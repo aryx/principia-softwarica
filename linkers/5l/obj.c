@@ -149,6 +149,7 @@ main(int argc, char *argv[])
         break;
     /*e: [[main()]] command line processing(arm) */
     } ARGEND
+
     USED(argc);
     if(*argv == nil)
         usage();
@@ -170,7 +171,7 @@ main(int argc, char *argv[])
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
     /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
-
+    /*s: [[main()]] set HEADTYPE, INITTEXT, INITDAT, etc */
     /*s: [[main()]] adjust HEADTYPE if debug flags(arm) */
     if(!debug['9'] && !debug['U'] && !debug['B'])
         debug[DEFAULT] = true;
@@ -186,15 +187,15 @@ main(int argc, char *argv[])
     /*e: [[main()]] adjust HEADTYPE if debug flags(arm) */
     switch(HEADTYPE) {
     /*s: [[main()]] switch HEADTYPE cases(arm) */
-        case H_PLAN9:
-            HEADR = 32L;
-            if(INITTEXT == -1)
-                INITTEXT = 4096+32;
-            if(INITDAT == -1)
-                INITDAT = 0;
-            if(INITRND == -1)
-                INITRND = 4096;
-            break;
+    case H_PLAN9:
+        HEADR = 32L;
+        if(INITTEXT == -1)
+            INITTEXT = 4096+32;
+        if(INITDAT == -1)
+            INITDAT = 0;
+        if(INITRND == -1)
+            INITRND = 4096;
+        break;
     /*x: [[main()]] switch HEADTYPE cases(arm) */
     case 0:	/* no header */
     case 6:	/* no header, padded segments */
@@ -256,7 +257,6 @@ main(int argc, char *argv[])
         diag("unknown -H option");
         errorexit();
     }
-
     /*s: [[main()]] last INITXXX adjustments */
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
@@ -265,10 +265,10 @@ main(int argc, char *argv[])
     if (INITTEXTP == -1)
         INITTEXTP = INITTEXT;
     /*e: [[main()]] last INITXXX adjustments */
-
     DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
-
+    /*e: [[main()]] set HEADTYPE, INITTEXT, INITDAT, etc */
+    /*s: [[main()]] initialize globals(arm) */
     /*s: [[main()]] set zprg(arm) */
     zprg.as = AGOK;
     zprg.scond = COND_ALWAYS; 
@@ -278,14 +278,14 @@ main(int argc, char *argv[])
     zprg.from.reg = R_NONE;
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg(arm) */
-
-    /*s: [[main()]] initialize globals(arm) */
-    pc = 0;
     /*x: [[main()]] initialize globals(arm) */
     load_libs = !debug['l'];
+    /*x: [[main()]] initialize globals(arm) */
+    cbp = buf.cbuf;
+    cbc = sizeof(buf.cbuf);
     /*e: [[main()]] initialize globals(arm) */
 
-    buildop();
+    buildop(); // ???
 
     cout = create(outfile, 1, 0775);
     if(cout < 0) {
@@ -293,18 +293,12 @@ main(int argc, char *argv[])
         errorexit();
     }
 
-    nuxiinit();
+    nuxiinit(); // ???
 
     // ------ main functions  ------
-    version = 0;
-
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
-
     /*s: [[main()]] cout is ready, LET'S GO(arm) */
     firstp = prg();
     lastp = firstp;
-
     /*s: [[main()]] set INITENTRY */
     if(INITENTRY == nil) {
         INITENTRY = "_main";
@@ -322,6 +316,7 @@ main(int argc, char *argv[])
     }
     /*e: [[main()]] set INITENTRY */
 
+    // Loading
     while(*argv)
         objfile(*argv++);
     if(load_libs)
@@ -331,6 +326,8 @@ main(int argc, char *argv[])
     if(firstp == P)
         goto out;
 
+    // Resolving
+    /*s: [[main()]] resolving phases */
     /*s: [[main()]] if export table or dynamic module(arm) */
     if(doexp || dlm){
         EXPTAB = "_exporttab";
@@ -355,7 +352,6 @@ main(int argc, char *argv[])
         export();
     }
     /*e: [[main()]] if export table or dynamic module(arm) */
-
     patch();
     /*s: [[main()]] call doprofxxx() if profiling */
     if(debug['p'])
@@ -371,11 +367,12 @@ main(int argc, char *argv[])
 
     noops();
     span();
+    /*e: [[main()]] resolving phases */
 
-    // write to cout, finally
+    // Generating (writing to cout, finally)
     asmb();
 
-    // sanity check
+    // Checking
     undef();
     /*e: [[main()]] cout is ready, LET'S GO(arm) */
 

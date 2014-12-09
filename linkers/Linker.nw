@@ -308,11 +308,13 @@ struct	Exec
 %5l/compat.c:
 %5l/list.c: dumpers
 
-%5l/optab.c:
 %5l/pass.c:
-%5l/asm.c:
 %5l/span.c:
 %5l/noop.c:
+
+%5l/asm.c: ARM machine code generation
+%5l/optab.c:
+
 %5l/obj.c: main()
 
 \section{Architecture overview}
@@ -343,17 +345,14 @@ struct	Sym
     char	*name;
     short	version; // for static names, each sym has a different version
 
-    //enum<section> ?
+    //enum<sxxx>
     short	type;
 
     long	value; // e.g. pc for a TEXT procedure
 
-
-
     <<[[Sym]] other fields>>
     // Extra
     <<[[Sym]] extra fields>>
-
 };
 @
 
@@ -370,6 +369,7 @@ NHASH		= 10007,
 // hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
 Sym*	hash[NHASH];
 @
+% when load the objects this hashtbl is populated
 
 <<[[Sym]] extra fields>>=
 // hash<Sym.name * Sym.version, ref<Sym>> of hash
@@ -418,7 +418,7 @@ lookup(char *symb, int v)
     memmove(s->name, symb, l);
 
     s->link = hash[h];
-    s->type = 0;
+    s->type = SNONE;
     s->version = v;
     s->value = 0;
     s->sig = 0;
@@ -435,38 +435,354 @@ long	nsymbol;
 
 
 
-
-
-
-%XXXXXXXXX
-% not sure it's section, it's more about
-%  type of symbol/entity, a const, file, data, procedure, etc
+% not sure it's just about section; it's more about
+% type of symbol/entity, a const, file, data, procedure, etc
 % see asmsym()
-% less: have a SNONE = 0? and in lookup above use it?
 <<enum sxxx(arm)>>=
 enum sxxx
 {
-    STEXT		= 1,
+    SNONE,
 
+    STEXT,
     SDATA,
     SBSS,
 
-    SDATA1,
     SXREF,
-    SLEAF, // arm
-    SFILE,
-    SCONST,
-
-    SSTRING, // arm
-    SUNDEF,
-
-    SIMPORT,
-    SEXPORT,
+    <<enum sxxx cases>>
 };
 @
-% can probably reorter and LP split?
-% SLEAF? the special opti ARM has for leaf functions?
 % SSTACK? no! not in exec :) 
+
+% the type and values in Sym are? for ATEXT elts, what is stored?
+% when can we get a SXREF in ldobj()? SXREF means unknown yet, happens when?
+
+\section{[[Opcode]] and [[Operand]]}
+
+% in 5.out.h: Opcode (enum opcode), Operand_kind (enum operand_kind)
+% see Aconv(opcode), Dconv(operand_kind)
+
+% reput major opcode here, AXXX, ALAST, AADD, ATEXT, AB, etc?
+% and also R1, ... 
+% and also D_EXTERN?
+
+% Operand of instruction, e.g. in MOV AX, BX,  then AX is a form of Adr
+<<struct Adr(arm)>>=
+struct	Adr
+{
+    //enum<operand_kind> (D_NONE by default)
+    byte	type;
+
+    union
+    {
+        long	u0offset;
+        char*	u0sval;
+        Ieee*	u0ieee;
+    } u0;
+
+    union
+    {
+        Auto*	u1autom;
+        Sym*	u1sym;
+    } u1;
+
+    // ??
+    char	reg;
+    char	name;
+    char	class;
+};
+@
+%see DConv
+% less: rename operand?
+%// TODO: abused for NOPROF function attributes
+
+% (would be better if had ADT so can have better Instruction type instead
+% of those opcode, operand, Adr, and unions and all comments)
+
+%give a few examples? show man page where have all the addressing modes
+
+%ATEXT arguments are also Adr (abuse)
+
+% the main thing the linker does: to relocate at the right place.
+% offset can be based on PC (for D_BRANCH), SB(for D_STATIC, D_EXTERN),
+% on FP(for D_PARAM), and on SP(for D_AUTO), 
+% or can be direct value (for D_CONST)
+
+
+% ???
+<<struct Autom(arm)>>=
+struct	Autom
+{
+    Sym*	asym;
+
+    long	aoffset;
+    short	type;
+
+    // Extra
+    Auto*	link;
+};
+@
+
+
+
+
+\ifallcode
+% TODO I thought could have unamed union that then alleviate the need
+% for those macros! (just need to adapt graph_code_c to find those fields)
+<<constant offset>>=
+#define	offset	u0.u0offset
+@
+
+<<constant sval(arm)>>=
+#define	sval	u0.u0sval
+@
+
+<<constant ieee>>=
+#define	ieee	u0.u0ieee
+@
+
+<<constant autom>>=
+#define	autom	u1.u1autom
+@
+
+<<constant sym>>=
+#define	sym	u1.u1sym
+@
+\fi
+
+
+\section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
+
+% bad name .... I think Prog is really an Instruction ... From and To
+% are when do MOV AX, BX,    then AX is the from, BX the to
+
+<<struct Prog(arm)>>=
+struct	Prog
+{
+    //enum<opcode>
+    byte	as;
+
+    // operands
+    Adr	from;
+    Adr	to;
+
+    <<[[Prog]] other fields>>
+
+    // Extra
+    <<[[Prog]] extra fields>>
+};
+@
+%see Pconv, %P
+%less: could rename cond to pcond and AB to AJMP and could factorize
+% more code with x86
+
+% note that pseudo-opcode like ATEXT also have operands, so
+% from can be abused to store the name of the procedure
+
+
+%XXX
+<<[[Prog]] other fields>>=
+long	pc;
+long	line;
+@
+
+
+
+
+
+% very arm specific!
+<<[[Prog]] other fields>>=
+// enum<register>
+byte	reg;
+// enum<instr_cond>
+byte	scond;
+@
+
+%XXX
+<<[[Prog]] other fields>>=
+union
+{
+    long	u0regused;
+    Prog*	u0forwd;
+} u0;
+@
+
+
+%XXX
+<<[[Prog]] other fields>>=
+byte	mark;
+@
+
+%XXX
+<<[[Prog]] other fields>>=
+byte	optab;
+@
+
+
+
+\ifallcode
+% why not using anonymous union? so don't need those aliases ...
+<<constant regused(arm)>>=
+#define	regused	u0.u0regused
+@
+<<constant forwd(arm)>>=
+#define	forwd	u0.u0forwd
+@
+\fi
+
+
+
+
+% list of instructions (ATEXT and its instrs, but not ADATA, AGLOBL, ...)
+% good name? first_instr better? also again there is strong
+% coupling between firstp and lastp that should be encapsulated
+% in a specific structure (like for datap, edatap)
+<<global firstp>>=
+// list<ref_own?<Prog>>, next = Prog.link
+Prog*	firstp;
+@
+
+<<constant P>>=
+#define	P		((Prog*)nil)
+@
+
+
+<<[[Prog]] extra fields>>=
+// list<ref<Prog>> from firstp/lastp, or datap/edatap
+Prog*	link;
+@
+
+
+<<global lastp>>=
+// ref<Prog>, last elt of firstp list
+Prog*	lastp;
+@
+
+
+
+
+
+
+
+% list of procedures (ATEXT opcode), subset of firstp/lastp
+<<global textp>>=
+// list<ref<Prog>>, next = Prog.cond
+Prog*	textp = P;
+@
+
+<<[[Prog]] extra fields>>=
+// list<ref<Prog>> from textp/etextp
+Prog*	cond;
+@
+%just to quickly iterate over all the ATEXT?
+
+
+
+<<global etextp>>=
+// ref<Prog>, end of textp list
+Prog*	etextp = P;
+@
+
+
+
+% list of data (ADATA opcode)
+<<global datap>>=
+// list<ref<Prog>>, next = Prog.next
+Prog*	datap = P;
+@
+% no edatap in arm
+
+
+
+
+
+
+% When iterate over all instrs, if the instr is a ATEXT then store it here.
+% It's probably for error message, to say in which procedure we currently are.
+% most of the code related to curtext is if(p->as == ATEXT) curtext = p;
+<<global curtext>>=
+Prog*	curtext = P;
+@
+
+<<adjust curtext when iterate over instructions p and opcode a>>=
+if(a == ATEXT)
+    curtext = p;
+@
+
+<<constant TNAME(arm)>>=
+#define	TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
+@
+
+<<global noname linker>>=
+char	*noname		= "<none>";
+@
+
+
+<<global undefp>>=
+//@Scheck: not dead, used by UP
+Prog	undefp;
+@
+
+
+<<constant UP>>=
+#define	UP	(&undefp)
+@
+
+
+
+
+
+
+\section{[[Optab]] and [[optab]]}
+% hmm core DS? could probably be moved just in machine code generation chapter
+
+<<struct Optab(arm)>>=
+struct	Optab
+{
+    // enum<opcode> from 5.out.h
+    byte	as;
+
+    char	a1;
+    char	a2;
+    char	a3;
+
+    char	type;
+    char	size;
+    char	param;
+
+    char	flag;
+};
+@
+
+% ex of entries:
+%Optab	optab[] =
+%{
+%    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
+%    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
+%    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
+%    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
+%    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
+%    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+
+
+%\section{[[Buf]] and [[buf]]}?
+
+\section{XXX}
+
+%XXXX
+<<enum sxxx cases>>=
+SDATA1,
+SLEAF, // arm
+SFILE,
+SCONST,
+
+SSTRING, // arm
+SUNDEF,
+
+SIMPORT,
+SEXPORT,
+@
+% SLEAF? the special opti ARM has for leaf functions?
+
 
 %XXXXXXXXX
 <<[[Sym]] other fields>>=
@@ -476,16 +792,20 @@ ushort	file;
 @
 
 
-
-%TODO LP split
-<<enum misc(arm)>>=
-enum misc {
+<<enum lxxx(arm)>>=
+enum lxxx {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
+
     V4		= 1<<3,	/* arm v4 arch */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
+};
+@
+% >> >> >> >> >>
 
+<<enum cxxx(arm)>>=
+enum cxxx {
     C_NONE		= 0,
     C_REG,
     C_REGREG,
@@ -532,12 +852,21 @@ enum misc {
     C_ADDR,		/* relocatable address */
 
     C_GOK,
+};
+@
 
+<<enum mark(arm)>>=
 /* mark flags */
+enum mark {
     FOLL		= 1<<0,
     LABEL		= 1<<1,
     LEAF		= 1<<2,
+};
+@
+% >> >> >>
 
+<<enum misc_constant(arm)>>=
+enum misc_constants {
     BIG		= (1<<12)-4,
 
     <<constant STRINGSZ>>
@@ -550,8 +879,7 @@ enum misc {
     MAXHIST		= 20,	/* limit of path elements for history symbols */
 };
 @
-% >> >> >> >> >> >> >> >> >>
-
+% >>
 
 
 %XXXX
@@ -562,304 +890,6 @@ byte	subtype;
 <<[[Sym]] other fields>>=
 long	sig;
 @
-
-\section{[[Opcode]] and [[Operand_kind]]}
-% in 5.out.h: Opcode (enum opcode), Operand_kind (enum operand_kind)
-% see Aconv, Rconv, Dconv
-
-% put major opcode here, AXXX, ALAST, etc
-% and also R1, ... and also D_EXTERN,
-
-\section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
-
-% bad name .... I think Prog is really an Instruction ... From and To
-% are when do MOV AX, BX,    then AX is the from, BX the to
-
-<<struct Prog(arm)>>=
-struct	Prog
-{
-    //enum<opcode>
-    byte	as;
-
-    // operands
-    Adr	from;
-    Adr	to;
-
-    // enum<register>?
-    byte	reg;
-    // enum<instr_cond>?
-    byte	scond;
-
-    union
-    {
-        long	u0regused;
-        Prog*	u0forwd;
-    } u0;
-
-    // [[Prog]] other fields
-
-    long	pc;
-    long	line;
-    byte	mark;
-    byte	optab;
-
-    // Extra
-    <<[[Prog]] extra fields>>
-
-
-};
-@
-% see Pconv, %P
-%less: could rename cond to pcond and AB to AJMP and could factorize
-% more code with x86
-
-% note that pseudo-opcode like ATEXT also have operands, so
-% from can be abused to store the name of the procedure
-
-
-% why not using anonymous union? so don't need those aliases ...
-<<constant regused(arm)>>=
-#define	regused	u0.u0regused
-@
-<<constant forwd(arm)>>=
-#define	forwd	u0.u0forwd
-@
-
-
-
-% list of instructions (ATEXT and its instrs, but not ADATA, AGLOBL, ...)
-% good name? first_instr better? also again there is strong
-% coupling between firstp and lastp that should be encapsulated
-% in a specific structure (like for datap, edatap)
-<<global firstp>>=
-// list<ref_own?<Prog>>, next = Prog.link
-Prog*	firstp;
-@
-
-<<constant P>>=
-#define	P		((Prog*)nil)
-@
-
-
-<<[[Prog]] extra fields>>=
-// list<ref<Prog>> from firstp/lastp, or datap/edatap
-Prog*	link;
-@
-
-
-<<global lastp>>=
-// ref<Prog>, last elt of firstp list
-Prog*	lastp;
-@
-
-
-
-
-
-
-
-% list of procedures (ATEXT opcode), subset of firstp/lastp
-<<global textp>>=
-// list<ref<Prog>>, next = Prog.cond
-Prog*	textp = P;
-@
-
-<<[[Prog]] extra fields>>=
-// list<ref<Prog>> from textp/etextp
-Prog*	cond;
-@
-%to follow CALL xxx ???
-
-
-
-<<global etextp>>=
-// ref<Prog>, end of textp list
-Prog*	etextp = P;
-@
-
-
-
-% list of data (ADATA opcode)
-<<global datap>>=
-// list<ref<Prog>>, next = Prog.next
-Prog*	datap = P;
-@
-% no edatap
-
-
-
-
-
-
-% When iterate over all instrs, if the instr is a ATEXT then store it here.
-% It's probably for error message, to say in which procedure we currently are.
-% most of the code related to curtext is if(p->as == ATEXT) curtext = p;
-<<global curtext>>=
-Prog*	curtext = P;
-@
-
-<<adjust curtext when iterate over instructions p and opcode a>>=
-if(a == ATEXT)
-    curtext = p;
-@
-
-<<constant TNAME(arm)>>=
-#define	TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
-@
-
-<<global noname linker>>=
-char	*noname		= "<none>";
-@
-
-
-<<global undefp>>=
-//@Scheck: not dead, used by UP
-Prog	undefp;
-@
-
-
-<<constant UP>>=
-#define	UP	(&undefp)
-@
-
-
-
-
-
-\section{[[Adr]]}
-
-
-% operand of instruction, e.g. in MOV AX, BX,  then AX is a form of Adr
-% (would be better if had ADT so can have better Instruction type instead
-% of those opcode, operand, Adr, and unions and all comments)
-
-% give a few examples? show man page where have all the addressing modes
-
-% ATEXT arguments are also Adr (abuse)
-
-<<struct Adr(arm)>>=
-struct	Adr
-{
-    //enum<operand_kind> (D_NONE by default)
-    byte	type;
-
-    union
-    {
-        long	u0offset;
-        char*	u0sval;
-        Ieee*	u0ieee;
-    } u0;
-
-    union
-    {
-        Auto*	u1autom;
-        Sym*	u1sym;
-    } u1;
-
-    // ??
-    char	reg;
-    char	name;
-    char	class;
-};
-@
-%    // TODO: abused for NOPROF function attributes
-%see DConv
-
-
-% the main thing the linker does: to relocate at the right place.
-% offset can be based on PC (for D_BRANCH), SB(for D_STATIC, D_EXTERN),
-% on FP(for D_PARAM), and on SP(for D_AUTO), 
-% or can be direct value (for D_CONST)
-<<constant offset>>=
-#define	offset	u0.u0offset
-@
-% again could use anonymous union?
-
-<<constant sval(arm)>>=
-#define	sval	u0.u0sval
-@
-
-% TODO I thought could have unamed union that then alleviate the need
-% for those macros! (just need to adapt graph_code_c to find those fields)
-
-<<constant ieee>>=
-#define	ieee	u0.u0ieee
-@
-
-
-<<constant autom>>=
-#define	autom	u1.u1autom
-@
-
-<<constant sym>>=
-#define	sym	u1.u1sym
-@
-
-
-% ???
-<<struct Autom(arm)>>=
-struct	Autom
-{
-    Sym*	asym;
-
-    long	aoffset;
-    short	type;
-
-    // Extra
-    Auto*	link;
-};
-@
-
-
-\section{[[Optab]] and [[optab]]}
-
-
-<<struct Optab(arm)>>=
-struct	Optab
-{
-    // enum<opcode> from 5.out.h
-    byte	as;
-
-    char	a1;
-    char	a2;
-    char	a3;
-    char	type;
-    char	size;
-    char	param;
-    char	flag;
-};
-@
-
-% ex of entries:
-%Optab	optab[] =
-%{
-%    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
-%    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
-%    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
-%    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
-%    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
-%    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-
-
-
-% ???
-<<struct Oprang(arm)>>=
-struct	Oprang
-{
-    Optab*	start;
-    Optab*	stop;
-};
-@
-
-%???
-<<struct Count(arm)>>=
-struct	Count
-{
-    long	count;
-    long	outof;
-};
-@
-
 
 \chapter{[[main()]]}
 
@@ -907,30 +937,16 @@ main(int argc, char *argv[])
     ARGBEGIN {
     <<[[main()]] command line processing(arm)>>
     } ARGEND
+
     USED(argc);
     if(*argv == nil)
         usage();
 
     <<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>
-
-    <<[[main()]] adjust HEADTYPE if debug flags(arm)>>
-    switch(HEADTYPE) {
-    <<[[main()]] switch HEADTYPE cases(arm)>>
-    default:
-        diag("unknown -H option");
-        errorexit();
-    }
-
-    <<[[main()]] last INITXXX adjustments>>
-
-    DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
-            HEADTYPE, INITTEXT, INITDAT, INITRND);
-
-    <<[[main()]] set zprg(arm)>>
-
+    <<[[main()]] set HEADTYPE, INITTEXT, INITDAT, etc>>
     <<[[main()]] initialize globals(arm)>>
 
-    buildop();
+    buildop(); // ???
 
     cout = create(outfile, 1, 0775);
     if(cout < 0) {
@@ -938,14 +954,9 @@ main(int argc, char *argv[])
         errorexit();
     }
 
-    nuxiinit();
+    nuxiinit(); // ???
 
     // ------ main functions  ------
-    version = 0;
-
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
-
     <<[[main()]] cout is ready, LET'S GO(arm)>>
 
 out:
@@ -954,14 +965,6 @@ out:
 }
 @
 %$
-
-
-%XXXX
-<<[[main()]] initialize globals(arm)>>=
-pc = 0;
-@
-
-
 
 
 \section{Arguments processing}
@@ -1036,21 +1039,35 @@ long	HEADR; 		/* length of header */
 
 
 
+<<[[main()]] set HEADTYPE, INITTEXT, INITDAT, etc>>=
+<<[[main()]] adjust HEADTYPE if debug flags(arm)>>
+switch(HEADTYPE) {
+<<[[main()]] switch HEADTYPE cases(arm)>>
+default:
+    diag("unknown -H option");
+    errorexit();
+}
+<<[[main()]] last INITXXX adjustments>>
+DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
+        HEADTYPE, INITTEXT, INITDAT, INITRND);
+@
+
+
 %32 = 0x20, hence this note in kernel mkfile:
 %# see mem.h, the additional 20 are the size of the a.out header added by LD
 %KTZERO_AND_HEADER=0xE0100020
 
-
+% -H2, see enum headtype in Overview chapter
 <<[[main()]] switch HEADTYPE cases(arm)>>=
-    case H_PLAN9:
-        HEADR = 32L;
-        if(INITTEXT == -1)
-            INITTEXT = 4096+32;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4096;
-        break;
+case H_PLAN9:
+    HEADR = 32L;
+    if(INITTEXT == -1)
+        INITTEXT = 4096+32;
+    if(INITDAT == -1)
+        INITDAT = 0;
+    if(INITRND == -1)
+        INITRND = 4096;
+    break;
 @
 
 
@@ -1062,9 +1079,6 @@ if(INITDAT != 0 && INITRND != 0)
 @
 
 
-
-
-
 \section{Main flow}
 
 % TODO: all those functions that take no args are ugly, they use too much
@@ -1074,9 +1088,9 @@ if(INITDAT != 0 && INITRND != 0)
 <<[[main()]] cout is ready, LET'S GO(arm)>>=
 firstp = prg();
 lastp = firstp;
-
 <<[[main()]] set INITENTRY>>
 
+// Loading
 while(*argv)
     objfile(*argv++);
 if(load_libs)
@@ -1086,26 +1100,18 @@ firstp = firstp->link;
 if(firstp == P)
     goto out;
 
-<<[[main()]] if export table or dynamic module(arm)>>
+// Resolving
+<<[[main()]] resolving phases>>
 
-patch();
-<<[[main()]] call doprofxxx() if profiling>>
-dodata();
-follow();
-if(firstp == P)
-    goto out;
-
-noops();
-span();
-
-// write to cout, finally
+// Generating (writing to cout, finally)
 asmb();
 
-// sanity check
+// Checking
 undef();
 @
 
-
+% why firstp = firstp->link? the first prog is a fake?
+% and why ->link and not ->cond?
 
 
 
@@ -1140,6 +1146,10 @@ Prog	zprg;
 %GOK? God Only Knows? to be used as a special mark, there is diag()
 % in ldobj() about AGOK
 
+<<[[main()]] initialize globals(arm)>>=
+<<[[main()]] set zprg(arm)>>
+@
+
 <<[[main()]] set zprg(arm)>>=
 zprg.as = AGOK;
 zprg.scond = COND_ALWAYS; 
@@ -1154,10 +1164,20 @@ zprg.to = zprg.from;
 
 
 
-% when -l alone it means no startup lib
-% why firstp = firstp->link? the first prog is a fake?
-% and why ->link and not ->cond?
+% new local added by me (but maybe was in x86 originally)
+<<[[main()]] locals(arm)>>=
+bool load_libs;
+@
 
+% -l means no automagic stdlibs
+<<[[main()]] initialize globals(arm)>>=
+load_libs = !debug['l'];
+@
+
+
+
+
+% when -l alone it means no startup lib
 
 <<[[main()]] set INITENTRY>>=
 if(INITENTRY == nil) {
@@ -1174,13 +1194,14 @@ if(INITENTRY == nil) {
 % SXREF means?
 
 \section{Loading the objects, [[objfile()]]}
+% this function can also load libraries passed on the
+% command line when the file is a .a
 
 % essentially modify which globals?
 %  - will modify libraryp probably, the cool pragma "autolib"
 %    which is why objfile() must be called before loadlib()
 %  - should modify firstp! and datap!
 
-% this function can also load libraries when the file is a .a
 <<function objfile>>=
 void
 objfile(char *file)
@@ -1229,19 +1250,7 @@ objfile(char *file)
 
 % so loading objects with ldbobj() will modify some of the globals below
 
-% new local added by me (but maybe was in x86 originally)
-<<[[main()]] locals(arm)>>=
-bool load_libs;
-@
-
-% -l means no automagic stdlibs
-<<[[main()]] initialize globals(arm)>>=
-load_libs = !debug['l'];
-@
-
 % then if(load_libs) loadlib()  in the main flow
-
-
 
 <<global library>>=
 char*	library[50];
@@ -1291,6 +1300,1278 @@ loop:
 
 
 
+
+\section{Resolving symbols}
+
+% see chapter, many phases, many passes
+
+
+\section{Generating the executable, [[asmb()]]}
+% asmb? asm binary?
+
+% first function to actually use cout!
+
+<<function asmb(arm)>>=
+void
+asmb(void)
+{
+    <<[[asmb()]] locals>>
+
+    DBG("%5.2f asm\n", cputime());
+
+    // TEXT SECTION
+    <<[[asmb()]] TEXT section>>
+
+    // DATA SECTION
+    <<[[asmb()]] DATA section>>
+
+    // SYMBOL TABLE
+    <<[[asmb()]] symbol table section>>
+
+    // HEADER
+    <<[[asmb()]] header section>>
+
+    cflush();
+}
+@
+% HEADER section at the end, paradoxal, but do SEEK, and because
+% the HEADER contain info about other sections such as size, so need
+% to know those size first.
+
+
+\subsection{Header}
+
+
+<<global OFFSET(arm)>>=
+long	OFFSET;
+@
+%less: has to be a global? could not just be a local in asmb()?
+
+
+<<[[asmb()]] header section>>=
+DBG("%5.2f header\n", cputime());
+
+OFFSET = 0;
+seek(cout, OFFSET, SEEK__START);
+
+switch(HEADTYPE) {
+// see Exec in a.out.h
+case H_PLAN9:
+    <<[[asmb()]] if dynamic module magic header adjustment(arm)>>
+    else
+        lput(0x647);			/* magic */
+    lput(textsize);			/* sizes */
+    lput(datsize);
+    lput(bsssize);
+    lput(symsize);			/* nsyms */
+
+    lput(entryvalue());		/* va of entry */
+
+    lput(0L);
+    lput(lcsize);
+    break;
+
+<<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>
+}
+@
+% all those xxxsize are globals, modified by previous phases
+
+
+<<function entryvalue(arm)>>=
+long
+entryvalue(void)
+{
+    char *a;
+    Sym *s;
+
+    a = INITENTRY;
+
+    <<[[entryvalue()]] if digit INITENTRY>>
+
+    s = lookup(a, 0);
+
+    switch(s->type) {
+    case SNONE:
+        return INITTEXT; // no _main, start at beginning of binary then
+    case STEXT:
+    case SLEAF:
+        // ok
+        return s->value;
+    <<[[entryvalue()]] if dynamic module case>>
+    default:
+        diag("entry not TEXT: %s", s->name);
+        return 0;
+    }
+}
+@
+
+
+\subsection{Text section}
+
+<<global curp>>=
+Prog*	curp;
+@
+
+<<[[asmb()]] locals>>=
+Prog *p;
+long t, etext;
+Optab *o;
+@
+
+
+
+<<[[asmb()]] TEXT section>>=
+OFFSET = HEADR;
+seek(cout, OFFSET, SEEK__START);
+pc = INITTEXT;
+
+for(p = firstp; p != P; p = p->link) {
+    if(p->as == ATEXT) {
+        curtext = p;
+        autosize = p->to.offset + 4; // ???
+    }
+    if(p->pc != pc) {
+        diag("phase error %lux sb %lux", p->pc, pc);
+        if(!debug['a'])
+            prasm(curp);
+        pc = p->pc;
+    }
+    curp = p;
+
+    // generate instruction!
+    o = oplook(p);	/* could probably avoid this call */
+    asmout(p, o);
+
+    pc += o->size;
+}
+
+if(debug['a'])
+    Bprint(&bso, "\n");
+Bflush(&bso);
+
+cflush();
+
+/* output strings in text segment */
+etext = INITTEXT + textsize;
+for(t = pc; t < etext; t += sizeof(buf)-100) {
+    if(etext-t > sizeof(buf)-100)
+        datblk(t, sizeof(buf)-100, 1);
+    else
+        datblk(t, etext-t, 1);
+}
+@
+
+\subsection{Data section}
+
+<<[[asmb()]] DATA section>>=
+curtext = P;
+switch(HEADTYPE) {
+case H_PLAN9:
+    OFFSET = HEADR+textsize;
+    seek(cout, OFFSET, SEEK__START);
+    break;
+<<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>
+}
+
+<<[[asmb()]] if dynamic module, before datblk()>>
+
+for(t = 0; t < datsize; t += sizeof(buf)-100) {
+    if(datsize-t > sizeof(buf)-100)
+        datblk(t, sizeof(buf)-100, 0);
+    else
+        datblk(t, datsize-t, 0);
+}
+@
+% what the fuss about those 100?? and what is sizeof(buf)?
+
+\subsection{Symbol table section}
+
+
+<<[[asmb()]] symbol table section>>=
+// modified by asmsym()
+symsize = 0;
+// modified by asmlc()
+lcsize = 0;
+
+if(!debug['s']) {
+    DBG("%5.2f sym\n", cputime());
+
+    switch(HEADTYPE) {
+    case H_PLAN9:
+        OFFSET = HEADR+textsize+datsize;
+        seek(cout, OFFSET, 0);
+        break;
+    <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>
+    }
+
+    asmsym();
+    DBG("%5.2f pc\n", cputime());
+
+    asmlc();
+    <<[[asmb()]] if dynamic module, call asmdyn()>>
+
+    cflush();
+}
+else {
+    <<[[asmb()]] if dynamic module and no symbol table generation>>
+}
+@
+
+
+
+\section{Checking for unresolved symbols, [[undef()]]}
+
+% rename check_if_still_undefined_symbols()?
+<<function undef>>=
+void
+undef(void)
+{
+    int i;
+    Sym *s;
+
+    for(i=0; i<NHASH; i++)
+        for(s = hash[i]; s != S; s = s->link)
+            if(s->type == SXREF)
+                diag("%s: not defined", s->name);
+}
+@
+
+% >>
+
+
+\chapter{Loading Objects}
+% was called parsing, but objects are stored in a binary format so
+% "loading" is more appropriate I think
+
+% essentially reverse operation than object generation in Assembler.nw.
+% hmmm if C had proper ADT and a Marshall module that would be easier ...
+% (but maybe less other-languages friendly)
+% could factorize code with libmach?
+
+% why not using 5obj.c from libmach/? because 5obj.c is incomplete?
+% care just about symbol table?
+
+% each call to ldobj() will increment this pc
+<<global pc>>=
+long	pc = 0;
+@
+
+% This is for the D_STATIC; to handle conflicts with different files
+% defining the same static entity. This is bumped each time
+% a new object file is parsed, so it's safe.
+<<global version>>=
+int	version = 0;
+@
+
+
+
+
+
+<<[[ldobj()]] locals(arm)>>=
+Sym *h[NSYM];
+Sym *di;
+Sym *s;
+long ipc;
+@
+
+
+<<[[ldobj()]] locals(arm)>>=
+Prog *t;
+byte *stop;
+int v;
+ulong sig;
+@
+
+
+
+
+<<[[ldobj()]] locals(arm)>>=
+byte *bloc;
+byte *bsize;
+int r;
+@
+% and parameter 'int c'
+
+<<[[ldobj()]] bloc and bsize init>>=
+bsize = buf.xbuf;
+bloc = buf.xbuf;
+@
+
+
+<<[[ldobj()]] read if needed in loop:, adjust block and bsize>>=
+r = bsize - bloc;
+if(r < 100 && r < c) {		/* enough for largest prog */
+    bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+    if(bsize == 0)
+        goto eof;
+    bloc = buf.xbuf;
+    goto loop;
+}
+@
+% >> >> >> >>
+
+
+\section{[[ldobj()]]}
+
+<<[[ldobj()]] locals(arm)>>=
+// enum<opcode>
+int o;
+Prog *p;
+@
+% the instruction p will be allocated
+
+<<[[ldobj()]] locals(arm)>>=
+bool skip;
+@
+
+% main -> objfile -> <>
+% f = fd of opened object file
+% c = size of object file, 
+% pn = filename of object, 
+
+<<function ldobj(arm)>>=
+void
+ldobj(fdt f, long c, char *pn)
+{
+    <<[[ldobj()]] locals(arm)>>
+
+    <<[[ldobj()]] grow filen if not enough space>>
+    filen[files++] = strdup(pn);
+
+    <<[[ldobj()]] bloc and bsize init>>
+
+    di = S;
+
+// can come from AEND
+newloop:
+    version++;
+    memset(h, 0, sizeof(h));
+    histfrogp = 0;
+    ipc = pc;
+    skip = false;
+
+loop:
+    if(c <= 0)
+        goto eof;
+
+    <<[[ldobj()]] read if needed in loop:, adjust block and bsize>>
+
+    o = bloc[0];		/* as */
+    <<[[ldobj()]] sanity check opcode in range(arm)>>
+    <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>
+
+    //TODO: factorize
+    if(nhunk < sizeof(Prog))
+        gethunk();
+    p = (Prog*)hunk;
+    nhunk -= sizeof(Prog);
+    hunk += sizeof(Prog);
+
+    // reading the object binary file, opposite of outcode() in Assembler.nw
+    p->as = o;
+    p->scond = bloc[1];
+    p->reg   = bloc[2];
+    p->line  = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
+    r = zaddr(bloc+7, &p->from, h) + 7;
+    r += zaddr(bloc+r, &p->to, h);
+
+    bloc += r;
+    c -= r;
+
+    if(p->reg > NREG)
+        diag("register out of range %d", p->reg);
+
+    p->link = P;
+    p->cond = P;
+
+    if(debug['W'])
+        print("%P\n", p);
+
+    switch(o) {
+    <<[[ldobj()]] switch opcode cases(arm)>>
+    default:
+    casedef:
+        if(skip)
+            nopout(p);
+
+        if(p->to.type == D_BRANCH)
+            p->to.offset += ipc;
+
+        lastp->link = p;
+        lastp = p;
+
+        p->pc = pc;
+        pc++;
+        break;
+    }
+    goto loop;
+
+eof:
+    diag("truncated object file: %s", pn);
+}
+@
+
+
+
+
+
+
+
+<<[[ldobj()]] sanity check opcode in range(arm)>>=
+if(o <= AXXX || o >= ALAST) {
+    diag("%s: line %ld: opcode out of range %d", pn, pc-ipc, o);
+    print("	probably not a .5 file\n");
+    errorexit();
+}
+@
+
+
+% reverse of zaddr() in Assembler.nw 
+<<function zaddr(arm)>>=
+int
+zaddr(byte *p, Adr *a, Sym *h[])
+{
+    int i, c;
+    int l;
+    Sym *s;
+    Auto *u;
+
+    <<[[zaddr()]] sanity check symbol range>>
+    a->type = p[0];
+    a->reg = p[1];
+    a->sym = h[c];
+    a->name = p[3];
+
+    c = 4;
+
+    <<[[zaddr()]] sanity check register range>>
+
+    switch(a->type) {
+    <<[[zaddr()]] cases>>
+    default:
+        print("unknown type %d\n", a->type);
+        p[0] = ALAST+1;
+        return 0;	/*  force real diagnostic */
+
+    }
+    s = a->sym;
+    if(s == S)
+        return c;
+
+    i = a->name;
+    if(i != D_AUTO && i != D_PARAM)
+        return c;
+
+    l = a->offset;
+    for(u=curauto; u; u=u->link)
+        if(u->asym == s)
+         if(u->type == i) {
+            if(u->aoffset > l)
+                u->aoffset = l;
+            return c;
+        }
+
+    //TODO: factorize
+    while(nhunk < sizeof(Auto))
+        gethunk();
+    u = (Auto*)hunk;
+    nhunk -= sizeof(Auto);
+    hunk += sizeof(Auto);
+
+    u->link = curauto;
+    curauto = u;
+    u->asym = s;
+    u->aoffset = l;
+    u->type = i;
+
+    return c;
+}
+@
+
+
+<<[[zaddr()]] cases>>=
+case D_NONE:
+case D_REG:
+case D_FREG:
+case D_PSR:
+case D_FPCR:
+    break;
+
+case D_REGREG:
+    a->offset = p[4];
+    c++;
+    break;
+
+case D_BRANCH:
+case D_OREG:
+case D_CONST:
+case D_OCONST:
+case D_SHIFT:
+    a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
+    c += 4;
+    break;
+
+case D_SCONST:
+    //TODO: factorize
+    while(nhunk < NSNAME)
+        gethunk();
+    a->sval = (char*)hunk;
+    nhunk -= NSNAME;
+    hunk += NSNAME;
+
+    memmove(a->sval, p+4, NSNAME);
+    c += NSNAME;
+    break;
+
+case D_FCONST:
+    //TODO: factorize
+    while(nhunk < sizeof(Ieee))
+        gethunk();
+    a->ieee = (Ieee*)hunk;
+    nhunk -= NSNAME;
+    hunk += NSNAME;
+
+    a->ieee->l = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
+    a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
+    c += 8;
+    break;
+@
+
+<<[[zaddr()]] sanity check symbol range>>=
+c = p[2];
+if(c < 0 || c > NSYM){
+    print("sym out of range: %d\n", c);
+    p[0] = ALAST+1;
+    return 0;
+}
+@
+<<[[zaddr()]] sanity check register range>>=
+if(a->reg < 0 || a->reg > NREG) {
+    print("register out of range %d\n", a->reg);
+    p[0] = ALAST+1;
+    return 0;	/*  force real diagnostic */
+}
+@
+
+
+
+
+
+<<function nopout>>=
+void
+nopout(Prog *p)
+{
+    p->as = ANOP;
+    p->from.type = D_NONE;
+    p->to.type = D_NONE;
+}
+@
+
+
+
+\section{[[ATEXT]]}
+
+<<global curauto>>=
+Auto*	curauto;
+@
+
+
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case ATEXT:
+    if(curtext != P) {
+        histtoauto();
+        curtext->to.autom = curauto;
+        curauto = 0;
+    }
+    skip = false;
+    curtext = p;
+    autosize = (p->to.offset+3L) & ~3L;
+    p->to.offset = autosize;
+    autosize += 4;
+    s = p->from.sym;
+
+    if(s == S) {
+        diag("TEXT must have a name\n%P", p);
+        errorexit();
+    }
+
+    if(s->type != 0 && s->type != SXREF) {
+        if(p->reg & DUPOK) {
+            skip = 1;
+            goto casedef;
+        }
+        diag("redefinition: %s\n%P", s->name, p);
+    }
+
+    s->type = STEXT;
+    s->value = pc;
+
+    //add_list(firstp, lastp, p)
+    lastp->link = p;
+    lastp = p;
+
+    p->pc = pc;
+    pc++;
+
+    //add_list(textp, etextp, p)
+    if(textp == P) {
+        textp = p;
+        etextp = p;
+        goto loop;
+    }
+
+    etextp->cond = p;
+    etextp = p;
+
+    break;
+@
+%$
+
+
+\section{[[ADATA]]}
+
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case ADATA:
+    if(p->from.sym == S) {
+        diag("DATA without a sym\n%P", p);
+        break;
+    }
+    //add_list(datap, edatap, p)
+    p->link = datap;
+    datap = p;
+
+    break;
+@
+
+\section{[[AGLOBL]]}
+
+% not added in any list? because bss?
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AGLOBL:
+    s = p->from.sym;
+    if(s == S) {
+        diag("GLOBL must have a name\n%P", p);
+        errorexit();
+    }
+    if(s->type == 0 || s->type == SXREF) {
+        s->type = SBSS;
+        s->value = 0;
+    }
+    if(s->type != SBSS) {
+        diag("redefinition: %s\n%P", s->name, p);
+        s->type = SBSS;
+        s->value = 0;
+    }
+    if(p->to.offset > s->value)
+        s->value = p->to.offset;
+    break;
+@
+
+\section{[[ANAME]], [[ASIGNAME]]}
+
+<<global histfrogp>>=
+int	histfrogp;
+@
+
+<<global histfrog>>=
+Sym*	histfrog[MAXHIST];
+@
+
+
+<<global histgen>>=
+int	histgen = 0;
+@
+
+
+% used by what? for debugging? when signature conflict! to print
+% current filenames in conflict
+
+<<[[ldobj()]] locals(arm)>>=
+// array<string>, length used = files, extended every 16
+static char **filen;
+static int files = 0;
+char **nfilen;
+@
+
+<<[[ldobj()]] grow filen if not enough space>>=
+if((files&15) == 0){
+    nfilen = malloc((files+16)*sizeof(char*));
+    memmove(nfilen, filen, files*sizeof(char*));
+    free(filen);
+    filen = nfilen;
+}
+@
+
+
+
+
+<<[[ldobj()]] if ANAME or ASIGNAME(arm)>>=
+if(o == ANAME || o == ASIGNAME) {
+    sig = 0;
+    if(o == ASIGNAME){
+        sig = bloc[1] | (bloc[2]<<8) | (bloc[3]<<16) | (bloc[4]<<24);
+        bloc += 4;
+        c -= 4;
+    }
+    stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
+    if(stop == 0){
+        bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+        if(bsize == 0)
+            goto eof;
+        bloc = buf.xbuf;
+        stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
+        if(stop == 0){
+            fprint(2, "%s: name too long\n", pn);
+            errorexit();
+        }
+    }
+    v = bloc[1];	/* type */
+    o = bloc[2];	/* sym */
+    bloc += 3;
+    c -= 3;
+
+    r = 0;
+    if(v == D_STATIC)
+        r = version;
+    s = lookup((char*)bloc, r);
+    c -= &stop[1] - bloc;
+    bloc = stop + 1;
+
+    if(sig != 0){
+        if(s->sig != 0 && s->sig != sig)
+            diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
+        s->sig = sig;
+        s->file = files-1;
+    }
+
+    if(debug['W'])
+        print("	ANAME	%s\n", s->name);
+    h[o] = s;
+    if((v == D_EXTERN || v == D_STATIC) && s->type == 0)
+        s->type = SXREF;
+    if(v == D_FILE) {
+        if(s->type != SFILE) {
+            histgen++;
+            s->type = SFILE;
+            s->value = histgen;
+        }
+        if(histfrogp < MAXHIST) {
+            histfrog[histfrogp] = s;
+            histfrogp++;
+        } else
+            collapsefrog(s);
+    }
+    goto loop;
+}
+@
+
+<<function collapsefrog>>=
+void
+collapsefrog(Sym *s)
+{
+    int i;
+
+    /*
+     * bad encoding of path components only allows
+     * MAXHIST components. if there is an overflow,
+     * first try to collapse xxx/..
+     */
+    for(i=1; i<histfrogp; i++)
+        if(strcmp(histfrog[i]->name+1, "..") == 0) {
+            memmove(histfrog+i-1, histfrog+i+1,
+                (histfrogp-i-1)*sizeof(histfrog[0]));
+            histfrogp--;
+            goto out;
+        }
+
+    /*
+     * next try to collapse .
+     */
+    for(i=0; i<histfrogp; i++)
+        if(strcmp(histfrog[i]->name+1, ".") == 0) {
+            memmove(histfrog+i, histfrog+i+1,
+                (histfrogp-i-1)*sizeof(histfrog[0]));
+            goto out;
+        }
+
+    /*
+     * last chance, just truncate from front
+     */
+    memmove(histfrog+0, histfrog+1,
+        (histfrogp-1)*sizeof(histfrog[0]));
+
+out:
+    histfrog[histfrogp-1] = s;
+}
+@
+
+
+
+\section{[[AHISTORY]]}
+
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AHISTORY:
+    if(p->to.offset == -1) {
+        addlib(pn);
+        histfrogp = 0;
+        goto loop;
+    }
+    addhist(p->line, D_FILE);		/* 'z' */
+    if(p->to.offset)
+        addhist(p->to.offset, D_FILE1);	/* 'Z' */
+    histfrogp = 0;
+    goto loop;
+@
+
+\section{[[AEND]]}
+
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AEND:
+    histtoauto();
+    if(curtext != P)
+        curtext->to.autom = curauto;
+    curauto = 0;
+    curtext = P;
+    if(c)
+        goto newloop;
+    return;
+@
+
+
+<<global curhist>>=
+Auto*	curhist;
+@
+
+
+% also called by ATEXT
+<<function histtoauto>>=
+void
+histtoauto(void)
+{
+    Auto *l;
+
+    while(l = curhist) {
+        curhist = l->link;
+        l->link = curauto;
+        curauto = l;
+    }
+}
+@
+
+
+\section{[[AGOK]]}
+
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AGOK:
+    diag("unknown opcode\n%P", p);
+    p->pc = pc;
+    pc++;
+    break;
+@
+%x86:     diag("%s: GOK opcode in %s", pn, TNAME);
+
+
+\chapter{Loading Libraries}
+
+\section{Library search path}
+
+
+<<[[main()]] command line processing(arm)>>=
+case 'L':
+    addlibpath(EARGF(usage()));
+    break;
+@
+
+
+% was called 'a', but root is a better name
+<<[[main()]] locals(arm)>>=
+char *root;
+@
+
+<<constant LIBNAMELEN>>=
+#define	LIBNAMELEN	300
+@
+
+% used locals? move closer the the code that use it then
+<<[[main()]] locals(arm)>>=
+int c;
+char name[LIBNAMELEN];
+char *a;
+@
+% *a still needed now that renamed to root?
+
+
+<<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>=
+<<[[main()]] change root if ccroot>>
+
+// usually /{thestring}/lib/ as root = ""
+snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
+addlibpath(name);
+@
+
+% possible to change default / search path
+<<[[main()]] change root if ccroot>>=
+root = getenv("ccroot");
+
+if(root != nil && *root != '\0') {
+    if(!fileexists(root)) {
+        diag("nonexistent $ccroot: %s", root);
+        errorexit();
+    }
+}else
+    root = "";
+@
+%$
+
+
+
+
+<<global libdir>>=
+char**	libdir;
+@
+
+
+<<global nlibdir>>=
+int	nlibdir	= 0;
+@
+
+<<global maxlibdir>>=
+static	int	maxlibdir = 0;
+@
+
+
+
+
+<<function addlibpath>>=
+void
+addlibpath(char *arg)
+{
+    char **p;
+
+    // growing array libdir
+    if(nlibdir >= maxlibdir) {
+        if(maxlibdir == 0)
+            maxlibdir = 8;
+        else
+            maxlibdir *= 2;
+        p = malloc(maxlibdir*sizeof(*p));
+        if(p == nil) {
+            diag("out of memory");
+            errorexit();
+        }
+        memmove(p, libdir, nlibdir*sizeof(*p));
+        free(libdir);
+        libdir = p;
+    }
+
+    libdir[nlibdir++] = strdup(arg);
+}
+@
+
+
+\section{[[ar]] format}
+
+% from ar.h
+<<constant ARMAG>>=
+#define	ARMAG	"!<arch>\n"
+@
+
+<<constant SARMAG>>=
+#define	SARMAG	8
+@
+
+<<constant ARFMAG>>=
+#define	ARFMAG	"`\n"
+@
+
+<<constant SARNAME>>=
+#define SARNAME	16
+@
+
+<<struct ar_hdr>>=
+struct	ar_hdr
+{
+    char	name[SARNAME];
+    char	date[12];
+    char	uid[6];
+    char	gid[6];
+    char	mode[8];
+    char	size[10];
+    char	fmag[2];
+};
+@
+
+<<constant SAR_HDR>>=
+#define	SAR_HDR	(SARNAME+44)
+@
+
+\section{Loading libraries}
+
+\subsection{Loading libraries manually [[5l -lxxx]]}
+
+% when done manually by -l in command line of ld
+<<[[objfile()]] adjust file if -lxxx filename>>=
+if(file[0] == '-' && file[1] == 'l') {
+    snprint(pname, sizeof(pname), "lib%s.a", file+2);
+    e = findlib(pname);
+    if(e == nil) {
+        diag("cannot find library: %s", file);
+        errorexit();
+    }
+    snprint(name, sizeof(name), "%s/%s", e, pname);
+    file = name;
+}
+@
+
+<<function findlib>>=
+char*
+findlib(char *file)
+{
+    int i;
+    char name[LIBNAMELEN];
+
+    for(i = 0; i < nlibdir; i++) {
+        snprint(name, sizeof(name), "%s/%s", libdir[i], file);
+        if(fileexists(name))
+            return libdir[i];
+    }
+    return nil;
+}
+@
+
+
+
+
+<<[[objfile()]] other locals>>=
+long off, esym, cnt;
+bool work;
+Sym *s;
+char pname[LIBNAMELEN];
+char name[LIBNAMELEN];
+struct ar_hdr arhdr;
+char *e, *start, *stop;
+@
+
+<<global symname linker>>=
+char	symname[]	= SYMDEF;
+@
+
+
+<<[[objfile()]] when file is a library>>=
+    DBG("%5.2f ldlib: %s\n", cputime(), file);
+    l = read(f, &arhdr, SAR_HDR);
+    if(l != SAR_HDR) {
+        diag("%s: short read on archive file symbol header", file);
+        goto out;
+    }
+    if(strncmp(arhdr.name, symname, strlen(symname))) {
+        diag("%s: first entry not symbol header", file);
+        goto out;
+    }
+
+    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
+    off = SARMAG + SAR_HDR;
+
+    /*
+     * just bang the whole symbol file into memory
+     */
+    seek(f, off, 0);
+    cnt = esym - off;
+    start = malloc(cnt + 10);
+    cnt = read(f, start, cnt);
+    if(cnt <= 0){
+        close(f);
+        return;
+    }
+    stop = &start[cnt];
+    memset(stop, 0, 10);
+
+    work = true;
+
+    while(work) {
+
+        DBG("%5.2f library pass: %s\n", cputime(), file);
+
+        work = false;
+        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+            s = lookup(e+5, 0);
+            if(s->type != SXREF)
+                continue;
+            sprint(pname, "%s(%s)", file, s->name);
+
+            DBG("%5.2f library: %s\n", cputime(), pname);
+
+            l = e[1] & 0xff;
+            l |= (e[2] & 0xff) << 8;
+            l |= (e[3] & 0xff) << 16;
+            l |= (e[4] & 0xff) << 24;
+            seek(f, l, 0);
+            /* need readn to read the dumps (at least) */
+            l = readn(f, &arhdr, SAR_HDR);
+            if(l != SAR_HDR)
+                goto bad;
+            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
+                goto bad;
+            l = atolwhex(arhdr.size);
+            ldobj(f, l, pname);
+            if(s->type == SXREF) {
+                diag("%s: failed to load: %s", file, s->name);
+                errorexit();
+            }
+            work = true;
+            xrefresolv = true;
+        }
+    }
+    return;
+
+bad:
+    diag("%s: bad or out of date archive", file);
+out:
+    close(f);
+@
+
+% >> >> >>
+
+\subsection{Loading libraries automagically [[#pragma lib]]}
+
+% when done automatically
+
+% TODO LP split AHISTORY here
+
+
+<<function addhist>>=
+void
+addhist(long line, int type)
+{
+    Auto *u;
+    Sym *s;
+    int i, j, k;
+
+    u = malloc(sizeof(Auto));
+    s = malloc(sizeof(Sym));
+    s->name = malloc(2*(histfrogp+1) + 1);
+
+    u->asym = s;
+    u->type = type;
+    u->aoffset = line;
+    u->link = curhist;
+    curhist = u;
+
+    j = 1;
+    for(i=0; i<histfrogp; i++) {
+        k = histfrog[i]->value;
+        s->name[j+0] = k>>8;
+        s->name[j+1] = k;
+        j += 2;
+    }
+}
+@
+
+
+
+
+<<function addlib>>=
+void
+addlib(char *obj)
+{
+    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN], *p, *name;
+    int i, search;
+
+    if(histfrogp <= 0)
+        return;
+
+    name = fn1;
+    search = 0;
+    if(histfrog[0]->name[1] == '/') {
+        sprint(name, "");
+        i = 1;
+    } else if(histfrog[0]->name[1] == '.') {
+        sprint(name, ".");
+        i = 0;
+    } else {
+        sprint(name, "");
+        i = 0;
+        search = 1;
+    }
+
+    for(; i<histfrogp; i++) {
+        snprint(comp, sizeof comp, histfrog[i]->name+1);
+        for(;;) {
+            p = strstr(comp, "$O");
+            if(p == 0)
+                break;
+            memmove(p+1, p+2, strlen(p+2)+1);
+            p[0] = thechar;
+        }
+        for(;;) {
+            p = strstr(comp, "$M");
+            if(p == 0)
+                break;
+            if(strlen(comp)+strlen(thestring)-2+1 >= sizeof comp) {
+                diag("library component too long");
+                return;
+            }
+            memmove(p+strlen(thestring), p+2, strlen(p+2)+1);
+            memmove(p, thestring, strlen(thestring));
+        }
+        if(strlen(fn1) + strlen(comp) + 3 >= sizeof(fn1)) {
+            diag("library component too long");
+            return;
+        }
+        if(i > 0 || !search)
+            strcat(fn1, "/");
+        strcat(fn1, comp);
+    }
+
+    cleanname(name);
+
+    if(search){
+        p = findlib(name);
+        if(p != nil){
+            snprint(fn2, sizeof(fn2), "%s/%s", p, name);
+            name = fn2;
+        }
+    }
+
+
+    for(i=0; i<libraryp; i++)
+        if(strcmp(name, library[i]) == 0)
+            return;
+    if(libraryp == nelem(library)){
+        diag("too many autolibs; skipping %s", name);
+        return;
+    }
+
+    p = malloc(strlen(name) + 1);
+    strcpy(p, name);
+    library[libraryp] = p;
+    p = malloc(strlen(obj) + 1);
+    strcpy(p, obj);
+    libraryobj[libraryp] = p;
+    libraryp++;
+}
+@
+
+\chapter{Resolving}
+
+<<[[main()]] resolving phases>>=
+<<[[main()]] if export table or dynamic module(arm)>>
+patch();
+<<[[main()]] call doprofxxx() if profiling>>
+dodata();
+follow();
+if(firstp == P)
+    goto out;
+
+noops();
+span();
+@
 
 \section{[[patch()]]}
 
@@ -2655,152 +3936,297 @@ addpool(Prog *p, Adr *a)
 }
 @
 
-
-\section{Generating the executable, [[asmb()]]}
-% asmb? asm binary?
-
-% first function to actually use cout!
-
-<<global curp>>=
-Prog*	curp;
-@
+\chapter{Checking Signatures}
 
 
-% has to be a global? could not just be a local in asmb()?
-<<global OFFSET(arm)>>=
-long	OFFSET;
-@
 
+\chapter{Machine Code Generation (ARM)}
 
-<<function asmb(arm)>>=
-void
-asmb(void)
+% done by 5l, not 5a, surprisingly!
+
+% why? because allows more optimisations? cross libs? as in llvm?
+% also more compact and simple object format? and more cross platform?
+
+% ???
+<<struct Oprang(arm)>>=
+struct	Oprang
 {
-    Prog *p;
-    long t, etext;
-    Optab *o;
-
-    DBG("%5.2f asm\n", cputime());
-
-    // TEXT SECTION
-
-    OFFSET = HEADR;
-    seek(cout, OFFSET, SEEK__START);
-    pc = INITTEXT;
-
-    for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT) {
-            curtext = p;
-            autosize = p->to.offset + 4;
-        }
-        if(p->pc != pc) {
-            diag("phase error %lux sb %lux", p->pc, pc);
-            if(!debug['a'])
-                prasm(curp);
-            pc = p->pc;
-        }
-        curp = p;
-
-        // generate instruction! ?
-        o = oplook(p);	/* could probably avoid this call */
-        asmout(p, o);
-
-        pc += o->size;
-    }
-
-    if(debug['a'])
-        Bprint(&bso, "\n");
-    Bflush(&bso);
-
-    cflush();
-
-    /* output strings in text segment */
-    etext = INITTEXT + textsize;
-    for(t = pc; t < etext; t += sizeof(buf)-100) {
-        if(etext-t > sizeof(buf)-100)
-            datblk(t, sizeof(buf)-100, 1);
-        else
-            datblk(t, etext-t, 1);
-    }
-
-    // DATA SECTION
-
-    curtext = P;
-    switch(HEADTYPE) {
-    case H_PLAN9:
-        OFFSET = HEADR+textsize;
-        seek(cout, OFFSET, SEEK__START);
-        break;
-    <<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>
-    }
-
-    <<[[asmb()]] if dynamic module, before datblk()>>
-
-    for(t = 0; t < datsize; t += sizeof(buf)-100) {
-        if(datsize-t > sizeof(buf)-100)
-            datblk(t, sizeof(buf)-100, 0);
-        else
-            datblk(t, datsize-t, 0);
-    }
-
-    // SYMBOL TABLE
-
-    // modified by asmsym()
-    symsize = 0;
-    // modified by asmlc()
-    lcsize = 0;
-
-    if(!debug['s']) {
-        DBG("%5.2f sym\n", cputime());
-
-        switch(HEADTYPE) {
-        case H_PLAN9:
-            OFFSET = HEADR+textsize+datsize;
-            seek(cout, OFFSET, 0);
-            break;
-        <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>
-        }
-
-        asmsym();
-        DBG("%5.2f pc\n", cputime());
-
-        asmlc();
-        <<[[asmb()]] if dynamic module, call asmdyn()>>
-
-        cflush();
-    }
-    else {
-        <<[[asmb()]] if dynamic module and no symbol table generation>>
-    }
-
-    // HEADER
-
-    DBG("%5.2f header\n", cputime());
-
-    OFFSET = 0;
-    seek(cout, OFFSET, SEEK__START);
-
-    switch(HEADTYPE) {
-    // see Exec in a.out.h
-    case H_PLAN9:
-        <<[[asmb()]] if dynamic module magic header adjustment(arm)>>
-        else
-            lput(0x647);			/* magic */
-        lput(textsize);			/* sizes */
-        lput(datsize);
-        lput(bsssize);
-        lput(symsize);			/* nsyms */
-        lput(entryvalue());		/* va of entry */
-        lput(0L);
-        lput(lcsize);
-        break;
-
-    <<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>
-    }
-
-    cflush();
-}
+    Optab*	start;
+    Optab*	stop;
+};
 @
+
+%???
+<<struct Count(arm)>>=
+struct	Count
+{
+    long	count;
+    long	outof;
+};
+@
+
+
+\section{[[optab]]}
+
+
+<<global optab (linkers/5l/optab.c)(arm)>>=
+Optab	optab[] =
+{
+    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
+    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
+    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
+    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
+
+    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
+    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+    { AMOVW,	C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+    { AMVN,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+    { ACMP,		C_REG,	C_REG,	C_NONE,		 1, 4, 0 },
+
+    { AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
+    { AADD,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+    { AMOVW,	C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+    { AMVN,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+    { ACMP,		C_RCON,	C_REG,	C_NONE,		 2, 4, 0 },
+
+    { AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
+    { AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+    { AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+    { ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
+
+    { AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
+    { AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
+
+    { AB,		C_NONE,	C_NONE,	C_SBRA,		 5, 4, 0,	LPOOL },
+    { ABL,		C_NONE,	C_NONE,	C_SBRA,		 5, 4, 0 },
+    { ABEQ,		C_NONE,	C_NONE,	C_SBRA,		 5, 4, 0 },
+
+    { AB,		C_NONE,	C_NONE,	C_ROREG,	 6, 4, 0,	LPOOL },
+    { ABL,		C_NONE,	C_NONE,	C_ROREG,	 7, 8, 0 },
+
+    { ASLL,		C_RCON,	C_REG,	C_REG,		 8, 4, 0 },
+    { ASLL,		C_RCON,	C_NONE,	C_REG,		 8, 4, 0 },
+
+    { ASLL,		C_REG,	C_NONE,	C_REG,		 9, 4, 0 },
+    { ASLL,		C_REG,	C_REG,	C_REG,		 9, 4, 0 },
+
+    { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4, 0 },
+    { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
+
+    { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
+    { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
+    { AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4, 0 },
+
+    { AMOVW,	C_NCON,	C_NONE,	C_REG,		12, 4, 0 },
+    { AMOVW,	C_LCON,	C_NONE,	C_REG,		12, 4, 0,	LFROM },
+
+    { AADD,		C_NCON,	C_REG,	C_REG,		13, 8, 0 },
+    { AADD,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
+    { AMVN,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
+    { ACMP,		C_NCON,	C_REG,	C_NONE,		13, 8, 0 },
+    { AADD,		C_LCON,	C_REG,	C_REG,		13, 8, 0,	LFROM },
+    { AADD,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
+    { AMVN,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
+    { ACMP,		C_LCON,	C_REG,	C_NONE,		13, 8, 0,	LFROM },
+
+    { AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+    { AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4, 0 },
+    { AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+    { AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+
+    { AMUL,		C_REG,	C_REG,	C_REG,		15, 4, 0 },
+    { AMUL,		C_REG,	C_NONE,	C_REG,		15, 4, 0 },
+
+    { ADIV,		C_REG,	C_REG,	C_REG,		16, 4, 0 },
+    { ADIV,		C_REG,	C_NONE,	C_REG,		16, 4, 0 },
+
+    { AMULL,	C_REG,	C_REG,	C_REGREG,	17, 4, 0 },
+
+    { AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+    { AMOVW,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+    { AMOVW,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+    { AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+    { AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+    { AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+    { AMOVBU,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+    { AMOVBU,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+    { AMOVBU,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+
+    { AMOVW,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
+    { AMOVW,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
+    { AMOVW,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
+    { AMOVBU,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
+    { AMOVBU,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
+    { AMOVBU,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
+
+    { AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+    { AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+    { AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+    { AMOVH,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+    { AMOVH,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+    { AMOVH,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+    { AMOVHU,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+    { AMOVHU,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+    { AMOVHU,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+
+    { AMOVH,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
+    { AMOVH,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
+    { AMOVH,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
+    { AMOVHU,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
+    { AMOVHU,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
+    { AMOVHU,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
+
+    { AMOVW,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+    { AMOVW,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+    { AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+    { AMOVW,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+    { AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+    { AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+    { AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+    { AMOVB,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+    { AMOVBU,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+    { AMOVBU,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+    { AMOVBU,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+    { AMOVBU,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+
+    { AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
+    { AMOVW,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
+    { AMOVW,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
+    { AMOVW,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
+    { AMOVBU,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
+    { AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
+    { AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
+    { AMOVBU,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
+
+    { AMOVB,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+    { AMOVB,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+    { AMOVB,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
+    { AMOVB,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+    { AMOVH,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+    { AMOVH,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+    { AMOVH,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
+    { AMOVH,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+    { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+    { AMOVHU,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+    { AMOVHU,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
+    { AMOVHU,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+
+    { AMOVH,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
+    { AMOVH,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
+    { AMOVH,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
+    { AMOVH,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
+    { AMOVHU,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
+    { AMOVHU,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
+    { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
+    { AMOVHU,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
+
+    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
+    { AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
+
+    { AMOVW,	C_PSR,	C_NONE,	C_REG,		35, 4, 0 },
+    { AMOVW,	C_REG,	C_NONE,	C_PSR,		36, 4, 0 },
+    { AMOVW,	C_RCON,	C_NONE,	C_PSR,		37, 4, 0 },
+
+    { AMOVM,	C_LCON,	C_NONE,	C_SOREG,	38, 4, 0 },
+    { AMOVM,	C_SOREG,C_NONE,	C_LCON,		39, 4, 0 },
+
+    { ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4, 0 },
+
+    { ARFE,		C_NONE,	C_NONE,	C_NONE,		41, 4, 0 },
+
+    { AMOVF,	C_FREG,	C_NONE,	C_FEXT,		50, 4, REGSB },
+    { AMOVF,	C_FREG,	C_NONE,	C_FAUTO,	50, 4, REGSP },
+    { AMOVF,	C_FREG,	C_NONE,	C_FOREG,	50, 4, 0 },
+
+    { AMOVF,	C_FEXT,	C_NONE,	C_FREG,		51, 4, REGSB },
+    { AMOVF,	C_FAUTO,C_NONE,	C_FREG,		51, 4, REGSP },
+    { AMOVF,	C_FOREG,C_NONE,	C_FREG,		51, 4, 0 },
+
+    { AMOVF,	C_FREG,	C_NONE,	C_LEXT,		52, 12, REGSB,	LTO },
+    { AMOVF,	C_FREG,	C_NONE,	C_LAUTO,	52, 12, REGSP,	LTO },
+    { AMOVF,	C_FREG,	C_NONE,	C_LOREG,	52, 12, 0,	LTO },
+
+    { AMOVF,	C_LEXT,	C_NONE,	C_FREG,		53, 12, REGSB,	LFROM },
+    { AMOVF,	C_LAUTO,C_NONE,	C_FREG,		53, 12, REGSP,	LFROM },
+    { AMOVF,	C_LOREG,C_NONE,	C_FREG,		53, 12, 0,	LFROM },
+
+    { AMOVF,	C_FREG,	C_NONE,	C_ADDR,		68, 8, 0,	LTO },
+    { AMOVF,	C_ADDR,	C_NONE,	C_FREG,		69, 8, 0,	LFROM },
+
+    { AADDF,	C_FREG,	C_NONE,	C_FREG,		54, 4, 0 },
+    { AADDF,	C_FREG,	C_REG,	C_FREG,		54, 4, 0 },
+    { AADDF,	C_FCON,	C_NONE,	C_FREG,		54, 4, 0 },
+    { AADDF,	C_FCON,	C_REG,	C_FREG,		54, 4, 0 },
+    { AMOVF,	C_FCON,	C_NONE,	C_FREG,		54, 4, 0 },
+    { AMOVF,	C_FREG, C_NONE, C_FREG,		54, 4, 0 },
+
+    { ACMPF,	C_FREG,	C_REG,	C_NONE,		54, 4, 0 },
+    { ACMPF,	C_FCON,	C_REG,	C_NONE,		54, 4, 0 },
+
+    { AMOVFW,	C_FREG,	C_NONE,	C_REG,		55, 4, 0 },
+    { AMOVFW,	C_REG,	C_NONE,	C_FREG,		55, 4, 0 },
+
+    { AMOVW,	C_REG,	C_NONE,	C_FCR,		56, 4, 0 },
+    { AMOVW,	C_FCR,	C_NONE,	C_REG,		57, 4, 0 },
+
+    { AMOVW,	C_SHIFT,C_NONE,	C_REG,		59, 4, 0 },
+    { AMOVBU,	C_SHIFT,C_NONE,	C_REG,		59, 4, 0 },
+
+    { AMOVB,	C_SHIFT,C_NONE,	C_REG,		60, 4, 0 },
+
+    { AMOVW,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
+    { AMOVB,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
+    { AMOVBU,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
+
+    { ACASE,	C_REG,	C_NONE,	C_NONE,		62, 4, 0 },
+    { ABCASE,	C_NONE, C_NONE, C_SBRA,		63, 4, 0 },
+
+    { AADDF,	C_FREG,	C_NONE,	C_FREG,		74, 4, 0, VFP },
+    { AADDF,	C_FREG,	C_REG,	C_FREG,		74, 4, 0, VFP },
+    { AMOVF,	C_FREG, C_NONE, C_FREG,		74, 4, 0, VFP },
+    { ACMPF,	C_FREG,	C_REG,	C_NONE,		75, 8, 0, VFP },
+    { ACMPF,	C_FCON,	C_REG,	C_NONE,		75, 8, 0, VFP },
+    { AMOVFW,	C_FREG,	C_NONE,	C_REG,		76, 8, 0, VFP },
+    { AMOVFW,	C_REG,	C_NONE,	C_FREG,		76, 8, 0, VFP },
+
+    { AMOVH,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
+    { AMOVH,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
+    { AMOVH,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,	V4 },
+    { AMOVHU,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
+    { AMOVHU,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
+    { AMOVHU,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,	V4 },
+
+    { AMOVB,	C_HEXT,	C_NONE, C_REG,		71, 4, REGSB,	V4 },
+    { AMOVB,	C_HAUTO,C_NONE,	C_REG,		71, 4, REGSP,	V4 },
+    { AMOVB,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
+    { AMOVH,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
+    { AMOVH,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
+    { AMOVH,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
+    { AMOVHU,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
+    { AMOVHU,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
+    { AMOVHU,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
+
+    { AMOVH,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
+    { AMOVH,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
+    { AMOVH,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,	LTO|V4 },
+    { AMOVHU,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
+    { AMOVHU,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
+    { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,	LTO|V4 },
+
+    { AMOVB,	C_LEXT,	C_NONE, C_REG,		73, 8, REGSB,	LFROM|V4 },
+    { AMOVB,	C_LAUTO,C_NONE,	C_REG,		73, 8, REGSP,	LFROM|V4 },
+    { AMOVB,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
+    { AMOVH,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
+    { AMOVH,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
+    { AMOVH,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
+    { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
+    { AMOVHU,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
+    { AMOVHU,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
+
+    { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
+};
+@
+
 
 <<function oplook(arm)>>=
 Optab*
@@ -2862,178 +4288,7 @@ oplook(Prog *p)
 }
 @
 
-
-
-
-
-<<function entryvalue(arm)>>=
-long
-entryvalue(void)
-{
-    char *a;
-    Sym *s;
-
-    a = INITENTRY;
-
-    <<[[entryvalue()]] if digit INITENTRY>>
-
-    s = lookup(a, 0);
-
-    if(s->type == 0)
-        return INITTEXT;
-
-    switch(s->type) {
-    case STEXT:
-    case SLEAF:
-        break;
-    <<[[entryvalue()]] if dynamic module case>>
-    default:
-        diag("entry not text: %s", s->name);
-    }
-    return s->value;
-}
-@
-
-
-<<constant Dbufslop>>=
-#define	Dbufslop	100
-@
-
-
-<<function datblk(arm)>>=
-void
-datblk(long s, long n, int str)
-{
-    Sym *v;
-    Prog *p;
-    char *cast;
-    long a, l, fl, j, d;
-    int i, c;
-
-    memset(buf.dbuf, 0, n+Dbufslop);
-    for(p = datap; p != P; p = p->link) {
-        if(str != (p->from.sym->type == SSTRING))
-            continue;
-        curp = p;
-        a = p->from.sym->value + p->from.offset;
-        l = a - s;
-        c = p->reg;
-        i = 0;
-        if(l < 0) {
-            if(l+c <= 0)
-                continue;
-            while(l < 0) {
-                l++;
-                i++;
-            }
-        }
-        if(l >= n)
-            continue;
-        if(p->as != AINIT && p->as != ADYNT) {
-            for(j=l+(c-i)-1; j>=l; j--)
-                if(buf.dbuf[j]) {
-                    print("%P\n", p);
-                    diag("multiple initialization");
-                    break;
-                }
-        }
-        switch(p->to.type) {
-        default:
-            diag("unknown mode in initialization%P", p);
-            break;
-
-        case D_FCONST:
-            switch(c) {
-            default:
-            case 4:
-                fl = ieeedtof(p->to.ieee);
-                cast = (char*)&fl;
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[fnuxi4[i]];
-                    l++;
-                }
-                break;
-            case 8:
-                cast = (char*)p->to.ieee;
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[fnuxi8[i]];
-                    l++;
-                }
-                break;
-            }
-            break;
-
-        case D_SCONST:
-            for(; i<c; i++) {
-                buf.dbuf[l] = p->to.sval[i];
-                l++;
-            }
-            break;
-
-        case D_CONST:
-            d = p->to.offset;
-            v = p->to.sym;
-            if(v) {
-                switch(v->type) {
-                case SUNDEF:
-                    ckoff(v, d);
-                case STEXT:
-                case SLEAF:
-                case SSTRING:
-                    d += p->to.sym->value;
-                    break;
-                case SDATA:
-                case SBSS:
-                    d += p->to.sym->value + INITDAT;
-                }
-                <<[[datblk()]] if dynamic module(arm)>>
-            }
-            cast = (char*)&d;
-            switch(c) {
-            default:
-                diag("bad nuxi %d %d%P", c, i, curp);
-                break;
-            case 1:
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi1[i]];
-                    l++;
-                }
-                break;
-            case 2:
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi2[i]];
-                    l++;
-                }
-                break;
-            case 4:
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi4[i]];
-                    l++;
-                }
-                break;
-            }
-            break;
-        }
-    }
-    write(cout, buf.dbuf, n);
-}
-@
-
-
-
-<<function ckoff>>=
-void
-ckoff(Sym *s, long v)
-{
-    if(v < 0 || v >= 1<<Roffset)
-        diag("relocation offset %ld for %s out of range", v, s->name);
-}
-@
-
-% >>
-
-
-
+\section{[[asmout()]]}
 
 <<function asmout(arm)>>=
 void
@@ -4330,1325 +5585,142 @@ chipfloat(Ieee *e)
 
 
 
-\section{Checking for unresolved symbols, [[undef()]]}
+\section{[[datblk()]]}
 
-% rename check_if_still_undefined_symbols()?
-<<function undef>>=
+<<constant Dbufslop>>=
+#define	Dbufslop	100
+@
+
+
+<<function datblk(arm)>>=
 void
-undef(void)
+datblk(long s, long n, int str)
 {
-    int i;
-    Sym *s;
+    Sym *v;
+    Prog *p;
+    char *cast;
+    long a, l, fl, j, d;
+    int i, c;
 
-    for(i=0; i<NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->type == SXREF)
-                diag("%s: not defined", s->name);
+    memset(buf.dbuf, 0, n+Dbufslop);
+    for(p = datap; p != P; p = p->link) {
+        if(str != (p->from.sym->type == SSTRING))
+            continue;
+        curp = p;
+        a = p->from.sym->value + p->from.offset;
+        l = a - s;
+        c = p->reg;
+        i = 0;
+        if(l < 0) {
+            if(l+c <= 0)
+                continue;
+            while(l < 0) {
+                l++;
+                i++;
+            }
+        }
+        if(l >= n)
+            continue;
+        if(p->as != AINIT && p->as != ADYNT) {
+            for(j=l+(c-i)-1; j>=l; j--)
+                if(buf.dbuf[j]) {
+                    print("%P\n", p);
+                    diag("multiple initialization");
+                    break;
+                }
+        }
+        switch(p->to.type) {
+        default:
+            diag("unknown mode in initialization%P", p);
+            break;
+
+        case D_FCONST:
+            switch(c) {
+            default:
+            case 4:
+                fl = ieeedtof(p->to.ieee);
+                cast = (char*)&fl;
+                for(; i<c; i++) {
+                    buf.dbuf[l] = cast[fnuxi4[i]];
+                    l++;
+                }
+                break;
+            case 8:
+                cast = (char*)p->to.ieee;
+                for(; i<c; i++) {
+                    buf.dbuf[l] = cast[fnuxi8[i]];
+                    l++;
+                }
+                break;
+            }
+            break;
+
+        case D_SCONST:
+            for(; i<c; i++) {
+                buf.dbuf[l] = p->to.sval[i];
+                l++;
+            }
+            break;
+
+        case D_CONST:
+            d = p->to.offset;
+            v = p->to.sym;
+            if(v) {
+                switch(v->type) {
+                case SUNDEF:
+                    ckoff(v, d);
+                case STEXT:
+                case SLEAF:
+                case SSTRING:
+                    d += p->to.sym->value;
+                    break;
+                case SDATA:
+                case SBSS:
+                    d += p->to.sym->value + INITDAT;
+                }
+                <<[[datblk()]] if dynamic module(arm)>>
+            }
+            cast = (char*)&d;
+            switch(c) {
+            default:
+                diag("bad nuxi %d %d%P", c, i, curp);
+                break;
+            case 1:
+                for(; i<c; i++) {
+                    buf.dbuf[l] = cast[inuxi1[i]];
+                    l++;
+                }
+                break;
+            case 2:
+                for(; i<c; i++) {
+                    buf.dbuf[l] = cast[inuxi2[i]];
+                    l++;
+                }
+                break;
+            case 4:
+                for(; i<c; i++) {
+                    buf.dbuf[l] = cast[inuxi4[i]];
+                    l++;
+                }
+                break;
+            }
+            break;
+        }
+    }
+    write(cout, buf.dbuf, n);
+}
+@
+
+<<function ckoff>>=
+void
+ckoff(Sym *s, long v)
+{
+    if(v < 0 || v >= 1<<Roffset)
+        diag("relocation offset %ld for %s out of range", v, s->name);
 }
 @
 
 % >>
-
-
-\chapter{Loading Objects}
-% was called parsing, but objects are stored in a binary format so
-% "loading" is more appropriate I think
-
-% essentially reverse operation than object generation in Assembler.nw.
-% hmmm if C had proper ADT and a Marshall module that would be easier ...
-% (but maybe less other-languages friendly)
-% could factorize code with libmach?
-
-% why not using 5obj.c from libmach/? because 5obj.c is incomplete?
-% care just about symbol table?
-
-% each call to ldobj() will increment this pc
-<<global pc>>=
-long	pc = 0;
-@
-
-
-
-
-% This is for the D_STATIC; to handle conflicts with different files
-% defining the same static entity. This is bumped each time
-% a new object file is parsed, so it's safe.
-<<global version>>=
-int	version = 0;
-@
-
-
-
-
-
-<<[[ldobj()]] locals(arm)>>=
-Sym *h[NSYM];
-Sym *di;
-Sym *s;
-long ipc;
-@
-
-
-<<[[ldobj()]] locals(arm)>>=
-Prog *t;
-byte *stop;
-int v;
-ulong sig;
-@
-
-
-
-
-<<[[ldobj()]] locals(arm)>>=
-byte *bloc;
-byte *bsize;
-int r;
-@
-% and parameter 'int c'
-
-<<[[ldobj()]] bloc and bsize init>>=
-bsize = buf.xbuf;
-bloc = buf.xbuf;
-@
-
-
-<<[[ldobj()]] read if needed in loop:, adjust block and bsize>>=
-r = bsize - bloc;
-if(r < 100 && r < c) {		/* enough for largest prog */
-    bsize = readsome(f, buf.xbuf, bloc, bsize, c);
-    if(bsize == 0)
-        goto eof;
-    bloc = buf.xbuf;
-    goto loop;
-}
-@
-% >> >> >> >>
-
-
-\section{[[ldobj()]]}
-
-<<[[ldobj()]] locals(arm)>>=
-// enum<opcode>
-int o;
-Prog *p;
-@
-% the instruction p will be allocated
-
-<<[[ldobj()]] locals(arm)>>=
-bool skip;
-@
-
-% main -> objfile -> <>
-% f = fd of opened object file
-% c = size of object file, 
-% pn = filename of object, 
-
-<<function ldobj(arm)>>=
-void
-ldobj(fdt f, long c, char *pn)
-{
-    <<[[ldobj()]] locals(arm)>>
-
-    <<[[ldobj()]] grow filen if not enough space>>
-    filen[files++] = strdup(pn);
-
-    <<[[ldobj()]] bloc and bsize init>>
-
-    di = S;
-
-// can come from AEND
-newloop:
-    version++;
-    memset(h, 0, sizeof(h));
-    histfrogp = 0;
-    ipc = pc;
-    skip = false;
-
-loop:
-    if(c <= 0)
-        goto eof;
-
-    <<[[ldobj()]] read if needed in loop:, adjust block and bsize>>
-
-    o = bloc[0];		/* as */
-    <<[[ldobj()]] sanity check opcode in range(arm)>>
-    <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>
-
-    //TODO: factorize
-    if(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
-    // reading the object binary file, opposite of outcode() in Assembler.nw
-    p->as = o;
-    p->scond = bloc[1];
-    p->reg   = bloc[2];
-    p->line  = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
-    r = zaddr(bloc+7, &p->from, h) + 7;
-    r += zaddr(bloc+r, &p->to, h);
-
-    bloc += r;
-    c -= r;
-
-    if(p->reg > NREG)
-        diag("register out of range %d", p->reg);
-
-    p->link = P;
-    p->cond = P;
-
-    if(debug['W'])
-        print("%P\n", p);
-
-    switch(o) {
-    <<[[ldobj()]] switch opcode cases(arm)>>
-    default:
-    casedef:
-        if(skip)
-            nopout(p);
-
-        if(p->to.type == D_BRANCH)
-            p->to.offset += ipc;
-
-        lastp->link = p;
-        lastp = p;
-
-        p->pc = pc;
-        pc++;
-        break;
-    }
-    goto loop;
-
-eof:
-    diag("truncated object file: %s", pn);
-}
-@
-
-
-
-
-
-
-
-<<[[ldobj()]] sanity check opcode in range(arm)>>=
-if(o <= AXXX || o >= ALAST) {
-    diag("%s: line %ld: opcode out of range %d", pn, pc-ipc, o);
-    print("	probably not a .5 file\n");
-    errorexit();
-}
-@
-
-
-% reverse of zaddr() in Assembler.nw 
-<<function zaddr(arm)>>=
-int
-zaddr(byte *p, Adr *a, Sym *h[])
-{
-    int i, c;
-    int l;
-    Sym *s;
-    Auto *u;
-
-    <<[[zaddr()]] sanity check symbol range>>
-    a->type = p[0];
-    a->reg = p[1];
-    a->sym = h[c];
-    a->name = p[3];
-
-    c = 4;
-
-    <<[[zaddr()]] sanity check register range>>
-
-    switch(a->type) {
-    <<[[zaddr()]] cases>>
-    default:
-        print("unknown type %d\n", a->type);
-        p[0] = ALAST+1;
-        return 0;	/*  force real diagnostic */
-
-    }
-    s = a->sym;
-    if(s == S)
-        return c;
-
-    i = a->name;
-    if(i != D_AUTO && i != D_PARAM)
-        return c;
-
-    l = a->offset;
-    for(u=curauto; u; u=u->link)
-        if(u->asym == s)
-         if(u->type == i) {
-            if(u->aoffset > l)
-                u->aoffset = l;
-            return c;
-        }
-
-    //TODO: factorize
-    while(nhunk < sizeof(Auto))
-        gethunk();
-    u = (Auto*)hunk;
-    nhunk -= sizeof(Auto);
-    hunk += sizeof(Auto);
-
-    u->link = curauto;
-    curauto = u;
-    u->asym = s;
-    u->aoffset = l;
-    u->type = i;
-
-    return c;
-}
-@
-
-
-<<[[zaddr()]] cases>>=
-case D_NONE:
-case D_REG:
-case D_FREG:
-case D_PSR:
-case D_FPCR:
-    break;
-
-case D_REGREG:
-    a->offset = p[4];
-    c++;
-    break;
-
-case D_BRANCH:
-case D_OREG:
-case D_CONST:
-case D_OCONST:
-case D_SHIFT:
-    a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
-    c += 4;
-    break;
-
-case D_SCONST:
-    //TODO: factorize
-    while(nhunk < NSNAME)
-        gethunk();
-    a->sval = (char*)hunk;
-    nhunk -= NSNAME;
-    hunk += NSNAME;
-
-    memmove(a->sval, p+4, NSNAME);
-    c += NSNAME;
-    break;
-
-case D_FCONST:
-    //TODO: factorize
-    while(nhunk < sizeof(Ieee))
-        gethunk();
-    a->ieee = (Ieee*)hunk;
-    nhunk -= NSNAME;
-    hunk += NSNAME;
-
-    a->ieee->l = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
-    a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
-    c += 8;
-    break;
-@
-
-<<[[zaddr()]] sanity check symbol range>>=
-c = p[2];
-if(c < 0 || c > NSYM){
-    print("sym out of range: %d\n", c);
-    p[0] = ALAST+1;
-    return 0;
-}
-@
-<<[[zaddr()]] sanity check register range>>=
-if(a->reg < 0 || a->reg > NREG) {
-    print("register out of range %d\n", a->reg);
-    p[0] = ALAST+1;
-    return 0;	/*  force real diagnostic */
-}
-@
-
-
-
-
-
-<<function nopout>>=
-void
-nopout(Prog *p)
-{
-    p->as = ANOP;
-    p->from.type = D_NONE;
-    p->to.type = D_NONE;
-}
-@
-
-
-
-\section{[[ATEXT]]}
-
-<<global curauto>>=
-Auto*	curauto;
-@
-
-
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case ATEXT:
-    if(curtext != P) {
-        histtoauto();
-        curtext->to.autom = curauto;
-        curauto = 0;
-    }
-    skip = false;
-    curtext = p;
-    autosize = (p->to.offset+3L) & ~3L;
-    p->to.offset = autosize;
-    autosize += 4;
-    s = p->from.sym;
-
-    if(s == S) {
-        diag("TEXT must have a name\n%P", p);
-        errorexit();
-    }
-
-    if(s->type != 0 && s->type != SXREF) {
-        if(p->reg & DUPOK) {
-            skip = 1;
-            goto casedef;
-        }
-        diag("redefinition: %s\n%P", s->name, p);
-    }
-
-    s->type = STEXT;
-    s->value = pc;
-
-    //add_list(firstp, lastp, p)
-    lastp->link = p;
-    lastp = p;
-
-    p->pc = pc;
-    pc++;
-
-    //add_list(textp, etextp, p)
-    if(textp == P) {
-        textp = p;
-        etextp = p;
-        goto loop;
-    }
-
-    etextp->cond = p;
-    etextp = p;
-
-    break;
-@
-%$
-
-
-\section{[[ADATA]]}
-
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case ADATA:
-    if(p->from.sym == S) {
-        diag("DATA without a sym\n%P", p);
-        break;
-    }
-    //add_list(datap, edatap, p)
-    p->link = datap;
-    datap = p;
-
-    break;
-@
-
-\section{[[AGLOBL]]}
-
-% not added in any list? because bss?
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AGLOBL:
-    s = p->from.sym;
-    if(s == S) {
-        diag("GLOBL must have a name\n%P", p);
-        errorexit();
-    }
-    if(s->type == 0 || s->type == SXREF) {
-        s->type = SBSS;
-        s->value = 0;
-    }
-    if(s->type != SBSS) {
-        diag("redefinition: %s\n%P", s->name, p);
-        s->type = SBSS;
-        s->value = 0;
-    }
-    if(p->to.offset > s->value)
-        s->value = p->to.offset;
-    break;
-@
-
-\section{[[ANAME]], [[ASIGNAME]]}
-
-<<global histfrogp>>=
-int	histfrogp;
-@
-
-<<global histfrog>>=
-Sym*	histfrog[MAXHIST];
-@
-
-
-<<global histgen>>=
-int	histgen = 0;
-@
-
-
-% used by what? for debugging? when signature conflict! to print
-% current filenames in conflict
-
-<<[[ldobj()]] locals(arm)>>=
-// array<string>, length used = files, extended every 16
-static char **filen;
-static int files = 0;
-char **nfilen;
-@
-
-<<[[ldobj()]] grow filen if not enough space>>=
-if((files&15) == 0){
-    nfilen = malloc((files+16)*sizeof(char*));
-    memmove(nfilen, filen, files*sizeof(char*));
-    free(filen);
-    filen = nfilen;
-}
-@
-
-
-
-
-<<[[ldobj()]] if ANAME or ASIGNAME(arm)>>=
-if(o == ANAME || o == ASIGNAME) {
-    sig = 0;
-    if(o == ASIGNAME){
-        sig = bloc[1] | (bloc[2]<<8) | (bloc[3]<<16) | (bloc[4]<<24);
-        bloc += 4;
-        c -= 4;
-    }
-    stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
-    if(stop == 0){
-        bsize = readsome(f, buf.xbuf, bloc, bsize, c);
-        if(bsize == 0)
-            goto eof;
-        bloc = buf.xbuf;
-        stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
-        if(stop == 0){
-            fprint(2, "%s: name too long\n", pn);
-            errorexit();
-        }
-    }
-    v = bloc[1];	/* type */
-    o = bloc[2];	/* sym */
-    bloc += 3;
-    c -= 3;
-
-    r = 0;
-    if(v == D_STATIC)
-        r = version;
-    s = lookup((char*)bloc, r);
-    c -= &stop[1] - bloc;
-    bloc = stop + 1;
-
-    if(sig != 0){
-        if(s->sig != 0 && s->sig != sig)
-            diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
-        s->sig = sig;
-        s->file = files-1;
-    }
-
-    if(debug['W'])
-        print("	ANAME	%s\n", s->name);
-    h[o] = s;
-    if((v == D_EXTERN || v == D_STATIC) && s->type == 0)
-        s->type = SXREF;
-    if(v == D_FILE) {
-        if(s->type != SFILE) {
-            histgen++;
-            s->type = SFILE;
-            s->value = histgen;
-        }
-        if(histfrogp < MAXHIST) {
-            histfrog[histfrogp] = s;
-            histfrogp++;
-        } else
-            collapsefrog(s);
-    }
-    goto loop;
-}
-@
-
-<<function collapsefrog>>=
-void
-collapsefrog(Sym *s)
-{
-    int i;
-
-    /*
-     * bad encoding of path components only allows
-     * MAXHIST components. if there is an overflow,
-     * first try to collapse xxx/..
-     */
-    for(i=1; i<histfrogp; i++)
-        if(strcmp(histfrog[i]->name+1, "..") == 0) {
-            memmove(histfrog+i-1, histfrog+i+1,
-                (histfrogp-i-1)*sizeof(histfrog[0]));
-            histfrogp--;
-            goto out;
-        }
-
-    /*
-     * next try to collapse .
-     */
-    for(i=0; i<histfrogp; i++)
-        if(strcmp(histfrog[i]->name+1, ".") == 0) {
-            memmove(histfrog+i, histfrog+i+1,
-                (histfrogp-i-1)*sizeof(histfrog[0]));
-            goto out;
-        }
-
-    /*
-     * last chance, just truncate from front
-     */
-    memmove(histfrog+0, histfrog+1,
-        (histfrogp-1)*sizeof(histfrog[0]));
-
-out:
-    histfrog[histfrogp-1] = s;
-}
-@
-
-
-
-\section{[[AHISTORY]]}
-
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AHISTORY:
-    if(p->to.offset == -1) {
-        addlib(pn);
-        histfrogp = 0;
-        goto loop;
-    }
-    addhist(p->line, D_FILE);		/* 'z' */
-    if(p->to.offset)
-        addhist(p->to.offset, D_FILE1);	/* 'Z' */
-    histfrogp = 0;
-    goto loop;
-@
-
-\section{[[AEND]]}
-
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AEND:
-    histtoauto();
-    if(curtext != P)
-        curtext->to.autom = curauto;
-    curauto = 0;
-    curtext = P;
-    if(c)
-        goto newloop;
-    return;
-@
-
-
-<<global curhist>>=
-Auto*	curhist;
-@
-
-
-% also called by ATEXT
-<<function histtoauto>>=
-void
-histtoauto(void)
-{
-    Auto *l;
-
-    while(l = curhist) {
-        curhist = l->link;
-        l->link = curauto;
-        curauto = l;
-    }
-}
-@
-
-
-\section{[[AGOK]]}
-
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AGOK:
-    diag("unknown opcode\n%P", p);
-    p->pc = pc;
-    pc++;
-    break;
-@
-%x86:     diag("%s: GOK opcode in %s", pn, TNAME);
-
-
-\chapter{Loading Libraries}
-
-\section{Library search path}
-
-
-<<[[main()]] command line processing(arm)>>=
-case 'L':
-    addlibpath(EARGF(usage()));
-    break;
-@
-
-
-% was called 'a', but root is a better name
-<<[[main()]] locals(arm)>>=
-char *root;
-@
-
-<<constant LIBNAMELEN>>=
-#define	LIBNAMELEN	300
-@
-
-% used locals? move closer the the code that use it then
-<<[[main()]] locals(arm)>>=
-int c;
-char name[LIBNAMELEN];
-char *a;
-@
-% *a still needed now that renamed to root?
-
-
-<<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>=
-<<[[main()]] change root if ccroot>>
-
-// usually /{thestring}/lib/ as root = ""
-snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
-addlibpath(name);
-@
-
-% possible to change default / search path
-<<[[main()]] change root if ccroot>>=
-root = getenv("ccroot");
-
-if(root != nil && *root != '\0') {
-    if(!fileexists(root)) {
-        diag("nonexistent $ccroot: %s", root);
-        errorexit();
-    }
-}else
-    root = "";
-@
-%$
-
-
-
-
-<<global libdir>>=
-char**	libdir;
-@
-
-
-<<global nlibdir>>=
-int	nlibdir	= 0;
-@
-
-<<global maxlibdir>>=
-static	int	maxlibdir = 0;
-@
-
-
-
-
-<<function addlibpath>>=
-void
-addlibpath(char *arg)
-{
-    char **p;
-
-    // growing array libdir
-    if(nlibdir >= maxlibdir) {
-        if(maxlibdir == 0)
-            maxlibdir = 8;
-        else
-            maxlibdir *= 2;
-        p = malloc(maxlibdir*sizeof(*p));
-        if(p == nil) {
-            diag("out of memory");
-            errorexit();
-        }
-        memmove(p, libdir, nlibdir*sizeof(*p));
-        free(libdir);
-        libdir = p;
-    }
-
-    libdir[nlibdir++] = strdup(arg);
-}
-@
-
-
-\section{[[ar]] format}
-
-% from ar.h
-<<constant ARMAG>>=
-#define	ARMAG	"!<arch>\n"
-@
-
-<<constant SARMAG>>=
-#define	SARMAG	8
-@
-
-<<constant ARFMAG>>=
-#define	ARFMAG	"`\n"
-@
-
-<<constant SARNAME>>=
-#define SARNAME	16
-@
-
-<<struct ar_hdr>>=
-struct	ar_hdr
-{
-    char	name[SARNAME];
-    char	date[12];
-    char	uid[6];
-    char	gid[6];
-    char	mode[8];
-    char	size[10];
-    char	fmag[2];
-};
-@
-
-<<constant SAR_HDR>>=
-#define	SAR_HDR	(SARNAME+44)
-@
-
-\section{Loading libraries}
-
-\subsection{Loading libraries manually [[5l -lxxx]]}
-
-% when done manually by -l in command line of ld
-<<[[objfile()]] adjust file if -lxxx filename>>=
-if(file[0] == '-' && file[1] == 'l') {
-    snprint(pname, sizeof(pname), "lib%s.a", file+2);
-    e = findlib(pname);
-    if(e == nil) {
-        diag("cannot find library: %s", file);
-        errorexit();
-    }
-    snprint(name, sizeof(name), "%s/%s", e, pname);
-    file = name;
-}
-@
-
-<<function findlib>>=
-char*
-findlib(char *file)
-{
-    int i;
-    char name[LIBNAMELEN];
-
-    for(i = 0; i < nlibdir; i++) {
-        snprint(name, sizeof(name), "%s/%s", libdir[i], file);
-        if(fileexists(name))
-            return libdir[i];
-    }
-    return nil;
-}
-@
-
-
-
-
-<<[[objfile()]] other locals>>=
-long off, esym, cnt;
-bool work;
-Sym *s;
-char pname[LIBNAMELEN];
-char name[LIBNAMELEN];
-struct ar_hdr arhdr;
-char *e, *start, *stop;
-@
-
-<<global symname linker>>=
-char	symname[]	= SYMDEF;
-@
-
-
-<<[[objfile()]] when file is a library>>=
-    DBG("%5.2f ldlib: %s\n", cputime(), file);
-    l = read(f, &arhdr, SAR_HDR);
-    if(l != SAR_HDR) {
-        diag("%s: short read on archive file symbol header", file);
-        goto out;
-    }
-    if(strncmp(arhdr.name, symname, strlen(symname))) {
-        diag("%s: first entry not symbol header", file);
-        goto out;
-    }
-
-    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
-    off = SARMAG + SAR_HDR;
-
-    /*
-     * just bang the whole symbol file into memory
-     */
-    seek(f, off, 0);
-    cnt = esym - off;
-    start = malloc(cnt + 10);
-    cnt = read(f, start, cnt);
-    if(cnt <= 0){
-        close(f);
-        return;
-    }
-    stop = &start[cnt];
-    memset(stop, 0, 10);
-
-    work = true;
-
-    while(work) {
-
-        DBG("%5.2f library pass: %s\n", cputime(), file);
-
-        work = false;
-        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
-            s = lookup(e+5, 0);
-            if(s->type != SXREF)
-                continue;
-            sprint(pname, "%s(%s)", file, s->name);
-
-            DBG("%5.2f library: %s\n", cputime(), pname);
-
-            l = e[1] & 0xff;
-            l |= (e[2] & 0xff) << 8;
-            l |= (e[3] & 0xff) << 16;
-            l |= (e[4] & 0xff) << 24;
-            seek(f, l, 0);
-            /* need readn to read the dumps (at least) */
-            l = readn(f, &arhdr, SAR_HDR);
-            if(l != SAR_HDR)
-                goto bad;
-            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
-                goto bad;
-            l = atolwhex(arhdr.size);
-            ldobj(f, l, pname);
-            if(s->type == SXREF) {
-                diag("%s: failed to load: %s", file, s->name);
-                errorexit();
-            }
-            work = true;
-            xrefresolv = true;
-        }
-    }
-    return;
-
-bad:
-    diag("%s: bad or out of date archive", file);
-out:
-    close(f);
-@
-
-% >> >> >>
-
-\subsection{Loading libraries automagically [[#pragma lib]]}
-
-% when done automatically
-
-% TODO LP split AHISTORY here
-
-
-<<function addhist>>=
-void
-addhist(long line, int type)
-{
-    Auto *u;
-    Sym *s;
-    int i, j, k;
-
-    u = malloc(sizeof(Auto));
-    s = malloc(sizeof(Sym));
-    s->name = malloc(2*(histfrogp+1) + 1);
-
-    u->asym = s;
-    u->type = type;
-    u->aoffset = line;
-    u->link = curhist;
-    curhist = u;
-
-    j = 1;
-    for(i=0; i<histfrogp; i++) {
-        k = histfrog[i]->value;
-        s->name[j+0] = k>>8;
-        s->name[j+1] = k;
-        j += 2;
-    }
-}
-@
-
-
-
-
-<<function addlib>>=
-void
-addlib(char *obj)
-{
-    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN], *p, *name;
-    int i, search;
-
-    if(histfrogp <= 0)
-        return;
-
-    name = fn1;
-    search = 0;
-    if(histfrog[0]->name[1] == '/') {
-        sprint(name, "");
-        i = 1;
-    } else if(histfrog[0]->name[1] == '.') {
-        sprint(name, ".");
-        i = 0;
-    } else {
-        sprint(name, "");
-        i = 0;
-        search = 1;
-    }
-
-    for(; i<histfrogp; i++) {
-        snprint(comp, sizeof comp, histfrog[i]->name+1);
-        for(;;) {
-            p = strstr(comp, "$O");
-            if(p == 0)
-                break;
-            memmove(p+1, p+2, strlen(p+2)+1);
-            p[0] = thechar;
-        }
-        for(;;) {
-            p = strstr(comp, "$M");
-            if(p == 0)
-                break;
-            if(strlen(comp)+strlen(thestring)-2+1 >= sizeof comp) {
-                diag("library component too long");
-                return;
-            }
-            memmove(p+strlen(thestring), p+2, strlen(p+2)+1);
-            memmove(p, thestring, strlen(thestring));
-        }
-        if(strlen(fn1) + strlen(comp) + 3 >= sizeof(fn1)) {
-            diag("library component too long");
-            return;
-        }
-        if(i > 0 || !search)
-            strcat(fn1, "/");
-        strcat(fn1, comp);
-    }
-
-    cleanname(name);
-
-    if(search){
-        p = findlib(name);
-        if(p != nil){
-            snprint(fn2, sizeof(fn2), "%s/%s", p, name);
-            name = fn2;
-        }
-    }
-
-
-    for(i=0; i<libraryp; i++)
-        if(strcmp(name, library[i]) == 0)
-            return;
-    if(libraryp == nelem(library)){
-        diag("too many autolibs; skipping %s", name);
-        return;
-    }
-
-    p = malloc(strlen(name) + 1);
-    strcpy(p, name);
-    library[libraryp] = p;
-    p = malloc(strlen(obj) + 1);
-    strcpy(p, obj);
-    libraryobj[libraryp] = p;
-    libraryp++;
-}
-@
-
-\chapter{Resolving}
-
-\chapter{Checking Signatures}
-
-
-
-\chapter{Machine Code Generation (ARM)}
-
-% done by 5l, not 5a, surprisingly!
-
-% why? because allows more optimisations? cross libs? as in llvm?
-% also more compact and simple object format? and more cross platform?
-
-\section{[[optab]]}
-
-
-<<global optab (linkers/5l/optab.c)(arm)>>=
-Optab	optab[] =
-{
-    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
-    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
-    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
-    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
-
-    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
-    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-    { AMOVW,	C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-    { AMVN,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-    { ACMP,		C_REG,	C_REG,	C_NONE,		 1, 4, 0 },
-
-    { AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
-    { AADD,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-    { AMOVW,	C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-    { AMVN,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-    { ACMP,		C_RCON,	C_REG,	C_NONE,		 2, 4, 0 },
-
-    { AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
-    { AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
-    { AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
-    { ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
-
-    { AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
-    { AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
-
-    { AB,		C_NONE,	C_NONE,	C_SBRA,		 5, 4, 0,	LPOOL },
-    { ABL,		C_NONE,	C_NONE,	C_SBRA,		 5, 4, 0 },
-    { ABEQ,		C_NONE,	C_NONE,	C_SBRA,		 5, 4, 0 },
-
-    { AB,		C_NONE,	C_NONE,	C_ROREG,	 6, 4, 0,	LPOOL },
-    { ABL,		C_NONE,	C_NONE,	C_ROREG,	 7, 8, 0 },
-
-    { ASLL,		C_RCON,	C_REG,	C_REG,		 8, 4, 0 },
-    { ASLL,		C_RCON,	C_NONE,	C_REG,		 8, 4, 0 },
-
-    { ASLL,		C_REG,	C_NONE,	C_REG,		 9, 4, 0 },
-    { ASLL,		C_REG,	C_REG,	C_REG,		 9, 4, 0 },
-
-    { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4, 0 },
-    { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
-
-    { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
-    { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
-    { AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4, 0 },
-
-    { AMOVW,	C_NCON,	C_NONE,	C_REG,		12, 4, 0 },
-    { AMOVW,	C_LCON,	C_NONE,	C_REG,		12, 4, 0,	LFROM },
-
-    { AADD,		C_NCON,	C_REG,	C_REG,		13, 8, 0 },
-    { AADD,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
-    { AMVN,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
-    { ACMP,		C_NCON,	C_REG,	C_NONE,		13, 8, 0 },
-    { AADD,		C_LCON,	C_REG,	C_REG,		13, 8, 0,	LFROM },
-    { AADD,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
-    { AMVN,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
-    { ACMP,		C_LCON,	C_REG,	C_NONE,		13, 8, 0,	LFROM },
-
-    { AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-    { AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4, 0 },
-    { AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-    { AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-
-    { AMUL,		C_REG,	C_REG,	C_REG,		15, 4, 0 },
-    { AMUL,		C_REG,	C_NONE,	C_REG,		15, 4, 0 },
-
-    { ADIV,		C_REG,	C_REG,	C_REG,		16, 4, 0 },
-    { ADIV,		C_REG,	C_NONE,	C_REG,		16, 4, 0 },
-
-    { AMULL,	C_REG,	C_REG,	C_REGREG,	17, 4, 0 },
-
-    { AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-    { AMOVW,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-    { AMOVW,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-    { AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-    { AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-    { AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-    { AMOVBU,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-    { AMOVBU,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-    { AMOVBU,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-
-    { AMOVW,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
-    { AMOVW,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
-    { AMOVW,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
-    { AMOVBU,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
-    { AMOVBU,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
-    { AMOVBU,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
-
-    { AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-    { AMOVH,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVH,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVH,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-    { AMOVHU,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVHU,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVHU,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-
-    { AMOVH,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
-    { AMOVH,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
-    { AMOVH,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
-    { AMOVHU,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
-    { AMOVHU,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
-    { AMOVHU,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
-
-    { AMOVW,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-    { AMOVW,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-    { AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVW,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
-
-    { AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
-    { AMOVW,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
-    { AMOVW,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
-    { AMOVW,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
-    { AMOVBU,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
-    { AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
-    { AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
-    { AMOVBU,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
-
-    { AMOVB,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVB,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVB,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVB,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
-    { AMOVH,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVH,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVH,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVH,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
-    { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVHU,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVHU,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVHU,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
-
-    { AMOVH,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
-    { AMOVH,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
-    { AMOVH,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
-    { AMOVH,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
-
-    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
-    { AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
-
-    { AMOVW,	C_PSR,	C_NONE,	C_REG,		35, 4, 0 },
-    { AMOVW,	C_REG,	C_NONE,	C_PSR,		36, 4, 0 },
-    { AMOVW,	C_RCON,	C_NONE,	C_PSR,		37, 4, 0 },
-
-    { AMOVM,	C_LCON,	C_NONE,	C_SOREG,	38, 4, 0 },
-    { AMOVM,	C_SOREG,C_NONE,	C_LCON,		39, 4, 0 },
-
-    { ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4, 0 },
-
-    { ARFE,		C_NONE,	C_NONE,	C_NONE,		41, 4, 0 },
-
-    { AMOVF,	C_FREG,	C_NONE,	C_FEXT,		50, 4, REGSB },
-    { AMOVF,	C_FREG,	C_NONE,	C_FAUTO,	50, 4, REGSP },
-    { AMOVF,	C_FREG,	C_NONE,	C_FOREG,	50, 4, 0 },
-
-    { AMOVF,	C_FEXT,	C_NONE,	C_FREG,		51, 4, REGSB },
-    { AMOVF,	C_FAUTO,C_NONE,	C_FREG,		51, 4, REGSP },
-    { AMOVF,	C_FOREG,C_NONE,	C_FREG,		51, 4, 0 },
-
-    { AMOVF,	C_FREG,	C_NONE,	C_LEXT,		52, 12, REGSB,	LTO },
-    { AMOVF,	C_FREG,	C_NONE,	C_LAUTO,	52, 12, REGSP,	LTO },
-    { AMOVF,	C_FREG,	C_NONE,	C_LOREG,	52, 12, 0,	LTO },
-
-    { AMOVF,	C_LEXT,	C_NONE,	C_FREG,		53, 12, REGSB,	LFROM },
-    { AMOVF,	C_LAUTO,C_NONE,	C_FREG,		53, 12, REGSP,	LFROM },
-    { AMOVF,	C_LOREG,C_NONE,	C_FREG,		53, 12, 0,	LFROM },
-
-    { AMOVF,	C_FREG,	C_NONE,	C_ADDR,		68, 8, 0,	LTO },
-    { AMOVF,	C_ADDR,	C_NONE,	C_FREG,		69, 8, 0,	LFROM },
-
-    { AADDF,	C_FREG,	C_NONE,	C_FREG,		54, 4, 0 },
-    { AADDF,	C_FREG,	C_REG,	C_FREG,		54, 4, 0 },
-    { AADDF,	C_FCON,	C_NONE,	C_FREG,		54, 4, 0 },
-    { AADDF,	C_FCON,	C_REG,	C_FREG,		54, 4, 0 },
-    { AMOVF,	C_FCON,	C_NONE,	C_FREG,		54, 4, 0 },
-    { AMOVF,	C_FREG, C_NONE, C_FREG,		54, 4, 0 },
-
-    { ACMPF,	C_FREG,	C_REG,	C_NONE,		54, 4, 0 },
-    { ACMPF,	C_FCON,	C_REG,	C_NONE,		54, 4, 0 },
-
-    { AMOVFW,	C_FREG,	C_NONE,	C_REG,		55, 4, 0 },
-    { AMOVFW,	C_REG,	C_NONE,	C_FREG,		55, 4, 0 },
-
-    { AMOVW,	C_REG,	C_NONE,	C_FCR,		56, 4, 0 },
-    { AMOVW,	C_FCR,	C_NONE,	C_REG,		57, 4, 0 },
-
-    { AMOVW,	C_SHIFT,C_NONE,	C_REG,		59, 4, 0 },
-    { AMOVBU,	C_SHIFT,C_NONE,	C_REG,		59, 4, 0 },
-
-    { AMOVB,	C_SHIFT,C_NONE,	C_REG,		60, 4, 0 },
-
-    { AMOVW,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
-    { AMOVB,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
-    { AMOVBU,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
-
-    { ACASE,	C_REG,	C_NONE,	C_NONE,		62, 4, 0 },
-    { ABCASE,	C_NONE, C_NONE, C_SBRA,		63, 4, 0 },
-
-    { AADDF,	C_FREG,	C_NONE,	C_FREG,		74, 4, 0, VFP },
-    { AADDF,	C_FREG,	C_REG,	C_FREG,		74, 4, 0, VFP },
-    { AMOVF,	C_FREG, C_NONE, C_FREG,		74, 4, 0, VFP },
-    { ACMPF,	C_FREG,	C_REG,	C_NONE,		75, 8, 0, VFP },
-    { ACMPF,	C_FCON,	C_REG,	C_NONE,		75, 8, 0, VFP },
-    { AMOVFW,	C_FREG,	C_NONE,	C_REG,		76, 8, 0, VFP },
-    { AMOVFW,	C_REG,	C_NONE,	C_FREG,		76, 8, 0, VFP },
-
-    { AMOVH,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
-    { AMOVH,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
-    { AMOVH,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,	V4 },
-    { AMOVHU,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
-    { AMOVHU,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
-    { AMOVHU,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,	V4 },
-
-    { AMOVB,	C_HEXT,	C_NONE, C_REG,		71, 4, REGSB,	V4 },
-    { AMOVB,	C_HAUTO,C_NONE,	C_REG,		71, 4, REGSP,	V4 },
-    { AMOVB,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
-    { AMOVH,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
-    { AMOVH,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
-    { AMOVH,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
-    { AMOVHU,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
-    { AMOVHU,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
-    { AMOVHU,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
-
-    { AMOVH,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
-    { AMOVH,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
-    { AMOVH,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,	LTO|V4 },
-    { AMOVHU,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
-    { AMOVHU,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
-    { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,	LTO|V4 },
-
-    { AMOVB,	C_LEXT,	C_NONE, C_REG,		73, 8, REGSB,	LFROM|V4 },
-    { AMOVB,	C_LAUTO,C_NONE,	C_REG,		73, 8, REGSP,	LFROM|V4 },
-    { AMOVB,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
-    { AMOVH,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
-    { AMOVH,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
-    { AMOVH,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
-    { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
-    { AMOVHU,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
-    { AMOVHU,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
-
-    { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
-};
-@
-
-
-
-
 
 \chapter{Debugging Support}
 % Symbol Tables.
@@ -8152,6 +8224,12 @@ int	cbc;
 
 <<global cbp>>=
 char*	cbp;
+@
+
+
+<<[[main()]] initialize globals(arm)>>=
+cbp = buf.cbuf;
+cbc = sizeof(buf.cbuf);
 @
 
 

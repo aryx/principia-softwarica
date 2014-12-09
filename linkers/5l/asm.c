@@ -29,22 +29,22 @@ entryvalue(void)
 
     s = lookup(a, 0);
 
-    if(s->type == 0)
-        return INITTEXT;
-
     switch(s->type) {
+    case SNONE:
+        return INITTEXT; // no _main, start at beginning of binary then
     case STEXT:
     case SLEAF:
-        break;
+        // ok
+        return s->value;
     /*s: [[entryvalue()]] if dynamic module case */
     case SDATA:
         if(dlm)
             return s->value+INITDAT;
     /*e: [[entryvalue()]] if dynamic module case */
     default:
-        diag("entry not text: %s", s->name);
+        diag("entry not TEXT: %s", s->name);
+        return 0;
     }
-    return s->value;
 }
 /*e: function entryvalue(arm) */
 
@@ -52,14 +52,16 @@ entryvalue(void)
 void
 asmb(void)
 {
+    /*s: [[asmb()]] locals */
     Prog *p;
     long t, etext;
     Optab *o;
+    /*e: [[asmb()]] locals */
 
     DBG("%5.2f asm\n", cputime());
 
     // TEXT SECTION
-
+    /*s: [[asmb()]] TEXT section */
     OFFSET = HEADR;
     seek(cout, OFFSET, SEEK__START);
     pc = INITTEXT;
@@ -67,7 +69,7 @@ asmb(void)
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             curtext = p;
-            autosize = p->to.offset + 4;
+            autosize = p->to.offset + 4; // ???
         }
         if(p->pc != pc) {
             diag("phase error %lux sb %lux", p->pc, pc);
@@ -77,7 +79,7 @@ asmb(void)
         }
         curp = p;
 
-        // generate instruction! ?
+        // generate instruction!
         o = oplook(p);	/* could probably avoid this call */
         asmout(p, o);
 
@@ -98,9 +100,10 @@ asmb(void)
         else
             datblk(t, etext-t, 1);
     }
+    /*e: [[asmb()]] TEXT section */
 
     // DATA SECTION
-
+    /*s: [[asmb()]] DATA section */
     curtext = P;
     switch(HEADTYPE) {
     case H_PLAN9:
@@ -138,9 +141,10 @@ asmb(void)
         else
             datblk(t, datsize-t, 0);
     }
+    /*e: [[asmb()]] DATA section */
 
     // SYMBOL TABLE
-
+    /*s: [[asmb()]] symbol table section */
     // modified by asmsym()
     symsize = 0;
     // modified by asmlc()
@@ -191,9 +195,10 @@ asmb(void)
         }
         /*e: [[asmb()]] if dynamic module and no symbol table generation */
     }
+    /*e: [[asmb()]] symbol table section */
 
     // HEADER
-
+    /*s: [[asmb()]] header section */
     DBG("%5.2f header\n", cputime());
 
     OFFSET = 0;
@@ -212,7 +217,9 @@ asmb(void)
         lput(datsize);
         lput(bsssize);
         lput(symsize);			/* nsyms */
+
         lput(entryvalue());		/* va of entry */
+
         lput(0L);
         lput(lcsize);
         break;
@@ -275,6 +282,7 @@ asmb(void)
         break;
     /*e: [[asmb()]] switch HEADTYPE (for header generation) cases(arm) */
     }
+    /*e: [[asmb()]] header section */
 
     cflush();
 }

@@ -88,7 +88,7 @@ lookup(char *symb, int v)
     memmove(s->name, symb, l);
 
     s->link = hash[h];
-    s->type = 0;
+    s->type = SNONE;
     s->version = v;
     s->value = 0;
     s->sig = 0;

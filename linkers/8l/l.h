@@ -137,12 +137,10 @@ struct	Sym
     char	*name;
     short	version; // for static names, each sym has a different version
 
-    //enum<section> ?
+    //enum<sxxx>
     short	type;
 
     long	value; // e.g. pc for a TEXT procedure
-
-
 
     /*s: [[Sym]] other fields */
     short	become;
@@ -159,7 +157,6 @@ struct	Sym
     // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
     /*e: [[Sym]] extra fields */
-
 };
 /*e: struct Sym */
 /*s: struct Optab(x86) */

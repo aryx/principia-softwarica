@@ -91,23 +91,25 @@ struct	Prog
     Adr	from;
     Adr	to;
 
-    // enum<register>?
+    /*s: [[Prog]] other fields */
+    long	pc;
+    long	line;
+    /*x: [[Prog]] other fields */
+    // enum<register>
     byte	reg;
-    // enum<instr_cond>?
+    // enum<instr_cond>
     byte	scond;
-
+    /*x: [[Prog]] other fields */
     union
     {
         long	u0regused;
         Prog*	u0forwd;
     } u0;
-
-    // [[Prog]] other fields
-
-    long	pc;
-    long	line;
+    /*x: [[Prog]] other fields */
     byte	mark;
+    /*x: [[Prog]] other fields */
     byte	optab;
+    /*e: [[Prog]] other fields */
 
     // Extra
     /*s: [[Prog]] extra fields */
@@ -117,8 +119,6 @@ struct	Prog
     // list<ref<Prog>> from textp/etextp
     Prog*	cond;
     /*e: [[Prog]] extra fields */
-
-
 };
 /*e: struct Prog(arm) */
 /*s: constant regused(arm) */
@@ -134,12 +134,10 @@ struct	Sym
     char	*name;
     short	version; // for static names, each sym has a different version
 
-    //enum<section> ?
+    //enum<sxxx>
     short	type;
 
     long	value; // e.g. pc for a TEXT procedure
-
-
 
     /*s: [[Sym]] other fields */
     short	become;
@@ -156,7 +154,6 @@ struct	Sym
     // hash<Sym.name * Sym.version, ref<Sym>> of hash
     Sym*	link;
     /*e: [[Sym]] extra fields */
-
 };
 /*e: struct Sym */
 
@@ -185,9 +182,11 @@ struct	Optab
     char	a1;
     char	a2;
     char	a3;
+
     char	type;
     char	size;
     char	param;
+
     char	flag;
 };
 /*e: struct Optab(arm) */
@@ -209,13 +208,15 @@ struct	Count
 /*s: enum sxxx(arm) */
 enum sxxx
 {
-    STEXT		= 1,
+    SNONE,
 
+    STEXT,
     SDATA,
     SBSS,
 
-    SDATA1,
     SXREF,
+    /*s: enum sxxx cases */
+    SDATA1,
     SLEAF, // arm
     SFILE,
     SCONST,
@@ -225,16 +226,21 @@ enum sxxx
 
     SIMPORT,
     SEXPORT,
+    /*e: enum sxxx cases */
 };
 /*e: enum sxxx(arm) */
-/*s: enum misc(arm) */
-enum misc {
+/*s: enum lxxx(arm) */
+enum lxxx {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
+
     V4		= 1<<3,	/* arm v4 arch */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
-
+};
+/*e: enum lxxx(arm) */
+/*s: enum cxxx(arm) */
+enum cxxx {
     C_NONE		= 0,
     C_REG,
     C_REGREG,
@@ -281,12 +287,19 @@ enum misc {
     C_ADDR,		/* relocatable address */
 
     C_GOK,
-
+};
+/*e: enum cxxx(arm) */
+/*s: enum mark(arm) */
 /* mark flags */
+enum mark {
     FOLL		= 1<<0,
     LABEL		= 1<<1,
     LEAF		= 1<<2,
+};
+/*e: enum mark(arm) */
 
+/*s: enum misc_constant(arm) */
+enum misc_constants {
     BIG		= (1<<12)-4,
 
     /*s: constant STRINGSZ */
@@ -306,7 +319,7 @@ enum misc {
     /*e: constant MAXIO */
     MAXHIST		= 20,	/* limit of path elements for history symbols */
 };
-/*e: enum misc(arm) */
+/*e: enum misc_constant(arm) */
 
 /*s: enum rxxx */
 enum rxxx {
