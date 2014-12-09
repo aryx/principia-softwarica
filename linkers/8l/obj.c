@@ -248,7 +248,7 @@ main(int argc, char *argv[])
         root = "";
     /*e: [[main()]] change root if ccroot */
 
-    // usually /386/lib/ as root = ""
+    // usually /{thestring}/lib/ as root = ""
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
     /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
@@ -569,6 +569,7 @@ loadlib(void)
 
 loop:
     xrefresolv = false;
+
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);

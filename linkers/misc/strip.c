@@ -103,7 +103,7 @@ strip(char* file, char* out)
 
     exec = data;
     exec->syms = 0;
-    exec->spsz = 0;
+    exec->_unused = 0;
     exec->pcsz = 0;
 
     if(out == nil){

@@ -114,7 +114,7 @@ struct	Prog
     // list<ref<Prog>> from firstp/lastp, or datap/edatap
     Prog*	link;
     /*x: [[Prog]] extra fields */
-    // list<ref<Prog>> from textp/etextp, to follow CALL xxx ???
+    // list<ref<Prog>> from textp/etextp
     Prog*	cond;
     /*e: [[Prog]] extra fields */
 
@@ -137,17 +137,19 @@ struct	Sym
     //enum<section> ?
     short	type;
 
-    // enum<section> too?
-    byte	subtype;
-
-    long	sig;
-
     long	value; // e.g. pc for a TEXT procedure
+
+
 
     /*s: [[Sym]] other fields */
     short	become;
     short	frame;
     ushort	file;
+    /*x: [[Sym]] other fields */
+    // enum<section> too?
+    byte	subtype;
+    /*x: [[Sym]] other fields */
+    long	sig;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
@@ -177,7 +179,7 @@ struct	Autom
 /*s: struct Optab(arm) */
 struct	Optab
 {
-    // enum<as> from 5.out.h
+    // enum<opcode> from 5.out.h
     byte	as;
 
     char	a1;

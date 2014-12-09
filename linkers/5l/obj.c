@@ -166,7 +166,7 @@ main(int argc, char *argv[])
         root = "";
     /*e: [[main()]] change root if ccroot */
 
-    // usually /386/lib/ as root = ""
+    // usually /{thestring}/lib/ as root = ""
     snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
     addlibpath(name);
     /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
@@ -281,7 +281,6 @@ main(int argc, char *argv[])
 
     /*s: [[main()]] initialize globals(arm) */
     pc = 0;
-    dtype = 4;
     /*x: [[main()]] initialize globals(arm) */
     load_libs = !debug['l'];
     /*e: [[main()]] initialize globals(arm) */
@@ -325,7 +324,6 @@ main(int argc, char *argv[])
 
     while(*argv)
         objfile(*argv++);
-
     if(load_libs)
         loadlib();
 
@@ -376,6 +374,7 @@ main(int argc, char *argv[])
 
     // write to cout, finally
     asmb();
+
     // sanity check
     undef();
     /*e: [[main()]] cout is ready, LET'S GO(arm) */
@@ -447,6 +446,7 @@ loadlib(void)
 
 loop:
     xrefresolv = false;
+
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
@@ -589,37 +589,38 @@ objfile(char *file)
 
 /*s: function zaddr(arm) */
 int
-zaddr(uchar *p, Adr *a, Sym *h[])
+zaddr(byte *p, Adr *a, Sym *h[])
 {
     int i, c;
     int l;
     Sym *s;
     Auto *u;
 
+    /*s: [[zaddr()]] sanity check symbol range */
     c = p[2];
     if(c < 0 || c > NSYM){
         print("sym out of range: %d\n", c);
         p[0] = ALAST+1;
         return 0;
     }
+    /*e: [[zaddr()]] sanity check symbol range */
     a->type = p[0];
     a->reg = p[1];
     a->sym = h[c];
     a->name = p[3];
+
     c = 4;
 
+    /*s: [[zaddr()]] sanity check register range */
     if(a->reg < 0 || a->reg > NREG) {
         print("register out of range %d\n", a->reg);
         p[0] = ALAST+1;
         return 0;	/*  force real diagnostic */
     }
+    /*e: [[zaddr()]] sanity check register range */
 
     switch(a->type) {
-    default:
-        print("unknown type %d\n", a->type);
-        p[0] = ALAST+1;
-        return 0;	/*  force real diagnostic */
-
+    /*s: [[zaddr()]] cases */
     case D_NONE:
     case D_REG:
     case D_FREG:
@@ -637,12 +638,12 @@ zaddr(uchar *p, Adr *a, Sym *h[])
     case D_CONST:
     case D_OCONST:
     case D_SHIFT:
-        a->offset = p[4] | (p[5]<<8) |
-            (p[6]<<16) | (p[7]<<24);
+        a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
         c += 4;
         break;
 
     case D_SCONST:
+        //TODO: factorize
         while(nhunk < NSNAME)
             gethunk();
         a->sval = (char*)hunk;
@@ -654,22 +655,28 @@ zaddr(uchar *p, Adr *a, Sym *h[])
         break;
 
     case D_FCONST:
+        //TODO: factorize
         while(nhunk < sizeof(Ieee))
             gethunk();
         a->ieee = (Ieee*)hunk;
         nhunk -= NSNAME;
         hunk += NSNAME;
 
-        a->ieee->l = p[4] | (p[5]<<8) |
-            (p[6]<<16) | (p[7]<<24);
-        a->ieee->h = p[8] | (p[9]<<8) |
-            (p[10]<<16) | (p[11]<<24);
+        a->ieee->l = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
+        a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
         c += 8;
         break;
+    /*e: [[zaddr()]] cases */
+    default:
+        print("unknown type %d\n", a->type);
+        p[0] = ALAST+1;
+        return 0;	/*  force real diagnostic */
+
     }
     s = a->sym;
     if(s == S)
         return c;
+
     i = a->name;
     if(i != D_AUTO && i != D_PARAM)
         return c;
@@ -677,12 +684,13 @@ zaddr(uchar *p, Adr *a, Sym *h[])
     l = a->offset;
     for(u=curauto; u; u=u->link)
         if(u->asym == s)
-        if(u->type == i) {
+         if(u->type == i) {
             if(u->aoffset > l)
                 u->aoffset = l;
             return c;
         }
 
+    //TODO: factorize
     while(nhunk < sizeof(Auto))
         gethunk();
     u = (Auto*)hunk;
@@ -694,6 +702,7 @@ zaddr(uchar *p, Adr *a, Sym *h[])
     u->asym = s;
     u->aoffset = l;
     u->type = i;
+
     return c;
 }
 /*e: function zaddr(arm) */
@@ -896,15 +905,10 @@ void
 ldobj(fdt f, long c, char *pn)
 {
     /*s: [[ldobj()]] locals(arm) */
-    // enum<as>, the opcode
-    int o;
-    Prog *p;
-    /*x: [[ldobj()]] locals(arm) */
     Sym *h[NSYM];
     Sym *di;
     Sym *s;
     long ipc;
-    bool skip;
     /*x: [[ldobj()]] locals(arm) */
     Prog *t;
     byte *stop;
@@ -914,6 +918,12 @@ ldobj(fdt f, long c, char *pn)
     byte *bloc;
     byte *bsize;
     int r;
+    /*x: [[ldobj()]] locals(arm) */
+    // enum<opcode>
+    int o;
+    Prog *p;
+    /*x: [[ldobj()]] locals(arm) */
+    bool skip;
     /*x: [[ldobj()]] locals(arm) */
     // array<string>, length used = files, extended every 16
     static char **filen;
@@ -944,7 +954,7 @@ newloop:
     memset(h, 0, sizeof(h));
     histfrogp = 0;
     ipc = pc;
-    skip = 0;
+    skip = false;
 
 loop:
     if(c <= 0)
@@ -962,7 +972,6 @@ loop:
     /*e: [[ldobj()]] read if needed in loop:, adjust block and bsize */
 
     o = bloc[0];		/* as */
-
     /*s: [[ldobj()]] sanity check opcode in range(arm) */
     if(o <= AXXX || o >= ALAST) {
         diag("%s: line %ld: opcode out of range %d", pn, pc-ipc, o);
@@ -970,7 +979,6 @@ loop:
         errorexit();
     }
     /*e: [[ldobj()]] sanity check opcode in range(arm) */
-
     /*s: [[ldobj()]] if ANAME or ASIGNAME(arm) */
     if(o == ANAME || o == ASIGNAME) {
         sig = 0;
@@ -1038,12 +1046,11 @@ loop:
     nhunk -= sizeof(Prog);
     hunk += sizeof(Prog);
 
-    // reading the object binary file
+    // reading the object binary file, opposite of outcode() in Assembler.nw
     p->as = o;
     p->scond = bloc[1];
-    p->reg = bloc[2];
-    p->line = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
-
+    p->reg   = bloc[2];
+    p->line  = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
     r = zaddr(bloc+7, &p->from, h) + 7;
     r += zaddr(bloc+r, &p->to, h);
 
@@ -1067,16 +1074,18 @@ loop:
             curtext->to.autom = curauto;
             curauto = 0;
         }
-        skip = 0;
+        skip = false;
         curtext = p;
         autosize = (p->to.offset+3L) & ~3L;
         p->to.offset = autosize;
         autosize += 4;
         s = p->from.sym;
+
         if(s == S) {
             diag("TEXT must have a name\n%P", p);
             errorexit();
         }
+
         if(s->type != 0 && s->type != SXREF) {
             if(p->reg & DUPOK) {
                 skip = 1;
@@ -1084,6 +1093,7 @@ loop:
             }
             diag("redefinition: %s\n%P", s->name, p);
         }
+
         s->type = STEXT;
         s->value = pc;
 
@@ -1115,50 +1125,6 @@ loop:
         p->link = datap;
         datap = p;
 
-        break;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
-    case ADYNT:
-        if(p->to.sym == S) {
-            diag("DYNT without a sym\n%P", p);
-            break;
-        }
-        di = p->to.sym;
-        p->reg = 4;
-        if(di->type == SXREF) {
-            if(debug['z'])
-                Bprint(&bso, "%P set to %d\n", p, dtype);
-            di->type = SCONST;
-            di->value = dtype;
-            dtype += 4;
-        }
-        if(p->from.sym == S)
-            break;
-
-        p->from.offset = di->value;
-        p->from.sym->type = SDATA;
-        if(curtext == P) {
-            diag("DYNT not in text: %P", p);
-            break;
-        }
-        p->to.sym = curtext->from.sym;
-        p->to.type = D_CONST;
-        p->link = datap;
-        datap = p;
-        break;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
-    case AINIT:
-        if(p->from.sym == S) {
-            diag("INIT without a sym\n%P", p);
-            break;
-        }
-        if(di == S) {
-            diag("INIT without previous DYNT\n%P", p);
-            break;
-        }
-        p->from.offset = di->value;
-        p->from.sym->type = SDATA;
-        p->link = datap;
-        datap = p;
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AGLOBL:
@@ -1210,8 +1176,8 @@ loop:
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ASUB:
         if(p->from.type == D_CONST)
-        if(p->from.name == D_NONE)
-        if(p->from.offset < 0) {
+         if(p->from.name == D_NONE)
+          if(p->from.offset < 0) {
             p->from.offset = -p->from.offset;
             p->as = AADD;
         }
@@ -1219,12 +1185,56 @@ loop:
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AADD:
         if(p->from.type == D_CONST)
-        if(p->from.name == D_NONE)
-        if(p->from.offset < 0) {
+         if(p->from.name == D_NONE)
+          if(p->from.offset < 0) {
             p->from.offset = -p->from.offset;
             p->as = ASUB;
         }
         goto casedef;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case ADYNT:
+        if(p->to.sym == S) {
+            diag("DYNT without a sym\n%P", p);
+            break;
+        }
+        di = p->to.sym;
+        p->reg = 4;
+        if(di->type == SXREF) {
+            if(debug['z'])
+                Bprint(&bso, "%P set to %d\n", p, dtype);
+            di->type = SCONST;
+            di->value = dtype;
+            dtype += 4;
+        }
+        if(p->from.sym == S)
+            break;
+
+        p->from.offset = di->value;
+        p->from.sym->type = SDATA;
+        if(curtext == P) {
+            diag("DYNT not in text: %P", p);
+            break;
+        }
+        p->to.sym = curtext->from.sym;
+        p->to.type = D_CONST;
+        p->link = datap;
+        datap = p;
+        break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AINIT:
+        if(p->from.sym == S) {
+            diag("INIT without a sym\n%P", p);
+            break;
+        }
+        if(di == S) {
+            diag("INIT without previous DYNT\n%P", p);
+            break;
+        }
+        p->from.offset = di->value;
+        p->from.sym->type = SDATA;
+        p->link = datap;
+        datap = p;
+        break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AMOVDF:
         if(!vfp || p->from.type != D_FCONST)
@@ -1525,7 +1535,7 @@ doprof2(void)
             q->reg = p->reg;
             p->link = q;
 
-            if(p->scond != 14) {
+            if(p->scond != COND_ALWAYS) {
                 q = prg();
                 q->as = ABL;
                 q->from = zprg.from;
@@ -1537,7 +1547,7 @@ doprof2(void)
                 p->link = q;
 
                 p->as = brcond[p->scond^1];	/* complement */
-                p->scond = 14;
+                p->scond = COND_ALWAYS;
                 p->from = zprg.from;
                 p->to = zprg.to;
                 p->to.type = D_BRANCH;
@@ -1556,7 +1566,7 @@ doprof2(void)
                 p->to.type = D_BRANCH;
                 p->cond = ps4;
                 p->to.sym = s4;
-                p->scond = 14;
+                p->scond = COND_ALWAYS;
 
                 p = q;
             }

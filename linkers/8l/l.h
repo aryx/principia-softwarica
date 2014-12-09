@@ -140,17 +140,19 @@ struct	Sym
     //enum<section> ?
     short	type;
 
-    // enum<section> too?
-    byte	subtype;
-
-    long	sig;
-
     long	value; // e.g. pc for a TEXT procedure
+
+
 
     /*s: [[Sym]] other fields */
     short	become;
     short	frame;
     ushort	file;
+    /*x: [[Sym]] other fields */
+    // enum<section> too?
+    byte	subtype;
+    /*x: [[Sym]] other fields */
+    long	sig;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */

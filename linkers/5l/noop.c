@@ -35,7 +35,7 @@ noops(void)
     curframe = 0;
     curbecome = 0;
     maxbecome = 0;
-    curtext = 0;
+    curtext = P;
 
     q = P;
     for(p = firstp; p != P; p = p->link) {
@@ -131,11 +131,11 @@ noops(void)
         print("max become = %d\n", maxbecome);
     xdefine("ALEFbecome", STEXT, maxbecome);
 
-    curtext = 0;
+    curtext = P;
     for(p = firstp; p != P; p = p->link) {
         switch(p->as) {
         case ATEXT:
-            curtext = p;
+            curtext = p; // could factorize with LP
             break;
         case ABL:
             if(curtext != P && curtext->from.sym != S && curtext->to.offset >= 0) {
@@ -176,24 +176,8 @@ noops(void)
             if(curtext->mark & LEAF) {
                 if(curtext->from.sym)
                     curtext->from.sym->type = SLEAF;
-#ifdef optimise_time
-                if(autosize) {
-                    q = prg();
-                    q->as = ASUB;
-                    q->line = p->line;
-                    q->from.type = D_CONST;
-                    q->from.offset = autosize;
-                    q->to.type = D_REG;
-                    q->to.reg = REGSP;
-
-                    q->link = p->link;
-                    p->link = q;
-                }
-                break;
-#else
                 if(!autosize)
                     break;
-#endif
             }
 
             q1 = prg();
@@ -224,26 +208,6 @@ noops(void)
                     break;
                 }
 
-#ifdef optimise_time
-                p->as = AADD;
-                p->from.type = D_CONST;
-                p->from.offset = autosize;
-                p->to.type = D_REG;
-                p->to.reg = REGSP;
-
-                q = prg();
-                q->as = AB;
-                q->scond = p->scond;
-                q->line = p->line;
-                q->to.type = D_OREG;
-                q->to.offset = 0;
-                q->to.reg = REGLINK;
-
-                q->link = p->link;
-                p->link = q;
-
-                break;
-#endif
             }
             p->as = AMOVW;
             p->scond |= C_PBIT;
@@ -263,27 +227,6 @@ noops(void)
                     break;
                 }
 
-#ifdef optimise_time
-                q = prg();
-                q->scond = p->scond;
-                q->line = p->line;
-                q->as = AB;
-                q->from = zprg.from;
-                q->to = p->to;
-                q->cond = p->cond;
-                q->link = p->link;
-                p->link = q;
-
-                p->as = AADD;
-                p->from = zprg.from;
-                p->from.type = D_CONST;
-                p->from.offset = autosize;
-                p->to = zprg.to;
-                p->to.type = D_REG;
-                p->to.reg = REGSP;
-
-                break;
-#endif
             }
             q = prg();
             q->scond = p->scond;

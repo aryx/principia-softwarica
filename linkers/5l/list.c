@@ -44,6 +44,7 @@ Pconv(Fmt *fp)
         break;
 
     case ADATA:
+
     case AINIT:
     case ADYNT:
         sprint(str, "(%ld)	%A%C	%D/%d,%D",

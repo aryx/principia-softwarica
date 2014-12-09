@@ -53,11 +53,11 @@ span(void)
             addpool(p, &p->to);
             break;
         case LPOOL:
-            if ((p->scond&C_SCOND) == 14)
+            if ((p->scond&C_SCOND) == COND_ALWAYS)
                 flushpool(p, 0);
             break;
         }
-        if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && (p->scond&C_SCOND) == 14)
+        if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && (p->scond&C_SCOND) == COND_ALWAYS)
             flushpool(p, 0);
         c += m;
         if(blitrl)
@@ -77,29 +77,6 @@ span(void)
         for(p = firstp; p != P; p = p->link) {
             p->pc = c;
             o = oplook(p);
-/* very larg branches
-            if(o->type == 6 && p->cond) {
-                otxt = p->cond->pc - c;
-                if(otxt < 0)
-                    otxt = -otxt;
-                if(otxt >= (1L<<17) - 10) {
-                    q = prg();
-                    q->link = p->link;
-                    p->link = q;
-                    q->as = AB;
-                    q->to.type = D_BRANCH;
-                    q->cond = p->cond;
-                    p->cond = q;
-                    q = prg();
-                    q->link = p->link;
-                    p->link = q;
-                    q->as = AB;
-                    q->to.type = D_BRANCH;
-                    q->cond = q->link->link;
-                    bflag = 1;
-                }
-            }
- */
             m = o->size;
             if(m == 0) {
                 if(p->as == ATEXT) {
@@ -165,13 +142,13 @@ checkpool(Prog *p)
 
 /*s: function flushpool(arm) */
 void
-flushpool(Prog *p, int skip)
+flushpool(Prog *p, bool skip)
 {
     Prog *q;
 
     if(blitrl) {
         if(skip){
-            if(debug['v'] && skip == 1)
+            if(debug['v'] && skip == true)
                 print("note: flush literal pool at %lux: len=%lud ref=%lux\n", p->pc+4, pool.size, pool.start);
             q = prg();
             q->as = AB;

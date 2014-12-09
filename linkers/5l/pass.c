@@ -13,10 +13,13 @@ dodata(void)
     DBG("%5.2f dodata\n", cputime());
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
+        /*s: [[dodata()]] if ADYNT or AINIT */
         if(p->as == ADYNT || p->as == AINIT)
             s->value = dtype;
+        /*e: [[dodata()]] if ADYNT or AINIT */
         if(s->type == SBSS)
             s->type = SDATA;
+
         if(s->type != SDATA)
             diag("initialize non-data (%d): %s\n%P",
                 s->type, s->name, p);
@@ -45,7 +48,7 @@ dodata(void)
      */
     orig = 0;
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link) {
+     for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t != SDATA && t != SBSS)
             continue;
@@ -69,7 +72,7 @@ dodata(void)
      *	assign large 'data' variables to data segment
      */
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link) {
+     for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t != SDATA) {
             if(t == SDATA1)
@@ -90,7 +93,7 @@ dodata(void)
      *	everything else to bss segment
      */
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link) {
+     for(s = hash[i]; s != S; s = s->link) {
         if(s->type != SBSS)
             continue;
         v = s->value;
@@ -213,7 +216,7 @@ loop:
                 i--;
                 continue;
             }
-            if(a == AB || (a == ARET && q->scond == 14) || a == ARFE)
+            if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
                 goto copy;
             if(!q->cond || (q->cond->mark&FOLL))
                 continue;
@@ -234,7 +237,7 @@ loop:
                 }
                 lastp->link = r;
                 lastp = r;
-                if(a == AB || (a == ARET && q->scond == 14) || a == ARFE)
+                if(a == AB || (a == ARET && q->scond == COND_ALWAYS)||a == ARFE)
                     return;
                 r->as = ABNE;
                 if(a == ABNE)
@@ -260,7 +263,7 @@ loop:
     p->mark |= FOLL;
     lastp->link = p;
     lastp = p;
-    if(a == AB || (a == ARET && p->scond == 14) || a == ARFE){
+    if(a == AB || (a == ARET && p->scond == COND_ALWAYS) || a == ARFE){
         return;
     }
     if(p->cond != P)
@@ -298,22 +301,22 @@ patch(void)
     int a;
 
     DBG("%5.2f patch\n", cputime());
+
     mkfwd();
     s = lookup("exit", 0);
     vexit = s->value;
+
     for(p = firstp; p != P; p = p->link) {
         a = p->as;
+        /*s: adjust curtext when iterate over instructions p and opcode a */
         if(a == ATEXT)
             curtext = p;
+        /*e: adjust curtext when iterate over instructions p and opcode a */
         if((a == ABL || a == AB || a == ARET) &&
-           p->to.type != D_BRANCH && p->to.sym != S) {
+           p->to.type != D_BRANCH && 
+           p->to.sym != S) {
             s = p->to.sym;
             switch(s->type) {
-            default:
-                diag("undefined: %s\n%P", s->name, p);
-                s->type = STEXT;
-                s->value = vexit;
-                break;
             case STEXT:
                 p->to.offset = s->value;
                 p->to.type = D_BRANCH;
@@ -324,6 +327,11 @@ patch(void)
                 p->to.offset = 0;
                 p->to.type = D_BRANCH;
                 p->cond = UP;
+                break;
+            default:
+                diag("undefined: %s\n%P", s->name, p);
+                s->type = STEXT;
+                s->value = vexit;
                 break;
             }
         }

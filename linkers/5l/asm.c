@@ -201,7 +201,6 @@ asmb(void)
 
     switch(HEADTYPE) {
     // see Exec in a.out.h
-
     case H_PLAN9:
         /*s: [[asmb()]] if dynamic module magic header adjustment(arm) */
         if(dlm)
