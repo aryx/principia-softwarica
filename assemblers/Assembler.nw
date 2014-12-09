@@ -4433,83 +4433,20 @@ char	symidx;
 % very generic form, 3 operands (but many times they
 % are equivalent to a None).
 
-
 % a = opcode
 % scond is cond bits and also special bits
-% TODO LP split and transform while into if, easier flow
 <<function outcode(arm)>>=
 void
 outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
 {
-    // symbol from, index in h[]
-    int sf;
-    // symbol to, index in h[]
-    int st;
-    // enum<name_kind>???
-    int t;
-    Sym *s;
+    <<[[outcode()]] locals>>
 
     <<[[outcode()]] adjust a and scond when a is AB>>
 
     if(pass == 1)
         goto out;
 
-jackpot:
-    sf = 0;
-    s = g1->sym;
-
-    while(s != S) {
-        sf = s->symidx;
-
-        if(sf < 0 || sf >= NSYM)
-            sf = 0;
-
-        t = g1->name;
-
-        // already generated an ANAME for this symbol reference
-        if(h[sf].type == t)
-         if(h[sf].sym == s)
-            break;
-
-        zname(s->name, t, symcounter);
-        s->symidx = symcounter;
-        h[symcounter].sym = s;
-        h[symcounter].type = t;
-        sf = symcounter;
-        symcounter++;
-        if(symcounter >= NSYM)
-            symcounter = 1; // ???????? bug?
-        break;
-    }
-
-    st = 0;
-    s = g2->sym;
-
-    while(s != S) {
-        st = s->symidx;
-
-        if(st < 0 || st >= NSYM)
-            st = 0;
-
-        t = g2->name;
-
-        if(h[st].type == t)
-          if(h[st].sym == s)
-            break;
-
-        zname(s->name, t, symcounter);
-        s->symidx = symcounter;
-        h[symcounter].sym = s;
-        h[symcounter].type = t;
-        st = symcounter;
-        symcounter++;
-        if(symcounter >= NSYM)
-            symcounter = 1;
-
-        if(st == sf)
-            goto jackpot;
-        break;
-    }
+    <<[[outcode()]] st and sf computation>>
 
     // Instruction serialized format: opcode, cond, optional reg, line, operands
     Bputc(&obuf, a);
@@ -4529,31 +4466,6 @@ out:
 @
 % skip pc++ for AGLOBL and ADATA because those pseudo ops concern
 % the Data section, not the Text section
-
-
-% outcode -> <>
-% for unresolved symbol names?
-% less: rename? out_symbol_reference?
-% note that labels do not generate code, they are local to the .o
-% and used to compute offsets (pc). TEXT generate symbols defs
-% and different opcodes generate symbol references.
-<<function zname(arm)>>=
-void
-zname(char *n, int t, int s)
-{
-
-    Bputc(&obuf, ANAME);
-    Bputc(&obuf, t);	/* type */
-    Bputc(&obuf, s);	/* sym */
-    while(*n) {
-        Bputc(&obuf, *n);
-        n++;
-    }
-    Bputc(&obuf, '\0');
-}
-@
-
-
 
 
 %\section{[[zaddr()]]}
@@ -4619,6 +4531,114 @@ case D_SCONST:
     }
     break;
 @
+
+
+
+
+
+
+
+
+
+
+
+
+<<[[outcode()]] locals>>=
+// symbol from, index in h[]
+int sf;
+// symbol to, index in h[]
+int st;
+// enum<name_kind>???
+int t;
+Sym *s;
+@
+
+
+% TODO LP split and transform while into if, easier flow
+<<[[outcode()]] st and sf computation>>=
+jackpot:
+sf = 0;
+s = g1->sym;
+
+while(s != S) {
+    sf = s->symidx;
+
+    if(sf < 0 || sf >= NSYM)
+        sf = 0;
+
+    t = g1->name;
+
+    // already generated an ANAME for this symbol reference
+    if(h[sf].type == t)
+     if(h[sf].sym == s)
+        break;
+
+    zname(s->name, t, symcounter);
+    s->symidx = symcounter;
+    h[symcounter].sym = s;
+    h[symcounter].type = t;
+    sf = symcounter;
+    symcounter++;
+    if(symcounter >= NSYM)
+        symcounter = 1; // ???????? bug?
+    break;
+}
+
+st = 0;
+s = g2->sym;
+
+while(s != S) {
+    st = s->symidx;
+
+    if(st < 0 || st >= NSYM)
+        st = 0;
+
+    t = g2->name;
+
+    if(h[st].type == t)
+      if(h[st].sym == s)
+        break;
+
+    zname(s->name, t, symcounter);
+    s->symidx = symcounter;
+    h[symcounter].sym = s;
+    h[symcounter].type = t;
+    st = symcounter;
+    symcounter++;
+    if(symcounter >= NSYM)
+        symcounter = 1;
+
+    if(st == sf)
+        goto jackpot;
+    break;
+}
+@
+
+% outcode -> <>
+% for unresolved symbol names?
+% less: rename? out_symbol_reference?
+% note that labels do not generate code, they are local to the .o
+% and used to compute offsets (pc). TEXT generate symbols defs
+% and different opcodes generate symbol references.
+<<function zname(arm)>>=
+void
+zname(char *n, int t, int s)
+{
+
+    Bputc(&obuf, ANAME);
+    Bputc(&obuf, t);	/* type */
+    Bputc(&obuf, s);	/* sym */
+    while(*n) {
+        Bputc(&obuf, *n);
+        n++;
+    }
+    Bputc(&obuf, '\0');
+}
+@
+
+
+
+
 
 
 
