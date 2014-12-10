@@ -73,6 +73,9 @@ enum {
 };
 /*e: enum _anon_ */
 
+typedef struct Ehdr Ehdr;
+typedef struct Phdr Phdr;
+typedef struct Shdr Shdr;
 
 /*s: struct Ehdr */
 /*
@@ -95,7 +98,6 @@ struct Ehdr {
     ushort	shstrndx;	/* shdr string index */
 };
 /*e: struct Ehdr */
-typedef struct Ehdr Ehdr;
 
 /*s: struct Phdr */
 struct Phdr {
@@ -109,7 +111,6 @@ struct Phdr {
     int	align;		/* memory/file alignment */
 };
 /*e: struct Phdr */
-typedef struct Phdr Phdr;
 
 /*s: struct Shdr */
 struct Shdr {
@@ -125,7 +126,6 @@ struct Shdr {
     ulong	entsize;	/* entry size if table */
 };
 /*e: struct Shdr */
-typedef struct Shdr Shdr;
 
 /*s: constant ELF_MAG */
 #define	ELF_MAG		((0x7f<<24) | ('E'<<16) | ('L'<<8) | 'F')
