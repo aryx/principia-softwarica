@@ -59,7 +59,8 @@ span(void)
                 flushpool(p, 0);
             break;
         }
-        if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && (p->scond&C_SCOND) == COND_ALWAYS)
+        if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
+           (p->scond&C_SCOND) == COND_ALWAYS)
             flushpool(p, 0);
         c += m;
         if(blitrl)
@@ -328,6 +329,8 @@ aclass(Adr *a)
     case D_FPCR:
         return C_FCR;
 
+
+
     case D_OREG:
         switch(a->name) {
         case D_EXTERN:
@@ -449,6 +452,7 @@ aclass(Adr *a)
             t = immrot(instoffset);
             if(t)
                 return C_RCON;
+
             t = immrot(~instoffset);
             if(t)
                 return C_NCON;
@@ -461,10 +465,9 @@ aclass(Adr *a)
                 break;
             t = s->type;
             switch(t) {
-            case 0:
+            case SNONE:
             case SXREF:
-                diag("undefined external: %s in %s",
-                    s->name, TNAME);
+                diag("undefined external: %s in %s", s->name, TNAME);
                 s->type = SDATA;
                 break;
             case SUNDEF:
@@ -490,6 +493,7 @@ aclass(Adr *a)
 
         case D_PARAM:
             instoffset = autosize + a->offset + 4L;
+
         aconsize:
             t = immrot(instoffset);
             if(t)
@@ -640,12 +644,14 @@ ocmp(const void *a1, const void *a2)
     n = p1->as - p2->as;
     if(n)
         return n;
+
     n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
     if(n)
         return n;
     n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
     if(n)
         return n;
+
     n = p1->a1 - p2->a1;
     if(n)
         return n;
@@ -667,9 +673,11 @@ buildop(void)
 
     armv4 = !debug['h'];
     vfp = debug['f'];
+
     for(i=0; i<C_GOK; i++)
         for(n=0; n<C_GOK; n++)
             xcmp[i][n] = cmp(n, i);
+
     for(n=0; optab[n].as != AXXX; n++) {
         if((optab[n].flag & VFP) && !vfp)
             optab[n].as = AXXX;
@@ -678,9 +686,11 @@ buildop(void)
             break;
         }
     }
+
     qsort(optab, n, sizeof(optab[0]), ocmp);
     for(i=0; i<n; i++) {
         r = optab[i].as;
+
         oprange[r].start = optab+i;
         while(optab[i].as == r)
             i++;
@@ -689,9 +699,6 @@ buildop(void)
 
         switch(r)
         {
-        default:
-            diag("unknown op in build: %A", r);
-            errorexit();
         case AXXX:
             break;
         case AADD:
@@ -752,8 +759,6 @@ buildop(void)
             break;
         case AB:
         case ABL:
-//		case ABX:
-//		case ABXRET:
         case ASWI:
         case AWORD:
         case AMOVM:
@@ -762,6 +767,7 @@ buildop(void)
         case ACASE:
         case ABCASE:
             break;
+
         case AADDF:
             oprange[AADDD] = oprange[r];
             oprange[ASUBF] = oprange[r];
@@ -794,6 +800,9 @@ buildop(void)
             oprange[AMULLU] = oprange[r];
             oprange[AMULALU] = oprange[r];
             break;
+        default:
+            diag("unknown op in build: %A", r);
+            errorexit();
         }
     }
 }

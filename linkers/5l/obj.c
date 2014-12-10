@@ -284,19 +284,19 @@ main(int argc, char *argv[])
     /*x: [[main()]] initialize globals(arm) */
     load_libs = !debug['l'];
     /*x: [[main()]] initialize globals(arm) */
+    buildop(); // ???
+    /*x: [[main()]] initialize globals(arm) */
+    nuxiinit(); // ???
+    /*x: [[main()]] initialize globals(arm) */
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
     /*e: [[main()]] initialize globals(arm) */
-
-    buildop(); // ???
 
     cout = create(outfile, 1, 0775);
     if(cout < 0) {
         diag("cannot create %s: %r", outfile);
         errorexit();
     }
-
-    nuxiinit(); // ???
 
     // ------ main functions  ------
     /*s: [[main()]] cout is ready, LET'S GO(arm) */
@@ -367,7 +367,6 @@ main(int argc, char *argv[])
     follow();
     if(firstp == P)
         goto out;
-
     noops();
     span();
     /*e: [[main()]] resolving phases */
@@ -499,7 +498,7 @@ objfile(char *file)
 
     l = read(f, magbuf, SARMAG);
 
-    // not a library
+    // is it a regular object (and not a library)
     if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
         l = seek(f, 0L, SEEK__END);
@@ -596,16 +595,16 @@ zaddr(byte *p, Adr *a, Sym *h[])
     Sym *s;
     Auto *u;
 
-    /*s: [[zaddr()]] sanity check symbol range */
+    a->type = p[0];
+    a->reg = p[1];
     c = p[2];
+    /*s: [[zaddr()]] sanity check symbol range */
     if(c < 0 || c > NSYM){
         print("sym out of range: %d\n", c);
         p[0] = ALAST+1;
         return 0;
     }
     /*e: [[zaddr()]] sanity check symbol range */
-    a->type = p[0];
-    a->reg = p[1];
     a->sym = h[c];
     a->name = p[3];
 
@@ -636,8 +635,8 @@ zaddr(byte *p, Adr *a, Sym *h[])
     case D_BRANCH:
     case D_OREG:
     case D_CONST:
-    case D_OCONST:
     case D_SHIFT:
+    case D_OCONST:
         a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
         c += 4;
         break;
@@ -662,10 +661,10 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return 0;	/*  force real diagnostic */
 
     }
+
     s = a->sym;
     if(s == S)
         return c;
-
     i = a->name;
     if(i != D_AUTO && i != D_PARAM)
         return c;
@@ -680,11 +679,13 @@ zaddr(byte *p, Adr *a, Sym *h[])
         }
 
     u = malloc(sizeof(Auto));
-    u->link = curauto;
-    curauto = u;
     u->asym = s;
     u->aoffset = l;
     u->type = i;
+
+    //add_list(u, curauto)
+    u->link = curauto;
+    curauto = u;
 
     return c;
 }
@@ -894,20 +895,21 @@ ldobj(fdt f, long c, char *pn)
     byte *bsize;
     int r;
     /*x: [[ldobj()]] locals(arm) */
-    Sym *h[NSYM];
-    Sym *di;
-    Sym *s;
-    /*x: [[ldobj()]] locals(arm) */
-    Prog *t;
-    byte *stop;
-    int v;
-    ulong sig;
-    /*x: [[ldobj()]] locals(arm) */
     // enum<opcode>
     int o;
     Prog *p;
     /*x: [[ldobj()]] locals(arm) */
     bool skip;
+    /*x: [[ldobj()]] locals(arm) */
+    Sym *h[NSYM];
+    Sym *di;
+    Sym *s;
+    /*x: [[ldobj()]] locals(arm) */
+    Prog *t;
+    int v;
+    ulong sig;
+    /*x: [[ldobj()]] locals(arm) */
+    byte *stop;
     /*x: [[ldobj()]] locals(arm) */
     // growing_array<filename>  (grown for every 16 elements)
     static char **filen;
@@ -948,7 +950,7 @@ loop:
     if(c <= 0)
         goto eof;
 
-    /*s: [[ldobj()]] read if needed in loop:, adjust block and bsize */
+    /*s: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
     r = bsize - bloc;
     if(r < 100 && r < c) {		/* enough for largest prog */
         bsize = readsome(f, buf.xbuf, bloc, bsize, c);
@@ -957,7 +959,7 @@ loop:
         bloc = buf.xbuf;
         goto loop;
     }
-    /*e: [[ldobj()]] read if needed in loop:, adjust block and bsize */
+    /*e: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
 
     o = bloc[0];		/* as */
     /*s: [[ldobj()]] sanity check opcode in range(arm) */
@@ -978,18 +980,21 @@ loop:
         }
         /*e: [[ldobj()]] if SIGNAME adjust sig */
 
-        stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
-        if(stop == 0){
+        stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
+        /*s: [[ldobj()]] if stop is nil refill buffer and retry */
+        if(stop == nil){
             bsize = readsome(f, buf.xbuf, bloc, bsize, c);
             if(bsize == 0)
                 goto eof;
             bloc = buf.xbuf;
-            stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
-            if(stop == 0){
+            stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
+            if(stop == nil){
                 fprint(2, "%s: name too long\n", pn);
                 errorexit();
             }
         }
+        /*e: [[ldobj()]] if stop is nil refill buffer and retry */
+
         v = bloc[1];	/* type */
         o = bloc[2];	/* sym */
         bloc += 3;
@@ -998,6 +1003,7 @@ loop:
         r = 0;
         if(v == D_STATIC)
             r = version;
+
         s = lookup((char*)bloc, r);
         c -= &stop[1] - bloc;
         bloc = stop + 1;
@@ -1013,6 +1019,7 @@ loop:
 
         if(debug['W'])
             print("	ANAME	%s\n", s->name);
+
         h[o] = s;
         if((v == D_EXTERN || v == D_STATIC) && s->type == SNONE)
             s->type = SXREF;
@@ -1034,30 +1041,27 @@ loop:
         goto loop;
     }
     /*e: [[ldobj()]] if ANAME or ASIGNAME(arm) */
-
-    //TODO: factorize
-    if(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
-    // reading the object binary file, opposite of outcode() in Assembler.nw
+    p = malloc(sizeof(Prog));
     p->as = o;
+    // reading the object binary file, opposite of outcode() in Assembler.nw
+    /*s: [[ldobj()]] read one instruction in p */
     p->scond = bloc[1];
     p->reg   = bloc[2];
     p->line  = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
-    r = zaddr(bloc+7, &p->from, h) + 7;
+    r = 7;
+    r += zaddr(bloc+7, &p->from, h);
     r += zaddr(bloc+r, &p->to, h);
 
     bloc += r;
     c -= r;
 
-    if(p->reg > NREG)
-        diag("register out of range %d", p->reg);
-
     p->link = P;
     p->cond = P;
+    /*e: [[ldobj()]] read one instruction in p */
+    /*s: [[ldobj()]] sanity check p */
+    if(p->reg > NREG)
+        diag("register out of range %d", p->reg);
+    /*e: [[ldobj()]] sanity check p */
 
     if(debug['W'])
         print("%P\n", p);
@@ -1068,13 +1072,16 @@ loop:
         if(curtext != P) {
             histtoauto();
             curtext->to.autom = curauto;
-            curauto = 0;
+            curauto = nil;
         }
-        skip = false;
+        skip = false; // needed?
+
         curtext = p;
+
         autosize = (p->to.offset+3L) & ~3L;
         p->to.offset = autosize;
         autosize += 4;
+
         s = p->from.sym;
 
         if(s == S) {
@@ -1084,7 +1091,7 @@ loop:
 
         if(s->type != SNONE && s->type != SXREF) {
             if(p->reg & DUPOK) {
-                skip = 1;
+                skip = true;
                 goto casedef;
             }
             diag("redefinition: %s\n%P", s->name, p);
@@ -1093,10 +1100,10 @@ loop:
         s->type = STEXT;
         s->value = pc;
 
+        // like in default case
         //add_list(firstp, lastp, p)
         lastp->link = p;
         lastp = p;
-
         p->pc = pc;
         pc++;
 
@@ -1104,12 +1111,10 @@ loop:
         if(textp == P) {
             textp = p;
             etextp = p;
-            goto loop;
+        } else {
+            etextp->cond = p;
+            etextp = p;
         }
-
-        etextp->cond = p;
-        etextp = p;
-
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ADATA:
@@ -1144,10 +1149,12 @@ loop:
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AEND:
+
         histtoauto();
         if(curtext != P)
             curtext->to.autom = curauto;
-        curauto = 0;
+        curauto = nil;
+
         curtext = P;
         if(c)
             goto newloop;
@@ -1307,6 +1314,7 @@ loop:
         if(p->to.type == D_BRANCH)
             p->to.offset += ipc;
 
+        //add_list(firstp, lastp, p)
         lastp->link = p;
         lastp = p;
 

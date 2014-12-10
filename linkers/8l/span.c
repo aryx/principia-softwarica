@@ -133,7 +133,8 @@ putsymb(char *s, int t, long v, int ver)
         t += 'a' - 'A';
     cput(t+0x80);			/* 0x80 is variable length */
 
-    if(t == 'Z' || t == 'z') {
+    /*s: [[putsymb()]] if z or Z */
+    if(t == 'z' || t == 'Z') {
         cput(s[0]);
         for(i=1; s[i] != 0 || s[i+1] != 0; i += 2) {
             cput(s[i]);
@@ -143,6 +144,7 @@ putsymb(char *s, int t, long v, int ver)
         cput(0);
         i++;
     }
+    /*e: [[putsymb()]] if z or Z */
     else {
         for(i=0; s[i]; i++)
             cput(s[i]);
@@ -151,6 +153,7 @@ putsymb(char *s, int t, long v, int ver)
     symsize += 4 + 1 + i + 1;
 
     if(debug['n']) {
+        /*s: [[putsymb()]] if z or Z in debug output */
         if(t == 'z' || t == 'Z') {
             Bprint(&bso, "%c %.8lux ", t, v);
             for(i=1; s[i] != 0 || s[i+1] != 0; i+=2) {
@@ -160,6 +163,7 @@ putsymb(char *s, int t, long v, int ver)
             Bprint(&bso, "\n");
             return;
         }
+        /*e: [[putsymb()]] if z or Z in debug output */
         if(ver)
             Bprint(&bso, "%c %.8lux %s<%d>\n", t, v, s, ver);
         else

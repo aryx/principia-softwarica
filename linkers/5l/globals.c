@@ -10,6 +10,7 @@ union Buf buf;
 long	HEADR; 		/* length of header */
 /*e: global HEADR */
 /*s: global HEADTYPE */
+// enum<headtype>
 long	HEADTYPE = -1; /* type of header */
 /*e: global HEADTYPE */
 /*s: global INITDAT */
@@ -102,12 +103,14 @@ int	histgen = 0;
 /*e: global histgen */
 
 /*s: global library */
+// array<option<filename>>
 char*	library[50];
 /*e: global library */
 /*s: global libraryobj */
 char*	libraryobj[50];
 /*e: global libraryobj */
 /*s: global libraryp */
+// index of first free entry in library array
 int	libraryp;
 /*e: global libraryp */
 
@@ -191,10 +194,10 @@ Prog	zprg;
 int	dtype = 4;
 /*e: global dtype(arm) */
 /*s: global armv4(arm) */
-int	armv4;
+bool	armv4;
 /*e: global armv4(arm) */
 /*s: global vfp(arm) */
-int vfp;
+bool vfp;
 /*e: global vfp(arm) */
 
 /*s: global doexp */

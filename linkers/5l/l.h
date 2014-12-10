@@ -21,7 +21,7 @@ char*	findlib(char*);
 
 typedef	struct	Adr	Adr;
 typedef	struct	Sym	Sym;
-typedef	struct	Autom	Auto;
+typedef	struct	Auto	Auto;
 typedef	struct	Prog	Prog;
 typedef	struct	Optab	Optab;
 typedef	struct	Oprang	Oprang;
@@ -58,8 +58,11 @@ struct	Adr
     } u1;
 
     /*s: [[Adr]] other fields */
-    char	reg; // Abused for NOPROF and DUPOK
+    // enum<name_kind>
     char	name;
+    /*x: [[Adr]] other fields */
+    char	reg; // Abused for NOPROF and DUPOK
+    /*x: [[Adr]] other fields */
     char	class;
     /*e: [[Adr]] other fields */
 };
@@ -93,13 +96,14 @@ struct	Prog
     Adr	to;
 
     /*s: [[Prog]] other fields */
-    long	pc;
-    long	line;
-    /*x: [[Prog]] other fields */
     // enum<register>
     byte	reg;
     // enum<instr_cond>
     byte	scond;
+    /*x: [[Prog]] other fields */
+    long	pc;
+    /*x: [[Prog]] other fields */
+    long	line;
     /*x: [[Prog]] other fields */
     union
     {
@@ -137,8 +141,8 @@ struct	Sym
 
     //enum<sxxx>
     short	type;
-
-    long	value; // e.g. pc for a TEXT procedure
+    // generic value, e.g. pc for a TEXT procedure
+    long	value; 
 
     /*s: [[Sym]] other fields */
     short	become;
@@ -165,18 +169,21 @@ struct	Sym
 #define SIGNINTERN	(1729*325*1729)
 /*e: constant SIGNINTERN(arm) */
 
-/*s: struct Autom(arm) */
-struct	Autom
+/*s: struct Auto(arm) */
+struct	Auto
 {
-    Sym*	asym;
-
-    long	aoffset;
+    // enum<name_kind> (but D_AUTO or D_PARAM only?)
     short	type;
 
+    Sym*	asym;
+    long	aoffset;
+
     // Extra
+    /*s: [[Auto]] extra fields */
     Auto*	link;
+    /*e: [[Auto]] extra fields */
 };
-/*e: struct Autom(arm) */
+/*e: struct Auto(arm) */
 /*s: struct Optab(arm) */
 struct	Optab
 {
@@ -201,13 +208,6 @@ struct	Oprang
     Optab*	stop;
 };
 /*e: struct Oprang(arm) */
-/*s: struct Count(arm) */
-struct	Count
-{
-    long	count;
-    long	outof;
-};
-/*e: struct Count(arm) */
 
 /*s: enum sxxx(arm) */
 enum sxxx
@@ -238,14 +238,16 @@ enum lxxx {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
-
+    /*s: enum lxxx cases */
     V4		= 1<<3,	/* arm v4 arch */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
+    /*e: enum lxxx cases */
 };
 /*e: enum lxxx(arm) */
 /*s: enum cxxx(arm) */
 enum cxxx {
     C_NONE		= 0,
+
     C_REG,
     C_REGREG,
     C_SHIFT,

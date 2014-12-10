@@ -13,7 +13,8 @@
 
 %thx to LP, changed for the better a few things:
 % - introduced HEADTYPE instead of hardcoded ints
-% - introduced mylog and DBG, cleaned up all those myxxx wrappers
+% - introduced mylog and DBG
+% - cleaned up all those myxxx wrappers
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
@@ -241,32 +242,10 @@ usage(void)
 % plan9 is essential a.out.h? 
 % but can actually generate different executable (well different headers)
 
-%l.h
-<<enum headtype(arm)>>=
-/*
- *	-H0				      no header
- *	-H2 -T4128 -R4096	  is plan9 format
- *	-H7				      is elf
- */
-enum headtype {
-     H_NOTHING = 0,
-     H_PLAN9 = 2,
-     H_ELF = 7,
-};
-@
-%old:
-% *	-H1 -T0x10005000 -R4  is aif for risc os
-% *	-H3 -T0xF0000020 -R4  is NetBSD format
-% *	-H4				      is IXP1200 (raw)
-% *	-H5 -T0xC0008010 -R1024 	is ipaq
-% *	-H6 -R4096			   no header with segments padded to pages
-
 % see libmach to read back this executable!
 
 % so   .s -5a-> .o -5l-> .exe -libmach-> readable
 % (hmm libmach is also reading .o (.5)
-
-
 
 % include/a.out.h
 % used by strip, libmach, but not 5l, should be 32 bytes (0x20)
@@ -336,8 +315,8 @@ struct	Exec
 
 \section{[[Sym]] and [[hash]]}
 
-% linker is all about resolving undefined symbols, and link to the right place,
-% so symbols are pretty central!
+% linker is a lot about resolving undefined symbols, and link to 
+% the right place, so symbols are pretty central!
 
 % conflict with include/a.out.h
 <<struct Sym>>=
@@ -348,19 +327,15 @@ struct	Sym
 
     //enum<sxxx>
     short	type;
-
-    long	value; // e.g. pc for a TEXT procedure
+    // generic value, e.g. pc for a TEXT procedure
+    long	value; 
 
     <<[[Sym]] other fields>>
     // Extra
     <<[[Sym]] extra fields>>
 };
 @
-
-<<constant S>>=
-#define	S		((Sym*)nil)
-@
-
+% rename value to pc? to a union?
 
 <<constant NHASH linker>>=
 NHASH		= 10007,
@@ -376,6 +351,11 @@ Sym*	hash[NHASH];
 // hash<Sym.name * Sym.version, ref<Sym>> of hash
 Sym*	link;
 @
+
+<<constant S>>=
+#define	S		((Sym*)nil)
+@
+
 
 
 
@@ -489,42 +469,43 @@ struct	Adr
 %see DConv
 % less: rename operand?
 %// TODO: abused for NOPROF function attributes
+% offset abused for REGREG
+% but otherwise it's often used as an offset in D_BRANCH, D_OREG
+% because indeed it's an offset to a basis (PC, SB, etc)
 
-%XXXXXXX
-<<[[Adr]] other fields>>=
-char	reg; // Abused for NOPROF and DUPOK
-char	name;
-char	class;
-@
 
 % (would be better if had ADT so can have better Instruction type instead
-% of those opcode, operand, Adr, and unions and all comments)
+% of those opcode, operand, Adr, and unions and all those comments)
 
 %give a few examples? show man page where have all the addressing modes
 
-%ATEXT arguments are also Adr (abuse)
+%note: ATEXT arguments are also Adr (abuse)
 
-% the main thing the linker does: to relocate at the right place.
+% one of the main thing a linker does is to relocate at the right place.
 % offset can be based on PC (for D_BRANCH), SB(for D_STATIC, D_EXTERN),
 % on FP(for D_PARAM), and on SP(for D_AUTO), 
 % or can be direct value (for D_CONST)
 
 
-% ???
-<<struct Autom(arm)>>=
-struct	Autom
+% for locals or param symbols
+<<struct Auto(arm)>>=
+struct	Auto
 {
-    Sym*	asym;
-
-    long	aoffset;
+    // enum<name_kind> (but D_AUTO or D_PARAM only?)
     short	type;
 
+    Sym*	asym;
+    long	aoffset;
+
     // Extra
-    Auto*	link;
+    <<[[Auto]] extra fields>>
 };
 @
 
 
+<<[[Auto]] extra fields>>=
+Auto*	link;
+@
 
 
 \ifallcode
@@ -551,6 +532,11 @@ struct	Autom
 @
 \fi
 
+% works with sym
+<<[[Adr]] other fields>>=
+// enum<name_kind>
+char	name;
+@
 
 \section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
 
@@ -580,17 +566,6 @@ struct	Prog
 % note that pseudo-opcode like ATEXT also have operands, so
 % from can be abused to store the name of the procedure
 
-
-%XXX
-<<[[Prog]] other fields>>=
-long	pc;
-long	line;
-@
-
-
-
-
-
 % very arm specific!
 <<[[Prog]] other fields>>=
 // enum<register>
@@ -599,38 +574,13 @@ byte	reg;
 byte	scond;
 @
 
-%XXX
+
+
 <<[[Prog]] other fields>>=
-union
-{
-    long	u0regused;
-    Prog*	u0forwd;
-} u0;
+long	pc;
 @
-
-
-%XXX
-<<[[Prog]] other fields>>=
-byte	mark;
-@
-
-%XXX
-<<[[Prog]] other fields>>=
-byte	optab;
-@
-
-
-
-\ifallcode
-% why not using anonymous union? so don't need those aliases ...
-<<constant regused(arm)>>=
-#define	regused	u0.u0regused
-@
-<<constant forwd(arm)>>=
-#define	forwd	u0.u0forwd
-@
-\fi
-
+% the absolute pc of this instruction! needed for
+% some check pc == p->pc somewhere.
 
 
 
@@ -643,14 +593,14 @@ byte	optab;
 Prog*	firstp;
 @
 
-<<constant P>>=
-#define	P		((Prog*)nil)
-@
-
 
 <<[[Prog]] extra fields>>=
 // list<ref<Prog>> from firstp/lastp, or datap/edatap
 Prog*	link;
+@
+
+<<constant P>>=
+#define	P		((Prog*)nil)
 @
 
 
@@ -676,13 +626,13 @@ Prog*	textp = P;
 Prog*	cond;
 @
 %just to quickly iterate over all the ATEXT?
-
-
+% (is called pcond I think in x86, could choose same name)
 
 <<global etextp>>=
 // ref<Prog>, end of textp list
 Prog*	etextp = P;
 @
+
 
 
 
@@ -719,6 +669,9 @@ char	*noname		= "<none>";
 @
 
 
+
+
+
 <<global undefp>>=
 //@Scheck: not dead, used by UP
 Prog	undefp;
@@ -728,10 +681,6 @@ Prog	undefp;
 <<constant UP>>=
 #define	UP	(&undefp)
 @
-
-
-
-
 
 
 \section{[[Optab]] and [[optab]]}
@@ -770,6 +719,58 @@ struct	Optab
 
 \section{XXX}
 
+%XXXXXXX
+<<[[Adr]] other fields>>=
+char	reg; // Abused for NOPROF and DUPOK
+@
+% again a reg field ... already have one in Prog
+
+%XXXXXXX
+<<[[Adr]] other fields>>=
+char	class;
+@
+
+
+
+%XXXX
+<<[[Prog]] other fields>>=
+long	line;
+@
+
+
+%XXX
+<<[[Prog]] other fields>>=
+union
+{
+    long	u0regused;
+    Prog*	u0forwd;
+} u0;
+@
+\ifallcode
+% why not using anonymous union? so don't need those aliases ...
+<<constant regused(arm)>>=
+#define	regused	u0.u0regused
+@
+<<constant forwd(arm)>>=
+#define	forwd	u0.u0forwd
+@
+\fi
+
+
+
+%XXX
+<<[[Prog]] other fields>>=
+byte	mark;
+@
+
+%XXX
+<<[[Prog]] other fields>>=
+byte	optab;
+@
+
+
+
+
 %XXXX
 <<enum sxxx cases>>=
 SDATA1,
@@ -784,6 +785,7 @@ SIMPORT,
 SEXPORT,
 @
 % SLEAF? the special opti ARM has for leaf functions?
+% SCONST ... hmm confusing with D_SCONST IMHO
 
 
 %XXXXXXXXX
@@ -798,16 +800,18 @@ enum lxxx {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
-
-    V4		= 1<<3,	/* arm v4 arch */
-    VFP		= 1<<4,	/* arm vfpv3 floating point */
+    <<enum lxxx cases>>
 };
 @
 % >> >> >> >> >>
 
+
+% seems called the class, see aclass(), a more precise operand_kind?
+% TODO LP split
 <<enum cxxx(arm)>>=
 enum cxxx {
     C_NONE		= 0,
+
     C_REG,
     C_REGREG,
     C_SHIFT,
@@ -856,6 +860,214 @@ enum cxxx {
 };
 @
 
+<<function aclass(arm)>>=
+int
+aclass(Adr *a)
+{
+    Sym *s;
+    int t;
+
+    switch(a->type) {
+    case D_NONE:
+        return C_NONE;
+
+    case D_REG:
+        return C_REG;
+
+    case D_REGREG:
+        return C_REGREG;
+
+    case D_SHIFT:
+        return C_SHIFT;
+
+    case D_FREG:
+        return C_FREG;
+
+    case D_FPCR:
+        return C_FCR;
+
+
+
+    case D_OREG:
+        switch(a->name) {
+        case D_EXTERN:
+        case D_STATIC:
+            if(a->sym == 0 || a->sym->name == 0) {
+                print("null sym external\n");
+                print("%D\n", a);
+                return C_GOK;
+            }
+            s = a->sym;
+            t = s->type;
+            if(t == 0 || t == SXREF) {
+                diag("undefined external: %s in %s",
+                    s->name, TNAME);
+                s->type = SDATA;
+            }
+            if(dlm) {
+                switch(t) {
+                default:
+                    instoffset = s->value + a->offset + INITDAT;
+                    break;
+                case SUNDEF:
+                case STEXT:
+                case SCONST:
+                case SLEAF:
+                case SSTRING:
+                    instoffset = s->value + a->offset;
+                    break;
+                }
+                return C_ADDR;
+            }
+            instoffset = s->value + a->offset - BIG;
+            t = immaddr(instoffset);
+            if(t) {
+                if(immhalf(instoffset))
+                    return immfloat(t) ? C_HFEXT : C_HEXT;
+                if(immfloat(t))
+                    return C_FEXT;
+                return C_SEXT;
+            }
+            return C_LEXT;
+        case D_AUTO:
+            instoffset = autosize + a->offset;
+            t = immaddr(instoffset);
+            if(t){
+                if(immhalf(instoffset))
+                    return immfloat(t) ? C_HFAUTO : C_HAUTO;
+                if(immfloat(t))
+                    return C_FAUTO;
+                return C_SAUTO;
+            }
+            return C_LAUTO;
+
+        case D_PARAM:
+            instoffset = autosize + a->offset + 4L;
+            t = immaddr(instoffset);
+            if(t){
+                if(immhalf(instoffset))
+                    return immfloat(t) ? C_HFAUTO : C_HAUTO;
+                if(immfloat(t))
+                    return C_FAUTO;
+                return C_SAUTO;
+            }
+            return C_LAUTO;
+        case D_NONE:
+            instoffset = a->offset;
+            t = immaddr(instoffset);
+            if(t) {
+                if(immhalf(instoffset))		 /* n.b. that it will also satisfy immrot */
+                    return immfloat(t) ? C_HFOREG : C_HOREG;
+                if(immfloat(t))
+                    return C_FOREG; /* n.b. that it will also satisfy immrot */
+                t = immrot(instoffset);
+                if(t)
+                    return C_SROREG;
+                if(immhalf(instoffset))
+                    return C_HOREG;
+                return C_SOREG;
+            }
+            t = immrot(instoffset);
+            if(t)
+                return C_ROREG;
+            return C_LOREG;
+        }
+        return C_GOK;
+
+    case D_PSR:
+        return C_PSR;
+
+    case D_OCONST:
+        switch(a->name) {
+        case D_EXTERN:
+        case D_STATIC:
+            s = a->sym;
+            t = s->type;
+            if(t == 0 || t == SXREF) {
+                diag("undefined external: %s in %s",
+                    s->name, TNAME);
+                s->type = SDATA;
+            }
+            instoffset = s->value + a->offset + INITDAT;
+            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
+                instoffset = s->value + a->offset;
+            return C_LCON;
+        }
+        return C_GOK;
+
+    case D_FCONST:
+        return C_FCON;
+
+    case D_CONST:
+        switch(a->name) {
+
+        case D_NONE:
+            instoffset = a->offset;
+            if(a->reg != NREG)
+                goto aconsize;
+
+            t = immrot(instoffset);
+            if(t)
+                return C_RCON;
+
+            t = immrot(~instoffset);
+            if(t)
+                return C_NCON;
+            return C_LCON;
+
+        case D_EXTERN:
+        case D_STATIC:
+            s = a->sym;
+            if(s == S)
+                break;
+            t = s->type;
+            switch(t) {
+            case SNONE:
+            case SXREF:
+                diag("undefined external: %s in %s", s->name, TNAME);
+                s->type = SDATA;
+                break;
+            case SUNDEF:
+            case STEXT:
+            case SSTRING:
+            case SCONST:
+            case SLEAF:
+                instoffset = s->value + a->offset;
+                return C_LCON;
+            }
+            if(!dlm) {
+                instoffset = s->value + a->offset - BIG;
+                t = immrot(instoffset);
+                if(t && instoffset != 0)
+                    return C_RECON;
+            }
+            instoffset = s->value + a->offset + INITDAT;
+            return C_LCON;
+
+        case D_AUTO:
+            instoffset = autosize + a->offset;
+            goto aconsize;
+
+        case D_PARAM:
+            instoffset = autosize + a->offset + 4L;
+
+        aconsize:
+            t = immrot(instoffset);
+            if(t)
+                return C_RACON;
+            return C_LACON;
+        }
+        return C_GOK;
+
+    case D_BRANCH:
+        return C_SBRA;
+    }
+    return C_GOK;
+}
+@
+
+
+
 <<enum mark(arm)>>=
 /* mark flags */
 enum mark {
@@ -888,6 +1100,12 @@ enum misc_constants {
 // enum<section> too?
 byte	subtype;
 @
+
+
+
+
+
+
 
 \chapter{[[main()]]}
 
@@ -944,15 +1162,11 @@ main(int argc, char *argv[])
     <<[[main()]] set HEADTYPE, INITTEXT, INITDAT, etc>>
     <<[[main()]] initialize globals(arm)>>
 
-    buildop(); // ???
-
     cout = create(outfile, 1, 0775);
     if(cout < 0) {
         diag("cannot create %s: %r", outfile);
         errorexit();
     }
-
-    nuxiinit(); // ???
 
     // ------ main functions  ------
     <<[[main()]] cout is ready, LET'S GO(arm)>>
@@ -969,21 +1183,24 @@ out:
 
 % -H executable format (header type)
 <<global HEADTYPE>>=
+// enum<headtype>
 long	HEADTYPE = -1; /* type of header */
 @
 % was int in ARM and long in x86, but I don't think it matters
+
 
 
 % -T text segment start virtual address (important! e.g. for kernel 0x7c00)
 <<global INITTEXT>>=
 long	INITTEXT = -1; /* text location */
 @
-
+% where expect the code to be loaded, at which (virtual) memory location
 
 % -D data segment start
 <<global INITDAT>>=
 long	INITDAT = -1; /* data location */
 @
+
 
 % -E default _main (or _mainp when -p)
 <<global INITENTRY>>=
@@ -991,7 +1208,7 @@ char*	INITENTRY = nil;		/* entry point */
 @
 
 
-
+% less important
 % -R text segment rounder at r multiple
 <<global INITRND>>=
 long	INITRND = -1; 		/* data round above text location */
@@ -1051,9 +1268,26 @@ DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
 @
 
 
-%32 = 0x20, hence this note in kernel mkfile:
-%# see mem.h, the additional 20 are the size of the a.out header added by LD
-%KTZERO_AND_HEADER=0xE0100020
+%l.h
+<<enum headtype(arm)>>=
+/*
+ *	-H0				      no header
+ *	-H2 -T4128 -R4096	  is plan9 format
+ *	-H7				      is elf
+ */
+enum headtype {
+     H_NOTHING = 0,
+     H_PLAN9 = 2,
+     H_ELF = 7,
+};
+@
+%old:
+% *	-H1 -T0x10005000 -R4  is aif for risc os
+% *	-H3 -T0xF0000020 -R4  is NetBSD format
+% *	-H4				      is IXP1200 (raw)
+% *	-H5 -T0xC0008010 -R1024 	is ipaq
+% *	-H6 -R4096			   no header with segments padded to pages
+
 
 % -H2, see enum headtype in Overview chapter
 <<[[main()]] switch HEADTYPE cases(arm)>>=
@@ -1067,6 +1301,9 @@ case H_PLAN9:
         INITRND = 4096;
     break;
 @
+%32 = 0x20, hence this note in kernel mkfile:
+%# see mem.h, the additional 20 are the size of the a.out header added by LD
+%KTZERO_AND_HEADER=0xE0100020
 
 
 % less important I think
@@ -1113,10 +1350,6 @@ undef();
 
 
 
-
-
-% essentially a malloc(sizeof(Prog), 
-% see section on Buffer managment to better understand
 <<constructor prg>>=
 Prog*
 prg(void)
@@ -1134,9 +1367,6 @@ prg(void)
 Prog	zprg;
 @
 
-%GOK? God Only Knows? to be used as a special mark, there is diag()
-% in ldobj() about AGOK
-
 <<[[main()]] initialize globals(arm)>>=
 <<[[main()]] set zprg(arm)>>
 @
@@ -1150,7 +1380,10 @@ zprg.from.name = N_NONE;
 zprg.from.reg = R_NONE;
 zprg.to = zprg.from;
 @
-% have to use AGOK? why not AXXX? or ANOP?
+%GOK? God Only Knows? to be used as a special mark, there is diag()
+% in ldobj() about AGOK
+%less: have to use AGOK? why not AXXX? or ANOP?
+
 
 
 
@@ -1180,18 +1413,20 @@ if(INITENTRY == nil) {
     <<[[main()]] if digit INITENTRY>>
 }
 @
+%todo: why when have libs we set _main as SXREF? and why when -l we don't?
 
 % _main! not main, because _main is defined in libc and then call your main?
 % SXREF means?
 
 \section{Loading the objects, [[objfile()]]}
-% this function can also load libraries passed on the
-% command line when the file is a .a
+% this function can actually also load libraries passed on the
+% command line when the file is a .a (and also core libs passed
+% via -lxxx)
 
 % essentially modify which globals?
+%  - should modify firstp! and textp, datap, lastp, etc
 %  - will modify libraryp probably, the cool pragma "autolib"
 %    which is why objfile() must be called before loadlib()
-%  - should modify firstp! and datap!
 
 <<function objfile>>=
 void
@@ -1214,7 +1449,7 @@ objfile(char *file)
 
     l = read(f, magbuf, SARMAG);
 
-    // not a library
+    // is it a regular object (and not a library)
     if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
         l = seek(f, 0L, SEEK__END);
@@ -1236,23 +1471,25 @@ objfile(char *file)
 
 \section{Loading the libraries, [[loadlib()]]}
 
-% it loads the libraries mentioned in the .obj via the .h and #pragma magic!
-% see later section
+% it loads the libraries mentioned in the .5 via the .h and #pragma magic!
+% (see later section)
 
 % so loading objects with ldbobj() will modify some of the globals below
 
 % then if(load_libs) loadlib()  in the main flow
 
 <<global library>>=
+// array<option<filename>>
 char*	library[50];
 @
 
 
 <<global libraryp>>=
+// index of first free entry in library array
 int	libraryp;
 @
 
-
+% ? obj that mentioned a library via a #pragma? for debugging purpose?
 <<global libraryobj>>=
 char*	libraryobj[50];
 @
@@ -1316,8 +1553,8 @@ asmb(void)
     // DATA SECTION
     <<[[asmb()]] DATA section>>
 
-    // SYMBOL TABLE
-    <<[[asmb()]] symbol table section>>
+    // SYMBOL AND LINE TABLE
+    <<[[asmb()]] symbol and line table section>>
 
     // HEADER
     <<[[asmb()]] header section>>
@@ -1486,18 +1723,18 @@ for(t = pc; t < etext; t += sizeof(buf)-100) {
         datblk(t, etext-t, 1);
 @
 
-\subsection{Symbol table section}
+\subsection{Symbol and line table section}
 
 % important call: asmlc()?
-<<[[asmb()]] symbol table section>>=
+<<[[asmb()]] symbol and line table section>>=
 // modified by asmsym()
 symsize = 0;
 // modified by asmlc()
 lcsize = 0;
 
 if(!debug['s']) {
-    DBG("%5.2f sym\n", cputime());
 
+    DBG("%5.2f sym\n", cputime());
     switch(HEADTYPE) {
     case H_PLAN9:
         OFFSET = HEADR+textsize+datsize;
@@ -1505,10 +1742,9 @@ if(!debug['s']) {
         break;
     <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>
     }
-
     asmsym();
-    DBG("%5.2f pc\n", cputime());
 
+    DBG("%5.2f pc\n", cputime());
     asmlc();
     <<[[asmb()]] if dynamic module, call asmdyn()>>
 
@@ -1596,7 +1832,7 @@ bloc = buf.xbuf;
 @
 
 
-<<[[ldobj()]] read if needed in loop:, adjust block and bsize>>=
+<<[[ldobj()]] read if needed in loop:, adjust bloc and bsize>>=
 r = bsize - bloc;
 if(r < 100 && r < c) {		/* enough for largest prog */
     bsize = readsome(f, buf.xbuf, bloc, bsize, c);
@@ -1611,23 +1847,6 @@ if(r < 100 && r < c) {		/* enough for largest prog */
 
 \section{[[ldobj()]]}
 
-%XXX
-<<[[ldobj()]] locals(arm)>>=
-Sym *h[NSYM];
-Sym *di;
-Sym *s;
-@
-
-%XXX
-<<[[ldobj()]] locals(arm)>>=
-Prog *t;
-byte *stop;
-int v;
-ulong sig;
-@
-
-
-
 <<[[ldobj()]] locals(arm)>>=
 // enum<opcode>
 int o;
@@ -1640,13 +1859,13 @@ Prog *p;
 bool skip;
 @
 % if set to true then generate a NOP actually for the currently
-% read instruction
+% read instruction. used for DUPOK for instance.
+
 
 % main -> objfile -> <>
 % f = fd of opened object file
 % c = size of object file, 
 % pn = filename of object, 
-
 <<function ldobj(arm)>>=
 void
 ldobj(fdt f, long c, char *pn)
@@ -1671,35 +1890,16 @@ loop:
     if(c <= 0)
         goto eof;
 
-    <<[[ldobj()]] read if needed in loop:, adjust block and bsize>>
+    <<[[ldobj()]] read if needed in loop:, adjust bloc and bsize>>
 
     o = bloc[0];		/* as */
     <<[[ldobj()]] sanity check opcode in range(arm)>>
     <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>
-
-    //TODO: factorize
-    if(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
-    // reading the object binary file, opposite of outcode() in Assembler.nw
+    p = malloc(sizeof(Prog));
     p->as = o;
-    p->scond = bloc[1];
-    p->reg   = bloc[2];
-    p->line  = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
-    r = zaddr(bloc+7, &p->from, h) + 7;
-    r += zaddr(bloc+r, &p->to, h);
-
-    bloc += r;
-    c -= r;
-
-    if(p->reg > NREG)
-        diag("register out of range %d", p->reg);
-
-    p->link = P;
-    p->cond = P;
+    // reading the object binary file, opposite of outcode() in Assembler.nw
+    <<[[ldobj()]] read one instruction in p>>
+    <<[[ldobj()]] sanity check p>>
 
     if(debug['W'])
         print("%P\n", p);
@@ -1715,6 +1915,7 @@ loop:
         if(p->to.type == D_BRANCH)
             p->to.offset += ipc;
 
+        //add_list(firstp, lastp, p)
         lastp->link = p;
         lastp = p;
 
@@ -1728,12 +1929,35 @@ eof:
     diag("truncated object file: %s", pn);
 }
 @
-% hmm when exit from this function without an error?
-% via AEND that does have a return
+%bugfix: again on gethunk, was doing if(nhunk < ...) instead of while(nhunk...)
+%  the bug seems only in arm, x86 does the correct while
+
+%hmm when exit from this function without an error?
+% via AEND! that does have a return!
 
 
 
 
+
+
+
+
+
+
+<<[[ldobj()]] read one instruction in p>>=
+p->scond = bloc[1];
+p->reg   = bloc[2];
+p->line  = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
+r = 7;
+r += zaddr(bloc+7, &p->from, h);
+r += zaddr(bloc+r, &p->to, h);
+
+bloc += r;
+c -= r;
+
+p->link = P;
+p->cond = P;
+@
 
 
 <<[[ldobj()]] sanity check opcode in range(arm)>>=
@@ -1744,8 +1968,44 @@ if(o <= AXXX || o >= ALAST) {
 }
 @
 
+<<[[ldobj()]] sanity check p>>=
+if(p->reg > NREG)
+    diag("register out of range %d", p->reg);
+@
+
+
+<<function nopout>>=
+void
+nopout(Prog *p)
+{
+    p->as = ANOP;
+    p->from.type = D_NONE;
+    p->to.type = D_NONE;
+}
+@
+
+
+
+
+%XXX
+<<[[ldobj()]] locals(arm)>>=
+Sym *h[NSYM];
+Sym *di;
+Sym *s;
+@
+
+%XXX
+<<[[ldobj()]] locals(arm)>>=
+Prog *t;
+int v;
+ulong sig;
+@
+
+
+\section{[[zaddr()]]}
 
 % reverse of zaddr() in Assembler.nw 
+% ldobj -> <>
 <<function zaddr(arm)>>=
 int
 zaddr(byte *p, Adr *a, Sym *h[])
@@ -1755,9 +2015,10 @@ zaddr(byte *p, Adr *a, Sym *h[])
     Sym *s;
     Auto *u;
 
-    <<[[zaddr()]] sanity check symbol range>>
     a->type = p[0];
     a->reg = p[1];
+    c = p[2];
+    <<[[zaddr()]] sanity check symbol range>>
     a->sym = h[c];
     a->name = p[3];
 
@@ -1773,10 +2034,10 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return 0;	/*  force real diagnostic */
 
     }
+
     s = a->sym;
     if(s == S)
         return c;
-
     i = a->name;
     if(i != D_AUTO && i != D_PARAM)
         return c;
@@ -1791,11 +2052,13 @@ zaddr(byte *p, Adr *a, Sym *h[])
         }
 
     u = malloc(sizeof(Auto));
-    u->link = curauto;
-    curauto = u;
     u->asym = s;
     u->aoffset = l;
     u->type = i;
+
+    //add_list(u, curauto)
+    u->link = curauto;
+    curauto = u;
 
     return c;
 }
@@ -1818,8 +2081,8 @@ case D_REGREG:
 case D_BRANCH:
 case D_OREG:
 case D_CONST:
-case D_OCONST:
 case D_SHIFT:
+case D_OCONST:
     a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
     c += 4;
     break;
@@ -1830,21 +2093,18 @@ case D_SCONST:
     c += NSNAME;
     break;
 @
+% get rid of OCONST?
 
-<<[[zaddr()]] cases>>=
-case D_FCONST:
-    a->ieee = malloc(sizeof(Ieee));
 
-    a->ieee->l = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
-    a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
-    c += 8;
-    break;
-@
-% bugfix: there was a bug where it was using NSNAME instead of sizeof(Ieee)
-%  but factorizing code with malloc fixed the issue too.
+
+
+
+
+
+
+
 
 <<[[zaddr()]] sanity check symbol range>>=
-c = p[2];
 if(c < 0 || c > NSYM){
     print("sym out of range: %d\n", c);
     p[0] = ALAST+1;
@@ -1858,22 +2118,6 @@ if(a->reg < 0 || a->reg > NREG) {
     return 0;	/*  force real diagnostic */
 }
 @
-
-
-
-
-
-<<function nopout>>=
-void
-nopout(Prog *p)
-{
-    p->as = ANOP;
-    p->from.type = D_NONE;
-    p->to.type = D_NONE;
-}
-@
-
-
 
 \section{[[ATEXT]]}
 
@@ -1907,13 +2151,16 @@ case ATEXT:
     if(curtext != P) {
         histtoauto();
         curtext->to.autom = curauto;
-        curauto = 0;
+        curauto = nil;
     }
-    skip = false;
+    skip = false; // needed?
+
     curtext = p;
+
     autosize = (p->to.offset+3L) & ~3L;
     p->to.offset = autosize;
     autosize += 4;
+
     s = p->from.sym;
 
     if(s == S) {
@@ -1923,7 +2170,7 @@ case ATEXT:
 
     if(s->type != SNONE && s->type != SXREF) {
         if(p->reg & DUPOK) {
-            skip = 1;
+            skip = true;
             goto casedef;
         }
         diag("redefinition: %s\n%P", s->name, p);
@@ -1932,10 +2179,10 @@ case ATEXT:
     s->type = STEXT;
     s->value = pc;
 
+    // like in default case
     //add_list(firstp, lastp, p)
     lastp->link = p;
     lastp = p;
-
     p->pc = pc;
     pc++;
 
@@ -1943,12 +2190,10 @@ case ATEXT:
     if(textp == P) {
         textp = p;
         etextp = p;
-        goto loop;
+    } else {
+        etextp->cond = p;
+        etextp = p;
     }
-
-    etextp->cond = p;
-    etextp = p;
-
     break;
 @
 %$
@@ -1969,6 +2214,7 @@ case ADATA:
 
     break;
 @
+% no s->type = SDATA?
 
 \section{[[AGLOBL]]}
 
@@ -1995,28 +2241,25 @@ case AGLOBL:
         s->value = p->to.offset;
     break;
 @
+% what is offset for AGLOBL?
 
 \section{[[ANAME]]}
 % and [[ASIGNAME]]
 
-% it's not part of the switch, it's done before1
+
+<<[[ldobj()]] locals(arm)>>=
+byte *stop;
+@
+
+% it's not part of the switch, it's done before!
 <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>=
 if(o == ANAME || o == ASIGNAME) {
     sig = 0;
     <<[[ldobj()]] if SIGNAME adjust sig>>
 
-    stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
-    if(stop == 0){
-        bsize = readsome(f, buf.xbuf, bloc, bsize, c);
-        if(bsize == 0)
-            goto eof;
-        bloc = buf.xbuf;
-        stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
-        if(stop == 0){
-            fprint(2, "%s: name too long\n", pn);
-            errorexit();
-        }
-    }
+    stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
+    <<[[ldobj()]] if stop is nil refill buffer and retry>>
+
     v = bloc[1];	/* type */
     o = bloc[2];	/* sym */
     bloc += 3;
@@ -2025,6 +2268,7 @@ if(o == ANAME || o == ASIGNAME) {
     r = 0;
     if(v == D_STATIC)
         r = version;
+
     s = lookup((char*)bloc, r);
     c -= &stop[1] - bloc;
     bloc = stop + 1;
@@ -2033,6 +2277,7 @@ if(o == ANAME || o == ASIGNAME) {
 
     if(debug['W'])
         print("	ANAME	%s\n", s->name);
+
     h[o] = s;
     if((v == D_EXTERN || v == D_STATIC) && s->type == SNONE)
         s->type = SXREF;
@@ -2042,17 +2287,32 @@ if(o == ANAME || o == ASIGNAME) {
 }
 @
 
-
+% buffer managment crap again
+<<[[ldobj()]] if stop is nil refill buffer and retry>>=
+if(stop == nil){
+    bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+    if(bsize == 0)
+        goto eof;
+    bloc = buf.xbuf;
+    stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
+    if(stop == nil){
+        fprint(2, "%s: name too long\n", pn);
+        errorexit();
+    }
+}
+@
 
 
 \section{[[AEND]]}
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AEND:
+
     histtoauto();
     if(curtext != P)
         curtext->to.autom = curauto;
-    curauto = 0;
+    curauto = nil;
+
     curtext = P;
     if(c)
         goto newloop;
@@ -2231,10 +2491,8 @@ if((files&15) == 0){
 
 \chapter{Loading Libraries}
 
-\section{Loading libraries}
 
-\subsection{Loading libraries manually [[5l libxxx.a]]}
-
+\section{Loading libraries manually [[5l libxxx.a]]}
 
 <<[[objfile()]] other locals>>=
 long off, esym, cnt;
@@ -2326,13 +2584,10 @@ out:
 
 % >> >> >>
 
-\subsection{Loading libraries automagically [[#pragma lib]]}
-
+\section{Loading libraries automagically [[#pragma lib]]}
 % when done automatically
 
 % TODO LP split AHISTORY here
-
-
 <<function addhist>>=
 void
 addhist(long line, int type)
@@ -2630,7 +2885,6 @@ dodata();
 follow();
 if(firstp == P)
     goto out;
-
 noops();
 span();
 @
@@ -3549,7 +3803,6 @@ long	textsize;
 
 
 
-
 <<function span(arm)>>=
 void
 span(void)
@@ -3596,7 +3849,8 @@ span(void)
                 flushpool(p, 0);
             break;
         }
-        if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && (p->scond&C_SCOND) == COND_ALWAYS)
+        if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
+           (p->scond&C_SCOND) == COND_ALWAYS)
             flushpool(p, 0);
         c += m;
         if(blitrl)
@@ -3743,208 +3997,6 @@ flushpool(Prog *p, bool skip)
 @
 
 
-<<function aclass(arm)>>=
-int
-aclass(Adr *a)
-{
-    Sym *s;
-    int t;
-
-    switch(a->type) {
-    case D_NONE:
-        return C_NONE;
-
-    case D_REG:
-        return C_REG;
-
-    case D_REGREG:
-        return C_REGREG;
-
-    case D_SHIFT:
-        return C_SHIFT;
-
-    case D_FREG:
-        return C_FREG;
-
-    case D_FPCR:
-        return C_FCR;
-
-    case D_OREG:
-        switch(a->name) {
-        case D_EXTERN:
-        case D_STATIC:
-            if(a->sym == 0 || a->sym->name == 0) {
-                print("null sym external\n");
-                print("%D\n", a);
-                return C_GOK;
-            }
-            s = a->sym;
-            t = s->type;
-            if(t == 0 || t == SXREF) {
-                diag("undefined external: %s in %s",
-                    s->name, TNAME);
-                s->type = SDATA;
-            }
-            if(dlm) {
-                switch(t) {
-                default:
-                    instoffset = s->value + a->offset + INITDAT;
-                    break;
-                case SUNDEF:
-                case STEXT:
-                case SCONST:
-                case SLEAF:
-                case SSTRING:
-                    instoffset = s->value + a->offset;
-                    break;
-                }
-                return C_ADDR;
-            }
-            instoffset = s->value + a->offset - BIG;
-            t = immaddr(instoffset);
-            if(t) {
-                if(immhalf(instoffset))
-                    return immfloat(t) ? C_HFEXT : C_HEXT;
-                if(immfloat(t))
-                    return C_FEXT;
-                return C_SEXT;
-            }
-            return C_LEXT;
-        case D_AUTO:
-            instoffset = autosize + a->offset;
-            t = immaddr(instoffset);
-            if(t){
-                if(immhalf(instoffset))
-                    return immfloat(t) ? C_HFAUTO : C_HAUTO;
-                if(immfloat(t))
-                    return C_FAUTO;
-                return C_SAUTO;
-            }
-            return C_LAUTO;
-
-        case D_PARAM:
-            instoffset = autosize + a->offset + 4L;
-            t = immaddr(instoffset);
-            if(t){
-                if(immhalf(instoffset))
-                    return immfloat(t) ? C_HFAUTO : C_HAUTO;
-                if(immfloat(t))
-                    return C_FAUTO;
-                return C_SAUTO;
-            }
-            return C_LAUTO;
-        case D_NONE:
-            instoffset = a->offset;
-            t = immaddr(instoffset);
-            if(t) {
-                if(immhalf(instoffset))		 /* n.b. that it will also satisfy immrot */
-                    return immfloat(t) ? C_HFOREG : C_HOREG;
-                if(immfloat(t))
-                    return C_FOREG; /* n.b. that it will also satisfy immrot */
-                t = immrot(instoffset);
-                if(t)
-                    return C_SROREG;
-                if(immhalf(instoffset))
-                    return C_HOREG;
-                return C_SOREG;
-            }
-            t = immrot(instoffset);
-            if(t)
-                return C_ROREG;
-            return C_LOREG;
-        }
-        return C_GOK;
-
-    case D_PSR:
-        return C_PSR;
-
-    case D_OCONST:
-        switch(a->name) {
-        case D_EXTERN:
-        case D_STATIC:
-            s = a->sym;
-            t = s->type;
-            if(t == 0 || t == SXREF) {
-                diag("undefined external: %s in %s",
-                    s->name, TNAME);
-                s->type = SDATA;
-            }
-            instoffset = s->value + a->offset + INITDAT;
-            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
-                instoffset = s->value + a->offset;
-            return C_LCON;
-        }
-        return C_GOK;
-
-    case D_FCONST:
-        return C_FCON;
-
-    case D_CONST:
-        switch(a->name) {
-
-        case D_NONE:
-            instoffset = a->offset;
-            if(a->reg != NREG)
-                goto aconsize;
-
-            t = immrot(instoffset);
-            if(t)
-                return C_RCON;
-            t = immrot(~instoffset);
-            if(t)
-                return C_NCON;
-            return C_LCON;
-
-        case D_EXTERN:
-        case D_STATIC:
-            s = a->sym;
-            if(s == S)
-                break;
-            t = s->type;
-            switch(t) {
-            case 0:
-            case SXREF:
-                diag("undefined external: %s in %s",
-                    s->name, TNAME);
-                s->type = SDATA;
-                break;
-            case SUNDEF:
-            case STEXT:
-            case SSTRING:
-            case SCONST:
-            case SLEAF:
-                instoffset = s->value + a->offset;
-                return C_LCON;
-            }
-            if(!dlm) {
-                instoffset = s->value + a->offset - BIG;
-                t = immrot(instoffset);
-                if(t && instoffset != 0)
-                    return C_RECON;
-            }
-            instoffset = s->value + a->offset + INITDAT;
-            return C_LCON;
-
-        case D_AUTO:
-            instoffset = autosize + a->offset;
-            goto aconsize;
-
-        case D_PARAM:
-            instoffset = autosize + a->offset + 4L;
-        aconsize:
-            t = immrot(instoffset);
-            if(t)
-                return C_RACON;
-            return C_LACON;
-        }
-        return C_GOK;
-
-    case D_BRANCH:
-        return C_SBRA;
-    }
-    return C_GOK;
-}
-@
 
 
 
@@ -4010,300 +4062,8 @@ addpool(Prog *p, Adr *a)
 % why? because allows more optimisations? cross libs? as in llvm?
 % also more compact and simple object format? and more cross platform?
 
-% ???
-<<struct Oprang(arm)>>=
-struct	Oprang
-{
-    Optab*	start;
-    Optab*	stop;
-};
-@
-
-%???
-<<struct Count(arm)>>=
-struct	Count
-{
-    long	count;
-    long	outof;
-};
-@
-
-
-<<function cmp(arm)>>=
-int
-cmp(int a, int b)
-{
-
-    if(a == b)
-        return 1;
-    switch(a) {
-    case C_LCON:
-        if(b == C_RCON || b == C_NCON)
-            return 1;
-        break;
-    case C_LACON:
-        if(b == C_RACON)
-            return 1;
-        break;
-    case C_LECON:
-        if(b == C_RECON)
-            return 1;
-        break;
-
-    case C_HFEXT:
-        return b == C_HEXT || b == C_FEXT;
-    case C_FEXT:
-    case C_HEXT:
-        return b == C_HFEXT;
-    case C_SEXT:
-        return cmp(C_HFEXT, b);
-    case C_LEXT:
-        return cmp(C_SEXT, b);
-
-    case C_HFAUTO:
-        return b == C_HAUTO || b == C_FAUTO;
-    case C_FAUTO:
-    case C_HAUTO:
-        return b == C_HFAUTO;
-    case C_SAUTO:
-        return cmp(C_HFAUTO, b);
-    case C_LAUTO:
-        return cmp(C_SAUTO, b);
-
-    case C_HFOREG:
-        return b == C_HOREG || b == C_FOREG;
-    case C_FOREG:
-    case C_HOREG:
-        return b == C_HFOREG;
-    case C_SROREG:
-        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
-    case C_SOREG:
-    case C_ROREG:
-        return b == C_SROREG || cmp(C_HFOREG, b);
-    case C_LOREG:
-        return cmp(C_SROREG, b);
-
-    case C_LBRA:
-        if(b == C_SBRA)
-            return 1;
-        break;
-    }
-    return 0;
-}
-@
-
-<<function ocmp(arm)>>=
-int
-ocmp(const void *a1, const void *a2)
-{
-    Optab *p1, *p2;
-    int n;
-
-    p1 = (Optab*)a1;
-    p2 = (Optab*)a2;
-    n = p1->as - p2->as;
-    if(n)
-        return n;
-    n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
-    if(n)
-        return n;
-    n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
-    if(n)
-        return n;
-    n = p1->a1 - p2->a1;
-    if(n)
-        return n;
-    n = p1->a2 - p2->a2;
-    if(n)
-        return n;
-    n = p1->a3 - p2->a3;
-    if(n)
-        return n;
-    return 0;
-}
-@
-
-<<function buildop(arm)>>=
-void
-buildop(void)
-{
-    int i, n, r;
-
-    armv4 = !debug['h'];
-    vfp = debug['f'];
-    for(i=0; i<C_GOK; i++)
-        for(n=0; n<C_GOK; n++)
-            xcmp[i][n] = cmp(n, i);
-    for(n=0; optab[n].as != AXXX; n++) {
-        if((optab[n].flag & VFP) && !vfp)
-            optab[n].as = AXXX;
-        if((optab[n].flag & V4) && !armv4) {
-            optab[n].as = AXXX;
-            break;
-        }
-    }
-    qsort(optab, n, sizeof(optab[0]), ocmp);
-    for(i=0; i<n; i++) {
-        r = optab[i].as;
-        oprange[r].start = optab+i;
-        while(optab[i].as == r)
-            i++;
-        oprange[r].stop = optab+i;
-        i--;
-
-        switch(r)
-        {
-        default:
-            diag("unknown op in build: %A", r);
-            errorexit();
-        case AXXX:
-            break;
-        case AADD:
-            oprange[AAND] = oprange[r];
-            oprange[AEOR] = oprange[r];
-            oprange[ASUB] = oprange[r];
-            oprange[ARSB] = oprange[r];
-            oprange[AADC] = oprange[r];
-            oprange[ASBC] = oprange[r];
-            oprange[ARSC] = oprange[r];
-            oprange[AORR] = oprange[r];
-            oprange[ABIC] = oprange[r];
-            break;
-        case ACMP:
-            oprange[ATST] = oprange[r];
-            oprange[ATEQ] = oprange[r];
-            oprange[ACMN] = oprange[r];
-            break;
-        case AMVN:
-            break;
-        case ABEQ:
-            oprange[ABNE] = oprange[r];
-            oprange[ABCS] = oprange[r];
-            oprange[ABHS] = oprange[r];
-            oprange[ABCC] = oprange[r];
-            oprange[ABLO] = oprange[r];
-            oprange[ABMI] = oprange[r];
-            oprange[ABPL] = oprange[r];
-            oprange[ABVS] = oprange[r];
-            oprange[ABVC] = oprange[r];
-            oprange[ABHI] = oprange[r];
-            oprange[ABLS] = oprange[r];
-            oprange[ABGE] = oprange[r];
-            oprange[ABLT] = oprange[r];
-            oprange[ABGT] = oprange[r];
-            oprange[ABLE] = oprange[r];
-            break;
-        case ASLL:
-            oprange[ASRL] = oprange[r];
-            oprange[ASRA] = oprange[r];
-            break;
-        case AMUL:
-            oprange[AMULU] = oprange[r];
-            break;
-        case ADIV:
-            oprange[AMOD] = oprange[r];
-            oprange[AMODU] = oprange[r];
-            oprange[ADIVU] = oprange[r];
-            break;
-        case AMOVW:
-        case AMOVB:
-        case AMOVBU:
-        case AMOVH:
-        case AMOVHU:
-            break;
-        case ASWPW:
-            oprange[ASWPBU] = oprange[r];
-            break;
-        case AB:
-        case ABL:
-//		case ABX:
-//		case ABXRET:
-        case ASWI:
-        case AWORD:
-        case AMOVM:
-        case ARFE:
-        case ATEXT:
-        case ACASE:
-        case ABCASE:
-            break;
-        case AADDF:
-            oprange[AADDD] = oprange[r];
-            oprange[ASUBF] = oprange[r];
-            oprange[ASUBD] = oprange[r];
-            oprange[AMULF] = oprange[r];
-            oprange[AMULD] = oprange[r];
-            oprange[ADIVF] = oprange[r];
-            oprange[ADIVD] = oprange[r];
-            oprange[AMOVFD] = oprange[r];
-            oprange[AMOVDF] = oprange[r];
-            break;
-            
-        case ACMPF:
-            oprange[ACMPD] = oprange[r];
-            break;
-
-        case AMOVF:
-            oprange[AMOVD] = oprange[r];
-            break;
-
-        case AMOVFW:
-            oprange[AMOVWF] = oprange[r];
-            oprange[AMOVWD] = oprange[r];
-            oprange[AMOVDW] = oprange[r];
-            break;
-
-        case AMULL:
-            oprange[AMULA] = oprange[r];
-            oprange[AMULAL] = oprange[r];
-            oprange[AMULLU] = oprange[r];
-            oprange[AMULALU] = oprange[r];
-            break;
-        }
-    }
-}
-@
-
-
-%/*
-%void
-%buildrep(int x, int as)
-%{
-%    Opcross *p;
-%    Optab *e, *s, *o;
-%    int a1, a2, a3, n;
-%
-%    if(C_NONE != 0 || C_REG != 1 || C_GOK >= 32 || x >= nelem(opcross)) {
-%        diag("assumptions fail in buildrep");
-%        errorexit();
-%    }
-%    repop[as] = x;
-%    p = (opcross + x);
-%    s = oprange[as].start;
-%    e = oprange[as].stop;
-%    for(o=e-1; o>=s; o--) {
-%        n = o-optab;
-%        for(a2=0; a2<2; a2++) {
-%            if(a2) {
-%                if(o->a2 == C_NONE)
-%                    continue;
-%            } else
-%                if(o->a2 != C_NONE)
-%                    continue;
-%            for(a1=0; a1<32; a1++) {
-%                if(!xcmp[a1][o->a1])
-%                    continue;
-%                for(a3=0; a3<32; a3++)
-%                    if(xcmp[a3][o->a3])
-%                        (*p)[a1][a2][a3] = n;
-%            }
-%        }
-%    }
-%    oprange[as].start = 0;
-%}
-%*/
 
 \section{[[optab]]}
-
 
 <<global optab (linkers/5l/optab.c)(arm)>>=
 Optab	optab[] =
@@ -4562,7 +4322,333 @@ Optab	optab[] =
     { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
 };
 @
+% AXXX at the end? why not ALAST instead?
 
+
+
+\section{[[buildop()]]}
+
+
+
+<<[[main()]] initialize globals(arm)>>=
+buildop(); // ???
+@
+
+% Optab range?
+<<struct Oprang(arm)>>=
+struct	Oprang
+{
+    Optab*	start;
+    Optab*	stop;
+};
+@
+
+
+
+
+% remove? and remove the relevant opcode also in optab? at least aspectize!
+<<global armv4(arm)>>=
+bool	armv4;
+@
+<<global vfp(arm)>>=
+bool vfp;
+@
+<<enum lxxx cases>>=
+V4		= 1<<3,	/* arm v4 arch */
+VFP		= 1<<4,	/* arm vfpv3 floating point */
+@
+% >> >>
+
+
+
+% coupling with order of opcode in 5.out.h ????
+<<function buildop(arm)>>=
+void
+buildop(void)
+{
+    int i, n, r;
+
+    armv4 = !debug['h'];
+    vfp = debug['f'];
+
+    for(i=0; i<C_GOK; i++)
+        for(n=0; n<C_GOK; n++)
+            xcmp[i][n] = cmp(n, i);
+
+    for(n=0; optab[n].as != AXXX; n++) {
+        if((optab[n].flag & VFP) && !vfp)
+            optab[n].as = AXXX;
+        if((optab[n].flag & V4) && !armv4) {
+            optab[n].as = AXXX;
+            break;
+        }
+    }
+
+    qsort(optab, n, sizeof(optab[0]), ocmp);
+    for(i=0; i<n; i++) {
+        r = optab[i].as;
+
+        oprange[r].start = optab+i;
+        while(optab[i].as == r)
+            i++;
+        oprange[r].stop = optab+i;
+        i--;
+
+        switch(r)
+        {
+        case AXXX:
+            break;
+        case AADD:
+            oprange[AAND] = oprange[r];
+            oprange[AEOR] = oprange[r];
+            oprange[ASUB] = oprange[r];
+            oprange[ARSB] = oprange[r];
+            oprange[AADC] = oprange[r];
+            oprange[ASBC] = oprange[r];
+            oprange[ARSC] = oprange[r];
+            oprange[AORR] = oprange[r];
+            oprange[ABIC] = oprange[r];
+            break;
+        case ACMP:
+            oprange[ATST] = oprange[r];
+            oprange[ATEQ] = oprange[r];
+            oprange[ACMN] = oprange[r];
+            break;
+        case AMVN:
+            break;
+        case ABEQ:
+            oprange[ABNE] = oprange[r];
+            oprange[ABCS] = oprange[r];
+            oprange[ABHS] = oprange[r];
+            oprange[ABCC] = oprange[r];
+            oprange[ABLO] = oprange[r];
+            oprange[ABMI] = oprange[r];
+            oprange[ABPL] = oprange[r];
+            oprange[ABVS] = oprange[r];
+            oprange[ABVC] = oprange[r];
+            oprange[ABHI] = oprange[r];
+            oprange[ABLS] = oprange[r];
+            oprange[ABGE] = oprange[r];
+            oprange[ABLT] = oprange[r];
+            oprange[ABGT] = oprange[r];
+            oprange[ABLE] = oprange[r];
+            break;
+        case ASLL:
+            oprange[ASRL] = oprange[r];
+            oprange[ASRA] = oprange[r];
+            break;
+        case AMUL:
+            oprange[AMULU] = oprange[r];
+            break;
+        case ADIV:
+            oprange[AMOD] = oprange[r];
+            oprange[AMODU] = oprange[r];
+            oprange[ADIVU] = oprange[r];
+            break;
+        case AMOVW:
+        case AMOVB:
+        case AMOVBU:
+        case AMOVH:
+        case AMOVHU:
+            break;
+        case ASWPW:
+            oprange[ASWPBU] = oprange[r];
+            break;
+        case AB:
+        case ABL:
+        case ASWI:
+        case AWORD:
+        case AMOVM:
+        case ARFE:
+        case ATEXT:
+        case ACASE:
+        case ABCASE:
+            break;
+
+        case AADDF:
+            oprange[AADDD] = oprange[r];
+            oprange[ASUBF] = oprange[r];
+            oprange[ASUBD] = oprange[r];
+            oprange[AMULF] = oprange[r];
+            oprange[AMULD] = oprange[r];
+            oprange[ADIVF] = oprange[r];
+            oprange[ADIVD] = oprange[r];
+            oprange[AMOVFD] = oprange[r];
+            oprange[AMOVDF] = oprange[r];
+            break;
+            
+        case ACMPF:
+            oprange[ACMPD] = oprange[r];
+            break;
+
+        case AMOVF:
+            oprange[AMOVD] = oprange[r];
+            break;
+
+        case AMOVFW:
+            oprange[AMOVWF] = oprange[r];
+            oprange[AMOVWD] = oprange[r];
+            oprange[AMOVDW] = oprange[r];
+            break;
+
+        case AMULL:
+            oprange[AMULA] = oprange[r];
+            oprange[AMULAL] = oprange[r];
+            oprange[AMULLU] = oprange[r];
+            oprange[AMULALU] = oprange[r];
+            break;
+        default:
+            diag("unknown op in build: %A", r);
+            errorexit();
+        }
+    }
+}
+@
+%//		case ABX:
+%//		case ABXRET:
+
+
+
+
+
+
+<<function cmp(arm)>>=
+int
+cmp(int a, int b)
+{
+
+    if(a == b)
+        return 1;
+    switch(a) {
+    case C_LCON:
+        if(b == C_RCON || b == C_NCON)
+            return 1;
+        break;
+    case C_LACON:
+        if(b == C_RACON)
+            return 1;
+        break;
+    case C_LECON:
+        if(b == C_RECON)
+            return 1;
+        break;
+
+    case C_HFEXT:
+        return b == C_HEXT || b == C_FEXT;
+    case C_FEXT:
+    case C_HEXT:
+        return b == C_HFEXT;
+    case C_SEXT:
+        return cmp(C_HFEXT, b);
+    case C_LEXT:
+        return cmp(C_SEXT, b);
+
+    case C_HFAUTO:
+        return b == C_HAUTO || b == C_FAUTO;
+    case C_FAUTO:
+    case C_HAUTO:
+        return b == C_HFAUTO;
+    case C_SAUTO:
+        return cmp(C_HFAUTO, b);
+    case C_LAUTO:
+        return cmp(C_SAUTO, b);
+
+    case C_HFOREG:
+        return b == C_HOREG || b == C_FOREG;
+    case C_FOREG:
+    case C_HOREG:
+        return b == C_HFOREG;
+    case C_SROREG:
+        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
+    case C_SOREG:
+    case C_ROREG:
+        return b == C_SROREG || cmp(C_HFOREG, b);
+    case C_LOREG:
+        return cmp(C_SROREG, b);
+
+    case C_LBRA:
+        if(b == C_SBRA)
+            return 1;
+        break;
+    }
+    return 0;
+}
+@
+
+<<function ocmp(arm)>>=
+int
+ocmp(const void *a1, const void *a2)
+{
+    Optab *p1, *p2;
+    int n;
+
+    p1 = (Optab*)a1;
+    p2 = (Optab*)a2;
+    n = p1->as - p2->as;
+    if(n)
+        return n;
+
+    n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
+    if(n)
+        return n;
+    n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
+    if(n)
+        return n;
+
+    n = p1->a1 - p2->a1;
+    if(n)
+        return n;
+    n = p1->a2 - p2->a2;
+    if(n)
+        return n;
+    n = p1->a3 - p2->a3;
+    if(n)
+        return n;
+    return 0;
+}
+@
+
+
+
+%/*
+%void
+%buildrep(int x, int as)
+%{
+%    Opcross *p;
+%    Optab *e, *s, *o;
+%    int a1, a2, a3, n;
+%
+%    if(C_NONE != 0 || C_REG != 1 || C_GOK >= 32 || x >= nelem(opcross)) {
+%        diag("assumptions fail in buildrep");
+%        errorexit();
+%    }
+%    repop[as] = x;
+%    p = (opcross + x);
+%    s = oprange[as].start;
+%    e = oprange[as].stop;
+%    for(o=e-1; o>=s; o--) {
+%        n = o-optab;
+%        for(a2=0; a2<2; a2++) {
+%            if(a2) {
+%                if(o->a2 == C_NONE)
+%                    continue;
+%            } else
+%                if(o->a2 != C_NONE)
+%                    continue;
+%            for(a1=0; a1<32; a1++) {
+%                if(!xcmp[a1][o->a1])
+%                    continue;
+%                for(a3=0; a3<32; a3++)
+%                    if(xcmp[a3][o->a3])
+%                        (*p)[a1][a2][a3] = n;
+%            }
+%        }
+%    }
+%    oprange[as].start = 0;
+%}
+%*/
+
+\section{[[oplook()]]}
 
 <<function oplook(arm)>>=
 Optab*
@@ -4624,6 +4710,7 @@ oplook(Prog *p)
 }
 @
 
+
 \section{Text section, [[asmout()]]}
 
 <<global PP(arm)>>=
@@ -4638,742 +4725,22 @@ asmout(Prog *p, Optab *o)
     int r, rf, rt, rt2;
     Sym *s;
 
-PP = p;
+    PP = p;
+
     o1 = 0;
     o2 = 0;
     o3 = 0;
     o4 = 0;
     o5 = 0;
     o6 = 0;
+
     switch(o->type) {
+    case 0:		/* pseudo ops */
+        break;
+    <<[[asmout()]] switch on type cases>>
     default:
         diag("unknown asm %d", o->type);
         prasm(p);
-        break;
-
-    case 0:		/* pseudo ops */
-        break;
-
-    case 1:		/* op R,[R],R */
-        o1 = oprrr(p->as, p->scond);
-        rf = p->from.reg;
-        rt = p->to.reg;
-        r = p->reg;
-        if(p->to.type == D_NONE)
-            rt = 0;
-        if(p->as == AMOVW || p->as == AMVN)
-            r = 0;
-        else if(r == NREG)
-            r = rt;
-        o1 |= rf | (r<<16) | (rt<<12);
-        break;
-
-    case 2:		/* movbu $I,[R],R */
-        aclass(&p->from);
-        o1 = oprrr(p->as, p->scond);
-        o1 |= immrot(instoffset);
-        rt = p->to.reg;
-        r = p->reg;
-        if(p->to.type == D_NONE)
-            rt = 0;
-        if(p->as == AMOVW || p->as == AMVN)
-            r = 0;
-        else if(r == NREG)
-            r = rt;
-        o1 |= (r<<16) | (rt<<12);
-        break;
-
-    case 3:		/* add R<<[IR],[R],R */
-    mov:
-        aclass(&p->from);
-        o1 = oprrr(p->as, p->scond);
-        o1 |= p->from.offset;
-        rt = p->to.reg;
-        r = p->reg;
-        if(p->to.type == D_NONE)
-            rt = 0;
-        if(p->as == AMOVW || p->as == AMVN)
-            r = 0;
-        else if(r == NREG)
-            r = rt;
-        o1 |= (r<<16) | (rt<<12);
-        break;
-
-    case 4:		/* add $I,[R],R */
-        aclass(&p->from);
-        o1 = oprrr(AADD, p->scond);
-        o1 |= immrot(instoffset);
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 |= r << 16;
-        o1 |= p->to.reg << 12;
-        break;
-
-    case 5:		/* bra s */
-        v = -8;
-        if(p->cond == UP) {
-            s = p->to.sym;
-            if(s->type != SUNDEF)
-                diag("bad branch sym type");
-            v = (ulong)s->value >> (Roffset-2);
-            dynreloc(s, p->pc, 0);
-        }
-        else if(p->cond != P)
-            v = (p->cond->pc - pc) - 8;
-        o1 = opbra(p->as, p->scond);
-        o1 |= (v >> 2) & 0xffffff;
-        break;
-
-    case 6:		/* b ,O(R) -> add $O,R,PC */
-        aclass(&p->to);
-        o1 = oprrr(AADD, p->scond);
-        o1 |= immrot(instoffset);
-        o1 |= p->to.reg << 16;
-        o1 |= REGPC << 12;
-        break;
-
-    case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
-        aclass(&p->to);
-        o1 = oprrr(AADD, p->scond);
-        o1 |= immrot(0);
-        o1 |= REGPC << 16;
-        o1 |= REGLINK << 12;
-
-        o2 = oprrr(AADD, p->scond);
-        o2 |= immrot(instoffset);
-        o2 |= p->to.reg << 16;
-        o2 |= REGPC << 12;
-        break;
-
-    case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
-        aclass(&p->from);
-        o1 = oprrr(p->as, p->scond);
-        r = p->reg;
-        if(r == NREG)
-            r = p->to.reg;
-        o1 |= r;
-        o1 |= (instoffset&31) << 7;
-        o1 |= p->to.reg << 12;
-        break;
-
-    case 9:		/* sll R,[R],R -> mov (R<<R),R */
-        o1 = oprrr(p->as, p->scond);
-        r = p->reg;
-        if(r == NREG)
-            r = p->to.reg;
-        o1 |= r;
-        o1 |= (p->from.reg << 8) | (1<<4);
-        o1 |= p->to.reg << 12;
-        break;
-
-    case 10:	/* swi [$con] */
-        o1 = oprrr(p->as, p->scond);
-        if(p->to.type != D_NONE) {
-            aclass(&p->to);
-            o1 |= instoffset & 0xffffff;
-        }
-        break;
-
-    case 11:	/* word */
-        switch(aclass(&p->to)) {
-        case C_LCON:
-            if(!dlm)
-                break;
-            if(p->to.name != D_EXTERN && p->to.name != D_STATIC)
-                break;
-        case C_ADDR:
-            if(p->to.sym->type == SUNDEF)
-                ckoff(p->to.sym, p->to.offset);
-            dynreloc(p->to.sym, p->pc, 1);
-        }
-        o1 = instoffset;
-        break;
-
-    case 12:	/* movw $lcon, reg */
-        o1 = omvl(p, &p->from, p->to.reg);
-        break;
-
-    case 13:	/* op $lcon, [R], R */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-        o2 = oprrr(p->as, p->scond);
-        o2 |= REGTMP;
-        r = p->reg;
-        if(p->as == AMOVW || p->as == AMVN)
-            r = 0;
-        else if(r == NREG)
-            r = p->to.reg;
-        o2 |= r << 16;
-        if(p->to.type != D_NONE)
-            o2 |= p->to.reg << 12;
-        break;
-
-    case 14:	/* movb/movbu/movh/movhu R,R */
-        o1 = oprrr(ASLL, p->scond);
-
-        if(p->as == AMOVBU || p->as == AMOVHU)
-            o2 = oprrr(ASRL, p->scond);
-        else
-            o2 = oprrr(ASRA, p->scond);
-
-        r = p->to.reg;
-        o1 |= (p->from.reg)|(r<<12);
-        o2 |= (r)|(r<<12);
-        if(p->as == AMOVB || p->as == AMOVBU) {
-            o1 |= (24<<7);
-            o2 |= (24<<7);
-        } else {
-            o1 |= (16<<7);
-            o2 |= (16<<7);
-        }
-        break;
-
-    case 15:	/* mul r,[r,]r */
-        o1 = oprrr(p->as, p->scond);
-        rf = p->from.reg;
-        rt = p->to.reg;
-        r = p->reg;
-        if(r == NREG)
-            r = rt;
-        if(rt == r) {
-            r = rf;
-            rf = rt;
-        }
-        if(0)
-        if(rt == r || rf == REGPC || r == REGPC || rt == REGPC) {
-            diag("bad registers in MUL");
-            prasm(p);
-        }
-        o1 |= (rf<<8) | r | (rt<<16);
-        break;
-
-
-    case 16:	/* div r,[r,]r */
-        o1 = 0xf << 28;
-        o2 = 0;
-        break;
-
-    case 17:
-        o1 = oprrr(p->as, p->scond);
-        rf = p->from.reg;
-        rt = p->to.reg;
-        rt2 = p->to.offset;
-        r = p->reg;
-        o1 |= (rf<<8) | r | (rt<<16) | (rt2<<12);
-        break;
-
-    case 20:	/* mov/movb/movbu R,O(R) */
-        aclass(&p->to);
-        r = p->to.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 = osr(p->as, p->from.reg, instoffset, r, p->scond);
-        break;
-
-    case 21:	/* mov/movbu O(R),R -> lr */
-        aclass(&p->from);
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 = olr(instoffset, r, p->to.reg, p->scond);
-        if(p->as != AMOVW)
-            o1 |= 1<<22;
-        break;
-
-    case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
-        aclass(&p->from);
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 = olr(instoffset, r, p->to.reg, p->scond);
-
-        o2 = oprrr(ASLL, p->scond);
-        o3 = oprrr(ASRA, p->scond);
-        r = p->to.reg;
-        if(p->as == AMOVB) {
-            o2 |= (24<<7)|(r)|(r<<12);
-            o3 |= (24<<7)|(r)|(r<<12);
-        } else {
-            o2 |= (16<<7)|(r)|(r<<12);
-            if(p->as == AMOVHU)
-                o3 = oprrr(ASRL, p->scond);
-            o3 |= (16<<7)|(r)|(r<<12);
-        }
-        break;
-
-    case 23:	/* movh/movhu R,O(R) -> sb,sb */
-        aclass(&p->to);
-        r = p->to.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 = osr(AMOVH, p->from.reg, instoffset, r, p->scond);
-
-        o2 = oprrr(ASRL, p->scond);
-        o2 |= (8<<7)|(p->from.reg)|(REGTMP<<12);
-
-        o3 = osr(AMOVH, REGTMP, instoffset+1, r, p->scond);
-        break;
-
-    case 30:	/* mov/movb/movbu R,L(R) */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        r = p->to.reg;
-        if(r == NREG)
-            r = o->param;
-        o2 = osrr(p->from.reg, REGTMP,r, p->scond);
-        if(p->as != AMOVW)
-            o2 |= 1<<22;
-        break;
-
-    case 31:	/* mov/movbu L(R),R -> lr[b] */
-    case 32:	/* movh/movb L(R),R -> lr[b] */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o2 = olrr(REGTMP,r, p->to.reg, p->scond);
-        if(p->as == AMOVBU || p->as == AMOVB)
-            o2 |= 1<<22;
-        if(o->type == 31)
-            break;
-
-        o3 = oprrr(ASLL, p->scond);
-
-        if(p->as == AMOVBU || p->as == AMOVHU)
-            o4 = oprrr(ASRL, p->scond);
-        else
-            o4 = oprrr(ASRA, p->scond);
-
-        r = p->to.reg;
-        o3 |= (r)|(r<<12);
-        o4 |= (r)|(r<<12);
-        if(p->as == AMOVB || p->as == AMOVBU) {
-            o3 |= (24<<7);
-            o4 |= (24<<7);
-        } else {
-            o3 |= (16<<7);
-            o4 |= (16<<7);
-        }
-        break;
-
-    case 33:	/* movh/movhu R,L(R) -> sb, sb */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        r = p->to.reg;
-        if(r == NREG)
-            r = o->param;
-        o2 = osrr(p->from.reg, REGTMP, r, p->scond);
-        o2 |= (1<<22) ;
-
-        o3 = oprrr(ASRL, p->scond);
-        o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
-        o3 |= (1<<6);	/* ROR 8 */
-
-        o4 = oprrr(AADD, p->scond);
-        o4 |= (REGTMP << 12) | (REGTMP << 16);
-        o4 |= immrot(1);
-
-        o5 = osrr(p->from.reg, REGTMP,r,p->scond);
-        o5 |= (1<<22);
-
-        o6 = oprrr(ASRL, p->scond);
-        o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
-        o6 |= (1<<6);	/* ROL 8 */
-
-        break;
-        
-    case 34:	/* mov $lacon,R */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-
-        o2 = oprrr(AADD, p->scond);
-        o2 |= REGTMP;
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o2 |= r << 16;
-        if(p->to.type != D_NONE)
-            o2 |= p->to.reg << 12;
-        break;
-
-    case 35:	/* mov PSR,R */
-        o1 = (2<<23) | (0xf<<16) | (0<<0);
-        o1 |= (p->scond & C_SCOND) << 28;
-        o1 |= (p->from.reg & 1) << 22;
-        o1 |= p->to.reg << 12;
-        break;
-
-    case 36:	/* mov R,PSR */
-        o1 = (2<<23) | (0x29f<<12) | (0<<4);
-        if(p->scond & C_FBIT)
-            o1 ^= 0x010 << 12;
-        o1 |= (p->scond & C_SCOND) << 28;
-        o1 |= (p->to.reg & 1) << 22;
-        o1 |= p->from.reg << 0;
-        break;
-
-    case 37:	/* mov $con,PSR */
-        aclass(&p->from);
-        o1 = (2<<23) | (0x29f<<12) | (0<<4);
-        if(p->scond & C_FBIT)
-            o1 ^= 0x010 << 12;
-        o1 |= (p->scond & C_SCOND) << 28;
-        o1 |= immrot(instoffset);
-        o1 |= (p->to.reg & 1) << 22;
-        o1 |= p->from.reg << 0;
-        break;
-
-    case 38:	/* movm $con,oreg -> stm */
-        o1 = (0x4 << 25);
-        o1 |= p->from.offset & 0xffff;
-        o1 |= p->to.reg << 16;
-        aclass(&p->to);
-        goto movm;
-
-    case 39:	/* movm oreg,$con -> ldm */
-        o1 = (0x4 << 25) | (1 << 20);
-        o1 |= p->to.offset & 0xffff;
-        o1 |= p->from.reg << 16;
-        aclass(&p->from);
-    movm:
-        if(instoffset != 0)
-            diag("offset must be zero in MOVM");
-        o1 |= (p->scond & C_SCOND) << 28;
-        if(p->scond & C_PBIT)
-            o1 |= 1 << 24;
-        if(p->scond & C_UBIT)
-            o1 |= 1 << 23;
-        if(p->scond & C_SBIT)
-            o1 |= 1 << 22;
-        if(p->scond & C_WBIT)
-            o1 |= 1 << 21;
-        break;
-
-    case 40:	/* swp oreg,reg,reg */
-        aclass(&p->from);
-        if(instoffset != 0)
-            diag("offset must be zero in SWP");
-        o1 = (0x2<<23) | (0x9<<4);
-        if(p->as != ASWPW)
-            o1 |= 1 << 22;
-        o1 |= p->from.reg << 16;
-        o1 |= p->reg << 0;
-        o1 |= p->to.reg << 12;
-        o1 |= (p->scond & C_SCOND) << 28;
-        break;
-
-    case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
-        o1 = 0xe8fd8000;
-        break;
-
-    case 50:	/* floating point store */
-        v = regoff(&p->to);
-        r = p->to.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 = ofsr(p->as, p->from.reg, v, r, p->scond, p);
-        break;
-
-    case 51:	/* floating point load */
-        v = regoff(&p->from);
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 = ofsr(p->as, p->to.reg, v, r, p->scond, p) | (1<<20);
-        break;
-
-    case 52:	/* floating point store, long offset UGLY */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        r = p->to.reg;
-        if(r == NREG)
-            r = o->param;
-        o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
-        o3 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
-        break;
-
-    case 53:	/* floating point load, long offset UGLY */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
-        o3 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
-        break;
-
-    case 54:	/* floating point arith */
-        o1 = oprrr(p->as, p->scond);
-        if(p->from.type == D_FCONST) {
-            rf = chipfloat(p->from.ieee);
-            if(rf < 0){
-                diag("invalid floating-point immediate\n%P", p);
-                rf = 0;
-            }
-            rf |= (1<<3);
-        } else
-            rf = p->from.reg;
-        rt = p->to.reg;
-        r = p->reg;
-        if(p->to.type == D_NONE)
-            rt = 0;	/* CMP[FD] */
-        else if(o1 & (1<<15))
-            r = 0;	/* monadic */
-        else if(r == NREG)
-            r = rt;
-        o1 |= rf | (r<<16) | (rt<<12);
-        break;
-
-    case 55:	/* floating point fix and float */
-        o1 = oprrr(p->as, p->scond);
-        rf = p->from.reg;
-        rt = p->to.reg;
-        if(p->to.type == D_NONE){
-            rt = 0;
-            diag("to.type==D_NONE (asm/fp)");
-        }
-        if(p->from.type == D_REG)
-            o1 |= (rf<<12) | (rt<<16);
-        else
-            o1 |= rf | (rt<<12);
-        break;
-
-    /* old arm 7500 fp using coproc 1 (1<<8) */
-    case 56:	/* move to FP[CS]R */
-        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
-        o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
-        break;
-
-    case 57:	/* move from FP[CS]R */
-        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
-        o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
-        break;
-    case 58:	/* movbu R,R */
-        o1 = oprrr(AAND, p->scond);
-        o1 |= immrot(0xff);
-        rt = p->to.reg;
-        r = p->from.reg;
-        if(p->to.type == D_NONE)
-            rt = 0;
-        if(r == NREG)
-            r = rt;
-        o1 |= (r<<16) | (rt<<12);
-        break;
-
-    case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
-        if(p->from.reg == NREG) {
-            if(p->as != AMOVW)
-                diag("byte MOV from shifter operand");
-            goto mov;
-        }
-        if(p->from.offset&(1<<4))
-            diag("bad shift in LDR");
-        o1 = olrr(p->from.offset, p->from.reg, p->to.reg, p->scond);
-        if(p->as == AMOVBU)
-            o1 |= 1<<22;
-        break;
-
-    case 60:	/* movb R(R),R -> ldrsb indexed */
-        if(p->from.reg == NREG) {
-            diag("byte MOV from shifter operand");
-            goto mov;
-        }
-        if(p->from.offset&(~0xf))
-            diag("bad shift in LDRSB");
-        o1 = olhrr(p->from.offset, p->from.reg, p->to.reg, p->scond);
-        o1 ^= (1<<5)|(1<<6);
-        break;
-
-    case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
-        if(p->to.reg == NREG)
-            diag("MOV to shifter operand");
-        o1 = osrr(p->from.reg, p->to.offset, p->to.reg, p->scond);
-        if(p->as == AMOVB || p->as == AMOVBU)
-            o1 |= 1<<22;
-        break;
-
-    case 62:	/* case R -> movw	R<<2(PC),PC */
-        o1 = olrr(p->from.reg, REGPC, REGPC, p->scond);
-        o1 |= 2<<7;
-        break;
-
-    case 63:	/* bcase */
-        if(p->cond != P) {
-            o1 = p->cond->pc;
-            if(dlm)
-                dynreloc(S, p->pc, 1);
-        }
-        break;
-
-    /* reloc ops */
-    case 64:	/* mov/movb/movbu R,addr */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
-        break;
-
-    case 65:	/* mov/movbu addr,R */
-    case 66:	/* movh/movhu/movb addr,R */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-        o2 = olr(0, REGTMP, p->to.reg, p->scond);
-        if(p->as == AMOVBU || p->as == AMOVB)
-            o2 |= 1<<22;
-        if(o->type == 65)
-            break;
-
-        o3 = oprrr(ASLL, p->scond);
-
-        if(p->as == AMOVBU || p->as == AMOVHU)
-            o4 = oprrr(ASRL, p->scond);
-        else
-            o4 = oprrr(ASRA, p->scond);
-
-        r = p->to.reg;
-        o3 |= (r)|(r<<12);
-        o4 |= (r)|(r<<12);
-        if(p->as == AMOVB || p->as == AMOVBU) {
-            o3 |= (24<<7);
-            o4 |= (24<<7);
-        } else {
-            o3 |= (16<<7);
-            o4 |= (16<<7);
-        }
-        break;
-
-    case 67:	/* movh/movhu R,addr -> sb, sb */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
-
-        o3 = oprrr(ASRL, p->scond);
-        o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
-        o3 |= (1<<6);	/* ROR 8 */
-
-        o4 = oprrr(AADD, p->scond);
-        o4 |= (REGTMP << 12) | (REGTMP << 16);
-        o4 |= immrot(1);
-
-        o5 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
-
-        o6 = oprrr(ASRL, p->scond);
-        o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
-        o6 |= (1<<6);	/* ROL 8 */
-        break;
-
-    case 68:	/* floating point store -> ADDR */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        o2 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
-        break;
-
-    case 69:	/* floating point load <- ADDR */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-        o2 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
-        break;
-
-    /* ArmV4 ops: */
-    case 70:	/* movh/movhu R,O(R) -> strh */
-        aclass(&p->to);
-        r = p->to.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 = oshr(p->from.reg, instoffset, r, p->scond);
-        break;	
-    case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
-        aclass(&p->from);
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o1 = olhr(instoffset, r, p->to.reg, p->scond);
-        if(p->as == AMOVB)
-            o1 ^= (1<<5)|(1<<6);
-        else if(p->as == AMOVH)
-            o1 ^= (1<<6);
-        break;
-    case 72:	/* movh/movhu R,L(R) -> strh */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        r = p->to.reg;
-        if(r == NREG)
-            r = o->param;
-        o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
-        break;	
-    case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-        r = p->from.reg;
-        if(r == NREG)
-            r = o->param;
-        o2 = olhrr(REGTMP, r, p->to.reg, p->scond);
-        if(p->as == AMOVB)
-            o2 ^= (1<<5)|(1<<6);
-        else if(p->as == AMOVH)
-            o2 ^= (1<<6);
-        break;
-
-    /* VFP ops: */
-    case 74:	/* vfp floating point arith */
-        o1 = opvfprrr(p->as, p->scond);
-        rf = p->from.reg;
-        if(p->from.type == D_FCONST) {
-            diag("invalid floating-point immediate\n%P", p);
-            rf = 0;
-        }
-        rt = p->to.reg;
-        r = p->reg;
-        if(r == NREG)
-            r = rt;
-        o1 |= rt<<12;
-        if(((o1>>20)&0xf) == 0xb)
-            o1 |= rf<<0;
-        else
-            o1 |= r<<16 | rf<<0;
-        break;
-    case 75:	/* vfp floating point compare */
-        o1 = opvfprrr(p->as, p->scond);
-        rf = p->from.reg;
-        if(p->from.type == D_FCONST) {
-            if(p->from.ieee->h != 0 || p->from.ieee->l != 0)
-                diag("invalid floating-point immediate\n%P", p);
-            o1 |= 1<<16;
-            rf = 0;
-        }
-        rt = p->reg;
-        o1 |= rt<<12 | rf<<0;
-        o2 = 0x0ef1fa10;	/* MRS APSR_nzcv, FPSCR */
-        o2 |= (p->scond & C_SCOND) << 28;
-        break;
-    case 76:	/* vfp floating point fix and float */
-        o1 = opvfprrr(p->as, p->scond);
-        rf = p->from.reg;
-        rt = p->to.reg;
-        if(p->from.type == D_REG) {
-            o2 = o1 | rt<<12 | rt<<0;
-            o1 = 0x0e000a10;	/* VMOV F,R */
-            o1 |= (p->scond & C_SCOND) << 28 | rt<<16 | rf<<12;
-        } else {
-            o1 |= FREGTMP<<12 | rf<<0;
-            o2 = 0x0e100a10;	/* VMOV R,F */
-            o2 |= (p->scond & C_SCOND) << 28 | FREGTMP<<16 | rt<<12;
-        }
         break;
     }
 
@@ -5382,62 +4749,795 @@ PP = p;
 
     v = p->pc;
     switch(o->size) {
+    <<[[asmout()]] switch on size cases>>
     default:
         if(debug['a'])
             Bprint(&bso, " %.8lux:\t\t%P\n", v, p);
-        break;
-    case 4:
-        if(debug['a'])
-            Bprint(&bso, " %.8lux: %.8lux\t%P\n", v, o1, p);
-        lputl(o1);
-        break;
-    case 8:
-        if(debug['a'])
-            Bprint(&bso, " %.8lux: %.8lux %.8lux%P\n", v, o1, o2, p);
-        lputl(o1);
-        lputl(o2);
-        break;
-    case 12:
-        if(debug['a'])
-            Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux%P\n", v, o1, o2, o3, p);
-        lputl(o1);
-        lputl(o2);
-        lputl(o3);
-        break;
-    case 16:
-        if(debug['a'])
-            Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux%P\n",
-                v, o1, o2, o3, o4, p);
-        lputl(o1);
-        lputl(o2);
-        lputl(o3);
-        lputl(o4);
-        break;
-    case 20:
-        if(debug['a'])
-            Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
-                v, o1, o2, o3, o4, o5, p);
-        lputl(o1);
-        lputl(o2);
-        lputl(o3);
-        lputl(o4);
-        lputl(o5);
-        break;
-    case 24:
-        if(debug['a'])
-            Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
-                v, o1, o2, o3, o4, o5, o6, p);
-        lputl(o1);
-        lputl(o2);
-        lputl(o3);
-        lputl(o4);
-        lputl(o5);
-        lputl(o6);
         break;
     }
 }
 @
 %$
+
+
+<<[[asmout()]] switch on type cases>>=
+case 1:		/* op R,[R],R */
+    o1 = oprrr(p->as, p->scond);
+    rf = p->from.reg;
+    rt = p->to.reg;
+    r = p->reg;
+    if(p->to.type == D_NONE)
+        rt = 0;
+    if(p->as == AMOVW || p->as == AMVN)
+        r = 0;
+    else if(r == NREG)
+        r = rt;
+    o1 |= rf | (r<<16) | (rt<<12);
+    break;
+
+case 2:		/* movbu $I,[R],R */
+    aclass(&p->from);
+    o1 = oprrr(p->as, p->scond);
+    o1 |= immrot(instoffset);
+    rt = p->to.reg;
+    r = p->reg;
+    if(p->to.type == D_NONE)
+        rt = 0;
+    if(p->as == AMOVW || p->as == AMVN)
+        r = 0;
+    else if(r == NREG)
+        r = rt;
+    o1 |= (r<<16) | (rt<<12);
+    break;
+
+case 3:		/* add R<<[IR],[R],R */
+mov:
+    aclass(&p->from);
+    o1 = oprrr(p->as, p->scond);
+    o1 |= p->from.offset;
+    rt = p->to.reg;
+    r = p->reg;
+    if(p->to.type == D_NONE)
+        rt = 0;
+    if(p->as == AMOVW || p->as == AMVN)
+        r = 0;
+    else if(r == NREG)
+        r = rt;
+    o1 |= (r<<16) | (rt<<12);
+    break;
+
+case 4:		/* add $I,[R],R */
+    aclass(&p->from);
+    o1 = oprrr(AADD, p->scond);
+    o1 |= immrot(instoffset);
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 |= r << 16;
+    o1 |= p->to.reg << 12;
+    break;
+
+case 5:		/* bra s */
+    v = -8;
+    if(p->cond == UP) {
+        s = p->to.sym;
+        if(s->type != SUNDEF)
+            diag("bad branch sym type");
+        v = (ulong)s->value >> (Roffset-2);
+        dynreloc(s, p->pc, 0);
+    }
+    else if(p->cond != P)
+        v = (p->cond->pc - pc) - 8;
+    o1 = opbra(p->as, p->scond);
+    o1 |= (v >> 2) & 0xffffff;
+    break;
+
+case 6:		/* b ,O(R) -> add $O,R,PC */
+    aclass(&p->to);
+    o1 = oprrr(AADD, p->scond);
+    o1 |= immrot(instoffset);
+    o1 |= p->to.reg << 16;
+    o1 |= REGPC << 12;
+    break;
+
+case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
+    aclass(&p->to);
+    o1 = oprrr(AADD, p->scond);
+    o1 |= immrot(0);
+    o1 |= REGPC << 16;
+    o1 |= REGLINK << 12;
+
+    o2 = oprrr(AADD, p->scond);
+    o2 |= immrot(instoffset);
+    o2 |= p->to.reg << 16;
+    o2 |= REGPC << 12;
+    break;
+
+case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
+    aclass(&p->from);
+    o1 = oprrr(p->as, p->scond);
+    r = p->reg;
+    if(r == NREG)
+        r = p->to.reg;
+    o1 |= r;
+    o1 |= (instoffset&31) << 7;
+    o1 |= p->to.reg << 12;
+    break;
+
+case 9:		/* sll R,[R],R -> mov (R<<R),R */
+    o1 = oprrr(p->as, p->scond);
+    r = p->reg;
+    if(r == NREG)
+        r = p->to.reg;
+    o1 |= r;
+    o1 |= (p->from.reg << 8) | (1<<4);
+    o1 |= p->to.reg << 12;
+    break;
+
+case 10:	/* swi [$con] */
+    o1 = oprrr(p->as, p->scond);
+    if(p->to.type != D_NONE) {
+        aclass(&p->to);
+        o1 |= instoffset & 0xffffff;
+    }
+    break;
+
+case 11:	/* word */
+    switch(aclass(&p->to)) {
+    case C_LCON:
+        if(!dlm)
+            break;
+        if(p->to.name != D_EXTERN && p->to.name != D_STATIC)
+            break;
+    case C_ADDR:
+        if(p->to.sym->type == SUNDEF)
+            ckoff(p->to.sym, p->to.offset);
+        dynreloc(p->to.sym, p->pc, 1);
+    }
+    o1 = instoffset;
+    break;
+
+case 12:	/* movw $lcon, reg */
+    o1 = omvl(p, &p->from, p->to.reg);
+    break;
+
+case 13:	/* op $lcon, [R], R */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+    o2 = oprrr(p->as, p->scond);
+    o2 |= REGTMP;
+    r = p->reg;
+    if(p->as == AMOVW || p->as == AMVN)
+        r = 0;
+    else if(r == NREG)
+        r = p->to.reg;
+    o2 |= r << 16;
+    if(p->to.type != D_NONE)
+        o2 |= p->to.reg << 12;
+    break;
+
+case 14:	/* movb/movbu/movh/movhu R,R */
+    o1 = oprrr(ASLL, p->scond);
+
+    if(p->as == AMOVBU || p->as == AMOVHU)
+        o2 = oprrr(ASRL, p->scond);
+    else
+        o2 = oprrr(ASRA, p->scond);
+
+    r = p->to.reg;
+    o1 |= (p->from.reg)|(r<<12);
+    o2 |= (r)|(r<<12);
+    if(p->as == AMOVB || p->as == AMOVBU) {
+        o1 |= (24<<7);
+        o2 |= (24<<7);
+    } else {
+        o1 |= (16<<7);
+        o2 |= (16<<7);
+    }
+    break;
+
+case 15:	/* mul r,[r,]r */
+    o1 = oprrr(p->as, p->scond);
+    rf = p->from.reg;
+    rt = p->to.reg;
+    r = p->reg;
+    if(r == NREG)
+        r = rt;
+    if(rt == r) {
+        r = rf;
+        rf = rt;
+    }
+    if(0)
+    if(rt == r || rf == REGPC || r == REGPC || rt == REGPC) {
+        diag("bad registers in MUL");
+        prasm(p);
+    }
+    o1 |= (rf<<8) | r | (rt<<16);
+    break;
+
+
+case 16:	/* div r,[r,]r */
+    o1 = 0xf << 28;
+    o2 = 0;
+    break;
+
+case 17:
+    o1 = oprrr(p->as, p->scond);
+    rf = p->from.reg;
+    rt = p->to.reg;
+    rt2 = p->to.offset;
+    r = p->reg;
+    o1 |= (rf<<8) | r | (rt<<16) | (rt2<<12);
+    break;
+
+case 20:	/* mov/movb/movbu R,O(R) */
+    aclass(&p->to);
+    r = p->to.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 = osr(p->as, p->from.reg, instoffset, r, p->scond);
+    break;
+
+case 21:	/* mov/movbu O(R),R -> lr */
+    aclass(&p->from);
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 = olr(instoffset, r, p->to.reg, p->scond);
+    if(p->as != AMOVW)
+        o1 |= 1<<22;
+    break;
+
+case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
+    aclass(&p->from);
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 = olr(instoffset, r, p->to.reg, p->scond);
+
+    o2 = oprrr(ASLL, p->scond);
+    o3 = oprrr(ASRA, p->scond);
+    r = p->to.reg;
+    if(p->as == AMOVB) {
+        o2 |= (24<<7)|(r)|(r<<12);
+        o3 |= (24<<7)|(r)|(r<<12);
+    } else {
+        o2 |= (16<<7)|(r)|(r<<12);
+        if(p->as == AMOVHU)
+            o3 = oprrr(ASRL, p->scond);
+        o3 |= (16<<7)|(r)|(r<<12);
+    }
+    break;
+
+case 23:	/* movh/movhu R,O(R) -> sb,sb */
+    aclass(&p->to);
+    r = p->to.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 = osr(AMOVH, p->from.reg, instoffset, r, p->scond);
+
+    o2 = oprrr(ASRL, p->scond);
+    o2 |= (8<<7)|(p->from.reg)|(REGTMP<<12);
+
+    o3 = osr(AMOVH, REGTMP, instoffset+1, r, p->scond);
+    break;
+
+case 30:	/* mov/movb/movbu R,L(R) */
+    o1 = omvl(p, &p->to, REGTMP);
+    if(!o1)
+        break;
+    r = p->to.reg;
+    if(r == NREG)
+        r = o->param;
+    o2 = osrr(p->from.reg, REGTMP,r, p->scond);
+    if(p->as != AMOVW)
+        o2 |= 1<<22;
+    break;
+
+case 31:	/* mov/movbu L(R),R -> lr[b] */
+case 32:	/* movh/movb L(R),R -> lr[b] */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o2 = olrr(REGTMP,r, p->to.reg, p->scond);
+    if(p->as == AMOVBU || p->as == AMOVB)
+        o2 |= 1<<22;
+    if(o->type == 31)
+        break;
+
+    o3 = oprrr(ASLL, p->scond);
+
+    if(p->as == AMOVBU || p->as == AMOVHU)
+        o4 = oprrr(ASRL, p->scond);
+    else
+        o4 = oprrr(ASRA, p->scond);
+
+    r = p->to.reg;
+    o3 |= (r)|(r<<12);
+    o4 |= (r)|(r<<12);
+    if(p->as == AMOVB || p->as == AMOVBU) {
+        o3 |= (24<<7);
+        o4 |= (24<<7);
+    } else {
+        o3 |= (16<<7);
+        o4 |= (16<<7);
+    }
+    break;
+
+case 33:	/* movh/movhu R,L(R) -> sb, sb */
+    o1 = omvl(p, &p->to, REGTMP);
+    if(!o1)
+        break;
+    r = p->to.reg;
+    if(r == NREG)
+        r = o->param;
+    o2 = osrr(p->from.reg, REGTMP, r, p->scond);
+    o2 |= (1<<22) ;
+
+    o3 = oprrr(ASRL, p->scond);
+    o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
+    o3 |= (1<<6);	/* ROR 8 */
+
+    o4 = oprrr(AADD, p->scond);
+    o4 |= (REGTMP << 12) | (REGTMP << 16);
+    o4 |= immrot(1);
+
+    o5 = osrr(p->from.reg, REGTMP,r,p->scond);
+    o5 |= (1<<22);
+
+    o6 = oprrr(ASRL, p->scond);
+    o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
+    o6 |= (1<<6);	/* ROL 8 */
+
+    break;
+    
+case 34:	/* mov $lacon,R */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+
+    o2 = oprrr(AADD, p->scond);
+    o2 |= REGTMP;
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o2 |= r << 16;
+    if(p->to.type != D_NONE)
+        o2 |= p->to.reg << 12;
+    break;
+
+case 35:	/* mov PSR,R */
+    o1 = (2<<23) | (0xf<<16) | (0<<0);
+    o1 |= (p->scond & C_SCOND) << 28;
+    o1 |= (p->from.reg & 1) << 22;
+    o1 |= p->to.reg << 12;
+    break;
+
+case 36:	/* mov R,PSR */
+    o1 = (2<<23) | (0x29f<<12) | (0<<4);
+    if(p->scond & C_FBIT)
+        o1 ^= 0x010 << 12;
+    o1 |= (p->scond & C_SCOND) << 28;
+    o1 |= (p->to.reg & 1) << 22;
+    o1 |= p->from.reg << 0;
+    break;
+
+case 37:	/* mov $con,PSR */
+    aclass(&p->from);
+    o1 = (2<<23) | (0x29f<<12) | (0<<4);
+    if(p->scond & C_FBIT)
+        o1 ^= 0x010 << 12;
+    o1 |= (p->scond & C_SCOND) << 28;
+    o1 |= immrot(instoffset);
+    o1 |= (p->to.reg & 1) << 22;
+    o1 |= p->from.reg << 0;
+    break;
+
+case 38:	/* movm $con,oreg -> stm */
+    o1 = (0x4 << 25);
+    o1 |= p->from.offset & 0xffff;
+    o1 |= p->to.reg << 16;
+    aclass(&p->to);
+    goto movm;
+
+case 39:	/* movm oreg,$con -> ldm */
+    o1 = (0x4 << 25) | (1 << 20);
+    o1 |= p->to.offset & 0xffff;
+    o1 |= p->from.reg << 16;
+    aclass(&p->from);
+movm:
+    if(instoffset != 0)
+        diag("offset must be zero in MOVM");
+    o1 |= (p->scond & C_SCOND) << 28;
+    if(p->scond & C_PBIT)
+        o1 |= 1 << 24;
+    if(p->scond & C_UBIT)
+        o1 |= 1 << 23;
+    if(p->scond & C_SBIT)
+        o1 |= 1 << 22;
+    if(p->scond & C_WBIT)
+        o1 |= 1 << 21;
+    break;
+
+case 40:	/* swp oreg,reg,reg */
+    aclass(&p->from);
+    if(instoffset != 0)
+        diag("offset must be zero in SWP");
+    o1 = (0x2<<23) | (0x9<<4);
+    if(p->as != ASWPW)
+        o1 |= 1 << 22;
+    o1 |= p->from.reg << 16;
+    o1 |= p->reg << 0;
+    o1 |= p->to.reg << 12;
+    o1 |= (p->scond & C_SCOND) << 28;
+    break;
+
+case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
+    o1 = 0xe8fd8000;
+    break;
+
+case 50:	/* floating point store */
+    v = regoff(&p->to);
+    r = p->to.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 = ofsr(p->as, p->from.reg, v, r, p->scond, p);
+    break;
+
+case 51:	/* floating point load */
+    v = regoff(&p->from);
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 = ofsr(p->as, p->to.reg, v, r, p->scond, p) | (1<<20);
+    break;
+
+case 52:	/* floating point store, long offset UGLY */
+    o1 = omvl(p, &p->to, REGTMP);
+    if(!o1)
+        break;
+    r = p->to.reg;
+    if(r == NREG)
+        r = o->param;
+    o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
+    o3 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
+    break;
+
+case 53:	/* floating point load, long offset UGLY */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
+    o3 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
+    break;
+
+case 54:	/* floating point arith */
+    o1 = oprrr(p->as, p->scond);
+    if(p->from.type == D_FCONST) {
+        rf = chipfloat(p->from.ieee);
+        if(rf < 0){
+            diag("invalid floating-point immediate\n%P", p);
+            rf = 0;
+        }
+        rf |= (1<<3);
+    } else
+        rf = p->from.reg;
+    rt = p->to.reg;
+    r = p->reg;
+    if(p->to.type == D_NONE)
+        rt = 0;	/* CMP[FD] */
+    else if(o1 & (1<<15))
+        r = 0;	/* monadic */
+    else if(r == NREG)
+        r = rt;
+    o1 |= rf | (r<<16) | (rt<<12);
+    break;
+
+case 55:	/* floating point fix and float */
+    o1 = oprrr(p->as, p->scond);
+    rf = p->from.reg;
+    rt = p->to.reg;
+    if(p->to.type == D_NONE){
+        rt = 0;
+        diag("to.type==D_NONE (asm/fp)");
+    }
+    if(p->from.type == D_REG)
+        o1 |= (rf<<12) | (rt<<16);
+    else
+        o1 |= rf | (rt<<12);
+    break;
+
+/* old arm 7500 fp using coproc 1 (1<<8) */
+case 56:	/* move to FP[CS]R */
+    o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
+    o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
+    break;
+
+case 57:	/* move from FP[CS]R */
+    o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
+    o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
+    break;
+case 58:	/* movbu R,R */
+    o1 = oprrr(AAND, p->scond);
+    o1 |= immrot(0xff);
+    rt = p->to.reg;
+    r = p->from.reg;
+    if(p->to.type == D_NONE)
+        rt = 0;
+    if(r == NREG)
+        r = rt;
+    o1 |= (r<<16) | (rt<<12);
+    break;
+
+case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
+    if(p->from.reg == NREG) {
+        if(p->as != AMOVW)
+            diag("byte MOV from shifter operand");
+        goto mov;
+    }
+    if(p->from.offset&(1<<4))
+        diag("bad shift in LDR");
+    o1 = olrr(p->from.offset, p->from.reg, p->to.reg, p->scond);
+    if(p->as == AMOVBU)
+        o1 |= 1<<22;
+    break;
+
+case 60:	/* movb R(R),R -> ldrsb indexed */
+    if(p->from.reg == NREG) {
+        diag("byte MOV from shifter operand");
+        goto mov;
+    }
+    if(p->from.offset&(~0xf))
+        diag("bad shift in LDRSB");
+    o1 = olhrr(p->from.offset, p->from.reg, p->to.reg, p->scond);
+    o1 ^= (1<<5)|(1<<6);
+    break;
+
+case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
+    if(p->to.reg == NREG)
+        diag("MOV to shifter operand");
+    o1 = osrr(p->from.reg, p->to.offset, p->to.reg, p->scond);
+    if(p->as == AMOVB || p->as == AMOVBU)
+        o1 |= 1<<22;
+    break;
+
+case 62:	/* case R -> movw	R<<2(PC),PC */
+    o1 = olrr(p->from.reg, REGPC, REGPC, p->scond);
+    o1 |= 2<<7;
+    break;
+
+case 63:	/* bcase */
+    if(p->cond != P) {
+        o1 = p->cond->pc;
+        if(dlm)
+            dynreloc(S, p->pc, 1);
+    }
+    break;
+
+/* reloc ops */
+case 64:	/* mov/movb/movbu R,addr */
+    o1 = omvl(p, &p->to, REGTMP);
+    if(!o1)
+        break;
+    o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+    break;
+
+case 65:	/* mov/movbu addr,R */
+case 66:	/* movh/movhu/movb addr,R */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+    o2 = olr(0, REGTMP, p->to.reg, p->scond);
+    if(p->as == AMOVBU || p->as == AMOVB)
+        o2 |= 1<<22;
+    if(o->type == 65)
+        break;
+
+    o3 = oprrr(ASLL, p->scond);
+
+    if(p->as == AMOVBU || p->as == AMOVHU)
+        o4 = oprrr(ASRL, p->scond);
+    else
+        o4 = oprrr(ASRA, p->scond);
+
+    r = p->to.reg;
+    o3 |= (r)|(r<<12);
+    o4 |= (r)|(r<<12);
+    if(p->as == AMOVB || p->as == AMOVBU) {
+        o3 |= (24<<7);
+        o4 |= (24<<7);
+    } else {
+        o3 |= (16<<7);
+        o4 |= (16<<7);
+    }
+    break;
+
+case 67:	/* movh/movhu R,addr -> sb, sb */
+    o1 = omvl(p, &p->to, REGTMP);
+    if(!o1)
+        break;
+    o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+
+    o3 = oprrr(ASRL, p->scond);
+    o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
+    o3 |= (1<<6);	/* ROR 8 */
+
+    o4 = oprrr(AADD, p->scond);
+    o4 |= (REGTMP << 12) | (REGTMP << 16);
+    o4 |= immrot(1);
+
+    o5 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+
+    o6 = oprrr(ASRL, p->scond);
+    o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
+    o6 |= (1<<6);	/* ROL 8 */
+    break;
+
+case 68:	/* floating point store -> ADDR */
+    o1 = omvl(p, &p->to, REGTMP);
+    if(!o1)
+        break;
+    o2 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
+    break;
+
+case 69:	/* floating point load <- ADDR */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+    o2 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
+    break;
+
+/* ArmV4 ops: */
+case 70:	/* movh/movhu R,O(R) -> strh */
+    aclass(&p->to);
+    r = p->to.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 = oshr(p->from.reg, instoffset, r, p->scond);
+    break;	
+case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
+    aclass(&p->from);
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o1 = olhr(instoffset, r, p->to.reg, p->scond);
+    if(p->as == AMOVB)
+        o1 ^= (1<<5)|(1<<6);
+    else if(p->as == AMOVH)
+        o1 ^= (1<<6);
+    break;
+case 72:	/* movh/movhu R,L(R) -> strh */
+    o1 = omvl(p, &p->to, REGTMP);
+    if(!o1)
+        break;
+    r = p->to.reg;
+    if(r == NREG)
+        r = o->param;
+    o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
+    break;	
+case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+    r = p->from.reg;
+    if(r == NREG)
+        r = o->param;
+    o2 = olhrr(REGTMP, r, p->to.reg, p->scond);
+    if(p->as == AMOVB)
+        o2 ^= (1<<5)|(1<<6);
+    else if(p->as == AMOVH)
+        o2 ^= (1<<6);
+    break;
+
+/* VFP ops: */
+case 74:	/* vfp floating point arith */
+    o1 = opvfprrr(p->as, p->scond);
+    rf = p->from.reg;
+    if(p->from.type == D_FCONST) {
+        diag("invalid floating-point immediate\n%P", p);
+        rf = 0;
+    }
+    rt = p->to.reg;
+    r = p->reg;
+    if(r == NREG)
+        r = rt;
+    o1 |= rt<<12;
+    if(((o1>>20)&0xf) == 0xb)
+        o1 |= rf<<0;
+    else
+        o1 |= r<<16 | rf<<0;
+    break;
+case 75:	/* vfp floating point compare */
+    o1 = opvfprrr(p->as, p->scond);
+    rf = p->from.reg;
+    if(p->from.type == D_FCONST) {
+        if(p->from.ieee->h != 0 || p->from.ieee->l != 0)
+            diag("invalid floating-point immediate\n%P", p);
+        o1 |= 1<<16;
+        rf = 0;
+    }
+    rt = p->reg;
+    o1 |= rt<<12 | rf<<0;
+    o2 = 0x0ef1fa10;	/* MRS APSR_nzcv, FPSCR */
+    o2 |= (p->scond & C_SCOND) << 28;
+    break;
+case 76:	/* vfp floating point fix and float */
+    o1 = opvfprrr(p->as, p->scond);
+    rf = p->from.reg;
+    rt = p->to.reg;
+    if(p->from.type == D_REG) {
+        o2 = o1 | rt<<12 | rt<<0;
+        o1 = 0x0e000a10;	/* VMOV F,R */
+        o1 |= (p->scond & C_SCOND) << 28 | rt<<16 | rf<<12;
+    } else {
+        o1 |= FREGTMP<<12 | rf<<0;
+        o2 = 0x0e100a10;	/* VMOV R,F */
+        o2 |= (p->scond & C_SCOND) << 28 | FREGTMP<<16 | rt<<12;
+    }
+    break;
+@
+%$
+
+
+
+<<[[asmout()]] switch on size cases>>=
+case 4:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux\t%P\n", v, o1, p);
+    lputl(o1);
+    break;
+case 8:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux%P\n", v, o1, o2, p);
+    lputl(o1);
+    lputl(o2);
+    break;
+case 12:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux%P\n", v, o1, o2, o3, p);
+    lputl(o1);
+    lputl(o2);
+    lputl(o3);
+    break;
+case 16:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux%P\n",
+            v, o1, o2, o3, o4, p);
+    lputl(o1);
+    lputl(o2);
+    lputl(o3);
+    lputl(o4);
+    break;
+case 20:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
+            v, o1, o2, o3, o4, o5, p);
+    lputl(o1);
+    lputl(o2);
+    lputl(o3);
+    lputl(o4);
+    lputl(o5);
+    break;
+case 24:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
+            v, o1, o2, o3, o4, o5, o6, p);
+    lputl(o1);
+    lputl(o2);
+    lputl(o3);
+    lputl(o4);
+    lputl(o5);
+    lputl(o6);
+    break;
+@
+
 
 <<function regoff(arm)>>=
 long
@@ -5970,9 +6070,6 @@ datblk(long s, long n, int str)
                 }
         }
         switch(p->to.type) {
-        default:
-            diag("unknown mode in initialization%P", p);
-            break;
 
         case D_FCONST:
             switch(c) {
@@ -6045,6 +6142,10 @@ datblk(long s, long n, int str)
                 break;
             }
             break;
+
+        default:
+            diag("unknown mode in initialization%P", p);
+            break;
         }
     }
     write(cout, buf.dbuf, n);
@@ -6064,17 +6165,29 @@ ckoff(Sym *s, long v)
 
 \chapter{Debugging Support}
 % Symbol Tables.
-% related to import/export table? I don't think so
+% related to import/export table? I don't think so.
 
-\section{Symbol table}
+\section{Symbol table, [[asmsym()]]}
+
+% nm helloc actually does not show everything,
+% the 'f', 'p', and so are not shown by nm apparently.
+% try 5l -n -o helloc helloc.5
 
 <<global symsize>>=
 long	symsize;
 @
+% for the a.out.h header
+
+
+%5l -n ...
+%T 000011d0 atexit
+%m 0000000c .frame
+%a 00000004 i
+%p 00000000 f
 
 
 
-% asmb -> <>
+% main -> asmb -> <>
 <<function asmsym(arm)>>=
 void
 asmsym(void)
@@ -6094,19 +6207,15 @@ asmsym(void)
             case SCONST:
                 putsymb(s->name, 'D', s->value, s->version);
                 continue;
-
             case SDATA:
                 putsymb(s->name, 'D', s->value+INITDAT, s->version);
                 continue;
-
             case SBSS:
                 putsymb(s->name, 'B', s->value+INITDAT, s->version);
                 continue;
-
             case SSTRING:
                 putsymb(s->name, 'T', s->value, s->version);
                 continue;
-
             case SFILE:
                 putsymb(s->name, 'f', s->value, s->version);
                 continue;
@@ -6118,16 +6227,11 @@ asmsym(void)
             continue;
 
         /* filenames first */
-        for(a=p->to.autom; a; a=a->link)
-            if(a->type == D_FILE)
-                putsymb(a->asym->name, 'z', a->aoffset, 0);
-            else
-            if(a->type == D_FILE1)
-                putsymb(a->asym->name, 'Z', a->aoffset, 0);
+        <<[[asmsym()]] call putsymb for filenames>>
 
         if(s->type == STEXT)
             putsymb(s->name, 'T', s->value, s->version);
-        else
+        else // SLEAF
             putsymb(s->name, 'L', s->value, s->version);
 
         /* frame, auto and param after */
@@ -6139,9 +6243,10 @@ asmsym(void)
             if(a->type == D_PARAM)
                 putsymb(a->asym->name, 'p', a->aoffset, 0);
     }
-    if(debug['v'] || debug['n'])
+    if(debug['v'] || debug['n']) {
         Bprint(&bso, "symsize = %lud\n", symsize);
-    Bflush(&bso);
+        Bflush(&bso);
+    }
 }
 @
 
@@ -6161,16 +6266,7 @@ putsymb(char *s, int t, long v, int ver)
         t += 'a' - 'A';
     cput(t+0x80);			/* 0x80 is variable length */
 
-    if(t == 'Z' || t == 'z') {
-        cput(s[0]);
-        for(i=1; s[i] != 0 || s[i+1] != 0; i += 2) {
-            cput(s[i]);
-            cput(s[i+1]);
-        }
-        cput(0);
-        cput(0);
-        i++;
-    }
+    <<[[putsymb()]] if z or Z>>
     else {
         for(i=0; s[i]; i++)
             cput(s[i]);
@@ -6179,15 +6275,7 @@ putsymb(char *s, int t, long v, int ver)
     symsize += 4 + 1 + i + 1;
 
     if(debug['n']) {
-        if(t == 'z' || t == 'Z') {
-            Bprint(&bso, "%c %.8lux ", t, v);
-            for(i=1; s[i] != 0 || s[i+1] != 0; i+=2) {
-                f = ((s[i]&0xff) << 8) | (s[i+1]&0xff);
-                Bprint(&bso, "/%x", f);
-            }
-            Bprint(&bso, "\n");
-            return;
-        }
+        <<[[putsymb()]] if z or Z in debug output>>
         if(ver)
             Bprint(&bso, "%c %.8lux %s<%d>\n", t, v, s, ver);
         else
@@ -6198,7 +6286,44 @@ putsymb(char *s, int t, long v, int ver)
 %>>
 
 
-\section{Line table}
+\section{Filenames}
+
+<<[[asmsym()]] call putsymb for filenames>>=
+for(a=p->to.autom; a; a=a->link)
+    if(a->type == D_FILE)
+        putsymb(a->asym->name, 'z', a->aoffset, 0);
+    else
+    if(a->type == D_FILE1)
+        putsymb(a->asym->name, 'Z', a->aoffset, 0);
+@
+
+<<[[putsymb()]] if z or Z>>=
+if(t == 'z' || t == 'Z') {
+    cput(s[0]);
+    for(i=1; s[i] != 0 || s[i+1] != 0; i += 2) {
+        cput(s[i]);
+        cput(s[i+1]);
+    }
+    cput(0);
+    cput(0);
+    i++;
+}
+@
+
+<<[[putsymb()]] if z or Z in debug output>>=
+if(t == 'z' || t == 'Z') {
+    Bprint(&bso, "%c %.8lux ", t, v);
+    for(i=1; s[i] != 0 || s[i+1] != 0; i+=2) {
+        f = ((s[i]&0xff) << 8) | (s[i+1]&0xff);
+        Bprint(&bso, "/%x", f);
+    }
+    Bprint(&bso, "\n");
+    return;
+}
+@
+% >> >> >>
+
+\section{Line table, [[asmlc()]]}
 
 % lc? line count?
 <<global lcsize>>=
@@ -6640,6 +6765,10 @@ char	fnuxi4[4];
 char	fnuxi8[8];
 @
 
+
+<<[[main()]] initialize globals(arm)>>=
+nuxiinit(); // ???
+@
 
 <<function nuxiinit(arm)>>=
 void
@@ -7545,6 +7674,19 @@ case AGOK:
 
 
 \section{Float}
+
+<<[[zaddr()]] cases>>=
+case D_FCONST:
+    a->ieee = malloc(sizeof(Ieee));
+
+    a->ieee->l = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
+    a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
+    c += 8;
+    break;
+@
+% bugfix: there was a bug where it was using NSNAME instead of sizeof(Ieee)
+%  but factorizing code with malloc fixed the issue too.
+
 
 % 8.out.h
 

@@ -139,8 +139,8 @@ struct	Sym
 
     //enum<sxxx>
     short	type;
-
-    long	value; // e.g. pc for a TEXT procedure
+    // generic value, e.g. pc for a TEXT procedure
+    long	value; 
 
     /*s: [[Sym]] other fields */
     short	become;
@@ -180,6 +180,7 @@ struct	Optab
 /*s: enum sxxx(x86) */
 enum section
 {
+    SNONE		= 0,
     STEXT		= 1,
     SDATA,
     SBSS,

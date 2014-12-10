@@ -146,16 +146,16 @@ asmb(void)
     }
     /*e: [[asmb()]] DATA section */
 
-    // SYMBOL TABLE
-    /*s: [[asmb()]] symbol table section */
+    // SYMBOL AND LINE TABLE
+    /*s: [[asmb()]] symbol and line table section */
     // modified by asmsym()
     symsize = 0;
     // modified by asmlc()
     lcsize = 0;
 
     if(!debug['s']) {
-        DBG("%5.2f sym\n", cputime());
 
+        DBG("%5.2f sym\n", cputime());
         switch(HEADTYPE) {
         case H_PLAN9:
             OFFSET = HEADR+textsize+datsize;
@@ -177,10 +177,9 @@ asmb(void)
             break;
         /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         }
-
         asmsym();
-        DBG("%5.2f pc\n", cputime());
 
+        DBG("%5.2f pc\n", cputime());
         asmlc();
         /*s: [[asmb()]] if dynamic module, call asmdyn() */
         if(dlm)
@@ -198,7 +197,7 @@ asmb(void)
         }
         /*e: [[asmb()]] if dynamic module and no symbol table generation */
     }
-    /*e: [[asmb()]] symbol table section */
+    /*e: [[asmb()]] symbol and line table section */
 
     // HEADER
     /*s: [[asmb()]] header section */
@@ -428,19 +427,15 @@ asmsym(void)
             case SCONST:
                 putsymb(s->name, 'D', s->value, s->version);
                 continue;
-
             case SDATA:
                 putsymb(s->name, 'D', s->value+INITDAT, s->version);
                 continue;
-
             case SBSS:
                 putsymb(s->name, 'B', s->value+INITDAT, s->version);
                 continue;
-
             case SSTRING:
                 putsymb(s->name, 'T', s->value, s->version);
                 continue;
-
             case SFILE:
                 putsymb(s->name, 'f', s->value, s->version);
                 continue;
@@ -452,16 +447,18 @@ asmsym(void)
             continue;
 
         /* filenames first */
+        /*s: [[asmsym()]] call putsymb for filenames */
         for(a=p->to.autom; a; a=a->link)
             if(a->type == D_FILE)
                 putsymb(a->asym->name, 'z', a->aoffset, 0);
             else
             if(a->type == D_FILE1)
                 putsymb(a->asym->name, 'Z', a->aoffset, 0);
+        /*e: [[asmsym()]] call putsymb for filenames */
 
         if(s->type == STEXT)
             putsymb(s->name, 'T', s->value, s->version);
-        else
+        else // SLEAF
             putsymb(s->name, 'L', s->value, s->version);
 
         /* frame, auto and param after */
@@ -473,9 +470,10 @@ asmsym(void)
             if(a->type == D_PARAM)
                 putsymb(a->asym->name, 'p', a->aoffset, 0);
     }
-    if(debug['v'] || debug['n'])
+    if(debug['v'] || debug['n']) {
         Bprint(&bso, "symsize = %lud\n", symsize);
-    Bflush(&bso);
+        Bflush(&bso);
+    }
 }
 /*e: function asmsym(arm) */
 
@@ -492,7 +490,8 @@ putsymb(char *s, int t, long v, int ver)
         t += 'a' - 'A';
     cput(t+0x80);			/* 0x80 is variable length */
 
-    if(t == 'Z' || t == 'z') {
+    /*s: [[putsymb()]] if z or Z */
+    if(t == 'z' || t == 'Z') {
         cput(s[0]);
         for(i=1; s[i] != 0 || s[i+1] != 0; i += 2) {
             cput(s[i]);
@@ -502,6 +501,7 @@ putsymb(char *s, int t, long v, int ver)
         cput(0);
         i++;
     }
+    /*e: [[putsymb()]] if z or Z */
     else {
         for(i=0; s[i]; i++)
             cput(s[i]);
@@ -510,6 +510,7 @@ putsymb(char *s, int t, long v, int ver)
     symsize += 4 + 1 + i + 1;
 
     if(debug['n']) {
+        /*s: [[putsymb()]] if z or Z in debug output */
         if(t == 'z' || t == 'Z') {
             Bprint(&bso, "%c %.8lux ", t, v);
             for(i=1; s[i] != 0 || s[i+1] != 0; i+=2) {
@@ -519,6 +520,7 @@ putsymb(char *s, int t, long v, int ver)
             Bprint(&bso, "\n");
             return;
         }
+        /*e: [[putsymb()]] if z or Z in debug output */
         if(ver)
             Bprint(&bso, "%c %.8lux %s<%d>\n", t, v, s, ver);
         else
@@ -650,9 +652,6 @@ datblk(long s, long n, int str)
                 }
         }
         switch(p->to.type) {
-        default:
-            diag("unknown mode in initialization%P", p);
-            break;
 
         case D_FCONST:
             switch(c) {
@@ -728,6 +727,10 @@ datblk(long s, long n, int str)
                 break;
             }
             break;
+
+        default:
+            diag("unknown mode in initialization%P", p);
+            break;
         }
     }
     write(cout, buf.dbuf, n);
@@ -742,22 +745,19 @@ asmout(Prog *p, Optab *o)
     int r, rf, rt, rt2;
     Sym *s;
 
-PP = p;
+    PP = p;
+
     o1 = 0;
     o2 = 0;
     o3 = 0;
     o4 = 0;
     o5 = 0;
     o6 = 0;
-    switch(o->type) {
-    default:
-        diag("unknown asm %d", o->type);
-        prasm(p);
-        break;
 
+    switch(o->type) {
     case 0:		/* pseudo ops */
         break;
-
+    /*s: [[asmout()]] switch on type cases */
     case 1:		/* op R,[R],R */
         o1 = oprrr(p->as, p->scond);
         rf = p->from.reg;
@@ -1091,7 +1091,7 @@ PP = p;
         o6 |= (1<<6);	/* ROL 8 */
 
         break;
-        
+    
     case 34:	/* mov $lacon,R */
         o1 = omvl(p, &p->from, REGTMP);
         if(!o1)
@@ -1479,6 +1479,11 @@ PP = p;
             o2 |= (p->scond & C_SCOND) << 28 | FREGTMP<<16 | rt<<12;
         }
         break;
+    /*e: [[asmout()]] switch on type cases */
+    default:
+        diag("unknown asm %d", o->type);
+        prasm(p);
+        break;
     }
 
     if(debug['a'] > 1)
@@ -1486,10 +1491,7 @@ PP = p;
 
     v = p->pc;
     switch(o->size) {
-    default:
-        if(debug['a'])
-            Bprint(&bso, " %.8lux:\t\t%P\n", v, p);
-        break;
+    /*s: [[asmout()]] switch on size cases */
     case 4:
         if(debug['a'])
             Bprint(&bso, " %.8lux: %.8lux\t%P\n", v, o1, p);
@@ -1537,6 +1539,11 @@ PP = p;
         lputl(o4);
         lputl(o5);
         lputl(o6);
+        break;
+    /*e: [[asmout()]] switch on size cases */
+    default:
+        if(debug['a'])
+            Bprint(&bso, " %.8lux:\t\t%P\n", v, p);
         break;
     }
 }

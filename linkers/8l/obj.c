@@ -31,12 +31,14 @@ int	histgen = 0;
 /*e: global histgen */
 
 /*s: global library */
+// array<option<filename>>
 char*	library[50];
 /*e: global library */
 /*s: global libraryobj */
 char*	libraryobj[50];
 /*e: global libraryobj */
 /*s: global libraryp */
+// index of first free entry in library array
 int	libraryp;
 /*e: global libraryp */
 
@@ -625,7 +627,7 @@ objfile(char *file)
 
     l = read(f, magbuf, SARMAG);
 
-    // not a library
+    // is it a regular object (and not a library)
     if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
         l = seek(f, 0L, SEEK__END);
@@ -1047,7 +1049,7 @@ loop:
     if(c <= 0)
         goto eof;
 
-    /*s: [[ldobj()]] read if needed in loop:, adjust block and bsize */
+    /*s: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
     r = bsize - bloc;
     if(r < 100 && r < c) {		/* enough for largest prog */
         bsize = readsome(f, buf.xbuf, bloc, bsize, c);
@@ -1056,7 +1058,7 @@ loop:
         bloc = buf.xbuf;
         goto loop;
     }
-    /*e: [[ldobj()]] read if needed in loop:, adjust block and bsize */
+    /*e: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
 
     // get the opcode
     o = bloc[0] | (bloc[1] << 8); // >>
