@@ -182,9 +182,9 @@ enum opcode
     /*x: pseudo opcodes */
     AEND,
     /*x: pseudo opcodes */
-    AHISTORY,
-    /*x: pseudo opcodes */
     ANAME,
+    /*x: pseudo opcodes */
+    AHISTORY,
     /*x: pseudo opcodes */
     ACASE,
     ABCASE,
