@@ -57,10 +57,11 @@ struct	Adr
         Sym*	u1sym;
     } u1;
 
-    // ??
-    char	reg;
+    /*s: [[Adr]] other fields */
+    char	reg; // Abused for NOPROF and DUPOK
     char	name;
     char	class;
+    /*e: [[Adr]] other fields */
 };
 /*e: struct Adr(arm) */
 
@@ -142,12 +143,15 @@ struct	Sym
     /*s: [[Sym]] other fields */
     short	become;
     short	frame;
-    ushort	file;
     /*x: [[Sym]] other fields */
     // enum<section> too?
     byte	subtype;
     /*x: [[Sym]] other fields */
+    // md5sum of the type of the symbol
     long	sig;
+    /*x: [[Sym]] other fields */
+    // idx in filen
+    ushort	file;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */

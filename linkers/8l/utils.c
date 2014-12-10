@@ -86,13 +86,14 @@ lookup(char *symb, int v)
 
     s->name = malloc(l + 1); // +1 again?
     memmove(s->name, symb, l);
-
-    s->link = hash[h];
     s->type = SNONE;
     s->version = v;
     s->value = 0;
     s->sig = 0;
+
+    s->link = hash[h];
     hash[h] = s;
+
     nsymbol++;
     return s;
 }

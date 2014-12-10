@@ -1381,7 +1381,7 @@ dynreloc(Sym *s, ulong v, int abs)
 }
 /*e: function dynreloc(x86) */
 
-/*s: function sput(x86) */
+/*s: function sput */
 static int
 sput(char *s)
 {
@@ -1391,9 +1391,9 @@ sput(char *s)
     while(*s)
         cput(*s++);
     cput(0);
-    return s-p+1;
+    return  s-p+1;
 }
-/*e: function sput(x86) */
+/*e: function sput */
 
 /*s: function asmdyn */
 void

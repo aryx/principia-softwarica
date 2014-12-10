@@ -20,7 +20,7 @@ entryvalue(void)
     char *a;
     Sym *s;
 
-    a = INITENTRY;
+    a = INITENTRY; // usually "_main"
 
     /*s: [[entryvalue()]] if digit INITENTRY */
     if(*a >= '0' && *a <= '9')
@@ -34,7 +34,6 @@ entryvalue(void)
         return INITTEXT; // no _main, start at beginning of binary then
     case STEXT:
     case SLEAF:
-        // ok
         return s->value;
     /*s: [[entryvalue()]] if dynamic module case */
     case SDATA:
@@ -54,8 +53,9 @@ asmb(void)
 {
     /*s: [[asmb()]] locals */
     Prog *p;
-    long t, etext;
     Optab *o;
+    /*x: [[asmb()]] locals */
+    long t, etext;
     /*e: [[asmb()]] locals */
 
     DBG("%5.2f asm\n", cputime());
@@ -86,12 +86,14 @@ asmb(void)
         pc += o->size;
     }
 
-    if(debug['a'])
+    if(debug['a']) {
         Bprint(&bso, "\n");
-    Bflush(&bso);
+        Bflush(&bso);
+    }
 
     cflush();
 
+    /*s: [[asmb()]] TEXT section, output strings in text segment */
     /* output strings in text segment */
     etext = INITTEXT + textsize;
     for(t = pc; t < etext; t += sizeof(buf)-100) {
@@ -99,6 +101,7 @@ asmb(void)
             datblk(t, sizeof(buf)-100, 1);
         else
             datblk(t, etext-t, 1);
+    /*e: [[asmb()]] TEXT section, output strings in text segment */
     }
     /*e: [[asmb()]] TEXT section */
 
@@ -400,21 +403,11 @@ cflush(void)
     n = sizeof(buf.cbuf) - cbc;
     if(n)
         write(cout, buf.cbuf, n);
+
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
 }
 /*e: function cflush */
-
-/*s: function nopstat(arm) */
-void
-nopstat(char *f, Count *c)
-{
-    if(c->outof)
-    Bprint(&bso, "%s delay %ld/%ld (%.2f)\n", f,
-        c->outof - c->count, c->outof,
-        (double)(c->outof - c->count)/c->outof);
-}
-/*e: function nopstat(arm) */
 
 /*s: function asmsym(arm) */
 void

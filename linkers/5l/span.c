@@ -10,6 +10,8 @@ static struct {
 
 void	checkpool(Prog*);
 void 	flushpool(Prog*, int);
+typedef struct Reloc Reloc;
+
 
 /*s: function span(arm) */
 void
@@ -229,7 +231,7 @@ xdefine(char *p, int t, long v)
     Sym *s;
 
     s = lookup(p, 0);
-    if(s->type == 0 || s->type == SXREF) {
+    if(s->type == SNONE || s->type == SXREF) {
         s->type = t;
         s->value = v;
     }
@@ -798,44 +800,6 @@ buildop(void)
 /*e: function buildop(arm) */
 
 /*s: enum _anon_ (linkers/5l/span.c)(arm) */
-/*
-void
-buildrep(int x, int as)
-{
-    Opcross *p;
-    Optab *e, *s, *o;
-    int a1, a2, a3, n;
-
-    if(C_NONE != 0 || C_REG != 1 || C_GOK >= 32 || x >= nelem(opcross)) {
-        diag("assumptions fail in buildrep");
-        errorexit();
-    }
-    repop[as] = x;
-    p = (opcross + x);
-    s = oprange[as].start;
-    e = oprange[as].stop;
-    for(o=e-1; o>=s; o--) {
-        n = o-optab;
-        for(a2=0; a2<2; a2++) {
-            if(a2) {
-                if(o->a2 == C_NONE)
-                    continue;
-            } else
-                if(o->a2 != C_NONE)
-                    continue;
-            for(a1=0; a1<32; a1++) {
-                if(!xcmp[a1][o->a1])
-                    continue;
-                for(a3=0; a3<32; a3++)
-                    if(xcmp[a3][o->a3])
-                        (*p)[a1][a2][a3] = n;
-            }
-        }
-    }
-    oprange[as].start = 0;
-}
-*/
-
 enum{
     ABSD = 0,
     ABSU = 1,
@@ -847,8 +811,6 @@ enum{
 /*s: global modemap */
 int modemap[4] = { 0, 1, -1, 2, };
 /*e: global modemap */
-
-typedef struct Reloc Reloc;
 
 /*s: struct Reloc */
 struct Reloc
@@ -924,7 +886,7 @@ dynreloc(Sym *s, long v, int abs)
 }
 /*e: function dynreloc(arm) */
 
-/*s: function sput(arm) */
+/*s: function sput */
 static int
 sput(char *s)
 {
@@ -936,7 +898,7 @@ sput(char *s)
     cput(0);
     return  s-p+1;
 }
-/*e: function sput(arm) */
+/*e: function sput */
 
 /*s: function asmdyn */
 void

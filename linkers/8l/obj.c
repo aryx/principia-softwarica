@@ -96,12 +96,15 @@ char	*thestring;
 /*e: global thestring */
 
 /*s: global libdir */
+// growing_array<dirname>
 char**	libdir;
 /*e: global libdir */
 /*s: global nlibdir */
+// index of next free entry in libdir
 int	nlibdir	= 0;
 /*e: global nlibdir */
 /*s: global maxlibdir */
+// index of last free entry in libdir
 static	int	maxlibdir = 0;
 /*e: global maxlibdir */
 

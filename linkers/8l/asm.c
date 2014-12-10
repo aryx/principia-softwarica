@@ -435,6 +435,7 @@ cflush(void)
     n = sizeof(buf.cbuf) - cbc;
     if(n)
         write(cout, buf.cbuf, n);
+
     cbp = buf.cbuf;
     cbc = sizeof(buf.cbuf);
 }

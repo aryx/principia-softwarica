@@ -22,12 +22,15 @@ char	*thestring;
 /*e: global thestring */
 
 /*s: global libdir */
+// growing_array<dirname>
 char**	libdir;
 /*e: global libdir */
 /*s: global nlibdir */
+// index of next free entry in libdir
 int	nlibdir	= 0;
 /*e: global nlibdir */
 /*s: global maxlibdir */
+// index of last free entry in libdir
 static	int	maxlibdir = 0;
 /*e: global maxlibdir */
 
@@ -902,19 +905,20 @@ void
 ldobj(fdt f, long c, char *pn)
 {
     /*s: [[ldobj()]] locals(arm) */
+    long ipc;
+    /*x: [[ldobj()]] locals(arm) */
+    byte *bloc;
+    byte *bsize;
+    int r;
+    /*x: [[ldobj()]] locals(arm) */
     Sym *h[NSYM];
     Sym *di;
     Sym *s;
-    long ipc;
     /*x: [[ldobj()]] locals(arm) */
     Prog *t;
     byte *stop;
     int v;
     ulong sig;
-    /*x: [[ldobj()]] locals(arm) */
-    byte *bloc;
-    byte *bsize;
-    int r;
     /*x: [[ldobj()]] locals(arm) */
     // enum<opcode>
     int o;
@@ -922,12 +926,15 @@ ldobj(fdt f, long c, char *pn)
     /*x: [[ldobj()]] locals(arm) */
     bool skip;
     /*x: [[ldobj()]] locals(arm) */
-    // array<string>, length used = files, extended every 16
+    // growing_array<filename>  (grown for every 16 elements)
     static char **filen;
+    // index of next free entry in filen
     static int files = 0;
+    /*x: [[ldobj()]] locals(arm) */
     char **nfilen;
     /*e: [[ldobj()]] locals(arm) */
 
+    /*s: [[ldobj()]] remember set of object filenames */
     /*s: [[ldobj()]] grow filen if not enough space */
     if((files&15) == 0){
         nfilen = malloc((files+16)*sizeof(char*));
@@ -937,7 +944,7 @@ ldobj(fdt f, long c, char *pn)
     }
     /*e: [[ldobj()]] grow filen if not enough space */
     filen[files++] = strdup(pn);
-
+    /*e: [[ldobj()]] remember set of object filenames */
     /*s: [[ldobj()]] bloc and bsize init */
     bsize = buf.xbuf;
     bloc = buf.xbuf;
@@ -947,11 +954,12 @@ ldobj(fdt f, long c, char *pn)
 
 // can come from AEND
 newloop:
+    ipc = pc;
     version++;
+    skip = false;
+
     memset(h, 0, sizeof(h));
     histfrogp = 0;
-    ipc = pc;
-    skip = false;
 
 loop:
     if(c <= 0)
@@ -979,11 +987,14 @@ loop:
     /*s: [[ldobj()]] if ANAME or ASIGNAME(arm) */
     if(o == ANAME || o == ASIGNAME) {
         sig = 0;
+        /*s: [[ldobj()]] if SIGNAME adjust sig */
         if(o == ASIGNAME){
             sig = bloc[1] | (bloc[2]<<8) | (bloc[3]<<16) | (bloc[4]<<24);
             bloc += 4;
             c -= 4;
         }
+        /*e: [[ldobj()]] if SIGNAME adjust sig */
+
         stop = memchr(&bloc[3], 0, bsize-&bloc[3]);
         if(stop == 0){
             bsize = readsome(f, buf.xbuf, bloc, bsize, c);
@@ -1008,18 +1019,22 @@ loop:
         c -= &stop[1] - bloc;
         bloc = stop + 1;
 
+        /*s: [[ldobj()]] if sig not zero */
         if(sig != 0){
             if(s->sig != 0 && s->sig != sig)
                 diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
             s->sig = sig;
             s->file = files-1;
         }
+        /*e: [[ldobj()]] if sig not zero */
 
         if(debug['W'])
             print("	ANAME	%s\n", s->name);
         h[o] = s;
-        if((v == D_EXTERN || v == D_STATIC) && s->type == 0)
+        if((v == D_EXTERN || v == D_STATIC) && s->type == SNONE)
             s->type = SXREF;
+
+        /*s: [[ldobj()]] when ANAME opcode, if D_FILE */
         if(v == D_FILE) {
             if(s->type != SFILE) {
                 histgen++;
@@ -1032,6 +1047,7 @@ loop:
             } else
                 collapsefrog(s);
         }
+        /*e: [[ldobj()]] when ANAME opcode, if D_FILE */
         goto loop;
     }
     /*e: [[ldobj()]] if ANAME or ASIGNAME(arm) */
@@ -1083,7 +1099,7 @@ loop:
             errorexit();
         }
 
-        if(s->type != 0 && s->type != SXREF) {
+        if(s->type != SNONE && s->type != SXREF) {
             if(p->reg & DUPOK) {
                 skip = 1;
                 goto casedef;
@@ -1130,7 +1146,8 @@ loop:
             diag("GLOBL must have a name\n%P", p);
             errorexit();
         }
-        if(s->type == 0 || s->type == SXREF) {
+
+        if(s->type == SNONE || s->type == SXREF) {
             s->type = SBSS;
             s->value = 0;
         }
@@ -1143,6 +1160,16 @@ loop:
             s->value = p->to.offset;
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AEND:
+        histtoauto();
+        if(curtext != P)
+            curtext->to.autom = curauto;
+        curauto = 0;
+        curtext = P;
+        if(c)
+            goto newloop;
+        return;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
     case AHISTORY:
         if(p->to.offset == -1) {
             addlib(pn);
@@ -1154,22 +1181,6 @@ loop:
             addhist(p->to.offset, D_FILE1);	/* 'Z' */
         histfrogp = 0;
         goto loop;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
-    case AEND:
-        histtoauto();
-        if(curtext != P)
-            curtext->to.autom = curauto;
-        curauto = 0;
-        curtext = P;
-        if(c)
-            goto newloop;
-        return;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
-    case AGOK:
-        diag("unknown opcode\n%P", p);
-        p->pc = pc;
-        pc++;
-        break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ASUB:
         if(p->from.type == D_CONST)
@@ -1231,6 +1242,13 @@ loop:
         p->from.sym->type = SDATA;
         p->link = datap;
         datap = p;
+        break;
+
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AGOK:
+        diag("unknown opcode\n%P", p);
+        p->pc = pc;
+        pc++;
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AMOVDF:
@@ -1302,6 +1320,7 @@ loop:
         if(skip)
             nopout(p);
 
+        // putting each object after each other, local offset become global
         if(p->to.type == D_BRANCH)
             p->to.offset += ipc;
 
