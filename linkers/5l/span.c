@@ -838,8 +838,8 @@ grow(Reloc *r)
     r->t += 64;
     m = r->m;
     a = r->a;
-    r->m = nm = malloc(r->t*sizeof(byte));
-    r->a = na = malloc(r->t*sizeof(ulong));
+    r->m = nm = malloc(r->t * sizeof(byte));
+    r->a = na = malloc(r->t * sizeof(ulong));
     memmove(nm, m, t*sizeof(byte));
     memmove(na, a, t*sizeof(ulong));
     free(m);

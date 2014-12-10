@@ -643,24 +643,13 @@ zaddr(byte *p, Adr *a, Sym *h[])
         break;
 
     case D_SCONST:
-        //TODO: factorize
-        while(nhunk < NSNAME)
-            gethunk();
-        a->sval = (char*)hunk;
-        nhunk -= NSNAME;
-        hunk += NSNAME;
-
+        a->sval = malloc(NSNAME);
         memmove(a->sval, p+4, NSNAME);
         c += NSNAME;
         break;
-
+    /*x: [[zaddr()]] cases */
     case D_FCONST:
-        //TODO: factorize
-        while(nhunk < sizeof(Ieee))
-            gethunk();
-        a->ieee = (Ieee*)hunk;
-        nhunk -= NSNAME;
-        hunk += NSNAME;
+        a->ieee = malloc(sizeof(Ieee));
 
         a->ieee->l = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
         a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
@@ -690,13 +679,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
             return c;
         }
 
-    //TODO: factorize
-    while(nhunk < sizeof(Auto))
-        gethunk();
-    u = (Auto*)hunk;
-    nhunk -= sizeof(Auto);
-    hunk += sizeof(Auto);
-
+    u = malloc(sizeof(Auto));
     u->link = curauto;
     curauto = u;
     u->asym = s;

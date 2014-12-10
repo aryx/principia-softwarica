@@ -77,13 +77,7 @@ lookup(char *symb, int v)
                 return s;
 
 
-    // s =~ malloc(sizeof(Sym)), TODO factorize this code
-    while(nhunk < sizeof(Sym))
-        gethunk();
-    s = (Sym*)hunk;
-    nhunk -= sizeof(Sym);
-    hunk += sizeof(Sym);
-
+    s = malloc(sizeof(Sym));
     s->name = malloc(l + 1); // +1 again?
     memmove(s->name, symb, l);
     s->type = SNONE;
@@ -105,14 +99,7 @@ prg(void)
 {
     Prog *p;
 
-    //todo: factorize with similar code in lookup but for Sym, 
-    // =~ malloc(sizeof(Procg))
-    while(nhunk < sizeof(Prog))
-        gethunk();
-    p = (Prog*)hunk;
-    nhunk -= sizeof(Prog);
-    hunk += sizeof(Prog);
-
+    p = malloc(sizeof(Prog));
     *p = zprg;
     return p;
 }
