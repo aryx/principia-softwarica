@@ -5,7 +5,7 @@
 /*s: union token(arm) */
 %union {
  //   enum<opcode>   (for LTYPEx/...) 
- // | enum<register> (for LREG/...)
+ // | enum<registr> (for LREG/...)
  // | enum<cond>     (for LCOND) 
  // ...
  // | long (for LCONST)
@@ -13,7 +13,7 @@
 
  double dval;    // for LFCONST
  char   sval[8]; // for LSCONST
- Sym    *sym;    // for LNAME/...
+ Sym    *sym;    // for LNAME/LLAB/LVAR
 
  /*s: [[Token]] other fields(arm) */
  Gen    gen;
@@ -35,8 +35,10 @@
 %token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
 /* registers */
 %token  <lval>  LSP LSB LFP LPC
-%token  <lval>  LR LREG
-%token  <lval>  LF LFREG  LC LCREG   LPSR LFCR
+%token  <lval>  LR LREG  LPSR
+%token  <lval>  LF LFREG  LFCR 
+%token  <lval>  LC LCREG
+
 /* bits */
 %token  <lval>  LCOND
 %token  <lval>  LS LAT
@@ -101,6 +103,7 @@ line:
   $1->value = pc;
  }
   line
+/*x: line rule(arm) */
 | LLAB ':'
  {
   if($1->value != pc)
@@ -128,7 +131,7 @@ inst:
  */
   LTYPE1 cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
 | LTYPE1 cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
-| LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * MULL hi,lo,r1,r2
@@ -148,12 +151,12 @@ inst:
 /*
  * MOVW
  */
-| LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * MVN
  */
-| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * CMP
@@ -163,23 +166,23 @@ inst:
 /*
  * B/BL
  */
-| LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, NREG, &$4); }
-| LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, NREG, &$4); }
+| LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, R_NONE, &$4); }
+| LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, R_NONE, &$4); }
 /*x: inst rule(arm) */
 /*
  * BEQ/...
  */
-| LTYPE5 comma rel { outcode($1, Always, &nullgen, NREG, &$3); }
+| LTYPE5 comma rel { outcode($1, Always, &nullgen, R_NONE, &$3); }
 /*x: inst rule(arm) */
 /*
  * RET
  */
-| LTYPEA cond comma { outcode($1, $2, &nullgen, NREG, &nullgen); }
+| LTYPEA cond comma { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * SWI
  */
-| LTYPE6 cond comma gen { outcode($1, $2, &nullgen, NREG, &$4); }
+| LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
 /*x: inst rule(arm) */
 /*
  * SWAP
@@ -191,7 +194,7 @@ inst:
 /*
  * TEXT/GLOBL
  */
-| LTYPEB name ',' imm         { outcode($1, Always, &$2, NREG, &$4); }
+| LTYPEB name ',' imm         { outcode($1, Always, &$2, R_NONE, &$4); }
 | LTYPEB name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
 /*x: inst rule(arm) */
 /*
@@ -202,12 +205,12 @@ inst:
 /*
  * WORD
  */
-| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
+| LTYPEH comma ximm { outcode($1, Always, &nullgen, R_NONE, &$3); }
 /*x: inst rule(arm) */
 /*
  * END
  */
-| LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
+| LTYPEE comma { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * MCR MRC
@@ -229,14 +232,14 @@ inst:
    (($11 & 15) << 0) |  /* Crm */
    (($12 & 7) << 5) |   /* coprocessor information */
    (1<<4);          /* must be set */ // opcode component
-  outcode(AWORD, Always, &nullgen, NREG, &g);
+  outcode(AWORD, Always, &nullgen, R_NONE, &g);
  }
 /*x: inst rule(arm) */
 /*
  * floating-point coprocessor
  */
-| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, NREG, &$5); }
-| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 | LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
 | LTYPEL cond freg ',' freg comma { outcode($1, $2, &$3, $5.reg, &nullgen); }
 /*x: inst rule(arm) */
@@ -250,7 +253,7 @@ inst:
   g = nullgen;
   g.type = D_CONST;
   g.offset = $6;
-  outcode($1, $2, &$3, NREG, &g);
+  outcode($1, $2, &$3, R_NONE, &g);
  }
 | LTYPE8 cond '[' reglist ']' ',' ioreg
  {
@@ -259,7 +262,7 @@ inst:
   g = nullgen;
   g.type = D_CONST;
   g.offset = $4;
-  outcode($1, $2, &g, NREG, &$7);
+  outcode($1, $2, &g, R_NONE, &$7);
  }
 /*e: inst rule(arm) */
 /*s: cond rule(arm) */
@@ -389,6 +392,7 @@ ximm:
   $$ = $2;
   $$.type = D_CONST;
  }
+/*x: ximm rule */
 | '$' '*' '$' oreg
  {
   $$ = $4;
@@ -398,16 +402,9 @@ ximm:
 | fcon
 /*e: ximm rule */
 /*x: operand rules(arm) */
+/*s: name rule */
 name:
- con '(' pointer ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.name = $3;
-  $$.sym = S;
-  $$.offset = $1;
- }
-| LNAME offset '(' pointer ')'
+  LNAME offset '(' pointer ')'
  {
   $$ = nullgen;
   $$.type = D_OREG;
@@ -415,6 +412,7 @@ name:
   $$.sym = $1;
   $$.offset = $2;
  }
+/*x: name rule */
 | LNAME '<' '>' offset '(' LSB ')'
  {
   $$ = nullgen;
@@ -423,21 +421,27 @@ name:
   $$.sym = $1;
   $$.offset = $4;
  }
-/*x: operand rules(arm) */
-rel:
-  con '(' LPC ')'
+/*x: name rule */
+| con '(' pointer ')'
  {
   $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.offset = $1 + pc;
+  $$.type = D_OREG;
+  $$.name = $3;
+  $$.sym = S;
+  $$.offset = $1;
  }
-| LLAB offset
+/*e: name rule */
+/*x: operand rules(arm) */
+/*s: rel rule */
+rel:
+  LLAB offset
  {
   $$ = nullgen;
   $$.type = D_BRANCH;
   $$.sym = $1;
   $$.offset = $1->value + $2;
  }
+/*x: rel rule */
 | LNAME offset
  {
   $$ = nullgen;
@@ -447,6 +451,14 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
+/*x: rel rule */
+|  con '(' LPC ')'
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.offset = $1 + pc;
+ }
+/*e: rel rule */
 /*x: operand rules(arm) */
 /* for MULL */
 regreg:

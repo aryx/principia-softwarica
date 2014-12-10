@@ -63,7 +63,7 @@ long	nhunk = 0;
 int	ninclude;
 /*e: global ninclude */
 /*s: global outfile */
-char*	outfile;
+char*	outfile = nil;
 /*e: global outfile */
 /*s: global pass */
 // 1|2

@@ -26,7 +26,7 @@
 %thx to codemap/codegraph/scheck:
 % - factorized code in aa/
 % - TODO mv errorexit, alloc, in utils.c instead of lexbody.c, same for gethunk
-% - TODO main.c
+% - TODO have a main.c?
 
 %thx to this manual, better understand assembly?:
 % - can actually understand the assembly code in Kernel.nw :) param1+0(FP)
@@ -208,10 +208,9 @@ License.
 
 \section{Assembler principles}
 
-% mnemonic and symbolic addresses -> object/machine code
-
-% goal is close to machine code, but more convenient than binary,
+% goal is close to machine code, but more convenient than binary;
 % essentially a textual form of a binary format.
+% mnemonic and symbolic addresses -> object/machine code
 
 % before was writing binary, then mnemonic but still hardcoded
 % address, and then finally symbolic addresses.
@@ -219,30 +218,31 @@ License.
 % usually 2 passes as can reference stuff coming later. pretty simple.
 
 % usually object code that is then processed by linker. So output
-% relocatable code, with symbol table in object for linker to know what
-% to do and where to patch things.
-% module!
+% code that will be relocated, with symbol table in object for linker
+% to know what to do and where to patch things.
+% (the .o is really like a module, the really lowest level module abstraction).
 
 % less: look at TECS section on assembler?
 
 \section{[[5a]] services}
 
 % command line interface? -o outfile,   -D -I (cpp),  -f -m for debug
-
 % env: INCLUDE (for cpp, similar to -I), NPROC (when multi files?)
 
-% can also have some simple constant expression.
-% have also "variables" (symbolic name of constants)
-% can also have macros and includes!
-% (really convenient, can define new instructions thx to macro & bitshift as in:
-%  #define MCRR(coproc, op, rd, rn, crm) \
-% 	WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
+% have a few more features than just mnemonic and symbolc addresses:
+%  - can also have some simple constant expression.
+%  - have also "variables" (symbolic name of constants)
+%  - can also have macros and includes!
+%    (really convenient, can define new instructions thx to macro & 
+%     bitshift as in:
+%     #define MCRR(coproc, op, rd, rn, crm) \
+% 	    WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
+%  - 5a also support some virtual opcode, to go around some of the restrictions
+%    of certain architecture, so have a very general MOV even though
+%    the actual archi supports only simple LOAD/STORE.
 
 % normally generate (relocatable) machine code, but here 5a is actually
 % a bit unusual.
-% 5a also support some virtual opcode, to go around some of the restrictions
-% of certain architecture, so have a very general MOV even though
-% the actual archi supports only simple LOAD/STORE.
 
 
 \section{[[helloworld.s]]}
@@ -274,10 +274,11 @@ License.
 
 \section{Input assembly language}
 
-% specifics of 5a? like left to right or right to left for mv, intel
-% or AT&T syntax (I guess AT&T :) )
+% specifics of 5a? 
+% left to right assignment, AT&T syntax, normal :)
 
 % the different addressing modes for MOV.
+
 
 % 8 bytes limit for strings (so if longer have to split manually,
 % a bit annoying but can use data2s too)
@@ -289,6 +290,8 @@ License.
 % - external symbols = fully unresolved! will be resolved at linking time
 %   but needs to keep the name in the symbol table and the place where it
 %   was referenced
+% - use '(' xxx ')' for memory dereference. so 4(FP) really means
+%   *fp + 4 (which in C could be written  fp[4] if fp was a byte pointer.
 
 %        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
 %vs
@@ -307,6 +310,10 @@ License.
 
 %less: could simplify the code at some point and use Ocaml/Rust
 % and just marshall the ADT, and do same in linker => shorter code!
+
+% put copy paste of Object format section here?
+
+% Figure!
 
 \section{Code organization}
 
@@ -362,6 +369,7 @@ License.
 
 % Instructions are made of an opcode and operands, which can be
 % registers, immediate values, or memory addresses.
+% (actually for ARM there also a COND and some bit modifiers)
 
 \section{[[Opcode]]}
 
@@ -455,12 +463,16 @@ enum registr {
 #define	NREG		16
 @
 % used to represent NONE for the outcode reg parameter
+% but I prefer now R_NONE below.
 
 <<constant R_NONE(arm)>>=
 #define R_NONE 16
 @
 
-
+% there are also 
+% - float registers Fxxx
+% - coprocessor registers Cxxx
+% - and also the status register, PCR, and FPCR
 
 
 \section{[[Operand_kind]] and [[Gen]]}
@@ -487,9 +499,13 @@ struct	Gen
 @
 %less: =~ Adr of Linker ?
 %less: rename operand? Why gen anyway? generic?
+
 %less: rename offset? to generic_value? or generic_long?
 % but it's true in many places it's used to encode an offset to
-% a base (a reg, a name)
+% a base (a reg, a name). maybe a union would be good. like 
+% they did for Adr in the linker.
+% e.g. for D_SHIFT the long is used really to encode the whole
+% thing with some bits for the shift kind, some bits for the register, etc.
 %mimic what is in union token too
 
 <<enum operand_kind(arm)>>=
@@ -521,41 +537,26 @@ enum operand_kind {
 %   ...
 
 
-% see cinit()
-<<global nullgen>>=
-Gen	nullgen;
-@
-
-
-% usually ADD, R1, R2, R3 
-% =~ Prog of Linker (but without opcode)?
-% how encoded the whole instruction? via multiple parameters to outcode?
-% define a structure?
-
-
-
 <<[[Gen]] other fields>>=
 // option<enum<register>>, None = R_NONE
 short	reg;
 @
 % many operands are either directly a register (D_REG), or an offset
 % to a register (D_OREG), so most operands involve at least one register
+% (this make the link with the previous section also)
 
-
-<<[[Gen]] other fields>>=
-// option<name_kind>, None = N_NONE
-short	name;
+% see cinit()
+<<global nullgen>>=
+Gen	nullgen;
 @
-% not necessarality affiliated with a sym
-% rename name to name_kind? name as a field is used in many structures
-
-<<[[Gen]] other fields>>=
-// option<Sym>
-Sym*	sym;
-@
-% rename also the sym field here?
 
 
+% ok but what about an Instruction data structure?
+% usually ADD, R1, R2, R3 
+% =~ Prog of Linker (but without opcode)?
+% how encoded the whole instruction? 
+% right now it's done via multiple parameters to outcode.
+% less: define a structure?
 
 \section{[[Token]] and [[itab]]}
 
@@ -563,7 +564,6 @@ Sym*	sym;
 % see y.tab.h for token_kind enum (which are actually a set of #define
 % with also ascii char into it)
 
-% the first part is essentially for keywords
 <<token declarations(arm)>>=
 /* opcodes */
 %token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
@@ -571,8 +571,10 @@ Sym*	sym;
 %token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
 /* registers */
 %token  <lval>  LSP LSB LFP LPC
-%token  <lval>  LR LREG
-%token  <lval>  LF LFREG  LC LCREG   LPSR LFCR
+%token  <lval>  LR LREG  LPSR
+%token  <lval>  LF LFREG  LFCR 
+%token  <lval>  LC LCREG
+
 /* bits */
 %token  <lval>  LCOND
 %token  <lval>  LS LAT
@@ -590,7 +592,7 @@ Sym*	sym;
 <<union token(arm)>>=
 %union {
  //   enum<opcode>   (for LTYPEx/...) 
- // | enum<register> (for LREG/...)
+ // | enum<registr> (for LREG/...)
  // | enum<cond>     (for LCOND) 
  // ...
  // | long (for LCONST)
@@ -598,7 +600,7 @@ Sym*	sym;
 
  double dval;    // for LFCONST
  char   sval[8]; // for LSCONST
- Sym    *sym;    // for LNAME/...
+ Sym    *sym;    // for LNAME/LLAB/LVAR
 
  <<[[Token]] other fields(arm)>>
 }
@@ -624,7 +626,7 @@ struct Itab
 
     //enum<token_kind>
     ushort	type;
-    //enum<opcode> | enum<operand_kind> | enum<name_kind> | enum<registers>
+    //enum<opcode|operand_kind|name_kind|registr> | int
     ushort	value;
 };
 @
@@ -654,14 +656,18 @@ struct Itab itab[] =
 <<struct Sym>>=
 struct	Sym
 {
-    // for user labels (bar:), variables (VAR=xxx)
-    // but also used for opcodes (AMOV) registers (LR1) and keywords (see itab)
+    // symbols are used for many things:
+    //  - for labels (bar:), 
+    //  - for symbols/names (e.g. TEXT foo, or MOV foo(SB), R1)
+    //  - variables (VAR=xxx)
+    //  - but also (ab)used for opcodes (AMOV), registers (LR1) (see itab)
     char	*name;
 
-    //enum<token_kind> (e.g. LNAME, LLAB, LBREG, etc)
+    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LTYPE1, etc)
     ushort	type;
 
-    //enum<operand_kind> | enum<opcode> | long (e.g. pc for LLAB)
+    // long (e.g. pc for LLAB, or integer for LVAR) 
+    //   | enum<opcode|operand_kind|registr|...> 
     long	value; 
 
     <<[[Sym]] other fields>>
@@ -744,6 +750,7 @@ lookup(void)
 
     s->link = hash[h];
     hash[h] = s;
+
     syminit(s);
     return s;
 }
@@ -786,7 +793,13 @@ slookup(char *s)
 
 \section{[[Name_kind]]}
 
-% Assembler is outputing a symbol table in the object file.
+<<[[Gen]] other fields>>=
+// option<Sym>
+Sym*	sym;
+@
+% hmm actually maybe should rename this field 'name'
+
+% Assembler is outputing a symbol table in the object file?
 % TODO: really? symbol table? or it's just spreaded ANAME?
 % Important job of assembler is to prepare for linker, to enable
 % the linker to ... link modules together and so to resolve references 
@@ -801,6 +814,19 @@ enum name_kind {
 % this used to be with operand_kind, but they are really disjoint
 % and used only for the ANAME pseudo opcode. In 5l/ there is
 % actually a separate Dconv and Nconv (but in 8l/ they are together).
+
+<<[[Gen]] other fields>>=
+// option<name_kind>, None = N_NONE
+short	name;
+@
+%less: rename name to name_kind? name as a field is used in many structures
+%less: rename also the sym field here?
+%note that can have name_kind set but not necessarality a sym,
+% but it's in the degenerated case of con ( pointer ) which
+% I think should not happen (or should happen when don't care
+% about naming the parameter so just do  4(FP) in which
+% case sym can be seen as an anonymous symbol name.
+
 
 
 
@@ -820,9 +846,10 @@ char*	thestring;
 
 % -o
 <<global outfile>>=
-char*	outfile;
+char*	outfile = nil;
 @
-
+% hmm could be 5.out instead no? hmm no, it will be set
+% to {basename(input_file)}.{thechar} in assemble()
 
 
 
@@ -837,7 +864,6 @@ main(int argc, char *argv[])
     thestring = "arm";
 
     cinit();
-    outfile = nil;
     include[ninclude++] = ".";
 
     ARGBEGIN {
@@ -856,7 +882,6 @@ main(int argc, char *argv[])
     exits(0);
 }
 @
-% outfile = nil?
 
 <<[[main()]] command line processing>>=
 case 'o':
@@ -868,16 +893,8 @@ case 'o':
 
 
 
-% cwd, for #include "" (cwd can change as one include other files)
-%  =~ dirname(current_file)
-% less: rename? dirname_of_current_file?
-<<global pathname>>=
-char*	pathname;
-@
-
 \section{[[cinit()]]}
 
-% could split, nullgen init, hash init (via lookup), pathname init
 <<function cinit(arm)>>=
 void
 cinit(void)
@@ -885,37 +902,55 @@ cinit(void)
     Sym *s;
     int i;
 
-    nullgen.type = D_NONE;
-    nullgen.offset = 0;
-    nullgen.reg = R_NONE;
-    nullgen.sym = S;
-    nullgen.name = N_NONE;
-    if(FPCHIP)
-        nullgen.dval = 0;
-    for(i=0; i<sizeof(nullgen.sval); i++)
-        nullgen.sval[i] = 0;
-
-    for(i=0; i<NHASH; i++)
-        hash[i] = S;
-
-    for(i=0; itab[i].name; i++) {
-        s = slookup(itab[i].name);
-        s->type = itab[i].type;
-        s->value = itab[i].value;
-    }
-
-    pathname = allocn(pathname, 0, 100);
-    if(getwd(pathname, 99) == 0) {
-        pathname = allocn(pathname, 100, 900);
-        if(getwd(pathname, 999) == 0)
-            strcpy(pathname, "/???");
-    }
+    <<[[cinit()]] nullgen initialisation>>
+    <<[[cinit()]] hash initialisation from itab>>
+    <<[[cinit()]] pathname initialisation from cwd>>
 }
 @
 % used to do more initialisation here, but instead move the init
 % at the def location
 % very similar to the x86 version, except the few change for nullgen fields
 
+<<[[cinit()]] nullgen initialisation>>=
+nullgen.type = D_NONE;
+nullgen.offset = 0;
+nullgen.reg = R_NONE;
+nullgen.sym = S;
+nullgen.name = 0;
+if(FPCHIP)
+    nullgen.dval = 0;
+for(i=0; i<sizeof(nullgen.sval); i++)
+    nullgen.sval[i] = 0;
+@
+% can't use N_NONE because this function is in aa/ and N_NONE is
+% in 5a/a.h
+
+<<[[cinit()]] hash initialisation from itab>>=
+for(i=0; i<NHASH; i++)
+    hash[i] = S;
+for(i=0; itab[i].name; i++) {
+    s = slookup(itab[i].name);
+    s->type = itab[i].type;
+    s->value = itab[i].value;
+}
+@
+
+% cwd, for #include "" (cwd can change as one include other files)
+%  =~ dirname(current_file)
+% less: rename? dirname_of_current_file?
+<<global pathname>>=
+char*	pathname;
+@
+
+
+<<[[cinit()]] pathname initialisation from cwd>>=
+pathname = allocn(pathname, 0, 100);
+if(getwd(pathname, 99) == 0) {
+    pathname = allocn(pathname, 100, 900);
+    if(getwd(pathname, 999) == 0)
+        strcpy(pathname, "/???");
+}
+@
 
 \section{[[assemble()]]}
 
@@ -1046,7 +1081,7 @@ void
 cclean(void)
 {
 
-    outcode(AEND, Always, &nullgen, NREG, &nullgen);
+    outcode(AEND, Always, &nullgen, R_NONE, &nullgen);
     Bflush(&obuf);
 }
 @
@@ -1079,7 +1114,7 @@ int	peekc = IGN;
 
 
 
-% assemble -> <> (before yyparse)
+% assemble -> <> (before yyparse, in both passes)
 % call at the beginning of each pass with the file to assemble
 <<function pinit>>=
 void
@@ -1089,16 +1124,18 @@ pinit(char *f)
     Sym *s;
 
     lineno = 1;
+    pc = 0;
+
     newio();
     newfile(f, -1);
-    pc = 0;
     peekc = IGN;
 
     symcounter = 1;
     for(i=0; i<NSYM; i++) {
-        h[i].type = 0;
+        h[i].type = N_NONE;
         h[i].sym = S;
     }
+
     for(i=0; i<NHASH; i++)
         for(s = hash[i]; s != S; s = s->link)
             s->macro = nil;
@@ -2924,6 +2961,7 @@ prog:
 
 % there are some special opcodes like TEXT which don't translate
 % in binary code but are useful for ? (symbol resolving?)
+% They are called pseudo-opcodes.
 
 
 <<line rule(arm)>>=
@@ -2945,15 +2983,7 @@ line:
 
 \section{Instructions}
 
-% outcode() =~ pc++
-% take 5 arguments, opcode, cond, op1, op2, op3.
-% op2 is always a register or nothing.
-
-% similar sections than in Machine.nw
-
-% (in ARM each instruction have same length, so doing pc++ 
-%  is easy, but for variable-sized archi like x86, the assembler
-%  actually does just pc++ because the pc in 8a/ is a virtual pc)
+% similar sub sections than in Machine.nw
 
 \subsection{Arithmetic}
 
@@ -2984,7 +3014,7 @@ inst:
  */
   LTYPE1 cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
 | LTYPE1 cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
-| LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, R_NONE, &$5); }
 @
 %$
 % arith operator of Machine.nw, but also SLL, SRL,   DIV, MOD, ...
@@ -2993,6 +3023,15 @@ inst:
 % e.g. ADD 10, R1, R2 (code 3 addresses, well 3 registers).
 
 % cond will be explained also later, ARM specificities.
+
+% outcode() =~ pc++
+% take 5 arguments, opcode, cond, op1, op2, op3.
+% op2 is always a register or nothing
+
+% (in ARM each instruction have same length, so doing pc++ 
+%  is easy, but for variable-sized archi like x86, the assembler
+%  actually does just pc++ because the pc in 8a/ is a virtual pc)
+
 
 \subsubsection{Add/sub}
 
@@ -3076,7 +3115,6 @@ AMOD,
 
 \subsubsection{Mul long}
 
-
 <<mul/div/mod opcodes>>=
 AMULL,
 AMULAL,
@@ -3101,7 +3139,7 @@ AMULALU,
 | LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
 @
 %$
-
+% ugly $5.reg?
 
 % multiply and accumulate
 <<mul/div/mod opcodes>>=
@@ -3135,6 +3173,7 @@ D_REGREG,
 
 % actually ARM has load/store, but plan9 has MOV as a virtual/fake-opcode,
 % more powerful, can do e.g. MOVW R2, (R3) !
+% with the load/store of ARM it would be: LOAD R3, R4; store R2, R4 ?
 
 <<mov opcodes>>=
 AMOVW,
@@ -3164,10 +3203,10 @@ AMOVHU,
 /*
  * MOVW
  */
-| LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
 @
 % special instr? the real one accept any gen? no real one are just load/store
-%  with registers.
+% with registers.
 % gen for general?
 
 \ifallcode
@@ -3186,7 +3225,7 @@ AMVN,
 /*
  * MVN
  */
-| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
 @
 \fi
 
@@ -3221,6 +3260,7 @@ ACMP,
 <<comparison opcodes>>=
 ACMN,
 @
+% CMP negative
 <<[[itab]] elements>>=
 "CMN",		LTYPE7,	ACMN,
 @
@@ -3236,7 +3276,8 @@ ABL,
 @
 % compiler: if, while, for, switch, they all rely on the
 % very basic building block of jmp, conditional or not (goto xxx, if(yyy))
-% BL is ARM specific opti for CALL to leaf functions.
+
+% BL is ARM specific opti for CALL to leaf functions. Branch and Link.
 
 <<[[itab]] elements>>=
 "B",		LTYPE4, AB,
@@ -3248,13 +3289,13 @@ ABL,
 /*
  * B/BL
  */
-| LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, NREG, &$4); }
-| LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, NREG, &$4); }
+| LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, R_NONE, &$4); }
+| LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, R_NONE, &$4); }
 @
 
 % B of name? of TEXT or label? both?
-% in rel it's just label! so BL foo_ret_lbl (and D_BRANCH)
-% in nireg it's name so it can be BL foo+0(SB) (and D_OREG)
+% in 'rel' it's just label! so BL foo_ret_lbl (and D_BRANCH)
+% in 'nireg' it's name so it can be BL foo+0(SB) (and D_OREG)
 
 %less: comma rel? comma useful? could probably rewrite the
 % few assembly instruction that uses this bad syntax
@@ -3309,7 +3350,7 @@ ABLE,
 /*
  * BEQ/...
  */
-| LTYPE5 comma rel { outcode($1, Always, &nullgen, NREG, &$3); }
+| LTYPE5 comma rel { outcode($1, Always, &nullgen, R_NONE, &$3); }
 @
 
 
@@ -3329,8 +3370,11 @@ ARET,
 /*
  * RET
  */
-| LTYPEA cond comma { outcode($1, $2, &nullgen, NREG, &nullgen); }
+| LTYPEA cond comma { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 @
+% because of B and BL (and as we will see in 5l STEXT and SLEAF),
+% it's convenient to have a general way to return from a procedure
+% whether it was a leaf or not. The machine can handle the specifics for us!
 
 \subsection{Software interrupt}
 % software interrupt, aka syscall
@@ -3350,7 +3394,7 @@ ASWI, // syscall
 /*
  * SWI
  */
-| LTYPE6 cond comma gen { outcode($1, $2, &nullgen, NREG, &$4); }
+| LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
 @
 %$
 
@@ -3427,7 +3471,7 @@ cond:
 <<constant Always(arm)>>=
 #define    Always 14
 @
-
+%less: use COND_ALWAYS now?
 
 \section{Special bits}
 % sign? long? p bit, w bit, ???
@@ -3442,6 +3486,7 @@ cond:
 ".W",		LS,	C_WBIT,
 ".P",		LS,	C_PBIT,
 @
+% .S can be used for arithmetic operations, to set condition code
 
 <<constant C_SBIT(arm)>>=
 #define	C_SBIT	(1<<4)
@@ -3472,12 +3517,17 @@ cond:
 ".IAW",		LS,	C_WBIT|C_UBIT,
 ".DBW",		LS,	C_WBIT|C_PBIT,
 ".DAW",		LS,	C_WBIT,
+
 ".IB",		LS,	C_PBIT|C_UBIT,
 ".IA",		LS,	C_UBIT,
 ".DB",		LS,	C_PBIT,
 ".DA",		LS,	0,
 @
 % some seems redundant like .DB and .P, .U and .IA, etc
+
+% see asm.ps ARM section: "addressing modes are supported by suffixes
+% of the instruction, IA = increment after, IB = increment before, ..."
+% it can be used only with the MOV instruction
 
 <<constant C_FBIT(arm)>>=
 #define	C_FBIT	(1<<7)	/* psr flags-only */
@@ -3495,7 +3545,7 @@ cond:
 <<[[Token]] other fields(arm)>>=
 Gen    gen;
 @
-% hmmm maybe confusing to have gen field and and type and gen grammar rule?
+% hmmm maybe confusing to have gen field and Gen type and gen grammar rule?
 
 % reg = register
 % imm = immediate
@@ -3507,13 +3557,13 @@ Gen    gen;
 %type   <gen> imsr
 @
 
+% e.g. for first operand of ADD
 <<operand rules(arm)>>=
 imsr:
   reg
 | imm
 | shift
 @
-
 
 <<type declarations(arm)>>=
 %type   <gen> reg imm shift
@@ -3526,7 +3576,7 @@ imsr:
 <<operand_kind cases>>=
 D_REG,
 @
-% works with Gen structure
+% works with Gen structure, as shown below
 
 <<operand rules(arm)>>=
 reg:
@@ -3539,7 +3589,7 @@ reg:
 @
 %$
 
-
+% lval but really enum<registr>
 <<type declarations(arm)>>=
 %type   <lval>  sreg spreg 
 @
@@ -3566,7 +3616,8 @@ spreg:
 | LSP { $$ = REGSP; }
 @
 %$
-
+% why another one again? in which context we don't accept LSP?
+% and also in which context we don't accept LPC?
 
 <<[[itab]] elements>>=
 "R0",		LREG,	0,
@@ -3613,7 +3664,7 @@ imm: '$' con
   $$.offset = $2;
  }
 @
-% offset is bad field name
+% offset is bad field name. maybe a union with value would be nice.
 
 % see con section below, essentially static-time integer constants
 % (not float, not string)
@@ -3682,7 +3733,7 @@ rcon:
   $$ = ($1&31) << 7;
  }
 @
-
+% really does too much work here and close to ARM concrete bits
 
 \subsection{Memory (de)references, pointers}
 % was "Memory references"
@@ -3727,9 +3778,9 @@ gen:
 | ximm
 | shift
 @
-% so close to imsr
+% so close to imsr. close except ximm instead of imm (extended immediate).
+% see below.
 
-% close except ximm instead of imm (extended immediate)
 <<type declarations(arm)>>=
 %type   <gen>   ximm
 @
@@ -3777,7 +3828,8 @@ ioreg:
 @
 
 
-% ireg? indirect reg?
+% ireg? indirect reg? 
+% used from ioreg (and so gen), and also specifically from SWAP
 <<misc rules>>=
 ireg:
  '(' spreg ')'
@@ -3861,26 +3913,23 @@ nireg:
 
 
 
-\subsection{Named memory}
+\subsection{Named memory location}
 % (different from labels, which are just for code refs)
 
 <<type declarations(arm)>>=
 %type   <gen>   name 
 %type   <lval>  pointer
 @
+% name is an operand argument for BL (via nireg), but also
+% for TEXT, and also for MOV (via oreg)
 
-% well first entry is not really a name ...
 <<operand rules(arm)>>=
+<<name rule>>
+@
+
+<<name rule>>=
 name:
- con '(' pointer ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.name = $3;
-  $$.sym = S;
-  $$.offset = $1;
- }
-| LNAME offset '(' pointer ')'
+  LNAME offset '(' pointer ')'
  {
   $$ = nullgen;
   $$.type = D_OREG;
@@ -3888,22 +3937,15 @@ name:
   $$.sym = $1;
   $$.offset = $2;
  }
-| LNAME '<' '>' offset '(' LSB ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.name = D_STATIC;
-  $$.sym = $1;
-  $$.offset = $4;
- }
 @
 %$
+
 % for TEXT foo(SB), ... or GLOBL. Definitions of names.
 % and also for references to names, like MOV count(SB), R1
-% (to get address of count?)
+% (to get address of count? no, to get address you need $count(SB))
 % no LLAB here!
 
-% abused also in definitions of parameter, as in
+% (ab)used also in reference to parameters, as in
 % MOVL    count+8(FP), CX
 % the LNAME here is really just a symbol for debugging help
 
@@ -3928,19 +3970,47 @@ pointer:
 @
 
 
-
 % can do 
-%	BL	div<>(SB)  so it's SB but it's really a code reference
+%	BL	div(SB)  so it's SB but it's really a code reference
 
-% hmm but it's actually not for type? it's for name field!
 <<name_kind cases>>=
 D_EXTERN, // data/bss values (from SB)
-D_STATIC, // data static variables (from SB)
 D_AUTO,   // stack values (from SP)
 D_PARAM,  // parameter (from FP)
 @
 % use A_EXTERN? or N_EXTERN?
 %/* name */ for D_EXTERN
+
+
+<<name rule>>=
+| LNAME '<' '>' offset '(' LSB ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.name = D_STATIC;
+  $$.sym = $1;
+  $$.offset = $4;
+ }
+@
+%$
+
+<<name_kind cases>>=
+D_STATIC, // data static variables (from SB)
+@
+
+% well this is not really a name ...
+<<name rule>>=
+| con '(' pointer ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.name = $3;
+  $$.sym = S;
+  $$.offset = $1;
+ }
+@
+%$
+% could delete that too? hmm no, it's for anonymous params like 4(FP)
 
 \subsection{Code references and labels}
 % hmm con(PC) is not really named code
@@ -3961,26 +4031,39 @@ D_BRANCH,
 %type   <lval>  offset
 @
 
-% for code (rel = ? relocatable?), argument of B/BL
-% hmm not it's more rel for relative! because it's labels which
+% for code (rel = ? relocatable? nope relative!), argument of B/BL
+% Relative because it's labels which
 % are locals to a file and can be resolved locally (no need symbols)
 % (but the offset value is actually not relative to the current PC,
 % it's an absolute value)
 <<operand rules(arm)>>=
+<<rel rule>>
+@
+
+<<rel rule>>=
 rel:
-  con '(' LPC ')'
- {
-  $$ = nullgen;
-  $$.type = D_BRANCH;
-  $$.offset = $1 + pc;
- }
-| LLAB offset
+  LLAB offset
  {
   $$ = nullgen;
   $$.type = D_BRANCH;
   $$.sym = $1;
   $$.offset = $1->value + $2;
  }
+@
+%$
+
+<<helper rules(arm)>>=
+offset:
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
+@
+%$
+%less: rename offset_opt?
+
+
+
+<<rel rule>>=
 | LNAME offset
  {
   $$ = nullgen;
@@ -3994,13 +4077,19 @@ rel:
 % if pass == 1 why care about setting the field values?
 % anyway outcode will not use the value
 
-<<helper rules(arm)>>=
-offset:
- /* empty */ { $$ = 0; }
-| '+' con    { $$ = $2; }
-| '-' con    { $$ = -$2; }
+
+% need that? we have code using relative jmp?
+<<rel rule>>=
+|  con '(' LPC ')'
+ {
+  $$ = nullgen;
+  $$.type = D_BRANCH;
+  $$.offset = $1 + pc;
+ }
 @
 %$
+
+
 
 \subsection{Status register}
 
@@ -4015,7 +4104,8 @@ offset:
 <<operand_kind cases>>=
 D_PSR,
 @
-% similar to D_REG really, just with special register
+% similar to D_REG really, just with special register, so reg field
+% is enum<registr> | enum<status_registr>
 
 <<gen rule>>=
 | LPSR
@@ -4062,6 +4152,12 @@ D_OCONST,
   $$ = $2;
   $$.type = D_CONST;
  }
+@
+% could simplify to $name? maybe could be better to have
+% a special D_ADDR? instead of abusing D_CONST?
+% it's to get the address of name?
+
+<<ximm rule>>=
 | '$' '*' '$' oreg
  {
   $$ = $4;
@@ -4112,6 +4208,9 @@ long	pc;
   $1->value = pc;
  }
   line
+@
+
+<<line rule(arm)>>=
 | LLAB ':'
  {
   if($1->value != pc)
@@ -4130,6 +4229,8 @@ long	pc;
 
 \subsection{[[TEXT/GLOBL]]}
 
+% declare symbols, names
+
 <<pseudo opcodes>>=
 ATEXT,
 AGLOBL,
@@ -4144,12 +4245,16 @@ AGLOBL,
 /*
  * TEXT/GLOBL
  */
-| LTYPEB name ',' imm         { outcode($1, Always, &$2, NREG, &$4); }
+| LTYPEB name ',' imm         { outcode($1, Always, &$2, R_NONE, &$4); }
 | LTYPEB name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
 @
 %$
 
-% TEXT foo, 4, $4 ???
+% TEXT is for procedures, code symbols, that will go in the TEXT section
+% GLOBL is to declare data symbols (globals indeed), that will go in DATA sect
+
+% TEXT foo, 4, $4 ??? semantic for those immediate value? to? size
+% of entity in the case of GLOBL?
 
 % if look qemu.root.s from data2c result:
 % e.g. 
@@ -4157,8 +4262,8 @@ AGLOBL,
 % ...
 % DATA boot_CONF_outcode+67520(SB)/8, $"\1\201\1\z\z\z\z\z"
 % GLOBL boot_CONF_outcode+0(SB), $67528
-% GLOBL boot_CONF_outlen+0(SB), $4
 % DATA boot_CONF_outlen+0(SB)/4, $67523
+% GLOBL boot_CONF_outlen+0(SB), $4
 
 \subsection{[[DATA/WORD]]}
 
@@ -4180,15 +4285,17 @@ AWORD,
 @
 
 % DATA boot_CONF_outlen+0(SB)/4, $67523
+% DATA boot_CONF_outcode+0(SB)/8, $"\z\z\1\353\z\z\213\33"
 % hmm abuse reg for this constant, ugly
 
 <<inst rule(arm)>>=
 /*
  * WORD
  */
-| LTYPEH comma ximm { outcode($1, Always, &nullgen, NREG, &$3); }
+| LTYPEH comma ximm { outcode($1, Always, &nullgen, R_NONE, &$3); }
 @
-% kind of anonymous DATA
+% kind of anonymous DATA? but used in TEXT so can
+% write binary data that cannot be expressed by the assembler?
 
 
 
@@ -4206,7 +4313,7 @@ AEND,
 /*
  * END
  */
-| LTYPEE comma { outcode($1, Always, &nullgen, NREG, &nullgen); }
+| LTYPEE comma { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
 @
 %$
 % also generated in cclean()
@@ -4317,13 +4424,36 @@ oexpr:
 
 \chapter{Object Generation}
 
-% it's not machine code generation ... 5l/optab.c does this
-% Note also that we output relocatable code! so need to 
-% output a symbol table! 'U'
+% it's not machine code generation ... 5l/optab.c does this.
+% Note also that we must output code that can be relocated! so need to 
+% output information about symbols! 'U'
+
+\section{Object format}
+
+% The format is very regular, essentially a list of instructions
+% where each instruction is encoded as:
+%  - opcode (1 byte)
+%  - condition (1 byte)
+%  - register (1 byte)
+%  - line  (4 bytes)
+%  - operand1, 
+%  - operand2
+%  where the operands depending on the operand_kind can actually have
+%  different size.
+%TODO: figure!!
+
+% some opcodes have a specialized format,
+% ANAME: ??
+% AHISTORY: ??
+
+% the header is really just a set of ANAME and AHISTORY.
+
+% 5l then read back this format in a simple loop reading one
+% instruction at a time
 
 \section{Object header, [[outhist()]]}
 
-% It looks like outhist generate some header information.
+% It looks like outhist() generate some header information.
 % Where is the spec of the format? 5l uses that I guess no?
 
 % main -> assemble -> outhist (at begining of pass 2)
@@ -4383,7 +4513,7 @@ outhist(void)
             }
             if(n) {
                 Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */
+                Bputc(&obuf, D_FILE);	/* type */ // name_kind
                 Bputc(&obuf, 1);	/* sym */
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);
@@ -4449,7 +4579,8 @@ out:
 }
 @
 % skip pc++ for AGLOBL and ADATA because those pseudo ops concern
-% the Data section, not the Text section
+% the DATA section, not the TEXT section.
+% WORD is for the TEXT section too!
 
 
 %\section{[[zaddr()]]}
@@ -4467,13 +4598,14 @@ zaddr(Gen *a, int s)
     char *n;
     Ieee e;
 
-    // Operand format, the operand kind first!
+    // operand format, the operand kind first!
     Bputc(&obuf, a->type);
+
     Bputc(&obuf, a->reg);
 
-    // idx in symbol table?
+    // idx in symbol table, 0 if no symbol involved in the operand
     Bputc(&obuf, s);
-    // idx in symbol table?
+    // name kind of symbol
     Bputc(&obuf, a->name);
 
     switch(a->type) {
@@ -4493,10 +4625,6 @@ case D_REG:
 case D_PSR:
     break;
 
-case D_REGREG:
-    Bputc(&obuf, a->offset);
-    break;
-
 case D_CONST:
 case D_OREG:
 case D_BRANCH:
@@ -4508,6 +4636,10 @@ case D_SHIFT:
     Bputc(&obuf, l>>24);
     break;
 
+case D_REGREG:
+    Bputc(&obuf, a->offset);
+    break;
+
 case D_SCONST:
     n = a->sval;
     for(i=0; i<NSNAME; i++) {
@@ -4516,13 +4648,6 @@ case D_SCONST:
     }
     break;
 @
-
-
-
-
-
-
-
 
 
 
@@ -4561,10 +4686,8 @@ static int bcode[] =
 @
 
 
-
-
-
 \section{Symbol table, [[h]] and [[sym]]}
+% put in Core DS? h is reset in pinit() and it seems important
 
 % when an instruction involves a symbol
 % the generated code contain an int that is an index
@@ -4583,7 +4706,9 @@ struct Htab
     short	type;
 };
 @
-%todo: rename namekind? avoid confusion with Gen.type?
+%todo: rename type to namekind? avoid confusion with Gen.type?
+% it's a subset of Sym but just for the symbols? (and an array
+% insteaf of a hash?)
 
 <<constant NSYM>>=
 #define	NSYM	50
@@ -4598,6 +4723,7 @@ struct Htab
 // array<ref<Sym>>
 struct Htab h[NSYM];
 @
+% why call it h when really it's an array ...
 
 
 % next free entry in h (actually can be reseted to 1)
@@ -4635,6 +4761,7 @@ Sym *s;
 
 
 % TODO LP split and transform while into if, easier flow
+% and also can maybe factorize code?
 <<[[outcode()]] st and sf computation>>=
 jackpot:
 sf = 0;
@@ -4754,7 +4881,7 @@ zname(char *n, int t, int s)
    (($11 & 15) << 0) |  /* Crm */
    (($12 & 7) << 5) |   /* coprocessor information */
    (1<<4);          /* must be set */ // opcode component
-  outcode(AWORD, Always, &nullgen, NREG, &g);
+  outcode(AWORD, Always, &nullgen, R_NONE, &g);
  }
 @
 % >> >> >> >> >> >> >> >> >> >>
@@ -4932,8 +5059,8 @@ ASQRTD,
 /*
  * floating-point coprocessor
  */
-| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, NREG, &$5); }
-| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, NREG, &$5); }
+| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 | LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
 | LTYPEL cond freg ',' freg comma { outcode($1, $2, &$3, $5.reg, &nullgen); }
 @
@@ -5101,7 +5228,7 @@ AMOVM,
   g = nullgen;
   g.type = D_CONST;
   g.offset = $6;
-  outcode($1, $2, &$3, NREG, &g);
+  outcode($1, $2, &$3, R_NONE, &g);
  }
 | LTYPE8 cond '[' reglist ']' ',' ioreg
  {
@@ -5110,7 +5237,7 @@ AMOVM,
   g = nullgen;
   g.type = D_CONST;
   g.offset = $4;
-  outcode($1, $2, &g, NREG, &$7);
+  outcode($1, $2, &g, R_NONE, &$7);
  }
 @
 
@@ -5150,7 +5277,7 @@ reglist:
 %/*
 % * BX
 % */
-%| LTYPEBX comma ireg { outcode($1, Always, &nullgen, NREG, &$3); }
+%| LTYPEBX comma ireg { outcode($1, Always, &nullgen, R_NONE, &$3); }
 %@
 
 %dead: ADWORD, // ? no reading syntax
@@ -5203,7 +5330,7 @@ ABCASE,
 %/*
 % * CASE
 % */
-%| LTYPED cond reg comma { outcode($1, $2, &$3, NREG, &nullgen); }
+%| LTYPED cond reg comma { outcode($1, $2, &$3, R_NONE, &nullgen); }
 %@
 %$
 

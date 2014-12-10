@@ -187,6 +187,7 @@ lookup(void)
 
     s->link = hash[h];
     hash[h] = s;
+
     syminit(s);
     return s;
 }
@@ -554,16 +555,18 @@ pinit(char *f)
     Sym *s;
 
     lineno = 1;
+    pc = 0;
+
     newio();
     newfile(f, -1);
-    pc = 0;
     peekc = IGN;
 
     symcounter = 1;
     for(i=0; i<NSYM; i++) {
-        h[i].type = 0;
+        h[i].type = N_NONE;
         h[i].sym = S;
     }
+
     for(i=0; i<NHASH; i++)
         for(s = hash[i]; s != S; s = s->link)
             s->macro = nil;

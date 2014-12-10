@@ -58,14 +58,18 @@ typedef	struct	Hist Hist;
 /*s: struct Sym */
 struct	Sym
 {
-    // for user labels (bar:), variables (VAR=xxx)
-    // but also used for opcodes (AMOV) registers (LR1) and keywords (see itab)
+    // symbols are used for many things:
+    //  - for labels (bar:), 
+    //  - for symbols/names (e.g. TEXT foo, or MOV foo(SB), R1)
+    //  - variables (VAR=xxx)
+    //  - but also (ab)used for opcodes (AMOV), registers (LR1) (see itab)
     char	*name;
 
-    //enum<token_kind> (e.g. LNAME, LLAB, LBREG, etc)
+    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LTYPE1, etc)
     ushort	type;
 
-    //enum<operand_kind> | enum<opcode> | long (e.g. pc for LLAB)
+    // long (e.g. pc for LLAB, or integer for LVAR) 
+    //   | enum<opcode|operand_kind|registr|...> 
     long	value; 
 
     /*s: [[Sym]] other fields */

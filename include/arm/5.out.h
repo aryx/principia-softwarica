@@ -84,9 +84,11 @@ enum opcode
     ADIVU,
     AMODU,
     /*e: mul/div/mod opcodes */
-    // ----------------------------------------------------------------------
-    // Comparison opcodes
-    // ----------------------------------------------------------------------
+    /*s: bitshift opcodes */
+    ASRL,
+    ASRA,
+    ASLL,
+    /*e: bitshift opcodes */
     /*s: comparison opcodes */
     ATST,
     ATEQ,
@@ -94,12 +96,6 @@ enum opcode
     /*x: comparison opcodes */
     ACMN,
     /*e: comparison opcodes */
-    /*s: bitshift opcodes */
-    ASRL,
-    ASRA,
-    ASLL,
-    /*e: bitshift opcodes */
-
     // ----------------------------------------------------------------------
     // Branching opcodes
     // ----------------------------------------------------------------------
@@ -132,7 +128,6 @@ enum opcode
     /*x: branching opcodes */
     ARET,
     /*e: branching opcodes */
-
     // ----------------------------------------------------------------------
     // Memory MOV opcodes
     // ----------------------------------------------------------------------
@@ -152,14 +147,12 @@ enum opcode
     ASWPW,
     ASWPBU,
     /*e: swap opcodes */
-
     // ----------------------------------------------------------------------
     // Syscall
     // ----------------------------------------------------------------------
     /*s: interrupt opcodes */
     ASWI, // syscall
     /*e: interrupt opcodes */
-
     // ----------------------------------------------------------------------
     // Float opcodes
     // ----------------------------------------------------------------------
@@ -259,9 +252,10 @@ enum name_kind {
    N_NONE,
    /*s: name_kind cases */
    D_EXTERN, // data/bss values (from SB)
-   D_STATIC, // data static variables (from SB)
    D_AUTO,   // stack values (from SP)
    D_PARAM,  // parameter (from FP)
+   /*x: name_kind cases */
+   D_STATIC, // data static variables (from SB)
    /*x: name_kind cases */
    D_FILE,
    /*x: name_kind cases */

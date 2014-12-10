@@ -25,7 +25,6 @@ main(int argc, char *argv[])
     thestring = "arm";
 
     cinit();
-    outfile = nil;
     include[ninclude++] = ".";
 
     ARGBEGIN {
@@ -205,7 +204,7 @@ struct Itab
 
     //enum<token_kind>
     ushort	type;
-    //enum<opcode> | enum<operand_kind> | enum<name_kind> | enum<registers>
+    //enum<opcode|operand_kind|name_kind|registr> | int
     ushort	value;
 };
 /*e: struct Itab(arm) */
@@ -315,6 +314,7 @@ struct Itab itab[] =
     ".IAW",		LS,	C_WBIT|C_UBIT,
     ".DBW",		LS,	C_WBIT|C_PBIT,
     ".DAW",		LS,	C_WBIT,
+
     ".IB",		LS,	C_PBIT|C_UBIT,
     ".IA",		LS,	C_UBIT,
     ".DB",		LS,	C_PBIT,
@@ -441,31 +441,34 @@ cinit(void)
     Sym *s;
     int i;
 
+    /*s: [[cinit()]] nullgen initialisation */
     nullgen.type = D_NONE;
     nullgen.offset = 0;
     nullgen.reg = R_NONE;
     nullgen.sym = S;
-    nullgen.name = N_NONE;
+    nullgen.name = 0;
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
         nullgen.sval[i] = 0;
-
+    /*e: [[cinit()]] nullgen initialisation */
+    /*s: [[cinit()]] hash initialisation from itab */
     for(i=0; i<NHASH; i++)
         hash[i] = S;
-
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
         s->type = itab[i].type;
         s->value = itab[i].value;
     }
-
+    /*e: [[cinit()]] hash initialisation from itab */
+    /*s: [[cinit()]] pathname initialisation from cwd */
     pathname = allocn(pathname, 0, 100);
     if(getwd(pathname, 99) == 0) {
         pathname = allocn(pathname, 100, 900);
         if(getwd(pathname, 999) == 0)
             strcpy(pathname, "/???");
     }
+    /*e: [[cinit()]] pathname initialisation from cwd */
 }
 /*e: function cinit(arm) */
 
@@ -484,7 +487,7 @@ void
 cclean(void)
 {
 
-    outcode(AEND, Always, &nullgen, NREG, &nullgen);
+    outcode(AEND, Always, &nullgen, R_NONE, &nullgen);
     Bflush(&obuf);
 }
 /*e: function cclean(arm) */
@@ -514,13 +517,14 @@ zaddr(Gen *a, int s)
     char *n;
     Ieee e;
 
-    // Operand format, the operand kind first!
+    // operand format, the operand kind first!
     Bputc(&obuf, a->type);
+
     Bputc(&obuf, a->reg);
 
-    // idx in symbol table?
+    // idx in symbol table, 0 if no symbol involved in the operand
     Bputc(&obuf, s);
-    // idx in symbol table?
+    // name kind of symbol
     Bputc(&obuf, a->name);
 
     switch(a->type) {
@@ -528,10 +532,6 @@ zaddr(Gen *a, int s)
     case D_NONE:
     case D_REG:
     case D_PSR:
-        break;
-
-    case D_REGREG:
-        Bputc(&obuf, a->offset);
         break;
 
     case D_CONST:
@@ -543,6 +543,10 @@ zaddr(Gen *a, int s)
         Bputc(&obuf, l>>8);
         Bputc(&obuf, l>>16);
         Bputc(&obuf, l>>24);
+        break;
+
+    case D_REGREG:
+        Bputc(&obuf, a->offset);
         break;
 
     case D_SCONST:
@@ -734,7 +738,7 @@ outhist(void)
             }
             if(n) {
                 Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */
+                Bputc(&obuf, D_FILE);	/* type */ // name_kind
                 Bputc(&obuf, 1);	/* sym */
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);

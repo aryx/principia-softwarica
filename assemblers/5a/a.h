@@ -25,11 +25,11 @@ struct	Gen
     // option<enum<register>>, None = R_NONE
     short	reg;
     /*x: [[Gen]] other fields */
-    // option<name_kind>, None = N_NONE
-    short	name;
-    /*x: [[Gen]] other fields */
     // option<Sym>
     Sym*	sym;
+    /*x: [[Gen]] other fields */
+    // option<name_kind>, None = N_NONE
+    short	name;
     /*e: [[Gen]] other fields */
 };
 /*e: struct Gen(arm) */
