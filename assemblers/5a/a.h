@@ -18,17 +18,18 @@ struct	Gen
     // enum<operand_kind>
     short	type;
 
-    long	offset; // generic value
+    long	offset; // offset or generic value
     double	dval;
     char	sval[8];
     /*s: [[Gen]] other fields */
-    // option<enum<register>> where None is done via NREG
-    short	reg; // ??
-
-    // option<Sym>, for debubbing purpose?
-    Sym*	sym;
-    // option<name_kind> None = N_NONE
+    // option<enum<register>>, None = R_NONE
+    short	reg;
+    /*x: [[Gen]] other fields */
+    // option<name_kind>, None = N_NONE
     short	name;
+    /*x: [[Gen]] other fields */
+    // option<Sym>
+    Sym*	sym;
     /*e: [[Gen]] other fields */
 };
 /*e: struct Gen(arm) */

@@ -443,9 +443,9 @@ cinit(void)
 
     nullgen.type = D_NONE;
     nullgen.offset = 0;
+    nullgen.reg = R_NONE;
     nullgen.sym = S;
     nullgen.name = N_NONE;
-    nullgen.reg = NREG;
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
@@ -453,6 +453,7 @@ cinit(void)
 
     for(i=0; i<NHASH; i++)
         hash[i] = S;
+
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
         s->type = itab[i].type;
@@ -516,6 +517,7 @@ zaddr(Gen *a, int s)
     // Operand format, the operand kind first!
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
+
     // idx in symbol table?
     Bputc(&obuf, s);
     // idx in symbol table?
@@ -601,6 +603,7 @@ static int bcode[] =
 void
 outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
 {
+    /*s: [[outcode()]] locals */
     // symbol from, index in h[]
     int sf;
     // symbol to, index in h[]
@@ -608,6 +611,7 @@ outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
     // enum<name_kind>???
     int t;
     Sym *s;
+    /*e: [[outcode()]] locals */
 
     /*s: [[outcode()]] adjust a and scond when a is AB */
     /* hack to make B.NE etc. work: turn it into the corresponding conditional*/
@@ -620,7 +624,8 @@ outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
     if(pass == 1)
         goto out;
 
-jackpot:
+    /*s: [[outcode()]] st and sf computation */
+    jackpot:
     sf = 0;
     s = g1->sym;
 
@@ -676,6 +681,7 @@ jackpot:
             goto jackpot;
         break;
     }
+    /*e: [[outcode()]] st and sf computation */
 
     // Instruction serialized format: opcode, cond, optional reg, line, operands
     Bputc(&obuf, a);

@@ -60,15 +60,15 @@
 /*x: type declarations(arm) */
 %type   <gen>   gen 
 /*x: type declarations(arm) */
-%type   <gen> oreg ireg nireg ioreg 
+%type   <gen>   ximm
+/*x: type declarations(arm) */
+%type   <gen> oreg ioreg ireg nireg 
 /*x: type declarations(arm) */
 %type   <gen>   name 
 %type   <lval>  pointer
 /*x: type declarations(arm) */
 %type   <gen>   rel
 %type   <lval>  offset
-/*x: type declarations(arm) */
-%type   <gen>   ximm
 /*x: type declarations(arm) */
 %type   <gen>   regreg
 /*x: type declarations(arm) */
@@ -368,6 +368,36 @@ gen:
  }
 /*e: gen rule */
 /*x: operand rules(arm) */
+/*s: ximm rule */
+ximm:
+  '$' con
+ {
+  $$ = nullgen;
+  $$.type = D_CONST;
+  $$.offset = $2;
+ }
+/*x: ximm rule */
+| '$' LSCONST
+ {
+  $$ = nullgen;
+  $$.type = D_SCONST;
+  memcpy($$.sval, $2, sizeof($$.sval));
+ }
+/*x: ximm rule */
+| '$' oreg
+ {
+  $$ = $2;
+  $$.type = D_CONST;
+ }
+| '$' '*' '$' oreg
+ {
+  $$ = $4;
+  $$.type = D_OCONST;
+ }
+/*x: ximm rule */
+| fcon
+/*e: ximm rule */
+/*x: operand rules(arm) */
 name:
  con '(' pointer ')'
  {
@@ -417,35 +447,6 @@ rel:
   $$.sym = $1;
   $$.offset = $2;
  }
-/*x: operand rules(arm) */
-/*s: ximm rule */
-ximm:
-  '$' con
- {
-  $$ = nullgen;
-  $$.type = D_CONST;
-  $$.offset = $2;
- }
-| '$' LSCONST
- {
-  $$ = nullgen;
-  $$.type = D_SCONST;
-  memcpy($$.sval, $2, sizeof($$.sval));
- }
-/*x: ximm rule */
-| '$' oreg
- {
-  $$ = $2;
-  $$.type = D_CONST;
- }
-| '$' '*' '$' oreg
- {
-  $$ = $4;
-  $$.type = D_OCONST;
- }
-/*x: ximm rule */
-| fcon
-/*e: ximm rule */
 /*x: operand rules(arm) */
 /* for MULL */
 regreg:
@@ -549,15 +550,19 @@ oexpr:
 | ',' expr    { $$ = $2; }
 /*e: opt rules */
 /*s: misc rules */
+/*s: oreg rule */
 oreg:
-  name
+  ioreg
+/*x: oreg rule */
+| name
+/*x: oreg rule */
 | name '(' sreg ')'
  {
   $$ = $1;
   $$.type = D_OREG;
   $$.reg = $3;
  }
-| ioreg
+/*e: oreg rule */
 /*x: misc rules */
 ioreg:
   ireg

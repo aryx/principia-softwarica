@@ -437,8 +437,10 @@ enum registr {
 #define	NREG		16
 @
 % used to represent NONE for the outcode reg parameter
-%less: #define R_NONE NREG ?
 
+<<constant R_NONE(arm)>>=
+#define R_NONE 16
+@
 
 
 
@@ -459,7 +461,7 @@ struct	Gen
     // enum<operand_kind>
     short	type;
 
-    long	offset; // generic value
+    long	offset; // offset or generic value
     double	dval;
     char	sval[8];
     <<[[Gen]] other fields>>
@@ -514,17 +516,25 @@ Gen	nullgen;
 
 
 
-%XXXXXXX LP distribute
 <<[[Gen]] other fields>>=
-// option<enum<register>> where None is done via NREG
-short	reg; // ??
+// option<enum<register>>, None = R_NONE
+short	reg;
+@
+% many operands are either directly a register (D_REG), or an offset
+% to a register (D_OREG), so most operands involve at least one register
 
-// option<Sym>, for debubbing purpose?
-Sym*	sym;
-// option<name_kind> None = N_NONE
+
+<<[[Gen]] other fields>>=
+// option<name_kind>, None = N_NONE
 short	name;
 @
+% not necessarality affiliated with a sym
 % rename name to name_kind? name as a field is used in many structures
+
+<<[[Gen]] other fields>>=
+// option<Sym>
+Sym*	sym;
+@
 % rename also the sym field here?
 
 
@@ -759,6 +769,7 @@ slookup(char *s)
 \section{[[Name_kind]]}
 
 % Assembler is outputing a symbol table in the object file.
+% TODO: really? symbol table? or it's just spreaded ANAME?
 % Important job of assembler is to prepare for linker, to enable
 % the linker to ... link modules together and so to resolve references 
 % to external symbols.
@@ -858,9 +869,9 @@ cinit(void)
 
     nullgen.type = D_NONE;
     nullgen.offset = 0;
+    nullgen.reg = R_NONE;
     nullgen.sym = S;
     nullgen.name = N_NONE;
-    nullgen.reg = NREG;
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
@@ -868,6 +879,7 @@ cinit(void)
 
     for(i=0; i<NHASH; i++)
         hash[i] = S;
+
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
         s->type = itab[i].type;
@@ -1020,7 +1032,9 @@ cclean(void)
     Bflush(&obuf);
 }
 @
-% need AEND?
+% need AEND? yes, the linker wants an AEND, and I think
+% when use a library, can have multiple objects concatenated
+% in which case AEND is a marker for the end of an object.
 
 \chapter{Input}
 
@@ -4529,8 +4543,10 @@ static int bcode[] =
 
 % when an instruction involves a symbol
 % the generated code contain an int that is an index
-% in a symbol table! to be relocated by 5l later when
-% the actual symbol is found and has a concrete address.
+% in a symbol table! 
+
+% to be relocated by 5l later when the actual symbol is found and
+% has a concrete address.
 
 
 <<struct Htab>>=
@@ -4538,10 +4554,11 @@ struct Htab
 {
     // ref<Sym>
     Sym*	sym;
-    //enum<operand_kind>?
+    //enum<name_kind>
     short	type;
 };
 @
+%todo: rename namekind? avoid confusion with Gen.type?
 
 <<constant NSYM>>=
 #define	NSYM	50
@@ -4577,6 +4594,8 @@ char	symidx;
 
 
 \section{[[ANAME]]}
+% I think each time an instruction reference a symbol, an ANAME
+% is output
 
 <<pseudo opcodes>>=
 ANAME,
@@ -4675,7 +4694,8 @@ zname(char *n, int t, int s)
 }
 @
 
-
+% when output the actual symbol table? zname output indexes
+% in h!
 
 
 

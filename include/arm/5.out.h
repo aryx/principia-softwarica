@@ -23,7 +23,9 @@ enum registr {
 /*s: constant NREG(arm) */
 #define	NREG		16
 /*e: constant NREG(arm) */
+/*s: constant R_NONE(arm) */
 #define R_NONE 16
+/*e: constant R_NONE(arm) */
 
 /*s: constant NFREG(arm) */
 #define	NFREG		8
@@ -180,9 +182,9 @@ enum opcode
     /*x: pseudo opcodes */
     AEND,
     /*x: pseudo opcodes */
-    ANAME,
-    /*x: pseudo opcodes */
     AHISTORY,
+    /*x: pseudo opcodes */
+    ANAME,
     /*x: pseudo opcodes */
     ACASE,
     ABCASE,
