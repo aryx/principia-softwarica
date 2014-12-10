@@ -38,7 +38,7 @@ main(int argc, char *argv[])
         exits("write error");
     }
 
-    exits((char *)0);
+    exits((char *)nil);
 }
 /*e: function main */
 /*e: misc/echo.c */

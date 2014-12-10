@@ -382,6 +382,7 @@ Execute(word *args, word *path)
                 // The actual exec() system call!
                 exec(file, argv+1);
 
+                // should not be reached!
                 rerrstr(errstr, sizeof errstr);
                 /*
                  * if file exists and is executable, exec should
@@ -399,6 +400,7 @@ Execute(word *args, word *path)
             else werrstr("command name too long");
         }
     }
+    // should not be reached if found an actual binary to exec
     pfmt(err, "%s: %s\n", argv[1], errstr);
     efree((char *)argv);
 }
@@ -664,7 +666,7 @@ Noerror(void)
 
 /*s: function Isatty */
 bool
-Isatty(int fd)
+Isatty(fdt fd)
 {
     char buf[64];
 

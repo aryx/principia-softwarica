@@ -96,7 +96,7 @@ Xsimple(void)
 }
 /*e: function Xsimple */
 /*s: global nullpath */
-struct Word nullpath = { "", 0};
+struct Word nullpath = { "", nil};
 /*e: global nullpath */
 
 /*s: function doredir */
@@ -128,11 +128,12 @@ word*
 searchpath(char *w)
 {
     word *path;
+
     if(strncmp(w, "/", 1)==0
     || strncmp(w, "#", 1)==0
     || strncmp(w, "./", 2)==0
     || strncmp(w, "../", 3)==0
-    || (path = vlook("path")->val)==0)
+    || (path = vlook("path")->val)==nil)
         path=&nullpath;
     return path;
 }
@@ -149,6 +150,7 @@ execexec(void)
     }
     doredir(runq->redir);
     Execute(runq->argv->words, searchpath(runq->argv->words->word));
+    // should not be reached!
     poplist();
 }
 /*e: function execexec */

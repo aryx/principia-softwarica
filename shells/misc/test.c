@@ -64,9 +64,9 @@ main(int argc, char *argv[])
      * nice idea but short-circuit -o and -a operators may have
      * not consumed their right-hand sides.
      */
-    if(0 && (c = nxtarg(1)) != nil)
+    if(false && (c = nxtarg(1)) != nil)
         synbad("unexpected operator/operand: ", c);
-    exits(r?0:"false");
+    exits(r? nil : "false");
 }
 /*e: function main (misc/test.c) */
 

@@ -144,9 +144,10 @@ newvar(char *name, var *next)
     var *v = new(var);
     v->name = name;
     v->val = 0;
-    v->fn = 0;
+    v->fn = nil;
     v->changed = false;
-    v->fnchanged = 0;
+    v->fnchanged = false;
+
     v->next = next;
     return v;
 }
@@ -185,7 +186,7 @@ void main(int argc, char *argv[])
     if(flag['I'])
         flag['i'] = nil;
     else 
-        if(flag['i']==nil && argc==1 && Isatty(0)) 
+        if(flag['i']==nil && argc==1 && Isatty(STDIN)) 
            flag['i'] = flagset;
     /*e: [[main()]] argc argv processing, modify flags */
     /*s: [[main()]] initialisation */
@@ -208,9 +209,28 @@ void main(int argc, char *argv[])
     /*s: [[main()]] initialize [[boostrap]] */
     memset(bootstrap, 0, sizeof bootstrap);
 
-    i = 0;
-    bootstrap[i++].i = 1; // reference count
-    bootstrap[i++].f = Xrdcmds;
+    bootstrap[i++].f = Xword;
+    bootstrap[i++].s="*";
+
+    bootstrap[i++].f = Xassign;
+    bootstrap[i++].f = Xmark;
+    bootstrap[i++].f = Xmark;
+
+    bootstrap[i++].f = Xword;
+    bootstrap[i++].s="*";
+
+    bootstrap[i++].f = Xdol;
+
+    bootstrap[i++].f = Xword;
+    bootstrap[i++].s = rcmain;
+
+    bootstrap[i++].f = Xword;
+    bootstrap[i++].s=".";
+
+    bootstrap[i++].f = Xsimple;
+
+    bootstrap[i++].f = Xexit;
+
     bootstrap[i].i = 0;
     /*e: [[main()]] initialize [[boostrap]] */
     /*s: [[main()]] initialize runq with bootstrap code */
@@ -736,7 +756,6 @@ Xassign(void)
 /*
  * copy arglist a, adding the copy to the front of tail
  */
-
 word*
 copywords(word *a, word *tail)
 {

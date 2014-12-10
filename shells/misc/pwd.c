@@ -17,7 +17,7 @@ main(int argc, char *argv[])
         exits("getwd");
     }
     print("%s\n", pathname);
-    exits(0);
+    exits(nil);
 }
 /*e: function main (misc/pwd.c) */
 /*e: misc/pwd.c */
