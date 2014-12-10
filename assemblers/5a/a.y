@@ -393,12 +393,6 @@ ximm:
   $$.type = D_CONST;
  }
 /*x: ximm rule */
-| '$' '*' '$' oreg
- {
-  $$ = $4;
-  $$.type = D_OCONST;
- }
-/*x: ximm rule */
 | fcon
 /*e: ximm rule */
 /*x: operand rules(arm) */

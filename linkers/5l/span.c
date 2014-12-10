@@ -420,24 +420,6 @@ aclass(Adr *a)
     case D_PSR:
         return C_PSR;
 
-    case D_OCONST:
-        switch(a->name) {
-        case D_EXTERN:
-        case D_STATIC:
-            s = a->sym;
-            t = s->type;
-            if(t == 0 || t == SXREF) {
-                diag("undefined external: %s in %s",
-                    s->name, TNAME);
-                s->type = SDATA;
-            }
-            instoffset = s->value + a->offset + INITDAT;
-            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
-                instoffset = s->value + a->offset;
-            return C_LCON;
-        }
-        return C_GOK;
-
     case D_FCONST:
         return C_FCON;
 

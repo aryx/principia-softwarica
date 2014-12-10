@@ -167,12 +167,6 @@ Dconv(Fmt *fp)
             sprint(str+strlen(str), "(R%d)", a->reg);
         break;
 
-    case D_OCONST:
-        sprint(str, "$*$%N", a);
-        if(a->reg != NREG)
-            sprint(str, "%N(R%d)(CONST)", a, a->reg);
-        break;
-
     case D_OREG:
         if(a->reg != NREG)
             sprint(str, "%N(R%d)", a, a->reg);

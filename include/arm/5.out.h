@@ -238,8 +238,6 @@ enum operand_kind {
     /*x: operand_kind cases */
     D_SCONST,
     /*x: operand_kind cases */
-    D_OCONST,
-    /*x: operand_kind cases */
     D_FREG,
     D_FCONST,
     D_FPCR,

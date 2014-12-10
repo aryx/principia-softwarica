@@ -636,7 +636,6 @@ zaddr(byte *p, Adr *a, Sym *h[])
     case D_OREG:
     case D_CONST:
     case D_SHIFT:
-    case D_OCONST:
         a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
         c += 4;
         break;

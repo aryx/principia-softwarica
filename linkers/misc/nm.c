@@ -24,7 +24,7 @@ static char	*filename;		/* current file */
 static char	symname[]="__.SYMDEF";	/* table of contents file name */
 /*e: global symname */
 /*s: global multifile */
-static int	multifile;		/* processing multiple files */
+static bool	multifile;		/* processing multiple files */
 /*e: global multifile */
 /*s: global aflag (linkers/misc/nm.c) */
 static int	aflag;
@@ -101,7 +101,7 @@ main(int argc, char *argv[])
     if (argc == 0)
         usage();
     if (argc > 1)
-        multifile++;
+        multifile = true;
     for(i=0; i<argc; i++){
         filename = argv[i];
         bin = Bopen(filename, OREAD);
@@ -132,7 +132,7 @@ doar(Biobuf *bp)
     int offset, size, obj;
     char membername[SARNAME];
 
-    multifile = 1;
+    multifile = true;
     for (offset = Boffset(bp);;offset += size) {
         size = nextar(bp, offset, membername);
         if (size < 0) {
