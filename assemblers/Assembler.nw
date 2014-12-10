@@ -4297,9 +4297,6 @@ oexpr:
 % main -> assemble -> outhist (at begining of pass 2)
 %out hist??
 
-<<pseudo opcodes>>=
-ANAME,
-@
 
 <<name_kind cases>>=
 D_FILE,
@@ -4375,58 +4372,6 @@ outhist(void)
 @
 
 
-\section{Symbol table, [[h]] and [[sym]]}
-
-% when an instruction involves a symbol
-% the generated code contain an int that is an index
-% in a symbol table! to be relocated by 5l later when
-% the actual symbol is found and has a concrete address.
-
-
-<<struct Htab>>=
-struct Htab
-{
-    // ref<Sym>
-    Sym*	sym;
-    //enum<operand_kind>?
-    short	type;
-};
-@
-
-<<constant NSYM>>=
-#define	NSYM	50
-@
-% limit on number of unresolved external symbols???
-% anyway need to be < 256 as currently use Bputc to marshall 
-% symbol indexes in zaddr()
-
-
-% starts to be used at index 1, as 0 is used as index for none value
-<<global h>>=
-// array<ref<Sym>>
-struct Htab h[NSYM];
-@
-
-
-% next free entry in h (actually can be reseted to 1)
-<<global symcounter>>=
-int	symcounter;
-@
-%less: why not char instead? like symidx (or better byte)
-%old: was called sym, but I renamed it to avoid overloading the sym name
-% (as a global, as a field)
-
-<<[[Sym]] other fields>>=
-//?? seems used only by outcode
-char	symidx;
-@
-%old: was called 'sym', but really it's an index in h, and it was confusing
-% to have so many fields called sym already (as well as the global sym)
-% char enough??
-
-
-
-
 \section{[[outcode()]]}
 
 % used for all opcodes, even pseudo opcodes.
@@ -4486,6 +4431,7 @@ zaddr(Gen *a, int s)
     // Operand format, the operand kind first!
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
+
     // idx in symbol table?
     Bputc(&obuf, s);
     // idx in symbol table?
@@ -4542,6 +4488,99 @@ case D_SCONST:
 
 
 
+
+
+
+<<[[outcode()]] adjust a and scond when a is AB>>=
+/* hack to make B.NE etc. work: turn it into the corresponding conditional*/
+if(a == AB){
+    a = bcode[scond&0xf];
+    scond = (scond & ~0xf) | Always;
+}
+@
+
+<<global bcode(arm)>>=
+static int bcode[] =
+{
+    ABEQ,
+    ABNE,
+    ABCS,
+    ABCC,
+    ABMI,
+    ABPL,
+    ABVS,
+    ABVC,
+    ABHI,
+    ABLS,
+    ABGE,
+    ABLT,
+    ABGT,
+    ABLE,
+    AB,
+    ANOP,
+};
+@
+
+
+
+
+
+\section{Symbol table, [[h]] and [[sym]]}
+
+% when an instruction involves a symbol
+% the generated code contain an int that is an index
+% in a symbol table! to be relocated by 5l later when
+% the actual symbol is found and has a concrete address.
+
+
+<<struct Htab>>=
+struct Htab
+{
+    // ref<Sym>
+    Sym*	sym;
+    //enum<operand_kind>?
+    short	type;
+};
+@
+
+<<constant NSYM>>=
+#define	NSYM	50
+@
+% limit on number of unresolved external symbols???
+% anyway need to be < 256 as currently use Bputc to marshall 
+% symbol indexes in zaddr()
+
+
+% starts to be used at index 1, as 0 is used as index for none value
+<<global h>>=
+// array<ref<Sym>>
+struct Htab h[NSYM];
+@
+
+
+% next free entry in h (actually can be reseted to 1)
+<<global symcounter>>=
+int	symcounter;
+@
+%less: why not char instead? like symidx (or better byte)
+%old: was called sym, but I renamed it to avoid overloading the sym name
+% (as a global, as a field)
+
+<<[[Sym]] other fields>>=
+//?? seems used only by outcode
+char	symidx;
+@
+%old: was called 'sym', but really it's an index in h, and it was confusing
+% to have so many fields called sym already (as well as the global sym)
+% char enough??
+
+
+
+\section{[[ANAME]]}
+
+<<pseudo opcodes>>=
+ANAME,
+@
 
 <<[[outcode()]] locals>>=
 // symbol from, index in h[]
@@ -4637,40 +4676,6 @@ zname(char *n, int t, int s)
 @
 
 
-
-
-
-
-
-<<[[outcode()]] adjust a and scond when a is AB>>=
-/* hack to make B.NE etc. work: turn it into the corresponding conditional*/
-if(a == AB){
-    a = bcode[scond&0xf];
-    scond = (scond & ~0xf) | Always;
-}
-@
-
-<<global bcode(arm)>>=
-static int bcode[] =
-{
-    ABEQ,
-    ABNE,
-    ABCS,
-    ABCC,
-    ABMI,
-    ABPL,
-    ABVS,
-    ABVC,
-    ABHI,
-    ABLS,
-    ABGE,
-    ABLT,
-    ABGT,
-    ABLE,
-    AB,
-    ANOP,
-};
-@
 
 
 
@@ -5172,6 +5177,7 @@ AMODU,
 ASIGNAME,
 @
 % for signatures checking I think, generated just in 5c
+% really an extended ANAME with signature information
 
 
 % not pseudo opcodes but related to compile-only opcodes. Here are other 
@@ -5203,6 +5209,8 @@ AGOK,
 @
 % GOK =? God only Knows? speciak mark?
 % actually used in both compiler and linker
+% but I think it's used only for zprg, and in ldobj it's an error
+% so maybe we could delete it.
 %old: there was a D_GOK, but it was unused in 5a/5c/5l
 
 <<pseudo opcodes>>=
