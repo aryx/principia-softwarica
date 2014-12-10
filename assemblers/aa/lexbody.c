@@ -563,7 +563,7 @@ pinit(char *f)
 
     symcounter = 1;
     for(i=0; i<NSYM; i++) {
-        h[i].type = N_NONE;
+        h[i].type = 0;
         h[i].sym = S;
     }
 
