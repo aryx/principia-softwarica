@@ -3537,7 +3537,7 @@ imsr:
 @
 
 
-% hmm put gen rule here? that matches closely
+%less: hmm put gen rule here? that matches closely
 % at first imsr with reg, ximm and shift?
 
 \subsection{Registers}
@@ -4361,7 +4361,7 @@ comma:
 
 % it's not machine code generation ... 5l/optab.c does this.
 % Note also that we must output code that can be relocated! so need to 
-% output information about symbols! 'U'
+% output information about use of external symbols! 'U'
 
 \section{Object format}
 
@@ -4375,104 +4375,23 @@ comma:
 %  - operand2
 %  where the operands depending on the operand_kind can actually have
 %  different size. the register above is a kind of operand3.
+% the operand itself have a specific format too:
+%  - 
 %TODO: figure!!
 
-% some opcodes have a specialized format,
-% ANAME: ??
-% AHISTORY: ??
+% Then spreaded among those instructions are also symbol table
+% entries, using a weird scheme
+% ANAME: name_kind (1 byte), ?? (1 byte), '<', string finished by \0
 
-% the header is really just a set of ANAME and AHISTORY.
+
+% the header is really just a set of ANAME and AHISTORY, and
+% AHISTORY just the same format than other instructions.
 
 % 5l then read back this format in a simple loop reading one
-% instruction at a time
+% instruction at a time and maintaing the symbol table information
+% via the ANAME.
 
-\section{Object header, [[outhist()]]}
-
-% It looks like outhist() generate some header information.
-% Where is the spec of the format? 5l uses that I guess no?
-
-% main -> assemble -> outhist (at begining of pass 2)
-%out hist??
-
-<<pseudo opcodes>>=
-AHISTORY,
-@
-
-
-
-
-<<name_kind cases>>=
-D_FILE,
-@
-<<name_kind cases>>=
-D_FILE1, // used by linker only?
-@
-
-
-
-<<function outhist(arm)>>=
-void
-outhist(void)
-{
-    Gen g;
-    Hist *h;
-    char *p, *q, *op;
-    int n;
-
-    g = nullgen;
-    for(h = hist; h != H; h = h->link) {
-        p = h->name;
-        op = nil;
-        if(p && p[0] != '/' && h->offset == 0 && pathname){
-            if(pathname[0] == '/'){
-                op = p;
-                p = pathname;
-            }
-        }
-        while(p) {
-            q = strchr(p, '/');
-            if(q) {
-                n = q-p;
-                if(n == 0){
-                    n = 1;	/* leading "/" */
-                    *p = '/';
-                }
-                q++;
-            } else {
-                n = strlen(p);
-                q = 0;
-            }
-            if(n) {
-                Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */ // name_kind
-                Bputc(&obuf, 1);	/* sym */
-                Bputc(&obuf, '<');
-                Bwrite(&obuf, p, n);
-                Bputc(&obuf, '\0');
-            }
-            p = q;
-            if(p == nil && op) {
-                p = op;
-                op = nil;
-            }
-        }
-        g.offset = h->offset;
-
-        Bputc(&obuf, AHISTORY);
-        Bputc(&obuf, Always);
-        Bputc(&obuf, 0); // reg
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
-        zaddr(&nullgen, 0);
-        zaddr(&g, 0);
-    }
-}
-@
-
-
-\section{[[outcode()]]}
+\section{Instruction output, [[outcode()]]}
 
 % used for all opcodes, even pseudo opcodes.
 % very generic form, 3 operands (but many times they
@@ -4491,7 +4410,7 @@ outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
     if(pass == 1)
         goto out;
 
-    <<[[outcode()]] st and sf computation>>
+    <<[[outcode()]] st and sf computation, and possible calls to zname>>
 
     // Instruction serialized format: opcode, cond, optional reg, line, operands
     Bputc(&obuf, a);
@@ -4514,7 +4433,7 @@ out:
 % WORD is for the TEXT section too!
 
 
-%\section{[[zaddr()]]}
+\section{Operand output, [[zaddr()]]}
 
 % outcode -> <>
 % less: rename? out_operand?
@@ -4536,7 +4455,7 @@ zaddr(Gen *a, int s)
 
     // idx in symbol table, 0 if no symbol involved in the operand
     Bputc(&obuf, s);
-    // name kind of symbol
+    // name kind of symbol, if any
     Bputc(&obuf, a->name);
 
     switch(a->type) {
@@ -4618,9 +4537,13 @@ static int bcode[] =
 \section{Symbol table, [[h]] and [[sym]]}
 % put in Core DS? h is reset in pinit() and it seems important
 
+% I think this h thing is mainly an optimisation to avoid
+% generating too many ANAME.
+
 % when an instruction involves a symbol
 % the generated code contain an int that is an index
-% in a symbol table! 
+% in a symbol table!
+
 
 % to be relocated by 5l later when the actual symbol is found and
 % has a concrete address.
@@ -4665,7 +4588,7 @@ int	symcounter;
 
 <<[[Sym]] other fields>>=
 //?? seems used only by outcode
-char	symidx;
+byte	symidx;
 @
 %old: was called 'sym', but really it's an index in h, and it was confusing
 % to have so many fields called sym already (as well as the global sym)
@@ -4701,7 +4624,7 @@ Sym *s;
 
 % TODO LP split and transform while into if, easier flow
 % and also can maybe factorize code?
-<<[[outcode()]] st and sf computation>>=
+<<[[outcode()]] st and sf computation, and possible calls to zname>>=
 jackpot:
 sf = 0;
 s = g1->sym;
@@ -4724,9 +4647,10 @@ while(s != S) {
     h[symcounter].sym = s;
     h[symcounter].type = t;
     sf = symcounter;
+
     symcounter++;
     if(symcounter >= NSYM)
-        symcounter = 1; // ???????? bug?
+        symcounter = 1;
     break;
 }
 
@@ -4750,6 +4674,7 @@ while(s != S) {
     h[symcounter].sym = s;
     h[symcounter].type = t;
     st = symcounter;
+
     symcounter++;
     if(symcounter >= NSYM)
         symcounter = 1;
@@ -4787,6 +4712,92 @@ zname(char *n, int t, int s)
 
 
 
+
+
+\section{Object header, [[outhist()]]}
+
+% It looks like outhist() generate some header information.
+% Where is the spec of the format? 5l uses that I guess no?
+
+% main -> assemble -> outhist (at begining of pass 2)
+%out hist??
+
+<<pseudo opcodes>>=
+AHISTORY,
+@
+
+
+
+
+<<name_kind cases>>=
+D_FILE,
+@
+<<name_kind cases>>=
+D_FILE1, // used by linker only?
+@
+
+
+
+<<function outhist(arm)>>=
+void
+outhist(void)
+{
+    Gen g;
+    Hist *h;
+    char *p, *q, *op;
+    int n;
+
+    g = nullgen;
+    for(h = hist; h != H; h = h->link) {
+        p = h->name;
+        op = nil;
+        if(p && p[0] != '/' && h->offset == 0 && pathname){
+            if(pathname[0] == '/'){
+                op = p;
+                p = pathname;
+            }
+        }
+        while(p) {
+            q = strchr(p, '/');
+            if(q) {
+                n = q-p;
+                if(n == 0){
+                    n = 1;	/* leading "/" */
+                    *p = '/';
+                }
+                q++;
+            } else {
+                n = strlen(p);
+                q = 0;
+            }
+            if(n) {
+                Bputc(&obuf, ANAME);
+                Bputc(&obuf, D_FILE);	/* type */ // name_kind
+                Bputc(&obuf, 1);	/* sym */
+                Bputc(&obuf, '<');
+                Bwrite(&obuf, p, n);
+                Bputc(&obuf, '\0');
+            }
+            p = q;
+            if(p == nil && op) {
+                p = op;
+                op = nil;
+            }
+        }
+        g.offset = h->offset;
+
+        Bputc(&obuf, AHISTORY);
+        Bputc(&obuf, Always);
+        Bputc(&obuf, 0); // reg, but could be R_NONE actually
+        Bputc(&obuf, h->line);
+        Bputc(&obuf, h->line>>8);
+        Bputc(&obuf, h->line>>16);
+        Bputc(&obuf, h->line>>24);
+        zaddr(&nullgen, 0);
+        zaddr(&g, 0);
+    }
+}
+@
 
 
 \chapter{Advanced Topics}
