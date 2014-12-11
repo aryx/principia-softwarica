@@ -380,17 +380,17 @@ ximm:
   $$.offset = $2;
  }
 /*x: ximm rule */
+| '$' oreg
+ {
+  $$ = $2;
+  $$.type = D_CONST;
+ }
+/*x: ximm rule */
 | '$' LSCONST
  {
   $$ = nullgen;
   $$.type = D_SCONST;
   memcpy($$.sval, $2, sizeof($$.sval));
- }
-/*x: ximm rule */
-| '$' oreg
- {
-  $$ = $2;
-  $$.type = D_CONST;
  }
 /*x: ximm rule */
 | fcon
@@ -560,14 +560,14 @@ oexpr:
 oreg:
   ioreg
 /*x: oreg rule */
-| name
-/*x: oreg rule */
 | name '(' sreg ')'
  {
   $$ = $1;
   $$.type = D_OREG;
   $$.reg = $3;
  }
+/*x: oreg rule */
+| name
 /*e: oreg rule */
 /*x: misc rules */
 ioreg:
