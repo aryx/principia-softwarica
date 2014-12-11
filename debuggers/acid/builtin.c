@@ -131,12 +131,14 @@ installbuiltin(void)
 void
 dosysr1(Node *r, Node*)
 {
-    extern int sysr1(void);
+    extern int sysnop(void);
     
     r->op = OCONST;
     r->type = TINT;
     r->fmt = 'D';
-    r->ival = sysr1();
+//    r->ival = sysr1();
+//pad: now it's sysnop
+    r->ival = nop();
 }
 /*e: function dosysr1 */
 

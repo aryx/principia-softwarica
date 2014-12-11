@@ -283,7 +283,7 @@ readtext(char *s)
     Value *v;
     uvlong length;
     Symbol sym;
-    extern Machdata mipsmach;
+    extern Machdata armmach;
 
     if(mtype != 0){
         symmap = newmap(0, 1);
@@ -299,7 +299,7 @@ readtext(char *s)
         return;
     }
 
-    machdata = &mipsmach;
+    machdata = &armmach;
 
     if(!crackhdr(text, &fhdr)) {
         print("can't decode file header\n");
