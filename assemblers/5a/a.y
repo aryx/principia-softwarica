@@ -182,7 +182,7 @@ inst:
 /*
  * SWI
  */
-| LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
+| LTYPE6 cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * SWAP
@@ -341,19 +341,6 @@ gen:
 /*x: gen rule */
 | oreg
 /*x: gen rule */
-| con
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.offset = $1;
- }
-/*x: gen rule */
-| shift '(' spreg ')'
- {
-  $$ = $1;
-  $$.reg = $3;
- }
-/*x: gen rule */
 | LPSR
  {
   $$ = nullgen;
@@ -380,7 +367,7 @@ ximm:
   $$.offset = $2;
  }
 /*x: ximm rule */
-| '$' oreg
+| '$' name
  {
   $$ = $2;
   $$.type = D_CONST;
@@ -559,13 +546,6 @@ oexpr:
 /*s: oreg rule */
 oreg:
   ioreg
-/*x: oreg rule */
-| name '(' sreg ')'
- {
-  $$ = $1;
-  $$.type = D_OREG;
-  $$.reg = $3;
- }
 /*x: oreg rule */
 | name
 /*e: oreg rule */

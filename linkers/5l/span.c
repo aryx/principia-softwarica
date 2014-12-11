@@ -395,6 +395,7 @@ aclass(Adr *a)
                 return C_SAUTO;
             }
             return C_LAUTO;
+
         case D_NONE:
             instoffset = a->offset;
             t = immaddr(instoffset);
