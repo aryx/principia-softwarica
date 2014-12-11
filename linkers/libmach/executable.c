@@ -190,7 +190,7 @@ adotout(int fd, Fhdr *fp, ExecHdr *hp)
             hp->e.text, sizeof(Exec));
     setdata(fp, _round(pgsize+fp->txtsz+sizeof(Exec), pgsize),
         hp->e.data, fp->txtsz+sizeof(Exec), hp->e.bss);
-    setsym(fp, hp->e.syms, hp->e.spsz, hp->e.pcsz, fp->datoff+fp->datsz);
+    setsym(fp, hp->e.syms, hp->e._unused, hp->e.pcsz, fp->datoff+fp->datsz);
     return 1;
 }
 /*e: function adotout */
@@ -397,7 +397,7 @@ armdotout(int fd, Fhdr *fp, ExecHdr *hp)
     USED(fd);
     settext(fp, hp->e.entry, sizeof(Exec), hp->e.text, sizeof(Exec));
     setdata(fp, fp->txtsz, hp->e.data, fp->txtsz, hp->e.bss);
-    setsym(fp, hp->e.syms, hp->e.spsz, hp->e.pcsz, fp->datoff+fp->datsz);
+    setsym(fp, hp->e.syms, hp->e._unused, hp->e.pcsz, fp->datoff+fp->datsz);
 
     kbase = 0xF0000000;
     if ((fp->entry & kbase) == kbase) {		/* Boot image */
