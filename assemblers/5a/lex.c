@@ -236,13 +236,6 @@ struct Itab itab[] =
     "DIV",		LTYPE1,	ADIV,
     "MOD",		LTYPE1,	AMOD,
     /*x: [[itab]] elements */
-    "MULL",		LTYPEM, AMULL,
-    "MULAL",	LTYPEM, AMULAL,
-    "MULLU",	LTYPEM, AMULLU,
-    "MULALU",	LTYPEM, AMULALU,
-    /*x: [[itab]] elements */
-    "MULA",		LTYPEN, AMULA,
-    /*x: [[itab]] elements */
     "MOVW",		LTYPE3, AMOVW,
     "MOVB",		LTYPE3, AMOVB,
     "MOVBU",	LTYPE3, AMOVBU,
@@ -360,29 +353,12 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "END",		LTYPEE, AEND,
     /*x: [[itab]] elements */
-    "MCR",		LTYPEJ, 0,
-    "MRC",		LTYPEJ, 1,
+    "MULL",		LTYPEM, AMULL,
+    "MULAL",	LTYPEM, AMULAL,
+    "MULLU",	LTYPEM, AMULLU,
+    "MULALU",	LTYPEM, AMULALU,
     /*x: [[itab]] elements */
-    "C",		LC,	0,
-
-    "C0",		LCREG,	0,
-    "C1",		LCREG,	1,
-    "C2",		LCREG,	2,
-    "C3",		LCREG,	3,
-    "C4",		LCREG,	4,
-    "C5",		LCREG,	5,
-    "C6",		LCREG,	6,
-    "C7",		LCREG,	7,
-    "C8",		LCREG,	8,
-    "C9",		LCREG,	9,
-    "C10",		LCREG,	10,
-    "C11",		LCREG,	11,
-    "C12",		LCREG,	12,
-    "C13",		LCREG,	13,
-    "C14",		LCREG,	14,
-    "C15",		LCREG,	15,
-    /*x: [[itab]] elements */
-    "RFE",		LTYPEA, ARFE,
+    "MULA",		LTYPEN, AMULA,
     /*x: [[itab]] elements */
     "MOVD",		LTYPE3, AMOVD,
     "MOVDF",	LTYPE3, AMOVDF,
@@ -429,6 +405,30 @@ struct Itab itab[] =
     "FPCR",		LFCR,	1,
     /*x: [[itab]] elements */
     "MOVM",		LTYPE8, AMOVM,
+    /*x: [[itab]] elements */
+    "MCR",		LTYPEJ, 0,
+    "MRC",		LTYPEJ, 1,
+    /*x: [[itab]] elements */
+    "C",		LC,	0,
+
+    "C0",		LCREG,	0,
+    "C1",		LCREG,	1,
+    "C2",		LCREG,	2,
+    "C3",		LCREG,	3,
+    "C4",		LCREG,	4,
+    "C5",		LCREG,	5,
+    "C6",		LCREG,	6,
+    "C7",		LCREG,	7,
+    "C8",		LCREG,	8,
+    "C9",		LCREG,	9,
+    "C10",		LCREG,	10,
+    "C11",		LCREG,	11,
+    "C12",		LCREG,	12,
+    "C13",		LCREG,	13,
+    "C14",		LCREG,	14,
+    "C15",		LCREG,	15,
+    /*x: [[itab]] elements */
+    "RFE",		LTYPEA, ARFE,
     /*e: [[itab]] elements */
     0
 };
@@ -545,16 +545,16 @@ zaddr(Gen *a, int s)
         Bputc(&obuf, l>>24);
         break;
 
-    case D_REGREG:
-        Bputc(&obuf, a->offset);
-        break;
-
     case D_SCONST:
         n = a->sval;
         for(i=0; i<NSNAME; i++) {
             Bputc(&obuf, *n);
             n++;
         }
+        break;
+    /*x: [[zaddr()]] cases */
+    case D_REGREG:
+        Bputc(&obuf, a->offset);
         break;
     /*x: [[zaddr()]] cases */
     case D_FREG:

@@ -199,9 +199,9 @@ enum opcode
     /*x: pseudo opcodes */
     AEND,
     /*x: pseudo opcodes */
-    ANAME,
-    /*x: pseudo opcodes */
     AHISTORY,
+    /*x: pseudo opcodes */
+    ANAME,
     /*x: pseudo opcodes */
     ACASE,
     ABCASE,
@@ -222,8 +222,6 @@ enum opcode
 enum operand_kind {
     D_NONE,
     /*s: operand_kind cases */
-    D_REGREG,
-    /*x: operand_kind cases */
     D_REG,
     /*x: operand_kind cases */
     D_CONST,
@@ -237,6 +235,8 @@ enum operand_kind {
     D_PSR,
     /*x: operand_kind cases */
     D_SCONST,
+    /*x: operand_kind cases */
+    D_REGREG,
     /*x: operand_kind cases */
     D_FREG,
     D_FCONST,

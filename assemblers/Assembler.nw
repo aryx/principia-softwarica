@@ -22,6 +22,7 @@
 %  - introduced name_kind, splitted from operand_kind, for ANAME
 %  - factorize more code between arm and x86 (abusing LP chunks)
 %  - removed a few grammar rules, weird operand forms that were not used anyway
+%    as well as the optional comma here and there
 %  - TODO rename types, clearer, Gen? as Adr? or Operand? (and Gen2? as Prog?)
 
 %thx to codemap/codegraph/scheck:
@@ -507,6 +508,7 @@ struct	Gen
 % they did for Adr in the linker.
 % e.g. for D_SHIFT the long is used really to encode the whole
 % thing with some bits for the shift kind, some bits for the register, etc.
+% see the many uses cases of offset in zaddr() switch about operand_kind ...
 %mimic what is in union token too
 
 <<enum operand_kind(arm)>>=
@@ -794,6 +796,17 @@ slookup(char *s)
 
 \section{[[Name_kind]]}
 
+% important rule of assembler is to use symbolic names, for
+% labels, but also for entities, that can even possibly
+% defined in another file. So arguments of some operands
+% are really names, symbols.
+
+% e.g. TEXT foo ... or MOV $1, bar(SB) or BL bar(SB)
+% in the case of MOV $1, bar(SB), the Gen structure
+% for the first operand will be a D_CONST of offset 1.
+% for the second operand will be a D_OREG of SB and sym bar
+% with name_kind = D_EXTERN and offset 0.
+
 <<[[Gen]] other fields>>=
 // option<Sym>
 Sym*	sym;
@@ -812,7 +825,7 @@ enum name_kind {
    <<name_kind cases>>
 };
 @
-% this used to be with operand_kind, but they are really disjoint
+%note: this used to be with operand_kind, but they are really disjoint
 % and used only for the ANAME pseudo opcode. In 5l/ there is
 % actually a separate Dconv and Nconv (but in 8l/ they are together).
 
@@ -3114,61 +3127,6 @@ AMOD,
 @
 
 
-\subsubsection{Mul long}
-
-<<mul/div/mod opcodes>>=
-AMULL,
-AMULAL,
-AMULLU,
-AMULALU,
-@
-
-<<[[itab]] elements>>=
-"MULL",		LTYPEM, AMULL,
-"MULAL",	LTYPEM, AMULAL,
-"MULLU",	LTYPEM, AMULLU,
-"MULALU",	LTYPEM, AMULALU,
-@
-
-
-
-% MULL special instruction?
-<<inst rule(arm)>>=
-/*
- * MULL hi,lo,r1,r2
- */
-| LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
-@
-%$
-% ugly $5.reg?
-
-% multiply and accumulate
-<<mul/div/mod opcodes>>=
-AMULA,
-@
-
-<<[[itab]] elements>>=
-"MULA",		LTYPEN, AMULA,
-@
-
-<<operand_kind cases>>=
-D_REGREG,
-@
-
-<<inst rule(arm)>>=
-/*
- * MULA hi,lo,r1,r2
- */
-| LTYPEN cond reg ',' reg ',' reg ',' spreg 
- {
-  $7.type = D_REGREG;
-  $7.offset = $9;
-  outcode($1, $2, &$3, $5.reg, &$7);
- }
-@
-%$
-% abuse offset, ADT would be better!
-
 
 \subsection{Memory}
 
@@ -3210,18 +3168,19 @@ AMOVHU,
 % with registers.
 % gen for general?
 
+
+
+
 \ifallcode
 % optional? not used a single time in arm/*.s, used a bit in 5c/
 <<mov opcodes>>=
 AMVN,
 @
+% MOV negative
 %//AMOV, redundant with the other MOV operations
-
 <<[[itab]] elements>>=
 "MVN",		LTYPE2, AMVN,	/* op2 ignored */
 @
-
-% MOV negative
 <<inst rule(arm)>>=
 /*
  * MVN
@@ -3269,6 +3228,8 @@ ACMN,
 
 
 \subsection{Branch}
+% rename control flow?
+% could split in two, with B and then BL and RET?
 % called JMP/CALL in 8a
 
 <<branching opcodes>>=
@@ -3401,9 +3362,11 @@ ASWI, // syscall
 %old: | LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
 % but not sure it needs an argument in plan9 context,
 % and anyway was doing stupid things like SWI 0  in 9syscall/mkfile
+% which was weird, at least should be SWI $0
 
 \subsection{Swap}
 %\subsection{Special}
+% mv in advanced topics? or merge with memory section?
 
 <<swap opcodes>>=
 ASWPW,
@@ -3574,6 +3537,8 @@ imsr:
 @
 
 
+% hmm put gen rule here? that matches closely
+% at first imsr with reg, ximm and shift?
 
 \subsection{Registers}
 
@@ -3854,7 +3819,6 @@ ireg:
 % (different from labels, which are just for code refs)
 
 
-
 % part of oreg? name is an offset to a reg?
 % Actually a name is really a constant offset to a base like LSB!!
 <<oreg rule>>=
@@ -3947,6 +3911,16 @@ D_PARAM,  // parameter (from FP)
 %/* name */ for D_EXTERN
 
 
+<<helper rules(arm)>>=
+offset:
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
+@
+%$
+%less: rename offset_opt?
+
+
 <<name rule>>=
 | LNAME '<' '>' offset '(' LSB ')'
  {
@@ -3999,7 +3973,6 @@ D_STATIC, // data static variables (from SB)
 
 \subsection{Code references and labels}
 % hmm con(PC) is not really named code
-% relocatable!
 
 <<operand_kind cases>>=
 D_BRANCH,
@@ -4016,7 +3989,7 @@ D_BRANCH,
 %type   <lval>  offset
 @
 
-% for code (rel = ? relocatable? nope relative!), argument of B/BL
+% rel = ? relocatable? nope relative!, argument of B/BL
 % Relative because it's labels which
 % are locals to a file and can be resolved locally (no need symbols)
 % (but the offset value is actually not relative to the current PC,
@@ -4037,14 +4010,6 @@ rel:
 @
 %$
 
-<<helper rules(arm)>>=
-offset:
- /* empty */ { $$ = 0; }
-| '+' con    { $$ = $2; }
-| '-' con    { $$ = -$2; }
-@
-%$
-%less: rename offset_opt?
 
 
 
@@ -4103,8 +4068,8 @@ D_PSR,
 %$
 % Status register? move earlier? 
 
-
-\subsection{Alternative forms}
+\subsection{String constants}
+%\subsection{Other forms}
 
 <<operand_kind cases>>=
 D_SCONST,
@@ -4171,24 +4136,6 @@ D_SCONST,
 % sreg, so can't use FP here, nor LSB, so only name refering to PC?
 
 
-
-
-<<type declarations(arm)>>=
-%type   <gen>   regreg
-@
-
-<<operand rules(arm)>>=
-/* for MULL */
-regreg:
- '(' spreg ',' spreg ')'
- {
-  $$ = nullgen;
-  $$.type = D_REGREG;
-  $$.reg = $2;
-  $$.offset = $4;
- }
-@
-% abuse offset again ... grrr
 
 
 \section{Labels and [[pc]]}
@@ -4391,26 +4338,15 @@ expr:
 \section{Optional commas}
 % the optional ',' why? because asm can ge generated by 5c -S that does
 % this. A bit ugly so maybe better to aspectize this.
+% actually I removed most of the use of comma for 5a/a.y 
+% so maybe could even remove this rule, or keep it
+% just for the comment about 5c -S.
 
 <<opt rules>>=
 comma:
   /* empty */
 | ',' comma
 @
-
-<<type declarations(arm)>>=
-%type   <lval>  oexpr 
-@
-
-% other optional stuff
-<<opt rules>>=
-/* for MCR */ 
-oexpr:
-  /* empty */ { $$ = 0; }
-| ',' expr    { $$ = $2; }
-@
-%$
-
 \fi
 
 \section{[[yyparse()]]}
@@ -4433,12 +4369,12 @@ oexpr:
 % where each instruction is encoded as:
 %  - opcode (1 byte)
 %  - condition (1 byte)
-%  - register (1 byte)
+%  - register (1 byte) (most instrs have at least one register operand)
 %  - line  (4 bytes)
 %  - operand1, 
 %  - operand2
 %  where the operands depending on the operand_kind can actually have
-%  different size.
+%  different size. the register above is a kind of operand3.
 %TODO: figure!!
 
 % some opcodes have a specialized format,
@@ -4458,6 +4394,12 @@ oexpr:
 % main -> assemble -> outhist (at begining of pass 2)
 %out hist??
 
+<<pseudo opcodes>>=
+AHISTORY,
+@
+
+
+
 
 <<name_kind cases>>=
 D_FILE,
@@ -4466,17 +4408,6 @@ D_FILE,
 D_FILE1, // used by linker only?
 @
 
-<<pseudo opcodes>>=
-ANAME,
-@
-%WEIRD: if ANAME is after AHISTORY in 5.out.h then get
-% some bugs in ar such as "inconsistent file xxx.5 in libc.a"
-%update: maybe it was because the Makefile pb where actually
-% libmach was not recompiled
-
-<<pseudo opcodes>>=
-AHISTORY,
-@
 
 
 <<function outhist(arm)>>=
@@ -4636,10 +4567,6 @@ case D_SHIFT:
     Bputc(&obuf, l>>24);
     break;
 
-case D_REGREG:
-    Bputc(&obuf, a->offset);
-    break;
-
 case D_SCONST:
     n = a->sval;
     for(i=0; i<NSNAME; i++) {
@@ -4662,6 +4589,8 @@ if(a == AB){
     scond = (scond & ~0xf) | Always;
 }
 @
+% so B.NE get translated in BNE. Not that important though,
+% again this feature could be removed.
 
 <<global bcode(arm)>>=
 static int bcode[] =
@@ -4747,6 +4676,16 @@ char	symidx;
 \section{[[ANAME]]}
 % I think each time an instruction reference a symbol, an ANAME
 % is output
+
+
+<<pseudo opcodes>>=
+ANAME,
+@
+%WEIRD: if ANAME is after AHISTORY in 5.out.h then got
+% some bugs in ar such as "inconsistent file xxx.5 in libc.a"
+%update: maybe it was because the Makefile pb where actually
+% libmach was not recompiled?
+
 
 
 <<[[outcode()]] locals>>=
@@ -4852,90 +4791,91 @@ zname(char *n, int t, int s)
 
 \chapter{Advanced Topics}
 
-\section{System instructions}
+\section{Long multiplication instructions}
 
-% no Axxx opcode, binary generation directly in action via D_CONST
+%\subsubsection{Mul long}
+% advanced topics? so can also put D_REGREG later?
+
+<<mul/div/mod opcodes>>=
+AMULL,
+AMULAL,
+AMULLU,
+AMULALU,
+@
+
 <<[[itab]] elements>>=
-"MCR",		LTYPEJ, 0,
-"MRC",		LTYPEJ, 1,
+"MULL",		LTYPEM, AMULL,
+"MULAL",	LTYPEM, AMULAL,
+"MULLU",	LTYPEM, AMULLU,
+"MULALU",	LTYPEM, AMULALU,
+@
+
+
+
+% MULL special instruction?
+<<inst rule(arm)>>=
+/*
+ * MULL hi,lo,r1,r2
+ */
+| LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
+@
+%$
+% ugly $5.reg?
+
+% multiply and accumulate
+<<mul/div/mod opcodes>>=
+AMULA,
+@
+
+<<[[itab]] elements>>=
+"MULA",		LTYPEN, AMULA,
+@
+
+<<operand_kind cases>>=
+D_REGREG,
 @
 
 <<inst rule(arm)>>=
 /*
- * MCR MRC
+ * MULA hi,lo,r1,r2
  */
-| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
+| LTYPEN cond reg ',' reg ',' reg ',' spreg 
  {
-  Gen g;
-
-  g = nullgen;
-  g.type = D_CONST;
-  g.offset =
-   (0xe << 24) |    /* opcode */
-   ($1 << 20) |     /* MCR/MRC */
-   ($2 << 28) |     /* scond */
-   (($3 & 15) << 8) |   /* coprocessor number */
-   (($5 & 7) << 21) |   /* coprocessor operation */
-   (($7 & 15) << 12) |  /* arm register */
-   (($9 & 15) << 16) |  /* Crn */
-   (($11 & 15) << 0) |  /* Crm */
-   (($12 & 7) << 5) |   /* coprocessor information */
-   (1<<4);          /* must be set */ // opcode component
-  outcode(AWORD, Always, &nullgen, R_NONE, &g);
- }
-@
-% >> >> >> >> >> >> >> >> >> >>
-
-<<type declarations(arm)>>=
-%type   <lval>  creg
-@
-
-<<misc rules>>=
-creg:
-  LCREG
-| LC '(' expr ')'
- {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
+  $7.type = D_REGREG;
+  $7.offset = $9;
+  outcode($1, $2, &$3, $5.reg, &$7);
  }
 @
 %$
+% abuse offset, ADT would be better!
 
-<<[[itab]] elements>>=
-"C",		LC,	0,
 
-"C0",		LCREG,	0,
-"C1",		LCREG,	1,
-"C2",		LCREG,	2,
-"C3",		LCREG,	3,
-"C4",		LCREG,	4,
-"C5",		LCREG,	5,
-"C6",		LCREG,	6,
-"C7",		LCREG,	7,
-"C8",		LCREG,	8,
-"C9",		LCREG,	9,
-"C10",		LCREG,	10,
-"C11",		LCREG,	11,
-"C12",		LCREG,	12,
-"C13",		LCREG,	13,
-"C14",		LCREG,	14,
-"C15",		LCREG,	15,
+
+
+<<type declarations(arm)>>=
+%type   <gen>   regreg
 @
 
-
-
-
-<<misc opcodes>>=
-ARFE, // ?? return from exn?
+<<operand rules(arm)>>=
+/* for MULL */
+regreg:
+ '(' spreg ',' spreg ')'
+ {
+  $$ = nullgen;
+  $$.type = D_REGREG;
+  $$.reg = $2;
+  $$.offset = $4;
+ }
 @
+% abuse offset again ... grrr
 
-<<[[itab]] elements>>=
-"RFE",		LTYPEA, ARFE,
+
+
+<<[[zaddr()]] cases>>=
+case D_REGREG:
+    Bputc(&obuf, a->offset);
+    break;
 @
-% same grammar rule than RET
-
-
 
 \section{Float instructions}
 
@@ -5305,6 +5245,104 @@ reglist:
 %"STREXD",		LTYPE9, ASTREXD,
 %@
 
+\section{System instructions}
+
+% no Axxx opcode, binary generation directly in action via D_CONST
+<<[[itab]] elements>>=
+"MCR",		LTYPEJ, 0,
+"MRC",		LTYPEJ, 1,
+@
+
+<<inst rule(arm)>>=
+/*
+ * MCR MRC
+ */
+| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
+ {
+  Gen g;
+
+  g = nullgen;
+  g.type = D_CONST;
+  g.offset =
+   (0xe << 24) |    /* opcode */
+   ($1 << 20) |     /* MCR/MRC */
+   ($2 << 28) |     /* scond */
+   (($3 & 15) << 8) |   /* coprocessor number */
+   (($5 & 7) << 21) |   /* coprocessor operation */
+   (($7 & 15) << 12) |  /* arm register */
+   (($9 & 15) << 16) |  /* Crn */
+   (($11 & 15) << 0) |  /* Crm */
+   (($12 & 7) << 5) |   /* coprocessor information */
+   (1<<4);          /* must be set */ // opcode component
+  outcode(AWORD, Always, &nullgen, R_NONE, &g);
+ }
+@
+% >> >> >> >> >> >> >> >> >> >>
+
+<<type declarations(arm)>>=
+%type   <lval>  creg
+@
+
+<<misc rules>>=
+creg:
+  LCREG
+| LC '(' expr ')'
+ {
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
+ }
+@
+%$
+
+<<[[itab]] elements>>=
+"C",		LC,	0,
+
+"C0",		LCREG,	0,
+"C1",		LCREG,	1,
+"C2",		LCREG,	2,
+"C3",		LCREG,	3,
+"C4",		LCREG,	4,
+"C5",		LCREG,	5,
+"C6",		LCREG,	6,
+"C7",		LCREG,	7,
+"C8",		LCREG,	8,
+"C9",		LCREG,	9,
+"C10",		LCREG,	10,
+"C11",		LCREG,	11,
+"C12",		LCREG,	12,
+"C13",		LCREG,	13,
+"C14",		LCREG,	14,
+"C15",		LCREG,	15,
+@
+
+
+<<type declarations(arm)>>=
+%type   <lval>  oexpr 
+@
+
+% other optional stuff
+<<opt rules>>=
+/* for MCR */ 
+oexpr:
+  /* empty */ { $$ = 0; }
+| ',' expr    { $$ = $2; }
+@
+%$
+
+
+
+<<misc opcodes>>=
+ARFE, // ?? return from exn?
+@
+
+<<[[itab]] elements>>=
+"RFE",		LTYPEA, ARFE,
+@
+% same grammar rule than RET
+
+
+
 \section{Compiler-only pseudo opcodes}
 
 % some of those are not really opcodes, they are entities 
@@ -5482,6 +5520,9 @@ if(argc > 1) {
 \appendix
 
 \chapter{Debugging}
+% not very powerful debugging options for 5a, mostly stuff
+% to debug cpp related issues.
+% 5l has more stuff, with dumpers for Gen, opcode, etc.
 
 % ex: 'm', 'f' (256 so can have for each character a boolean value)
 <<global debug>>=
