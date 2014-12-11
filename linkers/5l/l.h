@@ -190,12 +190,20 @@ struct	Optab
     // enum<opcode> from 5.out.h
     byte	as;
 
+    // enum<cxxx>, possible class for first operand
     char	a1;
+    // enum<cxxx>, possible class for second operand
     char	a2;
+    // enum<cxxx>, possible class for third operand
     char	a3;
 
-    char	type;
-    char	size;
+    // idx for the code generator, see the giant switch in asmout()
+    char	type; 
+
+    // size of the corresponding machine code, should be a multiple of 4
+    char	size; 
+
+    // ??
     char	param;
 
     char	flag;
