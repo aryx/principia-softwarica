@@ -15,9 +15,10 @@ setup_host:
 
 #assumes you have done source env.sh, or have a 'mk' wrapper that does that
 compile:
-	cd ROOT; mk
-	cd sys/src; mk all; cd cmd; mk install
-	cd sys/src/9/pc; mk; mk install
+	cd ROOT && mk
+	cd sys/src && mk all
+	cd sys/src/cmd && mk install
+	cd sys/src/9/pc && mk && mk install
 
 disk:
 	umount -f $(DISK) || echo not mounted

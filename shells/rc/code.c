@@ -176,7 +176,7 @@ outcode(tree *t, bool eflag)
         break;
     /*x: [[outcode()]] cases */
     case OROR:
-        outcode(c0, 0);
+        outcode(c0, false);
         emitf(Xfalse);
         p = emiti(0);
         outcode(c1, eflag);
@@ -459,7 +459,7 @@ outcode(tree *t, bool eflag)
  *	Xpopm
  */
 void
-codeswitch(tree *t, int eflag)
+codeswitch(tree *t, bool eflag)
 {
     int leave;		/* patch jump address to leave switch */
     int out;		/* jump here to leave switch */

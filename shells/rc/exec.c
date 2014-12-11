@@ -209,6 +209,9 @@ void main(int argc, char *argv[])
     /*s: [[main()]] initialize [[boostrap]] */
     memset(bootstrap, 0, sizeof bootstrap);
 
+    i = 0;
+    bootstrap[i++].i=1;
+    bootstrap[i++].f = Xmark;
     bootstrap[i++].f = Xword;
     bootstrap[i++].s="*";
 
@@ -235,10 +238,6 @@ void main(int argc, char *argv[])
     /*e: [[main()]] initialize [[boostrap]] */
     /*s: [[main()]] initialize runq with bootstrap code */
     start(bootstrap, 1, (var *)nil);
-    /*x: [[main()]] initialize runq with bootstrap code */
-    runq->cmdfd = openfd(STDIN); // reading from stdin
-    runq->cmdfile = "<stdin>";
-    runq->iflag = flag['i']? true : false;// interactive mode; will print a prompt
     /*e: [[main()]] initialize runq with bootstrap code */
     /*s: [[main()]] initialize runq->argv */
     /* prime bootstrap argv */
