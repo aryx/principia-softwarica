@@ -12,15 +12,16 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-%  - better organisation of the code, TOC better than the few existing
+%  - better organisation of the code, my TOC is better than the few existing
 %    files (that didn't have very good names)
 %  - removed deadcode (Ref, imm2, con2, NMACRO, CLAST, isreg, ...)
 %  - renamed some enums (as => opcode, _ => operand_kind)
 %  - reordered opcodes and operand kinds, and cleaned them:
 %     * removed opcodes (ADWORD, ABX, ...)
-%     * removed operand kinds (D_GOK, D_ADDR, ...)
+%     * removed operand kinds (D_GOK, D_ADDR, D_OCONST, ...)
 %  - introduced name_kind, splitted from operand_kind, for ANAME
 %  - factorize more code between arm and x86 (abusing LP chunks)
+%  - removed a few grammar rules, weird operand forms that were not used anyway
 %  - TODO rename types, clearer, Gen? as Adr? or Operand? (and Gen2? as Prog?)
 
 %thx to codemap/codegraph/scheck:
@@ -3849,47 +3850,6 @@ ireg:
 
 
 
-%XXXXXXXXXX
-%<<gen rule>>=
-%| con
-% {
-%  $$ = nullgen;
-%  $$.type = D_OREG;
-%  $$.offset = $1;
-% }
-%@
-%%$
-% no $ in front of con here?
-% was used in 9syscall for 'SWI 0' but not sure what it means.
-% todo:clean: can remove con case? needed? implicit register?
-% how can be D_OREG when there are no registers involved? it's SB by default?
-
-
-%XXXXXXXXXX
-%less:clean: delete?
-%<<gen rule>>=
-%| shift '(' spreg ')'
-% {
-%  $$ = $1;
-%  $$.reg = $3;
-% }
-%@
-
-%XXXXXXXXXX
-%<<oreg rule>>=
-%| name '(' sreg ')'
-% {
-%  $$ = $1;
-%  $$.type = D_OREG;
-%  $$.reg = $3;
-% }
-%@
-% XXXX remove name '(' sreg ')'?
-% sreg, so can't use FP here, nor LSB, so only name refering to PC?
-% no cos name allow name refering to LSB or FP or SP.
-% but what is then name '(' sreg ')' ?? double ()() ???
-
-
 \subsection{Named memory location}
 % (different from labels, which are just for code refs)
 
@@ -4160,7 +4120,6 @@ D_SCONST,
   memcpy($$.sval, $2, sizeof($$.sval));
  }
 @
-% string constant
 
 
 %<<operand_kind cases>>=
@@ -4174,8 +4133,42 @@ D_SCONST,
 % }
 %@
 %%$
-% can remove this? seems unused in ARM/*.s
+% seems unused in ARM/*.s
 
+
+%<<gen rule>>=
+%| con
+% {
+%  $$ = nullgen;
+%  $$.type = D_OREG;
+%  $$.offset = $1;
+% }
+%@
+%%$
+% no $ in front of con here?
+% was used in 9syscall for 'SWI 0' but not sure what it meant.
+% how can be D_OREG when there are no registers involved.
+% I removed the rule, and rewrote calls to SWI to just be SWI
+
+%<<gen rule>>=
+%| shift '(' spreg ')'
+% {
+%  $$ = $1;
+%  $$.reg = $3;
+% }
+%@
+
+%<<oreg rule>>=
+%| name '(' sreg ')'
+% {
+%  $$ = $1;
+%  $$.type = D_OREG;
+%  $$.reg = $3;
+% }
+%@
+% but name already has some (sreg), so what this rule mean?
+% foo(PC)(PC) ??
+% sreg, so can't use FP here, nor LSB, so only name refering to PC?
 
 
 
@@ -4195,7 +4188,7 @@ regreg:
   $$.offset = $4;
  }
 @
-% abuse offset again
+% abuse offset again ... grrr
 
 
 \section{Labels and [[pc]]}
