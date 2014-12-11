@@ -161,23 +161,23 @@ inst:
 /*
  * CMP
  */
-| LTYPE7 cond imsr ',' spreg comma { outcode($1, $2, &$3, $5, &nullgen); }
+| LTYPE7 cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * B/BL
  */
-| LTYPE4 cond comma rel   { outcode($1, $2, &nullgen, R_NONE, &$4); }
-| LTYPE4 cond comma nireg { outcode($1, $2, &nullgen, R_NONE, &$4); }
+| LTYPE4 cond rel   { outcode($1, $2, &nullgen, R_NONE, &$3); }
+| LTYPE4 cond nireg { outcode($1, $2, &nullgen, R_NONE, &$3); }
 /*x: inst rule(arm) */
 /*
  * BEQ/...
  */
-| LTYPE5 comma rel { outcode($1, Always, &nullgen, R_NONE, &$3); }
+| LTYPE5 rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
 /*x: inst rule(arm) */
 /*
  * RET
  */
-| LTYPEA cond comma { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+| LTYPEA cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * SWI
@@ -188,8 +188,8 @@ inst:
  * SWAP
  */
 | LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg comma   { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond comma ireg ',' reg   { outcode($1, $2, &$4, $6.reg, &$6); }
+| LTYPE9 cond reg ',' ireg   { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond ireg ',' reg   { outcode($1, $2, &$3, $5.reg, &$5); }
 /*x: inst rule(arm) */
 /*
  * TEXT/GLOBL
@@ -205,12 +205,12 @@ inst:
 /*
  * WORD
  */
-| LTYPEH comma ximm { outcode($1, Always, &nullgen, R_NONE, &$3); }
+| LTYPEH ximm { outcode($1, Always, &nullgen, R_NONE, &$2); }
 /*x: inst rule(arm) */
 /*
  * END
  */
-| LTYPEE comma { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
+| LTYPEE { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * MCR MRC
@@ -241,7 +241,7 @@ inst:
 | LTYPEI cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 | LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 | LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
-| LTYPEL cond freg ',' freg comma { outcode($1, $2, &$3, $5.reg, &nullgen); }
+| LTYPEL cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * MOVM
@@ -433,7 +433,7 @@ rel:
   $$.offset = $2;
  }
 /*x: rel rule */
-|  con '(' LPC ')'
+| con '(' LPC ')'
  {
   $$ = nullgen;
   $$.type = D_BRANCH;
