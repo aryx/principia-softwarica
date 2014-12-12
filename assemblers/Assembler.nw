@@ -19,7 +19,7 @@
 %  - reordered opcodes and operand kinds, and cleaned them:
 %     * removed opcodes (ADWORD, ABX, ...)
 %     * removed operand kinds (D_GOK, D_ADDR, D_OCONST, ...)
-%  - introduced name_kind, splitted from operand_kind, for ANAME
+%  - introduced sym_kind, splitted from operand_kind, for ANAME
 %  - factorize more code between arm and x86 (abusing LP chunks)
 %  - removed a few grammar rules, weird operand forms that were not used anyway
 %    as well as the optional comma here and there
@@ -30,10 +30,11 @@
 % - TODO mv errorexit, alloc, in utils.c instead of lexbody.c, same for gethunk
 % - TODO have a main.c?
 
-%thx to this manual, better understand assembly?:
+%thx to this manual, better understand assembly and assembler:
 % - can actually understand the assembly code in Kernel.nw :) param1+0(FP)
-% - DATA vs GLOBL?
-% - fpic?
+% - that an object is really a module, the simplest/lowest module abstraction 
+% - DATA vs GLOBL
+% - TODO -fpic?
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -177,7 +178,8 @@ Here are other candidates that were considered but ultimately discarded:
 \end{itemize}
 
 % a disadvantage of 5a is that it generates just a special kind of object
-% code, the actual machine code is done in the linker. A bit unusual.
+% code, the actual machine code generation is done by the linker. 
+% A bit unusual maybe.x
 
 %hex2c, the assembler in subc-2014, ...
 
@@ -188,7 +190,8 @@ Here are other candidates that were considered but ultimately discarded:
 
 \section{Requirements}
 
-% know at least one assembler, concepts: labels, mov, SP, FP, jmp, etc
+% know at least one assembler, concepts: labels, mov, SP, FP, jmp,
+% symbol defs/uses, external symbols.
 % know a bit about architecture (helps to understand Machine.nw)
 
 % asm.ps, 5a(1)
@@ -210,28 +213,44 @@ License.
 
 \section{Assembler principles}
 
-% goal is close to machine code, but more convenient than binary;
+% goal of assembler is to have a programming language close to
+% the machine code, but more convenient than binary. "as close
+% as possible but not closer" :)
 % essentially a textual form of a binary format.
 % mnemonic and symbolic addresses -> object/machine code
 
-% before was writing binary, then mnemonic but still hardcoded
+% history: (probably)
+% at the beginning was writing binary, then mnemonic but still hardcoded
 % address, and then finally symbolic addresses.
+% First symbol defs/uses in the same file (e.g. labels), but then could also
+% split the code in multiple assembly files and symbols can
+% reference external files. Introduced then the linker to
+% link together all those assembly objects.
 
-% usually 2 passes as can reference stuff coming later. pretty simple.
+% usually 2 passes for assembler itself as can reference labels
+% coming later.
 
-% usually object code that is then processed by linker. So output
-% code that will be relocated, with symbol table in object for linker
+% Object code is not the final code, it is then processed by a linker. 
+% So the assembler must output code that must be "resolved" later, with 
+% some symbol table information in the object for the linker
 % to know what to do and where to patch things.
-% (the .o is really like a module, the really lowest level module abstraction).
+% The .o is really like a module, the really lowest level module abstraction.
+% And a module define some symbols, and use external symbols.
+% The objects will also be concatenated together so branch/jmp addresses
+% need also to be "relocated", and the same for the reference to 
+% external symbols.
 
 % less: look at TECS section on assembler?
+
+% put some concrete examples where see two assemblies, with symbols
+% defined and used, and how the linker resolve and then relocate those things?
 
 \section{[[5a]] services}
 
 % command line interface? -o outfile,   -D -I (cpp),  -f -m for debug
 % env: INCLUDE (for cpp, similar to -I), NPROC (when multi files?)
 
-% have a few more features than just mnemonic and symbolc addresses:
+% 5a has a few more features than just mnemonic and symbolc addresses:
 %  - can also have some simple constant expression.
 %  - have also "variables" (symbolic name of constants)
 %  - can also have macros and includes!
@@ -272,18 +291,13 @@ License.
 % opcode format, see 5i/
 % but actually it's more the job of 5l and optab to do that.
 % 5a just try to mimic closely the ISA (but actually it also
-% introduce virtual/fake opcodes).
+% introducing some virtual/fake opcodes).
 
 \section{Input assembly language}
 
 % specifics of 5a? 
 % left to right assignment, AT&T syntax, normal :)
-
 % the different addressing modes for MOV.
-
-
-% 8 bytes limit for strings (so if longer have to split manually,
-% a bit annoying but can use data2s too)
 
 %concepts: 
 % - labels suffixed with :
@@ -295,14 +309,20 @@ License.
 % - use '(' xxx ')' for memory dereference. so 4(FP) really means
 %   *fp + 4 (which in C could be written  fp[4] if fp was a byte pointer.
 
+% special registers for addressing: PC, SB, FP, SP
+% for text, data, param, locals
+% (hmm has FP special register in 5a?)
+
+% 8 bytes limit for strings (so if longer have to split manually,
+% a bit annoying but can use data2s too)
+
+
 %        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
 %vs
 %        LONG    $_start-KZERO(SB)          /* load_addr */
 %why need SB in second case? because it refers to symbol in certain section?
-
-% special registers for addressing: PC, SB, FP, SP
-% for text, data, param, locals
-% (hmm has FP special register in 5a?)
+% it's to take the address of _start symbol in SB and adjust
+% by removing KZERO to it. tricky. It's really $  _start(SB) - KZERO
 
 \section{Output object format}
 
@@ -312,9 +332,10 @@ License.
 
 %less: could simplify the code at some point and use Ocaml/Rust
 % and just marshall the ADT, and do same in linker => shorter code!
+%update: hmm but the format is actually not that complicated, so win
+% but not that big probably.
 
 % put copy paste of Object format section here?
-
 % Figure!
 
 \section{Code organization}
@@ -339,14 +360,15 @@ License.
 
 \section{Software architecture}
 
-% main -> assemble -> yyparse -> yylex
-%                             -> outcode (increments pc and in pass2 output!)
+% main -> assemble -> (2 passes) -> yyparse -> yylex
+%                                -> outcode (increments pc and in pass2 output!)
 
 % text -> grammar -> symbols -> codegen
-% does not really use an AST, abuse tokens and the grammar to
-% do some computations (the classic old way to do things)
+% does not return an AST (but kinda build one for each instruction), 
+% abuse tokens and the grammar to do some computations 
+% (the classic old way to do things)
 
-% assembler generates a binary that is ARM specific, but not 
+% assembler generates an object file that is ARM specific, but not 
 % matching the ARM instruction set! 5l/asm.c is doing the real conversion
 % (why? because 5l does some inter-lib optimizations? a la llvm? nice design!?)
 % it generates an "object", a kind of .o except it's really not a .o like
@@ -371,7 +393,8 @@ License.
 
 % Instructions are made of an opcode and operands, which can be
 % registers, immediate values, or memory addresses.
-% (actually for ARM there also a COND and some bit modifiers)
+% (actually for ARM there also a COND and some bit modifiers).
+% Memory addresses can use symbolic names.
 
 \section{[[Opcode]]}
 
@@ -496,6 +519,7 @@ struct	Gen
     long	offset; // offset or generic value
     double	dval;
     char	sval[8];
+
     <<[[Gen]] other fields>>
 };
 @
@@ -547,11 +571,6 @@ short	reg;
 % many operands are either directly a register (D_REG), or an offset
 % to a register (D_OREG), so most operands involve at least one register
 % (this make the link with the previous section also)
-
-% see cinit()
-<<global nullgen>>=
-Gen	nullgen;
-@
 
 
 % ok but what about an Instruction data structure?
@@ -629,7 +648,7 @@ struct Itab
 
     //enum<token_kind>
     ushort	type;
-    //enum<opcode|operand_kind|name_kind|registr> | int
+    //enum<opcode|operand_kind|sym_kind|registr> | int
     ushort	value;
 };
 @
@@ -654,8 +673,13 @@ struct Itab itab[] =
 \section{[[Sym]] and [[hash]]}
 
 % assembling is a lot about symbolic name processing!
-% (actually generic struct in aa/)
+% The sym structure below is a kind of symbol tables, keep track
+% of what symbolic names are used, their type (labels vs variables
+% vs parameter vs local vs function).
 
+% This symbol table is abused also by the lexer.
+
+% (actually generic struct in aa/)
 <<struct Sym>>=
 struct	Sym
 {
@@ -794,35 +818,36 @@ slookup(char *s)
 %@
 
 
-\section{[[Name_kind]]}
+\section{[[Sym_kind]]}
 
 % important rule of assembler is to use symbolic names, for
 % labels, but also for entities, that can even possibly
-% defined in another file. So arguments of some operands
-% are really names, symbols.
-
-% e.g. TEXT foo ... or MOV $1, bar(SB) or BL bar(SB)
-% in the case of MOV $1, bar(SB), the Gen structure
-% for the first operand will be a D_CONST of offset 1.
-% for the second operand will be a D_OREG of SB and sym bar
-% with name_kind = D_EXTERN and offset 0.
+% defined in another file. So operands of some opcodes
+% are really names, symbols, to define them e.g. TEXT or
+% to use them e.g. MOV.
 
 <<[[Gen]] other fields>>=
 // option<Sym>
 Sym*	sym;
 @
-% hmm actually maybe should rename this field 'name'
+%less: maybe should rename this field 'name'? and then use name_kind?
 
-% Assembler is outputing a symbol table in the object file?
-% TODO: really? symbol table? or it's just spreaded ANAME?
+% example: TEXT foo(SB) ... or MOV $1, bar(SB) or BL bar(SB).
+% in the case of MOV $1, bar(SB), the Gen structure
+% for the first operand will be a D_CONST of offset/value 1.
+% For the second operand will be a D_OREG with 
+% with symkind = D_EXTERN (SB), offset 0, and sym "bar".
+
+
+% Assembler is outputing a (spreaded) symbol table in the object file.
 % Important job of assembler is to prepare for linker, to enable
-% the linker to ... link modules together and so to resolve references 
+% the linker to link modules together and so to resolve references 
 % to external symbols.
 
-<<enum name_kind(arm)>>=
-enum name_kind {
+<<enum sym_kind(arm)>>=
+enum sym_kind {
    N_NONE,
-   <<name_kind cases>>
+   <<sym_kind cases>>
 };
 @
 %note: this used to be with operand_kind, but they are really disjoint
@@ -830,12 +855,14 @@ enum name_kind {
 % actually a separate Dconv and Nconv (but in 8l/ they are together).
 
 <<[[Gen]] other fields>>=
-// option<name_kind>, None = N_NONE
-short	name;
+// option<sym_kind>, None = N_NONE
+short	symkind;
 @
-%less: rename name to name_kind? name as a field is used in many structures
-%less: rename also the sym field here?
-%note that can have name_kind set but not necessarality a sym,
+%old: was called name, but confusing I think, name as a field was used in
+% many structures and it's actually not a name
+%less: rename name to name_kind? rename also the sym field above?
+
+%note that can have symkind set but not necessarality a sym,
 % but it's in the degenerated case of con ( pointer ) which
 % I think should not happen (or should happen when don't care
 % about naming the parameter so just do  4(FP) in which
@@ -925,12 +952,19 @@ cinit(void)
 % at the def location
 % very similar to the x86 version, except the few change for nullgen fields
 
+% see cinit()
+<<global nullgen>>=
+Gen	nullgen;
+@
+
+
+
 <<[[cinit()]] nullgen initialisation>>=
 nullgen.type = D_NONE;
 nullgen.offset = 0;
 nullgen.reg = R_NONE;
 nullgen.sym = S;
-nullgen.name = 0;
+nullgen.symkind = N_NONE;
 if(FPCHIP)
     nullgen.dval = 0;
 for(i=0; i<sizeof(nullgen.sval); i++)
@@ -1144,11 +1178,7 @@ pinit(char *f)
     newfile(f, -1);
     peekc = IGN;
 
-    symcounter = 1;
-    for(i=0; i<NSYM; i++) {
-        h[i].type = 0;
-        h[i].sym = S;
-    }
+    <<[[pinit]] symcounter and h initialisation>>
 
     for(i=0; i<NHASH; i++)
         for(s = hash[i]; s != S; s = s->link)
@@ -3384,8 +3414,8 @@ ASWPBU,
  * SWAP
  */
 | LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg   { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond ireg ',' reg   { outcode($1, $2, &$3, $5.reg, &$5); }
+| LTYPE9 cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
 @
 %$
 
@@ -3613,8 +3643,6 @@ spreg:
 
 
 
-
-
 \subsection{Constants}
 
 % con = constant
@@ -3638,7 +3666,8 @@ imm: '$' con
 % see con section below, essentially static-time integer constants
 % (not float, not string)
 
-% float constants are in another category
+% float constants are in another category, actually they
+% are allowed only for ximm and so for MOV and DATA categories.
 
 \subsection{Shift registers}
 % register and constant in some sense
@@ -3862,8 +3891,8 @@ name:
  {
   $$ = nullgen;
   $$.type = D_OREG;
-  $$.name = $4;
   $$.sym = $1;
+  $$.symkind = $4;
   $$.offset = $2;
  }
 @
@@ -3902,7 +3931,7 @@ pointer:
 % can do 
 %	BL	div(SB)  so it's SB but it's really a code reference
 
-<<name_kind cases>>=
+<<sym_kind cases>>=
 D_EXTERN, // data/bss values (from SB)
 D_AUTO,   // stack values (from SP)
 D_PARAM,  // parameter (from FP)
@@ -3926,14 +3955,14 @@ offset:
  {
   $$ = nullgen;
   $$.type = D_OREG;
-  $$.name = D_STATIC;
   $$.sym = $1;
+  $$.symkind = D_STATIC;
   $$.offset = $4;
  }
 @
 %$
 
-<<name_kind cases>>=
+<<sym_kind cases>>=
 D_STATIC, // data static variables (from SB)
 @
 
@@ -3943,8 +3972,8 @@ D_STATIC, // data static variables (from SB)
  {
   $$ = nullgen;
   $$.type = D_OREG;
-  $$.name = $3;
   $$.sym = S;
+  $$.symkind = $3;
   $$.offset = $1;
  }
 @
@@ -4211,7 +4240,7 @@ AGLOBL,
 % DATA boot_CONF_outlen+0(SB)/4, $67523
 % GLOBL boot_CONF_outlen+0(SB), $4
 
-\subsection{[[DATA/WORD]]}
+\subsection{[[WORD/DATA]]}
 
 <<pseudo opcodes>>=
 ADATA,
@@ -4359,9 +4388,13 @@ comma:
 
 \chapter{Object Generation}
 
-% it's not machine code generation ... 5l/optab.c does this.
-% Note also that we must output code that can be relocated! so need to 
+% it's object generation, not machine code generation ... 5l/optab.c does this.
+
+% Note also that we must output code that will be part of a bigger set.
+% An object is really a module, defining symbols and using external symbols.
+% So the code we output can be relocated! so need to 
 % output information about use of external symbols! 'U'
+% (and also information about symbols the module defines! 'T', 'D')
 
 \section{Object format}
 
@@ -4371,18 +4404,26 @@ comma:
 %  - condition (1 byte)
 %  - register (1 byte) (most instrs have at least one register operand)
 %  - line  (4 bytes)
-%  - operand1, 
+%  - operand1
 %  - operand2
 %  where the operands depending on the operand_kind can actually have
-%  different size. the register above is a kind of operand3.
-% the operand itself have a specific format too:
-%  - 
+%  different size. The register above is a kind of operand3.
+%
+% the operands themselves have a specific format too
+%  - operand_kind (D_CONST, D_REG, etc)
+%  - register (again) if any
+%  - symidx if any (for D_OREG, and also D_CONST (but really D_ADDR))
+%  - symkind if any (for the same)
+%  - variable size data, nothing for D_REG, offset for D_OREG, 
+%    float for D_FLOAT, string for D_SCONST, ...
+
 %TODO: figure!!
 
 % Then spreaded among those instructions are also symbol table
 % entries, using a weird scheme
-% ANAME: name_kind (1 byte), ?? (1 byte), '<', string finished by \0
-
+% ANAME: symkind (1 byte), ?? (1 byte), '<', string finished by \0
+% (hmm the symkind might be redundant then if it's already listed
+%  as part of the operand?)
 
 % the header is really just a set of ANAME and AHISTORY, and
 % AHISTORY just the same format than other instructions.
@@ -4401,7 +4442,7 @@ comma:
 % scond is cond bits and also special bits
 <<function outcode(arm)>>=
 void
-outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
+outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
 {
     <<[[outcode()]] locals>>
 
@@ -4431,74 +4472,6 @@ out:
 % skip pc++ for AGLOBL and ADATA because those pseudo ops concern
 % the DATA section, not the TEXT section.
 % WORD is for the TEXT section too!
-
-
-\section{Operand output, [[zaddr()]]}
-
-% outcode -> <>
-% less: rename? out_operand?
-% s is index in h[] for symbol involved in the operand?
-% or 0 if no symbol involved for this operand?
-<<function zaddr(arm)>>=
-void
-zaddr(Gen *a, int s)
-{
-    long l;
-    int i;
-    char *n;
-    Ieee e;
-
-    // operand format, the operand kind first!
-    Bputc(&obuf, a->type);
-
-    Bputc(&obuf, a->reg);
-
-    // idx in symbol table, 0 if no symbol involved in the operand
-    Bputc(&obuf, s);
-    // name kind of symbol, if any
-    Bputc(&obuf, a->name);
-
-    switch(a->type) {
-    <<[[zaddr()]] cases>>
-    default:
-        print("unknown type %d\n", a->type);
-        exits("arg");
-
-    }
-}
-@
-
-
-<<[[zaddr()]] cases>>=
-case D_NONE:
-case D_REG:
-case D_PSR:
-    break;
-
-case D_CONST:
-case D_OREG:
-case D_BRANCH:
-case D_SHIFT:
-    l = a->offset;
-    Bputc(&obuf, l);
-    Bputc(&obuf, l>>8);
-    Bputc(&obuf, l>>16);
-    Bputc(&obuf, l>>24);
-    break;
-
-case D_SCONST:
-    n = a->sval;
-    for(i=0; i<NSNAME; i++) {
-        Bputc(&obuf, *n);
-        n++;
-    }
-    break;
-@
-
-
-
-
-
 
 
 <<[[outcode()]] adjust a and scond when a is AB>>=
@@ -4534,48 +4507,162 @@ static int bcode[] =
 @
 
 
-\section{Symbol table, [[h]] and [[sym]]}
-% put in Core DS? h is reset in pinit() and it seems important
 
-% I think this h thing is mainly an optimisation to avoid
-% generating too many ANAME.
+\section{Operand output, [[zaddr()]]}
 
-% when an instruction involves a symbol
-% the generated code contain an int that is an index
-% in a symbol table!
+% outcode -> <>
+% less: rename? out_operand?
+% s is index in h[] for symbol involved in the operand?
+% or 0 if no symbol involved for this operand?
+<<function zaddr(arm)>>=
+void
+zaddr(Gen *a, int symidx)
+{
+    <<[[zaddr()]] locals>>
+
+    // operand format, the operand kind first!
+    Bputc(&obuf, a->type);
+
+    Bputc(&obuf, a->reg);
+
+    // idx in symbol table, 0 if no symbol involved in the operand
+    Bputc(&obuf, symidx);
+    // symkind of the symbol, if any
+    Bputc(&obuf, a->symkind);
+
+    switch(a->type) {
+    <<[[zaddr()]] cases>>
+    default:
+        print("unknown type %d\n", a->type);
+        exits("arg");
+
+    }
+}
+@
+
+\ifallcode
+<<[[zaddr()]] locals>>=
+long l;
+char *n;
+Ieee e;
+int i;
+@
+\fi
+
+<<[[zaddr()]] cases>>=
+case D_NONE:
+case D_REG:
+case D_PSR:
+    break;
+
+case D_CONST:
+case D_OREG:
+case D_BRANCH:
+case D_SHIFT:
+    l = a->offset;
+    Bputc(&obuf, l);
+    Bputc(&obuf, l>>8);
+    Bputc(&obuf, l>>16);
+    Bputc(&obuf, l>>24);
+    break;
+
+case D_SCONST:
+    n = a->sval;
+    for(i=0; i<NSNAME; i++) {
+        Bputc(&obuf, *n);
+        n++;
+    }
+    break;
+@
 
 
-% to be relocated by 5l later when the actual symbol is found and
-% has a concrete address.
+\section{Symbol table, [[h]] and [[ANAME]]}
+%note: we could put Htab in Core DS, h is reset in pinit(), but it's
+% really just local to the Output code generation so I think
+% it is better to put this DS here I think.
+
+% When an operand involves a symbol, the generated operand code 
+% contain an int that is an index in a symbol table! See zaddr().
+
+% the way this symbol table is stored in the object file is a bit
+% tricky. They could have put the table at the beginning
+% of the file (I think it would have been simpler). Instead
+% the symbol table is spreaded in the object file and they use
+% a circular array scheme.
+
+
+% so among all those instructions there are some symbol table
+% elements, ANAME.
+
+<<pseudo opcodes>>=
+ANAME,
+@
+% could be renamed ASYM
+
+%old: if ANAME is after AHISTORY in 5.out.h then got
+% some bugs in ar such as "inconsistent file xxx.5 in libc.a"
+%update: maybe it was because the Makefile pb where actually
+% libmach was not recompiled?
+
+% outcode -> <>
+% for operands involving symbols.
+% less: rename? out_symbol_reference?
+<<function zname(arm)>>=
+void
+zname(char *n, int symkind, int symidx)
+{
+
+    Bputc(&obuf, ANAME);
+    Bputc(&obuf, symkind);	/* type */
+    Bputc(&obuf, symidx);	/* sym */
+    while(*n) {
+        Bputc(&obuf, *n);
+        n++;
+    }
+    Bputc(&obuf, '\0');
+}
+@
+% note that labels do not generate code, they are local to the .o
+% and used to compute offsets (pc). TEXT generate symbols defs
+% and some opcodes generate symbol references.
+
+% symidx may seem weird, why need idx if store the symbol entries
+% one after the other?
+
+
+
 
 
 <<struct Htab>>=
 struct Htab
 {
-    // ref<Sym>
+    // ref<Sym>>
     Sym*	sym;
-    //enum<name_kind>
-    short	type;
+    //enum<sym_kind>
+    short	symkind;
 };
 @
-%todo: rename type to namekind? avoid confusion with Gen.type?
-% it's a subset of Sym but just for the symbols? (and an array
-% insteaf of a hash?)
+%old: I rename 'type' to symkind, to avoid confusion with Gen.type.
+% Htab is a sliced subset of Sym but just for the symbols 
+% (and an array insteaf of a hash)
 
 <<constant NSYM>>=
 #define	NSYM	50
 @
-% limit on number of unresolved external symbols???
-% anyway need to be < 256 as currently use Bputc to marshall 
-% symbol indexes in zaddr()
+% limit on number of unresolved external symbols? Nope.
+% note: need to be < 256 as currently use Bputc to marshall 
+%  symbol indexes in zaddr().
 
 
-% starts to be used at index 1, as 0 is used as index for none value
+% starts to be used at index 1, as 0 is used as index for none symbol.
 <<global h>>=
 // array<ref<Sym>>
 struct Htab h[NSYM];
 @
 % why call it h when really it's an array ...
+
+% h is an optimisation to avoid generating too many ANAME? But
+% why not a symbol table at the beginning of the file?
 
 
 % next free entry in h (actually can be reseted to 1)
@@ -4587,7 +4674,7 @@ int	symcounter;
 % (as a global, as a field)
 
 <<[[Sym]] other fields>>=
-//?? seems used only by outcode
+// index> in h when the Sym is really a symbol, 0 when not a symbol
 byte	symidx;
 @
 %old: was called 'sym', but really it's an index in h, and it was confusing
@@ -4595,19 +4682,16 @@ byte	symidx;
 % char enough??
 
 
-
-\section{[[ANAME]]}
-% I think each time an instruction reference a symbol, an ANAME
-% is output
-
-
-<<pseudo opcodes>>=
-ANAME,
+<<[[pinit]] symcounter and h initialisation>>=
+symcounter = 1;
+for(i=0; i<NSYM; i++) {
+    h[i].symkind = 0; // N_NONE
+    h[i].sym = S;
+}
 @
-%WEIRD: if ANAME is after AHISTORY in 5.out.h then got
-% some bugs in ar such as "inconsistent file xxx.5 in libc.a"
-%update: maybe it was because the Makefile pb where actually
-% libmach was not recompiled?
+
+
+
 
 
 
@@ -4616,8 +4700,8 @@ ANAME,
 int sf;
 // symbol to, index in h[]
 int st;
-// enum<name_kind>???
-int t;
+// enum<sym_kind>
+int symkind;
 Sym *s;
 @
 
@@ -4635,18 +4719,18 @@ while(s != S) {
     if(sf < 0 || sf >= NSYM)
         sf = 0;
 
-    t = g1->name;
+    symkind = g1->symkind;
 
     // already generated an ANAME for this symbol reference
-    if(h[sf].type == t)
+    if(h[sf].symkind == symkind)
      if(h[sf].sym == s)
         break;
 
-    zname(s->name, t, symcounter);
     s->symidx = symcounter;
     h[symcounter].sym = s;
-    h[symcounter].type = t;
+    h[symcounter].symkind = symkind;
     sf = symcounter;
+    zname(s->name, symkind, symcounter);
 
     symcounter++;
     if(symcounter >= NSYM)
@@ -4663,17 +4747,17 @@ while(s != S) {
     if(st < 0 || st >= NSYM)
         st = 0;
 
-    t = g2->name;
+    symkind = g2->symkind;
 
-    if(h[st].type == t)
+    if(h[st].symkind == symkind)
       if(h[st].sym == s)
         break;
 
-    zname(s->name, t, symcounter);
     s->symidx = symcounter;
     h[symcounter].sym = s;
-    h[symcounter].type = t;
+    h[symcounter].symkind = symkind;
     st = symcounter;
+    zname(s->name, symkind, symcounter);
 
     symcounter++;
     if(symcounter >= NSYM)
@@ -4685,38 +4769,12 @@ while(s != S) {
 }
 @
 
-% outcode -> <>
-% for unresolved symbol names?
-% less: rename? out_symbol_reference?
-% note that labels do not generate code, they are local to the .o
-% and used to compute offsets (pc). TEXT generate symbols defs
-% and different opcodes generate symbol references.
-<<function zname(arm)>>=
-void
-zname(char *n, int t, int s)
-{
 
-    Bputc(&obuf, ANAME);
-    Bputc(&obuf, t);	/* type */
-    Bputc(&obuf, s);	/* sym */
-    while(*n) {
-        Bputc(&obuf, *n);
-        n++;
-    }
-    Bputc(&obuf, '\0');
-}
-@
+\section{File and line information, [[outhist()]] and [[AHISTORY]]}
 
-% when output the actual symbol table? zname output indexes
-% in h!
+% It's not really an header in traditional sense,
+% the object could be parsed without those AHISTORY and ANAME.
 
-
-
-
-
-\section{Object header, [[outhist()]]}
-
-% It looks like outhist() generate some header information.
 % Where is the spec of the format? 5l uses that I guess no?
 
 % main -> assemble -> outhist (at begining of pass 2)
@@ -4729,10 +4787,10 @@ AHISTORY,
 
 
 
-<<name_kind cases>>=
+<<sym_kind cases>>=
 D_FILE,
 @
-<<name_kind cases>>=
+<<sym_kind cases>>=
 D_FILE1, // used by linker only?
 @
 
@@ -4772,7 +4830,7 @@ outhist(void)
             }
             if(n) {
                 Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */ // name_kind
+                Bputc(&obuf, D_FILE);	/* type */ // sym_kind
                 Bputc(&obuf, 1);	/* sym */
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);

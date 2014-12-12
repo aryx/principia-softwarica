@@ -173,8 +173,8 @@ inst:
  * SWAP
  */
 | LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg   { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond ireg ',' reg   { outcode($1, $2, &$3, $5.reg, &$5); }
+| LTYPE9 cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
 /*x: inst rule(arm) */
 /*
  * TEXT/GLOBL
@@ -389,8 +389,8 @@ name:
  {
   $$ = nullgen;
   $$.type = D_OREG;
-  $$.name = $4;
   $$.sym = $1;
+  $$.symkind = $4;
   $$.offset = $2;
  }
 /*x: name rule */
@@ -398,8 +398,8 @@ name:
  {
   $$ = nullgen;
   $$.type = D_OREG;
-  $$.name = D_STATIC;
   $$.sym = $1;
+  $$.symkind = D_STATIC;
   $$.offset = $4;
  }
 /*x: name rule */
@@ -407,8 +407,8 @@ name:
  {
   $$ = nullgen;
   $$.type = D_OREG;
-  $$.name = $3;
   $$.sym = S;
+  $$.symkind = $3;
   $$.offset = $1;
  }
 /*e: name rule */

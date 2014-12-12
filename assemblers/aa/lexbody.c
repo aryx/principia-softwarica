@@ -561,11 +561,13 @@ pinit(char *f)
     newfile(f, -1);
     peekc = IGN;
 
+    /*s: [[pinit]] symcounter and h initialisation */
     symcounter = 1;
     for(i=0; i<NSYM; i++) {
-        h[i].type = 0;
+        h[i].symkind = 0; // N_NONE
         h[i].sym = S;
     }
+    /*e: [[pinit]] symcounter and h initialisation */
 
     for(i=0; i<NHASH; i++)
         for(s = hash[i]; s != S; s = s->link)

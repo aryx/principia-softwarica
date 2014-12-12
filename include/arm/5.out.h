@@ -199,9 +199,9 @@ enum opcode
     /*x: pseudo opcodes */
     AEND,
     /*x: pseudo opcodes */
-    AHISTORY,
-    /*x: pseudo opcodes */
     ANAME,
+    /*x: pseudo opcodes */
+    AHISTORY,
     /*x: pseudo opcodes */
     ACASE,
     ABCASE,
@@ -245,22 +245,22 @@ enum operand_kind {
 };
 /*e: enum operand_kind(arm) */
 
-/*s: enum name_kind(arm) */
-enum name_kind {
+/*s: enum sym_kind(arm) */
+enum sym_kind {
    N_NONE,
-   /*s: name_kind cases */
+   /*s: sym_kind cases */
    D_EXTERN, // data/bss values (from SB)
    D_AUTO,   // stack values (from SP)
    D_PARAM,  // parameter (from FP)
-   /*x: name_kind cases */
+   /*x: sym_kind cases */
    D_STATIC, // data static variables (from SB)
-   /*x: name_kind cases */
+   /*x: sym_kind cases */
    D_FILE,
-   /*x: name_kind cases */
+   /*x: sym_kind cases */
    D_FILE1, // used by linker only?
-   /*e: name_kind cases */
+   /*e: sym_kind cases */
 };
-/*e: enum name_kind(arm) */
+/*e: enum sym_kind(arm) */
 
 /*s: constant NSNAME(arm) */
 #define	NSNAME		8

@@ -904,14 +904,14 @@ jackpot:
         if(t == D_ADDR)
             t = g2->from.index;
 
-        if(h[sf].type == t)
+        if(h[sf].symkind == t)
             if(h[sf].sym == s)
                 break;
 
         zname(s->name, t, symcounter);
         s->symidx = symcounter;
         h[symcounter].sym = s;
-        h[symcounter].type = t;
+        h[symcounter].symkind = t;
         sf = symcounter;
         symcounter++;
         if(symcounter >= NSYM)
@@ -932,14 +932,14 @@ jackpot:
         if(t == D_ADDR)
             t = g2->to.index;
 
-        if(h[st].type == t)
+        if(h[st].symkind == t)
             if(h[st].sym == s)
                 break;
 
         zname(s->name, t, symcounter);
         s->symidx = symcounter;
         h[symcounter].sym = s;
-        h[symcounter].type = t;
+        h[symcounter].symkind = t;
         st = symcounter;
         symcounter++;
         if(symcounter >= NSYM)

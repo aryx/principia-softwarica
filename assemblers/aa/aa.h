@@ -76,8 +76,8 @@ struct	Sym
     //option<string>, for '#define FOO xxx' expansion
     char*	macro;
     /*x: [[Sym]] other fields */
-    //?? seems used only by outcode
-    char	symidx;
+    // index> in h when the Sym is really a symbol, 0 when not a symbol
+    byte	symidx;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
@@ -124,10 +124,10 @@ struct	Io
 /*s: struct Htab */
 struct Htab
 {
-    // ref<Sym>
+    // ref<Sym>>
     Sym*	sym;
-    //enum<name_kind>
-    short	type;
+    //enum<sym_kind>
+    short	symkind;
 };
 /*e: struct Htab */
 extern struct Htab h[NSYM];

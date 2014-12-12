@@ -204,7 +204,7 @@ struct Itab
 
     //enum<token_kind>
     ushort	type;
-    //enum<opcode|operand_kind|name_kind|registr> | int
+    //enum<opcode|operand_kind|sym_kind|registr> | int
     ushort	value;
 };
 /*e: struct Itab(arm) */
@@ -446,7 +446,7 @@ cinit(void)
     nullgen.offset = 0;
     nullgen.reg = R_NONE;
     nullgen.sym = S;
-    nullgen.name = 0;
+    nullgen.symkind = N_NONE;
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
@@ -494,12 +494,12 @@ cclean(void)
 
 /*s: function zname(arm) */
 void
-zname(char *n, int t, int s)
+zname(char *n, int symkind, int symidx)
 {
 
     Bputc(&obuf, ANAME);
-    Bputc(&obuf, t);	/* type */
-    Bputc(&obuf, s);	/* sym */
+    Bputc(&obuf, symkind);	/* type */
+    Bputc(&obuf, symidx);	/* sym */
     while(*n) {
         Bputc(&obuf, *n);
         n++;
@@ -510,12 +510,14 @@ zname(char *n, int t, int s)
 
 /*s: function zaddr(arm) */
 void
-zaddr(Gen *a, int s)
+zaddr(Gen *a, int symidx)
 {
+    /*s: [[zaddr()]] locals */
     long l;
-    int i;
     char *n;
     Ieee e;
+    int i;
+    /*e: [[zaddr()]] locals */
 
     // operand format, the operand kind first!
     Bputc(&obuf, a->type);
@@ -523,9 +525,9 @@ zaddr(Gen *a, int s)
     Bputc(&obuf, a->reg);
 
     // idx in symbol table, 0 if no symbol involved in the operand
-    Bputc(&obuf, s);
-    // name kind of symbol
-    Bputc(&obuf, a->name);
+    Bputc(&obuf, symidx);
+    // symkind of the symbol, if any
+    Bputc(&obuf, a->symkind);
 
     switch(a->type) {
     /*s: [[zaddr()]] cases */
@@ -605,15 +607,15 @@ static int bcode[] =
 
 /*s: function outcode(arm) */
 void
-outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
+outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
 {
     /*s: [[outcode()]] locals */
     // symbol from, index in h[]
     int sf;
     // symbol to, index in h[]
     int st;
-    // enum<name_kind>???
-    int t;
+    // enum<sym_kind>
+    int symkind;
     Sym *s;
     /*e: [[outcode()]] locals */
 
@@ -628,7 +630,7 @@ outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
     if(pass == 1)
         goto out;
 
-    /*s: [[outcode()]] st and sf computation */
+    /*s: [[outcode()]] st and sf computation, and possible calls to zname */
     jackpot:
     sf = 0;
     s = g1->sym;
@@ -639,21 +641,22 @@ outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
         if(sf < 0 || sf >= NSYM)
             sf = 0;
 
-        t = g1->name;
+        symkind = g1->symkind;
 
         // already generated an ANAME for this symbol reference
-        if(h[sf].type == t)
+        if(h[sf].symkind == symkind)
          if(h[sf].sym == s)
             break;
 
-        zname(s->name, t, symcounter);
         s->symidx = symcounter;
         h[symcounter].sym = s;
-        h[symcounter].type = t;
+        h[symcounter].symkind = symkind;
         sf = symcounter;
+        zname(s->name, symkind, symcounter);
+
         symcounter++;
         if(symcounter >= NSYM)
-            symcounter = 1; // ???????? bug?
+            symcounter = 1;
         break;
     }
 
@@ -666,17 +669,18 @@ outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
         if(st < 0 || st >= NSYM)
             st = 0;
 
-        t = g2->name;
+        symkind = g2->symkind;
 
-        if(h[st].type == t)
+        if(h[st].symkind == symkind)
           if(h[st].sym == s)
             break;
 
-        zname(s->name, t, symcounter);
         s->symidx = symcounter;
         h[symcounter].sym = s;
-        h[symcounter].type = t;
+        h[symcounter].symkind = symkind;
         st = symcounter;
+        zname(s->name, symkind, symcounter);
+
         symcounter++;
         if(symcounter >= NSYM)
             symcounter = 1;
@@ -685,7 +689,7 @@ outcode(int a, int scond, Gen *g1, int reg, Gen *g2)
             goto jackpot;
         break;
     }
-    /*e: [[outcode()]] st and sf computation */
+    /*e: [[outcode()]] st and sf computation, and possible calls to zname */
 
     // Instruction serialized format: opcode, cond, optional reg, line, operands
     Bputc(&obuf, a);
@@ -738,7 +742,7 @@ outhist(void)
             }
             if(n) {
                 Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */ // name_kind
+                Bputc(&obuf, D_FILE);	/* type */ // sym_kind
                 Bputc(&obuf, 1);	/* sym */
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);
@@ -754,7 +758,7 @@ outhist(void)
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, Always);
-        Bputc(&obuf, 0); // reg
+        Bputc(&obuf, 0); // reg, but could be R_NONE actually
         Bputc(&obuf, h->line);
         Bputc(&obuf, h->line>>8);
         Bputc(&obuf, h->line>>16);

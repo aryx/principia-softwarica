@@ -96,32 +96,32 @@ main(int argc, char *argv[])
         outfile = ARGF();
         break;
     /*x: [[main()]] command line processing(arm) */
-        case 'H':
-            a = ARGF();
-            if(a)
-                HEADTYPE = atolwhex(a);
-            /* do something about setting INITTEXT */
-            break;
-        case 'T':
-            a = ARGF();
-            if(a)
-                INITTEXT = atolwhex(a);
-            break;
-        case 'D':
-            a = ARGF();
-            if(a)
-                INITDAT = atolwhex(a);
-            break;
-        case 'E':
-            a = ARGF();
-            if(a)
-                INITENTRY = a;
-            break;
-        case 'R':
-            a = ARGF();
-            if(a)
-                INITRND = atolwhex(a);
-            break;
+    case 'H':
+        a = ARGF();
+        if(a)
+            HEADTYPE = atolwhex(a);
+        /* do something about setting INITTEXT */
+        break;
+    case 'T':
+        a = ARGF();
+        if(a)
+            INITTEXT = atolwhex(a);
+        break;
+    case 'D':
+        a = ARGF();
+        if(a)
+            INITDAT = atolwhex(a);
+        break;
+    case 'E':
+        a = ARGF();
+        if(a)
+            INITENTRY = a;
+        break;
+    case 'R':
+        a = ARGF();
+        if(a)
+            INITRND = atolwhex(a);
+        break;
     /*x: [[main()]] command line processing(arm) */
     case 'L':
         addlibpath(EARGF(usage()));
@@ -900,15 +900,14 @@ ldobj(fdt f, long c, char *pn)
     /*x: [[ldobj()]] locals(arm) */
     bool skip;
     /*x: [[ldobj()]] locals(arm) */
-    Sym *h[NSYM];
-    Sym *di;
-    Sym *s;
-    /*x: [[ldobj()]] locals(arm) */
     Prog *t;
     int v;
     ulong sig;
     /*x: [[ldobj()]] locals(arm) */
     byte *stop;
+    /*x: [[ldobj()]] locals(arm) */
+    Sym *h[NSYM];
+    Sym *s;
     /*x: [[ldobj()]] locals(arm) */
     // growing_array<filename>  (grown for every 16 elements)
     static char **filen;
@@ -916,6 +915,8 @@ ldobj(fdt f, long c, char *pn)
     static int files = 0;
     /*x: [[ldobj()]] locals(arm) */
     char **nfilen;
+    /*x: [[ldobj()]] locals(arm) */
+    Sym *di;
     /*e: [[ldobj()]] locals(arm) */
 
     /*s: [[ldobj()]] remember set of object filenames */
@@ -1020,6 +1021,7 @@ loop:
             print("	ANAME	%s\n", s->name);
 
         h[o] = s;
+
         if((v == D_EXTERN || v == D_STATIC) && s->type == SNONE)
             s->type = SXREF;
 

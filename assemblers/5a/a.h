@@ -21,6 +21,7 @@ struct	Gen
     long	offset; // offset or generic value
     double	dval;
     char	sval[8];
+
     /*s: [[Gen]] other fields */
     // option<enum<register>>, None = R_NONE
     short	reg;
@@ -28,8 +29,8 @@ struct	Gen
     // option<Sym>
     Sym*	sym;
     /*x: [[Gen]] other fields */
-    // option<name_kind>, None = N_NONE
-    short	name;
+    // option<sym_kind>, None = N_NONE
+    short	symkind;
     /*e: [[Gen]] other fields */
 };
 /*e: struct Gen(arm) */
