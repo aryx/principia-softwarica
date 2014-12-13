@@ -797,7 +797,7 @@ macprag(void)
         hunk += c;
     
         h = alloc(sizeof(Hist));
-        h->name = hp;
+        h->filename = hp;
         h->line = lineno;
         h->offset = -1;
 
@@ -850,7 +850,7 @@ linehist(char *f, int offset)
      * no alloc has happened since the last one
      */
     if(newflag == false && ehist != H && offset != 0 && ehist->offset != 0)
-        if(f && ehist->name && strcmp(f, ehist->name) == 0) {
+        if(f && ehist->filename && strcmp(f, ehist->filename) == 0) {
             ehist->line = lineno;
             ehist->offset = offset;
             return;
@@ -869,9 +869,11 @@ linehist(char *f, int offset)
     newflag = false;
 
     h = alloc(sizeof(Hist));
-    h->name = f;
+    h->filename = f;
     h->line = lineno;
     h->offset = offset;
+
+    //add_list(???)
     h->link = H;
     if(ehist == H) {
         hist = h;

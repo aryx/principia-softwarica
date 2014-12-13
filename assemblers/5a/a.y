@@ -56,13 +56,13 @@
 /*x: type declarations(arm) */
 %type   <gen> reg imm shift
 /*x: type declarations(arm) */
-%type   <lval>  sreg spreg 
-/*x: type declarations(arm) */
-%type   <lval>  rcon
-/*x: type declarations(arm) */
 %type   <gen>   gen 
 /*x: type declarations(arm) */
 %type   <gen>   ximm
+/*x: type declarations(arm) */
+%type   <lval>  sreg spreg 
+/*x: type declarations(arm) */
+%type   <lval>  rcon
 /*x: type declarations(arm) */
 %type   <gen> oreg ioreg ireg nireg 
 /*x: type declarations(arm) */
@@ -278,6 +278,56 @@ imsr:
 | imm
 | shift
 /*x: operand rules(arm) */
+/*s: gen rule */
+gen:
+  reg
+| ximm
+| shift
+/*x: gen rule */
+| oreg
+/*x: gen rule */
+| LPSR
+ {
+  $$ = nullgen;
+  $$.type = D_PSR;
+  $$.reg = $1;
+ }
+/*x: gen rule */
+| freg
+/*x: gen rule */
+| LFCR
+ {
+  $$ = nullgen;
+  $$.type = D_FPCR;
+  $$.reg = $1;
+ }
+/*e: gen rule */
+/*x: operand rules(arm) */
+/*s: ximm rule */
+ximm:
+  '$' con
+ {
+  $$ = nullgen;
+  $$.type = D_CONST;
+  $$.offset = $2;
+ }
+/*x: ximm rule */
+| '$' name
+ {
+  $$ = $2;
+  $$.type = D_CONST;
+ }
+/*x: ximm rule */
+| '$' LSCONST
+ {
+  $$ = nullgen;
+  $$.type = D_SCONST;
+  memcpy($$.sval, $2, sizeof($$.sval));
+ }
+/*x: ximm rule */
+| fcon
+/*e: ximm rule */
+/*x: operand rules(arm) */
 reg:
  spreg
  {
@@ -332,56 +382,6 @@ shift:
   $$.type = D_SHIFT;
   $$.offset = $1 | $4 | (3 << 5);
  }
-/*x: operand rules(arm) */
-/*s: gen rule */
-gen:
-  reg
-| ximm
-| shift
-/*x: gen rule */
-| oreg
-/*x: gen rule */
-| LPSR
- {
-  $$ = nullgen;
-  $$.type = D_PSR;
-  $$.reg = $1;
- }
-/*x: gen rule */
-| freg
-/*x: gen rule */
-| LFCR
- {
-  $$ = nullgen;
-  $$.type = D_FPCR;
-  $$.reg = $1;
- }
-/*e: gen rule */
-/*x: operand rules(arm) */
-/*s: ximm rule */
-ximm:
-  '$' con
- {
-  $$ = nullgen;
-  $$.type = D_CONST;
-  $$.offset = $2;
- }
-/*x: ximm rule */
-| '$' name
- {
-  $$ = $2;
-  $$.type = D_CONST;
- }
-/*x: ximm rule */
-| '$' LSCONST
- {
-  $$ = nullgen;
-  $$.type = D_SCONST;
-  memcpy($$.sval, $2, sizeof($$.sval));
- }
-/*x: ximm rule */
-| fcon
-/*e: ximm rule */
 /*x: operand rules(arm) */
 /*s: name rule */
 name:

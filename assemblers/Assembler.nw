@@ -586,6 +586,8 @@ short	reg;
 % see y.tab.h for token_kind enum (which are actually a set of #define
 % with also ascii char into it)
 
+% less: rename LTYPEXXX by T_END, T_TEXT, etc?
+% l for lexeme?
 <<token declarations(arm)>>=
 /* opcodes */
 %token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
@@ -683,11 +685,6 @@ struct Itab itab[] =
 <<struct Sym>>=
 struct	Sym
 {
-    // symbols are used for many things:
-    //  - for labels (bar:), 
-    //  - for symbols/names (e.g. TEXT foo, or MOV foo(SB), R1)
-    //  - variables (VAR=xxx)
-    //  - but also (ab)used for opcodes (AMOV), registers (LR1) (see itab)
     char	*name;
 
     //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LTYPE1, etc)
@@ -703,6 +700,13 @@ struct	Sym
 };
 @
 %note: value is a vlong in va/
+%note: there is no symkind here, this is stored outside the Sym
+
+%    // symbols are used for many things:
+%    //  - for labels (bar:), 
+%    //  - for symbols/names (e.g. TEXT foo, or MOV foo(SB), R1)
+%    //  - variables (VAR=xxx)
+%    //  - but also (ab)used for opcodes (AMOV), registers (LR1) (see itab)
 
 % this is used for user defined names (e.g. TEXT foo), but
 % abused also for keywords operand like AL, AX, and also for opcode
@@ -985,7 +989,9 @@ for(i=0; itab[i].name; i++) {
 
 % cwd, for #include "" (cwd can change as one include other files)
 %  =~ dirname(current_file)
-% less: rename? dirname_of_current_file?
+% less: rename? dirname_of_input_file? (actually it's really
+% dirname_of_current_input_file as 5a can process multiple files,
+% but it would complicate things; multifile is an advanced topic)
 <<global pathname>>=
 char*	pathname;
 @
@@ -1144,6 +1150,11 @@ cclean(void)
 <<global lineno>>=
 long	lineno;
 @
+% this is incremented by the lexer, and is also outputted
+% in the object code for each instruction! so can trace back
+% the line of an instruction!
+% Is it after #include expansion line number?
+% less: rename glineno?
 
 
 % =~ yyback(1) trick, used by yylex() and getc(), and?? cg?
@@ -2000,7 +2011,7 @@ setinclude(char *p)
 @
 
 
-\subsection{Tracing}
+\subsection{Tracing and [[Hist]]}
 
 % when error, need give line, but can be because of context,
 % so useful to give the full location of an error, that is the list
@@ -2013,13 +2024,13 @@ setinclude(char *p)
 <<struct Hist>>=
 struct	Hist
 {
-    char*	name;
+    char*	filename;
 
-    long	line;
-    long	offset;
+    long	line; // global line of this Hist
+    long	offset; // ??
 
     // Extra
-    Hist*	link;
+    <<[[Hist]] extra fields>>
 };
 @
 
@@ -2028,8 +2039,12 @@ struct	Hist
 Hist*	hist;
 @
 
+<<[[Hist]] extra fields>>=
+Hist*	link;
+@
+
 <<global ehist>>=
-// ref<Hist>, end of hist list?
+// ref<Hist>, end of list of hist
 Hist*	ehist;
 @
 
@@ -2058,7 +2073,7 @@ linehist(char *f, int offset)
      * no alloc has happened since the last one
      */
     if(newflag == false && ehist != H && offset != 0 && ehist->offset != 0)
-        if(f && ehist->name && strcmp(f, ehist->name) == 0) {
+        if(f && ehist->filename && strcmp(f, ehist->filename) == 0) {
             ehist->line = lineno;
             ehist->offset = offset;
             return;
@@ -2068,9 +2083,11 @@ linehist(char *f, int offset)
     newflag = false;
 
     h = alloc(sizeof(Hist));
-    h->name = f;
+    h->filename = f;
     h->line = lineno;
     h->offset = offset;
+
+    //add_list(???)
     h->link = H;
     if(ehist == H) {
         hist = h;
@@ -2083,7 +2100,51 @@ linehist(char *f, int offset)
 @
 
 
-% put prfile here?
+% I prefer to put prfile here rather than in the Error appendix.
+% So can better understand actually the tracing mechanism.
+
+% yyerror -> <>, for nice error reporting with include trace
+%  l = lineno
+<<function prfile>>=
+void
+prfile(long l)
+{
+    int i, n;
+    Hist a[HISTSZ], *h;
+    long d;
+
+    n = 0;
+    for(h = hist; h != H; h = h->link) {
+        if(l < h->line)
+            break;
+        if(h->filename) {
+            if(h->offset == 0) {
+                if(n >= 0 && n < HISTSZ)
+                    a[n] = *h;
+                n++;
+                continue;
+            }
+            if(n > 0 && n < HISTSZ)
+                if(a[n-1].offset == 0) {
+                    a[n] = *h;
+                    n++;
+                } else
+                    a[n-1] = *h;
+            continue;
+        }
+        n--;
+        if(n >= 0 && n < HISTSZ) {
+            d = h->line - a[n].line;
+            for(i=0; i<n; i++)
+                a[i].line += d;
+        }
+    }
+    if(n > HISTSZ)
+        n = HISTSZ;
+    for(i=0; i<n; i++)
+        print("%s:%ld ", a[i].filename, (long)(l-a[i].line+a[i].offset+1));
+}
+@
 
 
 \subsection{[[#include]]}
@@ -2771,7 +2832,7 @@ macprag(void)
         hunk += c;
     
         h = alloc(sizeof(Hist));
-        h->name = hp;
+        h->filename = hp;
         h->line = lineno;
         h->offset = -1;
 
@@ -2964,6 +3025,9 @@ getnsn(void)
 
 % assume understand yacc! if not read classic book on lex&yacc
 %  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
+
+% actually not context free, parsing a file modify the kind
+% of some tokens, e.g. labels, lval.
 
 <<5a/a.y>>=
 %{
@@ -3567,8 +3631,46 @@ imsr:
 @
 
 
-%less: hmm put gen rule here? that matches closely
-% at first imsr with reg, ximm and shift?
+% better to put gen rule here instead of rule about memory dereference.
+% That matches closely at first imsr with reg, ximm and shift.
+
+
+
+<<type declarations(arm)>>=
+%type   <gen>   gen 
+@
+% gen? general? 
+% arguments to MOV have less restrictions
+
+
+\ifallcode
+<<operand rules(arm)>>=
+<<gen rule>>
+@
+<<misc rules>>=
+<<oreg rule>>
+@
+<<operand rules(arm)>>=
+<<ximm rule>>
+@
+\fi
+
+
+<<gen rule>>=
+gen:
+  reg
+| ximm
+| shift
+@
+% so close to imsr. close except ximm instead of imm (extended immediate).
+% see below.
+% and also will see later than the gen rule will grow
+
+<<type declarations(arm)>>=
+%type   <gen>   ximm
+@
+
+
 
 \subsection{Registers}
 
@@ -3669,6 +3771,22 @@ imm: '$' con
 % float constants are in another category, actually they
 % are allowed only for ximm and so for MOV and DATA categories.
 
+
+
+% this is used for MOV of course, because of gen, but also
+% for DATA, WORD
+<<ximm rule>>=
+ximm:
+  '$' con
+ {
+  $$ = nullgen;
+  $$.type = D_CONST;
+  $$.offset = $2;
+ }
+@
+% see later the extension, MOV allows more forms of constants
+% (e.g. string constants, float constants)
+
 \subsection{Shift registers}
 % register and constant in some sense
 
@@ -3746,56 +3864,7 @@ D_OREG,
 % it's really like *r2 = r1
 
 
-<<type declarations(arm)>>=
-%type   <gen>   gen 
-@
-% gen? general?
-
-
-
-\ifallcode
-<<operand rules(arm)>>=
-<<gen rule>>
-@
-<<misc rules>>=
-<<oreg rule>>
-@
-<<operand rules(arm)>>=
-<<ximm rule>>
-@
-\fi
-
-
-
-
-<<gen rule>>=
-gen:
-  reg
-| ximm
-| shift
-@
-% so close to imsr. close except ximm instead of imm (extended immediate).
-% see below.
-
-<<type declarations(arm)>>=
-%type   <gen>   ximm
-@
-
-% this is used for MOV of course, because of gen, but also
-% for DATA, WORD
-<<ximm rule>>=
-ximm:
-  '$' con
- {
-  $$ = nullgen;
-  $$.type = D_CONST;
-  $$.offset = $2;
- }
-@
-% see later the extension, MOV allows more forms of constants
-% (e.g. string constants, float constants)
-
-
+% start of difference with imsr!
 <<gen rule>>=
 | oreg
 @
@@ -3841,9 +3910,6 @@ ireg:
 
 
 
-
-
-
 \subsection{Named memory location}
 % (different from labels, which are just for code refs)
 
@@ -3881,9 +3947,12 @@ nireg:
 % name is an operand argument for BL (via nireg), but also
 % for TEXT, and also for MOV (via oreg)
 
+\ifallcode
 <<operand rules(arm)>>=
 <<name rule>>
 @
+\fi
+
 
 <<name rule>>=
 name:
@@ -4018,14 +4087,20 @@ D_BRANCH,
 %type   <lval>  offset
 @
 
-% rel = ? relocatable? nope relative!, argument of B/BL
-% Relative because it's labels which
-% are locals to a file and can be resolved locally (no need symbols)
-% (but the offset value is actually not relative to the current PC,
-% it's an absolute value)
+% rel = ? relocatable? relative?, argument of B/BL
+% Relative because it's labels which are locals to a file and can be
+% resolved locally (no need symbols), but at the same time they will
+% also need to be relocated when all objects are attached after each
+% other
+% (and the offset value is actually not relative to the current PC,
+% it's an absolute value, so it probably means more relocatable than
+% relative in the end)
+
+\ifallcode
 <<operand rules(arm)>>=
 <<rel rule>>
 @
+\fi
 
 <<rel rule>>=
 rel:
@@ -4039,9 +4114,11 @@ rel:
 @
 %$
 
+% there is also nirel where can use a name instead of a label
 
 
-
+% when label is declared later, the symbol table does not know
+% yet that it's an LLABL, see section on labels below.
 <<rel rule>>=
 | LNAME offset
  {
@@ -4053,7 +4130,7 @@ rel:
   $$.offset = $2;
  }
 @
-% if pass == 1 why care about setting the field values?
+%less: if pass == 1 why care about setting the field values?
 % anyway outcode will not use the value
 
 
@@ -4167,7 +4244,7 @@ D_SCONST,
 
 
 
-\section{Labels and [[pc]]}
+\section{Label definitions and [[pc]]}
 
 % this is incremented in outcode() after each instruction 
 % (except for ADATA and AGLOBL)
@@ -4473,6 +4550,11 @@ out:
 % the DATA section, not the TEXT section.
 % WORD is for the TEXT section too!
 
+% note that output line number here! useful for debugging information,
+% to be ablt to go back from one instruction to the actual code!
+% (but lineno after #include expansion, see outhist() section
+% later so one can get from lineno to actual file+lineno
+
 
 <<[[outcode()]] adjust a and scond when a is AB>>=
 /* hack to make B.NE etc. work: turn it into the corresponding conditional*/
@@ -4674,12 +4756,14 @@ int	symcounter;
 % (as a global, as a field)
 
 <<[[Sym]] other fields>>=
-// index> in h when the Sym is really a symbol, 0 when not a symbol
-byte	symidx;
+// index in h when the Sym is really a symbol, 0 when not a symbol
+int	symidx;
 @
 %old: was called 'sym', but really it's an index in h, and it was confusing
 % to have so many fields called sym already (as well as the global sym)
 % char enough??
+%old: was char, but in many places they use int for symcounter so I use int
+% there too now
 
 
 <<[[pinit]] symcounter and h initialisation>>=
@@ -4768,80 +4852,60 @@ while(s != S) {
     break;
 }
 @
+% when jackpot can happen? 
+% if the first operand involved for instance a symbol with for index 41
+% and that the second operand involves a symbol not
+% yet seen and that the next free index turns out to be 41, 
+% then h[41].sym will change but sf now points to a wrong entry
+% and so you have to recompute sf.
+% this is very very suble (too subtle I think).
 
+% replace by:
+%sf = symidx_of_symopt(g1->sym);
+%st = symidx_of_symopt(g2->sym);
+% if (sf == st && sf != 0 && symcounter actually changed) goto jackpot;
+%  (otherwise could loop on MOVW bar(SB), bar(SB)
 
 \section{File and line information, [[outhist()]] and [[AHISTORY]]}
-
-% It's not really an header in traditional sense,
-% the object could be parsed without those AHISTORY and ANAME.
-
-% Where is the spec of the format? 5l uses that I guess no?
-
-% main -> assemble -> outhist (at begining of pass 2)
-%out hist??
+%note: was called Header section, but 
+% it's not really an header in traditional sense,
+% the object could be parsed without those AHISTORY and ANAME I think.
+%less: have a Debugging support section? where put lineno of outcode()
+% there?
 
 <<pseudo opcodes>>=
 AHISTORY,
 @
+% history? because trace history of a line if comes from some #include?
 
-
+% maybe good to take simplest case where have no #include,
+% then what will be the output?
 
 
 <<sym_kind cases>>=
 D_FILE,
 @
-<<sym_kind cases>>=
-D_FILE1, // used by linker only?
-@
 
 
 
+
+% main -> assemble -> <> (at begining of pass 2)
 <<function outhist(arm)>>=
 void
 outhist(void)
 {
     Gen g;
     Hist *h;
-    char *p, *q, *op;
+    char *p, *op;
+    char *q;
     int n;
 
     g = nullgen;
     for(h = hist; h != H; h = h->link) {
-        p = h->name;
-        op = nil;
-        if(p && p[0] != '/' && h->offset == 0 && pathname){
-            if(pathname[0] == '/'){
-                op = p;
-                p = pathname;
-            }
-        }
-        while(p) {
-            q = strchr(p, '/');
-            if(q) {
-                n = q-p;
-                if(n == 0){
-                    n = 1;	/* leading "/" */
-                    *p = '/';
-                }
-                q++;
-            } else {
-                n = strlen(p);
-                q = 0;
-            }
-            if(n) {
-                Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */ // sym_kind
-                Bputc(&obuf, 1);	/* sym */
-                Bputc(&obuf, '<');
-                Bwrite(&obuf, p, n);
-                Bputc(&obuf, '\0');
-            }
-            p = q;
-            if(p == nil && op) {
-                p = op;
-                op = nil;
-            }
-        }
+        p = h->filename;
+
+        <<[[outhist()]] adjust p and op if p is relative filename>>
+        <<[[outhist()]] output each path component as an ANAME>>
         g.offset = h->offset;
 
         Bputc(&obuf, AHISTORY);
@@ -4856,7 +4920,55 @@ outhist(void)
     }
 }
 @
+% bug???? g.offset is used? do zaddr(&g, 0) but g.type = D_NONE
+% at this point which means the offset will not be used.
+% look at linker reading back code, excpect a D_CONST here?
+% this code works for 8a, but not for 5a because zaddr() is
+% different there.
 
+% remember that output lineno for each instruction!
+
+<<[[outhist()]] adjust p and op if p is relative filename>>=
+op = nil;
+if(p && p[0] != '/' && h->offset == 0 && pathname){
+    if(pathname[0] == '/'){
+        op = p;
+        p = pathname;
+    }
+}
+@
+
+<<[[outhist()]] output each path component as an ANAME>>=
+while(p) {
+    q = strchr(p, '/');
+    if(q) {
+        n = q-p;
+        if(n == 0){
+            n = 1;	/* leading "/" */
+            *p = '/';
+        }
+        q++;
+    } else {
+        n = strlen(p);
+        q = nil;
+    }
+
+    if(n) {
+        Bputc(&obuf, ANAME);
+        Bputc(&obuf, D_FILE);	/* type */ // symkind
+        Bputc(&obuf, 1);	/* sym */ //symidx
+        Bputc(&obuf, '<');
+        Bwrite(&obuf, p, n);
+        Bputc(&obuf, '\0');
+    }
+    p = q;
+    if(p == nil && op) {
+        p = op;
+        op = nil;
+    }
+}
+@
+% why print each directory path separately?
 
 \chapter{Advanced Topics}
 
@@ -5488,7 +5600,7 @@ AGOK,
 % GOK =? God only Knows? speciak mark?
 % actually used in both compiler and linker
 % but I think it's used only for zprg, and in ldobj it's an error
-% so maybe we could delete it.
+% so maybe we could delete it, and just use AXXX or ALAST or ANOP instead.
 %old: there was a D_GOK, but it was unused in 5a/5c/5l
 
 <<pseudo opcodes>>=
@@ -5499,6 +5611,8 @@ AINIT,
 
 %again not an opcode, but related (where this bit is stored??)
 % used by 5l (to allow override existing symbol? 5l option?)
+%I think it's for TEXT and DATA instructions and its reg field
+% (that should be unused for TEXT and DATA)
 <<constant DUPOK(arm)>>=
 #define DUPOK		(1<<1)
 @
@@ -5509,6 +5623,10 @@ AINIT,
 #define NOPROF		(1<<0)
 @
 
+% related to linker again, in addition to D_FILE there is:
+<<sym_kind cases>>=
+D_FILE1, // used by linker only?
+@
 
 %dead: #define	ALLTHUMBS	(1<<2)
 
@@ -5688,47 +5806,6 @@ yyerror(char *a, ...)
 #define	HISTSZ		20
 @
 
-% yyerror -> <>, for nice error reporting with include trace
-<<function prfile>>=
-void
-prfile(long l)
-{
-    int i, n;
-    Hist a[HISTSZ], *h;
-    long d;
-
-    n = 0;
-    for(h = hist; h != H; h = h->link) {
-        if(l < h->line)
-            break;
-        if(h->name) {
-            if(h->offset == 0) {
-                if(n >= 0 && n < HISTSZ)
-                    a[n] = *h;
-                n++;
-                continue;
-            }
-            if(n > 0 && n < HISTSZ)
-                if(a[n-1].offset == 0) {
-                    a[n] = *h;
-                    n++;
-                } else
-                    a[n-1] = *h;
-            continue;
-        }
-        n--;
-        if(n >= 0 && n < HISTSZ) {
-            d = h->line - a[n].line;
-            for(i=0; i<n; i++)
-                a[i].line += d;
-        }
-    }
-    if(n > HISTSZ)
-        n = HISTSZ;
-    for(i=0; i<n; i++)
-        print("%s:%ld ", a[i].name, (long)(l-a[i].line+a[i].offset+1));
-}
-@
 
 \chapter{Libc}
 

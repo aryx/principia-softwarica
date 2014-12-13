@@ -978,7 +978,7 @@ outhist(void)
     c = pathchar();
 
     for(h = hist; h != H; h = h->link) {
-        p = h->name;
+        p = h->filename;
         op = nil;
         // relative file?
         if(p && p[0] != c && h->offset == 0 && pathname){

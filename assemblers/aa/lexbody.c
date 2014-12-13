@@ -653,7 +653,7 @@ prfile(long l)
     for(h = hist; h != H; h = h->link) {
         if(l < h->line)
             break;
-        if(h->name) {
+        if(h->filename) {
             if(h->offset == 0) {
                 if(n >= 0 && n < HISTSZ)
                     a[n] = *h;
@@ -678,7 +678,7 @@ prfile(long l)
     if(n > HISTSZ)
         n = HISTSZ;
     for(i=0; i<n; i++)
-        print("%s:%ld ", a[i].name, (long)(l-a[i].line+a[i].offset+1));
+        print("%s:%ld ", a[i].filename, (long)(l-a[i].line+a[i].offset+1));
 }
 /*e: function prfile */
 

@@ -23,7 +23,7 @@ char*	Dlist[30];
 int	nDlist;
 /*e: global nDlist */
 /*s: global ehist */
-// ref<Hist>, end of hist list?
+// ref<Hist>, end of list of hist
 Hist*	ehist;
 /*e: global ehist */
 /*s: global newflag */

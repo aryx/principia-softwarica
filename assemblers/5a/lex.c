@@ -714,12 +714,15 @@ outhist(void)
 {
     Gen g;
     Hist *h;
-    char *p, *q, *op;
+    char *p, *op;
+    char *q;
     int n;
 
     g = nullgen;
     for(h = hist; h != H; h = h->link) {
-        p = h->name;
+        p = h->filename;
+
+        /*s: [[outhist()]] adjust p and op if p is relative filename */
         op = nil;
         if(p && p[0] != '/' && h->offset == 0 && pathname){
             if(pathname[0] == '/'){
@@ -727,6 +730,8 @@ outhist(void)
                 p = pathname;
             }
         }
+        /*e: [[outhist()]] adjust p and op if p is relative filename */
+        /*s: [[outhist()]] output each path component as an ANAME */
         while(p) {
             q = strchr(p, '/');
             if(q) {
@@ -738,12 +743,13 @@ outhist(void)
                 q++;
             } else {
                 n = strlen(p);
-                q = 0;
+                q = nil;
             }
+
             if(n) {
                 Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */ // sym_kind
-                Bputc(&obuf, 1);	/* sym */
+                Bputc(&obuf, D_FILE);	/* type */ // symkind
+                Bputc(&obuf, 1);	/* sym */ //symidx
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);
                 Bputc(&obuf, '\0');
@@ -754,6 +760,7 @@ outhist(void)
                 op = nil;
             }
         }
+        /*e: [[outhist()]] output each path component as an ANAME */
         g.offset = h->offset;
 
         Bputc(&obuf, AHISTORY);

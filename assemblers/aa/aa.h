@@ -58,11 +58,6 @@ typedef	struct	Hist Hist;
 /*s: struct Sym */
 struct	Sym
 {
-    // symbols are used for many things:
-    //  - for labels (bar:), 
-    //  - for symbols/names (e.g. TEXT foo, or MOV foo(SB), R1)
-    //  - variables (VAR=xxx)
-    //  - but also (ab)used for opcodes (AMOV), registers (LR1) (see itab)
     char	*name;
 
     //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LTYPE1, etc)
@@ -76,8 +71,8 @@ struct	Sym
     //option<string>, for '#define FOO xxx' expansion
     char*	macro;
     /*x: [[Sym]] other fields */
-    // index> in h when the Sym is really a symbol, 0 when not a symbol
-    byte	symidx;
+    // index in h when the Sym is really a symbol, 0 when not a symbol
+    int	symidx;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
@@ -137,13 +132,15 @@ extern struct Htab h[NSYM];
 /*s: struct Hist */
 struct	Hist
 {
-    char*	name;
+    char*	filename;
 
-    long	line;
-    long	offset;
+    long	line; // global line of this Hist
+    long	offset; // ??
 
     // Extra
+    /*s: [[Hist]] extra fields */
     Hist*	link;
+    /*e: [[Hist]] extra fields */
 };
 /*e: struct Hist */
 /*s: constant H */
