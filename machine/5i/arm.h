@@ -57,8 +57,8 @@ enum ixxx
 /*e: enum ixxx */
 
 // added by pad
-/*s: enum class_kind */
-enum class_kind {
+/*s: enum opcode */
+enum opcode {
     // AND, ORR, EOR,    BIC
     // ADD, SUB,   RSB, ADC, SBC, RSC
     // TST, TEQ, CMP,    CMN
@@ -84,7 +84,7 @@ enum class_kind {
 
     CUNDEF   = 89
 };
-/*e: enum class_kind */
+/*e: enum opcode */
 
 /*s: constant Nmaxtlb */
 #define Nmaxtlb 64
@@ -95,9 +95,9 @@ enum
 {
     REGARG	= 0,
     REGRET	= 0,
-    REGPC	= 15,
-    REGLINK	= 14,
     REGSP	= 13,
+    REGLINK	= 14,
+    REGPC	= 15,
 };
 /*e: enum regxxx */
 
@@ -152,7 +152,7 @@ struct Registers
     /*s: [[Registers]] other fields */
     uintptr		ar;    // reg.r[REGPC]
     instruction	ir;    // ifetch(reg.ar)
-    //enum<class_kind>
+    //enum<opcode>
     int			class; // arm_class(reg.ir)
     Inst*		ip;    // &itab[reg.class]
     /*x: [[Registers]] other fields */
@@ -193,10 +193,10 @@ enum compare_op
 /*s: enum segment_kind */
 enum segment_kind
 {
-    Stack,
     Text,
     Data,
     Bss,
+    Stack,
 
     Nseg,
 };

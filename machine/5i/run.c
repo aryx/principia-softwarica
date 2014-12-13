@@ -54,7 +54,7 @@ static	char*	cond[16] =
 /*e: global cond */
 
 /*s: global itab */
-//hash<enum<class_kind>, Inst>
+//hash<enum<opcode>, Inst>
 Inst itab[] =
 {
   /*s: [[itab]] elements */
