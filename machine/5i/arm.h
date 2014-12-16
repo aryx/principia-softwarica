@@ -59,30 +59,88 @@ enum ixxx
 // added by pad
 /*s: enum opcode */
 enum opcode {
-    // AND, ORR, EOR,    BIC
-    // ADD, SUB,   RSB, ADC, SBC, RSC
-    // TST, TEQ, CMP,    CMN
-    // MOV,    MVN
+    // ----------------------------------------------------------------------
+    // Arithmetic and logic opcodes
+    // ----------------------------------------------------------------------
+    /*s: arith/logic opcodes */
+    OAND = 0,
+    OEOR = 1, 
+    OSUB = 2, 
+    ORSB = 3, 
+    OADD = 4, 
+    OADC = 5, 
+    OSBC = 6, 
+    ORSC = 7, 
+    OTST = 8, 
+    OTEQ = 9,
+    OCMP = 10,
+    OCMN = 11,
+    OORR = 12,
+    OMOV = 13,
+    OBIC = 14,
+    OMVN = 15,
+    /*x: arith/logic opcodes */
     CARITH0 = 0,  // r,r,r
     CARITH1 = 16, // r<>r, r, r
     CARITH2 = 32, // r<>#, r, r
     CARITH3 = 48, // i,r,r
-    // MUL, MULA, MULLU, MULALU, MULL, MULAL
+    /*x: arith/logic opcodes */
+    OMUL    = 64,
+    OMULA   = 65,
+    OMULLU  = 66,
+    OMULALU = 67,
+    OMULL   = 68,
+    OMULAL  = 69,
+    /*x: arith/logic opcodes */
     CMUL    = 64,
-
-    // SWPW, SWPBU
-    CSWAP   = 70,
-    // MOV, MOVW, MOVB
-    CMEM    = 72,
-    // LDM, STM
+    /*e: arith/logic opcodes */
+    // ----------------------------------------------------------------------
+    // Memory MOV opcodes
+    // ----------------------------------------------------------------------
+    /*s: memory opcodes */
+    OLDW    = 70,
+    OLDB    = 71,
+    OSTW    = 72,
+    OSTB    = 73,
+    /*x: memory opcodes */
+    CMEM0 = 0, // i(r)
+    CMEM1 = 4, // (r),(r)
+    /*x: memory opcodes */
+    OLDH    = 78,
+    OLDBU   = 79,
+    OSTH    = 80,
+    OSTBU   = 81,
+    /*x: memory opcodes */
+    CMEM2    = 78,
+    /*x: memory opcodes */
+    OSWPW = 82,
+    OSWPBU = 83,
+    /*x: memory opcodes */
+    OLDM = 84,
+    OSTM = 85,
+    /*x: memory opcodes */
     CBLOC   = 84,
-
-    // B, BL
+    /*e: memory opcodes */
+    // ----------------------------------------------------------------------
+    // Branching opcodes
+    // ----------------------------------------------------------------------
+    /*s: branching opcodes */
+    OB = 86,
+    OBL = 87,
+    /*x: branching opcodes */
     CBRANCH = 86,
-    // SWI
-    CSYSCALL = 88,
+    /*e: branching opcodes */
+    // ----------------------------------------------------------------------
+    // Syscall opcode
+    // ----------------------------------------------------------------------
+    /*s: syscall opcodes */
+    OSYSCALL = 88,
+    /*e: syscall opcodes */
 
-    CUNDEF   = 89
+    // ----------------------------------------------------------------------
+    // Other opcodes
+    // ----------------------------------------------------------------------
+    OUNDEF   = 89
 };
 /*e: enum opcode */
 
@@ -95,6 +153,7 @@ enum
 {
     REGARG	= 0,
     REGRET	= 0,
+
     REGSP	= 13,
     REGLINK	= 14,
     REGPC	= 15,

@@ -58,116 +58,116 @@ static	char*	cond[16] =
 Inst itab[] =
 {
   /*s: [[itab]] elements */
-  [CUNDEF] =  { undef,		"undef"  },
+  [OUNDEF] =  { undef,		"undef"  },
   /*x: [[itab]] elements */
-  [CMUL+0] =  { Imul,		"MUL",	Iarith },
-  [CMUL+1] =  { Imula,	"MULA",	Iarith },	
-  [CMUL+2] =  { Imull,	"MULLU",	Iarith },
-  [CMUL+3] =  { Imull,	"MULALU",	Iarith },
-  [CMUL+4] =  { Imull,	"MULL",		Iarith  },
-  [CMUL+5] =  { Imull,	"MULAL",	Iarith  },
+  [OMUL]    =  { Imul,	"MUL",	Iarith },
+  [OMULA]   =  { Imula,	"MULA",	Iarith },	
+  [OMULLU]  =  { Imull,	"MULLU",	Iarith },
+  [OMULALU] =  { Imull,	"MULALU",	Iarith },
+  [OMULL]   =  { Imull,	"MULL",		Iarith  },
+  [OMULAL]  =  { Imull,	"MULAL",	Iarith  },
   /*x: [[itab]] elements */
   //r,r,r
-  [CARITH0+ 0] =  { Idp0,		"AND",	Iarith },	
-  [CARITH0+ 1] =  { Idp0,		"EOR",	Iarith },	
-  [CARITH0+ 2] =  { Idp0,		"SUB",	Iarith },	
-  [CARITH0+ 3] =  { Idp0,		"RSB",	Iarith },	
-  [CARITH0+ 4] =  { Idp0,		"ADD",	Iarith },	
-  [CARITH0+ 5] =  { Idp0,		"ADC",	Iarith },	
-  [CARITH0+ 6] =  { Idp0,		"SBC",	Iarith },	
-  [CARITH0+ 7] =  { Idp0,		"RSC",	Iarith },	
-  [CARITH0+ 8] =  { Idp0,		"TST",	Iarith },	
-  [CARITH0+ 9] =  { Idp0,		"TEQ",	Iarith },	
-  [CARITH0+10] =  { Idp0,		"CMP",	Iarith },	
-  [CARITH0+11] =  { Idp0,		"CMN",	Iarith },	
-  [CARITH0+12] =  { Idp0,		"ORR",	Iarith },	
-  [CARITH0+13] =  { Idp0,		"MOV",	Iarith },	
-  [CARITH0+14] =  { Idp0,		"BIC",	Iarith },	
-  [CARITH0+15] =  { Idp0,		"MVN",	Iarith },	
+  [OAND +CARITH0] =  { Idp0,		"AND",	Iarith },	
+  [OEOR +CARITH0] =  { Idp0,		"EOR",	Iarith },	
+  [OSUB +CARITH0] =  { Idp0,		"SUB",	Iarith },	
+  [ORSB +CARITH0] =  { Idp0,		"RSB",	Iarith },	
+  [OADD +CARITH0] =  { Idp0,		"ADD",	Iarith },	
+  [OADC +CARITH0] =  { Idp0,		"ADC",	Iarith },	
+  [OSBC +CARITH0] =  { Idp0,		"SBC",	Iarith },	
+  [ORSC +CARITH0] =  { Idp0,		"RSC",	Iarith },	
+  [OTST +CARITH0] =  { Idp0,		"TST",	Iarith },	
+  [OTEQ +CARITH0] =  { Idp0,		"TEQ",	Iarith },	
+  [OCMP +CARITH0] =  { Idp0,		"CMP",	Iarith },	
+  [OCMN +CARITH0] =  { Idp0,		"CMN",	Iarith },	
+  [OORR +CARITH0] =  { Idp0,		"ORR",	Iarith },	
+  [OMOV +CARITH0] =  { Idp0,		"MOV",	Iarith },	
+  [OBIC +CARITH0] =  { Idp0,		"BIC",	Iarith },	
+  [OMVN +CARITH0] =  { Idp0,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
-  [CARITH1+ 0] =  { Idp1,		"AND",	Iarith },	
-  [CARITH1+ 1] =  { Idp1,		"EOR",	Iarith },	
-  [CARITH1+ 2] =  { Idp1,		"SUB",	Iarith },	
-  [CARITH1+ 3] =  { Idp1,		"RSB",	Iarith },	
-  [CARITH1+ 4] =  { Idp1,		"ADD",	Iarith },	
-  [CARITH1+ 5] =  { Idp1,		"ADC",	Iarith },	
-  [CARITH1+ 6] =  { Idp1,		"SBC",	Iarith },	
-  [CARITH1+ 7] =  { Idp1,		"RSC",	Iarith },	
-  [CARITH1+ 8] =  { Idp1,		"TST",	Iarith },	
-  [CARITH1+ 9] =  { Idp1,		"TEQ",	Iarith },	
-  [CARITH1+10] =  { Idp1,		"CMP",	Iarith },	
-  [CARITH1+11] =  { Idp1,		"CMN",	Iarith },	
-  [CARITH1+12] =  { Idp1,		"ORR",	Iarith },	
-  [CARITH1+13] =  { Idp1,		"MOV",	Iarith },	
-  [CARITH1+14] =  { Idp1,		"BIC",	Iarith },	
-  [CARITH1+15] =  { Idp1,		"MVN",	Iarith },	
+  [OAND +CARITH1] =  { Idp1,		"AND",	Iarith },	
+  [OEOR +CARITH1] =  { Idp1,		"EOR",	Iarith },	
+  [OSUB +CARITH1] =  { Idp1,		"SUB",	Iarith },	
+  [ORSB +CARITH1] =  { Idp1,		"RSB",	Iarith },	
+  [OADD +CARITH1] =  { Idp1,		"ADD",	Iarith },	
+  [OADC +CARITH1] =  { Idp1,		"ADC",	Iarith },	
+  [OSBC +CARITH1] =  { Idp1,		"SBC",	Iarith },	
+  [ORSC +CARITH1] =  { Idp1,		"RSC",	Iarith },	
+  [OTST +CARITH1] =  { Idp1,		"TST",	Iarith },	
+  [OTEQ +CARITH1] =  { Idp1,		"TEQ",	Iarith },	
+  [OCMP +CARITH1] =  { Idp1,		"CMP",	Iarith },	
+  [OCMN +CARITH1] =  { Idp1,		"CMN",	Iarith },	
+  [OORR +CARITH1] =  { Idp1,		"ORR",	Iarith },	
+  [OMOV +CARITH1] =  { Idp1,		"MOV",	Iarith },	
+  [OBIC +CARITH1] =  { Idp1,		"BIC",	Iarith },	
+  [OMVN +CARITH1] =  { Idp1,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
-  [CARITH2+ 0] =  { Idp2,		"AND",	Iarith },	
-  [CARITH2+ 1] =  { Idp2,		"EOR",	Iarith },	
-  [CARITH2+ 2] =  { Idp2,		"SUB",	Iarith },	
-  [CARITH2+ 3] =  { Idp2,		"RSB",	Iarith },	
-  [CARITH2+ 4] =  { Idp2,		"ADD",	Iarith },	
-  [CARITH2+ 5] =  { Idp2,		"ADC",	Iarith },	
-  [CARITH2+ 6] =  { Idp2,		"SBC",	Iarith },	
-  [CARITH2+ 7] =  { Idp2,		"RSC",	Iarith },	
-  [CARITH2+ 8] =  { Idp2,		"TST",	Iarith },	
-  [CARITH2+ 9] =  { Idp2,		"TEQ",	Iarith },	
-  [CARITH2+10] =  { Idp2,		"CMP",	Iarith },	
-  [CARITH2+11] =  { Idp2,		"CMN",	Iarith },	
-  [CARITH2+12] =  { Idp2,		"ORR",	Iarith },	
-  [CARITH2+13] =  { Idp2,		"MOV",	Iarith },	
-  [CARITH2+14] =  { Idp2,		"BIC",	Iarith },	
-  [CARITH2+15] =  { Idp2,		"MVN",	Iarith },	
+  [OAND +CARITH2] =  { Idp2,		"AND",	Iarith },	
+  [OEOR +CARITH2] =  { Idp2,		"EOR",	Iarith },	
+  [OSUB +CARITH2] =  { Idp2,		"SUB",	Iarith },	
+  [ORSB +CARITH2] =  { Idp2,		"RSB",	Iarith },	
+  [OADD +CARITH2] =  { Idp2,		"ADD",	Iarith },	
+  [OADC +CARITH2] =  { Idp2,		"ADC",	Iarith },	
+  [OSBC +CARITH2] =  { Idp2,		"SBC",	Iarith },	
+  [ORSC +CARITH2] =  { Idp2,		"RSC",	Iarith },	
+  [OTST +CARITH2] =  { Idp2,		"TST",	Iarith },	
+  [OTEQ +CARITH2] =  { Idp2,		"TEQ",	Iarith },	
+  [OCMP +CARITH2] =  { Idp2,		"CMP",	Iarith },	
+  [OCMN +CARITH2] =  { Idp2,		"CMN",	Iarith },	
+  [OORR +CARITH2] =  { Idp2,		"ORR",	Iarith },	
+  [OMOV +CARITH2] =  { Idp2,		"MOV",	Iarith },	
+  [OBIC +CARITH2] =  { Idp2,		"BIC",	Iarith },	
+  [OMVN +CARITH2] =  { Idp2,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
   //i,r,r
-  [CARITH3+ 0] =  { Idp3,		"AND",	Iarith },	
-  [CARITH3+ 1] =  { Idp3,		"EOR",	Iarith },	
-  [CARITH3+ 2] =  { Idp3,		"SUB",	Iarith },	
-  [CARITH3+ 3] =  { Idp3,		"RSB",	Iarith },	
-  [CARITH3+ 4] =  { Idp3,		"ADD",	Iarith },	
-  [CARITH3+ 5] =  { Idp3,		"ADC",	Iarith },	
-  [CARITH3+ 6] =  { Idp3,		"SBC",	Iarith },	
-  [CARITH3+ 7] =  { Idp3,		"RSC",	Iarith },	
-  [CARITH3+ 8] =  { Idp3,		"TST",	Iarith },	
-  [CARITH3+ 9] =  { Idp3,		"TEQ",	Iarith },	
-  [CARITH3+10] =  { Idp3,		"CMP",	Iarith },	
-  [CARITH3+11] =  { Idp3,		"CMN",	Iarith },	
-  [CARITH3+12] =  { Idp3,		"ORR",	Iarith },	
-  [CARITH3+13] =  { Idp3,		"MOV",	Iarith },	
-  [CARITH3+14] =  { Idp3,		"BIC",	Iarith },	
-  [CARITH3+15] =  { Idp3,		"MVN",	Iarith },	
-  /*x: [[itab]] elements */
-  [CSWAP+0] =  { Iswap,		"SWPW",	Imem },
-  [CSWAP+1] =  { Iswap,		"SWPBU",Imem },
-  /*x: [[itab]] elements */
-  // load/store h/sb
-  [CMEM+0] =  { Imem2,		"MOV",	Imem },
-  [CMEM+1] =  { Imem2,		"MOV",	Imem },
-  [CMEM+2] =  { Imem2,		"MOV",	Imem },
-  [CMEM+3] =  { Imem2,		"MOV",	Imem },
+  [OAND +CARITH3] =  { Idp3,		"AND",	Iarith },	
+  [OEOR +CARITH3] =  { Idp3,		"EOR",	Iarith },	
+  [OSUB +CARITH3] =  { Idp3,		"SUB",	Iarith },	
+  [ORSB +CARITH3] =  { Idp3,		"RSB",	Iarith },	
+  [OADD +CARITH3] =  { Idp3,		"ADD",	Iarith },	
+  [OADC +CARITH3] =  { Idp3,		"ADC",	Iarith },	
+  [OSBC +CARITH3] =  { Idp3,		"SBC",	Iarith },	
+  [ORSC +CARITH3] =  { Idp3,		"RSC",	Iarith },	
+  [OTST +CARITH3] =  { Idp3,		"TST",	Iarith },	
+  [OTEQ +CARITH3] =  { Idp3,		"TEQ",	Iarith },	
+  [OCMP +CARITH3] =  { Idp3,		"CMP",	Iarith },	
+  [OCMN +CARITH3] =  { Idp3,		"CMN",	Iarith },	
+  [OORR +CARITH3] =  { Idp3,		"ORR",	Iarith },	
+  [OMOV +CARITH3] =  { Idp3,		"MOV",	Iarith },	
+  [OBIC +CARITH3] =  { Idp3,		"BIC",	Iarith },	
+  [OMVN +CARITH3] =  { Idp3,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
   // load/store w/ub i,r
-  [CMEM+4+0] =  { Imem1,		"MOVW",	Imem },
-  [CMEM+4+1] =  { Imem1,		"MOVB",	Imem },
-  [CMEM+4+2] =  { Imem1,		"MOVW",	Imem },
-  [CMEM+4+3] =  { Imem1,		"MOVB",	Imem },
+  [OLDW +CMEM0] =  { Imem1,		"MOVW",	Imem },
+  [OLDB +CMEM0] =  { Imem1,		"MOVB",	Imem },
+  [OSTW +CMEM0] =  { Imem1,		"MOVW",	Imem },
+  [OSTB +CMEM0] =  { Imem1,		"MOVB",	Imem },
   /*x: [[itab]] elements */
   // load/store r,r
-  [CMEM+8+0] =  { Imem1,		"MOVW",	Imem },
-  [CMEM+8+1] =  { Imem1,		"MOVB",	Imem },
-  [CMEM+8+2] =  { Imem1,		"MOVW",	Imem },
-  [CMEM+8+3] =  { Imem1,		"MOVB",	Imem },
+  [OLDW +CMEM1] =  { Imem1,		"MOVW",	Imem },
+  [OLDB +CMEM1] =  { Imem1,		"MOVB",	Imem },
+  [OSTW +CMEM1] =  { Imem1,		"MOVW",	Imem },
+  [OSTB +CMEM1] =  { Imem1,		"MOVB",	Imem },
+  /*x: [[itab]] elements */
+  // load/store h/sb
+  [OLDH]  =  { Imem2,		"MOV",	Imem },
+  [OLDBU] =  { Imem2,		"MOV",	Imem },
+  [OSTH]  =  { Imem2,		"MOV",	Imem },
+  [OSTBU] =  { Imem2,		"MOV",	Imem },
+  /*x: [[itab]] elements */
+  [OSWPW] =   { Iswap,		"SWPW",	Imem },
+  [OSWPBU] =  { Iswap,		"SWPBU",Imem },
   /*x: [[itab]] elements */
   // block move r,r
-  [CBLOC+0] =  { Ilsm,		"LDM",	Imem },
-  [CBLOC+1] =  { Ilsm,		"STM",	Imem },
+  [OLDM] =  { Ilsm,		"LDM",	Imem },
+  [OSTM] =  { Ilsm,		"STM",	Imem },
   /*x: [[itab]] elements */
   // branch
-  [CBRANCH+0] =  { Ib,	"B",	Ibranch },
-  [CBRANCH+1] =  { Ibl,	"BL",	Ibranch },
+  [OB]  =  { Ib,	"B",	Ibranch },
+  [OBL] =  { Ibl,	"BL",	Ibranch },
   /*x: [[itab]] elements */
   // co processor
-  [CSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
+  [OSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
   /*e: [[itab]] elements */
   { 0 }
 };
@@ -332,9 +332,9 @@ arm_class(instruction w)
             op = CMUL;
             /*s: [[arm_class()]] class 0, when op == 0x9, if bit 24 set */
             if(w & (1<<24)) {
-                op = CSWAP;
+                op = OSWPW;
                 if(w & (1<<22))
-                     op++;	/* swpb */
+                     op = OSWPBU;
                 break;
             }
             /*e: [[arm_class()]] class 0, when op == 0x9, if bit 24 set */
@@ -350,11 +350,12 @@ arm_class(instruction w)
         /*e: [[arm_class()]] class 0, if op is 0x9 */
         /*s: [[arm_class()]] class 0, if op has 0x9 bits */
         if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
-             op = CMEM + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+             op = CMEM2 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
              break;
         }
         /*e: [[arm_class()]] class 0, if op has 0x9 bits */
-   
+
+        // the opcode! OAND/OADD/...
         op = (w >> 21) & 0xf;
 
         if(w & (1<<4))
@@ -370,11 +371,11 @@ arm_class(instruction w)
      break;
     /*x: [[arm_class()]] op cases */
     case 2:	/* load/store byte/word i(r) */
-     op = CMEM+4 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     op = CMEM0 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
      break;
     /*x: [[arm_class()]] op cases */
     case 3:	/* load/store byte/word (r)(r) */
-     op = CMEM+8 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     op = CMEM1 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
      break;
     /*x: [[arm_class()]] op cases */
     case 4:	/* block data transfer (r)(r) */
@@ -387,13 +388,13 @@ arm_class(instruction w)
     /*x: [[arm_class()]] op cases */
     case 7:	/* coprocessor crap */ // and syscall
      if((w >> 25) & 0x1)
-       op = CSYSCALL;
+       op = OSYSCALL;
      else
-       op = CUNDEF; // coprocessor stuff not handled
+       op = OUNDEF; // coprocessor stuff not handled
      break;
     /*e: [[arm_class()]] op cases */
     default:	  
-        op = CUNDEF;
+        op = OUNDEF;
         break;
     }
     return op;
@@ -465,24 +466,24 @@ dpex(instruction inst, long o1, long o2, int rd)
     bool cbit = false;
 
     switch((inst>>21) & 0xf) {
-    case  0:	/* and */
+    case  OAND:
         reg.r[rd] = o1 & o2;
         cbit = true;
         break;
-    case 12:	/* orr */
+    case OORR:
         reg.r[rd] = o1 | o2;
         cbit = true;
         break;
-    case  1:	/* eor */
+    case OEOR:
         reg.r[rd] = o1 ^ o2;
         cbit = true;
         break;
-    case 14:	/* bic */
+    case OBIC:	/* bic */
         reg.r[rd] = o1 & ~o2;
         cbit = true;
         break;
 
-    case  4:	/* add */
+    case OADD:
         /*s: [[dpex()]] if calltree, when add operation */
         if(calltree && rd == REGPC && o2 == 0) {
             Symbol s;
@@ -505,10 +506,10 @@ dpex(instruction inst, long o1, long o2, int rd)
         return;
 
 
-    case  2:	/* sub */
+    case OSUB:
         reg.r[rd] = o1 - o2;
         // Fallthrough
-    case 10:	/* cmp */
+    case OCMP:
         if(inst & Sbit) {
             reg.cc1 = o1;
             reg.cc2 = o2;
@@ -516,26 +517,21 @@ dpex(instruction inst, long o1, long o2, int rd)
         }
         return;
 
-    case  5:	/* adc */
-    case  6:	/* sbc */
-    case  7:	/* rsc */
-        undef(inst);
-
-    case  8:	/* tst */
+    case  OTST:
         if(inst & Sbit) {
             reg.cc1 = o1;
             reg.cc2 = o2;
             reg.compare_op = CCtst;
         }
         return;
-    case  9:	/* teq */
+    case  OTEQ:
         if(inst & Sbit) { // not always true?
             reg.cc1 = o1;
             reg.cc2 = o2;
             reg.compare_op = CCteq;
         }
         return;
-    case 11:	/* cmn */
+    case OCMN:
         if(inst & Sbit) { // not always true?
             reg.cc1 = o1;
             reg.cc2 = -o2;
@@ -543,7 +539,12 @@ dpex(instruction inst, long o1, long o2, int rd)
         }
         return;
 
-    case  3:	/* rsb */
+    case  OADC:
+    case  OSBC:
+    case  ORSC:
+        undef(inst);
+
+    case  ORSB:
         reg.r[rd] = o2 - o1;
         if(inst & Sbit) {
             reg.cc1 = o2;
@@ -551,11 +552,11 @@ dpex(instruction inst, long o1, long o2, int rd)
             reg.compare_op = CCcmp;
         }
         return;
-    case 13:	/* mov */
+    case OMOV:
         reg.r[rd] = o2;
         cbit = true;
         break;
-    case 15:	/* mvn */
+    case OMVN:
         reg.r[rd] = ~o2;
         cbit = true;
         break;

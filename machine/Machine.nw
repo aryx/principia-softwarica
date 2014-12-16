@@ -150,8 +150,9 @@ an hardware simulator.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 % and hardware is really the bottom of the hood :)
-% In the end hardware is a kind of software, so definitely softwarica
-% material (hardware is a kind of an interpreter). But infinite meta loop?
+% In the end hardware is a kind of software (so definitely softwarica
+% material); hardware is a kind of an interpreter (But infinite meta loop?)
+
 % Understanding ISA is also useful for other parts of principia,
 % assembler/compiler/linker
 % (especially since in plan9 the architecture specific stuff is distributed
@@ -173,7 +174,7 @@ you fully understand how things work under the hood.
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
 \item spim
-% but dead archi, and ARM mostly a MIPS, and LOC actually not that small
+% but dead archi (ARM mostly a MIPS anyway), and LOC actually not that small
 % and hybrid as work on assembly, not actual binary format
 \item spocketnes
 % nice, rust!
@@ -187,7 +188,7 @@ Here are other candidates that were considered but ultimately discarded:
 
 % 9front/games/gb? gameboy emulator?
 
-% not a complete simulator though. Good for ISA simulation, but not
+% 5i though is not a complete simulator. Good for ISA simulation, but not
 % for low level stuff like interrupts, page faults, running modes,
 % booting, etc. You can just run simple programs on it; definitely not
 % a kernel.
@@ -336,13 +337,14 @@ License.
 
 \chapter{Core Data Structures}
 
-\section{[[Inst]] and [[itab]]}
+\section{[[Opcode]] and [[Instruction]]}
 
 <<typedef instruction>>=
 typedef ulong instruction;
 @
 % 4 bytes fixed-length instructions (easier)
 
+% rename? opcode_category?
 <<enum ixxx>>=
 enum ixxx
 {
@@ -356,63 +358,89 @@ enum ixxx
 % I for Instruction?
 % vi/ has Iload Istore instead of Imem, and also Ireg and Ifloat
 
-%TODO: maybe can do
-% CARITH0 = 0,
-% OADD0 = 0,
-% OORR0 = 1,
-% ...
-% OXXX so different from AXXX from 5.out.h
-% and say that here some of the order matters (and also
-% that sligthly different from 5.out.h because here really 
-% concrete instructions)
-% also do <<arithmetic opcodes>>, etc split.
-% du coup apres peut etre dans dpex je peux utiliser des enum! ADD
-% ptet meme peut faire ADD1 = ADD + CARITH1
-% say that not exactly real opcode value like in the machine, but close to it
+
+
 <<enum opcode>>=
 enum opcode {
-    // AND, ORR, EOR,    BIC
-    // ADD, SUB,   RSB, ADC, SBC, RSC
-    // TST, TEQ, CMP,    CMN
-    // MOV,    MVN
-    CARITH0 = 0,  // r,r,r
-    CARITH1 = 16, // r<>r, r, r
-    CARITH2 = 32, // r<>#, r, r
-    CARITH3 = 48, // i,r,r
-    // MUL, MULA, MULLU, MULALU, MULL, MULAL
-    CMUL    = 64,
+    // ----------------------------------------------------------------------
+    // Arithmetic and logic opcodes
+    // ----------------------------------------------------------------------
+    <<arith/logic opcodes>>
+    // ----------------------------------------------------------------------
+    // Memory MOV opcodes
+    // ----------------------------------------------------------------------
+    <<memory opcodes>>
+    // ----------------------------------------------------------------------
+    // Branching opcodes
+    // ----------------------------------------------------------------------
+    <<branching opcodes>>
+    // ----------------------------------------------------------------------
+    // Syscall opcode
+    // ----------------------------------------------------------------------
+    <<syscall opcodes>>
 
-    // SWPW, SWPBU
-    CSWAP   = 70,
-    // MOV, MOVW, MOVB
-    CMEM    = 72,
-    // LDM, STM
-    CBLOC   = 84,
-
-    // B, BL
-    CBRANCH = 86,
-    // SWI
-    CSYSCALL = 88,
-
-    CUNDEF   = 89
+    // ----------------------------------------------------------------------
+    // Other opcodes
+    // ----------------------------------------------------------------------
+    OUNDEF   = 89
 };
 @
-% finer categories.
-% I called it class_kind, but it was a bad name, it's really more an opcode.
-% well it's category of opcodes that are used a starting index for
-% a range of actual opcodes
-% note: no DIV! no MOV
-% MOV in arith? seems redundant with load/store no?
+% OXXX sligthly different from AXXX from 5.out.h because here really 
+% concrete instructions. Here some of the order matters.
+% Actually not exactly real opcode value like in the machine, but close to it
+% (but in the machine the opcode is spreaded though different bits, the
+% three class bits but also more).
+% note: no DIV! no really MOV, more load and store.
+% what about the MOV in arith? seems redundant with load/store no?
 % ADC, SBC, RSC are not implemented in 5i, not used by 5a/5c/5l ?
 % MCR not implemented, very low level stuff used only by kernel
 %  is not implemented
 
+%note: I used to call it class_kind, but it was a bad name, it's really
+% more an opcode. In contains also category of opcodes that are used
+% as starting index for a range of actual opcodes.
+
 % compiler: meta: you'll see many of those instructions used
 % in this file :) bitshift, or, goto, syscall! :)
 
-% could be simpler to just put all the cases
-% instead of trying to factorize?
-% CAND_0, CAND_1, CAND_2, etc?
+% old range:
+% ARITH0: 0-15   16
+% ARITH1: 17-31  16
+% ARITH2: 32-47  16
+% ARITH3: 48-63  16
+% MUL:    64-65  2
+% SWAP:   66-67  2
+% MEM2:   68-71  4
+% MEM1:   72-79  8
+% BLOC:   80-81  2
+% BRANCH: 82-83  2
+% SYSCALL:84     1
+% UNDEF:  85-87  3
+% MULL:   88-91  4
+% UNDEF:  92     1
+
+% but remove intermediate UNDEF
+% can move MULL closer to MUL
+
+% new range:
+% ARITH0: 0-15   16
+% ARITH1: 16-31  16
+% ARITH2: 32-47  16
+% ARITH3: 48-63  16
+% MUL:    64-65  2
+% MULL:   66-69  4
+% SWAP:   70-71  2
+% MEM2:   72-75  4
+% MEM1:   76-83  8
+% BLOC:   84-85  2
+% BRANCH: 86-87  2
+% SYSCALL:88     1
+% UNDEF:  89     1
+
+
+% conventions: B, BU, W, H
+
+\section{[[Inst]] and [[itab]]}
 
 % rename?
 <<struct Inst>>=
@@ -428,8 +456,6 @@ struct Inst
 @
 % mini instruction interpreter, big categories, "sub-interpreter"?
 
-% similarity with 5.out.h enum<opcode_kind>
-% TODO? LP split where keep only Imul?
 <<global itab>>=
 //hash<enum<opcode>, Inst>
 Inst itab[] =
@@ -442,6 +468,7 @@ Inst itab[] =
 %ex: 
 %  [64] =  { Imul,	"MUL",	Iarith },
 %  [CMUL] =  { Imul,	"MUL",	Iarith },
+%  [OMUL] =  { Imul,	"MUL",	Iarith },
 
 \section{[[Registers]] and [[reg]]}
 
@@ -453,6 +480,7 @@ enum
 {
     REGARG	= 0,
     REGRET	= 0,
+
     REGSP	= 13,
     REGLINK	= 14,
     REGPC	= 15,
@@ -481,7 +509,7 @@ Registers reg;
 \section{[[Segment]] and [[memory]]}
 
 % part OS emulation now, because when exec the kernel
-% setup some memory segments
+% setup some memory segments.
 <<enum segment_kind>>=
 enum segment_kind
 {
@@ -493,7 +521,7 @@ enum segment_kind
     Nseg,
 };
 @
-% Stack used to be first, but more logical in this order
+%old: Stack used to be first, but more logical in this order
 
 <<struct Segment>>=
 struct Segment
@@ -920,42 +948,6 @@ case 'c':
 %  - S bit, etc
 %     adhoc ifs
 
-
-% old range:
-% ARITH0: 0-15   16
-% ARITH1: 17-31  16
-% ARITH2: 32-47  16
-% ARITH3: 48-63  16
-% MUL:    64-65  2
-% SWAP:   66-67  2
-% MEM2:   68-71  4
-% MEM1:   72-79  8
-% BLOC:   80-81  2
-% BRANCH: 82-83  2
-% SYSCALL:84     1
-% UNDEF:  85-87  3
-% MULL:   88-91  4
-% UNDEF:  92     1
-
-% but remove intermediate UNDEF
-% can move MULL closer to MUL
-
-% new range:
-% ARITH0: 0-15   16
-% ARITH1: 16-31  16
-% ARITH2: 32-47  16
-% ARITH3: 48-63  16
-% MUL:    64-65  2
-% MULL:   66-69  4
-% SWAP:   70-71  2
-% MEM2:   72-75  4
-% MEM1:   76-83  8
-% BLOC:   84-85  2
-% BRANCH: 86-87  2
-% SYSCALL:88     1
-% UNDEF:  89     1
-
-
 \section{[[run()]]}
 
 % often set to 0 and because of do while(--count) will actually go in
@@ -1165,7 +1157,7 @@ runtst(void)
 
 \section{[[arm_class()]]}
 
-% mostly for operand style big categories (r/r/r, i/r/r, etc)
+% those 3 bits are mostly for operand style big categories (r/r/r, i/r/r, etc)
 % copy paste from libmach/5db.c, but simplified as don't need
 % to handle debugging instructions or anything not handled in itab > 92
 <<function arm_class>>=
@@ -1178,7 +1170,7 @@ arm_class(instruction w)
     switch(op) {
     <<[[arm_class()]] op cases>>
     default:	  
-        op = CUNDEF;
+        op = OUNDEF;
         break;
     }
     return op;
@@ -1188,7 +1180,7 @@ arm_class(instruction w)
 %case 6:	/* vfp load / store */ ; // go to default now
 
 <<[[itab]] elements>>=
-[CUNDEF] =  { undef,		"undef"  },
+[OUNDEF] =  { undef,		"undef"  },
 @
 
 
@@ -1202,12 +1194,39 @@ arm_class(instruction w)
 
 \subsection{Arithmetic}
 
+<<arith/logic opcodes>>=
+OAND = 0,
+OEOR = 1, 
+OSUB = 2, 
+ORSB = 3, 
+OADD = 4, 
+OADC = 5, 
+OSBC = 6, 
+ORSC = 7, 
+OTST = 8, 
+OTEQ = 9,
+OCMP = 10,
+OCMN = 11,
+OORR = 12,
+OMOV = 13,
+OBIC = 14,
+OMVN = 15,
+@
+% order matters here! the same than in the machine!
+%// AND, ORR, EOR,    BIC
+%// ADD, SUB,   RSB, ADC, SBC, RSC
+%// TST, TEQ, CMP,    CMN
+%// MOV,    MVN
+
+
+
 <<[[arm_class()]] op cases>>=
 case 0:	/* data processing r,r,r */
     op = ((w >> 4) & 0xf);
     <<[[arm_class()]] class 0, if op is 0x9>>
     <<[[arm_class()]] class 0, if op has 0x9 bits>>
-   
+
+    // the opcode! OAND/OADD/...
     op = (w >> 21) & 0xf;
 
     if(w & (1<<4))
@@ -1221,6 +1240,29 @@ case 0:	/* data processing r,r,r */
 % 31 << 7 means take all the bits from 7 to 11, the shift#
 % >> >> >> >> >> >>
 
+<<[[arm_class()]] op cases>>=
+case 1:	/* data processing i,r,r */
+ op = CARITH3 + ((w >> 21) & 0xf);
+ break;
+@
+%48
+
+<<arith/logic opcodes>>=
+CARITH0 = 0,  // r,r,r
+CARITH1 = 16, // r<>r, r, r
+CARITH2 = 32, // r<>#, r, r
+CARITH3 = 48, // i,r,r
+@
+
+
+<<arith/logic opcodes>>=
+OMUL    = 64,
+OMULA   = 65,
+OMULLU  = 66,
+OMULALU = 67,
+OMULL   = 68,
+OMULAL  = 69,
+@
 
 % class 0 is bad name, maybe opcode_25_27? and op then is opcode_4_7
 <<[[arm_class()]] class 0, if op is 0x9>>=
@@ -1240,16 +1282,20 @@ if(op == 0x9) {
 @
 % >> >> >>
 
+<<arith/logic opcodes>>=
+CMUL    = 64,
+@
+
 
 %\subsection{Multiplication}
 
 <<[[itab]] elements>>=
-[CMUL+0] =  { Imul,		"MUL",	Iarith },
-[CMUL+1] =  { Imula,	"MULA",	Iarith },	
-[CMUL+2] =  { Imull,	"MULLU",	Iarith },
-[CMUL+3] =  { Imull,	"MULALU",	Iarith },
-[CMUL+4] =  { Imull,	"MULL",		Iarith  },
-[CMUL+5] =  { Imull,	"MULAL",	Iarith  },
+[OMUL]    =  { Imul,	"MUL",	Iarith },
+[OMULA]   =  { Imula,	"MULA",	Iarith },	
+[OMULLU]  =  { Imull,	"MULLU",	Iarith },
+[OMULALU] =  { Imull,	"MULALU",	Iarith },
+[OMULL]   =  { Imull,	"MULL",		Iarith  },
+[OMULAL]  =  { Imull,	"MULAL",	Iarith  },
 @
 
 % pretty simple :)
@@ -1368,22 +1414,22 @@ if(trace)
 
 <<[[itab]] elements>>=
 //r,r,r
-[CARITH0+ 0] =  { Idp0,		"AND",	Iarith },	
-[CARITH0+ 1] =  { Idp0,		"EOR",	Iarith },	
-[CARITH0+ 2] =  { Idp0,		"SUB",	Iarith },	
-[CARITH0+ 3] =  { Idp0,		"RSB",	Iarith },	
-[CARITH0+ 4] =  { Idp0,		"ADD",	Iarith },	
-[CARITH0+ 5] =  { Idp0,		"ADC",	Iarith },	
-[CARITH0+ 6] =  { Idp0,		"SBC",	Iarith },	
-[CARITH0+ 7] =  { Idp0,		"RSC",	Iarith },	
-[CARITH0+ 8] =  { Idp0,		"TST",	Iarith },	
-[CARITH0+ 9] =  { Idp0,		"TEQ",	Iarith },	
-[CARITH0+10] =  { Idp0,		"CMP",	Iarith },	
-[CARITH0+11] =  { Idp0,		"CMN",	Iarith },	
-[CARITH0+12] =  { Idp0,		"ORR",	Iarith },	
-[CARITH0+13] =  { Idp0,		"MOV",	Iarith },	
-[CARITH0+14] =  { Idp0,		"BIC",	Iarith },	
-[CARITH0+15] =  { Idp0,		"MVN",	Iarith },	
+[OAND +CARITH0] =  { Idp0,		"AND",	Iarith },	
+[OEOR +CARITH0] =  { Idp0,		"EOR",	Iarith },	
+[OSUB +CARITH0] =  { Idp0,		"SUB",	Iarith },	
+[ORSB +CARITH0] =  { Idp0,		"RSB",	Iarith },	
+[OADD +CARITH0] =  { Idp0,		"ADD",	Iarith },	
+[OADC +CARITH0] =  { Idp0,		"ADC",	Iarith },	
+[OSBC +CARITH0] =  { Idp0,		"SBC",	Iarith },	
+[ORSC +CARITH0] =  { Idp0,		"RSC",	Iarith },	
+[OTST +CARITH0] =  { Idp0,		"TST",	Iarith },	
+[OTEQ +CARITH0] =  { Idp0,		"TEQ",	Iarith },	
+[OCMP +CARITH0] =  { Idp0,		"CMP",	Iarith },	
+[OCMN +CARITH0] =  { Idp0,		"CMN",	Iarith },	
+[OORR +CARITH0] =  { Idp0,		"ORR",	Iarith },	
+[OMOV +CARITH0] =  { Idp0,		"MOV",	Iarith },	
+[OBIC +CARITH0] =  { Idp0,		"BIC",	Iarith },	
+[OMVN +CARITH0] =  { Idp0,		"MVN",	Iarith },	
 @
 
 
@@ -1435,22 +1481,22 @@ if(trace)
 
 
 <<[[itab]] elements>>=
-[CARITH1+ 0] =  { Idp1,		"AND",	Iarith },	
-[CARITH1+ 1] =  { Idp1,		"EOR",	Iarith },	
-[CARITH1+ 2] =  { Idp1,		"SUB",	Iarith },	
-[CARITH1+ 3] =  { Idp1,		"RSB",	Iarith },	
-[CARITH1+ 4] =  { Idp1,		"ADD",	Iarith },	
-[CARITH1+ 5] =  { Idp1,		"ADC",	Iarith },	
-[CARITH1+ 6] =  { Idp1,		"SBC",	Iarith },	
-[CARITH1+ 7] =  { Idp1,		"RSC",	Iarith },	
-[CARITH1+ 8] =  { Idp1,		"TST",	Iarith },	
-[CARITH1+ 9] =  { Idp1,		"TEQ",	Iarith },	
-[CARITH1+10] =  { Idp1,		"CMP",	Iarith },	
-[CARITH1+11] =  { Idp1,		"CMN",	Iarith },	
-[CARITH1+12] =  { Idp1,		"ORR",	Iarith },	
-[CARITH1+13] =  { Idp1,		"MOV",	Iarith },	
-[CARITH1+14] =  { Idp1,		"BIC",	Iarith },	
-[CARITH1+15] =  { Idp1,		"MVN",	Iarith },	
+[OAND +CARITH1] =  { Idp1,		"AND",	Iarith },	
+[OEOR +CARITH1] =  { Idp1,		"EOR",	Iarith },	
+[OSUB +CARITH1] =  { Idp1,		"SUB",	Iarith },	
+[ORSB +CARITH1] =  { Idp1,		"RSB",	Iarith },	
+[OADD +CARITH1] =  { Idp1,		"ADD",	Iarith },	
+[OADC +CARITH1] =  { Idp1,		"ADC",	Iarith },	
+[OSBC +CARITH1] =  { Idp1,		"SBC",	Iarith },	
+[ORSC +CARITH1] =  { Idp1,		"RSC",	Iarith },	
+[OTST +CARITH1] =  { Idp1,		"TST",	Iarith },	
+[OTEQ +CARITH1] =  { Idp1,		"TEQ",	Iarith },	
+[OCMP +CARITH1] =  { Idp1,		"CMP",	Iarith },	
+[OCMN +CARITH1] =  { Idp1,		"CMN",	Iarith },	
+[OORR +CARITH1] =  { Idp1,		"ORR",	Iarith },	
+[OMOV +CARITH1] =  { Idp1,		"MOV",	Iarith },	
+[OBIC +CARITH1] =  { Idp1,		"BIC",	Iarith },	
+[OMVN +CARITH1] =  { Idp1,		"MVN",	Iarith },	
 @
 
 <<function Idp1>>=
@@ -1496,22 +1542,22 @@ if(trace)
 \fi
 
 <<[[itab]] elements>>=
-[CARITH2+ 0] =  { Idp2,		"AND",	Iarith },	
-[CARITH2+ 1] =  { Idp2,		"EOR",	Iarith },	
-[CARITH2+ 2] =  { Idp2,		"SUB",	Iarith },	
-[CARITH2+ 3] =  { Idp2,		"RSB",	Iarith },	
-[CARITH2+ 4] =  { Idp2,		"ADD",	Iarith },	
-[CARITH2+ 5] =  { Idp2,		"ADC",	Iarith },	
-[CARITH2+ 6] =  { Idp2,		"SBC",	Iarith },	
-[CARITH2+ 7] =  { Idp2,		"RSC",	Iarith },	
-[CARITH2+ 8] =  { Idp2,		"TST",	Iarith },	
-[CARITH2+ 9] =  { Idp2,		"TEQ",	Iarith },	
-[CARITH2+10] =  { Idp2,		"CMP",	Iarith },	
-[CARITH2+11] =  { Idp2,		"CMN",	Iarith },	
-[CARITH2+12] =  { Idp2,		"ORR",	Iarith },	
-[CARITH2+13] =  { Idp2,		"MOV",	Iarith },	
-[CARITH2+14] =  { Idp2,		"BIC",	Iarith },	
-[CARITH2+15] =  { Idp2,		"MVN",	Iarith },	
+[OAND +CARITH2] =  { Idp2,		"AND",	Iarith },	
+[OEOR +CARITH2] =  { Idp2,		"EOR",	Iarith },	
+[OSUB +CARITH2] =  { Idp2,		"SUB",	Iarith },	
+[ORSB +CARITH2] =  { Idp2,		"RSB",	Iarith },	
+[OADD +CARITH2] =  { Idp2,		"ADD",	Iarith },	
+[OADC +CARITH2] =  { Idp2,		"ADC",	Iarith },	
+[OSBC +CARITH2] =  { Idp2,		"SBC",	Iarith },	
+[ORSC +CARITH2] =  { Idp2,		"RSC",	Iarith },	
+[OTST +CARITH2] =  { Idp2,		"TST",	Iarith },	
+[OTEQ +CARITH2] =  { Idp2,		"TEQ",	Iarith },	
+[OCMP +CARITH2] =  { Idp2,		"CMP",	Iarith },	
+[OCMN +CARITH2] =  { Idp2,		"CMN",	Iarith },	
+[OORR +CARITH2] =  { Idp2,		"ORR",	Iarith },	
+[OMOV +CARITH2] =  { Idp2,		"MOV",	Iarith },	
+[OBIC +CARITH2] =  { Idp2,		"BIC",	Iarith },	
+[OMVN +CARITH2] =  { Idp2,		"MVN",	Iarith },	
 @
 
 <<function Idp2>>=
@@ -1562,31 +1608,25 @@ if(trace)
 
 
 
-<<[[arm_class()]] op cases>>=
-case 1:	/* data processing i,r,r */
- op = CARITH3 + ((w >> 21) & 0xf);
- break;
-@
-%48
 
 <<[[itab]] elements>>=
 //i,r,r
-[CARITH3+ 0] =  { Idp3,		"AND",	Iarith },	
-[CARITH3+ 1] =  { Idp3,		"EOR",	Iarith },	
-[CARITH3+ 2] =  { Idp3,		"SUB",	Iarith },	
-[CARITH3+ 3] =  { Idp3,		"RSB",	Iarith },	
-[CARITH3+ 4] =  { Idp3,		"ADD",	Iarith },	
-[CARITH3+ 5] =  { Idp3,		"ADC",	Iarith },	
-[CARITH3+ 6] =  { Idp3,		"SBC",	Iarith },	
-[CARITH3+ 7] =  { Idp3,		"RSC",	Iarith },	
-[CARITH3+ 8] =  { Idp3,		"TST",	Iarith },	
-[CARITH3+ 9] =  { Idp3,		"TEQ",	Iarith },	
-[CARITH3+10] =  { Idp3,		"CMP",	Iarith },	
-[CARITH3+11] =  { Idp3,		"CMN",	Iarith },	
-[CARITH3+12] =  { Idp3,		"ORR",	Iarith },	
-[CARITH3+13] =  { Idp3,		"MOV",	Iarith },	
-[CARITH3+14] =  { Idp3,		"BIC",	Iarith },	
-[CARITH3+15] =  { Idp3,		"MVN",	Iarith },	
+[OAND +CARITH3] =  { Idp3,		"AND",	Iarith },	
+[OEOR +CARITH3] =  { Idp3,		"EOR",	Iarith },	
+[OSUB +CARITH3] =  { Idp3,		"SUB",	Iarith },	
+[ORSB +CARITH3] =  { Idp3,		"RSB",	Iarith },	
+[OADD +CARITH3] =  { Idp3,		"ADD",	Iarith },	
+[OADC +CARITH3] =  { Idp3,		"ADC",	Iarith },	
+[OSBC +CARITH3] =  { Idp3,		"SBC",	Iarith },	
+[ORSC +CARITH3] =  { Idp3,		"RSC",	Iarith },	
+[OTST +CARITH3] =  { Idp3,		"TST",	Iarith },	
+[OTEQ +CARITH3] =  { Idp3,		"TEQ",	Iarith },	
+[OCMP +CARITH3] =  { Idp3,		"CMP",	Iarith },	
+[OCMN +CARITH3] =  { Idp3,		"CMN",	Iarith },	
+[OORR +CARITH3] =  { Idp3,		"ORR",	Iarith },	
+[OMOV +CARITH3] =  { Idp3,		"MOV",	Iarith },	
+[OBIC +CARITH3] =  { Idp3,		"BIC",	Iarith },	
+[OMVN +CARITH3] =  { Idp3,		"MVN",	Iarith },	
 @
 
 
@@ -1634,7 +1674,7 @@ Sbit		= 1<<20,
 @
 % >>
 
-% dpex?
+% dpex? means?
 <<function dpex>>=
 void
 dpex(instruction inst, long o1, long o2, int rd)
@@ -1642,24 +1682,24 @@ dpex(instruction inst, long o1, long o2, int rd)
     bool cbit = false;
 
     switch((inst>>21) & 0xf) {
-    case  0:	/* and */
+    case  OAND:
         reg.r[rd] = o1 & o2;
         cbit = true;
         break;
-    case 12:	/* orr */
+    case OORR:
         reg.r[rd] = o1 | o2;
         cbit = true;
         break;
-    case  1:	/* eor */
+    case OEOR:
         reg.r[rd] = o1 ^ o2;
         cbit = true;
         break;
-    case 14:	/* bic */
+    case OBIC:	/* bic */
         reg.r[rd] = o1 & ~o2;
         cbit = true;
         break;
 
-    case  4:	/* add */
+    case OADD:
         <<[[dpex()]] if calltree, when add operation>>
         reg.r[rd] = o1 + o2;
         if(inst & Sbit) {
@@ -1674,10 +1714,10 @@ dpex(instruction inst, long o1, long o2, int rd)
         return;
 
 
-    case  2:	/* sub */
+    case OSUB:
         reg.r[rd] = o1 - o2;
         // Fallthrough
-    case 10:	/* cmp */
+    case OCMP:
         if(inst & Sbit) {
             reg.cc1 = o1;
             reg.cc2 = o2;
@@ -1685,26 +1725,21 @@ dpex(instruction inst, long o1, long o2, int rd)
         }
         return;
 
-    case  5:	/* adc */
-    case  6:	/* sbc */
-    case  7:	/* rsc */
-        undef(inst);
-
-    case  8:	/* tst */
+    case  OTST:
         if(inst & Sbit) {
             reg.cc1 = o1;
             reg.cc2 = o2;
             reg.compare_op = CCtst;
         }
         return;
-    case  9:	/* teq */
+    case  OTEQ:
         if(inst & Sbit) { // not always true?
             reg.cc1 = o1;
             reg.cc2 = o2;
             reg.compare_op = CCteq;
         }
         return;
-    case 11:	/* cmn */
+    case OCMN:
         if(inst & Sbit) { // not always true?
             reg.cc1 = o1;
             reg.cc2 = -o2;
@@ -1712,7 +1747,12 @@ dpex(instruction inst, long o1, long o2, int rd)
         }
         return;
 
-    case  3:	/* rsb */
+    case  OADC:
+    case  OSBC:
+    case  ORSC:
+        undef(inst);
+
+    case  ORSB:
         reg.r[rd] = o2 - o1;
         if(inst & Sbit) {
             reg.cc1 = o2;
@@ -1720,11 +1760,11 @@ dpex(instruction inst, long o1, long o2, int rd)
             reg.compare_op = CCcmp;
         }
         return;
-    case 13:	/* mov */
+    case OMOV:
         reg.r[rd] = o2;
         cbit = true;
         break;
-    case 15:	/* mvn */
+    case OMVN:
         reg.r[rd] = ~o2;
         cbit = true;
         break;
@@ -1817,80 +1857,187 @@ shift(long v, int st, int sc, bool isreg)
 
 \subsection{Memory}
 
-<<[[arm_class()]] class 0, when op == 0x9, if bit 24 set>>=
-if(w & (1<<24)) {
-    op = CSWAP;
-    if(w & (1<<22))
-         op++;	/* swpb */
-    break;
-}
+
+<<memory opcodes>>=
+OLDW    = 70,
+OLDB    = 71,
+OSTW    = 72,
+OSTB    = 73,
 @
-% >> >>
+
+<<[[arm_class()]] op cases>>=
+case 2:	/* load/store byte/word i(r) */
+ op = CMEM0 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+ break;
+@
+%48+24
+
+<<[[arm_class()]] op cases>>=
+case 3:	/* load/store byte/word (r)(r) */
+ op = CMEM1 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+ break;
+@
+%(48+24+4)
+
+<<memory opcodes>>=
+CMEM0 = 0, // i(r)
+CMEM1 = 4, // (r),(r)
+@
+
+
 
 <<[[itab]] elements>>=
-[CSWAP+0] =  { Iswap,		"SWPW",	Imem },
-[CSWAP+1] =  { Iswap,		"SWPBU",Imem },
+// load/store w/ub i,r
+[OLDW +CMEM0] =  { Imem1,		"MOVW",	Imem },
+[OLDB +CMEM0] =  { Imem1,		"MOVB",	Imem },
+[OSTW +CMEM0] =  { Imem1,		"MOVW",	Imem },
+[OSTB +CMEM0] =  { Imem1,		"MOVB",	Imem },
 @
 
-<<function Iswap>>=
-void
-Iswap(instruction inst)
-{
-    int rn, rd, rm;
-    ulong address, value, bbit;
+<<[[itab]] elements>>=
+// load/store r,r
+[OLDW +CMEM1] =  { Imem1,		"MOVW",	Imem },
+[OLDB +CMEM1] =  { Imem1,		"MOVB",	Imem },
+[OSTW +CMEM1] =  { Imem1,		"MOVW",	Imem },
+[OSTB +CMEM1] =  { Imem1,		"MOVB",	Imem },
+@
 
+<<function Imem1>>=
+/*
+ * load/store word/byte
+ */
+void
+Imem1(instruction inst)
+{
+    int rn, rd, off, rm, sc, st;
+    ulong address, value, pbit, ubit, bbit, wbit, lbit, bit25;
+
+    bit25 = inst & (1<<25);
+    pbit = inst & (1<<24);
+    ubit = inst & (1<<23);
     bbit = inst & (1<<22);
+    wbit = inst & (1<<21);
+    lbit = inst & (1<<20);
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
-    rm = (inst>>0) & 0xf;
+
+    SET(st);
+    SET(sc);
+    SET(rm);
+    if(bit25) {
+        rm = inst & 0xf;
+        st = (inst>>5) & 0x3;
+        sc = (inst>>7) & 0x1f;
+        off = reg.r[rm];
+        if(rm == REGPC)
+            off += 8;
+        off = shift(off, st, sc, false);
+    } else {
+        off = inst & 0xfff;
+    }
+    if(!ubit)
+        off = -off;
+    if(rn == REGPC)
+        off += 8;
 
     address = reg.r[rn];
-    if(bbit) {
-        value = getmem_b(address);
-        putmem_b(address, reg.r[rm]);
-    } else {
-        value = getmem_w(address);
-        putmem_w(address, reg.r[rm]);
-    }
-    reg.r[rd] = value;
+    if(pbit)
+        address += off;
 
-    <<[[Iswap()]] trace>>
+    if(lbit) {
+        if(bbit)
+            value = getmem_b(address);
+        else
+            value = getmem_w(address);
+        if(rd == REGPC)
+            value -= 4;
+        reg.r[rd] = value;
+    } else {
+        value = reg.r[rd];
+        if(rd == REGPC)
+            value -= 4;
+        if(bbit)
+            putmem_b(address, value);
+        else
+            putmem_w(address, value);
+    }
+    if(!(pbit && !wbit))
+        reg.r[rn] += off;
+
+    <<[[Imem1()]] trace>>
 }
 @
+% >> >> >>
 
 \ifallcode
-<<[[Iswap()]] trace>>=
+<<[[Imem1()]] trace>>=
 if(trace) {
-    char *bw, *dotc;
+    char *bw, *dotp, *dotc;
 
-    bw = "";
+    bw = "W";
     if(bbit)
-        bw = "B";
+        bw = "BU";
+    dotp = "";
+    if(!pbit)
+        dotp = ".P";
     dotc = cond[reg.cond];
 
-    itrace("SWP%s%s\t#%x(R%d),R%d #%lux=#%x",
-        bw, dotc,
-        rn, rd,
-        address, value);
+    if(lbit) {
+        if(!bit25)
+            itrace("MOV%s%s%s\t#%x(R%d),R%d #%lux=#%x",
+                bw, dotp, dotc,
+                off, rn, rd,
+                address, value);
+        else
+            itrace("MOV%s%s%s\t(R%d%s%d)(R%d),R%d  #%lux=#%x",
+                bw, dotp, dotc,
+                rm, shtype[st], sc, rn, rd,
+                address, value);
+    } else {
+        if(!bit25)
+            itrace("MOV%s%s%s\tR%d,#%x(R%d) #%lux=#%x",
+                bw, dotp, dotc,
+                rd, off, rn,
+                address, value);
+        else
+            itrace("MOV%s%s%s\tR%d,(R%d%s%d)(R%d) #%lux=#%x",
+                bw, dotp, dotc,
+                rd, rm, shtype[st], sc, rn,
+                address, value);
+    }
 }
 @
 \fi
 
 
+
+
+<<memory opcodes>>=
+OLDH    = 78,
+OLDBU   = 79,
+OSTH    = 80,
+OSTBU   = 81,
+@
+
 <<[[arm_class()]] class 0, if op has 0x9 bits>>=
 if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
-     op = CMEM + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     op = CMEM2 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
      break;
 }
 @
 
 
+
+<<memory opcodes>>=
+CMEM2    = 78,
+@
+
 <<[[itab]] elements>>=
 // load/store h/sb
-[CMEM+0] =  { Imem2,		"MOV",	Imem },
-[CMEM+1] =  { Imem2,		"MOV",	Imem },
-[CMEM+2] =  { Imem2,		"MOV",	Imem },
-[CMEM+3] =  { Imem2,		"MOV",	Imem },
+[OLDH]  =  { Imem2,		"MOV",	Imem },
+[OLDBU] =  { Imem2,		"MOV",	Imem },
+[OSTH]  =  { Imem2,		"MOV",	Imem },
+[OSTBU] =  { Imem2,		"MOV",	Imem },
 @
 
 <<function Imem2>>=
@@ -2004,147 +2151,79 @@ if(trace) {
 
 
 
-<<[[arm_class()]] op cases>>=
-case 2:	/* load/store byte/word i(r) */
- op = CMEM+4 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
- break;
-@
-%48+24
 
-
-
-
-<<[[itab]] elements>>=
-// load/store w/ub i,r
-[CMEM+4+0] =  { Imem1,		"MOVW",	Imem },
-[CMEM+4+1] =  { Imem1,		"MOVB",	Imem },
-[CMEM+4+2] =  { Imem1,		"MOVW",	Imem },
-[CMEM+4+3] =  { Imem1,		"MOVB",	Imem },
+<<memory opcodes>>=
+OSWPW = 82,
+OSWPBU = 83,
 @
 
-<<[[arm_class()]] op cases>>=
-case 3:	/* load/store byte/word (r)(r) */
- op = CMEM+8 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
- break;
-@
-%(48+24+4)
 
-<<[[itab]] elements>>=
-// load/store r,r
-[CMEM+8+0] =  { Imem1,		"MOVW",	Imem },
-[CMEM+8+1] =  { Imem1,		"MOVB",	Imem },
-[CMEM+8+2] =  { Imem1,		"MOVW",	Imem },
-[CMEM+8+3] =  { Imem1,		"MOVB",	Imem },
-@
-
-<<function Imem1>>=
-/*
- * load/store word/byte
- */
-void
-Imem1(instruction inst)
-{
-    int rn, rd, off, rm, sc, st;
-    ulong address, value, pbit, ubit, bbit, wbit, lbit, bit25;
-
-    bit25 = inst & (1<<25);
-    pbit = inst & (1<<24);
-    ubit = inst & (1<<23);
-    bbit = inst & (1<<22);
-    wbit = inst & (1<<21);
-    lbit = inst & (1<<20);
-    rn = (inst>>16) & 0xf;
-    rd = (inst>>12) & 0xf;
-
-    SET(st);
-    SET(sc);
-    SET(rm);
-    if(bit25) {
-        rm = inst & 0xf;
-        st = (inst>>5) & 0x3;
-        sc = (inst>>7) & 0x1f;
-        off = reg.r[rm];
-        if(rm == REGPC)
-            off += 8;
-        off = shift(off, st, sc, false);
-    } else {
-        off = inst & 0xfff;
-    }
-    if(!ubit)
-        off = -off;
-    if(rn == REGPC)
-        off += 8;
-
-    address = reg.r[rn];
-    if(pbit)
-        address += off;
-
-    if(lbit) {
-        if(bbit)
-            value = getmem_b(address);
-        else
-            value = getmem_w(address);
-        if(rd == REGPC)
-            value -= 4;
-        reg.r[rd] = value;
-    } else {
-        value = reg.r[rd];
-        if(rd == REGPC)
-            value -= 4;
-        if(bbit)
-            putmem_b(address, value);
-        else
-            putmem_w(address, value);
-    }
-    if(!(pbit && !wbit))
-        reg.r[rn] += off;
-
-    <<[[Imem1()]] trace>>
+<<[[arm_class()]] class 0, when op == 0x9, if bit 24 set>>=
+if(w & (1<<24)) {
+    op = OSWPW;
+    if(w & (1<<22))
+         op = OSWPBU;
+    break;
 }
 @
-% >> >> >>
+% >> >>
+
+<<[[itab]] elements>>=
+[OSWPW] =   { Iswap,		"SWPW",	Imem },
+[OSWPBU] =  { Iswap,		"SWPBU",Imem },
+@
+
+<<function Iswap>>=
+void
+Iswap(instruction inst)
+{
+    int rn, rd, rm;
+    ulong address, value, bbit;
+
+    bbit = inst & (1<<22);
+    rn = (inst>>16) & 0xf;
+    rd = (inst>>12) & 0xf;
+    rm = (inst>>0) & 0xf;
+
+    address = reg.r[rn];
+    if(bbit) {
+        value = getmem_b(address);
+        putmem_b(address, reg.r[rm]);
+    } else {
+        value = getmem_w(address);
+        putmem_w(address, reg.r[rm]);
+    }
+    reg.r[rd] = value;
+
+    <<[[Iswap()]] trace>>
+}
+@
 
 \ifallcode
-<<[[Imem1()]] trace>>=
+<<[[Iswap()]] trace>>=
 if(trace) {
-    char *bw, *dotp, *dotc;
+    char *bw, *dotc;
 
-    bw = "W";
+    bw = "";
     if(bbit)
-        bw = "BU";
-    dotp = "";
-    if(!pbit)
-        dotp = ".P";
+        bw = "B";
     dotc = cond[reg.cond];
 
-    if(lbit) {
-        if(!bit25)
-            itrace("MOV%s%s%s\t#%x(R%d),R%d #%lux=#%x",
-                bw, dotp, dotc,
-                off, rn, rd,
-                address, value);
-        else
-            itrace("MOV%s%s%s\t(R%d%s%d)(R%d),R%d  #%lux=#%x",
-                bw, dotp, dotc,
-                rm, shtype[st], sc, rn, rd,
-                address, value);
-    } else {
-        if(!bit25)
-            itrace("MOV%s%s%s\tR%d,#%x(R%d) #%lux=#%x",
-                bw, dotp, dotc,
-                rd, off, rn,
-                address, value);
-        else
-            itrace("MOV%s%s%s\tR%d,(R%d%s%d)(R%d) #%lux=#%x",
-                bw, dotp, dotc,
-                rd, rm, shtype[st], sc, rn,
-                address, value);
-    }
+    itrace("SWP%s%s\t#%x(R%d),R%d #%lux=#%x",
+        bw, dotc,
+        rn, rd,
+        address, value);
 }
 @
 \fi
 
 
+
+
+<<memory opcodes>>=
+OLDM = 84,
+OSTM = 85,
+@
 
 
 <<[[arm_class()]] op cases>>=
@@ -2154,10 +2233,14 @@ case 4:	/* block data transfer (r)(r) */
 @
 %48+24+4+4
 
+<<memory opcodes>>=
+CBLOC   = 84,
+@
+
 <<[[itab]] elements>>=
 // block move r,r
-[CBLOC+0] =  { Ilsm,		"LDM",	Imem },
-[CBLOC+1] =  { Ilsm,		"STM",	Imem },
+[OLDM] =  { Ilsm,		"LDM",	Imem },
+[OSTM] =  { Ilsm,		"STM",	Imem },
 @
 
 <<function Ilsm>>=
@@ -2234,6 +2317,15 @@ if(trace) {
 
 \subsection{Branch}
 
+<<branching opcodes>>=
+OB = 86,
+OBL = 87,
+@
+
+<<branching opcodes>>=
+CBRANCH = 86,
+@
+
 <<[[arm_class()]] op cases>>=
 case 5:	/* branch / branch link */
  op = CBRANCH + ((w >> 24) & 0x1);
@@ -2243,8 +2335,8 @@ case 5:	/* branch / branch link */
 
 <<[[itab]] elements>>=
 // branch
-[CBRANCH+0] =  { Ib,	"B",	Ibranch },
-[CBRANCH+1] =  { Ibl,	"BL",	Ibranch },
+[OB]  =  { Ib,	"B",	Ibranch },
+[OBL] =  { Ibl,	"BL",	Ibranch },
 @
 
 <<function Ib>>=
@@ -2303,12 +2395,17 @@ if(trace)
 % software interrupt aka syscall
 % see chapter
 
+<<syscall opcodes>>=
+OSYSCALL = 88,
+@
+%// SWI
+
 <<[[arm_class()]] op cases>>=
 case 7:	/* coprocessor crap */ // and syscall
  if((w >> 25) & 0x1)
-   op = CSYSCALL;
+   op = OSYSCALL;
  else
-   op = CUNDEF; // coprocessor stuff not handled
+   op = OUNDEF; // coprocessor stuff not handled
  break;
 @
 % op = (48+24+4+4+2+2) + ((w >> 3) & 0x2) + ((w >> 20) & 0x1);
@@ -2316,7 +2413,7 @@ case 7:	/* coprocessor crap */ // and syscall
 
 <<[[itab]] elements>>=
 // co processor
-[CSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
+[OSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
 @
 
 \section{Unimplemented instructions}
