@@ -21,8 +21,10 @@ ifetch(uintptr addr)
         longjmp(errjmp, 0);
     }
 
+    /*s: [[ifetch()]] instruction cache handling */
     if(icache.on)
         updateicache(addr);
+    /*e: [[ifetch()]] instruction cache handling */
     iprof[(addr-textbase)/PROFGRAN]++;
 
     va = vaddr(addr); // get page
@@ -248,7 +250,7 @@ memio(char *mb, uintptr mem, int size, int dir)
             putmem_b(mem++, *mb++);
         break;
     default:
-        fatal(0, "memio");
+        fatal(false, "memio");
     }
     return buf;
 }
@@ -282,8 +284,10 @@ vaddr(uintptr addr)
     int off, foff, l, n;
     byte **p, *a;
 
+    /*s: [[vaddr()]] TLB handling */
     if(tlb.on)
         dotlb(addr);
+    /*e: [[vaddr()]] TLB handling */
 
     es = &memory.seg[Nseg];
     for(s = memory.seg; s < es; s++) {
@@ -291,39 +295,45 @@ vaddr(uintptr addr)
             s->refs++;
             off = (addr - s->base)/BY2PG;
             p = &s->table[off];
+
             if(*p)
                 return *p;
 
+            // else page fault! no allocated memory there yet
             s->rss++;
 
             switch(s->type) {
+            /*s: [[vaddr()]] page fault, switch segment type cases */
             case Text:
                 *p = emalloc(BY2PG);
                 if(seek(text, s->fileoff+(off*BY2PG), 0) < 0)
-                    fatal(1, "vaddr text seek");
+                    fatal(true, "vaddr text seek");
                 if(read(text, *p, BY2PG) < 0)
-                    fatal(1, "vaddr text read");
+                    fatal(true, "vaddr text read");
                 return *p;
+            /*x: [[vaddr()]] page fault, switch segment type cases */
             case Data:
                 *p = emalloc(BY2PG);
                 foff = s->fileoff+(off*BY2PG);
                 if(seek(text, foff, 0) < 0)
-                    fatal(1, "vaddr text seek");
+                    fatal(true, "vaddr text seek");
                 n = read(text, *p, BY2PG);
                 if(n < 0)
-                    fatal(1, "vaddr text read");
+                    fatal(true, "vaddr text read");
                 if(foff + n > s->fileend) {
                     l = BY2PG - (s->fileend-foff);
                     a = *p+(s->fileend-foff);
                     memset(a, 0, l);
                 }
                 return *p;
+            /*x: [[vaddr()]] page fault, switch segment type cases */
             case Bss:
             case Stack:
                 *p = emalloc(BY2PG);
                 return *p;
+            /*e: [[vaddr()]] page fault, switch segment type cases */
             default:
-                fatal(0, "vaddr");
+                fatal(false, "vaddr");
             }
         }
     }

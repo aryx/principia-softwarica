@@ -352,11 +352,13 @@ enum ixxx
     Imem,
     Ibranch,
     Isyscall,
+    Imisc,
 };
 @
 % big categories (for profiler)
 % I for Instruction?
 % vi/ has Iload Istore instead of Imem, and also Ireg and Ifloat
+% pad: I've added Imisc for undef.
 
 
 
@@ -457,7 +459,7 @@ struct Inst
 % mini instruction interpreter, big categories, "sub-interpreter"?
 
 <<global itab>>=
-//hash<enum<opcode>, Inst>
+//map<enum<opcode>, Inst>
 Inst itab[] =
 {
   <<[[itab]] elements>>
@@ -465,12 +467,30 @@ Inst itab[] =
 };
 @
 
-%ex: 
+<<[[itab]] elements>>=
+[OUNDEF] =  { undef,		"UNDEF", Imisc},
+@
+
+%ex (and evolution of array):
+%  { Imul,	"MUL",	Iarith }, /* 64 */
 %  [64] =  { Imul,	"MUL",	Iarith },
 %  [CMUL] =  { Imul,	"MUL",	Iarith },
 %  [OMUL] =  { Imul,	"MUL",	Iarith },
 
 \section{[[Registers]] and [[reg]]}
+
+% could factorize with arm/ureg.h
+<<struct Registers>>=
+struct Registers
+{
+    long	r[16];
+    <<[[Registers]] other fields>>
+};
+@
+
+<<global reg>>=
+Registers reg;
+@
 
 % 16 registers, R0 to R15, with some are special, e.g. PC = R15
 % R0 is kinda like the equivalent of AX on x86
@@ -491,18 +511,6 @@ enum
 % REGARG/REGRET are plan9 conventions, independent of ARM,
 % but because we emulate syscalls we need to understand the API.
 
-% could factorize with arm/ureg.h
-<<struct Registers>>=
-struct Registers
-{
-    long	r[16];
-    <<[[Registers]] other fields>>
-};
-@
-
-<<global reg>>=
-Registers reg;
-@
 
 
 
@@ -535,7 +543,7 @@ struct Segment
     ulong	fileoff;
     ulong	fileend;
 
-    //array<option<array_4096<bytes>>> page table
+    //array<option<array_4096<byte>>> page table
     byte**	table; // the data
 
     <<[[Segment]] profiling fields>>
@@ -580,20 +588,16 @@ fdt text;
 @
 
 
-
+% in 5i.c
 <<global bxxx>>=
 Biobuf	bi, bp;
 @
 
-<<global bioout>>=
-Biobuf *bioout;
+% in globals.c
+<<global bixxx>>=
+Biobuf *bin, *bioout;
 @
-% point to bp
-
-<<global bin>>=
-Biobuf *bin;
-@
-% point to bi
+% point to bi, bp;
 
 
 <<function main>>=
@@ -609,8 +613,7 @@ void main(int argc, char **argv)
     Binit(bioout, STDOUT, OWRITE);
     Binit(bin, STDIN, OREAD);
 
-    tlb.on = true;
-    tlb.tlbsize = 24;
+    <<[[main()]] tlb initialisation>>
 
     if(argc)
         file = argv[0];
@@ -619,7 +622,7 @@ void main(int argc, char **argv)
 
     text = open(file, OREAD);
     if(text < 0)
-        fatal(1, "open text '%s'", file);
+        fatal(true, "open text '%s'", file);
 
     Bprint(bioout, "5i\n");
 
@@ -666,16 +669,17 @@ inithdr(fdt fd)
 
     seek(fd, 0, 0);
     if (!crackhdr(fd, &fhdr))
-        fatal(0, "read text header");
+        fatal(false, "read text header");
 
     if(fhdr.type != FARM )
-        fatal(0, "bad magic number: %d %d", fhdr.type, FARM);
+        fatal(false, "bad magic number: %d %d", fhdr.type, FARM);
 
     if (syminit(fd, &fhdr) < 0)
-        fatal(0, "%r\n");
+        fatal(false, "%r\n");
 
     symmap = loadmap(symmap, fd, &fhdr);
 
+    //???
     if (mach->sbreg && lookup(0, mach->sbreg, &s))
         mach->sb = s.value;
     machdata = &armmach;
@@ -686,9 +690,9 @@ inithdr(fdt fd)
 \section{[[initmap()]]}
 
 <<enum _anon_ (machine/5i/arm.h)7>>=
-/* Plan9 Kernel constants */
 enum
 {
+    /* Plan9 Kernel constants */
     BY2PG		= 4096,
     BY2WD		= 4,
 
@@ -702,6 +706,10 @@ enum
 };
 @
 % >> >>
+% UTZERO unused ... normal?
+% less: could lp split more
+
+% TODO macro round with (x+BY2PG -1) & (BY2PG - 1)?
 
 %dead:
 %    FP_U		= 3,
@@ -712,15 +720,6 @@ enum
 
 
 
-<<global datasize>>=
-int	datasize;
-@
-% who use that?
-
-<<global textbase>>=
-uintptr	textbase;
-@
-% who else use that?
 
 
 
@@ -738,40 +737,72 @@ initmap(void)
     bssend = t + fhdr.datsz + fhdr.bsssz;
     b = (bssend + (BY2PG-1)) & ~(BY2PG-1);
 
-    s = &memory.seg[Text];
-    s->type = Text;
-    s->base = fhdr.txtaddr - fhdr.hdrsz;
-    s->end = t;
-    s->fileoff = fhdr.txtoff - fhdr.hdrsz;
-    s->fileend = s->fileoff + fhdr.txtsz;
-    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
-    textbase = s->base;
-
-    <<[[initmap()]] iprof allocation>>
-
-    s = &memory.seg[Data];
-    s->type = Data;
-    s->base = t;
-    s->end = t+(d-t);
-    s->fileoff = fhdr.datoff;
-    s->fileend = s->fileoff + fhdr.datsz;
-    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
-    datasize = fhdr.datsz;
-
-    s = &memory.seg[Bss];
-    s->type = Bss;
-    s->base = d;
-    s->end = d+(b-d);
-    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
-
-    s = &memory.seg[Stack];
-    s->type = Stack;
-    s->base = STACKTOP-STACKSIZE;
-    s->end = STACKTOP;
-    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+    <<[[initmap()]] Text segment initilisation>>
+    <<[[initmap()]] Data segment initilisation>>
+    <<[[initmap()]] Bss segment initilisation>>
+    <<[[initmap()]] Stack segment initilisation>>
 
     reg.r[REGPC] = fhdr.entry;
 }
+@
+% note that bssend does not start at round page, not needed! can
+% just follow directly data
+
+
+<<[[initmap()]] Text segment initilisation>>=
+s = &memory.seg[Text];
+s->type = Text;
+s->base = fhdr.txtaddr - fhdr.hdrsz;
+s->end = t;
+s->fileoff = fhdr.txtoff - fhdr.hdrsz;
+s->fileend = s->fileoff + fhdr.txtsz;
+s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+@
+
+<<global textbase>>=
+uintptr	textbase;
+@
+% who else use that?
+
+<<[[initmap()]] Text segment initilisation>>=
+textbase = s->base;
+@
+
+
+<<[[initmap()]] Data segment initilisation>>=
+s = &memory.seg[Data];
+s->type = Data;
+s->base = t;
+s->end = t+(d-t);
+s->fileoff = fhdr.datoff;
+s->fileend = s->fileoff + fhdr.datsz;
+s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+@
+
+<<global datasize>>=
+int	datasize;
+@
+% who use that?
+
+<<[[initmap()]] Data segment initilisation>>=
+datasize = fhdr.datsz;
+@
+
+
+<<[[initmap()]] Bss segment initilisation>>=
+s = &memory.seg[Bss];
+s->type = Bss;
+s->base = d;
+s->end = d+(b-d);
+s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+@
+
+<<[[initmap()]] Stack segment initilisation>>=
+s = &memory.seg[Stack];
+s->type = Stack;
+s->base = STACKTOP-STACKSIZE;
+s->end = STACKTOP;
+s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
 @
 
 \section{[[initstk()]]}
@@ -906,8 +937,8 @@ colon(char *addr, char *cp)
     }
 
     dot = reg.r[REGPC];
-    Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
 
+    Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
     <<[[colon()]] print current instruction>>
     Bprint(bioout, "\n");
 }
@@ -1013,7 +1044,8 @@ run(void)
 @
 % what about jumps? always REGPC+=4? yes because if jmp then
 % the interpreter actually does some -=4 to compensate back at many
-% places (hmm a bit ugly)
+% places (hmm a bit ugly, maybe simpler to put this +=4 in the few
+% Ixxx we have anyway).
 
 % should switch to mips model with Iexec()?
 
@@ -1164,11 +1196,13 @@ runtst(void)
 int
 arm_class(instruction w)
 {
+    int class;
     int op;
+    int x;
    
-    op = (w >> 25) & 0x7;
-    switch(op) {
-    <<[[arm_class()]] op cases>>
+    class = (w >> 25) & 0x7;
+    switch(class) {
+    <<[[arm_class()]] class cases>>
     default:	  
         op = OUNDEF;
         break;
@@ -1176,12 +1210,11 @@ arm_class(instruction w)
     return op;
 }
 @
+%less: rename? opcode_of_instruction?
 % (48+24+4+4+2+2+4+4)
 %case 6:	/* vfp load / store */ ; // go to default now
-
-<<[[itab]] elements>>=
-[OUNDEF] =  { undef,		"undef"  },
-@
+% I used to have only int op; for local, but better to split
+% and have "class", and x
 
 
 
@@ -1219,12 +1252,13 @@ OMVN = 15,
 %// MOV,    MVN
 
 
-
-<<[[arm_class()]] op cases>>=
+%less: could use different locals for the different kinds of 'op'
+<<[[arm_class()]] class cases>>=
 case 0:	/* data processing r,r,r */
-    op = ((w >> 4) & 0xf);
-    <<[[arm_class()]] class 0, if op is 0x9>>
-    <<[[arm_class()]] class 0, if op has 0x9 bits>>
+    x = ((w >> 4) & 0xf);
+    <<[[arm_class()]] class 0, if x is 0x9>>
+    <<[[arm_class()]] class 0, if x has 0x9 bits>>
+    // else
 
     // the opcode! OAND/OADD/...
     op = (w >> 21) & 0xf;
@@ -1240,7 +1274,7 @@ case 0:	/* data processing r,r,r */
 % 31 << 7 means take all the bits from 7 to 11, the shift#
 % >> >> >> >> >> >>
 
-<<[[arm_class()]] op cases>>=
+<<[[arm_class()]] class cases>>=
 case 1:	/* data processing i,r,r */
  op = CARITH3 + ((w >> 21) & 0xf);
  break;
@@ -1258,23 +1292,16 @@ CARITH3 = 48, // i,r,r
 <<arith/logic opcodes>>=
 OMUL    = 64,
 OMULA   = 65,
-OMULLU  = 66,
-OMULALU = 67,
-OMULL   = 68,
-OMULAL  = 69,
 @
 
+
 % class 0 is bad name, maybe opcode_25_27? and op then is opcode_4_7
-<<[[arm_class()]] class 0, if op is 0x9>>=
+<<[[arm_class()]] class 0, if x is 0x9>>=
 /* mul, swp, mull */
-if(op == 0x9) {
+if(x == 0x9) {
     op = CMUL;
-    <<[[arm_class()]] class 0, when op == 0x9, if bit 24 set>>
-    if(w & (1<<23)) {	/* mullu */
-        op = CMUL+2;
-        if(w & (1<<22))	/* mull */
-            op = CMUL+4;
-    }
+    <<[[arm_class()]] class 0, when x == 0x9, if bit 24 set>>
+    <<[[arm_class()]] class 0, when x == 0x9, if bit 23 set>>
     if(w & (1<<21))
         op++;		/* mla */
     break;
@@ -1292,11 +1319,8 @@ CMUL    = 64,
 <<[[itab]] elements>>=
 [OMUL]    =  { Imul,	"MUL",	Iarith },
 [OMULA]   =  { Imula,	"MULA",	Iarith },	
-[OMULLU]  =  { Imull,	"MULLU",	Iarith },
-[OMULALU] =  { Imull,	"MULALU",	Iarith },
-[OMULL]   =  { Imull,	"MULL",		Iarith  },
-[OMULAL]  =  { Imull,	"MULAL",	Iarith  },
 @
+
 
 % pretty simple :)
 <<function Imul>>=
@@ -1351,6 +1375,8 @@ Imula(instruction inst)
     <<[[Imula()]] trace>>
 }
 @
+% convenient for pointer arithmetic, usually have a basis, and then
+% an index multiplied by sizeof entry
 
 \ifallcode
 <<[[Imula()]] trace>>=
@@ -1360,53 +1386,6 @@ if(trace)
         reg.r[rd]);
 @
 \fi
-
-
-
-% less simple, signed long multiply? so need XCAST because signed?
-<<function Imull>>=
-void
-Imull(instruction inst)
-{
-    vlong v;
-    int rs, rd, rm, rn;
-
-    rd = (inst>>16) & 0xf;
-    rn = (inst>>12) & 0xf;
-    rs = (inst>>8) & 0xf;
-    rm = inst & 0xf;
-
-    if(rd == REGPC || rn == REGPC || rs == REGPC || rm == REGPC
-      || rd == rm || rn == rm || rd == rn
-      )
-        undef(inst);
-
-    if(inst & (1<<22)){
-        v = (vlong)reg.r[rm] * (vlong)reg.r[rs];
-        if(inst & (1 << 21))
-            v += reg.r[rn];
-    }else{
-        v = XCAST(reg.r[rm]) * XCAST(reg.r[rs]);
-        if(inst & (1 << 21))
-            v += (ulong)reg.r[rn];
-    }
-    reg.r[rd] = v >> 32;
-    reg.r[rn] = v;
-
-    <<[[Imull()]] trace>>
-}
-@
-% >> >>
-
-\ifallcode
-<<[[Imull()]] trace>>=
-if(trace)
-    itrace("%s%s\tR%d,R%d,(R%d,R%d) =#%llx",
-        reg.ip->name, cond[reg.cond], rs, rm, rn, rd,
-        v);
-@
-\fi
-
 
 
 
@@ -1478,6 +1457,149 @@ if(trace)
         reg.r[rd]);
 @
 \fi
+
+
+
+% dpex? means?
+% note local cbit != reg.cbit
+<<function dpex>>=
+void
+dpex(instruction inst, long o1, long o2, int rd)
+{
+    bool cbit = false;
+
+    switch((inst>>21) & 0xf) {
+    <<[[dpex()]] switch arith/logic opcode cases>>
+    }
+    <<[[dpex()]] if Sbit>>
+}
+@
+% >>
+% mov in arith? seems redundant with load/store no?
+
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case  OAND:
+    reg.r[rd] = o1 & o2;
+    cbit = true;
+    break;
+case OORR:
+    reg.r[rd] = o1 | o2;
+    cbit = true;
+    break;
+case OEOR:
+    reg.r[rd] = o1 ^ o2;
+    cbit = true;
+    break;
+case OBIC:	/* bic */
+    reg.r[rd] = o1 & ~o2;
+    cbit = true;
+    break;
+@
+
+
+<<constant Sbit>>=
+Sbit		= 1<<20,
+@
+% >>
+
+% only for code that break
+<<[[dpex()]] if Sbit>>=
+if(inst & Sbit) {
+    if(cbit)
+        reg.cbit = reg.cout;
+    reg.cc1 = reg.r[rd];
+    reg.cc2 = 0;
+    reg.compare_op = CCcmp;
+}
+@
+
+<<[[Registers]] other fields>>=
+int	cbit; // carry bit?
+int	cout;
+@
+% cout is set by shift
+
+
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case OADD:
+    <<[[dpex()]] if calltree, when add operation>>
+    reg.r[rd] = o1 + o2;
+    if(inst & Sbit) {
+        if((XCAST(o1) + XCAST(o2)) & (1LL << 32))
+            reg.cbit = true;
+        else
+            reg.cbit = false;
+        reg.cc1 = o2;
+        reg.cc2 = -o1;
+        reg.compare_op = CCcmp;
+    }
+    return;
+@
+% >> >>
+
+
+<<macro XCAST>>=
+#define XCAST(a) (uvlong)(ulong)a
+@
+% first cast ulong because usually register are long[16],
+% and then uvlong cast to promote to 64 bits
+
+
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case OSUB:
+    reg.r[rd] = o1 - o2;
+    // Fallthrough
+case OCMP:
+    if(inst & Sbit) {
+        reg.cc1 = o1;
+        reg.cc2 = o2;
+        reg.compare_op = CCcmp;
+    }
+    return;
+@
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case  OTST:
+    if(inst & Sbit) {
+        reg.cc1 = o1;
+        reg.cc2 = o2;
+        reg.compare_op = CCtst;
+    }
+    return;
+case  OTEQ:
+    if(inst & Sbit) { // not always true?
+        reg.cc1 = o1;
+        reg.cc2 = o2;
+        reg.compare_op = CCteq;
+    }
+    return;
+@
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case OCMN:
+    if(inst & Sbit) { // not always true?
+        reg.cc1 = o1;
+        reg.cc2 = -o2;
+        reg.compare_op = CCcmp;
+    }
+    return;
+@
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case  ORSB:
+    reg.r[rd] = o2 - o1;
+    if(inst & Sbit) {
+        reg.cc1 = o2;
+        reg.cc2 = o1;
+        reg.compare_op = CCcmp;
+    }
+    return;
+@
+
+
 
 
 <<[[itab]] elements>>=
@@ -1669,124 +1791,6 @@ if(trace)
 
 
 
-<<constant Sbit>>=
-Sbit		= 1<<20,
-@
-% >>
-
-% dpex? means?
-<<function dpex>>=
-void
-dpex(instruction inst, long o1, long o2, int rd)
-{
-    bool cbit = false;
-
-    switch((inst>>21) & 0xf) {
-    case  OAND:
-        reg.r[rd] = o1 & o2;
-        cbit = true;
-        break;
-    case OORR:
-        reg.r[rd] = o1 | o2;
-        cbit = true;
-        break;
-    case OEOR:
-        reg.r[rd] = o1 ^ o2;
-        cbit = true;
-        break;
-    case OBIC:	/* bic */
-        reg.r[rd] = o1 & ~o2;
-        cbit = true;
-        break;
-
-    case OADD:
-        <<[[dpex()]] if calltree, when add operation>>
-        reg.r[rd] = o1 + o2;
-        if(inst & Sbit) {
-            if((XCAST(o1) + XCAST(o2)) & (1LL << 32))
-                reg.cbit = true;
-            else
-                reg.cbit = false;
-            reg.cc1 = o2;
-            reg.cc2 = -o1;
-            reg.compare_op = CCcmp;
-        }
-        return;
-
-
-    case OSUB:
-        reg.r[rd] = o1 - o2;
-        // Fallthrough
-    case OCMP:
-        if(inst & Sbit) {
-            reg.cc1 = o1;
-            reg.cc2 = o2;
-            reg.compare_op = CCcmp;
-        }
-        return;
-
-    case  OTST:
-        if(inst & Sbit) {
-            reg.cc1 = o1;
-            reg.cc2 = o2;
-            reg.compare_op = CCtst;
-        }
-        return;
-    case  OTEQ:
-        if(inst & Sbit) { // not always true?
-            reg.cc1 = o1;
-            reg.cc2 = o2;
-            reg.compare_op = CCteq;
-        }
-        return;
-    case OCMN:
-        if(inst & Sbit) { // not always true?
-            reg.cc1 = o1;
-            reg.cc2 = -o2;
-            reg.compare_op = CCcmp;
-        }
-        return;
-
-    case  OADC:
-    case  OSBC:
-    case  ORSC:
-        undef(inst);
-
-    case  ORSB:
-        reg.r[rd] = o2 - o1;
-        if(inst & Sbit) {
-            reg.cc1 = o2;
-            reg.cc2 = o1;
-            reg.compare_op = CCcmp;
-        }
-        return;
-    case OMOV:
-        reg.r[rd] = o2;
-        cbit = true;
-        break;
-    case OMVN:
-        reg.r[rd] = ~o2;
-        cbit = true;
-        break;
-    }
-
-    if(inst & Sbit) {
-        if(cbit)
-            reg.cbit = reg.cout;
-        reg.cc1 = reg.r[rd];
-        reg.cc2 = 0;
-        reg.compare_op = CCcmp;
-    }
-}
-@
-% >>
-% mov in arith? seems redundant with load/store no?
-
-
-<<[[Registers]] other fields>>=
-int	cbit; // carry bit?
-int	cout;
-@
 
 
 
@@ -1841,7 +1845,9 @@ shift(long v, int st, int sc, bool isreg)
             break;
         case 3:	/* rotate right */
             reg.cout = (v >> (sc - 1)) & 1;
-            v = (v << (32-sc)) | ((ulong)v >> sc);
+            v = (v << (32-sc)) 
+                 | 
+                ((ulong)v >> sc);
             break;
         }
     }
@@ -1853,10 +1859,99 @@ shift(long v, int st, int sc, bool isreg)
 
 
 
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case OMOV:
+    reg.r[rd] = o2;
+    cbit = true;
+    break;
+case OMVN:
+    reg.r[rd] = ~o2;
+    cbit = true;
+    break;
+@
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case  OADC:
+case  OSBC:
+case  ORSC:
+    undef(inst);
+@
+
+
+
+
+<<arith/logic opcodes>>=
+OMULLU  = 66,
+OMULALU = 67,
+OMULL   = 68,
+OMULAL  = 69,
+@
+
+<<[[arm_class()]] class 0, when x == 0x9, if bit 23 set>>=
+if(w & (1<<23)) {	/* mullu */
+    op = CMUL+2;
+    if(w & (1<<22))	/* mull */
+        op = CMUL+4;
+}
+@
+
+<<[[itab]] elements>>=
+[OMULLU]  =  { Imull,	"MULLU",	Iarith },
+[OMULALU] =  { Imull,	"MULALU",	Iarith },
+[OMULL]   =  { Imull,	"MULL",		Iarith  },
+[OMULAL]  =  { Imull,	"MULAL",	Iarith  },
+@
+
+
+% less simple, signed long multiply? so need XCAST because signed?
+<<function Imull>>=
+void
+Imull(instruction inst)
+{
+    vlong v;
+    int rs, rd, rm, rn;
+
+    rd = (inst>>16) & 0xf;
+    rn = (inst>>12) & 0xf;
+    rs = (inst>>8) & 0xf;
+    rm = inst & 0xf;
+
+    if(rd == REGPC || rn == REGPC || rs == REGPC || rm == REGPC
+      || rd == rm || rn == rm || rd == rn
+      )
+        undef(inst);
+
+    if(inst & (1<<22)){
+        v = (vlong)reg.r[rm] * (vlong)reg.r[rs];
+        if(inst & (1 << 21))
+            v += reg.r[rn];
+    }else{
+        v = XCAST(reg.r[rm]) * XCAST(reg.r[rs]);
+        if(inst & (1 << 21))
+            v += (ulong)reg.r[rn];
+    }
+    reg.r[rd] = v >> 32;
+    reg.r[rn] = v;
+
+    <<[[Imull()]] trace>>
+}
+@
+% >> >>
+
+
+\ifallcode
+<<[[Imull()]] trace>>=
+if(trace)
+    itrace("%s%s\tR%d,R%d,(R%d,R%d) =#%llx",
+        reg.ip->name, cond[reg.cond], rs, rm, rn, rd,
+        v);
+@
+\fi
+
+
 
 
 \subsection{Memory}
-
 
 <<memory opcodes>>=
 OLDW    = 70,
@@ -1865,24 +1960,112 @@ OSTW    = 72,
 OSTB    = 73,
 @
 
-<<[[arm_class()]] op cases>>=
+<<[[arm_class()]] class cases>>=
 case 2:	/* load/store byte/word i(r) */
- op = CMEM0 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+ op = CMEM_BASIS + CMEM0 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
  break;
 @
 %48+24
 
-<<[[arm_class()]] op cases>>=
+<<[[arm_class()]] class cases>>=
 case 3:	/* load/store byte/word (r)(r) */
- op = CMEM1 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+ op = CMEM_BASIS + CMEM1 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
  break;
 @
 %(48+24+4)
 
 <<memory opcodes>>=
+CMEM_BASIS = 70,
 CMEM0 = 0, // i(r)
 CMEM1 = 4, // (r),(r)
+CMEM2 = 8, // byte signed or half word
 @
+
+
+<<memory opcodes>>=
+OLDH    = 78,
+OLDBU   = 79,
+OSTH    = 80,
+OSTBU   = 81,
+@
+
+<<[[arm_class()]] class 0, if x has 0x9 bits>>=
+if((x & 0x9) == 0x9) {		/* ld/st byte/half s/u */
+     op = CMEM_BASIS + CMEM2 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     break;
+}
+@
+
+
+
+<<memory opcodes>>=
+OSWPW = 82,
+OSWPBU = 83,
+@
+
+
+<<[[arm_class()]] class 0, when x == 0x9, if bit 24 set>>=
+if(w & (1<<24)) {
+    op = OSWPW;
+    if(w & (1<<22))
+         op = OSWPBU;
+    break;
+}
+@
+% >> >>
+
+<<[[itab]] elements>>=
+[OSWPW] =   { Iswap,		"SWPW",	Imem },
+[OSWPBU] =  { Iswap,		"SWPBU",Imem },
+@
+
+<<function Iswap>>=
+void
+Iswap(instruction inst)
+{
+    int rn, rd, rm;
+    ulong address, value, bbit;
+
+    bbit = inst & (1<<22);
+
+    rn = (inst>>16) & 0xf;
+    rd = (inst>>12) & 0xf;
+    rm = (inst>>0) & 0xf;
+
+    address = reg.r[rn];
+    if(bbit) {
+        value = getmem_b(address);
+        putmem_b(address, reg.r[rm]);
+    } else {
+        value = getmem_w(address);
+        putmem_w(address, reg.r[rm]);
+    }
+    reg.r[rd] = value;
+
+    <<[[Iswap()]] trace>>
+}
+@
+
+\ifallcode
+<<[[Iswap()]] trace>>=
+if(trace) {
+    char *bw, *dotc;
+
+    bw = "";
+    if(bbit)
+        bw = "B";
+    dotc = cond[reg.cond];
+
+    itrace("SWP%s%s\t#%x(R%d),R%d #%lux=#%x",
+        bw, dotc,
+        rn, rd,
+        address, value);
+}
+@
+\fi
+
+
+
 
 
 
@@ -1918,6 +2101,7 @@ Imem1(instruction inst)
     bbit = inst & (1<<22);
     wbit = inst & (1<<21);
     lbit = inst & (1<<20);
+
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
 
@@ -2012,25 +2196,6 @@ if(trace) {
 
 
 
-<<memory opcodes>>=
-OLDH    = 78,
-OLDBU   = 79,
-OSTH    = 80,
-OSTBU   = 81,
-@
-
-<<[[arm_class()]] class 0, if op has 0x9 bits>>=
-if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
-     op = CMEM2 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
-     break;
-}
-@
-
-
-
-<<memory opcodes>>=
-CMEM2    = 78,
-@
 
 <<[[itab]] elements>>=
 // load/store h/sb
@@ -2057,6 +2222,7 @@ Imem2(instruction inst)
     lbit = inst & (1<<20);
     sbit = inst & (1<<6);
     hbit = inst & (1<<5);
+
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
 
@@ -2152,81 +2318,16 @@ if(trace) {
 
 
 
-<<memory opcodes>>=
-OSWPW = 82,
-OSWPBU = 83,
-@
 
 
-<<[[arm_class()]] class 0, when op == 0x9, if bit 24 set>>=
-if(w & (1<<24)) {
-    op = OSWPW;
-    if(w & (1<<22))
-         op = OSWPBU;
-    break;
-}
-@
-% >> >>
-
-<<[[itab]] elements>>=
-[OSWPW] =   { Iswap,		"SWPW",	Imem },
-[OSWPBU] =  { Iswap,		"SWPBU",Imem },
-@
-
-<<function Iswap>>=
-void
-Iswap(instruction inst)
-{
-    int rn, rd, rm;
-    ulong address, value, bbit;
-
-    bbit = inst & (1<<22);
-    rn = (inst>>16) & 0xf;
-    rd = (inst>>12) & 0xf;
-    rm = (inst>>0) & 0xf;
-
-    address = reg.r[rn];
-    if(bbit) {
-        value = getmem_b(address);
-        putmem_b(address, reg.r[rm]);
-    } else {
-        value = getmem_w(address);
-        putmem_w(address, reg.r[rm]);
-    }
-    reg.r[rd] = value;
-
-    <<[[Iswap()]] trace>>
-}
-@
-
-\ifallcode
-<<[[Iswap()]] trace>>=
-if(trace) {
-    char *bw, *dotc;
-
-    bw = "";
-    if(bbit)
-        bw = "B";
-    dotc = cond[reg.cond];
-
-    itrace("SWP%s%s\t#%x(R%d),R%d #%lux=#%x",
-        bw, dotc,
-        rn, rd,
-        address, value);
-}
-@
-\fi
-
-
-
-
+% advanced topic? like I did in Assembler.nw?
 <<memory opcodes>>=
 OLDM = 84,
 OSTM = 85,
 @
 
 
-<<[[arm_class()]] op cases>>=
+<<[[arm_class()]] class cases>>=
 case 4:	/* block data transfer (r)(r) */
  op = CBLOC + ((w >> 20) & 0x1);
  break;
@@ -2326,7 +2427,7 @@ OBL = 87,
 CBRANCH = 86,
 @
 
-<<[[arm_class()]] op cases>>=
+<<[[arm_class()]] class cases>>=
 case 5:	/* branch / branch link */
  op = CBRANCH + ((w >> 24) & 0x1);
  break;
@@ -2346,7 +2447,9 @@ Ib(instruction inst)
     long v;
 
     v = inst & 0xffffff; // 24 bits
-    v = reg.r[REGPC] + 8 + ((v << 8) >> 6);
+    v = reg.r[REGPC] + 8 + 
+        ((v << 8) 
+          >> 6);
     <<[[Ib()]] trace>>
     reg.r[REGPC] = v - 4;
 }
@@ -2374,7 +2477,9 @@ Ibl(instruction inst)
     Symbol s;
 
     v = inst & 0xffffff;
-    v = reg.r[REGPC] + 8 + ((v << 8) >> 6);
+    v = reg.r[REGPC] + 8 + 
+           ((v << 8) 
+               >> 6);
     <<[[Ibl()]] trace>>
     <<[[Ibl()]] if calltree>>
     reg.r[REGLINK] = reg.r[REGPC] + 4;
@@ -2383,6 +2488,7 @@ Ibl(instruction inst)
 @
 % Branch and Link, so kinda call, just for leaves, no need stack
 % if want RET, just have to mov reglink, regpc
+% why not just v << 2 ?? why this 8 and 6 stuff?
 
 \ifallcode
 <<[[Ibl()]] trace>>=
@@ -2400,7 +2506,7 @@ OSYSCALL = 88,
 @
 %// SWI
 
-<<[[arm_class()]] op cases>>=
+<<[[arm_class()]] class cases>>=
 case 7:	/* coprocessor crap */ // and syscall
  if((w >> 25) & 0x1)
    op = OSYSCALL;
@@ -2434,8 +2540,9 @@ case 7:	/* coprocessor crap */ // and syscall
 % of page faults, device interrupts, etc.
 % see also Syscalls chapter.
 
-\section{[[vaddr()]] and the TLB}
+\section{[[vaddr()]]}
 
+%rename page_of_vaddr?
 <<function vaddr>>=
 void*
 vaddr(uintptr addr)
@@ -2444,8 +2551,7 @@ vaddr(uintptr addr)
     int off, foff, l, n;
     byte **p, *a;
 
-    if(tlb.on)
-        dotlb(addr);
+    <<[[vaddr()]] TLB handling>>
 
     es = &memory.seg[Nseg];
     for(s = memory.seg; s < es; s++) {
@@ -2453,39 +2559,17 @@ vaddr(uintptr addr)
             s->refs++;
             off = (addr - s->base)/BY2PG;
             p = &s->table[off];
+
             if(*p)
                 return *p;
 
+            // else page fault! no allocated memory there yet
             s->rss++;
 
             switch(s->type) {
-            case Text:
-                *p = emalloc(BY2PG);
-                if(seek(text, s->fileoff+(off*BY2PG), 0) < 0)
-                    fatal(1, "vaddr text seek");
-                if(read(text, *p, BY2PG) < 0)
-                    fatal(1, "vaddr text read");
-                return *p;
-            case Data:
-                *p = emalloc(BY2PG);
-                foff = s->fileoff+(off*BY2PG);
-                if(seek(text, foff, 0) < 0)
-                    fatal(1, "vaddr text seek");
-                n = read(text, *p, BY2PG);
-                if(n < 0)
-                    fatal(1, "vaddr text read");
-                if(foff + n > s->fileend) {
-                    l = BY2PG - (s->fileend-foff);
-                    a = *p+(s->fileend-foff);
-                    memset(a, 0, l);
-                }
-                return *p;
-            case Bss:
-            case Stack:
-                *p = emalloc(BY2PG);
-                return *p;
+            <<[[vaddr()]] page fault, switch segment type cases>>
             default:
-                fatal(0, "vaddr");
+                fatal(false, "vaddr");
             }
         }
     }
@@ -2496,7 +2580,44 @@ vaddr(uintptr addr)
 }
 @
 
+\section{Page faults}
 
+<<[[vaddr()]] page fault, switch segment type cases>>=
+case Text:
+    *p = emalloc(BY2PG);
+    if(seek(text, s->fileoff+(off*BY2PG), 0) < 0)
+        fatal(true, "vaddr text seek");
+    if(read(text, *p, BY2PG) < 0)
+        fatal(true, "vaddr text read");
+    return *p;
+@
+
+<<[[vaddr()]] page fault, switch segment type cases>>=
+case Data:
+    *p = emalloc(BY2PG);
+    foff = s->fileoff+(off*BY2PG);
+    if(seek(text, foff, 0) < 0)
+        fatal(true, "vaddr text seek");
+    n = read(text, *p, BY2PG);
+    if(n < 0)
+        fatal(true, "vaddr text read");
+    if(foff + n > s->fileend) {
+        l = BY2PG - (s->fileend-foff);
+        a = *p+(s->fileend-foff);
+        memset(a, 0, l);
+    }
+    return *p;
+@
+
+<<[[vaddr()]] page fault, switch segment type cases>>=
+case Bss:
+case Stack:
+    *p = emalloc(BY2PG);
+    return *p;
+@
+
+
+\section{[[Tlb]]}
 
 <<struct Tlb>>=
 struct Tlb
@@ -2517,6 +2638,17 @@ struct Tlb
 
 <<global tlb>>=
 Tlb tlb;
+@
+
+<<[[main()]] tlb initialisation>>=
+tlb.on = true;
+tlb.tlbsize = 24;
+@
+
+
+<<[[vaddr()]] TLB handling>>=
+if(tlb.on)
+    dotlb(addr);
 @
 
 % just for stats
@@ -2541,7 +2673,7 @@ dotlb(uintptr vaddr)
 @
 
 
-\section{[[ifetch()]] and the instruction cache}
+\section{[[ifetch()]]}
 
 <<function ifetch>>=
 instruction
@@ -2554,8 +2686,7 @@ ifetch(uintptr addr)
         longjmp(errjmp, 0);
     }
 
-    if(icache.on)
-        updateicache(addr);
+    <<[[ifetch()]] instruction cache handling>>
     iprof[(addr-textbase)/PROFGRAN]++;
 
     va = vaddr(addr); // get page
@@ -2566,6 +2697,7 @@ ifetch(uintptr addr)
 @
 % >> >> >>
 
+\section{The instruction cache}
 
 <<struct Icache>>=
 struct Icache
@@ -2582,6 +2714,11 @@ struct Icache
 
 <<global icache>>=
 Icache icache;
+@
+
+<<[[ifetch()]] instruction cache handling>>=
+if(icache.on)
+    updateicache(addr);
 @
 
 % no icache in ARM? vs vi/?
@@ -2965,7 +3102,7 @@ memio(char *mb, uintptr mem, int size, int dir)
             putmem_b(mem++, *mb++);
         break;
     default:
-        fatal(0, "memio");
+        fatal(false, "memio");
     }
     return buf;
 }
@@ -2982,8 +3119,9 @@ sysnop(void)
 }
 @
 % used to have    exits(0);
-% but sysnop used to be sysr1 but I changed that to nop, and nop
-% should not exit
+% but sysnop used to be sysr1() but I changed that to nop, and nop
+% should not exit()
+% was called sysr1, which is why it was printing reg.r[1] probably.
 
 <<global errbuf>>=
 char 	errbuf[ERRMAX];
@@ -4787,6 +4925,10 @@ ulong *iprof;
 PROFGRAN	= 4,
 @
 
+<<[[initmap()]] Text segment initilisation>>=
+<<[[initmap()]] iprof allocation>>
+@
+
 <<[[initmap()]] iprof allocation>>=
 iprof = emalloc(((s->end - s->base)/PROFGRAN)*sizeof(long));
 @
@@ -4865,7 +5007,7 @@ isum(void)
                     syscall += i->count;
                     break;
                 default:
-                    fatal(0, "isum bad stype %d\n", i->type);
+                    fatal(false, "isum bad stype %d\n", i->type);
                 }
         
             }
@@ -5178,7 +5320,7 @@ emalloc(ulong size)
 
     a = malloc(size);
     if(a == nil)
-        fatal(0, "no memory");
+        fatal(false, "no memory");
 
     memset(a, 0, size);
     return a;
@@ -5193,7 +5335,7 @@ erealloc(void *a, ulong oldsize, ulong size)
 
     n = malloc(size);
     if(n == nil)
-        fatal(0, "no memory");
+        fatal(false, "no memory");
     memset(n, 0, size);
     if(size > oldsize)
         size = oldsize;

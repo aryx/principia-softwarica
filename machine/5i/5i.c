@@ -32,6 +32,7 @@ initmap(void)
     bssend = t + fhdr.datsz + fhdr.bsssz;
     b = (bssend + (BY2PG-1)) & ~(BY2PG-1);
 
+    /*s: [[initmap()]] Text segment initilisation */
     s = &memory.seg[Text];
     s->type = Text;
     s->base = fhdr.txtaddr - fhdr.hdrsz;
@@ -39,12 +40,14 @@ initmap(void)
     s->fileoff = fhdr.txtoff - fhdr.hdrsz;
     s->fileend = s->fileoff + fhdr.txtsz;
     s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+    /*x: [[initmap()]] Text segment initilisation */
     textbase = s->base;
-
+    /*x: [[initmap()]] Text segment initilisation */
     /*s: [[initmap()]] iprof allocation */
     iprof = emalloc(((s->end - s->base)/PROFGRAN)*sizeof(long));
     /*e: [[initmap()]] iprof allocation */
-
+    /*e: [[initmap()]] Text segment initilisation */
+    /*s: [[initmap()]] Data segment initilisation */
     s = &memory.seg[Data];
     s->type = Data;
     s->base = t;
@@ -52,19 +55,23 @@ initmap(void)
     s->fileoff = fhdr.datoff;
     s->fileend = s->fileoff + fhdr.datsz;
     s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+    /*x: [[initmap()]] Data segment initilisation */
     datasize = fhdr.datsz;
-
+    /*e: [[initmap()]] Data segment initilisation */
+    /*s: [[initmap()]] Bss segment initilisation */
     s = &memory.seg[Bss];
     s->type = Bss;
     s->base = d;
     s->end = d+(b-d);
     s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
-
+    /*e: [[initmap()]] Bss segment initilisation */
+    /*s: [[initmap()]] Stack segment initilisation */
     s = &memory.seg[Stack];
     s->type = Stack;
     s->base = STACKTOP-STACKSIZE;
     s->end = STACKTOP;
     s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+    /*e: [[initmap()]] Stack segment initilisation */
 
     reg.r[REGPC] = fhdr.entry;
 }
@@ -81,16 +88,17 @@ inithdr(fdt fd)
 
     seek(fd, 0, 0);
     if (!crackhdr(fd, &fhdr))
-        fatal(0, "read text header");
+        fatal(false, "read text header");
 
     if(fhdr.type != FARM )
-        fatal(0, "bad magic number: %d %d", fhdr.type, FARM);
+        fatal(false, "bad magic number: %d %d", fhdr.type, FARM);
 
     if (syminit(fd, &fhdr) < 0)
-        fatal(0, "%r\n");
+        fatal(false, "%r\n");
 
     symmap = loadmap(symmap, fd, &fhdr);
 
+    //???
     if (mach->sbreg && lookup(0, mach->sbreg, &s))
         mach->sb = s.value;
     machdata = &armmach;
@@ -172,8 +180,10 @@ void main(int argc, char **argv)
     Binit(bioout, STDOUT, OWRITE);
     Binit(bin, STDIN, OREAD);
 
+    /*s: [[main()]] tlb initialisation */
     tlb.on = true;
     tlb.tlbsize = 24;
+    /*e: [[main()]] tlb initialisation */
 
     if(argc)
         file = argv[0];
@@ -182,7 +192,7 @@ void main(int argc, char **argv)
 
     text = open(file, OREAD);
     if(text < 0)
-        fatal(1, "open text '%s'", file);
+        fatal(true, "open text '%s'", file);
 
     Bprint(bioout, "5i\n");
 

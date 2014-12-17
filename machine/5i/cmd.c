@@ -224,8 +224,8 @@ colon(char *addr, char *cp)
     }
 
     dot = reg.r[REGPC];
-    Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
 
+    Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
     /*s: [[colon()]] print current instruction */
     symoff(tbuf, sizeof(tbuf), dot, CTEXT);
     Bprint(bioout, tbuf);

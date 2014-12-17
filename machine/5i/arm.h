@@ -53,6 +53,7 @@ enum ixxx
     Imem,
     Ibranch,
     Isyscall,
+    Imisc,
 };
 /*e: enum ixxx */
 
@@ -87,12 +88,13 @@ enum opcode {
     /*x: arith/logic opcodes */
     OMUL    = 64,
     OMULA   = 65,
+    /*x: arith/logic opcodes */
+    CMUL    = 64,
+    /*x: arith/logic opcodes */
     OMULLU  = 66,
     OMULALU = 67,
     OMULL   = 68,
     OMULAL  = 69,
-    /*x: arith/logic opcodes */
-    CMUL    = 64,
     /*e: arith/logic opcodes */
     // ----------------------------------------------------------------------
     // Memory MOV opcodes
@@ -103,15 +105,15 @@ enum opcode {
     OSTW    = 72,
     OSTB    = 73,
     /*x: memory opcodes */
+    CMEM_BASIS = 70,
     CMEM0 = 0, // i(r)
     CMEM1 = 4, // (r),(r)
+    CMEM2 = 8, // byte signed or half word
     /*x: memory opcodes */
     OLDH    = 78,
     OLDBU   = 79,
     OSTH    = 80,
     OSTBU   = 81,
-    /*x: memory opcodes */
-    CMEM2    = 78,
     /*x: memory opcodes */
     OSWPW = 82,
     OSWPBU = 83,
@@ -273,7 +275,7 @@ struct Segment
     ulong	fileoff;
     ulong	fileend;
 
-    //array<option<array_4096<bytes>>> page table
+    //array<option<array_4096<byte>>> page table
     byte**	table; // the data
 
     /*s: [[Segment]] profiling fields */
@@ -382,9 +384,9 @@ extern	int		nopcount;
 extern	ulong*		iprof;
 
 /*s: enum _anon_ (machine/5i/arm.h)7 */
-/* Plan9 Kernel constants */
 enum
 {
+    /* Plan9 Kernel constants */
     BY2PG		= 4096,
     BY2WD		= 4,
 

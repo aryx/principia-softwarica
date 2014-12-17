@@ -62,12 +62,9 @@ int nopcount;
 /*s: global dot */
 uintptr dot;
 /*e: global dot */
-/*s: global bioout */
-Biobuf *bioout;
-/*e: global bioout */
-/*s: global bin */
-Biobuf *bin;
-/*e: global bin */
+/*s: global bixxx */
+Biobuf *bin, *bioout;
+/*e: global bixxx */
 /*s: global iprof */
 ulong *iprof;
 /*e: global iprof */

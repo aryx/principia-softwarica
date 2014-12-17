@@ -8,7 +8,9 @@
 #include "arm.h"
 /*e: basic includes */
 
+/*s: macro XCAST */
 #define XCAST(a) (uvlong)(ulong)a
+/*e: macro XCAST */
 
 // forward decl
 void	undef(ulong);
@@ -54,18 +56,14 @@ static	char*	cond[16] =
 /*e: global cond */
 
 /*s: global itab */
-//hash<enum<opcode>, Inst>
+//map<enum<opcode>, Inst>
 Inst itab[] =
 {
   /*s: [[itab]] elements */
-  [OUNDEF] =  { undef,		"undef"  },
+  [OUNDEF] =  { undef,		"UNDEF", Imisc},
   /*x: [[itab]] elements */
   [OMUL]    =  { Imul,	"MUL",	Iarith },
   [OMULA]   =  { Imula,	"MULA",	Iarith },	
-  [OMULLU]  =  { Imull,	"MULLU",	Iarith },
-  [OMULALU] =  { Imull,	"MULALU",	Iarith },
-  [OMULL]   =  { Imull,	"MULL",		Iarith  },
-  [OMULAL]  =  { Imull,	"MULAL",	Iarith  },
   /*x: [[itab]] elements */
   //r,r,r
   [OAND +CARITH0] =  { Idp0,		"AND",	Iarith },	
@@ -137,6 +135,14 @@ Inst itab[] =
   [OBIC +CARITH3] =  { Idp3,		"BIC",	Iarith },	
   [OMVN +CARITH3] =  { Idp3,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
+  [OMULLU]  =  { Imull,	"MULLU",	Iarith },
+  [OMULALU] =  { Imull,	"MULALU",	Iarith },
+  [OMULL]   =  { Imull,	"MULL",		Iarith  },
+  [OMULAL]  =  { Imull,	"MULAL",	Iarith  },
+  /*x: [[itab]] elements */
+  [OSWPW] =   { Iswap,		"SWPW",	Imem },
+  [OSWPBU] =  { Iswap,		"SWPBU",Imem },
+  /*x: [[itab]] elements */
   // load/store w/ub i,r
   [OLDW +CMEM0] =  { Imem1,		"MOVW",	Imem },
   [OLDB +CMEM0] =  { Imem1,		"MOVB",	Imem },
@@ -154,9 +160,6 @@ Inst itab[] =
   [OLDBU] =  { Imem2,		"MOV",	Imem },
   [OSTH]  =  { Imem2,		"MOV",	Imem },
   [OSTBU] =  { Imem2,		"MOV",	Imem },
-  /*x: [[itab]] elements */
-  [OSWPW] =   { Iswap,		"SWPW",	Imem },
-  [OSWPBU] =  { Iswap,		"SWPBU",Imem },
   /*x: [[itab]] elements */
   // block move r,r
   [OLDM] =  { Ilsm,		"LDM",	Imem },
@@ -319,41 +322,46 @@ undef(instruction inst)
 int
 arm_class(instruction w)
 {
+    int class;
     int op;
+    int x;
    
-    op = (w >> 25) & 0x7;
-    switch(op) {
-    /*s: [[arm_class()]] op cases */
+    class = (w >> 25) & 0x7;
+    switch(class) {
+    /*s: [[arm_class()]] class cases */
     case 0:	/* data processing r,r,r */
-        op = ((w >> 4) & 0xf);
-        /*s: [[arm_class()]] class 0, if op is 0x9 */
+        x = ((w >> 4) & 0xf);
+        /*s: [[arm_class()]] class 0, if x is 0x9 */
         /* mul, swp, mull */
-        if(op == 0x9) {
+        if(x == 0x9) {
             op = CMUL;
-            /*s: [[arm_class()]] class 0, when op == 0x9, if bit 24 set */
+            /*s: [[arm_class()]] class 0, when x == 0x9, if bit 24 set */
             if(w & (1<<24)) {
                 op = OSWPW;
                 if(w & (1<<22))
                      op = OSWPBU;
                 break;
             }
-            /*e: [[arm_class()]] class 0, when op == 0x9, if bit 24 set */
+            /*e: [[arm_class()]] class 0, when x == 0x9, if bit 24 set */
+            /*s: [[arm_class()]] class 0, when x == 0x9, if bit 23 set */
             if(w & (1<<23)) {	/* mullu */
                 op = CMUL+2;
                 if(w & (1<<22))	/* mull */
                     op = CMUL+4;
             }
+            /*e: [[arm_class()]] class 0, when x == 0x9, if bit 23 set */
             if(w & (1<<21))
                 op++;		/* mla */
             break;
         }
-        /*e: [[arm_class()]] class 0, if op is 0x9 */
-        /*s: [[arm_class()]] class 0, if op has 0x9 bits */
-        if((op & 0x9) == 0x9) {		/* ld/st byte/half s/u */
-             op = CMEM2 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+        /*e: [[arm_class()]] class 0, if x is 0x9 */
+        /*s: [[arm_class()]] class 0, if x has 0x9 bits */
+        if((x & 0x9) == 0x9) {		/* ld/st byte/half s/u */
+             op = CMEM_BASIS + CMEM2 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
              break;
         }
-        /*e: [[arm_class()]] class 0, if op has 0x9 bits */
+        /*e: [[arm_class()]] class 0, if x has 0x9 bits */
+        // else
 
         // the opcode! OAND/OADD/...
         op = (w >> 21) & 0xf;
@@ -365,34 +373,34 @@ arm_class(instruction w)
           op += CARITH1;
         // else op += CARITH0
         break;
-    /*x: [[arm_class()]] op cases */
+    /*x: [[arm_class()]] class cases */
     case 1:	/* data processing i,r,r */
      op = CARITH3 + ((w >> 21) & 0xf);
      break;
-    /*x: [[arm_class()]] op cases */
+    /*x: [[arm_class()]] class cases */
     case 2:	/* load/store byte/word i(r) */
-     op = CMEM0 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     op = CMEM_BASIS + CMEM0 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
      break;
-    /*x: [[arm_class()]] op cases */
+    /*x: [[arm_class()]] class cases */
     case 3:	/* load/store byte/word (r)(r) */
-     op = CMEM1 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
+     op = CMEM_BASIS + CMEM1 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
      break;
-    /*x: [[arm_class()]] op cases */
+    /*x: [[arm_class()]] class cases */
     case 4:	/* block data transfer (r)(r) */
      op = CBLOC + ((w >> 20) & 0x1);
      break;
-    /*x: [[arm_class()]] op cases */
+    /*x: [[arm_class()]] class cases */
     case 5:	/* branch / branch link */
      op = CBRANCH + ((w >> 24) & 0x1);
      break;
-    /*x: [[arm_class()]] op cases */
+    /*x: [[arm_class()]] class cases */
     case 7:	/* coprocessor crap */ // and syscall
      if((w >> 25) & 0x1)
        op = OSYSCALL;
      else
        op = OUNDEF; // coprocessor stuff not handled
      break;
-    /*e: [[arm_class()]] op cases */
+    /*e: [[arm_class()]] class cases */
     default:	  
         op = OUNDEF;
         break;
@@ -451,7 +459,9 @@ shift(long v, int st, int sc, bool isreg)
             break;
         case 3:	/* rotate right */
             reg.cout = (v >> (sc - 1)) & 1;
-            v = (v << (32-sc)) | ((ulong)v >> sc);
+            v = (v << (32-sc)) 
+                 | 
+                ((ulong)v >> sc);
             break;
         }
     }
@@ -466,6 +476,7 @@ dpex(instruction inst, long o1, long o2, int rd)
     bool cbit = false;
 
     switch((inst>>21) & 0xf) {
+    /*s: [[dpex()]] switch arith/logic opcode cases */
     case  OAND:
         reg.r[rd] = o1 & o2;
         cbit = true;
@@ -482,7 +493,7 @@ dpex(instruction inst, long o1, long o2, int rd)
         reg.r[rd] = o1 & ~o2;
         cbit = true;
         break;
-
+    /*x: [[dpex()]] switch arith/logic opcode cases */
     case OADD:
         /*s: [[dpex()]] if calltree, when add operation */
         if(calltree && rd == REGPC && o2 == 0) {
@@ -504,8 +515,7 @@ dpex(instruction inst, long o1, long o2, int rd)
             reg.compare_op = CCcmp;
         }
         return;
-
-
+    /*x: [[dpex()]] switch arith/logic opcode cases */
     case OSUB:
         reg.r[rd] = o1 - o2;
         // Fallthrough
@@ -516,7 +526,7 @@ dpex(instruction inst, long o1, long o2, int rd)
             reg.compare_op = CCcmp;
         }
         return;
-
+    /*x: [[dpex()]] switch arith/logic opcode cases */
     case  OTST:
         if(inst & Sbit) {
             reg.cc1 = o1;
@@ -531,6 +541,7 @@ dpex(instruction inst, long o1, long o2, int rd)
             reg.compare_op = CCteq;
         }
         return;
+    /*x: [[dpex()]] switch arith/logic opcode cases */
     case OCMN:
         if(inst & Sbit) { // not always true?
             reg.cc1 = o1;
@@ -538,12 +549,7 @@ dpex(instruction inst, long o1, long o2, int rd)
             reg.compare_op = CCcmp;
         }
         return;
-
-    case  OADC:
-    case  OSBC:
-    case  ORSC:
-        undef(inst);
-
+    /*x: [[dpex()]] switch arith/logic opcode cases */
     case  ORSB:
         reg.r[rd] = o2 - o1;
         if(inst & Sbit) {
@@ -552,6 +558,7 @@ dpex(instruction inst, long o1, long o2, int rd)
             reg.compare_op = CCcmp;
         }
         return;
+    /*x: [[dpex()]] switch arith/logic opcode cases */
     case OMOV:
         reg.r[rd] = o2;
         cbit = true;
@@ -560,8 +567,14 @@ dpex(instruction inst, long o1, long o2, int rd)
         reg.r[rd] = ~o2;
         cbit = true;
         break;
+    /*x: [[dpex()]] switch arith/logic opcode cases */
+    case  OADC:
+    case  OSBC:
+    case  ORSC:
+        undef(inst);
+    /*e: [[dpex()]] switch arith/logic opcode cases */
     }
-
+    /*s: [[dpex()]] if Sbit */
     if(inst & Sbit) {
         if(cbit)
             reg.cbit = reg.cout;
@@ -569,6 +582,7 @@ dpex(instruction inst, long o1, long o2, int rd)
         reg.cc2 = 0;
         reg.compare_op = CCcmp;
     }
+    /*e: [[dpex()]] if Sbit */
 }
 /*e: function dpex */
 
@@ -826,6 +840,7 @@ Iswap(instruction inst)
     ulong address, value, bbit;
 
     bbit = inst & (1<<22);
+
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
     rm = (inst>>0) & 0xf;
@@ -874,6 +889,7 @@ Imem1(instruction inst)
     bbit = inst & (1<<22);
     wbit = inst & (1<<21);
     lbit = inst & (1<<20);
+
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
 
@@ -977,6 +993,7 @@ Imem2(instruction inst)
     lbit = inst & (1<<20);
     sbit = inst & (1<<6);
     hbit = inst & (1<<5);
+
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
 
@@ -1138,7 +1155,9 @@ Ib(instruction inst)
     long v;
 
     v = inst & 0xffffff; // 24 bits
-    v = reg.r[REGPC] + 8 + ((v << 8) >> 6);
+    v = reg.r[REGPC] + 8 + 
+        ((v << 8) 
+          >> 6);
     /*s: [[Ib()]] trace */
     if(trace)
         itrace("B%s\t#%lux", cond[reg.cond], v);
@@ -1155,7 +1174,9 @@ Ibl(instruction inst)
     Symbol s;
 
     v = inst & 0xffffff;
-    v = reg.r[REGPC] + 8 + ((v << 8) >> 6);
+    v = reg.r[REGPC] + 8 + 
+           ((v << 8) 
+               >> 6);
     /*s: [[Ibl()]] trace */
     if(trace)
         itrace("BL%s\t#%lux", cond[reg.cond], v);

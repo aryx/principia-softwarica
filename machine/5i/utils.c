@@ -80,7 +80,7 @@ emalloc(ulong size)
 
     a = malloc(size);
     if(a == nil)
-        fatal(0, "no memory");
+        fatal(false, "no memory");
 
     memset(a, 0, size);
     return a;
@@ -95,7 +95,7 @@ erealloc(void *a, ulong oldsize, ulong size)
 
     n = malloc(size);
     if(n == nil)
-        fatal(0, "no memory");
+        fatal(false, "no memory");
     memset(n, 0, size);
     if(size > oldsize)
         size = oldsize;

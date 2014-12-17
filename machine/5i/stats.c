@@ -74,7 +74,7 @@ isum(void)
                     syscall += i->count;
                     break;
                 default:
-                    fatal(0, "isum bad stype %d\n", i->type);
+                    fatal(false, "isum bad stype %d\n", i->type);
                 }
         
             }
