@@ -66,22 +66,22 @@ Inst itab[] =
   [OMULA]   =  { Imula,	"MULA",	Iarith },	
   /*x: [[itab]] elements */
   //r,r,r
-  [OAND +CARITH0] =  { Idp0,		"AND",	Iarith },	
-  [OEOR +CARITH0] =  { Idp0,		"EOR",	Iarith },	
-  [OSUB +CARITH0] =  { Idp0,		"SUB",	Iarith },	
-  [ORSB +CARITH0] =  { Idp0,		"RSB",	Iarith },	
-  [OADD +CARITH0] =  { Idp0,		"ADD",	Iarith },	
-  [OADC +CARITH0] =  { Idp0,		"ADC",	Iarith },	
-  [OSBC +CARITH0] =  { Idp0,		"SBC",	Iarith },	
-  [ORSC +CARITH0] =  { Idp0,		"RSC",	Iarith },	
-  [OTST +CARITH0] =  { Idp0,		"TST",	Iarith },	
-  [OTEQ +CARITH0] =  { Idp0,		"TEQ",	Iarith },	
-  [OCMP +CARITH0] =  { Idp0,		"CMP",	Iarith },	
-  [OCMN +CARITH0] =  { Idp0,		"CMN",	Iarith },	
-  [OORR +CARITH0] =  { Idp0,		"ORR",	Iarith },	
-  [OMOV +CARITH0] =  { Idp0,		"MOV",	Iarith },	
-  [OBIC +CARITH0] =  { Idp0,		"BIC",	Iarith },	
-  [OMVN +CARITH0] =  { Idp0,		"MVN",	Iarith },	
+  [OAND] =  { Idp0,		"AND",	Iarith },	
+  [OEOR] =  { Idp0,		"EOR",	Iarith },	
+  [OSUB] =  { Idp0,		"SUB",	Iarith },	
+  [ORSB] =  { Idp0,		"RSB",	Iarith },	
+  [OADD] =  { Idp0,		"ADD",	Iarith },	
+  [OADC] =  { Idp0,		"ADC",	Iarith },	
+  [OSBC] =  { Idp0,		"SBC",	Iarith },	
+  [ORSC] =  { Idp0,		"RSC",	Iarith },	
+  [OTST] =  { Idp0,		"TST",	Iarith },	
+  [OTEQ] =  { Idp0,		"TEQ",	Iarith },	
+  [OCMP] =  { Idp0,		"CMP",	Iarith },	
+  [OCMN] =  { Idp0,		"CMN",	Iarith },	
+  [OORR] =  { Idp0,		"ORR",	Iarith },	
+  [OMOV] =  { Idp0,		"MOV",	Iarith },	
+  [OBIC] =  { Idp0,		"BIC",	Iarith },	
+  [OMVN] =  { Idp0,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
   [OAND +CARITH1] =  { Idp1,		"AND",	Iarith },	
   [OEOR +CARITH1] =  { Idp1,		"EOR",	Iarith },	
@@ -181,7 +181,7 @@ Inst itab[] =
 bool
 runcmp(void)
 {
-    switch(reg.cond) {
+    switch(reg.instr_cond) {
     case 0x0:	/* eq */	return (reg.cc1 == reg.cc2);
     case 0x1:	/* ne */	return (reg.cc1 != reg.cc2);
     case 0x2:	/* hs */	return ((ulong)reg.cc1 >= (ulong)reg.cc2);
@@ -199,8 +199,8 @@ runcmp(void)
     case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
-            reg.cond, reg.cc1, reg.cc2);
-        undef(reg.ir);
+            reg.instr_cond, reg.cc1, reg.cc2);
+        undef(reg.instr);
         return false;
     }
 }
@@ -212,7 +212,7 @@ runteq(void)
 {
     long res = reg.cc1 ^ reg.cc2;
 
-    switch(reg.cond) {
+    switch(reg.instr_cond) {
     case 0x0:	/* eq */	return res == 0;
     case 0x1:	/* ne */	return res != 0;
     case 0x4:	/* mi */	return (res & SIGNBIT) != 0;
@@ -221,8 +221,8 @@ runteq(void)
     case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
-            reg.cond, reg.cc1, reg.cc2);
-        undef(reg.ir);
+            reg.instr_cond, reg.cc1, reg.cc2);
+        undef(reg.instr);
         return false;
     }
 }
@@ -234,7 +234,7 @@ runtst(void)
 {
     long res = reg.cc1 & reg.cc2;
 
-    switch(reg.cond) {
+    switch(reg.instr_cond) {
     case 0x0:	/* eq */	return res == 0;
     case 0x1:	/* ne */	return res != 0;
     case 0x4:	/* mi */	return (res & SIGNBIT) != 0;
@@ -243,8 +243,8 @@ runtst(void)
     case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
-            reg.cond, reg.cc1, reg.cc2);
-        undef(reg.ir);
+            reg.instr_cond, reg.cc1, reg.cc2);
+        undef(reg.instr);
         return false;
     }
 }
@@ -260,18 +260,18 @@ run(void)
         if(trace) Bflush(bioout);
 
         reg.ar = reg.r[REGPC];
-        reg.ir = ifetch(reg.ar);
+        reg.instr = ifetch(reg.ar);
 
-        reg.class = arm_class(reg.ir);
-        reg.ip = &itab[reg.class];
+        reg.instr_opcode = arm_class(reg.instr);
+        reg.ip = &itab[reg.instr_opcode];
 
         /*s: [[run()]] set reg.cond */
-        reg.cond = (reg.ir>>28) & 0xf;
+        reg.instr_cond = (reg.instr>>28) & 0xf;
         /*e: [[run()]] set reg.cond */
         /*s: [[run()]] switch reg.compare_op to set execute */
         switch(reg.compare_op) {
         case CCcmp:
-            execute = runcmp(); // use reg.cond
+            execute = runcmp(); // use reg.instr_cond
             break;
         case CCteq:
             execute = runteq();
@@ -292,11 +292,11 @@ run(void)
             reg.ip->count++;
             /*e: [[run()]] profile current instruction class */
             // !!the dispatch!!
-            (*reg.ip->func)(reg.ir);
+            (*reg.ip->func)(reg.instr);
 
         }
         else
-          if(trace) itrace("%s%s IGNORED",reg.ip->name, cond[reg.cond]);
+          if(trace) itrace("%s%s IGNORED",reg.ip->name, cond[reg.instr_cond]);
 
         reg.r[REGPC] += 4; // simple archi with fixed-length instruction :)
 
@@ -312,8 +312,8 @@ run(void)
 void
 undef(instruction inst)
 {
-    Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux class %d\n",
-        reg.r[REGPC], inst, reg.class);
+    Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux op %d\n",
+        reg.r[REGPC], inst, reg.instr_opcode);
     longjmp(errjmp, 0);
 }
 /*e: function undef */
@@ -366,12 +366,14 @@ arm_class(instruction w)
         // the opcode! OAND/OADD/...
         op = (w >> 21) & 0xf;
 
+        /*s: [[arm_class()]] class 0, adjust op for operands mode */
         if(w & (1<<4))
           op += CARITH2;
         else
          if((w & (31<<7)) || (w & (1<<5)))
           op += CARITH1;
         // else op += CARITH0
+        /*e: [[arm_class()]] class 0, adjust op for operands mode */
         break;
     /*x: [[arm_class()]] class cases */
     case 1:	/* data processing i,r,r */
@@ -559,6 +561,11 @@ dpex(instruction inst, long o1, long o2, int rd)
         }
         return;
     /*x: [[dpex()]] switch arith/logic opcode cases */
+    case  OADC:
+    case  OSBC:
+    case  ORSC:
+        undef(inst);
+    /*x: [[dpex()]] switch arith/logic opcode cases */
     case OMOV:
         reg.r[rd] = o2;
         cbit = true;
@@ -567,11 +574,6 @@ dpex(instruction inst, long o1, long o2, int rd)
         reg.r[rd] = ~o2;
         cbit = true;
         break;
-    /*x: [[dpex()]] switch arith/logic opcode cases */
-    case  OADC:
-    case  OSBC:
-    case  ORSC:
-        undef(inst);
     /*e: [[dpex()]] switch arith/logic opcode cases */
     }
     /*s: [[dpex()]] if Sbit */
@@ -613,7 +615,7 @@ Idp0(instruction inst)
     /*s: [[Idp0()]] trace */
     if(trace)
         itrace("%s%s\tR%d,R%d,R%d =#%x",
-            reg.ip->name, cond[reg.cond],
+            reg.ip->name, cond[reg.instr_cond],
             rm, rn, rd,
             reg.r[rd]);
     /*e: [[Idp0()]] trace */
@@ -655,7 +657,7 @@ Idp1(instruction inst)
     /*s: [[Idp1()]] trace */
     if(trace)
         itrace("%s%s\tR%d%s%d,R%d,R%d =#%x",
-            reg.ip->name, cond[reg.cond], rm, shtype[st], sc, rn, rd,
+            reg.ip->name, cond[reg.instr_cond], rm, shtype[st], sc, rn, rd,
             reg.r[rd]);
     /*e: [[Idp1()]] trace */
     /*s: [[Idpx()]] compensate REGPC */
@@ -700,7 +702,7 @@ Idp2(instruction inst)
     /*s: [[Idp2()]] trace */
     if(trace)
         itrace("%s%s\tR%d%sR%d=%d,R%d,R%d =#%x",
-            reg.ip->name, cond[reg.cond], rm, shtype[st], rs, o3, rn, rd,
+            reg.ip->name, cond[reg.instr_cond], rm, shtype[st], rs, o3, rn, rd,
             reg.r[rd]);
     /*e: [[Idp2()]] trace */
     /*s: [[Idpx()]] compensate REGPC */
@@ -735,7 +737,7 @@ Idp3(instruction inst)
     /*s: [[Idp3()]] trace */
     if(trace)
         itrace("%s%s\t#%x,R%d,R%d =#%x",
-            reg.ip->name, cond[reg.cond], o2, rn, rd,
+            reg.ip->name, cond[reg.instr_cond], o2, rn, rd,
             reg.r[rd]);
     /*e: [[Idp3()]] trace */
     /*s: [[Idpx()]] compensate REGPC */
@@ -763,7 +765,7 @@ Imul(instruction inst)
     /*s: [[Imul()]] trace */
     if(trace)
         itrace("%s%s\tR%d,R%d,R%d =#%x",
-            reg.ip->name, cond[reg.cond], rs, rm, rd,
+            reg.ip->name, cond[reg.instr_cond], rs, rm, rd,
             reg.r[rd]);
     /*e: [[Imul()]] trace */
 }
@@ -786,13 +788,13 @@ Imull(instruction inst)
       )
         undef(inst);
 
-    if(inst & (1<<22)){
+    if(inst & (1<<22)){ // mull
         v = (vlong)reg.r[rm] * (vlong)reg.r[rs];
-        if(inst & (1 << 21))
+        if(inst & (1 << 21)) // mull and accumulate
             v += reg.r[rn];
-    }else{
+    }else{ // mullu
         v = XCAST(reg.r[rm]) * XCAST(reg.r[rs]);
-        if(inst & (1 << 21))
+        if(inst & (1 << 21)) // mullu and accumulate
             v += (ulong)reg.r[rn];
     }
     reg.r[rd] = v >> 32;
@@ -801,7 +803,7 @@ Imull(instruction inst)
     /*s: [[Imull()]] trace */
     if(trace)
         itrace("%s%s\tR%d,R%d,(R%d,R%d) =#%llx",
-            reg.ip->name, cond[reg.cond], rs, rm, rn, rd,
+            reg.ip->name, cond[reg.instr_cond], rs, rm, rn, rd,
             v);
     /*e: [[Imull()]] trace */
 }
@@ -826,7 +828,7 @@ Imula(instruction inst)
     /*s: [[Imula()]] trace */
     if(trace)
         itrace("%s%s\tR%d,R%d,R%d,R%d =#%x",
-            reg.ip->name, cond[reg.cond], rs, rm, rn, rd,
+            reg.ip->name, cond[reg.instr_cond], rs, rm, rn, rd,
             reg.r[rd]);
     /*e: [[Imula()]] trace */
 }
@@ -862,7 +864,7 @@ Iswap(instruction inst)
         bw = "";
         if(bbit)
             bw = "B";
-        dotc = cond[reg.cond];
+        dotc = cond[reg.instr_cond];
 
         itrace("SWP%s%s\t#%x(R%d),R%d #%lux=#%x",
             bw, dotc,
@@ -946,7 +948,7 @@ Imem1(instruction inst)
         dotp = "";
         if(!pbit)
             dotp = ".P";
-        dotc = cond[reg.cond];
+        dotc = cond[reg.instr_cond];
 
         if(lbit) {
             if(!bit25)
@@ -1051,7 +1053,7 @@ Imem2(instruction inst)
         dotp = "";
         if(!pbit)
             dotp = ".P";
-        dotc = cond[reg.cond];
+        dotc = cond[reg.instr_cond];
 
         if(lbit) {
             if(bit22)
@@ -1098,9 +1100,9 @@ Ilsm(instruction inst)
     reglist = inst & 0xffff;
 
     if(reglist & 0x8000)
-        undef(reg.ir);
+        undef(reg.instr);
     if(sbit)
-        undef(reg.ir);
+        undef(reg.instr);
 
     address = reg.r[rn];
 
@@ -1160,7 +1162,7 @@ Ib(instruction inst)
           >> 6);
     /*s: [[Ib()]] trace */
     if(trace)
-        itrace("B%s\t#%lux", cond[reg.cond], v);
+        itrace("B%s\t#%lux", cond[reg.instr_cond], v);
     /*e: [[Ib()]] trace */
     reg.r[REGPC] = v - 4;
 }
@@ -1179,7 +1181,7 @@ Ibl(instruction inst)
                >> 6);
     /*s: [[Ibl()]] trace */
     if(trace)
-        itrace("BL%s\t#%lux", cond[reg.cond], v);
+        itrace("BL%s\t#%lux", cond[reg.instr_cond], v);
     /*e: [[Ibl()]] trace */
     /*s: [[Ibl()]] if calltree */
     if(calltree) {

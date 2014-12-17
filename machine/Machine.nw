@@ -466,6 +466,8 @@ Inst itab[] =
   { 0 }
 };
 @
+% contain an array of instruction pointer ... something translating
+% an actual instruction into something we can execute.
 
 <<[[itab]] elements>>=
 [OUNDEF] =  { undef,		"UNDEF", Imisc},
@@ -796,6 +798,7 @@ s->base = d;
 s->end = d+(b-d);
 s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
 @
+% this can be extended by brk()!
 
 <<[[initmap()]] Stack segment initilisation>>=
 s = &memory.seg[Stack];
@@ -804,6 +807,7 @@ s->base = STACKTOP-STACKSIZE;
 s->end = STACKTOP;
 s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
 @
+% this can't be extended :(
 
 \section{[[initstk()]]}
 
@@ -996,16 +1000,18 @@ int count;
 % (but maybe still better to rename them, intern_ar)
 <<[[Registers]] other fields>>=
 uintptr		ar;    // reg.r[REGPC]
-instruction	ir;    // ifetch(reg.ar)
+instruction	instr;    // ifetch(reg.ar)
 //enum<opcode>
-int			class; // arm_class(reg.ir)
-Inst*		ip;    // &itab[reg.class]
+int			instr_opcode; // arm_class(reg.instr)
+Inst*		ip;    // &itab[reg.instr_opcode]
 @
-% used outside run()? could be locals then no?
+%note: I renamed class to instr_opcode now that we consider more this an
+% opcode. I also renamed ir to instr.
+
+% are those fields used outside run()? could be locals then no?
 %  - ip is used outside run() mostly for reg->ip.name
 %    so could have a global instead like instr_name
-%  - class is used in itrace(), and in undef
-% rename opcode_ir, opcode_class, opcode_cond?
+%  - instr_opocde is used in itrace(), and in undef
 
 
 % main -> cmd -> colon -> <> -> armclass!!
@@ -1019,10 +1025,10 @@ run(void)
         if(trace) Bflush(bioout);
 
         reg.ar = reg.r[REGPC];
-        reg.ir = ifetch(reg.ar);
+        reg.instr = ifetch(reg.ar);
 
-        reg.class = arm_class(reg.ir);
-        reg.ip = &itab[reg.class];
+        reg.instr_opcode = arm_class(reg.instr);
+        reg.ip = &itab[reg.instr_opcode];
 
         <<[[run()]] set reg.cond>>
         <<[[run()]] switch reg.compare_op to set execute>>
@@ -1030,11 +1036,11 @@ run(void)
         if(execute) {
             <<[[run()]] profile current instruction class>>
             // !!the dispatch!!
-            (*reg.ip->func)(reg.ir);
+            (*reg.ip->func)(reg.instr);
 
         }
         else
-          if(trace) itrace("%s%s IGNORED",reg.ip->name, cond[reg.cond]);
+          if(trace) itrace("%s%s IGNORED",reg.ip->name, cond[reg.instr_cond]);
 
         reg.r[REGPC] += 4; // simple archi with fixed-length instruction :)
 
@@ -1059,12 +1065,14 @@ run(void)
 
 <<[[Registers]] other fields>>=
 // actually only 4 bits (16 possibilities)
-int	cond;
+int	instr_cond;
 @
-% rename opcode_cond?
+%note: I renamed from cond to instr_cond so easier to see that
+% this is derived from the instruction, unlike compare_op below
+% which is derived from runtime
 
 <<[[run()]] set reg.cond>>=
-reg.cond = (reg.ir>>28) & 0xf;
+reg.instr_cond = (reg.instr>>28) & 0xf;
 @
 % so this is part of the opcode, the user program decides this
 
@@ -1088,7 +1096,7 @@ enum compare_op
 <<[[run()]] switch reg.compare_op to set execute>>=
 switch(reg.compare_op) {
 case CCcmp:
-    execute = runcmp(); // use reg.cond
+    execute = runcmp(); // use reg.instr_cond
     break;
 case CCteq:
     execute = runteq();
@@ -1114,7 +1122,7 @@ long	cc2;
 bool
 runcmp(void)
 {
-    switch(reg.cond) {
+    switch(reg.instr_cond) {
     case 0x0:	/* eq */	return (reg.cc1 == reg.cc2);
     case 0x1:	/* ne */	return (reg.cc1 != reg.cc2);
     case 0x2:	/* hs */	return ((ulong)reg.cc1 >= (ulong)reg.cc2);
@@ -1132,8 +1140,8 @@ runcmp(void)
     case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
-            reg.cond, reg.cc1, reg.cc2);
-        undef(reg.ir);
+            reg.instr_cond, reg.cc1, reg.cc2);
+        undef(reg.instr);
         return false;
     }
 }
@@ -1149,7 +1157,7 @@ runteq(void)
 {
     long res = reg.cc1 ^ reg.cc2;
 
-    switch(reg.cond) {
+    switch(reg.instr_cond) {
     case 0x0:	/* eq */	return res == 0;
     case 0x1:	/* ne */	return res != 0;
     case 0x4:	/* mi */	return (res & SIGNBIT) != 0;
@@ -1158,8 +1166,8 @@ runteq(void)
     case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
-            reg.cond, reg.cc1, reg.cc2);
-        undef(reg.ir);
+            reg.instr_cond, reg.cc1, reg.cc2);
+        undef(reg.instr);
         return false;
     }
 }
@@ -1171,7 +1179,7 @@ runtst(void)
 {
     long res = reg.cc1 & reg.cc2;
 
-    switch(reg.cond) {
+    switch(reg.instr_cond) {
     case 0x0:	/* eq */	return res == 0;
     case 0x1:	/* ne */	return res != 0;
     case 0x4:	/* mi */	return (res & SIGNBIT) != 0;
@@ -1180,8 +1188,8 @@ runtst(void)
     case 0xf:	/* nv */	return false;
     default:
         Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
-            reg.cond, reg.cc1, reg.cc2);
-        undef(reg.ir);
+            reg.instr_cond, reg.cc1, reg.cc2);
+        undef(reg.instr);
         return false;
     }
 }
@@ -1227,6 +1235,10 @@ arm_class(instruction w)
 
 \subsection{Arithmetic}
 
+\subsubsection{Opcode extraction}
+% at least for the first time we see that we can have a named
+% section about it, to repeat what was done in the arm_class section
+
 <<arith/logic opcodes>>=
 OAND = 0,
 OEOR = 1, 
@@ -1252,7 +1264,6 @@ OMVN = 15,
 %// MOV,    MVN
 
 
-%less: could use different locals for the different kinds of 'op'
 <<[[arm_class()]] class cases>>=
 case 0:	/* data processing r,r,r */
     x = ((w >> 4) & 0xf);
@@ -1263,37 +1274,20 @@ case 0:	/* data processing r,r,r */
     // the opcode! OAND/OADD/...
     op = (w >> 21) & 0xf;
 
-    if(w & (1<<4))
-      op += CARITH2;
-    else
-     if((w & (31<<7)) || (w & (1<<5)))
-      op += CARITH1;
-    // else op += CARITH0
+    <<[[arm_class()]] class 0, adjust op for operands mode>>
     break;
 @
+%note: now use different locals for the different kinds of 'op' (class, and x)
 % 31 << 7 means take all the bits from 7 to 11, the shift#
 % >> >> >> >> >> >>
 
-<<[[arm_class()]] class cases>>=
-case 1:	/* data processing i,r,r */
- op = CARITH3 + ((w >> 21) & 0xf);
- break;
-@
-%48
 
-<<arith/logic opcodes>>=
-CARITH0 = 0,  // r,r,r
-CARITH1 = 16, // r<>r, r, r
-CARITH2 = 32, // r<>#, r, r
-CARITH3 = 48, // i,r,r
-@
-
+\subsubsection{Multiplication}
 
 <<arith/logic opcodes>>=
 OMUL    = 64,
 OMULA   = 65,
 @
-
 
 % class 0 is bad name, maybe opcode_25_27? and op then is opcode_4_7
 <<[[arm_class()]] class 0, if x is 0x9>>=
@@ -1313,8 +1307,6 @@ if(x == 0x9) {
 CMUL    = 64,
 @
 
-
-%\subsection{Multiplication}
 
 <<[[itab]] elements>>=
 [OMUL]    =  { Imul,	"MUL",	Iarith },
@@ -1350,7 +1342,7 @@ Imul(instruction inst)
 <<[[Imul()]] trace>>=
 if(trace)
     itrace("%s%s\tR%d,R%d,R%d =#%x",
-        reg.ip->name, cond[reg.cond], rs, rm, rd,
+        reg.ip->name, cond[reg.instr_cond], rs, rm, rd,
         reg.r[rd]);
 @
 \fi
@@ -1382,35 +1374,34 @@ Imula(instruction inst)
 <<[[Imula()]] trace>>=
 if(trace)
     itrace("%s%s\tR%d,R%d,R%d,R%d =#%x",
-        reg.ip->name, cond[reg.cond], rs, rm, rn, rd,
+        reg.ip->name, cond[reg.instr_cond], rs, rm, rn, rd,
         reg.r[rd]);
 @
 \fi
 
 
-
-%\subsection{}
+\subsubsection{[[Idp()]] and [[dpex()]]}
 
 <<[[itab]] elements>>=
 //r,r,r
-[OAND +CARITH0] =  { Idp0,		"AND",	Iarith },	
-[OEOR +CARITH0] =  { Idp0,		"EOR",	Iarith },	
-[OSUB +CARITH0] =  { Idp0,		"SUB",	Iarith },	
-[ORSB +CARITH0] =  { Idp0,		"RSB",	Iarith },	
-[OADD +CARITH0] =  { Idp0,		"ADD",	Iarith },	
-[OADC +CARITH0] =  { Idp0,		"ADC",	Iarith },	
-[OSBC +CARITH0] =  { Idp0,		"SBC",	Iarith },	
-[ORSC +CARITH0] =  { Idp0,		"RSC",	Iarith },	
-[OTST +CARITH0] =  { Idp0,		"TST",	Iarith },	
-[OTEQ +CARITH0] =  { Idp0,		"TEQ",	Iarith },	
-[OCMP +CARITH0] =  { Idp0,		"CMP",	Iarith },	
-[OCMN +CARITH0] =  { Idp0,		"CMN",	Iarith },	
-[OORR +CARITH0] =  { Idp0,		"ORR",	Iarith },	
-[OMOV +CARITH0] =  { Idp0,		"MOV",	Iarith },	
-[OBIC +CARITH0] =  { Idp0,		"BIC",	Iarith },	
-[OMVN +CARITH0] =  { Idp0,		"MVN",	Iarith },	
+[OAND] =  { Idp0,		"AND",	Iarith },	
+[OEOR] =  { Idp0,		"EOR",	Iarith },	
+[OSUB] =  { Idp0,		"SUB",	Iarith },	
+[ORSB] =  { Idp0,		"RSB",	Iarith },	
+[OADD] =  { Idp0,		"ADD",	Iarith },	
+[OADC] =  { Idp0,		"ADC",	Iarith },	
+[OSBC] =  { Idp0,		"SBC",	Iarith },	
+[ORSC] =  { Idp0,		"RSC",	Iarith },	
+[OTST] =  { Idp0,		"TST",	Iarith },	
+[OTEQ] =  { Idp0,		"TEQ",	Iarith },	
+[OCMP] =  { Idp0,		"CMP",	Iarith },	
+[OCMN] =  { Idp0,		"CMN",	Iarith },	
+[OORR] =  { Idp0,		"ORR",	Iarith },	
+[OMOV] =  { Idp0,		"MOV",	Iarith },	
+[OBIC] =  { Idp0,		"BIC",	Iarith },	
+[OMVN] =  { Idp0,		"MVN",	Iarith },	
 @
-
+% was +CARITH0 but now present CARITH0 later
 
 % meh, dp? data processing? vague, everything is data processing
 <<function Idp0>>=
@@ -1452,7 +1443,7 @@ if(rd == REGPC)
 <<[[Idp0()]] trace>>=
 if(trace)
     itrace("%s%s\tR%d,R%d,R%d =#%x",
-        reg.ip->name, cond[reg.cond],
+        reg.ip->name, cond[reg.instr_cond],
         rm, rn, rd,
         reg.r[rd]);
 @
@@ -1477,6 +1468,7 @@ dpex(instruction inst, long o1, long o2, int rd)
 % >>
 % mov in arith? seems redundant with load/store no?
 
+\subsubsection{Boolean logic}
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
 case  OAND:
@@ -1521,6 +1513,17 @@ int	cout;
 % cout is set by shift
 
 
+\subsubsection{Addition and overflow}
+% carry? overflow?
+
+% concepts: carry, overflow, signed/unsigned, complement 2 notations
+% with booleans, no sign/unsigned notion,
+% with addition neither, because ADD using complement 2 notation
+% works for both signed or unsigned integer. BUT the
+% sign vs unsigned matters when consider overflow? because
+% in one case the result could be zero because added 10 to -10,
+% but in the other case -10 is actually a huge number and we can
+% have an overflow that we want to indicate to the user.
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
 case OADD:
@@ -1544,9 +1547,11 @@ case OADD:
 #define XCAST(a) (uvlong)(ulong)a
 @
 % first cast ulong because usually register are long[16],
-% and then uvlong cast to promote to 64 bits
+% and then uvlong cast to promote to 64 bits so at least
+% can compute if overflow
 
 
+\subsubsection{Comparisons}
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
 case OSUB:
@@ -1578,27 +1583,32 @@ case  OTEQ:
     return;
 @
 
-<<[[dpex()]] switch arith/logic opcode cases>>=
-case OCMN:
-    if(inst & Sbit) { // not always true?
-        reg.cc1 = o1;
-        reg.cc2 = -o2;
-        reg.compare_op = CCcmp;
-    }
-    return;
-@
 
-<<[[dpex()]] switch arith/logic opcode cases>>=
-case  ORSB:
-    reg.r[rd] = o2 - o1;
-    if(inst & Sbit) {
-        reg.cc1 = o2;
-        reg.cc2 = o1;
-        reg.compare_op = CCcmp;
-    }
-    return;
-@
+\subsubsection{[[shift()]]}
 
+<<[[arm_class()]] class 0, adjust op for operands mode>>=
+if(w & (1<<4))
+  op += CARITH2;
+else
+ if((w & (31<<7)) || (w & (1<<5)))
+  op += CARITH1;
+// else op += CARITH0
+@
+% >> >>
+
+<<[[arm_class()]] class cases>>=
+case 1:	/* data processing i,r,r */
+ op = CARITH3 + ((w >> 21) & 0xf);
+ break;
+@
+%48
+
+<<arith/logic opcodes>>=
+CARITH0 = 0,  // r,r,r
+CARITH1 = 16, // r<>r, r, r
+CARITH2 = 32, // r<>#, r, r
+CARITH3 = 48, // i,r,r
+@
 
 
 
@@ -1658,7 +1668,7 @@ Idp1(instruction inst)
 <<[[Idp1()]] trace>>=
 if(trace)
     itrace("%s%s\tR%d%s%d,R%d,R%d =#%x",
-        reg.ip->name, cond[reg.cond], rm, shtype[st], sc, rn, rd,
+        reg.ip->name, cond[reg.instr_cond], rm, shtype[st], sc, rn, rd,
         reg.r[rd]);
 @
 \fi
@@ -1723,7 +1733,7 @@ Idp2(instruction inst)
 <<[[Idp2()]] trace>>=
 if(trace)
     itrace("%s%s\tR%d%sR%d=%d,R%d,R%d =#%x",
-        reg.ip->name, cond[reg.cond], rm, shtype[st], rs, o3, rn, rd,
+        reg.ip->name, cond[reg.instr_cond], rm, shtype[st], rs, o3, rn, rd,
         reg.r[rd]);
 @
 \fi
@@ -1784,13 +1794,10 @@ Idp3(instruction inst)
 <<[[Idp3()]] trace>>=
 if(trace)
     itrace("%s%s\t#%x,R%d,R%d =#%x",
-        reg.ip->name, cond[reg.cond], o2, rn, rd,
+        reg.ip->name, cond[reg.instr_cond], o2, rn, rd,
         reg.r[rd]);
 @
 \fi
-
-
-
 
 
 
@@ -1858,28 +1865,11 @@ shift(long v, int st, int sc, bool isreg)
 
 
 
+\subsubsection{64 bits (unsigned) multiplication}
+% not really 64 bits multiplication,
+% more 32 bits multiply but can store 64 bit result!
 
-<<[[dpex()]] switch arith/logic opcode cases>>=
-case OMOV:
-    reg.r[rd] = o2;
-    cbit = true;
-    break;
-case OMVN:
-    reg.r[rd] = ~o2;
-    cbit = true;
-    break;
-@
-
-<<[[dpex()]] switch arith/logic opcode cases>>=
-case  OADC:
-case  OSBC:
-case  ORSC:
-    undef(inst);
-@
-
-
-
-
+% (v)long multiplication, 64 bits
 <<arith/logic opcodes>>=
 OMULLU  = 66,
 OMULALU = 67,
@@ -1894,6 +1884,7 @@ if(w & (1<<23)) {	/* mullu */
         op = CMUL+4;
 }
 @
+% >> >> >>
 
 <<[[itab]] elements>>=
 [OMULLU]  =  { Imull,	"MULLU",	Iarith },
@@ -1921,13 +1912,13 @@ Imull(instruction inst)
       )
         undef(inst);
 
-    if(inst & (1<<22)){
+    if(inst & (1<<22)){ // mull
         v = (vlong)reg.r[rm] * (vlong)reg.r[rs];
-        if(inst & (1 << 21))
+        if(inst & (1 << 21)) // mull and accumulate
             v += reg.r[rn];
-    }else{
+    }else{ // mullu
         v = XCAST(reg.r[rm]) * XCAST(reg.r[rs]);
-        if(inst & (1 << 21))
+        if(inst & (1 << 21)) // mullu and accumulate
             v += (ulong)reg.r[rn];
     }
     reg.r[rd] = v >> 32;
@@ -1943,7 +1934,7 @@ Imull(instruction inst)
 <<[[Imull()]] trace>>=
 if(trace)
     itrace("%s%s\tR%d,R%d,(R%d,R%d) =#%llx",
-        reg.ip->name, cond[reg.cond], rs, rm, rn, rd,
+        reg.ip->name, cond[reg.instr_cond], rs, rm, rn, rd,
         v);
 @
 \fi
@@ -1951,7 +1942,55 @@ if(trace)
 
 
 
+\subsubsection{Misc instructions}
+
+% ifallcode?
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case OCMN:
+    if(inst & Sbit) { // not always true?
+        reg.cc1 = o1;
+        reg.cc2 = -o2;
+        reg.compare_op = CCcmp;
+    }
+    return;
+@
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case  ORSB:
+    reg.r[rd] = o2 - o1;
+    if(inst & Sbit) {
+        reg.cc1 = o2;
+        reg.cc2 = o1;
+        reg.compare_op = CCcmp;
+    }
+    return;
+@
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case  OADC:
+case  OSBC:
+case  ORSC:
+    undef(inst);
+@
+
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
+case OMOV:
+    reg.r[rd] = o2;
+    cbit = true;
+    break;
+case OMVN:
+    reg.r[rd] = ~o2;
+    cbit = true;
+    break;
+@
+
+
+
 \subsection{Memory}
+
+\subsubsection{Opcode extraction}
 
 <<memory opcodes>>=
 OLDW    = 70,
@@ -1997,6 +2036,7 @@ if((x & 0x9) == 0x9) {		/* ld/st byte/half s/u */
 @
 
 
+\subsubsection{Memory swap}
 
 <<memory opcodes>>=
 OSWPW = 82,
@@ -2054,7 +2094,7 @@ if(trace) {
     bw = "";
     if(bbit)
         bw = "B";
-    dotc = cond[reg.cond];
+    dotc = cond[reg.instr_cond];
 
     itrace("SWP%s%s\t#%x(R%d),R%d #%lux=#%x",
         bw, dotc,
@@ -2067,7 +2107,7 @@ if(trace) {
 
 
 
-
+\subsubsection{Load/store}
 
 <<[[itab]] elements>>=
 // load/store w/ub i,r
@@ -2164,7 +2204,7 @@ if(trace) {
     dotp = "";
     if(!pbit)
         dotp = ".P";
-    dotc = cond[reg.cond];
+    dotc = cond[reg.instr_cond];
 
     if(lbit) {
         if(!bit25)
@@ -2286,7 +2326,7 @@ if(trace) {
     dotp = "";
     if(!pbit)
         dotp = ".P";
-    dotc = cond[reg.cond];
+    dotc = cond[reg.instr_cond];
 
     if(lbit) {
         if(bit22)
@@ -2318,7 +2358,7 @@ if(trace) {
 
 
 
-
+\subsubsection{Multi registers load/store}
 
 % advanced topic? like I did in Assembler.nw?
 <<memory opcodes>>=
@@ -2361,9 +2401,9 @@ Ilsm(instruction inst)
     reglist = inst & 0xffff;
 
     if(reglist & 0x8000)
-        undef(reg.ir);
+        undef(reg.instr);
     if(sbit)
-        undef(reg.ir);
+        undef(reg.instr);
 
     address = reg.r[rn];
 
@@ -2465,7 +2505,7 @@ Ib(instruction inst)
 \ifallcode
 <<[[Ib()]] trace>>=
 if(trace)
-    itrace("B%s\t#%lux", cond[reg.cond], v);
+    itrace("B%s\t#%lux", cond[reg.instr_cond], v);
 @
 \fi
 
@@ -2493,7 +2533,7 @@ Ibl(instruction inst)
 \ifallcode
 <<[[Ibl()]] trace>>=
 if(trace)
-    itrace("BL%s\t#%lux", cond[reg.cond], v);
+    itrace("BL%s\t#%lux", cond[reg.instr_cond], v);
 @
 \fi
 
@@ -5238,7 +5278,8 @@ itrace(char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
-    Bprint(bioout, "%8lux %.8lux %2d %s\n", reg.ar, reg.ir, reg.class, buf);	
+    Bprint(bioout, "%8lux %.8lux %2d %s\n", 
+                     reg.ar, reg.instr, reg.instr_opcode, buf);	
 }
 @
 
@@ -5301,8 +5342,8 @@ setjmp(errjmp);
 void
 undef(instruction inst)
 {
-    Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux class %d\n",
-        reg.r[REGPC], inst, reg.class);
+    Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux op %d\n",
+        reg.r[REGPC], inst, reg.instr_opcode);
     longjmp(errjmp, 0);
 }
 @

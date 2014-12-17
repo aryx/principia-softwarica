@@ -81,15 +81,15 @@ enum opcode {
     OBIC = 14,
     OMVN = 15,
     /*x: arith/logic opcodes */
-    CARITH0 = 0,  // r,r,r
-    CARITH1 = 16, // r<>r, r, r
-    CARITH2 = 32, // r<>#, r, r
-    CARITH3 = 48, // i,r,r
-    /*x: arith/logic opcodes */
     OMUL    = 64,
     OMULA   = 65,
     /*x: arith/logic opcodes */
     CMUL    = 64,
+    /*x: arith/logic opcodes */
+    CARITH0 = 0,  // r,r,r
+    CARITH1 = 16, // r<>r, r, r
+    CARITH2 = 32, // r<>#, r, r
+    CARITH3 = 48, // i,r,r
     /*x: arith/logic opcodes */
     OMULLU  = 66,
     OMULALU = 67,
@@ -212,13 +212,13 @@ struct Registers
     long	r[16];
     /*s: [[Registers]] other fields */
     uintptr		ar;    // reg.r[REGPC]
-    instruction	ir;    // ifetch(reg.ar)
+    instruction	instr;    // ifetch(reg.ar)
     //enum<opcode>
-    int			class; // arm_class(reg.ir)
-    Inst*		ip;    // &itab[reg.class]
+    int			instr_opcode; // arm_class(reg.instr)
+    Inst*		ip;    // &itab[reg.instr_opcode]
     /*x: [[Registers]] other fields */
     // actually only 4 bits (16 possibilities)
-    int	cond;
+    int	instr_cond;
     /*x: [[Registers]] other fields */
     // enum<compare_op>
     int	compare_op;
