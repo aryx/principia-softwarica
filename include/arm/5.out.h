@@ -42,7 +42,7 @@ enum registr {
 /* compiler allocates register variables F0 up */
 /* compiler allocates external registers F7 down */
 
-/*s: enum as(arm) */
+/*s: enum opcode(arm) */
 // coupling: with 5c/enam.c
 enum opcode
 {
@@ -216,7 +216,7 @@ enum opcode
 
     ALAST,
 };
-/*e: enum as(arm) */
+/*e: enum opcode(arm) */
 
 /*s: enum operand_kind(arm) */
 enum operand_kind {

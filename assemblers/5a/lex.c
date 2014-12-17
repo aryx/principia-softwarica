@@ -107,7 +107,7 @@ main(int argc, char *argv[])
 
 /*s: function assemble */
 int
-assemble(char *file)
+assemble(char *infile)
 {
     /*s: [[assemble()]] locals */
     char *p;
@@ -119,20 +119,19 @@ assemble(char *file)
     char incfile[20];
     /*e: [[assemble()]] locals */
 
-    /*s: [[assemble()]] set p to basename(file) and adjust include */
-    // p = basename(file)
-    // include[0] = dirname(file); 
-    strcpy(ofile, file);
+    /*s: [[assemble()]] set p to basename(infile) and adjust include */
+    // p = basename(infile)
+    // include[0] = dirname(infile); 
+    strcpy(ofile, infile);
     p = utfrrune(ofile, '/');
     if(p) {
         include[0] = ofile;
         *p++ = '\0';
     } else
         p = ofile;
-    /*e: [[assemble()]] set p to basename(file) and adjust include */
-
+    /*e: [[assemble()]] set p to basename(infile) and adjust include */
     if(outfile == nil) {
-        /*s: [[assemble()]] set outfile to {basename(file)}.{thechar} */
+        /*s: [[assemble()]] set outfile to {basename(infile)}.{thechar} */
         // outfile =  p =~ s/.s/.5/;
         outfile = p;
         if(outfile){
@@ -146,9 +145,8 @@ assemble(char *file)
             p[2] = '\0';
         } else
             outfile = "/dev/null";
-        /*e: [[assemble()]] set outfile to {basename(file)}.{thechar} */
+        /*e: [[assemble()]] set outfile to {basename(infile)}.{thechar} */
     }
-
     /*s: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
     p = getenv("INCLUDE");
     if(p) {
@@ -170,7 +168,7 @@ assemble(char *file)
 
     pass = 1;
 
-    pinit(file);
+    pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
@@ -185,7 +183,7 @@ assemble(char *file)
     pass = 2;
     outhist(); // header
 
-    pinit(file);
+    pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
@@ -210,7 +208,7 @@ struct Itab
 /*e: struct Itab(arm) */
 
 /*s: global itab(arm) */
-// hashtbl<string, (token_kind * opcode|register|...)>
+// map<string, (token_kind * enum<opcode|register|...>)>
 struct Itab itab[] =
 {
     "NOP",		LTYPEI, ANOP,
@@ -236,6 +234,12 @@ struct Itab itab[] =
     "DIV",		LTYPE1,	ADIV,
     "MOD",		LTYPE1,	AMOD,
     /*x: [[itab]] elements */
+    "CMP",		LTYPE7,	ACMP,
+    "TST",		LTYPE7,	ATST,
+    "TEQ",		LTYPE7,	ATEQ,
+    /*x: [[itab]] elements */
+    "CMN",		LTYPE7,	ACMN,
+    /*x: [[itab]] elements */
     "MOVW",		LTYPE3, AMOVW,
     "MOVB",		LTYPE3, AMOVB,
     "MOVBU",	LTYPE3, AMOVBU,
@@ -244,11 +248,8 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "MVN",		LTYPE2, AMVN,	/* op2 ignored */
     /*x: [[itab]] elements */
-    "CMP",		LTYPE7,	ACMP,
-    "TST",		LTYPE7,	ATST,
-    "TEQ",		LTYPE7,	ATEQ,
-    /*x: [[itab]] elements */
-    "CMN",		LTYPE7,	ACMN,
+    "SWPW",		LTYPE9, ASWPW,
+    "SWPBU",	LTYPE9, ASWPBU,
     /*x: [[itab]] elements */
     "B",		LTYPE4, AB,
     "BL",		LTYPE4, ABL,
@@ -273,9 +274,6 @@ struct Itab itab[] =
     "RET",		LTYPEA, ARET,
     /*x: [[itab]] elements */
     "SWI",		LTYPE6, ASWI,
-    /*x: [[itab]] elements */
-    "SWPW",		LTYPE9, ASWPW,
-    "SWPBU",	LTYPE9, ASWPBU,
     /*x: [[itab]] elements */
     ".EQ",		LCOND,	0,
     ".NE",		LCOND,	1,
@@ -519,11 +517,9 @@ zaddr(Gen *a, int symidx)
     int i;
     /*e: [[zaddr()]] locals */
 
-    // operand format, the operand kind first!
+    // operand format: operand kind, register, symidx, symlink, optional offset
     Bputc(&obuf, a->type);
-
     Bputc(&obuf, a->reg);
-
     // idx in symbol table, 0 if no symbol involved in the operand
     Bputc(&obuf, symidx);
     // symkind of the symbol, if any
@@ -607,7 +603,7 @@ static int bcode[] =
 
 /*s: function outcode(arm) */
 void
-outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
+outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
 {
     /*s: [[outcode()]] locals */
     // symbol from, index in h[]
@@ -619,13 +615,13 @@ outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
     Sym *s;
     /*e: [[outcode()]] locals */
 
-    /*s: [[outcode()]] adjust a and scond when a is AB */
+    /*s: [[outcode()]] adjust opcode and scond when opcode is AB */
     /* hack to make B.NE etc. work: turn it into the corresponding conditional*/
-    if(a == AB){
-        a = bcode[scond&0xf];
+    if(opcode == AB){
+        opcode = bcode[scond&0xf];
         scond = (scond & ~0xf) | Always;
     }
-    /*e: [[outcode()]] adjust a and scond when a is AB */
+    /*e: [[outcode()]] adjust opcode and scond when opcode is AB */
 
     if(pass == 1)
         goto out;
@@ -692,7 +688,7 @@ outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
     /*e: [[outcode()]] st and sf computation, and possible calls to zname */
 
     // Instruction serialized format: opcode, cond, optional reg, line, operands
-    Bputc(&obuf, a);
+    Bputc(&obuf, opcode);
     Bputc(&obuf, scond);
     Bputc(&obuf, reg);
     Bputc(&obuf, lineno);
@@ -703,7 +699,7 @@ outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
     zaddr(g2, st);
 
 out:
-    if(a != AGLOBL && a != ADATA)
+    if(opcode != AGLOBL && opcode != ADATA)
         pc++;
 }
 /*e: function outcode(arm) */
@@ -724,7 +720,7 @@ outhist(void)
 
         /*s: [[outhist()]] adjust p and op if p is relative filename */
         op = nil;
-        if(p && p[0] != '/' && h->offset == 0 && pathname){
+        if(p && p[0] != '/' && h->local_line == 0 && pathname){
             if(pathname[0] == '/'){
                 op = p;
                 p = pathname;
@@ -761,7 +757,7 @@ outhist(void)
             }
         }
         /*e: [[outhist()]] output each path component as an ANAME */
-        g.offset = h->offset;
+        g.offset = h->local_line;
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, Always);

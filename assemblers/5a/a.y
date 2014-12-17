@@ -134,6 +134,11 @@ inst:
 | LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
+ * CMP
+ */
+| LTYPE7 cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
+/*x: inst rule(arm) */
+/*
  * MOVW
  */
 | LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
@@ -144,9 +149,11 @@ inst:
 | LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
- * CMP
+ * SWAP
  */
-| LTYPE7 cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
+| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
+| LTYPE9 cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
 /*x: inst rule(arm) */
 /*
  * B/BL
@@ -168,13 +175,6 @@ inst:
  * SWI
  */
 | LTYPE6 cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
-/*x: inst rule(arm) */
-/*
- * SWAP
- */
-| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
 /*x: inst rule(arm) */
 /*
  * TEXT/GLOBL

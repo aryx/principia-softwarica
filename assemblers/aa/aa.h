@@ -109,7 +109,9 @@ struct	Io
     short	c;
 
     // Extra
+    /*s: [[Io]] extra fields */
     Io*	link;
+    /*e: [[Io]] extra fields */
 };
 /*e: struct Io */
 /*s: constant I */
@@ -134,8 +136,8 @@ struct	Hist
 {
     char*	filename;
 
-    long	line; // global line of this Hist
-    long	offset; // ??
+    long	line;   // global line of this Hist
+    long	local_line; // local line for this hist 
 
     // Extra
     /*s: [[Hist]] extra fields */

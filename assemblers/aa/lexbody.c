@@ -568,10 +568,11 @@ pinit(char *f)
         h[i].sym = S;
     }
     /*e: [[pinit]] symcounter and h initialisation */
-
+    /*s: [[pinit]] hash macro field reset */
     for(i=0; i<NHASH; i++)
         for(s = hash[i]; s != S; s = s->link)
             s->macro = nil;
+    /*e: [[pinit]] hash macro field reset */
 }
 /*e: function pinit */
 
@@ -590,7 +591,7 @@ loop:
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     if(fi.c < 0) {
         close(i->f);
-        linehist(0, 0);
+        linehist(nil, 0);
         goto pop;
     }
     fi.p = i->b + 1;
@@ -646,39 +647,44 @@ void
 prfile(long l)
 {
     int i, n;
-    Hist a[HISTSZ], *h;
+    Hist *h;
+    Hist a[HISTSZ];
     long d;
 
     n = 0;
     for(h = hist; h != H; h = h->link) {
         if(l < h->line)
             break;
+
         if(h->filename) {
-            if(h->offset == 0) {
+            if(h->local_line == 0) {
                 if(n >= 0 && n < HISTSZ)
                     a[n] = *h;
                 n++;
-                continue;
-            }
-            if(n > 0 && n < HISTSZ)
-                if(a[n-1].offset == 0) {
-                    a[n] = *h;
-                    n++;
-                } else
-                    a[n-1] = *h;
-            continue;
+            } else {
+                if(n > 0 && n < HISTSZ)
+                    if(a[n-1].local_line == 0) {
+                        a[n] = *h;
+                        n++;
+                    } else
+                        a[n-1] = *h;
+           }
         }
-        n--;
-        if(n >= 0 && n < HISTSZ) {
-            d = h->line - a[n].line;
-            for(i=0; i<n; i++)
-                a[i].line += d;
+        // a pop
+        else {
+            n--;
+            if(n >= 0 && n < HISTSZ) {
+                d = h->line - a[n].line;
+                for(i=0; i<n; i++)
+                    a[i].line += d;
+            }
         }
     }
     if(n > HISTSZ)
         n = HISTSZ;
     for(i=0; i<n; i++)
-        print("%s:%ld ", a[i].filename, (long)(l-a[i].line+a[i].offset+1));
+        print("%s:%ld ", a[i].filename, 
+                         (long)(l - a[i].line + a[i].local_line + 1));
 }
 /*e: function prfile */
 

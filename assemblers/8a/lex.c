@@ -108,7 +108,7 @@ main(int argc, char *argv[])
 
 /*s: function assemble */
 int
-assemble(char *file)
+assemble(char *infile)
 {
     /*s: [[assemble()]] locals */
     char *p;
@@ -120,20 +120,19 @@ assemble(char *file)
     char incfile[20];
     /*e: [[assemble()]] locals */
 
-    /*s: [[assemble()]] set p to basename(file) and adjust include */
-    // p = basename(file)
-    // include[0] = dirname(file); 
-    strcpy(ofile, file);
+    /*s: [[assemble()]] set p to basename(infile) and adjust include */
+    // p = basename(infile)
+    // include[0] = dirname(infile); 
+    strcpy(ofile, infile);
     p = utfrrune(ofile, '/');
     if(p) {
         include[0] = ofile;
         *p++ = '\0';
     } else
         p = ofile;
-    /*e: [[assemble()]] set p to basename(file) and adjust include */
-
+    /*e: [[assemble()]] set p to basename(infile) and adjust include */
     if(outfile == nil) {
-        /*s: [[assemble()]] set outfile to {basename(file)}.{thechar} */
+        /*s: [[assemble()]] set outfile to {basename(infile)}.{thechar} */
         // outfile =  p =~ s/.s/.5/;
         outfile = p;
         if(outfile){
@@ -147,9 +146,8 @@ assemble(char *file)
             p[2] = '\0';
         } else
             outfile = "/dev/null";
-        /*e: [[assemble()]] set outfile to {basename(file)}.{thechar} */
+        /*e: [[assemble()]] set outfile to {basename(infile)}.{thechar} */
     }
-
     /*s: [[assemble()]] setinclude("/{thestring}/include") or INCLUDE */
     p = getenv("INCLUDE");
     if(p) {
@@ -171,7 +169,7 @@ assemble(char *file)
 
     pass = 1;
 
-    pinit(file);
+    pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
@@ -186,7 +184,7 @@ assemble(char *file)
     pass = 2;
     outhist(); // header
 
-    pinit(file);
+    pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
@@ -981,7 +979,7 @@ outhist(void)
         p = h->filename;
         op = nil;
         // relative file?
-        if(p && p[0] != c && h->offset == 0 && pathname){
+        if(p && p[0] != c && h->local_line == 0 && pathname){
             if(pathname[0] == c){
                 op = p;
                 p = pathname;
@@ -1017,7 +1015,7 @@ outhist(void)
             }
         }
 
-        g.offset = h->offset;
+        g.offset = h->local_line;
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, AHISTORY>>8);

@@ -403,7 +403,7 @@ License.
 
 
 % include/arm/5.out.h (used to be just 5c/5.out.h)
-<<enum as(arm)>>=
+<<enum opcode(arm)>>=
 // coupling: with 5c/enam.c
 enum opcode
 {
@@ -484,8 +484,9 @@ enum registr {
     REGPC =		15,
 };
 @
-% FP? not in ARM, but 5a has a fake register LFP (not sure
-% which actual register will be used for it)
+% REGSB is new! Machine.nw does not have it.
+% REGFP? not in ARM, but 5a has a fake register LFP (not sure
+% which actual register will be used for it though)
 
 <<constant NREG(arm)>>=
 #define	NREG		16
@@ -664,7 +665,7 @@ struct Itab
 %
 
 <<global itab(arm)>>=
-// hashtbl<string, (token_kind * opcode|register|...)>
+// map<string, (token_kind * enum<opcode|register|...>)>
 struct Itab itab[] =
 {
     "NOP",		LTYPEI, ANOP,
@@ -1035,16 +1036,14 @@ Biobuf	obuf;
 
 <<function assemble>>=
 int
-assemble(char *file)
+assemble(char *infile)
 {
     <<[[assemble()]] locals>>
 
-    <<[[assemble()]] set p to basename(file) and adjust include>>
-
+    <<[[assemble()]] set p to basename(infile) and adjust include>>
     if(outfile == nil) {
-        <<[[assemble()]] set outfile to {basename(file)}.{thechar}>>
+        <<[[assemble()]] set outfile to {basename(infile)}.{thechar}>>
     }
-
     <<[[assemble()]] setinclude("/{thestring}/include") or INCLUDE>>
 
     of = mycreat(outfile, 0664);
@@ -1056,7 +1055,7 @@ assemble(char *file)
 
     pass = 1;
 
-    pinit(file);
+    pinit(infile);
     <<[[assemble()]] init Dlist after pinit>>
     yyparse(); // calls outcode() but does nothing when pass == 1
 
@@ -1068,7 +1067,7 @@ assemble(char *file)
     pass = 2;
     outhist(); // header
 
-    pinit(file);
+    pinit(infile);
     <<[[assemble()]] init Dlist after pinit>>
     yyparse(); // calls outcode() that now does things
 
@@ -1076,6 +1075,7 @@ assemble(char *file)
     return nerrors;
 }
 @
+%note: I renamed parameter to infile, to better contrast with outfile
 
 
 
@@ -1086,10 +1086,10 @@ assemble(char *file)
 char ofile[100];
 @
 
-<<[[assemble()]] set p to basename(file) and adjust include>>=
-// p = basename(file)
-// include[0] = dirname(file); 
-strcpy(ofile, file);
+<<[[assemble()]] set p to basename(infile) and adjust include>>=
+// p = basename(infile)
+// include[0] = dirname(infile); 
+strcpy(ofile, infile);
 p = utfrrune(ofile, '/');
 if(p) {
     include[0] = ofile;
@@ -1098,7 +1098,7 @@ if(p) {
     p = ofile;
 @
 
-<<[[assemble()]] set outfile to {basename(file)}.{thechar}>>=
+<<[[assemble()]] set outfile to {basename(infile)}.{thechar}>>=
 // outfile =  p =~ s/.s/.5/;
 outfile = p;
 if(outfile){
@@ -1193,15 +1193,12 @@ pinit(char *f)
     peekc = IGN;
 
     <<[[pinit]] symcounter and h initialisation>>
-
-    for(i=0; i<NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            s->macro = nil;
+    <<[[pinit]] hash macro field reset>>
 }
 @
 
 
-\section{Files managment}
+\section{Files managment, [[iostack]]}
 
 % 5a supports #include  so have to open files, close them
 %less: better to separate concern and have cpp in a different program?
@@ -1224,7 +1221,7 @@ struct	Io
     short	c;
 
     // Extra
-    Io*	link;
+    <<[[Io]] extra fields>>
 };
 @
 
@@ -1236,6 +1233,10 @@ Io*	iostack = I;
 @
 % used to be set in cinit()
 
+<<[[Io]] extra fields>>=
+Io*	link;
+@
+
 <<constant I>>=
 #define	I	((Io*)nil)
 @
@@ -1246,8 +1247,8 @@ Io*	iostack = I;
 Io*	iofree = I;
 @
 
-// option<ref<IO>>
 <<global ionext>>=
+// option<ref<IO>>
 Io*	ionext;
 @
 
@@ -1300,7 +1301,7 @@ newfile(char *s, int f)
 }
 @
 
-\section{Buffer managment}
+\section{Buffer managment, [[fi]]}
 
 % buffered IO
 
@@ -1340,7 +1341,7 @@ loop:
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     if(fi.c < 0) {
         close(i->f);
-        linehist(0, 0);
+        linehist(nil, 0);
         goto pop;
     }
     fi.p = i->b + 1;
@@ -1381,10 +1382,6 @@ pop:
 % should use lex ... simpler, but maybe to avoid bootstrapping issues?
 % hmm but they use yacc so ... (and lex uses yacc)
 
-<<[[yylex()]] locals>>=
-int c1;
-@
-% for peek
 
 
 % called by? yyparse() in generated code from a.y
@@ -1436,9 +1433,14 @@ l1:
 % LP aspectize peekc? lp split more the func?
 
 
+<<[[yylex()]] locals>>=
+int c1;
+@
+% for peek
 
 
 \section{Newline}
+% and semicolons?
 
 <<[[yylex()]] switch c cases>>=
 case '\n':
@@ -1894,20 +1896,20 @@ struct
 {
     "ifdef",	nil,	/* macif(0) */
     "ifndef",	nil,	/* macif(1) */
-    "else",	nil,	/* macif(2) */
-
-    "line",	maclin,
-    "define",	macdef,
-    "include",	macinc,
-    "undef",	macund,
-
-    "pragma",	macprag,
+    "else",		nil,	/* macif(2) */
     "endif",	macend,
+
+    "include",	macinc,
+    "define",	macdef,
+    "undef",	macund,
+    "pragma",	macprag,
+    "line",		maclin,
     0
 };
 @
 % mac for macro (and not macos or macintosh), but used actually
 % for all cpp related constructs.
+% note: I reorganized the entries, but should not matter
 
 <<[[yylex()]] switch c cases>>=
 case '#':
@@ -1946,6 +1948,7 @@ domacro(void)
 @
 % abuse getsym just to get an ident, don't have to go through
 % lookup really
+% note: didn't know that a single # is actually equivalent to an endif
 
 
 
@@ -1964,7 +1967,8 @@ macend(void)
 @
 % I don't think c can be < 0 here.
 
-\section{[[#include]] and [[-I]]}
+\section{[[#include]]}
+% and [[-I]]
 
 \subsection{Include path, [[-I]]}
 
@@ -2014,7 +2018,7 @@ setinclude(char *p)
 @
 
 
-\subsection{Tracing and [[Hist]]}
+\subsection{Tracing origin and [[Hist]]}
 
 % when error, need give line, but can be because of context,
 % so useful to give the full location of an error, that is the list
@@ -2029,13 +2033,15 @@ struct	Hist
 {
     char*	filename;
 
-    long	line; // global line of this Hist
-    long	offset; // ??
+    long	line;   // global line of this Hist
+    long	local_line; // local line for this hist 
 
     // Extra
     <<[[Hist]] extra fields>>
 };
 @
+%note: rename offset to local_line, clearer, and also avoid
+% possible confusion with Gen.offset
 
 <<global hist>>=
 // list<ref_own<Hist>>, next = Hist.link
@@ -2059,38 +2065,21 @@ Hist*	ehist;
 
 
 
-% dead? seems just set to 0 ... just one write
-% it's used in cc/ though, and we copy pasted code for macbody
-<<global newflag>>=
-bool	newflag;
-@
 
 <<function linehist>>=
 void
-linehist(char *f, int offset)
+linehist(char *f, int local_line)
 {
     Hist *h;
 
-    /*
-     * overwrite the last #line directive if
-     * no alloc has happened since the last one
-     */
-    if(newflag == false && ehist != H && offset != 0 && ehist->offset != 0)
-        if(f && ehist->filename && strcmp(f, ehist->filename) == 0) {
-            ehist->line = lineno;
-            ehist->offset = offset;
-            return;
-        }
     <<[[linehist()]] debug>>
-
-    newflag = false;
 
     h = alloc(sizeof(Hist));
     h->filename = f;
     h->line = lineno;
-    h->offset = offset;
+    h->local_line = local_line;
 
-    //add_list(???)
+    //add_list(hist, ehist, h)
     h->link = H;
     if(ehist == H) {
         hist = h;
@@ -2103,8 +2092,40 @@ linehist(char *f, int offset)
 @
 
 
+%% newflag dead? seems just set to false ... just one write.
+%% it's used in cc/ though, but we copy pasted code for macbody so
+% I think it's safe to delete it here.
+%<<global newflag>>=
+%bool	newflag;
+%@
+%
+%    <<[[linehist()]] newflag hack>>
+%    <<[[linehist()]] debug>>
+%    newflag = false;
+%
+%
+%<<[[linehist()]] newflag hack>>=
+%/*
+% * overwrite the last #line directive if
+% * no alloc has happened since the last one
+% */
+%if(newflag == false && ehist != H && offset != 0 && ehist->offset != 0)
+%    if(f && ehist->filename && strcmp(f, ehist->filename) == 0) {
+%        ehist->line = lineno;
+%        ehist->offset = offset;
+%        return;
+%    }
+%@
+
+
+
+
 % I prefer to put prfile here rather than in the Error appendix.
 % So can better understand actually the tracing mechanism.
+
+<<constant HISTSZ>>=
+#define	HISTSZ		20
+@
 
 % yyerror -> <>, for nice error reporting with include trace
 %  l = lineno
@@ -2113,42 +2134,48 @@ void
 prfile(long l)
 {
     int i, n;
-    Hist a[HISTSZ], *h;
+    Hist *h;
+    Hist a[HISTSZ];
     long d;
 
     n = 0;
     for(h = hist; h != H; h = h->link) {
         if(l < h->line)
             break;
+
         if(h->filename) {
-            if(h->offset == 0) {
+            if(h->local_line == 0) {
                 if(n >= 0 && n < HISTSZ)
                     a[n] = *h;
                 n++;
-                continue;
-            }
-            if(n > 0 && n < HISTSZ)
-                if(a[n-1].offset == 0) {
-                    a[n] = *h;
-                    n++;
-                } else
-                    a[n-1] = *h;
-            continue;
+            } else {
+                if(n > 0 && n < HISTSZ)
+                    if(a[n-1].local_line == 0) {
+                        a[n] = *h;
+                        n++;
+                    } else
+                        a[n-1] = *h;
+           }
         }
-        n--;
-        if(n >= 0 && n < HISTSZ) {
-            d = h->line - a[n].line;
-            for(i=0; i<n; i++)
-                a[i].line += d;
+        // a pop
+        else {
+            n--;
+            if(n >= 0 && n < HISTSZ) {
+                d = h->line - a[n].line;
+                for(i=0; i<n; i++)
+                    a[i].line += d;
+            }
         }
     }
     if(n > HISTSZ)
         n = HISTSZ;
     for(i=0; i<n; i++)
-        print("%s:%ld ", a[i].filename, (long)(l-a[i].line+a[i].offset+1));
+        print("%s:%ld ", a[i].filename, 
+                         (long)(l - a[i].line + a[i].local_line + 1));
 }
 @
-
+% see 5a -f to help understand a bit.
+% when no filename it means it's a pop
 
 \subsection{[[#include]]}
 
@@ -2156,7 +2183,7 @@ prfile(long l)
 #define	STRINGSZ	200
 @
 
-% LP split, and factorize code with gethunk
+% LP split
 <<function macinc>>=
 void
 macinc(void)
@@ -2206,12 +2233,8 @@ macinc(void)
     while(c & 3)
         c++;
 
-    while(nhunk < c)
-        gethunk();
-    hp = hunk;
-    memcpy(hunk, symb, c);
-    nhunk -= c;
-    hunk += c;
+    hp = malloc(c);
+    memcpy(hp, symb, c);
 
     newio();
     pushio();
@@ -2242,7 +2265,8 @@ pushio(void)
 }
 @
 
-\section{[[#define]] and [[-D]]}
+\section{[[#define]]}
+% and [[-D]]
 
 \subsection{[[-D]]}
 
@@ -2273,6 +2297,13 @@ for(i=0; i<nDlist; i++)
 char*	macro;
 @
 
+<<[[pinit]] hash macro field reset>>=
+for(i=0; i<NHASH; i++)
+    for(s = hash[i]; s != S; s = s->link)
+        s->macro = nil;
+@
+
+
 <<function dodefine>>=
 void
 dodefine(char *cp)
@@ -2280,6 +2311,7 @@ dodefine(char *cp)
     Sym *s;
     char *p;
     long l;
+    char *x;
 
     strcpy(symb, cp);
     p = strchr(symb, '=');
@@ -2290,14 +2322,10 @@ dodefine(char *cp)
         while(l & 3)
             l++;
 
-        while(nhunk < l)
-            gethunk();
-        *hunk = 0;
-        strcpy(hunk+1, p);
-        s->macro = hunk;
-        hunk += l;
-        nhunk -= l;
-
+        x = malloc(l);
+        *x = '\0';
+        strcpy(x+1, p);
+        s->macro = x;
     } else {
         s = lookup();
         s->macro = "\0001";	/* \000 is nargs */
@@ -2827,17 +2855,13 @@ macprag(void)
         while(c & 3)
             c++;
     
-        while(nhunk < c)
-            gethunk();
-        hp = hunk;
-        memcpy(hunk, symb, c);
-        nhunk -= c;
-        hunk += c;
+        hp = malloc(c);
+        memcpy(hp, symb, c);
     
         h = alloc(sizeof(Hist));
         h->filename = hp;
         h->line = lineno;
-        h->offset = -1;
+        h->local_line = -1;
 
         h->link = H;
         if(ehist == H) {
@@ -2982,12 +3006,8 @@ nn:
     while(c & 3)
         c++;
 
-    while(nhunk < c)
-        gethunk();
-    cp = hunk;
-    memcpy(hunk, symb, c);
-    nhunk -= c;
-    hunk += c;
+    cp = malloc(c);
+    memcpy(cp, symb, c);
 
     linehist(cp, n);
     return;
@@ -3110,6 +3130,7 @@ AEOR,
 %compiler: need logic for many things, complex if conditions. booleans!
 % also useful for bit level operations (bitsets, bit extraction, bit mask)
 % (and actually most things can be encoded with just NAND!)
+% how NOT?
 
 <<[[itab]] elements>>=
 "AND",		LTYPE1,	AAND,
@@ -3225,6 +3246,46 @@ AMOD,
 
 
 
+\subsubsection{Comparison}
+%note: was actually part of arithmetic in Machine.nw so
+% kinda make sense to put it here too, though
+% it has some logic too to put it just before branching
+
+<<comparison opcodes>>=
+ATST,
+ATEQ,
+ACMP,
+@
+%compiler: if, while, they all need to compare values
+% and they need to act on it (see also branching)
+%todo: (but why 3 different tests? one not enough?)
+
+<<[[itab]] elements>>=
+"CMP",		LTYPE7,	ACMP,
+"TST",		LTYPE7,	ATST,
+"TEQ",		LTYPE7,	ATEQ,
+@
+
+
+<<inst rule(arm)>>=
+/*
+ * CMP
+ */
+| LTYPE7 cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
+@
+%$
+
+\ifallcode
+<<comparison opcodes>>=
+ACMN,
+@
+% CMP negative
+<<[[itab]] elements>>=
+"CMN",		LTYPE7,	ACMN,
+@
+\fi
+
+
 \subsection{Memory}
 
 % actually ARM has load/store, but plan9 has MOV as a virtual/fake-opcode,
@@ -3286,42 +3347,35 @@ AMVN,
 @
 \fi
 
-\subsection{Comparison}
-% was actually part of arithmetic in Machine.nw
 
-<<comparison opcodes>>=
-ATST,
-ATEQ,
-ACMP,
+
+
+%\subsubsection{Swap}
+%\subsection{Special}
+% mv in advanced topics? or merge with memory section? Like
+% I did for Machine.nw?
+
+<<swap opcodes>>=
+ASWPW,
+ASWPBU,
 @
-%compiler: if, while, they all need to compare values
-% and they need to act on it (see also branching)
-%todo: (but why 3 different tests? one not enough?)
+% used in _tas so maybe a special system-like instruction?
 
 <<[[itab]] elements>>=
-"CMP",		LTYPE7,	ACMP,
-"TST",		LTYPE7,	ATST,
-"TEQ",		LTYPE7,	ATEQ,
+"SWPW",		LTYPE9, ASWPW,
+"SWPBU",	LTYPE9, ASWPBU,
 @
-
 
 <<inst rule(arm)>>=
 /*
- * CMP
+ * SWAP
  */
-| LTYPE7 cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
+| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
+| LTYPE9 cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
+| LTYPE9 cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
 @
 %$
 
-\ifallcode
-<<comparison opcodes>>=
-ACMN,
-@
-% CMP negative
-<<[[itab]] elements>>=
-"CMN",		LTYPE7,	ACMN,
-@
-\fi
 
 
 \subsection{Branch}
@@ -3460,32 +3514,6 @@ ASWI, // syscall
 % but not sure it needs an argument in plan9 context,
 % and anyway was doing stupid things like SWI 0  in 9syscall/mkfile
 % which was weird, at least should be SWI $0
-
-\subsection{Swap}
-%\subsection{Special}
-% mv in advanced topics? or merge with memory section?
-
-<<swap opcodes>>=
-ASWPW,
-ASWPBU,
-@
-% used in _tas so maybe a special system-like instruction?
-
-<<[[itab]] elements>>=
-"SWPW",		LTYPE9, ASWPW,
-"SWPBU",	LTYPE9, ASWPBU,
-@
-
-<<inst rule(arm)>>=
-/*
- * SWAP
- */
-| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
-@
-%$
-
 
 
 
@@ -3919,6 +3947,8 @@ ireg:
 
 % part of oreg? name is an offset to a reg?
 % Actually a name is really a constant offset to a base like LSB!!
+% it's implicitly a dereference so foo is really (foo), you want
+% $foo to get the actual address (and not content)
 <<oreg rule>>=
 | name
 @
@@ -4116,6 +4146,12 @@ rel:
  }
 @
 %$
+% branch are relative to current PC for ARM, but here
+% we deal with more absolute address.
+
+% it's an offset in the sense that it's like a 'LLAB offset (starting_pc)'
+% so offset to basis, which should be zero for this assembly
+% (and when link will actually be relocated).
 
 % there is also nirel where can use a name instead of a label
 
@@ -4137,7 +4173,6 @@ rel:
 % anyway outcode will not use the value
 
 
-% need that? we have code using relative jmp?
 <<rel rule>>=
 | con '(' LPC ')'
  {
@@ -4147,6 +4182,8 @@ rel:
  }
 @
 %$
+% need that? we have code using relative jmp?
+% anyway if do  B 4(PC) it will jump one instruction?
 
 
 
@@ -4518,15 +4555,15 @@ comma:
 % very generic form, 3 operands (but many times they
 % are equivalent to a None).
 
-% a = opcode
 % scond is cond bits and also special bits
+% less: rename reg to reg3? so less confusing with reg in zaddr?
 <<function outcode(arm)>>=
 void
-outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
+outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
 {
     <<[[outcode()]] locals>>
 
-    <<[[outcode()]] adjust a and scond when a is AB>>
+    <<[[outcode()]] adjust opcode and scond when opcode is AB>>
 
     if(pass == 1)
         goto out;
@@ -4534,7 +4571,7 @@ outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
     <<[[outcode()]] st and sf computation, and possible calls to zname>>
 
     // Instruction serialized format: opcode, cond, optional reg, line, operands
-    Bputc(&obuf, a);
+    Bputc(&obuf, opcode);
     Bputc(&obuf, scond);
     Bputc(&obuf, reg);
     Bputc(&obuf, lineno);
@@ -4545,13 +4582,14 @@ outcode(int a, int scond,  Gen *g1, int reg, Gen *g2)
     zaddr(g2, st);
 
 out:
-    if(a != AGLOBL && a != ADATA)
+    if(opcode != AGLOBL && opcode != ADATA)
         pc++;
 }
 @
 % skip pc++ for AGLOBL and ADATA because those pseudo ops concern
 % the DATA section, not the TEXT section.
 % WORD is for the TEXT section too!
+%note: I renamed a to opcode
 
 % note that output line number here! useful for debugging information,
 % to be ablt to go back from one instruction to the actual code!
@@ -4559,10 +4597,10 @@ out:
 % later so one can get from lineno to actual file+lineno
 
 
-<<[[outcode()]] adjust a and scond when a is AB>>=
+<<[[outcode()]] adjust opcode and scond when opcode is AB>>=
 /* hack to make B.NE etc. work: turn it into the corresponding conditional*/
-if(a == AB){
-    a = bcode[scond&0xf];
+if(opcode == AB){
+    opcode = bcode[scond&0xf];
     scond = (scond & ~0xf) | Always;
 }
 @
@@ -4605,11 +4643,9 @@ zaddr(Gen *a, int symidx)
 {
     <<[[zaddr()]] locals>>
 
-    // operand format, the operand kind first!
+    // operand format: operand kind, register, symidx, symlink, optional offset
     Bputc(&obuf, a->type);
-
     Bputc(&obuf, a->reg);
-
     // idx in symbol table, 0 if no symbol involved in the operand
     Bputc(&obuf, symidx);
     // symkind of the symbol, if any
@@ -4909,7 +4945,7 @@ outhist(void)
 
         <<[[outhist()]] adjust p and op if p is relative filename>>
         <<[[outhist()]] output each path component as an ANAME>>
-        g.offset = h->offset;
+        g.offset = h->local_line;
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, Always);
@@ -4933,7 +4969,7 @@ outhist(void)
 
 <<[[outhist()]] adjust p and op if p is relative filename>>=
 op = nil;
-if(p && p[0] != '/' && h->offset == 0 && pathname){
+if(p && p[0] != '/' && h->local_line == 0 && pathname){
     if(pathname[0] == '/'){
         op = p;
         p = pathname;
@@ -5340,6 +5376,8 @@ AMOVM,
 @
 %in lproc.s 
 %	RFE				/* MOVM.IA.S.W (R13), [R15] */
+
+%todo: abuse D_CONST again, why not D_MULTI instead?
 
 <<inst rule(arm)>>=
 /*
@@ -5749,8 +5787,8 @@ if(debug['m'])
 <<[[linehist()]] debug>>=
 if(debug['f'])
     if(f) {
-        if(offset)
-            print("%4ld: %s (#line %d)\n", lineno, f, offset);
+        if(local_line)
+            print("%4ld: %s (#line %d)\n", lineno, f, local_line);
         else
             print("%4ld: %s\n", lineno, f);
     } else
@@ -5805,9 +5843,6 @@ yyerror(char *a, ...)
 }
 @
 
-<<constant HISTSZ>>=
-#define	HISTSZ		20
-@
 
 
 \chapter{Libc}

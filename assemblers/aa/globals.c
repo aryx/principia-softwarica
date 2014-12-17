@@ -26,9 +26,6 @@ int	nDlist;
 // ref<Hist>, end of list of hist
 Hist*	ehist;
 /*e: global ehist */
-/*s: global newflag */
-bool	newflag;
-/*e: global newflag */
 /*s: global hist */
 // list<ref_own<Hist>>, next = Hist.link
 Hist*	hist;
@@ -44,6 +41,7 @@ char*	include[NINCLUDE];
 Io*	iofree = I;
 /*e: global iofree */
 /*s: global ionext */
+// option<ref<IO>>
 Io*	ionext;
 /*e: global ionext */
 /*s: global iostack */

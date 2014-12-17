@@ -131,6 +131,7 @@ dodefine(char *cp)
     Sym *s;
     char *p;
     long l;
+    char *x;
 
     strcpy(symb, cp);
     p = strchr(symb, '=');
@@ -141,14 +142,10 @@ dodefine(char *cp)
         while(l & 3)
             l++;
 
-        while(nhunk < l)
-            gethunk();
-        *hunk = 0;
-        strcpy(hunk+1, p);
-        s->macro = hunk;
-        hunk += l;
-        nhunk -= l;
-
+        x = malloc(l);
+        *x = '\0';
+        strcpy(x+1, p);
+        s->macro = x;
     } else {
         s = lookup();
         s->macro = "\0001";	/* \000 is nargs */
@@ -169,15 +166,14 @@ struct
 {
     "ifdef",	nil,	/* macif(0) */
     "ifndef",	nil,	/* macif(1) */
-    "else",	nil,	/* macif(2) */
-
-    "line",	maclin,
-    "define",	macdef,
-    "include",	macinc,
-    "undef",	macund,
-
-    "pragma",	macprag,
+    "else",		nil,	/* macif(2) */
     "endif",	macend,
+
+    "include",	macinc,
+    "define",	macdef,
+    "undef",	macund,
+    "pragma",	macprag,
+    "line",		maclin,
     0
 };
 /*e: global mactab */
@@ -612,12 +608,8 @@ macinc(void)
     while(c & 3)
         c++;
 
-    while(nhunk < c)
-        gethunk();
-    hp = hunk;
-    memcpy(hunk, symb, c);
-    nhunk -= c;
-    hunk += c;
+    hp = malloc(c);
+    memcpy(hp, symb, c);
 
     newio();
     pushio();
@@ -674,12 +666,8 @@ nn:
     while(c & 3)
         c++;
 
-    while(nhunk < c)
-        gethunk();
-    cp = hunk;
-    memcpy(hunk, symb, c);
-    nhunk -= c;
-    hunk += c;
+    cp = malloc(c);
+    memcpy(cp, symb, c);
 
     linehist(cp, n);
     return;
@@ -789,17 +777,13 @@ macprag(void)
         while(c & 3)
             c++;
     
-        while(nhunk < c)
-            gethunk();
-        hp = hunk;
-        memcpy(hunk, symb, c);
-        nhunk -= c;
-        hunk += c;
+        hp = malloc(c);
+        memcpy(hp, symb, c);
     
         h = alloc(sizeof(Hist));
         h->filename = hp;
         h->line = lineno;
-        h->offset = -1;
+        h->local_line = -1;
 
         h->link = H;
         if(ehist == H) {
@@ -841,39 +825,27 @@ macend(void)
 
 /*s: function linehist */
 void
-linehist(char *f, int offset)
+linehist(char *f, int local_line)
 {
     Hist *h;
 
-    /*
-     * overwrite the last #line directive if
-     * no alloc has happened since the last one
-     */
-    if(newflag == false && ehist != H && offset != 0 && ehist->offset != 0)
-        if(f && ehist->filename && strcmp(f, ehist->filename) == 0) {
-            ehist->line = lineno;
-            ehist->offset = offset;
-            return;
-        }
     /*s: [[linehist()]] debug */
     if(debug['f'])
         if(f) {
-            if(offset)
-                print("%4ld: %s (#line %d)\n", lineno, f, offset);
+            if(local_line)
+                print("%4ld: %s (#line %d)\n", lineno, f, local_line);
             else
                 print("%4ld: %s\n", lineno, f);
         } else
             print("%4ld: <pop>\n", lineno);
     /*e: [[linehist()]] debug */
 
-    newflag = false;
-
     h = alloc(sizeof(Hist));
     h->filename = f;
     h->line = lineno;
-    h->offset = offset;
+    h->local_line = local_line;
 
-    //add_list(???)
+    //add_list(hist, ehist, h)
     h->link = H;
     if(ehist == H) {
         hist = h;
