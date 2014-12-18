@@ -9,14 +9,14 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Make.tex.nw
+TEXMAIN=Make.nw
 TEX=Make.tex
 
 # set of noweb (.nw) files
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Make.tex.nw Make_extra.tex.nw
+SRC_ORIG=Make.nw Make_extra.nw
 
 SRC_VIEWS= \
     mk/fns.h\
