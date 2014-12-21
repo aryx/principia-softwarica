@@ -553,11 +553,12 @@ struct Segment
     uintptr	base;
     uintptr	end;
 
-    ulong	fileoff;
-    ulong	fileend;
-
     //array<option<array_4096<byte>>> page table
     byte**	table; // the data
+
+    // for the Text and Data segments the bytes are in the file
+    ulong	fileoff;
+    ulong	fileend;
 
     <<[[Segment]] profiling fields>>
 };
@@ -589,7 +590,7 @@ Memory memory;
 \chapter{[[main()]]}
 
 %input: file => fdt => biobuf bi => bin
-%output: bp => bioout
+%output: bo => bioout
 
 <<global file>>=
 char*	file = "5.out";
@@ -603,8 +604,9 @@ fdt text;
 
 % in 5i.c
 <<global bxxx>>=
-Biobuf	bi, bp;
+Biobuf	bi, bo;
 @
+%note: was bp, but I renamed bo
 
 % in globals.c
 <<global bixxx>>=
@@ -621,7 +623,7 @@ void main(int argc, char **argv)
     argc--;
     argv++;
 
-    bioout = &bp;
+    bioout = &bo;
     bin = &bi;
     Binit(bioout, STDOUT, OWRITE);
     Binit(bin, STDIN, OREAD);
@@ -1494,7 +1496,7 @@ case OEOR:
     reg.r[rd] = o1 ^ o2;
     cbit = true;
     break;
-case OBIC:	/* bic */
+case OBIC:
     reg.r[rd] = o1 & ~o2;
     cbit = true;
     break;
@@ -1605,7 +1607,7 @@ else
   op += CARITH1;
 // else op += CARITH0
 @
-% >> >>
+% >> >> >>
 
 <<[[arm_class()]] class cases>>=
 case 1:	/* data processing i,r,r */
@@ -1624,6 +1626,7 @@ CARITH3 = 48, // i,r,r
 
 
 <<[[itab]] elements>>=
+// r<>r, r, r
 [OAND +CARITH1] =  { Idp1,		"AND",	Iarith },	
 [OEOR +CARITH1] =  { Idp1,		"EOR",	Iarith },	
 [OSUB +CARITH1] =  { Idp1,		"SUB",	Iarith },	
@@ -1685,6 +1688,7 @@ if(trace)
 \fi
 
 <<[[itab]] elements>>=
+// r<>#, r, r
 [OAND +CARITH2] =  { Idp2,		"AND",	Iarith },	
 [OEOR +CARITH2] =  { Idp2,		"EOR",	Iarith },	
 [OSUB +CARITH2] =  { Idp2,		"SUB",	Iarith },	
@@ -1811,6 +1815,7 @@ if(trace)
 \fi
 
 
+%todo: do an enum SH_LEFT | SH_RIGHT
 
 % shift(rm, op, rs or #, true if rs)
 <<function shift>>=
@@ -1900,8 +1905,8 @@ if(w & (1<<23)) {	/* mullu */
 <<[[itab]] elements>>=
 [OMULLU]  =  { Imull,	"MULLU",	Iarith },
 [OMULALU] =  { Imull,	"MULALU",	Iarith },
-[OMULL]   =  { Imull,	"MULL",		Iarith  },
-[OMULAL]  =  { Imull,	"MULAL",	Iarith  },
+[OMULL]   =  { Imull,	"MULL",		Iarith },
+[OMULAL]  =  { Imull,	"MULAL",	Iarith },
 @
 
 
@@ -2370,8 +2375,8 @@ if(trace) {
 
 
 \subsubsection{Multi registers load/store}
-
 % advanced topic? like I did in Assembler.nw?
+
 <<memory opcodes>>=
 OLDM = 84,
 OSTM = 85,
@@ -2474,16 +2479,17 @@ OB = 86,
 OBL = 87,
 @
 
-<<branching opcodes>>=
-CBRANCH = 86,
-@
-
 <<[[arm_class()]] class cases>>=
 case 5:	/* branch / branch link */
  op = CBRANCH + ((w >> 24) & 0x1);
  break;
 @
 %(48+24+4+4+2)
+
+<<branching opcodes>>=
+CBRANCH = 86,
+@
+
 
 <<[[itab]] elements>>=
 // branch
@@ -2506,7 +2512,9 @@ Ib(instruction inst)
 }
 @
 % why +8?
-% -4 to compensate back for +=4 in run()
+% why -4? to compensate back for +=4 in run()
+% why << 8 and then >> 6
+% why << 2? because jump are anyway to code and so 4 bytes boundaries
 
 % note that there is no conditional branch instruction like
 % JNE, JEQ, etc, because B is using the generic conditional execution
@@ -2539,7 +2547,6 @@ Ibl(instruction inst)
 @
 % Branch and Link, so kinda call, just for leaves, no need stack
 % if want RET, just have to mov reglink, regpc
-% why not just v << 2 ?? why this 8 and 6 stuff?
 
 \ifallcode
 <<[[Ibl()]] trace>>=
@@ -2569,7 +2576,6 @@ case 7:	/* coprocessor crap */ // and syscall
 % should assert bit 25 is 1
 
 <<[[itab]] elements>>=
-// co processor
 [OSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
 @
 
@@ -2987,10 +2993,72 @@ putmem_v(uintptr addr, uvlong data)
 
 % #include "/sys/src/libc/9syscall/sys.h"
 
+
+
+<<global systab>>=
+void	(*systab[])(void) =
+{
+    [NOP]		sysnop,
+
+    [RFORK]		sysrfork,
+    [EXEC]		sysexec,
+    [EXITS]		sysexits,
+    [AWAIT]		sysawait,
+
+    [BRK]		sysbrk,
+
+    [OPEN]		sysopen,
+    [CLOSE]		sysclose,
+    [PREAD]		syspread,
+    [PWRITE]	syspwrite,
+    [SEEK]		sysseek,
+
+    [CREATE]	syscreate,
+    [REMOVE]	sysremove,
+    [CHDIR]		syschdir,
+    [FD2PATH]	sysfd2path,
+    [STAT]		sysstat,
+    [FSTAT]		sysfstat,
+    [WSTAT]		syswstat,
+    [FWSTAT]	sysfwstat,
+
+    [BIND]		sysbind,
+    [MOUNT]		sysmount,
+    [UNMOUNT]	sysunmount,
+
+    [SLEEP]		syssleep,
+    [ALARM]		sysalarm,
+
+    [PIPE]		syspipe,
+    [NOTIFY]	sysnotify,
+    [NOTED]		sysnoted,
+
+    [SEGATTACH]	syssegattach,
+    [SEGDETACH]	syssegdetach,
+    [SEGFREE]	syssegfree,
+    [SEGFLUSH]	syssegflush,
+    [SEGBRK]	syssegbrk,
+
+    [RENDEZVOUS]	sysrendezvous,
+
+    [DUP]		sysdup,
+    [FVERSION]	sysfversion,
+    [FAUTH]		sysfauth,
+
+    [ERRSTR]	syserrstr,
+};
+@
+% miss 
+%#define	SEMACQUIRE	33
+%#define	SEMRELEASE	34
+%#define	TSEMACQUIRE	35
+
+
+\ifallcode
 <<global sysctab>>=
 char*	sysctab[] =
 {
-    [NOP]		"Running",
+    [NOP]		"Nop",
     [BIND]		"Bind",
     [CHDIR]		"Chdir",
     [CLOSE]		"Close",
@@ -3029,50 +3097,7 @@ char*	sysctab[] =
     [AWAIT]		"Await",
 };
 @
-
-
-<<global systab>>=
-void	(*systab[])(void) =
-{
-    [NOP]		sysnop,
-    [BIND]		sysbind,
-    [CHDIR]		syschdir,
-    [CLOSE]		sysclose,
-    [DUP]		sysdup,
-    [ALARM]		sysalarm,
-    [EXEC]		sysexec,
-    [EXITS]		sysexits,
-    [FAUTH]		sysfauth,
-    [SEGBRK]	syssegbrk,
-    [MOUNT]		sysmount,
-    [OPEN]		sysopen,
-    [SLEEP]		syssleep,
-    [RFORK]		sysrfork,
-    [PIPE]		syspipe,
-    [CREATE]	syscreate,
-    [FD2PATH]	sysfd2path,
-    [BRK]		sysbrk,
-    [REMOVE]	sysremove,
-    [NOTIFY]	sysnotify,
-    [NOTED]		sysnoted,
-    [SEGATTACH]		syssegattach,
-    [SEGDETACH]		syssegdetach,
-    [SEGFREE]		syssegfree,
-    [SEGFLUSH]		syssegflush,
-    [RENDEZVOUS]	sysrendezvous,
-    [UNMOUNT]		sysunmount,
-    [SEEK]		sysseek,
-    [FVERSION]	sysfversion,
-    [ERRSTR]	syserrstr,
-    [STAT]		sysstat,
-    [FSTAT]		sysfstat,
-    [WSTAT]		syswstat,
-    [FWSTAT]	sysfwstat,
-    [PREAD]		syspread,
-    [PWRITE]	syspwrite,
-    [AWAIT]		sysawait,
-};
-@
+\fi
 
 % itab[CSYSCALL].instr = <>
 <<function Ssyscall>>=
@@ -3083,6 +3108,7 @@ Ssyscall(instruction _unused)
     USED(_unused);
 
     call = reg.r[REGARG];
+
     if(call < 0 || call >= nelem(systab) || systab[call] == nil) {
         Bprint(bioout, "bad system call %d (%#ux)\n", call, call);
         dumpreg();
@@ -3092,8 +3118,10 @@ Ssyscall(instruction _unused)
 
     if(trace)
         itrace("SWI\t%s", sysctab[call]);
+
     // dispatch!
     (*systab[call])();
+
     Bflush(bioout);
 }
 @
@@ -4724,7 +4752,7 @@ if(calltree && rd == REGPC && o2 == 0) {
 @
 % there is no RET operation?
 % o2 == 0 so why the o1 + o2?? because that's the spirit of this opcode
-% anyway, so just to be consistent
+% anyway, so just to be consistent?
 
 % branch and link
 <<[[Ibl()]] if calltree>>=
