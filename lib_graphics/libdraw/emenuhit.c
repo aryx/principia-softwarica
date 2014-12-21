@@ -108,16 +108,16 @@ paintitem(Menu *menu, Rectangle textr, int off, int i, int highlight, Image *sav
         return;
     r = menurect(textr, i);
     if(restore){
-        draw(screen, r, restore, nil, restore->r.min);
+        draw(view, r, restore, nil, restore->r.min);
         return;
     }
     if(save)
-        draw(save, save->r, screen, nil, r.min);
+        draw(save, save->r, view, nil, r.min);
     item = menu->item? menu->item[i+off] : (*menu->gen)(i+off);
     pt.x = (textr.min.x+textr.max.x-stringwidth(font, item))/2;
     pt.y = textr.min.y+i*(font->height+Vspacing);
-    draw(screen, r, highlight? high : back, nil, pt);
-    string(screen, pt, highlight? htext : text, pt, font, item);
+    draw(view, r, highlight? high : back, nil, pt);
+    string(view, pt, highlight? htext : text, pt, font, item);
 }
 /*e: function paintitem */
 
@@ -158,7 +158,7 @@ menupaint(Menu *menu, Rectangle textr, int off, int nitemdrawn)
 {
     int i;
 
-    draw(screen, insetrect(textr, Border-Margin), back, nil, ZP);
+    draw(view, insetrect(textr, Border-Margin), back, nil, ZP);
     for(i = 0; i<nitemdrawn; i++)
         paintitem(menu, textr, off, i, 0, nil, nil);
 }
@@ -170,18 +170,18 @@ menuscrollpaint(Rectangle scrollr, int off, int nitem, int nitemdrawn)
 {
     Rectangle r;
 
-    draw(screen, scrollr, back, nil, ZP);
+    draw(view, scrollr, back, nil, ZP);
     r.min.x = scrollr.min.x;
     r.max.x = scrollr.max.x;
     r.min.y = scrollr.min.y + (Dy(scrollr)*off)/nitem;
     r.max.y = scrollr.min.y + (Dy(scrollr)*(off+nitemdrawn))/nitem;
     if(r.max.y < r.min.y+2)
         r.max.y = r.min.y+2;
-    border(screen, r, 1, bord, ZP);
+    border(view, r, 1, bord, ZP);
     if(menutxt == 0)
         menutxt = allocimage(display, Rect(0, 0, 1, 1), CMAP8, 1, DDarkgreen);
     if(menutxt)
-        draw(screen, insetrect(r, 1), menutxt, nil, ZP);
+        draw(view, insetrect(r, 1), menutxt, nil, ZP);
 }
 /*e: function menuscrollpaint */
 
@@ -198,8 +198,8 @@ emenuhit(int but, Mouse *m, Menu *menu)
 
     if(back == nil)
         menucolors();
-    sc = screen->clipr;
-    replclipr(screen, 0, screen->r);
+    sc = view->clipr;
+    replclipr(view, 0, view->r);
     maxwid = 0;
     for(nitem = 0;
         item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
@@ -210,7 +210,7 @@ emenuhit(int but, Mouse *m, Menu *menu)
     }
     if(menu->lasthit<0 || menu->lasthit>=nitem)
         menu->lasthit = 0;
-    screenitem = (Dy(screen->r)-10)/(font->height+Vspacing);
+    screenitem = (Dy(view->r)-10)/(font->height+Vspacing);
     if(nitem>Maxunscroll || nitem>screenitem){
         scrolling = 1;
         nitemdrawn = Nscroll;
@@ -234,14 +234,14 @@ emenuhit(int but, Mouse *m, Menu *menu)
     r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
     r = rectaddpt(r, m->xy);
     pt = ZP;
-    if(r.max.x>screen->r.max.x)
-        pt.x = screen->r.max.x-r.max.x;
-    if(r.max.y>screen->r.max.y)
-        pt.y = screen->r.max.y-r.max.y;
-    if(r.min.x<screen->r.min.x)
-        pt.x = screen->r.min.x-r.min.x;
-    if(r.min.y<screen->r.min.y)
-        pt.y = screen->r.min.y-r.min.y;
+    if(r.max.x>view->r.max.x)
+        pt.x = view->r.max.x-r.max.x;
+    if(r.max.y>view->r.max.y)
+        pt.y = view->r.max.y-r.max.y;
+    if(r.min.x<view->r.min.x)
+        pt.x = view->r.min.x-r.min.x;
+    if(r.min.y<view->r.min.y)
+        pt.y = view->r.min.y-r.min.y;
     menur = rectaddpt(r, pt);
     textr.max.x = menur.max.x-Margin;
     textr.min.x = textr.max.x-maxwid;
@@ -253,13 +253,13 @@ emenuhit(int but, Mouse *m, Menu *menu)
     }else
         scrollr = Rect(0, 0, 0, 0);
 
-    b = allocimage(display, menur, screen->chan, 0, 0);
+    b = allocimage(display, menur, view->chan, 0, 0);
     if(b == 0)
-        b = screen;
-    draw(b, menur, screen, nil, menur.min);
-    draw(screen, menur, back, nil, ZP);
-    border(screen, menur, Blackborder, bord, ZP);
-    save = allocimage(display, menurect(textr, 0), screen->chan, 0, -1);
+        b = view;
+    draw(b, menur, view, nil, menur.min);
+    draw(view, menur, back, nil, ZP);
+    border(view, menur, Blackborder, bord, ZP);
+    save = allocimage(display, menurect(textr, 0), view->chan, 0, -1);
     r = menurect(textr, lasti);
     emoveto(divpt(addpt(r.min, r.max), 2));
     menupaint(menu, textr, off, nitemdrawn);
@@ -287,11 +287,11 @@ emenuhit(int but, Mouse *m, Menu *menu)
             *m = emouse();
         }
     }
-    draw(screen, menur, b, nil, menur.min);
-    if(b != screen)
+    draw(view, menur, b, nil, menur.min);
+    if(b != view)
         freeimage(b);
     freeimage(save);
-    replclipr(screen, 0, sc);
+    replclipr(view, 0, sc);
     if(lasti >= 0){
         menu->lasthit = lasti+off;
         return menu->lasthit;

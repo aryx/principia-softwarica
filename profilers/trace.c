@@ -244,9 +244,9 @@ static void
 mkcol(int i, int c0, int c1, int c2)
 {
     cols[i][0] = allocimagemix(display, c0, DWhite);
-    cols[i][1] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, c1);
-    cols[i][2] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, c2);
-    cols[i][3] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, c0);
+    cols[i][1] = allocimage(display, Rect(0,0,1,1), view->chan, 1, c1);
+    cols[i][2] = allocimage(display, Rect(0,0,1,1), view->chan, 1, c2);
+    cols[i][3] = allocimage(display, Rect(0,0,1,1), view->chan, 1, c0);
 }
 /*e: function mkcol */
 
@@ -274,14 +274,14 @@ colinit(void)
     /* Blue */
     mkcol(4, 0x00AAFFFF, 0x00AAFFFF, 0x0088CCFF);
     /* Grey */
-    cols[5][0] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xEEEEEEFF);
-    cols[5][1] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xCCCCCCFF);
-    cols[5][2] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x888888FF);
-    cols[5][3] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xAAAAAAFF);
+    cols[5][0] = allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xEEEEEEFF);
+    cols[5][1] = allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xCCCCCCFF);
+    cols[5][2] = allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x888888FF);
+    cols[5][3] = allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xAAAAAAFF);
     grey = cols[5][2];
-    red = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0xFF0000FF);
-    green = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x00FF00FF);
-    blue = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x0000FFFF);
+    red = allocimage(display, Rect(0,0,1,1), view->chan, 1, 0xFF0000FF);
+    green = allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x00FF00FF);
+    blue = allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x0000FFFF);
     bg = display->white;
     fg = display->black;
 }
@@ -317,22 +317,22 @@ redraw(int scaleno)
         oldestts = newestts - period;
 
         prevts = oldestts;
-        draw(screen, screen->r, bg, nil, ZP);
+        draw(view, view->r, bg, nil, ZP);
     }else{
         /* just white out time */
-        rtime = screen->r;
+        rtime = view->r;
         rtime.min.x = rtime.max.x - stringwidth(mediumfont, "00000000000.000s");
         rtime.max.y = rtime.min.y + mediumfont->height;
-        draw(screen, rtime, bg, nil, ZP);
+        draw(view, rtime, bg, nil, ZP);
     }
-    p = screen->r.min;
+    p = view->r.min;
     for (n = 0; n != ntasks; n++) {
         t = &tasks[n];
         /* p is upper left corner for this task */
         rtime = Rpt(p, addpt(p, Pt(500, mediumfont->height)));
-        draw(screen, rtime, bg, nil, ZP);
+        draw(view, rtime, bg, nil, ZP);
         snprint(buf, sizeof(buf), "%d %s", t->pid, t->name);
-        q = string(screen, p, fg, ZP, mediumfont, buf);
+        q = string(view, p, fg, ZP, mediumfont, buf);
         s = now - t->tstart;
         if(t->tevents[SRelease])
             snprint(buf, sizeof(buf), " per %t — avg: %t max: %t",
@@ -345,12 +345,12 @@ redraw(int scaleno)
                 t->total);
         else
             snprint(buf, sizeof(buf), " total: %t", t->total);
-        string(screen, q, fg, ZP, tinyfont, buf);
+        string(view, q, fg, ZP, tinyfont, buf);
         p.y += Height;
     }
     x = time2x(prevts);
 
-    p = screen->r.min;
+    p = view->r.min;
     for (n = 0; n != ntasks; n++) {
         t = &tasks[n];
 
@@ -358,13 +358,13 @@ redraw(int scaleno)
 
         /* Move part already drawn */
         r = Rect(p.x, p.y + topmargin, p.x + x, p.y+Height);
-        draw(screen, r, screen, nil, Pt(p.x + Width - x, p.y + topmargin));
+        draw(view, r, view, nil, Pt(p.x + Width - x, p.y + topmargin));
 
-        r.max.x = screen->r.max.x;
+        r.max.x = view->r.max.x;
         r.min.x += x;
-        draw(screen, r, bg, nil, ZP);
+        draw(view, r, bg, nil, ZP);
 
-        line(screen, addpt(p, Pt(x, Height - lineht)), Pt(screen->r.max.x, p.y + Height - lineht),
+        line(view, addpt(p, Pt(x, Height - lineht)), Pt(view->r.max.x, p.y + Height - lineht),
             Endsquare, Endsquare, 0, cols[n % Ncolor][1], ZP);
 
         for (i = 0; i < t->nevents-1; i++)
@@ -384,7 +384,7 @@ redraw(int scaleno)
             case SAdmit:
                 if (e->time > prevts && e->time <= newestts) {
                     sx = time2x(e->time);
-                    line(screen, addpt(p, Pt(sx, topmargin)), 
+                    line(view, addpt(p, Pt(sx, topmargin)), 
                         addpt(p, Pt(sx, Height - bottommargin)), 
                         Endarrow, Endsquare, 1, green, ZP);
                 }
@@ -392,7 +392,7 @@ redraw(int scaleno)
             case SExpel:
                 if (e->time > prevts && e->time <= newestts) {
                     sx = time2x(e->time);
-                    line(screen, addpt(p, Pt(sx, topmargin)), 
+                    line(view, addpt(p, Pt(sx, topmargin)), 
                         addpt(p, Pt(sx, Height - bottommargin)), 
                         Endsquare, Endarrow, 1, red, ZP);
                 }
@@ -400,7 +400,7 @@ redraw(int scaleno)
             case SRelease:
                 if (e->time > prevts && e->time <= newestts) {
                     sx = time2x(e->time);
-                    line(screen, addpt(p, Pt(sx, topmargin)), 
+                    line(view, addpt(p, Pt(sx, topmargin)), 
                         addpt(p, Pt(sx, Height - bottommargin)), 
                         Endarrow, Endsquare, 1, fg, ZP);
                 }
@@ -408,7 +408,7 @@ redraw(int scaleno)
             case SDeadline:
                 if (e->time > prevts && e->time <= newestts) {
                     sx = time2x(e->time);
-                    line(screen, addpt(p, Pt(sx, topmargin)), 
+                    line(view, addpt(p, Pt(sx, topmargin)), 
                         addpt(p, Pt(sx, Height - bottommargin)), 
                         Endsquare, Endarrow, 1, fg, ZP);
                 }
@@ -418,7 +418,7 @@ redraw(int scaleno)
             case SUser:
                 if (e->time > prevts && e->time <= newestts) {
                     sx = time2x(e->time);
-                    line(screen, addpt(p, Pt(sx, topmargin)), 
+                    line(view, addpt(p, Pt(sx, topmargin)), 
                         addpt(p, Pt(sx, Height - bottommargin)), 
                         Endsquare, Endarrow, 0, 
                         (e->etype == SYield)? green: blue, ZP);
@@ -427,7 +427,7 @@ redraw(int scaleno)
             case SSlice:
                 if (e->time > prevts && e->time <= newestts) {
                     sx = time2x(e->time);
-                    line(screen, addpt(p, Pt(sx, topmargin)), 
+                    line(view, addpt(p, Pt(sx, topmargin)), 
                         addpt(p, Pt(sx, Height - bottommargin)), 
                         Endsquare, Endarrow, 0, red, ZP);
                 }
@@ -442,7 +442,7 @@ redraw(int scaleno)
                 r = Rect(sx, topmargin + 8, ex, Height - lineht);
                 r = rectaddpt(r, p);
 
-                draw(screen, r, cols[n % Ncolor][e->etype==SRun?1:3], nil, ZP);
+                draw(view, r, cols[n % Ncolor][e->etype==SRun?1:3], nil, ZP);
 
                 if(t->pid == triggerproc && ex < Width)
                     paused ^= 1;
@@ -453,7 +453,7 @@ redraw(int scaleno)
                     case SInts:
                         if (_e->time > prevts && _e->time <= newestts){
                             sx = time2x(_e->time);
-                            line(screen, addpt(p, Pt(sx, topmargin)), 
+                            line(view, addpt(p, Pt(sx, topmargin)), 
                                                 addpt(p, Pt(sx, Height / 2 - bottommargin)), 	
                                                 Endsquare, Endsquare, 0, 
                                                 green, ZP);
@@ -462,7 +462,7 @@ redraw(int scaleno)
                     case SInte:
                         if (_e->time > prevts && _e->time <= newestts) {
                             sx = time2x(_e->time);
-                            line(screen, addpt(p, Pt(sx, Height / 2 - bottommargin)), 
+                            line(view, addpt(p, Pt(sx, Height / 2 - bottommargin)), 
                                                 addpt(p, Pt(sx, Height - bottommargin)), 
                                                 Endsquare, Endsquare, 0, 
                                                 blue, ZP);
@@ -480,7 +480,7 @@ redraw(int scaleno)
     x = time2x(ts);
 
     while(x < Width){
-        p = screen->r.min;
+        p = view->r.min;
         for(n = 0; n < ntasks; n++){
             int height, width;
 
@@ -497,7 +497,7 @@ redraw(int scaleno)
             }
             height >>= 4;
 
-            line(screen, addpt(p, Pt(x, height)), addpt(p, Pt(x, Height - lineht)),
+            line(view, addpt(p, Pt(x, height)), addpt(p, Pt(x, Height - lineht)),
                 Endsquare, Endsquare, width, cols[n % Ncolor][2], ZP);
 
             p.y += Height;
@@ -506,15 +506,15 @@ redraw(int scaleno)
         x = time2x(ts);
     }
 
-    rtime = screen->r;
+    rtime = view->r;
     rtime.min.y = rtime.max.y - tinyfont->height + 2;
-    draw(screen, rtime, bg, nil, ZP);
+    draw(view, rtime, bg, nil, ZP);
     ts = oldestts + scales[scaleno].bigtics - (oldestts % scales[scaleno].bigtics);
     x = time2x(ts);
     ss = 0;
     while(x < Width){
         snprint(buf, sizeof(buf), "%t", ss);
-        string(screen, addpt(p, Pt(x - stringwidth(tinyfont, buf)/2, - tinyfont->height - 1)), 
+        string(view, addpt(p, Pt(x - stringwidth(tinyfont, buf)/2, - tinyfont->height - 1)), 
             fg, ZP, tinyfont, buf);
         ts += scales[scaleno].bigtics;
         ss += scales[scaleno].bigtics;
@@ -522,7 +522,7 @@ redraw(int scaleno)
     }
 
     snprint(buf, sizeof(buf), "%t", now);
-    string(screen, Pt(screen->r.max.x - stringwidth(mediumfont, buf), screen->r.min.y), 
+    string(view, Pt(view->r.max.x - stringwidth(mediumfont, buf), view->r.min.y), 
         fg, ZP, mediumfont, buf);
     
     flushimage(display, 1);
@@ -566,7 +566,7 @@ newtask(ulong pid)
         fprint(wctlfd, "resize -dx %d -dy %d\n",
             Width + 20, (ntasks * Height) + 5);
     }else
-        Height = ntasks ? Dy(screen->r)/ntasks : Dy(screen->r);
+        Height = ntasks ? Dy(view->r)/ntasks : Dy(view->r);
     return t;
 }
 /*e: function newtask */
@@ -622,7 +622,7 @@ print("task died %ld %t %s\n", event->pid, event->time, schedstatename[event->et
             fprint(wctlfd, "resize -dx %d -dy %d\n",
                 Width + 20, (ntasks * Height) + 5);
         else
-            Height = ntasks ? Dy(screen->r)/ntasks : Dy(screen->r);
+            Height = ntasks ? Dy(view->r)/ntasks : Dy(view->r);
         prevts = 0;
     }
 }
@@ -676,10 +676,10 @@ drawtrace(void)
     if(initdraw(nil, nil, "trace") < 0)
         sysfatal("%s: initdraw failure: %r", argv0);
 
-    Width = Dx(screen->r);
-    Height = Dy(screen->r);
+    Width = Dx(view->r);
+    Height = Dy(view->r);
 
-    if((mousectl = initmouse(nil, screen)) == nil)
+    if((mousectl = initmouse(nil, view)) == nil)
         sysfatal("%s: cannot initialize mouse: %r", argv0);
 
     if((keyboardctl = initkeyboard(nil)) == nil)
@@ -706,18 +706,18 @@ drawtrace(void)
             if(getwindow(display, Refnone) < 0)
                 sysfatal("drawrt: Cannot re-attach window");
             if(newwin){
-                if(Dx(screen->r) != Width || 
-                    Dy(screen->r) != (ntasks * Height)){
+                if(Dx(view->r) != Width || 
+                    Dy(view->r) != (ntasks * Height)){
                     fprint(2, "resize: x: have %d, need %d; y: have %d, need %d\n",
-                            Dx(screen->r), Width + 8, Dy(screen->r), (ntasks * Height) + 8);
+                            Dx(view->r), Width + 8, Dy(view->r), (ntasks * Height) + 8);
                     fprint(wctlfd, "resize -dx %d -dy %d\n", 
                             Width + 8, (ntasks * Height) + 8);
                 }
             }
             else{
-                Width = Dx(screen->r);
-                Height = ntasks? Dy(screen->r)/ntasks: 
-                            Dy(screen->r);
+                Width = Dx(view->r);
+                Height = ntasks? Dy(view->r)/ntasks: 
+                            Dy(view->r);
             }
             break;
 

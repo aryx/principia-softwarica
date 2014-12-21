@@ -112,12 +112,12 @@ goodrect(Rectangle r)
     if(Dx(r)<100 || Dy(r)<3*font->height)
         return 0;
     /* must have some screen and border visible so we can move it out of the way */
-    if(Dx(r) >= Dx(screen->r) && Dy(r) >= Dy(screen->r))
+    if(Dx(r) >= Dx(view->r) && Dy(r) >= Dy(view->r))
         return 0;
     /* reasonable sizes only please */
-    if(Dx(r) > BIG*Dx(screen->r))
+    if(Dx(r) > BIG*Dx(view->r))
         return 0;
-    if(Dy(r) > BIG*Dx(screen->r))
+    if(Dy(r) > BIG*Dx(view->r))
         return 0;
     return 1;
 }
@@ -165,8 +165,8 @@ newrect(void)
     static int i = 0;
     int minx, miny, dx, dy;
 
-    dx = min(600, Dx(screen->r) - 2*Borderwidth);
-    dy = min(400, Dy(screen->r) - 2*Borderwidth);
+    dx = min(600, Dx(view->r) - 2*Borderwidth);
+    dy = min(400, Dy(view->r) - 2*Borderwidth);
     minx = 32 + 16*i;
     miny = 32 + 16*i;
     i++;
@@ -195,8 +195,8 @@ shift(int *minp, int *maxp, int min, int max)
 Rectangle
 rectonscreen(Rectangle r)
 {
-    shift(&r.min.x, &r.max.x, screen->r.min.x, screen->r.max.x);
-    shift(&r.min.y, &r.max.y, screen->r.min.y, screen->r.max.y);
+    shift(&r.min.x, &r.max.x, view->r.min.x, view->r.max.x);
+    shift(&r.min.y, &r.max.y, view->r.min.y, view->r.max.y);
     return r;
 }
 /*e: function rectonscreen */
@@ -327,7 +327,7 @@ parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hid
         }
     }
 
-    *rp = rectonscreen(rectaddpt(r, screen->r.min));
+    *rp = rectonscreen(rectaddpt(r, view->r.min));
 
     while(isspace(*s))
         s++;
@@ -367,7 +367,7 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
         argv[3] = nil;
     }
     if(hideit)
-        i = allocimage(display, rect, screen->chan, 0, DWhite);
+        i = allocimage(display, rect, view->chan, 0, DWhite);
     else
         i = allocwindow(wscreen, rect, Refbackup, DWhite);
     if(i == nil){
@@ -398,7 +398,7 @@ writewctl(Xfid *x, char *err)
     x->data[cnt] = '\0';
     id = 0;
 
-    rect = rectsubpt(w->screenr, screen->r.min);
+    rect = rectsubpt(w->screenr, view->r.min);
     cmd = parsewctl(&arg, rect, &rect, &pid, &id, &hideit, &scrollit, &dir, x->data, err);
     if(cmd < 0)
         return -1;

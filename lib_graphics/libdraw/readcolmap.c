@@ -28,7 +28,7 @@ readcolmap(Display *d, RGB *colmap)
     Biobuf *b;
     char buf[128];
 
-    USED(screen);
+    //USED(screen);
 
     sprint(buf, "/dev/draw/%d/colormap", d->dirno);
     b = Bopen(buf, OREAD);

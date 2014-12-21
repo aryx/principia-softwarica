@@ -106,16 +106,16 @@ drawbar(void)
     if(lastp != p){
         sprint(buf, "%d%%", p);
         
-        stringbg(screen, addpt(screen->r.min, Pt(Dx(rbar)-30, 4)), text, ZP, display->defaultfont, buf, light, ZP);
+        stringbg(view, addpt(view->r.min, Pt(Dx(rbar)-30, 4)), text, ZP, display->defaultfont, buf, light, ZP);
         lastp = p;
     }
 
     if(last != i){
         if(i > last)
-            draw(screen, Rect(rbar.min.x+last, rbar.min.y, rbar.min.x+i, rbar.max.y),
+            draw(view, Rect(rbar.min.x+last, rbar.min.y, rbar.min.x+i, rbar.max.y),
                 dark, nil, ZP);
         else
-            draw(screen, Rect(rbar.min.x+i, rbar.min.y, rbar.min.x+last, rbar.max.y),
+            draw(view, Rect(rbar.min.x+i, rbar.min.y, rbar.min.x+last, rbar.max.y),
                 light, nil, ZP);
         last = i;
     }
@@ -133,9 +133,9 @@ eresized(int new)
     if(new && getwindow(display, Refnone) < 0)
         fprint(2,"can't reattach to window");
 
-    r = screen->r;
-    draw(screen, r, light, nil, ZP);
-    p = string(screen, addpt(r.min, Pt(4,4)), text, ZP,
+    r = view->r;
+    draw(view, r, light, nil, ZP);
+    p = string(view, addpt(r.min, Pt(4,4)), text, ZP,
         display->defaultfont, title);
 
     p.x = r.min.x+4;
@@ -145,7 +145,7 @@ eresized(int new)
     rbar = Rpt(p, q);
 
     ptext = Pt(r.max.x-4-stringwidth(display->defaultfont, "100%"), r.min.x+4);
-    border(screen, rbar, -2, dark, ZP);
+    border(view, rbar, -2, dark, ZP);
     last = 0;
     lastp = -1;
 

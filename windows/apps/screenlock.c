@@ -203,15 +203,15 @@ grabmouse(void*)
         error("can't open /dev/mouse: %r");
 
     snprint(obuf, sizeof obuf, "m %d %d",
-        screen->r.min.x + Dx(screen->r)/2,
-        screen->r.min.y + Dy(screen->r)/2);
+        view->r.min.x + Dx(view->r)/2,
+        view->r.min.y + Dy(view->r)/2);
     while(read(fd, ibuf, sizeof ibuf) > 0){
         ibuf[12] = 0;
         ibuf[24] = 0;
         x = atoi(ibuf+1);
         y = atoi(ibuf+13);
-        if(x != screen->r.min.x + Dx(screen->r)/2 ||
-           y != screen->r.min.y + Dy(screen->r)/2){
+        if(x != view->r.min.x + Dx(view->r)/2 ||
+           y != view->r.min.y + Dy(view->r)/2){
             fprint(fd, "%s", obuf);
             doblank = 1;
         }
@@ -224,7 +224,7 @@ grabmouse(void*)
 static void
 screenstring(Point p, char *s)
 {
-    string(screen, p, screen->display->white, ZP, font, s);
+    string(view, p, view->display->white, ZP, font, s);
     flushimage(display, 1);
 }
 /*e: function screenstring */
@@ -266,16 +266,16 @@ lockscreen(void)
     if(fd > 0){
         i = readimage(display, fd, 0);
         if(i){
-    r = screen->r;
+    r = view->r;
             p = Pt(r.max.x / 2, r.max.y * 2 / 3); 
-            dx = (Dx(screen->r) - Dx(i->r)) / 2;
+            dx = (Dx(view->r) - Dx(i->r)) / 2;
             r.min.x += dx;
             r.max.x -= dx;
-            dy = (Dy(screen->r) - Dy(i->r)) / 2;
+            dy = (Dy(view->r) - Dy(i->r)) / 2;
             r.min.y += dy;
             r.max.y -= dy;
-            draw(screen, screen->r, display->black, nil, ZP);
-            draw(screen, r, i, nil, i->r.min);
+            draw(view, view->r, display->black, nil, ZP);
+            draw(view, r, i, nil, i->r.min);
             flushimage(display, 1);
         }
         close(fd);

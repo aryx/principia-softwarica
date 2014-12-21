@@ -251,7 +251,7 @@ xfidattach(Xfid *x)
             err = Ebadrect;
         else{
             if(hideit)
-                i = allocimage(display, r, screen->chan, 0, DWhite);
+                i = allocimage(display, r, view->chan, 0, DWhite);
             else
                 i = allocwindow(wscreen, r, Refbackup, DWhite);
             if(i){
@@ -665,7 +665,7 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
     int ww, y;
 
     offset -= 5*12;
-    ww = bytesperline(r, screen->depth);
+    ww = bytesperline(r, view->depth);
     r.min.y += offset/ww;
     if(r.min.y >= r.max.y)
         return 0;
@@ -821,7 +821,7 @@ xfidread(Xfid *x)
     caseImage:
         if(off < 5*12){
             n = sprint(buf, "%11s %11d %11d %11d %11d ",
-                chantostr(cbuf, screen->chan),
+                chantostr(cbuf, view->chan),
                 i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y);
             t = estrdup(buf);
             goto Text;

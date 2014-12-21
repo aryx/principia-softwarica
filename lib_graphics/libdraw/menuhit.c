@@ -45,8 +45,8 @@ menucolors(void)
 {
     /* Main tone is greenish, with negative selection */
     back = allocimagemix(display, DPalegreen, DWhite);
-    high = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DDarkgreen);	/* dark green */
-    bord = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DMedgreen);	/* not as dark green */
+    high = allocimage(display, Rect(0,0,1,1), view->chan, 1, DDarkgreen);	/* dark green */
+    bord = allocimage(display, Rect(0,0,1,1), view->chan, 1, DMedgreen);	/* not as dark green */
     if(back==nil || high==nil || bord==nil)
         goto Error;
     text = display->black;
@@ -176,7 +176,7 @@ menuscrollpaint(Image *m, Rectangle scrollr, int off, int nitem, int nitemdrawn)
         r.max.y = r.min.y+2;
     border(m, r, 1, bord, ZP);
     if(menutxt == 0)
-        menutxt = allocimage(display, Rect(0, 0, 1, 1), screen->chan, 1, DDarkgreen);	/* border color; BUG? */
+        menutxt = allocimage(display, Rect(0, 0, 1, 1), view->chan, 1, DDarkgreen);	/* border color; BUG? */
     if(menutxt)
         draw(m, insetrect(r, 1), menutxt, nil, ZP);
 }
@@ -195,8 +195,8 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
 
     if(back == nil)
         menucolors();
-    sc = screen->clipr;
-    replclipr(screen, 0, screen->r);
+    sc = view->clipr;
+    replclipr(view, 0, view->r);
     maxwid = 0;
     for(nitem = 0;
         item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
@@ -207,7 +207,7 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     }
     if(menu->lasthit<0 || menu->lasthit>=nitem)
         menu->lasthit = 0;
-    screenitem = (Dy(screen->r)-10)/(font->height+Vspacing);
+    screenitem = (Dy(view->r)-10)/(font->height+Vspacing);
     if(nitem>Maxunscroll || nitem>screenitem){
         scrolling = 1;
         nitemdrawn = Nscroll;
@@ -231,14 +231,14 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
     r = rectaddpt(r, mc->xy);
     pt = ZP;
-    if(r.max.x>screen->r.max.x)
-        pt.x = screen->r.max.x-r.max.x;
-    if(r.max.y>screen->r.max.y)
-        pt.y = screen->r.max.y-r.max.y;
-    if(r.min.x<screen->r.min.x)
-        pt.x = screen->r.min.x-r.min.x;
-    if(r.min.y<screen->r.min.y)
-        pt.y = screen->r.min.y-r.min.y;
+    if(r.max.x>view->r.max.x)
+        pt.x = view->r.max.x-r.max.x;
+    if(r.max.y>view->r.max.y)
+        pt.y = view->r.max.y-r.max.y;
+    if(r.min.x<view->r.min.x)
+        pt.x = view->r.min.x-r.min.x;
+    if(r.min.y<view->r.min.y)
+        pt.y = view->r.min.y-r.min.y;
     menur = rectaddpt(r, pt);
     textr.max.x = menur.max.x-Margin;
     textr.min.x = textr.max.x-maxwid;
@@ -253,17 +253,17 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     if(scr){
         b = allocwindow(scr, menur, Refbackup, DWhite);
         if(b == nil)
-            b = screen;
+            b = view;
         backup = nil;
     }else{
-        b = screen;
-        backup = allocimage(display, menur, screen->chan, 0, -1);
+        b = view;
+        backup = allocimage(display, menur, view->chan, 0, -1);
         if(backup)
-            draw(backup, menur, screen, nil, menur.min);
+            draw(backup, menur, view, nil, menur.min);
     }
     draw(b, menur, back, nil, ZP);
     border(b, menur, Blackborder, bord, ZP);
-    save = allocimage(display, menurect(textr, 0), screen->chan, 0, -1);
+    save = allocimage(display, menurect(textr, 0), view->chan, 0, -1);
     r = menurect(textr, lasti);
     moveto(mc, divpt(addpt(r.min, r.max), 2));
     menupaint(b, menu, textr, off, nitemdrawn);
@@ -290,14 +290,14 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
             readmouse(mc);
         }
     }
-    if(b != screen)
+    if(b != view)
         freeimage(b);
     if(backup){
-        draw(screen, menur, backup, nil, menur.min);
+        draw(view, menur, backup, nil, menur.min);
         freeimage(backup);
     }
     freeimage(save);
-    replclipr(screen, 0, sc);
+    replclipr(view, 0, sc);
     flushimage(display, 1);
     if(lasti >= 0){
         menu->lasthit = lasti+off;

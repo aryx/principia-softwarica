@@ -249,7 +249,7 @@ label(Point p, int dy, char *text)
 		w = runestringwidth(mediumfont, r);
 		if(w > maxw)
 			maxw = w;
-		runestring(screen, p, display->black, ZP, mediumfont, r);
+		runestring(view, p, display->black, ZP, mediumfont, r);
 		p.y += mediumfont->height-Ysqueeze;
 	}
 }
@@ -262,9 +262,9 @@ hashmark(Point p, int dy, long v, long vmax, char *label)
 
 	x = p.x + Labspace;
 	y = p.y + (dy*(vmax-v))/vmax;
-	draw(screen, Rect(p.x, y-1, p.x+Labspace, y+1), display->black, nil, ZP);
+	draw(view, Rect(p.x, y-1, p.x+Labspace, y+1), display->black, nil, ZP);
 	if(dy > 5*mediumfont->height)
-		string(screen, Pt(x, y-mediumfont->height/2),
+		string(view, Pt(x, y-mediumfont->height/2),
 			display->black, ZP, mediumfont, label);
 }
 
@@ -316,13 +316,13 @@ drawdatum(Graph *g, int x, long prev, long v, long vmax)
 	p = datapoint(g, x, v, vmax);
 	q = datapoint(g, x, prev, vmax);
 	if(p.y < q.y){
-		draw(screen, Rect(p.x, g->r.min.y, p.x+1, p.y), cols[c][0], nil, paritypt(p.x));
-		draw(screen, Rect(p.x, p.y, p.x+1, q.y+Dot), cols[c][2], nil, ZP);
-		draw(screen, Rect(p.x, q.y+Dot, p.x+1, g->r.max.y), cols[c][1], nil, ZP);
+		draw(view, Rect(p.x, g->r.min.y, p.x+1, p.y), cols[c][0], nil, paritypt(p.x));
+		draw(view, Rect(p.x, p.y, p.x+1, q.y+Dot), cols[c][2], nil, ZP);
+		draw(view, Rect(p.x, q.y+Dot, p.x+1, g->r.max.y), cols[c][1], nil, ZP);
 	}else{
-		draw(screen, Rect(p.x, g->r.min.y, p.x+1, q.y), cols[c][0], nil, paritypt(p.x));
-		draw(screen, Rect(p.x, q.y, p.x+1, p.y+Dot), cols[c][2], nil, ZP);
-		draw(screen, Rect(p.x, p.y+Dot, p.x+1, g->r.max.y), cols[c][1], nil, ZP);
+		draw(view, Rect(p.x, g->r.min.y, p.x+1, q.y), cols[c][0], nil, paritypt(p.x));
+		draw(view, Rect(p.x, q.y, p.x+1, p.y+Dot), cols[c][2], nil, ZP);
+		draw(view, Rect(p.x, p.y+Dot, p.x+1, g->r.max.y), cols[c][1], nil, ZP);
 	}
 	g->vmax = vmax;
 }
@@ -333,7 +333,7 @@ drawmark(Graph *g, int x)
 	int c;
 
 	c = (g->colindex+1)&Ncolor;
-	draw(screen, Rect(x, g->r.min.y, x+1, g->r.max.y), cols[c][2], nil, ZP);
+	draw(view, Rect(x, g->r.min.y, x+1, g->r.max.y), cols[c][2], nil, ZP);
 }
 
 void
@@ -342,7 +342,7 @@ redraw(Graph *g, int vmax)
 	int i, c;
 
 	c = g->colindex;
-	draw(screen, g->r, cols[c][0], nil, paritypt(g->r.min.x));
+	draw(view, g->r, cols[c][0], nil, paritypt(g->r.min.x));
 	for(i=1; i<Dx(g->r); i++)
 		drawdatum(g, g->r.max.x-i, g->data[i-1], g->data[i], vmax);
 	drawdatum(g, g->r.min.x, g->data[i], g->data[i], vmax);
@@ -352,7 +352,7 @@ void
 clearmsg(Graph *g)
 {
 	if(g->overtmp != nil)
-		draw(screen, g->overtmp->r, g->overtmp, nil, g->overtmp->r.min);
+		draw(view, g->overtmp->r, g->overtmp, nil, g->overtmp->r.min);
 	g->overflow = 0;
 }
 
@@ -362,13 +362,13 @@ drawmsg(Graph *g, char *msg)
 	if(g->overtmp == nil)
 		return;
 
-	/* save previous contents of screen */
-	draw(g->overtmp, g->overtmp->r, screen, nil, g->overtmp->r.min);
+	/* save previous contents of view */
+	draw(g->overtmp, g->overtmp->r, view, nil, g->overtmp->r.min);
 
 	/* draw message */
 	if(strlen(msg) > g->overtmplen)
 		msg[g->overtmplen] = 0;
-	string(screen, g->overtmp->r.min, display->black, ZP, mediumfont, msg);
+	string(view, g->overtmp->r.min, display->black, ZP, mediumfont, msg);
 }
 
 void
@@ -396,7 +396,7 @@ drawcursor(Graph *g, int x)
 	if(g->overtmp == nil)
 		return;
 
-	draw(screen, Rect(x, g->r.min.y, x+1, g->r.max.y), cols[g->colindex][2], nil, ZP);
+	draw(view, Rect(x, g->r.min.y, x+1, g->r.max.y), cols[g->colindex][2], nil, ZP);
 }
 
 void
@@ -404,13 +404,13 @@ update1(Graph *g, long v, long vmax, long mark)
 {
 	char buf[Gmsglen];
 
-	/* put back screen value sans message */
+	/* put back view value sans message */
 	if(g->overflow || *g->msg){
 		clearmsg(g);
 		g->overflow = 0;
 	}
 
-	draw(screen, g->r, screen, nil, Pt(g->r.min.x+1, g->r.min.y));
+	draw(view, g->r, view, nil, Pt(g->r.min.x+1, g->r.min.y));
 	drawdatum(g, g->r.max.x-1, g->data[0], v, vmax);
 	if(mark)
 		drawmark(g, g->r.max.x-1);
@@ -769,38 +769,38 @@ resize(void)
 	long v, vmax, mark;
 	char buf[128];
 
-	draw(screen, screen->r, display->white, nil, ZP);
+	draw(view, view->r, display->white, nil, ZP);
 
 	/* label left edge */
-	x = screen->r.min.x;
-	y = screen->r.min.y + Labspace+mediumfont->height+Labspace;
-	dy = (screen->r.max.y - y)/ngraph;
+	x = view->r.min.x;
+	y = view->r.min.y + Labspace+mediumfont->height+Labspace;
+	dy = (view->r.max.y - y)/ngraph;
 	dx = Labspace+stringwidth(mediumfont, "0")+Labspace;
 	startx = x+dx+1;
 	starty = y;
 	for(i=0; i<ngraph; i++,y+=dy){
-		draw(screen, Rect(x, y-1, screen->r.max.x, y), display->black, nil, ZP);
-		draw(screen, Rect(x, y, x+dx, screen->r.max.y), cols[graph[i].colindex][0], nil, paritypt(x));
+		draw(view, Rect(x, y-1, view->r.max.x, y), display->black, nil, ZP);
+		draw(view, Rect(x, y, x+dx, view->r.max.y), cols[graph[i].colindex][0], nil, paritypt(x));
 		label(Pt(x, y), dy, graph[i].label);
-		draw(screen, Rect(x+dx, y, x+dx+1, screen->r.max.y), cols[graph[i].colindex][2], nil, ZP);
+		draw(view, Rect(x+dx, y, x+dx+1, view->r.max.y), cols[graph[i].colindex][2], nil, ZP);
 	}
 
 	/* label right edge */
 	dx = Labspace+stringwidth(mediumfont, "0.001")+Labspace;
 	hashdx = dx;
-	x = screen->r.max.x - dx;
-	y = screen->r.min.y + Labspace+mediumfont->height+Labspace;
+	x = view->r.max.x - dx;
+	y = view->r.min.y + Labspace+mediumfont->height+Labspace;
 	for(i=0; i<ngraph; i++,y+=dy){
-		draw(screen, Rect(x, y-1, screen->r.max.x, y), display->black, nil, ZP);
-		draw(screen, Rect(x, y, x+dx, screen->r.max.y), cols[graph[i].colindex][0], nil, paritypt(x));
+		draw(view, Rect(x, y-1, view->r.max.x, y), display->black, nil, ZP);
+		draw(view, Rect(x, y, x+dx, view->r.max.y), cols[graph[i].colindex][0], nil, paritypt(x));
 		hashmarks(Pt(x, y), dy, i);
-		draw(screen, Rect(x+dx, y, x+dx+1, screen->r.max.y), cols[graph[i].colindex][2], nil, ZP);
+		draw(view, Rect(x+dx, y, x+dx+1, view->r.max.y), cols[graph[i].colindex][2], nil, ZP);
 	}
 
 	/* label top edge */
-	dx = (screen->r.max.x - dx - startx)/nmach;
+	dx = (view->r.max.x - dx - startx)/nmach;
 	for(x=startx, i=0; i<nmach; i++,x+=dx){
-		draw(screen, Rect(x-1, starty-1, x, screen->r.max.y), display->black, nil, ZP);
+		draw(view, Rect(x-1, starty-1, x, view->r.max.y), display->black, nil, ZP);
 		j = dx/stringwidth(mediumfont, "0");
 		n = mach[i].nproc;
 		if(n>1 && j>=1+3+(n>10)+(n>100)){	/* first char of name + (n) */
@@ -810,21 +810,21 @@ resize(void)
 			snprint(buf, sizeof buf, "%.*s(%d)", j, mach[i].name, n);
 		}else
 			snprint(buf, sizeof buf, "%.*s", j, mach[i].name);
-		string(screen, Pt(x+Labspace, screen->r.min.y + Labspace), display->black, ZP,
+		string(view, Pt(x+Labspace, view->r.min.y + Labspace), display->black, ZP,
 			mediumfont, buf);
 	}
 	/* draw last vertical line */
-	draw(screen,
-		Rect(screen->r.max.x-hashdx-1, starty-1, screen->r.max.x-hashdx, screen->r.max.y),
+	draw(view,
+		Rect(view->r.max.x-hashdx-1, starty-1, view->r.max.x-hashdx, view->r.max.y),
 		display->black, nil, ZP);
 
 	/* create graphs */
 	for(i=0; i<nmach; i++){
-		machr = Rect(startx+i*dx, starty, screen->r.max.x, screen->r.max.y);
+		machr = Rect(startx+i*dx, starty, view->r.max.x, view->r.max.y);
 		if(i < nmach-1)
 			machr.max.x = startx+(i+1)*dx - 1;
 		else
-			machr.max.x = screen->r.max.x - hashdx - 1;
+			machr.max.x = view->r.max.x - hashdx - 1;
 		y = starty;
 		for(j=0; j<ngraph; j++, y+=dy){
 			g = &graph[i*ngraph+j];
@@ -839,8 +839,8 @@ resize(void)
 			g->r.min.y = y;
 			g->r.max.y = y+dy - 1;
 			if(j == ngraph-1)
-				g->r.max.y = screen->r.max.y;
-			draw(screen, g->r, cols[g->colindex][0], nil, paritypt(g->r.min.x));
+				g->r.max.y = view->r.max.y;
+			draw(view, g->r, cols[g->colindex][0], nil, paritypt(g->r.min.x));
 			g->overflow = 0;
 			*g->msg = 0;
 			freeimage(g->overtmp);
@@ -854,7 +854,7 @@ resize(void)
 					n = Gmsglen;
 				r.max.x = r.min.x+stringwidth(mediumfont, "9")*n;
 				g->overtmplen = n;
-				g->overtmp = allocimage(display, r, screen->chan, 0, -1);
+				g->overtmp = allocimage(display, r, view->chan, 0, -1);
 			}
 			g->newvalue(g->mach, &v, &vmax, &mark);
 			redraw(g, vmax);

@@ -151,10 +151,10 @@ drawnowin(int i)
 {
     Rectangle r;
 
-    r = Rect(0,0,(Dx(screen->r)-2*MARGIN+PAD)/cols-PAD, font->height);
+    r = Rect(0,0,(Dx(view->r)-2*MARGIN+PAD)/cols-PAD, font->height);
     r = rectaddpt(rectaddpt(r, Pt(MARGIN+(PAD+Dx(r))*(i/rows),
-                MARGIN+(PAD+Dy(r))*(i%rows))), screen->r.min);
-    draw(screen, insetrect(r, -1), lightblue, nil, ZP);
+                MARGIN+(PAD+Dy(r))*(i%rows))), view->r.min);
+    draw(view, insetrect(r, -1), lightblue, nil, ZP);
 }
 /*e: function drawnowin */
 
@@ -162,11 +162,11 @@ drawnowin(int i)
 static void
 drawwin(int i)
 {
-    draw(screen, win[i].r, lightblue, nil, ZP);
-    _string(screen, addpt(win[i].r.min, Pt(2,0)), display->black, ZP,
+    draw(view, win[i].r, lightblue, nil, ZP);
+    _string(view, addpt(win[i].r.min, Pt(2,0)), display->black, ZP,
         font, win[i].label, nil, strlen(win[i].label), 
         win[i].r, nil, ZP, SoverD);
-    border(screen, win[i].r, 1, display->black, ZP);	
+    border(view, win[i].r, 1, display->black, ZP);	
     win[i].dirty = 0;
 }
 /*e: function drawwin */
@@ -179,7 +179,7 @@ geometry(void)
     Rectangle r;
 
     z = 0;
-    rows = (Dy(screen->r)-2*MARGIN+PAD)/(font->height+PAD);
+    rows = (Dy(view->r)-2*MARGIN+PAD)/(font->height+PAD);
     if(rows*cols < nwin || rows*cols >= nwin*2){
         ncols = nwin <= 0 ? 1 : (nwin+rows-1)/rows;
         if(ncols != cols){
@@ -188,10 +188,10 @@ geometry(void)
         }
     }
 
-    r = Rect(0,0,(Dx(screen->r)-2*MARGIN+PAD)/cols-PAD, font->height);
+    r = Rect(0,0,(Dx(view->r)-2*MARGIN+PAD)/cols-PAD, font->height);
     for(i=0; i<nwin; i++)
         win[i].r = rectaddpt(rectaddpt(r, Pt(MARGIN+(PAD+Dx(r))*(i/rows),
-                    MARGIN+(PAD+Dy(r))*(i%rows))), screen->r.min);
+                    MARGIN+(PAD+Dy(r))*(i%rows))), view->r.min);
 
     return z;
 }
@@ -199,13 +199,13 @@ geometry(void)
 
 /*s: function redraw (windows/apps/winwatch.c) */
 static void
-redraw(Image *screen, int all)
+redraw(Image *view, int all)
 {
     int i;
 
     all |= geometry();
     if(all)
-        draw(screen, screen->r, lightblue, nil, ZP);
+        draw(view, view->r, lightblue, nil, ZP);
     for(i=0; i<nwin; i++)
         if(all || win[i].dirty)
             drawwin(i);
@@ -224,7 +224,7 @@ eresized(int new)
     if(new && getwindow(display, Refmesg) < 0)
         fprint(2,"can't reattach to window");
     geometry();
-    redraw(screen, 1);
+    redraw(view, 1);
 }
 /*e: function eresized (windows/apps/winwatch.c) */
 
@@ -313,7 +313,7 @@ main(int argc, char **argv)
         sysfatal("font '%s' not found", fontname);
 
     refreshwin();
-    redraw(screen, 1);
+    redraw(view, 1);
     einit(Emouse|Ekeyboard);
     Etimer = etimer(0, 2500);
 
@@ -329,7 +329,7 @@ main(int argc, char **argv)
             /* fall through  */
         default:	/* Etimer */
             refreshwin();
-            redraw(screen, 0);
+            redraw(view, 0);
             break;
         }
     }

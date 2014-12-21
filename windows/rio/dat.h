@@ -407,7 +407,7 @@ extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 extern Keyboardctl	*keyboardctl;
 
-extern Image	*view;
+//extern Image	*view;
 extern Screen	*wscreen;
 extern Cursor	boxcursor;
 extern Cursor	crosscursor;

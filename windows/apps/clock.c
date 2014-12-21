@@ -22,7 +22,7 @@ circlept(Point c, int r, int degrees)
 
 /*s: function redraw */
 static void
-redraw(Image *screen)
+redraw(Image *view)
 {
     static int tm, ntm;
     static Rectangle r;
@@ -35,7 +35,7 @@ redraw(Image *screen)
     static Tm ntms;
 
     ntm = time(0);
-    if(ntm == tm && eqrect(screen->r, r))
+    if(ntm == tm && eqrect(view->r, r))
         return;
 
     ntms = *localtime(ntm);
@@ -43,18 +43,18 @@ redraw(Image *screen)
     angmin = 90-ntms.min*6;
     tm = ntm;
     tms = ntms;
-    r = screen->r;
+    r = view->r;
     c = divpt(addpt(r.min, r.max), 2);
     rad = Dx(r) < Dy(r) ? Dx(r) : Dy(r);
     rad /= 2;
     rad -= 8;
 
-    draw(screen, screen->r, back, nil, ZP);
+    draw(view, view->r, back, nil, ZP);
     for(i=0; i<12; i++)
-        fillellipse(screen, circlept(c, rad, i*(360/12)), 2, 2, dots, ZP);
+        fillellipse(view, circlept(c, rad, i*(360/12)), 2, 2, dots, ZP);
 
-    line(screen, c, circlept(c, (rad*3)/4, angmin), 0, 0, 1, minhand, ZP);
-    line(screen, c, circlept(c, rad/2, anghr), 0, 0, 1, hrhand, ZP);
+    line(view, c, circlept(c, (rad*3)/4, angmin), 0, 0, 1, minhand, ZP);
+    line(view, c, circlept(c, rad/2, anghr), 0, 0, 1, hrhand, ZP);
 
     flushimage(display, 1);
 }
@@ -66,7 +66,7 @@ eresized(int new)
 {
     if(new && getwindow(display, Refnone) < 0)
         fprint(2,"can't reattach to window");
-    redraw(screen);
+    redraw(view);
 }
 /*e: function eresized */
 
@@ -88,7 +88,7 @@ main(int, char**)
     hrhand = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkblue);
     minhand = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPaleblue);
     dots = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DBlue);
-    redraw(screen);
+    redraw(view);
 
     einit(Emouse);
     t = (30*1000);
@@ -106,7 +106,7 @@ main(int, char**)
                     exits(0);
             }
         } else if(key == timer) {
-            redraw(screen);
+            redraw(view);
         }
     }	
 }

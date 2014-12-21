@@ -109,25 +109,25 @@ edrawgetrect(Rectangle rc, int up)
             freetmp();
 
     if(tmp[0] == 0){
-        r = Rect(0, 0, Dx(screen->r), W);
-        tmp[0] = allocimage(display, r, screen->chan, 0, -1);
-        tmp[1] = allocimage(display, r, screen->chan, 0, -1);
-        r = Rect(0, 0, W, Dy(screen->r));
-        tmp[2] = allocimage(display, r, screen->chan, 0, -1);
-        tmp[3] = allocimage(display, r, screen->chan, 0, -1);
-        red = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DRed);
+        r = Rect(0, 0, Dx(view->r), W);
+        tmp[0] = allocimage(display, r, view->chan, 0, -1);
+        tmp[1] = allocimage(display, r, view->chan, 0, -1);
+        r = Rect(0, 0, W, Dy(view->r));
+        tmp[2] = allocimage(display, r, view->chan, 0, -1);
+        tmp[3] = allocimage(display, r, view->chan, 0, -1);
+        red = allocimage(display, Rect(0,0,1,1), view->chan, 1, DRed);
         if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0)
             drawerror(display, "getrect: allocimage failed");
     }
     brects(rc, rects);
     if(!up){
         for(i=0; i<4; i++)
-            draw(screen, rects[i], tmp[i], nil, ZP);
+            draw(view, rects[i], tmp[i], nil, ZP);
         return;
     }
     for(i=0; i<4; i++){
-        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), screen, nil, rects[i].min);
-        draw(screen, rects[i], red, nil, ZP);
+        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), view, nil, rects[i].min);
+        draw(view, rects[i], red, nil, ZP);
     }
 }
 /*e: function edrawgetrect */

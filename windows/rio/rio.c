@@ -226,13 +226,12 @@ void threadmain(int argc, char *argv[])
         exits("display open");
     }
 
-    view = screen;
     viewr = view->r;
 
     iconinit(); // allocate background and red images
 
     /*s: [[main()]] mouse initialisation */
-    mousectl = initmouse(nil, screen);
+    mousectl = initmouse(nil, view);
     if(mousectl == nil)
         error("can't find mouse");
     mouse = mousectl;
@@ -243,7 +242,7 @@ void threadmain(int argc, char *argv[])
         error("can't find keyboard");
     /*e: [[main()]] keyboard initialisation */
 
-    wscreen = allocscreen(screen, background, 0);
+    wscreen = allocscreen(view, background, 0);
     if(wscreen == nil)
         error("can't allocate screen");
     
@@ -276,7 +275,7 @@ void threadmain(int argc, char *argv[])
         /*x: [[main()]] if initstr or kdbin */
         if(kbdin){
             kbdargv[2] = kbdin;
-            r = screen->r;
+            r = view->r;
             r.max.x = r.min.x+300;
             r.max.y = r.min.y+80;
             i = allocwindow(wscreen, r, Refbackup, DWhite);
@@ -781,9 +780,8 @@ resized(void)
     if(getwindow(display, Refnone) < 0)
         error("failed to re-attach window");
     freescrtemps();
-    view = screen;
     freescreen(wscreen);
-    wscreen = allocscreen(screen, background, 0);
+    wscreen = allocscreen(view, background, 0);
     if(wscreen == nil)
         error("can't re-allocate screen");
     draw(view, view->r, background, nil, ZP);
@@ -798,7 +796,7 @@ resized(void)
         r.min.y = (r.min.y*n.y)/o.y;
         r.max.x = (r.max.x*n.x)/o.x;
         r.max.y = (r.max.y*n.y)/o.y;
-        r = rectaddpt(r, screen->clipr.min);
+        r = rectaddpt(r, view->clipr.min);
         ishidden = 0;
         for(j=0; j<nhidden; j++)
             if(w == hidden[j]){
@@ -806,14 +804,14 @@ resized(void)
                 break;
             }
         if(ishidden){
-            im = allocimage(display, r, screen->chan, 0, DWhite);
+            im = allocimage(display, r, view->chan, 0, DWhite);
             r = ZR;
         }else
             im = allocwindow(wscreen, r, Refbackup, DWhite);
         if(im)
             wsendctlmesg(w, Reshaped, r, im);
     }
-    viewr = screen->r;
+    viewr = view->r;
     flushimage(display, 1);
 }
 /*e: function resized */
@@ -939,10 +937,10 @@ button2menu(Window *w)
 Point
 onscreen(Point p)
 {
-    p.x = max(screen->clipr.min.x, p.x);
-    p.x = min(screen->clipr.max.x, p.x);
-    p.y = max(screen->clipr.min.y, p.y);
-    p.y = min(screen->clipr.max.y, p.y);
+    p.x = max(view->clipr.min.x, p.x);
+    p.x = min(view->clipr.max.x, p.x);
+    p.y = max(view->clipr.min.y, p.y);
+    p.y = min(view->clipr.max.y, p.y);
     return p;
 }
 /*e: function onscreen */

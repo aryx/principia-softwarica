@@ -26,7 +26,7 @@ Keyboardctl	*keyboardctl;
 /*e: global keyboardctl */
 
 /*s: global view */
-Image	*view;
+//Image	*view;
 /*e: global view */
 /*s: global wscreen */
 Screen	*wscreen;

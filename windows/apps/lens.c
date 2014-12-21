@@ -79,10 +79,10 @@ void
 drawit(void)
 {
     Rectangle r;
-    border(screen, screen->r, Edge, red, ZP);
+    border(view, view->r, Edge, red, ZP);
     magnify();
-    r = insetrect(screen->r, Edge);
-    draw(screen, r, tmp, nil, tmp->r.min);
+    r = insetrect(view->r, Edge);
+    draw(view, r, tmp, nil, tmp->r.min);
     flushimage(display, true);
 }
 /*e: function drawit */
@@ -113,7 +113,7 @@ main(int argc, char *argv[])
 
     draw(chequer, Rect(0, 0, 1, 1), display->white, nil, ZP);
     draw(chequer, Rect(1, 1, 2, 2), display->white, nil, ZP);
-    lastp = divpt(addpt(screen->r.min, screen->r.max), 2);
+    lastp = divpt(addpt(view->r.min, view->r.max), 2);
     screenfd = open("/dev/screen", OREAD);
     if(screenfd < 0){
         fprint(2, "lens: can't open /dev/screen: %r\n");
@@ -243,7 +243,7 @@ eresized(int new)
         exits("attach");
     }
     freeimage(tmp);
-    tmp = allocimage(display, Rect(0, 0, Dx(screen->r)-Edge, Dy(screen->r)-Edge+Maxmag), screen->chan, 0, DNofill);
+    tmp = allocimage(display, Rect(0, 0, Dx(view->r)-Edge, Dy(view->r)-Edge+Maxmag), view->chan, 0, DNofill);
     if(tmp == nil){
         fprint(2, "lens: allocimage failed: %r\n");
         exits("allocimage");

@@ -98,7 +98,7 @@ init(void)
 
 	/* make background color */
 	bgrnd = allocimagemix(display, DPalebluegreen, DWhite);
-	blue = allocimage(display, Rect(0,0,1,1), screen->chan, 1, 0x008888FF);	/* blue-green */
+	blue = allocimage(display, Rect(0,0,1,1), view->chan, 1, 0x008888FF);	/* blue-green */
 	left = allocimage(display, leftright, GREY1, 0, DWhite);
 	right = allocimage(display, leftright, GREY1, 0, DWhite);
 	if(bgrnd==nil || blue==nil || left==nil || right==nil){
@@ -129,7 +129,7 @@ drawtime(void)
 {
 	Rectangle r;
 
-	r.min = addpt(screen->r.min, datep);
+	r.min = addpt(view->r.min, datep);
 	if(eqpt(enddate, ZP)){
 		enddate = r.min;
 		enddate.x += stringwidth(datefont, "Wed May 30 22:54");	/* nice wide string */
@@ -137,8 +137,8 @@ drawtime(void)
 	}
 	r.max.x = enddate.x;
 	r.max.y = enddate.y+datefont->height;
-	draw(screen, r, bgrnd, nil, ZP);
-	string(screen, r.min, display->black, ZP, datefont, date);
+	draw(view, r, bgrnd, nil, ZP);
+	string(view, r.min, display->black, ZP, datefont, date);
 }
 
 void
@@ -205,7 +205,7 @@ center(Font *f, Point p, char *s, Image *color)
 		dx = stringwidth(f, s);
 	}
 	p.x += (Facesize-dx)/2;
-	string(screen, p, color, ZP, f, s);
+	string(view, p, color, ZP, f, s);
 }
 
 Rectangle
@@ -216,12 +216,12 @@ facerect(int index)	/* index is geometric; 0 is always upper left face */
 
 	x = index % nacross;
 	y = index / nacross;
-	r.min = addpt(screen->r.min, facep);
+	r.min = addpt(view->r.min, facep);
 	r.min.x += x*(Facesize+Facesep);
 	r.min.y += y*(Facesize+Facesep+2*mediumfont->height);
 	r.max = addpt(r.min, Pt(Facesize, Facesize));
 	r.max.y += 2*mediumfont->height;
-	/* simple fix to avoid drawing off screen, allowing customers to use position */
+	/* simple fix to avoid drawing off view, allowing customers to use position */
 	if(index<0 || index>=nacross*ndown)
 		r.max.x = r.min.x;
 	return r;
@@ -256,8 +256,8 @@ drawface(Face *f, int i)
 	if(i<first || i>=last)
 		return;
 	r = facerect(i-first);
-	draw(screen, r, bgrnd, nil, ZP);
-	draw(screen, r, f->bit, f->mask, ZP);
+	draw(view, r, bgrnd, nil, ZP);
+	draw(view, r, f->bit, f->mask, ZP);
 	r.min.y += Facesize;
 	center(mediumfont, r.min, f->str[Suser], display->black);
 	r.min.y += mediumfont->height;
@@ -307,8 +307,8 @@ drawarrows(void)
 	leftr = rectaddpt(leftright, p);
 	p.x += Dx(leftright) + Facesep;
 	rightr = rectaddpt(leftright, p);
-	draw(screen, leftr, first>0? blue : bgrnd, left, leftright.min);
-	draw(screen, rightr, last<nfaces? blue : bgrnd, right, leftright.min);
+	draw(view, leftr, first>0? blue : bgrnd, left, leftright.min);
+	draw(view, rightr, last<nfaces? blue : bgrnd, right, leftright.min);
 }
 
 void
@@ -336,11 +336,11 @@ addface(Face *f)	/* always adds at 0 */
 		r1 = facerect(y*nx+1);
 		r = r1;
 		r.max.x = r.min.x + (nx - 1)*(Facesize+Facesep);
-		draw(screen, r, screen, nil, r0.min);
+		draw(view, r, view, nil, r0.min);
 		/* copy one down from row above */
 		if(y != 0){
 			r = facerect((y-1)*nx+nx-1);
-			draw(screen, r0, screen, nil, r.min);
+			draw(view, r0, view, nil, r.min);
 		}
 	}
 
@@ -408,12 +408,12 @@ delface(int j)
 				r1 = facerect(y*nx+x+1);
 				r = r0;
 				r.max.x = r.min.x + (nx - x - 1)*(Facesize+Facesep);
-				draw(screen, r, screen, nil, r1.min);
+				draw(view, r, view, nil, r1.min);
 			}
 			if(y != ny-1){
 				/* copy one up from row below */
 				r = facerect((y+1)*nx);
-				draw(screen, facerect(y*nx+nx-1), screen, nil, r.min);
+				draw(view, facerect(y*nx+nx-1), view, nil, r.min);
 			}
 			x = 0;
 		}
@@ -422,7 +422,7 @@ delface(int j)
 		else{
 			/* clear final spot */
 			r = facerect(last-first-1);
-			draw(screen, r, bgrnd, nil, r.min);
+			draw(view, r, bgrnd, nil, r.min);
 		}
 	}
 	freeface(faces[j]);
@@ -483,11 +483,11 @@ resized(void)
 {
 	int i;
 
-	nacross = (Dx(screen->r)-2*facep.x+Facesep)/(Facesize+Facesep);
-	for(ndown=1; rectinrect(facerect(ndown*nacross), screen->r); ndown++)
+	nacross = (Dx(view->r)-2*facep.x+Facesep)/(Facesize+Facesep);
+	for(ndown=1; rectinrect(facerect(ndown*nacross), view->r); ndown++)
 		;
 	setlast();
-	draw(screen, screen->r, bgrnd, nil, ZP);
+	draw(view, view->r, bgrnd, nil, ZP);
 	enddate = ZP;
 	drawtime();
 	for(i=0; i<nfaces; i++)
