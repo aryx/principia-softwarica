@@ -64,14 +64,14 @@ wininit(Window *w, Window *clone, Rectangle r)
 	textinit(&w->body, f, r1, rf, textcols);
 	r1.min.y -= 1;
 	r1.max.y = r1.min.y+1;
-	draw(screen, r1, tagcols[BORD], nil, ZP);
+	draw(view, r1, tagcols[BORD], nil, ZP);
 	textscrdraw(&w->body);
 	w->r = r;
 	w->r.max.y = w->body.r.max.y;
 	br.min = w->tag.scrollr.min;
 	br.max.x = br.min.x + Dx(button->r);
 	br.max.y = br.min.y + Dy(button->r);
-	draw(screen, br, button, nil, button->r.min);
+	draw(view, br, button, nil, button->r.min);
 	w->filemenu = TRUE;
 	w->maxlines = w->body.maxlines;
 	w->autoindent = globalautoindent;
@@ -102,7 +102,7 @@ winresize(Window *w, Rectangle r, int safe)
 		br.min = w->tag.scrollr.min;
 		br.max.x = br.min.x + Dx(b->r);
 		br.max.y = br.min.y + Dy(b->r);
-		draw(screen, br, b, nil, b->r.min);
+		draw(view, br, b, nil, b->r.min);
 	}
 	if(!safe || !eqrect(w->body.r, r1)){
 		if(y+1+font->height > r.max.y){		/* no body */
@@ -116,7 +116,7 @@ winresize(Window *w, Rectangle r, int safe)
 		r1 = r;
 		r1.min.y = y;
 		r1.max.y = y + 1;
-		draw(screen, r1, tagcols[BORD], nil, ZP);
+		draw(view, r1, tagcols[BORD], nil, ZP);
 		r1.min.y = y + 1;
 		r1.max.y = r.max.y;
 		y = textresize(&w->body, r1);
@@ -413,7 +413,7 @@ winsettag1(Window *w)
 	br.min = w->tag.scrollr.min;
 	br.max.x = br.min.x + Dx(b->r);
 	br.max.y = br.min.y + Dy(b->r);
-	draw(screen, br, b, nil, b->r.min);
+	draw(view, br, b, nil, b->r.min);
 }
 
 void

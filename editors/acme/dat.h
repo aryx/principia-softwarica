@@ -493,10 +493,10 @@ uint		seq;
 uint		maxtab;	/* size of a tab, in units of the '0' character */
 
 Display		*display;
-Image		*screen;
-Font			*font;
+Image		*view; // was screen before
+Font		*font;
 Mouse		*mouse;
-Mousectl		*mousectl;
+Mousectl	*mousectl;
 Keyboardctl	*keyboardctl;
 Reffont		reffont;
 Image		*modbutton;

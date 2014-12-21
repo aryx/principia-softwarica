@@ -64,7 +64,7 @@ struct Memimage
     /*s: [[MemImage]] other fields */
     int		zero;		/* data->bdata+zero==&byte containing (0,0) */
     ulong	width;	/* width in words of a single scan line */
-
+    /*x: [[MemImage]] other fields */
     int		shift[NChan];
     int		mask[NChan];
     int		nbits[NChan];
@@ -130,6 +130,7 @@ struct	Memdrawparam
     Rectangle sr;
     Memimage *mask;
     Rectangle mr;
+
     int op;
 
     ulong state;

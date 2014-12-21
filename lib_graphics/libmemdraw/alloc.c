@@ -147,13 +147,14 @@ wordaddr(Memimage *i, Point p)
 /*e: function wordaddr */
 
 /*s: function byteaddr */
-uchar*
+byte*
 byteaddr(Memimage *i, Point p)
 {
-    uchar *a;
+    byte *a;
 
     a = i->data->bdata + i->zero + sizeof(ulong) * p.y * i->width;
 
+    /*s: [[byteaddr()]] if depth less than 8 */
     if(i->depth < 8){
         /*
          * We need to always round down,
@@ -166,8 +167,9 @@ byteaddr(Memimage *i, Point p)
         else
             return a+p.x/np;
     }
+    /*e: [[byteaddr()]] if depth less than 8 */
     else
-        return a+p.x*(i->depth/8);
+        return a + p.x*(i->depth/8);
 }
 /*e: function byteaddr */
 

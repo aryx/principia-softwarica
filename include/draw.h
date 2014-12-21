@@ -138,6 +138,7 @@ enum {
 
     CGrey,
     CAlpha,
+
     CMap,
     CIgnore,
 
@@ -295,7 +296,7 @@ struct Image
     int			depth;		/* number of bits per pixel */
 
     /*s: [[Image]] other fields */
-    Screen		*screen;	/* 0 if not a window */
+    Screen		*screen;	/* nil if not a window */
     /*e: [[Image]] other fields */
     // Extra
     /*s: [[Image]] extra fields */
@@ -638,10 +639,10 @@ extern	int		sizeofdefont;
  * Set up by initdraw()
  */
 extern	Display	*display;
-extern	Image	*view; // was called screen before.
+extern	Image	*view; // was called screen before
 extern	Font	*font;
+extern	Screen	*screen; // was called _screen before
 
-extern	Screen	*_screen;
 extern	int		_cursorfd;
 extern	bool	_drawdebug;	/* set to true to see errors from flushimage */
 

@@ -20,7 +20,7 @@ bool	_drawdebug = 0;
 static char deffontname[] = "*default*";
 /*e: global deffontname */
 /*s: global _screen */
-Screen	*_screen;
+Screen	*screen;
 /*e: global _screen */
 
 /*s: global debuglockdisplay */
@@ -122,7 +122,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
     /*e: [[geninitdraw()]] write label */
     /*s: [[geninitdraw()]] get window */
     snprint(buf, sizeof buf, "%s/winname", display->windir);
-    if(gengetwindow(display, buf, &view, &_screen, ref) < 0)
+    if(gengetwindow(display, buf, &view, &screen, ref) < 0)
         goto Error;
     /*e: [[geninitdraw()]] get window */
 
@@ -220,7 +220,7 @@ getwindow(Display *d, int ref)
     char winname[128];
 
     snprint(winname, sizeof winname, "%s/winname", d->windir);
-    return gengetwindow(d, winname, &view, &_screen, ref);
+    return gengetwindow(d, winname, &view, &screen, ref);
 }
 /*e: function getwindow */
 

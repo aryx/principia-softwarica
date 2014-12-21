@@ -46,7 +46,7 @@ void
 scrlresize(void)
 {
 	freeimage(scrtmp);
-	scrtmp = allocimage(display, Rect(0, 0, 32, screen->r.max.y), screen->chan, 0, DNofill);
+	scrtmp = allocimage(display, Rect(0, 0, 32, view->r.max.y), view->chan, 0, DNofill);
 	if(scrtmp == nil)
 		error("scroll alloc");
 }

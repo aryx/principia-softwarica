@@ -1029,7 +1029,7 @@ fontx(Text *et, Text *t, Text *argt, int, int, Rune *arg, int narg)
 	}else
 		newfont = rfget(fix, FALSE, FALSE, nil);
 	if(newfont){
-		draw(screen, t->w->r, textcols[BACK], nil, ZP);
+		draw(view, t->w->r, textcols[BACK], nil, ZP);
 		rfclose(t->reffont);
 		t->reffont = newfont;
 		t->font = newfont->f;

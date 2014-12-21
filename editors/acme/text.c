@@ -33,7 +33,7 @@ textinit(Text *t, File *f, Rectangle r, Reffont *rf, Image *cols[NCOL])
 	t->reffont = rf;
 	t->tabstop = maxtab;
 	memmove(t->Frame.cols, cols, sizeof t->Frame.cols);
-	textredraw(t, r, rf->f, screen, -1);
+	textredraw(t, r, rf->f, view, -1);
 }
 
 void

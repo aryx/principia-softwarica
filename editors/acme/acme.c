@@ -166,7 +166,7 @@ threadmain(int argc, char *argv[])
 		exits("channels");
 	}
 
-	mousectl = initmouse(nil, screen);
+	mousectl = initmouse(nil, view);
 	if(mousectl == nil){
 		fprint(2, "acme: can't initialize mouse: %r\n");
 		exits("mouse");
@@ -189,7 +189,7 @@ threadmain(int argc, char *argv[])
 
 	disk = diskinit();
 	if(!loadfile || !rowload(&row, loadfile, TRUE)){
-		rowinit(&row, screen->clipr);
+		rowinit(&row, view->clipr);
 		if(ncol < 0){
 			if(argc == 0)
 				ncol = 2;
@@ -455,7 +455,7 @@ mousethread(void *)
 			if(getwindow(display, Refnone) < 0)
 				error("attach to window");
 			scrlresize();
-			rowresize(&row, screen->clipr);
+			rowresize(&row, view->clipr);
 			break;
 		case MPlumb:
 			if(strcmp(pm->type, "text") == 0){
@@ -860,15 +860,15 @@ iconinit(void)
 
 	/* Blue */
 	tagcols[BACK] = allocimagemix(display, DPalebluegreen, DWhite);
-	tagcols[HIGH] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DPalegreygreen);
-	tagcols[BORD] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DPurpleblue);
+	tagcols[HIGH] = allocimage(display, Rect(0,0,1,1), view->chan, 1, DPalegreygreen);
+	tagcols[BORD] = allocimage(display, Rect(0,0,1,1), view->chan, 1, DPurpleblue);
 	tagcols[TEXT] = display->black;
 	tagcols[HTEXT] = display->black;
 
 	/* Yellow */
 	textcols[BACK] = allocimagemix(display, DPaleyellow, DWhite);
-	textcols[HIGH] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DDarkyellow);
-	textcols[BORD] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DYellowgreen);
+	textcols[HIGH] = allocimage(display, Rect(0,0,1,1), view->chan, 1, DDarkyellow);
+	textcols[BORD] = allocimage(display, Rect(0,0,1,1), view->chan, 1, DYellowgreen);
 	textcols[TEXT] = display->black;
 	textcols[HTEXT] = display->black;
 
@@ -879,26 +879,26 @@ iconinit(void)
 	}
 
 	r = Rect(0, 0, Scrollwid+2, font->height+1);
-	button = allocimage(display, r, screen->chan, 0, DNofill);
+	button = allocimage(display, r, view->chan, 0, DNofill);
 	draw(button, r, tagcols[BACK], nil, r.min);
 	r.max.x -= 2;
 	border(button, r, 2, tagcols[BORD], ZP);
 
 	r = button->r;
-	modbutton = allocimage(display, r, screen->chan, 0, DNofill);
+	modbutton = allocimage(display, r, view->chan, 0, DNofill);
 	draw(modbutton, r, tagcols[BACK], nil, r.min);
 	r.max.x -= 2;
 	border(modbutton, r, 2, tagcols[BORD], ZP);
 	r = insetrect(r, 2);
-	tmp = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DMedblue);
+	tmp = allocimage(display, Rect(0,0,1,1), view->chan, 1, DMedblue);
 	draw(modbutton, r, tmp, nil, ZP);
 	freeimage(tmp);
 
 	r = button->r;
-	colbutton = allocimage(display, r, screen->chan, 0, DPurpleblue);
+	colbutton = allocimage(display, r, view->chan, 0, DPurpleblue);
 
-	but2col = allocimage(display, r, screen->chan, 1, 0xAA0000FF);
-	but3col = allocimage(display, r, screen->chan, 1, 0x006600FF);
+	but2col = allocimage(display, r, view->chan, 1, 0xAA0000FF);
+	but3col = allocimage(display, r, view->chan, 1, 0x006600FF);
 }
 
 /*

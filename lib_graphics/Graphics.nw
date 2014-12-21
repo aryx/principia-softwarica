@@ -5,8 +5,7 @@
 %******************************************************************************
 \newif\iffinal
 \newif\ifverbose
-\finaltrue\verbosefalse
-% see also other newif in Macros.tex
+\finaltrue\verbosefalse % see also other newif in Macros.tex
 
 %------------------------------------------------------------------------------
 %history: 
@@ -15,6 +14,7 @@
 %thx to LP, changed for the better a few things:
 % - deadcode (Displaybufsize, ...)
 % - screen.h cleaner interface, TODO merge globals (screenimage and gscreen)
+% - rename some globals (screen -> view, _screen -> screen)
 
 %thx to codemap/codegraph/scheck:
 % - SEMI use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -194,8 +194,8 @@ Here are other candidates that were considered but ultimately discarded:
 
 \section{Requirements}
 
-% graphics(2)
-% draw(2?), draw(6?) 
+% graphics(2), draw(2), 
+% draw(6?) 
 % font(?) image(?)
 
 %advanced: more for rio
@@ -546,7 +546,7 @@ from Bell Labs.
 
 \chapter{Core Data Structures}
 
-% below are draw.h big categories and also their pending in the kernel.
+% below are draw.h big DS and also their pending DS in the kernel.
 % many important globals are in libdraw/init.c
 
 \section{[[Display]] and [[Client]]}
@@ -566,7 +566,7 @@ struct Display
     <<[[Display]] other fields>>
 };
 @
-% rename image field to screen instead? is it the same than global screen?
+% rename image field to screen/view? is it the same than global screen/view?
 
 % usually have draw(dstimg, rectangle, srcimg, maskimg)
 % and srcimg can be just black, and maskimg can be just opaque
@@ -664,7 +664,7 @@ int     infoid;
 % CScreen? DScreen? ...
 
 \section{[[Image]] and [[Memimage]]}
-% and [[screen]],  and DImage?
+% and [[screen/view]],  and DImage?
 
 % see technicolor.ps! images in plan9 draw are
 % specials.
@@ -701,10 +701,10 @@ struct Image
 % to write in img->display.buf! and then flushimage(img->display)!
 % we need the connection handler!
 
-% can be changed? is it the same than Display->image?
 <<global screen>>=
 Image	*view;
 @
+%less: can be modified? Is it the same than Display->image?
 %old: was called screen, but unfortunate because there was
 % also a Screen type and then a _screen global.
 % could maybe also call it image, or window.
@@ -720,7 +720,7 @@ Image	*view;
 <<[[Display]] other fields>>=
 int		imageid;
 @
-% counter, incremented each allocimage
+% counter, incremented each allocimage()
 
 % for r, clipr, repl, see technicolor.ps!
 %/* huge but not infinite, so various offsets will leave it huge, not overflow*/
@@ -767,7 +767,7 @@ struct Memimage
     <<[[MemImage]] other fields>>
 };
 @
-% no repl here? yes, it's flags
+%less: no repl here? yes, it's flags. rename repl?
 % depth is sum of bits per pixel for r/g/b, so for RGB16 it's ... 16
 
 
@@ -804,27 +804,37 @@ struct Memdata
 % put DImage here and screendimage? and even gscreen?
 
 <<function byteaddr>>=
-uchar*
+byte*
 byteaddr(Memimage *i, Point p)
 {
-    uchar *a;
+    byte *a;
 
     a = i->data->bdata + i->zero + sizeof(ulong) * p.y * i->width;
 
-    if(i->depth < 8){
-        /*
-         * We need to always round down,
-         * but C rounds toward zero.
-         */
-        int np;
-        np = 8/i->depth;
-        if(p.x < 0)
-            return a+(p.x-np+1)/np;
-        else
-            return a+p.x/np;
-    }
+    <<[[byteaddr()]] if depth less than 8>>
     else
-        return a+p.x*(i->depth/8);
+        return a + p.x*(i->depth/8);
+}
+@
+
+<<[[MemImage]] other fields>>=
+int		zero;		/* data->bdata+zero==&byte containing (0,0) */
+ulong	width;	/* width in words of a single scan line */
+@
+
+
+<<[[byteaddr()]] if depth less than 8>>=
+if(i->depth < 8){
+    /*
+     * We need to always round down,
+     * but C rounds toward zero.
+     */
+    int np;
+    np = 8/i->depth;
+    if(p.x < 0)
+        return a+(p.x-np+1)/np;
+    else
+        return a+p.x/np;
 }
 @
 
@@ -848,7 +858,7 @@ wordaddr(Memimage *i, Point p)
 
 
 %\section{[[gscreen]]}
-% just like have [[screen]], client side,
+% just like have [[screen/view]], client side,
 % have also gscreendimage and gscreen kernel side
 %[[screen.h]] interface
 % This used to be called the [[VGAscr]] section.
@@ -858,7 +868,7 @@ wordaddr(Memimage *i, Point p)
 % VGA details when nowadays things are simpler like the framebuffer
 % interface of the raspberry.
 
-% screen.c, relation to Display->image? to screen? g? global screen?
+% screen.c, relation to Display->image? to screen/view? g? global screen?
 <<global gscreen>>=
 Memimage *gscreen;
 @
@@ -887,14 +897,10 @@ Rectangle physgscreenr;
 
 %XXXXXXXXXXXXXXXXXXXXX
 <<[[MemImage]] other fields>>=
-int		zero;		/* data->bdata+zero==&byte containing (0,0) */
-ulong	width;	/* width in words of a single scan line */
-
 int		shift[NChan];
 int		mask[NChan];
 int		nbits[NChan];
 @
-
 
 %XXXXXXXXXX
 <<[[Memdata]] other fields>>=
@@ -903,8 +909,6 @@ int		ref;		/* number of Memimages using this data */
 void*	imref;
 int		allocd;	/* is this malloc'd? */
 @
-
-
 
 
 % libmemdraw/draw.c
@@ -993,6 +997,7 @@ struct	Memdrawparam
     Rectangle sr;
     Memimage *mask;
     Rectangle mr;
+
     int op;
 
     ulong state;
@@ -1021,6 +1026,7 @@ enum {
 
     CGrey,
     CAlpha,
+
     CMap,
     CIgnore,
 
@@ -1050,9 +1056,9 @@ enum {
     XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
 };
 @
-% need all of that? could maybe simplfy and support less
+% todo: need all of that? could maybe simplfy and support less
 % image format. That should remove quite some code, e.g. all those
-% alphacalcxxx
+% alphacalcxxx.
 % cairo has what? RGBA32 no?
 
 % what is True Color? mentionned in technicolor.ps. It's RGBA32?
@@ -1113,7 +1119,7 @@ chantodepth(ulong c)
 \section{Colors}
 
 % actually Color are Image* in plan9 draw!
-% a Rect(0,0,1,1), with clipr = infinitty and repl = true
+% a Rect(0,0,1,1), with clipr = infinity and repl = true
 % very general so less need draw_mask, or draw_color, instead
 % just have a generic draw function where you can pass
 % black as the src!
@@ -1389,7 +1395,7 @@ Image	*screenimage; // ???
 
 
 <<[[Image]] other fields>>=
-Screen		*screen;	/* 0 if not a window */
+Screen		*screen;	/* nil if not a window */
 @
 
 % Screen type described later, but really should
@@ -2108,7 +2114,7 @@ if(label){
 
 <<[[geninitdraw()]] get window>>=
 snprint(buf, sizeof buf, "%s/winname", display->windir);
-if(gengetwindow(display, buf, &screen, &_screen, ref) < 0)
+if(gengetwindow(display, buf, &view, &screen, ref) < 0)
     goto Error;
 @
 % ???
@@ -2188,7 +2194,7 @@ getwindow(Display *d, int ref)
     char winname[128];
 
     snprint(winname, sizeof winname, "%s/winname", d->windir);
-    return gengetwindow(d, winname, &screen, &_screen, ref);
+    return gengetwindow(d, winname, &view, &screen, ref);
 }
 @
 
@@ -8279,9 +8285,10 @@ struct Screen
 %less: delete image field?
 
 <<global _screen>>=
-Screen	*_screen;
+Screen	*screen;
 @
-% called _screen because screen is already use (to actually an Image, hmm)
+%old: was called _screen because screen was already use 
+% (to actually an Image, hmm), but I s/screen/view so now screen is free.
 
 
 <<global screenid>>=
@@ -10210,12 +10217,12 @@ drawgetrect(Rectangle rc, int up)
             freetmp();
     if(tmp[0] == 0){
         r = Rect(0, 0, max(Dx(display->screenimage->r), Dx(rc)), W);
-        tmp[0] = allocimage(display, r, screen->chan, 0, -1);
-        tmp[1] = allocimage(display, r, screen->chan, 0, -1);
+        tmp[0] = allocimage(display, r, view->chan, 0, -1);
+        tmp[1] = allocimage(display, r, view->chan, 0, -1);
         r = Rect(0, 0, W, max(Dy(display->screenimage->r), Dy(rc)));
-        tmp[2] = allocimage(display, r, screen->chan, 0, -1);
-        tmp[3] = allocimage(display, r, screen->chan, 0, -1);
-        red = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DRed);
+        tmp[2] = allocimage(display, r, view->chan, 0, -1);
+        tmp[3] = allocimage(display, r, view->chan, 0, -1);
+        red = allocimage(display, Rect(0,0,1,1), view->chan, 1, DRed);
         if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0){
             freetmp();
             drawerror(display, "getrect: allocimage failed");
@@ -10224,12 +10231,12 @@ drawgetrect(Rectangle rc, int up)
     brects(rc, rects);
     if(!up){
         for(i=0; i<4; i++)
-            draw(screen, rects[i], tmp[i], nil, ZP);
+            draw(view, rects[i], tmp[i], nil, ZP);
         return;
     }
     for(i=0; i<4; i++){
-        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), screen, nil, rects[i].min);
-        draw(screen, rects[i], red, nil, ZP);
+        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), view, nil, rects[i].min);
+        draw(view, rects[i], red, nil, ZP);
     }
 }
 @
@@ -11745,8 +11752,8 @@ menucolors(void)
 {
     /* Main tone is greenish, with negative selection */
     back = allocimagemix(display, DPalegreen, DWhite);
-    high = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DDarkgreen);	/* dark green */
-    bord = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DMedgreen);	/* not as dark green */
+    high = allocimage(display, Rect(0,0,1,1), view->chan, 1, DDarkgreen);	/* dark green */
+    bord = allocimage(display, Rect(0,0,1,1), view->chan, 1, DMedgreen);	/* not as dark green */
     if(back==nil || high==nil || bord==nil)
         goto Error;
     text = display->black;
@@ -11876,7 +11883,7 @@ menuscrollpaint(Image *m, Rectangle scrollr, int off, int nitem, int nitemdrawn)
         r.max.y = r.min.y+2;
     border(m, r, 1, bord, ZP);
     if(menutxt == 0)
-        menutxt = allocimage(display, Rect(0, 0, 1, 1), screen->chan, 1, DDarkgreen);	/* border color; BUG? */
+        menutxt = allocimage(display, Rect(0, 0, 1, 1), view->chan, 1, DDarkgreen);	/* border color; BUG? */
     if(menutxt)
         draw(m, insetrect(r, 1), menutxt, nil, ZP);
 }
@@ -11895,8 +11902,8 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
 
     if(back == nil)
         menucolors();
-    sc = screen->clipr;
-    replclipr(screen, 0, screen->r);
+    sc = view->clipr;
+    replclipr(view, 0, view->r);
     maxwid = 0;
     for(nitem = 0;
         item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
@@ -11907,7 +11914,7 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     }
     if(menu->lasthit<0 || menu->lasthit>=nitem)
         menu->lasthit = 0;
-    screenitem = (Dy(screen->r)-10)/(font->height+Vspacing);
+    screenitem = (Dy(view->r)-10)/(font->height+Vspacing);
     if(nitem>Maxunscroll || nitem>screenitem){
         scrolling = 1;
         nitemdrawn = Nscroll;
@@ -11931,14 +11938,14 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
     r = rectaddpt(r, mc->xy);
     pt = ZP;
-    if(r.max.x>screen->r.max.x)
-        pt.x = screen->r.max.x-r.max.x;
-    if(r.max.y>screen->r.max.y)
-        pt.y = screen->r.max.y-r.max.y;
-    if(r.min.x<screen->r.min.x)
-        pt.x = screen->r.min.x-r.min.x;
-    if(r.min.y<screen->r.min.y)
-        pt.y = screen->r.min.y-r.min.y;
+    if(r.max.x>view->r.max.x)
+        pt.x = view->r.max.x-r.max.x;
+    if(r.max.y>view->r.max.y)
+        pt.y = view->r.max.y-r.max.y;
+    if(r.min.x<view->r.min.x)
+        pt.x = view->r.min.x-r.min.x;
+    if(r.min.y<view->r.min.y)
+        pt.y = view->r.min.y-r.min.y;
     menur = rectaddpt(r, pt);
     textr.max.x = menur.max.x-Margin;
     textr.min.x = textr.max.x-maxwid;
@@ -11953,17 +11960,17 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     if(scr){
         b = allocwindow(scr, menur, Refbackup, DWhite);
         if(b == nil)
-            b = screen;
+            b = view;
         backup = nil;
     }else{
-        b = screen;
-        backup = allocimage(display, menur, screen->chan, 0, -1);
+        b = view;
+        backup = allocimage(display, menur, view->chan, 0, -1);
         if(backup)
-            draw(backup, menur, screen, nil, menur.min);
+            draw(backup, menur, view, nil, menur.min);
     }
     draw(b, menur, back, nil, ZP);
     border(b, menur, Blackborder, bord, ZP);
-    save = allocimage(display, menurect(textr, 0), screen->chan, 0, -1);
+    save = allocimage(display, menurect(textr, 0), view->chan, 0, -1);
     r = menurect(textr, lasti);
     moveto(mc, divpt(addpt(r.min, r.max), 2));
     menupaint(b, menu, textr, off, nitemdrawn);
@@ -11990,14 +11997,14 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
             readmouse(mc);
         }
     }
-    if(b != screen)
+    if(b != view)
         freeimage(b);
     if(backup){
-        draw(screen, menur, backup, nil, menur.min);
+        draw(view, menur, backup, nil, menur.min);
         freeimage(backup);
     }
     freeimage(save);
-    replclipr(screen, 0, sc);
+    replclipr(view, 0, sc);
     flushimage(display, 1);
     if(lasti >= 0){
         menu->lasthit = lasti+off;
@@ -12124,25 +12131,25 @@ edrawgetrect(Rectangle rc, int up)
             freetmp();
 
     if(tmp[0] == 0){
-        r = Rect(0, 0, Dx(screen->r), W);
-        tmp[0] = allocimage(display, r, screen->chan, 0, -1);
-        tmp[1] = allocimage(display, r, screen->chan, 0, -1);
-        r = Rect(0, 0, W, Dy(screen->r));
-        tmp[2] = allocimage(display, r, screen->chan, 0, -1);
-        tmp[3] = allocimage(display, r, screen->chan, 0, -1);
-        red = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DRed);
+        r = Rect(0, 0, Dx(view->r), W);
+        tmp[0] = allocimage(display, r, view->chan, 0, -1);
+        tmp[1] = allocimage(display, r, view->chan, 0, -1);
+        r = Rect(0, 0, W, Dy(view->r));
+        tmp[2] = allocimage(display, r, view->chan, 0, -1);
+        tmp[3] = allocimage(display, r, view->chan, 0, -1);
+        red = allocimage(display, Rect(0,0,1,1), view->chan, 1, DRed);
         if(tmp[0]==0 || tmp[1]==0 || tmp[2]==0 || tmp[3]==0 || red==0)
             drawerror(display, "getrect: allocimage failed");
     }
     brects(rc, rects);
     if(!up){
         for(i=0; i<4; i++)
-            draw(screen, rects[i], tmp[i], nil, ZP);
+            draw(view, rects[i], tmp[i], nil, ZP);
         return;
     }
     for(i=0; i<4; i++){
-        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), screen, nil, rects[i].min);
-        draw(screen, rects[i], red, nil, ZP);
+        draw(tmp[i], Rect(0, 0, Dx(rects[i]), Dy(rects[i])), view, nil, rects[i].min);
+        draw(view, rects[i], red, nil, ZP);
     }
 }
 @
@@ -12258,16 +12265,16 @@ paintitem(Menu *menu, Rectangle textr, int off, int i, int highlight, Image *sav
         return;
     r = menurect(textr, i);
     if(restore){
-        draw(screen, r, restore, nil, restore->r.min);
+        draw(view, r, restore, nil, restore->r.min);
         return;
     }
     if(save)
-        draw(save, save->r, screen, nil, r.min);
+        draw(save, save->r, view, nil, r.min);
     item = menu->item? menu->item[i+off] : (*menu->gen)(i+off);
     pt.x = (textr.min.x+textr.max.x-stringwidth(font, item))/2;
     pt.y = textr.min.y+i*(font->height+Vspacing);
-    draw(screen, r, highlight? high : back, nil, pt);
-    string(screen, pt, highlight? htext : text, pt, font, item);
+    draw(view, r, highlight? high : back, nil, pt);
+    string(view, pt, highlight? htext : text, pt, font, item);
 }
 @
 
@@ -12308,7 +12315,7 @@ menupaint(Menu *menu, Rectangle textr, int off, int nitemdrawn)
 {
     int i;
 
-    draw(screen, insetrect(textr, Border-Margin), back, nil, ZP);
+    draw(view, insetrect(textr, Border-Margin), back, nil, ZP);
     for(i = 0; i<nitemdrawn; i++)
         paintitem(menu, textr, off, i, 0, nil, nil);
 }
@@ -12320,18 +12327,18 @@ menuscrollpaint(Rectangle scrollr, int off, int nitem, int nitemdrawn)
 {
     Rectangle r;
 
-    draw(screen, scrollr, back, nil, ZP);
+    draw(view, scrollr, back, nil, ZP);
     r.min.x = scrollr.min.x;
     r.max.x = scrollr.max.x;
     r.min.y = scrollr.min.y + (Dy(scrollr)*off)/nitem;
     r.max.y = scrollr.min.y + (Dy(scrollr)*(off+nitemdrawn))/nitem;
     if(r.max.y < r.min.y+2)
         r.max.y = r.min.y+2;
-    border(screen, r, 1, bord, ZP);
+    border(view, r, 1, bord, ZP);
     if(menutxt == 0)
         menutxt = allocimage(display, Rect(0, 0, 1, 1), CMAP8, 1, DDarkgreen);
     if(menutxt)
-        draw(screen, insetrect(r, 1), menutxt, nil, ZP);
+        draw(view, insetrect(r, 1), menutxt, nil, ZP);
 }
 @
 
@@ -12348,8 +12355,8 @@ emenuhit(int but, Mouse *m, Menu *menu)
 
     if(back == nil)
         menucolors();
-    sc = screen->clipr;
-    replclipr(screen, 0, screen->r);
+    sc = view->clipr;
+    replclipr(view, 0, view->r);
     maxwid = 0;
     for(nitem = 0;
         item = menu->item? menu->item[nitem] : (*menu->gen)(nitem);
@@ -12360,7 +12367,7 @@ emenuhit(int but, Mouse *m, Menu *menu)
     }
     if(menu->lasthit<0 || menu->lasthit>=nitem)
         menu->lasthit = 0;
-    screenitem = (Dy(screen->r)-10)/(font->height+Vspacing);
+    screenitem = (Dy(view->r)-10)/(font->height+Vspacing);
     if(nitem>Maxunscroll || nitem>screenitem){
         scrolling = 1;
         nitemdrawn = Nscroll;
@@ -12384,14 +12391,14 @@ emenuhit(int but, Mouse *m, Menu *menu)
     r = rectsubpt(r, Pt(wid/2, lasti*(font->height+Vspacing)+font->height/2));
     r = rectaddpt(r, m->xy);
     pt = ZP;
-    if(r.max.x>screen->r.max.x)
-        pt.x = screen->r.max.x-r.max.x;
-    if(r.max.y>screen->r.max.y)
-        pt.y = screen->r.max.y-r.max.y;
-    if(r.min.x<screen->r.min.x)
-        pt.x = screen->r.min.x-r.min.x;
-    if(r.min.y<screen->r.min.y)
-        pt.y = screen->r.min.y-r.min.y;
+    if(r.max.x>view->r.max.x)
+        pt.x = view->r.max.x-r.max.x;
+    if(r.max.y>view->r.max.y)
+        pt.y = view->r.max.y-r.max.y;
+    if(r.min.x<view->r.min.x)
+        pt.x = view->r.min.x-r.min.x;
+    if(r.min.y<view->r.min.y)
+        pt.y = view->r.min.y-r.min.y;
     menur = rectaddpt(r, pt);
     textr.max.x = menur.max.x-Margin;
     textr.min.x = textr.max.x-maxwid;
@@ -12403,13 +12410,13 @@ emenuhit(int but, Mouse *m, Menu *menu)
     }else
         scrollr = Rect(0, 0, 0, 0);
 
-    b = allocimage(display, menur, screen->chan, 0, 0);
+    b = allocimage(display, menur, view->chan, 0, 0);
     if(b == 0)
-        b = screen;
-    draw(b, menur, screen, nil, menur.min);
-    draw(screen, menur, back, nil, ZP);
-    border(screen, menur, Blackborder, bord, ZP);
-    save = allocimage(display, menurect(textr, 0), screen->chan, 0, -1);
+        b = view;
+    draw(b, menur, view, nil, menur.min);
+    draw(view, menur, back, nil, ZP);
+    border(view, menur, Blackborder, bord, ZP);
+    save = allocimage(display, menurect(textr, 0), view->chan, 0, -1);
     r = menurect(textr, lasti);
     emoveto(divpt(addpt(r.min, r.max), 2));
     menupaint(menu, textr, off, nitemdrawn);
@@ -12437,11 +12444,11 @@ emenuhit(int but, Mouse *m, Menu *menu)
             *m = emouse();
         }
     }
-    draw(screen, menur, b, nil, menur.min);
-    if(b != screen)
+    draw(view, menur, b, nil, menur.min);
+    if(b != view)
         freeimage(b);
     freeimage(save);
-    replclipr(screen, 0, sc);
+    replclipr(view, 0, sc);
     if(lasti >= 0){
         menu->lasthit = lasti+off;
         return menu->lasthit;
