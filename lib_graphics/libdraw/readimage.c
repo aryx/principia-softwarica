@@ -5,7 +5,7 @@
 
 /*s: function readimage */
 Image*
-readimage(Display *d, int fd, int dolock)
+readimage(Display *d, fdt fd, bool dolock)
 {
     char hdr[5*12+1];
     int dy;

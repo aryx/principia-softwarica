@@ -25,7 +25,7 @@ struct Hlist{
 
 /*s: function writeimage */
 int
-writeimage(int fd, Image *i, int dolock)
+writeimage(fdt fd, Image *i, bool dolock)
 {
     uchar *outbuf, *outp, *eout;		/* encoded data, pointer, end */
     uchar *loutp;				/* start of encoded line */

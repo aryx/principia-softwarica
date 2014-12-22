@@ -5,7 +5,7 @@
 
 /*s: function drawsetdebug */
 void
-drawsetdebug(int v)
+drawsetdebug(bool v)
 {
     uchar *a;
     a = bufimage(display, 1+1);
