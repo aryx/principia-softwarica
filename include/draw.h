@@ -318,10 +318,10 @@ struct RGB
 struct	Fontchar
 {
     int		x;		/* left edge of bits */
-    uchar		top;		/* first non-zero scan-line */
-    uchar		bottom;		/* last non-zero scan-line + 1 */
-    char		left;		/* offset of baseline */
-    uchar		width;		/* width of baseline */
+    byte	top;		/* first non-zero scan-line */
+    byte	bottom;		/* last non-zero scan-line + 1 */
+    char	left;		/* offset of baseline */
+    byte	width;		/* width of baseline */
 };
 /*e: struct Fontchar */
 
@@ -341,7 +341,7 @@ struct	Subfont
 {
     char		*name;
     short		n;		/* number of chars in font */
-    uchar		height;		/* height of image */
+    byte		height;		/* height of image */
     char		ascent;		/* top of image to baseline */
 
     Fontchar 	*info;		/* n+1 character descriptors */
@@ -384,7 +384,7 @@ struct Cachefont
 struct Cacheinfo
 {
     ushort		x;		/* left edge of bits */
-    uchar		width;		/* width of baseline */
+    byte		width;		/* width of baseline */
     schar		left;		/* offset of baseline */
     Rune		value;	/* value of character at this slot in cache */
     ushort		age;
@@ -433,6 +433,7 @@ struct Font
 /*
  * Image management
  */
+// set globals at the end of this file: display, view, font, screen
 extern int	initdraw(void(*)(Display*, char*), char*, char*);
 extern int	geninitdraw(char*, void(*)(Display*, char*), char*, char*, char*, int);
 extern Display*	initdisplay(char*, char*, void(*)(Display*, char*));
@@ -444,13 +445,12 @@ extern Image*	allocimage(Display*, Rectangle, ulong, int, ulong);
 extern int		freeimage(Image*);
 extern Image* 	allocimagemix(Display*, ulong, ulong);
 
-extern int		loadimage(Image*, Rectangle, uchar*, int);
-extern int		unloadimage(Image*, Rectangle, uchar*, int);
-extern Image* 	readimage(Display*, int, int);
-extern int		writeimage(int, Image*, int);
-
+extern int		loadimage(Image*, Rectangle, byte*, int);
+extern int		unloadimage(Image*, Rectangle, byte*, int);
+extern Image* 	readimage(Display*, fdt, bool);
+extern int		writeimage(fdt, Image*, bool);
 // compressed variants
-extern int		cloadimage(Image*, Rectangle, uchar*, int);
+extern int		cloadimage(Image*, Rectangle, byte*, int);
 extern Image* 	creadimage(Display*, int, int);
 
 extern Image*	namedimage(Display*, char*);
@@ -461,18 +461,12 @@ extern void	drawerror(Display*, char*);
 extern int	bytesperline(Rectangle, int);
 extern int	wordsperline(Rectangle, int);
 
-// why not in Windows section?
-extern int	newwindow(char*);
-extern int	getwindow(Display*, int);
-extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
-
-
 /*
  * Colors
  */
 extern	void	readcolmap(Display*, RGB*);
 extern	void	writecolmap(Display*, RGB*);
-extern	ulong	setalpha(ulong, uchar);
+extern	ulong	setalpha(ulong, byte);
 
 /*
  * Windows
@@ -487,6 +481,12 @@ extern void	bottomnwindows(Image**, int);
 extern void	bottomwindow(Image*);
 extern void	topnwindows(Image**, int);
 extern void	topwindow(Image*);
+
+// was in Image section
+extern int	newwindow(char*);
+extern int	getwindow(Display*, int);
+extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
+
 
 /*
  * Geometry
@@ -611,7 +611,7 @@ extern int		runestringnwidth(Font*, Rune*, int);
 
 extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
 extern void		agefont(Font*);
-extern void		_unpackinfo(Fontchar*, uchar*, int);
+extern void		_unpackinfo(Fontchar*, byte*, int);
 extern Point	strsubfontwidth(Subfont*, char*);
 extern int		loadchar(Font*, Rune, Cacheinfo*, int, int, char**);
 extern Subfont*	getdefont(Display*);
@@ -632,7 +632,8 @@ extern int		mousescrollsize(int);
  */
 extern	Point		ZP;
 extern	Rectangle	ZR;
-extern	uchar	defontdata[];
+
+extern	byte	defontdata[];
 extern	int		sizeofdefont;
 
 /*
@@ -643,7 +644,9 @@ extern	Image	*view; // was called screen before
 extern	Font	*font;
 extern	Screen	*screen; // was called _screen before
 
+// dead?
 extern	int		_cursorfd;
+
 extern	bool	_drawdebug;	/* set to true to see errors from flushimage */
 
 // forward decl, could be move to individual files or in a drawimpl.h
@@ -688,10 +691,10 @@ extern byte*	bufimage(Display*, int);
 /*s: constant NCBLOCK */
 #define	NCBLOCK	6000		/* size of compressed blocks */
 /*e: constant NCBLOCK */
-extern	void	_twiddlecompressed(uchar*, int);
+extern	void _twiddlecompressed(byte*, int);
 extern	int	_compblocksize(Rectangle, int);
 
 /* XXX backwards helps; should go */
 extern	ulong	drawld2chan[];
-extern	void	drawsetdebug(int);
+extern	void	drawsetdebug(bool);
 /*e: include/draw.h */
