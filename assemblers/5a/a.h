@@ -18,10 +18,11 @@ struct	Gen
     // enum<operand_kind>
     short	type;
 
-    long	offset; // offset or generic value
-    double	dval;
-    char	sval[8];
-
+    union {
+        long	offset; // offset or generic value
+        double	dval;
+        char	sval[8];
+    };
     /*s: [[Gen]] other fields */
     // option<enum<register>>, None = R_NONE
     short	reg;
