@@ -60,7 +60,7 @@ struct	Sym
 {
     char	*name;
 
-    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LTYPE1, etc)
+    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
     ushort	type;
 
     // long (e.g. pc for LLAB, or integer for LVAR) 

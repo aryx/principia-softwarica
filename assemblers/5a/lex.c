@@ -211,69 +211,69 @@ struct Itab
 // map<string, (token_kind * enum<opcode|register|...>)>
 struct Itab itab[] =
 {
-    "NOP",		LTYPEI, ANOP,
+    "NOP",		LMISC, ANOP,
     /*s: [[itab]] elements */
-    "AND",		LTYPE1,	AAND,
-    "ORR",		LTYPE1,	AORR,
-    "EOR",		LTYPE1,	AEOR,
+    "AND",		LARITH,	AAND,
+    "ORR",		LARITH,	AORR,
+    "EOR",		LARITH,	AEOR,
     /*x: [[itab]] elements */
-    "ADD",		LTYPE1,	AADD,
-    "SUB",		LTYPE1,	ASUB,
+    "ADD",		LARITH,	AADD,
+    "SUB",		LARITH,	ASUB,
     /*x: [[itab]] elements */
-    "BIC",		LTYPE1,	ABIC,
-    "RSB",		LTYPE1,	ARSB,
-    "ADC",		LTYPE1,	AADC,
-    "SBC",		LTYPE1,	ASBC,
-    "RSC",		LTYPE1,	ARSC,
+    "BIC",		LARITH,	ABIC,
+    "RSB",		LARITH,	ARSB,
+    "ADC",		LARITH,	AADC,
+    "SBC",		LARITH,	ASBC,
+    "RSC",		LARITH,	ARSC,
     /*x: [[itab]] elements */
-    "SLL",		LTYPE1,	ASLL,
-    "SRL",		LTYPE1,	ASRL,
-    "SRA",		LTYPE1,	ASRA,
+    "SLL",		LARITH,	ASLL,
+    "SRL",		LARITH,	ASRL,
+    "SRA",		LARITH,	ASRA,
     /*x: [[itab]] elements */
-    "MUL",		LTYPE1, AMUL,
-    "DIV",		LTYPE1,	ADIV,
-    "MOD",		LTYPE1,	AMOD,
+    "MUL",		LARITH, AMUL,
+    "DIV",		LARITH,	ADIV,
+    "MOD",		LARITH,	AMOD,
     /*x: [[itab]] elements */
-    "CMP",		LTYPE7,	ACMP,
-    "TST",		LTYPE7,	ATST,
-    "TEQ",		LTYPE7,	ATEQ,
+    "CMP",		LCMP,	ACMP,
+    "TST",		LCMP,	ATST,
+    "TEQ",		LCMP,	ATEQ,
     /*x: [[itab]] elements */
-    "CMN",		LTYPE7,	ACMN,
+    "CMN",		LCMP,	ACMN,
     /*x: [[itab]] elements */
-    "MOVW",		LTYPE3, AMOVW,
-    "MOVB",		LTYPE3, AMOVB,
-    "MOVBU",	LTYPE3, AMOVBU,
-    "MOVH",		LTYPE3, AMOVH,
-    "MOVHU",	LTYPE3, AMOVHU,
+    "MOVW",		LMOV, AMOVW,
+    "MOVB",		LMOV, AMOVB,
+    "MOVBU",	LMOV, AMOVBU,
+    "MOVH",		LMOV, AMOVH,
+    "MOVHU",	LMOV, AMOVHU,
     /*x: [[itab]] elements */
-    "MVN",		LTYPE2, AMVN,	/* op2 ignored */
+    "MVN",		LMVN, AMVN,	/* op2 ignored */
     /*x: [[itab]] elements */
-    "SWPW",		LTYPE9, ASWPW,
-    "SWPBU",	LTYPE9, ASWPBU,
+    "SWPW",		LSWAP, ASWPW,
+    "SWPBU",	LSWAP, ASWPBU,
     /*x: [[itab]] elements */
-    "B",		LTYPE4, AB,
-    "BL",		LTYPE4, ABL,
+    "B",		LBRANCH, AB,
+    "BL",		LBRANCH, ABL,
     /*x: [[itab]] elements */
-    "BEQ",		LTYPE5,	ABEQ,
-    "BNE",		LTYPE5,	ABNE,
-    "BCS",		LTYPE5,	ABCS,
-    "BHS",		LTYPE5,	ABHS,
-    "BCC",		LTYPE5,	ABCC,
-    "BLO",		LTYPE5,	ABLO,
-    "BMI",		LTYPE5,	ABMI,
-    "BPL",		LTYPE5,	ABPL,
-    "BVS",		LTYPE5,	ABVS,
-    "BVC",		LTYPE5,	ABVC,
-    "BHI",		LTYPE5,	ABHI,
-    "BLS",		LTYPE5,	ABLS,
-    "BGE",		LTYPE5,	ABGE,
-    "BLT",		LTYPE5,	ABLT,
-    "BGT",		LTYPE5,	ABGT,
-    "BLE",		LTYPE5,	ABLE,
+    "BEQ",		LBCOND,	ABEQ,
+    "BNE",		LBCOND,	ABNE,
+    "BCS",		LBCOND,	ABCS,
+    "BHS",		LBCOND,	ABHS,
+    "BCC",		LBCOND,	ABCC,
+    "BLO",		LBCOND,	ABLO,
+    "BMI",		LBCOND,	ABMI,
+    "BPL",		LBCOND,	ABPL,
+    "BVS",		LBCOND,	ABVS,
+    "BVC",		LBCOND,	ABVC,
+    "BHI",		LBCOND,	ABHI,
+    "BLS",		LBCOND,	ABLS,
+    "BGE",		LBCOND,	ABGE,
+    "BLT",		LBCOND,	ABLT,
+    "BGT",		LBCOND,	ABGT,
+    "BLE",		LBCOND,	ABLE,
     /*x: [[itab]] elements */
-    "RET",		LTYPEA, ARET,
+    "RET",		LRET, ARET,
     /*x: [[itab]] elements */
-    "SWI",		LTYPE6, ASWI,
+    "SWI",		LSWI, ASWI,
     /*x: [[itab]] elements */
     ".EQ",		LCOND,	0,
     ".NE",		LCOND,	1,
@@ -343,42 +343,42 @@ struct Itab itab[] =
     "CPSR",		LPSR,	0,
     "SPSR",		LPSR,	1,
     /*x: [[itab]] elements */
-    "TEXT",		LTYPEB, ATEXT,
-    "GLOBL",	LTYPEB, AGLOBL,
+    "TEXT",		LDEF, ATEXT,
+    "GLOBL",	LDEF, AGLOBL,
     /*x: [[itab]] elements */
-    "DATA",		LTYPEC, ADATA,
-    "WORD",		LTYPEH, AWORD,
+    "DATA",		LDATA, ADATA,
+    "WORD",		LWORD, AWORD,
     /*x: [[itab]] elements */
-    "END",		LTYPEE, AEND,
+    "END",		LEND, AEND,
     /*x: [[itab]] elements */
-    "MULL",		LTYPEM, AMULL,
-    "MULAL",	LTYPEM, AMULAL,
-    "MULLU",	LTYPEM, AMULLU,
-    "MULALU",	LTYPEM, AMULALU,
+    "MULL",		LMULL, AMULL,
+    "MULAL",	LMULL, AMULAL,
+    "MULLU",	LMULL, AMULLU,
+    "MULALU",	LMULL, AMULALU,
     /*x: [[itab]] elements */
-    "MULA",		LTYPEN, AMULA,
+    "MULA",		LMULA, AMULA,
     /*x: [[itab]] elements */
-    "MOVD",		LTYPE3, AMOVD,
-    "MOVDF",	LTYPE3, AMOVDF,
-    "MOVDW",	LTYPE3, AMOVDW,
-    "MOVF",		LTYPE3, AMOVF,
-    "MOVFD",	LTYPE3, AMOVFD,
-    "MOVFW",	LTYPE3, AMOVFW,
-    "MOVWD",	LTYPE3, AMOVWD,
-    "MOVWF",	LTYPE3, AMOVWF,
+    "MOVD",		LMOV, AMOVD,
+    "MOVDF",	LMOV, AMOVDF,
+    "MOVDW",	LMOV, AMOVDW,
+    "MOVF",		LMOV, AMOVF,
+    "MOVFD",	LMOV, AMOVFD,
+    "MOVFW",	LMOV, AMOVFW,
+    "MOVWD",	LMOV, AMOVWD,
+    "MOVWF",	LMOV, AMOVWF,
     /*x: [[itab]] elements */
-    "SQRTF",	LTYPEI, ASQRTF,
-    "SQRTD",	LTYPEI, ASQRTD,
-    "CMPF",		LTYPEL, ACMPF,
-    "CMPD",		LTYPEL, ACMPD,
-    "ADDF",		LTYPEK,	AADDF,
-    "ADDD",		LTYPEK,	AADDD,
-    "SUBF",		LTYPEK,	ASUBF,
-    "SUBD",		LTYPEK,	ASUBD,
-    "MULF",		LTYPEK,	AMULF,
-    "MULD",		LTYPEK,	AMULD,
-    "DIVF",		LTYPEK,	ADIVF,
-    "DIVD",		LTYPEK,	ADIVD,
+    "SQRTF",	LMISC, ASQRTF,
+    "SQRTD",	LMISC, ASQRTD,
+    "CMPF",		LCMPFLOAT, ACMPF,
+    "CMPD",		LCMPFLOAT, ACMPD,
+    "ADDF",		LARITHFLOAT,	AADDF,
+    "ADDD",		LARITHFLOAT,	AADDD,
+    "SUBF",		LARITHFLOAT,	ASUBF,
+    "SUBD",		LARITHFLOAT,	ASUBD,
+    "MULF",		LARITHFLOAT,	AMULF,
+    "MULD",		LARITHFLOAT,	AMULD,
+    "DIVF",		LARITHFLOAT,	ADIVF,
+    "DIVD",		LARITHFLOAT,	ADIVD,
     /*x: [[itab]] elements */
     "F",		LF,	0,
 
@@ -402,10 +402,10 @@ struct Itab itab[] =
     "FPSR",		LFCR,	0,
     "FPCR",		LFCR,	1,
     /*x: [[itab]] elements */
-    "MOVM",		LTYPE8, AMOVM,
+    "MOVM",		LMOVM, AMOVM,
     /*x: [[itab]] elements */
-    "MCR",		LTYPEJ, 0,
-    "MRC",		LTYPEJ, 1,
+    "MCR",		LSYSTEM, 0,
+    "MRC",		LSYSTEM, 1,
     /*x: [[itab]] elements */
     "C",		LC,	0,
 
@@ -426,7 +426,7 @@ struct Itab itab[] =
     "C14",		LCREG,	14,
     "C15",		LCREG,	15,
     /*x: [[itab]] elements */
-    "RFE",		LTYPEA, ARFE,
+    "RFE",		LRET, ARFE,
     /*e: [[itab]] elements */
     0
 };
@@ -441,10 +441,10 @@ cinit(void)
 
     /*s: [[cinit()]] nullgen initialisation */
     nullgen.type = D_NONE;
-    nullgen.offset = 0;
     nullgen.reg = R_NONE;
     nullgen.sym = S;
     nullgen.symkind = N_NONE;
+    nullgen.offset = 0;
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)

@@ -30,9 +30,10 @@
 /*e: priority and associativity declarations */
 /*s: token declarations(arm) */
 /* opcodes */
-%token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
-%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPEE LTYPEH LTYPEI
-%token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
+%token  <lval>  LARITH LCMP LBRANCH LBCOND  LMOV LSWAP LSWI
+%token  <lval>  LMVN  LSYSTEM
+%token  <lval>  LDEF LDATA LEND LWORD LRET
+%token  <lval>  LARITHFLOAT LCMPFLOAT LMULL LMULA LMOVM LMISC
 /* registers */
 %token  <lval>  LSP LSB LFP LPC
 %token  <lval>  LR LREG  LPSR
@@ -129,83 +130,83 @@ inst:
 /*
  * AND/OR/ADD/SUB/...
  */
-  LTYPE1 cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
-| LTYPE1 cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
-| LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, R_NONE, &$5); }
+  LARITH cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
+| LARITH cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
+| LARITH cond imsr ',' reg           { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * CMP
  */
-| LTYPE7 cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
+| LCMP cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * MOVW
  */
-| LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
+| LMOV cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * MVN
  */
-| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LMVN cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * SWAP
  */
-| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
+| LSWAP cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
+| LSWAP cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
+| LSWAP cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
 /*x: inst rule(arm) */
 /*
  * B/BL
  */
-| LTYPE4 cond rel   { outcode($1, $2, &nullgen, R_NONE, &$3); }
-| LTYPE4 cond nireg { outcode($1, $2, &nullgen, R_NONE, &$3); }
+| LBRANCH cond rel   { outcode($1, $2, &nullgen, R_NONE, &$3); }
+| LBRANCH cond nireg { outcode($1, $2, &nullgen, R_NONE, &$3); }
 /*x: inst rule(arm) */
 /*
  * BEQ/...
  */
-| LTYPE5 rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
+| LBCOND rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
 /*x: inst rule(arm) */
 /*
  * RET
  */
-| LTYPEA cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+| LRET cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * SWI
  */
-| LTYPE6 cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+| LSWI cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * TEXT/GLOBL
  */
-| LTYPEB name ',' imm         { outcode($1, Always, &$2, R_NONE, &$4); }
-| LTYPEB name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
+| LDEF name ',' imm         { outcode($1, Always, &$2, R_NONE, &$4); }
+| LDEF name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
 /*x: inst rule(arm) */
 /*
  * DATA
  */
-| LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
+| LDATA name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
 /*x: inst rule(arm) */
 /*
  * WORD
  */
-| LTYPEH ximm { outcode($1, Always, &nullgen, R_NONE, &$2); }
+| LWORD ximm { outcode($1, Always, &nullgen, R_NONE, &$2); }
 /*x: inst rule(arm) */
 /*
  * END
  */
-| LTYPEE { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
+| LEND { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * MULL hi,lo,r1,r2
  */
-| LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
+| LMULL cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
 /*x: inst rule(arm) */
 /*
  * MULA hi,lo,r1,r2
  */
-| LTYPEN cond reg ',' reg ',' reg ',' spreg 
+| LMULA cond reg ',' reg ',' reg ',' spreg 
  {
   $7.type = D_REGREG;
   $7.offset = $9;
@@ -215,15 +216,15 @@ inst:
 /*
  * floating-point coprocessor
  */
-| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
-| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
-| LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
-| LTYPEL cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
+| LMISC cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LARITHFLOAT cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LARITHFLOAT cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
+| LCMPFLOAT cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * MOVM
  */
-| LTYPE8 cond ioreg ',' '[' reglist ']'
+| LMOVM cond ioreg ',' '[' reglist ']'
  {
   Gen g;
 
@@ -232,7 +233,7 @@ inst:
   g.offset = $6;
   outcode($1, $2, &$3, R_NONE, &g);
  }
-| LTYPE8 cond '[' reglist ']' ',' ioreg
+| LMOVM cond '[' reglist ']' ',' ioreg
  {
   Gen g;
 
@@ -245,7 +246,7 @@ inst:
 /*
  * MCR MRC
  */
-| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
+| LSYSTEM cond con ',' expr ',' spreg ',' creg ',' creg oexpr
  {
   Gen g;
 

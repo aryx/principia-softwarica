@@ -179,7 +179,7 @@ Here are other candidates that were considered but ultimately discarded:
 
 % a disadvantage of 5a is that it generates just a special kind of object
 % code, the actual machine code generation is done by the linker. 
-% A bit unusual maybe.x
+% A bit unusual maybe.
 
 %hex2c, the assembler in subc-2014, ...
 
@@ -194,7 +194,8 @@ Here are other candidates that were considered but ultimately discarded:
 % symbol defs/uses, external symbols.
 % know a bit about architecture (helps to understand Machine.nw)
 
-% asm.ps, 5a(1)
+% asm.ps
+% 8a/5a(1)
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -235,7 +236,8 @@ License.
 % some symbol table information in the object for the linker
 % to know what to do and where to patch things.
 % The .o is really like a module, the really lowest level module abstraction.
-% And a module define some symbols, and use external symbols.
+% And a module define some symbols (for TEXT/GLOBL)
+% and use external symbols.
 % The objects will also be concatenated together so branch/jmp addresses
 % need also to be "relocated", and the same for the reference to 
 % external symbols.
@@ -253,7 +255,7 @@ License.
 % 5a has a few more features than just mnemonic and symbolc addresses:
 %  - can also have some simple constant expression.
 %  - have also "variables" (symbolic name of constants)
-%  - can also have macros and includes!
+%  - can also have macros and includes! cpp.
 %    (really convenient, can define new instructions thx to macro & 
 %     bitshift as in:
 %     #define MCRR(coproc, op, rd, rn, crm) \
@@ -276,7 +278,7 @@ License.
 % can also maybe show one that use libc, use 5c -S hello.c
 
 % show binary format? hexdump? 
-% hmmm actually not binary instruction format! see section below.
+% (hmmm actually not binary instruction format! see section below)
 
 % try show code using TEXT, DATA, GLOBL, different addressing modes, etc
 % show the advantage of assembly, that is mnemonic and symbolic addresses!
@@ -316,7 +318,7 @@ License.
 % 8 bytes limit for strings (so if longer have to split manually,
 % a bit annoying but can use data2s too)
 
-
+% (LONG is a macro?)
 %        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
 %vs
 %        LONG    $_start-KZERO(SB)          /* load_addr */
@@ -363,8 +365,9 @@ License.
 
 \section{Software architecture}
 
-% main -> assemble -> (2 passes) -> yyparse -> yylex
-%                                -> outcode (increments pc and in pass2 output!)
+% main -> assemble -> (2 passes) 
+%   -> yyparse -> yylex
+%              -> outcode (increments pc and in pass2 output!)
 
 % text -> grammar -> symbols -> codegen
 % does not return an AST (but kinda build one for each instruction), 
@@ -501,7 +504,7 @@ enum registr {
 % there are also 
 % - float registers Fxxx
 % - coprocessor registers Cxxx
-% - and also the status register, PCR, and FPCR
+% - and also the status register PCR (and FPCR)
 
 
 \section{[[Operand_kind]] and [[Gen]]}
@@ -520,20 +523,21 @@ struct	Gen
     // enum<operand_kind>
     short	type;
 
-    long	offset; // offset or generic value
-    double	dval;
-    char	sval[8];
-
+    union {
+        long	offset; // offset or generic value
+        double	dval;
+        char	sval[8];
+    };
     <<[[Gen]] other fields>>
 };
 @
 %less: =~ Adr of Linker ?
 %less: rename operand? Why gen anyway? generic?
+%less: can have an union? operand_kind will be good enough?
 
-%less: rename offset? to generic_value? or generic_long?
+%less: rename offset? to generic_value? or generic_long? or lval?
 % but it's true in many places it's used to encode an offset to
-% a base (a reg, a name). maybe a union would be good. like 
-% they did for Adr in the linker.
+% a base (a reg, a name).
 % e.g. for D_SHIFT the long is used really to encode the whole
 % thing with some bits for the shift kind, some bits for the register, etc.
 % see the many uses cases of offset in zaddr() switch about operand_kind ...
@@ -555,7 +559,7 @@ enum operand_kind {
 %note: An ADT would be far better than this enum and separate Sym 
 % and Gen (=~ Adr). So it works with Gen so it's really
 % type operand = 
-%  | D_REG of register
+%  | D_REG of register // and offset?
 %  | D_CONST of int
 %  | Branch of offset (PC)
 %  | Extern of name * offset (SB) ?
@@ -590,13 +594,13 @@ short	reg;
 % see y.tab.h for token_kind enum (which are actually a set of #define
 % with also ascii char into it)
 
-% less: rename LTYPEXXX by T_END, T_TEXT, etc?
 % l for lexeme?
 <<token declarations(arm)>>=
 /* opcodes */
-%token  <lval>  LTYPE1 LTYPE2 LTYPE3 LTYPE4 LTYPE5 LTYPE6 LTYPE7 LTYPE8 LTYPE9 
-%token  <lval>  LTYPEA LTYPEB LTYPEC LTYPEE LTYPEH LTYPEI
-%token  <lval>  LTYPEJ LTYPEK LTYPEL LTYPEM LTYPEN 
+%token  <lval>  LARITH LCMP LBRANCH LBCOND  LMOV LSWAP LSWI
+%token  <lval>  LMVN  LSYSTEM
+%token  <lval>  LDEF LDATA LEND LWORD LRET
+%token  <lval>  LARITHFLOAT LCMPFLOAT LMULL LMULA LMOVM LMISC
 /* registers */
 %token  <lval>  LSP LSB LFP LPC
 %token  <lval>  LR LREG  LPSR
@@ -614,6 +618,8 @@ short	reg;
 %token  <sym>   LNAME LLAB LVAR
 @
 %dead: LTYPEX LTYPEF LTYPEG LTYPED
+%old: used to be LTYPE1 LTYPE2 LTYPEI etc, but better to give clearer names
+%TODO: rename LTYPEXXX by T_END, T_TEXT, etc? L_ARITH? L_CMP L_MOV L_SWAP
 
 
 
@@ -668,11 +674,12 @@ struct Itab
 // map<string, (token_kind * enum<opcode|register|...>)>
 struct Itab itab[] =
 {
-    "NOP",		LTYPEI, ANOP,
+    "NOP",		LMISC, ANOP,
     <<[[itab]] elements>>
     0
 };
 @
+%LTYPEI? really? should have a special rule no? LNOP and then a nop grammar rule
 % not a string -> partial_token (miss the concrete values, have just the lval
 %  case)
 
@@ -691,7 +698,7 @@ struct	Sym
 {
     char	*name;
 
-    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LTYPE1, etc)
+    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
     ushort	type;
 
     // long (e.g. pc for LLAB, or integer for LVAR) 
@@ -868,7 +875,7 @@ short	symkind;
 @
 %old: was called name, but confusing I think, name as a field was used in
 % many structures and it's actually not a name
-%less: rename name to name_kind? rename also the sym field above?
+%less: rename to name_kind? rename also the sym field above?
 
 %note that can have symkind set but not necessarality a sym,
 % but it's in the degenerated case of con ( pointer ) which
@@ -969,15 +976,16 @@ Gen	nullgen;
 
 <<[[cinit()]] nullgen initialisation>>=
 nullgen.type = D_NONE;
-nullgen.offset = 0;
 nullgen.reg = R_NONE;
 nullgen.sym = S;
 nullgen.symkind = N_NONE;
+nullgen.offset = 0;
 if(FPCHIP)
     nullgen.dval = 0;
 for(i=0; i<sizeof(nullgen.sval); i++)
     nullgen.sval[i] = 0;
 @
+%todo: now that I use an union, this code is valid about dval and sval?
 % can't use N_NONE because this function is in aa/ and N_NONE is
 % in 5a/a.h
 
@@ -1200,7 +1208,7 @@ pinit(char *f)
 
 \section{Files managment, [[iostack]]}
 
-% 5a supports #include  so have to open files, close them
+% 5a supports #include  so have to open files, and also close them
 %less: better to separate concern and have cpp in a different program?
 
 <<constant BUFSIZ>>=
@@ -1302,7 +1310,6 @@ newfile(char *s, int f)
 @
 
 \section{Buffer managment, [[fi]]}
-
 % buffered IO
 
 % File input?
@@ -3133,20 +3140,19 @@ AEOR,
 % how NOT?
 
 <<[[itab]] elements>>=
-"AND",		LTYPE1,	AAND,
-"ORR",		LTYPE1,	AORR,
-"EOR",		LTYPE1,	AEOR,
+"AND",		LARITH,	AAND,
+"ORR",		LARITH,	AORR,
+"EOR",		LARITH,	AEOR,
 @
-
 
 <<inst rule(arm)>>=
 inst:
 /*
  * AND/OR/ADD/SUB/...
  */
-  LTYPE1 cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
-| LTYPE1 cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
-| LTYPE1 cond imsr ',' reg           { outcode($1, $2, &$3, R_NONE, &$5); }
+  LARITH cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
+| LARITH cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
+| LARITH cond imsr ',' reg           { outcode($1, $2, &$3, R_NONE, &$5); }
 @
 %$
 % arith operator of Machine.nw, but also SLL, SRL,   DIV, MOD, ...
@@ -3177,8 +3183,8 @@ ASUB,
 % fields of struct (need add offset to a base)
 
 <<[[itab]] elements>>=
-"ADD",		LTYPE1,	AADD,
-"SUB",		LTYPE1,	ASUB,
+"ADD",		LARITH,	AADD,
+"SUB",		LARITH,	ASUB,
 @
 
 
@@ -3195,11 +3201,11 @@ ASBC,
 ARSC,
 @
 <<[[itab]] elements>>=
-"BIC",		LTYPE1,	ABIC,
-"RSB",		LTYPE1,	ARSB,
-"ADC",		LTYPE1,	AADC,
-"SBC",		LTYPE1,	ASBC,
-"RSC",		LTYPE1,	ARSC,
+"BIC",		LARITH,	ABIC,
+"RSB",		LARITH,	ARSB,
+"ADC",		LARITH,	AADC,
+"SBC",		LARITH,	ASBC,
+"RSC",		LARITH,	ARSC,
 @
 \fi
 
@@ -3222,9 +3228,9 @@ ASLL,
 % multiplication optimisation (when power of 2)
 
 <<[[itab]] elements>>=
-"SLL",		LTYPE1,	ASLL,
-"SRL",		LTYPE1,	ASRL,
-"SRA",		LTYPE1,	ASRA,
+"SLL",		LARITH,	ASLL,
+"SRL",		LARITH,	ASRL,
+"SRA",		LARITH,	ASRA,
 @
 
 \subsubsection{Mul/div/mod}
@@ -3239,9 +3245,9 @@ AMOD,
 %  for pointer arithmetic in general!
 
 <<[[itab]] elements>>=
-"MUL",		LTYPE1, AMUL,
-"DIV",		LTYPE1,	ADIV,
-"MOD",		LTYPE1,	AMOD,
+"MUL",		LARITH, AMUL,
+"DIV",		LARITH,	ADIV,
+"MOD",		LARITH,	AMOD,
 @
 
 
@@ -3261,9 +3267,9 @@ ACMP,
 %todo: (but why 3 different tests? one not enough?)
 
 <<[[itab]] elements>>=
-"CMP",		LTYPE7,	ACMP,
-"TST",		LTYPE7,	ATST,
-"TEQ",		LTYPE7,	ATEQ,
+"CMP",		LCMP,	ACMP,
+"TST",		LCMP,	ATST,
+"TEQ",		LCMP,	ATEQ,
 @
 
 
@@ -3271,7 +3277,7 @@ ACMP,
 /*
  * CMP
  */
-| LTYPE7 cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
+| LCMP cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
 @
 %$
 
@@ -3281,7 +3287,7 @@ ACMN,
 @
 % CMP negative
 <<[[itab]] elements>>=
-"CMN",		LTYPE7,	ACMN,
+"CMN",		LCMP,	ACMN,
 @
 \fi
 
@@ -3308,11 +3314,11 @@ AMOVHU,
 
 
 <<[[itab]] elements>>=
-"MOVW",		LTYPE3, AMOVW,
-"MOVB",		LTYPE3, AMOVB,
-"MOVBU",	LTYPE3, AMOVBU,
-"MOVH",		LTYPE3, AMOVH,
-"MOVHU",	LTYPE3, AMOVHU,
+"MOVW",		LMOV, AMOVW,
+"MOVB",		LMOV, AMOVB,
+"MOVBU",	LMOV, AMOVBU,
+"MOVH",		LMOV, AMOVH,
+"MOVHU",	LMOV, AMOVHU,
 @
 
 
@@ -3320,7 +3326,7 @@ AMOVHU,
 /*
  * MOVW
  */
-| LTYPE3 cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
+| LMOV cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
 @
 % special instr? the real one accept any gen? no real one are just load/store
 % with registers.
@@ -3337,13 +3343,13 @@ AMVN,
 % MOV negative
 %//AMOV, redundant with the other MOV operations
 <<[[itab]] elements>>=
-"MVN",		LTYPE2, AMVN,	/* op2 ignored */
+"MVN",		LMVN, AMVN,	/* op2 ignored */
 @
 <<inst rule(arm)>>=
 /*
  * MVN
  */
-| LTYPE2 cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LMVN cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
 @
 \fi
 
@@ -3362,17 +3368,17 @@ ASWPBU,
 % used in _tas so maybe a special system-like instruction?
 
 <<[[itab]] elements>>=
-"SWPW",		LTYPE9, ASWPW,
-"SWPBU",	LTYPE9, ASWPBU,
+"SWPW",		LSWAP, ASWPW,
+"SWPBU",	LSWAP, ASWPBU,
 @
 
 <<inst rule(arm)>>=
 /*
  * SWAP
  */
-| LTYPE9 cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
-| LTYPE9 cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
-| LTYPE9 cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
+| LSWAP cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
+| LSWAP cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
+| LSWAP cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
 @
 %$
 
@@ -3393,8 +3399,8 @@ ABL,
 % BL is ARM specific opti for CALL to leaf functions. Branch and Link.
 
 <<[[itab]] elements>>=
-"B",		LTYPE4, AB,
-"BL",		LTYPE4, ABL,
+"B",		LBRANCH, AB,
+"BL",		LBRANCH, ABL,
 @
 
 
@@ -3402,8 +3408,8 @@ ABL,
 /*
  * B/BL
  */
-| LTYPE4 cond rel   { outcode($1, $2, &nullgen, R_NONE, &$3); }
-| LTYPE4 cond nireg { outcode($1, $2, &nullgen, R_NONE, &$3); }
+| LBRANCH cond rel   { outcode($1, $2, &nullgen, R_NONE, &$3); }
+| LBRANCH cond nireg { outcode($1, $2, &nullgen, R_NONE, &$3); }
 @
 
 % B of name? of TEXT or label? both?
@@ -3441,29 +3447,29 @@ ABLE,
 % and does not match the ARM convention
 
 <<[[itab]] elements>>=
-"BEQ",		LTYPE5,	ABEQ,
-"BNE",		LTYPE5,	ABNE,
-"BCS",		LTYPE5,	ABCS,
-"BHS",		LTYPE5,	ABHS,
-"BCC",		LTYPE5,	ABCC,
-"BLO",		LTYPE5,	ABLO,
-"BMI",		LTYPE5,	ABMI,
-"BPL",		LTYPE5,	ABPL,
-"BVS",		LTYPE5,	ABVS,
-"BVC",		LTYPE5,	ABVC,
-"BHI",		LTYPE5,	ABHI,
-"BLS",		LTYPE5,	ABLS,
-"BGE",		LTYPE5,	ABGE,
-"BLT",		LTYPE5,	ABLT,
-"BGT",		LTYPE5,	ABGT,
-"BLE",		LTYPE5,	ABLE,
+"BEQ",		LBCOND,	ABEQ,
+"BNE",		LBCOND,	ABNE,
+"BCS",		LBCOND,	ABCS,
+"BHS",		LBCOND,	ABHS,
+"BCC",		LBCOND,	ABCC,
+"BLO",		LBCOND,	ABLO,
+"BMI",		LBCOND,	ABMI,
+"BPL",		LBCOND,	ABPL,
+"BVS",		LBCOND,	ABVS,
+"BVC",		LBCOND,	ABVC,
+"BHI",		LBCOND,	ABHI,
+"BLS",		LBCOND,	ABLS,
+"BGE",		LBCOND,	ABGE,
+"BLT",		LBCOND,	ABLT,
+"BGT",		LBCOND,	ABGT,
+"BLE",		LBCOND,	ABLE,
 @
 
 <<inst rule(arm)>>=
 /*
  * BEQ/...
  */
-| LTYPE5 rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
+| LBCOND rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
 @
 
 
@@ -3476,14 +3482,14 @@ ARET,
 % (works with BL?)
 
 <<[[itab]] elements>>=
-"RET",		LTYPEA, ARET,
+"RET",		LRET, ARET,
 @
 
 <<inst rule(arm)>>=
 /*
  * RET
  */
-| LTYPEA cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+| LRET cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 @
 % because of B and BL (and as we will see in 5l STEXT and SLEAF),
 % it's convenient to have a general way to return from a procedure
@@ -3500,14 +3506,14 @@ ASWI, // syscall
 % (but in supervised mode of course)
 
 <<[[itab]] elements>>=
-"SWI",		LTYPE6, ASWI,
+"SWI",		LSWI, ASWI,
 @
 
 <<inst rule(arm)>>=
 /*
  * SWI
  */
-| LTYPE6 cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+| LSWI cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 @
 %$
 %old: | LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
@@ -4334,16 +4340,16 @@ AGLOBL,
 @
 
 <<[[itab]] elements>>=
-"TEXT",		LTYPEB, ATEXT,
-"GLOBL",	LTYPEB, AGLOBL,
+"TEXT",		LDEF, ATEXT,
+"GLOBL",	LDEF, AGLOBL,
 @
 
 <<inst rule(arm)>>=
 /*
  * TEXT/GLOBL
  */
-| LTYPEB name ',' imm         { outcode($1, Always, &$2, R_NONE, &$4); }
-| LTYPEB name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
+| LDEF name ',' imm         { outcode($1, Always, &$2, R_NONE, &$4); }
+| LDEF name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
 @
 %$
 
@@ -4370,15 +4376,15 @@ AWORD,
 @
 
 <<[[itab]] elements>>=
-"DATA",		LTYPEC, ADATA,
-"WORD",		LTYPEH, AWORD,
+"DATA",		LDATA, ADATA,
+"WORD",		LWORD, AWORD,
 @
 
 <<inst rule(arm)>>=
 /*
  * DATA
  */
-| LTYPEC name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
+| LDATA name '/' con ',' ximm { outcode($1, Always, &$2, $4, &$6); }
 @
 
 % DATA boot_CONF_outlen+0(SB)/4, $67523
@@ -4389,7 +4395,7 @@ AWORD,
 /*
  * WORD
  */
-| LTYPEH ximm { outcode($1, Always, &nullgen, R_NONE, &$2); }
+| LWORD ximm { outcode($1, Always, &nullgen, R_NONE, &$2); }
 @
 % kind of anonymous DATA? but used in TEXT so can
 % write binary data that cannot be expressed by the assembler?
@@ -4403,14 +4409,14 @@ AEND,
 @
 
 <<[[itab]] elements>>=
-"END",		LTYPEE, AEND,
+"END",		LEND, AEND,
 @
 
 <<inst rule(arm)>>=
 /*
  * END
  */
-| LTYPEE { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
+| LEND { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
 @
 %$
 % also generated in cclean()
@@ -5029,10 +5035,10 @@ AMULALU,
 @
 
 <<[[itab]] elements>>=
-"MULL",		LTYPEM, AMULL,
-"MULAL",	LTYPEM, AMULAL,
-"MULLU",	LTYPEM, AMULLU,
-"MULALU",	LTYPEM, AMULALU,
+"MULL",		LMULL, AMULL,
+"MULAL",	LMULL, AMULAL,
+"MULLU",	LMULL, AMULLU,
+"MULALU",	LMULL, AMULALU,
 @
 
 
@@ -5042,7 +5048,7 @@ AMULALU,
 /*
  * MULL hi,lo,r1,r2
  */
-| LTYPEM cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
+| LMULL cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
 @
 %$
 % ugly $5.reg?
@@ -5053,7 +5059,7 @@ AMULA,
 @
 
 <<[[itab]] elements>>=
-"MULA",		LTYPEN, AMULA,
+"MULA",		LMULA, AMULA,
 @
 
 <<operand_kind cases>>=
@@ -5064,7 +5070,7 @@ D_REGREG,
 /*
  * MULA hi,lo,r1,r2
  */
-| LTYPEN cond reg ',' reg ',' reg ',' spreg 
+| LMULA cond reg ',' reg ',' reg ',' spreg 
  {
   $7.type = D_REGREG;
   $7.offset = $9;
@@ -5131,44 +5137,44 @@ ASQRTD,
 @
 
 <<[[itab]] elements>>=
-"MOVD",		LTYPE3, AMOVD,
-"MOVDF",	LTYPE3, AMOVDF,
-"MOVDW",	LTYPE3, AMOVDW,
-"MOVF",		LTYPE3, AMOVF,
-"MOVFD",	LTYPE3, AMOVFD,
-"MOVFW",	LTYPE3, AMOVFW,
-"MOVWD",	LTYPE3, AMOVWD,
-"MOVWF",	LTYPE3, AMOVWF,
+"MOVD",		LMOV, AMOVD,
+"MOVDF",	LMOV, AMOVDF,
+"MOVDW",	LMOV, AMOVDW,
+"MOVF",		LMOV, AMOVF,
+"MOVFD",	LMOV, AMOVFD,
+"MOVFW",	LMOV, AMOVFW,
+"MOVWD",	LMOV, AMOVWD,
+"MOVWF",	LMOV, AMOVWF,
 @
 
 <<[[itab]] elements>>=
-"SQRTF",	LTYPEI, ASQRTF,
-"SQRTD",	LTYPEI, ASQRTD,
-"CMPF",		LTYPEL, ACMPF,
-"CMPD",		LTYPEL, ACMPD,
-"ADDF",		LTYPEK,	AADDF,
-"ADDD",		LTYPEK,	AADDD,
-"SUBF",		LTYPEK,	ASUBF,
-"SUBD",		LTYPEK,	ASUBD,
-"MULF",		LTYPEK,	AMULF,
-"MULD",		LTYPEK,	AMULD,
-"DIVF",		LTYPEK,	ADIVF,
-"DIVD",		LTYPEK,	ADIVD,
+"SQRTF",	LMISC, ASQRTF,
+"SQRTD",	LMISC, ASQRTD,
+"CMPF",		LCMPFLOAT, ACMPF,
+"CMPD",		LCMPFLOAT, ACMPD,
+"ADDF",		LARITHFLOAT,	AADDF,
+"ADDD",		LARITHFLOAT,	AADDD,
+"SUBF",		LARITHFLOAT,	ASUBF,
+"SUBD",		LARITHFLOAT,	ASUBD,
+"MULF",		LARITHFLOAT,	AMULF,
+"MULD",		LARITHFLOAT,	AMULD,
+"DIVF",		LARITHFLOAT,	ADIVF,
+"DIVD",		LARITHFLOAT,	ADIVD,
 @
 
 %/*
-%    "ABSF",		LTYPEI, AABSF,
-%    "ABSD",		LTYPEI, AABSD,
-%    "NEGF",		LTYPEI, ANEGF,
-%    "NEGD",		LTYPEI, ANEGD,
-%    "SQTF",		LTYPEI,	ASQTF,
-%    "SQTD",		LTYPEI,	ASQTD,
-%    "RNDF",		LTYPEI,	ARNDF,
-%    "RNDD",		LTYPEI,	ARNDD,
-%    "URDF",		LTYPEI,	AURDF,
-%    "URDD",		LTYPEI,	AURDD,
-%    "NRMF",		LTYPEI,	ANRMF,
-%    "NRMD",		LTYPEI,	ANRMD,
+%    "ABSF",		LMISC, AABSF,
+%    "ABSD",		LMISC, AABSD,
+%    "NEGF",		LMISC, ANEGF,
+%    "NEGD",		LMISC, ANEGD,
+%    "SQTF",		LMISC,	ASQTF,
+%    "SQTD",		LMISC,	ASQTD,
+%    "RNDF",		LMISC,	ARNDF,
+%    "RNDD",		LMISC,	ARNDD,
+%    "URDF",		LMISC,	AURDF,
+%    "URDD",		LMISC,	AURDD,
+%    "NRMF",		LMISC,	ANRMF,
+%    "NRMD",		LMISC,	ANRMD,
 %*/
 
 
@@ -5224,10 +5230,10 @@ ASQRTD,
 /*
  * floating-point coprocessor
  */
-| LTYPEI cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
-| LTYPEK cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
-| LTYPEK cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
-| LTYPEL cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
+| LMISC cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LARITHFLOAT cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LARITHFLOAT cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
+| LCMPFLOAT cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
 @
 %$
 
@@ -5377,7 +5383,7 @@ AMOVM,
 @
 
 <<[[itab]] elements>>=
-"MOVM",		LTYPE8, AMOVM,
+"MOVM",		LMOVM, AMOVM,
 @
 %in lproc.s 
 %	RFE				/* MOVM.IA.S.W (R13), [R15] */
@@ -5388,7 +5394,7 @@ AMOVM,
 /*
  * MOVM
  */
-| LTYPE8 cond ioreg ',' '[' reglist ']'
+| LMOVM cond ioreg ',' '[' reglist ']'
  {
   Gen g;
 
@@ -5397,7 +5403,7 @@ AMOVM,
   g.offset = $6;
   outcode($1, $2, &$3, R_NONE, &g);
  }
-| LTYPE8 cond '[' reglist ']' ',' ioreg
+| LMOVM cond '[' reglist ']' ',' ioreg
  {
   Gen g;
 
@@ -5466,25 +5472,25 @@ reglist:
 %%#define	STREX(v,a,r)	WORD	$(0xe<<28|0x01800f90 | (a)<<16 | (r)<<12 | (v)<<0)
 %
 %<<[[itab]] elements>>=
-%"LDREX",		LTYPE3, ALDREX,
-%"LDREXD",		LTYPE3, ALDREXD,
-%"STREX",		LTYPE9, ASTREX,
-%"STREXD",		LTYPE9, ASTREXD,
+%"LDREX",		LMOV, ALDREX,
+%"LDREXD",		LMOV, ALDREXD,
+%"STREX",		LSWP, ASTREX,
+%"STREXD",		LSWP, ASTREXD,
 %@
 
 \section{System instructions}
 
 % no Axxx opcode, binary generation directly in action via D_CONST
 <<[[itab]] elements>>=
-"MCR",		LTYPEJ, 0,
-"MRC",		LTYPEJ, 1,
+"MCR",		LSYSTEM, 0,
+"MRC",		LSYSTEM, 1,
 @
 
 <<inst rule(arm)>>=
 /*
  * MCR MRC
  */
-| LTYPEJ cond con ',' expr ',' spreg ',' creg ',' creg oexpr
+| LSYSTEM cond con ',' expr ',' spreg ',' creg ',' creg oexpr
  {
   Gen g;
 
@@ -5564,7 +5570,7 @@ ARFE, // ?? return from exn?
 @
 
 <<[[itab]] elements>>=
-"RFE",		LTYPEA, ARFE,
+"RFE",		LRET, ARFE,
 @
 % same grammar rule than RET
 
@@ -5591,7 +5597,7 @@ ABCASE,
 % using them so I commented the code.
 %<<[[itab]] elements>>=
 %"CASE",		LTYPED, ACASE,
-%"BCASE",	LTYPE5,	ABCASE,
+%"BCASE",	LBCOND,	ABCASE,
 %@
 %<<inst rule(arm)>>=
 %/*
