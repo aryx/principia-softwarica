@@ -517,7 +517,7 @@ zaddr(Gen *a, int symidx)
     int i;
     /*e: [[zaddr()]] locals */
 
-    // operand format: operand kind, register, symidx, symlink, optional offset
+    // operand format: operand kind, register, symidx, symkind, optional offset
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
     // idx in symbol table, 0 if no symbol involved in the operand
@@ -528,6 +528,8 @@ zaddr(Gen *a, int symidx)
     switch(a->type) {
     /*s: [[zaddr()]] cases */
     case D_NONE:
+        break;
+
     case D_REG:
     case D_PSR:
         break;
@@ -745,7 +747,7 @@ outhist(void)
             if(n) {
                 Bputc(&obuf, ANAME);
                 Bputc(&obuf, D_FILE);	/* type */ // symkind
-                Bputc(&obuf, 1);	/* sym */ //symidx
+                Bputc(&obuf, 1);	    /* sym */  // symidx
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);
                 Bputc(&obuf, '\0');

@@ -597,10 +597,9 @@ short	reg;
 % l for lexeme?
 <<token declarations(arm)>>=
 /* opcodes */
-%token  <lval>  LARITH LCMP LBRANCH LBCOND  LMOV LSWAP LSWI
-%token  <lval>  LMVN  LSYSTEM
-%token  <lval>  LDEF LDATA LEND LWORD LRET
-%token  <lval>  LARITHFLOAT LCMPFLOAT LMULL LMULA LMOVM LMISC
+%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LSWI LRET
+%token  <lval>  LDEF LDATA LWORD LEND
+%token  <lval>  LSYSTEM LARITHFLOAT LCMPFLOAT LMULL LMULA LMOVM LMVN LMISC
 /* registers */
 %token  <lval>  LSP LSB LFP LPC
 %token  <lval>  LR LREG  LPSR
@@ -4549,12 +4548,13 @@ comma:
 
 % Then spreaded among those instructions are also symbol table
 % entries, using a weird scheme
-% ANAME: symkind (1 byte), ?? (1 byte), '<', string finished by \0
+% ANAME: symkind (1 byte), symidx (1 byte), string finished by \0
 % (hmm the symkind might be redundant then if it's already listed
-%  as part of the operand?)
+%  as part of the operand? no, it's because of the spreaded symbol
+%  table scheme)
 
 % the header is really just a set of ANAME and AHISTORY, and
-% AHISTORY just the same format than other instructions.
+% AHISTORY use the same format than other instructions.
 
 % 5l then read back this format in a simple loop reading one
 % instruction at a time and maintaing the symbol table information
@@ -4654,7 +4654,7 @@ zaddr(Gen *a, int symidx)
 {
     <<[[zaddr()]] locals>>
 
-    // operand format: operand kind, register, symidx, symlink, optional offset
+    // operand format: operand kind, register, symidx, symkind, optional offset
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
     // idx in symbol table, 0 if no symbol involved in the operand
@@ -4683,6 +4683,8 @@ int i;
 
 <<[[zaddr()]] cases>>=
 case D_NONE:
+    break;
+
 case D_REG:
 case D_PSR:
     break;
@@ -4755,14 +4757,11 @@ zname(char *n, int symkind, int symidx)
 }
 @
 % note that labels do not generate code, they are local to the .o
-% and used to compute offsets (pc). TEXT generate symbols defs
-% and some opcodes generate symbol references.
+% and used to compute offsets (pc). TEXT/GLOBL generate symbols defs
+% and other opcodes generate symbol uses.
 
 % symidx may seem weird, why need idx if store the symbol entries
 % one after the other?
-
-
-
 
 
 <<struct Htab>>=
@@ -4794,8 +4793,9 @@ struct Htab h[NSYM];
 % why call it h when really it's an array ...
 
 % h is an optimisation to avoid generating too many ANAME? But
-% why not a symbol table at the beginning of the file?
-
+% why not a symbol table at the beginning of the file? why spread it?
+% because that way can use 1 byte for symbol idx and still have
+% infinite possibilities! tricky.
 
 % next free entry in h (actually can be reseted to 1)
 <<global symcounter>>=
@@ -4917,7 +4917,7 @@ while(s != S) {
 %  (otherwise could loop on MOVW bar(SB), bar(SB)
 
 \section{File and line information, [[outhist()]] and [[AHISTORY]]}
-%note: was called Header section, but 
+%note: was called Header section, but
 % it's not really an header in traditional sense,
 % the object could be parsed without those AHISTORY and ANAME I think.
 %less: have a Debugging support section? where put lineno of outcode()
@@ -5006,7 +5006,7 @@ while(p) {
     if(n) {
         Bputc(&obuf, ANAME);
         Bputc(&obuf, D_FILE);	/* type */ // symkind
-        Bputc(&obuf, 1);	/* sym */ //symidx
+        Bputc(&obuf, 1);	    /* sym */  // symidx
         Bputc(&obuf, '<');
         Bwrite(&obuf, p, n);
         Bputc(&obuf, '\0');

@@ -30,10 +30,9 @@
 /*e: priority and associativity declarations */
 /*s: token declarations(arm) */
 /* opcodes */
-%token  <lval>  LARITH LCMP LBRANCH LBCOND  LMOV LSWAP LSWI
-%token  <lval>  LMVN  LSYSTEM
-%token  <lval>  LDEF LDATA LEND LWORD LRET
-%token  <lval>  LARITHFLOAT LCMPFLOAT LMULL LMULA LMOVM LMISC
+%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LSWI LRET
+%token  <lval>  LDEF LDATA LWORD LEND
+%token  <lval>  LSYSTEM LARITHFLOAT LCMPFLOAT LMULL LMULA LMOVM LMVN LMISC
 /* registers */
 %token  <lval>  LSP LSB LFP LPC
 %token  <lval>  LR LREG  LPSR
