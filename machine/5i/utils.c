@@ -38,6 +38,7 @@ itrace(char *fmt, ...)
     va_end(arg);
     Bprint(bioout, "%8lux %.8lux %2d %s\n", 
                      reg.ar, reg.instr, reg.instr_opcode, buf);	
+    Bflush(bioout);
 }
 /*e: function itrace */
 

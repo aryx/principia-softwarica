@@ -25,7 +25,7 @@ ulong	nofunc;
 /*s: global sysctab */
 char*	sysctab[] =
 {
-    [NOP]		"Running",
+    [NOP]		"Nop",
     [BIND]		"Bind",
     [CHDIR]		"Chdir",
     [CLOSE]		"Close",
@@ -698,42 +698,53 @@ sysfversion(void)
 void	(*systab[])(void) =
 {
     [NOP]		sysnop,
-    [BIND]		sysbind,
-    [CHDIR]		syschdir,
-    [CLOSE]		sysclose,
-    [DUP]		sysdup,
-    [ALARM]		sysalarm,
+
+    [RFORK]		sysrfork,
     [EXEC]		sysexec,
     [EXITS]		sysexits,
-    [FAUTH]		sysfauth,
-    [SEGBRK]	syssegbrk,
-    [MOUNT]		sysmount,
-    [OPEN]		sysopen,
-    [SLEEP]		syssleep,
-    [RFORK]		sysrfork,
-    [PIPE]		syspipe,
-    [CREATE]	syscreate,
-    [FD2PATH]	sysfd2path,
+    [AWAIT]		sysawait,
+
     [BRK]		sysbrk,
-    [REMOVE]	sysremove,
-    [NOTIFY]	sysnotify,
-    [NOTED]		sysnoted,
-    [SEGATTACH]		syssegattach,
-    [SEGDETACH]		syssegdetach,
-    [SEGFREE]		syssegfree,
-    [SEGFLUSH]		syssegflush,
-    [RENDEZVOUS]	sysrendezvous,
-    [UNMOUNT]		sysunmount,
+
+    [OPEN]		sysopen,
+    [CLOSE]		sysclose,
+    [PREAD]		syspread,
+    [PWRITE]	syspwrite,
     [SEEK]		sysseek,
-    [FVERSION]	sysfversion,
-    [ERRSTR]	syserrstr,
+
+    [CREATE]	syscreate,
+    [REMOVE]	sysremove,
+    [CHDIR]		syschdir,
+    [FD2PATH]	sysfd2path,
     [STAT]		sysstat,
     [FSTAT]		sysfstat,
     [WSTAT]		syswstat,
     [FWSTAT]	sysfwstat,
-    [PREAD]		syspread,
-    [PWRITE]	syspwrite,
-    [AWAIT]		sysawait,
+
+    [BIND]		sysbind,
+    [MOUNT]		sysmount,
+    [UNMOUNT]	sysunmount,
+
+    [SLEEP]		syssleep,
+    [ALARM]		sysalarm,
+
+    [PIPE]		syspipe,
+    [NOTIFY]	sysnotify,
+    [NOTED]		sysnoted,
+
+    [SEGATTACH]	syssegattach,
+    [SEGDETACH]	syssegdetach,
+    [SEGFREE]	syssegfree,
+    [SEGFLUSH]	syssegflush,
+    [SEGBRK]	syssegbrk,
+
+    [RENDEZVOUS]	sysrendezvous,
+
+    [DUP]		sysdup,
+    [FVERSION]	sysfversion,
+    [FAUTH]		sysfauth,
+
+    [ERRSTR]	syserrstr,
 };
 /*e: global systab */
 
@@ -745,6 +756,7 @@ Ssyscall(instruction _unused)
     USED(_unused);
 
     call = reg.r[REGARG];
+
     if(call < 0 || call >= nelem(systab) || systab[call] == nil) {
         Bprint(bioout, "bad system call %d (%#ux)\n", call, call);
         dumpreg();
@@ -754,8 +766,10 @@ Ssyscall(instruction _unused)
 
     if(trace)
         itrace("SWI\t%s", sysctab[call]);
+
     // dispatch!
     (*systab[call])();
+
     Bflush(bioout);
 }
 /*e: function Ssyscall */

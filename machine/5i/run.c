@@ -83,6 +83,7 @@ Inst itab[] =
   [OBIC] =  { Idp0,		"BIC",	Iarith },	
   [OMVN] =  { Idp0,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
+  // r<>r, r, r
   [OAND +CARITH1] =  { Idp1,		"AND",	Iarith },	
   [OEOR +CARITH1] =  { Idp1,		"EOR",	Iarith },	
   [OSUB +CARITH1] =  { Idp1,		"SUB",	Iarith },	
@@ -100,6 +101,7 @@ Inst itab[] =
   [OBIC +CARITH1] =  { Idp1,		"BIC",	Iarith },	
   [OMVN +CARITH1] =  { Idp1,		"MVN",	Iarith },	
   /*x: [[itab]] elements */
+  // r<>#, r, r
   [OAND +CARITH2] =  { Idp2,		"AND",	Iarith },	
   [OEOR +CARITH2] =  { Idp2,		"EOR",	Iarith },	
   [OSUB +CARITH2] =  { Idp2,		"SUB",	Iarith },	
@@ -137,8 +139,8 @@ Inst itab[] =
   /*x: [[itab]] elements */
   [OMULLU]  =  { Imull,	"MULLU",	Iarith },
   [OMULALU] =  { Imull,	"MULALU",	Iarith },
-  [OMULL]   =  { Imull,	"MULL",		Iarith  },
-  [OMULAL]  =  { Imull,	"MULAL",	Iarith  },
+  [OMULL]   =  { Imull,	"MULL",		Iarith },
+  [OMULAL]  =  { Imull,	"MULAL",	Iarith },
   /*x: [[itab]] elements */
   [OSWPW] =   { Iswap,		"SWPW",	Imem },
   [OSWPBU] =  { Iswap,		"SWPBU",Imem },
@@ -169,7 +171,6 @@ Inst itab[] =
   [OB]  =  { Ib,	"B",	Ibranch },
   [OBL] =  { Ibl,	"BL",	Ibranch },
   /*x: [[itab]] elements */
-  // co processor
   [OSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
   /*e: [[itab]] elements */
   { 0 }
@@ -257,8 +258,6 @@ run(void)
     bool execute;
 
     do {
-        if(trace) Bflush(bioout);
-
         reg.ar = reg.r[REGPC];
         reg.instr = ifetch(reg.ar);
 
@@ -491,7 +490,7 @@ dpex(instruction inst, long o1, long o2, int rd)
         reg.r[rd] = o1 ^ o2;
         cbit = true;
         break;
-    case OBIC:	/* bic */
+    case OBIC:
         reg.r[rd] = o1 & ~o2;
         cbit = true;
         break;

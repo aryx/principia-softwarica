@@ -14,7 +14,7 @@
 char*	file = "5.out";
 /*e: global file */
 /*s: global bxxx */
-Biobuf	bi, bp;
+Biobuf	bi, bo;
 /*e: global bxxx */
 /*s: global fhdr */
 Fhdr	fhdr;
@@ -175,7 +175,7 @@ void main(int argc, char **argv)
     argc--;
     argv++;
 
-    bioout = &bp;
+    bioout = &bo;
     bin = &bi;
     Binit(bioout, STDOUT, OWRITE);
     Binit(bin, STDIN, OREAD);

@@ -272,11 +272,12 @@ struct Segment
     uintptr	base;
     uintptr	end;
 
-    ulong	fileoff;
-    ulong	fileend;
-
     //array<option<array_4096<byte>>> page table
     byte**	table; // the data
+
+    // for the Text and Data segments the bytes are in the file
+    ulong	fileoff;
+    ulong	fileend;
 
     /*s: [[Segment]] profiling fields */
     int	rss;
