@@ -16,13 +16,18 @@ TEXT _main(SB), 0, $20
         MOVW R1, 16(R13)
         MOVW $PWRITE, R0
         SWI
-                
+
+        MOVW $end(SB), R1
+        MOVW R1, 4(R13)                
         MOVW $EXITS, R0
         SWI
 
 GLOBL   hello(SB), $16
 DATA    hello+0(SB)/8, $"hello wo"
 DATA    hello+8(SB)/8, $"rld\n\z\z\z\z"
+
+GLOBL   end(SB), $8
+DATA    end+0(SB)/8, $"end\z\z\z\z\z"
                         
 
         
