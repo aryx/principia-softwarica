@@ -30,4 +30,3 @@ GLOBL   end(SB), $8
 DATA    end+0(SB)/8, $"end\z\z\z\z\z"
                         
 
-        
