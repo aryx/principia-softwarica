@@ -41,14 +41,14 @@ typedef	struct	Count	Count;
 /*s: struct Adr(arm) */
 struct	Adr
 {
-    //enum<operand_kind> (D_NONE by default)
+    // enum<operand_kind> (D_NONE by default)
     byte	type;
 
     union
     {
         long	u0offset;
-        char*	u0sval;
         Ieee*	u0ieee;
+        char*	u0sval;
     } u0;
 
     union

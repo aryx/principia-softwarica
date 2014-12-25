@@ -12,14 +12,16 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - introduced HEADTYPE instead of hardcoded ints
-% - introduced mylog and DBG
-% - cleaned up all those myxxx wrappers
+% - introduced HEADTYPE instead of hardcoded integers
+% - introduced mylog and DBG, factorize tracing code
+% - removed many portable myxxx wrappers
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
 
-%thx to this manual, better understand ld?:
+%thx to this manual, better understand linking:
+% - that an object is really a module, the simplest/lowest module abstraction
+%   with defs and uses to link together (for text and data).
 % - TODO fpic? 
 % - TODO dynamic linking?
 
@@ -32,8 +34,8 @@
 % - distribute parts of the file before
 % - understand main(), LP split main, improve TOC
 % - understand main functions, LP split, cluster, improve TOC
-% - TODO LP split the structures, use datalog for flow to field info
-% - TODO nullify, boolify, typeify,    scheckify
+% - LP split the structures, use datalog for flow to field info
+% - SEMI nullify, boolify, typeify,    scheckify
 % - aspecify advanced features!
 % - TODO add figures
 % - TODO add explanations
@@ -99,12 +101,12 @@
 \title{
 {\Huge 
 Principia Softwarica: The Plan9 Linker [[5l]]
-% and Loader?
 }\\
 ARM (32 bits) edition\\
 {version 0.1}
 }
-% 8l, x86 (32 bits) edition
+%alt: 8l, x86 (32 bits) edition
+% Linker and Loader?
 
 \author{
 Yoann Padioleau\\
@@ -191,12 +193,13 @@ License.
 
 \section{Linker principles}
 
+% principle: link together object files. Resolve external symbols references.
+% Link defs to uses. An object is really the simplest/lowest module abstraction.
+% Also compute textsize, datasize, etc and adjust addresses.
+
 % and loader? why the term loader instead of linker?
 % maybe because load the objects and libs and then link them
 % (but first it "loads" them)
-
-% principle: link together object files. Resolve external symbols references.
-% Also compute textsize, datasize, etc and adjust addresses.
 
 % For plan9 the linker is also generating the
 % ISA binary code (what was usually done by the assembler)).
@@ -206,7 +209,6 @@ License.
 \section{[[5l]] services}
 
 % command line interface? -o
-
 % important -TText, see Kernel.nw
 
 <<function usage, linker>>=
@@ -225,7 +227,8 @@ usage(void)
 \section{[[hello.5]], [[world.5]]}
 % show binary format? hexdump?
 
-% see tests/ with two .c calling each other
+% two modules where one call the other or use a definition defined
+% in another object. 
 
 \section{Input object format}
 % the object is the input this time (as opposed to 5a where it's the output)
@@ -243,12 +246,13 @@ usage(void)
 
 
 \section{Output executable format}
-% the output,
+% the output
 
 %http://jvns.ca/blog/2014/09/06/how-to-read-an-executable/
 
-% plan9 is essential a.out.h? 
-% but can actually generate different executable (well different headers)
+% plan9 is using the very simple a.out.h format.
+% but 5l can also generate different executable formats (well different
+% headers).
 
 % see libmach to read back this executable!
 
@@ -283,7 +287,7 @@ struct	Exec
 %    long	spsz;		/* size of pc/sp offset table */
 
 
-% entry: it's actually usually not main but _main (or _mainp) that does
+% entry: it's usually not main but _main (or _mainp) that does
 % some core initialization and then call main
 
 \section{Code organization}
@@ -305,9 +309,9 @@ struct	Exec
 
 %5l/obj.c: main()
 
-\section{Architecture overview}
+\section{Software architecture}
 
-% depends on 5.out.h for all assembly instructions/opcodes, registers, etc
+% depends on include/arm/5.out.h for all assembly opcodes, registers, etc
 % (used to depend on 5c/ for one file ../5c/enam.c but now done via symlink)
 
 %linker vs libmach:
@@ -323,8 +327,8 @@ struct	Exec
 
 \section{[[Sym]] and [[hash]]}
 
-% linker is a lot about resolving undefined symbols, and link to 
-% the right place, so symbols are pretty central!
+% linker is a lot about resolving undefined symbols; link def to use 
+% at the right place, so symbols are pretty central!
 
 % conflict with include/a.out.h
 <<struct Sym>>=
@@ -344,6 +348,10 @@ struct	Sym
 };
 @
 % rename value to pc? to a union?
+% Similar to Sym in Assembler.nw, but a few differences:
+% - no 'type' (token_kind) field, no 'macro', no symidx
+% - a new 'version' field; the static attribute was in the Operand.symkind
+% - a new 'type' field for the section
 
 <<constant NHASH linker>>=
 NHASH		= 10007,
@@ -386,13 +394,15 @@ enum sxxx
 @
 % SSTACK? no! not in exec :) 
 
-% the type and values in Sym are? for ATEXT elts, what is stored?
-% when can we get a SXREF in ldobj()? SXREF means unknown yet, happens when?
+% The type and values in Sym are? for ATEXT elts what is stored?
+% When can we get a SXREF in ldobj()? SXREF means unknown yet, happens when?
 
 
 
-% v is for version, but really it's about handling static names
-% (we could have a typedef int version;? and VERSION0 = 0 so clearer to read?)
+% v is for version, but really it's about handling static names.
+% This function creates a new symbol if it does not exist.
+% (we could have a typedef int version;? and VERSION0 = 0 so clearer to read?
+% or a NO_STATIC = 0?)
 <<function lookup>>=
 Sym*
 lookup(char *symb, int v)
@@ -440,14 +450,14 @@ long	nsymbol;
 @
 % statistics
 
-
+% s->link will be described in Safe linking section
 
 \section{[[Opcode]] and [[Operand]]}
 
 % in 5.out.h: Opcode (enum opcode), Operand_kind (enum operand_kind)
 % see Aconv(opcode), Dconv(operand_kind)
 
-% reput major opcode here, AXXX, ALAST, AADD, ATEXT, AB, etc?
+% can reput major opcode here, AXXX, ALAST, AADD, ATEXT, AB, etc?
 % and also R1, ... 
 % and also D_EXTERN?
 
@@ -455,14 +465,14 @@ long	nsymbol;
 <<struct Adr(arm)>>=
 struct	Adr
 {
-    //enum<operand_kind> (D_NONE by default)
+    // enum<operand_kind> (D_NONE by default)
     byte	type;
 
     union
     {
         long	u0offset;
-        char*	u0sval;
         Ieee*	u0ieee;
+        char*	u0sval;
     } u0;
 
     union
@@ -475,19 +485,20 @@ struct	Adr
 };
 @
 %see DConv
-% less: rename operand?
+% very similar to Assembler.nw Gen type.
+
+%less: rename Operand?
 %// TODO: abused for NOPROF function attributes
 % offset abused for REGREG
 % but otherwise it's often used as an offset in D_BRANCH, D_OREG
 % because indeed it's an offset to a basis (PC, SB, etc)
 
 
-% (would be better if had ADT so can have better Instruction type instead
-% of those opcode, operand, Adr, and unions and all those comments)
+%less: would be better if had ADT so can have better Instruction type instead
+% of those opcode, operand, Adr, and unions and all those comments
+%note: ATEXT arguments are also Adr (abuse)
 
 %give a few examples? show man page where have all the addressing modes
-
-%note: ATEXT arguments are also Adr (abuse)
 
 % one of the main thing a linker does is to relocate at the right place.
 % offset can be based on PC (for D_BRANCH), SB(for D_STATIC, D_EXTERN),
