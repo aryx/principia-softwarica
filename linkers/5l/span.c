@@ -332,32 +332,32 @@ aclass(Adr *a)
 
 
     case D_OREG:
-        switch(a->name) {
+        switch(a->symkind) {
         case D_EXTERN:
         case D_STATIC:
-            if(a->sym == 0 || a->sym->name == 0) {
+            if(a->sym == nil || a->sym->name == nil) {
                 print("null sym external\n");
                 print("%D\n", a);
                 return C_GOK;
             }
             s = a->sym;
             t = s->type;
-            if(t == 0 || t == SXREF) {
+            if(t == SNONE || t == SXREF) {
                 diag("undefined external: %s in %s",
                     s->name, TNAME);
                 s->type = SDATA;
             }
             if(dlm) {
                 switch(t) {
-                default:
-                    instoffset = s->value + a->offset + INITDAT;
-                    break;
                 case SUNDEF:
                 case STEXT:
                 case SCONST:
                 case SLEAF:
                 case SSTRING:
                     instoffset = s->value + a->offset;
+                    break;
+                default:
+                    instoffset = s->value + a->offset + INITDAT;
                     break;
                 }
                 return C_ADDR;
@@ -425,7 +425,7 @@ aclass(Adr *a)
         return C_FCON;
 
     case D_CONST:
-        switch(a->name) {
+        switch(a->symkind) {
 
         case D_NONE:
             instoffset = a->offset;

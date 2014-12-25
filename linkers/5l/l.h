@@ -5,6 +5,7 @@
 
 #include	<common.out.h>
 #include	<arm/5.out.h>
+
 #include	"../8l/elf.h"
 
 /*s: macro DBG */
@@ -16,7 +17,7 @@
 /*e: constant LIBNAMELEN */
 
 void	addlibpath(char*);
-int	fileexists(char*);
+int		fileexists(char*);
 char*	findlib(char*);
 
 typedef	struct	Adr	Adr;
@@ -42,48 +43,29 @@ typedef	struct	Count	Count;
 struct	Adr
 {
     // enum<operand_kind> (D_NONE by default)
-    byte	type;
+    short	type;
 
-    union
-    {
-        long	u0offset;
-        Ieee*	u0ieee;
-        char*	u0sval;
-    } u0;
-
-    union
-    {
-        Auto*	u1autom;
-        Sym*	u1sym;
-    } u1;
+    union {
+        long	offset;
+        Ieee*	ieee;
+        char*	sval;
+    };
 
     /*s: [[Adr]] other fields */
-    // enum<name_kind>
-    char	name;
+    short	reg; // Abused for NOPROF and DUPOK
     /*x: [[Adr]] other fields */
-    char	reg; // Abused for NOPROF and DUPOK
+    union {
+        Sym*	sym;
+        Auto*	autom;
+    };
+    /*x: [[Adr]] other fields */
+    // enum<sym_kind>
+    short	symkind;
     /*x: [[Adr]] other fields */
     char	class;
     /*e: [[Adr]] other fields */
 };
 /*e: struct Adr(arm) */
-
-/*s: constant offset */
-#define	offset	u0.u0offset
-/*e: constant offset */
-/*s: constant sval(arm) */
-#define	sval	u0.u0sval
-/*e: constant sval(arm) */
-/*s: constant ieee */
-#define	ieee	u0.u0ieee
-/*e: constant ieee */
-
-/*s: constant autom */
-#define	autom	u1.u1autom
-/*e: constant autom */
-/*s: constant sym */
-#define	sym	u1.u1sym
-/*e: constant sym */
 
 /*s: struct Prog(arm) */
 struct	Prog
@@ -97,7 +79,8 @@ struct	Prog
 
     /*s: [[Prog]] other fields */
     // enum<register>
-    byte	reg;
+    short	reg;
+    /*x: [[Prog]] other fields */
     // enum<instr_cond>
     byte	scond;
     /*x: [[Prog]] other fields */
@@ -107,9 +90,9 @@ struct	Prog
     /*x: [[Prog]] other fields */
     union
     {
-        long	u0regused;
-        Prog*	u0forwd;
-    } u0;
+        long	regused;
+        Prog*	forwd;
+    };
     /*x: [[Prog]] other fields */
     byte	mark;
     /*x: [[Prog]] other fields */
@@ -126,12 +109,6 @@ struct	Prog
     /*e: [[Prog]] extra fields */
 };
 /*e: struct Prog(arm) */
-/*s: constant regused(arm) */
-#define	regused	u0.u0regused
-/*e: constant regused(arm) */
-/*s: constant forwd(arm) */
-#define	forwd	u0.u0forwd
-/*e: constant forwd(arm) */
 
 /*s: struct Sym */
 struct	Sym
@@ -220,7 +197,7 @@ struct	Oprang
 /*s: enum sxxx(arm) */
 enum sxxx
 {
-    SNONE,
+    SNONE = 0,
 
     STEXT,
     SDATA,
@@ -474,6 +451,7 @@ int	Dconv(Fmt*);
 int	Nconv(Fmt*);
 int	Pconv(Fmt*);
 int	Sconv(Fmt*);
+
 int	aclass(Adr*);
 void	addhist(long, int);
 void	addlibpath(char*);

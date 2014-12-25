@@ -13,7 +13,7 @@
 
 %thx to LP, changed for the better a few things:
 % - introduced HEADTYPE instead of hardcoded integers
-% - introduced mylog and DBG, factorize tracing code
+% - introduced mylog() and DBG(), factorize tracing code
 % - removed many portable myxxx wrappers
 
 %thx to codemap/codegraph:
@@ -159,10 +159,10 @@ Here are other candidates that were considered but ultimately discarded:
 \item GNU ld and the BFD library
 \item Gold
 \end{itemize}
-% Linker and Loader book, introduce his own ld?
-% http://www.iecc.com/linker
+% dev86?
+% Linker and Loader book, introduce his own ld? http://www.iecc.com/linker
 
-%http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
+% http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
 % http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
 % http://www.lurklurk.org/linkers/linkers.html
 
@@ -327,10 +327,9 @@ struct	Exec
 
 \section{[[Sym]] and [[hash]]}
 
-% linker is a lot about resolving undefined symbols; link def to use 
+% linker is a lot about resolving undefined symbols; linking definition to uses
 % at the right place, so symbols are pretty central!
 
-% conflict with include/a.out.h
 <<struct Sym>>=
 struct	Sym
 {
@@ -347,11 +346,14 @@ struct	Sym
     <<[[Sym]] extra fields>>
 };
 @
-% rename value to pc? to a union?
 % Similar to Sym in Assembler.nw, but a few differences:
-% - no 'type' (token_kind) field, no 'macro', no symidx
-% - a new 'version' field; the static attribute was in the Operand.symkind
-% - a new 'type' field for the section
+% - no 'type' (token_kind) field, no 'macro' field
+% - no symidx field
+% - a new 'version' field; D_STATIC was in the Operand.symkind
+% - a new 'type' field for the section (the linker has to resolve
+%   as opposed to the assembler)
+%less: rename value to pc? to a union?
+%note: conflict with include/a.out.h
 
 <<constant NHASH linker>>=
 NHASH		= 10007,
@@ -382,7 +384,7 @@ Sym*	link;
 <<enum sxxx(arm)>>=
 enum sxxx
 {
-    SNONE,
+    SNONE = 0,
 
     STEXT,
     SDATA,
@@ -454,46 +456,38 @@ long	nsymbol;
 
 \section{[[Opcode]] and [[Operand]]}
 
-% in 5.out.h: Opcode (enum opcode), Operand_kind (enum operand_kind)
+% in 5.out.h: 
+% - Opcode (enum opcode), 
+% - Operand_kind (enum operand_kind)
 % see Aconv(opcode), Dconv(operand_kind)
 
 % can reput major opcode here, AXXX, ALAST, AADD, ATEXT, AB, etc?
 % and also R1, ... 
 % and also D_EXTERN?
 
-% Operand of instruction, e.g. in MOV AX, BX,  then AX is a form of Adr
+% Adr = Operand of instruction, e.g. in MOV AX, BX, then AX is a form of Adr
 <<struct Adr(arm)>>=
 struct	Adr
 {
     // enum<operand_kind> (D_NONE by default)
-    byte	type;
+    short	type;
 
-    union
-    {
-        long	u0offset;
-        Ieee*	u0ieee;
-        char*	u0sval;
-    } u0;
-
-    union
-    {
-        Auto*	u1autom;
-        Sym*	u1sym;
-    } u1;
+    union {
+        long	offset;
+        Ieee*	ieee;
+        char*	sval;
+    };
 
     <<[[Adr]] other fields>>
 };
 @
+% Similar to Gen in Assembler.nw, but a few differences:
+% - ieee was dval, and sval was sval[8]
+% - have now a union for sym and autom, probably autom for the D_PARAM and
+%   D_AUTO cases
+% - new 'class' field
 %see DConv
-% very similar to Assembler.nw Gen type.
-
 %less: rename Operand?
-%// TODO: abused for NOPROF function attributes
-% offset abused for REGREG
-% but otherwise it's often used as an offset in D_BRANCH, D_OREG
-% because indeed it's an offset to a basis (PC, SB, etc)
-
-
 %less: would be better if had ADT so can have better Instruction type instead
 % of those opcode, operand, Adr, and unions and all those comments
 %note: ATEXT arguments are also Adr (abuse)
@@ -504,6 +498,34 @@ struct	Adr
 % offset can be based on PC (for D_BRANCH), SB(for D_STATIC, D_EXTERN),
 % on FP(for D_PARAM), and on SP(for D_AUTO), 
 % or can be direct value (for D_CONST)
+
+
+% abused for NOPROF function attributes
+% offset abused for REGREG
+% but otherwise it's often used as an offset in D_BRANCH, D_OREG
+% because indeed it's an offset to a basis (PC, SB, etc)
+
+
+
+
+<<[[Adr]] other fields>>=
+short	reg; // Abused for NOPROF and DUPOK
+@
+% again a reg field ... because most operands involve a register
+
+
+<<[[Adr]] other fields>>=
+union {
+    Sym*	sym;
+    Auto*	autom;
+};
+@
+
+% works with sym
+<<[[Adr]] other fields>>=
+// enum<sym_kind>
+short	symkind;
+@
 
 
 % for locals or param symbols
@@ -528,15 +550,18 @@ Auto*	link;
 
 
 \ifallcode
-% TODO I thought could have unamed union that then alleviate the need
-% for those macros! (just need to adapt graph_code_c to find those fields)
+
+% can have unamed union that then alleviate the need for those macros!
+% this is not used anymore for the arm, but could be used by 8l
+% todo: need to adapt graph_code_c to find those fields
+
 <<constant offset>>=
 #define	offset	u0.u0offset
 @
 
-<<constant sval(arm)>>=
-#define	sval	u0.u0sval
-@
+%<<constant sval(arm)>>=
+%#define	sval	u0.u0sval
+%@
 
 <<constant ieee>>=
 #define	ieee	u0.u0ieee
@@ -551,11 +576,6 @@ Auto*	link;
 @
 \fi
 
-% works with sym
-<<[[Adr]] other fields>>=
-// enum<name_kind>
-char	name;
-@
 
 \section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
 
@@ -582,13 +602,18 @@ struct	Prog
 %less: could rename cond to pcond and AB to AJMP and could factorize
 % more code with x86
 
-% note that pseudo-opcode like ATEXT also have operands, so
+%note: pseudo-opcode like ATEXT also have operands, so
 % from can be abused to store the name of the procedure
 
 % very arm specific!
 <<[[Prog]] other fields>>=
 // enum<register>
-byte	reg;
+short	reg;
+@
+% ARM instructions have often 3 operands in which case at least
+% one is a register
+
+<<[[Prog]] other fields>>=
 // enum<instr_cond>
 byte	scond;
 @
@@ -712,11 +737,6 @@ Prog	undefp;
 
 \section{XXX}
 
-%XXXXXXX
-<<[[Adr]] other fields>>=
-char	reg; // Abused for NOPROF and DUPOK
-@
-% again a reg field ... already have one in Prog
 
 %XXXXXXX
 <<[[Adr]] other fields>>=
@@ -735,19 +755,20 @@ long	line;
 <<[[Prog]] other fields>>=
 union
 {
-    long	u0regused;
-    Prog*	u0forwd;
-} u0;
+    long	regused;
+    Prog*	forwd;
+};
 @
-\ifallcode
-% why not using anonymous union? so don't need those aliases ...
-<<constant regused(arm)>>=
-#define	regused	u0.u0regused
-@
-<<constant forwd(arm)>>=
-#define	forwd	u0.u0forwd
-@
-\fi
+
+
+% use anonymous union now, so don't need those aliases
+%<<constant regused(arm)>>=
+%#define	Xregused	u0.u0regused
+%@
+%<<constant forwd(arm)>>=
+%#define	Xforwd	u0.u0forwd
+%@
+
 
 
 
@@ -884,32 +905,32 @@ aclass(Adr *a)
 
 
     case D_OREG:
-        switch(a->name) {
+        switch(a->symkind) {
         case D_EXTERN:
         case D_STATIC:
-            if(a->sym == 0 || a->sym->name == 0) {
+            if(a->sym == nil || a->sym->name == nil) {
                 print("null sym external\n");
                 print("%D\n", a);
                 return C_GOK;
             }
             s = a->sym;
             t = s->type;
-            if(t == 0 || t == SXREF) {
+            if(t == SNONE || t == SXREF) {
                 diag("undefined external: %s in %s",
                     s->name, TNAME);
                 s->type = SDATA;
             }
             if(dlm) {
                 switch(t) {
-                default:
-                    instoffset = s->value + a->offset + INITDAT;
-                    break;
                 case SUNDEF:
                 case STEXT:
                 case SCONST:
                 case SLEAF:
                 case SSTRING:
                     instoffset = s->value + a->offset;
+                    break;
+                default:
+                    instoffset = s->value + a->offset + INITDAT;
                     break;
                 }
                 return C_ADDR;
@@ -977,7 +998,7 @@ aclass(Adr *a)
         return C_FCON;
 
     case D_CONST:
-        switch(a->name) {
+        switch(a->symkind) {
 
         case D_NONE:
             instoffset = a->offset;
@@ -1372,7 +1393,7 @@ zprg.as = AGOK;
 zprg.scond = COND_ALWAYS; 
 zprg.reg = R_NONE;
 zprg.from.type = D_NONE;
-zprg.from.name = N_NONE;
+zprg.from.symkind = N_NONE;
 zprg.from.reg = R_NONE;
 zprg.to = zprg.from;
 @
@@ -2011,7 +2032,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     c = p[2];
     <<[[zaddr()]] sanity check symbol range>>
     a->sym = h[c];
-    a->name = p[3];
+    a->symkind = p[3];
 
     c = 4;
 
@@ -2029,7 +2050,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     s = a->sym;
     if(s == S)
         return c;
-    i = a->name;
+    i = a->symkind;
     if(i != D_AUTO && i != D_PARAM)
         return c;
 
@@ -4941,7 +4962,7 @@ case 11:	/* word */
     case C_LCON:
         if(!dlm)
             break;
-        if(p->to.name != D_EXTERN && p->to.name != D_STATIC)
+        if(p->to.symkind != D_EXTERN && p->to.symkind != D_STATIC)
             break;
     case C_ADDR:
         if(p->to.sym->type == SUNDEF)
@@ -6526,7 +6547,7 @@ doprof1(void)
             datap = q;
             q->as = ADATA;
             q->from.type = D_OREG;
-            q->from.name = D_EXTERN;
+            q->from.symkind = D_EXTERN;
             q->from.offset = n*4;
             q->from.sym = s;
             q->reg = 4;
@@ -6541,7 +6562,7 @@ doprof1(void)
             p = q;
             p->as = AMOVW;
             p->from.type = D_OREG;
-            p->from.name = D_EXTERN;
+            p->from.symkind = D_EXTERN;
             p->from.sym = s;
             p->from.offset = n*4 + 4;
             p->to.type = D_REG;
@@ -6569,7 +6590,7 @@ doprof1(void)
             p->from.type = D_REG;
             p->from.reg = REGTMP;
             p->to.type = D_OREG;
-            p->to.name = D_EXTERN;
+            p->to.symkind = D_EXTERN;
             p->to.sym = s;
             p->to.offset = n*4 + 4;
 
@@ -6584,7 +6605,7 @@ doprof1(void)
 
     q->as = ADATA;
     q->from.type = D_OREG;
-    q->from.name = D_EXTERN;
+    q->from.symkind = D_EXTERN;
     q->from.sym = s;
     q->reg = 4;
     q->to.type = D_CONST;
@@ -7004,7 +7025,7 @@ main(int argc, char *argv[])
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case ASUB:
     if(p->from.type == D_CONST)
-     if(p->from.name == D_NONE)
+     if(p->from.symkind == D_NONE)
       if(p->from.offset < 0) {
         p->from.offset = -p->from.offset;
         p->as = AADD;
@@ -7014,7 +7035,7 @@ case ASUB:
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AADD:
     if(p->from.type == D_CONST)
-     if(p->from.name == D_NONE)
+     if(p->from.symkind == D_NONE)
       if(p->from.offset < 0) {
         p->from.offset = -p->from.offset;
         p->as = ASUB;
@@ -7232,7 +7253,7 @@ export(void)
         /* address */
         p = newdata(et, off, sizeof(long), D_EXTERN);
         off += sizeof(long);
-        p->to.name = D_EXTERN;
+        p->to.symkind = D_EXTERN;
         p->to.sym = s;
 
         /* string */
@@ -7255,7 +7276,7 @@ export(void)
         /* name */
         p = newdata(et, off, sizeof(long), D_EXTERN);
         off += sizeof(long);
-        p->to.name = D_STATIC;
+        p->to.symkind = D_STATIC;
         p->to.sym = str;
         p->to.offset = sv-n;
     }
@@ -7295,11 +7316,11 @@ newdata(Sym *s, int o, int w, int t)
     p->as = ADATA;
     p->reg = w;
     p->from.type = D_OREG;
-    p->from.name = t;
+    p->from.symkind = t;
     p->from.sym = s;
     p->from.offset = o;
     p->to.type = D_CONST;
-    p->to.name = D_NONE;
+    p->to.symkind = D_NONE;
     return p;
 }
 @
@@ -7828,7 +7849,7 @@ case AMOVF:
             t->line = p->line;
             t->from.type = D_OREG;
             t->from.sym = s;
-            t->from.name = D_EXTERN;
+            t->from.symkind = D_EXTERN;
             t->reg = 4;
             t->to = p->from;
             t->link = datap;
@@ -7836,7 +7857,7 @@ case AMOVF:
         }
         p->from.type = D_OREG;
         p->from.sym = s;
-        p->from.name = D_EXTERN;
+        p->from.symkind = D_EXTERN;
         p->from.offset = 0;
     }
     goto casedef;
@@ -7858,7 +7879,7 @@ case AMOVD:
             t->line = p->line;
             t->from.type = D_OREG;
             t->from.sym = s;
-            t->from.name = D_EXTERN;
+            t->from.symkind = D_EXTERN;
             t->reg = 8;
             t->to = p->from;
             t->link = datap;
@@ -7866,7 +7887,7 @@ case AMOVD:
         }
         p->from.type = D_OREG;
         p->from.sym = s;
-        p->from.name = D_EXTERN;
+        p->from.symkind = D_EXTERN;
         p->from.offset = 0;
     }
     goto casedef;
@@ -8292,7 +8313,7 @@ Nconv(Fmt *fp)
     a = va_arg(fp->args, Adr*);
     s = a->sym;
 
-    switch(a->name) {
+    switch(a->symkind) {
     case N_NONE:
         sprint(str, "%ld", a->offset);
         break;
@@ -8325,7 +8346,7 @@ Nconv(Fmt *fp)
             sprint(str, "%s+%ld(FP)", s->name, a->offset);
         break;
     default:
-        sprint(str, "GOK-name(%d)", a->name);
+        sprint(str, "GOK-name(%d)", a->symkind);
         break;
 
     }
@@ -8481,7 +8502,7 @@ Dconv(Fmt *fp)
 
     case D_NONE:
         str[0] = 0;
-        if(a->name != D_NONE || a->reg != NREG || a->sym != S)
+        if(a->symkind != D_NONE || a->reg != NREG || a->sym != S)
             sprint(str, "%N(R%d)(NONE)", a, a->reg);
         break;
 
@@ -8512,19 +8533,19 @@ Dconv(Fmt *fp)
 
     case D_REG:
         sprint(str, "R%d", a->reg);
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             sprint(str, "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_REGREG:
         sprint(str, "(R%d,R%d)", a->reg, (int)a->offset);
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             sprint(str, "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_FREG:
         sprint(str, "F%d", a->reg);
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             sprint(str, "%N(R%d)(REG)", a, a->reg);
         break;
 
@@ -8540,7 +8561,7 @@ Dconv(Fmt *fp)
             sprint(str, "PSR%d", a->reg);
             break;
         }
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             sprint(str, "%N(PSR%d)(REG)", a, a->reg);
         break;
 
@@ -8556,7 +8577,7 @@ Dconv(Fmt *fp)
             sprint(str, "FCR%d", a->reg);
             break;
         }
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             sprint(str, "%N(FCR%d)(REG)", a, a->reg);
 
         break;

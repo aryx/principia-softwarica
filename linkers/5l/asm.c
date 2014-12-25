@@ -884,7 +884,7 @@ asmout(Prog *p, Optab *o)
         case C_LCON:
             if(!dlm)
                 break;
-            if(p->to.name != D_EXTERN && p->to.name != D_STATIC)
+            if(p->to.symkind != D_EXTERN && p->to.symkind != D_STATIC)
                 break;
         case C_ADDR:
             if(p->to.sym->type == SUNDEF)

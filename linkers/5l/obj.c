@@ -277,7 +277,7 @@ main(int argc, char *argv[])
     zprg.scond = COND_ALWAYS; 
     zprg.reg = R_NONE;
     zprg.from.type = D_NONE;
-    zprg.from.name = N_NONE;
+    zprg.from.symkind = N_NONE;
     zprg.from.reg = R_NONE;
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg(arm) */
@@ -606,7 +606,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     }
     /*e: [[zaddr()]] sanity check symbol range */
     a->sym = h[c];
-    a->name = p[3];
+    a->symkind = p[3];
 
     c = 4;
 
@@ -664,7 +664,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     s = a->sym;
     if(s == S)
         return c;
-    i = a->name;
+    i = a->symkind;
     if(i != D_AUTO && i != D_PARAM)
         return c;
 
@@ -1175,7 +1175,7 @@ loop:
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ASUB:
         if(p->from.type == D_CONST)
-         if(p->from.name == D_NONE)
+         if(p->from.symkind == D_NONE)
           if(p->from.offset < 0) {
             p->from.offset = -p->from.offset;
             p->as = AADD;
@@ -1184,7 +1184,7 @@ loop:
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AADD:
         if(p->from.type == D_CONST)
-         if(p->from.name == D_NONE)
+         if(p->from.symkind == D_NONE)
           if(p->from.offset < 0) {
             p->from.offset = -p->from.offset;
             p->as = ASUB;
@@ -1263,7 +1263,7 @@ loop:
                 t->line = p->line;
                 t->from.type = D_OREG;
                 t->from.sym = s;
-                t->from.name = D_EXTERN;
+                t->from.symkind = D_EXTERN;
                 t->reg = 4;
                 t->to = p->from;
                 t->link = datap;
@@ -1271,7 +1271,7 @@ loop:
             }
             p->from.type = D_OREG;
             p->from.sym = s;
-            p->from.name = D_EXTERN;
+            p->from.symkind = D_EXTERN;
             p->from.offset = 0;
         }
         goto casedef;
@@ -1293,7 +1293,7 @@ loop:
                 t->line = p->line;
                 t->from.type = D_OREG;
                 t->from.sym = s;
-                t->from.name = D_EXTERN;
+                t->from.symkind = D_EXTERN;
                 t->reg = 8;
                 t->to = p->from;
                 t->link = datap;
@@ -1301,7 +1301,7 @@ loop:
             }
             p->from.type = D_OREG;
             p->from.sym = s;
-            p->from.name = D_EXTERN;
+            p->from.symkind = D_EXTERN;
             p->from.offset = 0;
         }
         goto casedef;
@@ -1349,7 +1349,7 @@ doprof1(void)
             datap = q;
             q->as = ADATA;
             q->from.type = D_OREG;
-            q->from.name = D_EXTERN;
+            q->from.symkind = D_EXTERN;
             q->from.offset = n*4;
             q->from.sym = s;
             q->reg = 4;
@@ -1364,7 +1364,7 @@ doprof1(void)
             p = q;
             p->as = AMOVW;
             p->from.type = D_OREG;
-            p->from.name = D_EXTERN;
+            p->from.symkind = D_EXTERN;
             p->from.sym = s;
             p->from.offset = n*4 + 4;
             p->to.type = D_REG;
@@ -1392,7 +1392,7 @@ doprof1(void)
             p->from.type = D_REG;
             p->from.reg = REGTMP;
             p->to.type = D_OREG;
-            p->to.name = D_EXTERN;
+            p->to.symkind = D_EXTERN;
             p->to.sym = s;
             p->to.offset = n*4 + 4;
 
@@ -1407,7 +1407,7 @@ doprof1(void)
 
     q->as = ADATA;
     q->from.type = D_OREG;
-    q->from.name = D_EXTERN;
+    q->from.symkind = D_EXTERN;
     q->from.sym = s;
     q->reg = 4;
     q->to.type = D_CONST;

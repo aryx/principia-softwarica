@@ -524,11 +524,11 @@ newdata(Sym *s, int o, int w, int t)
     p->as = ADATA;
     p->reg = w;
     p->from.type = D_OREG;
-    p->from.name = t;
+    p->from.symkind = t;
     p->from.sym = s;
     p->from.offset = o;
     p->to.type = D_CONST;
-    p->to.name = D_NONE;
+    p->to.symkind = D_NONE;
     return p;
 }
 /*e: function newdata(arm) */
@@ -584,7 +584,7 @@ export(void)
         /* address */
         p = newdata(et, off, sizeof(long), D_EXTERN);
         off += sizeof(long);
-        p->to.name = D_EXTERN;
+        p->to.symkind = D_EXTERN;
         p->to.sym = s;
 
         /* string */
@@ -607,7 +607,7 @@ export(void)
         /* name */
         p = newdata(et, off, sizeof(long), D_EXTERN);
         off += sizeof(long);
-        p->to.name = D_STATIC;
+        p->to.symkind = D_STATIC;
         p->to.sym = str;
         p->to.offset = sv-n;
     }
