@@ -5,10 +5,6 @@
 #define	Dbufslop	100
 /*e: constant Dbufslop */
 
-/*s: global OFFSET(arm) */
-long	OFFSET;
-/*e: global OFFSET(arm) */
-
 /*s: global PP(arm) */
 static Prog *PP;
 /*e: global PP(arm) */
@@ -21,7 +17,6 @@ entryvalue(void)
     Sym *s;
 
     a = INITENTRY; // usually "_main"
-
     /*s: [[entryvalue()]] if digit INITENTRY */
     if(*a >= '0' && *a <= '9')
         return atolwhex(a);
@@ -32,8 +27,7 @@ entryvalue(void)
     switch(s->type) {
     case SNONE:
         return INITTEXT; // no _main, start at beginning of binary then
-    case STEXT:
-    case SLEAF:
+    case STEXT: case SLEAF:
         return s->value;
     /*s: [[entryvalue()]] if dynamic module case */
     case SDATA:
@@ -52,6 +46,8 @@ void
 asmb(void)
 {
     /*s: [[asmb()]] locals */
+    long OFFSET;
+    /*x: [[asmb()]] locals */
     Prog *p;
     Optab *o;
     /*x: [[asmb()]] locals */
@@ -69,14 +65,16 @@ asmb(void)
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             curtext = p;
-            autosize = p->to.offset + 4; // ???
+            autosize = p->to.offset + 4; // locals
         }
+        /*s: [[asmb()]] when in TEXT section if pc differs */
         if(p->pc != pc) {
             diag("phase error %lux sb %lux", p->pc, pc);
             if(!debug['a'])
                 prasm(curp);
             pc = p->pc;
         }
+        /*e: [[asmb()]] when in TEXT section if pc differs */
         curp = p;
 
         // generate instruction!
@@ -86,11 +84,12 @@ asmb(void)
         pc += o->size;
     }
 
+    /*s: [[asmb()]] if debug a */
     if(debug['a']) {
         Bprint(&bso, "\n");
         Bflush(&bso);
     }
-
+    /*e: [[asmb()]] if debug a */
     cflush();
 
     /*s: [[asmb()]] TEXT section, output strings in text segment */
@@ -98,9 +97,9 @@ asmb(void)
     etext = INITTEXT + textsize;
     for(t = pc; t < etext; t += sizeof(buf)-100) {
         if(etext-t > sizeof(buf)-100)
-            datblk(t, sizeof(buf)-100, 1);
+            datblk(t, sizeof(buf)-100, true);
         else
-            datblk(t, etext-t, 1);
+            datblk(t, etext-t, true);
     /*e: [[asmb()]] TEXT section, output strings in text segment */
     }
     /*e: [[asmb()]] TEXT section */
@@ -140,9 +139,9 @@ asmb(void)
 
     for(t = 0; t < datsize; t += sizeof(buf)-100) {
         if(datsize-t > sizeof(buf)-100)
-            datblk(t, sizeof(buf)-100, 0);
+            datblk(t, sizeof(buf)-100, false);
         else
-            datblk(t, datsize-t, 0);
+            datblk(t, datsize-t, false);
     }
     /*e: [[asmb()]] DATA section */
 
@@ -159,7 +158,7 @@ asmb(void)
         switch(HEADTYPE) {
         case H_PLAN9:
             OFFSET = HEADR+textsize+datsize;
-            seek(cout, OFFSET, 0);
+            seek(cout, OFFSET, SEEK__START);
             break;
         /*s: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         case 0:
@@ -225,7 +224,6 @@ asmb(void)
         lput(0L);
         lput(lcsize);
         break;
-
     /*s: [[asmb()]] switch HEADTYPE (for header generation) cases(arm) */
     case 0:	/* no header */
     case 6:	/* no header, padded segments */
@@ -616,7 +614,7 @@ asmlc(void)
 
 /*s: function datblk(arm) */
 void
-datblk(long s, long n, int str)
+datblk(long s, long n, bool str)
 {
     Sym *v;
     Prog *p;

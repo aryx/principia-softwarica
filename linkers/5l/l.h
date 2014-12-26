@@ -62,6 +62,7 @@ struct	Adr
     // enum<sym_kind>
     short	symkind;
     /*x: [[Adr]] other fields */
+    // enum<classx>
     char	class;
     /*e: [[Adr]] other fields */
 };
@@ -84,9 +85,9 @@ struct	Prog
     // enum<instr_cond>
     byte	scond;
     /*x: [[Prog]] other fields */
-    long	pc;
-    /*x: [[Prog]] other fields */
     long	line;
+    /*x: [[Prog]] other fields */
+    long	pc;
     /*x: [[Prog]] other fields */
     union
     {
@@ -230,7 +231,7 @@ enum lxxx {
 };
 /*e: enum lxxx(arm) */
 /*s: enum cxxx(arm) */
-enum cxxx {
+enum classx {
     C_NONE		= 0,
 
     C_REG,

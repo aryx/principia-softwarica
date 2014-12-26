@@ -14,7 +14,7 @@
 %thx to LP, changed for the better a few things:
 % - introduced HEADTYPE instead of hardcoded integers
 % - introduced mylog() and DBG(), factorize tracing code
-% - removed many portable myxxx wrappers
+% - removed many portable myxxx() wrappers
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
@@ -348,8 +348,10 @@ struct	Sym
 @
 % Similar to Sym in Assembler.nw, but a few differences:
 % - no 'type' (token_kind) field, no 'macro' field
-% - no symidx field
-% - a new 'version' field; D_STATIC was in the Operand.symkind
+% - no symidx field (but was local to outcode())
+% - a new 'version' field; D_STATIC was in the Operand.symkind (the linker
+%   manages multiple objects together where can have the same static name
+%   multiple times)
 % - a new 'type' field for the section (the linker has to resolve
 %   as opposed to the assembler)
 %less: rename value to pc? to a union?
@@ -401,8 +403,8 @@ enum sxxx
 
 
 
-% v is for version, but really it's about handling static names.
 % This function creates a new symbol if it does not exist.
+% v is for version, but really it's about handling static names.
 % (we could have a typedef int version;? and VERSION0 = 0 so clearer to read?
 % or a NO_STATIC = 0?)
 <<function lookup>>=
@@ -485,7 +487,7 @@ struct	Adr
 % - ieee was dval, and sval was sval[8]
 % - have now a union for sym and autom, probably autom for the D_PARAM and
 %   D_AUTO cases
-% - new 'class' field
+% - new 'class' field (but seems local to oplook())
 %see DConv
 %less: rename Operand?
 %less: would be better if had ADT so can have better Instruction type instead
@@ -550,30 +552,24 @@ Auto*	link;
 
 
 \ifallcode
-
 % can have unamed union that then alleviate the need for those macros!
 % this is not used anymore for the arm, but could be used by 8l
 % todo: need to adapt graph_code_c to find those fields
-
 <<constant offset>>=
 #define	offset	u0.u0offset
 @
-
-%<<constant sval(arm)>>=
-%#define	sval	u0.u0sval
-%@
-
 <<constant ieee>>=
 #define	ieee	u0.u0ieee
 @
-
 <<constant autom>>=
 #define	autom	u1.u1autom
 @
-
 <<constant sym>>=
 #define	sym	u1.u1sym
 @
+%<<constant sval(arm)>>=
+%#define	sval	u0.u0sval
+%@
 \fi
 
 
@@ -581,7 +577,6 @@ Auto*	link;
 
 % bad name .... I think Prog is really an Instruction ... From and To
 % are when do MOV AX, BX,    then AX is the from, BX the to
-
 <<struct Prog(arm)>>=
 struct	Prog
 {
@@ -598,6 +593,10 @@ struct	Prog
     <<[[Prog]] extra fields>>
 };
 @
+% Similar to the arguments of outcode():
+%  - as (opcode), from (g1), to (g2), reg, scond, and
+%    line field was a lineno global
+%  - ???
 %see Pconv, %P
 %less: could rename cond to pcond and AB to AJMP and could factorize
 % more code with x86
@@ -618,6 +617,10 @@ short	reg;
 byte	scond;
 @
 
+
+<<[[Prog]] other fields>>=
+long	line;
+@
 
 
 <<[[Prog]] other fields>>=
@@ -713,6 +716,11 @@ char	*noname		= "<none>";
 @
 
 
+<<global curp>>=
+Prog*	curp;
+@
+% similar to curtext, for error report, but this time it can be any instr,
+% not just the ATEXT
 
 
 
@@ -729,101 +737,18 @@ Prog	undefp;
 
 
 
-%\section{[[Optab]] and [[optab]]}?
-%hmm maybe better later
+\section{[[Class]]}
 
-%\section{[[Buf]] and [[buf]]}?
-%hmm maybe better later
-
-\section{XXX}
-
-
-%XXXXXXX
 <<[[Adr]] other fields>>=
+// enum<classx>
 char	class;
 @
-
-
-
-%XXXX
-<<[[Prog]] other fields>>=
-long	line;
-@
-
-
-%XXX
-<<[[Prog]] other fields>>=
-union
-{
-    long	regused;
-    Prog*	forwd;
-};
-@
-
-
-% use anonymous union now, so don't need those aliases
-%<<constant regused(arm)>>=
-%#define	Xregused	u0.u0regused
-%@
-%<<constant forwd(arm)>>=
-%#define	Xforwd	u0.u0forwd
-%@
-
-
-
-
-%XXX
-<<[[Prog]] other fields>>=
-byte	mark;
-@
-
-%XXX
-<<[[Prog]] other fields>>=
-byte	optab;
-@
-
-
-
-
-%XXXX
-<<enum sxxx cases>>=
-SDATA1,
-SLEAF, // arm
-SFILE,
-SCONST,
-
-SSTRING, // arm
-SUNDEF,
-
-SIMPORT,
-SEXPORT,
-@
-% SLEAF? the special opti ARM has for leaf functions?
-% SCONST ... hmm confusing with D_SCONST IMHO
-
-
-%XXXXXXXXX
-<<[[Sym]] other fields>>=
-short	become;
-short	frame;
-@
-
-
-<<enum lxxx(arm)>>=
-enum lxxx {
-    LFROM	= 1<<0,
-    LTO		= 1<<1,
-    LPOOL	= 1<<2,
-    <<enum lxxx cases>>
-};
-@
-% >> >> >> >> >>
 
 
 % seems called the class, see aclass(), a more precise operand_kind?
 % TODO LP split
 <<enum cxxx(arm)>>=
-enum cxxx {
+enum classx {
     C_NONE		= 0,
 
     C_REG,
@@ -1085,6 +1010,87 @@ aclass(Adr *a)
 %        return C_GOK;
 
 
+
+%\section{[[Optab]] and [[optab]]}?
+%hmm maybe better later
+
+%\section{[[Buf]] and [[buf]]}?
+%hmm maybe better later
+
+
+%\section{[[pc]]}?
+
+\section{XXX}
+
+%XXX
+<<[[Prog]] other fields>>=
+union
+{
+    long	regused;
+    Prog*	forwd;
+};
+@
+
+
+% use anonymous union now, so don't need those aliases
+%<<constant regused(arm)>>=
+%#define	Xregused	u0.u0regused
+%@
+%<<constant forwd(arm)>>=
+%#define	Xforwd	u0.u0forwd
+%@
+
+
+%XXX
+<<[[Prog]] other fields>>=
+byte	mark;
+@
+
+%XXX
+<<[[Prog]] other fields>>=
+byte	optab;
+@
+
+
+
+
+%XXXX
+<<enum sxxx cases>>=
+SDATA1,
+SLEAF, // arm
+SFILE,
+SCONST,
+
+SSTRING, // arm
+SUNDEF,
+
+SIMPORT,
+SEXPORT,
+@
+% SLEAF? the special opti ARM has for leaf functions?
+% SCONST ... hmm confusing with D_SCONST IMHO
+
+
+%XXXXXXXXX
+<<[[Sym]] other fields>>=
+short	become;
+short	frame;
+@
+
+
+<<enum lxxx(arm)>>=
+enum lxxx {
+    LFROM	= 1<<0,
+    LTO		= 1<<1,
+    LPOOL	= 1<<2,
+    <<enum lxxx cases>>
+};
+@
+% >> >> >> >> >>
+
+
+
+
 <<enum mark(arm)>>=
 /* mark flags */
 enum mark {
@@ -1122,8 +1128,6 @@ byte	subtype;
 
 
 
-
-
 \chapter{[[main()]]}
 
 % default object suffix, to generate x.out
@@ -1140,12 +1144,6 @@ char	*thestring;
 % -o, 
 <<global outfile>>=
 char*	outfile;
-@
-
-<<[[main()]] command line processing(arm)>>=
-case 'o':
-    outfile = ARGF();
-    break;
 @
 
 % cout =~ create(outfile)
@@ -1197,6 +1195,13 @@ out:
 
 
 \section{Arguments processing}
+
+<<[[main()]] command line processing(arm)>>=
+case 'o':
+    outfile = ARGF();
+    break;
+@
+
 
 % -H executable format (header type)
 <<global HEADTYPE>>=
@@ -1340,6 +1345,7 @@ if(INITDAT != 0 && INITRND != 0)
 <<[[main()]] cout is ready, LET'S GO(arm)>>=
 firstp = prg();
 lastp = firstp;
+
 <<[[main()]] set INITENTRY>>
 
 // Loading
@@ -1401,7 +1407,7 @@ zprg.to = zprg.from;
 % in ldobj() about AGOK
 %less: have to use AGOK? why not AXXX? or ANOP?
 
-
+% many of the constants such as COND_ALWAYS are in 5.out.h
 
 
 
@@ -1436,6 +1442,7 @@ if(INITENTRY == nil) {
 % SXREF means?
 
 \section{Loading the objects, [[objfile()]]}
+
 % this function can actually also load libraries passed on the
 % command line when the file is a .a (and also core libs passed
 % via -lxxx)
@@ -1482,7 +1489,6 @@ objfile(char *file)
     <<[[objfile()]] when file is a library>>
 }
 @
-
 % see next chapter for ldobj()
 
 
@@ -1506,20 +1512,14 @@ char*	library[50];
 int	libraryp;
 @
 
-% ? obj that mentioned a library via a #pragma? for debugging purpose?
+% the .5 that mentioned a library via a #pragma? for debugging purpose?
 <<global libraryobj>>=
 char*	libraryobj[50];
 @
 
 
 
-% ???
-<<global xrefresolv>>=
-bool	xrefresolv;
-@
 
-
-%TODO: LP split this xfresolve thing?
 <<function loadlib>>=
 void
 loadlib(void)
@@ -1535,14 +1535,23 @@ loop:
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
-    if(xrefresolv)
-        for(h=0; h<nelem(hash); h++)
-             for(s = hash[h]; s != S; s = s->link)
-                 if(s->type == SXREF)
-                     goto loop;
+    <<[[loadlib()]] if xrefresolv>>
 }
 @
 
+
+% ???
+<<global xrefresolv>>=
+bool	xrefresolv;
+@
+
+<<[[loadlib()]] if xrefresolv>>=
+if(xrefresolv)
+    for(h=0; h<nelem(hash); h++)
+         for(s = hash[h]; s != S; s = s->link)
+             if(s->type == SXREF)
+                 goto loop;
+@
 
 
 
@@ -1584,14 +1593,15 @@ asmb(void)
 % to know those size first.
 
 
-\subsection{Header}
-
-
-<<global OFFSET(arm)>>=
-long	OFFSET;
+<<[[asmb()]] locals>>=
+long OFFSET;
 @
-%less: has to be a global? could not just be a local in asmb()?
+%<<global OFFSET(arm)>>=
+%long	OFFSET;
+%@
+% was  a global but can not just be a local in asmb()
 
+\subsection{Header}
 
 <<[[asmb()]] header section>>=
 DBG("%5.2f header\n", cputime());
@@ -1615,7 +1625,6 @@ case H_PLAN9:
     lput(0L);
     lput(lcsize);
     break;
-
 <<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>
 }
 @
@@ -1623,6 +1632,8 @@ case H_PLAN9:
 % s/0x647/E_MAGIC?
 
 
+% could at least take initentry as a parameter instead of using
+% the global
 <<function entryvalue(arm)>>=
 long
 entryvalue(void)
@@ -1631,7 +1642,6 @@ entryvalue(void)
     Sym *s;
 
     a = INITENTRY; // usually "_main"
-
     <<[[entryvalue()]] if digit INITENTRY>>
 
     s = lookup(a, 0);
@@ -1639,8 +1649,7 @@ entryvalue(void)
     switch(s->type) {
     case SNONE:
         return INITTEXT; // no _main, start at beginning of binary then
-    case STEXT:
-    case SLEAF:
+    case STEXT: case SLEAF:
         return s->value;
     <<[[entryvalue()]] if dynamic module case>>
     default:
@@ -1652,11 +1661,6 @@ entryvalue(void)
 
 
 \subsection{Text section}
-
-<<global curp>>=
-Prog*	curp;
-@
-% why a global?
 
 <<[[asmb()]] locals>>=
 Prog *p;
@@ -1673,14 +1677,9 @@ pc = INITTEXT;
 for(p = firstp; p != P; p = p->link) {
     if(p->as == ATEXT) {
         curtext = p;
-        autosize = p->to.offset + 4; // ???
+        autosize = p->to.offset + 4; // locals
     }
-    if(p->pc != pc) {
-        diag("phase error %lux sb %lux", p->pc, pc);
-        if(!debug['a'])
-            prasm(curp);
-        pc = p->pc;
-    }
+    <<[[asmb()]] when in TEXT section if pc differs>>
     curp = p;
 
     // generate instruction!
@@ -1690,14 +1689,27 @@ for(p = firstp; p != P; p = p->link) {
     pc += o->size;
 }
 
-if(debug['a']) {
-    Bprint(&bso, "\n");
-    Bflush(&bso);
-}
-
+<<[[asmb()]] if debug a>>
 cflush();
 
 <<[[asmb()]] TEXT section, output strings in text segment>>
+}
+@
+
+
+<<[[asmb()]] when in TEXT section if pc differs>>=
+if(p->pc != pc) {
+    diag("phase error %lux sb %lux", p->pc, pc);
+    if(!debug['a'])
+        prasm(curp);
+    pc = p->pc;
+}
+@
+
+<<[[asmb()]] if debug a>>=
+if(debug['a']) {
+    Bprint(&bso, "\n");
+    Bflush(&bso);
 }
 @
 
@@ -1718,9 +1730,9 @@ case H_PLAN9:
 
 for(t = 0; t < datsize; t += sizeof(buf)-100) {
     if(datsize-t > sizeof(buf)-100)
-        datblk(t, sizeof(buf)-100, 0);
+        datblk(t, sizeof(buf)-100, false);
     else
-        datblk(t, datsize-t, 0);
+        datblk(t, datsize-t, false);
 }
 @
 % what the fuss about those 100?? and what is sizeof(buf)?
@@ -1735,9 +1747,9 @@ long t, etext;
 etext = INITTEXT + textsize;
 for(t = pc; t < etext; t += sizeof(buf)-100) {
     if(etext-t > sizeof(buf)-100)
-        datblk(t, sizeof(buf)-100, 1);
+        datblk(t, sizeof(buf)-100, true);
     else
-        datblk(t, etext-t, 1);
+        datblk(t, etext-t, true);
 @
 
 \subsection{Symbol and line table section}
@@ -1755,7 +1767,7 @@ if(!debug['s']) {
     switch(HEADTYPE) {
     case H_PLAN9:
         OFFSET = HEADR+textsize+datsize;
-        seek(cout, OFFSET, 0);
+        seek(cout, OFFSET, SEEK__START);
         break;
     <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>
     }
@@ -3242,6 +3254,7 @@ long	bsssize;
 <<global autosize(arm)>>=
 long	autosize;
 @
+% size for the locals
 
 
 % LP split
@@ -4725,6 +4738,7 @@ ocmp(const void *a1, const void *a2)
 
 \section{[[oplook()]]}
 
+
 <<function oplook(arm)>>=
 Optab*
 oplook(Prog *p)
@@ -6109,7 +6123,7 @@ chipfloat(Ieee *e)
 
 <<function datblk(arm)>>=
 void
-datblk(long s, long n, int str)
+datblk(long s, long n, bool str)
 {
     Sym *v;
     Prog *p;
@@ -8907,6 +8921,10 @@ union Buf
 };
 @
 
+<<constant MAXIO>>=
+MAXIO		= 8192,
+@
+
 <<global buf>>=
 union Buf buf;
 @
@@ -8931,15 +8949,13 @@ readsome(int f, byte *buf, byte *good, byte *stop, int max)
 }
 @
 
-<<constant MAXIO>>=
-MAXIO		= 8192,
-@
 
 
 <<constant cbuf>>=
 #define	cbuf	u.obuf
 @
 % why not obuf? because infinite macro?
+%todo: simplify! use anonymous union!
 
 <<constant xbuf>>=
 #define	xbuf	u.ibuf

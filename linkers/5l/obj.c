@@ -302,6 +302,7 @@ main(int argc, char *argv[])
     /*s: [[main()]] cout is ready, LET'S GO(arm) */
     firstp = prg();
     lastp = firstp;
+
     /*s: [[main()]] set INITENTRY */
     if(INITENTRY == nil) {
         INITENTRY = "_main";
@@ -450,11 +451,13 @@ loop:
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
+    /*s: [[loadlib()]] if xrefresolv */
     if(xrefresolv)
         for(h=0; h<nelem(hash); h++)
              for(s = hash[h]; s != S; s = s->link)
                  if(s->type == SXREF)
                      goto loop;
+    /*e: [[loadlib()]] if xrefresolv */
 }
 /*e: function loadlib */
 
