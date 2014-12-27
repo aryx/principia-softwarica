@@ -165,10 +165,11 @@ Here are other candidates that were considered but ultimately discarded:
 % http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
 % http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
 % http://www.lurklurk.org/linkers/linkers.html
+% http://www.iecc.com/linker
 
 % plan9 approach to linking is a bit different. The linker actually
-% generate also the machine code. The object format is not the ISA.
-% Simpler that way. This also allows inter-lib linking-time optimisations!
+% generates also the machine code. The object format is not the ISA.
+% Simpler that way. This may also allows inter-lib linking-time optimisations!
 % Also there is no dynamic linking by default. Simpler approach
 % again.
 
@@ -197,7 +198,11 @@ License.
 % Link defs to uses. An object is really the simplest/lowest module abstraction.
 % Also compute textsize, datasize, etc and adjust addresses.
 
-% and loader? why the term loader instead of linker?
+%figure: like a train, some wagons, and inside some unresolved references
+% and after linking see all the wagons really after each other and
+% the links resolved.
+
+% why the term loader instead of linker?
 % maybe because load the objects and libs and then link them
 % (but first it "loads" them)
 
@@ -209,7 +214,7 @@ License.
 \section{[[5l]] services}
 
 % command line interface? -o
-% important -TText, see Kernel.nw
+% also important -TText, see Kernel.nw
 
 <<function usage, linker>>=
 void
@@ -231,7 +236,8 @@ usage(void)
 % in another object. 
 
 \section{Input object format}
-% the object is the input this time (as opposed to 5a where it's the output)
+% the object file is the input this time 
+% (as opposed to 5a where it's the output)
 
 % nm foo.5 => ? U? D? T?
 
@@ -256,7 +262,7 @@ usage(void)
 
 % see libmach to read back this executable!
 
-% so   .s -5a-> .o -5l-> .exe -libmach-> readable
+% so   .s --5a--> .o (.5) --5l--> .exe (5.out) --libmach--> readable
 % (hmm libmach is also reading .o (.5)
 
 % include/a.out.h
@@ -287,8 +293,8 @@ struct	Exec
 %    long	spsz;		/* size of pc/sp offset table */
 
 
-% entry: it's usually not main but _main (or _mainp) that does
-% some core initialization and then call main
+% entry: it's usually not main but _main (or _mainp) which does
+% some core initializations and then call main
 
 \section{Code organization}
 
@@ -1024,10 +1030,6 @@ union
 byte	mark;
 @
 
-%XXX
-<<[[Prog]] other fields>>=
-byte	optab;
-@
 
 
 
@@ -1835,18 +1837,18 @@ int r;
 % and parameter 'int c'
 
 <<[[ldobj()]] bloc and bsize init>>=
-bsize = buf.xbuf;
-bloc = buf.xbuf;
+bsize = buf.ibuf;
+bloc = buf.ibuf;
 @
 
 
 <<[[ldobj()]] read if needed in loop:, adjust bloc and bsize>>=
 r = bsize - bloc;
 if(r < 100 && r < c) {		/* enough for largest prog */
-    bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+    bsize = readsome(f, buf.ibuf, bloc, bsize, c);
     if(bsize == 0)
         goto eof;
-    bloc = buf.xbuf;
+    bloc = buf.ibuf;
     goto loop;
 }
 @
@@ -2299,10 +2301,10 @@ if(o == ANAME || o == ASIGNAME) {
 % buffer managment crap again
 <<[[ldobj()]] if stop is nil refill buffer and retry>>=
 if(stop == nil){
-    bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+    bsize = readsome(f, buf.ibuf, bloc, bsize, c);
     if(bsize == 0)
         goto eof;
-    bloc = buf.xbuf;
+    bloc = buf.ibuf;
     stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
     if(stop == nil){
         fprint(2, "%s: name too long\n", pn);
@@ -3444,7 +3446,6 @@ noops(void)
             if(curtext != P)
                 curtext->mark &= ~LEAF;
 
-        case ABCASE:
         case AB:
 
         case ABEQ:
@@ -3463,6 +3464,8 @@ noops(void)
         case ABLT:
         case ABGT:
         case ABLE:
+
+        case ABCASE:
 
             q1 = p->cond;
             if(q1 != P) {
@@ -3519,7 +3522,7 @@ noops(void)
             curtext = p;
             autosize = p->to.offset + 4;
             if(autosize <= 4)
-            if(curtext->mark & LEAF) {
+              if(curtext->mark & LEAF) {
                 p->to.offset = -4;
                 autosize = 0;
             }
@@ -3565,6 +3568,7 @@ noops(void)
                 }
 
             }
+            // MOVW autosize(SP), PC
             p->as = AMOVW;
             p->scond |= C_PBIT;
             p->from.type = D_OREG;
@@ -3594,6 +3598,7 @@ noops(void)
             q->link = p->link;
             p->link = q;
 
+            // MOVW autosize(SP), LINK
             p->as = AMOVW;
             p->scond |= C_PBIT;
             p->from = zprg.from;
@@ -3615,9 +3620,9 @@ noops(void)
          */
         case AMOVWD:
             if((q = p->link) != P && q->as == ACMP)
-            if((q = q->link) != P && q->as == AMOVF)
-            if((q1 = q->link) != P && q1->as == AADDF)
-            if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
+             if((q = q->link) != P && q->as == AMOVF)
+              if((q1 = q->link) != P && q1->as == AADDF)
+               if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
                 q1->as = AADDD;
                 q1 = prg();
                 q1->scond = q->scond;
@@ -4717,6 +4722,9 @@ ocmp(const void *a1, const void *a2)
 
 \section{[[oplook()]]}
 
+<<[[Prog]] other fields>>=
+byte	optab;
+@
 
 <<function oplook(arm)>>=
 Optab*
@@ -7920,7 +7928,7 @@ sigdiv(char *n)
         if(s->sig == 0)
             s->sig = SIGNINTERN;
     }
-    else if(s->type == 0 || s->type == SXREF)
+    else if(s->type == SNONE || s->type == SXREF)
         s->type = SUNDEF;
 }
 @
@@ -7940,7 +7948,7 @@ divsig(void)
 static void
 sdiv(Sym *s)
 {
-    if(s->type == 0 || s->type == SXREF){
+    if(s->type == SNONE || s->type == SXREF){
         /* undefsym(s); */
         s->type = SXREF;
         if(s->sig == 0)
@@ -8006,8 +8014,8 @@ void
 nocache(Prog *p)
 {
     p->optab = 0;
-    p->from.class = 0;
-    p->to.class = 0;
+    p->from.class = C_NONE;
+    p->to.class = C_NONE;
 }
 @
 
@@ -8895,7 +8903,7 @@ union Buf
     {
         char	obuf[MAXIO];			/* output buffer */
         byte	ibuf[MAXIO];			/* input buffer */
-    } u;
+    };
     char	dbuf[1];
 };
 @
@@ -8930,17 +8938,13 @@ readsome(int f, byte *buf, byte *good, byte *stop, int max)
 
 
 
-<<constant cbuf>>=
-#define	cbuf	u.obuf
-@
-% why not obuf? because infinite macro?
-%todo: simplify! use anonymous union!
-
-<<constant xbuf>>=
-#define	xbuf	u.ibuf
-@
-% why not ibuf?
-
+%<<constant cbuf>>=
+%#define	Cbuf	u.obuf
+%@
+%<<constant xbuf>>=
+%#define	Xbuf	u.ibuf
+%@
+%%simplified! use anonymous union!
 
 
 <<global cbp>>=
@@ -8954,8 +8958,8 @@ int	cbc;
 
 
 <<[[main()]] initialize globals(arm)>>=
-cbp = buf.cbuf;
-cbc = sizeof(buf.cbuf);
+cbp = buf.obuf;
+cbc = sizeof(buf.obuf);
 @
 
 
@@ -8980,12 +8984,12 @@ cflush(void)
 {
     int n;
 
-    n = sizeof(buf.cbuf) - cbc;
+    n = sizeof(buf.obuf) - cbc;
     if(n)
-        write(cout, buf.cbuf, n);
+        write(cout, buf.obuf, n);
 
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
+    cbp = buf.obuf;
+    cbc = sizeof(buf.obuf);
 }
 @
 

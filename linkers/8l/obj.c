@@ -419,8 +419,8 @@ main(int argc, char *argv[])
     /*e: [[main()]] set zprg(x86) */
     dtype = 4;
 
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
+    cbp = buf.obuf;
+    cbc = sizeof(buf.obuf);
     /*x: [[main()]] initialize globals(x86) */
     load_libs = !debug['l'];
     /*e: [[main()]] initialize globals(x86) */
@@ -1033,8 +1033,8 @@ ldobj(fdt f, long c, char *pn)
     filen[files++] = strdup(pn);
 
     /*s: [[ldobj()]] bloc and bsize init */
-    bsize = buf.xbuf;
-    bloc = buf.xbuf;
+    bsize = buf.ibuf;
+    bloc = buf.ibuf;
     /*e: [[ldobj()]] bloc and bsize init */
 
     di = S;
@@ -1054,10 +1054,10 @@ loop:
     /*s: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
     r = bsize - bloc;
     if(r < 100 && r < c) {		/* enough for largest prog */
-        bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+        bsize = readsome(f, buf.ibuf, bloc, bsize, c);
         if(bsize == 0)
             goto eof;
-        bloc = buf.xbuf;
+        bloc = buf.ibuf;
         goto loop;
     }
     /*e: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
@@ -1086,10 +1086,10 @@ loop:
         }
         stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
         if(stop == nil){
-            bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+            bsize = readsome(f, buf.ibuf, bloc, bsize, c);
             if(bsize == 0)
                 goto eof;
-            bloc = buf.xbuf;
+            bloc = buf.ibuf;
             stop = memchr(&bloc[4], 0, bsize-&bloc[4]);
             if(stop == nil){
                 fprint(2, "%s: name too long\n", pn);

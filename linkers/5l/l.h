@@ -340,18 +340,11 @@ union Buf
     {
         char	obuf[MAXIO];			/* output buffer */
         byte	ibuf[MAXIO];			/* input buffer */
-    } u;
+    };
     char	dbuf[1];
 };
 /*e: struct Buf */
 extern union Buf buf;
-
-/*s: constant cbuf */
-#define	cbuf	u.obuf
-/*e: constant cbuf */
-/*s: constant xbuf */
-#define	xbuf	u.ibuf
-/*e: constant xbuf */
 
 extern	long	HEADR;			/* length of header */
 extern	long	HEADTYPE;		/* type of header */

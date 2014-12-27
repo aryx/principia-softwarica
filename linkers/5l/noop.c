@@ -88,7 +88,6 @@ noops(void)
             if(curtext != P)
                 curtext->mark &= ~LEAF;
 
-        case ABCASE:
         case AB:
 
         case ABEQ:
@@ -107,6 +106,8 @@ noops(void)
         case ABLT:
         case ABGT:
         case ABLE:
+
+        case ABCASE:
 
             q1 = p->cond;
             if(q1 != P) {
@@ -163,7 +164,7 @@ noops(void)
             curtext = p;
             autosize = p->to.offset + 4;
             if(autosize <= 4)
-            if(curtext->mark & LEAF) {
+              if(curtext->mark & LEAF) {
                 p->to.offset = -4;
                 autosize = 0;
             }
@@ -209,6 +210,7 @@ noops(void)
                 }
 
             }
+            // MOVW autosize(SP), PC
             p->as = AMOVW;
             p->scond |= C_PBIT;
             p->from.type = D_OREG;
@@ -238,6 +240,7 @@ noops(void)
             q->link = p->link;
             p->link = q;
 
+            // MOVW autosize(SP), LINK
             p->as = AMOVW;
             p->scond |= C_PBIT;
             p->from = zprg.from;
@@ -259,9 +262,9 @@ noops(void)
          */
         case AMOVWD:
             if((q = p->link) != P && q->as == ACMP)
-            if((q = q->link) != P && q->as == AMOVF)
-            if((q1 = q->link) != P && q1->as == AADDF)
-            if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
+             if((q = q->link) != P && q->as == AMOVF)
+              if((q1 = q->link) != P && q1->as == AADDF)
+               if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
                 q1->as = AADDD;
                 q1 = prg();
                 q1->scond = q->scond;
@@ -398,7 +401,7 @@ sigdiv(char *n)
         if(s->sig == 0)
             s->sig = SIGNINTERN;
     }
-    else if(s->type == 0 || s->type == SXREF)
+    else if(s->type == SNONE || s->type == SXREF)
         s->type = SUNDEF;
 }
 /*e: function sigdiv(arm) */
@@ -418,7 +421,7 @@ divsig(void)
 static void
 sdiv(Sym *s)
 {
-    if(s->type == 0 || s->type == SXREF){
+    if(s->type == SNONE || s->type == SXREF){
         /* undefsym(s); */
         s->type = SXREF;
         if(s->sig == 0)
@@ -484,8 +487,8 @@ void
 nocache(Prog *p)
 {
     p->optab = 0;
-    p->from.class = 0;
-    p->to.class = 0;
+    p->from.class = C_NONE;
+    p->to.class = C_NONE;
 }
 /*e: function nocache(arm) */
 /*e: linkers/5l/noop.c */

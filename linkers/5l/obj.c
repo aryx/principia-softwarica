@@ -288,8 +288,8 @@ main(int argc, char *argv[])
     /*x: [[main()]] initialize globals(arm) */
     nuxiinit(); // ???
     /*x: [[main()]] initialize globals(arm) */
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
+    cbp = buf.obuf;
+    cbc = sizeof(buf.obuf);
     /*e: [[main()]] initialize globals(arm) */
 
     cout = create(outfile, 1, 0775);
@@ -934,8 +934,8 @@ ldobj(fdt f, long c, char *pn)
     filen[files++] = strdup(pn);
     /*e: [[ldobj()]] remember set of object filenames */
     /*s: [[ldobj()]] bloc and bsize init */
-    bsize = buf.xbuf;
-    bloc = buf.xbuf;
+    bsize = buf.ibuf;
+    bloc = buf.ibuf;
     /*e: [[ldobj()]] bloc and bsize init */
 
     di = S;
@@ -956,10 +956,10 @@ loop:
     /*s: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
     r = bsize - bloc;
     if(r < 100 && r < c) {		/* enough for largest prog */
-        bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+        bsize = readsome(f, buf.ibuf, bloc, bsize, c);
         if(bsize == 0)
             goto eof;
-        bloc = buf.xbuf;
+        bloc = buf.ibuf;
         goto loop;
     }
     /*e: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
@@ -986,10 +986,10 @@ loop:
         stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
         /*s: [[ldobj()]] if stop is nil refill buffer and retry */
         if(stop == nil){
-            bsize = readsome(f, buf.xbuf, bloc, bsize, c);
+            bsize = readsome(f, buf.ibuf, bloc, bsize, c);
             if(bsize == 0)
                 goto eof;
-            bloc = buf.xbuf;
+            bloc = buf.ibuf;
             stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
             if(stop == nil){
                 fprint(2, "%s: name too long\n", pn);

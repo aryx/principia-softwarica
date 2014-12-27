@@ -432,12 +432,12 @@ cflush(void)
 {
     int n;
 
-    n = sizeof(buf.cbuf) - cbc;
+    n = sizeof(buf.obuf) - cbc;
     if(n)
-        write(cout, buf.cbuf, n);
+        write(cout, buf.obuf, n);
 
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
+    cbp = buf.obuf;
+    cbc = sizeof(buf.obuf);
 }
 /*e: function cflush */
 

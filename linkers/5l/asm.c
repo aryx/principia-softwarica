@@ -153,8 +153,6 @@ asmb(void)
     lcsize = 0;
 
     if(!debug['s']) {
-
-        DBG("%5.2f sym\n", cputime());
         switch(HEADTYPE) {
         case H_PLAN9:
             OFFSET = HEADR+textsize+datsize;
@@ -176,10 +174,13 @@ asmb(void)
             break;
         /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         }
+
+        DBG("%5.2f sym\n", cputime());
         asmsym();
 
         DBG("%5.2f pc\n", cputime());
         asmlc();
+
         /*s: [[asmb()]] if dynamic module, call asmdyn() */
         if(dlm)
             asmdyn();
@@ -397,12 +398,12 @@ cflush(void)
 {
     int n;
 
-    n = sizeof(buf.cbuf) - cbc;
+    n = sizeof(buf.obuf) - cbc;
     if(n)
-        write(cout, buf.cbuf, n);
+        write(cout, buf.obuf, n);
 
-    cbp = buf.cbuf;
-    cbc = sizeof(buf.cbuf);
+    cbp = buf.obuf;
+    cbc = sizeof(buf.obuf);
 }
 /*e: function cflush */
 
