@@ -199,7 +199,7 @@ asmb(void)
         break;
     /*e: [[asmb()]] switch HEADTYPE (to position after text) cases(x86) */
     default:
-        diag("unknown header type %ld", HEADTYPE);
+        diag("unknown header type %d", HEADTYPE);
     }
 
     DBG("%5.2f datblk\n", cputime());

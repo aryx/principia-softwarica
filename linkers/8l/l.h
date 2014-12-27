@@ -143,14 +143,15 @@ struct	Sym
     long	value; 
 
     /*s: [[Sym]] other fields */
-    short	become;
-    short	frame;
-    /*x: [[Sym]] other fields */
     // md5sum of the type of the symbol
     long	sig;
     /*x: [[Sym]] other fields */
     // idx in filen
     ushort	file;
+    /*x: [[Sym]] other fields */
+    short	become;
+    /*x: [[Sym]] other fields */
+    short	frame;
     /*x: [[Sym]] other fields */
     // enum<section> too?
     short	subtype;
@@ -345,7 +346,7 @@ extern union Buf buf;
 #pragma	varargck	argpos	diag 1
 
 extern	long	HEADR;
-extern	long	HEADTYPE;
+extern	short	HEADTYPE;
 extern	long	INITDAT;
 extern	long	INITRND;
 extern	long	INITTEXT;

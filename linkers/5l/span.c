@@ -485,10 +485,10 @@ aclass(Adr *a)
         }
         return C_GOK;
     /*x: [[aclass()]] switch type cases */
-    case D_FCONST:
-        return C_FCON;
     case D_FREG:
         return C_FREG;
+    case D_FCONST:
+        return C_FCON;
     case D_FPCR:
         return C_FCR;
     /*e: [[aclass()]] switch type cases */
@@ -679,6 +679,7 @@ buildop(void)
 
         switch(r)
         {
+        /*s: [[buildop()]] switch opcode r cases */
         case AXXX:
             break;
         case AADD:
@@ -698,6 +699,9 @@ buildop(void)
             oprange[ACMN] = oprange[r];
             break;
         case AMVN:
+            break;
+        case AB:
+        case ABL:
             break;
         case ABEQ:
             oprange[ABNE] = oprange[r];
@@ -737,17 +741,21 @@ buildop(void)
         case ASWPW:
             oprange[ASWPBU] = oprange[r];
             break;
-        case AB:
-        case ABL:
         case ASWI:
-        case AWORD:
-        case AMOVM:
         case ARFE:
         case ATEXT:
+        case AWORD:
         case ACASE:
         case ABCASE:
+        case AMOVM:
             break;
-
+        case AMULL:
+            oprange[AMULA] = oprange[r];
+            oprange[AMULAL] = oprange[r];
+            oprange[AMULLU] = oprange[r];
+            oprange[AMULALU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
         case AADDF:
             oprange[AADDD] = oprange[r];
             oprange[ASUBF] = oprange[r];
@@ -759,7 +767,7 @@ buildop(void)
             oprange[AMOVFD] = oprange[r];
             oprange[AMOVDF] = oprange[r];
             break;
-            
+    
         case ACMPF:
             oprange[ACMPD] = oprange[r];
             break;
@@ -773,13 +781,7 @@ buildop(void)
             oprange[AMOVWD] = oprange[r];
             oprange[AMOVDW] = oprange[r];
             break;
-
-        case AMULL:
-            oprange[AMULA] = oprange[r];
-            oprange[AMULAL] = oprange[r];
-            oprange[AMULLU] = oprange[r];
-            oprange[AMULALU] = oprange[r];
-            break;
+        /*e: [[buildop()]] switch opcode r cases */
         default:
             diag("unknown op in build: %A", r);
             errorexit();

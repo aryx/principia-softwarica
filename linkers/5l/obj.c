@@ -284,7 +284,7 @@ main(int argc, char *argv[])
     /*x: [[main()]] initialize globals(arm) */
     load_libs = !debug['l'];
     /*x: [[main()]] initialize globals(arm) */
-    buildop(); // ???
+    buildop();
     /*x: [[main()]] initialize globals(arm) */
     nuxiinit(); // ???
     /*x: [[main()]] initialize globals(arm) */
@@ -891,11 +891,11 @@ void
 ldobj(fdt f, long c, char *pn)
 {
     /*s: [[ldobj()]] locals(arm) */
-    long ipc;
-    /*x: [[ldobj()]] locals(arm) */
     byte *bloc;
     byte *bsize;
     int r;
+    /*x: [[ldobj()]] locals(arm) */
+    long ipc;
     /*x: [[ldobj()]] locals(arm) */
     // enum<opcode>
     short o;
@@ -1072,6 +1072,12 @@ loop:
 
     switch(o) {
     /*s: [[ldobj()]] switch opcode cases(arm) */
+    case AGOK:
+        diag("unknown opcode\n%P", p);
+        p->pc = pc;
+        pc++;
+        break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
     case ATEXT:
         if(curtext != P) {
             histtoauto();
@@ -1087,17 +1093,18 @@ loop:
         autosize += 4;
 
         s = p->from.sym;
-
         if(s == S) {
             diag("TEXT must have a name\n%P", p);
             errorexit();
         }
 
         if(s->type != SNONE && s->type != SXREF) {
+            /*s: [[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK */
             if(p->reg & DUPOK) {
                 skip = true;
                 goto casedef;
             }
+            /*e: [[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK */
             diag("redefinition: %s\n%P", s->name, p);
         }
 
@@ -1239,12 +1246,6 @@ loop:
         break;
 
     /*x: [[ldobj()]] switch opcode cases(arm) */
-    case AGOK:
-        diag("unknown opcode\n%P", p);
-        p->pc = pc;
-        pc++;
-        break;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
     case AMOVDF:
         if(!vfp || p->from.type != D_FCONST)
             goto casedef;
@@ -1309,6 +1310,7 @@ loop:
         }
         goto casedef;
     /*e: [[ldobj()]] switch opcode cases(arm) */
+
     default:
     casedef:
         if(skip)

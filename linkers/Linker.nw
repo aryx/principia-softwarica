@@ -15,6 +15,7 @@
 % - introduced HEADTYPE instead of hardcoded integers
 % - introduced mylog() and DBG(), factorize tracing code
 % - removed many portable myxxx() wrappers
+% - removed some deadcode (C_LBRA, C_LECON, C_SCON, D_OCONST, regused)
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
@@ -23,7 +24,7 @@
 % - that an object is really a module, the simplest/lowest module abstraction
 %   with defs and uses to link together (for text and data).
 % - TODO fpic? 
-% - TODO dynamic linking?
+% - TODO dynamic linking? export table? import table?
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -363,6 +364,9 @@ struct	Sym
 %less: rename value to pc? to a union?
 %note: conflict with include/a.out.h
 
+% The type and values in Sym are? for ATEXT elts what is stored?
+% When can we get a SXREF in ldobj()? SXREF means unknown yet, happens when?
+
 <<constant NHASH linker>>=
 NHASH		= 10007,
 @
@@ -404,8 +408,6 @@ enum section
 % those are mostly sections, or subsections (e.g. SDATA1 of SDATA,
 % and SLEAF/SCONST/STRING of STEXT)
 
-% The type and values in Sym are? for ATEXT elts what is stored?
-% When can we get a SXREF in ldobj()? SXREF means unknown yet, happens when?
 
 
 
@@ -458,20 +460,21 @@ lookup(char *symb, int v)
 <<global nsymbol linker>>=
 long	nsymbol;
 @
-% statistics
+% for statistics
 
 % s->link will be described in Safe linking section
 
 \section{[[Opcode]] and [[Operand]]}
 
-% in 5.out.h: 
+% in include/arm/5.out.h: 
 % - Opcode (enum opcode), 
 % - Operand_kind (enum operand_kind)
 % see Aconv(opcode), Dconv(operand_kind)
 
-% can reput major opcode here, AXXX, ALAST, AADD, ATEXT, AB, etc?
+% can reput major opcode here, AADD, ATEXT, AB, etc?
 % and also R1, ... 
-% and also D_EXTERN?
+% and also D_REG, ... 
+% and even D_STATIC, ...
 
 % Adr = Operand of instruction, e.g. in MOV AX, BX, then AX is a form of Adr
 <<struct Adr(arm)>>=
@@ -495,10 +498,13 @@ struct	Adr
 %   D_AUTO cases
 % - new 'class' field (but seems local to oplook())
 %see DConv
+%note: offset abused for REGREG
+% but otherwise it's often used as an offset in D_BRANCH, D_OREG
+% because indeed it's an offset to a basis (PC, SB, etc)
+%note: ATEXT arguments are also Adr (abuse)
 %less: rename Operand?
 %less: would be better if had ADT so can have better Instruction type instead
 % of those opcode, operand, Adr, and unions and all those comments
-%note: ATEXT arguments are also Adr (abuse)
 
 %give a few examples? show man page where have all the addressing modes
 
@@ -508,19 +514,12 @@ struct	Adr
 % or can be direct value (for D_CONST)
 
 
-% abused for NOPROF function attributes
-% offset abused for REGREG
-% but otherwise it's often used as an offset in D_BRANCH, D_OREG
-% because indeed it's an offset to a basis (PC, SB, etc)
-
-
-
 
 <<[[Adr]] other fields>>=
-short	reg; // Abused for NOPROF and DUPOK
+short	reg; 
 @
 % again a reg field ... because most operands involve a register
-
+%// Abused for NOPROF and DUPOK; abused for NOPROF function attributes
 
 <<[[Adr]] other fields>>=
 union {
@@ -528,6 +527,8 @@ union {
     Auto*	autom;
 };
 @
+%autom because auto is a reserved keyword? but has nothing to do
+% with automata so maybe better to rename local_or_param
 
 % works with sym
 <<[[Adr]] other fields>>=
@@ -555,7 +556,7 @@ struct	Auto
 <<[[Auto]] extra fields>>=
 Auto*	link;
 @
-
+% chain them so can do some basic checks? like right autosize?
 
 \section{[[Prog]]}
 
@@ -590,7 +591,7 @@ struct	Prog
 
 % very arm specific!
 <<[[Prog]] other fields>>=
-// enum<register>
+// enum<registr>
 short	reg;
 @
 % ARM instructions have often 3 operands in which case at least
@@ -639,16 +640,33 @@ LEAF		= 1<<2,
 % case STEXT: case SLEAF: below)
 
 
+
+%dead:
+%<<[[Prog]] other fields>>=
+%union
+%{
+%    long	regused;
+%};
+%@
+% use anonymous union now, so don't need those aliases
+%<<constant regused(arm)>>=
+%#define	regused	u0.u0regused
+%@
+%<<constant forwd(arm)>>=
+%#define	forwd	u0.u0forwd
+%@
+
 \section{[[firstp]], [[textp]], [[datap]], [[curtext]], etc}
 
 % list of instructions (ATEXT and its instrs, but not ADATA, AGLOBL, ...)
 % good name? first_instr better? also again there is strong
 % coupling between firstp and lastp that should be encapsulated
-% in a specific structure (like for datap, edatap)
+% in a specific structure (like for datap/edatap)
 <<global firstp>>=
 // list<ref_own?<Prog>>, next = Prog.link
 Prog*	firstp;
 @
+% rename instrp?
 
 
 <<[[Prog]] extra fields>>=
@@ -773,7 +791,7 @@ enum classx {
 };
 @
 %diffs with operand_kind:
-% - OREG splitted in many xxxOREG
+% - OREG splitted in many xxxOREG and xxxEXT, xxAUTO
 % - D_CONST splitted in many xxxCON
 % - S_CONST?
 % - a new C_GOK
@@ -820,27 +838,6 @@ aclass(Adr *a)
 }
 @
 
-%old:
-%    case D_OCONST:
-%        switch(a->name) {
-%        case D_EXTERN:
-%        case D_STATIC:
-%            s = a->sym;
-%            t = s->type;
-%            if(t == 0 || t == SXREF) {
-%                diag("undefined external: %s in %s",
-%                    s->name, TNAME);
-%                s->type = SDATA;
-%            }
-%            instoffset = s->value + a->offset + INITDAT;
-%            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
-%                instoffset = s->value + a->offset;
-%            return C_LCON;
-%        }
-%        return C_GOK;
-
-
-
 
 
 
@@ -855,12 +852,14 @@ case D_OREG:
 
 <<cxxx(arm) cases>>=
 C_HEXT,
-C_FEXT,
-C_HFEXT,
 C_SEXT,
 C_LEXT,
+
+C_FEXT,
+C_HFEXT,
 @
 
+%xxx+y(SB)
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
 case D_EXTERN:
 case D_STATIC:
@@ -888,13 +887,15 @@ case D_STATIC:
     }
     return C_LEXT;
 @
+% BIG ???
 
 <<cxxx(arm) cases>>=
 C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-C_HFAUTO,	/* both H and F */
 C_SAUTO,	/* -0xfff to 0xfff */
 C_LAUTO,
+
+C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+C_HFAUTO,	/* both H and F */
 @
 
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
@@ -910,6 +911,7 @@ case D_AUTO:
     }
     return C_LAUTO;
 @
+
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
 case D_PARAM:
     instoffset = autosize + a->offset + 4L;
@@ -923,15 +925,17 @@ case D_PARAM:
     }
     return C_LAUTO;
 @
+% +4??
 
 <<cxxx(arm) cases>>=
 C_HOREG,
-C_FOREG,
-C_HFOREG,
 C_SOREG,
 C_ROREG,
 C_SROREG,	/* both S and R */
 C_LOREG,
+
+C_FOREG,
+C_HFOREG,
 @
 
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
@@ -1036,6 +1040,8 @@ case D_STATIC:
 
 
 
+
+
 <<cxxx(arm) cases>>=
 C_RACON,
 C_LACON,
@@ -1063,73 +1069,35 @@ aconsize:
 
 
 
+%old: dead: this advanced addressing mode of 5a is not that useful
+%    case D_OCONST:
+%        switch(a->name) {
+%        case D_EXTERN:
+%        case D_STATIC:
+%            s = a->sym;
+%            t = s->type;
+%            if(t == 0 || t == SXREF) {
+%                diag("undefined external: %s in %s",
+%                    s->name, TNAME);
+%                s->type = SDATA;
+%            }
+%            instoffset = s->value + a->offset + INITDAT;
+%            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
+%                instoffset = s->value + a->offset;
+%            return C_LCON;
+%        }
+%        return C_GOK;
+
+
+
+
 %\section{[[Optab]] and [[optab]]}?
 %hmm maybe better later
 
 %\section{[[Buf]] and [[buf]]}?
-%hmm maybe better later
-
+%hmm maybe better in appendix or later
 
 %\section{[[pc]]}?
-
-\section{XXX}
-
-%XXX
-<<[[Prog]] other fields>>=
-union
-{
-    long	regused;
-    Prog*	forwd;
-};
-@
-% use anonymous union now, so don't need those aliases
-%<<constant regused(arm)>>=
-%#define	Xregused	u0.u0regused
-%@
-%<<constant forwd(arm)>>=
-%#define	Xforwd	u0.u0forwd
-%@
-
-
-%XXXXXXXXX
-<<[[Sym]] other fields>>=
-short	become;
-short	frame;
-@
-
-
-<<enum lxxx(arm)>>=
-enum lxxx {
-    LFROM	= 1<<0,
-    LTO		= 1<<1,
-    LPOOL	= 1<<2,
-    <<enum lxxx cases>>
-};
-@
-% >> >> >> >> >>
-
-
-
-
-
-<<enum misc_constant(arm)>>=
-enum misc_constants {
-    BIG		= (1<<12)-4,
-
-    <<constant STRINGSZ>>
-    <<constant NHASH linker>>
-    <<constant NHUNK linker>>
-
-    MINSIZ		= 64,
-    NENT		= 100,
-    <<constant MAXIO>>
-    MAXHIST		= 20,	/* limit of path elements for history symbols */
-};
-@
-% >>
-
-
-
 
 \chapter{[[main()]]}
 
@@ -1820,32 +1788,8 @@ undef(void)
 % why not using 5obj.c from libmach/? because 5obj.c is incomplete?
 % because it cares just about the symbol table?
 
-\section{A global [[pc]]}
-
-% each call to ldobj() will increment this pc
-<<global pc>>=
-long	pc = 0;
-@
-
-% internal pc? objects are loaded after each other,
-% but when had a local D_BRANCH then need now to adjust to a global value
-<<[[ldobj()]] locals(arm)>>=
-long ipc;
-@
-% so set to current pc when at the beginning of object
-
-
-% This is for the D_STATIC; to handle conflicts with different files
-% defining the same static entity. This is bumped each time
-% a new object file is parsed, so it's safe.
-<<global version>>=
-int	version = 0;
-@
-
-
-
-
-
+\section{Object format}
+% again ... repeat Assembler.nw section?
 
 \section{Buffered input, [[buf]]}
 % see buffer managment appendix,
@@ -1877,7 +1821,29 @@ if(r < 100 && r < c) {		/* enough for largest prog */
 % >> >> >> >>
 % readsome() is in appendix too
 
-\section{[[ldobj()]]}
+\section{A global [[pc]]}
+
+% each call to ldobj() will increment this pc
+<<global pc>>=
+long	pc = 0;
+@
+
+% internal pc? objects are loaded after each other,
+% but when had a local D_BRANCH then need now to adjust to a global value
+<<[[ldobj()]] locals(arm)>>=
+long ipc;
+@
+% so set to current pc when at the beginning of object
+
+
+% This is for the D_STATIC; to handle conflicts with different files
+% defining the same static entity. This is bumped each time
+% a new object file is parsed, so it's safe.
+<<global version>>=
+int	version = 0;
+@
+
+\section{Instructions input, [[ldobj()]]}
 
 <<[[ldobj()]] locals(arm)>>=
 // enum<opcode>
@@ -1886,12 +1852,12 @@ Prog *p;
 @
 % the instruction p will be allocated
 
-% ???
 <<[[ldobj()]] locals(arm)>>=
 bool skip;
 @
 % if set to true then generate a NOP actually for the currently
-% read instruction. used for DUPOK for instance.
+% read instruction. 
+% used for DUPOK for instance.
 
 
 % main -> objfile -> <>
@@ -1938,6 +1904,7 @@ loop:
 
     switch(o) {
     <<[[ldobj()]] switch opcode cases(arm)>>
+
     default:
     casedef:
         if(skip)
@@ -1974,7 +1941,7 @@ eof:
 
 
 
-% section{Object format}?
+%\section{Object format}?
 
 <<[[ldobj()]] read one instruction in p>>=
 p->scond = bloc[1];
@@ -1990,6 +1957,7 @@ c -= r;
 p->link = P;
 p->cond = P;
 @
+% >> >> >>
 
 
 <<[[ldobj()]] sanity check opcode in range(arm)>>=
@@ -2000,12 +1968,28 @@ if(o <= AXXX || o >= ALAST) {
 }
 @
 
+
 <<[[ldobj()]] sanity check p>>=
 if(p->reg > NREG)
     diag("register out of range %d", p->reg);
 @
 
 
+%\section{[[AGOK]]}
+% can happen? I think we can remove it, 5c can't produce such opcodes. Can it?
+% another kind of sanity check:
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AGOK:
+    diag("unknown opcode\n%P", p);
+    p->pc = pc;
+    pc++;
+    break;
+@
+%x86:     diag("%s: GOK opcode in %s", pn, TNAME);
+
+
+
+% for e.g. ATEXT that are DUPOK
 <<function nopout>>=
 void
 nopout(Prog *p)
@@ -2029,7 +2013,7 @@ ulong sig;
 @
 
 
-\section{[[zaddr()]]}
+\section{Operand input, [[zaddr()]]}
 
 % reverse of zaddr() in Assembler.nw 
 % ldobj -> <>
@@ -2120,7 +2104,7 @@ case D_SCONST:
     break;
 @
 %//case D_OCONST: was with D_SHIFT
-
+% >> >> >> >>
 
 
 
@@ -2147,10 +2131,14 @@ if(a->reg < 0 || a->reg > NREG) {
 
 \section{[[ATEXT]]}
 
-% ???
+% parameters + locals list
 <<global curauto>>=
 Auto*	curauto;
 @
+
+
+
+
 <<global curhist>>=
 Auto*	curhist;
 @
@@ -2188,17 +2176,13 @@ case ATEXT:
     autosize += 4;
 
     s = p->from.sym;
-
     if(s == S) {
         diag("TEXT must have a name\n%P", p);
         errorexit();
     }
 
     if(s->type != SNONE && s->type != SXREF) {
-        if(p->reg & DUPOK) {
-            skip = true;
-            goto casedef;
-        }
+        <<[[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK>> 
         diag("redefinition: %s\n%P", s->name, p);
     }
 
@@ -2269,7 +2253,28 @@ case AGLOBL:
 @
 % what is offset for AGLOBL?
 
-\section{[[ANAME]]}
+\section{[[AEND]]}
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AEND:
+
+    histtoauto();
+    if(curtext != P)
+        curtext->to.autom = curauto;
+    curauto = nil;
+
+    curtext = P;
+    if(c)
+        goto newloop;
+    return;
+@
+% when goto newloop? when have stuff behind an AEND?
+% for library? aggregate to have AEND between files?
+
+
+
+
+\section{Symbol table, [[ANAME]]}
 % and [[ASIGNAME]]
 
 
@@ -2334,30 +2339,81 @@ if(stop == nil){
     }
 }
 @
+% >> >>
 
+\section{Safe linking with [[ASIGNAME]]}
+% put in advanced topics? At the same time safe linking is
+% an essential feature to me
+%note: cool, like in ocamlc! ocaml does that too, to make linking more safe!
 
-\section{[[AEND]]}
+% ASIGNAME is a pseudo opcode generated by 5c.
+% when 2 .c include some .h and reference an object, we
+% want that they refer to the same object with the same type!
 
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AEND:
-
-    histtoauto();
-    if(curtext != P)
-        curtext->to.autom = curauto;
-    curauto = nil;
-
-    curtext = P;
-    if(c)
-        goto newloop;
-    return;
+<<[[Sym]] other fields>>=
+// md5sum of the type of the symbol
+long	sig;
 @
-% when goto newloop? when have stuff behind an AEND?
-% for library? aggregate to have AEND between files?
+
+<<[[ldobj()]] if SIGNAME adjust sig>>=
+if(o == ASIGNAME){
+    sig = bloc[1] | (bloc[2]<<8) | (bloc[3]<<16) | (bloc[4]<<24);
+    bloc += 4;
+    c -= 4;
+}
+@
+% >> >> >> >>
+
+
+% s = ? symbol set in ldobj() to be?
+<<[[ldobj()]] if sig not zero>>=
+if(sig != 0){
+    if(s->sig != 0 && s->sig != sig)
+        diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
+    s->sig = sig;
+    s->file = files-1;
+}
+@
 
 
 
+% local, but really kinda globals
+<<[[ldobj()]] locals(arm)>>=
+// growing_array<filename>  (grown for every 16 elements)
+static char **filen;
+// index of next free entry in filen
+static int files = 0;
+@
 
-\section{[[AHISTORY]]}
+<<[[Sym]] other fields>>=
+// idx in filen
+ushort	file;
+@
+
+
+<<[[ldobj()]] remember set of object filenames>>=
+<<[[ldobj()]] grow filen if not enough space>>
+filen[files++] = strdup(pn);
+@
+
+
+
+% new filen (not a static this time)
+<<[[ldobj()]] locals(arm)>>=
+char **nfilen;
+@
+
+% =~ realloc
+<<[[ldobj()]] grow filen if not enough space>>=
+if((files&15) == 0){
+    nfilen = malloc((files+16)*sizeof(char*));
+    memmove(nfilen, filen, files*sizeof(char*));
+    free(filen);
+    filen = nfilen;
+}
+@
+
+\section{File and line information, [[AHISTORY]]}
 % tracing origin??
 
 
@@ -2451,78 +2507,6 @@ collapsefrog(Sym *s)
 
 out:
     histfrog[histfrogp-1] = s;
-}
-@
-
-\section{Safe linking with [[ASIGNAME]]}
-% put in advanced topics? At the same time safe linking is
-% an essential feature to me
-%note: ocaml does that too, to make linking more safe!
-
-% ASIGNAME is a pseudo opcode generated by 5c.
-% when 2 .c include some .h and reference an object, we
-% want that they refer to the same object with the same type!
-
-<<[[Sym]] other fields>>=
-// md5sum of the type of the symbol
-long	sig;
-@
-
-<<[[ldobj()]] if SIGNAME adjust sig>>=
-if(o == ASIGNAME){
-    sig = bloc[1] | (bloc[2]<<8) | (bloc[3]<<16) | (bloc[4]<<24);
-    bloc += 4;
-    c -= 4;
-}
-@
-% >> >> >> >>
-
-
-% s = ? symbol set in ldobj() to be?
-<<[[ldobj()]] if sig not zero>>=
-if(sig != 0){
-    if(s->sig != 0 && s->sig != sig)
-        diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
-    s->sig = sig;
-    s->file = files-1;
-}
-@
-
-
-
-% local, but really kinda globals
-<<[[ldobj()]] locals(arm)>>=
-// growing_array<filename>  (grown for every 16 elements)
-static char **filen;
-// index of next free entry in filen
-static int files = 0;
-@
-
-<<[[Sym]] other fields>>=
-// idx in filen
-ushort	file;
-@
-
-
-<<[[ldobj()]] remember set of object filenames>>=
-<<[[ldobj()]] grow filen if not enough space>>
-filen[files++] = strdup(pn);
-@
-
-
-
-% new filen (not a static this time)
-<<[[ldobj()]] locals(arm)>>=
-char **nfilen;
-@
-
-% =~ realloc
-<<[[ldobj()]] grow filen if not enough space>>=
-if((files&15) == 0){
-    nfilen = malloc((files+16)*sizeof(char*));
-    memmove(nfilen, filen, files*sizeof(char*));
-    free(filen);
-    filen = nfilen;
 }
 @
 
@@ -2620,6 +2604,145 @@ out:
 @
 
 % >> >> >>
+
+\section{Loading libraries semi automatically [[5l -lxxx]]}
+
+\subsection{Library search path}
+
+<<global libdir>>=
+// growing_array<dirname>
+char**	libdir;
+@
+
+<<global nlibdir>>=
+// index of next free entry in libdir
+int	nlibdir	= 0;
+@
+
+<<global maxlibdir>>=
+// index of last free entry in libdir
+static	int	maxlibdir = 0;
+@
+
+
+\subsection{[[5l -L]]}
+
+<<[[main()]] command line processing(arm)>>=
+case 'L':
+    addlibpath(EARGF(usage()));
+    break;
+@
+
+
+% was called 'a', but root is a better name
+<<[[main()]] locals(arm)>>=
+char *root;
+@
+
+<<constant LIBNAMELEN>>=
+#define	LIBNAMELEN	300
+@
+
+% used locals? move closer the the code that use it then
+<<[[main()]] locals(arm)>>=
+int c;
+char name[LIBNAMELEN];
+char *a;
+@
+% *a still needed now that renamed to root?
+
+
+<<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>=
+<<[[main()]] change root if ccroot>>
+
+// usually /{thestring}/lib/ as root = ""
+snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
+addlibpath(name);
+@
+
+% possible to change default / search path
+<<[[main()]] change root if ccroot>>=
+root = getenv("ccroot");
+
+if(root != nil && *root != '\0') {
+    if(!fileexists(root)) {
+        diag("nonexistent $ccroot: %s", root);
+        errorexit();
+    }
+}else
+    root = "";
+@
+%$
+
+
+
+
+
+
+
+
+<<function addlibpath>>=
+void
+addlibpath(char *arg)
+{
+    char **p;
+
+    // growing array libdir
+    if(nlibdir >= maxlibdir) {
+        if(maxlibdir == 0)
+            maxlibdir = 8;
+        else
+            maxlibdir *= 2;
+        p = malloc(maxlibdir*sizeof(*p));
+        if(p == nil) {
+            diag("out of memory");
+            errorexit();
+        }
+        memmove(p, libdir, nlibdir*sizeof(*p));
+        free(libdir);
+        libdir = p;
+    }
+
+    libdir[nlibdir++] = strdup(arg);
+}
+@
+
+\subsection{[[5l -lxxx]]}
+
+% actually can also load them manually by specifing the full
+% path of the .a with the lib prefix.
+
+% when done manually by -l in command line of ld
+<<[[objfile()]] adjust file if -lxxx filename>>=
+if(file[0] == '-' && file[1] == 'l') {
+    snprint(pname, sizeof(pname), "lib%s.a", file+2);
+    e = findlib(pname);
+    if(e == nil) {
+        diag("cannot find library: %s", file);
+        errorexit();
+    }
+    snprint(name, sizeof(name), "%s/%s", e, pname);
+    file = name;
+}
+@
+
+<<function findlib>>=
+char*
+findlib(char *file)
+{
+    int i;
+    char name[LIBNAMELEN];
+
+    for(i = 0; i < nlibdir; i++) {
+        snprint(name, sizeof(name), "%s/%s", libdir[i], file);
+        if(fileexists(name))
+            return libdir[i];
+    }
+    return nil;
+}
+@
+
+
 
 \section{Loading libraries automagically [[#pragma lib]]}
 % when done automatically
@@ -2775,141 +2898,6 @@ struct	ar_hdr
 #define	SAR_HDR	(SARNAME+44)
 @
 
-\section{Library search path}
-
-<<global libdir>>=
-// growing_array<dirname>
-char**	libdir;
-@
-
-<<global nlibdir>>=
-// index of next free entry in libdir
-int	nlibdir	= 0;
-@
-
-<<global maxlibdir>>=
-// index of last free entry in libdir
-static	int	maxlibdir = 0;
-@
-
-
-\subsection{[[5l -L]]}
-
-<<[[main()]] command line processing(arm)>>=
-case 'L':
-    addlibpath(EARGF(usage()));
-    break;
-@
-
-
-% was called 'a', but root is a better name
-<<[[main()]] locals(arm)>>=
-char *root;
-@
-
-<<constant LIBNAMELEN>>=
-#define	LIBNAMELEN	300
-@
-
-% used locals? move closer the the code that use it then
-<<[[main()]] locals(arm)>>=
-int c;
-char name[LIBNAMELEN];
-char *a;
-@
-% *a still needed now that renamed to root?
-
-
-<<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>=
-<<[[main()]] change root if ccroot>>
-
-// usually /{thestring}/lib/ as root = ""
-snprint(name, sizeof(name), "%s/%s/lib", root, thestring);
-addlibpath(name);
-@
-
-% possible to change default / search path
-<<[[main()]] change root if ccroot>>=
-root = getenv("ccroot");
-
-if(root != nil && *root != '\0') {
-    if(!fileexists(root)) {
-        diag("nonexistent $ccroot: %s", root);
-        errorexit();
-    }
-}else
-    root = "";
-@
-%$
-
-
-
-
-
-
-
-
-<<function addlibpath>>=
-void
-addlibpath(char *arg)
-{
-    char **p;
-
-    // growing array libdir
-    if(nlibdir >= maxlibdir) {
-        if(maxlibdir == 0)
-            maxlibdir = 8;
-        else
-            maxlibdir *= 2;
-        p = malloc(maxlibdir*sizeof(*p));
-        if(p == nil) {
-            diag("out of memory");
-            errorexit();
-        }
-        memmove(p, libdir, nlibdir*sizeof(*p));
-        free(libdir);
-        libdir = p;
-    }
-
-    libdir[nlibdir++] = strdup(arg);
-}
-@
-
-\subsection{[[5l -lxxx]]}
-
-% actually can also load them manually by specifing the full
-% path of the .a with the lib prefix.
-
-% when done manually by -l in command line of ld
-<<[[objfile()]] adjust file if -lxxx filename>>=
-if(file[0] == '-' && file[1] == 'l') {
-    snprint(pname, sizeof(pname), "lib%s.a", file+2);
-    e = findlib(pname);
-    if(e == nil) {
-        diag("cannot find library: %s", file);
-        errorexit();
-    }
-    snprint(name, sizeof(name), "%s/%s", e, pname);
-    file = name;
-}
-@
-
-<<function findlib>>=
-char*
-findlib(char *file)
-{
-    int i;
-    char name[LIBNAMELEN];
-
-    for(i = 0; i < nlibdir; i++) {
-        snprint(name, sizeof(name), "%s/%s", libdir[i], file);
-        if(fileexists(name))
-            return libdir[i];
-    }
-    return nil;
-}
-@
-
 
 
 
@@ -3033,6 +3021,12 @@ brloop(Prog *p)
 #define	LOG	5
 @
 
+
+<<[[Prog]] other fields>>=
+Prog*	forwd;
+@
+% used to be part of an union with regused, but regused was actually
+% unused
 
 <<function mkfwd>>=
 void
@@ -3401,6 +3395,13 @@ SLEAF, // arm
 @
 % SLEAF? the special opti ARM has for leaf functions?
 
+
+<<[[Sym]] other fields>>=
+short	become;
+@
+<<[[Sym]] other fields>>=
+short	frame;
+@
 
 <<function noops(arm)>>=
 void
@@ -3848,6 +3849,7 @@ long	textsize;
 
 
 
+
 <<function span(arm)>>=
 void
 span(void)
@@ -4096,7 +4098,7 @@ addpool(Prog *p, Adr *a)
 <<struct Optab(arm)>>=
 struct	Optab
 {
-    // enum<opcode> from 5.out.h
+    // enum<opcode> from 5.out.h, but represents a range, see oprange[]
     byte	as;
 
     // enum<cxxx>, possible class for first operand
@@ -4112,20 +4114,17 @@ struct	Optab
     // size of the corresponding machine code, should be a multiple of 4
     short	size; 
 
-    // ??
-    char	param;
-
-    char	flag;
+    <<[[Optab]] other fields>>
 };
 @
+% order is important, see optab[] global
 
 %ex of entries:
 % Optab	optab[] =
 % {
 %    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
 %    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
-%    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
-%    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
+%    ...
 %    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
 %    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
 
@@ -4133,6 +4132,25 @@ struct	Optab
 % ARM has fixed-length instructions, 4, but 5a/ support
 % some fake/virtual opcodes that actually expands to 
 % multiple instructions, hence the size field above.
+
+
+<<[[Optab]] other fields>>=
+// 0 | REGSB | REGSP
+char	param;
+// enum<lxxx>
+char	flag;
+@
+% order is important, see optab[] global
+
+<<enum lxxx(arm)>>=
+enum lxxx {
+    LFROM	= 1<<0,
+    LTO		= 1<<1,
+    LPOOL	= 1<<2,
+    <<enum lxxx cases>>
+};
+@
+% >> >> >> >> >>
 
 
 %\section{[[optab]]}
@@ -4152,268 +4170,200 @@ struct	Optab
 <<global optab (linkers/5l/optab.c)(arm)>>=
 Optab	optab[] =
 {
-    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
-    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
-    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
-    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
-
-    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
-    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-    { AMOVW,	C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-    { AMVN,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-    { ACMP,		C_REG,	C_REG,	C_NONE,		 1, 4, 0 },
-
-    { AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
-    { AADD,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-    { AMOVW,	C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-    { AMVN,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-    { ACMP,		C_RCON,	C_REG,	C_NONE,		 2, 4, 0 },
-
-    { AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
-    { AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
-    { AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
-    { ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
-
-    { AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
-    { AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
-
-    { AB,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0,	LPOOL },
-    { ABL,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0 },
-    { ABEQ,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0 },
-
-    { AB,		C_NONE,	C_NONE,	C_ROREG,	 6, 4, 0,	LPOOL },
-    { ABL,		C_NONE,	C_NONE,	C_ROREG,	 7, 8, 0 },
-
-    { ASLL,		C_RCON,	C_REG,	C_REG,		 8, 4, 0 },
-    { ASLL,		C_RCON,	C_NONE,	C_REG,		 8, 4, 0 },
-
-    { ASLL,		C_REG,	C_NONE,	C_REG,		 9, 4, 0 },
-    { ASLL,		C_REG,	C_REG,	C_REG,		 9, 4, 0 },
-
-    { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4, 0 },
-
-    { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
-    { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
-    { AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4, 0 },
-
-    { AMOVW,	C_NCON,	C_NONE,	C_REG,		12, 4, 0 },
-    { AMOVW,	C_LCON,	C_NONE,	C_REG,		12, 4, 0,	LFROM },
-
-    { AADD,		C_NCON,	C_REG,	C_REG,		13, 8, 0 },
-    { AADD,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
-    { AMVN,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
-    { ACMP,		C_NCON,	C_REG,	C_NONE,		13, 8, 0 },
-    { AADD,		C_LCON,	C_REG,	C_REG,		13, 8, 0,	LFROM },
-    { AADD,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
-    { AMVN,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
-    { ACMP,		C_LCON,	C_REG,	C_NONE,		13, 8, 0,	LFROM },
-
-    { AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-    { AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4, 0 },
-    { AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-    { AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-
-    { AMUL,		C_REG,	C_REG,	C_REG,		15, 4, 0 },
-    { AMUL,		C_REG,	C_NONE,	C_REG,		15, 4, 0 },
-
-    { ADIV,		C_REG,	C_REG,	C_REG,		16, 4, 0 },
-    { ADIV,		C_REG,	C_NONE,	C_REG,		16, 4, 0 },
-
-    { AMULL,	C_REG,	C_REG,	C_REGREG,	17, 4, 0 },
-
-    { AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-    { AMOVW,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-    { AMOVW,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-    { AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-    { AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-    { AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-    { AMOVBU,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-    { AMOVBU,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-    { AMOVBU,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-
-    { AMOVW,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
-    { AMOVW,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
-    { AMOVW,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
-    { AMOVBU,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
-    { AMOVBU,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
-    { AMOVBU,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
-
-    { AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-    { AMOVH,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVH,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVH,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-    { AMOVHU,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVHU,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVHU,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-
-    { AMOVH,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
-    { AMOVH,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
-    { AMOVH,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
-    { AMOVHU,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
-    { AMOVHU,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
-    { AMOVHU,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
-
-    { AMOVW,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-    { AMOVW,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-    { AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVW,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
-
-    { AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
-    { AMOVW,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
-    { AMOVW,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
-    { AMOVW,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
-    { AMOVBU,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
-    { AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
-    { AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
-    { AMOVBU,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
-
-    { AMOVB,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVB,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVB,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVB,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
-    { AMOVH,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVH,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVH,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVH,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
-    { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVHU,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVHU,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVHU,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
-
-    { AMOVH,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
-    { AMOVH,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
-    { AMOVH,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
-    { AMOVH,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
-
-    { AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
-
-    { AMOVW,	C_PSR,	C_NONE,	C_REG,		35, 4, 0 },
-    { AMOVW,	C_REG,	C_NONE,	C_PSR,		36, 4, 0 },
-    { AMOVW,	C_RCON,	C_NONE,	C_PSR,		37, 4, 0 },
-
-    { AMOVM,	C_LCON,	C_NONE,	C_SOREG,	38, 4, 0 },
-    { AMOVM,	C_SOREG,C_NONE,	C_LCON,		39, 4, 0 },
-
-    { ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4, 0 },
-
-    { ARFE,		C_NONE,	C_NONE,	C_NONE,		41, 4, 0 },
-
-    { AMOVF,	C_FREG,	C_NONE,	C_FEXT,		50, 4, REGSB },
-    { AMOVF,	C_FREG,	C_NONE,	C_FAUTO,	50, 4, REGSP },
-    { AMOVF,	C_FREG,	C_NONE,	C_FOREG,	50, 4, 0 },
-
-    { AMOVF,	C_FEXT,	C_NONE,	C_FREG,		51, 4, REGSB },
-    { AMOVF,	C_FAUTO,C_NONE,	C_FREG,		51, 4, REGSP },
-    { AMOVF,	C_FOREG,C_NONE,	C_FREG,		51, 4, 0 },
-
-    { AMOVF,	C_FREG,	C_NONE,	C_LEXT,		52, 12, REGSB,	LTO },
-    { AMOVF,	C_FREG,	C_NONE,	C_LAUTO,	52, 12, REGSP,	LTO },
-    { AMOVF,	C_FREG,	C_NONE,	C_LOREG,	52, 12, 0,	LTO },
-
-    { AMOVF,	C_LEXT,	C_NONE,	C_FREG,		53, 12, REGSB,	LFROM },
-    { AMOVF,	C_LAUTO,C_NONE,	C_FREG,		53, 12, REGSP,	LFROM },
-    { AMOVF,	C_LOREG,C_NONE,	C_FREG,		53, 12, 0,	LFROM },
-
-    { AMOVF,	C_FREG,	C_NONE,	C_ADDR,		68, 8, 0,	LTO },
-    { AMOVF,	C_ADDR,	C_NONE,	C_FREG,		69, 8, 0,	LFROM },
-
-    { AADDF,	C_FREG,	C_NONE,	C_FREG,		54, 4, 0 },
-    { AADDF,	C_FREG,	C_REG,	C_FREG,		54, 4, 0 },
-    { AADDF,	C_FCON,	C_NONE,	C_FREG,		54, 4, 0 },
-    { AADDF,	C_FCON,	C_REG,	C_FREG,		54, 4, 0 },
-    { AMOVF,	C_FCON,	C_NONE,	C_FREG,		54, 4, 0 },
-    { AMOVF,	C_FREG, C_NONE, C_FREG,		54, 4, 0 },
-
-    { ACMPF,	C_FREG,	C_REG,	C_NONE,		54, 4, 0 },
-    { ACMPF,	C_FCON,	C_REG,	C_NONE,		54, 4, 0 },
-
-    { AMOVFW,	C_FREG,	C_NONE,	C_REG,		55, 4, 0 },
-    { AMOVFW,	C_REG,	C_NONE,	C_FREG,		55, 4, 0 },
-
-    { AMOVW,	C_REG,	C_NONE,	C_FCR,		56, 4, 0 },
-    { AMOVW,	C_FCR,	C_NONE,	C_REG,		57, 4, 0 },
-
-    { AMOVW,	C_SHIFT,C_NONE,	C_REG,		59, 4, 0 },
-    { AMOVBU,	C_SHIFT,C_NONE,	C_REG,		59, 4, 0 },
-
-    { AMOVB,	C_SHIFT,C_NONE,	C_REG,		60, 4, 0 },
-
-    { AMOVW,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
-    { AMOVB,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
-    { AMOVBU,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
-
-    { ACASE,	C_REG,	C_NONE,	C_NONE,		62, 4, 0 },
-    { ABCASE,	C_NONE, C_NONE, C_BRANCH,		63, 4, 0 },
-
-    { AADDF,	C_FREG,	C_NONE,	C_FREG,		74, 4, 0, VFP },
-    { AADDF,	C_FREG,	C_REG,	C_FREG,		74, 4, 0, VFP },
-    { AMOVF,	C_FREG, C_NONE, C_FREG,		74, 4, 0, VFP },
-    { ACMPF,	C_FREG,	C_REG,	C_NONE,		75, 8, 0, VFP },
-    { ACMPF,	C_FCON,	C_REG,	C_NONE,		75, 8, 0, VFP },
-    { AMOVFW,	C_FREG,	C_NONE,	C_REG,		76, 8, 0, VFP },
-    { AMOVFW,	C_REG,	C_NONE,	C_FREG,		76, 8, 0, VFP },
-
-    { AMOVH,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
-    { AMOVH,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
-    { AMOVH,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,	V4 },
-    { AMOVHU,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
-    { AMOVHU,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
-    { AMOVHU,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,	V4 },
-
-    { AMOVB,	C_HEXT,	C_NONE, C_REG,		71, 4, REGSB,	V4 },
-    { AMOVB,	C_HAUTO,C_NONE,	C_REG,		71, 4, REGSP,	V4 },
-    { AMOVB,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
-    { AMOVH,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
-    { AMOVH,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
-    { AMOVH,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
-    { AMOVHU,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
-    { AMOVHU,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
-    { AMOVHU,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,	V4 },
-
-    { AMOVH,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
-    { AMOVH,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
-    { AMOVH,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,	LTO|V4 },
-    { AMOVHU,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
-    { AMOVHU,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
-    { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,	LTO|V4 },
-
-    { AMOVB,	C_LEXT,	C_NONE, C_REG,		73, 8, REGSB,	LFROM|V4 },
-    { AMOVB,	C_LAUTO,C_NONE,	C_REG,		73, 8, REGSP,	LFROM|V4 },
-    { AMOVB,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
-    { AMOVH,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
-    { AMOVH,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
-    { AMOVH,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
-    { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
-    { AMOVHU,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
-    { AMOVHU,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,	LFROM|V4 },
-
+    <<[[optab]] entries>>
     { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
 };
 @
 % AXXX at the end? why not ALAST instead?
-
 %old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
+
+
+<<[[optab]] entries>>=
+{ ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
+{ ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
+
+{ ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
+{ ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
+
+{ AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
+{ AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+{ AMOVW,	C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+{ AMVN,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+{ ACMP,		C_REG,	C_REG,	C_NONE,		 1, 4, 0 },
+
+{ AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
+{ AADD,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+{ AMOVW,	C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+{ AMVN,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+{ ACMP,		C_RCON,	C_REG,	C_NONE,		 2, 4, 0 },
+
+{ AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
+{ AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+{ AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+{ ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
+
+{ AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
+{ AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
+
+{ AB,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0,	LPOOL },
+{ ABL,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0 },
+{ ABEQ,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0 },
+
+{ AB,		C_NONE,	C_NONE,	C_ROREG,	 6, 4, 0,	LPOOL },
+{ ABL,		C_NONE,	C_NONE,	C_ROREG,	 7, 8, 0 },
+
+{ ASLL,		C_RCON,	C_REG,	C_REG,		 8, 4, 0 },
+{ ASLL,		C_RCON,	C_NONE,	C_REG,		 8, 4, 0 },
+
+{ ASLL,		C_REG,	C_NONE,	C_REG,		 9, 4, 0 },
+{ ASLL,		C_REG,	C_REG,	C_REG,		 9, 4, 0 },
+
+{ ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4, 0 },
+
+{ AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
+{ AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
+{ AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4, 0 },
+
+{ AMOVW,	C_NCON,	C_NONE,	C_REG,		12, 4, 0 },
+{ AMOVW,	C_LCON,	C_NONE,	C_REG,		12, 4, 0,	LFROM },
+
+{ AADD,		C_NCON,	C_REG,	C_REG,		13, 8, 0 },
+{ AADD,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
+{ AMVN,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
+{ ACMP,		C_NCON,	C_REG,	C_NONE,		13, 8, 0 },
+
+{ AADD,		C_LCON,	C_REG,	C_REG,		13, 8, 0,	LFROM },
+{ AADD,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
+{ AMVN,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
+{ ACMP,		C_LCON,	C_REG,	C_NONE,		13, 8, 0,	LFROM },
+
+{ AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+{ AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4, 0 },
+{ AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+{ AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+
+{ AMUL,		C_REG,	C_REG,	C_REG,		15, 4, 0 },
+{ AMUL,		C_REG,	C_NONE,	C_REG,		15, 4, 0 },
+
+{ ADIV,		C_REG,	C_REG,	C_REG,		16, 4, 0 },
+{ ADIV,		C_REG,	C_NONE,	C_REG,		16, 4, 0 },
+
+{ AMULL,	C_REG,	C_REG,	C_REGREG,	17, 4, 0 },
+
+{ AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+{ AMOVW,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+{ AMOVW,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+{ AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+{ AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+{ AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+{ AMOVBU,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+{ AMOVBU,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+{ AMOVBU,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+
+{ AMOVW,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
+{ AMOVW,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
+{ AMOVW,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
+{ AMOVBU,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
+{ AMOVBU,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
+{ AMOVBU,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
+
+{ AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+{ AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+{ AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+{ AMOVH,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+{ AMOVH,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+{ AMOVH,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+{ AMOVHU,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+{ AMOVHU,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+{ AMOVHU,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+
+{ AMOVH,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
+{ AMOVH,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
+{ AMOVH,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
+{ AMOVHU,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
+{ AMOVHU,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
+{ AMOVHU,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
+
+{ AMOVW,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+{ AMOVW,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+{ AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+{ AMOVW,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+{ AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+{ AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+{ AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+{ AMOVB,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+{ AMOVBU,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+{ AMOVBU,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+{ AMOVBU,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+{ AMOVBU,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+
+{ AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
+{ AMOVW,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
+{ AMOVW,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
+{ AMOVW,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
+{ AMOVBU,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
+{ AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
+{ AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
+{ AMOVBU,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
+
+{ AMOVB,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+{ AMOVB,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+{ AMOVB,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
+{ AMOVB,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+{ AMOVH,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+{ AMOVH,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+{ AMOVH,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
+{ AMOVH,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+{ AMOVHU,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+{ AMOVHU,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+{ AMOVHU,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
+{ AMOVHU,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+
+{ AMOVH,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
+{ AMOVH,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
+{ AMOVH,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
+{ AMOVH,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
+{ AMOVHU,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
+{ AMOVHU,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
+{ AMOVHU,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
+{ AMOVHU,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
+
+{ AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
+
+
+
+{ AMOVW,	C_PSR,	C_NONE,	C_REG,		35, 4, 0 },
+{ AMOVW,	C_REG,	C_NONE,	C_PSR,		36, 4, 0 },
+{ AMOVW,	C_RCON,	C_NONE,	C_PSR,		37, 4, 0 },
+
+{ AMOVM,	C_LCON,	C_NONE,	C_SOREG,	38, 4, 0 },
+{ AMOVM,	C_SOREG,C_NONE,	C_LCON,		39, 4, 0 },
+
+{ ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4, 0 },
+
+{ ARFE,		C_NONE,	C_NONE,	C_NONE,		41, 4, 0 },
+
+
+{ AMOVW,	C_SHIFT,C_NONE,	C_REG,		59, 4, 0 },
+{ AMOVBU,	C_SHIFT,C_NONE,	C_REG,		59, 4, 0 },
+
+{ AMOVB,	C_SHIFT,C_NONE,	C_REG,		60, 4, 0 },
+
+{ AMOVW,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
+{ AMOVB,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
+{ AMOVBU,	C_REG,	C_NONE,	C_SHIFT,	61, 4, 0 },
+
+{ ACASE,	C_REG,	C_NONE,	C_NONE,		62, 4, 0 },
+{ ABCASE,	C_NONE, C_NONE, C_BRANCH,   63, 4, 0 },
+@
+
 
 
 
 \section{[[buildop()]]}
 
 <<[[main()]] initialize globals(arm)>>=
-buildop(); // ???
+buildop();
 @
 
 % Optab range?
@@ -4477,107 +4427,7 @@ buildop(void)
 
         switch(r)
         {
-        case AXXX:
-            break;
-        case AADD:
-            oprange[AAND] = oprange[r];
-            oprange[AEOR] = oprange[r];
-            oprange[ASUB] = oprange[r];
-            oprange[ARSB] = oprange[r];
-            oprange[AADC] = oprange[r];
-            oprange[ASBC] = oprange[r];
-            oprange[ARSC] = oprange[r];
-            oprange[AORR] = oprange[r];
-            oprange[ABIC] = oprange[r];
-            break;
-        case ACMP:
-            oprange[ATST] = oprange[r];
-            oprange[ATEQ] = oprange[r];
-            oprange[ACMN] = oprange[r];
-            break;
-        case AMVN:
-            break;
-        case ABEQ:
-            oprange[ABNE] = oprange[r];
-            oprange[ABCS] = oprange[r];
-            oprange[ABHS] = oprange[r];
-            oprange[ABCC] = oprange[r];
-            oprange[ABLO] = oprange[r];
-            oprange[ABMI] = oprange[r];
-            oprange[ABPL] = oprange[r];
-            oprange[ABVS] = oprange[r];
-            oprange[ABVC] = oprange[r];
-            oprange[ABHI] = oprange[r];
-            oprange[ABLS] = oprange[r];
-            oprange[ABGE] = oprange[r];
-            oprange[ABLT] = oprange[r];
-            oprange[ABGT] = oprange[r];
-            oprange[ABLE] = oprange[r];
-            break;
-        case ASLL:
-            oprange[ASRL] = oprange[r];
-            oprange[ASRA] = oprange[r];
-            break;
-        case AMUL:
-            oprange[AMULU] = oprange[r];
-            break;
-        case ADIV:
-            oprange[AMOD] = oprange[r];
-            oprange[AMODU] = oprange[r];
-            oprange[ADIVU] = oprange[r];
-            break;
-        case AMOVW:
-        case AMOVB:
-        case AMOVBU:
-        case AMOVH:
-        case AMOVHU:
-            break;
-        case ASWPW:
-            oprange[ASWPBU] = oprange[r];
-            break;
-        case AB:
-        case ABL:
-        case ASWI:
-        case AWORD:
-        case AMOVM:
-        case ARFE:
-        case ATEXT:
-        case ACASE:
-        case ABCASE:
-            break;
-
-        case AADDF:
-            oprange[AADDD] = oprange[r];
-            oprange[ASUBF] = oprange[r];
-            oprange[ASUBD] = oprange[r];
-            oprange[AMULF] = oprange[r];
-            oprange[AMULD] = oprange[r];
-            oprange[ADIVF] = oprange[r];
-            oprange[ADIVD] = oprange[r];
-            oprange[AMOVFD] = oprange[r];
-            oprange[AMOVDF] = oprange[r];
-            break;
-            
-        case ACMPF:
-            oprange[ACMPD] = oprange[r];
-            break;
-
-        case AMOVF:
-            oprange[AMOVD] = oprange[r];
-            break;
-
-        case AMOVFW:
-            oprange[AMOVWF] = oprange[r];
-            oprange[AMOVWD] = oprange[r];
-            oprange[AMOVDW] = oprange[r];
-            break;
-
-        case AMULL:
-            oprange[AMULA] = oprange[r];
-            oprange[AMULAL] = oprange[r];
-            oprange[AMULLU] = oprange[r];
-            oprange[AMULALU] = oprange[r];
-            break;
+        <<[[buildop()]] switch opcode r cases>>
         default:
             diag("unknown op in build: %A", r);
             errorexit();
@@ -4589,15 +4439,92 @@ buildop(void)
 %old:		case ABXRET:
 % coupling with order of opcode in 5.out.h? no, this just
 % describe the equivalence classes for optab, that
-% is an entry in optab about AADD is also valid for AAND,
-% etc.
+% is an entry in optab about AADD is also valid for AAND, etc.
 % invariant: the case in the switch must be the entries in optab, not
 % more, not less
 
 
 
-
-
+<<[[buildop()]] switch opcode r cases>>=
+case AXXX:
+    break;
+case AADD:
+    oprange[AAND] = oprange[r];
+    oprange[AEOR] = oprange[r];
+    oprange[ASUB] = oprange[r];
+    oprange[ARSB] = oprange[r];
+    oprange[AADC] = oprange[r];
+    oprange[ASBC] = oprange[r];
+    oprange[ARSC] = oprange[r];
+    oprange[AORR] = oprange[r];
+    oprange[ABIC] = oprange[r];
+    break;
+case ACMP:
+    oprange[ATST] = oprange[r];
+    oprange[ATEQ] = oprange[r];
+    oprange[ACMN] = oprange[r];
+    break;
+case AMVN:
+    break;
+case AB:
+case ABL:
+    break;
+case ABEQ:
+    oprange[ABNE] = oprange[r];
+    oprange[ABCS] = oprange[r];
+    oprange[ABHS] = oprange[r];
+    oprange[ABCC] = oprange[r];
+    oprange[ABLO] = oprange[r];
+    oprange[ABMI] = oprange[r];
+    oprange[ABPL] = oprange[r];
+    oprange[ABVS] = oprange[r];
+    oprange[ABVC] = oprange[r];
+    oprange[ABHI] = oprange[r];
+    oprange[ABLS] = oprange[r];
+    oprange[ABGE] = oprange[r];
+    oprange[ABLT] = oprange[r];
+    oprange[ABGT] = oprange[r];
+    oprange[ABLE] = oprange[r];
+    break;
+case ASLL:
+    oprange[ASRL] = oprange[r];
+    oprange[ASRA] = oprange[r];
+    break;
+case AMUL:
+    oprange[AMULU] = oprange[r];
+    break;
+case ADIV:
+    oprange[AMOD] = oprange[r];
+    oprange[AMODU] = oprange[r];
+    oprange[ADIVU] = oprange[r];
+    break;
+case AMOVW:
+case AMOVB:
+case AMOVBU:
+case AMOVH:
+case AMOVHU:
+    break;
+case ASWPW:
+    oprange[ASWPBU] = oprange[r];
+    break;
+case ASWI:
+case ARFE:
+case ATEXT:
+case AWORD:
+case ACASE:
+case ABCASE:
+case AMOVM:
+    break;
+case AMULL:
+    oprange[AMULA] = oprange[r];
+    oprange[AMULAL] = oprange[r];
+    oprange[AMULLU] = oprange[r];
+    oprange[AMULALU] = oprange[r];
+    break;
+@
+% no ARET? no because noops should have rewrote it.
+% no ADATA because buildop is used for code (TEXT) generation,
+% no data (DATA).
 
 <<function cmp(arm)>>=
 int
@@ -4802,7 +4729,8 @@ static Prog *PP;
 void
 asmout(Prog *p, Optab *o)
 {
-    long o1, o2, o3, o4, o5, o6, v;
+    long o1, o2, o3, o4, o5, o6;
+    long v;
     int r, rf, rt, rt2;
     Sym *s;
 
@@ -4841,6 +4769,19 @@ asmout(Prog *p, Optab *o)
 %$
 
 
+
+\subsection{[[ATEXT]]}
+
+\subsection{Arithmetic opcodes}
+
+\subsection{Branching opcodes}
+
+\subsection{Memory opcodes}
+
+\subsection{Syscall opcode}
+
+\subsection{XXX opcode}
+
 <<[[asmout()]] switch on type cases>>=
 case 1:		/* op R,[R],R */
     o1 = oprrr(p->as, p->scond);
@@ -4855,7 +4796,8 @@ case 1:		/* op R,[R],R */
         r = rt;
     o1 |= rf | (r<<16) | (rt<<12);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 2:		/* movbu $I,[R],R */
     aclass(&p->from);
     o1 = oprrr(p->as, p->scond);
@@ -4870,7 +4812,10 @@ case 2:		/* movbu $I,[R],R */
         r = rt;
     o1 |= (r<<16) | (rt<<12);
     break;
+@
+%$
 
+<<[[asmout()]] switch on type cases>>=
 case 3:		/* add R<<[IR],[R],R */
 mov:
     aclass(&p->from);
@@ -4886,7 +4831,8 @@ mov:
         r = rt;
     o1 |= (r<<16) | (rt<<12);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 4:		/* add $I,[R],R */
     aclass(&p->from);
     o1 = oprrr(AADD, p->scond);
@@ -4897,7 +4843,9 @@ case 4:		/* add $I,[R],R */
     o1 |= r << 16;
     o1 |= p->to.reg << 12;
     break;
-
+@
+%$
+<<[[asmout()]] switch on type cases>>=
 case 5:		/* bra s */
     v = -8;
     if(p->cond == UP) {
@@ -4912,7 +4860,8 @@ case 5:		/* bra s */
     o1 = opbra(p->as, p->scond);
     o1 |= (v >> 2) & 0xffffff;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 6:		/* b ,O(R) -> add $O,R,PC */
     aclass(&p->to);
     o1 = oprrr(AADD, p->scond);
@@ -4920,7 +4869,9 @@ case 6:		/* b ,O(R) -> add $O,R,PC */
     o1 |= p->to.reg << 16;
     o1 |= REGPC << 12;
     break;
-
+@
+%$
+<<[[asmout()]] switch on type cases>>=
 case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
     aclass(&p->to);
     o1 = oprrr(AADD, p->scond);
@@ -4933,7 +4884,10 @@ case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
     o2 |= p->to.reg << 16;
     o2 |= REGPC << 12;
     break;
+@
+%$
 
+<<[[asmout()]] switch on type cases>>=
 case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
     aclass(&p->from);
     o1 = oprrr(p->as, p->scond);
@@ -4944,7 +4898,9 @@ case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
     o1 |= (instoffset&31) << 7;
     o1 |= p->to.reg << 12;
     break;
-
+@
+%$
+<<[[asmout()]] switch on type cases>>=
 case 9:		/* sll R,[R],R -> mov (R<<R),R */
     o1 = oprrr(p->as, p->scond);
     r = p->reg;
@@ -4954,7 +4910,8 @@ case 9:		/* sll R,[R],R -> mov (R<<R),R */
     o1 |= (p->from.reg << 8) | (1<<4);
     o1 |= p->to.reg << 12;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 10:	/* swi [$con] */
     o1 = oprrr(p->as, p->scond);
     if(p->to.type != D_NONE) {
@@ -4962,7 +4919,9 @@ case 10:	/* swi [$con] */
         o1 |= instoffset & 0xffffff;
     }
     break;
-
+@
+%$
+<<[[asmout()]] switch on type cases>>=
 case 11:	/* word */
     switch(aclass(&p->to)) {
     case C_LCON:
@@ -4977,11 +4936,14 @@ case 11:	/* word */
     }
     o1 = instoffset;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 12:	/* movw $lcon, reg */
     o1 = omvl(p, &p->from, p->to.reg);
     break;
-
+@
+%$
+<<[[asmout()]] switch on type cases>>=
 case 13:	/* op $lcon, [R], R */
     o1 = omvl(p, &p->from, REGTMP);
     if(!o1)
@@ -4997,7 +4959,9 @@ case 13:	/* op $lcon, [R], R */
     if(p->to.type != D_NONE)
         o2 |= p->to.reg << 12;
     break;
-
+@
+%$
+<<[[asmout()]] switch on type cases>>=
 case 14:	/* movb/movbu/movh/movhu R,R */
     o1 = oprrr(ASLL, p->scond);
 
@@ -5017,7 +4981,8 @@ case 14:	/* movb/movbu/movh/movhu R,R */
         o2 |= (16<<7);
     }
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 15:	/* mul r,[r,]r */
     o1 = oprrr(p->as, p->scond);
     rf = p->from.reg;
@@ -5036,13 +5001,14 @@ case 15:	/* mul r,[r,]r */
     }
     o1 |= (rf<<8) | r | (rt<<16);
     break;
-
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 16:	/* div r,[r,]r */
     o1 = 0xf << 28;
     o2 = 0;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 17:
     o1 = oprrr(p->as, p->scond);
     rf = p->from.reg;
@@ -5051,7 +5017,8 @@ case 17:
     r = p->reg;
     o1 |= (rf<<8) | r | (rt<<16) | (rt2<<12);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 20:	/* mov/movb/movbu R,O(R) */
     aclass(&p->to);
     r = p->to.reg;
@@ -5059,7 +5026,8 @@ case 20:	/* mov/movb/movbu R,O(R) */
         r = o->param;
     o1 = osr(p->as, p->from.reg, instoffset, r, p->scond);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 21:	/* mov/movbu O(R),R -> lr */
     aclass(&p->from);
     r = p->from.reg;
@@ -5069,7 +5037,8 @@ case 21:	/* mov/movbu O(R),R -> lr */
     if(p->as != AMOVW)
         o1 |= 1<<22;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
     aclass(&p->from);
     r = p->from.reg;
@@ -5090,7 +5059,8 @@ case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
         o3 |= (16<<7)|(r)|(r<<12);
     }
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 23:	/* movh/movhu R,O(R) -> sb,sb */
     aclass(&p->to);
     r = p->to.reg;
@@ -5103,7 +5073,8 @@ case 23:	/* movh/movhu R,O(R) -> sb,sb */
 
     o3 = osr(AMOVH, REGTMP, instoffset+1, r, p->scond);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 30:	/* mov/movb/movbu R,L(R) */
     o1 = omvl(p, &p->to, REGTMP);
     if(!o1)
@@ -5115,7 +5086,8 @@ case 30:	/* mov/movb/movbu R,L(R) */
     if(p->as != AMOVW)
         o2 |= 1<<22;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 31:	/* mov/movbu L(R),R -> lr[b] */
 case 32:	/* movh/movb L(R),R -> lr[b] */
     o1 = omvl(p, &p->from, REGTMP);
@@ -5148,7 +5120,8 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
         o4 |= (16<<7);
     }
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 33:	/* movh/movhu R,L(R) -> sb, sb */
     o1 = omvl(p, &p->to, REGTMP);
     if(!o1)
@@ -5175,7 +5148,8 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
     o6 |= (1<<6);	/* ROL 8 */
 
     break;
-    
+@
+<<[[asmout()]] switch on type cases>>=
 case 34:	/* mov $lacon,R */
     o1 = omvl(p, &p->from, REGTMP);
     if(!o1)
@@ -5190,14 +5164,17 @@ case 34:	/* mov $lacon,R */
     if(p->to.type != D_NONE)
         o2 |= p->to.reg << 12;
     break;
-
+@
+%$
+<<[[asmout()]] switch on type cases>>=
 case 35:	/* mov PSR,R */
     o1 = (2<<23) | (0xf<<16) | (0<<0);
     o1 |= (p->scond & C_SCOND) << 28;
     o1 |= (p->from.reg & 1) << 22;
     o1 |= p->to.reg << 12;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 36:	/* mov R,PSR */
     o1 = (2<<23) | (0x29f<<12) | (0<<4);
     if(p->scond & C_FBIT)
@@ -5206,7 +5183,8 @@ case 36:	/* mov R,PSR */
     o1 |= (p->to.reg & 1) << 22;
     o1 |= p->from.reg << 0;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 37:	/* mov $con,PSR */
     aclass(&p->from);
     o1 = (2<<23) | (0x29f<<12) | (0<<4);
@@ -5217,14 +5195,16 @@ case 37:	/* mov $con,PSR */
     o1 |= (p->to.reg & 1) << 22;
     o1 |= p->from.reg << 0;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 38:	/* movm $con,oreg -> stm */
     o1 = (0x4 << 25);
     o1 |= p->from.offset & 0xffff;
     o1 |= p->to.reg << 16;
     aclass(&p->to);
     goto movm;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 39:	/* movm oreg,$con -> ldm */
     o1 = (0x4 << 25) | (1 << 20);
     o1 |= p->to.offset & 0xffff;
@@ -5243,7 +5223,10 @@ movm:
     if(p->scond & C_WBIT)
         o1 |= 1 << 21;
     break;
+@
+%$
 
+<<[[asmout()]] switch on type cases>>=
 case 40:	/* swp oreg,reg,reg */
     aclass(&p->from);
     if(instoffset != 0)
@@ -5256,11 +5239,13 @@ case 40:	/* swp oreg,reg,reg */
     o1 |= p->to.reg << 12;
     o1 |= (p->scond & C_SCOND) << 28;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
     o1 = 0xe8fd8000;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 50:	/* floating point store */
     v = regoff(&p->to);
     r = p->to.reg;
@@ -5268,7 +5253,8 @@ case 50:	/* floating point store */
         r = o->param;
     o1 = ofsr(p->as, p->from.reg, v, r, p->scond, p);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 51:	/* floating point load */
     v = regoff(&p->from);
     r = p->from.reg;
@@ -5276,7 +5262,8 @@ case 51:	/* floating point load */
         r = o->param;
     o1 = ofsr(p->as, p->to.reg, v, r, p->scond, p) | (1<<20);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 52:	/* floating point store, long offset UGLY */
     o1 = omvl(p, &p->to, REGTMP);
     if(!o1)
@@ -5287,7 +5274,8 @@ case 52:	/* floating point store, long offset UGLY */
     o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
     o3 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 53:	/* floating point load, long offset UGLY */
     o1 = omvl(p, &p->from, REGTMP);
     if(!o1)
@@ -5298,7 +5286,8 @@ case 53:	/* floating point load, long offset UGLY */
     o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
     o3 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 54:	/* floating point arith */
     o1 = oprrr(p->as, p->scond);
     if(p->from.type == D_FCONST) {
@@ -5320,7 +5309,8 @@ case 54:	/* floating point arith */
         r = rt;
     o1 |= rf | (r<<16) | (rt<<12);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 55:	/* floating point fix and float */
     o1 = oprrr(p->as, p->scond);
     rf = p->from.reg;
@@ -5334,17 +5324,21 @@ case 55:	/* floating point fix and float */
     else
         o1 |= rf | (rt<<12);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 /* old arm 7500 fp using coproc 1 (1<<8) */
 case 56:	/* move to FP[CS]R */
     o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
     o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 57:	/* move from FP[CS]R */
     o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
     o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
     break;
+@
+<<[[asmout()]] switch on type cases>>=
 case 58:	/* movbu R,R */
     o1 = oprrr(AAND, p->scond);
     o1 |= immrot(0xff);
@@ -5356,7 +5350,8 @@ case 58:	/* movbu R,R */
         r = rt;
     o1 |= (r<<16) | (rt<<12);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
     if(p->from.reg == NREG) {
         if(p->as != AMOVW)
@@ -5369,7 +5364,8 @@ case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
     if(p->as == AMOVBU)
         o1 |= 1<<22;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 60:	/* movb R(R),R -> ldrsb indexed */
     if(p->from.reg == NREG) {
         diag("byte MOV from shifter operand");
@@ -5380,7 +5376,8 @@ case 60:	/* movb R(R),R -> ldrsb indexed */
     o1 = olhrr(p->from.offset, p->from.reg, p->to.reg, p->scond);
     o1 ^= (1<<5)|(1<<6);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
     if(p->to.reg == NREG)
         diag("MOV to shifter operand");
@@ -5388,12 +5385,14 @@ case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
     if(p->as == AMOVB || p->as == AMOVBU)
         o1 |= 1<<22;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 62:	/* case R -> movw	R<<2(PC),PC */
     o1 = olrr(p->from.reg, REGPC, REGPC, p->scond);
     o1 |= 2<<7;
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 63:	/* bcase */
     if(p->cond != P) {
         o1 = p->cond->pc;
@@ -5401,7 +5400,8 @@ case 63:	/* bcase */
             dynreloc(S, p->pc, 1);
     }
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 /* reloc ops */
 case 64:	/* mov/movb/movbu R,addr */
     o1 = omvl(p, &p->to, REGTMP);
@@ -5409,7 +5409,8 @@ case 64:	/* mov/movb/movbu R,addr */
         break;
     o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 65:	/* mov/movbu addr,R */
 case 66:	/* movh/movhu/movb addr,R */
     o1 = omvl(p, &p->from, REGTMP);
@@ -5439,7 +5440,8 @@ case 66:	/* movh/movhu/movb addr,R */
         o4 |= (16<<7);
     }
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 67:	/* movh/movhu R,addr -> sb, sb */
     o1 = omvl(p, &p->to, REGTMP);
     if(!o1)
@@ -5460,21 +5462,24 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
     o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
     o6 |= (1<<6);	/* ROL 8 */
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 68:	/* floating point store -> ADDR */
     o1 = omvl(p, &p->to, REGTMP);
     if(!o1)
         break;
     o2 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 case 69:	/* floating point load <- ADDR */
     o1 = omvl(p, &p->from, REGTMP);
     if(!o1)
         break;
     o2 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 /* ArmV4 ops: */
 case 70:	/* movh/movhu R,O(R) -> strh */
     aclass(&p->to);
@@ -5483,6 +5488,8 @@ case 70:	/* movh/movhu R,O(R) -> strh */
         r = o->param;
     o1 = oshr(p->from.reg, instoffset, r, p->scond);
     break;	
+@
+<<[[asmout()]] switch on type cases>>=
 case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
     aclass(&p->from);
     r = p->from.reg;
@@ -5494,6 +5501,8 @@ case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
     else if(p->as == AMOVH)
         o1 ^= (1<<6);
     break;
+@
+<<[[asmout()]] switch on type cases>>=
 case 72:	/* movh/movhu R,L(R) -> strh */
     o1 = omvl(p, &p->to, REGTMP);
     if(!o1)
@@ -5503,6 +5512,8 @@ case 72:	/* movh/movhu R,L(R) -> strh */
         r = o->param;
     o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
     break;	
+@
+<<[[asmout()]] switch on type cases>>=
 case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
     o1 = omvl(p, &p->from, REGTMP);
     if(!o1)
@@ -5516,7 +5527,8 @@ case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
     else if(p->as == AMOVH)
         o2 ^= (1<<6);
     break;
-
+@
+<<[[asmout()]] switch on type cases>>=
 /* VFP ops: */
 case 74:	/* vfp floating point arith */
     o1 = opvfprrr(p->as, p->scond);
@@ -5535,6 +5547,8 @@ case 74:	/* vfp floating point arith */
     else
         o1 |= r<<16 | rf<<0;
     break;
+@
+<<[[asmout()]] switch on type cases>>=
 case 75:	/* vfp floating point compare */
     o1 = opvfprrr(p->as, p->scond);
     rf = p->from.reg;
@@ -5549,6 +5563,8 @@ case 75:	/* vfp floating point compare */
     o2 = 0x0ef1fa10;	/* MRS APSR_nzcv, FPSCR */
     o2 |= (p->scond & C_SCOND) << 28;
     break;
+@
+<<[[asmout()]] switch on type cases>>=
 case 76:	/* vfp floating point fix and float */
     o1 = opvfprrr(p->as, p->scond);
     rf = p->from.reg;
@@ -5619,6 +5635,7 @@ case 24:
     break;
 @
 
+\subsection{Helpers}
 
 <<function regoff(arm)>>=
 long
@@ -7022,14 +7039,16 @@ main(int argc, char *argv[])
 
 \section{[[strip]]}
 
+
+
+
 \chapter{Advanced Topics}
 
 \section{Optimisations}
 
 \subsection{Opcode rewriting}
-% arm only
 
-% prefer ADD to SUB, not sure why
+% would be better with ocaml pattern matching (but maybe not that shorter)
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case ASUB:
     if(p->from.type == D_CONST)
@@ -7059,16 +7078,20 @@ case AADD:
 
 % DUPOK, x.scale & DUPOK
 
-\section{Export table}
+<<[[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK>>=
+if(p->reg & DUPOK) {
+    skip = true;
+    goto casedef;
+}
+@
 
+\section{Export table, [[5l -x]]}
 % what this is for?
 
 <<global doexp>>=
 // do export table, -x
 bool	doexp;
 @
-
-
 
 
 <<[[main()]] command line processing(arm)>>=
@@ -7326,6 +7349,7 @@ newdata(Sym *s, int o, int w, int t)
     p = prg();
     p->link = datap;
     datap = p;
+
     p->as = ADATA;
     p->reg = w;
     p->from.type = D_OREG;
@@ -7334,15 +7358,15 @@ newdata(Sym *s, int o, int w, int t)
     p->from.offset = o;
     p->to.type = D_CONST;
     p->to.symkind = D_NONE;
+
     return p;
 }
 @
 
 
 
-\section{Dynamic loading}
+\section{Dynamic loading, [[5l -u]]}
 % been disabled? can not find man page for dynld anymore, nor dynld.h
-
 % -x, -u
 % see dynld(2)
 
@@ -7767,6 +7791,7 @@ case ADYNT:
 
 \section{[[AINIT]]}
 % seems never produced by 5a/5c, like ADYNT, so move?
+% seems to be just after a ADYNT, see the error message below
 
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
@@ -7787,20 +7812,6 @@ case AINIT:
 
 @
 
-\section{[[AGOK]]}
-% can happen? I think we can remove it, 5c can't produce
-% such opcodes. Can it?
-
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AGOK:
-    diag("unknown opcode\n%P", p);
-    p->pc = pc;
-    pc++;
-    break;
-@
-%x86:     diag("%s: GOK opcode in %s", pn, TNAME);
-
 
 \section{Float}
 
@@ -7811,13 +7822,15 @@ C_FCR,
 @
 
 <<[[aclass()]] switch type cases>>=
-case D_FCONST:
-    return C_FCON;
 case D_FREG:
     return C_FREG;
+case D_FCONST:
+    return C_FCON;
 case D_FPCR:
     return C_FCR;
 @
+
+
 
 <<[[zaddr()]] cases>>=
 case D_FCONST:
@@ -7957,6 +7970,128 @@ case AMOVD:
     }
     goto casedef;
 @
+
+
+<<[[buildop()]] switch opcode r cases>>=
+case AADDF:
+    oprange[AADDD] = oprange[r];
+    oprange[ASUBF] = oprange[r];
+    oprange[ASUBD] = oprange[r];
+    oprange[AMULF] = oprange[r];
+    oprange[AMULD] = oprange[r];
+    oprange[ADIVF] = oprange[r];
+    oprange[ADIVD] = oprange[r];
+    oprange[AMOVFD] = oprange[r];
+    oprange[AMOVDF] = oprange[r];
+    break;
+    
+case ACMPF:
+    oprange[ACMPD] = oprange[r];
+    break;
+
+case AMOVF:
+    oprange[AMOVD] = oprange[r];
+    break;
+
+case AMOVFW:
+    oprange[AMOVWF] = oprange[r];
+    oprange[AMOVWD] = oprange[r];
+    oprange[AMOVDW] = oprange[r];
+    break;
+@
+
+<<[[optab]] entries>>=
+{ AMOVF,	C_FREG,	C_NONE,	C_FEXT,		50, 4, REGSB },
+{ AMOVF,	C_FREG,	C_NONE,	C_FAUTO,	50, 4, REGSP },
+{ AMOVF,	C_FREG,	C_NONE,	C_FOREG,	50, 4, 0 },
+
+{ AMOVF,	C_FEXT,	C_NONE,	C_FREG,		51, 4, REGSB },
+{ AMOVF,	C_FAUTO,C_NONE,	C_FREG,		51, 4, REGSP },
+{ AMOVF,	C_FOREG,C_NONE,	C_FREG,		51, 4, 0 },
+
+{ AMOVF,	C_FREG,	C_NONE,	C_LEXT,		52, 12, REGSB,	LTO },
+{ AMOVF,	C_FREG,	C_NONE,	C_LAUTO,	52, 12, REGSP,	LTO },
+{ AMOVF,	C_FREG,	C_NONE,	C_LOREG,	52, 12, 0,	LTO },
+
+{ AMOVF,	C_LEXT,	C_NONE,	C_FREG,		53, 12, REGSB,	LFROM },
+{ AMOVF,	C_LAUTO,C_NONE,	C_FREG,		53, 12, REGSP,	LFROM },
+{ AMOVF,	C_LOREG,C_NONE,	C_FREG,		53, 12, 0,	LFROM },
+
+{ AMOVF,	C_FREG,	C_NONE,	C_ADDR,		68, 8, 0,	LTO },
+{ AMOVF,	C_ADDR,	C_NONE,	C_FREG,		69, 8, 0,	LFROM },
+
+{ AADDF,	C_FREG,	C_NONE,	C_FREG,		54, 4, 0 },
+{ AADDF,	C_FREG,	C_REG,	C_FREG,		54, 4, 0 },
+{ AADDF,	C_FCON,	C_NONE,	C_FREG,		54, 4, 0 },
+{ AADDF,	C_FCON,	C_REG,	C_FREG,		54, 4, 0 },
+{ AMOVF,	C_FCON,	C_NONE,	C_FREG,		54, 4, 0 },
+{ AMOVF,	C_FREG, C_NONE, C_FREG,		54, 4, 0 },
+
+{ ACMPF,	C_FREG,	C_REG,	C_NONE,		54, 4, 0 },
+{ ACMPF,	C_FCON,	C_REG,	C_NONE,		54, 4, 0 },
+
+{ AMOVFW,	C_FREG,	C_NONE,	C_REG,		55, 4, 0 },
+{ AMOVFW,	C_REG,	C_NONE,	C_FREG,		55, 4, 0 },
+
+{ AMOVW,	C_REG,	C_NONE,	C_FCR,		56, 4, 0 },
+{ AMOVW,	C_FCR,	C_NONE,	C_REG,		57, 4, 0 },
+@
+
+\subsection{VFP hardware instructions, [[5l -f]]}
+
+<<[[optab]] entries>>=
+{ AADDF,	C_FREG,	C_NONE,	C_FREG,		74, 4, 0, VFP },
+{ AADDF,	C_FREG,	C_REG,	C_FREG,		74, 4, 0, VFP },
+{ AMOVF,	C_FREG, C_NONE, C_FREG,		74, 4, 0, VFP },
+{ ACMPF,	C_FREG,	C_REG,	C_NONE,		75, 8, 0, VFP },
+{ ACMPF,	C_FCON,	C_REG,	C_NONE,		75, 8, 0, VFP },
+{ AMOVFW,	C_FREG,	C_NONE,	C_REG,		76, 8, 0, VFP },
+{ AMOVFW,	C_REG,	C_NONE,	C_FREG,		76, 8, 0, VFP },
+@
+
+\subsection{kernel emulation}
+% "without -f 5l generates arm7500 floating-point
+% instructions which are emulated in the kernel."
+
+
+<<[[optab]] entries>>=
+{ AMOVH,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
+{ AMOVH,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
+{ AMOVH,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,		V4 },
+{ AMOVHU,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
+{ AMOVHU,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
+{ AMOVHU,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,		V4 },
+
+{ AMOVB,	C_HEXT,	C_NONE, C_REG,		71, 4, REGSB,	V4 },
+{ AMOVB,	C_HAUTO,C_NONE,	C_REG,		71, 4, REGSP,	V4 },
+{ AMOVB,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
+{ AMOVH,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
+{ AMOVH,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
+{ AMOVH,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
+{ AMOVHU,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
+{ AMOVHU,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
+{ AMOVHU,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
+
+{ AMOVH,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
+{ AMOVH,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
+{ AMOVH,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,		LTO|V4 },
+{ AMOVHU,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
+{ AMOVHU,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
+{ AMOVHU,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,		LTO|V4 },
+
+{ AMOVB,	C_LEXT,	C_NONE, C_REG,		73, 8, REGSB,	LFROM|V4 },
+{ AMOVB,	C_LAUTO,C_NONE,	C_REG,		73, 8, REGSP,	LFROM|V4 },
+{ AMOVB,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
+{ AMOVH,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
+{ AMOVH,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
+{ AMOVH,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
+{ AMOVHU,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
+{ AMOVHU,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
+{ AMOVHU,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
+@
+
+
+
 
 \section{Division}
 

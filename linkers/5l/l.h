@@ -52,7 +52,7 @@ struct	Adr
     };
 
     /*s: [[Adr]] other fields */
-    short	reg; // Abused for NOPROF and DUPOK
+    short	reg; 
     /*x: [[Adr]] other fields */
     union {
         Sym*	sym;
@@ -79,7 +79,7 @@ struct	Prog
     Adr	to;
 
     /*s: [[Prog]] other fields */
-    // enum<register>
+    // enum<registr>
     short	reg;
     /*x: [[Prog]] other fields */
     // enum<instr_cond>
@@ -92,11 +92,7 @@ struct	Prog
     //bitset<enum<mark>
     short	mark;
     /*x: [[Prog]] other fields */
-    union
-    {
-        long	regused;
-        Prog*	forwd;
-    };
+    Prog*	forwd;
     /*x: [[Prog]] other fields */
     byte	optab;
     /*e: [[Prog]] other fields */
@@ -124,14 +120,15 @@ struct	Sym
     long	value; 
 
     /*s: [[Sym]] other fields */
-    short	become;
-    short	frame;
-    /*x: [[Sym]] other fields */
     // md5sum of the type of the symbol
     long	sig;
     /*x: [[Sym]] other fields */
     // idx in filen
     ushort	file;
+    /*x: [[Sym]] other fields */
+    short	become;
+    /*x: [[Sym]] other fields */
+    short	frame;
     /*x: [[Sym]] other fields */
     // enum<section> too?
     short	subtype;
@@ -166,7 +163,7 @@ struct	Auto
 /*s: struct Optab(arm) */
 struct	Optab
 {
-    // enum<opcode> from 5.out.h
+    // enum<opcode> from 5.out.h, but represents a range, see oprange[]
     byte	as;
 
     // enum<cxxx>, possible class for first operand
@@ -182,10 +179,12 @@ struct	Optab
     // size of the corresponding machine code, should be a multiple of 4
     short	size; 
 
-    // ??
+    /*s: [[Optab]] other fields */
+    // 0 | REGSB | REGSP
     char	param;
-
+    // enum<lxxx>
     char	flag;
+    /*e: [[Optab]] other fields */
 };
 /*e: struct Optab(arm) */
 /*s: struct Oprang(arm) */
@@ -250,24 +249,27 @@ enum classx {
     C_GOK,
     /*x: cxxx(arm) cases */
     C_HEXT,
-    C_FEXT,
-    C_HFEXT,
     C_SEXT,
     C_LEXT,
+
+    C_FEXT,
+    C_HFEXT,
     /*x: cxxx(arm) cases */
     C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-    C_HFAUTO,	/* both H and F */
     C_SAUTO,	/* -0xfff to 0xfff */
     C_LAUTO,
+
+    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+    C_HFAUTO,	/* both H and F */
     /*x: cxxx(arm) cases */
     C_HOREG,
-    C_FOREG,
-    C_HFOREG,
     C_SOREG,
     C_ROREG,
     C_SROREG,	/* both S and R */
     C_LOREG,
+
+    C_FOREG,
+    C_HFOREG,
     /*x: cxxx(arm) cases */
     C_RCON,		/* 0xff rotated */
     C_NCON,		/* ~RCON */

@@ -522,6 +522,7 @@ newdata(Sym *s, int o, int w, int t)
     p = prg();
     p->link = datap;
     datap = p;
+
     p->as = ADATA;
     p->reg = w;
     p->from.type = D_OREG;
@@ -530,6 +531,7 @@ newdata(Sym *s, int o, int w, int t)
     p->from.offset = o;
     p->to.type = D_CONST;
     p->to.symkind = D_NONE;
+
     return p;
 }
 /*e: function newdata(arm) */
