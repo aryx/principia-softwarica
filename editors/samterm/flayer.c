@@ -30,15 +30,15 @@ flstart(Rectangle r)
 
 	/* Main text is yellowish */
 	maincols[BACK] = allocimagemix(display, DPaleyellow, DWhite);
-	maincols[HIGH] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DDarkyellow);
-	maincols[BORD] = allocimage(display, Rect(0,0,2,2), screen->chan, 1, DYellowgreen);
+	maincols[HIGH] = allocimage(display, Rect(0,0,1,1), view->chan, 1, DDarkyellow);
+	maincols[BORD] = allocimage(display, Rect(0,0,2,2), view->chan, 1, DYellowgreen);
 	maincols[TEXT] = display->black;
 	maincols[HTEXT] = display->black;
 
 	/* Command text is blueish */
 	cmdcols[BACK] = allocimagemix(display, DPalebluegreen, DWhite);
-	cmdcols[HIGH] = allocimage(display, Rect(0,0,1,1), screen->chan, 1, DPalegreygreen);
-	cmdcols[BORD] = allocimage(display, Rect(0,0,2,2), screen->chan, 1, DPurpleblue);
+	cmdcols[HIGH] = allocimage(display, Rect(0,0,1,1), view->chan, 1, DPalegreygreen);
+	cmdcols[BORD] = allocimage(display, Rect(0,0,2,2), view->chan, 1, DPurpleblue);
 	cmdcols[TEXT] = display->black;
 	cmdcols[HTEXT] = display->black;
 }
@@ -77,10 +77,10 @@ flinit(Flayer *l, Rectangle r, Font *ft, Image **cols)
 	llinsert(l);
 	l->visible = All;
 	l->origin = l->p0 = l->p1 = 0;
-	frinit(&l->f, insetrect(flrect(l, r), FLMARGIN), ft, screen, cols);
+	frinit(&l->f, insetrect(flrect(l, r), FLMARGIN), ft, view, cols);
 	l->f.maxtab = maxtab*stringwidth(ft, "0");
 	newvisibilities(1);
-	draw(screen, l->entire, l->f.cols[BACK], nil, ZP);
+	draw(view, l->entire, l->f.cols[BACK], nil, ZP);
 	scrdraw(l, 0L);
 	flborder(l, 0);
 }
@@ -89,10 +89,10 @@ void
 flclose(Flayer *l)
 {
 	if(l->visible == All)
-		draw(screen, l->entire, display->white, nil, ZP);
+		draw(view, l->entire, display->white, nil, ZP);
 	else if(l->visible == Some){
 		if(l->f.b == 0)
-			l->f.b = allocimage(display, l->entire, screen->chan, 0, DNofill);
+			l->f.b = allocimage(display, l->entire, view->chan, 0, DNofill);
 		if(l->f.b){
 			draw(l->f.b, l->entire, display->white, nil, ZP);
 			flrefresh(l, l->entire, 0);
@@ -182,9 +182,9 @@ newvisibilities(int redraw)
 
 		case V(Some, All):
 			if(l->f.b){
-				draw(screen, l->entire, l->f.b, nil, l->entire.min);
+				draw(view, l->entire, l->f.b, nil, l->entire.min);
 				freeimage(l->f.b);
-				l->f.b = screen;
+				l->f.b = view;
 				break;
 			}
 		case V(None, All):
@@ -355,7 +355,7 @@ flresize(Rectangle dr)
 	if(0 && Dx(dr)==Dx(olDrect) && Dy(dr)==Dy(olDrect))
 		move = 1;
 	else
-		draw(screen, lDrect, display->white, nil, ZP);
+		draw(view, lDrect, display->white, nil, ZP);
 	for(i=0; i<nllist; i++){
 		l = llist[i];
 		l->lastsr = ZR;
@@ -405,8 +405,8 @@ flprepare(Flayer *l)
 	f = &l->f;
 	if(f->b == 0){
 		if(l->visible == All)
-			f->b = screen;
-		else if((f->b = allocimage(display, l->entire, screen->chan, 0, 0))==0)
+			f->b = view;
+		else if((f->b = allocimage(display, l->entire, view->chan, 0, 0))==0)
 			return 0;
 		draw(f->b, l->entire, f->cols[BACK], nil, ZP);
 		border(f->b, l->entire, l==llist[0]? FLMARGIN : 1, f->cols[BORD], ZP);
@@ -449,7 +449,7 @@ flrefresh(Flayer *l, Rectangle r, int i)
     Top:
 	if((t=llist[i++]) == l){
 		if(!justvis)
-			draw(screen, r, l->f.b, nil, r.min);
+			draw(view, r, l->f.b, nil, r.min);
 		somevis = 1;
 	}else{
 		if(!rectXrect(t->entire, r))

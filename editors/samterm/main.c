@@ -37,9 +37,9 @@ threadmain(int argc, char *argv[])
 	initio();
 	scratch = alloc(100*RUNESIZE);
 	nscralloc = 100;
-	r = screen->r;
+	r = view->r;
 	r.max.y = r.min.y+Dy(r)/5;
-	flstart(screen->clipr);
+	flstart(view->clipr);
 	rinit(&cmd.rasp);
 	flnew(&cmd.l[0], gettext, 1, &cmd);
 	flinit(&cmd.l[0], r, font, cmdcols);
@@ -68,7 +68,7 @@ threadmain(int argc, char *argv[])
 			else
 				kbdblock();
 		if(got&(1<<RMouse)){
-			if(hostlock==2 || !ptinrect(mousep->xy, screen->r)){
+			if(hostlock==2 || !ptinrect(mousep->xy, view->r)){
 				mouseunblock();
 				continue;
 			}
@@ -112,7 +112,7 @@ void
 resize(void){
 	int i;
 
-	flresize(screen->clipr);
+	flresize(view->clipr);
 	for(i = 0; i<nname; i++)
 		if(text[i])
 			hcheck(text[i]->tag);
@@ -222,7 +222,7 @@ getr(Rectangle *rp)
 	if(rp->max.x && rp->max.x-rp->min.x<=5 && rp->max.y-rp->min.y<=5){
 		p = rp->min;
 		r = cmd.l[cmd.front].entire;
-		*rp = screen->r;
+		*rp = view->r;
 		if(cmd.nwin==1){
 			if (p.y <= r.min.y)
 				rp->max.y = r.min.y;
@@ -234,7 +234,7 @@ getr(Rectangle *rp)
 				rp->min.x = r.max.x;
 		}
 	}
-	return rectclip(rp, screen->r) &&
+	return rectclip(rp, view->r) &&
 	   rp->max.x-rp->min.x>100 && rp->max.y-rp->min.y>40;
 }
 
