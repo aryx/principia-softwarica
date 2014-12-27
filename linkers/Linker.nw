@@ -342,7 +342,7 @@ struct	Sym
     char	*name;
     short	version; // for static names, each sym has a different version
 
-    //enum<sxxx>
+    //enum<section>
     short	type;
     // generic value, e.g. pc for a TEXT procedure
     long	value; 
@@ -386,11 +386,8 @@ Sym*	link;
 
 
 
-% not sure it's just about section; it's more about
-% type of symbol/entity, a const, file, data, procedure, etc
-% see asmsym()
 <<enum sxxx(arm)>>=
-enum sxxx
+enum section
 {
     SNONE = 0,
 
@@ -403,6 +400,9 @@ enum sxxx
 };
 @
 % SSTACK? no! not in exec :) 
+% see also asmsym()
+% those are mostly sections, or subsections (e.g. SDATA1 of SDATA,
+% and SLEAF/SCONST/STRING of STEXT)
 
 % The type and values in Sym are? for ATEXT elts what is stored?
 % When can we get a SXREF in ldobj()? SXREF means unknown yet, happens when?
@@ -619,7 +619,8 @@ long	pc;
 //bitset<enum<mark>
 short	mark;
 @
-% was byte
+%old: was byte
+% some generic tags to help some algoritms (e.g. for LEAF)
 
 <<enum mark(arm)>>=
 /* mark flags */
@@ -627,13 +628,15 @@ enum mark {
     <<enum mark cases>>
 };
 @
+%dead: LABEL
+
 
 <<enum mark cases>>=
-FOLL		= 1<<0,
-LABEL		= 1<<1,
 LEAF		= 1<<2,
 @
-% >> >> >>
+% >>
+% example of mark. useful to see early? (as there are a few
+% case STEXT: case SLEAF: below)
 
 
 \section{[[firstp]], [[textp]], [[datap]], [[curtext]], etc}
@@ -681,6 +684,7 @@ Prog*	cond;
 @
 %just to quickly iterate over all the ATEXT?
 % (is called pcond I think in x86, could choose same name)
+% why cond?? short for what?
 
 <<global etextp>>=
 // ref<Prog>, end of textp list
@@ -695,7 +699,7 @@ Prog*	etextp = P;
 // list<ref<Prog>>, next = Prog.next
 Prog*	datap = P;
 @
-% no edatap in arm
+%note: no need for edatap in arm
 
 
 
@@ -748,68 +752,88 @@ Prog	undefp;
 
 <<[[Adr]] other fields>>=
 // enum<classx>
-char	class;
+short	class;
 @
+%was char, but ugly
 
 
 % seems called the class, see aclass(), a more precise operand_kind?
-% TODO LP split
 <<enum cxxx(arm)>>=
 enum classx {
     C_NONE		= 0,
+
+    C_GOK,
 
     C_REG,
     C_REGREG,
     C_SHIFT,
     C_PSR,
 
-
-    C_RCON,		/* 0xff rotated */
-    C_NCON,		/* ~RCON */
-    C_SCON,		/* 0xffff */
-    C_LCON,
-    C_FCON,
-
-    C_RACON,
-    C_LACON,
-
-    C_RECON,
-    C_LECON,
-
-    C_SBRA,
-    C_LBRA,
-
-    C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-    C_HFAUTO,	/* both H and F */
-    C_SAUTO,	/* -0xfff to 0xfff */
-    C_LAUTO,
-
-    C_HEXT,
-    C_FEXT,
-    C_HFEXT,
-    C_SEXT,
-    C_LEXT,
-
-    C_HOREG,
-    C_FOREG,
-    C_HFOREG,
-    C_SOREG,
-    C_ROREG,
-    C_SROREG,	/* both S and R */
-    C_LOREG,
-
-    C_ADDR,		/* relocatable address */
-
-    C_FREG,
-    C_FCR,
-
-
-    C_GOK,
+    <<cxxx(arm) cases>>
 };
 @
-%TODO LP split and do big categories, xxCON, xxAUTO, xxEXT, xxREG
-%TODO simplify, for instance C_LBRA seems unassigned
+%less: do big categories, xxCON, xxAUTO, xxEXT, xxREG?
+%repeat operand_kind here?
+
+
+<<cxxx(arm) cases>>=
+C_RCON,		/* 0xff rotated */
+C_NCON,		/* ~RCON */
+C_SCON,		/* 0xffff */
+C_LCON,
+C_FCON,
+@
+
+<<cxxx(arm) cases>>=
+C_RACON,
+C_LACON,
+@
+
+<<cxxx(arm) cases>>=
+C_RECON,
+C_LECON,
+@
+
+<<cxxx(arm) cases>>=
+C_SBRA,
+C_LBRA,
+@
+
+<<cxxx(arm) cases>>=
+C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+C_HFAUTO,	/* both H and F */
+C_SAUTO,	/* -0xfff to 0xfff */
+C_LAUTO,
+@
+
+<<cxxx(arm) cases>>=
+C_HEXT,
+C_FEXT,
+C_HFEXT,
+C_SEXT,
+C_LEXT,
+@
+
+<<cxxx(arm) cases>>=
+C_HOREG,
+C_FOREG,
+C_HFOREG,
+C_SOREG,
+C_ROREG,
+C_SROREG,	/* both S and R */
+C_LOREG,
+@
+
+<<cxxx(arm) cases>>=
+C_ADDR,		/* relocatable address */
+@
+
+<<cxxx(arm) cases>>=
+C_FREG,
+C_FCR,
+@
+
 
 <<function aclass(arm)>>=
 int
@@ -1070,14 +1094,6 @@ enum misc_constants {
 % >>
 
 
-%XXXX
-<<[[Sym]] other fields>>=
-// enum<section> too?
-byte	subtype;
-@
-
-
-
 
 
 \chapter{[[main()]]}
@@ -1158,7 +1174,7 @@ case 'o':
 % -H executable format (header type)
 <<global HEADTYPE>>=
 // enum<headtype>
-long	HEADTYPE = -1; /* type of header */
+short	HEADTYPE = -1; /* type of header */
 @
 % was int in ARM and long in x86, but I don't think it matters
 
@@ -1830,7 +1846,7 @@ if(r < 100 && r < c) {		/* enough for largest prog */
 
 <<[[ldobj()]] locals(arm)>>=
 // enum<opcode>
-int o;
+short o;
 Prog *p;
 @
 % the instruction p will be allocated
@@ -2718,6 +2734,7 @@ struct	ar_hdr
     char	fmag[2];
 };
 @
+%less: s/char/byte!
 
 <<constant SAR_HDR>>=
 #define	SAR_HDR	(SARNAME+44)
@@ -3037,7 +3054,10 @@ follow(void)
 }
 @
 
-
+<<enum mark cases>>=
+FOLL		= 1<<0,
+@
+% >>
 
 % xfol??
 <<function xfol(arm)>>=
@@ -4045,17 +4065,17 @@ struct	Optab
     byte	as;
 
     // enum<cxxx>, possible class for first operand
-    char	a1;
+    short	a1;
     // enum<cxxx>, possible class for second operand
-    char	a2;
+    short	a2;
     // enum<cxxx>, possible class for third operand
-    char	a3;
+    short	a3;
 
     // idx for the code generator, see the giant switch in asmout()
-    char	type; 
+    short	type; 
 
     // size of the corresponding machine code, should be a multiple of 4
-    char	size; 
+    short	size; 
 
     // ??
     char	param;
@@ -7116,6 +7136,11 @@ int	exports;
 @
 
 
+<<[[Sym]] other fields>>=
+// enum<section> too?
+short	subtype;
+@
+% was char
 
 
 <<function readundefs>>=

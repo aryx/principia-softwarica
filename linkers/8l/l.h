@@ -137,7 +137,7 @@ struct	Sym
     char	*name;
     short	version; // for static names, each sym has a different version
 
-    //enum<sxxx>
+    //enum<section>
     short	type;
     // generic value, e.g. pc for a TEXT procedure
     long	value; 
@@ -146,14 +146,14 @@ struct	Sym
     short	become;
     short	frame;
     /*x: [[Sym]] other fields */
-    // enum<section> too?
-    byte	subtype;
-    /*x: [[Sym]] other fields */
     // md5sum of the type of the symbol
     long	sig;
     /*x: [[Sym]] other fields */
     // idx in filen
     ushort	file;
+    /*x: [[Sym]] other fields */
+    // enum<section> too?
+    short	subtype;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */

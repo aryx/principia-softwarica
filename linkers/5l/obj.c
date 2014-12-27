@@ -898,7 +898,7 @@ ldobj(fdt f, long c, char *pn)
     int r;
     /*x: [[ldobj()]] locals(arm) */
     // enum<opcode>
-    int o;
+    short o;
     Prog *p;
     /*x: [[ldobj()]] locals(arm) */
     bool skip;

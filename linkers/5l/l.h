@@ -63,7 +63,7 @@ struct	Adr
     short	symkind;
     /*x: [[Adr]] other fields */
     // enum<classx>
-    char	class;
+    short	class;
     /*e: [[Adr]] other fields */
 };
 /*e: struct Adr(arm) */
@@ -118,7 +118,7 @@ struct	Sym
     char	*name;
     short	version; // for static names, each sym has a different version
 
-    //enum<sxxx>
+    //enum<section>
     short	type;
     // generic value, e.g. pc for a TEXT procedure
     long	value; 
@@ -127,14 +127,14 @@ struct	Sym
     short	become;
     short	frame;
     /*x: [[Sym]] other fields */
-    // enum<section> too?
-    byte	subtype;
-    /*x: [[Sym]] other fields */
     // md5sum of the type of the symbol
     long	sig;
     /*x: [[Sym]] other fields */
     // idx in filen
     ushort	file;
+    /*x: [[Sym]] other fields */
+    // enum<section> too?
+    short	subtype;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
@@ -170,17 +170,17 @@ struct	Optab
     byte	as;
 
     // enum<cxxx>, possible class for first operand
-    char	a1;
+    short	a1;
     // enum<cxxx>, possible class for second operand
-    char	a2;
+    short	a2;
     // enum<cxxx>, possible class for third operand
-    char	a3;
+    short	a3;
 
     // idx for the code generator, see the giant switch in asmout()
-    char	type; 
+    short	type; 
 
     // size of the corresponding machine code, should be a multiple of 4
-    char	size; 
+    short	size; 
 
     // ??
     char	param;
@@ -197,7 +197,7 @@ struct	Oprang
 /*e: struct Oprang(arm) */
 
 /*s: enum sxxx(arm) */
-enum sxxx
+enum section
 {
     SNONE = 0,
 
@@ -239,39 +239,41 @@ enum lxxx {
 enum classx {
     C_NONE		= 0,
 
+    C_GOK,
+
     C_REG,
     C_REGREG,
     C_SHIFT,
     C_PSR,
 
-
+    /*s: cxxx(arm) cases */
     C_RCON,		/* 0xff rotated */
     C_NCON,		/* ~RCON */
     C_SCON,		/* 0xffff */
     C_LCON,
     C_FCON,
-
+    /*x: cxxx(arm) cases */
     C_RACON,
     C_LACON,
-
+    /*x: cxxx(arm) cases */
     C_RECON,
     C_LECON,
-
+    /*x: cxxx(arm) cases */
     C_SBRA,
     C_LBRA,
-
+    /*x: cxxx(arm) cases */
     C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
     C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
     C_HFAUTO,	/* both H and F */
     C_SAUTO,	/* -0xfff to 0xfff */
     C_LAUTO,
-
+    /*x: cxxx(arm) cases */
     C_HEXT,
     C_FEXT,
     C_HFEXT,
     C_SEXT,
     C_LEXT,
-
+    /*x: cxxx(arm) cases */
     C_HOREG,
     C_FOREG,
     C_HFOREG,
@@ -279,23 +281,21 @@ enum classx {
     C_ROREG,
     C_SROREG,	/* both S and R */
     C_LOREG,
-
+    /*x: cxxx(arm) cases */
     C_ADDR,		/* relocatable address */
-
+    /*x: cxxx(arm) cases */
     C_FREG,
     C_FCR,
-
-
-    C_GOK,
+    /*e: cxxx(arm) cases */
 };
 /*e: enum cxxx(arm) */
 /*s: enum mark(arm) */
 /* mark flags */
 enum mark {
     /*s: enum mark cases */
-    FOLL		= 1<<0,
-    LABEL		= 1<<1,
     LEAF		= 1<<2,
+    /*x: enum mark cases */
+    FOLL		= 1<<0,
     /*e: enum mark cases */
 };
 /*e: enum mark(arm) */
@@ -357,7 +357,7 @@ union Buf
 extern union Buf buf;
 
 extern	long	HEADR;			/* length of header */
-extern	long	HEADTYPE;		/* type of header */
+extern	short	HEADTYPE;		/* type of header */
 extern	long	INITDAT;		/* data location */
 extern	long	INITRND;		/* data round above text location */
 extern	long	INITTEXT;		/* text location */
