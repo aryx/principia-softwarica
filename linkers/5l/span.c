@@ -95,7 +95,7 @@ span(void)
             c += m;
         }
     }
-
+    /*s: [[span()]] if string in text segment */
     if(debug['t']) {
         /* 
          * add strings to text segment
@@ -112,6 +112,7 @@ span(void)
             c += v;
         }
     }
+    /*e: [[span()]] if string in text segment */
 
     c = rnd(c, 8);
 
@@ -316,19 +317,23 @@ aclass(Adr *a)
 
     case D_REG:
         return C_REG;
-
     case D_REGREG:
         return C_REGREG;
-
     case D_SHIFT:
         return C_SHIFT;
+    case D_PSR:
+        return C_PSR;
 
+    case D_BRANCH:
+        return C_SBRA;
+
+
+    case D_FCONST:
+        return C_FCON;
     case D_FREG:
         return C_FREG;
-
     case D_FPCR:
         return C_FCR;
-
 
 
     case D_OREG:
@@ -347,12 +352,13 @@ aclass(Adr *a)
                     s->name, TNAME);
                 s->type = SDATA;
             }
+            /*s: [[aclass()]] when D_OREG and D_STATIC and dlm */
             if(dlm) {
                 switch(t) {
                 case SUNDEF:
                 case STEXT:
-                case SCONST:
                 case SLEAF:
+                case SCONST:
                 case SSTRING:
                     instoffset = s->value + a->offset;
                     break;
@@ -362,6 +368,7 @@ aclass(Adr *a)
                 }
                 return C_ADDR;
             }
+            /*e: [[aclass()]] when D_OREG and D_STATIC and dlm */
             instoffset = s->value + a->offset - BIG;
             t = immaddr(instoffset);
             if(t) {
@@ -372,6 +379,7 @@ aclass(Adr *a)
                 return C_SEXT;
             }
             return C_LEXT;
+
         case D_AUTO:
             instoffset = autosize + a->offset;
             t = immaddr(instoffset);
@@ -418,12 +426,6 @@ aclass(Adr *a)
         }
         return C_GOK;
 
-    case D_PSR:
-        return C_PSR;
-
-    case D_FCONST:
-        return C_FCON;
-
     case D_CONST:
         switch(a->symkind) {
 
@@ -455,9 +457,9 @@ aclass(Adr *a)
                 break;
             case SUNDEF:
             case STEXT:
+            case SLEAF:
             case SSTRING:
             case SCONST:
-            case SLEAF:
                 instoffset = s->value + a->offset;
                 return C_LCON;
             }
@@ -485,8 +487,6 @@ aclass(Adr *a)
         }
         return C_GOK;
 
-    case D_BRANCH:
-        return C_SBRA;
     }
     return C_GOK;
 }

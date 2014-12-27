@@ -28,7 +28,7 @@ dodata(void)
             diag("initialize bounds (%ld): %s\n%P",
                 s->value, s->name, p);
     }
-
+    /*s: [[dodata()]] if string in text segment */
     if(debug['t']) {
         /*
          * pull out string constants
@@ -39,6 +39,7 @@ dodata(void)
                 s->type = SSTRING;
         }
     }
+    /*e: [[dodata()]] if string in text segment */
 
     /*
      * pass 1

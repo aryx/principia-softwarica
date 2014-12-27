@@ -557,7 +557,7 @@ Auto*	link;
 @
 
 
-\section{[[Prog]] and [[firstp]], [[textp]], [[datap]], [[curtext]], etc}
+\section{[[Prog]]}
 
 % bad name .... I think Prog is really an Instruction ... From and To
 % are when do MOV AX, BX,    then AX is the from, BX the to
@@ -614,6 +614,29 @@ long	pc;
 % some check pc == p->pc somewhere.
 
 
+
+<<[[Prog]] other fields>>=
+//bitset<enum<mark>
+short	mark;
+@
+% was byte
+
+<<enum mark(arm)>>=
+/* mark flags */
+enum mark {
+    <<enum mark cases>>
+};
+@
+
+<<enum mark cases>>=
+FOLL		= 1<<0,
+LABEL		= 1<<1,
+LEAF		= 1<<2,
+@
+% >> >> >>
+
+
+\section{[[firstp]], [[textp]], [[datap]], [[curtext]], etc}
 
 % list of instructions (ATEXT and its instrs, but not ADATA, AGLOBL, ...)
 % good name? first_instr better? also again there is strong
@@ -738,9 +761,8 @@ enum classx {
     C_REG,
     C_REGREG,
     C_SHIFT,
-    C_FREG,
     C_PSR,
-    C_FCR,
+
 
     C_RCON,		/* 0xff rotated */
     C_NCON,		/* ~RCON */
@@ -779,6 +801,10 @@ enum classx {
 
     C_ADDR,		/* relocatable address */
 
+    C_FREG,
+    C_FCR,
+
+
     C_GOK,
 };
 @
@@ -798,19 +824,23 @@ aclass(Adr *a)
 
     case D_REG:
         return C_REG;
-
     case D_REGREG:
         return C_REGREG;
-
     case D_SHIFT:
         return C_SHIFT;
+    case D_PSR:
+        return C_PSR;
 
+    case D_BRANCH:
+        return C_SBRA;
+
+
+    case D_FCONST:
+        return C_FCON;
     case D_FREG:
         return C_FREG;
-
     case D_FPCR:
         return C_FCR;
-
 
 
     case D_OREG:
@@ -829,21 +859,7 @@ aclass(Adr *a)
                     s->name, TNAME);
                 s->type = SDATA;
             }
-            if(dlm) {
-                switch(t) {
-                case SUNDEF:
-                case STEXT:
-                case SCONST:
-                case SLEAF:
-                case SSTRING:
-                    instoffset = s->value + a->offset;
-                    break;
-                default:
-                    instoffset = s->value + a->offset + INITDAT;
-                    break;
-                }
-                return C_ADDR;
-            }
+            <<[[aclass()]] when D_OREG and D_STATIC and dlm>>
             instoffset = s->value + a->offset - BIG;
             t = immaddr(instoffset);
             if(t) {
@@ -854,6 +870,7 @@ aclass(Adr *a)
                 return C_SEXT;
             }
             return C_LEXT;
+
         case D_AUTO:
             instoffset = autosize + a->offset;
             t = immaddr(instoffset);
@@ -900,12 +917,6 @@ aclass(Adr *a)
         }
         return C_GOK;
 
-    case D_PSR:
-        return C_PSR;
-
-    case D_FCONST:
-        return C_FCON;
-
     case D_CONST:
         switch(a->symkind) {
 
@@ -937,9 +948,9 @@ aclass(Adr *a)
                 break;
             case SUNDEF:
             case STEXT:
+            case SLEAF:
             case SSTRING:
             case SCONST:
-            case SLEAF:
                 instoffset = s->value + a->offset;
                 return C_LCON;
             }
@@ -967,8 +978,6 @@ aclass(Adr *a)
         }
         return C_GOK;
 
-    case D_BRANCH:
-        return C_SBRA;
     }
     return C_GOK;
 }
@@ -1014,8 +1023,6 @@ union
     Prog*	forwd;
 };
 @
-
-
 % use anonymous union now, so don't need those aliases
 %<<constant regused(arm)>>=
 %#define	Xregused	u0.u0regused
@@ -1023,32 +1030,6 @@ union
 %<<constant forwd(arm)>>=
 %#define	Xforwd	u0.u0forwd
 %@
-
-
-%XXX
-<<[[Prog]] other fields>>=
-byte	mark;
-@
-
-
-
-
-
-%XXXX
-<<enum sxxx cases>>=
-SDATA1,
-SLEAF, // arm
-SFILE,
-SCONST,
-
-SSTRING, // arm
-SUNDEF,
-
-SIMPORT,
-SEXPORT,
-@
-% SLEAF? the special opti ARM has for leaf functions?
-% SCONST ... hmm confusing with D_SCONST IMHO
 
 
 %XXXXXXXXX
@@ -1071,15 +1052,6 @@ enum lxxx {
 
 
 
-<<enum mark(arm)>>=
-/* mark flags */
-enum mark {
-    FOLL		= 1<<0,
-    LABEL		= 1<<1,
-    LEAF		= 1<<2,
-};
-@
-% >> >> >>
 
 <<enum misc_constant(arm)>>=
 enum misc_constants {
@@ -1794,7 +1766,6 @@ undef(void)
 %less: hmmm if C had proper ADT and a Marshall module that would be easier ...
 % (but maybe less other-languages friendly)
 %less: could factorize code with libmach?
-
 % why not using 5obj.c from libmach/? because 5obj.c is incomplete?
 % because it cares just about the symbol table?
 
@@ -2371,6 +2342,10 @@ case AHISTORY:
     goto loop;
 @
 
+
+<<enum sxxx cases>>=
+SFILE,
+@
 
 <<[[ldobj()]] when ANAME opcode, if D_FILE>>=
 if(v == D_FILE) {
@@ -3238,6 +3213,10 @@ long	autosize;
 % size for the locals
 
 
+<<enum sxxx cases>>=
+SDATA1,
+@
+
 % LP split
 <<function dodata(arm)>>=
 void
@@ -3263,17 +3242,7 @@ dodata(void)
             diag("initialize bounds (%ld): %s\n%P",
                 s->value, s->name, p);
     }
-
-    if(debug['t']) {
-        /*
-         * pull out string constants
-         */
-        for(p = datap; p != P; p = p->link) {
-            s = p->from.sym;
-            if(p->to.type == D_SCONST)
-                s->type = SSTRING;
-        }
-    }
+    <<[[dodata()]] if string in text segment>>
 
     /*
      * pass 1
@@ -3371,6 +3340,12 @@ xdefine(char *p, int t, long v)
 
 %I think it's when an ASM opcode has actually no 
 % machine opcode (e.g. ADIV) so was using a fake/virtual opcode
+
+<<enum sxxx cases>>=
+SLEAF, // arm
+@
+% SLEAF? the special opti ARM has for leaf functions?
+
 
 <<function noops(arm)>>=
 void
@@ -3900,23 +3875,7 @@ span(void)
             c += m;
         }
     }
-
-    if(debug['t']) {
-        /* 
-         * add strings to text segment
-         */
-        c = rnd(c, 8);
-        for(i=0; i<NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link) {
-            if(s->type != SSTRING)
-                continue;
-            v = s->value;
-            while(v & 3)
-                v++;
-            s->value = c;
-            c += v;
-        }
-    }
+    <<[[span()]] if string in text segment>>
 
     c = rnd(c, 8);
 
@@ -6504,6 +6463,8 @@ asmlc(void)
 
 % see NOPROF of 8.out.h in Assembler_extra.nw
 
+\section{[[5l -p]]}
+
 
 % where is defined _mainp? lib_core/libc/386/main9p.s
 <<[[main()]] adjust INITENTRY if profiling>>=
@@ -6748,7 +6709,7 @@ doprof2(void)
 
 
 
-\section{[[_tracin()]]}
+\section{[[5l -e]], [[_tracin()]]}
 
 % -p -e, -e for embedded tracing
 
@@ -7331,9 +7292,16 @@ newdata(Sym *s, int o, int w, int t)
 \section{Dynamic loading}
 % been disabled? can not find man page for dynld anymore, nor dynld.h
 
+% -x, -u
+% see dynld(2)
 
 <<global dlm>>=
 bool dlm;
+@
+
+<<enum sxxx cases>>=
+SIMPORT,
+SEXPORT,
 @
 
 
@@ -7372,7 +7340,23 @@ if(dlm){
 @
 
 
-
+<<[[aclass()]] when D_OREG and D_STATIC and dlm>>=
+if(dlm) {
+    switch(t) {
+    case SUNDEF:
+    case STEXT:
+    case SLEAF:
+    case SCONST:
+    case SSTRING:
+        instoffset = s->value + a->offset;
+        break;
+    default:
+        instoffset = s->value + a->offset + INITDAT;
+        break;
+    }
+    return C_ADDR;
+}
+@
 
 
 
@@ -7419,6 +7403,10 @@ enum rxxx {
     Roffset	= 22,		/* no. bits for offset in relocation address */
     Rindex	= 10,		/* no. bits for index in relocation address */
 };
+@
+
+<<enum sxxx cases>>=
+SUNDEF,
 @
 
 % import -> undefsym
@@ -7677,11 +7665,17 @@ grow(Reloc *r)
 % ???
 % mv with dlm?
 % seems never produced by 5a/5c
+% was for alef?
 
 
 <<[[ldobj()]] locals(arm)>>=
 Sym *di;
 @
+
+<<enum sxxx cases>>=
+SCONST,
+@
+% SCONST ... hmm confusing with D_SCONST IMHO
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case ADYNT:
@@ -8209,7 +8203,51 @@ enum {
 %\subsection{PE}
 % windows format, see pe.h in golang/src/libmach/
 
-\section{[[8l -E digits]]}
+\section{Strings in text segment, [[5l -t]]}
+
+% what for? so cannot be modified?
+% for constant strings?
+
+<<enum sxxx cases>>=
+SSTRING, // arm
+@
+
+
+<<[[dodata()]] if string in text segment>>=
+if(debug['t']) {
+    /*
+     * pull out string constants
+     */
+    for(p = datap; p != P; p = p->link) {
+        s = p->from.sym;
+        if(p->to.type == D_SCONST)
+            s->type = SSTRING;
+    }
+}
+@
+
+<<[[span()]] if string in text segment>>=
+if(debug['t']) {
+    /* 
+     * add strings to text segment
+     */
+    c = rnd(c, 8);
+    for(i=0; i<NHASH; i++)
+    for(s = hash[i]; s != S; s = s->link) {
+        if(s->type != SSTRING)
+            continue;
+        v = s->value;
+        while(v & 3)
+            v++;
+        s->value = c;
+        c += v;
+    }
+}
+@
+
+
+
+\section{[[5l -E digits]]}
 
 <<[[main()]] if digit INITENTRY>>=
 if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))

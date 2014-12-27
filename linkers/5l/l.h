@@ -89,13 +89,14 @@ struct	Prog
     /*x: [[Prog]] other fields */
     long	pc;
     /*x: [[Prog]] other fields */
+    //bitset<enum<mark>
+    short	mark;
+    /*x: [[Prog]] other fields */
     union
     {
         long	regused;
         Prog*	forwd;
     };
-    /*x: [[Prog]] other fields */
-    byte	mark;
     /*x: [[Prog]] other fields */
     byte	optab;
     /*e: [[Prog]] other fields */
@@ -206,16 +207,20 @@ enum sxxx
 
     SXREF,
     /*s: enum sxxx cases */
-    SDATA1,
-    SLEAF, // arm
     SFILE,
-    SCONST,
-
-    SSTRING, // arm
-    SUNDEF,
-
+    /*x: enum sxxx cases */
+    SDATA1,
+    /*x: enum sxxx cases */
+    SLEAF, // arm
+    /*x: enum sxxx cases */
     SIMPORT,
     SEXPORT,
+    /*x: enum sxxx cases */
+    SUNDEF,
+    /*x: enum sxxx cases */
+    SCONST,
+    /*x: enum sxxx cases */
+    SSTRING, // arm
     /*e: enum sxxx cases */
 };
 /*e: enum sxxx(arm) */
@@ -237,9 +242,8 @@ enum classx {
     C_REG,
     C_REGREG,
     C_SHIFT,
-    C_FREG,
     C_PSR,
-    C_FCR,
+
 
     C_RCON,		/* 0xff rotated */
     C_NCON,		/* ~RCON */
@@ -278,15 +282,21 @@ enum classx {
 
     C_ADDR,		/* relocatable address */
 
+    C_FREG,
+    C_FCR,
+
+
     C_GOK,
 };
 /*e: enum cxxx(arm) */
 /*s: enum mark(arm) */
 /* mark flags */
 enum mark {
+    /*s: enum mark cases */
     FOLL		= 1<<0,
     LABEL		= 1<<1,
     LEAF		= 1<<2,
+    /*e: enum mark cases */
 };
 /*e: enum mark(arm) */
 
