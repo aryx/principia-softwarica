@@ -23,6 +23,7 @@ dodata(void)
         if(s->type != SDATA)
             diag("initialize non-data (%d): %s\n%P",
                 s->type, s->name, p);
+
         v = p->from.offset + p->reg;
         if(v > s->value)
             diag("initialize bounds (%ld): %s\n%P",
