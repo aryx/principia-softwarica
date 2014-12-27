@@ -325,19 +325,12 @@ aclass(Adr *a)
         return C_PSR;
 
     case D_BRANCH:
-        return C_SBRA;
+        return C_BRANCH;
 
-
-    case D_FCONST:
-        return C_FCON;
-    case D_FREG:
-        return C_FREG;
-    case D_FPCR:
-        return C_FCR;
-
-
+    /*s: [[aclass()]] switch type cases */
     case D_OREG:
         switch(a->symkind) {
+        /*s: [[aclass()]] D_OREG case, switch symkind cases */
         case D_EXTERN:
         case D_STATIC:
             if(a->sym == nil || a->sym->name == nil) {
@@ -379,7 +372,7 @@ aclass(Adr *a)
                 return C_SEXT;
             }
             return C_LEXT;
-
+        /*x: [[aclass()]] D_OREG case, switch symkind cases */
         case D_AUTO:
             instoffset = autosize + a->offset;
             t = immaddr(instoffset);
@@ -391,7 +384,7 @@ aclass(Adr *a)
                 return C_SAUTO;
             }
             return C_LAUTO;
-
+        /*x: [[aclass()]] D_OREG case, switch symkind cases */
         case D_PARAM:
             instoffset = autosize + a->offset + 4L;
             t = immaddr(instoffset);
@@ -403,7 +396,7 @@ aclass(Adr *a)
                 return C_SAUTO;
             }
             return C_LAUTO;
-
+        /*x: [[aclass()]] D_OREG case, switch symkind cases */
         case D_NONE:
             instoffset = a->offset;
             t = immaddr(instoffset);
@@ -423,12 +416,13 @@ aclass(Adr *a)
             if(t)
                 return C_ROREG;
             return C_LOREG;
+        /*e: [[aclass()]] D_OREG case, switch symkind cases */
         }
         return C_GOK;
-
+    /*x: [[aclass()]] switch type cases */
     case D_CONST:
         switch(a->symkind) {
-
+        /*s: [[aclass()]] D_CONST case, switch symkind cases */
         case D_NONE:
             instoffset = a->offset;
             if(a->reg != NREG)
@@ -442,7 +436,7 @@ aclass(Adr *a)
             if(t)
                 return C_NCON;
             return C_LCON;
-
+        /*x: [[aclass()]] D_CONST case, switch symkind cases */
         case D_EXTERN:
         case D_STATIC:
             s = a->sym;
@@ -472,21 +466,32 @@ aclass(Adr *a)
             instoffset = s->value + a->offset + INITDAT;
             return C_LCON;
 
+        /*x: [[aclass()]] D_CONST case, switch symkind cases */
         case D_AUTO:
             instoffset = autosize + a->offset;
             goto aconsize;
 
+        /*x: [[aclass()]] D_CONST case, switch symkind cases */
         case D_PARAM:
             instoffset = autosize + a->offset + 4L;
-
+            goto aconsize;
+        /*x: [[aclass()]] D_CONST case, switch symkind cases */
         aconsize:
             t = immrot(instoffset);
             if(t)
                 return C_RACON;
             return C_LACON;
+        /*e: [[aclass()]] D_CONST case, switch symkind cases */
         }
         return C_GOK;
-
+    /*x: [[aclass()]] switch type cases */
+    case D_FCONST:
+        return C_FCON;
+    case D_FREG:
+        return C_FREG;
+    case D_FPCR:
+        return C_FCR;
+    /*e: [[aclass()]] switch type cases */
     }
     return C_GOK;
 }
@@ -568,10 +573,6 @@ cmp(int a, int b)
         if(b == C_RACON)
             return 1;
         break;
-    case C_LECON:
-        if(b == C_RECON)
-            return 1;
-        break;
 
     case C_HFEXT:
         return b == C_HEXT || b == C_FEXT;
@@ -606,10 +607,6 @@ cmp(int a, int b)
     case C_LOREG:
         return cmp(C_SROREG, b);
 
-    case C_LBRA:
-        if(b == C_SBRA)
-            return 1;
-        break;
     }
     return 0;
 }

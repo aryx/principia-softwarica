@@ -239,40 +239,27 @@ enum lxxx {
 enum classx {
     C_NONE		= 0,
 
-    C_GOK,
-
     C_REG,
     C_REGREG,
     C_SHIFT,
     C_PSR,
 
+    C_BRANCH,
+
     /*s: cxxx(arm) cases */
-    C_RCON,		/* 0xff rotated */
-    C_NCON,		/* ~RCON */
-    C_SCON,		/* 0xffff */
-    C_LCON,
-    C_FCON,
-    /*x: cxxx(arm) cases */
-    C_RACON,
-    C_LACON,
-    /*x: cxxx(arm) cases */
-    C_RECON,
-    C_LECON,
-    /*x: cxxx(arm) cases */
-    C_SBRA,
-    C_LBRA,
-    /*x: cxxx(arm) cases */
-    C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-    C_HFAUTO,	/* both H and F */
-    C_SAUTO,	/* -0xfff to 0xfff */
-    C_LAUTO,
+    C_GOK,
     /*x: cxxx(arm) cases */
     C_HEXT,
     C_FEXT,
     C_HFEXT,
     C_SEXT,
     C_LEXT,
+    /*x: cxxx(arm) cases */
+    C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+    C_HFAUTO,	/* both H and F */
+    C_SAUTO,	/* -0xfff to 0xfff */
+    C_LAUTO,
     /*x: cxxx(arm) cases */
     C_HOREG,
     C_FOREG,
@@ -282,9 +269,19 @@ enum classx {
     C_SROREG,	/* both S and R */
     C_LOREG,
     /*x: cxxx(arm) cases */
+    C_RCON,		/* 0xff rotated */
+    C_NCON,		/* ~RCON */
+    C_LCON,
+    /*x: cxxx(arm) cases */
+    C_RECON,
+    /*x: cxxx(arm) cases */
+    C_RACON,
+    C_LACON,
+    /*x: cxxx(arm) cases */
     C_ADDR,		/* relocatable address */
     /*x: cxxx(arm) cases */
     C_FREG,
+    C_FCON,
     C_FCR,
     /*e: cxxx(arm) cases */
 };
