@@ -411,7 +411,6 @@ License.
 
 \section{[[Opcode]]}
 
-
 % include/arm/5.out.h (used to be just 5c/5.out.h)
 <<enum opcode(arm)>>=
 // coupling: with 5c/enam.c
@@ -514,7 +513,8 @@ enum registr {
 % - and also the status register PCR (and FPCR)
 
 
-\section{[[Operand_kind]] and [[Gen]]}
+\section{[[Operand]]}
+%[[Operand_kind]] and [[Gen]]
 
 % many instructions have 2 or 3 operands, e.g. ADD X1, X2, X3,
 % MOV X1, X2 where they can all be registers, or sometimes they can be
@@ -2055,6 +2055,7 @@ struct	Hist
 @
 %note: rename offset to local_line, clearer, and also avoid
 % possible confusion with Gen.offset
+%abused for #pragma lib "xxx.a" where local_line is then -1. ugly.
 
 <<global hist>>=
 // list<ref_own<Hist>>, next = Hist.link
@@ -2829,70 +2830,20 @@ bad:
 
 % effect of #pragma lib in .s ??
 
+<<[[macprag()]] locals>>=
+Sym *s;
+@
+
 <<function macprag>>=
 void
 macprag(void)
 {
-    Sym *s;
-    int c0, c;
-    char *hp;
-    Hist *h;
+    <<[[macprag()]] locals>>
 
     s = getsym();
 
-    if(s && strcmp(s->name, "lib") == 0) {
-        c0 = getnsc();
-        if(c0 != '"') {
-            c = c0;
-            if(c0 != '<')
-                goto bad;
-            c0 = '>';
-        }
-        for(hp = symb;;) {
-            c = getc();
-            if(c == c0)
-                break;
-            if(c == '\n')
-                goto bad;
-            *hp++ = c;
-        }
-        *hp = '\0';
-        c = getcom();
-        if(c != '\n')
-            goto bad;
-    
-        /*
-         * put pragma-line in as a funny history 
-         */
-        c = strlen(symb) + 1;
-        while(c & 3)
-            c++;
-    
-        hp = malloc(c);
-        memcpy(hp, symb, c);
-    
-        h = alloc(sizeof(Hist));
-        h->filename = hp;
-        h->line = lineno;
-        h->local_line = -1;
-
-        h->link = H;
-        if(ehist == H) {
-            hist = h;
-            ehist = h;
-            return;
-        }
-        ehist->link = h;
-        ehist = h;
-
-        return;
-
-bad:
-        unget(c);
-        yyerror("syntax in #pragma lib");
-        macend();
-
-    } else {
+    <<[[macprag()]] if pragma lib>>
+    else {
         while(getnsc() != '\n')
             ;
         return;
@@ -3974,11 +3925,12 @@ ireg:
 
 % part of oreg? name is an offset to a reg?
 % Actually a name is really a constant offset to a base like LSB!!
-% it's implicitly a dereference so foo is really (foo), you want
+% it's implicitly a dereference so foo is really foo(SB); you want
 % $foo to get the actual address (and not content)
 <<oreg rule>>=
 | name
 @
+
 
 % for BL, in addition to rel, can also have nireg
 <<misc rules>>=
@@ -5717,7 +5669,76 @@ D_FILE1, // used by linker only?
 % this is very very nice! remove so much headache,
 % no need ocamlfind, no need pkg-config, so simple ...
 
-% but useful in assembly?
+% the object can contain information about which
+% lib you want to link with!
+
+% less useful in assembly than in .c, but because anyway it's
+% an object file property, it's also in the assembler (that generate
+% object files).
+
+<<[[macprag()]] locals>>=
+Hist *h;
+char *hp;
+int c0, c;
+@
+
+<<[[macprag()]] if pragma lib>>=
+if(s && strcmp(s->name, "lib") == 0) {
+    c0 = getnsc();
+    if(c0 != '"') {
+        c = c0;
+        if(c0 != '<')
+            goto bad;
+        c0 = '>';
+    }
+    for(hp = symb;;) {
+        c = getc();
+        if(c == c0)
+            break;
+        if(c == '\n')
+            goto bad;
+        *hp++ = c;
+    }
+    *hp = '\0';
+    c = getcom();
+    if(c != '\n')
+        goto bad;
+
+    /*
+     * put pragma-line in as a funny history 
+     */
+    c = strlen(symb) + 1;
+    while(c & 3)
+        c++;
+
+    hp = malloc(c);
+    memcpy(hp, symb, c);
+
+    h = alloc(sizeof(Hist));
+    h->filename = hp;
+    h->line = lineno;
+    h->local_line = -1; // special mark, ugly
+
+    h->link = H;
+    if(ehist == H) {
+        hist = h;
+        ehist = h;
+        return;
+    }
+    ehist->link = h;
+    ehist = h;
+
+    return;
+
+bad:
+    unget(c);
+    yyerror("syntax in #pragma lib");
+    macend();
+
+}
+@
+
+
 
 \section{Processing multiple files}
 
