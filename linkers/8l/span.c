@@ -128,6 +128,7 @@ putsymb(char *s, int t, long v, int ver)
 
     if(t == 'f')
         s++;
+
     lput(v);
     if(ver)
         t += 'a' - 'A';
@@ -148,7 +149,7 @@ putsymb(char *s, int t, long v, int ver)
     else {
         for(i=0; s[i]; i++)
             cput(s[i]);
-        cput(0);
+        cput('\0');
     }
     symsize += 4 + 1 + i + 1;
 

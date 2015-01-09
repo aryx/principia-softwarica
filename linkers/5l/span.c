@@ -514,24 +514,28 @@ oplook(Prog *p)
     a1 = p->optab;
     if(a1)
         return optab+(a1-1);
+
     a1 = p->from.class;
     if(a1 == 0) {
         a1 = aclass(&p->from) + 1;
         p->from.class = a1;
     }
     a1--;
+
     a3 = p->to.class;
     if(a3 == 0) {
         a3 = aclass(&p->to) + 1;
         p->to.class = a3;
     }
     a3--;
+
     a2 = C_NONE;
     if(p->reg != NREG)
         a2 = C_REG;
+
     r = p->as;
     o = oprange[r].start;
-    if(o == 0) {
+    if(o == nil) {
         a1 = opcross[repop[r]][a1][a2][a3];
         if(a1) {
             p->optab = a1+1;
@@ -539,7 +543,7 @@ oplook(Prog *p)
         }
         o = oprange[r].stop; /* just generate an error */
     }
-    if(0) {
+    if(1) {
         print("oplook %A %d %d %d\n",
             (int)p->as, a1, a2, a3);
         print("		%d %d\n", p->from.type, p->to.type);
@@ -549,15 +553,16 @@ oplook(Prog *p)
     c3 = xcmp[a3];
     for(; o<e; o++)
         if(o->a2 == a2)
-        if(c1[o->a1])
-        if(c3[o->a3]) {
+         if(c1[o->a1])
+          if(c3[o->a3]) {
             p->optab = (o-optab)+1;
             return o;
         }
+
     diag("illegal combination %A %d %d %d",
         p->as, a1, a2, a3);
     prasm(p);
-    if(o == 0)
+    if(o == nil)
         o = optab;
     return o;
 }

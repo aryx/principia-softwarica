@@ -1635,6 +1635,7 @@ nuxiinit(void)
             inuxi1[i] = c;
         inuxi4[i] = c;
         fnuxi4[i] = c;
+
         if(debug['d'] == 0){
             fnuxi8[i] = c;
             fnuxi8[i+4] = c+4;
@@ -1644,6 +1645,7 @@ nuxiinit(void)
             fnuxi8[i+4] = c;
         }
     }
+
     if(debug['v']) {
         Bprint(&bso, "inuxi = ");
         for(i=0; i<1; i++)

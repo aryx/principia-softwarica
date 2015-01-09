@@ -3582,7 +3582,8 @@ dodata(void)
 }
 @
 % important exxx!!! the kernel uses etext! edata!
-
+% how end can be in SBSS section? we actually want it initialized ...
+% etext final value will be set in span()
 
 <<constant BIG>>=
 BIG		= (1<<12)-4,
@@ -4888,24 +4889,28 @@ oplook(Prog *p)
     a1 = p->optab;
     if(a1)
         return optab+(a1-1);
+
     a1 = p->from.class;
     if(a1 == 0) {
         a1 = aclass(&p->from) + 1;
         p->from.class = a1;
     }
     a1--;
+
     a3 = p->to.class;
     if(a3 == 0) {
         a3 = aclass(&p->to) + 1;
         p->to.class = a3;
     }
     a3--;
+
     a2 = C_NONE;
     if(p->reg != NREG)
         a2 = C_REG;
+
     r = p->as;
     o = oprange[r].start;
-    if(o == 0) {
+    if(o == nil) {
         a1 = opcross[repop[r]][a1][a2][a3];
         if(a1) {
             p->optab = a1+1;
@@ -4913,7 +4918,7 @@ oplook(Prog *p)
         }
         o = oprange[r].stop; /* just generate an error */
     }
-    if(0) {
+    if(1) {
         print("oplook %A %d %d %d\n",
             (int)p->as, a1, a2, a3);
         print("		%d %d\n", p->from.type, p->to.type);
@@ -4923,15 +4928,16 @@ oplook(Prog *p)
     c3 = xcmp[a3];
     for(; o<e; o++)
         if(o->a2 == a2)
-        if(c1[o->a1])
-        if(c3[o->a3]) {
+         if(c1[o->a1])
+          if(c3[o->a3]) {
             p->optab = (o-optab)+1;
             return o;
         }
+
     diag("illegal combination %A %d %d %d",
         p->as, a1, a2, a3);
     prasm(p);
-    if(o == 0)
+    if(o == nil)
         o = optab;
     return o;
 }
@@ -4954,17 +4960,9 @@ asmout(Prog *p, Optab *o)
     Sym *s;
 
     PP = p;
-
-    o1 = 0;
-    o2 = 0;
-    o3 = 0;
-    o4 = 0;
-    o5 = 0;
-    o6 = 0;
+    o1 = o2 = o3 = o4 = o5 = o6 = 0;
 
     switch(o->type) {
-    case 0:		/* pseudo ops */
-        break;
     <<[[asmout()]] switch on type cases>>
     default:
         diag("unknown asm %d", o->type);
@@ -4989,7 +4987,66 @@ asmout(Prog *p, Optab *o)
 
 
 
+
+<<[[asmout()]] switch on size cases>>=
+case 4:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux\t%P\n", v, o1, p);
+    lputl(o1);
+    break;
+case 8:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux%P\n", v, o1, o2, p);
+    lputl(o1);
+    lputl(o2);
+    break;
+case 12:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux%P\n", v, o1, o2, o3, p);
+    lputl(o1);
+    lputl(o2);
+    lputl(o3);
+    break;
+case 16:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux%P\n",
+            v, o1, o2, o3, o4, p);
+    lputl(o1);
+    lputl(o2);
+    lputl(o3);
+    lputl(o4);
+    break;
+case 20:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
+            v, o1, o2, o3, o4, o5, p);
+    lputl(o1);
+    lputl(o2);
+    lputl(o3);
+    lputl(o4);
+    lputl(o5);
+    break;
+case 24:
+    if(debug['a'])
+        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
+            v, o1, o2, o3, o4, o5, o6, p);
+    lputl(o1);
+    lputl(o2);
+    lputl(o3);
+    lputl(o4);
+    lputl(o5);
+    lputl(o6);
+    break;
+@
+
+
+
 \subsection{[[ATEXT]]}
+
+<<[[asmout()]] switch on type cases>>=
+case 0:		/* pseudo ops */
+    break;
+@
 
 \subsection{Arithmetic opcodes}
 
@@ -5783,6 +5840,8 @@ case 75:	/* vfp floating point compare */
     o2 |= (p->scond & C_SCOND) << 28;
     break;
 @
+% >> >> >> >>
+
 <<[[asmout()]] switch on type cases>>=
 case 76:	/* vfp floating point fix and float */
     o1 = opvfprrr(p->as, p->scond);
@@ -5800,59 +5859,9 @@ case 76:	/* vfp floating point fix and float */
     break;
 @
 %$
+% >> >> >> >> >> >> >> >> >> >>
 
 
-
-<<[[asmout()]] switch on size cases>>=
-case 4:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux\t%P\n", v, o1, p);
-    lputl(o1);
-    break;
-case 8:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux%P\n", v, o1, o2, p);
-    lputl(o1);
-    lputl(o2);
-    break;
-case 12:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux%P\n", v, o1, o2, o3, p);
-    lputl(o1);
-    lputl(o2);
-    lputl(o3);
-    break;
-case 16:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux%P\n",
-            v, o1, o2, o3, o4, p);
-    lputl(o1);
-    lputl(o2);
-    lputl(o3);
-    lputl(o4);
-    break;
-case 20:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
-            v, o1, o2, o3, o4, o5, p);
-    lputl(o1);
-    lputl(o2);
-    lputl(o3);
-    lputl(o4);
-    lputl(o5);
-    break;
-case 24:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
-            v, o1, o2, o3, o4, o5, o6, p);
-    lputl(o1);
-    lputl(o2);
-    lputl(o3);
-    lputl(o4);
-    lputl(o5);
-    lputl(o6);
-    break;
-@
 
 \subsection{Helpers}
 
@@ -5882,6 +5891,8 @@ immrot(ulong v)
     return 0;
 }
 @
+% >> >>
+
 
 <<function immaddr(arm)>>=
 long
@@ -5897,6 +5908,7 @@ immaddr(long v)
     return 0;
 }
 @
+% >> >> >>
 
 <<function immfloat(arm)>>=
 int
@@ -5920,7 +5932,7 @@ immhalf(long v)
     return 0;
 }
 @
-
+% >> >> >>
 
 
 
@@ -6360,10 +6372,13 @@ datblk(long s, long n, bool str)
     int i, c;
 
     memset(buf.dbuf, 0, n+Dbufslop);
+
     for(p = datap; p != P; p = p->link) {
         if(str != (p->from.sym->type == SSTRING))
             continue;
+
         curp = p;
+
         a = p->from.sym->value + p->from.offset;
         l = a - s;
         c = p->reg;
@@ -6378,6 +6393,7 @@ datblk(long s, long n, bool str)
         }
         if(l >= n)
             continue;
+
         if(p->as != AINIT && p->as != ADYNT) {
             for(j=l+(c-i)-1; j>=l; j--)
                 if(buf.dbuf[j]) {
@@ -6386,6 +6402,7 @@ datblk(long s, long n, bool str)
                     break;
                 }
         }
+
         switch(p->to.type) {
 
         case D_FCONST:
@@ -6435,6 +6452,7 @@ datblk(long s, long n, bool str)
                 <<[[datblk()]] if dynamic module(arm)>>
             }
             cast = (char*)&d;
+
             switch(c) {
             default:
                 diag("bad nuxi %d %d%P", c, i, curp);
@@ -6480,6 +6498,104 @@ ckoff(Sym *s, long v)
 
 % >>
 
+
+\subsection{Endianess, [[nuxiinit()]]}
+
+%"unix" in some systems is represented as "nuxi" because of endianess
+
+<<global inuxi1>>=
+char	inuxi1[1];
+@
+
+<<global inuxi2>>=
+char	inuxi2[2];
+@
+
+<<global inuxi4>>=
+char	inuxi4[4];
+@
+
+
+<<global fnuxi4>>=
+char	fnuxi4[4];
+@
+
+<<global fnuxi8>>=
+char	fnuxi8[8];
+@
+
+
+<<[[main()]] initialize globals(arm)>>=
+nuxiinit(); // ???
+@
+
+<<function nuxiinit(arm)>>=
+void
+nuxiinit(void)
+{
+
+    int i, c;
+
+    for(i=0; i<4; i++) {
+        c = find1(0x04030201L, i+1);
+        if(i < 2)
+            inuxi2[i] = c;
+        if(i < 1)
+            inuxi1[i] = c;
+        inuxi4[i] = c;
+        fnuxi4[i] = c;
+
+        if(debug['d'] == 0){
+            fnuxi8[i] = c;
+            fnuxi8[i+4] = c+4;
+        }
+        else{
+            fnuxi8[i] = c+4;		/* ms word first, then ls, even in little endian mode */
+            fnuxi8[i+4] = c;
+        }
+    }
+
+    if(debug['v']) {
+        Bprint(&bso, "inuxi = ");
+        for(i=0; i<1; i++)
+            Bprint(&bso, "%d", inuxi1[i]);
+        Bprint(&bso, " ");
+        for(i=0; i<2; i++)
+            Bprint(&bso, "%d", inuxi2[i]);
+        Bprint(&bso, " ");
+        for(i=0; i<4; i++)
+            Bprint(&bso, "%d", inuxi4[i]);
+        Bprint(&bso, "\nfnuxi = ");
+        for(i=0; i<4; i++)
+            Bprint(&bso, "%d", fnuxi4[i]);
+        Bprint(&bso, " ");
+        for(i=0; i<8; i++)
+            Bprint(&bso, "%d", fnuxi8[i]);
+        Bprint(&bso, "\n");
+    }
+    Bflush(&bso);
+}
+@
+
+
+
+
+<<function find1>>=
+int
+find1(long l, int c)
+{
+    char *p;
+    int i;
+
+    p = (char*)&l;
+    for(i=0; i<4; i++)
+        if(*p++ == c)
+            return i;
+    return 0;
+}
+@
+
+
 \chapter{Debugging Support}
 % Symbol Tables.
 % related to import/export table? I don't think so.
@@ -6521,18 +6637,20 @@ asmsym(void)
     for(h=0; h<NHASH; h++)
         for(s=hash[h]; s!=S; s=s->link)
             switch(s->type) {
-            case SCONST:
-                putsymb(s->name, 'D', s->value, s->version);
-                continue;
             case SDATA:
                 putsymb(s->name, 'D', s->value+INITDAT, s->version);
                 continue;
             case SBSS:
                 putsymb(s->name, 'B', s->value+INITDAT, s->version);
                 continue;
+
+            case SCONST:
+                putsymb(s->name, 'D', s->value, s->version);
+                continue;
             case SSTRING:
                 putsymb(s->name, 'T', s->value, s->version);
                 continue;
+
             case SFILE:
                 putsymb(s->name, 'f', s->value, s->version);
                 continue;
@@ -6578,6 +6696,7 @@ putsymb(char *s, int t, long v, int ver)
 
     if(t == 'f')
         s++;
+
     lput(v);
     if(ver)
         t += 'a' - 'A';
@@ -6587,7 +6706,7 @@ putsymb(char *s, int t, long v, int ver)
     else {
         for(i=0; s[i]; i++)
             cput(s[i]);
-        cput(0);
+        cput('\0');
     }
     symsize += 4 + 1 + i + 1;
 
@@ -6605,6 +6724,7 @@ putsymb(char *s, int t, long v, int ver)
 
 \section{Filenames}
 
+% why they are shoved in to.autom with locals and params? a bit ugly
 <<[[asmsym()]] call putsymb for filenames>>=
 for(a=p->to.autom; a; a=a->link)
     if(a->type == D_FILE)
@@ -7056,101 +7176,6 @@ if(p->reg & NOPROF) {
 @
 
 
-\chapter{Nuxiinit ???}
-
-%???
-
-<<global inuxi1>>=
-char	inuxi1[1];
-@
-
-<<global inuxi2>>=
-char	inuxi2[2];
-@
-
-<<global inuxi4>>=
-char	inuxi4[4];
-@
-
-
-
-
-<<global fnuxi4>>=
-char	fnuxi4[4];
-@
-
-<<global fnuxi8>>=
-char	fnuxi8[8];
-@
-
-
-<<[[main()]] initialize globals(arm)>>=
-nuxiinit(); // ???
-@
-
-<<function nuxiinit(arm)>>=
-void
-nuxiinit(void)
-{
-
-    int i, c;
-
-    for(i=0; i<4; i++) {
-        c = find1(0x04030201L, i+1);
-        if(i < 2)
-            inuxi2[i] = c;
-        if(i < 1)
-            inuxi1[i] = c;
-        inuxi4[i] = c;
-        fnuxi4[i] = c;
-        if(debug['d'] == 0){
-            fnuxi8[i] = c;
-            fnuxi8[i+4] = c+4;
-        }
-        else{
-            fnuxi8[i] = c+4;		/* ms word first, then ls, even in little endian mode */
-            fnuxi8[i+4] = c;
-        }
-    }
-    if(debug['v']) {
-        Bprint(&bso, "inuxi = ");
-        for(i=0; i<1; i++)
-            Bprint(&bso, "%d", inuxi1[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<2; i++)
-            Bprint(&bso, "%d", inuxi2[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", inuxi4[i]);
-        Bprint(&bso, "\nfnuxi = ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", fnuxi4[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<8; i++)
-            Bprint(&bso, "%d", fnuxi8[i]);
-        Bprint(&bso, "\n");
-    }
-    Bflush(&bso);
-}
-@
-
-
-
-
-<<function find1>>=
-int
-find1(long l, int c)
-{
-    char *p;
-    int i;
-
-    p = (char*)&l;
-    for(i=0; i<4; i++)
-        if(*p++ == c)
-            return i;
-    return 0;
-}
-@
 
 
 

@@ -426,18 +426,20 @@ asmsym(void)
     for(h=0; h<NHASH; h++)
         for(s=hash[h]; s!=S; s=s->link)
             switch(s->type) {
-            case SCONST:
-                putsymb(s->name, 'D', s->value, s->version);
-                continue;
             case SDATA:
                 putsymb(s->name, 'D', s->value+INITDAT, s->version);
                 continue;
             case SBSS:
                 putsymb(s->name, 'B', s->value+INITDAT, s->version);
                 continue;
+
+            case SCONST:
+                putsymb(s->name, 'D', s->value, s->version);
+                continue;
             case SSTRING:
                 putsymb(s->name, 'T', s->value, s->version);
                 continue;
+
             case SFILE:
                 putsymb(s->name, 'f', s->value, s->version);
                 continue;
@@ -487,6 +489,7 @@ putsymb(char *s, int t, long v, int ver)
 
     if(t == 'f')
         s++;
+
     lput(v);
     if(ver)
         t += 'a' - 'A';
@@ -507,7 +510,7 @@ putsymb(char *s, int t, long v, int ver)
     else {
         for(i=0; s[i]; i++)
             cput(s[i]);
-        cput(0);
+        cput('\0');
     }
     symsize += 4 + 1 + i + 1;
 
@@ -629,10 +632,13 @@ datblk(long s, long n, bool str)
     int i, c;
 
     memset(buf.dbuf, 0, n+Dbufslop);
+
     for(p = datap; p != P; p = p->link) {
         if(str != (p->from.sym->type == SSTRING))
             continue;
+
         curp = p;
+
         a = p->from.sym->value + p->from.offset;
         l = a - s;
         c = p->reg;
@@ -647,6 +653,7 @@ datblk(long s, long n, bool str)
         }
         if(l >= n)
             continue;
+
         if(p->as != AINIT && p->as != ADYNT) {
             for(j=l+(c-i)-1; j>=l; j--)
                 if(buf.dbuf[j]) {
@@ -655,6 +662,7 @@ datblk(long s, long n, bool str)
                     break;
                 }
         }
+
         switch(p->to.type) {
 
         case D_FCONST:
@@ -707,6 +715,7 @@ datblk(long s, long n, bool str)
                 /*e: [[datblk()]] if dynamic module(arm) */
             }
             cast = (char*)&d;
+
             switch(c) {
             default:
                 diag("bad nuxi %d %d%P", c, i, curp);
@@ -751,18 +760,13 @@ asmout(Prog *p, Optab *o)
     Sym *s;
 
     PP = p;
-
-    o1 = 0;
-    o2 = 0;
-    o3 = 0;
-    o4 = 0;
-    o5 = 0;
-    o6 = 0;
+    o1 = o2 = o3 = o4 = o5 = o6 = 0;
 
     switch(o->type) {
+    /*s: [[asmout()]] switch on type cases */
     case 0:		/* pseudo ops */
         break;
-    /*s: [[asmout()]] switch on type cases */
+    /*x: [[asmout()]] switch on type cases */
     case 1:		/* op R,[R],R */
         o1 = oprrr(p->as, p->scond);
         rf = p->from.reg;
