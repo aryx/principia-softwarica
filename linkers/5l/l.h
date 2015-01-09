@@ -301,7 +301,9 @@ enum mark {
 
 /*s: enum misc_constant(arm) */
 enum misc_constants {
+    /*s: constant BIG */
     BIG		= (1<<12)-4,
+    /*e: constant BIG */
 
     /*s: constant STRINGSZ */
     STRINGSZ	= 200,
@@ -313,7 +315,9 @@ enum misc_constants {
     NHUNK		= 100000,
     /*e: constant NHUNK linker */
 
+    /*s: constant MINSIZ */
     MINSIZ		= 64,
+    /*e: constant MINSIZ */
     NENT		= 100,
     /*s: constant MAXIO */
     MAXIO		= 8192,

@@ -8,7 +8,8 @@ dodata(void)
     int i, t;
     Sym *s;
     Prog *p;
-    long orig, v;
+    long orig;
+    long v;
 
     DBG("%5.2f dodata\n", cputime());
     for(p = datap; p != P; p = p->link) {
@@ -23,7 +24,6 @@ dodata(void)
         if(s->type != SDATA)
             diag("initialize non-data (%d): %s\n%P",
                 s->type, s->name, p);
-
         v = p->from.offset + p->reg;
         if(v > s->value)
             diag("initialize bounds (%ld): %s\n%P",
@@ -42,18 +42,20 @@ dodata(void)
     }
     /*e: [[dodata()]] if string in text segment */
 
+    orig = 0;
+
     /*
      * pass 1
      *	assign 'small' variables to data segment
      *	(rational is that data segment is more easily
      *	 addressed through offset on R12)
      */
-    orig = 0;
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t != SDATA && t != SBSS)
             continue;
+
         v = s->value;
         if(v == 0) {
             diag("%s: no size", s->name);
@@ -62,6 +64,7 @@ dodata(void)
         while(v & 3)
             v++;
         s->value = v;
+
         if(v > MINSIZ)
             continue;
         s->value = orig;
@@ -88,6 +91,7 @@ dodata(void)
 
     while(orig & 7)
         orig++;
+
     datsize = orig;
 
     /*
@@ -104,6 +108,7 @@ dodata(void)
     }
     while(orig & 7)
         orig++;
+
     bsssize = orig-datsize;
 
     xdefine("setR12", SDATA, 0L+BIG);

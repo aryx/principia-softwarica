@@ -570,6 +570,7 @@ cmp(int a, int b)
 
     if(a == b)
         return 1;
+
     switch(a) {
     case C_LCON:
         if(b == C_RCON || b == C_NCON)
