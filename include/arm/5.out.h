@@ -249,7 +249,7 @@ enum operand_kind {
 enum sym_kind {
    N_NONE,
    /*s: sym_kind cases */
-   D_EXTERN, // data/bss values (from SB)
+   D_EXTERN, // text/data/bss values (from SB)
    D_AUTO,   // stack values (from SP)
    D_PARAM,  // parameter (from FP)
    /*x: sym_kind cases */
