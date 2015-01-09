@@ -799,13 +799,15 @@ enum classx {
     C_BRANCH,
 
     <<cxxx(arm) cases>>
+
+    C_GOK, // must be at the end e.g. for xcmp[] decl
 };
 @
 %diffs with operand_kind:
 % - OREG splitted in many xxxOREG and xxxEXT, xxAUTO
 % - D_CONST splitted in many xxxCON
 % - S_CONST?
-% - a new C_GOK
+% - a new C_GOK, could be called C_LAST maybe
 %less: do big categories, xxCON, xxAUTO, xxEXT, xxREG?
 %old: there was C_SBRA, C_LBRA but LBRA was unused so I s/C_LBRA/C_BRANCH/
 % there was also this in cmp()
@@ -815,9 +817,6 @@ enum classx {
 %        break;
 %
 
-<<cxxx(arm) cases>>=
-C_GOK,
-@
 
 
 <<function aclass(arm)>>=
@@ -1393,6 +1392,7 @@ zprg.to = zprg.from;
 %GOK? God Only Knows? to be used as a special mark, there is diag()
 % in ldobj() about AGOK
 %less: have to use AGOK? why not AXXX? or ANOP?
+%todo: what about .class? should be set to C_NONE no?
 
 % many of the constants such as COND_ALWAYS are in 5.out.h
 
@@ -4612,6 +4612,11 @@ VFP		= 1<<4,	/* arm vfpv3 floating point */
 
 
 
+<<global xcmp(arm)>>=
+char	xcmp[C_GOK+1][C_GOK+1];
+@
+
+
 <<function buildop(arm)>>=
 void
 buildop(void)
@@ -4872,6 +4877,31 @@ ocmp(const void *a1, const void *a2)
 %}
 %*/
 
+% there was this in oplook() but I think it could not work
+% if buildrep was not called
+%    if(o == nil) {
+%        a1 = opcross[repop[r]][a1][a2][a3];
+%        if(a1) {
+%            p->optab = a1+1;
+%            return optab+a1;
+%        }
+%        o = oprange[r].stop; /* just generate an error */
+%    }
+
+%extern	uchar	repop[ALAST];
+%
+%<<global repop(arm)>>=
+%uchar	repop[ALAST];
+%@
+%
+%typedef	uchar	Opcross[32][2][32];
+%
+%extern	Opcross	opcross[8];
+%
+%<<global opcross(arm)>>=
+%Opcross	opcross[8];
+%@
+
 \section{[[oplook()]]}
 
 <<[[Prog]] other fields>>=
@@ -4891,37 +4921,27 @@ oplook(Prog *p)
         return optab+(a1-1);
 
     a1 = p->from.class;
-    if(a1 == 0) {
+    if(a1 == C_NONE) {
         a1 = aclass(&p->from) + 1;
         p->from.class = a1;
     }
     a1--;
 
     a3 = p->to.class;
-    if(a3 == 0) {
+    if(a3 == C_NONE) {
         a3 = aclass(&p->to) + 1;
         p->to.class = a3;
     }
     a3--;
 
     a2 = C_NONE;
-    if(p->reg != NREG)
+    if(p->reg != R_NONE)
         a2 = C_REG;
 
     r = p->as;
     o = oprange[r].start;
     if(o == nil) {
-        a1 = opcross[repop[r]][a1][a2][a3];
-        if(a1) {
-            p->optab = a1+1;
-            return optab+a1;
-        }
         o = oprange[r].stop; /* just generate an error */
-    }
-    if(1) {
-        print("oplook %A %d %d %d\n",
-            (int)p->as, a1, a2, a3);
-        print("		%d %d\n", p->from.type, p->to.type);
     }
     e = oprange[r].stop;
     c1 = xcmp[a1];
@@ -4942,6 +4962,12 @@ oplook(Prog *p)
     return o;
 }
 @
+
+%    if(0) {
+%        print("oplook %A %d %d %d\n",
+%            (int)p->as, a1, a2, a3);
+%        print("		%d %d\n", p->from.type, p->to.type);
+%    }
 
 
 \section{Text section, [[asmout()]]}

@@ -26,7 +26,6 @@ typedef	struct	Auto	Auto;
 typedef	struct	Prog	Prog;
 typedef	struct	Optab	Optab;
 typedef	struct	Oprang	Oprang;
-typedef	uchar	Opcross[32][2][32];
 typedef	struct	Count	Count;
 
 /*s: constant P */
@@ -246,8 +245,6 @@ enum classx {
     C_BRANCH,
 
     /*s: cxxx(arm) cases */
-    C_GOK,
-    /*x: cxxx(arm) cases */
     C_HEXT,
     C_SEXT,
     C_LEXT,
@@ -286,6 +283,8 @@ enum classx {
     C_FCON,
     C_FCR,
     /*e: cxxx(arm) cases */
+
+    C_GOK, // must be at the end e.g. for xcmp[] decl
 };
 /*e: enum cxxx(arm) */
 /*s: enum mark(arm) */
@@ -405,11 +404,9 @@ extern	int	nerrors;
 extern	long	nhunk;
 extern long	nsymbol;
 extern	long	instoffset;
-extern	Opcross	opcross[8];
 extern	Oprang	oprange[ALAST];
 extern	char*	outfile;
 extern	long	pc;
-extern	uchar	repop[ALAST];
 extern	long	symsize;
 extern	Prog*	textp;
 extern	long	textsize;

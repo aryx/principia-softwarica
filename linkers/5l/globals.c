@@ -153,9 +153,6 @@ long	nsymbol;
 /*s: global instoffset(arm) */
 long	instoffset;
 /*e: global instoffset(arm) */
-/*s: global opcross(arm) */
-Opcross	opcross[8];
-/*e: global opcross(arm) */
 /*s: global oprange(arm) */
 Oprang	oprange[ALAST];
 /*e: global oprange(arm) */
@@ -165,9 +162,6 @@ char*	outfile;
 /*s: global pc */
 long	pc = 0;
 /*e: global pc */
-/*s: global repop(arm) */
-uchar	repop[ALAST];
-/*e: global repop(arm) */
 /*s: global symsize */
 long	symsize;
 /*e: global symsize */
