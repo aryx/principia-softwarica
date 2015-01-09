@@ -742,13 +742,17 @@ bad:
 void
 macprag(void)
 {
+    /*s: [[macprag()]] locals */
     Sym *s;
-    int c0, c;
-    char *hp;
+    /*x: [[macprag()]] locals */
     Hist *h;
+    char *hp;
+    int c0, c;
+    /*e: [[macprag()]] locals */
 
     s = getsym();
 
+    /*s: [[macprag()]] if pragma lib */
     if(s && strcmp(s->name, "lib") == 0) {
         c0 = getnsc();
         if(c0 != '"') {
@@ -769,21 +773,21 @@ macprag(void)
         c = getcom();
         if(c != '\n')
             goto bad;
-    
+
         /*
          * put pragma-line in as a funny history 
          */
         c = strlen(symb) + 1;
         while(c & 3)
             c++;
-    
+
         hp = malloc(c);
         memcpy(hp, symb, c);
-    
+
         h = alloc(sizeof(Hist));
         h->filename = hp;
         h->line = lineno;
-        h->local_line = -1;
+        h->local_line = -1; // special mark, ugly
 
         h->link = H;
         if(ehist == H) {
@@ -796,12 +800,14 @@ macprag(void)
 
         return;
 
-bad:
+    bad:
         unget(c);
         yyerror("syntax in #pragma lib");
         macend();
 
-    } else {
+    }
+    /*e: [[macprag()]] if pragma lib */
+    else {
         while(getnsc() != '\n')
             ;
         return;
