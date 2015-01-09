@@ -94,7 +94,7 @@ char	symname[]	= SYMDEF;
 char	thechar;
 /*e: global thechar */
 /*s: global thestring */
-char	*thestring;
+char*	thestring;
 /*e: global thestring */
 
 /*s: global libdir */
@@ -573,8 +573,9 @@ loadlib(void)
     Sym *s;
 
 loop:
+    /*s: [[loadlib()]] reset xrefresolv */
     xrefresolv = false;
-
+    /*e: [[loadlib()]] reset xrefresolv */
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
@@ -597,12 +598,12 @@ objfile(char *file)
     long l;
     char magbuf[SARMAG];
     /*s: [[objfile()]] other locals */
+    struct ar_hdr arhdr;
     long off, esym, cnt;
     bool work;
     Sym *s;
     char pname[LIBNAMELEN];
     char name[LIBNAMELEN];
-    struct ar_hdr arhdr;
     char *e, *start, *stop;
     /*e: [[objfile()]] other locals */
 
@@ -644,6 +645,7 @@ objfile(char *file)
 
     /*s: [[objfile()]] when file is a library */
         DBG("%5.2f ldlib: %s\n", cputime(), file);
+
         l = read(f, &arhdr, SAR_HDR);
         if(l != SAR_HDR) {
             diag("%s: short read on archive file symbol header", file);
@@ -679,6 +681,7 @@ objfile(char *file)
 
             work = false;
             for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+
                 s = lookup(e+5, 0);
                 if(s->type != SXREF)
                     continue;
@@ -690,6 +693,7 @@ objfile(char *file)
                 l |= (e[2] & 0xff) << 8;
                 l |= (e[3] & 0xff) << 16;
                 l |= (e[4] & 0xff) << 24;
+
                 seek(f, l, 0);
                 /* need readn to read the dumps (at least) */
                 l = readn(f, &arhdr, SAR_HDR);
@@ -698,7 +702,9 @@ objfile(char *file)
                 if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
                     goto bad;
                 l = atolwhex(arhdr.size);
+
                 ldobj(f, l, pname);
+
                 if(s->type == SXREF) {
                     diag("%s: failed to load: %s", file, s->name);
                     errorexit();
@@ -803,14 +809,16 @@ zaddr(byte *p, Adr *a, Sym *h[])
 void
 addlib(char *obj)
 {
-    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN], *p, *name;
-    int i, search;
+    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN];
+    char *p, *name;
+    int i;
+    bool search;
 
     if(histfrogp <= 0)
         return;
 
     name = fn1;
-    search = 0;
+    search = false;
     if(histfrog[0]->name[1] == '/') {
         sprint(name, "");
         i = 1;
@@ -820,21 +828,24 @@ addlib(char *obj)
     } else {
         sprint(name, "");
         i = 0;
-        search = 1;
+        search = true;
     }
 
     for(; i<histfrogp; i++) {
         snprint(comp, sizeof comp, histfrog[i]->name+1);
+
+        // s/$0/<thechar>/
         for(;;) {
             p = strstr(comp, "$O");
-            if(p == 0)
+            if(p == nil)
                 break;
             memmove(p+1, p+2, strlen(p+2)+1);
             p[0] = thechar;
         }
+        // s/$M/<thestring>/
         for(;;) {
             p = strstr(comp, "$M");
-            if(p == 0)
+            if(p == nil)
                 break;
             if(strlen(comp)+strlen(thestring)-2+1 >= sizeof comp) {
                 diag("library component too long");
@@ -843,6 +854,7 @@ addlib(char *obj)
             memmove(p+strlen(thestring), p+2, strlen(p+2)+1);
             memmove(p, thestring, strlen(thestring));
         }
+
         if(strlen(fn1) + strlen(comp) + 3 >= sizeof(fn1)) {
             diag("library component too long");
             return;
@@ -889,13 +901,14 @@ addhist(long line, int type)
     Sym *s;
     int i, j, k;
 
-    u = malloc(sizeof(Auto));
     s = malloc(sizeof(Sym));
     s->name = malloc(2*(histfrogp+1) + 1);
 
+    u = malloc(sizeof(Auto));
     u->asym = s;
     u->type = type;
     u->aoffset = line;
+
     u->link = curhist;
     curhist = u;
 

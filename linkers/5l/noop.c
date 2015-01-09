@@ -134,10 +134,11 @@ noops(void)
 
     curtext = P;
     for(p = firstp; p != P; p = p->link) {
+        /*s: adjust curtext when iterate over instructions p */
+        if(p->as == ATEXT)
+            curtext = p;
+        /*e: adjust curtext when iterate over instructions p */
         switch(p->as) {
-        case ATEXT:
-            curtext = p; // could factorize with LP
-            break;
         case ABL:
             if(curtext != P && curtext->from.sym != S && curtext->to.offset >= 0) {
                 o = maxbecome - curtext->from.sym->frame;
@@ -158,10 +159,13 @@ noops(void)
     }
 
     for(p = firstp; p != P; p = p->link) {
+        /*s: adjust curtext when iterate over instructions p */
+        if(p->as == ATEXT)
+            curtext = p;
+        /*e: adjust curtext when iterate over instructions p */
         o = p->as;
         switch(o) {
         case ATEXT:
-            curtext = p;
             autosize = p->to.offset + 4;
             if(autosize <= 4)
               if(curtext->mark & LEAF) {

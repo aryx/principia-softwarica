@@ -174,7 +174,7 @@ Here are other candidates that were considered but ultimately discarded:
 % Also there is no dynamic linking by default. Simpler approach
 % again.
 
-% critique of go/plan9 toolchain:
+% recent critique of go/plan9 toolchain:
 % http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
 
 \section{Getting started}
@@ -270,7 +270,8 @@ usage(void)
 % (hmm libmach is also reading .o (.5)
 
 % include/a.out.h
-% used by strip, libmach, but not 5l, should be 32 bytes (0x20)
+% used by strip, libmach, but not really 5l.
+% should be 32 bytes (0x20)
 % see asmb() that generates this far below
 <<struct Exec>>=
 // a.out header format
@@ -368,7 +369,6 @@ struct	Sym
 %note: conflict with include/a.out.h
 
 % The type and values in Sym are? for ATEXT elts what is stored?
-% When can we get a SXREF in ldobj()? SXREF means unknown yet, happens when?
 
 <<constant NHASH linker>>=
 NHASH		= 10007,
@@ -409,7 +409,9 @@ enum section
 % SSTACK? no! not in exec :) 
 % see also asmsym()
 % those are mostly sections, or subsections (e.g. SDATA1 of SDATA,
-% and SLEAF/SCONST/STRING of STEXT)
+%  and SLEAF/SCONST/STRING of STEXT)
+% note: a symbol is assigned SXREF in ldobj() when the obj introduces an ANAME
+%  about an D_EXTERN or D_STATIC symbol.
 
 
 
@@ -501,7 +503,7 @@ struct	Adr
 %   D_AUTO cases
 % - new 'class' field (but seems local to oplook())
 %see DConv
-%note: offset abused for REGREG
+%note: offset abused for REGREG in which case it's really a int4
 % but otherwise it's often used as an offset in D_BRANCH, D_OREG
 % because indeed it's an offset to a basis (PC, SB, etc)
 %note: ATEXT arguments are also Adr (abuse)
@@ -532,6 +534,7 @@ union {
 @
 %autom because auto is a reserved keyword? but has nothing to do
 % with automata so maybe better to rename local_or_param
+%should be set to curauto for the TEXT instructions and its to Adr field
 
 % works with sym
 <<[[Adr]] other fields>>=
@@ -561,7 +564,7 @@ Auto*	link;
 @
 % chain them so can do some basic checks? like right autosize?
 
-\section{[[Prog]]}
+\section{[[Instruction]]}
 
 % bad name .... I think Prog is really an Instruction ... From and To
 % are when do MOV AX, BX,    then AX is the from, BX the to
@@ -703,9 +706,9 @@ Prog*	textp = P;
 // list<ref<Prog>> from textp/etextp
 Prog*	cond;
 @
-%just to quickly iterate over all the ATEXT?
+%to link destination labels for branch instructions.
+%also to quickly iterate over all the ATEXT as they are chained via cond.
 % (is called pcond I think in x86, could choose same name)
-% why cond?? short for what?
 
 <<global etextp>>=
 // ref<Prog>, end of textp list
@@ -729,19 +732,24 @@ Prog*	datap = P;
 
 % When iterate over all instrs, if the instr is a ATEXT then store it here.
 % It's probably for error message, to say in which procedure we currently are.
-% most of the code related to curtext is if(p->as == ATEXT) curtext = p;
 <<global curtext>>=
 Prog*	curtext = P;
 @
+% there will be different curxxx, a bit ugly use of globals
+% curauto, curhist, curp
 
-<<adjust curtext when iterate over instructions p and opcode a>>=
-if(a == ATEXT)
+<<adjust curtext when iterate over instructions p>>=
+if(p->as == ATEXT)
     curtext = p;
 @
+%note: I factorized code using this chunk more than what existed before
+% by moving some curtext = p outside some if; it's sligtly slower
+% but cleaner for LP purpose.
 
 <<constant TNAME(arm)>>=
 #define	TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
 @
+% TNAME? TEXT NAME probably
 
 <<global noname linker>>=
 char	*noname		= "<none>";
@@ -840,7 +848,10 @@ aclass(Adr *a)
     return C_GOK;
 }
 @
-
+% I think aclass() assumes the size of the sections
+% has been computed so it can know if a symbol reference
+% is close and so could be stored in a half-word, or if
+% it's far away.
 
 
 
@@ -851,7 +862,7 @@ case D_OREG:
     }
     return C_GOK;
 @
-
+% OREG usually is a dereference of a register or a symbol reference
 
 <<cxxx(arm) cases>>=
 C_HEXT,
@@ -861,6 +872,7 @@ C_LEXT,
 C_FEXT,
 C_HFEXT,
 @
+% EXT for? external symbol?
 
 %xxx+y(SB)
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
@@ -1111,7 +1123,7 @@ char	thechar;
 
 % to find library files? /arch/lib/...
 <<global thestring>>=
-char	*thestring;
+char*	thestring;
 @
 
 
@@ -1149,6 +1161,7 @@ main(int argc, char *argv[])
 
     <<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>
     <<[[main()]] set HEADTYPE, INITTEXT, INITDAT, etc>>
+
     <<[[main()]] initialize globals(arm)>>
 
     cout = create(outfile, 1, 0775);
@@ -1468,8 +1481,10 @@ objfile(char *file)
 
 \section{Loading the libraries, [[loadlib()]]}
 
-% it loads the libraries mentioned in the .5 via the .h and #pragma magic!
+% It loads the libraries mentioned in the .5 via the .h and #pragma magic!
 % (see later section)
+% ldobj() is actually also loading libraries when they are mentioned
+% explicitly as in 5l ... libxxx.a or via 5l ... -lxxx
 
 % so loading objects with ldbobj() will modify some of the globals below
 
@@ -1479,6 +1494,7 @@ objfile(char *file)
 // array<option<filename>>
 char*	library[50];
 @
+% addlib() modifies this global
 
 
 <<global libraryp>>=
@@ -1503,8 +1519,7 @@ loadlib(void)
     Sym *s;
 
 loop:
-    xrefresolv = false;
-
+    <<[[loadlib()]] reset xrefresolv>>
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
@@ -1514,18 +1529,6 @@ loop:
 @
 
 
-% ???
-<<global xrefresolv>>=
-bool	xrefresolv;
-@
-
-<<[[loadlib()]] if xrefresolv>>=
-if(xrefresolv)
-    for(h=0; h<nelem(hash); h++)
-         for(s = hash[h]; s != S; s = s->link)
-             if(s->type == SXREF)
-                 goto loop;
-@
 
 
 
@@ -1606,8 +1609,7 @@ case H_PLAN9:
 % s/0x647/E_MAGIC?
 
 
-% could at least take initentry as a parameter instead of using
-% the global
+% less: could at least take initentry as a parameter instead of using a global
 <<function entryvalue(arm)>>=
 long
 entryvalue(void)
@@ -1649,8 +1651,8 @@ seek(cout, OFFSET, SEEK__START);
 pc = INITTEXT;
 
 for(p = firstp; p != P; p = p->link) {
+    <<adjust curtext when iterate over instructions p>>
     if(p->as == ATEXT) {
-        curtext = p;
         autosize = p->to.offset + 4; // locals
     }
     <<[[asmb()]] when in TEXT section if pc differs>>
@@ -1669,6 +1671,7 @@ cflush();
 <<[[asmb()]] TEXT section, output strings in text segment>>
 }
 @
+% +4? locals + RETURN?
 
 
 <<[[asmb()]] when in TEXT section if pc differs>>=
@@ -1796,7 +1799,7 @@ undef(void)
 
 \section{Buffered input, [[buf]]}
 % see buffer managment appendix,
-% essentially this buf global! and buf.xbuf  which is is input buffer
+% essentially this buf global! and buf.ibuf  which is is input buffer
 
 <<[[ldobj()]] locals(arm)>>=
 byte *bloc;
@@ -1804,6 +1807,7 @@ byte *bsize;
 int r;
 @
 % and parameter 'int c'
+% bloc[xxx] will be what we will read from below in ldobj()
 
 <<[[ldobj()]] bloc and bsize init>>=
 bsize = buf.ibuf;
@@ -1895,7 +1899,9 @@ loop:
 
     o = bloc[0];		/* as */
     <<[[ldobj()]] sanity check opcode in range(arm)>>
+
     <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>
+
     p = malloc(sizeof(Prog));
     p->as = o;
     // reading the object binary file, opposite of outcode() in Assembler.nw
@@ -1943,8 +1949,6 @@ eof:
 
 
 
-
-%\section{Object format}?
 
 <<[[ldobj()]] read one instruction in p>>=
 p->scond = bloc[1];
@@ -2008,26 +2012,21 @@ nopout(Prog *p)
 
 
 
-%XXX
-<<[[ldobj()]] locals(arm)>>=
-Prog *t;
-int v;
-ulong sig;
-@
-
-
 \section{Operand input, [[zaddr()]]}
 
-% reverse of zaddr() in Assembler.nw 
+<<[[zaddr()]] locals>>=
+int c; // symidx
+int size;
+@
+
+% mostly reverse of zaddr() in Assembler.nw 
 % ldobj -> <>
+% return number of bytes read to read this Adr
 <<function zaddr(arm)>>=
 int
 zaddr(byte *p, Adr *a, Sym *h[])
 {
-    int i, c;
-    int l;
-    Sym *s;
-    Auto *u;
+    <<[[zaddr()]] locals>>
 
     a->type = p[0];
     a->reg = p[1];
@@ -2036,7 +2035,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     a->sym = h[c];
     a->symkind = p[3];
 
-    c = 4;
+    size = 4;
 
     <<[[zaddr()]] sanity check register range>>
 
@@ -2048,33 +2047,9 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return 0;	/*  force real diagnostic */
 
     }
+    <<[[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind>>
 
-    s = a->sym;
-    if(s == S)
-        return c;
-    i = a->symkind;
-    if(i != D_AUTO && i != D_PARAM)
-        return c;
-
-    l = a->offset;
-    for(u=curauto; u; u=u->link)
-        if(u->asym == s)
-         if(u->type == i) {
-            if(u->aoffset > l)
-                u->aoffset = l;
-            return c;
-        }
-
-    u = malloc(sizeof(Auto));
-    u->asym = s;
-    u->aoffset = l;
-    u->type = i;
-
-    //add_list(u, curauto)
-    u->link = curauto;
-    curauto = u;
-
-    return c;
+    return size;
 }
 @
 
@@ -2089,7 +2064,7 @@ case D_FPCR:
 
 case D_REGREG:
     a->offset = p[4];
-    c++;
+    size++;
     break;
 
 case D_BRANCH:
@@ -2097,13 +2072,13 @@ case D_OREG:
 case D_CONST:
 case D_SHIFT:
     a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
-    c += 4;
+    size += 4;
     break;
 
 case D_SCONST:
     a->sval = malloc(NSNAME);
     memmove(a->sval, p+4, NSNAME);
-    c += NSNAME;
+    size += NSNAME;
     break;
 @
 %//case D_OCONST: was with D_SHIFT
@@ -2124,6 +2099,8 @@ if(c < 0 || c > NSYM){
     return 0;
 }
 @
+% not sure those p[0] have any effects
+
 <<[[zaddr()]] sanity check register range>>=
 if(a->reg < 0 || a->reg > NREG) {
     print("register out of range %d\n", a->reg);
@@ -2132,47 +2109,60 @@ if(a->reg < 0 || a->reg > NREG) {
 }
 @
 
-\section{[[ATEXT]]}
+
+\section{adjusting [[curauto]]}
 
 % parameters + locals list
 <<global curauto>>=
 Auto*	curauto;
 @
+% set for the first time where? bug? should be = nil?
 
 
-
-
-<<global curhist>>=
-Auto*	curhist;
+<<[[zaddr()]] locals>>=
+int t, l;
+Sym *s;
+Auto *u;
 @
+%old: t was i, but t(ype) better than i
 
-% ldobj (case AEND | ATEXT | ??) -> <>
-<<function histtoauto>>=
-void
-histtoauto(void)
-{
-    Auto *l;
 
-    while(l = curhist) {
-        curhist = l->link;
-        l->link = curauto;
-        curauto = l;
+<<[[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind>>=
+s = a->sym;
+t = a->symkind;
+if(s == S || (t != D_AUTO && t != D_PARAM))
+    return size;
+
+l = a->offset;
+for(u=curauto; u; u=u->link)
+    if(u->asym == s)
+     if(u->type == t) {
+        if(u->aoffset > l)
+            u->aoffset = l;
+        return size;
     }
-}
+
+u = malloc(sizeof(Auto));
+u->type = t;
+u->asym = s;
+u->aoffset = l;
+
+//add_list(u, curauto)
+u->link = curauto;
+curauto = u;
 @
 
 
+\section{[[ATEXT]]}
+
+% abuse from = symbolname, to = immediate constant size for locals
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case ATEXT:
-    if(curtext != P) {
-        histtoauto();
-        curtext->to.autom = curauto;
-        curauto = nil;
-    }
-    skip = false; // needed?
-
+    <<[[ldobj()]] case ATEXT, if curtext not null adjustments for curauto>>
     curtext = p;
+
+    skip = false; // needed?
 
     autosize = (p->to.offset+3L) & ~3L;
     p->to.offset = autosize;
@@ -2185,7 +2175,7 @@ case ATEXT:
     }
 
     if(s->type != SNONE && s->type != SXREF) {
-        <<[[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK>> 
+        <<[[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK>>
         diag("redefinition: %s\n%P", s->name, p);
     }
 
@@ -2212,6 +2202,43 @@ case ATEXT:
 %$
 
 
+<<[[ldobj()]] case ATEXT, if curtext not null adjustments for curauto>>=
+if(curtext != P) {
+    <<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>
+    curtext->to.autom = curauto;
+    curauto = nil;
+}
+@
+
+\section{[[AGLOBL]]}
+
+% not added in any list? because bss?
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AGLOBL:
+    s = p->from.sym;
+    if(s == S) {
+        diag("GLOBL must have a name\n%P", p);
+        errorexit();
+    }
+
+    if(s->type == SNONE || s->type == SXREF) {
+        s->type = SBSS; // for now, will be set to SDATA in dodata()
+        s->value = 0;
+    }
+    if(s->type != SBSS) {
+        diag("redefinition: %s\n%P", s->name, p);
+        s->type = SBSS;
+        s->value = 0;
+    }
+    if(p->to.offset > s->value)
+        s->value = p->to.offset;
+    break;
+@
+% what is offset for AGLOBL? It should be the immediate constant size of 
+% the global. But how can s->value be different from 0 anyway?
+% the test p->to.offset > s->value seems to always return true to me.
+
 \section{[[ADATA]]}
 
 
@@ -2227,46 +2254,19 @@ case ADATA:
 
     break;
 @
-% no s->type = SDATA?
-
-\section{[[AGLOBL]]}
-
-% not added in any list? because bss?
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AGLOBL:
-    s = p->from.sym;
-    if(s == S) {
-        diag("GLOBL must have a name\n%P", p);
-        errorexit();
-    }
-
-    if(s->type == SNONE || s->type == SXREF) {
-        s->type = SBSS;
-        s->value = 0;
-    }
-    if(s->type != SBSS) {
-        diag("redefinition: %s\n%P", s->name, p);
-        s->type = SBSS;
-        s->value = 0;
-    }
-    if(p->to.offset > s->value)
-        s->value = p->to.offset;
-    break;
-@
-% what is offset for AGLOBL?
+% no s->type = SDATA? it's done in dodata()
 
 \section{[[AEND]]}
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AEND:
 
-    histtoauto();
+    <<[[ldobj()]] case AEND, curauto adjustments with curhist>>
     if(curtext != P)
         curtext->to.autom = curauto;
     curauto = nil;
-
     curtext = P;
+
     if(c)
         goto newloop;
     return;
@@ -2276,9 +2276,9 @@ case AEND:
 
 
 
-
 \section{Symbol table, [[ANAME]]}
 % and [[ASIGNAME]]
+% spreaded symbol table
 
 
 <<[[ldobj()]] locals(arm)>>=
@@ -2290,6 +2290,9 @@ Sym *h[NSYM];
 Sym *s;
 @
 
+<<[[ldobj()]] locals(arm)>>=
+int v;
+@
 
 % it's not part of the switch, it's done before!
 <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>=
@@ -2310,6 +2313,7 @@ if(o == ANAME || o == ASIGNAME) {
         r = version;
 
     s = lookup((char*)bloc, r);
+
     c -= &stop[1] - bloc;
     bloc = stop + 1;
 
@@ -2327,6 +2331,7 @@ if(o == ANAME || o == ASIGNAME) {
     goto loop;
 }
 @
+% SXREF!
 
 % buffer managment crap again
 <<[[ldobj()]] if stop is nil refill buffer and retry>>=
@@ -2356,6 +2361,10 @@ if(stop == nil){
 <<[[Sym]] other fields>>=
 // md5sum of the type of the symbol
 long	sig;
+@
+
+<<[[ldobj()]] locals(arm)>>=
+ulong sig;
 @
 
 <<[[ldobj()]] if SIGNAME adjust sig>>=
@@ -2420,24 +2429,27 @@ if((files&15) == 0){
 % tracing origin??
 
 
-<<global histfrogp>>=
-int	histfrogp;
-@
-
 <<global histfrog>>=
 Sym*	histfrog[MAXHIST];
 @
 
-
-<<global histgen>>=
-int	histgen = 0;
+<<constant MAXHIST>>=
+MAXHIST		= 20,	/* limit of path elements for history symbols */
 @
+
+<<global histfrogp>>=
+int	histfrogp;
+@
+
+
+
 
 
 % used by what? for debugging? when signature conflict! to print
 % current filenames in conflict
 
 
+% pn? filename of object file, but addlib() really abuse histgrog global
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AHISTORY:
     if(p->to.offset == -1) {
@@ -2445,6 +2457,7 @@ case AHISTORY:
         histfrogp = 0;
         goto loop;
     }
+
     addhist(p->line, D_FILE);		/* 'z' */
     if(p->to.offset)
         addhist(p->to.offset, D_FILE1);	/* 'Z' */
@@ -2452,9 +2465,75 @@ case AHISTORY:
     goto loop;
 @
 
+<<function addhist>>=
+void
+addhist(long line, int type)
+{
+    Auto *u;
+    Sym *s;
+    int i, j, k;
+
+    s = malloc(sizeof(Sym));
+    s->name = malloc(2*(histfrogp+1) + 1);
+
+    u = malloc(sizeof(Auto));
+    u->asym = s;
+    u->type = type;
+    u->aoffset = line;
+
+    u->link = curhist;
+    curhist = u;
+
+    j = 1;
+    for(i=0; i<histfrogp; i++) {
+        k = histfrog[i]->value;
+        s->name[j+0] = k>>8;
+        s->name[j+1] = k;
+        j += 2;
+    }
+}
+@
+
+
+
+<<global curhist>>=
+Auto*	curhist;
+@
+% like curauto
+
+% ldobj (case AEND | ATEXT | ??) -> <>
+<<function histtoauto>>=
+void
+histtoauto(void)
+{
+    Auto *l;
+
+    while(l = curhist) {
+        curhist = l->link;
+        l->link = curauto;
+        curauto = l;
+    }
+}
+@
+
+
+<<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>=
+histtoauto();
+@
+
+<<[[ldobj()]] case AEND, curauto adjustments with curhist>>=
+histtoauto();
+@
+
+
+
 
 <<enum sxxx cases>>=
 SFILE,
+@
+
+<<global histgen>>=
+int	histgen = 0;
 @
 
 <<[[ldobj()]] when ANAME opcode, if D_FILE>>=
@@ -2519,12 +2598,12 @@ out:
 \section{Loading libraries manually [[5l libxxx.a]]}
 
 <<[[objfile()]] other locals>>=
+struct ar_hdr arhdr;
 long off, esym, cnt;
 bool work;
 Sym *s;
 char pname[LIBNAMELEN];
 char name[LIBNAMELEN];
-struct ar_hdr arhdr;
 char *e, *start, *stop;
 @
 
@@ -2535,6 +2614,7 @@ char	symname[]	= SYMDEF;
 
 <<[[objfile()]] when file is a library>>=
     DBG("%5.2f ldlib: %s\n", cputime(), file);
+
     l = read(f, &arhdr, SAR_HDR);
     if(l != SAR_HDR) {
         diag("%s: short read on archive file symbol header", file);
@@ -2570,6 +2650,7 @@ char	symname[]	= SYMDEF;
 
         work = false;
         for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+
             s = lookup(e+5, 0);
             if(s->type != SXREF)
                 continue;
@@ -2581,6 +2662,7 @@ char	symname[]	= SYMDEF;
             l |= (e[2] & 0xff) << 8;
             l |= (e[3] & 0xff) << 16;
             l |= (e[4] & 0xff) << 24;
+
             seek(f, l, 0);
             /* need readn to read the dumps (at least) */
             l = readn(f, &arhdr, SAR_HDR);
@@ -2589,7 +2671,9 @@ char	symname[]	= SYMDEF;
             if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
                 goto bad;
             l = atolwhex(arhdr.size);
+
             ldobj(f, l, pname);
+
             if(s->type == SXREF) {
                 diag("%s: failed to load: %s", file, s->name);
                 errorexit();
@@ -2607,6 +2691,24 @@ out:
 @
 
 % >> >> >>
+
+
+% ??? why need multi pass for libs?
+<<global xrefresolv>>=
+bool	xrefresolv;
+@
+
+<<[[loadlib()]] reset xrefresolv>>=
+xrefresolv = false;
+@
+
+<<[[loadlib()]] if xrefresolv>>=
+if(xrefresolv)
+    for(h=0; h<nelem(hash); h++)
+         for(s = hash[h]; s != S; s = s->link)
+             if(s->type == SXREF)
+                 goto loop;
+@
 
 \section{Loading libraries semi automatically [[5l -lxxx]]}
 
@@ -2750,50 +2852,21 @@ findlib(char *file)
 \section{Loading libraries automagically [[#pragma lib]]}
 % when done automatically
 
-% TODO LP split AHISTORY here
-<<function addhist>>=
-void
-addhist(long line, int type)
-{
-    Auto *u;
-    Sym *s;
-    int i, j, k;
-
-    u = malloc(sizeof(Auto));
-    s = malloc(sizeof(Sym));
-    s->name = malloc(2*(histfrogp+1) + 1);
-
-    u->asym = s;
-    u->type = type;
-    u->aoffset = line;
-    u->link = curhist;
-    curhist = u;
-
-    j = 1;
-    for(i=0; i<histfrogp; i++) {
-        k = histfrog[i]->value;
-        s->name[j+0] = k>>8;
-        s->name[j+1] = k;
-        j += 2;
-    }
-}
-@
-
-
-
-
+% ldobj(case AHISTORY and local_line == -1 special mark) -> <>
 <<function addlib>>=
 void
 addlib(char *obj)
 {
-    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN], *p, *name;
-    int i, search;
+    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN];
+    char *p, *name;
+    int i;
+    bool search;
 
     if(histfrogp <= 0)
         return;
 
     name = fn1;
-    search = 0;
+    search = false;
     if(histfrog[0]->name[1] == '/') {
         sprint(name, "");
         i = 1;
@@ -2803,21 +2876,24 @@ addlib(char *obj)
     } else {
         sprint(name, "");
         i = 0;
-        search = 1;
+        search = true;
     }
 
     for(; i<histfrogp; i++) {
         snprint(comp, sizeof comp, histfrog[i]->name+1);
+
+        // s/$0/<thechar>/
         for(;;) {
             p = strstr(comp, "$O");
-            if(p == 0)
+            if(p == nil)
                 break;
             memmove(p+1, p+2, strlen(p+2)+1);
             p[0] = thechar;
         }
+        // s/$M/<thestring>/
         for(;;) {
             p = strstr(comp, "$M");
-            if(p == 0)
+            if(p == nil)
                 break;
             if(strlen(comp)+strlen(thestring)-2+1 >= sizeof comp) {
                 diag("library component too long");
@@ -2826,6 +2902,7 @@ addlib(char *obj)
             memmove(p+strlen(thestring), p+2, strlen(p+2)+1);
             memmove(p, thestring, strlen(thestring));
         }
+
         if(strlen(fn1) + strlen(comp) + 3 >= sizeof(fn1)) {
             diag("library component too long");
             return;
@@ -2863,6 +2940,9 @@ addlib(char *obj)
     libraryp++;
 }
 @
+
+
+
 
 \section{[[ar]] format}
 
@@ -2906,151 +2986,168 @@ struct	ar_hdr
 
 \chapter{Resolving}
 
+% Ok loading objects and libs has been done. Normally
+% have now a linked list of instructions in firstp, with a valid Prog->pc
+% and a good symbol table where can see for instance the pc
+% for every TEXT symbols.
+
 <<[[main()]] resolving phases>>=
 <<[[main()]] if export table or dynamic module(arm)>>
+
 patch();
 <<[[main()]] call doprofxxx() if profiling>>
 dodata();
 follow();
+
 if(firstp == P)
     goto out;
 noops();
 span();
 @
 
-\section{[[patch()]]}
+
+
+
+
+\section{Linking branch instructions, [[patch()]]}
+
+% Set Prog->cond for the branch instructions.
+% (before transform branch instructions using symbols in regular branch 
+% instructions using offsets (like labels))
+
+<<[[patch()]] locals>>=
+Prog *p, *q;
+int a;
+long c;
+Sym *s;
+@
+% essentially will add some links with p->cond = q;   for instruction p
+% with opcode a == ABxx where q->pc == c where c is the branch offset value.
 
 <<function patch(arm)>>=
 void
 patch(void)
 {
-    long c, vexit;
-    Prog *p, *q;
-    Sym *s;
-    int a;
+    <<[[patch()]] locals>>
 
     DBG("%5.2f patch\n", cputime());
 
-    mkfwd();
-    s = lookup("exit", 0);
-    vexit = s->value;
+    <<[[patch()]] initialisations>>
 
+    // pass 1
     for(p = firstp; p != P; p = p->link) {
-        a = p->as;
-        <<adjust curtext when iterate over instructions p and opcode a>>
-        if((a == ABL || a == AB || a == ARET) &&
-           p->to.type != D_BRANCH && 
-           p->to.sym != S) {
-            s = p->to.sym;
-            switch(s->type) {
-            case STEXT:
-                p->to.offset = s->value;
-                p->to.type = D_BRANCH;
-                break;
-            case SUNDEF:
-                if(p->as != ABL)
-                    diag("help: SUNDEF in AB || ARET");
-                p->to.offset = 0;
-                p->to.type = D_BRANCH;
-                p->cond = UP;
-                break;
-            default:
-                diag("undefined: %s\n%P", s->name, p);
-                s->type = STEXT;
-                s->value = vexit;
-                break;
-            }
-        }
+        <<adjust curtext when iterate over instructions p>>
+
+        <<[[patch()]] resolve branch instructions using symbols>>
+
         if(p->to.type != D_BRANCH || p->cond == UP)
             continue;
+
         c = p->to.offset;
-        for(q = firstp; q != P;) {
-            if(q->forwd != P)
-            if(c >= q->forwd->pc) {
-                q = q->forwd;
-                continue;
-            }
-            if(c == q->pc)
-                break;
-            q = q->link;
-        }
-        if(q == P) {
-            diag("branch out of range %ld\n%P", c, p);
-            p->to.type = D_NONE;
-        }
+        <<[[patch()]] find Prog q with pc == c>>
         p->cond = q;
     }
 
+    // pass 2
     for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT)
-            curtext = p;
+        <<adjust curtext when iterate over instructions p>>
         if(p->cond != P && p->cond != UP) {
             p->cond = brloop(p->cond);
             if(p->cond != P)
-            if(p->to.type == D_BRANCH)
+             if(p->to.type == D_BRANCH)
                 p->to.offset = p->cond->pc;
         }
     }
 }
 @
+%less: ARET in conditional? but ARET has no args in Assembler.nw
+%note: has the p->cond == UP because can have such things
+% done for SUNDEF sections
 
+% p->to.offset = p->cond->pc;
+% can have changed?? yes because of brloop()
+% s/brloop()/? follow_AB?
 
+\subsection{Resolving branch instructions using symbols}
 
-<<function brloop(arm)>>=
-Prog*
-brloop(Prog *p)
-{
-    Prog *q;
-    int c;
-
-    for(c=0; p!=P;) {
-        if(p->as != AB)
-            return p;
-        q = p->cond;
-        if(q <= p) {
-            c++;
-            if(q == p || c > 5000)
-                break;
-        }
-        p = q;
+<<[[patch()]] resolve branch instructions using symbols>>=
+a = p->as;
+if((a == ABL || a == AB || a == ARET) &&
+   p->to.type != D_BRANCH && 
+   p->to.sym != S) {
+    s = p->to.sym;
+    switch(s->type) {
+    case STEXT:
+        p->to.offset = s->value;
+        p->to.type = D_BRANCH;
+        break;
+    <<[[patch()]] switch section type for branch instruction, cases>>
     }
-    return P;
 }
 @
 
+<<[[patch()]] switch section type for branch instruction, cases>>=
+default:
+    diag("undefined: %s\n%P", s->name, p);
+    s->type = STEXT;
+    s->value = vexit;
+    break;
+@
 
+<<[[patch()]] locals>>=
+long vexit;
+@
+
+<<[[patch()]] initialisations>>=
+s = lookup("exit", 0);
+vexit = s->value;
+@
+
+
+\subsection{Indexing pc, forward links overlay}
+
+<<[[patch()]] initialisations>>=
+mkfwd();
+@
+
+% Allows to do some big jmps forward in the list of instructions, 
+% to be faster than going just through ->link.
+% Interesting data structure overlay on top of a simple linked list
+% alternatives: 
+%  - a hashtbl on Prog.pc? to get a Prog from a specific pc
 
 <<constant LOG>>=
 #define	LOG	5
 @
 
-
 <<[[Prog]] other fields>>=
 Prog*	forwd;
 @
-% used to be part of an union with regused, but regused was actually
+%old: used to be part of an union with regused, but regused was actually
 % unused
 
+% main -> <> patch -> <>
 <<function mkfwd>>=
 void
 mkfwd(void)
 {
-    Prog *p;
-    int i;
     long dwn[LOG], cnt[LOG];
     Prog *lst[LOG];
+    Prog *p;
+    int i;
 
     for(i=0; i<LOG; i++) {
         if(i == 0)
-            cnt[i] = 1; else
+            cnt[i] = 1; 
+        else
             cnt[i] = LOG * cnt[i-1];
         dwn[i] = 1;
         lst[i] = P;
     }
+
     i = 0;
     for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT)
-            curtext = p;
+        <<adjust curtext when iterate over instructions p>>
         i--;
         if(i < 0)
             i = LOG-1;
@@ -3066,8 +3163,65 @@ mkfwd(void)
 }
 @
 
+\subsection{Finding instruction at pc}
 
-\section{[[follow()]]}
+<<[[patch()]] find Prog q with pc == c>>=
+for(q = firstp; q != P;) {
+    if(q->forwd != P)
+     if(c >= q->forwd->pc) {
+        q = q->forwd;
+        continue;
+    }
+    if(c == q->pc)
+        break;
+    q = q->link;
+}
+if(q == P) {
+    diag("branch out of range %ld\n%P", c, p);
+    p->to.type = D_NONE;
+}
+@
+
+\subsection{Compacting chains of AB, [[brloop()]]}
+
+
+% main -> patch -> <>
+%  p->cond = brloop(p->cond);
+% compact a chain of AB to the end, and "detect" infinite chain loops
+<<function brloop(arm)>>=
+Prog*
+brloop(Prog *p)
+{
+    Prog *q;
+    int c = 0;
+
+    for(; p!=P;) {
+        if(p->as != AB)
+            return p;
+        q = p->cond;
+        if(q <= p) {
+            c++;
+            if(q == p || c > 5000)
+                break;
+        }
+        p = q;
+    }
+    return P;
+}
+@
+% less: diag infinute loop detected?
+
+
+
+
+\section{Removing some useless instructions, [[follow()]]}
+% mostly unreachable code, and chains of direct jmps
+
+% does not remove all unreachable instrs so,
+% and does not remove unreachable functions :( maybe more important
+
+%todo: print the removed code!! usuful diagnostic no?
+
 
 <<function follow>>=
 void
@@ -3090,8 +3244,11 @@ follow(void)
 FOLL		= 1<<0,
 @
 % >>
+% foll for follow?
 
-% xfol??
+
+
+% xfol? extended follow?
 <<function xfol(arm)>>=
 void
 xfol(Prog *p)
@@ -3102,9 +3259,9 @@ xfol(Prog *p)
 loop:
     if(p == P)
         return;
+    <<adjust curtext when iterate over instructions p>>
     a = p->as;
-    if(a == ATEXT)
-        curtext = p;
+
     if(a == AB) {
         q = p->cond;
         if(q != P) {
@@ -3114,50 +3271,9 @@ loop:
                 goto loop;
         }
     }
+
     if(p->mark & FOLL) {
-        for(i=0,q=p; i<4; i++,q=q->link) {
-            if(q == lastp)
-                break;
-            a = q->as;
-            if(a == ANOP) {
-                i--;
-                continue;
-            }
-            if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
-                goto copy;
-            if(!q->cond || (q->cond->mark&FOLL))
-                continue;
-            if(a != ABEQ && a != ABNE)
-                continue;
-        copy:
-            for(;;) {
-                r = prg();
-                *r = *p;
-                if(!(r->mark&FOLL))
-                    print("cant happen 1\n");
-                r->mark |= FOLL;
-                if(p != q) {
-                    p = p->link;
-                    lastp->link = r;
-                    lastp = r;
-                    continue;
-                }
-                lastp->link = r;
-                lastp = r;
-                if(a == AB || (a == ARET && q->scond == COND_ALWAYS)||a == ARFE)
-                    return;
-                r->as = ABNE;
-                if(a == ABNE)
-                    r->as = ABEQ;
-                r->cond = p->link;
-                r->link = p->cond;
-                if(!(r->link->mark&FOLL))
-                    xfol(r->link);
-                if(!(r->cond->mark&FOLL))
-                    print("cant happen 2\n");
-                return;
-            }
-        }
+        <<[[xfol()]] when p is marked, for loop to copy instructions>>
         a = AB;
         q = prg();
         q->as = a;
@@ -3167,32 +3283,16 @@ loop:
         q->cond = p;
         p = q;
     }
+
     p->mark |= FOLL;
     lastp->link = p;
     lastp = p;
+
     if(a == AB || (a == ARET && p->scond == COND_ALWAYS) || a == ARFE){
         return;
     }
     if(p->cond != P)
-    if(a != ABL && p->link != P) {
-        q = brchain(p->link);
-        if(a != ATEXT && a != ABCASE)
-        if(q != P && (q->mark&FOLL)) {
-            p->as = relinv(a);
-            p->link = p->cond;
-            p->cond = q;
-        }
-        xfol(p->link);
-        q = brchain(p->cond);
-        if(q == P)
-            q = p->cond;
-        if(q->mark&FOLL) {
-            p->cond = q;
-            return;
-        }
-        p = q;
-        goto loop;
-    }
+     <<[[xfol()]] if a is not ABL and p has a link>>
     p = p->link;
     goto loop;
 }
@@ -3200,6 +3300,47 @@ loop:
 
 
 
+<<[[xfol()]] if a is not ABL and p has a link>>=
+if(a != ABL && p->link != P) {
+   q = brchain(p->link);
+
+   if(a != ATEXT && a != ABCASE)
+    if(q != P && (q->mark & FOLL)) {
+       p->as = relinv(a);
+       p->link = p->cond;
+       p->cond = q;
+   }
+
+   // recursive call
+   xfol(p->link);
+
+   q = brchain(p->cond);
+   if(q == P)
+       q = p->cond;
+   if(q->mark&FOLL) {
+       p->cond = q;
+       return;
+   }
+   p = q;
+   goto loop;
+}
+@
+
+% follows a chain of AB, hmm but needed now that has brloop()?
+<<function brchain(arm)>>=
+Prog*
+brchain(Prog *p)
+{
+    int i;
+
+    for(i=0; i<20; i++) {
+        if(p == P || p->as != AB)
+            return p;
+        p = p->cond;
+    }
+    return P;
+}
+@
 
 <<function relinv(arm)>>=
 int
@@ -3231,21 +3372,80 @@ relinv(int a)
 
 
 
-<<function brchain(arm)>>=
-Prog*
-brchain(Prog *p)
-{
-    int i;
 
-    for(i=0; i<20; i++) {
-        if(p == P || p->as != AB)
-            return p;
-        p = p->cond;
+<<[[xfol()]] when p is marked, for loop to copy instructions>>=
+for(i=0, q=p; i<4 && q != lastp; i++, q=q->link) {
+    a = q->as;
+    if(a == ANOP) {
+        i--;
+        continue;
     }
-    return P;
+    if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
+        goto copy;
+    if(!q->cond || (q->cond->mark & FOLL))
+        continue;
+    if(a != ABEQ && a != ABNE)
+        continue;
+
+// here when a is one of AB, ARET, ARFE, ABEQ, ABNE
+copy:
+    for(;;) {
+        r = prg();
+        *r = *p;
+
+        <<[[xfol()]] sanity check one, r should be marked>>
+
+        if(p != q) {
+            p = p->link;
+            lastp->link = r;
+            lastp = r;
+            continue;
+        }
+        lastp->link = r;
+        lastp = r;
+
+        if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
+            return;
+
+        // r->as = relinv(a)
+        r->as = ABNE;
+        if(a == ABNE)
+            r->as = ABEQ;
+
+        r->cond = p->link;
+        r->link = p->cond;
+
+        if(!(r->link->mark&FOLL))
+            // recursive call
+            xfol(r->link);
+
+        <<[[xfol()]] sanity check two, [[r->cond]] should be marked>>
+
+        return;
+    }
 }
 @
+%old: had        
+% if(q == lastp)
+%    break;
+% at beginning of the for loop, but I moved it up in the for(;_here_;) instead
+% (equivalent)
 
+
+
+
+\ifallcode
+<<[[xfol()]] sanity check one, r should be marked>>=
+if(!(r->mark&FOLL))
+    print("cant happen 1\n");
+r->mark |= FOLL;
+@
+
+<<[[xfol()]] sanity check two, [[r->cond]] should be marked>>=
+if(!(r->cond->mark&FOLL))
+    print("cant happen 2\n");
+@
+\fi
 
 \section{Computing datsize, [[dodata()]]}
 
@@ -3527,10 +3727,8 @@ noops(void)
 
     curtext = P;
     for(p = firstp; p != P; p = p->link) {
+        <<adjust curtext when iterate over instructions p>>
         switch(p->as) {
-        case ATEXT:
-            curtext = p; // could factorize with LP
-            break;
         case ABL:
             if(curtext != P && curtext->from.sym != S && curtext->to.offset >= 0) {
                 o = maxbecome - curtext->from.sym->frame;
@@ -3551,10 +3749,10 @@ noops(void)
     }
 
     for(p = firstp; p != P; p = p->link) {
+        <<adjust curtext when iterate over instructions p>>
         o = p->as;
         switch(o) {
         case ATEXT:
-            curtext = p;
             autosize = p->to.offset + 4;
             if(autosize <= 4)
               if(curtext->mark & LEAF) {
@@ -3874,8 +4072,8 @@ span(void)
         o = oplook(p);
         m = o->size;
         if(m == 0) {
+            <<adjust curtext when iterate over instructions p>>
             if(p->as == ATEXT) {
-                curtext = p;
                 autosize = p->to.offset + 4;
                 if(p->from.sym != S)
                     p->from.sym->value = c;
@@ -3923,8 +4121,8 @@ span(void)
             o = oplook(p);
             m = o->size;
             if(m == 0) {
+                <<adjust curtext when iterate over instructions p>>
                 if(p->as == ATEXT) {
-                    curtext = p;
                     autosize = p->to.offset + 4;
                     if(p->from.sym != S)
                         p->from.sym->value = c;
@@ -4537,6 +4735,7 @@ cmp(int a, int b)
 
     if(a == b)
         return 1;
+
     switch(a) {
     case C_LCON:
         if(b == C_RCON || b == C_NCON)
@@ -6449,8 +6648,7 @@ asmlc(void)
     oldlc = 0;
     for(p = firstp; p != P; p = p->link) {
         if(p->line == oldlc || p->as == ATEXT || p->as == ANOP) {
-            if(p->as == ATEXT)
-                curtext = p;
+            <<adjust curtext when iterate over instructions p>>
             if(debug['V'])
                 Bprint(&bso, "%6lux %P\n",
                     p->pc, p);
@@ -7494,6 +7692,17 @@ enum rxxx {
 <<enum sxxx cases>>=
 SUNDEF,
 @
+% for ??
+
+<<[[patch()]] switch section type for branch instruction, cases>>=
+case SUNDEF:
+    if(p->as != ABL)
+        diag("help: SUNDEF in AB || ARET");
+    p->to.offset = 0;
+    p->to.type = D_BRANCH;
+    p->cond = UP;
+    break;
+@
 
 % import -> undefsym
 <<function undefsym>>=
@@ -7845,7 +8054,7 @@ case D_FCONST:
 
     a->ieee->l = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
     a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
-    c += 8;
+    size += 8;
     break;
 @
 % bugfix: there was a bug where it was using NSNAME instead of sizeof(Ieee)
@@ -7911,6 +8120,9 @@ ieeedtod(Ieee *ieeep)
 
 
 
+<<[[ldobj()]] locals(arm)>>=
+Prog *t;
+@
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AMOVDF:

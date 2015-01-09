@@ -18,7 +18,7 @@ char	symname[]	= SYMDEF;
 char	thechar;
 /*e: global thechar */
 /*s: global thestring */
-char	*thestring;
+char*	thestring;
 /*e: global thestring */
 
 /*s: global libdir */
@@ -271,6 +271,7 @@ main(int argc, char *argv[])
     DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
     /*e: [[main()]] set HEADTYPE, INITTEXT, INITDAT, etc */
+
     /*s: [[main()]] initialize globals(arm) */
     /*s: [[main()]] set zprg(arm) */
     zprg.as = AGOK;
@@ -356,6 +357,7 @@ main(int argc, char *argv[])
         export();
     }
     /*e: [[main()]] if export table or dynamic module(arm) */
+
     patch();
     /*s: [[main()]] call doprofxxx() if profiling */
     if(debug['p'])
@@ -366,6 +368,7 @@ main(int argc, char *argv[])
     /*e: [[main()]] call doprofxxx() if profiling */
     dodata();
     follow();
+
     if(firstp == P)
         goto out;
     noops();
@@ -445,8 +448,9 @@ loadlib(void)
     Sym *s;
 
 loop:
+    /*s: [[loadlib()]] reset xrefresolv */
     xrefresolv = false;
-
+    /*e: [[loadlib()]] reset xrefresolv */
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
@@ -469,12 +473,12 @@ objfile(char *file)
     long l;
     char magbuf[SARMAG];
     /*s: [[objfile()]] other locals */
+    struct ar_hdr arhdr;
     long off, esym, cnt;
     bool work;
     Sym *s;
     char pname[LIBNAMELEN];
     char name[LIBNAMELEN];
-    struct ar_hdr arhdr;
     char *e, *start, *stop;
     /*e: [[objfile()]] other locals */
 
@@ -516,6 +520,7 @@ objfile(char *file)
 
     /*s: [[objfile()]] when file is a library */
         DBG("%5.2f ldlib: %s\n", cputime(), file);
+
         l = read(f, &arhdr, SAR_HDR);
         if(l != SAR_HDR) {
             diag("%s: short read on archive file symbol header", file);
@@ -551,6 +556,7 @@ objfile(char *file)
 
             work = false;
             for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+
                 s = lookup(e+5, 0);
                 if(s->type != SXREF)
                     continue;
@@ -562,6 +568,7 @@ objfile(char *file)
                 l |= (e[2] & 0xff) << 8;
                 l |= (e[3] & 0xff) << 16;
                 l |= (e[4] & 0xff) << 24;
+
                 seek(f, l, 0);
                 /* need readn to read the dumps (at least) */
                 l = readn(f, &arhdr, SAR_HDR);
@@ -570,7 +577,9 @@ objfile(char *file)
                 if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
                     goto bad;
                 l = atolwhex(arhdr.size);
+
                 ldobj(f, l, pname);
+
                 if(s->type == SXREF) {
                     diag("%s: failed to load: %s", file, s->name);
                     errorexit();
@@ -593,10 +602,14 @@ objfile(char *file)
 int
 zaddr(byte *p, Adr *a, Sym *h[])
 {
-    int i, c;
-    int l;
+    /*s: [[zaddr()]] locals */
+    int c; // symidx
+    int size;
+    /*x: [[zaddr()]] locals */
+    int t, l;
     Sym *s;
     Auto *u;
+    /*e: [[zaddr()]] locals */
 
     a->type = p[0];
     a->reg = p[1];
@@ -611,7 +624,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     a->sym = h[c];
     a->symkind = p[3];
 
-    c = 4;
+    size = 4;
 
     /*s: [[zaddr()]] sanity check register range */
     if(a->reg < 0 || a->reg > NREG) {
@@ -632,7 +645,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
 
     case D_REGREG:
         a->offset = p[4];
-        c++;
+        size++;
         break;
 
     case D_BRANCH:
@@ -640,13 +653,13 @@ zaddr(byte *p, Adr *a, Sym *h[])
     case D_CONST:
     case D_SHIFT:
         a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
-        c += 4;
+        size += 4;
         break;
 
     case D_SCONST:
         a->sval = malloc(NSNAME);
         memmove(a->sval, p+4, NSNAME);
-        c += NSNAME;
+        size += NSNAME;
         break;
     /*x: [[zaddr()]] cases */
     case D_FCONST:
@@ -654,7 +667,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
 
         a->ieee->l = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
         a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
-        c += 8;
+        size += 8;
         break;
     /*e: [[zaddr()]] cases */
     default:
@@ -663,33 +676,32 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return 0;	/*  force real diagnostic */
 
     }
-
+    /*s: [[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind */
     s = a->sym;
-    if(s == S)
-        return c;
-    i = a->symkind;
-    if(i != D_AUTO && i != D_PARAM)
-        return c;
+    t = a->symkind;
+    if(s == S || (t != D_AUTO && t != D_PARAM))
+        return size;
 
     l = a->offset;
     for(u=curauto; u; u=u->link)
         if(u->asym == s)
-         if(u->type == i) {
+         if(u->type == t) {
             if(u->aoffset > l)
                 u->aoffset = l;
-            return c;
+            return size;
         }
 
     u = malloc(sizeof(Auto));
+    u->type = t;
     u->asym = s;
     u->aoffset = l;
-    u->type = i;
 
     //add_list(u, curauto)
     u->link = curauto;
     curauto = u;
+    /*e: [[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind */
 
-    return c;
+    return size;
 }
 /*e: function zaddr(arm) */
 
@@ -697,14 +709,16 @@ zaddr(byte *p, Adr *a, Sym *h[])
 void
 addlib(char *obj)
 {
-    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN], *p, *name;
-    int i, search;
+    char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN];
+    char *p, *name;
+    int i;
+    bool search;
 
     if(histfrogp <= 0)
         return;
 
     name = fn1;
-    search = 0;
+    search = false;
     if(histfrog[0]->name[1] == '/') {
         sprint(name, "");
         i = 1;
@@ -714,21 +728,24 @@ addlib(char *obj)
     } else {
         sprint(name, "");
         i = 0;
-        search = 1;
+        search = true;
     }
 
     for(; i<histfrogp; i++) {
         snprint(comp, sizeof comp, histfrog[i]->name+1);
+
+        // s/$0/<thechar>/
         for(;;) {
             p = strstr(comp, "$O");
-            if(p == 0)
+            if(p == nil)
                 break;
             memmove(p+1, p+2, strlen(p+2)+1);
             p[0] = thechar;
         }
+        // s/$M/<thestring>/
         for(;;) {
             p = strstr(comp, "$M");
-            if(p == 0)
+            if(p == nil)
                 break;
             if(strlen(comp)+strlen(thestring)-2+1 >= sizeof comp) {
                 diag("library component too long");
@@ -737,6 +754,7 @@ addlib(char *obj)
             memmove(p+strlen(thestring), p+2, strlen(p+2)+1);
             memmove(p, thestring, strlen(thestring));
         }
+
         if(strlen(fn1) + strlen(comp) + 3 >= sizeof(fn1)) {
             diag("library component too long");
             return;
@@ -783,13 +801,14 @@ addhist(long line, int type)
     Sym *s;
     int i, j, k;
 
-    u = malloc(sizeof(Auto));
     s = malloc(sizeof(Sym));
     s->name = malloc(2*(histfrogp+1) + 1);
 
+    u = malloc(sizeof(Auto));
     u->asym = s;
     u->type = type;
     u->aoffset = line;
+
     u->link = curhist;
     curhist = u;
 
@@ -903,14 +922,14 @@ ldobj(fdt f, long c, char *pn)
     /*x: [[ldobj()]] locals(arm) */
     bool skip;
     /*x: [[ldobj()]] locals(arm) */
-    Prog *t;
-    int v;
-    ulong sig;
-    /*x: [[ldobj()]] locals(arm) */
     byte *stop;
     /*x: [[ldobj()]] locals(arm) */
     Sym *h[NSYM];
     Sym *s;
+    /*x: [[ldobj()]] locals(arm) */
+    int v;
+    /*x: [[ldobj()]] locals(arm) */
+    ulong sig;
     /*x: [[ldobj()]] locals(arm) */
     // growing_array<filename>  (grown for every 16 elements)
     static char **filen;
@@ -920,6 +939,8 @@ ldobj(fdt f, long c, char *pn)
     char **nfilen;
     /*x: [[ldobj()]] locals(arm) */
     Sym *di;
+    /*x: [[ldobj()]] locals(arm) */
+    Prog *t;
     /*e: [[ldobj()]] locals(arm) */
 
     /*s: [[ldobj()]] remember set of object filenames */
@@ -972,6 +993,7 @@ loop:
         errorexit();
     }
     /*e: [[ldobj()]] sanity check opcode in range(arm) */
+
     /*s: [[ldobj()]] if ANAME or ASIGNAME(arm) */
     if(o == ANAME || o == ASIGNAME) {
         sig = 0;
@@ -1008,6 +1030,7 @@ loop:
             r = version;
 
         s = lookup((char*)bloc, r);
+
         c -= &stop[1] - bloc;
         bloc = stop + 1;
 
@@ -1045,6 +1068,7 @@ loop:
         goto loop;
     }
     /*e: [[ldobj()]] if ANAME or ASIGNAME(arm) */
+
     p = malloc(sizeof(Prog));
     p->as = o;
     // reading the object binary file, opposite of outcode() in Assembler.nw
@@ -1079,14 +1103,18 @@ loop:
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ATEXT:
+        /*s: [[ldobj()]] case ATEXT, if curtext not null adjustments for curauto */
         if(curtext != P) {
+            /*s: [[ldobj()]] case ATEXT, curauto adjustments with curhist */
             histtoauto();
+            /*e: [[ldobj()]] case ATEXT, curauto adjustments with curhist */
             curtext->to.autom = curauto;
             curauto = nil;
         }
-        skip = false; // needed?
-
+        /*e: [[ldobj()]] case ATEXT, if curtext not null adjustments for curauto */
         curtext = p;
+
+        skip = false; // needed?
 
         autosize = (p->to.offset+3L) & ~3L;
         p->to.offset = autosize;
@@ -1128,17 +1156,6 @@ loop:
         }
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
-    case ADATA:
-        if(p->from.sym == S) {
-            diag("DATA without a sym\n%P", p);
-            break;
-        }
-        //add_list(datap, edatap, p)
-        p->link = datap;
-        datap = p;
-
-        break;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
     case AGLOBL:
         s = p->from.sym;
         if(s == S) {
@@ -1147,7 +1164,7 @@ loop:
         }
 
         if(s->type == SNONE || s->type == SXREF) {
-            s->type = SBSS;
+            s->type = SBSS; // for now, will be set to SDATA in dodata()
             s->value = 0;
         }
         if(s->type != SBSS) {
@@ -1159,14 +1176,27 @@ loop:
             s->value = p->to.offset;
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
+    case ADATA:
+        if(p->from.sym == S) {
+            diag("DATA without a sym\n%P", p);
+            break;
+        }
+        //add_list(datap, edatap, p)
+        p->link = datap;
+        datap = p;
+
+        break;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
     case AEND:
 
+        /*s: [[ldobj()]] case AEND, curauto adjustments with curhist */
         histtoauto();
+        /*e: [[ldobj()]] case AEND, curauto adjustments with curhist */
         if(curtext != P)
             curtext->to.autom = curauto;
         curauto = nil;
-
         curtext = P;
+
         if(c)
             goto newloop;
         return;
@@ -1177,6 +1207,7 @@ loop:
             histfrogp = 0;
             goto loop;
         }
+
         addhist(p->line, D_FILE);		/* 'z' */
         if(p->to.offset)
             addhist(p->to.offset, D_FILE1);	/* 'Z' */

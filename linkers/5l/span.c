@@ -33,8 +33,11 @@ span(void)
         o = oplook(p);
         m = o->size;
         if(m == 0) {
-            if(p->as == ATEXT) {
+            /*s: adjust curtext when iterate over instructions p */
+            if(p->as == ATEXT)
                 curtext = p;
+            /*e: adjust curtext when iterate over instructions p */
+            if(p->as == ATEXT) {
                 autosize = p->to.offset + 4;
                 if(p->from.sym != S)
                     p->from.sym->value = c;
@@ -82,8 +85,11 @@ span(void)
             o = oplook(p);
             m = o->size;
             if(m == 0) {
-                if(p->as == ATEXT) {
+                /*s: adjust curtext when iterate over instructions p */
+                if(p->as == ATEXT)
                     curtext = p;
+                /*e: adjust curtext when iterate over instructions p */
+                if(p->as == ATEXT) {
                     autosize = p->to.offset + 4;
                     if(p->from.sym != S)
                         p->from.sym->value = c;

@@ -63,8 +63,11 @@ asmb(void)
     pc = INITTEXT;
 
     for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT) {
+        /*s: adjust curtext when iterate over instructions p */
+        if(p->as == ATEXT)
             curtext = p;
+        /*e: adjust curtext when iterate over instructions p */
+        if(p->as == ATEXT) {
             autosize = p->to.offset + 4; // locals
         }
         /*s: [[asmb()]] when in TEXT section if pc differs */
@@ -543,8 +546,10 @@ asmlc(void)
     oldlc = 0;
     for(p = firstp; p != P; p = p->link) {
         if(p->line == oldlc || p->as == ATEXT || p->as == ANOP) {
+            /*s: adjust curtext when iterate over instructions p */
             if(p->as == ATEXT)
                 curtext = p;
+            /*e: adjust curtext when iterate over instructions p */
             if(debug['V'])
                 Bprint(&bso, "%6lux %P\n",
                     p->pc, p);

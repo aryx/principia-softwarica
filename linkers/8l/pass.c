@@ -387,22 +387,26 @@ patch(void)
 void
 mkfwd(void)
 {
-    Prog *p;
-    int i;
     long dwn[LOG], cnt[LOG];
     Prog *lst[LOG];
+    Prog *p;
+    int i;
 
     for(i=0; i<LOG; i++) {
         if(i == 0)
-            cnt[i] = 1; else
+            cnt[i] = 1; 
+        else
             cnt[i] = LOG * cnt[i-1];
         dwn[i] = 1;
         lst[i] = P;
     }
+
     i = 0;
     for(p = firstp; p != P; p = p->link) {
+        /*s: adjust curtext when iterate over instructions p */
         if(p->as == ATEXT)
             curtext = p;
+        /*e: adjust curtext when iterate over instructions p */
         i--;
         if(i < 0)
             i = LOG-1;

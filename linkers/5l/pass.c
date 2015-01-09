@@ -197,9 +197,12 @@ xfol(Prog *p)
 loop:
     if(p == P)
         return;
-    a = p->as;
-    if(a == ATEXT)
+    /*s: adjust curtext when iterate over instructions p */
+    if(p->as == ATEXT)
         curtext = p;
+    /*e: adjust curtext when iterate over instructions p */
+    a = p->as;
+
     if(a == AB) {
         q = p->cond;
         if(q != P) {
@@ -209,10 +212,10 @@ loop:
                 goto loop;
         }
     }
+
     if(p->mark & FOLL) {
-        for(i=0,q=p; i<4; i++,q=q->link) {
-            if(q == lastp)
-                break;
+        /*s: [[xfol()]] when p is marked, for loop to copy instructions */
+        for(i=0, q=p; i<4 && q != lastp; i++, q=q->link) {
             a = q->as;
             if(a == ANOP) {
                 i--;
@@ -220,17 +223,23 @@ loop:
             }
             if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
                 goto copy;
-            if(!q->cond || (q->cond->mark&FOLL))
+            if(!q->cond || (q->cond->mark & FOLL))
                 continue;
             if(a != ABEQ && a != ABNE)
                 continue;
+
+        // here when a is one of AB, ARET, ARFE, ABEQ, ABNE
         copy:
             for(;;) {
                 r = prg();
                 *r = *p;
+
+                /*s: [[xfol()]] sanity check one, r should be marked */
                 if(!(r->mark&FOLL))
                     print("cant happen 1\n");
                 r->mark |= FOLL;
+                /*e: [[xfol()]] sanity check one, r should be marked */
+
                 if(p != q) {
                     p = p->link;
                     lastp->link = r;
@@ -239,20 +248,31 @@ loop:
                 }
                 lastp->link = r;
                 lastp = r;
-                if(a == AB || (a == ARET && q->scond == COND_ALWAYS)||a == ARFE)
+
+                if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
                     return;
+
+                // r->as = relinv(a)
                 r->as = ABNE;
                 if(a == ABNE)
                     r->as = ABEQ;
+
                 r->cond = p->link;
                 r->link = p->cond;
+
                 if(!(r->link->mark&FOLL))
+                    // recursive call
                     xfol(r->link);
+
+                /*s: [[xfol()]] sanity check two, [[r->cond]] should be marked */
                 if(!(r->cond->mark&FOLL))
                     print("cant happen 2\n");
+                /*e: [[xfol()]] sanity check two, [[r->cond]] should be marked */
+
                 return;
             }
         }
+        /*e: [[xfol()]] when p is marked, for loop to copy instructions */
         a = AB;
         q = prg();
         q->as = a;
@@ -262,22 +282,29 @@ loop:
         q->cond = p;
         p = q;
     }
+
     p->mark |= FOLL;
     lastp->link = p;
     lastp = p;
+
     if(a == AB || (a == ARET && p->scond == COND_ALWAYS) || a == ARFE){
         return;
     }
     if(p->cond != P)
-    if(a != ABL && p->link != P) {
+     /*s: [[xfol()]] if a is not ABL and p has a link */
+     if(a != ABL && p->link != P) {
         q = brchain(p->link);
+
         if(a != ATEXT && a != ABCASE)
-        if(q != P && (q->mark&FOLL)) {
+         if(q != P && (q->mark & FOLL)) {
             p->as = relinv(a);
             p->link = p->cond;
             p->cond = q;
         }
+
+        // recursive call
         xfol(p->link);
+
         q = brchain(p->cond);
         if(q == P)
             q = p->cond;
@@ -287,7 +314,8 @@ loop:
         }
         p = q;
         goto loop;
-    }
+     }
+     /*e: [[xfol()]] if a is not ABL and p has a link */
     p = p->link;
     goto loop;
 }
@@ -297,23 +325,33 @@ loop:
 void
 patch(void)
 {
-    long c, vexit;
+    /*s: [[patch()]] locals */
     Prog *p, *q;
-    Sym *s;
     int a;
+    long c;
+    Sym *s;
+    /*x: [[patch()]] locals */
+    long vexit;
+    /*e: [[patch()]] locals */
 
     DBG("%5.2f patch\n", cputime());
 
-    mkfwd();
+    /*s: [[patch()]] initialisations */
     s = lookup("exit", 0);
     vexit = s->value;
+    /*x: [[patch()]] initialisations */
+    mkfwd();
+    /*e: [[patch()]] initialisations */
 
+    // pass 1
     for(p = firstp; p != P; p = p->link) {
-        a = p->as;
-        /*s: adjust curtext when iterate over instructions p and opcode a */
-        if(a == ATEXT)
+        /*s: adjust curtext when iterate over instructions p */
+        if(p->as == ATEXT)
             curtext = p;
-        /*e: adjust curtext when iterate over instructions p and opcode a */
+        /*e: adjust curtext when iterate over instructions p */
+
+        /*s: [[patch()]] resolve branch instructions using symbols */
+        a = p->as;
         if((a == ABL || a == AB || a == ARET) &&
            p->to.type != D_BRANCH && 
            p->to.sym != S) {
@@ -323,6 +361,13 @@ patch(void)
                 p->to.offset = s->value;
                 p->to.type = D_BRANCH;
                 break;
+            /*s: [[patch()]] switch section type for branch instruction, cases */
+            default:
+                diag("undefined: %s\n%P", s->name, p);
+                s->type = STEXT;
+                s->value = vexit;
+                break;
+            /*x: [[patch()]] switch section type for branch instruction, cases */
             case SUNDEF:
                 if(p->as != ABL)
                     diag("help: SUNDEF in AB || ARET");
@@ -330,19 +375,19 @@ patch(void)
                 p->to.type = D_BRANCH;
                 p->cond = UP;
                 break;
-            default:
-                diag("undefined: %s\n%P", s->name, p);
-                s->type = STEXT;
-                s->value = vexit;
-                break;
+            /*e: [[patch()]] switch section type for branch instruction, cases */
             }
         }
+        /*e: [[patch()]] resolve branch instructions using symbols */
+
         if(p->to.type != D_BRANCH || p->cond == UP)
             continue;
+
         c = p->to.offset;
+        /*s: [[patch()]] find Prog q with pc == c */
         for(q = firstp; q != P;) {
             if(q->forwd != P)
-            if(c >= q->forwd->pc) {
+             if(c >= q->forwd->pc) {
                 q = q->forwd;
                 continue;
             }
@@ -354,16 +399,20 @@ patch(void)
             diag("branch out of range %ld\n%P", c, p);
             p->to.type = D_NONE;
         }
+        /*e: [[patch()]] find Prog q with pc == c */
         p->cond = q;
     }
 
+    // pass 2
     for(p = firstp; p != P; p = p->link) {
+        /*s: adjust curtext when iterate over instructions p */
         if(p->as == ATEXT)
             curtext = p;
+        /*e: adjust curtext when iterate over instructions p */
         if(p->cond != P && p->cond != UP) {
             p->cond = brloop(p->cond);
             if(p->cond != P)
-            if(p->to.type == D_BRANCH)
+             if(p->to.type == D_BRANCH)
                 p->to.offset = p->cond->pc;
         }
     }
@@ -377,22 +426,26 @@ patch(void)
 void
 mkfwd(void)
 {
-    Prog *p;
-    int i;
     long dwn[LOG], cnt[LOG];
     Prog *lst[LOG];
+    Prog *p;
+    int i;
 
     for(i=0; i<LOG; i++) {
         if(i == 0)
-            cnt[i] = 1; else
+            cnt[i] = 1; 
+        else
             cnt[i] = LOG * cnt[i-1];
         dwn[i] = 1;
         lst[i] = P;
     }
+
     i = 0;
     for(p = firstp; p != P; p = p->link) {
+        /*s: adjust curtext when iterate over instructions p */
         if(p->as == ATEXT)
             curtext = p;
+        /*e: adjust curtext when iterate over instructions p */
         i--;
         if(i < 0)
             i = LOG-1;
@@ -413,9 +466,9 @@ Prog*
 brloop(Prog *p)
 {
     Prog *q;
-    int c;
+    int c = 0;
 
-    for(c=0; p!=P;) {
+    for(; p!=P;) {
         if(p->as != AB)
             return p;
         q = p->cond;

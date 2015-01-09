@@ -318,7 +318,9 @@ enum misc_constants {
     /*s: constant MAXIO */
     MAXIO		= 8192,
     /*e: constant MAXIO */
+    /*s: constant MAXHIST */
     MAXHIST		= 20,	/* limit of path elements for history symbols */
+    /*e: constant MAXHIST */
 };
 /*e: enum misc_constant(arm) */
 
