@@ -301,6 +301,14 @@ struct	Exec
 % entry: it's usually not main but _main (or _mainp) which does
 % some core initializations and then call main
 
+
+\section{Runtime conventions}
+
+%        autosize = p->to.offset + 4; // locals
+
+% frame format?
+% layout
+
 \section{Code organization}
 
 %5l/l.h: data structures and prototypes (like a dat.h and fns.h)
@@ -784,6 +792,9 @@ Prog	undefp;
 short	class;
 @
 %old: was char, but ugly
+% usually the class is computed via aclass() and used as an index
+% in the optab complex structure. Not sure why it needs to be stored
+% here in Adr too.
 
 
 % seems called the class, see aclass(), a more precise operand_kind?
@@ -804,10 +815,11 @@ enum classx {
 };
 @
 %diffs with operand_kind:
-% - OREG splitted in many xxxOREG and xxxEXT, xxAUTO
+% - OREG splitted in many xxxOREG and xxxEXT (SB), xxAUTO (FP, SP)
 % - D_CONST splitted in many xxxCON
 % - S_CONST?
 % - a new C_GOK, could be called C_LAST maybe
+%
 %less: do big categories, xxCON, xxAUTO, xxEXT, xxREG?
 %old: there was C_SBRA, C_LBRA but LBRA was unused so I s/C_LBRA/C_BRANCH/
 % there was also this in cmp()
@@ -862,6 +874,7 @@ case D_OREG:
     return C_GOK;
 @
 % OREG usually is a dereference of a register or a symbol reference
+% (which is then really an implicit offet to SB)
 
 <<cxxx(arm) cases>>=
 C_HEXT,
@@ -995,7 +1008,7 @@ C_LCON,
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_NONE:
     instoffset = a->offset;
-    if(a->reg != NREG)
+    if(a->reg != R_NONE)
         goto aconsize;
 
     t = immrot(instoffset);
@@ -1642,6 +1655,14 @@ entryvalue(void)
 Prog *p;
 Optab *o;
 @
+
+% arm specficic
+<<global autosize(arm)>>=
+long	autosize;
+@
+% size for the locals? (and params?)
+%less: could be renamed curautosize
+
 
 
 % important call, asmout()
@@ -3449,7 +3470,9 @@ if(!(r->cond->mark&FOLL))
 @
 \fi
 
-\section{Computing datsize, [[dodata()]]}
+\section{Layout data, [[dodata()]]}
+% computing datasize
+% != generating DATA
 
 <<global datsize>>=
 long	datsize;
@@ -3460,24 +3483,7 @@ long	bsssize;
 @
 
 
-% arm specficic
-<<global autosize(arm)>>=
-long	autosize;
-@
-% size for the locals? (and params?)
-%less: could be renamed curautosize
 
-
-<<enum sxxx cases>>=
-SDATA1,
-@
-
-<<constant MINSIZ>>=
-MINSIZ		= 64,
-@
-
-
-% LP split
 <<function dodata(arm)>>=
 void
 dodata(void)
@@ -3489,19 +3495,14 @@ dodata(void)
     long v;
 
     DBG("%5.2f dodata\n", cputime());
+
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
         <<[[dodata()]] if ADYNT or AINIT>>
         if(s->type == SBSS)
             s->type = SDATA;
 
-        if(s->type != SDATA)
-            diag("initialize non-data (%d): %s\n%P",
-                s->type, s->name, p);
-        v = p->from.offset + p->reg;
-        if(v > s->value)
-            diag("initialize bounds (%ld): %s\n%P",
-                s->value, s->name, p);
+        <<[[dodata()]] sanity check DATA instructions>>
     }
     <<[[dodata()]] if string in text segment>>
 
@@ -3513,27 +3514,7 @@ dodata(void)
      *	(rational is that data segment is more easily
      *	 addressed through offset on R12)
      */
-    for(i=0; i<NHASH; i++)
-     for(s = hash[i]; s != S; s = s->link) {
-        t = s->type;
-        if(t != SDATA && t != SBSS)
-            continue;
-
-        v = s->value;
-        if(v == 0) {
-            diag("%s: no size", s->name);
-            v = 1;
-        }
-        while(v & 3)
-            v++;
-        s->value = v;
-
-        if(v > MINSIZ)
-            continue;
-        s->value = orig;
-        orig += v;
-        s->type = SDATA1;
-    }
+    <<[[dodata()]] small data pass>>
 
     /*
      * pass 2
@@ -3543,15 +3524,13 @@ dodata(void)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t != SDATA) {
-            if(t == SDATA1)
-                s->type = SDATA;
+            <<[[dodata()]] pass2, retag small data>>
             continue;
         }
         v = s->value;
         s->value = orig;
         orig += v;
     }
-
     while(orig & 7)
         orig++;
 
@@ -3585,8 +3564,15 @@ dodata(void)
 % how end can be in SBSS section? we actually want it initialized ...
 % etext final value will be set in span()
 
-<<constant BIG>>=
-BIG		= (1<<12)-4,
+
+<<[[dodata()]] sanity check DATA instructions>>=
+if(s->type != SDATA)
+    diag("initialize non-data (%d): %s\n%P",
+        s->type, s->name, p);
+v = p->from.offset + p->reg;
+if(v > s->value)
+    diag("initialize bounds (%ld): %s\n%P",
+        s->value, s->name, p);
 @
 
 <<function xdefine(arm)>>=
@@ -3601,6 +3587,10 @@ xdefine(char *p, int t, long v)
         s->value = v;
     }
 }
+@
+
+<<constant BIG>>=
+BIG		= (1<<12)-4,
 @
 
 
@@ -3921,7 +3911,7 @@ noops(void)
             p->line = q1->line;
             p->from.type = D_REG;
             p->from.reg = q1->reg;
-            if(q1->reg == NREG)
+            if(q1->reg == R_NONE)
                 p->from.reg = q1->to.reg;
             p->to.type = D_REG;
             p->to.reg = REGTMP;
@@ -3978,9 +3968,9 @@ noops(void)
 
             p->as = AADD;
             p->from.type = D_CONST;
-            p->from.reg = NREG;
+            p->from.reg = R_NONE;
             p->from.offset = 8;
-            p->reg = NREG;
+            p->reg = R_NONE;
             p->to.type = D_REG;
             p->to.reg = REGSP;
 
@@ -3988,8 +3978,8 @@ noops(void)
             q1->as = ASUB;
             q1->from.type = D_CONST;
             q1->from.offset = 8;
-            q1->from.reg = NREG;
-            q1->reg = NREG;
+            q1->from.reg = R_NONE;
+            q1->reg = R_NONE;
             q1->to.type = D_REG;
             q1->to.reg = REGSP;
             break;
@@ -5094,7 +5084,7 @@ case 1:		/* op R,[R],R */
         rt = 0;
     if(p->as == AMOVW || p->as == AMVN)
         r = 0;
-    else if(r == NREG)
+    else if(r == R_NONE)
         r = rt;
     o1 |= rf | (r<<16) | (rt<<12);
     break;
@@ -5110,7 +5100,7 @@ case 2:		/* movbu $I,[R],R */
         rt = 0;
     if(p->as == AMOVW || p->as == AMVN)
         r = 0;
-    else if(r == NREG)
+    else if(r == R_NONE)
         r = rt;
     o1 |= (r<<16) | (rt<<12);
     break;
@@ -5129,7 +5119,7 @@ mov:
         rt = 0;
     if(p->as == AMOVW || p->as == AMVN)
         r = 0;
-    else if(r == NREG)
+    else if(r == R_NONE)
         r = rt;
     o1 |= (r<<16) | (rt<<12);
     break;
@@ -5140,7 +5130,7 @@ case 4:		/* add $I,[R],R */
     o1 = oprrr(AADD, p->scond);
     o1 |= immrot(instoffset);
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 |= r << 16;
     o1 |= p->to.reg << 12;
@@ -5194,7 +5184,7 @@ case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
     aclass(&p->from);
     o1 = oprrr(p->as, p->scond);
     r = p->reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = p->to.reg;
     o1 |= r;
     o1 |= (instoffset&31) << 7;
@@ -5206,7 +5196,7 @@ case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
 case 9:		/* sll R,[R],R -> mov (R<<R),R */
     o1 = oprrr(p->as, p->scond);
     r = p->reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = p->to.reg;
     o1 |= r;
     o1 |= (p->from.reg << 8) | (1<<4);
@@ -5255,7 +5245,7 @@ case 13:	/* op $lcon, [R], R */
     r = p->reg;
     if(p->as == AMOVW || p->as == AMVN)
         r = 0;
-    else if(r == NREG)
+    else if(r == R_NONE)
         r = p->to.reg;
     o2 |= r << 16;
     if(p->to.type != D_NONE)
@@ -5290,7 +5280,7 @@ case 15:	/* mul r,[r,]r */
     rf = p->from.reg;
     rt = p->to.reg;
     r = p->reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = rt;
     if(rt == r) {
         r = rf;
@@ -5324,7 +5314,7 @@ case 17:
 case 20:	/* mov/movb/movbu R,O(R) */
     aclass(&p->to);
     r = p->to.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 = osr(p->as, p->from.reg, instoffset, r, p->scond);
     break;
@@ -5333,7 +5323,7 @@ case 20:	/* mov/movb/movbu R,O(R) */
 case 21:	/* mov/movbu O(R),R -> lr */
     aclass(&p->from);
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 = olr(instoffset, r, p->to.reg, p->scond);
     if(p->as != AMOVW)
@@ -5344,7 +5334,7 @@ case 21:	/* mov/movbu O(R),R -> lr */
 case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
     aclass(&p->from);
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 = olr(instoffset, r, p->to.reg, p->scond);
 
@@ -5366,7 +5356,7 @@ case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
 case 23:	/* movh/movhu R,O(R) -> sb,sb */
     aclass(&p->to);
     r = p->to.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 = osr(AMOVH, p->from.reg, instoffset, r, p->scond);
 
@@ -5382,7 +5372,7 @@ case 30:	/* mov/movb/movbu R,L(R) */
     if(!o1)
         break;
     r = p->to.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o2 = osrr(p->from.reg, REGTMP,r, p->scond);
     if(p->as != AMOVW)
@@ -5396,7 +5386,7 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
     if(!o1)
         break;
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o2 = olrr(REGTMP,r, p->to.reg, p->scond);
     if(p->as == AMOVBU || p->as == AMOVB)
@@ -5429,7 +5419,7 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
     if(!o1)
         break;
     r = p->to.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o2 = osrr(p->from.reg, REGTMP, r, p->scond);
     o2 |= (1<<22) ;
@@ -5460,7 +5450,7 @@ case 34:	/* mov $lacon,R */
     o2 = oprrr(AADD, p->scond);
     o2 |= REGTMP;
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o2 |= r << 16;
     if(p->to.type != D_NONE)
@@ -5551,7 +5541,7 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
 case 50:	/* floating point store */
     v = regoff(&p->to);
     r = p->to.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 = ofsr(p->as, p->from.reg, v, r, p->scond, p);
     break;
@@ -5560,7 +5550,7 @@ case 50:	/* floating point store */
 case 51:	/* floating point load */
     v = regoff(&p->from);
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 = ofsr(p->as, p->to.reg, v, r, p->scond, p) | (1<<20);
     break;
@@ -5571,7 +5561,7 @@ case 52:	/* floating point store, long offset UGLY */
     if(!o1)
         break;
     r = p->to.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
     o3 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
@@ -5583,7 +5573,7 @@ case 53:	/* floating point load, long offset UGLY */
     if(!o1)
         break;
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
     o3 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
@@ -5607,7 +5597,7 @@ case 54:	/* floating point arith */
         rt = 0;	/* CMP[FD] */
     else if(o1 & (1<<15))
         r = 0;	/* monadic */
-    else if(r == NREG)
+    else if(r == R_NONE)
         r = rt;
     o1 |= rf | (r<<16) | (rt<<12);
     break;
@@ -5648,14 +5638,14 @@ case 58:	/* movbu R,R */
     r = p->from.reg;
     if(p->to.type == D_NONE)
         rt = 0;
-    if(r == NREG)
+    if(r == R_NONE)
         r = rt;
     o1 |= (r<<16) | (rt<<12);
     break;
 @
 <<[[asmout()]] switch on type cases>>=
 case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
-    if(p->from.reg == NREG) {
+    if(p->from.reg == R_NONE) {
         if(p->as != AMOVW)
             diag("byte MOV from shifter operand");
         goto mov;
@@ -5669,7 +5659,7 @@ case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
 @
 <<[[asmout()]] switch on type cases>>=
 case 60:	/* movb R(R),R -> ldrsb indexed */
-    if(p->from.reg == NREG) {
+    if(p->from.reg == R_NONE) {
         diag("byte MOV from shifter operand");
         goto mov;
     }
@@ -5681,7 +5671,7 @@ case 60:	/* movb R(R),R -> ldrsb indexed */
 @
 <<[[asmout()]] switch on type cases>>=
 case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
-    if(p->to.reg == NREG)
+    if(p->to.reg == R_NONE)
         diag("MOV to shifter operand");
     o1 = osrr(p->from.reg, p->to.offset, p->to.reg, p->scond);
     if(p->as == AMOVB || p->as == AMOVBU)
@@ -5786,7 +5776,7 @@ case 69:	/* floating point load <- ADDR */
 case 70:	/* movh/movhu R,O(R) -> strh */
     aclass(&p->to);
     r = p->to.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 = oshr(p->from.reg, instoffset, r, p->scond);
     break;	
@@ -5795,7 +5785,7 @@ case 70:	/* movh/movhu R,O(R) -> strh */
 case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
     aclass(&p->from);
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o1 = olhr(instoffset, r, p->to.reg, p->scond);
     if(p->as == AMOVB)
@@ -5810,7 +5800,7 @@ case 72:	/* movh/movhu R,L(R) -> strh */
     if(!o1)
         break;
     r = p->to.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
     break;	
@@ -5821,7 +5811,7 @@ case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
     if(!o1)
         break;
     r = p->from.reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = o->param;
     o2 = olhrr(REGTMP, r, p->to.reg, p->scond);
     if(p->as == AMOVB)
@@ -5841,7 +5831,7 @@ case 74:	/* vfp floating point arith */
     }
     rt = p->to.reg;
     r = p->reg;
-    if(r == NREG)
+    if(r == R_NONE)
         r = rt;
     o1 |= rt<<12;
     if(((o1>>20)&0xf) == 0xb)
@@ -7339,6 +7329,44 @@ case AADD:
     goto casedef;
 @
 
+\subsection{Small data layout}
+
+<<enum sxxx cases>>=
+SDATA1,
+@
+
+<<constant MINSIZ>>=
+MINSIZ		= 64,
+@
+
+<<[[dodata()]] small data pass>>=
+for(i=0; i<NHASH; i++)
+ for(s = hash[i]; s != S; s = s->link) {
+    t = s->type;
+    if(t != SDATA && t != SBSS)
+        continue;
+
+    v = s->value;
+    if(v == 0) {
+        diag("%s: no size", s->name);
+        v = 1;
+    }
+    while(v & 3)
+        v++;
+    s->value = v;
+
+    if(v > MINSIZ)
+        continue;
+    s->value = orig;
+    orig += v;
+    s->type = SDATA1;
+}
+@
+
+<<[[dodata()]] pass2, retag small data>>=
+if(t == SDATA1)
+    s->type = SDATA;
+@
 
 \section{Overriding symbols, [[DUPOK]]}
 
@@ -8996,7 +9024,7 @@ Pconv(Fmt *fp)
     default:
         s = str;
         s += sprint(s, "(%ld)", p->line);
-        if(p->reg == NREG)
+        if(p->reg == R_NONE)
             sprint(s, "	%A%C	%D,%D",
                 a, p->scond, &p->from, &p->to);
         else
@@ -9032,12 +9060,12 @@ Dconv(Fmt *fp)
 
     case D_NONE:
         str[0] = 0;
-        if(a->symkind != D_NONE || a->reg != NREG || a->sym != S)
+        if(a->symkind != D_NONE || a->reg != R_NONE || a->sym != S)
             sprint(str, "%N(R%d)(NONE)", a, a->reg);
         break;
 
     case D_CONST:
-        if(a->reg == NREG)
+        if(a->reg == R_NONE)
             sprint(str, "$%N", a);
         else
             sprint(str, "$%N(R%d)", a, a->reg);
@@ -9050,12 +9078,12 @@ Dconv(Fmt *fp)
             sprint(str, "R%ld%c%cR%ld", v&15, op[0], op[1], (v>>8)&15);
         else
             sprint(str, "R%ld%c%c%ld", v&15, op[0], op[1], (v>>7)&31);
-        if(a->reg != NREG)
+        if(a->reg != R_NONE)
             sprint(str+strlen(str), "(R%d)", a->reg);
         break;
 
     case D_OREG:
-        if(a->reg != NREG)
+        if(a->reg != R_NONE)
             sprint(str, "%N(R%d)", a, a->reg);
         else
             sprint(str, "%N", a);
@@ -9145,7 +9173,7 @@ Dconv(Fmt *fp)
 
 %    case D_OCONST:
 %        sprint(str, "$*$%N", a);
-%        if(a->reg != NREG)
+%        if(a->reg != R_NONE)
 %            sprint(str, "%N(R%d)(CONST)", a, a->reg);
 %        break;
 

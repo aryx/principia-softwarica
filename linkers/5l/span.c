@@ -431,7 +431,7 @@ aclass(Adr *a)
         /*s: [[aclass()]] D_CONST case, switch symkind cases */
         case D_NONE:
             instoffset = a->offset;
-            if(a->reg != NREG)
+            if(a->reg != R_NONE)
                 goto aconsize;
 
             t = immrot(instoffset);

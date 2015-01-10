@@ -54,7 +54,7 @@ Pconv(Fmt *fp)
     default:
         s = str;
         s += sprint(s, "(%ld)", p->line);
-        if(p->reg == NREG)
+        if(p->reg == R_NONE)
             sprint(s, "	%A%C	%D,%D",
                 a, p->scond, &p->from, &p->to);
         else
@@ -145,12 +145,12 @@ Dconv(Fmt *fp)
 
     case D_NONE:
         str[0] = 0;
-        if(a->symkind != D_NONE || a->reg != NREG || a->sym != S)
+        if(a->symkind != D_NONE || a->reg != R_NONE || a->sym != S)
             sprint(str, "%N(R%d)(NONE)", a, a->reg);
         break;
 
     case D_CONST:
-        if(a->reg == NREG)
+        if(a->reg == R_NONE)
             sprint(str, "$%N", a);
         else
             sprint(str, "$%N(R%d)", a, a->reg);
@@ -163,12 +163,12 @@ Dconv(Fmt *fp)
             sprint(str, "R%ld%c%cR%ld", v&15, op[0], op[1], (v>>8)&15);
         else
             sprint(str, "R%ld%c%c%ld", v&15, op[0], op[1], (v>>7)&31);
-        if(a->reg != NREG)
+        if(a->reg != R_NONE)
             sprint(str+strlen(str), "(R%d)", a->reg);
         break;
 
     case D_OREG:
-        if(a->reg != NREG)
+        if(a->reg != R_NONE)
             sprint(str, "%N(R%d)", a, a->reg);
         else
             sprint(str, "%N", a);

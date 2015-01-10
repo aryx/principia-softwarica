@@ -317,7 +317,7 @@ noops(void)
             p->line = q1->line;
             p->from.type = D_REG;
             p->from.reg = q1->reg;
-            if(q1->reg == NREG)
+            if(q1->reg == R_NONE)
                 p->from.reg = q1->to.reg;
             p->to.type = D_REG;
             p->to.reg = REGTMP;
@@ -374,9 +374,9 @@ noops(void)
 
             p->as = AADD;
             p->from.type = D_CONST;
-            p->from.reg = NREG;
+            p->from.reg = R_NONE;
             p->from.offset = 8;
-            p->reg = NREG;
+            p->reg = R_NONE;
             p->to.type = D_REG;
             p->to.reg = REGSP;
 
@@ -384,8 +384,8 @@ noops(void)
             q1->as = ASUB;
             q1->from.type = D_CONST;
             q1->from.offset = 8;
-            q1->from.reg = NREG;
-            q1->reg = NREG;
+            q1->from.reg = R_NONE;
+            q1->reg = R_NONE;
             q1->to.type = D_REG;
             q1->to.reg = REGSP;
             break;

@@ -776,7 +776,7 @@ asmout(Prog *p, Optab *o)
             rt = 0;
         if(p->as == AMOVW || p->as == AMVN)
             r = 0;
-        else if(r == NREG)
+        else if(r == R_NONE)
             r = rt;
         o1 |= rf | (r<<16) | (rt<<12);
         break;
@@ -791,7 +791,7 @@ asmout(Prog *p, Optab *o)
             rt = 0;
         if(p->as == AMOVW || p->as == AMVN)
             r = 0;
-        else if(r == NREG)
+        else if(r == R_NONE)
             r = rt;
         o1 |= (r<<16) | (rt<<12);
         break;
@@ -807,7 +807,7 @@ asmout(Prog *p, Optab *o)
             rt = 0;
         if(p->as == AMOVW || p->as == AMVN)
             r = 0;
-        else if(r == NREG)
+        else if(r == R_NONE)
             r = rt;
         o1 |= (r<<16) | (rt<<12);
         break;
@@ -817,7 +817,7 @@ asmout(Prog *p, Optab *o)
         o1 = oprrr(AADD, p->scond);
         o1 |= immrot(instoffset);
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 |= r << 16;
         o1 |= p->to.reg << 12;
@@ -863,7 +863,7 @@ asmout(Prog *p, Optab *o)
         aclass(&p->from);
         o1 = oprrr(p->as, p->scond);
         r = p->reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = p->to.reg;
         o1 |= r;
         o1 |= (instoffset&31) << 7;
@@ -873,7 +873,7 @@ asmout(Prog *p, Optab *o)
     case 9:		/* sll R,[R],R -> mov (R<<R),R */
         o1 = oprrr(p->as, p->scond);
         r = p->reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = p->to.reg;
         o1 |= r;
         o1 |= (p->from.reg << 8) | (1<<4);
@@ -916,7 +916,7 @@ asmout(Prog *p, Optab *o)
         r = p->reg;
         if(p->as == AMOVW || p->as == AMVN)
             r = 0;
-        else if(r == NREG)
+        else if(r == R_NONE)
             r = p->to.reg;
         o2 |= r << 16;
         if(p->to.type != D_NONE)
@@ -948,7 +948,7 @@ asmout(Prog *p, Optab *o)
         rf = p->from.reg;
         rt = p->to.reg;
         r = p->reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = rt;
         if(rt == r) {
             r = rf;
@@ -979,7 +979,7 @@ asmout(Prog *p, Optab *o)
     case 20:	/* mov/movb/movbu R,O(R) */
         aclass(&p->to);
         r = p->to.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 = osr(p->as, p->from.reg, instoffset, r, p->scond);
         break;
@@ -987,7 +987,7 @@ asmout(Prog *p, Optab *o)
     case 21:	/* mov/movbu O(R),R -> lr */
         aclass(&p->from);
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 = olr(instoffset, r, p->to.reg, p->scond);
         if(p->as != AMOVW)
@@ -997,7 +997,7 @@ asmout(Prog *p, Optab *o)
     case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
         aclass(&p->from);
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 = olr(instoffset, r, p->to.reg, p->scond);
 
@@ -1018,7 +1018,7 @@ asmout(Prog *p, Optab *o)
     case 23:	/* movh/movhu R,O(R) -> sb,sb */
         aclass(&p->to);
         r = p->to.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 = osr(AMOVH, p->from.reg, instoffset, r, p->scond);
 
@@ -1033,7 +1033,7 @@ asmout(Prog *p, Optab *o)
         if(!o1)
             break;
         r = p->to.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o2 = osrr(p->from.reg, REGTMP,r, p->scond);
         if(p->as != AMOVW)
@@ -1046,7 +1046,7 @@ asmout(Prog *p, Optab *o)
         if(!o1)
             break;
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o2 = olrr(REGTMP,r, p->to.reg, p->scond);
         if(p->as == AMOVBU || p->as == AMOVB)
@@ -1078,7 +1078,7 @@ asmout(Prog *p, Optab *o)
         if(!o1)
             break;
         r = p->to.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o2 = osrr(p->from.reg, REGTMP, r, p->scond);
         o2 |= (1<<22) ;
@@ -1108,7 +1108,7 @@ asmout(Prog *p, Optab *o)
         o2 = oprrr(AADD, p->scond);
         o2 |= REGTMP;
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o2 |= r << 16;
         if(p->to.type != D_NONE)
@@ -1188,7 +1188,7 @@ asmout(Prog *p, Optab *o)
     case 50:	/* floating point store */
         v = regoff(&p->to);
         r = p->to.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 = ofsr(p->as, p->from.reg, v, r, p->scond, p);
         break;
@@ -1196,7 +1196,7 @@ asmout(Prog *p, Optab *o)
     case 51:	/* floating point load */
         v = regoff(&p->from);
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 = ofsr(p->as, p->to.reg, v, r, p->scond, p) | (1<<20);
         break;
@@ -1206,7 +1206,7 @@ asmout(Prog *p, Optab *o)
         if(!o1)
             break;
         r = p->to.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
         o3 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
@@ -1217,7 +1217,7 @@ asmout(Prog *p, Optab *o)
         if(!o1)
             break;
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o2 = oprrr(AADD, p->scond) | (REGTMP << 12) | (REGTMP << 16) | r;
         o3 = ofsr(p->as, p->to.reg, 0, REGTMP, p->scond, p) | (1<<20);
@@ -1240,7 +1240,7 @@ asmout(Prog *p, Optab *o)
             rt = 0;	/* CMP[FD] */
         else if(o1 & (1<<15))
             r = 0;	/* monadic */
-        else if(r == NREG)
+        else if(r == R_NONE)
             r = rt;
         o1 |= rf | (r<<16) | (rt<<12);
         break;
@@ -1277,13 +1277,13 @@ asmout(Prog *p, Optab *o)
         r = p->from.reg;
         if(p->to.type == D_NONE)
             rt = 0;
-        if(r == NREG)
+        if(r == R_NONE)
             r = rt;
         o1 |= (r<<16) | (rt<<12);
         break;
     /*x: [[asmout()]] switch on type cases */
     case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
-        if(p->from.reg == NREG) {
+        if(p->from.reg == R_NONE) {
             if(p->as != AMOVW)
                 diag("byte MOV from shifter operand");
             goto mov;
@@ -1296,7 +1296,7 @@ asmout(Prog *p, Optab *o)
         break;
     /*x: [[asmout()]] switch on type cases */
     case 60:	/* movb R(R),R -> ldrsb indexed */
-        if(p->from.reg == NREG) {
+        if(p->from.reg == R_NONE) {
             diag("byte MOV from shifter operand");
             goto mov;
         }
@@ -1307,7 +1307,7 @@ asmout(Prog *p, Optab *o)
         break;
     /*x: [[asmout()]] switch on type cases */
     case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
-        if(p->to.reg == NREG)
+        if(p->to.reg == R_NONE)
             diag("MOV to shifter operand");
         o1 = osrr(p->from.reg, p->to.offset, p->to.reg, p->scond);
         if(p->as == AMOVB || p->as == AMOVBU)
@@ -1404,7 +1404,7 @@ asmout(Prog *p, Optab *o)
     case 70:	/* movh/movhu R,O(R) -> strh */
         aclass(&p->to);
         r = p->to.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 = oshr(p->from.reg, instoffset, r, p->scond);
         break;	
@@ -1412,7 +1412,7 @@ asmout(Prog *p, Optab *o)
     case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
         aclass(&p->from);
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o1 = olhr(instoffset, r, p->to.reg, p->scond);
         if(p->as == AMOVB)
@@ -1426,7 +1426,7 @@ asmout(Prog *p, Optab *o)
         if(!o1)
             break;
         r = p->to.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
         break;	
@@ -1436,7 +1436,7 @@ asmout(Prog *p, Optab *o)
         if(!o1)
             break;
         r = p->from.reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = o->param;
         o2 = olhrr(REGTMP, r, p->to.reg, p->scond);
         if(p->as == AMOVB)
@@ -1455,7 +1455,7 @@ asmout(Prog *p, Optab *o)
         }
         rt = p->to.reg;
         r = p->reg;
-        if(r == NREG)
+        if(r == R_NONE)
             r = rt;
         o1 |= rt<<12;
         if(((o1>>20)&0xf) == 0xb)

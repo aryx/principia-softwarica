@@ -12,6 +12,7 @@ dodata(void)
     long v;
 
     DBG("%5.2f dodata\n", cputime());
+
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
         /*s: [[dodata()]] if ADYNT or AINIT */
@@ -21,6 +22,7 @@ dodata(void)
         if(s->type == SBSS)
             s->type = SDATA;
 
+        /*s: [[dodata()]] sanity check DATA instructions */
         if(s->type != SDATA)
             diag("initialize non-data (%d): %s\n%P",
                 s->type, s->name, p);
@@ -28,6 +30,7 @@ dodata(void)
         if(v > s->value)
             diag("initialize bounds (%ld): %s\n%P",
                 s->value, s->name, p);
+        /*e: [[dodata()]] sanity check DATA instructions */
     }
     /*s: [[dodata()]] if string in text segment */
     if(debug['t']) {
@@ -50,6 +53,7 @@ dodata(void)
      *	(rational is that data segment is more easily
      *	 addressed through offset on R12)
      */
+    /*s: [[dodata()]] small data pass */
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
@@ -71,6 +75,7 @@ dodata(void)
         orig += v;
         s->type = SDATA1;
     }
+    /*e: [[dodata()]] small data pass */
 
     /*
      * pass 2
@@ -80,15 +85,16 @@ dodata(void)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t != SDATA) {
+            /*s: [[dodata()]] pass2, retag small data */
             if(t == SDATA1)
                 s->type = SDATA;
+            /*e: [[dodata()]] pass2, retag small data */
             continue;
         }
         v = s->value;
         s->value = orig;
         orig += v;
     }
-
     while(orig & 7)
         orig++;
 

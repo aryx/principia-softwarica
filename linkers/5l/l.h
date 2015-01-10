@@ -207,9 +207,9 @@ enum section
     /*s: enum sxxx cases */
     SFILE,
     /*x: enum sxxx cases */
-    SDATA1,
-    /*x: enum sxxx cases */
     SLEAF, // arm
+    /*x: enum sxxx cases */
+    SDATA1,
     /*x: enum sxxx cases */
     SIMPORT,
     SEXPORT,
