@@ -647,12 +647,6 @@ enum mark {
 %dead: LABEL
 
 
-<<enum mark cases>>=
-LEAF		= 1<<2,
-@
-% >>
-% example of mark. useful to see early? (as there are a few
-% case STEXT: case SLEAF: below)
 
 
 
@@ -1048,8 +1042,7 @@ case D_STATIC:
         s->type = SDATA;
         break;
     case SUNDEF:
-    case STEXT:
-    case SLEAF:
+    case STEXT: case SLEAF:
     case SSTRING:
     case SCONST:
         instoffset = s->value + a->offset;
@@ -3596,23 +3589,12 @@ BIG		= (1<<12)-4,
 
 
 \section{Virtual opcode rewriting, [[noops()]]}
-% arm only, or does it correspond to dostkoff of x86?
 
-%noops is for ASM opcodes which have actually no 
+% ARM only. there is a dostkoff in x86 but it's related only to the become
+% stuff that I have now deleted for the ARM.
+
+%noops() is for ASM opcodes which have actually no
 %machine opcode (e.g. ADIV, ARET) so was using a fake/virtual opcode
-
-<<enum sxxx cases>>=
-SLEAF, // arm
-@
-% SLEAF? the special opti ARM has for leaf functions?
-
-
-<<[[Sym]] other fields>>=
-short	become;
-@
-<<[[Sym]] other fields>>=
-short	frame;
-@
 
 <<function noops(arm)>>=
 void
@@ -3620,374 +3602,146 @@ noops(void)
 {
     Prog *p, *q, *q1;
     int o;
-    int curframe, curbecome, maxbecome;
 
     /*
      * find leaf subroutines
-     * become sizes
-     * frame sizes
      * strip NOPs
      * expand RET
-     * expand BECOME pseudo
      */
 
     DBG("%5.2f noops\n", cputime());
 
-    curframe = 0;
-    curbecome = 0;
-    maxbecome = 0;
-
-    curtext = P;
-    q = P;
-
-    for(p = firstp; p != P; p = p->link) {
-        <<adjust curtext when iterate over instructions p>>
-
-        /* find out how much arg space is used in this TEXT */
-        if(p->to.type == D_OREG && p->to.reg == REGSP)
-            if(p->to.offset > curframe)
-                curframe = p->to.offset;
-
-        switch(p->as) {
-        case ATEXT:
-            if(curtext && curtext->from.sym) {
-                curtext->from.sym->frame = curframe;
-                curtext->from.sym->become = curbecome;
-                if(curbecome > maxbecome)
-                    maxbecome = curbecome;
-            }
-            curframe = 0;
-            curbecome = 0;
-
-            p->mark |= LEAF;
-            break;
-
-        case ARET:
-            /* special form of RET is BECOME */
-            if(p->from.type == D_CONST)
-                if(p->from.offset > curbecome)
-                    curbecome = p->from.offset;
-            break;
-
-        case ADIV:
-        case ADIVU:
-        case AMOD:
-        case AMODU:
-            q = p;
-            if(prog_div == P)
-                initdiv();
-            if(curtext != P)
-                curtext->mark &= ~LEAF;
-            continue;
-
-        case ANOP:
-            q1 = p->link;
-            q->link = q1;		/* q is non-nop */
-            q1->mark |= p->mark;
-            continue;
-
-        case ABL:
-            if(curtext != P)
-                curtext->mark &= ~LEAF;
-
-        case AB:
-
-        case ABEQ:
-        case ABNE:
-        case ABCS:
-        case ABHS:
-        case ABCC:
-        case ABLO:
-        case ABMI:
-        case ABPL:
-        case ABVS:
-        case ABVC:
-        case ABHI:
-        case ABLS:
-        case ABGE:
-        case ABLT:
-        case ABGT:
-        case ABLE:
-
-        case ABCASE:
-
-            q1 = p->cond;
-            if(q1 != P) {
-                while(q1->as == ANOP) {
-                    q1 = q1->link;
-                    p->cond = q1;
-                }
-            }
-            break;
-        }
-        q = p;
-    }
-
-    if(curtext && curtext->from.sym) {
-        curtext->from.sym->frame = curframe;
-        curtext->from.sym->become = curbecome;
-        if(curbecome > maxbecome)
-            maxbecome = curbecome;
-    }
-
-    if(debug['b'])
-        print("max become = %d\n", maxbecome);
-    xdefine("ALEFbecome", STEXT, maxbecome);
-
+    // pass 1
     curtext = P;
     for(p = firstp; p != P; p = p->link) {
         <<adjust curtext when iterate over instructions p>>
         switch(p->as) {
-        case ABL:
-            if(curtext != P && curtext->from.sym != S && curtext->to.offset >= 0) {
-                o = maxbecome - curtext->from.sym->frame;
-                if(o <= 0)
-                    break;
-                /* calling a become or calling a variable */
-                if(p->to.sym == S || p->to.sym->become) {
-                    curtext->to.offset += o;
-                    if(debug['b']) {
-                        curp = p;
-                        print("%D calling %D increase %d\n",
-                            &curtext->from, &p->to, o);
-                    }
-                }
-            }
-            break;
+        <<[[noops()]] first pass switch opcode cases>>
         }
     }
 
+    // pass 2
+    curtext = P;
     for(p = firstp; p != P; p = p->link) {
         <<adjust curtext when iterate over instructions p>>
         o = p->as;
         switch(o) {
-        case ATEXT:
-            autosize = p->to.offset + 4;
-            if(autosize <= 4)
-              if(curtext->mark & LEAF) {
-                p->to.offset = -4;
-                autosize = 0;
-            }
-
-            if(!autosize && !(curtext->mark & LEAF)) {
-                DBG("save suppressed in: %s\n", curtext->from.sym->name);
-                curtext->mark |= LEAF;
-            }
-
-            if(curtext->mark & LEAF) {
-                if(curtext->from.sym)
-                    curtext->from.sym->type = SLEAF;
-                if(!autosize)
-                    break;
-            }
-
-            q1 = prg();
-            q1->as = AMOVW;
-            q1->scond |= C_WBIT;
-            q1->line = p->line;
-            q1->from.type = D_REG;
-            q1->from.reg = REGLINK;
-            q1->to.type = D_OREG;
-            q1->to.offset = -autosize;
-            q1->to.reg = REGSP;
-
-            q1->link = p->link;
-            p->link = q1;
-            break;
-
-        case ARET:
-            nocache(p);
-            if(p->from.type == D_CONST)
-                goto become;
-            if(curtext->mark & LEAF) {
-                if(!autosize) {
-                    p->as = AB;
-                    p->from = zprg.from;
-                    p->to.type = D_OREG;
-                    p->to.offset = 0;
-                    p->to.reg = REGLINK;
-                    break;
-                }
-            }
-            // MOVW autosize(SP), PC
-            p->as = AMOVW;
-            p->scond |= C_PBIT;
-            p->from.type = D_OREG;
-            p->from.offset = autosize;
-            p->from.reg = REGSP;
-            p->to.type = D_REG;
-            p->to.reg = REGPC;
-            break;
-
-        become:
-            if(curtext->mark & LEAF) {
-                if(!autosize) {
-                    p->as = AB;
-                    p->from = zprg.from;
-                    break;
-                }
-            }
-            q = prg();
-            q->scond = p->scond;
-            q->line = p->line;
-            q->as = AB;
-            q->from = zprg.from;
-            q->to = p->to;
-            q->cond = p->cond;
-            q->link = p->link;
-            p->link = q;
-
-            // MOVW autosize(SP), LINK
-            p->as = AMOVW;
-            p->scond |= C_PBIT;
-            p->from = zprg.from;
-            p->from.type = D_OREG;
-            p->from.offset = autosize;
-            p->from.reg = REGSP;
-            p->to = zprg.to;
-            p->to.type = D_REG;
-            p->to.reg = REGLINK;
-
-            break;
-
-        /*
-         * 5c code generation for unsigned -> double made the
-         * unfortunate assumption that single and double floating
-         * point registers are aliased - true for emulated 7500
-         * but not for vfp.  Now corrected, but this test is
-         * insurance against old 5c compiled code in libraries.
-         */
-        case AMOVWD:
-            if((q = p->link) != P && q->as == ACMP)
-             if((q = q->link) != P && q->as == AMOVF)
-              if((q1 = q->link) != P && q1->as == AADDF)
-               if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
-                q1->as = AADDD;
-                q1 = prg();
-                q1->scond = q->scond;
-                q1->line = q->line;
-                q1->as = AMOVFD;
-                q1->from = q->to;
-                q1->to = q1->from;
-                q1->link = q->link;
-                q->link = q1;
-            }
-            break;
-
-        case ADIV:
-        case ADIVU:
-        case AMOD:
-        case AMODU:
-            if(debug['M'])
-                break;
-            if(p->from.type != D_REG)
-                break;
-            if(p->to.type != D_REG)
-                break;
-            q1 = p;
-
-            /* MOV a,4(SP) */
-            q = prg();
-            q->link = p->link;
-            p->link = q;
-            p = q;
-
-            p->as = AMOVW;
-            p->line = q1->line;
-            p->from.type = D_REG;
-            p->from.reg = q1->from.reg;
-            p->to.type = D_OREG;
-            p->to.reg = REGSP;
-            p->to.offset = 4;
-
-            /* MOV b,REGTMP */
-            q = prg();
-            q->link = p->link;
-            p->link = q;
-            p = q;
-
-            p->as = AMOVW;
-            p->line = q1->line;
-            p->from.type = D_REG;
-            p->from.reg = q1->reg;
-            if(q1->reg == R_NONE)
-                p->from.reg = q1->to.reg;
-            p->to.type = D_REG;
-            p->to.reg = REGTMP;
-            p->to.offset = 0;
-
-            /* CALL appropriate */
-            q = prg();
-            q->link = p->link;
-            p->link = q;
-            p = q;
-
-            p->as = ABL;
-            p->line = q1->line;
-            p->to.type = D_BRANCH;
-            p->cond = p;
-            switch(o) {
-            case ADIV:
-                p->cond = prog_div;
-                p->to.sym = sym_div;
-                break;
-            case ADIVU:
-                p->cond = prog_divu;
-                p->to.sym = sym_divu;
-                break;
-            case AMOD:
-                p->cond = prog_mod;
-                p->to.sym = sym_mod;
-                break;
-            case AMODU:
-                p->cond = prog_modu;
-                p->to.sym = sym_modu;
-                break;
-            }
-
-            /* MOV REGTMP, b */
-            q = prg();
-            q->link = p->link;
-            p->link = q;
-            p = q;
-
-            p->as = AMOVW;
-            p->line = q1->line;
-            p->from.type = D_REG;
-            p->from.reg = REGTMP;
-            p->from.offset = 0;
-            p->to.type = D_REG;
-            p->to.reg = q1->to.reg;
-
-            /* ADD $8,SP */
-            q = prg();
-            q->link = p->link;
-            p->link = q;
-            p = q;
-
-            p->as = AADD;
-            p->from.type = D_CONST;
-            p->from.reg = R_NONE;
-            p->from.offset = 8;
-            p->reg = R_NONE;
-            p->to.type = D_REG;
-            p->to.reg = REGSP;
-
-            /* SUB $8,SP */
-            q1->as = ASUB;
-            q1->from.type = D_CONST;
-            q1->from.offset = 8;
-            q1->from.reg = R_NONE;
-            q1->reg = R_NONE;
-            q1->to.type = D_REG;
-            q1->to.reg = REGSP;
-            break;
+        <<[[noops()]] second pass swith opcode cases>>
         }
     }
 }
 @
 
+%old: there was lots of stuff about BECOME which I think was
+% a feature necessary for the alef compiler, but it
+% has been removed from plan9 edition 4 so this code
+% was probably dead.
 
+%    int curframe, curbecome, maxbecome;
+%
+%     * become sizes
+%     * frame sizes
+%
+%     * expand BECOME pseudo
+%
+%    curframe = 0;
+%    curbecome = 0;
+%    maxbecome = 0;
+%
+%        /* find out how much arg space is used in this TEXT */
+%        if(p->to.type == D_OREG && p->to.reg == REGSP)
+%            if(p->to.offset > curframe)
+%                curframe = p->to.offset;
+%
+%
+%            if(curtext && curtext->from.sym) {
+%                curtext->from.sym->frame = curframe;
+%                curtext->from.sym->become = curbecome;
+%                if(curbecome > maxbecome)
+%                    maxbecome = curbecome;
+%            }
+%            curframe = 0;
+%            curbecome = 0;
+%
+%
+%        case ARET:
+%            /* special form of RET is BECOME */
+%            if(p->from.type == D_CONST)
+%                if(p->from.offset > curbecome)
+%                    curbecome = p->from.offset;
+%            break;
+%
+%    if(curtext && curtext->from.sym) {
+%        curtext->from.sym->frame = curframe;
+%        curtext->from.sym->become = curbecome;
+%        if(curbecome > maxbecome)
+%            maxbecome = curbecome;
+%    }
+%
+%    if(debug['b'])
+%        print("max become = %d\n", maxbecome);
+%    xdefine("ALEFbecome", STEXT, maxbecome);
+%
+%    curtext = P;
+%    for(p = firstp; p != P; p = p->link) {
+%        <<adjust curtext when iterate over instructions p>>
+%        switch(p->as) {
+%        case ABL:
+%            if(curtext != P && curtext->from.sym != S && curtext->to.offset >= 0) {
+%                o = maxbecome - curtext->from.sym->frame;
+%                if(o <= 0)
+%                    break;
+%                /* calling a become or calling a variable */
+%                if(p->to.sym == S || p->to.sym->become) {
+%                    curtext->to.offset += o;
+%                    if(debug['b']) {
+%                        curp = p;
+%                        print("%D calling %D increase %d\n",
+%                            &curtext->from, &p->to, o);
+%                    }
+%                }
+%            }
+%            break;
+%        }
+%    }
+%
+%
+%            if(p->from.type == D_CONST)
+%                goto become;
+%
+%        become:
+%            if(curtext->mark & LEAF) {
+%                if(!autosize) {
+%                    p->as = AB;
+%                    p->from = zprg.from;
+%                    break;
+%                }
+%            }
+%            q = prg();
+%            q->scond = p->scond;
+%            q->line = p->line;
+%            q->as = AB;
+%            q->from = zprg.from;
+%            q->to = p->to;
+%            q->cond = p->cond;
+%            q->link = p->link;
+%            p->link = q;
+%
+%            // MOVW autosize(SP), LINK
+%            p->as = AMOVW;
+%            p->scond |= C_PBIT;
+%            p->from = zprg.from;
+%            p->from.type = D_OREG;
+%            p->from.offset = autosize;
+%            p->from.reg = REGSP;
+%            p->to = zprg.to;
+%            p->to.type = D_REG;
+%            p->to.reg = REGLINK;
+%
+%            break;
+
+
+%old: this was under some ifdef, probably experimental stuff
 %#ifdef optimise_time
 %                if(autosize) {
 %                    q = prg();
@@ -4048,106 +3802,369 @@ noops(void)
 %                break;
 %#endif
 
-\subsection{[[ATEXT]]}
+\subsection{Leaf procedure optimisation}
 
-\subsection{[[ARET]]}
+<<enum sxxx cases>>=
+SLEAF, // arm
+@
+% SLEAF? the special opti ARM has for leaf functions?
 
-\subsection{[[ANOP]]}
+<<enum mark cases>>=
+LEAF		= 1<<2,
+@
+% >>
+% example of mark. useful to see early? (as there are a few
+% case STEXT: case SLEAF: below)
 
-\subsection{[[ADIV]]}
+<<[[noops()]] first pass switch opcode cases>>=
+case ATEXT:
+    p->mark |= LEAF;
+    break;
+
+case ABL:
+    if(curtext != P)
+        curtext->mark &= ~LEAF;
+    // fallthrough
+<<[[noops()]] first pass switch opcode ABL fallthrough>>
+@
+
+\subsection{[[ATEXT]] patching}
+
+<<[[noops()]] second pass swith opcode cases>>=
+case ATEXT:
+    autosize = p->to.offset + 4;
+    if(autosize <= 4)
+      if(curtext->mark & LEAF) {
+        p->to.offset = -4;
+        autosize = 0;
+    }
+
+    if(!autosize && !(curtext->mark & LEAF)) {
+        DBG("save suppressed in: %s\n", curtext->from.sym->name);
+        curtext->mark |= LEAF;
+    }
+
+    if(curtext->mark & LEAF) {
+        if(curtext->from.sym)
+            curtext->from.sym->type = SLEAF;
+        if(!autosize)
+            break;
+    }
+
+    // MOVW R14, -autosize(SP)
+    q1 = prg();
+    q1->as = AMOVW;
+    q1->scond |= C_WBIT;
+    q1->line = p->line;
+    q1->from.type = D_REG;
+    q1->from.reg = REGLINK;
+    q1->to.type = D_OREG;
+    q1->to.offset = -autosize;
+    q1->to.reg = REGSP;
+
+    q1->link = p->link;
+    p->link = q1;
+    break;
+@
+
+
+\subsection{[[ARET]] rewriting}
+
+<<[[noops()]] second pass swith opcode cases>>=
+case ARET:
+    nocache(p);
+    if((curtext->mark & LEAF) && !autosize) {
+        // B (R14)
+        p->as = AB;
+        p->from = zprg.from;
+        p->to.type = D_OREG;
+        p->to.offset = 0;
+        p->to.reg = REGLINK;
+    } else {
+        // MOVW autosize(SP), PC
+        p->as = AMOVW;
+        p->scond |= C_PBIT;
+        p->from.type = D_OREG;
+        p->from.offset = autosize;
+        p->from.reg = REGSP;
+        p->to.type = D_REG;
+        p->to.reg = REGPC;
+    }
+    break;
+@
+
+% ???
+<<function nocache(arm)>>=
+void
+nocache(Prog *p)
+{
+    p->optab = 0;
+    p->from.class = C_NONE;
+    p->to.class = C_NONE;
+}
+@
+
+
+\subsection{[[ANOP]] stripping}
+
+<<[[noops()]] first pass swith opcode cases>>=
+case ANOP:
+    q1 = p->link;
+    q->link = q1;		/* q is non-nop */
+    q1->mark |= p->mark;
+    continue;
+@
+
+% now that have also the ->cond for branches, we need
+% to take care and update those links as we removed
+% some ANOP.
+
+% so also case ABL: before
+<<[[noops()]] first pass switch opcode ABL fallthrough>>=
+case AB:
+
+case ABEQ:
+case ABNE:
+case ABCS:
+case ABHS:
+case ABCC:
+case ABLO:
+case ABMI:
+case ABPL:
+case ABVS:
+case ABVC:
+case ABHI:
+case ABLS:
+case ABGE:
+case ABLT:
+case ABGT:
+case ABLE:
+
+case ABCASE:
+
+    q1 = p->cond;
+    if(q1 != P) {
+        while(q1->as == ANOP) {
+            q1 = q1->link;
+            p->cond = q1;
+        }
+    }
+    break;
+@
+
+
+\subsection{[[ADIV]] rewriting}
+
+<<[[noops()]] first pass switch opcode cases>>=
+case ADIV:
+case ADIVU:
+case AMOD:
+case AMODU:
+    if(prog_div == P)
+        initdiv();
+    if(curtext != P)
+        curtext->mark &= ~LEAF;
+    continue;
+@
+% a bit ugly to do the initdiv here? at the same it's related to
+% this notion of NOOP.
+
+%    /* MOV a,4(SP) */
+%    /* MOV b,REGTMP */
+%    /* CALL appropriate */
+%    /* MOV REGTMP, b */
+%    /* ADD $8,SP */
+%q1
+%    /* SUB $8,SP */
+
+<<[[noops()]] second pass swith opcode cases>>=
+case ADIV:
+case ADIVU:
+case AMOD:
+case AMODU:
+    if(debug['M'])
+        break;
+    if(p->from.type != D_REG)
+        break;
+    if(p->to.type != D_REG)
+        break;
+    q1 = p;
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* MOV a,4(SP) */
+    p->as = AMOVW;
+    p->line = q1->line;
+    p->from.type = D_REG;
+    p->from.reg = q1->from.reg;
+    p->to.type = D_OREG;
+    p->to.reg = REGSP;
+    p->to.offset = 4;
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* MOV b,REGTMP */
+    p->as = AMOVW;
+    p->line = q1->line;
+    p->from.type = D_REG;
+    p->from.reg = q1->reg;
+    if(q1->reg == R_NONE)
+        p->from.reg = q1->to.reg;
+    p->to.type = D_REG;
+    p->to.reg = REGTMP;
+    p->to.offset = 0;
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* CALL appropriate */
+    p->as = ABL;
+    p->line = q1->line;
+    p->to.type = D_BRANCH;
+    p->cond = p;
+    switch(o) {
+    case ADIV:
+        p->cond = prog_div;
+        p->to.sym = sym_div;
+        break;
+    case ADIVU:
+        p->cond = prog_divu;
+        p->to.sym = sym_divu;
+        break;
+    case AMOD:
+        p->cond = prog_mod;
+        p->to.sym = sym_mod;
+        break;
+    case AMODU:
+        p->cond = prog_modu;
+        p->to.sym = sym_modu;
+        break;
+    }
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* MOV REGTMP, b */
+    p->as = AMOVW;
+    p->line = q1->line;
+    p->from.type = D_REG;
+    p->from.reg = REGTMP;
+    p->from.offset = 0;
+    p->to.type = D_REG;
+    p->to.reg = q1->to.reg;
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* ADD $8,SP */
+    p->as = AADD;
+    p->from.type = D_CONST;
+    p->from.reg = R_NONE;
+    p->from.offset = 8;
+    p->reg = R_NONE;
+    p->to.type = D_REG;
+    p->to.reg = REGSP;
+
+    /* SUB $8,SP */
+    q1->as = ASUB;
+    q1->from.type = D_CONST;
+    q1->from.offset = 8;
+    q1->from.reg = R_NONE;
+    q1->reg = R_NONE;
+    q1->to.type = D_REG;
+    q1->to.reg = REGSP;
+    break;
+@
+
+
+<<global prog_div(arm)>>=
+Prog*	prog_div;
+@
+
+<<global prog_divu(arm)>>=
+Prog*	prog_divu;
+@
+
+<<global prog_mod(arm)>>=
+Prog*	prog_mod;
+@
+
+<<global prog_modu(arm)>>=
+Prog*	prog_modu;
+@
+
 
 \section{Computing textsize, [[span()]]}
+% and adjusting pc and code addresses to concrete value, 
+% not symbolic pc
 
 <<global textsize>>=
 long	textsize;
 @
 
 
+% start to use INITTEXT! switch from a symbolic pc to a real pc
+% where the size of the instructions now matter.
+% todo: so have to relocate every code references? so that jump goes to
+% the right place?
 
+<<[[span()]] locals>>=
+Prog *p;
+Optab *o;
+long c, otxt;
+long v;
+Sym *setext, *s;
+int m, i;
+@
 
 
 <<function span(arm)>>=
 void
 span(void)
 {
-    Prog *p;
-    Sym *setext, *s;
-    Optab *o;
-    int m, bflag, i;
-    long c, otxt, v;
+    <<[[span()]] locals>>
 
     DBG("%5.2f span\n", cputime());
 
-    bflag = 0;
+    <<[[span()]] initialisation>>
+
     c = INITTEXT;
     otxt = c;
     for(p = firstp; p != P; p = p->link) {
+       <<adjust curtext when iterate over instructions p>>
+
         p->pc = c;
         o = oplook(p);
         m = o->size;
+
         if(m == 0) {
-            <<adjust curtext when iterate over instructions p>>
             if(p->as == ATEXT) {
                 autosize = p->to.offset + 4;
                 if(p->from.sym != S)
                     p->from.sym->value = c;
-                /* need passes to resolve branches */
-                if(c-otxt >= 1L<<17)
-                    bflag = 1;
+                <<[[span()]] if large procedure>>
                 otxt = c;
-                continue;
+            } else {
+                diag("zero-width instruction\n%P", p);
             }
-            diag("zero-width instruction\n%P", p);
             continue;
         }
-        switch(o->flag & (LFROM|LTO|LPOOL)) {
-        case LFROM:
-            addpool(p, &p->from);
-            break;
-        case LTO:
-            addpool(p, &p->to);
-            break;
-        case LPOOL:
-            if ((p->scond&C_SCOND) == COND_ALWAYS)
-                flushpool(p, 0);
-            break;
-        }
-        if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
-           (p->scond&C_SCOND) == COND_ALWAYS)
-            flushpool(p, 0);
         c += m;
-        if(blitrl)
-            checkpool(p);
+        <<[[span()]] pool handling for optab o>>
     }
-
-    /*
-     * if any procedure is large enough to
-     * generate a large SBRA branch, then
-     * generate extra passes putting branches
-     * around jmps to fix. this is rare.
-     */
-    while(bflag) {
-        DBG("%5.2f span1\n", cputime());
-        bflag = 0;
-        c = INITTEXT;
-        for(p = firstp; p != P; p = p->link) {
-            p->pc = c;
-            o = oplook(p);
-            m = o->size;
-            if(m == 0) {
-                <<adjust curtext when iterate over instructions p>>
-                if(p->as == ATEXT) {
-                    autosize = p->to.offset + 4;
-                    if(p->from.sym != S)
-                        p->from.sym->value = c;
-                    continue;
-                }
-                diag("zero-width instruction\n%P", p);
-                continue;
-            }
-            c += m;
-        }
-    }
+    <<[[span()]] if large procedure>>
     <<[[span()]] if string in text segment>>
 
     c = rnd(c, 8);
@@ -4160,6 +4177,56 @@ span(void)
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);
+}
+@
+
+
+\subsection{Large procedures}
+
+<<[[span()]] initialisation>>=
+bflag = false;
+@
+
+<<[[span()]] locals>>=
+bool bflag;
+@
+
+<<[[span()]] if large procedure>>=
+/* need passes to resolve branches */
+if(c - otxt >= 1L<<17)
+    bflag = true;
+@
+% >>
+
+
+<<[[span()]] if large procedure>>=
+/*
+ * if any procedure is large enough to
+ * generate a large SBRA branch, then
+ * generate extra passes putting branches
+ * around jmps to fix. this is rare.
+ */
+while(bflag) {
+    DBG("%5.2f span1\n", cputime());
+    bflag = false;
+    c = INITTEXT;
+    for(p = firstp; p != P; p = p->link) {
+        <<adjust curtext when iterate over instructions p>>
+        p->pc = c;
+        o = oplook(p);
+        m = o->size;
+        if(m == 0) {
+            if(p->as == ATEXT) {
+                autosize = p->to.offset + 4;
+                if(p->from.sym != S)
+                    p->from.sym->value = c;
+            } else {
+                diag("zero-width instruction\n%P", p);
+            }
+            continue;
+        }
+        c += m;
+    }
 }
 @
 
@@ -4188,6 +4255,33 @@ span(void)
 % */
 
 
+\subsection{Pool}
+
+<<[[span()]] pool handling for optab o>>=
+switch(o->flag & (LFROM|LTO|LPOOL)) {
+case LFROM:
+    addpool(p, &p->from);
+    break;
+case LTO:
+    addpool(p, &p->to);
+    break;
+
+case LPOOL:
+    if ((p->scond&C_SCOND) == COND_ALWAYS)
+        flushpool(p, 0);
+    break;
+}
+
+if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
+   (p->scond&C_SCOND) == COND_ALWAYS)
+    flushpool(p, 0);
+
+if(blitrl)
+    checkpool(p);
+@
+% c += m; used to be before if(blitrl)
+
+
 % arm specific
 <<global pool(arm)>>=
 static struct {
@@ -4214,15 +4308,24 @@ checkpool(Prog *p)
 }
 @
 
+<<global blitrl(arm)>>=
+Prog*	blitrl;
+@
+
+<<global elitrl(arm)>>=
+Prog*	elitrl;
+@
+
+
 <<function flushpool(arm)>>=
 void
-flushpool(Prog *p, bool skip)
+flushpool(Prog *p, int skip)
 {
     Prog *q;
 
     if(blitrl) {
         if(skip){
-            if(debug['v'] && skip == true)
+            if(debug['v'] && skip == 1)
                 print("note: flush literal pool at %lux: len=%lud ref=%lux\n", p->pc+4, pool.size, pool.start);
             q = prg();
             q->as = AB;
@@ -4235,17 +4338,13 @@ flushpool(Prog *p, bool skip)
             return;
         elitrl->link = p->link;
         p->link = blitrl;
-        blitrl = 0;	/* BUG: should refer back to values until out-of-range */
-        elitrl = 0;
+        blitrl = nil;	/* BUG: should refer back to values until out-of-range */
+        elitrl = nil;
         pool.size = 0;
         pool.start = 0;
     }
 }
 @
-
-
-
-
 
 <<function addpool(arm)>>=
 void
@@ -4260,10 +4359,6 @@ addpool(Prog *p, Adr *a)
     t.as = AWORD;
 
     switch(c) {
-    default:
-        t.to = *a;
-        break;
-
     case C_SROREG:
     case C_LOREG:
     case C_ROREG:
@@ -4275,6 +4370,9 @@ addpool(Prog *p, Adr *a)
     case C_LACON:
         t.to.type = D_CONST;
         t.to.offset = instoffset;
+        break;
+    default:
+        t.to = *a;
         break;
     }
 
@@ -4664,6 +4762,10 @@ buildop(void)
 % invariant: the case in the switch must be the entries in optab, not
 % more, not less
 
+
+<<global oprange(arm)>>=
+Oprang	oprange[ALAST];
+@
 
 
 <<[[buildop()]] switch opcode r cases>>=
@@ -8358,6 +8460,33 @@ case AMOVFW:
 { AMOVW,	C_FCR,	C_NONE,	C_REG,		57, 4, 0 },
 @
 
+
+<<[[noops()]] second pass swith opcode cases>>=
+/*
+ * 5c code generation for unsigned -> double made the
+ * unfortunate assumption that single and double floating
+ * point registers are aliased - true for emulated 7500
+ * but not for vfp.  Now corrected, but this test is
+ * insurance against old 5c compiled code in libraries.
+ */
+case AMOVWD:
+    if((q = p->link) != P && q->as == ACMP)
+     if((q = q->link) != P && q->as == AMOVF)
+      if((q1 = q->link) != P && q1->as == AADDF)
+       if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
+        q1->as = AADDD;
+        q1 = prg();
+        q1->scond = q->scond;
+        q1->line = q->line;
+        q1->as = AMOVFD;
+        q1->from = q->to;
+        q1->to = q1->from;
+        q1->link = q->link;
+        q->link = q1;
+    }
+    break;
+@
+
 \subsection{VFP hardware instructions, [[5l -f]]}
 
 <<[[optab]] entries>>=
@@ -8529,15 +8658,6 @@ initdiv(void)
 }
 @
 
-<<function nocache(arm)>>=
-void
-nocache(Prog *p)
-{
-    p->optab = 0;
-    p->from.class = C_NONE;
-    p->to.class = C_NONE;
-}
-@
 
 
 

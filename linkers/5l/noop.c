@@ -19,75 +19,34 @@ void
 noops(void)
 {
     Prog *p, *q, *q1;
-    int o, curframe, curbecome, maxbecome;
+    int o;
 
     /*
      * find leaf subroutines
-     * become sizes
-     * frame sizes
      * strip NOPs
      * expand RET
-     * expand BECOME pseudo
      */
 
     DBG("%5.2f noops\n", cputime());
 
-    curframe = 0;
-    curbecome = 0;
-    maxbecome = 0;
+    // pass 1
     curtext = P;
-
-    q = P;
     for(p = firstp; p != P; p = p->link) {
-
-        /* find out how much arg space is used in this TEXT */
-        if(p->to.type == D_OREG && p->to.reg == REGSP)
-            if(p->to.offset > curframe)
-                curframe = p->to.offset;
-
-        switch(p->as) {
-        case ATEXT:
-            if(curtext && curtext->from.sym) {
-                curtext->from.sym->frame = curframe;
-                curtext->from.sym->become = curbecome;
-                if(curbecome > maxbecome)
-                    maxbecome = curbecome;
-            }
-            curframe = 0;
-            curbecome = 0;
-
-            p->mark |= LEAF;
+        /*s: adjust curtext when iterate over instructions p */
+        if(p->as == ATEXT)
             curtext = p;
+        /*e: adjust curtext when iterate over instructions p */
+        switch(p->as) {
+        /*s: [[noops()]] first pass switch opcode cases */
+        case ATEXT:
+            p->mark |= LEAF;
             break;
-
-        case ARET:
-            /* special form of RET is BECOME */
-            if(p->from.type == D_CONST)
-                if(p->from.offset > curbecome)
-                    curbecome = p->from.offset;
-            break;
-
-        case ADIV:
-        case ADIVU:
-        case AMOD:
-        case AMODU:
-            q = p;
-            if(prog_div == P)
-                initdiv();
-            if(curtext != P)
-                curtext->mark &= ~LEAF;
-            continue;
-
-        case ANOP:
-            q1 = p->link;
-            q->link = q1;		/* q is non-nop */
-            q1->mark |= p->mark;
-            continue;
 
         case ABL:
             if(curtext != P)
                 curtext->mark &= ~LEAF;
-
+            // fallthrough
+        /*s: [[noops()]] first pass switch opcode ABL fallthrough */
         case AB:
 
         case ABEQ:
@@ -117,47 +76,23 @@ noops(void)
                 }
             }
             break;
+        /*e: [[noops()]] first pass switch opcode ABL fallthrough */
+        /*x: [[noops()]] first pass switch opcode cases */
+        case ADIV:
+        case ADIVU:
+        case AMOD:
+        case AMODU:
+            if(prog_div == P)
+                initdiv();
+            if(curtext != P)
+                curtext->mark &= ~LEAF;
+            continue;
+        /*e: [[noops()]] first pass switch opcode cases */
         }
-        q = p;
     }
 
-    if(curtext && curtext->from.sym) {
-        curtext->from.sym->frame = curframe;
-        curtext->from.sym->become = curbecome;
-        if(curbecome > maxbecome)
-            maxbecome = curbecome;
-    }
-
-    if(debug['b'])
-        print("max become = %d\n", maxbecome);
-    xdefine("ALEFbecome", STEXT, maxbecome);
-
+    // pass 2
     curtext = P;
-    for(p = firstp; p != P; p = p->link) {
-        /*s: adjust curtext when iterate over instructions p */
-        if(p->as == ATEXT)
-            curtext = p;
-        /*e: adjust curtext when iterate over instructions p */
-        switch(p->as) {
-        case ABL:
-            if(curtext != P && curtext->from.sym != S && curtext->to.offset >= 0) {
-                o = maxbecome - curtext->from.sym->frame;
-                if(o <= 0)
-                    break;
-                /* calling a become or calling a variable */
-                if(p->to.sym == S || p->to.sym->become) {
-                    curtext->to.offset += o;
-                    if(debug['b']) {
-                        curp = p;
-                        print("%D calling %D increase %d\n",
-                            &curtext->from, &p->to, o);
-                    }
-                }
-            }
-            break;
-        }
-    }
-
     for(p = firstp; p != P; p = p->link) {
         /*s: adjust curtext when iterate over instructions p */
         if(p->as == ATEXT)
@@ -165,6 +100,7 @@ noops(void)
         /*e: adjust curtext when iterate over instructions p */
         o = p->as;
         switch(o) {
+        /*s: [[noops()]] second pass swith opcode cases */
         case ATEXT:
             autosize = p->to.offset + 4;
             if(autosize <= 4)
@@ -185,6 +121,7 @@ noops(void)
                     break;
             }
 
+            // MOVW R14, -autosize(SP)
             q1 = prg();
             q1->as = AMOVW;
             q1->scond |= C_WBIT;
@@ -198,89 +135,28 @@ noops(void)
             q1->link = p->link;
             p->link = q1;
             break;
-
+        /*x: [[noops()]] second pass swith opcode cases */
         case ARET:
             nocache(p);
-            if(p->from.type == D_CONST)
-                goto become;
-            if(curtext->mark & LEAF) {
-                if(!autosize) {
-                    p->as = AB;
-                    p->from = zprg.from;
-                    p->to.type = D_OREG;
-                    p->to.offset = 0;
-                    p->to.reg = REGLINK;
-                    break;
-                }
-
-            }
-            // MOVW autosize(SP), PC
-            p->as = AMOVW;
-            p->scond |= C_PBIT;
-            p->from.type = D_OREG;
-            p->from.offset = autosize;
-            p->from.reg = REGSP;
-            p->to.type = D_REG;
-            p->to.reg = REGPC;
-            break;
-
-        become:
-            if(curtext->mark & LEAF) {
-
-                if(!autosize) {
-                    p->as = AB;
-                    p->from = zprg.from;
-                    break;
-                }
-
-            }
-            q = prg();
-            q->scond = p->scond;
-            q->line = p->line;
-            q->as = AB;
-            q->from = zprg.from;
-            q->to = p->to;
-            q->cond = p->cond;
-            q->link = p->link;
-            p->link = q;
-
-            // MOVW autosize(SP), LINK
-            p->as = AMOVW;
-            p->scond |= C_PBIT;
-            p->from = zprg.from;
-            p->from.type = D_OREG;
-            p->from.offset = autosize;
-            p->from.reg = REGSP;
-            p->to = zprg.to;
-            p->to.type = D_REG;
-            p->to.reg = REGLINK;
-
-            break;
-
-        /*
-         * 5c code generation for unsigned -> double made the
-         * unfortunate assumption that single and double floating
-         * point registers are aliased - true for emulated 7500
-         * but not for vfp.  Now corrected, but this test is
-         * insurance against old 5c compiled code in libraries.
-         */
-        case AMOVWD:
-            if((q = p->link) != P && q->as == ACMP)
-             if((q = q->link) != P && q->as == AMOVF)
-              if((q1 = q->link) != P && q1->as == AADDF)
-               if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
-                q1->as = AADDD;
-                q1 = prg();
-                q1->scond = q->scond;
-                q1->line = q->line;
-                q1->as = AMOVFD;
-                q1->from = q->to;
-                q1->to = q1->from;
-                q1->link = q->link;
-                q->link = q1;
+            if((curtext->mark & LEAF) && !autosize) {
+                // B (R14)
+                p->as = AB;
+                p->from = zprg.from;
+                p->to.type = D_OREG;
+                p->to.offset = 0;
+                p->to.reg = REGLINK;
+            } else {
+                // MOVW autosize(SP), PC
+                p->as = AMOVW;
+                p->scond |= C_PBIT;
+                p->from.type = D_OREG;
+                p->from.offset = autosize;
+                p->from.reg = REGSP;
+                p->to.type = D_REG;
+                p->to.reg = REGPC;
             }
             break;
-
+        /*x: [[noops()]] second pass swith opcode cases */
         case ADIV:
         case ADIVU:
         case AMOD:
@@ -293,12 +169,12 @@ noops(void)
                 break;
             q1 = p;
 
-            /* MOV a,4(SP) */
             q = prg();
             q->link = p->link;
             p->link = q;
             p = q;
 
+            /* MOV a,4(SP) */
             p->as = AMOVW;
             p->line = q1->line;
             p->from.type = D_REG;
@@ -307,12 +183,12 @@ noops(void)
             p->to.reg = REGSP;
             p->to.offset = 4;
 
-            /* MOV b,REGTMP */
             q = prg();
             q->link = p->link;
             p->link = q;
             p = q;
 
+            /* MOV b,REGTMP */
             p->as = AMOVW;
             p->line = q1->line;
             p->from.type = D_REG;
@@ -323,12 +199,12 @@ noops(void)
             p->to.reg = REGTMP;
             p->to.offset = 0;
 
-            /* CALL appropriate */
             q = prg();
             q->link = p->link;
             p->link = q;
             p = q;
 
+            /* CALL appropriate */
             p->as = ABL;
             p->line = q1->line;
             p->to.type = D_BRANCH;
@@ -352,12 +228,12 @@ noops(void)
                 break;
             }
 
-            /* MOV REGTMP, b */
             q = prg();
             q->link = p->link;
             p->link = q;
             p = q;
 
+            /* MOV REGTMP, b */
             p->as = AMOVW;
             p->line = q1->line;
             p->from.type = D_REG;
@@ -366,12 +242,12 @@ noops(void)
             p->to.type = D_REG;
             p->to.reg = q1->to.reg;
 
-            /* ADD $8,SP */
             q = prg();
             q->link = p->link;
             p->link = q;
             p = q;
 
+            /* ADD $8,SP */
             p->as = AADD;
             p->from.type = D_CONST;
             p->from.reg = R_NONE;
@@ -389,6 +265,31 @@ noops(void)
             q1->to.type = D_REG;
             q1->to.reg = REGSP;
             break;
+        /*x: [[noops()]] second pass swith opcode cases */
+        /*
+         * 5c code generation for unsigned -> double made the
+         * unfortunate assumption that single and double floating
+         * point registers are aliased - true for emulated 7500
+         * but not for vfp.  Now corrected, but this test is
+         * insurance against old 5c compiled code in libraries.
+         */
+        case AMOVWD:
+            if((q = p->link) != P && q->as == ACMP)
+             if((q = q->link) != P && q->as == AMOVF)
+              if((q1 = q->link) != P && q1->as == AADDF)
+               if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
+                q1->as = AADDD;
+                q1 = prg();
+                q1->scond = q->scond;
+                q1->line = q->line;
+                q1->as = AMOVFD;
+                q1->from = q->to;
+                q1->to = q1->from;
+                q1->link = q->link;
+                q->link = q1;
+            }
+            break;
+        /*e: [[noops()]] second pass swith opcode cases */
         }
     }
 }

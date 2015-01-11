@@ -125,12 +125,12 @@ struct	Sym
     // idx in filen
     ushort	file;
     /*x: [[Sym]] other fields */
+    // enum<section> too?
+    short	subtype;
+    /*x: [[Sym]] other fields */
     short	become;
     /*x: [[Sym]] other fields */
     short	frame;
-    /*x: [[Sym]] other fields */
-    // enum<section> too?
-    short	subtype;
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
@@ -291,9 +291,9 @@ enum classx {
 /* mark flags */
 enum mark {
     /*s: enum mark cases */
-    LEAF		= 1<<2,
-    /*x: enum mark cases */
     FOLL		= 1<<0,
+    /*x: enum mark cases */
+    LEAF		= 1<<2,
     /*e: enum mark cases */
 };
 /*e: enum mark(arm) */
