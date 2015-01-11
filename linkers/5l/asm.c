@@ -70,14 +70,14 @@ asmb(void)
         if(p->as == ATEXT) {
             autosize = p->to.offset + 4; // locals
         }
-        /*s: [[asmb()]] when in TEXT section if pc differs */
+        /*s: [[asmb()]] when in TEXT section, sanity check pc */
         if(p->pc != pc) {
             diag("phase error %lux sb %lux", p->pc, pc);
             if(!debug['a'])
                 prasm(curp);
             pc = p->pc;
         }
-        /*e: [[asmb()]] when in TEXT section if pc differs */
+        /*e: [[asmb()]] when in TEXT section, sanity check pc */
         curp = p;
 
         // generate instruction!
@@ -700,8 +700,7 @@ datblk(long s, long n, bool str)
                 switch(v->type) {
                 case SUNDEF:
                     ckoff(v, d);
-                case STEXT:
-                case SLEAF:
+                case STEXT: case SLEAF:
                 case SSTRING:
                     d += p->to.sym->value;
                     break;
@@ -717,9 +716,6 @@ datblk(long s, long n, bool str)
             cast = (char*)&d;
 
             switch(c) {
-            default:
-                diag("bad nuxi %d %d%P", c, i, curp);
-                break;
             case 1:
                 for(; i<c; i++) {
                     buf.dbuf[l] = cast[inuxi1[i]];
@@ -737,6 +733,10 @@ datblk(long s, long n, bool str)
                     buf.dbuf[l] = cast[inuxi4[i]];
                     l++;
                 }
+                break;
+
+            default:
+                diag("bad nuxi %d %d%P", c, i, curp);
                 break;
             }
             break;
@@ -1681,8 +1681,10 @@ opbra(int a, int sc)
     sc &= C_SCOND;
     if(a == ABL)
         return (sc<<28)|(0x5<<25)|(0x1<<24);
+
     if(sc != 0xe)
         diag(".COND on bcond instruction");
+
     switch(a) {
     case ABEQ:	return (0x0<<28)|(0x5<<25);
     case ABNE:	return (0x1<<28)|(0x5<<25);

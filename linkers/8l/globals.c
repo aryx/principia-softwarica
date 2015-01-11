@@ -49,9 +49,11 @@ char*	pcstr = "%.6lux ";
 fdt	cout = -1;
 /*e: global cout */
 /*s: global curp */
+// option<ref<Prog>>
 Prog*	curp;
 /*e: global curp */
 /*s: global curtext */
+//option<ref<Prog>> where Prog.as == ATEXT
 Prog*	curtext = P;
 /*e: global curtext */
 /*s: global datap */
@@ -69,7 +71,7 @@ long	datsize;
 bool	debug[128];
 /*e: global debug */
 /*s: global firstp */
-// list<ref_own?<Prog>>, next = Prog.link
+// list<ref_own<Prog>>, next = Prog.link
 Prog*	firstp;
 /*e: global firstp */
 

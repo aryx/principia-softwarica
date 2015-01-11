@@ -51,6 +51,7 @@ struct	Adr
     };
 
     /*s: [[Adr]] other fields */
+    // enum<registr>
     short	reg; 
     /*x: [[Adr]] other fields */
     union {
@@ -88,7 +89,7 @@ struct	Prog
     /*x: [[Prog]] other fields */
     long	pc;
     /*x: [[Prog]] other fields */
-    //bitset<enum<mark>
+    //bitset<enum<mark>>
     short	mark;
     /*x: [[Prog]] other fields */
     Prog*	forwd;
@@ -115,7 +116,7 @@ struct	Sym
 
     //enum<section>
     short	type;
-    // generic value, e.g. pc for a TEXT procedure
+    // generic value, e.g. pc for a TEXT procedure, size for GLOBL
     long	value; 
 
     /*s: [[Sym]] other fields */
@@ -261,9 +262,10 @@ enum classx {
     /*x: cxxx(arm) cases */
     C_HOREG,
     C_SOREG,
+    C_LOREG,
+
     C_ROREG,
     C_SROREG,	/* both S and R */
-    C_LOREG,
 
     C_FOREG,
     C_HFOREG,

@@ -56,9 +56,11 @@ Auto*	curauto;
 Auto*	curhist;
 /*e: global curhist */
 /*s: global curp */
+// option<ref<Prog>>
 Prog*	curp;
 /*e: global curp */
 /*s: global curtext */
+//option<ref<Prog>> where Prog.as == ATEXT
 Prog*	curtext = P;
 /*e: global curtext */
 /*s: global datap */
@@ -76,7 +78,7 @@ bool	debug[128];
 Prog*	etextp = P;
 /*e: global etextp */
 /*s: global firstp */
-// list<ref_own?<Prog>>, next = Prog.link
+// list<ref_own<Prog>>, next = Prog.link
 Prog*	firstp;
 /*e: global firstp */
 

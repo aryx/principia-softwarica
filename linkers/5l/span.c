@@ -155,6 +155,7 @@ span(void)
         }
     }
     /*e: [[span()]] if large procedure */
+
     /*s: [[span()]] if string in text segment */
     if(debug['t']) {
         /* 
@@ -162,7 +163,7 @@ span(void)
          */
         c = rnd(c, 8);
         for(i=0; i<NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link) {
+         for(s = hash[i]; s != S; s = s->link) {
             if(s->type != SSTRING)
                 continue;
             v = s->value;
@@ -464,6 +465,7 @@ aclass(Adr *a)
                     return immfloat(t) ? C_HFOREG : C_HOREG;
                 if(immfloat(t))
                     return C_FOREG; /* n.b. that it will also satisfy immrot */
+
                 t = immrot(instoffset);
                 if(t)
                     return C_SROREG;
@@ -503,17 +505,16 @@ aclass(Adr *a)
                 break;
             t = s->type;
             switch(t) {
-            case SNONE:
-            case SXREF:
-                diag("undefined external: %s in %s", s->name, TNAME);
-                s->type = SDATA;
-                break;
-            case SUNDEF:
             case STEXT: case SLEAF:
             case SSTRING:
             case SCONST:
+            case SUNDEF:
                 instoffset = s->value + a->offset;
                 return C_LCON;
+            case SNONE: case SXREF:
+                diag("undefined external: %s in %s", s->name, TNAME);
+                s->type = SDATA;
+                break;
             }
             if(!dlm) {
                 instoffset = s->value + a->offset - BIG;

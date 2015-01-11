@@ -358,7 +358,7 @@ struct	Sym
 
     //enum<section>
     short	type;
-    // generic value, e.g. pc for a TEXT procedure
+    // generic value, e.g. pc for a TEXT procedure, size for GLOBL
     long	value; 
 
     <<[[Sym]] other fields>>
@@ -369,15 +369,20 @@ struct	Sym
 % Similar to Sym in Assembler.nw, but a few differences:
 % - no 'type' (token_kind) field, no 'macro' field
 % - no symidx field (but was local to outcode())
-% - a new 'version' field; D_STATIC was in the Operand.symkind (the linker
-%   manages multiple objects together where can have the same static name
+% - a new 'version' field; D_STATIC was in the Operand.symkind (but the linker
+%   now manages multiple objects together where can have the same static name
 %   multiple times)
 % - a new 'type' field for the section (the linker has to resolve
 %   as opposed to the assembler)
 %less: rename value to pc? to a union?
 %note: conflict with include/a.out.h
 
-% The type and values in Sym are? for ATEXT elts what is stored?
+% The 'type' and 'value' in Sym are? 
+% - for ATEXT elts what is stored?
+% - for ADATA? 
+% does it change during the execution? before dodata() what is it? after?
+% during span()?
+
 
 <<constant NHASH linker>>=
 NHASH		= 10007,
@@ -530,6 +535,7 @@ struct	Adr
 
 
 <<[[Adr]] other fields>>=
+// enum<registr>
 short	reg; 
 @
 % again a reg field ... because most operands involve a register
@@ -628,11 +634,12 @@ long	pc;
 @
 % the absolute pc of this instruction! needed for
 % some check pc == p->pc somewhere.
+%todo: virtual pc first? does it evolve?
 
 
 
 <<[[Prog]] other fields>>=
-//bitset<enum<mark>
+//bitset<enum<mark>>
 short	mark;
 @
 %old: was byte
@@ -672,7 +679,7 @@ enum mark {
 % coupling between firstp and lastp that should be encapsulated
 % in a specific structure (like for datap/edatap)
 <<global firstp>>=
-// list<ref_own?<Prog>>, next = Prog.link
+// list<ref_own<Prog>>, next = Prog.link
 Prog*	firstp;
 @
 % rename instrp?
@@ -692,7 +699,8 @@ Prog*	link;
 // ref<Prog>, last elt of firstp list
 Prog*	lastp;
 @
-
+% option<Prog>? usually there is a sentinel so there is always
+% a lastp
 
 
 
@@ -736,6 +744,7 @@ Prog*	datap = P;
 % When iterate over all instrs, if the instr is a ATEXT then store it here.
 % It's probably for error message, to say in which procedure we currently are.
 <<global curtext>>=
+//option<ref<Prog>> where Prog.as == ATEXT
 Prog*	curtext = P;
 @
 % there will be different curxxx, a bit ugly use of globals
@@ -760,6 +769,7 @@ char	*noname		= "<none>";
 
 
 <<global curp>>=
+// option<ref<Prog>>
 Prog*	curp;
 @
 % similar to curtext, for error report, but this time it can be any instr,
@@ -786,6 +796,7 @@ Prog	undefp;
 // enum<classx>
 short	class;
 @
+%a more precise Adr.type
 %old: was char, but ugly
 % usually the class is computed via aclass() and used as an index
 % in the optab complex structure. Not sure why it needs to be stored
@@ -813,7 +824,7 @@ enum classx {
 % - OREG splitted in many xxxOREG and xxxEXT (SB), xxAUTO (FP, SP)
 % - D_CONST splitted in many xxxCON
 % - S_CONST?
-% - a new C_GOK, could be called C_LAST maybe
+% - a new C_GOK, but could be called C_LAST I think
 %
 %less: do big categories, xxCON, xxAUTO, xxEXT, xxREG?
 %old: there was C_SBRA, C_LBRA but LBRA was unused so I s/C_LBRA/C_BRANCH/
@@ -870,6 +881,8 @@ case D_OREG:
 @
 % OREG usually is a dereference of a register or a symbol reference
 % (which is then really an implicit offet to SB)
+
+% H S L ? halfword, small, large?
 
 <<cxxx(arm) cases>>=
 C_HEXT,
@@ -949,12 +962,14 @@ case D_PARAM:
 @
 % +4??
 
+% RO? rotated?
 <<cxxx(arm) cases>>=
 C_HOREG,
 C_SOREG,
+C_LOREG,
+
 C_ROREG,
 C_SROREG,	/* both S and R */
-C_LOREG,
 
 C_FOREG,
 C_HFOREG,
@@ -969,6 +984,7 @@ case D_NONE:
             return immfloat(t) ? C_HFOREG : C_HOREG;
         if(immfloat(t))
             return C_FOREG; /* n.b. that it will also satisfy immrot */
+
         t = immrot(instoffset);
         if(t)
             return C_SROREG;
@@ -993,6 +1009,7 @@ case D_CONST:
 @
 
 
+% Rotated, Negative, Large?
 <<cxxx(arm) cases>>=
 C_RCON,		/* 0xff rotated */
 C_NCON,		/* ~RCON */
@@ -1036,17 +1053,16 @@ case D_STATIC:
         break;
     t = s->type;
     switch(t) {
-    case SNONE:
-    case SXREF:
-        diag("undefined external: %s in %s", s->name, TNAME);
-        s->type = SDATA;
-        break;
-    case SUNDEF:
     case STEXT: case SLEAF:
     case SSTRING:
     case SCONST:
+    case SUNDEF:
         instoffset = s->value + a->offset;
         return C_LCON;
+    case SNONE: case SXREF:
+        diag("undefined external: %s in %s", s->name, TNAME);
+        s->type = SDATA;
+        break;
     }
     if(!dlm) {
         instoffset = s->value + a->offset - BIG;
@@ -1657,6 +1673,7 @@ long	autosize;
 % size for the locals? (and params?)
 %less: could be renamed curautosize
 
+%less: have a <<adjust autosize when iterate over p thing>> ?
 
 
 % important call, asmout()
@@ -1670,7 +1687,7 @@ for(p = firstp; p != P; p = p->link) {
     if(p->as == ATEXT) {
         autosize = p->to.offset + 4; // locals
     }
-    <<[[asmb()]] when in TEXT section if pc differs>>
+    <<[[asmb()]] when in TEXT section, sanity check pc>>
     curp = p;
 
     // generate instruction!
@@ -1686,10 +1703,12 @@ cflush();
 <<[[asmb()]] TEXT section, output strings in text segment>>
 }
 @
-% +4? locals + RETURN?
+% +4? locals + RETURN? see "runtime conventions" section.
+%lesS: "could avoid this call" because could just use p->optab?
 
 
-<<[[asmb()]] when in TEXT section if pc differs>>=
+
+<<[[asmb()]] when in TEXT section, sanity check pc>>=
 if(p->pc != pc) {
     diag("phase error %lux sb %lux", p->pc, pc);
     if(!debug['a'])
@@ -1843,7 +1862,7 @@ if(r < 100 && r < c) {		/* enough for largest prog */
 % >> >> >> >>
 % readsome() is in appendix too
 
-\section{A global [[pc]]}
+\section{A global and virtual [[pc]]}
 
 % each call to ldobj() will increment this pc
 <<global pc>>=
@@ -2215,7 +2234,7 @@ case ATEXT:
     break;
 @
 %$
-
+% "virtual pc"
 
 <<[[ldobj()]] case ATEXT, if curtext not null adjustments for curauto>>=
 if(curtext != P) {
@@ -2253,6 +2272,7 @@ case AGLOBL:
 % what is offset for AGLOBL? It should be the immediate constant size of 
 % the global. But how can s->value be different from 0 anyway?
 % the test p->to.offset > s->value seems to always return true to me.
+% or it's just to sanity check people entering negative size for the globals?
 
 \section{[[ADATA]]}
 
@@ -3020,10 +3040,22 @@ span();
 @
 
 
+% what we need to resolve?
+% - code references
+% - data references
 
-
+% For data(globl) references it's a symbol, so need to assign
+% an absolute location to this symbol. If it's a local or parameter
+% it's relative so easier.
+% For code they can be reduced to branch pc jump. If we use
+% pointer to link a src to it's dest, and then far later assign
+% a absolute concrete pc to the instructions, then easy.
 
 \section{Linking branch instructions, [[patch()]]}
+
+% needed because better to use pointers to virtual pc because
+% we will change the linked list of instructions. remove, strip,
+% compact.
 
 % Set Prog->cond for the branch instructions.
 % (before transform branch instructions using symbols in regular branch 
@@ -3061,7 +3093,7 @@ patch(void)
             continue;
 
         c = p->to.offset;
-        <<[[patch()]] find Prog q with pc == c>>
+        <<[[patch()]] find Prog reference q with pc == c>>
         p->cond = q;
     }
 
@@ -3182,7 +3214,7 @@ mkfwd(void)
 
 \subsection{Finding instruction at pc}
 
-<<[[patch()]] find Prog q with pc == c>>=
+<<[[patch()]] find Prog reference q with pc == c>>=
 for(q = firstp; q != P;) {
     if(q->forwd != P)
      if(c >= q->forwd->pc) {
@@ -3475,6 +3507,11 @@ long	datsize;
 long	bsssize;
 @
 
+% programmer specify size for GLOBL, and their content via DATA.
+% he does not care about the precise layout. Here we layout,
+% we put them next to each other, assigning location (offset to INITDAT)
+% to each GLOBL.
+% Sym.value changes type!
 
 
 <<function dodata(arm)>>=
@@ -3520,6 +3557,7 @@ dodata(void)
             <<[[dodata()]] pass2, retag small data>>
             continue;
         }
+        // s->value used to contain the size of the GLOBL, now it's its location
         v = s->value;
         s->value = orig;
         orig += v;
@@ -3556,6 +3594,9 @@ dodata(void)
 % important exxx!!! the kernel uses etext! edata!
 % how end can be in SBSS section? we actually want it initialized ...
 % etext final value will be set in span()
+
+% now Sym.value for GLOBL is not the size anymore but the offset
+% (offset to INITDAT though) changed type!
 
 
 <<[[dodata()]] sanity check DATA instructions>>=
@@ -3803,11 +3844,18 @@ noops(void)
 %#endif
 
 \subsection{Leaf procedure optimisation}
+% could be put in Optimisation section?
 
 <<enum sxxx cases>>=
 SLEAF, // arm
 @
 % SLEAF? the special opti ARM has for leaf functions?
+
+% if leaf procedure, no need to save current SP, noone
+% will RET back to this procedure. Also
+% we can use a special ABL that use a register instead
+% of the stack to save the current PC so RET is also
+% faster from this leaf.
 
 <<enum mark cases>>=
 LEAF		= 1<<2,
@@ -3951,159 +3999,12 @@ case ABCASE:
     }
     break;
 @
-
-
-\subsection{[[ADIV]] rewriting}
-
-<<[[noops()]] first pass switch opcode cases>>=
-case ADIV:
-case ADIVU:
-case AMOD:
-case AMODU:
-    if(prog_div == P)
-        initdiv();
-    if(curtext != P)
-        curtext->mark &= ~LEAF;
-    continue;
-@
-% a bit ugly to do the initdiv here? at the same it's related to
-% this notion of NOOP.
-
-%    /* MOV a,4(SP) */
-%    /* MOV b,REGTMP */
-%    /* CALL appropriate */
-%    /* MOV REGTMP, b */
-%    /* ADD $8,SP */
-%q1
-%    /* SUB $8,SP */
-
-<<[[noops()]] second pass swith opcode cases>>=
-case ADIV:
-case ADIVU:
-case AMOD:
-case AMODU:
-    if(debug['M'])
-        break;
-    if(p->from.type != D_REG)
-        break;
-    if(p->to.type != D_REG)
-        break;
-    q1 = p;
-
-    q = prg();
-    q->link = p->link;
-    p->link = q;
-    p = q;
-
-    /* MOV a,4(SP) */
-    p->as = AMOVW;
-    p->line = q1->line;
-    p->from.type = D_REG;
-    p->from.reg = q1->from.reg;
-    p->to.type = D_OREG;
-    p->to.reg = REGSP;
-    p->to.offset = 4;
-
-    q = prg();
-    q->link = p->link;
-    p->link = q;
-    p = q;
-
-    /* MOV b,REGTMP */
-    p->as = AMOVW;
-    p->line = q1->line;
-    p->from.type = D_REG;
-    p->from.reg = q1->reg;
-    if(q1->reg == R_NONE)
-        p->from.reg = q1->to.reg;
-    p->to.type = D_REG;
-    p->to.reg = REGTMP;
-    p->to.offset = 0;
-
-    q = prg();
-    q->link = p->link;
-    p->link = q;
-    p = q;
-
-    /* CALL appropriate */
-    p->as = ABL;
-    p->line = q1->line;
-    p->to.type = D_BRANCH;
-    p->cond = p;
-    switch(o) {
-    case ADIV:
-        p->cond = prog_div;
-        p->to.sym = sym_div;
-        break;
-    case ADIVU:
-        p->cond = prog_divu;
-        p->to.sym = sym_divu;
-        break;
-    case AMOD:
-        p->cond = prog_mod;
-        p->to.sym = sym_mod;
-        break;
-    case AMODU:
-        p->cond = prog_modu;
-        p->to.sym = sym_modu;
-        break;
-    }
-
-    q = prg();
-    q->link = p->link;
-    p->link = q;
-    p = q;
-
-    /* MOV REGTMP, b */
-    p->as = AMOVW;
-    p->line = q1->line;
-    p->from.type = D_REG;
-    p->from.reg = REGTMP;
-    p->from.offset = 0;
-    p->to.type = D_REG;
-    p->to.reg = q1->to.reg;
-
-    q = prg();
-    q->link = p->link;
-    p->link = q;
-    p = q;
-
-    /* ADD $8,SP */
-    p->as = AADD;
-    p->from.type = D_CONST;
-    p->from.reg = R_NONE;
-    p->from.offset = 8;
-    p->reg = R_NONE;
-    p->to.type = D_REG;
-    p->to.reg = REGSP;
-
-    /* SUB $8,SP */
-    q1->as = ASUB;
-    q1->from.type = D_CONST;
-    q1->from.offset = 8;
-    q1->from.reg = R_NONE;
-    q1->reg = R_NONE;
-    q1->to.type = D_REG;
-    q1->to.reg = REGSP;
-    break;
-@
-
-
-<<global prog_div(arm)>>=
-Prog*	prog_div;
-@
-
-<<global prog_divu(arm)>>=
-Prog*	prog_divu;
-@
-
-<<global prog_mod(arm)>>=
-Prog*	prog_mod;
-@
-
-<<global prog_modu(arm)>>=
-Prog*	prog_modu;
-@
+% bug? q1 could be null in the loop?
+% todo: write test case showing the bug?
+% I would rewrite the code as
+%   while(q1 != P && q1->as == ANOP) 
+%       q1 = q1->link;
+%   p->cond = q1;
 
 
 \section{Computing textsize, [[span()]]}
@@ -4165,6 +4066,7 @@ span(void)
         <<[[span()]] pool handling for optab o>>
     }
     <<[[span()]] if large procedure>>
+
     <<[[span()]] if string in text segment>>
 
     c = rnd(c, 8);
@@ -4256,6 +4158,7 @@ while(bflag) {
 
 
 \subsection{Pool}
+% ????
 
 <<[[span()]] pool handling for optab o>>=
 switch(o->flag & (LFROM|LTO|LPOOL)) {
@@ -4403,8 +4306,8 @@ addpool(Prog *p, Adr *a)
 \chapter{Machine Code Generation (ARM)}
 
 % The code generation is done by 5l, not 5a, surprisingly!
-% Why? Because allows more optimisations? cross libs? as in llvm?
-% also more compact and simple object format? and more cross platform?
+% Why? Because it allows more optimisations? cross libs? as in llvm?
+% also more compact and simpler object format? and more cross platform?
 
 \section{[[Optab]] and [[optab]]}
 % hmm core DS? could probably be moved just in machine code generation chapter
@@ -4696,9 +4599,11 @@ struct	Oprang
 <<global armv4(arm)>>=
 bool	armv4;
 @
+
 <<global vfp(arm)>>=
 bool vfp;
 @
+
 <<enum lxxx cases>>=
 V4		= 1<<3,	/* arm v4 arch */
 VFP		= 1<<4,	/* arm vfpv3 floating point */
@@ -6189,8 +6094,10 @@ opbra(int a, int sc)
     sc &= C_SCOND;
     if(a == ABL)
         return (sc<<28)|(0x5<<25)|(0x1<<24);
+
     if(sc != 0xe)
         diag(".COND on bcond instruction");
+
     switch(a) {
     case ABEQ:	return (0x0<<28)|(0x5<<25);
     case ABNE:	return (0x1<<28)|(0x5<<25);
@@ -6565,8 +6472,7 @@ datblk(long s, long n, bool str)
                 switch(v->type) {
                 case SUNDEF:
                     ckoff(v, d);
-                case STEXT:
-                case SLEAF:
+                case STEXT: case SLEAF:
                 case SSTRING:
                     d += p->to.sym->value;
                     break;
@@ -6579,9 +6485,6 @@ datblk(long s, long n, bool str)
             cast = (char*)&d;
 
             switch(c) {
-            default:
-                diag("bad nuxi %d %d%P", c, i, curp);
-                break;
             case 1:
                 for(; i<c; i++) {
                     buf.dbuf[l] = cast[inuxi1[i]];
@@ -6599,6 +6502,10 @@ datblk(long s, long n, bool str)
                     buf.dbuf[l] = cast[inuxi4[i]];
                     l++;
                 }
+                break;
+
+            default:
+                diag("bad nuxi %d %d%P", c, i, curp);
                 break;
             }
             break;
@@ -7025,6 +6932,7 @@ doprof1(void)
     Prog *p, *q;
 
     DBG("%5.2f profile 1\n", cputime());
+
     s = lookup("__mcount", 0);
     n = 1;
     for(p = firstp->link; p != P; p = p->link) {
@@ -7033,6 +6941,7 @@ doprof1(void)
             q->line = p->line;
             q->link = datap;
             datap = q;
+
             q->as = ADATA;
             q->from.type = D_OREG;
             q->from.symkind = D_EXTERN;
@@ -7048,6 +6957,7 @@ doprof1(void)
             q->link = p->link;
             p->link = q;
             p = q;
+
             p->as = AMOVW;
             p->from.type = D_OREG;
             p->from.symkind = D_EXTERN;
@@ -7062,6 +6972,7 @@ doprof1(void)
             q->link = p->link;
             p->link = q;
             p = q;
+
             p->as = AADD;
             p->from.type = D_CONST;
             p->from.offset = 1;
@@ -7074,6 +6985,7 @@ doprof1(void)
             q->link = p->link;
             p->link = q;
             p = q;
+
             p->as = AMOVW;
             p->from.type = D_REG;
             p->from.reg = REGTMP;
@@ -7413,6 +7325,9 @@ main(int argc, char *argv[])
 \chapter{Advanced Topics}
 
 \section{Optimisations}
+
+\subsection{Leaf procedures}
+% see previous section
 
 \subsection{Opcode rewriting}
 
@@ -8261,6 +8176,7 @@ case D_FCONST:
     size += 8;
     break;
 @
+% >> >> >> >> >> >>
 % bugfix: there was a bug where it was using NSNAME instead of sizeof(Ieee)
 %  but factorizing code with malloc fixed the issue too.
 
@@ -8503,7 +8419,6 @@ case AMOVWD:
 % "without -f 5l generates arm7500 floating-point
 % instructions which are emulated in the kernel."
 
-
 <<[[optab]] entries>>=
 { AMOVH,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
 { AMOVH,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
@@ -8544,6 +8459,161 @@ case AMOVWD:
 
 
 \section{Division}
+
+\subsection{[[ADIV]] rewriting}
+
+<<[[noops()]] first pass switch opcode cases>>=
+case ADIV:
+case ADIVU:
+case AMOD:
+case AMODU:
+    if(prog_div == P)
+        initdiv();
+    if(curtext != P)
+        curtext->mark &= ~LEAF;
+    continue;
+@
+% a bit ugly to do the initdiv here? at the same it's related to
+% this notion of NOOP.
+
+%    /* MOV a,4(SP) */
+%    /* MOV b,REGTMP */
+%    /* CALL appropriate */
+%    /* MOV REGTMP, b */
+%    /* ADD $8,SP */
+%q1
+%    /* SUB $8,SP */
+
+<<[[noops()]] second pass swith opcode cases>>=
+case ADIV:
+case ADIVU:
+case AMOD:
+case AMODU:
+    if(debug['M'])
+        break;
+    if(p->from.type != D_REG)
+        break;
+    if(p->to.type != D_REG)
+        break;
+    q1 = p;
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* MOV a,4(SP) */
+    p->as = AMOVW;
+    p->line = q1->line;
+    p->from.type = D_REG;
+    p->from.reg = q1->from.reg;
+    p->to.type = D_OREG;
+    p->to.reg = REGSP;
+    p->to.offset = 4;
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* MOV b,REGTMP */
+    p->as = AMOVW;
+    p->line = q1->line;
+    p->from.type = D_REG;
+    p->from.reg = q1->reg;
+    if(q1->reg == R_NONE)
+        p->from.reg = q1->to.reg;
+    p->to.type = D_REG;
+    p->to.reg = REGTMP;
+    p->to.offset = 0;
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* CALL appropriate */
+    p->as = ABL;
+    p->line = q1->line;
+    p->to.type = D_BRANCH;
+    p->cond = p;
+    switch(o) {
+    case ADIV:
+        p->cond = prog_div;
+        p->to.sym = sym_div;
+        break;
+    case ADIVU:
+        p->cond = prog_divu;
+        p->to.sym = sym_divu;
+        break;
+    case AMOD:
+        p->cond = prog_mod;
+        p->to.sym = sym_mod;
+        break;
+    case AMODU:
+        p->cond = prog_modu;
+        p->to.sym = sym_modu;
+        break;
+    }
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* MOV REGTMP, b */
+    p->as = AMOVW;
+    p->line = q1->line;
+    p->from.type = D_REG;
+    p->from.reg = REGTMP;
+    p->from.offset = 0;
+    p->to.type = D_REG;
+    p->to.reg = q1->to.reg;
+
+    q = prg();
+    q->link = p->link;
+    p->link = q;
+    p = q;
+
+    /* ADD $8,SP */
+    p->as = AADD;
+    p->from.type = D_CONST;
+    p->from.reg = R_NONE;
+    p->from.offset = 8;
+    p->reg = R_NONE;
+    p->to.type = D_REG;
+    p->to.reg = REGSP;
+
+    /* SUB $8,SP */
+    q1->as = ASUB;
+    q1->from.type = D_CONST;
+    q1->from.offset = 8;
+    q1->from.reg = R_NONE;
+    q1->reg = R_NONE;
+    q1->to.type = D_REG;
+    q1->to.reg = REGSP;
+    break;
+@
+
+
+<<global prog_div(arm)>>=
+Prog*	prog_div;
+@
+
+<<global prog_divu(arm)>>=
+Prog*	prog_divu;
+@
+
+<<global prog_mod(arm)>>=
+Prog*	prog_mod;
+@
+
+<<global prog_modu(arm)>>=
+Prog*	prog_modu;
+@
+
+
+\subsection{[[initdiv()]]}
 
 <<global sym_div(arm)>>=
 static	Sym*	sym_div;
@@ -8657,8 +8727,6 @@ initdiv(void)
     }
 }
 @
-
-
 
 
 \section{Extra executable formats}
@@ -8852,7 +8920,7 @@ enum {
 \section{Strings in text segment, [[5l -t]]}
 
 % what for? so cannot be modified?
-% for constant strings?
+% for constant strings? an optimisation?
 
 <<enum sxxx cases>>=
 SSTRING, // arm
@@ -8879,7 +8947,7 @@ if(debug['t']) {
      */
     c = rnd(c, 8);
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link) {
+     for(s = hash[i]; s != S; s = s->link) {
         if(s->type != SSTRING)
             continue;
         v = s->value;

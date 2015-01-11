@@ -1375,6 +1375,7 @@ doprof1(void)
     Prog *p, *q;
 
     DBG("%5.2f profile 1\n", cputime());
+
     s = lookup("__mcount", 0);
     n = 1;
     for(p = firstp->link; p != P; p = p->link) {
@@ -1383,6 +1384,7 @@ doprof1(void)
             q->line = p->line;
             q->link = datap;
             datap = q;
+
             q->as = ADATA;
             q->from.type = D_OREG;
             q->from.symkind = D_EXTERN;
@@ -1398,6 +1400,7 @@ doprof1(void)
             q->link = p->link;
             p->link = q;
             p = q;
+
             p->as = AMOVW;
             p->from.type = D_OREG;
             p->from.symkind = D_EXTERN;
@@ -1412,6 +1415,7 @@ doprof1(void)
             q->link = p->link;
             p->link = q;
             p = q;
+
             p->as = AADD;
             p->from.type = D_CONST;
             p->from.offset = 1;
@@ -1424,6 +1428,7 @@ doprof1(void)
             q->link = p->link;
             p->link = q;
             p = q;
+
             p->as = AMOVW;
             p->from.type = D_REG;
             p->from.reg = REGTMP;

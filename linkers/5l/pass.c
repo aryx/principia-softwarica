@@ -91,6 +91,7 @@ dodata(void)
             /*e: [[dodata()]] pass2, retag small data */
             continue;
         }
+        // s->value used to contain the size of the GLOBL, now it's its location
         v = s->value;
         s->value = orig;
         orig += v;
@@ -395,7 +396,7 @@ patch(void)
             continue;
 
         c = p->to.offset;
-        /*s: [[patch()]] find Prog q with pc == c */
+        /*s: [[patch()]] find Prog reference q with pc == c */
         for(q = firstp; q != P;) {
             if(q->forwd != P)
              if(c >= q->forwd->pc) {
@@ -410,7 +411,7 @@ patch(void)
             diag("branch out of range %ld\n%P", c, p);
             p->to.type = D_NONE;
         }
-        /*e: [[patch()]] find Prog q with pc == c */
+        /*e: [[patch()]] find Prog reference q with pc == c */
         p->cond = q;
     }
 
