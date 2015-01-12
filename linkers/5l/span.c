@@ -739,6 +739,13 @@ buildop(void)
         /*s: [[buildop()]] switch opcode r cases */
         case AXXX:
             break;
+        /*x: [[buildop()]] switch opcode r cases */
+        case ATEXT:
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
+        case AWORD:
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
         case AADD:
             oprange[AAND] = oprange[r];
             oprange[AEOR] = oprange[r];
@@ -750,13 +757,38 @@ buildop(void)
             oprange[AORR] = oprange[r];
             oprange[ABIC] = oprange[r];
             break;
+        /*x: [[buildop()]] switch opcode r cases */
         case ACMP:
             oprange[ATST] = oprange[r];
             oprange[ATEQ] = oprange[r];
             oprange[ACMN] = oprange[r];
             break;
+        /*x: [[buildop()]] switch opcode r cases */
         case AMVN:
             break;
+        /*x: [[buildop()]] switch opcode r cases */
+        case ASLL:
+            oprange[ASRL] = oprange[r];
+            oprange[ASRA] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
+        case AMUL:
+            oprange[AMULU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
+        case ADIV:
+            oprange[AMOD] = oprange[r];
+            oprange[AMODU] = oprange[r];
+            oprange[ADIVU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
+        case AMULL:
+            oprange[AMULA] = oprange[r];
+            oprange[AMULAL] = oprange[r];
+            oprange[AMULLU] = oprange[r];
+            oprange[AMULALU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
         case AB:
         case ABL:
             break;
@@ -777,40 +809,20 @@ buildop(void)
             oprange[ABGT] = oprange[r];
             oprange[ABLE] = oprange[r];
             break;
-        case ASLL:
-            oprange[ASRL] = oprange[r];
-            oprange[ASRA] = oprange[r];
-            break;
-        case AMUL:
-            oprange[AMULU] = oprange[r];
-            break;
-        case ADIV:
-            oprange[AMOD] = oprange[r];
-            oprange[AMODU] = oprange[r];
-            oprange[ADIVU] = oprange[r];
-            break;
+        /*x: [[buildop()]] switch opcode r cases */
         case AMOVW:
         case AMOVB:
         case AMOVBU:
         case AMOVH:
         case AMOVHU:
             break;
+        /*x: [[buildop()]] switch opcode r cases */
         case ASWPW:
             oprange[ASWPBU] = oprange[r];
             break;
+        /*x: [[buildop()]] switch opcode r cases */
         case ASWI:
         case ARFE:
-        case ATEXT:
-        case AWORD:
-        case ACASE:
-        case ABCASE:
-        case AMOVM:
-            break;
-        case AMULL:
-            oprange[AMULA] = oprange[r];
-            oprange[AMULAL] = oprange[r];
-            oprange[AMULLU] = oprange[r];
-            oprange[AMULALU] = oprange[r];
             break;
         /*x: [[buildop()]] switch opcode r cases */
         case AADDF:
@@ -837,6 +849,13 @@ buildop(void)
             oprange[AMOVWF] = oprange[r];
             oprange[AMOVWD] = oprange[r];
             oprange[AMOVDW] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
+        case AMOVM:
+            break;
+        /*x: [[buildop()]] switch opcode r cases */
+        case ACASE:
+        case ABCASE:
             break;
         /*e: [[buildop()]] switch opcode r cases */
         default:

@@ -212,14 +212,14 @@ enum section
     /*x: enum sxxx cases */
     SDATA1,
     /*x: enum sxxx cases */
+    SSTRING, // arm
+    /*x: enum sxxx cases */
     SIMPORT,
     SEXPORT,
     /*x: enum sxxx cases */
     SUNDEF,
     /*x: enum sxxx cases */
     SCONST,
-    /*x: enum sxxx cases */
-    SSTRING, // arm
     /*e: enum sxxx cases */
 };
 /*e: enum sxxx(arm) */
