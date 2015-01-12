@@ -205,6 +205,8 @@ License.
 %figure: like a train, some wagons, and inside some unresolved references
 % and after linking see all the wagons really after each other and
 % the links resolved.
+% Also agglomerate the code, and the data of the different modules together,
+% and pack them.
 
 % why the term loader instead of linker?
 % maybe because load the objects and libs and then link them
@@ -303,11 +305,21 @@ struct	Exec
 
 
 \section{Runtime conventions}
+
 % frame format?
-% layout
+%  parameters
+%  saved PC (from REGLINK when not a leaf procedure)
+%  locals
+%
+% SP is?
+
+% When want to call a procedure, need to save current place,
+% so do BL for branch and link where a special register
+% holds a value. Then need to save this value in a stack
+% (if it's not a leaf procedure).
 
 %        autosize = p->to.offset + 4; // locals
-% + 4?
+% + 4 = saved PC (REGLINK from BL)
 
 
 \section{Code organization}
@@ -381,7 +393,8 @@ struct	Sym
 % - for ATEXT elts what is stored?
 % - for ADATA? 
 % does it change during the execution? before dodata() what is it? after?
-% during span()?
+% during span()? for GLOBL it changes! from a size to a location
+% => maybe use an union! 
 
 
 <<constant NHASH linker>>=
@@ -1671,6 +1684,7 @@ Optab *o;
 long	autosize;
 @
 % size for the locals? (and params?)
+% used a lot by aclass()
 %less: could be renamed curautosize
 
 %less: have a <<adjust autosize when iterate over p thing>> ?
@@ -3495,7 +3509,7 @@ if(!(r->cond->mark&FOLL))
 @
 \fi
 
-\section{Layout data, [[dodata()]]}
+\section{Laying out data, [[dodata()]]}
 % computing datasize
 % != generating DATA
 
@@ -3575,6 +3589,7 @@ dodata(void)
      for(s = hash[i]; s != S; s = s->link) {
         if(s->type != SBSS)
             continue;
+        // s->value used to contain the size of the GLOBL, now it's its location
         v = s->value;
         s->value = orig;
         orig += v;
@@ -3584,19 +3599,12 @@ dodata(void)
 
     bsssize = orig-datsize;
 
-    xdefine("setR12", SDATA, 0L+BIG);
-    xdefine("bdata", SDATA, 0L);
-    xdefine("edata", SDATA, datsize);
-    xdefine("end", SBSS, datsize+bsssize);
-    xdefine("etext", STEXT, 0L);
+    <<[[dodata()]] define special symbols>>
 }
 @
-% important exxx!!! the kernel uses etext! edata!
-% how end can be in SBSS section? we actually want it initialized ...
-% etext final value will be set in span()
-
 % now Sym.value for GLOBL is not the size anymore but the offset
 % (offset to INITDAT though) changed type!
+
 
 
 <<[[dodata()]] sanity check DATA instructions>>=
@@ -3608,25 +3616,6 @@ if(v > s->value)
     diag("initialize bounds (%ld): %s\n%P",
         s->value, s->name, p);
 @
-
-<<function xdefine(arm)>>=
-void
-xdefine(char *p, int t, long v)
-{
-    Sym *s;
-
-    s = lookup(p, 0);
-    if(s->type == SNONE || s->type == SXREF) {
-        s->type = t;
-        s->value = v;
-    }
-}
-@
-
-<<constant BIG>>=
-BIG		= (1<<12)-4,
-@
-
 
 
 \section{Virtual opcode rewriting, [[noops()]]}
@@ -3876,7 +3865,13 @@ case ABL:
 <<[[noops()]] first pass switch opcode ABL fallthrough>>
 @
 
+% assumes can not make jump outside the function ...?
+% the assembler checks that?
+
 \subsection{[[ATEXT]] patching}
+
+% if leaf procedure, no need to save REGLINK in the stack!
+% hence the autosize = 0 I think
 
 <<[[noops()]] second pass swith opcode cases>>=
 case ATEXT:
@@ -3914,7 +3909,7 @@ case ATEXT:
     p->link = q1;
     break;
 @
-
+% wbit??
 
 \subsection{[[ARET]] rewriting}
 
@@ -3940,6 +3935,7 @@ case ARET:
     }
     break;
 @
+% pbit??
 
 % ???
 <<function nocache(arm)>>=
@@ -4007,7 +4003,10 @@ case ABCASE:
 %   p->cond = q1;
 
 
-\section{Computing textsize, [[span()]]}
+\section{Laying out code, [[span()]]}
+% computing textsize
+% != generating DATA
+
 % and adjusting pc and code addresses to concrete value, 
 % not symbolic pc
 
@@ -4071,11 +4070,7 @@ span(void)
 
     c = rnd(c, 8);
 
-    setext = lookup("etext", 0);
-    if(setext != S) {
-        setext->value = c;
-        textsize = c - INITTEXT;
-    }
+    <<[[span()]] define special symbols>>
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);
@@ -4302,6 +4297,67 @@ addpool(Prog *p, Adr *a)
 @
 
 
+\section{Defining special symbols [[etext]], [[edata]], [[end]]}
+
+% at this point we are in dodata() in which case the value field
+% is now really a location
+% which means the xdefine below now have a different meaning: the 3rd
+% argument is now a location, not a size anymore!
+
+% some important exxx!!! the kernel uses etext! edata!
+% some form of introspection capability.
+
+<<[[dodata()]] define special symbols>>=
+xdefine("bdata", SDATA, 0L);
+xdefine("edata", SDATA, datsize);
+xdefine("end", SBSS, datsize+bsssize);
+@
+
+% how 'end' can be in SBSS section? we actually want it initialized ...
+% because here it's actually about the layout! end will have a location
+% at the end of the SBSS! if do &end (or $end) then you'll get a pointer to
+% the end of the BSS! reflection power!
+
+<<[[span()]] define special symbols>>=
+setext = lookup("etext", 0);
+if(setext != S) {
+    setext->value = c;
+    textsize = c - INITTEXT;
+}
+@
+% could use xdefine?
+
+% note that etext final value will be set in span()
+
+
+
+<<function xdefine(arm)>>=
+void
+xdefine(char *p, int t, long v)
+{
+    Sym *s;
+
+    s = lookup(p, 0);
+    if(s->type == SNONE || s->type == SXREF) {
+        s->type = t;
+        s->value = v;
+    }
+}
+@
+
+<<[[dodata()]] define special symbols>>=
+xdefine("etext", STEXT, 0L);
+@
+
+<<[[dodata()]] define special symbols>>=
+xdefine("setR12", SDATA, 0L+BIG);
+@
+
+<<constant BIG>>=
+BIG		= (1<<12)-4,
+@
+% ???
+% >>
 
 \chapter{Machine Code Generation (ARM)}
 

@@ -109,6 +109,7 @@ dodata(void)
      for(s = hash[i]; s != S; s = s->link) {
         if(s->type != SBSS)
             continue;
+        // s->value used to contain the size of the GLOBL, now it's its location
         v = s->value;
         s->value = orig;
         orig += v;
@@ -118,11 +119,15 @@ dodata(void)
 
     bsssize = orig-datsize;
 
-    xdefine("setR12", SDATA, 0L+BIG);
+    /*s: [[dodata()]] define special symbols */
     xdefine("bdata", SDATA, 0L);
     xdefine("edata", SDATA, datsize);
     xdefine("end", SBSS, datsize+bsssize);
+    /*x: [[dodata()]] define special symbols */
     xdefine("etext", STEXT, 0L);
+    /*x: [[dodata()]] define special symbols */
+    xdefine("setR12", SDATA, 0L+BIG);
+    /*e: [[dodata()]] define special symbols */
 }
 /*e: function dodata(arm) */
 

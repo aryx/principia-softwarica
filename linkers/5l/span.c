@@ -177,11 +177,13 @@ span(void)
 
     c = rnd(c, 8);
 
+    /*s: [[span()]] define special symbols */
     setext = lookup("etext", 0);
     if(setext != S) {
         setext->value = c;
         textsize = c - INITTEXT;
     }
+    /*e: [[span()]] define special symbols */
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);
