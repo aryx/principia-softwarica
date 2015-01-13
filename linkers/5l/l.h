@@ -51,7 +51,7 @@ struct	Adr
     };
 
     /*s: [[Adr]] other fields */
-    // enum<registr>
+    // option<enum<registr>> None = R_NONE
     short	reg; 
     /*x: [[Adr]] other fields */
     union {
@@ -79,7 +79,7 @@ struct	Prog
     Adr	to;
 
     /*s: [[Prog]] other fields */
-    // enum<registr>
+    // option<enum<registr>>, None = R_NONE
     short	reg;
     /*x: [[Prog]] other fields */
     // enum<instr_cond>
@@ -116,7 +116,7 @@ struct	Sym
 
     //enum<section>
     short	type;
-    // generic value, e.g. pc for a TEXT procedure, size for GLOBL
+    // generic value, e.g. virtual pc for a TEXT procedure, size for GLOBL
     long	value; 
 
     /*s: [[Sym]] other fields */

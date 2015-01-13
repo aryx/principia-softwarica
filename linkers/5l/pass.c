@@ -47,13 +47,13 @@ dodata(void)
 
     orig = 0;
 
+    /*s: [[dodata()]] small data pass */
     /*
-     * pass 1
+     * pass 0
      *	assign 'small' variables to data segment
      *	(rational is that data segment is more easily
      *	 addressed through offset on R12)
      */
-    /*s: [[dodata()]] small data pass */
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
@@ -78,8 +78,8 @@ dodata(void)
     /*e: [[dodata()]] small data pass */
 
     /*
-     * pass 2
-     *	assign large 'data' variables to data segment
+     * pass 1
+     *	assign (large) 'data' variables to data segment
      */
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
@@ -102,7 +102,7 @@ dodata(void)
     datsize = orig;
 
     /*
-     * pass 3
+     * pass 2
      *	everything else to bss segment
      */
     for(i=0; i<NHASH; i++)
@@ -305,6 +305,7 @@ loop:
     if(a == AB || (a == ARET && p->scond == COND_ALWAYS) || a == ARFE){
         return;
     }
+
     if(p->cond != P)
      /*s: [[xfol()]] if a is not ABL and p has a link */
      if(a != ABL && p->link != P) {

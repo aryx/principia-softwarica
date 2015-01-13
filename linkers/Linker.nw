@@ -374,7 +374,7 @@ struct	Sym
 
     //enum<section>
     short	type;
-    // generic value, e.g. pc for a TEXT procedure, size for GLOBL
+    // generic value, e.g. virtual pc for a TEXT procedure, size for GLOBL
     long	value; 
 
     <<[[Sym]] other fields>>
@@ -552,7 +552,7 @@ struct	Adr
 
 
 <<[[Adr]] other fields>>=
-// enum<registr>
+// option<enum<registr>> None = R_NONE
 short	reg; 
 @
 % again a reg field ... because most operands involve a register
@@ -629,7 +629,7 @@ struct	Prog
 
 % very arm specific!
 <<[[Prog]] other fields>>=
-// enum<registr>
+// option<enum<registr>>, None = R_NONE
 short	reg;
 @
 % ARM instructions have often 3 operands in which case at least
@@ -1214,7 +1214,10 @@ if(INITENTRY == nil) {
     <<[[main()]] if digit INITENTRY>>
 }
 @
-%todo: why when have libs we set _main as SXREF? and why when -l we don't?
+%Why when have libs we set _main as SXREF? and why when -l we don't?
+% by creating a new entry and setting it to SXREF (default is SNONE) we will
+% force in loadlib() to consider _main as a starting point as we marked
+% is a undefined (undefined but looked for)
 
 % _main! not main, because _main is defined in libc and then call your main?
 % SXREF means?
@@ -1225,10 +1228,15 @@ if(INITENTRY == nil) {
 % command line when the file is a .a (and also core libs passed
 % via -lxxx)
 
+% less: objfile -> ldobj and ldobj -> ldinstrs
+%  as it can actually load a slice of an object, just a procedure
+
 % essentially modify which globals?
 %  - should modify firstp! and textp, datap, lastp, etc
 %  - will modify libraryp probably, the cool pragma "autolib"
 %    which is why objfile() must be called before loadlib()
+
+% SARMAG = Size ARchive MAGic string
 
 <<function objfile>>=
 void
@@ -1239,7 +1247,7 @@ objfile(char *file)
     char magbuf[SARMAG];
     <<[[objfile()]] other locals>>
 
-    DBG("%5.2f ldobj: %s\n", cputime(), file);
+    DBG("%5.2f objfile: %s\n", cputime(), file);
 
     <<[[objfile()]] adjust file if -lxxx filename>>
 
@@ -2397,6 +2405,62 @@ out:
 
 \chapter{Loading Libraries}
 
+% it actually loads only the functions/data which are necessary
+% (which are used by the object files). So it removes lots of code
+% which helps generate small binaries (see helloc, only 4618 bytes)
+
+\section{[[ar]] format}
+
+% from ar.h
+<<constant ARMAG>>=
+#define	ARMAG	"!<arch>\n"
+@
+% ARchive MAGic?
+
+<<constant SARMAG>>=
+#define	SARMAG	8
+@
+%size ARMAG
+
+<<constant ARFMAG>>=
+#define	ARFMAG	"`\n"
+@
+% ARchive F? MAGic
+
+<<constant SARNAME>>=
+#define SARNAME	16
+@
+%size ARNAME
+% so can't have symbol name of more than 16 characters?
+
+% seems to be the file header and also each entry header
+<<struct ar_hdr>>=
+struct	ar_hdr
+{
+    char	name[SARNAME];
+
+    char	date[12];
+    char	uid[6];
+    char	gid[6];
+    char	mode[8];
+
+    char	size[10]; // use atolwhex() to get the value
+    char	fmag[2]; // ARFMAG
+};
+@
+%less: s/char/byte!
+
+<<constant SAR_HDR>>=
+#define	SAR_HDR	(SARNAME+44)
+@
+% sizeof(struct ar_hdr)
+
+
+
+%todo: ar does things with pc? I can't see how ldobj can work
+% when you seek to an individual TEXT because the branch jumps
+% are absolute with the 0 basis as the first instruction in the file,
+% not first instruction in the procedure ...
 
 \section{Loading libraries manually [[5l libxxx.a]]}
 
@@ -2416,76 +2480,67 @@ char	symname[]	= SYMDEF;
 
 
 <<[[objfile()]] when file is a library>>=
-    DBG("%5.2f ldlib: %s\n", cputime(), file);
+DBG("%5.2f ldlib: %s\n", cputime(), file);
 
-    l = read(f, &arhdr, SAR_HDR);
-    if(l != SAR_HDR) {
-        diag("%s: short read on archive file symbol header", file);
-        goto out;
-    }
-    if(strncmp(arhdr.name, symname, strlen(symname))) {
-        diag("%s: first entry not symbol header", file);
-        goto out;
-    }
+l = read(f, &arhdr, SAR_HDR);
 
-    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
-    off = SARMAG + SAR_HDR;
+<<[[objfile()]] sanity check library header size and content>>
 
-    /*
-     * just bang the whole symbol file into memory
-     */
-    seek(f, off, 0);
-    cnt = esym - off;
-    start = malloc(cnt + 10);
-    cnt = read(f, start, cnt);
-    if(cnt <= 0){
-        close(f);
-        return;
-    }
-    stop = &start[cnt];
-    memset(stop, 0, 10);
+esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
+off = SARMAG + SAR_HDR;
 
-    work = true;
-
-    while(work) {
-
-        DBG("%5.2f library pass: %s\n", cputime(), file);
-
-        work = false;
-        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
-
-            s = lookup(e+5, 0);
-            if(s->type != SXREF)
-                continue;
-            sprint(pname, "%s(%s)", file, s->name);
-
-            DBG("%5.2f library: %s\n", cputime(), pname);
-
-            l = e[1] & 0xff;
-            l |= (e[2] & 0xff) << 8;
-            l |= (e[3] & 0xff) << 16;
-            l |= (e[4] & 0xff) << 24;
-
-            seek(f, l, 0);
-            /* need readn to read the dumps (at least) */
-            l = readn(f, &arhdr, SAR_HDR);
-            if(l != SAR_HDR)
-                goto bad;
-            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
-                goto bad;
-            l = atolwhex(arhdr.size);
-
-            ldobj(f, l, pname);
-
-            if(s->type == SXREF) {
-                diag("%s: failed to load: %s", file, s->name);
-                errorexit();
-            }
-            work = true;
-            xrefresolv = true;
-        }
-    }
+/*
+ * just bang the whole symbol file into memory
+ */
+seek(f, off, 0);
+cnt = esym - off;
+start = malloc(cnt + 10);
+cnt = read(f, start, cnt);
+if(cnt <= 0){
+    close(f);
     return;
+}
+stop = &start[cnt];
+memset(stop, 0, 10);
+
+work = true;
+
+while(work) {
+
+    DBG("%5.2f library pass: %s\n", cputime(), file);
+
+    work = false;
+    for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+
+        s = lookup(e+5, 0);
+        if(s->type != SXREF)
+            continue;
+
+        sprint(pname, "%s(%s)", file, s->name);
+        DBG("%5.2f library: %s\n", cputime(), pname);
+
+        l = e[1] & 0xff;
+        l |= (e[2] & 0xff) << 8;
+        l |= (e[3] & 0xff) << 16;
+        l |= (e[4] & 0xff) << 24;
+        // >> >> >> >>
+
+        seek(f, l, SEEK__START);
+        l = read(f, &arhdr, SAR_HDR);
+        <<[[objfile()]] sanity check entry header>>
+        l = atolwhex(arhdr.size);
+
+        ldobj(f, l, pname);
+
+        if(s->type == SXREF) {
+            diag("%s: failed to load: %s", file, s->name);
+            errorexit();
+        }
+        work = true;
+        xrefresolv = true;
+    }
+}
+return;
 
 bad:
     diag("%s: bad or out of date archive", file);
@@ -2495,8 +2550,32 @@ out:
 
 % >> >> >>
 
+%old:
+%        /* need readn to read the dumps (at least) */
+%        l = readn(f, &arhdr, SAR_HDR);
+% but seems ugly, readn in lib_core/libc/port/readn.c seems to just
+% do some repetitive read()
 
-% ??? why need multi pass for libs?
+
+<<[[objfile()]] sanity check library header size and content>>=
+if(l != SAR_HDR) {
+    diag("%s: short read on archive file symbol header", file);
+    goto out;
+}
+if(strncmp(arhdr.name, symname, strlen(symname))) {
+    diag("%s: first entry not symbol header", file);
+    goto out;
+}
+@
+
+<<[[objfile()]] sanity check entry header>>=
+if(l != SAR_HDR)
+    goto bad;
+if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
+    goto bad;
+@
+
+% Why need multi pass for libs?
 <<global xrefresolv>>=
 bool	xrefresolv;
 @
@@ -2512,6 +2591,7 @@ if(xrefresolv)
              if(s->type == SXREF)
                  goto loop;
 @
+% still some unresolved symbols, loop
 
 \section{Loading libraries semi automatically [[5l -lxxx]]}
 
@@ -2742,46 +2822,6 @@ addlib(char *obj)
     libraryobj[libraryp] = p;
     libraryp++;
 }
-@
-
-
-
-
-\section{[[ar]] format}
-
-% from ar.h
-<<constant ARMAG>>=
-#define	ARMAG	"!<arch>\n"
-@
-
-<<constant SARMAG>>=
-#define	SARMAG	8
-@
-
-<<constant ARFMAG>>=
-#define	ARFMAG	"`\n"
-@
-
-<<constant SARNAME>>=
-#define SARNAME	16
-@
-
-<<struct ar_hdr>>=
-struct	ar_hdr
-{
-    char	name[SARNAME];
-    char	date[12];
-    char	uid[6];
-    char	gid[6];
-    char	mode[8];
-    char	size[10];
-    char	fmag[2];
-};
-@
-%less: s/char/byte!
-
-<<constant SAR_HDR>>=
-#define	SAR_HDR	(SARNAME+44)
 @
 
 
@@ -10181,7 +10221,7 @@ fileexists(char *s)
 \section{String processing}
 
 % could be put in libc, with the other atoxxx
-% atoxx? why a?
+% atoxx? why a?  a to long with hexadecimal?
 <<function atolwhex>>=
 long
 atolwhex(char *s)

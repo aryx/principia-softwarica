@@ -139,7 +139,7 @@ struct	Sym
 
     //enum<section>
     short	type;
-    // generic value, e.g. pc for a TEXT procedure, size for GLOBL
+    // generic value, e.g. virtual pc for a TEXT procedure, size for GLOBL
     long	value; 
 
     /*s: [[Sym]] other fields */
