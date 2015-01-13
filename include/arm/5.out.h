@@ -44,7 +44,7 @@ enum opcode
 {
     AXXX,
 
-    ANOP, // VIRTUAL, removed by linker
+    ANOP, // VIRTUAL removed by linker
     // ----------------------------------------------------------------------
     // Arithmetic and logic opcodes
     // ----------------------------------------------------------------------
