@@ -232,6 +232,10 @@ License.
 % in hardware also because in soft could be too slow
 % and generic enough that in hardware make sense, e.g. floating point.
 
+% from http://danluu.com/new-cpu-features/
+% "... boxes that do arithmetic, logic, bit twiddling and shifting, and loading
+%  and storing things in memory."
+
 % memory access (load/store archi on ARM) (Imem)
 % add/sub/mul in hardware! sometimes also div! (Iarith)
 % branching (Ibranch)
@@ -2509,7 +2513,8 @@ Ib(instruction inst)
     reg.r[REGPC] = v - 4;
 }
 @
-% why +8?
+% why +8? because when jmp usually it's not the current instruction,
+% nor the next instruction, so make sense to by default jump to +8
 % why -4? to compensate back for +=4 in run()
 % why << 8 and then >> 6
 % why << 2? because jump are anyway to code and so 4 bytes boundaries
@@ -2543,8 +2548,12 @@ Ibl(instruction inst)
     reg.r[REGPC] = v - 4;
 }
 @
-% Branch and Link, so kinda call, just for leaves, no need stack
-% if want RET, just have to mov reglink, regpc
+% Branch and Link, so kinda call. The callee needs to save.
+% REGLINK then in the stack if one wants to have multiple BL.
+% For leaves, no need stack, if want RET, just have to mov reglink, regpc.
+
+% +4 to save the next instruction, so RET comes back after the current
+% instruction (after the BL). -4 to compensate.
 
 \ifallcode
 <<[[Ibl()]] trace>>=
@@ -2577,10 +2586,15 @@ case 7:	/* coprocessor crap */ // and syscall
 [OSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
 @
 
+% no RFE here, because RFE should never be used in application code.
+% Only system code could contain RFE, but we emulate completely
+% system code.
+
 \section{Unimplemented instructions}
 
-% MCR, and other very low level stuff
-% also ADC/... transfer to undef
+% - MCR, and other very low level stuff
+% - ADC/... transfer to undef
+% - RFE see above
 
 \chapter{Memory}
 
@@ -3186,7 +3200,7 @@ memio(char *mb, uintptr mem, int size, int dir)
 }
 @
 
-\section{Supported syscalls}
+\section{Nop and errstr syscalls}
 
 <<function sysnop>>=
 void
@@ -3226,142 +3240,43 @@ syserrstr(void)
 }
 @
 
-<<function sysbind>>=
+\section{Memory syscalls}
+
+<<function sysbrk>>=
 void
-sysbind(void)
-{ 
-    ulong pname, pold, flags;
-    char name[1024], old[1024];
-    int n;
-
-    pname = getmem_w(reg.r[REGSP]+4);
-    pold = getmem_w(reg.r[REGSP]+8);
-    flags = getmem_w(reg.r[REGSP]+12);
-    memio(name, pname, sizeof(name), MemReadstring);
-    memio(old, pold, sizeof(old), MemReadstring);
-    if(sysdbg)
-        itrace("bind(0x%lux='%s', 0x%lux='%s', 0x%lux)", name, name, old, old, flags);
-
-    n = bind(name, old, flags);
-    if(n < 0)
-        errstr(errbuf, sizeof errbuf);
-
-    reg.r[REGRET] = n;
-}
-@
-
-<<function sysfd2path>>=
-void
-sysfd2path(void)
+sysbrk(void)
 {
-    int n;
-    uint fd;
-    ulong str;
-    char buf[1024];
+    ulong addr, osize, nsize;
+    Segment *s;
 
-    fd = getmem_w(reg.r[REGSP]+4);
-    str = getmem_w(reg.r[REGSP]+8);
-    n = getmem_w(reg.r[REGSP]+12);
+    addr = getmem_w(reg.r[REGSP]+4);
     if(sysdbg)
-        itrace("fd2path(0x%lux, 0x%lux, 0x%lux)", fd, str, n);
-    reg.r[1] = -1;
-    if(n > sizeof buf){
-        strcpy(errbuf, "buffer too big");
+        itrace("brk(0x%lux)", addr);
+
+    reg.r[REGRET] = -1;
+    if(addr < memory.seg[Data].base+datasize) {
+        strcpy(errbuf, "address below segment");
         return;
     }
-    n = fd2path(fd, buf, sizeof buf);
-    if(n < 0)
-        errstr(buf, sizeof buf);
-    else
-        memio(errbuf, str, n, MemWrite);
-    reg.r[REGRET] = n;
-    
-}
-@
-
-<<function syschdir>>=
-void
-syschdir(void)
-{ 
-    char file[1024];
-    int n;
-    ulong name;
-
-    name = getmem_w(reg.r[REGSP]+4);
-    memio(file, name, sizeof(file), MemReadstring);
-    if(sysdbg)
-        itrace("chdir(0x%lux='%s', 0x%lux)", name, file);
-    
-    n = chdir(file);
-    if(n < 0)
-        errstr(errbuf, sizeof errbuf);
-
-    reg.r[REGRET] = n;
-}
-@
-
-<<function sysclose>>=
-void
-sysclose(void)
-{
-    int n;
-    ulong fd;
-
-    fd = getmem_w(reg.r[REGSP]+4);
-    if(sysdbg)
-        itrace("close(%d)", fd);
-
-    n = close(fd);
-    if(n < 0)
-        errstr(errbuf, sizeof errbuf);
-    reg.r[REGRET] = n;
-}
-@
-
-<<function sysdup>>=
-void
-sysdup(void)
-{
-    int oldfd, newfd;
-    int n;
-
-    oldfd = getmem_w(reg.r[REGSP]+4);
-    newfd = getmem_w(reg.r[REGSP]+8);
-    if(sysdbg)
-        itrace("dup(%d, %d)", oldfd, newfd);
-
-    n = dup(oldfd, newfd);
-    if(n < 0)
-        errstr(errbuf, sizeof errbuf);
-    reg.r[REGRET] = n;
-}
-@
-
-<<constant OERRLEN>>=
-#define	OERRLEN	64	/* compatibility; used in _stat etc. */
-@
-
-<<function sysexits>>=
-void
-sysexits(void)
-{
-    char buf[OERRLEN];
-    ulong str;
-
-    str = getmem_w(reg.r[REGSP]+4);
-    if(sysdbg)
-        itrace("exits(0x%lux)", str);
-
-    // single step to give opportunity to inspect before exit
-    count = 1;
-    if(str != 0) {
-        memio(buf, str, sizeof buf, MemRead);
-        Bprint(bioout, "exits(%s)\n", buf);
+    if(addr > memory.seg[Stack].base) {
+        strcpy(errbuf, "segment too big");
+        return;
     }
-    else
-        Bprint(bioout, "exits(0)\n");
+    s = &memory.seg[Bss];
+    if(addr > s->end) {
+        osize = ((s->end-s->base)/BY2PG)*sizeof(byte*);
+        addr = ((addr)+(BY2PG-1))&~(BY2PG-1);
+        s->end = addr;
+        nsize = ((s->end-s->base)/BY2PG)*sizeof(byte*);
+        s->table = erealloc(s->table, osize, nsize);
+    }	
+
+    reg.r[REGRET] = 0;	
 }
 @
+
+
+\section{File syscalls}
 
 <<function sysopen>>=
 void
@@ -3385,6 +3300,25 @@ sysopen(void)
     reg.r[REGRET] = n;
 };
 @
+
+<<function sysclose>>=
+void
+sysclose(void)
+{
+    int n;
+    ulong fd;
+
+    fd = getmem_w(reg.r[REGSP]+4);
+    if(sysdbg)
+        itrace("close(%d)", fd);
+
+    n = close(fd);
+    if(n < 0)
+        errstr(errbuf, sizeof errbuf);
+    reg.r[REGRET] = n;
+}
+@
+
 
 <<function sysread>>=
 void
@@ -3464,24 +3398,44 @@ sysseek(void)
 }
 @
 
-<<function syssleep>>=
+
+<<function syswrite>>=
 void
-syssleep(void)
+syswrite(vlong offset)
 {
-    ulong len;
+    int fd;
+    ulong size, a;
+    char *buf;
     int n;
 
-    len = getmem_w(reg.r[REGSP]+4);
-    if(sysdbg)
-        itrace("sleep(%d)", len);
+    fd = getmem_w(reg.r[REGSP]+4);
+    a = getmem_w(reg.r[REGSP]+8);
+    size = getmem_w(reg.r[REGSP]+12);
 
-    n = sleep(len);
+    Bflush(bioout);
+    buf = memio(0, a, size, MemRead);
+    n = pwrite(fd, buf, size, offset);
     if(n < 0)
         errstr(errbuf, sizeof errbuf);	
+
+    if(sysdbg)
+        itrace("write(%d, %lux, %d, 0x%llx) = %d", fd, a, size, offset, n);
+
+    free(buf);
 
     reg.r[REGRET] = n;
 }
 @
+
+<<function syspwrite>>=
+void
+syspwrite(void)
+{
+    syswrite(getmem_v(reg.r[REGSP]+16));
+}
+@
+
+
 
 <<function sysstat>>=
 void
@@ -3539,63 +3493,8 @@ sysfstat(void)
 }
 @
 
-<<function syswrite>>=
-void
-syswrite(vlong offset)
-{
-    int fd;
-    ulong size, a;
-    char *buf;
-    int n;
 
-    fd = getmem_w(reg.r[REGSP]+4);
-    a = getmem_w(reg.r[REGSP]+8);
-    size = getmem_w(reg.r[REGSP]+12);
-
-    Bflush(bioout);
-    buf = memio(0, a, size, MemRead);
-    n = pwrite(fd, buf, size, offset);
-    if(n < 0)
-        errstr(errbuf, sizeof errbuf);	
-
-    if(sysdbg)
-        itrace("write(%d, %lux, %d, 0x%llx) = %d", fd, a, size, offset, n);
-
-    free(buf);
-
-    reg.r[REGRET] = n;
-}
-@
-
-<<function syspwrite>>=
-void
-syspwrite(void)
-{
-    syswrite(getmem_v(reg.r[REGSP]+16));
-}
-@
-
-<<function syspipe>>=
-void
-syspipe(void)
-{
-    int n, p[2];
-    ulong fd;
-
-    fd = getmem_w(reg.r[REGSP]+4);
-    if(sysdbg)
-        itrace("pipe(%lux)", fd);
-
-    n = pipe(p);
-    if(n < 0)
-        errstr(errbuf, sizeof errbuf);
-    else {
-        putmem_w(fd, p[0]);
-        putmem_w(fd+4, p[1]);
-    }
-    reg.r[REGRET] = n;
-}
-@
+\section{Directory syscalls}
 
 <<function syscreate>>=
 void
@@ -3620,39 +3519,6 @@ syscreate(void)
 }
 @
 
-<<function sysbrk>>=
-void
-sysbrk(void)
-{
-    ulong addr, osize, nsize;
-    Segment *s;
-
-    addr = getmem_w(reg.r[REGSP]+4);
-    if(sysdbg)
-        itrace("brk(0x%lux)", addr);
-
-    reg.r[REGRET] = -1;
-    if(addr < memory.seg[Data].base+datasize) {
-        strcpy(errbuf, "address below segment");
-        return;
-    }
-    if(addr > memory.seg[Stack].base) {
-        strcpy(errbuf, "segment too big");
-        return;
-    }
-    s = &memory.seg[Bss];
-    if(addr > s->end) {
-        osize = ((s->end-s->base)/BY2PG)*sizeof(byte*);
-        addr = ((addr)+(BY2PG-1))&~(BY2PG-1);
-        s->end = addr;
-        nsize = ((s->end-s->base)/BY2PG)*sizeof(byte*);
-        s->table = erealloc(s->table, osize, nsize);
-    }	
-
-    reg.r[REGRET] = 0;	
-}
-@
-
 <<function sysremove>>=
 void
 sysremove(void)
@@ -3672,6 +3538,178 @@ sysremove(void)
     reg.r[REGRET] = n;
 }
 @
+
+
+
+<<function sysfd2path>>=
+void
+sysfd2path(void)
+{
+    int n;
+    uint fd;
+    ulong str;
+    char buf[1024];
+
+    fd = getmem_w(reg.r[REGSP]+4);
+    str = getmem_w(reg.r[REGSP]+8);
+    n = getmem_w(reg.r[REGSP]+12);
+    if(sysdbg)
+        itrace("fd2path(0x%lux, 0x%lux, 0x%lux)", fd, str, n);
+    reg.r[1] = -1;
+    if(n > sizeof buf){
+        strcpy(errbuf, "buffer too big");
+        return;
+    }
+    n = fd2path(fd, buf, sizeof buf);
+    if(n < 0)
+        errstr(buf, sizeof buf);
+    else
+        memio(errbuf, str, n, MemWrite);
+    reg.r[REGRET] = n;
+    
+}
+@
+
+<<function syschdir>>=
+void
+syschdir(void)
+{ 
+    char file[1024];
+    int n;
+    ulong name;
+
+    name = getmem_w(reg.r[REGSP]+4);
+    memio(file, name, sizeof(file), MemReadstring);
+    if(sysdbg)
+        itrace("chdir(0x%lux='%s', 0x%lux)", name, file);
+    
+    n = chdir(file);
+    if(n < 0)
+        errstr(errbuf, sizeof errbuf);
+
+    reg.r[REGRET] = n;
+}
+@
+
+
+\section{Namespace syscalls}
+
+
+<<function sysbind>>=
+void
+sysbind(void)
+{ 
+    ulong pname, pold, flags;
+    char name[1024], old[1024];
+    int n;
+
+    pname = getmem_w(reg.r[REGSP]+4);
+    pold = getmem_w(reg.r[REGSP]+8);
+    flags = getmem_w(reg.r[REGSP]+12);
+    memio(name, pname, sizeof(name), MemReadstring);
+    memio(old, pold, sizeof(old), MemReadstring);
+    if(sysdbg)
+        itrace("bind(0x%lux='%s', 0x%lux='%s', 0x%lux)", name, name, old, old, flags);
+
+    n = bind(name, old, flags);
+    if(n < 0)
+        errstr(errbuf, sizeof errbuf);
+
+    reg.r[REGRET] = n;
+}
+@
+
+\section{Misc syscalls}
+
+<<function sysdup>>=
+void
+sysdup(void)
+{
+    int oldfd, newfd;
+    int n;
+
+    oldfd = getmem_w(reg.r[REGSP]+4);
+    newfd = getmem_w(reg.r[REGSP]+8);
+    if(sysdbg)
+        itrace("dup(%d, %d)", oldfd, newfd);
+
+    n = dup(oldfd, newfd);
+    if(n < 0)
+        errstr(errbuf, sizeof errbuf);
+    reg.r[REGRET] = n;
+}
+@
+
+<<constant OERRLEN>>=
+#define	OERRLEN	64	/* compatibility; used in _stat etc. */
+@
+
+<<function sysexits>>=
+void
+sysexits(void)
+{
+    char buf[OERRLEN];
+    ulong str;
+
+    str = getmem_w(reg.r[REGSP]+4);
+    if(sysdbg)
+        itrace("exits(0x%lux)", str);
+
+    // single step to give opportunity to inspect before exit
+    count = 1;
+    if(str != 0) {
+        memio(buf, str, sizeof buf, MemRead);
+        Bprint(bioout, "exits(%s)\n", buf);
+    }
+    else
+        Bprint(bioout, "exits(0)\n");
+}
+@
+
+
+<<function syssleep>>=
+void
+syssleep(void)
+{
+    ulong len;
+    int n;
+
+    len = getmem_w(reg.r[REGSP]+4);
+    if(sysdbg)
+        itrace("sleep(%d)", len);
+
+    n = sleep(len);
+    if(n < 0)
+        errstr(errbuf, sizeof errbuf);	
+
+    reg.r[REGRET] = n;
+}
+@
+
+
+<<function syspipe>>=
+void
+syspipe(void)
+{
+    int n, p[2];
+    ulong fd;
+
+    fd = getmem_w(reg.r[REGSP]+4);
+    if(sysdbg)
+        itrace("pipe(%lux)", fd);
+
+    n = pipe(p);
+    if(n < 0)
+        errstr(errbuf, sizeof errbuf);
+    else {
+        putmem_w(fd, p[0]);
+        putmem_w(fd+4, p[1]);
+    }
+    reg.r[REGRET] = n;
+}
+@
+
+
 
 % why global? could be local of sysnotify
 <<global nofunc>>=
@@ -3712,7 +3750,6 @@ sysexec(void)
     exits(0);
 }
 @
-
 
 
 <<function sysawait>>=
@@ -5244,6 +5281,8 @@ iprofile(void)
 
 
 \chapter{Advanced Topics}
+
+% see from http://danluu.com/new-cpu-features/
 
 \section{Floats}
 % see vi/ ? ARM has no float? it has maybe but 5i/ didn't
