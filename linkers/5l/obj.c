@@ -1460,7 +1460,7 @@ doprof1(void)
 /*e: function doprof1(arm) */
 
 /*s: global brcond(arm) */
-static int brcond[] = {ABEQ, ABNE, ABCS, ABCC, ABMI, ABPL, ABVS, ABVC, ABHI, ABLS, ABGE, ABLT, ABGT, ABLE};
+static int brcond[] = {ABEQ, ABNE, ABHS, ABLO, ABMI, ABPL, ABVS, ABVC, ABHI, ABLS, ABGE, ABLT, ABGT, ABLE};
 /*e: global brcond(arm) */
 
 /*s: function doprof2(arm) */

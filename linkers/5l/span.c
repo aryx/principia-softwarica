@@ -794,9 +794,7 @@ buildop(void)
             break;
         case ABEQ:
             oprange[ABNE] = oprange[r];
-            oprange[ABCS] = oprange[r];
             oprange[ABHS] = oprange[r];
-            oprange[ABCC] = oprange[r];
             oprange[ABLO] = oprange[r];
             oprange[ABMI] = oprange[r];
             oprange[ABPL] = oprange[r];

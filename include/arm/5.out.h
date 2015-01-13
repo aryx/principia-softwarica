@@ -106,9 +106,7 @@ enum opcode
     // VIRTUAL, AB derivatives with condition code, see 5i/
     ABEQ,
     ABNE,
-    ABCS,//not in 5i/cond, seems equivalent to ABHS
     ABHS,
-    ABCC,//not in 5i/cond, seems equivalent to ABLO
     ABLO,
     ABMI,
     ABPL,

@@ -256,9 +256,7 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "BEQ",		LBCOND,	ABEQ,
     "BNE",		LBCOND,	ABNE,
-    "BCS",		LBCOND,	ABCS,
     "BHS",		LBCOND,	ABHS,
-    "BCC",		LBCOND,	ABCC,
     "BLO",		LBCOND,	ABLO,
     "BMI",		LBCOND,	ABMI,
     "BPL",		LBCOND,	ABPL,
@@ -586,8 +584,8 @@ static int bcode[] =
 {
     ABEQ,
     ABNE,
-    ABCS,
-    ABCC,
+    ABHS,
+    ABLO,
     ABMI,
     ABPL,
     ABVS,

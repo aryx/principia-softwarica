@@ -1688,9 +1688,7 @@ opbra(int a, int sc)
     switch(a) {
     case ABEQ:	return (0x0<<28)|(0x5<<25);
     case ABNE:	return (0x1<<28)|(0x5<<25);
-    case ABCS:	return (0x2<<28)|(0x5<<25);
     case ABHS:	return (0x2<<28)|(0x5<<25);
-    case ABCC:	return (0x3<<28)|(0x5<<25);
     case ABLO:	return (0x3<<28)|(0x5<<25);
     case ABMI:	return (0x4<<28)|(0x5<<25);
     case ABPL:	return (0x5<<28)|(0x5<<25);

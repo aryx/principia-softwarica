@@ -167,9 +167,7 @@ relinv(int a)
     switch(a) {
     case ABEQ:	return ABNE;
     case ABNE:	return ABEQ;
-    case ABCS:	return ABCC;
     case ABHS:	return ABLO;
-    case ABCC:	return ABCS;
     case ABLO:	return ABHS;
     case ABMI:	return ABPL;
     case ABPL:	return ABMI;

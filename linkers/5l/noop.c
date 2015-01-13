@@ -51,9 +51,7 @@ noops(void)
 
         case ABEQ:
         case ABNE:
-        case ABCS:
         case ABHS:
-        case ABCC:
         case ABLO:
         case ABMI:
         case ABPL:

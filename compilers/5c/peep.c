@@ -1022,9 +1022,7 @@ copyu(Prog *p, Adr *v, Adr *s)
 
 	case ABEQ:	/* read, read */
 	case ABNE:
-	case ABCS:
 	case ABHS:
-	case ABCC:
 	case ABLO:
 	case ABMI:
 	case ABPL:
@@ -1233,9 +1231,7 @@ struct {
 } predinfo[]  = { 
 	{ ABEQ,	ABNE,	0x0,	0x1, }, 
 	{ ABNE,	ABEQ,	0x1,	0x0, }, 
-	{ ABCS,	ABCC,	0x2,	0x3, }, 
 	{ ABHS,	ABLO,	0x2,	0x3, }, 
-	{ ABCC,	ABCS,	0x3,	0x2, }, 
 	{ ABLO,	ABHS,	0x3,	0x2, }, 
 	{ ABMI,	ABPL,	0x4,	0x5, }, 
 	{ ABPL,	ABMI,	0x5,	0x4, }, 
