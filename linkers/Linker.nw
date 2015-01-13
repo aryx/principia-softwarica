@@ -647,7 +647,12 @@ long	pc;
 @
 % the absolute pc of this instruction! needed for
 % some check pc == p->pc somewhere.
-%todo: virtual pc first? does it evolve?
+%todo: virtual pc first? does it evolve? yes!
+% first it's relative to the object code start (0..) in the .5
+% and incremented by 1 (virtual pc),
+% then it's adjusted when loading the object files (see ipc),
+% then in span and asmb it's incremented by 4 or even more
+% (concrete pc)
 
 
 
@@ -883,260 +888,6 @@ aclass(Adr *a)
 % is close and so could be stored in a half-word, or if
 % it's far away.
 
-
-
-<<[[aclass()]] switch type cases>>=
-case D_OREG:
-    switch(a->symkind) {
-    <<[[aclass()]] D_OREG case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-% OREG usually is a dereference of a register or a symbol reference
-% (which is then really an implicit offet to SB)
-
-% H S L ? halfword, small, large?
-
-<<cxxx(arm) cases>>=
-C_HEXT,
-C_SEXT,
-C_LEXT,
-
-C_FEXT,
-C_HFEXT,
-@
-% EXT for? external symbol?
-
-%xxx+y(SB)
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_EXTERN:
-case D_STATIC:
-    if(a->sym == nil || a->sym->name == nil) {
-        print("null sym external\n");
-        print("%D\n", a);
-        return C_GOK;
-    }
-    s = a->sym;
-    t = s->type;
-    if(t == SNONE || t == SXREF) {
-        diag("undefined external: %s in %s",
-            s->name, TNAME);
-        s->type = SDATA;
-    }
-    <<[[aclass()]] when D_OREG and D_STATIC and dlm>>
-    instoffset = s->value + a->offset - BIG;
-    t = immaddr(instoffset);
-    if(t) {
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFEXT : C_HEXT;
-        if(immfloat(t))
-            return C_FEXT;
-        return C_SEXT;
-    }
-    return C_LEXT;
-@
-% BIG ???
-
-<<cxxx(arm) cases>>=
-C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-C_SAUTO,	/* -0xfff to 0xfff */
-C_LAUTO,
-
-C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-C_HFAUTO,	/* both H and F */
-@
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_AUTO:
-    instoffset = autosize + a->offset;
-    t = immaddr(instoffset);
-    if(t){
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFAUTO : C_HAUTO;
-        if(immfloat(t))
-            return C_FAUTO;
-        return C_SAUTO;
-    }
-    return C_LAUTO;
-@
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_PARAM:
-    instoffset = autosize + a->offset + 4L;
-    t = immaddr(instoffset);
-    if(t){
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFAUTO : C_HAUTO;
-        if(immfloat(t))
-            return C_FAUTO;
-        return C_SAUTO;
-    }
-    return C_LAUTO;
-@
-% +4??
-
-% RO? rotated?
-<<cxxx(arm) cases>>=
-C_HOREG,
-C_SOREG,
-C_LOREG,
-
-C_ROREG,
-C_SROREG,	/* both S and R */
-
-C_FOREG,
-C_HFOREG,
-@
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_NONE:
-    instoffset = a->offset;
-    t = immaddr(instoffset);
-    if(t) {
-        if(immhalf(instoffset))		 /* n.b. that it will also satisfy immrot */
-            return immfloat(t) ? C_HFOREG : C_HOREG;
-        if(immfloat(t))
-            return C_FOREG; /* n.b. that it will also satisfy immrot */
-
-        t = immrot(instoffset);
-        if(t)
-            return C_SROREG;
-        if(immhalf(instoffset))
-            return C_HOREG;
-        return C_SOREG;
-    }
-    t = immrot(instoffset);
-    if(t)
-        return C_ROREG;
-    return C_LOREG;
-@
-
-
-
-<<[[aclass()]] switch type cases>>=
-case D_CONST:
-    switch(a->symkind) {
-    <<[[aclass()]] D_CONST case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-
-
-% Rotated, Negative, Large?
-<<cxxx(arm) cases>>=
-C_RCON,		/* 0xff rotated */
-C_NCON,		/* ~RCON */
-C_LCON,
-@
-%dead: C_SCON,		/* 0xffff */
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_NONE:
-    instoffset = a->offset;
-    if(a->reg != R_NONE)
-        goto aconsize;
-
-    t = immrot(instoffset);
-    if(t)
-        return C_RCON;
-
-    t = immrot(~instoffset);
-    if(t)
-        return C_NCON;
-    return C_LCON;
-@
-
-
-
-<<cxxx(arm) cases>>=
-C_RECON,
-@
-%dead: C_LECON
-%optab:    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
-%cmp:    case C_LECON:
-%        if(b == C_RECON)
-%            return 1;
-%        break;
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_EXTERN:
-case D_STATIC:
-    s = a->sym;
-    if(s == S)
-        break;
-    t = s->type;
-    switch(t) {
-    case STEXT: case SLEAF:
-    case SSTRING:
-    case SCONST:
-    case SUNDEF:
-        instoffset = s->value + a->offset;
-        return C_LCON;
-    case SNONE: case SXREF:
-        diag("undefined external: %s in %s", s->name, TNAME);
-        s->type = SDATA;
-        break;
-    }
-    if(!dlm) {
-        instoffset = s->value + a->offset - BIG;
-        t = immrot(instoffset);
-        if(t && instoffset != 0)
-            return C_RECON;
-    }
-    instoffset = s->value + a->offset + INITDAT;
-    return C_LCON;
-
-@
-
-
-
-
-
-<<cxxx(arm) cases>>=
-C_RACON,
-C_LACON,
-@
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_AUTO:
-    instoffset = autosize + a->offset;
-    goto aconsize;
-
-@
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_PARAM:
-    instoffset = autosize + a->offset + 4L;
-    goto aconsize;
-@
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-aconsize:
-    t = immrot(instoffset);
-    if(t)
-        return C_RACON;
-    return C_LACON;
-@
-
-
-
-%old: dead: this advanced addressing mode of 5a is not that useful
-%    case D_OCONST:
-%        switch(a->name) {
-%        case D_EXTERN:
-%        case D_STATIC:
-%            s = a->sym;
-%            t = s->type;
-%            if(t == 0 || t == SXREF) {
-%                diag("undefined external: %s in %s",
-%                    s->name, TNAME);
-%                s->type = SDATA;
-%            }
-%            instoffset = s->value + a->offset + INITDAT;
-%            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
-%                instoffset = s->value + a->offset;
-%            return C_LCON;
-%        }
-%        return C_GOK;
 
 
 
@@ -4008,7 +3759,8 @@ case ABCASE:
 % != generating DATA
 
 % and adjusting pc and code addresses to concrete value, 
-% not symbolic pc
+% not symbolic pc! so then in AB can do p->cond->pc to know
+% where to concretely jump
 
 <<global textsize>>=
 long	textsize;
@@ -4454,6 +4206,323 @@ Optab	optab[] =
 @
 % AXXX at the end? why not ALAST instead?
 %old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
+
+
+
+\section{Rot, Half, Large, and [[aclass()]]}
+
+<<function immrot(arm)>>=
+long
+immrot(ulong v)
+{
+    int i;
+
+    for(i=0; i<16; i++) {
+        if((v & ~0xff) == 0)
+            return (i<<8) | v | (1<<25);
+        v = (v<<2) | (v>>30);
+    }
+    return 0;
+}
+@
+% >> >>
+
+
+<<function immaddr(arm)>>=
+long
+immaddr(long v)
+{
+    if(v >= 0 && v <= 0xfff)
+        return (v & 0xfff) |
+            (1<<24) |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xfff && v < 0)
+        return (-v & 0xfff) |
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+
+
+<<function immhalf(arm)>>=
+int
+immhalf(long v)
+{
+    if(v >= 0 && v <= 0xff)
+        return v|
+            (1<<24)|	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xff && v < 0)
+        return (-v & 0xff)|
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+
+
+
+<<global instoffset(arm)>>=
+long	instoffset;
+@
+
+
+
+<<[[aclass()]] switch type cases>>=
+case D_OREG:
+    switch(a->symkind) {
+    <<[[aclass()]] D_OREG case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+% OREG usually is a dereference of a register or a symbol reference
+% (which is then really an implicit offet to SB)
+
+% H S L ? halfword, small, large?
+
+<<cxxx(arm) cases>>=
+C_HEXT,
+C_SEXT,
+C_LEXT,
+
+C_FEXT,
+C_HFEXT,
+@
+% EXT for? external symbol?
+
+%xxx+y(SB)
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_EXTERN:
+case D_STATIC:
+    if(a->sym == nil || a->sym->name == nil) {
+        print("null sym external\n");
+        print("%D\n", a);
+        return C_GOK;
+    }
+    s = a->sym;
+    t = s->type;
+    if(t == SNONE || t == SXREF) {
+        diag("undefined external: %s in %s",
+            s->name, TNAME);
+        s->type = SDATA;
+    }
+    <<[[aclass()]] when D_OREG and D_STATIC and dlm>>
+    instoffset = s->value + a->offset - BIG;
+    t = immaddr(instoffset);
+    if(t) {
+        if(immhalf(instoffset))
+            return immfloat(t) ? C_HFEXT : C_HEXT;
+        if(immfloat(t))
+            return C_FEXT;
+        return C_SEXT;
+    }
+    return C_LEXT;
+@
+% BIG ???
+
+<<cxxx(arm) cases>>=
+C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+C_SAUTO,	/* -0xfff to 0xfff */
+C_LAUTO,
+
+C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+C_HFAUTO,	/* both H and F */
+@
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_AUTO:
+    instoffset = autosize + a->offset;
+    t = immaddr(instoffset);
+    if(t){
+        if(immhalf(instoffset))
+            return immfloat(t) ? C_HFAUTO : C_HAUTO;
+        if(immfloat(t))
+            return C_FAUTO;
+        return C_SAUTO;
+    }
+    return C_LAUTO;
+@
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_PARAM:
+    instoffset = autosize + a->offset + 4L;
+    t = immaddr(instoffset);
+    if(t){
+        if(immhalf(instoffset))
+            return immfloat(t) ? C_HFAUTO : C_HAUTO;
+        if(immfloat(t))
+            return C_FAUTO;
+        return C_SAUTO;
+    }
+    return C_LAUTO;
+@
+% +4??
+
+% RO? rotated?
+<<cxxx(arm) cases>>=
+C_HOREG,
+C_SOREG,
+C_LOREG,
+
+C_ROREG,
+C_SROREG,	/* both S and R */
+
+C_FOREG,
+C_HFOREG,
+@
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_NONE:
+    instoffset = a->offset;
+    t = immaddr(instoffset);
+    if(t) {
+        if(immhalf(instoffset))		 /* n.b. that it will also satisfy immrot */
+            return immfloat(t) ? C_HFOREG : C_HOREG;
+        if(immfloat(t))
+            return C_FOREG; /* n.b. that it will also satisfy immrot */
+
+        t = immrot(instoffset);
+        if(t)
+            return C_SROREG;
+        if(immhalf(instoffset))
+            return C_HOREG;
+        return C_SOREG;
+    }
+    t = immrot(instoffset);
+    if(t)
+        return C_ROREG;
+    return C_LOREG;
+@
+
+
+
+<<[[aclass()]] switch type cases>>=
+case D_CONST:
+    switch(a->symkind) {
+    <<[[aclass()]] D_CONST case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+
+
+% Rotated, Negative, Large?
+<<cxxx(arm) cases>>=
+C_RCON,		/* 0xff rotated */
+C_NCON,		/* ~RCON */
+C_LCON,
+@
+%dead: C_SCON,		/* 0xffff */
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_NONE:
+    instoffset = a->offset;
+    if(a->reg != R_NONE)
+        goto aconsize;
+
+    t = immrot(instoffset);
+    if(t)
+        return C_RCON;
+
+    t = immrot(~instoffset);
+    if(t)
+        return C_NCON;
+    return C_LCON;
+@
+
+
+
+<<cxxx(arm) cases>>=
+C_RECON,
+@
+%dead: C_LECON
+%optab:    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
+%cmp:    case C_LECON:
+%        if(b == C_RECON)
+%            return 1;
+%        break;
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_EXTERN:
+case D_STATIC:
+    s = a->sym;
+    if(s == S)
+        break;
+    t = s->type;
+    switch(t) {
+    case STEXT: case SLEAF:
+    case SSTRING:
+    case SCONST:
+    case SUNDEF:
+        instoffset = s->value + a->offset;
+        return C_LCON;
+    case SNONE: case SXREF:
+        diag("undefined external: %s in %s", s->name, TNAME);
+        s->type = SDATA;
+        break;
+    }
+    if(!dlm) {
+        instoffset = s->value + a->offset - BIG;
+        t = immrot(instoffset);
+        if(t && instoffset != 0)
+            return C_RECON;
+    }
+    instoffset = s->value + a->offset + INITDAT;
+    return C_LCON;
+
+@
+
+
+
+
+
+<<cxxx(arm) cases>>=
+C_RACON,
+C_LACON,
+@
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_AUTO:
+    instoffset = autosize + a->offset;
+    goto aconsize;
+
+@
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_PARAM:
+    instoffset = autosize + a->offset + 4L;
+    goto aconsize;
+@
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+aconsize:
+    t = immrot(instoffset);
+    if(t)
+        return C_RACON;
+    return C_LACON;
+@
+
+
+
+%old: dead: this advanced addressing mode of 5a is not that useful
+%    case D_OCONST:
+%        switch(a->name) {
+%        case D_EXTERN:
+%        case D_STATIC:
+%            s = a->sym;
+%            t = s->type;
+%            if(t == 0 || t == SXREF) {
+%                diag("undefined external: %s in %s",
+%                    s->name, TNAME);
+%                s->type = SDATA;
+%            }
+%            instoffset = s->value + a->offset + INITDAT;
+%            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
+%                instoffset = s->value + a->offset;
+%            return C_LCON;
+%        }
+%        return C_GOK;
+
+
 
 
 \section{[[buildop()]]}
@@ -4994,6 +5063,85 @@ case 1:		/* op R,[R],R */
     break;
 @
 
+<<function oprrr(arm)>>=
+long
+oprrr(int a, int sc)
+{
+    long o;
+
+    o = (sc & C_SCOND) << 28;
+    if(sc & C_SBIT)
+        o |= 1 << 20;
+    if(sc & (C_PBIT|C_WBIT))
+        diag(".P/.W on dp instruction");
+
+    switch(a) {
+    case AAND:	return o | (0x0<<21);
+    case AEOR:	return o | (0x1<<21);
+    case ASUB:	return o | (0x2<<21);
+    case ARSB:	return o | (0x3<<21);
+    case AADD:	return o | (0x4<<21);
+    case AADC:	return o | (0x5<<21);
+    case ASBC:	return o | (0x6<<21);
+    case ARSC:	return o | (0x7<<21);
+    case ATST:	return o | (0x8<<21) | (1<<20);
+    case ATEQ:	return o | (0x9<<21) | (1<<20);
+    case ACMP:	return o | (0xa<<21) | (1<<20);
+    case ACMN:	return o | (0xb<<21) | (1<<20);
+    case AORR:	return o | (0xc<<21);
+    case AMOVW:	return o | (0xd<<21);
+    case ABIC:	return o | (0xe<<21);
+    case AMVN:	return o | (0xf<<21);
+
+    case AMULU:
+    case AMUL:	return o | (0x0<<21) | (0x9<<4);
+    case AMULA:	return o | (0x1<<21) | (0x9<<4);
+    case AMULLU:	return o | (0x4<<21) | (0x9<<4);
+    case AMULL:		return o | (0x6<<21) | (0x9<<4);
+    case AMULALU:	return o | (0x5<<21) | (0x9<<4);
+    case AMULAL:	return o | (0x7<<21) | (0x9<<4);
+
+    case ASLL:	return o | (0xd<<21) | (0<<5);
+    case ASRL:	return o | (0xd<<21) | (1<<5);
+    case ASRA:	return o | (0xd<<21) | (2<<5);
+
+    case ASWI:	return o | (0xf<<24);
+
+    /* old arm 7500 fp using coproc 1 (1<<8) */
+    case AADDD:	return o | (0xe<<24) | (0x0<<20) | (1<<8) | (1<<7);
+    case AADDF:	return o | (0xe<<24) | (0x0<<20) | (1<<8);
+    case AMULD:	return o | (0xe<<24) | (0x1<<20) | (1<<8) | (1<<7);
+    case AMULF:	return o | (0xe<<24) | (0x1<<20) | (1<<8);
+    case ASUBD:	return o | (0xe<<24) | (0x2<<20) | (1<<8) | (1<<7);
+    case ASUBF:	return o | (0xe<<24) | (0x2<<20) | (1<<8);
+    case ADIVD:	return o | (0xe<<24) | (0x4<<20) | (1<<8) | (1<<7);
+    case ADIVF:	return o | (0xe<<24) | (0x4<<20) | (1<<8);
+    case ACMPD:
+    case ACMPF:	return o | (0xe<<24) | (0x9<<20) | (0xF<<12) | (1<<8) | (1<<4);	/* arguably, ACMPF should expand to RNDF, CMPD */
+
+    case AMOVF:
+    case AMOVDF:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8);
+    case AMOVD:
+    case AMOVFD:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8) | (1<<7);
+
+    case AMOVWF:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4);
+    case AMOVWD:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4) | (1<<7);
+    case AMOVFW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4);
+    case AMOVDW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4) | (1<<7);
+    }
+    diag("bad rrr %d", a);
+    prasm(curp);
+    return 0;
+}
+@
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+
+
 
 
 <<[[asmout()]] switch on type cases>>=
@@ -5068,6 +5216,30 @@ case 13:	/* op $lcon, [R], R */
 @
 %$
 
+<<function omvl(arm)>>=
+long
+omvl(Prog *p, Adr *a, int dr)
+{	
+    long v, o1;
+    if(!p->cond) {
+        aclass(a);
+        v = immrot(~instoffset);
+        if(v == 0) {
+            diag("missing literal");
+            prasm(p);
+            return 0;
+        }
+        o1 = oprrr(AMVN, p->scond&C_SCOND);
+        o1 |= v;
+        o1 |= dr << 12;
+    } else {
+        v = p->cond->pc - p->pc - 8;
+        o1 = olr(v, REGPC, dr, p->scond&C_SCOND);
+    }
+    return o1;
+}
+@
+% >> >> >>
 
 
 
@@ -5248,6 +5420,53 @@ case 5:		/* bra s */
     o1 |= (v >> 2) & 0xffffff;
     break;
 @
+% p->cond->pc !! hence the need for patch()! and span()
+% and do -pc because it's relative, and do -8 because ARM
+% does implicitly a +8 (see Machine.nw)
+
+<<function opbra(arm)>>=
+long
+opbra(int a, int sc)
+{
+
+    if(sc & (C_SBIT|C_PBIT|C_WBIT))
+        diag(".S/.P/.W on bra instruction");
+    sc &= C_SCOND;
+    if(a == ABL)
+        return (sc<<28)|(0x5<<25)|(0x1<<24);
+
+    if(sc != 0xe)
+        diag(".COND on bcond instruction");
+
+    switch(a) {
+    case ABEQ:	return (0x0<<28)|(0x5<<25);
+    case ABNE:	return (0x1<<28)|(0x5<<25);
+    case ABCS:	return (0x2<<28)|(0x5<<25);
+    case ABHS:	return (0x2<<28)|(0x5<<25);
+    case ABCC:	return (0x3<<28)|(0x5<<25);
+    case ABLO:	return (0x3<<28)|(0x5<<25);
+    case ABMI:	return (0x4<<28)|(0x5<<25);
+    case ABPL:	return (0x5<<28)|(0x5<<25);
+    case ABVS:	return (0x6<<28)|(0x5<<25);
+    case ABVC:	return (0x7<<28)|(0x5<<25);
+    case ABHI:	return (0x8<<28)|(0x5<<25);
+    case ABLS:	return (0x9<<28)|(0x5<<25);
+    case ABGE:	return (0xa<<28)|(0x5<<25);
+    case ABLT:	return (0xb<<28)|(0x5<<25);
+    case ABGT:	return (0xc<<28)|(0x5<<25);
+    case ABLE:	return (0xd<<28)|(0x5<<25);
+    case AB:	return (0xe<<28)|(0x5<<25);
+    }
+    diag("bad bra %A", a);
+    prasm(curp);
+    return 0;
+}
+@
+% 
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+
+
 
 
 <<[[optab]] entries>>=
@@ -5422,6 +5641,8 @@ case 20:	/* mov/movb/movbu R,O(R) */
     o1 = osr(p->as, p->from.reg, instoffset, r, p->scond);
     break;
 @
+
+
 <<[[asmout()]] switch on type cases>>=
 case 21:	/* mov/movbu O(R),R -> lr */
     aclass(&p->from);
@@ -5433,6 +5654,39 @@ case 21:	/* mov/movbu O(R),R -> lr */
         o1 |= 1<<22;
     break;
 @
+
+<<function olr(arm)>>=
+long
+olr(long v, int b, int r, int sc)
+{
+    long o;
+
+    if(sc & C_SBIT)
+        diag(".S on LDR/STR instruction");
+    o = (sc & C_SCOND) << 28;
+    if(!(sc & C_PBIT))
+        o |= 1 << 24;
+    if(!(sc & C_UBIT))
+        o |= 1 << 23;
+    if(sc & C_WBIT)
+        o |= 1 << 21;
+    o |= (0x1<<26) | (1<<20);
+    if(v < 0) {
+        v = -v;
+        o ^= 1 << 23;
+    }
+    if(v >= (1<<12))
+        diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
+    o |= v;
+    o |= b << 16;
+    o |= r << 12;
+    return o;
+}
+@
+% >> >> >> >> >> >> >> >> >> >>
+
+
+
 <<[[asmout()]] switch on type cases>>=
 case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
     aclass(&p->from);
@@ -5757,6 +6011,9 @@ case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
         o1 |= 1<<22;
     break;
 @
+% >> >> >>
+
+
 <<[[asmout()]] switch on type cases>>=
 case 60:	/* movb R(R),R -> ldrsb indexed */
     if(p->from.reg == R_NONE) {
@@ -5769,6 +6026,8 @@ case 60:	/* movb R(R),R -> ldrsb indexed */
     o1 ^= (1<<5)|(1<<6);
     break;
 @
+% >> >> 
+
 <<[[asmout()]] switch on type cases>>=
 case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
     if(p->to.reg == R_NONE)
@@ -5778,6 +6037,7 @@ case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
         o1 |= 1<<22;
     break;
 @
+% >> >>
 
 
 
@@ -5843,498 +6103,6 @@ case 10:	/* swi [$con] */
 case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
     o1 = 0xe8fd8000;
     break;
-@
-
-
-\subsection{Helpers}
-
-<<function regoff(arm)>>=
-long
-regoff(Adr *a)
-{
-
-    instoffset = 0;
-    aclass(a);
-    return instoffset;
-}
-@
-
-
-<<function immrot(arm)>>=
-long
-immrot(ulong v)
-{
-    int i;
-
-    for(i=0; i<16; i++) {
-        if((v & ~0xff) == 0)
-            return (i<<8) | v | (1<<25);
-        v = (v<<2) | (v>>30);
-    }
-    return 0;
-}
-@
-% >> >>
-
-
-<<function immaddr(arm)>>=
-long
-immaddr(long v)
-{
-    if(v >= 0 && v <= 0xfff)
-        return (v & 0xfff) |
-            (1<<24) |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xfff && v < 0)
-        return (-v & 0xfff) |
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-
-<<function immfloat(arm)>>=
-int
-immfloat(long v)
-{
-    return (v & 0xC03) == 0;	/* offset will fit in floating-point load/store */
-}
-@
-
-<<function immhalf(arm)>>=
-int
-immhalf(long v)
-{
-    if(v >= 0 && v <= 0xff)
-        return v|
-            (1<<24)|	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xff && v < 0)
-        return (-v & 0xff)|
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-
-
-
-<<function oprrr(arm)>>=
-long
-oprrr(int a, int sc)
-{
-    long o;
-
-    o = (sc & C_SCOND) << 28;
-    if(sc & C_SBIT)
-        o |= 1 << 20;
-    if(sc & (C_PBIT|C_WBIT))
-        diag(".P/.W on dp instruction");
-
-    switch(a) {
-    case AMULU:
-    case AMUL:	return o | (0x0<<21) | (0x9<<4);
-    case AMULA:	return o | (0x1<<21) | (0x9<<4);
-    case AMULLU:	return o | (0x4<<21) | (0x9<<4);
-    case AMULL:		return o | (0x6<<21) | (0x9<<4);
-    case AMULALU:	return o | (0x5<<21) | (0x9<<4);
-    case AMULAL:	return o | (0x7<<21) | (0x9<<4);
-
-    case AAND:	return o | (0x0<<21);
-    case AEOR:	return o | (0x1<<21);
-    case ASUB:	return o | (0x2<<21);
-    case ARSB:	return o | (0x3<<21);
-    case AADD:	return o | (0x4<<21);
-    case AADC:	return o | (0x5<<21);
-    case ASBC:	return o | (0x6<<21);
-    case ARSC:	return o | (0x7<<21);
-    case ATST:	return o | (0x8<<21) | (1<<20);
-    case ATEQ:	return o | (0x9<<21) | (1<<20);
-    case ACMP:	return o | (0xa<<21) | (1<<20);
-    case ACMN:	return o | (0xb<<21) | (1<<20);
-    case AORR:	return o | (0xc<<21);
-    case AMOVW:	return o | (0xd<<21);
-    case ABIC:	return o | (0xe<<21);
-    case AMVN:	return o | (0xf<<21);
-
-    case ASLL:	return o | (0xd<<21) | (0<<5);
-    case ASRL:	return o | (0xd<<21) | (1<<5);
-    case ASRA:	return o | (0xd<<21) | (2<<5);
-
-    case ASWI:	return o | (0xf<<24);
-
-    /* old arm 7500 fp using coproc 1 (1<<8) */
-    case AADDD:	return o | (0xe<<24) | (0x0<<20) | (1<<8) | (1<<7);
-    case AADDF:	return o | (0xe<<24) | (0x0<<20) | (1<<8);
-    case AMULD:	return o | (0xe<<24) | (0x1<<20) | (1<<8) | (1<<7);
-    case AMULF:	return o | (0xe<<24) | (0x1<<20) | (1<<8);
-    case ASUBD:	return o | (0xe<<24) | (0x2<<20) | (1<<8) | (1<<7);
-    case ASUBF:	return o | (0xe<<24) | (0x2<<20) | (1<<8);
-    case ADIVD:	return o | (0xe<<24) | (0x4<<20) | (1<<8) | (1<<7);
-    case ADIVF:	return o | (0xe<<24) | (0x4<<20) | (1<<8);
-    case ACMPD:
-    case ACMPF:	return o | (0xe<<24) | (0x9<<20) | (0xF<<12) | (1<<8) | (1<<4);	/* arguably, ACMPF should expand to RNDF, CMPD */
-
-    case AMOVF:
-    case AMOVDF:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8);
-    case AMOVD:
-    case AMOVFD:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8) | (1<<7);
-
-    case AMOVWF:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4);
-    case AMOVWD:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4) | (1<<7);
-    case AMOVFW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4);
-    case AMOVDW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4) | (1<<7);
-    }
-    diag("bad rrr %d", a);
-    prasm(curp);
-    return 0;
-}
-@
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-
-<<function opvfprrr(arm)>>=
-long
-opvfprrr(int a, int sc)
-{
-    long o;
-
-    o = (sc & C_SCOND) << 28;
-    if(sc & (C_SBIT|C_PBIT|C_WBIT))
-        diag(".S/.P/.W on vfp instruction");
-    o |= 0xe<<24;
-    switch(a) {
-    case AMOVWD:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0x8<<16 | 1<<7;
-    case AMOVWF:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0x8<<16 | 1<<7;
-    case AMOVDW:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0xD<<16 | 1<<7;
-    case AMOVFW:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0xD<<16 | 1<<7;
-    case AMOVFD:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0x7<<16 | 1<<7;
-    case AMOVDF:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0x7<<16 | 1<<7;
-    case AMOVF:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0x0<<16 | 0<<7;
-    case AMOVD:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0x0<<16 | 0<<7;
-    case ACMPF:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0x4<<16 | 0<<7;
-    case ACMPD:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0x4<<16 | 0<<7;
-    case AADDF:	return o | 0xa<<8 | 0x3<<20;
-    case AADDD:	return o | 0xb<<8 | 0x3<<20;
-    case ASUBF:	return o | 0xa<<8 | 0x3<<20 | 1<<6;
-    case ASUBD:	return o | 0xb<<8 | 0x3<<20 | 1<<6;
-    case AMULF:	return o | 0xa<<8 | 0x2<<20;
-    case AMULD:	return o | 0xb<<8 | 0x2<<20;
-    case ADIVF:	return o | 0xa<<8 | 0x8<<20;
-    case ADIVD:	return o | 0xb<<8 | 0x8<<20;
-    }
-    diag("bad vfp rrr %d", a);
-    prasm(curp);
-    return 0;
-}
-@
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-
-<<function opbra(arm)>>=
-long
-opbra(int a, int sc)
-{
-
-    if(sc & (C_SBIT|C_PBIT|C_WBIT))
-        diag(".S/.P/.W on bra instruction");
-    sc &= C_SCOND;
-    if(a == ABL)
-        return (sc<<28)|(0x5<<25)|(0x1<<24);
-
-    if(sc != 0xe)
-        diag(".COND on bcond instruction");
-
-    switch(a) {
-    case ABEQ:	return (0x0<<28)|(0x5<<25);
-    case ABNE:	return (0x1<<28)|(0x5<<25);
-    case ABCS:	return (0x2<<28)|(0x5<<25);
-    case ABHS:	return (0x2<<28)|(0x5<<25);
-    case ABCC:	return (0x3<<28)|(0x5<<25);
-    case ABLO:	return (0x3<<28)|(0x5<<25);
-    case ABMI:	return (0x4<<28)|(0x5<<25);
-    case ABPL:	return (0x5<<28)|(0x5<<25);
-    case ABVS:	return (0x6<<28)|(0x5<<25);
-    case ABVC:	return (0x7<<28)|(0x5<<25);
-    case ABHI:	return (0x8<<28)|(0x5<<25);
-    case ABLS:	return (0x9<<28)|(0x5<<25);
-    case ABGE:	return (0xa<<28)|(0x5<<25);
-    case ABLT:	return (0xb<<28)|(0x5<<25);
-    case ABGT:	return (0xc<<28)|(0x5<<25);
-    case ABLE:	return (0xd<<28)|(0x5<<25);
-    case AB:	return (0xe<<28)|(0x5<<25);
-    }
-    diag("bad bra %A", a);
-    prasm(curp);
-    return 0;
-}
-@
-% 
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-
-
-<<function olr(arm)>>=
-long
-olr(long v, int b, int r, int sc)
-{
-    long o;
-
-    if(sc & C_SBIT)
-        diag(".S on LDR/STR instruction");
-    o = (sc & C_SCOND) << 28;
-    if(!(sc & C_PBIT))
-        o |= 1 << 24;
-    if(!(sc & C_UBIT))
-        o |= 1 << 23;
-    if(sc & C_WBIT)
-        o |= 1 << 21;
-    o |= (0x1<<26) | (1<<20);
-    if(v < 0) {
-        v = -v;
-        o ^= 1 << 23;
-    }
-    if(v >= (1<<12))
-        diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
-    o |= v;
-    o |= b << 16;
-    o |= r << 12;
-    return o;
-}
-@
-% >> >> >> >> >> >> >> >> >> >>
-
-<<function olhr(arm)>>=
-long
-olhr(long v, int b, int r, int sc)
-{
-    long o;
-
-    if(sc & C_SBIT)
-        diag(".S on LDRH/STRH instruction");
-    o = (sc & C_SCOND) << 28;
-    if(!(sc & C_PBIT))
-        o |= 1 << 24;
-    if(sc & C_WBIT)
-        o |= 1 << 21;
-    o |= (1<<23) | (1<<20)|(0xb<<4);
-    if(v < 0) {
-        v = -v;
-        o ^= 1 << 23;
-    }
-    if(v >= (1<<8))
-        diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
-    o |= (v&0xf)|((v>>4)<<8)|(1<<22);
-    o |= b << 16;
-    o |= r << 12;
-    return o;
-}
-@
-% >> >> >> >> >> >> >> >> >> >> >>
-
-<<function osr(arm)>>=
-long
-osr(int a, int r, long v, int b, int sc)
-{
-    long o;
-
-    o = olr(v, b, r, sc) ^ (1<<20);
-    if(a != AMOVW)
-        o |= 1<<22;
-    return o;
-}
-@
-% >> >> >> >>
-
-<<function oshr(arm)>>=
-long
-oshr(int r, long v, int b, int sc)
-{
-    long o;
-
-    o = olhr(v, b, r, sc) ^ (1<<20);
-    return o;
-}
-@
-% >>
-
-
-<<function osrr(arm)>>=
-long
-osrr(int r, int i, int b, int sc)
-{
-
-    return olr(i, b, r, sc) ^ ((1<<25) | (1<<20));
-}
-@
-% >> >>
-
-<<function oshrr(arm)>>=
-long
-oshrr(int r, int i, int b, int sc)
-{
-    return olhr(i, b, r, sc) ^ ((1<<22) | (1<<20));
-}
-@
-% >> >>
-
-<<function olrr(arm)>>=
-long
-olrr(int i, int b, int r, int sc)
-{
-
-    return olr(i, b, r, sc) ^ (1<<25);
-}
-@
-% >>
-
-<<function olhrr(arm)>>=
-long
-olhrr(int i, int b, int r, int sc)
-{
-    return olhr(i, b, r, sc) ^ (1<<22);
-}
-@
-% >>
-
-<<function ovfpmem(arm)>>=
-long
-ovfpmem(int a, int r, long v, int b, int sc, Prog *p)
-{
-    long o;
-
-    if(sc & (C_SBIT|C_PBIT|C_WBIT))
-        diag(".S/.P/.W on VLDR/VSTR instruction");
-    o = (sc & C_SCOND) << 28;
-    o |= 0xd<<24 | (1<<23);
-    if(v < 0) {
-        v = -v;
-        o ^= 1 << 23;
-    }
-    if(v & 3)
-        diag("odd offset for floating point op: %ld\n%P", v, p);
-    else if(v >= (1<<10))
-        diag("literal span too large: %ld\n%P", v, p);
-    o |= (v>>2) & 0xFF;
-    o |= b << 16;
-    o |= r << 12;
-    switch(a) {
-    default:
-        diag("bad fst %A", a);
-    case AMOVD:
-        o |= 0xb<<8;
-        break;
-    case AMOVF:
-        o |= 0xa<<8;
-        break;
-    }
-    return o;
-}
-@
-% >> >> >> >> >> >> >> >> 
-
-<<function ofsr(arm)>>=
-long
-ofsr(int a, int r, long v, int b, int sc, Prog *p)
-{
-    long o;
-
-    if(vfp)
-        return ovfpmem(a, r, v, b, sc, p);
-    if(sc & C_SBIT)
-        diag(".S on FLDR/FSTR instruction");
-    o = (sc & C_SCOND) << 28;
-    if(!(sc & C_PBIT))
-        o |= 1 << 24;
-    if(sc & C_WBIT)
-        o |= 1 << 21;
-    o |= (6<<25) | (1<<24) | (1<<23);
-    if(v < 0) {
-        v = -v;
-        o ^= 1 << 23;
-    }
-    if(v & 3)
-        diag("odd offset for floating point op: %ld\n%P", v, p);
-    else if(v >= (1<<10))
-        diag("literal span too large: %ld\n%P", v, p);
-    o |= (v>>2) & 0xFF;
-    o |= b << 16;
-    o |= r << 12;
-    o |= 1 << 8;
-
-    switch(a) {
-    default:
-        diag("bad fst %A", a);
-    case AMOVD:
-        o |= 1<<15;
-    case AMOVF:
-        break;
-    }
-    return o;
-}
-@
-% >> >> >> >> >> >> >> >> >> >> >>
-
-<<function omvl(arm)>>=
-long
-omvl(Prog *p, Adr *a, int dr)
-{	
-    long v, o1;
-    if(!p->cond) {
-        aclass(a);
-        v = immrot(~instoffset);
-        if(v == 0) {
-            diag("missing literal");
-            prasm(p);
-            return 0;
-        }
-        o1 = oprrr(AMVN, p->scond&C_SCOND);
-        o1 |= v;
-        o1 |= dr << 12;
-    } else {
-        v = p->cond->pc - p->pc - 8;
-        o1 = olr(v, REGPC, dr, p->scond&C_SCOND);
-    }
-    return o1;
-}
-@
-% >> >> >>
-
-<<global chipfloats(arm)>>=
-static Ieee chipfloats[] = {
-    {0x00000000, 0x00000000}, /* 0 */
-    {0x00000000, 0x3ff00000}, /* 1 */
-    {0x00000000, 0x40000000}, /* 2 */
-    {0x00000000, 0x40080000}, /* 3 */
-    {0x00000000, 0x40100000}, /* 4 */
-    {0x00000000, 0x40140000}, /* 5 */
-    {0x00000000, 0x3fe00000}, /* .5 */
-    {0x00000000, 0x40240000}, /* 10 */
-};
-@
-
-<<function chipfloat(arm)>>=
-int
-chipfloat(Ieee *e)
-{
-    Ieee *p;
-    int n;
-
-    if(vfp)
-        return -1;
-    for(n = sizeof(chipfloats)/sizeof(chipfloats[0]); --n >= 0;){
-        p = &chipfloats[n];
-        if(p->l == e->l && p->h == e->h)
-            return n;
-    }
-    return -1;
-}
 @
 
 
@@ -8350,6 +8118,15 @@ if(*a >= '0' && *a <= '9')
 
 \section{Float}
 
+<<function immfloat(arm)>>=
+int
+immfloat(long v)
+{
+    return (v & 0xC03) == 0;	/* offset will fit in floating-point load/store */
+}
+@
+
+
 <<cxxx(arm) cases>>=
 C_FREG,
 C_FCON,
@@ -8443,6 +8220,41 @@ ieeedtod(Ieee *ieeep)
 <<[[ldobj()]] locals(arm)>>=
 Prog *t;
 @
+
+
+<<global chipfloats(arm)>>=
+static Ieee chipfloats[] = {
+    {0x00000000, 0x00000000}, /* 0 */
+    {0x00000000, 0x3ff00000}, /* 1 */
+    {0x00000000, 0x40000000}, /* 2 */
+    {0x00000000, 0x40080000}, /* 3 */
+    {0x00000000, 0x40100000}, /* 4 */
+    {0x00000000, 0x40140000}, /* 5 */
+    {0x00000000, 0x3fe00000}, /* .5 */
+    {0x00000000, 0x40240000}, /* 10 */
+};
+@
+
+<<function chipfloat(arm)>>=
+int
+chipfloat(Ieee *e)
+{
+    Ieee *p;
+    int n;
+
+    if(vfp)
+        return -1;
+    for(n = sizeof(chipfloats)/sizeof(chipfloats[0]); --n >= 0;){
+        p = &chipfloats[n];
+        if(p->l == e->l && p->h == e->h)
+            return n;
+    }
+    return -1;
+}
+@
+
+
+
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AMOVDF:
@@ -8577,6 +8389,17 @@ case AMOVFW:
 @
 
 
+<<function regoff(arm)>>=
+long
+regoff(Adr *a)
+{
+
+    instoffset = 0;
+    aclass(a);
+    return instoffset;
+}
+@
+
 <<[[asmout()]] switch on type cases>>=
 case 50:	/* floating point store */
     v = regoff(&p->to);
@@ -8586,6 +8409,88 @@ case 50:	/* floating point store */
     o1 = ofsr(p->as, p->from.reg, v, r, p->scond, p);
     break;
 @
+
+<<function ofsr(arm)>>=
+long
+ofsr(int a, int r, long v, int b, int sc, Prog *p)
+{
+    long o;
+
+    if(vfp)
+        return ovfpmem(a, r, v, b, sc, p);
+    if(sc & C_SBIT)
+        diag(".S on FLDR/FSTR instruction");
+    o = (sc & C_SCOND) << 28;
+    if(!(sc & C_PBIT))
+        o |= 1 << 24;
+    if(sc & C_WBIT)
+        o |= 1 << 21;
+    o |= (6<<25) | (1<<24) | (1<<23);
+    if(v < 0) {
+        v = -v;
+        o ^= 1 << 23;
+    }
+    if(v & 3)
+        diag("odd offset for floating point op: %ld\n%P", v, p);
+    else if(v >= (1<<10))
+        diag("literal span too large: %ld\n%P", v, p);
+    o |= (v>>2) & 0xFF;
+    o |= b << 16;
+    o |= r << 12;
+    o |= 1 << 8;
+
+    switch(a) {
+    default:
+        diag("bad fst %A", a);
+    case AMOVD:
+        o |= 1<<15;
+    case AMOVF:
+        break;
+    }
+    return o;
+}
+@
+% >> >> >> >> >> >> >> >> >> >> >>
+
+<<function ovfpmem(arm)>>=
+long
+ovfpmem(int a, int r, long v, int b, int sc, Prog *p)
+{
+    long o;
+
+    if(sc & (C_SBIT|C_PBIT|C_WBIT))
+        diag(".S/.P/.W on VLDR/VSTR instruction");
+    o = (sc & C_SCOND) << 28;
+    o |= 0xd<<24 | (1<<23);
+    if(v < 0) {
+        v = -v;
+        o ^= 1 << 23;
+    }
+    if(v & 3)
+        diag("odd offset for floating point op: %ld\n%P", v, p);
+    else if(v >= (1<<10))
+        diag("literal span too large: %ld\n%P", v, p);
+    o |= (v>>2) & 0xFF;
+    o |= b << 16;
+    o |= r << 12;
+    switch(a) {
+    default:
+        diag("bad fst %A", a);
+    case AMOVD:
+        o |= 0xb<<8;
+        break;
+    case AMOVF:
+        o |= 0xa<<8;
+        break;
+    }
+    return o;
+}
+@
+% >> >> >> >> >> >> >> >> 
+
+
+
+
 <<[[asmout()]] switch on type cases>>=
 case 51:	/* floating point load */
     v = regoff(&p->from);
@@ -8607,6 +8512,10 @@ case 52:	/* floating point store, long offset UGLY */
     o3 = ofsr(p->as, p->from.reg, 0, REGTMP, p->scond, p);
     break;
 @
+
+
+
+
 <<[[asmout()]] switch on type cases>>=
 case 53:	/* floating point load, long offset UGLY */
     o1 = omvl(p, &p->from, REGTMP);
@@ -8730,6 +8639,47 @@ case AMOVWD:
 { AMOVFW,	C_FREG,	C_NONE,	C_REG,		76, 8, 0, VFP },
 { AMOVFW,	C_REG,	C_NONE,	C_FREG,		76, 8, 0, VFP },
 @
+
+<<function opvfprrr(arm)>>=
+long
+opvfprrr(int a, int sc)
+{
+    long o;
+
+    o = (sc & C_SCOND) << 28;
+    if(sc & (C_SBIT|C_PBIT|C_WBIT))
+        diag(".S/.P/.W on vfp instruction");
+    o |= 0xe<<24;
+    switch(a) {
+    case AMOVWD:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0x8<<16 | 1<<7;
+    case AMOVWF:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0x8<<16 | 1<<7;
+    case AMOVDW:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0xD<<16 | 1<<7;
+    case AMOVFW:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0xD<<16 | 1<<7;
+    case AMOVFD:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0x7<<16 | 1<<7;
+    case AMOVDF:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0x7<<16 | 1<<7;
+    case AMOVF:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0x0<<16 | 0<<7;
+    case AMOVD:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0x0<<16 | 0<<7;
+    case ACMPF:	return o | 0xa<<8 | 0xb<<20 | 1<<6 | 0x4<<16 | 0<<7;
+    case ACMPD:	return o | 0xb<<8 | 0xb<<20 | 1<<6 | 0x4<<16 | 0<<7;
+    case AADDF:	return o | 0xa<<8 | 0x3<<20;
+    case AADDD:	return o | 0xb<<8 | 0x3<<20;
+    case ASUBF:	return o | 0xa<<8 | 0x3<<20 | 1<<6;
+    case ASUBD:	return o | 0xb<<8 | 0x3<<20 | 1<<6;
+    case AMULF:	return o | 0xa<<8 | 0x2<<20;
+    case AMULD:	return o | 0xb<<8 | 0x2<<20;
+    case ADIVF:	return o | 0xa<<8 | 0x8<<20;
+    case ADIVD:	return o | 0xb<<8 | 0x8<<20;
+    }
+    diag("bad vfp rrr %d", a);
+    prasm(curp);
+    return 0;
+}
+@
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+
 
 <<[[asmout()]] switch on type cases>>=
 /* VFP ops: */
@@ -8878,6 +8828,101 @@ case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
         o2 ^= (1<<6);
     break;
 @
+
+
+
+<<function olhr(arm)>>=
+long
+olhr(long v, int b, int r, int sc)
+{
+    long o;
+
+    if(sc & C_SBIT)
+        diag(".S on LDRH/STRH instruction");
+    o = (sc & C_SCOND) << 28;
+    if(!(sc & C_PBIT))
+        o |= 1 << 24;
+    if(sc & C_WBIT)
+        o |= 1 << 21;
+    o |= (1<<23) | (1<<20)|(0xb<<4);
+    if(v < 0) {
+        v = -v;
+        o ^= 1 << 23;
+    }
+    if(v >= (1<<8))
+        diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
+    o |= (v&0xf)|((v>>4)<<8)|(1<<22);
+    o |= b << 16;
+    o |= r << 12;
+    return o;
+}
+@
+% >> >> >> >> >> >> >> >> >> >> >>
+
+<<function osr(arm)>>=
+long
+osr(int a, int r, long v, int b, int sc)
+{
+    long o;
+
+    o = olr(v, b, r, sc) ^ (1<<20);
+    if(a != AMOVW)
+        o |= 1<<22;
+    return o;
+}
+@
+% >> >> >> >>
+
+<<function oshr(arm)>>=
+long
+oshr(int r, long v, int b, int sc)
+{
+    long o;
+
+    o = olhr(v, b, r, sc) ^ (1<<20);
+    return o;
+}
+@
+% >>
+
+
+<<function osrr(arm)>>=
+long
+osrr(int r, int i, int b, int sc)
+{
+
+    return olr(i, b, r, sc) ^ ((1<<25) | (1<<20));
+}
+@
+% >> >>
+
+<<function oshrr(arm)>>=
+long
+oshrr(int r, int i, int b, int sc)
+{
+    return olhr(i, b, r, sc) ^ ((1<<22) | (1<<20));
+}
+@
+% >> >>
+
+<<function olrr(arm)>>=
+long
+olrr(int i, int b, int r, int sc)
+{
+
+    return olr(i, b, r, sc) ^ (1<<25);
+}
+@
+% >>
+
+<<function olhrr(arm)>>=
+long
+olhrr(int i, int b, int r, int sc)
+{
+    return olhr(i, b, r, sc) ^ (1<<22);
+}
+@
+% >>
 
 
 
