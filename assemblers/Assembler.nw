@@ -418,7 +418,7 @@ enum opcode
 {
     AXXX,
 
-    ANOP,
+    ANOP, // VIRTUAL, removed by linker
     // ----------------------------------------------------------------------
     // Arithmetic and logic opcodes
     // ----------------------------------------------------------------------
@@ -445,10 +445,6 @@ enum opcode
     // ----------------------------------------------------------------------
     <<float mov opcodes>>
     <<float arithmetic opcodes>>
-    // ----------------------------------------------------------------------
-    // Misc opcodes
-    // ----------------------------------------------------------------------
-    <<misc opcodes>>
 
     // ----------------------------------------------------------------------
     // Pseudo opcodes
@@ -487,20 +483,20 @@ enum opcode
 <<enum regxxx(arm)>>=
 enum registr {
     <<[[regxxx]] compiler conventions cases>>
-    REGSB =		12,
+    REGSB =		12, // SB? segment base?
+
     REGSP =		13,
     REGLINK =	14,
     REGPC =		15,
+
+    NREG = 16,
 };
 @
 % REGSB is new! Machine.nw does not have it.
 % REGFP? not in ARM, but 5a has a fake register LFP (not sure
 % which actual register will be used for it though)
 
-<<constant NREG(arm)>>=
-#define	NREG		16
-@
-% used to represent NONE for the outcode reg parameter
+% NREG used to represent NONE for the outcode reg parameter
 % but I prefer now R_NONE below.
 
 <<constant R_NONE(arm)>>=
@@ -3194,8 +3190,8 @@ ASLL,
 
 <<mul/div/mod opcodes>>=
 AMUL,
-ADIV,
-AMOD,
+ADIV, // VIRTUAL, transformed to call to _div
+AMOD, // VIRTUAL, transformed to call to _mod
 @
 % ARM has no ADIV or AMOD so virtual/fake-opcode again?
 % compiler: need also mul for array access, need base + idx * size of entry.
@@ -3254,7 +3250,7 @@ ACMN,
 % ARM has load/store, but plan9 has MOV as a virtual/fake-opcode.
 
 <<mov opcodes>>=
-AMOVW,
+AMOVW, // VIRTUAL, transformed in load and store instructions
 @
 % compiler: machine is von newman model, memory is everything.
 % store simple data(int), complex (aggregate), store results, 
@@ -3354,7 +3350,7 @@ ASWPBU,
 
 <<branching opcodes>>=
 AB,
-ABL,
+ABL, // branch and link, =~ CALL
 @
 % compiler: if, while, for, switch, they all rely on the
 % very basic building block of jmp, conditional or not (goto xxx, if(yyy))
@@ -3387,7 +3383,7 @@ ABL,
  * Do not reorder or fragment the conditional branch 
  * opcodes, or the predication code will break 
  */ 
-// AB derivatives with condition code, see 5i/
+// VIRTUAL, AB derivatives with condition code, see 5i/
 ABEQ,
 ABNE,
 ABCS,//not in 5i/cond, seems equivalent to ABHS
@@ -3439,7 +3435,7 @@ ABLE,
 
 
 <<branching opcodes>>=
-ARET,
+ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
 @
 % actually no RET in ARM, so virtual/fake-opcode
 % (works with BL?)
@@ -3460,6 +3456,7 @@ ARET,
 
 \subsection{Software interrupt}
 % software interrupt, aka syscall
+% interrupts and exceptions
 
 <<interrupt opcodes>>=
 ASWI, // syscall
@@ -3483,6 +3480,19 @@ ASWI, // syscall
 % but not sure it needs an argument in plan9 context,
 % and anyway was doing stupid things like SWI 0  in 9syscall/mkfile
 % which was weird, at least should be SWI $0
+
+<<interrupt opcodes>>=
+ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
+@
+
+<<[[itab]] elements>>=
+"RFE",		LRET, ARFE,
+@
+% same grammar rule than RET
+% =~ IRET
+%in lproc.s 
+%	RFE				/* MOVM.IA.S.W (R13), [R15] */
+
 
 
 %\ifallcode
@@ -5189,21 +5199,19 @@ ASQRTD,
 "FPCR",		LFCR,	1,
 @
 
+<<enum fregister(arm)>>=
+enum fregister {
+    FREGRET = 0,
+    /* compiler allocates register variables F0 up */
+    FREGEXT = 7,
+    /* compiler allocates external registers F7 down */
+    FREGTMP = 15, // ??
 
-<<constant FREGRET(arm)>>=
-#define	FREGRET		0
-@
-<<constant FREGEXT(arm)>>=
-#define	FREGEXT		7
-@
-<<constant FREGTMP(arm)>>=
-#define	FREGTMP		15
+    NFREG = 8,
+};
 @
 
-% used by 5c/ in char	reg[NREG+NFREG];
-<<constant NFREG(arm)>>=
-#define	NFREG		8
-@
+% NFREG used by 5c/ in char	reg[NREG+NFREG];
 % 8? looks like 16 above
 
 
@@ -5462,6 +5470,8 @@ reglist:
 
 \section{System instructions}
 
+% Already seen 2 system instructions: SWI and RFE. Here are a few more.
+
 % no Axxx opcode, binary generation directly in action via D_CONST
 <<[[itab]] elements>>=
 "MCR",		LSYSTEM, 0,
@@ -5547,14 +5557,6 @@ oexpr:
 
 
 
-<<misc opcodes>>=
-ARFE, // ?? return from exn?
-@
-
-<<[[itab]] elements>>=
-"RFE",		LRET, ARFE,
-@
-% same grammar rule than RET
 
 
 
@@ -5592,8 +5594,8 @@ ABCASE,
 
 <<mul/div/mod opcodes>>=
 AMULU,
-ADIVU,
-AMODU,
+ADIVU, // VIRTUAL, transformed to call to _divu
+AMODU, // VIRTUAL, transformed to call to _modu
 @
 % has no reading syntax, generated just in 5c
 
@@ -5615,7 +5617,6 @@ REGARG =	0,
 /* compiler allocates register variables R2 up */
 REGMIN =	2,
 REGMAX =	8,
-
 REGEXT =	10,
 /* compiler allocates external registers R10 down */
 REGTMP =	11,

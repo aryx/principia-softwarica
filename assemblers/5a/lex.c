@@ -275,6 +275,8 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "SWI",		LSWI, ASWI,
     /*x: [[itab]] elements */
+    "RFE",		LRET, ARFE,
+    /*x: [[itab]] elements */
     ".EQ",		LCOND,	0,
     ".NE",		LCOND,	1,
     ".CS",		LCOND,	2,
@@ -425,8 +427,6 @@ struct Itab itab[] =
     "C13",		LCREG,	13,
     "C14",		LCREG,	14,
     "C15",		LCREG,	15,
-    /*x: [[itab]] elements */
-    "RFE",		LRET, ARFE,
     /*e: [[itab]] elements */
     0
 };

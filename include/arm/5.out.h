@@ -9,38 +9,34 @@ enum registr {
     /* compiler allocates register variables R2 up */
     REGMIN =	2,
     REGMAX =	8,
-
     REGEXT =	10,
     /* compiler allocates external registers R10 down */
     REGTMP =	11,
     /*e: [[regxxx]] compiler conventions cases */
-    REGSB =		12,
+    REGSB =		12, // SB? segment base?
+
     REGSP =		13,
     REGLINK =	14,
     REGPC =		15,
+
+    NREG = 16,
 };
 /*e: enum regxxx(arm) */
-/*s: constant NREG(arm) */
-#define	NREG		16
-/*e: constant NREG(arm) */
 /*s: constant R_NONE(arm) */
 #define R_NONE 16
 /*e: constant R_NONE(arm) */
 
-/*s: constant NFREG(arm) */
-#define	NFREG		8
-/*e: constant NFREG(arm) */
-/*s: constant FREGRET(arm) */
-#define	FREGRET		0
-/*e: constant FREGRET(arm) */
-/*s: constant FREGEXT(arm) */
-#define	FREGEXT		7
-/*e: constant FREGEXT(arm) */
-/*s: constant FREGTMP(arm) */
-#define	FREGTMP		15
-/*e: constant FREGTMP(arm) */
-/* compiler allocates register variables F0 up */
-/* compiler allocates external registers F7 down */
+/*s: enum fregister(arm) */
+enum fregister {
+    FREGRET = 0,
+    /* compiler allocates register variables F0 up */
+    FREGEXT = 7,
+    /* compiler allocates external registers F7 down */
+    FREGTMP = 15, // ??
+
+    NFREG = 8,
+};
+/*e: enum fregister(arm) */
 
 /*s: enum opcode(arm) */
 // coupling: with 5c/enam.c
@@ -48,7 +44,7 @@ enum opcode
 {
     AXXX,
 
-    ANOP,
+    ANOP, // VIRTUAL, removed by linker
     // ----------------------------------------------------------------------
     // Arithmetic and logic opcodes
     // ----------------------------------------------------------------------
@@ -70,8 +66,8 @@ enum opcode
     /*e: add/sub opcodes */
     /*s: mul/div/mod opcodes */
     AMUL,
-    ADIV,
-    AMOD,
+    ADIV, // VIRTUAL, transformed to call to _div
+    AMOD, // VIRTUAL, transformed to call to _mod
     /*x: mul/div/mod opcodes */
     AMULL,
     AMULAL,
@@ -81,8 +77,8 @@ enum opcode
     AMULA,
     /*x: mul/div/mod opcodes */
     AMULU,
-    ADIVU,
-    AMODU,
+    ADIVU, // VIRTUAL, transformed to call to _divu
+    AMODU, // VIRTUAL, transformed to call to _modu
     /*e: mul/div/mod opcodes */
     /*s: bitshift opcodes */
     ASRL,
@@ -101,13 +97,13 @@ enum opcode
     // ----------------------------------------------------------------------
     /*s: branching opcodes */
     AB,
-    ABL,
+    ABL, // branch and link, =~ CALL
     /*x: branching opcodes */
     /* 
      * Do not reorder or fragment the conditional branch 
      * opcodes, or the predication code will break 
      */ 
-    // AB derivatives with condition code, see 5i/
+    // VIRTUAL, AB derivatives with condition code, see 5i/
     ABEQ,
     ABNE,
     ABCS,//not in 5i/cond, seems equivalent to ABHS
@@ -126,13 +122,13 @@ enum opcode
     ABLE,
     //ABAL? (always) done via AB, ABNV (never) done via ANOP probably
     /*x: branching opcodes */
-    ARET,
+    ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
     /*e: branching opcodes */
     // ----------------------------------------------------------------------
     // Memory MOV opcodes
     // ----------------------------------------------------------------------
     /*s: mov opcodes */
-    AMOVW,
+    AMOVW, // VIRTUAL, transformed in load and store instructions
     /*x: mov opcodes */
     AMOVB,
     AMOVBU,
@@ -152,6 +148,8 @@ enum opcode
     // ----------------------------------------------------------------------
     /*s: interrupt opcodes */
     ASWI, // syscall
+    /*x: interrupt opcodes */
+    ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
     /*e: interrupt opcodes */
     // ----------------------------------------------------------------------
     // Float opcodes
@@ -180,12 +178,6 @@ enum opcode
     ASQRTF,
     ASQRTD,
     /*e: float arithmetic opcodes */
-    // ----------------------------------------------------------------------
-    // Misc opcodes
-    // ----------------------------------------------------------------------
-    /*s: misc opcodes */
-    ARFE, // ?? return from exn?
-    /*e: misc opcodes */
 
     // ----------------------------------------------------------------------
     // Pseudo opcodes

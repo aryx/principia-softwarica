@@ -1576,14 +1576,6 @@ oprrr(int a, int sc)
         diag(".P/.W on dp instruction");
 
     switch(a) {
-    case AMULU:
-    case AMUL:	return o | (0x0<<21) | (0x9<<4);
-    case AMULA:	return o | (0x1<<21) | (0x9<<4);
-    case AMULLU:	return o | (0x4<<21) | (0x9<<4);
-    case AMULL:		return o | (0x6<<21) | (0x9<<4);
-    case AMULALU:	return o | (0x5<<21) | (0x9<<4);
-    case AMULAL:	return o | (0x7<<21) | (0x9<<4);
-
     case AAND:	return o | (0x0<<21);
     case AEOR:	return o | (0x1<<21);
     case ASUB:	return o | (0x2<<21);
@@ -1600,6 +1592,14 @@ oprrr(int a, int sc)
     case AMOVW:	return o | (0xd<<21);
     case ABIC:	return o | (0xe<<21);
     case AMVN:	return o | (0xf<<21);
+
+    case AMULU:
+    case AMUL:	return o | (0x0<<21) | (0x9<<4);
+    case AMULA:	return o | (0x1<<21) | (0x9<<4);
+    case AMULLU:	return o | (0x4<<21) | (0x9<<4);
+    case AMULL:		return o | (0x6<<21) | (0x9<<4);
+    case AMULALU:	return o | (0x5<<21) | (0x9<<4);
+    case AMULAL:	return o | (0x7<<21) | (0x9<<4);
 
     case ASLL:	return o | (0xd<<21) | (0<<5);
     case ASRL:	return o | (0xd<<21) | (1<<5);
