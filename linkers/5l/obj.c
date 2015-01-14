@@ -643,9 +643,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     /*s: [[zaddr()]] cases */
     case D_NONE:
     case D_REG:
-    case D_FREG:
     case D_PSR:
-    case D_FPCR:
         break;
 
     case D_REGREG:
@@ -667,6 +665,10 @@ zaddr(byte *p, Adr *a, Sym *h[])
         size += NSNAME;
         break;
     /*x: [[zaddr()]] cases */
+    case D_FREG:
+    case D_FPCR:
+        break;
+    /*x: [[zaddr()]] cases */
     case D_FCONST:
         a->ieee = malloc(sizeof(Ieee));
 
@@ -684,10 +686,11 @@ zaddr(byte *p, Adr *a, Sym *h[])
     /*s: [[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind */
     s = a->sym;
     t = a->symkind;
+    l = a->offset;
+
     if(s == S || (t != D_AUTO && t != D_PARAM))
         return size;
 
-    l = a->offset;
     for(u=curauto; u; u=u->link)
         if(u->asym == s)
          if(u->type == t) {
@@ -697,8 +700,8 @@ zaddr(byte *p, Adr *a, Sym *h[])
         }
 
     u = malloc(sizeof(Auto));
-    u->type = t;
     u->asym = s;
+    u->type = t;
     u->aoffset = l;
 
     //add_list(u, curauto)
