@@ -686,36 +686,35 @@ objfile(char *file)
         for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
 
             s = lookup(e+5, 0);
-            if(s->type != SXREF)
-                continue;
-
-            sprint(pname, "%s(%s)", file, s->name);
-            DBG("%5.2f library: %s\n", cputime(), pname);
-
-            l = e[1] & 0xff;
-            l |= (e[2] & 0xff) << 8;
-            l |= (e[3] & 0xff) << 16;
-            l |= (e[4] & 0xff) << 24;
-            // >> >> >> >>
-
-            seek(f, l, SEEK__START);
-            l = read(f, &arhdr, SAR_HDR);
-            /*s: [[objfile()]] sanity check entry header */
-            if(l != SAR_HDR)
-                goto bad;
-            if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
-                goto bad;
-            /*e: [[objfile()]] sanity check entry header */
-            l = atolwhex(arhdr.size);
-
-            ldobj(f, l, pname);
-
             if(s->type == SXREF) {
-                diag("%s: failed to load: %s", file, s->name);
-                errorexit();
+                sprint(pname, "%s(%s)", file, s->name);
+                DBG("%5.2f library: %s\n", cputime(), pname);
+            
+                l = e[1] & 0xff;
+                l |= (e[2] & 0xff) << 8;
+                l |= (e[3] & 0xff) << 16;
+                l |= (e[4] & 0xff) << 24;
+                // >> >> >> >>
+            
+                seek(f, l, SEEK__START);
+                l = read(f, &arhdr, SAR_HDR);
+                /*s: [[objfile()]] sanity check entry header */
+                if(l != SAR_HDR)
+                    goto bad;
+                if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
+                    goto bad;
+                /*e: [[objfile()]] sanity check entry header */
+                l = atolwhex(arhdr.size);
+            
+                ldobj(f, l, pname);
+            
+                if(s->type == SXREF) {
+                    diag("%s: failed to load: %s", file, s->name);
+                    errorexit();
+                }
+                work = true;
+                xrefresolv = true;
             }
-            work = true;
-            xrefresolv = true;
         }
     }
     return;

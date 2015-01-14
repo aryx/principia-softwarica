@@ -82,9 +82,9 @@ span(void)
                             } else {
                                 diag("zero-width instruction\n%P", p);
                             }
-                            continue;
+                        } else {
+                             c += m;
                         }
-                        c += m;
                     }
                 }
                 /*e: [[span()]] if large procedure */
@@ -92,31 +92,31 @@ span(void)
             } else {
                 diag("zero-width instruction\n%P", p);
             }
-            continue;
-        }
-        c += m;
-        /*s: [[span()]] pool handling for optab o */
-        switch(o->flag & (LFROM|LTO|LPOOL)) {
-        case LFROM:
-            addpool(p, &p->from);
-            break;
-        case LTO:
-            addpool(p, &p->to);
-            break;
+        } else {
+            c += m;
+            /*s: [[span()]] pool handling for optab o */
+            switch(o->flag & (LFROM|LTO|LPOOL)) {
+            case LFROM:
+                addpool(p, &p->from);
+                break;
+            case LTO:
+                addpool(p, &p->to);
+                break;
 
-        case LPOOL:
-            if ((p->scond&C_SCOND) == COND_ALWAYS)
+            case LPOOL:
+                if ((p->scond&C_SCOND) == COND_ALWAYS)
+                    flushpool(p, 0);
+                break;
+            }
+
+            if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
+               (p->scond&C_SCOND) == COND_ALWAYS)
                 flushpool(p, 0);
-            break;
+
+            if(blitrl)
+                checkpool(p);
+            /*e: [[span()]] pool handling for optab o */
         }
-
-        if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
-           (p->scond&C_SCOND) == COND_ALWAYS)
-            flushpool(p, 0);
-
-        if(blitrl)
-            checkpool(p);
-        /*e: [[span()]] pool handling for optab o */
     }
     /*s: [[span()]] if large procedure */
     /* need passes to resolve branches */
@@ -149,9 +149,9 @@ span(void)
                 } else {
                     diag("zero-width instruction\n%P", p);
                 }
-                continue;
+            } else {
+                 c += m;
             }
-            c += m;
         }
     }
     /*e: [[span()]] if large procedure */
@@ -163,15 +163,14 @@ span(void)
          */
         c = rnd(c, 8);
         for(i=0; i<NHASH; i++)
-         for(s = hash[i]; s != S; s = s->link) {
-            if(s->type != SSTRING)
-                continue;
-            v = s->value;
-            while(v & 3)
-                v++;
-            s->value = c;
-            c += v;
-        }
+         for(s = hash[i]; s != S; s = s->link)
+          if(s->type == SSTRING) {
+              v = s->value;
+              while(v & 3)
+                  v++;
+              s->value = c;
+              c += v;
+          }
     }
     /*e: [[span()]] if string in text segment */
 

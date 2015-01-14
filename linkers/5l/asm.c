@@ -218,13 +218,12 @@ asmb(void)
         /*e: [[asmb()]] if dynamic module magic header adjustment(arm) */
         else
             lput(0x647);			/* magic */
+
         lput(textsize);			/* sizes */
         lput(datsize);
         lput(bsssize);
         lput(symsize);			/* nsyms */
-
         lput(entryvalue());		/* va of entry */
-
         lput(0L);
         lput(lcsize);
         break;
@@ -447,32 +446,31 @@ asmsym(void)
 
     for(p=textp; p!=P; p=p->cond) {
         s = p->from.sym;
-        if(s->type != STEXT && s->type != SLEAF)
-            continue;
-
-        /* filenames first */
-        /*s: [[asmsym()]] call putsymb for filenames */
-        for(a=p->to.autom; a; a=a->link)
-            if(a->type == D_FILE)
-                putsymb(a->asym->name, 'z', a->aoffset, 0);
-            else
-            if(a->type == D_FILE1)
-                putsymb(a->asym->name, 'Z', a->aoffset, 0);
-        /*e: [[asmsym()]] call putsymb for filenames */
-
-        if(s->type == STEXT)
-            putsymb(s->name, 'T', s->value, s->version);
-        else // SLEAF
-            putsymb(s->name, 'L', s->value, s->version);
-
-        /* frame, auto and param after */
-        putsymb(".frame", 'm', p->to.offset+4, 0);
-        for(a=p->to.autom; a; a=a->link)
-            if(a->type == D_AUTO)
-                putsymb(a->asym->name, 'a', -a->aoffset, 0);
-            else
-            if(a->type == D_PARAM)
-                putsymb(a->asym->name, 'p', a->aoffset, 0);
+        if(s->type == STEXT || s->type == SLEAF) {
+            /* filenames first */
+            /*s: [[asmsym()]] call putsymb for filenames */
+            for(a=p->to.autom; a; a=a->link)
+                if(a->type == D_FILE)
+                    putsymb(a->asym->name, 'z', a->aoffset, 0);
+                else
+                if(a->type == D_FILE1)
+                    putsymb(a->asym->name, 'Z', a->aoffset, 0);
+            /*e: [[asmsym()]] call putsymb for filenames */
+            
+            if(s->type == STEXT)
+                putsymb(s->name, 'T', s->value, s->version);
+            else // SLEAF
+                putsymb(s->name, 'L', s->value, s->version);
+            
+            /* frame, auto and param after */
+            putsymb(".frame", 'm', p->to.offset+4, 0);
+            for(a=p->to.autom; a; a=a->link)
+                if(a->type == D_AUTO)
+                    putsymb(a->asym->name, 'a', -a->aoffset, 0);
+                else
+                if(a->type == D_PARAM)
+                    putsymb(a->asym->name, 'p', a->aoffset, 0);
+        }
     }
     if(debug['v'] || debug['n']) {
         Bprint(&bso, "symsize = %lud\n", symsize);

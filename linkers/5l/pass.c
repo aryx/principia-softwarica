@@ -57,23 +57,22 @@ dodata(void)
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
-        if(t != SDATA && t != SBSS)
-            continue;
-
-        v = s->value;
-        if(v == 0) {
-            diag("%s: no size", s->name);
-            v = 1;
+        if(t == SDATA || t == SBSS) {
+            v = s->value;
+            if(v == 0) {
+                diag("%s: no size", s->name);
+                v = 1;
+            }
+            while(v & 3)
+                v++;
+            s->value = v;
+        
+            if(v > MINSIZ)
+                continue;
+            s->value = orig;
+            orig += v;
+            s->type = SDATA1;
         }
-        while(v & 3)
-            v++;
-        s->value = v;
-
-        if(v > MINSIZ)
-            continue;
-        s->value = orig;
-        orig += v;
-        s->type = SDATA1;
     }
     /*e: [[dodata()]] small data pass */
 
@@ -84,18 +83,20 @@ dodata(void)
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
-        if(t != SDATA) {
+        if(t == SDATA) {
+            // s->value used to contain the size of the GLOBL, 
+            // now it's its location!
+            v = s->value;
+            s->value = orig;
+            orig += v;
+        } else {
             /*s: [[dodata()]] pass2, retag small data */
             if(t == SDATA1)
                 s->type = SDATA;
             /*e: [[dodata()]] pass2, retag small data */
-            continue;
         }
-        // s->value used to contain the size of the GLOBL, now it's its location
-        v = s->value;
-        s->value = orig;
-        orig += v;
     }
+
     while(orig & 7)
         orig++;
 
@@ -107,12 +108,13 @@ dodata(void)
      */
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
-        if(s->type != SBSS)
-            continue;
-        // s->value used to contain the size of the GLOBL, now it's its location
-        v = s->value;
-        s->value = orig;
-        orig += v;
+        if(s->type == SBSS) {
+            // s->value used to contain the size of the GLOBL, 
+            // now it's its location
+            v = s->value;
+            s->value = orig;
+            orig += v;
+        }
     }
     while(orig & 7)
         orig++;
@@ -396,27 +398,25 @@ patch(void)
         }
         /*e: [[patch()]] resolve branch instructions using symbols */
 
-        if(p->to.type != D_BRANCH || p->cond == UP)
-            continue;
-
-        c = p->to.offset;
-        /*s: [[patch()]] find Prog reference q with pc == c */
-        for(q = firstp; q != P;) {
-            if(q->forwd != P)
-             if(c >= q->forwd->pc) {
-                q = q->forwd;
-                continue;
+        if(p->to.type == D_BRANCH && p->cond != UP) {
+            c = p->to.offset;
+            /*s: [[patch()]] find Prog reference q with pc == c */
+            for(q = firstp; q != P;) {
+                if((q->forwd != P) && (c >= q->forwd->pc)) {
+                    q = q->forwd;
+                } else {
+                    if(c == q->pc)
+                        break;
+                    q = q->link;
+                }
             }
-            if(c == q->pc)
-                break;
-            q = q->link;
+            if(q == P) {
+                diag("branch out of range %ld\n%P", c, p);
+                p->to.type = D_NONE;
+            }
+            /*e: [[patch()]] find Prog reference q with pc == c */
+            p->cond = q;
         }
-        if(q == P) {
-            diag("branch out of range %ld\n%P", c, p);
-            p->to.type = D_NONE;
-        }
-        /*e: [[patch()]] find Prog reference q with pc == c */
-        p->cond = q;
     }
 
     // pass 2
