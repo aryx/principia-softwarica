@@ -201,6 +201,9 @@ Here are other candidates that were considered but ultimately discarded:
 % asm.ps
 % 8a/5a(1)
 
+%MIPS assembly tutorial, might give some ideas (use spim)
+%http://programmedlessons.org/AssemblyTutorial/index.html
+
 \section{About this document}
 #include "../docs/latex/About.nw"
 
@@ -534,8 +537,13 @@ struct	Gen
     <<[[Gen]] other fields>>
 };
 @
-%less: =~ Adr of Linker ?
-%less: rename operand? Why gen anyway? generic?
+%offset is used for:
+% - offset
+% - constant
+% - register for REGREG
+% - bitset of register for MOVM
+% - ??
+%less: rename operand? Why gen anyway? generic? =~ Adr of Linker.
 %less: can have an union? operand_kind will be good enough?
 
 %less: rename offset? to generic_value? or generic_long? or lval?
@@ -570,7 +578,9 @@ enum operand_kind {
 % e.g. by introducing LSREG, and then the part of the enum register related
 % to LSREG?
 % type instr = 
+%  | TEXT of name * attribute list * int (* locals *)
 %   ...
+%   
 % type reg = 
 %   ...
 
@@ -1075,7 +1085,7 @@ assemble(char *infile)
     }
 
     pass = 2;
-    outhist(); // header
+    outhist(); // file history information at the beginning of the object
 
     pinit(infile);
     <<[[assemble()]] init Dlist after pinit>>
@@ -3375,9 +3385,6 @@ ABL, // branch and link, =~ CALL
 % in 'rel' it's just label! so BL foo_ret_lbl (and D_BRANCH)
 % in 'nireg' it's name so it can be BL foo+0(SB) (and D_OREG)
 
-%less: comma rel? comma useful? could probably rewrite the
-% few assembly instruction that uses this bad syntax
-
 <<branching opcodes>>=
 /* 
  * Do not reorder or fragment the conditional branch 
@@ -3402,8 +3409,8 @@ ABLE,
 @
 %old: got rid of ABCS and ABCC, seems redundant
 % and does not match the ARM convention
-%ABCS,//not in 5i/cond, seems equivalent to ABHS
-%ABCC,//not in 5i/cond, seems equivalent to ABLO
+% ABCS,//not in 5i/cond, seems equivalent to ABHS
+% ABCC,//not in 5i/cond, seems equivalent to ABLO
 
 <<[[itab]] elements>>=
 "BEQ",		LBCOND,	ABEQ,
@@ -3479,6 +3486,19 @@ ASWI, // syscall
 % and anyway was doing stupid things like SWI 0  in 9syscall/mkfile
 % which was weird, at least should be SWI $0
 
+
+%\ifallcode
+%<<inst rule(arm)>>=
+%| LSWI cond gen { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+%@
+%%$
+%\fi
+%% just so can test things with kencc/5a, ignore actually the last argument
+%% otherwise the linker will fail.
+
+
+
+
 <<interrupt opcodes>>=
 ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
 @
@@ -3490,17 +3510,6 @@ ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
 % =~ IRET
 %in lproc.s 
 %	RFE				/* MOVM.IA.S.W (R13), [R15] */
-
-
-
-%\ifallcode
-%<<inst rule(arm)>>=
-%| LSWI cond gen { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
-%@
-%%$
-%\fi
-%% just so can test things with kencc/5a, ignore actually the last argument
-%% otherwise the linker will fail.
 
 
 \section{Conditional execution}
@@ -3955,6 +3964,11 @@ nireg:
 %  }
 % }
 
+% BL ireg means have no idea where it jmps ... can this
+% create bugs in 5l that statically tries to find the necessary code?
+% well the address of a function should be taken somewhere so
+% the function should be considered unless one does really crazy
+% magic stuff.
 
 
 
@@ -4307,13 +4321,15 @@ long	pc;
 
 % note that labels are different from ATEXT! they are local
 % to the file, and so lead to local jmps. no need to relocate
-% those names.
+% those names (well actually we relocate them in 5l when
+% we put each object one after another, see the 'ipc' local variable)
 
 \section{Pseudo instructions}
 
 \subsection{[[TEXT/GLOBL]]}
 
-% declare symbols, names
+% declare symbols, names, that other can either call (BL) or 
+% access (MOVW).
 
 <<pseudo opcodes>>=
 ATEXT,
@@ -4338,8 +4354,14 @@ AGLOBL,
 % GLOBL is to declare data symbols (globals indeed), that will go in DATA sect
 
 % TEXT foo(SB), 4, $4, semantic for those immediate value? to? 
+% - size of the locals to reserve for TEXT
 % - size of entity in the case of GLOBL?
-% - size of the locals to reserve
+
+% what is the middle con? for attributes? e.g. for NOPROF, DUPOK?
+% but then what is 4 for??
+
+% the imm can be negative! so SP will be decrememted. This is useful
+% for stuff that needs to access the parameter of the enclosing function?
 
 % if look qemu.root.s from data2c result:
 % e.g. 
@@ -4500,12 +4522,6 @@ comma:
 % essentially generated code by yacc, that is calling yylex
 
 
-%\chapter{Output}
-%\chapter{Name resolution}
-
-
-
-
 \chapter{Object Generation}
 
 % it's object generation, not machine code generation ... 5l/optab.c does this.
@@ -4523,6 +4539,7 @@ comma:
 %  - opcode (1 byte)
 %  - condition (1 byte)
 %  - register (1 byte) (most instrs have at least one register operand)
+%    (also abused to encode some symbol attributes, e.g. DUPOK)
 %  - line  (4 bytes)
 %  - operand1
 %  - operand2
@@ -4917,6 +4934,9 @@ while(s != S) {
 %less: have a Debugging support section? where put lineno of outcode()
 % there?
 
+%todo: use 5l -v -W to see those AHISTORY and ANAME; it can help
+% debug things
+
 <<pseudo opcodes>>=
 AHISTORY,
 @
@@ -5014,6 +5034,7 @@ while(p) {
 @
 % why print each directory path separately?
 
+
 \chapter{Advanced Topics}
 
 \section{Long multiplication instructions}
@@ -5101,6 +5122,7 @@ case D_REGREG:
     Bputc(&obuf, a->offset);
     break;
 @
+% abuse offset to represent a register
 
 \section{Float instructions}
 
@@ -5228,7 +5250,7 @@ enum fregister {
 | LCMPFLOAT cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
 @
 %$
-
+% LMISC, meh
 
 <<operand_kind cases>>=
 D_FREG,
@@ -5604,8 +5626,10 @@ AMODU, // VIRTUAL, transformed to call to _modu
 <<pseudo opcodes>>=
 ASIGNAME,
 @
-% for signatures checking I think, generated just in 5c
-% really an extended ANAME with signature information
+% for signatures checking, generated just in 5c
+% really an extended ANAME with signature information (md5sum of the
+% type, which for a structure is a md5sum of all its components, so
+% pretty safe)
 
 
 % not pseudo opcodes but related to compile-only opcodes. Here are other 
@@ -5637,24 +5661,26 @@ AGOK,
 % GOK =? God only Knows? speciak mark?
 % actually used in both compiler and linker
 % but I think it's used only for zprg, and in ldobj it's an error
-% so maybe we could delete it, and just use AXXX or ALAST or ANOP instead.
+%less: maybe we could delete it, and just use AXXX or ALAST or ANOP instead.
 %old: there was a D_GOK, but it was unused in 5a/5c/5l
 
 <<pseudo opcodes>>=
 ADYNT,
 AINIT,
 @
-% seems never assigned, maybe not used anymore?
+% seems never assigned, maybe not used anymore? seems about
+% dynamic loading, alef stuff maybe?
 
-%again not an opcode, but related (where this bit is stored??)
-% used by 5l (to allow override existing symbol? 5l option?)
+%Again not an opcode, but related. Where this bit is stored?
+%I think in the middle reg of an instruction for opcodes like ATEXT.
+%It is used by 5l e.g. to allow override existing symbol.
 %I think it's for TEXT and DATA instructions and its reg field
 % (that should be unused for TEXT and DATA)
 <<constant DUPOK(arm)>>=
 #define DUPOK		(1<<1)
 @
 
-% less: transform in an enum with DUPOK
+%less: transform in an enum with DUPOK
 % note that it's not used by 5a, used by 5c/5l when have a special #pragma
 <<constant NOPROF(arm)>>=
 #define NOPROF		(1<<0)
@@ -5664,6 +5690,7 @@ AINIT,
 <<sym_kind cases>>=
 D_FILE1, // used by linker only?
 @
+%todo: delete?
 
 %dead: #define	ALLTHUMBS	(1<<2)
 
@@ -5740,7 +5767,8 @@ bad:
 
 }
 @
-
+%less ugly would be to have object attribute (in addition to
+% text/data attributes)
 
 
 \section{Processing multiple files}
@@ -5815,7 +5843,8 @@ if(argc > 1) {
 \chapter{Debugging}
 % not very powerful debugging options for 5a, mostly stuff
 % to debug cpp related issues.
-% 5l has more stuff, with dumpers for Gen, opcode, etc.
+% 5l has actually more stuff, with dumpers for Gen, opcode, etc.
+% e.g. 5l -v -W is pretty useful as it helps debug the object loading
 
 % ex: 'm', 'f' (256 so can have for each character a boolean value)
 <<global debug>>=

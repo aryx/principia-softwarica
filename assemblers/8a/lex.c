@@ -182,7 +182,7 @@ assemble(char *infile)
     }
 
     pass = 2;
-    outhist(); // header
+    outhist(); // file history information at the beginning of the object
 
     pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */

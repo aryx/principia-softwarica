@@ -202,7 +202,7 @@ typedef struct Fhdr
     long	bsssz;		/* size of bss */
 
     long	symsz;		/* size of symbol table */
-    long	sppcsz;		/* size of sp-pc table */
+    long	sppcsz;		/* size of sp-pc table */ // unused
     long	lnpcsz;		/* size of line number-pc table */
 
 } Fhdr;

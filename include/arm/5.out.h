@@ -1,5 +1,9 @@
 /*s: include/arm/5.out.h */
 
+// Many of the types below are marshalled in the .5 object files
+// so take care when changing those types to not alter the order
+// (or to recompile carefully everything).
+
 /*s: enum regxxx(arm) */
 enum registr {
     /*s: [[regxxx]] compiler conventions cases */
@@ -256,12 +260,15 @@ enum sym_kind {
 #define	NSNAME		8
 /*e: constant NSNAME(arm) */
 
+// Attributes
 /*s: constant NOPROF(arm) */
 #define NOPROF		(1<<0)
 /*e: constant NOPROF(arm) */
 /*s: constant DUPOK(arm) */
 #define DUPOK		(1<<1)
 /*e: constant DUPOK(arm) */
+//other attributes?
+//old: #define	ALLTHUMBS	(1<<2)
 
 /*s: constant C_SCOND(arm) */
 /* scond byte */

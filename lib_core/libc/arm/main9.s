@@ -1,10 +1,11 @@
 #define NPRIVATES	16
+#define NOPROF 1 // see 5.out.h        
 
 arg=0
 sp=13
 sb=12
 
-TEXT	_main(SB), 1, $(16 + NPRIVATES*4)
+TEXT	_main(SB), NOPROF, $(16 + NPRIVATES*4)
 	MOVW	$setR12(SB), R(sb)
 	MOVW	R(arg), _tos(SB)
 

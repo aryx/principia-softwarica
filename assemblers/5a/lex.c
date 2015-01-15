@@ -181,7 +181,7 @@ assemble(char *infile)
     }
 
     pass = 2;
-    outhist(); // header
+    outhist(); // file history information at the beginning of the object
 
     pinit(infile);
     /*s: [[assemble()]] init Dlist after pinit */
@@ -628,6 +628,7 @@ outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
 
     /*s: [[outcode()]] st and sf computation, and possible calls to zname */
     jackpot:
+
     sf = 0;
     s = g1->sym;
 
