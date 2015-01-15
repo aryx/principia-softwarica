@@ -4,7 +4,7 @@
 
 #ifndef	DEFAULT
 /*s: constant DEFAULT */
-#define	DEFAULT	'9'
+#define	DEFAULT	H_PLAN9
 /*e: constant DEFAULT */
 #endif
 
@@ -584,8 +584,10 @@ loop:
     if(xrefresolv)
         for(h=0; h<nelem(hash); h++)
              for(s = hash[h]; s != S; s = s->link)
-                 if(s->type == SXREF)
+                 if(s->type == SXREF) {
+                     DBG("symbol %s still not resolved, looping\n", s->name);//pad
                      goto loop;
+                 }
     /*e: [[loadlib()]] if xrefresolv */
 }
 /*e: function loadlib */
@@ -605,6 +607,7 @@ objfile(char *file)
     char pname[LIBNAMELEN];
     char name[LIBNAMELEN];
     char *e, *start, *stop;
+    int pass = 1;
     /*e: [[objfile()]] other locals */
 
     DBG("%5.2f objfile: %s\n", cputime(), file);
@@ -680,8 +683,8 @@ objfile(char *file)
 
     while(work) {
 
-        DBG("%5.2f library pass: %s\n", cputime(), file);
-
+        DBG("%5.2f library pass%d: %s\n", cputime(), pass, file);
+        pass++;
         work = false;
         for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
 

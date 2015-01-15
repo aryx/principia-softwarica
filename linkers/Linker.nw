@@ -1054,9 +1054,10 @@ long	HEADR; 		/* length of header */
 @
 
 
-
 <<[[main()]] set HEADTYPE, INITTEXT, INITDAT, etc>>=
-<<[[main()]] adjust HEADTYPE if debug flags(arm)>>
+if(HEADTYPE == -1) {
+    HEADTYPE = DEFAULT;
+}
 switch(HEADTYPE) {
 <<[[main()]] switch HEADTYPE cases(arm)>>
 default:
@@ -1067,7 +1068,7 @@ default:
 DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
         HEADTYPE, INITTEXT, INITDAT, INITRND);
 @
-
+%could put HEADTYPE=DEFAULT_HEADTYPE;
 
 %l.h
 <<enum headtype(arm)>>=
@@ -1088,6 +1089,11 @@ enum headtype {
 % *	-H4				      is IXP1200 (raw)
 % *	-H5 -T0xC0008010 -R1024 	is ipaq
 % *	-H6 -R4096			   no header with segments padded to pages
+
+<<constant DEFAULT>>=
+#define	DEFAULT	H_PLAN9
+@
+
 
 
 % -H2, see enum headtype in Overview chapter
@@ -2482,6 +2488,7 @@ Sym *s;
 char pname[LIBNAMELEN];
 char name[LIBNAMELEN];
 char *e, *start, *stop;
+int pass = 1;
 @
 
 <<global symname linker>>=
@@ -2517,8 +2524,8 @@ work = true;
 
 while(work) {
 
-    DBG("%5.2f library pass: %s\n", cputime(), file);
-
+    DBG("%5.2f library pass%d: %s\n", cputime(), pass, file);
+    pass++;
     work = false;
     for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
 
@@ -2607,8 +2614,10 @@ xrefresolv = false;
 if(xrefresolv)
     for(h=0; h<nelem(hash); h++)
          for(s = hash[h]; s != S; s = s->link)
-             if(s->type == SXREF)
+             if(s->type == SXREF) {
+                 DBG("symbol %s still not resolved, looping\n", s->name);//pad
                  goto loop;
+             }
 @
 % still some unresolved symbols, loop
 
@@ -2917,7 +2926,7 @@ patch(void)
 
         <<[[patch()]] resolve branch instructions using symbols>>
 
-        if(p->to.type == D_BRANCH && p->cond != UP)
+        if(p->to.type == D_BRANCH && p->cond != UP) {
             c = p->to.offset;
             <<[[patch()]] find Prog reference q with pc == c>>
             p->cond = q;
@@ -7975,54 +7984,140 @@ case AINIT:
 
 \section{Extra executable formats}
 
+
+%<<[[main()]] switch HEADTYPE cases(arm)>>=
+%case 0:	/* no header */
+%case 6:	/* no header, padded segments */
+%    HEADR = 0L;
+%    if(INITTEXT == -1)
+%        INITTEXT = 0;
+%    if(INITDAT == -1)
+%        INITDAT = 0;
+%    if(INITRND == -1)
+%        INITRND = 4;
+%    break;
+%case 1:	/* aif for risc os */
+%    HEADR = 128L;
+%    if(INITTEXT == -1)
+%        INITTEXT = 0x10005000 + HEADR;
+%    if(INITDAT == -1)
+%        INITDAT = 0;
+%    if(INITRND == -1)
+%        INITRND = 4;
+%    break;
+%case 3:	/* boot for NetBSD */
+%    HEADR = 32L;
+%    if(INITTEXT == -1)
+%        INITTEXT = 0xF0000020L;
+%    if(INITDAT == -1)
+%        INITDAT = 0;
+%    if(INITRND == -1)
+%        INITRND = 4096;
+%    break;
+%case 4: /* boot for IXP1200 */
+%    HEADR = 0L;
+%    if(INITTEXT == -1)
+%        INITTEXT = 0x0;
+%    if(INITDAT == -1)
+%        INITDAT = 0;
+%    if(INITRND == -1)
+%        INITRND = 4;
+%    break;
+%case 5: /* boot for ipaq */
+%    HEADR = 16L;
+%    if(INITTEXT == -1)
+%        INITTEXT = 0xC0008010;
+%    if(INITDAT == -1)
+%        INITDAT = 0;
+%    if(INITRND == -1)
+%        INITRND = 1024;
+%    break;
+
+%<<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>=
+%case 0:
+%case 1:
+%case 5:
+%...
+%case 3:
+%case 6:	/* no header, padded segments */
+%    OFFSET = rnd(HEADR+textsize, 4096);
+%    seek(cout, OFFSET, 0);
+%    break;
+
+
+%<<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>=
+%case 0:
+%case 1:
+%case 4:
+%case 5:
+%    debug['s'] = 1;
+%    break;
+%case 3:
+%case 6:	/* no header, padded segments */
+%    OFFSET += rnd(datsize, 4096);
+%    seek(cout, OFFSET, 0);
+%    break;
+
+
+%<<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>=
+%case 0:	/* no header */
+%case 6:	/* no header, padded segments */
+%    break;
+%case 1:	/* aif for risc os */
+%    lputl(0xe1a00000);		/* NOP - decompress code */
+%    lputl(0xe1a00000);		/* NOP - relocation code */
+%    lputl(0xeb000000 + 12);		/* BL - zero init code */
+%    lputl(0xeb000000 +
+%        (entryvalue()
+%         - INITTEXT
+%         + HEADR
+%         - 12
+%         - 8) / 4);		/* BL - entry code */
+%
+%    lputl(0xef000011);		/* SWI - exit code */
+%    lputl(textsize+HEADR);		/* text size */
+%    lputl(datsize);			/* data size */
+%    lputl(0);			/* sym size */
+%
+%    lputl(bsssize);			/* bss size */
+%    lputl(0);			/* sym type */
+%    lputl(INITTEXT-HEADR);		/* text addr */
+%    lputl(0);			/* workspace - ignored */
+%
+%    lputl(32);			/* addr mode / data addr flag */
+%    lputl(0);			/* data addr */
+%    for(t=0; t<2; t++)
+%        lputl(0);		/* reserved */
+%
+%    for(t=0; t<15; t++)
+%        lputl(0xe1a00000);	/* NOP - zero init code */
+%    lputl(0xe1a0f00e);		/* B (R14) - zero init return */
+%    break;
+%case 3:	/* boot for NetBSD */
+%    lput((143<<16)|0413);		/* magic */
+%    lputl(rnd(HEADR+textsize, 4096));
+%    lputl(rnd(datsize, 4096));
+%    lputl(bsssize);
+%    lputl(symsize);			/* nsyms */
+%    lputl(entryvalue());		/* va of entry */
+%    lputl(0L);
+%    lputl(0L);
+%    break;
+%case 4: /* boot for IXP1200 */
+%    break;
+%case 5: /* boot for ipaq */
+%    lputl(0xe3300000);		/* nop */
+%    lputl(0xe3300000);		/* nop */
+%    lputl(0xe3300000);		/* nop */
+%    lputl(0xe3300000);		/* nop */
+%    break;
+% >> 
+
+\subsection{Elf}
+
+
 <<[[main()]] switch HEADTYPE cases(arm)>>=
-case 0:	/* no header */
-case 6:	/* no header, padded segments */
-    HEADR = 0L;
-    if(INITTEXT == -1)
-        INITTEXT = 0;
-    if(INITDAT == -1)
-        INITDAT = 0;
-    if(INITRND == -1)
-        INITRND = 4;
-    break;
-case 1:	/* aif for risc os */
-    HEADR = 128L;
-    if(INITTEXT == -1)
-        INITTEXT = 0x10005000 + HEADR;
-    if(INITDAT == -1)
-        INITDAT = 0;
-    if(INITRND == -1)
-        INITRND = 4;
-    break;
-case 3:	/* boot for NetBSD */
-    HEADR = 32L;
-    if(INITTEXT == -1)
-        INITTEXT = 0xF0000020L;
-    if(INITDAT == -1)
-        INITDAT = 0;
-    if(INITRND == -1)
-        INITRND = 4096;
-    break;
-case 4: /* boot for IXP1200 */
-    HEADR = 0L;
-    if(INITTEXT == -1)
-        INITTEXT = 0x0;
-    if(INITDAT == -1)
-        INITDAT = 0;
-    if(INITRND == -1)
-        INITRND = 4;
-    break;
-case 5: /* boot for ipaq */
-    HEADR = 16L;
-    if(INITTEXT == -1)
-        INITTEXT = 0xC0008010;
-    if(INITDAT == -1)
-        INITDAT = 0;
-    if(INITRND == -1)
-        INITRND = 1024;
-    break;
-case 7:	/* elf executable */
+case H_ELF:	/* elf executable */
     HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
     if(INITTEXT == -1)
         INITTEXT = 4096+HEADR;
@@ -8034,95 +8129,25 @@ case 7:	/* elf executable */
 @
 
 <<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>=
-case 0:
-case 1:
-case 5:
-case 7:
+case H_ELF:
     OFFSET = HEADR+textsize;
     seek(cout, OFFSET, 0);
     break;
-case 3:
-case 6:	/* no header, padded segments */
-    OFFSET = rnd(HEADR+textsize, 4096);
-    seek(cout, OFFSET, 0);
-    break;
 @
+
 <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>=
-case 0:
-case 1:
-case 4:
-case 5:
-    debug['s'] = 1;
-    break;
-case 3:
-case 6:	/* no header, padded segments */
-    OFFSET += rnd(datsize, 4096);
-    seek(cout, OFFSET, 0);
-    break;
-case 7:
+case H_ELF:
     break;
 @
 
 <<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>=
-case 0:	/* no header */
-case 6:	/* no header, padded segments */
-    break;
-case 1:	/* aif for risc os */
-    lputl(0xe1a00000);		/* NOP - decompress code */
-    lputl(0xe1a00000);		/* NOP - relocation code */
-    lputl(0xeb000000 + 12);		/* BL - zero init code */
-    lputl(0xeb000000 +
-        (entryvalue()
-         - INITTEXT
-         + HEADR
-         - 12
-         - 8) / 4);		/* BL - entry code */
-
-    lputl(0xef000011);		/* SWI - exit code */
-    lputl(textsize+HEADR);		/* text size */
-    lputl(datsize);			/* data size */
-    lputl(0);			/* sym size */
-
-    lputl(bsssize);			/* bss size */
-    lputl(0);			/* sym type */
-    lputl(INITTEXT-HEADR);		/* text addr */
-    lputl(0);			/* workspace - ignored */
-
-    lputl(32);			/* addr mode / data addr flag */
-    lputl(0);			/* data addr */
-    for(t=0; t<2; t++)
-        lputl(0);		/* reserved */
-
-    for(t=0; t<15; t++)
-        lputl(0xe1a00000);	/* NOP - zero init code */
-    lputl(0xe1a0f00e);		/* B (R14) - zero init return */
-    break;
-case 3:	/* boot for NetBSD */
-    lput((143<<16)|0413);		/* magic */
-    lputl(rnd(HEADR+textsize, 4096));
-    lputl(rnd(datsize, 4096));
-    lputl(bsssize);
-    lputl(symsize);			/* nsyms */
-    lputl(entryvalue());		/* va of entry */
-    lputl(0L);
-    lputl(0L);
-    break;
-case 4: /* boot for IXP1200 */
-    break;
-case 5: /* boot for ipaq */
-    lputl(0xe3300000);		/* nop */
-    lputl(0xe3300000);		/* nop */
-    lputl(0xe3300000);		/* nop */
-    lputl(0xe3300000);		/* nop */
-    break;
-case 7:	/* elf */
+case H_ELF:
     debug['S'] = 1;			/* symbol table */
     elf32(ARM, ELFDATA2LSB, 0, nil);
     break;
 @
 % >>
 
-\subsection{Elf}
 
 % start text physical address (elf only)
 <<global INITTEXTP>>=
@@ -8160,6 +8185,8 @@ enum {
 
 %\subsection{PE}
 % windows format, see pe.h in golang/src/libmach/
+
+
 
 \section{[[5l -E digits]]}
 
@@ -9365,7 +9392,7 @@ case 63:	/* bcase */
 
 \chapter{Debugging}
 
-\section{[[debug]]}
+%\section{[[debug]]}
 
 % hmm actually it's used not just for debugging but also for generic
 % options, e.g. for -l, -p, etc in addition to the main use which is -v
@@ -9381,7 +9408,6 @@ bool	debug[128];
 <<global bso>>=
 Biobuf	bso;
 @
-
 
 
 
@@ -9795,7 +9821,8 @@ Sconv(Fmt *fp)
 @
 
 
-\section{[[5l -v]] and [[DBG()]]}
+\section{Verbose mode, [[5l -v]]}
+% and [[DBG()]]
 
 %used to have lots of code like:
 %if(debug['v']) {
@@ -9822,35 +9849,45 @@ void mylog(char *fmt, ...) {
 }
 @
 
-\section{[[5l -a]]}
-% print object code in assembly language with addresses?
-
-\section{[[5l -W]]}
+\section{Object loading debugging, [[5l -W]]}
 % print object code when loading
 
-\section{[[5l -9 -B -U]]}
-% dead?
-
-<<constant DEFAULT>>=
-#define	DEFAULT	'9'
-@
+%ex: of output:
 
 
-% obsolete?
-<<[[main()]] adjust HEADTYPE if debug flags(arm)>>=
-if(!debug['9'] && !debug['U'] && !debug['B'])
-    debug[DEFAULT] = true;
 
-if(HEADTYPE == -1) {
-    if(debug['U'])
-        HEADTYPE = 0;
-    if(debug['B'])
-        HEADTYPE = 1;
-    if(debug['9'])
-        HEADTYPE = 2;
-}
-@
 
+\section{Machine code debugging, [[5l -a]]}
+% print final concrete code in assembly language with addresses
+
+%ex of output:
+
+
+
+
+
+%\section{[[5l -9 -B -U]]}
+% dead I think, -9 for plan9, B for planB? U for Unix?
+
+%<<constant DEFAULT>>=
+%#define	DEFAULT	'9'
+%@
+%
+%
+%% obsolete?
+%<<[[main()]] adjust HEADTYPE if debug flags(arm)>>=
+%if(!debug['9'] && !debug['U'] && !debug['B'])
+%    debug[DEFAULT] = true;
+%
+%if(HEADTYPE == -1) {
+%    if(debug['U'])
+%        HEADTYPE = 0;
+%    if(debug['B'])
+%        HEADTYPE = 1;
+%    if(debug['9'])
+%        HEADTYPE = H_PLAN9;
+%}
+%@
 \chapter{Error Managment}
 
 <<global nerrors>>=

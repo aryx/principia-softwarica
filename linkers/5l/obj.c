@@ -4,7 +4,7 @@
 
 #ifndef	DEFAULT
 /*s: constant DEFAULT */
-#define	DEFAULT	'9'
+#define	DEFAULT	H_PLAN9
 /*e: constant DEFAULT */
 #endif
 
@@ -175,19 +175,9 @@ main(int argc, char *argv[])
     addlibpath(name);
     /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
     /*s: [[main()]] set HEADTYPE, INITTEXT, INITDAT, etc */
-    /*s: [[main()]] adjust HEADTYPE if debug flags(arm) */
-    if(!debug['9'] && !debug['U'] && !debug['B'])
-        debug[DEFAULT] = true;
-
     if(HEADTYPE == -1) {
-        if(debug['U'])
-            HEADTYPE = 0;
-        if(debug['B'])
-            HEADTYPE = 1;
-        if(debug['9'])
-            HEADTYPE = 2;
+        HEADTYPE = DEFAULT;
     }
-    /*e: [[main()]] adjust HEADTYPE if debug flags(arm) */
     switch(HEADTYPE) {
     /*s: [[main()]] switch HEADTYPE cases(arm) */
     case H_PLAN9:
@@ -200,53 +190,7 @@ main(int argc, char *argv[])
             INITRND = 4096;
         break;
     /*x: [[main()]] switch HEADTYPE cases(arm) */
-    case 0:	/* no header */
-    case 6:	/* no header, padded segments */
-        HEADR = 0L;
-        if(INITTEXT == -1)
-            INITTEXT = 0;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4;
-        break;
-    case 1:	/* aif for risc os */
-        HEADR = 128L;
-        if(INITTEXT == -1)
-            INITTEXT = 0x10005000 + HEADR;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4;
-        break;
-    case 3:	/* boot for NetBSD */
-        HEADR = 32L;
-        if(INITTEXT == -1)
-            INITTEXT = 0xF0000020L;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4096;
-        break;
-    case 4: /* boot for IXP1200 */
-        HEADR = 0L;
-        if(INITTEXT == -1)
-            INITTEXT = 0x0;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 4;
-        break;
-    case 5: /* boot for ipaq */
-        HEADR = 16L;
-        if(INITTEXT == -1)
-            INITTEXT = 0xC0008010;
-        if(INITDAT == -1)
-            INITDAT = 0;
-        if(INITRND == -1)
-            INITRND = 1024;
-        break;
-    case 7:	/* elf executable */
+    case H_ELF:	/* elf executable */
         HEADR = rnd(Ehdr32sz+3*Phdr32sz, 16);
         if(INITTEXT == -1)
             INITTEXT = 4096+HEADR;
@@ -459,8 +403,10 @@ loop:
     if(xrefresolv)
         for(h=0; h<nelem(hash); h++)
              for(s = hash[h]; s != S; s = s->link)
-                 if(s->type == SXREF)
+                 if(s->type == SXREF) {
+                     DBG("symbol %s still not resolved, looping\n", s->name);//pad
                      goto loop;
+                 }
     /*e: [[loadlib()]] if xrefresolv */
 }
 /*e: function loadlib */
@@ -480,6 +426,7 @@ objfile(char *file)
     char pname[LIBNAMELEN];
     char name[LIBNAMELEN];
     char *e, *start, *stop;
+    int pass = 1;
     /*e: [[objfile()]] other locals */
 
     DBG("%5.2f objfile: %s\n", cputime(), file);
@@ -555,8 +502,8 @@ objfile(char *file)
 
     while(work) {
 
-        DBG("%5.2f library pass: %s\n", cputime(), file);
-
+        DBG("%5.2f library pass%d: %s\n", cputime(), pass, file);
+        pass++;
         work = false;
         for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
 

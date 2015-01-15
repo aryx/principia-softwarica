@@ -116,16 +116,8 @@ asmb(void)
         seek(cout, OFFSET, SEEK__START);
         break;
     /*s: [[asmb()]] switch HEADTYPE (to position after text) cases(arm) */
-    case 0:
-    case 1:
-    case 5:
-    case 7:
+    case H_ELF:
         OFFSET = HEADR+textsize;
-        seek(cout, OFFSET, 0);
-        break;
-    case 3:
-    case 6:	/* no header, padded segments */
-        OFFSET = rnd(HEADR+textsize, 4096);
         seek(cout, OFFSET, 0);
         break;
     /*e: [[asmb()]] switch HEADTYPE (to position after text) cases(arm) */
@@ -162,18 +154,7 @@ asmb(void)
             seek(cout, OFFSET, SEEK__START);
             break;
         /*s: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
-        case 0:
-        case 1:
-        case 4:
-        case 5:
-            debug['s'] = 1;
-            break;
-        case 3:
-        case 6:	/* no header, padded segments */
-            OFFSET += rnd(datsize, 4096);
-            seek(cout, OFFSET, 0);
-            break;
-        case 7:
+        case H_ELF:
             break;
         /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         }
@@ -228,58 +209,7 @@ asmb(void)
         lput(lcsize);
         break;
     /*s: [[asmb()]] switch HEADTYPE (for header generation) cases(arm) */
-    case 0:	/* no header */
-    case 6:	/* no header, padded segments */
-        break;
-    case 1:	/* aif for risc os */
-        lputl(0xe1a00000);		/* NOP - decompress code */
-        lputl(0xe1a00000);		/* NOP - relocation code */
-        lputl(0xeb000000 + 12);		/* BL - zero init code */
-        lputl(0xeb000000 +
-            (entryvalue()
-             - INITTEXT
-             + HEADR
-             - 12
-             - 8) / 4);		/* BL - entry code */
-
-        lputl(0xef000011);		/* SWI - exit code */
-        lputl(textsize+HEADR);		/* text size */
-        lputl(datsize);			/* data size */
-        lputl(0);			/* sym size */
-
-        lputl(bsssize);			/* bss size */
-        lputl(0);			/* sym type */
-        lputl(INITTEXT-HEADR);		/* text addr */
-        lputl(0);			/* workspace - ignored */
-
-        lputl(32);			/* addr mode / data addr flag */
-        lputl(0);			/* data addr */
-        for(t=0; t<2; t++)
-            lputl(0);		/* reserved */
-
-        for(t=0; t<15; t++)
-            lputl(0xe1a00000);	/* NOP - zero init code */
-        lputl(0xe1a0f00e);		/* B (R14) - zero init return */
-        break;
-    case 3:	/* boot for NetBSD */
-        lput((143<<16)|0413);		/* magic */
-        lputl(rnd(HEADR+textsize, 4096));
-        lputl(rnd(datsize, 4096));
-        lputl(bsssize);
-        lputl(symsize);			/* nsyms */
-        lputl(entryvalue());		/* va of entry */
-        lputl(0L);
-        lputl(0L);
-        break;
-    case 4: /* boot for IXP1200 */
-        break;
-    case 5: /* boot for ipaq */
-        lputl(0xe3300000);		/* nop */
-        lputl(0xe3300000);		/* nop */
-        lputl(0xe3300000);		/* nop */
-        lputl(0xe3300000);		/* nop */
-        break;
-    case 7:	/* elf */
+    case H_ELF:
         debug['S'] = 1;			/* symbol table */
         elf32(ARM, ELFDATA2LSB, 0, nil);
         break;
