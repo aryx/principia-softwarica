@@ -171,7 +171,7 @@ Inst itab[] =
   [OB]  =  { Ib,	"B",	Ibranch },
   [OBL] =  { Ibl,	"BL",	Ibranch },
   /*x: [[itab]] elements */
-  [OSYSCALL] =  { Ssyscall,		"SWI",	Isyscall },
+  [OSWI] =  { Ssyscall,		"SWI",	Isyscall },
   /*e: [[itab]] elements */
   { 0 }
 };
@@ -397,7 +397,7 @@ arm_class(instruction w)
     /*x: [[arm_class()]] class cases */
     case 7:	/* coprocessor crap */ // and syscall
      if((w >> 25) & 0x1)
-       op = OSYSCALL;
+       op = OSWI;
      else
        op = OUNDEF; // coprocessor stuff not handled
      break;
