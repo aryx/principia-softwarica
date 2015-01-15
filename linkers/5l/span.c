@@ -51,43 +51,11 @@ span(void)
                 autosize = p->to.offset + 4;
                 if(p->from.sym != S)
                     p->from.sym->value = c;
-                /*s: [[span()]] if large procedure */
+                /*s: [[span()]] if large procedure set bflag */
                 /* need passes to resolve branches */
                 if(c - otxt >= 1L<<17)
                     bflag = true;
-                /*x: [[span()]] if large procedure */
-                /*
-                 * if any procedure is large enough to
-                 * generate a large SBRA branch, then
-                 * generate extra passes putting branches
-                 * around jmps to fix. this is rare.
-                 */
-                while(bflag) {
-                    DBG("%5.2f span1\n", cputime());
-                    bflag = false;
-                    c = INITTEXT;
-                    for(p = firstp; p != P; p = p->link) {
-                        /*s: adjust curtext when iterate over instructions p */
-                        if(p->as == ATEXT)
-                            curtext = p;
-                        /*e: adjust curtext when iterate over instructions p */
-                        p->pc = c;
-                        o = oplook(p);
-                        m = o->size;
-                        if(m == 0) {
-                            if(p->as == ATEXT) {
-                                autosize = p->to.offset + 4;
-                                if(p->from.sym != S)
-                                    p->from.sym->value = c;
-                            } else {
-                                diag("zero-width instruction\n%P", p);
-                            }
-                        } else {
-                             c += m;
-                        }
-                    }
-                }
-                /*e: [[span()]] if large procedure */
+                /*e: [[span()]] if large procedure set bflag */
                 otxt = c;
             } else {
                 diag("zero-width instruction\n%P", p);
@@ -119,10 +87,6 @@ span(void)
         }
     }
     /*s: [[span()]] if large procedure */
-    /* need passes to resolve branches */
-    if(c - otxt >= 1L<<17)
-        bflag = true;
-    /*x: [[span()]] if large procedure */
     /*
      * if any procedure is large enough to
      * generate a large SBRA branch, then

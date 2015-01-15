@@ -42,9 +42,7 @@ char*	libraryobj[50];
 int	libraryp;
 /*e: global libraryp */
 
-/*s: global xrefresolv */
-bool	xrefresolv;
-/*e: global xrefresolv */
+//global xrefresolv
 
 /*s: global version */
 int	version = 0;
@@ -569,26 +567,11 @@ void
 loadlib(void)
 {
     int i;
-    long h;
-    Sym *s;
 
-loop:
-    /*s: [[loadlib()]] reset xrefresolv */
-    xrefresolv = false;
-    /*e: [[loadlib()]] reset xrefresolv */
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
-    /*s: [[loadlib()]] if xrefresolv */
-    if(xrefresolv)
-        for(h=0; h<nelem(hash); h++)
-             for(s = hash[h]; s != S; s = s->link)
-                 if(s->type == SXREF) {
-                     DBG("symbol %s still not resolved, looping\n", s->name);//pad
-                     goto loop;
-                 }
-    /*e: [[loadlib()]] if xrefresolv */
 }
 /*e: function loadlib */
 
@@ -602,11 +585,11 @@ objfile(char *file)
     /*s: [[objfile()]] other locals */
     struct ar_hdr arhdr;
     long off, esym, cnt;
-    bool work;
     Sym *s;
     char pname[LIBNAMELEN];
     char name[LIBNAMELEN];
     char *e, *start, *stop;
+    bool work;
     int pass = 1;
     /*e: [[objfile()]] other locals */
 
@@ -677,10 +660,9 @@ objfile(char *file)
         return;
     }
     stop = &start[cnt];
-    memset(stop, 0, 10);
+    memset(stop, '\0', 10);
 
     work = true;
-
     while(work) {
 
         DBG("%5.2f library pass%d: %s\n", cputime(), pass, file);
@@ -715,8 +697,7 @@ objfile(char *file)
                     diag("%s: failed to load: %s", file, s->name);
                     errorexit();
                 }
-                work = true;
-                xrefresolv = true;
+                work = true; // maybe some new SXREF has been found in ldobj()
             }
         }
     }

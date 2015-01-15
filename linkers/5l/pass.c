@@ -403,11 +403,11 @@ patch(void)
             /*s: [[patch()]] find Prog reference q with pc == c */
             for(q = firstp; q != P;) {
                 if((q->forwd != P) && (c >= q->forwd->pc)) {
-                    q = q->forwd;
+                    q = q->forwd; // big jump
                 } else {
                     if(c == q->pc)
-                        break;
-                    q = q->link;
+                        break; // found it!
+                    q = q->link; // small jump
                 }
             }
             if(q == P) {

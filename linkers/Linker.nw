@@ -1297,6 +1297,9 @@ objfile(char *file)
 
 % then if(load_libs) loadlib()  in the main flow
 
+% todo: it does some uniq? there is an order? this is why
+% we need xrefresolv?
+
 <<global library>>=
 // array<option<filename>>
 char*	library[50];
@@ -1322,19 +1325,28 @@ void
 loadlib(void)
 {
     int i;
-    long h;
-    Sym *s;
 
-loop:
-    <<[[loadlib()]] reset xrefresolv>>
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
-    <<[[loadlib()]] if xrefresolv>>
 }
 @
 
+%old:
+%    long h;
+%    Sym *s;
+%loop:
+%    <<[[loadlib()]] reset xrefresolv>>
+%    for(i=0; i<libraryp; i++) {
+%        DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
+%        objfile(library[i]);
+%    }
+%    <<[[loadlib()]] if xrefresolv>>
+% which allows to have mutually dependent libraries, but I don't think
+% it's a good idea, ocaml does not allow it, so I commented it for now.
+% if people have mutually dependent, they'll have to mention
+% the same lib multiple time on the command line!
 
 
 
@@ -2421,9 +2433,17 @@ out:
 
 \chapter{Loading Libraries}
 
-% it actually loads only the functions/data which are necessary
-% (which are used by the object files). So it removes lots of code
-% which helps generate small binaries (see helloc, only 4618 bytes)
+% 5l actually loads only the object files in the librairies containing 
+% the functions/data which are mentionned by the main object files
+% (starting from _main).
+% So it removes lots of code which helps generate small binaries 
+% (see helloc which is only 4618 bytes).
+% Note that the granularity is the object file; if it was the function/data
+% it could remove even more code.
+
+% see 5l -W -v helloc.5 to see the different passes, which symbols
+% are needed, which object files in the archive are read, which ANAME
+% are processed, etc.
 
 \section{[[ar]] format}
 
@@ -2442,14 +2462,15 @@ out:
 #define	ARFMAG	"`\n"
 @
 % ARchive F? MAGic
+% separator between each ar_hdr entries?
 
 <<constant SARNAME>>=
 #define SARNAME	16
 @
 %size ARNAME
-% so can't have symbol name of more than 16 characters?
+% so can't have symbol names of more than 16 characters?
 
-% seems to be the file header and also each entry header
+% seems to be the symbol file header and also each file entry header
 <<struct ar_hdr>>=
 struct	ar_hdr
 {
@@ -2466,34 +2487,51 @@ struct	ar_hdr
 @
 %less: s/char/byte!
 
+% an archive contains:
+% MAGIC header "<arch"
+% symbol table which is a kind of map from symbol to file entry offset
+% file entry header
+% object file content
+% file entry header
+% object file content
+% ...
+
 <<constant SAR_HDR>>=
 #define	SAR_HDR	(SARNAME+44)
 @
 % sizeof(struct ar_hdr)
 
 
+<<global symname linker>>=
+char	symname[]	= SYMDEF;
+@
+% in 5.out.h #define	SYMDEF "__.SYMDEF"
+% the first ar_hdr entry is the symbol table.
 
-%todo: ar does things with pc? I can't see how ldobj can work
-% when you seek to an individual TEXT because the branch jumps
+%todo: What is the format of the symbol table?
+% see the strchr(e+5, ...) below, it's weird
+
+%I could not originally see how ldobj() could work
+% when you seek to an individual TEXT. Indeed the branch jumps
 % are absolute with the 0 basis as the first instruction in the file,
-% not first instruction in the procedure ...
+% not the first instruction in the procedure. It's because you
+% actually don't seek to individual function. The symbol table
+% contains offsets for symbols which are not the offset of their TEXT
+% but the offset of their object file entry in the archive file.
 
 \section{Loading libraries manually [[5l libxxx.a]]}
 
 <<[[objfile()]] other locals>>=
 struct ar_hdr arhdr;
 long off, esym, cnt;
-bool work;
 Sym *s;
 char pname[LIBNAMELEN];
 char name[LIBNAMELEN];
 char *e, *start, *stop;
+bool work;
 int pass = 1;
 @
 
-<<global symname linker>>=
-char	symname[]	= SYMDEF;
-@
 
 
 <<[[objfile()]] when file is a library>>=
@@ -2518,10 +2556,9 @@ if(cnt <= 0){
     return;
 }
 stop = &start[cnt];
-memset(stop, 0, 10);
+memset(stop, '\0', 10);
 
 work = true;
-
 while(work) {
 
     DBG("%5.2f library pass%d: %s\n", cputime(), pass, file);
@@ -2551,8 +2588,7 @@ while(work) {
                 diag("%s: failed to load: %s", file, s->name);
                 errorexit();
             }
-            work = true;
-            xrefresolv = true;
+            work = true; // maybe some new SXREF has been found in ldobj()
         }
     }
 }
@@ -2566,22 +2602,17 @@ out:
 
 % >> >> >>
 
-% double loop!  while work, for ;;
-% this is where we include all relevant entities, and only those,
-% so 5l can produce small binaries (good because plan9 does not have
-% shared libraries).
-
-% but how ldobj() can work on just a slice of an object file? just
-% on a set of instrs from a single procedure? the pc will be wrong?
-% the ANAME may not be there but before ... or is it 'ar' that does
-% lots of changes and make those set of instructions independent?
-
 %old:
 %        /* need readn to read the dumps (at least) */
 %        l = readn(f, &arhdr, SAR_HDR);
 % but seems ugly, readn in lib_core/libc/port/readn.c seems to just
 % do some repetitive read()
 
+% double loop!  while work, for ;;
+% this is where we include all relevant entities(actually object files), 
+% and only those,
+% so 5l can produce small binaries (good because plan9 does not have
+% shared libraries).
 
 <<[[objfile()]] sanity check library header size and content>>=
 if(l != SAR_HDR) {
@@ -2601,24 +2632,30 @@ if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
     goto bad;
 @
 
-% Why need multi pass for libs?
-<<global xrefresolv>>=
-bool	xrefresolv;
-@
 
-<<[[loadlib()]] reset xrefresolv>>=
-xrefresolv = false;
-@
-
-<<[[loadlib()]] if xrefresolv>>=
-if(xrefresolv)
-    for(h=0; h<nelem(hash); h++)
-         for(s = hash[h]; s != S; s = s->link)
-             if(s->type == SXREF) {
-                 DBG("symbol %s still not resolved, looping\n", s->name);//pad
-                 goto loop;
-             }
-@
+% Why need multi pass for libs? ocamlc does not allow this, so I commented
+% it for now
+%  ...
+%            work = true;
+%            xrefresolv = true;
+%  ...
+%<<global xrefresolv>>=
+%bool	xrefresolv;
+%@
+%
+%<<[[loadlib()]] reset xrefresolv>>=
+%xrefresolv = false;
+%@
+%
+%<<[[loadlib()]] if xrefresolv>>=
+%if(xrefresolv)
+%    for(h=0; h<nelem(hash); h++)
+%         for(s = hash[h]; s != S; s = s->link)
+%             if(s->type == SXREF) {
+%                 DBG("symbol %s still not resolved, looping\n", s->name);//pad
+%                 goto loop;
+%             }
+%@
 % still some unresolved symbols, loop
 
 \section{Loading libraries semi automatically [[5l -lxxx]]}
@@ -3053,11 +3090,11 @@ mkfwd(void)
 <<[[patch()]] find Prog reference q with pc == c>>=
 for(q = firstp; q != P;) {
     if((q->forwd != P) && (c >= q->forwd->pc)) {
-        q = q->forwd;
+        q = q->forwd; // big jump
     } else {
         if(c == q->pc)
-            break;
-        q = q->link;
+            break; // found it!
+        q = q->link; // small jump
     }
 }
 if(q == P) {
@@ -3099,10 +3136,17 @@ brloop(Prog *p)
 
 
 \section{Removing some useless instructions, [[follow()]]}
-%todo: seems like it removes many unused functions!
-% the size of helloc is very small. How?
+% a space optimisation more than speed opti (but can help speed
+% a bit maybe because of icache)
 
-% mostly unreachable code, and chains of direct jmps
+% Note that this code does not remove the unused functions
+% The size of helloc is very small but mainly because of
+% loadlib() and objfile() on demand loading strategy of used
+% but not yet defined (SXREF) symbols (and multiple passes
+% on library symbol table until fixpoint).
+
+% Here I think it's mostly for unreachable code, and chains of direct jmps.
+% Note that useful I think.
 
 % does not remove all unreachable instrs so,
 % and does not remove unreachable functions :( maybe more important
@@ -3873,7 +3917,7 @@ span(void)
                 autosize = p->to.offset + 4;
                 if(p->from.sym != S)
                     p->from.sym->value = c;
-                <<[[span()]] if large procedure>>
+                <<[[span()]] if large procedure set bflag>>
                 otxt = c;
             } else {
                 diag("zero-width instruction\n%P", p);
@@ -3898,16 +3942,18 @@ span(void)
 
 
 \subsection{Large procedures}
-
-<<[[span()]] initialisation>>=
-bflag = false;
-@
+% need that?
 
 <<[[span()]] locals>>=
 bool bflag;
 @
 
-<<[[span()]] if large procedure>>=
+<<[[span()]] initialisation>>=
+bflag = false;
+@
+
+
+<<[[span()]] if large procedure set bflag>>=
 /* need passes to resolve branches */
 if(c - otxt >= 1L<<17)
     bflag = true;
@@ -3945,6 +3991,7 @@ while(bflag) {
     }
 }
 @
+%bug? does not have the [[span()]] if large procedure set bflag here?
 
 %/* very larg branches
 %            if(o->type == 6 && p->cond) {
@@ -4118,25 +4165,27 @@ addpool(Prog *p, Adr *a)
 
 \section{Defining special symbols [[etext]], [[edata]], [[end]]}
 
+% the kernel uses etext! edata! those are important special symbols.
+% some form of introspection capability.
+
 % At this point we are in dodata() in which case the 'value' field
 % is now really a location.
 % This means the xdefine below now have a different meaning: the 3rd
 % argument is a location, not a size anymore!
-
-% some important exxx!!! the kernel uses etext! edata!
-% some form of introspection capability.
 
 <<[[dodata()]] define special symbols>>=
 xdefine("bdata", SDATA, 0L);
 xdefine("edata", SDATA, datsize);
 xdefine("end", SBSS, datsize+bsssize);
 @
-% 0L because still relative to INITDAT
+% 0L because still relative to INITDAT. There are many code
+% later that do the final s->value+INITDAT.
 
 % how 'end' can be in SBSS section? we actually want it initialized ...
 % because here it's actually about the layout! 'end' will have a location
 % at the end of the SBSS! If do &end in C (or $end in asm) then you'll get
-% a pointer to the end of the BSS! reflection power!
+% a pointer to the end of the BSS! reflection power! 'end' has no value
+% because it's in the BSS, but its location is its interesting value!
 
 <<[[dodata()]] define special symbols>>=
 xdefine("etext", STEXT, 0L);
@@ -4151,7 +4200,7 @@ if(setext != S) {
     textsize = c - INITTEXT;
 }
 @
-% could use xdefine?
+%todo: could use xdefine?
 
 
 
@@ -4180,7 +4229,7 @@ xdefine("setR12", SDATA, 0L+BIG);
 <<constant BIG>>=
 BIG		= (1<<12)-4,
 @
-% ???
+% ??? what if override this because have really lots of symbols?
 % >>
 
 \chapter{Machine Code Generation (ARM)}
@@ -6985,16 +7034,14 @@ if(debug['e']){		/* embedded tracing */
 if(p->reg & NOPROF) {
     for(;;) {
         q = p->link;
-        if(q == P)
-            break;
-        if(q->as == ATEXT)
+        if(q == P || q->as == ATEXT)
             break;
         p = q;
     }
     continue;
 }
 @
-
+%grrr continue, break, grrr
 
 
 
@@ -7006,6 +7053,7 @@ if(p->reg & NOPROF) {
 
 % read .o (objects), read .out (binaries)
 
+\section{[[Fhdr]] and [[crackhdr()]]}
 
 <<struct Fhdr>>=
 /*
@@ -7037,14 +7085,19 @@ typedef struct Fhdr
     long	bsssz;		/* size of bss */
 
     long	symsz;		/* size of symbol table */
-    long	sppcsz;		/* size of sp-pc table */
+    long	sppcsz;		/* size of sp-pc table */ // unused
     long	lnpcsz;		/* size of line number-pc table */
 
 } Fhdr;
 @
+% use uvlong to encompass 32 and 64 architecture.
+
 
 % crackhdr() at least?
 
+\section{[[Map]], [[syminit()]], [[loadmap()]]}
+
+\section{[[machdata]]}
 
 \chapter{Utilities}
 
@@ -9557,9 +9610,6 @@ Cconv(Fmt *fp)
 
 % defined in ../5c/enam.c, coupling with enum as in 5.out.h
 % extern	char*	anames[];
-
-
-
 
 <<function Aconv(arm)>>=
 // enum<opcode> -> string
