@@ -15,27 +15,26 @@ typedef struct Reloc Reloc;
 
 /*s: function span(arm) */
 void
-span(void)
+dotext(void)
 {
     /*s: [[span()]] locals */
     Prog *p;
     Optab *o;
-    long c, otxt;
+    long c;
     long v;
-    Sym *setext, *s;
+    Sym *s;
     int m, i;
     /*x: [[span()]] locals */
-    bool bflag;
+    long    otxt;
     /*e: [[span()]] locals */
 
     DBG("%5.2f span\n", cputime());
 
+    c = INITTEXT;
     /*s: [[span()]] initialisation */
-    bflag = false;
+    otxt = c;
     /*e: [[span()]] initialisation */
 
-    c = INITTEXT;
-    otxt = c;
     for(p = firstp; p != P; p = p->link) {
        /*s: adjust curtext when iterate over instructions p */
        if(p->as == ATEXT)
@@ -51,12 +50,13 @@ span(void)
                 autosize = p->to.offset + 4;
                 if(p->from.sym != S)
                     p->from.sym->value = c;
-                /*s: [[span()]] if large procedure set bflag */
-                /* need passes to resolve branches */
-                if(c - otxt >= 1L<<17)
-                    bflag = true;
-                /*e: [[span()]] if large procedure set bflag */
+                /*s: [[span()]] detect if large procedure */
+                if(c - otxt >= 1L<<17) {
+                    diag("Procedure %s too large\n", TNAME);
+                    errorexit();
+                }
                 otxt = c;
+                /*e: [[span()]] detect if large procedure */
             } else {
                 diag("zero-width instruction\n%P", p);
             }
@@ -86,39 +86,6 @@ span(void)
             /*e: [[span()]] pool handling for optab o */
         }
     }
-    /*s: [[span()]] if large procedure */
-    /*
-     * if any procedure is large enough to
-     * generate a large SBRA branch, then
-     * generate extra passes putting branches
-     * around jmps to fix. this is rare.
-     */
-    while(bflag) {
-        DBG("%5.2f span1\n", cputime());
-        bflag = false;
-        c = INITTEXT;
-        for(p = firstp; p != P; p = p->link) {
-            /*s: adjust curtext when iterate over instructions p */
-            if(p->as == ATEXT)
-                curtext = p;
-            /*e: adjust curtext when iterate over instructions p */
-            p->pc = c;
-            o = oplook(p);
-            m = o->size;
-            if(m == 0) {
-                if(p->as == ATEXT) {
-                    autosize = p->to.offset + 4;
-                    if(p->from.sym != S)
-                        p->from.sym->value = c;
-                } else {
-                    diag("zero-width instruction\n%P", p);
-                }
-            } else {
-                 c += m;
-            }
-        }
-    }
-    /*e: [[span()]] if large procedure */
 
     /*s: [[span()]] if string in text segment */
     if(debug['t']) {
@@ -141,12 +108,9 @@ span(void)
     c = rnd(c, 8);
 
     /*s: [[span()]] define special symbols */
-    setext = lookup("etext", 0);
-    if(setext != S) {
-        setext->value = c;
-        textsize = c - INITTEXT;
-    }
+    xdefine("etext", STEXT, c);
     /*e: [[span()]] define special symbols */
+    textsize = c - INITTEXT;
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);

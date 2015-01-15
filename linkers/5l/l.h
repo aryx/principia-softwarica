@@ -293,9 +293,9 @@ enum classx {
 /* mark flags */
 enum mark {
     /*s: enum mark cases */
-    FOLL		= 1<<0,
-    /*x: enum mark cases */
     LEAF		= 1<<2,
+    /*x: enum mark cases */
+    FOLL		= 1<<0,
     /*e: enum mark cases */
 };
 /*e: enum mark(arm) */
@@ -540,7 +540,7 @@ void	readundefs(char*, int);
 long	regoff(Adr*);
 int	relinv(int);
 long	rnd(long, long);
-void	span(void);
+void	dotext(void);
 void	strnput(char*, int);
 void	undef(void);
 void	undefsym(Sym*);

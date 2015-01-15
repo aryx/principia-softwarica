@@ -310,13 +310,10 @@ main(int argc, char *argv[])
         else
             doprof2();
     /*e: [[main()]] call doprofxxx() if profiling */
-    dodata();
-    follow();
-
-    if(firstp == P)
-        goto out;
     noops();
-    span();
+
+    dodata();
+    dotext();
     /*e: [[main()]] resolving phases */
 
     // Generating (writing to cout, finally)

@@ -47,37 +47,39 @@ dodata(void)
 
     orig = 0;
 
-    /*s: [[dodata()]] small data pass */
     /*
-     * pass 0
-     *	assign 'small' variables to data segment
-     *	(rational is that data segment is more easily
-     *	 addressed through offset on R12)
+     * pass 1
+     *  sanity check data values, and align.
      */
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t == SDATA || t == SBSS) {
             v = s->value;
-            if(v == 0) {
+            if(v == 0) { // check
                 diag("%s: no size", s->name);
                 v = 1;
             }
-            while(v & 3)
+            while(v & 3) // align
                 v++;
-            s->value = v;
-        
-            if(v > MINSIZ)
-                continue;
-            s->value = orig;
-            orig += v;
-            s->type = SDATA1;
+            s->value = v; // adjust
+            /*s: [[dodata()]] if small data size */
+            /*
+             *	assign 'small' variables to data segment
+             *	(rational is that data segment is more easily
+             *	 addressed through offset on R12)
+             */
+            if(v <= MINSIZ) {
+                s->value = orig;
+                orig += v;
+                s->type = SDATA1;
+            }
+            /*e: [[dodata()]] if small data size */
         }
     }
-    /*e: [[dodata()]] small data pass */
 
     /*
-     * pass 1
+     * pass 2
      *	assign (large) 'data' variables to data segment
      */
     for(i=0; i<NHASH; i++)
@@ -87,6 +89,10 @@ dodata(void)
             // s->value used to contain the size of the GLOBL, 
             // now it's its location!
             v = s->value;
+            if(v == 0) {
+                diag("%s: no size", s->name);
+                v = 1;
+            }
             s->value = orig;
             orig += v;
         } else {
@@ -103,7 +109,7 @@ dodata(void)
     datsize = orig;
 
     /*
-     * pass 2
+     * pass 3
      *	everything else to bss segment
      */
     for(i=0; i<NHASH; i++)
@@ -125,8 +131,6 @@ dodata(void)
     xdefine("bdata", SDATA, 0L);
     xdefine("edata", SDATA, datsize);
     xdefine("end", SBSS, datsize+bsssize);
-    /*x: [[dodata()]] define special symbols */
-    xdefine("etext", STEXT, 0L);
     /*x: [[dodata()]] define special symbols */
     xdefine("setR12", SDATA, 0L+BIG);
     /*e: [[dodata()]] define special symbols */

@@ -557,6 +557,7 @@ short	reg;
 @
 % again a reg field ... because most operands involve a register
 %// Abused for NOPROF and DUPOK; abused for NOPROF function attributes
+%less: could use a union again?
 
 <<[[Adr]] other fields>>=
 union {
@@ -1343,9 +1344,10 @@ loadlib(void)
 %        objfile(library[i]);
 %    }
 %    <<[[loadlib()]] if xrefresolv>>
-% which allows to have mutually dependent libraries, but I don't think
+%
+% this allows to have mutually dependent libraries, but I don't think
 % it's a good idea, ocaml does not allow it, so I commented it for now.
-% if people have mutually dependent, they'll have to mention
+% If people have mutually dependent, they'll have to mention
 % the same lib multiple time on the command line!
 
 
@@ -2904,15 +2906,11 @@ addlib(char *obj)
 
 patch();
 <<[[main()]] call doprofxxx() if profiling>>
-dodata();
-follow();
-
-if(firstp == P)
-    goto out;
 noops();
-span();
-@
 
+dodata();
+dotext();
+@
 
 % what we need to resolve?
 % - code references
@@ -2924,6 +2922,25 @@ span();
 % For code they can be reduced to branch pc jump. If we use
 % pointer to link a src to it's dest, and then far later assign
 % a absolute concrete pc to the instructions, then easy.
+
+
+
+%old:
+%   patch();
+%   <<[[main()]] call doprofxxx() if profiling>>
+%   dodata();
+%   follow();
+%   if(firstp == P)
+%       goto out;
+
+%   noops();
+%   span();
+%
+% but I think follow is optional, the order can be changed as
+% some steps are independent I think, and test for firstp is not useful
+% I think if you remove follow.
+
+
 
 \section{Linking branch instructions, [[patch()]]}
 
@@ -3133,353 +3150,6 @@ brloop(Prog *p)
 % less: diag infinute loop detected?
 
 
-
-
-\section{Removing some useless instructions, [[follow()]]}
-% a space optimisation more than speed opti (but can help speed
-% a bit maybe because of icache)
-
-% Note that this code does not remove the unused functions
-% The size of helloc is very small but mainly because of
-% loadlib() and objfile() on demand loading strategy of used
-% but not yet defined (SXREF) symbols (and multiple passes
-% on library symbol table until fixpoint).
-
-% Here I think it's mostly for unreachable code, and chains of direct jmps.
-% Note that useful I think.
-
-% does not remove all unreachable instrs so,
-% and does not remove unreachable functions :( maybe more important
-
-%todo: print the removed code!! usuful diagnostic no?
-
-<<function follow>>=
-void
-follow(void)
-{
-
-    DBG("%5.2f follow\n", cputime());
-
-    firstp = prg();
-    lastp = firstp;
-
-    xfol(textp);
-
-    lastp->link = P;
-    firstp = firstp->link;
-}
-@
-
-<<enum mark cases>>=
-FOLL		= 1<<0,
-@
-% >>
-% foll for follow?
-
-
-
-% xfol? extended follow?
-<<function xfol(arm)>>=
-void
-xfol(Prog *p)
-{
-    Prog *q, *r;
-    int a, i;
-
-loop:
-    if(p == P)
-        return;
-    <<adjust curtext when iterate over instructions p>>
-    a = p->as;
-
-    if(a == AB) {
-        q = p->cond;
-        if(q != P) {
-            p->mark |= FOLL;
-            p = q;
-            if(!(p->mark & FOLL))
-                goto loop;
-        }
-    }
-
-    if(p->mark & FOLL) {
-        <<[[xfol()]] when p is marked, for loop to copy instructions>>
-        a = AB;
-        q = prg();
-        q->as = a;
-        q->line = p->line;
-        q->to.type = D_BRANCH;
-        q->to.offset = p->pc;
-        q->cond = p;
-        p = q;
-    }
-
-    p->mark |= FOLL;
-    lastp->link = p;
-    lastp = p;
-
-    if(a == AB || (a == ARET && p->scond == COND_ALWAYS) || a == ARFE){
-        return;
-    }
-
-    if(p->cond != P)
-     <<[[xfol()]] if a is not ABL and p has a link>>
-    p = p->link;
-    goto loop;
-}
-@
-
-
-
-<<[[xfol()]] if a is not ABL and p has a link>>=
-if(a != ABL && p->link != P) {
-   q = brchain(p->link);
-
-   if(a != ATEXT && a != ABCASE)
-    if(q != P && (q->mark & FOLL)) {
-       p->as = relinv(a);
-       p->link = p->cond;
-       p->cond = q;
-   }
-
-   // recursive call
-   xfol(p->link);
-
-   q = brchain(p->cond);
-   if(q == P)
-       q = p->cond;
-   if(q->mark&FOLL) {
-       p->cond = q;
-       return;
-   }
-   p = q;
-   goto loop;
-}
-@
-
-% follows a chain of AB, hmm but needed now that has brloop()?
-<<function brchain(arm)>>=
-Prog*
-brchain(Prog *p)
-{
-    int i;
-
-    for(i=0; i<20; i++) {
-        if(p == P || p->as != AB)
-            return p;
-        p = p->cond;
-    }
-    return P;
-}
-@
-
-<<function relinv(arm)>>=
-int
-relinv(int a)
-{
-    switch(a) {
-    case ABEQ:	return ABNE;
-    case ABNE:	return ABEQ;
-    case ABHS:	return ABLO;
-    case ABLO:	return ABHS;
-    case ABMI:	return ABPL;
-    case ABPL:	return ABMI;
-    case ABVS:	return ABVC;
-    case ABVC:	return ABVS;
-    case ABHI:	return ABLS;
-    case ABLS:	return ABHI;
-    case ABGE:	return ABLT;
-    case ABLT:	return ABGE;
-    case ABGT:	return ABLE;
-    case ABLE:	return ABGT;
-    }
-    diag("unknown relation: %s", anames[a]);
-    return a;
-}
-@
-
-
-
-
-
-<<[[xfol()]] when p is marked, for loop to copy instructions>>=
-for(i=0, q=p; i<4 && q != lastp; i++, q=q->link) {
-    a = q->as;
-    if(a == ANOP) {
-        i--;
-        continue;
-    }
-    if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
-        goto copy;
-    if(!q->cond || (q->cond->mark & FOLL))
-        continue;
-    if(a != ABEQ && a != ABNE)
-        continue;
-
-// here when a is one of AB, ARET, ARFE, ABEQ, ABNE
-copy:
-    for(;;) {
-        r = prg();
-        *r = *p;
-
-        <<[[xfol()]] sanity check one, r should be marked>>
-
-        if(p != q) {
-            p = p->link;
-            lastp->link = r;
-            lastp = r;
-            continue;
-        }
-        lastp->link = r;
-        lastp = r;
-
-        if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
-            return;
-
-        // r->as = relinv(a)
-        r->as = ABNE;
-        if(a == ABNE)
-            r->as = ABEQ;
-
-        r->cond = p->link;
-        r->link = p->cond;
-
-        if(!(r->link->mark&FOLL))
-            // recursive call
-            xfol(r->link);
-
-        <<[[xfol()]] sanity check two, [[r->cond]] should be marked>>
-
-        return;
-    }
-}
-@
-%old: had        
-% if(q == lastp)
-%    break;
-% at beginning of the for loop, but I moved it up in the for(;_here_;) instead
-% (equivalent)
-
-
-
-
-\ifallcode
-<<[[xfol()]] sanity check one, r should be marked>>=
-if(!(r->mark&FOLL))
-    print("cant happen 1\n");
-r->mark |= FOLL;
-@
-
-<<[[xfol()]] sanity check two, [[r->cond]] should be marked>>=
-if(!(r->cond->mark&FOLL))
-    print("cant happen 2\n");
-@
-\fi
-
-\section{Laying out data, [[dodata()]]}
-% computing datasize
-% != generating DATA
-
-<<global datsize>>=
-long	datsize;
-@
-
-<<global bsssize>>=
-long	bsssize;
-@
-
-% The programmer specifies sizes for GLOBL, and their content via DATA,
-% but he does not want to care about the precise layout. Here we layout,
-% we put the globals next to each other, assigning locations (offset to INITDAT)
-% to each GLOBL.
-% Note that Sym.value changes "type" going from a size to now a location.
-
-
-<<function dodata(arm)>>=
-void
-dodata(void)
-{
-    int i, t;
-    Sym *s;
-    Prog *p;
-    long orig;
-    long v;
-
-    DBG("%5.2f dodata\n", cputime());
-
-    for(p = datap; p != P; p = p->link) {
-        s = p->from.sym;
-        <<[[dodata()]] if ADYNT or AINIT>>
-        if(s->type == SBSS)
-            s->type = SDATA;
-
-        <<[[dodata()]] sanity check DATA instructions>>
-    }
-    <<[[dodata()]] if string in text segment>>
-
-    orig = 0;
-
-    <<[[dodata()]] small data pass>>
-
-    /*
-     * pass 1
-     *	assign (large) 'data' variables to data segment
-     */
-    for(i=0; i<NHASH; i++)
-     for(s = hash[i]; s != S; s = s->link) {
-        t = s->type;
-        if(t == SDATA) {
-            // s->value used to contain the size of the GLOBL, 
-            // now it's its location!
-            v = s->value;
-            s->value = orig;
-            orig += v;
-        } else {
-            <<[[dodata()]] pass2, retag small data>>
-        }
-    }
-
-    while(orig & 7)
-        orig++;
-
-    datsize = orig;
-
-    /*
-     * pass 2
-     *	everything else to bss segment
-     */
-    for(i=0; i<NHASH; i++)
-     for(s = hash[i]; s != S; s = s->link) {
-        if(s->type == SBSS) {
-            // s->value used to contain the size of the GLOBL, 
-            // now it's its location
-            v = s->value;
-            s->value = orig;
-            orig += v;
-        }
-    }
-    while(orig & 7)
-        orig++;
-
-    bsssize = orig-datsize;
-
-    <<[[dodata()]] define special symbols>>
-}
-@
-% now Sym.value for GLOBL is not the size anymore but the offset
-% (offset to INITDAT though) changed type!
-
-
-
-<<[[dodata()]] sanity check DATA instructions>>=
-if(s->type != SDATA)
-    diag("initialize non-data (%d): %s\n%P",
-        s->type, s->name, p);
-v = p->from.offset + p->reg;
-if(v > s->value)
-    diag("initialize bounds (%ld): %s\n%P",
-        s->value, s->name, p);
-@
 
 
 \section{Virtual opcode rewriting, [[noops()]]}
@@ -3865,46 +3535,171 @@ case ABCASE:
 %   p->cond = q1;
 
 
-\section{Laying out code, [[span()]]}
-% computing textsize
+\section{Laying out data, [[dodata()]]}
+% computing datasize (and bsssize)
 % != generating DATA
 
-% and adjusting pc and code addresses to concrete value, 
-% not symbolic pc! so then in AB can do p->cond->pc to know
-% where to concretely jump
+<<global datsize>>=
+long	datsize;
+@
+
+<<global bsssize>>=
+long	bsssize;
+@
+
+% The programmer specifies sizes for GLOBL, and their content via DATA,
+% but he does not want to care about the precise layout. Here we layout,
+% we put the globals next to each other, assigning concrete locations 
+% (actually offset to INITDAT) to each GLOBL.
+% Note that Sym.value changes "type" going from a size to now a location.
+
+
+<<function dodata(arm)>>=
+void
+dodata(void)
+{
+    int i, t;
+    Sym *s;
+    Prog *p;
+    long orig;
+    long v;
+
+    DBG("%5.2f dodata\n", cputime());
+
+    for(p = datap; p != P; p = p->link) {
+        s = p->from.sym;
+        <<[[dodata()]] if ADYNT or AINIT>>
+        if(s->type == SBSS)
+            s->type = SDATA;
+
+        <<[[dodata()]] sanity check DATA instructions>>
+    }
+    <<[[dodata()]] if string in text segment>>
+
+    orig = 0;
+
+    /*
+     * pass 1
+     *  sanity check data values, and align.
+     */
+    for(i=0; i<NHASH; i++)
+     for(s = hash[i]; s != S; s = s->link) {
+        t = s->type;
+        if(t == SDATA || t == SBSS) {
+            v = s->value;
+            if(v == 0) { // check
+                diag("%s: no size", s->name);
+                v = 1;
+            }
+            while(v & 3) // align
+                v++;
+            s->value = v; // adjust
+            <<[[dodata()]] if small data size>>
+        }
+    }
+
+    /*
+     * pass 2
+     *	assign (large) 'data' variables to data segment
+     */
+    for(i=0; i<NHASH; i++)
+     for(s = hash[i]; s != S; s = s->link) {
+        t = s->type;
+        if(t == SDATA) {
+            // s->value used to contain the size of the GLOBL, 
+            // now it's its location!
+            v = s->value;
+            if(v == 0) {
+                diag("%s: no size", s->name);
+                v = 1;
+            }
+            s->value = orig;
+            orig += v;
+        } else {
+            <<[[dodata()]] pass2, retag small data>>
+        }
+    }
+
+    while(orig & 7)
+        orig++;
+
+    datsize = orig;
+
+    /*
+     * pass 3
+     *	everything else to bss segment
+     */
+    for(i=0; i<NHASH; i++)
+     for(s = hash[i]; s != S; s = s->link) {
+        if(s->type == SBSS) {
+            // s->value used to contain the size of the GLOBL, 
+            // now it's its location
+            v = s->value;
+            s->value = orig;
+            orig += v;
+        }
+    }
+    while(orig & 7)
+        orig++;
+
+    bsssize = orig-datsize;
+
+    <<[[dodata()]] define special symbols>>
+}
+@
+% now Sym.value for GLOBL is not the size anymore but the offset
+% (offset to INITDAT though) changed type!
+% note that first iteration is on datap instructions, the other
+% loops are on the symbol table.
+
+
+<<[[dodata()]] sanity check DATA instructions>>=
+if(s->type != SDATA)
+    diag("initialize non-data (%d): %s\n%P",
+        s->type, s->name, p);
+v = p->from.offset + p->reg;
+if(v > s->value)
+    diag("initialize bounds (%ld): %s\n%P",
+        s->value, s->name, p);
+@
+
+
+\section{Laying out code, [[dotext()]]}
+% computing textsize
+% != generating TEXT
+
+% Adjusting pc and code addresses to concrete values, 
+% not symbolic pc! so then when generating the code for AB in
+% the next chapter we can do p->cond->pc to know where to concretely jump.
+% Start of use of INITTEXT! switch from a symbolic pc to a real pc
+% where the size of the instructions now matter (hence use of oplook()).
 
 <<global textsize>>=
 long	textsize;
 @
 
 
-% start to use INITTEXT! switch from a symbolic pc to a real pc
-% where the size of the instructions now matter.
-% todo: so have to relocate every code references? so that jump goes to
-% the right place?
-
 <<[[span()]] locals>>=
 Prog *p;
 Optab *o;
-long c, otxt;
+long c;
 long v;
-Sym *setext, *s;
+Sym *s;
 int m, i;
 @
 
 
 <<function span(arm)>>=
 void
-span(void)
+dotext(void)
 {
     <<[[span()]] locals>>
 
     DBG("%5.2f span\n", cputime());
 
+    c = INITTEXT;
     <<[[span()]] initialisation>>
 
-    c = INITTEXT;
-    otxt = c;
     for(p = firstp; p != P; p = p->link) {
        <<adjust curtext when iterate over instructions p>>
 
@@ -3917,8 +3712,7 @@ span(void)
                 autosize = p->to.offset + 4;
                 if(p->from.sym != S)
                     p->from.sym->value = c;
-                <<[[span()]] if large procedure set bflag>>
-                otxt = c;
+                <<[[span()]] detect if large procedure>>
             } else {
                 diag("zero-width instruction\n%P", p);
             }
@@ -3927,13 +3721,13 @@ span(void)
             <<[[span()]] pool handling for optab o>>
         }
     }
-    <<[[span()]] if large procedure>>
 
     <<[[span()]] if string in text segment>>
 
     c = rnd(c, 8);
 
     <<[[span()]] define special symbols>>
+    textsize = c - INITTEXT;
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);
@@ -3941,56 +3735,78 @@ span(void)
 @
 
 
-\subsection{Large procedures}
+%\subsection{Large procedures}
 % need that?
 
 <<[[span()]] locals>>=
-bool bflag;
+long    otxt;
 @
 
 <<[[span()]] initialisation>>=
-bflag = false;
+otxt = c;
 @
 
-
-<<[[span()]] if large procedure set bflag>>=
-/* need passes to resolve branches */
-if(c - otxt >= 1L<<17)
-    bflag = true;
+<<[[span()]] detect if large procedure>>=
+if(c - otxt >= 1L<<17) {
+    diag("Procedure %s too large\n", TNAME);
+    errorexit();
+}
+otxt = c;
 @
 % >>
+%TODO: why big procedures are a problem???
 
 
-<<[[span()]] if large procedure>>=
-/*
- * if any procedure is large enough to
- * generate a large SBRA branch, then
- * generate extra passes putting branches
- * around jmps to fix. this is rare.
- */
-while(bflag) {
-    DBG("%5.2f span1\n", cputime());
-    bflag = false;
-    c = INITTEXT;
-    for(p = firstp; p != P; p = p->link) {
-        <<adjust curtext when iterate over instructions p>>
-        p->pc = c;
-        o = oplook(p);
-        m = o->size;
-        if(m == 0) {
-            if(p->as == ATEXT) {
-                autosize = p->to.offset + 4;
-                if(p->from.sym != S)
-                    p->from.sym->value = c;
-            } else {
-                diag("zero-width instruction\n%P", p);
-            }
-        } else {
-             c += m;
-        }
-    }
-}
-@
+%old: there was some special code to handle really large procedures
+% but the code looked buggy, so I commented it out for now.
+
+%<<[[span()]] locals>>=
+%bool bflag;
+%@
+%
+%<<[[span()]] initialisation>>=
+%bflag = false;
+%@
+%
+%
+%<<[[span()]] if large procedure set bflag>>=
+%/* need passes to resolve branches */
+%if(c - otxt >= 1L<<17)
+%    bflag = true;
+%@
+%% >>
+%
+%
+%<<[[span()]] if large procedure>>=
+%/*
+% * if any procedure is large enough to
+% * generate a large SBRA branch, then
+% * generate extra passes putting branches
+% * around jmps to fix. this is rare.
+% */
+%while(bflag) {
+%    DBG("%5.2f span1\n", cputime());
+%    bflag = false;
+%    c = INITTEXT;
+%    for(p = firstp; p != P; p = p->link) {
+%        <<adjust curtext when iterate over instructions p>>
+%        p->pc = c;
+%        o = oplook(p);
+%        m = o->size;
+%        if(m == 0) {
+%            if(p->as == ATEXT) {
+%                autosize = p->to.offset + 4;
+%                if(p->from.sym != S)
+%                    p->from.sym->value = c;
+%            } else {
+%                diag("zero-width instruction\n%P", p);
+%            }
+%        } else {
+%             c += m;
+%        }
+%    }
+%}
+%@
 %bug? does not have the [[span()]] if large procedure set bflag here?
 
 %/* very larg branches
@@ -4187,23 +4003,22 @@ xdefine("end", SBSS, datsize+bsssize);
 % a pointer to the end of the BSS! reflection power! 'end' has no value
 % because it's in the BSS, but its location is its interesting value!
 
-<<[[dodata()]] define special symbols>>=
-xdefine("etext", STEXT, 0L);
-@
-% INITTEXT+textsize?
-% the final value will be set in span(), below
 
 <<[[span()]] define special symbols>>=
-setext = lookup("etext", 0);
-if(setext != S) {
-    setext->value = c;
-    textsize = c - INITTEXT;
-}
+xdefine("etext", STEXT, c);
 @
-%todo: could use xdefine?
 
+%old: 
+%setext = lookup("etext", 0);
+%if(setext != S) {
+%    setext->value = c;
+%    textsize = c - INITTEXT;
 
-
+%<<[[dodata()]] define special symbols>>=
+%xdefine("etext", STEXT, 0L);
+%@
+% INITTEXT+textsize?
+% the final value will be set in span(), below
 
 
 <<function xdefine(arm)>>=
@@ -7026,9 +6841,9 @@ if(debug['e']){		/* embedded tracing */
 }
 @
 
-\section{[[NOPROF]] attribute}
+\section{Disabling profiling attribute, [[NOPROF]]}
 
-% from Assembler_extra.nw
+% NOPROF is in 5.out.h (in Assembler_extra.nw)
 
 <<[[doprof2()]] if NOPROF p(arm)>>=
 if(p->reg & NOPROF) {
@@ -7044,7 +6859,7 @@ if(p->reg & NOPROF) {
 %grrr continue, break, grrr
 
 
-
+% useful for the tracing instructions themselves ... hmmm
 
 \chapter{[[libmach/]]}
 
@@ -7169,6 +6984,7 @@ main(int argc, char *argv[])
 % see previous section
 
 \subsection{Opcode rewriting}
+% at loading time
 
 % would be better with ocaml pattern matching (but maybe not that shorter)
 <<[[ldobj()]] switch opcode cases(arm)>>=
@@ -7193,6 +7009,7 @@ case AADD:
 @
 
 \subsection{Small data layout}
+% improve data cache miss?
 
 <<enum sxxx cases>>=
 SDATA1,
@@ -7202,32 +7019,17 @@ SDATA1,
 MINSIZ		= 64,
 @
 
-<<[[dodata()]] small data pass>>=
+
+<<[[dodata()]] if small data size>>=
 /*
- * pass 0
  *	assign 'small' variables to data segment
  *	(rational is that data segment is more easily
  *	 addressed through offset on R12)
  */
-for(i=0; i<NHASH; i++)
- for(s = hash[i]; s != S; s = s->link) {
-    t = s->type;
-    if(t == SDATA || t == SBSS) {
-        v = s->value;
-        if(v == 0) {
-            diag("%s: no size", s->name);
-            v = 1;
-        }
-        while(v & 3)
-            v++;
-        s->value = v;
-        
-        if(v > MINSIZ)
-            continue;
-        s->value = orig;
-        orig += v;
-        s->type = SDATA1;
-    }
+if(v <= MINSIZ) {
+    s->value = orig;
+    orig += v;
+    s->type = SDATA1;
 }
 @
 
@@ -7235,6 +7037,251 @@ for(i=0; i<NHASH; i++)
 if(t == SDATA1)
     s->type = SDATA;
 @
+
+\subsection{Removing some useless instructions, [[follow()]]}
+% a space optimisation more than speed opti (but can help speed
+% a bit maybe because of icache)
+
+%note: right now it's not executed by 5l
+
+% Note that this code does not remove the unused functions
+% The size of helloc is very small but mainly because of
+% loadlib() and objfile() on demand loading strategy of used
+% but not yet defined (SXREF) symbols (and multiple passes
+% on library symbol table until fixpoint).
+
+% Here I think it's mostly for unreachable code, and chains of direct jmps.
+% Note that useful I think.
+
+% does not remove all unreachable instrs so,
+% and does not remove unreachable functions :( maybe more important
+
+%todo: print the removed code!! usuful diagnostic no?
+
+<<function follow>>=
+void
+follow(void)
+{
+
+    DBG("%5.2f follow\n", cputime());
+
+    firstp = prg();
+    lastp = firstp;
+
+    xfol(textp);
+
+    lastp->link = P;
+    firstp = firstp->link;
+}
+@
+
+<<enum mark cases>>=
+FOLL		= 1<<0,
+@
+% >>
+% foll for follow?
+
+
+
+% xfol? extended follow?
+<<function xfol(arm)>>=
+void
+xfol(Prog *p)
+{
+    Prog *q, *r;
+    int a, i;
+
+loop:
+    if(p == P)
+        return;
+    <<adjust curtext when iterate over instructions p>>
+    a = p->as;
+
+    if(a == AB) {
+        q = p->cond;
+        if(q != P) {
+            p->mark |= FOLL;
+            p = q;
+            if(!(p->mark & FOLL))
+                goto loop;
+        }
+    }
+
+    if(p->mark & FOLL) {
+        <<[[xfol()]] when p is marked, for loop to copy instructions>>
+        a = AB;
+        q = prg();
+        q->as = a;
+        q->line = p->line;
+        q->to.type = D_BRANCH;
+        q->to.offset = p->pc;
+        q->cond = p;
+        p = q;
+    }
+
+    p->mark |= FOLL;
+    lastp->link = p;
+    lastp = p;
+
+    if(a == AB || (a == ARET && p->scond == COND_ALWAYS) || a == ARFE){
+        return;
+    }
+
+    if(p->cond != P)
+     <<[[xfol()]] if a is not ABL and p has a link>>
+    p = p->link;
+    goto loop;
+}
+@
+
+
+
+<<[[xfol()]] if a is not ABL and p has a link>>=
+if(a != ABL && p->link != P) {
+   q = brchain(p->link);
+
+   if(a != ATEXT && a != ABCASE)
+    if(q != P && (q->mark & FOLL)) {
+       p->as = relinv(a);
+       p->link = p->cond;
+       p->cond = q;
+   }
+
+   // recursive call
+   xfol(p->link);
+
+   q = brchain(p->cond);
+   if(q == P)
+       q = p->cond;
+   if(q->mark&FOLL) {
+       p->cond = q;
+       return;
+   }
+   p = q;
+   goto loop;
+}
+@
+
+% follows a chain of AB, hmm but needed now that has brloop()?
+<<function brchain(arm)>>=
+Prog*
+brchain(Prog *p)
+{
+    int i;
+
+    for(i=0; i<20; i++) {
+        if(p == P || p->as != AB)
+            return p;
+        p = p->cond;
+    }
+    return P;
+}
+@
+
+<<function relinv(arm)>>=
+int
+relinv(int a)
+{
+    switch(a) {
+    case ABEQ:	return ABNE;
+    case ABNE:	return ABEQ;
+    case ABHS:	return ABLO;
+    case ABLO:	return ABHS;
+    case ABMI:	return ABPL;
+    case ABPL:	return ABMI;
+    case ABVS:	return ABVC;
+    case ABVC:	return ABVS;
+    case ABHI:	return ABLS;
+    case ABLS:	return ABHI;
+    case ABGE:	return ABLT;
+    case ABLT:	return ABGE;
+    case ABGT:	return ABLE;
+    case ABLE:	return ABGT;
+    }
+    diag("unknown relation: %s", anames[a]);
+    return a;
+}
+@
+
+
+
+
+
+<<[[xfol()]] when p is marked, for loop to copy instructions>>=
+for(i=0, q=p; i<4 && q != lastp; i++, q=q->link) {
+    a = q->as;
+    if(a == ANOP) {
+        i--;
+        continue;
+    }
+    if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
+        goto copy;
+    if(!q->cond || (q->cond->mark & FOLL))
+        continue;
+    if(a != ABEQ && a != ABNE)
+        continue;
+
+// here when a is one of AB, ARET, ARFE, ABEQ, ABNE
+copy:
+    for(;;) {
+        r = prg();
+        *r = *p;
+
+        <<[[xfol()]] sanity check one, r should be marked>>
+
+        if(p != q) {
+            p = p->link;
+            lastp->link = r;
+            lastp = r;
+            continue;
+        }
+        lastp->link = r;
+        lastp = r;
+
+        if(a == AB || (a == ARET && q->scond == COND_ALWAYS) || a == ARFE)
+            return;
+
+        // r->as = relinv(a)
+        r->as = ABNE;
+        if(a == ABNE)
+            r->as = ABEQ;
+
+        r->cond = p->link;
+        r->link = p->cond;
+
+        if(!(r->link->mark&FOLL))
+            // recursive call
+            xfol(r->link);
+
+        <<[[xfol()]] sanity check two, [[r->cond]] should be marked>>
+
+        return;
+    }
+}
+@
+%old: had        
+% if(q == lastp)
+%    break;
+% at beginning of the for loop, but I moved it up in the for(;_here_;) instead
+% (equivalent)
+
+
+
+
+\ifallcode
+<<[[xfol()]] sanity check one, r should be marked>>=
+if(!(r->mark&FOLL))
+    print("cant happen 1\n");
+r->mark |= FOLL;
+@
+
+<<[[xfol()]] sanity check two, [[r->cond]] should be marked>>=
+if(!(r->cond->mark&FOLL))
+    print("cant happen 2\n");
+@
+\fi
+
+
 
 \section{Strings in text segment, [[5l -t]]}
 
@@ -7259,6 +7306,7 @@ if(debug['t']) {
 }
 @
 
+% after has layout all the TEXT instrs, can put behind the strings.
 <<[[span()]] if string in text segment>>=
 if(debug['t']) {
     /* 
@@ -7279,7 +7327,7 @@ if(debug['t']) {
 
 
 
-\section{Overriding symbols, [[DUPOK]]}
+\section{Overriding symbols attribute, [[DUPOK]]}
 
 % case in kernel where override a previous symbol,
 % e.g. sysfatal, werrstr
@@ -7293,7 +7341,9 @@ if(p->reg & DUPOK) {
 }
 @
 
-\section{Export table, [[5l -x]]}
+\section{Dynamic loading}
+
+\subsection{Export table, [[5l -x]]}
 % what this is for?
 
 <<global doexp>>=
@@ -7573,7 +7623,7 @@ newdata(Sym *s, int o, int w, int t)
 
 
 
-\section{Dynamic loading, [[5l -u]]}
+\subsection{Dynamic loading, [[5l -u]]}
 % been disabled? can not find man page for dynld anymore, nor dynld.h
 % -x, -u
 % see dynld(2)
@@ -7962,7 +8012,7 @@ grow(Reloc *r)
 @
 
 
-\section{[[ADYNT]]}
+\subsection{[[ADYNT]]}
 % ???
 % mv with dlm?
 % seems never produced by 5a/5c
@@ -8011,7 +8061,7 @@ case ADYNT:
 
 
 
-\section{[[AINIT]]}
+\subsection{[[AINIT]]}
 % seems never produced by 5a/5c, like ADYNT, so move?
 % seems to be just after a ADYNT, see the error message below
 
@@ -8256,7 +8306,7 @@ if(*a >= '0' && *a <= '9')
 
 
 
-\section{Float}
+\section{Float instructions}
 
 <<function immfloat(arm)>>=
 int
@@ -9077,7 +9127,7 @@ olhrr(int i, int b, int r, int sc)
 
 
 
-\section{Division}
+\section{Division instructions}
 
 \subsection{[[ADIV]] rewriting}
 
