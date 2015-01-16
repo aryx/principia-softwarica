@@ -690,7 +690,8 @@ objfile(char *file)
                     goto bad;
                 /*e: [[objfile()]] sanity check entry header */
                 l = atolwhex(arhdr.size);
-            
+
+                // loading the object file containing the symbol
                 ldobj(f, l, pname);
             
                 if(s->type == SXREF) {

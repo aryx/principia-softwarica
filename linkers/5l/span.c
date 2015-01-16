@@ -107,10 +107,10 @@ dotext(void)
 
     c = rnd(c, 8);
 
-    /*s: [[span()]] define special symbols */
-    xdefine("etext", STEXT, c);
-    /*e: [[span()]] define special symbols */
     textsize = c - INITTEXT;
+    /*s: [[span()]] define special symbols */
+    xdefine("etext", STEXT, INITTEXT+textsize);
+    /*e: [[span()]] define special symbols */
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);

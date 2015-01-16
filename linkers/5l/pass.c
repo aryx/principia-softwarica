@@ -13,6 +13,7 @@ dodata(void)
 
     DBG("%5.2f dodata\n", cputime());
 
+    // DATA instructions loop
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
         /*s: [[dodata()]] if ADYNT or AINIT */
@@ -21,7 +22,6 @@ dodata(void)
         /*e: [[dodata()]] if ADYNT or AINIT */
         if(s->type == SBSS)
             s->type = SDATA;
-
         /*s: [[dodata()]] sanity check DATA instructions */
         if(s->type != SDATA)
             diag("initialize non-data (%d): %s\n%P",
@@ -32,6 +32,7 @@ dodata(void)
                 s->value, s->name, p);
         /*e: [[dodata()]] sanity check DATA instructions */
     }
+
     /*s: [[dodata()]] if string in text segment */
     if(debug['t']) {
         /*
@@ -51,6 +52,7 @@ dodata(void)
      * pass 1
      *  sanity check data values, and align.
      */
+    // symbol table loop
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;

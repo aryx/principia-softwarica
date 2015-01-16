@@ -508,7 +508,8 @@ objfile(char *file)
                     goto bad;
                 /*e: [[objfile()]] sanity check entry header */
                 l = atolwhex(arhdr.size);
-            
+
+                // loading the object file containing the symbol
                 ldobj(f, l, pname);
             
                 if(s->type == SXREF) {
@@ -577,10 +578,10 @@ zaddr(byte *p, Adr *a, Sym *h[])
         size++;
         break;
 
-    case D_BRANCH:
-    case D_OREG:
     case D_CONST:
     case D_SHIFT:
+    case D_OREG:
+    case D_BRANCH:
         a->offset = p[4] | (p[5]<<8) | (p[6]<<16) | (p[7]<<24);
         size += 4;
         break;
@@ -872,7 +873,7 @@ ldobj(fdt f, long c, char *pn)
     /*x: [[ldobj()]] locals(arm) */
     char **nfilen;
     /*x: [[ldobj()]] locals(arm) */
-    Sym *di;
+    Sym *di = S;
     /*x: [[ldobj()]] locals(arm) */
     Prog *t;
     /*e: [[ldobj()]] locals(arm) */
@@ -892,8 +893,6 @@ ldobj(fdt f, long c, char *pn)
     bsize = buf.ibuf;
     bloc = buf.ibuf;
     /*e: [[ldobj()]] bloc and bsize init */
-
-    di = S;
 
 // can come from AEND
 newloop:
@@ -1055,11 +1054,12 @@ loop:
         autosize += 4;
 
         s = p->from.sym;
+
+        /*s: [[ldobj()]] sanity check for ATEXT symbol s */
         if(s == S) {
             diag("TEXT must have a name\n%P", p);
             errorexit();
         }
-
         if(s->type != SNONE && s->type != SXREF) {
             /*s: [[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK */
             if(p->reg & DUPOK) {
@@ -1069,6 +1069,7 @@ loop:
             /*e: [[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK */
             diag("redefinition: %s\n%P", s->name, p);
         }
+        /*e: [[ldobj()]] sanity check for ATEXT symbol s */
 
         s->type = STEXT;
         s->value = pc;
@@ -1092,29 +1093,31 @@ loop:
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AGLOBL:
         s = p->from.sym;
+
+        /*s: [[ldobj()]] sanity check for AGLOBL symbol s */
         if(s == S) {
             diag("GLOBL must have a name\n%P", p);
             errorexit();
         }
+        if(s->type != SNONE && s->type != SXREF) {
+                diag("redefinition: %s\n%P", s->name, p);
+        }
+        /*e: [[ldobj()]] sanity check for AGLOBL symbol s */
 
-        if(s->type == SNONE || s->type == SXREF) {
-            s->type = SBSS; // for now, will be set to SDATA in dodata()
-            s->value = 0;
-        }
-        if(s->type != SBSS) {
-            diag("redefinition: %s\n%P", s->name, p);
-            s->type = SBSS;
-            s->value = 0;
-        }
+        s->type = SBSS; // for now SBSS; will be set maybe to SDATA in dodata()
+        s->value = 0;
         if(p->to.offset > s->value)
             s->value = p->to.offset;
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ADATA:
+        /*s: [[ldobj()]] sanity check for ADATA symbol s */
         if(p->from.sym == S) {
             diag("DATA without a sym\n%P", p);
             break;
         }
+        /*e: [[ldobj()]] sanity check for ADATA symbol s */
+
         //add_list(datap, edatap, p)
         p->link = datap;
         datap = p;
@@ -1126,10 +1129,12 @@ loop:
         /*s: [[ldobj()]] case AEND, curauto adjustments with curhist */
         histtoauto();
         /*e: [[ldobj()]] case AEND, curauto adjustments with curhist */
+        /*s: [[ldobj()]] case AEND, curauto adjustments */
         if(curtext != P)
             curtext->to.autom = curauto;
         curauto = nil;
         curtext = P;
+        /*e: [[ldobj()]] case AEND, curauto adjustments */
 
         if(c)
             goto newloop;

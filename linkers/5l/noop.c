@@ -135,7 +135,9 @@ noops(void)
             break;
         /*x: [[noops()]] second pass switch opcode cases */
         case ARET:
+            /*s: [[noops()]] case ARET, call nocache */
             nocache(p);
+            /*e: [[noops()]] case ARET, call nocache */
             if((curtext->mark & LEAF) && !autosize) {
                 // B (R14)
                 p->as = AB;
