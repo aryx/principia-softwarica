@@ -842,7 +842,7 @@ enum classx {
 
     <<cxxx(arm) cases>>
 
-    C_GOK, // must be at the end e.g. for xcmp[] decl
+    C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };
 @
 %diffs with operand_kind:
@@ -3836,6 +3836,522 @@ otxt = c;
 % */
 
 
+
+\section{Defining special symbols [[etext]], [[edata]], [[end]]}
+
+% the kernel uses etext! edata! those are important special symbols.
+% some form of introspection capability.
+
+% At this point we are in dodata() in which case the 'value' field
+% is now really a location.
+% This means the xdefine below now have a different meaning: the 3rd
+% argument is a location, not a size anymore!
+
+<<[[dodata()]] define special symbols>>=
+xdefine("bdata", SDATA, 0L);
+xdefine("edata", SDATA, datsize);
+xdefine("end", SBSS, datsize+bsssize);
+@
+% 0L because still relative to INITDAT. There are many code
+% later that do the final s->value+INITDAT.
+
+% how 'end' can be in SBSS section? we actually want it initialized ...
+% because here it's actually about the layout! 'end' will have a location
+% at the end of the SBSS! If do &end in C (or $end in asm) then you'll get
+% a pointer to the end of the BSS! reflection power! 'end' has no value
+% because it's in the BSS, but its location is its interesting value!
+
+
+<<[[span()]] define special symbols>>=
+xdefine("etext", STEXT, c);
+@
+
+%old: 
+%setext = lookup("etext", 0);
+%if(setext != S) {
+%    setext->value = c;
+%    textsize = c - INITTEXT;
+
+%<<[[dodata()]] define special symbols>>=
+%xdefine("etext", STEXT, 0L);
+%@
+% INITTEXT+textsize?
+% the final value will be set in span(), below
+
+
+<<function xdefine(arm)>>=
+void
+xdefine(char *p, int t, long v)
+{
+    Sym *s;
+
+    s = lookup(p, 0);
+    if(s->type == SNONE || s->type == SXREF) {
+        s->type = t;
+        s->value = v;
+    }
+}
+@
+
+
+\chapter{Machine Code Generation (ARM)}
+
+% The code generation is done by 5l, not 5a, surprisingly!
+% Why? Because it allows more optimisations? cross libs? as in llvm?
+% also more compact and simpler object format? and more cross platform?
+
+\section{[[Optab]] and [[optab]]}
+% hmm put in core DS? but it's really specific to the code generation chapter
+
+<<struct Optab(arm)>>=
+struct	Optab
+{
+    // enum<opcode> from 5.out.h, but represents a range, see oprange[]
+    byte	as;
+
+    // enum<cxxx>, possible class for first operand
+    short	a1;
+    // enum<cxxx>, possible class for second operand
+    short	a2;
+    // enum<cxxx>, possible class for third operand
+    short	a3;
+
+    // idx for the code generator, see the giant switch in asmout()
+    short	type; 
+
+    // size of the corresponding machine code, should be a multiple of 4
+    short	size; 
+
+    <<[[Optab]] other fields>>
+};
+@
+% order is important, see optab[] global
+
+%ex of entries:
+% Optab	optab[] =
+% {
+%    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
+%    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
+%    ...
+%    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
+%    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+
+
+% ARM has fixed-length instructions, 4, but 5a/ support
+% some fake/virtual opcodes that actually expands to 
+% multiple instructions, hence the size field above.
+
+
+<<[[Optab]] other fields>>=
+// 0 | REGSB | REGSP
+short	param;
+// bitset<enum<optab_flag>>
+short	flag;
+@
+%old: was char, but ugly
+% order is important, see optab[] global
+
+<<enum optab_flag(arm)>>=
+enum optab_flag {
+    LFROM	= 1<<0,
+    LTO		= 1<<1,
+    LPOOL	= 1<<2,
+    <<enum optab_flag cases>>
+};
+@
+% >> >> >> >> >>
+
+
+%\section{[[optab]]}
+
+% This table contains the different valid combinations 
+% of operands for the different opcodes. Actually not all opcodes are put,
+% only some representative (see also oprange that describes
+% the equivalence classes).
+% There is a strong coupling with the grammar 5a/a.y to see
+% what operands are allowed, e.g. AMOV has gen operand which
+% allow many things, but AADD has more restricted operands
+% (immediate, shift, or plain register).
+
+% not sure it needs this complexity, things could probably
+% be factorized more.
+
+<<global optab (linkers/5l/optab.c)(arm)>>=
+Optab	optab[] =
+{
+    <<[[optab]] entries>>
+    { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
+};
+@
+% AXXX at the end? why not ALAST instead?
+%old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
+
+
+\section{Addr, Half, Large, Rot, Neg, and [[aclass()]]}
+% those are some kinds of optimisations no?
+
+% The load/store ARM instructions take 2 registers (src_val, dst_address)
+% and a 12 bits offset (for a range of 4096, so really a page).
+% That means that if you do  'MOVW $1, myglobal', naively you'll have to
+% encode it as 3 instructions:
+%     MOV $1, R1
+%     MOV $myglobal, R2
+%     STR R1, R2.
+% But if myglobal is not that far from address 0 and you have a special
+% register reserved that always contain 0 (e.g. R12),
+% then you could use the 12bits offset instead of using a register
+% and just do
+%     MOV $1, R1
+%     STR R1, R12+$myglobal
+% If you have a special register which always contain the value 1, 
+% then you do even better with just do 
+%     STR R0, R12+$myglobal! 
+% which is 3 times faster (well if the global address is in a cache).
+%
+% In practice the first page of the address space is always reserved
+% so it's better to store in R12 a bigger value.
+
+<<[[dodata()]] define special symbols>>=
+xdefine("setR12", SDATA, 0L+BIG);
+@
+% the value here is a location for DATA, so it's always +INITDAT.
+
+<<constant BIG>>=
+BIG		= (1<<12)-4,
+@
+% lib_core/libc/arm/main9.s will do 
+%	MOVW	$setR12(SB), R(sb)
+% before anything.
+
+% Note again that we cannot override setR12 address with our own data
+% because of the use of lots of symbols. It's the same for btext,
+% bdata, etc. Here we care actually only about the address, not the
+% content at that address.
+
+% why -4?
+
+
+
+<<function immaddr(arm)>>=
+long
+immaddr(long v)
+{
+    if(v >= 0 && v <= 0xfff)
+        return (v & 0xfff) |
+            (1<<24) |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xfff && v < 0)
+        return (-v & 0xfff) |
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+% rename immsmall?
+% why 0xfff? = 4095. related to BIG?
+
+
+<<function immhalf(arm)>>=
+int
+immhalf(long v)
+{
+    if(v >= 0 && v <= 0xff)
+        return v |
+            (1<<24)  |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xff && v < 0)
+        return (-v & 0xff)|
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+% seems identical to immhalf no? no now it's 0xff! not 0xfff
+
+
+<<global instoffset(arm)>>=
+long	instoffset;
+@
+% instruction offset?
+
+
+
+<<[[aclass()]] switch type cases>>=
+case D_OREG:
+    switch(a->symkind) {
+    <<[[aclass()]] D_OREG case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+% OREG usually is a dereference of a register or a symbol reference
+% (which is then really an implicit offet to SB)
+
+% H S L ? halfword, small, large?
+
+<<cxxx(arm) cases>>=
+C_HEXT,
+C_SEXT,
+C_LEXT,
+
+C_FEXT,
+C_HFEXT,
+@
+% EXT for? external symbol?
+
+%xxx+y(SB)
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_EXTERN:
+case D_STATIC:
+    if(a->sym == nil || a->sym->name == nil) {
+        print("null sym external\n");
+        print("%D\n", a);
+        return C_GOK;
+    }
+    s = a->sym;
+    t = s->type;
+    if(t == SNONE || t == SXREF) {
+        diag("undefined external: %s in %s",
+            s->name, TNAME);
+        s->type = SDATA;
+    }
+    <<[[aclass()]] when D_OREG and external symbol and dlm>>
+    instoffset = s->value + a->offset - BIG;
+    t = immaddr(instoffset);
+    if(t) {
+        if(immhalf(instoffset))
+            return immfloat(t) ? C_HFEXT : C_HEXT;
+        if(immfloat(t))
+            return C_FEXT;
+        return C_SEXT;
+    }
+    return C_LEXT;
+@
+
+
+
+
+<<cxxx(arm) cases>>=
+C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+C_SAUTO,	/* -0xfff to 0xfff */
+C_LAUTO,
+
+C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+C_HFAUTO,	/* both H and F */
+@
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_AUTO:
+    instoffset = autosize + a->offset;
+    t = immaddr(instoffset);
+    if(t){
+        if(immhalf(instoffset))
+            return immfloat(t) ? C_HFAUTO : C_HAUTO;
+        if(immfloat(t))
+            return C_FAUTO;
+        return C_SAUTO;
+    }
+    return C_LAUTO;
+@
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_PARAM:
+    instoffset = autosize + a->offset + 4L;
+    t = immaddr(instoffset);
+    if(t){
+        if(immhalf(instoffset))
+            return immfloat(t) ? C_HFAUTO : C_HAUTO;
+        if(immfloat(t))
+            return C_FAUTO;
+        return C_SAUTO;
+    }
+    return C_LAUTO;
+@
+% +4??
+
+% RO? rotated?
+<<cxxx(arm) cases>>=
+C_HOREG,
+C_SOREG,
+C_LOREG,
+
+C_ROREG,
+C_SROREG,	/* both S and R */
+
+C_FOREG,
+C_HFOREG,
+@
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_NONE:
+    instoffset = a->offset;
+    t = immaddr(instoffset);
+    if(t) {
+        if(immhalf(instoffset))		 /* n.b. that it will also satisfy immrot */
+            return immfloat(t) ? C_HFOREG : C_HOREG;
+        if(immfloat(t))
+            return C_FOREG; /* n.b. that it will also satisfy immrot */
+
+        t = immrot(instoffset);
+        if(t)
+            return C_SROREG;
+        if(immhalf(instoffset))
+            return C_HOREG;
+        return C_SOREG;
+    }
+    t = immrot(instoffset);
+    if(t)
+        return C_ROREG;
+    return C_LOREG;
+@
+
+<<function immrot(arm)>>=
+long
+immrot(ulong v)
+{
+    int i;
+
+    for(i=0; i<16; i++) {
+        if((v & ~0xff) == 0)
+            return (i<<8) | v | (1<<25);
+        v = (v<<2) | (v>>30);
+    }
+    return 0;
+}
+@
+% >> >>
+
+
+
+
+<<[[aclass()]] switch type cases>>=
+case D_CONST:
+    switch(a->symkind) {
+    <<[[aclass()]] D_CONST case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+
+
+% Rotated, Negative, Large?
+<<cxxx(arm) cases>>=
+C_RCON,		/* 0xff rotated */
+C_NCON,		/* ~RCON */
+C_LCON,
+@
+%dead: C_SCON,		/* 0xffff */
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_NONE:
+    instoffset = a->offset;
+    if(a->reg != R_NONE)
+        goto aconsize;
+
+    t = immrot(instoffset);
+    if(t)
+        return C_RCON;
+
+    t = immrot(~instoffset);
+    if(t)
+        return C_NCON;
+    return C_LCON;
+@
+
+
+
+<<cxxx(arm) cases>>=
+C_RECON,
+@
+%dead: C_LECON
+%optab:    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
+%cmp:    case C_LECON:
+%        if(b == C_RECON)
+%            return 1;
+%        break;
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_EXTERN:
+case D_STATIC:
+    s = a->sym;
+    if(s == S)
+        break;
+    t = s->type;
+    switch(t) {
+    case STEXT: case SLEAF:
+    case SSTRING:
+    case SCONST:
+    case SUNDEF:
+        instoffset = s->value + a->offset;
+        return C_LCON;
+    case SNONE: case SXREF:
+        diag("undefined external: %s in %s", s->name, TNAME);
+        s->type = SDATA;
+        break;
+    }
+    if(!dlm) {
+        instoffset = s->value + a->offset - BIG;
+        t = immrot(instoffset);
+        if(t && instoffset != 0)
+            return C_RECON;
+    }
+    instoffset = s->value + a->offset + INITDAT;
+    return C_LCON;
+
+@
+
+
+
+
+
+<<cxxx(arm) cases>>=
+C_RACON,
+C_LACON,
+@
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_AUTO:
+    instoffset = autosize + a->offset;
+    goto aconsize;
+
+@
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_PARAM:
+    instoffset = autosize + a->offset + 4L;
+    goto aconsize;
+@
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+aconsize:
+    t = immrot(instoffset);
+    if(t)
+        return C_RACON;
+    return C_LACON;
+@
+
+
+
+%old: dead: this advanced addressing mode of 5a is not that useful
+%    case D_OCONST:
+%        switch(a->name) {
+%        case D_EXTERN:
+%        case D_STATIC:
+%            s = a->sym;
+%            t = s->type;
+%            if(t == 0 || t == SXREF) {
+%                diag("undefined external: %s in %s",
+%                    s->name, TNAME);
+%                s->type = SDATA;
+%            }
+%            instoffset = s->value + a->offset + INITDAT;
+%            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
+%                instoffset = s->value + a->offset;
+%            return C_LCON;
+%        }
+%        return C_GOK;
+
+
+
+
+
 \subsection{Pool}
 % ????
 
@@ -3981,484 +4497,6 @@ addpool(Prog *p, Adr *a)
 @
 
 
-\section{Defining special symbols [[etext]], [[edata]], [[end]]}
-
-% the kernel uses etext! edata! those are important special symbols.
-% some form of introspection capability.
-
-% At this point we are in dodata() in which case the 'value' field
-% is now really a location.
-% This means the xdefine below now have a different meaning: the 3rd
-% argument is a location, not a size anymore!
-
-<<[[dodata()]] define special symbols>>=
-xdefine("bdata", SDATA, 0L);
-xdefine("edata", SDATA, datsize);
-xdefine("end", SBSS, datsize+bsssize);
-@
-% 0L because still relative to INITDAT. There are many code
-% later that do the final s->value+INITDAT.
-
-% how 'end' can be in SBSS section? we actually want it initialized ...
-% because here it's actually about the layout! 'end' will have a location
-% at the end of the SBSS! If do &end in C (or $end in asm) then you'll get
-% a pointer to the end of the BSS! reflection power! 'end' has no value
-% because it's in the BSS, but its location is its interesting value!
-
-
-<<[[span()]] define special symbols>>=
-xdefine("etext", STEXT, c);
-@
-
-%old: 
-%setext = lookup("etext", 0);
-%if(setext != S) {
-%    setext->value = c;
-%    textsize = c - INITTEXT;
-
-%<<[[dodata()]] define special symbols>>=
-%xdefine("etext", STEXT, 0L);
-%@
-% INITTEXT+textsize?
-% the final value will be set in span(), below
-
-
-<<function xdefine(arm)>>=
-void
-xdefine(char *p, int t, long v)
-{
-    Sym *s;
-
-    s = lookup(p, 0);
-    if(s->type == SNONE || s->type == SXREF) {
-        s->type = t;
-        s->value = v;
-    }
-}
-@
-
-
-% mv? advanced topic?
-<<[[dodata()]] define special symbols>>=
-xdefine("setR12", SDATA, 0L+BIG);
-@
-
-<<constant BIG>>=
-BIG		= (1<<12)-4,
-@
-% ??? what if override this because have really lots of symbols?
-% >>
-
-\chapter{Machine Code Generation (ARM)}
-
-% The code generation is done by 5l, not 5a, surprisingly!
-% Why? Because it allows more optimisations? cross libs? as in llvm?
-% also more compact and simpler object format? and more cross platform?
-
-\section{[[Optab]] and [[optab]]}
-% hmm put in core DS? but it's really specific to the code generation chapter
-
-<<struct Optab(arm)>>=
-struct	Optab
-{
-    // enum<opcode> from 5.out.h, but represents a range, see oprange[]
-    byte	as;
-
-    // enum<cxxx>, possible class for first operand
-    short	a1;
-    // enum<cxxx>, possible class for second operand
-    short	a2;
-    // enum<cxxx>, possible class for third operand
-    short	a3;
-
-    // idx for the code generator, see the giant switch in asmout()
-    short	type; 
-
-    // size of the corresponding machine code, should be a multiple of 4
-    short	size; 
-
-    <<[[Optab]] other fields>>
-};
-@
-% order is important, see optab[] global
-
-%ex of entries:
-% Optab	optab[] =
-% {
-%    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
-%    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
-%    ...
-%    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
-%    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-
-
-% ARM has fixed-length instructions, 4, but 5a/ support
-% some fake/virtual opcodes that actually expands to 
-% multiple instructions, hence the size field above.
-
-
-<<[[Optab]] other fields>>=
-// 0 | REGSB | REGSP
-char	param;
-// bitset<enum<optab_flag>>
-char	flag;
-@
-% order is important, see optab[] global
-
-<<enum optab_flag(arm)>>=
-enum optab_flag {
-    LFROM	= 1<<0,
-    LTO		= 1<<1,
-    LPOOL	= 1<<2,
-    <<enum optab_flag cases>>
-};
-@
-% >> >> >> >> >>
-
-
-%\section{[[optab]]}
-
-% This table contains the different valid combinations 
-% of operands for the different opcodes. Actually not all opcodes are put,
-% only some representative (see also oprange that describe
-% the equivalence classes).
-% There is a strong coupling with the grammar 5a/a.y to see
-% what operands are allowed, e.g. AMOV has gen operand which
-% allow many things, but AADD has more restricted operands
-% (immediate, shift, or plain register).
-
-% not sure it needs this complexity, things could probably
-% be factorized more.
-
-<<global optab (linkers/5l/optab.c)(arm)>>=
-Optab	optab[] =
-{
-    <<[[optab]] entries>>
-    { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
-};
-@
-% AXXX at the end? why not ALAST instead?
-%old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
-
-
-
-\section{Rot, Half, Large, and [[aclass()]]}
-
-<<function immrot(arm)>>=
-long
-immrot(ulong v)
-{
-    int i;
-
-    for(i=0; i<16; i++) {
-        if((v & ~0xff) == 0)
-            return (i<<8) | v | (1<<25);
-        v = (v<<2) | (v>>30);
-    }
-    return 0;
-}
-@
-% >> >>
-
-
-<<function immaddr(arm)>>=
-long
-immaddr(long v)
-{
-    if(v >= 0 && v <= 0xfff)
-        return (v & 0xfff) |
-            (1<<24) |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xfff && v < 0)
-        return (-v & 0xfff) |
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-
-
-<<function immhalf(arm)>>=
-int
-immhalf(long v)
-{
-    if(v >= 0 && v <= 0xff)
-        return v|
-            (1<<24)|	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xff && v < 0)
-        return (-v & 0xff)|
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-
-
-
-<<global instoffset(arm)>>=
-long	instoffset;
-@
-% instruction offset?
-
-
-
-<<[[aclass()]] switch type cases>>=
-case D_OREG:
-    switch(a->symkind) {
-    <<[[aclass()]] D_OREG case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-% OREG usually is a dereference of a register or a symbol reference
-% (which is then really an implicit offet to SB)
-
-% H S L ? halfword, small, large?
-
-<<cxxx(arm) cases>>=
-C_HEXT,
-C_SEXT,
-C_LEXT,
-
-C_FEXT,
-C_HFEXT,
-@
-% EXT for? external symbol?
-
-%xxx+y(SB)
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_EXTERN:
-case D_STATIC:
-    if(a->sym == nil || a->sym->name == nil) {
-        print("null sym external\n");
-        print("%D\n", a);
-        return C_GOK;
-    }
-    s = a->sym;
-    t = s->type;
-    if(t == SNONE || t == SXREF) {
-        diag("undefined external: %s in %s",
-            s->name, TNAME);
-        s->type = SDATA;
-    }
-    <<[[aclass()]] when D_OREG and external symbol and dlm>>
-    instoffset = s->value + a->offset - BIG;
-    t = immaddr(instoffset);
-    if(t) {
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFEXT : C_HEXT;
-        if(immfloat(t))
-            return C_FEXT;
-        return C_SEXT;
-    }
-    return C_LEXT;
-@
-% BIG ???
-
-<<cxxx(arm) cases>>=
-C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-C_SAUTO,	/* -0xfff to 0xfff */
-C_LAUTO,
-
-C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-C_HFAUTO,	/* both H and F */
-@
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_AUTO:
-    instoffset = autosize + a->offset;
-    t = immaddr(instoffset);
-    if(t){
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFAUTO : C_HAUTO;
-        if(immfloat(t))
-            return C_FAUTO;
-        return C_SAUTO;
-    }
-    return C_LAUTO;
-@
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_PARAM:
-    instoffset = autosize + a->offset + 4L;
-    t = immaddr(instoffset);
-    if(t){
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFAUTO : C_HAUTO;
-        if(immfloat(t))
-            return C_FAUTO;
-        return C_SAUTO;
-    }
-    return C_LAUTO;
-@
-% +4??
-
-% RO? rotated?
-<<cxxx(arm) cases>>=
-C_HOREG,
-C_SOREG,
-C_LOREG,
-
-C_ROREG,
-C_SROREG,	/* both S and R */
-
-C_FOREG,
-C_HFOREG,
-@
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_NONE:
-    instoffset = a->offset;
-    t = immaddr(instoffset);
-    if(t) {
-        if(immhalf(instoffset))		 /* n.b. that it will also satisfy immrot */
-            return immfloat(t) ? C_HFOREG : C_HOREG;
-        if(immfloat(t))
-            return C_FOREG; /* n.b. that it will also satisfy immrot */
-
-        t = immrot(instoffset);
-        if(t)
-            return C_SROREG;
-        if(immhalf(instoffset))
-            return C_HOREG;
-        return C_SOREG;
-    }
-    t = immrot(instoffset);
-    if(t)
-        return C_ROREG;
-    return C_LOREG;
-@
-
-
-
-<<[[aclass()]] switch type cases>>=
-case D_CONST:
-    switch(a->symkind) {
-    <<[[aclass()]] D_CONST case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-
-
-% Rotated, Negative, Large?
-<<cxxx(arm) cases>>=
-C_RCON,		/* 0xff rotated */
-C_NCON,		/* ~RCON */
-C_LCON,
-@
-%dead: C_SCON,		/* 0xffff */
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_NONE:
-    instoffset = a->offset;
-    if(a->reg != R_NONE)
-        goto aconsize;
-
-    t = immrot(instoffset);
-    if(t)
-        return C_RCON;
-
-    t = immrot(~instoffset);
-    if(t)
-        return C_NCON;
-    return C_LCON;
-@
-
-
-
-<<cxxx(arm) cases>>=
-C_RECON,
-@
-%dead: C_LECON
-%optab:    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
-%cmp:    case C_LECON:
-%        if(b == C_RECON)
-%            return 1;
-%        break;
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_EXTERN:
-case D_STATIC:
-    s = a->sym;
-    if(s == S)
-        break;
-    t = s->type;
-    switch(t) {
-    case STEXT: case SLEAF:
-    case SSTRING:
-    case SCONST:
-    case SUNDEF:
-        instoffset = s->value + a->offset;
-        return C_LCON;
-    case SNONE: case SXREF:
-        diag("undefined external: %s in %s", s->name, TNAME);
-        s->type = SDATA;
-        break;
-    }
-    if(!dlm) {
-        instoffset = s->value + a->offset - BIG;
-        t = immrot(instoffset);
-        if(t && instoffset != 0)
-            return C_RECON;
-    }
-    instoffset = s->value + a->offset + INITDAT;
-    return C_LCON;
-
-@
-
-
-
-
-
-<<cxxx(arm) cases>>=
-C_RACON,
-C_LACON,
-@
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_AUTO:
-    instoffset = autosize + a->offset;
-    goto aconsize;
-
-@
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_PARAM:
-    instoffset = autosize + a->offset + 4L;
-    goto aconsize;
-@
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-aconsize:
-    t = immrot(instoffset);
-    if(t)
-        return C_RACON;
-    return C_LACON;
-@
-
-
-
-%old: dead: this advanced addressing mode of 5a is not that useful
-%    case D_OCONST:
-%        switch(a->name) {
-%        case D_EXTERN:
-%        case D_STATIC:
-%            s = a->sym;
-%            t = s->type;
-%            if(t == 0 || t == SXREF) {
-%                diag("undefined external: %s in %s",
-%                    s->name, TNAME);
-%                s->type = SDATA;
-%            }
-%            instoffset = s->value + a->offset + INITDAT;
-%            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
-%                instoffset = s->value + a->offset;
-%            return C_LCON;
-%        }
-%        return C_GOK;
-
-
-
-
 \section{[[buildop()]]}
 
 <<[[main()]] initialize globals(arm)>>=
@@ -4474,38 +4512,27 @@ struct	Oprang
 };
 @
 
-
-
-
-
-<<global xcmp(arm)>>=
-char	xcmp[C_GOK+1][C_GOK+1];
+<<global oprange(arm)>>=
+Oprang	oprange[ALAST];
 @
-
 
 <<function buildop(arm)>>=
 void
 buildop(void)
 {
-    int i, n, r;
+    int i, n;
+    // enum<opcode> representing a range
+    int r;
 
-    armv4 = !debug['h'];
-    vfp = debug['f'];
-
-    for(i=0; i<C_GOK; i++)
-        for(n=0; n<C_GOK; n++)
-            xcmp[i][n] = cmp(n, i);
+    <<[[buildop()]] initialize xcmp cache>>
+    <<[[buildop()]] initializer floating flags>>
 
     for(n=0; optab[n].as != AXXX; n++) {
-        if((optab[n].flag & VFP) && !vfp)
-            optab[n].as = AXXX;
-        if((optab[n].flag & V4) && !armv4) {
-            optab[n].as = AXXX;
-            break;
-        }
+        <<[[buildop()]] adjust optab if floating flags>>
     }
 
     qsort(optab, n, sizeof(optab[0]), ocmp);
+
     for(i=0; i<n; i++) {
         r = optab[i].as;
 
@@ -4517,7 +4544,7 @@ buildop(void)
 
         switch(r)
         {
-        <<[[buildop()]] switch opcode r cases>>
+        <<[[buildop()]] switch opcode r for ranges cases>>
         default:
             diag("unknown op in build: %A", r);
             errorexit();
@@ -4534,11 +4561,8 @@ buildop(void)
 % more, not less
 
 
-<<global oprange(arm)>>=
-Oprang	oprange[ALAST];
-@
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AXXX:
     break;
 @
@@ -4547,62 +4571,6 @@ case AXXX:
 % not for data (DATA) generation.
 
 
-
-<<function cmp(arm)>>=
-int
-cmp(int a, int b)
-{
-
-    if(a == b)
-        return 1;
-
-    switch(a) {
-    case C_LCON:
-        if(b == C_RCON || b == C_NCON)
-            return 1;
-        break;
-    case C_LACON:
-        if(b == C_RACON)
-            return 1;
-        break;
-
-    case C_HFEXT:
-        return b == C_HEXT || b == C_FEXT;
-    case C_FEXT:
-    case C_HEXT:
-        return b == C_HFEXT;
-    case C_SEXT:
-        return cmp(C_HFEXT, b);
-    case C_LEXT:
-        return cmp(C_SEXT, b);
-
-    case C_HFAUTO:
-        return b == C_HAUTO || b == C_FAUTO;
-    case C_FAUTO:
-    case C_HAUTO:
-        return b == C_HFAUTO;
-    case C_SAUTO:
-        return cmp(C_HFAUTO, b);
-    case C_LAUTO:
-        return cmp(C_SAUTO, b);
-
-    case C_HFOREG:
-        return b == C_HOREG || b == C_FOREG;
-    case C_FOREG:
-    case C_HOREG:
-        return b == C_HFOREG;
-    case C_SROREG:
-        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
-    case C_SOREG:
-    case C_ROREG:
-        return b == C_SROREG || cmp(C_HFOREG, b);
-    case C_LOREG:
-        return cmp(C_SROREG, b);
-
-    }
-    return 0;
-}
-@
 
 % buildop -> qsort(..., <>)
 <<function ocmp(arm)>>=
@@ -4618,15 +4586,7 @@ ocmp(const void *a1, const void *a2)
     n = p1->as - p2->as;
     if(n)
         return n;
-
-    n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
-    if(n)
-        return n;
-    n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
-    if(n)
-        return n;
-
-
+    <<[[ocmp()]] if floating point flag on p1 or p2>>
     n = p1->a1 - p2->a1;
     if(n)
         return n;
@@ -4706,9 +4666,84 @@ ocmp(const void *a1, const void *a2)
 
 \section{[[oplook()]]}
 
+
+% cmp for compatible?
+<<function cmp(arm)>>=
+bool
+cmp(int a, int b)
+{
+
+    if(a == b)
+        return true;
+
+    switch(a) {
+    case C_LCON:
+        if(b == C_RCON || b == C_NCON)
+            return true;
+        break;
+    case C_LACON:
+        if(b == C_RACON)
+            return true;
+        break;
+
+    case C_HFEXT:
+        return b == C_HEXT || b == C_FEXT;
+    case C_FEXT:
+    case C_HEXT:
+        return b == C_HFEXT;
+    case C_SEXT:
+        return cmp(C_HFEXT, b);
+    case C_LEXT:
+        return cmp(C_SEXT, b);
+
+    case C_HFAUTO:
+        return b == C_HAUTO || b == C_FAUTO;
+    case C_FAUTO:
+    case C_HAUTO:
+        return b == C_HFAUTO;
+    case C_SAUTO:
+        return cmp(C_HFAUTO, b);
+    case C_LAUTO:
+        return cmp(C_SAUTO, b);
+
+    case C_HFOREG:
+        return b == C_HOREG || b == C_FOREG;
+    case C_FOREG:
+    case C_HOREG:
+        return b == C_HFOREG;
+    case C_SROREG:
+        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
+    case C_SOREG:
+    case C_ROREG:
+        return b == C_SROREG || cmp(C_HFOREG, b);
+    case C_LOREG:
+        return cmp(C_SROREG, b);
+
+    }
+    return false;
+}
+@
+
+% cmp() cache for oplook()
+<<global xcmp(arm)>>=
+char	xcmp[C_GOK+1][C_GOK+1];
+@
+
+<<[[buildop()]] initialize xcmp cache>>=
+for(i=0; i<C_GOK; i++)
+    for(n=0; n<C_GOK; n++)
+        xcmp[i][n] = cmp(n, i);
+@
+
+
+
+
+
+
 <<[[Prog]] other fields>>=
 byte	optab;
 @
+% not sure it's needed
 
 % leverage the sorted data structure computed by buildop()
 % dotext | asmb -> <>
@@ -4872,7 +4907,8 @@ case 24:
 
 
 \subsection{[[ATEXT]]}
-<<[[buildop()]] switch opcode r cases>>=
+
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case ATEXT:
     break;
 @
@@ -4893,7 +4929,7 @@ case 0:		/* pseudo ops */
 
 \subsection{[[AWORD]]}
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AWORD:
     break;
 @
@@ -4914,7 +4950,7 @@ case 11:	/* word */
 
 \subsection{Arithmetic opcodes}
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AADD:
     oprange[AAND] = oprange[r];
     oprange[AEOR] = oprange[r];
@@ -4927,14 +4963,14 @@ case AADD:
     oprange[ABIC] = oprange[r];
     break;
 @
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case ACMP:
     oprange[ATST] = oprange[r];
     oprange[ATEQ] = oprange[r];
     oprange[ACMN] = oprange[r];
     break;
 @
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AMVN:
     break;
 @
@@ -5136,7 +5172,7 @@ omvl(Prog *p, Adr *a, int dr)
 
 
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case ASLL:
     oprange[ASRL] = oprange[r];
     oprange[ASRA] = oprange[r];
@@ -5181,7 +5217,7 @@ case 9:		/* sll R,[R],R -> mov (R<<R),R */
 % >> >> >> >> 
 
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AMUL:
     oprange[AMULU] = oprange[r];
     break;
@@ -5216,7 +5252,7 @@ case 15:	/* mul r,[r,]r */
 % >> >> 
 
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case ADIV:
     oprange[AMOD] = oprange[r];
     oprange[AMODU] = oprange[r];
@@ -5240,7 +5276,7 @@ case 16:	/* div r,[r,]r */
 % >>
 
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AMULL:
     oprange[AMULA] = oprange[r];
     oprange[AMULAL] = oprange[r];
@@ -5267,7 +5303,7 @@ case 17:
 
 \subsection{Branching opcodes}
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AB:
 case ABL:
     break;
@@ -5394,7 +5430,7 @@ case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
 
 \subsection{Memory opcodes}
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AMOVW:
 case AMOVB:
 case AMOVBU:
@@ -5858,7 +5894,7 @@ case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
 
 
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case ASWPW:
     oprange[ASWPBU] = oprange[r];
     break;
@@ -5887,7 +5923,7 @@ case 40:	/* swp oreg,reg,reg */
 
 \subsection{Interrupt opcodes}
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case ASWI:
 case ARFE:
     break;
@@ -6870,9 +6906,6 @@ main(int argc, char *argv[])
 
 \section{Optimisations}
 
-\subsection{Leaf procedures}
-% see previous section
-
 \subsection{Opcode rewriting}
 % at loading time
 
@@ -6897,6 +6930,20 @@ case AADD:
     }
     goto casedef;
 @
+
+% see also before in previous section the Leaf procedure opti,
+% a form of opcode rewriting where some TEXT and RET can
+% be optimized.
+
+\subsection{Operand rewriting}
+
+% certain operand values immediate values can be in a certain range
+% which then can be encoded as a single instruction.
+
+% If they are out of range but a double of 2, then again
+% can be encoded as a single instruction.
+
+% otherwise have to decompose.
 
 \subsection{Small data layout}
 % improve data cache miss?
@@ -6927,6 +6974,10 @@ if(v <= MINSIZ) {
 if(t == SDATA1)
     s->type = SDATA;
 @
+
+
+
+
 
 \subsection{Removing some useless instructions, [[follow()]]}
 % a space optimisation more than speed opti (but can help speed
@@ -8449,6 +8500,38 @@ VFP		= 1<<4,	/* arm vfpv3 floating point */
 % from 8l(1) "Without this [-f] option, 5l generates arm7500 floating-point
 % instructions which are emulated in the kernel."
 
+<<[[ocmp()]] if floating point flag on p1 or p2>>=
+n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
+if(n)
+    return n;
+n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
+if(n)
+    return n;
+@
+
+<<global vfp(arm)>>=
+bool vfp;
+@
+
+% remove? and remove the relevant opcode also in optab? at least aspectize!
+<<global armv4(arm)>>=
+bool	armv4;
+@
+
+<<[[buildop()]] initializer floating flags>>=
+armv4 = !debug['h'];
+vfp = debug['f'];
+@
+
+<<[[buildop()]] adjust optab if floating flags>>=
+if((optab[n].flag & VFP) && !vfp)
+    optab[n].as = AXXX;
+if((optab[n].flag & V4) && !armv4) {
+    optab[n].as = AXXX;
+    break;
+}
+@
+
 
 
 
@@ -8591,7 +8674,7 @@ case AMOVWD:
 \subsection{Common float instructions}
 
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AADDF:
     oprange[AADDD] = oprange[r];
     oprange[ASUBF] = oprange[r];
@@ -8865,10 +8948,6 @@ case 69:	/* floating point load <- ADDR */
 
 \subsection{VFP hardware instructions, [[5l -f]]}
 
-<<global vfp(arm)>>=
-bool vfp;
-@
-
 
 
 <<function ovfpmem(arm)>>=
@@ -9026,10 +9105,6 @@ opvfprrr(int a, int sc)
 
 \subsection{Kernel emulation}
 
-% remove? and remove the relevant opcode also in optab? at least aspectize!
-<<global armv4(arm)>>=
-bool	armv4;
-@
 
 
 <<[[optab]] entries>>=
@@ -9524,7 +9599,7 @@ initdiv(void)
 
 \section{Multiple registers instructions}
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case AMOVM:
     break;
 @
@@ -9569,7 +9644,7 @@ movm:
 
 \section{Compiler-only pseudo opcodes}
 
-<<[[buildop()]] switch opcode r cases>>=
+<<[[buildop()]] switch opcode r for ranges cases>>=
 case ACASE:
 case ABCASE:
     break;

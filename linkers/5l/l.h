@@ -181,9 +181,9 @@ struct	Optab
 
     /*s: [[Optab]] other fields */
     // 0 | REGSB | REGSP
-    char	param;
+    short	param;
     // bitset<enum<optab_flag>>
-    char	flag;
+    short	flag;
     /*e: [[Optab]] other fields */
 };
 /*e: struct Optab(arm) */
@@ -286,7 +286,7 @@ enum classx {
     C_FCR,
     /*e: cxxx(arm) cases */
 
-    C_GOK, // must be at the end e.g. for xcmp[] decl
+    C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };
 /*e: enum cxxx(arm) */
 /*s: enum mark(arm) */

@@ -283,8 +283,8 @@ int
 immhalf(long v)
 {
     if(v >= 0 && v <= 0xff)
-        return v|
-            (1<<24)|	/* pre indexing */
+        return v |
+            (1<<24)  |	/* pre indexing */
             (1<<23);	/* pre indexing, up */
     if(v >= -0xff && v < 0)
         return (-v & 0xff)|
@@ -540,21 +540,21 @@ oplook(Prog *p)
 /*e: function oplook(arm) */
 
 /*s: function cmp(arm) */
-int
+bool
 cmp(int a, int b)
 {
 
     if(a == b)
-        return 1;
+        return true;
 
     switch(a) {
     case C_LCON:
         if(b == C_RCON || b == C_NCON)
-            return 1;
+            return true;
         break;
     case C_LACON:
         if(b == C_RACON)
-            return 1;
+            return true;
         break;
 
     case C_HFEXT:
@@ -591,7 +591,7 @@ cmp(int a, int b)
         return cmp(C_SROREG, b);
 
     }
-    return 0;
+    return false;
 }
 /*e: function cmp(arm) */
 
@@ -608,15 +608,14 @@ ocmp(const void *a1, const void *a2)
     n = p1->as - p2->as;
     if(n)
         return n;
-
+    /*s: [[ocmp()]] if floating point flag on p1 or p2 */
     n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
     if(n)
         return n;
     n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
     if(n)
         return n;
-
-
+    /*e: [[ocmp()]] if floating point flag on p1 or p2 */
     n = p1->a1 - p2->a1;
     if(n)
         return n;
@@ -635,25 +634,33 @@ ocmp(const void *a1, const void *a2)
 void
 buildop(void)
 {
-    int i, n, r;
+    int i, n;
+    // enum<opcode> representing a range
+    int r;
 
-    armv4 = !debug['h'];
-    vfp = debug['f'];
-
+    /*s: [[buildop()]] initialize xcmp cache */
     for(i=0; i<C_GOK; i++)
         for(n=0; n<C_GOK; n++)
             xcmp[i][n] = cmp(n, i);
+    /*e: [[buildop()]] initialize xcmp cache */
+    /*s: [[buildop()]] initializer floating flags */
+    armv4 = !debug['h'];
+    vfp = debug['f'];
+    /*e: [[buildop()]] initializer floating flags */
 
     for(n=0; optab[n].as != AXXX; n++) {
+        /*s: [[buildop()]] adjust optab if floating flags */
         if((optab[n].flag & VFP) && !vfp)
             optab[n].as = AXXX;
         if((optab[n].flag & V4) && !armv4) {
             optab[n].as = AXXX;
             break;
         }
+        /*e: [[buildop()]] adjust optab if floating flags */
     }
 
     qsort(optab, n, sizeof(optab[0]), ocmp);
+
     for(i=0; i<n; i++) {
         r = optab[i].as;
 
@@ -665,16 +672,16 @@ buildop(void)
 
         switch(r)
         {
-        /*s: [[buildop()]] switch opcode r cases */
+        /*s: [[buildop()]] switch opcode r for ranges cases */
         case AXXX:
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ATEXT:
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AWORD:
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AADD:
             oprange[AAND] = oprange[r];
             oprange[AEOR] = oprange[r];
@@ -686,38 +693,38 @@ buildop(void)
             oprange[AORR] = oprange[r];
             oprange[ABIC] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ACMP:
             oprange[ATST] = oprange[r];
             oprange[ATEQ] = oprange[r];
             oprange[ACMN] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMVN:
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ASLL:
             oprange[ASRL] = oprange[r];
             oprange[ASRA] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMUL:
             oprange[AMULU] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ADIV:
             oprange[AMOD] = oprange[r];
             oprange[AMODU] = oprange[r];
             oprange[ADIVU] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMULL:
             oprange[AMULA] = oprange[r];
             oprange[AMULAL] = oprange[r];
             oprange[AMULLU] = oprange[r];
             oprange[AMULALU] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AB:
         case ABL:
             break;
@@ -736,22 +743,22 @@ buildop(void)
             oprange[ABGT] = oprange[r];
             oprange[ABLE] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMOVW:
         case AMOVB:
         case AMOVBU:
         case AMOVH:
         case AMOVHU:
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ASWPW:
             oprange[ASWPBU] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ASWI:
         case ARFE:
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AADDF:
             oprange[AADDD] = oprange[r];
             oprange[ASUBF] = oprange[r];
@@ -777,14 +784,14 @@ buildop(void)
             oprange[AMOVWD] = oprange[r];
             oprange[AMOVDW] = oprange[r];
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMOVM:
             break;
-        /*x: [[buildop()]] switch opcode r cases */
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ACASE:
         case ABCASE:
             break;
-        /*e: [[buildop()]] switch opcode r cases */
+        /*e: [[buildop()]] switch opcode r for ranges cases */
         default:
             diag("unknown op in build: %A", r);
             errorexit();
