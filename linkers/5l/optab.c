@@ -7,13 +7,9 @@ Optab	optab[] =
     /*s: [[optab]] entries */
     { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
     { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
-
-    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
-    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
     /*x: [[optab]] entries */
     { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
     { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
-    { AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4, 0 },
     /*x: [[optab]] entries */
     { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
     { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
@@ -111,46 +107,36 @@ Optab	optab[] =
     { AMOVW,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
     { AMOVW,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
     { AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVW,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
     { AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
     { AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
     { AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
     { AMOVBU,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
     { AMOVBU,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
     { AMOVBU,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-    { AMOVBU,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
     /*x: [[optab]] entries */
     { AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
     { AMOVW,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
     { AMOVW,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
-    { AMOVW,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
     { AMOVBU,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
     { AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
     { AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
-    { AMOVBU,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
 
     { AMOVB,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
     { AMOVB,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
     { AMOVB,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVB,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
     { AMOVH,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
     { AMOVH,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
     { AMOVH,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVH,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
     { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
     { AMOVHU,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
     { AMOVHU,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    { AMOVHU,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
     /*x: [[optab]] entries */
     { AMOVH,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
     { AMOVH,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
     { AMOVH,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
-    { AMOVH,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
     { AMOVHU,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
     { AMOVHU,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
     { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
-    { AMOVHU,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
     /*x: [[optab]] entries */
     { AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
     /*x: [[optab]] entries */
@@ -172,6 +158,24 @@ Optab	optab[] =
     { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4, 0 },
     /*x: [[optab]] entries */
     { ARFE,		C_NONE,	C_NONE,	C_NONE,		41, 4, 0 },
+    /*x: [[optab]] entries */
+    { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
+    { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
+    /*x: [[optab]] entries */
+    { AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4, 0 },
+    /*x: [[optab]] entries */
+    { AMOVW,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+    { AMOVB,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+    { AMOVBU,	C_REG,	C_NONE,	C_ADDR,		64, 8, 0,	LTO },
+    /*x: [[optab]] entries */
+    { AMOVW,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
+    { AMOVBU,	C_ADDR,	C_NONE,	C_REG,		65, 8, 0,	LFROM },
+    { AMOVB,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+    { AMOVH,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+    { AMOVHU,	C_ADDR,	C_NONE,	C_REG,		66, 16, 0,	LFROM },
+    /*x: [[optab]] entries */
+    { AMOVH,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
+    { AMOVHU,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
     /*x: [[optab]] entries */
     { AMOVF,	C_FREG,	C_NONE,	C_FEXT,		50, 4, REGSB },
     { AMOVF,	C_FREG,	C_NONE,	C_FAUTO,	50, 4, REGSP },

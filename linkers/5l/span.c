@@ -334,23 +334,22 @@ aclass(Adr *a)
                     s->name, TNAME);
                 s->type = SDATA;
             }
-            /*s: [[aclass()]] when D_OREG and D_STATIC and dlm */
+            /*s: [[aclass()]] when D_OREG and external symbol and dlm */
             if(dlm) {
                 switch(t) {
                 case SUNDEF:
-                case STEXT:
-                case SLEAF:
-                case SCONST:
-                case SSTRING:
+                case STEXT: case SLEAF:
+                case SCONST: case SSTRING:
                     instoffset = s->value + a->offset;
                     break;
+                case SDATA: case SBSS:
                 default:
                     instoffset = s->value + a->offset + INITDAT;
                     break;
                 }
                 return C_ADDR;
             }
-            /*e: [[aclass()]] when D_OREG and D_STATIC and dlm */
+            /*e: [[aclass()]] when D_OREG and external symbol and dlm */
             instoffset = s->value + a->offset - BIG;
             t = immaddr(instoffset);
             if(t) {

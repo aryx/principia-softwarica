@@ -697,15 +697,18 @@ asmout(Prog *p, Optab *o)
     /*x: [[asmout()]] switch on type cases */
     case 11:	/* word */
         switch(aclass(&p->to)) {
+        /*s: [[asmout()]] on WORD case, switch class cases */
         case C_LCON:
             if(!dlm)
                 break;
             if(p->to.symkind != D_EXTERN && p->to.symkind != D_STATIC)
                 break;
+            // Fallthrough
         case C_ADDR:
             if(p->to.sym->type == SUNDEF)
                 ckoff(p->to.sym, p->to.offset);
             dynreloc(p->to.sym, p->pc, 1);
+        /*e: [[asmout()]] on WORD case, switch class cases */
         }
         o1 = instoffset;
         break;
@@ -972,14 +975,6 @@ asmout(Prog *p, Optab *o)
             o2 |= 1<<22;
         break;
     /*x: [[asmout()]] switch on type cases */
-    /* reloc ops */
-    case 64:	/* mov/movb/movbu R,addr */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
-        break;
-    /*x: [[asmout()]] switch on type cases */
     case 31:	/* mov/movbu L(R),R -> lr[b] */
     case 32:	/* movh/movb L(R),R -> lr[b] */
         o1 = omvl(p, &p->from, REGTMP);
@@ -992,36 +987,6 @@ asmout(Prog *p, Optab *o)
         if(p->as == AMOVBU || p->as == AMOVB)
             o2 |= 1<<22;
         if(o->type == 31)
-            break;
-
-        o3 = oprrr(ASLL, p->scond);
-
-        if(p->as == AMOVBU || p->as == AMOVHU)
-            o4 = oprrr(ASRL, p->scond);
-        else
-            o4 = oprrr(ASRA, p->scond);
-
-        r = p->to.reg;
-        o3 |= (r)|(r<<12);
-        o4 |= (r)|(r<<12);
-        if(p->as == AMOVB || p->as == AMOVBU) {
-            o3 |= (24<<7);
-            o4 |= (24<<7);
-        } else {
-            o3 |= (16<<7);
-            o4 |= (16<<7);
-        }
-        break;
-    /*x: [[asmout()]] switch on type cases */
-    case 65:	/* mov/movbu addr,R */
-    case 66:	/* movh/movhu/movb addr,R */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-        o2 = olr(0, REGTMP, p->to.reg, p->scond);
-        if(p->as == AMOVBU || p->as == AMOVB)
-            o2 |= 1<<22;
-        if(o->type == 65)
             break;
 
         o3 = oprrr(ASLL, p->scond);
@@ -1068,27 +1033,6 @@ asmout(Prog *p, Optab *o)
         o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
         o6 |= (1<<6);	/* ROL 8 */
 
-        break;
-    /*x: [[asmout()]] switch on type cases */
-    case 67:	/* movh/movhu R,addr -> sb, sb */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
-
-        o3 = oprrr(ASRL, p->scond);
-        o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
-        o3 |= (1<<6);	/* ROR 8 */
-
-        o4 = oprrr(AADD, p->scond);
-        o4 |= (REGTMP << 12) | (REGTMP << 16);
-        o4 |= immrot(1);
-
-        o5 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
-
-        o6 = oprrr(ASRL, p->scond);
-        o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
-        o6 |= (1<<6);	/* ROL 8 */
         break;
     /*x: [[asmout()]] switch on type cases */
     case 34:	/* mov $lacon,R */
@@ -1188,6 +1132,65 @@ asmout(Prog *p, Optab *o)
     /*x: [[asmout()]] switch on type cases */
     case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
         o1 = 0xe8fd8000;
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    /* reloc ops */
+    case 64:	/* mov/movb/movbu R,addr */
+        o1 = omvl(p, &p->to, REGTMP);
+        if(!o1)
+            break;
+        o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 65:	/* mov/movbu addr,R */
+    case 66:	/* movh/movhu/movb addr,R */
+        o1 = omvl(p, &p->from, REGTMP);
+        if(!o1)
+            break;
+        o2 = olr(0, REGTMP, p->to.reg, p->scond);
+        if(p->as == AMOVBU || p->as == AMOVB)
+            o2 |= 1<<22;
+        if(o->type == 65)
+            break;
+
+        o3 = oprrr(ASLL, p->scond);
+
+        if(p->as == AMOVBU || p->as == AMOVHU)
+            o4 = oprrr(ASRL, p->scond);
+        else
+            o4 = oprrr(ASRA, p->scond);
+
+        r = p->to.reg;
+        o3 |= (r)|(r<<12);
+        o4 |= (r)|(r<<12);
+        if(p->as == AMOVB || p->as == AMOVBU) {
+            o3 |= (24<<7);
+            o4 |= (24<<7);
+        } else {
+            o3 |= (16<<7);
+            o4 |= (16<<7);
+        }
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 67:	/* movh/movhu R,addr -> sb, sb */
+        o1 = omvl(p, &p->to, REGTMP);
+        if(!o1)
+            break;
+        o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+
+        o3 = oprrr(ASRL, p->scond);
+        o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
+        o3 |= (1<<6);	/* ROR 8 */
+
+        o4 = oprrr(AADD, p->scond);
+        o4 |= (REGTMP << 12) | (REGTMP << 16);
+        o4 |= immrot(1);
+
+        o5 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+
+        o6 = oprrr(ASRL, p->scond);
+        o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
+        o6 |= (1<<6);	/* ROL 8 */
         break;
     /*x: [[asmout()]] switch on type cases */
     case 50:	/* floating point store */
