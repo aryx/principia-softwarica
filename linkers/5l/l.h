@@ -62,7 +62,7 @@ struct	Adr
     // enum<sym_kind>
     short	symkind;
     /*x: [[Adr]] other fields */
-    // enum<classx>
+    // option<enum<classx>>, 0 means None, i means i-1 is the class you want
     short	class;
     /*e: [[Adr]] other fields */
 };
@@ -94,6 +94,7 @@ struct	Prog
     /*x: [[Prog]] other fields */
     Prog*	forwd;
     /*x: [[Prog]] other fields */
+    // option<index-1-based in optab[]>, 0 means None, i means index optab[i-1]
     byte	optab;
     /*e: [[Prog]] other fields */
 

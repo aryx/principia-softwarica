@@ -2883,6 +2883,12 @@ dotext();
 % pointer to link a src to it's dest, and then far later assign
 % a absolute concrete pc to the instructions, then easy.
 
+% Note that there is a mutual recursive issue. To layout code
+% we need to know where the adress of the variables, but 
+% for that we need to know what is INITDAT but INITDAT is
+% after the text so need to layout the text and the size
+% of some instructions depends on the location of the data ...
+% Solved with the (SB) and R12 trick for the ARM.
 
 
 %old:
@@ -3692,6 +3698,13 @@ dotext(void)
 % but here it's really a concrete location whereas for dodata()
 % it's relative to INITDAT that we actually compute here.
 
+% if assembly was simple, then simple to know the size
+% of instructions, 4, but some ASM instructions are virtual,
+% they expand in multiple instructions, so have oplook()!
+% this is subtle but explained later in next chapter.
+% for now imagine oplook as returning something with size 4.
+
+
 %Is there a mutual recursive problem? oplook call
 % aclass() which needs to know offset size, but we don't know
 % yet INITDAT and how far it will be from R12 or other stuff.
@@ -3932,16 +3945,6 @@ Optab	optab[] =
 \section{[[Class]] and [[aclass()]]}
 % was in core DS, but I think better here with Optab.
 
-<<[[Adr]] other fields>>=
-// enum<classx>
-short	class;
-@
-%a more precise Adr.type
-%old: was char, but ugly
-% usually the class is computed via aclass() and used as an index
-% in the optab complex structure. Not sure why it needs to be stored
-% here in Adr too.
-
 
 % seems called the class, see aclass(), a more precise operand_kind?
 <<enum cxxx(arm)>>=
@@ -4038,6 +4041,8 @@ aclass(Adr *a)
 % so it's better to store in R12 a bigger value. R12 will actually
 % be set to INITDAT+BIG.
 
+\subsection{[[SB/R12]]}
+
 <<[[dodata()]] define special symbols>>=
 xdefine("setR12", SDATA, 0L+BIG);
 @
@@ -4128,6 +4133,7 @@ immrot(ulong v)
 long	instoffset;
 @
 % instruction offset?
+% really needs to be a global? can't be just a local to aclass()?
 
 
 \subsection{[[aclass()]] refinments}
@@ -4272,8 +4278,10 @@ case D_NONE:
     return C_LCON;
 @
 
+%\subsubsection{[[D_ADDR]]}
+% should not use D_CONST when really you use the address of a symbol
 
-% External const
+% rotated External const
 <<cxxx(arm) cases>>=
 C_RECON,
 @
@@ -4312,7 +4320,8 @@ case D_STATIC:
     diag("unknown section for %s", s->name);
     break;
 @
-
+% for LCON have to do the INITDAT!
+% really need RECON?
 
 %old: used to be but more messy I think, the +INITDAT is then confusing
 %    case SNONE: case SXREF:
@@ -4330,7 +4339,8 @@ case D_STATIC:
 
 
 
-
+% need that? when do we get the address of a local or parameter?
+% for which code we have those classes used??
 <<cxxx(arm) cases>>=
 C_RACON,
 C_LACON,
@@ -4541,11 +4551,13 @@ addpool(Prog *p, Adr *a)
 @
 
 
-\section{[[buildop()]]}
+\section{[[buildop()]] and [[oplook()]]}
 
 <<[[main()]] initialize globals(arm)>>=
 buildop();
 @
+
+\subsection{Range}
 
 % Optab range?
 <<struct Oprang(arm)>>=
@@ -4559,6 +4571,8 @@ struct	Oprang
 <<global oprange(arm)>>=
 Oprang	oprange[ALAST];
 @
+
+\subsection{[[buildop()]]}
 
 <<function buildop(arm)>>=
 void
@@ -4708,7 +4722,74 @@ ocmp(const void *a1, const void *a2)
 %Opcross	opcross[8];
 %@
 
-\section{[[oplook()]]}
+\subsection{[[oplook()]]}
+
+% leverage the sorted data structure computed by buildop()
+% dotext | asmb -> <>
+<<function oplook(arm)>>=
+Optab*
+oplook(Prog *p)
+{
+    Optab *o, *e;
+    int r;
+    // enum<class>
+    int a1, a2, a3;
+    char *c1, *c3;
+
+    a1 = p->optab;
+    if(a1)
+        return optab+(a1-1);
+
+    a1 = p->from.class;
+    if(a1 == C_NONE) {
+        a1 = aclass(&p->from) + 1;
+        p->from.class = a1;
+    }
+    a1--;
+
+    a3 = p->to.class;
+    if(a3 == C_NONE) {
+        a3 = aclass(&p->to) + 1;
+        p->to.class = a3;
+    }
+    a3--;
+
+    a2 = C_NONE;
+    if(p->reg != R_NONE)
+        a2 = C_REG;
+
+    r = p->as;
+    o = oprange[r].start;
+    if(o == nil) {
+        o = oprange[r].stop; /* just generate an error */
+    }
+    e = oprange[r].stop;
+
+    c1 = xcmp[a1];
+    c3 = xcmp[a3];
+    for(; o<e; o++)
+        if(o->a2 == a2)
+         if(c1[o->a1])
+          if(c3[o->a3]) {
+            p->optab = (o-optab)+1;
+            return o;
+        }
+
+    diag("illegal combination %A %d %d %d",
+        p->as, a1, a2, a3);
+    prasm(p);
+    if(o == nil)
+        o = optab;
+    return o;
+}
+@
+
+%    if(0) {
+%        print("oplook %A %d %d %d\n",
+%            (int)p->as, a1, a2, a3);
+%        print("		%d %d\n", p->from.type, p->to.type);
+%    }
+
 
 
 % cmp for compatible?
@@ -4768,6 +4849,12 @@ cmp(int a, int b)
 }
 @
 
+
+
+
+
+\subsection{Caching}
+
 % cmp() cache for oplook()
 <<global xcmp(arm)>>=
 char	xcmp[C_GOK+1][C_GOK+1];
@@ -4780,77 +4867,24 @@ for(i=0; i<C_GOK; i++)
 @
 
 
-
-
-
-
 <<[[Prog]] other fields>>=
+// option<index-1-based in optab[]>, 0 means None, i means index optab[i-1]
 byte	optab;
 @
-% not sure it's needed
+% cache so second call to oplook() in asmb() is faster I think
 
-% leverage the sorted data structure computed by buildop()
-% dotext | asmb -> <>
-<<function oplook(arm)>>=
-Optab*
-oplook(Prog *p)
-{
-    int a1, a2, a3, r;
-    char *c1, *c3;
-    Optab *o, *e;
-
-    a1 = p->optab;
-    if(a1)
-        return optab+(a1-1);
-
-    a1 = p->from.class;
-    if(a1 == C_NONE) {
-        a1 = aclass(&p->from) + 1;
-        p->from.class = a1;
-    }
-    a1--;
-
-    a3 = p->to.class;
-    if(a3 == C_NONE) {
-        a3 = aclass(&p->to) + 1;
-        p->to.class = a3;
-    }
-    a3--;
-
-    a2 = C_NONE;
-    if(p->reg != R_NONE)
-        a2 = C_REG;
-
-    r = p->as;
-    o = oprange[r].start;
-    if(o == nil) {
-        o = oprange[r].stop; /* just generate an error */
-    }
-    e = oprange[r].stop;
-    c1 = xcmp[a1];
-    c3 = xcmp[a3];
-    for(; o<e; o++)
-        if(o->a2 == a2)
-         if(c1[o->a1])
-          if(c3[o->a3]) {
-            p->optab = (o-optab)+1;
-            return o;
-        }
-
-    diag("illegal combination %A %d %d %d",
-        p->as, a1, a2, a3);
-    prasm(p);
-    if(o == nil)
-        o = optab;
-    return o;
-}
+<<[[Adr]] other fields>>=
+// option<enum<classx>>, 0 means None, i means i-1 is the class you want
+short	class;
 @
+%a more precise Adr.type
+%old: was char, but ugly
+%usually the class is computed via aclass() and used as an index
+% in the optab complex structure. 
+% Not sure why it needs to be stored here in Adr too.
 
-%    if(0) {
-%        print("oplook %A %d %d %d\n",
-%            (int)p->as, a1, a2, a3);
-%        print("		%d %d\n", p->from.type, p->to.type);
-%    }
+
+
 
 
 <<[[noops()]] case ARET, call nocache>>=
@@ -4863,8 +4897,8 @@ void
 nocache(Prog *p)
 {
     p->optab = 0;
-    p->from.class = C_NONE;
-    p->to.class = C_NONE;
+    p->from.class = 0;
+    p->to.class = 0;
 }
 @
 
@@ -4880,6 +4914,7 @@ static Prog *PP;
 void
 asmout(Prog *p, Optab *o)
 {
+    // ARM 32 bits instructions
     long o1, o2, o3, o4, o5, o6;
     long v;
     int r, rf, rt, rt2;
@@ -4985,8 +5020,8 @@ case 0:		/* pseudo ops */
     break;
 @
 % nothing to be done! TEXT is a pseudo opcode, and noops()
-% has patched it with the initial mov SP, so we're good
-% to go
+% has patched it with the initial mov to save REGLINK in stack, so we're good
+% to go.
 
 \subsection{[[AWORD]]}
 

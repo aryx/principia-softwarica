@@ -481,9 +481,11 @@ aclass(Adr *a)
 Optab*
 oplook(Prog *p)
 {
-    int a1, a2, a3, r;
-    char *c1, *c3;
     Optab *o, *e;
+    int r;
+    // enum<class>
+    int a1, a2, a3;
+    char *c1, *c3;
 
     a1 = p->optab;
     if(a1)
@@ -513,6 +515,7 @@ oplook(Prog *p)
         o = oprange[r].stop; /* just generate an error */
     }
     e = oprange[r].stop;
+
     c1 = xcmp[a1];
     c3 = xcmp[a3];
     for(; o<e; o++)

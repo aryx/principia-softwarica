@@ -682,6 +682,7 @@ datblk(long s, long n, bool str)
 void
 asmout(Prog *p, Optab *o)
 {
+    // ARM 32 bits instructions
     long o1, o2, o3, o4, o5, o6;
     long v;
     int r, rf, rt, rt2;

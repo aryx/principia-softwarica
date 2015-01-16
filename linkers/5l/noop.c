@@ -392,8 +392,8 @@ void
 nocache(Prog *p)
 {
     p->optab = 0;
-    p->from.class = C_NONE;
-    p->to.class = C_NONE;
+    p->from.class = 0;
+    p->to.class = 0;
 }
 /*e: function nocache(arm) */
 /*e: linkers/5l/noop.c */
