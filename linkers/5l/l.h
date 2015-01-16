@@ -166,11 +166,11 @@ struct	Optab
     // enum<opcode> from 5.out.h, but represents a range, see oprange[]
     byte	as;
 
-    // enum<cxxx>, possible class for first operand
+    // enum<cxxx>, possible operand_kind/class for first operand
     short	a1;
-    // enum<cxxx>, possible class for second operand
+    // enum<cxxx>, possible operand_kind/class for second operand
     short	a2;
-    // enum<cxxx>, possible class for third operand
+    // enum<cxxx>, possible operand_kind/class for third operand
     short	a3;
 
     // idx for the code generator, see the giant switch in asmout()

@@ -822,16 +822,18 @@ Prog	undefp;
 
 
 
-%\section{[[Class]]}
+%\section{[[Optab]] and [[optab]]}?
 %hmm maybe better later
 
-%\section{[[Optab]] and [[optab]]}?
+%\section{[[Class]]}
 %hmm maybe better later
 
 %\section{[[Buf]] and [[buf]]}?
 %hmm maybe better in appendix or later
 
 %\section{[[pc]]}?
+
+%\section{[[textsize]], [[datasize]], [[INITDAT]], ...}?
 
 \chapter{[[main()]]}
 
@@ -3683,10 +3685,12 @@ dotext(void)
 %less: use orig instead of 'c' so match more dodata()?
 % but here it's really a concrete location whereas for dodata()
 % it's relative to INITDAT that we actually compute here.
-%todo? but is there a mutual recursive problem? oplook call
-% aclass which needs to know offset size, but we don't know
+
+%Is there a mutual recursive problem? oplook call
+% aclass() which needs to know offset size, but we don't know
 % yet INITDAT and how far it will be from R12 or other stuff.
-% so bug?????
+% so bug? No because R12 will be INITDAT+BIG! this will not change.
+% subtle.
 
 
 %\subsection{Large procedures}
@@ -3860,11 +3864,11 @@ struct	Optab
     // enum<opcode> from 5.out.h, but represents a range, see oprange[]
     byte	as;
 
-    // enum<cxxx>, possible class for first operand
+    // enum<cxxx>, possible operand_kind/class for first operand
     short	a1;
-    // enum<cxxx>, possible class for second operand
+    // enum<cxxx>, possible operand_kind/class for second operand
     short	a2;
-    // enum<cxxx>, possible class for third operand
+    // enum<cxxx>, possible operand_kind/class for third operand
     short	a3;
 
     // idx for the code generator, see the giant switch in asmout()
@@ -3893,26 +3897,6 @@ struct	Optab
 % multiple instructions, hence the size field above.
 
 
-<<[[Optab]] other fields>>=
-// 0 | REGSB | REGSP
-short	param;
-// bitset<enum<optab_flag>>
-short	flag;
-@
-%old: was char, but ugly
-% order is important, see optab[] global
-
-<<enum optab_flag(arm)>>=
-enum optab_flag {
-    LFROM	= 1<<0,
-    LTO		= 1<<1,
-    LPOOL	= 1<<2,
-    <<enum optab_flag cases>>
-};
-@
-% >> >> >> >> >>
-
-
 %\section{[[optab]]}
 
 % This table contains the different valid combinations 
@@ -3939,9 +3923,8 @@ Optab	optab[] =
 
 
 
-
-\section{[[Class]]}
-% could be moved?
+\section{[[Class]] and [[aclass()]]}
+% was in core DS, but I think better here with Optab.
 
 <<[[Adr]] other fields>>=
 // enum<classx>
@@ -4022,11 +4005,13 @@ aclass(Adr *a)
 % it's far away.
 
 
-\section{Addr, Half, Large, Rot, Neg, and [[aclass()]]}
+
+\section{[[SB/R12]], Half, Small, Large, Rot, Neg, and [[aclass()]]}
 % those are some kinds of optimisations no?
 
 % The load/store ARM instructions take 2 registers (src_val, dst_address)
-% and a 12 bits offset (for a range of 4096, so really a page).
+% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
+% do negative offset with a bit).
 % That means that if you do  'MOVW $1, myglobal', naively you'll have to
 % encode it as 3 instructions:
 %     MOV $1, R1
@@ -4044,12 +4029,17 @@ aclass(Adr *a)
 % which is 3 times faster (well if the global address is in a cache).
 %
 % In practice the first page of the address space is always reserved
-% so it's better to store in R12 a bigger value.
+% so it's better to store in R12 a bigger value. R12 will actually
+% be set to INITDAT+BIG.
 
 <<[[dodata()]] define special symbols>>=
 xdefine("setR12", SDATA, 0L+BIG);
 @
-% the value here is a location for DATA, so it's always +INITDAT.
+% the value here is a location for DATA, so there is
+% an implicit +INITDAT. Has to be, otherwise would have a mutually
+% recursive issue between dodata and dotext because dotext
+% need the layout of data, but this layout must start after the
+% text ...
 
 <<constant BIG>>=
 BIG		= (1<<12)-4,
@@ -4063,9 +4053,12 @@ BIG		= (1<<12)-4,
 % bdata, etc. Here we care actually only about the address, not the
 % content at that address.
 
-% why -4?
+% why -4? otherwise could not reach the first data? offset
+% can be negative or positive so actually can cover 2 pages of
+% small data variables!
 
 
+\subsection{Immediate address}
 
 <<function immaddr(arm)>>=
 long
@@ -4083,8 +4076,10 @@ immaddr(long v)
 @
 % >> >> >>
 % rename immsmall?
-% why 0xfff? = 4095. related to BIG?
+% why 0xfff? = 4095 so a page.
 
+
+\subsection{Half immediate address}
 
 <<function immhalf(arm)>>=
 int
@@ -4103,6 +4098,25 @@ immhalf(long v)
 % >> >> >>
 % seems identical to immhalf no? no now it's 0xff! not 0xfff
 
+\subsection{Rotated immediate address}
+
+<<function immrot(arm)>>=
+long
+immrot(ulong v)
+{
+    int i;
+
+    for(i=0; i<16; i++) {
+        if((v & ~0xff) == 0)
+            return (i<<8) | v | (1<<25);
+        v = (v<<2) | (v>>30);
+    }
+    return 0;
+}
+@
+% >> >>
+
+\subsection{[[instoffset]]}
 
 <<global instoffset(arm)>>=
 long	instoffset;
@@ -4110,6 +4124,9 @@ long	instoffset;
 % instruction offset?
 
 
+\subsection{[[aclass()]] refinments}
+
+\subsubsection{[[D_OREG]]}
 
 <<[[aclass()]] switch type cases>>=
 case D_OREG:
@@ -4121,8 +4138,7 @@ case D_OREG:
 % OREG usually is a dereference of a register or a symbol reference
 % (which is then really an implicit offet to SB)
 
-% H S L ? halfword, small, large?
-
+% H S L ? half, small, large?
 <<cxxx(arm) cases>>=
 C_HEXT,
 C_SEXT,
@@ -4153,11 +4169,9 @@ case D_STATIC:
     instoffset = s->value + a->offset - BIG;
     t = immaddr(instoffset);
     if(t) {
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFEXT : C_HEXT;
         if(immfloat(t))
-            return C_FEXT;
-        return C_SEXT;
+            return immhalf(instoffset)? C_HFEXT : C_FEXT;
+        return immhalf(instoffset)? C_HEXT : C_SEXT;
     }
     return C_LEXT;
 @
@@ -4179,11 +4193,9 @@ case D_AUTO:
     instoffset = autosize + a->offset;
     t = immaddr(instoffset);
     if(t){
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFAUTO : C_HAUTO;
         if(immfloat(t))
-            return C_FAUTO;
-        return C_SAUTO;
+            return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+        return immhalf(instoffset)? C_HAUTO : C_SAUTO;
     }
     return C_LAUTO;
 @
@@ -4193,11 +4205,9 @@ case D_PARAM:
     instoffset = autosize + a->offset + 4L;
     t = immaddr(instoffset);
     if(t){
-        if(immhalf(instoffset))
-            return immfloat(t) ? C_HFAUTO : C_HAUTO;
         if(immfloat(t))
-            return C_FAUTO;
-        return C_SAUTO;
+            return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+        return immhalf(instoffset)? C_HAUTO : C_SAUTO;
     }
     return C_LAUTO;
 @
@@ -4221,42 +4231,27 @@ case D_NONE:
     instoffset = a->offset;
     t = immaddr(instoffset);
     if(t) {
-        if(immhalf(instoffset))		 /* n.b. that it will also satisfy immrot */
-            return immfloat(t) ? C_HFOREG : C_HOREG;
         if(immfloat(t))
-            return C_FOREG; /* n.b. that it will also satisfy immrot */
+            return immhalf(instoffset)? C_HFOREG : C_FOREG;
+            /* n.b. that it will also satisfy immrot */
 
-        t = immrot(instoffset);
-        if(t)
-            return C_SROREG;
-        if(immhalf(instoffset))
+         /* n.b. that immhalf() will also satisfy immrot */
+        if(immhalf(instoffset))	
             return C_HOREG;
-        return C_SOREG;
+
+        if(immrot(instoffset))
+            return C_SROREG;
+        return immhalf(instoffset)? C_HOREG : C_SOREG;
     }
-    t = immrot(instoffset);
-    if(t)
+    if(immrot(instoffset))
         return C_ROREG;
     return C_LOREG;
 @
 
-<<function immrot(arm)>>=
-long
-immrot(ulong v)
-{
-    int i;
-
-    for(i=0; i<16; i++) {
-        if((v & ~0xff) == 0)
-            return (i<<8) | v | (1<<25);
-        v = (v<<2) | (v>>30);
-    }
-    return 0;
-}
-@
-% >> >>
 
 
 
+\subsubsection{[[D_CONST]]}
 
 <<[[aclass()]] switch type cases>>=
 case D_CONST:
@@ -4281,18 +4276,15 @@ case D_NONE:
     if(a->reg != R_NONE)
         goto aconsize;
 
-    t = immrot(instoffset);
-    if(t)
+    if(immrot(instoffset))
         return C_RCON;
-
-    t = immrot(~instoffset);
-    if(t)
+    if(immrot(~instoffset))
         return C_NCON;
     return C_LCON;
 @
 
 
-
+% External const
 <<cxxx(arm) cases>>=
 C_RECON,
 @
@@ -4307,12 +4299,10 @@ C_RECON,
 case D_EXTERN:
 case D_STATIC:
     s = a->sym;
-    if(s == S)
+    if(s == S) // no warning?
         break;
-    t = s->type;
-    switch(t) {
-    case STEXT: case SLEAF:
-    case SSTRING:
+    switch(s->type) {
+    case STEXT: case SLEAF: case SSTRING:
     case SCONST:
     case SUNDEF:
         instoffset = s->value + a->offset;
@@ -4320,19 +4310,34 @@ case D_STATIC:
     case SNONE: case SXREF:
         diag("undefined external: %s in %s", s->name, TNAME);
         s->type = SDATA;
-        break;
+        // Fall through
+    case SDATA: case SBSS: case SDATA1:
+        if(!dlm) {
+            instoffset = s->value + a->offset - BIG;
+            if(immrot(instoffset) && instoffset != 0)
+                return C_RECON;
+        }
+        instoffset = s->value + a->offset + INITDAT;
+        return C_LCON;
     }
-    if(!dlm) {
-        instoffset = s->value + a->offset - BIG;
-        t = immrot(instoffset);
-        if(t && instoffset != 0)
-            return C_RECON;
-    }
-    instoffset = s->value + a->offset + INITDAT;
-    return C_LCON;
-
+    diag("unknown section for %s", s->name);
+    break;
 @
 
+
+%old: used to be but more messy I think, the +INITDAT is then confusing
+%    case SNONE: case SXREF:
+%        diag("undefined external: %s in %s", s->name, TNAME);
+%        s->type = SDATA;
+%        break;
+%    }
+%    if(!dlm) {
+%        instoffset = s->value + a->offset - BIG;
+%        if(immrot(instoffset) && instoffset != 0)
+%            return C_RECON;
+%    }
+%    instoffset = s->value + a->offset + INITDAT;
+%    return C_LCON;
 
 
 
@@ -4356,10 +4361,7 @@ case D_PARAM:
 
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 aconsize:
-    t = immrot(instoffset);
-    if(t)
-        return C_RACON;
-    return C_LACON;
+    return immrot(instoffset)? C_RACON : C_LACON;
 @
 
 
@@ -4389,6 +4391,27 @@ aconsize:
 
 \subsection{Pool}
 % ????
+
+<<[[Optab]] other fields>>=
+// 0 | REGSB | REGSP
+short	param;
+// bitset<enum<optab_flag>>
+short	flag;
+@
+%old: was char, but ugly
+% order is important, see optab[] global
+
+<<enum optab_flag(arm)>>=
+enum optab_flag {
+    LFROM	= 1<<0,
+    LTO		= 1<<1,
+    LPOOL	= 1<<2,
+    <<enum optab_flag cases>>
+};
+@
+% >> >> >> >> >>
+
+
 
 <<[[span()]] pool handling for optab o>>=
 switch(o->flag & (LFROM|LTO|LPOOL)) {
@@ -8073,8 +8096,8 @@ C_ADDR,		/* relocatable address */
 if(dlm) {
     switch(t) {
     case SUNDEF:
-    case STEXT: case SLEAF:
-    case SCONST: case SSTRING:
+    case STEXT: case SLEAF: case SSTRING:
+    case SCONST: 
         instoffset = s->value + a->offset;
         break;
     case SDATA: case SBSS:
@@ -8431,7 +8454,7 @@ if(*a >= '0' && *a <= '9')
 int
 immfloat(long v)
 {
-    return (v & 0xC03) == 0;	/* offset will fit in floating-point load/store */
+    return (v & 0xC03) == 0;/* offset will fit in floating-point load/store */
 }
 @
 

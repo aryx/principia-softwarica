@@ -274,7 +274,7 @@ immaddr(long v)
 int
 immfloat(long v)
 {
-    return (v & 0xC03) == 0;	/* offset will fit in floating-point load/store */
+    return (v & 0xC03) == 0;/* offset will fit in floating-point load/store */
 }
 /*e: function immfloat(arm) */
 
@@ -338,8 +338,8 @@ aclass(Adr *a)
             if(dlm) {
                 switch(t) {
                 case SUNDEF:
-                case STEXT: case SLEAF:
-                case SCONST: case SSTRING:
+                case STEXT: case SLEAF: case SSTRING:
+                case SCONST: 
                     instoffset = s->value + a->offset;
                     break;
                 case SDATA: case SBSS:
@@ -353,11 +353,9 @@ aclass(Adr *a)
             instoffset = s->value + a->offset - BIG;
             t = immaddr(instoffset);
             if(t) {
-                if(immhalf(instoffset))
-                    return immfloat(t) ? C_HFEXT : C_HEXT;
                 if(immfloat(t))
-                    return C_FEXT;
-                return C_SEXT;
+                    return immhalf(instoffset)? C_HFEXT : C_FEXT;
+                return immhalf(instoffset)? C_HEXT : C_SEXT;
             }
             return C_LEXT;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
@@ -365,11 +363,9 @@ aclass(Adr *a)
             instoffset = autosize + a->offset;
             t = immaddr(instoffset);
             if(t){
-                if(immhalf(instoffset))
-                    return immfloat(t) ? C_HFAUTO : C_HAUTO;
                 if(immfloat(t))
-                    return C_FAUTO;
-                return C_SAUTO;
+                    return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+                return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
@@ -377,11 +373,9 @@ aclass(Adr *a)
             instoffset = autosize + a->offset + 4L;
             t = immaddr(instoffset);
             if(t){
-                if(immhalf(instoffset))
-                    return immfloat(t) ? C_HFAUTO : C_HAUTO;
                 if(immfloat(t))
-                    return C_FAUTO;
-                return C_SAUTO;
+                    return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+                return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
@@ -389,20 +383,19 @@ aclass(Adr *a)
             instoffset = a->offset;
             t = immaddr(instoffset);
             if(t) {
-                if(immhalf(instoffset))		 /* n.b. that it will also satisfy immrot */
-                    return immfloat(t) ? C_HFOREG : C_HOREG;
                 if(immfloat(t))
-                    return C_FOREG; /* n.b. that it will also satisfy immrot */
+                    return immhalf(instoffset)? C_HFOREG : C_FOREG;
+                    /* n.b. that it will also satisfy immrot */
 
-                t = immrot(instoffset);
-                if(t)
-                    return C_SROREG;
-                if(immhalf(instoffset))
+                 /* n.b. that immhalf() will also satisfy immrot */
+                if(immhalf(instoffset))	
                     return C_HOREG;
-                return C_SOREG;
+
+                if(immrot(instoffset))
+                    return C_SROREG;
+                return immhalf(instoffset)? C_HOREG : C_SOREG;
             }
-            t = immrot(instoffset);
-            if(t)
+            if(immrot(instoffset))
                 return C_ROREG;
             return C_LOREG;
         /*e: [[aclass()]] D_OREG case, switch symkind cases */
@@ -417,24 +410,19 @@ aclass(Adr *a)
             if(a->reg != R_NONE)
                 goto aconsize;
 
-            t = immrot(instoffset);
-            if(t)
+            if(immrot(instoffset))
                 return C_RCON;
-
-            t = immrot(~instoffset);
-            if(t)
+            if(immrot(~instoffset))
                 return C_NCON;
             return C_LCON;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
         case D_EXTERN:
         case D_STATIC:
             s = a->sym;
-            if(s == S)
+            if(s == S) // no warning?
                 break;
-            t = s->type;
-            switch(t) {
-            case STEXT: case SLEAF:
-            case SSTRING:
+            switch(s->type) {
+            case STEXT: case SLEAF: case SSTRING:
             case SCONST:
             case SUNDEF:
                 instoffset = s->value + a->offset;
@@ -442,17 +430,18 @@ aclass(Adr *a)
             case SNONE: case SXREF:
                 diag("undefined external: %s in %s", s->name, TNAME);
                 s->type = SDATA;
-                break;
+                // Fall through
+            case SDATA: case SBSS: case SDATA1:
+                if(!dlm) {
+                    instoffset = s->value + a->offset - BIG;
+                    if(immrot(instoffset) && instoffset != 0)
+                        return C_RECON;
+                }
+                instoffset = s->value + a->offset + INITDAT;
+                return C_LCON;
             }
-            if(!dlm) {
-                instoffset = s->value + a->offset - BIG;
-                t = immrot(instoffset);
-                if(t && instoffset != 0)
-                    return C_RECON;
-            }
-            instoffset = s->value + a->offset + INITDAT;
-            return C_LCON;
-
+            diag("unknown section for %s", s->name);
+            break;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
         case D_AUTO:
             instoffset = autosize + a->offset;
@@ -464,10 +453,7 @@ aclass(Adr *a)
             goto aconsize;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
         aconsize:
-            t = immrot(instoffset);
-            if(t)
-                return C_RACON;
-            return C_LACON;
+            return immrot(instoffset)? C_RACON : C_LACON;
         /*e: [[aclass()]] D_CONST case, switch symkind cases */
         }
         return C_GOK;
