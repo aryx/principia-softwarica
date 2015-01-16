@@ -605,6 +605,7 @@ ocmp(const void *a1, const void *a2)
 
     p1 = (Optab*)a1;
     p2 = (Optab*)a2;
+
     n = p1->as - p2->as;
     if(n)
         return n;
@@ -616,6 +617,7 @@ ocmp(const void *a1, const void *a2)
     if(n)
         return n;
 
+
     n = p1->a1 - p2->a1;
     if(n)
         return n;
@@ -623,6 +625,7 @@ ocmp(const void *a1, const void *a2)
     if(n)
         return n;
     n = p1->a3 - p2->a3;
+
     if(n)
         return n;
     return 0;

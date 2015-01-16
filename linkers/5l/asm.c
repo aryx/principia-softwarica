@@ -1264,17 +1264,6 @@ asmout(Prog *p, Optab *o)
             o1 |= rf | (rt<<12);
         break;
     /*x: [[asmout()]] switch on type cases */
-    /* old arm 7500 fp using coproc 1 (1<<8) */
-    case 56:	/* move to FP[CS]R */
-        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
-        o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
-        break;
-    /*x: [[asmout()]] switch on type cases */
-    case 57:	/* move from FP[CS]R */
-        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
-        o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
-        break;
-    /*x: [[asmout()]] switch on type cases */
     case 68:	/* floating point store -> ADDR */
         o1 = omvl(p, &p->to, REGTMP);
         if(!o1)
@@ -1336,6 +1325,17 @@ asmout(Prog *p, Optab *o)
             o2 = 0x0e100a10;	/* VMOV R,F */
             o2 |= (p->scond & C_SCOND) << 28 | FREGTMP<<16 | rt<<12;
         }
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    /* old arm 7500 fp using coprocessor 1 (1<<8) */
+    case 56:	/* move to FP[CS]R */
+        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
+        o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 57:	/* move from FP[CS]R */
+        o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
+        o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
         break;
     /*x: [[asmout()]] switch on type cases */
     /* ArmV4 ops: */
@@ -1535,7 +1535,8 @@ oprrr(int a, int sc)
 
     case ASWI:	return o | (0xf<<24);
 
-    /* old arm 7500 fp using coproc 1 (1<<8) */
+    /*s: [[oprrr()]] switch cases */
+    /* old arm 7500 fp using coprocessor 1 (1<<8) */
     case AADDD:	return o | (0xe<<24) | (0x0<<20) | (1<<8) | (1<<7);
     case AADDF:	return o | (0xe<<24) | (0x0<<20) | (1<<8);
     case AMULD:	return o | (0xe<<24) | (0x1<<20) | (1<<8) | (1<<7);
@@ -1544,8 +1545,9 @@ oprrr(int a, int sc)
     case ASUBF:	return o | (0xe<<24) | (0x2<<20) | (1<<8);
     case ADIVD:	return o | (0xe<<24) | (0x4<<20) | (1<<8) | (1<<7);
     case ADIVF:	return o | (0xe<<24) | (0x4<<20) | (1<<8);
+    /* arguably, ACMPF should expand to RNDF, CMPD */
     case ACMPD:
-    case ACMPF:	return o | (0xe<<24) | (0x9<<20) | (0xF<<12) | (1<<8) | (1<<4);	/* arguably, ACMPF should expand to RNDF, CMPD */
+    case ACMPF:	return o | (0xe<<24) | (0x9<<20) | (0xF<<12) | (1<<8) | (1<<4);	
 
     case AMOVF:
     case AMOVDF:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8);
@@ -1556,6 +1558,7 @@ oprrr(int a, int sc)
     case AMOVWD:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4) | (1<<7);
     case AMOVFW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4);
     case AMOVDW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4) | (1<<7);
+    /*e: [[oprrr()]] switch cases */
     }
     diag("bad rrr %d", a);
     prasm(curp);
@@ -1642,9 +1645,9 @@ olr(long v, int b, int r, int sc)
 {
     long o;
 
+    o = (sc & C_SCOND) << 28;
     if(sc & C_SBIT)
         diag(".S on LDR/STR instruction");
-    o = (sc & C_SCOND) << 28;
     if(!(sc & C_PBIT))
         o |= 1 << 24;
     if(!(sc & C_UBIT))
@@ -1671,9 +1674,10 @@ olhr(long v, int b, int r, int sc)
 {
     long o;
 
+    o = (sc & C_SCOND) << 28;
     if(sc & C_SBIT)
         diag(".S on LDRH/STRH instruction");
-    o = (sc & C_SCOND) << 28;
+
     if(!(sc & C_PBIT))
         o |= 1 << 24;
     if(sc & C_WBIT)
@@ -1757,9 +1761,9 @@ ovfpmem(int a, int r, long v, int b, int sc, Prog *p)
 {
     long o;
 
+    o = (sc & C_SCOND) << 28;
     if(sc & (C_SBIT|C_PBIT|C_WBIT))
         diag(".S/.P/.W on VLDR/VSTR instruction");
-    o = (sc & C_SCOND) << 28;
     o |= 0xd<<24 | (1<<23);
     if(v < 0) {
         v = -v;
@@ -1794,9 +1798,10 @@ ofsr(int a, int r, long v, int b, int sc, Prog *p)
 
     if(vfp)
         return ovfpmem(a, r, v, b, sc, p);
+
+    o = (sc & C_SCOND) << 28;
     if(sc & C_SBIT)
         diag(".S on FLDR/FSTR instruction");
-    o = (sc & C_SCOND) << 28;
     if(!(sc & C_PBIT))
         o |= 1 << 24;
     if(sc & C_WBIT)

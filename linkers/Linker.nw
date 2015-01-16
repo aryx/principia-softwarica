@@ -1192,7 +1192,9 @@ zprg.to = zprg.from;
 %GOK? God Only Knows? to be used as a special mark, there is diag()
 % in ldobj() about AGOK
 %less: have to use AGOK? why not AXXX? or ANOP?
-%todo: what about .class? should be set to C_NONE no?
+%bug: what about .class? should be set to C_NONE no?
+%bug? what about optab? should be null no? there is code
+% using p->optab like oplook()
 
 % many of the constants such as COND_ALWAYS are in 5.out.h
 
@@ -3190,7 +3192,7 @@ noops(void)
         <<adjust curtext when iterate over instructions p>>
         o = p->as;
         switch(o) {
-        <<[[noops()]] second pass swith opcode cases>>
+        <<[[noops()]] second pass switch opcode cases>>
         }
     }
 }
@@ -3407,7 +3409,7 @@ case ABL:
 % if leaf procedure, no need to save REGLINK in the stack!
 % hence the autosize = 0 I think
 
-<<[[noops()]] second pass swith opcode cases>>=
+<<[[noops()]] second pass switch opcode cases>>=
 case ATEXT:
     autosize = p->to.offset + 4;
     if(autosize <= 4)
@@ -3447,7 +3449,7 @@ case ATEXT:
 
 \subsection{[[ARET]] rewriting}
 
-<<[[noops()]] second pass swith opcode cases>>=
+<<[[noops()]] second pass switch opcode cases>>=
 case ARET:
     nocache(p);
     if((curtext->mark & LEAF) && !autosize) {
@@ -4098,17 +4100,17 @@ struct	Optab
 <<[[Optab]] other fields>>=
 // 0 | REGSB | REGSP
 char	param;
-// enum<lxxx>
+// bitset<enum<optab_flag>>
 char	flag;
 @
 % order is important, see optab[] global
 
-<<enum lxxx(arm)>>=
-enum lxxx {
+<<enum optab_flag(arm)>>=
+enum optab_flag {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
-    <<enum lxxx cases>>
+    <<enum optab_flag cases>>
 };
 @
 % >> >> >> >> >>
@@ -4474,22 +4476,6 @@ struct	Oprang
 
 
 
-% remove? and remove the relevant opcode also in optab? at least aspectize!
-<<global armv4(arm)>>=
-bool	armv4;
-@
-
-<<global vfp(arm)>>=
-bool vfp;
-@
-
-<<enum lxxx cases>>=
-V4		= 1<<3,	/* arm v4 arch */
-VFP		= 1<<4,	/* arm vfpv3 floating point */
-@
-% >> >>
-
-
 
 <<global xcmp(arm)>>=
 char	xcmp[C_GOK+1][C_GOK+1];
@@ -4617,6 +4603,7 @@ cmp(int a, int b)
 }
 @
 
+% buildop -> qsort(..., <>)
 <<function ocmp(arm)>>=
 int
 ocmp(const void *a1, const void *a2)
@@ -4626,6 +4613,7 @@ ocmp(const void *a1, const void *a2)
 
     p1 = (Optab*)a1;
     p2 = (Optab*)a2;
+
     n = p1->as - p2->as;
     if(n)
         return n;
@@ -4637,6 +4625,7 @@ ocmp(const void *a1, const void *a2)
     if(n)
         return n;
 
+
     n = p1->a1 - p2->a1;
     if(n)
         return n;
@@ -4644,6 +4633,7 @@ ocmp(const void *a1, const void *a2)
     if(n)
         return n;
     n = p1->a3 - p2->a3;
+
     if(n)
         return n;
     return 0;
@@ -4719,6 +4709,8 @@ ocmp(const void *a1, const void *a2)
 byte	optab;
 @
 
+% leverage the sorted data structure computed by buildop()
+% dotext | asmb -> <>
 <<function oplook(arm)>>=
 Optab*
 oplook(Prog *p)
@@ -4993,6 +4985,7 @@ case 1:		/* op R,[R],R */
     o1 |= rf | (r<<16) | (rt<<12);
     break;
 @
+% >> >>
 
 <<function oprrr(arm)>>=
 long
@@ -5038,27 +5031,7 @@ oprrr(int a, int sc)
 
     case ASWI:	return o | (0xf<<24);
 
-    /* old arm 7500 fp using coproc 1 (1<<8) */
-    case AADDD:	return o | (0xe<<24) | (0x0<<20) | (1<<8) | (1<<7);
-    case AADDF:	return o | (0xe<<24) | (0x0<<20) | (1<<8);
-    case AMULD:	return o | (0xe<<24) | (0x1<<20) | (1<<8) | (1<<7);
-    case AMULF:	return o | (0xe<<24) | (0x1<<20) | (1<<8);
-    case ASUBD:	return o | (0xe<<24) | (0x2<<20) | (1<<8) | (1<<7);
-    case ASUBF:	return o | (0xe<<24) | (0x2<<20) | (1<<8);
-    case ADIVD:	return o | (0xe<<24) | (0x4<<20) | (1<<8) | (1<<7);
-    case ADIVF:	return o | (0xe<<24) | (0x4<<20) | (1<<8);
-    case ACMPD:
-    case ACMPF:	return o | (0xe<<24) | (0x9<<20) | (0xF<<12) | (1<<8) | (1<<4);	/* arguably, ACMPF should expand to RNDF, CMPD */
-
-    case AMOVF:
-    case AMOVDF:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8);
-    case AMOVD:
-    case AMOVFD:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8) | (1<<7);
-
-    case AMOVWF:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4);
-    case AMOVWD:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4) | (1<<7);
-    case AMOVFW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4);
-    case AMOVDW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4) | (1<<7);
+    <<[[oprrr()]] switch cases>>
     }
     diag("bad rrr %d", a);
     prasm(curp);
@@ -5110,7 +5083,7 @@ mov:
     o1 |= (r<<16) | (rt<<12);
     break;
 @
-
+% >> >>
 
 
 
@@ -5588,9 +5561,9 @@ olr(long v, int b, int r, int sc)
 {
     long o;
 
+    o = (sc & C_SCOND) << 28;
     if(sc & C_SBIT)
         diag(".S on LDR/STR instruction");
-    o = (sc & C_SCOND) << 28;
     if(!(sc & C_PBIT))
         o |= 1 << 24;
     if(!(sc & C_UBIT))
@@ -7676,27 +7649,6 @@ if(dlm){
 @
 
 
-<<cxxx(arm) cases>>=
-C_ADDR,		/* relocatable address */
-@
-
-<<[[aclass()]] when D_OREG and D_STATIC and dlm>>=
-if(dlm) {
-    switch(t) {
-    case SUNDEF:
-    case STEXT:
-    case SLEAF:
-    case SCONST:
-    case SSTRING:
-        instoffset = s->value + a->offset;
-        break;
-    default:
-        instoffset = s->value + a->offset + INITDAT;
-        break;
-    }
-    return C_ADDR;
-}
-@
 
 
 
@@ -8084,6 +8036,30 @@ case AINIT:
 
 @
 
+\subsection{Relocatable address, [[C_ADDR]]}
+
+<<cxxx(arm) cases>>=
+C_ADDR,		/* relocatable address */
+@
+
+<<[[aclass()]] when D_OREG and D_STATIC and dlm>>=
+if(dlm) {
+    switch(t) {
+    case SUNDEF:
+    case STEXT:
+    case SLEAF:
+    case SCONST:
+    case SSTRING:
+        instoffset = s->value + a->offset;
+        break;
+    default:
+        instoffset = s->value + a->offset + INITDAT;
+        break;
+    }
+    return C_ADDR;
+}
+@
+
 
 \section{Extra executable formats}
 
@@ -8308,6 +8284,10 @@ if(*a >= '0' && *a <= '9')
 
 \section{Float instructions}
 
+% string connection with the kernel floating port support.
+% see bcm/vfp3.c, bcm/fpiarm.c, etc
+
+
 <<function immfloat(arm)>>=
 int
 immfloat(long v)
@@ -8323,12 +8303,6 @@ C_FCON,
 C_FCR,
 @
 
-<<[[zaddr()]] cases>>=
-case D_FREG:
-case D_FPCR:
-    break;
-@
-
 <<[[aclass()]] switch type cases>>=
 case D_FREG:
     return C_FREG;
@@ -8336,6 +8310,12 @@ case D_FCONST:
     return C_FCON;
 case D_FPCR:
     return C_FCR;
+@
+
+<<[[zaddr()]] cases>>=
+case D_FREG:
+case D_FPCR:
+    break;
 @
 
 
@@ -8356,6 +8336,7 @@ case D_FCONST:
 
 % 8.out.h
 
+% ldobj -> <>
 <<function ieeedtof>>=
 long
 ieeedtof(Ieee *e)
@@ -8384,6 +8365,7 @@ ieeedtof(Ieee *e)
 }
 @
 
+% Dconv -> <>
 <<function ieeedtod>>=
 double
 ieeedtod(Ieee *ieeep)
@@ -8413,44 +8395,31 @@ ieeedtod(Ieee *ieeep)
 
 
 
+
+
+
+
+
+
+
+
+<<enum optab_flag cases>>=
+V4		= 1<<3,	/* arm v4 arch */
+VFP		= 1<<4,	/* arm vfpv3 floating point */
+@
+% >> >>
+%http://www.arm.com/products/processors/technologies/vector-floating-point.php
+
+% from 8l(1) "Without this [-f] option, 5l generates arm7500 floating-point
+% instructions which are emulated in the kernel."
+
+
+
+
+
 <<[[ldobj()]] locals(arm)>>=
 Prog *t;
 @
-
-
-<<global chipfloats(arm)>>=
-static Ieee chipfloats[] = {
-    {0x00000000, 0x00000000}, /* 0 */
-    {0x00000000, 0x3ff00000}, /* 1 */
-    {0x00000000, 0x40000000}, /* 2 */
-    {0x00000000, 0x40080000}, /* 3 */
-    {0x00000000, 0x40100000}, /* 4 */
-    {0x00000000, 0x40140000}, /* 5 */
-    {0x00000000, 0x3fe00000}, /* .5 */
-    {0x00000000, 0x40240000}, /* 10 */
-};
-@
-
-<<function chipfloat(arm)>>=
-int
-chipfloat(Ieee *e)
-{
-    Ieee *p;
-    int n;
-
-    if(vfp)
-        return -1;
-    for(n = sizeof(chipfloats)/sizeof(chipfloats[0]); --n >= 0;){
-        p = &chipfloats[n];
-        if(p->l == e->l && p->h == e->h)
-            return n;
-    }
-    return -1;
-}
-@
-
-
-
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AMOVDF:
@@ -8519,6 +8488,73 @@ case AMOVD:
 @
 
 
+<<global chipfloats(arm)>>=
+static Ieee chipfloats[] = {
+    {0x00000000, 0x00000000}, /* 0 */
+    {0x00000000, 0x3ff00000}, /* 1 */
+    {0x00000000, 0x40000000}, /* 2 */
+    {0x00000000, 0x40080000}, /* 3 */
+    {0x00000000, 0x40100000}, /* 4 */
+    {0x00000000, 0x40140000}, /* 5 */
+    {0x00000000, 0x3fe00000}, /* .5 */
+    {0x00000000, 0x40240000}, /* 10 */
+};
+@
+% ???
+
+<<function chipfloat(arm)>>=
+int
+chipfloat(Ieee *e)
+{
+    Ieee *p;
+    int n;
+
+    if(vfp)
+        return -1;
+    for(n = sizeof(chipfloats)/sizeof(chipfloats[0]); --n >= 0;){
+        p = &chipfloats[n];
+        if(p->l == e->l && p->h == e->h)
+            return n;
+    }
+    return -1;
+}
+@
+
+
+
+
+
+
+<<[[noops()]] second pass switch opcode cases>>=
+/*
+ * 5c code generation for unsigned -> double made the
+ * unfortunate assumption that single and double floating
+ * point registers are aliased - true for emulated 7500
+ * but not for vfp.  Now corrected, but this test is
+ * insurance against old 5c compiled code in libraries.
+ */
+case AMOVWD:
+    if((q = p->link) != P && q->as == ACMP)
+     if((q = q->link) != P && q->as == AMOVF)
+      if((q1 = q->link) != P && q1->as == AADDF)
+       if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
+        q1->as = AADDD;
+        q1 = prg();
+        q1->scond = q->scond;
+        q1->line = q->line;
+        q1->as = AMOVFD;
+        q1->from = q->to;
+        q1->to = q1->from;
+        q1->link = q->link;
+        q->link = q1;
+    }
+    break;
+@
+
+
+\subsection{Common float instructions}
+
+
 <<[[buildop()]] switch opcode r cases>>=
 case AADDF:
     oprange[AADDD] = oprange[r];
@@ -8579,10 +8615,8 @@ case AMOVFW:
 
 { AMOVFW,	C_FREG,	C_NONE,	C_REG,		55, 4, 0 },
 { AMOVFW,	C_REG,	C_NONE,	C_FREG,		55, 4, 0 },
-
-{ AMOVW,	C_REG,	C_NONE,	C_FCR,		56, 4, 0 },
-{ AMOVW,	C_FCR,	C_NONE,	C_REG,		57, 4, 0 },
 @
+
 
 
 <<function regoff(arm)>>=
@@ -8606,6 +8640,7 @@ case 50:	/* floating point store */
     break;
 @
 
+%STC 6 << 25
 <<function ofsr(arm)>>=
 long
 ofsr(int a, int r, long v, int b, int sc, Prog *p)
@@ -8614,9 +8649,10 @@ ofsr(int a, int r, long v, int b, int sc, Prog *p)
 
     if(vfp)
         return ovfpmem(a, r, v, b, sc, p);
+
+    o = (sc & C_SCOND) << 28;
     if(sc & C_SBIT)
         diag(".S on FLDR/FSTR instruction");
-    o = (sc & C_SCOND) << 28;
     if(!(sc & C_PBIT))
         o |= 1 << 24;
     if(sc & C_WBIT)
@@ -8648,45 +8684,9 @@ ofsr(int a, int r, long v, int b, int sc, Prog *p)
 @
 % >> >> >> >> >> >> >> >> >> >> >>
 
-<<function ovfpmem(arm)>>=
-long
-ovfpmem(int a, int r, long v, int b, int sc, Prog *p)
-{
-    long o;
-
-    if(sc & (C_SBIT|C_PBIT|C_WBIT))
-        diag(".S/.P/.W on VLDR/VSTR instruction");
-    o = (sc & C_SCOND) << 28;
-    o |= 0xd<<24 | (1<<23);
-    if(v < 0) {
-        v = -v;
-        o ^= 1 << 23;
-    }
-    if(v & 3)
-        diag("odd offset for floating point op: %ld\n%P", v, p);
-    else if(v >= (1<<10))
-        diag("literal span too large: %ld\n%P", v, p);
-    o |= (v>>2) & 0xFF;
-    o |= b << 16;
-    o |= r << 12;
-    switch(a) {
-    default:
-        diag("bad fst %A", a);
-    case AMOVD:
-        o |= 0xb<<8;
-        break;
-    case AMOVF:
-        o |= 0xa<<8;
-        break;
-    }
-    return o;
-}
-@
-% >> >> >> >> >> >> >> >> 
 
 
-
-
+% LDC, 6 << 25 and 1 << 20
 <<[[asmout()]] switch on type cases>>=
 case 51:	/* floating point load */
     v = regoff(&p->from);
@@ -8696,6 +8696,10 @@ case 51:	/* floating point load */
     o1 = ofsr(p->as, p->to.reg, v, r, p->scond, p) | (1<<20);
     break;
 @
+% >>
+
+
+% ADD ... STC
 <<[[asmout()]] switch on type cases>>=
 case 52:	/* floating point store, long offset UGLY */
     o1 = omvl(p, &p->to, REGTMP);
@@ -8710,8 +8714,7 @@ case 52:	/* floating point store, long offset UGLY */
 @
 % >> >> >>
 
-
-
+% ADD ... LTC
 <<[[asmout()]] switch on type cases>>=
 case 53:	/* floating point load, long offset UGLY */
     o1 = omvl(p, &p->from, REGTMP);
@@ -8725,6 +8728,41 @@ case 53:	/* floating point load, long offset UGLY */
     break;
 @
 % >> >> >>
+
+
+<<[[oprrr()]] switch cases>>=
+/* old arm 7500 fp using coprocessor 1 (1<<8) */
+case AADDD:	return o | (0xe<<24) | (0x0<<20) | (1<<8) | (1<<7);
+case AADDF:	return o | (0xe<<24) | (0x0<<20) | (1<<8);
+case AMULD:	return o | (0xe<<24) | (0x1<<20) | (1<<8) | (1<<7);
+case AMULF:	return o | (0xe<<24) | (0x1<<20) | (1<<8);
+case ASUBD:	return o | (0xe<<24) | (0x2<<20) | (1<<8) | (1<<7);
+case ASUBF:	return o | (0xe<<24) | (0x2<<20) | (1<<8);
+case ADIVD:	return o | (0xe<<24) | (0x4<<20) | (1<<8) | (1<<7);
+case ADIVF:	return o | (0xe<<24) | (0x4<<20) | (1<<8);
+/* arguably, ACMPF should expand to RNDF, CMPD */
+case ACMPD:
+case ACMPF:	return o | (0xe<<24) | (0x9<<20) | (0xF<<12) | (1<<8) | (1<<4);	
+
+case AMOVF:
+case AMOVDF:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8);
+case AMOVD:
+case AMOVFD:	return o | (0xe<<24) | (0x0<<20) | (1<<15) | (1<<8) | (1<<7);
+
+case AMOVWF:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4);
+case AMOVWD:	return o | (0xe<<24) | (0<<20) | (1<<8) | (1<<4) | (1<<7);
+case AMOVFW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4);
+case AMOVDW:	return o | (0xe<<24) | (1<<20) | (1<<8) | (1<<4) | (1<<7);
+@
+% >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >>
+% 0xe << 24 => CDP instr, 1 << 8 => co processor 1
+
+
 
 
 <<[[asmout()]] switch on type cases>>=
@@ -8769,21 +8807,7 @@ case 55:	/* floating point fix and float */
 @
 % >> >> >> >>
 
-<<[[asmout()]] switch on type cases>>=
-/* old arm 7500 fp using coproc 1 (1<<8) */
-case 56:	/* move to FP[CS]R */
-    o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
-    o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
-    break;
-@
-% >> >> >> >> >> >> >>
-<<[[asmout()]] switch on type cases>>=
-case 57:	/* move from FP[CS]R */
-    o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
-    o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
-    break;
-@
-% >> >> >> >> >> >> >> >
+
 
 <<[[asmout()]] switch on type cases>>=
 case 68:	/* floating point store -> ADDR */
@@ -8803,33 +8827,52 @@ case 69:	/* floating point load <- ADDR */
 @
 % >> >> >>
 
-<<[[noops()]] second pass swith opcode cases>>=
-/*
- * 5c code generation for unsigned -> double made the
- * unfortunate assumption that single and double floating
- * point registers are aliased - true for emulated 7500
- * but not for vfp.  Now corrected, but this test is
- * insurance against old 5c compiled code in libraries.
- */
-case AMOVWD:
-    if((q = p->link) != P && q->as == ACMP)
-     if((q = q->link) != P && q->as == AMOVF)
-      if((q1 = q->link) != P && q1->as == AADDF)
-       if(q1->to.type == D_FREG && q1->to.reg == p->to.reg) {
-        q1->as = AADDD;
-        q1 = prg();
-        q1->scond = q->scond;
-        q1->line = q->line;
-        q1->as = AMOVFD;
-        q1->from = q->to;
-        q1->to = q1->from;
-        q1->link = q->link;
-        q->link = q1;
-    }
-    break;
+\subsection{VFP hardware instructions, [[5l -f]]}
+
+<<global vfp(arm)>>=
+bool vfp;
 @
 
-\subsection{VFP hardware instructions, [[5l -f]]}
+
+
+<<function ovfpmem(arm)>>=
+long
+ovfpmem(int a, int r, long v, int b, int sc, Prog *p)
+{
+    long o;
+
+    o = (sc & C_SCOND) << 28;
+    if(sc & (C_SBIT|C_PBIT|C_WBIT))
+        diag(".S/.P/.W on VLDR/VSTR instruction");
+    o |= 0xd<<24 | (1<<23);
+    if(v < 0) {
+        v = -v;
+        o ^= 1 << 23;
+    }
+    if(v & 3)
+        diag("odd offset for floating point op: %ld\n%P", v, p);
+    else if(v >= (1<<10))
+        diag("literal span too large: %ld\n%P", v, p);
+    o |= (v>>2) & 0xFF;
+    o |= b << 16;
+    o |= r << 12;
+    switch(a) {
+    default:
+        diag("bad fst %A", a);
+    case AMOVD:
+        o |= 0xb<<8;
+        break;
+    case AMOVF:
+        o |= 0xa<<8;
+        break;
+    }
+    return o;
+}
+@
+% >> >> >> >> >> >> >> >> 
+
+
+
 
 <<[[optab]] entries>>=
 { AADDF,	C_FREG,	C_NONE,	C_FREG,		74, 4, 0, VFP },
@@ -8840,6 +8883,68 @@ case AMOVWD:
 { AMOVFW,	C_FREG,	C_NONE,	C_REG,		76, 8, 0, VFP },
 { AMOVFW,	C_REG,	C_NONE,	C_FREG,		76, 8, 0, VFP },
 @
+% remember those are ranges!
+
+<<[[asmout()]] switch on type cases>>=
+/* VFP ops: */
+case 74:	/* vfp floating point arith */
+    o1 = opvfprrr(p->as, p->scond);
+    rf = p->from.reg;
+    if(p->from.type == D_FCONST) {
+        diag("invalid floating-point immediate\n%P", p);
+        rf = 0;
+    }
+    rt = p->to.reg;
+    r = p->reg;
+    if(r == R_NONE)
+        r = rt;
+    o1 |= rt<<12;
+    if(((o1>>20)&0xf) == 0xb)
+        o1 |= rf<<0;
+    else
+        o1 |= r<<16 | rf<<0;
+    break;
+@
+% >> >> >>
+
+<<[[asmout()]] switch on type cases>>=
+case 75:	/* vfp floating point compare */
+    o1 = opvfprrr(p->as, p->scond);
+    rf = p->from.reg;
+    if(p->from.type == D_FCONST) {
+        if(p->from.ieee->h != 0 || p->from.ieee->l != 0)
+            diag("invalid floating-point immediate\n%P", p);
+        o1 |= 1<<16;
+        rf = 0;
+    }
+    rt = p->reg;
+    o1 |= rt<<12 | rf<<0;
+    o2 = 0x0ef1fa10;	/* MRS APSR_nzcv, FPSCR */
+    o2 |= (p->scond & C_SCOND) << 28;
+    break;
+@
+% >> >> >> >>
+
+<<[[asmout()]] switch on type cases>>=
+case 76:	/* vfp floating point fix and float */
+    o1 = opvfprrr(p->as, p->scond);
+    rf = p->from.reg;
+    rt = p->to.reg;
+    if(p->from.type == D_REG) {
+        o2 = o1 | rt<<12 | rt<<0;
+        o1 = 0x0e000a10;	/* VMOV F,R */
+        o1 |= (p->scond & C_SCOND) << 28 | rt<<16 | rf<<12;
+    } else {
+        o1 |= FREGTMP<<12 | rf<<0;
+        o2 = 0x0e100a10;	/* VMOV R,F */
+        o2 |= (p->scond & C_SCOND) << 28 | FREGTMP<<16 | rt<<12;
+    }
+    break;
+@
+%$
+% >> >> >> >> >> >> >> >> >> >>
+
+
 
 <<function opvfprrr(arm)>>=
 long
@@ -8882,67 +8987,46 @@ opvfprrr(int a, int sc)
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 
 
-<<[[asmout()]] switch on type cases>>=
-/* VFP ops: */
-case 74:	/* vfp floating point arith */
-    o1 = opvfprrr(p->as, p->scond);
-    rf = p->from.reg;
-    if(p->from.type == D_FCONST) {
-        diag("invalid floating-point immediate\n%P", p);
-        rf = 0;
-    }
-    rt = p->to.reg;
-    r = p->reg;
-    if(r == R_NONE)
-        r = rt;
-    o1 |= rt<<12;
-    if(((o1>>20)&0xf) == 0xb)
-        o1 |= rf<<0;
-    else
-        o1 |= r<<16 | rf<<0;
-    break;
-@
-<<[[asmout()]] switch on type cases>>=
-case 75:	/* vfp floating point compare */
-    o1 = opvfprrr(p->as, p->scond);
-    rf = p->from.reg;
-    if(p->from.type == D_FCONST) {
-        if(p->from.ieee->h != 0 || p->from.ieee->l != 0)
-            diag("invalid floating-point immediate\n%P", p);
-        o1 |= 1<<16;
-        rf = 0;
-    }
-    rt = p->reg;
-    o1 |= rt<<12 | rf<<0;
-    o2 = 0x0ef1fa10;	/* MRS APSR_nzcv, FPSCR */
-    o2 |= (p->scond & C_SCOND) << 28;
-    break;
-@
-% >> >> >> >>
 
-<<[[asmout()]] switch on type cases>>=
-case 76:	/* vfp floating point fix and float */
-    o1 = opvfprrr(p->as, p->scond);
-    rf = p->from.reg;
-    rt = p->to.reg;
-    if(p->from.type == D_REG) {
-        o2 = o1 | rt<<12 | rt<<0;
-        o1 = 0x0e000a10;	/* VMOV F,R */
-        o1 |= (p->scond & C_SCOND) << 28 | rt<<16 | rf<<12;
-    } else {
-        o1 |= FREGTMP<<12 | rf<<0;
-        o2 = 0x0e100a10;	/* VMOV R,F */
-        o2 |= (p->scond & C_SCOND) << 28 | FREGTMP<<16 | rt<<12;
-    }
-    break;
+\subsection{Kernel emulation}
+
+% remove? and remove the relevant opcode also in optab? at least aspectize!
+<<global armv4(arm)>>=
+bool	armv4;
 @
-%$
-% >> >> >> >> >> >> >> >> >> >>
 
 
-\subsection{kernel emulation}
+<<[[optab]] entries>>=
+{ AMOVW,	C_REG,	C_NONE,	C_FCR,		56, 4, 0 },
+{ AMOVW,	C_FCR,	C_NONE,	C_REG,		57, 4, 0 },
+@
+
+<<[[asmout()]] switch on type cases>>=
+/* old arm 7500 fp using coprocessor 1 (1<<8) */
+case 56:	/* move to FP[CS]R */
+    o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
+    o1 |= ((p->to.reg+1)<<21) | (p->from.reg << 12);
+    break;
+@
+% >> >> >> >> >> >> >>
+<<[[asmout()]] switch on type cases>>=
+case 57:	/* move from FP[CS]R */
+    o1 = ((p->scond & C_SCOND) << 28) | (0xe << 24) | (1<<8) | (1<<4);
+    o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
+    break;
+@
+% >> >> >> >> >> >> >> >
+
+
+
+%from bcm/arm.h
+%#define CpOFPA		1			/* ancient 7500 FPA */
+% => use coprocessor 1
+
 % "without -f 5l generates arm7500 floating-point
 % instructions which are emulated in the kernel."
+
+% see bcm/fpiarm.c
 
 <<[[optab]] entries>>=
 { AMOVH,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
@@ -9003,6 +9087,8 @@ case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
         o1 ^= (1<<6);
     break;
 @
+% >> >>  >>
+
 <<[[asmout()]] switch on type cases>>=
 case 72:	/* movh/movhu R,L(R) -> strh */
     o1 = omvl(p, &p->to, REGTMP);
@@ -9014,6 +9100,7 @@ case 72:	/* movh/movhu R,L(R) -> strh */
     o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
     break;	
 @
+
 <<[[asmout()]] switch on type cases>>=
 case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
     o1 = omvl(p, &p->from, REGTMP);
@@ -9029,7 +9116,7 @@ case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
         o2 ^= (1<<6);
     break;
 @
-
+% >> >> >>
 
 
 <<function olhr(arm)>>=
@@ -9038,9 +9125,10 @@ olhr(long v, int b, int r, int sc)
 {
     long o;
 
+    o = (sc & C_SCOND) << 28;
     if(sc & C_SBIT)
         diag(".S on LDRH/STRH instruction");
-    o = (sc & C_SCOND) << 28;
+
     if(!(sc & C_PBIT))
         o |= 1 << 24;
     if(sc & C_WBIT)
@@ -9058,7 +9146,7 @@ olhr(long v, int b, int r, int sc)
     return o;
 }
 @
-% >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >>
 
 <<function osr(arm)>>=
 long
@@ -9153,7 +9241,7 @@ case AMODU:
 %q1
 %    /* SUB $8,SP */
 
-<<[[noops()]] second pass swith opcode cases>>=
+<<[[noops()]] second pass switch opcode cases>>=
 case ADIV:
 case ADIVU:
 case AMOD:

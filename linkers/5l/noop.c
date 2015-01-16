@@ -98,7 +98,7 @@ noops(void)
         /*e: adjust curtext when iterate over instructions p */
         o = p->as;
         switch(o) {
-        /*s: [[noops()]] second pass swith opcode cases */
+        /*s: [[noops()]] second pass switch opcode cases */
         case ATEXT:
             autosize = p->to.offset + 4;
             if(autosize <= 4)
@@ -133,7 +133,7 @@ noops(void)
             q1->link = p->link;
             p->link = q1;
             break;
-        /*x: [[noops()]] second pass swith opcode cases */
+        /*x: [[noops()]] second pass switch opcode cases */
         case ARET:
             nocache(p);
             if((curtext->mark & LEAF) && !autosize) {
@@ -154,7 +154,7 @@ noops(void)
                 p->to.reg = REGPC;
             }
             break;
-        /*x: [[noops()]] second pass swith opcode cases */
+        /*x: [[noops()]] second pass switch opcode cases */
         /*
          * 5c code generation for unsigned -> double made the
          * unfortunate assumption that single and double floating
@@ -178,7 +178,7 @@ noops(void)
                 q->link = q1;
             }
             break;
-        /*x: [[noops()]] second pass swith opcode cases */
+        /*x: [[noops()]] second pass switch opcode cases */
         case ADIV:
         case ADIVU:
         case AMOD:
@@ -287,7 +287,7 @@ noops(void)
             q1->to.type = D_REG;
             q1->to.reg = REGSP;
             break;
-        /*e: [[noops()]] second pass swith opcode cases */
+        /*e: [[noops()]] second pass switch opcode cases */
         }
     }
 }

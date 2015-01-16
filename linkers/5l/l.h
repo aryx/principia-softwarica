@@ -182,7 +182,7 @@ struct	Optab
     /*s: [[Optab]] other fields */
     // 0 | REGSB | REGSP
     char	param;
-    // enum<lxxx>
+    // bitset<enum<optab_flag>>
     char	flag;
     /*e: [[Optab]] other fields */
 };
@@ -223,17 +223,17 @@ enum section
     /*e: enum sxxx cases */
 };
 /*e: enum sxxx(arm) */
-/*s: enum lxxx(arm) */
-enum lxxx {
+/*s: enum optab_flag(arm) */
+enum optab_flag {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
-    /*s: enum lxxx cases */
+    /*s: enum optab_flag cases */
     V4		= 1<<3,	/* arm v4 arch */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
-    /*e: enum lxxx cases */
+    /*e: enum optab_flag cases */
 };
-/*e: enum lxxx(arm) */
+/*e: enum optab_flag(arm) */
 /*s: enum cxxx(arm) */
 enum classx {
     C_NONE		= 0,
