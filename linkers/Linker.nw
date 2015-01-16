@@ -886,10 +886,7 @@ main(int argc, char *argv[])
     <<[[main()]] initialize globals(arm)>>
 
     cout = create(outfile, 1, 0775);
-    if(cout < 0) {
-        diag("cannot create %s: %r", outfile);
-        errorexit();
-    }
+    <<[[main()]] sanity check cout>>
 
     // ------ main functions  ------
     <<[[main()]] cout is ready, LET'S GO(arm)>>
@@ -901,6 +898,13 @@ out:
 @
 %$
 
+
+<<[[main()]] sanity check cout>>=
+if(cout < 0) {
+    diag("cannot create %s: %r", outfile);
+    errorexit();
+}
+@
 
 \section{Arguments processing}
 
@@ -1192,10 +1196,7 @@ objfile(char *file)
     <<[[objfile()]] adjust file if -lxxx filename>>
 
     f = open(file, 0);
-    if(f < 0) {
-        diag("cannot open %s: %r", file);
-        errorexit();
-    }
+    <<[[objfile()]] sanity check f>>
 
     l = read(f, magbuf, SARMAG);
 
@@ -1217,6 +1218,12 @@ objfile(char *file)
 @
 % see next chapter for ldobj()
 
+<<[[objfile()]] sanity check f>>=
+if(f < 0) {
+    diag("cannot open %s: %r", file);
+    errorexit();
+}
+@
 
 \section{Loading the libraries, [[loadlib()]]}
 
@@ -2016,9 +2023,8 @@ if(s == S) {
     diag("GLOBL must have a name\n%P", p);
     errorexit();
 }
-if(s->type != SNONE && s->type != SXREF) {
-        diag("redefinition: %s\n%P", s->name, p);
-}
+if(s->type != SNONE && s->type != SXREF)
+    diag("redefinition: %s\n%P", s->name, p);
 @
 %pad: the second check used to be written differently, but I prefer
 % it this way to mimic more what we do for ATEXT
@@ -4143,9 +4149,6 @@ case D_OREG:
 C_HEXT,
 C_SEXT,
 C_LEXT,
-
-C_FEXT,
-C_HFEXT,
 @
 % EXT for? external symbol?
 
@@ -4161,31 +4164,24 @@ case D_STATIC:
     s = a->sym;
     t = s->type;
     if(t == SNONE || t == SXREF) {
-        diag("undefined external: %s in %s",
-            s->name, TNAME);
+        diag("undefined external: %s in %s", s->name, TNAME);
         s->type = SDATA;
     }
     <<[[aclass()]] when D_OREG and external symbol and dlm>>
     instoffset = s->value + a->offset - BIG;
     t = immaddr(instoffset);
     if(t) {
-        if(immfloat(t))
-            return immhalf(instoffset)? C_HFEXT : C_FEXT;
+        <<[[aclass()]] if immfloat for D_EXTERN symbol>>
         return immhalf(instoffset)? C_HEXT : C_SEXT;
     }
     return C_LEXT;
 @
 
 
-
-
 <<cxxx(arm) cases>>=
 C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
 C_SAUTO,	/* -0xfff to 0xfff */
 C_LAUTO,
-
-C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-C_HFAUTO,	/* both H and F */
 @
 
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
@@ -4193,8 +4189,7 @@ case D_AUTO:
     instoffset = autosize + a->offset;
     t = immaddr(instoffset);
     if(t){
-        if(immfloat(t))
-            return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+        <<[[aclass()]] if immfloat for D_AUTO or D_PARAM symbol>>
         return immhalf(instoffset)? C_HAUTO : C_SAUTO;
     }
     return C_LAUTO;
@@ -4205,8 +4200,7 @@ case D_PARAM:
     instoffset = autosize + a->offset + 4L;
     t = immaddr(instoffset);
     if(t){
-        if(immfloat(t))
-            return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+        <<[[aclass()]] if immfloat for D_AUTO or D_PARAM symbol>>
         return immhalf(instoffset)? C_HAUTO : C_SAUTO;
     }
     return C_LAUTO;
@@ -4221,9 +4215,6 @@ C_LOREG,
 
 C_ROREG,
 C_SROREG,	/* both S and R */
-
-C_FOREG,
-C_HFOREG,
 @
 
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
@@ -4231,9 +4222,7 @@ case D_NONE:
     instoffset = a->offset;
     t = immaddr(instoffset);
     if(t) {
-        if(immfloat(t))
-            return immhalf(instoffset)? C_HFOREG : C_FOREG;
-            /* n.b. that it will also satisfy immrot */
+        <<[[aclass()]] if immfloat for D_NONE symbol>>
 
          /* n.b. that immhalf() will also satisfy immrot */
         if(immhalf(instoffset))	
@@ -4384,9 +4373,6 @@ aconsize:
 %            return C_LCON;
 %        }
 %        return C_GOK;
-
-
-
 
 
 \subsection{Pool}
@@ -5348,7 +5334,8 @@ case ADIV:
 { ADIV,		C_REG,	C_REG,	C_REG,		16, 4, 0 },
 { ADIV,		C_REG,	C_NONE,	C_REG,		16, 4, 0 },
 @
-% hmm but noops should have rewrite them no?
+% hmm but noops should have rewrite them no? not if used
+% also 5l -M
 
 <<[[asmout()]] switch on type cases>>=
 case 16:	/* div r,[r,]r */
@@ -5356,7 +5343,7 @@ case 16:	/* div r,[r,]r */
     o2 = 0;
     break;
 @
-% 0xf?? o2 = 0 ??
+% 0xf? SWI? o2 = 0 ?? illegal instruction? so kernel trap?
 % >>
 
 
@@ -8459,37 +8446,13 @@ if(*a >= '0' && *a <= '9')
 % see bcm/vfp3.c, bcm/fpiarm.c, etc
 
 
-<<function immfloat(arm)>>=
-int
-immfloat(long v)
-{
-    return (v & 0xC03) == 0;/* offset will fit in floating-point load/store */
-}
-@
-
-
-<<cxxx(arm) cases>>=
-C_FREG,
-C_FCON,
-C_FCR,
-@
-
-<<[[aclass()]] switch type cases>>=
-case D_FREG:
-    return C_FREG;
-case D_FCONST:
-    return C_FCON;
-case D_FPCR:
-    return C_FCR;
-@
+\subsection{Operand kind}
 
 <<[[zaddr()]] cases>>=
 case D_FREG:
 case D_FPCR:
     break;
 @
-
-
 
 <<[[zaddr()]] cases>>=
 case D_FCONST:
@@ -8566,6 +8529,68 @@ ieeedtod(Ieee *ieeep)
 
 
 
+
+\subsection{Class}
+
+<<cxxx(arm) cases>>=
+C_FREG,
+C_FCON,
+C_FCR,
+@
+
+<<[[aclass()]] switch type cases>>=
+case D_FREG:
+    return C_FREG;
+case D_FCONST:
+    return C_FCON;
+case D_FPCR:
+    return C_FCR;
+@
+
+
+
+<<function immfloat(arm)>>=
+int
+immfloat(long v)
+{
+    return (v & 0xC03) == 0;/* offset will fit in floating-point load/store */
+}
+@
+
+<<cxxx(arm) cases>>=
+C_FEXT,
+C_HFEXT,
+@
+
+<<[[aclass()]] if immfloat for D_EXTERN symbol>>=
+if(immfloat(t))
+    return immhalf(instoffset)? C_HFEXT : C_FEXT;
+@
+
+<<cxxx(arm) cases>>=
+C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+C_HFAUTO,	/* both H and F */
+@
+
+<<[[aclass()]] if immfloat for D_AUTO or D_PARAM symbol>>=
+if(immfloat(t))
+    return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+@
+
+<<cxxx(arm) cases>>=
+C_FOREG,
+C_HFOREG,
+@
+
+
+<<[[aclass()]] if immfloat for D_NONE symbol>>=
+if(immfloat(t))
+    return immhalf(instoffset)? C_HFOREG : C_FOREG;
+    /* n.b. that it will also satisfy immrot */
+@
+
+
+\subsection{XXX}
 
 
 
@@ -9436,6 +9461,8 @@ case AMODU:
 %q1
 %    /* SUB $8,SP */
 
+% -M??
+
 <<[[noops()]] second pass switch opcode cases>>=
 case ADIV:
 case ADIVU:
@@ -9547,6 +9574,9 @@ case AMODU:
     break;
 @
 
+% for -M, in 8l(1):
+% "Generate instructions rather than calls to emulation routines
+% for multiply and divide."
 
 <<global prog_div(arm)>>=
 Prog*	prog_div;

@@ -249,16 +249,10 @@ enum classx {
     C_HEXT,
     C_SEXT,
     C_LEXT,
-
-    C_FEXT,
-    C_HFEXT,
     /*x: cxxx(arm) cases */
     C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
     C_SAUTO,	/* -0xfff to 0xfff */
     C_LAUTO,
-
-    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-    C_HFAUTO,	/* both H and F */
     /*x: cxxx(arm) cases */
     C_HOREG,
     C_SOREG,
@@ -266,9 +260,6 @@ enum classx {
 
     C_ROREG,
     C_SROREG,	/* both S and R */
-
-    C_FOREG,
-    C_HFOREG,
     /*x: cxxx(arm) cases */
     C_RCON,		/* 0xff rotated */
     C_NCON,		/* ~RCON */
@@ -284,6 +275,15 @@ enum classx {
     C_FREG,
     C_FCON,
     C_FCR,
+    /*x: cxxx(arm) cases */
+    C_FEXT,
+    C_HFEXT,
+    /*x: cxxx(arm) cases */
+    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+    C_HFAUTO,	/* both H and F */
+    /*x: cxxx(arm) cases */
+    C_FOREG,
+    C_HFOREG,
     /*e: cxxx(arm) cases */
 
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops

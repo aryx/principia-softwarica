@@ -238,10 +238,12 @@ main(int argc, char *argv[])
     /*e: [[main()]] initialize globals(arm) */
 
     cout = create(outfile, 1, 0775);
+    /*s: [[main()]] sanity check cout */
     if(cout < 0) {
         diag("cannot create %s: %r", outfile);
         errorexit();
     }
+    /*e: [[main()]] sanity check cout */
 
     // ------ main functions  ------
     /*s: [[main()]] cout is ready, LET'S GO(arm) */
@@ -427,10 +429,12 @@ objfile(char *file)
     /*e: [[objfile()]] adjust file if -lxxx filename */
 
     f = open(file, 0);
+    /*s: [[objfile()]] sanity check f */
     if(f < 0) {
         diag("cannot open %s: %r", file);
         errorexit();
     }
+    /*e: [[objfile()]] sanity check f */
 
     l = read(f, magbuf, SARMAG);
 
@@ -1099,9 +1103,8 @@ loop:
             diag("GLOBL must have a name\n%P", p);
             errorexit();
         }
-        if(s->type != SNONE && s->type != SXREF) {
-                diag("redefinition: %s\n%P", s->name, p);
-        }
+        if(s->type != SNONE && s->type != SXREF)
+            diag("redefinition: %s\n%P", s->name, p);
         /*e: [[ldobj()]] sanity check for AGLOBL symbol s */
 
         s->type = SBSS; // for now SBSS; will be set maybe to SDATA in dodata()

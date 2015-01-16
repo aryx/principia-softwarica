@@ -13,18 +13,23 @@ Optab	optab[] =
     /*x: [[optab]] entries */
     { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
     { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
+
     { AMOVW,	C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
     { AMVN,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
     { ACMP,		C_REG,	C_REG,	C_NONE,		 1, 4, 0 },
 
+
     { AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
     { AADD,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+
     { AMOVW,	C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
     { AMVN,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
     { ACMP,		C_RCON,	C_REG,	C_NONE,		 2, 4, 0 },
 
+
     { AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
     { AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+
     { AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
     { ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
     /*x: [[optab]] entries */

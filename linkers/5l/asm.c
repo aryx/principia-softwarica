@@ -1524,6 +1524,7 @@ oprrr(int a, int sc)
     case ABIC:	return o | (0xe<<21);
     case AMVN:	return o | (0xf<<21);
 
+    /*s: [[oprrr()]] switch cases */
     case AMULU:
     case AMUL:	return o | (0x0<<21) | (0x9<<4);
     case AMULA:	return o | (0x1<<21) | (0x9<<4);
@@ -1537,8 +1538,7 @@ oprrr(int a, int sc)
     case ASRA:	return o | (0xd<<21) | (2<<5);
 
     case ASWI:	return o | (0xf<<24);
-
-    /*s: [[oprrr()]] switch cases */
+    /*x: [[oprrr()]] switch cases */
     /* old arm 7500 fp using coprocessor 1 (1<<8) */
     case AADDD:	return o | (0xe<<24) | (0x0<<20) | (1<<8) | (1<<7);
     case AADDF:	return o | (0xe<<24) | (0x0<<20) | (1<<8);

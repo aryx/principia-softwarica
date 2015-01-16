@@ -330,8 +330,7 @@ aclass(Adr *a)
             s = a->sym;
             t = s->type;
             if(t == SNONE || t == SXREF) {
-                diag("undefined external: %s in %s",
-                    s->name, TNAME);
+                diag("undefined external: %s in %s", s->name, TNAME);
                 s->type = SDATA;
             }
             /*s: [[aclass()]] when D_OREG and external symbol and dlm */
@@ -353,8 +352,10 @@ aclass(Adr *a)
             instoffset = s->value + a->offset - BIG;
             t = immaddr(instoffset);
             if(t) {
+                /*s: [[aclass()]] if immfloat for D_EXTERN symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFEXT : C_FEXT;
+                /*e: [[aclass()]] if immfloat for D_EXTERN symbol */
                 return immhalf(instoffset)? C_HEXT : C_SEXT;
             }
             return C_LEXT;
@@ -363,8 +364,10 @@ aclass(Adr *a)
             instoffset = autosize + a->offset;
             t = immaddr(instoffset);
             if(t){
+                /*s: [[aclass()]] if immfloat for D_AUTO or D_PARAM symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+                /*e: [[aclass()]] if immfloat for D_AUTO or D_PARAM symbol */
                 return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
@@ -373,8 +376,10 @@ aclass(Adr *a)
             instoffset = autosize + a->offset + 4L;
             t = immaddr(instoffset);
             if(t){
+                /*s: [[aclass()]] if immfloat for D_AUTO or D_PARAM symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
+                /*e: [[aclass()]] if immfloat for D_AUTO or D_PARAM symbol */
                 return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
@@ -383,9 +388,11 @@ aclass(Adr *a)
             instoffset = a->offset;
             t = immaddr(instoffset);
             if(t) {
+                /*s: [[aclass()]] if immfloat for D_NONE symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFOREG : C_FOREG;
                     /* n.b. that it will also satisfy immrot */
+                /*e: [[aclass()]] if immfloat for D_NONE symbol */
 
                  /* n.b. that immhalf() will also satisfy immrot */
                 if(immhalf(instoffset))	

@@ -609,10 +609,12 @@ objfile(char *file)
     /*e: [[objfile()]] adjust file if -lxxx filename */
 
     f = open(file, 0);
+    /*s: [[objfile()]] sanity check f */
     if(f < 0) {
         diag("cannot open %s: %r", file);
         errorexit();
     }
+    /*e: [[objfile()]] sanity check f */
 
     l = read(f, magbuf, SARMAG);
 
