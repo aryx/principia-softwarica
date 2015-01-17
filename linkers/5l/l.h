@@ -164,7 +164,7 @@ struct	Auto
 /*s: struct Optab(arm) */
 struct	Optab
 {
-    // enum<opcode> from 5.out.h, but represents a range, see oprange[]
+    // enum<opcode> from 5.out.h, (the opcode is the representant of a range)
     byte	as;
 
     // enum<cxxx>, possible operand_kind/class for first operand
@@ -191,7 +191,9 @@ struct	Optab
 /*s: struct Oprang(arm) */
 struct	Oprang
 {
+    //index in sorted optab global
     Optab*	start;
+    //index in sorted optab global
     Optab*	stop;
 };
 /*e: struct Oprang(arm) */
@@ -262,7 +264,7 @@ enum classx {
     C_ROREG,
     C_SROREG,	/* both S and R */
     /*x: cxxx(arm) cases */
-    C_RCON,		/* 0xff rotated */
+    C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
     C_NCON,		/* ~RCON */
     C_LCON,
     /*x: cxxx(arm) cases */

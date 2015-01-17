@@ -185,8 +185,10 @@ noops(void)
         case ADIVU:
         case AMOD:
         case AMODU:
+            /*s: [[noops()]] second pass, ADIV rewrite, case ADIV and so on, if -M */
             if(debug['M'])
                 break;
+            /*e: [[noops()]] second pass, ADIV rewrite, case ADIV and so on, if -M */
             if(p->from.type != D_REG)
                 break;
             if(p->to.type != D_REG)

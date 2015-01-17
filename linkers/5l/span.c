@@ -704,13 +704,13 @@ buildop(void)
         case AADD:
             oprange[AAND] = oprange[r];
             oprange[AEOR] = oprange[r];
+            oprange[AORR] = oprange[r];
+            oprange[ABIC] = oprange[r];
             oprange[ASUB] = oprange[r];
             oprange[ARSB] = oprange[r];
             oprange[AADC] = oprange[r];
             oprange[ASBC] = oprange[r];
             oprange[ARSC] = oprange[r];
-            oprange[AORR] = oprange[r];
-            oprange[ABIC] = oprange[r];
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
         case ACMP:
@@ -722,6 +722,13 @@ buildop(void)
         case AMVN:
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AMOVW:
+        case AMOVB:
+        case AMOVBU:
+        case AMOVH:
+        case AMOVHU:
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ASLL:
             oprange[ASRL] = oprange[r];
             oprange[ASRA] = oprange[r];
@@ -729,12 +736,6 @@ buildop(void)
         /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMUL:
             oprange[AMULU] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ADIV:
-            oprange[AMOD] = oprange[r];
-            oprange[AMODU] = oprange[r];
-            oprange[ADIVU] = oprange[r];
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMULL:
@@ -761,13 +762,6 @@ buildop(void)
             oprange[ABLT] = oprange[r];
             oprange[ABGT] = oprange[r];
             oprange[ABLE] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AMOVW:
-        case AMOVB:
-        case AMOVBU:
-        case AMOVH:
-        case AMOVHU:
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
         case ASWPW:
@@ -802,6 +796,12 @@ buildop(void)
             oprange[AMOVWF] = oprange[r];
             oprange[AMOVWD] = oprange[r];
             oprange[AMOVDW] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ADIV:
+            oprange[AMOD] = oprange[r];
+            oprange[AMODU] = oprange[r];
+            oprange[ADIVU] = oprange[r];
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMOVM:

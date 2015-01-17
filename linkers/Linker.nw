@@ -821,6 +821,7 @@ Prog	undefp;
 @
 
 
+%---------------------------------------------
 
 %\section{[[Optab]] and [[optab]]}?
 %hmm maybe better later
@@ -3881,7 +3882,7 @@ xdefine(char *p, int t, long v)
 <<struct Optab(arm)>>=
 struct	Optab
 {
-    // enum<opcode> from 5.out.h, but represents a range, see oprange[]
+    // enum<opcode> from 5.out.h, (the opcode is the representant of a range)
     byte	as;
 
     // enum<cxxx>, possible operand_kind/class for first operand
@@ -4110,7 +4111,14 @@ immhalf(long v)
 % >> >> >>
 % seems identical to immhalf no? no now it's 0xff! not 0xfff
 
-\subsection{Rotated immediate address}
+\subsection{Small (possibly rotated) immediate values}
+% small immediate (rotated) address
+
+% see Machine.nw and the ARM refcard to understand the code below.
+% RCON is for small immediate value, or rotated things of small 
+% immediate value.
+% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
+% hence the code below.
 
 <<function immrot(arm)>>=
 long
@@ -4127,6 +4135,11 @@ immrot(ulong v)
 }
 @
 % >> >>
+
+% there is code like
+%    o1 |= immrot(instoffset);
+% the 1<<25 means we are in the  i,r,r  case
+
 
 \subsection{[[instoffset]]}
 
@@ -4260,11 +4273,13 @@ case D_CONST:
 
 % Rotated, Negative, Large?
 <<cxxx(arm) cases>>=
-C_RCON,		/* 0xff rotated */
+C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
 C_NCON,		/* ~RCON */
 C_LCON,
 @
 %dead: C_SCON,		/* 0xffff */
+%in the end NCON is not different from LCON when you look at optab,
+% so perhaps it could be removed.
 
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_NONE:
@@ -4564,7 +4579,9 @@ buildop();
 <<struct Oprang(arm)>>=
 struct	Oprang
 {
+    //index in sorted optab global
     Optab*	start;
+    //index in sorted optab global
     Optab*	stop;
 };
 @
@@ -4572,6 +4589,9 @@ struct	Oprang
 <<global oprange(arm)>>=
 Oprang	oprange[ALAST];
 @
+
+% will be the set of entries in the sorted optab
+% that talk about a certain opcode
 
 \subsection{[[buildop()]]}
 
@@ -4659,69 +4679,13 @@ ocmp(const void *a1, const void *a2)
     return 0;
 }
 @
-
-%/*
-%void
-%buildrep(int x, int as)
-%{
-%    Opcross *p;
-%    Optab *e, *s, *o;
-%    int a1, a2, a3, n;
-%
-%    if(C_NONE != 0 || C_REG != 1 || C_GOK >= 32 || x >= nelem(opcross)) {
-%        diag("assumptions fail in buildrep");
-%        errorexit();
-%    }
-%    repop[as] = x;
-%    p = (opcross + x);
-%    s = oprange[as].start;
-%    e = oprange[as].stop;
-%    for(o=e-1; o>=s; o--) {
-%        n = o-optab;
-%        for(a2=0; a2<2; a2++) {
-%            if(a2) {
-%                if(o->a2 == C_NONE)
-%                    continue;
-%            } else
-%                if(o->a2 != C_NONE)
-%                    continue;
-%            for(a1=0; a1<32; a1++) {
-%                if(!xcmp[a1][o->a1])
-%                    continue;
-%                for(a3=0; a3<32; a3++)
-%                    if(xcmp[a3][o->a3])
-%                        (*p)[a1][a2][a3] = n;
-%            }
-%        }
-%    }
-%    oprange[as].start = 0;
-%}
-%*/
-
-% there was this in oplook() but I think it could not work
-% if buildrep was not called
-%    if(o == nil) {
-%        a1 = opcross[repop[r]][a1][a2][a3];
-%        if(a1) {
-%            p->optab = a1+1;
-%            return optab+a1;
-%        }
-%        o = oprange[r].stop; /* just generate an error */
-%    }
-
-%extern	uchar	repop[ALAST];
-%
-%<<global repop(arm)>>=
-%uchar	repop[ALAST];
-%@
-%
-%typedef	uchar	Opcross[32][2][32];
-%
-%extern	Opcross	opcross[8];
-%
-%<<global opcross(arm)>>=
-%Opcross	opcross[8];
-%@
+%sort first by opcode, then class of first operand, then second, then thrd.
+%less: I'm not sure it's needed since in oplook() we just
+%  iterate over all the range for a certain opcode.
+%  hmm maybe if the order of the entries matter! if have
+%  some specific entries first and then a general one,
+%TODO: which is why perhaps doing some += in the chunk for xxx
+% is not good?  
 
 \subsection{[[oplook()]]}
 
@@ -4954,12 +4918,75 @@ nocache(Prog *p)
 
 
 
+
+
+
+%/*
+%void
+%buildrep(int x, int as)
+%{
+%    Opcross *p;
+%    Optab *e, *s, *o;
+%    int a1, a2, a3, n;
+%
+%    if(C_NONE != 0 || C_REG != 1 || C_GOK >= 32 || x >= nelem(opcross)) {
+%        diag("assumptions fail in buildrep");
+%        errorexit();
+%    }
+%    repop[as] = x;
+%    p = (opcross + x);
+%    s = oprange[as].start;
+%    e = oprange[as].stop;
+%    for(o=e-1; o>=s; o--) {
+%        n = o-optab;
+%        for(a2=0; a2<2; a2++) {
+%            if(a2) {
+%                if(o->a2 == C_NONE)
+%                    continue;
+%            } else
+%                if(o->a2 != C_NONE)
+%                    continue;
+%            for(a1=0; a1<32; a1++) {
+%                if(!xcmp[a1][o->a1])
+%                    continue;
+%                for(a3=0; a3<32; a3++)
+%                    if(xcmp[a3][o->a3])
+%                        (*p)[a1][a2][a3] = n;
+%            }
+%        }
+%    }
+%    oprange[as].start = 0;
+%}
+%*/
+
+% there was this in oplook() but I think it could not work
+% if buildrep was not called
+%    if(o == nil) {
+%        a1 = opcross[repop[r]][a1][a2][a3];
+%        if(a1) {
+%            p->optab = a1+1;
+%            return optab+a1;
+%        }
+%        o = oprange[r].stop; /* just generate an error */
+%    }
+
+%extern	uchar	repop[ALAST];
+%
+%<<global repop(arm)>>=
+%uchar	repop[ALAST];
+%@
+%
+%typedef	uchar	Opcross[32][2][32];
+%
+%extern	Opcross	opcross[8];
+%
+%<<global opcross(arm)>>=
+%Opcross	opcross[8];
+%@
+
 \section{Text section, [[asmout()]]}
 
-<<global PP(arm)>>=
-static Prog *PP;
-@
-
+% main -> asmb -> <> (in a for loop over all instructions)
 <<function asmout(arm)>>=
 void
 asmout(Prog *p, Optab *o)
@@ -4970,7 +4997,7 @@ asmout(Prog *p, Optab *o)
     int r, rf, rt, rt2;
     Sym *s;
 
-    PP = p;
+    <<[[asmout()]] initialisation>>
     o1 = o2 = o3 = o4 = o5 = o6 = 0;
 
     switch(o->type) {
@@ -5084,6 +5111,8 @@ case AWORD:
 { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
 { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
 @
+%less: WORD foo;  what does it mean?
+% WORD $foo; ok, I get it, and it should be a C_LCON
 
 <<[[asmout()]] switch on type cases>>=
 case 11:	/* word */
@@ -5094,21 +5123,25 @@ case 11:	/* word */
     break;
 @
 
+
 \subsection{Arithmetic opcodes}
+
+\subsubsection{Logic, add/sub, comparisons, simple movs}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AADD:
     oprange[AAND] = oprange[r];
     oprange[AEOR] = oprange[r];
+    oprange[AORR] = oprange[r];
+    oprange[ABIC] = oprange[r];
     oprange[ASUB] = oprange[r];
     oprange[ARSB] = oprange[r];
     oprange[AADC] = oprange[r];
     oprange[ASBC] = oprange[r];
     oprange[ARSC] = oprange[r];
-    oprange[AORR] = oprange[r];
-    oprange[ABIC] = oprange[r];
     break;
 @
+
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ACMP:
     oprange[ATST] = oprange[r];
@@ -5116,10 +5149,22 @@ case ACMP:
     oprange[ACMN] = oprange[r];
     break;
 @
+
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMVN:
     break;
 @
+
+<<[[buildop()]] switch opcode r for ranges cases>>=
+case AMOVW:
+case AMOVB:
+case AMOVBU:
+case AMOVH:
+case AMOVHU:
+    break;
+@
+% mov put here because many mov are simple and involve
+% just setting registers, as in MOV $1, R0
 
 
 <<[[optab]] entries>>=
@@ -5129,22 +5174,9 @@ case AMVN:
 { AMOVW,	C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
 { AMVN,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
 { ACMP,		C_REG,	C_REG,	C_NONE,		 1, 4, 0 },
-
-
-{ AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
-{ AADD,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-
-{ AMOVW,	C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-{ AMVN,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
-{ ACMP,		C_RCON,	C_REG,	C_NONE,		 2, 4, 0 },
-
-
-{ AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
-{ AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
-
-{ AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
-{ ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
 @
+
+
 
 <<[[asmout()]] switch on type cases>>=
 case 1:		/* op R,[R],R */
@@ -5152,12 +5184,7 @@ case 1:		/* op R,[R],R */
     rf = p->from.reg;
     rt = p->to.reg;
     r = p->reg;
-    if(p->to.type == D_NONE)
-        rt = 0;
-    if(p->as == AMOVW || p->as == AMVN)
-        r = 0;
-    else if(r == R_NONE)
-        r = rt;
+    <<[[asmout()]] adjust r and rt>>
     o1 |= rf | (r<<16) | (rt<<12);
     break;
 @
@@ -5204,66 +5231,88 @@ oprrr(int a, int sc)
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 
-
-<<[[oprrr()]] switch cases>>=
-case AMULU:
-case AMUL:	return o | (0x0<<21) | (0x9<<4);
-case AMULA:	return o | (0x1<<21) | (0x9<<4);
-case AMULLU:	return o | (0x4<<21) | (0x9<<4);
-case AMULL:		return o | (0x6<<21) | (0x9<<4);
-case AMULALU:	return o | (0x5<<21) | (0x9<<4);
-case AMULAL:	return o | (0x7<<21) | (0x9<<4);
-
-case ASLL:	return o | (0xd<<21) | (0<<5);
-case ASRL:	return o | (0xd<<21) | (1<<5);
-case ASRA:	return o | (0xd<<21) | (2<<5);
-
-case ASWI:	return o | (0xf<<24);
+% the assembler allows some sugar e.g. ADD X1, X2 is really
+% ADD X1, X2, X2, so this code handles this sugar.
+<<[[asmout()]] adjust r and rt>>=
+if(p->to.type == D_NONE)
+    rt = 0;
+if(p->as == AMOVW || p->as == AMVN)
+    r = 0;
+else if(r == R_NONE)
+    r = rt;
 @
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
-% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 
 
 
+
+
+<<[[optab]] entries>>=
+{ AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
+{ AADD,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+
+{ AMOVW,	C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+{ AMVN,		C_RCON,	C_NONE,	C_REG,		 2, 4, 0 },
+{ ACMP,		C_RCON,	C_REG,	C_NONE,		 2, 4, 0 },
+@
 
 <<[[asmout()]] switch on type cases>>=
-case 2:		/* movbu $I,[R],R */
+case 2:		/* op $I,[R],R */
     aclass(&p->from);
     o1 = oprrr(p->as, p->scond);
     o1 |= immrot(instoffset);
     rt = p->to.reg;
     r = p->reg;
-    if(p->to.type == D_NONE)
-        rt = 0;
-    if(p->as == AMOVW || p->as == AMVN)
-        r = 0;
-    else if(r == R_NONE)
-        r = rt;
+    <<[[asmout()]] adjust r and rt>>
     o1 |= (r<<16) | (rt<<12);
     break;
 @
 %$
+%pad: the comment was about movbu, but it was wrong I think
+
+<<[[optab]] entries>>=
+{ AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
+{ AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+
+{ AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+{ ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
+@
 
 <<[[asmout()]] switch on type cases>>=
-case 3:		/* add R<<[IR],[R],R */
+case 3:		/* op R<<[IR],[R],R */
 mov:
     aclass(&p->from);
     o1 = oprrr(p->as, p->scond);
     o1 |= p->from.offset;
     rt = p->to.reg;
     r = p->reg;
-    if(p->to.type == D_NONE)
-        rt = 0;
-    if(p->as == AMOVW || p->as == AMVN)
-        r = 0;
-    else if(r == R_NONE)
-        r = rt;
+    <<[[asmout()]] adjust r and rt>>
     o1 |= (r<<16) | (rt<<12);
     break;
 @
-% >> >>
+% >> >> >>
+%pad: add -> op in the comment
+
+% the MOV opcodes with size 4 which are simple, simple load or store
+<<[[optab]] entries>>=
+{ AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
+{ AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 4:		/* add $I,[R],R */
+    aclass(&p->from);
+    o1 = oprrr(AADD, p->scond);
+    o1 |= immrot(instoffset);
+    r = p->from.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o1 |= (r << 16) | (p->to.reg << 12);
+    break;
+@
+%$
+% add in comment?
 
 
 
@@ -5279,7 +5328,7 @@ mov:
 { AMVN,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
 { ACMP,		C_LCON,	C_REG,	C_NONE,		13, 8, 0,	LFROM },
 @
-
+% the general case for big constants
 
 <<[[asmout()]] switch on type cases>>=
 case 13:	/* op $lcon, [R], R */
@@ -5324,8 +5373,11 @@ omvl(Prog *p, Adr *a, int dr)
 }
 @
 % >> >> >>
+%less: can have p->cond because called for basic arith op and also
+% for BL ops?
 
 
+\subsubsection{Bit shift}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ASLL:
@@ -5338,10 +5390,8 @@ case ASLL:
 <<[[optab]] entries>>=
 { ASLL,		C_RCON,	C_REG,	C_REG,		 8, 4, 0 },
 { ASLL,		C_RCON,	C_NONE,	C_REG,		 8, 4, 0 },
-
-{ ASLL,		C_REG,	C_NONE,	C_REG,		 9, 4, 0 },
-{ ASLL,		C_REG,	C_REG,	C_REG,		 9, 4, 0 },
 @
+
 
 <<[[asmout()]] switch on type cases>>=
 case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
@@ -5350,13 +5400,25 @@ case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
     r = p->reg;
     if(r == R_NONE)
         r = p->to.reg;
-    o1 |= r;
-    o1 |= (instoffset&31) << 7;
-    o1 |= p->to.reg << 12;
+    o1 |= r | ((instoffset&31) << 7) | (p->to.reg << 12);
     break;
 @
 %$
 % >> >>
+
+% 0xd is AMOV
+<<[[oprrr()]] switch cases>>=
+case ASLL:	return o | (0xd<<21) | (0<<5);
+case ASRL:	return o | (0xd<<21) | (1<<5);
+case ASRA:	return o | (0xd<<21) | (2<<5);
+@
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+
+<<[[optab]] entries>>=
+{ ASLL,		C_REG,	C_NONE,	C_REG,		 9, 4, 0 },
+{ ASLL,		C_REG,	C_REG,	C_REG,		 9, 4, 0 },
+@
 
 <<[[asmout()]] switch on type cases>>=
 case 9:		/* sll R,[R],R -> mov (R<<R),R */
@@ -5364,13 +5426,13 @@ case 9:		/* sll R,[R],R -> mov (R<<R),R */
     r = p->reg;
     if(r == R_NONE)
         r = p->to.reg;
-    o1 |= r;
-    o1 |= (p->from.reg << 8) | (1<<4);
-    o1 |= p->to.reg << 12;
+    o1 |= r | ((p->from.reg << 8) | (1<<4)) | (p->to.reg << 12);
     break;
 @
 % >> >> >> >> 
 
+
+\subsubsection{Multiplication}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMUL:
@@ -5396,40 +5458,26 @@ case 15:	/* mul r,[r,]r */
         r = rf;
         rf = rt;
     }
-    if(0)
-    if(rt == r || rf == REGPC || r == REGPC || rt == REGPC) {
-        diag("bad registers in MUL");
-        prasm(p);
-    }
     o1 |= (rf<<8) | r | (rt<<16);
     break;
 @
 % >> >> 
+%old code
+%    if(0)
+%    if(rt == r || rf == REGPC || r == REGPC || rt == REGPC) {
+%        diag("bad registers in MUL");
+%        prasm(p);
+%    }
 
-
-<<[[buildop()]] switch opcode r for ranges cases>>=
-case ADIV:
-    oprange[AMOD] = oprange[r];
-    oprange[AMODU] = oprange[r];
-    oprange[ADIVU] = oprange[r];
-    break;
+<<[[oprrr()]] switch cases>>=
+case AMULU:
+case AMUL:	return o | (0x0<<21) | (0x9<<4);
 @
+% >> >>
 
-<<[[optab]] entries>>=
-{ ADIV,		C_REG,	C_REG,	C_REG,		16, 4, 0 },
-{ ADIV,		C_REG,	C_NONE,	C_REG,		16, 4, 0 },
-@
-% hmm but noops should have rewrite them no? not if used
-% also 5l -M
 
-<<[[asmout()]] switch on type cases>>=
-case 16:	/* div r,[r,]r */
-    o1 = 0xf << 28;
-    o2 = 0;
-    break;
-@
-% 0xf? SWI? o2 = 0 ?? illegal instruction? so kernel trap?
-% >>
+\subsubsection{Long mulitplication}
+% could be in advanced topic, like I did in Assembler.nw
 
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
@@ -5456,6 +5504,83 @@ case 17:
     break;
 @
 % >> >> >>
+
+<<[[oprrr()]] switch cases>>=
+case AMULA:	return o | (0x1<<21) | (0x9<<4);
+case AMULLU:	return o | (0x4<<21) | (0x9<<4);
+case AMULL:		return o | (0x6<<21) | (0x9<<4);
+case AMULALU:	return o | (0x5<<21) | (0x9<<4);
+case AMULAL:	return o | (0x7<<21) | (0x9<<4);
+@
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
+
+
+\subsubsection{Simple movs}
+
+% have already some simple movs before
+% here are a few more
+
+<<[[optab]] entries>>=
+{ AMOVW,	C_NCON,	C_NONE,	C_REG,		12, 4, 0 },
+{ AMOVW,	C_LCON,	C_NONE,	C_REG,		12, 4, 0,	LFROM },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 12:	/* movw $lcon, reg */
+    o1 = omvl(p, &p->from, p->to.reg);
+    break;
+@
+%$
+
+
+
+<<[[optab]] entries>>=
+{ AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+{ AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4, 0 },
+{ AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+{ AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 14:	/* movb/movbu/movh/movhu R,R */
+    o1 = oprrr(ASLL, p->scond);
+
+    if(p->as == AMOVBU || p->as == AMOVHU)
+        o2 = oprrr(ASRL, p->scond);
+    else
+        o2 = oprrr(ASRA, p->scond);
+
+    r = p->to.reg;
+    o1 |= (p->from.reg)|(r<<12);
+    o2 |= (r)|(r<<12);
+    if(p->as == AMOVB || p->as == AMOVBU) {
+        o1 |= (24<<7);
+        o2 |= (24<<7);
+    } else {
+        o1 |= (16<<7);
+        o2 |= (16<<7);
+    }
+    break;
+@
+% >> >> >> >> >> >> >>
+
+<<[[asmout()]] switch on type cases>>=
+case 58:	/* movbu R,R */
+    o1 = oprrr(AAND, p->scond);
+    o1 |= immrot(0xff);
+    rt = p->to.reg;
+    r = p->from.reg;
+    if(p->to.type == D_NONE)
+        rt = 0;
+    if(r == R_NONE)
+        r = rt;
+    o1 |= (r<<16) | (rt<<12);
+    break;
+@
+% >> >>
+
+
 
 \subsection{Branching opcodes}
 
@@ -5489,16 +5614,12 @@ case ABEQ:
 
 <<[[asmout()]] switch on type cases>>=
 case 5:		/* bra s */
-    v = -8;
-    if(p->cond == UP) {
-        s = p->to.sym;
-        if(s->type != SUNDEF)
-            diag("bad branch sym type");
-        v = (ulong)s->value >> (Roffset-2);
-        dynreloc(s, p->pc, 0);
-    }
-    else if(p->cond != P)
+    <<[[asmout()]] BRA case, if undefined target>>
+    else 
+      if(p->cond != P)
         v = (p->cond->pc - pc) - 8;
+      else 
+        v = -8;
     o1 = opbra(p->as, p->scond);
     o1 |= (v >> 2) & 0xffffff;
     break;
@@ -5550,18 +5671,20 @@ opbra(int a, int sc)
 
 
 
+
 <<[[optab]] entries>>=
 { AB,		C_NONE,	C_NONE,	C_ROREG,	 6, 4, 0,	LPOOL },
 { ABL,		C_NONE,	C_NONE,	C_ROREG,	 7, 8, 0 },
 @
+% branch to indirect code!
+% if it's a really big offset that is not immrot(), no code generation?
 
 <<[[asmout()]] switch on type cases>>=
 case 6:		/* b ,O(R) -> add $O,R,PC */
     aclass(&p->to);
     o1 = oprrr(AADD, p->scond);
     o1 |= immrot(instoffset);
-    o1 |= p->to.reg << 16;
-    o1 |= REGPC << 12;
+    o1 |= (p->to.reg << 16) | (REGPC << 12);
     break;
 @
 %$
@@ -5570,111 +5693,22 @@ case 6:		/* b ,O(R) -> add $O,R,PC */
 case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
     aclass(&p->to);
     o1 = oprrr(AADD, p->scond);
-    o1 |= immrot(0);
-    o1 |= REGPC << 16;
-    o1 |= REGLINK << 12;
+    o1 |= immrot(0) | (REGPC << 16) | (REGLINK << 12);
 
     o2 = oprrr(AADD, p->scond);
-    o2 |= immrot(instoffset);
-    o2 |= p->to.reg << 16;
-    o2 |= REGPC << 12;
+    o2 |= immrot(instoffset) | (p->to.reg << 16) | (REGPC << 12);
     break;
 @
 %$
-
+% could use AMOVW instead of AADD no?
 
 
 \subsection{Memory opcodes}
+% more complicated ... can generate up to 6 ARM instructions
 
-<<[[buildop()]] switch opcode r for ranges cases>>=
-case AMOVW:
-case AMOVB:
-case AMOVBU:
-case AMOVH:
-case AMOVHU:
-    break;
-@
-
-
-% the MOV opcodes with size 4 which are simple, simple load or store
-<<[[optab]] entries>>=
-{ AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
-{ AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 4:		/* add $I,[R],R */
-    aclass(&p->from);
-    o1 = oprrr(AADD, p->scond);
-    o1 |= immrot(instoffset);
-    r = p->from.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o1 |= r << 16;
-    o1 |= p->to.reg << 12;
-    break;
-@
-%$
-
-
-<<[[optab]] entries>>=
-{ AMOVW,	C_NCON,	C_NONE,	C_REG,		12, 4, 0 },
-{ AMOVW,	C_LCON,	C_NONE,	C_REG,		12, 4, 0,	LFROM },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 12:	/* movw $lcon, reg */
-    o1 = omvl(p, &p->from, p->to.reg);
-    break;
-@
-%$
-
-
-
-<<[[optab]] entries>>=
-{ AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-{ AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4, 0 },
-{ AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-{ AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 14:	/* movb/movbu/movh/movhu R,R */
-    o1 = oprrr(ASLL, p->scond);
-
-    if(p->as == AMOVBU || p->as == AMOVHU)
-        o2 = oprrr(ASRL, p->scond);
-    else
-        o2 = oprrr(ASRA, p->scond);
-
-    r = p->to.reg;
-    o1 |= (p->from.reg)|(r<<12);
-    o2 |= (r)|(r<<12);
-    if(p->as == AMOVB || p->as == AMOVBU) {
-        o1 |= (24<<7);
-        o2 |= (24<<7);
-    } else {
-        o1 |= (16<<7);
-        o2 |= (16<<7);
-    }
-    break;
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 58:	/* movbu R,R */
-    o1 = oprrr(AAND, p->scond);
-    o1 |= immrot(0xff);
-    rt = p->to.reg;
-    r = p->from.reg;
-    if(p->to.type == D_NONE)
-        rt = 0;
-    if(r == R_NONE)
-        r = rt;
-    o1 |= (r<<16) | (rt<<12);
-    break;
-@
-
-
+% have seen the simple MOV before, which don't involve
+% any dereference, but just a constant and a register
+% or even sometimes just two registers.
 
 <<[[optab]] entries>>=
 { AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
@@ -5736,6 +5770,7 @@ case 21:	/* mov/movbu O(R),R -> lr */
     break;
 @
 
+
 <<function olr(arm)>>=
 long
 olr(long v, int b, int r, int sc)
@@ -5765,6 +5800,18 @@ olr(long v, int b, int r, int sc)
 }
 @
 % >> >> >> >> >> >> >> >> >> >>
+
+<<global PP(arm)>>=
+static Prog *PP;
+@
+% to communicate info to olr for better diagnostic
+
+<<[[asmout()]] initialisation>>=
+PP = p;
+@
+
+
+
 
 
 
@@ -5891,7 +5938,7 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
 @
 
 
-
+% 24 size ...
 <<[[optab]] entries>>=
 { AMOVH,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
 { AMOVH,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
@@ -6050,6 +6097,8 @@ case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
 
 
 
+
+
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ASWPW:
     oprange[ASWPBU] = oprange[r];
@@ -6089,6 +6138,7 @@ case ARFE:
 <<[[optab]] entries>>=
 { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4, 0 },
 @
+%old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
 
 <<[[asmout()]] switch on type cases>>=
 case 10:	/* swi [$con] */
@@ -6100,6 +6150,11 @@ case 10:	/* swi [$con] */
     break;
 @
 %$
+
+<<[[oprrr()]] switch cases>>=
+case ASWI:	return o | (0xf<<24);
+@
+% >> 
 
 
 <<[[optab]] entries>>=
@@ -6113,7 +6168,8 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
     o1 = 0xe8fd8000;
     break;
 @
-
+% .s? .w? .u?
+% r13 = REGSP
 
 
 \section{Data section, [[datblk()]]}
@@ -7843,6 +7899,17 @@ case SUNDEF:
     break;
 @
 
+<<[[asmout()]] BRA case, if undefined target>>=
+if(p->cond == UP) {
+    s = p->to.sym;
+    if(s->type != SUNDEF)
+        diag("bad branch sym type");
+    v = (ulong)s->value >> (Roffset-2);
+    dynreloc(s, p->pc, 0);
+}
+@
+
+
 % import -> undefsym
 <<function undefsym>>=
 void
@@ -9522,21 +9589,9 @@ olhrr(int i, int b, int r, int sc)
 
 \section{Division instructions}
 
-\subsection{[[ADIV]] rewriting}
+% like for floats, different options
 
-<<[[noops()]] first pass switch opcode cases>>=
-case ADIV:
-case ADIVU:
-case AMOD:
-case AMODU:
-    if(prog_div == P)
-        initdiv();
-    if(curtext != P)
-        curtext->mark &= ~LEAF;
-    continue;
-@
-% a bit ugly to do the initdiv here? at the same it's related to
-% this notion of NOOP.
+\subsection{[[ADIV]] rewriting}
 
 %    /* MOV a,4(SP) */
 %    /* MOV b,REGTMP */
@@ -9546,15 +9601,12 @@ case AMODU:
 %q1
 %    /* SUB $8,SP */
 
-% -M??
-
 <<[[noops()]] second pass switch opcode cases>>=
 case ADIV:
 case ADIVU:
 case AMOD:
 case AMODU:
-    if(debug['M'])
-        break;
+    <<[[noops()]] second pass, ADIV rewrite, case ADIV and so on, if -M>>
     if(p->from.type != D_REG)
         break;
     if(p->to.type != D_REG)
@@ -9794,6 +9846,57 @@ initdiv(void)
     }
 }
 @
+
+
+
+
+<<[[noops()]] first pass switch opcode cases>>=
+case ADIV:
+case ADIVU:
+case AMOD:
+case AMODU:
+    if(prog_div == P)
+        initdiv();
+    if(curtext != P)
+        curtext->mark &= ~LEAF;
+    continue;
+@
+% a bit ugly to do the initdiv here? at the same it's related to
+% this notion of NOOP.
+
+
+\subsection{Kernel emulation, [[5l -M]]}
+
+<<[[noops()]] second pass, ADIV rewrite, case ADIV and so on, if -M>>=
+if(debug['M'])
+    break;
+@
+% if -M then break in noops and so does not rewrite the ADIV
+% and so the code below becomes reachable
+
+<<[[buildop()]] switch opcode r for ranges cases>>=
+case ADIV:
+    oprange[AMOD] = oprange[r];
+    oprange[AMODU] = oprange[r];
+    oprange[ADIVU] = oprange[r];
+    break;
+@
+
+<<[[optab]] entries>>=
+{ ADIV,		C_REG,	C_REG,	C_REG,		16, 4, 0 },
+{ ADIV,		C_REG,	C_NONE,	C_REG,		16, 4, 0 },
+@
+% hmm but noops should have rewrite them no? not if used
+% also 5l -M
+
+<<[[asmout()]] switch on type cases>>=
+case 16:	/* div r,[r,]r */
+    o1 = 0xf << 28;
+    o2 = 0;
+    break;
+@
+% 0xf? SWI? o2 = 0 ?? illegal instruction? so kernel trap?
+% >>
 
 
 \section{Multiple registers instructions}
@@ -10358,12 +10461,14 @@ void mylog(char *fmt, ...) {
 \section{Machine code debugging, [[5l -a]]}
 % print final concrete code in assembly language with addresses
 
+% if do 5l -a -a two times I think it will print a few more things
+
 %ex of output:
 
 
 
 
-
+%---------------------------------------------
 %\section{[[5l -9 -B -U]]}
 % dead I think, -9 for plan9, B for planB? U for Unix?
 
