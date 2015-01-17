@@ -1443,7 +1443,8 @@ cflush();
 }
 @
 % +4? locals + RETURN? see "runtime conventions" section.
-%lesS: "could avoid this call" because could just use p->optab?
+%less: "could avoid this call" because could just use p->optab?
+% but it actually uses optab ... oplook() memoize things.
 
 
 
@@ -4557,9 +4558,9 @@ addpool(Prog *p, Adr *a)
 buildop();
 @
 
-\subsection{Range}
+\subsection{[[oprange]]}
 
-% Optab range?
+% Optab range
 <<struct Oprang(arm)>>=
 struct	Oprang
 {
@@ -4724,65 +4725,48 @@ ocmp(const void *a1, const void *a2)
 
 \subsection{[[oplook()]]}
 
+<<[[oplook()]] locals>>=
+Optab *o, *e;
+// enum<opcode>, to index oprange[]
+int r;
+// enum<class>
+int a1, a2, a3;
+@
+
+
 % leverage the sorted data structure computed by buildop()
 % dotext | asmb -> <>
 <<function oplook(arm)>>=
 Optab*
 oplook(Prog *p)
 {
-    Optab *o, *e;
-    int r;
-    // enum<class>
-    int a1, a2, a3;
-    char *c1, *c3;
-
-    a1 = p->optab;
-    if(a1)
-        return optab+(a1-1);
-
-    a1 = p->from.class;
-    if(a1 == C_NONE) {
-        a1 = aclass(&p->from) + 1;
-        p->from.class = a1;
+    <<[[oplook()]] locals>>
+ 
+    <<[[oplook()]] if use cache, part1>>
+    else {
+        a1 = aclass(&p->from);
+        a3 = aclass(&p->to);
     }
-    a1--;
-
-    a3 = p->to.class;
-    if(a3 == C_NONE) {
-        a3 = aclass(&p->to) + 1;
-        p->to.class = a3;
-    }
-    a3--;
-
-    a2 = C_NONE;
-    if(p->reg != R_NONE)
-        a2 = C_REG;
-
+    a2 = (p->reg != R_NONE)? C_REG : C_NONE;
     r = p->as;
     o = oprange[r].start;
-    if(o == nil) {
-        o = oprange[r].stop; /* just generate an error */
-    }
     e = oprange[r].stop;
+    <<[[oplook()]] sanity check o>>
 
-    c1 = xcmp[a1];
-    c3 = xcmp[a3];
-    for(; o<e; o++)
-        if(o->a2 == a2)
-         if(c1[o->a1])
-          if(c3[o->a3]) {
-            p->optab = (o-optab)+1;
-            return o;
-        }
-
-    diag("illegal combination %A %d %d %d",
-        p->as, a1, a2, a3);
-    prasm(p);
-    if(o == nil)
-        o = optab;
-    return o;
+    <<[[oplook()]] if use cache, part2>>
+    else {
+        for(; o<e; o++)
+            if(o->a2 == a2)
+             if(cmp(o->a1, a1))
+              if(cmp(o->a3, a3)) {
+                return o;
+            }
+    }
+    <<[[oplook()]] illegal combination error>>
 }
 @
+% the order to cmp is right? I think so, see the comment
+% about cmp()
 
 %    if(0) {
 %        print("oplook %A %d %d %d\n",
@@ -4792,7 +4776,13 @@ oplook(Prog *p)
 
 
 
+
 % cmp for compatible?
+% 'b' is the actual class of the operand, 'a' is the one mentionned
+% in optab which is actually compatible with a few concrete class.
+% e.g. an optab entry for C_LCON will also accomodate concrete operand
+% with class C_RCON or C_NCON, but if it's mentionned C_RCON in
+% the optab, then it will accept only C_RCON concrete operands.
 <<function cmp(arm)>>=
 bool
 cmp(int a, int b)
@@ -4853,19 +4843,23 @@ cmp(int a, int b)
 
 
 
+<<[[oplook()]] sanity check o>>=
+if(o == nil) {
+    o = oprange[r].stop; /* just generate an error */
+}
+@
+
+<<[[oplook()]] illegal combination error>>=
+diag("illegal combination %A %d %d %d",  p->as, a1, a2, a3);
+prasm(p);
+if(o == nil)
+    o = optab;
+return o;
+@
+
+
 \subsection{Caching}
-
-% cmp() cache for oplook()
-<<global xcmp(arm)>>=
-char	xcmp[C_GOK+1][C_GOK+1];
-@
-
-<<[[buildop()]] initialize xcmp cache>>=
-for(i=0; i<C_GOK; i++)
-    for(n=0; n<C_GOK; n++)
-        xcmp[i][n] = cmp(n, i);
-@
-
+% Memoizing
 
 <<[[Prog]] other fields>>=
 // option<index-1-based in optab[]>, 0 means None, i means index optab[i-1]
@@ -4883,7 +4877,58 @@ short	class;
 % in the optab complex structure. 
 % Not sure why it needs to be stored here in Adr too.
 
+<<[[oplook()]] locals>>=
+bool usecache = true;
+char *c1, *c3;
+@
 
+<<[[oplook()]] if use cache, part1>>=
+if(usecache) {
+    a1 = p->optab;
+    if(a1)
+        return optab+(a1-1);
+    
+    a1 = p->from.class;
+    if(a1 == C_NONE) {
+        a1 = aclass(&p->from) + 1;
+        p->from.class = a1;
+    }
+    a1--;
+    
+    a3 = p->to.class;
+    if(a3 == C_NONE) {
+        a3 = aclass(&p->to) + 1;
+        p->to.class = a3;
+    }
+    a3--;
+}
+@
+
+<<[[oplook()]] if use cache, part2>>=
+if(usecache) {
+    c1 = xcmp[a1];
+    c3 = xcmp[a3];
+    for(; o<e; o++)
+        if(o->a2 == a2)
+         if(c1[o->a1])
+          if(c3[o->a3]) {
+            p->optab = (o-optab)+1;
+            return o;
+        }
+}
+@
+
+% cmp() cache for oplook()
+<<global xcmp(arm)>>=
+char	xcmp[C_GOK+1][C_GOK+1];
+@
+
+<<[[buildop()]] initialize xcmp cache>>=
+for(i=0; i<C_GOK; i++)
+    for(n=0; n<C_GOK; n++)
+        xcmp[i][n] = cmp(n, i);
+@
+% subtle the order to cmp here, cmp(n,i) not cmp(i,n)
 
 
 
@@ -4891,7 +4936,6 @@ short	class;
 nocache(p);
 @
 
-% ???
 <<function nocache(arm)>>=
 void
 nocache(Prog *p)
@@ -4901,6 +4945,12 @@ nocache(Prog *p)
     p->to.class = 0;
 }
 @
+% disable cache for ARET because the instruction has actually changed!
+% in noops we overwrite the ancien instruction, with p->as = ABL
+% so we must force to recompute optab and aclass.
+% not sure it's needed though since optab is used only in oplook()
+% which is called only by span() and asmb() which are both called
+% long after noops().
 
 
 

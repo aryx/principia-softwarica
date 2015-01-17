@@ -481,57 +481,80 @@ aclass(Adr *a)
 Optab*
 oplook(Prog *p)
 {
+    /*s: [[oplook()]] locals */
     Optab *o, *e;
+    // enum<opcode>, to index oprange[]
     int r;
     // enum<class>
     int a1, a2, a3;
+    /*x: [[oplook()]] locals */
+    bool usecache = true;
     char *c1, *c3;
-
-    a1 = p->optab;
-    if(a1)
-        return optab+(a1-1);
-
-    a1 = p->from.class;
-    if(a1 == C_NONE) {
-        a1 = aclass(&p->from) + 1;
-        p->from.class = a1;
+    /*e: [[oplook()]] locals */
+ 
+    /*s: [[oplook()]] if use cache, part1 */
+    if(usecache) {
+        a1 = p->optab;
+        if(a1)
+            return optab+(a1-1);
+    
+        a1 = p->from.class;
+        if(a1 == C_NONE) {
+            a1 = aclass(&p->from) + 1;
+            p->from.class = a1;
+        }
+        a1--;
+    
+        a3 = p->to.class;
+        if(a3 == C_NONE) {
+            a3 = aclass(&p->to) + 1;
+            p->to.class = a3;
+        }
+        a3--;
     }
-    a1--;
-
-    a3 = p->to.class;
-    if(a3 == C_NONE) {
-        a3 = aclass(&p->to) + 1;
-        p->to.class = a3;
+    /*e: [[oplook()]] if use cache, part1 */
+    else {
+        a1 = aclass(&p->from);
+        a3 = aclass(&p->to);
     }
-    a3--;
-
-    a2 = C_NONE;
-    if(p->reg != R_NONE)
-        a2 = C_REG;
-
+    a2 = (p->reg != R_NONE)? C_REG : C_NONE;
     r = p->as;
     o = oprange[r].start;
+    e = oprange[r].stop;
+    /*s: [[oplook()]] sanity check o */
     if(o == nil) {
         o = oprange[r].stop; /* just generate an error */
     }
-    e = oprange[r].stop;
+    /*e: [[oplook()]] sanity check o */
 
-    c1 = xcmp[a1];
-    c3 = xcmp[a3];
-    for(; o<e; o++)
-        if(o->a2 == a2)
-         if(c1[o->a1])
-          if(c3[o->a3]) {
-            p->optab = (o-optab)+1;
-            return o;
-        }
-
-    diag("illegal combination %A %d %d %d",
-        p->as, a1, a2, a3);
+    /*s: [[oplook()]] if use cache, part2 */
+    if(usecache) {
+        c1 = xcmp[a1];
+        c3 = xcmp[a3];
+        for(; o<e; o++)
+            if(o->a2 == a2)
+             if(c1[o->a1])
+              if(c3[o->a3]) {
+                p->optab = (o-optab)+1;
+                return o;
+            }
+    }
+    /*e: [[oplook()]] if use cache, part2 */
+    else {
+        for(; o<e; o++)
+            if(o->a2 == a2)
+             if(cmp(o->a1, a1))
+              if(cmp(o->a3, a3)) {
+                return o;
+            }
+    }
+    /*s: [[oplook()]] illegal combination error */
+    diag("illegal combination %A %d %d %d",  p->as, a1, a2, a3);
     prasm(p);
     if(o == nil)
         o = optab;
     return o;
+    /*e: [[oplook()]] illegal combination error */
 }
 /*e: function oplook(arm) */
 
