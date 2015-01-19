@@ -40,6 +40,18 @@ SRC_VIEWS= \
    cc/com.c\
    cc2/pswt.c\
    cc2/pgen.c\
+   5c/enam.c\
+   5c/gc.h\
+   5c/machcap.c\
+   5c/globals2.c\
+   5c/list.c\
+   5c/txt.c\
+   5c/peep.c\
+   5c/sgen.c\
+   5c/swt.c\
+   5c/mul.c\
+   5c/reg.c\
+   5c/cgen.c\
    8c/enam.c\
    8c/gc.h\
    8c/machcap.c\
@@ -54,5 +66,9 @@ SRC_VIEWS= \
    8c/cgen64.c\
    8c/div.c\
    8c/cgen.c\
+
+
+# no 5c/div.c?
+
 
 # y.tab.[ch]
