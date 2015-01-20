@@ -32,7 +32,7 @@ typedef	struct	Tname	Tname;
 struct	Tname
 {
     char*	name;
-    int	param;
+    int		param;
     Tname*	link;
 };
 /*e: struct Tname */

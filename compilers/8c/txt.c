@@ -142,7 +142,7 @@ gclean(void)
 }
 /*e: function gclean(x86) */
 
-/*s: function nextpc(x86) */
+/*s: function nextpc */
 void
 nextpc(void)
 {
@@ -160,9 +160,9 @@ nextpc(void)
     lastp->link = p;
     lastp = p;
 }
-/*e: function nextpc(x86) */
+/*e: function nextpc */
 
-/*s: function gargs(x86) */
+/*s: function gargs */
 void
 gargs(Node *n, Node *tn1, Node *tn2)
 {
@@ -180,7 +180,7 @@ gargs(Node *n, Node *tn1, Node *tn2)
 
     cursafe = regs;
 }
-/*e: function gargs(x86) */
+/*e: function gargs */
 
 /*s: function nareg(x86) */
 int
@@ -259,23 +259,23 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 }
 /*e: function garg1(x86) */
 
-/*s: function nodconst(x86) */
+/*s: function nodconst */
 Node*
 nodconst(long v)
 {
     constnode.vconst = v;
     return &constnode;
 }
-/*e: function nodconst(x86) */
+/*e: function nodconst */
 
-/*s: function nodfconst(x86) */
+/*s: function nodfconst */
 Node*
 nodfconst(double d)
 {
     fconstnode.fconst = d;
     return &fconstnode;
 }
-/*e: function nodfconst(x86) */
+/*e: function nodfconst */
 
 /*s: function isreg(x86) */
 int
@@ -388,7 +388,7 @@ out:
 }
 /*e: function regalloc(x86) */
 
-/*s: function regialloc(x86) */
+/*s: function regialloc */
 void
 regialloc(Node *n, Node *tn, Node *o)
 {
@@ -398,7 +398,7 @@ regialloc(Node *n, Node *tn, Node *o)
     nod.type = types[TIND];
     regalloc(n, &nod, o);
 }
-/*e: function regialloc(x86) */
+/*e: function regialloc */
 
 /*s: function regfree(x86) */
 void
@@ -428,7 +428,7 @@ err:
 }
 /*e: function regfree(x86) */
 
-/*s: function regsalloc(x86) */
+/*s: function regsalloc */
 void
 regsalloc(Node *n, Node *nn)
 {
@@ -440,7 +440,7 @@ regsalloc(Node *n, Node *nn)
     n->etype = nn->type->etype;
     n->lineno = nn->lineno;
 }
-/*e: function regsalloc(x86) */
+/*e: function regsalloc */
 
 /*s: function regaalloc1(x86) */
 void
@@ -478,7 +478,7 @@ regaalloc(Node *n, Node *nn)
 }
 /*e: function regaalloc(x86) */
 
-/*s: function regind(x86) */
+/*s: function regind */
 void
 regind(Node *n, Node *nn)
 {
@@ -490,7 +490,7 @@ regind(Node *n, Node *nn)
     n->op = OINDREG;
     n->type = nn->type;
 }
-/*e: function regind(x86) */
+/*e: function regind */
 
 /*s: function naddr(x86) */
 void
@@ -1373,7 +1373,7 @@ gopcode(int o, Type *ty, Node *f, Node *t)
 }
 /*e: function gopcode(x86) */
 
-/*s: function samaddr(x86) */
+/*s: function samaddr */
 int
 samaddr(Node *f, Node *t)
 {
@@ -1389,7 +1389,7 @@ samaddr(Node *f, Node *t)
     }
     return 0;
 }
-/*e: function samaddr(x86) */
+/*e: function samaddr */
 
 /*s: function gbranch(x86) */
 void
@@ -1415,7 +1415,7 @@ gbranch(int o)
 }
 /*e: function gbranch(x86) */
 
-/*s: function patch(x86) */
+/*s: function patch */
 void
 patch(Prog *op, long pc)
 {
@@ -1423,7 +1423,7 @@ patch(Prog *op, long pc)
     op->to.offset = pc;
     op->to.type = D_BRANCH;
 }
-/*e: function patch(x86) */
+/*e: function patch */
 
 /*s: function gpseudo(x86) */
 void
@@ -1476,54 +1476,54 @@ exreg(Type *t)
 }
 /*e: function exreg(x86) */
 
-/*s: global ewidth(x86) */
+/*s: global ewidth */
 schar	ewidth[NTYPE] =
 {
-    -1,		/*[TXXX]*/	
-    SZ_CHAR,	/*[TCHAR]*/	
-    SZ_CHAR,	/*[TUCHAR]*/
-    SZ_SHORT,	/*[TSHORT]*/
-    SZ_SHORT,	/*[TUSHORT]*/
-    SZ_INT,		/*[TINT]*/
-    SZ_INT,		/*[TUINT]*/
-    SZ_LONG,	/*[TLONG]*/
-    SZ_LONG,	/*[TULONG]*/
-    SZ_VLONG,	/*[TVLONG]*/
-    SZ_VLONG,	/*[TUVLONG]*/
-    SZ_FLOAT,	/*[TFLOAT]*/
-    SZ_DOUBLE,	/*[TDOUBLE]*/
-    SZ_IND,		/*[TIND]*/
-    0,		/*[TFUNC]*/
-    -1,		/*[TARRAY]*/
-    0,		/*[TVOID]*/
-    -1,		/*[TSTRUCT]*/
-    -1,		/*[TUNION]*/
-    SZ_INT,		/*[TENUM]*/
+    -1,		/* [TXXX] */
+    SZ_CHAR,	/* [TCHAR] */
+    SZ_CHAR,	/* [TUCHAR] */
+    SZ_SHORT,	/* [TSHORT] */
+    SZ_SHORT,	/* [TUSHORT] */
+    SZ_INT,		/* [TINT] */
+    SZ_INT,		/* [TUINT] */
+    SZ_LONG,	/* [TLONG] */
+    SZ_LONG,	/* [TULONG] */
+    SZ_VLONG,	/* [TVLONG] */
+    SZ_VLONG,	/* [TUVLONG] */
+    SZ_FLOAT,	/* [TFLOAT] */
+    SZ_DOUBLE,	/* [TDOUBLE] */
+    SZ_IND,		/* [TIND] */
+    0,		/* [TFUNC] */
+    -1,		/* [TARRAY] */
+    0,		/* [TVOID] */
+    -1,		/* [TSTRUCT] */
+    -1,		/* [TUNION] */
+    SZ_INT,		/* [TENUM] */
 };
-/*e: global ewidth(x86) */
-/*s: global ncast(x86) */
+/*e: global ewidth */
+/*s: global ncast */
 long	ncast[NTYPE] =
 {
-    0,				/*[TXXX]*/
-    BCHAR|BUCHAR,			/*[TCHAR]*/
-    BCHAR|BUCHAR,			/*[TUCHAR]*/	
-    BSHORT|BUSHORT,			/*[TSHORT]*/
-    BSHORT|BUSHORT,			/*[TUSHORT]*/
-    BINT|BUINT|BLONG|BULONG|BIND,	/*[TINT]*/		
-    BINT|BUINT|BLONG|BULONG|BIND,	/*[TUINT]*/
-    BINT|BUINT|BLONG|BULONG|BIND,	/*[TLONG]*/
-    BINT|BUINT|BLONG|BULONG|BIND,	/*[TULONG]*/
-    BVLONG|BUVLONG,			/*[TVLONG]*/
-    BVLONG|BUVLONG,			/*[TUVLONG]*/
-    BFLOAT,				/*[TFLOAT]*/
-    BDOUBLE,			/*[TDOUBLE]*/
-    BLONG|BULONG|BIND,		/*[TIND]*/
-    0,				/*[TFUNC]*/
-    0,				/*[TARRAY]*/
-    0,				/*[TVOID]*/
-    BSTRUCT,			/*[TSTRUCT]*/
-    BUNION,				/*[TUNION]*/
-    0,				/*[TENUM]*/
+    0,				/* [TXXX] */
+    BCHAR|BUCHAR,			/* [TCHAR] */
+    BCHAR|BUCHAR,			/* [TUCHAR] */
+    BSHORT|BUSHORT,			/* [TSHORT] */
+    BSHORT|BUSHORT,			/* [TUSHORT] */
+    BINT|BUINT|BLONG|BULONG|BIND,	/* [TINT] */
+    BINT|BUINT|BLONG|BULONG|BIND,	/* [TUINT] */
+    BINT|BUINT|BLONG|BULONG|BIND,	/* [TLONG] */
+    BINT|BUINT|BLONG|BULONG|BIND,	/* [TULONG] */
+    BVLONG|BUVLONG,			/* [TVLONG] */
+    BVLONG|BUVLONG,			/* [TUVLONG] */
+    BFLOAT,				/* [TFLOAT] */
+    BDOUBLE,			/* [TDOUBLE] */
+    BLONG|BULONG|BIND,		/* [TIND] */
+    0,				/* [TFUNC] */
+    0,				/* [TARRAY] */
+    0,				/* [TVOID] */
+    BSTRUCT,			/* [TSTRUCT] */
+    BUNION,				/* [TUNION] */
+    0,				/* [TENUM] */
 };
-/*e: global ncast(x86) */
+/*e: global ncast */
 /*e: 8c/txt.c */

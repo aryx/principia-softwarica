@@ -642,19 +642,6 @@ lcgen(Node *n, Node *nn)
         regalloc(&nod, n, Z);
     }
     switch(n->op) {
-    default:
-        if(n->addable < INDEXED) {
-            diag(n, "unknown op in lcgen: %O", n->op);
-            break;
-        }
-        nod = *n;
-        nod.op = OADDR;
-        nod.left = n;
-        nod.right = Z;
-        nod.type = types[TIND];
-        gopcode(OAS, &nod, Z, nn);
-        break;
-
     case OCOMMA:
         cgen(n->left, n->left);
         lcgen(n->right, nn);
@@ -674,11 +661,25 @@ lcgen(Node *n, Node *nn)
         lcgen(n->right->right, nn);
         patch(p1, pc);
         break;
+
+    default:
+        if(n->addable < INDEXED) {
+            diag(n, "unknown op in lcgen: %O", n->op);
+            break;
+        }
+        nod = *n;
+        nod.op = OADDR;
+        nod.left = n;
+        nod.right = Z;
+        nod.type = types[TIND];
+        gopcode(OAS, &nod, Z, nn);
+        break;
+
     }
 }
 /*e: function lcgen(arm) */
 
-/*s: function bcgen(arm) */
+/*s: function bcgen */
 void
 bcgen(Node *n, int true)
 {
@@ -688,7 +689,7 @@ bcgen(Node *n, int true)
     else
         boolgen(n, true, Z);
 }
-/*e: function bcgen(arm) */
+/*e: function bcgen */
 
 /*s: function boolgen(arm) */
 void

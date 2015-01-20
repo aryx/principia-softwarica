@@ -16,7 +16,8 @@ listinit(void)
 }
 /*e: function listinit(arm) */
 
-/*s: function Bconv(arm) */
+/*s: function Bconv */
+// Bits -> string
 int
 Bconv(Fmt *fp)
 {
@@ -42,7 +43,7 @@ Bconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Bconv(arm) */
+/*e: function Bconv */
 
 /*s: global extra(arm) */
 char *extra [] = {
@@ -54,6 +55,7 @@ char *extra [] = {
 /*e: global extra(arm) */
 
 /*s: function Pconv(arm) */
+// Prog -> string
 int
 Pconv(Fmt *fp)
 {
@@ -99,7 +101,8 @@ Pconv(Fmt *fp)
 }
 /*e: function Pconv(arm) */
 
-/*s: function Aconv(arm) */
+/*s: function Aconv */
+// enum<opcode_kind> -> string
 int
 Aconv(Fmt *fp)
 {
@@ -112,7 +115,7 @@ Aconv(Fmt *fp)
         s = anames[a];
     return fmtstrcpy(fp, s);
 }
-/*e: function Aconv(arm) */
+/*e: function Aconv */
 
 /*s: function Dconv(arm) */
 int
@@ -196,6 +199,7 @@ Dconv(Fmt *fp)
 /*e: function Dconv(arm) */
 
 /*s: function Rconv(arm) */
+// enum<operand_kind(register-only??)> -> string
 int
 Rconv(Fmt *fp)
 {

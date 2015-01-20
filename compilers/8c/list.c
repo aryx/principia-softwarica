@@ -22,7 +22,7 @@ listinit(void)
 }
 /*e: function listinit(x86) */
 
-/*s: function Bconv(x86) */
+/*s: function Bconv */
 // Bits -> string
 int
 Bconv(Fmt *fp)
@@ -38,7 +38,7 @@ Bconv(Fmt *fp)
         if(str[0])
             strcat(str, " ");
         if(var[i].sym == S) {
-            snprint(ss, sizeof(ss), "$%ld", var[i].offset); //$
+            snprint(ss, sizeof(ss), "$%ld", var[i].offset);
             s = ss;
         } else
             s = var[i].sym->name;
@@ -49,7 +49,7 @@ Bconv(Fmt *fp)
     }
     return fmtstrcpy(fp, str);
 }
-/*e: function Bconv(x86) */
+/*e: function Bconv */
 
 /*s: function Pconv(x86) */
 // Prog -> string
@@ -73,17 +73,21 @@ Pconv(Fmt *fp)
 }
 /*e: function Pconv(x86) */
 
-/*s: function Aconv(x86) */
+/*s: function Aconv */
 // enum<opcode_kind> -> string
 int
 Aconv(Fmt *fp)
 {
-    int i;
+    char *s;
+    int a;
 
-    i = va_arg(fp->args, int);
-    return fmtstrcpy(fp, anames[i]);
+    a = va_arg(fp->args, int);
+    s = "???";
+    if(a >= AXXX && a < ALAST)
+        s = anames[a];
+    return fmtstrcpy(fp, s);
 }
-/*e: function Aconv(x86) */
+/*e: function Aconv */
 
 /*s: function Dconv(x86) */
 // Adr -> string

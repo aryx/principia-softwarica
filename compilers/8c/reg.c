@@ -18,7 +18,7 @@ long	RtoB(int);
 int	BtoR(long);
 //int	BtoF(long);
 
-/*s: function rega(x86) */
+/*s: function rega */
 Reg*
 rega(void)
 {
@@ -33,9 +33,9 @@ rega(void)
     *r = zreg;
     return r;
 }
-/*e: function rega(x86) */
+/*e: function rega */
 
-/*s: function rcmp(x86) */
+/*s: function rcmp */
 int
 rcmp(const void *a1, const void *a2)
 {
@@ -50,7 +50,7 @@ rcmp(const void *a1, const void *a2)
         return c1;
     return p2->varno - p1->varno;
 }
-/*e: function rcmp(x86) */
+/*e: function rcmp */
 
 /*s: struct Regopt_helper(x86) */
 struct Regopt_helper {
@@ -816,7 +816,7 @@ prop(Reg *r, Bits ref, Bits cal)
 }
 /*e: function prop(x86) */
 
-/*s: function postorder(x86) */
+/*s: function postorder */
 /*
  * find looping structure
  *
@@ -848,9 +848,9 @@ postorder(Reg *r, Reg **rpo2r, long n)
     n++;
     return n;
 }
-/*e: function postorder(x86) */
+/*e: function postorder */
 
-/*s: function rpolca(x86) */
+/*s: function rpolca */
 long
 rpolca(long *idom, long rpo1, long rpo2)
 {
@@ -873,9 +873,9 @@ rpolca(long *idom, long rpo1, long rpo2)
     }
     return rpo1;
 }
-/*e: function rpolca(x86) */
+/*e: function rpolca */
 
-/*s: function doms(x86) */
+/*s: function doms */
 int
 doms(long *idom, long r, long s)
 {
@@ -883,9 +883,9 @@ doms(long *idom, long r, long s)
         s = idom[s];
     return s == r;
 }
-/*e: function doms(x86) */
+/*e: function doms */
 
-/*s: function loophead(x86) */
+/*s: function loophead */
 int
 loophead(long *idom, Reg *r)
 {
@@ -899,9 +899,9 @@ loophead(long *idom, Reg *r)
             return 1;
     return 0;
 }
-/*e: function loophead(x86) */
+/*e: function loophead */
 
-/*s: function loopmark(x86) */
+/*s: function loopmark */
 void
 loopmark(Reg **rpo2r, long head, Reg *r)
 {
@@ -914,9 +914,9 @@ loopmark(Reg **rpo2r, long head, Reg *r)
     for(r = r->p2; r != R; r = r->p2link)
         loopmark(rpo2r, head, r);
 }
-/*e: function loopmark(x86) */
+/*e: function loopmark */
 
-/*s: function loopit(x86) */
+/*s: function loopit */
 void
 loopit(Reg *r, long nr)
 {
@@ -961,9 +961,9 @@ loopit(Reg *r, long nr)
             loopmark(rpo2r, i, r1);
     }
 }
-/*e: function loopit(x86) */
+/*e: function loopit */
 
-/*s: function synch(x86) */
+/*s: function synch */
 void
 synch(Reg *r, Bits dif)
 {
@@ -989,7 +989,7 @@ synch(Reg *r, Bits dif)
             synch(r1->s2, dif);
     }
 }
-/*e: function synch(x86) */
+/*e: function synch */
 
 /*s: function allreg(x86) */
 ulong
@@ -1223,7 +1223,7 @@ paint2(Reg *r, int bn)
 }
 /*e: function paint2(x86) */
 
-/*s: function paint3(x86) */
+/*s: function paint3 */
 void
 paint3(Reg *r, int bn, long rb, int rn)
 {
@@ -1233,7 +1233,7 @@ paint3(Reg *r, int bn, long rb, int rn)
     ulong bb;
 
     z = bn/32;
-    bb = 1L << (bn%32); // >>
+    bb = 1L << (bn%32);
     if(r->act.b[z] & bb)
         return;
     for(;;) {
@@ -1294,7 +1294,7 @@ paint3(Reg *r, int bn, long rb, int rn)
             break;
     }
 }
-/*e: function paint3(x86) */
+/*e: function paint3 */
 
 /*s: function addreg(x86) */
 void

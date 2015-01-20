@@ -71,9 +71,9 @@ struct	Adr
     uchar	scale;	/* doubles as width in DATA op */
 };
 /*e: struct Adr(x86) */
-/*s: constant A(x86) */
+/*s: constant A */
 #define	A	((Adr*)nil)
-/*e: constant A(x86) */
+/*e: constant A */
 
 /*s: constant INDEXED(x86) */
 #define	INDEXED	9
@@ -95,11 +95,11 @@ struct	Prog
     /*e: [[Prog]] extra fields(x86) */
 };
 /*e: struct Prog(x86) */
-/*s: constant P(x86) */
+/*s: constant P */
 #define	P	((Prog*)nil)
-/*e: constant P(x86) */
+/*e: constant P */
 
-/*s: struct Case(x86) */
+/*s: struct Case */
 struct	Case
 {
     vlong	val;
@@ -109,20 +109,20 @@ struct	Case
 
     Case*	link;
 };
-/*e: struct Case(x86) */
-/*s: constant C(x86) */
+/*e: struct Case */
+/*s: constant C */
 #define	C	((Case*)nil)
-/*e: constant C(x86) */
+/*e: constant C */
 
-/*s: struct C1(x86) */
+/*s: struct C1 */
 struct	C1
 {
     vlong	val;
     long	label;
 };
-/*e: struct C1(x86) */
+/*e: struct C1 */
 
-/*s: struct Var(x86) */
+/*s: struct Var */
 struct	Var
 {
     long	offset;
@@ -130,9 +130,9 @@ struct	Var
     char	name;
     char	etype;
 };
-/*e: struct Var(x86) */
+/*e: struct Var */
 
-/*s: struct Reg(x86) */
+/*s: struct Reg */
 struct	Reg
 {
     long	pc;
@@ -152,6 +152,7 @@ struct	Reg
     long	regu;
     long	loop;		/* could be shorter */
 
+    
     Reg*	log5;
     long	active;
 
@@ -163,15 +164,15 @@ struct	Reg
     Reg*	link;
     Prog*	prog;
 };
-/*e: struct Reg(x86) */
-/*s: constant R(x86) */
+/*e: struct Reg */
+/*s: constant R */
 #define	R	((Reg*)nil)
-/*e: constant R(x86) */
+/*e: constant R */
 
 /*s: constant NRGN(x86) */
 #define	NRGN	600
 /*e: constant NRGN(x86) */
-/*s: struct Rgn(x86) */
+/*s: struct Rgn */
 struct	Rgn
 {
     Reg*	enter;
@@ -179,7 +180,7 @@ struct	Rgn
     short	varno;
     short	regno;
 };
-/*e: struct Rgn(x86) */
+/*e: struct Rgn */
 
 extern	long	breakpc;
 extern	long	nbreak;

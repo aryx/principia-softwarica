@@ -172,7 +172,7 @@ excise(Reg *r)
 }
 /*e: function excise(x86) */
 
-/*s: function uniqp(x86) */
+/*s: function uniqp */
 Reg*
 uniqp(Reg *r)
 {
@@ -188,9 +188,9 @@ uniqp(Reg *r)
             return R;
     return r1;
 }
-/*e: function uniqp(x86) */
+/*e: function uniqp */
 
-/*s: function uniqs(x86) */
+/*s: function uniqs */
 Reg*
 uniqs(Reg *r)
 {
@@ -206,7 +206,7 @@ uniqs(Reg *r)
             return R;
     return r1;
 }
-/*e: function uniqs(x86) */
+/*e: function uniqs */
 
 /*s: function regtyp(x86) */
 int
@@ -345,7 +345,7 @@ gotit:
 }
 /*e: function subprop(x86) */
 
-/*s: function copyprop(x86) */
+/*s: function copyprop */
 /*
  * The idea is to remove redundant copies.
  *	v1->v2	F=0
@@ -374,9 +374,9 @@ copyprop(Reg *r0)
         r->active = 0;
     return copy1(v1, v2, r0->s1, 0);
 }
-/*e: function copyprop(x86) */
+/*e: function copyprop */
 
-/*s: function copy1(x86) */
+/*s: function copy1 */
 int
 copy1(Adr *v1, Adr *v2, Reg *r, int f)
 {
@@ -404,12 +404,12 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
         switch(t) {
         case 2:	/* rar, cant split */
             if(debug['P'])
-                print("; %D rar; return 0\n", v2);
+                print("; %Drar; return 0\n", v2);
             return 0;
 
         case 3:	/* set */
             if(debug['P'])
-                print("; %D set; return 1\n", v2);
+                print("; %Dset; return 1\n", v2);
             return 1;
 
         case 1:	/* used, substitute */
@@ -418,9 +418,9 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
                 if(!debug['P'])
                     return 0;
                 if(t == 4)
-                    print("; %D used+set and f=%d; return 0\n", v2, f);
+                    print("; %Dused+set and f=%d; return 0\n", v2, f);
                 else
-                    print("; %D used and f=%d; return 0\n", v2, f);
+                    print("; %Dused and f=%d; return 0\n", v2, f);
                 return 0;
             }
             if(copyu(p, v2, v1)) {
@@ -429,10 +429,10 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
                 return 0;
             }
             if(debug['P'])
-                print("; sub %D/%D", v2, v1);
+                print("; sub%D/%D", v2, v1);
             if(t == 4) {
                 if(debug['P'])
-                    print("; %D used+set; return 1\n", v2);
+                    print("; %Dused+set; return 1\n", v2);
                 return 1;
             }
             break;
@@ -442,7 +442,7 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
             if(!f && (t == 2 || t == 3 || t == 4)) {
                 f = 1;
                 if(debug['P'])
-                    print("; %D set and !f; f=%d", v1, f);
+                    print("; %Dset and !f; f=%d", v1, f);
             }
         }
         if(debug['P'])
@@ -453,7 +453,7 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
     }
     return 1;
 }
-/*e: function copy1(x86) */
+/*e: function copy1 */
 
 /*s: function copyu(x86) */
 /*

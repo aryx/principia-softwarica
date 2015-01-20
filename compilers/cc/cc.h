@@ -106,7 +106,6 @@ struct	Node
     int	reg;
     long	xoffset;
 
-
     // (ab)used as bool for marker of label def (true) vs use (false),
     // FNX special value, register allocation value, etc
     char	complex; 
@@ -135,8 +134,7 @@ struct	Node
 /*s: struct Sym */
 struct	Sym
 {
-    // for? keywords? locals? parameters? struct/union? all names? fields?
-    // macros
+    // for? keywords? locals? params? struct/union? all names? fields? macros?
     char	*name;
 
     long	varlineno;
@@ -328,7 +326,7 @@ struct	Term
 /*e: struct Term */
 
 /*s: enum os */
-enum os				/* also in ../{8a,0a}.h */
+enum os				/* also in ../{8a,5a,0a}.h */
 {
     Plan9	= 1<<0,
     Unix	= 1<<1,
@@ -536,7 +534,7 @@ enum dxxx
     DMARK,
 
     DAUTO,
-    DSUE, // struct/union/enum?
+    DSUE, // struct/union/enum
     DLABEL,
 };
 /*e: enum dxxx */

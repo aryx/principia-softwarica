@@ -134,15 +134,16 @@ gclean(void)
 }
 /*e: function gclean(arm) */
 
-/*s: function nextpc(arm) */
+/*s: function nextpc */
 void
 nextpc(void)
 {
 
-    p = alloc(sizeof(*p));
+    p = alloc(sizeof(Prog));
     *p = zprog;
     p->lineno = nearln;
     pc++;
+
     if(firstp == P) {
         firstp = p;
         lastp = p;
@@ -151,9 +152,9 @@ nextpc(void)
     lastp->link = p;
     lastp = p;
 }
-/*e: function nextpc(arm) */
+/*e: function nextpc */
 
-/*s: function gargs(arm) */
+/*s: function gargs */
 void
 gargs(Node *n, Node *tn1, Node *tn2)
 {
@@ -171,7 +172,7 @@ gargs(Node *n, Node *tn1, Node *tn2)
 
     cursafe = regs;
 }
-/*e: function gargs(arm) */
+/*e: function gargs */
 
 /*s: function garg1(arm) */
 void
@@ -229,14 +230,14 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 }
 /*e: function garg1(arm) */
 
-/*s: function nodconst(arm) */
+/*s: function nodconst */
 Node*
 nodconst(long v)
 {
     constnode.vconst = v;
     return &constnode;
 }
-/*e: function nodconst(arm) */
+/*e: function nodconst */
 
 /*s: function nod32const(arm) */
 Node*
@@ -247,14 +248,14 @@ nod32const(vlong v)
 }
 /*e: function nod32const(arm) */
 
-/*s: function nodfconst(arm) */
+/*s: function nodfconst */
 Node*
 nodfconst(double d)
 {
     fconstnode.fconst = d;
     return &fconstnode;
 }
-/*e: function nodfconst(arm) */
+/*e: function nodfconst */
 
 /*s: function nodreg(arm) */
 void
@@ -364,7 +365,7 @@ out:
 }
 /*e: function regalloc(arm) */
 
-/*s: function regialloc(arm) */
+/*s: function regialloc */
 void
 regialloc(Node *n, Node *tn, Node *o)
 {
@@ -374,7 +375,7 @@ regialloc(Node *n, Node *tn, Node *o)
     nod.type = types[TIND];
     regalloc(n, &nod, o);
 }
-/*e: function regialloc(arm) */
+/*e: function regialloc */
 
 /*s: function regfree(arm) */
 void
@@ -397,7 +398,7 @@ err:
 }
 /*e: function regfree(arm) */
 
-/*s: function regsalloc(arm) */
+/*s: function regsalloc */
 void
 regsalloc(Node *n, Node *nn)
 {
@@ -409,7 +410,7 @@ regsalloc(Node *n, Node *nn)
     n->etype = nn->type->etype;
     n->lineno = nn->lineno;
 }
-/*e: function regsalloc(arm) */
+/*e: function regsalloc */
 
 /*s: function regaalloc1(arm) */
 void
@@ -439,7 +440,7 @@ regaalloc(Node *n, Node *nn)
 }
 /*e: function regaalloc(arm) */
 
-/*s: function regind(arm) */
+/*s: function regind */
 void
 regind(Node *n, Node *nn)
 {
@@ -451,7 +452,7 @@ regind(Node *n, Node *nn)
     n->op = OINDREG;
     n->type = nn->type;
 }
-/*e: function regind(arm) */
+/*e: function regind */
 
 /*s: function raddr(arm) */
 void
@@ -577,21 +578,6 @@ naddr(Node *n, Adr *a)
     }
 }
 /*e: function naddr(arm) */
-
-/*s: function fop(arm) */
-void
-fop(int as, int f1, int f2, Node *t)
-{
-    Node nod1, nod2, nod3;
-
-    nodreg(&nod1, t, NREG+f1);
-    nodreg(&nod2, t, NREG+f2);
-    regalloc(&nod3, t, t);
-    gopcode(as, &nod1, &nod2, &nod3);
-    gmove(&nod3, t);
-    regfree(&nod3);
-}
-/*e: function fop(arm) */
 
 /*s: function gmovm(arm) */
 void
@@ -1192,8 +1178,9 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 }
 /*e: function gopcode(arm) */
 
-/*s: function samaddr(arm) */
-int samaddr(Node *f, Node *t)
+/*s: function samaddr */
+int
+samaddr(Node *f, Node *t)
 {
 
     if(f->op != t->op)
@@ -1207,7 +1194,7 @@ int samaddr(Node *f, Node *t)
     }
     return 0;
 }
-/*e: function samaddr(arm) */
+/*e: function samaddr */
 
 /*s: function gbranch(arm) */
 void
@@ -1233,7 +1220,7 @@ gbranch(int o)
 }
 /*e: function gbranch(arm) */
 
-/*s: function patch(arm) */
+/*s: function patch */
 void
 patch(Prog *op, long pc)
 {
@@ -1241,7 +1228,7 @@ patch(Prog *op, long pc)
     op->to.offset = pc;
     op->to.type = D_BRANCH;
 }
-/*e: function patch(arm) */
+/*e: function patch */
 
 /*s: function gpseudo(arm) */
 void
@@ -1333,7 +1320,7 @@ exreg(Type *t)
 }
 /*e: function exreg(arm) */
 
-/*s: global ewidth(arm) */
+/*s: global ewidth */
 schar	ewidth[NTYPE] =
 {
     -1,		/* [TXXX] */
@@ -1357,9 +1344,9 @@ schar	ewidth[NTYPE] =
     -1,		/* [TUNION] */
     SZ_INT,		/* [TENUM] */
 };
-/*e: global ewidth(arm) */
+/*e: global ewidth */
 
-/*s: global ncast(arm) */
+/*s: global ncast */
 long	ncast[NTYPE] =
 {
     0,				/* [TXXX] */
@@ -1383,5 +1370,5 @@ long	ncast[NTYPE] =
     BUNION,				/* [TUNION] */
     0,				/* [TENUM] */
 };
-/*e: global ncast(arm) */
+/*e: global ncast */
 /*e: 5c/txt.c */

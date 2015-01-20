@@ -333,11 +333,18 @@ zwrite(Biobuf *b, Prog *p, int sf, int st)
 }
 /*e: function zwrite(arm) */
 
+/*s: struct Htab */
+struct Htab { 
+    Sym *sym; 
+    short type; 
+};
+/*e: struct Htab */
+
 /*s: function outcode(arm) */
 void
 outcode(void)
 {
-    struct { Sym *sym; short type; } h[NSYM];
+    struct Htab h[NSYM];
     Prog *p;
     Sym *s;
     int sf, st, t, sym;
@@ -637,7 +644,7 @@ align(long i, Type *t, int op)
 }
 /*e: function align(arm) */
 
-/*s: function maxround(arm) */
+/*s: function maxround */
 long
 maxround(long max, long v)
 {
@@ -646,5 +653,5 @@ maxround(long max, long v)
         return v;
     return max;
 }
-/*e: function maxround(arm) */
+/*e: function maxround */
 /*e: 5c/swt.c */

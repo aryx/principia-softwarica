@@ -1,156 +1,163 @@
 /*s: 5c/globals2.c */
 #include "gc.h"
 
-/*s: global breakpc(arm) */
+/*s: global breakpc */
 long	breakpc;
-/*e: global breakpc(arm) */
-/*s: global nbreak(arm) */
+/*e: global breakpc */
+/*s: global nbreak */
 long	nbreak;
-/*e: global nbreak(arm) */
-/*s: global cases(arm) */
+/*e: global nbreak */
+/*s: global cases */
 Case*	cases;
-/*e: global cases(arm) */
-/*s: global constnode(arm) */
+/*x: global cases */
+Case*	cases;
+/*e: global cases */
+/*s: global constnode */
 Node	constnode;
-/*e: global constnode(arm) */
-/*s: global fconstnode(arm) */
+/*e: global constnode */
+/*s: global fconstnode */
 Node	fconstnode;
-/*e: global fconstnode(arm) */
-/*s: global continpc(arm) */
+/*e: global fconstnode */
+/*s: global continpc */
 long	continpc;
-/*e: global continpc(arm) */
-/*s: global curarg(arm) */
+/*e: global continpc */
+
+/*s: global curarg */
 long	curarg;
-/*e: global curarg(arm) */
-/*s: global cursafe(arm) */
+/*e: global curarg */
+/*s: global cursafe */
 long	cursafe;
-/*e: global cursafe(arm) */
-/*s: global firstp(arm) */
+/*e: global cursafe */
+
+/*s: global firstp */
 Prog*	firstp;
-/*e: global firstp(arm) */
-/*s: global lastp(arm) */
+/*e: global firstp */
+/*s: global lastp */
 Prog*	lastp;
-/*e: global lastp(arm) */
-/*s: global maxargsafe(arm) */
+/*e: global lastp */
+
+/*s: global maxargsafe */
 long	maxargsafe;
-/*e: global maxargsafe(arm) */
-/*s: global mnstring(arm) */
+/*e: global maxargsafe */
+
+/*s: global mnstring */
 int	mnstring;
-/*e: global mnstring(arm) */
+/*e: global mnstring */
 /*s: global multab(arm) */
 Multab	multab[20];
 /*e: global multab(arm) */
 /*s: global hintabsize(arm) */
 int	hintabsize;
 /*e: global hintabsize(arm) */
-/*s: global nodrat(arm) */
+/*s: global nodrat */
 Node*	nodrat;
-/*e: global nodrat(arm) */
-/*s: global nodret(arm) */
+/*e: global nodrat */
+/*s: global nodret */
 Node*	nodret;
-/*e: global nodret(arm) */
-/*s: global nodsafe(arm) */
+/*e: global nodret */
+/*s: global nodsafe */
 Node*	nodsafe;
-/*e: global nodsafe(arm) */
-/*s: global nrathole(arm) */
+/*e: global nodsafe */
+/*s: global nrathole */
 long	nrathole;
-/*e: global nrathole(arm) */
-/*s: global nstring(arm) */
+/*e: global nrathole */
+/*s: global nstring */
 long	nstring;
-/*e: global nstring(arm) */
-/*s: global p(arm) */
+/*e: global nstring */
+/*s: global p */
 Prog*	p;
-/*e: global p(arm) */
-/*s: global pc(arm) */
+/*e: global p */
+/*s: global pc */
 long	pc;
-/*e: global pc(arm) */
-/*s: global regnode(arm) */
+/*e: global pc */
+/*s: global regnode */
 Node	regnode;
-/*e: global regnode(arm) */
-/*s: global string(arm) */
+/*e: global regnode */
+/*s: global string */
 char	string[NSNAME];
-/*e: global string(arm) */
-/*s: global symrathole(arm) */
+/*e: global string */
+/*s: global symrathole */
 Sym*	symrathole;
-/*e: global symrathole(arm) */
-/*s: global znode(arm) */
+/*e: global symrathole */
+/*s: global znode */
 Node	znode;
-/*e: global znode(arm) */
-/*s: global zprog(arm) */
+/*e: global znode */
+/*s: global zprog */
 Prog	zprog;
-/*e: global zprog(arm) */
+/*e: global zprog */
 /*s: global reg(arm) */
 char	reg[NREG+NFREG];
 /*e: global reg(arm) */
-/*s: global exregoffset(arm) */
+/*s: global exregoffset */
 long	exregoffset;
-/*e: global exregoffset(arm) */
-/*s: global exfregoffset(arm) */
+/*e: global exregoffset */
+/*s: global exfregoffset */
 long	exfregoffset;
-/*e: global exfregoffset(arm) */
-/*s: global suppress(arm) */
+/*e: global exfregoffset */
+/*s: global suppress */
 bool	suppress;
-/*e: global suppress(arm) */
+/*e: global suppress */
 
-/*s: global region(arm) */
+/*s: global region */
 Rgn	region[NRGN];
-/*e: global region(arm) */
-/*s: global rgp(arm) */
+/*e: global region */
+/*s: global rgp */
 Rgn*	rgp;
-/*e: global rgp(arm) */
-/*s: global nregion(arm) */
+/*e: global rgp */
+/*s: global nregion */
 int	nregion;
-/*e: global nregion(arm) */
-/*s: global nvar(arm) */
-int	nvar;
-/*e: global nvar(arm) */
+/*e: global nregion */
 
-/*s: global externs(arm) */
+/*s: global externs */
 Bits	externs;
-/*e: global externs(arm) */
-/*s: global params(arm) */
+/*e: global externs */
+/*s: global params */
 Bits	params;
-/*e: global params(arm) */
-/*s: global consts(arm) */
+/*e: global params */
+/*s: global consts */
 Bits	consts;
-/*e: global consts(arm) */
-/*s: global addrs(arm) */
+/*e: global consts */
+/*s: global addrs */
 Bits	addrs;
-/*e: global addrs(arm) */
+/*e: global addrs */
 
-/*s: global regbits(arm) */
+/*s: global regbits */
 long	regbits;
-/*e: global regbits(arm) */
-/*s: global exregbits(arm) */
+/*e: global regbits */
+/*s: global exregbits */
 long	exregbits;
-/*e: global exregbits(arm) */
+/*e: global exregbits */
 
-/*s: global change(arm) */
+/*s: global change */
 int	change;
-/*e: global change(arm) */
+/*e: global change */
 
-/*s: global firstr(arm) */
+/*s: global firstr */
 Reg*	firstr;
-/*e: global firstr(arm) */
-/*s: global lastr(arm) */
+/*e: global firstr */
+/*s: global lastr */
 Reg*	lastr;
-/*e: global lastr(arm) */
-/*s: global zreg(arm) */
+/*e: global lastr */
+/*s: global zreg */
 Reg	zreg;
-/*e: global zreg(arm) */
-/*s: global freer(arm) */
+/*e: global zreg */
+/*s: global freer */
 Reg*	freer;
-/*e: global freer(arm) */
-/*s: global var(arm) */
+/*e: global freer */
+/*s: global var */
 Var	var[NVAR];
-/*e: global var(arm) */
-/*s: global idom(arm) */
+/*e: global var */
+/*s: global nvar */
+int	nvar;
+/*e: global nvar */
+
+/*s: global idom */
 long*	idom;
-/*e: global idom(arm) */
-/*s: global rpo2r(arm) */
+/*e: global idom */
+/*s: global rpo2r */
 Reg**	rpo2r;
-/*e: global rpo2r(arm) */
-/*s: global maxnr(arm) */
+/*e: global rpo2r */
+/*s: global maxnr */
 long	maxnr;
-/*e: global maxnr(arm) */
+/*e: global maxnr */
 /*e: 5c/globals2.c */

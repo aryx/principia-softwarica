@@ -168,12 +168,12 @@ void	zname(Biobuf*, Sym*, int);
 void	zaddr(Biobuf*, Adr*, int);
 void	outhist(Biobuf*);
 
-/*s: struct Htab(x86) */
+/*s: struct Htab */
 struct Htab { 
-  Sym *sym; 
-  short type; 
+    Sym *sym; 
+    short type; 
 };
-/*e: struct Htab(x86) */
+/*e: struct Htab */
 
 /*s: function outcode(x86) */
 void
@@ -463,7 +463,7 @@ align(long i, Type *t, int op)
             w = packflg;
         break;
 
-    case Ael1:	/* initial allign of struct element */
+    case Ael1:	/* initial align of struct element */
         for(v=t; v->etype==TARRAY; v=v->link)
             ;
         w = ewidth[v->etype];
@@ -484,7 +484,7 @@ align(long i, Type *t, int op)
         }
         break;
 
-    case Aarg1:	/* initial allign of parameter */
+    case Aarg1:	/* initial align of parameter */
         w = ewidth[t->etype];
         if(w <= 0 || w >= SZ_LONG) {
             w = SZ_LONG;
@@ -498,7 +498,7 @@ align(long i, Type *t, int op)
         w = SZ_LONG;
         break;
 
-    case Aaut3:	/* total allign of automatic */
+    case Aaut3:	/* total align of automatic */
         o = align(o, t, Ael1);
         o = align(o, t, Ael2);
         break;
@@ -510,7 +510,7 @@ align(long i, Type *t, int op)
 }
 /*e: function align(x86) */
 
-/*s: function maxround(x86) */
+/*s: function maxround */
 long
 maxround(long max, long v)
 {
@@ -519,5 +519,5 @@ maxround(long max, long v)
         return v;
     return max;
 }
-/*e: function maxround(x86) */
+/*e: function maxround */
 /*e: 8c/swt.c */

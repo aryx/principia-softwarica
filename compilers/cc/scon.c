@@ -21,7 +21,6 @@ acast(Type *t, Node *n)
 }
 /*e: function acast */
 
-
 /*s: function evconst */
 void
 evconst(Node *n)

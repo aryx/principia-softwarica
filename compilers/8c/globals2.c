@@ -4,157 +4,160 @@
 /*s: global idx(x86) */
 struct Idx idx;
 /*e: global idx(x86) */
-
-/*s: global breakpc(x86) */
-long	breakpc;
-/*e: global breakpc(x86) */
-/*s: global nbreak(x86) */
-long	nbreak;
-/*e: global nbreak(x86) */
-/*s: global cases(x86) */
-Case*	cases;
-/*e: global cases(x86) */
-/*s: global constnode(x86) */
-Node	constnode;
-/*e: global constnode(x86) */
-/*s: global fconstnode(x86) */
-Node	fconstnode;
-/*e: global fconstnode(x86) */
-/*s: global continpc(x86) */
-long	continpc;
-/*e: global continpc(x86) */
-/*s: global curarg(x86) */
-long	curarg;
-/*e: global curarg(x86) */
-/*s: global cursafe(x86) */
-long	cursafe;
-/*e: global cursafe(x86) */
-/*s: global firstp(x86) */
-Prog*	firstp;
-/*e: global firstp(x86) */
-/*s: global lastp(x86) */
-Prog*	lastp;
-/*e: global lastp(x86) */
-/*s: global maxargsafe(x86) */
-long	maxargsafe;
-/*e: global maxargsafe(x86) */
-/*s: global mnstring(x86) */
-int	mnstring;
-/*e: global mnstring(x86) */
-/*s: global nodrat(x86) */
-Node*	nodrat;
-/*e: global nodrat(x86) */
-/*s: global nodret(x86) */
-Node*	nodret;
-/*e: global nodret(x86) */
-/*s: global nodsafe(x86) */
-Node*	nodsafe;
-/*e: global nodsafe(x86) */
-/*s: global nrathole(x86) */
-long	nrathole;
-/*e: global nrathole(x86) */
-/*s: global nstring(x86) */
-long	nstring;
-/*e: global nstring(x86) */
-/*s: global p(x86) */
-Prog*	p;
-/*e: global p(x86) */
-/*s: global pc(x86) */
-long	pc;
-/*e: global pc(x86) */
-/*s: global regnode(x86) */
-Node	regnode;
-/*e: global regnode(x86) */
 /*s: global fregnode0(x86) */
 Node	fregnode0;
 /*e: global fregnode0(x86) */
 /*s: global fregnode1(x86) */
 Node	fregnode1;
 /*e: global fregnode1(x86) */
-/*s: global string(x86) */
-char	string[NSNAME];
-/*e: global string(x86) */
-/*s: global symrathole(x86) */
-Sym*	symrathole;
-/*e: global symrathole(x86) */
-/*s: global znode(x86) */
-Node	znode;
-/*e: global znode(x86) */
-/*s: global zprog(x86) */
-Prog	zprog;
-/*e: global zprog(x86) */
 /*s: global reg(x86) */
 int	reg[D_NONE];
 /*e: global reg(x86) */
-/*s: global exregoffset(x86) */
+
+/*s: global breakpc */
+long	breakpc;
+/*e: global breakpc */
+/*s: global nbreak */
+long	nbreak;
+/*e: global nbreak */
+/*s: global cases */
+Case*	cases;
+/*x: global cases */
+Case*	cases;
+/*e: global cases */
+/*s: global constnode */
+Node	constnode;
+/*e: global constnode */
+/*s: global fconstnode */
+Node	fconstnode;
+/*e: global fconstnode */
+/*s: global continpc */
+long	continpc;
+/*e: global continpc */
+/*s: global curarg */
+long	curarg;
+/*e: global curarg */
+/*s: global cursafe */
+long	cursafe;
+/*e: global cursafe */
+/*s: global firstp */
+Prog*	firstp;
+/*e: global firstp */
+/*s: global lastp */
+Prog*	lastp;
+/*e: global lastp */
+/*s: global maxargsafe */
+long	maxargsafe;
+/*e: global maxargsafe */
+/*s: global mnstring */
+int	mnstring;
+/*e: global mnstring */
+/*s: global nodrat */
+Node*	nodrat;
+/*e: global nodrat */
+/*s: global nodret */
+Node*	nodret;
+/*e: global nodret */
+/*s: global nodsafe */
+Node*	nodsafe;
+/*e: global nodsafe */
+/*s: global nrathole */
+long	nrathole;
+/*e: global nrathole */
+/*s: global nstring */
+long	nstring;
+/*e: global nstring */
+/*s: global p */
+Prog*	p;
+/*e: global p */
+/*s: global pc */
+long	pc;
+/*e: global pc */
+/*s: global regnode */
+Node	regnode;
+/*e: global regnode */
+/*s: global string */
+char	string[NSNAME];
+/*e: global string */
+/*s: global symrathole */
+Sym*	symrathole;
+/*e: global symrathole */
+/*s: global znode */
+Node	znode;
+/*e: global znode */
+/*s: global zprog */
+Prog	zprog;
+/*e: global zprog */
+/*s: global exregoffset */
 long	exregoffset;
-/*e: global exregoffset(x86) */
-/*s: global exfregoffset(x86) */
+/*e: global exregoffset */
+/*s: global exfregoffset */
 long	exfregoffset;
-/*e: global exfregoffset(x86) */
+/*e: global exfregoffset */
 
-/*s: global region(x86) */
+/*s: global region */
 Rgn	region[NRGN];
-/*e: global region(x86) */
-/*s: global rgp(x86) */
+/*e: global region */
+/*s: global rgp */
 Rgn*	rgp;
-/*e: global rgp(x86) */
-/*s: global nregion(x86) */
+/*e: global rgp */
+/*s: global nregion */
 int	nregion;
-/*e: global nregion(x86) */
-/*s: global nvar(x86) */
-int	nvar;
-/*e: global nvar(x86) */
+/*e: global nregion */
 
-/*s: global externs(x86) */
+/*s: global externs */
 Bits	externs;
-/*e: global externs(x86) */
-/*s: global params(x86) */
+/*e: global externs */
+/*s: global params */
 Bits	params;
-/*e: global params(x86) */
-/*s: global consts(x86) */
+/*e: global params */
+/*s: global consts */
 Bits	consts;
-/*e: global consts(x86) */
-/*s: global addrs(x86) */
+/*e: global consts */
+/*s: global addrs */
 Bits	addrs;
-/*e: global addrs(x86) */
+/*e: global addrs */
 
-/*s: global regbits(x86) */
+/*s: global regbits */
 long	regbits;
-/*e: global regbits(x86) */
-/*s: global exregbits(x86) */
-//long	exregbits;
-/*e: global exregbits(x86) */
+/*e: global regbits */
+/*s: global exregbits */
+long	exregbits;
+/*e: global exregbits */
 
-/*s: global change(x86) */
+/*s: global change */
 int	change;
-/*e: global change(x86) */
-/*s: global suppress(x86) */
-int	suppress;
-/*e: global suppress(x86) */
+/*e: global change */
+/*s: global suppress */
+bool	suppress;
+/*e: global suppress */
 
-/*s: global firstr(x86) */
+/*s: global firstr */
 Reg*	firstr;
-/*e: global firstr(x86) */
-/*s: global lastr(x86) */
+/*e: global firstr */
+/*s: global lastr */
 Reg*	lastr;
-/*e: global lastr(x86) */
-/*s: global zreg(x86) */
+/*e: global lastr */
+/*s: global zreg */
 Reg	zreg;
-/*e: global zreg(x86) */
-/*s: global freer(x86) */
+/*e: global zreg */
+/*s: global freer */
 Reg*	freer;
-/*e: global freer(x86) */
-/*s: global var(x86) */
+/*e: global freer */
+/*s: global var */
 Var	var[NVAR];
-/*e: global var(x86) */
-/*s: global idom(x86) */
+/*e: global var */
+/*s: global nvar */
+int	nvar;
+/*e: global nvar */
+
+/*s: global idom */
 long*	idom;
-/*e: global idom(x86) */
-/*s: global rpo2r(x86) */
+/*e: global idom */
+/*s: global rpo2r */
 Reg**	rpo2r;
-/*e: global rpo2r(x86) */
-/*s: global maxnr(x86) */
+/*e: global rpo2r */
+/*s: global maxnr */
 long	maxnr;
-/*e: global maxnr(x86) */
+/*e: global maxnr */
 /*e: 8c/globals2.c */

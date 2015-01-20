@@ -33,7 +33,7 @@ noretval(int n)
  *		*11 ==> 11		??
  *		*2 ==> 10		name
  *		*3 ==> 12		*(reg)+offset
- *	calculate complexity (number of registers)
+ *	calculate complexity (number of registers) //$
  */
 void
 xcom(Node *n)

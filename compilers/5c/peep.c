@@ -219,7 +219,7 @@ excise(Reg *r)
 }
 /*e: function excise(arm) */
 
-/*s: function uniqp(arm) */
+/*s: function uniqp */
 Reg*
 uniqp(Reg *r)
 {
@@ -235,9 +235,9 @@ uniqp(Reg *r)
             return R;
     return r1;
 }
-/*e: function uniqp(arm) */
+/*e: function uniqp */
 
-/*s: function uniqs(arm) */
+/*s: function uniqs */
 Reg*
 uniqs(Reg *r)
 {
@@ -253,7 +253,7 @@ uniqs(Reg *r)
             return R;
     return r1;
 }
-/*e: function uniqs(arm) */
+/*e: function uniqs */
 
 /*s: function regtyp(arm) */
 int
@@ -390,7 +390,7 @@ gotit:
 }
 /*e: function subprop(arm) */
 
-/*s: function copyprop(arm) */
+/*s: function copyprop */
 /*
  * The idea is to remove redundant copies.
  *	v1->v2	F=0
@@ -419,9 +419,9 @@ copyprop(Reg *r0)
         r->active = 0;
     return copy1(v1, v2, r0->s1, 0);
 }
-/*e: function copyprop(arm) */
+/*e: function copyprop */
 
-/*s: function copy1(arm) */
+/*s: function copy1 */
 int
 copy1(Adr *v1, Adr *v2, Reg *r, int f)
 {
@@ -498,7 +498,7 @@ copy1(Adr *v1, Adr *v2, Reg *r, int f)
     }
     return 1;
 }
-/*e: function copy1(arm) */
+/*e: function copy1 */
 
 /*s: function constprop(arm) */
 /*
@@ -1296,12 +1296,14 @@ struct {
 }; 
 /*e: global predinfo(arm) */
 
+/*s: struct Joininfo */
 typedef struct Joininfo {
     Reg *start;
     Reg *last;
     Reg *end;
     int len;
 } Joininfo;
+/*e: struct Joininfo */
 
 /*s: enum _anon_(arm) */
 enum {

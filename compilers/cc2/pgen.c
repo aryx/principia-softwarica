@@ -3,7 +3,7 @@
 
 void	gen(Node*);
 void	usedset(Node*, int);
-int	bcomplex(Node*, Node*);
+int		bcomplex(Node*, Node*);
 
 /*s: function codgen */
 //@Scheck: used by cc.y

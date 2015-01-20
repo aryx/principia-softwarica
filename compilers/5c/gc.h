@@ -71,9 +71,9 @@ struct	Adr
     char	etype;
 };
 /*e: struct Adr(arm) */
-/*s: constant A(arm) */
+/*s: constant A */
 #define	A	((Adr*)nil)
-/*e: constant A(arm) */
+/*e: constant A */
 
 /*s: constant INDEXED(arm) */
 #define	INDEXED	9
@@ -89,38 +89,43 @@ struct	Prog
 
     long	lineno;
 
+    /*s: [[Prog]] other fields(arm) */
     char	reg;
     byte	scond;
+    /*e: [[Prog]] other fields(arm) */
 
+    // Extra
+    /*s: [[Prog]] extra fields(arm) */
     Prog*	link;
+    /*e: [[Prog]] extra fields(arm) */
 };
 /*e: struct Prog(arm) */
-/*s: constant P(arm) */
+/*s: constant P */
 #define	P	((Prog*)nil)
-/*e: constant P(arm) */
+/*e: constant P */
 
-/*s: struct Case(arm) */
+/*s: struct Case */
 struct	Case
 {
     vlong	val;
     long	label;
     char	def;
-    char    isv;
+    char 	isv;
 
     Case*	link;
 };
-/*e: struct Case(arm) */
-/*s: constant C(arm) */
+/*e: struct Case */
+/*s: constant C */
 #define	C	((Case*)nil)
-/*e: constant C(arm) */
+/*e: constant C */
 
-/*s: struct C1(arm) */
+/*s: struct C1 */
 struct	C1
 {
     vlong	val;
     long	label;
 };
-/*e: struct C1(arm) */
+/*e: struct C1 */
 
 /*s: struct Multab(arm) */
 struct	Multab
@@ -138,7 +143,7 @@ struct	Hintab
 };
 /*e: struct Hintab(arm) */
 
-/*s: struct Var(arm) */
+/*s: struct Var */
 struct	Var
 {
     long	offset;
@@ -146,9 +151,9 @@ struct	Var
     char	name;
     char	etype;
 };
-/*e: struct Var(arm) */
+/*e: struct Var */
 
-/*s: struct Reg(arm) */
+/*s: struct Reg */
 struct	Reg
 {
     long	pc;
@@ -180,15 +185,15 @@ struct	Reg
     Reg*	link;
     Prog*	prog;
 };
-/*e: struct Reg(arm) */
-/*s: constant R(arm) */
+/*e: struct Reg */
+/*s: constant R */
 #define	R	((Reg*)nil)
-/*e: constant R(arm) */
+/*e: constant R */
 
 /*s: constant NRGN(arm) */
 #define	NRGN	1000		/* was 600; raised for paranoia.c */
 /*e: constant NRGN(arm) */
-/*s: struct Rgn(arm) */
+/*s: struct Rgn */
 struct	Rgn
 {
     Reg*	enter;
@@ -196,7 +201,7 @@ struct	Rgn
     short	varno;
     short	regno;
 };
-/*e: struct Rgn(arm) */
+/*e: struct Rgn */
 
 extern	long	breakpc;
 extern	long	nbreak;
