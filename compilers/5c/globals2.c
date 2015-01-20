@@ -89,7 +89,7 @@ long	exregoffset;
 long	exfregoffset;
 /*e: global exfregoffset(arm) */
 /*s: global suppress(arm) */
-int	suppress;
+bool	suppress;
 /*e: global suppress(arm) */
 
 /*s: global region(arm) */

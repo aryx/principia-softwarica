@@ -26,15 +26,15 @@ Gtab	gtabinit[NTYPE] =
     TCHAR,		"c",
     TUCHAR,		"uc",
     TSHORT,		"h",
-    TUSHORT,		"uh",
+    TUSHORT,	"uh",
     TINT,		"i",
     TUINT,		"ui",
     TLONG,		"l",
     TULONG,		"ul",
     TVLONG,		"v",
-    TUVLONG,		"uv",
+    TUVLONG,	"uv",
     TFLOAT,		"f",
-    TDOUBLE,		"d",
+    TDOUBLE,	"d",
 
     TXXX
 };

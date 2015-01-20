@@ -3,10 +3,10 @@
 
 /*s: function machcap(arm) */
 /* default, like old cc */
-int
+bool
 machcap(Node*)
 {
-    return 0;
+    return false;
 }
 /*e: function machcap(arm) */
 /*e: 5c/machcap.c */

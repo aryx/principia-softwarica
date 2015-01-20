@@ -4,11 +4,12 @@
 #include	<common.out.h>
 #include	"arm/5.out.h"
 
-/*s: constant SZ_CHAR(arm) */
 /*
  * 5c/arm
  * Arm
  */
+
+/*s: constant SZ_CHAR(arm) */
 #define	SZ_CHAR		1
 /*e: constant SZ_CHAR(arm) */
 /*s: constant SZ_SHORT(arm) */
@@ -39,15 +40,15 @@
 #define	BTRUE		0x1000
 /*e: constant BTRUE(arm) */
 
-typedef	struct	Adr	Adr;
+typedef	struct	Adr		Adr;
 typedef	struct	Prog	Prog;
 typedef	struct	Case	Case;
-typedef	struct	C1	C1;
+typedef	struct	C1		C1;
 typedef	struct	Multab	Multab;
 typedef	struct	Hintab	Hintab;
-typedef	struct	Var	Var;
-typedef	struct	Reg	Reg;
-typedef	struct	Rgn	Rgn;
+typedef	struct	Var		Var;
+typedef	struct	Reg		Reg;
+typedef	struct	Rgn		Rgn;
 
 
 /*s: constant R0ISZERO(arm) */
@@ -61,16 +62,17 @@ struct	Adr
     double	dval;
     char	sval[NSNAME];
     Ieee	ieee;
-
     Sym*	sym;
+
     char	type;
     char	reg;
     char	name;
+
     char	etype;
 };
 /*e: struct Adr(arm) */
 /*s: constant A(arm) */
-#define	A	((Adr*)0)
+#define	A	((Adr*)nil)
 /*e: constant A(arm) */
 
 /*s: constant INDEXED(arm) */
@@ -79,31 +81,37 @@ struct	Adr
 /*s: struct Prog(arm) */
 struct	Prog
 {
+    // enum<opcode>, from 5.out.h
+    char	as;
+
     Adr	from;
     Adr	to;
-    Prog*	link;
+
     long	lineno;
-    char	as;
+
     char	reg;
-    uchar	scond;
+    byte	scond;
+
+    Prog*	link;
 };
 /*e: struct Prog(arm) */
 /*s: constant P(arm) */
-#define	P	((Prog*)0)
+#define	P	((Prog*)nil)
 /*e: constant P(arm) */
 
 /*s: struct Case(arm) */
 struct	Case
 {
-    Case*	link;
     vlong	val;
     long	label;
     char	def;
-    char isv;
+    char    isv;
+
+    Case*	link;
 };
 /*e: struct Case(arm) */
 /*s: constant C(arm) */
-#define	C	((Case*)0)
+#define	C	((Case*)nil)
 /*e: constant C(arm) */
 
 /*s: struct C1(arm) */
@@ -174,7 +182,7 @@ struct	Reg
 };
 /*e: struct Reg(arm) */
 /*s: constant R(arm) */
-#define	R	((Reg*)0)
+#define	R	((Reg*)nil)
 /*e: constant R(arm) */
 
 /*s: constant NRGN(arm) */
@@ -221,12 +229,6 @@ extern	long	exregoffset;
 extern	long	exfregoffset;
 extern	int	suppress;
 
-/*s: function BLOAD(arm) */
-#define	BLOAD(r)	band(bnot(r->refbehind), r->refahead)
-/*e: function BLOAD(arm) */
-/*s: function BSTORE(arm) */
-#define	BSTORE(r)	band(bnot(r->calbehind), r->calahead)
-/*e: function BSTORE(arm) */
 /*s: function LOAD(arm) */
 #define	LOAD(r)		(~r->refbehind.b[z] & r->refahead.b[z])
 /*e: function LOAD(arm) */
@@ -244,9 +246,6 @@ extern	int	suppress;
 /*s: constant CREF(arm) */
 #define	CREF	5
 /*e: constant CREF(arm) */
-/*s: constant CINF(arm) */
-#define	CINF	1000
-/*e: constant CINF(arm) */
 /*s: constant LOOP(arm) */
 #define	LOOP	3
 /*e: constant LOOP(arm) */
@@ -313,7 +312,7 @@ Node*	nod32const(vlong);
 Node*	nodfconst(double);
 void	nodreg(Node*, Node*, int);
 void	regret(Node*, Node*);
-int	tmpreg(void);
+int		tmpreg(void);
 void	regalloc(Node*, Node*, Node*);
 void	regfree(Node*);
 void	regialloc(Node*, Node*, Node*);
@@ -329,17 +328,17 @@ void	gmove(Node*, Node*);
 void	gmover(Node*, Node*);
 void	gins(int a, Node*, Node*);
 void	gopcode(int, Node*, Node*, Node*);
-int	samaddr(Node*, Node*);
+int		samaddr(Node*, Node*);
 void	gbranch(int);
 void	patch(Prog*, long);
-int	sconst(Node*);
-int	sval(long);
+int		sconst(Node*);
+int		sval(long);
 void	gpseudo(int, Sym*, Node*);
 
 /*
  * swt.c
  */
-int	swcmp(const void*, const void*);
+int		swcmp(const void*, const void*);
 void	doswit(Node*);
 void	swit1(C1*, int, long, Node*);
 void	swit2(C1*, int, long, Node*, Node*);
@@ -347,7 +346,7 @@ void	casf(void);
 void	bitload(Node*, Node*, Node*, Node*, Node*);
 void	bitstore(Node*, Node*, Node*, Node*, Node*);
 long	outstring(char*, long);
-int	mulcon(Node*, Node*);
+int		mulcon(Node*, Node*);
 Multab*	mulcon0(long);
 void	nullwarn(Node*, Node*);
 void	gextern(Sym*, Node*, long, long);
@@ -370,7 +369,7 @@ int	Rconv(Fmt*);
  * reg.c
  */
 Reg*	rega(void);
-int	rcmp(const void*, const void*);
+int		rcmp(const void*, const void*);
 void	regopt(Prog*);
 void	addmove(Reg*, int, int, int);
 Bits	mkvar(Adr*, int);
@@ -408,8 +407,8 @@ int	copysub1(Prog*, Adr*, Adr*, int);
 
 long	RtoB(int);
 long	FtoB(int);
-int	BtoR(long);
-int	BtoF(long);
+int		BtoR(long);
+int		BtoF(long);
 
 void	predicate(void); 
 int	isbranch(Prog *); 

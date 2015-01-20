@@ -4,11 +4,12 @@
 #include	<common.out.h>
 #include	<386/8.out.h>
 
-/*s: constant SZ_CHAR(x86) */
 /*
  * 8c/386
  * Intel 386
  */
+
+/*s: constant SZ_CHAR(x86) */
 #define	SZ_CHAR		1
 /*e: constant SZ_CHAR(x86) */
 /*s: constant SZ_SHORT(x86) */

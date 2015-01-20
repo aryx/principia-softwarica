@@ -7,11 +7,11 @@
 #pragma	lib	"../cc/cc.a$O" //$
 
 typedef	struct	Node	Node;
-typedef	struct	Sym	Sym;
 typedef	struct	Type	Type;
+typedef	struct	Sym		Sym;
 typedef	struct	Funct	Funct;
 typedef	struct	Decl	Decl;
-typedef	struct	Io	Io;
+typedef	struct	Io		Io;
 typedef	struct	Hist	Hist;
 typedef	struct	Term	Term;
 typedef	struct	Init	Init;

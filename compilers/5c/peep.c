@@ -1296,7 +1296,7 @@ struct {
 }; 
 /*e: global predinfo(arm) */
 
-typedef struct {
+typedef struct Joininfo {
     Reg *start;
     Reg *last;
     Reg *end;

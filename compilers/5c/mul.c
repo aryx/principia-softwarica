@@ -1,7 +1,6 @@
 /*s: 5c/mul.c */
 #include "gc.h"
 
-/*s: global maxmulops(arm) */
 /*
  * code sequences for multiply by constant.
  * [a-l][0-3]
@@ -12,6 +11,7 @@
  *	sub	r0,r1,r2
  */
 
+/*s: global maxmulops(arm) */
 static  int	maxmulops = 3;	/* max # of ops to replace mul with */
 /*e: global maxmulops(arm) */
 /*s: global multabp(arm) */
