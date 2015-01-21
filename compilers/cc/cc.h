@@ -79,6 +79,9 @@ struct	Node
     // option<ref_own<Node>>
     Node*	right;
 
+    long	lineno;
+
+    /*s: [[Node]] other fields */
     // for OCONST?
     // could be put in a union
     vlong	vconst;		/* non fp const */ // abused in switch?
@@ -86,14 +89,8 @@ struct	Node
 
     char*	cstring;	/* character string */ // also used for ints
     TRune*	rstring;	/* rune string */
-
-    long	lineno;
-
-    /*s: [[Node]] other fields */
-    Type*	type;
     /*x: [[Node]] other fields */
-    // enum<type_kind>, inline of Node.type->etype?
-    char	etype;
+    Type*	type;
     /*x: [[Node]] other fields */
     // enum<cxxx>
     char	class;
@@ -103,7 +100,7 @@ struct	Node
     void*	label;
 
     long	pc;
-    int	reg;
+    int		reg;
     long	xoffset;
 
     // (ab)used as bool for marker of label def (true) vs use (false),
@@ -111,6 +108,9 @@ struct	Node
     char	complex; 
 
     char	scale;
+    /*x: [[Node]] other fields */
+    // enum<type_kind>, inline of Node.type->etype?
+    char	etype;
     /*x: [[Node]] other fields */
     // enum<gxxx>
     char	garb;
@@ -148,12 +148,12 @@ struct	Sym
     /*x: [[Sym]] other fields */
     char*	macro;
     /*x: [[Sym]] other fields */
+    ushort	lexical;
+    /*x: [[Sym]] other fields */
     long	offset;
 
     vlong	vconst;
     double	fconst;
-
-    ushort	lexical;
 
     char	sym;
     /*x: [[Sym]] other fields */
@@ -338,12 +338,30 @@ enum node_kind
 {
     OXXX,
 
-    OADD,
+    // ----------------------------------------------------------------------
+    // Names
+    // ----------------------------------------------------------------------
+    ONAME,
+
+    // ----------------------------------------------------------------------
+    // Expressions
+    // ----------------------------------------------------------------------
+    /*s: expression nodes */
+    OSTRING,
+    OLSTRING,
+
     OADDR,
+
+    OADD,
+
     OAND,
     OANDAND,
 
-    OARRAY, // used for array decl and designator initializer array
+    OOR,
+    OOROR,
+
+    OXOR,
+    ONEG,
 
     OAS,
     OASI,
@@ -364,40 +382,26 @@ enum node_kind
     OASSUB,
     OASXOR,
 
-    OBIT,
-    OBREAK,
-    OCASE, // for default too, in which case Node.left is null
     OCAST,
-    OCOMMA,
-    OCOND,
-    OCONST,
-    OCONTINUE,
+
     ODIV,
 
     ODOT,
 
     ODOTDOT,
-    ODWHILE,
-    OENUM,
+
+    OCOMMA,
+
+    OCOND,
+
     OEQ,
-    OFOR,
-
-    OFUNC, // used for calls but also proto decls :(
-
     OGE,
-    OGOTO,
     OGT,
     OHI,
     OHS,
-    OIF,
-    OIND,
-    OINDREG,
-    OINIT,
-    OLABEL,
 
     OLDIV,
     OLE,
-    OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
     OLMOD,
     OLMUL,
     OLO,
@@ -405,52 +409,100 @@ enum node_kind
     OLSHR,
     OLT,
 
-    OMOD,
-    OMUL,
-
-    ONAME,
-
     ONE,
     ONOT,
-    OOR,
-    OOROR,
+
+    OMOD,
+    OMUL,
 
     OPOSTDEC,
     OPOSTINC,
     OPREDEC,
     OPREINC,
 
-    OPROTO,
+    OIND,
+    OINDREG,
+    OSUB,
 
-    OREGISTER, // after parsing only?
-
-    ORETURN,
-    OSET,
     OSIGN,
     OSIZE,
-    OSTRING,
-    OLSTRING,
-    OSTRUCT,
-    OSUB,
-    OSWITCH,
-    OUNION,
-    OUSED,
-    OWHILE,
-
-    OXOR,
-    ONEG,
-
-    OCOM,
-
-    OPOS,
 
     OELEM, // field designator
+    /*e: expression nodes */
 
+    // ----------------------------------------------------------------------
+    // Statements
+    // ----------------------------------------------------------------------
+    /*s: statement nodes */
+    OIF,
+
+    OSWITCH,
+    OCASE, // for default too, in which case Node.left is null
+
+    OFOR,
+    OWHILE,
+    ODWHILE,
+
+    OBREAK,
+    OCONTINUE,
+
+    ORETURN,
+
+    OGOTO,
+    OLABEL,
+
+    OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
+
+    OSET,
+    OUSED,
+    /*e: statement nodes */
+
+    // ----------------------------------------------------------------------
+    // Variables
+    // ----------------------------------------------------------------------
+    /*s: variable declaration nodes */
+    OINIT,
+    /*e: variable declaration nodes */
+
+    // ----------------------------------------------------------------------
+    // Declarations
+    // ----------------------------------------------------------------------
+    /*s: declaration nodes */
+    OPROTO,
+    /*e: declaration nodes */
+
+    // ----------------------------------------------------------------------
+    // Definitions
+    // ----------------------------------------------------------------------
+    /*s: definition nodes */
+    OARRAY, // used for array decl and designator initializer array
+
+    OCONST,
+    OREGISTER, // after parsing only?
+
+    OSTRUCT,
+    OUNION,
+    OENUM,
+
+    OFUNC, // used for calls but also proto decls :(
+    /*e: definition nodes */
+
+    // ----------------------------------------------------------------------
+    // Misc
+    // ----------------------------------------------------------------------
+    /*s: misc nodes */
     OTST,		/* used in some compilers */
     OINDEX,
     OFAS,
     OREGPAIR,
     OEXREG,
+
+    OCOM,
+
+    OPOS,
+
+    OBIT,
+    /*e: misc nodes */
 
     OEND
 };
@@ -460,7 +512,10 @@ enum type_kind
 {
     TXXX,
 
-    // type cases
+    // ----------------------------------------------------------------------
+    // Types
+    // ----------------------------------------------------------------------
+    /*s: [[Type_kind]] type cases */
     TCHAR,
     TUCHAR,
     TSHORT,
@@ -483,28 +538,45 @@ enum type_kind
     TENUM,
 
     TDOT, // ??
+    /*e: [[Type_kind]] type cases */
+
     NTYPE,
 
-    // storage class cases
+    // ----------------------------------------------------------------------
+    // Storage (temporary, see CAUTO/CEXTERN/...)
+    // ----------------------------------------------------------------------
+    /*s: [[Type_kind]] storage cases */
     TAUTO	= NTYPE,
-
     TEXTERN,
     TSTATIC,
     TTYPEDEF, // ugly, not really a storage class
     TTYPESTR,
     TREGISTER,
+    /*e: [[Type_kind]] storage cases */
 
-    // qualifier cases
+    // ----------------------------------------------------------------------
+    // Qualifiers (aka garbage) (temporary, see GCONSTNT/GVOLATILE)
+    // ----------------------------------------------------------------------
+    /*s: [[Type_kind]] qualifier cases */
     TCONSTNT,
     TVOLATILE,
+    /*e: [[Type_kind]] qualifier cases */
 
-    // other cases
+    // ----------------------------------------------------------------------
+    // Signs (temporary, see TUINT/TULONG/...)
+    // ----------------------------------------------------------------------
+    /*s: [[Type_kind]] sign cases */
     TUNSIGNED,
     TSIGNED,
+    /*e: [[Type_kind]] sign cases */
 
-    // ????
+    // ----------------------------------------------------------------------
+    // Misc
+    // ----------------------------------------------------------------------
+    /*s: [[Type_kind]] misc cases */
     TFILE,
     TOLD,
+    /*e: [[Type_kind]] misc cases */
 
     NALLTYPES,
 
@@ -566,6 +638,7 @@ enum
 enum gxxx
 {
     GXXX		= 0,
+
     GCONSTNT	= 1<<0,
     GVOLATILE	= 1<<1,
 

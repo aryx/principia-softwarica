@@ -4,7 +4,6 @@
 %}
 /*s: union yacc */
 %union  {
-    Sym*    sym;
     vlong   vval;
     double  dval;
     struct
@@ -12,6 +11,8 @@
         char*   s;
         long    l;
     } sval;
+
+    Sym*    sym;
 
    /*s: [[union yacc]] other fields */
    long    lval;

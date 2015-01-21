@@ -1283,6 +1283,7 @@ cinit(void)
     types[TFLOAT] = typ(TFLOAT, T);
     types[TDOUBLE] = typ(TDOUBLE, T);
     types[TVOID] = typ(TVOID, T);
+
     types[TENUM] = typ(TENUM, T);
     types[TFUNC] = typ(TFUNC, types[TINT]);
     types[TIND] = typ(TIND, types[TVOID]);

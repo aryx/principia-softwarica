@@ -149,7 +149,7 @@ typ(int et, Type *d)
     t->etype = et;
     t->link = d;
     t->down = T;
-    t->garb = 0;
+    t->garb = GXXX;
     t->sym = S;
 
     t->width = ewidth[et];
