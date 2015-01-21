@@ -605,6 +605,8 @@ enum type_kind
 % split? hmm but would not work with enum<bxxx> then, ugly but
 % because of the way they handle type/qualifier/storage they all
 % have to be in the same enum (ugly).
+%dead:TFILE?
+
 
 % that's the real important stuff
 <<[[Type_kind]] type cases>>=
@@ -660,7 +662,7 @@ TSIGNED,
 <<[[Type_kind]] misc cases>>=
 TOLD,
 @
-%dead:TFILE?
+% old style ansi declaration?
 
 % see also enum bxxx which is used only in grammar I think,
 % and seems to be a 64 bits bitset of the types above
@@ -815,7 +817,7 @@ Type*	tfield;
 <<global tufield>>=
 Type*	tufield;
 @
-
+% ??? unsigned field?
 
 
 % see also typexxx set in Typechecking section
@@ -847,6 +849,7 @@ rsametype(Type *t1, Type *t2, int n, bool f)
             return false;
         if(n <= 0)
             return true;
+
         et = t1->etype;
         if(et != t2->etype)
             return false;
@@ -857,6 +860,7 @@ rsametype(Type *t1, Type *t2, int n, bool f)
             t1 = t1->down;
             t2 = t2->down;
             while(t1 != T && t2 != T) {
+
                 if(t1->etype == TOLD) {
                     t1 = t1->down;
                     continue;
@@ -902,6 +906,7 @@ rsametype(Type *t1, Type *t2, int n, bool f)
         }
         t1 = t1->link;
         t2 = t2->link;
+
         if((f || !debug['V']) && et == TIND) {
             if(t1 != T && t1->etype == TVOID)
                 return true;
@@ -949,7 +954,7 @@ struct	Funct
 @
 
 <<function isfunct>>=
-int
+bool
 isfunct(Node *n)
 {
     Type *t, *t1;
@@ -970,18 +975,18 @@ isfunct(Node *n)
     case OAS:	// put cast on rhs
     case OASI:
     case OASADD:
-    case OASAND:
-    case OASASHL:
-    case OASASHR:
+    case OASSUB:
+    case OASMUL:
     case OASDIV:
+    case OASMOD:
+    case OASASHR:
+    case OASLMUL:
     case OASLDIV:
     case OASLMOD:
-    case OASLMUL:
     case OASLSHR:
-    case OASMOD:
-    case OASMUL:
+    case OASASHL:
+    case OASAND:
     case OASOR:
-    case OASSUB:
     case OASXOR:
         if(n->right == Z)
             goto no;
@@ -1031,16 +1036,14 @@ isfunct(Node *n)
     if(s == S)
         goto no;
 
+
+
     /*
      * the answer is yes,
      * now we rewrite the node
      * and give diagnostics
      */
     switch(o) {
-    default:
-        diag(n, "isfunct op missing %O\n", o);
-        goto bad;
-
     case OADD:	// T f(T, T)
     case OAND:
     case OASHL:
@@ -1111,6 +1114,10 @@ isfunct(Node *n)
         n->right = n->left;
         break;
 
+    default:
+        diag(n, "isfunct op missing %O\n", o);
+        goto bad;
+
 
     }
 
@@ -1130,16 +1137,16 @@ build:
         goto bad;
     if(tcoma(n->left, n->right, l->type->down, 1))
         goto bad;
-    return 1;
+    return true;
 
 no:
-    return 0;
+    return false;
 
 bad:
     diag(n, "cant rewrite typestr for op %O\n", o);
     prtree(n, "isfunct");
     n->type = T;
-    return 1;
+    return true;
 }
 @
 
@@ -1238,7 +1245,7 @@ lookup(void)
 
 <<[[Sym]] other fields>>=
 Type*	type;
-// enum<cxxx>?
+// enum<storage_class>
 char	class;
 @
 % similar to Node.type Decl.type, and now Sym.type
@@ -1315,7 +1322,7 @@ char	sym;
 <<enum dxxx>>=
 enum dxxx
 {
-    DMARK,
+    DMARK, // special mark to help represent a stack of list??
 
     DAUTO,
     DSUE, // struct/union/enum
@@ -1324,6 +1331,8 @@ enum dxxx
 @
 % DAUTO(declaration?), TAUTO(temporary), LAUTO(lexeme), CAUTO(class), 
 % hmmm that's a lot of AUTO.
+% this type is for the different namespaces? which are
+% variables, sue tags, and labels?
 
 % for? 
 % - labels
@@ -1337,7 +1346,7 @@ struct	Decl
     short	val;
 
     Type*	type;
-    // enum<cxxx> storage class
+    // enum<storage_class>
     char	class;
 
     long	varlineno;
@@ -1613,19 +1622,12 @@ struct	Prog
 };
 @
 
-<<[[Prog]] extra fields(arm)>>=
-Prog*	link;
-@
-
-<<constant P>>=
-#define	P	((Prog*)nil)
-@
-
-
 
 
 <<[[Prog]] other fields(arm)>>=
+// option<enum<registr>>, None = R_NONE, see 5.out.h
 char	reg;
+// biset<>
 byte	scond;
 @
 
@@ -1669,18 +1671,29 @@ long	pc;
 Prog*	p;
 @
 
-
+% like in Linker.nw
 <<global firstp>>=
+// list<ref_own<Prog>, next = Prog.link
 Prog*	firstp;
 @
 
+<<[[Prog]] extra fields(arm)>>=
+// list<ref<Prog>> from firstp
+Prog*	link;
+@
+
+<<constant P>>=
+#define	P	((Prog*)nil)
+@
+
 <<global lastp>>=
+// ref<Prog>, last elt of firstp list
 Prog*	lastp;
 @
 
 
 
-
+% gins | gclean | ... -> <>
 <<function nextpc>>=
 void
 nextpc(void)
@@ -1700,7 +1713,7 @@ nextpc(void)
     lastp = p;
 }
 @
-
+% pc useful for what?
 
 
 \chapter{[[main()]]}
@@ -1721,40 +1734,49 @@ char*	outfile;
 
 % not put here: -g (in cgen()) -G (in gen())
 
-<<function main>>=
-/*
- * known debug flags
- *	-a		acid declaration output
- *	-A		!B
- *	-B		non ANSI
- *	-d		print declarations
- *	-D name		define
- *	-F		format specification check
- *	-i		print initialization
- *	-I path		include
- *	-l		generate little-endian code
- *	-L		print every NAME symbol
- *	-M		constant multiplication
- *	-m		print add/sub/mul trees
- *	-n		print acid to file (%.c=%.acid) (with -a or -aa)
- *	-o file		output file
- *	-p		use standard cpp ANSI preprocessor (not on windows)
- *	-r		print registerization
- *	-s		print structure offsets (with -a or -aa)
- *	-S		print assembly
- *	-t		print type trees
- *	-V		enable void* conversion warnings
- *	-v		verbose printing
- *	-w		print warnings
- *	-X		abort on error
- *	-.		Inhibit search for includes in source directory
- */
+% *	-o file		output file
 
+% *	-v		verbose printing
+% *	-w		print warnings
+% *	-X		abort on error
+% *	-V		enable void* conversion warnings
+
+% *	-A		!B
+% *	-B		non ANSI
+
+% *	-p		use standard cpp ANSI preprocessor (not on windows)
+% *	-D name		define
+% *	-I path		include
+% *	-.		Inhibit search for includes in source directory
+
+% *	-S		print assembly
+
+% *	-a		acid declaration output
+% *	-n		print acid to file (%.c=%.acid) (with -a or -aa)
+
+% *	-d		print declarations
+% *	-L		print every NAME symbol
+% *	-m		print add/sub/mul trees
+% *	-r		print registerization
+% *	-s		print structure offsets (with -a or -aa)
+% *	-t		print type trees
+% *	-i		print initialization
+
+% *	-F		format specification check
+% *	-M		constant multiplication
+% *	-l		generate little-endian code (mips only)
+
+<<[[main()]] locals>>=
+char **defs, **np, *p;
+int nproc, nout, status, i, c, ndef, maxdef;
+@
+
+
+<<function main>>=
 //@Scheck: not dead, entry point :)
 void main(int argc, char *argv[])
 {
-    char **defs, **np, *p;
-    int nproc, nout, status, i, c, ndef, maxdef;
+    <<[[main()]] locals>>
 
     memset(debug, 0, sizeof(debug));
 
@@ -1772,48 +1794,7 @@ void main(int argc, char *argv[])
     setinclude(".");
 
     ARGBEGIN {
-    case 'o':
-        outfile = ARGF();
-        break;
-
-    case 'D':
-        p = ARGF();
-        if(p) {
-            // realloc, growing array
-            if(ndef >= maxdef){
-                maxdef += 50;
-                np = alloc(maxdef * sizeof *np);
-                if(defs != nil)
-                    memmove(np, defs, (maxdef - 50) * sizeof *np);
-                defs = np;
-            }
-            defs[ndef++] = p;
-            dodefine(p);
-        }
-        break;
-
-    case 'I':
-        p = ARGF();
-        if(p)
-            setinclude(p);
-        break;
-
-    case 'l':			/* for little-endian mips */
-        if(thechar != 'v'){
-            print("can only use -l with vc");
-            errorexit();
-        }
-        thechar = '0';
-        thestring = "spim";
-        break;
-
-    default:
-        c = ARGC();
-        if(c >= 0 && c < sizeof(debug))
-            debug[c]++;
-        break;
-
-
+    <<[[main()]] command line processing>>
     } ARGEND
 
     if(argc < 1 && outfile == nil) {
@@ -1821,52 +1802,7 @@ void main(int argc, char *argv[])
         errorexit();
     }
 
-    if(argc > 1) {
-        nproc = 1;
-        /*
-         * if we're writing acid to standard output, don't compile
-         * concurrently, to avoid interleaving output.
-         */
-        if(((!debug['a'] && !debug['Z']) || debug['n']) &&
-            (p = getenv("NPROC")) != nil)
-            nproc = atol(p);	/* */
-        c = 0;
-        nout = 0;
-        for(;;) {
-            while(nout < nproc && argc > 0) {
-                i = fork();
-                if(i < 0) {
-                    i = mywait(&status);
-                    if(i < 0) {
-                        print("cannot create a process\n");
-                        errorexit();
-                    }
-                    if(status)
-                        c++;
-                    nout--;
-                    continue;
-                }
-                if(i == 0) {
-                    fprint(2, "%s:\n", *argv);
-                    if (compile(*argv, defs, ndef))
-                        errorexit();
-                    exits(0);
-                }
-                nout++;
-                argc--;
-                argv++;
-            }
-            i = mywait(&status);
-            if(i < 0) {
-                if(c)
-                    errorexit();
-                exits(0);
-            }
-            if(status)
-                c++;
-            nout--;
-        }
-    }
+    <<[[main()]] multiple files handling>>
 
     if(argc == 0)
         c = compile("stdin", defs, ndef);
@@ -1875,7 +1811,7 @@ void main(int argc, char *argv[])
 
     if(c)
         errorexit();
-    exits(0);
+    exits(nil);
 }
 @
 
@@ -1886,6 +1822,43 @@ Biobuf	outbuf;
 <<global diagbuf>>=
 Biobuf	diagbuf;
 @
+
+\section{Arguments processing}
+
+<<[[main()]] command line processing>>=
+case 'o':
+    outfile = ARGF();
+    break;
+
+case 'D':
+    p = ARGF();
+    if(p) {
+        // realloc, growing array
+        if(ndef >= maxdef){
+            maxdef += 50;
+            np = alloc(maxdef * sizeof *np);
+            if(defs != nil)
+                memmove(np, defs, (maxdef - 50) * sizeof *np);
+            defs = np;
+        }
+        defs[ndef++] = p;
+        dodefine(p);
+    }
+    break;
+
+case 'I':
+    p = ARGF();
+    if(p)
+        setinclude(p);
+    break;
+default:
+    c = ARGC();
+    if(c >= 0 && c < sizeof(debug))
+        debug[c]++;
+    break;
+@
+
+
 
 \section{[[compile()]]}
 
@@ -22497,7 +22470,65 @@ convvtox(vlong c, int et)
 % 5c -l, just for mips => switch from vc to 0c
 
 
+%    case 'l':			/* for little-endian mips */
+%        if(thechar != 'v'){
+%            print("can only use -l with vc");
+%            errorexit();
+%        }
+%        thechar = '0';
+%        thestring = "spim";
+%        break;
+
 \section{Processing multiple files}
+
+<<[[main()]] multiple files handling>>=
+if(argc > 1) {
+    nproc = 1;
+    /*
+     * if we're writing acid to standard output, don't compile
+     * concurrently, to avoid interleaving output.
+     */
+    if(((!debug['a'] && !debug['Z']) || debug['n']) &&
+        (p = getenv("NPROC")) != nil)
+        nproc = atol(p);	/* */
+    c = 0;
+    nout = 0;
+    for(;;) {
+        while(nout < nproc && argc > 0) {
+            i = fork();
+            if(i < 0) {
+                i = mywait(&status);
+                if(i < 0) {
+                    print("cannot create a process\n");
+                    errorexit();
+                }
+                if(status)
+                    c++;
+                nout--;
+                continue;
+            }
+            if(i == 0) {
+                fprint(2, "%s:\n", *argv);
+                if (compile(*argv, defs, ndef))
+                    errorexit();
+                exits(0);
+            }
+            nout++;
+            argc--;
+            argv++;
+        }
+        i = mywait(&status);
+        if(i < 0) {
+            if(c)
+                errorexit();
+            exits(0);
+        }
+        if(status)
+            c++;
+        nout--;
+    }
+}
+@
 
 \chapter{Conclusion}
 
@@ -23473,6 +23504,7 @@ if(debug['f'])
 
 \section{[[5c -d]], printing declarations}
 % useful to debug, potentially useful to build tools too! e.g. tags file
+% also print when revert a decl in revertdcl()
 
 % labels
 <<function dbgdecl>>=
