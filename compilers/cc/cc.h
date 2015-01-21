@@ -92,7 +92,7 @@ struct	Node
     /*x: [[Node]] other fields */
     Type*	type;
     /*x: [[Node]] other fields */
-    // enum<cxxx>
+    // enum<storage_class>
     char	class;
     /*x: [[Node]] other fields */
     Sym*	sym; 
@@ -112,7 +112,7 @@ struct	Node
     // enum<type_kind>, inline of Node.type->etype?
     char	etype;
     /*x: [[Node]] other fields */
-    // enum<gxxx>
+    // enum<qualifier>
     char	garb;
     /*x: [[Node]] other fields */
     bool 	xcast;
@@ -242,6 +242,7 @@ struct	Type
     long	lineno;
 
     /*s: [[Type]] other fields */
+    // enum<qualifier>
     char	garb;
     /*x: [[Type]] other fields */
     Sym*	sym;
@@ -347,114 +348,125 @@ enum node_kind
     // Expressions
     // ----------------------------------------------------------------------
     /*s: expression nodes */
-    OSTRING,
-    OLSTRING,
-
-    OADDR,
-
-    OADD,
-
-    OAND,
-    OANDAND,
-
-    OOR,
-    OOROR,
-
-    OXOR,
-    ONEG,
-
-    OAS,
-    OASI,
-    OASADD,
-    OASAND,
-    OASASHL,
-    OASASHR,
-    OASDIV,
-    OASHL,
-    OASHR,
-    OASLDIV,
-    OASLMOD,
-    OASLMUL,
-    OASLSHR,
-    OASMOD,
-    OASMUL,
-    OASOR,
-    OASSUB,
-    OASXOR,
-
-    OCAST,
-
-    ODIV,
-
-    ODOT,
-
-    ODOTDOT,
-
     OCOMMA,
-
-    OCOND,
-
-    OEQ,
-    OGE,
-    OGT,
-    OHI,
-    OHS,
-
-    OLDIV,
-    OLE,
-    OLMOD,
-    OLMUL,
-    OLO,
-    OLS,
-    OLSHR,
-    OLT,
-
-    ONE,
-    ONOT,
-
-    OMOD,
-    OMUL,
-
-    OPOSTDEC,
-    OPOSTINC,
-    OPREDEC,
-    OPREINC,
-
-    OIND,
-    OINDREG,
+    /*x: expression nodes */
+    OADD,
     OSUB,
 
-    OSIGN,
-    OSIZE,
+    OMUL,
+    ODIV,
+    OMOD,
 
-    OELEM, // field designator
+    OASHL,
+    OASHR,
+
+    OLT,
+    OGT,
+    OLE,
+    OGE,
+
+    OEQ,
+    ONE,
+
+    OAND,
+    OOR,
+    OXOR,
+
+    OANDAND,
+    OOROR,
+    /*x: expression nodes */
+    OCOND,
+    /*x: expression nodes */
+    OAS,
+
+    OASADD,
+    OASSUB,
+
+    OASMUL,
+    OASMOD,
+    OASDIV,
+
+    OASASHL,
+    OASASHR,
+
+    OASAND,
+    OASOR,
+    OASXOR,
+    /*x: expression nodes */
+    OCAST,
+    /*x: expression nodes */
+    OIND, // for uses (dereference) and also defs (and decls)
+    OADDR,
+    /*x: expression nodes */
+    OPOS,
+    ONEG,
+    ONOT,
+    OCOM,
+    /*x: expression nodes */
+    OPREDEC,
+    OPREINC,
+    /*x: expression nodes */
+    OSIZE,
+    OSIGN,
+    /*x: expression nodes */
+    OFUNC, // used for uses (calls) but also defs (and decls) :(
+    /*x: expression nodes */
+    ODOT,
+    /*x: expression nodes */
+    OPOSTINC,
+    OPOSTDEC,
+    /*x: expression nodes */
+    OCONST,
+    /*x: expression nodes */
+    OSTRING,
+    OLSTRING,
+    /*x: expression nodes */
+    OASI,
+    /*x: expression nodes */
+    OASLMUL,
+    OASLDIV,
+    OASLMOD,
+    OASLSHR,
+    /*x: expression nodes */
+    OLMUL,
+    OLDIV,
+    OLMOD,
+    OLSHR,
+    /*x: expression nodes */
+    OINDREG, // after parsing only
+    /*x: expression nodes */
+    // after parsing only
+    OHI,
+    OHS,
+    OLO,
+    OLS,
     /*e: expression nodes */
 
     // ----------------------------------------------------------------------
     // Statements
     // ----------------------------------------------------------------------
     /*s: statement nodes */
+    OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
+    /*x: statement nodes */
     OIF,
-
+    /*x: statement nodes */
     OSWITCH,
     OCASE, // for default too, in which case Node.left is null
-
-    OFOR,
-    OWHILE,
-    ODWHILE,
+    /*x: statement nodes */
+    ORETURN,
 
     OBREAK,
     OCONTINUE,
-
-    ORETURN,
-
-    OGOTO,
+    /*x: statement nodes */
+    OFOR,
+    OWHILE,
+    ODWHILE,
+    /*x: statement nodes */
     OLABEL,
-
-    OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
-
-    OSET,
+    OGOTO,
+    /*x: statement nodes */
     OUSED,
+    OSET,
     /*e: statement nodes */
 
     // ----------------------------------------------------------------------
@@ -462,6 +474,9 @@ enum node_kind
     // ----------------------------------------------------------------------
     /*s: variable declaration nodes */
     OINIT,
+    /*x: variable declaration nodes */
+    OARRAY, // used for uses (including designator) and defs (and decl)
+    OELEM,  // field designator
     /*e: variable declaration nodes */
 
     // ----------------------------------------------------------------------
@@ -475,33 +490,24 @@ enum node_kind
     // Definitions
     // ----------------------------------------------------------------------
     /*s: definition nodes */
-    OARRAY, // used for array decl and designator initializer array
-
-    OCONST,
-    OREGISTER, // after parsing only?
-
     OSTRUCT,
     OUNION,
-    OENUM,
-
-    OFUNC, // used for calls but also proto decls :(
+    /*x: definition nodes */
+    OBIT,
+    /*x: definition nodes */
+    OREGISTER, // after parsing only?
     /*e: definition nodes */
 
     // ----------------------------------------------------------------------
     // Misc
     // ----------------------------------------------------------------------
     /*s: misc nodes */
-    OTST,		/* used in some compilers */
-    OINDEX,
-    OFAS,
-    OREGPAIR,
+    ODOTDOT,
+    /*x: misc nodes */
     OEXREG,
-
-    OCOM,
-
-    OPOS,
-
-    OBIT,
+    /*x: misc nodes */
+    OINDEX, // x86 only
+    OREGPAIR, // x86 only, for 64 bits stuff
     /*e: misc nodes */
 
     OEND
@@ -528,22 +534,21 @@ enum type_kind
     TUVLONG,
     TFLOAT,
     TDOUBLE,
-
-    TIND,
-    TFUNC,
-    TARRAY,
+    /*x: [[Type_kind]] type cases */
     TVOID,
+    TIND,
+    TARRAY,
     TSTRUCT,
     TUNION,
     TENUM,
-
-    TDOT, // ??
+    TFUNC,
+    TDOT, // ... in function types
     /*e: [[Type_kind]] type cases */
 
     NTYPE,
 
     // ----------------------------------------------------------------------
-    // Storage (temporary, see CAUTO/CEXTERN/...)
+    // Storage (temporary, see CAUTO/CEXTERN/... for final storage)
     // ----------------------------------------------------------------------
     /*s: [[Type_kind]] storage cases */
     TAUTO	= NTYPE,
@@ -574,7 +579,6 @@ enum type_kind
     // Misc
     // ----------------------------------------------------------------------
     /*s: [[Type_kind]] misc cases */
-    TFILE,
     TOLD,
     /*e: [[Type_kind]] misc cases */
 
@@ -611,7 +615,7 @@ enum dxxx
 };
 /*e: enum dxxx */
 /*s: enum cxxx */
-enum
+enum storage_class
 {
     CXXX, // nothing specified
 
@@ -620,6 +624,7 @@ enum
     CGLOBL,
     CSTATIC,
 
+    /*s: [[Storage_class]] cases */
     CLOCAL,
 
     CTYPEDEF,
@@ -628,14 +633,15 @@ enum
     CPARAM,
     CSELEM,
     CLABEL,
-
+    /*x: [[Storage_class]] cases */
     CEXREG, // extern register, kencc ext (used in kernel for mips)
+    /*e: [[Storage_class]] cases */
 
     NCTYPES,
 };
 /*e: enum cxxx */
 /*s: enum gxxx */
-enum gxxx
+enum qualifier
 {
     GXXX		= 0,
 
@@ -670,7 +676,6 @@ enum bxxx
     BUNION		= 1L<<TUNION,
     BENUM		= 1L<<TENUM,
 
-    BFILE		= 1L<<TFILE,
     BDOT		= 1L<<TDOT,
 
     BCONSTNT	= 1L<<TCONSTNT,

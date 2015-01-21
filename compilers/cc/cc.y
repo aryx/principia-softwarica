@@ -430,6 +430,7 @@ cexpr:
     expr
 |   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
 /*x: expressions rules */
+/*s: expr rule */
 expr:
     xuexpr
 
@@ -451,9 +452,9 @@ expr:
 |   expr '|' expr  { $$ = new(OOR, $1, $3); }
 |   expr LANDAND expr { $$ = new(OANDAND, $1, $3); }
 |   expr LOROR expr   { $$ = new(OOROR, $1, $3); }
-
+/*x: expr rule */
 |   expr '?' cexpr ':' expr { $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
-
+/*x: expr rule */
 |   expr '=' expr  { $$ = new(OAS, $1, $3); }
 |   expr LPE expr  { $$ = new(OASADD, $1, $3); }
 |   expr LME expr  { $$ = new(OASSUB, $1, $3); }
@@ -465,6 +466,7 @@ expr:
 |   expr LANDE expr { $$ = new(OASAND, $1, $3); }
 |   expr LXORE expr { $$ = new(OASXOR, $1, $3); }
 |   expr LORE expr  { $$ = new(OASOR, $1, $3); }
+/*e: expr rule */
 /*x: expressions rules */
 xuexpr:
     uexpr
@@ -484,21 +486,23 @@ xuexpr:
     }
 /*e: xuexpr other cases */
 /*x: expressions rules */
+/*s: uexpr rule */
 uexpr:
     pexpr
 
 |   '*' xuexpr { $$ = new(OIND, $2, Z); }
 |   '&' xuexpr { $$ = new(OADDR, $2, Z); }
-
+/*x: uexpr rule */
 |   '+' xuexpr { $$ = new(OPOS, $2, Z); }
 |   '-' xuexpr { $$ = new(ONEG, $2, Z); }
 |   '!' xuexpr { $$ = new(ONOT, $2, Z); }
 |   '~' xuexpr { $$ = new(OCOM, $2, Z); }
 |   LPP xuexpr { $$ = new(OPREINC, $2, Z); }
 |   LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
-
+/*x: uexpr rule */
 |   LSIZEOF uexpr { $$ = new(OSIZE, $2, Z); }
 |   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
+/*e: uexpr rule */
 /*x: expressions rules */
 /*s: pexpr rule */
 pexpr:

@@ -12,7 +12,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - deadcode (TFILE?
+% - deadcode (TFILE, OFAS, OTST)
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -386,152 +386,8 @@ enum node_kind
 % I reorged. This type is purely internal to cc, it is not marshalled, 
 % so it is safe to reorder (as opposed to 5.out.h opcode type which is
 % a bit more difficult)
-
-<<expression nodes>>=
-OSTRING,
-OLSTRING,
-
-OADDR,
-
-OADD,
-
-OAND,
-OANDAND,
-
-OOR,
-OOROR,
-
-OXOR,
-ONEG,
-
-OAS,
-OASI,
-OASADD,
-OASAND,
-OASASHL,
-OASASHR,
-OASDIV,
-OASHL,
-OASHR,
-OASLDIV,
-OASLMOD,
-OASLMUL,
-OASLSHR,
-OASMOD,
-OASMUL,
-OASOR,
-OASSUB,
-OASXOR,
-
-OCAST,
-
-ODIV,
-
-ODOT,
-
-ODOTDOT,
-
-OCOMMA,
-
-OCOND,
-
-OEQ,
-OGE,
-OGT,
-OHI,
-OHS,
-
-OLDIV,
-OLE,
-OLMOD,
-OLMUL,
-OLO,
-OLS,
-OLSHR,
-OLT,
-
-ONE,
-ONOT,
-
-OMOD,
-OMUL,
-
-OPOSTDEC,
-OPOSTINC,
-OPREDEC,
-OPREINC,
-
-OIND,
-OINDREG,
-OSUB,
-
-OSIGN,
-OSIZE,
-
-OELEM, // field designator
-@
-
-
-<<statement nodes>>=
-OIF,
-
-OSWITCH,
-OCASE, // for default too, in which case Node.left is null
-
-OFOR,
-OWHILE,
-ODWHILE,
-
-OBREAK,
-OCONTINUE,
-
-ORETURN,
-
-OGOTO,
-OLABEL,
-
-OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
-
-OSET,
-OUSED,
-@
-
-<<variable declaration nodes>>=
-OINIT,
-@
-
-
-<<declaration nodes>>=
-OPROTO,
-@
-
-<<definition nodes>>=
-OARRAY, // used for array decl and designator initializer array
-
-OCONST,
-OREGISTER, // after parsing only?
-
-OSTRUCT,
-OUNION,
-OENUM,
-
-OFUNC, // used for calls but also proto decls :(
-@
-
-<<misc nodes>>=
-OTST,		/* used in some compilers */
-OINDEX,
-OFAS,
-OREGPAIR,
-OEXREG,
-
-OCOM,
-
-OPOS,
-
-OBIT,
-@
-
+%dead: OTST,		/* used in some compilers */
+%dead: OFAS
 
 % ONAME, ODOT, OELEM => use FNconv
 
@@ -588,9 +444,8 @@ Type*	type;
 
 
 
-% storage class
 <<enum cxxx>>=
-enum
+enum storage_class
 {
     CXXX, // nothing specified
 
@@ -599,16 +454,7 @@ enum
     CGLOBL,
     CSTATIC,
 
-    CLOCAL,
-
-    CTYPEDEF,
-    CTYPESTR,
-
-    CPARAM,
-    CSELEM,
-    CLABEL,
-
-    CEXREG, // extern register, kencc ext (used in kernel for mips)
+    <<[[Storage_class]] cases>>
 
     NCTYPES,
 };
@@ -618,7 +464,7 @@ enum
 
 % for nodes that are decl? which is?
 <<[[Node]] other fields>>=
-// enum<cxxx>
+// enum<storage_class>
 char	class;
 @
 
@@ -631,8 +477,17 @@ Sym*	sym;
 % see Sym later
 
 
+%XXXXX
+<<[[Storage_class]] cases>>=
+CLOCAL,
 
+CTYPEDEF,
+CTYPESTR,
 
+CPARAM,
+CSELEM,
+CLABEL,
+@
 
 
 
@@ -721,7 +576,7 @@ enum type_kind
     NTYPE,
 
     // ----------------------------------------------------------------------
-    // Storage (temporary, see CAUTO/CEXTERN/...)
+    // Storage (temporary, see CAUTO/CEXTERN/... for final storage)
     // ----------------------------------------------------------------------
     <<[[Type_kind]] storage cases>>
 
@@ -751,7 +606,7 @@ enum type_kind
 % because of the way they handle type/qualifier/storage they all
 % have to be in the same enum (ugly).
 
-
+% that's the real important stuff
 <<[[Type_kind]] type cases>>=
 TCHAR,
 TUCHAR,
@@ -765,18 +620,20 @@ TVLONG,
 TUVLONG,
 TFLOAT,
 TDOUBLE,
+@
 
-TIND,
-TFUNC,
-TARRAY,
+<<[[Type_kind]] type cases>>=
 TVOID,
+TIND,
+TARRAY,
 TSTRUCT,
 TUNION,
 TENUM,
-
-TDOT, // ??
+TFUNC,
+TDOT, // ... in function types
 @
-
+% array access are unsugar in pointer arithmetic access, but
+% type declarations are not; we keep the array vs pointer info here
 
 <<[[Type_kind]] storage cases>>=
 TAUTO	= NTYPE,
@@ -801,10 +658,9 @@ TSIGNED,
 % temporary, actually the type have the TINT vs TUINT
 
 <<[[Type_kind]] misc cases>>=
-TFILE,
 TOLD,
 @
-%dead?TFILE?
+%dead:TFILE?
 
 % see also enum bxxx which is used only in grammar I think,
 % and seems to be a 64 bits bitset of the types above
@@ -843,7 +699,7 @@ char	etype;
 
 % gxxx for 'garbage' but should be renamed qualifier
 <<enum gxxx>>=
-enum gxxx
+enum qualifier
 {
     GXXX		= 0,
 
@@ -862,11 +718,12 @@ enum gxxx
 
 %// garbage? rename qualifier?
 <<[[Type]] other fields>>=
+// enum<qualifier>
 char	garb;
 @
 
 <<[[Node]] other fields>>=
-// enum<gxxx>
+// enum<qualifier>
 char	garb;
 @
 
@@ -971,14 +828,14 @@ sametype(Type *t1, Type *t2)
 
     if(t1 == t2)
         return true;
-    return rsametype(t1, t2, 5, 1);
+    return rsametype(t1, t2, 5, true);
 }
 @
 
 % n = depth? so equal modulo a certain depth?? hmmm
 <<function rsametype>>=
 bool
-rsametype(Type *t1, Type *t2, int n, int f)
+rsametype(Type *t1, Type *t2, int n, bool f)
 {
     int et;
 
@@ -4454,6 +4311,8 @@ getnsn(void)
 
 
 
+
+
 \chapter{Parsing}
 
 \section{Overview}
@@ -4562,9 +4421,10 @@ xdecl:
 |   zctlist xdlist ';'
 <<xdecl function definition case>>
 @
+% "external" but actually also work for locals and globals.
 
-% do that because C sucks? but my parser_c.mly was also complicated
-% when it come to declaration handling
+% do that because C sucks? my parser_c.mly was also complicated
+% when it come to declaration handling ...
 <<global lastclass>>=
 // enum<cxxx>
 //@Scheck: y.tab.c
@@ -4585,6 +4445,11 @@ Type*	lastdcl;
 
 
 \section{Function definition}
+
+
+<<declaration nodes>>=
+OPROTO,
+@
 
 
 <<global firstdcl>>=
@@ -5051,11 +4916,19 @@ arglist:
 @
 %$
 
+<<misc nodes>>=
+ODOTDOT,
+@
 
 
 \section{Statements}
 
 % block, labels, stmts
+
+<<statement nodes>>=
+OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
+@
+
 
 % seen 'block' for func def, block is a list of stmnt
 <<statements rules>>=
@@ -5125,6 +4998,10 @@ labels:
 
 \subsection{Conditionals}
 
+<<statement nodes>>=
+OIF,
+@
+
 <<ulstmnt rule>>=
 |   LIF '(' cexpr ')' stmnt
     {
@@ -5146,6 +5023,11 @@ labels:
 % cexpr means  comma expr
 
 \subsection{Switch}
+
+<<statement nodes>>=
+OSWITCH,
+OCASE, // for default too, in which case Node.left is null
+@
 
 <<ulstmnt rule>>=
 |   LSWITCH '(' cexpr ')' stmnt
@@ -5185,6 +5067,13 @@ label:
 
 \subsection{Control flow jumps}
 
+<<statement nodes>>=
+ORETURN,
+
+OBREAK,
+OCONTINUE,
+@
+
 <<ulstmnt rule>>=
 |   LRETURN zcexpr ';'
     {
@@ -5198,6 +5087,12 @@ label:
 
 
 \subsection{Loops}
+
+<<statement nodes>>=
+OFOR,
+OWHILE,
+ODWHILE,
+@
 
 <<ulstmnt rule>>=
 |   { 
@@ -5227,6 +5122,11 @@ forexpr:
 %$
 
 \subsection{Labels and goto}
+
+<<statement nodes>>=
+OLABEL,
+OGOTO,
+@
 
 <<label rule>>=
 |   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
@@ -5308,6 +5208,10 @@ lexpr:
 @
 %$
 
+<<expression nodes>>=
+OCOMMA,
+@
+
 <<expressions rules>>=
 cexpr:
     expr
@@ -5326,7 +5230,38 @@ zcexpr:
 
 \subsection{Binary expressions}
 
+<<expression nodes>>=
+OADD,
+OSUB,
+
+OMUL,
+ODIV,
+OMOD,
+
+OASHL,
+OASHR,
+
+OLT,
+OGT,
+OLE,
+OGE,
+
+OEQ,
+ONE,
+
+OAND,
+OOR,
+OXOR,
+
+OANDAND,
+OOROR,
+@
+
 <<expressions rules>>=
+<<expr rule>>
+@
+
+<<expr rule>>=
 expr:
     xuexpr
 
@@ -5348,9 +5283,39 @@ expr:
 |   expr '|' expr  { $$ = new(OOR, $1, $3); }
 |   expr LANDAND expr { $$ = new(OANDAND, $1, $3); }
 |   expr LOROR expr   { $$ = new(OOROR, $1, $3); }
+@
 
+
+<<expression nodes>>=
+OCOND,
+@
+
+<<expr rule>>=
 |   expr '?' cexpr ':' expr { $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
+@
+%$
 
+<<expression nodes>>=
+OAS,
+
+OASADD,
+OASSUB,
+
+OASMUL,
+OASMOD,
+OASDIV,
+
+OASASHL,
+OASASHR,
+
+OASAND,
+OASOR,
+OASXOR,
+@
+
+
+
+<<expr rule>>=
 |   expr '=' expr  { $$ = new(OAS, $1, $3); }
 |   expr LPE expr  { $$ = new(OASADD, $1, $3); }
 |   expr LME expr  { $$ = new(OASSUB, $1, $3); }
@@ -5366,6 +5331,10 @@ expr:
 %$
 
 \subsection{Cast}
+
+<<expression nodes>>=
+OCAST,
+@
 
 <<expressions rules>>=
 xuexpr:
@@ -5403,19 +5372,51 @@ bool 	xcast;
 
 % unary expr
 <<expressions rules>>=
+<<uexpr rule>>
+@
+
+
+<<expression nodes>>=
+OIND, // for uses (dereference) and also defs (and decls)
+OADDR,
+@
+
+
+<<uexpr rule>>=
 uexpr:
     pexpr
 
 |   '*' xuexpr { $$ = new(OIND, $2, Z); }
 |   '&' xuexpr { $$ = new(OADDR, $2, Z); }
+@
 
+<<expression nodes>>=
+OPOS,
+ONEG,
+ONOT,
+OCOM,
+@
+
+<<expression nodes>>=
+OPREDEC,
+OPREINC,
+@
+
+<<uexpr rule>>=
 |   '+' xuexpr { $$ = new(OPOS, $2, Z); }
 |   '-' xuexpr { $$ = new(ONEG, $2, Z); }
 |   '!' xuexpr { $$ = new(ONOT, $2, Z); }
 |   '~' xuexpr { $$ = new(OCOM, $2, Z); }
 |   LPP xuexpr { $$ = new(OPREINC, $2, Z); }
 |   LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
+@
 
+<<expression nodes>>=
+OSIZE,
+OSIGN,
+@
+
+<<uexpr rule>>=
 |   LSIZEOF uexpr { $$ = new(OSIZE, $2, Z); }
 |   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
 @
@@ -5451,6 +5452,12 @@ pexpr:
 %$
 % again sizeof but this time not uexpr, but types!
 
+
+
+<<expression nodes>>=
+OFUNC, // used for uses (calls) but also defs (and decls) :(
+@
+
 % funcall!
 <<pexpr rule>>=
 |   pexpr '(' zelist ')'
@@ -5484,6 +5491,11 @@ elist:
 |   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
 @
 
+
+<<expression nodes>>=
+ODOT,
+@
+
 % unsugar x->y as (*x).y
 <<pexpr rule>>=
 |   pexpr '.' ltag
@@ -5496,6 +5508,11 @@ elist:
         $$ = new(ODOT, new(OIND, $1, Z), Z);
         $$->sym = $3;
     }
+@
+
+<<expression nodes>>=
+OPOSTINC,
+OPOSTDEC,
 @
 
 <<pexpr rule>>=
@@ -5558,6 +5575,12 @@ mkstatic(Sym *s)
 
 \subsection{Numeric Constants}
 
+<<expression nodes>>=
+OCONST,
+@
+% also for float
+% the const keyword is actually a GCONSTNT, and LCONST
+
 <<pexpr rule>>=
 |   LCONST
     {
@@ -5581,6 +5604,8 @@ mkstatic(Sym *s)
         $$->cstring = strdup(symb);
     }
 @
+%$
+
 
 <<pexpr rule>>=
 |   LUCONST
@@ -5627,6 +5652,11 @@ mkstatic(Sym *s)
 
 \subsection{String constants}
 % char constant? unsugard in yylex?
+
+<<expression nodes>>=
+OSTRING,
+OLSTRING,
+@
 
 <<pexpr rule>>=
 |   string
@@ -5693,9 +5723,19 @@ lstring:
         $$->rstring = (TRune*)s;
     }
 @
+%$
 
 
 \section{Initializers}
+
+<<variable declaration nodes>>=
+OINIT,
+@
+
+<<variable declaration nodes>>=
+OARRAY, // used for uses (including designator) and defs (and decl)
+OELEM,  // field designator
+@
 
 % in decl?:
 %    '=' init
@@ -5782,6 +5822,11 @@ doinit(Sym *s, Type *t, long o, Node *a)
 Node*	nodcast;
 @
 
+% declaration and expression
+<<expression nodes>>=
+OASI,
+@
+% assign initializer?
 
 <<function init1>>=
 Node*
@@ -6158,7 +6203,6 @@ enum bxxx
     BUNION		= 1L<<TUNION,
     BENUM		= 1L<<TENUM,
 
-    BFILE		= 1L<<TFILE,
     BDOT		= 1L<<TDOT,
 
     BCONSTNT	= 1L<<TCONSTNT,
@@ -6578,6 +6622,12 @@ tcopy(Type *t)
 
 \subsection{Structures and unions}
 
+<<definition nodes>>=
+OSTRUCT,
+OUNION,
+@
+% used for definitions and uses too
+
 <<type declarations>>=
 %type   <sym>   ltag
 @
@@ -6791,6 +6841,9 @@ sbody:
 
 
 
+<<definition nodes>>=
+OBIT,
+@
 
 <<structure element declarator rules>>=
 /*
@@ -6874,6 +6927,10 @@ void edecl(int c, Type *t, Sym *s)
 
 
 \subsection{Enum}
+
+%<<definition nodes>>=
+%OENUM,
+%@
 
 <<struct En>>=
 struct En
@@ -7464,6 +7521,17 @@ symadjust(Sym *s, Node *n, long del)
 {
 
     switch(n->op) {
+    case ONAME:
+        if(n->sym == s)
+            n->xoffset -= del;
+        return;
+
+    case OCONST:
+    case OSTRING: case OLSTRING:
+    case OREGISTER:
+    case OINDREG:
+        return;
+
     default:
         if(n->left)
             symadjust(s, n->left, del);
@@ -7471,17 +7539,6 @@ symadjust(Sym *s, Node *n, long del)
             symadjust(s, n->right, del);
         return;
 
-    case ONAME:
-        if(n->sym == s)
-            n->xoffset -= del;
-        return;
-
-    case OCONST:
-    case OSTRING:
-    case OLSTRING:
-    case OINDREG:
-    case OREGISTER:
-        return;
     }
 }
 @
@@ -7548,6 +7605,9 @@ invert(Node *n)
     return i;
 }
 @
+
+
+
 
 
 \chapter{Checking}
@@ -8397,6 +8457,23 @@ tcom(Node *n)
     return tcomo(n, ADDROF);
 }
 @
+
+
+<<expression nodes>>=
+OASLMUL,
+OASLDIV,
+OASLMOD,
+OASLSHR,
+@
+% typed long version?
+
+<<expression nodes>>=
+OLMUL,
+OLDIV,
+OLMOD,
+OLSHR,
+@
+
 
 % true means error
 % f = context?
@@ -10377,6 +10454,11 @@ bool	aused;
 % what if struct and local with same name?
 
 \subsection{[[SET/USED]]}
+
+<<statement nodes>>=
+OUSED,
+OSET,
+@
 
 <<ulstmnt rule>>=
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
@@ -13144,6 +13226,10 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 }
 @
 
+<<expression nodes>>=
+OINDREG, // after parsing only
+@
+
 <<function regaalloc(arm)>>=
 void
 regaalloc(Node *n, Node *nn)
@@ -13255,6 +13341,9 @@ bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 % >> >>
 
 
+<<definition nodes>>=
+OREGISTER, // after parsing only?
+@
 
 
 <<function reglcgen(arm)>>=
@@ -13641,8 +13730,6 @@ relindex(int o)
 {
 
     switch(o) {
-    default:
-        diag(Z, "bad in relindex: %O", o);
     case OEQ: return 0;
     case ONE: return 1;
     case OLE: return 2;
@@ -13653,6 +13740,8 @@ relindex(int o)
     case OHS: return 7;
     case OGT: return 8;
     case OHI: return 9;
+    default:
+        diag(Z, "bad in relindex: %O", o);
     }
 }
 @
@@ -16155,6 +16244,14 @@ add(Big x, int y)
 @
 
 
+<<expression nodes>>=
+// after parsing only
+OHI,
+OHS,
+OLO,
+OLS,
+@
+%todo: seems to be redundant no?
 
 <<global cmps>>=
 /*	OEQ, ONE, OLE, OLS, OLT, OLO, OGE, OHS, OGT, OHI */
@@ -20462,7 +20559,6 @@ Init	thashinit[] =
     TUNION,		0x3eb25e98,	0,
     TENUM,		0x44b54f61,	0,
 
-    TFILE,		0x19242ac3,	0,
     TOLD,		0x22b15988,	0,
     TDOT,		0x0204f6b3,	0,
 
@@ -21248,6 +21344,14 @@ bool	profileflg;
 \section{C extensions}
 
 \subsection{External register}
+
+<<[[Storage_class]] cases>>=
+CEXREG, // extern register, kencc ext (used in kernel for mips)
+@
+
+<<misc nodes>>=
+OEXREG,
+@
 
 <<global exregoffset>>=
 long	exregoffset;
@@ -22485,7 +22589,6 @@ Init	onamesinit[] =
     ODOT,		0,	"DOT",
     ODOTDOT,	0,	"DOTDOT",
     ODWHILE,	0,	"DWHILE",
-    OENUM,		0,	"ENUM",
     OEQ,		0,	"EQ",
     OFOR,		0,	"FOR",
     OFUNC,		0,	"FUNC",
@@ -22538,9 +22641,7 @@ Init	onamesinit[] =
     ONEG,		0,	"NEG",
     OCOM,		0,	"COM",
     OELEM,		0,	"ELEM",
-    OTST,		0,	"TST",
     OINDEX,		0,	"INDEX",
-    OFAS,		0,	"FAS",
     OREGPAIR,	0,	"REGPAIR",
     OEXREG,		0,	"EXREG",
     OEND,		0,	"END",
@@ -22719,7 +22820,6 @@ Init	tnamesinit[] =
     TSTRUCT,	0,	"STRUCT",
     TUNION,		0,	"UNION",
     TENUM,		0,	"ENUM",
-    TFILE,		0,	"FILE",
     TOLD,		0,	"OLD",
     TDOT,		0,	"DOT",
 
@@ -23215,7 +23315,6 @@ Init	qnamesinit[] =
     TUNSIGNED,		0,	"UNSIGNED",
     TSIGNED,		0,	"SIGNED",
     TDOT,		0,	"DOT",
-    TFILE,		0,	"FILE",
     TOLD,		0,	"OLD",
 
     -1,		0,	0,

@@ -1174,8 +1174,6 @@ relindex(int o)
 {
 
     switch(o) {
-    default:
-        diag(Z, "bad in relindex: %O", o);
     case OEQ: return 0;
     case ONE: return 1;
     case OLE: return 2;
@@ -1186,6 +1184,8 @@ relindex(int o)
     case OHS: return 7;
     case OGT: return 8;
     case OHI: return 9;
+    default:
+        diag(Z, "bad in relindex: %O", o);
     }
 }
 /*e: function relindex */
@@ -1358,7 +1358,6 @@ Init	thashinit[] =
     TUNION,		0x3eb25e98,	0,
     TENUM,		0x44b54f61,	0,
 
-    TFILE,		0x19242ac3,	0,
     TOLD,		0x22b15988,	0,
     TDOT,		0x0204f6b3,	0,
 
@@ -1412,7 +1411,6 @@ Init	tnamesinit[] =
     TSTRUCT,	0,	"STRUCT",
     TUNION,		0,	"UNION",
     TENUM,		0,	"ENUM",
-    TFILE,		0,	"FILE",
     TOLD,		0,	"OLD",
     TDOT,		0,	"DOT",
 
@@ -1473,7 +1471,6 @@ Init	qnamesinit[] =
     TUNSIGNED,		0,	"UNSIGNED",
     TSIGNED,		0,	"SIGNED",
     TDOT,		0,	"DOT",
-    TFILE,		0,	"FILE",
     TOLD,		0,	"OLD",
 
     -1,		0,	0,
@@ -1543,7 +1540,6 @@ Init	onamesinit[] =
     ODOT,		0,	"DOT",
     ODOTDOT,	0,	"DOTDOT",
     ODWHILE,	0,	"DWHILE",
-    OENUM,		0,	"ENUM",
     OEQ,		0,	"EQ",
     OFOR,		0,	"FOR",
     OFUNC,		0,	"FUNC",
@@ -1596,9 +1592,7 @@ Init	onamesinit[] =
     ONEG,		0,	"NEG",
     OCOM,		0,	"COM",
     OELEM,		0,	"ELEM",
-    OTST,		0,	"TST",
     OINDEX,		0,	"INDEX",
-    OFAS,		0,	"FAS",
     OREGPAIR,	0,	"REGPAIR",
     OEXREG,		0,	"EXREG",
     OEND,		0,	"END",

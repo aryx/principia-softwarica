@@ -1008,13 +1008,13 @@ sametype(Type *t1, Type *t2)
 
     if(t1 == t2)
         return true;
-    return rsametype(t1, t2, 5, 1);
+    return rsametype(t1, t2, 5, true);
 }
 /*e: function sametype */
 
 /*s: function rsametype */
 bool
-rsametype(Type *t1, Type *t2, int n, int f)
+rsametype(Type *t1, Type *t2, int n, bool f)
 {
     int et;
 
@@ -1639,6 +1639,17 @@ symadjust(Sym *s, Node *n, long del)
 {
 
     switch(n->op) {
+    case ONAME:
+        if(n->sym == s)
+            n->xoffset -= del;
+        return;
+
+    case OCONST:
+    case OSTRING: case OLSTRING:
+    case OREGISTER:
+    case OINDREG:
+        return;
+
     default:
         if(n->left)
             symadjust(s, n->left, del);
@@ -1646,17 +1657,6 @@ symadjust(Sym *s, Node *n, long del)
             symadjust(s, n->right, del);
         return;
 
-    case ONAME:
-        if(n->sym == s)
-            n->xoffset -= del;
-        return;
-
-    case OCONST:
-    case OSTRING:
-    case OLSTRING:
-    case OINDREG:
-    case OREGISTER:
-        return;
     }
 }
 /*e: function symadjust */
