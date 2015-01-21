@@ -213,7 +213,8 @@ int simplec(long b)
 
     b &= BCLASS;
     switch(b) {
-    case 0:
+    case 0: 
+    // skipping regsiter
     case BREGISTER:
         return CXXX;
     case BAUTO:
@@ -221,14 +222,16 @@ int simplec(long b)
         return CAUTO;
     case BEXTERN:
         return CEXTERN;
-    case BEXTERN|BREGISTER:
-        return CEXREG;
     case BSTATIC:
         return CSTATIC;
     case BTYPEDEF:
         return CTYPEDEF;
     case BTYPESTR:
         return CTYPESTR;
+    /*s: [[simplec()]] cases */
+    case BEXTERN|BREGISTER:
+        return CEXREG;
+    /*e: [[simplec()]] cases */
     }
     diag(Z, "illegal combination of classes %Q", b);
     return CXXX;

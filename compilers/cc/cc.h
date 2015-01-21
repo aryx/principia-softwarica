@@ -82,14 +82,6 @@ struct	Node
     long	lineno;
 
     /*s: [[Node]] other fields */
-    // for OCONST?
-    // could be put in a union
-    vlong	vconst;		/* non fp const */ // abused in switch?
-    double	fconst;		/* fp constant */
-
-    char*	cstring;	/* character string */ // also used for ints
-    TRune*	rstring;	/* rune string */
-    /*x: [[Node]] other fields */
     Type*	type;
     /*x: [[Node]] other fields */
     // enum<storage_class>
@@ -114,6 +106,14 @@ struct	Node
     /*x: [[Node]] other fields */
     // enum<qualifier>
     char	garb;
+    /*x: [[Node]] other fields */
+    vlong	vconst;		/* non fp const */ // abused in switch?
+    /*x: [[Node]] other fields */
+    double	fconst;		/* fp constant */
+    /*x: [[Node]] other fields */
+    char*	cstring;	/* character string */ // also used for ints
+    /*x: [[Node]] other fields */
+    TRune*	rstring;	/* rune string */
     /*x: [[Node]] other fields */
     bool 	xcast;
     /*x: [[Node]] other fields */
@@ -141,7 +141,7 @@ struct	Sym
 
     /*s: [[Sym]] other fields */
     Type*	type;
-    // enum<cxxx>?
+    // enum<storage_class>
     char	class;
     /*x: [[Sym]] other fields */
     ushort	block;
@@ -168,7 +168,7 @@ struct	Sym
     /*x: [[Sym]] other fields */
     bool	aused;
     /*x: [[Sym]] other fields */
-    // enum<sigxxx>
+    // enum<signature>
     char	sig;
     /*e: [[Sym]] other fields */
 
@@ -183,8 +183,8 @@ struct	Sym
 #define	S	((Sym*)nil)
 /*e: constant S */
 
-/*s: enum sigxxx */
-enum{
+/*s: enum signature */
+enum signature {
     SIGNONE = 0,
     SIGDONE = 1,
     SIGINTERN = 2,
@@ -192,7 +192,7 @@ enum{
     // ???
     SIGNINTERN = 1729*325*1729,
 };
-/*e: enum sigxxx */
+/*e: enum signature */
 
 /*s: struct Decl */
 struct	Decl
@@ -203,7 +203,7 @@ struct	Decl
     short	val;
 
     Type*	type;
-    // enum<cxxx> storage class
+    // enum<storage_class>
     char	class;
 
     long	varlineno;
@@ -360,22 +360,26 @@ enum node_kind
     OASHL,
     OASHR,
 
+    OAND,
+    OOR,
+    OXOR,
+    /*x: expression nodes */
+    OPOS,
+    ONEG,
+    /*x: expression nodes */
+    OANDAND,
+    OOROR,
+    /*x: expression nodes */
+    OEQ,
+    ONE,
+
     OLT,
     OGT,
     OLE,
     OGE,
-
-    OEQ,
-    ONE,
-
-    OAND,
-    OOR,
-    OXOR,
-
-    OANDAND,
-    OOROR,
     /*x: expression nodes */
-    OCOND,
+    ONOT,
+    OCOM,
     /*x: expression nodes */
     OAS,
 
@@ -393,35 +397,30 @@ enum node_kind
     OASOR,
     OASXOR,
     /*x: expression nodes */
-    OCAST,
-    /*x: expression nodes */
     OIND, // for uses (dereference) and also defs (and decls)
     OADDR,
     /*x: expression nodes */
-    OPOS,
-    ONEG,
-    ONOT,
-    OCOM,
-    /*x: expression nodes */
-    OPREDEC,
-    OPREINC,
-    /*x: expression nodes */
-    OSIZE,
-    OSIGN,
-    /*x: expression nodes */
-    OFUNC, // used for uses (calls) but also defs (and decls) :(
-    /*x: expression nodes */
     ODOT,
-    /*x: expression nodes */
-    OPOSTINC,
-    OPOSTDEC,
     /*x: expression nodes */
     OCONST,
     /*x: expression nodes */
     OSTRING,
+    /*x: expression nodes */
     OLSTRING,
     /*x: expression nodes */
-    OASI,
+    OCAST,
+    /*x: expression nodes */
+    OCOND,
+    /*x: expression nodes */
+    OPREDEC,
+    OPREINC,
+    /*x: expression nodes */
+    OPOSTINC,
+    OPOSTDEC,
+    /*x: expression nodes */
+    OSIZE,
+    /*x: expression nodes */
+    OASI, // appears during parsing
     /*x: expression nodes */
     OASLMUL,
     OASLDIV,
@@ -440,14 +439,14 @@ enum node_kind
     OHS,
     OLO,
     OLS,
+    /*x: expression nodes */
+    OSIGN,
     /*e: expression nodes */
 
     // ----------------------------------------------------------------------
     // Statements
     // ----------------------------------------------------------------------
     /*s: statement nodes */
-    OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
-    /*x: statement nodes */
     OIF,
     /*x: statement nodes */
     OSWITCH,
@@ -475,7 +474,6 @@ enum node_kind
     /*s: variable declaration nodes */
     OINIT,
     /*x: variable declaration nodes */
-    OARRAY, // used for uses (including designator) and defs (and decl)
     OELEM,  // field designator
     /*e: variable declaration nodes */
 
@@ -502,7 +500,13 @@ enum node_kind
     // Misc
     // ----------------------------------------------------------------------
     /*s: misc nodes */
+    OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
+    /*x: misc nodes */
     ODOTDOT,
+    /*x: misc nodes */
+    OFUNC, // used for uses (calls) but also defs (and decls) :(
+    /*x: misc nodes */
+    OARRAY, // used for uses (including designator) and defs (and decl)
     /*x: misc nodes */
     OEXREG,
     /*x: misc nodes */
@@ -517,11 +521,7 @@ enum node_kind
 enum type_kind
 {
     TXXX,
-
-    // ----------------------------------------------------------------------
-    // Types
-    // ----------------------------------------------------------------------
-    /*s: [[Type_kind]] type cases */
+    /*s: type cases */
     TCHAR,
     TUCHAR,
     TSHORT,
@@ -534,7 +534,7 @@ enum type_kind
     TUVLONG,
     TFLOAT,
     TDOUBLE,
-    /*x: [[Type_kind]] type cases */
+    /*x: type cases */
     TVOID,
     TIND,
     TARRAY,
@@ -543,53 +543,55 @@ enum type_kind
     TENUM,
     TFUNC,
     TDOT, // ... in function types
-    /*e: [[Type_kind]] type cases */
-
+    /*e: type cases */
     NTYPE,
-
+};
+/*e: enum type_kind */
+/*s: enum type_kind_bis */
+enum type_kind_bis {
     // ----------------------------------------------------------------------
     // Storage (temporary, see CAUTO/CEXTERN/... for final storage)
     // ----------------------------------------------------------------------
-    /*s: [[Type_kind]] storage cases */
+    /*s: [[Type_kind_bis]] storage cases */
     TAUTO	= NTYPE,
     TEXTERN,
     TSTATIC,
     TTYPEDEF, // ugly, not really a storage class
     TTYPESTR,
     TREGISTER,
-    /*e: [[Type_kind]] storage cases */
+    /*e: [[Type_kind_bis]] storage cases */
 
     // ----------------------------------------------------------------------
     // Qualifiers (aka garbage) (temporary, see GCONSTNT/GVOLATILE)
     // ----------------------------------------------------------------------
-    /*s: [[Type_kind]] qualifier cases */
+    /*s: [[Type_kind_bis]] qualifier cases */
     TCONSTNT,
     TVOLATILE,
-    /*e: [[Type_kind]] qualifier cases */
+    /*e: [[Type_kind_bis]] qualifier cases */
 
     // ----------------------------------------------------------------------
     // Signs (temporary, see TUINT/TULONG/...)
     // ----------------------------------------------------------------------
-    /*s: [[Type_kind]] sign cases */
+    /*s: [[Type_kind_bis]] sign cases */
     TUNSIGNED,
     TSIGNED,
-    /*e: [[Type_kind]] sign cases */
+    /*e: [[Type_kind_bis]] sign cases */
 
     // ----------------------------------------------------------------------
     // Misc
     // ----------------------------------------------------------------------
-    /*s: [[Type_kind]] misc cases */
+    /*s: [[Type_kind_bis]] misc cases */
     TOLD,
-    /*e: [[Type_kind]] misc cases */
+    /*e: [[Type_kind_bis]] misc cases */
 
     NALLTYPES,
 
     /* adapt size of Rune to target system's size */
     TRUNE = sizeof(TRune)==4? TUINT: TUSHORT,
 };
-/*e: enum type_kind */
-/*s: enum axxx */
-enum axxx
+/*e: enum type_kind_bis */
+/*s: enum align */
+enum align
 {
     Axxx,
 
@@ -603,18 +605,18 @@ enum axxx
 
     NALIGN,
 };
-/*e: enum axxx */
+/*e: enum align */
 /*s: enum dxxx */
 enum dxxx
 {
-    DMARK,
+    DMARK, // special mark to help represent a stack of list??
 
     DAUTO,
     DSUE, // struct/union/enum
     DLABEL,
 };
 /*e: enum dxxx */
-/*s: enum cxxx */
+/*s: enum storage_class */
 enum storage_class
 {
     CXXX, // nothing specified
@@ -639,8 +641,8 @@ enum storage_class
 
     NCTYPES,
 };
-/*e: enum cxxx */
-/*s: enum gxxx */
+/*e: enum storage_class */
+/*s: enum qualifier */
 enum qualifier
 {
     GXXX		= 0,
@@ -651,7 +653,7 @@ enum qualifier
     NGTYPES		= 1<<2,
     GINCOMPLETE	= 1<<2,
 };
-/*e: enum gxxx */
+/*e: enum qualifier */
 /*s: enum bxxx */
 enum bxxx
 {
@@ -687,7 +689,6 @@ enum bxxx
     BAUTO		= 1L<<TAUTO,
     BEXTERN		= 1L<<TEXTERN,
     BSTATIC		= 1L<<TSTATIC,
-
     BTYPEDEF	= 1L<<TTYPEDEF,
     BTYPESTR	= 1L<<TTYPESTR,
     BREGISTER	= 1L<<TREGISTER,

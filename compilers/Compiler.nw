@@ -12,7 +12,9 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - deadcode (TFILE, OFAS, OTST)
+% - deadcode (TFILE, OFAS, OTST, OENUM)
+% - TODO rename more consistently things 
+%   (thisfn -> thisfntype, fistdcl->firstdcltype)
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -391,7 +393,6 @@ enum node_kind
 
 % ONAME, ODOT, OELEM => use FNconv
 
-
 <<struct Node>>=
 struct	Node
 {
@@ -421,16 +422,16 @@ struct	Node
 #define	Z	((Node*)nil)
 @
 
-% XXXX
-<<[[Node]] other fields>>=
-// for OCONST?
-// could be put in a union
-vlong	vconst;		/* non fp const */ // abused in switch?
-double	fconst;		/* fp constant */
 
-char*	cstring;	/* character string */ // also used for ints
-TRune*	rstring;	/* rune string */
+% put OLIST here, it has many usages
+<<misc nodes>>=
+OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
 @
+% add an OPAIR alias?
+
+
+
+
 
 
 
@@ -444,7 +445,7 @@ Type*	type;
 
 
 
-<<enum cxxx>>=
+<<enum storage_class>>=
 enum storage_class
 {
     CXXX, // nothing specified
@@ -459,8 +460,9 @@ enum storage_class
     NCTYPES,
 };
 @
-% CSTATIC vs TSTATIC vs BSTATIC
+% CSTATIC vs LSTATIC(lexeme) TSTATIC(temporary) vs BSTATIC(bitset of TSTATIC)
 % see also cnames[] in debugging section
+% strings are using CSTATIC
 
 % for nodes that are decl? which is?
 <<[[Node]] other fields>>=
@@ -514,7 +516,9 @@ new(int t, Node *l, Node *r)
     return n;
 }
 @
-% newflag?
+%less: newflag?
+%less: why this special thing about GOTO? becaus goto take a symbol
+% and don't want the line of the symbol?
 
 <<global lineno>>=
 long	lineno;
@@ -524,6 +528,7 @@ long	lineno;
 <<global nearln>>=
 long	nearln;
 @
+% ?? diff with lineno?
 
 <<function new1>>=
 Node*
@@ -567,33 +572,32 @@ char	scale;
 enum type_kind
 {
     TXXX,
-
-    // ----------------------------------------------------------------------
-    // Types
-    // ----------------------------------------------------------------------
-    <<[[Type_kind]] type cases>>
-
+    <<type cases>>
     NTYPE,
+};
+@
 
+<<enum type_kind_bis>>=
+enum type_kind_bis {
     // ----------------------------------------------------------------------
     // Storage (temporary, see CAUTO/CEXTERN/... for final storage)
     // ----------------------------------------------------------------------
-    <<[[Type_kind]] storage cases>>
+    <<[[Type_kind_bis]] storage cases>>
 
     // ----------------------------------------------------------------------
     // Qualifiers (aka garbage) (temporary, see GCONSTNT/GVOLATILE)
     // ----------------------------------------------------------------------
-    <<[[Type_kind]] qualifier cases>>
+    <<[[Type_kind_bis]] qualifier cases>>
 
     // ----------------------------------------------------------------------
     // Signs (temporary, see TUINT/TULONG/...)
     // ----------------------------------------------------------------------
-    <<[[Type_kind]] sign cases>>
+    <<[[Type_kind_bis]] sign cases>>
 
     // ----------------------------------------------------------------------
     // Misc
     // ----------------------------------------------------------------------
-    <<[[Type_kind]] misc cases>>
+    <<[[Type_kind_bis]] misc cases>>
 
     NALLTYPES,
 
@@ -609,7 +613,7 @@ enum type_kind
 
 
 % that's the real important stuff
-<<[[Type_kind]] type cases>>=
+<<type cases>>=
 TCHAR,
 TUCHAR,
 TSHORT,
@@ -624,7 +628,7 @@ TFLOAT,
 TDOUBLE,
 @
 
-<<[[Type_kind]] type cases>>=
+<<type cases>>=
 TVOID,
 TIND,
 TARRAY,
@@ -634,10 +638,11 @@ TENUM,
 TFUNC,
 TDOT, // ... in function types
 @
-% array access are unsugar in pointer arithmetic access, but
-% type declarations are not; we keep the array vs pointer info here
+% IND for indirect probably, meaning pointer.
+% Note that even if array access are unsugar in pointer arithmetic access, 
+% type declarations are not; we keep the array vs pointer info here.
 
-<<[[Type_kind]] storage cases>>=
+<<[[Type_kind_bis]] storage cases>>=
 TAUTO	= NTYPE,
 TEXTERN,
 TSTATIC,
@@ -647,22 +652,18 @@ TREGISTER,
 @
 % temporary, the real one are the CAUTO, CEXTERN, etc
 
-<<[[Type_kind]] qualifier cases>>=
+<<[[Type_kind_bis]] qualifier cases>>=
 TCONSTNT,
 TVOLATILE,
 @
 % temporary, the real one are the GCONSTNT, GVOLATILE, etc
 
-<<[[Type_kind]] sign cases>>=
+<<[[Type_kind_bis]] sign cases>>=
 TUNSIGNED,
 TSIGNED,
 @
 % temporary, actually the type have the TINT vs TUINT
 
-<<[[Type_kind]] misc cases>>=
-TOLD,
-@
-% old style ansi declaration?
 
 % see also enum bxxx which is used only in grammar I think,
 % and seems to be a 64 bits bitset of the types above
@@ -700,7 +701,7 @@ char	etype;
 
 
 % gxxx for 'garbage' but should be renamed qualifier
-<<enum gxxx>>=
+<<enum qualifier>>=
 enum qualifier
 {
     GXXX		= 0,
@@ -855,22 +856,16 @@ rsametype(Type *t1, Type *t2, int n, bool f)
             return false;
 
         if(et == TFUNC) {
-            if(!rsametype(t1->link, t2->link, n, 0))
+            if(!rsametype(t1->link, t2->link, n, false))
                 return false;
             t1 = t1->down;
             t2 = t2->down;
             while(t1 != T && t2 != T) {
 
-                if(t1->etype == TOLD) {
-                    t1 = t1->down;
-                    continue;
-                }
-                if(t2->etype == TOLD) {
-                    t2 = t2->down;
-                    continue;
-                }
+                <<[[rsametype()]] continue if old style type>>
+
                 while(t1 != T || t2 != T) {
-                    if(!rsametype(t1, t2, n, 0))
+                    if(!rsametype(t1, t2, n, false))
                         return false;
                     t1 = t1->down;
                     t2 = t2->down;
@@ -898,7 +893,7 @@ rsametype(Type *t1, Type *t2, int n, bool f)
             for(;;) {
                 if(t1 == t2)
                     return true;
-                if(!rsametype(t1, t2, n, 0))
+                if(!rsametype(t1, t2, n, false))
                     return false;
                 t1 = t1->down;
                 t2 = t2->down;
@@ -1366,6 +1361,7 @@ Decl*	dclstack;
 @
 % but should have a list of list?
 % ugly but do ia via DMARK
+% see also firstdcl when parsing
 
 <<[[Decl]] extra fields>>=
 // list<ref_own<Decl> of dclstack
@@ -1588,7 +1584,7 @@ Node* revertdcl(void)
 %token  LRESTRICT LINLINE
 @
 % LXXX  Lexer XXX? Lexeme XXX?
-% so have LDOUBLE and TDOUBLE
+% so have LDOUBLE and TDOUBLE (and even BDOUBLE)
 
 
 %less? seems used by sub.c simpleg()
@@ -1602,7 +1598,7 @@ long    lval;
 % see also Opcode and Operand in Assembler.nw
 % (and Aconv, Rconv, Dconv, ... in this file)
 
-% see also enum misc3 of 5.out.h with REGARG, REGRET, REGSP, REGTMP
+% see also enum of 5.out.h with REGARG, REGRET, REGSP, REGTMP
 
 <<struct Prog(arm)>>=
 struct	Prog
@@ -1623,7 +1619,7 @@ struct	Prog
 @
 
 
-
+% really ARM specific
 <<[[Prog]] other fields(arm)>>=
 // option<enum<registr>>, None = R_NONE, see 5.out.h
 char	reg;
@@ -1648,7 +1644,7 @@ struct	Adr
     char	etype;
 };
 @
-% use union for first 5?
+%less: use union for first 5?
 
 
 <<constant A>>=
@@ -1665,11 +1661,6 @@ Prog	zprog;
 long	pc;
 @
 
-
-% current? see nextpc()?
-<<global p>>=
-Prog*	p;
-@
 
 % like in Linker.nw
 <<global firstp>>=
@@ -1693,6 +1684,12 @@ Prog*	lastp;
 
 
 
+% current? see nextpc()?
+<<global p>>=
+Prog*	p;
+@
+
+
 % gins | gclean | ... -> <>
 <<function nextpc>>=
 void
@@ -1704,6 +1701,7 @@ nextpc(void)
     p->lineno = nearln;
     pc++;
 
+    // add_end_list(p, firstp/lastp)
     if(firstp == P) {
         firstp = p;
         lastp = p;
@@ -1738,8 +1736,9 @@ char*	outfile;
 
 % *	-v		verbose printing
 % *	-w		print warnings
-% *	-X		abort on error
 % *	-V		enable void* conversion warnings
+% *	-X		abort on error
+% *	-F		format specification check
 
 % *	-A		!B
 % *	-B		non ANSI
@@ -1753,22 +1752,27 @@ char*	outfile;
 
 % *	-a		acid declaration output
 % *	-n		print acid to file (%.c=%.acid) (with -a or -aa)
+% *	-Z		pickle output (pad: was not mentioned originally)
 
 % *	-d		print declarations
 % *	-L		print every NAME symbol
 % *	-m		print add/sub/mul trees
+%     pad: also macro debugging
+% *	-f		line information debugging (pad: was not mentioned originally)
 % *	-r		print registerization
 % *	-s		print structure offsets (with -a or -aa)
 % *	-t		print type trees
 % *	-i		print initialization
 
-% *	-F		format specification check
 % *	-M		constant multiplication
 % *	-l		generate little-endian code (mips only)
 
+
+
 <<[[main()]] locals>>=
-char **defs, **np, *p;
-int nproc, nout, status, i, c, ndef, maxdef;
+int c;
+char **defs;
+int ndef;
 @
 
 
@@ -1780,17 +1784,19 @@ void main(int argc, char *argv[])
 
     memset(debug, 0, sizeof(debug));
 
-    tinit();
-    cinit();
-    ginit();
-    arginit();
+    tinit(); // type globals init
+    cinit(); // lexing/parsing init
+    ginit(); // arch dependent init, 5c/8c/...
+    arginit(); // printf argument checking init
+
+    outfile = nil;
+    defs = nil;
 
     profileflg = true;	/* #pragma can turn it off */
     tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     maxdef = 0;
     ndef = 0;
-    outfile = nil;
-    defs = nil;
+
     setinclude(".");
 
     ARGBEGIN {
@@ -1814,6 +1820,7 @@ void main(int argc, char *argv[])
     exits(nil);
 }
 @
+% compile returns number of possible errors
 
 <<global outbuf>>=
 Biobuf	outbuf;
@@ -1825,11 +1832,20 @@ Biobuf	diagbuf;
 
 \section{Arguments processing}
 
+
 <<[[main()]] command line processing>>=
 case 'o':
     outfile = ARGF();
     break;
+@
 
+
+<<[[main()]] locals>>=
+char **np;
+int maxdef;
+@
+
+<<[[main()]] command line processing>>=
 case 'D':
     p = ARGF();
     if(p) {
@@ -1845,12 +1861,21 @@ case 'D':
         dodefine(p);
     }
     break;
+@
 
+<<[[main()]] locals>>=
+char *p;
+@
+
+<<[[main()]] command line processing>>=
 case 'I':
     p = ARGF();
     if(p)
         setinclude(p);
     break;
+@
+
+<<[[main()]] command line processing>>=
 default:
     c = ARGC();
     if(c >= 0 && c < sizeof(debug))
@@ -1940,7 +1965,10 @@ compile(char *file, char **defs, int ndef)
         else
             newfile(file, -1);
     }
+ 
+    // The big call!
     yyparse();
+
     if(!debug['a'] && !debug['Z'])
         gclean();
     return nerrors;
@@ -1952,6 +1980,9 @@ compile(char *file, char **defs, int ndef)
 
 
 
+\section{[[tinit()]]}
+
+% see later
 
 \section{[[cinit()]]}
 
@@ -2139,6 +2170,10 @@ gclean(void)
 }
 @
 
+\section{[[arginit()]]}
+
+% see later
+
 
 \chapter{Input}
 % similar to Assembler, could reuse
@@ -2294,6 +2329,7 @@ pop:
     return *fi.p++ & 0xff;
 }
 @
+
 
 \chapter{Lexing}
 
@@ -2794,49 +2830,58 @@ caseout:
 struct
 {
     char	*name;
+    // enum<lexeme>
     ushort	lexical;
-    // option<enum<Type>>
+    // option<enum<Type>>, None = 0 (or TXXX)
     ushort	type;
 } itab[] =
 {
     "auto",		LAUTO,		0,
-    "break",	LBREAK,		0,
-    "case",		LCASE,		0,
-    "char",		LCHAR,		TCHAR,
-    "const",	LCONSTNT,	0,
-    "continue",	LCONTINUE,	0,
-    "default",	LDEFAULT,	0,
-    "do",		LDO,		0,
-    "double",	LDOUBLE,	TDOUBLE,
-    "else",		LELSE,		0,
-    "enum",		LENUM,		0,
-    "extern",	LEXTERN,	0,
-    "float",	LFLOAT,		TFLOAT,
-    "for",		LFOR,		0,
-    "goto",		LGOTO,		0,
-    "if",		LIF,		0,
-    "inline",	LINLINE,	0,
-    "int",		LINT,		TINT,
-    "long",		LLONG,		TLONG,
-    "register",	LREGISTER,	0,
-    "restrict",	LRESTRICT,	0,
-    "return",	LRETURN,	0,
-    "SET",		LSET,		0,
-    "short",	LSHORT,		TSHORT,
-    "signed",	LSIGNED,	0,
-    "signof",	LSIGNOF,	0,
-    "sizeof",	LSIZEOF,	0,
     "static",	LSTATIC,	0,
+    "extern",	LEXTERN,	0,
+
+    "void",		LVOID,		TVOID,
+    "char",		LCHAR,		TCHAR,
+    "int",		LINT,		TINT,
+    "short",	LSHORT,		TSHORT,
+    "long",		LLONG,		TLONG,
+    "float",	LFLOAT,		TFLOAT,
+    "double",	LDOUBLE,	TDOUBLE,
+
     "struct",	LSTRUCT,	0,
-    "switch",	LSWITCH,	0,
+    "union",	LUNION,		0,
+    "enum",		LENUM,		0,
+
     "typedef",	LTYPEDEF,	0,
     "typestr",	LTYPESTR,	0,
-    "union",	LUNION,		0,
+
     "unsigned",	LUNSIGNED,	0,
-    "USED",		LUSED,		0,
-    "void",		LVOID,		TVOID,
+    "signed",	LSIGNED,	0,
+
+    "const",	LCONSTNT,	0,
     "volatile",	LVOLATILE,	0,
+    "inline",	LINLINE,	0,
+    "register",	LREGISTER,	0,
+    "restrict",	LRESTRICT,	0,
+
+    "if",		LIF,		0,
+    "else",		LELSE,		0,
     "while",	LWHILE,		0,
+    "for",		LFOR,		0,
+    "do",		LDO,		0,
+    "break",	LBREAK,		0,
+    "continue",	LCONTINUE,	0,
+    "switch",	LSWITCH,	0,
+    "case",		LCASE,		0,
+    "default",	LDEFAULT,	0,
+    "return",	LRETURN,	0,
+    "goto",		LGOTO,		0,
+
+    "signof",	LSIGNOF,	0,
+    "sizeof",	LSIZEOF,	0,
+
+    "SET",		LSET,		0,
+    "USED",		LUSED,		0,
     0
 };
 @
@@ -2936,11 +2981,15 @@ bad:
 
 \subsection{Decimals}
 
+\subsection{Hexadecimals}
+
+\subsection{Octadecimals}
+
 \subsection{Floats}
 
 \section{Characters}
 
-\section{Escaping characters}
+\subsection{Escaping characters}
 
 <<function escchar>>=
 long
@@ -4328,7 +4377,8 @@ getnsn(void)
 %left   '*' '/' '%'
 %right  LMM LPP LMG '.' '[' '('
 @
-
+% LXE = L X Equal, e.g. LPE = L Plus Equal (+=)
+% LMM = L Minus Minus (--), LMG = L Minux Greater (->)
 
 <<[[union yacc]] other fields>>=
 Node*   node;
@@ -4337,17 +4387,25 @@ Node*   node;
 % see Node also in Core data structure section, with Z, left/right, new(), etc
 
 <<type declarations>>=
-%type   <node>  zarglist arglist zcexpr
-%type   <node>  name block stmnt cexpr expr xuexpr pexpr
-%type   <node>  zelist elist adecl slist uexpr string lstring
-%type   <node>  xdecor xdecor2 labels label ulstmnt
-%type   <node>  adlist edecor tag qual qlist
-%type   <node>  abdecor abdecor1 abdecor2 abdecor3
-%type   <node>  zexpr lexpr init ilist forexpr
+%type   <node>  name tag 
+%type   <node>  stmnt   block slist ulstmnt labels label forexpr
+%type   <node>  expr    cexpr lexpr  xuexpr uexpr pexpr  elist  string lstring
+%type   <node>  adecl   qual init ilist  adlist qlist  arglist
+%type   <node>  xdecor xdecor2 edecor  abdecor abdecor1 abdecor2 abdecor3
+%type   <node>  zexpr zelist zcexpr zarglist
 @
+% xdecl, pdecl are not here, because do side effects I think
+%less: ltag is a sym. 
+%note that name and tag are nodes here, convenient so can use diag($xx) on
+% them. 
 
 % in what follows a few conventions: 
 % zxxx means zero or more e.g. zctlist means list of ctl 0 or more
+% ct means class and storage
+% x means external
+% u means unary, ul = unary or label
+% ab means abstract
+% cexpr means comma expr
 
 % note that all terminal chars like ')' are acutally Node* too
 % so can pass them to warn() to get accurate error location
@@ -4399,7 +4457,7 @@ xdecl:
 % do that because C sucks? my parser_c.mly was also complicated
 % when it come to declaration handling ...
 <<global lastclass>>=
-// enum<cxxx>
+// enum<storage_class>
 //@Scheck: y.tab.c
 char	lastclass;
 @
@@ -4409,20 +4467,10 @@ char	lastclass;
 Type*	lasttype;
 @
 
-% dodecl() modify especially this global.
-% hmm why Type* and not Decl*? rename lastdcltype?
-<<global lastdcl>>=
-Type*	lastdcl;
-@
 
 
 
 \section{Function definition}
-
-
-<<declaration nodes>>=
-OPROTO,
-@
 
 
 <<global firstdcl>>=
@@ -4433,6 +4481,14 @@ Decl*	firstdcl;
 %rename thisfntype?
 <<global thisfn>>=
 Type*	thisfn;
+@
+% this is useful to annotate the type of RETURN
+
+
+% dodecl() modify especially this global.
+% hmm why Type* and not Decl*? rename lastdcltype?
+<<global lastdcl>>=
+Type*	lastdcl;
 @
 
 
@@ -4471,6 +4527,43 @@ Type*	thisfn;
 
 % markdcl(), revertdcl(), see next section
 
+
+<<declaration nodes>>=
+OPROTO,
+@
+% ?? rename OPARAM?
+
+% called arg ... hmmm ... should be renamed zparamlist
+% xdecor -> ... -> <> ?
+<<parameter declarator rules>>=
+zarglist:
+  /* empty */   { $$ = Z; }
+|   arglist     { $$ = invert($1); }
+
+
+arglist:
+    name
+|   tlist abdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+|   tlist xdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
+@
+%$
+
+<<misc nodes>>=
+ODOTDOT,
+@
+
+
+
 \subsection{Parameters}
 
 <<global firstarg>>=
@@ -4490,6 +4583,7 @@ long	autoffset;
 <<global stkoff>>=
 long	stkoff;
 @
+% stack offset
 
 
 % pass is 0 or 1
@@ -4505,131 +4599,20 @@ void argmark(Node *n, int pass)
         if(n->op != OFUNC || n->left->op != ONAME)
             continue;
         walkparam(n->right, pass);
-        if(pass != 0 && anyproto(n->right) == OLDPROTO) {
-            t = typ(TFUNC, n->left->sym->type->link);
-            t->down = typ(TOLD, T);
-            t->down->down = ofnproto(n->right);
-            tmerge(t, n->left->sym);
-            n->left->sym->type = t;
-        }
+        <<[[argmark()]] if old proto style>>
         break;
     }
     autoffset = 0;
     stkoff = 0;
 }
 @
+%less: not part of the old proto stuff?
 
-<<function tmerge>>=
-void
-tmerge(Type *t1, Sym *s)
-{
-    Type *ta, *tb, *t2;
 
-    t2 = s->type;
-/*print("merge	%T; %T\n", t1, t2);/**/
-    for(;;) {
-        if(t1 == T || t2 == T || t1 == t2)
-            break;
-        if(t1->etype != t2->etype)
-            break;
-        switch(t1->etype) {
-        case TFUNC:
-            ta = t1->down;
-            tb = t2->down;
-            if(ta == T) {
-                t1->down = tb;
-                break;
-            }
-            if(tb == T)
-                break;
-            while(ta != T && tb != T) {
-                if(ta == tb)
-                    break;
-                /* ignore old-style flag */
-                if(ta->etype == TOLD) {
-                    ta = ta->down;
-                    continue;
-                }
-                if(tb->etype == TOLD) {
-                    tb = tb->down;
-                    continue;
-                }
-                /* checking terminated by ... */
-                if(ta->etype == TDOT && tb->etype == TDOT) {
-                    ta = T;
-                    tb = T;
-                    break;
-                }
-                if(!sametype(ta, tb))
-                    break;
-                ta = ta->down;
-                tb = tb->down;
-            }
-            if(ta != tb)
-                diag(Z, "function inconsistently declared: %s", s->name);
-
-            /* take new-style over old-style */
-            ta = t1->down;
-            tb = t2->down;
-            if(ta != T && ta->etype == TOLD)
-                if(tb != T && tb->etype != TOLD)
-                    t1->down = tb;
-            break;
-
-        case TARRAY:
-            /* should we check array size change? */
-            if(t2->width > t1->width)
-                t1->width = t2->width;
-            break;
-
-        case TUNION:
-        case TSTRUCT:
-            return;
-        }
-        t1 = t1->link;
-        t2 = t2->link;
-    }
-}
-@
-
-<<function ofnproto>>=
-Type*
-ofnproto(Node *n)
-{
-    Type *tl, *tr, *t;
-
-    if(n == Z)
-        return T;
-    switch(n->op) {
-    case OLIST:
-        tl = ofnproto(n->left);
-        tr = ofnproto(n->right);
-        if(tl == T)
-            return tr;
-        tl->down = tr;
-        return tl;
-
-    case ONAME:
-        t = copytyp(n->sym->type);
-        t->down = T;
-        return t;
-    }
-    return T;
-}
-@
-
-% TODO enum with bitset 1<<0, 1<<1
+% TODO enum with bitset 1<<0, 1<<1 ?
 <<constant ANSIPROTO>>=
 #define	ANSIPROTO	1
 @
-
-<<constant OLDPROTO>>=
-#define	OLDPROTO	2
-@
-
-
-
-
 
 <<function fnproto>>=
 Type*
@@ -4648,12 +4631,12 @@ fnproto(Node *n)
 @
 
 <<function anyproto>>=
-int
+bool
 anyproto(Node *n)
 {
     int r;
 
-    r = 0;
+    r = false;
 
 loop:
     if(n == Z)
@@ -4706,11 +4689,12 @@ fnproto1(Node *n)
     return T;
 }
 @
+% NODECL =~ (complex function type cast) nil
 
 
 <<function paramconv>>=
 Type*
-paramconv(Type *t, int f)
+paramconv(Type *t, bool f)
 {
 
     switch(t->etype) {
@@ -4761,10 +4745,6 @@ loop:
     if(n == Z)
         return;
     switch(n->op) {
-    default:
-        diag(n, "argument not a name/prototype: %O", n->op);
-        break;
-
     case OLIST:
         walkparam(n->left, pass);
         n = n->right;
@@ -4817,27 +4797,16 @@ loop:
         } else
             dodecl(pdecl, CXXX, types[TINT], n);
         break;
+    default:
+        diag(n, "argument not a name/prototype: %O", n->op);
+        break;
+
     }
 }
 @
 
 
 
-% TODO remove? old style decl?
-<<parameter declarator rules>>=
-/*
- * parameter declarator
- */
-pdecl:
-  /* empty */
-|   pdecl ctlist pdlist ';'
-
-pdlist:
-    xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
-|   pdlist ',' pdlist
-@
-%$
-% this is old style? pre-ansi?
 
 
 <<function pdecl>>=
@@ -4865,42 +4834,9 @@ pdecl(int c, Type *t, Sym *s)
 
 
 
-% called arg ... hmmm ... should be renamed zparamlist
-<<parameter declarator rules>>=
-zarglist:
-  /* empty */   { $$ = Z; }
-|   arglist     { $$ = invert($1); }
-
-
-arglist:
-    name
-|   tlist abdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   tlist xdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
-|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
-@
-%$
-
-<<misc nodes>>=
-ODOTDOT,
-@
-
 
 \section{Statements}
-
 % block, labels, stmts
-
-<<statement nodes>>=
-OLIST, // of stmts, labels, sometimes also used for pairs, triples, etc
-@
 
 
 % seen 'block' for func def, block is a list of stmnt
@@ -4928,26 +4864,27 @@ stmnt:
 |   labels ulstmnt { $$ = new(OLIST, $1, $2); }
 |   error ';'      { $$ = Z; }
 @
+% hmm could have a OLABELS no?
 
 % ul = no label? unlabeled?
 <<statements rules>>=
 <<ulstmnt rule>>
+<<label rule>>
 @
 
 <<ulstmnt rule>>=
 ulstmnt:
     zcexpr ';'
 @
+% zero or commaexpr, will see in next chapter expressions
 
 <<ebnf grammar rules>>=
 labels:
     label
 |   labels label  { $$ = new(OLIST, $1, $2); }
 @
+% why not OLABEL instead?
 
-<<statements rules>>=
-<<label rule>>
-@
 
 \subsection{Blocks}
 
@@ -4992,8 +4929,8 @@ OIF,
     }
 @
 %$
-
 % cexpr means  comma expr
+% OLIST here could be an OPAIR
 
 \subsection{Switch}
 
@@ -5005,29 +4942,11 @@ OCASE, // for default too, in which case Node.left is null
 <<ulstmnt rule>>=
 |   LSWITCH '(' cexpr ')' stmnt
     {
-        // generate (0:int - (0:int - x))
-        // which will force the usual arithmetic conversions
-        // (and will later be simplified by later transformations)
-
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
-
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
-
+       <<ulstmt rule, SWITCH case, adjust cexpr node>>
         $$ = new(OSWITCH, $3, $5);
     }
 @
-% I originally thought there was a copy paste bug above,
-% and even Rob Pike thought so, but it turned out it's not a bug :)
 
-% why 0 - 0 - x? why not 0+x?
-%"you can't subtract pointers from 0 but you can add 0 to a pointer,
-%since + is commutative" forsith
 
 % note that 'labels' with an 's' before, so can have case 1: case 2: ...
 
@@ -5037,6 +4956,30 @@ label:
 |   LDEFAULT ':'    { $$ = new(OCASE, Z, Z); }
 @
 %$
+
+
+
+<<ulstmt rule, SWITCH case, adjust cexpr node>>=
+// generate (0:int - (0:int - x))
+// which will force the usual arithmetic conversions
+// (and will be simplified later by some transformations)
+
+$$ = new(OCONST, Z, Z);
+$$->vconst = 0;
+$$->type = types[TINT];
+$3 = new(OSUB, $$, $3);
+
+$$ = new(OCONST, Z, Z);
+$$->vconst = 0;
+$$->type = types[TINT];
+$3 = new(OSUB, $$, $3);
+@
+% I originally thought there was a copy paste bug above,
+% and even Rob Pike thought so, but it turned out it's not a bug :)
+% why 0 - 0 - x? why not 0+x?
+%"you can't subtract pointers from 0 but you can add 0 to a pointer,
+%since + is commutative" forsith
+
 
 \subsection{Control flow jumps}
 
@@ -5067,6 +5010,7 @@ OWHILE,
 ODWHILE,
 @
 
+% markdecl because forexpr allow local declaration ext, as in C++
 <<ulstmnt rule>>=
 |   { 
         markdcl(); 
@@ -5086,7 +5030,7 @@ ODWHILE,
 |   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
 @
 
-% C extension for(int i; ... ?) hence the markdcl? for scope?
+% C extension for(int i; ... ?) hence the markdcl, for scope.
 <<statements rules>>=
 forexpr:
     zcexpr
@@ -5105,11 +5049,14 @@ OGOTO,
 |   LNAME ':'       { $$ = new(OLABEL, dcllabel($1, true), Z); }
 @
 %$
+% what? it's in label rule? with case and default??
+% actually then often do  case x: talpha: ...
 
 <<ulstmnt rule>>=
 |   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, false), Z); }
 @
 %$
+% ltag = LNAME | LTYPE, see later
 
 
 <<[[Sym]] other fields>>=
@@ -5162,22 +5109,36 @@ Node* dcllabel(Sym *s, bool f)
 }
 @
 
+
+
 \section{Expressions}
 
-% e.g. in array def context, can have an int or nothing, TODO rename zlexpr?
 <<expressions rules>>=
-zexpr:
-  /* empty */ { $$ = Z; }
-|   lexpr
+<<expr rule>>
+<<xuexpr rule>>
+<<uexpr rule>>
+<<pexpr rule>>
+@
+% extended unary(cast), unary, primary expr
+
+<<expr rule>>=
+expr:
+    xuexpr
 @
 
-<<expressions rules>>=
-lexpr:
-    expr
-    {
-        $$ = new(OCAST, $1, Z);
-        $$->type = types[TLONG];
-    }
+<<xuexpr rule>>=
+xuexpr:
+    uexpr
+@
+
+<<uexpr rule>>=
+uexpr:
+    pexpr
+@
+
+<<pexpr rule>>=
+pexpr:
+    '(' cexpr ')' { $$ = $2; }
 @
 %$
 
@@ -5194,14 +5155,51 @@ cexpr:
 % cexpr = comma expr
 
 
+
+
+
+
+<<expressions rules>>=
+lexpr:
+    expr
+    {
+        $$ = new(OCAST, $1, Z);
+        $$->type = types[TLONG];
+    }
+@
+%$
+% long expr. zexpr is a longexpr because empty means 0 which is a long.
+
+
+
+% e.g. in array def context, can have an int or nothing, TODO rename zlexpr?
+<<expressions rules>>=
+zexpr:
+  /* empty */ { $$ = Z; }
+|   lexpr
+@
+
+
 <<ebnf grammar rules>>=
 zcexpr:
   /* empty */ { $$ = Z; }
 |   cexpr
 @
+% this time for a zero it means really None.
 
 
-\subsection{Binary expressions}
+
+
+% I used to have a "Binary expr", "Unary expr", "Primary expr" 
+% but it makes more sense to structure around features
+% the user can understand rather than grammar specificities
+
+
+\subsection{Arithmetic expressions}
+
+% Similar to Machine.nw/Assembler.nw in some sense,
+% except can compose them to form complex tree formulas.
+% and also have DIV here even though the machine does not!
 
 <<expression nodes>>=
 OADD,
@@ -5214,59 +5212,87 @@ OMOD,
 OASHL,
 OASHR,
 
-OLT,
-OGT,
-OLE,
-OGE,
-
-OEQ,
-ONE,
-
 OAND,
 OOR,
 OXOR,
+@
+% OAS ... rename? so less confusing with the other assign nodes?
 
+
+<<expr rule>>=
+|   expr '+' expr { $$ = new(OADD, $1, $3); }
+|   expr '-' expr { $$ = new(OSUB, $1, $3); }
+|   expr '*' expr { $$ = new(OMUL, $1, $3); }
+|   expr '/' expr { $$ = new(ODIV, $1, $3); }
+|   expr '%' expr { $$ = new(OMOD, $1, $3); }
+|   expr LRSH expr { $$ = new(OASHR, $1, $3); }
+|   expr LLSH expr { $$ = new(OASHL, $1, $3); }
+|   expr '&' expr  { $$ = new(OAND, $1, $3); }
+|   expr '^' expr  { $$ = new(OXOR, $1, $3); }
+|   expr '|' expr  { $$ = new(OOR, $1, $3); }
+@
+
+% see also in unary expression POS and NEG
+
+
+
+<<expression nodes>>=
+OPOS,
+ONEG,
+@
+
+<<uexpr rule>>=
+|   '+' xuexpr { $$ = new(OPOS, $2, Z); }
+|   '-' xuexpr { $$ = new(ONEG, $2, Z); }
+@
+
+\subsection{Boolean expressions}
+
+<<expression nodes>>=
 OANDAND,
 OOROR,
 @
 
-<<expressions rules>>=
-<<expr rule>>
-@
-
 <<expr rule>>=
-expr:
-    xuexpr
-
-|   expr '*' expr { $$ = new(OMUL, $1, $3); }
-|   expr '/' expr { $$ = new(ODIV, $1, $3); }
-|   expr '%' expr { $$ = new(OMOD, $1, $3); }
-|   expr '+' expr { $$ = new(OADD, $1, $3); }
-|   expr '-' expr { $$ = new(OSUB, $1, $3); }
-|   expr LRSH expr { $$ = new(OASHR, $1, $3); }
-|   expr LLSH expr { $$ = new(OASHL, $1, $3); }
-|   expr '<' expr  { $$ = new(OLT, $1, $3); }
-|   expr '>' expr  { $$ = new(OGT, $1, $3); }
-|   expr LLE expr  { $$ = new(OLE, $1, $3); }
-|   expr LGE expr  { $$ = new(OGE, $1, $3); }
-|   expr LEQ expr  { $$ = new(OEQ, $1, $3); }
-|   expr LNE expr  { $$ = new(ONE, $1, $3); }
-|   expr '&' expr  { $$ = new(OAND, $1, $3); }
-|   expr '^' expr  { $$ = new(OXOR, $1, $3); }
-|   expr '|' expr  { $$ = new(OOR, $1, $3); }
 |   expr LANDAND expr { $$ = new(OANDAND, $1, $3); }
 |   expr LOROR expr   { $$ = new(OOROR, $1, $3); }
 @
 
-
 <<expression nodes>>=
-OCOND,
+OEQ,
+ONE,
+
+OLT,
+OGT,
+OLE,
+OGE,
 @
 
 <<expr rule>>=
-|   expr '?' cexpr ':' expr { $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
+|   expr LEQ expr  { $$ = new(OEQ, $1, $3); }
+|   expr LNE expr  { $$ = new(ONE, $1, $3); }
+|   expr '<' expr  { $$ = new(OLT, $1, $3); }
+|   expr '>' expr  { $$ = new(OGT, $1, $3); }
+|   expr LLE expr  { $$ = new(OLE, $1, $3); }
+|   expr LGE expr  { $$ = new(OGE, $1, $3); }
 @
-%$
+
+
+<<expression nodes>>=
+ONOT,
+OCOM,
+@
+
+<<uexpr rule>>=
+|   '!' xuexpr { $$ = new(ONOT, $2, Z); }
+|   '~' xuexpr { $$ = new(OCOM, $2, Z); }
+@
+
+
+\subsection{Assignments}
+% which really should be instructions, not expressions, grrr
+
+% =~ AMOV in Assembler.nw
 
 <<expression nodes>>=
 OAS,
@@ -5287,7 +5313,6 @@ OASXOR,
 @
 
 
-
 <<expr rule>>=
 |   expr '=' expr  { $$ = new(OAS, $1, $3); }
 |   expr LPE expr  { $$ = new(OASADD, $1, $3); }
@@ -5303,131 +5328,22 @@ OASXOR,
 @
 %$
 
-\subsection{Cast}
-
-<<expression nodes>>=
-OCAST,
-@
-
-<<expressions rules>>=
-xuexpr:
-    uexpr
-|   '(' tlist abdecor ')' xuexpr
-    {
-        $$ = new(OCAST, $5, Z);
-        dodecl(NODECL, CXXX, $2, $3);
-        $$->type = lastdcl;
-        $$->xcast = true;
-    }
-<<xuexpr other cases>>
-@
-%$
-
-% extended unary expr? = cast expr
-
-<<[[Node]] other fields>>=
-bool 	xcast;
-@
-
-% kenccext and gccext, struct constructor
-<<xuexpr other cases>>=
-|   '(' tlist abdecor ')' '{' ilist '}' /* extension */
-    {
-        $$ = new(OSTRUCT, $6, Z);
-        dodecl(NODECL, CXXX, $2, $3);
-        $$->type = lastdcl;
-    }
-@
-%$
-
-
-\subsection{Unary expressions}
-
-% unary expr
-<<expressions rules>>=
-<<uexpr rule>>
-@
-
+\subsection{Pointers}
 
 <<expression nodes>>=
 OIND, // for uses (dereference) and also defs (and decls)
 OADDR,
 @
 
-
 <<uexpr rule>>=
-uexpr:
-    pexpr
-
 |   '*' xuexpr { $$ = new(OIND, $2, Z); }
 |   '&' xuexpr { $$ = new(OADDR, $2, Z); }
 @
 
-<<expression nodes>>=
-OPOS,
-ONEG,
-ONOT,
-OCOM,
-@
 
-<<expression nodes>>=
-OPREDEC,
-OPREINC,
-@
+\subsection{Function call}
 
-<<uexpr rule>>=
-|   '+' xuexpr { $$ = new(OPOS, $2, Z); }
-|   '-' xuexpr { $$ = new(ONEG, $2, Z); }
-|   '!' xuexpr { $$ = new(ONOT, $2, Z); }
-|   '~' xuexpr { $$ = new(OCOM, $2, Z); }
-|   LPP xuexpr { $$ = new(OPREINC, $2, Z); }
-|   LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
-@
-
-<<expression nodes>>=
-OSIZE,
-OSIGN,
-@
-
-<<uexpr rule>>=
-|   LSIZEOF uexpr { $$ = new(OSIZE, $2, Z); }
-|   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
-@
-% signof?
-
-\subsection{Primary expressions}
-
-<<expressions rules>>=
-<<pexpr rule>>
-@
-
-% primary expr
-<<pexpr rule>>=
-pexpr:
-    '(' cexpr ')' { $$ = $2; }
-@
-%$
-
-<<pexpr rule>>=
-|   LSIZEOF '(' tlist abdecor ')'
-    {
-        $$ = new(OSIZE, Z, Z);
-        dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcl;
-    }
-|   LSIGNOF '(' tlist abdecor ')'
-    {
-        $$ = new(OSIGN, Z, Z);
-        dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcl;
-    }
-@
-%$
-% again sizeof but this time not uexpr, but types!
-
-
-
-<<expression nodes>>=
+<<misc nodes>>=
 OFUNC, // used for uses (calls) but also defs (and decls) :(
 @
 
@@ -5443,7 +5359,8 @@ OFUNC, // used for uses (calls) but also defs (and decls) :(
     }
 @
 % no forward decl of entity name, so assumes return an int?
-% TODO should warn instead about undeclared symbol? cleaner!
+% TODO should warn instead about undeclared symbol? cleaner
+% than this implicit prototype declaration where return an int
 
 <<ebnf grammar rules>>=
 zelist:
@@ -5459,11 +5376,14 @@ elist:
 @
 % elist really? should be expr no? or have a %left for ',' ?
 
+\subsection{Array access}
+
 % unsugar x[y] as *(x+y) :)
 <<pexpr rule>>=
 |   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
 @
 
+\subsection{Field access}
 
 <<expression nodes>>=
 ODOT,
@@ -5483,15 +5403,7 @@ ODOT,
     }
 @
 
-<<expression nodes>>=
-OPOSTINC,
-OPOSTDEC,
-@
 
-<<pexpr rule>>=
-|   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
-|   pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
-@
 
 \subsection{Entities}
 
@@ -5548,11 +5460,18 @@ mkstatic(Sym *s)
 
 \subsection{Numeric Constants}
 
+\subsubsection{Integers}
+
 <<expression nodes>>=
 OCONST,
 @
 % also for float
 % the const keyword is actually a GCONSTNT, and LCONST
+
+<<[[Node]] other fields>>=
+vlong	vconst;		/* non fp const */ // abused in switch?
+@
+% could be put in a union with fpconst and rstring (but not cstring)
 
 <<pexpr rule>>=
 |   LCONST
@@ -5605,6 +5524,12 @@ OCONST,
 @
 %$
 
+\subsubsection{Floats}
+
+<<[[Node]] other fields>>=
+double	fconst;		/* fp constant */
+@
+
 <<pexpr rule>>=
 |   LFCONST
     {
@@ -5626,15 +5551,23 @@ OCONST,
 \subsection{String constants}
 % char constant? unsugard in yylex?
 
+\subsubsection{Ascii strings}
+% classic '\0' terminated "C strings"
+
 <<expression nodes>>=
 OSTRING,
-OLSTRING,
 @
 
 <<pexpr rule>>=
 |   string
 |   lstring
 @
+
+<<[[Node]] other fields>>=
+char*	cstring;	/* character string */ // also used for ints
+@
+% could be put in a union, except it uses both vconst and cstring
+% at the same time
 
 <<expressions rules>>=
 string:
@@ -5664,6 +5597,18 @@ string:
         $$->type->width += $2.l;
         $$->cstring = s;
     }
+@
+% do not free the previous one?
+
+\subsubsection{Unicode strings}
+% long strings
+
+<<expression nodes>>=
+OLSTRING,
+@
+
+<<[[Node]] other fields>>=
+TRune*	rstring;	/* rune string */
 @
 
 % unicode
@@ -5699,18 +5644,104 @@ lstring:
 %$
 
 
-\section{Initializers}
+\subsection{Cast}
+
+<<expression nodes>>=
+OCAST,
+@
+
+<<xuexpr rule>>=
+|   '(' tlist abdecor ')' xuexpr
+    {
+        $$ = new(OCAST, $5, Z);
+        dodecl(NODECL, CXXX, $2, $3);
+        $$->type = lastdcl;
+        $$->xcast = true;
+    }
+@
+%$
+% extended unary expr? = cast expr
+
+<<[[Node]] other fields>>=
+bool 	xcast;
+@
+% explicit cast
+
+
+\subsection{Ternary expressions}
+
+<<expression nodes>>=
+OCOND,
+@
+
+<<expr rule>>=
+|   expr '?' cexpr ':' expr { $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
+@
+%$
+
+\subsection{Prefix/postfix}
+
+<<expression nodes>>=
+OPREDEC,
+OPREINC,
+@
+
+<<uexpr rule>>=
+|   LPP xuexpr { $$ = new(OPREINC, $2, Z); }
+|   LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
+@
+
+
+<<expression nodes>>=
+OPOSTINC,
+OPOSTDEC,
+@
+
+<<pexpr rule>>=
+|   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
+|   pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
+@
+
+
+\subsection{[[sizeof()]]}
+
+<<expression nodes>>=
+OSIZE,
+@
+
+<<uexpr rule>>=
+|   LSIZEOF uexpr { $$ = new(OSIZE, $2, Z); }
+@
+% $
+
+%\subsection{Primary expressions}
+% call, array access, field access, sizeof, 
+
+
+% already seen sizeof in uexpr rule
+<<pexpr rule>>=
+|   LSIZEOF '(' tlist abdecor ')'
+    {
+        $$ = new(OSIZE, Z, Z);
+        dodecl(NODECL, CXXX, $3, $4);
+        $$->type = lastdcl;
+    }
+@
+%$
+% again sizeof but this time not uexpr, but types!
+
+
+
+
+
+\section{Initializers and designators}
 
 <<variable declaration nodes>>=
 OINIT,
 @
+% but just for list! otherwise it's really OASI.
 
-<<variable declaration nodes>>=
-OARRAY, // used for uses (including designator) and defs (and decl)
-OELEM,  // field designator
-@
-
-% in decl?:
+% as a reminder, here is what was in decl:
 %    '=' init
 %    {
 %        doinit($1->sym, $1->type, 0L, $4);
@@ -5731,7 +5762,21 @@ qlist:
 |   qlist init ','  { $$ = new(OLIST, $1, $2); }
 |   qual
 |   qlist qual      { $$ = new(OLIST, $1, $2); }
+@
+%$
+% why not OLIST also for the first one?
 
+<<variable declaration nodes>>=
+OELEM,  // field designator
+@
+% for regular access it's TDOT
+
+<<misc nodes>>=
+OARRAY, // used for uses (including designator) and defs (and decl)
+@
+
+
+<<initializers rules>>=
 qual:
     '[' lexpr ']' { $$ = new(OARRAY, $2, Z); }
 |   '.' ltag
@@ -5745,7 +5790,8 @@ qual:
 % alternate syntax qual =
 
 
-% in decl?:
+
+% as a reminder, here is what was in decl:
 %    '=' init
 %    {
 %        doinit($1->sym, $1->type, 0L, $4);
@@ -5788,6 +5834,7 @@ doinit(Sym *s, Type *t, long o, Node *a)
     return a;
 }
 @
+% init1 below
 
 
 % could be made a static local of init1?
@@ -5795,9 +5842,9 @@ doinit(Sym *s, Type *t, long o, Node *a)
 Node*	nodcast;
 @
 
-% declaration and expression
+% declaration and expression actually
 <<expression nodes>>=
-OASI,
+OASI, // appears during parsing
 @
 % assign initializer?
 
@@ -5838,6 +5885,7 @@ init1(Sym *s, Type *t, long o, int exflag)
     case TUVLONG:
     case TFLOAT:
     case TDOUBLE:
+
     case TIND:
     single:
         if(a->op == OARRAY || a->op == OELEM)
@@ -6149,8 +6197,17 @@ nextinit(void)
 
 \section{Types and storage classes}
 
+%context:
+% cast:  '(' tlist abdecor ')' xuexpr
+% sizeof: |   LSIZEOF '(' tlist abdecor ')'
+% arguments: |   tlist abdecor
+% adecl? and will see later also for adecl probably
+
+% tlist because can have a list like unsigned int, or long long
+
+
 % bitset, because need to aggregate keywords to form the final thing.
-% to transform from 'unsigned char' -> TUCHAR?
+% to do 'unsigned char' -> TUCHAR
 % pre: Txxx must have less than 64 cases? 1L => long => long enum
 <<enum bxxx>>=
 enum bxxx
@@ -6187,7 +6244,6 @@ enum bxxx
     BAUTO		= 1L<<TAUTO,
     BEXTERN		= 1L<<TEXTERN,
     BSTATIC		= 1L<<TSTATIC,
-
     BTYPEDEF	= 1L<<TTYPEDEF,
     BTYPESTR	= 1L<<TTYPESTR,
     BREGISTER	= 1L<<TREGISTER,
@@ -6204,7 +6260,7 @@ enum bxxx
 };
 @
 
-% see also enum<cxxx> and enum<type_kind>
+% see also enum<storage_class> and enum<type_kind>
 
 
 % bitset<enum<bxxx> > actually
@@ -6262,31 +6318,18 @@ gcname:
 
 
 
-% type and class
-<<[[union yacc]] other fields>>=
-struct
-{
-    Type*   t;
-    // enum<cxxx>
-    byte   c;
-} tycl;
-@
+
 
 <<[[union yacc]] other fields>>=
 Type*   type;
 @
 
-
 <<type declarations>>=
-%type   <tycl>  types
+%type   <type> tlist
 @
 
-
-<<types rules>>=
-<<types rule>>
-@
-
-% sizeof, cast, context
+% arguments to sizeof and cast
+% tlist because can have a list like unsigned int, or long long
 <<extra grammar rules>>=
 tlist:
     types
@@ -6299,12 +6342,35 @@ tlist:
 % do not allow to specify storage class
 % (hmmm could have done via grammar?)
 
-<<type declarations>>=
-%type   <type> tlist
+
+
+
+% type and class
+<<[[union yacc]] other fields>>=
+struct
+{
+    Type*   t;
+    // option<enum<storage_class> >, None = CXXX
+    byte   c;
+} tycl;
 @
 
 
+<<type declarations>>=
+%type   <tycl>  types
+@
+
+
+
+
+
+
 \subsection{Simple types}
+
+
+<<types rules>>=
+<<types rule>>
+@
 
 <<types rule>>=
 types:
@@ -6461,7 +6527,8 @@ int simplec(long b)
 
     b &= BCLASS;
     switch(b) {
-    case 0:
+    case 0: 
+    // skipping regsiter
     case BREGISTER:
         return CXXX;
     case BAUTO:
@@ -6469,14 +6536,13 @@ int simplec(long b)
         return CAUTO;
     case BEXTERN:
         return CEXTERN;
-    case BEXTERN|BREGISTER:
-        return CEXREG;
     case BSTATIC:
         return CSTATIC;
     case BTYPEDEF:
         return CTYPEDEF;
     case BTYPESTR:
         return CTYPESTR;
+    <<[[simplec()]] cases>>
     }
     diag(Z, "illegal combination of classes %Q", b);
     return CXXX;
@@ -6517,7 +6583,18 @@ simpleg(long b)
 }
 @
 
-\subsection{Complex types}
+
+\subsection{Structures and unions}
+
+<<definition nodes>>=
+OSTRUCT,
+OUNION,
+@
+% used for definitions and uses too
+
+
+
+\subsubsection{Complex types}
 
 <<types rule>>=
 |  complex
@@ -6550,56 +6627,10 @@ simpleg(long b)
 %type   <type>  complex
 @
 
-\subsection{Typedefs}
-
-% uses
-<<complex rule>>=
-complex:
-    LTYPE { $$ = tcopy($1->type); }
-@
-%$
-
-<<function tcopy>>=
-/*
- * make a copy of a typedef
- * the problem is to split out incomplete
- * arrays so that it is in the variable
- * rather than the typedef.
- */
-Type*
-tcopy(Type *t)
-{
-    Type *tl, *tx;
-    int et;
-
-    if(t == T)
-        return t;
-    et = t->etype;
-    if(typesu[et])
-        return t;
-    tl = tcopy(t->link);
-    if(tl != t->link ||
-      (et == TARRAY && t->width == 0)) {
-        tx = copytyp(t);
-        tx->link = tl;
-        return tx;
-    }
-    return t;
-}
-@
-
-
-% defs ?
 
 
 
-\subsection{Structures and unions}
-
-<<definition nodes>>=
-OSTRUCT,
-OUNION,
-@
-% used for definitions and uses too
+\subsubsection{Structure/union uses}
 
 <<type declarations>>=
 %type   <sym>   ltag
@@ -6607,7 +6638,8 @@ OUNION,
 
 %use
 <<complex rule>>=
-|   LSTRUCT ltag
+complex:
+    LSTRUCT ltag
     {
         dotag($2, TSTRUCT, 0);
         $$ = $2->suetag;
@@ -6693,6 +6725,8 @@ ltag:
 @
 
 
+\subsubsection{Structure/union definitions}
+
 % defs
 <<complex rule>>=
 |   LSTRUCT ltag
@@ -6753,6 +6787,7 @@ int	taggen;
 
 
 
+\subsubsection{Fields}
 
 <<type declarations>>=
 %type   <type> sbody
@@ -6814,9 +6849,6 @@ sbody:
 
 
 
-<<definition nodes>>=
-OBIT,
-@
 
 <<structure element declarator rules>>=
 /*
@@ -6845,17 +6877,23 @@ zedlist:                    /* extension */
 edlist:
     edecor            { dodecl(edecl, CXXX, lasttype, $1); }
 |   edlist ',' edlist
+@
+%$
 
+<<structure element declarator rules>>=
+<<edecor rule>>
+@
+
+
+<<edecor rule>>=
 edecor:
     xdecor
     {
         lastbit = 0;
         firstbit = 1;
     }
-|   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
-|   ':' lexpr       { $$ = new(OBIT, Z, $2); }
 @
-%$
+
 
 <<global lastfield>>=
 long	lastfield;
@@ -6898,6 +6936,17 @@ void edecl(int c, Type *t, Sym *s)
 }
 @
 
+\subsubsection{Bitfields}
+
+<<definition nodes>>=
+OBIT,
+@
+
+<<edecor rule>>=
+|   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
+|   ':' lexpr       { $$ = new(OBIT, Z, $2); }
+@
+%$
 
 \subsection{Enum}
 
@@ -7053,6 +7102,49 @@ maxtype(Type *t1, Type *t2)
 }
 @
 
+
+\subsection{Typedefs}
+
+%\subsubsection{Typedefs uses}
+
+% uses
+<<complex rule>>=
+|   LTYPE { $$ = tcopy($1->type); }
+@
+%$
+
+<<function tcopy>>=
+/*
+ * make a copy of a typedef
+ * the problem is to split out incomplete
+ * arrays so that it is in the variable
+ * rather than the typedef.
+ */
+Type*
+tcopy(Type *t)
+{
+    Type *tl, *tx;
+    int et;
+
+    if(t == T)
+        return t;
+    et = t->etype;
+    if(typesu[et])
+        return t;
+    tl = tcopy(t->link);
+    if(tl != t->link ||
+      (et == TARRAY && t->width == 0)) {
+        tx = copytyp(t);
+        tx->link = tl;
+        return tx;
+    }
+    return t;
+}
+@
+
+%\subsubsection{Typedefs definitions}
+
+% defs ?
 
 \section{Declarations and definitions, part two}
 
@@ -7887,18 +7979,18 @@ int	typesuinit[] =
 % set of type supported for switch argument
 % todo use array of bool instead
 <<global typeswitch>>=
-// set<txxx>
+// set<txxx>??
 char*	typeswitch;
 @
 
 <<global typeword>>=
-// set<txxx>
+// set<txxx>??
 char*	typeword;
 @
 
 % set of complex types
 <<global typecmplx>>=
-// set<txxx>
+// set<txxx>??
 char*	typecmplx;
 @
 
@@ -15202,8 +15294,8 @@ maxround(long max, long v)
 
 
 
-<<enum axxx>>=
-enum axxx
+<<enum align>>=
+enum align
 {
     Axxx,
 
@@ -20472,8 +20564,8 @@ BtoF(long b)
 % md5sum like in ocaml!
 
 % signature! for safe linking
-<<enum sigxxx>>=
-enum{
+<<enum signature>>=
+enum signature {
     SIGNONE = 0,
     SIGDONE = 1,
     SIGINTERN = 2,
@@ -20484,7 +20576,7 @@ enum{
 @
 
 <<[[Sym]] other fields>>=
-// enum<sigxxx>
+// enum<signature>
 char	sig;
 @
 % SIGNINTERN does not fit in a char ...
@@ -21316,7 +21408,45 @@ bool	profileflg;
 
 \section{C extensions}
 
+\subsection{Struct constructors}
+
+% kenccext and gccext, struct constructor
+<<xuexpr rule>>=
+|   '(' tlist abdecor ')' '{' ilist '}' /* extension */
+    {
+        $$ = new(OSTRUCT, $6, Z);
+        dodecl(NODECL, CXXX, $2, $3);
+        $$->type = lastdcl;
+    }
+@
+%$
+
+\subsection{[[signof()]]}
+
+<<expression nodes>>=
+OSIGN,
+@
+
+<<uexpr rule>>=
+|   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
+@
+%$
+
+<<pexpr rule>>=
+|   LSIGNOF '(' tlist abdecor ')'
+    {
+        $$ = new(OSIGN, Z, Z);
+        dodecl(NODECL, CXXX, $3, $4);
+        $$->type = lastdcl;
+    }
+@
+
 \subsection{External register}
+
+<<[[simplec()]] cases>>=
+case BEXTERN|BREGISTER:
+    return CEXREG;
+@
 
 <<[[Storage_class]] cases>>=
 CEXREG, // extern register, kencc ext (used in kernel for mips)
@@ -21368,6 +21498,159 @@ exreg(Type *t)
 }
 @
 
+\subsection{Old style prototypes}
+% not really an extension though
+
+
+% TODO remove? old style decl?
+<<parameter declarator rules>>=
+/*
+ * parameter declarator
+ */
+pdecl:
+  /* empty */
+|   pdecl ctlist pdlist ';'
+
+pdlist:
+    xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
+|   pdlist ',' pdlist
+@
+%$
+% this is old style? pre-ansi? can remove no?
+
+
+
+<<[[Type_kind_bis]] misc cases>>=
+TOLD,
+@
+% old style ansi declaration?
+
+
+<<[[rsametype()]] continue if old style type>>=
+if(t1->etype == TOLD) {
+    t1 = t1->down;
+    continue;
+}
+if(t2->etype == TOLD) {
+    t2 = t2->down;
+    continue;
+}
+@
+
+<<constant OLDPROTO>>=
+#define	OLDPROTO	2
+@
+% 1<<1
+
+<<[[argmark()]] if old proto style>>=
+if(pass != 0 && anyproto(n->right) == OLDPROTO) {
+    t = typ(TFUNC, n->left->sym->type->link);
+    t->down = typ(TOLD, T);
+    t->down->down = ofnproto(n->right);
+    tmerge(t, n->left->sym);
+    n->left->sym->type = t;
+}
+@
+
+<<function tmerge>>=
+void
+tmerge(Type *t1, Sym *s)
+{
+    Type *ta, *tb, *t2;
+
+    t2 = s->type;
+/*print("merge	%T; %T\n", t1, t2);/**/
+    for(;;) {
+        if(t1 == T || t2 == T || t1 == t2)
+            break;
+        if(t1->etype != t2->etype)
+            break;
+        switch(t1->etype) {
+        case TFUNC:
+            ta = t1->down;
+            tb = t2->down;
+            if(ta == T) {
+                t1->down = tb;
+                break;
+            }
+            if(tb == T)
+                break;
+            while(ta != T && tb != T) {
+                if(ta == tb)
+                    break;
+                /* ignore old-style flag */
+                if(ta->etype == TOLD) {
+                    ta = ta->down;
+                    continue;
+                }
+                if(tb->etype == TOLD) {
+                    tb = tb->down;
+                    continue;
+                }
+                /* checking terminated by ... */
+                if(ta->etype == TDOT && tb->etype == TDOT) {
+                    ta = T;
+                    tb = T;
+                    break;
+                }
+                if(!sametype(ta, tb))
+                    break;
+                ta = ta->down;
+                tb = tb->down;
+            }
+            if(ta != tb)
+                diag(Z, "function inconsistently declared: %s", s->name);
+
+            /* take new-style over old-style */
+            ta = t1->down;
+            tb = t2->down;
+            if(ta != T && ta->etype == TOLD)
+                if(tb != T && tb->etype != TOLD)
+                    t1->down = tb;
+            break;
+
+        case TARRAY:
+            /* should we check array size change? */
+            if(t2->width > t1->width)
+                t1->width = t2->width;
+            break;
+
+        case TUNION:
+        case TSTRUCT:
+            return;
+        }
+        t1 = t1->link;
+        t2 = t2->link;
+    }
+}
+@
+
+<<function ofnproto>>=
+Type*
+ofnproto(Node *n)
+{
+    Type *tl, *tr, *t;
+
+    if(n == Z)
+        return T;
+    switch(n->op) {
+    case OLIST:
+        tl = ofnproto(n->left);
+        tr = ofnproto(n->right);
+        if(tl == T)
+            return tr;
+        tl->down = tr;
+        return tl;
+
+    case ONAME:
+        t = copytyp(n->sym->type);
+        t->down = T;
+        return t;
+    }
+    return T;
+}
+@
+% old fn proto style?
 
 
 
@@ -22480,6 +22763,10 @@ convvtox(vlong c, int et)
 %        break;
 
 \section{Processing multiple files}
+
+<<[[main()]] locals>>=
+int nproc, nout, status, i;
+@
 
 <<[[main()]] multiple files handling>>=
 if(argc > 1) {

@@ -90,12 +90,15 @@ struct	Prog
     long	lineno;
 
     /*s: [[Prog]] other fields(arm) */
+    // option<enum<registr>>, None = R_NONE, see 5.out.h
     char	reg;
+    // biset<>
     byte	scond;
     /*e: [[Prog]] other fields(arm) */
 
     // Extra
     /*s: [[Prog]] extra fields(arm) */
+    // list<ref<Prog>> from firstp
     Prog*	link;
     /*e: [[Prog]] extra fields(arm) */
 };

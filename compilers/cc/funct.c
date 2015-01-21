@@ -98,7 +98,7 @@ Ftab	ftabinit[OEND] =
 /*e: global ftabinit */
 
 /*s: function isfunct */
-int
+bool
 isfunct(Node *n)
 {
     Type *t, *t1;
@@ -119,18 +119,18 @@ isfunct(Node *n)
     case OAS:	// put cast on rhs
     case OASI:
     case OASADD:
-    case OASAND:
-    case OASASHL:
-    case OASASHR:
+    case OASSUB:
+    case OASMUL:
     case OASDIV:
+    case OASMOD:
+    case OASASHR:
+    case OASLMUL:
     case OASLDIV:
     case OASLMOD:
-    case OASLMUL:
     case OASLSHR:
-    case OASMOD:
-    case OASMUL:
+    case OASASHL:
+    case OASAND:
     case OASOR:
-    case OASSUB:
     case OASXOR:
         if(n->right == Z)
             goto no;
@@ -180,16 +180,14 @@ isfunct(Node *n)
     if(s == S)
         goto no;
 
+
+
     /*
      * the answer is yes,
      * now we rewrite the node
      * and give diagnostics
      */
     switch(o) {
-    default:
-        diag(n, "isfunct op missing %O\n", o);
-        goto bad;
-
     case OADD:	// T f(T, T)
     case OAND:
     case OASHL:
@@ -260,6 +258,10 @@ isfunct(Node *n)
         n->right = n->left;
         break;
 
+    default:
+        diag(n, "isfunct op missing %O\n", o);
+        goto bad;
+
 
     }
 
@@ -279,16 +281,16 @@ build:
         goto bad;
     if(tcoma(n->left, n->right, l->type->down, 1))
         goto bad;
-    return 1;
+    return true;
 
 no:
-    return 0;
+    return false;
 
 bad:
     diag(n, "cant rewrite typestr for op %O\n", o);
     prtree(n, "isfunct");
     n->type = T;
-    return 1;
+    return true;
 }
 /*e: function isfunct */
 /*s: function dclfunct */

@@ -68,7 +68,7 @@ Io*	iostack;
 long	lastbit;
 /*e: global lastbit */
 /*s: global lastclass */
-// enum<cxxx>
+// enum<storage_class>
 //@Scheck: y.tab.c
 char	lastclass;
 /*e: global lastclass */
@@ -202,15 +202,15 @@ Bits	zbits;
 /*e: global zbits */
 
 /*s: global typeswitch */
-// set<txxx>
+// set<txxx>??
 char*	typeswitch;
 /*e: global typeswitch */
 /*s: global typeword */
-// set<txxx>
+// set<txxx>??
 char*	typeword;
 /*e: global typeword */
 /*s: global typecmplx */
-// set<txxx>
+// set<txxx>??
 char*	typecmplx;
 /*e: global typecmplx */
 /*e: cc/globals.c */

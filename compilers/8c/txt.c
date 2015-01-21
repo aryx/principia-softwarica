@@ -152,6 +152,7 @@ nextpc(void)
     p->lineno = nearln;
     pc++;
 
+    // add_end_list(p, firstp/lastp)
     if(firstp == P) {
         firstp = p;
         lastp = p;

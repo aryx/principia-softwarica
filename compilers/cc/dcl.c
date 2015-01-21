@@ -354,6 +354,7 @@ init1(Sym *s, Type *t, long o, int exflag)
     case TUVLONG:
     case TFLOAT:
     case TDOUBLE:
+
     case TIND:
     single:
         if(a->op == OARRAY || a->op == OELEM)
@@ -690,6 +691,7 @@ void argmark(Node *n, int pass)
         if(n->op != OFUNC || n->left->op != ONAME)
             continue;
         walkparam(n->right, pass);
+        /*s: [[argmark()]] if old proto style */
         if(pass != 0 && anyproto(n->right) == OLDPROTO) {
             t = typ(TFUNC, n->left->sym->type->link);
             t->down = typ(TOLD, T);
@@ -697,6 +699,7 @@ void argmark(Node *n, int pass)
             tmerge(t, n->left->sym);
             n->left->sym->type = t;
         }
+        /*e: [[argmark()]] if old proto style */
         break;
     }
     autoffset = 0;
@@ -718,10 +721,6 @@ loop:
     if(n == Z)
         return;
     switch(n->op) {
-    default:
-        diag(n, "argument not a name/prototype: %O", n->op);
-        break;
-
     case OLIST:
         walkparam(n->left, pass);
         n = n->right;
@@ -774,6 +773,10 @@ loop:
         } else
             dodecl(pdecl, CXXX, types[TINT], n);
         break;
+    default:
+        diag(n, "argument not a name/prototype: %O", n->op);
+        break;
+
     }
 }
 /*e: function walkparam */
@@ -901,12 +904,12 @@ fnproto(Node *n)
 /*e: function fnproto */
 
 /*s: function anyproto */
-int
+bool
 anyproto(Node *n)
 {
     int r;
 
-    r = 0;
+    r = false;
 
 loop:
     if(n == Z)
@@ -1026,16 +1029,19 @@ rsametype(Type *t1, Type *t2, int n, bool f)
             return false;
         if(n <= 0)
             return true;
+
         et = t1->etype;
         if(et != t2->etype)
             return false;
 
         if(et == TFUNC) {
-            if(!rsametype(t1->link, t2->link, n, 0))
+            if(!rsametype(t1->link, t2->link, n, false))
                 return false;
             t1 = t1->down;
             t2 = t2->down;
             while(t1 != T && t2 != T) {
+
+                /*s: [[rsametype()]] continue if old style type */
                 if(t1->etype == TOLD) {
                     t1 = t1->down;
                     continue;
@@ -1044,8 +1050,10 @@ rsametype(Type *t1, Type *t2, int n, bool f)
                     t2 = t2->down;
                     continue;
                 }
+                /*e: [[rsametype()]] continue if old style type */
+
                 while(t1 != T || t2 != T) {
-                    if(!rsametype(t1, t2, n, 0))
+                    if(!rsametype(t1, t2, n, false))
                         return false;
                     t1 = t1->down;
                     t2 = t2->down;
@@ -1073,7 +1081,7 @@ rsametype(Type *t1, Type *t2, int n, bool f)
             for(;;) {
                 if(t1 == t2)
                     return true;
-                if(!rsametype(t1, t2, n, 0))
+                if(!rsametype(t1, t2, n, false))
                     return false;
                 t1 = t1->down;
                 t2 = t2->down;
@@ -1081,6 +1089,7 @@ rsametype(Type *t1, Type *t2, int n, bool f)
         }
         t1 = t1->link;
         t2 = t2->link;
+
         if((f || !debug['V']) && et == TIND) {
             if(t1 != T && t1->etype == TVOID)
                 return true;
@@ -1285,7 +1294,7 @@ Node* dcllabel(Sym *s, bool f)
 
 /*s: function paramconv */
 Type*
-paramconv(Type *t, int f)
+paramconv(Type *t, bool f)
 {
 
     switch(t->etype) {

@@ -25,7 +25,6 @@ void	setinclude(char*);
 /*e: constant CPP */
 #endif
 
-/*s: function main */
 /*
  * known debug flags
  *	-a		acid declaration output
@@ -54,32 +53,46 @@ void	setinclude(char*);
  *	-.		Inhibit search for includes in source directory
  */
 
+/*s: function main */
 //@Scheck: not dead, entry point :)
 void main(int argc, char *argv[])
 {
-    char **defs, **np, *p;
-    int nproc, nout, status, i, c, ndef, maxdef;
+    /*s: [[main()]] locals */
+    int c;
+    char **defs;
+    int ndef;
+    /*x: [[main()]] locals */
+    char **np;
+    int maxdef;
+    /*x: [[main()]] locals */
+    char *p;
+    /*x: [[main()]] locals */
+    int nproc, nout, status, i;
+    /*e: [[main()]] locals */
 
     memset(debug, 0, sizeof(debug));
 
-    tinit();
-    cinit();
-    ginit();
-    arginit();
+    tinit(); // type globals init
+    cinit(); // lexing/parsing init
+    ginit(); // arch dependent init, 5c/8c/...
+    arginit(); // printf argument checking init
+
+    outfile = nil;
+    defs = nil;
 
     profileflg = true;	/* #pragma can turn it off */
     tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     maxdef = 0;
     ndef = 0;
-    outfile = nil;
-    defs = nil;
+
     setinclude(".");
 
     ARGBEGIN {
+    /*s: [[main()]] command line processing */
     case 'o':
         outfile = ARGF();
         break;
-
+    /*x: [[main()]] command line processing */
     case 'D':
         p = ARGF();
         if(p) {
@@ -95,29 +108,19 @@ void main(int argc, char *argv[])
             dodefine(p);
         }
         break;
-
+    /*x: [[main()]] command line processing */
     case 'I':
         p = ARGF();
         if(p)
             setinclude(p);
         break;
-
-    case 'l':			/* for little-endian mips */
-        if(thechar != 'v'){
-            print("can only use -l with vc");
-            errorexit();
-        }
-        thechar = '0';
-        thestring = "spim";
-        break;
-
+    /*x: [[main()]] command line processing */
     default:
         c = ARGC();
         if(c >= 0 && c < sizeof(debug))
             debug[c]++;
         break;
-
-
+    /*e: [[main()]] command line processing */
     } ARGEND
 
     if(argc < 1 && outfile == nil) {
@@ -125,6 +128,7 @@ void main(int argc, char *argv[])
         errorexit();
     }
 
+    /*s: [[main()]] multiple files handling */
     if(argc > 1) {
         nproc = 1;
         /*
@@ -171,6 +175,7 @@ void main(int argc, char *argv[])
             nout--;
         }
     }
+    /*e: [[main()]] multiple files handling */
 
     if(argc == 0)
         c = compile("stdin", defs, ndef);
@@ -179,7 +184,7 @@ void main(int argc, char *argv[])
 
     if(c)
         errorexit();
-    exits(0);
+    exits(nil);
 }
 /*e: function main */
 
@@ -315,7 +320,10 @@ compile(char *file, char **defs, int ndef)
         else
             newfile(file, -1);
     }
+ 
+    // The big call!
     yyparse();
+
     if(!debug['a'] && !debug['Z'])
         gclean();
     return nerrors;
@@ -1205,49 +1213,58 @@ loop:
 struct
 {
     char	*name;
+    // enum<lexeme>
     ushort	lexical;
-    // option<enum<Type>>
+    // option<enum<Type>>, None = 0 (or TXXX)
     ushort	type;
 } itab[] =
 {
     "auto",		LAUTO,		0,
-    "break",	LBREAK,		0,
-    "case",		LCASE,		0,
-    "char",		LCHAR,		TCHAR,
-    "const",	LCONSTNT,	0,
-    "continue",	LCONTINUE,	0,
-    "default",	LDEFAULT,	0,
-    "do",		LDO,		0,
-    "double",	LDOUBLE,	TDOUBLE,
-    "else",		LELSE,		0,
-    "enum",		LENUM,		0,
-    "extern",	LEXTERN,	0,
-    "float",	LFLOAT,		TFLOAT,
-    "for",		LFOR,		0,
-    "goto",		LGOTO,		0,
-    "if",		LIF,		0,
-    "inline",	LINLINE,	0,
-    "int",		LINT,		TINT,
-    "long",		LLONG,		TLONG,
-    "register",	LREGISTER,	0,
-    "restrict",	LRESTRICT,	0,
-    "return",	LRETURN,	0,
-    "SET",		LSET,		0,
-    "short",	LSHORT,		TSHORT,
-    "signed",	LSIGNED,	0,
-    "signof",	LSIGNOF,	0,
-    "sizeof",	LSIZEOF,	0,
     "static",	LSTATIC,	0,
+    "extern",	LEXTERN,	0,
+
+    "void",		LVOID,		TVOID,
+    "char",		LCHAR,		TCHAR,
+    "int",		LINT,		TINT,
+    "short",	LSHORT,		TSHORT,
+    "long",		LLONG,		TLONG,
+    "float",	LFLOAT,		TFLOAT,
+    "double",	LDOUBLE,	TDOUBLE,
+
     "struct",	LSTRUCT,	0,
-    "switch",	LSWITCH,	0,
+    "union",	LUNION,		0,
+    "enum",		LENUM,		0,
+
     "typedef",	LTYPEDEF,	0,
     "typestr",	LTYPESTR,	0,
-    "union",	LUNION,		0,
+
     "unsigned",	LUNSIGNED,	0,
-    "USED",		LUSED,		0,
-    "void",		LVOID,		TVOID,
+    "signed",	LSIGNED,	0,
+
+    "const",	LCONSTNT,	0,
     "volatile",	LVOLATILE,	0,
+    "inline",	LINLINE,	0,
+    "register",	LREGISTER,	0,
+    "restrict",	LRESTRICT,	0,
+
+    "if",		LIF,		0,
+    "else",		LELSE,		0,
     "while",	LWHILE,		0,
+    "for",		LFOR,		0,
+    "do",		LDO,		0,
+    "break",	LBREAK,		0,
+    "continue",	LCONTINUE,	0,
+    "switch",	LSWITCH,	0,
+    "case",		LCASE,		0,
+    "default",	LDEFAULT,	0,
+    "return",	LRETURN,	0,
+    "goto",		LGOTO,		0,
+
+    "signof",	LSIGNOF,	0,
+    "sizeof",	LSIZEOF,	0,
+
+    "SET",		LSET,		0,
+    "USED",		LUSED,		0,
     0
 };
 /*e: global itab */

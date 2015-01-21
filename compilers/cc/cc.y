@@ -19,14 +19,14 @@
    /*x: [[union yacc]] other fields */
    Node*   node;
    /*x: [[union yacc]] other fields */
+   Type*   type;
+   /*x: [[union yacc]] other fields */
    struct
    {
        Type*   t;
-       // enum<cxxx>
+       // option<enum<storage_class> >, None = CXXX
        byte   c;
    } tycl;
-   /*x: [[union yacc]] other fields */
-   Type*   type;
    /*x: [[union yacc]] other fields */
    struct
    {
@@ -69,21 +69,20 @@
 %right  LMM LPP LMG '.' '[' '('
 /*e: priority and associativity declarations */
 /*s: type declarations */
-%type   <node>  zarglist arglist zcexpr
-%type   <node>  name block stmnt cexpr expr xuexpr pexpr
-%type   <node>  zelist elist adecl slist uexpr string lstring
-%type   <node>  xdecor xdecor2 labels label ulstmnt
-%type   <node>  adlist edecor tag qual qlist
-%type   <node>  abdecor abdecor1 abdecor2 abdecor3
-%type   <node>  zexpr lexpr init ilist forexpr
+%type   <node>  name tag 
+%type   <node>  stmnt   block slist ulstmnt labels label forexpr
+%type   <node>  expr    cexpr lexpr  xuexpr uexpr pexpr  elist  string lstring
+%type   <node>  adecl   qual init ilist  adlist qlist  arglist
+%type   <node>  xdecor xdecor2 edecor  abdecor abdecor1 abdecor2 abdecor3
+%type   <node>  zexpr zelist zcexpr zarglist
 /*x: type declarations */
 %type   <lval>  tname cname gname
 /*x: type declarations */
 %type   <lval>   gcname   gctname
 /*x: type declarations */
-%type   <tycl>  types
-/*x: type declarations */
 %type   <type> tlist
+/*x: type declarations */
+%type   <tycl>  types
 /*x: type declarations */
 %type   <lval>  gctnlist gcnlist zgnlist
 /*x: type declarations */
@@ -202,17 +201,6 @@ adlist:
     }
 /*e: automatic declarator rules */
 /*s: parameter declarator rules */
-/*
- * parameter declarator
- */
-pdecl:
-  /* empty */
-|   pdecl ctlist pdlist ';'
-
-pdlist:
-    xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
-|   pdlist ',' pdlist
-/*x: parameter declarator rules */
 zarglist:
   /* empty */   { $$ = Z; }
 |   arglist     { $$ = invert($1); }
@@ -232,6 +220,17 @@ arglist:
     }
 |   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
 |   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
+/*x: parameter declarator rules */
+/*
+ * parameter declarator
+ */
+pdecl:
+  /* empty */
+|   pdecl ctlist pdlist ';'
+
+pdlist:
+    xdecor              { dodecl(pdecl, lastclass, lasttype, $1); }
+|   pdlist ',' pdlist
 /*e: parameter declarator rules */
 /*s: abstract declarator rules */
 /*
@@ -291,15 +290,18 @@ zedlist:                    /* extension */
 edlist:
     edecor            { dodecl(edecl, CXXX, lasttype, $1); }
 |   edlist ',' edlist
-
+/*x: structure element declarator rules */
+/*s: edecor rule */
 edecor:
     xdecor
     {
         lastbit = 0;
         firstbit = 1;
     }
+/*x: edecor rule */
 |   tag ':' lexpr   { $$ = new(OBIT, $1, $3); }
 |   ':' lexpr       { $$ = new(OBIT, Z, $2); }
+/*e: edecor rule */
 /*e: structure element declarator rules */
 /*e: declarator rules */
 /*s: statements rules */
@@ -354,20 +356,21 @@ ulstmnt:
 /*x: ulstmnt rule */
 |   LSWITCH '(' cexpr ')' stmnt
     {
-        // generate (0:int - (0:int - x))
-        // which will force the usual arithmetic conversions
-        // (and will later be simplified by later transformations)
+       /*s: ulstmt rule, SWITCH case, adjust cexpr node */
+       // generate (0:int - (0:int - x))
+       // which will force the usual arithmetic conversions
+       // (and will be simplified later by some transformations)
 
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
+       $$ = new(OCONST, Z, Z);
+       $$->vconst = 0;
+       $$->type = types[TINT];
+       $3 = new(OSUB, $$, $3);
 
-        $$ = new(OCONST, Z, Z);
-        $$->vconst = 0;
-        $$->type = types[TINT];
-        $3 = new(OSUB, $$, $3);
-
+       $$ = new(OCONST, Z, Z);
+       $$->vconst = 0;
+       $$->type = types[TINT];
+       $3 = new(OSUB, $$, $3);
+       /*e: ulstmt rule, SWITCH case, adjust cexpr node */
         $$ = new(OSWITCH, $3, $5);
     }
 /*x: ulstmnt rule */
@@ -401,7 +404,6 @@ ulstmnt:
 |   LUSED '(' zelist ')' ';' { $$ = new(OUSED, $3, Z); }
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
 /*e: ulstmnt rule */
-/*x: statements rules */
 /*s: label rule */
 label:
     LCASE expr ':'  { $$ = new(OCASE, $2, Z); }
@@ -415,45 +417,30 @@ forexpr:
 |   ctlist adlist { $$ = $2; }
 /*e: statements rules */
 /*s: expressions rules */
-zexpr:
-  /* empty */ { $$ = Z; }
-|   lexpr
-/*x: expressions rules */
-lexpr:
-    expr
-    {
-        $$ = new(OCAST, $1, Z);
-        $$->type = types[TLONG];
-    }
-/*x: expressions rules */
-cexpr:
-    expr
-|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
-/*x: expressions rules */
 /*s: expr rule */
 expr:
     xuexpr
-
+/*x: expr rule */
+|   expr '+' expr { $$ = new(OADD, $1, $3); }
+|   expr '-' expr { $$ = new(OSUB, $1, $3); }
 |   expr '*' expr { $$ = new(OMUL, $1, $3); }
 |   expr '/' expr { $$ = new(ODIV, $1, $3); }
 |   expr '%' expr { $$ = new(OMOD, $1, $3); }
-|   expr '+' expr { $$ = new(OADD, $1, $3); }
-|   expr '-' expr { $$ = new(OSUB, $1, $3); }
 |   expr LRSH expr { $$ = new(OASHR, $1, $3); }
 |   expr LLSH expr { $$ = new(OASHL, $1, $3); }
+|   expr '&' expr  { $$ = new(OAND, $1, $3); }
+|   expr '^' expr  { $$ = new(OXOR, $1, $3); }
+|   expr '|' expr  { $$ = new(OOR, $1, $3); }
+/*x: expr rule */
+|   expr LANDAND expr { $$ = new(OANDAND, $1, $3); }
+|   expr LOROR expr   { $$ = new(OOROR, $1, $3); }
+/*x: expr rule */
+|   expr LEQ expr  { $$ = new(OEQ, $1, $3); }
+|   expr LNE expr  { $$ = new(ONE, $1, $3); }
 |   expr '<' expr  { $$ = new(OLT, $1, $3); }
 |   expr '>' expr  { $$ = new(OGT, $1, $3); }
 |   expr LLE expr  { $$ = new(OLE, $1, $3); }
 |   expr LGE expr  { $$ = new(OGE, $1, $3); }
-|   expr LEQ expr  { $$ = new(OEQ, $1, $3); }
-|   expr LNE expr  { $$ = new(ONE, $1, $3); }
-|   expr '&' expr  { $$ = new(OAND, $1, $3); }
-|   expr '^' expr  { $$ = new(OXOR, $1, $3); }
-|   expr '|' expr  { $$ = new(OOR, $1, $3); }
-|   expr LANDAND expr { $$ = new(OANDAND, $1, $3); }
-|   expr LOROR expr   { $$ = new(OOROR, $1, $3); }
-/*x: expr rule */
-|   expr '?' cexpr ':' expr { $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
 /*x: expr rule */
 |   expr '=' expr  { $$ = new(OAS, $1, $3); }
 |   expr LPE expr  { $$ = new(OASADD, $1, $3); }
@@ -466,10 +453,13 @@ expr:
 |   expr LANDE expr { $$ = new(OASAND, $1, $3); }
 |   expr LXORE expr { $$ = new(OASXOR, $1, $3); }
 |   expr LORE expr  { $$ = new(OASOR, $1, $3); }
+/*x: expr rule */
+|   expr '?' cexpr ':' expr { $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
 /*e: expr rule */
-/*x: expressions rules */
+/*s: xuexpr rule */
 xuexpr:
     uexpr
+/*x: xuexpr rule */
 |   '(' tlist abdecor ')' xuexpr
     {
         $$ = new(OCAST, $5, Z);
@@ -477,49 +467,37 @@ xuexpr:
         $$->type = lastdcl;
         $$->xcast = true;
     }
-/*s: xuexpr other cases */
+/*x: xuexpr rule */
 |   '(' tlist abdecor ')' '{' ilist '}' /* extension */
     {
         $$ = new(OSTRUCT, $6, Z);
         dodecl(NODECL, CXXX, $2, $3);
         $$->type = lastdcl;
     }
-/*e: xuexpr other cases */
-/*x: expressions rules */
+/*e: xuexpr rule */
 /*s: uexpr rule */
 uexpr:
     pexpr
-
-|   '*' xuexpr { $$ = new(OIND, $2, Z); }
-|   '&' xuexpr { $$ = new(OADDR, $2, Z); }
 /*x: uexpr rule */
 |   '+' xuexpr { $$ = new(OPOS, $2, Z); }
 |   '-' xuexpr { $$ = new(ONEG, $2, Z); }
+/*x: uexpr rule */
 |   '!' xuexpr { $$ = new(ONOT, $2, Z); }
 |   '~' xuexpr { $$ = new(OCOM, $2, Z); }
+/*x: uexpr rule */
+|   '*' xuexpr { $$ = new(OIND, $2, Z); }
+|   '&' xuexpr { $$ = new(OADDR, $2, Z); }
+/*x: uexpr rule */
 |   LPP xuexpr { $$ = new(OPREINC, $2, Z); }
 |   LMM xuexpr { $$ = new(OPREDEC, $2, Z); }
 /*x: uexpr rule */
 |   LSIZEOF uexpr { $$ = new(OSIZE, $2, Z); }
+/*x: uexpr rule */
 |   LSIGNOF uexpr { $$ = new(OSIGN, $2, Z); }
 /*e: uexpr rule */
-/*x: expressions rules */
 /*s: pexpr rule */
 pexpr:
     '(' cexpr ')' { $$ = $2; }
-/*x: pexpr rule */
-|   LSIZEOF '(' tlist abdecor ')'
-    {
-        $$ = new(OSIZE, Z, Z);
-        dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcl;
-    }
-|   LSIGNOF '(' tlist abdecor ')'
-    {
-        $$ = new(OSIGN, Z, Z);
-        dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcl;
-    }
 /*x: pexpr rule */
 |   pexpr '(' zelist ')'
     {
@@ -542,9 +520,6 @@ pexpr:
         $$ = new(ODOT, new(OIND, $1, Z), Z);
         $$->sym = $3;
     }
-/*x: pexpr rule */
-|   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
-|   pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
 /*x: pexpr rule */
 |   name
 /*x: pexpr rule */
@@ -609,7 +584,39 @@ pexpr:
 /*x: pexpr rule */
 |   string
 |   lstring
+/*x: pexpr rule */
+|   pexpr LPP { $$ = new(OPOSTINC, $1, Z); }
+|   pexpr LMM { $$ = new(OPOSTDEC, $1, Z); }
+/*x: pexpr rule */
+|   LSIZEOF '(' tlist abdecor ')'
+    {
+        $$ = new(OSIZE, Z, Z);
+        dodecl(NODECL, CXXX, $3, $4);
+        $$->type = lastdcl;
+    }
+/*x: pexpr rule */
+|   LSIGNOF '(' tlist abdecor ')'
+    {
+        $$ = new(OSIGN, Z, Z);
+        dodecl(NODECL, CXXX, $3, $4);
+        $$->type = lastdcl;
+    }
 /*e: pexpr rule */
+/*x: expressions rules */
+cexpr:
+    expr
+|   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
+/*x: expressions rules */
+lexpr:
+    expr
+    {
+        $$ = new(OCAST, $1, Z);
+        $$->type = types[TLONG];
+    }
+/*x: expressions rules */
+zexpr:
+  /* empty */ { $$ = Z; }
+|   lexpr
 /*x: expressions rules */
 elist:
     expr
@@ -686,7 +693,7 @@ qlist:
 |   qlist init ','  { $$ = new(OLIST, $1, $2); }
 |   qual
 |   qlist qual      { $$ = new(OLIST, $1, $2); }
-
+/*x: initializers rules */
 qual:
     '[' lexpr ']' { $$ = new(OARRAY, $2, Z); }
 |   '.' ltag
@@ -815,9 +822,7 @@ gcnlist:
 /*x: types rules */
 /*s: complex rule */
 complex:
-    LTYPE { $$ = tcopy($1->type); }
-/*x: complex rule */
-|   LSTRUCT ltag
+    LSTRUCT ltag
     {
         dotag($2, TSTRUCT, 0);
         $$ = $2->suetag;
@@ -909,6 +914,8 @@ complex:
     {
         $$ = en.tenum;
     }
+/*x: complex rule */
+|   LTYPE { $$ = tcopy($1->type); }
 /*e: complex rule */
 /*x: types rules */
 enum:
