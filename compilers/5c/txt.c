@@ -1180,20 +1180,20 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 /*e: function gopcode(arm) */
 
 /*s: function samaddr */
-int
+bool
 samaddr(Node *f, Node *t)
 {
 
     if(f->op != t->op)
-        return 0;
+        return false;
     switch(f->op) {
 
     case OREGISTER:
         if(f->reg != t->reg)
             break;
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function samaddr */
 
@@ -1252,7 +1252,7 @@ gpseudo(int a, Sym *s, Node *n)
 /*e: function gpseudo(arm) */
 
 /*s: function sconst(arm) */
-int
+bool
 sconst(Node *n)
 {
     vlong vv;
@@ -1261,16 +1261,16 @@ sconst(Node *n)
         if(!typefd[n->type->etype]) {
             vv = n->vconst;
             if(vv >= (vlong)(-32766) && vv < (vlong)32766)
-                return 1;
+                return true;
             /*
              * should be specialised for constant values which will
              * fit in different instructionsl; for now, let 5l
              * sort it out
              */
-            return 1;
+            return true;
         }
     }
-    return 0;
+    return false;
 }
 /*e: function sconst(arm) */
 

@@ -982,7 +982,7 @@ caseout:
  * return conversion overflow.
  * required syntax is [0[x]]d*
  */
-int
+bool
 mpatov(char *s, vlong *v)
 {
     vlong n, nn;
@@ -1039,11 +1039,11 @@ hex:
     }
 out:
     *v = n;
-    return 0;
+    return false;
 
 bad:
     *v = ~0;
-    return 1;
+    return true;
 }
 /*e: function mpatov */
 

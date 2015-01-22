@@ -1375,20 +1375,20 @@ gopcode(int o, Type *ty, Node *f, Node *t)
 /*e: function gopcode(x86) */
 
 /*s: function samaddr */
-int
+bool
 samaddr(Node *f, Node *t)
 {
 
     if(f->op != t->op)
-        return 0;
+        return false;
     switch(f->op) {
 
     case OREGISTER:
         if(f->reg != t->reg)
             break;
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 /*e: function samaddr */
 

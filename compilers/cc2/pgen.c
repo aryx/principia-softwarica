@@ -582,7 +582,7 @@ usedset(Node *n, int o)
 /*e: function usedset */
 
 /*s: function bcomplex */
-int
+bool
 bcomplex(Node *n, Node *c)
 {
 //    Node *b, nod;
@@ -593,14 +593,14 @@ bcomplex(Node *n, Node *c)
         n->type = T;
     if(n->type == T) {
         gbranch(OGOTO);
-        return 0;
+        return false;
     }
     if(c != Z && n->op == OCONST && deadheads(c))
-        return 1;
+        return true;
 
     bool64(n);
     boolgen(n, 1, Z);
-    return 0;
+    return false;
 }
 /*e: function bcomplex */
 /*e: cc2/pgen.c */

@@ -2868,7 +2868,7 @@ nret:
  * return conversion overflow.
  * required syntax is [0[x]]d*
  */
-int
+bool
 mpatov(char *s, vlong *v)
 {
     vlong n, nn;
@@ -2925,11 +2925,11 @@ hex:
     }
 out:
     *v = n;
-    return 0;
+    return false;
 
 bad:
     *v = ~0;
-    return 1;
+    return true;
 }
 @
 
@@ -5958,10 +5958,6 @@ init1(Sym *s, Type *t, long o, int exflag)
         return doinit(s, t, o, nextinit());
 
     switch(t->etype) {
-    default:
-        diag(Z, "unknown type in initialization: %T to: %s", t, s->name);
-        return Z;
-
     case TCHAR:
     case TUCHAR:
     case TINT:
@@ -6163,6 +6159,10 @@ init1(Sym *s, Type *t, long o, int exflag)
         if(a && a->op == OELEM)
             diag(a, "structure element not found %F", a);
         return l;
+
+    default:
+        diag(Z, "unknown type in initialization: %T to: %s", t, s->name);
+        return Z;
     }
 }
 @
@@ -6182,7 +6182,7 @@ newlist(Node *l, Node *r)
 @
 
 <<function isstruct>>=
-int
+bool
 isstruct(Node *a, Type *t)
 {
     Node *n;
@@ -6191,13 +6191,12 @@ isstruct(Node *a, Type *t)
     case ODOTDOT:
         n = a->left;
         if(n && n->type && sametype(n->type, t))
-            return 1;
-    case OSTRING:
-    case OLSTRING:
+            return true;
+    case OSTRING: case OLSTRING:
     case OCONST:
     case OINIT:
     case OELEM:
-        return 0;
+        return false;
     }
 
     n = new(ODOTDOT, Z, Z);
@@ -6212,11 +6211,11 @@ isstruct(Node *a, Type *t)
     a->right = Z;
 
     if(tcom(n))
-        return 0;
+        return false;
 
     if(sametype(n->type, t))
-        return 1;
-    return 0;
+        return true;
+    return false;
 }
 @
 
@@ -9468,7 +9467,7 @@ Node*	nodproto;
 @
 
 <<function tcoma>>=
-int
+bool
 tcoma(Node *l, Node *n, Type *t, int f)
 {
     Node *n1;
@@ -9480,9 +9479,9 @@ tcoma(Node *l, Node *n, Type *t, int f)
     if(n == Z) {
         if(t != T && !sametype(t, types[TVOID])) {
             diag(n, "not enough function arguments: %F", l);
-            return 1;
+            return true;
         }
-        return 0;
+        return false;
     }
     if(n->op == OLIST) {
         o = tcoma(l, n->left, t, 0);
@@ -9496,17 +9495,17 @@ tcoma(Node *l, Node *n, Type *t, int f)
     if(f && t != T)
         tcoma(l, Z, t->down, 0);
     if(tcom(n) || tcompat(n, T, n->type, targ))
-        return 1;
+        return true;
     if(sametype(t, types[TVOID])) {
         diag(n, "too many function arguments: %F", l);
-        return 1;
+        return true;
     }
     if(t != T) {
         typeext(t, n);
         if(stcompat(nodproto, t, n->type, tasign)) {
             diag(l, "argument prototype mismatch \"%T\" for \"%T\": %F",
                 n->type, t, l);
-            return 1;
+            return true;
         }
         switch(t->etype) {
         case TCHAR:
@@ -9544,7 +9543,7 @@ tcoma(Node *l, Node *n, Type *t, int f)
         n->type = t;
         n->addable = 0;
     }
-    return 0;
+    return false;
 }
 @
 
@@ -9554,7 +9553,7 @@ tcoma(Node *l, Node *n, Type *t, int f)
 
 % tcom ODOT
 <<function tcomd>>=
-int
+bool
 tcomd(Node *n)
 {
     Type *t;
@@ -9564,10 +9563,10 @@ tcomd(Node *n)
     t = dotsearch(n->sym, n->left->type->link, n, &o);
     if(t == T) {
         diag(n, "not a member of struct/union: %F", n);
-        return 1;
+        return true;
     }
     makedot(n, t, o);
-    return 0;
+    return false;
 }
 @
 
@@ -10050,7 +10049,7 @@ typeext(Type *st, Node *l)
 }
 @
 
-\section{printf typechecking}
+\section{Format arguments checking}
 % cool, like in ocamlc!
 
 
@@ -11131,20 +11130,20 @@ gmove(Node *f, Node *t)
 @
 
 <<function samaddr>>=
-int
+bool
 samaddr(Node *f, Node *t)
 {
 
     if(f->op != t->op)
-        return 0;
+        return false;
     switch(f->op) {
 
     case OREGISTER:
         if(f->reg != t->reg)
             break;
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 @
 
@@ -13561,7 +13560,7 @@ reglcgen(Node *t, Node *n, Node *nn)
 % quite similar to the 386, but with some variations
 
 <<function sconst(arm)>>=
-int
+bool
 sconst(Node *n)
 {
     vlong vv;
@@ -13570,16 +13569,16 @@ sconst(Node *n)
         if(!typefd[n->type->etype]) {
             vv = n->vconst;
             if(vv >= (vlong)(-32766) && vv < (vlong)32766)
-                return 1;
+                return true;
             /*
              * should be specialised for constant values which will
              * fit in different instructionsl; for now, let 5l
              * sort it out
              */
-            return 1;
+            return true;
         }
     }
-    return 0;
+    return false;
 }
 @
 
@@ -13677,7 +13676,7 @@ uncomma(Node *n)
 \section{[[bcomplex()]]}
 
 <<function bcomplex>>=
-int
+bool
 bcomplex(Node *n, Node *c)
 {
 //    Node *b, nod;
@@ -13688,14 +13687,14 @@ bcomplex(Node *n, Node *c)
         n->type = T;
     if(n->type == T) {
         gbranch(OGOTO);
-        return 0;
+        return false;
     }
     if(c != Z && n->op == OCONST && deadheads(c))
-        return 1;
+        return true;
 
     bool64(n);
     boolgen(n, 1, Z);
-    return 0;
+    return false;
 }
 @
 %    /* this is not quite right yet, so ignore it for now */

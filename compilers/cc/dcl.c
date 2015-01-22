@@ -279,7 +279,7 @@ nextinit(void)
 /*e: function nextinit */
 
 /*s: function isstruct */
-int
+bool
 isstruct(Node *a, Type *t)
 {
     Node *n;
@@ -288,13 +288,12 @@ isstruct(Node *a, Type *t)
     case ODOTDOT:
         n = a->left;
         if(n && n->type && sametype(n->type, t))
-            return 1;
-    case OSTRING:
-    case OLSTRING:
+            return true;
+    case OSTRING: case OLSTRING:
     case OCONST:
     case OINIT:
     case OELEM:
-        return 0;
+        return false;
     }
 
     n = new(ODOTDOT, Z, Z);
@@ -309,11 +308,11 @@ isstruct(Node *a, Type *t)
     a->right = Z;
 
     if(tcom(n))
-        return 0;
+        return false;
 
     if(sametype(n->type, t))
-        return 1;
-    return 0;
+        return true;
+    return false;
 }
 /*e: function isstruct */
 
@@ -338,10 +337,6 @@ init1(Sym *s, Type *t, long o, int exflag)
         return doinit(s, t, o, nextinit());
 
     switch(t->etype) {
-    default:
-        diag(Z, "unknown type in initialization: %T to: %s", t, s->name);
-        return Z;
-
     case TCHAR:
     case TUCHAR:
     case TINT:
@@ -543,6 +538,10 @@ init1(Sym *s, Type *t, long o, int exflag)
         if(a && a->op == OELEM)
             diag(a, "structure element not found %F", a);
         return l;
+
+    default:
+        diag(Z, "unknown type in initialization: %T to: %s", t, s->name);
+        return Z;
     }
 }
 /*e: function init1 */

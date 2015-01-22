@@ -776,7 +776,7 @@ bad:
 /*e: function tcomo */
 
 /*s: function tcoma */
-int
+bool
 tcoma(Node *l, Node *n, Type *t, int f)
 {
     Node *n1;
@@ -788,9 +788,9 @@ tcoma(Node *l, Node *n, Type *t, int f)
     if(n == Z) {
         if(t != T && !sametype(t, types[TVOID])) {
             diag(n, "not enough function arguments: %F", l);
-            return 1;
+            return true;
         }
-        return 0;
+        return false;
     }
     if(n->op == OLIST) {
         o = tcoma(l, n->left, t, 0);
@@ -804,17 +804,17 @@ tcoma(Node *l, Node *n, Type *t, int f)
     if(f && t != T)
         tcoma(l, Z, t->down, 0);
     if(tcom(n) || tcompat(n, T, n->type, targ))
-        return 1;
+        return true;
     if(sametype(t, types[TVOID])) {
         diag(n, "too many function arguments: %F", l);
-        return 1;
+        return true;
     }
     if(t != T) {
         typeext(t, n);
         if(stcompat(nodproto, t, n->type, tasign)) {
             diag(l, "argument prototype mismatch \"%T\" for \"%T\": %F",
                 n->type, t, l);
-            return 1;
+            return true;
         }
         switch(t->etype) {
         case TCHAR:
@@ -852,12 +852,12 @@ tcoma(Node *l, Node *n, Type *t, int f)
         n->type = t;
         n->addable = 0;
     }
-    return 0;
+    return false;
 }
 /*e: function tcoma */
 
 /*s: function tcomd */
-int
+bool
 tcomd(Node *n)
 {
     Type *t;
@@ -867,10 +867,10 @@ tcomd(Node *n)
     t = dotsearch(n->sym, n->left->type->link, n, &o);
     if(t == T) {
         diag(n, "not a member of struct/union: %F", n);
-        return 1;
+        return true;
     }
     makedot(n, t, o);
-    return 0;
+    return false;
 }
 /*e: function tcomd */
 
