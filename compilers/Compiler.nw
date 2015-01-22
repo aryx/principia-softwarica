@@ -1596,7 +1596,7 @@ long    lval;
 @
 
 
-\section{Assembly output, [[Instruction]] and [[p]]}
+\section{Assembly output, [[Instruction]]}
 
 % see also Opcode and Operand in Assembler.nw
 % (and Aconv, Rconv, Dconv, ... in this file)
@@ -1664,57 +1664,6 @@ Prog	zprog;
 long	pc;
 @
 
-
-% like in Linker.nw
-<<global firstp>>=
-// list<ref_own<Prog>, next = Prog.link
-Prog*	firstp;
-@
-
-<<[[Prog]] extra fields(arm)>>=
-// list<ref<Prog>> from firstp
-Prog*	link;
-@
-
-<<constant P>>=
-#define	P	((Prog*)nil)
-@
-
-<<global lastp>>=
-// ref<Prog>, last elt of firstp list
-Prog*	lastp;
-@
-
-
-
-% current? see nextpc()?
-<<global p>>=
-Prog*	p;
-@
-
-
-% gins | gclean | ... -> <>
-<<function nextpc>>=
-void
-nextpc(void)
-{
-
-    p = alloc(sizeof(Prog));
-    *p = zprog;
-    p->lineno = nearln;
-    pc++;
-
-    // add_end_list(p, firstp/lastp)
-    if(firstp == P) {
-        firstp = p;
-        lastp = p;
-        return;
-    }
-    lastp->link = p;
-    lastp = p;
-}
-@
-% pc useful for what?
 
 
 \chapter{[[main()]]}
@@ -10675,13 +10624,15 @@ usedset(Node *n, int o)
 /*
  * return true if it is impossible to jump into the middle of n.
  */
-static int
-deadhead(Node *n, int caseok)
+static bool
+deadhead(Node *n, bool caseok)
 {
 loop:
     if(n == Z)
         return true;
+
     switch(n->op) {
+
     case OLIST:
         if(!deadhead(n->left, caseok))
             return false;
@@ -10689,42 +10640,35 @@ loop:
         n = n->right;
         goto loop;
 
-    case ORETURN:
-        break;
+    case OWHILE:
+    case ODWHILE:
+    case OFOR:
+        goto rloop;
 
-    case OLABEL:
-        return false;
+    case OIF:
+        return deadhead(n->right->left, caseok) && 
+               deadhead(n->right->right, caseok);
 
-    case OGOTO:
-        break;
+    case OSWITCH:
+        return deadhead(n->right, true);
 
     case OCASE:
         if(!caseok)
             return false;
         goto rloop;
 
-    case OSWITCH:
-        return deadhead(n->right, 1);
+    case OLABEL:
+        return false;
 
-    case OWHILE:
-    case ODWHILE:
-        goto rloop;
-
-    case OFOR:
-        goto rloop;
-
+    case ORETURN:
+    case OGOTO:
     case OCONTINUE:
-        break;
-
     case OBREAK:
-        break;
-
-    case OIF:
-        return deadhead(n->right->left, caseok) && deadhead(n->right->right, caseok);
+        return true;
 
     case OSET:
     case OUSED:
-        break;
+        return true;
     }
     return true;
 }
@@ -10741,37 +10685,111 @@ deadheads(Node *c)
 \chapter{Assembly Generation}
 % hmm better name than code generation?
 
-% what does gpseudo, etc? general pseudo opcode?
-
 \section{Overview}
 
-% intermediate language? RTL? seems not :( but have kinda factorized
-% a few things behind some common interface: gins, gmove, gbranch
+% Does 5c/8c/... have an intermediate language? RTL? 
+% seems not :( but have kinda factorized a few things behind some
+% common interface: gpseudo(), gins(), gmove(), gbranch()
+% so at least some of the statement code generator is portable.
 % (but maybe lcc is cleaner)
 
-% gbranch, gmove, mostly archi independent interface.
+% gbranch(), gmove(), are mostly archi independent interface.
 %  cc2/pgen.c include gc.h where all archi define some kinda archi independent
 %  stuff like ATEXT, ANOP, etc
-% gins seems more archi independent
+% gins() seems more archi dependent but can also do arch independent
+% when the opcode is quite general (e.g. ANOP)
 
-% nextpc()?
-% gxxx = generate Prog (=~ assembly code)
-% but in mostly portable way!
-
-%x86!
 % target language = Adr, Prog, as, etc, like in Linker and assembler
-% outcode, like in Assembler?
-
+% outcode, like in Assembler.
 
 % remember in cc.y for function definition case:
 %        if(!debug['a'] && !debug['Z'])
 %            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
 
-% codgen (func) -> gen (statement) 
-%                     -> cgen (expr?) x86 specific
+% main -> yyparse -> codgen (func) -> gen (statement) 
+%                                  -> cgen (expr?) ARM specific
 
+
+% nextpc()?
+% the gxxx() generate Prog (=~ assembly code)
+% but in mostly portable way!
+
+
+% current? see nextpc()?
+<<global p>>=
+Prog*	p;
+@
+
+
+% gins | gclean | ... -> <>
+<<function nextpc>>=
+void
+nextpc(void)
+{
+
+    p = alloc(sizeof(Prog));
+    *p = zprog;
+    p->lineno = nearln;
+    pc++;
+
+    // add_end_list(p, firstp/lastp)
+    if(firstp == P) {
+        firstp = p;
+        lastp = p;
+        return;
+    }
+    lastp->link = p;
+    lastp = p;
+}
+@
+% pc useful for what?
+
+
+% like in Linker.nw
+<<global firstp>>=
+// list<ref_own<Prog>, next = Prog.link
+Prog*	firstp;
+@
+
+<<[[Prog]] extra fields(arm)>>=
+// list<ref<Prog>> from firstp
+Prog*	link;
+@
+
+<<constant P>>=
+#define	P	((Prog*)nil)
+@
+
+<<global lastp>>=
+// ref<Prog>, last elt of firstp list
+Prog*	lastp;
+@
+
+% firstp/lastp are used only by outcode()
 
 \section{[[gxxx()]]}
+
+\subsection{[[gpseudo()]]}
+
+<<function gpseudo(arm)>>=
+void
+gpseudo(int a, Sym *s, Node *n)
+{
+
+    nextpc();
+    p->as = a;
+    p->from.type = D_OREG;
+    p->from.sym = s;
+    p->from.name = (s->class == CSTATIC) ? D_STATIC : D_EXTERN;
+    if(a == ATEXT)
+        p->reg = (profileflg ? 0 : NOPROF);
+    naddr(n, &p->to);
+    if(a == ADATA || a == AGLOBL)
+        pc--;
+}
+@
+
+\subsection{[[gextern()]]}
 
 <<function gextern(arm)>>=
 void
@@ -10801,6 +10819,157 @@ gextern(Sym *s, Node *a, long o, long w)
 }
 @
 
+\subsection{[[gins()]]}
+
+<<function gins(arm)>>=
+void
+gins(int a, Node *f, Node *t)
+{
+
+    nextpc();
+    p->as = a;
+    if(f != Z)
+        naddr(f, &p->from);
+    if(t != Z)
+        naddr(t, &p->to);
+    if(debug['g'])
+        print("%P\n", p);
+}
+@
+
+
+<<function naddr(arm)>>=
+void
+naddr(Node *n, Adr *a)
+{
+    long v;
+
+    a->type = D_NONE;
+    if(n == Z)
+        return;
+    switch(n->op) {
+    default:
+    bad:
+        diag(n, "bad in naddr: %O", n->op);
+        break;
+
+    case OREGISTER:
+        a->type = D_REG;
+        a->sym = S;
+        a->reg = n->reg;
+        if(a->reg >= NREG) {
+            a->type = D_FREG;
+            a->reg -= NREG;
+        }
+        break;
+
+    case OIND:
+        naddr(n->left, a);
+        if(a->type == D_REG) {
+            a->type = D_OREG;
+            break;
+        }
+        if(a->type == D_CONST) {
+            a->type = D_OREG;
+            break;
+        }
+        goto bad;
+
+    case OINDREG:
+        a->type = D_OREG;
+        a->sym = S;
+        a->offset = n->xoffset;
+        a->reg = n->reg;
+        break;
+
+    case ONAME:
+        a->etype = n->etype;
+        a->type = D_OREG;
+        a->name = D_STATIC;
+        a->sym = n->sym;
+        a->offset = n->xoffset;
+        if(n->class == CSTATIC)
+            break;
+        if(n->class == CEXTERN || n->class == CGLOBL) {
+            a->name = D_EXTERN;
+            break;
+        }
+        if(n->class == CAUTO) {
+            a->name = D_AUTO;
+            break;
+        }
+        if(n->class == CPARAM) {
+            a->name = D_PARAM;
+            break;
+        }
+        goto bad;
+
+    case OCONST:
+        a->sym = S;
+        a->reg = NREG;
+        if(typefd[n->type->etype]) {
+            a->type = D_FCONST;
+            a->dval = n->fconst;
+        } else {
+            a->type = D_CONST;
+            a->offset = n->vconst;
+        }
+        break;
+
+    case OADDR:
+        naddr(n->left, a);
+        if(a->type == D_OREG) {
+            a->type = D_CONST;
+            break;
+        }
+        goto bad;
+
+    case OADD:
+        if(n->left->op == OCONST) {
+            naddr(n->left, a);
+            v = a->offset;
+            naddr(n->right, a);
+        } else {
+            naddr(n->right, a);
+            v = a->offset;
+            naddr(n->left, a);
+        }
+        a->offset += v;
+        break;
+
+    }
+}
+@
+
+\subsection{[[gbranch()]]}
+
+<<function gbranch(arm)>>=
+void
+gbranch(int o)
+{
+    int a;
+
+    a = AGOK;
+    switch(o) {
+    case ORETURN:
+        a = ARET;
+        break;
+    case OGOTO:
+        a = AB;
+        break;
+    }
+    nextpc();
+    if(a == AGOK) {
+        diag(Z, "bad in gbranch %O",  o);
+        nextpc();
+    }
+    p->as = a;
+}
+@
+% 386 is just AB -> JMP, should factorize!!
+
+
+\subsection{[[gmove()]]}
 
 <<function gmove(arm)>>=
 void
@@ -11153,6 +11322,7 @@ samaddr(Node *f, Node *t)
 #define	R0ISZERO	0
 @
 
+% gmove -> <>
 <<function raddr(arm)>>=
 void
 raddr(Node *n, Prog *p)
@@ -11175,128 +11345,11 @@ raddr(Node *n, Prog *p)
 }
 @
 
-<<function naddr(arm)>>=
-void
-naddr(Node *n, Adr *a)
-{
-    long v;
-
-    a->type = D_NONE;
-    if(n == Z)
-        return;
-    switch(n->op) {
-    default:
-    bad:
-        diag(n, "bad in naddr: %O", n->op);
-        break;
-
-    case OREGISTER:
-        a->type = D_REG;
-        a->sym = S;
-        a->reg = n->reg;
-        if(a->reg >= NREG) {
-            a->type = D_FREG;
-            a->reg -= NREG;
-        }
-        break;
-
-    case OIND:
-        naddr(n->left, a);
-        if(a->type == D_REG) {
-            a->type = D_OREG;
-            break;
-        }
-        if(a->type == D_CONST) {
-            a->type = D_OREG;
-            break;
-        }
-        goto bad;
-
-    case OINDREG:
-        a->type = D_OREG;
-        a->sym = S;
-        a->offset = n->xoffset;
-        a->reg = n->reg;
-        break;
-
-    case ONAME:
-        a->etype = n->etype;
-        a->type = D_OREG;
-        a->name = D_STATIC;
-        a->sym = n->sym;
-        a->offset = n->xoffset;
-        if(n->class == CSTATIC)
-            break;
-        if(n->class == CEXTERN || n->class == CGLOBL) {
-            a->name = D_EXTERN;
-            break;
-        }
-        if(n->class == CAUTO) {
-            a->name = D_AUTO;
-            break;
-        }
-        if(n->class == CPARAM) {
-            a->name = D_PARAM;
-            break;
-        }
-        goto bad;
-
-    case OCONST:
-        a->sym = S;
-        a->reg = NREG;
-        if(typefd[n->type->etype]) {
-            a->type = D_FCONST;
-            a->dval = n->fconst;
-        } else {
-            a->type = D_CONST;
-            a->offset = n->vconst;
-        }
-        break;
-
-    case OADDR:
-        naddr(n->left, a);
-        if(a->type == D_OREG) {
-            a->type = D_CONST;
-            break;
-        }
-        goto bad;
-
-    case OADD:
-        if(n->left->op == OCONST) {
-            naddr(n->left, a);
-            v = a->offset;
-            naddr(n->right, a);
-        } else {
-            naddr(n->right, a);
-            v = a->offset;
-            naddr(n->left, a);
-        }
-        a->offset += v;
-        break;
-
-    }
-}
-@
 
 
 
 
-<<function gins(arm)>>=
-void
-gins(int a, Node *f, Node *t)
-{
-
-    nextpc();
-    p->as = a;
-    if(f != Z)
-        naddr(f, &p->from);
-    if(t != Z)
-        naddr(t, &p->to);
-    if(debug['g'])
-        print("%P\n", p);
-}
-@
-
+\subsection{[[gopcode()]]}
 
 
 <<function gopcode(arm)>>=
@@ -11312,6 +11365,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
     true = o & BTRUE;
     o &= ~BTRUE;
     a = AGOK;
+
     switch(o) {
     case OAS:
         gmove(f1, t);
@@ -11495,8 +11549,10 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         f2 = Z;
         break;
     }
+
     if(a == AGOK)
         diag(Z, "bad in gopcode %O", o);
+
     nextpc();
     p->as = a;
     if(f1 != Z)
@@ -11507,6 +11563,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
     }
     if(t != Z)
         naddr(t, &p->to);
+
     if(debug['g'])
         print("%P\n", p);
 }
@@ -11530,60 +11587,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 
 
 
-<<function gbranch(arm)>>=
-void
-gbranch(int o)
-{
-    int a;
 
-    a = AGOK;
-    switch(o) {
-    case ORETURN:
-        a = ARET;
-        break;
-    case OGOTO:
-        a = AB;
-        break;
-    }
-    nextpc();
-    if(a == AGOK) {
-        diag(Z, "bad in gbranch %O",  o);
-        nextpc();
-    }
-    p->as = a;
-}
-@
-% 386 is just AB -> JMP, should factorize!!
-
-<<function patch>>=
-void
-patch(Prog *op, long pc)
-{
-
-    op->to.offset = pc;
-    op->to.type = D_BRANCH;
-}
-@
-
-<<function gpseudo(arm)>>=
-void
-gpseudo(int a, Sym *s, Node *n)
-{
-
-    nextpc();
-    p->as = a;
-    p->from.type = D_OREG;
-    p->from.sym = s;
-    p->from.name = D_EXTERN;
-    if(a == ATEXT)
-        p->reg = (profileflg ? 0 : NOPROF);
-    if(s->class == CSTATIC)
-        p->from.name = D_STATIC;
-    naddr(n, &p->to);
-    if(a == ADATA || a == AGLOBL)
-        pc--;
-}
-@
 
 
 
@@ -11609,16 +11613,16 @@ int	hasdoubled;
 
 
 
-% not set anywhere?
+% set anywhere?
 <<global nodret>>=
 Node*	nodret;
 @
 
 
 
-
-%REGARG from 8.out.h = -1 => no register for first argument,
-% everything in the stack. AX is used for return though
+%REGARG from 5.out.h = 0 => so use R0 and the
+% rest in the stack. 
+%REGRET is also R0.
 
 % cc2/pgen.c  n = node of the blocks OLIST, nn = node of the ident ONAME
 <<function codgen>>=
@@ -12247,6 +12251,18 @@ loop:
     }
 }
 @
+
+% gmove | gen | ... -> <>
+<<function patch>>=
+void
+patch(Prog *op, long pc)
+{
+
+    op->to.offset = pc;
+    op->to.type = D_BRANCH;
+}
+@
+
 
 
 <<global reg(arm)>>=
