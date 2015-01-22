@@ -350,10 +350,8 @@ dclfunct(Type *t, Sym *s)
         n = new(ONAME, Z, Z);
         n->sym = slookup(str);
         f->sym[o] = n->sym;
+
         switch(ftabinit[i].typ) {
-        default:
-            diag(Z, "dclfunct op missing %d\n", ftabinit[i].typ);
-            break;
 
         case 1:	// T f(T,T)	+
             dodecl(xdecl, CEXTERN, f1, n);
@@ -369,6 +367,10 @@ dclfunct(Type *t, Sym *s)
 
         case 4:	// T f(T)	~
             dodecl(xdecl, CEXTERN, f4, n);
+            break;
+
+        default:
+            diag(Z, "dclfunct op missing %d\n", ftabinit[i].typ);
             break;
         }
     }
