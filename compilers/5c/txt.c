@@ -15,13 +15,12 @@ ginit(void)
     thechar = '5';
     thestring = "arm";
     /*x: [[ginit()]] initialisation */
-    exregoffset = REGEXT;
-    exfregoffset = FREGEXT;
     listinit();
     nstring = 0;
     mnstring = 0;
     nrathole = 0;
     cases = C;
+    /*x: [[ginit()]] initialisation */
     tfield = types[TLONG];
     /*x: [[ginit()]] initialisation */
     pc = 0;
@@ -31,6 +30,9 @@ ginit(void)
     /*x: [[ginit()]] initialisation */
     breakpc = -1;
     continpc = -1;
+    /*x: [[ginit()]] initialisation */
+    exregoffset = REGEXT;
+    exfregoffset = FREGEXT;
     /*e: [[ginit()]] initialisation */
 
     zprog.link = P;
@@ -40,7 +42,7 @@ ginit(void)
     zprog.from.name = D_NONE;
     zprog.from.reg = NREG;
     zprog.to = zprog.from;
-    zprog.scond = 0xE;  
+    zprog.scond = COND_ALWAYS;  
 
     regnode.op = OREGISTER;
     regnode.class = CEXREG;
@@ -120,12 +122,14 @@ gclean(void)
     for(i=NREG; i<NREG+NFREG; i++)
         if(reg[i] && !resvreg[i])
             diag(Z, "freg %d left allocated", i-NREG);
+
     while(mnstring)
         outstring("", 1L);
     symstring->type->width = nstring;
     symrathole->type->width = nrathole;
+
     for(i=0; i<NHASH; i++)
-    for(s = hash[i]; s != S; s = s->link) {
+     for(s = hash[i]; s != S; s = s->link) {
         if(s->type == T)
             continue;
         if(s->type->width == 0)
@@ -136,8 +140,10 @@ gclean(void)
             continue;
         gpseudo(AGLOBL, s, nodconst(s->type->width));
     }
+ 
     nextpc();
     p->as = AEND;
+
     outcode();
 }
 /*e: function gclean(arm) */

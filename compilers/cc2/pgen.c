@@ -210,11 +210,6 @@ loop:
 
     switch(o) {
     /*s: [[gen()]] switch node kind cases */
-    case OSET:
-    case OUSED:
-        usedset(n->left, o);
-        break;
-    /*x: [[gen()]] switch node kind cases */
     case OLIST:
     case OCOMMA:
         gen(n->left);
@@ -598,6 +593,11 @@ loop:
     default:
         complex(n);
         cgen(n, Z);
+        break;
+    /*x: [[gen()]] switch node kind cases */
+    case OSET:
+    case OUSED:
+        usedset(n->left, o);
         break;
     /*e: [[gen()]] switch node kind cases */
     }

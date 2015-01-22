@@ -940,8 +940,10 @@ name:
 
         $$->xoffset = $1->offset;
         $$->class = $1->class;
-
+ 
+        /*s: name rule, LNAME case */
         $1->aused = true;
+        /*e: name rule, LNAME case */
     }
 /*x: names rules */
 gctname:

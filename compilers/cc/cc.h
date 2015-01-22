@@ -82,12 +82,12 @@ struct	Node
     long	lineno;
 
     /*s: [[Node]] other fields */
+    Sym*	sym; 
+    /*x: [[Node]] other fields */
     Type*	type;
     /*x: [[Node]] other fields */
     // enum<storage_class>
     char	class;
-    /*x: [[Node]] other fields */
-    Sym*	sym; 
     /*x: [[Node]] other fields */
     void*	label;
 
@@ -144,11 +144,11 @@ struct	Sym
     // enum<storage_class>
     char	class;
     /*x: [[Sym]] other fields */
-    ushort	block;
-    /*x: [[Sym]] other fields */
     char*	macro;
     /*x: [[Sym]] other fields */
     ushort	lexical;
+    /*x: [[Sym]] other fields */
+    ushort	block;
     /*x: [[Sym]] other fields */
     long	offset;
 
@@ -198,23 +198,17 @@ enum signature {
 struct	Decl
 {
     Sym*	sym;
-
     // enum<dxxx>
     short	val;
 
+    /*s: [[Decl]] sym copy fields */
     Type*	type;
-    // enum<storage_class>
     char	class;
-
-    long	varlineno;
-
-    /*s: [[Decl]] other fields */
-    ushort	block;
-    /*x: [[Decl]] other fields */
     long	offset;
-    /*x: [[Decl]] other fields */
+    ushort	block;
+    long	varlineno;
     bool	aused;
-    /*e: [[Decl]] other fields */
+    /*e: [[Decl]] sym copy fields */
 
     // Extra fields
     /*s: [[Decl]] extra fields */
@@ -242,10 +236,10 @@ struct	Type
     long	lineno;
 
     /*s: [[Type]] other fields */
+    Sym*	sym;
+    /*x: [[Type]] other fields */
     // enum<qualifier>
     char	garb;
-    /*x: [[Type]] other fields */
-    Sym*	sym;
     /*x: [[Type]] other fields */
     long	width; // ewidth[Type.etype]
 
@@ -422,6 +416,8 @@ enum node_kind
     /*x: expression nodes */
     OASI, // appears during parsing
     /*x: expression nodes */
+    OINDREG, // after parsing only
+    /*x: expression nodes */
     OASLMUL,
     OASLDIV,
     OASLMOD,
@@ -431,8 +427,6 @@ enum node_kind
     OLDIV,
     OLMOD,
     OLSHR,
-    /*x: expression nodes */
-    OINDREG, // after parsing only
     /*x: expression nodes */
     // after parsing only
     OHI,

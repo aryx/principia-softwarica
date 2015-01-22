@@ -79,14 +79,15 @@ void main(int argc, char *argv[])
 
     outfile = nil;
     defs = nil;
-
-    /*s: [[main()]] initialisation */
-    tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
-    maxdef = 0;
     ndef = 0;
-    /*x: [[main()]] initialisation */
+
+    /*s: [[main()]] remaining initialisation */
+    maxdef = 0;
+    /*x: [[main()]] remaining initialisation */
+    tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
+    /*x: [[main()]] remaining initialisation */
     profileflg = true;	/* #pragma can turn it off */
-    /*e: [[main()]] initialisation */
+    /*e: [[main()]] remaining initialisation */
 
     setinclude(".");
 
@@ -180,10 +181,7 @@ void main(int argc, char *argv[])
     }
     /*e: [[main()]] multiple files handling */
 
-    if(argc == 0)
-        c = compile("stdin", defs, ndef);
-    else
-        c = compile(argv[0], defs, ndef);
+    c = compile((argc == 0) ? "stdin" : argv[0], defs, ndef);
 
     if(c)
         errorexit();
@@ -459,8 +457,10 @@ syminit(Sym *s)
     s->suetag = T;
 
     s->class = CXXX;
-    s->aused = false;
     s->sig = SIGNONE;
+    /*s: [[syminit()]] remaining initialisations */
+    s->aused = false;
+    /*e: [[syminit()]] remaining initialisations */
 }
 /*e: function syminit */
 

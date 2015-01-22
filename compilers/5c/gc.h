@@ -58,15 +58,17 @@ typedef	struct	Rgn		Rgn;
 /*s: struct Adr(arm) */
 struct	Adr
 {
+    char	type;
+
     long	offset;
     double	dval;
     char	sval[NSNAME];
     Ieee	ieee;
-    Sym*	sym;
 
-    char	type;
-    char	reg;
+    Sym*	sym;
     char	name;
+
+    char	reg;
 
     char	etype;
 };

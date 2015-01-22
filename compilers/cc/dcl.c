@@ -820,20 +820,22 @@ Node* revertdcl(void)
         case DMARK:
             autoffset = d->offset;
             autobn = d->block;
+            // we popped everything
             return n;
 
         case DAUTO:
             if(debug['d'])
                 print("revert1 \"%s\"\n", s->name);
 
-            // TODO LP split!
-            if(s->aused == false) {
+            /*s: [[reverdcl()]] DAUTO case, warn if auto declared but not used */
+            if(!s->aused) {
                 nearln = s->varlineno;
                 if(s->class == CAUTO)
                     warn(Z, "auto declared and not used: %s", s->name);
                 if(s->class == CPARAM)
                     warn(Z, "param declared and not used: %s", s->name);
             }
+            /*e: [[reverdcl()]] DAUTO case, warn if auto declared but not used */
 
             if(s->type && (s->type->garb & GVOLATILE)) {
                 n1 = new(ONAME, Z, Z);
@@ -853,13 +855,14 @@ Node* revertdcl(void)
                     n = new(OLIST, n1, n);
             }
 
-            // restore
+            /*s: [[reverdcl()]] DAUTO case, restore symbol fields from decl */
             s->type = d->type;
             s->class = d->class;
             s->offset = d->offset;
             s->block = d->block;
             s->varlineno = d->varlineno;
             s->aused = d->aused;
+            /*e: [[reverdcl()]] DAUTO case, restore symbol fields from decl */
 
             break;
 
@@ -993,12 +996,16 @@ push1(Sym *s)
     d = push();
     d->sym = s;
     d->val = DAUTO;
+
+    /*s: [[push1()]] save symbol fields in decl */
     d->type = s->type;
     d->class = s->class;
     d->offset = s->offset;
     d->block = s->block;
     d->varlineno = s->varlineno;
     d->aused = s->aused;
+    /*e: [[push1()]] save symbol fields in decl */
+
     return d;
 }
 /*e: function push1 */
@@ -1211,7 +1218,7 @@ void
 snap(Type *t)
 {
     if(typesu[t->etype])
-    if(t->link == T && t->tag && t->tag->suetag) {
+     if(t->link == T && t->tag && t->tag->suetag) {
         t->link = t->tag->suetag->link;
         t->width = t->tag->suetag->width;
     }
@@ -1360,7 +1367,7 @@ adecl(int c, Type *t, Sym *s)
         s->offset = 0;
         s->type = t;
         s->class = c;
-        s->aused = 0;
+        s->aused = false;
     }
     switch(c) {
     case CAUTO:
