@@ -1480,51 +1480,51 @@ exreg(Type *t)
 /*s: global ewidth */
 schar	ewidth[NTYPE] =
 {
-    -1,		/* [TXXX] */
-    SZ_CHAR,	/* [TCHAR] */
-    SZ_CHAR,	/* [TUCHAR] */
-    SZ_SHORT,	/* [TSHORT] */
-    SZ_SHORT,	/* [TUSHORT] */
-    SZ_INT,		/* [TINT] */
-    SZ_INT,		/* [TUINT] */
-    SZ_LONG,	/* [TLONG] */
-    SZ_LONG,	/* [TULONG] */
-    SZ_VLONG,	/* [TVLONG] */
-    SZ_VLONG,	/* [TUVLONG] */
-    SZ_FLOAT,	/* [TFLOAT] */
-    SZ_DOUBLE,	/* [TDOUBLE] */
-    SZ_IND,		/* [TIND] */
-    0,		/* [TFUNC] */
-    -1,		/* [TARRAY] */
-    0,		/* [TVOID] */
-    -1,		/* [TSTRUCT] */
-    -1,		/* [TUNION] */
-    SZ_INT,		/* [TENUM] */
+    [TXXX] = -1,		
+    [TCHAR] = SZ_CHAR,	
+    [TUCHAR] = SZ_CHAR,	
+    [TSHORT] = SZ_SHORT,	
+    [TUSHORT] = SZ_SHORT,	
+    [TINT] = SZ_INT,		
+    [TUINT] = SZ_INT,		
+    [TLONG] = SZ_LONG,	
+    [TULONG] = SZ_LONG,	
+    [TVLONG] = SZ_VLONG,	
+    [TUVLONG] = SZ_VLONG,	
+    [TFLOAT] = SZ_FLOAT,	
+    [TDOUBLE] = SZ_DOUBLE,	
+    [TIND] = SZ_IND,		
+    [TFUNC] = 0,		
+    [TARRAY] = -1,		
+    [TVOID] = 0,		
+    [TSTRUCT] = -1,		
+    [TUNION] = -1,		
+    [TENUM] = SZ_INT,		
 };
 /*e: global ewidth */
 /*s: global ncast */
 long	ncast[NTYPE] =
 {
-    0,				/* [TXXX] */
-    BCHAR|BUCHAR,			/* [TCHAR] */
-    BCHAR|BUCHAR,			/* [TUCHAR] */
-    BSHORT|BUSHORT,			/* [TSHORT] */
-    BSHORT|BUSHORT,			/* [TUSHORT] */
-    BINT|BUINT|BLONG|BULONG|BIND,	/* [TINT] */
-    BINT|BUINT|BLONG|BULONG|BIND,	/* [TUINT] */
-    BINT|BUINT|BLONG|BULONG|BIND,	/* [TLONG] */
-    BINT|BUINT|BLONG|BULONG|BIND,	/* [TULONG] */
-    BVLONG|BUVLONG,			/* [TVLONG] */
-    BVLONG|BUVLONG,			/* [TUVLONG] */
-    BFLOAT,				/* [TFLOAT] */
-    BDOUBLE,			/* [TDOUBLE] */
-    BLONG|BULONG|BIND,		/* [TIND] */
-    0,				/* [TFUNC] */
-    0,				/* [TARRAY] */
-    0,				/* [TVOID] */
-    BSTRUCT,			/* [TSTRUCT] */
-    BUNION,				/* [TUNION] */
-    0,				/* [TENUM] */
+    [TXXX] = 0,				
+    [TCHAR] = BCHAR|BUCHAR,			
+    [TUCHAR] = BCHAR|BUCHAR,			
+    [TSHORT] = BSHORT|BUSHORT,			
+    [TUSHORT] = BSHORT|BUSHORT,			
+    [TINT] = BINT|BUINT|BLONG|BULONG|BIND,	
+    [TUINT] = BINT|BUINT|BLONG|BULONG|BIND,	
+    [TLONG] = BINT|BUINT|BLONG|BULONG|BIND,	
+    [TULONG] = BINT|BUINT|BLONG|BULONG|BIND,	
+    [TVLONG] = BVLONG|BUVLONG,			
+    [TUVLONG] = BVLONG|BUVLONG,			
+    [TFLOAT] = BFLOAT,				
+    [TDOUBLE] = BDOUBLE,			
+    [TIND] = BLONG|BULONG|BIND,		
+    [TFUNC] = 0,				
+    [TARRAY] = 0,				
+    [TVOID] = 0,				
+    [TSTRUCT] = BSTRUCT,			
+    [TUNION] = BUNION,				
+    [TENUM] = 0,				
 };
 /*e: global ncast */
 /*e: 8c/txt.c */
