@@ -489,11 +489,14 @@ enum numxxx
 //@Scheck: not dead, called by yyparse
 long yylex(void)
 {
+    long c;
+    /*s: [[yylex()]] locals */
     vlong vv;
-    long c, c1, t;
+    long c1, t;
     char *cp;
     Rune rune;
     Sym *s;
+    /*e: [[yylex()]] locals */
 
     if(peekc != IGN) {
         c = peekc;
@@ -521,6 +524,7 @@ l1:
         cp = symb;
         if(c != 'L')
             goto talph;
+
         *cp++ = c;
         c = GETC();
         if(c == '\'') {
@@ -543,21 +547,17 @@ l1:
     }
     if(isdigit(c))
         goto tnum;
-    switch(c)
-    {
 
+    switch(c) {
+    /*s: [[yylex()]] switch c cases */
     case EOF:
         peekc = EOF;
         return -1;
-
-    case '_':
-        cp = symb;
-        goto talph;
-
+    /*x: [[yylex()]] switch c cases */
     case '#':
         domacro();
         goto l0;
-
+    /*x: [[yylex()]] switch c cases */
     case '.':
         c1 = GETC();
         if(isdigit(c1)) {
@@ -568,80 +568,7 @@ l1:
             goto casedot;
         }
         break;
-
-    case '"':
-        strcpy(symb, "\"<string>\"");
-        cp = alloc(0);
-        c1 = 0;
-
-        /* "..." */
-        for(;;) {
-            c = escchar('"', 0, 1);
-            if(c == EOF)
-                break;
-            if(c & ESC) {
-                cp = allocn(cp, c1, 1);
-                cp[c1++] = c;
-            } else {
-                rune = c;
-                c = runelen(rune);
-                cp = allocn(cp, c1, c);
-                runetochar(cp+c1, &rune);
-                c1 += c;
-            }
-        }
-        yylval.sval.l = c1;
-        do {
-            cp = allocn(cp, c1, 1);
-            cp[c1++] = 0;
-        } while(c1 & MAXALIGN);
-        yylval.sval.s = cp;
-        return LSTRING;
-
-    caselq:
-        /* L"..." */
-        strcpy(symb, "\"L<string>\"");
-        cp = alloc(0);
-        c1 = 0;
-        for(;;) {
-            c = escchar('"', 1, 0);
-            if(c == EOF)
-                break;
-            cp = allocn(cp, c1, sizeof(TRune));
-            *(TRune*)(cp + c1) = c;
-            c1 += sizeof(TRune);
-        }
-        yylval.sval.l = c1;
-        do {
-            cp = allocn(cp, c1, sizeof(TRune));
-            *(TRune*)(cp + c1) = 0;
-            c1 += sizeof(TRune);
-        } while(c1 & MAXALIGN);
-        yylval.sval.s = cp;
-        return LLSTRING;
-
-    case '\'':
-        /* '.' */
-        c = escchar('\'', 0, 0);
-        if(c == EOF)
-            c = '\'';
-        c1 = escchar('\'', 0, 0);
-        if(c1 != EOF) {
-            yyerror("missing '");
-            peekc = c1;
-        }
-        vv = c;
-        yylval.vval = convvtox(vv, TUCHAR);
-        if(yylval.vval != vv)
-            yyerror("overflow in character constant: 0x%lx", c);
-        else
-        if(c & 0x80){
-            nearln = lineno;
-            warn(Z, "sign-extended character constant");
-        }
-        yylval.vval = convvtox(vv, TCHAR);
-        return LCONST;
-
+    /*x: [[yylex()]] switch c cases */
     case '/':
         c1 = GETC();
         if(c1 == '*') {
@@ -672,19 +599,23 @@ l1:
         if(c1 == '=')
             return LDVE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
+    case '_':
+        cp = symb;
+        goto talph;
+    /*x: [[yylex()]] switch c cases */
     case '*':
         c1 = GETC();
         if(c1 == '=')
             return LMLE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '%':
         c1 = GETC();
         if(c1 == '=')
             return LMDE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '+':
         c1 = GETC();
         if(c1 == '+')
@@ -692,7 +623,7 @@ l1:
         if(c1 == '=')
             return LPE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '-':
         c1 = GETC();
         if(c1 == '-')
@@ -702,7 +633,7 @@ l1:
         if(c1 == '>')
             return LMG;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '>':
         c1 = GETC();
         if(c1 == '>') {
@@ -715,7 +646,7 @@ l1:
         if(c1 == '=')
             return LGE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '<':
         c1 = GETC();
         if(c1 == '<') {
@@ -728,19 +659,19 @@ l1:
         if(c1 == '=')
             return LLE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '=':
         c1 = GETC();
         if(c1 == '=')
             return LEQ;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '!':
         c1 = GETC();
         if(c1 == '=')
             return LNE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '&':
         c1 = GETC();
         if(c1 == '&')
@@ -748,7 +679,7 @@ l1:
         if(c1 == '=')
             return LANDE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '|':
         c1 = GETC();
         if(c1 == '|')
@@ -756,19 +687,93 @@ l1:
         if(c1 == '=')
             return LORE;
         break;
-
+    /*x: [[yylex()]] switch c cases */
     case '^':
         c1 = GETC();
         if(c1 == '=')
             return LXORE;
         break;
+    /*x: [[yylex()]] switch c cases */
+    case '\'':
+        /* '.' */
+        c = escchar('\'', 0, 0);
+        if(c == EOF)
+            c = '\'';
+        c1 = escchar('\'', 0, 0);
+        if(c1 != EOF) {
+            yyerror("missing '");
+            peekc = c1;
+        }
+        vv = c;
+        yylval.vval = convvtox(vv, TUCHAR);
+        if(yylval.vval != vv)
+            yyerror("overflow in character constant: 0x%lx", c);
+        else
+        if(c & 0x80){
+            nearln = lineno;
+            warn(Z, "sign-extended character constant");
+        }
+        yylval.vval = convvtox(vv, TCHAR);
+        return LCONST;
+    /*x: [[yylex()]] switch c cases */
+    case '"':
+        strcpy(symb, "\"<string>\"");
+        cp = alloc(0);
+        c1 = 0;
 
+        /* "..." */
+        for(;;) {
+            c = escchar('"', 0, 1);
+            if(c == EOF)
+                break;
+            if(c & ESC) {
+                cp = allocn(cp, c1, 1);
+                cp[c1++] = c;
+            } else {
+                rune = c;
+                c = runelen(rune);
+                cp = allocn(cp, c1, c);
+                runetochar(cp+c1, &rune);
+                c1 += c;
+            }
+        }
+        yylval.sval.l = c1;
+        do {
+            cp = allocn(cp, c1, 1);
+            cp[c1++] = 0;
+        } while(c1 & MAXALIGN);
+        yylval.sval.s = cp;
+        return LSTRING;
+    /*x: [[yylex()]] switch c cases */
+    caselq:
+        /* L"..." */
+        strcpy(symb, "\"L<string>\"");
+        cp = alloc(0);
+        c1 = 0;
+        for(;;) {
+            c = escchar('"', 1, 0);
+            if(c == EOF)
+                break;
+            cp = allocn(cp, c1, sizeof(TRune));
+            *(TRune*)(cp + c1) = c;
+            c1 += sizeof(TRune);
+        }
+        yylval.sval.l = c1;
+        do {
+            cp = allocn(cp, c1, sizeof(TRune));
+            *(TRune*)(cp + c1) = 0;
+            c1 += sizeof(TRune);
+        } while(c1 & MAXALIGN);
+        yylval.sval.s = cp;
+        return LLSTRING;
+    /*e: [[yylex()]] switch c cases */
     default:
         return c;
     }
     peekc = c1;
     return c;
 
+/*s: [[yylex()]] labels */
 talph:
     /*
      * cp is set to symb and some
@@ -795,7 +800,10 @@ talph:
     if(debug['L'])
         print("%L: %s\n", lineno, symb);
     peekc = c;
+
+    // the important call!
     s = lookup();
+
     if(s->macro) {
         newio();
         cp = ionext->b;
@@ -816,7 +824,7 @@ talph:
     if(s->class == CTYPEDEF || s->class == CTYPESTR)
         return LTYPE;
     return s->lexical;
-
+/*x: [[yylex()]] labels */
 tnum:
     c1 = 0;
     cp = symb;
@@ -856,13 +864,13 @@ tnum:
         }
         goto ncu;
     }
-
+    //Fallthrough
 dc:
     if(c == '.')
         goto casedot;
     if(c == 'e' || c == 'E')
         goto casee;
-
+    //Fallthrough
 ncu:
     if((c == 'U' || c == 'u') && !(c1 & Numuns)) {
         c = GETC();
@@ -910,7 +918,7 @@ ncu:
     c = LCONST;
     t = TINT;
     goto nret;
-
+/*x: [[yylex()]] labels */
 nret:
     yylval.vval = convvtox(vv, t);
     if(yylval.vval != vv){
@@ -918,7 +926,7 @@ nret:
         warn(Z, "truncated constant: %T %s", types[t], symb);
     }
     return c;
-
+/*x: [[yylex()]] labels */
 casedot:
     for(;;) {
         *cp++ = c;
@@ -928,6 +936,7 @@ casedot:
     }
     if(c != 'e' && c != 'E')
         goto caseout;
+    // Fallthrough
 
 casee:
     *cp++ = 'e';
@@ -942,7 +951,7 @@ casee:
         *cp++ = c;
         c = GETC();
     }
-
+    // Fallthrough
 caseout:
     if(c == 'L' || c == 'l') {
         c = GETC();
@@ -962,6 +971,7 @@ caseout:
     if(c1 & Numflt)
         return LFCONST;
     return LDCONST;
+/*e: [[yylex()]] labels */
 }
 /*e: function yylex */
 
@@ -1222,6 +1232,13 @@ struct
     "auto",		LAUTO,		0,
     "static",	LSTATIC,	0,
     "extern",	LEXTERN,	0,
+    "register",	LREGISTER,	0,
+
+    "const",	LCONSTNT,	0,
+    "volatile",	LVOLATILE,	0,
+
+    "inline",	LINLINE,	0,
+    "restrict",	LRESTRICT,	0,
 
     "void",		LVOID,		TVOID,
     "char",		LCHAR,		TCHAR,
@@ -1231,21 +1248,14 @@ struct
     "float",	LFLOAT,		TFLOAT,
     "double",	LDOUBLE,	TDOUBLE,
 
+    "unsigned",	LUNSIGNED,	0,
+    "signed",	LSIGNED,	0,
+
     "struct",	LSTRUCT,	0,
     "union",	LUNION,		0,
     "enum",		LENUM,		0,
 
     "typedef",	LTYPEDEF,	0,
-    "typestr",	LTYPESTR,	0,
-
-    "unsigned",	LUNSIGNED,	0,
-    "signed",	LSIGNED,	0,
-
-    "const",	LCONSTNT,	0,
-    "volatile",	LVOLATILE,	0,
-    "inline",	LINLINE,	0,
-    "register",	LREGISTER,	0,
-    "restrict",	LRESTRICT,	0,
 
     "if",		LIF,		0,
     "else",		LELSE,		0,
@@ -1260,11 +1270,15 @@ struct
     "return",	LRETURN,	0,
     "goto",		LGOTO,		0,
 
-    "signof",	LSIGNOF,	0,
     "sizeof",	LSIZEOF,	0,
-
+    /*s: [[itab]] entries, kencc extensions */
     "SET",		LSET,		0,
     "USED",		LUSED,		0,
+    /*x: [[itab]] entries, kencc extensions */
+    "signof",	LSIGNOF,	0,
+    /*x: [[itab]] entries, kencc extensions */
+    "typestr",	LTYPESTR,	0,
+    /*e: [[itab]] entries, kencc extensions */
     0
 };
 /*e: global itab */
@@ -1308,12 +1322,15 @@ cinit(void)
 
     for(i=0; i<NHASH; i++)
         hash[i] = S;
+
+    /*s: [[cinit()]] symbol table initialization */
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
         s->lexical = itab[i].lexical;
         if(itab[i].type != 0)
             s->type = types[itab[i].type];
     }
+    /*e: [[cinit()]] symbol table initialization */
 
     blockno = 0;
     autobn = 0;

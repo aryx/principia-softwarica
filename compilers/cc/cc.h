@@ -627,13 +627,13 @@ enum storage_class
     CGLOBL,
     CSTATIC,
 
-    /*s: [[Storage_class]] cases */
     CLOCAL,
+    CPARAM,
 
+    /*s: [[Storage_class]] cases */
     CTYPEDEF,
     CTYPESTR,
 
-    CPARAM,
     CSELEM,
     CLABEL,
     /*x: [[Storage_class]] cases */

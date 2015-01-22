@@ -455,6 +455,9 @@ enum storage_class
     CGLOBL,
     CSTATIC,
 
+    CLOCAL,
+    CPARAM,
+
     <<[[Storage_class]] cases>>
 
     NCTYPES,
@@ -481,12 +484,9 @@ Sym*	sym;
 
 %XXXXX
 <<[[Storage_class]] cases>>=
-CLOCAL,
-
 CTYPEDEF,
 CTYPESTR,
 
-CPARAM,
 CSELEM,
 CLABEL,
 @
@@ -2008,12 +2008,8 @@ cinit(void)
 
     for(i=0; i<NHASH; i++)
         hash[i] = S;
-    for(i=0; itab[i].name; i++) {
-        s = slookup(itab[i].name);
-        s->lexical = itab[i].lexical;
-        if(itab[i].type != 0)
-            s->type = types[itab[i].type];
-    }
+
+    <<[[cinit()]] symbol table initialization>>
 
     blockno = 0;
     autobn = 0;
@@ -2340,20 +2336,20 @@ pop:
 
 \section{[[yylex()]]}
 
-<<constant ESC>>=
-#define	ESC	(Runemask+1)		/* Rune flag: a literal byte */
+<<[[yylex()]] locals>>=
+vlong vv;
+long c1, t;
+char *cp;
+Rune rune;
+Sym *s;
 @
-
 
 <<function yylex>>=
 //@Scheck: not dead, called by yyparse
 long yylex(void)
 {
-    vlong vv;
-    long c, c1, t;
-    char *cp;
-    Rune rune;
-    Sym *s;
+    long c;
+    <<[[yylex()]] locals>>
 
     if(peekc != IGN) {
         c = peekc;
@@ -2381,6 +2377,7 @@ l1:
         cp = symb;
         if(c != 'L')
             goto talph;
+
         *cp++ = c;
         c = GETC();
         if(c == '\'') {
@@ -2403,232 +2400,167 @@ l1:
     }
     if(isdigit(c))
         goto tnum;
-    switch(c)
-    {
 
-    case EOF:
-        peekc = EOF;
-        return -1;
-
-    case '_':
-        cp = symb;
-        goto talph;
-
-    case '#':
-        domacro();
-        goto l0;
-
-    case '.':
-        c1 = GETC();
-        if(isdigit(c1)) {
-            cp = symb;
-            *cp++ = c;
-            c = c1;
-            c1 = 0;
-            goto casedot;
-        }
-        break;
-
-    case '"':
-        strcpy(symb, "\"<string>\"");
-        cp = alloc(0);
-        c1 = 0;
-
-        /* "..." */
-        for(;;) {
-            c = escchar('"', 0, 1);
-            if(c == EOF)
-                break;
-            if(c & ESC) {
-                cp = allocn(cp, c1, 1);
-                cp[c1++] = c;
-            } else {
-                rune = c;
-                c = runelen(rune);
-                cp = allocn(cp, c1, c);
-                runetochar(cp+c1, &rune);
-                c1 += c;
-            }
-        }
-        yylval.sval.l = c1;
-        do {
-            cp = allocn(cp, c1, 1);
-            cp[c1++] = 0;
-        } while(c1 & MAXALIGN);
-        yylval.sval.s = cp;
-        return LSTRING;
-
-    caselq:
-        /* L"..." */
-        strcpy(symb, "\"L<string>\"");
-        cp = alloc(0);
-        c1 = 0;
-        for(;;) {
-            c = escchar('"', 1, 0);
-            if(c == EOF)
-                break;
-            cp = allocn(cp, c1, sizeof(TRune));
-            *(TRune*)(cp + c1) = c;
-            c1 += sizeof(TRune);
-        }
-        yylval.sval.l = c1;
-        do {
-            cp = allocn(cp, c1, sizeof(TRune));
-            *(TRune*)(cp + c1) = 0;
-            c1 += sizeof(TRune);
-        } while(c1 & MAXALIGN);
-        yylval.sval.s = cp;
-        return LLSTRING;
-
-    case '\'':
-        /* '.' */
-        c = escchar('\'', 0, 0);
-        if(c == EOF)
-            c = '\'';
-        c1 = escchar('\'', 0, 0);
-        if(c1 != EOF) {
-            yyerror("missing '");
-            peekc = c1;
-        }
-        vv = c;
-        yylval.vval = convvtox(vv, TUCHAR);
-        if(yylval.vval != vv)
-            yyerror("overflow in character constant: 0x%lx", c);
-        else
-        if(c & 0x80){
-            nearln = lineno;
-            warn(Z, "sign-extended character constant");
-        }
-        yylval.vval = convvtox(vv, TCHAR);
-        return LCONST;
-
-    case '/':
-        c1 = GETC();
-        if(c1 == '*') {
-            for(;;) {
-                c = getr();
-                while(c == '*') {
-                    c = getr();
-                    if(c == '/')
-                        goto l0;
-                }
-                if(c == EOF) {
-                    yyerror("eof in comment");
-                    errorexit();
-                }
-            }
-        }
-        if(c1 == '/') {
-            for(;;) {
-                c = getr();
-                if(c == '\n')
-                    goto l0;
-                if(c == EOF) {
-                    yyerror("eof in comment");
-                    errorexit();
-                }
-            }
-        }
-        if(c1 == '=')
-            return LDVE;
-        break;
-
-    case '*':
-        c1 = GETC();
-        if(c1 == '=')
-            return LMLE;
-        break;
-
-    case '%':
-        c1 = GETC();
-        if(c1 == '=')
-            return LMDE;
-        break;
-
-    case '+':
-        c1 = GETC();
-        if(c1 == '+')
-            return LPP;
-        if(c1 == '=')
-            return LPE;
-        break;
-
-    case '-':
-        c1 = GETC();
-        if(c1 == '-')
-            return LMM;
-        if(c1 == '=')
-            return LME;
-        if(c1 == '>')
-            return LMG;
-        break;
-
-    case '>':
-        c1 = GETC();
-        if(c1 == '>') {
-            c = LRSH;
-            c1 = GETC();
-            if(c1 == '=')
-                return LRSHE;
-            break;
-        }
-        if(c1 == '=')
-            return LGE;
-        break;
-
-    case '<':
-        c1 = GETC();
-        if(c1 == '<') {
-            c = LLSH;
-            c1 = GETC();
-            if(c1 == '=')
-                return LLSHE;
-            break;
-        }
-        if(c1 == '=')
-            return LLE;
-        break;
-
-    case '=':
-        c1 = GETC();
-        if(c1 == '=')
-            return LEQ;
-        break;
-
-    case '!':
-        c1 = GETC();
-        if(c1 == '=')
-            return LNE;
-        break;
-
-    case '&':
-        c1 = GETC();
-        if(c1 == '&')
-            return LANDAND;
-        if(c1 == '=')
-            return LANDE;
-        break;
-
-    case '|':
-        c1 = GETC();
-        if(c1 == '|')
-            return LOROR;
-        if(c1 == '=')
-            return LORE;
-        break;
-
-    case '^':
-        c1 = GETC();
-        if(c1 == '=')
-            return LXORE;
-        break;
-
+    switch(c) {
+    <<[[yylex()]] switch c cases>>
     default:
         return c;
     }
     peekc = c1;
     return c;
 
+<<[[yylex()]] labels>>
+}
+@
+
+
+
+<<[[yylex()]] switch c cases>>=
+case EOF:
+    peekc = EOF;
+    return -1;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '#':
+    domacro();
+    goto l0;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '.':
+    c1 = GETC();
+    if(isdigit(c1)) {
+        cp = symb;
+        *cp++ = c;
+        c = c1;
+        c1 = 0;
+        goto casedot;
+    }
+    break;
+@
+
+
+
+
+
+
+
+
+\section{Comments}
+
+<<[[yylex()]] switch c cases>>=
+case '/':
+    c1 = GETC();
+    if(c1 == '*') {
+        for(;;) {
+            c = getr();
+            while(c == '*') {
+                c = getr();
+                if(c == '/')
+                    goto l0;
+            }
+            if(c == EOF) {
+                yyerror("eof in comment");
+                errorexit();
+            }
+        }
+    }
+    if(c1 == '/') {
+        for(;;) {
+            c = getr();
+            if(c == '\n')
+                goto l0;
+            if(c == EOF) {
+                yyerror("eof in comment");
+                errorexit();
+            }
+        }
+    }
+    if(c1 == '=')
+        return LDVE;
+    break;
+@
+
+
+\section{Keywords and identifiers}
+
+<<global itab>>=
+struct
+{
+    char	*name;
+    // enum<lexeme>
+    ushort	lexical;
+    // option<enum<Type>>, None = 0 (or TXXX)
+    ushort	type;
+} itab[] =
+{
+    "auto",		LAUTO,		0,
+    "static",	LSTATIC,	0,
+    "extern",	LEXTERN,	0,
+    "register",	LREGISTER,	0,
+
+    "const",	LCONSTNT,	0,
+    "volatile",	LVOLATILE,	0,
+
+    "inline",	LINLINE,	0,
+    "restrict",	LRESTRICT,	0,
+
+    "void",		LVOID,		TVOID,
+    "char",		LCHAR,		TCHAR,
+    "int",		LINT,		TINT,
+    "short",	LSHORT,		TSHORT,
+    "long",		LLONG,		TLONG,
+    "float",	LFLOAT,		TFLOAT,
+    "double",	LDOUBLE,	TDOUBLE,
+
+    "unsigned",	LUNSIGNED,	0,
+    "signed",	LSIGNED,	0,
+
+    "struct",	LSTRUCT,	0,
+    "union",	LUNION,		0,
+    "enum",		LENUM,		0,
+
+    "typedef",	LTYPEDEF,	0,
+
+    "if",		LIF,		0,
+    "else",		LELSE,		0,
+    "while",	LWHILE,		0,
+    "for",		LFOR,		0,
+    "do",		LDO,		0,
+    "break",	LBREAK,		0,
+    "continue",	LCONTINUE,	0,
+    "switch",	LSWITCH,	0,
+    "case",		LCASE,		0,
+    "default",	LDEFAULT,	0,
+    "return",	LRETURN,	0,
+    "goto",		LGOTO,		0,
+
+    "sizeof",	LSIZEOF,	0,
+    <<[[itab]] entries, kencc extensions>>
+    0
+};
+@
+
+<<[[cinit()]] symbol table initialization>>=
+for(i=0; itab[i].name; i++) {
+    s = slookup(itab[i].name);
+    s->lexical = itab[i].lexical;
+    if(itab[i].type != 0)
+        s->type = types[itab[i].type];
+}
+@
+
+
+<<[[yylex()]] switch c cases>>=
+case '_':
+    cp = symb;
+    goto talph;
+@
+
+
+
+<<[[yylex()]] labels>>=
 talph:
     /*
      * cp is set to symb and some
@@ -2655,7 +2587,10 @@ talph:
     if(debug['L'])
         print("%L: %s\n", lineno, symb);
     peekc = c;
+
+    // the important call!
     s = lookup();
+
     if(s->macro) {
         newio();
         cp = ionext->b;
@@ -2676,7 +2611,147 @@ talph:
     if(s->class == CTYPEDEF || s->class == CTYPESTR)
         return LTYPE;
     return s->lexical;
+@
 
+
+
+
+\section{Typedef trick}
+
+%LTYPE!!
+
+% typestr?
+
+\section{Operators}
+
+<<[[yylex()]] switch c cases>>=
+case '*':
+    c1 = GETC();
+    if(c1 == '=')
+        return LMLE;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '%':
+    c1 = GETC();
+    if(c1 == '=')
+        return LMDE;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '+':
+    c1 = GETC();
+    if(c1 == '+')
+        return LPP;
+    if(c1 == '=')
+        return LPE;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '-':
+    c1 = GETC();
+    if(c1 == '-')
+        return LMM;
+    if(c1 == '=')
+        return LME;
+    if(c1 == '>')
+        return LMG;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '>':
+    c1 = GETC();
+    if(c1 == '>') {
+        c = LRSH;
+        c1 = GETC();
+        if(c1 == '=')
+            return LRSHE;
+        break;
+    }
+    if(c1 == '=')
+        return LGE;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '<':
+    c1 = GETC();
+    if(c1 == '<') {
+        c = LLSH;
+        c1 = GETC();
+        if(c1 == '=')
+            return LLSHE;
+        break;
+    }
+    if(c1 == '=')
+        return LLE;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '=':
+    c1 = GETC();
+    if(c1 == '=')
+        return LEQ;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '!':
+    c1 = GETC();
+    if(c1 == '=')
+        return LNE;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '&':
+    c1 = GETC();
+    if(c1 == '&')
+        return LANDAND;
+    if(c1 == '=')
+        return LANDE;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '|':
+    c1 = GETC();
+    if(c1 == '|')
+        return LOROR;
+    if(c1 == '=')
+        return LORE;
+    break;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '^':
+    c1 = GETC();
+    if(c1 == '=')
+        return LXORE;
+    break;
+@
+
+
+
+\section{Numbers}
+
+<<enum numxxx>>=
+enum numxxx
+{
+    Numdec		= 1<<0,
+    Numlong		= 1<<1,
+    Numuns		= 1<<2,
+    Numvlong	= 1<<3,
+    Numflt		= 1<<4,
+};
+@
+
+<<[[yylex()]] labels>>=
 tnum:
     c1 = 0;
     cp = symb;
@@ -2716,13 +2791,13 @@ tnum:
         }
         goto ncu;
     }
-
+    //Fallthrough
 dc:
     if(c == '.')
         goto casedot;
     if(c == 'e' || c == 'E')
         goto casee;
-
+    //Fallthrough
 ncu:
     if((c == 'U' || c == 'u') && !(c1 & Numuns)) {
         c = GETC();
@@ -2770,7 +2845,9 @@ ncu:
     c = LCONST;
     t = TINT;
     goto nret;
+@
 
+<<[[yylex()]] labels>>=
 nret:
     yylval.vval = convvtox(vv, t);
     if(yylval.vval != vv){
@@ -2778,138 +2855,13 @@ nret:
         warn(Z, "truncated constant: %T %s", types[t], symb);
     }
     return c;
-
-casedot:
-    for(;;) {
-        *cp++ = c;
-        c = GETC();
-        if(!isdigit(c))
-            break;
-    }
-    if(c != 'e' && c != 'E')
-        goto caseout;
-
-casee:
-    *cp++ = 'e';
-    c = GETC();
-    if(c == '+' || c == '-') {
-        *cp++ = c;
-        c = GETC();
-    }
-    if(!isdigit(c))
-        yyerror("malformed fp constant exponent");
-    while(isdigit(c)) {
-        *cp++ = c;
-        c = GETC();
-    }
-
-caseout:
-    if(c == 'L' || c == 'l') {
-        c = GETC();
-        c1 |= Numlong;
-    } else
-    if(c == 'F' || c == 'f') {
-        c = GETC();
-        c1 |= Numflt;
-    }
-    *cp = 0;
-    peekc = c;
-    yylval.dval = strtod(symb, nil);
-    if(isInf(yylval.dval, 1) || isInf(yylval.dval, -1)) {
-        yyerror("overflow in float constant");
-        yylval.dval = 0;
-    }
-    if(c1 & Numflt)
-        return LFCONST;
-    return LDCONST;
-}
 @
 
-\section{Comments}
 
-\section{Keywords and identifiers}
 
-<<global itab>>=
-struct
-{
-    char	*name;
-    // enum<lexeme>
-    ushort	lexical;
-    // option<enum<Type>>, None = 0 (or TXXX)
-    ushort	type;
-} itab[] =
-{
-    "auto",		LAUTO,		0,
-    "static",	LSTATIC,	0,
-    "extern",	LEXTERN,	0,
 
-    "void",		LVOID,		TVOID,
-    "char",		LCHAR,		TCHAR,
-    "int",		LINT,		TINT,
-    "short",	LSHORT,		TSHORT,
-    "long",		LLONG,		TLONG,
-    "float",	LFLOAT,		TFLOAT,
-    "double",	LDOUBLE,	TDOUBLE,
 
-    "struct",	LSTRUCT,	0,
-    "union",	LUNION,		0,
-    "enum",		LENUM,		0,
-
-    "typedef",	LTYPEDEF,	0,
-    "typestr",	LTYPESTR,	0,
-
-    "unsigned",	LUNSIGNED,	0,
-    "signed",	LSIGNED,	0,
-
-    "const",	LCONSTNT,	0,
-    "volatile",	LVOLATILE,	0,
-    "inline",	LINLINE,	0,
-    "register",	LREGISTER,	0,
-    "restrict",	LRESTRICT,	0,
-
-    "if",		LIF,		0,
-    "else",		LELSE,		0,
-    "while",	LWHILE,		0,
-    "for",		LFOR,		0,
-    "do",		LDO,		0,
-    "break",	LBREAK,		0,
-    "continue",	LCONTINUE,	0,
-    "switch",	LSWITCH,	0,
-    "case",		LCASE,		0,
-    "default",	LDEFAULT,	0,
-    "return",	LRETURN,	0,
-    "goto",		LGOTO,		0,
-
-    "signof",	LSIGNOF,	0,
-    "sizeof",	LSIZEOF,	0,
-
-    "SET",		LSET,		0,
-    "USED",		LUSED,		0,
-    0
-};
-@
-
-% extension: SET/USED
-
-\section{Typedef trick}
-
-%LTYPE!!
-
-% typestr?
-
-\section{Numbers}
-
-<<enum numxxx>>=
-enum numxxx
-{
-    Numdec		= 1<<0,
-    Numlong		= 1<<1,
-    Numuns		= 1<<2,
-    Numvlong	= 1<<3,
-    Numflt		= 1<<4,
-};
-@
-
+% yylex()#ncu -> <>
 <<function mpatov>>=
 /*
  * convert a string, s, to vlong in *v
@@ -2990,7 +2942,82 @@ bad:
 
 \subsection{Floats}
 
+<<[[yylex()]] labels>>=
+casedot:
+    for(;;) {
+        *cp++ = c;
+        c = GETC();
+        if(!isdigit(c))
+            break;
+    }
+    if(c != 'e' && c != 'E')
+        goto caseout;
+    // Fallthrough
+
+casee:
+    *cp++ = 'e';
+    c = GETC();
+    if(c == '+' || c == '-') {
+        *cp++ = c;
+        c = GETC();
+    }
+    if(!isdigit(c))
+        yyerror("malformed fp constant exponent");
+    while(isdigit(c)) {
+        *cp++ = c;
+        c = GETC();
+    }
+    // Fallthrough
+caseout:
+    if(c == 'L' || c == 'l') {
+        c = GETC();
+        c1 |= Numlong;
+    } else
+    if(c == 'F' || c == 'f') {
+        c = GETC();
+        c1 |= Numflt;
+    }
+    *cp = 0;
+    peekc = c;
+    yylval.dval = strtod(symb, nil);
+    if(isInf(yylval.dval, 1) || isInf(yylval.dval, -1)) {
+        yyerror("overflow in float constant");
+        yylval.dval = 0;
+    }
+    if(c1 & Numflt)
+        return LFCONST;
+    return LDCONST;
+@
+
 \section{Characters}
+
+<<[[yylex()]] switch c cases>>=
+case '\'':
+    /* '.' */
+    c = escchar('\'', 0, 0);
+    if(c == EOF)
+        c = '\'';
+    c1 = escchar('\'', 0, 0);
+    if(c1 != EOF) {
+        yyerror("missing '");
+        peekc = c1;
+    }
+    vv = c;
+    yylval.vval = convvtox(vv, TUCHAR);
+    if(yylval.vval != vv)
+        yyerror("overflow in character constant: 0x%lx", c);
+    else
+    if(c & 0x80){
+        nearln = lineno;
+        warn(Z, "sign-extended character constant");
+    }
+    yylval.vval = convvtox(vv, TCHAR);
+    return LCONST;
+@
+
+
+
+
 
 \subsection{Escaping characters}
 
@@ -3113,6 +3140,65 @@ loop:
 @
 
 \section{Strings}
+
+<<constant ESC>>=
+#define	ESC	(Runemask+1)		/* Rune flag: a literal byte */
+@
+
+<<[[yylex()]] switch c cases>>=
+case '"':
+    strcpy(symb, "\"<string>\"");
+    cp = alloc(0);
+    c1 = 0;
+
+    /* "..." */
+    for(;;) {
+        c = escchar('"', 0, 1);
+        if(c == EOF)
+            break;
+        if(c & ESC) {
+            cp = allocn(cp, c1, 1);
+            cp[c1++] = c;
+        } else {
+            rune = c;
+            c = runelen(rune);
+            cp = allocn(cp, c1, c);
+            runetochar(cp+c1, &rune);
+            c1 += c;
+        }
+    }
+    yylval.sval.l = c1;
+    do {
+        cp = allocn(cp, c1, 1);
+        cp[c1++] = 0;
+    } while(c1 & MAXALIGN);
+    yylval.sval.s = cp;
+    return LSTRING;
+@
+
+<<[[yylex()]] switch c cases>>=
+caselq:
+    /* L"..." */
+    strcpy(symb, "\"L<string>\"");
+    cp = alloc(0);
+    c1 = 0;
+    for(;;) {
+        c = escchar('"', 1, 0);
+        if(c == EOF)
+            break;
+        cp = allocn(cp, c1, sizeof(TRune));
+        *(TRune*)(cp + c1) = c;
+        c1 += sizeof(TRune);
+    }
+    yylval.sval.l = c1;
+    do {
+        cp = allocn(cp, c1, sizeof(TRune));
+        *(TRune*)(cp + c1) = 0;
+        c1 += sizeof(TRune);
+    } while(c1 & MAXALIGN);
+    yylval.sval.s = cp;
+    return LLSTRING;
+@
 
 
 
@@ -10540,6 +10626,11 @@ bool	aused;
 % what if struct and local with same name?
 
 \subsection{[[SET/USED]]}
+
+<<[[itab]] entries, kencc extensions>>=
+"SET",		LSET,		0,
+"USED",		LUSED,		0,
+@
 
 <<statement nodes>>=
 OUSED,
@@ -21447,6 +21538,10 @@ bool	profileflg;
 
 \subsection{[[signof()]]}
 
+<<[[itab]] entries, kencc extensions>>=
+"signof",	LSIGNOF,	0,
+@
+
 <<expression nodes>>=
 OSIGN,
 @
@@ -21465,7 +21560,9 @@ OSIGN,
     }
 @
 
-\subsection{External register}
+\subsection{[[extern register]]}
+% useful for ARM kernel (bcm/), where mach and up are in registers
+%  and so are perfectly local to each processor! per-processor storage
 
 <<[[simplec()]] cases>>=
 case BEXTERN|BREGISTER:
@@ -21520,6 +21617,12 @@ exreg(Type *t)
     }
     return 0;
 }
+@
+
+\subsection{[[typestr]]}
+
+<<[[itab]] entries, kencc extensions>>=
+"typestr",	LTYPESTR,	0,
 @
 
 \subsection{Old style prototypes}
