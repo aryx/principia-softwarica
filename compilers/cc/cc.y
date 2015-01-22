@@ -149,7 +149,7 @@ xdlist:
         doinit($1->sym, $1->type, 0L, $4);
     }
 |   xdlist ',' xdlist
-
+/*x: external declarator rules */
 xdecor:
     xdecor2
 |   '*' zgnlist xdecor
@@ -157,7 +157,7 @@ xdecor:
         $$ = new(OIND, $3, Z);
         $$->garb = simpleg($2);
     }
-
+/*x: external declarator rules */
 xdecor2:
     tag
 |   '(' xdecor ')'             { $$ = $2;   }
