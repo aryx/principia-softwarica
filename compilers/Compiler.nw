@@ -942,217 +942,6 @@ char	nbits;
 @
 
 
-<<[[Type]] other fields>>=
-Funct*	funct;
-@
-
-<<struct Funct>>=
-struct	Funct
-{
-    Sym*	sym[OEND];
-    Sym*	castto[NTYPE];
-    Sym*	castfr[NTYPE];
-};
-@
-
-<<function isfunct>>=
-bool
-isfunct(Node *n)
-{
-    Type *t, *t1;
-    Funct *f;
-    Node *l;
-    Sym *s;
-    int o;
-
-    o = n->op;
-    if(n->left == Z)
-        goto no;
-    t = n->left->type;
-    if(t == T)
-        goto no;
-    f = t->funct;
-
-    switch(o) {
-    case OAS:	// put cast on rhs
-    case OASI:
-    case OASADD:
-    case OASSUB:
-    case OASMUL:
-    case OASDIV:
-    case OASMOD:
-    case OASASHR:
-    case OASLMUL:
-    case OASLDIV:
-    case OASLMOD:
-    case OASLSHR:
-    case OASASHL:
-    case OASAND:
-    case OASOR:
-    case OASXOR:
-        if(n->right == Z)
-            goto no;
-        t1 = n->right->type;
-        if(t1 == T)
-            goto no;
-        if(t1->funct == f)
-            break;
-
-        l = new(OXXX, Z, Z);
-        *l = *n->right;
-
-        n->right->left = l;
-        n->right->right = Z;
-        n->right->type = t;
-        n->right->op = OCAST;
-
-        if(!isfunct(n->right))
-            prtree(n, "isfunc !");
-        break;
-
-    case OCAST:	// t f(T) or T f(t)
-        t1 = n->type;
-        if(t1 == T)
-            goto no;
-        if(f != nil) {
-            s = f->castfr[t1->etype];
-            if(s == S)
-                goto no;
-            n->right = n->left;
-            goto build;
-        }
-        f = t1->funct;
-        if(f != nil) {
-            s = f->castto[t->etype];
-            if(s == S)
-                goto no;
-            n->right = n->left;
-            goto build;
-        }
-        goto no;
-    }
-
-    if(f == nil)
-        goto no;
-    s = f->sym[o];
-    if(s == S)
-        goto no;
-
-
-
-    /*
-     * the answer is yes,
-     * now we rewrite the node
-     * and give diagnostics
-     */
-    switch(o) {
-    case OADD:	// T f(T, T)
-    case OAND:
-    case OASHL:
-    case OASHR:
-    case ODIV:
-    case OLDIV:
-    case OLMOD:
-    case OLMUL:
-    case OLSHR:
-    case OMOD:
-    case OMUL:
-    case OOR:
-    case OSUB:
-    case OXOR:
-
-    case OEQ:	// int f(T, T)
-    case OGE:
-    case OGT:
-    case OHI:
-    case OHS:
-    case OLE:
-    case OLO:
-    case OLS:
-    case OLT:
-    case ONE:
-        if(n->right == Z)
-            goto bad;
-        t1 = n->right->type;
-        if(t1 == T)
-            goto bad;
-        if(t1->funct != f)
-            goto bad;
-        n->right = new(OLIST, n->left, n->right);
-        break;
-
-    case OAS:	// structure copies done by the compiler
-    case OASI:
-        goto no;
-
-    case OASADD:	// T f(T*, T)
-    case OASAND:
-    case OASASHL:
-    case OASASHR:
-    case OASDIV:
-    case OASLDIV:
-    case OASLMOD:
-    case OASLMUL:
-    case OASLSHR:
-    case OASMOD:
-    case OASMUL:
-    case OASOR:
-    case OASSUB:
-    case OASXOR:
-        if(n->right == Z)
-            goto bad;
-        t1 = n->right->type;
-        if(t1 == T)
-            goto bad;
-        if(t1->funct != f)
-            goto bad;
-        n->right = new(OLIST, new(OADDR, n->left, Z), n->right);
-        break;
-
-    case OPOS:	// T f(T)
-    case ONEG:
-    case ONOT:
-    case OCOM:
-        n->right = n->left;
-        break;
-
-    default:
-        diag(n, "isfunct op missing %O\n", o);
-        goto bad;
-
-
-    }
-
-build:
-    l = new(ONAME, Z, Z);
-    l->sym = s;
-    l->type = s->type;
-    l->etype = s->type->etype;
-    l->xoffset = s->offset;
-    l->class = s->class;
-    tcomo(l, 0);
-
-    n->op = OFUNC;
-    n->left = l;
-    n->type = l->type->link;
-    if(tcompat(n, T, l->type, tfunct))
-        goto bad;
-    if(tcoma(n->left, n->right, l->type->down, 1))
-        goto bad;
-    return true;
-
-no:
-    return false;
-
-bad:
-    diag(n, "cant rewrite typestr for op %O\n", o);
-    prtree(n, "isfunct");
-    n->type = T;
-    return true;
-}
-@
-
-
 
 \section{Symbol table, [[Sym]] and [[hash]]}
 % another symbol table!
@@ -1664,11 +1453,9 @@ struct	Adr
 Prog	zprog;
 @
 
-<<global pc>>=
-long	pc;
-@
+%\section{[[fistp]], [[lastp]]}
 
-
+%\section{[[reg]]}
 
 \chapter{[[main()]]}
 
@@ -1678,6 +1465,11 @@ int	thechar;
 
 <<global thestring>>=
 char*	thestring;
+@
+
+<<[[ginit()]] initialisation>>=
+thechar = '5';
+thestring = "arm";
 @
 
 
@@ -1735,6 +1527,13 @@ int ndef;
 @
 
 
+
+<<[[main()]] initialisation>>=
+tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
+maxdef = 0;
+ndef = 0;
+@
+
 <<function main>>=
 //@Scheck: not dead, entry point :)
 void main(int argc, char *argv[])
@@ -1751,10 +1550,7 @@ void main(int argc, char *argv[])
     outfile = nil;
     defs = nil;
 
-    profileflg = true;	/* #pragma can turn it off */
-    tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
-    maxdef = 0;
-    ndef = 0;
+    <<[[main()]] initialisation>>
 
     setinclude(".");
 
@@ -1995,27 +1791,25 @@ cinit(void)
 
 \section{[[ginit()]]}
 
+
+<<[[ginit()]] initialisation>>=
+exregoffset = REGEXT;
+exfregoffset = FREGEXT;
+listinit();
+nstring = 0;
+mnstring = 0;
+nrathole = 0;
+cases = C;
+tfield = types[TLONG];
+@
+
 <<function ginit(arm)>>=
 void
 ginit(void)
 {
     Type *t;
 
-    thechar = '5';
-    thestring = "arm";
-    exregoffset = REGEXT;
-    exfregoffset = FREGEXT;
-    listinit();
-    nstring = 0;
-    mnstring = 0;
-    nrathole = 0;
-    pc = 0;
-    breakpc = -1;
-    continpc = -1;
-    cases = C;
-    firstp = P;
-    lastp = P;
-    tfield = types[TLONG];
+    <<[[ginit()]] initialisation>>
 
     zprog.link = P;
     zprog.as = AGOK;
@@ -2076,6 +1870,7 @@ ginit(void)
     com64init();
 
     memset(reg, 0, sizeof(reg));
+
     /* don't allocate */
     reg[REGTMP] = 1;
     reg[REGSB] = 1;
@@ -2083,10 +1878,15 @@ ginit(void)
     reg[REGLINK] = 1;
     reg[REGPC] = 1;
     /* keep two external registers */
-    reg[REGEXT] = 1;
-    reg[REGEXT-1] = 1;
+    reg[REGEXT] = 1; // R10
+    reg[REGEXT-1] = 1; // R9
+
     memmove(resvreg, reg, sizeof(reg));
 }
+@
+
+<<global reg(arm)>>=
+char	reg[NREG+NFREG];
 @
 
 
@@ -4978,6 +4778,63 @@ OIF,
 % cexpr means  comma expr
 % OLIST here could be an OPAIR
 
+\subsection{Loops}
+
+<<statement nodes>>=
+OFOR,
+OWHILE,
+ODWHILE,
+@
+
+% markdecl because forexpr allow local declaration ext, as in C++
+<<ulstmnt rule>>=
+|   { 
+        markdcl(); 
+    } 
+    LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
+    {
+        $$ = revertdcl();
+        if($$){
+            if($4)
+                $4 = new(OLIST, $$, $4);
+            else
+                $4 = $$;
+        }
+        $$ = new(OFOR, new(OLIST, $6, new(OLIST, $4, $8)), $10);
+    }
+|   LWHILE '(' cexpr ')' stmnt          { $$ = new(OWHILE, $3, $5); }
+|   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
+@
+
+% C extension for(int i; ... ?) hence the markdcl, for scope.
+<<statements rules>>=
+forexpr:
+    zcexpr
+|   ctlist adlist { $$ = $2; }
+@
+%$
+
+\subsection{Control flow jumps}
+
+<<statement nodes>>=
+ORETURN,
+
+OBREAK,
+OCONTINUE,
+@
+
+<<ulstmnt rule>>=
+|   LRETURN zcexpr ';'
+    {
+        $$ = new(ORETURN, $2, Z);
+        $$->type = thisfn->link;
+    }
+|   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
+|   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
+@
+%$
+
+
 \subsection{Switch}
 
 <<statement nodes>>=
@@ -5026,63 +4883,6 @@ $3 = new(OSUB, $$, $3);
 %"you can't subtract pointers from 0 but you can add 0 to a pointer,
 %since + is commutative" forsith
 
-
-\subsection{Control flow jumps}
-
-<<statement nodes>>=
-ORETURN,
-
-OBREAK,
-OCONTINUE,
-@
-
-<<ulstmnt rule>>=
-|   LRETURN zcexpr ';'
-    {
-        $$ = new(ORETURN, $2, Z);
-        $$->type = thisfn->link;
-    }
-|   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
-|   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
-@
-%$
-
-
-\subsection{Loops}
-
-<<statement nodes>>=
-OFOR,
-OWHILE,
-ODWHILE,
-@
-
-% markdecl because forexpr allow local declaration ext, as in C++
-<<ulstmnt rule>>=
-|   { 
-        markdcl(); 
-    } 
-    LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
-    {
-        $$ = revertdcl();
-        if($$){
-            if($4)
-                $4 = new(OLIST, $$, $4);
-            else
-                $4 = $$;
-        }
-        $$ = new(OFOR, new(OLIST, $6, new(OLIST, $4, $8)), $10);
-    }
-|   LWHILE '(' cexpr ')' stmnt          { $$ = new(OWHILE, $3, $5); }
-|   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
-@
-
-% C extension for(int i; ... ?) hence the markdcl, for scope.
-<<statements rules>>=
-forexpr:
-    zcexpr
-|   ctlist adlist { $$ = $2; }
-@
-%$
 
 \subsection{Labels and goto}
 
@@ -8573,626 +8373,7 @@ tcomo(Node *n, int f)
     r = n->right;
 
     switch(n->op) {
-    case ODOTDOT:
-        /*
-         * tcom has already been called on this subtree
-         */
-        *n = *n->left;
-        if(n->type == T)
-            goto bad;
-        break;
-
-    case OCAST:
-        if(n->type == T)
-            break;
-        if(n->type->width == types[TLONG]->width) {
-            if(tcomo(l, ADDROF|CASTOF))
-                goto bad;
-        } else
-            if(tcom(l))
-                goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, n->type, tcast))
-            goto bad;
-        break;
-
-    case ORETURN:
-        if(l == Z) {
-            if(n->type->etype != TVOID)
-                warn(n, "null return of a typed function");
-            break;
-        }
-        if(tcom(l))
-            goto bad;
-        typeext(n->type, l);
-        if(tcompat(n, n->type, l->type, tasign))
-            break;
-        constas(n, n->type, l->type);
-        if(!sametype(n->type, l->type)) {
-            l = new1(OCAST, l, Z);
-            l->type = n->type;
-            n->left = l;
-        }
-        break;
-
-    case OASI:	/* same as as, but no test for const */
-        n->op = OAS;
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-
-        typeext(l->type, r);
-        if(tlvalue(l) || tcompat(n, l->type, r->type, tasign))
-            goto bad;
-        if(!sametype(l->type, r->type)) {
-            r = new1(OCAST, r, Z);
-            r->type = l->type;
-            n->right = r;
-        }
-        n->type = l->type;
-        break;
-
-    case OAS:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(tlvalue(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-        typeext(l->type, r);
-        if(tcompat(n, l->type, r->type, tasign))
-            goto bad;
-        constas(n, l->type, r->type);
-        if(!sametype(l->type, r->type)) {
-            r = new1(OCAST, r, Z);
-            r->type = l->type;
-            n->right = r;
-        }
-        n->type = l->type;
-        break;
-
-    case OASADD:
-    case OASSUB:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(tlvalue(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-        typeext1(l->type, r);
-        if(tcompat(n, l->type, r->type, tasadd))
-            goto bad;
-        constas(n, l->type, r->type);
-        t = l->type;
-        arith(n, 0);
-        while(n->left->op == OCAST)
-            n->left = n->left->left;
-        if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-            r = new1(OCAST, n->right, Z);
-            r->type = t;
-            n->right = r;
-            n->type = t;
-        }
-        break;
-
-    case OASMUL:
-    case OASLMUL:
-    case OASDIV:
-    case OASLDIV:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(tlvalue(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-        typeext1(l->type, r);
-        if(tcompat(n, l->type, r->type, tmul))
-            goto bad;
-        constas(n, l->type, r->type);
-        t = l->type;
-        arith(n, 0);
-        while(n->left->op == OCAST)
-            n->left = n->left->left;
-        if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-            r = new1(OCAST, n->right, Z);
-            r->type = t;
-            n->right = r;
-            n->type = t;
-        }
-        if(typeu[n->type->etype]) {
-            if(n->op == OASDIV)
-                n->op = OASLDIV;
-            if(n->op == OASMUL)
-                n->op = OASLMUL;
-        }
-        break;
-
-    case OASLSHR:
-    case OASASHR:
-    case OASASHL:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(tlvalue(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, r->type, tand))
-            goto bad;
-        n->type = l->type;
-        n->right = new1(OCAST, r, Z);
-        n->right->type = types[TINT];
-        if(typeu[n->type->etype]) {
-            if(n->op == OASASHR)
-                n->op = OASLSHR;
-        }
-        break;
-
-    case OASMOD:
-    case OASLMOD:
-    case OASOR:
-    case OASAND:
-    case OASXOR:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(tlvalue(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, r->type, tand))
-            goto bad;
-        t = l->type;
-        arith(n, 0);
-        while(n->left->op == OCAST)
-            n->left = n->left->left;
-        if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
-            r = new1(OCAST, n->right, Z);
-            r->type = t;
-            n->right = r;
-            n->type = t;
-        }
-        if(typeu[n->type->etype]) {
-            if(n->op == OASMOD)
-                n->op = OASLMOD;
-        }
-        break;
-
-    case OPREINC:
-    case OPREDEC:
-    case OPOSTINC:
-    case OPOSTDEC:
-        if(tcom(l))
-            goto bad;
-        if(tlvalue(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, types[TINT], tadd))
-            goto bad;
-        n->type = l->type;
-        if(n->type->etype == TIND)
-        if(n->type->link->width < 1) {
-            snap(n->type->link);
-            if(n->type->link->width < 1)
-                diag(n, "inc/dec of a void pointer");
-        }
-        break;
-
-    case OEQ:
-    case ONE:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(isfunct(n))
-            break;
-        typeext(l->type, r);
-        typeext(r->type, l);
-        if(tcompat(n, l->type, r->type, trel))
-            goto bad;
-        arith(n, 0);
-        n->type = types[TINT];
-        break;
-
-    case OLT:
-    case OGE:
-    case OGT:
-    case OLE:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(isfunct(n))
-            break;
-        typeext1(l->type, r);
-        typeext1(r->type, l);
-        if(tcompat(n, l->type, r->type, trel))
-            goto bad;
-        arith(n, 0);
-        if(typeu[n->type->etype])
-            n->op = logrel[relindex(n->op)];
-        n->type = types[TINT];
-        break;
-
-    case OCOND:
-        o = tcom(l);
-        o |= tcom(r->left);
-        if(o | tcom(r->right))
-            goto bad;
-        if(r->right->type->etype == TIND && vconst(r->left) == 0) {
-            r->left->type = r->right->type;
-            r->left->vconst = 0;
-        }
-        if(r->left->type->etype == TIND && vconst(r->right) == 0) {
-            r->right->type = r->left->type;
-            r->right->vconst = 0;
-        }
-        if(sametype(r->right->type, r->left->type)) {
-            r->type = r->right->type;
-            n->type = r->type;
-            break;
-        }
-        if(tcompat(r, r->left->type, r->right->type, trel))
-            goto bad;
-        arith(r, 0);
-        n->type = r->type;
-        break;
-
-    case OADD:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, r->type, tadd))
-            goto bad;
-        arith(n, 1);
-        break;
-
-    case OSUB:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, r->type, tsub))
-            goto bad;
-        arith(n, 1);
-        break;
-
-    case OMUL:
-    case OLMUL:
-    case ODIV:
-    case OLDIV:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, r->type, tmul))
-            goto bad;
-        arith(n, 1);
-        if(typeu[n->type->etype]) {
-            if(n->op == ODIV)
-                n->op = OLDIV;
-            if(n->op == OMUL)
-                n->op = OLMUL;
-        }
-        break;
-
-    case OLSHR:
-    case OASHL:
-    case OASHR:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, r->type, tand))
-            goto bad;
-        n->right = Z;
-        arith(n, 1);
-        n->right = new1(OCAST, r, Z);
-        n->right->type = types[TINT];
-        if(typeu[n->type->etype])
-            if(n->op == OASHR)
-                n->op = OLSHR;
-        break;
-
-    case OAND:
-    case OOR:
-    case OXOR:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, r->type, tand))
-            goto bad;
-        arith(n, 1);
-        break;
-
-    case OMOD:
-    case OLMOD:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, l->type, r->type, tand))
-            goto bad;
-        arith(n, 1);
-        if(typeu[n->type->etype])
-            n->op = OLMOD;
-        break;
-
-    case OPOS:
-        if(tcom(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-
-        r = l;
-        l = new(OCONST, Z, Z);
-        l->vconst = 0;
-        l->type = types[TINT];
-        n->op = OADD;
-        n->right = r;
-        n->left = l;
-
-        if(tcom(l))
-            goto bad;
-        if(tcompat(n, l->type, r->type, tsub))
-            goto bad;
-        arith(n, 1);
-        break;
-
-    case ONEG:
-        if(tcom(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-
-        if(!machcap(n)) {
-            r = l;
-            l = new(OCONST, Z, Z);
-            l->vconst = 0;
-            l->type = types[TINT];
-            n->op = OSUB;
-            n->right = r;
-            n->left = l;
-
-            if(tcom(l))
-                goto bad;
-            if(tcompat(n, l->type, r->type, tsub))
-                goto bad;
-        }
-        arith(n, 1);
-        break;
-
-    case OCOM:
-        if(tcom(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-
-        if(!machcap(n)) {
-            r = l;
-            l = new(OCONST, Z, Z);
-            l->vconst = -1;
-            l->type = types[TINT];
-            n->op = OXOR;
-            n->right = r;
-            n->left = l;
-
-            if(tcom(l))
-                goto bad;
-            if(tcompat(n, l->type, r->type, tand))
-                goto bad;
-        }
-        arith(n, 1);
-        break;
-
-    case ONOT:
-        if(tcom(l))
-            goto bad;
-        if(isfunct(n))
-            break;
-        if(tcompat(n, T, l->type, tnot))
-            goto bad;
-        n->type = types[TINT];
-        break;
-
-    case OANDAND:
-    case OOROR:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        if(tcompat(n, T, l->type, tnot) |
-           tcompat(n, T, r->type, tnot))
-            goto bad;
-        n->type = types[TINT];
-        break;
-
-    case OCOMMA:
-        o = tcom(l);
-        if(o | tcom(r))
-            goto bad;
-        n->type = r->type;
-        break;
-
-
-    case OSIGN:	/* extension signof(type) returns a hash */
-        if(l != Z) {
-            if(l->op != OSTRING && l->op != OLSTRING)
-                if(tcomo(l, 0))
-                    goto bad;
-            if(l->op == OBIT) {
-                diag(n, "signof bitfield");
-                goto bad;
-            }
-            n->type = l->type;
-        }
-        if(n->type == T)
-            goto bad;
-        if(n->type->width < 0) {
-            diag(n, "signof undefined type");
-            goto bad;
-        }
-        n->op = OCONST;
-        n->left = Z;
-        n->right = Z;
-        n->vconst = convvtox(signature(n->type), TULONG);
-        n->type = types[TULONG];
-        break;
-
-    case OSIZE:
-        if(l != Z) {
-            if(l->op != OSTRING && l->op != OLSTRING)
-                if(tcomo(l, 0))
-                    goto bad;
-            if(l->op == OBIT) {
-                diag(n, "sizeof bitfield");
-                goto bad;
-            }
-            n->type = l->type;
-        }
-        if(n->type == T)
-            goto bad;
-        if(n->type->width <= 0) {
-            diag(n, "sizeof undefined type");
-            goto bad;
-        }
-        if(n->type->etype == TFUNC) {
-            diag(n, "sizeof function");
-            goto bad;
-        }
-        n->op = OCONST;
-        n->left = Z;
-        n->right = Z;
-        n->vconst = convvtox(n->type->width, TINT);
-        n->type = types[TINT];
-        break;
-
-    case OFUNC:
-        o = tcomo(l, 0);
-        if(o)
-            goto bad;
-        if(l->type->etype == TIND && l->type->link->etype == TFUNC) {
-            l = new1(OIND, l, Z);
-            l->type = l->left->type->link;
-            n->left = l;
-        }
-        if(tcompat(n, T, l->type, tfunct))
-            goto bad;
-        if(o | tcoma(l, r, l->type->down, 1))
-            goto bad;
-        n->type = l->type->link;
-        if(!debug['B'])
-            if(l->type->down == T || l->type->down->etype == TOLD) {
-                nerrors--;
-                diag(n, "function args not checked: %F", l);
-            }
-        dpcheck(n);
-        break;
-
-    case ONAME:
-        if(n->type == T) {
-            diag(n, "name not declared: %F", n);
-            goto bad;
-        }
-        if(n->type->etype == TENUM) {
-            n->op = OCONST;
-            n->type = n->sym->tenum;
-            if(!typefd[n->type->etype])
-                n->vconst = n->sym->vconst;
-            else
-                n->fconst = n->sym->fconst;
-            break;
-        }
-        n->addable = 1;
-        if(n->class == CEXREG) {
-            n->op = OREGISTER;
-            if(thechar == '8')
-                n->op = OEXREG;
-            n->reg = n->sym->offset;
-            n->xoffset = 0;
-            break;
-        }
-        break;
-
-    case OLSTRING:
-        if(n->type->link != types[TRUNE]) {
-            o = outstring(0, 0);
-            while(o & 3) {
-                outlstring(&zer, sizeof(TRune));
-                o = outlstring(0, 0);
-            }
-        }
-        n->op = ONAME;
-        n->xoffset = outlstring(n->rstring, n->type->width);
-        n->addable = 1;
-        break;
-
-    case OSTRING:
-        if(n->type->link != types[TCHAR]) {
-            o = outstring(0, 0);
-            while(o & 3) {
-                outstring("", 1);
-                o = outstring(0, 0);
-            }
-        }
-        n->op = ONAME;
-        n->xoffset = outstring(n->cstring, n->type->width);
-        n->addable = 1;
-        break;
-
-    case OCONST:
-        break;
-
-    case ODOT:
-        if(tcom(l))
-            goto bad;
-        if(tcompat(n, T, l->type, tdot))
-            goto bad;
-        if(tcomd(n))
-            goto bad;
-        break;
-
-    case OADDR:
-        if(tcomo(l, ADDROP))
-            goto bad;
-        if(tlvalue(l))
-            goto bad;
-        if(l->type->nbits) {
-            diag(n, "address of a bit field");
-            goto bad;
-        }
-        if(l->op == OREGISTER) {
-            diag(n, "address of a register");
-            goto bad;
-        }
-        n->type = typ(TIND, l->type);
-        n->type->width = types[TIND]->width;
-        break;
-
-    case OIND:
-        if(tcom(l))
-            goto bad;
-        if(tcompat(n, T, l->type, tindir))
-            goto bad;
-        n->type = l->type->link;
-        n->addable = 1;
-        break;
-
-    case OSTRUCT:
-        if(tcomx(n))
-            goto bad;
-        break;
-
+    <<[[tcomo()]] switch node kind cases>>
     default:
         diag(n, "unknown op in type complex: %O", n->op);
         goto bad;
@@ -9241,6 +8422,858 @@ bad:
     return true;
 }
 @
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case ODOTDOT:
+    /*
+     * tcom has already been called on this subtree
+     */
+    *n = *n->left;
+    if(n->type == T)
+        goto bad;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OCAST:
+    if(n->type == T)
+        break;
+    if(n->type->width == types[TLONG]->width) {
+        if(tcomo(l, ADDROF|CASTOF))
+            goto bad;
+    } else
+        if(tcom(l))
+            goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, n->type, tcast))
+        goto bad;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case ORETURN:
+    if(l == Z) {
+        if(n->type->etype != TVOID)
+            warn(n, "null return of a typed function");
+        break;
+    }
+    if(tcom(l))
+        goto bad;
+    typeext(n->type, l);
+    if(tcompat(n, n->type, l->type, tasign))
+        break;
+    constas(n, n->type, l->type);
+    if(!sametype(n->type, l->type)) {
+        l = new1(OCAST, l, Z);
+        l->type = n->type;
+        n->left = l;
+    }
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OASI:	/* same as as, but no test for const */
+    n->op = OAS;
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+
+    typeext(l->type, r);
+    if(tlvalue(l) || tcompat(n, l->type, r->type, tasign))
+        goto bad;
+    if(!sametype(l->type, r->type)) {
+        r = new1(OCAST, r, Z);
+        r->type = l->type;
+        n->right = r;
+    }
+    n->type = l->type;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OAS:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+    typeext(l->type, r);
+    if(tcompat(n, l->type, r->type, tasign))
+        goto bad;
+    constas(n, l->type, r->type);
+    if(!sametype(l->type, r->type)) {
+        r = new1(OCAST, r, Z);
+        r->type = l->type;
+        n->right = r;
+    }
+    n->type = l->type;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OASADD:
+case OASSUB:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+    typeext1(l->type, r);
+    if(tcompat(n, l->type, r->type, tasadd))
+        goto bad;
+    constas(n, l->type, r->type);
+    t = l->type;
+    arith(n, 0);
+    while(n->left->op == OCAST)
+        n->left = n->left->left;
+    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
+        r = new1(OCAST, n->right, Z);
+        r->type = t;
+        n->right = r;
+        n->type = t;
+    }
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OASMUL:
+case OASLMUL:
+case OASDIV:
+case OASLDIV:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+    typeext1(l->type, r);
+    if(tcompat(n, l->type, r->type, tmul))
+        goto bad;
+    constas(n, l->type, r->type);
+    t = l->type;
+    arith(n, 0);
+    while(n->left->op == OCAST)
+        n->left = n->left->left;
+    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
+        r = new1(OCAST, n->right, Z);
+        r->type = t;
+        n->right = r;
+        n->type = t;
+    }
+    if(typeu[n->type->etype]) {
+        if(n->op == OASDIV)
+            n->op = OASLDIV;
+        if(n->op == OASMUL)
+            n->op = OASLMUL;
+    }
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OASLSHR:
+case OASASHR:
+case OASASHL:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    n->type = l->type;
+    n->right = new1(OCAST, r, Z);
+    n->right->type = types[TINT];
+    if(typeu[n->type->etype]) {
+        if(n->op == OASASHR)
+            n->op = OASLSHR;
+    }
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OASMOD:
+case OASLMOD:
+case OASOR:
+case OASAND:
+case OASXOR:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    t = l->type;
+    arith(n, 0);
+    while(n->left->op == OCAST)
+        n->left = n->left->left;
+    if(!sametype(t, n->type) && !mixedasop(t, n->type)) {
+        r = new1(OCAST, n->right, Z);
+        r->type = t;
+        n->right = r;
+        n->type = t;
+    }
+    if(typeu[n->type->etype]) {
+        if(n->op == OASMOD)
+            n->op = OASLMOD;
+    }
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OPREINC:
+case OPREDEC:
+case OPOSTINC:
+case OPOSTDEC:
+    if(tcom(l))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, types[TINT], tadd))
+        goto bad;
+    n->type = l->type;
+    if(n->type->etype == TIND)
+    if(n->type->link->width < 1) {
+        snap(n->type->link);
+        if(n->type->link->width < 1)
+            diag(n, "inc/dec of a void pointer");
+    }
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OEQ:
+case ONE:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(isfunct(n))
+        break;
+    typeext(l->type, r);
+    typeext(r->type, l);
+    if(tcompat(n, l->type, r->type, trel))
+        goto bad;
+    arith(n, 0);
+    n->type = types[TINT];
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OLT:
+case OGE:
+case OGT:
+case OLE:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(isfunct(n))
+        break;
+    typeext1(l->type, r);
+    typeext1(r->type, l);
+    if(tcompat(n, l->type, r->type, trel))
+        goto bad;
+    arith(n, 0);
+    if(typeu[n->type->etype])
+        n->op = logrel[relindex(n->op)];
+    n->type = types[TINT];
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OCOND:
+    o = tcom(l);
+    o |= tcom(r->left);
+    if(o | tcom(r->right))
+        goto bad;
+    if(r->right->type->etype == TIND && vconst(r->left) == 0) {
+        r->left->type = r->right->type;
+        r->left->vconst = 0;
+    }
+    if(r->left->type->etype == TIND && vconst(r->right) == 0) {
+        r->right->type = r->left->type;
+        r->right->vconst = 0;
+    }
+    if(sametype(r->right->type, r->left->type)) {
+        r->type = r->right->type;
+        n->type = r->type;
+        break;
+    }
+    if(tcompat(r, r->left->type, r->right->type, trel))
+        goto bad;
+    arith(r, 0);
+    n->type = r->type;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OADD:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, r->type, tadd))
+        goto bad;
+    arith(n, 1);
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OSUB:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, r->type, tsub))
+        goto bad;
+    arith(n, 1);
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OMUL:
+case OLMUL:
+case ODIV:
+case OLDIV:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, r->type, tmul))
+        goto bad;
+    arith(n, 1);
+    if(typeu[n->type->etype]) {
+        if(n->op == ODIV)
+            n->op = OLDIV;
+        if(n->op == OMUL)
+            n->op = OLMUL;
+    }
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OLSHR:
+case OASHL:
+case OASHR:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    n->right = Z;
+    arith(n, 1);
+    n->right = new1(OCAST, r, Z);
+    n->right->type = types[TINT];
+    if(typeu[n->type->etype])
+        if(n->op == OASHR)
+            n->op = OLSHR;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OAND:
+case OOR:
+case OXOR:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    arith(n, 1);
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OMOD:
+case OLMOD:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, l->type, r->type, tand))
+        goto bad;
+    arith(n, 1);
+    if(typeu[n->type->etype])
+        n->op = OLMOD;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OPOS:
+    if(tcom(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+
+    r = l;
+    l = new(OCONST, Z, Z);
+    l->vconst = 0;
+    l->type = types[TINT];
+    n->op = OADD;
+    n->right = r;
+    n->left = l;
+
+    if(tcom(l))
+        goto bad;
+    if(tcompat(n, l->type, r->type, tsub))
+        goto bad;
+    arith(n, 1);
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case ONEG:
+    if(tcom(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+
+    if(!machcap(n)) {
+        r = l;
+        l = new(OCONST, Z, Z);
+        l->vconst = 0;
+        l->type = types[TINT];
+        n->op = OSUB;
+        n->right = r;
+        n->left = l;
+
+        if(tcom(l))
+            goto bad;
+        if(tcompat(n, l->type, r->type, tsub))
+            goto bad;
+    }
+    arith(n, 1);
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OCOM:
+    if(tcom(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+
+    if(!machcap(n)) {
+        r = l;
+        l = new(OCONST, Z, Z);
+        l->vconst = -1;
+        l->type = types[TINT];
+        n->op = OXOR;
+        n->right = r;
+        n->left = l;
+
+        if(tcom(l))
+            goto bad;
+        if(tcompat(n, l->type, r->type, tand))
+            goto bad;
+    }
+    arith(n, 1);
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case ONOT:
+    if(tcom(l))
+        goto bad;
+    if(isfunct(n))
+        break;
+    if(tcompat(n, T, l->type, tnot))
+        goto bad;
+    n->type = types[TINT];
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OANDAND:
+case OOROR:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    if(tcompat(n, T, l->type, tnot) |
+       tcompat(n, T, r->type, tnot))
+        goto bad;
+    n->type = types[TINT];
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OCOMMA:
+    o = tcom(l);
+    if(o | tcom(r))
+        goto bad;
+    n->type = r->type;
+    break;
+@
+
+<<[[tcomo()]] switch node kind cases>>=
+case OSIZE:
+    if(l != Z) {
+        if(l->op != OSTRING && l->op != OLSTRING)
+            if(tcomo(l, 0))
+                goto bad;
+        if(l->op == OBIT) {
+            diag(n, "sizeof bitfield");
+            goto bad;
+        }
+        n->type = l->type;
+    }
+    if(n->type == T)
+        goto bad;
+    if(n->type->width <= 0) {
+        diag(n, "sizeof undefined type");
+        goto bad;
+    }
+    if(n->type->etype == TFUNC) {
+        diag(n, "sizeof function");
+        goto bad;
+    }
+    n->op = OCONST;
+    n->left = Z;
+    n->right = Z;
+    n->vconst = convvtox(n->type->width, TINT);
+    n->type = types[TINT];
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OFUNC:
+    o = tcomo(l, 0);
+    if(o)
+        goto bad;
+    if(l->type->etype == TIND && l->type->link->etype == TFUNC) {
+        l = new1(OIND, l, Z);
+        l->type = l->left->type->link;
+        n->left = l;
+    }
+    if(tcompat(n, T, l->type, tfunct))
+        goto bad;
+    if(o | tcoma(l, r, l->type->down, 1))
+        goto bad;
+    n->type = l->type->link;
+    if(!debug['B'])
+        if(l->type->down == T || l->type->down->etype == TOLD) {
+            nerrors--;
+            diag(n, "function args not checked: %F", l);
+        }
+    dpcheck(n);
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case ONAME:
+    if(n->type == T) {
+        diag(n, "name not declared: %F", n);
+        goto bad;
+    }
+    if(n->type->etype == TENUM) {
+        n->op = OCONST;
+        n->type = n->sym->tenum;
+        if(!typefd[n->type->etype])
+            n->vconst = n->sym->vconst;
+        else
+            n->fconst = n->sym->fconst;
+        break;
+    }
+    n->addable = 1;
+    if(n->class == CEXREG) {
+        n->op = OREGISTER;
+        if(thechar == '8')
+            n->op = OEXREG;
+        n->reg = n->sym->offset;
+        n->xoffset = 0;
+        break;
+    }
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OLSTRING:
+    if(n->type->link != types[TRUNE]) {
+        o = outstring(0, 0);
+        while(o & 3) {
+            outlstring(&zer, sizeof(TRune));
+            o = outlstring(0, 0);
+        }
+    }
+    n->op = ONAME;
+    n->xoffset = outlstring(n->rstring, n->type->width);
+    n->addable = 1;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OSTRING:
+    if(n->type->link != types[TCHAR]) {
+        o = outstring(0, 0);
+        while(o & 3) {
+            outstring("", 1);
+            o = outstring(0, 0);
+        }
+    }
+    n->op = ONAME;
+    n->xoffset = outstring(n->cstring, n->type->width);
+    n->addable = 1;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OCONST:
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case ODOT:
+    if(tcom(l))
+        goto bad;
+    if(tcompat(n, T, l->type, tdot))
+        goto bad;
+    if(tcomd(n))
+        goto bad;
+    break;
+@
+<<[[tcomo()]] switch node kind cases>>=
+case OADDR:
+    if(tcomo(l, ADDROP))
+        goto bad;
+    if(tlvalue(l))
+        goto bad;
+    if(l->type->nbits) {
+        diag(n, "address of a bit field");
+        goto bad;
+    }
+    if(l->op == OREGISTER) {
+        diag(n, "address of a register");
+        goto bad;
+    }
+    n->type = typ(TIND, l->type);
+    n->type->width = types[TIND]->width;
+    break;
+@
+
+<<[[tcomo()]] switch node kind cases>>=
+case OIND:
+    if(tcom(l))
+        goto bad;
+    if(tcompat(n, T, l->type, tindir))
+        goto bad;
+    n->type = l->type->link;
+    n->addable = 1;
+    break;
+@
+
+
+<<[[tcomo()]] switch node kind cases>>=
+case OSTRUCT:
+    if(tcomx(n))
+        goto bad;
+    break;
+@
+
+
+
+
+<<[[Type]] other fields>>=
+Funct*	funct;
+@
+
+<<struct Funct>>=
+struct	Funct
+{
+    Sym*	sym[OEND];
+    Sym*	castto[NTYPE];
+    Sym*	castfr[NTYPE];
+};
+@
+
+<<function isfunct>>=
+bool
+isfunct(Node *n)
+{
+    Type *t, *t1;
+    Funct *f;
+    Node *l;
+    Sym *s;
+    int o;
+
+    o = n->op;
+    if(n->left == Z)
+        goto no;
+    t = n->left->type;
+    if(t == T)
+        goto no;
+    f = t->funct;
+
+    switch(o) {
+    case OAS:	// put cast on rhs
+    case OASI:
+    case OASADD:
+    case OASSUB:
+    case OASMUL:
+    case OASDIV:
+    case OASMOD:
+    case OASASHR:
+    case OASLMUL:
+    case OASLDIV:
+    case OASLMOD:
+    case OASLSHR:
+    case OASASHL:
+    case OASAND:
+    case OASOR:
+    case OASXOR:
+        if(n->right == Z)
+            goto no;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto no;
+        if(t1->funct == f)
+            break;
+
+        l = new(OXXX, Z, Z);
+        *l = *n->right;
+
+        n->right->left = l;
+        n->right->right = Z;
+        n->right->type = t;
+        n->right->op = OCAST;
+
+        if(!isfunct(n->right))
+            prtree(n, "isfunc !");
+        break;
+
+    case OCAST:	// t f(T) or T f(t)
+        t1 = n->type;
+        if(t1 == T)
+            goto no;
+        if(f != nil) {
+            s = f->castfr[t1->etype];
+            if(s == S)
+                goto no;
+            n->right = n->left;
+            goto build;
+        }
+        f = t1->funct;
+        if(f != nil) {
+            s = f->castto[t->etype];
+            if(s == S)
+                goto no;
+            n->right = n->left;
+            goto build;
+        }
+        goto no;
+    }
+
+    if(f == nil)
+        goto no;
+    s = f->sym[o];
+    if(s == S)
+        goto no;
+
+
+
+    /*
+     * the answer is yes,
+     * now we rewrite the node
+     * and give diagnostics
+     */
+    switch(o) {
+    case OADD:	// T f(T, T)
+    case OAND:
+    case OASHL:
+    case OASHR:
+    case ODIV:
+    case OLDIV:
+    case OLMOD:
+    case OLMUL:
+    case OLSHR:
+    case OMOD:
+    case OMUL:
+    case OOR:
+    case OSUB:
+    case OXOR:
+
+    case OEQ:	// int f(T, T)
+    case OGE:
+    case OGT:
+    case OHI:
+    case OHS:
+    case OLE:
+    case OLO:
+    case OLS:
+    case OLT:
+    case ONE:
+        if(n->right == Z)
+            goto bad;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto bad;
+        if(t1->funct != f)
+            goto bad;
+        n->right = new(OLIST, n->left, n->right);
+        break;
+
+    case OAS:	// structure copies done by the compiler
+    case OASI:
+        goto no;
+
+    case OASADD:	// T f(T*, T)
+    case OASAND:
+    case OASASHL:
+    case OASASHR:
+    case OASDIV:
+    case OASLDIV:
+    case OASLMOD:
+    case OASLMUL:
+    case OASLSHR:
+    case OASMOD:
+    case OASMUL:
+    case OASOR:
+    case OASSUB:
+    case OASXOR:
+        if(n->right == Z)
+            goto bad;
+        t1 = n->right->type;
+        if(t1 == T)
+            goto bad;
+        if(t1->funct != f)
+            goto bad;
+        n->right = new(OLIST, new(OADDR, n->left, Z), n->right);
+        break;
+
+    case OPOS:	// T f(T)
+    case ONEG:
+    case ONOT:
+    case OCOM:
+        n->right = n->left;
+        break;
+
+    default:
+        diag(n, "isfunct op missing %O\n", o);
+        goto bad;
+
+
+    }
+
+build:
+    l = new(ONAME, Z, Z);
+    l->sym = s;
+    l->type = s->type;
+    l->etype = s->type->etype;
+    l->xoffset = s->offset;
+    l->class = s->class;
+    tcomo(l, 0);
+
+    n->op = OFUNC;
+    n->left = l;
+    n->type = l->type->link;
+    if(tcompat(n, T, l->type, tfunct))
+        goto bad;
+    if(tcoma(n->left, n->right, l->type->down, 1))
+        goto bad;
+    return true;
+
+no:
+    return false;
+
+bad:
+    diag(n, "cant rewrite typestr for op %O\n", o);
+    prtree(n, "isfunct");
+    n->type = T;
+    return true;
+}
+@
+
+
+
 
 
 <<function machcap(arm)>>=
@@ -10520,6 +10553,10 @@ dpcheck(Node *n)
 % 5c -V enable void* conversion warnings
 % 5c -w print warnings
 
+\subsection{[[SET/USED]]}
+
+% the data structure
+
 <<[[Sym]] other fields>>=
 bool	aused;
 @
@@ -10531,7 +10568,8 @@ bool	aused;
 % hmmm but correct? handle well the different namespace?
 % what if struct and local with same name?
 
-\subsection{[[SET/USED]]}
+
+% the parsing
 
 <<[[itab]] entries, kencc extensions>>=
 "SET",		LSET,		0,
@@ -10548,6 +10586,12 @@ OSET,
 |   LSET '(' zelist ')' ';'  { $$ = new(OSET, $3, Z); }
 @
 
+
+% the check?
+
+% ????
+
+% the code generation
 
 <<[[gen()]] switch node kind cases>>=
 case OSET:
@@ -10706,12 +10750,16 @@ if(canreach && thisfn->link->etype != TVOID){
 }
 @
 
+
+
+
 \chapter{Assembly Generation}
-% hmm better name than code generation?
+% Code Generation?
 
 \section{Overview}
 
-% Does 5c/8c/... have an intermediate language? RTL? nope :( 
+% 5c/8c/... don't have an intermediate language :( not even an RTL.
+% They generate directly assembly.
 % But they have kinda factorized a few things behind some
 % common interface: gpseudo(), gins(), gmove(), gbranch(), as well
 % as some REGARG, REGRET,
@@ -10722,7 +10770,7 @@ if(canreach && thisfn->link->etype != TVOID){
 %  cc2/pgen.c include gc.h where all archi define some kinda archi independent
 %  stuff like ATEXT, ANOP, etc
 % gins() seems more archi dependent but can also do arch independent
-% when the opcode is quite general (e.g. ANOP)
+%  when the opcode is quite general (e.g. ANOP)
 
 % target language = Adr, Prog, as, etc, like in Linker and assembler
 % outcode, like in Assembler.
@@ -10731,8 +10779,8 @@ if(canreach && thisfn->link->etype != TVOID){
 %        if(!debug['a'] && !debug['Z'])
 %            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
 
-% main -> yyparse -> codgen (func) -> gen (statement) 
-%                                  -> cgen (expr?) ARM specific
+% main -> yyparse -> codgen (func) -> gen (statement) -> cgen (expr)
+
 
 
 % nextpc()?
@@ -10747,6 +10795,15 @@ Prog*	p;
 % often have a 'sp' for save p, and do things like
 % gxxx(); sp = p;   to remember what was the instruction generated
 % by this gxxx()
+
+
+<<global pc>>=
+long	pc;
+@
+
+<<[[ginit()]] initialisation>>=
+pc = 0;
+@
 
 
 % gins | gclean | ... -> <>
@@ -10794,6 +10851,12 @@ Prog*	lastp;
 @
 
 % firstp/lastp are used only by outcode()
+
+<<[[ginit()]] initialisation>>=
+firstp = P;
+lastp = P;
+@
+
 
 \section{[[gxxx()]]}
 
@@ -10892,90 +10955,7 @@ naddr(Node *n, Adr *a)
         return;
 
     switch(n->op) {
-    case OREGISTER:
-        a->type = D_REG;
-        a->sym = S;
-        a->reg = n->reg;
-        if(a->reg >= NREG) {
-            a->type = D_FREG;
-            a->reg -= NREG;
-        }
-        break;
-
-    case OIND:
-        naddr(n->left, a);
-        if(a->type == D_REG) {
-            a->type = D_OREG;
-            break;
-        }
-        if(a->type == D_CONST) {
-            a->type = D_OREG;
-            break;
-        }
-        goto bad;
-
-    case OINDREG:
-        a->type = D_OREG;
-        a->sym = S;
-        a->offset = n->xoffset;
-        a->reg = n->reg;
-        break;
-
-    case ONAME:
-        a->etype = n->etype;
-        a->type = D_OREG;
-        a->name = D_STATIC;
-        a->sym = n->sym;
-        a->offset = n->xoffset;
-        if(n->class == CSTATIC)
-            break;
-        if(n->class == CEXTERN || n->class == CGLOBL) {
-            a->name = D_EXTERN;
-            break;
-        }
-        if(n->class == CAUTO) {
-            a->name = D_AUTO;
-            break;
-        }
-        if(n->class == CPARAM) {
-            a->name = D_PARAM;
-            break;
-        }
-        goto bad;
-
-    case OCONST:
-        a->sym = S;
-        a->reg = NREG;
-        if(typefd[n->type->etype]) {
-            a->type = D_FCONST;
-            a->dval = n->fconst;
-        } else {
-            a->type = D_CONST;
-            a->offset = n->vconst;
-        }
-        break;
-
-    case OADDR:
-        naddr(n->left, a);
-        if(a->type == D_OREG) {
-            a->type = D_CONST;
-            break;
-        }
-        goto bad;
-
-    case OADD:
-        if(n->left->op == OCONST) {
-            naddr(n->left, a);
-            v = a->offset;
-            naddr(n->right, a);
-        } else {
-            naddr(n->right, a);
-            v = a->offset;
-            naddr(n->left, a);
-        }
-        a->offset += v;
-        break;
-
+    <<[[naddr()]] switch node kind cases>>
     default:
     bad:
         diag(n, "bad in naddr: %O", n->op);
@@ -10985,6 +10965,113 @@ naddr(Node *n, Adr *a)
 }
 @
 
+<<[[naddr()]] switch node kind cases>>=
+case OCONST:
+    a->sym = S;
+    a->reg = NREG;
+    if(typefd[n->type->etype]) {
+        a->type = D_FCONST;
+        a->dval = n->fconst;
+    } else {
+        a->type = D_CONST;
+        a->offset = n->vconst;
+    }
+    break;
+@
+
+<<[[naddr()]] switch node kind cases>>=
+case ONAME:
+    a->etype = n->etype;
+    a->type = D_OREG;
+    a->name = D_STATIC;
+    a->sym = n->sym;
+    a->offset = n->xoffset;
+    if(n->class == CSTATIC)
+        break;
+    if(n->class == CEXTERN || n->class == CGLOBL) {
+        a->name = D_EXTERN;
+        break;
+    }
+    if(n->class == CAUTO) {
+        a->name = D_AUTO;
+        break;
+    }
+    if(n->class == CPARAM) {
+        a->name = D_PARAM;
+        break;
+    }
+    goto bad;
+@
+
+<<[[naddr()]] switch node kind cases>>=
+case OIND:
+    naddr(n->left, a);
+    if(a->type == D_REG) {
+        a->type = D_OREG;
+        break;
+    }
+    if(a->type == D_CONST) {
+        a->type = D_OREG;
+        break;
+    }
+    goto bad;
+@
+
+
+<<[[naddr()]] switch node kind cases>>=
+case OADDR:
+    naddr(n->left, a);
+    if(a->type == D_OREG) {
+        a->type = D_CONST;
+        break;
+    }
+    goto bad;
+@
+
+
+
+
+% less important?
+
+
+<<[[naddr()]] switch node kind cases>>=
+case OREGISTER:
+    a->type = D_REG;
+    a->sym = S;
+    a->reg = n->reg;
+    if(a->reg >= NREG) {
+        a->type = D_FREG;
+        a->reg -= NREG;
+    }
+    break;
+@
+
+
+<<[[naddr()]] switch node kind cases>>=
+case OINDREG:
+    a->type = D_OREG;
+    a->sym = S;
+    a->offset = n->xoffset;
+    a->reg = n->reg;
+    break;
+@
+
+<<[[naddr()]] switch node kind cases>>=
+case OADD:
+    if(n->left->op == OCONST) {
+        naddr(n->left, a);
+        v = a->offset;
+        naddr(n->right, a);
+    } else {
+        naddr(n->right, a);
+        v = a->offset;
+        naddr(n->left, a);
+    }
+    a->offset += v;
+    break;
+@
+
+
 \subsection{[[gbranch()]]}
 
 <<function gbranch(arm)>>=
@@ -10993,8 +11080,9 @@ gbranch(int o)
 {
     int a;
 
-    a = AGOK;
+    nextpc();
 
+    a = AGOK;
     switch(o) {
     case ORETURN:
         a = ARET;
@@ -11003,16 +11091,28 @@ gbranch(int o)
         a = AB;
         break;
     }
-    nextpc();
     if(a == AGOK) {
         diag(Z, "bad in gbranch %O",  o);
         nextpc();
     }
+
     p->as = a;
 }
 @
 % 386 is just AB -> JMP, should factorize!!
 
+
+% gmove | gen | ... -> <>
+<<function patch>>=
+void
+patch(Prog *op, long pc)
+{
+
+    op->to.offset = pc;
+    op->to.type = D_BRANCH;
+}
+@
+% usually do  gbranch(xxx); xpc = p; patch(p, specific_pc);
 
 \subsection{[[gmove()]]}
 
@@ -11635,6 +11735,28 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 
 \subsection{[[gargs()]]}
 
+<<global cursafe>>=
+long	cursafe;
+@
+
+<<global curarg>>=
+long	curarg;
+@
+
+<<global maxargsafe>>=
+long	maxargsafe;
+@
+
+
+
+<<[[codgen()]] initialisation>>=
+cursafe = 0;
+curarg = 0;
+maxargsafe = 0;
+@
+
+
+
 <<function gargs>>=
 void
 gargs(Node *n, Node *tn1, Node *tn2)
@@ -11715,34 +11837,6 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
 
 \section{Functions, [[codgen()]]}
 
-<<global cursafe>>=
-long	cursafe;
-@
-
-<<global curarg>>=
-long	curarg;
-@
-
-<<global maxargsafe>>=
-long	maxargsafe;
-@
-
-
-<<global hasdoubled>>=
-bool	hasdoubled;
-@
-% seems dead
-
-<<[[codgen()]] initialisation>>=
-cursafe = 0;
-curarg = 0;
-maxargsafe = 0;
-hasdoubled = false;
-@
-
-
-
-
 %REGARG from 5.out.h = 0 => so use R0 and the rest in the stack. 
 %REGRET is also R0.
 
@@ -11784,6 +11878,16 @@ void codgen(Node *n, Node *nn)
     sp->to.offset += maxargsafe;
 }
 @
+
+<<[[codgen()]] initialisation>>=
+hasdoubled = false;
+@
+<<global hasdoubled>>=
+bool	hasdoubled;
+@
+% seems dead
+
+
 
 % regopt() does a lot of things, the final touch for a function
 
@@ -12403,49 +12507,18 @@ nodreg(Node *n, Node *nn, int reg)
 
 \section{Statements, [[gen()]]}
 
-
-% initialize to true in codgen, before calling gen()
-
-% turn into a static local?
-<<global ncontin>>=
-int	ncontin;
+<<[[gen()]] locals>>=
+// enum<node_kind> of a statement
+int o;
 @
 
-% seems dead, never set to true or valid in other archi?
-<<global newvlongcode>>=
-bool	newvlongcode;
-@
-
-
-<<global breakpc>>=
-long	breakpc;
-@
-% for break to branch at the right place
-
-<<global continpc>>=
-long	continpc;
-@
-% for continue to branch at the right place
-
-
-<<global nbreak>>=
-long	nbreak;
-@
-
-
-
-
+% codgen -> <>
 % cc2/pgen.c
 <<function gen>>=
 void
 gen(Node *n)
 {
-    Node *l, nod, rn;
-    Prog *sp, *spc, *spb;
-    Case *cn;
-    long sbc, scc;
-    int snbreak, sncontin;
-    int f, o, oldreach;
+    <<[[gen()]] locals>>
 
 loop:
     if(n == Z)
@@ -12454,9 +12527,8 @@ loop:
     nearln = n->lineno;
     o = n->op;
 
-    if(debug['G'])
-        if(o != OLIST)
-            print("%L %O\n", nearln, o);
+    if(debug['G'] && (o != OLIST))
+        print("%L %O\n", nearln, o);
 
     <<[[gen()]] if not canreach>>
 
@@ -12467,6 +12539,8 @@ loop:
 @
 
 
+\subsection{Blocks, sequence}
+
 <<[[gen()]] switch node kind cases>>=
 case OLIST:
 case OCOMMA:
@@ -12476,6 +12550,270 @@ rloop:
     n = n->right;
     goto loop;
 @
+
+\subsection{Conditionals}
+
+<<[[gen()]] locals>>=
+Prog *sp;
+bool f;
+bool oldreach;
+Node *l;
+@
+% saved prog
+
+<<[[gen()]] switch node kind cases>>=
+case OIF:
+    l = n->left;
+    if(bcomplex(l, n->right)) {
+        if(typefd[l->type->etype])
+            f = !l->fconst;
+        else
+            f = !l->vconst;
+        if(debug['c'])
+            print("%L const if %s\n", nearln, f ? "false" : "true");
+        if(f) {
+            canreach = true;
+            supgen(n->right->left);
+            oldreach = canreach;
+            canreach = true;
+            gen(n->right->right);
+            /*
+             * treat constant ifs as regular ifs for 
+             * reachability warnings.
+             */
+            if(!canreach && oldreach && debug['w'] < 2)
+                warnreach = 0;
+        } else {
+            canreach = true;
+            gen(n->right->left);
+            oldreach = canreach;
+            canreach = true;
+            supgen(n->right->right);
+            /*
+             * treat constant ifs as regular ifs for 
+             * reachability warnings.
+             */
+            if(!oldreach && canreach && debug['w'] < 2)
+                warnreach = 0;
+            canreach = oldreach;
+        }
+    } else {
+        sp = p;
+        canreach = true;
+        if(n->right->left != Z)
+            gen(n->right->left);
+        oldreach = canreach;
+        canreach = true;
+        if(n->right->right != Z) {
+            gbranch(OGOTO);
+            patch(sp, pc);
+            sp = p;
+
+            gen(n->right->right);
+        }
+        patch(sp, pc);
+        canreach = canreach || oldreach;
+        if(canreach == false)
+            warnreach = !suppress;
+    }
+    break;
+@
+
+% bcomplex(), boolean_complex()?
+
+<<function supgen>>=
+void
+supgen(Node *n)
+{
+    bool owarn;
+    long opc;
+    Prog *olastp;
+
+    if(n == Z)
+        return;
+
+    suppress++;
+    owarn = warnreach;
+    opc = pc;
+    olastp = lastp;
+
+    warnreach = false;
+
+    gen(n);
+
+    lastp = olastp;
+    olastp->link = nil;
+    pc = opc;
+    warnreach = owarn;
+    suppress--;
+}
+@
+
+
+\subsection{Loops}
+
+<<global breakpc>>=
+// option<pc>, None = -1
+long	breakpc;
+@
+% for break to branch at the right place
+
+<<global continpc>>=
+// option<pc>, None = -1
+long	continpc;
+@
+% for continue to branch at the right place
+
+<<[[ginit()]] initialisation>>=
+breakpc = -1;
+continpc = -1;
+@
+
+
+
+% turn into a static local?
+<<global ncontin>>=
+int	ncontin;
+@
+
+<<global nbreak>>=
+long nbreak;
+@
+
+
+
+<<[[gen()]] locals>>=
+Prog *spc, *spb;
+long sbc, scc;
+int snbreak, sncontin;
+@
+% saved prog continue, saved prog break
+
+<<[[gen()]] switch node kind cases>>=
+case OWHILE:
+case ODWHILE:
+    l = n->left;
+
+    gbranch(OGOTO);		/* entry */
+    sp = p;
+
+    scc = continpc;
+    continpc = pc;
+
+    gbranch(OGOTO);
+    spc = p;
+
+    sbc = breakpc;
+    breakpc = pc;
+    snbreak = nbreak;
+    nbreak = 0;
+
+    gbranch(OGOTO);
+    spb = p;
+
+    patch(spc, pc);
+    if(n->op == OWHILE)
+        patch(sp, pc);
+    bcomplex(l, Z);		/* test */
+    patch(p, breakpc);
+    if(l->op != OCONST || vconst(l) == 0)
+        nbreak++;
+
+    if(n->op == ODWHILE)
+        patch(sp, pc);
+    gen(n->right);		/* body */
+
+    gbranch(OGOTO);
+    patch(p, continpc);
+
+    patch(spb, pc);
+    continpc = scc;
+    breakpc = sbc;
+    canreach = nbreak!=0;
+    if(canreach == false)
+        warnreach = !suppress;
+    nbreak = snbreak;
+    break;
+@
+
+<<[[gen()]] switch node kind cases>>=
+case OFOR:
+    l = n->left;
+    if(!canreach && l->right->left && warnreach) {
+        warn(n, "unreachable code FOR");
+        warnreach = 0;
+    }
+    gen(l->right->left);	/* init */
+
+    gbranch(OGOTO);		/* entry */
+    sp = p;
+
+    /* 
+     * if there are no incoming labels in the 
+     * body and the top's not reachable, warn
+     */
+    if(!canreach && warnreach && deadheads(n)) {
+        warn(n, "unreachable code %O", o);
+        warnreach = 0;
+    }
+
+    scc = continpc;
+    continpc = pc;
+
+    gbranch(OGOTO);
+    spc = p;
+
+    sbc = breakpc;
+    breakpc = pc;
+    snbreak = nbreak;
+    nbreak = 0;
+    sncontin = ncontin;
+    ncontin = 0;
+
+    gbranch(OGOTO);
+    spb = p;
+
+    patch(spc, pc);
+    gen(l->right->right);	/* inc */
+    patch(sp, pc);	
+    if(l->left != Z) {	/* test */
+        bcomplex(l->left, Z);
+        patch(p, breakpc);
+        if(l->left->op != OCONST || vconst(l->left) == 0)
+            nbreak++;
+    }
+    canreach = true;
+    gen(n->right);		/* body */
+    if(canreach){
+        gbranch(OGOTO);
+        patch(p, continpc);
+
+        ncontin++;
+    }
+    if(!ncontin && l->right->right && warnreach) {
+        warn(l->right->right, "unreachable FOR inc");
+        warnreach = 0;
+    }
+
+    patch(spb, pc);
+    continpc = scc;
+    breakpc = sbc;
+    canreach = nbreak!=0;
+    if(canreach == false)
+        warnreach = !suppress;
+    nbreak = snbreak;
+    ncontin = sncontin;
+    break;
+@
+
+
+\subsection{Control flow jumps}
+
+<<[[gen()]] locals>>=
+Node nod;
+Node rn;
+@
+
 <<[[gen()]] switch node kind cases>>=
 case ORETURN:
     canreach = false;
@@ -12526,231 +12864,29 @@ case ORETURN:
     break;
 
 @
-<<[[gen()]] switch node kind cases>>=
-case OLABEL:
-    canreach = true;
-    l = n->left;
-    if(l) {
-        l->pc = pc;
-        if(l->label)
-            patch(l->label, pc);
-    }
-    gbranch(OGOTO);	/* prevent self reference in reg */
-    patch(p, pc);
-    goto rloop;
 
+<<global newvlongcode>>=
+bool	newvlongcode;
 @
-<<[[gen()]] switch node kind cases>>=
-case OGOTO:
-    canreach = false;
-    warnreach = !suppress;
-    n = n->left;
-    if(n == Z)
-        return;
-    if(n->complex == 0) {
-        diag(Z, "label undefined: %s", n->sym->name);
-        return;
-    }
-    if(suppress)
-        return;
-    gbranch(OGOTO);
-    if(n->pc) {
-        patch(p, n->pc);
-        return;
-    }
-    if(n->label)
-        patch(n->label, pc-1);
-    n->label = p;
-    return;
+%todo: seems dead, never set to true or valid in other archi?
 
+
+<<function regret(arm)>>=
+void
+regret(Node *n, Node *nn)
+{
+    int r;
+
+    r = REGRET;
+    if(typefd[nn->type->etype])
+        r = FREGRET+NREG;
+    nodreg(n, nn, r);
+    reg[r]++;
+}
 @
-<<[[gen()]] switch node kind cases>>=
-case OCASE:
-    canreach = true;
-    l = n->left;
-    if(cases == C)
-        diag(n, "case/default outside a switch");
-    if(l == Z) {
-        casf();
-        cases->val = 0;
-        cases->def = 1;
-        cases->label = pc;
-        cases->isv = 0;
-        goto rloop;
-    }
-    complex(l);
-    if(l->type == T)
-        goto rloop;
-    if(l->op != OCONST || !typeswitch[l->type->etype]) {
-        diag(n, "case expression must be integer constant");
-        goto rloop;
-    }
-    casf();
-    cases->val = l->vconst;
-    cases->def = 0;
-    cases->label = pc;
-    cases->isv = typev[l->type->etype];
-    goto rloop;
-@
-<<[[gen()]] switch node kind cases>>=
-case OSWITCH:
-    l = n->left;
-    complex(l);
-    if(l->type == T)
-        break;
-    if(!typeswitch[l->type->etype]) {
-        diag(n, "switch expression must be integer");
-        break;
-    }
 
-    gbranch(OGOTO);		/* entry */
-    sp = p;
 
-    cn = cases;
-    cases = C;
-    casf();
 
-    sbc = breakpc;
-    breakpc = pc;
-    snbreak = nbreak;
-    nbreak = 0;
-    gbranch(OGOTO);
-    spb = p;
-
-    gen(n->right);		/* body */
-    if(canreach){
-        gbranch(OGOTO);
-        patch(p, breakpc);
-        nbreak++;
-    }
-
-    patch(sp, pc);
-    regalloc(&nod, l, Z);
-    /* always signed */
-    if(typev[l->type->etype])
-        nod.type = types[TVLONG];
-    else
-        nod.type = types[TLONG];
-    cgen(l, &nod);
-    doswit(&nod);
-    regfree(&nod);
-    patch(spb, pc);
-
-    cases = cn;
-    breakpc = sbc;
-    canreach = nbreak!=0;
-    if(canreach == false)
-        warnreach = !suppress;
-    nbreak = snbreak;
-    break;
-@
-<<[[gen()]] switch node kind cases>>=
-case OWHILE:
-case ODWHILE:
-    l = n->left;
-    gbranch(OGOTO);		/* entry */
-    sp = p;
-
-    scc = continpc;
-    continpc = pc;
-    gbranch(OGOTO);
-    spc = p;
-
-    sbc = breakpc;
-    breakpc = pc;
-    snbreak = nbreak;
-    nbreak = 0;
-    gbranch(OGOTO);
-    spb = p;
-
-    patch(spc, pc);
-    if(n->op == OWHILE)
-        patch(sp, pc);
-    bcomplex(l, Z);		/* test */
-    patch(p, breakpc);
-    if(l->op != OCONST || vconst(l) == 0)
-        nbreak++;
-
-    if(n->op == ODWHILE)
-        patch(sp, pc);
-    gen(n->right);		/* body */
-    gbranch(OGOTO);
-    patch(p, continpc);
-
-    patch(spb, pc);
-    continpc = scc;
-    breakpc = sbc;
-    canreach = nbreak!=0;
-    if(canreach == false)
-        warnreach = !suppress;
-    nbreak = snbreak;
-    break;
-@
-<<[[gen()]] switch node kind cases>>=
-case OFOR:
-    l = n->left;
-    if(!canreach && l->right->left && warnreach) {
-        warn(n, "unreachable code FOR");
-        warnreach = 0;
-    }
-    gen(l->right->left);	/* init */
-    gbranch(OGOTO);		/* entry */
-    sp = p;
-
-    /* 
-     * if there are no incoming labels in the 
-     * body and the top's not reachable, warn
-     */
-    if(!canreach && warnreach && deadheads(n)) {
-        warn(n, "unreachable code %O", o);
-        warnreach = 0;
-    }
-
-    scc = continpc;
-    continpc = pc;
-    gbranch(OGOTO);
-    spc = p;
-
-    sbc = breakpc;
-    breakpc = pc;
-    snbreak = nbreak;
-    nbreak = 0;
-    sncontin = ncontin;
-    ncontin = 0;
-    gbranch(OGOTO);
-    spb = p;
-
-    patch(spc, pc);
-    gen(l->right->right);	/* inc */
-    patch(sp, pc);	
-    if(l->left != Z) {	/* test */
-        bcomplex(l->left, Z);
-        patch(p, breakpc);
-        if(l->left->op != OCONST || vconst(l->left) == 0)
-            nbreak++;
-    }
-    canreach = true;
-    gen(n->right);		/* body */
-    if(canreach){
-        gbranch(OGOTO);
-        patch(p, continpc);
-        ncontin++;
-    }
-    if(!ncontin && l->right->right && warnreach) {
-        warn(l->right->right, "unreachable FOR inc");
-        warnreach = 0;
-    }
-
-    patch(spb, pc);
-    continpc = scc;
-    breakpc = sbc;
-    canreach = nbreak!=0;
-    if(canreach == false)
-        warnreach = !suppress;
-    nbreak = snbreak;
-    ncontin = sncontin;
-    break;
-@
 <<[[gen()]] switch node kind cases>>=
 case OCONTINUE:
     if(continpc < 0) {
@@ -12759,6 +12895,7 @@ case OCONTINUE:
     }
     gbranch(OGOTO);
     patch(p, continpc);
+
     ncontin++;
     canreach = false;
     warnreach = !suppress;
@@ -12781,130 +12918,74 @@ case OBREAK:
         break;
     gbranch(OGOTO);
     patch(p, breakpc);
+
     nbreak++;
     canreach = false;
     warnreach = !suppress;
     break;
 @
+
+
+\subsection{Switch}
+
+
+<<[[gen()]] locals>>=
+Case *cn;
+@
+
 <<[[gen()]] switch node kind cases>>=
-case OIF:
+case OSWITCH:
     l = n->left;
-    if(bcomplex(l, n->right)) {
-        if(typefd[l->type->etype])
-            f = !l->fconst;
-        else
-            f = !l->vconst;
-        if(debug['c'])
-            print("%L const if %s\n", nearln, f ? "false" : "true");
-        if(f) {
-            canreach = true;
-            supgen(n->right->left);
-            oldreach = canreach;
-            canreach = true;
-            gen(n->right->right);
-            /*
-             * treat constant ifs as regular ifs for 
-             * reachability warnings.
-             */
-            if(!canreach && oldreach && debug['w'] < 2)
-                warnreach = 0;
-        }
-        else {
-            canreach = true;
-            gen(n->right->left);
-            oldreach = canreach;
-            canreach = true;
-            supgen(n->right->right);
-            /*
-             * treat constant ifs as regular ifs for 
-             * reachability warnings.
-             */
-            if(!oldreach && canreach && debug['w'] < 2)
-                warnreach = 0;
-            canreach = oldreach;
-        }
+    complex(l);
+    if(l->type == T)
+        break;
+    if(!typeswitch[l->type->etype]) {
+        diag(n, "switch expression must be integer");
+        break;
     }
-    else {
-        sp = p;
-        canreach = true;
-        if(n->right->left != Z)
-            gen(n->right->left);
-        oldreach = canreach;
-        canreach = true;
-        if(n->right->right != Z) {
-            gbranch(OGOTO);
-            patch(sp, pc);
-            sp = p;
-            gen(n->right->right);
-        }
-        patch(sp, pc);
-        canreach = canreach || oldreach;
-        if(canreach == false)
-            warnreach = !suppress;
+
+    gbranch(OGOTO);		/* entry */
+    sp = p;
+
+    cn = cases;
+    cases = C;
+    casf();
+
+    sbc = breakpc;
+    breakpc = pc;
+    snbreak = nbreak;
+    nbreak = 0;
+
+    gbranch(OGOTO);
+    spb = p;
+
+    gen(n->right);		/* body */
+    if(canreach){
+        gbranch(OGOTO);
+        patch(p, breakpc);
+
+        nbreak++;
     }
+
+    patch(sp, pc);
+    regalloc(&nod, l, Z);
+    /* always signed */
+    if(typev[l->type->etype])
+        nod.type = types[TVLONG];
+    else
+        nod.type = types[TLONG];
+    cgen(l, &nod);
+    doswit(&nod);
+    regfree(&nod);
+    patch(spb, pc);
+
+    cases = cn;
+    breakpc = sbc;
+    canreach = nbreak!=0;
+    if(canreach == false)
+        warnreach = !suppress;
+    nbreak = snbreak;
     break;
-@
-
-
-
-% gmove | gen | ... -> <>
-<<function patch>>=
-void
-patch(Prog *op, long pc)
-{
-
-    op->to.offset = pc;
-    op->to.type = D_BRANCH;
-}
-@
-
-
-
-<<global reg(arm)>>=
-char	reg[NREG+NFREG];
-@
-
-<<function regret(arm)>>=
-void
-regret(Node *n, Node *nn)
-{
-    int r;
-
-    r = REGRET;
-    if(typefd[nn->type->etype])
-        r = FREGRET+NREG;
-    nodreg(n, nn, r);
-    reg[r]++;
-}
-@
-
-
-
-<<function supgen>>=
-void
-supgen(Node *n)
-{
-    int owarn;
-    long opc;
-    Prog *olastp;
-
-    if(n == Z)
-        return;
-
-    suppress++;
-    owarn = warnreach;
-    warnreach = 0;
-    opc = pc;
-    olastp = lastp;
-
-    gen(n);
-
-    lastp = olastp;
-    pc = opc;
-    olastp->link = nil;
-    suppress--;
-    warnreach = owarn;
-}
 @
 
 
@@ -12999,11 +13080,37 @@ err:
 }
 @
 
-\subsection{Blocks, sequence}
 
-\subsection{Conditionals}
 
-\subsection{Switch}
+<<[[gen()]] switch node kind cases>>=
+case OCASE:
+    canreach = true;
+    l = n->left;
+    if(cases == C)
+        diag(n, "case/default outside a switch");
+    if(l == Z) {
+        casf();
+        cases->val = 0;
+        cases->def = 1;
+        cases->label = pc;
+        cases->isv = 0;
+        goto rloop;
+    }
+    complex(l);
+    if(l->type == T)
+        goto rloop;
+    if(l->op != OCONST || !typeswitch[l->type->etype]) {
+        diag(n, "case expression must be integer constant");
+        goto rloop;
+    }
+    casf();
+    cases->val = l->vconst;
+    cases->def = 0;
+    cases->label = pc;
+    cases->isv = typev[l->type->etype];
+    goto rloop;
+@
+
 
 % C1, Case are in 5c/
 % the code below is in cc2/pswt.c
@@ -13144,8 +13251,10 @@ doswit(Node *n)
     }
     vr[0]->type = types[TLONG];
     vr[1]->type = types[TLONG];
+
     gbranch(OGOTO);
     hsb = p;
+
     iqh = alloc(nc*sizeof(C1));
     iql = alloc(nc*sizeof(C1));
     nh = 0;
@@ -13221,6 +13330,7 @@ swit2(C1 *q, int nc, long def, Node *n, Node *tn)
         }
         gbranch(OGOTO);
         patch(p, def);
+
         return;
     }
 
@@ -13261,20 +13371,59 @@ direct:
         q++;
         v++;
     }
+
     gbranch(OGOTO);		/* so that regopt() won't be confused */
     patch(p, def);
 }
 @
 
-\subsection{Control flow jumps}
-
-\subsection{Loops}
-
 \subsection{Labels and goto}
+
+<<[[gen()]] switch node kind cases>>=
+case OLABEL:
+    canreach = true;
+    l = n->left;
+    if(l) {
+        l->pc = pc;
+        if(l->label)
+            patch(l->label, pc);
+    }
+    gbranch(OGOTO);	/* prevent self reference in reg */
+    patch(p, pc);
+
+    goto rloop;
+@
+
+<<[[gen()]] switch node kind cases>>=
+case OGOTO:
+    canreach = false;
+    warnreach = !suppress;
+
+    n = n->left;
+    if(n == Z)
+        return;
+    if(n->complex == 0) {
+        diag(Z, "label undefined: %s", n->sym->name);
+        return;
+    }
+    if(suppress)
+        return;
+
+    gbranch(OGOTO);
+    if(n->pc) {
+        patch(p, n->pc);
+        return;
+    }
+    if(n->label)
+        patch(n->label, pc-1);
+
+    n->label = p;
+    return;
+
+@
 
 
 \section{Expressions}
-
 
 <<[[gen()]] switch node kind cases>>=
 default:
@@ -13282,6 +13431,8 @@ default:
     cgen(n, Z);
     break;
 @
+
+% also many calls to bcomplex()
 
 \subsection{[[complex()]]}
 
@@ -13332,6 +13483,46 @@ complex(Node *n)
 }
 @
 
+
+
+
+\subsection{[[bcomplex()]]}
+
+<<function bcomplex>>=
+bool
+bcomplex(Node *n, Node *c)
+{
+//    Node *b, nod;
+
+    complex(n);
+
+    if(n->type != T)
+     if(tcompat(n, T, n->type, tnot))
+        n->type = T;
+    if(n->type == T) {
+        gbranch(OGOTO);
+        return false;
+    }
+    if(c != Z && n->op == OCONST && deadheads(c))
+        return true;
+
+    bool64(n);
+    boolgen(n, 1, Z);
+    return false;
+}
+@
+%    /* this is not quite right yet, so ignore it for now */
+%    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
+%        b = &nod;
+%        b->op = ONE;
+%        b->left = n;
+%        b->right = new(0, Z, Z);
+%        *b->right = *nodconst(0);
+%        b->right->type = n->type;
+%        b->type = types[TLONG];
+%        cgen(b, Z);
+%        return 0;
+%    }
 
 
 
@@ -14279,45 +14470,7 @@ uncomma(Node *n)
 }
 @
 
-\section{[[bcomplex()]]}
-
-<<function bcomplex>>=
-bool
-bcomplex(Node *n, Node *c)
-{
-//    Node *b, nod;
-
-    complex(n);
-    if(n->type != T)
-    if(tcompat(n, T, n->type, tnot))
-        n->type = T;
-    if(n->type == T) {
-        gbranch(OGOTO);
-        return false;
-    }
-    if(c != Z && n->op == OCONST && deadheads(c))
-        return true;
-
-    bool64(n);
-    boolgen(n, 1, Z);
-    return false;
-}
-@
-%    /* this is not quite right yet, so ignore it for now */
-%    if(0 && newvlongcode && typev[n->type->etype] && machcap(Z)) {
-%        b = &nod;
-%        b->op = ONE;
-%        b->left = n;
-%        b->right = new(0, Z, Z);
-%        *b->right = *nodconst(0);
-%        b->right->type = n->type;
-%        b->type = types[TLONG];
-%        cgen(b, Z);
-%        return 0;
-%    }
-
-
-\section{[[boolgen()]]}
+\subsection{[[boolgen()]]}
 
 <<constant BTRUE(arm)>>=
 #define	BTRUE		0x1000
@@ -14504,8 +14657,6 @@ bcgen(Node *n, int true)
 }
 @
 
-\section{[[relxxx()]]}
-
 <<function relindex>>=
 int
 relindex(int o)
@@ -14552,7 +14703,8 @@ char	logrel[12] =
 @
 
 
-\section{[[sugen()]]}
+
+\subsection{[[sugen()]]}
 
 <<global nrathole>>=
 long	nrathole;
@@ -14576,6 +14728,7 @@ sugen(Node *n, Node *nn, long w)
 
     if(n == Z || n->type == T)
         return;
+
     if(debug['g']) {
         prtree(nn, "sugen lhs");
         prtree(n, "sugen");
@@ -14583,12 +14736,14 @@ sugen(Node *n, Node *nn, long w)
     if(nn == nodrat)
         if(w > nrathole)
             nrathole = w;
+
     switch(n->op) {
     case OIND:
         if(nn == Z) {
             nullwarn(n->left, Z);
             break;
         }
+    // Fallthrough
 
     default:
         goto copy;
@@ -14637,6 +14792,7 @@ sugen(Node *n, Node *nn, long w)
         }
         break;
 
+    // struct constructor extension?
     case OSTRUCT:
         /*
          * rewrite so lhs has no fn call
@@ -14946,8 +15102,9 @@ reglpcgen(Node *n, Node *nn, int f)
 @
 
 
-\section{Cast}
+\subsection{Cast}
 
+% cgen -> cgenrel -> <>
 <<function nocast>>=
 /*
  * a cast that generates no code
@@ -15001,9 +15158,14 @@ long	ncast[NTYPE] =
 };
 @
 
+\subsection{Arithmetic}
 
-\section{Multiplication}
+% see acom()?
 
+
+\subsection{Multiplication}
+
+% cgen -> cgenrel -> <>
 <<function mulcon(arm)>>=
 int
 mulcon(Node *n, Node *nn)
@@ -15773,11 +15935,9 @@ int	hintabsize;
 
 
 
-\section{Division}
+\subsection{Division}
 
-\section{Initializers}
-
-\section{Strings}
+\subsection{Strings}
 
 <<global symstring>>=
 Sym*	symstring;
@@ -18207,11 +18367,11 @@ xcom(Node *n)
 
 
 
-
 \chapter{Assembly-level Optimisations}
 
 \section{Peep optimizer}
 
+% codgen -> regopt -> <>
 <<function peep(arm)>>=
 void
 peep(void)
@@ -20258,40 +20418,6 @@ prop(Reg *r, Bits ref, Bits cal)
 @
 % 386 only diff is ABL -> ACALL
 
-<<function postorder>>=
-/*
- * find looping structure
- *
- * 1) find reverse postordering
- * 2) find approximate dominators,
- *	the actual dominators if the flow graph is reducible
- *	otherwise, dominators plus some other non-dominators.
- *	See Matthew S. Hecht and Jeffrey D. Ullman,
- *	"Analysis of a Simple Algorithm for Global Data Flow Problems",
- *	Conf.  Record of ACM Symp. on Principles of Prog. Langs, Boston, Massachusetts,
- *	Oct. 1-3, 1973, pp.  207-217.
- * 3) find all nodes with a predecessor dominated by the current node.
- *	such a node is a loop head.
- *	recursively, all preds with a greater rpo number are in the loop
- */
-long
-postorder(Reg *r, Reg **rpo2r, long n)
-{
-    Reg *r1;
-
-    r->rpo = 1;
-    r1 = r->s1;
-    if(r1 && !r1->rpo)
-        n = postorder(r1, rpo2r, n);
-    r1 = r->s2;
-    if(r1 && !r1->rpo)
-        n = postorder(r1, rpo2r, n);
-    rpo2r[n] = r;
-    n++;
-    return n;
-}
-@
-
 <<function rpolca>>=
 long
 rpolca(long *idom, long rpo1, long rpo2)
@@ -20799,14 +20925,47 @@ BtoF(long b)
 
 \section{Dominators}
 
+<<function postorder>>=
+/*
+ * find looping structure
+ *
+ * 1) find reverse postordering
+ * 2) find approximate dominators,
+ *	the actual dominators if the flow graph is reducible
+ *	otherwise, dominators plus some other non-dominators.
+ *	See Matthew S. Hecht and Jeffrey D. Ullman,
+ *	"Analysis of a Simple Algorithm for Global Data Flow Problems",
+ *	Conf.  Record of ACM Symp. on Principles of Prog. Langs, Boston, Massachusetts,
+ *	Oct. 1-3, 1973, pp.  207-217.
+ * 3) find all nodes with a predecessor dominated by the current node.
+ *	such a node is a loop head.
+ *	recursively, all preds with a greater rpo number are in the loop
+ */
+long
+postorder(Reg *r, Reg **rpo2r, long n)
+{
+    Reg *r1;
+
+    r->rpo = 1;
+    r1 = r->s1;
+    if(r1 && !r1->rpo)
+        n = postorder(r1, rpo2r, n);
+    r1 = r->s2;
+    if(r1 && !r1->rpo)
+        n = postorder(r1, rpo2r, n);
+    rpo2r[n] = r;
+    n++;
+    return n;
+}
+@
+
+
 
 \chapter{Linking Support}
 
 \section{[[#pragma lib]] and automagic linking}
 
 \section{Safe linking with type signatures}
-
-
 % md5sum like in ocaml!
 
 % signature! for safe linking
@@ -21650,6 +21809,12 @@ pickletype(Type *t)
 bool	profileflg;
 @
 
+<<[[main()]] initialisation>>=
+profileflg = true;	/* #pragma can turn it off */
+@
+
+
+
 \chapter{Advanced Topics}
 
 \section{C extensions}
@@ -21667,7 +21832,10 @@ bool	profileflg;
 @
 %$
 
-\subsection{[[signof()]]}
+\subsection{Signature reflection, [[signof()]]}
+% sign for signature, not sign of an operation
+
+% parsing
 
 <<[[itab]] entries, kencc extensions>>=
 "signof",	LSIGNOF,	0,
@@ -21691,7 +21859,36 @@ OSIGN,
     }
 @
 
-\subsection{[[extern register]]}
+% code generation
+
+<<[[tcomo()]] switch node kind cases>>=
+case OSIGN:	/* extension signof(type) returns a hash */
+    if(l != Z) {
+        if(l->op != OSTRING && l->op != OLSTRING)
+            if(tcomo(l, 0))
+                goto bad;
+        if(l->op == OBIT) {
+            diag(n, "signof bitfield");
+            goto bad;
+        }
+        n->type = l->type;
+    }
+    if(n->type == T)
+        goto bad;
+    if(n->type->width < 0) {
+        diag(n, "signof undefined type");
+        goto bad;
+    }
+    n->op = OCONST;
+    n->left = Z;
+    n->right = Z;
+    n->vconst = convvtox(signature(n->type), TULONG);
+    n->type = types[TULONG];
+    break;
+@
+
+
+\subsection{Per-processor storage, [[extern register]]}
 % useful for ARM kernel (bcm/), where mach and up are in registers
 %  and so are perfectly local to each processor! per-processor storage
 

@@ -37,6 +37,7 @@ swit2(C1 *q, int nc, long def, Node *n, Node *tn)
         }
         gbranch(OGOTO);
         patch(p, def);
+
         return;
     }
 
@@ -77,6 +78,7 @@ direct:
         q++;
         v++;
     }
+
     gbranch(OGOTO);		/* so that regopt() won't be confused */
     patch(p, def);
 }

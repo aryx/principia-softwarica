@@ -253,9 +253,9 @@ struct	Type
     schar	shift;
     char	nbits;
     /*x: [[Type]] other fields */
-    Funct*	funct;
-    /*x: [[Type]] other fields */
     Sym*	tag;
+    /*x: [[Type]] other fields */
+    Funct*	funct;
     /*e: [[Type]] other fields */
 };
 /*e: struct Type */
@@ -449,17 +449,17 @@ enum node_kind
     /*s: statement nodes */
     OIF,
     /*x: statement nodes */
-    OSWITCH,
-    OCASE, // for default too, in which case Node.left is null
+    OFOR,
+    OWHILE,
+    ODWHILE,
     /*x: statement nodes */
     ORETURN,
 
     OBREAK,
     OCONTINUE,
     /*x: statement nodes */
-    OFOR,
-    OWHILE,
-    ODWHILE,
+    OSWITCH,
+    OCASE, // for default too, in which case Node.left is null
     /*x: statement nodes */
     OLABEL,
     OGOTO,

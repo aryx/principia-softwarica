@@ -354,6 +354,31 @@ ulstmnt:
             warn($3, "empty else body");
     }
 /*x: ulstmnt rule */
+|   { 
+        markdcl(); 
+    } 
+    LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
+    {
+        $$ = revertdcl();
+        if($$){
+            if($4)
+                $4 = new(OLIST, $$, $4);
+            else
+                $4 = $$;
+        }
+        $$ = new(OFOR, new(OLIST, $6, new(OLIST, $4, $8)), $10);
+    }
+|   LWHILE '(' cexpr ')' stmnt          { $$ = new(OWHILE, $3, $5); }
+|   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
+/*x: ulstmnt rule */
+|   LRETURN zcexpr ';'
+    {
+        $$ = new(ORETURN, $2, Z);
+        $$->type = thisfn->link;
+    }
+|   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
+|   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
+/*x: ulstmnt rule */
 |   LSWITCH '(' cexpr ')' stmnt
     {
        /*s: ulstmt rule, SWITCH case, adjust cexpr node */
@@ -373,31 +398,6 @@ ulstmnt:
        /*e: ulstmt rule, SWITCH case, adjust cexpr node */
         $$ = new(OSWITCH, $3, $5);
     }
-/*x: ulstmnt rule */
-|   LRETURN zcexpr ';'
-    {
-        $$ = new(ORETURN, $2, Z);
-        $$->type = thisfn->link;
-    }
-|   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
-|   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
-/*x: ulstmnt rule */
-|   { 
-        markdcl(); 
-    } 
-    LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
-    {
-        $$ = revertdcl();
-        if($$){
-            if($4)
-                $4 = new(OLIST, $$, $4);
-            else
-                $4 = $$;
-        }
-        $$ = new(OFOR, new(OLIST, $6, new(OLIST, $4, $8)), $10);
-    }
-|   LWHILE '(' cexpr ')' stmnt          { $$ = new(OWHILE, $3, $5); }
-|   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
 /*x: ulstmnt rule */
 |   LGOTO ltag ';' { $$ = new(OGOTO, dcllabel($2, false), Z); }
 /*x: ulstmnt rule */

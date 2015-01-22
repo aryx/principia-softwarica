@@ -106,6 +106,7 @@ tcomo(Node *n, int f)
     r = n->right;
 
     switch(n->op) {
+    /*s: [[tcomo()]] switch node kind cases */
     case ODOTDOT:
         /*
          * tcom has already been called on this subtree
@@ -114,7 +115,7 @@ tcomo(Node *n, int f)
         if(n->type == T)
             goto bad;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OCAST:
         if(n->type == T)
             break;
@@ -129,7 +130,7 @@ tcomo(Node *n, int f)
         if(tcompat(n, l->type, n->type, tcast))
             goto bad;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case ORETURN:
         if(l == Z) {
             if(n->type->etype != TVOID)
@@ -148,7 +149,7 @@ tcomo(Node *n, int f)
             n->left = l;
         }
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OASI:	/* same as as, but no test for const */
         n->op = OAS;
         o = tcom(l);
@@ -165,7 +166,7 @@ tcomo(Node *n, int f)
         }
         n->type = l->type;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OAS:
         o = tcom(l);
         if(o | tcom(r))
@@ -185,7 +186,7 @@ tcomo(Node *n, int f)
         }
         n->type = l->type;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OASADD:
     case OASSUB:
         o = tcom(l);
@@ -210,7 +211,7 @@ tcomo(Node *n, int f)
             n->type = t;
         }
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OASMUL:
     case OASLMUL:
     case OASDIV:
@@ -243,7 +244,7 @@ tcomo(Node *n, int f)
                 n->op = OASLMUL;
         }
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OASLSHR:
     case OASASHR:
     case OASASHL:
@@ -264,7 +265,7 @@ tcomo(Node *n, int f)
                 n->op = OASLSHR;
         }
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OASMOD:
     case OASLMOD:
     case OASOR:
@@ -294,7 +295,7 @@ tcomo(Node *n, int f)
                 n->op = OASLMOD;
         }
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OPREINC:
     case OPREDEC:
     case OPOSTINC:
@@ -315,7 +316,7 @@ tcomo(Node *n, int f)
                 diag(n, "inc/dec of a void pointer");
         }
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OEQ:
     case ONE:
         o = tcom(l);
@@ -330,7 +331,7 @@ tcomo(Node *n, int f)
         arith(n, 0);
         n->type = types[TINT];
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OLT:
     case OGE:
     case OGT:
@@ -349,7 +350,7 @@ tcomo(Node *n, int f)
             n->op = logrel[relindex(n->op)];
         n->type = types[TINT];
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OCOND:
         o = tcom(l);
         o |= tcom(r->left);
@@ -373,7 +374,7 @@ tcomo(Node *n, int f)
         arith(r, 0);
         n->type = r->type;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OADD:
         o = tcom(l);
         if(o | tcom(r))
@@ -384,7 +385,7 @@ tcomo(Node *n, int f)
             goto bad;
         arith(n, 1);
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OSUB:
         o = tcom(l);
         if(o | tcom(r))
@@ -395,7 +396,7 @@ tcomo(Node *n, int f)
             goto bad;
         arith(n, 1);
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OMUL:
     case OLMUL:
     case ODIV:
@@ -415,7 +416,7 @@ tcomo(Node *n, int f)
                 n->op = OLMUL;
         }
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OLSHR:
     case OASHL:
     case OASHR:
@@ -434,7 +435,7 @@ tcomo(Node *n, int f)
             if(n->op == OASHR)
                 n->op = OLSHR;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OAND:
     case OOR:
     case OXOR:
@@ -447,7 +448,7 @@ tcomo(Node *n, int f)
             goto bad;
         arith(n, 1);
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OMOD:
     case OLMOD:
         o = tcom(l);
@@ -461,7 +462,7 @@ tcomo(Node *n, int f)
         if(typeu[n->type->etype])
             n->op = OLMOD;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OPOS:
         if(tcom(l))
             goto bad;
@@ -482,7 +483,7 @@ tcomo(Node *n, int f)
             goto bad;
         arith(n, 1);
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case ONEG:
         if(tcom(l))
             goto bad;
@@ -505,7 +506,7 @@ tcomo(Node *n, int f)
         }
         arith(n, 1);
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OCOM:
         if(tcom(l))
             goto bad;
@@ -528,7 +529,7 @@ tcomo(Node *n, int f)
         }
         arith(n, 1);
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case ONOT:
         if(tcom(l))
             goto bad;
@@ -538,7 +539,7 @@ tcomo(Node *n, int f)
             goto bad;
         n->type = types[TINT];
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OANDAND:
     case OOROR:
         o = tcom(l);
@@ -549,39 +550,14 @@ tcomo(Node *n, int f)
             goto bad;
         n->type = types[TINT];
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OCOMMA:
         o = tcom(l);
         if(o | tcom(r))
             goto bad;
         n->type = r->type;
         break;
-
-
-    case OSIGN:	/* extension signof(type) returns a hash */
-        if(l != Z) {
-            if(l->op != OSTRING && l->op != OLSTRING)
-                if(tcomo(l, 0))
-                    goto bad;
-            if(l->op == OBIT) {
-                diag(n, "signof bitfield");
-                goto bad;
-            }
-            n->type = l->type;
-        }
-        if(n->type == T)
-            goto bad;
-        if(n->type->width < 0) {
-            diag(n, "signof undefined type");
-            goto bad;
-        }
-        n->op = OCONST;
-        n->left = Z;
-        n->right = Z;
-        n->vconst = convvtox(signature(n->type), TULONG);
-        n->type = types[TULONG];
-        break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OSIZE:
         if(l != Z) {
             if(l->op != OSTRING && l->op != OLSTRING)
@@ -609,7 +585,7 @@ tcomo(Node *n, int f)
         n->vconst = convvtox(n->type->width, TINT);
         n->type = types[TINT];
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OFUNC:
         o = tcomo(l, 0);
         if(o)
@@ -631,7 +607,7 @@ tcomo(Node *n, int f)
             }
         dpcheck(n);
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case ONAME:
         if(n->type == T) {
             diag(n, "name not declared: %F", n);
@@ -656,7 +632,7 @@ tcomo(Node *n, int f)
             break;
         }
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OLSTRING:
         if(n->type->link != types[TRUNE]) {
             o = outstring(0, 0);
@@ -669,7 +645,7 @@ tcomo(Node *n, int f)
         n->xoffset = outlstring(n->rstring, n->type->width);
         n->addable = 1;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OSTRING:
         if(n->type->link != types[TCHAR]) {
             o = outstring(0, 0);
@@ -682,10 +658,10 @@ tcomo(Node *n, int f)
         n->xoffset = outstring(n->cstring, n->type->width);
         n->addable = 1;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OCONST:
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case ODOT:
         if(tcom(l))
             goto bad;
@@ -694,7 +670,7 @@ tcomo(Node *n, int f)
         if(tcomd(n))
             goto bad;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OADDR:
         if(tcomo(l, ADDROP))
             goto bad;
@@ -711,7 +687,7 @@ tcomo(Node *n, int f)
         n->type = typ(TIND, l->type);
         n->type->width = types[TIND]->width;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OIND:
         if(tcom(l))
             goto bad;
@@ -720,12 +696,36 @@ tcomo(Node *n, int f)
         n->type = l->type->link;
         n->addable = 1;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
     case OSTRUCT:
         if(tcomx(n))
             goto bad;
         break;
-
+    /*x: [[tcomo()]] switch node kind cases */
+    case OSIGN:	/* extension signof(type) returns a hash */
+        if(l != Z) {
+            if(l->op != OSTRING && l->op != OLSTRING)
+                if(tcomo(l, 0))
+                    goto bad;
+            if(l->op == OBIT) {
+                diag(n, "signof bitfield");
+                goto bad;
+            }
+            n->type = l->type;
+        }
+        if(n->type == T)
+            goto bad;
+        if(n->type->width < 0) {
+            diag(n, "signof undefined type");
+            goto bad;
+        }
+        n->op = OCONST;
+        n->left = Z;
+        n->right = Z;
+        n->vconst = convvtox(signature(n->type), TULONG);
+        n->type = types[TULONG];
+        break;
+    /*e: [[tcomo()]] switch node kind cases */
     default:
         diag(n, "unknown op in type complex: %O", n->op);
         goto bad;

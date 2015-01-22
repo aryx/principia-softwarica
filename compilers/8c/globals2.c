@@ -15,10 +15,11 @@ int	reg[D_NONE];
 /*e: global reg(x86) */
 
 /*s: global breakpc */
+// option<pc>, None = -1
 long	breakpc;
 /*e: global breakpc */
 /*s: global nbreak */
-long	nbreak;
+long nbreak;
 /*e: global nbreak */
 /*s: global cases */
 Case*	cases;
@@ -32,6 +33,7 @@ Node	constnode;
 Node	fconstnode;
 /*e: global fconstnode */
 /*s: global continpc */
+// option<pc>, None = -1
 long	continpc;
 /*e: global continpc */
 /*s: global curarg */

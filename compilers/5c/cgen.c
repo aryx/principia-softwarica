@@ -869,6 +869,7 @@ sugen(Node *n, Node *nn, long w)
 
     if(n == Z || n->type == T)
         return;
+
     if(debug['g']) {
         prtree(nn, "sugen lhs");
         prtree(n, "sugen");
@@ -876,12 +877,14 @@ sugen(Node *n, Node *nn, long w)
     if(nn == nodrat)
         if(w > nrathole)
             nrathole = w;
+
     switch(n->op) {
     case OIND:
         if(nn == Z) {
             nullwarn(n->left, Z);
             break;
         }
+    // Fallthrough
 
     default:
         goto copy;
@@ -930,6 +933,7 @@ sugen(Node *n, Node *nn, long w)
         }
         break;
 
+    // struct constructor extension?
     case OSTRUCT:
         /*
          * rewrite so lhs has no fn call

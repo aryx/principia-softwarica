@@ -99,8 +99,10 @@ doswit(Node *n)
     }
     vr[0]->type = types[TLONG];
     vr[1]->type = types[TLONG];
+
     gbranch(OGOTO);
     hsb = p;
+
     iqh = alloc(nc*sizeof(C1));
     iql = alloc(nc*sizeof(C1));
     nh = 0;

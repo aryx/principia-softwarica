@@ -80,10 +80,13 @@ void main(int argc, char *argv[])
     outfile = nil;
     defs = nil;
 
-    profileflg = true;	/* #pragma can turn it off */
+    /*s: [[main()]] initialisation */
     tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     maxdef = 0;
     ndef = 0;
+    /*x: [[main()]] initialisation */
+    profileflg = true;	/* #pragma can turn it off */
+    /*e: [[main()]] initialisation */
 
     setinclude(".");
 

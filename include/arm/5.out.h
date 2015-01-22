@@ -13,7 +13,7 @@ enum registr {
     /* compiler allocates register variables R2 up */
     REGMIN =	2,
     REGMAX =	8,
-    REGEXT =	10,
+    REGEXT =	10, // R9/R10 possible 'extern register xxx;'
     /* compiler allocates external registers R10 down */
     REGTMP =	11,
     /*e: [[regxxx]] compiler conventions cases */

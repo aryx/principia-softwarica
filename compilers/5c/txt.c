@@ -11,21 +11,27 @@ ginit(void)
 {
     Type *t;
 
+    /*s: [[ginit()]] initialisation */
     thechar = '5';
     thestring = "arm";
+    /*x: [[ginit()]] initialisation */
     exregoffset = REGEXT;
     exfregoffset = FREGEXT;
     listinit();
     nstring = 0;
     mnstring = 0;
     nrathole = 0;
-    pc = 0;
-    breakpc = -1;
-    continpc = -1;
     cases = C;
+    tfield = types[TLONG];
+    /*x: [[ginit()]] initialisation */
+    pc = 0;
+    /*x: [[ginit()]] initialisation */
     firstp = P;
     lastp = P;
-    tfield = types[TLONG];
+    /*x: [[ginit()]] initialisation */
+    breakpc = -1;
+    continpc = -1;
+    /*e: [[ginit()]] initialisation */
 
     zprog.link = P;
     zprog.as = AGOK;
@@ -86,6 +92,7 @@ ginit(void)
     com64init();
 
     memset(reg, 0, sizeof(reg));
+
     /* don't allocate */
     reg[REGTMP] = 1;
     reg[REGSB] = 1;
@@ -93,8 +100,9 @@ ginit(void)
     reg[REGLINK] = 1;
     reg[REGPC] = 1;
     /* keep two external registers */
-    reg[REGEXT] = 1;
-    reg[REGEXT-1] = 1;
+    reg[REGEXT] = 1; // R10
+    reg[REGEXT-1] = 1; // R9
+
     memmove(resvreg, reg, sizeof(reg));
 }
 /*e: function ginit(arm) */
@@ -488,35 +496,19 @@ naddr(Node *n, Adr *a)
         return;
 
     switch(n->op) {
-    case OREGISTER:
-        a->type = D_REG;
+    /*s: [[naddr()]] switch node kind cases */
+    case OCONST:
         a->sym = S;
-        a->reg = n->reg;
-        if(a->reg >= NREG) {
-            a->type = D_FREG;
-            a->reg -= NREG;
+        a->reg = NREG;
+        if(typefd[n->type->etype]) {
+            a->type = D_FCONST;
+            a->dval = n->fconst;
+        } else {
+            a->type = D_CONST;
+            a->offset = n->vconst;
         }
         break;
-
-    case OIND:
-        naddr(n->left, a);
-        if(a->type == D_REG) {
-            a->type = D_OREG;
-            break;
-        }
-        if(a->type == D_CONST) {
-            a->type = D_OREG;
-            break;
-        }
-        goto bad;
-
-    case OINDREG:
-        a->type = D_OREG;
-        a->sym = S;
-        a->offset = n->xoffset;
-        a->reg = n->reg;
-        break;
-
+    /*x: [[naddr()]] switch node kind cases */
     case ONAME:
         a->etype = n->etype;
         a->type = D_OREG;
@@ -538,19 +530,19 @@ naddr(Node *n, Adr *a)
             break;
         }
         goto bad;
-
-    case OCONST:
-        a->sym = S;
-        a->reg = NREG;
-        if(typefd[n->type->etype]) {
-            a->type = D_FCONST;
-            a->dval = n->fconst;
-        } else {
-            a->type = D_CONST;
-            a->offset = n->vconst;
+    /*x: [[naddr()]] switch node kind cases */
+    case OIND:
+        naddr(n->left, a);
+        if(a->type == D_REG) {
+            a->type = D_OREG;
+            break;
         }
-        break;
-
+        if(a->type == D_CONST) {
+            a->type = D_OREG;
+            break;
+        }
+        goto bad;
+    /*x: [[naddr()]] switch node kind cases */
     case OADDR:
         naddr(n->left, a);
         if(a->type == D_OREG) {
@@ -558,7 +550,24 @@ naddr(Node *n, Adr *a)
             break;
         }
         goto bad;
-
+    /*x: [[naddr()]] switch node kind cases */
+    case OREGISTER:
+        a->type = D_REG;
+        a->sym = S;
+        a->reg = n->reg;
+        if(a->reg >= NREG) {
+            a->type = D_FREG;
+            a->reg -= NREG;
+        }
+        break;
+    /*x: [[naddr()]] switch node kind cases */
+    case OINDREG:
+        a->type = D_OREG;
+        a->sym = S;
+        a->offset = n->xoffset;
+        a->reg = n->reg;
+        break;
+    /*x: [[naddr()]] switch node kind cases */
     case OADD:
         if(n->left->op == OCONST) {
             naddr(n->left, a);
@@ -571,7 +580,7 @@ naddr(Node *n, Adr *a)
         }
         a->offset += v;
         break;
-
+    /*e: [[naddr()]] switch node kind cases */
     default:
     bad:
         diag(n, "bad in naddr: %O", n->op);
@@ -1208,8 +1217,9 @@ gbranch(int o)
 {
     int a;
 
-    a = AGOK;
+    nextpc();
 
+    a = AGOK;
     switch(o) {
     case ORETURN:
         a = ARET;
@@ -1218,11 +1228,11 @@ gbranch(int o)
         a = AB;
         break;
     }
-    nextpc();
     if(a == AGOK) {
         diag(Z, "bad in gbranch %O",  o);
         nextpc();
     }
+
     p->as = a;
 }
 /*e: function gbranch(arm) */
