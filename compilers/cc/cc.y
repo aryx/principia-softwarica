@@ -100,13 +100,15 @@ prog:
 
 /*s: declarator rules */
 /*s: external declarator rules */
+/*s: xdecl rule */
 /*
  * external declarator
  */
 xdecl:
     zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
+/*x: xdecl rule */
 |   zctlist xdlist ';'
-/*s: xdecl function definition case */
+/*x: xdecl rule */
 |   zctlist xdecor
     {
         lastdcl = T;
@@ -136,10 +138,12 @@ xdecl:
         if(!debug['a'] && !debug['Z'])
             codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
     }
-/*e: xdecl function definition case */
-/*x: external declarator rules */
+/*e: xdecl rule */
+/*s: xdlist rule */
 xdlist:
     xdecor  { dodecl(xdecl, lastclass, lasttype, $1); }
+|   xdlist ',' xdlist
+/*x: xdlist rule */
 |   xdecor
     {
         $1 = dodecl(xdecl, lastclass, lasttype, $1);
@@ -148,21 +152,26 @@ xdlist:
     {
         doinit($1->sym, $1->type, 0L, $4);
     }
-|   xdlist ',' xdlist
-/*x: external declarator rules */
+/*e: xdlist rule */
+/*s: xdecor rule */
 xdecor:
     xdecor2
+/*x: xdecor rule */
 |   '*' zgnlist xdecor
     {
         $$ = new(OIND, $3, Z);
         $$->garb = simpleg($2);
     }
-/*x: external declarator rules */
+/*e: xdecor rule */
+/*s: xdecor2 rule */
 xdecor2:
     tag
+/*x: xdecor2 rule */
 |   '(' xdecor ')'             { $$ = $2;   }
-|   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
 |   xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
+/*x: xdecor2 rule */
+|   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
+/*e: xdecor2 rule */
 /*e: external declarator rules */
 /*s: automatic declarator rules */
 /*
@@ -239,7 +248,7 @@ pdlist:
 abdecor:
   /* empty */ { $$ = Z; }
 |   abdecor1
-
+/*x: abstract declarator rules */
 abdecor1:
     '*' zgnlist
     {
@@ -252,7 +261,7 @@ abdecor1:
         $$->garb = simpleg($2);
     }
 |   abdecor2
-
+/*x: abstract declarator rules */
 abdecor2:
     abdecor3
 |   abdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
@@ -925,6 +934,23 @@ enum:
 |   enum ',' enum
 /*e: types rules */
 /*s: names rules */
+tag:
+    ltag
+    {
+        $$ = new(ONAME, Z, Z);
+        $$->sym = $1;
+
+        $$->type = $1->type;
+        $$->etype = ($$->type != T) ? $$->type->etype : TVOID;
+
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+    }
+/*x: names rules */
+ltag:
+    LNAME
+|   LTYPE
+/*x: names rules */
 name:
     LNAME
     {
@@ -954,28 +980,16 @@ gctname:
 gcname:
     gname
 |   cname
-/*x: names rules */
-tag:
-    ltag
-    {
-        $$ = new(ONAME, Z, Z);
-        $$->sym = $1;
-
-        $$->type = $1->type;
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-    }
-/*x: names rules */
-ltag:
-    LNAME
-|   LTYPE
 /*e: names rules */
 
 /*s: extra grammar rules */
+ctlist:
+    types
+    {
+        lasttype = $1.t;
+        lastclass = $1.c;
+    }
+/*x: extra grammar rules */
 tlist:
     types
     {
@@ -983,15 +997,16 @@ tlist:
         if($1.c != CXXX)
             diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
     }
-/*x: extra grammar rules */
-ctlist:
-    types
-    {
-        lasttype = $1.t;
-        lastclass = $1.c;
-    }
 /*e: extra grammar rules */
 /*s: ebnf grammar rules */
+zctlist:
+ /* empty */
+    {
+        lastclass = CXXX;
+        lasttype = types[TINT];
+    }
+|   ctlist
+/*x: ebnf grammar rules */
 labels:
     label
 |   labels label  { $$ = new(OLIST, $1, $2); }
@@ -1003,14 +1018,6 @@ zcexpr:
 zelist:
   /* empty */ { $$ = Z; }
 |   elist
-/*x: ebnf grammar rules */
-zctlist:
- /* empty */
-    {
-        lastclass = CXXX;
-        lasttype = types[TINT];
-    }
-|   ctlist
 /*e: ebnf grammar rules */
 /*e: grammar */
 %%

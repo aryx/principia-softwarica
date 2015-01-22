@@ -4288,15 +4288,41 @@ prog:
 @
 
 <<external declarator rules>>=
+<<xdecl rule>>
+<<xdlist rule>>
+<<xdecor rule>>
+<<xdecor2 rule>>
+@
+% "external" but actually also work for locals and globals.
+
+<<xdecl rule>>=
 /*
  * external declarator
  */
 xdecl:
     zctlist ';'          { dodecl(xdecl, lastclass, lasttype, Z); }
-|   zctlist xdlist ';'
-<<xdecl function definition case>>
 @
-% "external" but actually also work for locals and globals.
+% This declaration covers actually many definitions as
+% can have complex struct def, typedefs, inside the t or zct_list.
+% ct means class | type, z means zero
+
+
+<<xdecl rule>>=
+|   zctlist xdlist ';'
+@
+% With xdlist can also have global declarations. It also
+% include the types part2, what is on the right of the identifier.
+% xd means external decl
+
+<<xdlist rule>>=
+xdlist:
+    xdecor  { dodecl(xdecl, lastclass, lasttype, $1); }
+|   xdlist ',' xdlist
+@
+%$
+
+
+
 
 % do that because C sucks? my parser_c.mly was also complicated
 % when it come to declaration handling ...
@@ -4312,6 +4338,137 @@ Type*	lasttype;
 @
 
 
+<<ebnf grammar rules>>=
+zctlist:
+ /* empty */
+    {
+        lastclass = CXXX;
+        lasttype = types[TINT];
+    }
+|   ctlist
+@
+
+<<extra grammar rules>>=
+ctlist:
+    types
+    {
+        lasttype = $1.t;
+        lastclass = $1.c;
+    }
+@
+% it's not really 'types', it's types_and_storage really
+% will see types later.
+
+
+
+
+
+
+
+% set lastdcl!
+
+% dodecl() modify especially the lastdcl global.
+% does it also adjust the type? and the node?
+<<function dodecl>>=
+Node*
+dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
+{
+    Sym *s;
+    Node *n1;
+    long v;
+
+    nearln = lineno;
+    lastfield = 0;
+
+loop:
+    if(n != Z)
+     switch(n->op) {
+     <<[[dodecl()]] switch node kind cases>>
+     default:
+         diag(n, "unknown declarator: %O", n->op);
+         break;
+     }
+
+    lastdcl = t;
+    return n;
+}
+@
+
+% hmm why Type* and not Decl*? rename lastdcltype?
+<<global lastdcl>>=
+Type*	lastdcl;
+@
+
+
+
+
+\subsection{Entity declaration or definition}
+
+<<xdecor rule>>=
+xdecor:
+    xdecor2
+@
+% will contain the before identifier type part 2 (pointers)
+
+<<xdecor2 rule>>=
+xdecor2:
+    tag
+@
+% will contain the after identifier type part 2 (array and functions)
+
+
+% for struct, function ... ?
+% xdecor -> xdecor2 -> tag
+<<names rules>>=
+tag:
+    ltag
+    {
+        $$ = new(ONAME, Z, Z);
+        $$->sym = $1;
+
+        $$->type = $1->type;
+        $$->etype = ($$->type != T) ? $$->type->etype : TVOID;
+
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+    }
+@
+% similar to name rule but here it's for decl/defs, 'name' rule is for use.
+% tag! but it's really ident
+
+<<names rules>>=
+ltag:
+    LNAME
+|   LTYPE
+@
+
+
+<<[[dodecl()]] switch node kind cases>>=
+case ONAME:
+    if(f == NODECL)
+        break;
+    s = n->sym;
+
+    // callback!
+    (*f)(class, t, s);
+
+    if(s->class == CLOCAL)
+        s = mkstatic(s);
+    firstbit = 0;
+    n->sym = s;
+    n->type = s->type;
+    n->xoffset = s->offset;
+    n->class = s->class;
+    n->etype = TVOID;
+    if(n->type != T)
+        n->etype = n->type->etype;
+    if(debug['d'])
+        dbgdecl(s);
+    acidvar(s);
+    s->varlineno = lineno;
+    break;
+@
+
 
 
 \section{Function definitions}
@@ -4321,7 +4478,6 @@ Type*	lasttype;
 Decl*	firstdcl;
 @
 
-
 %rename thisfntype?
 <<global thisfn>>=
 Type*	thisfn;
@@ -4329,15 +4485,8 @@ Type*	thisfn;
 % this is useful to annotate the type of RETURN
 
 
-% dodecl() modify especially this global.
-% hmm why Type* and not Decl*? rename lastdcltype?
-<<global lastdcl>>=
-Type*	lastdcl;
-@
 
-
-
-<<xdecl function definition case>>=
+<<xdecl rule>>=
 |   zctlist xdecor
     {
         lastdcl = T;
@@ -4454,87 +4603,6 @@ void argmark(Node *n, int pass)
 %less: not part of the old proto stuff?
 
 
-% TODO enum with bitset 1<<0, 1<<1 ?
-<<constant ANSIPROTO>>=
-#define	ANSIPROTO	1
-@
-
-<<function fnproto>>=
-Type*
-fnproto(Node *n)
-{
-    int r;
-
-    r = anyproto(n->right);
-    if(r == 0 || (r & OLDPROTO)) {
-        if(r & ANSIPROTO)
-            diag(n, "mixed ansi/old function declaration: %F", n->left);
-        return T;
-    }
-    return fnproto1(n->right);
-}
-@
-
-<<function anyproto>>=
-bool
-anyproto(Node *n)
-{
-    int r;
-
-    r = false;
-
-loop:
-    if(n == Z)
-        return r;
-    switch(n->op) {
-    case OLIST:
-        r |= anyproto(n->left);
-        n = n->right;
-        goto loop;
-
-    case ODOTDOT:
-    case OPROTO:
-        return r | ANSIPROTO;
-    }
-    return r | OLDPROTO;
-}
-@
-
-<<function fnproto1>>=
-Type*
-fnproto1(Node *n)
-{
-    Type *t;
-
-    if(n == Z)
-        return T;
-    switch(n->op) {
-    case OLIST:
-        t = fnproto1(n->left);
-        if(t != T)
-            t->down = fnproto1(n->right);
-        return t;
-
-    case OPROTO:
-        lastdcl = T;
-        dodecl(NODECL, CXXX, n->type, n->left);
-        t = typ(TXXX, T);
-        if(lastdcl != T)
-            *t = *paramconv(lastdcl, 1);
-        return t;
-
-    case ONAME:
-        diag(n, "incomplete argument prototype");
-        return typ(TINT, T);
-
-    case ODOTDOT:
-        return typ(TDOT, T);
-    }
-    diag(n, "unknown op in fnproto");
-    return T;
-}
-@
-% NODECL =~ (complex function type cast) nil
 
 
 <<function paramconv>>=
@@ -4653,6 +4721,7 @@ loop:
 
 
 
+% dodecl -> <> 
 
 <<function pdecl>>=
 void
@@ -4674,6 +4743,7 @@ pdecl(int c, Type *t, Sym *s)
     adecl(c, t, s);
 }
 @
+% a parameter is a kind of local, hence the call to adecl
 
 
 
@@ -4700,6 +4770,7 @@ slist:
 |   slist stmnt    { $$ = new(OLIST, $1, $2); }
 @
 %$
+% adecl! for locals
 
 
 % can have labels before stmts
@@ -5250,7 +5321,7 @@ ODOT,
 
 
 
-\subsection{Entities}
+\subsection{Entity uses}
 
 <<pexpr rule>>=
 |   name
@@ -5578,20 +5649,26 @@ OSIZE,
 
 
 
-
-
 \section{Initializers and designators}
+
+
+<<xdlist rule>>=
+|   xdecor
+    {
+        $1 = dodecl(xdecl, lastclass, lasttype, $1);
+    }
+    '=' init
+    {
+        doinit($1->sym, $1->type, 0L, $4);
+    }
+@
+%$
 
 <<variable declaration nodes>>=
 OINIT,
 @
 % but just for list! otherwise it's really OASI.
 
-% as a reminder, here is what was in decl:
-%    '=' init
-%    {
-%        doinit($1->sym, $1->type, 0L, $4);
-%    }
 
 <<initializers rules>>=
 init:
@@ -5637,11 +5714,6 @@ qual:
 
 
 
-% as a reminder, here is what was in decl:
-%    '=' init
-%    {
-%        doinit($1->sym, $1->type, 0L, $4);
-%    }
 
 <<global initlist>>=
 Node*	initlist;
@@ -6617,30 +6689,6 @@ Type* dotag(Sym *s, int et, int bn)
 @
 
 
-<<names rules>>=
-tag:
-    ltag
-    {
-        $$ = new(ONAME, Z, Z);
-        $$->sym = $1;
-
-        $$->type = $1->type;
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-    }
-@
-% similar to name rule
-
-<<names rules>>=
-ltag:
-    LNAME
-|   LTYPE
-@
-
 
 \subsubsection{Structure/union definitions}
 
@@ -6816,7 +6864,7 @@ edecor:
 long	lastfield;
 @
 
-
+% dodecl(<>) -> <>
 <<function edecl>>=
 //@Scheck: used by cc.y
 void edecl(int c, Type *t, Sym *s)
@@ -6884,6 +6932,44 @@ OBIT,
 |   ':' lexpr       { $$ = new(OBIT, Z, $2); }
 @
 %$
+
+<<[[dodecl()]] switch node kind cases>>=
+case OBIT:
+    n1 = n->right;
+    complex(n1);
+    lastfield = -1;
+    if(n1->op == OCONST)
+        lastfield = n1->vconst;
+    if(lastfield < 0) {
+        diag(n, "field width must be non-negative constant");
+        lastfield = 1;
+    }
+    if(lastfield == 0) {
+        lastbit = 0;
+        firstbit = 1;
+        if(n->left != Z) {
+            diag(n, "zero width named field");
+            lastfield = 1;
+        }
+    }
+    if(!typei[t->etype]) {
+        diag(n, "field type must be int-like");
+        t = types[TINT];
+        lastfield = 1;
+    }
+    if(lastfield > tfield->width*8) {
+        diag(n, "field width larger than field unit");
+        lastfield = 1;
+    }
+    lastbit += lastfield;
+    if(lastbit > tfield->width*8) {
+        lastbit = lastfield;
+        firstbit = 1;
+    }
+    n = n->left;
+    goto loop;
+@
+
 
 \subsection{Enums}
 
@@ -7087,125 +7173,160 @@ tcopy(Type *t)
 \subsection{Pointer and array types}
 % types part two
 
+<<xdecor rule>>=
+|   '*' zgnlist xdecor
+    {
+        $$ = new(OIND, $3, Z);
+        $$->garb = simpleg($2);
+    }
+@
+% before the identifier
+
+<<[[dodecl()]] switch node kind cases>>=
+case OIND:
+    t = typ(TIND, t);
+    t->garb = n->garb;
+    n = n->left;
+    goto loop;
+@
+
+
+<<xdecor2 rule>>=
+|   '(' xdecor ')'             { $$ = $2;   }
+|   xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
+@
+%$
+% after the identifier
+
+% see also the abstract declarator rules which are similar
+
+
+<<[[dodecl()]] switch node kind cases>>=
+case OARRAY:
+    t = typ(TARRAY, t);
+    t->width = 0;
+    n1 = n->right;
+    n = n->left;
+    if(n1 != Z) {
+        complex(n1);
+        v = -1;
+        if(n1->op == OCONST)
+            v = n1->vconst;
+        if(v <= 0) {
+            diag(n, "array size must be a positive constant");
+            v = 1;
+        }
+        t->width = v * t->link->width;
+    }
+    goto loop;
+@
 
 \subsection{Function types}
+
+<<xdecor2 rule>>=
+|   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
+@
+%$
+% after the identifier
+
+<<[[dodecl()]] switch node kind cases>>=
+case OFUNC:
+    t = typ(TFUNC, t);
+    t->down = fnproto(n);
+    n = n->left;
+    goto loop;
+@
+
+
+% TODO enum with bitset 1<<0, 1<<1 ?
+<<constant ANSIPROTO>>=
+#define	ANSIPROTO	1
+@
+
+<<function fnproto>>=
+Type*
+fnproto(Node *n)
+{
+    int r;
+
+    r = anyproto(n->right);
+    if(r == 0 || (r & OLDPROTO)) {
+        if(r & ANSIPROTO)
+            diag(n, "mixed ansi/old function declaration: %F", n->left);
+        return T;
+    }
+    return fnproto1(n->right);
+}
+@
+
+<<function anyproto>>=
+bool
+anyproto(Node *n)
+{
+    int r;
+
+    r = false;
+
+loop:
+    if(n == Z)
+        return r;
+    switch(n->op) {
+    case OLIST:
+        r |= anyproto(n->left);
+        n = n->right;
+        goto loop;
+
+    case ODOTDOT:
+    case OPROTO:
+        return r | ANSIPROTO;
+    }
+    return r | OLDPROTO;
+}
+@
+
+<<function fnproto1>>=
+Type*
+fnproto1(Node *n)
+{
+    Type *t;
+
+    if(n == Z)
+        return T;
+    switch(n->op) {
+    case OLIST:
+        t = fnproto1(n->left);
+        if(t != T)
+            t->down = fnproto1(n->right);
+        return t;
+
+    case OPROTO:
+        lastdcl = T;
+        dodecl(NODECL, CXXX, n->type, n->left);
+        t = typ(TXXX, T);
+        if(lastdcl != T)
+            *t = *paramconv(lastdcl, 1);
+        return t;
+
+    case ONAME:
+        diag(n, "incomplete argument prototype");
+        return typ(TINT, T);
+
+    case ODOTDOT:
+        return typ(TDOT, T);
+    }
+    diag(n, "unknown op in fnproto");
+    return T;
+}
+@
+% NODECL =~ (complex function type cast) nil
+
+
 
 \section{Declarations and definitions, part two}
 
 <<constant NODECL>>=
 #define	NODECL	((void(*)(int, Type*, Sym*))nil)
 @
-
-<<function dodecl>>=
-Node*
-dodecl(void (*f)(int,Type*,Sym*), int c, Type *t, Node *n)
-{
-    Sym *s;
-    Node *n1;
-    long v;
-
-    nearln = lineno;
-    lastfield = 0;
-
-loop:
-    if(n != Z)
-    switch(n->op) {
-    case OARRAY:
-        t = typ(TARRAY, t);
-        t->width = 0;
-        n1 = n->right;
-        n = n->left;
-        if(n1 != Z) {
-            complex(n1);
-            v = -1;
-            if(n1->op == OCONST)
-                v = n1->vconst;
-            if(v <= 0) {
-                diag(n, "array size must be a positive constant");
-                v = 1;
-            }
-            t->width = v * t->link->width;
-        }
-        goto loop;
-
-    case OIND:
-        t = typ(TIND, t);
-        t->garb = n->garb;
-        n = n->left;
-        goto loop;
-
-    case OFUNC:
-        t = typ(TFUNC, t);
-        t->down = fnproto(n);
-        n = n->left;
-        goto loop;
-
-    case OBIT:
-        n1 = n->right;
-        complex(n1);
-        lastfield = -1;
-        if(n1->op == OCONST)
-            lastfield = n1->vconst;
-        if(lastfield < 0) {
-            diag(n, "field width must be non-negative constant");
-            lastfield = 1;
-        }
-        if(lastfield == 0) {
-            lastbit = 0;
-            firstbit = 1;
-            if(n->left != Z) {
-                diag(n, "zero width named field");
-                lastfield = 1;
-            }
-        }
-        if(!typei[t->etype]) {
-            diag(n, "field type must be int-like");
-            t = types[TINT];
-            lastfield = 1;
-        }
-        if(lastfield > tfield->width*8) {
-            diag(n, "field width larger than field unit");
-            lastfield = 1;
-        }
-        lastbit += lastfield;
-        if(lastbit > tfield->width*8) {
-            lastbit = lastfield;
-            firstbit = 1;
-        }
-        n = n->left;
-        goto loop;
-
-    case ONAME:
-        if(f == NODECL)
-            break;
-        s = n->sym;
-        (*f)(c, t, s);
-        if(s->class == CLOCAL)
-            s = mkstatic(s);
-        firstbit = 0;
-        n->sym = s;
-        n->type = s->type;
-        n->xoffset = s->offset;
-        n->class = s->class;
-        n->etype = TVOID;
-        if(n->type != T)
-            n->etype = n->type->etype;
-        if(debug['d'])
-            dbgdecl(s);
-        acidvar(s);
-        s->varlineno = lineno;
-        break;
-
-    default:
-        diag(n, "unknown declarator: %O", n->op);
-        break;
-    }
-
-    lastdcl = t;
-    return n;
-}
-@
-
 
 
 <<function xdecl>>=
@@ -7272,66 +7393,14 @@ xdecl(int c, Type *t, Sym *s)
 
 
 
-\subsection{External declarator}
+\subsection{Globals, external declarator}
 
-<<external declarator rules>>=
-xdlist:
-    xdecor  { dodecl(xdecl, lastclass, lasttype, $1); }
-|   xdecor
-    {
-        $1 = dodecl(xdecl, lastclass, lasttype, $1);
-    }
-    '=' init
-    {
-        doinit($1->sym, $1->type, 0L, $4);
-    }
-|   xdlist ',' xdlist
-@
+% have seen already before xdecl, xdlist, xdecor, xdecor2
 
 
-<<external declarator rules>>=
-xdecor:
-    xdecor2
-|   '*' zgnlist xdecor
-    {
-        $$ = new(OIND, $3, Z);
-        $$->garb = simpleg($2);
-    }
-@
-% before the identifier
+\subsection{Locals, automatic declarator}
 
-<<external declarator rules>>=
-xdecor2:
-    tag
-|   '(' xdecor ')'             { $$ = $2;   }
-|   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
-|   xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
-@
-%$
-% after the identifier
-
-<<ebnf grammar rules>>=
-zctlist:
- /* empty */
-    {
-        lastclass = CXXX;
-        lasttype = types[TINT];
-    }
-|   ctlist
-@
-
-<<extra grammar rules>>=
-ctlist:
-    types
-    {
-        lasttype = $1.t;
-        lastclass = $1.c;
-    }
-@
-% it's not really types, it's types_and_storage really
-
-\subsection{Automatic declarator}
-
+% slist -> <>
 <<automatic declarator rules>>=
 /*
  * automatic declarator
@@ -7371,6 +7440,7 @@ adlist:
 %$
 
 
+% pdecl | dodecl(<>) -> <>
 <<function adecl>>=
 void
 adecl(int c, Type *t, Sym *s)
@@ -7560,8 +7630,9 @@ symadjust(Sym *s, Node *n, long del)
 @
 
 
-\subsection{Abstract declarator}
+\subsection{Types, abstract declarator}
 
+% for cast, sizeof, declaration of parameters in a prototype
 <<abstract declarator rules>>=
 /*
  * abstract declarator
@@ -7569,7 +7640,9 @@ symadjust(Sym *s, Node *n, long del)
 abdecor:
   /* empty */ { $$ = Z; }
 |   abdecor1
+@
 
+<<abstract declarator rules>>=
 abdecor1:
     '*' zgnlist
     {
@@ -7582,7 +7655,10 @@ abdecor1:
         $$->garb = simpleg($2);
     }
 |   abdecor2
+@
+%$
 
+<<abstract declarator rules>>=
 abdecor2:
     abdecor3
 |   abdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }

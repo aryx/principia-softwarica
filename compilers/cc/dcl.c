@@ -21,7 +21,7 @@ void	tmerge(Type*, Sym*);
 
 /*s: function dodecl */
 Node*
-dodecl(void (*f)(int,Type*,Sym*), int c, Type *t, Node *n)
+dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
 {
     Sym *s;
     Node *n1;
@@ -32,97 +32,101 @@ dodecl(void (*f)(int,Type*,Sym*), int c, Type *t, Node *n)
 
 loop:
     if(n != Z)
-    switch(n->op) {
-    case OARRAY:
-        t = typ(TARRAY, t);
-        t->width = 0;
-        n1 = n->right;
-        n = n->left;
-        if(n1 != Z) {
-            complex(n1);
-            v = -1;
-            if(n1->op == OCONST)
-                v = n1->vconst;
-            if(v <= 0) {
-                diag(n, "array size must be a positive constant");
-                v = 1;
-            }
-            t->width = v * t->link->width;
-        }
-        goto loop;
+     switch(n->op) {
+     /*s: [[dodecl()]] switch node kind cases */
+     case ONAME:
+         if(f == NODECL)
+             break;
+         s = n->sym;
 
-    case OIND:
-        t = typ(TIND, t);
-        t->garb = n->garb;
-        n = n->left;
-        goto loop;
+         // callback!
+         (*f)(class, t, s);
 
-    case OFUNC:
-        t = typ(TFUNC, t);
-        t->down = fnproto(n);
-        n = n->left;
-        goto loop;
-
-    case OBIT:
-        n1 = n->right;
-        complex(n1);
-        lastfield = -1;
-        if(n1->op == OCONST)
-            lastfield = n1->vconst;
-        if(lastfield < 0) {
-            diag(n, "field width must be non-negative constant");
-            lastfield = 1;
-        }
-        if(lastfield == 0) {
-            lastbit = 0;
-            firstbit = 1;
-            if(n->left != Z) {
-                diag(n, "zero width named field");
-                lastfield = 1;
-            }
-        }
-        if(!typei[t->etype]) {
-            diag(n, "field type must be int-like");
-            t = types[TINT];
-            lastfield = 1;
-        }
-        if(lastfield > tfield->width*8) {
-            diag(n, "field width larger than field unit");
-            lastfield = 1;
-        }
-        lastbit += lastfield;
-        if(lastbit > tfield->width*8) {
-            lastbit = lastfield;
-            firstbit = 1;
-        }
-        n = n->left;
-        goto loop;
-
-    case ONAME:
-        if(f == NODECL)
-            break;
-        s = n->sym;
-        (*f)(c, t, s);
-        if(s->class == CLOCAL)
-            s = mkstatic(s);
-        firstbit = 0;
-        n->sym = s;
-        n->type = s->type;
-        n->xoffset = s->offset;
-        n->class = s->class;
-        n->etype = TVOID;
-        if(n->type != T)
-            n->etype = n->type->etype;
-        if(debug['d'])
-            dbgdecl(s);
-        acidvar(s);
-        s->varlineno = lineno;
-        break;
-
-    default:
-        diag(n, "unknown declarator: %O", n->op);
-        break;
-    }
+         if(s->class == CLOCAL)
+             s = mkstatic(s);
+         firstbit = 0;
+         n->sym = s;
+         n->type = s->type;
+         n->xoffset = s->offset;
+         n->class = s->class;
+         n->etype = TVOID;
+         if(n->type != T)
+             n->etype = n->type->etype;
+         if(debug['d'])
+             dbgdecl(s);
+         acidvar(s);
+         s->varlineno = lineno;
+         break;
+     /*x: [[dodecl()]] switch node kind cases */
+     case OBIT:
+         n1 = n->right;
+         complex(n1);
+         lastfield = -1;
+         if(n1->op == OCONST)
+             lastfield = n1->vconst;
+         if(lastfield < 0) {
+             diag(n, "field width must be non-negative constant");
+             lastfield = 1;
+         }
+         if(lastfield == 0) {
+             lastbit = 0;
+             firstbit = 1;
+             if(n->left != Z) {
+                 diag(n, "zero width named field");
+                 lastfield = 1;
+             }
+         }
+         if(!typei[t->etype]) {
+             diag(n, "field type must be int-like");
+             t = types[TINT];
+             lastfield = 1;
+         }
+         if(lastfield > tfield->width*8) {
+             diag(n, "field width larger than field unit");
+             lastfield = 1;
+         }
+         lastbit += lastfield;
+         if(lastbit > tfield->width*8) {
+             lastbit = lastfield;
+             firstbit = 1;
+         }
+         n = n->left;
+         goto loop;
+     /*x: [[dodecl()]] switch node kind cases */
+     case OIND:
+         t = typ(TIND, t);
+         t->garb = n->garb;
+         n = n->left;
+         goto loop;
+     /*x: [[dodecl()]] switch node kind cases */
+     case OARRAY:
+         t = typ(TARRAY, t);
+         t->width = 0;
+         n1 = n->right;
+         n = n->left;
+         if(n1 != Z) {
+             complex(n1);
+             v = -1;
+             if(n1->op == OCONST)
+                 v = n1->vconst;
+             if(v <= 0) {
+                 diag(n, "array size must be a positive constant");
+                 v = 1;
+             }
+             t->width = v * t->link->width;
+         }
+         goto loop;
+     /*x: [[dodecl()]] switch node kind cases */
+     case OFUNC:
+         t = typ(TFUNC, t);
+         t->down = fnproto(n);
+         n = n->left;
+         goto loop;
+     /*e: [[dodecl()]] switch node kind cases */
+     default:
+         diag(n, "unknown declarator: %O", n->op);
+         break;
+     }
 
     lastdcl = t;
     return n;
