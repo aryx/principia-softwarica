@@ -21953,6 +21953,220 @@ exreg(Type *t)
 "typestr",	LTYPESTR,	0,
 @
 
+% dodecl(xdecl, ...) ->  <>
+<<function dclfunct>>=
+void
+dclfunct(Type *t, Sym *s)
+{
+    Funct *f;
+    Node *n;
+    Type *f1, *f2, *f3, *f4;
+    int o, i, c;
+    char str[100];
+
+    if(t->funct)
+        return;
+
+    // recognize generated tag of dorm _%d_
+    if(t->tag == S)
+        goto bad;
+    for(i=0; c = t->tag->name[i]; i++) {
+        if(c == '_') {
+            if(i == 0 || t->tag->name[i+1] == 0)
+                continue;
+            break;
+        }
+        if(c < '0' || c > '9')
+            break;
+    }
+    if(c == 0)
+        goto bad;
+
+    f = alloc(sizeof(*f));
+    for(o=0; o<sizeof(f->sym); o++)
+        f->sym[o] = S;
+
+    t->funct = f;
+
+    f1 = typ(TFUNC, t);
+    f1->down = copytyp(t);
+    f1->down->down = t;
+
+    f2 = typ(TFUNC, types[TINT]);
+    f2->down = copytyp(t);
+    f2->down->down = t;
+
+    f3 = typ(TFUNC, t);
+    f3->down = typ(TIND, t);
+    f3->down->down = t;
+
+    f4 = typ(TFUNC, t);
+    f4->down = t;
+
+    for(i=0;; i++) {
+        o = ftabinit[i].op;
+        if(o == OXXX)
+            break;
+        sprint(str, "%s_%s_", t->tag->name, ftabinit[i].name);
+        n = new(ONAME, Z, Z);
+        n->sym = slookup(str);
+        f->sym[o] = n->sym;
+
+        switch(ftabinit[i].typ) {
+
+        case 1:	// T f(T,T)	+
+            dodecl(xdecl, CEXTERN, f1, n);
+            break;
+
+        case 2:	// int f(T,T)	==
+            dodecl(xdecl, CEXTERN, f2, n);
+            break;
+
+        case 3:	// void f(T*,T)	+=
+            dodecl(xdecl, CEXTERN, f3, n);
+            break;
+
+        case 4:	// T f(T)	~
+            dodecl(xdecl, CEXTERN, f4, n);
+            break;
+
+        default:
+            diag(Z, "dclfunct op missing %d\n", ftabinit[i].typ);
+            break;
+        }
+    }
+    for(i=0;; i++) {
+        o = gtabinit[i].etype;
+        if(o == TXXX)
+            break;
+
+        /*
+         * OCAST types T1 _T2_T1_(T2)
+         */
+        sprint(str, "_%s%s_", gtabinit[i].name, t->tag->name);
+        n = new(ONAME, Z, Z);
+        n->sym = slookup(str);
+        f->castto[o] = n->sym;
+
+        f1 = typ(TFUNC, t);
+        f1->down = types[o];
+        dodecl(xdecl, CEXTERN, f1, n);
+
+        sprint(str, "%s_%s_", t->tag->name, gtabinit[i].name);
+        n = new(ONAME, Z, Z);
+        n->sym = slookup(str);
+        f->castfr[o] = n->sym;
+
+        f1 = typ(TFUNC, types[o]);
+        f1->down = t;
+        dodecl(xdecl, CEXTERN, f1, n);
+    }
+    return;
+bad:
+    diag(Z, "dclfunct bad %T %s\n", t, s->name);
+}
+@
+
+
+% why not use Init?
+<<struct Ftab>>=
+struct	Ftab
+{
+    char	op;
+    char*	name;
+    char	typ;
+};
+@
+
+% why not use Init?
+<<struct Gtab>>=
+struct	Gtab
+{
+    char	etype;
+    char*	name;
+};
+@
+
+<<global gtabinit>>=
+Gtab	gtabinit[NTYPE] =
+{
+    TCHAR,		"c",
+    TUCHAR,		"uc",
+    TSHORT,		"h",
+    TUSHORT,	"uh",
+    TINT,		"i",
+    TUINT,		"ui",
+    TLONG,		"l",
+    TULONG,		"ul",
+    TVLONG,		"v",
+    TUVLONG,	"uv",
+    TFLOAT,		"f",
+    TDOUBLE,	"d",
+
+    TXXX
+};
+@
+
+<<global ftabinit>>=
+Ftab	ftabinit[OEND] =
+{
+    OADD,		"add",		1,
+    OAND,		"and",		1,
+    OASHL,		"ashl",		1,
+    OASHR,		"ashr",		1,
+    ODIV,		"div",		1,
+    OLDIV,		"ldiv",		1,
+    OLMOD,		"lmod",		1,
+    OLMUL,		"lmul",		1,
+    OLSHR,		"lshr",		1,
+    OMOD,		"mod",		1,
+    OMUL,		"mul",		1,
+    OOR,		"or",		1,
+    OSUB,		"sub",		1,
+    OXOR,		"xor",		1,
+
+    OEQ,		"eq",		2,
+    OGE,		"ge",		2,
+    OGT,		"gt",		2,
+    OHI,		"hi",		2,
+    OHS,		"hs",		2,
+    OLE,		"le",		2,
+    OLO,		"lo",		2,
+    OLS,		"ls",		2,
+    OLT,		"lt",		2,
+    ONE,		"ne",		2,
+
+    OASADD,		"asadd",	3,
+    OASAND,		"asand",	3,
+    OASASHL,	"asashl",	3,
+    OASASHR,	"asashr",	3,
+    OASDIV,		"asdiv",	3,
+    OASLDIV,	"asldiv",	3,
+    OASLMOD,	"aslmod",	3,
+    OASLMUL,	"aslmul",	3,
+    OASLSHR,	"aslshr",	3,
+    OASMOD,		"asmod",	3,
+    OASMUL,		"asmul",	3,
+    OASOR,		"asor",		3,
+    OASSUB,		"assub",	3,
+    OASXOR,		"asxor",	3,
+
+    OPOS,		"pos",		4,
+    ONEG,		"neg",		4,
+    OCOM,		"com",		4,
+    ONOT,		"not",		4,
+
+//	OPOSTDEC,
+//	OPOSTINC,
+//	OPREDEC,
+//	OPREINC,
+
+    OXXX,
+};
+@
+
+
+
 \subsection{Old style prototypes}
 % not really an extension though
 
@@ -22109,217 +22323,6 @@ ofnproto(Node *n)
 
 
 
-\section{[[typestr]]}
-% ???
-
-<<function dclfunct>>=
-void
-dclfunct(Type *t, Sym *s)
-{
-    Funct *f;
-    Node *n;
-    Type *f1, *f2, *f3, *f4;
-    int o, i, c;
-    char str[100];
-
-    if(t->funct)
-        return;
-
-    // recognize generated tag of dorm _%d_
-    if(t->tag == S)
-        goto bad;
-    for(i=0; c = t->tag->name[i]; i++) {
-        if(c == '_') {
-            if(i == 0 || t->tag->name[i+1] == 0)
-                continue;
-            break;
-        }
-        if(c < '0' || c > '9')
-            break;
-    }
-    if(c == 0)
-        goto bad;
-
-    f = alloc(sizeof(*f));
-    for(o=0; o<sizeof(f->sym); o++)
-        f->sym[o] = S;
-
-    t->funct = f;
-
-    f1 = typ(TFUNC, t);
-    f1->down = copytyp(t);
-    f1->down->down = t;
-
-    f2 = typ(TFUNC, types[TINT]);
-    f2->down = copytyp(t);
-    f2->down->down = t;
-
-    f3 = typ(TFUNC, t);
-    f3->down = typ(TIND, t);
-    f3->down->down = t;
-
-    f4 = typ(TFUNC, t);
-    f4->down = t;
-
-    for(i=0;; i++) {
-        o = ftabinit[i].op;
-        if(o == OXXX)
-            break;
-        sprint(str, "%s_%s_", t->tag->name, ftabinit[i].name);
-        n = new(ONAME, Z, Z);
-        n->sym = slookup(str);
-        f->sym[o] = n->sym;
-        switch(ftabinit[i].typ) {
-        default:
-            diag(Z, "dclfunct op missing %d\n", ftabinit[i].typ);
-            break;
-
-        case 1:	// T f(T,T)	+
-            dodecl(xdecl, CEXTERN, f1, n);
-            break;
-
-        case 2:	// int f(T,T)	==
-            dodecl(xdecl, CEXTERN, f2, n);
-            break;
-
-        case 3:	// void f(T*,T)	+=
-            dodecl(xdecl, CEXTERN, f3, n);
-            break;
-
-        case 4:	// T f(T)	~
-            dodecl(xdecl, CEXTERN, f4, n);
-            break;
-        }
-    }
-    for(i=0;; i++) {
-        o = gtabinit[i].etype;
-        if(o == TXXX)
-            break;
-
-        /*
-         * OCAST types T1 _T2_T1_(T2)
-         */
-        sprint(str, "_%s%s_", gtabinit[i].name, t->tag->name);
-        n = new(ONAME, Z, Z);
-        n->sym = slookup(str);
-        f->castto[o] = n->sym;
-
-        f1 = typ(TFUNC, t);
-        f1->down = types[o];
-        dodecl(xdecl, CEXTERN, f1, n);
-
-        sprint(str, "%s_%s_", t->tag->name, gtabinit[i].name);
-        n = new(ONAME, Z, Z);
-        n->sym = slookup(str);
-        f->castfr[o] = n->sym;
-
-        f1 = typ(TFUNC, types[o]);
-        f1->down = t;
-        dodecl(xdecl, CEXTERN, f1, n);
-    }
-    return;
-bad:
-    diag(Z, "dclfunct bad %T %s\n", t, s->name);
-}
-@
-
-
-% why not use Init?
-<<struct Ftab>>=
-struct	Ftab
-{
-    char	op;
-    char*	name;
-    char	typ;
-};
-@
-
-% why not use Init?
-<<struct Gtab>>=
-struct	Gtab
-{
-    char	etype;
-    char*	name;
-};
-@
-
-<<global gtabinit>>=
-Gtab	gtabinit[NTYPE] =
-{
-    TCHAR,		"c",
-    TUCHAR,		"uc",
-    TSHORT,		"h",
-    TUSHORT,	"uh",
-    TINT,		"i",
-    TUINT,		"ui",
-    TLONG,		"l",
-    TULONG,		"ul",
-    TVLONG,		"v",
-    TUVLONG,	"uv",
-    TFLOAT,		"f",
-    TDOUBLE,	"d",
-
-    TXXX
-};
-@
-
-<<global ftabinit>>=
-Ftab	ftabinit[OEND] =
-{
-    OADD,		"add",		1,
-    OAND,		"and",		1,
-    OASHL,		"ashl",		1,
-    OASHR,		"ashr",		1,
-    ODIV,		"div",		1,
-    OLDIV,		"ldiv",		1,
-    OLMOD,		"lmod",		1,
-    OLMUL,		"lmul",		1,
-    OLSHR,		"lshr",		1,
-    OMOD,		"mod",		1,
-    OMUL,		"mul",		1,
-    OOR,		"or",		1,
-    OSUB,		"sub",		1,
-    OXOR,		"xor",		1,
-
-    OEQ,		"eq",		2,
-    OGE,		"ge",		2,
-    OGT,		"gt",		2,
-    OHI,		"hi",		2,
-    OHS,		"hs",		2,
-    OLE,		"le",		2,
-    OLO,		"lo",		2,
-    OLS,		"ls",		2,
-    OLT,		"lt",		2,
-    ONE,		"ne",		2,
-
-    OASADD,		"asadd",	3,
-    OASAND,		"asand",	3,
-    OASASHL,	"asashl",	3,
-    OASASHR,	"asashr",	3,
-    OASDIV,		"asdiv",	3,
-    OASLDIV,	"asldiv",	3,
-    OASLMOD,	"aslmod",	3,
-    OASLMUL,	"aslmul",	3,
-    OASLSHR,	"aslshr",	3,
-    OASMOD,		"asmod",	3,
-    OASMUL,		"asmul",	3,
-    OASOR,		"asor",		3,
-    OASSUB,		"assub",	3,
-    OASXOR,		"asxor",	3,
-
-    OPOS,		"pos",		4,
-    ONEG,		"neg",		4,
-    OCOM,		"com",		4,
-    ONOT,		"not",		4,
-
-//	OPOSTDEC,
-//	OPOSTINC,
-//	OPREDEC,
-//	OPREINC,
-
-    OXXX,
-};
-@
 
 
 
