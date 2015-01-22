@@ -5,13 +5,13 @@
 void
 cgen(Node *n, Node *nn)
 {
-    cgenrel(n, nn, 0);
+    cgenrel(n, nn, false);
 }
 /*e: function cgen(arm) */
 
 /*s: function cgenrel(arm) */
 void
-cgenrel(Node *n, Node *nn, int inrel)
+cgenrel(Node *n, Node *nn, bool inrel)
 {
     Node *l, *r;
     Prog *p1;
@@ -802,7 +802,7 @@ boolgen(Node *n, int true, Node *nn)
             o = comrel[relindex(o)];
         if(l->complex >= FNX && r->complex >= FNX) {
             regret(&nod, r);
-            cgenrel(r, &nod, 1);
+            cgenrel(r, &nod, true);
             regsalloc(&nod1, r);
             gopcode(OAS, &nod, Z, &nod1);
             regfree(&nod);
@@ -813,7 +813,7 @@ boolgen(Node *n, int true, Node *nn)
         }
         if(sconst(l)) {
             regalloc(&nod, r, nn);
-            cgenrel(r, &nod, 1);
+            cgenrel(r, &nod, true);
             o = invrel[relindex(o)];
             gopcode(true ? o | BTRUE : o, l, &nod, Z);
             regfree(&nod);
@@ -821,21 +821,21 @@ boolgen(Node *n, int true, Node *nn)
         }
         if(sconst(r)) {
             regalloc(&nod, l, nn);
-            cgenrel(l, &nod, 1);
+            cgenrel(l, &nod, true);
             gopcode(true ? o | BTRUE : o, r, &nod, Z);
             regfree(&nod);
             goto com;
         }
         if(l->complex >= r->complex) {
             regalloc(&nod1, l, nn);
-            cgenrel(l, &nod1, 1);
+            cgenrel(l, &nod1, true);
             regalloc(&nod, r, Z);
-            cgenrel(r, &nod, 1);
+            cgenrel(r, &nod, true);
         } else {
             regalloc(&nod, r, nn);
-            cgenrel(r, &nod, 1);
+            cgenrel(r, &nod, true);
             regalloc(&nod1, l, Z);
-            cgenrel(l, &nod1, 1);
+            cgenrel(l, &nod1, true);
         }
         gopcode(true ? o | BTRUE : o, &nod, &nod1, Z);
         regfree(&nod);

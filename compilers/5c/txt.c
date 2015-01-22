@@ -486,12 +486,8 @@ naddr(Node *n, Adr *a)
     a->type = D_NONE;
     if(n == Z)
         return;
-    switch(n->op) {
-    default:
-    bad:
-        diag(n, "bad in naddr: %O", n->op);
-        break;
 
+    switch(n->op) {
     case OREGISTER:
         a->type = D_REG;
         a->sym = S;
@@ -576,6 +572,11 @@ naddr(Node *n, Adr *a)
         a->offset += v;
         break;
 
+    default:
+    bad:
+        diag(n, "bad in naddr: %O", n->op);
+        break;
+
     }
 }
 /*e: function naddr(arm) */
@@ -614,9 +615,6 @@ gmove(Node *f, Node *t)
      */
     if(f->op == ONAME || f->op == OINDREG || f->op == OIND) {
         switch(ft) {
-        default:
-            a = AMOVW;
-            break;
         case TFLOAT:
             a = AMOVF;
             break;
@@ -634,6 +632,9 @@ gmove(Node *f, Node *t)
             break;
         case TUSHORT:
             a = AMOVHU;
+            break;
+        default:
+            a = AMOVW;
             break;
         }
         if(typechlp[ft] && typeilp[tt])
@@ -653,9 +654,6 @@ gmove(Node *f, Node *t)
      */
     if(t->op == ONAME || t->op == OINDREG || t->op == OIND) {
         switch(tt) {
-        default:
-            a = AMOVW;
-            break;
         case TUCHAR:
             a = AMOVBU;
             break;
@@ -674,6 +672,9 @@ gmove(Node *f, Node *t)
         case TVLONG:
         case TDOUBLE:
             a = AMOVD;
+            break;
+        default:
+            a = AMOVW;
             break;
         }
         if(ft == tt)
@@ -979,6 +980,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
     true = o & BTRUE;
     o &= ~BTRUE;
     a = AGOK;
+
     switch(o) {
     case OAS:
         gmove(f1, t);
@@ -1162,8 +1164,10 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         f2 = Z;
         break;
     }
+
     if(a == AGOK)
         diag(Z, "bad in gopcode %O", o);
+
     nextpc();
     p->as = a;
     if(f1 != Z)
@@ -1174,6 +1178,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
     }
     if(t != Z)
         naddr(t, &p->to);
+
     if(debug['g'])
         print("%P\n", p);
 }
@@ -1204,6 +1209,7 @@ gbranch(int o)
     int a;
 
     a = AGOK;
+
     switch(o) {
     case ORETURN:
         a = ARET;
@@ -1240,11 +1246,9 @@ gpseudo(int a, Sym *s, Node *n)
     p->as = a;
     p->from.type = D_OREG;
     p->from.sym = s;
-    p->from.name = D_EXTERN;
+    p->from.name = (s->class == CSTATIC) ? D_STATIC : D_EXTERN;
     if(a == ATEXT)
         p->reg = (profileflg ? 0 : NOPROF);
-    if(s->class == CSTATIC)
-        p->from.name = D_STATIC;
     naddr(n, &p->to);
     if(a == ADATA || a == AGLOBL)
         pc--;

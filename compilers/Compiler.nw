@@ -812,6 +812,10 @@ types[TFUNC] = typ(TFUNC, types[TINT]);
 types[TIND] = typ(TIND, types[TVOID]);
 @
 
+% see also those typesets like typev, typeint, etc
+% that allow to quickly check if a type is part of
+% a certain category.
+
 
 <<global tfield>>=
 Type*	tfield;
@@ -1682,7 +1686,9 @@ char*	thestring;
 char*	outfile;
 @
 
-% not put here: -g (in cgen()) -G (in gen())
+% not put here originally: 
+% -g (in cgen()) -G (in gen()) -Z, -f
+% -N -R -P in gen()
 
 % *	-o file		output file
 
@@ -1715,6 +1721,7 @@ char*	outfile;
 % *	-r		print registerization
 % *	-t		print type trees
 % *	-i		print initialization
+% * -G      print stuff for gen (pad: was not mentioned originally)
 
 % *	-M		constant multiplication
 % *	-l		generate little-endian code (mips only)
@@ -4621,7 +4628,8 @@ long	autoffset;
 <<global stkoff>>=
 long	stkoff;
 @
-% stack offset
+% stack offset, used for ATEXT generation, 
+% to compute the set of locals we need
 
 
 % pass is 0 or 1
@@ -7826,57 +7834,6 @@ fatal(Node *n, char *fmt, ...)
 % and so imply some form of promotion
 
 
-
-
-% complex? compile lexical? called by?
-<<function complex>>=
-void
-complex(Node *n)
-{
-
-    if(n == Z)
-        return;
-
-    nearln = n->lineno;
-
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "pre complex");
-
-    if(tcom(n))
-        return;
-
-
-
-    //if(debug['y'] || true)
-    comma(n);
-
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "t complex");
-
-    ccom(n);
-
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "c complex");
-
-    acom(n);
-
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "a complex");
-
-    xcom(n);
-
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "x complex");
-}
-@
-
-
-
 \subsection{Type helpers}
 
 
@@ -7976,6 +7933,7 @@ int	typeilinit[] =
 <<global typev>>=
 char	typev[NTYPE];
 @
+% very long
 
 <<global typevinit>>=
 int	typevinit[] =
@@ -10591,7 +10549,14 @@ OSET,
 @
 
 
-% called by gen() (statement code generator) 
+<<[[gen()]] switch node kind cases>>=
+case OSET:
+case OUSED:
+    usedset(n->left, o);
+    break;
+@
+
+% gen -> <>
 <<function usedset>>=
 void
 usedset(Node *n, int o)
@@ -10620,6 +10585,51 @@ usedset(Node *n, int o)
 
 \subsection{Unreachable code}
 
+<<global canreach>>=
+bool	canreach;
+@
+
+<<global warnreach>>=
+bool	warnreach;
+@
+% set in codgen(), used in gen()
+
+<<global suppress>>=
+bool	suppress;
+@
+% often do warneach = !suppress. not sure why.
+
+<<[[codgen()]] initialisation before call to gen>>=
+canreach = true;
+warnreach = true;
+@
+
+
+
+<<[[gen()]] if not canreach>>=
+if(!canreach) {
+    switch(o) {
+    case OLABEL:
+    case OCASE:
+    case OLIST:
+    case OCOMMA:
+    case OBREAK:
+    case OFOR:
+    case OWHILE:
+    case ODWHILE:
+        /* all handled specially - see switch body below */
+        break;
+    default:
+        if(warnreach) {
+            warn(n, "unreachable code %O", o);
+            warnreach = false;
+        }
+    }
+}
+@
+
+
+% deadheads -> <>
 <<function deadhead>>=
 /*
  * return true if it is impossible to jump into the middle of n.
@@ -10674,11 +10684,25 @@ loop:
 }
 @
 
+% gen | bcomplex -> <>
 <<function deadheads>>=
 bool
 deadheads(Node *c)
 {
-    return deadhead(c->left, 0) && deadhead(c->right, 0);
+    return deadhead(c->left, false) && deadhead(c->right, false);
+}
+@
+
+
+
+\subsection{Missing return}
+
+<<[[codgen()]] warn for possible missing return after call to gen>>=
+if(canreach && thisfn->link->etype != TVOID){
+    if(debug['B'])
+        warn(Z, "no return at end of function: %s", n1->sym->name);
+    else
+        diag(Z, "no return at end of function: %s", n1->sym->name);
 }
 @
 
@@ -10687,9 +10711,10 @@ deadheads(Node *c)
 
 \section{Overview}
 
-% Does 5c/8c/... have an intermediate language? RTL? 
-% seems not :( but have kinda factorized a few things behind some
-% common interface: gpseudo(), gins(), gmove(), gbranch()
+% Does 5c/8c/... have an intermediate language? RTL? nope :( 
+% But they have kinda factorized a few things behind some
+% common interface: gpseudo(), gins(), gmove(), gbranch(), as well
+% as some REGARG, REGRET,
 % so at least some of the statement code generator is portable.
 % (but maybe lcc is cleaner)
 
@@ -10719,6 +10744,9 @@ deadheads(Node *c)
 <<global p>>=
 Prog*	p;
 @
+% often have a 'sp' for save p, and do things like
+% gxxx(); sp = p;   to remember what was the instruction generated
+% by this gxxx()
 
 
 % gins | gclean | ... -> <>
@@ -10795,27 +10823,42 @@ gpseudo(int a, Sym *s, Node *n)
 void
 gextern(Sym *s, Node *a, long o, long w)
 {
-
-    if(a->op == OCONST && typev[a->type->etype]) {
-        if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-            gpseudo(ADATA, s, nod32const(a->vconst>>32));
-        else
-            gpseudo(ADATA, s, nod32const(a->vconst));
+    <<[[gextern()]] if OCONST and a vlong type>>
+    else {
+        gpseudo(ADATA, s, a);
         p->from.offset += o;
-        p->reg = 4;
-        if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-            gpseudo(ADATA, s, nod32const(a->vconst));
-        else
-            gpseudo(ADATA, s, nod32const(a->vconst>>32));
-        p->from.offset += o + 4;
-        p->reg = 4;
-        return;
+        p->reg = w;
+        if(p->to.type == D_OREG)
+            p->to.type = D_CONST;
     }
-    gpseudo(ADATA, s, a);
+}
+@
+
+
+
+<<[[gextern()]] if OCONST and a vlong type>>=
+if(a->op == OCONST && typev[a->type->etype]) {
+    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
+        gpseudo(ADATA, s, nod32const(a->vconst>>32));
+    else
+        gpseudo(ADATA, s, nod32const(a->vconst));
     p->from.offset += o;
-    p->reg = w;
-    if(p->to.type == D_OREG)
-        p->to.type = D_CONST;
+    p->reg = 4;
+    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
+        gpseudo(ADATA, s, nod32const(a->vconst));
+    else
+        gpseudo(ADATA, s, nod32const(a->vconst>>32));
+    p->from.offset += o + 4;
+    p->reg = 4;
+}
+@
+
+<<function nod32const(arm)>>=
+Node*
+nod32const(vlong v)
+{
+    constnode.vconst = v & MASK(32);
+    return &constnode;
 }
 @
 
@@ -10847,12 +10890,8 @@ naddr(Node *n, Adr *a)
     a->type = D_NONE;
     if(n == Z)
         return;
-    switch(n->op) {
-    default:
-    bad:
-        diag(n, "bad in naddr: %O", n->op);
-        break;
 
+    switch(n->op) {
     case OREGISTER:
         a->type = D_REG;
         a->sym = S;
@@ -10937,6 +10976,11 @@ naddr(Node *n, Adr *a)
         a->offset += v;
         break;
 
+    default:
+    bad:
+        diag(n, "bad in naddr: %O", n->op);
+        break;
+
     }
 }
 @
@@ -10950,6 +10994,7 @@ gbranch(int o)
     int a;
 
     a = AGOK;
+
     switch(o) {
     case ORETURN:
         a = ARET;
@@ -10994,9 +11039,6 @@ gmove(Node *f, Node *t)
      */
     if(f->op == ONAME || f->op == OINDREG || f->op == OIND) {
         switch(ft) {
-        default:
-            a = AMOVW;
-            break;
         case TFLOAT:
             a = AMOVF;
             break;
@@ -11014,6 +11056,9 @@ gmove(Node *f, Node *t)
             break;
         case TUSHORT:
             a = AMOVHU;
+            break;
+        default:
+            a = AMOVW;
             break;
         }
         if(typechlp[ft] && typeilp[tt])
@@ -11033,9 +11078,6 @@ gmove(Node *f, Node *t)
      */
     if(t->op == ONAME || t->op == OINDREG || t->op == OIND) {
         switch(tt) {
-        default:
-            a = AMOVW;
-            break;
         case TUCHAR:
             a = AMOVBU;
             break;
@@ -11054,6 +11096,9 @@ gmove(Node *f, Node *t)
         case TVLONG:
         case TDOUBLE:
             a = AMOVD;
+            break;
+        default:
+            a = AMOVW;
             break;
         }
         if(ft == tt)
@@ -11588,8 +11633,85 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 
 
 
+\subsection{[[gargs()]]}
+
+<<function gargs>>=
+void
+gargs(Node *n, Node *tn1, Node *tn2)
+{
+    long regs;
+    Node fnxargs[20], *fnxp;
+
+    regs = cursafe;
+
+    fnxp = fnxargs;
+    garg1(n, tn1, tn2, 0, &fnxp);	/* compile fns to temps */
+
+    curarg = 0;
+    fnxp = fnxargs;
+    garg1(n, tn1, tn2, 1, &fnxp);	/* compile normal args and temps */
+
+    cursafe = regs;
+}
+@
 
 
+
+<<function garg1(arm)>>=
+void
+garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
+{
+    Node nod;
+
+    if(n == Z)
+        return;
+    if(n->op == OLIST) {
+        garg1(n->left, tn1, tn2, f, fnxp);
+        garg1(n->right, tn1, tn2, f, fnxp);
+        return;
+    }
+    if(f == 0) {
+        if(n->complex >= FNX) {
+            regsalloc(*fnxp, n);
+            nod = znode;
+            nod.op = OAS;
+            nod.left = *fnxp;
+            nod.right = n;
+            nod.type = n->type;
+            cgen(&nod, Z);
+            (*fnxp)++;
+        }
+        return;
+    }
+    if(typesuv[n->type->etype]) {
+        regaalloc(tn2, n);
+        if(n->complex >= FNX) {
+            sugen(*fnxp, tn2, n->type->width);
+            (*fnxp)++;
+        } else
+            sugen(n, tn2, n->type->width);
+        return;
+    }
+    if(REGARG >= 0 && curarg == 0 && typechlp[n->type->etype]) {
+        regaalloc1(tn1, n);
+        if(n->complex >= FNX) {
+            cgen(*fnxp, tn1);
+            (*fnxp)++;
+        } else
+            cgen(n, tn1);
+        return;
+    }
+    regalloc(tn1, n, Z);
+    if(n->complex >= FNX) {
+        cgen(*fnxp, tn1);
+        (*fnxp)++;
+    } else
+        cgen(n, tn1);
+    regaalloc(tn2, n);
+    gopcode(OAS, tn1, Z, tn2);
+    regfree(tn1);
+}
+@
 
 \section{Functions, [[codgen()]]}
 
@@ -11607,21 +11729,21 @@ long	maxargsafe;
 
 
 <<global hasdoubled>>=
-int	hasdoubled;
+bool	hasdoubled;
+@
+% seems dead
+
+<<[[codgen()]] initialisation>>=
+cursafe = 0;
+curarg = 0;
+maxargsafe = 0;
+hasdoubled = false;
 @
 
 
 
 
-% set anywhere?
-<<global nodret>>=
-Node*	nodret;
-@
-
-
-
-%REGARG from 5.out.h = 0 => so use R0 and the
-% rest in the stack. 
+%REGARG from 5.out.h = 0 => so use R0 and the rest in the stack. 
 %REGRET is also R0.
 
 % cc2/pgen.c  n = node of the blocks OLIST, nn = node of the ident ONAME
@@ -11632,80 +11754,25 @@ void codgen(Node *n, Node *nn)
     Prog *sp;
     Node *n1, nod, nod1;
 
-    cursafe = 0;
-    curarg = 0;
-    maxargsafe = 0;
-    hasdoubled = 0;
+    <<[[codgen()]] initialisation>>
 
-    /*
-     * isolate name
-     */
-    for(n1 = nn;; n1 = n1->left) {
-        if(n1 == Z) {
-            diag(nn, "cant find function name");
-            return;
-        }
-        if(n1->op == ONAME)
-            break;
-    }
+    <<[[codgen()]] set n1 node to node in nn where have ONAME>>
+
     nearln = nn->lineno;
     gpseudo(ATEXT, n1->sym, nodconst(stkoff));
     sp = p;
 
-    if(typecmplx[thisfn->link->etype]) {
-        if(nodret == nil) {
-            nodret = new(ONAME, Z, Z);
-            nodret->sym = slookup(".ret");
-            nodret->class = CPARAM;
-            nodret->type = types[TIND];
-            nodret->etype = TIND;
-            nodret = new(OIND, nodret, Z);
-        }
-        n1 = nodret->left;
-        if(n1->type == T || n1->type->link != thisfn->link) {
-            n1->type = typ(TIND, thisfn->link);
-            n1->etype = n1->type->etype;
-            nodret = new(OIND, n1, Z);
-            complex(nodret);
-        }
-    }
+    <<[[codgen()]] if complex return type>>
+    <<[[codgen()]] if use REGARG>>
 
-    /*
-     * isolate first argument
-     */
-    if(REGARG >= 0) {	
-        if(typecmplx[thisfn->link->etype]) {
-            nod1 = *nodret->left;
-            nodreg(&nod, &nod1, REGARG);
-            gmove(&nod, &nod1);
-        } else
-        if(firstarg && typeword[firstargtype->etype]) {
-            nod1 = znode;
-            nod1.op = ONAME;
-            nod1.sym = firstarg;
-            nod1.type = firstargtype;
-            nod1.class = CPARAM;
-            nod1.xoffset = align(0, firstargtype, Aarg1);
-            nod1.etype = firstargtype->etype;
-            xcom(&nod1);
-            nodreg(&nod, &nod1, REGARG);
-            gmove(&nod, &nod1);
-        }
-    }
+    <<[[codgen()]] initialisation before call to gen>>
 
-    canreach = true;
-    warnreach = true;
-
+    // generate the assembly for the statements in the body
     gen(n);
 
-    if(canreach && thisfn->link->etype != TVOID){
-        if(debug['B'])
-            warn(Z, "no return at end of function: %s", n1->sym->name);
-        else
-            diag(Z, "no return at end of function: %s", n1->sym->name);
-    }
+    <<[[codgen()]] warn for possible missing return after call to gen>>
 
-    noretval(3);
+    noretval(1 | 2);
 
     gbranch(ORETURN);
 
@@ -11716,6 +11783,51 @@ void codgen(Node *n, Node *nn)
         maxargsafe = round(maxargsafe, 8);
     sp->to.offset += maxargsafe;
 }
+@
+
+% regopt() does a lot of things, the final touch for a function
+
+<<[[codgen()]] set n1 node to node in nn where have ONAME>>=
+/*
+ * isolate name
+ */
+for(n1 = nn;; n1 = n1->left) {
+    if(n1 == Z) {
+        diag(nn, "cant find function name");
+        return;
+    }
+    if(n1->op == ONAME)
+        break;
+}
+@
+% in which case the ONAME is not directly there??
+
+
+\subsection{Return value}
+
+<<[[codgen()]] if complex return type>>=
+if(typecmplx[thisfn->link->etype]) {
+    if(nodret == nil) {
+        nodret = new(ONAME, Z, Z);
+        nodret->sym = slookup(".ret");
+        nodret->class = CPARAM;
+        nodret->type = types[TIND];
+        nodret->etype = TIND;
+        nodret = new(OIND, nodret, Z);
+    }
+    n1 = nodret->left;
+    if(n1->type == T || n1->type->link != thisfn->link) {
+        n1->type = typ(TIND, thisfn->link);
+        n1->etype = n1->type->etype;
+        nodret = new(OIND, n1, Z);
+        complex(nodret);
+    }
+}
+@
+
+% set in codegen
+<<global nodret>>=
+Node*	nodret;
 @
 
 
@@ -11739,7 +11851,513 @@ noretval(int n)
 }
 @
 
+\subsection{First argument}
 
+<<[[codgen()]] if use REGARG>>=
+/*
+ * isolate first argument
+ */
+if(REGARG >= 0) {	
+    if(typecmplx[thisfn->link->etype]) {
+        nod1 = *nodret->left;
+        nodreg(&nod, &nod1, REGARG);
+        gmove(&nod, &nod1);
+    }
+    else
+    if(firstarg && typeword[firstargtype->etype]) {
+        nod1 = znode;
+        nod1.op = ONAME;
+        nod1.sym = firstarg;
+        nod1.type = firstargtype;
+        nod1.class = CPARAM;
+        nod1.xoffset = align(0, firstargtype, Aarg1);
+        nod1.etype = firstargtype->etype;
+        xcom(&nod1);
+        nodreg(&nod, &nod1, REGARG);
+        gmove(&nod, &nod1);
+    }
+}
+@
+
+\subsection{XXX [[regopt()]]}
+
+<<global externs>>=
+Bits	externs;
+@
+<<global params>>=
+Bits	params;
+@
+
+<<global consts>>=
+Bits	consts;
+@
+
+<<global addrs>>=
+Bits	addrs;
+@
+
+
+<<global regbits>>=
+long	regbits;
+@
+
+<<global exregbits>>=
+long	exregbits;
+@
+
+
+<<global change>>=
+int	change;
+@
+
+
+<<global firstr>>=
+Reg*	firstr;
+@
+
+<<global lastr>>=
+Reg*	lastr;
+@
+
+<<global zreg>>=
+Reg	zreg;
+@
+
+<<global freer>>=
+Reg*	freer;
+@
+
+
+% gen -> <>
+<<function regopt(arm)>>=
+void
+regopt(Prog *p)
+{
+    Reg *r, *r1, *r2;
+    Prog *p1;
+    int i, z;
+    long initpc, val, npc;
+    ulong vreg;
+    Bits bit;
+    struct
+    {
+        long	m;
+        long	c;
+        Reg*	p;
+    } log5[6], *lp;
+
+    firstr = R;
+    lastr = R;
+    nvar = 0;
+    regbits = 0;
+    for(z=0; z<BITS; z++) {
+        externs.b[z] = 0;
+        params.b[z] = 0;
+        consts.b[z] = 0;
+        addrs.b[z] = 0;
+    }
+
+    /*
+     * pass 1
+     * build aux data structure
+     * allocate pcs
+     * find use and set of variables
+     */
+    val = 5L * 5L * 5L * 5L * 5L;
+    lp = log5;
+    for(i=0; i<5; i++) {
+        lp->m = val;
+        lp->c = 0;
+        lp->p = R;
+        val /= 5L;
+        lp++;
+    }
+    val = 0;
+    for(; p != P; p = p->link) {
+        switch(p->as) {
+        case ADATA:
+        case AGLOBL:
+        case ANAME:
+        case ASIGNAME:
+            continue;
+        }
+        r = rega();
+        if(firstr == R) {
+            firstr = r;
+            lastr = r;
+        } else {
+            lastr->link = r;
+            r->p1 = lastr;
+            lastr->s1 = r;
+            lastr = r;
+        }
+        r->prog = p;
+        r->pc = val;
+        val++;
+
+        lp = log5;
+        for(i=0; i<5; i++) {
+            lp->c--;
+            if(lp->c <= 0) {
+                lp->c = lp->m;
+                if(lp->p != R)
+                    lp->p->log5 = r;
+                lp->p = r;
+                (lp+1)->c = 0;
+                break;
+            }
+            lp++;
+        }
+
+        r1 = r->p1;
+        if(r1 != R)
+        switch(r1->prog->as) {
+        case ARET:
+        case AB:
+        case ARFE:
+            r->p1 = R;
+            r1->s1 = R;
+        }
+
+        /*
+         * left side always read
+         */
+        bit = mkvar(&p->from, p->as==AMOVW);
+        for(z=0; z<BITS; z++)
+            r->use1.b[z] |= bit.b[z];
+
+        /*
+         * right side depends on opcode
+         */
+        bit = mkvar(&p->to, 0);
+        if(bany(&bit))
+        switch(p->as) {
+        default:
+            diag(Z, "reg: unknown asop: %A", p->as);
+            break;
+
+        /*
+         * right side write
+         */
+        case ANOP:
+        case AMOVB:
+        case AMOVBU:
+        case AMOVH:
+        case AMOVHU:
+        case AMOVW:
+        case AMOVF:
+        case AMOVD:
+            for(z=0; z<BITS; z++)
+                r->set.b[z] |= bit.b[z];
+            break;
+
+        /*
+         * funny
+         */
+        case ABL:
+            for(z=0; z<BITS; z++)
+                addrs.b[z] |= bit.b[z];
+            break;
+        }
+
+        if(p->as == AMOVM) {
+            if(p->from.type == D_CONST)
+                z = p->from.offset;
+            else
+                z = p->to.offset;
+            for(i=0; z; i++) {
+                if(z&1)
+                    regbits |= RtoB(i);
+                z >>= 1;
+            }
+        }
+    }
+    if(firstr == R)
+        return;
+    initpc = pc - val;
+    npc = val;
+
+    /*
+     * pass 2
+     * turn branch references to pointers
+     * build back pointers
+     */
+    for(r = firstr; r != R; r = r->link) {
+        p = r->prog;
+        if(p->to.type == D_BRANCH) {
+            val = p->to.offset - initpc;
+            r1 = firstr;
+            while(r1 != R) {
+                r2 = r1->log5;
+                if(r2 != R && val >= r2->pc) {
+                    r1 = r2;
+                    continue;
+                }
+                if(r1->pc == val)
+                    break;
+                r1 = r1->link;
+            }
+            if(r1 == R) {
+                nearln = p->lineno;
+                diag(Z, "ref not found\n%P", p);
+                continue;
+            }
+            if(r1 == r) {
+                nearln = p->lineno;
+                diag(Z, "ref to self\n%P", p);
+                continue;
+            }
+            r->s2 = r1;
+            r->p2link = r1->p2;
+            r1->p2 = r;
+        }
+    }
+    if(debug['R']) {
+        p = firstr->prog;
+        print("\n%L %D\n", p->lineno, &p->from);
+    }
+
+    /*
+     * pass 2.5
+     * find looping structure
+     */
+    for(r = firstr; r != R; r = r->link)
+        r->active = 0;
+    change = 0;
+    loopit(firstr, npc);
+
+    /*
+     * pass 3
+     * iterate propagating usage
+     * 	back until flow graph is complete
+     */
+loop1:
+    change = 0;
+    for(r = firstr; r != R; r = r->link)
+        r->active = 0;
+    for(r = firstr; r != R; r = r->link)
+        if(r->prog->as == ARET)
+            prop(r, zbits, zbits);
+loop11:
+    /* pick up unreachable code */
+    i = 0;
+    for(r = firstr; r != R; r = r1) {
+        r1 = r->link;
+        if(r1 && r1->active && !r->active) {
+            prop(r, zbits, zbits);
+            i = 1;
+        }
+    }
+    if(i)
+        goto loop11;
+    if(change)
+        goto loop1;
+
+
+    /*
+     * pass 4
+     * iterate propagating register/variable synchrony
+     * 	forward until graph is complete
+     */
+loop2:
+    change = 0;
+    for(r = firstr; r != R; r = r->link)
+        r->active = 0;
+    synch(firstr, zbits);
+    if(change)
+        goto loop2;
+
+    addsplits();
+
+    if(debug['R'] && debug['v']) {
+        print("\nprop structure:\n");
+        for(r = firstr; r != R; r = r->link) {
+            print("%ld:%P", r->loop, r->prog);
+            for(z=0; z<BITS; z++)
+                bit.b[z] = r->set.b[z] |
+                    r->refahead.b[z] | r->calahead.b[z] |
+                    r->refbehind.b[z] | r->calbehind.b[z] |
+                    r->use1.b[z] | r->use2.b[z];
+            if(bany(&bit)) {
+                print("\t");
+                if(bany(&r->use1))
+                    print(" u1=%B", r->use1);
+                if(bany(&r->use2))
+                    print(" u2=%B", r->use2);
+                if(bany(&r->set))
+                    print(" st=%B", r->set);
+                if(bany(&r->refahead))
+                    print(" ra=%B", r->refahead);
+                if(bany(&r->calahead))
+                    print(" ca=%B", r->calahead);
+                if(bany(&r->refbehind))
+                    print(" rb=%B", r->refbehind);
+                if(bany(&r->calbehind))
+                    print(" cb=%B", r->calbehind);
+            }
+            print("\n");
+        }
+    }
+
+    /*
+     * pass 5
+     * isolate regions
+     * calculate costs (paint1)
+     */
+    r = firstr;
+    if(r) {
+        for(z=0; z<BITS; z++)
+            bit.b[z] = (r->refahead.b[z] | r->calahead.b[z]) &
+              ~(externs.b[z] | params.b[z] | addrs.b[z] | consts.b[z]);
+        if(bany(&bit)) {
+            nearln = r->prog->lineno;
+            warn(Z, "used and not set: %B", bit);
+            if(debug['R'] && !debug['w'])
+                print("used and not set: %B\n", bit);
+        }
+    }
+
+    for(r = firstr; r != R; r = r->link)
+        r->act = zbits;
+    rgp = region;
+    nregion = 0;
+    for(r = firstr; r != R; r = r->link) {
+        for(z=0; z<BITS; z++)
+            bit.b[z] = r->set.b[z] &
+              ~(r->refahead.b[z] | r->calahead.b[z] | addrs.b[z]);
+        if(bany(&bit)) {
+            nearln = r->prog->lineno;
+            warn(Z, "set and not used: %B", bit);
+            if(debug['R'])
+                print("set and not used: %B\n", bit);
+            excise(r);
+        }
+        for(z=0; z<BITS; z++)
+            bit.b[z] = LOAD(r) & ~(r->act.b[z] | addrs.b[z]);
+        while(bany(&bit)) {
+            i = bnum(bit);
+            rgp->enter = r;
+            rgp->varno = i;
+            change = 0;
+            if(debug['R'] && debug['v'])
+                print("\n");
+            paint1(r, i);
+            bit.b[i/32] &= ~(1L<<(i%32));
+            if(change <= 0) {
+                if(debug['R'])
+                    print("%L $%d: %B\n",
+                        r->prog->lineno, change, blsh(i));
+                continue;
+            }
+            rgp->cost = change;
+            nregion++;
+            if(nregion >= NRGN) {
+                warn(Z, "too many regions");
+                goto brk;
+            }
+            rgp++;
+        }
+    }
+brk:
+    qsort(region, nregion, sizeof(region[0]), rcmp);
+
+    /*
+     * pass 6
+     * determine used registers (paint2)
+     * replace code (paint3)
+     */
+    rgp = region;
+    for(i=0; i<nregion; i++) {
+        bit = blsh(rgp->varno);
+        vreg = paint2(rgp->enter, rgp->varno);
+        vreg = allreg(vreg, rgp);
+        if(debug['R']) {
+            if(rgp->regno >= NREG)
+                print("%L $%d F%d: %B\n",
+                    rgp->enter->prog->lineno,
+                    rgp->cost,
+                    rgp->regno-NREG,
+                    bit);
+            else
+                print("%L $%d R%d: %B\n",
+                    rgp->enter->prog->lineno,
+                    rgp->cost,
+                    rgp->regno,
+                    bit);
+        }
+        if(rgp->regno != 0)
+            paint3(rgp->enter, rgp->varno, vreg, rgp->regno);
+        rgp++;
+    }
+    /*
+     * pass 7
+     * peep-hole on basic block
+     */
+    if(!debug['R'] || debug['P'])
+        peep();
+
+    /*
+     * pass 8
+     * recalculate pc
+     */
+    val = initpc;
+    for(r = firstr; r != R; r = r1) {
+        r->pc = val;
+        p = r->prog;
+        p1 = P;
+        r1 = r->link;
+        if(r1 != R)
+            p1 = r1->prog;
+        for(; p != p1; p = p->link) {
+            switch(p->as) {
+            default:
+                val++;
+                break;
+
+            case ANOP:
+            case ADATA:
+            case AGLOBL:
+            case ANAME:
+            case ASIGNAME:
+                break;
+            }
+        }
+    }
+    pc = val;
+
+    /*
+     * fix up branches
+     */
+    if(debug['R'])
+        if(bany(&addrs))
+            print("addrs: %B\n", addrs);
+
+    r1 = 0; /* set */
+    for(r = firstr; r != R; r = r->link) {
+        p = r->prog;
+        if(p->to.type == D_BRANCH)
+            p->to.offset = r->s2->pc;
+        r1 = r;
+    }
+
+    /*
+     * last pass
+     * eliminate nops
+     * free aux structures
+     */
+    for(p = firstr->prog; p != P; p = p->link){
+        while(p->link && p->link->as == ANOP)
+            p->link = p->link->link;
+    }
+    if(r1 != R) {
+        r1->link = freer;
+        freer = firstr;
+    }
+}
+@
+
+
+\subsection{Misc}
 
 <<global constnode>>=
 Node	constnode;
@@ -11755,15 +12373,6 @@ Node*
 nodconst(long v)
 {
     constnode.vconst = v;
-    return &constnode;
-}
-@
-
-<<function nod32const(arm)>>=
-Node*
-nod32const(vlong v)
-{
-    constnode.vconst = v & MASK(32);
     return &constnode;
 }
 @
@@ -11794,13 +12403,8 @@ nodreg(Node *n, Node *nn, int reg)
 
 \section{Statements, [[gen()]]}
 
-<<global canreach>>=
-bool	canreach;
-@
 
-<<global warnreach>>=
-bool	warnreach;
-@
+% initialize to true in codgen, before calling gen()
 
 % turn into a static local?
 <<global ncontin>>=
@@ -11816,21 +12420,19 @@ bool	newvlongcode;
 <<global breakpc>>=
 long	breakpc;
 @
+% for break to branch at the right place
 
-
+<<global continpc>>=
+long	continpc;
+@
+% for continue to branch at the right place
 
 
 <<global nbreak>>=
 long	nbreak;
 @
 
-<<global continpc>>=
-long	continpc;
-@
 
-<<global suppress>>=
-bool	suppress;
-@
 
 
 % cc2/pgen.c
@@ -11848,409 +12450,402 @@ gen(Node *n)
 loop:
     if(n == Z)
         return;
+
     nearln = n->lineno;
     o = n->op;
+
     if(debug['G'])
         if(o != OLIST)
             print("%L %O\n", nearln, o);
 
-    if(!canreach) {
-        switch(o) {
-        case OLABEL:
-        case OCASE:
-        case OLIST:
-        case OCOMMA:
-        case OBREAK:
-        case OFOR:
-        case OWHILE:
-        case ODWHILE:
-            /* all handled specially - see switch body below */
-            break;
-        default:
-            if(warnreach) {
-                warn(n, "unreachable code %O", o);
-                warnreach = 0;
-            }
-        }
-    }
+    <<[[gen()]] if not canreach>>
 
     switch(o) {
-
-    default:
-        complex(n);
-        cgen(n, Z);
-        break;
-
-    case OLIST:
-    case OCOMMA:
-        gen(n->left);
-
-    rloop:
-        n = n->right;
-        goto loop;
-
-    case ORETURN:
-        canreach = false;
-        warnreach = !suppress;
-        complex(n);
-        if(n->type == T)
-            break;
-        l = uncomma(n->left);
-        if(l == Z) {
-            noretval(3);
-            gbranch(ORETURN);
-            break;
-        }
-        if(typecmplx[n->type->etype]) {
-            nod = znode;
-            nod.op = OAS;
-            nod.left = nodret;
-            nod.right = l;
-            nod.type = n->type;
-            nod.complex = l->complex;
-            cgen(&nod, Z);
-            noretval(3);
-            gbranch(ORETURN);
-            break;
-        }
-        if(newvlongcode && !typefd[n->type->etype]){
-            regret(&rn, n);
-            regfree(&rn);
-            nod = znode;
-            nod.op = OAS;
-            nod.left = &rn;
-            nod.right = l;
-            nod.type = n->type;
-            nod.complex = l->complex;
-            cgen(&nod, Z);
-            noretval(2);
-            gbranch(ORETURN);
-            break;
-        }
-        regret(&nod, n);
-        cgen(l, &nod);
-        regfree(&nod);
-        if(typefd[n->type->etype])
-            noretval(1);
-        else
-            noretval(2);
-        gbranch(ORETURN);
-        break;
-
-    case OLABEL:
-        canreach = true;
-        l = n->left;
-        if(l) {
-            l->pc = pc;
-            if(l->label)
-                patch(l->label, pc);
-        }
-        gbranch(OGOTO);	/* prevent self reference in reg */
-        patch(p, pc);
-        goto rloop;
-
-    case OGOTO:
-        canreach = false;
-        warnreach = !suppress;
-        n = n->left;
-        if(n == Z)
-            return;
-        if(n->complex == 0) {
-            diag(Z, "label undefined: %s", n->sym->name);
-            return;
-        }
-        if(suppress)
-            return;
-        gbranch(OGOTO);
-        if(n->pc) {
-            patch(p, n->pc);
-            return;
-        }
-        if(n->label)
-            patch(n->label, pc-1);
-        n->label = p;
-        return;
-
-    case OCASE:
-        canreach = true;
-        l = n->left;
-        if(cases == C)
-            diag(n, "case/default outside a switch");
-        if(l == Z) {
-            casf();
-            cases->val = 0;
-            cases->def = 1;
-            cases->label = pc;
-            cases->isv = 0;
-            goto rloop;
-        }
-        complex(l);
-        if(l->type == T)
-            goto rloop;
-        if(l->op != OCONST || !typeswitch[l->type->etype]) {
-            diag(n, "case expression must be integer constant");
-            goto rloop;
-        }
-        casf();
-        cases->val = l->vconst;
-        cases->def = 0;
-        cases->label = pc;
-        cases->isv = typev[l->type->etype];
-        goto rloop;
-
-    case OSWITCH:
-        l = n->left;
-        complex(l);
-        if(l->type == T)
-            break;
-        if(!typeswitch[l->type->etype]) {
-            diag(n, "switch expression must be integer");
-            break;
-        }
-
-        gbranch(OGOTO);		/* entry */
-        sp = p;
-
-        cn = cases;
-        cases = C;
-        casf();
-
-        sbc = breakpc;
-        breakpc = pc;
-        snbreak = nbreak;
-        nbreak = 0;
-        gbranch(OGOTO);
-        spb = p;
-
-        gen(n->right);		/* body */
-        if(canreach){
-            gbranch(OGOTO);
-            patch(p, breakpc);
-            nbreak++;
-        }
-
-        patch(sp, pc);
-        regalloc(&nod, l, Z);
-        /* always signed */
-        if(typev[l->type->etype])
-            nod.type = types[TVLONG];
-        else
-            nod.type = types[TLONG];
-        cgen(l, &nod);
-        doswit(&nod);
-        regfree(&nod);
-        patch(spb, pc);
-
-        cases = cn;
-        breakpc = sbc;
-        canreach = nbreak!=0;
-        if(canreach == false)
-            warnreach = !suppress;
-        nbreak = snbreak;
-        break;
-
-    case OWHILE:
-    case ODWHILE:
-        l = n->left;
-        gbranch(OGOTO);		/* entry */
-        sp = p;
-
-        scc = continpc;
-        continpc = pc;
-        gbranch(OGOTO);
-        spc = p;
-
-        sbc = breakpc;
-        breakpc = pc;
-        snbreak = nbreak;
-        nbreak = 0;
-        gbranch(OGOTO);
-        spb = p;
-
-        patch(spc, pc);
-        if(n->op == OWHILE)
-            patch(sp, pc);
-        bcomplex(l, Z);		/* test */
-        patch(p, breakpc);
-        if(l->op != OCONST || vconst(l) == 0)
-            nbreak++;
-
-        if(n->op == ODWHILE)
-            patch(sp, pc);
-        gen(n->right);		/* body */
-        gbranch(OGOTO);
-        patch(p, continpc);
-
-        patch(spb, pc);
-        continpc = scc;
-        breakpc = sbc;
-        canreach = nbreak!=0;
-        if(canreach == false)
-            warnreach = !suppress;
-        nbreak = snbreak;
-        break;
-
-    case OFOR:
-        l = n->left;
-        if(!canreach && l->right->left && warnreach) {
-            warn(n, "unreachable code FOR");
-            warnreach = 0;
-        }
-        gen(l->right->left);	/* init */
-        gbranch(OGOTO);		/* entry */
-        sp = p;
-
-        /* 
-         * if there are no incoming labels in the 
-         * body and the top's not reachable, warn
-         */
-        if(!canreach && warnreach && deadheads(n)) {
-            warn(n, "unreachable code %O", o);
-            warnreach = 0;
-        }
-
-        scc = continpc;
-        continpc = pc;
-        gbranch(OGOTO);
-        spc = p;
-
-        sbc = breakpc;
-        breakpc = pc;
-        snbreak = nbreak;
-        nbreak = 0;
-        sncontin = ncontin;
-        ncontin = 0;
-        gbranch(OGOTO);
-        spb = p;
-
-        patch(spc, pc);
-        gen(l->right->right);	/* inc */
-        patch(sp, pc);	
-        if(l->left != Z) {	/* test */
-            bcomplex(l->left, Z);
-            patch(p, breakpc);
-            if(l->left->op != OCONST || vconst(l->left) == 0)
-                nbreak++;
-        }
-        canreach = true;
-        gen(n->right);		/* body */
-        if(canreach){
-            gbranch(OGOTO);
-            patch(p, continpc);
-            ncontin++;
-        }
-        if(!ncontin && l->right->right && warnreach) {
-            warn(l->right->right, "unreachable FOR inc");
-            warnreach = 0;
-        }
-
-        patch(spb, pc);
-        continpc = scc;
-        breakpc = sbc;
-        canreach = nbreak!=0;
-        if(canreach == false)
-            warnreach = !suppress;
-        nbreak = snbreak;
-        ncontin = sncontin;
-        break;
-
-    case OCONTINUE:
-        if(continpc < 0) {
-            diag(n, "continue not in a loop");
-            break;
-        }
-        gbranch(OGOTO);
-        patch(p, continpc);
-        ncontin++;
-        canreach = false;
-        warnreach = !suppress;
-        break;
-
-    case OBREAK:
-        if(breakpc < 0) {
-            diag(n, "break not in a loop");
-            break;
-        }
-        /*
-         * Don't complain about unreachable break statements.
-         * There are breaks hidden in yacc's output and some people
-         * write return; break; in their switch statements out of habit.
-         * However, don't confuse the analysis by inserting an 
-         * unreachable reference to breakpc either.
-         */
-        if(!canreach)
-            break;
-        gbranch(OGOTO);
-        patch(p, breakpc);
-        nbreak++;
-        canreach = false;
-        warnreach = !suppress;
-        break;
-
-    case OIF:
-        l = n->left;
-        if(bcomplex(l, n->right)) {
-            if(typefd[l->type->etype])
-                f = !l->fconst;
-            else
-                f = !l->vconst;
-            if(debug['c'])
-                print("%L const if %s\n", nearln, f ? "false" : "true");
-            if(f) {
-                canreach = true;
-                supgen(n->right->left);
-                oldreach = canreach;
-                canreach = true;
-                gen(n->right->right);
-                /*
-                 * treat constant ifs as regular ifs for 
-                 * reachability warnings.
-                 */
-                if(!canreach && oldreach && debug['w'] < 2)
-                    warnreach = 0;
-            }
-            else {
-                canreach = true;
-                gen(n->right->left);
-                oldreach = canreach;
-                canreach = true;
-                supgen(n->right->right);
-                /*
-                 * treat constant ifs as regular ifs for 
-                 * reachability warnings.
-                 */
-                if(!oldreach && canreach && debug['w'] < 2)
-                    warnreach = 0;
-                canreach = oldreach;
-            }
-        }
-        else {
-            sp = p;
-            canreach = true;
-            if(n->right->left != Z)
-                gen(n->right->left);
-            oldreach = canreach;
-            canreach = true;
-            if(n->right->right != Z) {
-                gbranch(OGOTO);
-                patch(sp, pc);
-                sp = p;
-                gen(n->right->right);
-            }
-            patch(sp, pc);
-            canreach = canreach || oldreach;
-            if(canreach == false)
-                warnreach = !suppress;
-        }
-        break;
-
-    case OSET:
-    case OUSED:
-        usedset(n->left, o);
-        break;
+    <<[[gen()]] switch node kind cases>>
     }
 }
 @
+
+
+<<[[gen()]] switch node kind cases>>=
+case OLIST:
+case OCOMMA:
+    gen(n->left);
+
+rloop:
+    n = n->right;
+    goto loop;
+@
+<<[[gen()]] switch node kind cases>>=
+case ORETURN:
+    canreach = false;
+    warnreach = !suppress;
+    complex(n);
+    if(n->type == T)
+        break;
+    l = uncomma(n->left);
+    if(l == Z) {
+        noretval(3);
+        gbranch(ORETURN);
+        break;
+    }
+    if(typecmplx[n->type->etype]) {
+        nod = znode;
+        nod.op = OAS;
+        nod.left = nodret;
+        nod.right = l;
+        nod.type = n->type;
+        nod.complex = l->complex;
+        cgen(&nod, Z);
+        noretval(3);
+        gbranch(ORETURN);
+        break;
+    }
+    if(newvlongcode && !typefd[n->type->etype]){
+        regret(&rn, n);
+        regfree(&rn);
+        nod = znode;
+        nod.op = OAS;
+        nod.left = &rn;
+        nod.right = l;
+        nod.type = n->type;
+        nod.complex = l->complex;
+        cgen(&nod, Z);
+        noretval(2);
+        gbranch(ORETURN);
+        break;
+    }
+    regret(&nod, n);
+    cgen(l, &nod);
+    regfree(&nod);
+    if(typefd[n->type->etype])
+        noretval(1);
+    else
+        noretval(2);
+    gbranch(ORETURN);
+    break;
+
+@
+<<[[gen()]] switch node kind cases>>=
+case OLABEL:
+    canreach = true;
+    l = n->left;
+    if(l) {
+        l->pc = pc;
+        if(l->label)
+            patch(l->label, pc);
+    }
+    gbranch(OGOTO);	/* prevent self reference in reg */
+    patch(p, pc);
+    goto rloop;
+
+@
+<<[[gen()]] switch node kind cases>>=
+case OGOTO:
+    canreach = false;
+    warnreach = !suppress;
+    n = n->left;
+    if(n == Z)
+        return;
+    if(n->complex == 0) {
+        diag(Z, "label undefined: %s", n->sym->name);
+        return;
+    }
+    if(suppress)
+        return;
+    gbranch(OGOTO);
+    if(n->pc) {
+        patch(p, n->pc);
+        return;
+    }
+    if(n->label)
+        patch(n->label, pc-1);
+    n->label = p;
+    return;
+
+@
+<<[[gen()]] switch node kind cases>>=
+case OCASE:
+    canreach = true;
+    l = n->left;
+    if(cases == C)
+        diag(n, "case/default outside a switch");
+    if(l == Z) {
+        casf();
+        cases->val = 0;
+        cases->def = 1;
+        cases->label = pc;
+        cases->isv = 0;
+        goto rloop;
+    }
+    complex(l);
+    if(l->type == T)
+        goto rloop;
+    if(l->op != OCONST || !typeswitch[l->type->etype]) {
+        diag(n, "case expression must be integer constant");
+        goto rloop;
+    }
+    casf();
+    cases->val = l->vconst;
+    cases->def = 0;
+    cases->label = pc;
+    cases->isv = typev[l->type->etype];
+    goto rloop;
+@
+<<[[gen()]] switch node kind cases>>=
+case OSWITCH:
+    l = n->left;
+    complex(l);
+    if(l->type == T)
+        break;
+    if(!typeswitch[l->type->etype]) {
+        diag(n, "switch expression must be integer");
+        break;
+    }
+
+    gbranch(OGOTO);		/* entry */
+    sp = p;
+
+    cn = cases;
+    cases = C;
+    casf();
+
+    sbc = breakpc;
+    breakpc = pc;
+    snbreak = nbreak;
+    nbreak = 0;
+    gbranch(OGOTO);
+    spb = p;
+
+    gen(n->right);		/* body */
+    if(canreach){
+        gbranch(OGOTO);
+        patch(p, breakpc);
+        nbreak++;
+    }
+
+    patch(sp, pc);
+    regalloc(&nod, l, Z);
+    /* always signed */
+    if(typev[l->type->etype])
+        nod.type = types[TVLONG];
+    else
+        nod.type = types[TLONG];
+    cgen(l, &nod);
+    doswit(&nod);
+    regfree(&nod);
+    patch(spb, pc);
+
+    cases = cn;
+    breakpc = sbc;
+    canreach = nbreak!=0;
+    if(canreach == false)
+        warnreach = !suppress;
+    nbreak = snbreak;
+    break;
+@
+<<[[gen()]] switch node kind cases>>=
+case OWHILE:
+case ODWHILE:
+    l = n->left;
+    gbranch(OGOTO);		/* entry */
+    sp = p;
+
+    scc = continpc;
+    continpc = pc;
+    gbranch(OGOTO);
+    spc = p;
+
+    sbc = breakpc;
+    breakpc = pc;
+    snbreak = nbreak;
+    nbreak = 0;
+    gbranch(OGOTO);
+    spb = p;
+
+    patch(spc, pc);
+    if(n->op == OWHILE)
+        patch(sp, pc);
+    bcomplex(l, Z);		/* test */
+    patch(p, breakpc);
+    if(l->op != OCONST || vconst(l) == 0)
+        nbreak++;
+
+    if(n->op == ODWHILE)
+        patch(sp, pc);
+    gen(n->right);		/* body */
+    gbranch(OGOTO);
+    patch(p, continpc);
+
+    patch(spb, pc);
+    continpc = scc;
+    breakpc = sbc;
+    canreach = nbreak!=0;
+    if(canreach == false)
+        warnreach = !suppress;
+    nbreak = snbreak;
+    break;
+@
+<<[[gen()]] switch node kind cases>>=
+case OFOR:
+    l = n->left;
+    if(!canreach && l->right->left && warnreach) {
+        warn(n, "unreachable code FOR");
+        warnreach = 0;
+    }
+    gen(l->right->left);	/* init */
+    gbranch(OGOTO);		/* entry */
+    sp = p;
+
+    /* 
+     * if there are no incoming labels in the 
+     * body and the top's not reachable, warn
+     */
+    if(!canreach && warnreach && deadheads(n)) {
+        warn(n, "unreachable code %O", o);
+        warnreach = 0;
+    }
+
+    scc = continpc;
+    continpc = pc;
+    gbranch(OGOTO);
+    spc = p;
+
+    sbc = breakpc;
+    breakpc = pc;
+    snbreak = nbreak;
+    nbreak = 0;
+    sncontin = ncontin;
+    ncontin = 0;
+    gbranch(OGOTO);
+    spb = p;
+
+    patch(spc, pc);
+    gen(l->right->right);	/* inc */
+    patch(sp, pc);	
+    if(l->left != Z) {	/* test */
+        bcomplex(l->left, Z);
+        patch(p, breakpc);
+        if(l->left->op != OCONST || vconst(l->left) == 0)
+            nbreak++;
+    }
+    canreach = true;
+    gen(n->right);		/* body */
+    if(canreach){
+        gbranch(OGOTO);
+        patch(p, continpc);
+        ncontin++;
+    }
+    if(!ncontin && l->right->right && warnreach) {
+        warn(l->right->right, "unreachable FOR inc");
+        warnreach = 0;
+    }
+
+    patch(spb, pc);
+    continpc = scc;
+    breakpc = sbc;
+    canreach = nbreak!=0;
+    if(canreach == false)
+        warnreach = !suppress;
+    nbreak = snbreak;
+    ncontin = sncontin;
+    break;
+@
+<<[[gen()]] switch node kind cases>>=
+case OCONTINUE:
+    if(continpc < 0) {
+        diag(n, "continue not in a loop");
+        break;
+    }
+    gbranch(OGOTO);
+    patch(p, continpc);
+    ncontin++;
+    canreach = false;
+    warnreach = !suppress;
+    break;
+@
+<<[[gen()]] switch node kind cases>>=
+case OBREAK:
+    if(breakpc < 0) {
+        diag(n, "break not in a loop");
+        break;
+    }
+    /*
+     * Don't complain about unreachable break statements.
+     * There are breaks hidden in yacc's output and some people
+     * write return; break; in their switch statements out of habit.
+     * However, don't confuse the analysis by inserting an 
+     * unreachable reference to breakpc either.
+     */
+    if(!canreach)
+        break;
+    gbranch(OGOTO);
+    patch(p, breakpc);
+    nbreak++;
+    canreach = false;
+    warnreach = !suppress;
+    break;
+@
+<<[[gen()]] switch node kind cases>>=
+case OIF:
+    l = n->left;
+    if(bcomplex(l, n->right)) {
+        if(typefd[l->type->etype])
+            f = !l->fconst;
+        else
+            f = !l->vconst;
+        if(debug['c'])
+            print("%L const if %s\n", nearln, f ? "false" : "true");
+        if(f) {
+            canreach = true;
+            supgen(n->right->left);
+            oldreach = canreach;
+            canreach = true;
+            gen(n->right->right);
+            /*
+             * treat constant ifs as regular ifs for 
+             * reachability warnings.
+             */
+            if(!canreach && oldreach && debug['w'] < 2)
+                warnreach = 0;
+        }
+        else {
+            canreach = true;
+            gen(n->right->left);
+            oldreach = canreach;
+            canreach = true;
+            supgen(n->right->right);
+            /*
+             * treat constant ifs as regular ifs for 
+             * reachability warnings.
+             */
+            if(!oldreach && canreach && debug['w'] < 2)
+                warnreach = 0;
+            canreach = oldreach;
+        }
+    }
+    else {
+        sp = p;
+        canreach = true;
+        if(n->right->left != Z)
+            gen(n->right->left);
+        oldreach = canreach;
+        canreach = true;
+        if(n->right->right != Z) {
+            gbranch(OGOTO);
+            patch(sp, pc);
+            sp = p;
+            gen(n->right->right);
+        }
+        patch(sp, pc);
+        canreach = canreach || oldreach;
+        if(canreach == false)
+            warnreach = !suppress;
+    }
+    break;
+@
+
+
 
 % gmove | gen | ... -> <>
 <<function patch>>=
@@ -12404,7 +12999,9 @@ err:
 }
 @
 
+\subsection{Blocks, sequence}
 
+\subsection{Conditionals}
 
 \subsection{Switch}
 
@@ -12669,8 +13266,87 @@ direct:
 }
 @
 
+\subsection{Control flow jumps}
 
-\section{[[cgen()]]}
+\subsection{Loops}
+
+\subsection{Labels and goto}
+
+
+\section{Expressions}
+
+
+<<[[gen()]] switch node kind cases>>=
+default:
+    complex(n);
+    cgen(n, Z);
+    break;
+@
+
+\subsection{[[complex()]]}
+
+% complex? compile lexical? called by?
+<<function complex>>=
+void
+complex(Node *n)
+{
+
+    if(n == Z)
+        return;
+
+    nearln = n->lineno;
+
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "pre complex");
+
+    if(tcom(n))
+        return;
+
+
+
+    //if(debug['y'] || true)
+    comma(n);
+
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "t complex");
+
+    ccom(n);
+
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "c complex");
+
+    acom(n);
+
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "a complex");
+
+    xcom(n);
+
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "x complex");
+}
+@
+
+
+
+
+
+\subsection{[[cgen()]]}
+
+% codgen -> gen -> <> for expression stuff
+<<function cgen(arm)>>=
+void
+cgen(Node *n, Node *nn)
+{
+    cgenrel(n, nn, false);
+}
+@
+
 
 % this in cc/pswt.c but should be in a cc/pcgen.c
 <<function nullwarn>>=
@@ -12684,6 +13360,7 @@ nullwarn(Node *l, Node *r)
         cgen(r, Z);
 }
 @
+%less: mv also in Checking section?
 
 <<constant INDEXED(arm)>>=
 #define	INDEXED	9
@@ -12698,21 +13375,11 @@ Node*	nodrat;
 
 
 
-<<function cgen(arm)>>=
-void
-cgen(Node *n, Node *nn)
-{
-    cgenrel(n, nn, 0);
-}
-@
-
-
-
 
 
 <<function cgenrel(arm)>>=
 void
-cgenrel(Node *n, Node *nn, int inrel)
+cgenrel(Node *n, Node *nn, bool inrel)
 {
     Node *l, *r;
     Prog *p1;
@@ -13340,83 +14007,6 @@ regialloc(Node *n, Node *tn, Node *o)
 
 
 
-<<function gargs>>=
-void
-gargs(Node *n, Node *tn1, Node *tn2)
-{
-    long regs;
-    Node fnxargs[20], *fnxp;
-
-    regs = cursafe;
-
-    fnxp = fnxargs;
-    garg1(n, tn1, tn2, 0, &fnxp);	/* compile fns to temps */
-
-    curarg = 0;
-    fnxp = fnxargs;
-    garg1(n, tn1, tn2, 1, &fnxp);	/* compile normal args and temps */
-
-    cursafe = regs;
-}
-@
-
-
-
-<<function garg1(arm)>>=
-void
-garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
-{
-    Node nod;
-
-    if(n == Z)
-        return;
-    if(n->op == OLIST) {
-        garg1(n->left, tn1, tn2, f, fnxp);
-        garg1(n->right, tn1, tn2, f, fnxp);
-        return;
-    }
-    if(f == 0) {
-        if(n->complex >= FNX) {
-            regsalloc(*fnxp, n);
-            nod = znode;
-            nod.op = OAS;
-            nod.left = *fnxp;
-            nod.right = n;
-            nod.type = n->type;
-            cgen(&nod, Z);
-            (*fnxp)++;
-        }
-        return;
-    }
-    if(typesuv[n->type->etype]) {
-        regaalloc(tn2, n);
-        if(n->complex >= FNX) {
-            sugen(*fnxp, tn2, n->type->width);
-            (*fnxp)++;
-        } else
-            sugen(n, tn2, n->type->width);
-        return;
-    }
-    if(REGARG >= 0 && curarg == 0 && typechlp[n->type->etype]) {
-        regaalloc1(tn1, n);
-        if(n->complex >= FNX) {
-            cgen(*fnxp, tn1);
-            (*fnxp)++;
-        } else
-            cgen(n, tn1);
-        return;
-    }
-    regalloc(tn1, n, Z);
-    if(n->complex >= FNX) {
-        cgen(*fnxp, tn1);
-        (*fnxp)++;
-    } else
-        cgen(n, tn1);
-    regaalloc(tn2, n);
-    gopcode(OAS, tn1, Z, tn2);
-    regfree(tn1);
-}
-@
 
 <<expression nodes>>=
 OINDREG, // after parsing only
@@ -13845,7 +14435,7 @@ boolgen(Node *n, int true, Node *nn)
             o = comrel[relindex(o)];
         if(l->complex >= FNX && r->complex >= FNX) {
             regret(&nod, r);
-            cgenrel(r, &nod, 1);
+            cgenrel(r, &nod, true);
             regsalloc(&nod1, r);
             gopcode(OAS, &nod, Z, &nod1);
             regfree(&nod);
@@ -13856,7 +14446,7 @@ boolgen(Node *n, int true, Node *nn)
         }
         if(sconst(l)) {
             regalloc(&nod, r, nn);
-            cgenrel(r, &nod, 1);
+            cgenrel(r, &nod, true);
             o = invrel[relindex(o)];
             gopcode(true ? o | BTRUE : o, l, &nod, Z);
             regfree(&nod);
@@ -13864,21 +14454,21 @@ boolgen(Node *n, int true, Node *nn)
         }
         if(sconst(r)) {
             regalloc(&nod, l, nn);
-            cgenrel(l, &nod, 1);
+            cgenrel(l, &nod, true);
             gopcode(true ? o | BTRUE : o, r, &nod, Z);
             regfree(&nod);
             goto com;
         }
         if(l->complex >= r->complex) {
             regalloc(&nod1, l, nn);
-            cgenrel(l, &nod1, 1);
+            cgenrel(l, &nod1, true);
             regalloc(&nod, r, Z);
-            cgenrel(r, &nod, 1);
+            cgenrel(r, &nod, true);
         } else {
             regalloc(&nod, r, nn);
-            cgenrel(r, &nod, 1);
+            cgenrel(r, &nod, true);
             regalloc(&nod1, l, Z);
-            cgenrel(l, &nod1, 1);
+            cgenrel(l, &nod1, true);
         }
         gopcode(true ? o | BTRUE : o, &nod, &nod1, Z);
         regfree(&nod);
@@ -19375,480 +19965,6 @@ rcmp(const void *a1, const void *a2)
 @
 
 
-<<global externs>>=
-Bits	externs;
-@
-<<global params>>=
-Bits	params;
-@
-
-<<global consts>>=
-Bits	consts;
-@
-
-<<global addrs>>=
-Bits	addrs;
-@
-
-
-<<global regbits>>=
-long	regbits;
-@
-
-<<global exregbits>>=
-long	exregbits;
-@
-
-
-<<global change>>=
-int	change;
-@
-
-
-<<global firstr>>=
-Reg*	firstr;
-@
-
-<<global lastr>>=
-Reg*	lastr;
-@
-
-<<global zreg>>=
-Reg	zreg;
-@
-
-<<global freer>>=
-Reg*	freer;
-@
-
-
-
-<<function regopt(arm)>>=
-void
-regopt(Prog *p)
-{
-    Reg *r, *r1, *r2;
-    Prog *p1;
-    int i, z;
-    long initpc, val, npc;
-    ulong vreg;
-    Bits bit;
-    struct
-    {
-        long	m;
-        long	c;
-        Reg*	p;
-    } log5[6], *lp;
-
-    firstr = R;
-    lastr = R;
-    nvar = 0;
-    regbits = 0;
-    for(z=0; z<BITS; z++) {
-        externs.b[z] = 0;
-        params.b[z] = 0;
-        consts.b[z] = 0;
-        addrs.b[z] = 0;
-    }
-
-    /*
-     * pass 1
-     * build aux data structure
-     * allocate pcs
-     * find use and set of variables
-     */
-    val = 5L * 5L * 5L * 5L * 5L;
-    lp = log5;
-    for(i=0; i<5; i++) {
-        lp->m = val;
-        lp->c = 0;
-        lp->p = R;
-        val /= 5L;
-        lp++;
-    }
-    val = 0;
-    for(; p != P; p = p->link) {
-        switch(p->as) {
-        case ADATA:
-        case AGLOBL:
-        case ANAME:
-        case ASIGNAME:
-            continue;
-        }
-        r = rega();
-        if(firstr == R) {
-            firstr = r;
-            lastr = r;
-        } else {
-            lastr->link = r;
-            r->p1 = lastr;
-            lastr->s1 = r;
-            lastr = r;
-        }
-        r->prog = p;
-        r->pc = val;
-        val++;
-
-        lp = log5;
-        for(i=0; i<5; i++) {
-            lp->c--;
-            if(lp->c <= 0) {
-                lp->c = lp->m;
-                if(lp->p != R)
-                    lp->p->log5 = r;
-                lp->p = r;
-                (lp+1)->c = 0;
-                break;
-            }
-            lp++;
-        }
-
-        r1 = r->p1;
-        if(r1 != R)
-        switch(r1->prog->as) {
-        case ARET:
-        case AB:
-        case ARFE:
-            r->p1 = R;
-            r1->s1 = R;
-        }
-
-        /*
-         * left side always read
-         */
-        bit = mkvar(&p->from, p->as==AMOVW);
-        for(z=0; z<BITS; z++)
-            r->use1.b[z] |= bit.b[z];
-
-        /*
-         * right side depends on opcode
-         */
-        bit = mkvar(&p->to, 0);
-        if(bany(&bit))
-        switch(p->as) {
-        default:
-            diag(Z, "reg: unknown asop: %A", p->as);
-            break;
-
-        /*
-         * right side write
-         */
-        case ANOP:
-        case AMOVB:
-        case AMOVBU:
-        case AMOVH:
-        case AMOVHU:
-        case AMOVW:
-        case AMOVF:
-        case AMOVD:
-            for(z=0; z<BITS; z++)
-                r->set.b[z] |= bit.b[z];
-            break;
-
-        /*
-         * funny
-         */
-        case ABL:
-            for(z=0; z<BITS; z++)
-                addrs.b[z] |= bit.b[z];
-            break;
-        }
-
-        if(p->as == AMOVM) {
-            if(p->from.type == D_CONST)
-                z = p->from.offset;
-            else
-                z = p->to.offset;
-            for(i=0; z; i++) {
-                if(z&1)
-                    regbits |= RtoB(i);
-                z >>= 1;
-            }
-        }
-    }
-    if(firstr == R)
-        return;
-    initpc = pc - val;
-    npc = val;
-
-    /*
-     * pass 2
-     * turn branch references to pointers
-     * build back pointers
-     */
-    for(r = firstr; r != R; r = r->link) {
-        p = r->prog;
-        if(p->to.type == D_BRANCH) {
-            val = p->to.offset - initpc;
-            r1 = firstr;
-            while(r1 != R) {
-                r2 = r1->log5;
-                if(r2 != R && val >= r2->pc) {
-                    r1 = r2;
-                    continue;
-                }
-                if(r1->pc == val)
-                    break;
-                r1 = r1->link;
-            }
-            if(r1 == R) {
-                nearln = p->lineno;
-                diag(Z, "ref not found\n%P", p);
-                continue;
-            }
-            if(r1 == r) {
-                nearln = p->lineno;
-                diag(Z, "ref to self\n%P", p);
-                continue;
-            }
-            r->s2 = r1;
-            r->p2link = r1->p2;
-            r1->p2 = r;
-        }
-    }
-    if(debug['R']) {
-        p = firstr->prog;
-        print("\n%L %D\n", p->lineno, &p->from);
-    }
-
-    /*
-     * pass 2.5
-     * find looping structure
-     */
-    for(r = firstr; r != R; r = r->link)
-        r->active = 0;
-    change = 0;
-    loopit(firstr, npc);
-
-    /*
-     * pass 3
-     * iterate propagating usage
-     * 	back until flow graph is complete
-     */
-loop1:
-    change = 0;
-    for(r = firstr; r != R; r = r->link)
-        r->active = 0;
-    for(r = firstr; r != R; r = r->link)
-        if(r->prog->as == ARET)
-            prop(r, zbits, zbits);
-loop11:
-    /* pick up unreachable code */
-    i = 0;
-    for(r = firstr; r != R; r = r1) {
-        r1 = r->link;
-        if(r1 && r1->active && !r->active) {
-            prop(r, zbits, zbits);
-            i = 1;
-        }
-    }
-    if(i)
-        goto loop11;
-    if(change)
-        goto loop1;
-
-
-    /*
-     * pass 4
-     * iterate propagating register/variable synchrony
-     * 	forward until graph is complete
-     */
-loop2:
-    change = 0;
-    for(r = firstr; r != R; r = r->link)
-        r->active = 0;
-    synch(firstr, zbits);
-    if(change)
-        goto loop2;
-
-    addsplits();
-
-    if(debug['R'] && debug['v']) {
-        print("\nprop structure:\n");
-        for(r = firstr; r != R; r = r->link) {
-            print("%ld:%P", r->loop, r->prog);
-            for(z=0; z<BITS; z++)
-                bit.b[z] = r->set.b[z] |
-                    r->refahead.b[z] | r->calahead.b[z] |
-                    r->refbehind.b[z] | r->calbehind.b[z] |
-                    r->use1.b[z] | r->use2.b[z];
-            if(bany(&bit)) {
-                print("\t");
-                if(bany(&r->use1))
-                    print(" u1=%B", r->use1);
-                if(bany(&r->use2))
-                    print(" u2=%B", r->use2);
-                if(bany(&r->set))
-                    print(" st=%B", r->set);
-                if(bany(&r->refahead))
-                    print(" ra=%B", r->refahead);
-                if(bany(&r->calahead))
-                    print(" ca=%B", r->calahead);
-                if(bany(&r->refbehind))
-                    print(" rb=%B", r->refbehind);
-                if(bany(&r->calbehind))
-                    print(" cb=%B", r->calbehind);
-            }
-            print("\n");
-        }
-    }
-
-    /*
-     * pass 5
-     * isolate regions
-     * calculate costs (paint1)
-     */
-    r = firstr;
-    if(r) {
-        for(z=0; z<BITS; z++)
-            bit.b[z] = (r->refahead.b[z] | r->calahead.b[z]) &
-              ~(externs.b[z] | params.b[z] | addrs.b[z] | consts.b[z]);
-        if(bany(&bit)) {
-            nearln = r->prog->lineno;
-            warn(Z, "used and not set: %B", bit);
-            if(debug['R'] && !debug['w'])
-                print("used and not set: %B\n", bit);
-        }
-    }
-
-    for(r = firstr; r != R; r = r->link)
-        r->act = zbits;
-    rgp = region;
-    nregion = 0;
-    for(r = firstr; r != R; r = r->link) {
-        for(z=0; z<BITS; z++)
-            bit.b[z] = r->set.b[z] &
-              ~(r->refahead.b[z] | r->calahead.b[z] | addrs.b[z]);
-        if(bany(&bit)) {
-            nearln = r->prog->lineno;
-            warn(Z, "set and not used: %B", bit);
-            if(debug['R'])
-                print("set and not used: %B\n", bit);
-            excise(r);
-        }
-        for(z=0; z<BITS; z++)
-            bit.b[z] = LOAD(r) & ~(r->act.b[z] | addrs.b[z]);
-        while(bany(&bit)) {
-            i = bnum(bit);
-            rgp->enter = r;
-            rgp->varno = i;
-            change = 0;
-            if(debug['R'] && debug['v'])
-                print("\n");
-            paint1(r, i);
-            bit.b[i/32] &= ~(1L<<(i%32));
-            if(change <= 0) {
-                if(debug['R'])
-                    print("%L $%d: %B\n",
-                        r->prog->lineno, change, blsh(i));
-                continue;
-            }
-            rgp->cost = change;
-            nregion++;
-            if(nregion >= NRGN) {
-                warn(Z, "too many regions");
-                goto brk;
-            }
-            rgp++;
-        }
-    }
-brk:
-    qsort(region, nregion, sizeof(region[0]), rcmp);
-
-    /*
-     * pass 6
-     * determine used registers (paint2)
-     * replace code (paint3)
-     */
-    rgp = region;
-    for(i=0; i<nregion; i++) {
-        bit = blsh(rgp->varno);
-        vreg = paint2(rgp->enter, rgp->varno);
-        vreg = allreg(vreg, rgp);
-        if(debug['R']) {
-            if(rgp->regno >= NREG)
-                print("%L $%d F%d: %B\n",
-                    rgp->enter->prog->lineno,
-                    rgp->cost,
-                    rgp->regno-NREG,
-                    bit);
-            else
-                print("%L $%d R%d: %B\n",
-                    rgp->enter->prog->lineno,
-                    rgp->cost,
-                    rgp->regno,
-                    bit);
-        }
-        if(rgp->regno != 0)
-            paint3(rgp->enter, rgp->varno, vreg, rgp->regno);
-        rgp++;
-    }
-    /*
-     * pass 7
-     * peep-hole on basic block
-     */
-    if(!debug['R'] || debug['P'])
-        peep();
-
-    /*
-     * pass 8
-     * recalculate pc
-     */
-    val = initpc;
-    for(r = firstr; r != R; r = r1) {
-        r->pc = val;
-        p = r->prog;
-        p1 = P;
-        r1 = r->link;
-        if(r1 != R)
-            p1 = r1->prog;
-        for(; p != p1; p = p->link) {
-            switch(p->as) {
-            default:
-                val++;
-                break;
-
-            case ANOP:
-            case ADATA:
-            case AGLOBL:
-            case ANAME:
-            case ASIGNAME:
-                break;
-            }
-        }
-    }
-    pc = val;
-
-    /*
-     * fix up branches
-     */
-    if(debug['R'])
-        if(bany(&addrs))
-            print("addrs: %B\n", addrs);
-
-    r1 = 0; /* set */
-    for(r = firstr; r != R; r = r->link) {
-        p = r->prog;
-        if(p->to.type == D_BRANCH)
-            p->to.offset = r->s2->pc;
-        r1 = r;
-    }
-
-    /*
-     * last pass
-     * eliminate nops
-     * free aux structures
-     */
-    for(p = firstr->prog; p != P; p = p->link){
-        while(p->link && p->link->as == ANOP)
-            p->link = p->link->link;
-    }
-    if(r1 != R) {
-        r1->link = freer;
-        freer = firstr;
-    }
-}
-@
 
 
 <<constant NRGN(arm)>>=

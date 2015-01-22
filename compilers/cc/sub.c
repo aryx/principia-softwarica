@@ -2191,13 +2191,15 @@ tinit(void)
 /*
  * return true if it is impossible to jump into the middle of n.
  */
-static int
-deadhead(Node *n, int caseok)
+static bool
+deadhead(Node *n, bool caseok)
 {
 loop:
     if(n == Z)
         return true;
+
     switch(n->op) {
+
     case OLIST:
         if(!deadhead(n->left, caseok))
             return false;
@@ -2205,42 +2207,35 @@ loop:
         n = n->right;
         goto loop;
 
-    case ORETURN:
-        break;
+    case OWHILE:
+    case ODWHILE:
+    case OFOR:
+        goto rloop;
 
-    case OLABEL:
-        return false;
+    case OIF:
+        return deadhead(n->right->left, caseok) && 
+               deadhead(n->right->right, caseok);
 
-    case OGOTO:
-        break;
+    case OSWITCH:
+        return deadhead(n->right, true);
 
     case OCASE:
         if(!caseok)
             return false;
         goto rloop;
 
-    case OSWITCH:
-        return deadhead(n->right, 1);
+    case OLABEL:
+        return false;
 
-    case OWHILE:
-    case ODWHILE:
-        goto rloop;
-
-    case OFOR:
-        goto rloop;
-
+    case ORETURN:
+    case OGOTO:
     case OCONTINUE:
-        break;
-
     case OBREAK:
-        break;
-
-    case OIF:
-        return deadhead(n->right->left, caseok) && deadhead(n->right->right, caseok);
+        return true;
 
     case OSET:
     case OUSED:
-        break;
+        return true;
     }
     return true;
 }
@@ -2250,7 +2245,7 @@ loop:
 bool
 deadheads(Node *c)
 {
-    return deadhead(c->left, 0) && deadhead(c->right, 0);
+    return deadhead(c->left, false) && deadhead(c->right, false);
 }
 /*e: function deadheads */
 

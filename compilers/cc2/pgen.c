@@ -12,11 +12,14 @@ void codgen(Node *n, Node *nn)
     Prog *sp;
     Node *n1, nod, nod1;
 
+    /*s: [[codgen()]] initialisation */
     cursafe = 0;
     curarg = 0;
     maxargsafe = 0;
-    hasdoubled = 0;
+    hasdoubled = false;
+    /*e: [[codgen()]] initialisation */
 
+    /*s: [[codgen()]] set n1 node to node in nn where have ONAME */
     /*
      * isolate name
      */
@@ -28,10 +31,13 @@ void codgen(Node *n, Node *nn)
         if(n1->op == ONAME)
             break;
     }
+    /*e: [[codgen()]] set n1 node to node in nn where have ONAME */
+
     nearln = nn->lineno;
     gpseudo(ATEXT, n1->sym, nodconst(stkoff));
     sp = p;
 
+    /*s: [[codgen()]] if complex return type */
     if(typecmplx[thisfn->link->etype]) {
         if(nodret == nil) {
             nodret = new(ONAME, Z, Z);
@@ -49,7 +55,8 @@ void codgen(Node *n, Node *nn)
             complex(nodret);
         }
     }
-
+    /*e: [[codgen()]] if complex return type */
+    /*s: [[codgen()]] if use REGARG */
     /*
      * isolate first argument
      */
@@ -58,7 +65,8 @@ void codgen(Node *n, Node *nn)
             nod1 = *nodret->left;
             nodreg(&nod, &nod1, REGARG);
             gmove(&nod, &nod1);
-        } else
+        }
+        else
         if(firstarg && typeword[firstargtype->etype]) {
             nod1 = znode;
             nod1.op = ONAME;
@@ -72,20 +80,26 @@ void codgen(Node *n, Node *nn)
             gmove(&nod, &nod1);
         }
     }
+    /*e: [[codgen()]] if use REGARG */
 
+    /*s: [[codgen()]] initialisation before call to gen */
     canreach = true;
     warnreach = true;
+    /*e: [[codgen()]] initialisation before call to gen */
 
+    // generate the assembly for the statements in the body
     gen(n);
 
+    /*s: [[codgen()]] warn for possible missing return after call to gen */
     if(canreach && thisfn->link->etype != TVOID){
         if(debug['B'])
             warn(Z, "no return at end of function: %s", n1->sym->name);
         else
             diag(Z, "no return at end of function: %s", n1->sym->name);
     }
+    /*e: [[codgen()]] warn for possible missing return after call to gen */
 
-    noretval(3);
+    noretval(1 | 2);
 
     gbranch(ORETURN);
 
@@ -151,12 +165,15 @@ gen(Node *n)
 loop:
     if(n == Z)
         return;
+
     nearln = n->lineno;
     o = n->op;
+
     if(debug['G'])
         if(o != OLIST)
             print("%L %O\n", nearln, o);
 
+    /*s: [[gen()]] if not canreach */
     if(!canreach) {
         switch(o) {
         case OLABEL:
@@ -172,18 +189,19 @@ loop:
         default:
             if(warnreach) {
                 warn(n, "unreachable code %O", o);
-                warnreach = 0;
+                warnreach = false;
             }
         }
     }
+    /*e: [[gen()]] if not canreach */
 
     switch(o) {
-
-    default:
-        complex(n);
-        cgen(n, Z);
+    /*s: [[gen()]] switch node kind cases */
+    case OSET:
+    case OUSED:
+        usedset(n->left, o);
         break;
-
+    /*x: [[gen()]] switch node kind cases */
     case OLIST:
     case OCOMMA:
         gen(n->left);
@@ -191,7 +209,7 @@ loop:
     rloop:
         n = n->right;
         goto loop;
-
+    /*x: [[gen()]] switch node kind cases */
     case ORETURN:
         canreach = false;
         warnreach = !suppress;
@@ -240,6 +258,7 @@ loop:
         gbranch(ORETURN);
         break;
 
+    /*x: [[gen()]] switch node kind cases */
     case OLABEL:
         canreach = true;
         l = n->left;
@@ -252,6 +271,7 @@ loop:
         patch(p, pc);
         goto rloop;
 
+    /*x: [[gen()]] switch node kind cases */
     case OGOTO:
         canreach = false;
         warnreach = !suppress;
@@ -274,6 +294,7 @@ loop:
         n->label = p;
         return;
 
+    /*x: [[gen()]] switch node kind cases */
     case OCASE:
         canreach = true;
         l = n->left;
@@ -300,7 +321,7 @@ loop:
         cases->label = pc;
         cases->isv = typev[l->type->etype];
         goto rloop;
-
+    /*x: [[gen()]] switch node kind cases */
     case OSWITCH:
         l = n->left;
         complex(l);
@@ -351,7 +372,7 @@ loop:
             warnreach = !suppress;
         nbreak = snbreak;
         break;
-
+    /*x: [[gen()]] switch node kind cases */
     case OWHILE:
     case ODWHILE:
         l = n->left;
@@ -392,7 +413,7 @@ loop:
             warnreach = !suppress;
         nbreak = snbreak;
         break;
-
+    /*x: [[gen()]] switch node kind cases */
     case OFOR:
         l = n->left;
         if(!canreach && l->right->left && warnreach) {
@@ -456,7 +477,7 @@ loop:
         nbreak = snbreak;
         ncontin = sncontin;
         break;
-
+    /*x: [[gen()]] switch node kind cases */
     case OCONTINUE:
         if(continpc < 0) {
             diag(n, "continue not in a loop");
@@ -468,7 +489,7 @@ loop:
         canreach = false;
         warnreach = !suppress;
         break;
-
+    /*x: [[gen()]] switch node kind cases */
     case OBREAK:
         if(breakpc < 0) {
             diag(n, "break not in a loop");
@@ -489,7 +510,7 @@ loop:
         canreach = false;
         warnreach = !suppress;
         break;
-
+    /*x: [[gen()]] switch node kind cases */
     case OIF:
         l = n->left;
         if(bcomplex(l, n->right)) {
@@ -546,11 +567,12 @@ loop:
                 warnreach = !suppress;
         }
         break;
-
-    case OSET:
-    case OUSED:
-        usedset(n->left, o);
+    /*x: [[gen()]] switch node kind cases */
+    default:
+        complex(n);
+        cgen(n, Z);
         break;
+    /*e: [[gen()]] switch node kind cases */
     }
 }
 /*e: function gen */

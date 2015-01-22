@@ -47,7 +47,7 @@ Decl*	firstdcl;
 Sym*	hash[NHASH];
 /*e: global hash */
 /*s: global hasdoubled */
-int	hasdoubled;
+bool	hasdoubled;
 /*e: global hasdoubled */
 /*s: global hunk */
 char*	hunk;
