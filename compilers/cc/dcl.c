@@ -33,10 +33,6 @@ dodecl(void (*f)(int,Type*,Sym*), int c, Type *t, Node *n)
 loop:
     if(n != Z)
     switch(n->op) {
-    default:
-        diag(n, "unknown declarator: %O", n->op);
-        break;
-
     case OARRAY:
         t = typ(TARRAY, t);
         t->width = 0;
@@ -121,6 +117,10 @@ loop:
             dbgdecl(s);
         acidvar(s);
         s->varlineno = lineno;
+        break;
+
+    default:
+        diag(n, "unknown declarator: %O", n->op);
         break;
     }
 
@@ -789,8 +789,8 @@ void markdcl(void)
     blockno++;
 
     d = push();
-
     d->val = DMARK;
+
     d->offset = autoffset;
     d->block = autobn;
 
@@ -804,7 +804,10 @@ Node* revertdcl(void)
 {
     Decl *d;
     Sym *s;
-    Node *n, *n1;
+    Node *n;
+    /*s: [[revertdcl()]] other locals */
+    Node *n1;
+    /*e: [[revertdcl()]] other locals */
 
     n = Z;
     for(;;) {
@@ -813,16 +816,19 @@ Node* revertdcl(void)
             diag(Z, "pop off dcl stack");
             break;
         }
+        // pop(declstack)
         dclstack = d->link;
 
         s = d->sym;
         switch(d->val) {
+        /*s: [[revertdcl()]] switch declaration type cases */
         case DMARK:
+            // restore info previous block
             autoffset = d->offset;
             autobn = d->block;
-            // we popped everything
+            // we popped everything, exit loop and return
             return n;
-
+        /*x: [[revertdcl()]] switch declaration type cases */
         case DAUTO:
             if(debug['d'])
                 print("revert1 \"%s\"\n", s->name);
@@ -836,7 +842,7 @@ Node* revertdcl(void)
                     warn(Z, "param declared and not used: %s", s->name);
             }
             /*e: [[reverdcl()]] DAUTO case, warn if auto declared but not used */
-
+            /*s: [[reverdcl()]] if volatile symbol */
             if(s->type && (s->type->garb & GVOLATILE)) {
                 n1 = new(ONAME, Z, Z);
                 n1->sym = s;
@@ -854,7 +860,8 @@ Node* revertdcl(void)
                 else
                     n = new(OLIST, n1, n);
             }
-
+            /*e: [[reverdcl()]] if volatile symbol */
+            // restore info previous identnfier
             /*s: [[reverdcl()]] DAUTO case, restore symbol fields from decl */
             s->type = d->type;
             s->class = d->class;
@@ -865,24 +872,29 @@ Node* revertdcl(void)
             /*e: [[reverdcl()]] DAUTO case, restore symbol fields from decl */
 
             break;
-
+        /*x: [[revertdcl()]] switch declaration type cases */
         case DSUE:
             if(debug['d'])
                 print("revert2 \"%s\"\n", s->name);
 
+            // retore info previous tag
             s->suetag = d->type;
             s->sueblock = d->block;
 
             break;
 
+        /*x: [[revertdcl()]] switch declaration type cases */
         case DLABEL:
             if(debug['d'])
                 print("revert3 \"%s\"\n", s->name);
 
+            /*s: [[reverdcl()]] DLABEL case, warn if label not used */
             if(s->label && s->label->addable == 0)
                 warn(s->label, "label declared and not used \"%s\"", s->name);
+            /*e: [[reverdcl()]] DLABEL case, warn if label not used */
             s->label = Z;
             break;
+        /*e: [[revertdcl()]] switch declaration type cases */
         }
     }
     return n;

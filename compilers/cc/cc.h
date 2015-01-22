@@ -134,7 +134,12 @@ struct	Node
 /*s: struct Sym */
 struct	Sym
 {
-    // for? keywords? locals? params? struct/union? all names? fields? macros?
+    // for: 
+    //  - keywords, 
+    //  - identifiers (locals/params/globals/functions/typedefs),
+    //  - tags (struct/union/enum) 
+    //  - labels (for the goto)
+    //  - macros
     char	*name;
 
     long	varlineno;
@@ -606,9 +611,9 @@ enum dxxx
 {
     DMARK, // special mark to help represent a stack of list??
 
-    DAUTO,
-    DSUE, // struct/union/enum
-    DLABEL,
+    DAUTO, // locals/parameters/globals/typedefs/functions identifiers
+    DSUE,  // struct/union/enum tags
+    DLABEL,// labels, goto
 };
 /*e: enum dxxx */
 /*s: enum storage_class */

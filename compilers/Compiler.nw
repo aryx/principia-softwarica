@@ -821,6 +821,7 @@ types[TIND] = typ(TIND, types[TVOID]);
 % see also those typesets like typev[], typeint[], typesu[] etc
 % that allow to quickly check if a type is part of a certain category.
 % Explained more in Typechecking section.
+% important convention: sue = struct/union/enum, v = vlong
 
 
 <<function sametype>>=
@@ -940,7 +941,12 @@ char	nbits;
 <<struct Sym>>=
 struct	Sym
 {
-    // for? keywords? locals? params? struct/union? all names? fields? macros?
+    // for: 
+    //  - keywords, 
+    //  - identifiers (locals/params/globals/functions/typedefs),
+    //  - tags (struct/union/enum) 
+    //  - labels (for the goto)
+    //  - macros
     char	*name;
 
     long	varlineno;
@@ -956,6 +962,13 @@ struct	Sym
 % that it references the place where the symbol is defined?
 %coupling: if add a field here, don't forget to update Decl too
 % and especially its "sym copy fields" section
+%namespace: it's the symbol table for different kind of names
+% - identifier, see s->type, s->class, etc
+% - tags, see s->suetag and s->sueblock
+% - labels, see s->label
+% - macro, see s->macros
+%note that fields are not here as they are not in the global namespace.
+%TODO? lp split other fields in identifier fields, macro fields, tag fields?
 
 <<constant NHASH>>=
 #define	NHASH		1024
@@ -1027,7 +1040,7 @@ lookup(void)
 }
 @
 
-
+% for identifiers (they are more)
 <<[[Sym]] other fields>>=
 Type*	type;
 // enum<storage_class>
@@ -1036,12 +1049,16 @@ char	class;
 % similar to Node.type Decl.type, and now Sym.type
 
 
-% for cpp macro
+% for cpp macros
 <<[[Sym]] other fields>>=
 char*	macro;
 @
 
-% see also later suetag for tag.
+% for labels?
+%  see later labels
+% for tags?
+%  see later suetag, sueblock
+
 % how handle namespace? can have struct x x;
 % it can be the same symbol, but in a struct context we will use
 % Sym.suetag, in other context Sym.type!
@@ -1104,27 +1121,23 @@ char	sym;
 \section{Declarations and scope, [[Decl]]}
 % nested scope
 
-% block, nested language
-
 % the different "namespaces"
 <<enum dxxx>>=
 enum dxxx
 {
     DMARK, // special mark to help represent a stack of list??
 
-    DAUTO,
-    DSUE, // struct/union/enum
-    DLABEL,
+    DAUTO, // locals/parameters/globals/typedefs/functions identifiers
+    DSUE,  // struct/union/enum tags
+    DLABEL,// labels, goto
 };
 @
-% DAUTO(declaration?), TAUTO(temporary), LAUTO(lexeme), CAUTO(class), 
-% hmmm that's a lot of AUTO.
 % this type is for the different namespaces? which are
-% variables, sue tags, and labels?
+%  identifier, sue tags, and labels
+% DAUTO(declaration?), TAUTO(temporary), LAUTO(lexeme), CAUTO(class), 
+%  hmmm that's a lot of AUTO.
+% less: DAUTO is a bad name, DIDENT would be better no?
 
-% for? 
-% - labels
-% - locals? func?, params? typedefs? all entities?
 <<struct Decl>>=
 struct	Decl
 {
@@ -1221,8 +1234,8 @@ void markdcl(void)
     blockno++;
 
     d = push();
-
     d->val = DMARK;
+
     d->offset = autoffset;
     d->block = autobn;
 
@@ -1239,7 +1252,8 @@ Node* revertdcl(void)
 {
     Decl *d;
     Sym *s;
-    Node *n, *n1;
+    Node *n;
+    <<[[revertdcl()]] other locals>>
 
     n = Z;
     for(;;) {
@@ -1248,66 +1262,66 @@ Node* revertdcl(void)
             diag(Z, "pop off dcl stack");
             break;
         }
+        // pop(declstack)
         dclstack = d->link;
 
         s = d->sym;
         switch(d->val) {
-        case DMARK:
-            autoffset = d->offset;
-            autobn = d->block;
-            // we popped everything
-            return n;
-
-        case DAUTO:
-            if(debug['d'])
-                print("revert1 \"%s\"\n", s->name);
-
-            <<[[reverdcl()]] DAUTO case, warn if auto declared but not used>>
-
-            if(s->type && (s->type->garb & GVOLATILE)) {
-                n1 = new(ONAME, Z, Z);
-                n1->sym = s;
-                n1->type = s->type;
-                n1->etype = TVOID;
-                if(n1->type != T)
-                    n1->etype = n1->type->etype;
-                n1->xoffset = s->offset;
-                n1->class = s->class;
-
-                n1 = new(OADDR, n1, Z);
-                n1 = new(OUSED, n1, Z);
-                if(n == Z)
-                    n = n1;
-                else
-                    n = new(OLIST, n1, n);
-            }
-
-            <<[[reverdcl()]] DAUTO case, restore symbol fields from decl>>
-
-            break;
-
-        case DSUE:
-            if(debug['d'])
-                print("revert2 \"%s\"\n", s->name);
-
-            s->suetag = d->type;
-            s->sueblock = d->block;
-
-            break;
-
-        case DLABEL:
-            if(debug['d'])
-                print("revert3 \"%s\"\n", s->name);
-
-            if(s->label && s->label->addable == 0)
-                warn(s->label, "label declared and not used \"%s\"", s->name);
-            s->label = Z;
-            break;
+        <<[[revertdcl()]] switch declaration type cases>>
         }
     }
     return n;
 }
 @
+% what is this Node n??
+
+<<[[revertdcl()]] switch declaration type cases>>=
+case DMARK:
+    // restore info previous block
+    autoffset = d->offset;
+    autobn = d->block;
+    // we popped everything, exit loop and return
+    return n;
+@
+
+
+
+<<[[revertdcl()]] switch declaration type cases>>=
+case DAUTO:
+    if(debug['d'])
+        print("revert1 \"%s\"\n", s->name);
+
+    <<[[reverdcl()]] DAUTO case, warn if auto declared but not used>>
+    <<[[reverdcl()]] if volatile symbol>>
+    // restore info previous identnfier
+    <<[[reverdcl()]] DAUTO case, restore symbol fields from decl>>
+
+    break;
+@
+
+<<[[revertdcl()]] switch declaration type cases>>=
+case DSUE:
+    if(debug['d'])
+        print("revert2 \"%s\"\n", s->name);
+
+    // retore info previous tag
+    s->suetag = d->type;
+    s->sueblock = d->block;
+
+    break;
+
+@
+<<[[revertdcl()]] switch declaration type cases>>=
+case DLABEL:
+    if(debug['d'])
+        print("revert3 \"%s\"\n", s->name);
+
+    <<[[reverdcl()]] DLABEL case, warn if label not used>>
+    s->label = Z;
+    break;
+@
+%less: no restore? see dcllabels, maybe they are not added in the current
+% scope but the function scope?
 
 
 <<[[Decl]] sym copy fields>>=
@@ -1337,6 +1351,31 @@ s->varlineno = d->varlineno;
 s->aused = d->aused;
 @
 
+
+%XXX
+<<[[revertdcl()]] other locals>>=
+Node *n1;
+@
+%XXX ??
+<<[[reverdcl()]] if volatile symbol>>=
+if(s->type && (s->type->garb & GVOLATILE)) {
+    n1 = new(ONAME, Z, Z);
+    n1->sym = s;
+    n1->type = s->type;
+    n1->etype = TVOID;
+    if(n1->type != T)
+        n1->etype = n1->type->etype;
+    n1->xoffset = s->offset;
+    n1->class = s->class;
+
+    n1 = new(OADDR, n1, Z);
+    n1 = new(OUSED, n1, Z);
+    if(n == Z)
+        n = n1;
+    else
+        n = new(OLIST, n1, n);
+}
+@
 \section{[[Token]]}
 
 <<union yacc>>=
@@ -6534,6 +6573,7 @@ complex:
 Type*	suetag;
 @
 % rename sue_tag_type?
+% restored in revertdcl
 
 <<[[Type]] other fields>>=
 Sym*	tag;
@@ -7070,10 +7110,6 @@ dodecl(void (*f)(int,Type*,Sym*), int c, Type *t, Node *n)
 loop:
     if(n != Z)
     switch(n->op) {
-    default:
-        diag(n, "unknown declarator: %O", n->op);
-        break;
-
     case OARRAY:
         t = typ(TARRAY, t);
         t->width = 0;
@@ -7158,6 +7194,10 @@ loop:
             dbgdecl(s);
         acidvar(s);
         s->varlineno = lineno;
+        break;
+
+    default:
+        diag(n, "unknown declarator: %O", n->op);
         break;
     }
 
@@ -16562,8 +16602,17 @@ if(!s->aused) {
 @
 
 
+\subsection{Unused labels}
+
 % hmmm but correct? handle well the different namespace?
 % what if struct and local with same name?
+
+<<[[reverdcl()]] DLABEL case, warn if label not used>>=
+if(s->label && s->label->addable == 0)
+    warn(s->label, "label declared and not used \"%s\"", s->name);
+@
+
+% ugly this abuse of addable, why not using lblaused instead?
 
 \subsection{[[SET()/USED()]]}
 % like fallthrough, to remove false positives or true positives which are ok.
