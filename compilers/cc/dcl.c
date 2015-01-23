@@ -1606,7 +1606,7 @@ void edecl(int c, Type *t, Sym *s)
 /*s: function maxtype */
 /*
  * this routine is very suspect.
- * ansi requires the enum type to
+ * ANSI requires the enum type to
  * be represented as an 'int'
  * this means that 0x81234567
  * would be illegal. this routine
@@ -1633,11 +1633,12 @@ void doenum(Sym *s, Node *n)
 {
 
     if(n) {
-        complex(n);
+        complex(n); // will call evconst()
         if(n->op != OCONST) {
             diag(n, "enum not a constant: %s", s->name);
             return;
         }
+
         en.cenum = n->type;
         en.tenum = maxtype(en.cenum, en.tenum);
 
@@ -1648,6 +1649,7 @@ void doenum(Sym *s, Node *n)
     }
     if(dclstack)
         push1(s);
+
     xdecl(CXXX, types[TENUM], s);
 
     if(en.cenum == T) {

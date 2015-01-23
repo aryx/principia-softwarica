@@ -34,10 +34,9 @@ complex(Node *n)
         if(n->op != OCONST)
             prtree(n, "pre complex");
 
+    // typechecking, removing some sugar, lvalue annotate, etc
     if(tcom(n))
         return;
-
-
 
     //if(debug['y'] || true)
     comma(n);
@@ -213,8 +212,8 @@ tcomo(Node *n, int f)
         break;
     /*x: [[tcomo()]] switch node kind cases */
     case OASMUL:
-    case OASLMUL:
     case OASDIV:
+    case OASLMUL:
     case OASLDIV:
         o = tcom(l);
         if(o | tcom(r))
@@ -398,8 +397,8 @@ tcomo(Node *n, int f)
         break;
     /*x: [[tcomo()]] switch node kind cases */
     case OMUL:
-    case OLMUL:
     case ODIV:
+    case OLMUL:
     case OLDIV:
         o = tcom(l);
         if(o | tcom(r))
@@ -875,17 +874,17 @@ tcomd(Node *n)
 /*e: function tcomd */
 
 /*s: function tcomx */
-int
+bool
 tcomx(Node *n)
 {
     Type *t;
     Node *l, *r, **ar, **al;
-    int e;
+    bool e;
 
-    e = 0;
+    e = false;
     if(n->type->etype != TSTRUCT) {
         diag(n, "constructor must be a structure");
-        return 1;
+        return true;
     }
     l = invert(n->left);
     n->left = l;
@@ -893,7 +892,7 @@ tcomx(Node *n)
     for(t = n->type->link; t != T; t = t->down) {
         if(l == Z) {
             diag(n, "constructor list too short");
-            return 1;
+            return true;
         }
         if(l->op == OLIST) {
             r = l->left;
@@ -919,7 +918,7 @@ tcomx(Node *n)
     }
     if(l != Z) {
         diag(n, "constructor list too long");
-        return 1;
+        return true;
     }
     return e;
 }

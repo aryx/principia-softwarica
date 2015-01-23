@@ -526,7 +526,7 @@ ambig:
  * look into tree for floating point constant expressions
  */
 bool
-allfloat(Node *n, int flag)
+allfloat(Node *n, bool flag)
 {
 
     if(n != Z) {
@@ -592,8 +592,8 @@ constas(Node *n, Type *il, Type *ir)
 void
 typeext1(Type *st, Node *l)
 {
-    if(st->etype == TFLOAT && allfloat(l, 0))
-        allfloat(l, 1);
+    if(st->etype == TFLOAT && allfloat(l, false))
+        allfloat(l, true);
 }
 /*e: function typeext1 */
 
@@ -606,15 +606,19 @@ typeext(Type *st, Node *l)
     long o;
 
     lt = l->type;
+
     if(lt == T)
         return;
+
     if(st->etype == TIND && vconst(l) == 0) {
         l->type = st;
         l->vconst = 0;
         return;
     }
+    /*s: [[typeext()]] float handling */
     typeext1(st, l);
-
+    /*e: [[typeext()]] float handling */
+    /*s: [[typeext()]] unnamed substructure handling */
     /*
      * extension of C
      * if assign of struct containing unnamed sub-struct
@@ -634,6 +638,7 @@ typeext(Type *st, Node *l)
         }
         return;
     }
+
     if(st->etype == TIND && typesu[st->link->etype])
     if(lt->etype == TIND && typesu[lt->link->etype]) {
         o = dotoffset(st->link, lt->link, l);
@@ -652,6 +657,7 @@ typeext(Type *st, Node *l)
         }
         return;
     }
+    /*e: [[typeext()]] unnamed substructure handling */
 }
 /*e: function typeext */
 
@@ -1046,6 +1052,7 @@ vconst(Node *n)
         goto no;
     if(n->type == T)
         goto no;
+
     switch(n->type->etype)
     {
     case TFLOAT:
@@ -1290,7 +1297,8 @@ warn(Node *n, char *fmt, ...)
             return;
         }
 
-        Bprint(&diagbuf, "warning: %L %s\n", (n==Z)? nearln : n->lineno, buf);
+        Bprint(&diagbuf, "warning: %L %s\n", 
+                 (n==Z) ? nearln : n->lineno, buf);
 
         if(n != Z)
           if(debug['v'])
@@ -1309,7 +1317,8 @@ fatal(Node *n, char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
-    Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
+    Bprint(&diagbuf, "%L %s\n", 
+              (n==Z)? nearln: n->lineno, buf);
 
     if(debug['X']){
         Bflush(&diagbuf);
@@ -1625,6 +1634,7 @@ char	logrel[12] =
 /*e: global logrel */
 
 /*s: global typei */
+// set<type_kind>
 char	typei[NTYPE];
 /*e: global typei */
 /*s: global typeiinit */
@@ -1644,7 +1654,6 @@ int	typeuinit[] =
 /*e: global typeuinit */
 
 /*s: global typesuv */
-// bool
 char	typesuv[NTYPE];
 /*e: global typesuv */
 /*s: global typesuvinit */
@@ -2061,6 +2070,7 @@ tinit(void)
         urk("thash", nelem(thash), p->code);
         thash[p->code] = p->value;
     }
+
     for(p=bnamesinit; p->code >= 0; p++) {
         urk("bnames", nelem(bnames), p->code);
         bnames[p->code] = p->s;
@@ -2085,6 +2095,9 @@ tinit(void)
         urk("onames", nelem(onames), p->code);
         onames[p->code] = p->s;
     }
+
+
+
     for(ip=typeiinit; *ip>=0; ip++) {
         urk("typei", nelem(typei), *ip);
         typei[*ip] = 1;

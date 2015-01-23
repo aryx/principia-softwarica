@@ -84,6 +84,11 @@ struct	Node
     /*s: [[Node]] other fields */
     Sym*	sym; 
     /*x: [[Node]] other fields */
+    // used as a bool to mark lvalues.
+    // (ab)used as bool for marker of use of labels.
+    // (ab)used by xcom to assign ``addressibility''.
+    char	addable;
+    /*x: [[Node]] other fields */
     Type*	type;
     /*x: [[Node]] other fields */
     // enum<storage_class>
@@ -116,11 +121,6 @@ struct	Node
     TRune*	rstring;	/* rune string */
     /*x: [[Node]] other fields */
     bool 	xcast;
-    /*x: [[Node]] other fields */
-    // used as a bool to mark lvalues.
-    // (ab)used as bool for marker of use of labels.
-    // (ab)used by xcom to assign ``addressibility''.
-    char	addable;
     /*x: [[Node]] other fields */
     // enum<node_kind>
     char	oldop;
@@ -355,19 +355,22 @@ enum node_kind
     OMUL,
     ODIV,
     OMOD,
-
-    OASHL,
-    OASHR,
-
+    /*x: expression nodes */
     OAND,
     OOR,
     OXOR,
+    OASHL,
+    OASHR,
+
     /*x: expression nodes */
     OPOS,
     ONEG,
     /*x: expression nodes */
     OANDAND,
     OOROR,
+    /*x: expression nodes */
+    ONOT,
+    OCOM,
     /*x: expression nodes */
     OEQ,
     ONE,
@@ -376,9 +379,6 @@ enum node_kind
     OGT,
     OLE,
     OGE,
-    /*x: expression nodes */
-    ONOT,
-    OCOM,
     /*x: expression nodes */
     OAS,
 
@@ -389,12 +389,13 @@ enum node_kind
     OASMOD,
     OASDIV,
 
-    OASASHL,
-    OASASHR,
-
     OASAND,
     OASOR,
     OASXOR,
+
+    OASASHL,
+    OASASHR,
+
     /*x: expression nodes */
     OIND, // for uses (dereference) and also defs (and decls)
     OADDR,
@@ -423,11 +424,13 @@ enum node_kind
     /*x: expression nodes */
     OINDREG, // after parsing only
     /*x: expression nodes */
+    // after parsing only
     OASLMUL,
     OASLDIV,
     OASLMOD,
     OASLSHR,
     /*x: expression nodes */
+    // after parsing only
     OLMUL,
     OLDIV,
     OLMOD,
@@ -557,8 +560,9 @@ enum type_kind_bis {
     TEXTERN,
     TSTATIC,
     TTYPEDEF, // ugly, not really a storage class
-    TTYPESTR,
     TREGISTER,
+    /*x: [[Type_kind_bis]] storage cases */
+    TTYPESTR,
     /*e: [[Type_kind_bis]] storage cases */
 
     // ----------------------------------------------------------------------
@@ -691,18 +695,19 @@ enum bxxx
     BEXTERN		= 1L<<TEXTERN,
     BSTATIC		= 1L<<TSTATIC,
     BTYPEDEF	= 1L<<TTYPEDEF,
-    BTYPESTR	= 1L<<TTYPESTR,
     BREGISTER	= 1L<<TREGISTER,
+    /*s: enum bxxx cases */
+    BTYPESTR	= 1L<<TTYPESTR,
+    /*e: enum bxxx cases */
 
-
-    BINTEGER	= BCHAR|BUCHAR|BSHORT|BUSHORT|BINT|BUINT|
-                BLONG|BULONG|BVLONG|BUVLONG,
-    BNUMBER		= BINTEGER|BFLOAT|BDOUBLE,
-
-/* these can be overloaded with complex types */
-
+    /*s: enum bxxx constants */
+    /* these can be overloaded with complex types */
     BCLASS		= BAUTO|BEXTERN|BSTATIC|BTYPEDEF|BTYPESTR|BREGISTER,
     BGARB		= BCONSTNT|BVOLATILE,
+    /*x: enum bxxx constants */
+    BINTEGER	= BCHAR|BUCHAR|BSHORT|BUSHORT|BINT|BUINT|BLONG|BULONG|BVLONG|BUVLONG,
+    BNUMBER		= BINTEGER|BFLOAT|BDOUBLE,
+    /*e: enum bxxx constants */
 };
 /*e: enum bxxx */
 

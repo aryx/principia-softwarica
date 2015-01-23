@@ -26,7 +26,8 @@ void
 evconst(Node *n)
 {
     Node *l, *r;
-    int et, isf;
+    int et;
+    bool isf;
     vlong v;
     double d;
 
@@ -43,18 +44,10 @@ evconst(Node *n)
     v = 0;
 
     switch(n->op) {
-    // how knows l is a constant? no recursive call to evconst?
-    case ONEG:
-        if(isf)
-            d = -l->fconst;
-        else
-            v = -l->vconst;
+    /*s: [[evconst()]] switch node kind cases */
+    case OCONST:
         break;
-
-    case OCOM:
-        v = ~l->vconst;
-        break;
-
+    /*x: [[evconst()]] switch node kind cases */
     case OCAST:
         if(et == TVOID)
             return;
@@ -71,11 +64,7 @@ evconst(Node *n)
                 v = convvtox(l->vconst, n->type->etype);
         }
         break;
-
-    case OCONST:
-        break;
-
-    // assume have done explicit cast and balancing before?
+    /*x: [[evconst()]] switch node kind cases */
     case OADD:
         if(isf)
             d = l->fconst + r->fconst;
@@ -138,7 +127,18 @@ evconst(Node *n)
         }
         v = (uvlong)l->vconst % (uvlong)r->vconst;
         break;
+    /*x: [[evconst()]] switch node kind cases */
+    case ONEG:
+        if(isf)
+            d = -l->fconst;
+        else
+            v = -l->vconst;
+        break;
 
+    case OCOM:
+        v = ~l->vconst;
+        break;
+    /*x: [[evconst()]] switch node kind cases */
     case OAND:
         v = l->vconst & r->vconst;
         break;
@@ -162,7 +162,7 @@ evconst(Node *n)
     case OASHL:
         v = l->vconst << r->vconst;
         break;
-
+    /*x: [[evconst()]] switch node kind cases */
     case OLO:
         v = (uvlong)l->vconst < (uvlong)r->vconst;
         break;
@@ -206,7 +206,7 @@ evconst(Node *n)
         else
             v = l->vconst >= r->vconst;
         break;
-
+    /*x: [[evconst()]] switch node kind cases */
     case OEQ:
         if(typefd[l->type->etype])
             v = l->fconst == r->fconst;
@@ -220,14 +220,7 @@ evconst(Node *n)
         else
             v = l->vconst != r->vconst;
         break;
-
-    case ONOT:
-        if(typefd[l->type->etype])
-            v = !l->fconst;
-        else
-            v = !l->vconst;
-        break;
-
+    /*x: [[evconst()]] switch node kind cases */
     case OANDAND:
         if(typefd[l->type->etype])
             v = l->fconst && r->fconst;
@@ -241,7 +234,13 @@ evconst(Node *n)
         else
             v = l->vconst || r->vconst;
         break;
-
+    case ONOT:
+        if(typefd[l->type->etype])
+            v = !l->fconst;
+        else
+            v = !l->vconst;
+        break;
+    /*e: [[evconst()]] switch node kind cases */
     default:
         return;
 

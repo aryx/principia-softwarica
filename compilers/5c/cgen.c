@@ -25,10 +25,12 @@ cgenrel(Node *n, Node *nn, bool inrel)
     }
     if(n == Z || n->type == T)
         return;
+
     if(typesuv[n->type->etype]) {
         sugen(n, nn, n->type->width);
         return;
     }
+
     l = n->left;
     r = n->right;
     o = n->op;
@@ -50,30 +52,31 @@ cgenrel(Node *n, Node *nn, bool inrel)
     curs = cursafe;
 
     if(n->complex >= FNX)
-    if(l->complex >= FNX)
-    if(r != Z && r->complex >= FNX)
-    switch(o) {
-    default:
-        regret(&nod, r);
-        cgen(r, &nod);
-
-        regsalloc(&nod1, r);
-        gopcode(OAS, &nod, Z, &nod1);
-
-        regfree(&nod);
-        nod = *n;
-        nod.right = &nod1;
-        cgen(&nod, nn);
-        return;
-
-    case OFUNC:
-    case OCOMMA:
-    case OANDAND:
-    case OOROR:
-    case OCOND:
-    case ODOT:
-        break;
-    }
+     if(l->complex >= FNX)
+      if(r != Z && r->complex >= FNX)
+        switch(o) {
+        case OFUNC:
+        case OCOMMA:
+        case OANDAND:
+        case OOROR:
+        case OCOND:
+        case ODOT:
+            break;
+        
+        default:
+            regret(&nod, r);
+            cgen(r, &nod);
+        
+            regsalloc(&nod1, r);
+            gopcode(OAS, &nod, Z, &nod1);
+        
+            regfree(&nod);
+            nod = *n;
+            nod.right = &nod1;
+            cgen(&nod, nn);
+            return;
+        
+        }
 
     switch(o) {
     default:

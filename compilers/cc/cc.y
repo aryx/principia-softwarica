@@ -435,11 +435,12 @@ expr:
 |   expr '*' expr { $$ = new(OMUL, $1, $3); }
 |   expr '/' expr { $$ = new(ODIV, $1, $3); }
 |   expr '%' expr { $$ = new(OMOD, $1, $3); }
-|   expr LRSH expr { $$ = new(OASHR, $1, $3); }
-|   expr LLSH expr { $$ = new(OASHL, $1, $3); }
+/*x: expr rule */
 |   expr '&' expr  { $$ = new(OAND, $1, $3); }
 |   expr '^' expr  { $$ = new(OXOR, $1, $3); }
 |   expr '|' expr  { $$ = new(OOR, $1, $3); }
+|   expr LRSH expr { $$ = new(OASHR, $1, $3); }
+|   expr LLSH expr { $$ = new(OASHL, $1, $3); }
 /*x: expr rule */
 |   expr LANDAND expr { $$ = new(OANDAND, $1, $3); }
 |   expr LOROR expr   { $$ = new(OOROR, $1, $3); }
@@ -457,11 +458,11 @@ expr:
 |   expr LMLE expr { $$ = new(OASMUL, $1, $3); }
 |   expr LDVE expr { $$ = new(OASDIV, $1, $3); }
 |   expr LMDE expr { $$ = new(OASMOD, $1, $3); }
-|   expr LLSHE expr { $$ = new(OASASHL, $1, $3); }
-|   expr LRSHE expr { $$ = new(OASASHR, $1, $3); }
 |   expr LANDE expr { $$ = new(OASAND, $1, $3); }
 |   expr LXORE expr { $$ = new(OASXOR, $1, $3); }
 |   expr LORE expr  { $$ = new(OASOR, $1, $3); }
+|   expr LLSHE expr { $$ = new(OASASHL, $1, $3); }
+|   expr LRSHE expr { $$ = new(OASASHR, $1, $3); }
 /*x: expr rule */
 |   expr '?' cexpr ':' expr { $$ = new(OCOND, $1, new(OLIST, $3, $5)); }
 /*e: expr rule */

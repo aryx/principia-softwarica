@@ -634,7 +634,6 @@ usedset(Node *n, int o)
 bool
 bcomplex(Node *n, Node *c)
 {
-//    Node *b, nod;
 
     complex(n);
 

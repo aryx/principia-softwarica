@@ -202,15 +202,15 @@ Bits	zbits;
 /*e: global zbits */
 
 /*s: global typeswitch */
-// set<txxx>??
+// set<type_kind>
 char*	typeswitch;
 /*e: global typeswitch */
 /*s: global typeword */
-// set<txxx>??
+// set<type_kind>
 char*	typeword;
 /*e: global typeword */
 /*s: global typecmplx */
-// set<txxx>??
+// set<type_kind>
 char*	typecmplx;
 /*e: global typecmplx */
 /*e: cc/globals.c */
