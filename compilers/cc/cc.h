@@ -262,7 +262,7 @@ struct	Type
 #define	T	((Type*)nil)
 /*e: constant T */
 /*s: constant NODECL */
-#define	NODECL	((void(*)(int, Type*, Sym*))nil)
+#define	NODECL	((void(*)(int, Type*, Sym*)) nil)
 /*e: constant NODECL */
 
 /*s: struct Init */
@@ -487,7 +487,7 @@ enum node_kind
     // Definitions
     // ----------------------------------------------------------------------
     /*s: definition nodes */
-    OSTRUCT,
+    OSTRUCT, // used also for struct constructor
     OUNION,
     /*x: definition nodes */
     OBIT,
@@ -507,7 +507,7 @@ enum node_kind
     /*x: misc nodes */
     OARRAY, // used for uses (including designator) and defs (and decl)
     /*x: misc nodes */
-    OEXREG,
+    OEXREG, // appears only during parsing
     /*x: misc nodes */
     OINDEX, // x86 only
     OREGPAIR, // x86 only, for 64 bits stuff
@@ -631,12 +631,13 @@ enum storage_class
 
     /*s: [[Storage_class]] cases */
     CTYPEDEF,
-    CTYPESTR,
 
     CSELEM,
     CLABEL,
     /*x: [[Storage_class]] cases */
-    CEXREG, // extern register, kencc ext (used in kernel for mips)
+    CEXREG, // extern register, kenccext (used in kernel for mips)
+    /*x: [[Storage_class]] cases */
+    CTYPESTR,
     /*e: [[Storage_class]] cases */
 
     NCTYPES,

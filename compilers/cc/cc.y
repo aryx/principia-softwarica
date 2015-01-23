@@ -713,6 +713,7 @@ qual:
 |   qual '='
 /*e: initializers rules */
 /*s: types rules */
+/*s: tname rule */
 tname:  /* type words */
     LCHAR     { $$ = BCHAR; }
 |   LSHORT    { $$ = BSHORT; }
@@ -723,20 +724,24 @@ tname:  /* type words */
 |   LFLOAT    { $$ = BFLOAT; }
 |   LDOUBLE   { $$ = BDOUBLE; }
 |   LVOID     { $$ = BVOID; }
-/*x: types rules */
+/*e: tname rule */
+/*s: cname rule */
 cname:  /* class words */
     LAUTO     { $$ = BAUTO; }
 |   LSTATIC   { $$ = BSTATIC; }
 |   LEXTERN   { $$ = BEXTERN; }
 |   LTYPEDEF  { $$ = BTYPEDEF; }
-|   LTYPESTR  { $$ = BTYPESTR; }
 |   LREGISTER { $$ = BREGISTER; }
 |   LINLINE   { $$ = 0; }
-/*x: types rules */
+/*x: cname rule */
+|   LTYPESTR  { $$ = BTYPESTR; }
+/*e: cname rule */
+/*s: gname rule */
 gname:  /* garbage words */
     LCONSTNT  { $$ = BCONSTNT; }
 |   LVOLATILE { $$ = BVOLATILE; }
 |   LRESTRICT { $$ = 0; }
+/*e: gname rule */
 /*x: types rules */
 /*s: types rule */
 types:

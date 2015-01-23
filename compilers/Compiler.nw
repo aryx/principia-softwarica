@@ -611,7 +611,6 @@ char	scale;
 %XXXXX
 <<[[Storage_class]] cases>>=
 CTYPEDEF,
-CTYPESTR,
 
 CSELEM,
 CLABEL,
@@ -1849,12 +1848,7 @@ ginit(void)
     zprog.to = zprog.from;
     zprog.scond = COND_ALWAYS;  
 
-    regnode.op = OREGISTER;
-    regnode.class = CEXREG;
-    regnode.reg = REGTMP;
-    regnode.complex = 0;
-    regnode.addable = 11;
-    regnode.type = types[TLONG];
+    <<[[ginit()]] special nodes initialisation>>
 
     constnode.op = OCONST;
     constnode.class = CXXX;
@@ -2370,8 +2364,6 @@ talph:
 \section{Typedef trick}
 
 %LTYPE!!
-
-% typestr?
 
 \section{Operators}
 
@@ -4400,7 +4392,153 @@ Type*	lastdcl;
 @
 
 
+<<constant NODECL>>=
+#define	NODECL	((void(*)(int, Type*, Sym*)) nil)
+@
+% no decl
+%less: rename NO_DECL_CALLBACK?
 
+
+
+<<function xdecl>>=
+void
+xdecl(int class, Type *t, Sym *s)
+{
+    long o; // offset
+
+    o = 0;
+    // adjusting class
+    switch(class) {
+    <<[[xdecl()]] switch class cases>>
+    }
+
+    <<[[xdecl()]] sanity checks>>
+
+    tmerge(t, s);
+    s->type = t;
+    s->class = class;
+    s->block = 0;
+    s->offset = o;
+}
+@
+
+
+<<[[xdecl()]] switch class cases>>=
+case CXXX:
+    class = CGLOBL;
+    if(s->class == CEXTERN)
+        s->class = CGLOBL;
+    break;
+@
+
+<<[[xdecl()]] switch class cases>>=
+case CEXTERN:
+    if(s->class == CGLOBL)
+        class = CGLOBL;
+    break;
+@
+
+<<[[xdecl()]] switch class cases>>=
+case CAUTO:
+    diag(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
+    class = CEXTERN;
+    break;
+@
+
+
+
+<<[[xdecl()]] sanity checks>>=
+if(s->class == CSTATIC)
+    if(class == CEXTERN || class == CGLOBL) {
+        warn(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
+        class = CSTATIC;
+    }
+
+if(s->type != T)
+    if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
+        diag(Z, "external redeclaration of: %s", s->name);
+        Bprint(&diagbuf, "	%s %T %L\n", cnames[class], t, nearln);
+        Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
+    }
+@
+
+
+
+
+\subsection{Declaration and definition types merge}
+
+<<function tmerge>>=
+void
+tmerge(Type *t1, Sym *s)
+{
+    Type *ta, *tb, *t2;
+
+    t2 = s->type;
+/*print("merge	%T; %T\n", t1, t2);/**/
+    for(;;) {
+        if(t1 == T || t2 == T || t1 == t2)
+            break;
+        if(t1->etype != t2->etype)
+            break;
+        switch(t1->etype) {
+        case TFUNC:
+            ta = t1->down;
+            tb = t2->down;
+            if(ta == T) {
+                t1->down = tb;
+                break;
+            }
+            if(tb == T)
+                break;
+            while(ta != T && tb != T) {
+                if(ta == tb)
+                    break;
+                /* ignore old-style flag */
+                if(ta->etype == TOLD) {
+                    ta = ta->down;
+                    continue;
+                }
+                if(tb->etype == TOLD) {
+                    tb = tb->down;
+                    continue;
+                }
+                /* checking terminated by ... */
+                if(ta->etype == TDOT && tb->etype == TDOT) {
+                    ta = T;
+                    tb = T;
+                    break;
+                }
+                if(!sametype(ta, tb))
+                    break;
+                ta = ta->down;
+                tb = tb->down;
+            }
+            if(ta != tb)
+                diag(Z, "function inconsistently declared: %s", s->name);
+
+            /* take new-style over old-style */
+            ta = t1->down;
+            tb = t2->down;
+            if(ta != T && ta->etype == TOLD)
+                if(tb != T && tb->etype != TOLD)
+                    t1->down = tb;
+            break;
+
+        case TARRAY:
+            /* should we check array size change? */
+            if(t2->width > t1->width)
+                t1->width = t2->width;
+            break;
+
+        case TUNION:
+        case TSTRUCT:
+            return;
+        }
+        t1 = t1->link;
+        t2 = t2->link;
+    }
+}
+@
 
 \subsection{Entity declaration or definition}
 
@@ -4725,22 +4863,22 @@ loop:
 
 <<function pdecl>>=
 void
-pdecl(int c, Type *t, Sym *s)
+pdecl(int class, Type *t, Sym *s)
 {
     if(s && s->offset != -1) {
         diag(Z, "not a parameter: %s", s->name);
         return;
     }
-    t = paramconv(t, c==CPARAM);
-    if(c == CXXX)
-        c = CPARAM;
-    if(c != CPARAM) {
+    t = paramconv(t, class==CPARAM);
+    if(class == CXXX)
+        class = CPARAM;
+    if(class != CPARAM) {
         diag(Z, "parameter cannot have class: %s", s->name);
-        c = CPARAM;
+        class = CPARAM;
     }
     if(typesu[t->etype] && t->width <= 0)
         diag(Z, "incomplete structure: %s", t->tag->name);
-    adecl(c, t, s);
+    adecl(class, t, s);
 }
 @
 % a parameter is a kind of local, hence the call to adecl
@@ -6257,6 +6395,12 @@ enum bxxx
 @
 
 <<types rules>>=
+<<tname rule>>
+<<cname rule>>
+<<gname rule>>
+@
+
+<<tname rule>>=
 tname:  /* type words */
     LCHAR     { $$ = BCHAR; }
 |   LSHORT    { $$ = BSHORT; }
@@ -6269,19 +6413,18 @@ tname:  /* type words */
 |   LVOID     { $$ = BVOID; }
 @
 
-<<types rules>>=
+<<cname rule>>=
 cname:  /* class words */
     LAUTO     { $$ = BAUTO; }
 |   LSTATIC   { $$ = BSTATIC; }
 |   LEXTERN   { $$ = BEXTERN; }
 |   LTYPEDEF  { $$ = BTYPEDEF; }
-|   LTYPESTR  { $$ = BTYPESTR; }
 |   LREGISTER { $$ = BREGISTER; }
 |   LINLINE   { $$ = 0; }
 @
 
 % garbage?
-<<types rules>>=
+<<gname rule>>=
 gname:  /* garbage words */
     LCONSTNT  { $$ = BCONSTNT; }
 |   LVOLATILE { $$ = BVOLATILE; }
@@ -6528,8 +6671,6 @@ int simplec(long b)
         return CSTATIC;
     case BTYPEDEF:
         return CTYPEDEF;
-    case BTYPESTR:
-        return CTYPESTR;
     <<[[simplec()]] cases>>
     }
     diag(Z, "illegal combination of classes %Q", b);
@@ -6575,7 +6716,7 @@ simpleg(long b)
 \subsection{Structures and unions}
 
 <<definition nodes>>=
-OSTRUCT,
+OSTRUCT, // used also for struct constructor
 OUNION,
 @
 % used for definitions and uses too
@@ -7323,74 +7464,6 @@ fnproto1(Node *n)
 
 
 \section{Declarations and definitions, part two}
-
-<<constant NODECL>>=
-#define	NODECL	((void(*)(int, Type*, Sym*))nil)
-@
-
-
-<<function xdecl>>=
-void
-xdecl(int c, Type *t, Sym *s)
-{
-    long o;
-
-    o = 0;
-    switch(c) {
-    case CEXREG:
-        o = exreg(t);
-        if(o == 0)
-            c = CEXTERN;
-        if(s->class == CGLOBL)
-            c = CGLOBL;
-        break;
-
-    case CEXTERN:
-        if(s->class == CGLOBL)
-            c = CGLOBL;
-        break;
-
-    case CXXX:
-        c = CGLOBL;
-        if(s->class == CEXTERN)
-            s->class = CGLOBL;
-        break;
-
-    case CAUTO:
-        diag(Z, "overspecified class: %s %s %s", s->name, cnames[c], cnames[s->class]);
-        c = CEXTERN;
-        break;
-
-    case CTYPESTR:
-        if(!typesuv[t->etype]) {
-            diag(Z, "typestr must be struct/union: %s", s->name);
-            break;
-        }
-        dclfunct(t, s);
-        break;
-    }
-
-    if(s->class == CSTATIC)
-        if(c == CEXTERN || c == CGLOBL) {
-            warn(Z, "overspecified class: %s %s %s", s->name, cnames[c], cnames[s->class]);
-            c = CSTATIC;
-        }
-    if(s->type != T)
-        if(s->class != c || !sametype(t, s->type) || t->etype == TENUM) {
-            diag(Z, "external redeclaration of: %s", s->name);
-            Bprint(&diagbuf, "	%s %T %L\n", cnames[c], t, nearln);
-            Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
-        }
-    tmerge(t, s);
-    s->type = t;
-    s->class = c;
-    s->block = 0;
-    s->offset = o;
-}
-@
-
-
-
 
 
 \subsection{Globals, external declarator}
@@ -9450,6 +9523,7 @@ nodreg(Node *n, Node *nn, int reg)
     n->type = nn->type;
     n->lineno = nn->lineno;
 }
+
 @
 
 
@@ -9955,6 +10029,7 @@ regalloc(Node *n, Node *tn, Node *o)
     case TUINT:
     case TLONG:
     case TULONG:
+
     case TIND:
         if(o != Z && o->op == OREGISTER) {
             i = o->reg;
@@ -12003,6 +12078,15 @@ out:
 Node	regnode;
 @
 
+<<[[ginit()]] special nodes initialisation>>=
+regnode.op = OREGISTER;
+regnode.class = CEXREG;
+regnode.reg = REGTMP;
+regnode.complex = 0;
+regnode.addable = 11;
+regnode.type = types[TLONG];
+@
+
 
 <<function gmovm(arm)>>=
 void
@@ -13642,6 +13726,8 @@ zaddr(char *bp, Adr *a, int s)
 % - symbol resolution (use/def matching correctly), lookup failure
 %   with scoping rules, via Decl and symbol table (and .h so have
 %   all declarations in one file)
+%   and also def/def matching correctly by checking for wrong
+%   redeclaration in xdecl
 % - typechecking rules
 % - lint rules (e.g. unused local, unused param, dead code, etc)
 
@@ -13653,6 +13739,7 @@ zaddr(char *bp, Adr *a, int s)
 %    initialize pointer to an integer?
 %    duplicated keywords for storage or qualifier or type
 %    overspecified class? just say static?
+
 
 % a few later:
 %  - div by zero in evconst()
@@ -17174,7 +17261,7 @@ loop:
             ccom(l);
         if(r != Z)
             ccom(r);
-
+        // Fallthrough
     common:
         if(l != Z)
           if(l->op != OCONST)
@@ -21157,9 +21244,12 @@ postorder(Reg *r, Reg **rpo2r, long n)
 
 
 
+
 \chapter{Linking Support}
 
 \section{[[#pragma lib]] and automagic linking}
+
+
 
 \section{Safe linking with type signatures}
 % md5sum like in ocaml!
@@ -21356,7 +21446,7 @@ sign(Sym *s)
 
 \subsection{Entities}
 
-% called e.g. for enum constants in doenum() and dodecl()
+% doenum? | dodecl? -> <>
 % exported in cc.h
 <<function acidvar>>=
 void
@@ -21488,8 +21578,6 @@ amap(char *s)
 
 
 
-
-
 \subsection{Structure/union definitions}
 
 % called from sualign, so for struct and union
@@ -21537,6 +21625,7 @@ acidtype(Type *t)
             acidmember(l, 0, 0);
         Bprint(&outbuf, "};\n\n");
         break;
+
     asmstr:
         if(s == S)
             break;
@@ -22094,16 +22183,31 @@ case BEXTERN|BREGISTER:
 @
 
 <<[[Storage_class]] cases>>=
-CEXREG, // extern register, kencc ext (used in kernel for mips)
+CEXREG, // extern register, kenccext (used in kernel for mips)
 @
 
-<<misc nodes>>=
-OEXREG,
+<<[[xdecl()]] switch class cases>>=
+case CEXREG:
+    o = exreg(t);
+    if(o == 0)
+        class = CEXTERN;
+    if(s->class == CGLOBL)
+        class = CGLOBL;
+    break;
 @
+
+
+
+<<misc nodes>>=
+OEXREG, // appears only during parsing
+@
+% for regnode
+
 
 <<global exregoffset>>=
 long	exregoffset;
 @
+% does not look like an offset, more a register number
 
 <<global exfregoffset>>=
 long	exfregoffset;
@@ -22128,6 +22232,7 @@ exreg(Type *t)
     if(typechlp[t->etype]) {
         if(exregoffset <= REGEXT-2)
             return 0;
+
         o = exregoffset;
         if(reg[o] && !resvreg[o])
             return 0;
@@ -22138,6 +22243,7 @@ exreg(Type *t)
     if(typefd[t->etype]) {
         if(exfregoffset <= NFREG-1)
             return 0;
+
         o = exfregoffset + NREG;
         if(reg[o] && !resvreg[o])
             return 0;
@@ -22150,10 +22256,37 @@ exreg(Type *t)
 @
 
 \subsection{[[typestr]]}
+% a form of reflection too?
+
 
 <<[[itab]] entries, kencc extensions>>=
 "typestr",	LTYPESTR,	0,
 @
+
+<<cname rule>>=
+|   LTYPESTR  { $$ = BTYPESTR; }
+@
+
+
+<<[[Storage_class]] cases>>=
+CTYPESTR,
+@
+
+<<[[simplec()]] cases>>=
+case BTYPESTR:
+    return CTYPESTR;
+@
+
+<<[[xdecl()]] switch class cases>>=
+case CTYPESTR:
+    if(!typesuv[t->etype]) {
+        diag(Z, "typestr must be struct/union: %s", s->name);
+        break;
+    }
+    dclfunct(t, s);
+    break;
+@
+
 
 % dodecl(xdecl, ...) ->  <>
 <<function dclfunct>>=
@@ -22423,78 +22556,6 @@ if(pass != 0 && anyproto(n->right) == OLDPROTO) {
 }
 @
 
-<<function tmerge>>=
-void
-tmerge(Type *t1, Sym *s)
-{
-    Type *ta, *tb, *t2;
-
-    t2 = s->type;
-/*print("merge	%T; %T\n", t1, t2);/**/
-    for(;;) {
-        if(t1 == T || t2 == T || t1 == t2)
-            break;
-        if(t1->etype != t2->etype)
-            break;
-        switch(t1->etype) {
-        case TFUNC:
-            ta = t1->down;
-            tb = t2->down;
-            if(ta == T) {
-                t1->down = tb;
-                break;
-            }
-            if(tb == T)
-                break;
-            while(ta != T && tb != T) {
-                if(ta == tb)
-                    break;
-                /* ignore old-style flag */
-                if(ta->etype == TOLD) {
-                    ta = ta->down;
-                    continue;
-                }
-                if(tb->etype == TOLD) {
-                    tb = tb->down;
-                    continue;
-                }
-                /* checking terminated by ... */
-                if(ta->etype == TDOT && tb->etype == TDOT) {
-                    ta = T;
-                    tb = T;
-                    break;
-                }
-                if(!sametype(ta, tb))
-                    break;
-                ta = ta->down;
-                tb = tb->down;
-            }
-            if(ta != tb)
-                diag(Z, "function inconsistently declared: %s", s->name);
-
-            /* take new-style over old-style */
-            ta = t1->down;
-            tb = t2->down;
-            if(ta != T && ta->etype == TOLD)
-                if(tb != T && tb->etype != TOLD)
-                    t1->down = tb;
-            break;
-
-        case TARRAY:
-            /* should we check array size change? */
-            if(t2->width > t1->width)
-                t1->width = t2->width;
-            break;
-
-        case TUNION:
-        case TSTRUCT:
-            return;
-        }
-        t1 = t1->link;
-        t2 = t2->link;
-    }
-}
-@
 
 <<function ofnproto>>=
 Type*

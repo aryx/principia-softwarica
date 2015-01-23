@@ -1327,7 +1327,7 @@ loop:
             ccom(l);
         if(r != Z)
             ccom(r);
-
+        // Fallthrough
     common:
         if(l != Z)
           if(l->op != OCONST)

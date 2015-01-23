@@ -253,6 +253,7 @@ acidtype(Type *t)
             acidmember(l, 0, 0);
         Bprint(&outbuf, "};\n\n");
         break;
+
     asmstr:
         if(s == S)
             break;

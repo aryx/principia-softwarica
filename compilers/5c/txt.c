@@ -44,12 +44,14 @@ ginit(void)
     zprog.to = zprog.from;
     zprog.scond = COND_ALWAYS;  
 
+    /*s: [[ginit()]] special nodes initialisation */
     regnode.op = OREGISTER;
     regnode.class = CEXREG;
     regnode.reg = REGTMP;
     regnode.complex = 0;
     regnode.addable = 11;
     regnode.type = types[TLONG];
+    /*e: [[ginit()]] special nodes initialisation */
 
     constnode.op = OCONST;
     constnode.class = CXXX;
@@ -281,6 +283,7 @@ nodreg(Node *n, Node *nn, int reg)
     n->type = nn->type;
     n->lineno = nn->lineno;
 }
+
 /*e: function nodreg(arm) */
 
 /*s: function regret(arm) */
@@ -327,6 +330,7 @@ regalloc(Node *n, Node *tn, Node *o)
     case TUINT:
     case TLONG:
     case TULONG:
+
     case TIND:
         if(o != Z && o->op == OREGISTER) {
             i = o->reg;
@@ -1320,6 +1324,7 @@ exreg(Type *t)
     if(typechlp[t->etype]) {
         if(exregoffset <= REGEXT-2)
             return 0;
+
         o = exregoffset;
         if(reg[o] && !resvreg[o])
             return 0;
@@ -1330,6 +1335,7 @@ exreg(Type *t)
     if(typefd[t->etype]) {
         if(exfregoffset <= NFREG-1)
             return 0;
+
         o = exfregoffset + NREG;
         if(reg[o] && !resvreg[o])
             return 0;

@@ -226,11 +226,12 @@ int simplec(long b)
         return CSTATIC;
     case BTYPEDEF:
         return CTYPEDEF;
-    case BTYPESTR:
-        return CTYPESTR;
     /*s: [[simplec()]] cases */
     case BEXTERN|BREGISTER:
         return CEXREG;
+    /*x: [[simplec()]] cases */
+    case BTYPESTR:
+        return CTYPESTR;
     /*e: [[simplec()]] cases */
     }
     diag(Z, "illegal combination of classes %Q", b);

@@ -1408,57 +1408,59 @@ adecl(int c, Type *t, Sym *s)
 
 /*s: function pdecl */
 void
-pdecl(int c, Type *t, Sym *s)
+pdecl(int class, Type *t, Sym *s)
 {
     if(s && s->offset != -1) {
         diag(Z, "not a parameter: %s", s->name);
         return;
     }
-    t = paramconv(t, c==CPARAM);
-    if(c == CXXX)
-        c = CPARAM;
-    if(c != CPARAM) {
+    t = paramconv(t, class==CPARAM);
+    if(class == CXXX)
+        class = CPARAM;
+    if(class != CPARAM) {
         diag(Z, "parameter cannot have class: %s", s->name);
-        c = CPARAM;
+        class = CPARAM;
     }
     if(typesu[t->etype] && t->width <= 0)
         diag(Z, "incomplete structure: %s", t->tag->name);
-    adecl(c, t, s);
+    adecl(class, t, s);
 }
 /*e: function pdecl */
 
 /*s: function xdecl */
 void
-xdecl(int c, Type *t, Sym *s)
+xdecl(int class, Type *t, Sym *s)
 {
-    long o;
+    long o; // offset
 
     o = 0;
-    switch(c) {
-    case CEXREG:
-        o = exreg(t);
-        if(o == 0)
-            c = CEXTERN;
-        if(s->class == CGLOBL)
-            c = CGLOBL;
-        break;
-
-    case CEXTERN:
-        if(s->class == CGLOBL)
-            c = CGLOBL;
-        break;
-
+    // adjusting class
+    switch(class) {
+    /*s: [[xdecl()]] switch class cases */
     case CXXX:
-        c = CGLOBL;
+        class = CGLOBL;
         if(s->class == CEXTERN)
             s->class = CGLOBL;
         break;
-
-    case CAUTO:
-        diag(Z, "overspecified class: %s %s %s", s->name, cnames[c], cnames[s->class]);
-        c = CEXTERN;
+    /*x: [[xdecl()]] switch class cases */
+    case CEXTERN:
+        if(s->class == CGLOBL)
+            class = CGLOBL;
         break;
-
+    /*x: [[xdecl()]] switch class cases */
+    case CAUTO:
+        diag(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
+        class = CEXTERN;
+        break;
+    /*x: [[xdecl()]] switch class cases */
+    case CEXREG:
+        o = exreg(t);
+        if(o == 0)
+            class = CEXTERN;
+        if(s->class == CGLOBL)
+            class = CGLOBL;
+        break;
+    /*x: [[xdecl()]] switch class cases */
     case CTYPESTR:
         if(!typesuv[t->etype]) {
             diag(Z, "typestr must be struct/union: %s", s->name);
@@ -1466,22 +1468,27 @@ xdecl(int c, Type *t, Sym *s)
         }
         dclfunct(t, s);
         break;
+    /*e: [[xdecl()]] switch class cases */
     }
 
+    /*s: [[xdecl()]] sanity checks */
     if(s->class == CSTATIC)
-        if(c == CEXTERN || c == CGLOBL) {
-            warn(Z, "overspecified class: %s %s %s", s->name, cnames[c], cnames[s->class]);
-            c = CSTATIC;
+        if(class == CEXTERN || class == CGLOBL) {
+            warn(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
+            class = CSTATIC;
         }
+
     if(s->type != T)
-        if(s->class != c || !sametype(t, s->type) || t->etype == TENUM) {
+        if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
             diag(Z, "external redeclaration of: %s", s->name);
-            Bprint(&diagbuf, "	%s %T %L\n", cnames[c], t, nearln);
+            Bprint(&diagbuf, "	%s %T %L\n", cnames[class], t, nearln);
             Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
         }
+    /*e: [[xdecl()]] sanity checks */
+
     tmerge(t, s);
     s->type = t;
-    s->class = c;
+    s->class = class;
     s->block = 0;
     s->offset = o;
 }
