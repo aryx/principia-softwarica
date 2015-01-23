@@ -4343,7 +4343,7 @@ getnsn(void)
 
 \section{Overview}
 
-% I assume you understand yacc! if not read classic book on lex&yacc
+% I assume you understand Yacc! if not read the oreilly book on Lex&Yacc
 %  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
 %(compared to ocamlyacc can have actions in the middle, and they count
 % as indexable elements for the $xxx ($1, $2, etc))
@@ -4361,7 +4361,8 @@ getnsn(void)
 %%
 @
 
-% have seen Token declarations in Core Data structures chapter already.
+% have seen union yacc and token declarations in Core Data structures
+% chapter already.
 
 % do not LP split, order matters!
 <<priority and associativity declarations>>=
@@ -4383,6 +4384,7 @@ getnsn(void)
 @
 % LXE = L X Equal, e.g. LPE = L Plus Equal (+=)
 % LMM = L Minus Minus (--), LMG = L Minux Greater (->)
+% the most important: * below + so * has priority.
 
 <<[[union yacc]] other fields>>=
 Node*   node;
@@ -4398,8 +4400,8 @@ Node*   node;
 %type   <node>  xdecor xdecor2 edecor  abdecor abdecor1 abdecor2 abdecor3
 %type   <node>  zexpr zelist zcexpr zarglist
 @
-% xdecl, pdecl are not here, because do side effects I think
-%less: ltag is a sym. 
+% xdecl, pdecl are not here, because do side effects I think.
+% ltag is a sym. 
 %note that name and tag are nodes here, convenient so can use diag($xx) on
 % them. 
 
@@ -4859,6 +4861,29 @@ arglist:
 
 <<misc nodes>>=
 ODOTDOT,
+@
+
+
+% invert in place
+<<function invert>>=
+Node*
+invert(Node *n)
+{
+    Node *i;
+
+    if(n == Z || n->op != OLIST)
+        return n;
+    i = n;
+    for(n = n->left; n != Z; n = n->left) {
+        if(n->op != OLIST)
+            break;
+        i->left = n->right;
+        n->right = i;
+        i = n;
+    }
+    i->left = n;
+    return i;
+}
 @
 
 
@@ -5422,6 +5447,9 @@ zcexpr:
 % Similar to Machine.nw/Assembler.nw in some sense,
 % except can compose them to form complex tree formulas.
 % and also have DIV here even though the machine does not!
+
+% also + is now overloaded! works for integers (char/short/int/long/vlong)
+% and floats (double/float).
 
 <<expression nodes>>=
 OADD,
@@ -7929,32 +7957,6 @@ abdecor3:
 @
 %$
 
-
-
-
-\section{Helpers}
-
-% invert in place
-<<function invert>>=
-Node*
-invert(Node *n)
-{
-    Node *i;
-
-    if(n == Z || n->op != OLIST)
-        return n;
-    i = n;
-    for(n = n->left; n != Z; n = n->left) {
-        if(n->op != OLIST)
-            break;
-        i->left = n->right;
-        n->right = i;
-        i = n;
-    }
-    i->left = n;
-    return i;
-}
-@
 
 
 
@@ -17343,7 +17345,8 @@ OHS,
 OLO,
 OLS,
 @
-%todo: seems to be redundant no?
+% for unsigned context, see evconst()
+% I think created only via comrel, relindex, and so on
 
 <<global cmps>>=
 /*	OEQ, ONE, OLE, OLS, OLT, OLO, OGE, OHS, OGT, OHI */
@@ -17485,8 +17488,6 @@ useless:
 
 \subsection{Constant evaluation, [[evconst()]]}
 
-
-
 % evaluate constants statically.
 % ccom -> <>
 % ccom() explores first the leaves, so here we can
@@ -17518,7 +17519,6 @@ evconst(Node *n)
     <<[[evconst()]] switch node kind cases>>
     default:
         return;
-
     }
 
     if(isf) {
@@ -17569,9 +17569,8 @@ case OCAST:
 case OADD:
     if(isf)
         d = l->fconst + r->fconst;
-    else {
+    else 
         v = l->vconst + r->vconst;
-    }
     break;
 
 case OSUB:
@@ -17584,15 +17583,9 @@ case OSUB:
 case OMUL:
     if(isf)
         d = l->fconst * r->fconst;
-    else {
+    else
         v = l->vconst * r->vconst;
-    }
     break;
-
-case OLMUL:
-    v = (uvlong)l->vconst * (uvlong)r->vconst;
-    break;
-
 
 case ODIV:
     if(vconst(r) == 0) {
@@ -17605,20 +17598,26 @@ case ODIV:
         v = l->vconst / r->vconst;
     break;
 
-case OLDIV:
-    if(vconst(r) == 0) {
-        warn(n, "divide by zero");
-        return;
-    }
-    v = (uvlong)l->vconst / (uvlong)r->vconst;
-    break;
-
 case OMOD:
     if(vconst(r) == 0) {
         warn(n, "modulo by zero");
         return;
     }
     v = l->vconst % r->vconst;
+    break;
+@
+
+<<[[evconst()]] switch node kind cases>>=
+case OLMUL:
+    v = (uvlong)l->vconst * (uvlong)r->vconst;
+    break;
+
+case OLDIV:
+    if(vconst(r) == 0) {
+        warn(n, "divide by zero");
+        return;
+    }
+    v = (uvlong)l->vconst / (uvlong)r->vconst;
     break;
 
 case OLMOD:
@@ -17672,19 +17671,11 @@ case OASHL:
 @
 
 <<[[evconst()]] switch node kind cases>>=
-case OLO:
-    v = (uvlong)l->vconst < (uvlong)r->vconst;
-    break;
-
 case OLT:
     if(typefd[l->type->etype])
         v = l->fconst < r->fconst;
     else
         v = l->vconst < r->vconst;
-    break;
-
-case OHI:
-    v = (uvlong)l->vconst > (uvlong)r->vconst;
     break;
 
 case OGT:
@@ -17694,10 +17685,6 @@ case OGT:
         v = l->vconst > r->vconst;
     break;
 
-case OLS:
-    v = (uvlong)l->vconst <= (uvlong)r->vconst;
-    break;
-
 case OLE:
     if(typefd[l->type->etype])
         v = l->fconst <= r->fconst;
@@ -17705,15 +17692,29 @@ case OLE:
         v = l->vconst <= r->vconst;
     break;
 
-case OHS:
-    v = (uvlong)l->vconst >= (uvlong)r->vconst;
-    break;
-
 case OGE:
     if(typefd[l->type->etype])
         v = l->fconst >= r->fconst;
     else
         v = l->vconst >= r->vconst;
+    break;
+@
+
+<<[[evconst()]] switch node kind cases>>=
+case OLO:
+    v = (uvlong)l->vconst < (uvlong)r->vconst;
+    break;
+
+case OHI:
+    v = (uvlong)l->vconst > (uvlong)r->vconst;
+    break;
+
+case OLS:
+    v = (uvlong)l->vconst <= (uvlong)r->vconst;
+    break;
+
+case OHS:
+    v = (uvlong)l->vconst >= (uvlong)r->vconst;
     break;
 @
 

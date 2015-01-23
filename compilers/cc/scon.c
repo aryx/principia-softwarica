@@ -68,9 +68,8 @@ evconst(Node *n)
     case OADD:
         if(isf)
             d = l->fconst + r->fconst;
-        else {
+        else 
             v = l->vconst + r->vconst;
-        }
         break;
 
     case OSUB:
@@ -83,15 +82,9 @@ evconst(Node *n)
     case OMUL:
         if(isf)
             d = l->fconst * r->fconst;
-        else {
+        else
             v = l->vconst * r->vconst;
-        }
         break;
-
-    case OLMUL:
-        v = (uvlong)l->vconst * (uvlong)r->vconst;
-        break;
-
 
     case ODIV:
         if(vconst(r) == 0) {
@@ -104,20 +97,24 @@ evconst(Node *n)
             v = l->vconst / r->vconst;
         break;
 
-    case OLDIV:
-        if(vconst(r) == 0) {
-            warn(n, "divide by zero");
-            return;
-        }
-        v = (uvlong)l->vconst / (uvlong)r->vconst;
-        break;
-
     case OMOD:
         if(vconst(r) == 0) {
             warn(n, "modulo by zero");
             return;
         }
         v = l->vconst % r->vconst;
+        break;
+    /*x: [[evconst()]] switch node kind cases */
+    case OLMUL:
+        v = (uvlong)l->vconst * (uvlong)r->vconst;
+        break;
+
+    case OLDIV:
+        if(vconst(r) == 0) {
+            warn(n, "divide by zero");
+            return;
+        }
+        v = (uvlong)l->vconst / (uvlong)r->vconst;
         break;
 
     case OLMOD:
@@ -163,19 +160,11 @@ evconst(Node *n)
         v = l->vconst << r->vconst;
         break;
     /*x: [[evconst()]] switch node kind cases */
-    case OLO:
-        v = (uvlong)l->vconst < (uvlong)r->vconst;
-        break;
-
     case OLT:
         if(typefd[l->type->etype])
             v = l->fconst < r->fconst;
         else
             v = l->vconst < r->vconst;
-        break;
-
-    case OHI:
-        v = (uvlong)l->vconst > (uvlong)r->vconst;
         break;
 
     case OGT:
@@ -185,10 +174,6 @@ evconst(Node *n)
             v = l->vconst > r->vconst;
         break;
 
-    case OLS:
-        v = (uvlong)l->vconst <= (uvlong)r->vconst;
-        break;
-
     case OLE:
         if(typefd[l->type->etype])
             v = l->fconst <= r->fconst;
@@ -196,15 +181,27 @@ evconst(Node *n)
             v = l->vconst <= r->vconst;
         break;
 
-    case OHS:
-        v = (uvlong)l->vconst >= (uvlong)r->vconst;
-        break;
-
     case OGE:
         if(typefd[l->type->etype])
             v = l->fconst >= r->fconst;
         else
             v = l->vconst >= r->vconst;
+        break;
+    /*x: [[evconst()]] switch node kind cases */
+    case OLO:
+        v = (uvlong)l->vconst < (uvlong)r->vconst;
+        break;
+
+    case OHI:
+        v = (uvlong)l->vconst > (uvlong)r->vconst;
+        break;
+
+    case OLS:
+        v = (uvlong)l->vconst <= (uvlong)r->vconst;
+        break;
+
+    case OHS:
+        v = (uvlong)l->vconst >= (uvlong)r->vconst;
         break;
     /*x: [[evconst()]] switch node kind cases */
     case OEQ:
@@ -243,7 +240,6 @@ evconst(Node *n)
     /*e: [[evconst()]] switch node kind cases */
     default:
         return;
-
     }
 
     if(isf) {
