@@ -17,7 +17,7 @@ noretval(int n)
         p->to.type = FREGRET;
     }
     if((n&3) == 3)
-    if(thisfn && thisfn->link && typefd[thisfn->link->etype])
+    if(thisfntype && thisfntype->link && typefd[thisfntype->link->etype])
         gins(AFLDZ, Z, Z);
 }
 /*e: function noretval(x86) */

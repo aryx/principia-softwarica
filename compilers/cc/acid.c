@@ -307,7 +307,7 @@ acidvar(Sym *s)
     switch(s->class) {
     case CAUTO:
     case CPARAM:
-        s2 = acidfun(thisfn);
+        s2 = acidfun(thisfntype);
         if(s2)
             Bprint(&outbuf, "complex %s %s:%s;\n",
                 amap(s1->name), amap(s2->name), amap(s->name));

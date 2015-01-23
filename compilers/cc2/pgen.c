@@ -39,7 +39,7 @@ void codgen(Node *n, Node *nn)
     sp = p;
 
     /*s: [[codgen()]] if complex return type */
-    if(typecmplx[thisfn->link->etype]) {
+    if(typecmplx[thisfntype->link->etype]) {
         if(nodret == nil) {
             nodret = new(ONAME, Z, Z);
             nodret->sym = slookup(".ret");
@@ -49,8 +49,8 @@ void codgen(Node *n, Node *nn)
             nodret = new(OIND, nodret, Z);
         }
         n1 = nodret->left;
-        if(n1->type == T || n1->type->link != thisfn->link) {
-            n1->type = typ(TIND, thisfn->link);
+        if(n1->type == T || n1->type->link != thisfntype->link) {
+            n1->type = typ(TIND, thisfntype->link);
             n1->etype = n1->type->etype;
             nodret = new(OIND, n1, Z);
             complex(nodret);
@@ -62,7 +62,7 @@ void codgen(Node *n, Node *nn)
      * isolate first argument
      */
     if(REGARG >= 0) {	
-        if(typecmplx[thisfn->link->etype]) {
+        if(typecmplx[thisfntype->link->etype]) {
             nod1 = *nodret->left;
             nodreg(&nod, &nod1, REGARG);
             gmove(&nod, &nod1);
@@ -92,7 +92,7 @@ void codgen(Node *n, Node *nn)
     gen(n);
 
     /*s: [[codgen()]] warn for possible missing return after call to gen */
-    if(canreach && thisfn->link->etype != TVOID){
+    if(canreach && thisfntype->link->etype != TVOID){
         if(debug['B'])
             warn(Z, "no return at end of function: %s", n1->sym->name);
         else

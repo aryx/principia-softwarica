@@ -104,17 +104,17 @@ loop:
          t->width = 0;
          n1 = n->right;
          n = n->left;
+         /*s: [[dodecl()]] switch node kind cases, case OARRAY, if array have a size */
          if(n1 != Z) {
              complex(n1);
-             v = -1;
-             if(n1->op == OCONST)
-                 v = n1->vconst;
+             v = (n1->op == OCONST) ? n1->vconst : -1;
              if(v <= 0) {
                  diag(n, "array size must be a positive constant");
                  v = 1;
              }
              t->width = v * t->link->width;
          }
+         /*e: [[dodecl()]] switch node kind cases, case OARRAY, if array have a size */
          goto loop;
      /*x: [[dodecl()]] switch node kind cases */
      case OFUNC:
@@ -128,7 +128,7 @@ loop:
          break;
      }
 
-    lastdcl = t;
+    lastdcltype = t;
     return n;
 }
 /*e: function dodecl */
@@ -688,7 +688,7 @@ void argmark(Node *n, int pass)
 {
     Type *t;
 
-    autoffset = align(0, thisfn->link, Aarg0);
+    autoffset = align(0, thisfntype->link, Aarg0);
     stkoff = 0;
     for(; n->left != Z; n = n->left) {
         if(n->op != OFUNC || n->left->op != ONAME)
@@ -752,7 +752,7 @@ loop:
             break;
         }
         dodecl(NODECL, CPARAM, n->type, n->left);
-        pdecl(CPARAM, lastdcl, S);
+        pdecl(CPARAM, lastdcltype, S);
         break;
 
     case ODOTDOT:
@@ -962,11 +962,11 @@ fnproto1(Node *n)
         return t;
 
     case OPROTO:
-        lastdcl = T;
+        lastdcltype = T;
         dodecl(NODECL, CXXX, n->type, n->left);
         t = typ(TXXX, T);
-        if(lastdcl != T)
-            *t = *paramconv(lastdcl, 1);
+        if(lastdcltype != T)
+            *t = *paramconv(lastdcltype, 1);
         return t;
 
     case ONAME:

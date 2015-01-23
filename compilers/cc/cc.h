@@ -116,7 +116,7 @@ struct	Node
     /*x: [[Node]] other fields */
     double	fconst;		/* fp constant */
     /*x: [[Node]] other fields */
-    char*	cstring;	/* character string */ // also used for ints
+    char*	cstring;	/* character string */
     /*x: [[Node]] other fields */
     TRune*	rstring;	/* rune string */
     /*x: [[Node]] other fields */
@@ -234,8 +234,7 @@ struct	Type
 
     // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
     Type*	link;
-
-    // ??
+    // option<list<ref_own<Type>>, just for the parameters of a TFUNC
     Type*	down;
 
     long	lineno;
@@ -752,7 +751,7 @@ extern	Io*	ionext;
 extern	Io*	iostack;
 extern	long	lastbit;
 extern	char	lastclass;
-extern	Type*	lastdcl;
+extern	Type*	lastdcltype;
 extern	long	lastfield;
 extern	Type*	lasttype;
 extern	long	lineno;
@@ -779,7 +778,7 @@ extern	Type*	tfield;
 extern	Type*	tufield;
 extern	int	thechar;
 extern	char*	thestring;
-extern	Type*	thisfn;
+extern	Type*	thisfntype;
 extern	long	thunk;
 extern	Type*	types[NTYPE];
 

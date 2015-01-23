@@ -73,7 +73,7 @@ long	lastbit;
 char	lastclass;
 /*e: global lastclass */
 /*s: global lastdcl */
-Type*	lastdcl;
+Type*	lastdcltype;
 /*e: global lastdcl */
 /*s: global lastfield */
 long	lastfield;
@@ -156,7 +156,7 @@ int	thechar;
 char*	thestring;
 /*e: global thestring */
 /*s: global thisfn */
-Type*	thisfn;
+Type*	thisfntype;
 /*e: global thisfn */
 /*s: global thunk */
 long	thunk;

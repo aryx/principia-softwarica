@@ -111,14 +111,14 @@ xdecl:
 /*x: xdecl rule */
 |   zctlist xdecor
     {
-        lastdcl = T;
+        lastdcltype = T;
         firstarg = S;
         dodecl(xdecl, lastclass, lasttype, $2);
-        if(lastdcl == T || lastdcl->etype != TFUNC) {
+        if(lastdcltype == T || lastdcltype->etype != TFUNC) {
             diag($2, "not a function");
-            lastdcl = types[TFUNC];
+            lastdcltype = types[TFUNC];
         }
-        thisfn = lastdcl;
+        thisfntype = lastdcltype;
         markdcl();
         firstdcl = dclstack;
         argmark($2, 0);
@@ -383,7 +383,7 @@ ulstmnt:
 |   LRETURN zcexpr ';'
     {
         $$ = new(ORETURN, $2, Z);
-        $$->type = thisfn->link;
+        $$->type = thisfntype->link;
     }
 |   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
 |   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
@@ -474,7 +474,7 @@ xuexpr:
     {
         $$ = new(OCAST, $5, Z);
         dodecl(NODECL, CXXX, $2, $3);
-        $$->type = lastdcl;
+        $$->type = lastdcltype;
         $$->xcast = true;
     }
 /*x: xuexpr rule */
@@ -482,7 +482,7 @@ xuexpr:
     {
         $$ = new(OSTRUCT, $6, Z);
         dodecl(NODECL, CXXX, $2, $3);
-        $$->type = lastdcl;
+        $$->type = lastdcltype;
     }
 /*e: xuexpr rule */
 /*s: uexpr rule */
@@ -602,14 +602,14 @@ pexpr:
     {
         $$ = new(OSIZE, Z, Z);
         dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcl;
+        $$->type = lastdcltype;
     }
 /*x: pexpr rule */
 |   LSIGNOF '(' tlist abdecor ')'
     {
         $$ = new(OSIGN, Z, Z);
         dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcl;
+        $$->type = lastdcltype;
     }
 /*e: pexpr rule */
 /*x: expressions rules */

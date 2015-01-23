@@ -13,8 +13,8 @@
 
 %thx to LP, changed for the better a few things:
 % - deadcode (TFILE, OFAS, OTST, OENUM)
-% - TODO rename more consistently things 
-%   (thisfn -> thisfntype, fistdcl->firstdcltype)
+% - rename more consistently things 
+%   (thisfn -> thisfntype, lastdcl->lastdcltype)
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -691,8 +691,7 @@ struct	Type
 
     // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
     Type*	link;
-
-    // ??
+    // option<list<ref_own<Type>>, just for the parameters of a TFUNC
     Type*	down;
 
     long	lineno;
@@ -709,8 +708,7 @@ struct	Type
 %    Where stores the tag of the struct? sym below I think.
 %  - TYPEDEF? they are not in enum type_kind! they are substitued
 %    at use time? where?
-%  - TFUNC? How is the return and how are the parameters? via link and
-%    down?
+%  - TFUNC? the return is in the link, the parameters in the down
 % note that ADT would be better again here.
 
 % when type involves a symbol, e.g. for tags in struct/union/enum
@@ -4407,13 +4405,13 @@ Node*   node;
 
 % in what follows a few conventions: 
 % zxxx means zero or more e.g. zctlist means list of ctl 0 or more
-% ct means class and storage
+% ct means class(storage) and type(part one)
 % x means external
 % u means unary, ul = unary or label
 % ab means abstract
 % cexpr means comma expr
 
-% note that all terminal chars like ')' are acutally Node* too
+% note that all terminal chars like ')' are actually Node* too
 % so can pass them to warn() to get accurate error location
 
 <<grammar>>=
@@ -4457,6 +4455,7 @@ prog:
 @
 % "external" but actually also work for locals and globals.
 
+
 <<xdecl rule>>=
 /*
  * external declarator
@@ -4466,15 +4465,25 @@ xdecl:
 @
 % This declaration covers actually many definitions as
 % can have complex struct def, typedefs, inside the t or zct_list.
-% ct means class | type, z means zero
+% recall that ct means class_storage and type, z means zero.
+% ex: 
+%  - int; (not very useful)
+%  - struct x; (forward decl)
+%  - struct x { ... }; (ok something kinda useful).
 
 
 <<xdecl rule>>=
 |   zctlist xdlist ';'
 @
 % With xdlist can also have global declarations. It also
-% include the types part2, what is on the right of the identifier.
-% xd means external decl
+% includes the types part2, what is on the right of the identifier.
+% xd means external decl.
+% ex:
+%  - int x; (more useful)
+%  - int x,y,z; (list)
+%  - struct x { ... } y;
+%  - int foo[4]; (array)
+%  - int foo(int x); (prototype forward or external decl)
 
 <<xdlist rule>>=
 xdlist:
@@ -4482,8 +4491,9 @@ xdlist:
 |   xdlist ',' xdlist
 @
 %$
-
-
+% will see xdecor below, essentially a name.
+% x decorated with more type info (left pointer, right array and func).
+% so for now xdecor =~ identifier.
 
 
 % do that because C sucks? my parser_c.mly was also complicated
@@ -4509,6 +4519,7 @@ zctlist:
     }
 |   ctlist
 @
+% so no type means int by default, as in 'x;' really means 'int x;'
 
 <<extra grammar rules>>=
 ctlist:
@@ -4527,10 +4538,12 @@ ctlist:
 
 
 
-% set lastdcl!
-
-% dodecl() modify especially the lastdcl global.
-% does it also adjust the type? and the node?
+% dodecl() modify especially the lastdcltype global.
+% its main role is to possibly compose the part one (type t) and two (node n)
+% of the type that is spreaded around the identifier (or abstract declarator).
+% does it also adjust the parameter type? and the parameter node?
+% note that the node n is Z or a symbol with also the type part two info,
+% so either ONAME or OIND of ONAME, etc.
 <<function dodecl>>=
 Node*
 dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
@@ -4551,15 +4564,16 @@ loop:
          break;
      }
 
-    lastdcl = t;
+    lastdcltype = t;
     return n;
 }
 @
 
 % hmm why Type* and not Decl*? rename lastdcltype?
 <<global lastdcl>>=
-Type*	lastdcl;
+Type*	lastdcltype;
 @
+%old: was call lastdcl, but confusing
 
 
 <<constant NODECL>>=
@@ -4569,7 +4583,7 @@ Type*	lastdcl;
 %less: rename NO_DECL_CALLBACK?
 
 
-
+% dodecl(<>) -> <>
 <<function xdecl>>=
 void
 xdecl(int class, Type *t, Sym *s)
@@ -4591,8 +4605,11 @@ xdecl(int class, Type *t, Sym *s)
     s->offset = o;
 }
 @
+% block 0, because global scope?
+% tmerge because the symbol may have been previously forward declared,
+% so need to check if consistent. See typechecking section?
 
-
+%XXX
 <<[[xdecl()]] switch class cases>>=
 case CXXX:
     class = CGLOBL;
@@ -4635,82 +4652,7 @@ if(s->type != T)
 
 
 
-\subsection{Declaration and definition types merge}
-
-<<function tmerge>>=
-void
-tmerge(Type *t1, Sym *s)
-{
-    Type *ta, *tb, *t2;
-
-    t2 = s->type;
-/*print("merge	%T; %T\n", t1, t2);/**/
-    for(;;) {
-        if(t1 == T || t2 == T || t1 == t2)
-            break;
-        if(t1->etype != t2->etype)
-            break;
-        switch(t1->etype) {
-        case TFUNC:
-            ta = t1->down;
-            tb = t2->down;
-            if(ta == T) {
-                t1->down = tb;
-                break;
-            }
-            if(tb == T)
-                break;
-            while(ta != T && tb != T) {
-                if(ta == tb)
-                    break;
-                /* ignore old-style flag */
-                if(ta->etype == TOLD) {
-                    ta = ta->down;
-                    continue;
-                }
-                if(tb->etype == TOLD) {
-                    tb = tb->down;
-                    continue;
-                }
-                /* checking terminated by ... */
-                if(ta->etype == TDOT && tb->etype == TDOT) {
-                    ta = T;
-                    tb = T;
-                    break;
-                }
-                if(!sametype(ta, tb))
-                    break;
-                ta = ta->down;
-                tb = tb->down;
-            }
-            if(ta != tb)
-                diag(Z, "function inconsistently declared: %s", s->name);
-
-            /* take new-style over old-style */
-            ta = t1->down;
-            tb = t2->down;
-            if(ta != T && ta->etype == TOLD)
-                if(tb != T && tb->etype != TOLD)
-                    t1->down = tb;
-            break;
-
-        case TARRAY:
-            /* should we check array size change? */
-            if(t2->width > t1->width)
-                t1->width = t2->width;
-            break;
-
-        case TUNION:
-        case TSTRUCT:
-            return;
-        }
-        t1 = t1->link;
-        t2 = t2->link;
-    }
-}
-@
-
-\subsection{Entity declaration or definition}
+\subsection{Entity declarations and definitions}
 
 <<xdecor rule>>=
 xdecor:
@@ -4788,8 +4730,9 @@ Decl*	firstdcl;
 
 %rename thisfntype?
 <<global thisfn>>=
-Type*	thisfn;
+Type*	thisfntype;
 @
+%old: was called thisfn, but confusing
 % this is useful to annotate the type of RETURN
 
 
@@ -4797,14 +4740,14 @@ Type*	thisfn;
 <<xdecl rule>>=
 |   zctlist xdecor
     {
-        lastdcl = T;
+        lastdcltype = T;
         firstarg = S;
         dodecl(xdecl, lastclass, lasttype, $2);
-        if(lastdcl == T || lastdcl->etype != TFUNC) {
+        if(lastdcltype == T || lastdcltype->etype != TFUNC) {
             diag($2, "not a function");
-            lastdcl = types[TFUNC];
+            lastdcltype = types[TFUNC];
         }
-        thisfn = lastdcl;
+        thisfntype = lastdcltype;
         markdcl();
         firstdcl = dclstack;
         argmark($2, 0);
@@ -4918,7 +4861,7 @@ void argmark(Node *n, int pass)
 {
     Type *t;
 
-    autoffset = align(0, thisfn->link, Aarg0);
+    autoffset = align(0, thisfntype->link, Aarg0);
     stkoff = 0;
     for(; n->left != Z; n = n->left) {
         if(n->op != OFUNC || n->left->op != ONAME)
@@ -5017,7 +4960,7 @@ loop:
             break;
         }
         dodecl(NODECL, CPARAM, n->type, n->left);
-        pdecl(CPARAM, lastdcl, S);
+        pdecl(CPARAM, lastdcltype, S);
         break;
 
     case ODOTDOT:
@@ -5052,8 +4995,7 @@ loop:
 
 
 
-% dodecl -> <> 
-
+% dodecl(<>,...) -> <> 
 <<function pdecl>>=
 void
 pdecl(int class, Type *t, Sym *s)
@@ -5228,7 +5170,7 @@ OCONTINUE,
 |   LRETURN zcexpr ';'
     {
         $$ = new(ORETURN, $2, Z);
-        $$->type = thisfn->link;
+        $$->type = thisfntype->link;
     }
 |   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
 |   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
@@ -5593,6 +5535,7 @@ OASASHR,
 %$
 
 \subsection{Pointers}
+% C power!
 
 <<expression nodes>>=
 OIND, // for uses (dereference) and also defs (and decls)
@@ -5725,18 +5668,20 @@ mkstatic(Sym *s)
 
 \subsection{Numeric Constants}
 
-\subsubsection{Integers}
-
 <<expression nodes>>=
 OCONST,
 @
 % also for float
 % the const keyword is actually a GCONSTNT, and LCONST
 
+\subsubsection{Integers}
+
 <<[[Node]] other fields>>=
 vlong	vconst;		/* non fp const */ // abused in switch?
 @
 % could be put in a union with fpconst and rstring (but not cstring)
+% take vlong to store the maximum possible value.
+
 
 <<pexpr rule>>=
 |   LCONST
@@ -5795,6 +5740,8 @@ vlong	vconst;		/* non fp const */ // abused in switch?
 double	fconst;		/* fp constant */
 @
 
+% take double to store the maximum possible value.
+
 <<pexpr rule>>=
 |   LFCONST
     {
@@ -5829,10 +5776,11 @@ OSTRING,
 @
 
 <<[[Node]] other fields>>=
-char*	cstring;	/* character string */ // also used for ints
+char*	cstring;	/* character string */
 @
 % could be put in a union, except it uses both vconst and cstring
-% at the same time
+% at the same time.
+% used also to remember the original string representation of the integer.
 
 <<expressions rules>>=
 string:
@@ -5920,17 +5868,20 @@ OCAST,
     {
         $$ = new(OCAST, $5, Z);
         dodecl(NODECL, CXXX, $2, $3);
-        $$->type = lastdcl;
+        $$->type = lastdcltype;
         $$->xcast = true;
     }
 @
 %$
 % extended unary expr? = cast expr
+% dodecl? to have lastdcltype, to reconstruct the whole type
+% from the tlist part one and abdecor part two.
 
 <<[[Node]] other fields>>=
 bool 	xcast;
 @
-% explicit cast
+% explicit cast, to remember, as we will add some implicit
+% cast during the typechecking/annotating/expliciting phase.
 
 
 \subsection{Ternary expressions}
@@ -5968,6 +5919,9 @@ OPOSTDEC,
 @
 
 
+%old:\subsection{Primary expressions}
+% call, array access, field access, sizeof, 
+
 \subsection{[[sizeof()]]}
 
 <<expression nodes>>=
@@ -5979,8 +5933,6 @@ OSIZE,
 @
 % $
 
-%\subsection{Primary expressions}
-% call, array access, field access, sizeof, 
 
 
 % already seen sizeof in uexpr rule
@@ -5989,7 +5941,7 @@ OSIZE,
     {
         $$ = new(OSIZE, Z, Z);
         dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcl;
+        $$->type = lastdcltype;
     }
 @
 %$
@@ -7215,6 +7167,7 @@ edecor:
 <<global lastfield>>=
 long	lastfield;
 @
+% set in dodecl() and ?
 
 % dodecl(<>) -> <>
 <<function edecl>>=
@@ -7543,7 +7496,7 @@ case OIND:
     n = n->left;
     goto loop;
 @
-
+% n = n->left? to access the name?
 
 <<xdecor2 rule>>=
 |   '(' xdecor ')'             { $$ = $2;   }
@@ -7561,18 +7514,20 @@ case OARRAY:
     t->width = 0;
     n1 = n->right;
     n = n->left;
-    if(n1 != Z) {
-        complex(n1);
-        v = -1;
-        if(n1->op == OCONST)
-            v = n1->vconst;
-        if(v <= 0) {
-            diag(n, "array size must be a positive constant");
-            v = 1;
-        }
-        t->width = v * t->link->width;
-    }
+    <<[[dodecl()]] switch node kind cases, case OARRAY, if array have a size>>
     goto loop;
+@
+
+<<[[dodecl()]] switch node kind cases, case OARRAY, if array have a size>>=
+if(n1 != Z) {
+    complex(n1);
+    v = (n1->op == OCONST) ? n1->vconst : -1;
+    if(v <= 0) {
+        diag(n, "array size must be a positive constant");
+        v = 1;
+    }
+    t->width = v * t->link->width;
+}
 @
 
 \subsection{Function types}
@@ -7654,11 +7609,11 @@ fnproto1(Node *n)
         return t;
 
     case OPROTO:
-        lastdcl = T;
+        lastdcltype = T;
         dodecl(NODECL, CXXX, n->type, n->left);
         t = typ(TXXX, T);
-        if(lastdcl != T)
-            *t = *paramconv(lastdcl, 1);
+        if(lastdcltype != T)
+            *t = *paramconv(lastdcltype, 1);
         return t;
 
     case ONAME:
@@ -9119,7 +9074,7 @@ for(n1 = nn;; n1 = n1->left) {
 \subsection{Return value}
 
 <<[[codgen()]] if complex return type>>=
-if(typecmplx[thisfn->link->etype]) {
+if(typecmplx[thisfntype->link->etype]) {
     if(nodret == nil) {
         nodret = new(ONAME, Z, Z);
         nodret->sym = slookup(".ret");
@@ -9129,8 +9084,8 @@ if(typecmplx[thisfn->link->etype]) {
         nodret = new(OIND, nodret, Z);
     }
     n1 = nodret->left;
-    if(n1->type == T || n1->type->link != thisfn->link) {
-        n1->type = typ(TIND, thisfn->link);
+    if(n1->type == T || n1->type->link != thisfntype->link) {
+        n1->type = typ(TIND, thisfntype->link);
         n1->etype = n1->type->etype;
         nodret = new(OIND, n1, Z);
         complex(nodret);
@@ -9171,7 +9126,7 @@ noretval(int n)
  * isolate first argument
  */
 if(REGARG >= 0) {	
-    if(typecmplx[thisfn->link->etype]) {
+    if(typecmplx[thisfntype->link->etype]) {
         nod1 = *nodret->left;
         nodreg(&nod, &nod1, REGARG);
         gmove(&nod, &nod1);
@@ -13926,12 +13881,14 @@ zaddr(char *bp, Adr *a, int s)
 
 % a few warn() seen before, 
 %  - in lexer: sign-extended char? truncated constant?
-%  - in grammar: empty body of if
+%  - in grammar: 
+%     * empty body of if
 %  - in ast builder helper: 
 %     * CAST in initialization ignored?? 
 %     * initialize pointer to an integer?
 %     * duplicated keywords for storage or qualifier or type
 %       overspecified class? just say static?
+%     * negative (or not constant) size for an array.
 
 % a few later:
 %  - div by zero in evconst()
@@ -14501,6 +14458,82 @@ long	targ[1] =
 @
 
 
+
+\subsection{Declaration and definition types merge}
+
+% dodectl(xdecl,...) -> xdecl -> <>
+<<function tmerge>>=
+void
+tmerge(Type *t1, Sym *s)
+{
+    Type *ta, *tb, *t2;
+
+    t2 = s->type;
+/*print("merge	%T; %T\n", t1, t2);/**/
+    for(;;) {
+        if(t1 == T || t2 == T || t1 == t2)
+            break;
+        if(t1->etype != t2->etype)
+            break;
+        switch(t1->etype) {
+        case TFUNC:
+            ta = t1->down;
+            tb = t2->down;
+            if(ta == T) {
+                t1->down = tb;
+                break;
+            }
+            if(tb == T)
+                break;
+            while(ta != T && tb != T) {
+                if(ta == tb)
+                    break;
+                /* ignore old-style flag */
+                if(ta->etype == TOLD) {
+                    ta = ta->down;
+                    continue;
+                }
+                if(tb->etype == TOLD) {
+                    tb = tb->down;
+                    continue;
+                }
+                /* checking terminated by ... */
+                if(ta->etype == TDOT && tb->etype == TDOT) {
+                    ta = T;
+                    tb = T;
+                    break;
+                }
+                if(!sametype(ta, tb))
+                    break;
+                ta = ta->down;
+                tb = tb->down;
+            }
+            if(ta != tb)
+                diag(Z, "function inconsistently declared: %s", s->name);
+
+            /* take new-style over old-style */
+            ta = t1->down;
+            tb = t2->down;
+            if(ta != T && ta->etype == TOLD)
+                if(tb != T && tb->etype != TOLD)
+                    t1->down = tb;
+            break;
+
+        case TARRAY:
+            /* should we check array size change? */
+            if(t2->width > t1->width)
+                t1->width = t2->width;
+            break;
+
+        case TUNION:
+        case TSTRUCT:
+            return;
+        }
+        t1 = t1->link;
+        t2 = t2->link;
+    }
+}
+@
 
 \subsection{[[tcom()]]}
 % cc/com.c
@@ -16819,7 +16852,7 @@ deadheads(Node *c)
 \subsection{Missing return}
 
 <<[[codgen()]] warn for possible missing return after call to gen>>=
-if(canreach && thisfn->link->etype != TVOID){
+if(canreach && thisfntype->link->etype != TVOID){
     if(debug['B'])
         warn(Z, "no return at end of function: %s", n1->sym->name);
     else
@@ -21378,7 +21411,7 @@ acidvar(Sym *s)
     switch(s->class) {
     case CAUTO:
     case CPARAM:
-        s2 = acidfun(thisfn);
+        s2 = acidfun(thisfntype);
         if(s2)
             Bprint(&outbuf, "complex %s %s:%s;\n",
                 amap(s1->name), amap(s2->name), amap(s->name));
@@ -21960,7 +21993,7 @@ pickletype(Type *t)
 %//    switch(s->class) {
 %//    case CAUTO:
 %//    case CPARAM:
-%//        s2 = picklefun(thisfn);
+%//        s2 = picklefun(thisfntype);
 %//        if(s2)
 %//            Bprint(&outbuf, "complex %s %s:%s;\n",
 %//                pmap(s1->name), pmap(s2->name), pmap(s->name));
@@ -22113,7 +22146,7 @@ ambig:
     {
         $$ = new(OSTRUCT, $6, Z);
         dodecl(NODECL, CXXX, $2, $3);
-        $$->type = lastdcl;
+        $$->type = lastdcltype;
     }
 @
 %$
@@ -22202,7 +22235,7 @@ OSIGN,
     {
         $$ = new(OSIGN, Z, Z);
         dodecl(NODECL, CXXX, $3, $4);
-        $$->type = lastdcl;
+        $$->type = lastdcltype;
     }
 @
 
