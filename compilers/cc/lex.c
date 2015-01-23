@@ -59,6 +59,7 @@ void main(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
     int c;
+    /*x: [[main()]] locals */
     char **defs;
     int ndef;
     /*x: [[main()]] locals */
@@ -72,10 +73,10 @@ void main(int argc, char *argv[])
 
     memset(debug, 0, sizeof(debug));
 
-    tinit(); // type globals init
-    cinit(); // lexing/parsing init
-    ginit(); // arch dependent init, 5c/8c/...
-    arginit(); // printf argument checking init
+    tinit(); // type globals initialisation
+    cinit(); // C lexing/parsing initialisation
+    ginit(); // arch dependent globals initialisation, 5c/8c/...
+    arginit(); // printf argument checking initialisation
 
     outfile = nil;
     defs = nil;
@@ -824,8 +825,10 @@ talph:
         goto l0;
     }
     yylval.sym = s;
+    /*s: [[yylex()]] alpha case, return LTYPE if typedef symbol s */
     if(s->class == CTYPEDEF || s->class == CTYPESTR)
         return LTYPE;
+    /*e: [[yylex()]] alpha case, return LTYPE if typedef symbol s */
     return s->lexical;
 /*x: [[yylex()]] labels */
 tnum:

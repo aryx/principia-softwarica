@@ -134,12 +134,12 @@ struct	Node
 /*s: struct Sym */
 struct	Sym
 {
-    // for: 
-    //  - keywords, 
+    // Symbolic names are used for: 
     //  - identifiers (locals/params/globals/functions/typedefs),
     //  - tags (struct/union/enum) 
     //  - labels (for the goto)
-    //  - macros
+    //  - macros (the #define)
+    //  - keywords lexeme? (abuse)
     char	*name;
 
     long	varlineno;
@@ -151,6 +151,7 @@ struct	Sym
     /*x: [[Sym]] other fields */
     char*	macro;
     /*x: [[Sym]] other fields */
+    // enum<lexeme>
     ushort	lexical;
     /*x: [[Sym]] other fields */
     ushort	block;
@@ -203,7 +204,7 @@ enum signature {
 struct	Decl
 {
     Sym*	sym;
-    // enum<dxxx>
+    // enum<namespace>
     short	val;
 
     /*s: [[Decl]] sym copy fields */
@@ -394,7 +395,6 @@ enum node_kind
 
     OASASHL,
     OASASHR,
-
     /*x: expression nodes */
     OIND, // for uses (dereference) and also defs (and decls)
     OADDR,
@@ -610,7 +610,7 @@ enum align
 };
 /*e: enum align */
 /*s: enum dxxx */
-enum dxxx
+enum namespace
 {
     DMARK, // special mark to help represent a stack of list??
 

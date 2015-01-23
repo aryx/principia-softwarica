@@ -498,7 +498,13 @@ zname(Biobuf *b, Sym *s, int t)
     ulong sig;
 
     n = s->name;
-    if(debug['T'] && t == D_EXTERN && s->sig != SIGDONE && s->type != types[TENUM] && s != symrathole){
+    /*s: [[zname()]] if generate signature for symbol s */
+    if(debug['T'] && 
+       t == D_EXTERN && 
+       s->sig != SIGDONE && 
+       s->type != types[TENUM] && 
+       s != symrathole){
+
         sig = sign(s);
         bf[0] = ASIGNAME;
         bf[1] = sig;
@@ -510,6 +516,7 @@ zname(Biobuf *b, Sym *s, int t)
         Bwrite(b, bf, 7);
         s->sig = SIGDONE;
     }
+    /*e: [[zname()]] if generate signature for symbol s */
     else{
         bf[0] = ANAME;
         bf[1] = t;	/* type */

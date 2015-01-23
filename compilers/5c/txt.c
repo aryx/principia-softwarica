@@ -146,6 +146,7 @@ gclean(void)
     nextpc();
     p->as = AEND;
 
+    // generate the whole file, use outbuf global
     outcode();
 }
 /*e: function gclean(arm) */
@@ -977,10 +978,12 @@ gins(int a, Node *f, Node *t)
 
     nextpc();
     p->as = a;
+
     if(f != Z)
         naddr(f, &p->from);
     if(t != Z)
         naddr(t, &p->to);
+
     if(debug['g'])
         print("%P\n", p);
 }

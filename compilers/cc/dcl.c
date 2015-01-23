@@ -39,7 +39,7 @@ loop:
              break;
          s = n->sym;
 
-         // callback!
+         // callback! should set s->type
          (*f)(class, t, s);
 
          if(s->class == CLOCAL)
@@ -47,11 +47,9 @@ loop:
          firstbit = 0;
          n->sym = s;
          n->type = s->type;
+         n->etype = (n->type != T) ? n->type->etype : TVOID;
          n->xoffset = s->offset;
          n->class = s->class;
-         n->etype = TVOID;
-         if(n->type != T)
-             n->etype = n->type->etype;
          if(debug['d'])
              dbgdecl(s);
          acidvar(s);

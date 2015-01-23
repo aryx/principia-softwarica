@@ -13,8 +13,7 @@
 
 %thx to LP, changed for the better a few things:
 % - deadcode (TFILE, OFAS, OTST, OENUM)
-% - rename more consistently things 
-%   (thisfn -> thisfntype, lastdcl->lastdcltype)
+% - rename more consistently things (thisfn->thisfntype, lastdcl->lastdcltype)
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -246,6 +245,7 @@ License.
 % not put here originally: 
 % -g (in cgen()) -G (in gen()) -Z, -f
 % -N -R -P in gen()
+% -T in zname to generate ASIGNAME, can be disabled by some pragma apparently
 
 % *	-o file		output file
 
@@ -493,7 +493,6 @@ Sym*	sym;
 // (ab)used by xcom to assign ``addressibility''.
 char	addable;
 @
-
 % put also here complex?
 
 
@@ -680,8 +679,6 @@ TDOT, // ... in function types
 
 
 
-
-
 % char -> byte? but get some warnings (but we should fix that too)
 <<struct Type>>=
 struct	Type
@@ -699,7 +696,7 @@ struct	Type
     <<[[Type]] other fields>>
 };
 @
-% How things are represented for
+% Here are how things are represented for the different composed types:
 %  - TVOID, simple, should actually be in the simple case
 %  - TIND: simple, via link
 %  - TARRAY: same? but for the size of it? not in type info?
@@ -708,7 +705,7 @@ struct	Type
 %    Where stores the tag of the struct? sym below I think.
 %  - TYPEDEF? they are not in enum type_kind! they are substitued
 %    at use time? where?
-%  - TFUNC? the return is in the link, the parameters in the down
+%  - TFUNC: the return is in the link, the parameters in the down
 % note that ADT would be better again here.
 
 % when type involves a symbol, e.g. for tags in struct/union/enum
@@ -723,7 +720,7 @@ Sym*	sym;
 // enum<type_kind>, inline of Node.type->etype?
 char	etype;
 @
-
+% could remove? redundant no? annoying to maintain?
 
 % gxxx for 'garbage' but should be renamed qualifier
 <<enum qualifier>>=
@@ -747,11 +744,14 @@ enum qualifier
 // enum<qualifier>
 char	garb;
 @
+% note that can be at different level! can have  const * const *x;
+% tricky.
 
 <<[[Node]] other fields>>=
 // enum<qualifier>
 char	garb;
 @
+% inline?
 
 % storage class is not there! should be in Decl instead?
 
@@ -950,12 +950,12 @@ char	nbits;
 <<struct Sym>>=
 struct	Sym
 {
-    // for: 
-    //  - keywords, 
+    // Symbolic names are used for: 
     //  - identifiers (locals/params/globals/functions/typedefs),
     //  - tags (struct/union/enum) 
     //  - labels (for the goto)
-    //  - macros
+    //  - macros (the #define)
+    //  - keywords lexeme? (abuse)
     char	*name;
 
     long	varlineno;
@@ -966,11 +966,13 @@ struct	Sym
     <<[[Sym]] extra fields>>
 };
 @
-% similar to Assembler.nw and Linker.nw Sym DS. Diffs?
-% varlineno? why not simply lineno? to help indicate
+% Similar to Assembler.nw and Linker.nw Sym DS. Differences?
+%  -
+% varlineno? why not simply lineno? To help indicate
 % that it references the place where the symbol is defined?
 %coupling: if add a field here, don't forget to update Decl too
 % and especially its "sym copy fields" section
+
 %namespace: it's the symbol table for different kind of names
 % - identifier, see s->type, s->class, etc
 % - tags, see s->suetag and s->sueblock
@@ -1094,6 +1096,18 @@ syminit(Sym *s)
 @
 
 
+<<[[Sym]] other fields>>=
+// enum<lexeme>
+ushort	lexical;
+@
+
+<<[[Sym]] other fields>>=
+ushort	block;
+@
+% see also Decl.block
+
+
+
 <<function slookup>>=
 Sym*
 slookup(char *s)
@@ -1103,16 +1117,6 @@ slookup(char *s)
     return lookup();
 }
 @
-
-<<[[Sym]] other fields>>=
-ushort	lexical;
-@
-
-<<[[Sym]] other fields>>=
-ushort	block;
-@
-% see also Decl.block
-
 
 
 
@@ -1135,7 +1139,7 @@ char	sym;
 
 % the different "namespaces"
 <<enum dxxx>>=
-enum dxxx
+enum namespace
 {
     DMARK, // special mark to help represent a stack of list??
 
@@ -1154,7 +1158,7 @@ enum dxxx
 struct	Decl
 {
     Sym*	sym;
-    // enum<dxxx>
+    // enum<namespace>
     short	val;
 
     <<[[Decl]] sym copy fields>>
@@ -1426,7 +1430,7 @@ if(s->type && (s->type->garb & GVOLATILE)) {
 % so have LDOUBLE and TDOUBLE (and even BDOUBLE)
 
 
-%less? seems used by sub.c simpleg()
+%XXX less? seems used by sub.c simpleg()
 <<[[union yacc]] other fields>>=
 long    lval;
 @
@@ -1486,7 +1490,7 @@ struct	Adr
 };
 @
 %less: use union for first 5?
-%tood: name -> symkind
+%todo: name -> symkind
 
 <<constant A>>=
 #define	A	((Adr*)nil)
@@ -1498,7 +1502,7 @@ struct	Adr
 Prog	zprog;
 @
 
-%\section{[[fistp]], [[lastp]]}
+%\section{[[firstp]], [[lastp]]}
 
 %\section{[[reg]]}
 
@@ -1512,11 +1516,6 @@ int	thechar;
 char*	thestring;
 @
 
-<<[[ginit()]] initialisation>>=
-thechar = '5';
-thestring = "arm";
-@
-
 
 <<global outfile>>=
 char*	outfile;
@@ -1526,9 +1525,13 @@ char*	outfile;
 
 <<[[main()]] locals>>=
 int c;
+@
+
+<<[[main()]] locals>>=
 char **defs;
 int ndef;
 @
+% the -Dxxx
 
 <<function main>>=
 //@Scheck: not dead, entry point :)
@@ -1538,10 +1541,10 @@ void main(int argc, char *argv[])
 
     memset(debug, 0, sizeof(debug));
 
-    tinit(); // type globals init
-    cinit(); // lexing/parsing init
-    ginit(); // arch dependent init, 5c/8c/...
-    arginit(); // printf argument checking init
+    tinit(); // type globals initialisation
+    cinit(); // C lexing/parsing initialisation
+    ginit(); // arch dependent globals initialisation, 5c/8c/...
+    arginit(); // printf argument checking initialisation
 
     outfile = nil;
     defs = nil;
@@ -1571,19 +1574,16 @@ void main(int argc, char *argv[])
 @
 % compile returns number of possible errors
 
-<<global outbuf>>=
-Biobuf	outbuf;
-@
 
-<<global diagbuf>>=
-Biobuf	diagbuf;
+<<[[ginit()]] initialisation>>=
+thechar = '5';
+thestring = "arm";
 @
 
 
 
 
 \section{Arguments processing}
-
 
 <<[[main()]] command line processing>>=
 case 'o':
@@ -1644,6 +1644,16 @@ default:
 
 
 \section{[[compile()]]}
+
+<<global outbuf>>=
+Biobuf	outbuf;
+@
+% used by outcode()
+
+<<global diagbuf>>=
+Biobuf	diagbuf;
+@
+
 
 <<function compile>>=
 int
@@ -1774,6 +1784,7 @@ gclean(void)
     nextpc();
     p->as = AEND;
 
+    // generate the whole file, use outbuf global
     outcode();
 }
 @
@@ -1782,6 +1793,7 @@ gclean(void)
 
 \section{[[tinit()]]}
 
+%TODO: LP split
 <<function tinit>>=
 void
 tinit(void)
@@ -1988,6 +2000,7 @@ cinit(void)
 @
 
 \section{[[ginit()]]}
+% and reg[]
 
 <<[[ginit()]] initialisation>>=
 listinit();
@@ -2242,8 +2255,10 @@ pop:
 
 
 \chapter{Lexing}
-
-% why not using lex? why handwritten?
+% Why not using lex? Why handwritten? ...
+% Because anyway have to do a few things which are easier outside
+% lex like comment handling, typedefs, escape characters
+% and unicode! ocamllex not great with unicode (hence ulex).
 
 \section{[[yylex()]]}
 
@@ -2392,7 +2407,7 @@ case '/':
         return LDVE;
     break;
 @
-
+% LDVE, not a comment here!!
 
 \section{Keywords and identifiers}
 
@@ -2461,6 +2476,7 @@ for(i=0; itab[i].name; i++) {
         s->type = types[itab[i].type];
 }
 @
+% abuse symbol table
 
 
 <<[[yylex()]] switch c cases>>=
@@ -2519,8 +2535,7 @@ talph:
         goto l0;
     }
     yylval.sym = s;
-    if(s->class == CTYPEDEF || s->class == CTYPESTR)
-        return LTYPE;
+    <<[[yylex()]] alpha case, return LTYPE if typedef symbol s>>
     return s->lexical;
 @
 
@@ -2529,7 +2544,15 @@ talph:
 
 \section{Typedef trick}
 
-%LTYPE!!
+% lexer/parser cooperation. The parser sets the class
+% of the symbol.
+% is there any issue when do  xxx xxx; ?
+
+
+<<[[yylex()]] alpha case, return LTYPE if typedef symbol s>>=
+if(s->class == CTYPEDEF || s->class == CTYPESTR)
+    return LTYPE;
+@
 
 \section{Operators}
 
@@ -2540,6 +2563,8 @@ case '*':
         return LMLE;
     break;
 @
+% else return character itself, which is ok since yacc have
+% a special case for single character terminals.
 
 <<[[yylex()]] switch c cases>>=
 case '%':
@@ -3249,7 +3274,8 @@ getcom(void)
 
 \chapter{Preprocessing}
 
-% similar to Assembler.nw again
+% similar to Assembler.nw again, except here have the possiblity
+% to also call an external program.
 
 <<constant CPP>>=
 #define	CPP	"/bin/cpp"
@@ -3340,7 +3366,7 @@ struct
 @
 
 % dispatcher, should rename because it's not just about macro =>
-% parse_and_dispatch_pp_directive?
+% less: parse_and_dispatch_pp_directive?
 <<function domacro>>=
 void
 domacro(void)
@@ -3402,6 +3428,7 @@ int	maxinclude;
 @
 
 
+% main -> <>(".")
 <<function setinclude>>=
 void
 setinclude(char *p)
@@ -4437,6 +4464,7 @@ prog:
 #define YYMAXDEPTH	1500
 @
 
+
 \section{Declarations and definitions, part one}
 
 <<declarator rules>>=
@@ -4455,6 +4483,19 @@ prog:
 @
 % "external" but actually also work for locals and globals.
 
+% will use declaration for declaration and definition sometimes.
+
+% will use declarator, important concept.
+
+% An important thing, types are constructed in a complex way in C.
+% Types have part one, part two A, part two B. And this has some
+% implications on the AST building for the identifier and the type
+% of the identifier.
+
+\subsection{No-declarator declarations}
+% was "nameless" declarations, but it actually can define struct, 
+% in which case they have a name ... so better title I think
+% even if it's very technical, but I have too.
 
 <<xdecl rule>>=
 /*
@@ -4472,11 +4513,59 @@ xdecl:
 %  - struct x { ... }; (ok something kinda useful).
 
 
+
+
+% do that because C sucks? my parser_c.mly was also complicated
+% when it come to declaration handling ...
+<<global lastclass>>=
+// enum<storage_class>
+//@Scheck: y.tab.c
+char	lastclass;
+@
+
+<<global lasttype>>=
+//@Scheck: y.tab.c
+Type*	lasttype;
+@
+% really lastype_partone.
+
+<<ebnf grammar rules>>=
+zctlist:
+ /* empty */
+    {
+        lastclass = CXXX;
+        lasttype = types[TINT];
+    }
+|   ctlist
+@
+% so no type means int by default, as in 'x;' really means 'int x;'
+% can even have ';' which is not very useful.
+
+<<extra grammar rules>>=
+ctlist:
+    types
+    {
+        lasttype = $1.t;
+        lastclass = $1.c;
+    }
+@
+% it's not really 'types', it's types_and_storage really
+% will see types later.
+
+
+
+\subsection{Declarator-based declarations}
+% It's not just for globals, it can also define
+% typedefs, and even struct def and global at the same time.
+% also can declare prototypes
+% hmm I love C. It makes it easy to present.
+
 <<xdecl rule>>=
 |   zctlist xdlist ';'
 @
 % With xdlist can also have global declarations. It also
-% includes the types part2, what is on the right of the identifier.
+% includes the types part2, what are decorations (left and right) around 
+% the identifier.
 % xd means external decl.
 % ex:
 %  - int x; (more useful)
@@ -4496,42 +4585,6 @@ xdlist:
 % so for now xdecor =~ identifier.
 
 
-% do that because C sucks? my parser_c.mly was also complicated
-% when it come to declaration handling ...
-<<global lastclass>>=
-// enum<storage_class>
-//@Scheck: y.tab.c
-char	lastclass;
-@
-
-<<global lasttype>>=
-//@Scheck: y.tab.c
-Type*	lasttype;
-@
-
-
-<<ebnf grammar rules>>=
-zctlist:
- /* empty */
-    {
-        lastclass = CXXX;
-        lasttype = types[TINT];
-    }
-|   ctlist
-@
-% so no type means int by default, as in 'x;' really means 'int x;'
-
-<<extra grammar rules>>=
-ctlist:
-    types
-    {
-        lasttype = $1.t;
-        lastclass = $1.c;
-    }
-@
-% it's not really 'types', it's types_and_storage really
-% will see types later.
-
 
 
 
@@ -4541,9 +4594,11 @@ ctlist:
 % dodecl() modify especially the lastdcltype global.
 % its main role is to possibly compose the part one (type t) and two (node n)
 % of the type that is spreaded around the identifier (or abstract declarator).
-% does it also adjust the parameter type? and the parameter node?
 % note that the node n is Z or a symbol with also the type part two info,
 % so either ONAME or OIND of ONAME, etc.
+% dodecl() also adjusts the parameter node, to extract the ONAME that
+% can be deep, and then doing so construct the type of this ONAME
+% on its way.
 <<function dodecl>>=
 Node*
 dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
@@ -4581,6 +4636,76 @@ Type*	lastdcltype;
 @
 % no decl
 %less: rename NO_DECL_CALLBACK?
+
+
+
+
+\subsection{Entity declarations, the declarator}
+% also use for definitions
+
+<<xdecor rule>>=
+xdecor:
+    xdecor2
+@
+% will contain the before identifier type part 2 (pointers)
+
+<<xdecor2 rule>>=
+xdecor2:
+    tag
+@
+% will contain the after identifier type part 2 (array and functions)
+
+
+% xdecor -> xdecor2 -> tag
+<<names rules>>=
+tag:
+    ltag
+    {
+        $$ = new(ONAME, Z, Z);
+        $$->sym = $1;
+
+        $$->type = $1->type;
+        $$->etype = ($$->type != T) ? $$->type->etype : TVOID;
+
+        $$->xoffset = $1->offset;
+        $$->class = $1->class;
+    }
+@
+% similar to name rule but here it's for decl/defs, 'name' rule is for use.
+% tag! but it's really ident.
+% the type will be adjusted in dodecl as goes up the chain.
+
+<<names rules>>=
+ltag:
+    LNAME
+|   LTYPE
+@
+% no ambiguity??
+
+<<[[dodecl()]] switch node kind cases>>=
+case ONAME:
+    if(f == NODECL)
+        break;
+    s = n->sym;
+
+    // callback! should set s->type
+    (*f)(class, t, s);
+
+    if(s->class == CLOCAL)
+        s = mkstatic(s);
+    firstbit = 0;
+    n->sym = s;
+    n->type = s->type;
+    n->etype = (n->type != T) ? n->type->etype : TVOID;
+    n->xoffset = s->offset;
+    n->class = s->class;
+    if(debug['d'])
+        dbgdecl(s);
+    acidvar(s);
+    s->varlineno = lineno;
+    break;
+@
+
 
 
 % dodecl(<>) -> <>
@@ -4651,77 +4776,7 @@ if(s->type != T)
 
 
 
-
-\subsection{Entity declarations and definitions}
-
-<<xdecor rule>>=
-xdecor:
-    xdecor2
-@
-% will contain the before identifier type part 2 (pointers)
-
-<<xdecor2 rule>>=
-xdecor2:
-    tag
-@
-% will contain the after identifier type part 2 (array and functions)
-
-
-% for struct, function ... ?
-% xdecor -> xdecor2 -> tag
-<<names rules>>=
-tag:
-    ltag
-    {
-        $$ = new(ONAME, Z, Z);
-        $$->sym = $1;
-
-        $$->type = $1->type;
-        $$->etype = ($$->type != T) ? $$->type->etype : TVOID;
-
-        $$->xoffset = $1->offset;
-        $$->class = $1->class;
-    }
-@
-% similar to name rule but here it's for decl/defs, 'name' rule is for use.
-% tag! but it's really ident
-
-<<names rules>>=
-ltag:
-    LNAME
-|   LTYPE
-@
-
-
-<<[[dodecl()]] switch node kind cases>>=
-case ONAME:
-    if(f == NODECL)
-        break;
-    s = n->sym;
-
-    // callback!
-    (*f)(class, t, s);
-
-    if(s->class == CLOCAL)
-        s = mkstatic(s);
-    firstbit = 0;
-    n->sym = s;
-    n->type = s->type;
-    n->xoffset = s->offset;
-    n->class = s->class;
-    n->etype = TVOID;
-    if(n->type != T)
-        n->etype = n->type->etype;
-    if(debug['d'])
-        dbgdecl(s);
-    acidvar(s);
-    s->varlineno = lineno;
-    break;
-@
-
-
-
-\section{Function definitions}
+\subsection{Function definitions}
 
 
 <<global firstdcl>>=
@@ -4831,7 +4886,7 @@ invert(Node *n)
 
 
 
-\subsection{Parameters}
+\subsubsection{Parameters}
 
 <<global firstarg>>=
 Sym*	firstarg;
@@ -5515,7 +5570,6 @@ OASXOR,
 
 OASASHL,
 OASASHR,
-
 @
 
 
@@ -5548,7 +5602,7 @@ OADDR,
 @
 
 
-\subsection{Function call}
+\subsection{Function calls}
 
 <<misc nodes>>=
 OFUNC, // used for uses (calls) but also defs (and decls) :(
@@ -5583,14 +5637,14 @@ elist:
 @
 % elist really? should be expr no? or have a %left for ',' ?
 
-\subsection{Array access}
+\subsection{Array accesses}
 
 % unsugar x[y] as *(x+y) :)
 <<pexpr rule>>=
 |   pexpr '[' cexpr ']' { $$ = new(OIND, new(OADD, $1, $3), Z); }
 @
 
-\subsection{Field access}
+\subsection{Field accesses}
 
 <<expression nodes>>=
 ODOT,
@@ -7442,6 +7496,7 @@ maxtype(Type *t1, Type *t2)
 |   LTYPE { $$ = tcopy($1->type); }
 @
 %$
+% tricky!
 
 <<function tcopy>>=
 /*
@@ -7489,6 +7544,7 @@ tcopy(Type *t)
 @
 % before the identifier
 
+% remember t is the type part one (or the currently adjusted type)
 <<[[dodecl()]] switch node kind cases>>=
 case OIND:
     t = typ(TIND, t);
@@ -7633,11 +7689,9 @@ fnproto1(Node *n)
 
 \section{Declarations and definitions, part two}
 
-
 \subsection{Globals, external declarator}
 
 % have seen already before xdecl, xdlist, xdecor, xdecor2
-
 
 \subsection{Locals, automatic declarator}
 
@@ -7930,14 +7984,15 @@ abdecor3:
 % so at least some of the statement code generator is portable.
 % (but maybe lcc is cleaner)
 
-% gbranch(), gmove(), are mostly archi independent interface.
+% gbranch(), gmove(), are archi independent interface.
 %  cc2/pgen.c include gc.h where all archi define some kinda archi independent
 %  stuff like ATEXT, ANOP, etc
 % gins() seems more archi dependent but can also do arch independent
 %  when the opcode is quite general (e.g. ANOP)
 
-% target language = Adr, Prog, as, etc, like in Linker and assembler
-% outcode, like in Assembler.
+% target language = Prog, Adr, as, etc, like in Linker and assembler.
+% outcode(), like in Assembler.
+
 
 % remember in cc.y for function definition case:
 %        if(!debug['a'] && !debug['Z'])
@@ -7968,7 +8023,7 @@ long	pc;
 <<[[ginit()]] initialisation>>=
 pc = 0;
 @
-
+% seems archi independent ... could be in a gginit()? generic globals init.
 
 % gins | gclean | ... -> <>
 <<function nextpc>>=
@@ -8098,10 +8153,12 @@ gins(int a, Node *f, Node *t)
 
     nextpc();
     p->as = a;
+
     if(f != Z)
         naddr(f, &p->from);
     if(t != Z)
         naddr(t, &p->to);
+
     if(debug['g'])
         print("%P\n", p);
 }
@@ -10603,6 +10660,7 @@ default:
 % statements for instance for the expression in if(e), or while(e)
 
 \subsection{Typechecking, annotating, unsugaring, [[complex()]]}
+% unsugaring -> expliciting?
 
 % complex? compile lexical?
 % gen | dodecl | doenum | codgen | bcomplex -> <>
@@ -11882,6 +11940,7 @@ char	logrel[12] =
 
 
 \subsection{Multiplication}
+% is this an optimisation? move?
 
 % cgen -> cgenrel -> <>
 <<function mulcon(arm)>>=
@@ -13468,7 +13527,7 @@ void sualign(Type *t)
 @
 
 \chapter{Object Generation}
-% dupe with Assembler.nw
+% Dupe with Assembler.nw. Quite simple.
 
 % 5c -S
 
@@ -13572,8 +13631,9 @@ char*	anames[] =
 @
 
 
+\section{Object format}
 
-\section{Instruction output}
+\section{Instruction output, [[outcode()]]}
 
 <<struct Htab>>=
 struct Htab { 
@@ -13581,6 +13641,8 @@ struct Htab {
     short type; 
 };
 @
+
+%TODO: do LP split like I did in Assembler.nw
 
 % main -> compile -> yyparse; gclean -> <>
 <<function outcode(arm)>>=
@@ -13679,7 +13741,99 @@ zwrite(Biobuf *b, Prog *p, int sf, int st)
 @
 
 
+\section{Operand output, [[zaddr()]]}
 
+
+<<function zaddr(arm)>>=
+char*
+zaddr(char *bp, Adr *a, int s)
+{
+    long l;
+    Ieee e;
+
+    bp[0] = a->type;
+    bp[1] = a->reg;
+    bp[2] = s;
+    bp[3] = a->name;
+    bp += 4;
+    switch(a->type) {
+    default:
+        diag(Z, "unknown type %d in zaddr", a->type);
+
+    case D_NONE:
+    case D_REG:
+    case D_FREG:
+    case D_PSR:
+        break;
+
+    case D_OREG:
+    case D_CONST:
+    case D_BRANCH:
+    case D_SHIFT:
+        l = a->offset;
+        bp[0] = l;
+        bp[1] = l>>8;
+        bp[2] = l>>16;
+        bp[3] = l>>24;
+        bp += 4;
+        break;
+
+    case D_SCONST:
+        memmove(bp, a->sval, NSNAME);
+        bp += NSNAME;
+        break;
+
+    case D_FCONST:
+        ieeedtod(&e, a->dval);
+        l = e.l;
+        bp[0] = l;
+        bp[1] = l>>8;
+        bp[2] = l>>16;
+        bp[3] = l>>24;
+        bp += 4;
+        l = e.h;
+        bp[0] = l;
+        bp[1] = l>>8;
+        bp[2] = l>>16;
+        bp[3] = l>>24;
+        bp += 4;
+        break;
+    }
+    return bp;
+}
+@
+
+
+
+
+\section{Symbol table, [[zname()]], [[h]] and [[ANAME]]}
+% spreaded
+% and SIGNAME!
+
+
+
+
+<<function zname(arm)>>=
+void
+zname(Biobuf *b, Sym *s, int t)
+{
+    char *n, bf[7];
+    ulong sig;
+
+    n = s->name;
+    <<[[zname()]] if generate signature for symbol s>>
+    else{
+        bf[0] = ANAME;
+        bf[1] = t;	/* type */
+        bf[2] = s->sym;	/* sym */
+        Bwrite(b, bf, 3);
+    }
+    Bwrite(b, n, strlen(n)+1);
+}
+@
+
+
+\section{File and line information, [[outhist()]]}
 
 <<global pathname>>=
 char*	pathname;
@@ -13756,109 +13910,6 @@ outhist(Biobuf *b)
 }
 @
 
-
-
-
-
-
-<<global symrathole>>=
-Sym*	symrathole;
-@
-
-
-
-<<function zname(arm)>>=
-void
-zname(Biobuf *b, Sym *s, int t)
-{
-    char *n, bf[7];
-    ulong sig;
-
-    n = s->name;
-    if(debug['T'] && t == D_EXTERN && s->sig != SIGDONE && s->type != types[TENUM] && s != symrathole){
-        sig = sign(s);
-        bf[0] = ASIGNAME;
-        bf[1] = sig;
-        bf[2] = sig>>8;
-        bf[3] = sig>>16;
-        bf[4] = sig>>24;
-        bf[5] = t;
-        bf[6] = s->sym;
-        Bwrite(b, bf, 7);
-        s->sig = SIGDONE;
-    }
-    else{
-        bf[0] = ANAME;
-        bf[1] = t;	/* type */
-        bf[2] = s->sym;	/* sym */
-        Bwrite(b, bf, 3);
-    }
-    Bwrite(b, n, strlen(n)+1);
-}
-@
-
-
-\section{Operand output}
-
-
-<<function zaddr(arm)>>=
-char*
-zaddr(char *bp, Adr *a, int s)
-{
-    long l;
-    Ieee e;
-
-    bp[0] = a->type;
-    bp[1] = a->reg;
-    bp[2] = s;
-    bp[3] = a->name;
-    bp += 4;
-    switch(a->type) {
-    default:
-        diag(Z, "unknown type %d in zaddr", a->type);
-
-    case D_NONE:
-    case D_REG:
-    case D_FREG:
-    case D_PSR:
-        break;
-
-    case D_OREG:
-    case D_CONST:
-    case D_BRANCH:
-    case D_SHIFT:
-        l = a->offset;
-        bp[0] = l;
-        bp[1] = l>>8;
-        bp[2] = l>>16;
-        bp[3] = l>>24;
-        bp += 4;
-        break;
-
-    case D_SCONST:
-        memmove(bp, a->sval, NSNAME);
-        bp += NSNAME;
-        break;
-
-    case D_FCONST:
-        ieeedtod(&e, a->dval);
-        l = e.l;
-        bp[0] = l;
-        bp[1] = l>>8;
-        bp[2] = l>>16;
-        bp[3] = l>>24;
-        bp += 4;
-        l = e.h;
-        bp[0] = l;
-        bp[1] = l>>8;
-        bp[2] = l>>16;
-        bp[3] = l>>24;
-        bp += 4;
-        break;
-    }
-    return bp;
-}
-@
 
 
 
@@ -13961,7 +14012,7 @@ fatal(Node *n, char *fmt, ...)
 
 % See Decl section and markdcl() and revertdecl().
 
-\section{Typechecking}
+\section{Type checking}
 
 \subsection{Overview}
 
@@ -16074,6 +16125,7 @@ typeext(Type *st, Node *l)
 }
 @
 
+\section{Const checking}
 
 \section{Format arguments checking}
 % cool, like in ocamlc!
@@ -16655,6 +16707,7 @@ s->aused = false;
 $1->aused = true;
 @
 %$
+% during parsing, a bit ugly.
 
 <<[[reverdcl()]] DAUTO case, warn if auto declared but not used>>=
 if(!s->aused) {
@@ -16859,7 +16912,6 @@ if(canreach && thisfntype->link->etype != TVOID){
         diag(Z, "no return at end of function: %s", n1->sym->name);
 }
 @
-
 
 
 
@@ -17522,7 +17574,7 @@ useless:
 \subsection{Constant evaluation, [[evconst()]]}
 
 % evaluate constants statically.
-% ccom -> <>
+% gen | ... -> complex -> ccom -> <>
 % ccom() explores first the leaves, so here we can
 %  expect the evconst() has been called already on the leaves
 %  of a node??
@@ -17596,6 +17648,7 @@ case OCAST:
     }
     break;
 @
+
 
 %// assume have done explicit cast and balancing before?
 <<[[evconst()]] switch node kind cases>>=
@@ -17733,6 +17786,8 @@ case OGE:
     break;
 @
 
+% a good side effect of evconst() is that it helps
+% understand the semantic of certain opcodes :)
 <<[[evconst()]] switch node kind cases>>=
 case OLO:
     v = (uvlong)l->vconst < (uvlong)r->vconst;
@@ -21197,6 +21252,109 @@ char	sig;
 % SIGNINTERN does not fit in a char ...
 
 
+<<global symrathole>>=
+Sym*	symrathole;
+@
+
+<<[[zname()]] if generate signature for symbol s>>=
+if(debug['T'] && 
+   t == D_EXTERN && 
+   s->sig != SIGDONE && 
+   s->type != types[TENUM] && 
+   s != symrathole){
+
+    sig = sign(s);
+    bf[0] = ASIGNAME;
+    bf[1] = sig;
+    bf[2] = sig>>8;
+    bf[3] = sig>>16;
+    bf[4] = sig>>24;
+    bf[5] = t;
+    bf[6] = s->sym;
+    Bwrite(b, bf, 7);
+    s->sig = SIGDONE;
+}
+@
+
+
+% main -> compile -> gclean -> outcode -> zname -> <>
+<<function sign>>=
+ulong
+sign(Sym *s)
+{
+    ulong v;
+    Type *t;
+
+    if(s->sig == SIGINTERN)
+        return SIGNINTERN;
+    if((t = s->type) == T)
+        return 0;
+    v = signature(t);
+    if(v == 0)
+        v = SIGNINTERN;
+    return v;
+}
+@
+
+% sign -> <>
+<<function signature>>=
+ulong
+signature(Type *t)
+{
+    ulong s;
+    Typetab tt;
+
+    tt.n = 0;
+    tt.a = nil;
+    s = signat(t, &tt);
+    free(tt.a);
+    return s;
+}
+@
+
+% sign -> signature -> <>
+<<function signat>>=
+static ulong
+signat(Type *t, Typetab *tt)
+{
+    int i;
+    Type *t1;
+    long s;
+
+    s = 0;
+    for(; t; t=t->link) {
+        s = s*thash1 + thash[t->etype];
+        if(t->garb&GINCOMPLETE)
+            return s;
+        switch(t->etype) {
+        default:
+            return s;
+        case TARRAY:
+            s = s*thash2 + 0;	/* was t->width */
+            break;
+        case TFUNC:
+            for(t1=t->down; t1; t1=t1->down)
+                s = s*thash3 + signat(t1, tt);
+            break;
+        case TSTRUCT:
+        case TUNION:
+            if((i = sigind(t, tt)) >= 0){
+                s = s*thash2 + i;
+                return s;
+            }
+            for(t1=t->link; t1; t1=t1->down)
+                s = s*thash3 + signat(t1, tt);
+            return s;
+        case TIND:
+            break;
+        }
+    }
+    return s;
+}
+@
+
+
+
 <<global thash1>>=
 ulong	thash1	= 0x2edab8c9;
 @
@@ -21247,6 +21405,7 @@ Init	thashinit[] =
 @
 
 
+
 <<struct Typetab>>=
 struct Typetab {
     int n;
@@ -21254,6 +21413,7 @@ struct Typetab {
 };
 @
 
+% signat -> <>
 <<function sigind>>=
 static int
 sigind(Type *t, Typetab *tt)
@@ -21279,78 +21439,8 @@ sigind(Type *t, Typetab *tt)
 }
 @
 
-<<function signat>>=
-static ulong
-signat(Type *t, Typetab *tt)
-{
-    int i;
-    Type *t1;
-    long s;
 
-    s = 0;
-    for(; t; t=t->link) {
-        s = s*thash1 + thash[t->etype];
-        if(t->garb&GINCOMPLETE)
-            return s;
-        switch(t->etype) {
-        default:
-            return s;
-        case TARRAY:
-            s = s*thash2 + 0;	/* was t->width */
-            break;
-        case TFUNC:
-            for(t1=t->down; t1; t1=t1->down)
-                s = s*thash3 + signat(t1, tt);
-            break;
-        case TSTRUCT:
-        case TUNION:
-            if((i = sigind(t, tt)) >= 0){
-                s = s*thash2 + i;
-                return s;
-            }
-            for(t1=t->link; t1; t1=t1->down)
-                s = s*thash3 + signat(t1, tt);
-            return s;
-        case TIND:
-            break;
-        }
-    }
-    return s;
-}
-@
 
-<<function signature>>=
-ulong
-signature(Type *t)
-{
-    ulong s;
-    Typetab tt;
-
-    tt.n = 0;
-    tt.a = nil;
-    s = signat(t, &tt);
-    free(tt.a);
-    return s;
-}
-@
-
-<<function sign>>=
-ulong
-sign(Sym *s)
-{
-    ulong v;
-    Type *t;
-
-    if(s->sig == SIGINTERN)
-        return SIGNINTERN;
-    if((t = s->type) == T)
-        return 0;
-    v = signature(t);
-    if(v == 0)
-        v = SIGNINTERN;
-    return v;
-}
-@
 
 
 \chapter{Debugging Support}
@@ -23669,6 +23759,7 @@ if(argc > 1) {
 <<global debug>>=
 char	debug[256];
 @
+% bool? ushort?
 
 \section{[[Fmt]]}
 
@@ -24410,18 +24501,18 @@ char*	cnames[NCTYPES];
 <<global cnamesinit>>=
 Init	cnamesinit[] =
 {
-    CXXX,		0,	"CXXX",
-    CAUTO,		0,	"AUTO",
-    CEXTERN,		0,	"EXTERN",
-    CGLOBL,		0,	"GLOBL",
-    CSTATIC,		0,	"STATIC",
-    CLOCAL,		0,	"LOCAL",
-    CTYPEDEF,		0,	"TYPEDEF",
-    CTYPESTR,		0,	"TYPESTR",
-    CPARAM,		0,	"PARAM",
-    CSELEM,		0,	"SELEM",
-    CLABEL,		0,	"LABEL",
-    CEXREG,		0,	"EXREG",
+    CXXX     ,		0,	"CXXX",
+    CAUTO    ,		0,	"AUTO",
+    CEXTERN  ,		0,	"EXTERN",
+    CGLOBL   ,		0,	"GLOBL",
+    CSTATIC  ,		0,	"STATIC",
+    CLOCAL   ,		0,	"LOCAL",
+    CTYPEDEF ,		0,	"TYPEDEF",
+    CTYPESTR ,		0,	"TYPESTR",
+    CPARAM   ,		0,	"PARAM",
+    CSELEM   ,		0,	"SELEM",
+    CLABEL   ,		0,	"LABEL",
+    CEXREG   ,		0,	"EXREG",
     -1,			0,	0,
 };
 @
@@ -24434,40 +24525,40 @@ char*	qnames[NALLTYPES];
 <<global qnamesinit>>=
 Init	qnamesinit[] =
 {
-    TXXX,		0,	"TXXX",
+    TXXX      ,		0,	"TXXX",
 
-    TCHAR,		0,	"CHAR",
-    TUCHAR,		0,	"UCHAR",
-    TSHORT,		0,	"SHORT",
-    TUSHORT,		0,	"USHORT",
-    TINT,		0,	"INT",
-    TUINT,		0,	"UINT",
-    TLONG,		0,	"LONG",
-    TULONG,		0,	"ULONG",
-    TVLONG,		0,	"VLONG",
-    TUVLONG,		0,	"UVLONG",
-    TFLOAT,		0,	"FLOAT",
-    TDOUBLE,		0,	"DOUBLE",
-    TIND,		0,	"IND",
-    TFUNC,		0,	"FUNC",
-    TARRAY,		0,	"ARRAY",
-    TVOID,		0,	"VOID",
-    TSTRUCT,		0,	"STRUCT",
-    TUNION,		0,	"UNION",
-    TENUM,		0,	"ENUM",
+    TCHAR     ,		0,	"CHAR",
+    TUCHAR    ,		0,	"UCHAR",
+    TSHORT    ,		0,	"SHORT",
+    TUSHORT   ,		0,	"USHORT",
+    TINT      ,		0,	"INT",
+    TUINT     ,		0,	"UINT",
+    TLONG     ,		0,	"LONG",
+    TULONG    ,		0,	"ULONG",
+    TVLONG    ,		0,	"VLONG",
+    TUVLONG   ,		0,	"UVLONG",
+    TFLOAT    ,		0,	"FLOAT",
+    TDOUBLE   ,		0,	"DOUBLE",
+    TIND      ,		0,	"IND",
+    TFUNC     ,		0,	"FUNC",
+    TARRAY    ,		0,	"ARRAY",
+    TVOID     ,		0,	"VOID",
+    TSTRUCT   ,		0,	"STRUCT",
+    TUNION    ,		0,	"UNION",
+    TENUM     ,		0,	"ENUM",
 
-    TAUTO,		0,	"AUTO",
-    TEXTERN,		0,	"EXTERN",
-    TSTATIC,		0,	"STATIC",
-    TTYPEDEF,		0,	"TYPEDEF",
-    TTYPESTR,		0,	"TYPESTR",
-    TREGISTER,		0,	"REGISTER",
-    TCONSTNT,		0,	"CONSTNT",
-    TVOLATILE,		0,	"VOLATILE",
-    TUNSIGNED,		0,	"UNSIGNED",
-    TSIGNED,		0,	"SIGNED",
-    TDOT,		0,	"DOT",
-    TOLD,		0,	"OLD",
+    TAUTO     ,		0,	"AUTO",
+    TEXTERN   ,		0,	"EXTERN",
+    TSTATIC   ,		0,	"STATIC",
+    TTYPEDEF  ,		0,	"TYPEDEF",
+    TTYPESTR  ,		0,	"TYPESTR",
+    TREGISTER ,		0,	"REGISTER",
+    TCONSTNT  ,		0,	"CONSTNT",
+    TVOLATILE ,		0,	"VOLATILE",
+    TUNSIGNED ,		0,	"UNSIGNED",
+    TSIGNED   ,		0,	"SIGNED",
+    TDOT      ,		0,	"DOT",
+    TOLD      ,		0,	"OLD",
 
     -1,		0,	0,
 };
@@ -24492,6 +24583,9 @@ Init	gnamesinit[] =
 @
 
 \section{AST dumper, [[prtree()]]}
+% this is useful! gcc still have not it, and RMS is actually
+% opposing adding them to gcc (but for licensing issues).
+% clang has it!
 
 <<function prtree>>=
 void
@@ -24638,7 +24732,8 @@ dbgdecl(Sym *s)
 @
 
 
-\section{[[5c -t]], printing type trees}
+\section{[[5c -t]], printing expression type trees}
+% before and after different phases
 
 \section{[[5c -i]], printing initializations}
 
@@ -24649,12 +24744,15 @@ dbgdecl(Sym *s)
 \section{[[5c -g]], ???}
 % for cgen, print lhs and rhs
 
+\section{[[5c -???]], ???}
+
 \chapter{Error Managment}
 
 <<global nerrors>>=
 int	nerrors;
 @
 
+% main | compile | newio | newfile | yylex | ... -> <>
 <<function errorexit>>=
 void
 errorexit(void)
