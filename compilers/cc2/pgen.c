@@ -434,7 +434,6 @@ loop:
             noretval(2);
         gbranch(ORETURN);
         break;
-
     /*x: [[gen()]] switch node kind cases */
     case OCONTINUE:
         if(continpc < 0) {
@@ -638,8 +637,8 @@ bcomplex(Node *n, Node *c)
     complex(n);
 
     if(n->type != T)
-     if(tcompat(n, T, n->type, tnot))
-        n->type = T;
+       if(tcompat(n, T, n->type, tnot))
+          n->type = T;
     if(n->type == T) {
         gbranch(OGOTO);
         return false;

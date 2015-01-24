@@ -243,7 +243,8 @@ License.
 % target language: assembly ARM
 
 % not put here originally: 
-% -g (in cgen()) -G (in gen()) -Z, -f
+% -g (in cgen()) -G (in gen()) 
+% -Z, -f
 % -N -R -P in gen()
 % -T in zname to generate ASIGNAME, can be disabled by some pragma apparently
 
@@ -278,7 +279,7 @@ License.
 % *	-r		print registerization
 % *	-t		print type trees
 % *	-i		print initialization
-% * -G      print stuff for gen (pad: was not mentioned originally)
+% * -g -G      print stuff for code gen (pad: was not mentioned originally)
 
 % *	-M		constant multiplication
 % *	-l		generate little-endian code (mips only)
@@ -451,10 +452,12 @@ struct	Node
     <<[[Node]] other fields>>
 };
 @
-%less: char -> byte? or actually char sometimes when use '+' ?
+%less: char -> ushort? or actually char sometimes when use '+' ?
 % hmm get some warnings though when do that, but maybe should fix those 
 % warnings anyway
 %see also prtree() in debugging section to dump the ast
+%todo: split other fields in  parsing fields, assembly gen fields,
+% value fields.
 
 % How things are represented for
 % - OCONST: additional vconst field, will see later
@@ -486,19 +489,26 @@ Sym*	sym;
 
 
 
-
+% for expression nodes?
 <<[[Node]] other fields>>=
-// used as a bool to mark lvalues.
-// (ab)used as bool for marker of use of labels.
-// (ab)used by xcom to assign ``addressibility''.
+// address-able, used as a bool to mark lvalues, if can assign you can take
+// the address of. used by xcom() to assign ``addressibility''.
+// (ab)used as a bool for marker of use of labels.
 char	addable;
 @
-% put also here complex?
+
+% for expression nodes?
+<<[[Node]] other fields>>=
+// complexity in number of registers. for register allocation?
+// (ab)used as FNX special value
+// (ab)used as bool for marker of label def (true) vs use (false),
+char	complex; 
+@
 
 
+% for expression nodes?
 % important field! typechecking! set in parsing when can
 % (e.g. for cast where have type, for return where have also spec)
-% only for nodes that are expressions?
 <<[[Node]] other fields>>=
 Type*	type;
 @
@@ -507,20 +517,17 @@ Type*	type;
 % see Type in next section
 
 
-% for nodes that are decl? which are?
+% for declaration nodes?
 <<enum storage_class>>=
 enum storage_class
 {
     CXXX, // nothing specified
 
     CAUTO,
+    CPARAM,
     CEXTERN,
     CGLOBL,
     CSTATIC,
-
-    CLOCAL,
-    CPARAM,
-
     <<[[Storage_class]] cases>>
 
     NCTYPES,
@@ -530,13 +537,11 @@ enum storage_class
 % see also cnames[] in debugging section
 % strings are using CSTATIC
 
-% for nodes that are decl? which are?
+% for declaration nodes?
 <<[[Node]] other fields>>=
 // enum<storage_class>
 char	class;
 @
-
-
 
 
 
@@ -606,23 +611,12 @@ new1(int o, Node *l, Node *r)
 %XXXX
 <<[[Node]] other fields>>=
 void*	label;
-
-long	pc;
-int		reg;
 long	xoffset;
-
-// (ab)used as bool for marker of label def (true) vs use (false),
-// FNX special value, register allocation value, etc
-char	complex; 
-
-char	scale;
 @
 
 
 %XXXXX
 <<[[Storage_class]] cases>>=
-CTYPEDEF,
-
 CSELEM,
 CLABEL,
 @
@@ -2040,13 +2034,6 @@ ginit(void)
     fconstnode.complex = 0;
     fconstnode.addable = 20;
     fconstnode.type = types[TDOUBLE];
-
-    nodsafe = new(ONAME, Z, Z);
-    nodsafe->sym = slookup(".safe");
-    nodsafe->type = types[TINT];
-    nodsafe->etype = types[TINT]->etype;
-    nodsafe->class = CAUTO;
-    complex(nodsafe);
 
     t = typ(TARRAY, types[TCHAR]);
     symrathole = slookup(".rathole");
@@ -4691,8 +4678,7 @@ case ONAME:
     // callback! should set s->type
     (*f)(class, t, s);
 
-    if(s->class == CLOCAL)
-        s = mkstatic(s);
+    <<[[dodecl()]] case ONAME, if local static variable>>
     firstbit = 0;
     n->sym = s;
     n->type = s->type;
@@ -5536,6 +5522,8 @@ OGT,
 OLE,
 OGE,
 @
+% there are some more opcodes that are generated after
+% parsing mimicing OLT/... but explicitly unsigned (OLO/OHS/...)
 
 <<expr rule>>=
 |   expr LEQ expr  { $$ = new(OEQ, $1, $3); }
@@ -5678,8 +5666,7 @@ name:
     LNAME
     {
         $$ = new(ONAME, Z, Z);
-        if($1->class == CLOCAL)
-            $1 = mkstatic($1);
+        <<name rule, if local static variable>>
         $$->sym = $1;
         $$->type = $1->type;
 
@@ -5696,29 +5683,6 @@ name:
 % similar to tag rule
 %$
 
-% rename mkstatic_if_local?
-% rename locals in global symbol table so have unique name with the block
-<<function mkstatic>>=
-Sym*
-mkstatic(Sym *s)
-{
-    Sym *s1;
-
-    if(s->class != CLOCAL)
-        return s;
-
-    snprint(symb, NSYMB, "%s$%d", s->name, s->block);
-    s1 = lookup();
-
-    if(s1->class != CSTATIC) {
-        s1->type = s->type;
-        s1->offset = s->offset;
-        s1->block = s->block;
-        s1->class = CSTATIC;
-    }
-    return s1;
-}
-@
 
 \subsection{Numeric Constants}
 
@@ -6630,10 +6594,10 @@ cname:  /* class words */
     LAUTO     { $$ = BAUTO; }
 |   LSTATIC   { $$ = BSTATIC; }
 |   LEXTERN   { $$ = BEXTERN; }
-|   LTYPEDEF  { $$ = BTYPEDEF; }
 |   LREGISTER { $$ = BREGISTER; }
 |   LINLINE   { $$ = 0; }
 @
+
 
 % garbage?
 <<gname rule>>=
@@ -6886,15 +6850,14 @@ int simplec(long b)
         return CEXTERN;
     case BSTATIC:
         return CSTATIC;
-    case BTYPEDEF:
-        return CTYPEDEF;
+
     <<[[simplec()]] cases>>
     }
     diag(Z, "illegal combination of classes %Q", b);
     return CXXX;
 }
 @
-
+% ugly that typedef if considered a storage class ...
 
 <<function garbt>>=
 //@Scheck: used by cc.y
@@ -7489,9 +7452,27 @@ maxtype(Type *t1, Type *t2)
 
 \subsection{Typedefs}
 
-%\subsubsection{Typedefs uses}
+% defs
+
+<<cname rule>>=
+|   LTYPEDEF  { $$ = BTYPEDEF; }
+@
+
+<<[[simplec()]] cases>>=
+case BTYPEDEF:
+    return CTYPEDEF;
+@
+
+<<[[Storage_class]] cases>>=
+CTYPEDEF,
+@
+
+% this storage class will be stored in the class of the
+% declarator (where? in dodecl?) and yylex will then generate LTYPE tokens
+% if this symbol is referenced.
 
 % uses
+
 <<complex rule>>=
 |   LTYPE { $$ = tcopy($1->type); }
 @
@@ -7527,9 +7508,6 @@ tcopy(Type *t)
 }
 @
 
-%\subsubsection{Typedefs definitions}
-
-% defs ?
 
 
 \subsection{Pointer and array types}
@@ -7735,14 +7713,14 @@ adlist:
 %$
 
 
+
 % pdecl | dodecl(<>) -> <>
 <<function adecl>>=
 void
 adecl(int c, Type *t, Sym *s)
 {
 
-    if(c == CSTATIC)
-        c = CLOCAL;
+    <<[[adecl()]] adjust storage to CLOCAL if static local variable>>
     if(t->etype == TFUNC) {
         if(c == CXXX)
             c = CEXTERN;
@@ -7909,8 +7887,7 @@ symadjust(Sym *s, Node *n, long del)
 
     case OCONST:
     case OSTRING: case OLSTRING:
-    case OREGISTER:
-    case OINDREG:
+    case OREGISTER: case OINDREG:
         return;
 
     default:
@@ -7993,27 +7970,20 @@ abdecor3:
 % target language = Prog, Adr, as, etc, like in Linker and assembler.
 % outcode(), like in Assembler.
 
-
 % remember in cc.y for function definition case:
 %        if(!debug['a'] && !debug['Z'])
 %            codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
 
 % main -> yyparse -> codgen (func) -> gen (statement) -> cgen (expr)
 
+% will visit the AST and generate recursively the code mostly.
 
+\section{[[nextpc()]]}
 
-% nextpc()?
-% the gxxx() generate Prog (=~ assembly code)
-% but in mostly portable way!
-
-
-% current? see nextpc()?
-<<global p>>=
-Prog*	p;
-@
-% often have a 'sp' for save p, and do things like
-% gxxx(); sp = p;   to remember what was the instruction generated
-% by this gxxx()
+% as we visit we will create new ASM instructions, linked
+% together that will be then serialized and written to a file
+% (see outcode). So nextpc() is here to create those new instruction
+% and increment the pc global counter.
 
 
 <<global pc>>=
@@ -8046,7 +8016,21 @@ nextpc(void)
     lastp = p;
 }
 @
-% pc useful for what?
+% pc useful for what? for jumps, see patch(),
+% and spc.
+% less: could do p->pc = pc; no?
+
+% current? see nextpc()?
+<<global p>>=
+Prog*	p;
+@
+% often have a 'sp' for save p, and do things like
+% gxxx(); sp = p;   to remember what was the instruction generated
+% by this gxxx()
+
+
+
+
 
 
 % like in Linker.nw
@@ -8081,6 +8065,7 @@ lastp = P;
 
 \subsection{[[gpseudo()]]}
 
+% codgen(function generation) | gextern -> <>
 <<function gpseudo(arm)>>=
 void
 gpseudo(int a, Sym *s, Node *n)
@@ -8134,6 +8119,7 @@ if(a->op == OCONST && typev[a->type->etype]) {
     p->reg = 4;
 }
 @
+% 4 -> ??
 
 <<function nod32const(arm)>>=
 Node*
@@ -8146,6 +8132,10 @@ nod32const(vlong v)
 
 \subsection{[[gins()]]}
 
+% gmove | ... -> <>
+% pre: the from and to nodes should be very basic,
+% constants, or names, or simple indirection of names or constants,
+% see naddr() and the goto bad.
 <<function gins(arm)>>=
 void
 gins(int a, Node *f, Node *t)
@@ -8199,14 +8189,15 @@ case OCONST:
     }
     break;
 @
+% NREG -> R_NONE?
 
 <<[[naddr()]] switch node kind cases>>=
 case ONAME:
     a->etype = n->etype;
     a->type = D_OREG;
-    a->name = D_STATIC;
     a->sym = n->sym;
     a->offset = n->xoffset;
+    a->name = D_STATIC;
     if(n->class == CSTATIC)
         break;
     if(n->class == CEXTERN || n->class == CGLOBL) {
@@ -8255,27 +8246,8 @@ case OADDR:
 % less important?
 
 
-<<[[naddr()]] switch node kind cases>>=
-case OREGISTER:
-    a->type = D_REG;
-    a->sym = S;
-    a->reg = n->reg;
-    if(a->reg >= NREG) {
-        a->type = D_FREG;
-        a->reg -= NREG;
-    }
-    break;
-@
 
 
-<<[[naddr()]] switch node kind cases>>=
-case OINDREG:
-    a->type = D_OREG;
-    a->sym = S;
-    a->offset = n->xoffset;
-    a->reg = n->reg;
-    break;
-@
 
 <<[[naddr()]] switch node kind cases>>=
 case OADD:
@@ -8337,11 +8309,15 @@ patch(Prog *op, long pc)
 
 \subsection{[[gmove()]]}
 
+% from, to
 <<function gmove(arm)>>=
 void
 gmove(Node *f, Node *t)
 {
-    int ft, tt, a;
+    // enum<type_kind> // TXXX
+    int ft, tt;
+    // enum<opcode_kind> // AXXX
+    int a;
     Node nod, nod1;
     Prog *p1;
 
@@ -8431,6 +8407,8 @@ gmove(Node *f, Node *t)
         regfree(&nod);
         return;
     }
+
+    // at this point f and t should be simpler nodes with registers
 
     /*
      * type x type cross table
@@ -8672,11 +8650,8 @@ samaddr(Node *f, Node *t)
     if(f->op != t->op)
         return false;
     switch(f->op) {
-
     case OREGISTER:
-        if(f->reg != t->reg)
-            break;
-        return true;
+        return (f->reg == t->reg);
     }
     return false;
 }
@@ -8684,9 +8659,15 @@ samaddr(Node *f, Node *t)
 
 
 
-<<constant R0ISZERO(arm)>>=
-#define	R0ISZERO	0
-@
+%<<constant R0ISZERO(arm)>>=
+%#define	R0ISZERO	0
+%@
+%% was false so I removed the code
+% in raddr():
+%    if(R0ISZERO && a.type == D_CONST && a.offset == 0) {
+%        a.type = D_REG;
+%        a.reg = 0;
+%    }
 
 % gmove -> <>
 <<function raddr(arm)>>=
@@ -8696,10 +8677,6 @@ raddr(Node *n, Prog *p)
     Adr a;
 
     naddr(n, &a);
-    if(R0ISZERO && a.type == D_CONST && a.offset == 0) {
-        a.type = D_REG;
-        a.reg = 0;
-    }
     if(a.type != D_REG && a.type != D_FREG) {
         if(n)
             diag(n, "bad in raddr: %O", n->op);
@@ -8717,210 +8694,35 @@ raddr(Node *n, Prog *p)
 
 \subsection{[[gopcode()]]}
 
+<<[[gopcode()]] locals>>=
+Adr ta;
+@
 
+% from1, to, but f2??
 <<function gopcode(arm)>>=
 void
 gopcode(int o, Node *f1, Node *f2, Node *t)
 {
-    int a, et, true;
-    Adr ta;
+    // enum<opcode_kind> AXXX
+    int a;
+    // enum<type_kind> TXXX
+    int et;
+    <<[[gopcode()]] locals>>
 
-    et = TLONG;
-    if(f1 != Z && f1->type != T)
-        et = f1->type->etype;
-    true = o & BTRUE;
-    o &= ~BTRUE;
+    et = (f1 != Z && f1->type != T)? f1->type->etype : TLONG;
+
+    <<[[gopcode()]] initialisation>>
+
     a = AGOK;
-
     switch(o) {
-    case OAS:
-        gmove(f1, t);
-        return;
-
-    case OASADD:
-    case OADD:
-        a = AADD;
-        if(et == TFLOAT)
-            a = AADDF;
-        else
-        if(et == TDOUBLE || et == TVLONG)
-            a = AADDD;
-        break;
-
-    case OASSUB:
-    case OSUB:
-        if(f2 && f2->op == OCONST) {
-            Node *t = f1;
-            f1 = f2;
-            f2 = t;
-            a = ARSB;
-        } else
-            a = ASUB;
-        if(et == TFLOAT)
-            a = ASUBF;
-        else
-        if(et == TDOUBLE || et == TVLONG)
-            a = ASUBD;
-        break;
-
-    case OASOR:
-    case OOR:
-        a = AORR;
-        break;
-
-    case OASAND:
-    case OAND:
-        a = AAND;
-        break;
-
-    case OASXOR:
-    case OXOR:
-        a = AEOR;
-        break;
-
-    case OASLSHR:
-    case OLSHR:
-        a = ASRL;
-        break;
-
-    case OASASHR:
-    case OASHR:
-        a = ASRA;
-        break;
-
-    case OASASHL:
-    case OASHL:
-        a = ASLL;
-        break;
-
-    case OFUNC:
-        a = ABL;
-        break;
-
-    case OASMUL:
-    case OMUL:
-        a = AMUL;
-        if(et == TFLOAT)
-            a = AMULF;
-        else
-        if(et == TDOUBLE || et == TVLONG)
-            a = AMULD;
-        break;
-
-    case OASDIV:
-    case ODIV:
-        a = ADIV;
-        if(et == TFLOAT)
-            a = ADIVF;
-        else
-        if(et == TDOUBLE || et == TVLONG)
-            a = ADIVD;
-        break;
-
-    case OASMOD:
-    case OMOD:
-        a = AMOD;
-        break;
-
-    case OASLMUL:
-    case OLMUL:
-        a = AMULU;
-        break;
-
-    case OASLMOD:
-    case OLMOD:
-        a = AMODU;
-        break;
-
-    case OASLDIV:
-    case OLDIV:
-        a = ADIVU;
-        break;
-
-    case OCASE:
-    case OEQ:
-    case ONE:
-    case OLT:
-    case OLE:
-    case OGE:
-    case OGT:
-    case OLO:
-    case OLS:
-    case OHS:
-    case OHI:
-        a = ACMP;
-        if(et == TFLOAT)
-            a = ACMPF;
-        else
-        if(et == TDOUBLE || et == TVLONG)
-            a = ACMPD;
-        nextpc();
-        p->as = a;
-        naddr(f1, &p->from);
-        if(a == ACMP && f1->op == OCONST && p->from.offset < 0 &&
-            p->from.offset != 0x80000000) {
-            p->as = ACMN;
-            p->from.offset = -p->from.offset;
-        }
-        raddr(f2, p);
-        switch(o) {
-        case OEQ:
-            a = ABEQ;
-            break;
-        case ONE:
-            a = ABNE;
-            break;
-        case OLT:
-            a = ABLT;
-            /* ensure NaN comparison is always false */
-            if(typefd[et] && !true)
-                a = ABMI;
-            break;
-        case OLE:
-            a = ABLE;
-            if(typefd[et] && !true)
-                a = ABLS;
-            break;
-        case OGE:
-            a = ABGE;
-            if(typefd[et] && true)
-                a = ABPL;
-            break;
-        case OGT:
-            a = ABGT;
-            if(typefd[et] && true)
-                a = ABHI;
-            break;
-        case OLO:
-            a = ABLO;
-            break;
-        case OLS:
-            a = ABLS;
-            break;
-        case OHS:
-            a = ABHS;
-            break;
-        case OHI:
-            a = ABHI;
-            break;
-        case OCASE:
-            nextpc();
-            p->as = ACASE;
-            p->scond = 0x9;
-            naddr(f2, &p->from);
-            a = ABHI;
-            break;
-        }
-        f1 = Z;
-        f2 = Z;
-        break;
+    <<[[gopcode()]] switch opcode cases>>
     }
-
     if(a == AGOK)
         diag(Z, "bad in gopcode %O", o);
 
     nextpc();
     p->as = a;
+
     if(f1 != Z)
         naddr(f1, &p->from);
     if(f2 != Z) {
@@ -8959,6 +8761,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 <<global cursafe>>=
 long	cursafe;
 @
+% ???
 
 <<global curarg>>=
 long	curarg;
@@ -9055,6 +8858,153 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
     regfree(tn1);
 }
 @
+
+<<function regaalloc1(arm)>>=
+void
+regaalloc1(Node *n, Node *nn)
+{
+    nodreg(n, nn, REGARG);
+    reg[REGARG]++;
+    curarg = align(curarg, nn->type, Aarg1);
+    curarg = align(curarg, nn->type, Aarg2);
+    maxargsafe = maxround(maxargsafe, cursafe+curarg);
+}
+@
+
+<<expression nodes>>=
+OINDREG, // after parsing only
+@
+
+<<function regaalloc(arm)>>=
+void
+regaalloc(Node *n, Node *nn)
+{
+    curarg = align(curarg, nn->type, Aarg1);
+    *n = *nn;
+    n->op = OINDREG;
+    n->reg = REGSP;
+    n->xoffset = curarg + SZ_LONG;
+    n->complex = 0;
+    n->addable = 20;
+    curarg = align(curarg, nn->type, Aarg2);
+    maxargsafe = maxround(maxargsafe, cursafe+curarg);
+}
+@
+% 386 is just    n->xoffset = curarg;
+
+<<[[naddr()]] switch node kind cases>>=
+case OINDREG:
+    a->type = D_OREG;
+    a->sym = S;
+    a->offset = n->xoffset;
+    a->reg = n->reg;
+    break;
+@
+
+\section{Register allocation, part one}
+
+\subsection{[[regalloc()]]}
+
+<<[[Node]] other fields>>=
+int		reg;
+@
+%TODO: rename, to avoid ambiguity with Prog.reg and Adr.reg
+
+<<function regalloc(arm)>>=
+void
+regalloc(Node *n, Node *tn, Node *o)
+{
+    int i, j;
+    static int lasti;
+
+    switch(tn->type->etype) {
+    case TCHAR:
+    case TUCHAR:
+    case TSHORT:
+    case TUSHORT:
+    case TINT:
+    case TUINT:
+    case TLONG:
+    case TULONG:
+
+    case TIND:
+        if(o != Z && o->op == OREGISTER) {
+            i = o->reg;
+            if(i >= 0 && i < NREG)
+                goto out;
+        }
+        j = lasti + REGRET+1;
+        for(i=REGRET+1; i<NREG; i++) {
+            if(j >= NREG)
+                j = REGRET+1;
+            if(reg[j] == 0 && resvreg[j] == 0) {
+                i = j;
+                goto out;
+            }
+            j++;
+        }
+        diag(tn, "out of fixed registers");
+        goto err;
+
+    case TFLOAT:
+    case TDOUBLE:
+    case TVLONG:
+        if(o != Z && o->op == OREGISTER) {
+            i = o->reg;
+            if(i >= NREG && i < NREG+NFREG)
+                goto out;
+        }
+        j = 0*2 + NREG;
+        for(i=NREG; i<NREG+NFREG; i++) {
+            if(j >= NREG+NFREG)
+                j = NREG;
+            if(reg[j] == 0) {
+                i = j;
+                goto out;
+            }
+            j++;
+        }
+        diag(tn, "out of float registers");
+        goto err;
+    }
+    diag(tn, "unknown type in regalloc: %T", tn->type);
+err:
+    nodreg(n, tn, 0);
+    return;
+out:
+    reg[i]++;
+    lasti++;
+    if(lasti >= 5)
+        lasti = 0;
+    nodreg(n, tn, i);
+}
+@
+
+
+\subsection{[[regfree()]]}
+<<function regfree(arm)>>=
+void
+regfree(Node *n)
+{
+    int i;
+
+    i = 0;
+    if(n->op != OREGISTER && n->op != OINDREG)
+        goto err;
+    i = n->reg;
+    if(i < 0 || i >= sizeof(reg))
+        goto err;
+    if(reg[i] <= 0)
+        goto err;
+    reg[i]--;
+    return;
+err:
+    diag(n, "error in regfree: %d", i);
+}
+@
+
+
+
 
 \section{Functions, [[codgen()]]}
 
@@ -9728,6 +9678,7 @@ nodreg(Node *n, Node *nn, int reg)
 
 
 \section{Statements, [[gen()]]}
+% mimic parsing chapter subsections
 
 <<[[gen()]] locals>>=
 // enum<node_kind> of a statement
@@ -10085,8 +10036,21 @@ case ORETURN:
         noretval(2);
     gbranch(ORETURN);
     break;
-
 @
+
+% gen(case RETURN) -> <>
+<<function uncomma>>=
+Node*
+uncomma(Node *n)
+{
+    while(n != Z && n->op == OCOMMA) {
+        cgen(n->left, Z);
+        n = n->right;
+    }
+    return n;
+}
+@
+
 
 <<global newvlongcode>>=
 bool	newvlongcode;
@@ -10211,98 +10175,6 @@ case OSWITCH:
     break;
 @
 
-
-<<function regalloc(arm)>>=
-void
-regalloc(Node *n, Node *tn, Node *o)
-{
-    int i, j;
-    static int lasti;
-
-    switch(tn->type->etype) {
-    case TCHAR:
-    case TUCHAR:
-    case TSHORT:
-    case TUSHORT:
-    case TINT:
-    case TUINT:
-    case TLONG:
-    case TULONG:
-
-    case TIND:
-        if(o != Z && o->op == OREGISTER) {
-            i = o->reg;
-            if(i >= 0 && i < NREG)
-                goto out;
-        }
-        j = lasti + REGRET+1;
-        for(i=REGRET+1; i<NREG; i++) {
-            if(j >= NREG)
-                j = REGRET+1;
-            if(reg[j] == 0 && resvreg[j] == 0) {
-                i = j;
-                goto out;
-            }
-            j++;
-        }
-        diag(tn, "out of fixed registers");
-        goto err;
-
-    case TFLOAT:
-    case TDOUBLE:
-    case TVLONG:
-        if(o != Z && o->op == OREGISTER) {
-            i = o->reg;
-            if(i >= NREG && i < NREG+NFREG)
-                goto out;
-        }
-        j = 0*2 + NREG;
-        for(i=NREG; i<NREG+NFREG; i++) {
-            if(j >= NREG+NFREG)
-                j = NREG;
-            if(reg[j] == 0) {
-                i = j;
-                goto out;
-            }
-            j++;
-        }
-        diag(tn, "out of float registers");
-        goto err;
-    }
-    diag(tn, "unknown type in regalloc: %T", tn->type);
-err:
-    nodreg(n, tn, 0);
-    return;
-out:
-    reg[i]++;
-    lasti++;
-    if(lasti >= 5)
-        lasti = 0;
-    nodreg(n, tn, i);
-}
-@
-
-
-<<function regfree(arm)>>=
-void
-regfree(Node *n)
-{
-    int i;
-
-    i = 0;
-    if(n->op != OREGISTER && n->op != OINDREG)
-        goto err;
-    i = n->reg;
-    if(i < 0 || i >= sizeof(reg))
-        goto err;
-    if(reg[i] <= 0)
-        goto err;
-    reg[i]--;
-    return;
-err:
-    diag(n, "error in regfree: %d", i);
-}
-@
 
 
 
@@ -10603,6 +10475,11 @@ direct:
 
 \subsection{Labels and goto}
 
+<<[[Node]] other fields>>=
+long	pc;
+@
+
+
 <<[[gen()]] switch node kind cases>>=
 case OLABEL:
     canreach = true;
@@ -10648,6 +10525,7 @@ case OGOTO:
 
 
 \section{Expressions, [[cgen()]]}
+% mimic parsing chapter subsection
 
 <<[[gen()]] switch node kind cases>>=
 default:
@@ -10657,7 +10535,8 @@ default:
 @
 
 % also many calls to bcomplex() before when processing
-% statements for instance for the expression in if(e), or while(e)
+% statements for instance for the expression in if(e), or while(e).
+% Many calls to cgen too.
 
 \subsection{Typechecking, annotating, unsugaring, [[complex()]]}
 % unsugaring -> expliciting?
@@ -10678,31 +10557,29 @@ complex(Node *n)
         if(n->op != OCONST)
             prtree(n, "pre complex");
 
-    // typechecking, removing some sugar, lvalue annotate, etc
+    // typechecking, removing some sugar, lvalue annotate, bitfield annot, etc
     if(tcom(n))
         return;
-
     //if(debug['y'] || true)
     comma(n);
-
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "t complex");
 
+    // general rewrite
     ccom(n);
-
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "c complex");
 
+    // arithmetic rewrite
     acom(n);
-
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "a complex");
 
+    // addressability and complexity
     xcom(n);
-
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "x complex");
@@ -10713,6 +10590,8 @@ complex(Node *n)
 
 \subsection{Boolean context typechecking, [[bcomplex()]]}
 
+% does both the call to complex and cgen(boolgen) when it needs!
+
 <<function bcomplex>>=
 bool
 bcomplex(Node *n, Node *c)
@@ -10721,8 +10600,8 @@ bcomplex(Node *n, Node *c)
     complex(n);
 
     if(n->type != T)
-     if(tcompat(n, T, n->type, tnot))
-        n->type = T;
+       if(tcompat(n, T, n->type, tnot))
+          n->type = T;
     if(n->type == T) {
         gbranch(OGOTO);
         return false;
@@ -10754,7 +10633,9 @@ bcomplex(Node *n, Node *c)
 
 \subsection{Code generation, [[cgen()]]}
 
-% codgen -> gen -> <> for expression stuff
+% codgen -> gen -> <>    for expression stuff
+% nn is optional!
+%pre: has called complex() on the node n before (and nn if not null?)
 <<function cgen(arm)>>=
 void
 cgen(Node *n, Node *nn)
@@ -10764,6 +10645,56 @@ cgen(Node *n, Node *nn)
 @
 % false means inrel = false
 % why care whether rel context?
+
+
+% nn = optional lhs?, n = rhs
+<<function cgenrel(arm)>>=
+void
+cgenrel(Node *n, Node *nn, bool inrel)
+{
+    Node *l, *r;
+    // enum<node_kind>
+    int o;
+    // enum<type_kind>?
+    int t;
+    long curs;
+    <<[[cgenrel()]] locals>>
+
+    if(debug['g']) {
+        prtree(nn, "cgen lhs");
+        prtree(n, "cgen");
+    }
+    if(n == Z || n->type == T)
+        return;
+
+    <<[[cgenrel()]] if structure or vlong type node, call sugen and return>>
+    // else
+
+    l = n->left;
+    r = n->right;
+    o = n->op;
+
+    <<[[cgenrel()]] if addable more than INDEXED>>
+    curs = cursafe;
+    <<[[cgenrel()]] if all complex fields more than FNX>>
+
+    switch(o) {
+    <<[[cgenrel()]] switch opcode cases>>
+    default:
+        diag(n, "unknown op in cgen: %O", o);
+        break;
+    }
+    cursafe = curs;
+    return;
+}
+@
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OCOMMA:
+    cgen(l, Z);
+    cgen(r, nn);
+    break;
+@
 
 
 % this in cc/pswt.c but should be in a cc/pcgen.c
@@ -10780,931 +10711,289 @@ nullwarn(Node *l, Node *r)
 @
 %less: mv also in Checking section?
 
-<<constant INDEXED(arm)>>=
-#define	INDEXED	9
+
+
+
+<<[[cgenrel()]] locals>>=
+Prog *p1;
+Node nod, nod1, nod2, nod3, nod4;
+long v;
 @
 
 
-<<global nodrat>>=
-Node*	nodrat;
-@
 
+\subsection{Arithmetic expressions}
 
+% see also acom() rewriting
 
-
-
-
-
-<<function cgenrel(arm)>>=
-void
-cgenrel(Node *n, Node *nn, bool inrel)
-{
-    Node *l, *r;
-    Prog *p1;
-    Node nod, nod1, nod2, nod3, nod4;
-    int o, t;
-    long v, curs;
-
-    if(debug['g']) {
-        prtree(nn, "cgen lhs");
-        prtree(n, "cgen");
-    }
-    if(n == Z || n->type == T)
-        return;
-
-    if(typesuv[n->type->etype]) {
-        sugen(n, nn, n->type->width);
-        return;
-    }
-
-    l = n->left;
-    r = n->right;
-    o = n->op;
-    if(n->addable >= INDEXED) {
-        if(nn == Z) {
-            switch(o) {
-            default:
-                nullwarn(Z, Z);
-                break;
-            case OINDEX:
-                nullwarn(l, r);
-                break;
-            }
-            return;
-        }
-        gmove(n, nn);
-        return;
-    }
-    curs = cursafe;
-
-    if(n->complex >= FNX)
-     if(l->complex >= FNX)
-      if(r != Z && r->complex >= FNX)
-        switch(o) {
-        case OFUNC:
-        case OCOMMA:
-        case OANDAND:
-        case OOROR:
-        case OCOND:
-        case ODOT:
-            break;
-        
-        default:
-            regret(&nod, r);
-            cgen(r, &nod);
-        
-            regsalloc(&nod1, r);
-            gopcode(OAS, &nod, Z, &nod1);
-        
-            regfree(&nod);
-            nod = *n;
-            nod.right = &nod1;
-            cgen(&nod, nn);
-            return;
-        
-        }
-
-    switch(o) {
-    default:
-        diag(n, "unknown op in cgen: %O", o);
-        break;
-
-    case OAS:
-        if(l->op == OBIT)
-            goto bitas;
-        if(l->addable >= INDEXED && l->complex < FNX) {
-            if(nn != Z || r->addable < INDEXED) {
-                if(r->complex >= FNX && nn == Z)
-                    regret(&nod, r);
-                else
-                    regalloc(&nod, r, nn);
-                cgen(r, &nod);
-                gmove(&nod, l);
-                if(nn != Z)
-                    gmove(&nod, nn);
-                regfree(&nod);
-            } else
-                gmove(r, l);
-            break;
-        }
-        if(l->complex >= r->complex) {
-            reglcgen(&nod1, l, Z);
-            if(r->addable >= INDEXED) {
-                gmove(r, &nod1);
-                if(nn != Z)
-                    gmove(r, nn);
-                regfree(&nod1);
-                break;
-            }
-            regalloc(&nod, r, nn);
-            cgen(r, &nod);
+<<[[cgenrel()]] switch opcode cases>>=
+case ODIV:
+case OMOD:
+    if(nn != Z)
+    if((t = vlog(r)) >= 0) {
+        /* signed div/mod by constant power of 2 */
+        cgen(l, nn);
+        gopcode(OGE, nodconst(0), nn, Z);
+        p1 = p;
+        if(o == ODIV) {
+            gopcode(OADD, nodconst((1<<t)-1), Z, nn);
+            patch(p1, pc);
+            gopcode(OASHR, nodconst(t), Z, nn);
         } else {
-            regalloc(&nod, r, nn);
-            cgen(r, &nod);
-            reglcgen(&nod1, l, Z);
-        }
-        gmove(&nod, &nod1);
-        regfree(&nod);
-        regfree(&nod1);
-        break;
-
-    bitas:
-        n = l->left;
-        regalloc(&nod, r, nn);
-        if(l->complex >= r->complex) {
-            reglcgen(&nod1, n, Z);
-            cgen(r, &nod);
-        } else {
-            cgen(r, &nod);
-            reglcgen(&nod1, n, Z);
-        }
-        regalloc(&nod2, n, Z);
-        gopcode(OAS, &nod1, Z, &nod2);
-        bitstore(l, &nod, &nod1, &nod2, nn);
-        break;
-
-    case OBIT:
-        if(nn == Z) {
-            nullwarn(l, Z);
-            break;
-        }
-        bitload(n, &nod, Z, Z, nn);
-        gopcode(OAS, &nod, Z, nn);
-        regfree(&nod);
-        break;
-
-    case ODIV:
-    case OMOD:
-        if(nn != Z)
-        if((t = vlog(r)) >= 0) {
-            /* signed div/mod by constant power of 2 */
-            cgen(l, nn);
-            gopcode(OGE, nodconst(0), nn, Z);
+            gopcode(OSUB, nn, nodconst(0), nn);
+            gopcode(OAND, nodconst((1<<t)-1), Z, nn);
+            gopcode(OSUB, nn, nodconst(0), nn);
+            gbranch(OGOTO);
+            patch(p1, pc);
             p1 = p;
-            if(o == ODIV) {
-                gopcode(OADD, nodconst((1<<t)-1), Z, nn);
-                patch(p1, pc);
-                gopcode(OASHR, nodconst(t), Z, nn);
-            } else {
-                gopcode(OSUB, nn, nodconst(0), nn);
-                gopcode(OAND, nodconst((1<<t)-1), Z, nn);
-                gopcode(OSUB, nn, nodconst(0), nn);
-                gbranch(OGOTO);
-                patch(p1, pc);
-                p1 = p;
-                gopcode(OAND, nodconst((1<<t)-1), Z, nn);
-                patch(p1, pc);
-            }
-            break;
-        }
-        goto muldiv;
-
-    case OSUB:
-        if(nn != Z)
-        if(l->op == OCONST)
-        if(!typefd[n->type->etype]) {
-            cgen(r, nn);
-            gopcode(o, Z, l, nn);
-            break;
-        }
-    case OADD:
-    case OAND:
-    case OOR:
-    case OXOR:
-    case OLSHR:
-    case OASHL:
-    case OASHR:
-        /*
-         * immediate operands
-         */
-        if(nn != Z)
-        if(r->op == OCONST)
-        if(!typefd[n->type->etype]) {
-            cgen(l, nn);
-            if(r->vconst == 0)
-            if(o != OAND)
-                break;
-            if(nn != Z)
-                gopcode(o, r, Z, nn);
-            break;
-        }
-
-    case OLMUL:
-    case OLDIV:
-    case OLMOD:
-    case OMUL:
-    muldiv:
-        if(nn == Z) {
-            nullwarn(l, r);
-            break;
-        }
-        if(o == OMUL || o == OLMUL) {
-            if(mulcon(n, nn))
-                break;
-        }
-        if(l->complex >= r->complex) {
-            regalloc(&nod, l, nn);
-            cgen(l, &nod);
-            regalloc(&nod1, r, Z);
-            cgen(r, &nod1);
-            gopcode(o, &nod1, Z, &nod);
-        } else {
-            regalloc(&nod, r, nn);
-            cgen(r, &nod);
-            regalloc(&nod1, l, Z);
-            cgen(l, &nod1);
-            gopcode(o, &nod, &nod1, &nod);
-        }
-        gopcode(OAS, &nod, Z, nn);
-        regfree(&nod);
-        regfree(&nod1);
-        break;
-
-    case OASLSHR:
-    case OASASHL:
-    case OASASHR:
-    case OASAND:
-    case OASADD:
-    case OASSUB:
-    case OASXOR:
-    case OASOR:
-        if(l->op == OBIT)
-            goto asbitop;
-        if(r->op == OCONST)
-        if(!typefd[r->type->etype])
-        if(!typefd[n->type->etype]) {
-            if(l->addable < INDEXED)
-                reglcgen(&nod2, l, Z);
-            else
-                nod2 = *l;
-            regalloc(&nod, r, nn);
-            gopcode(OAS, &nod2, Z, &nod);
-            gopcode(o, r, Z, &nod);
-            gopcode(OAS, &nod, Z, &nod2);
-    
-            regfree(&nod);
-            if(l->addable < INDEXED)
-                regfree(&nod2);
-            break;
-        }
-
-    case OASLMUL:
-    case OASLDIV:
-    case OASLMOD:
-    case OASMUL:
-    case OASDIV:
-    case OASMOD:
-        if(l->op == OBIT)
-            goto asbitop;
-        if(l->complex >= r->complex) {
-            if(l->addable < INDEXED)
-                reglcgen(&nod2, l, Z);
-            else
-                nod2 = *l;
-            regalloc(&nod1, r, Z);
-            cgen(r, &nod1);
-        } else {
-            regalloc(&nod1, r, Z);
-            cgen(r, &nod1);
-            if(l->addable < INDEXED)
-                reglcgen(&nod2, l, Z);
-            else
-                nod2 = *l;
-        }
-
-        regalloc(&nod, n, nn);
-        gmove(&nod2, &nod);
-        gopcode(o, &nod1, Z, &nod);
-        gmove(&nod, &nod2);
-        if(nn != Z)
-            gopcode(OAS, &nod, Z, nn);
-        regfree(&nod);
-        regfree(&nod1);
-        if(l->addable < INDEXED)
-            regfree(&nod2);
-        break;
-
-    asbitop:
-        regalloc(&nod4, n, nn);
-        if(l->complex >= r->complex) {
-            bitload(l, &nod, &nod1, &nod2, &nod4);
-            regalloc(&nod3, r, Z);
-            cgen(r, &nod3);
-        } else {
-            regalloc(&nod3, r, Z);
-            cgen(r, &nod3);
-            bitload(l, &nod, &nod1, &nod2, &nod4);
-        }
-        gmove(&nod, &nod4);
-        gopcode(o, &nod3, Z, &nod4);
-        regfree(&nod3);
-        gmove(&nod4, &nod);
-        regfree(&nod4);
-        bitstore(l, &nod, &nod1, &nod2, nn);
-        break;
-
-    case OADDR:
-        if(nn == Z) {
-            nullwarn(l, Z);
-            break;
-        }
-        lcgen(l, nn);
-        break;
-
-    case OFUNC:
-        if(l->complex >= FNX) {
-            if(l->op != OIND)
-                diag(n, "bad function call");
-
-            regret(&nod, l->left);
-            cgen(l->left, &nod);
-            regsalloc(&nod1, l->left);
-            gopcode(OAS, &nod, Z, &nod1);
-            regfree(&nod);
-
-            nod = *n;
-            nod.left = &nod2;
-            nod2 = *l;
-            nod2.left = &nod1;
-            nod2.complex = 1;
-            cgen(&nod, nn);
-
-            return;
-        }
-        if(REGARG >= 0)
-            o = reg[REGARG];
-        gargs(r, &nod, &nod1);
-        if(l->addable < INDEXED) {
-            reglcgen(&nod, l, Z);
-            gopcode(OFUNC, Z, Z, &nod);
-            regfree(&nod);
-        } else
-            gopcode(OFUNC, Z, Z, l);
-        if(REGARG >= 0)
-            if(o != reg[REGARG])
-                reg[REGARG]--;
-        if(nn != Z) {
-            regret(&nod, n);
-            gopcode(OAS, &nod, Z, nn);
-            regfree(&nod);
+            gopcode(OAND, nodconst((1<<t)-1), Z, nn);
+            patch(p1, pc);
         }
         break;
+    }
+    goto muldiv;
+@
 
-    case OIND:
-        if(nn == Z) {
-            nullwarn(l, Z);
-            break;
-        }
-        regialloc(&nod, n, nn);
-        r = l;
-        while(r->op == OADD)
-            r = r->right;
-        if(sconst(r) && (v = r->vconst+nod.xoffset) > -4096 && v < 4096) {
-            v = r->vconst;
-            r->vconst = 0;
-            cgen(l, &nod);
-            nod.xoffset += v;
-            r->vconst = v;
-        } else
-            cgen(l, &nod);
-        regind(&nod, n);
-        gopcode(OAS, &nod, Z, nn);
-        regfree(&nod);
-        break;
-
-    case OEQ:
-    case ONE:
-    case OLE:
-    case OLT:
-    case OGE:
-    case OGT:
-    case OLO:
-    case OLS:
-    case OHI:
-    case OHS:
-        if(nn == Z) {
-            nullwarn(l, r);
-            break;
-        }
-        boolgen(n, 1, nn);
-        break;
-
-    case OANDAND:
-    case OOROR:
-        boolgen(n, 1, nn);
-        if(nn == Z)
-            patch(p, pc);
-        break;
-
-    case ONOT:
-        if(nn == Z) {
-            nullwarn(l, Z);
-            break;
-        }
-        boolgen(n, 1, nn);
-        break;
-
-    case OCOMMA:
-        cgen(l, Z);
+<<[[cgenrel()]] switch opcode cases>>=
+case OSUB:
+    if(nn != Z)
+    if(l->op == OCONST)
+    if(!typefd[n->type->etype]) {
         cgen(r, nn);
+        gopcode(o, Z, l, nn);
         break;
-
-    case OCAST:
-        if(nn == Z) {
-            nullwarn(l, Z);
+    }
+    // Fallthrough
+case OADD:
+case OAND:
+case OOR:
+case OXOR:
+case OLSHR:
+case OASHL:
+case OASHR:
+    /*
+     * immediate operands
+     */
+    if(nn != Z)
+    if(r->op == OCONST)
+    if(!typefd[n->type->etype]) {
+        cgen(l, nn);
+        if(r->vconst == 0)
+        if(o != OAND)
             break;
-        }
-        /*
-         * convert from types l->n->nn
-         */
-        if(nocast(l->type, n->type)) {
-            if(nocast(n->type, nn->type)) {
-                cgen(l, nn);
-                break;
-            }
-        }
+        if(nn != Z)
+            gopcode(o, r, Z, nn);
+        break;
+    }
+    // Fallthrough
+case OLMUL:
+case OLDIV:
+case OLMOD:
+case OMUL:
+muldiv:
+    if(nn == Z) {
+        nullwarn(l, r);
+        break;
+    }
+    if(o == OMUL || o == OLMUL) {
+        if(mulcon(n, nn))
+            break;
+    }
+    if(l->complex >= r->complex) {
         regalloc(&nod, l, nn);
         cgen(l, &nod);
-        regalloc(&nod1, n, &nod);
-        if(inrel)
-            gmover(&nod, &nod1);
-        else
-            gopcode(OAS, &nod, Z, &nod1);
-        gopcode(OAS, &nod1, Z, nn);
-        regfree(&nod1);
-        regfree(&nod);
-        break;
-
-    case ODOT:
-        sugen(l, nodrat, l->type->width);
-        if(nn != Z) {
-            warn(n, "non-interruptable temporary");
-            nod = *nodrat;
-            if(!r || r->op != OCONST) {
-                diag(n, "DOT and no offset");
-                break;
-            }
-            nod.xoffset += (long)r->vconst;
-            nod.type = n->type;
-            cgen(&nod, nn);
-        }
-        break;
-
-    case OCOND:
-        bcgen(l, 1);
-        p1 = p;
-        cgen(r->left, nn);
-        gbranch(OGOTO);
-        patch(p1, pc);
-        p1 = p;
-        cgen(r->right, nn);
-        patch(p1, pc);
-        break;
-
-    case OPOSTINC:
-    case OPOSTDEC:
-        v = 1;
-        if(l->type->etype == TIND)
-            v = l->type->link->width;
-        if(o == OPOSTDEC)
-            v = -v;
-        if(l->op == OBIT)
-            goto bitinc;
-        if(nn == Z)
-            goto pre;
-
-        if(l->addable < INDEXED)
-            reglcgen(&nod2, l, Z);
-        else
-            nod2 = *l;
-
-        regalloc(&nod, l, nn);
-        gopcode(OAS, &nod2, Z, &nod);
+        regalloc(&nod1, r, Z);
+        cgen(r, &nod1);
+        gopcode(o, &nod1, Z, &nod);
+    } else {
+        regalloc(&nod, r, nn);
+        cgen(r, &nod);
         regalloc(&nod1, l, Z);
-        if(typefd[l->type->etype]) {
-            regalloc(&nod3, l, Z);
-            if(v < 0) {
-                gopcode(OAS, nodfconst(-v), Z, &nod3);
-                gopcode(OSUB, &nod3, &nod, &nod1);
-            } else {
-                gopcode(OAS, nodfconst(v), Z, &nod3);
-                gopcode(OADD, &nod3, &nod, &nod1);
-            }
-            regfree(&nod3);
-        } else
-            gopcode(OADD, nodconst(v), &nod, &nod1);
-        gopcode(OAS, &nod1, Z, &nod2);
-
-        regfree(&nod);
-        regfree(&nod1);
-        if(l->addable < INDEXED)
-            regfree(&nod2);
-        break;
-
-    case OPREINC:
-    case OPREDEC:
-        v = 1;
-        if(l->type->etype == TIND)
-            v = l->type->link->width;
-        if(o == OPREDEC)
-            v = -v;
-        if(l->op == OBIT)
-            goto bitinc;
-
-    pre:
-        if(l->addable < INDEXED)
-            reglcgen(&nod2, l, Z);
-        else
-            nod2 = *l;
-
-        regalloc(&nod, l, nn);
-        gopcode(OAS, &nod2, Z, &nod);
-        if(typefd[l->type->etype]) {
-            regalloc(&nod3, l, Z);
-            if(v < 0) {
-                gopcode(OAS, nodfconst(-v), Z, &nod3);
-                gopcode(OSUB, &nod3, Z, &nod);
-            } else {
-                gopcode(OAS, nodfconst(v), Z, &nod3);
-                gopcode(OADD, &nod3, Z, &nod);
-            }
-            regfree(&nod3);
-        } else
-            gopcode(OADD, nodconst(v), Z, &nod);
-        gopcode(OAS, &nod, Z, &nod2);
-        if(nn && l->op == ONAME)	/* in x=++i, emit USED(i) */
-            gins(ANOP, l, Z);
-
-        regfree(&nod);
-        if(l->addable < INDEXED)
-            regfree(&nod2);
-        break;
-
-    bitinc:
-        if(nn != Z && (o == OPOSTINC || o == OPOSTDEC)) {
-            bitload(l, &nod, &nod1, &nod2, Z);
-            gopcode(OAS, &nod, Z, nn);
-            gopcode(OADD, nodconst(v), Z, &nod);
-            bitstore(l, &nod, &nod1, &nod2, Z);
-            break;
-        }
-        bitload(l, &nod, &nod1, &nod2, nn);
-        gopcode(OADD, nodconst(v), Z, &nod);
-        bitstore(l, &nod, &nod1, &nod2, nn);
-        break;
+        cgen(l, &nod1);
+        gopcode(o, &nod, &nod1, &nod);
     }
-    cursafe = curs;
-    return;
-}
-@
-
-
-
-<<function gmover(arm)>>=
-void
-gmover(Node *f, Node *t)
-{
-    int ft, tt, a;
-
-    ft = f->type->etype;
-    tt = t->type->etype;
-    a = AGOK;
-    if(typechlp[ft] && typechlp[tt] && ewidth[ft] >= ewidth[tt]){
-        switch(tt){
-        case TSHORT:
-            a = AMOVH;
-            break;
-        case TUSHORT:
-            a = AMOVHU;
-            break;
-        case TCHAR:
-            a = AMOVB;
-            break;
-        case TUCHAR:
-            a = AMOVBU;
-            break;
-        }
-    }
-    if(a == AGOK)
-        gmove(f, t);
-    else
-        gins(a, f, t);
-}
-@
-
-
-
-<<global nodsafe>>=
-Node*	nodsafe;
-@
-
-<<function regsalloc>>=
-void
-regsalloc(Node *n, Node *nn)
-{
-    cursafe = align(cursafe, nn->type, Aaut3);
-    maxargsafe = maxround(maxargsafe, cursafe+curarg);
-    *n = *nodsafe;
-    n->xoffset = -(stkoff + cursafe);
-    n->type = nn->type;
-    n->etype = nn->type->etype;
-    n->lineno = nn->lineno;
-}
-@
-
-
-
-<<function regialloc>>=
-void
-regialloc(Node *n, Node *tn, Node *o)
-{
-    Node nod;
-
-    nod = *tn;
-    nod.type = types[TIND];
-    regalloc(n, &nod, o);
-}
-@
-
-
-
-
-<<expression nodes>>=
-OINDREG, // after parsing only
-@
-
-<<function regaalloc(arm)>>=
-void
-regaalloc(Node *n, Node *nn)
-{
-    curarg = align(curarg, nn->type, Aarg1);
-    *n = *nn;
-    n->op = OINDREG;
-    n->reg = REGSP;
-    n->xoffset = curarg + SZ_LONG;
-    n->complex = 0;
-    n->addable = 20;
-    curarg = align(curarg, nn->type, Aarg2);
-    maxargsafe = maxround(maxargsafe, cursafe+curarg);
-}
-@
-% 386 is just    n->xoffset = curarg;
-
-
-<<function regaalloc1(arm)>>=
-void
-regaalloc1(Node *n, Node *nn)
-{
-    nodreg(n, nn, REGARG);
-    reg[REGARG]++;
-    curarg = align(curarg, nn->type, Aarg1);
-    curarg = align(curarg, nn->type, Aarg2);
-    maxargsafe = maxround(maxargsafe, cursafe+curarg);
-}
-@
-
-
-<<function bitload(arm)>>=
-void
-bitload(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
-{
-    int sh;
-    long v;
-    Node *l;
-
-    /*
-     * n1 gets adjusted/masked value
-     * n2 gets address of cell
-     * n3 gets contents of cell
-     */
-    l = b->left;
-    if(n2 != Z) {
-        regalloc(n1, l, nn);
-        reglcgen(n2, l, Z);
-        regalloc(n3, l, Z);
-        gopcode(OAS, n2, Z, n3);
-        gopcode(OAS, n3, Z, n1);
-    } else {
-        regalloc(n1, l, nn);
-        cgen(l, n1);
-    }
-    if(b->type->shift == 0 && typeu[b->type->etype]) {
-        v = ~0 + (1L << b->type->nbits);
-        gopcode(OAND, nodconst(v), Z, n1);
-    } else {
-        sh = 32 - b->type->shift - b->type->nbits;
-        if(sh > 0)
-            gopcode(OASHL, nodconst(sh), Z, n1);
-        sh += b->type->shift;
-        if(sh > 0)
-            if(typeu[b->type->etype])
-                gopcode(OLSHR, nodconst(sh), Z, n1);
-            else
-                gopcode(OASHR, nodconst(sh), Z, n1);
-    }
-}
-@
-% >> >>
-
-
-<<function bitstore(arm)>>=
-void
-bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
-{
-    long v;
-    Node nod, *l;
-    int sh;
-
-    /*
-     * n1 has adjusted/masked value
-     * n2 has address of cell
-     * n3 has contents of cell
-     */
-    l = b->left;
-    regalloc(&nod, l, Z);
-    v = ~0 + (1L << b->type->nbits);
-    gopcode(OAND, nodconst(v), Z, n1);
-    gopcode(OAS, n1, Z, &nod);
-    if(nn != Z)
-        gopcode(OAS, n1, Z, nn);
-    sh = b->type->shift;
-    if(sh > 0)
-        gopcode(OASHL, nodconst(sh), Z, &nod);
-    v <<= sh;
-    gopcode(OAND, nodconst(~v), Z, n3);
-    gopcode(OOR, n3, Z, &nod);
-    gopcode(OAS, &nod, Z, n2);
-
+    gopcode(OAS, &nod, Z, nn);
     regfree(&nod);
-    regfree(n1);
-    regfree(n2);
-    regfree(n3);
-}
-@
-% >> >>
-
-
-<<definition nodes>>=
-OREGISTER, // after parsing only?
-@
-
-
-<<function reglcgen(arm)>>=
-void
-reglcgen(Node *t, Node *n, Node *nn)
-{
-    Node *r;
-    long v;
-
-    regialloc(t, n, nn);
-    if(n->op == OIND) {
-        r = n->left;
-        while(r->op == OADD)
-            r = r->right;
-        if(sconst(r) && (v = r->vconst+t->xoffset) > -4096 && v < 4096) {
-            v = r->vconst;
-            r->vconst = 0;
-            lcgen(n, t);
-            t->xoffset += v;
-            r->vconst = v;
-            regind(t, n);
-            return;
-        }
-    } else if(n->op == OINDREG) {
-        if((v = n->xoffset) > -4096 && v < 4096) {
-            n->op = OREGISTER;
-            cgen(n, t);
-            t->xoffset += v;
-            n->op = OINDREG;
-            regind(t, n);
-            return;
-        }
-    }
-    lcgen(n, t);
-    regind(t, n);
-}
-@
-% quite similar to the 386, but with some variations
-
-<<function sconst(arm)>>=
-bool
-sconst(Node *n)
-{
-    vlong vv;
-
-    if(n->op == OCONST) {
-        if(!typefd[n->type->etype]) {
-            vv = n->vconst;
-            if(vv >= (vlong)(-32766) && vv < (vlong)32766)
-                return true;
-            /*
-             * should be specialised for constant values which will
-             * fit in different instructionsl; for now, let 5l
-             * sort it out
-             */
-            return true;
-        }
-    }
-    return false;
-}
-@
-
-
-<<function regind>>=
-void
-regind(Node *n, Node *nn)
-{
-
-    if(n->op != OREGISTER) {
-        diag(n, "regind not OREGISTER");
-        return;
-    }
-    n->op = OINDREG;
-    n->type = nn->type;
-}
+    regfree(&nod1);
+    break;
 @
 
 
 
+<<[[gopcode()]] switch opcode cases>>=
+case OASADD:
+case OADD:
+    a = AADD;
+    if(et == TFLOAT)
+        a = AADDF;
+    else
+    if(et == TDOUBLE || et == TVLONG)
+        a = AADDD;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASSUB:
+case OSUB:
+    if(f2 && f2->op == OCONST) {
+        Node *t = f1;
+        f1 = f2;
+        f2 = t;
+        a = ARSB;
+    } else
+        a = ASUB;
+    if(et == TFLOAT)
+        a = ASUBF;
+    else
+    if(et == TDOUBLE || et == TVLONG)
+        a = ASUBD;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASOR:
+case OOR:
+    a = AORR;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASAND:
+case OAND:
+    a = AAND;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASXOR:
+case OXOR:
+    a = AEOR;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASLSHR:
+case OLSHR:
+    a = ASRL;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASASHR:
+case OASHR:
+    a = ASRA;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASASHL:
+case OASHL:
+    a = ASLL;
+    break;
+@
 
 
 
-<<function lcgen(arm)>>=
-void
-lcgen(Node *n, Node *nn)
-{
-    Prog *p1;
-    Node nod;
+<<[[gopcode()]] switch opcode cases>>=
+case OASMUL:
+case OMUL:
+    a = AMUL;
+    if(et == TFLOAT)
+        a = AMULF;
+    else
+    if(et == TDOUBLE || et == TVLONG)
+        a = AMULD;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASDIV:
+case ODIV:
+    a = ADIV;
+    if(et == TFLOAT)
+        a = ADIVF;
+    else
+    if(et == TDOUBLE || et == TVLONG)
+        a = ADIVD;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASMOD:
+case OMOD:
+    a = AMOD;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASLMUL:
+case OLMUL:
+    a = AMULU;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASLMOD:
+case OLMOD:
+    a = AMODU;
+    break;
+@
+<<[[gopcode()]] switch opcode cases>>=
+case OASLDIV:
+case OLDIV:
+    a = ADIVU;
+    break;
+@
 
-    if(debug['g']) {
-        prtree(nn, "lcgen lhs");
-        prtree(n, "lcgen");
-    }
-    if(n == Z || n->type == T)
-        return;
+
+\subsection{Boolean expressions}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OANDAND:
+case OOROR:
+    boolgen(n, 1, nn);
+    if(nn == Z)
+        patch(p, pc);
+    break;
+@
+
+<<[[cgenrel()]] switch opcode cases>>=
+case ONOT:
     if(nn == Z) {
-        nn = &nod;
-        regalloc(&nod, n, Z);
+        nullwarn(l, Z);
+        break;
     }
-    switch(n->op) {
-    case OCOMMA:
-        cgen(n->left, n->left);
-        lcgen(n->right, nn);
-        break;
-
-    case OIND:
-        cgen(n->left, nn);
-        break;
-
-    case OCOND:
-        bcgen(n->left, 1);
-        p1 = p;
-        lcgen(n->right->left, nn);
-        gbranch(OGOTO);
-        patch(p1, pc);
-        p1 = p;
-        lcgen(n->right->right, nn);
-        patch(p1, pc);
-        break;
-
-    default:
-        if(n->addable < INDEXED) {
-            diag(n, "unknown op in lcgen: %O", n->op);
-            break;
-        }
-        nod = *n;
-        nod.op = OADDR;
-        nod.left = n;
-        nod.right = Z;
-        nod.type = types[TIND];
-        gopcode(OAS, &nod, Z, nn);
-        break;
-
-    }
-}
-@
-% diff with 386 is that default case is just:
-%        gopcode(OADDR, n->type, n, nn);
-% so maybe could actually factorize
-
-
-<<function uncomma>>=
-Node*
-uncomma(Node *n)
-{
-    while(n != Z && n->op == OCOMMA) {
-        cgen(n->left, Z);
-        n = n->right;
-    }
-    return n;
-}
+    boolgen(n, 1, nn);
+    break;
 @
 
-\subsection{Booleans, [[boolgen()]]}
+% OCOM?
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OEQ:
+case ONE:
+case OLE:
+case OLT:
+case OGE:
+case OGT:
+case OLO:
+case OLS:
+case OHI:
+case OHS:
+    if(nn == Z) {
+        nullwarn(l, r);
+        break;
+    }
+    boolgen(n, 1, nn);
+    break;
+@
+
+
+
 
 <<constant BTRUE(arm)>>=
 #define	BTRUE		0x1000
 @
+% ugly, need to be more than node_kind max OEND
+
+<<[[gopcode()]] locals>>=
+bool btrue;
+@
+<<[[gopcode()]] initialisation>>=
+btrue = o & BTRUE;
+o &= ~BTRUE;
+@
+
+
 
 % cgenrel | bcomplex -> <>
 <<function boolgen(arm)>>=
@@ -11934,10 +11223,1317 @@ char	logrel[12] =
 
 
 
-\subsection{Arithmetic}
 
-% see acom()?
 
+
+
+<<[[gopcode()]] switch opcode cases>>=
+case OCASE:
+case OEQ:
+case ONE:
+case OLT:
+case OLE:
+case OGE:
+case OGT:
+case OLO:
+case OLS:
+case OHS:
+case OHI:
+    a = ACMP;
+    if(et == TFLOAT)
+        a = ACMPF;
+    else
+    if(et == TDOUBLE || et == TVLONG)
+        a = ACMPD;
+    nextpc();
+    p->as = a;
+    naddr(f1, &p->from);
+    if(a == ACMP && f1->op == OCONST && p->from.offset < 0 &&
+        p->from.offset != 0x80000000) {
+        p->as = ACMN;
+        p->from.offset = -p->from.offset;
+    }
+    raddr(f2, p);
+    switch(o) {
+    case OEQ:
+        a = ABEQ;
+        break;
+    case ONE:
+        a = ABNE;
+        break;
+    case OLT:
+        a = ABLT;
+        /* ensure NaN comparison is always false */
+        if(typefd[et] && !btrue)
+            a = ABMI;
+        break;
+    case OLE:
+        a = ABLE;
+        if(typefd[et] && !btrue)
+            a = ABLS;
+        break;
+    case OGE:
+        a = ABGE;
+        if(typefd[et] && btrue)
+            a = ABPL;
+        break;
+    case OGT:
+        a = ABGT;
+        if(typefd[et] && btrue)
+            a = ABHI;
+        break;
+    case OLO:
+        a = ABLO;
+        break;
+    case OLS:
+        a = ABLS;
+        break;
+    case OHS:
+        a = ABHS;
+        break;
+    case OHI:
+        a = ABHI;
+        break;
+    case OCASE:
+        nextpc();
+        p->as = ACASE;
+        p->scond = 0x9;
+        naddr(f2, &p->from);
+        a = ABHI;
+        break;
+    }
+    f1 = Z;
+    f2 = Z;
+    break;
+@
+
+
+\subsection{Assignments}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OAS:
+    if(l->op == OBIT)
+        goto bitas;
+    if(l->addable >= INDEXED && l->complex < FNX) {
+        if(nn != Z || r->addable < INDEXED) {
+            if(r->complex >= FNX && nn == Z)
+                regret(&nod, r);
+            else
+                regalloc(&nod, r, nn);
+            cgen(r, &nod);
+            gmove(&nod, l);
+            if(nn != Z)
+                gmove(&nod, nn);
+            regfree(&nod);
+        } else
+            gmove(r, l);
+        break;
+    }
+    if(l->complex >= r->complex) {
+        reglcgen(&nod1, l, Z);
+        if(r->addable >= INDEXED) {
+            gmove(r, &nod1);
+            if(nn != Z)
+                gmove(r, nn);
+            regfree(&nod1);
+            break;
+        }
+        regalloc(&nod, r, nn);
+        cgen(r, &nod);
+    } else {
+        regalloc(&nod, r, nn);
+        cgen(r, &nod);
+        reglcgen(&nod1, l, Z);
+    }
+    gmove(&nod, &nod1);
+    regfree(&nod);
+    regfree(&nod1);
+    break;
+@
+
+<<[[gopcode()]] switch opcode cases>>=
+case OAS:
+    gmove(f1, t);
+    return;
+@
+% it's a return here! it shortcircuit what gopcode normally does
+
+
+<<definition nodes>>=
+OREGISTER, // after parsing only?
+@
+
+
+<<function reglcgen(arm)>>=
+void
+reglcgen(Node *t, Node *n, Node *nn)
+{
+    Node *r;
+    long v;
+
+    regialloc(t, n, nn);
+    if(n->op == OIND) {
+        r = n->left;
+        while(r->op == OADD)
+            r = r->right;
+        if(sconst(r) && (v = r->vconst+t->xoffset) > -4096 && v < 4096) {
+            v = r->vconst;
+            r->vconst = 0;
+            lcgen(n, t);
+            t->xoffset += v;
+            r->vconst = v;
+            regind(t, n);
+            return;
+        }
+    } else if(n->op == OINDREG) {
+        if((v = n->xoffset) > -4096 && v < 4096) {
+            n->op = OREGISTER;
+            cgen(n, t);
+            t->xoffset += v;
+            n->op = OINDREG;
+            regind(t, n);
+            return;
+        }
+    }
+    lcgen(n, t);
+    regind(t, n);
+}
+@
+% quite similar to the 386, but with some variations
+
+<<[[naddr()]] switch node kind cases>>=
+case OREGISTER:
+    a->type = D_REG;
+    a->sym = S;
+    a->reg = n->reg;
+    if(a->reg >= NREG) {
+        a->type = D_FREG;
+        a->reg -= NREG;
+    }
+    break;
+@
+
+
+<<function regialloc>>=
+void
+regialloc(Node *n, Node *tn, Node *o)
+{
+    Node nod;
+
+    nod = *tn;
+    nod.type = types[TIND];
+    regalloc(n, &nod, o);
+}
+@
+
+<<function regind>>=
+void
+regind(Node *n, Node *nn)
+{
+
+    if(n->op != OREGISTER) {
+        diag(n, "regind not OREGISTER");
+        return;
+    }
+    n->op = OINDREG;
+    n->type = nn->type;
+}
+@
+
+<<function lcgen(arm)>>=
+void
+lcgen(Node *n, Node *nn)
+{
+    Prog *p1;
+    Node nod;
+
+    if(debug['g']) {
+        prtree(nn, "lcgen lhs");
+        prtree(n, "lcgen");
+    }
+    if(n == Z || n->type == T)
+        return;
+    if(nn == Z) {
+        nn = &nod;
+        regalloc(&nod, n, Z);
+    }
+    switch(n->op) {
+    case OCOMMA:
+        cgen(n->left, n->left);
+        lcgen(n->right, nn);
+        break;
+
+    case OIND:
+        cgen(n->left, nn);
+        break;
+
+    case OCOND:
+        bcgen(n->left, 1);
+        p1 = p;
+        lcgen(n->right->left, nn);
+        gbranch(OGOTO);
+        patch(p1, pc);
+        p1 = p;
+        lcgen(n->right->right, nn);
+        patch(p1, pc);
+        break;
+
+    default:
+        if(n->addable < INDEXED) {
+            diag(n, "unknown op in lcgen: %O", n->op);
+            break;
+        }
+        nod = *n;
+        nod.op = OADDR;
+        nod.left = n;
+        nod.right = Z;
+        nod.type = types[TIND];
+        gopcode(OAS, &nod, Z, nn);
+        break;
+
+    }
+}
+@
+% diff with 386 is that default case is just:
+%        gopcode(OADDR, n->type, n, nn);
+% so maybe could actually factorize
+
+
+
+<<function sconst(arm)>>=
+bool
+sconst(Node *n)
+{
+    vlong vv;
+
+    if(n->op == OCONST) {
+        if(!typefd[n->type->etype]) {
+            vv = n->vconst;
+            if(vv >= (vlong)(-32766) && vv < (vlong)32766)
+                return true;
+            /*
+             * should be specialised for constant values which will
+             * fit in different instructionsl; for now, let 5l
+             * sort it out
+             */
+            return true;
+        }
+    }
+    return false;
+}
+@
+
+
+%\subsection{Assignments and arithmetic}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OASLSHR:
+case OASASHL:
+case OASASHR:
+case OASAND:
+case OASADD:
+case OASSUB:
+case OASXOR:
+case OASOR:
+    if(l->op == OBIT)
+        goto asbitop;
+    if(r->op == OCONST)
+    if(!typefd[r->type->etype])
+    if(!typefd[n->type->etype]) {
+        if(l->addable < INDEXED)
+            reglcgen(&nod2, l, Z);
+        else
+            nod2 = *l;
+        regalloc(&nod, r, nn);
+        gopcode(OAS, &nod2, Z, &nod);
+        gopcode(o, r, Z, &nod);
+        gopcode(OAS, &nod, Z, &nod2);
+
+        regfree(&nod);
+        if(l->addable < INDEXED)
+            regfree(&nod2);
+        break;
+    }
+    // Fallthrough
+case OASLMUL:
+case OASLDIV:
+case OASLMOD:
+case OASMUL:
+case OASDIV:
+case OASMOD:
+    if(l->op == OBIT)
+        goto asbitop;
+    if(l->complex >= r->complex) {
+        if(l->addable < INDEXED)
+            reglcgen(&nod2, l, Z);
+        else
+            nod2 = *l;
+        regalloc(&nod1, r, Z);
+        cgen(r, &nod1);
+    } else {
+        regalloc(&nod1, r, Z);
+        cgen(r, &nod1);
+        if(l->addable < INDEXED)
+            reglcgen(&nod2, l, Z);
+        else
+            nod2 = *l;
+    }
+
+    regalloc(&nod, n, nn);
+    gmove(&nod2, &nod);
+    gopcode(o, &nod1, Z, &nod);
+    gmove(&nod, &nod2);
+    if(nn != Z)
+        gopcode(OAS, &nod, Z, nn);
+    regfree(&nod);
+    regfree(&nod1);
+    if(l->addable < INDEXED)
+        regfree(&nod2);
+    break;
+@
+
+
+\subsection{Pointers}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OADDR:
+    if(nn == Z) {
+        nullwarn(l, Z);
+        break;
+    }
+    lcgen(l, nn);
+    break;
+@
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OIND:
+    if(nn == Z) {
+        nullwarn(l, Z);
+        break;
+    }
+    regialloc(&nod, n, nn);
+    r = l;
+    while(r->op == OADD)
+        r = r->right;
+    if(sconst(r) && (v = r->vconst+nod.xoffset) > -4096 && v < 4096) {
+        v = r->vconst;
+        r->vconst = 0;
+        cgen(l, &nod);
+        nod.xoffset += v;
+        r->vconst = v;
+    } else
+        cgen(l, &nod);
+    regind(&nod, n);
+    gopcode(OAS, &nod, Z, nn);
+    regfree(&nod);
+    break;
+@
+
+
+\subsection{Function calls}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OFUNC:
+    if(l->complex >= FNX) {
+        if(l->op != OIND)
+            diag(n, "bad function call");
+
+        regret(&nod, l->left);
+        cgen(l->left, &nod);
+        regsalloc(&nod1, l->left);
+        gopcode(OAS, &nod, Z, &nod1);
+        regfree(&nod);
+
+        nod = *n;
+        nod.left = &nod2;
+        nod2 = *l;
+        nod2.left = &nod1;
+        nod2.complex = 1;
+        cgen(&nod, nn);
+
+        return;
+    }
+    if(REGARG >= 0)
+        o = reg[REGARG];
+    gargs(r, &nod, &nod1);
+    if(l->addable < INDEXED) {
+        reglcgen(&nod, l, Z);
+        gopcode(OFUNC, Z, Z, &nod);
+        regfree(&nod);
+    } else
+        gopcode(OFUNC, Z, Z, l);
+    if(REGARG >= 0)
+        if(o != reg[REGARG])
+            reg[REGARG]--;
+    if(nn != Z) {
+        regret(&nod, n);
+        gopcode(OAS, &nod, Z, nn);
+        regfree(&nod);
+    }
+    break;
+@
+
+<<[[gopcode()]] switch opcode cases>>=
+case OFUNC:
+    a = ABL;
+    break;
+@
+
+
+<<global nodsafe>>=
+Node*	nodsafe;
+@
+
+<<[[ginit()]] special nodes initialisation>>=
+nodsafe = new(ONAME, Z, Z);
+nodsafe->sym = slookup(".safe");
+nodsafe->type = types[TINT];
+nodsafe->etype = types[TINT]->etype;
+nodsafe->class = CAUTO;
+complex(nodsafe);
+@
+
+<<function regsalloc>>=
+void
+regsalloc(Node *n, Node *nn)
+{
+    cursafe = align(cursafe, nn->type, Aaut3);
+    maxargsafe = maxround(maxargsafe, cursafe+curarg);
+    *n = *nodsafe;
+    n->xoffset = -(stkoff + cursafe);
+    n->type = nn->type;
+    n->etype = nn->type->etype;
+    n->lineno = nn->lineno;
+}
+@
+
+\subsection{Array accesses}
+
+\subsection{Field accesses}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case ODOT:
+    sugen(l, nodrat, l->type->width);
+    if(nn != Z) {
+        warn(n, "non-interruptable temporary");
+        nod = *nodrat;
+        if(!r || r->op != OCONST) {
+            diag(n, "DOT and no offset");
+            break;
+        }
+        nod.xoffset += (long)r->vconst;
+        nod.type = n->type;
+        cgen(&nod, nn);
+    }
+    break;
+@
+
+<<global nodrat>>=
+Node*	nodrat;
+@
+
+
+
+<<function sugen(arm)>>=
+void
+sugen(Node *n, Node *nn, long w)
+{
+    Prog *p1;
+    Node nod0, nod1, nod2, nod3, nod4, *l, *r;
+    Type *t;
+    long pc1;
+    int i, m, c;
+
+    if(n == Z || n->type == T)
+        return;
+
+    if(debug['g']) {
+        prtree(nn, "sugen lhs");
+        prtree(n, "sugen");
+    }
+    if(nn == nodrat)
+        if(w > nrathole)
+            nrathole = w;
+
+    switch(n->op) {
+    case OIND:
+        if(nn == Z) {
+            nullwarn(n->left, Z);
+            break;
+        }
+    // Fallthrough
+
+    default:
+        goto copy;
+
+    case OCONST:
+        if(n->type && typev[n->type->etype]) {
+            if(nn == Z) {
+                nullwarn(n->left, Z);
+                break;
+            }
+
+            t = nn->type;
+            nn->type = types[TLONG];
+            reglcgen(&nod1, nn, Z);
+            nn->type = t;
+
+            if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
+                gopcode(OAS, nod32const(n->vconst>>32), Z, &nod1);
+            else
+                gopcode(OAS, nod32const(n->vconst), Z, &nod1);
+            nod1.xoffset += SZ_LONG;
+            if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
+                gopcode(OAS, nod32const(n->vconst), Z, &nod1);
+            else
+                gopcode(OAS, nod32const(n->vconst>>32), Z, &nod1);
+
+            regfree(&nod1);
+            break;
+        }
+        goto copy;
+
+    case ODOT:
+        l = n->left;
+        sugen(l, nodrat, l->type->width);
+        if(nn != Z) {
+            warn(n, "non-interruptable temporary");
+            nod1 = *nodrat;
+            r = n->right;
+            if(!r || r->op != OCONST) {
+                diag(n, "DOT and no offset");
+                break;
+            }
+            nod1.xoffset += (long)r->vconst;
+            nod1.type = n->type;
+            sugen(&nod1, nn, w);
+        }
+        break;
+
+    // struct constructor extension?
+    case OSTRUCT:
+        /*
+         * rewrite so lhs has no fn call
+         */
+        if(nn != Z && nn->complex >= FNX) {
+            nod1 = *n;
+            nod1.type = typ(TIND, n->type);
+            regret(&nod2, &nod1);
+            lcgen(nn, &nod2);
+            regsalloc(&nod0, &nod1);
+            gopcode(OAS, &nod2, Z, &nod0);
+            regfree(&nod2);
+
+            nod1 = *n;
+            nod1.op = OIND;
+            nod1.left = &nod0;
+            nod1.right = Z;
+            nod1.complex = 1;
+
+            sugen(n, &nod1, w);
+            return;
+        }
+
+        r = n->left;
+        for(t = n->type->link; t != T; t = t->down) {
+            l = r;
+            if(r->op == OLIST) {
+                l = r->left;
+                r = r->right;
+            }
+            if(nn == Z) {
+                cgen(l, nn);
+                continue;
+            }
+            /*
+             * hand craft *(&nn + o) = l
+             */
+            nod0 = znode;
+            nod0.op = OAS;
+            nod0.type = t;
+            nod0.left = &nod1;
+            nod0.right = l;
+
+            nod1 = znode;
+            nod1.op = OIND;
+            nod1.type = t;
+            nod1.left = &nod2;
+
+            nod2 = znode;
+            nod2.op = OADD;
+            nod2.type = typ(TIND, t);
+            nod2.left = &nod3;
+            nod2.right = &nod4;
+
+            nod3 = znode;
+            nod3.op = OADDR;
+            nod3.type = nod2.type;
+            nod3.left = nn;
+
+            nod4 = znode;
+            nod4.op = OCONST;
+            nod4.type = nod2.type;
+            nod4.vconst = t->offset;
+
+            ccom(&nod0);
+            acom(&nod0);
+            xcom(&nod0);
+            nod0.addable = 0;
+
+            cgen(&nod0, Z);
+        }
+        break;
+
+    case OAS:
+        if(nn == Z) {
+            if(n->addable < INDEXED)
+                sugen(n->right, n->left, w);
+            break;
+        }
+        sugen(n->right, nodrat, w);
+        warn(n, "non-interruptable temporary");
+        sugen(nodrat, n->left, w);
+        sugen(nodrat, nn, w);
+        break;
+
+    case OFUNC:
+        if(nn == Z) {
+            sugen(n, nodrat, w);
+            break;
+        }
+        if(nn->op != OIND) {
+            nn = new1(OADDR, nn, Z);
+            nn->type = types[TIND];
+            nn->addable = 0;
+        } else
+            nn = nn->left;
+        n = new(OFUNC, n->left, new(OLIST, nn, n->right));
+        n->type = types[TVOID];
+        n->left->type = types[TVOID];
+        cgen(n, Z);
+        break;
+
+    case OCOND:
+        bcgen(n->left, 1);
+        p1 = p;
+        sugen(n->right->left, nn, w);
+        gbranch(OGOTO);
+        patch(p1, pc);
+        p1 = p;
+        sugen(n->right->right, nn, w);
+        patch(p1, pc);
+        break;
+
+    case OCOMMA:
+        cgen(n->left, Z);
+        sugen(n->right, nn, w);
+        break;
+    }
+    return;
+
+copy:
+    if(nn == Z)
+        return;
+    if(n->complex >= FNX && nn->complex >= FNX) {
+        t = nn->type;
+        nn->type = types[TLONG];
+        regialloc(&nod1, nn, Z);
+        lcgen(nn, &nod1);
+        regsalloc(&nod2, nn);
+        nn->type = t;
+
+        gopcode(OAS, &nod1, Z, &nod2);
+        regfree(&nod1);
+
+        nod2.type = typ(TIND, t);
+
+        nod1 = nod2;
+        nod1.op = OIND;
+        nod1.left = &nod2;
+        nod1.right = Z;
+        nod1.complex = 1;
+        nod1.type = t;
+
+        sugen(n, &nod1, w);
+        return;
+    }
+
+    w /= SZ_LONG;
+    if(w <= 2) {
+        if(n->complex > nn->complex) {
+            reglpcgen(&nod1, n, 1);
+            reglpcgen(&nod2, nn, 1);
+        } else {
+            reglpcgen(&nod2, nn, 1);
+            reglpcgen(&nod1, n, 1);
+        }
+        regalloc(&nod3, &regnode, Z);
+        regalloc(&nod4, &regnode, Z);
+        if(nod3.reg > nod4.reg){
+            /* code below assumes nod3 loaded first */
+            Node t = nod3; nod3 = nod4; nod4 = t;
+        }
+        nod0 = *nodconst((1<<nod3.reg)|(1<<nod4.reg));
+        if(w == 2 && nod1.xoffset == 0)
+            gmovm(&nod1, &nod0, 0);
+        else {
+            gmove(&nod1, &nod3);
+            if(w == 2) {
+                nod1.xoffset += SZ_LONG;
+                gmove(&nod1, &nod4);
+            }
+        }
+        if(w == 2 && nod2.xoffset == 0)
+            gmovm(&nod0, &nod2, 0);
+        else {
+            gmove(&nod3, &nod2);
+            if(w == 2) {
+                nod2.xoffset += SZ_LONG;
+                gmove(&nod4, &nod2);
+            }
+        }
+        regfree(&nod1);
+        regfree(&nod2);
+        regfree(&nod3);
+        regfree(&nod4);
+        return;
+    }
+
+    if(n->complex > nn->complex) {
+        reglpcgen(&nod1, n, 0);
+        reglpcgen(&nod2, nn, 0);
+    } else {
+        reglpcgen(&nod2, nn, 0);
+        reglpcgen(&nod1, n, 0);
+    }
+
+    m = 0;
+    for(c = 0; c < w && c < 4; c++) {
+        i = tmpreg();
+        if (i == 0)
+            break;
+        reg[i]++;
+        m |= 1<<i;
+    }
+    nod4 = *(nodconst(m));
+    if(w < 3*c) {
+        for (; w>c; w-=c) {
+            gmovm(&nod1, &nod4, 1);
+            gmovm(&nod4, &nod2, 1);
+        }
+        goto out;
+    }
+
+    regalloc(&nod3, &regnode, Z);
+    gopcode(OAS, nodconst(w/c), Z, &nod3);
+    w %= c;
+    
+    pc1 = pc;
+    gmovm(&nod1, &nod4, 1);
+    gmovm(&nod4, &nod2, 1);
+
+    gopcode(OSUB, nodconst(1), Z, &nod3);
+    gopcode(OEQ, nodconst(0), &nod3, Z);
+    p->as = ABGT;
+    patch(p, pc1);
+    regfree(&nod3);
+
+out:
+    if (w) {
+        i = 0;
+        while (c>w) {
+            while ((m&(1<<i)) == 0)
+                i++;
+            m &= ~(1<<i);
+            reg[i] = 0;
+            c--;
+            i++;
+        }
+        nod4.vconst = m;
+        gmovm(&nod1, &nod4, 0);
+        gmovm(&nod4, &nod2, 0);
+    }
+    i = 0;
+    do {
+        while ((m&(1<<i)) == 0)
+            i++;
+        reg[i] = 0;
+        c--;
+        i++;
+    } while (c>0);
+    regfree(&nod1);
+    regfree(&nod2);
+}
+@
+% >> >> >> >> >> >> >>
+
+<<global regnode>>=
+Node	regnode;
+@
+
+<<[[ginit()]] special nodes initialisation>>=
+regnode.op = OREGISTER;
+regnode.class = CEXREG;
+regnode.reg = REGTMP;
+regnode.complex = 0;
+regnode.addable = 11;
+regnode.type = types[TLONG];
+@
+
+
+<<function gmovm(arm)>>=
+void
+gmovm(Node *f, Node *t, int w)
+{
+    gins(AMOVM, f, t);
+    p->scond |= C_UBIT;
+    if(w)
+        p->scond |= C_WBIT;
+}
+@
+
+
+
+<<function tmpreg(arm)>>=
+int
+tmpreg(void)
+{
+    int i;
+
+    for(i=REGRET+1; i<NREG; i++)
+        if(reg[i] == 0)
+            return i;
+    diag(Z, "out of fixed registers");
+    return 0;
+}
+@
+
+
+<<function reglpcgen(arm)>>=
+void
+reglpcgen(Node *n, Node *nn, int f)
+{
+    Type *t;
+
+    t = nn->type;
+    nn->type = types[TLONG];
+    if(f)
+        reglcgen(n, nn, Z);
+    else {
+        regialloc(n, nn, Z);
+        lcgen(nn, n);
+        regind(n, nn);
+    }
+    nn->type = t;
+}
+@
+
+
+<<[[cgenrel()]] if structure or vlong type node, call sugen and return>>=
+if(typesuv[n->type->etype]) {
+    sugen(n, nn, n->type->width);
+    return;
+}
+@
+
+
+<<global nrathole>>=
+long	nrathole;
+@
+
+
+<<global znode>>=
+Node	znode;
+@
+
+
+
+\subsection{Bitfield access}
+
+% how can have this OBIT in an expression context?
+% I think complex() explicitly mark expressions
+% which are bitfields, e.g.  foo.x where x was a bitfield
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OBIT:
+    if(nn == Z) {
+        nullwarn(l, Z);
+        break;
+    }
+    bitload(n, &nod, Z, Z, nn);
+    gopcode(OAS, &nod, Z, nn);
+    regfree(&nod);
+    break;
+@
+
+<<[[cgenrel()]] switch opcode cases>>=
+asbitop:
+    regalloc(&nod4, n, nn);
+    if(l->complex >= r->complex) {
+        bitload(l, &nod, &nod1, &nod2, &nod4);
+        regalloc(&nod3, r, Z);
+        cgen(r, &nod3);
+    } else {
+        regalloc(&nod3, r, Z);
+        cgen(r, &nod3);
+        bitload(l, &nod, &nod1, &nod2, &nod4);
+    }
+    gmove(&nod, &nod4);
+    gopcode(o, &nod3, Z, &nod4);
+    regfree(&nod3);
+    gmove(&nod4, &nod);
+    regfree(&nod4);
+    bitstore(l, &nod, &nod1, &nod2, nn);
+    break;
+@
+
+<<[[cgenrel()]] switch opcode cases>>=
+bitinc:
+    if(nn != Z && (o == OPOSTINC || o == OPOSTDEC)) {
+        bitload(l, &nod, &nod1, &nod2, Z);
+        gopcode(OAS, &nod, Z, nn);
+        gopcode(OADD, nodconst(v), Z, &nod);
+        bitstore(l, &nod, &nod1, &nod2, Z);
+        break;
+    }
+    bitload(l, &nod, &nod1, &nod2, nn);
+    gopcode(OADD, nodconst(v), Z, &nod);
+    bitstore(l, &nod, &nod1, &nod2, nn);
+    break;
+@
+
+<<[[cgenrel()]] switch opcode cases>>=
+bitas:
+    n = l->left;
+    regalloc(&nod, r, nn);
+    if(l->complex >= r->complex) {
+        reglcgen(&nod1, n, Z);
+        cgen(r, &nod);
+    } else {
+        cgen(r, &nod);
+        reglcgen(&nod1, n, Z);
+    }
+    regalloc(&nod2, n, Z);
+    gopcode(OAS, &nod1, Z, &nod2);
+    bitstore(l, &nod, &nod1, &nod2, nn);
+    break;
+@
+
+
+
+<<function bitload(arm)>>=
+void
+bitload(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
+{
+    int sh;
+    long v;
+    Node *l;
+
+    /*
+     * n1 gets adjusted/masked value
+     * n2 gets address of cell
+     * n3 gets contents of cell
+     */
+    l = b->left;
+    if(n2 != Z) {
+        regalloc(n1, l, nn);
+        reglcgen(n2, l, Z);
+        regalloc(n3, l, Z);
+        gopcode(OAS, n2, Z, n3);
+        gopcode(OAS, n3, Z, n1);
+    } else {
+        regalloc(n1, l, nn);
+        cgen(l, n1);
+    }
+    if(b->type->shift == 0 && typeu[b->type->etype]) {
+        v = ~0 + (1L << b->type->nbits);
+        gopcode(OAND, nodconst(v), Z, n1);
+    } else {
+        sh = 32 - b->type->shift - b->type->nbits;
+        if(sh > 0)
+            gopcode(OASHL, nodconst(sh), Z, n1);
+        sh += b->type->shift;
+        if(sh > 0)
+            if(typeu[b->type->etype])
+                gopcode(OLSHR, nodconst(sh), Z, n1);
+            else
+                gopcode(OASHR, nodconst(sh), Z, n1);
+    }
+}
+@
+% >> >>
+
+<<function bitstore(arm)>>=
+void
+bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
+{
+    long v;
+    Node nod, *l;
+    int sh;
+
+    /*
+     * n1 has adjusted/masked value
+     * n2 has address of cell
+     * n3 has contents of cell
+     */
+    l = b->left;
+    regalloc(&nod, l, Z);
+    v = ~0 + (1L << b->type->nbits);
+    gopcode(OAND, nodconst(v), Z, n1);
+    gopcode(OAS, n1, Z, &nod);
+    if(nn != Z)
+        gopcode(OAS, n1, Z, nn);
+    sh = b->type->shift;
+    if(sh > 0)
+        gopcode(OASHL, nodconst(sh), Z, &nod);
+    v <<= sh;
+    gopcode(OAND, nodconst(~v), Z, n3);
+    gopcode(OOR, n3, Z, &nod);
+    gopcode(OAS, &nod, Z, n2);
+
+    regfree(&nod);
+    regfree(n1);
+    regfree(n2);
+    regfree(n3);
+}
+@
+% >> >>
+
+
+
+
+
+
+
+
+
+\subsection{Entity uses}
+
+\subsection{Numeric constants}
+
+\subsection{String constants}
+
+\subsection{Cast}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OCAST:
+    if(nn == Z) {
+        nullwarn(l, Z);
+        break;
+    }
+    /*
+     * convert from types l->n->nn
+     */
+    if(nocast(l->type, n->type)) {
+        if(nocast(n->type, nn->type)) {
+            cgen(l, nn);
+            break;
+        }
+    }
+    regalloc(&nod, l, nn);
+    cgen(l, &nod);
+    regalloc(&nod1, n, &nod);
+    if(inrel)
+        gmover(&nod, &nod1);
+    else
+        gopcode(OAS, &nod, Z, &nod1);
+    gopcode(OAS, &nod1, Z, nn);
+    regfree(&nod1);
+    regfree(&nod);
+    break;
+@
+
+<<function gmover(arm)>>=
+void
+gmover(Node *f, Node *t)
+{
+    int ft, tt, a;
+
+    ft = f->type->etype;
+    tt = t->type->etype;
+    a = AGOK;
+    if(typechlp[ft] && typechlp[tt] && ewidth[ft] >= ewidth[tt]){
+        switch(tt){
+        case TSHORT:
+            a = AMOVH;
+            break;
+        case TUSHORT:
+            a = AMOVHU;
+            break;
+        case TCHAR:
+            a = AMOVB;
+            break;
+        case TUCHAR:
+            a = AMOVBU;
+            break;
+        }
+    }
+    if(a == AGOK)
+        gmove(f, t);
+    else
+        gins(a, f, t);
+}
+@
+
+% cgen -> cgenrel -> <>
+<<function nocast>>=
+/*
+ * a cast that generates no code
+ * (same size move)
+ */
+bool
+nocast(Type *t1, Type *t2)
+{
+    int i, b;
+
+    if(t1->nbits)
+        return false;
+    i = 0;
+    if(t2 != T)
+        i = t2->etype;
+    b = 1<<i;
+    i = 0;
+    if(t1 != T)
+        i = t1->etype;
+    if(b & ncast[i])
+        return true;
+    return false;
+}
+@
+
+%>>
+
+<<global ncast>>=
+long	ncast[NTYPE] =
+{
+    [TXXX] = 0,				
+    [TCHAR] = BCHAR|BUCHAR,			
+    [TUCHAR] = BCHAR|BUCHAR,			
+    [TSHORT] = BSHORT|BUSHORT,			
+    [TUSHORT] = BSHORT|BUSHORT,			
+    [TINT] = BINT|BUINT|BLONG|BULONG|BIND,	
+    [TUINT] = BINT|BUINT|BLONG|BULONG|BIND,	
+    [TLONG] = BINT|BUINT|BLONG|BULONG|BIND,	
+    [TULONG] = BINT|BUINT|BLONG|BULONG|BIND,	
+    [TVLONG] = BVLONG|BUVLONG,			
+    [TUVLONG] = BVLONG|BUVLONG,			
+    [TFLOAT] = BFLOAT,				
+    [TDOUBLE] = BDOUBLE,			
+    [TIND] = BLONG|BULONG|BIND,		
+    [TFUNC] = 0,				
+    [TARRAY] = 0,				
+    [TVOID] = 0,				
+    [TSTRUCT] = BSTRUCT,			
+    [TUNION] = BUNION,				
+    [TENUM] = 0,				
+};
+@
+
+
+\subsection{Ternary expressions}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OCOND:
+    bcgen(l, 1);
+    p1 = p;
+    cgen(r->left, nn);
+    gbranch(OGOTO);
+    patch(p1, pc);
+    p1 = p;
+    cgen(r->right, nn);
+    patch(p1, pc);
+    break;
+@
+
+\subsection{Prefix/postfix}
+
+<<[[cgenrel()]] switch opcode cases>>=
+case OPOSTINC:
+case OPOSTDEC:
+    v = 1;
+    if(l->type->etype == TIND)
+        v = l->type->link->width;
+    if(o == OPOSTDEC)
+        v = -v;
+    if(l->op == OBIT)
+        goto bitinc;
+    if(nn == Z)
+        goto pre;
+
+    if(l->addable < INDEXED)
+        reglcgen(&nod2, l, Z);
+    else
+        nod2 = *l;
+
+    regalloc(&nod, l, nn);
+    gopcode(OAS, &nod2, Z, &nod);
+    regalloc(&nod1, l, Z);
+    if(typefd[l->type->etype]) {
+        regalloc(&nod3, l, Z);
+        if(v < 0) {
+            gopcode(OAS, nodfconst(-v), Z, &nod3);
+            gopcode(OSUB, &nod3, &nod, &nod1);
+        } else {
+            gopcode(OAS, nodfconst(v), Z, &nod3);
+            gopcode(OADD, &nod3, &nod, &nod1);
+        }
+        regfree(&nod3);
+    } else
+        gopcode(OADD, nodconst(v), &nod, &nod1);
+    gopcode(OAS, &nod1, Z, &nod2);
+
+    regfree(&nod);
+    regfree(&nod1);
+    if(l->addable < INDEXED)
+        regfree(&nod2);
+    break;
+@
+<<[[cgenrel()]] switch opcode cases>>=
+case OPREINC:
+case OPREDEC:
+    v = 1;
+    if(l->type->etype == TIND)
+        v = l->type->link->width;
+    if(o == OPREDEC)
+        v = -v;
+    if(l->op == OBIT)
+        goto bitinc;
+
+pre:
+    if(l->addable < INDEXED)
+        reglcgen(&nod2, l, Z);
+    else
+        nod2 = *l;
+
+    regalloc(&nod, l, nn);
+    gopcode(OAS, &nod2, Z, &nod);
+    if(typefd[l->type->etype]) {
+        regalloc(&nod3, l, Z);
+        if(v < 0) {
+            gopcode(OAS, nodfconst(-v), Z, &nod3);
+            gopcode(OSUB, &nod3, Z, &nod);
+        } else {
+            gopcode(OAS, nodfconst(v), Z, &nod3);
+            gopcode(OADD, &nod3, Z, &nod);
+        }
+        regfree(&nod3);
+    } else
+        gopcode(OADD, nodconst(v), Z, &nod);
+    gopcode(OAS, &nod, Z, &nod2);
+    if(nn && l->op == ONAME)	/* in x=++i, emit USED(i) */
+        gins(ANOP, l, Z);
+
+    regfree(&nod);
+    if(l->addable < INDEXED)
+        regfree(&nod2);
+    break;
+@
+
+
+
+\subsection{[[sizeof()]]}
+
+\section{XXX}
 
 \subsection{Multiplication}
 % is this an optimisation? move?
@@ -12711,551 +13307,78 @@ int	hintabsize;
 @
 
 
+\subsection{[[INDEXED]]}
 
-\subsection{Division}
-
-\subsection{Structures, [[sugen()]]}
-
-<<global nrathole>>=
-long	nrathole;
+<<constant INDEXED(arm)>>=
+#define	INDEXED	9
 @
+% ???
 
 
-<<global znode>>=
-Node	znode;
-@
-
-
-<<function sugen(arm)>>=
-void
-sugen(Node *n, Node *nn, long w)
-{
-    Prog *p1;
-    Node nod0, nod1, nod2, nod3, nod4, *l, *r;
-    Type *t;
-    long pc1;
-    int i, m, c;
-
-    if(n == Z || n->type == T)
+<<[[cgenrel()]] if addable more than INDEXED>>=
+if(n->addable >= INDEXED) {
+    if(nn == Z) {
+        switch(o) {
+        default:
+            nullwarn(Z, Z);
+            break;
+        case OINDEX:
+            nullwarn(l, r);
+            break;
+        }
         return;
-
-    if(debug['g']) {
-        prtree(nn, "sugen lhs");
-        prtree(n, "sugen");
     }
-    if(nn == nodrat)
-        if(w > nrathole)
-            nrathole = w;
-
-    switch(n->op) {
-    case OIND:
-        if(nn == Z) {
-            nullwarn(n->left, Z);
-            break;
-        }
-    // Fallthrough
-
-    default:
-        goto copy;
-
-    case OCONST:
-        if(n->type && typev[n->type->etype]) {
-            if(nn == Z) {
-                nullwarn(n->left, Z);
-                break;
-            }
-
-            t = nn->type;
-            nn->type = types[TLONG];
-            reglcgen(&nod1, nn, Z);
-            nn->type = t;
-
-            if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-                gopcode(OAS, nod32const(n->vconst>>32), Z, &nod1);
-            else
-                gopcode(OAS, nod32const(n->vconst), Z, &nod1);
-            nod1.xoffset += SZ_LONG;
-            if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-                gopcode(OAS, nod32const(n->vconst), Z, &nod1);
-            else
-                gopcode(OAS, nod32const(n->vconst>>32), Z, &nod1);
-
-            regfree(&nod1);
-            break;
-        }
-        goto copy;
-
-    case ODOT:
-        l = n->left;
-        sugen(l, nodrat, l->type->width);
-        if(nn != Z) {
-            warn(n, "non-interruptable temporary");
-            nod1 = *nodrat;
-            r = n->right;
-            if(!r || r->op != OCONST) {
-                diag(n, "DOT and no offset");
-                break;
-            }
-            nod1.xoffset += (long)r->vconst;
-            nod1.type = n->type;
-            sugen(&nod1, nn, w);
-        }
-        break;
-
-    // struct constructor extension?
-    case OSTRUCT:
-        /*
-         * rewrite so lhs has no fn call
-         */
-        if(nn != Z && nn->complex >= FNX) {
-            nod1 = *n;
-            nod1.type = typ(TIND, n->type);
-            regret(&nod2, &nod1);
-            lcgen(nn, &nod2);
-            regsalloc(&nod0, &nod1);
-            gopcode(OAS, &nod2, Z, &nod0);
-            regfree(&nod2);
-
-            nod1 = *n;
-            nod1.op = OIND;
-            nod1.left = &nod0;
-            nod1.right = Z;
-            nod1.complex = 1;
-
-            sugen(n, &nod1, w);
-            return;
-        }
-
-        r = n->left;
-        for(t = n->type->link; t != T; t = t->down) {
-            l = r;
-            if(r->op == OLIST) {
-                l = r->left;
-                r = r->right;
-            }
-            if(nn == Z) {
-                cgen(l, nn);
-                continue;
-            }
-            /*
-             * hand craft *(&nn + o) = l
-             */
-            nod0 = znode;
-            nod0.op = OAS;
-            nod0.type = t;
-            nod0.left = &nod1;
-            nod0.right = l;
-
-            nod1 = znode;
-            nod1.op = OIND;
-            nod1.type = t;
-            nod1.left = &nod2;
-
-            nod2 = znode;
-            nod2.op = OADD;
-            nod2.type = typ(TIND, t);
-            nod2.left = &nod3;
-            nod2.right = &nod4;
-
-            nod3 = znode;
-            nod3.op = OADDR;
-            nod3.type = nod2.type;
-            nod3.left = nn;
-
-            nod4 = znode;
-            nod4.op = OCONST;
-            nod4.type = nod2.type;
-            nod4.vconst = t->offset;
-
-            ccom(&nod0);
-            acom(&nod0);
-            xcom(&nod0);
-            nod0.addable = 0;
-
-            cgen(&nod0, Z);
-        }
-        break;
-
-    case OAS:
-        if(nn == Z) {
-            if(n->addable < INDEXED)
-                sugen(n->right, n->left, w);
-            break;
-        }
-        sugen(n->right, nodrat, w);
-        warn(n, "non-interruptable temporary");
-        sugen(nodrat, n->left, w);
-        sugen(nodrat, nn, w);
-        break;
-
-    case OFUNC:
-        if(nn == Z) {
-            sugen(n, nodrat, w);
-            break;
-        }
-        if(nn->op != OIND) {
-            nn = new1(OADDR, nn, Z);
-            nn->type = types[TIND];
-            nn->addable = 0;
-        } else
-            nn = nn->left;
-        n = new(OFUNC, n->left, new(OLIST, nn, n->right));
-        n->type = types[TVOID];
-        n->left->type = types[TVOID];
-        cgen(n, Z);
-        break;
-
-    case OCOND:
-        bcgen(n->left, 1);
-        p1 = p;
-        sugen(n->right->left, nn, w);
-        gbranch(OGOTO);
-        patch(p1, pc);
-        p1 = p;
-        sugen(n->right->right, nn, w);
-        patch(p1, pc);
-        break;
-
-    case OCOMMA:
-        cgen(n->left, Z);
-        sugen(n->right, nn, w);
-        break;
-    }
+    gmove(n, nn);
     return;
-
-copy:
-    if(nn == Z)
-        return;
-    if(n->complex >= FNX && nn->complex >= FNX) {
-        t = nn->type;
-        nn->type = types[TLONG];
-        regialloc(&nod1, nn, Z);
-        lcgen(nn, &nod1);
-        regsalloc(&nod2, nn);
-        nn->type = t;
-
-        gopcode(OAS, &nod1, Z, &nod2);
-        regfree(&nod1);
-
-        nod2.type = typ(TIND, t);
-
-        nod1 = nod2;
-        nod1.op = OIND;
-        nod1.left = &nod2;
-        nod1.right = Z;
-        nod1.complex = 1;
-        nod1.type = t;
-
-        sugen(n, &nod1, w);
-        return;
-    }
-
-    w /= SZ_LONG;
-    if(w <= 2) {
-        if(n->complex > nn->complex) {
-            reglpcgen(&nod1, n, 1);
-            reglpcgen(&nod2, nn, 1);
-        } else {
-            reglpcgen(&nod2, nn, 1);
-            reglpcgen(&nod1, n, 1);
-        }
-        regalloc(&nod3, &regnode, Z);
-        regalloc(&nod4, &regnode, Z);
-        if(nod3.reg > nod4.reg){
-            /* code below assumes nod3 loaded first */
-            Node t = nod3; nod3 = nod4; nod4 = t;
-        }
-        nod0 = *nodconst((1<<nod3.reg)|(1<<nod4.reg));
-        if(w == 2 && nod1.xoffset == 0)
-            gmovm(&nod1, &nod0, 0);
-        else {
-            gmove(&nod1, &nod3);
-            if(w == 2) {
-                nod1.xoffset += SZ_LONG;
-                gmove(&nod1, &nod4);
-            }
-        }
-        if(w == 2 && nod2.xoffset == 0)
-            gmovm(&nod0, &nod2, 0);
-        else {
-            gmove(&nod3, &nod2);
-            if(w == 2) {
-                nod2.xoffset += SZ_LONG;
-                gmove(&nod4, &nod2);
-            }
-        }
-        regfree(&nod1);
-        regfree(&nod2);
-        regfree(&nod3);
-        regfree(&nod4);
-        return;
-    }
-
-    if(n->complex > nn->complex) {
-        reglpcgen(&nod1, n, 0);
-        reglpcgen(&nod2, nn, 0);
-    } else {
-        reglpcgen(&nod2, nn, 0);
-        reglpcgen(&nod1, n, 0);
-    }
-
-    m = 0;
-    for(c = 0; c < w && c < 4; c++) {
-        i = tmpreg();
-        if (i == 0)
-            break;
-        reg[i]++;
-        m |= 1<<i;
-    }
-    nod4 = *(nodconst(m));
-    if(w < 3*c) {
-        for (; w>c; w-=c) {
-            gmovm(&nod1, &nod4, 1);
-            gmovm(&nod4, &nod2, 1);
-        }
-        goto out;
-    }
-
-    regalloc(&nod3, &regnode, Z);
-    gopcode(OAS, nodconst(w/c), Z, &nod3);
-    w %= c;
-    
-    pc1 = pc;
-    gmovm(&nod1, &nod4, 1);
-    gmovm(&nod4, &nod2, 1);
-
-    gopcode(OSUB, nodconst(1), Z, &nod3);
-    gopcode(OEQ, nodconst(0), &nod3, Z);
-    p->as = ABGT;
-    patch(p, pc1);
-    regfree(&nod3);
-
-out:
-    if (w) {
-        i = 0;
-        while (c>w) {
-            while ((m&(1<<i)) == 0)
-                i++;
-            m &= ~(1<<i);
-            reg[i] = 0;
-            c--;
-            i++;
-        }
-        nod4.vconst = m;
-        gmovm(&nod1, &nod4, 0);
-        gmovm(&nod4, &nod2, 0);
-    }
-    i = 0;
-    do {
-        while ((m&(1<<i)) == 0)
-            i++;
-        reg[i] = 0;
-        c--;
-        i++;
-    } while (c>0);
-    regfree(&nod1);
-    regfree(&nod2);
-}
-@
-% >> >> >> >> >> >> >>
-
-<<global regnode>>=
-Node	regnode;
-@
-
-<<[[ginit()]] special nodes initialisation>>=
-regnode.op = OREGISTER;
-regnode.class = CEXREG;
-regnode.reg = REGTMP;
-regnode.complex = 0;
-regnode.addable = 11;
-regnode.type = types[TLONG];
-@
-
-
-<<function gmovm(arm)>>=
-void
-gmovm(Node *f, Node *t, int w)
-{
-    gins(AMOVM, f, t);
-    p->scond |= C_UBIT;
-    if(w)
-        p->scond |= C_WBIT;
 }
 @
 
+\subsection{[[FNX]]}
 
-
-<<function tmpreg(arm)>>=
-int
-tmpreg(void)
-{
-    int i;
-
-    for(i=REGRET+1; i<NREG; i++)
-        if(reg[i] == 0)
-            return i;
-    diag(Z, "out of fixed registers");
-    return 0;
-}
+<<constant FNX(arm)>>=
+#define	FNX		100
 @
+% ???
 
-
-<<function reglpcgen(arm)>>=
-void
-reglpcgen(Node *n, Node *nn, int f)
-{
-    Type *t;
-
-    t = nn->type;
-    nn->type = types[TLONG];
-    if(f)
-        reglcgen(n, nn, Z);
-    else {
-        regialloc(n, nn, Z);
-        lcgen(nn, n);
-        regind(n, nn);
-    }
-    nn->type = t;
-}
-@
-
-
-\subsection{Cast}
-
-% cgen -> cgenrel -> <>
-<<function nocast>>=
+<<constant FNX>>=
 /*
- * a cast that generates no code
- * (same size move)
+ * this is machine dependent, but it is totally
+ * common on all of the 64-bit symulating machines.
  */
-bool
-nocast(Type *t1, Type *t2)
-{
-    int i, b;
 
-    if(t1->nbits)
-        return false;
-    i = 0;
-    if(t2 != T)
-        i = t2->etype;
-    b = 1<<i;
-    i = 0;
-    if(t1 != T)
-        i = t1->etype;
-    if(b & ncast[i])
-        return true;
-    return false;
-}
+#define	FNX	100	/* botch -- redefinition */
 @
 
-%>>
-
-<<global ncast>>=
-long	ncast[NTYPE] =
-{
-    [TXXX] = 0,				
-    [TCHAR] = BCHAR|BUCHAR,			
-    [TUCHAR] = BCHAR|BUCHAR,			
-    [TSHORT] = BSHORT|BUSHORT,			
-    [TUSHORT] = BSHORT|BUSHORT,			
-    [TINT] = BINT|BUINT|BLONG|BULONG|BIND,	
-    [TUINT] = BINT|BUINT|BLONG|BULONG|BIND,	
-    [TLONG] = BINT|BUINT|BLONG|BULONG|BIND,	
-    [TULONG] = BINT|BUINT|BLONG|BULONG|BIND,	
-    [TVLONG] = BVLONG|BUVLONG,			
-    [TUVLONG] = BVLONG|BUVLONG,			
-    [TFLOAT] = BFLOAT,				
-    [TDOUBLE] = BDOUBLE,			
-    [TIND] = BLONG|BULONG|BIND,		
-    [TFUNC] = 0,				
-    [TARRAY] = 0,				
-    [TVOID] = 0,				
-    [TSTRUCT] = BSTRUCT,			
-    [TUNION] = BUNION,				
-    [TENUM] = 0,				
-};
-@
-
-
-\subsection{Strings}
-
-<<global symstring>>=
-Sym*	symstring;
-@
-
-
-<<global nstring>>=
-long	nstring;
-@
-
-
-<<function outlstring>>=
-long
-outlstring(TRune *s, long n)
-{
-    char buf[sizeof(TRune)];
-    uint c;
-    int i;
-    long r;
-
-    if(suppress)
-        return nstring;
-    while(nstring & (sizeof(TRune)-1))
-        outstring("", 1);
-    r = nstring;
-    while(n > 0) {
-        c = *s++;
-        if(align(0, types[TCHAR], Aarg1)) {
-            for(i = 0; i < sizeof(TRune); i++)
-                buf[i] = c>>(8*(sizeof(TRune) - i - 1));
-        } else {
-            for(i = 0; i < sizeof(TRune); i++)
-                buf[i] = c>>(8*i);
-        }
-        outstring(buf, sizeof(TRune));
-        n -= sizeof(TRune);
+<<[[cgenrel()]] if all complex fields more than FNX>>=
+if(n->complex >= FNX)
+ if(l->complex >= FNX)
+  if(r != Z && r->complex >= FNX)
+    switch(o) {
+    case OFUNC:
+    case OCOMMA:
+    case OANDAND:
+    case OOROR:
+    case OCOND:
+    case ODOT:
+        break;
+    
+    default:
+        regret(&nod, r);
+        cgen(r, &nod);
+    
+        regsalloc(&nod1, r);
+        gopcode(OAS, &nod, Z, &nod1);
+    
+        regfree(&nod);
+        nod = *n;
+        nod.right = &nod1;
+        cgen(&nod, nn);
+        return;
+    
     }
-    return r;
-}
-@
-
-<<global mnstring>>=
-int	mnstring;
-@
-
-<<global string>>=
-char	string[NSNAME];
 @
 
 
-<<function outstring(arm)>>=
-long
-outstring(char *s, long n)
-{
-    long r;
-
-    if(suppress)
-        return nstring;
-    r = nstring;
-    while(n) {
-        string[mnstring] = *s++;
-        mnstring++;
-        nstring++;
-        if(mnstring >= NSNAME) {
-            gpseudo(ADATA, symstring, nodconst(0L));
-            p->from.offset += nstring - NSNAME;
-            p->reg = NSNAME;
-            p->to.type = D_SCONST;
-            memmove(p->to.sval, string, NSNAME);
-            mnstring = 0;
-        }
-        n--;
-    }
-    return r;
-}
-@
-% 386 diff is jsut p->reg -->  p->from.scale = NSNAME;
 
 
 
@@ -14230,8 +14353,30 @@ char*	typecmplx;
 
 
 
-\subsection{Type compatibility, [[txxx[]]]}
+\subsection{Type compatibility, [[tcompat()]]}
 
+% again returning true means actually they are not compatible and
+% there is a type error
+<<function tcompat>>=
+bool
+tcompat(Node *n, Type *t1, Type *t2, long ttab[])
+{
+
+    if(stcompat(n, t1, t2, ttab)) {
+        if(t1 == T)
+            diag(n, "incompatible type: \"%T\" for op \"%O\"",
+                t2, n->op);
+        else
+            diag(n, "incompatible types: \"%T\" and \"%T\" for op \"%O\"",
+                t1, t2, n->op);
+        return true;
+    }
+    return false;
+}
+@
+
+
+% this is silent, it does not generate error if there are not compatible.
 <<function stcompat>>=
 bool
 stcompat(Node *n, Type *t1, Type *t2, long ttab[])
@@ -14258,24 +14403,6 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
         return false;
     }
     return true;
-}
-@
-
-<<function tcompat>>=
-bool
-tcompat(Node *n, Type *t1, Type *t2, long ttab[])
-{
-
-    if(stcompat(n, t1, t2, ttab)) {
-        if(t1 == T)
-            diag(n, "incompatible type: \"%T\" for op \"%O\"",
-                t2, n->op);
-        else
-            diag(n, "incompatible types: \"%T\" and \"%T\" for op \"%O\"",
-                t1, t2, n->op);
-        return true;
-    }
-    return false;
 }
 @
 
@@ -14709,6 +14836,7 @@ case ODOTDOT:
         goto bad;
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case OCAST:
     if(n->type == T)
@@ -14725,6 +14853,7 @@ case OCAST:
         goto bad;
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case ORETURN:
     if(l == Z) {
@@ -14745,6 +14874,7 @@ case ORETURN:
     }
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case OASI:	/* same as as, but no test for const */
     n->op = OAS;
@@ -14763,6 +14893,7 @@ case OASI:	/* same as as, but no test for const */
     n->type = l->type;
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case OAS:
     o = tcom(l);
@@ -14784,6 +14915,7 @@ case OAS:
     n->type = l->type;
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case OASADD:
 case OASSUB:
@@ -14879,6 +15011,7 @@ case OASASHL:
     }
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case OASMOD:
 case OASLMOD:
@@ -14910,6 +15043,7 @@ case OASXOR:
     }
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case OPREINC:
 case OPREDEC:
@@ -14993,6 +15127,7 @@ case OCOND:
     n->type = r->type;
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case OADD:
     o = tcom(l);
@@ -15277,6 +15412,8 @@ case ONAME:
     }
     break;
 @
+
+
 <<[[tcomo()]] switch node kind cases>>=
 case OLSTRING:
     if(n->type->link != types[TRUNE]) {
@@ -15291,6 +15428,7 @@ case OLSTRING:
     n->addable = 1;
     break;
 @
+
 <<[[tcomo()]] switch node kind cases>>=
 case OSTRING:
     if(n->type->link != types[TCHAR]) {
@@ -15305,6 +15443,87 @@ case OSTRING:
     n->addable = 1;
     break;
 @
+
+
+<<global symstring>>=
+Sym*	symstring;
+@
+
+
+<<global nstring>>=
+long	nstring;
+@
+
+
+<<function outlstring>>=
+long
+outlstring(TRune *s, long n)
+{
+    char buf[sizeof(TRune)];
+    uint c;
+    int i;
+    long r;
+
+    if(suppress)
+        return nstring;
+    while(nstring & (sizeof(TRune)-1))
+        outstring("", 1);
+    r = nstring;
+    while(n > 0) {
+        c = *s++;
+        if(align(0, types[TCHAR], Aarg1)) {
+            for(i = 0; i < sizeof(TRune); i++)
+                buf[i] = c>>(8*(sizeof(TRune) - i - 1));
+        } else {
+            for(i = 0; i < sizeof(TRune); i++)
+                buf[i] = c>>(8*i);
+        }
+        outstring(buf, sizeof(TRune));
+        n -= sizeof(TRune);
+    }
+    return r;
+}
+@
+
+<<global mnstring>>=
+int	mnstring;
+@
+
+<<global string>>=
+char	string[NSNAME];
+@
+
+
+<<function outstring(arm)>>=
+long
+outstring(char *s, long n)
+{
+    long r;
+
+    if(suppress)
+        return nstring;
+    r = nstring;
+    while(n) {
+        string[mnstring] = *s++;
+        mnstring++;
+        nstring++;
+        if(mnstring >= NSNAME) {
+            gpseudo(ADATA, symstring, nodconst(0L));
+            p->from.offset += nstring - NSNAME;
+            p->reg = NSNAME;
+            p->to.type = D_SCONST;
+            memmove(p->to.sval, string, NSNAME);
+            mnstring = 0;
+        }
+        n--;
+    }
+    return r;
+}
+@
+% 386 diff is jsut p->reg -->  p->from.scale = NSNAME;
+
+
+
 <<[[tcomo()]] switch node kind cases>>=
 case OCONST:
     break;
@@ -20141,7 +20360,7 @@ predicate(void)
 @
 
 
-\section{Register allocation}
+\section{Register allocation, part two}
 % 5c -r? registerization
 
 \subsection{[[Bits]]}
@@ -21507,10 +21726,9 @@ acidvar(Sym *s)
                 amap(s1->name), amap(s2->name), amap(s->name));
         break;
     
-    case CSTATIC:
     case CEXTERN:
     case CGLOBL:
-    case CLOCAL:
+    case CSTATIC: case CLOCAL:
         Bprint(&outbuf, "complex %s %s;\n",
             amap(s1->name), amap(s->name));
         break;
@@ -22089,10 +22307,9 @@ pickletype(Type *t)
 %//                pmap(s1->name), pmap(s2->name), pmap(s->name));
 %//        break;
 %//    
-%//    case CSTATIC:
 %//    case CEXTERN:
 %//    case CGLOBL:
-%//    case CLOCAL:
+%//    case CSTATIC: case CLOCAL:
 %//        Bprint(&outbuf, "complex %s %s;\n",
 %//            pmap(s1->name), pmap(s->name));
 %//        break;
@@ -22781,6 +22998,63 @@ ofnproto(Node *n)
 
 
 
+\subsection{Local static}
+% not really a C extension, but really sugar
+% for what could be just a scoped global.
+
+
+<<[[Storage_class]] cases>>=
+CLOCAL,
+@
+% for static local, should be renamed?
+
+% defs
+
+<<[[adecl()]] adjust storage to CLOCAL if static local variable>>=
+if(c == CSTATIC)
+    c = CLOCAL;
+@
+% c gets propagated to s->class?
+
+<<[[dodecl()]] case ONAME, if local static variable>>=
+if(s->class == CLOCAL)
+    s = mkstatic(s);
+@
+% adecl callback get called before this chunk! important
+
+% uses
+
+<<name rule, if local static variable>>=
+if($1->class == CLOCAL)
+    $1 = mkstatic($1);
+@
+%$
+
+% sugar
+
+% rename locals in global symbol table so have unique name with the block
+<<function mkstatic>>=
+Sym*
+mkstatic(Sym *s)
+{
+    Sym *s1;
+
+    if(s->class != CLOCAL) // should never happen, use errorexit()?
+        return s;
+
+    snprint(symb, NSYMB, "%s$%d", s->name, s->block);
+    s1 = lookup();
+
+    if(s1->class != CSTATIC) {
+        s1->type = s->type;
+        s1->offset = s->offset;
+        s1->block = s->block;
+        s1->class = CSTATIC;
+    }
+    return s1;
+}
+@
+
 \section{Float}
 
 <<function ieeedtod>>=
@@ -22870,18 +23144,6 @@ allfloat(Node *n, bool flag)
 % vlong is 64 bits, so how do on 32 bits?
 % do via builtins _xxxv, e.g. _addv, _mulv in lib_core/libc/xxx/vlop.c
 
-<<constant FNX(arm)>>=
-#define	FNX		100
-@
-
-<<constant FNX>>=
-/*
- * this is machine dependent, but it is totally
- * common on all of the 64-bit symulating machines.
- */
-
-#define	FNX	100	/* botch -- redefinition */
-@
 
 <<global nodaddv>>=
 Node*	nodaddv;
@@ -24735,14 +24997,17 @@ dbgdecl(Sym *s)
 \section{[[5c -t]], printing expression type trees}
 % before and after different phases
 
+\section{[[5c -g]], debugging code generation}
+% for gins, gopcode, gen, cgen, sugen, ... print lhs and rhs
+
+% print either resulting Prog (in gins, gopcode), or
+% print Nodes
+
 \section{[[5c -i]], printing initializations}
 
 \section{[[5c -m]], printing arithmetic trees}
 
 \section{[[5c -r]], printing registerization}
-
-\section{[[5c -g]], ???}
-% for cgen, print lhs and rhs
 
 \section{[[5c -???]], ???}
 
@@ -25036,6 +25301,7 @@ log2(uvlong v)
 % mostly helper structure to build a  hash<enum<xxx>,string> to debug
 %  enums values
 % most of the time value is 0 and unused as people just want a int -> string
+%less: they could use array designator though to get the same effects.
 <<struct Init>>=
 struct	Init			/* general purpose initialization */
 {

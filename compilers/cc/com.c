@@ -34,31 +34,29 @@ complex(Node *n)
         if(n->op != OCONST)
             prtree(n, "pre complex");
 
-    // typechecking, removing some sugar, lvalue annotate, etc
+    // typechecking, removing some sugar, lvalue annotate, bitfield annot, etc
     if(tcom(n))
         return;
-
     //if(debug['y'] || true)
     comma(n);
-
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "t complex");
 
+    // general rewrite
     ccom(n);
-
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "c complex");
 
+    // arithmetic rewrite
     acom(n);
-
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "a complex");
 
+    // addressability and complexity
     xcom(n);
-
     if(debug['t'])
         if(n->op != OCONST)
             prtree(n, "x complex");

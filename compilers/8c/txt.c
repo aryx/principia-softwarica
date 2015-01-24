@@ -1382,11 +1382,8 @@ samaddr(Node *f, Node *t)
     if(f->op != t->op)
         return false;
     switch(f->op) {
-
     case OREGISTER:
-        if(f->reg != t->reg)
-            break;
-        return true;
+        return (f->reg == t->reg);
     }
     return false;
 }

@@ -51,10 +51,6 @@ typedef	struct	Reg		Reg;
 typedef	struct	Rgn		Rgn;
 
 
-/*s: constant R0ISZERO(arm) */
-#define	R0ISZERO	0
-/*e: constant R0ISZERO(arm) */
-
 /*s: struct Adr(arm) */
 struct	Adr
 {

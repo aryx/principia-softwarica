@@ -42,8 +42,10 @@ loop:
          // callback! should set s->type
          (*f)(class, t, s);
 
+         /*s: [[dodecl()]] case ONAME, if local static variable */
          if(s->class == CLOCAL)
              s = mkstatic(s);
+         /*e: [[dodecl()]] case ONAME, if local static variable */
          firstbit = 0;
          n->sym = s;
          n->type = s->type;
@@ -137,7 +139,7 @@ mkstatic(Sym *s)
 {
     Sym *s1;
 
-    if(s->class != CLOCAL)
+    if(s->class != CLOCAL) // should never happen, use errorexit()?
         return s;
 
     snprint(symb, NSYMB, "%s$%d", s->name, s->block);
@@ -1354,8 +1356,10 @@ void
 adecl(int c, Type *t, Sym *s)
 {
 
+    /*s: [[adecl()]] adjust storage to CLOCAL if static local variable */
     if(c == CSTATIC)
         c = CLOCAL;
+    /*e: [[adecl()]] adjust storage to CLOCAL if static local variable */
     if(t->etype == TFUNC) {
         if(c == CXXX)
             c = CEXTERN;
@@ -1684,8 +1688,7 @@ symadjust(Sym *s, Node *n, long del)
 
     case OCONST:
     case OSTRING: case OLSTRING:
-    case OREGISTER:
-    case OINDREG:
+    case OREGISTER: case OINDREG:
         return;
 
     default:

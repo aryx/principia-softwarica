@@ -313,10 +313,9 @@ acidvar(Sym *s)
                 amap(s1->name), amap(s2->name), amap(s->name));
         break;
     
-    case CSTATIC:
     case CEXTERN:
     case CGLOBL:
-    case CLOCAL:
+    case CSTATIC: case CLOCAL:
         Bprint(&outbuf, "complex %s %s;\n",
             amap(s1->name), amap(s->name));
         break;

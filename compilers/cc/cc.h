@@ -84,10 +84,15 @@ struct	Node
     /*s: [[Node]] other fields */
     Sym*	sym; 
     /*x: [[Node]] other fields */
-    // used as a bool to mark lvalues.
-    // (ab)used as bool for marker of use of labels.
-    // (ab)used by xcom to assign ``addressibility''.
+    // address-able, used as a bool to mark lvalues, if can assign you can take
+    // the address of. used by xcom() to assign ``addressibility''.
+    // (ab)used as a bool for marker of use of labels.
     char	addable;
+    /*x: [[Node]] other fields */
+    // complexity in number of registers. for register allocation?
+    // (ab)used as FNX special value
+    // (ab)used as bool for marker of label def (true) vs use (false),
+    char	complex; 
     /*x: [[Node]] other fields */
     Type*	type;
     /*x: [[Node]] other fields */
@@ -95,16 +100,7 @@ struct	Node
     char	class;
     /*x: [[Node]] other fields */
     void*	label;
-
-    long	pc;
-    int		reg;
     long	xoffset;
-
-    // (ab)used as bool for marker of label def (true) vs use (false),
-    // FNX special value, register allocation value, etc
-    char	complex; 
-
-    char	scale;
     /*x: [[Node]] other fields */
     // enum<type_kind>, inline of Node.type->etype?
     char	etype;
@@ -122,8 +118,14 @@ struct	Node
     /*x: [[Node]] other fields */
     bool 	xcast;
     /*x: [[Node]] other fields */
+    int		reg;
+    /*x: [[Node]] other fields */
+    long	pc;
+    /*x: [[Node]] other fields */
     // enum<node_kind>
     char	oldop;
+    /*x: [[Node]] other fields */
+    char	scale; // x86 only
     /*e: [[Node]] other fields */
 };
 /*e: struct Node */
@@ -625,22 +627,21 @@ enum storage_class
     CXXX, // nothing specified
 
     CAUTO,
+    CPARAM,
     CEXTERN,
     CGLOBL,
     CSTATIC,
-
-    CLOCAL,
-    CPARAM,
-
     /*s: [[Storage_class]] cases */
-    CTYPEDEF,
-
     CSELEM,
     CLABEL,
+    /*x: [[Storage_class]] cases */
+    CTYPEDEF,
     /*x: [[Storage_class]] cases */
     CEXREG, // extern register, kenccext (used in kernel for mips)
     /*x: [[Storage_class]] cases */
     CTYPESTR,
+    /*x: [[Storage_class]] cases */
+    CLOCAL,
     /*e: [[Storage_class]] cases */
 
     NCTYPES,

@@ -45,6 +45,13 @@ ginit(void)
     zprog.scond = COND_ALWAYS;  
 
     /*s: [[ginit()]] special nodes initialisation */
+    nodsafe = new(ONAME, Z, Z);
+    nodsafe->sym = slookup(".safe");
+    nodsafe->type = types[TINT];
+    nodsafe->etype = types[TINT]->etype;
+    nodsafe->class = CAUTO;
+    complex(nodsafe);
+    /*x: [[ginit()]] special nodes initialisation */
     regnode.op = OREGISTER;
     regnode.class = CEXREG;
     regnode.reg = REGTMP;
@@ -64,13 +71,6 @@ ginit(void)
     fconstnode.complex = 0;
     fconstnode.addable = 20;
     fconstnode.type = types[TDOUBLE];
-
-    nodsafe = new(ONAME, Z, Z);
-    nodsafe->sym = slookup(".safe");
-    nodsafe->type = types[TINT];
-    nodsafe->etype = types[TINT]->etype;
-    nodsafe->class = CAUTO;
-    complex(nodsafe);
 
     t = typ(TARRAY, types[TCHAR]);
     symrathole = slookup(".rathole");
@@ -481,10 +481,6 @@ raddr(Node *n, Prog *p)
     Adr a;
 
     naddr(n, &a);
-    if(R0ISZERO && a.type == D_CONST && a.offset == 0) {
-        a.type = D_REG;
-        a.reg = 0;
-    }
     if(a.type != D_REG && a.type != D_FREG) {
         if(n)
             diag(n, "bad in raddr: %O", n->op);
@@ -523,9 +519,9 @@ naddr(Node *n, Adr *a)
     case ONAME:
         a->etype = n->etype;
         a->type = D_OREG;
-        a->name = D_STATIC;
         a->sym = n->sym;
         a->offset = n->xoffset;
+        a->name = D_STATIC;
         if(n->class == CSTATIC)
             break;
         if(n->class == CEXTERN || n->class == CGLOBL) {
@@ -562,23 +558,6 @@ naddr(Node *n, Adr *a)
         }
         goto bad;
     /*x: [[naddr()]] switch node kind cases */
-    case OREGISTER:
-        a->type = D_REG;
-        a->sym = S;
-        a->reg = n->reg;
-        if(a->reg >= NREG) {
-            a->type = D_FREG;
-            a->reg -= NREG;
-        }
-        break;
-    /*x: [[naddr()]] switch node kind cases */
-    case OINDREG:
-        a->type = D_OREG;
-        a->sym = S;
-        a->offset = n->xoffset;
-        a->reg = n->reg;
-        break;
-    /*x: [[naddr()]] switch node kind cases */
     case OADD:
         if(n->left->op == OCONST) {
             naddr(n->left, a);
@@ -590,6 +569,23 @@ naddr(Node *n, Adr *a)
             naddr(n->left, a);
         }
         a->offset += v;
+        break;
+    /*x: [[naddr()]] switch node kind cases */
+    case OINDREG:
+        a->type = D_OREG;
+        a->sym = S;
+        a->offset = n->xoffset;
+        a->reg = n->reg;
+        break;
+    /*x: [[naddr()]] switch node kind cases */
+    case OREGISTER:
+        a->type = D_REG;
+        a->sym = S;
+        a->reg = n->reg;
+        if(a->reg >= NREG) {
+            a->type = D_FREG;
+            a->reg -= NREG;
+        }
         break;
     /*e: [[naddr()]] switch node kind cases */
     default:
@@ -616,7 +612,10 @@ gmovm(Node *f, Node *t, int w)
 void
 gmove(Node *f, Node *t)
 {
-    int ft, tt, a;
+    // enum<type_kind> // TXXX
+    int ft, tt;
+    // enum<opcode_kind> // AXXX
+    int a;
     Node nod, nod1;
     Prog *p1;
 
@@ -706,6 +705,8 @@ gmove(Node *f, Node *t)
         regfree(&nod);
         return;
     }
+
+    // at this point f and t should be simpler nodes with registers
 
     /*
      * type x type cross table
@@ -993,21 +994,26 @@ gins(int a, Node *f, Node *t)
 void
 gopcode(int o, Node *f1, Node *f2, Node *t)
 {
-    int a, et, true;
+    // enum<opcode_kind> AXXX
+    int a;
+    // enum<type_kind> TXXX
+    int et;
+    /*s: [[gopcode()]] locals */
     Adr ta;
+    /*x: [[gopcode()]] locals */
+    bool btrue;
+    /*e: [[gopcode()]] locals */
 
-    et = TLONG;
-    if(f1 != Z && f1->type != T)
-        et = f1->type->etype;
-    true = o & BTRUE;
+    et = (f1 != Z && f1->type != T)? f1->type->etype : TLONG;
+
+    /*s: [[gopcode()]] initialisation */
+    btrue = o & BTRUE;
     o &= ~BTRUE;
+    /*e: [[gopcode()]] initialisation */
+
     a = AGOK;
-
     switch(o) {
-    case OAS:
-        gmove(f1, t);
-        return;
-
+    /*s: [[gopcode()]] switch opcode cases */
     case OASADD:
     case OADD:
         a = AADD;
@@ -1017,7 +1023,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         if(et == TDOUBLE || et == TVLONG)
             a = AADDD;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASSUB:
     case OSUB:
         if(f2 && f2->op == OCONST) {
@@ -1033,41 +1039,37 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         if(et == TDOUBLE || et == TVLONG)
             a = ASUBD;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASOR:
     case OOR:
         a = AORR;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASAND:
     case OAND:
         a = AAND;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASXOR:
     case OXOR:
         a = AEOR;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASLSHR:
     case OLSHR:
         a = ASRL;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASASHR:
     case OASHR:
         a = ASRA;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASASHL:
     case OASHL:
         a = ASLL;
         break;
-
-    case OFUNC:
-        a = ABL;
-        break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASMUL:
     case OMUL:
         a = AMUL;
@@ -1077,7 +1079,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         if(et == TDOUBLE || et == TVLONG)
             a = AMULD;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASDIV:
     case ODIV:
         a = ADIV;
@@ -1087,27 +1089,27 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         if(et == TDOUBLE || et == TVLONG)
             a = ADIVD;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASMOD:
     case OMOD:
         a = AMOD;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASLMUL:
     case OLMUL:
         a = AMULU;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASLMOD:
     case OLMOD:
         a = AMODU;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OASLDIV:
     case OLDIV:
         a = ADIVU;
         break;
-
+    /*x: [[gopcode()]] switch opcode cases */
     case OCASE:
     case OEQ:
     case ONE:
@@ -1144,22 +1146,22 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         case OLT:
             a = ABLT;
             /* ensure NaN comparison is always false */
-            if(typefd[et] && !true)
+            if(typefd[et] && !btrue)
                 a = ABMI;
             break;
         case OLE:
             a = ABLE;
-            if(typefd[et] && !true)
+            if(typefd[et] && !btrue)
                 a = ABLS;
             break;
         case OGE:
             a = ABGE;
-            if(typefd[et] && true)
+            if(typefd[et] && btrue)
                 a = ABPL;
             break;
         case OGT:
             a = ABGT;
-            if(typefd[et] && true)
+            if(typefd[et] && btrue)
                 a = ABHI;
             break;
         case OLO:
@@ -1185,13 +1187,22 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         f1 = Z;
         f2 = Z;
         break;
+    /*x: [[gopcode()]] switch opcode cases */
+    case OAS:
+        gmove(f1, t);
+        return;
+    /*x: [[gopcode()]] switch opcode cases */
+    case OFUNC:
+        a = ABL;
+        break;
+    /*e: [[gopcode()]] switch opcode cases */
     }
-
     if(a == AGOK)
         diag(Z, "bad in gopcode %O", o);
 
     nextpc();
     p->as = a;
+
     if(f1 != Z)
         naddr(f1, &p->from);
     if(f2 != Z) {
@@ -1214,11 +1225,8 @@ samaddr(Node *f, Node *t)
     if(f->op != t->op)
         return false;
     switch(f->op) {
-
     case OREGISTER:
-        if(f->reg != t->reg)
-            break;
-        return true;
+        return (f->reg == t->reg);
     }
     return false;
 }

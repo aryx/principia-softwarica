@@ -224,9 +224,11 @@ int simplec(long b)
         return CEXTERN;
     case BSTATIC:
         return CSTATIC;
+
+    /*s: [[simplec()]] cases */
     case BTYPEDEF:
         return CTYPEDEF;
-    /*s: [[simplec()]] cases */
+    /*x: [[simplec()]] cases */
     case BEXTERN|BREGISTER:
         return CEXREG;
     /*x: [[simplec()]] cases */

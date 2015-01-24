@@ -731,9 +731,10 @@ cname:  /* class words */
     LAUTO     { $$ = BAUTO; }
 |   LSTATIC   { $$ = BSTATIC; }
 |   LEXTERN   { $$ = BEXTERN; }
-|   LTYPEDEF  { $$ = BTYPEDEF; }
 |   LREGISTER { $$ = BREGISTER; }
 |   LINLINE   { $$ = 0; }
+/*x: cname rule */
+|   LTYPEDEF  { $$ = BTYPEDEF; }
 /*x: cname rule */
 |   LTYPESTR  { $$ = BTYPESTR; }
 /*e: cname rule */
@@ -961,8 +962,10 @@ name:
     LNAME
     {
         $$ = new(ONAME, Z, Z);
+        /*s: name rule, if local static variable */
         if($1->class == CLOCAL)
             $1 = mkstatic($1);
+        /*e: name rule, if local static variable */
         $$->sym = $1;
         $$->type = $1->type;
 
