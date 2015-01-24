@@ -1506,8 +1506,6 @@ Init	cnamesinit[] =
     CTYPEDEF ,		0,	"TYPEDEF",
     CTYPESTR ,		0,	"TYPESTR",
     CPARAM   ,		0,	"PARAM",
-    CSELEM   ,		0,	"SELEM",
-    CLABEL   ,		0,	"LABEL",
     CEXREG   ,		0,	"EXREG",
     -1,			0,	0,
 };

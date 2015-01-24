@@ -568,7 +568,7 @@ loop:
         warnreach = !suppress;
 
         n = n->left;
-        if(n == Z)
+        if(n == Z) // possible?
             return;
         if(n->complex == 0) {
             diag(Z, "label undefined: %s", n->sym->name);
@@ -580,14 +580,12 @@ loop:
         gbranch(OGOTO);
         if(n->pc) {
             patch(p, n->pc);
-            return;
+        } else {
+            if(n->label)
+                 patch(n->label, pc-1);
+            n->label = p;
         }
-        if(n->label)
-            patch(n->label, pc-1);
-
-        n->label = p;
         return;
-
     /*x: [[gen()]] switch node kind cases */
     default:
         complex(n);

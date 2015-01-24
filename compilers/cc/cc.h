@@ -99,14 +99,13 @@ struct	Node
     // enum<storage_class>
     char	class;
     /*x: [[Node]] other fields */
-    void*	label;
-    long	xoffset;
-    /*x: [[Node]] other fields */
     // enum<type_kind>, inline of Node.type->etype?
     char	etype;
     /*x: [[Node]] other fields */
     // enum<qualifier>
     char	garb;
+    /*x: [[Node]] other fields */
+    long	xoffset;
     /*x: [[Node]] other fields */
     vlong	vconst;		/* non fp const */ // abused in switch?
     /*x: [[Node]] other fields */
@@ -121,6 +120,9 @@ struct	Node
     int		reg;
     /*x: [[Node]] other fields */
     long	pc;
+    /*x: [[Node]] other fields */
+    // ref<Prog>, but archi dependent
+    void*	label;
     /*x: [[Node]] other fields */
     // enum<node_kind>
     char	oldop;
@@ -159,7 +161,7 @@ struct	Sym
     ushort	block;
     /*x: [[Sym]] other fields */
     long	offset;
-
+    /*x: [[Sym]] other fields */
     vlong	vconst;
     double	fconst;
 
@@ -343,7 +345,7 @@ enum node_kind
     // ----------------------------------------------------------------------
     // Names
     // ----------------------------------------------------------------------
-    ONAME,
+    ONAME, // for defs and uses
 
     // ----------------------------------------------------------------------
     // Expressions
@@ -632,9 +634,6 @@ enum storage_class
     CGLOBL,
     CSTATIC,
     /*s: [[Storage_class]] cases */
-    CSELEM,
-    CLABEL,
-    /*x: [[Storage_class]] cases */
     CTYPEDEF,
     /*x: [[Storage_class]] cases */
     CEXREG, // extern register, kenccext (used in kernel for mips)

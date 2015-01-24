@@ -12,7 +12,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - deadcode (TFILE, OFAS, OTST, OENUM)
+% - deadcode (TFILE, OFAS, OTST, OENUM, CSELEM, CLABEL)
 % - rename more consistently things (thisfn->thisfntype, lastdcl->lastdcltype)
 
 %thx to codemap/codegraph/scheck:
@@ -393,7 +393,7 @@ enum node_kind
     // ----------------------------------------------------------------------
     // Names
     // ----------------------------------------------------------------------
-    ONAME,
+    ONAME, // for defs and uses
 
     // ----------------------------------------------------------------------
     // Expressions
@@ -433,8 +433,6 @@ enum node_kind
 % a bit more difficult)
 %dead: OTST,		/* used in some compilers */
 %dead: OFAS
-
-% ONAME, ODOT, OELEM => use FNconv
 
 <<struct Node>>=
 struct	Node
@@ -480,7 +478,7 @@ OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
 
 
 % for nodes involving a symbol (entity used, field access, ONAME ODOT)
-% (and should have mutual reciproque?) which are?
+% (and should have mutual reciproque?)
 <<[[Node]] other fields>>=
 Sym*	sym; 
 @
@@ -586,6 +584,9 @@ long	nearln;
 % set in codgen() to the lineno field of the function node.
 % this is useful for error reporting when use warn on an empty node,
 % to at least give an error location not too far away.
+% we can't use lineno in those cases because the parsing is done,
+% so lineno is set to the maximum line of the expanded file, hence
+% nearln.
 
 <<function new1>>=
 Node*
@@ -602,25 +603,6 @@ new1(int o, Node *l, Node *r)
 % in tcomo() during typechecking to make more explicit certain
 % cast for instance, and when we are not sure there is something
 % to base line upon (maybe l and r are empty).
-
-
-
-
-%TODO archi independent  part for code generation, ex nod1.reg?
-
-%XXXX
-<<[[Node]] other fields>>=
-void*	label;
-long	xoffset;
-@
-
-
-%XXXXX
-<<[[Storage_class]] cases>>=
-CSELEM,
-CLABEL,
-@
-
 
 
 
@@ -1115,12 +1097,17 @@ slookup(char *s)
 
 
 
-
-
 %XXX
 <<[[Sym]] other fields>>=
 long	offset;
+@
 
+<<[[Node]] other fields>>=
+long	xoffset;
+@
+
+%XXX
+<<[[Sym]] other fields>>=
 vlong	vconst;
 double	fconst;
 
@@ -10475,10 +10462,16 @@ direct:
 
 \subsection{Labels and goto}
 
+% abuse complex to represent whether the label is defined.
+
 <<[[Node]] other fields>>=
 long	pc;
 @
 
+<<[[Node]] other fields>>=
+// ref<Prog>, but archi dependent
+void*	label;
+@
 
 <<[[gen()]] switch node kind cases>>=
 case OLABEL:
@@ -10501,7 +10494,7 @@ case OGOTO:
     warnreach = !suppress;
 
     n = n->left;
-    if(n == Z)
+    if(n == Z) // possible?
         return;
     if(n->complex == 0) {
         diag(Z, "label undefined: %s", n->sym->name);
@@ -10513,16 +10506,14 @@ case OGOTO:
     gbranch(OGOTO);
     if(n->pc) {
         patch(p, n->pc);
-        return;
+    } else {
+        if(n->label)
+             patch(n->label, pc-1);
+        n->label = p;
     }
-    if(n->label)
-        patch(n->label, pc-1);
-
-    n->label = p;
     return;
-
 @
-
+% pc -1?
 
 \section{Expressions, [[cgen()]]}
 % mimic parsing chapter subsection
@@ -24772,8 +24763,6 @@ Init	cnamesinit[] =
     CTYPEDEF ,		0,	"TYPEDEF",
     CTYPESTR ,		0,	"TYPESTR",
     CPARAM   ,		0,	"PARAM",
-    CSELEM   ,		0,	"SELEM",
-    CLABEL   ,		0,	"LABEL",
     CEXREG   ,		0,	"EXREG",
     -1,			0,	0,
 };
