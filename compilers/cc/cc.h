@@ -706,6 +706,7 @@ enum bxxx
     /*s: enum bxxx constants */
     /* these can be overloaded with complex types */
     BCLASS		= BAUTO|BEXTERN|BSTATIC|BTYPEDEF|BTYPESTR|BREGISTER,
+    /*x: enum bxxx constants */
     BGARB		= BCONSTNT|BVOLATILE,
     /*x: enum bxxx constants */
     BINTEGER	= BCHAR|BUCHAR|BSHORT|BUSHORT|BINT|BUINT|BLONG|BULONG|BVLONG|BUVLONG,
