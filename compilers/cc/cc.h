@@ -105,8 +105,6 @@ struct	Node
     // enum<qualifier>
     char	garb;
     /*x: [[Node]] other fields */
-    long	xoffset;
-    /*x: [[Node]] other fields */
     vlong	vconst;		/* non fp const */ // abused in switch?
     /*x: [[Node]] other fields */
     double	fconst;		/* fp constant */
@@ -116,6 +114,8 @@ struct	Node
     TRune*	rstring;	/* rune string */
     /*x: [[Node]] other fields */
     bool 	xcast;
+    /*x: [[Node]] other fields */
+    long	xoffset;
     /*x: [[Node]] other fields */
     int		reg;
     /*x: [[Node]] other fields */
@@ -149,6 +149,8 @@ struct	Sym
     long	varlineno;
 
     /*s: [[Sym]] other fields */
+    char	sym;
+    /*x: [[Sym]] other fields */
     Type*	type;
     // enum<storage_class>
     char	class;
@@ -160,13 +162,6 @@ struct	Sym
     /*x: [[Sym]] other fields */
     ushort	block;
     /*x: [[Sym]] other fields */
-    long	offset;
-    /*x: [[Sym]] other fields */
-    vlong	vconst;
-    double	fconst;
-
-    char	sym;
-    /*x: [[Sym]] other fields */
     Node*	label;
     /*x: [[Sym]] other fields */
     Type*	suetag;
@@ -175,6 +170,11 @@ struct	Sym
     /*x: [[Sym]] other fields */
     // ref<Type>
     Type*	tenum;
+    /*x: [[Sym]] other fields */
+    vlong	vconst;
+    double	fconst;
+    /*x: [[Sym]] other fields */
+    long	offset;
     /*x: [[Sym]] other fields */
     bool	aused;
     /*x: [[Sym]] other fields */
@@ -251,12 +251,13 @@ struct	Type
     char	garb;
     /*x: [[Type]] other fields */
     long	width; // ewidth[Type.etype]
-
-    long	offset;
+    /*x: [[Type]] other fields */
+    Sym*	tag;
+    /*x: [[Type]] other fields */
     schar	shift;
     char	nbits;
     /*x: [[Type]] other fields */
-    Sym*	tag;
+    long	offset;
     /*x: [[Type]] other fields */
     Funct*	funct;
     /*e: [[Type]] other fields */
@@ -507,11 +508,11 @@ enum node_kind
     /*s: misc nodes */
     OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
     /*x: misc nodes */
-    ODOTDOT,
-    /*x: misc nodes */
     OFUNC, // used for uses (calls) but also defs (and decls) :(
     /*x: misc nodes */
     OARRAY, // used for uses (including designator) and defs (and decl)
+    /*x: misc nodes */
+    ODOTDOT,
     /*x: misc nodes */
     OEXREG, // appears only during parsing
     /*x: misc nodes */
@@ -526,6 +527,7 @@ enum node_kind
 enum type_kind
 {
     TXXX,
+
     /*s: type cases */
     TCHAR,
     TUCHAR,
@@ -550,6 +552,7 @@ enum type_kind
 
     TDOT, // ... in function types
     /*e: type cases */
+
     NTYPE,
 };
 /*e: enum type_kind */
@@ -626,7 +629,7 @@ enum namespace
 /*s: enum storage_class */
 enum storage_class
 {
-    CXXX, // nothing specified
+    CXXX,
 
     CAUTO,
     CPARAM,
@@ -655,6 +658,7 @@ enum qualifier
     GVOLATILE	= 1<<1,
 
     NGTYPES		= 1<<2,
+
     GINCOMPLETE	= 1<<2,
 };
 /*e: enum qualifier */

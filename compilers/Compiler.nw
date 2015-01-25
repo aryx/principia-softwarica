@@ -455,7 +455,8 @@ struct	Node
 % warnings anyway
 %see also prtree() in debugging section to dump the ast
 %todo: split other fields in  parsing fields, assembly gen fields,
-% value fields.
+% value fields, maybe type and storage fields, identifier field
+% (where have sym and storage and maybe more?)
 
 % How things are represented for
 % - OCONST: additional vconst field, will see later
@@ -519,7 +520,7 @@ Type*	type;
 <<enum storage_class>>=
 enum storage_class
 {
-    CXXX, // nothing specified
+    CXXX,
 
     CAUTO,
     CPARAM,
@@ -612,7 +613,9 @@ new1(int o, Node *l, Node *r)
 enum type_kind
 {
     TXXX,
+
     <<type cases>>
+
     NTYPE,
 };
 @
@@ -672,6 +675,9 @@ struct	Type
     <<[[Type]] other fields>>
 };
 @
+%less: like for Node, split other fields in value fields, 
+% and annotation fields?
+
 % Here are how things are represented for the different composed types:
 %  - TVOID, simple, should actually be in the simple case
 %  - TIND: simple, via link
@@ -679,6 +685,7 @@ struct	Type
 %  - TSTRUCT/TUNION? link is empty at first for structure tag. forward decl, 
 %    but set when have the actual structure def fields.
 %    Where stores the tag of the struct? sym below I think.
+%    Where stores the fields themselves? in a list?
 %  - TYPEDEF? they are not in enum type_kind! they are substitued
 %    at use time? where?
 %  - TFUNC: the return is in the link, the parameters in the down
@@ -708,6 +715,7 @@ enum qualifier
     GVOLATILE	= 1<<1,
 
     NGTYPES		= 1<<2,
+
     GINCOMPLETE	= 1<<2,
 };
 @
@@ -727,7 +735,7 @@ char	garb;
 // enum<qualifier>
 char	garb;
 @
-% inline?
+% inline? redundant too? remove?
 
 % storage class is not there! should be in Decl instead?
 
@@ -762,6 +770,12 @@ typ(int et, Type *d)
 }
 @
 % see Size section for ewidth, LP split!
+
+<<[[Type]] other fields>>=
+long	width; // ewidth[Type.etype]
+@
+% semantic phase
+
 
 <<function copytyp>>=
 Type*
@@ -809,116 +823,6 @@ types[TIND] = typ(TIND, types[TVOID]);
 % important convention: sue = struct/union/enum, v = vlong
 
 
-<<function sametype>>=
-bool
-sametype(Type *t1, Type *t2)
-{
-
-    if(t1 == t2)
-        return true;
-    return rsametype(t1, t2, 5, true);
-}
-@
-
-% n = depth? so equal modulo a certain depth?? hmmm
-<<function rsametype>>=
-bool
-rsametype(Type *t1, Type *t2, int n, bool f)
-{
-    int et;
-
-    n--;
-    for(;;) {
-        if(t1 == t2)
-            return true;
-        if(t1 == T || t2 == T)
-            return false;
-        if(n <= 0)
-            return true;
-
-        et = t1->etype;
-        if(et != t2->etype)
-            return false;
-
-        if(et == TFUNC) {
-            if(!rsametype(t1->link, t2->link, n, false))
-                return false;
-            t1 = t1->down;
-            t2 = t2->down;
-            while(t1 != T && t2 != T) {
-
-                <<[[rsametype()]] continue if old style type>>
-
-                while(t1 != T || t2 != T) {
-                    if(!rsametype(t1, t2, n, false))
-                        return false;
-                    t1 = t1->down;
-                    t2 = t2->down;
-                }
-                break;
-            }
-            return true;
-        }
-        if(et == TARRAY)
-            if(t1->width != t2->width && t1->width != 0 && t2->width != 0)
-                return false;
-        if(typesu[et]) {
-            if(t1->link == T)
-                snap(t1);
-            if(t2->link == T)
-                snap(t2);
-            if(t1 != t2 && t1->link == T && t2->link == T){
-                /* structs with missing or different tag names aren't considered equal */
-                if(t1->tag == nil || t2->tag == nil ||
-                   strcmp(t1->tag->name, t2->tag->name) != 0)
-                    return false;
-            }
-            t1 = t1->link;
-            t2 = t2->link;
-            for(;;) {
-                if(t1 == t2)
-                    return true;
-                if(!rsametype(t1, t2, n, false))
-                    return false;
-                t1 = t1->down;
-                t2 = t2->down;
-            }
-        }
-        t1 = t1->link;
-        t2 = t2->link;
-
-        if((f || !debug['V']) && et == TIND) {
-            if(t1 != T && t1->etype == TVOID)
-                return true;
-            if(t2 != T && t2->etype == TVOID)
-                return true;
-        }
-    }
-}
-@
-
-<<function snap>>=
-void
-snap(Type *t)
-{
-    if(typesu[t->etype])
-     if(t->link == T && t->tag && t->tag->suetag) {
-        t->link = t->tag->suetag->link;
-        t->width = t->tag->suetag->width;
-    }
-}
-@
-
-
-%XXXX
-<<[[Type]] other fields>>=
-long	width; // ewidth[Type.etype]
-
-long	offset;
-schar	shift;
-char	nbits;
-@
-
 
 \section{Symbol table, [[Sym]] and [[hash]]}
 % another symbol table!
@@ -942,6 +846,9 @@ struct	Sym
     <<[[Sym]] extra fields>>
 };
 @
+% todo: split other fields in, identifier ifelds, tags fields, labels fields,
+%  macro felds, misc fields!
+
 % Similar to Assembler.nw and Linker.nw Sym DS. Differences?
 %  -
 % varlineno? why not simply lineno? To help indicate
@@ -959,6 +866,12 @@ struct	Sym
 
 % hmmm but correct? handle well the different namespace?
 % what if struct and local with same name?
+
+<<[[Sym]] other fields>>=
+char	sym;
+@
+% char sym;? name_kind?
+
 
 <<constant NHASH>>=
 #define	NHASH		1024
@@ -1097,25 +1010,9 @@ slookup(char *s)
 
 
 
-%XXX
-<<[[Sym]] other fields>>=
-long	offset;
-@
 
-<<[[Node]] other fields>>=
-long	xoffset;
-@
 
-%XXX
-<<[[Sym]] other fields>>=
-vlong	vconst;
-double	fconst;
-
-char	sym;
-@
-% char sym;? name_kind?
-
-\section{Declarations and scope, [[Decl]]}
+\section{Declarations, namespace and scope, [[Decl]]}
 % nested scope
 
 % the different "namespaces"
@@ -1450,7 +1347,7 @@ char	reg;
 // biset<>
 byte	scond;
 @
-
+%less: rename reg
 
 <<struct Adr(arm)>>=
 struct	Adr
@@ -1481,6 +1378,17 @@ struct	Adr
 
 <<global zprog>>=
 Prog	zprog;
+@
+
+<<[[ginit()]] zprog initialisation>>=
+zprog.link = P;
+zprog.as = AGOK;
+zprog.reg = R_NONE;
+zprog.from.type = D_NONE;
+zprog.from.name = D_NONE;
+zprog.from.reg = R_NONE;
+zprog.to = zprog.from;
+zprog.scond = COND_ALWAYS;  
 @
 
 %\section{[[firstp]], [[lastp]]}
@@ -1635,67 +1543,26 @@ Biobuf	outbuf;
 Biobuf	diagbuf;
 @
 
-
+% main -> <> (can be called multiple times because of multifile parallel option)
 <<function compile>>=
 int
-compile(char *file, char **defs, int ndef)
+compile(char *infile, char **defs, int ndef)
 {
-    char ofile[400], incfile[20];
-    char *p, **av, opt[256];
-    int i, c, fd[2];
-    static int first = 1;
+    <<[[compile()]] locals>>
 
-    strcpy(ofile, file);
-    p = utfrrune(ofile, pathchar());
-    if(p) {
-        *p++ = 0;
-        if(!debug['.'])
-            include[0] = strdup(ofile);
-    } else
-        p = ofile;
+    <<[[compile()]] set p to basename(infile) and adjust include>>
 
     if(outfile == nil) {
-        outfile = p;
-        if(outfile) {
-            if(p = utfrrune(outfile, '.'))
-                if(p[1] == 'c' && p[2] == 0)
-                    p[0] = 0;
-            p = utfrune(outfile, 0);
-            if(debug['a'] && debug['n'])
-                strcat(p, ".acid");
-            else if(debug['Z'] && debug['n'])
-                strcat(p, "_pickle.c");
-            else {
-                p[0] = '.';
-                p[1] = thechar;
-                p[2] = 0;
-            }
-        } else
-            outfile = "/dev/null";
+        <<[[compile()]] set outfile, using p, to {basename(infile)}.{thechar}>>
     }
 
-    if(p = getenv("INCLUDE")) {
-        setinclude(p);
-    } else {
-        if(systemtype(Plan9)) {
-            sprint(incfile, "/%s/include", thestring);
-            setinclude(strdup(incfile));
-            setinclude("/sys/include");
-        }
-    }
+    <<[[compile()]] setinclude("/{thestring}/include") or INCLUDE>>
+
     if (first)
         Binit(&diagbuf, 1, OWRITE);
-    /*
-     * if we're writing acid to standard output, don't keep scratching
-     * outbuf.
-     */
-    if((debug['a'] || debug['Z']) && !debug['n']) {
-        if (first) {
-            outfile = nil;
-            Binit(&outbuf, dup(1, -1), OWRITE);
-            dup(2, 1);
-        }
-    } else {
+
+    <<[[compile()]] if writing acid to standard output>>
+    else {
         c = mycreat(outfile, 0664);
         if(c < 0) {
             diag(Z, "cannot open %s - %r", outfile);
@@ -1705,14 +1572,14 @@ compile(char *file, char **defs, int ndef)
         Binit(&outbuf, c, OWRITE);
     }
     newio();
-    first = 0;
+    first = false;
 
     <<[[compile()]] use ANSI preprocessor>>
     else {
-        if(strcmp(file, "stdin") == 0)
-            newfile(file, 0);
+        if(strcmp(infile, "stdin") == 0)
+            newfile(infile, 0);
         else
-            newfile(file, -1);
+            newfile(infile, -1);
     }
  
     // The big call!
@@ -1723,9 +1590,64 @@ compile(char *file, char **defs, int ndef)
     return nerrors;
 }
 @
+% file -> infile
+
+
+
+<<[[compile()]] locals>>=
+char ofile[400], incfile[20];
+char *p, **av, opt[256];
+int i, c, fd[2];
+static bool first = true;
+@
+
+
+
+<<[[compile()]] set p to basename(infile) and adjust include>>=
+strcpy(ofile, infile);
+p = utfrrune(ofile, pathchar());
+if(p) {
+    *p++ = 0;
+    if(!debug['.'])
+        include[0] = strdup(ofile);
+} else
+    p = ofile;
+@
+
+<<[[compile()]] set outfile, using p, to {basename(infile)}.{thechar}>>=
+outfile = p;
+if(outfile) {
+    if(p = utfrrune(outfile, '.'))
+        if(p[1] == 'c' && p[2] == 0)
+            p[0] = 0;
+    p = utfrune(outfile, 0);
+    <<[[compile()]] adjust p for outfile if acid option>>
+    <<[[compile()]] adjust p for outfile if pickle option>>
+    else {
+        p[0] = '.';
+        p[1] = thechar;
+        p[2] = '\0';
+    }
+} else
+    outfile = "/dev/null";
+@
+
+<<[[compile()]] setinclude("/{thestring}/include") or INCLUDE>>=
+if(p = getenv("INCLUDE")) {
+    setinclude(p);
+} else {
+    if(systemtype(Plan9)) {
+        sprint(incfile, "/%s/include", thestring);
+        setinclude(strdup(incfile));
+        setinclude("/sys/include");
+    }
+}
+@
+
 
 % main -> compile -> yyparse -> yylex -> macxxx
 %                            -> codgen (portable) -> gen
+
 
 
 
@@ -1737,44 +1659,50 @@ gclean(void)
     int i;
     Sym *s;
 
-    for(i=0; i<NREG; i++)
-        if(reg[i] && !resvreg[i])
-            diag(Z, "reg %d left allocated", i);
-    for(i=NREG; i<NREG+NFREG; i++)
-        if(reg[i] && !resvreg[i])
-            diag(Z, "freg %d left allocated", i-NREG);
+    <<[[gclean()]] sanity check reg>>
 
-    while(mnstring)
-        outstring("", 1L);
-    symstring->type->width = nstring;
-    symrathole->type->width = nrathole;
+    <<[[gclean()]] adjust symstring width>>
+    <<[[gclean()]] adjust symrathole width>>
 
-    for(i=0; i<NHASH; i++)
-     for(s = hash[i]; s != S; s = s->link) {
-        if(s->type == T)
-            continue;
-        if(s->type->width == 0)
-            continue;
-        if(s->class != CGLOBL && s->class != CSTATIC)
-            continue;
-        if(s->type == types[TENUM])
-            continue;
-        gpseudo(AGLOBL, s, nodconst(s->type->width));
-    }
+    <<[[gclean()]] generate all AGLOBL pseudo opcodes>>
  
-    nextpc();
-    p->as = AEND;
+    <<[[gclean()]] generate last opcode, AEND>>
 
-    // generate the whole file, use outbuf global
+    // generate the whole output file using outbuf global
     outcode();
 }
 @
 
+<<[[gclean()]] adjust symstring width>>=
+while(mnstring)
+    outstring("", 1L);
+symstring->type->width = nstring;
+@
 
+
+<<[[gclean()]] generate all AGLOBL pseudo opcodes>>=
+for(i=0; i<NHASH; i++)
+ for(s = hash[i]; s != S; s = s->link) {
+    if(s->type == T)
+        continue;
+    if(s->type->width == 0)
+        continue;
+    if(s->class != CGLOBL && s->class != CSTATIC)
+        continue;
+    if(s->type == types[TENUM])
+        continue;
+    gpseudo(AGLOBL, s, nodconst(s->type->width));
+}
+@
+
+<<[[gclean()]] generate last opcode, AEND>>=
+nextpc();
+p->as = AEND;
+@
 
 \section{[[tinit()]]}
 
-%TODO: LP split
+% main -> <>
 <<function tinit>>=
 void
 tinit(void)
@@ -1782,138 +1710,19 @@ tinit(void)
     int *ip;
     Init *p;
 
-    for(p=thashinit; p->code >= 0; p++) {
-        urk("thash", nelem(thash), p->code);
-        thash[p->code] = p->value;
-    }
-
-    for(p=bnamesinit; p->code >= 0; p++) {
-        urk("bnames", nelem(bnames), p->code);
-        bnames[p->code] = p->s;
-    }
-    for(p=tnamesinit; p->code >= 0; p++) {
-        urk("tnames", nelem(tnames), p->code);
-        tnames[p->code] = p->s;
-    }
-    for(p=gnamesinit; p->code >= 0; p++) {
-        urk("gnames", nelem(gnames), p->code);
-        gnames[p->code] = p->s;
-    }
-    for(p=qnamesinit; p->code >= 0; p++) {
-        urk("qnames", nelem(qnames), p->code);
-        qnames[p->code] = p->s;
-    }
-    for(p=cnamesinit; p->code >= 0; p++) {
-        urk("cnames", nelem(cnames), p->code);
-        cnames[p->code] = p->s;
-    }
-    for(p=onamesinit; p->code >= 0; p++) {
-        urk("onames", nelem(onames), p->code);
-        onames[p->code] = p->s;
-    }
+    <<[[tinit()]] initialise thash>>
+    <<[[tinit()]] initialise xxxnames debugging arrays>>
+    <<[[tinit()]] initialise typexxx type sets>>
+    <<[[tinit()]] initialise tcompat arrays>>
+    <<[[tinit()]] initialise 32 bits defaults type sets>>
+}
+@
 
 
-
-    for(ip=typeiinit; *ip>=0; ip++) {
-        urk("typei", nelem(typei), *ip);
-        typei[*ip] = 1;
-    }
-    for(ip=typeuinit; *ip>=0; ip++) {
-        urk("typeu", nelem(typeu), *ip);
-        typeu[*ip] = 1;
-    }
-    for(ip=typesuvinit; *ip>=0; ip++) {
-        urk("typesuv", nelem(typesuv), *ip);
-        typesuv[*ip] = true;
-    }
-    for(ip=typeilpinit; *ip>=0; ip++) {
-        urk("typeilp", nelem(typeilp), *ip);
-        typeilp[*ip] = 1;
-    }
-    for(ip=typechlinit; *ip>=0; ip++) {
-        urk("typechl", nelem(typechl), *ip);
-        typechl[*ip] = 1;
-        typechlv[*ip] = 1;
-        typechlvp[*ip] = 1;
-    }
-    for(ip=typechlpinit; *ip>=0; ip++) {
-        urk("typechlp", nelem(typechlp), *ip);
-        typechlp[*ip] = 1;
-        typechlvp[*ip] = 1;
-    }
-    for(ip=typechlpfdinit; *ip>=0; ip++) {
-        urk("typechlpfd", nelem(typechlpfd), *ip);
-        typechlpfd[*ip] = 1;
-    }
-    for(ip=typecinit; *ip>=0; ip++) {
-        urk("typec", nelem(typec), *ip);
-        typec[*ip] = 1;
-    }
-    for(ip=typehinit; *ip>=0; ip++) {
-        urk("typeh", nelem(typeh), *ip);
-        typeh[*ip] = 1;
-    }
-    for(ip=typeilinit; *ip>=0; ip++) {
-        urk("typeil", nelem(typeil), *ip);
-        typeil[*ip] = 1;
-    }
-    for(ip=typevinit; *ip>=0; ip++) {
-        urk("typev", nelem(typev), *ip);
-        typev[*ip] = 1;
-        typechlv[*ip] = 1;
-        typechlvp[*ip] = 1;
-    }
-    for(ip=typefdinit; *ip>=0; ip++) {
-        urk("typefd", nelem(typefd), *ip);
-        typefd[*ip] = 1;
-    }
-    for(ip=typeafinit; *ip>=0; ip++) {
-        urk("typeaf", nelem(typeaf), *ip);
-        typeaf[*ip] = 1;
-    }
-    for(ip=typesuinit; *ip >= 0; ip++) {
-        urk("typesu", nelem(typesu), *ip);
-        typesu[*ip] = 1;
-    }
-
-
-    for(p=tasigninit; p->code >= 0; p++) {
-        urk("tasign", nelem(tasign), p->code);
-        tasign[p->code] = p->value;
-    }
-    for(p=tasaddinit; p->code >= 0; p++) {
-        urk("tasadd", nelem(tasadd), p->code);
-        tasadd[p->code] = p->value;
-    }
-    for(p=tcastinit; p->code >= 0; p++) {
-        urk("tcast", nelem(tcast), p->code);
-        tcast[p->code] = p->value;
-    }
-    for(p=taddinit; p->code >= 0; p++) {
-        urk("tadd", nelem(tadd), p->code);
-        tadd[p->code] = p->value;
-    }
-    for(p=tsubinit; p->code >= 0; p++) {
-        urk("tsub", nelem(tsub), p->code);
-        tsub[p->code] = p->value;
-    }
-    for(p=tmulinit; p->code >= 0; p++) {
-        urk("tmul", nelem(tmul), p->code);
-        tmul[p->code] = p->value;
-    }
-    for(p=tandinit; p->code >= 0; p++) {
-        urk("tand", nelem(tand), p->code);
-        tand[p->code] = p->value;
-    }
-    for(p=trelinit; p->code >= 0; p++) {
-        urk("trel", nelem(trel), p->code);
-        trel[p->code] = p->value;
-    }
-    
-    /* 32-bit defaults */
-    typeword = typechlp;
-    typeswitch = typechl;
-    typecmplx = typesuv;
+<<[[tinit()]] initialise thash>>=
+for(p=thashinit; p->code >= 0; p++) {
+    urk("thash", nelem(thash), p->code);
+    thash[p->code] = p->value;
 }
 @
 
@@ -1932,6 +1741,7 @@ urk(char *name, int max, int i)
 
 \section{[[cinit()]]}
 
+% main -> <>
 <<function cinit>>=
 void
 cinit(void)
@@ -1940,29 +1750,12 @@ cinit(void)
     int i;
     Type *t;
 
-    nerrors = 0;
-    lineno = 1;
-    iostack = I;
-    iofree = I;
-    peekc = IGN;
-    nhunk = 0;
-
+    <<[[cinit()]] lexing globals initialization>>
     <<[[cinit()]] types initialization>>
-
-    for(i=0; i<NHASH; i++)
-        hash[i] = S;
-
+    <<[[cinit()]] hash initialization>>
     <<[[cinit()]] symbol table initialization>>
-
-    blockno = 0;
-    autobn = 0;
-    autoffset = 0;
-
-    t = typ(TARRAY, types[TCHAR]);
-    t->width = 0;
-    symstring = slookup(".string");
-    symstring->class = CSTATIC;
-    symstring->type = t;
+    <<[[cinit()]] namespace globals initialization>>
+    <<[[cinit()]] symstring initialization>>
 
     t = typ(TARRAY, types[TCHAR]);
     t->width = 0;
@@ -1970,27 +1763,59 @@ cinit(void)
     nodproto = new(OPROTO, Z, Z);
     dclstack = D;
 
-    pathname = allocn(pathname, 0, 100);
-    if(getwd(pathname, 99) == 0) {
-        pathname = allocn(pathname, 100, 900);
-        if(getwd(pathname, 999) == 0)
-            strcpy(pathname, "/???");
-    }
+    <<[[cinit()]] pathname initialisation from cwd>>
     <<[[cinit()]] fmtinstall>>
 }
 @
 
-\section{[[ginit()]]}
-% and reg[]
-
-<<[[ginit()]] initialisation>>=
-listinit();
-nstring = 0;
-mnstring = 0;
-nrathole = 0;
-cases = C;
+<<[[cinit()]] hash initialization>>=
+for(i=0; i<NHASH; i++)
+    hash[i] = S;
 @
 
+<<[[cinit()]] lexing globals initialization>>=
+nerrors = 0;
+lineno = 1;
+iostack = I;
+iofree = I;
+peekc = IGN;
+nhunk = 0;
+@
+
+<<[[cinit()]] namespace globals initialization>>=
+blockno = 0;
+autobn = 0;
+autoffset = 0;
+@
+
+<<[[cinit()]] symstring initialization>>=
+t = typ(TARRAY, types[TCHAR]);
+t->width = 0;
+symstring = slookup(".string");
+symstring->class = CSTATIC;
+symstring->type = t;
+@
+
+
+
+% =~ cwd, for include "" to work
+<<global pathname>>=
+char*	pathname;
+@
+% 
+
+<<[[cinit()]] pathname initialisation from cwd>>=
+pathname = allocn(pathname, 0, 100);
+if(getwd(pathname, 99) == 0) {
+    pathname = allocn(pathname, 100, 900);
+    if(getwd(pathname, 999) == 0)
+        strcpy(pathname, "/???");
+}
+@
+
+\section{[[ginit()]]}
+
+% main -> <>
 <<function ginit(arm)>>=
 void
 ginit(void)
@@ -1999,72 +1824,23 @@ ginit(void)
 
     <<[[ginit()]] initialisation>>
 
-    zprog.link = P;
-    zprog.as = AGOK;
-    zprog.reg = NREG;
-    zprog.from.type = D_NONE;
-    zprog.from.name = D_NONE;
-    zprog.from.reg = NREG;
-    zprog.to = zprog.from;
-    zprog.scond = COND_ALWAYS;  
+    <<[[ginit()]] zprog initialisation>>
 
     <<[[ginit()]] special nodes initialisation>>
 
-    constnode.op = OCONST;
-    constnode.class = CXXX;
-    constnode.complex = 0;
-    constnode.addable = 20;
-    constnode.type = types[TLONG];
-
-    fconstnode.op = OCONST;
-    fconstnode.class = CXXX;
-    fconstnode.complex = 0;
-    fconstnode.addable = 20;
-    fconstnode.type = types[TDOUBLE];
-
-    t = typ(TARRAY, types[TCHAR]);
-    symrathole = slookup(".rathole");
-    symrathole->class = CGLOBL;
-    symrathole->type = t;
-
-    nodrat = new(ONAME, Z, Z);
-    nodrat->sym = symrathole;
-    nodrat->type = types[TIND];
-    nodrat->etype = TVOID;
-    nodrat->class = CGLOBL;
-    complex(nodrat);
-    nodrat->type = t;
-
-    nodret = new(ONAME, Z, Z);
-    nodret->sym = slookup(".ret");
-    nodret->type = types[TIND];
-    nodret->etype = TIND;
-    nodret->class = CPARAM;
-    nodret = new(OIND, nodret, Z);
-    complex(nodret);
-
     com64init();
 
-    memset(reg, 0, sizeof(reg));
-
-    /* don't allocate */
-    reg[REGTMP] = 1;
-    reg[REGSB] = 1;
-    reg[REGSP] = 1;
-    reg[REGLINK] = 1;
-    reg[REGPC] = 1;
-    /* keep two external registers */
-    reg[REGEXT] = 1; // R10
-    reg[REGEXT-1] = 1; // R9
-
-    memmove(resvreg, reg, sizeof(reg));
+    <<[[ginit()]] reg and resvreg initialisation>>
 }
 @
 
-<<global reg(arm)>>=
-char	reg[NREG+NFREG];
+<<[[ginit()]] initialisation>>=
+listinit();
+nstring = 0;
+mnstring = 0;
+nrathole = 0;
+cases = C;
 @
-
 
 
 \section{[[arginit()]]}
@@ -3258,8 +3034,8 @@ getcom(void)
 <<[[compile()]] use ANSI preprocessor>>=
 /* Use an ANSI preprocessor */
 if(debug['p']) {
-    if(myaccess(file) < 0) {
-        diag(Z, "%s does not exist", file);
+    if(myaccess(infile) < 0) {
+        diag(Z, "%s does not exist", infile);
         errorexit();
     }
     if(pipe(fd) < 0) {
@@ -3290,8 +3066,8 @@ if(debug['p']) {
             sprint(opt, "-I%s", include[c]);
             av[i++] = strdup(opt);
         }
-        if(strcmp(file, "stdin") != 0)
-            av[i++] = file;
+        if(strcmp(infile, "stdin") != 0)
+            av[i++] = infile;
         av[i] = 0;
         if(debug['p'] > 1) {
             for(c = 0; c < i; c++)
@@ -3305,7 +3081,7 @@ if(debug['p']) {
 
     default:
         close(fd[1]);
-        newfile(file, fd[0]);
+        newfile(infile, fd[0]);
         break;
     }
 }
@@ -4649,6 +4425,10 @@ tag:
 % tag! but it's really ident.
 % the type will be adjusted in dodecl as goes up the chain.
 
+<<type declarations>>=
+%type   <sym>   ltag
+@
+
 <<names rules>>=
 ltag:
     LNAME
@@ -4689,7 +4469,7 @@ xdecl(int class, Type *t, Sym *s)
     long o; // offset
 
     o = 0;
-    // adjusting class
+    // adjusting class, and possibly o (for CEXREG)
     switch(class) {
     <<[[xdecl()]] switch class cases>>
     }
@@ -4798,254 +4578,6 @@ Type*	thisfntype;
 @
 
 % markdcl(), revertdcl(), see next section
-
-
-<<declaration nodes>>=
-OPROTO,
-@
-% ?? rename OPARAM?
-
-% called arg ... hmmm ... should be renamed zparamlist
-% xdecor -> ... -> <> ?
-<<parameter declarator rules>>=
-zarglist:
-  /* empty */   { $$ = Z; }
-|   arglist     { $$ = invert($1); }
-
-
-arglist:
-    name
-|   tlist abdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   tlist xdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
-|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
-|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
-@
-%$
-
-<<misc nodes>>=
-ODOTDOT,
-@
-
-
-% invert in place
-<<function invert>>=
-Node*
-invert(Node *n)
-{
-    Node *i;
-
-    if(n == Z || n->op != OLIST)
-        return n;
-    i = n;
-    for(n = n->left; n != Z; n = n->left) {
-        if(n->op != OLIST)
-            break;
-        i->left = n->right;
-        n->right = i;
-        i = n;
-    }
-    i->left = n;
-    return i;
-}
-@
-
-
-
-\subsubsection{Parameters}
-
-<<global firstarg>>=
-Sym*	firstarg;
-@
-
-<<global firstargtype>>=
-Type*	firstargtype;
-@
-
-% ?
-<<global autoffset>>=
-long	autoffset;
-@
-
-% ?
-<<global stkoff>>=
-long	stkoff;
-@
-% stack offset, used for ATEXT generation, 
-% to compute the set of locals we need
-
-
-% pass is 0 or 1
-<<function argmark>>=
-//@Scheck: not dead, used by cc.y
-void argmark(Node *n, int pass)
-{
-    Type *t;
-
-    autoffset = align(0, thisfntype->link, Aarg0);
-    stkoff = 0;
-    for(; n->left != Z; n = n->left) {
-        if(n->op != OFUNC || n->left->op != ONAME)
-            continue;
-        walkparam(n->right, pass);
-        <<[[argmark()]] if old proto style>>
-        break;
-    }
-    autoffset = 0;
-    stkoff = 0;
-}
-@
-%less: not part of the old proto stuff?
-
-
-
-
-<<function paramconv>>=
-Type*
-paramconv(Type *t, bool f)
-{
-
-    switch(t->etype) {
-    case TARRAY:
-        t = typ(TIND, t->link);
-        t->width = types[TIND]->width;
-        break;
-
-    case TFUNC:
-        t = typ(TIND, t);
-        t->width = types[TIND]->width;
-        break;
-
-    case TFLOAT:
-        if(!f)
-            t = types[TDOUBLE];
-        break;
-
-    case TCHAR:
-    case TSHORT:
-        if(!f)
-            t = types[TINT];
-        break;
-
-    case TUCHAR:
-    case TUSHORT:
-        if(!f)
-            t = types[TUINT];
-        break;
-    }
-    return t;
-}
-@
-
-
-
-<<function walkparam>>=
-void
-walkparam(Node *n, int pass)
-{
-    Sym *s;
-    Node *n1;
-
-    if(n != Z && n->op == OPROTO && n->left == Z && n->type == types[TVOID])
-        return;
-
-loop:
-    if(n == Z)
-        return;
-    switch(n->op) {
-    case OLIST:
-        walkparam(n->left, pass);
-        n = n->right;
-        goto loop;
-
-    case OPROTO:
-        for(n1 = n; n1 != Z; n1=n1->left)
-            if(n1->op == ONAME) {
-                if(pass == 0) {
-                    s = n1->sym;
-                    push1(s);
-                    s->offset = -1;
-                    break;
-                }
-                dodecl(pdecl, CPARAM, n->type, n->left);
-                break;
-            }
-        if(n1)
-            break;
-        if(pass == 0) {
-            /*
-             * extension:
-             *	allow no name in argument declaration
-            diag(Z, "no name in argument declaration");
-             */
-            break;
-        }
-        dodecl(NODECL, CPARAM, n->type, n->left);
-        pdecl(CPARAM, lastdcltype, S);
-        break;
-
-    case ODOTDOT:
-        break;
-    
-    case ONAME:
-        s = n->sym;
-        if(pass == 0) {
-            push1(s);
-            s->offset = -1;
-            break;
-        }
-        if(s->offset != -1) {
-            if(autoffset == 0) {
-                firstarg = s;
-                firstargtype = s->type;
-            }
-            autoffset = align(autoffset, s->type, Aarg1);
-            s->offset = autoffset;
-            autoffset = align(autoffset, s->type, Aarg2);
-        } else
-            dodecl(pdecl, CXXX, types[TINT], n);
-        break;
-    default:
-        diag(n, "argument not a name/prototype: %O", n->op);
-        break;
-
-    }
-}
-@
-
-
-
-
-% dodecl(<>,...) -> <> 
-<<function pdecl>>=
-void
-pdecl(int class, Type *t, Sym *s)
-{
-    if(s && s->offset != -1) {
-        diag(Z, "not a parameter: %s", s->name);
-        return;
-    }
-    t = paramconv(t, class==CPARAM);
-    if(class == CXXX)
-        class = CPARAM;
-    if(class != CPARAM) {
-        diag(Z, "parameter cannot have class: %s", s->name);
-        class = CPARAM;
-    }
-    if(typesu[t->etype] && t->width <= 0)
-        diag(Z, "incomplete structure: %s", t->tag->name);
-    adecl(class, t, s);
-}
-@
-% a parameter is a kind of local, hence the call to adecl
-
 
 
 
@@ -6891,6 +6423,7 @@ OUNION,
 
 
 \subsubsection{Complex types}
+% also for enum
 
 <<types rule>>=
 |  complex
@@ -6928,9 +6461,6 @@ OUNION,
 
 \subsubsection{Structure/union uses}
 
-<<type declarations>>=
-%type   <sym>   ltag
-@
 
 %use
 <<complex rule>>=
@@ -6958,7 +6488,7 @@ Type*	suetag;
 <<[[Type]] other fields>>=
 Sym*	tag;
 @
-% mutual ref
+% mutual ref?
 
 
 % depth of struct
@@ -6967,6 +6497,7 @@ ushort	sueblock;
 @
 
 % LP split bn != 0
+% called also for enums
 <<function dotag>>=
 //@Scheck: used by cc.y
 Type* dotag(Sym *s, int et, int bn)
@@ -7173,6 +6704,13 @@ long	lastfield;
 @
 % set in dodecl() and ?
 
+
+<<[[Type]] other fields>>=
+schar	shift;
+char	nbits;
+@
+% only for fields?
+
 % dodecl(<>) -> <>
 <<function edecl>>=
 //@Scheck: used by cc.y
@@ -7363,6 +6901,14 @@ enum:
 // ref<Type>
 Type*	tenum;
 @
+
+
+
+<<[[Sym]] other fields>>=
+vlong	vconst;
+double	fconst;
+@
+% computed value for the enum
 
 
 % n = optional expression for the value of the enum constant
@@ -7658,6 +7204,271 @@ fnproto1(Node *n)
 
 % have seen already before xdecl, xdlist, xdecor, xdecor2
 
+\subsection{Parameters}
+
+<<declaration nodes>>=
+OPROTO,
+@
+% ?? rename OPARAM?
+
+% called arg ... hmmm ... should be renamed zparamlist
+% xdecor -> ... -> <> ?
+<<parameter declarator rules>>=
+zarglist:
+  /* empty */   { $$ = Z; }
+|   arglist     { $$ = invert($1); }
+
+
+arglist:
+    name
+|   tlist abdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+|   tlist xdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+|   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
+@
+%$
+
+<<misc nodes>>=
+ODOTDOT,
+@
+
+
+% invert in place
+<<function invert>>=
+Node*
+invert(Node *n)
+{
+    Node *i;
+
+    if(n == Z || n->op != OLIST)
+        return n;
+    i = n;
+    for(n = n->left; n != Z; n = n->left) {
+        if(n->op != OLIST)
+            break;
+        i->left = n->right;
+        n->right = i;
+        i = n;
+    }
+    i->left = n;
+    return i;
+}
+@
+
+
+
+
+
+
+<<global firstarg>>=
+Sym*	firstarg;
+@
+
+<<global firstargtype>>=
+Type*	firstargtype;
+@
+
+% ?
+<<global autoffset>>=
+long	autoffset;
+@
+
+% ?
+<<global stkoff>>=
+long	stkoff;
+@
+% stack offset, used for ATEXT generation, 
+% to compute the set of locals we need
+
+
+% pass is 0 or 1
+<<function argmark>>=
+//@Scheck: not dead, used by cc.y
+void argmark(Node *n, int pass)
+{
+    Type *t;
+
+    autoffset = align(0, thisfntype->link, Aarg0);
+    stkoff = 0;
+    for(; n->left != Z; n = n->left) {
+        if(n->op != OFUNC || n->left->op != ONAME)
+            continue;
+        walkparam(n->right, pass);
+        <<[[argmark()]] if old proto style>>
+        break;
+    }
+    autoffset = 0;
+    stkoff = 0;
+}
+@
+%less: not part of the old proto stuff?
+
+
+
+
+<<function paramconv>>=
+Type*
+paramconv(Type *t, bool f)
+{
+
+    switch(t->etype) {
+    case TARRAY:
+        t = typ(TIND, t->link);
+        t->width = types[TIND]->width;
+        break;
+
+    case TFUNC:
+        t = typ(TIND, t);
+        t->width = types[TIND]->width;
+        break;
+
+    case TFLOAT:
+        if(!f)
+            t = types[TDOUBLE];
+        break;
+
+    case TCHAR:
+    case TSHORT:
+        if(!f)
+            t = types[TINT];
+        break;
+
+    case TUCHAR:
+    case TUSHORT:
+        if(!f)
+            t = types[TUINT];
+        break;
+    }
+    return t;
+}
+@
+
+
+
+<<[[Sym]] other fields>>=
+long	offset;
+@
+%todo: hmm seems used for CEXREG, flow fron exreg -> o -> xdecl -> offset field.
+
+<<[[Node]] other fields>>=
+long	xoffset;
+@
+% for parameters and locals?
+
+
+<<function walkparam>>=
+void
+walkparam(Node *n, int pass)
+{
+    Sym *s;
+    Node *n1;
+
+    if(n != Z && n->op == OPROTO && n->left == Z && n->type == types[TVOID])
+        return;
+
+loop:
+    if(n == Z)
+        return;
+    switch(n->op) {
+    case OLIST:
+        walkparam(n->left, pass);
+        n = n->right;
+        goto loop;
+
+    case OPROTO:
+        for(n1 = n; n1 != Z; n1=n1->left)
+            if(n1->op == ONAME) {
+                if(pass == 0) {
+                    s = n1->sym;
+                    push1(s);
+                    s->offset = -1;
+                    break;
+                }
+                dodecl(pdecl, CPARAM, n->type, n->left);
+                break;
+            }
+        if(n1)
+            break;
+        if(pass == 0) {
+            /*
+             * extension:
+             *	allow no name in argument declaration
+            diag(Z, "no name in argument declaration");
+             */
+            break;
+        }
+        dodecl(NODECL, CPARAM, n->type, n->left);
+        pdecl(CPARAM, lastdcltype, S);
+        break;
+
+    case ODOTDOT:
+        break;
+    
+    case ONAME:
+        s = n->sym;
+        if(pass == 0) {
+            push1(s);
+            s->offset = -1;
+            break;
+        }
+        if(s->offset != -1) {
+            if(autoffset == 0) {
+                firstarg = s;
+                firstargtype = s->type;
+            }
+            autoffset = align(autoffset, s->type, Aarg1);
+            s->offset = autoffset;
+            autoffset = align(autoffset, s->type, Aarg2);
+        } else
+            dodecl(pdecl, CXXX, types[TINT], n);
+        break;
+    default:
+        diag(n, "argument not a name/prototype: %O", n->op);
+        break;
+
+    }
+}
+@
+
+
+
+
+% dodecl(<>,...) -> <> 
+<<function pdecl>>=
+void
+pdecl(int class, Type *t, Sym *s)
+{
+    if(s && s->offset != -1) {
+        diag(Z, "not a parameter: %s", s->name);
+        return;
+    }
+    t = paramconv(t, class==CPARAM);
+    if(class == CXXX)
+        class = CPARAM;
+    if(class != CPARAM) {
+        diag(Z, "parameter cannot have class: %s", s->name);
+        class = CPARAM;
+    }
+    if(typesu[t->etype] && t->width <= 0)
+        diag(Z, "incomplete structure: %s", t->tag->name);
+    adecl(class, t, s);
+}
+@
+% a parameter is a kind of local, hence the call to adecl
+
+
+
+
+
+
 \subsection{Locals, automatic declarator}
 
 % slist -> <>
@@ -7735,6 +7546,7 @@ adecl(int c, Type *t, Sym *s)
         s->class = c;
         s->aused = false;
     }
+
     switch(c) {
     case CAUTO:
         autoffset = align(autoffset, t, Aaut3);
@@ -8890,6 +8702,38 @@ case OINDREG:
 
 \section{Register allocation, part one}
 
+<<global reg(arm)>>=
+char	reg[NREG+NFREG];
+@
+
+<<[[ginit()]] reg and resvreg initialisation>>=
+memset(reg, 0, sizeof(reg));
+
+/* don't allocate */
+reg[REGTMP] = 1;
+reg[REGSB] = 1;
+reg[REGSP] = 1;
+reg[REGLINK] = 1;
+reg[REGPC] = 1;
+/* keep two external registers */
+reg[REGEXT] = 1; // R10
+reg[REGEXT-1] = 1; // R9
+@
+
+<<[[ginit()]] reg and resvreg initialisation>>=
+memmove(resvreg, reg, sizeof(reg));
+@
+
+<<[[gclean()]] sanity check reg>>=
+for(i=0; i<NREG; i++)
+    if(reg[i] && !resvreg[i])
+        diag(Z, "reg %d left allocated", i);
+for(i=NREG; i<NREG+NFREG; i++)
+    if(reg[i] && !resvreg[i])
+        diag(Z, "freg %d left allocated", i-NREG);
+@
+
+
 \subsection{[[regalloc()]]}
 
 <<[[Node]] other fields>>=
@@ -9092,6 +8936,15 @@ if(typecmplx[thisfntype->link->etype]) {
 Node*	nodret;
 @
 
+<<[[ginit()]] special nodes initialisation>>=
+nodret = new(ONAME, Z, Z);
+nodret->sym = slookup(".ret");
+nodret->type = types[TIND];
+nodret->etype = TIND;
+nodret->class = CPARAM;
+nodret = new(OIND, nodret, Z);
+complex(nodret);
+@
 
 
 % 5c/sgen.c?
@@ -9629,6 +9482,21 @@ Node	constnode;
 Node	fconstnode;
 @
 
+<<[[ginit()]] special nodes initialisation>>=
+constnode.op = OCONST;
+constnode.class = CXXX;
+constnode.complex = 0;
+constnode.addable = 20;
+constnode.type = types[TLONG];
+@
+
+<<[[ginit()]] special nodes initialisation>>=
+fconstnode.op = OCONST;
+fconstnode.class = CXXX;
+fconstnode.complex = 0;
+fconstnode.addable = 20;
+fconstnode.type = types[TDOUBLE];
+@
 
 <<function nodconst>>=
 Node*
@@ -10717,33 +10585,6 @@ long v;
 
 % see also acom() rewriting
 
-<<[[cgenrel()]] switch opcode cases>>=
-case ODIV:
-case OMOD:
-    if(nn != Z)
-    if((t = vlog(r)) >= 0) {
-        /* signed div/mod by constant power of 2 */
-        cgen(l, nn);
-        gopcode(OGE, nodconst(0), nn, Z);
-        p1 = p;
-        if(o == ODIV) {
-            gopcode(OADD, nodconst((1<<t)-1), Z, nn);
-            patch(p1, pc);
-            gopcode(OASHR, nodconst(t), Z, nn);
-        } else {
-            gopcode(OSUB, nn, nodconst(0), nn);
-            gopcode(OAND, nodconst((1<<t)-1), Z, nn);
-            gopcode(OSUB, nn, nodconst(0), nn);
-            gbranch(OGOTO);
-            patch(p1, pc);
-            p1 = p;
-            gopcode(OAND, nodconst((1<<t)-1), Z, nn);
-            patch(p1, pc);
-        }
-        break;
-    }
-    goto muldiv;
-@
 
 <<[[cgenrel()]] switch opcode cases>>=
 case OSUB:
@@ -10807,6 +10648,34 @@ muldiv:
     regfree(&nod);
     regfree(&nod1);
     break;
+@
+
+<<[[cgenrel()]] switch opcode cases>>=
+case ODIV:
+case OMOD:
+    if(nn != Z)
+    if((t = vlog(r)) >= 0) {
+        /* signed div/mod by constant power of 2 */
+        cgen(l, nn);
+        gopcode(OGE, nodconst(0), nn, Z);
+        p1 = p;
+        if(o == ODIV) {
+            gopcode(OADD, nodconst((1<<t)-1), Z, nn);
+            patch(p1, pc);
+            gopcode(OASHR, nodconst(t), Z, nn);
+        } else {
+            gopcode(OSUB, nn, nodconst(0), nn);
+            gopcode(OAND, nodconst((1<<t)-1), Z, nn);
+            gopcode(OSUB, nn, nodconst(0), nn);
+            gbranch(OGOTO);
+            patch(p1, pc);
+            p1 = p;
+            gopcode(OAND, nodconst((1<<t)-1), Z, nn);
+            patch(p1, pc);
+        }
+        break;
+    }
+    goto muldiv;
 @
 
 
@@ -11723,7 +11592,32 @@ case ODOT:
 Node*	nodrat;
 @
 
+<<global symrathole>>=
+Sym*	symrathole;
+@
 
+<<[[ginit()]] special nodes initialisation>>=
+t = typ(TARRAY, types[TCHAR]);
+symrathole = slookup(".rathole");
+symrathole->class = CGLOBL;
+symrathole->type = t;
+
+nodrat = new(ONAME, Z, Z);
+nodrat->sym = symrathole;
+nodrat->type = types[TIND];
+nodrat->etype = TVOID;
+nodrat->class = CGLOBL;
+complex(nodrat);
+nodrat->type = t;
+@
+
+<<[[gclean()]] adjust symrathole width>>=
+symrathole->type->width = nrathole;
+@
+
+<<global nrathole>>=
+long	nrathole;
+@
 
 <<function sugen(arm)>>=
 void
@@ -12128,9 +12022,6 @@ if(typesuv[n->type->etype]) {
 @
 
 
-<<global nrathole>>=
-long	nrathole;
-@
 
 
 <<global znode>>=
@@ -13569,6 +13460,11 @@ Init	bnamesinit[] =
 
 % called for fields of structures/unions
 
+<<[[Type]] other fields>>=
+long	offset;
+@
+
+
 % complex rule for struct/union definition -> <>
 <<function sualign>>=
 //@Scheck: not dead, used by cc.y
@@ -13949,9 +13845,6 @@ zname(Biobuf *b, Sym *s, int t)
 
 \section{File and line information, [[outhist()]]}
 
-<<global pathname>>=
-char*	pathname;
-@
 
 
 <<function outhist(arm)>>=
@@ -14317,6 +14210,71 @@ char typechlvp[NTYPE];
 
 
 
+<<[[tinit()]] initialise typexxx type sets>>=
+for(ip=typeiinit; *ip>=0; ip++) {
+    urk("typei", nelem(typei), *ip);
+    typei[*ip] = 1;
+}
+for(ip=typeuinit; *ip>=0; ip++) {
+    urk("typeu", nelem(typeu), *ip);
+    typeu[*ip] = 1;
+}
+for(ip=typesuvinit; *ip>=0; ip++) {
+    urk("typesuv", nelem(typesuv), *ip);
+    typesuv[*ip] = true;
+}
+for(ip=typeilpinit; *ip>=0; ip++) {
+    urk("typeilp", nelem(typeilp), *ip);
+    typeilp[*ip] = 1;
+}
+for(ip=typechlinit; *ip>=0; ip++) {
+    urk("typechl", nelem(typechl), *ip);
+    typechl[*ip] = 1;
+    typechlv[*ip] = 1;
+    typechlvp[*ip] = 1;
+}
+for(ip=typechlpinit; *ip>=0; ip++) {
+    urk("typechlp", nelem(typechlp), *ip);
+    typechlp[*ip] = 1;
+    typechlvp[*ip] = 1;
+}
+for(ip=typechlpfdinit; *ip>=0; ip++) {
+    urk("typechlpfd", nelem(typechlpfd), *ip);
+    typechlpfd[*ip] = 1;
+}
+for(ip=typecinit; *ip>=0; ip++) {
+    urk("typec", nelem(typec), *ip);
+    typec[*ip] = 1;
+}
+for(ip=typehinit; *ip>=0; ip++) {
+    urk("typeh", nelem(typeh), *ip);
+    typeh[*ip] = 1;
+}
+for(ip=typeilinit; *ip>=0; ip++) {
+    urk("typeil", nelem(typeil), *ip);
+    typeil[*ip] = 1;
+}
+for(ip=typevinit; *ip>=0; ip++) {
+    urk("typev", nelem(typev), *ip);
+    typev[*ip] = 1;
+    typechlv[*ip] = 1;
+    typechlvp[*ip] = 1;
+}
+for(ip=typefdinit; *ip>=0; ip++) {
+    urk("typefd", nelem(typefd), *ip);
+    typefd[*ip] = 1;
+}
+for(ip=typeafinit; *ip>=0; ip++) {
+    urk("typeaf", nelem(typeaf), *ip);
+    typeaf[*ip] = 1;
+}
+for(ip=typesuinit; *ip >= 0; ip++) {
+    urk("typesu", nelem(typesu), *ip);
+    typesu[*ip] = 1;
+}
+@
+
+
 
 
 % set of type supported for switch argument
@@ -14337,10 +14295,13 @@ char*	typeword;
 char*	typecmplx;
 @
 
-%    /* 32-bit defaults */
-%    typeword = typechlp;
-%    typeswitch = typechl;
-%    typecmplx = typesuv;
+
+<<[[tinit()]] initialise 32 bits defaults type sets>>=
+/* 32-bit defaults */
+typeword = typechlp;
+typeswitch = typechl;
+typecmplx = typesuv;
+@
 
 
 
@@ -14396,6 +14357,108 @@ stcompat(Node *n, Type *t1, Type *t2, long ttab[])
     return true;
 }
 @
+
+
+<<function sametype>>=
+bool
+sametype(Type *t1, Type *t2)
+{
+
+    if(t1 == t2)
+        return true;
+    return rsametype(t1, t2, 5, true);
+}
+@
+
+% n = depth? so equal modulo a certain depth?? hmmm
+<<function rsametype>>=
+bool
+rsametype(Type *t1, Type *t2, int n, bool f)
+{
+    int et;
+
+    n--;
+    for(;;) {
+        if(t1 == t2)
+            return true;
+        if(t1 == T || t2 == T)
+            return false;
+        if(n <= 0)
+            return true;
+
+        et = t1->etype;
+        if(et != t2->etype)
+            return false;
+
+        if(et == TFUNC) {
+            if(!rsametype(t1->link, t2->link, n, false))
+                return false;
+            t1 = t1->down;
+            t2 = t2->down;
+            while(t1 != T && t2 != T) {
+
+                <<[[rsametype()]] continue if old style type>>
+
+                while(t1 != T || t2 != T) {
+                    if(!rsametype(t1, t2, n, false))
+                        return false;
+                    t1 = t1->down;
+                    t2 = t2->down;
+                }
+                break;
+            }
+            return true;
+        }
+        if(et == TARRAY)
+            if(t1->width != t2->width && t1->width != 0 && t2->width != 0)
+                return false;
+        if(typesu[et]) {
+            if(t1->link == T)
+                snap(t1);
+            if(t2->link == T)
+                snap(t2);
+            if(t1 != t2 && t1->link == T && t2->link == T){
+                /* structs with missing or different tag names aren't considered equal */
+                if(t1->tag == nil || t2->tag == nil ||
+                   strcmp(t1->tag->name, t2->tag->name) != 0)
+                    return false;
+            }
+            t1 = t1->link;
+            t2 = t2->link;
+            for(;;) {
+                if(t1 == t2)
+                    return true;
+                if(!rsametype(t1, t2, n, false))
+                    return false;
+                t1 = t1->down;
+                t2 = t2->down;
+            }
+        }
+        t1 = t1->link;
+        t2 = t2->link;
+
+        if((f || !debug['V']) && et == TIND) {
+            if(t1 != T && t1->etype == TVOID)
+                return true;
+            if(t2 != T && t2->etype == TVOID)
+                return true;
+        }
+    }
+}
+@
+
+<<function snap>>=
+void
+snap(Type *t)
+{
+    if(typesu[t->etype])
+     if(t->link == T && t->tag && t->tag->suetag) {
+        t->link = t->tag->suetag->link;
+        t->width = t->tag->suetag->width;
+    }
+}
+@
+
 
 
 <<enum bxxx constants>>=
@@ -14626,6 +14689,42 @@ long	targ[1] =
 };
 @
 
+
+
+<<[[tinit()]] initialise tcompat arrays>>=
+for(p=tasigninit; p->code >= 0; p++) {
+    urk("tasign", nelem(tasign), p->code);
+    tasign[p->code] = p->value;
+}
+for(p=tasaddinit; p->code >= 0; p++) {
+    urk("tasadd", nelem(tasadd), p->code);
+    tasadd[p->code] = p->value;
+}
+for(p=tcastinit; p->code >= 0; p++) {
+    urk("tcast", nelem(tcast), p->code);
+    tcast[p->code] = p->value;
+}
+for(p=taddinit; p->code >= 0; p++) {
+    urk("tadd", nelem(tadd), p->code);
+    tadd[p->code] = p->value;
+}
+for(p=tsubinit; p->code >= 0; p++) {
+    urk("tsub", nelem(tsub), p->code);
+    tsub[p->code] = p->value;
+}
+for(p=tmulinit; p->code >= 0; p++) {
+    urk("tmul", nelem(tmul), p->code);
+    tmul[p->code] = p->value;
+}
+for(p=tandinit; p->code >= 0; p++) {
+    urk("tand", nelem(tand), p->code);
+    tand[p->code] = p->value;
+}
+for(p=trelinit; p->code >= 0; p++) {
+    urk("trel", nelem(trel), p->code);
+    trel[p->code] = p->value;
+}
+@
 
 
 \subsection{Declaration and definition types merge}
@@ -21462,9 +21561,6 @@ char	sig;
 % SIGNINTERN does not fit in a char ...
 
 
-<<global symrathole>>=
-Sym*	symrathole;
-@
 
 <<[[zname()]] if generate signature for symbol s>>=
 if(debug['T'] && 
@@ -21667,6 +21763,25 @@ sigind(Type *t, Typetab *tt)
 %	$CC -a $CFLAGS rio.c	> syms
 %	$CC -aa $CFLAGS *.c 	>>syms
 
+
+<<[[compile()]] if writing acid to standard output>>=
+/*
+ * if we're writing acid to standard output, don't keep scratching
+ * outbuf.
+ */
+if((debug['a'] || debug['Z']) && !debug['n']) {
+    if (first) {
+        outfile = nil;
+        Binit(&outbuf, dup(1, -1), OWRITE);
+        dup(2, 1);
+    }
+} 
+@
+
+<<[[compile()]] adjust p for outfile if acid option>>=
+if(debug['a'] && debug['n'])
+    strcat(p, ".acid");
+@
 
 \subsection{Entities}
 
@@ -22016,6 +22131,11 @@ acidmember(Type *t, long off, int flag)
 
 % 5c -Z  and -n create _picke.c
 
+
+<<[[compile()]] adjust p for outfile if pickle option>>=
+else if(debug['Z'] && debug['n'])
+    strcat(p, "_pickle.c");
+@
 
 <<global kwd (cc/pickle.c)>>=
 static char *kwd[] =
@@ -24832,6 +24952,35 @@ Init	gnamesinit[] =
     -1,			0,	0,
 };
 @
+
+
+<<[[tinit()]] initialise xxxnames debugging arrays>>=
+for(p=bnamesinit; p->code >= 0; p++) {
+    urk("bnames", nelem(bnames), p->code);
+    bnames[p->code] = p->s;
+}
+for(p=tnamesinit; p->code >= 0; p++) {
+    urk("tnames", nelem(tnames), p->code);
+    tnames[p->code] = p->s;
+}
+for(p=gnamesinit; p->code >= 0; p++) {
+    urk("gnames", nelem(gnames), p->code);
+    gnames[p->code] = p->s;
+}
+for(p=qnamesinit; p->code >= 0; p++) {
+    urk("qnames", nelem(qnames), p->code);
+    qnames[p->code] = p->s;
+}
+for(p=cnamesinit; p->code >= 0; p++) {
+    urk("cnames", nelem(cnames), p->code);
+    cnames[p->code] = p->s;
+}
+for(p=onamesinit; p->code >= 0; p++) {
+    urk("onames", nelem(onames), p->code);
+    onames[p->code] = p->s;
+}
+@
+
 
 \section{AST dumper, [[prtree()]]}
 % this is useful! gcc still have not it, and RMS is actually

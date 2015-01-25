@@ -192,14 +192,17 @@ void main(int argc, char *argv[])
 
 /*s: function compile */
 int
-compile(char *file, char **defs, int ndef)
+compile(char *infile, char **defs, int ndef)
 {
+    /*s: [[compile()]] locals */
     char ofile[400], incfile[20];
     char *p, **av, opt[256];
     int i, c, fd[2];
-    static int first = 1;
+    static bool first = true;
+    /*e: [[compile()]] locals */
 
-    strcpy(ofile, file);
+    /*s: [[compile()]] set p to basename(infile) and adjust include */
+    strcpy(ofile, infile);
     p = utfrrune(ofile, pathchar());
     if(p) {
         *p++ = 0;
@@ -207,27 +210,35 @@ compile(char *file, char **defs, int ndef)
             include[0] = strdup(ofile);
     } else
         p = ofile;
+    /*e: [[compile()]] set p to basename(infile) and adjust include */
 
     if(outfile == nil) {
+        /*s: [[compile()]] set outfile, using p, to {basename(infile)}.{thechar} */
         outfile = p;
         if(outfile) {
             if(p = utfrrune(outfile, '.'))
                 if(p[1] == 'c' && p[2] == 0)
                     p[0] = 0;
             p = utfrune(outfile, 0);
+            /*s: [[compile()]] adjust p for outfile if acid option */
             if(debug['a'] && debug['n'])
                 strcat(p, ".acid");
+            /*e: [[compile()]] adjust p for outfile if acid option */
+            /*s: [[compile()]] adjust p for outfile if pickle option */
             else if(debug['Z'] && debug['n'])
                 strcat(p, "_pickle.c");
+            /*e: [[compile()]] adjust p for outfile if pickle option */
             else {
                 p[0] = '.';
                 p[1] = thechar;
-                p[2] = 0;
+                p[2] = '\0';
             }
         } else
             outfile = "/dev/null";
+        /*e: [[compile()]] set outfile, using p, to {basename(infile)}.{thechar} */
     }
 
+    /*s: [[compile()]] setinclude("/{thestring}/include") or INCLUDE */
     if(p = getenv("INCLUDE")) {
         setinclude(p);
     } else {
@@ -237,8 +248,12 @@ compile(char *file, char **defs, int ndef)
             setinclude("/sys/include");
         }
     }
+    /*e: [[compile()]] setinclude("/{thestring}/include") or INCLUDE */
+
     if (first)
         Binit(&diagbuf, 1, OWRITE);
+
+    /*s: [[compile()]] if writing acid to standard output */
     /*
      * if we're writing acid to standard output, don't keep scratching
      * outbuf.
@@ -249,7 +264,9 @@ compile(char *file, char **defs, int ndef)
             Binit(&outbuf, dup(1, -1), OWRITE);
             dup(2, 1);
         }
-    } else {
+    } 
+    /*e: [[compile()]] if writing acid to standard output */
+    else {
         c = mycreat(outfile, 0664);
         if(c < 0) {
             diag(Z, "cannot open %s - %r", outfile);
@@ -259,13 +276,13 @@ compile(char *file, char **defs, int ndef)
         Binit(&outbuf, c, OWRITE);
     }
     newio();
-    first = 0;
+    first = false;
 
     /*s: [[compile()]] use ANSI preprocessor */
     /* Use an ANSI preprocessor */
     if(debug['p']) {
-        if(myaccess(file) < 0) {
-            diag(Z, "%s does not exist", file);
+        if(myaccess(infile) < 0) {
+            diag(Z, "%s does not exist", infile);
             errorexit();
         }
         if(pipe(fd) < 0) {
@@ -296,8 +313,8 @@ compile(char *file, char **defs, int ndef)
                 sprint(opt, "-I%s", include[c]);
                 av[i++] = strdup(opt);
             }
-            if(strcmp(file, "stdin") != 0)
-                av[i++] = file;
+            if(strcmp(infile, "stdin") != 0)
+                av[i++] = infile;
             av[i] = 0;
             if(debug['p'] > 1) {
                 for(c = 0; c < i; c++)
@@ -311,16 +328,16 @@ compile(char *file, char **defs, int ndef)
 
         default:
             close(fd[1]);
-            newfile(file, fd[0]);
+            newfile(infile, fd[0]);
             break;
         }
     }
     /*e: [[compile()]] use ANSI preprocessor */
     else {
-        if(strcmp(file, "stdin") == 0)
-            newfile(file, 0);
+        if(strcmp(infile, "stdin") == 0)
+            newfile(infile, 0);
         else
-            newfile(file, -1);
+            newfile(infile, -1);
     }
  
     // The big call!
@@ -1297,13 +1314,14 @@ cinit(void)
     int i;
     Type *t;
 
+    /*s: [[cinit()]] lexing globals initialization */
     nerrors = 0;
     lineno = 1;
     iostack = I;
     iofree = I;
     peekc = IGN;
     nhunk = 0;
-
+    /*e: [[cinit()]] lexing globals initialization */
     /*s: [[cinit()]] types initialization */
     types[TXXX] = T;
 
@@ -1325,10 +1343,10 @@ cinit(void)
     types[TFUNC] = typ(TFUNC, types[TINT]);
     types[TIND] = typ(TIND, types[TVOID]);
     /*e: [[cinit()]] types initialization */
-
+    /*s: [[cinit()]] hash initialization */
     for(i=0; i<NHASH; i++)
         hash[i] = S;
-
+    /*e: [[cinit()]] hash initialization */
     /*s: [[cinit()]] symbol table initialization */
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
@@ -1337,16 +1355,18 @@ cinit(void)
             s->type = types[itab[i].type];
     }
     /*e: [[cinit()]] symbol table initialization */
-
+    /*s: [[cinit()]] namespace globals initialization */
     blockno = 0;
     autobn = 0;
     autoffset = 0;
-
+    /*e: [[cinit()]] namespace globals initialization */
+    /*s: [[cinit()]] symstring initialization */
     t = typ(TARRAY, types[TCHAR]);
     t->width = 0;
     symstring = slookup(".string");
     symstring->class = CSTATIC;
     symstring->type = t;
+    /*e: [[cinit()]] symstring initialization */
 
     t = typ(TARRAY, types[TCHAR]);
     t->width = 0;
@@ -1354,12 +1374,14 @@ cinit(void)
     nodproto = new(OPROTO, Z, Z);
     dclstack = D;
 
+    /*s: [[cinit()]] pathname initialisation from cwd */
     pathname = allocn(pathname, 0, 100);
     if(getwd(pathname, 99) == 0) {
         pathname = allocn(pathname, 100, 900);
         if(getwd(pathname, 999) == 0)
             strcpy(pathname, "/???");
     }
+    /*e: [[cinit()]] pathname initialisation from cwd */
     /*s: [[cinit()]] fmtinstall */
     fmtinstall('O', Oconv);
     fmtinstall('T', Tconv);

@@ -98,32 +98,6 @@ cgenrel(Node *n, Node *nn, bool inrel)
         cgen(r, nn);
         break;
     /*x: [[cgenrel()]] switch opcode cases */
-    case ODIV:
-    case OMOD:
-        if(nn != Z)
-        if((t = vlog(r)) >= 0) {
-            /* signed div/mod by constant power of 2 */
-            cgen(l, nn);
-            gopcode(OGE, nodconst(0), nn, Z);
-            p1 = p;
-            if(o == ODIV) {
-                gopcode(OADD, nodconst((1<<t)-1), Z, nn);
-                patch(p1, pc);
-                gopcode(OASHR, nodconst(t), Z, nn);
-            } else {
-                gopcode(OSUB, nn, nodconst(0), nn);
-                gopcode(OAND, nodconst((1<<t)-1), Z, nn);
-                gopcode(OSUB, nn, nodconst(0), nn);
-                gbranch(OGOTO);
-                patch(p1, pc);
-                p1 = p;
-                gopcode(OAND, nodconst((1<<t)-1), Z, nn);
-                patch(p1, pc);
-            }
-            break;
-        }
-        goto muldiv;
-    /*x: [[cgenrel()]] switch opcode cases */
     case OSUB:
         if(nn != Z)
         if(l->op == OCONST)
@@ -185,6 +159,32 @@ cgenrel(Node *n, Node *nn, bool inrel)
         regfree(&nod);
         regfree(&nod1);
         break;
+    /*x: [[cgenrel()]] switch opcode cases */
+    case ODIV:
+    case OMOD:
+        if(nn != Z)
+        if((t = vlog(r)) >= 0) {
+            /* signed div/mod by constant power of 2 */
+            cgen(l, nn);
+            gopcode(OGE, nodconst(0), nn, Z);
+            p1 = p;
+            if(o == ODIV) {
+                gopcode(OADD, nodconst((1<<t)-1), Z, nn);
+                patch(p1, pc);
+                gopcode(OASHR, nodconst(t), Z, nn);
+            } else {
+                gopcode(OSUB, nn, nodconst(0), nn);
+                gopcode(OAND, nodconst((1<<t)-1), Z, nn);
+                gopcode(OSUB, nn, nodconst(0), nn);
+                gbranch(OGOTO);
+                patch(p1, pc);
+                p1 = p;
+                gopcode(OAND, nodconst((1<<t)-1), Z, nn);
+                patch(p1, pc);
+            }
+            break;
+        }
+        goto muldiv;
     /*x: [[cgenrel()]] switch opcode cases */
     case OANDAND:
     case OOROR:

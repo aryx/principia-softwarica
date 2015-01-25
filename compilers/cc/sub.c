@@ -2066,11 +2066,13 @@ tinit(void)
     int *ip;
     Init *p;
 
+    /*s: [[tinit()]] initialise thash */
     for(p=thashinit; p->code >= 0; p++) {
         urk("thash", nelem(thash), p->code);
         thash[p->code] = p->value;
     }
-
+    /*e: [[tinit()]] initialise thash */
+    /*s: [[tinit()]] initialise xxxnames debugging arrays */
     for(p=bnamesinit; p->code >= 0; p++) {
         urk("bnames", nelem(bnames), p->code);
         bnames[p->code] = p->s;
@@ -2095,9 +2097,8 @@ tinit(void)
         urk("onames", nelem(onames), p->code);
         onames[p->code] = p->s;
     }
-
-
-
+    /*e: [[tinit()]] initialise xxxnames debugging arrays */
+    /*s: [[tinit()]] initialise typexxx type sets */
     for(ip=typeiinit; *ip>=0; ip++) {
         urk("typei", nelem(typei), *ip);
         typei[*ip] = 1;
@@ -2159,8 +2160,8 @@ tinit(void)
         urk("typesu", nelem(typesu), *ip);
         typesu[*ip] = 1;
     }
-
-
+    /*e: [[tinit()]] initialise typexxx type sets */
+    /*s: [[tinit()]] initialise tcompat arrays */
     for(p=tasigninit; p->code >= 0; p++) {
         urk("tasign", nelem(tasign), p->code);
         tasign[p->code] = p->value;
@@ -2193,11 +2194,13 @@ tinit(void)
         urk("trel", nelem(trel), p->code);
         trel[p->code] = p->value;
     }
-    
+    /*e: [[tinit()]] initialise tcompat arrays */
+    /*s: [[tinit()]] initialise 32 bits defaults type sets */
     /* 32-bit defaults */
     typeword = typechlp;
     typeswitch = typechl;
     typecmplx = typesuv;
+    /*e: [[tinit()]] initialise 32 bits defaults type sets */
 }
 /*e: function tinit */
 

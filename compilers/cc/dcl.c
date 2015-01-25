@@ -1387,6 +1387,7 @@ adecl(int c, Type *t, Sym *s)
         s->class = c;
         s->aused = false;
     }
+
     switch(c) {
     case CAUTO:
         autoffset = align(autoffset, t, Aaut3);
@@ -1436,7 +1437,7 @@ xdecl(int class, Type *t, Sym *s)
     long o; // offset
 
     o = 0;
-    // adjusting class
+    // adjusting class, and possibly o (for CEXREG)
     switch(class) {
     /*s: [[xdecl()]] switch class cases */
     case CXXX:

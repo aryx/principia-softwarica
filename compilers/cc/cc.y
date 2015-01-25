@@ -76,6 +76,8 @@
 %type   <node>  xdecor xdecor2 edecor  abdecor abdecor1 abdecor2 abdecor3
 %type   <node>  zexpr zelist zcexpr zarglist
 /*x: type declarations */
+%type   <sym>   ltag
+/*x: type declarations */
 %type   <lval>  tname cname gname
 /*x: type declarations */
 %type   <lval>   gcname   gctname
@@ -87,8 +89,6 @@
 %type   <lval>  gctnlist gcnlist zgnlist
 /*x: type declarations */
 %type   <type>  complex
-/*x: type declarations */
-%type   <sym>   ltag
 /*x: type declarations */
 %type   <type> sbody
 /*e: type declarations */

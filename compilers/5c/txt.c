@@ -35,16 +35,38 @@ ginit(void)
     exfregoffset = FREGEXT;
     /*e: [[ginit()]] initialisation */
 
+    /*s: [[ginit()]] zprog initialisation */
     zprog.link = P;
     zprog.as = AGOK;
-    zprog.reg = NREG;
+    zprog.reg = R_NONE;
     zprog.from.type = D_NONE;
     zprog.from.name = D_NONE;
-    zprog.from.reg = NREG;
+    zprog.from.reg = R_NONE;
     zprog.to = zprog.from;
     zprog.scond = COND_ALWAYS;  
+    /*e: [[ginit()]] zprog initialisation */
 
     /*s: [[ginit()]] special nodes initialisation */
+    nodret = new(ONAME, Z, Z);
+    nodret->sym = slookup(".ret");
+    nodret->type = types[TIND];
+    nodret->etype = TIND;
+    nodret->class = CPARAM;
+    nodret = new(OIND, nodret, Z);
+    complex(nodret);
+    /*x: [[ginit()]] special nodes initialisation */
+    constnode.op = OCONST;
+    constnode.class = CXXX;
+    constnode.complex = 0;
+    constnode.addable = 20;
+    constnode.type = types[TLONG];
+    /*x: [[ginit()]] special nodes initialisation */
+    fconstnode.op = OCONST;
+    fconstnode.class = CXXX;
+    fconstnode.complex = 0;
+    fconstnode.addable = 20;
+    fconstnode.type = types[TDOUBLE];
+    /*x: [[ginit()]] special nodes initialisation */
     nodsafe = new(ONAME, Z, Z);
     nodsafe->sym = slookup(".safe");
     nodsafe->type = types[TINT];
@@ -52,26 +74,6 @@ ginit(void)
     nodsafe->class = CAUTO;
     complex(nodsafe);
     /*x: [[ginit()]] special nodes initialisation */
-    regnode.op = OREGISTER;
-    regnode.class = CEXREG;
-    regnode.reg = REGTMP;
-    regnode.complex = 0;
-    regnode.addable = 11;
-    regnode.type = types[TLONG];
-    /*e: [[ginit()]] special nodes initialisation */
-
-    constnode.op = OCONST;
-    constnode.class = CXXX;
-    constnode.complex = 0;
-    constnode.addable = 20;
-    constnode.type = types[TLONG];
-
-    fconstnode.op = OCONST;
-    fconstnode.class = CXXX;
-    fconstnode.complex = 0;
-    fconstnode.addable = 20;
-    fconstnode.type = types[TDOUBLE];
-
     t = typ(TARRAY, types[TCHAR]);
     symrathole = slookup(".rathole");
     symrathole->class = CGLOBL;
@@ -84,17 +86,18 @@ ginit(void)
     nodrat->class = CGLOBL;
     complex(nodrat);
     nodrat->type = t;
-
-    nodret = new(ONAME, Z, Z);
-    nodret->sym = slookup(".ret");
-    nodret->type = types[TIND];
-    nodret->etype = TIND;
-    nodret->class = CPARAM;
-    nodret = new(OIND, nodret, Z);
-    complex(nodret);
+    /*x: [[ginit()]] special nodes initialisation */
+    regnode.op = OREGISTER;
+    regnode.class = CEXREG;
+    regnode.reg = REGTMP;
+    regnode.complex = 0;
+    regnode.addable = 11;
+    regnode.type = types[TLONG];
+    /*e: [[ginit()]] special nodes initialisation */
 
     com64init();
 
+    /*s: [[ginit()]] reg and resvreg initialisation */
     memset(reg, 0, sizeof(reg));
 
     /* don't allocate */
@@ -106,8 +109,9 @@ ginit(void)
     /* keep two external registers */
     reg[REGEXT] = 1; // R10
     reg[REGEXT-1] = 1; // R9
-
+    /*x: [[ginit()]] reg and resvreg initialisation */
     memmove(resvreg, reg, sizeof(reg));
+    /*e: [[ginit()]] reg and resvreg initialisation */
 }
 /*e: function ginit(arm) */
 
@@ -118,18 +122,25 @@ gclean(void)
     int i;
     Sym *s;
 
+    /*s: [[gclean()]] sanity check reg */
     for(i=0; i<NREG; i++)
         if(reg[i] && !resvreg[i])
             diag(Z, "reg %d left allocated", i);
     for(i=NREG; i<NREG+NFREG; i++)
         if(reg[i] && !resvreg[i])
             diag(Z, "freg %d left allocated", i-NREG);
+    /*e: [[gclean()]] sanity check reg */
 
+    /*s: [[gclean()]] adjust symstring width */
     while(mnstring)
         outstring("", 1L);
     symstring->type->width = nstring;
+    /*e: [[gclean()]] adjust symstring width */
+    /*s: [[gclean()]] adjust symrathole width */
     symrathole->type->width = nrathole;
+    /*e: [[gclean()]] adjust symrathole width */
 
+    /*s: [[gclean()]] generate all AGLOBL pseudo opcodes */
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         if(s->type == T)
@@ -142,11 +153,14 @@ gclean(void)
             continue;
         gpseudo(AGLOBL, s, nodconst(s->type->width));
     }
+    /*e: [[gclean()]] generate all AGLOBL pseudo opcodes */
  
+    /*s: [[gclean()]] generate last opcode, AEND */
     nextpc();
     p->as = AEND;
+    /*e: [[gclean()]] generate last opcode, AEND */
 
-    // generate the whole file, use outbuf global
+    // generate the whole output file using outbuf global
     outcode();
 }
 /*e: function gclean(arm) */
