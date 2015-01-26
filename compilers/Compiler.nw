@@ -892,6 +892,12 @@ Sym*	link;
 @
 
 
+<<[[cinit()]] hash initialization>>=
+for(i=0; i<NHASH; i++)
+    hash[i] = S;
+@
+
+
 
 
 
@@ -1673,33 +1679,6 @@ gclean(void)
 }
 @
 
-<<[[gclean()]] adjust symstring width>>=
-while(mnstring)
-    outstring("", 1L);
-symstring->type->width = nstring;
-@
-
-
-<<[[gclean()]] generate all AGLOBL pseudo opcodes>>=
-for(i=0; i<NHASH; i++)
- for(s = hash[i]; s != S; s = s->link) {
-    if(s->type == T)
-        continue;
-    if(s->type->width == 0)
-        continue;
-    if(s->class != CGLOBL && s->class != CSTATIC)
-        continue;
-    if(s->type == types[TENUM])
-        continue;
-    gpseudo(AGLOBL, s, nodconst(s->type->width));
-}
-@
-
-<<[[gclean()]] generate last opcode, AEND>>=
-nextpc();
-p->as = AEND;
-@
-
 \section{[[tinit()]]}
 
 % main -> <>
@@ -1718,7 +1697,7 @@ tinit(void)
 }
 @
 
-
+% put here just to show an example?
 <<[[tinit()]] initialise thash>>=
 for(p=thashinit; p->code >= 0; p++) {
     urk("thash", nelem(thash), p->code);
@@ -1767,11 +1746,8 @@ cinit(void)
     <<[[cinit()]] fmtinstall>>
 }
 @
+% dead code about 't'?
 
-<<[[cinit()]] hash initialization>>=
-for(i=0; i<NHASH; i++)
-    hash[i] = S;
-@
 
 <<[[cinit()]] lexing globals initialization>>=
 nerrors = 0;
@@ -1788,13 +1764,6 @@ autobn = 0;
 autoffset = 0;
 @
 
-<<[[cinit()]] symstring initialization>>=
-t = typ(TARRAY, types[TCHAR]);
-t->width = 0;
-symstring = slookup(".string");
-symstring->class = CSTATIC;
-symstring->type = t;
-@
 
 
 
@@ -3026,66 +2995,6 @@ getcom(void)
 
 % similar to Assembler.nw again, except here have the possiblity
 % to also call an external program.
-
-<<constant CPP>>=
-#define	CPP	"/bin/cpp"
-@
-
-<<[[compile()]] use ANSI preprocessor>>=
-/* Use an ANSI preprocessor */
-if(debug['p']) {
-    if(myaccess(infile) < 0) {
-        diag(Z, "%s does not exist", infile);
-        errorexit();
-    }
-    if(pipe(fd) < 0) {
-        diag(Z, "pipe failed");
-        errorexit();
-    }
-    switch(fork()) {
-    case -1:
-        diag(Z, "fork failed");
-        errorexit();
-
-    case 0:
-        close(fd[0]);
-        dup(fd[1], 1);
-        close(fd[1]);
-        av = alloc((3 + ndef + ninclude + 2) * sizeof *av);
-        av[0] = CPP;
-        i = 1;
-        if(debug['.'])
-            av[i++] = strdup("-.");
-        /* 1999 ANSI C requires recognising // comments */
-        av[i++] = strdup("-+");
-        for(c = 0; c < ndef; c++) {
-            sprint(opt, "-D%s", defs[c]);
-            av[i++] = strdup(opt);
-        }
-        for(c = 0; c < ninclude; c++) {
-            sprint(opt, "-I%s", include[c]);
-            av[i++] = strdup(opt);
-        }
-        if(strcmp(infile, "stdin") != 0)
-            av[i++] = infile;
-        av[i] = 0;
-        if(debug['p'] > 1) {
-            for(c = 0; c < i; c++)
-                fprint(2, "%s ", av[c]);
-            fprint(2, "\n");
-        }
-
-        exec(av[0], av);
-        fprint(2, "can't exec C preprocessor %s: %r\n", CPP);
-        errorexit();
-
-    default:
-        close(fd[1]);
-        newfile(infile, fd[0]);
-        break;
-    }
-}
-@
 
 
 % builtin preprocessor integrated with lexer (benefit? faster? no fork?)
@@ -4363,6 +4272,7 @@ dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
 loop:
     if(n != Z)
      switch(n->op) {
+     // can adjust t using information from node n
      <<[[dodecl()]] switch node kind cases>>
      default:
          diag(n, "unknown declarator: %O", n->op);
@@ -4452,9 +4362,11 @@ case ONAME:
     n->etype = (n->type != T) ? n->type->etype : TVOID;
     n->xoffset = s->offset;
     n->class = s->class;
+
     if(debug['d'])
         dbgdecl(s);
     acidvar(s);
+
     s->varlineno = lineno;
     break;
 @
@@ -4486,47 +4398,6 @@ xdecl(int class, Type *t, Sym *s)
 % block 0, because global scope?
 % tmerge because the symbol may have been previously forward declared,
 % so need to check if consistent. See typechecking section?
-
-%XXX
-<<[[xdecl()]] switch class cases>>=
-case CXXX:
-    class = CGLOBL;
-    if(s->class == CEXTERN)
-        s->class = CGLOBL;
-    break;
-@
-
-<<[[xdecl()]] switch class cases>>=
-case CEXTERN:
-    if(s->class == CGLOBL)
-        class = CGLOBL;
-    break;
-@
-
-<<[[xdecl()]] switch class cases>>=
-case CAUTO:
-    diag(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
-    class = CEXTERN;
-    break;
-@
-
-
-
-<<[[xdecl()]] sanity checks>>=
-if(s->class == CSTATIC)
-    if(class == CEXTERN || class == CGLOBL) {
-        warn(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
-        class = CSTATIC;
-    }
-
-if(s->type != T)
-    if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
-        diag(Z, "external redeclaration of: %s", s->name);
-        Bprint(&diagbuf, "	%s %T %L\n", cnames[class], t, nearln);
-        Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
-    }
-@
-
 
 
 \subsection{Function definitions}
@@ -5350,6 +5221,9 @@ string:
 @
 % do not free the previous one?
 
+
+
+
 \subsubsection{Unicode strings}
 % long strings
 
@@ -5603,6 +5477,7 @@ OASI, // appears during parsing
 @
 % assign initializer?
 
+% doinit -> <>
 <<function init1>>=
 Node*
 init1(Sym *s, Type *t, long o, int exflag)
@@ -6130,6 +6005,41 @@ struct
 
 
 
+<<type declarations>>=
+%type   <lval>  gctnlist gcnlist zgnlist
+@
+
+
+<<types rules>>=
+gctnlist:
+    gctname
+|   gctnlist gctname { $$ = typebitor($1, $2); }
+@
+
+<<types rules>>=
+gcnlist:
+    gcname
+|   gcnlist gcname { $$ = typebitor($1, $2); }
+@
+
+
+<<function typebitor>>=
+//@Scheck: used by cc.y
+long typebitor(long a, long b)
+{
+    long c;
+
+    c = a | b;
+    if(a & b)
+        if((a & b) == BLONG)
+            c |= BVLONG;		/* long long => vlong */
+        else
+            warn(Z, "once is enough: %Q", a & b);
+    return c;
+}
+@
+
+
 \subsection{Basic types}
 % types part one
 
@@ -6153,8 +6063,6 @@ tname:  /* type words */
 |   LSHORT    { $$ = BSHORT; }
 |   LINT      { $$ = BINT; }
 |   LLONG     { $$ = BLONG; }
-|   LSIGNED   { $$ = BSIGNED; }
-|   LUNSIGNED { $$ = BUNSIGNED; }
 |   LFLOAT    { $$ = BFLOAT; }
 |   LDOUBLE   { $$ = BDOUBLE; }
 |   LVOID     { $$ = BVOID; }
@@ -6168,70 +6076,11 @@ TSIGNED,
 @
 % temporary, actually the type have the TINT vs TUINT
 
-
-
-
-<<types rule>>=
-|   gcnlist
-    {
-        $$.t = simplet($1);
-        $$.c = simplec($1);
-        $$.t = garbt($$.t, $1);
-    }
-|   tname gctnlist
-    {
-        $$.t = simplet(typebitor($1, $2));
-        $$.c = simplec($2);
-        $$.t = garbt($$.t, $2);
-    }
-|   gcnlist tname
-    {
-        $$.t = simplet($2);
-        $$.c = simplec($1);
-        $$.t = garbt($$.t, $1);
-    }
-|   gcnlist tname gctnlist
-    {
-        $$.t = simplet(typebitor($2, $3));
-        $$.c = simplec($1|$3);
-        $$.t = garbt($$.t, $1|$3);
-    }
+<<tname rule>>=
+|   LSIGNED   { $$ = BSIGNED; }
+|   LUNSIGNED { $$ = BUNSIGNED; }
 @
 
-<<function typebitor>>=
-//@Scheck: used by cc.y
-long typebitor(long a, long b)
-{
-    long c;
-
-    c = a | b;
-    if(a & b)
-        if((a & b) == BLONG)
-            c |= BVLONG;		/* long long => vlong */
-        else
-            warn(Z, "once is enough: %Q", a & b);
-    return c;
-}
-@
-
-
-<<type declarations>>=
-%type   <lval>  gctnlist gcnlist zgnlist
-@
-
-<<types rules>>=
-gctnlist:
-    gctname
-|   gctnlist gctname { $$ = typebitor($1, $2); }
-
-zgnlist:
- /* empty */       { $$ = 0; }
-|   zgnlist gname  { $$ = typebitor($1, $2); }
-
-gcnlist:
-    gcname
-|   gcnlist gcname { $$ = typebitor($1, $2); }
-@
 
 
 
@@ -6315,6 +6164,47 @@ simplet(long b)
 }
 @
 
+
+
+<<types rule>>=
+|   gcnlist
+    {
+        $$.t = simplet($1);
+        $$.c = simplec($1);
+        $$.t = garbt($$.t, $1);
+    }
+|   tname gctnlist
+    {
+        $$.t = simplet(typebitor($1, $2));
+        $$.c = simplec($2);
+        $$.t = garbt($$.t, $2);
+    }
+|   gcnlist tname
+    {
+        $$.t = simplet($2);
+        $$.c = simplec($1);
+        $$.t = garbt($$.t, $1);
+    }
+|   gcnlist tname gctnlist
+    {
+        $$.t = simplet(typebitor($2, $3));
+        $$.c = simplec($1|$3);
+        $$.t = garbt($$.t, $1|$3);
+    }
+@
+
+
+
+
+
+<<types rules>>=
+zgnlist:
+ /* empty */       { $$ = 0; }
+|   zgnlist gname  { $$ = typebitor($1, $2); }
+@
+
+
+
 \subsection{Storage classes}
 
 
@@ -6363,6 +6253,50 @@ int simplec(long b)
 }
 @
 % ugly that typedef if considered a storage class ...
+
+
+
+%XXX
+<<[[xdecl()]] switch class cases>>=
+case CXXX:
+    class = CGLOBL;
+    if(s->class == CEXTERN)
+        s->class = CGLOBL;
+    break;
+@
+
+<<[[xdecl()]] switch class cases>>=
+case CEXTERN:
+    if(s->class == CGLOBL)
+        class = CGLOBL;
+    break;
+@
+
+<<[[xdecl()]] switch class cases>>=
+case CAUTO:
+    diag(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
+    class = CEXTERN;
+    break;
+@
+
+
+
+<<[[xdecl()]] sanity checks>>=
+if(s->class == CSTATIC)
+    if(class == CEXTERN || class == CGLOBL) {
+        warn(Z, "overspecified class: %s %s %s", s->name, cnames[class], cnames[s->class]);
+        class = CSTATIC;
+    }
+
+if(s->type != T)
+    if(s->class != class || !sametype(t, s->type) || t->etype == TENUM) {
+        diag(Z, "external redeclaration of: %s", s->name);
+        Bprint(&diagbuf, "	%s %T %L\n", cnames[class], t, nearln);
+        Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
+    }
+@
+
+
 
 \subsection{Qualifiers}
 
@@ -7861,6 +7795,13 @@ lastp = P;
 @
 
 
+
+<<[[gclean()]] generate last opcode, AEND>>=
+nextpc();
+p->as = AEND;
+@
+
+
 \section{[[gxxx()]]}
 
 \subsection{[[gpseudo()]]}
@@ -7883,6 +7824,8 @@ gpseudo(int a, Sym *s, Node *n)
         pc--;
 }
 @
+
+
 
 \subsection{[[gextern()]]}
 
@@ -12418,6 +12361,24 @@ pre:
 
 \section{XXX}
 
+\subsection{The globals}
+
+<<[[gclean()]] generate all AGLOBL pseudo opcodes>>=
+for(i=0; i<NHASH; i++)
+ for(s = hash[i]; s != S; s = s->link) {
+    if(s->type == T)
+        continue;
+    if(s->type->width == 0)
+        continue;
+    if(s->class != CGLOBL && s->class != CSTATIC)
+        continue;
+    if(s->type == types[TENUM])
+        continue;
+    gpseudo(AGLOBL, s, nodconst(s->type->width));
+}
+@
+
+
 \subsection{Multiplication}
 % is this an optimisation? move?
 
@@ -15540,9 +15501,23 @@ case OSTRING:
 Sym*	symstring;
 @
 
+<<[[cinit()]] symstring initialization>>=
+t = typ(TARRAY, types[TCHAR]);
+t->width = 0;
+symstring = slookup(".string");
+symstring->class = CSTATIC;
+symstring->type = t;
+@
+
 
 <<global nstring>>=
 long	nstring;
+@
+
+<<[[gclean()]] adjust symstring width>>=
+while(mnstring)
+    outstring("", 1L);
+symstring->type->width = nstring;
 @
 
 
@@ -21711,6 +21686,14 @@ Init	thashinit[] =
 };
 @
 
+% in tinit section for now
+%<<[[tinit()]] initialise thash>>=
+%for(p=thashinit; p->code >= 0; p++) {
+%    urk("thash", nelem(thash), p->code);
+%    thash[p->code] = p->value;
+%}
+%@
+
 
 
 <<struct Typetab>>=
@@ -24059,6 +24042,70 @@ convvtox(vlong c, int et)
 %        thechar = '0';
 %        thestring = "spim";
 %        break;
+
+
+\section{Using an external preprocessor, [[/bin/cpp]]}
+
+<<constant CPP>>=
+#define	CPP	"/bin/cpp"
+@
+
+<<[[compile()]] use ANSI preprocessor>>=
+/* Use an ANSI preprocessor */
+if(debug['p']) {
+    if(myaccess(infile) < 0) {
+        diag(Z, "%s does not exist", infile);
+        errorexit();
+    }
+    if(pipe(fd) < 0) {
+        diag(Z, "pipe failed");
+        errorexit();
+    }
+    switch(fork()) {
+    case -1:
+        diag(Z, "fork failed");
+        errorexit();
+
+    case 0:
+        close(fd[0]);
+        dup(fd[1], 1);
+        close(fd[1]);
+        av = alloc((3 + ndef + ninclude + 2) * sizeof *av);
+        av[0] = CPP;
+        i = 1;
+        if(debug['.'])
+            av[i++] = strdup("-.");
+        /* 1999 ANSI C requires recognising // comments */
+        av[i++] = strdup("-+");
+        for(c = 0; c < ndef; c++) {
+            sprint(opt, "-D%s", defs[c]);
+            av[i++] = strdup(opt);
+        }
+        for(c = 0; c < ninclude; c++) {
+            sprint(opt, "-I%s", include[c]);
+            av[i++] = strdup(opt);
+        }
+        if(strcmp(infile, "stdin") != 0)
+            av[i++] = infile;
+        av[i] = 0;
+        if(debug['p'] > 1) {
+            for(c = 0; c < i; c++)
+                fprint(2, "%s ", av[c]);
+            fprint(2, "\n");
+        }
+
+        exec(av[0], av);
+        fprint(2, "can't exec C preprocessor %s: %r\n", CPP);
+        errorexit();
+
+    default:
+        close(fd[1]);
+        newfile(infile, fd[0]);
+        break;
+    }
+}
+@
+
 
 \section{Processing multiple files}
 

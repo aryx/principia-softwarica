@@ -720,11 +720,12 @@ tname:  /* type words */
 |   LSHORT    { $$ = BSHORT; }
 |   LINT      { $$ = BINT; }
 |   LLONG     { $$ = BLONG; }
-|   LSIGNED   { $$ = BSIGNED; }
-|   LUNSIGNED { $$ = BUNSIGNED; }
 |   LFLOAT    { $$ = BFLOAT; }
 |   LDOUBLE   { $$ = BDOUBLE; }
 |   LVOID     { $$ = BVOID; }
+/*x: tname rule */
+|   LSIGNED   { $$ = BSIGNED; }
+|   LUNSIGNED { $$ = BUNSIGNED; }
 /*e: tname rule */
 /*s: cname rule */
 cname:  /* class words */
@@ -744,6 +745,14 @@ gname:  /* garbage words */
 |   LVOLATILE { $$ = BVOLATILE; }
 |   LRESTRICT { $$ = 0; }
 /*e: gname rule */
+/*x: types rules */
+gctnlist:
+    gctname
+|   gctnlist gctname { $$ = typebitor($1, $2); }
+/*x: types rules */
+gcnlist:
+    gcname
+|   gcnlist gcname { $$ = typebitor($1, $2); }
 /*x: types rules */
 /*s: types rule */
 types:
@@ -824,17 +833,9 @@ sbody:
 
 /*e: types rule */
 /*x: types rules */
-gctnlist:
-    gctname
-|   gctnlist gctname { $$ = typebitor($1, $2); }
-
 zgnlist:
  /* empty */       { $$ = 0; }
 |   zgnlist gname  { $$ = typebitor($1, $2); }
-
-gcnlist:
-    gcname
-|   gcnlist gcname { $$ = typebitor($1, $2); }
 /*x: types rules */
 /*s: complex rule */
 complex:

@@ -33,6 +33,7 @@ dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
 loop:
     if(n != Z)
      switch(n->op) {
+     // can adjust t using information from node n
      /*s: [[dodecl()]] switch node kind cases */
      case ONAME:
          if(f == NODECL)
@@ -52,9 +53,11 @@ loop:
          n->etype = (n->type != T) ? n->type->etype : TVOID;
          n->xoffset = s->offset;
          n->class = s->class;
+
          if(debug['d'])
              dbgdecl(s);
          acidvar(s);
+
          s->varlineno = lineno;
          break;
      /*x: [[dodecl()]] switch node kind cases */
