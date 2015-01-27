@@ -570,15 +570,15 @@ mkvar(Adr *a, int docon)
     Sym *s;
 
     t = a->type;
-    if(t == D_REG && a->reg != NREG)
+    if(t == D_REG && a->reg != R_NONE)
         regbits |= RtoB(a->reg);
-    if(t == D_FREG && a->reg != NREG)
+    if(t == D_FREG && a->reg != R_NONE)
         regbits |= FtoB(a->reg);
     s = a->sym;
     o = a->offset;
     et = a->etype;
     if(s == S) {
-        if(t != D_CONST || !docon || a->reg != NREG)
+        if(t != D_CONST || !docon || a->reg != R_NONE)
             goto none;
         et = TLONG;
     }

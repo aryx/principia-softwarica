@@ -47,6 +47,13 @@ ginit(void)
     /*e: [[ginit()]] zprog initialisation */
 
     /*s: [[ginit()]] special nodes initialisation */
+    regnode.op = OREGISTER;
+    regnode.class = CEXREG;
+    regnode.reg = REGTMP;
+    regnode.complex = 0;
+    regnode.addable = 11;
+    regnode.type = types[TLONG];
+    /*x: [[ginit()]] special nodes initialisation */
     nodret = new(ONAME, Z, Z);
     nodret->sym = slookup(".ret");
     nodret->type = types[TIND];
@@ -86,13 +93,6 @@ ginit(void)
     nodrat->class = CGLOBL;
     complex(nodrat);
     nodrat->type = t;
-    /*x: [[ginit()]] special nodes initialisation */
-    regnode.op = OREGISTER;
-    regnode.class = CEXREG;
-    regnode.reg = REGTMP;
-    regnode.complex = 0;
-    regnode.addable = 11;
-    regnode.type = types[TLONG];
     /*e: [[ginit()]] special nodes initialisation */
 
     com64init();
@@ -126,6 +126,7 @@ gclean(void)
     for(i=0; i<NREG; i++)
         if(reg[i] && !resvreg[i])
             diag(Z, "reg %d left allocated", i);
+    /*x: [[gclean()]] sanity check reg */
     for(i=NREG; i<NREG+NFREG; i++)
         if(reg[i] && !resvreg[i])
             diag(Z, "freg %d left allocated", i-NREG);
@@ -298,7 +299,6 @@ nodreg(Node *n, Node *nn, int reg)
     n->type = nn->type;
     n->lineno = nn->lineno;
 }
-
 /*e: function nodreg(arm) */
 
 /*s: function regret(arm) */
@@ -347,11 +347,14 @@ regalloc(Node *n, Node *tn, Node *o)
     case TULONG:
 
     case TIND:
+        /*s: [[regalloc()]] if integer type tn and OREGISTER o */
         if(o != Z && o->op == OREGISTER) {
             i = o->reg;
             if(i >= 0 && i < NREG)
                 goto out;
         }
+        /*e: [[regalloc()]] if integer type tn and OREGISTER o */
+
         j = lasti + REGRET+1;
         for(i=REGRET+1; i<NREG; i++) {
             if(j >= NREG)
@@ -365,8 +368,10 @@ regalloc(Node *n, Node *tn, Node *o)
         diag(tn, "out of fixed registers");
         goto err;
 
+    /*s: [[regalloc()]] switch tn type, float or vlong case */
     case TFLOAT:
     case TDOUBLE:
+
     case TVLONG:
         if(o != Z && o->op == OREGISTER) {
             i = o->reg;
@@ -385,17 +390,22 @@ regalloc(Node *n, Node *tn, Node *o)
         }
         diag(tn, "out of float registers");
         goto err;
+    /*e: [[regalloc()]] switch tn type, float or vlong case */
     }
     diag(tn, "unknown type in regalloc: %T", tn->type);
+    // fallthrough
 err:
     nodreg(n, tn, 0);
     return;
+
 out:
     reg[i]++;
+    nodreg(n, tn, i);
+
     lasti++;
     if(lasti >= 5)
         lasti = 0;
-    nodreg(n, tn, i);
+
 }
 /*e: function regalloc(arm) */
 
@@ -417,16 +427,21 @@ regfree(Node *n)
 {
     int i;
 
+    /*s: [[regfree()]] sanity checks */
     i = 0;
     if(n->op != OREGISTER && n->op != OINDREG)
         goto err;
+
     i = n->reg;
     if(i < 0 || i >= sizeof(reg))
         goto err;
     if(reg[i] <= 0)
         goto err;
-    reg[i]--;
+    /*e: [[regfree()]] sanity checks */
+
+    reg[n->reg]--;
     return;
+
 err:
     diag(n, "error in regfree: %d", i);
 }
@@ -500,7 +515,7 @@ raddr(Node *n, Prog *p)
             diag(n, "bad in raddr: %O", n->op);
         else
             diag(n, "bad in raddr: <null>");
-        p->reg = NREG;
+        p->reg = R_NONE;
     } else
         p->reg = a.reg;
 }
@@ -520,7 +535,7 @@ naddr(Node *n, Adr *a)
     /*s: [[naddr()]] switch node kind cases */
     case OCONST:
         a->sym = S;
-        a->reg = NREG;
+        a->reg = R_NONE;
         if(typefd[n->type->etype]) {
             a->type = D_FCONST;
             a->dval = n->fconst;
@@ -533,8 +548,9 @@ naddr(Node *n, Adr *a)
     case ONAME:
         a->etype = n->etype;
         a->type = D_OREG;
-        a->sym = n->sym;
         a->offset = n->xoffset;
+        a->sym = n->sym;
+
         a->name = D_STATIC;
         if(n->class == CSTATIC)
             break;
@@ -554,11 +570,7 @@ naddr(Node *n, Adr *a)
     /*x: [[naddr()]] switch node kind cases */
     case OIND:
         naddr(n->left, a);
-        if(a->type == D_REG) {
-            a->type = D_OREG;
-            break;
-        }
-        if(a->type == D_CONST) {
+        if(a->type == D_REG || a->type == D_CONST) {
             a->type = D_OREG;
             break;
         }
@@ -585,13 +597,6 @@ naddr(Node *n, Adr *a)
         a->offset += v;
         break;
     /*x: [[naddr()]] switch node kind cases */
-    case OINDREG:
-        a->type = D_OREG;
-        a->sym = S;
-        a->offset = n->xoffset;
-        a->reg = n->reg;
-        break;
-    /*x: [[naddr()]] switch node kind cases */
     case OREGISTER:
         a->type = D_REG;
         a->sym = S;
@@ -600,6 +605,13 @@ naddr(Node *n, Adr *a)
             a->type = D_FREG;
             a->reg -= NREG;
         }
+        break;
+    /*x: [[naddr()]] switch node kind cases */
+    case OINDREG:
+        a->type = D_OREG;
+        a->sym = S;
+        a->offset = n->xoffset;
+        a->reg = n->reg;
         break;
     /*e: [[naddr()]] switch node kind cases */
     default:
@@ -626,34 +638,28 @@ gmovm(Node *f, Node *t, int w)
 void
 gmove(Node *f, Node *t)
 {
-    // enum<type_kind> // TXXX
+    // enum<type_kind> // Txxx
     int ft, tt;
-    // enum<opcode_kind> // AXXX
+    // enum<opcode_kind> // Axxx
     int a;
-    Node nod, nod1;
+    /*s: [[gmove()]] locals */
+    Node nod;
+    /*x: [[gmove()]] locals */
+    Node nod1;
     Prog *p1;
+    /*e: [[gmove()]] locals */
 
     ft = f->type->etype;
     tt = t->type->etype;
-
-    if(ft == TDOUBLE && f->op == OCONST) {
-    }
-    if(ft == TFLOAT && f->op == OCONST) {
-    }
 
     /*
      * a load --
      * put it into a register then
      * worry what to do with it.
      */
-    if(f->op == ONAME || f->op == OINDREG || f->op == OIND) {
+    /*s: [[gmove()]] if from is not a register, registerize and return */
+    if(f->op == ONAME || f->op == OIND || f->op == OINDREG) {
         switch(ft) {
-        case TFLOAT:
-            a = AMOVF;
-            break;
-        case TDOUBLE:
-            a = AMOVD;
-            break;
         case TCHAR:
             a = AMOVB;
             break;
@@ -665,6 +671,12 @@ gmove(Node *f, Node *t)
             break;
         case TUSHORT:
             a = AMOVHU;
+            break;
+        case TFLOAT:
+            a = AMOVF;
+            break;
+        case TDOUBLE:
+            a = AMOVD;
             break;
         default:
             a = AMOVW;
@@ -679,30 +691,31 @@ gmove(Node *f, Node *t)
         regfree(&nod);
         return;
     }
-
+    /*e: [[gmove()]] if from is not a register, registerize and return */
     /*
      * a store --
      * put it into a register then
      * store it.
      */
-    if(t->op == ONAME || t->op == OINDREG || t->op == OIND) {
+    /*s: [[gmove()]] if to is not a register, registerize and return */
+    if(t->op == ONAME || t->op == OIND || t->op == OINDREG) {
         switch(tt) {
-        case TUCHAR:
-            a = AMOVBU;
-            break;
         case TCHAR:
             a = AMOVB;
             break;
-        case TUSHORT:
-            a = AMOVHU;
+        case TUCHAR:
+            a = AMOVBU;
             break;
         case TSHORT:
             a = AMOVH;
             break;
+        case TUSHORT:
+            a = AMOVHU;
+            break;
         case TFLOAT:
             a = AMOVF;
             break;
-        case TVLONG:
+        case TVLONG: // addon?
         case TDOUBLE:
             a = AMOVD;
             break;
@@ -719,6 +732,7 @@ gmove(Node *f, Node *t)
         regfree(&nod);
         return;
     }
+    /*e: [[gmove()]] if to is not a register, registerize and return */
 
     // at this point f and t should be simpler nodes with registers
 
@@ -727,42 +741,10 @@ gmove(Node *f, Node *t)
      */
     a = AGOK;
     switch(ft) {
-    case TDOUBLE:
-    case TVLONG:
-    case TFLOAT:
-        switch(tt) {
-        case TDOUBLE:
-        case TVLONG:
-            a = AMOVD;
-            if(ft == TFLOAT)
-                a = AMOVFD;
-            break;
-        case TFLOAT:
-            a = AMOVDF;
-            if(ft == TFLOAT)
-                a = AMOVF;
-            break;
-        case TINT:
-        case TUINT:
-        case TLONG:
-        case TULONG:
-        case TIND:
-            a = AMOVDW;
-            if(ft == TFLOAT)
-                a = AMOVFW;
-            break;
-        case TSHORT:
-        case TUSHORT:
-        case TCHAR:
-        case TUCHAR:
-            a = AMOVDW;
-            if(ft == TFLOAT)
-                a = AMOVFW;
-            break;
-        }
-        break;
+    /*s: [[gmove()]] switch from type cases */
     case TUINT:
     case TULONG:
+        /*s: [[gmove()]] switch from type cases, TUINT/TULONG case, if float target */
         if(tt == TFLOAT || tt == TDOUBLE) {
             // ugly and probably longer than necessary,
             // but vfp has a single instruction for this,
@@ -803,33 +785,38 @@ gmove(Node *f, Node *t)
             patch(p1, pc);
             return;
         }
+        /*e: [[gmove()]] switch from type cases, TUINT/TULONG case, if float target */
         // fall through
-
     case TINT:
     case TLONG:
     case TIND:
         switch(tt) {
+        /*s: [[gmove()]] switch from type cases, TINT/TLONG case, if float target */
         case TDOUBLE:
             gins(AMOVWD, f, t);
             return;
         case TFLOAT:
             gins(AMOVWF, f, t);
             return;
+        /*e: [[gmove()]] switch from type cases, TINT/TLONG case, if float target */
+        case TCHAR:
+        case TUCHAR:
+        case TSHORT:
+        case TUSHORT:
         case TINT:
         case TUINT:
         case TLONG:
         case TULONG:
+
         case TIND:
-        case TSHORT:
-        case TUSHORT:
-        case TCHAR:
-        case TUCHAR:
             a = AMOVW;
             break;
         }
         break;
+    /*x: [[gmove()]] switch from type cases */
     case TSHORT:
         switch(tt) {
+        /*s: [[gmove()]] switch from type cases, TSHORT case, if float target */
         case TDOUBLE:
             regalloc(&nod, f, Z);
             gins(AMOVH, f, &nod);
@@ -842,6 +829,7 @@ gmove(Node *f, Node *t)
             gins(AMOVWF, &nod, t);
             regfree(&nod);
             return;
+        /*e: [[gmove()]] switch from type cases, TSHORT case, if float target */
         case TUINT:
         case TINT:
         case TULONG:
@@ -849,16 +837,18 @@ gmove(Node *f, Node *t)
         case TIND:
             a = AMOVH;
             break;
-        case TSHORT:
-        case TUSHORT:
         case TCHAR:
         case TUCHAR:
+        case TSHORT:
+        case TUSHORT:
             a = AMOVW;
             break;
         }
         break;
+    /*x: [[gmove()]] switch from type cases */
     case TUSHORT:
         switch(tt) {
+        /*s: [[gmove()]] switch from type cases, TUSHORT case, if float target */
         case TDOUBLE:
             regalloc(&nod, f, Z);
             gins(AMOVHU, f, &nod);
@@ -871,6 +861,7 @@ gmove(Node *f, Node *t)
             gins(AMOVWF, &nod, t);
             regfree(&nod);
             return;
+        /*e: [[gmove()]] switch from type cases, TUSHORT case, if float target */
         case TINT:
         case TUINT:
         case TLONG:
@@ -878,16 +869,18 @@ gmove(Node *f, Node *t)
         case TIND:
             a = AMOVHU;
             break;
-        case TSHORT:
-        case TUSHORT:
         case TCHAR:
         case TUCHAR:
+        case TSHORT:
+        case TUSHORT:
             a = AMOVW;
             break;
         }
         break;
+    /*x: [[gmove()]] switch from type cases */
     case TCHAR:
         switch(tt) {
+        /*s: [[gmove()]] switch from type cases, TCHAR case, if float target */
         case TDOUBLE:
             regalloc(&nod, f, Z);
             gins(AMOVB, f, &nod);
@@ -900,6 +893,7 @@ gmove(Node *f, Node *t)
             gins(AMOVWF, &nod, t);
             regfree(&nod);
             return;
+        /*e: [[gmove()]] switch from type cases, TCHAR case, if float target */
         case TINT:
         case TUINT:
         case TLONG:
@@ -915,8 +909,10 @@ gmove(Node *f, Node *t)
             break;
         }
         break;
+    /*x: [[gmove()]] switch from type cases */
     case TUCHAR:
         switch(tt) {
+        /*s: [[gmove()]] switch from type cases, TUCHAR case, if float target */
         case TDOUBLE:
             regalloc(&nod, f, Z);
             gins(AMOVBU, f, &nod);
@@ -929,6 +925,7 @@ gmove(Node *f, Node *t)
             gins(AMOVWF, &nod, t);
             regfree(&nod);
             return;
+        /*e: [[gmove()]] switch from type cases, TUCHAR case, if float target */
         case TINT:
         case TUINT:
         case TLONG:
@@ -944,12 +941,49 @@ gmove(Node *f, Node *t)
             break;
         }
         break;
+    /*x: [[gmove()]] switch from type cases */
+    case TDOUBLE:
+    case TVLONG:
+    case TFLOAT:
+        switch(tt) {
+        case TDOUBLE:
+        case TVLONG:
+            a = AMOVD;
+            if(ft == TFLOAT)
+                a = AMOVFD;
+            break;
+        case TFLOAT:
+            a = AMOVDF;
+            if(ft == TFLOAT)
+                a = AMOVF;
+            break;
+        case TINT:
+        case TUINT:
+        case TLONG:
+        case TULONG:
+        case TIND:
+            a = AMOVDW;
+            if(ft == TFLOAT)
+                a = AMOVFW;
+            break;
+        case TSHORT:
+        case TUSHORT:
+        case TCHAR:
+        case TUCHAR:
+            a = AMOVDW;
+            if(ft == TFLOAT)
+                a = AMOVFW;
+            break;
+        }
+        break;
+    /*e: [[gmove()]] switch from type cases */
     }
     if(a == AGOK)
         diag(Z, "bad opcode in gmove %T -> %T", f->type, t->type);
     if(a == AMOVW || a == AMOVF || a == AMOVD)
-    if(samaddr(f, t))
+     if(samaddr(f, t))
         return;
+
     gins(a, f, t);
 }
 /*e: function gmove(arm) */
@@ -1190,6 +1224,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
         case OHI:
             a = ABHI;
             break;
+
         case OCASE:
             nextpc();
             p->as = ACASE;
@@ -1254,20 +1289,14 @@ gbranch(int o)
 
     nextpc();
 
-    a = AGOK;
     switch(o) {
-    case ORETURN:
-        a = ARET;
-        break;
-    case OGOTO:
-        a = AB;
-        break;
-    }
-    if(a == AGOK) {
+    case ORETURN: a = ARET; break;
+    case OGOTO:   a = AB;   break;
+    default:
+        a = AGOK;
         diag(Z, "bad in gbranch %O",  o);
         nextpc();
     }
-
     p->as = a;
 }
 /*e: function gbranch(arm) */
@@ -1277,8 +1306,8 @@ void
 patch(Prog *op, long pc)
 {
 
-    op->to.offset = pc;
     op->to.type = D_BRANCH;
+    op->to.offset = pc;
 }
 /*e: function patch */
 
@@ -1292,8 +1321,10 @@ gpseudo(int a, Sym *s, Node *n)
     p->from.type = D_OREG;
     p->from.sym = s;
     p->from.name = (s->class == CSTATIC) ? D_STATIC : D_EXTERN;
+    /*s: [[gpseudo()]] if TEXT, set possible TEXT attributes */
     if(a == ATEXT)
         p->reg = (profileflg ? 0 : NOPROF);
+    /*e: [[gpseudo()]] if TEXT, set possible TEXT attributes */
     naddr(n, &p->to);
     if(a == ADATA || a == AGLOBL)
         pc--;

@@ -92,16 +92,16 @@ cgenrel(Node *n, Node *nn, bool inrel)
     /*e: [[cgenrel()]] if all complex fields more than FNX */
 
     switch(o) {
-    /*s: [[cgenrel()]] switch opcode cases */
+    /*s: [[cgenrel()]] switch node kind cases */
     case OCOMMA:
         cgen(l, Z);
         cgen(r, nn);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OSUB:
         if(nn != Z)
-        if(l->op == OCONST)
-        if(!typefd[n->type->etype]) {
+         if(l->op == OCONST)
+          if(!typefd[n->type->etype]) {
             cgen(r, nn);
             gopcode(o, Z, l, nn);
             break;
@@ -118,11 +118,10 @@ cgenrel(Node *n, Node *nn, bool inrel)
          * immediate operands
          */
         if(nn != Z)
-        if(r->op == OCONST)
-        if(!typefd[n->type->etype]) {
+         if(r->op == OCONST)
+          if(!typefd[n->type->etype]) {
             cgen(l, nn);
-            if(r->vconst == 0)
-            if(o != OAND)
+            if((r->vconst == 0) && (o != OAND))
                 break;
             if(nn != Z)
                 gopcode(o, r, Z, nn);
@@ -134,10 +133,12 @@ cgenrel(Node *n, Node *nn, bool inrel)
     case OLMOD:
     case OMUL:
     muldiv:
+        /*s: [[cgenrel()]] nullwarn check if nn is null */
         if(nn == Z) {
             nullwarn(l, r);
             break;
         }
+        /*e: [[cgenrel()]] nullwarn check if nn is null */
         if(o == OMUL || o == OLMUL) {
             if(mulcon(n, nn))
                 break;
@@ -159,11 +160,11 @@ cgenrel(Node *n, Node *nn, bool inrel)
         regfree(&nod);
         regfree(&nod1);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case ODIV:
     case OMOD:
         if(nn != Z)
-        if((t = vlog(r)) >= 0) {
+         if((t = vlog(r)) >= 0) {
             /* signed div/mod by constant power of 2 */
             cgen(l, nn);
             gopcode(OGE, nodconst(0), nn, Z);
@@ -185,22 +186,24 @@ cgenrel(Node *n, Node *nn, bool inrel)
             break;
         }
         goto muldiv;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OANDAND:
     case OOROR:
-        boolgen(n, 1, nn);
+        boolgen(n, true, nn);
         if(nn == Z)
             patch(p, pc);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case ONOT:
+        /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
         if(nn == Z) {
             nullwarn(l, Z);
             break;
         }
-        boolgen(n, 1, nn);
+        /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
+        boolgen(n, true, nn);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OEQ:
     case ONE:
     case OLE:
@@ -211,13 +214,15 @@ cgenrel(Node *n, Node *nn, bool inrel)
     case OLS:
     case OHI:
     case OHS:
+        /*s: [[cgenrel()]] nullwarn check if nn is null */
         if(nn == Z) {
             nullwarn(l, r);
             break;
         }
-        boolgen(n, 1, nn);
+        /*e: [[cgenrel()]] nullwarn check if nn is null */
+        boolgen(n, true, nn);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OAS:
         if(l->op == OBIT)
             goto bitas;
@@ -256,7 +261,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
         regfree(&nod);
         regfree(&nod1);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OASLSHR:
     case OASASHL:
     case OASASHR:
@@ -268,8 +273,8 @@ cgenrel(Node *n, Node *nn, bool inrel)
         if(l->op == OBIT)
             goto asbitop;
         if(r->op == OCONST)
-        if(!typefd[r->type->etype])
-        if(!typefd[n->type->etype]) {
+         if(!typefd[r->type->etype])
+          if(!typefd[n->type->etype]) {
             if(l->addable < INDEXED)
                 reglcgen(&nod2, l, Z);
             else
@@ -320,20 +325,24 @@ cgenrel(Node *n, Node *nn, bool inrel)
         if(l->addable < INDEXED)
             regfree(&nod2);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OADDR:
+        /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
         if(nn == Z) {
             nullwarn(l, Z);
             break;
         }
+        /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
         lcgen(l, nn);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OIND:
+        /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
         if(nn == Z) {
             nullwarn(l, Z);
             break;
         }
+        /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
         regialloc(&nod, n, nn);
         r = l;
         while(r->op == OADD)
@@ -350,7 +359,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
         gopcode(OAS, &nod, Z, nn);
         regfree(&nod);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OFUNC:
         if(l->complex >= FNX) {
             if(l->op != OIND)
@@ -389,7 +398,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
             regfree(&nod);
         }
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case ODOT:
         sugen(l, nodrat, l->type->width);
         if(nn != Z) {
@@ -404,69 +413,14 @@ cgenrel(Node *n, Node *nn, bool inrel)
             cgen(&nod, nn);
         }
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
-    case OBIT:
-        if(nn == Z) {
-            nullwarn(l, Z);
-            break;
-        }
-        bitload(n, &nod, Z, Z, nn);
-        gopcode(OAS, &nod, Z, nn);
-        regfree(&nod);
-        break;
-    /*x: [[cgenrel()]] switch opcode cases */
-    asbitop:
-        regalloc(&nod4, n, nn);
-        if(l->complex >= r->complex) {
-            bitload(l, &nod, &nod1, &nod2, &nod4);
-            regalloc(&nod3, r, Z);
-            cgen(r, &nod3);
-        } else {
-            regalloc(&nod3, r, Z);
-            cgen(r, &nod3);
-            bitload(l, &nod, &nod1, &nod2, &nod4);
-        }
-        gmove(&nod, &nod4);
-        gopcode(o, &nod3, Z, &nod4);
-        regfree(&nod3);
-        gmove(&nod4, &nod);
-        regfree(&nod4);
-        bitstore(l, &nod, &nod1, &nod2, nn);
-        break;
-    /*x: [[cgenrel()]] switch opcode cases */
-    bitinc:
-        if(nn != Z && (o == OPOSTINC || o == OPOSTDEC)) {
-            bitload(l, &nod, &nod1, &nod2, Z);
-            gopcode(OAS, &nod, Z, nn);
-            gopcode(OADD, nodconst(v), Z, &nod);
-            bitstore(l, &nod, &nod1, &nod2, Z);
-            break;
-        }
-        bitload(l, &nod, &nod1, &nod2, nn);
-        gopcode(OADD, nodconst(v), Z, &nod);
-        bitstore(l, &nod, &nod1, &nod2, nn);
-        break;
-    /*x: [[cgenrel()]] switch opcode cases */
-    bitas:
-        n = l->left;
-        regalloc(&nod, r, nn);
-        if(l->complex >= r->complex) {
-            reglcgen(&nod1, n, Z);
-            cgen(r, &nod);
-        } else {
-            cgen(r, &nod);
-            reglcgen(&nod1, n, Z);
-        }
-        regalloc(&nod2, n, Z);
-        gopcode(OAS, &nod1, Z, &nod2);
-        bitstore(l, &nod, &nod1, &nod2, nn);
-        break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OCAST:
+        /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
         if(nn == Z) {
             nullwarn(l, Z);
             break;
         }
+        /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
         /*
          * convert from types l->n->nn
          */
@@ -487,9 +441,9 @@ cgenrel(Node *n, Node *nn, bool inrel)
         regfree(&nod1);
         regfree(&nod);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OCOND:
-        bcgen(l, 1);
+        bcgen(l, true);
         p1 = p;
         cgen(r->left, nn);
         gbranch(OGOTO);
@@ -498,7 +452,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
         cgen(r->right, nn);
         patch(p1, pc);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OPOSTINC:
     case OPOSTDEC:
         v = 1;
@@ -538,7 +492,7 @@ cgenrel(Node *n, Node *nn, bool inrel)
         if(l->addable < INDEXED)
             regfree(&nod2);
         break;
-    /*x: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
     case OPREINC:
     case OPREDEC:
         v = 1;
@@ -577,7 +531,66 @@ cgenrel(Node *n, Node *nn, bool inrel)
         if(l->addable < INDEXED)
             regfree(&nod2);
         break;
-    /*e: [[cgenrel()]] switch opcode cases */
+    /*x: [[cgenrel()]] switch node kind cases */
+    case OBIT:
+        /*s: [[cgenrel()]] nullwarn check if nn is null, empty right */
+        if(nn == Z) {
+            nullwarn(l, Z);
+            break;
+        }
+        /*e: [[cgenrel()]] nullwarn check if nn is null, empty right */
+        bitload(n, &nod, Z, Z, nn);
+        gopcode(OAS, &nod, Z, nn);
+        regfree(&nod);
+        break;
+    /*x: [[cgenrel()]] switch node kind cases */
+    asbitop:
+        regalloc(&nod4, n, nn);
+        if(l->complex >= r->complex) {
+            bitload(l, &nod, &nod1, &nod2, &nod4);
+            regalloc(&nod3, r, Z);
+            cgen(r, &nod3);
+        } else {
+            regalloc(&nod3, r, Z);
+            cgen(r, &nod3);
+            bitload(l, &nod, &nod1, &nod2, &nod4);
+        }
+        gmove(&nod, &nod4);
+        gopcode(o, &nod3, Z, &nod4);
+        regfree(&nod3);
+        gmove(&nod4, &nod);
+        regfree(&nod4);
+        bitstore(l, &nod, &nod1, &nod2, nn);
+        break;
+    /*x: [[cgenrel()]] switch node kind cases */
+    bitinc:
+        if(nn != Z && (o == OPOSTINC || o == OPOSTDEC)) {
+            bitload(l, &nod, &nod1, &nod2, Z);
+            gopcode(OAS, &nod, Z, nn);
+            gopcode(OADD, nodconst(v), Z, &nod);
+            bitstore(l, &nod, &nod1, &nod2, Z);
+            break;
+        }
+        bitload(l, &nod, &nod1, &nod2, nn);
+        gopcode(OADD, nodconst(v), Z, &nod);
+        bitstore(l, &nod, &nod1, &nod2, nn);
+        break;
+    /*x: [[cgenrel()]] switch node kind cases */
+    bitas:
+        n = l->left;
+        regalloc(&nod, r, nn);
+        if(l->complex >= r->complex) {
+            reglcgen(&nod1, n, Z);
+            cgen(r, &nod);
+        } else {
+            cgen(r, &nod);
+            reglcgen(&nod1, n, Z);
+        }
+        regalloc(&nod2, n, Z);
+        gopcode(OAS, &nod1, Z, &nod2);
+        bitstore(l, &nod, &nod1, &nod2, nn);
+        break;
+    /*e: [[cgenrel()]] switch node kind cases */
     default:
         diag(n, "unknown op in cgen: %O", o);
         break;
@@ -699,19 +712,19 @@ lcgen(Node *n, Node *nn)
 
 /*s: function bcgen */
 void
-bcgen(Node *n, int true)
+bcgen(Node *n, bool btrue)
 {
 
     if(n->type == T)
         gbranch(OGOTO);
     else
-        boolgen(n, true, Z);
+        boolgen(n, btrue, Z);
 }
 /*e: function bcgen */
 
 /*s: function boolgen(arm) */
 void
-boolgen(Node *n, int true, Node *nn)
+boolgen(Node *n, int btrue, Node *nn)
 {
     int o;
     Prog *p1, *p2;
@@ -723,26 +736,14 @@ boolgen(Node *n, int true, Node *nn)
         prtree(n, "boolgen");
     }
     curs = cursafe;
+
     l = n->left;
     r = n->right;
     switch(n->op) {
 
-    default:
-        regalloc(&nod, n, nn);
-        cgen(n, &nod);
-        o = ONE;
-        if(true)
-            o = comrel[relindex(o)];
-        if(typefd[n->type->etype]) {
-            gopcode(true ? o | BTRUE : o, nodfconst(0), &nod, Z);
-        } else
-            gopcode(o, nodconst(0), &nod, Z);
-        regfree(&nod);
-        goto com;
-
     case OCONST:
         o = vconst(n);
-        if(!true)
+        if(!btrue)
             o = !o;
         gbranch(OGOTO);
         if(o) {
@@ -754,22 +755,22 @@ boolgen(Node *n, int true, Node *nn)
 
     case OCOMMA:
         cgen(l, Z);
-        boolgen(r, true, nn);
+        boolgen(r, btrue, nn);
         break;
 
     case ONOT:
-        boolgen(l, !true, nn);
+        boolgen(l, !btrue, nn);
         break;
 
     case OCOND:
         bcgen(l, 1);
         p1 = p;
-        bcgen(r->left, true);
+        bcgen(r->left, btrue);
         p2 = p;
         gbranch(OGOTO);
         patch(p1, pc);
         p1 = p;
-        bcgen(r->right, !true);
+        bcgen(r->right, !btrue);
         patch(p2, pc);
         p2 = p;
         gbranch(OGOTO);
@@ -778,13 +779,13 @@ boolgen(Node *n, int true, Node *nn)
         goto com;
 
     case OANDAND:
-        if(!true)
+        if(!btrue)
             goto caseor;
 
     caseand:
-        bcgen(l, true);
+        bcgen(l, btrue);
         p1 = p;
-        bcgen(r, !true);
+        bcgen(r, !btrue);
         p2 = p;
         patch(p1, pc);
         gbranch(OGOTO);
@@ -792,13 +793,13 @@ boolgen(Node *n, int true, Node *nn)
         goto com;
 
     case OOROR:
-        if(!true)
+        if(!btrue)
             goto caseand;
 
     caseor:
-        bcgen(l, !true);
+        bcgen(l, !btrue);
         p1 = p;
-        bcgen(r, !true);
+        bcgen(r, !btrue);
         p2 = p;
         gbranch(OGOTO);
         patch(p1, pc);
@@ -816,46 +817,47 @@ boolgen(Node *n, int true, Node *nn)
     case OLO:
     case OLS:
         o = n->op;
-        if(true)
+        if(btrue)
             o = comrel[relindex(o)];
         if(l->complex >= FNX && r->complex >= FNX) {
             regret(&nod, r);
-            cgenrel(r, &nod, true);
+            cgenrel(r, &nod, btrue);
             regsalloc(&nod1, r);
             gopcode(OAS, &nod, Z, &nod1);
             regfree(&nod);
             nod = *n;
             nod.right = &nod1;
-            boolgen(&nod, true, nn);
+            boolgen(&nod, btrue, nn);
             break;
         }
         if(sconst(l)) {
             regalloc(&nod, r, nn);
-            cgenrel(r, &nod, true);
+            cgenrel(r, &nod, btrue);
             o = invrel[relindex(o)];
-            gopcode(true ? o | BTRUE : o, l, &nod, Z);
+            gopcode(btrue ? o | BTRUE : o, l, &nod, Z);
             regfree(&nod);
             goto com;
         }
         if(sconst(r)) {
             regalloc(&nod, l, nn);
-            cgenrel(l, &nod, true);
-            gopcode(true ? o | BTRUE : o, r, &nod, Z);
+            cgenrel(l, &nod, btrue);
+            gopcode(btrue ? o | BTRUE : o, r, &nod, Z);
             regfree(&nod);
             goto com;
         }
+
         if(l->complex >= r->complex) {
             regalloc(&nod1, l, nn);
-            cgenrel(l, &nod1, true);
+            cgenrel(l, &nod1, btrue);
             regalloc(&nod, r, Z);
-            cgenrel(r, &nod, true);
+            cgenrel(r, &nod, btrue);
         } else {
             regalloc(&nod, r, nn);
-            cgenrel(r, &nod, true);
+            cgenrel(r, &nod, btrue);
             regalloc(&nod1, l, Z);
-            cgenrel(l, &nod1, true);
+            cgenrel(l, &nod1, btrue);
         }
-        gopcode(true ? o | BTRUE : o, &nod, &nod1, Z);
+        gopcode(btrue ? o | BTRUE : o, &nod, &nod1, Z);
         regfree(&nod);
         regfree(&nod1);
 
@@ -870,6 +872,20 @@ boolgen(Node *n, int true, Node *nn)
             patch(p2, pc);
         }
         break;
+
+    default:
+        regalloc(&nod, n, nn);
+        cgen(n, &nod);
+        o = ONE;
+        if(btrue)
+            o = comrel[relindex(o)];
+        if(typefd[n->type->etype]) {
+            gopcode(btrue ? o | BTRUE : o, nodfconst(0), &nod, Z);
+        } else
+            gopcode(o, nodconst(0), &nod, Z);
+        regfree(&nod);
+        goto com;
+
     }
     cursafe = curs;
 }

@@ -85,10 +85,10 @@ struct	Prog
     Adr	from;
     Adr	to;
 
-    long	lineno;
+    long	lineno; // of the line in the C program!
 
     /*s: [[Prog]] other fields(arm) */
-    // option<enum<registr>>, None = R_NONE, see 5.out.h
+    // option<enum<registr>>|TEXT or DATA attributes, None = R_NONE, see 5.out.h
     char	reg;
     // biset<>
     byte	scond;

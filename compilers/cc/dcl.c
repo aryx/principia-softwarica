@@ -61,6 +61,36 @@ loop:
          s->varlineno = lineno;
          break;
      /*x: [[dodecl()]] switch node kind cases */
+     case OIND:
+         t = typ(TIND, t);
+         t->garb = n->garb;
+         n = n->left;
+         goto loop;
+     /*x: [[dodecl()]] switch node kind cases */
+     case OARRAY:
+         t = typ(TARRAY, t);
+         t->width = 0;
+         n1 = n->right;
+         n = n->left;
+         /*s: [[dodecl()]] switch node kind cases, case OARRAY, if array have a size */
+         if(n1 != Z) {
+             complex(n1);
+             v = (n1->op == OCONST) ? n1->vconst : -1;
+             if(v <= 0) {
+                 diag(n, "array size must be a positive constant");
+                 v = 1;
+             }
+             t->width = v * t->link->width;
+         }
+         /*e: [[dodecl()]] switch node kind cases, case OARRAY, if array have a size */
+         goto loop;
+     /*x: [[dodecl()]] switch node kind cases */
+     case OFUNC:
+         t = typ(TFUNC, t);
+         t->down = fnproto(n);
+         n = n->left;
+         goto loop;
+     /*x: [[dodecl()]] switch node kind cases */
      case OBIT:
          n1 = n->right;
          complex(n1);
@@ -93,36 +123,6 @@ loop:
              lastbit = lastfield;
              firstbit = 1;
          }
-         n = n->left;
-         goto loop;
-     /*x: [[dodecl()]] switch node kind cases */
-     case OIND:
-         t = typ(TIND, t);
-         t->garb = n->garb;
-         n = n->left;
-         goto loop;
-     /*x: [[dodecl()]] switch node kind cases */
-     case OARRAY:
-         t = typ(TARRAY, t);
-         t->width = 0;
-         n1 = n->right;
-         n = n->left;
-         /*s: [[dodecl()]] switch node kind cases, case OARRAY, if array have a size */
-         if(n1 != Z) {
-             complex(n1);
-             v = (n1->op == OCONST) ? n1->vconst : -1;
-             if(v <= 0) {
-                 diag(n, "array size must be a positive constant");
-                 v = 1;
-             }
-             t->width = v * t->link->width;
-         }
-         /*e: [[dodecl()]] switch node kind cases, case OARRAY, if array have a size */
-         goto loop;
-     /*x: [[dodecl()]] switch node kind cases */
-     case OFUNC:
-         t = typ(TFUNC, t);
-         t->down = fnproto(n);
          n = n->left;
          goto loop;
      /*e: [[dodecl()]] switch node kind cases */

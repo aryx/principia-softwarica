@@ -90,7 +90,7 @@ Pconv(Fmt *fp)
     if(p->as == ATEXT)
         snprint(str, sizeof(str), "	%A	%D,%d,%D", a, &p->from, p->reg, &p->to);
     else
-    if(p->reg == NREG)
+    if(p->reg == R_NONE)
         snprint(str, sizeof(str), "	%A%s	%D,%D", a, sc, &p->from, &p->to);
     else
     if(p->from.type != D_FREG)
@@ -135,12 +135,12 @@ Dconv(Fmt *fp)
 
     case D_NONE:
         str[0] = 0;
-        if(a->name != D_NONE || a->reg != NREG || a->sym != S)
+        if(a->name != D_NONE || a->reg != R_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(NONE)", a, a->reg);
         break;
 
     case D_CONST:
-        if(a->reg != NREG)
+        if(a->reg != R_NONE)
             snprint(str, sizeof(str), "$%N(R%d)", a, a->reg);
         else
             snprint(str, sizeof(str), "$%N", a);
@@ -153,12 +153,12 @@ Dconv(Fmt *fp)
             snprint(str, sizeof(str), "R%d%c%cR%d", v&15, op[0], op[1], (v>>8)&15);
         else
             snprint(str, sizeof(str), "R%d%c%c%d", v&15, op[0], op[1], (v>>7)&31);
-        if(a->reg != NREG)
+        if(a->reg != R_NONE)
             sprint(str+strlen(str), "(R%d)", a->reg);
         break;
 
     case D_OREG:
-        if(a->reg != NREG)
+        if(a->reg != R_NONE)
             snprint(str, sizeof(str), "%N(R%d)", a, a->reg);
         else
             snprint(str, sizeof(str), "%N", a);
@@ -211,7 +211,7 @@ Rconv(Fmt *fp)
     snprint(str, sizeof(str), "GOK-reglist");
     switch(a->type) {
     case D_CONST:
-        if(a->reg != NREG)
+        if(a->reg != R_NONE)
             break;
         if(a->sym != S)
             break;

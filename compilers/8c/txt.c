@@ -1418,8 +1418,8 @@ void
 patch(Prog *op, long pc)
 {
 
-    op->to.offset = pc;
     op->to.type = D_BRANCH;
+    op->to.offset = pc;
 }
 /*e: function patch */
 

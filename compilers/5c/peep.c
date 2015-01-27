@@ -90,11 +90,11 @@ loop1:
             if(p->from.type == D_CONST && p->from.offset == -1) {
                 p->as = AMVN;
                 p->from.type = D_REG;
-                if(p->reg != NREG)
+                if(p->reg != R_NONE)
                     p->from.reg = p->reg;
                 else
                     p->from.reg = p->to.reg;
-                p->reg = NREG;
+                p->reg = R_NONE;
             }
             continue;
         case AMOVH:
@@ -333,7 +333,7 @@ subprop(Reg *r0)
         case ADIVF:
             if(p->to.type == v1->type)
             if(p->to.reg == v1->reg) {
-                if(p->reg == NREG)
+                if(p->reg == R_NONE)
                     p->reg = p->to.reg;
                 goto gotit;
             }
@@ -569,7 +569,7 @@ shiftprop(Reg *r)
         FAIL("BOTCH: result not reg");
     n = p->to.reg;
     a = zprog.from;
-    if(p->reg != NREG && p->reg != p->to.reg) {
+    if(p->reg != R_NONE && p->reg != p->to.reg) {
         a.type = D_REG;
         a.reg = p->reg;
     }
@@ -610,7 +610,7 @@ shiftprop(Reg *r)
     case ARSB:
     case ASBC:
     case ARSC:
-        if(p1->reg == n || (p1->reg == NREG && p1->to.type == D_REG && p1->to.reg == n)) {
+        if(p1->reg == n || (p1->reg == R_NONE && p1->to.type == D_REG && p1->to.reg == n)) {
             if(p1->from.type != D_REG)
                 FAIL("can't swap");
             p1->reg = p1->from.reg;
@@ -637,7 +637,7 @@ shiftprop(Reg *r)
     case ACMN:
         if(p1->reg == n)
             FAIL("can't swap");
-        if(p1->reg == NREG && p1->to.reg == n)
+        if(p1->reg == R_NONE && p1->to.reg == n)
             FAIL("shift result used twice");
     case AMVN:
         if(p1->from.type == D_SHIFT)
@@ -668,9 +668,9 @@ shiftprop(Reg *r)
     }
     /* make the substitution */
     p2->from.type = D_SHIFT;
-    p2->from.reg = NREG;
+    p2->from.reg = R_NONE;
     o = p->reg;
-    if(o == NREG)
+    if(o == R_NONE)
         o = p->to.reg;
     switch(p->from.type){
     case D_CONST:
@@ -758,7 +758,7 @@ nochange(Reg *r, Reg *r2, Prog *p)
     if(r == r2)
         return 1;
     n = 0;
-    if(p->reg != NREG && p->reg != p->to.reg) {
+    if(p->reg != R_NONE && p->reg != p->to.reg) {
         a[n].type = D_REG;
         a[n++].reg = p->reg;
     }
@@ -845,7 +845,7 @@ xtramodes(Reg *r, Adr *a)
             if(nochange(uniqs(r1), r, p1)) {
                 if(a != &p->from || v.reg != p->to.reg)
                 if (finduse(r->s1, &v)) {
-                    if(p1->reg == NREG || p1->reg == v.reg)
+                    if(p1->reg == R_NONE || p1->reg == v.reg)
                         /* pre-indexing */
                         p->scond |= C_WBIT;
                     else return 0;	
@@ -864,7 +864,7 @@ xtramodes(Reg *r, Adr *a)
                     a->offset = p1->from.offset;
                     break;
                 }
-                if(p1->reg != NREG)
+                if(p1->reg != R_NONE)
                     a->reg = p1->reg;
                 excise(r1);
                 return 1;
@@ -1040,7 +1040,7 @@ copyu(Prog *p, Adr *v, Adr *s)
             return 0;
         }
         if(copyas(&p->to, v)) {
-            if(p->reg == NREG)
+            if(p->reg == R_NONE)
                 p->reg = p->to.reg;
             if(copyau(&p->from, v))
                 return 4;

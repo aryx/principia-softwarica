@@ -117,11 +117,12 @@ struct	Node
     /*x: [[Node]] other fields */
     long	xoffset;
     /*x: [[Node]] other fields */
+    // option<enum<registr>>, None = ?
     int		reg;
     /*x: [[Node]] other fields */
     long	pc;
     /*x: [[Node]] other fields */
-    // ref<Prog>, but archi dependent
+    // ref<Prog>, but use void to be archi independent
     void*	label;
     /*x: [[Node]] other fields */
     // enum<node_kind>
@@ -497,9 +498,9 @@ enum node_kind
     OSTRUCT, // used also for struct constructor
     OUNION,
     /*x: definition nodes */
-    OBIT,
+    OREGISTER, // after parsing only, via regalloc()
     /*x: definition nodes */
-    OREGISTER, // after parsing only?
+    OBIT,
     /*e: definition nodes */
 
     // ----------------------------------------------------------------------
@@ -508,7 +509,7 @@ enum node_kind
     /*s: misc nodes */
     OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
     /*x: misc nodes */
-    OFUNC, // used for uses (calls) but also defs (and decls) :(
+    OFUNC, // used for uses (calls) but also defs (and decls)
     /*x: misc nodes */
     OARRAY, // used for uses (including designator) and defs (and decl)
     /*x: misc nodes */

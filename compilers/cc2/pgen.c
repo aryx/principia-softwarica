@@ -13,11 +13,11 @@ void codgen(Node *n, Node *nn)
     Node *n1, nod, nod1;
 
     /*s: [[codgen()]] initialisation */
+    hasdoubled = false;
+    /*x: [[codgen()]] initialisation */
     cursafe = 0;
     curarg = 0;
     maxargsafe = 0;
-    /*x: [[codgen()]] initialisation */
-    hasdoubled = false;
     /*e: [[codgen()]] initialisation */
 
     /*s: [[codgen()]] set n1 node to node in nn where have ONAME */
@@ -162,9 +162,11 @@ gen(Node *n)
     int o;
     /*x: [[gen()]] locals */
     Prog *sp;
-    bool f;
     bool oldreach;
     Node *l;
+    bool err;
+    /*x: [[gen()]] locals */
+    bool f;
     /*x: [[gen()]] locals */
     Prog *spc, *spb;
     long sbc, scc;
@@ -220,13 +222,16 @@ loop:
     /*x: [[gen()]] switch node kind cases */
     case OIF:
         l = n->left;
-        if(bcomplex(l, n->right)) {
+        err = bcomplex(l, n->right);
+        /*s: [[gen()]] switch node kind cases, OIF case, if bcomplex error */
+        if(err) {
             if(typefd[l->type->etype])
                 f = !l->fconst;
             else
                 f = !l->vconst;
             if(debug['c'])
                 print("%L const if %s\n", nearln, f ? "false" : "true");
+
             if(f) {
                 canreach = true;
                 supgen(n->right->left);
@@ -253,13 +258,18 @@ loop:
                     warnreach = 0;
                 canreach = oldreach;
             }
-        } else {
+        }
+        /*e: [[gen()]] switch node kind cases, OIF case, if bcomplex error */
+        else {
             sp = p;
             canreach = true;
+
             if(n->right->left != Z)
                 gen(n->right->left);
+
             oldreach = canreach;
             canreach = true;
+
             if(n->right->right != Z) {
                 gbranch(OGOTO);
                 patch(sp, pc);
@@ -268,6 +278,7 @@ loop:
                 gen(n->right->right);
             }
             patch(sp, pc);
+
             canreach = canreach || oldreach;
             if(canreach == false)
                 warnreach = !suppress;
@@ -311,6 +322,7 @@ loop:
         patch(p, continpc);
 
         patch(spb, pc);
+
         continpc = scc;
         breakpc = sbc;
         canreach = nbreak!=0;
@@ -390,6 +402,7 @@ loop:
     case ORETURN:
         canreach = false;
         warnreach = !suppress;
+
         complex(n);
         if(n->type == T)
             break;
@@ -462,6 +475,7 @@ loop:
          */
         if(!canreach)
             break;
+
         gbranch(OGOTO);
         patch(p, breakpc);
 
@@ -645,7 +659,7 @@ bcomplex(Node *n, Node *c)
         return true;
 
     bool64(n);
-    boolgen(n, 1, Z);
+    boolgen(n, true, Z);
     return false;
 }
 /*e: function bcomplex */

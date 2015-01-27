@@ -195,12 +195,9 @@ simpleg(long b)
 
     b &= BGARB;
     switch(b) {
-    case BCONSTNT:
-        return GCONSTNT;
-    case BVOLATILE:
-        return GVOLATILE;
-    case BVOLATILE|BCONSTNT:
-        return GCONSTNT|GVOLATILE;
+    case BCONSTNT:           return GCONSTNT;
+    case BVOLATILE:          return GVOLATILE;
+    case BVOLATILE|BCONSTNT: return GCONSTNT|GVOLATILE;
     }
     return GXXX;
 }

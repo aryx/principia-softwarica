@@ -1208,13 +1208,13 @@ lcgen(Node *n, Node *nn)
 
 /*s: function bcgen */
 void
-bcgen(Node *n, int true)
+bcgen(Node *n, bool btrue)
 {
 
     if(n->type == T)
         gbranch(OGOTO);
     else
-        boolgen(n, true, Z);
+        boolgen(n, btrue, Z);
 }
 /*e: function bcgen */
 
