@@ -31,3 +31,4 @@ DATA    end+0(SB)/8, $"end\z\z\z\z\z"
                         
 
 /* http://sysdigcloud.com/fascinating-world-linux-system-calls/ */
+/* https://jroweboy.github.io/c/asm/2015/01/26/when-is-main-not-a-function.html  */
