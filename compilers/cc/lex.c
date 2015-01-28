@@ -58,6 +58,7 @@ void	setinclude(char*);
 void main(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
+    int err;
     int c;
     /*x: [[main()]] locals */
     char **defs;
@@ -74,11 +75,12 @@ void main(int argc, char *argv[])
     memset(debug, 0, sizeof(debug));
 
     tinit(); // type globals initialisation
-    cinit(); // C lexing/parsing initialisation
+    cinit(); // C lexing/parsing globals initialisation
     ginit(); // arch dependent globals initialisation, 5c/8c/...
     arginit(); // printf argument checking initialisation
 
     outfile = nil;
+
     defs = nil;
     ndef = 0;
 
@@ -182,9 +184,9 @@ void main(int argc, char *argv[])
     }
     /*e: [[main()]] multiple files handling */
 
-    c = compile((argc == 0) ? "stdin" : argv[0], defs, ndef);
+    err = compile((argc == 0) ? "stdin" : argv[0], defs, ndef);
 
-    if(c)
+    if(err)
         errorexit();
     exits(nil);
 }
@@ -195,10 +197,16 @@ int
 compile(char *infile, char **defs, int ndef)
 {
     /*s: [[compile()]] locals */
-    char ofile[400], incfile[20];
-    char *p, **av, opt[256];
-    int i, c, fd[2];
+    char *p;
+    fdt ofd;
     static bool first = true;
+    /*x: [[compile()]] locals */
+    char ofile[400];
+    /*x: [[compile()]] locals */
+    char incfile[20];
+    /*x: [[compile()]] locals */
+    char **av, opt[256];
+    int i, c, fd[2];
     /*e: [[compile()]] locals */
 
     /*s: [[compile()]] set p to basename(infile) and adjust include */
@@ -251,7 +259,7 @@ compile(char *infile, char **defs, int ndef)
     /*e: [[compile()]] setinclude("/{thestring}/include") or INCLUDE */
 
     if (first)
-        Binit(&diagbuf, 1, OWRITE);
+        Binit(&diagbuf, STDOUT, OWRITE);
 
     /*s: [[compile()]] if writing acid to standard output */
     /*
@@ -267,13 +275,13 @@ compile(char *infile, char **defs, int ndef)
     } 
     /*e: [[compile()]] if writing acid to standard output */
     else {
-        c = mycreat(outfile, 0664);
-        if(c < 0) {
+        ofd = mycreat(outfile, 0664);
+        if(ofd < 0) {
             diag(Z, "cannot open %s - %r", outfile);
             outfile = nil;
             errorexit();
         }
-        Binit(&outbuf, c, OWRITE);
+        Binit(&outbuf, ofd, OWRITE);
     }
     newio();
     first = false;
@@ -1316,12 +1324,16 @@ cinit(void)
 
     /*s: [[cinit()]] lexing globals initialization */
     nerrors = 0;
+    /*x: [[cinit()]] lexing globals initialization */
     lineno = 1;
+    peekc = IGN;
+    /*x: [[cinit()]] lexing globals initialization */
     iostack = I;
     iofree = I;
-    peekc = IGN;
-    nhunk = 0;
     /*e: [[cinit()]] lexing globals initialization */
+    /*s: [[cinit()]] memory globals initialization */
+    nhunk = 0;
+    /*e: [[cinit()]] memory globals initialization */
     /*s: [[cinit()]] types initialization */
     types[TXXX] = T;
 
@@ -1360,6 +1372,9 @@ cinit(void)
     autobn = 0;
     autoffset = 0;
     /*e: [[cinit()]] namespace globals initialization */
+    /*s: [[cinit()]] dclstack initialization */
+    dclstack = D;
+    /*e: [[cinit()]] dclstack initialization */
     /*s: [[cinit()]] symstring initialization */
     t = typ(TARRAY, types[TCHAR]);
     t->width = 0;
@@ -1367,13 +1382,9 @@ cinit(void)
     symstring->class = CSTATIC;
     symstring->type = t;
     /*e: [[cinit()]] symstring initialization */
-
-    t = typ(TARRAY, types[TCHAR]);
-    t->width = 0;
-
+    /*s: [[cinit()]] nodproto initialization */
     nodproto = new(OPROTO, Z, Z);
-    dclstack = D;
-
+    /*e: [[cinit()]] nodproto initialization */
     /*s: [[cinit()]] pathname initialisation from cwd */
     pathname = allocn(pathname, 0, 100);
     if(getwd(pathname, 99) == 0) {

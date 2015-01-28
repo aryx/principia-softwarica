@@ -141,6 +141,7 @@ struct	Sym
 {
     // Symbolic names are used for: 
     //  - identifiers (locals/params/globals/functions/typedefs),
+    //    and also enum constants
     //  - tags (struct/union/enum) 
     //  - labels (for the goto)
     //  - macros (the #define)
@@ -213,10 +214,11 @@ struct	Decl
     short	val;
 
     /*s: [[Decl]] sym copy fields */
-    Type*	type;
-    char	class;
     long	offset;
     ushort	block;
+    /*x: [[Decl]] sym copy fields */
+    Type*	type;
+    char	class;
     long	varlineno;
     bool	aused;
     /*e: [[Decl]] sym copy fields */
@@ -240,7 +242,7 @@ struct	Type
 
     // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
     Type*	link;
-    // option<list<ref_own<Type>>, just for the parameters of a TFUNC
+    // option<list<ref_own<Type>>, next = Type.down, just for OFUNC params
     Type*	down;
 
     long	lineno;
@@ -387,7 +389,7 @@ enum node_kind
     OGE,
     /*x: expression nodes */
     OAS,
-
+    /*x: expression nodes */
     OASADD,
     OASSUB,
 
@@ -456,9 +458,9 @@ enum node_kind
     /*s: statement nodes */
     OIF,
     /*x: statement nodes */
-    OFOR,
     OWHILE,
     ODWHILE,
+    OFOR,
     /*x: statement nodes */
     ORETURN,
 
@@ -560,7 +562,7 @@ enum type_kind
 /*s: enum type_kind_bis */
 enum type_kind_bis {
     // ----------------------------------------------------------------------
-    // Storage (temporary, see CAUTO/CEXTERN/... for final storage)
+    // Class storage (temporary, see CAUTO/CEXTERN/... for final storage)
     // ----------------------------------------------------------------------
     /*s: [[Type_kind_bis]] storage cases */
     TAUTO	= NTYPE,
@@ -597,8 +599,10 @@ enum type_kind_bis {
 
     NALLTYPES,
 
+    /*s: constant TRUNE */
     /* adapt size of Rune to target system's size */
     TRUNE = sizeof(TRune)==4? TUINT: TUSHORT,
+    /*e: constant TRUNE */
 };
 /*e: enum type_kind_bis */
 /*s: enum align */
@@ -620,7 +624,7 @@ enum align
 /*s: enum dxxx */
 enum namespace
 {
-    DMARK, // special mark to help represent a stack of list??
+    DMARK, // special mark to help separate the different lists
 
     DAUTO, // locals/parameters/globals/typedefs/functions identifiers
     DSUE,  // struct/union/enum tags
@@ -640,11 +644,11 @@ enum storage_class
     /*s: [[Storage_class]] cases */
     CTYPEDEF,
     /*x: [[Storage_class]] cases */
+    CLOCAL,
+    /*x: [[Storage_class]] cases */
     CEXREG, // extern register, kenccext (used in kernel for mips)
     /*x: [[Storage_class]] cases */
     CTYPESTR,
-    /*x: [[Storage_class]] cases */
-    CLOCAL,
     /*e: [[Storage_class]] cases */
 
     NCTYPES,

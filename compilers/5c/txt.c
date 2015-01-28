@@ -15,12 +15,6 @@ ginit(void)
     thechar = '5';
     thestring = "arm";
     /*x: [[ginit()]] initialisation */
-    listinit();
-    nstring = 0;
-    mnstring = 0;
-    nrathole = 0;
-    cases = C;
-    /*x: [[ginit()]] initialisation */
     tfield = types[TLONG];
     /*x: [[ginit()]] initialisation */
     pc = 0;
@@ -31,10 +25,18 @@ ginit(void)
     breakpc = -1;
     continpc = -1;
     /*x: [[ginit()]] initialisation */
+    cases = C;
+    /*x: [[ginit()]] initialisation */
+    nrathole = 0;
+    /*x: [[ginit()]] initialisation */
+    nstring = 0;
+    mnstring = 0;
+    /*x: [[ginit()]] initialisation */
     exregoffset = REGEXT;
     exfregoffset = FREGEXT;
+    /*x: [[ginit()]] initialisation */
+    listinit();
     /*e: [[ginit()]] initialisation */
-
     /*s: [[ginit()]] zprog initialisation */
     zprog.link = P;
     zprog.as = AGOK;
@@ -45,7 +47,6 @@ ginit(void)
     zprog.to = zprog.from;
     zprog.scond = COND_ALWAYS;  
     /*e: [[ginit()]] zprog initialisation */
-
     /*s: [[ginit()]] special nodes initialisation */
     regnode.op = OREGISTER;
     regnode.class = CEXREG;
@@ -94,9 +95,7 @@ ginit(void)
     complex(nodrat);
     nodrat->type = t;
     /*e: [[ginit()]] special nodes initialisation */
-
     com64init();
-
     /*s: [[ginit()]] reg and resvreg initialisation */
     memset(reg, 0, sizeof(reg));
 

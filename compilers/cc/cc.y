@@ -40,16 +40,24 @@
 /*e: union yacc */
 /*s: token declarations */
 %token  <sym>   LNAME LTYPE
-%token  <vval>  LCONST LLCONST LUCONST LULCONST LVLCONST LUVLCONST
+%token  <vval>  LCONST LUCONST  LLCONST  LULCONST   LVLCONST LUVLCONST
 %token  <dval>  LFCONST LDCONST
 %token  <sval>  LSTRING LLSTRING
 /*x: token declarations */
-%token  LAUTO LBREAK LCASE LCHAR LCONTINUE LDEFAULT LDO
-%token  LDOUBLE LELSE LEXTERN LFLOAT LFOR LGOTO
-%token  LIF LINT LLONG LREGISTER LRETURN LSHORT LSIZEOF LUSED
-%token  LSTATIC LSTRUCT LSWITCH LTYPEDEF LTYPESTR LUNION LUNSIGNED
-%token  LWHILE LVOID LENUM LSIGNED LCONSTNT LVOLATILE LSET LSIGNOF
-%token  LRESTRICT LINLINE
+%token  LVOID   LCHAR LSHORT LINT LLONG   LDOUBLE LFLOAT   LSIGNED LUNSIGNED
+%token  LSTRUCT LUNION LENUM
+%token  LTYPEDEF  
+%token  LCONSTNT LVOLATILE  LRESTRICT LINLINE
+%token  LAUTO LSTATIC LEXTERN LREGISTER
+%token  LIF LELSE  LWHILE LDO LFOR  LBREAK LCONTINUE  LRETURN LGOTO
+%token  LSWITCH LCASE LDEFAULT 
+%token  LSIZEOF
+/*x: token declarations */
+%token  LUSED LSET 
+/*x: token declarations */
+%token  LSIGNOF
+/*x: token declarations */
+%token  LTYPESTR
 /*e: token declarations */
 /*s: priority and associativity declarations */
 %left   ';'
@@ -130,11 +138,11 @@ xdecl:
     block
     {
         Node *n;
-
         n = revertdcl();
+        /*s: xdecl rule, adjust block body with possible hidden generated nodes */
         if(n)
             $6 = new(OLIST, n, $6);
-
+        /*e: xdecl rule, adjust block body with possible hidden generated nodes */
         if(!debug['a'] && !debug['Z'])
             codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
     }
@@ -166,8 +174,8 @@ xdecor:
 /*s: xdecor2 rule */
 xdecor2:
     tag
-/*x: xdecor2 rule */
 |   '(' xdecor ')'             { $$ = $2;   }
+/*x: xdecor2 rule */
 |   xdecor2 '[' zexpr ']'      { $$ = new(OARRAY, $1, $3); }
 /*x: xdecor2 rule */
 |   xdecor2 '(' zarglist ')'   { $$ = new(OFUNC, $1, $3); }
@@ -180,7 +188,7 @@ xdecor2:
 adecl:
     ctlist ';'        { $$ = dodecl(adecl, lastclass, lasttype, Z); }
 |   ctlist adlist ';' { $$ = $2; }
-
+/*x: automatic declarator rules */
 adlist:
     xdecor
     {
@@ -213,22 +221,26 @@ adlist:
 zarglist:
   /* empty */   { $$ = Z; }
 |   arglist     { $$ = invert($1); }
-
-
+/*x: parameter declarator rules */
+/*s: arglist rule */
 arglist:
     name
-|   tlist abdecor
-    {
-        $$ = new(OPROTO, $2, Z);
-        $$->type = $1;
-    }
+/*x: arglist rule */
 |   tlist xdecor
     {
         $$ = new(OPROTO, $2, Z);
         $$->type = $1;
     }
-|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+|   tlist abdecor
+    {
+        $$ = new(OPROTO, $2, Z);
+        $$->type = $1;
+    }
+/*x: arglist rule */
 |   arglist ',' arglist  { $$ = new(OLIST, $1, $3); }
+/*x: arglist rule */
+|   '.' '.' '.'          { $$ = new(ODOTDOT, Z, Z); }
+/*e: arglist rule */
 /*x: parameter declarator rules */
 /*
  * parameter declarator
@@ -341,9 +353,12 @@ ulstmnt:
     }
     block
     {
-        $$ = revertdcl();
-        if($$)
-            $$ = new(OLIST, $$, $2);
+        Node *n;
+        n = revertdcl();
+        /*s: ulstmt rule, adjust block body with possible hidden generated nodes */
+        if(n)
+            $$ = new(OLIST, n, $2);
+        /*e: ulstmt rule, adjust block body with possible hidden generated nodes */
         else
             $$ = $2;
     }
@@ -363,28 +378,33 @@ ulstmnt:
             warn($3, "empty else body");
     }
 /*x: ulstmnt rule */
+|   LWHILE '(' cexpr ')' stmnt          { $$ = new(OWHILE, $3, $5); }
+|   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
+/*x: ulstmnt rule */
 |   { 
         markdcl(); 
     } 
     LFOR '(' forexpr ';' zcexpr ';' zcexpr ')' stmnt
     {
-        $$ = revertdcl();
-        if($$){
+        Node *n;
+        n = revertdcl();
+        /*s: ulstmt rule, adjust forexpr with possible hidden generated nodes */
+        if(n){
             if($4)
-                $4 = new(OLIST, $$, $4);
+                $4 = new(OLIST, n, $4);
             else
-                $4 = $$;
+                $4 = n;
         }
+        /*e: ulstmt rule, adjust forexpr with possible hidden generated nodes */
         $$ = new(OFOR, new(OLIST, $6, new(OLIST, $4, $8)), $10);
     }
-|   LWHILE '(' cexpr ')' stmnt          { $$ = new(OWHILE, $3, $5); }
-|   LDO stmnt LWHILE '(' cexpr ')' ';'  { $$ = new(ODWHILE, $5, $2); }
 /*x: ulstmnt rule */
 |   LRETURN zcexpr ';'
     {
         $$ = new(ORETURN, $2, Z);
         $$->type = thisfntype->link;
     }
+/*x: ulstmnt rule */
 |   LBREAK ';'     { $$ = new(OBREAK, Z, Z); }
 |   LCONTINUE ';'  { $$ = new(OCONTINUE, Z, Z); }
 /*x: ulstmnt rule */
@@ -453,6 +473,7 @@ expr:
 |   expr LGE expr  { $$ = new(OGE, $1, $3); }
 /*x: expr rule */
 |   expr '=' expr  { $$ = new(OAS, $1, $3); }
+/*x: expr rule */
 |   expr LPE expr  { $$ = new(OASADD, $1, $3); }
 |   expr LME expr  { $$ = new(OASSUB, $1, $3); }
 |   expr LMLE expr { $$ = new(OASMUL, $1, $3); }
@@ -512,9 +533,10 @@ pexpr:
 |   pexpr '(' zelist ')'
     {
         $$ = new(OFUNC, $1, Z);
-        if($1->op == ONAME)
-          if($1->type == T)
+        /*s: pexpr rule, implicit declaration of unknown function */
+        if(($1->op == ONAME) && ($1->type == T))
             dodecl(xdecl, CXXX, types[TINT], $$);
+        /*e: pexpr rule, implicit declaration of unknown function */
         $$->right = invert($3);
     }
 /*x: pexpr rule */
@@ -617,16 +639,16 @@ cexpr:
     expr
 |   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
 /*x: expressions rules */
+zexpr:
+  /* empty */ { $$ = Z; }
+|   lexpr
+/*x: expressions rules */
 lexpr:
     expr
     {
         $$ = new(OCAST, $1, Z);
         $$->type = types[TLONG];
     }
-/*x: expressions rules */
-zexpr:
-  /* empty */ { $$ = Z; }
-|   lexpr
 /*x: expressions rules */
 elist:
     expr
@@ -692,7 +714,7 @@ lstring:
 init:
     expr
 |   '{' ilist '}' { $$ = new(OINIT, invert($2), Z); }
-
+/*x: initializers rules */
 ilist:
     qlist
 |   init
@@ -938,8 +960,8 @@ complex:
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
-|   enum ','
 |   enum ',' enum
+|   enum ','
 /*e: types rules */
 /*s: names rules */
 tag:
@@ -949,7 +971,7 @@ tag:
         $$->sym = $1;
 
         $$->type = $1->type;
-        $$->etype = ($$->type != T) ? $$->type->etype : TVOID;
+        $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
 
         $$->xoffset = $1->offset;
         $$->class = $1->class;
@@ -969,17 +991,12 @@ name:
         /*e: name rule, if local static variable */
         $$->sym = $1;
         $$->type = $1->type;
-
-        $$->etype = TVOID;
-        if($$->type != T)
-            $$->etype = $$->type->etype;
-
+        $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
         $$->xoffset = $1->offset;
         $$->class = $1->class;
- 
-        /*s: name rule, LNAME case */
-        $1->aused = true;
-        /*e: name rule, LNAME case */
+         /*s: name rule, LNAME case, adjust more fields */
+         $1->aused = true;
+         /*e: name rule, LNAME case, adjust more fields */
     }
 /*x: names rules */
 gctname:

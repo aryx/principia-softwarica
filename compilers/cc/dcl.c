@@ -48,9 +48,10 @@ loop:
              s = mkstatic(s);
          /*e: [[dodecl()]] case ONAME, if local static variable */
          firstbit = 0;
+
          n->sym = s;
          n->type = s->type;
-         n->etype = (n->type != T) ? n->type->etype : TVOID;
+         n->etype = (s->type != T) ? s->type->etype : TVOID;
          n->xoffset = s->offset;
          n->class = s->class;
 
@@ -69,12 +70,12 @@ loop:
      /*x: [[dodecl()]] switch node kind cases */
      case OARRAY:
          t = typ(TARRAY, t);
-         t->width = 0;
-         n1 = n->right;
+         n1 = n->right; // possible size
          n = n->left;
-         /*s: [[dodecl()]] switch node kind cases, case OARRAY, if array have a size */
+         t->width = 0; // array[], size could be set by doinit (or specified in n1)
+         /*s: [[dodecl()]] switch node kind cases, case OARRAY, if array has a size */
          if(n1 != Z) {
-             complex(n1);
+             complex(n1); // will call evconst()
              v = (n1->op == OCONST) ? n1->vconst : -1;
              if(v <= 0) {
                  diag(n, "array size must be a positive constant");
@@ -82,7 +83,7 @@ loop:
              }
              t->width = v * t->link->width;
          }
-         /*e: [[dodecl()]] switch node kind cases, case OARRAY, if array have a size */
+         /*e: [[dodecl()]] switch node kind cases, case OARRAY, if array has a size */
          goto loop;
      /*x: [[dodecl()]] switch node kind cases */
      case OFUNC:
@@ -176,9 +177,9 @@ tcopy(Type *t)
     et = t->etype;
     if(typesu[et])
         return t;
+
     tl = tcopy(t->link);
-    if(tl != t->link ||
-      (et == TARRAY && t->width == 0)) {
+    if(tl != t->link || (et == TARRAY && t->width == 0)) {
         tx = copytyp(t);
         tx->link = tl;
         return tx;
@@ -836,6 +837,27 @@ Node* revertdcl(void)
             // we popped everything, exit loop and return
             return n;
         /*x: [[revertdcl()]] switch declaration type cases */
+        case DSUE:
+            if(debug['d'])
+                print("revert2 \"%s\"\n", s->name);
+
+            // retore info previous tag
+            s->suetag = d->type;
+            s->sueblock = d->block;
+
+            break;
+        /*x: [[revertdcl()]] switch declaration type cases */
+        case DLABEL:
+            if(debug['d'])
+                print("revert3 \"%s\"\n", s->name);
+
+            /*s: [[reverdcl()]] DLABEL case, warn if label not used */
+            if(s->label && s->label->addable == 0)
+                warn(s->label, "label declared and not used \"%s\"", s->name);
+            /*e: [[reverdcl()]] DLABEL case, warn if label not used */
+            s->label = Z;
+            break;
+        /*x: [[revertdcl()]] switch declaration type cases */
         case DAUTO:
             if(debug['d'])
                 print("revert1 \"%s\"\n", s->name);
@@ -851,12 +873,11 @@ Node* revertdcl(void)
             /*e: [[reverdcl()]] DAUTO case, warn if auto declared but not used */
             /*s: [[reverdcl()]] if volatile symbol */
             if(s->type && (s->type->garb & GVOLATILE)) {
+                // add USED(&local_volatile);
                 n1 = new(ONAME, Z, Z);
                 n1->sym = s;
                 n1->type = s->type;
-                n1->etype = TVOID;
-                if(n1->type != T)
-                    n1->etype = n1->type->etype;
+                n1->etype = (s->type != T) ? s->type->etype : TVOID;
                 n1->xoffset = s->offset;
                 n1->class = s->class;
 
@@ -868,38 +889,17 @@ Node* revertdcl(void)
                     n = new(OLIST, n1, n);
             }
             /*e: [[reverdcl()]] if volatile symbol */
-            // restore info previous identnfier
+            // restore info previous identifier
             /*s: [[reverdcl()]] DAUTO case, restore symbol fields from decl */
             s->type = d->type;
             s->class = d->class;
-            s->offset = d->offset;
-            s->block = d->block;
             s->varlineno = d->varlineno;
             s->aused = d->aused;
+
+            s->offset = d->offset;
+            s->block = d->block;
             /*e: [[reverdcl()]] DAUTO case, restore symbol fields from decl */
 
-            break;
-        /*x: [[revertdcl()]] switch declaration type cases */
-        case DSUE:
-            if(debug['d'])
-                print("revert2 \"%s\"\n", s->name);
-
-            // retore info previous tag
-            s->suetag = d->type;
-            s->sueblock = d->block;
-
-            break;
-
-        /*x: [[revertdcl()]] switch declaration type cases */
-        case DLABEL:
-            if(debug['d'])
-                print("revert3 \"%s\"\n", s->name);
-
-            /*s: [[reverdcl()]] DLABEL case, warn if label not used */
-            if(s->label && s->label->addable == 0)
-                warn(s->label, "label declared and not used \"%s\"", s->name);
-            /*e: [[reverdcl()]] DLABEL case, warn if label not used */
-            s->label = Z;
             break;
         /*e: [[revertdcl()]] switch declaration type cases */
         }
@@ -912,6 +912,7 @@ Node* revertdcl(void)
 Type*
 fnproto(Node *n)
 {
+    /*s: [[fnproto()]] old prototype style handling */
     int r;
 
     r = anyproto(n->right);
@@ -920,6 +921,7 @@ fnproto(Node *n)
             diag(n, "mixed ansi/old function declaration: %F", n->left);
         return T;
     }
+    /*e: [[fnproto()]] old prototype style handling */
     return fnproto1(n->right);
 }
 /*e: function fnproto */
@@ -957,27 +959,30 @@ fnproto1(Node *n)
 
     if(n == Z)
         return T;
-    switch(n->op) {
-    case OLIST:
-        t = fnproto1(n->left);
-        if(t != T)
-            t->down = fnproto1(n->right);
-        return t;
 
+    switch(n->op) {
+    /*s: [[fnproto1()]] switch node kind cases */
+    case ONAME:
+        diag(n, "incomplete argument prototype");
+        return typ(TINT, T);
+    /*x: [[fnproto1()]] switch node kind cases */
     case OPROTO:
         lastdcltype = T;
         dodecl(NODECL, CXXX, n->type, n->left);
         t = typ(TXXX, T);
         if(lastdcltype != T)
-            *t = *paramconv(lastdcltype, 1);
+            *t = *paramconv(lastdcltype, true);
         return t;
-
-    case ONAME:
-        diag(n, "incomplete argument prototype");
-        return typ(TINT, T);
-
+    /*x: [[fnproto1()]] switch node kind cases */
+    case OLIST:
+        t = fnproto1(n->left);
+        if(t != T)
+            t->down = fnproto1(n->right);
+        return t;
+    /*x: [[fnproto1()]] switch node kind cases */
     case ODOTDOT:
         return typ(TDOT, T);
+    /*e: [[fnproto1()]] switch node kind cases */
     }
     diag(n, "unknown op in fnproto");
     return T;
@@ -1019,10 +1024,11 @@ push1(Sym *s)
     /*s: [[push1()]] save symbol fields in decl */
     d->type = s->type;
     d->class = s->class;
-    d->offset = s->offset;
-    d->block = s->block;
     d->varlineno = s->varlineno;
     d->aused = s->aused;
+
+    d->offset = s->offset;
+    d->block = s->block;
     /*e: [[push1()]] save symbol fields in decl */
 
     return d;
@@ -1248,6 +1254,7 @@ snap(Type *t)
 //@Scheck: used by cc.y
 Type* dotag(Sym *s, int et, int bn)
 {
+    /*s: [[dotag()]] if bn not null and bn not sueblock */
     Decl *d;
 
     if(bn != 0 && bn != s->sueblock) {
@@ -1258,17 +1265,19 @@ Type* dotag(Sym *s, int et, int bn)
         d->block = s->sueblock;
         s->suetag = T;
     }
-
+    /*e: [[dotag()]] if bn not null and bn not sueblock */
     if(s->suetag == T) {
-        s->suetag = typ(et, T);
+        s->suetag = typ(et, T); // link is null for now
         s->sueblock = autobn;
     }
+    /*s: [[dotag()]] sanity check tag redeclaration */
     if(s->suetag->etype != et)
         diag(Z, "tag used for more than one type: %s",
             s->name);
-
+    /*e: [[dotag()]] sanity check tag redeclaration */
     if(s->suetag->tag == S)
         s->suetag->tag = s;
+
     return s->suetag;
 }
 /*e: function dotag */
@@ -1327,12 +1336,11 @@ paramconv(Type *t, bool f)
         t = typ(TIND, t->link);
         t->width = types[TIND]->width;
         break;
-
     case TFUNC:
         t = typ(TIND, t);
         t->width = types[TIND]->width;
         break;
-
+    /*s: [[paramconv()]] switch etype, adjust type when not f cases */
     case TFLOAT:
         if(!f)
             t = types[TDOUBLE];
@@ -1349,6 +1357,7 @@ paramconv(Type *t, bool f)
         if(!f)
             t = types[TUINT];
         break;
+    /*e: [[paramconv()]] switch etype, adjust type when not f cases */
     }
     return t;
 }
@@ -1437,9 +1446,8 @@ pdecl(int class, Type *t, Sym *s)
 void
 xdecl(int class, Type *t, Sym *s)
 {
-    long o; // offset
+    long o = 0; // offset
 
-    o = 0;
     // adjusting class, and possibly o (for CEXREG)
     switch(class) {
     /*s: [[xdecl()]] switch class cases */
@@ -1648,10 +1656,10 @@ void doenum(Sym *s, Node *n)
         en.cenum = n->type;
         en.tenum = maxtype(en.cenum, en.tenum);
 
-        if(!typefd[en.cenum->etype])
-            en.lastenum = n->vconst;
-        else
+        if(typefd[en.cenum->etype])
             en.floatenum = n->fconst;
+        else
+            en.lastenum = n->vconst;
     }
     if(dclstack)
         push1(s);
@@ -1665,12 +1673,12 @@ void doenum(Sym *s, Node *n)
     }
     s->tenum = en.cenum;
 
-    if(!typefd[s->tenum->etype]) {
-        s->vconst = convvtox(en.lastenum, s->tenum->etype);
-        en.lastenum++;
-    } else {
+    if(typefd[s->tenum->etype]) {
         s->fconst = en.floatenum;
         en.floatenum++;
+    } else {
+        s->vconst = convvtox(en.lastenum, s->tenum->etype);
+        en.lastenum++;
     }
 
     if(debug['d'])

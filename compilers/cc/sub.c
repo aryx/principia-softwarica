@@ -153,6 +153,7 @@ typ(int et, Type *d)
     t->sym = S;
 
     t->width = ewidth[et];
+
     t->offset = 0;
     t->shift = 0;
     t->nbits = 0;
