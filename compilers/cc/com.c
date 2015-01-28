@@ -1328,7 +1328,7 @@ loop:
             ccom(r);
         // Fallthrough
     common:
-        if((l == Z) || (r == Z) || (l->op == OCONST) || (r->op == OCONST))
+        if(((l == Z)||(l->op == OCONST)) && ((r == Z)||(r->op == OCONST)))
             evconst(n);
     }
 }
