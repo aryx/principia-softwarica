@@ -585,14 +585,13 @@ enum type_kind
     TFLOAT,
     TDOUBLE,
     /*x: type cases */
-    TIND,
-    TFUNC,
-    TARRAY,
     TVOID,
+    TIND,
+    TARRAY,
+    TFUNC,
     TSTRUCT,
     TUNION,
     TENUM,
-
     TDOT, // ... in function types
     /*e: type cases */
 
