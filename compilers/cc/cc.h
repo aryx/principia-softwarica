@@ -586,12 +586,14 @@ enum type_kind
     TDOUBLE,
     /*x: type cases */
     TVOID,
+    /*x: type cases */
     TIND,
     TARRAY,
     TFUNC,
     TSTRUCT,
     TUNION,
     TENUM,
+    /*x: type cases */
     TDOT, // ... in function types
     /*e: type cases */
 
