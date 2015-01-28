@@ -373,9 +373,7 @@ init1(Sym *s, Type *t, long o, int exflag)
             l = new(ONAME, Z, Z);
             l->sym = s;
             l->type = t;
-            l->etype = TVOID;
-            if(s->type)
-                l->etype = s->type->etype;
+            l->etype = s->type ? s->type->etype : TVOID;
             l->xoffset = s->offset + o;
             l->class = s->class;
 
@@ -1179,8 +1177,6 @@ signat(Type *t, Typetab *tt)
         if(t->garb&GINCOMPLETE)
             return s;
         switch(t->etype) {
-        default:
-            return s;
         case TARRAY:
             s = s*thash2 + 0;	/* was t->width */
             break;
@@ -1199,6 +1195,8 @@ signat(Type *t, Typetab *tt)
             return s;
         case TIND:
             break;
+        default:
+            return s;
         }
     }
     return s;

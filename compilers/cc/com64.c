@@ -201,10 +201,10 @@ fvn(char *name, int type)
     n = new(ONAME, Z, Z);
     n->sym = slookup(name);
     n->sym->sig = SIGINTERN;
-    if(fntypes[type] == 0)
+    if(fntypes[type] == nil)
         fntypes[type] = typ(TFUNC, types[type]);
     n->type = fntypes[type];
-    n->etype = type;
+    n->etype = type; // type of return?
     n->class = CGLOBL;
     n->addable = 10;
     n->complex = 0;

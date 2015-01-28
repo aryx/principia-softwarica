@@ -28,8 +28,8 @@ evconst(Node *n)
     Node *l, *r;
     int et;
     bool isf;
-    vlong v;
-    double d;
+    vlong v = 0;
+    double d = 0;
 
     if(n == Z || n->type == T)
         return;
@@ -39,9 +39,6 @@ evconst(Node *n)
 
     l = n->left;
     r = n->right;
-
-    d = 0;
-    v = 0;
 
     switch(n->op) {
     /*s: [[evconst()]] switch node kind cases */
@@ -241,12 +238,11 @@ evconst(Node *n)
     default:
         return;
     }
-
-    if(isf) {
+    // reach this point if the node is indeed a candidate to "constification"
+    if(isf)
         n->fconst = d;
-    } else {
+    else
         n->vconst = convvtox(v, n->type->etype);
-    }
     n->oldop = n->op;
     n->op = OCONST;
 }

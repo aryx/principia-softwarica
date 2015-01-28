@@ -69,9 +69,11 @@ struct	Adr
     Sym*	sym;
     // enum<sym_kind>
     char	symkind;
-    /*x: [[Adr]] other fields(arm) */
-    char	etype;
     /*e: [[Adr]] other fields(arm) */
+    /*s: [[Adr]] type fields(arm) */
+    // enum<type_kind>
+    char	etype;
+    /*e: [[Adr]] type fields(arm) */
 };
 /*e: struct Adr(arm) */
 /*s: constant A */
@@ -153,10 +155,12 @@ struct	Hintab
 /*s: struct Var */
 struct	Var
 {
-    long	offset;
     Sym*	sym;
+    //enum<sym_kind>
     char	symkind;
+    //enum<type_kind>
     char	etype;
+    long	offset;
 };
 /*e: struct Var */
 
@@ -190,6 +194,7 @@ struct	Reg
     Reg*	s1;
     Reg*	s2;
     Reg*	link;
+
     Prog*	prog;
 };
 /*e: struct Reg */

@@ -233,10 +233,6 @@ acidtype(Type *t)
     if(s == S)
         return;
     switch(t->etype) {
-    default:
-        Bprint(&outbuf, "T%d\n", t->etype);
-        return;
-
     case TUNION:
     case TSTRUCT:
         if(debug['s'])
@@ -264,6 +260,11 @@ acidtype(Type *t)
                     l->sym->name,
                     l->offset);
         break;
+
+    default:
+        Bprint(&outbuf, "T%d\n", t->etype);
+        return;
+
     }
 }
 /*e: function acidtype */

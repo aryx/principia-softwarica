@@ -78,7 +78,7 @@ ginit(void)
     nodsafe = new(ONAME, Z, Z);
     nodsafe->sym = slookup(".safe");
     nodsafe->type = types[TINT];
-    nodsafe->etype = types[TINT]->etype;
+    nodsafe->etype = types[TINT]->etype; // TINT
     nodsafe->class = CAUTO;
     complex(nodsafe);
     /*x: [[ginit()]] special nodes initialisation */
@@ -90,7 +90,7 @@ ginit(void)
     nodrat = new(ONAME, Z, Z);
     nodrat->sym = symrathole;
     nodrat->type = types[TIND];
-    nodrat->etype = TVOID;
+    nodrat->etype = TVOID; // not TIND?
     nodrat->class = CGLOBL;
     complex(nodrat);
     nodrat->type = t;
@@ -154,12 +154,10 @@ gclean(void)
         gpseudo(AGLOBL, s, nodconst(s->type->width));
     }
     /*e: [[gclean()]] generate all AGLOBL pseudo opcodes */
- 
     /*s: [[gclean()]] generate last opcode, AEND */
     nextpc();
     p->as = AEND;
     /*e: [[gclean()]] generate last opcode, AEND */
-
     // generate the whole output file using outbuf global
     outcode();
 }

@@ -97,10 +97,10 @@ struct	Node
     // Post parsing annotations
     // ----------------------------------------------------------------------
     /*s: [[Node]] type and storage fields */
-    Type*	type;
-    /*x: [[Node]] type and storage fields */
     // enum<storage_class>
     char	class;
+    /*x: [[Node]] type and storage fields */
+    Type*	type;
     /*x: [[Node]] type and storage fields */
     // enum<type_kind>, inline of Node.type->etype?
     char	etype;

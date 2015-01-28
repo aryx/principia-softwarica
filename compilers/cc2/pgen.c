@@ -51,7 +51,7 @@ void codgen(Node *n, Node *nn)
         n1 = nodret->left;
         if(n1->type == T || n1->type->link != thisfntype->link) {
             n1->type = typ(TIND, thisfntype->link);
-            n1->etype = n1->type->etype;
+            n1->etype = n1->type->etype; // TIND
             nodret = new(OIND, n1, Z);
             complex(nodret);
         }

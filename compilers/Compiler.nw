@@ -529,15 +529,6 @@ Sym*	sym; // for ONAME, ODOT, OSTRUCT/OUNION
 
 
 
-% for expression nodes?
-% important field! typechecking! set in parsing when can
-% (e.g. for cast where have type, for return where have also spec)
-<<[[Node]] type and storage fields>>=
-Type*	type;
-@
-% so it's more than an AST actually, there is semantic info attached to it
-% by other phases.
-% see Type in next section
 
 
 % for declaration nodes?
@@ -757,13 +748,25 @@ Sym*	sym; // for TSTRUCT/TUNION/TENUM
 
 
 
-% inline of type->etype?
+% for expression nodes?
+% important field! typechecking! set in parsing when can
+% (e.g. for cast where have type, for return where have also spec)
+<<[[Node]] type and storage fields>>=
+Type*	type;
+@
+% so it's more than an AST actually, there is semantic info attached to it
+% by other phases.
+% see Type in next section
+
+% seems mostly inline of type->etype, except in fvn() and ccom()
 <<[[Node]] type and storage fields>>=
 // enum<type_kind>, inline of Node.type->etype?
 char	etype;
 @
 %less: could remove? redundant no? annoying to maintain?
 % annoying those n->etype = (s->type?): s->type->etype: TVOID;
+
+
 
 % gxxx for 'garbage' but should be renamed qualifier
 <<enum qualifier>>=
@@ -1473,6 +1476,7 @@ struct	Adr
     Ieee	ieee;
 
     <<[[Adr]] other fields(arm)>>
+    <<[[Adr]] type fields(arm)>>
 };
 @
 %less: use union for first 5?
@@ -1498,11 +1502,6 @@ char	symkind;
 @
 %old: was name, but symkind is less confusing (did the same in
 % Assembler.nw and Linker.nw)
-
-
-<<[[Adr]] other fields(arm)>>=
-char	etype;
-@
 
 
 <<global zprog>>=
@@ -1941,9 +1940,7 @@ gclean(void)
     <<[[gclean()]] adjust symrathole width>>
 
     <<[[gclean()]] generate all AGLOBL pseudo opcodes>>
- 
     <<[[gclean()]] generate last opcode, AEND>>
-
     // generate the whole output file using outbuf global
     outcode();
 }
@@ -4472,7 +4469,7 @@ xdecor2:
 |   '(' xdecor ')'             { $$ = $2;   }
 @
 % will contain the after identifier, type part 2b (array and functions)
-
+%$
 
 % xdecor -> xdecor2 -> tag
 <<names rules>>=
@@ -4587,10 +4584,7 @@ Type*	thisfntype;
         lastdcltype = T;
         firstarg = S;
         dodecl(xdecl, lastclass, lasttype, $2);
-        if(lastdcltype == T || lastdcltype->etype != TFUNC) {
-            diag($2, "not a function");
-            lastdcltype = types[TFUNC];
-        }
+        <<xdecl rule, sanity check lastdcltype is a function type>>
         thisfntype = lastdcltype;
         markdcl();
         firstdcl = dclstack;
@@ -4609,9 +4603,17 @@ Type*	thisfntype;
             codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
     }
 @
+%$
 
 % markdcl(), revertdcl(), see next section
 
+<<xdecl rule, sanity check lastdcltype is a function type>>=
+if(lastdcltype == T || lastdcltype->etype != TFUNC) {
+    diag($2, "not a function");
+    lastdcltype = types[TFUNC];
+}
+@
+%$
 
 % lots of things happen in xdecor actually as the parameters
 % will be there.
@@ -5803,9 +5805,7 @@ init1(Sym *s, Type *t, long o, int exflag)
             l = new(ONAME, Z, Z);
             l->sym = s;
             l->type = t;
-            l->etype = TVOID;
-            if(s->type)
-                l->etype = s->type->etype;
+            l->etype = s->type ? s->type->etype : TVOID;
             l->xoffset = s->offset + o;
             l->class = s->class;
 
@@ -7413,11 +7413,12 @@ paramconv(Type *t, bool f)
     return t;
 }
 @
-% a function parameter is really a pointer
-% an array is also really a pointer when passed as a parameter
-% as the size info is lost.
+% A function parameter is really a function pointer.
+% An array is really a pointer when passed as a parameter
+% as the size of the array information is lost.
 
 %todo: can do int foo(int x[45]) { }? 
+%todo: can do int foo(int bar(int x)) { }? 
 
 
 
@@ -8175,6 +8176,7 @@ naddr(Node *n, Adr *a)
 }
 @
 
+
 <<[[naddr()]] switch node kind cases>>=
 case OCONST:
     a->sym = S;
@@ -8188,6 +8190,15 @@ case OCONST:
     }
     break;
 @
+
+<<[[Adr]] type fields(arm)>>=
+// enum<type_kind>
+char	etype;
+@
+% seems used only so that can generate back a Var from an Adr
+
+% copy of node->type->etype
+%todo: useful?
 
 <<[[naddr()]] switch node kind cases>>=
 case ONAME:
@@ -8884,7 +8895,7 @@ if(typecmplx[thisfntype->link->etype]) {
     n1 = nodret->left;
     if(n1->type == T || n1->type->link != thisfntype->link) {
         n1->type = typ(TIND, thisfntype->link);
-        n1->etype = n1->type->etype;
+        n1->etype = n1->type->etype; // TIND
         nodret = new(OIND, n1, Z);
         complex(nodret);
     }
@@ -11495,7 +11506,7 @@ Node*	nodsafe;
 nodsafe = new(ONAME, Z, Z);
 nodsafe->sym = slookup(".safe");
 nodsafe->type = types[TINT];
-nodsafe->etype = types[TINT]->etype;
+nodsafe->etype = types[TINT]->etype; // TINT
 nodsafe->class = CAUTO;
 complex(nodsafe);
 @
@@ -11703,7 +11714,7 @@ symrathole->type = t;
 nodrat = new(ONAME, Z, Z);
 nodrat->sym = symrathole;
 nodrat->type = types[TIND];
-nodrat->etype = TVOID;
+nodrat->etype = TVOID; // not TIND?
 nodrat->class = CGLOBL;
 complex(nodrat);
 nodrat->type = t;
@@ -17289,8 +17300,10 @@ if(canreach && thisfntype->link->etype != TVOID){
 
 \subsection{[[ccom()]]}
 
-% called from complex(), after tcom()
+% mostly partial evaluation when have constants involved
+% in operations.
 
+% tcomo; complex() -> <> ??
 % cc/com.c
 <<function ccom>>=
 /*
@@ -17313,262 +17326,8 @@ loop:
 
     l = n->left;
     r = n->right;
-
     switch(n->op) {
-
-    case OAS:
-    case OASXOR:
-    case OASAND:
-    case OASOR:
-    case OASMOD:
-    case OASLMOD:
-    case OASLSHR:
-    case OASASHR:
-    case OASASHL:
-    case OASDIV:
-    case OASLDIV:
-    case OASMUL:
-    case OASLMUL:
-    case OASSUB:
-    case OASADD:
-        ccom(l);
-        ccom(r);
-        if(n->op == OASLSHR || n->op == OASASHR || n->op == OASASHL)
-          if(r->op == OCONST) {
-            t = n->type->width * 8;	/* bits per byte */
-            if(r->vconst >= t || r->vconst < 0)
-                warn(n, "stupid shift: %lld", r->vconst);
-        }
-        break;
-
-    case OCAST:
-        ccom(l);
-        if(l->op == OCONST) {
-            evconst(n);
-            if(n->op == OCONST)
-                break;
-        }
-        if(nocast(l->type, n->type) &&
-           (!typefd[l->type->etype] || typeu[l->type->etype] && 
-           typeu[n->type->etype])) {
-            l->type = n->type;
-            *n = *l;
-        }
-        break;
-
-    case OCOND:
-        ccom(l);
-        ccom(r);
-        if(l->op == OCONST)
-            if(vconst(l) == 0)
-                *n = *r->right;
-            else
-                *n = *r->left;
-        break;
-
-    case OREGISTER:
-    case OINDREG:
-    case OCONST:
-    case ONAME:
-        break;
-
-    case OADDR:
-        ccom(l);
-        l->etype = TVOID;
-        if(l->op == OIND) {
-            l->left->type = n->type;
-            *n = *l->left;
-            break;
-        }
-        goto common;
-
-    case OIND:
-        ccom(l);
-        if(l->op == OADDR) {
-            l->left->type = n->type;
-            *n = *l->left;
-            break;
-        }
-        goto common;
-
-    case OEQ:
-    case ONE:
-
-    case OLE:
-    case OGE:
-    case OLT:
-    case OGT:
-
-    case OLS:
-    case OHS:
-    case OLO:
-    case OHI:
-        ccom(l);
-        ccom(r);
-        if(compar(n, 0) || compar(n, 1))
-            break;
-        relcon(l, r);
-        relcon(r, l);
-        goto common;
-
-    case OASHR:
-    case OASHL:
-    case OLSHR:
-        ccom(l);
-        if(vconst(l) == 0 && !side(r)) {
-            *n = *l;
-            break;
-        }
-        ccom(r);
-        if(vconst(r) == 0) {
-            *n = *l;
-            break;
-        }
-        if(r->op == OCONST) {
-            t = n->type->width * 8;	/* bits per byte */
-            if(r->vconst >= t || r->vconst <= -t)
-                warn(n, "stupid shift: %lld", r->vconst);
-        }
-        goto common;
-
-    case OMUL:
-    case OLMUL:
-        ccom(l);
-        t = vconst(l);
-        if(t == 0 && !side(r)) {
-            *n = *l;
-            break;
-        }
-        if(t == 1) {
-            *n = *r;
-            goto loop;
-        }
-        ccom(r);
-        t = vconst(r);
-        if(t == 0 && !side(l)) {
-            *n = *r;
-            break;
-        }
-        if(t == 1) {
-            *n = *l;
-            break;
-        }
-        goto common;
-
-    case ODIV:
-    case OLDIV:
-        ccom(l);
-        if(vconst(l) == 0 && !side(r)) {
-            *n = *l;
-            break;
-        }
-        ccom(r);
-        t = vconst(r);
-        if(t == 0) {
-            diag(n, "divide check");
-            *n = *r;
-            break;
-        }
-        if(t == 1) {
-            *n = *l;
-            break;
-        }
-        goto common;
-
-    case OSUB:
-        ccom(r);
-        if(r->op == OCONST) {
-            if(typefd[r->type->etype]) {
-                n->op = OADD;
-                r->fconst = -r->fconst;
-                goto loop;
-            } else {
-                n->op = OADD;
-                r->vconst = -r->vconst;
-                goto loop;
-            }
-        }
-        ccom(l);
-        goto common;
-
-    case OXOR:
-    case OOR:
-    case OADD:
-        ccom(l);
-        if(vconst(l) == 0) {
-            *n = *r;
-            goto loop;
-        }
-        ccom(r);
-        if(vconst(r) == 0) {
-            *n = *l;
-            break;
-        }
-        goto commute;
-
-    case OAND:
-        ccom(l);
-        ccom(r);
-        if(vconst(l) == 0 && !side(r)) {
-            *n = *l;
-            break;
-        }
-        if(vconst(r) == 0 && !side(l)) {
-            *n = *r;
-            break;
-        }
-
-    commute:
-        /* look for commutative constant */
-        if(r->op == OCONST) {
-            if(l->op == n->op) {
-                if(l->left->op == OCONST) {
-                    n->right = l->right;
-                    l->right = r;
-                    goto loop;
-                }
-                if(l->right->op == OCONST) {
-                    n->right = l->left;
-                    l->left = r;
-                    goto loop;
-                }
-            }
-        }
-        if(l->op == OCONST) {
-            if(r->op == n->op) {
-                if(r->left->op == OCONST) {
-                    n->left = r->right;
-                    r->right = l;
-                    goto loop;
-                }
-                if(r->right->op == OCONST) {
-                    n->left = r->left;
-                    r->left = l;
-                    goto loop;
-                }
-            }
-        }
-        goto common;
-
-    case OANDAND:
-        ccom(l);
-        if(vconst(l) == 0) {
-            *n = *l;
-            break;
-        }
-        ccom(r);
-        goto common;
-
-    case OOROR:
-        ccom(l);
-        if(l->op == OCONST && l->vconst != 0) {
-            *n = *l;
-            n->vconst = 1;
-            break;
-        }
-        ccom(r);
-        goto common;
-
+    <<[[ccom()]] switch node kind cases>>
     default:
         if(l != Z)
             ccom(l);
@@ -17576,19 +17335,310 @@ loop:
             ccom(r);
         // Fallthrough
     common:
-        if(l != Z)
-          if(l->op != OCONST)
-            break;
-        if(r != Z)
-          if(r->op != OCONST)
-            break;
-
-        evconst(n);
+        if((l == Z) || (r == Z) || (l->op == OCONST) || (r->op == OCONST))
+            evconst(n);
     }
 }
 @
+% call recursively ccom first, so evconst can assume evconst
+% has been called on its leaves.
+%old: I rewrote common: to be positive rather than using 'break'
+
+<<[[ccom()]] switch node kind cases>>=
+case OCONST:
+case ONAME:
+    break;
+@
 
 
+<<[[ccom()]] switch node kind cases>>=
+case OAS:
+case OASXOR:
+case OASAND:
+case OASOR:
+case OASMOD:
+case OASLMOD:
+case OASLSHR:
+case OASASHR:
+case OASASHL:
+case OASDIV:
+case OASLDIV:
+case OASMUL:
+case OASLMUL:
+case OASSUB:
+case OASADD:
+    ccom(l);
+    ccom(r);
+    if(n->op == OASLSHR || n->op == OASASHR || n->op == OASASHL)
+      if(r->op == OCONST) {
+        t = n->type->width * 8;	/* bits per byte */
+        if(r->vconst >= t || r->vconst < 0)
+            warn(n, "stupid shift: %lld", r->vconst);
+    }
+    break;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OCAST:
+    ccom(l);
+    if(l->op == OCONST) {
+        evconst(n);
+        if(n->op == OCONST)
+            break;
+    }
+    if(nocast(l->type, n->type) &&
+       (!typefd[l->type->etype] || typeu[l->type->etype] && 
+       typeu[n->type->etype])) {
+        l->type = n->type;
+        *n = *l;
+    }
+    break;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OCOND:
+    ccom(l);
+    ccom(r);
+    if(l->op == OCONST)
+        if(vconst(l) == 0)
+            *n = *r->right;
+        else
+            *n = *r->left;
+    break;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OADDR:
+    ccom(l);
+    l->etype = TVOID; // ????
+    if(l->op == OIND) {
+        l->left->type = n->type;
+        *n = *l->left;
+        break;
+    }
+    goto common;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OIND:
+    ccom(l);
+    if(l->op == OADDR) {
+        l->left->type = n->type;
+        *n = *l->left;
+        break;
+    }
+    goto common;
+@
+<<[[ccom()]] switch node kind cases>>=
+case OEQ:
+case ONE:
+
+case OLE:
+case OGE:
+case OLT:
+case OGT:
+
+case OLS:
+case OHS:
+case OLO:
+case OHI:
+    ccom(l);
+    ccom(r);
+    if(compar(n, 0) || compar(n, 1))
+        break;
+    relcon(l, r);
+    relcon(r, l);
+    goto common;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OASHR:
+case OASHL:
+case OLSHR:
+    ccom(l);
+    if(vconst(l) == 0 && !side(r)) {
+        *n = *l;
+        break;
+    }
+    ccom(r);
+    if(vconst(r) == 0) {
+        *n = *l;
+        break;
+    }
+    if(r->op == OCONST) {
+        t = n->type->width * 8;	/* bits per byte */
+        if(r->vconst >= t || r->vconst <= -t)
+            warn(n, "stupid shift: %lld", r->vconst);
+    }
+    goto common;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OMUL:
+case OLMUL:
+    ccom(l);
+    t = vconst(l);
+    if(t == 0 && !side(r)) {
+        *n = *l;
+        break;
+    }
+    if(t == 1) {
+        *n = *r;
+        goto loop;
+    }
+    ccom(r);
+    t = vconst(r);
+    if(t == 0 && !side(l)) {
+        *n = *r;
+        break;
+    }
+    if(t == 1) {
+        *n = *l;
+        break;
+    }
+    goto common;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case ODIV:
+case OLDIV:
+    ccom(l);
+    if(vconst(l) == 0 && !side(r)) {
+        *n = *l;
+        break;
+    }
+    ccom(r);
+    t = vconst(r);
+    if(t == 0) {
+        diag(n, "divide check");
+        *n = *r;
+        break;
+    }
+    if(t == 1) {
+        *n = *l;
+        break;
+    }
+    goto common;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OSUB:
+    ccom(r);
+    if(r->op == OCONST) {
+        if(typefd[r->type->etype]) {
+            n->op = OADD;
+            r->fconst = -r->fconst;
+            goto loop;
+        } else {
+            n->op = OADD;
+            r->vconst = -r->vconst;
+            goto loop;
+        }
+    }
+    ccom(l);
+    goto common;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OXOR:
+case OOR:
+case OADD:
+    ccom(l);
+    if(vconst(l) == 0) {
+        *n = *r;
+        goto loop;
+    }
+    ccom(r);
+    if(vconst(r) == 0) {
+        *n = *l;
+        break;
+    }
+    goto commute;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OAND:
+    ccom(l);
+    ccom(r);
+    if(vconst(l) == 0 && !side(r)) {
+        *n = *l;
+        break;
+    }
+    if(vconst(r) == 0 && !side(l)) {
+        *n = *r;
+        break;
+    }
+    // Fallthrough, goto commute
+@
+
+<<[[ccom()]] switch node kind cases>>=
+commute:
+    /* look for commutative constant */
+    if(r->op == OCONST) {
+        if(l->op == n->op) {
+            if(l->left->op == OCONST) {
+                n->right = l->right;
+                l->right = r;
+                goto loop;
+            }
+            if(l->right->op == OCONST) {
+                n->right = l->left;
+                l->left = r;
+                goto loop;
+            }
+        }
+    }
+    if(l->op == OCONST) {
+        if(r->op == n->op) {
+            if(r->left->op == OCONST) {
+                n->left = r->right;
+                r->right = l;
+                goto loop;
+            }
+            if(r->right->op == OCONST) {
+                n->left = r->left;
+                r->left = l;
+                goto loop;
+            }
+        }
+    }
+    goto common;
+@
+
+<<[[ccom()]] switch node kind cases>>=
+case OANDAND:
+    ccom(l);
+    if(vconst(l) == 0) {
+        *n = *l;
+        break;
+    }
+    ccom(r);
+    goto common;
+@
+<<[[ccom()]] switch node kind cases>>=
+case OOROR:
+    ccom(l);
+    if(l->op == OCONST && l->vconst != 0) {
+        *n = *l;
+        n->vconst = 1;
+        break;
+    }
+    ccom(r);
+    goto common;
+@
+
+
+<<[[ccom()]] switch node kind cases>>=
+case OREGISTER:
+case OINDREG:
+    break;
+@
+
+
+
+
+
+% ??? -> <>
 <<function side>>=
 bool
 side(Node *n)
@@ -17934,11 +17984,13 @@ useless:
 
 \subsection{Constant evaluation, [[evconst()]]}
 
-% evaluate constants statically.
 % gen | ... -> complex -> ccom -> <>
-% ccom() explores first the leaves, so here we can
-%  expect the evconst() has been called already on the leaves
-%  of a node??
+% evaluate constants statically.
+%pre: can expect evconst() has been called already on the leaves, see
+% ccom(), and except node to satisfy
+%  ((l == Z) || (r == Z) || (l->op == OCONST) || (r->op == OCONST)), see
+% ccom() again.
+
 <<function evconst>>=
 void
 evconst(Node *n)
@@ -17946,8 +17998,8 @@ evconst(Node *n)
     Node *l, *r;
     int et;
     bool isf;
-    vlong v;
-    double d;
+    vlong v = 0;
+    double d = 0;
 
     if(n == Z || n->type == T)
         return;
@@ -17958,20 +18010,16 @@ evconst(Node *n)
     l = n->left;
     r = n->right;
 
-    d = 0;
-    v = 0;
-
     switch(n->op) {
     <<[[evconst()]] switch node kind cases>>
     default:
         return;
     }
-
-    if(isf) {
+    // reach this point if the node is indeed a candidate to "constification"
+    if(isf)
         n->fconst = d;
-    } else {
+    else
         n->vconst = convvtox(v, n->type->etype);
-    }
     n->oldop = n->op;
     n->op = OCONST;
 }
@@ -17982,7 +18030,7 @@ evconst(Node *n)
 char	oldop;
 @
 % when retag a node as an OCONST, we want to remember
-% what it was actually before
+% what it was actually before. This is used only in compar() right now.
 
 
 
@@ -18330,7 +18378,7 @@ comargs(Com *com, Node *n)
 
 
 
-\section{Arithmetic}
+\section{Associative-commutative arithmetic optimisations}
 % see also 5c -m, print add/mul/sub trees
 
 
@@ -20638,6 +20686,7 @@ int bset(Bits a, uint n)
 <<constant NVAR>>=
 #define	NVAR	(BITS*sizeof(ulong)*8)
 @
+%5 * 4 * 8
 
 <<global nvar>>=
 int	nvar;
@@ -20651,15 +20700,17 @@ Var	var[NVAR];
 <<struct Var>>=
 struct	Var
 {
-    long	offset;
     Sym*	sym;
+    //enum<sym_kind>
     char	symkind;
+    //enum<type_kind>
     char	etype;
+    long	offset;
 };
 @
+% yet another etype
 
 \subsection{[[Reg]]}
-
 
 <<struct Reg>>=
 struct	Reg
@@ -20691,10 +20742,10 @@ struct	Reg
     Reg*	s1;
     Reg*	s2;
     Reg*	link;
+
     Prog*	prog;
 };
 @
-
 
 
 <<constant R>>=
@@ -20820,7 +20871,7 @@ addmove(Reg *r, int bn, int rn, int f)
     Adr *a;
     Var *v;
 
-    p1 = alloc(sizeof(*p1));
+    p1 = alloc(sizeof(Prog));
     *p1 = zprog;
     p = r->prog;
 
@@ -20836,7 +20887,7 @@ addmove(Reg *r, int bn, int rn, int f)
     a->offset = v->offset;
     a->etype = v->etype;
     a->type = D_OREG;
-    if(a->etype == TARRAY || a->sym == S)
+    if(v->etype == TARRAY || a->sym == S)
         a->type = D_CONST;
 
     p1->as = AMOVW;
@@ -20882,10 +20933,14 @@ Bits
 mkvar(Adr *a, int docon)
 {
     Var *v;
-    int i, t, n, et, z;
+    int i, n, z;
     long o;
     Bits bit;
     Sym *s;
+    //enum<operand_kind>
+    int t;
+    //enum<type_kind>
+    int et;
 
     t = a->type;
     if(t == D_REG && a->reg != R_NONE)
@@ -21212,10 +21267,6 @@ allreg(ulong b, Rgn *r)
     r->regno = 0;
     switch(v->etype) {
 
-    default:
-        diag(Z, "unknown etype %d/%d", bitno(b), v->etype);
-        break;
-
     case TCHAR:
     case TUCHAR:
     case TSHORT:
@@ -21242,6 +21293,11 @@ allreg(ulong b, Rgn *r)
             return FtoB(i);
         }
         break;
+
+    default:
+        diag(Z, "unknown etype %d/%d", bitno(b), v->etype);
+        break;
+
     }
     return 0;
 }
@@ -21685,8 +21741,6 @@ signat(Type *t, Typetab *tt)
         if(t->garb&GINCOMPLETE)
             return s;
         switch(t->etype) {
-        default:
-            return s;
         case TARRAY:
             s = s*thash2 + 0;	/* was t->width */
             break;
@@ -21705,6 +21759,8 @@ signat(Type *t, Typetab *tt)
             return s;
         case TIND:
             break;
+        default:
+            return s;
         }
     }
     return s;
@@ -22003,10 +22059,6 @@ acidtype(Type *t)
     if(s == S)
         return;
     switch(t->etype) {
-    default:
-        Bprint(&outbuf, "T%d\n", t->etype);
-        return;
-
     case TUNION:
     case TSTRUCT:
         if(debug['s'])
@@ -22034,6 +22086,11 @@ acidtype(Type *t)
                     l->sym->name,
                     l->offset);
         break;
+
+    default:
+        Bprint(&outbuf, "T%d\n", t->etype);
+        return;
+
     }
 }
 @
@@ -24082,10 +24139,10 @@ fvn(char *name, int type)
     n = new(ONAME, Z, Z);
     n->sym = slookup(name);
     n->sym->sig = SIGINTERN;
-    if(fntypes[type] == 0)
+    if(fntypes[type] == nil)
         fntypes[type] = typ(TFUNC, types[type]);
     n->type = fntypes[type];
-    n->etype = type;
+    n->etype = type; // type of return?
     n->class = CGLOBL;
     n->addable = 10;
     n->complex = 0;

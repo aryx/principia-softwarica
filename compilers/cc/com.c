@@ -1063,9 +1063,12 @@ loop:
 
     l = n->left;
     r = n->right;
-
     switch(n->op) {
-
+    /*s: [[ccom()]] switch node kind cases */
+    case OCONST:
+    case ONAME:
+        break;
+    /*x: [[ccom()]] switch node kind cases */
     case OAS:
     case OASXOR:
     case OASAND:
@@ -1090,7 +1093,7 @@ loop:
                 warn(n, "stupid shift: %lld", r->vconst);
         }
         break;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OCAST:
         ccom(l);
         if(l->op == OCONST) {
@@ -1105,7 +1108,7 @@ loop:
             *n = *l;
         }
         break;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OCOND:
         ccom(l);
         ccom(r);
@@ -1115,23 +1118,17 @@ loop:
             else
                 *n = *r->left;
         break;
-
-    case OREGISTER:
-    case OINDREG:
-    case OCONST:
-    case ONAME:
-        break;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OADDR:
         ccom(l);
-        l->etype = TVOID;
+        l->etype = TVOID; // ????
         if(l->op == OIND) {
             l->left->type = n->type;
             *n = *l->left;
             break;
         }
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OIND:
         ccom(l);
         if(l->op == OADDR) {
@@ -1140,7 +1137,7 @@ loop:
             break;
         }
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OEQ:
     case ONE:
 
@@ -1160,7 +1157,7 @@ loop:
         relcon(l, r);
         relcon(r, l);
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OASHR:
     case OASHL:
     case OLSHR:
@@ -1180,7 +1177,7 @@ loop:
                 warn(n, "stupid shift: %lld", r->vconst);
         }
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OMUL:
     case OLMUL:
         ccom(l);
@@ -1204,7 +1201,7 @@ loop:
             break;
         }
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case ODIV:
     case OLDIV:
         ccom(l);
@@ -1224,7 +1221,7 @@ loop:
             break;
         }
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OSUB:
         ccom(r);
         if(r->op == OCONST) {
@@ -1240,7 +1237,7 @@ loop:
         }
         ccom(l);
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OXOR:
     case OOR:
     case OADD:
@@ -1255,7 +1252,7 @@ loop:
             break;
         }
         goto commute;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OAND:
         ccom(l);
         ccom(r);
@@ -1267,7 +1264,8 @@ loop:
             *n = *r;
             break;
         }
-
+        // Fallthrough, goto commute
+    /*x: [[ccom()]] switch node kind cases */
     commute:
         /* look for commutative constant */
         if(r->op == OCONST) {
@@ -1299,7 +1297,7 @@ loop:
             }
         }
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OANDAND:
         ccom(l);
         if(vconst(l) == 0) {
@@ -1308,7 +1306,7 @@ loop:
         }
         ccom(r);
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
     case OOROR:
         ccom(l);
         if(l->op == OCONST && l->vconst != 0) {
@@ -1318,7 +1316,11 @@ loop:
         }
         ccom(r);
         goto common;
-
+    /*x: [[ccom()]] switch node kind cases */
+    case OREGISTER:
+    case OINDREG:
+        break;
+    /*e: [[ccom()]] switch node kind cases */
     default:
         if(l != Z)
             ccom(l);
@@ -1326,14 +1328,8 @@ loop:
             ccom(r);
         // Fallthrough
     common:
-        if(l != Z)
-          if(l->op != OCONST)
-            break;
-        if(r != Z)
-          if(r->op != OCONST)
-            break;
-
-        evconst(n);
+        if((l == Z) || (r == Z) || (l->op == OCONST) || (r->op == OCONST))
+            evconst(n);
     }
 }
 /*e: function ccom */

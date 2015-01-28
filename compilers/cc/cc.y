@@ -122,10 +122,12 @@ xdecl:
         lastdcltype = T;
         firstarg = S;
         dodecl(xdecl, lastclass, lasttype, $2);
+        /*s: xdecl rule, sanity check lastdcltype is a function type */
         if(lastdcltype == T || lastdcltype->etype != TFUNC) {
             diag($2, "not a function");
             lastdcltype = types[TFUNC];
         }
+        /*e: xdecl rule, sanity check lastdcltype is a function type */
         thisfntype = lastdcltype;
         markdcl();
         firstdcl = dclstack;

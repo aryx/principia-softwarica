@@ -505,7 +505,7 @@ addmove(Reg *r, int bn, int rn, int f)
     Adr *a;
     Var *v;
 
-    p1 = alloc(sizeof(*p1));
+    p1 = alloc(sizeof(Prog));
     *p1 = zprog;
     p = r->prog;
 
@@ -521,7 +521,7 @@ addmove(Reg *r, int bn, int rn, int f)
     a->offset = v->offset;
     a->etype = v->etype;
     a->type = D_OREG;
-    if(a->etype == TARRAY || a->sym == S)
+    if(v->etype == TARRAY || a->sym == S)
         a->type = D_CONST;
 
     p1->as = AMOVW;
@@ -564,10 +564,14 @@ Bits
 mkvar(Adr *a, int docon)
 {
     Var *v;
-    int i, t, n, et, z;
+    int i, n, z;
     long o;
     Bits bit;
     Sym *s;
+    //enum<operand_kind>
+    int t;
+    //enum<type_kind>
+    int et;
 
     t = a->type;
     if(t == D_REG && a->reg != R_NONE)
@@ -889,10 +893,6 @@ allreg(ulong b, Rgn *r)
     r->regno = 0;
     switch(v->etype) {
 
-    default:
-        diag(Z, "unknown etype %d/%d", bitno(b), v->etype);
-        break;
-
     case TCHAR:
     case TUCHAR:
     case TSHORT:
@@ -919,6 +919,11 @@ allreg(ulong b, Rgn *r)
             return FtoB(i);
         }
         break;
+
+    default:
+        diag(Z, "unknown etype %d/%d", bitno(b), v->etype);
+        break;
+
     }
     return 0;
 }

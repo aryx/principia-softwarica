@@ -125,10 +125,12 @@ struct	C1
 /*s: struct Var */
 struct	Var
 {
-    long	offset;
     Sym*	sym;
+    //enum<sym_kind>
     char	symkind;
+    //enum<type_kind>
     char	etype;
+    long	offset;
 };
 /*e: struct Var */
 
@@ -162,6 +164,7 @@ struct	Reg
     Reg*	s1;
     Reg*	s2;
     Reg*	link;
+
     Prog*	prog;
 };
 /*e: struct Reg */
