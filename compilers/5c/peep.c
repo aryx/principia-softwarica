@@ -1185,7 +1185,7 @@ copyas(Adr *a, Adr *v)
             return 1;
     } else if(v->type == D_CONST) {		/* for constprop */
         if(a->type == v->type)
-        if(a->name == v->name)
+        if(a->symkind == v->symkind)
         if(a->sym == v->sym)
         if(a->reg == v->reg)
         if(a->offset == v->offset)

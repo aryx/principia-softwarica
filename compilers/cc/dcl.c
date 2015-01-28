@@ -892,12 +892,12 @@ Node* revertdcl(void)
             // restore info previous identifier
             /*s: [[reverdcl()]] DAUTO case, restore symbol fields from decl */
             s->type = d->type;
+            s->offset = d->offset;
+            s->block = d->block;
+
             s->class = d->class;
             s->varlineno = d->varlineno;
             s->aused = d->aused;
-
-            s->offset = d->offset;
-            s->block = d->block;
             /*e: [[reverdcl()]] DAUTO case, restore symbol fields from decl */
 
             break;
@@ -1023,12 +1023,12 @@ push1(Sym *s)
 
     /*s: [[push1()]] save symbol fields in decl */
     d->type = s->type;
+    d->offset = s->offset;
+    d->block = s->block;
+
     d->class = s->class;
     d->varlineno = s->varlineno;
     d->aused = s->aused;
-
-    d->offset = s->offset;
-    d->block = s->block;
     /*e: [[push1()]] save symbol fields in decl */
 
     return d;

@@ -42,7 +42,7 @@ ginit(void)
     zprog.as = AGOK;
     zprog.reg = R_NONE;
     zprog.from.type = D_NONE;
-    zprog.from.name = D_NONE;
+    zprog.from.symkind = D_NONE;
     zprog.from.reg = R_NONE;
     zprog.to = zprog.from;
     zprog.scond = COND_ALWAYS;  
@@ -550,19 +550,19 @@ naddr(Node *n, Adr *a)
         a->offset = n->xoffset;
         a->sym = n->sym;
 
-        a->name = D_STATIC;
+        a->symkind = D_STATIC;
         if(n->class == CSTATIC)
             break;
         if(n->class == CEXTERN || n->class == CGLOBL) {
-            a->name = D_EXTERN;
+            a->symkind = D_EXTERN;
             break;
         }
         if(n->class == CAUTO) {
-            a->name = D_AUTO;
+            a->symkind = D_AUTO;
             break;
         }
         if(n->class == CPARAM) {
-            a->name = D_PARAM;
+            a->symkind = D_PARAM;
             break;
         }
         goto bad;
@@ -1319,7 +1319,7 @@ gpseudo(int a, Sym *s, Node *n)
     p->as = a;
     p->from.type = D_OREG;
     p->from.sym = s;
-    p->from.name = (s->class == CSTATIC) ? D_STATIC : D_EXTERN;
+    p->from.symkind = (s->class == CSTATIC) ? D_STATIC : D_EXTERN;
     /*s: [[gpseudo()]] if TEXT, set possible TEXT attributes */
     if(a == ATEXT)
         p->reg = (profileflg ? 0 : NOPROF);

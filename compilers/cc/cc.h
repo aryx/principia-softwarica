@@ -161,29 +161,32 @@ struct	Sym
     // ----------------------------------------------------------------------
     char	*name;
 
-    long	varlineno;
-
     // ----------------------------------------------------------------------
-    // The "value"
+    // The "value" for the different "namespaces"
     // ----------------------------------------------------------------------
     /*s: [[Sym]] identifier value fields */
-    char	sym;
-    /*x: [[Sym]] identifier value fields */
+    /*s: [[Sym]] identifier value, type and storage fields */
     // ref<Type> ?
     Type*	type;
     // enum<storage_class>
     char	class;
-    /*x: [[Sym]] identifier value fields */
+    /*e: [[Sym]] identifier value, type and storage fields */
+    /*s: [[Sym]] identifier value, scope fields */
     ushort	block;
-    /*x: [[Sym]] identifier value fields */
-    long	offset;
-    /*x: [[Sym]] identifier value fields */
+    /*e: [[Sym]] identifier value, scope fields */
+    /*s: [[Sym]] identifier value, checking fields */
     bool	aused;
-    /*x: [[Sym]] identifier value fields */
+    /*e: [[Sym]] identifier value, checking fields */
+    /*s: [[Sym]] identifier value, code generation fields */
+    long	offset;
+    /*x: [[Sym]] identifier value, code generation fields */
+    // index in h when the Sym is really a symbol, 0 when not a symbol
+    char	symidx;
+    /*x: [[Sym]] identifier value, code generation fields */
     // enum<signature>
     char	sig;
+    /*e: [[Sym]] identifier value, code generation fields */
     /*e: [[Sym]] identifier value fields */
-
     /*s: [[Sym]] enum value fields */
     vlong	vconst;
     double	fconst;
@@ -199,14 +202,19 @@ struct	Sym
     /*s: [[Sym]] label value fields */
     Node*	label;
     /*e: [[Sym]] label value fields */
+
     /*s: [[Sym]] macro value fields */
     char*	macro;
     /*e: [[Sym]] macro value fields */
-
     /*s: [[Sym]] lexeme value fields */
     // enum<lexeme>
     ushort	lexical;
     /*e: [[Sym]] lexeme value fields */
+
+    // ----------------------------------------------------------------------
+    // Misc
+    // ----------------------------------------------------------------------
+    long	varlineno;
 
     // ----------------------------------------------------------------------
     // Extra
@@ -240,10 +248,10 @@ struct	Decl
     short	val;
 
     /*s: [[Decl]] sym copy fields */
-    long	offset;
-    ushort	block;
+    Type*	type;  // for Sym.type and Sym.suetag
+    ushort	block; // for Sym.block and Sym.sueblock and autobn
+    long	offset; // for Sym.offset and autoffset
     /*x: [[Decl]] sym copy fields */
-    Type*	type;
     char	class;
     long	varlineno;
     bool	aused;

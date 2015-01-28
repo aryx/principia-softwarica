@@ -480,9 +480,9 @@ syminit(Sym *s)
     s->offset = 0;
 
     s->type = T;
+    s->class = CXXX;
     s->suetag = T;
 
-    s->class = CXXX;
     s->sig = SIGNONE;
     /*s: [[syminit()]] remaining initialisations */
     s->aused = false;

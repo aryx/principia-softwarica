@@ -517,7 +517,7 @@ addmove(Reg *r, int bn, int rn, int f)
 
     a = &p1->to;
     a->sym = v->sym;
-    a->name = v->name;
+    a->symkind = v->symkind;
     a->offset = v->offset;
     a->etype = v->etype;
     a->type = D_OREG;
@@ -587,11 +587,11 @@ mkvar(Adr *a, int docon)
             goto none;
     }
 
-    n = a->name;
+    n = a->symkind;
     v = var;
     for(i=0; i<nvar; i++) {
         if(s == v->sym)
-        if(n == v->name)
+        if(n == v->symkind)
         if(o == v->offset)
             goto out;
         v++;
@@ -610,7 +610,7 @@ mkvar(Adr *a, int docon)
     v->sym = s;
     v->offset = o;
     v->etype = et;
-    v->name = n;
+    v->symkind = n;
     if(debug['R'])
         print("bit=%2d et=%2d %D\n", i, et, a);
 out:
@@ -1135,7 +1135,7 @@ addreg(Adr *a, int rn)
 {
 
     a->sym = 0;
-    a->name = D_NONE;
+    a->symkind = D_NONE;
     a->type = D_REG;
     a->reg = rn;
     if(rn >= NREG) {

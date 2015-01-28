@@ -374,14 +374,14 @@ outcode(void)
         sf = 0;
         s = p->from.sym;
         while(s != S) {
-            sf = s->sym;
+            sf = s->symidx;
             if(sf < 0 || sf >= NSYM)
                 sf = 0;
-            t = p->from.name;
+            t = p->from.symkind;
             if(h[sf].type == t)
             if(h[sf].sym == s)
                 break;
-            s->sym = sym;
+            s->symidx = sym;
             zname(&outbuf, s, t);
             h[sym].sym = s;
             h[sym].type = t;
@@ -394,14 +394,14 @@ outcode(void)
         st = 0;
         s = p->to.sym;
         while(s != S) {
-            st = s->sym;
+            st = s->symidx;
             if(st < 0 || st >= NSYM)
                 st = 0;
-            t = p->to.name;
+            t = p->to.symkind;
             if(h[st].type == t)
             if(h[st].sym == s)
                 break;
-            s->sym = sym;
+            s->symidx = sym;
             zname(&outbuf, s, t);
             h[sym].sym = s;
             h[sym].type = t;
@@ -512,7 +512,7 @@ zname(Biobuf *b, Sym *s, int t)
         bf[3] = sig>>16;
         bf[4] = sig>>24;
         bf[5] = t;
-        bf[6] = s->sym;
+        bf[6] = s->symidx;
         Bwrite(b, bf, 7);
         s->sig = SIGDONE;
     }
@@ -520,7 +520,7 @@ zname(Biobuf *b, Sym *s, int t)
     else{
         bf[0] = ANAME;
         bf[1] = t;	/* type */
-        bf[2] = s->sym;	/* sym */
+        bf[2] = s->symidx;	/* sym */
         Bwrite(b, bf, 3);
     }
     Bwrite(b, n, strlen(n)+1);
@@ -537,7 +537,7 @@ zaddr(char *bp, Adr *a, int s)
     bp[0] = a->type;
     bp[1] = a->reg;
     bp[2] = s;
-    bp[3] = a->name;
+    bp[3] = a->symkind;
     bp += 4;
     switch(a->type) {
     default:

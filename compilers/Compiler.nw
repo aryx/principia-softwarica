@@ -407,6 +407,9 @@ License.
 \section{Abstract syntax tree, [[Node]] and [[Type]]}
 % vs what I have in ast_c.ml?
 
+% need to represent program in memory. propram is essentially
+% a tree of expr|stmt|... with different kinds of nodes.
+
 %figure: AST concept, tree of expression 1+2*3, with OCONST, OADD, OMUL.
 % simple.
 
@@ -913,19 +916,21 @@ struct	Sym
     // ----------------------------------------------------------------------
     char	*name;
 
-    long	varlineno;
-
     // ----------------------------------------------------------------------
-    // The "value"
+    // The "value" for the different "namespaces"
     // ----------------------------------------------------------------------
     <<[[Sym]] identifier value fields>>
-
     <<[[Sym]] enum value fields>>
     <<[[Sym]] tag value fields>>
     <<[[Sym]] label value fields>>
-    <<[[Sym]] macro value fields>>
 
+    <<[[Sym]] macro value fields>>
     <<[[Sym]] lexeme value fields>>
+
+    // ----------------------------------------------------------------------
+    // Misc
+    // ----------------------------------------------------------------------
+    long	varlineno;
 
     // ----------------------------------------------------------------------
     // Extra
@@ -943,10 +948,13 @@ struct	Sym
 % - labels, see s->label
 % - macro, see s->macros
 %note that fields are not here as they are not in the global namespace.
-%
 %Does Sym handles well the different namespaces? What if struct and local
 % with same name? It's not a union! the Decl value will determine
 % which field to look for.
+%Can have struct x x;
+% it can be the same symbol, but in a struct context we will use
+% Sym.suetag, in other context Sym.type!
+% same for Sym.sueblock vs Sym.block.
 
 % Similar to Assembler.nw and Linker.nw Sym DS. Differences?
 %  - have labels, tags
@@ -957,11 +965,7 @@ struct	Sym
 % struct definition?
 
 
-%XXX ???
-<<[[Sym]] identifier value fields>>=
-char	sym;
-@
-% -> symkind?
+
 
 
 <<constant NHASH>>=
@@ -1052,9 +1056,15 @@ slookup(char *s)
 
 
 
-
-% for identifiers (they are more)
 <<[[Sym]] identifier value fields>>=
+<<[[Sym]] identifier value, type and storage fields>>
+<<[[Sym]] identifier value, scope fields>>
+<<[[Sym]] identifier value, checking fields>>
+<<[[Sym]] identifier value, code generation fields>>
+@
+
+
+<<[[Sym]] identifier value, type and storage fields>>=
 // ref<Type> ?
 Type*	type;
 // enum<storage_class>
@@ -1062,15 +1072,12 @@ char	class;
 @
 % similar to Node.type Decl.type, and now Sym.type
 
-<<[[Sym]] identifier value fields>>=
+<<[[Sym]] identifier value, scope fields>>=
 ushort	block;
 @
 % see also Decl.block
 
 
-
-
-% for cpp macros
 <<[[Sym]] macro value fields>>=
 char*	macro;
 @
@@ -1080,10 +1087,12 @@ char*	macro;
 % for tags?
 %  see later suetag, sueblock
 
-% how handle namespace? can have struct x x;
-% it can be the same symbol, but in a struct context we will use
-% Sym.suetag, in other context Sym.type!
-% same for Sym.sueblock vs Sym.block
+
+<<[[Sym]] lexeme value fields>>=
+// enum<lexeme>
+ushort	lexical;
+@
+
 
 <<function syminit>>=
 void
@@ -1094,19 +1103,15 @@ syminit(Sym *s)
     s->offset = 0;
 
     s->type = T;
+    s->class = CXXX;
     s->suetag = T;
 
-    s->class = CXXX;
     s->sig = SIGNONE;
     <<[[syminit()]] remaining initialisations>>
 }
 @
 
 
-<<[[Sym]] lexeme value fields>>=
-// enum<lexeme>
-ushort	lexical;
-@
 
 
 \section{Declarations, namespaces and scope, [[Decl]]}
@@ -1244,8 +1249,9 @@ void markdcl(void)
 % save current scope autobn, so can restore it when pop DMARK.
 
 <<[[Decl]] sym copy fields>>=
-long	offset;
-ushort	block;
+Type*	type;  // for Sym.type and Sym.suetag
+ushort	block; // for Sym.block and Sym.sueblock and autobn
+long	offset; // for Sym.offset and autoffset
 @
 % this are sym copy fields and also copy of autobn and autooffset
 % actually.
@@ -1341,7 +1347,6 @@ case DAUTO:
 
 
 <<[[Decl]] sym copy fields>>=
-Type*	type;
 char	class;
 long	varlineno;
 bool	aused;
@@ -1349,23 +1354,23 @@ bool	aused;
 
 <<[[reverdcl()]] DAUTO case, restore symbol fields from decl>>=
 s->type = d->type;
+s->offset = d->offset;
+s->block = d->block;
+
 s->class = d->class;
 s->varlineno = d->varlineno;
 s->aused = d->aused;
-
-s->offset = d->offset;
-s->block = d->block;
 @
 
 
 <<[[push1()]] save symbol fields in decl>>=
 d->type = s->type;
+d->offset = s->offset;
+d->block = s->block;
+
 d->class = s->class;
 d->varlineno = s->varlineno;
 d->aused = s->aused;
-
-d->offset = s->offset;
-d->block = s->block;
 @
 
 
@@ -1459,6 +1464,7 @@ byte	scond;
 <<struct Adr(arm)>>=
 struct	Adr
 {
+    // enum<operand_kind> (D_NONE by default)
     char	type;
 
     long	offset;
@@ -1466,22 +1472,37 @@ struct	Adr
     char	sval[NSNAME];
     Ieee	ieee;
 
-    Sym*	sym;
-    char	name;
-
-    char	reg;
-
-    char	etype;
+    <<[[Adr]] other fields(arm)>>
 };
 @
 %less: use union for first 5?
-%todo: name -> symkind
-%todo: rename reg?
+%Similar to Gen in Assembler.nw and Adr in Linker.nw. Some differences?:
+% - ??
 
 <<constant A>>=
 #define	A	((Adr*)nil)
 @
 
+
+<<[[Adr]] other fields(arm)>>=
+// option<enum<registr>> None = R_NONE
+char	reg;
+@
+%todo: rename reg?
+
+
+<<[[Adr]] other fields(arm)>>=
+Sym*	sym;
+// enum<sym_kind>
+char	symkind;
+@
+%old: was name, but symkind is less confusing (did the same in
+% Assembler.nw and Linker.nw)
+
+
+<<[[Adr]] other fields(arm)>>=
+char	etype;
+@
 
 
 <<global zprog>>=
@@ -1493,7 +1514,7 @@ zprog.link = P;
 zprog.as = AGOK;
 zprog.reg = R_NONE;
 zprog.from.type = D_NONE;
-zprog.from.name = D_NONE;
+zprog.from.symkind = D_NONE;
 zprog.from.reg = R_NONE;
 zprog.to = zprog.from;
 zprog.scond = COND_ALWAYS;  
@@ -7491,7 +7512,7 @@ void argmark(Node *n, int pass)
 
 
 
-<<[[Sym]] identifier value fields>>=
+<<[[Sym]] identifier value, code generation fields>>=
 long	offset;
 @
 %todo: hmm seems used for CEXREG, flow fron exreg -> o -> xdecl -> offset field.
@@ -8043,7 +8064,7 @@ gpseudo(int a, Sym *s, Node *n)
     p->as = a;
     p->from.type = D_OREG;
     p->from.sym = s;
-    p->from.name = (s->class == CSTATIC) ? D_STATIC : D_EXTERN;
+    p->from.symkind = (s->class == CSTATIC) ? D_STATIC : D_EXTERN;
     <<[[gpseudo()]] if TEXT, set possible TEXT attributes>>
     naddr(n, &p->to);
     if(a == ADATA || a == AGLOBL)
@@ -8175,19 +8196,19 @@ case ONAME:
     a->offset = n->xoffset;
     a->sym = n->sym;
 
-    a->name = D_STATIC;
+    a->symkind = D_STATIC;
     if(n->class == CSTATIC)
         break;
     if(n->class == CEXTERN || n->class == CGLOBL) {
-        a->name = D_EXTERN;
+        a->symkind = D_EXTERN;
         break;
     }
     if(n->class == CAUTO) {
-        a->name = D_AUTO;
+        a->symkind = D_AUTO;
         break;
     }
     if(n->class == CPARAM) {
-        a->name = D_PARAM;
+        a->symkind = D_PARAM;
         break;
     }
     goto bad;
@@ -13614,6 +13635,11 @@ struct Htab {
 };
 @
 
+<<[[Sym]] identifier value, code generation fields>>=
+// index in h when the Sym is really a symbol, 0 when not a symbol
+char	symidx;
+@
+
 %TODO: do LP split like I did in Assembler.nw
 
 % main -> compile -> yyparse; gclean -> <>
@@ -13647,14 +13673,14 @@ outcode(void)
         sf = 0;
         s = p->from.sym;
         while(s != S) {
-            sf = s->sym;
+            sf = s->symidx;
             if(sf < 0 || sf >= NSYM)
                 sf = 0;
-            t = p->from.name;
+            t = p->from.symkind;
             if(h[sf].type == t)
             if(h[sf].sym == s)
                 break;
-            s->sym = sym;
+            s->symidx = sym;
             zname(&outbuf, s, t);
             h[sym].sym = s;
             h[sym].type = t;
@@ -13667,14 +13693,14 @@ outcode(void)
         st = 0;
         s = p->to.sym;
         while(s != S) {
-            st = s->sym;
+            st = s->symidx;
             if(st < 0 || st >= NSYM)
                 st = 0;
-            t = p->to.name;
+            t = p->to.symkind;
             if(h[st].type == t)
             if(h[st].sym == s)
                 break;
-            s->sym = sym;
+            s->symidx = sym;
             zname(&outbuf, s, t);
             h[sym].sym = s;
             h[sym].type = t;
@@ -13726,7 +13752,7 @@ zaddr(char *bp, Adr *a, int s)
     bp[0] = a->type;
     bp[1] = a->reg;
     bp[2] = s;
-    bp[3] = a->name;
+    bp[3] = a->symkind;
     bp += 4;
     switch(a->type) {
     default:
@@ -13797,7 +13823,7 @@ zname(Biobuf *b, Sym *s, int t)
     else{
         bf[0] = ANAME;
         bf[1] = t;	/* type */
-        bf[2] = s->sym;	/* sym */
+        bf[2] = s->symidx;	/* sym */
         Bwrite(b, bf, 3);
     }
     Bwrite(b, n, strlen(n)+1);
@@ -16991,7 +17017,7 @@ dpcheck(Node *n)
 
 % the data structure
 
-<<[[Sym]] identifier value fields>>=
+<<[[Sym]] identifier value, checking fields>>=
 bool	aused;
 @
 
@@ -20155,7 +20181,7 @@ copyas(Adr *a, Adr *v)
             return 1;
     } else if(v->type == D_CONST) {		/* for constprop */
         if(a->type == v->type)
-        if(a->name == v->name)
+        if(a->symkind == v->symkind)
         if(a->sym == v->sym)
         if(a->reg == v->reg)
         if(a->offset == v->offset)
@@ -20627,7 +20653,7 @@ struct	Var
 {
     long	offset;
     Sym*	sym;
-    char	name;
+    char	symkind;
     char	etype;
 };
 @
@@ -20806,7 +20832,7 @@ addmove(Reg *r, int bn, int rn, int f)
 
     a = &p1->to;
     a->sym = v->sym;
-    a->name = v->name;
+    a->symkind = v->symkind;
     a->offset = v->offset;
     a->etype = v->etype;
     a->type = D_OREG;
@@ -20879,11 +20905,11 @@ mkvar(Adr *a, int docon)
             goto none;
     }
 
-    n = a->name;
+    n = a->symkind;
     v = var;
     for(i=0; i<nvar; i++) {
         if(s == v->sym)
-        if(n == v->name)
+        if(n == v->symkind)
         if(o == v->offset)
             goto out;
         v++;
@@ -20902,7 +20928,7 @@ mkvar(Adr *a, int docon)
     v->sym = s;
     v->offset = o;
     v->etype = et;
-    v->name = n;
+    v->symkind = n;
     if(debug['R'])
         print("bit=%2d et=%2d %D\n", i, et, a);
 out:
@@ -21447,7 +21473,7 @@ addreg(Adr *a, int rn)
 {
 
     a->sym = 0;
-    a->name = D_NONE;
+    a->symkind = D_NONE;
     a->type = D_REG;
     a->reg = rn;
     if(rn >= NREG) {
@@ -21580,7 +21606,7 @@ enum signature {
 };
 @
 
-<<[[Sym]] identifier value fields>>=
+<<[[Sym]] identifier value, code generation fields>>=
 // enum<signature>
 char	sig;
 @
@@ -21602,7 +21628,7 @@ if(debug['T'] &&
     bf[3] = sig>>16;
     bf[4] = sig>>24;
     bf[5] = t;
-    bf[6] = s->sym;
+    bf[6] = s->symidx;
     Bwrite(b, bf, 7);
     s->sig = SIGDONE;
 }
@@ -25290,7 +25316,7 @@ Dconv(Fmt *fp)
 
     case D_NONE:
         str[0] = 0;
-        if(a->name != D_NONE || a->reg != R_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->reg != R_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(NONE)", a, a->reg);
         break;
 
@@ -25321,19 +25347,19 @@ Dconv(Fmt *fp)
 
     case D_REG:
         snprint(str, sizeof(str), "R%d", a->reg);
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_FREG:
         snprint(str, sizeof(str), "F%d", a->reg);
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_PSR:
         snprint(str, sizeof(str), "PSR");
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(PSR)(REG)", a);
         break;
 
@@ -25458,11 +25484,7 @@ Nconv(Fmt *fp)
         snprint(str, sizeof(str), "%ld", a->offset);
         goto out;
     }
-    switch(a->name) {
-    default:
-        snprint(str, sizeof(str), "GOK-name(%d)", a->name);
-        break;
-
+    switch(a->symkind) {
     case D_NONE:
         snprint(str, sizeof(str), "%ld", a->offset);
         break;
@@ -25482,6 +25504,11 @@ Nconv(Fmt *fp)
     case D_PARAM:
         snprint(str, sizeof(str), "%s+%ld(FP)", s->name, a->offset);
         break;
+
+    default:
+        snprint(str, sizeof(str), "GOK-name(%d)", a->symkind);
+        break;
+
     }
 out:
     return fmtstrcpy(fp, str);

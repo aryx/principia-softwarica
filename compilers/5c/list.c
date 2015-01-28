@@ -135,7 +135,7 @@ Dconv(Fmt *fp)
 
     case D_NONE:
         str[0] = 0;
-        if(a->name != D_NONE || a->reg != R_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->reg != R_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(NONE)", a, a->reg);
         break;
 
@@ -166,19 +166,19 @@ Dconv(Fmt *fp)
 
     case D_REG:
         snprint(str, sizeof(str), "R%d", a->reg);
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_FREG:
         snprint(str, sizeof(str), "F%d", a->reg);
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_PSR:
         snprint(str, sizeof(str), "PSR");
-        if(a->name != D_NONE || a->sym != S)
+        if(a->symkind != D_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(PSR)(REG)", a);
         break;
 
@@ -295,11 +295,7 @@ Nconv(Fmt *fp)
         snprint(str, sizeof(str), "%ld", a->offset);
         goto out;
     }
-    switch(a->name) {
-    default:
-        snprint(str, sizeof(str), "GOK-name(%d)", a->name);
-        break;
-
+    switch(a->symkind) {
     case D_NONE:
         snprint(str, sizeof(str), "%ld", a->offset);
         break;
@@ -319,6 +315,11 @@ Nconv(Fmt *fp)
     case D_PARAM:
         snprint(str, sizeof(str), "%s+%ld(FP)", s->name, a->offset);
         break;
+
+    default:
+        snprint(str, sizeof(str), "GOK-name(%d)", a->symkind);
+        break;
+
     }
 out:
     return fmtstrcpy(fp, str);

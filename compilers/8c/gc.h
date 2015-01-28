@@ -127,7 +127,7 @@ struct	Var
 {
     long	offset;
     Sym*	sym;
-    char	name;
+    char	symkind;
     char	etype;
 };
 /*e: struct Var */

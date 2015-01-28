@@ -54,6 +54,7 @@ typedef	struct	Rgn		Rgn;
 /*s: struct Adr(arm) */
 struct	Adr
 {
+    // enum<operand_kind> (D_NONE by default)
     char	type;
 
     long	offset;
@@ -61,12 +62,16 @@ struct	Adr
     char	sval[NSNAME];
     Ieee	ieee;
 
-    Sym*	sym;
-    char	name;
-
+    /*s: [[Adr]] other fields(arm) */
+    // option<enum<registr>> None = R_NONE
     char	reg;
-
+    /*x: [[Adr]] other fields(arm) */
+    Sym*	sym;
+    // enum<sym_kind>
+    char	symkind;
+    /*x: [[Adr]] other fields(arm) */
     char	etype;
+    /*e: [[Adr]] other fields(arm) */
 };
 /*e: struct Adr(arm) */
 /*s: constant A */
@@ -150,7 +155,7 @@ struct	Var
 {
     long	offset;
     Sym*	sym;
-    char	name;
+    char	symkind;
     char	etype;
 };
 /*e: struct Var */
