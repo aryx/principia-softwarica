@@ -9,8 +9,8 @@
 typedef	struct	Node	Node;
 typedef	struct	Type	Type;
 typedef	struct	Sym		Sym;
-typedef	struct	Funct	Funct;
 typedef	struct	Decl	Decl;
+typedef	struct	Funct	Funct;
 typedef	struct	Io		Io;
 typedef	struct	Hist	Hist;
 typedef	struct	Term	Term;
@@ -81,55 +81,64 @@ struct	Node
 
     long	lineno;
 
-    /*s: [[Node]] other fields */
-    Sym*	sym; 
-    /*x: [[Node]] other fields */
+    /*s: [[Node]] value fields */
+    Sym*	sym; // for ONAME, ODOT, OSTRUCT/OUNION
+    /*x: [[Node]] value fields */
+    vlong	vconst; /* non fp const */ // for OCONST
+    /*x: [[Node]] value fields */
+    double	fconst;		/* fp constant */ // for OCONST
+    /*x: [[Node]] value fields */
+    char*	cstring;	/* character string */ // for OSTRING (and OCONST)
+    /*x: [[Node]] value fields */
+    TRune*	rstring;	/* rune string */ // for OLSTRING
+    /*e: [[Node]] value fields */
+
+    // ----------------------------------------------------------------------
+    // Post parsing annotations
+    // ----------------------------------------------------------------------
+    /*s: [[Node]] type and storage fields */
+    Type*	type;
+    /*x: [[Node]] type and storage fields */
+    // enum<storage_class>
+    char	class;
+    /*x: [[Node]] type and storage fields */
+    // enum<type_kind>, inline of Node.type->etype?
+    char	etype;
+    /*x: [[Node]] type and storage fields */
+    // enum<qualifier>
+    char	garb;
+    /*e: [[Node]] type and storage fields */
+
+    /*s: [[Node]] code generation fields */
     // address-able, used as a bool to mark lvalues, if can assign you can take
     // the address of. used by xcom() to assign ``addressibility''.
     // (ab)used as a bool for marker of use of labels.
     char	addable;
-    /*x: [[Node]] other fields */
+    /*x: [[Node]] code generation fields */
     // complexity in number of registers. for register allocation?
     // (ab)used as FNX special value
     // (ab)used as bool for marker of label def (true) vs use (false),
     char	complex; 
-    /*x: [[Node]] other fields */
-    Type*	type;
-    /*x: [[Node]] other fields */
-    // enum<storage_class>
-    char	class;
-    /*x: [[Node]] other fields */
-    // enum<type_kind>, inline of Node.type->etype?
-    char	etype;
-    /*x: [[Node]] other fields */
-    // enum<qualifier>
-    char	garb;
-    /*x: [[Node]] other fields */
-    vlong	vconst;		/* non fp const */ // abused in switch?
-    /*x: [[Node]] other fields */
-    double	fconst;		/* fp constant */
-    /*x: [[Node]] other fields */
-    char*	cstring;	/* character string */
-    /*x: [[Node]] other fields */
-    TRune*	rstring;	/* rune string */
-    /*x: [[Node]] other fields */
-    bool 	xcast;
-    /*x: [[Node]] other fields */
+    /*x: [[Node]] code generation fields */
     long	xoffset;
-    /*x: [[Node]] other fields */
+    /*x: [[Node]] code generation fields */
     // option<enum<registr>>, None = ?
     int		reg;
-    /*x: [[Node]] other fields */
+    /*x: [[Node]] code generation fields */
     long	pc;
-    /*x: [[Node]] other fields */
+    /*x: [[Node]] code generation fields */
     // ref<Prog>, but use void to be archi independent
     void*	label;
-    /*x: [[Node]] other fields */
+    /*x: [[Node]] code generation fields */
+    char	scale; // x86 only
+    /*e: [[Node]] code generation fields */
+
+    /*s: [[Node]] origin tracking fields */
+    bool 	xcast;
+    /*x: [[Node]] origin tracking fields */
     // enum<node_kind>
     char	oldop;
-    /*x: [[Node]] other fields */
-    char	scale; // x86 only
-    /*e: [[Node]] other fields */
+    /*e: [[Node]] origin tracking fields */
 };
 /*e: struct Node */
 /*s: constant Z */
@@ -145,46 +154,63 @@ struct	Sym
     //  - tags (struct/union/enum) 
     //  - labels (for the goto)
     //  - macros (the #define)
-    //  - keywords lexeme? (abuse)
+    //  - keywords lexeme (abuse)
+
+    // ----------------------------------------------------------------------
+    // The "key"
+    // ----------------------------------------------------------------------
     char	*name;
 
     long	varlineno;
 
-    /*s: [[Sym]] other fields */
+    // ----------------------------------------------------------------------
+    // The "value"
+    // ----------------------------------------------------------------------
+    /*s: [[Sym]] identifier value fields */
     char	sym;
-    /*x: [[Sym]] other fields */
+    /*x: [[Sym]] identifier value fields */
+    // ref<Type> ?
     Type*	type;
     // enum<storage_class>
     char	class;
-    /*x: [[Sym]] other fields */
-    char*	macro;
-    /*x: [[Sym]] other fields */
-    // enum<lexeme>
-    ushort	lexical;
-    /*x: [[Sym]] other fields */
+    /*x: [[Sym]] identifier value fields */
     ushort	block;
-    /*x: [[Sym]] other fields */
-    Node*	label;
-    /*x: [[Sym]] other fields */
-    Type*	suetag;
-    /*x: [[Sym]] other fields */
-    ushort	sueblock;
-    /*x: [[Sym]] other fields */
-    // ref<Type>
-    Type*	tenum;
-    /*x: [[Sym]] other fields */
-    vlong	vconst;
-    double	fconst;
-    /*x: [[Sym]] other fields */
+    /*x: [[Sym]] identifier value fields */
     long	offset;
-    /*x: [[Sym]] other fields */
+    /*x: [[Sym]] identifier value fields */
     bool	aused;
-    /*x: [[Sym]] other fields */
+    /*x: [[Sym]] identifier value fields */
     // enum<signature>
     char	sig;
-    /*e: [[Sym]] other fields */
+    /*e: [[Sym]] identifier value fields */
 
+    /*s: [[Sym]] enum value fields */
+    vlong	vconst;
+    double	fconst;
+    /*x: [[Sym]] enum value fields */
+    // ref<Type>
+    Type*	tenum;
+    /*e: [[Sym]] enum value fields */
+    /*s: [[Sym]] tag value fields */
+    Type*	suetag;
+    /*x: [[Sym]] tag value fields */
+    ushort	sueblock;
+    /*e: [[Sym]] tag value fields */
+    /*s: [[Sym]] label value fields */
+    Node*	label;
+    /*e: [[Sym]] label value fields */
+    /*s: [[Sym]] macro value fields */
+    char*	macro;
+    /*e: [[Sym]] macro value fields */
+
+    /*s: [[Sym]] lexeme value fields */
+    // enum<lexeme>
+    ushort	lexical;
+    /*e: [[Sym]] lexeme value fields */
+
+    // ----------------------------------------------------------------------
     // Extra
+    // ----------------------------------------------------------------------
     /*s: [[Sym]] extra fields */
     // list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
     Sym*	link;
@@ -237,7 +263,7 @@ struct	Decl
 /*s: struct Type */
 struct	Type
 {
-    // enum<type_kind>  (the type cases only?)
+    // enum<type_kind>
     char	etype;
 
     // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
@@ -247,20 +273,29 @@ struct	Type
 
     long	lineno;
 
-    /*s: [[Type]] other fields */
-    Sym*	sym;
-    /*x: [[Type]] other fields */
+    /*s: [[Type]] value fields */
+    Sym*	sym; // for TSTRUCT/TUNION/TENUM
+    /*e: [[Type]] value fields */
+
+    /*s: [[Type]] qualifier fields */
     // enum<qualifier>
     char	garb;
-    /*x: [[Type]] other fields */
+    /*e: [[Type]] qualifier fields */
+
+    // ----------------------------------------------------------------------
+    // Post parsing annotations
+    // ----------------------------------------------------------------------
+    /*s: [[Type]] code generation fields */
     long	width; // ewidth[Type.etype]
-    /*x: [[Type]] other fields */
-    Sym*	tag;
-    /*x: [[Type]] other fields */
+    /*x: [[Type]] code generation fields */
     schar	shift;
     char	nbits;
-    /*x: [[Type]] other fields */
+    /*x: [[Type]] code generation fields */
     long	offset;
+    /*e: [[Type]] code generation fields */
+
+    /*s: [[Type]] other fields */
+    Sym*	tag;
     /*x: [[Type]] other fields */
     Funct*	funct;
     /*e: [[Type]] other fields */
@@ -429,26 +464,6 @@ enum node_kind
     /*x: expression nodes */
     OASI, // appears during parsing
     /*x: expression nodes */
-    OINDREG, // after parsing only
-    /*x: expression nodes */
-    // after parsing only
-    OASLMUL,
-    OASLDIV,
-    OASLMOD,
-    OASLSHR,
-    /*x: expression nodes */
-    // after parsing only
-    OLMUL,
-    OLDIV,
-    OLMOD,
-    OLSHR,
-    /*x: expression nodes */
-    // after parsing only
-    OHI,
-    OHS,
-    OLO,
-    OLS,
-    /*x: expression nodes */
     OSIGN,
     /*e: expression nodes */
 
@@ -478,29 +493,24 @@ enum node_kind
     /*e: statement nodes */
 
     // ----------------------------------------------------------------------
-    // Variables
+    // Variables (locals, globals, parameters)
     // ----------------------------------------------------------------------
     /*s: variable declaration nodes */
     OINIT,
     /*x: variable declaration nodes */
     OELEM,  // field designator
-    /*e: variable declaration nodes */
-
-    // ----------------------------------------------------------------------
-    // Declarations
-    // ----------------------------------------------------------------------
-    /*s: declaration nodes */
+    /*x: variable declaration nodes */
     OPROTO,
-    /*e: declaration nodes */
+    /*x: variable declaration nodes */
+    ODOTDOT,
+    /*e: variable declaration nodes */
 
     // ----------------------------------------------------------------------
     // Definitions
     // ----------------------------------------------------------------------
     /*s: definition nodes */
-    OSTRUCT, // used also for struct constructor
+    OSTRUCT, // used for defs, decls, and for struct constructors
     OUNION,
-    /*x: definition nodes */
-    OREGISTER, // after parsing only, via regalloc()
     /*x: definition nodes */
     OBIT,
     /*e: definition nodes */
@@ -513,15 +523,37 @@ enum node_kind
     /*x: misc nodes */
     OFUNC, // used for uses (calls) but also defs (and decls)
     /*x: misc nodes */
-    OARRAY, // used for uses (including designator) and defs (and decl)
-    /*x: misc nodes */
-    ODOTDOT,
-    /*x: misc nodes */
-    OEXREG, // appears only during parsing
+    OARRAY, // used for uses (designator) and defs (and decl)
     /*x: misc nodes */
     OINDEX, // x86 only
     OREGPAIR, // x86 only, for 64 bits stuff
     /*e: misc nodes */
+
+    // ----------------------------------------------------------------------
+    // Post parsing nodes
+    // ----------------------------------------------------------------------
+    /*s: after parsing nodes */
+    OREGISTER, // via regalloc()
+    /*x: after parsing nodes */
+    OINDREG,
+    /*x: after parsing nodes */
+    OASLMUL,
+    OASLDIV,
+    OASLMOD,
+    OASLSHR,
+    /*x: after parsing nodes */
+    OLMUL,
+    OLDIV,
+    OLMOD,
+    OLSHR,
+    /*x: after parsing nodes */
+    OHI,
+    OHS,
+    OLO,
+    OLS,
+    /*x: after parsing nodes */
+    OEXREG,
+    /*e: after parsing nodes */
 
     OEND
 };
@@ -644,7 +676,7 @@ enum storage_class
     /*s: [[Storage_class]] cases */
     CTYPEDEF,
     /*x: [[Storage_class]] cases */
-    CLOCAL,
+    CLOCAL, // local static
     /*x: [[Storage_class]] cases */
     CEXREG, // extern register, kenccext (used in kernel for mips)
     /*x: [[Storage_class]] cases */
@@ -863,16 +895,18 @@ int	yyparse(void);
 /*
  *	lex.c
  */
+long	yylex(void);
+
+Sym*	lookup(void);
+Sym*	slookup(char*);
+
 int	filbuf(void);
 int	getc(void);
 int	getnsc(void);
-Sym*	lookup(void);
 void	newfile(char*, int);
 void	newio(void);
 void	pushio(void);
-Sym*	slookup(char*);
 void	unget(int);
-long	yylex(void);
 
 //!!!! (hmmm in lex.c, as well as cinit(), compile())
 void	main(int, char*[]);
@@ -995,13 +1029,13 @@ void	pickletype(Type*);
  * bits.c
  */
 Bits	bor(Bits, Bits);
-//Bits	band(Bits, Bits);
-//Bits	bnot(Bits);
 int	bany(Bits*);
 int	bnum(Bits);
 Bits	blsh(uint);
 int	beq(Bits, Bits);
 int	bset(Bits, uint);
+//Bits	band(Bits, Bits);
+//Bits	bnot(Bits);
 
 /*
  * dpchk.c
@@ -1037,10 +1071,10 @@ extern	schar	ewidth[];
 int	com64(Node*);
 void	com64init(void);
 void	bool64(Node*);
+vlong	convvtox(vlong, int);
 //double	convvtof(vlong);
 //vlong		convftov(double);
 //double	convftox(double, int);
-vlong	convvtox(vlong, int);
 
 /*
  * machcap

@@ -407,6 +407,9 @@ License.
 \section{Abstract syntax tree, [[Node]] and [[Type]]}
 % vs what I have in ast_c.ml?
 
+%figure: AST concept, tree of expression 1+2*3, with OCONST, OADD, OMUL.
+% simple.
+
 \subsection*{[[Node]]}
 % = expr + stmt + decl + func def
 % the type definitions and uses are in another DS (Type).
@@ -432,14 +435,9 @@ enum node_kind
     <<statement nodes>>
 
     // ----------------------------------------------------------------------
-    // Variables
+    // Variables (locals, globals, parameters)
     // ----------------------------------------------------------------------
     <<variable declaration nodes>>
-
-    // ----------------------------------------------------------------------
-    // Declarations
-    // ----------------------------------------------------------------------
-    <<declaration nodes>>
 
     // ----------------------------------------------------------------------
     // Definitions
@@ -450,6 +448,11 @@ enum node_kind
     // Misc
     // ----------------------------------------------------------------------
     <<misc nodes>>
+
+    // ----------------------------------------------------------------------
+    // Post parsing nodes
+    // ----------------------------------------------------------------------
+    <<after parsing nodes>>
 
     OEND
 };
@@ -473,17 +476,24 @@ struct	Node
 
     long	lineno;
 
-    <<[[Node]] other fields>>
+    <<[[Node]] value fields>>
+
+    // ----------------------------------------------------------------------
+    // Post parsing annotations
+    // ----------------------------------------------------------------------
+    <<[[Node]] type and storage fields>>
+
+    <<[[Node]] code generation fields>>
+
+    <<[[Node]] origin tracking fields>>
 };
 @
 %see also prtree() in debugging section to dump the ast
 %less: char -> ushort? or actually char sometimes when use '+' ?
 % hmm get some warnings though when do that, but maybe should fix those 
 % warnings anyway
-%todo: split other fields in  parsing fields, assembly gen fields,
-% value fields, maybe type and storage fields, identifier field
-% (where have sym and storage and maybe more?), track origin field
-% (for oldop and xcast)
+%less: different split for other fields? parsing fields?? identifier field
+% where have sym and storage and maybe more? 
 
 % How things are represented for
 % - OCONST: additional vconst field, will see later
@@ -505,37 +515,21 @@ OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
 %ocaml: note that ADT would be better ...
 
 
-% for nodes involving a symbol (entity used, field access, ONAME, ODOT)
+% for nodes involving a symbol (entity used, field access)
 % (and should have mutual reciproque?)
-<<[[Node]] other fields>>=
-Sym*	sym; 
+<<[[Node]] value fields>>=
+Sym*	sym; // for ONAME, ODOT, OSTRUCT/OUNION
 @
 % see Sym in next section
 
 
 
 
-% for expression nodes?
-<<[[Node]] other fields>>=
-// address-able, used as a bool to mark lvalues, if can assign you can take
-// the address of. used by xcom() to assign ``addressibility''.
-// (ab)used as a bool for marker of use of labels.
-char	addable;
-@
-
-% for expression nodes?
-<<[[Node]] other fields>>=
-// complexity in number of registers. for register allocation?
-// (ab)used as FNX special value
-// (ab)used as bool for marker of label def (true) vs use (false),
-char	complex; 
-@
-
 
 % for expression nodes?
 % important field! typechecking! set in parsing when can
 % (e.g. for cast where have type, for return where have also spec)
-<<[[Node]] other fields>>=
+<<[[Node]] type and storage fields>>=
 Type*	type;
 @
 % so it's more than an AST actually, there is semantic info attached to it
@@ -564,11 +558,29 @@ enum storage_class
 % strings are also using CSTATIC!
 
 % for declaration nodes?
-<<[[Node]] other fields>>=
+<<[[Node]] type and storage fields>>=
 // enum<storage_class>
 char	class;
 @
 
+
+
+
+% for expression nodes?
+<<[[Node]] code generation fields>>=
+// address-able, used as a bool to mark lvalues, if can assign you can take
+// the address of. used by xcom() to assign ``addressibility''.
+// (ab)used as a bool for marker of use of labels.
+char	addable;
+@
+
+% for expression nodes?
+<<[[Node]] code generation fields>>=
+// complexity in number of registers. for register allocation?
+// (ab)used as FNX special value
+// (ab)used as bool for marker of label def (true) vs use (false),
+char	complex; 
+@
 
 
 
@@ -694,7 +706,7 @@ TDOT, // ... in function types
 <<struct Type>>=
 struct	Type
 {
-    // enum<type_kind>  (the type cases only?)
+    // enum<type_kind>
     char	etype;
 
     // option<ref_own<Type>, e.g. for '*int' have TIND -link-> TINT
@@ -703,6 +715,15 @@ struct	Type
     Type*	down;
 
     long	lineno;
+
+    <<[[Type]] value fields>>
+
+    <<[[Type]] qualifier fields>>
+
+    // ----------------------------------------------------------------------
+    // Post parsing annotations
+    // ----------------------------------------------------------------------
+    <<[[Type]] code generation fields>>
 
     <<[[Type]] other fields>>
 };
@@ -720,20 +741,21 @@ struct	Type
 %    is defined, or if it was defined before, the symbol for
 %    this structure will link via suetag to a TSTRUCT type
 %    where the link will have been set to the body of the struct.
+%    how then represent the list of the fields?
 %  - TYPEDEF? they are not in enum type_kind! they are substitued
 %    at use time? where?
 %  - TFUNC: the return is in the link, the parameters in the down
 %ocaml: note that ADT would be better again here.
 
 % when type involves a symbol, e.g. for tags in struct/union/enum
-<<[[Type]] other fields>>=
-Sym*	sym;
+<<[[Type]] value fields>>=
+Sym*	sym; // for TSTRUCT/TUNION/TENUM
 @
 
 
 
 % inline of type->etype?
-<<[[Node]] other fields>>=
+<<[[Node]] type and storage fields>>=
 // enum<type_kind>, inline of Node.type->etype?
 char	etype;
 @
@@ -758,7 +780,7 @@ enum qualifier
 % see also gnames in debugging section
 
 
-<<[[Type]] other fields>>=
+<<[[Type]] qualifier fields>>=
 // enum<qualifier>
 char	garb;
 @
@@ -766,7 +788,7 @@ char	garb;
 % tricky.
 %less: rename qualifier
 
-<<[[Node]] other fields>>=
+<<[[Node]] type and storage fields>>=
 // enum<qualifier>
 char	garb;
 @
@@ -810,7 +832,7 @@ typ(int et, Type *d)
 @
 % see Size section for ewidth, LP split!
 
-<<[[Type]] other fields>>=
+<<[[Type]] code generation fields>>=
 long	width; // ewidth[Type.etype]
 @
 % semantic phase?
@@ -884,21 +906,35 @@ struct	Sym
     //  - tags (struct/union/enum) 
     //  - labels (for the goto)
     //  - macros (the #define)
-    //  - keywords lexeme? (abuse)
+    //  - keywords lexeme (abuse)
+
+    // ----------------------------------------------------------------------
+    // The "key"
+    // ----------------------------------------------------------------------
     char	*name;
 
     long	varlineno;
 
-    <<[[Sym]] other fields>>
+    // ----------------------------------------------------------------------
+    // The "value"
+    // ----------------------------------------------------------------------
+    <<[[Sym]] identifier value fields>>
 
+    <<[[Sym]] enum value fields>>
+    <<[[Sym]] tag value fields>>
+    <<[[Sym]] label value fields>>
+    <<[[Sym]] macro value fields>>
+
+    <<[[Sym]] lexeme value fields>>
+
+    // ----------------------------------------------------------------------
     // Extra
+    // ----------------------------------------------------------------------
     <<[[Sym]] extra fields>>
 };
 @
 %coupling: if add a field here, don't forget to update Decl too
 % and especially its "sym copy fields" section
-%todo: split other fields in, identifier ifelds, tags fields, labels fields,
-%  macro felds, misc fields!
 
 %namespace: it's the symbol table for different kind of names
 % - identifier, see s->type, s->class, etc s->xoffset? x->block?
@@ -907,9 +943,10 @@ struct	Sym
 % - labels, see s->label
 % - macro, see s->macros
 %note that fields are not here as they are not in the global namespace.
-%TODO? lp split other fields in identifier fields, macro fields, tag fields?
-% hmmm but correct? handle well the different namespace?
-% what if struct and local with same name?
+%
+%Does Sym handles well the different namespaces? What if struct and local
+% with same name? It's not a union! the Decl value will determine
+% which field to look for.
 
 % Similar to Assembler.nw and Linker.nw Sym DS. Differences?
 %  - have labels, tags
@@ -920,10 +957,11 @@ struct	Sym
 % struct definition?
 
 
-<<[[Sym]] other fields>>=
+%XXX ???
+<<[[Sym]] identifier value fields>>=
 char	sym;
 @
-% char sym;? name_kind?
+% -> symkind?
 
 
 <<constant NHASH>>=
@@ -1016,16 +1054,24 @@ slookup(char *s)
 
 
 % for identifiers (they are more)
-<<[[Sym]] other fields>>=
+<<[[Sym]] identifier value fields>>=
+// ref<Type> ?
 Type*	type;
 // enum<storage_class>
 char	class;
 @
 % similar to Node.type Decl.type, and now Sym.type
 
+<<[[Sym]] identifier value fields>>=
+ushort	block;
+@
+% see also Decl.block
+
+
+
 
 % for cpp macros
-<<[[Sym]] other fields>>=
+<<[[Sym]] macro value fields>>=
 char*	macro;
 @
 
@@ -1057,21 +1103,10 @@ syminit(Sym *s)
 @
 
 
-<<[[Sym]] other fields>>=
+<<[[Sym]] lexeme value fields>>=
 // enum<lexeme>
 ushort	lexical;
 @
-
-<<[[Sym]] other fields>>=
-ushort	block;
-@
-% see also Decl.block
-
-
-
-
-
-
 
 
 \section{Declarations, namespaces and scope, [[Decl]]}
@@ -4834,9 +4869,10 @@ OGOTO,
 % ltag = LNAME | LTYPE, see later
 
 
-<<[[Sym]] other fields>>=
+<<[[Sym]] label value fields>>=
 Node*	label;
 @
+% can then access pc via s->label->pc?
 
 % flag is true for label definition context, false for use (e.g. in goto)
 %TODO: cleanup abuse of complex/addable, do like in scheck field for used
@@ -5278,9 +5314,10 @@ OCONST,
 
 \subsubsection{Integers}
 
-<<[[Node]] other fields>>=
-vlong	vconst;		/* non fp const */ // abused in switch?
+<<[[Node]] value fields>>=
+vlong	vconst; /* non fp const */ // for OCONST
 @
+%// abused in switch?
 % could be put in a union with fpconst and rstring (but not cstring)
 % take vlong to store the maximum possible value.
 
@@ -5338,8 +5375,8 @@ vlong	vconst;		/* non fp const */ // abused in switch?
 
 \subsubsection{Floats}
 
-<<[[Node]] other fields>>=
-double	fconst;		/* fp constant */
+<<[[Node]] value fields>>=
+double	fconst;		/* fp constant */ // for OCONST
 @
 
 % take double to store the maximum possible value.
@@ -5380,8 +5417,8 @@ OSTRING,
 |   lstring
 @
 
-<<[[Node]] other fields>>=
-char*	cstring;	/* character string */
+<<[[Node]] value fields>>=
+char*	cstring;	/* character string */ // for OSTRING (and OCONST)
 @
 % could be put in a union, except it uses both vconst and cstring
 % at the same time.
@@ -5430,8 +5467,8 @@ string:
 OLSTRING,
 @
 
-<<[[Node]] other fields>>=
-TRune*	rstring;	/* rune string */
+<<[[Node]] value fields>>=
+TRune*	rstring;	/* rune string */ // for OLSTRING
 @
 
 %in cc.h, which should include the u.h before?
@@ -5496,7 +5533,7 @@ OCAST,
 % dodecl? to have lastdcltype, to reconstruct the whole type
 % from the tlist part one and abdecor part two.
 
-<<[[Node]] other fields>>=
+<<[[Node]] origin tracking fields>>=
 bool 	xcast;
 @
 % explicit cast, to remember, as we will add some implicit
@@ -5623,7 +5660,7 @@ OELEM,  // field designator
 %less: rename OINITFIELD?
 
 <<misc nodes>>=
-OARRAY, // used for uses (including designator) and defs (and decl)
+OARRAY, // used for uses (designator) and defs (and decl)
 @
 %less: could be renamed no? OINITARRAY
 
@@ -6564,10 +6601,9 @@ simpleg(long b)
 \subsection{Structures and unions}
 
 <<definition nodes>>=
-OSTRUCT, // used also for struct constructor
+OSTRUCT, // used for defs, decls, and for struct constructors
 OUNION,
 @
-% used for definitions and uses too
 
 
 
@@ -6633,7 +6669,7 @@ complex:
 
 % when the name refers to a tag, lookup its final def
 % sue = structure union enum
-<<[[Sym]] other fields>>=
+<<[[Sym]] tag value fields>>=
 Type*	suetag;
 @
 % rename sue_tag_type?
@@ -6643,12 +6679,13 @@ Type*	suetag;
 <<[[Type]] other fields>>=
 Sym*	tag;
 @
+%todo: vs sym?? have a sym and a tag??
 % mutual ref, do  s->suetag->tag = s;
 % useful, yes to recover the name of the struct which is not
 % stored in the Type otherwise.
 
 % depth of struct
-<<[[Sym]] other fields>>=
+<<[[Sym]] tag value fields>>=
 ushort	sueblock;
 @
 
@@ -6873,7 +6910,7 @@ long	lastfield;
 % set in dodecl() and ?
 
 
-<<[[Type]] other fields>>=
+<<[[Type]] code generation fields>>=
 schar	shift;
 char	nbits;
 @
@@ -7015,19 +7052,19 @@ enum:
 % optional trailing ,
 
 
+<<[[Sym]] enum value fields>>=
+vlong	vconst;
+double	fconst;
+@
+% computed value for the enum, different from vconst/fconst in Node.
+
 % ref to type of enum for each constants symbols of the enum?
-<<[[Sym]] other fields>>=
+<<[[Sym]] enum value fields>>=
 // ref<Type>
 Type*	tenum;
 @
 
 
-
-<<[[Sym]] other fields>>=
-vlong	vconst;
-double	fconst;
-@
-% computed value for the enum, different from vconst/fconst in Node.
 
 
 % n = optional expression for the value of the enum constant
@@ -7303,7 +7340,7 @@ case ONAME:
 
 
 
-<<declaration nodes>>=
+<<variable declaration nodes>>=
 OPROTO,
 @
 % ?? rename OPARAM?
@@ -7383,7 +7420,7 @@ case OLIST:
 
 
 
-<<misc nodes>>=
+<<variable declaration nodes>>=
 ODOTDOT,
 @
 
@@ -7454,12 +7491,12 @@ void argmark(Node *n, int pass)
 
 
 
-<<[[Sym]] other fields>>=
+<<[[Sym]] identifier value fields>>=
 long	offset;
 @
 %todo: hmm seems used for CEXREG, flow fron exreg -> o -> xdecl -> offset field.
 
-<<[[Node]] other fields>>=
+<<[[Node]] code generation fields>>=
 long	xoffset;
 @
 % for parameters and locals? code generation field? FP offset? 
@@ -8587,7 +8624,7 @@ for(i=0; i<NREG; i++)
 
 \subsection{[[regalloc()]]}
 
-<<[[Node]] other fields>>=
+<<[[Node]] code generation fields>>=
 // option<enum<registr>>, None = ?
 int		reg;
 @
@@ -8681,8 +8718,8 @@ regnode.type = types[TLONG];
 @
 % class? CEXREG? matters? abused?
 
-<<definition nodes>>=
-OREGISTER, // after parsing only, via regalloc()
+<<after parsing nodes>>=
+OREGISTER, // via regalloc()
 @
 
 
@@ -10222,11 +10259,11 @@ direct:
 
 % abuse complex to represent whether the label is defined.
 
-<<[[Node]] other fields>>=
+<<[[Node]] code generation fields>>=
 long	pc;
 @
 
-<<[[Node]] other fields>>=
+<<[[Node]] code generation fields>>=
 // ref<Prog>, but use void to be archi independent
 void*	label;
 @
@@ -11572,8 +11609,8 @@ regaalloc1(Node *n, Node *nn)
 }
 @
 
-<<expression nodes>>=
-OINDREG, // after parsing only
+<<after parsing nodes>>=
+OINDREG,
 @
 
 <<function regaalloc(arm)>>=
@@ -13385,7 +13422,7 @@ Init	bnamesinit[] =
 
 % called for fields of structures/unions
 
-<<[[Type]] other fields>>=
+<<[[Type]] code generation fields>>=
 long	offset;
 @
 
@@ -14959,8 +14996,7 @@ case OASSUB:
 @
 
 
-<<expression nodes>>=
-// after parsing only
+<<after parsing nodes>>=
 OASLMUL,
 OASLDIV,
 OASLMOD,
@@ -15168,8 +15204,7 @@ case OSUB:
     break;
 @
 
-<<expression nodes>>=
-// after parsing only
+<<after parsing nodes>>=
 OLMUL,
 OLDIV,
 OLMOD,
@@ -15610,6 +15645,7 @@ case OIND:
 <<[[Type]] other fields>>=
 Funct*	funct;
 @
+% ????
 
 <<struct Funct>>=
 struct	Funct
@@ -16955,7 +16991,7 @@ dpcheck(Node *n)
 
 % the data structure
 
-<<[[Sym]] other fields>>=
+<<[[Sym]] identifier value fields>>=
 bool	aused;
 @
 
@@ -17723,8 +17759,7 @@ add(Big x, int y)
 @
 
 
-<<expression nodes>>=
-// after parsing only
+<<after parsing nodes>>=
 OHI,
 OHS,
 OLO,
@@ -17916,7 +17951,7 @@ evconst(Node *n)
 }
 @
 
-<<[[Node]] other fields>>=
+<<[[Node]] origin tracking fields>>=
 // enum<node_kind>
 char	oldop;
 @
@@ -21545,7 +21580,7 @@ enum signature {
 };
 @
 
-<<[[Sym]] other fields>>=
+<<[[Sym]] identifier value fields>>=
 // enum<signature>
 char	sig;
 @
@@ -22456,7 +22491,7 @@ if(a == ATEXT)
 
 
 <<[[Storage_class]] cases>>=
-CLOCAL,
+CLOCAL, // local static
 @
 % for static local, should be renamed?
 
@@ -23156,8 +23191,8 @@ case CEXREG:
 
 
 
-<<misc nodes>>=
-OEXREG, // appears only during parsing
+<<after parsing nodes>>=
+OEXREG,
 @
 % for regnode
 
