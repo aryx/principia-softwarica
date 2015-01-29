@@ -64,7 +64,7 @@ loop:
      /*x: [[dodecl()]] switch node kind cases */
      case OIND:
          t = typ(TIND, t);
-         t->garb = n->garb;
+         t->garb = n->nodegarb;
          n = n->left;
          goto loop;
      /*x: [[dodecl()]] switch node kind cases */

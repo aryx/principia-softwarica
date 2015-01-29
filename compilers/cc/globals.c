@@ -188,9 +188,6 @@ bool	profileflg;
 /*s: global ncontin */
 int	ncontin;
 /*e: global ncontin */
-/*s: global newvlongcode */
-bool	newvlongcode;
-/*e: global newvlongcode */
 /*s: global canreach */
 bool	canreach;
 /*e: global canreach */

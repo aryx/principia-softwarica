@@ -173,7 +173,6 @@ gen(Node *n)
     int snbreak, sncontin;
     /*x: [[gen()]] locals */
     Node nod;
-    Node rn;
     /*x: [[gen()]] locals */
     Case *cn;
     /*e: [[gen()]] locals */
@@ -421,20 +420,6 @@ loop:
             nod.complex = l->complex;
             cgen(&nod, Z);
             noretval(3);
-            gbranch(ORETURN);
-            break;
-        }
-        if(newvlongcode && !typefd[n->type->etype]){
-            regret(&rn, n);
-            regfree(&rn);
-            nod = znode;
-            nod.op = OAS;
-            nod.left = &rn;
-            nod.right = l;
-            nod.type = n->type;
-            nod.complex = l->complex;
-            cgen(&nod, Z);
-            noretval(2);
             gbranch(ORETURN);
             break;
         }

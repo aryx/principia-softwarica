@@ -170,7 +170,7 @@ xdecor:
 |   '*' zgnlist xdecor
     {
         $$ = new(OIND, $3, Z);
-        $$->garb = simpleg($2);
+        $$->nodegarb = simpleg($2);
     }
 /*e: xdecor rule */
 /*s: xdecor2 rule */
@@ -267,12 +267,12 @@ abdecor1:
     '*' zgnlist
     {
         $$ = new(OIND, (Z), Z);
-        $$->garb = simpleg($2);
+        $$->nodegarb = simpleg($2);
     }
 |   '*' zgnlist abdecor1
     {
         $$ = new(OIND, $3, Z);
-        $$->garb = simpleg($2);
+        $$->nodegarb = simpleg($2);
     }
 |   abdecor2
 /*x: abstract declarator rules */

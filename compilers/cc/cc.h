@@ -91,6 +91,9 @@ struct	Node
     char*	cstring;	/* character string */ // for OSTRING (and OCONST)
     /*x: [[Node]] value fields */
     TRune*	rstring;	/* rune string */ // for OLSTRING
+    /*x: [[Node]] value fields */
+    // option<enum<registr>>
+    int		reg; // for OREGISTER
     /*e: [[Node]] value fields */
 
     // ----------------------------------------------------------------------
@@ -104,9 +107,6 @@ struct	Node
     /*x: [[Node]] type and storage fields */
     // enum<type_kind>, inline of Node.type->etype?
     char	etype;
-    /*x: [[Node]] type and storage fields */
-    // enum<qualifier>
-    char	garb;
     /*e: [[Node]] type and storage fields */
 
     /*s: [[Node]] code generation fields */
@@ -122,9 +122,6 @@ struct	Node
     /*x: [[Node]] code generation fields */
     long	xoffset;
     /*x: [[Node]] code generation fields */
-    // option<enum<registr>>, None = ?
-    int		reg;
-    /*x: [[Node]] code generation fields */
     long	pc;
     /*x: [[Node]] code generation fields */
     // ref<Prog>, but use void to be archi independent
@@ -139,6 +136,14 @@ struct	Node
     // enum<node_kind>
     char	oldop;
     /*e: [[Node]] origin tracking fields */
+
+    // ----------------------------------------------------------------------
+    // Misc
+    // ----------------------------------------------------------------------
+    /*s: [[Node]] parsing helper fields */
+    // enum<qualifier>
+    char	nodegarb;
+    /*e: [[Node]] parsing helper fields */
 };
 /*e: struct Node */
 /*s: constant Z */
@@ -841,7 +846,6 @@ extern	int	packflg;
 extern	int	fproundflg;
 extern	bool	profileflg;
 extern	int	ncontin;
-extern	bool	newvlongcode;
 extern	int	canreach;
 extern	int	warnreach;
 extern	Bits	zbits;
