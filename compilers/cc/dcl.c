@@ -23,9 +23,13 @@ void	tmerge(Type*, Sym*);
 Node*
 dodecl(void (*f)(int,Type*,Sym*), int class, Type *t, Node *n)
 {
+    /*s: [[dodecl()]] locals */
     Sym *s;
+    /*x: [[dodecl()]] locals */
     Node *n1;
+    /*x: [[dodecl()]] locals */
     long v;
+    /*e: [[dodecl()]] locals */
 
     nearln = lineno;
     lastfield = 0;
@@ -757,9 +761,6 @@ loop:
         pdecl(CPARAM, lastdcltype, S);
         break;
 
-    case ODOTDOT:
-        break;
-    
     case ONAME:
         s = n->sym;
         if(pass == 0) {
@@ -778,6 +779,10 @@ loop:
         } else
             dodecl(pdecl, CXXX, types[TINT], n);
         break;
+
+    case ODOTDOT:
+        break;
+    
     default:
         diag(n, "argument not a name/prototype: %O", n->op);
         break;
@@ -1282,14 +1287,16 @@ Type* dotag(Sym *s, int et, int bn)
 
 /*s: function dcllabel */
 //@Scheck: used by cc.y
-Node* dcllabel(Sym *s, bool f)
+Node* dcllabel(Sym *s, bool defcontext)
 {
-    Decl *d, d1;
+    Decl *d;
+    Decl d1;
     Node *n;
 
     n = s->label;
+    /*s: [[dcllabel()]] if n not null, mark node as declared or used */
     if(n != Z) {
-        if(f) {
+        if(defcontext) {
             if(n->complex)
                 diag(Z, "label reused: %s", s->name);
             n->complex = true;	// declared
@@ -1297,24 +1304,26 @@ Node* dcllabel(Sym *s, bool f)
             n->addable = true;	// used
         return n;
     }
+    /*e: [[dcllabel()]] if n not null, mark node as declared or used */
 
     d = push();
     d->sym = s;
     d->val = DLABEL;
 
+    //pop(dclstack)
     dclstack = d->link;
 
+    //add_list(d, firstdcl)
     d1 = *firstdcl;
     *firstdcl = *d;
     *d = d1;
-
     firstdcl->link = d;
     firstdcl = d;
 
     n = new(OXXX, Z, Z);
     n->sym = s;
-    n->complex = f;
-    n->addable = !f;
+    n->complex = defcontext;
+    n->addable = !defcontext;
 
     s->label = n;
 
@@ -1446,7 +1455,7 @@ xdecl(int class, Type *t, Sym *s)
 {
     long o = 0; // offset
 
-    // adjusting class, and possibly o (for CEXREG)
+    // adjusting class (and possibly o for CEXREG)
     switch(class) {
     /*s: [[xdecl()]] switch class cases */
     case CXXX:

@@ -112,12 +112,12 @@ struct	Node
     /*s: [[Node]] code generation fields */
     // address-able, used as a bool to mark lvalues, if can assign you can take
     // the address of. used by xcom() to assign ``addressibility''.
-    // (ab)used as a bool for marker of use of labels.
+    // also (ab)used as a bool for to mark label uses (true = used in a goto)
     char	addable;
     /*x: [[Node]] code generation fields */
     // complexity in number of registers. for register allocation?
-    // (ab)used as FNX special value
-    // (ab)used as bool for marker of label def (true) vs use (false),
+    // also (ab)used as FNX special value
+    // also (ab)used as a bool to mark label definitions (true = already defined)
     char	complex; 
     /*x: [[Node]] code generation fields */
     long	xoffset;
@@ -154,8 +154,8 @@ struct	Node
 struct	Sym
 {
     // Symbolic names are used for: 
-    //  - identifiers (locals/params/globals/functions/typedefs),
-    //    and also enum constants
+    //  - identifiers (locals/params/globals, functions, typedefs
+    //    and also enum constants)
     //  - tags (struct/union/enum) 
     //  - labels (for the goto)
     //  - macros (the #define)
@@ -779,7 +779,6 @@ struct	Funct
 struct En
 {
     Type*	tenum;		/* type of entire enum */
-
     Type*	cenum;		/* type of current enum run */
 
     vlong	lastenum;	/* value of current enum */
@@ -799,7 +798,6 @@ extern	Sym*	firstarg;
 extern	Type*	firstargtype;
 extern	Decl*	firstdcl;
 extern	Sym*	hash[NHASH];
-extern	int	hasdoubled;
 extern	char*	hunk;
 extern	char**	include;
 extern	Io*	iofree;

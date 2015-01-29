@@ -2199,6 +2199,7 @@ tinit(void)
     /* 32-bit defaults */
     typeword = typechlp;
     typeswitch = typechl;
+    /*x: [[tinit()]] initialise 32 bits defaults type sets */
     typecmplx = typesuv;
     /*e: [[tinit()]] initialise 32 bits defaults type sets */
 }

@@ -13,8 +13,6 @@ void codgen(Node *n, Node *nn)
     Node *n1, nod, nod1;
 
     /*s: [[codgen()]] initialisation */
-    hasdoubled = false;
-    /*x: [[codgen()]] initialisation */
     cursafe = 0;
     curarg = 0;
     maxargsafe = 0;
@@ -40,14 +38,6 @@ void codgen(Node *n, Node *nn)
 
     /*s: [[codgen()]] if complex return type */
     if(typecmplx[thisfntype->link->etype]) {
-        if(nodret == nil) {
-            nodret = new(ONAME, Z, Z);
-            nodret->sym = slookup(".ret");
-            nodret->class = CPARAM;
-            nodret->type = types[TIND];
-            nodret->etype = TIND;
-            nodret = new(OIND, nodret, Z);
-        }
         n1 = nodret->left;
         if(n1->type == T || n1->type->link != thisfntype->link) {
             n1->type = typ(TIND, thisfntype->link);
@@ -62,11 +52,13 @@ void codgen(Node *n, Node *nn)
      * isolate first argument
      */
     if(REGARG >= 0) {	
+        /*s: [[codegen()]] if use REGARG, if complex return type */
         if(typecmplx[thisfntype->link->etype]) {
             nod1 = *nodret->left;
             nodreg(&nod, &nod1, REGARG);
             gmove(&nod, &nod1);
         }
+        /*e: [[codegen()]] if use REGARG, if complex return type */
         else
         if(firstarg && typeword[firstargtype->etype]) {
             nod1 = znode;
@@ -107,8 +99,6 @@ void codgen(Node *n, Node *nn)
     if(!debug['N'] || debug['R'] || debug['P'])
         regopt(sp);
     
-    if(thechar=='6' || thechar=='7' || thechar=='9' || hasdoubled)	/* [sic] */
-        maxargsafe = round(maxargsafe, 8);
     sp->to.offset += maxargsafe;
 }
 /*e: function codgen */
@@ -411,6 +401,7 @@ loop:
             gbranch(ORETURN);
             break;
         }
+        /*s: [[gen()]] case ORETURN, if complex type */
         if(typecmplx[n->type->etype]) {
             nod = znode;
             nod.op = OAS;
@@ -423,6 +414,8 @@ loop:
             gbranch(ORETURN);
             break;
         }
+        /*e: [[gen()]] case ORETURN, if complex type */
+        // else
         regret(&nod, n);
         cgen(l, &nod);
         regfree(&nod);

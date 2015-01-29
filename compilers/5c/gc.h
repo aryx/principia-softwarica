@@ -57,7 +57,7 @@ struct	Adr
     // enum<operand_kind> (D_NONE by default)
     char	type;
 
-    long	offset;
+    long	offset; // generic value, offset or simple constant
     double	dval;
     char	sval[NSNAME];
     Ieee	ieee;

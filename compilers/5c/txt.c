@@ -55,14 +55,6 @@ ginit(void)
     regnode.addable = 11;
     regnode.type = types[TLONG];
     /*x: [[ginit()]] special nodes initialisation */
-    nodret = new(ONAME, Z, Z);
-    nodret->sym = slookup(".ret");
-    nodret->type = types[TIND];
-    nodret->etype = TIND;
-    nodret->class = CPARAM;
-    nodret = new(OIND, nodret, Z);
-    complex(nodret);
-    /*x: [[ginit()]] special nodes initialisation */
     constnode.op = OCONST;
     constnode.class = CXXX;
     constnode.complex = 0;
@@ -94,6 +86,14 @@ ginit(void)
     nodrat->class = CGLOBL;
     complex(nodrat);
     nodrat->type = t;
+    /*x: [[ginit()]] special nodes initialisation */
+    nodret = new(ONAME, Z, Z);
+    nodret->sym = slookup(".ret");
+    nodret->type = types[TIND];
+    nodret->etype = TIND;
+    nodret->class = CPARAM;
+    nodret = new(OIND, nodret, Z);
+    complex(nodret);
     /*e: [[ginit()]] special nodes initialisation */
     com64init();
     /*s: [[ginit()]] reg and resvreg initialisation */
@@ -549,21 +549,23 @@ naddr(Node *n, Adr *a)
         a->sym = n->sym;
 
         a->symkind = D_STATIC;
-        if(n->class == CSTATIC)
+        switch(n->class) {
+        case CSTATIC: 
+            a->symkind = D_STATIC;
             break;
-        if(n->class == CEXTERN || n->class == CGLOBL) {
+        case CEXTERN: case CGLOBL:
             a->symkind = D_EXTERN;
             break;
-        }
-        if(n->class == CAUTO) {
+        case CAUTO:
             a->symkind = D_AUTO;
             break;
-        }
-        if(n->class == CPARAM) {
+        case CPARAM:
             a->symkind = D_PARAM;
             break;
+        default:
+            goto bad;
         }
-        goto bad;
+        break;
     /*x: [[naddr()]] switch node kind cases */
     case OIND:
         naddr(n->left, a);

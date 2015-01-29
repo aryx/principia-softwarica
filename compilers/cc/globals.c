@@ -46,9 +46,6 @@ Decl*	firstdcl;
 // hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 /*e: global hash */
-/*s: global hasdoubled */
-bool	hasdoubled;
-/*e: global hasdoubled */
 /*s: global hunk */
 char*	hunk;
 /*e: global hunk */

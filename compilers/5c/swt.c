@@ -306,7 +306,7 @@ gextern(Sym *s, Node *a, long o, long w)
     else {
         gpseudo(ADATA, s, a);
         p->from.offset += o;
-        p->reg = w;
+        p->reg = w; // attributes
         if(p->to.type == D_OREG)
             p->to.type = D_CONST;
     }

@@ -15,9 +15,9 @@
     Sym*    sym;
 
    /*s: [[union yacc]] other fields */
-   long    lval;
-   /*x: [[union yacc]] other fields */
    Node*   node;
+   /*x: [[union yacc]] other fields */
+   long    lval; //bitset<enum<bxxx> >
    /*x: [[union yacc]] other fields */
    Type*   type;
    /*x: [[union yacc]] other fields */
@@ -741,7 +741,7 @@ qual:
     }
 |   qual '='
 /*e: initializers rules */
-/*s: types rules */
+/*s: types, storage classes, qualifiers rules */
 /*s: tname rule */
 tname:  /* type words */
     LCHAR     { $$ = BCHAR; }
@@ -773,15 +773,32 @@ gname:  /* garbage words */
 |   LVOLATILE { $$ = BVOLATILE; }
 |   LRESTRICT { $$ = 0; }
 /*e: gname rule */
-/*x: types rules */
+/*x: types, storage classes, qualifiers rules */
+gctname:
+    tname
+|   gname
+|   cname
+
+gcname:
+    gname
+|   cname
+/*x: types, storage classes, qualifiers rules */
+tlist:
+    types
+    {
+        $$ = $1.t;
+        if($1.c != CXXX)
+            diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
+    }
+/*x: types, storage classes, qualifiers rules */
 gctnlist:
     gctname
 |   gctnlist gctname { $$ = typebitor($1, $2); }
-/*x: types rules */
+/*x: types, storage classes, qualifiers rules */
 gcnlist:
     gcname
 |   gcnlist gcname { $$ = typebitor($1, $2); }
-/*x: types rules */
+/*x: types, storage classes, qualifiers rules */
 /*s: types rule */
 types:
    tname
@@ -834,37 +851,12 @@ types:
         $$.c = simplec($1);
         $$.t = garbt($$.t, $1|$3);
     }
-/*x: types rule */
-sbody:
-    '{'
-    {
-        $<tyty>$.t1 = strf;
-        $<tyty>$.t2 = strl;
-        $<tyty>$.t3 = lasttype;
-        $<tyty>$.c = lastclass;
-        strf = T;
-        strl = T;
-        lastbit = 0;
-        firstbit = 1;
-        lastclass = CXXX;
-        lasttype = T;
-    }
-    edecl 
-    '}'
-    {
-        $$ = strf;
-        strf = $<tyty>2.t1;
-        strl = $<tyty>2.t2;
-        lasttype = $<tyty>2.t3;
-        lastclass = $<tyty>2.c;
-    }
-
 /*e: types rule */
-/*x: types rules */
+/*x: types, storage classes, qualifiers rules */
 zgnlist:
  /* empty */       { $$ = 0; }
 |   zgnlist gname  { $$ = typebitor($1, $2); }
-/*x: types rules */
+/*x: types, storage classes, qualifiers rules */
 /*s: complex rule */
 complex:
     LSTRUCT ltag
@@ -962,13 +954,38 @@ complex:
 /*x: complex rule */
 |   LTYPE { $$ = tcopy($1->type); }
 /*e: complex rule */
-/*x: types rules */
+/*x: types, storage classes, qualifiers rules */
+sbody:
+    '{'
+    {
+        $<tyty>$.t1 = strf;
+        $<tyty>$.t2 = strl;
+        $<tyty>$.t3 = lasttype;
+        $<tyty>$.c = lastclass;
+        strf = T;
+        strl = T;
+        lastbit = 0;
+        firstbit = 1;
+        lastclass = CXXX;
+        lasttype = T;
+    }
+    edecl 
+    '}'
+    {
+        $$ = strf;
+        strf = $<tyty>2.t1;
+        strl = $<tyty>2.t2;
+        lasttype = $<tyty>2.t3;
+        lastclass = $<tyty>2.c;
+    }
+
+/*x: types, storage classes, qualifiers rules */
 enum:
     LNAME           { doenum($1, Z); }
 |   LNAME '=' expr  { doenum($1, $3); }
 |   enum ',' enum
 |   enum ','
-/*e: types rules */
+/*e: types, storage classes, qualifiers rules */
 /*s: names rules */
 tag:
     ltag
@@ -1004,15 +1021,6 @@ name:
          $1->aused = true;
          /*e: name rule, LNAME case, adjust more fields */
     }
-/*x: names rules */
-gctname:
-    tname
-|   gname
-|   cname
-
-gcname:
-    gname
-|   cname
 /*e: names rules */
 
 /*s: extra grammar rules */
@@ -1021,14 +1029,6 @@ ctlist:
     {
         lasttype = $1.t;
         lastclass = $1.c;
-    }
-/*x: extra grammar rules */
-tlist:
-    types
-    {
-        $$ = $1.t;
-        if($1.c != CXXX)
-            diag(Z, "illegal combination of class 4: %s", cnames[$1.c]);
     }
 /*e: extra grammar rules */
 /*s: ebnf grammar rules */
