@@ -82,7 +82,7 @@ struct	Node
     long	lineno;
 
     /*s: [[Node]] value fields */
-    Sym*	sym; // for ONAME, ODOT, OSTRUCT/OUNION
+    Sym*	sym; // for ONAME, ODOT/OELEM, OSTRUCT/OUNION
     /*x: [[Node]] value fields */
     vlong	vconst; /* non fp const */ // for OCONST
     /*x: [[Node]] value fields */

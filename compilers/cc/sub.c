@@ -59,6 +59,7 @@ prtree(Node *n, char *s)
 void
 prtree1(Node *n, int d, bool f)
 {
+    //bitset<Left|Right> to decide whether to recurse left and right child
     int i;
 
     if(f)
@@ -68,6 +69,7 @@ prtree1(Node *n, int d, bool f)
         print("Z\n");
         return;
     }
+
     if(n->op == OLIST) {
         prtree1(n->left, d, false);
         prtree1(n->right, d, true);
@@ -75,18 +77,37 @@ prtree1(Node *n, int d, bool f)
     }
     d++;
     print("%O", n->op);
-    i = 3; // 1 || 2
+    i = 3; // 1 | 2
 
     switch(n->op) {
+    case OCONST:
+        if(typefd[n->type->etype])
+            print(" \"%.8e\"", n->fconst);
+        else
+            print(" \"%lld\"", n->vconst);
+        i = 0;
+        break;
+
+    case OSTRING:
+        print(" \"%s\"", n->cstring);
+        i = 0;
+        break;
+    case OLSTRING:
+        if(sizeof(TRune) == sizeof(Rune))
+            print(" \"%S\"", (Rune*)n->rstring);
+        else
+            print(" \"...\"");
+        i = 0;
+        break;
+
     case ONAME:
         print(" \"%F\"", n);
         print(" %ld", n->xoffset);
         i = 0;
         break;
-
-    case OINDREG:
-        print(" %ld(R%d)", n->xoffset, n->reg);
-        i = 0;
+    case ODOT:
+    case OELEM:
+        print(" \"%F\"", n);
         break;
 
     case OREGISTER:
@@ -96,37 +117,18 @@ prtree1(Node *n, int d, bool f)
             print(" R%d", n->reg);
         i = 0;
         break;
-
-    case OSTRING:
-        print(" \"%s\"", n->cstring);
+    case OINDREG:
+        print(" %ld(R%d)", n->xoffset, n->reg);
         i = 0;
         break;
 
-    case OLSTRING:
-        if(sizeof(TRune) == sizeof(Rune))
-            print(" \"%S\"", (Rune*)n->rstring);
-        else
-            print(" \"...\"");
-        i = 0;
-        break;
-
-    case ODOT:
-    case OELEM:
-        print(" \"%F\"", n);
-        break;
-
-    case OCONST:
-        if(typefd[n->type->etype])
-            print(" \"%.8e\"", n->fconst);
-        else
-            print(" \"%lld\"", n->vconst);
-        i = 0;
-        break;
     }
-    if(n->addable != 0)
-        print(" <%d>", n->addable);
+
     if(n->type != T)
         print(" %T", n->type);
+
+    if(n->addable != 0)
+        print(" <%d>", n->addable);
     if(n->complex != 0)
         print(" (%d)", n->complex);
 

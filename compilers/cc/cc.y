@@ -145,6 +145,10 @@ xdecl:
         if(n)
             $6 = new(OLIST, n, $6);
         /*e: xdecl rule, adjust block body with possible hidden generated nodes */
+        if(debug['x']) {
+            prtree($2, "func");
+            prtree($6, "body");
+        }
         if(!debug['a'] && !debug['Z'])
             codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
     }

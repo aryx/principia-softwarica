@@ -260,6 +260,10 @@ License.
 % -N -R -P in gen()
 % -T in zname to generate ASIGNAME, can be disabled by some pragma apparently
 % -c, if(constant) warning
+% -P, regopt stuff, and debug asm stuff?
+% -R, regopt stuff
+% -N, regopt stuff
+% -x,   pad: dump AST
 
 % *	-o file		output file
 
@@ -496,15 +500,21 @@ struct	Node
     <<[[Node]] parsing helper fields>>
 };
 @
-%see also prtree() in debugging section to dump the ast
+%see also prtree() in debugging section to dump the AST, useful
+% to understand which fields make sense for which node_kind!
+% all the nodes with value fields have a case in prtree().
 %less: char -> ushort? or actually char sometimes when use '+' ?
 % hmm get some warnings though when do that, but maybe should fix those 
 % warnings anyway
 %still?: different split? identifier field where have sym and storage? 
 
 % How things are represented for
-% - OCONST: additional vconst field, will see later
+% - OCONST: additional vconst and fconst field
+% - OSTRING, OLSTRING: cstring and rstring fields
 % - ONAME: additional sym field
+%   (and xoffset later when param or local name)
+% - OREGISTER, OINDREG: reg and xoffset
+% - ODOT/OELEM: sym field
 % - blocks? left/right used for many things, for left/right branch in e.g.
 %   arithmetic trees (a+b), but also for linked list (e.g. OLIST) with
 %   double chaining
@@ -525,7 +535,7 @@ OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
 % for nodes involving a symbol (entity used, field access)
 % (and should have mutual reciproque?)
 <<[[Node]] value fields>>=
-Sym*	sym; // for ONAME, ODOT, OSTRUCT/OUNION
+Sym*	sym; // for ONAME, ODOT/OELEM, OSTRUCT/OUNION
 @
 % see Sym in next section
 
@@ -4600,6 +4610,10 @@ Type*	thisfntype;
         Node *n;
         n = revertdcl();
         <<xdecl rule, adjust block body with possible hidden generated nodes>>
+        if(debug['x']) {
+            prtree($2, "func");
+            prtree($6, "body");
+        }
         if(!debug['a'] && !debug['Z'])
             codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
     }
@@ -5324,9 +5338,10 @@ name:
 % similar to tag rule
 %$
 
-%codegen: name(SB)
+%codegen: name(SB), or name+-offset(FP) for params and locals
+% a C symbol is an assembly symbol. It is kept as is.
 
-\subsection{Numeric Constants}
+\subsection{Numeric constants}
 
 <<expression nodes>>=
 OCONST,
@@ -5680,13 +5695,15 @@ qlist:
 <<variable declaration nodes>>=
 OELEM,  // field designator
 @
-% for regular access it's TDOT
+% for regular access it's TDOT, could have been marged
 %less: rename OINITFIELD?
 
 <<misc nodes>>=
 OARRAY, // used for uses (designator) and defs (and decl)
 @
 %less: could be renamed no? OINITARRAY
+%note that for regular uses that are not designator it does not
+% use OARRAY but instead unsugar in OIND and OADD
 
 
 <<initializers rules>>=
@@ -7533,7 +7550,8 @@ long	offset;
 <<[[Node]] code generation fields>>=
 long	xoffset;
 @
-% for parameters and locals? code generation field? FP offset? 
+% this is for ONAME after some resolving for params and locals
+% and for OREGISTER and OINDREG (in addition to reg)
 
 
 <<function walkparam>>=
@@ -8674,6 +8692,7 @@ OREGISTER, // via regalloc()
 // option<enum<registr>>
 int		reg; // for OREGISTER
 @
+% has also xoffset!
 %less: rename, to avoid ambiguity with Prog.reg and Adr.reg
 
 % | ... -> <>
@@ -10289,6 +10308,7 @@ direct:
 <<[[Node]] code generation fields>>=
 long	pc;
 @
+% can be seen as a kind of value field too, for OLABEL and OGOTO
 
 <<[[Node]] code generation fields>>=
 // ref<Prog>, but use void to be archi independent
@@ -12129,7 +12149,14 @@ Node	znode;
 
 \subsection{Entity uses}
 
+% this is ONAME! which will not be transformed by assembly generation
+% phase, a C symbol is an assembly symbol! 
+% the only thing is that ONAME is decorated with xoffset
+% if it's a parameter or a local
+
 \subsection{Numeric constants}
+
+% same, OCONST is kept as is.
 
 \subsection{String constants}
 
@@ -12352,57 +12379,6 @@ pre:
 \subsection{[[sizeof()]]}
 
 \section{XXX}
-
-\subsection{[[vlong]] managment}
-
-%<<global newvlongcode>>=
-%bool	newvlongcode;
-%@
-%seems dead, never set to true or valid in other archi?
-% in Gen for RETURN case:
-%    if(newvlongcode && !typefd[n->type->etype]){
-%        regret(&rn, n);
-%        regfree(&rn);
-%        nod = znode;
-%        nod.op = OAS;
-%        nod.left = &rn;
-%        nod.right = l;
-%        nod.type = n->type;
-%        nod.complex = l->complex;
-%        cgen(&nod, Z);
-%        noretval(2);
-%        gbranch(ORETURN);
-%        break;
-%    }
-
-
-%aspectize?
-<<[[gextern()]] if OCONST and a vlong type>>=
-if(a->op == OCONST && typev[a->type->etype]) {
-    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-        gpseudo(ADATA, s, nod32const(a->vconst>>32));
-    else
-        gpseudo(ADATA, s, nod32const(a->vconst));
-    p->from.offset += o;
-    p->reg = 4;
-    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
-        gpseudo(ADATA, s, nod32const(a->vconst));
-    else
-        gpseudo(ADATA, s, nod32const(a->vconst>>32));
-    p->from.offset += o + 4;
-    p->reg = 4;
-}
-@
-% 4 -> ??
-
-<<function nod32const(arm)>>=
-Node*
-nod32const(vlong v)
-{
-    constnode.vconst = v & MASK(32);
-    return &constnode;
-}
-@
 
 \subsection{The globals}
 
@@ -14024,10 +14000,15 @@ fatal(Node *n, char *fmt, ...)
 
 % Done in parsing, as C force to forward decl everything and have huge .h
 % (and actual linking is done in linker to find inconsistencies).
+% All the information is in the global symbol table.
+
+% Warn when symbol not found before, or (ugly) implicitly
+% declare it.
 
 \section{Scoping resolution}
 
 % See Decl section and markdcl() and revertdecl().
+% see also the Sym.block and Sym.sublock fields
 
 \section{Type checking}
 
@@ -17029,7 +17010,7 @@ dpcheck(Node *n)
 
 
 
-\section{Lint checks}
+\section{Lint checking}
 
 % good checks :) used/set ! good warnings. gcc sucks, it does not even
 % have that by default.
@@ -17065,15 +17046,6 @@ if(!s->aused) {
 }
 @
 
-
-\subsection{Unused labels}
-
-<<[[reverdcl()]] DLABEL case, warn if label not used>>=
-if(s->label && s->label->addable == 0)
-    warn(s->label, "label declared and not used \"%s\"", s->name);
-@
-
-% ugly this abuse of addable, why not using lblaused instead?
 
 \subsection{[[SET()/USED()]]}
 % like fallthrough, to remove false positives or true positives which are ok.
@@ -17139,6 +17111,15 @@ usedset(Node *n, int o)
     }
 }
 @
+
+\subsection{Unused labels}
+
+<<[[reverdcl()]] DLABEL case, warn if label not used>>=
+if(s->label && s->label->addable == 0)
+    warn(s->label, "label declared and not used \"%s\"", s->name);
+@
+
+% ugly this abuse of addable, why not using lblaused instead?
 
 \subsection{Unreachable code}
 
@@ -17311,7 +17292,7 @@ if(canreach && thisfntype->link->etype != TVOID){
 
 % using a visitor would be better, to avoid boilerplate
 
-\subsection{[[ccom()]]}
+\subsection{General rewrites, [[ccom()]]}
 
 % mostly partial evaluation when have constants involved
 % in operations.
@@ -19057,7 +19038,7 @@ xcom(Node *n)
 
 \chapter{Assembly-level Optimisations}
 
-\section{Peep optimizer}
+\section{Peephole optimizer, [[peep()]]}
 
 % codgen -> regopt -> <>
 <<function peep(arm)>>=
@@ -21664,7 +21645,7 @@ postorder(Reg *r, Reg **rpo2r, long n)
 
 
 
-\section{Safe linking with type signatures}
+\section{Safe linking with type signatures, [[5c -T]]}
 % md5sum like in ocaml!
 
 % signature! for safe linking
@@ -21884,7 +21865,13 @@ sigind(Type *t, Typetab *tt)
 
 \chapter{Debugging Support}
 
-\section{Acid, [[5c -a]]}
+\section{General debugging metadata}
+% Instruction origin location?
+
+% have lineno field in generated object that tracked
+% back the lineno of the relevant C code.
+
+\section{Acid debugger metadata, [[5c -a]]}
 
 % 5c -a to print acid declarations
 %  -n print acid to file
@@ -22585,7 +22572,7 @@ if(a == ATEXT)
 
 \section{Advanced C features}
 
-\subsection{Local static}
+\subsection{Local [[static]]}
 % not really a C extension, but really sugar
 % for what could be just a scoped global.
 
@@ -22642,7 +22629,7 @@ mkstatic(Sym *s)
 }
 @
 
-\subsection{Local volatile}
+\subsection{Local [[volatile]]}
 
 <<[[revertdcl()]] other locals>>=
 Node *n1;
@@ -23022,7 +23009,7 @@ bitstore(Node *b, Node *n1, Node *n2, Node *n3, Node *nn)
 
 \section{C extensions}
 
-\subsection{Unnamed sub-struct}
+\subsection{Unnamed sub structure}
 % aka Anonymous field? poor's man inheritance?
 
 % Lock;
@@ -23345,7 +23332,7 @@ exreg(Type *t)
 }
 @
 
-\subsection{[[typestr]]}
+\subsection{[[typestr()]]}
 % a form of reflection too?
 
 
@@ -23609,7 +23596,7 @@ Ftab	ftabinit[OEND] =
 
 
 
-\section{Float}
+\section{Floats}
 
 <<function ieeedtod>>=
 void
@@ -23907,6 +23894,59 @@ case TVLONG:
 @
 
 \section{64 bits operations}
+
+%\subsection{[[vlong]] managment}
+
+%<<global newvlongcode>>=
+%bool	newvlongcode;
+%@
+%seems dead, never set to true or valid in other archi?
+% in Gen for RETURN case:
+%    if(newvlongcode && !typefd[n->type->etype]){
+%        regret(&rn, n);
+%        regfree(&rn);
+%        nod = znode;
+%        nod.op = OAS;
+%        nod.left = &rn;
+%        nod.right = l;
+%        nod.type = n->type;
+%        nod.complex = l->complex;
+%        cgen(&nod, Z);
+%        noretval(2);
+%        gbranch(ORETURN);
+%        break;
+%    }
+
+
+%aspectize?
+<<[[gextern()]] if OCONST and a vlong type>>=
+if(a->op == OCONST && typev[a->type->etype]) {
+    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
+        gpseudo(ADATA, s, nod32const(a->vconst>>32));
+    else
+        gpseudo(ADATA, s, nod32const(a->vconst));
+    p->from.offset += o;
+    p->reg = 4;
+    if(align(0, types[TCHAR], Aarg1))	/* isbigendian */
+        gpseudo(ADATA, s, nod32const(a->vconst));
+    else
+        gpseudo(ADATA, s, nod32const(a->vconst>>32));
+    p->from.offset += o + 4;
+    p->reg = 4;
+}
+@
+% 4 -> ??
+
+<<function nod32const(arm)>>=
+Node*
+nod32const(vlong v)
+{
+    constnode.vconst = v & MASK(32);
+    return &constnode;
+}
+@
+
+
 
 %\subsection{[[cc/com64.c]]}
 % portable part, cc/com64.c
@@ -24856,9 +24896,9 @@ char	debug[256];
 @
 % bool? ushort?
 
-\section{[[Fmt]]}
+\section{Dumpers}
 
-\subsection{[[cc/]]}
+\subsection{[[cc/]] [[Fmt]] data structures}
 
 <<[[cinit()]] fmtinstall>>=
 fmtinstall('O', Oconv);
@@ -25235,7 +25275,7 @@ VBconv(Fmt *fp)
 }
 @
 
-\subsection{[[5c/]]}
+\subsection{[[5c/]] [[Fmt]] data structures}
 
 % similar to Assembler.nw?
 
@@ -25589,7 +25629,7 @@ out:
 }
 @
 
-\section{[[xxxnames]]}
+\subsection{[[xxxnames[]]]}
 
 % already seen onames and anames before
 
@@ -25709,10 +25749,10 @@ for(p=onamesinit; p->code >= 0; p++) {
 @
 
 
-\section{AST dumper, [[prtree()]]}
+\subsection{AST dumper, [[prtree()]], [[5c -x]]}
 % this is useful! gcc still have not it, and RMS is actually
 % opposing adding them to gcc (but for licensing issues).
-% clang has it!
+% clang has it! (and pfff has it from the beginning of course ...)
 
 <<function prtree>>=
 void
@@ -25725,10 +25765,12 @@ prtree(Node *n, char *s)
 }
 @
 
+% d = depth, indentation level
 <<function prtree1>>=
 void
 prtree1(Node *n, int d, bool f)
 {
+    //bitset<Left|Right> to decide whether to recurse left and right child
     int i;
 
     if(f)
@@ -25738,6 +25780,7 @@ prtree1(Node *n, int d, bool f)
         print("Z\n");
         return;
     }
+
     if(n->op == OLIST) {
         prtree1(n->left, d, false);
         prtree1(n->right, d, true);
@@ -25745,18 +25788,37 @@ prtree1(Node *n, int d, bool f)
     }
     d++;
     print("%O", n->op);
-    i = 3; // 1 || 2
+    i = 3; // 1 | 2
 
     switch(n->op) {
+    case OCONST:
+        if(typefd[n->type->etype])
+            print(" \"%.8e\"", n->fconst);
+        else
+            print(" \"%lld\"", n->vconst);
+        i = 0;
+        break;
+
+    case OSTRING:
+        print(" \"%s\"", n->cstring);
+        i = 0;
+        break;
+    case OLSTRING:
+        if(sizeof(TRune) == sizeof(Rune))
+            print(" \"%S\"", (Rune*)n->rstring);
+        else
+            print(" \"...\"");
+        i = 0;
+        break;
+
     case ONAME:
         print(" \"%F\"", n);
         print(" %ld", n->xoffset);
         i = 0;
         break;
-
-    case OINDREG:
-        print(" %ld(R%d)", n->xoffset, n->reg);
-        i = 0;
+    case ODOT:
+    case OELEM:
+        print(" \"%F\"", n);
         break;
 
     case OREGISTER:
@@ -25766,37 +25828,18 @@ prtree1(Node *n, int d, bool f)
             print(" R%d", n->reg);
         i = 0;
         break;
-
-    case OSTRING:
-        print(" \"%s\"", n->cstring);
+    case OINDREG:
+        print(" %ld(R%d)", n->xoffset, n->reg);
         i = 0;
         break;
 
-    case OLSTRING:
-        if(sizeof(TRune) == sizeof(Rune))
-            print(" \"%S\"", (Rune*)n->rstring);
-        else
-            print(" \"...\"");
-        i = 0;
-        break;
-
-    case ODOT:
-    case OELEM:
-        print(" \"%F\"", n);
-        break;
-
-    case OCONST:
-        if(typefd[n->type->etype])
-            print(" \"%.8e\"", n->fconst);
-        else
-            print(" \"%lld\"", n->vconst);
-        i = 0;
-        break;
     }
-    if(n->addable != 0)
-        print(" <%d>", n->addable);
+
     if(n->type != T)
         print(" %T", n->type);
+
+    if(n->addable != 0)
+        print(" <%d>", n->addable);
     if(n->complex != 0)
         print(" (%d)", n->complex);
 
@@ -25862,7 +25905,7 @@ dbgdecl(Sym *s)
 \section{[[5c -t]], printing expression type trees}
 % before and after different phases
 
-\section{[[5c -g]], debugging code generation}
+\section{[[5c -g]], printing code generation information}
 % for gins, gopcode, gen, cgen, sugen, ... print lhs and rhs
 
 % print either resulting Prog (in gins, gopcode), or
@@ -26165,7 +26208,7 @@ log2(uvlong v)
 }
 @
 
-\section{Key/value}
+\section{Key/value data structure}
 
 % mostly helper structure to build a  hash<enum<xxx>,string> to debug
 %  enums values
