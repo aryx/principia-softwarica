@@ -10,7 +10,11 @@ int		bcomplex(Node*, Node*);
 void codgen(Node *n, Node *nn)
 {
     Prog *sp;
-    Node *n1, nod, nod1;
+    /*s: [[codgen()]] locals */
+    Node *n1;
+    /*x: [[codgen()]] locals */
+    Node nod, nod1;
+    /*e: [[codgen()]] locals */
 
     /*s: [[codgen()]] initialisation */
     cursafe = 0;
@@ -42,7 +46,7 @@ void codgen(Node *n, Node *nn)
         if(n1->type == T || n1->type->link != thisfntype->link) {
             n1->type = typ(TIND, thisfntype->link);
             n1->etype = n1->type->etype; // TIND
-            nodret = new(OIND, n1, Z);
+            nodret = new(OIND, n1, Z); // useful? to force retyping?
             complex(nodret);
         }
     }
@@ -65,9 +69,9 @@ void codgen(Node *n, Node *nn)
             nod1.op = ONAME;
             nod1.sym = firstarg;
             nod1.type = firstargtype;
+            nod1.etype = firstargtype->etype;
             nod1.class = CPARAM;
             nod1.xoffset = align(0, firstargtype, Aarg1);
-            nod1.etype = firstargtype->etype;
             xcom(&nod1);
             nodreg(&nod, &nod1, REGARG);
             gmove(&nod, &nod1);
@@ -79,10 +83,8 @@ void codgen(Node *n, Node *nn)
     canreach = true;
     warnreach = true;
     /*e: [[codgen()]] initialisation before call to gen */
-
     // generate the assembly for the statements in the body
     gen(n);
-
     /*s: [[codgen()]] warn for possible missing return after call to gen */
     if(canreach && thisfntype->link->etype != TVOID){
         if(debug['B'])
@@ -93,11 +95,12 @@ void codgen(Node *n, Node *nn)
     /*e: [[codgen()]] warn for possible missing return after call to gen */
 
     noretval(1 | 2);
-
     gbranch(ORETURN);
 
+    /*s: [[codgen()]] register optimisation */
     if(!debug['N'] || debug['R'] || debug['P'])
         regopt(sp);
+    /*e: [[codgen()]] register optimisation */
     
     sp->to.offset += maxargsafe;
 }

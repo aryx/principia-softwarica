@@ -61,12 +61,6 @@ ginit(void)
     constnode.addable = 20;
     constnode.type = types[TLONG];
     /*x: [[ginit()]] special nodes initialisation */
-    fconstnode.op = OCONST;
-    fconstnode.class = CXXX;
-    fconstnode.complex = 0;
-    fconstnode.addable = 20;
-    fconstnode.type = types[TDOUBLE];
-    /*x: [[ginit()]] special nodes initialisation */
     nodsafe = new(ONAME, Z, Z);
     nodsafe->sym = slookup(".safe");
     nodsafe->type = types[TINT];
@@ -86,6 +80,12 @@ ginit(void)
     nodrat->class = CGLOBL;
     complex(nodrat);
     nodrat->type = t;
+    /*x: [[ginit()]] special nodes initialisation */
+    fconstnode.op = OCONST;
+    fconstnode.class = CXXX;
+    fconstnode.complex = 0;
+    fconstnode.addable = 20;
+    fconstnode.type = types[TDOUBLE];
     /*x: [[ginit()]] special nodes initialisation */
     nodret = new(ONAME, Z, Z);
     nodret->sym = slookup(".ret");
@@ -389,6 +389,7 @@ regalloc(Node *n, Node *tn, Node *o)
         goto err;
     /*e: [[regalloc()]] switch tn type, float or vlong case */
     }
+
     diag(tn, "unknown type in regalloc: %T", tn->type);
     // fallthrough
 err:

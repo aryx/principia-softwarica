@@ -41,6 +41,7 @@ rcmp(const void *a1, const void *a2)
 void
 regopt(Prog *p)
 {
+    /*s: [[regopt()]] locals */
     Reg *r, *r1, *r2;
     Prog *p1;
     int i, z;
@@ -53,7 +54,9 @@ regopt(Prog *p)
         long	c;
         Reg*	p;
     } log5[6], *lp;
+    /*e: [[regopt()]] locals */
 
+    /*s: [[regopt()]] initialisation */
     firstr = R;
     lastr = R;
     nvar = 0;
@@ -64,7 +67,9 @@ regopt(Prog *p)
         consts.b[z] = 0;
         addrs.b[z] = 0;
     }
+    /*e: [[regopt()]] initialisation */
 
+    /*s: [[regopt()]] pass 1 */
     /*
      * pass 1
      * build aux data structure
@@ -184,7 +189,8 @@ regopt(Prog *p)
         return;
     initpc = pc - val;
     npc = val;
-
+    /*e: [[regopt()]] pass 1 */
+    /*s: [[regopt()]] pass 2 */
     /*
      * pass 2
      * turn branch references to pointers
@@ -224,7 +230,8 @@ regopt(Prog *p)
         p = firstr->prog;
         print("\n%L %D\n", p->lineno, &p->from);
     }
-
+    /*e: [[regopt()]] pass 2 */
+    /*s: [[regopt()]] pass 2.5 */
     /*
      * pass 2.5
      * find looping structure
@@ -233,142 +240,145 @@ regopt(Prog *p)
         r->active = 0;
     change = 0;
     loopit(firstr, npc);
-
-    /*
-     * pass 3
-     * iterate propagating usage
-     * 	back until flow graph is complete
-     */
-loop1:
-    change = 0;
-    for(r = firstr; r != R; r = r->link)
-        r->active = 0;
-    for(r = firstr; r != R; r = r->link)
-        if(r->prog->as == ARET)
-            prop(r, zbits, zbits);
-loop11:
-    /* pick up unreachable code */
-    i = 0;
-    for(r = firstr; r != R; r = r1) {
-        r1 = r->link;
-        if(r1 && r1->active && !r->active) {
-            prop(r, zbits, zbits);
-            i = 1;
-        }
-    }
-    if(i)
-        goto loop11;
-    if(change)
-        goto loop1;
-
-
-    /*
-     * pass 4
-     * iterate propagating register/variable synchrony
-     * 	forward until graph is complete
-     */
-loop2:
-    change = 0;
-    for(r = firstr; r != R; r = r->link)
-        r->active = 0;
-    synch(firstr, zbits);
-    if(change)
-        goto loop2;
-
-    addsplits();
-
-    if(debug['R'] && debug['v']) {
-        print("\nprop structure:\n");
-        for(r = firstr; r != R; r = r->link) {
-            print("%ld:%P", r->loop, r->prog);
-            for(z=0; z<BITS; z++)
-                bit.b[z] = r->set.b[z] |
-                    r->refahead.b[z] | r->calahead.b[z] |
-                    r->refbehind.b[z] | r->calbehind.b[z] |
-                    r->use1.b[z] | r->use2.b[z];
-            if(bany(&bit)) {
-                print("\t");
-                if(bany(&r->use1))
-                    print(" u1=%B", r->use1);
-                if(bany(&r->use2))
-                    print(" u2=%B", r->use2);
-                if(bany(&r->set))
-                    print(" st=%B", r->set);
-                if(bany(&r->refahead))
-                    print(" ra=%B", r->refahead);
-                if(bany(&r->calahead))
-                    print(" ca=%B", r->calahead);
-                if(bany(&r->refbehind))
-                    print(" rb=%B", r->refbehind);
-                if(bany(&r->calbehind))
-                    print(" cb=%B", r->calbehind);
+    /*e: [[regopt()]] pass 2.5 */
+    /*s: [[regopt()]] pass 3 */
+        /*
+         * pass 3
+         * iterate propagating usage
+         * 	back until flow graph is complete
+         */
+    loop1:
+        change = 0;
+        for(r = firstr; r != R; r = r->link)
+            r->active = 0;
+        for(r = firstr; r != R; r = r->link)
+            if(r->prog->as == ARET)
+                prop(r, zbits, zbits);
+    loop11:
+        /* pick up unreachable code */
+        i = 0;
+        for(r = firstr; r != R; r = r1) {
+            r1 = r->link;
+            if(r1 && r1->active && !r->active) {
+                prop(r, zbits, zbits);
+                i = 1;
             }
-            print("\n");
         }
-    }
+        if(i)
+            goto loop11;
+        if(change)
+            goto loop1;
+    /*e: [[regopt()]] pass 3 */
+    /*s: [[regopt()]] pass 4 */
+        /*
+         * pass 4
+         * iterate propagating register/variable synchrony
+         * 	forward until graph is complete
+         */
+    loop2:
+        change = 0;
+        for(r = firstr; r != R; r = r->link)
+            r->active = 0;
+        synch(firstr, zbits);
+        if(change)
+            goto loop2;
 
-    /*
-     * pass 5
-     * isolate regions
-     * calculate costs (paint1)
-     */
-    r = firstr;
-    if(r) {
-        for(z=0; z<BITS; z++)
-            bit.b[z] = (r->refahead.b[z] | r->calahead.b[z]) &
-              ~(externs.b[z] | params.b[z] | addrs.b[z] | consts.b[z]);
-        if(bany(&bit)) {
-            nearln = r->prog->lineno;
-            warn(Z, "used and not set: %B", bit);
-            if(debug['R'] && !debug['w'])
-                print("used and not set: %B\n", bit);
-        }
-    }
+        addsplits();
 
-    for(r = firstr; r != R; r = r->link)
-        r->act = zbits;
-    rgp = region;
-    nregion = 0;
-    for(r = firstr; r != R; r = r->link) {
-        for(z=0; z<BITS; z++)
-            bit.b[z] = r->set.b[z] &
-              ~(r->refahead.b[z] | r->calahead.b[z] | addrs.b[z]);
-        if(bany(&bit)) {
-            nearln = r->prog->lineno;
-            warn(Z, "set and not used: %B", bit);
-            if(debug['R'])
-                print("set and not used: %B\n", bit);
-            excise(r);
-        }
-        for(z=0; z<BITS; z++)
-            bit.b[z] = LOAD(r) & ~(r->act.b[z] | addrs.b[z]);
-        while(bany(&bit)) {
-            i = bnum(bit);
-            rgp->enter = r;
-            rgp->varno = i;
-            change = 0;
-            if(debug['R'] && debug['v'])
+        if(debug['R'] && debug['v']) {
+            print("\nprop structure:\n");
+            for(r = firstr; r != R; r = r->link) {
+                print("%ld:%P", r->loop, r->prog);
+                for(z=0; z<BITS; z++)
+                    bit.b[z] = r->set.b[z] |
+                        r->refahead.b[z] | r->calahead.b[z] |
+                        r->refbehind.b[z] | r->calbehind.b[z] |
+                        r->use1.b[z] | r->use2.b[z];
+                if(bany(&bit)) {
+                    print("\t");
+                    if(bany(&r->use1))
+                        print(" u1=%B", r->use1);
+                    if(bany(&r->use2))
+                        print(" u2=%B", r->use2);
+                    if(bany(&r->set))
+                        print(" st=%B", r->set);
+                    if(bany(&r->refahead))
+                        print(" ra=%B", r->refahead);
+                    if(bany(&r->calahead))
+                        print(" ca=%B", r->calahead);
+                    if(bany(&r->refbehind))
+                        print(" rb=%B", r->refbehind);
+                    if(bany(&r->calbehind))
+                        print(" cb=%B", r->calbehind);
+                }
                 print("\n");
-            paint1(r, i);
-            bit.b[i/32] &= ~(1L<<(i%32));
-            if(change <= 0) {
-                if(debug['R'])
-                    print("%L $%d: %B\n",
-                        r->prog->lineno, change, blsh(i));
-                continue;
             }
-            rgp->cost = change;
-            nregion++;
-            if(nregion >= NRGN) {
-                warn(Z, "too many regions");
-                goto brk;
-            }
-            rgp++;
         }
-    }
-brk:
-    qsort(region, nregion, sizeof(region[0]), rcmp);
+    /*e: [[regopt()]] pass 4 */
+    /*s: [[regopt()]] pass 5 */
+        /*
+         * pass 5
+         * isolate regions
+         * calculate costs (paint1)
+         */
+        r = firstr;
+        if(r) {
+            for(z=0; z<BITS; z++)
+                bit.b[z] = (r->refahead.b[z] | r->calahead.b[z]) &
+                  ~(externs.b[z] | params.b[z] | addrs.b[z] | consts.b[z]);
+            if(bany(&bit)) {
+                nearln = r->prog->lineno;
+                warn(Z, "used and not set: %B", bit);
+                if(debug['R'] && !debug['w'])
+                    print("used and not set: %B\n", bit);
+            }
+        }
 
+        for(r = firstr; r != R; r = r->link)
+            r->act = zbits;
+        rgp = region;
+        nregion = 0;
+        for(r = firstr; r != R; r = r->link) {
+            for(z=0; z<BITS; z++)
+                bit.b[z] = r->set.b[z] &
+                  ~(r->refahead.b[z] | r->calahead.b[z] | addrs.b[z]);
+            if(bany(&bit)) {
+                nearln = r->prog->lineno;
+                warn(Z, "set and not used: %B", bit);
+                if(debug['R'])
+                    print("set and not used: %B\n", bit);
+                excise(r);
+            }
+            for(z=0; z<BITS; z++)
+                bit.b[z] = LOAD(r) & ~(r->act.b[z] | addrs.b[z]);
+            while(bany(&bit)) {
+                i = bnum(bit);
+                rgp->enter = r;
+                rgp->varno = i;
+                change = 0;
+                if(debug['R'] && debug['v'])
+                    print("\n");
+                paint1(r, i);
+                bit.b[i/32] &= ~(1L<<(i%32));
+                if(change <= 0) {
+                    if(debug['R'])
+                        print("%L $%d: %B\n",
+                            r->prog->lineno, change, blsh(i));
+                    continue;
+                }
+                rgp->cost = change;
+                nregion++;
+                if(nregion >= NRGN) {
+                    warn(Z, "too many regions");
+                    goto brk;
+                }
+                rgp++;
+            }
+        }
+    brk:
+        qsort(region, nregion, sizeof(region[0]), rcmp);
+    /*e: [[regopt()]] pass 5 */
+    /*s: [[regopt()]] pass 6 */
     /*
      * pass 6
      * determine used registers (paint2)
@@ -397,13 +407,16 @@ brk:
             paint3(rgp->enter, rgp->varno, vreg, rgp->regno);
         rgp++;
     }
+    /*e: [[regopt()]] pass 6 */
+    /*s: [[regopt()]] pass 7 */
     /*
      * pass 7
      * peep-hole on basic block
      */
     if(!debug['R'] || debug['P'])
         peep();
-
+    /*e: [[regopt()]] pass 7 */
+    /*s: [[regopt()]] pass 8 */
     /*
      * pass 8
      * recalculate pc
@@ -447,7 +460,8 @@ brk:
             p->to.offset = r->s2->pc;
         r1 = r;
     }
-
+    /*e: [[regopt()]] pass 8 */
+    /*s: [[regopt()]] pass 9 */
     /*
      * last pass
      * eliminate nops
@@ -461,6 +475,7 @@ brk:
         r1->link = freer;
         freer = firstr;
     }
+    /*e: [[regopt()]] pass 9 */
 }
 /*e: function regopt(arm) */
 
