@@ -2196,10 +2196,10 @@ tinit(void)
     }
     /*e: [[tinit()]] initialise tcompat arrays */
     /*s: [[tinit()]] initialise 32 bits defaults type sets */
+    typeswitch = typechl;
+    /*x: [[tinit()]] initialise 32 bits defaults type sets */
     /* 32-bit defaults */
     typeword = typechlp;
-    /*x: [[tinit()]] initialise 32 bits defaults type sets */
-    typeswitch = typechl;
     /*x: [[tinit()]] initialise 32 bits defaults type sets */
     typecmplx = typesuv;
     /*e: [[tinit()]] initialise 32 bits defaults type sets */

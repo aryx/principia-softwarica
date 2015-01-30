@@ -216,7 +216,8 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
         garg1(n->left, tn1, tn2, f, fnxp);
         garg1(n->right, tn1, tn2, f, fnxp);
         return;
-    }
+    } 
+
     if(f == 0) {
         if(n->complex >= FNX) {
             regsalloc(*fnxp, n);
@@ -228,8 +229,9 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
             cgen(&nod, Z);
             (*fnxp)++;
         }
-        return;
-    }
+    } 
+    else
+    /*s: [[garg1()]] if complex argument type */
     if(typesuv[n->type->etype]) {
         regaalloc(tn2, n);
         if(n->complex >= FNX) {
@@ -237,8 +239,10 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
             (*fnxp)++;
         } else
             sugen(n, tn2, n->type->width);
-        return;
     }
+    /*e: [[garg1()]] if complex argument type */
+    else
+    /*s: [[garg1()]] if use REGARG and curarg is zero and simple type */
     if(REGARG >= 0 && curarg == 0 && typechlp[n->type->etype]) {
         regaalloc1(tn1, n);
         if(n->complex >= FNX) {
@@ -246,17 +250,19 @@ garg1(Node *n, Node *tn1, Node *tn2, int f, Node **fnxp)
             (*fnxp)++;
         } else
             cgen(n, tn1);
-        return;
     }
-    regalloc(tn1, n, Z);
-    if(n->complex >= FNX) {
-        cgen(*fnxp, tn1);
-        (*fnxp)++;
-    } else
-        cgen(n, tn1);
-    regaalloc(tn2, n);
-    gopcode(OAS, tn1, Z, tn2);
-    regfree(tn1);
+    /*e: [[garg1()]] if use REGARG and curarg is zero and simple type */
+    else {
+        regalloc(tn1, n, Z);
+        if(n->complex >= FNX) {
+            cgen(*fnxp, tn1);
+            (*fnxp)++;
+        } else
+            cgen(n, tn1);
+        regaalloc(tn2, n);
+        gopcode(OAS, tn1, Z, tn2);
+        regfree(tn1);
+    }
 }
 /*e: function garg1(arm) */
 

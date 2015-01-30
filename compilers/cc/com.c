@@ -37,7 +37,6 @@ complex(Node *n)
     // typechecking, removing some sugar, lvalue annotate, bitfield annot, etc
     if(tcom(n))
         return;
-    //if(debug['y'] || true)
     comma(n);
     if(debug['t'])
         if(n->op != OCONST)

@@ -35,7 +35,6 @@ void codgen(Node *n, Node *nn)
             break;
     }
     /*e: [[codgen()]] set n1 node to node in nn where have ONAME */
-
     nearln = nn->lineno;
     gpseudo(ATEXT, n1->sym, nodconst(stkoff));
     sp = p;
@@ -94,7 +93,9 @@ void codgen(Node *n, Node *nn)
     }
     /*e: [[codgen()]] warn for possible missing return after call to gen */
 
+    /*s: [[codgen()]] before RET */
     noretval(1 | 2);
+    /*e: [[codgen()]] before RET */
     gbranch(ORETURN);
 
     /*s: [[codgen()]] register optimisation */
@@ -150,14 +151,14 @@ uncomma(Node *n)
 void
 gen(Node *n)
 {
-    /*s: [[gen()]] locals */
     // enum<node_kind> of a statement
     int o;
-    /*x: [[gen()]] locals */
+    /*s: [[gen()]] locals */
     Prog *sp;
-    bool oldreach;
     Node *l;
     bool err;
+    /*x: [[gen()]] locals */
+    bool oldreach;
     /*x: [[gen()]] locals */
     bool f;
     /*x: [[gen()]] locals */
@@ -253,16 +254,16 @@ loop:
         }
         /*e: [[gen()]] switch node kind cases, OIF case, if bcomplex error */
         else {
-            sp = p;
+            sp = p; // AB instr for 'else' to patch later (created by bcomplex())
             canreach = true;
 
-            if(n->right->left != Z)
-                gen(n->right->left);
+            if(n->right->left != Z) // gen then part
+                gen(n->right->left); 
 
             oldreach = canreach;
             canreach = true;
 
-            if(n->right->right != Z) {
+            if(n->right->right != Z) { // gen else part
                 gbranch(OGOTO);
                 patch(sp, pc);
                 sp = p;
@@ -398,12 +399,15 @@ loop:
         complex(n);
         if(n->type == T)
             break;
+
         l = uncomma(n->left);
         if(l == Z) {
-            noretval(3);
+            /*s: [[gen()]] case ORETURN with no argument, before RET */
+            noretval(1 | 2);
+            /*e: [[gen()]] case ORETURN with no argument, before RET */
             gbranch(ORETURN);
-            break;
-        }
+        } 
+        else
         /*s: [[gen()]] case ORETURN, if complex type */
         if(typecmplx[n->type->etype]) {
             nod = znode;
@@ -413,20 +417,23 @@ loop:
             nod.type = n->type;
             nod.complex = l->complex;
             cgen(&nod, Z);
-            noretval(3);
+            noretval(1 | 2);
             gbranch(ORETURN);
             break;
         }
         /*e: [[gen()]] case ORETURN, if complex type */
-        // else
-        regret(&nod, n);
-        cgen(l, &nod);
-        regfree(&nod);
-        if(typefd[n->type->etype])
-            noretval(1);
-        else
-            noretval(2);
-        gbranch(ORETURN);
+        else {
+            regret(&nod, n);
+            cgen(l, &nod);
+            regfree(&nod);
+            /*s: [[gen()]] case ORETURN with argument, before RET */
+            if(typefd[n->type->etype])
+                noretval(1);
+            else
+                noretval(2);
+            /*e: [[gen()]] case ORETURN with argument, before RET */
+            gbranch(ORETURN);
+        }
         break;
     /*x: [[gen()]] switch node kind cases */
     case OCONTINUE:
