@@ -8937,6 +8937,57 @@ if(reg[i] <= 0)
 
 
 
+\section{Typechecking, expliciting, annotating, rewriting, [[complex()]]}
+% unsugaring -> expliciting?
+
+% complex? compile lexical?
+% gen | dodecl | doenum | codgen | bcomplex -> <>
+<<function complex>>=
+void
+complex(Node *n)
+{
+
+    if(n == Z)
+        return;
+
+    nearln = n->lineno;
+
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "pre complex");
+
+    // typechecking, removing some sugar, lvalue annotate, bitfield annot, etc
+    if(tcom(n))
+        return;
+    comma(n);
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "t complex");
+
+    // general rewrite
+    ccom(n);
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "c complex");
+
+    // arithmetic rewrite
+    acom(n);
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "a complex");
+
+    // addressability and complexity
+    xcom(n);
+    if(debug['t'])
+        if(n->op != OCONST)
+            prtree(n, "x complex");
+}
+@
+%    //if(debug['y'] || true)
+
+
+
+
 \section{Functions, [[codgen()]]}
 
 % n = node of the blocks OLIST, nn = node of the xdecor (should be ONAME)
@@ -9099,8 +9150,8 @@ bool oldreach;
 
 % if e { thenst } else { elsest }
 % ->
-%   <code e>
-%   ABxx? elsepc
+%   <code e>       <-- bcomplex
+%   ABxx elsepc    <-- bcomplex
 %   <code thenst>
 %   AB endpc
 %   elsepc:
@@ -10256,6 +10307,16 @@ case OLDIV:
 
 
 \subsection{Boolean expressions}
+
+% idea is to generate code to evaluate expression
+% and finish by an ABxxx that can be patched to jmp
+% to the code when the condition was not true.
+
+%ex:
+%  if(1) { ... }
+% => 
+%  MOV $1, R0
+%  ABxx ??tofilllater?? by patch()
 
 <<[[cgenrel()]] switch node kind cases>>=
 case OANDAND:
@@ -11588,9 +11649,9 @@ reglpcgen(Node *n, Node *nn, int f)
 \subsection{Entity uses}
 
 % this is ONAME! which will not be transformed by assembly generation
-% phase, a C symbol is an assembly symbol! 
-% the only thing is that ONAME is decorated with xoffset
-% if it's a parameter or a local
+% phase; a C symbol is an assembly symbol! 
+% The only thing is that ONAME is decorated with xoffset
+% if it's a parameter or a local.
 
 \subsection{Numeric constants}
 
@@ -11817,56 +11878,6 @@ pre:
 \subsection{[[sizeof()]]}
 
 \section{XXX}
-
-\subsection{Typechecking, expliciting, annotating, rewriting, [[complex()]]}
-% unsugaring -> expliciting?
-
-% complex? compile lexical?
-% gen | dodecl | doenum | codgen | bcomplex -> <>
-<<function complex>>=
-void
-complex(Node *n)
-{
-
-    if(n == Z)
-        return;
-
-    nearln = n->lineno;
-
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "pre complex");
-
-    // typechecking, removing some sugar, lvalue annotate, bitfield annot, etc
-    if(tcom(n))
-        return;
-    comma(n);
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "t complex");
-
-    // general rewrite
-    ccom(n);
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "c complex");
-
-    // arithmetic rewrite
-    acom(n);
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "a complex");
-
-    // addressability and complexity
-    xcom(n);
-    if(debug['t'])
-        if(n->op != OCONST)
-            prtree(n, "x complex");
-}
-@
-%    //if(debug['y'] || true)
-
-
 
 
 \subsection{The globals}
@@ -16649,6 +16660,9 @@ if(!canreach) {
 
 
 % deadheads -> <>
+% return false if it is possible to jump in the middle of n
+%  that is if there is a label:
+% less: rewrite as a possibive form ... would be clearer?
 <<function deadhead>>=
 /*
  * return true if it is impossible to jump into the middle of n.
@@ -16662,6 +16676,15 @@ loop:
 
     switch(n->op) {
 
+    case OCASE:
+        if(!caseok)
+            return false;
+        goto rloop;
+    case OLABEL:
+        return false;
+
+
+
     case OLIST:
         if(!deadhead(n->left, caseok))
             return false;
@@ -16669,10 +16692,12 @@ loop:
         n = n->right;
         goto loop;
 
+
     case OWHILE:
     case ODWHILE:
     case OFOR:
         goto rloop;
+
 
     case OIF:
         return deadhead(n->right->left, caseok) && 
@@ -16681,13 +16706,6 @@ loop:
     case OSWITCH:
         return deadhead(n->right, true);
 
-    case OCASE:
-        if(!caseok)
-            return false;
-        goto rloop;
-
-    case OLABEL:
-        return false;
 
     case ORETURN:
     case OGOTO:
@@ -16711,7 +16729,7 @@ deadheads(Node *c)
     return deadhead(c->left, false) && deadhead(c->right, false);
 }
 @
-
+% called from bcomplex with an OLIST being a OPAIR(thenst, elsest)
 
 
 <<function supgen>>=

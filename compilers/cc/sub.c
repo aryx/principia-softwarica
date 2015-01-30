@@ -2219,6 +2219,15 @@ loop:
 
     switch(n->op) {
 
+    case OCASE:
+        if(!caseok)
+            return false;
+        goto rloop;
+    case OLABEL:
+        return false;
+
+
+
     case OLIST:
         if(!deadhead(n->left, caseok))
             return false;
@@ -2226,10 +2235,12 @@ loop:
         n = n->right;
         goto loop;
 
+
     case OWHILE:
     case ODWHILE:
     case OFOR:
         goto rloop;
+
 
     case OIF:
         return deadhead(n->right->left, caseok) && 
@@ -2238,13 +2249,6 @@ loop:
     case OSWITCH:
         return deadhead(n->right, true);
 
-    case OCASE:
-        if(!caseok)
-            return false;
-        goto rloop;
-
-    case OLABEL:
-        return false;
 
     case ORETURN:
     case OGOTO:
