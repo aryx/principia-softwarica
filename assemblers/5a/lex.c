@@ -858,6 +858,7 @@ l1:
     case '_':
     case '@':
     // case 'a'..'z' 'A'..'Z': (isalpha())
+    // case '.' too
     talph:
         cp = symb;
 

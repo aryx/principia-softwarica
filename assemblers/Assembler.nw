@@ -33,7 +33,7 @@
 %thx to this manual, better understand assembly and assembler:
 % - can actually understand the assembly code in Kernel.nw :) param1+0(FP)
 % - that an object is really a module, the simplest/lowest module abstraction
-% - DATA vs GLOBL
+% - GLOBL vs DATA, declaration vs definition
 % - TODO -fpic?
 
 %history LP-ization:
@@ -377,6 +377,10 @@ License.
 %	MOVW	0(R13), R14
 %	ADD	$20, R13
 %	B	(R14)
+
+
+%todo: also TEXT foo, 0, $20
+% is then translated in some instructions related to R13?
 
 \section{Output object format}
 
@@ -751,28 +755,41 @@ struct Itab itab[] =
 <<struct Sym>>=
 struct	Sym
 {
+    // Symbolic names are used for: 
+    //  - identifiers (e.g. TEXT foo, or MOV foo(SB), R1)
+    //  - labels (bar:), 
+    //  - variables (VAR=xxx)
+    //  - macros (#define MACRO)
+    //  - keywords lexemes (abuse), opcodes (AMOV) or registers (LR1), see itab
+
+    // ----------------------------------------------------------------------
+    // The "key"
+    // ----------------------------------------------------------------------
     char	*name;
 
-    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
-    ushort	type;
+    // ----------------------------------------------------------------------
+    // The "value" for the different "namespaces"
+    // ----------------------------------------------------------------------
 
-    // long (e.g. pc for LLAB, or integer for LVAR) 
-    //   | enum<opcode|operand_kind|registr|...> 
+    // generic value
+    //  - ?? for identifiers?
+    //  - pc for labels, 
+    //  - value for variables
+    //  - enum<opcode|operand_kind|registr|...> for keywords
     long	value; 
 
-    <<[[Sym]] other fields>>
+    <<[[Sym]] identifier value fields>>
+    <<[[Sym]] macro value fields>>
+    <<[[Sym]] lexeme value fields>>
+
+    // ----------------------------------------------------------------------
     // Extra
+    // ----------------------------------------------------------------------
     <<[[Sym]] extra fields>>
 };
 @
 %note: value is a vlong in va/
 %note: there is no symkind here, this is stored outside the Sym
-
-%    // symbols are used for many things:
-%    //  - for labels (bar:), 
-%    //  - for symbols/names (e.g. TEXT foo, or MOV foo(SB), R1)
-%    //  - variables (VAR=xxx)
-%    //  - but also (ab)used for opcodes (AMOV), registers (LR1) (see itab)
 
 % this is used for user defined names (e.g. TEXT foo), but
 % abused also for keywords operand like AL, AX, and also for opcode
@@ -888,6 +905,11 @@ slookup(char *s)
 %@
 
 
+<<[[Sym]] lexeme value fields>>=
+//enum<token_kind> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
+ushort	type;
+@
+
 \section{[[Sym_kind]]}
 
 % important rule of assembler is to use symbolic names, for
@@ -931,6 +953,8 @@ short	symkind;
 %old: was called name, but confusing I think, name as a field was used in
 % many structures and it's actually not a name
 %less: rename to name_kind? rename also the sym field above?
+%note: that thre symkind is a property of the Gen and not Sym
+% because people disambiguate at each use, foo(SB), foo+0(FP), etc.
 
 %note that can have symkind set but not necessarality a sym,
 % but it's in the degenerated case of con ( pointer ) which
@@ -2356,7 +2380,7 @@ for(i=0; i<nDlist; i++)
         dodefine(Dlist[i]);
 @
 
-<<[[Sym]] other fields>>=
+<<[[Sym]] macro value fields>>=
 //option<string>, for '#define FOO xxx' expansion
 char*	macro;
 @
@@ -4862,7 +4886,7 @@ int	symcounter;
 %old: was called sym, but I renamed it to avoid overloading the sym name
 % (as a global, as a field)
 
-<<[[Sym]] other fields>>=
+<<[[Sym]] identifier value fields>>=
 // index in h when the Sym is really a symbol, 0 when not a symbol
 int	symidx;
 @
@@ -5708,9 +5732,9 @@ REGARG =	0,
 /* compiler allocates register variables R2 up */
 REGMIN =	2,
 REGMAX =	8,
-REGEXT =	10,
+REGEXT =	10, // R9/R10 possible 'extern register xxx;'
 /* compiler allocates external registers R10 down */
-REGTMP =	11, // used by linker machine code generator
+REGTMP =	11,
 @
 % hmm regxxx is not really an enum as REGREG = REGARG, but still useful.
 

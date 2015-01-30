@@ -58,23 +58,45 @@ typedef	struct	Hist Hist;
 /*s: struct Sym */
 struct	Sym
 {
+    // Symbolic names are used for: 
+    //  - identifiers (e.g. TEXT foo, or MOV foo(SB), R1)
+    //  - labels (bar:), 
+    //  - variables (VAR=xxx)
+    //  - macros (#define MACRO)
+    //  - keywords lexemes (abuse), opcodes (AMOV) or registers (LR1), see itab
+
+    // ----------------------------------------------------------------------
+    // The "key"
+    // ----------------------------------------------------------------------
     char	*name;
 
-    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
-    ushort	type;
+    // ----------------------------------------------------------------------
+    // The "value" for the different "namespaces"
+    // ----------------------------------------------------------------------
 
-    // long (e.g. pc for LLAB, or integer for LVAR) 
-    //   | enum<opcode|operand_kind|registr|...> 
+    // generic value
+    //  - ?? for identifiers?
+    //  - pc for labels, 
+    //  - value for variables
+    //  - enum<opcode|operand_kind|registr|...> for keywords
     long	value; 
 
-    /*s: [[Sym]] other fields */
-    //option<string>, for '#define FOO xxx' expansion
-    char*	macro;
-    /*x: [[Sym]] other fields */
+    /*s: [[Sym]] identifier value fields */
     // index in h when the Sym is really a symbol, 0 when not a symbol
     int	symidx;
-    /*e: [[Sym]] other fields */
+    /*e: [[Sym]] identifier value fields */
+    /*s: [[Sym]] macro value fields */
+    //option<string>, for '#define FOO xxx' expansion
+    char*	macro;
+    /*e: [[Sym]] macro value fields */
+    /*s: [[Sym]] lexeme value fields */
+    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
+    ushort	type;
+    /*e: [[Sym]] lexeme value fields */
+
+    // ----------------------------------------------------------------------
     // Extra
+    // ----------------------------------------------------------------------
     /*s: [[Sym]] extra fields */
     // list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
     Sym*	link;
