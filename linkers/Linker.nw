@@ -180,6 +180,10 @@ Here are other candidates that were considered but ultimately discarded:
 % recent critique of go/plan9 toolchain:
 % http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
 
+% a few tags used in this file
+% - "sanity check" in chunkname, aspectize a bit error checking
+
+
 \section{Getting started}
 
 \section{Requirements}
@@ -2755,16 +2759,20 @@ addlibpath(char *arg)
         else
             maxlibdir *= 2;
         p = malloc(maxlibdir*sizeof(*p));
-        if(p == nil) {
-            diag("out of memory");
-            errorexit();
-        }
+        <<[[addlibpath()]] sanity check p>>
         memmove(p, libdir, nlibdir*sizeof(*p));
         free(libdir);
         libdir = p;
     }
 
     libdir[nlibdir++] = strdup(arg);
+}
+@
+
+<<[[addlibpath()]] sanity check p>>=
+if(p == nil) {
+    diag("out of memory");
+    errorexit();
 }
 @
 
@@ -4340,6 +4348,8 @@ case D_NONE:
     return C_LCON;
 @
 
+
+%todo: D_ADDR?
 %\subsubsection{[[D_ADDR]]}
 % should not use D_CONST when really you use the address of a symbol
 
@@ -4401,7 +4411,7 @@ case D_STATIC:
 
 
 
-% need that? when do we get the address of a local or parameter?
+%todo: need that? when do we get the address of a local or parameter?
 % for which code we have those classes used??
 <<cxxx(arm) cases>>=
 C_RACON,
@@ -4412,13 +4422,13 @@ C_LACON,
 case D_AUTO:
     instoffset = autosize + a->offset;
     goto aconsize;
-
 @
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_PARAM:
     instoffset = autosize + a->offset + 4L;
     goto aconsize;
 @
+
 
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 aconsize:
@@ -6224,21 +6234,21 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
 #define	Dbufslop	100
 @
 
-
+%sstring is bool used when call datblk for generating strings in text segment
 <<function datblk(arm)>>=
 void
-datblk(long s, long n, bool str)
+datblk(long s, long n, bool sstring)
 {
-    Sym *v;
     Prog *p;
-    char *cast;
-    long a, l, fl, j, d;
+    long a, l
     int i, c;
+    <<[[datblk()]] locals>>
 
     memset(buf.dbuf, 0, n+Dbufslop);
 
     for(p = datap; p != P; p = p->link) {
-        if(str != (p->from.sym->type == SSTRING))
+
+        if(sstring != (p->from.sym->type == SSTRING))
             continue;
 
         curp = p;
@@ -6258,90 +6268,10 @@ datblk(long s, long n, bool str)
         if(l >= n)
             continue;
 
-        if(p->as != AINIT && p->as != ADYNT) {
-            for(j=l+(c-i)-1; j>=l; j--)
-                if(buf.dbuf[j]) {
-                    print("%P\n", p);
-                    diag("multiple initialization");
-                    break;
-                }
-        }
+        <<[[datblk()]] sanity check multiple initialization>>
 
         switch(p->to.type) {
-
-        case D_FCONST:
-            switch(c) {
-            default:
-            case 4:
-                fl = ieeedtof(p->to.ieee);
-                cast = (char*)&fl;
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[fnuxi4[i]];
-                    l++;
-                }
-                break;
-            case 8:
-                cast = (char*)p->to.ieee;
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[fnuxi8[i]];
-                    l++;
-                }
-                break;
-            }
-            break;
-
-        case D_SCONST:
-            for(; i<c; i++) {
-                buf.dbuf[l] = p->to.sval[i];
-                l++;
-            }
-            break;
-
-        case D_CONST:
-            d = p->to.offset;
-            v = p->to.sym;
-            if(v) {
-                switch(v->type) {
-                case SUNDEF:
-                    ckoff(v, d);
-                case STEXT: case SLEAF:
-                case SSTRING:
-                    d += p->to.sym->value;
-                    break;
-                case SDATA:
-                case SBSS:
-                    d += p->to.sym->value + INITDAT;
-                }
-                <<[[datblk()]] if dynamic module(arm)>>
-            }
-            cast = (char*)&d;
-
-            switch(c) {
-            case 1:
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi1[i]];
-                    l++;
-                }
-                break;
-            case 2:
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi2[i]];
-                    l++;
-                }
-                break;
-            case 4:
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[inuxi4[i]];
-                    l++;
-                }
-                break;
-
-            default:
-                diag("bad nuxi %d %d%P", c, i, curp);
-                break;
-            }
-            break;
-
+        <<[[datblk()]] switch type of destination cases>>
         default:
             diag("unknown mode in initialization%P", p);
             break;
@@ -6350,6 +6280,87 @@ datblk(long s, long n, bool str)
     write(cout, buf.dbuf, n);
 }
 @
+
+<<[[datblk()]] locals>>
+long j;
+@
+
+<<[[datblk()]] sanity check multiple initialization>>=
+if(p->as != AINIT && p->as != ADYNT) {
+    for(j=l+(c-i)-1; j>=l; j--)
+        if(buf.dbuf[j]) {
+            print("%P\n", p);
+            diag("multiple initialization");
+            break;
+        }
+}
+@
+
+<<[[datblk()]] switch type of destination cases>>=
+case D_SCONST:
+    for(; i<c; i++) {
+        buf.dbuf[l] = p->to.sval[i];
+        l++;
+    }
+    break;
+@
+
+
+<<[[datblk()]] locals>>
+Sym *v;
+char *cast;
+long d;
+@
+
+<<[[datblk()]] switch type of destination cases>>=
+case D_CONST:
+    d = p->to.offset;
+    v = p->to.sym;
+    if(v) {
+        switch(v->type) {
+        case SUNDEF:
+            ckoff(v, d);
+        case STEXT: case SLEAF:
+        case SSTRING:
+            d += p->to.sym->value;
+            break;
+        case SDATA:
+        case SBSS:
+            d += p->to.sym->value + INITDAT;
+        }
+        <<[[datblk()]] if dynamic module(arm)>>
+    }
+    cast = (char*)&d;
+
+    switch(c) {
+    case 1:
+        for(; i<c; i++) {
+            buf.dbuf[l] = cast[inuxi1[i]];
+            l++;
+        }
+        break;
+    case 2:
+        for(; i<c; i++) {
+            buf.dbuf[l] = cast[inuxi2[i]];
+            l++;
+        }
+        break;
+    case 4:
+        for(; i<c; i++) {
+            buf.dbuf[l] = cast[inuxi4[i]];
+            l++;
+        }
+        break;
+
+    default:
+        diag("bad nuxi %d %d%P", c, i, curp);
+        break;
+    }
+    break;
+@
+
+
+
 
 <<function ckoff>>=
 void
@@ -6770,25 +6781,30 @@ doprof1(void)
         if(p->as == ATEXT) {
             q = prg();
             q->line = p->line;
+
+            // add_list(q, datap)
             q->link = datap;
             datap = q;
 
+            // DATA __mcount +n*4(SB), 4,  $p->syn //$
             q->as = ADATA;
             q->from.type = D_OREG;
             q->from.symkind = D_EXTERN;
             q->from.offset = n*4;
             q->from.sym = s;
-            q->reg = 4;
+            q->reg = 4; // size of this DATA slice
             q->to = p->from;
             q->to.type = D_CONST;
 
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+            
             q->link = p->link;
             p->link = q;
             p = q;
 
+            // MOVW p->s + n*4+4(SB), R11
             p->as = AMOVW;
             p->from.type = D_OREG;
             p->from.symkind = D_EXTERN;
@@ -6804,6 +6820,7 @@ doprof1(void)
             p->link = q;
             p = q;
 
+            // ADD, $1, R11 //$
             p->as = AADD;
             p->from.type = D_CONST;
             p->from.offset = 1;
@@ -6817,6 +6834,7 @@ doprof1(void)
             p->link = q;
             p = q;
 
+            // MOVW R11, 
             p->as = AMOVW;
             p->from.type = D_REG;
             p->from.reg = REGTMP;
@@ -8978,6 +8996,34 @@ case AMOVWD:
 @
 
 
+
+<<[[datblk()]] locals>>
+long fl;
+@
+
+<<[[datblk()]] switch type of destination cases>>=
+case D_FCONST:
+    switch(c) {
+    default:
+    case 4:
+        fl = ieeedtof(p->to.ieee);
+        cast = (char*)&fl;
+        for(; i<c; i++) {
+            buf.dbuf[l] = cast[fnuxi4[i]];
+            l++;
+        }
+        break;
+    case 8:
+        cast = (char*)p->to.ieee;
+        for(; i<c; i++) {
+            buf.dbuf[l] = cast[fnuxi8[i]];
+            l++;
+        }
+        break;
+    }
+    break;
+@
+
 \subsection{Common float instructions}
 
 
@@ -10716,7 +10762,7 @@ union Buf
         char	obuf[MAXIO];			/* output buffer */
         byte	ibuf[MAXIO];			/* input buffer */
     };
-    char	dbuf[1];
+    char	dbuf[1]; // variable size
 };
 @
 
