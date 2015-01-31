@@ -177,13 +177,14 @@ Here are other candidates that were considered but ultimately discarded:
 \item compcert
 % harder to understand coq :), but definitly better IL and CFG I think.
 \item tinycc, fbcc
+% cool maybe
 \item cminusminus
-% maybe a good idea!
+% maybe a good idea to also present c--
 \item gcc
 %big
 \item clang
 %cleaner but still very big
-% nice single binary that can cross compile for multiple targets, nice
+% nice to have single binary that can cross compile for multiple targets, nice
 % interface (cleaner than 5c/vc/...; interfaces are better!)
 \end{itemize}
 
@@ -197,14 +198,15 @@ Here are other candidates that were considered but ultimately discarded:
 %  also includes assembler, debugger, simulator, ...
 
 % a few tags used in this file
-% - codegen: 
-% - ocaml:
+% - codegen: to give a preview of how a C construct is translated to ASM
+% - ocaml: to give a hint on how rewriting C in OCaml could improve things
 
 \section{Getting started}
 
 \section{Requirements}
 
-% Vague idea of how works a compiler. Dragon book. Appel. Or other books.
+% You need to have a vague idea of how works a compiler. 
+% Have read Dragon book. Appel. Or other books.
 
 %``the compiler assumes you've know your Aho and Ullman either by'
 %reading them or by working with them.''
@@ -212,7 +214,9 @@ Here are other candidates that were considered but ultimately discarded:
 
 % comp.ps, [8]5c man pages, etc
 
-% Also assumes Assembler.nw for ARM. Helps.
+% Also assumes Assembler.nw for ARM. Helps to understand
+% the target (especially since there is no RTL so the code
+% generation part directly generates concrete ASM code)
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -242,14 +246,16 @@ License.
 % statements, more structured forms than jmp.
 % types! typechecking! (5c even adds some simple dataflow checks!)
 %  so can type check arguments vs parameters, their numbers, array access,
-% field access, more restricted register indexing (xxx) -> *xxx but only 
-% if makes sense.
+%  field access, more restricted register indexing (xxx) -> *xxx but only 
+%  if makes sense.
 %  (still have lots of room to improve even more, C could be more typed!
 %   see rust, and ocaml).
 % => see codegen: tag
 
-% innovation of C vs fortran/pascal/algol? simpler?
-%  bitfields? so can match more directly hardware specifics?
+% innovation of C vs fortran/pascal/algol? 
+%  - pointer arithmetic? (but also a bad thing to have such wild pointers)
+%  - simpler?
+%  - bitfields? so can match more directly hardware specifics?
 
 
 \section{[[5c]] services}
@@ -1172,7 +1178,7 @@ enum namespace
 %  identifier, sue tags, and labels. See K&R book?
 % DAUTO(declaration?), TAUTO(temporary), LAUTO(lexeme), CAUTO(class), 
 %  hmmm that's a lot of AUTO.
-%less: DAUTO is a bad name, DIDENT would be better no? and SUE -> DTAG?
+%todo: DAUTO is a bad name, DIDENT would be better no? and SUE -> DTAG?
 
 <<struct Decl>>=
 struct	Decl
@@ -9295,6 +9301,35 @@ if(err) {
 % what is default value for non constant node of fconst and vconst??
 % zero?
 
+<<function supgen>>=
+void
+supgen(Node *n)
+{
+    bool owarn;
+    long opc;
+    Prog *olastp;
+
+    if(n == Z)
+        return;
+
+    suppress++;
+    owarn = warnreach;
+    opc = pc;
+    olastp = lastp;
+
+    warnreach = false;
+
+    gen(n);
+
+    lastp = olastp;
+    olastp->link = nil;
+    pc = opc;
+    warnreach = owarn;
+    suppress--;
+}
+@
+
+
 \subsection{Loops}
 
 <<global breakpc>>=
@@ -13020,6 +13055,11 @@ void sualign(Type *t)
 }
 @
 
+
+
+
+
+
 \chapter{Object Generation}
 % Dupe with Assembler.nw. Quite simple.
 
@@ -14207,7 +14247,8 @@ for(p=trelinit; p->code >= 0; p++) {
 @
 
 
-\subsection{Declaration and definition types merge}
+\subsection{Type declarations consistency, [[tmerge()]]}
+%Declaration and definition types merge
 
 % dodectl(xdecl,...) -> xdecl -> <>
 <<function tmerge>>=
@@ -14285,7 +14326,7 @@ tmerge(Type *t1, Sym *s)
 
 
 
-\subsection{[[tcom()]]}
+\subsection{Expression typechecking, [[tcom()]]}
 % cc/com.c
 
 
@@ -16503,7 +16544,7 @@ dpcheck(Node *n)
 \section{Lint checking}
 
 % good checks :) used/set ! good warnings. gcc sucks, it does not even
-% have that by default.
+% have that (or it's not by default maybe).
 
 % 5c -V enable void* conversion warnings
 % 5c -w print warnings
@@ -16537,8 +16578,10 @@ if(!s->aused) {
 @
 
 
-\subsection{[[SET()/USED()]]}
+\subsection{False positives silencing, [[SET()/USED()]]}
 % like fallthrough, to remove false positives or true positives which are ok.
+
+% Why have false positives? limitations? bugs? or normal?
 
 % the parsing
 
@@ -16564,7 +16607,9 @@ OSET,
 
 % the check?
 
-% ????
+% for USED if the local is mentionned, then there will be an LNAME
+% occurrence.
+% for SET?
 
 % the code generation
 
@@ -16589,18 +16634,24 @@ usedset(Node *n, int o)
     complex(n);
 
     switch(n->op) {
-    case OADDR:	/* volatile */
-        gins(ANOP, n, Z);
-        break;
     case ONAME:
         if(o == OSET)
             gins(ANOP, Z, n);
         else
             gins(ANOP, n, Z);
         break;
+    case OADDR:	/* volatile */
+        gins(ANOP, n, Z);
+        break;
     }
 }
 @
+% normal to generate ANOP for LUSED. goal is to shut
+% the lint checking, but code generation should be empty.
+%less: for LSET?
+
+%those ANOP with arguments are weird,
+%less: used in regopt?
 
 \subsection{Unused labels}
 
@@ -16608,7 +16659,6 @@ usedset(Node *n, int o)
 if(s->label && s->label->addable == 0)
     warn(s->label, "label declared and not used \"%s\"", s->name);
 @
-
 % ugly this abuse of addable, why not using lblaused instead?
 
 \subsection{Unreachable code}
@@ -16733,34 +16783,6 @@ deadheads(Node *c)
 @
 % called from bcomplex with an OLIST being a OPAIR(thenst, elsest)
 
-
-<<function supgen>>=
-void
-supgen(Node *n)
-{
-    bool owarn;
-    long opc;
-    Prog *olastp;
-
-    if(n == Z)
-        return;
-
-    suppress++;
-    owarn = warnreach;
-    opc = pc;
-    olastp = lastp;
-
-    warnreach = false;
-
-    gen(n);
-
-    lastp = olastp;
-    olastp->link = nil;
-    pc = opc;
-    warnreach = owarn;
-    suppress--;
-}
-@
 
 
 
@@ -22767,7 +22789,7 @@ if(a == ATEXT)
 <<[[Storage_class]] cases>>=
 CLOCAL, // local static
 @
-% for static local, should be renamed?
+%todo: for static local, should be renamed?
 
 % defs
 
