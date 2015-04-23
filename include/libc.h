@@ -1,7 +1,7 @@
 #pragma	lib	"libc.a"
 #pragma	src	"/sys/src/libc"
 
-// pad's stuff, could also be in u.h, more types!
+// pad stuff, could also be in u.h, more types!
 typedef int bool;
 enum _bool {
   false = 0,
@@ -24,7 +24,7 @@ typedef int fdt; // file descriptor type
 typedef int error0; // 0 is the error value
 typedef int error1; // 1 is the error value
 typedef int errorneg1; // -1 is the error value
-// end pad's stuff
+// end pad stuff
 
 
 #define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
@@ -734,7 +734,7 @@ extern	int		remove(char*);
 extern	void*	sbrk(ulong);
 // extern	int	fdflush(int);
 
-// pad's stuff, but is actually also in stdio.h
+// pad stuff, but is actually also in stdio.h
 enum seek_cursor {
     SEEK__START = 0,
     SEEK__CUR = 1,

@@ -36,9 +36,9 @@ typedef struct{
 	char unbuf[1];	/* tiny buffer for unbuffered io (used for ungetc?) */
 }FILE;
 typedef long fpos_t;
-//#ifndef NULL
+#ifndef NULL
 #define	NULL	((void*)0)
-//#endif
+#endif
 /*
  * Third arg of setvbuf
  */
