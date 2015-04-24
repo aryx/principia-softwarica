@@ -3,20 +3,68 @@ NPROC=1
 
 all:V: install
 
-install:V: genall gencall
-	genall
+# this was in './genall' by I've decided to inline it here
+# because it's more portable that way
+SYSH=/sys/src/libc/9syscall/sys.h
 
-# ugh. sources's build process can't hack absolute path names.
-# we're in /sys/src/ape/lib/ap/syscall.
-gencall:D: ../../../../libc/9syscall/mkfile	# /sys/src/libc/9syscall/mkfile
-	{
-		echo '#!/bin/rc'
-		sed -n -e 's/seek/_SEEK/g' -e '/switch/,/\$AS /p' $prereq
-	} >$target
-	chmod +x $target
+install:V:
+	SYS=`{grep define $SYSH | sed 's/#define.([A-Z0-9_]*).*/\1/'}
+	for(I in $SYS) {
+		i=_^$I
+		n=`{sed -n '/[ 	]'$I'[ 	]/s/.*	//p' $SYSH}
+		if(~ $i exits) i=_exits
+		{switch($objtype){
+		case 386
+			echo TEXT $i'(SB)', 1, '$0'
+			echo MOVL '$'$n, AX
+			echo INT '$'64
+			if(~ $i _SEEK) {
+				echo 'CMPL AX,$-1
+				JNE 4(PC)
+				MOVL a+0(FP),CX
+				MOVL AX,0(CX)
+				MOVL AX,4(CX)'
+			}
+			echo RET
+		case arm
+			echo TEXT $i'(SB)', 1, '$0'
+			echo MOVW R0, '0(FP)'
+			echo MOVW '$'$n, R0
+			echo SWI
+			if(~ $i _seek) {
+				echo 'CMP $-1,R0
+				BNE 4(PC)
+				MOVW a+0(FP),R1
+				MOVW R0,0(R1)
+				MOVW R0,4(R1)'
+			}
+			echo RET
+		}} > $i.s
+		$AS $i.s
+	}
+    ar vu /$objtype/lib/ape/libap.a *.$O
 
 nuke clean:V:
-	rm -f *.[$OS] *.s gencall
+	rm -f *.[$OS] *.s
+
+
+
+#install:V: genall gencall
+#	./genall
+#
+## ugh. sources's build process can't hack absolute path names.
+## we're in /sys/src/ape/lib/ap/syscall.
+##pad: why not? we do it at many other places ... so why not one more?
+##was: ../../../../libc/9syscall/mkfile	#
+#gencall:D: /sys/src/libc/9syscall/mkfile
+#	{
+#		echo '#!/bin/rc'
+#		sed -n -e 's/seek/_SEEK/g' -e '/switch/,/\$AS /p' $prereq
+#	} >$target
+#	chmod +x $target
+#
+#nuke clean:V:
+#	rm -f *.[$OS] *.s gencall
 
 installall:V:
 	for(objtype in $CPUS) mk install
