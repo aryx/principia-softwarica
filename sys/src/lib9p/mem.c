@@ -3,7 +3,7 @@
 #include <auth.h>
 #include <fcall.h>
 #include <thread.h>
-#include "9p.h"
+#include <9p.h>
 
 void*
 emalloc9p(ulong sz)
