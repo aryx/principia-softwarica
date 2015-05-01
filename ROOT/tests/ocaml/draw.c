@@ -22,9 +22,14 @@ void caml_draw_set_color(value red, value green, value blue, value alpha) {
 
 void caml_draw_line(value x1, value y1, value x2, value y2) {
 
-
   line(view, Pt(Int_val(x1), Int_val(y1)), 
              Pt(Int_val(x2), Int_val(y2)), 
-       0, 0, 1, current_color, ZP);
+       0, 0, 0, current_color, ZP);
+  flushimage(display, 1);
+}
+
+void caml_draw_string(value x, value y, value str) {
+  string(view, Pt(Int_val(x), Int_val(y)), current_color, ZP, font,
+         String_val(str));
   flushimage(display, 1);
 }
