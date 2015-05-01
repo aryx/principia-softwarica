@@ -18,8 +18,6 @@ assline(Biobuf *bp, Bufblock *buf)
     while ((c = nextrune(bp, 1)) >= 0){
         switch(c)
         {
-        case '\r':		/* consumes CRs for Win95 */
-            continue;
         case '\n':
             if (buf->current != buf->start) {
                 insert(buf, '\0');

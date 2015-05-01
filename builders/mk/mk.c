@@ -304,7 +304,7 @@ outofdate(Node *node, Arc *arc, bool eval)
          * It's a race, and the safer option is to do
          * extra building rather than not enough.
          */
-        return node->time <= arc->n->time;
+        return node->time < arc->n->time;
 }
 /*e: function outofdate */
 /*e: mk/mk.c */
