@@ -17,7 +17,7 @@ static Image *color[256];
 
 /*s: function eresized (windows/apps/colors.c) */
 void
-eresized(int new)
+eresized(bool new)
 {
     int x, y, i, n, nx, ny;
     Rectangle r, b;
@@ -151,7 +151,7 @@ main(int argc, char *argv[])
             sysfatal("can't allocate image: %r");
     }
 
-    eresized(0);
+    eresized(false);
 
     prev = -1;
     for(;;){

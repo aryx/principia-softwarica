@@ -256,7 +256,7 @@ from Bell Labs.
 % e.g. colors? clock.c?
 
 % see display, image, and draw() generic ops.
-% see colors that are actually images.
+% see that colors that are actually images! very general (maybe too much).
 % different model than the Context of X11, or cairo, or canvas.
 
 % maybe can zoom on line to see it's tricky to get diagonals
@@ -2406,6 +2406,8 @@ drawmesg(Client *client, void *av, int n)
 
 \subsection{API}
 
+% for a color r is usually R(0,0,1,1), chan is view->chan, repl = 1,
+% and val is the color
 <<function allocimage>>=
 Image*
 allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
@@ -2510,7 +2512,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     }
 
     /* flush pending data so we don't get error allocating the image */
-    flushimage(d, 0);
+    flushimage(d, false);
 
     a = bufimage(d, 1+4+4+1+4+1+4*4+4*4+4);
     if(a == nil)
@@ -2539,7 +2541,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     BPLONG(a+43, clipr.max.y);
     BPLONG(a+47, val);
 
-    if(flushimage(d, 0) < 0)
+    if(flushimage(d, false) < 0)
         goto Error;
 
     if(ai)
@@ -2551,7 +2553,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
             if(a){
                 a[0] = 'f';
                 BPLONG(a+1, id);
-                flushimage(d, 0);
+                flushimage(d, false);
             }
             goto Error;
         }
@@ -2585,7 +2587,7 @@ _freeimage1(Image *i)
     /* make sure no refresh events occur on this if we block in the write */
     d = i->display;
     /* flush pending data so we don't get error deleting the image */
-    flushimage(d, 0);
+    flushimage(d, false);
 
     a = bufimage(d, 1+4);
     if(a == nil)
@@ -3903,6 +3905,7 @@ bool hwdraw(Memdrawparam *par)
 \subsection{API}
 
 % visible argument??
+% seems errorneg because called do if(flushimage() < 0)
 <<function flushimage>>=
 int
 flushimage(Display *d, bool visible)
@@ -4093,7 +4096,7 @@ nameimage(Image *i, char *name, int in)
     a[5] = in;
     a[6] = n;
     memmove(a+7, name, n);
-    if(flushimage(i->display, 0) < 0)
+    if(flushimage(i->display, false) < 0)
         return 0;
     return 1;
 }
@@ -4125,7 +4128,7 @@ namedimage(Display *d, char *name)
         return nil;
     }
     /* flush pending data so we don't get error allocating the image */
-    flushimage(d, 0);
+    flushimage(d, false);
     a = bufimage(d, 1+4+1+n);
     if(a == 0)
         goto Error;
@@ -4137,7 +4140,7 @@ namedimage(Display *d, char *name)
     a[5] = n;
     memmove(a+6, name, n);
 
-    if(flushimage(d, 0) < 0)
+    if(flushimage(d, false) < 0)
         goto Error;
 
     if(pread(d->ctlfd, buf, sizeof buf, 0) < 12*12)
@@ -4151,7 +4154,7 @@ namedimage(Display *d, char *name)
         if(a){
             a[0] = 'f';
             BPLONG(a+1, id);
-            flushimage(d, 0);
+            flushimage(d, false);
         }
         goto Error;
     }
@@ -4574,6 +4577,7 @@ combinerect(Rectangle *r1, Rectangle r2)
 
 \subsection{API}
 
+%todo: typedef this!! typedef int endline; or use enu,?
 <<function line>>=
 void
 line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src, Point sp)
@@ -6794,7 +6798,7 @@ fontresize(Font *f, int wid, int ncache, int depth)
         abort();
         goto Return;
     }
-    flushimage(d, 0);	/* flush any pending errors */
+    flushimage(d, false);	/* flush any pending errors */
     b = bufimage(d, 1+4+4+1);
     if(b == 0){
         freeimage(new);
@@ -6804,7 +6808,7 @@ fontresize(Font *f, int wid, int ncache, int depth)
     BPLONG(b+1, new->id);
     BPLONG(b+5, ncache);
     b[9] = f->ascent;
-    if(flushimage(d, 0) < 0){
+    if(flushimage(d, false) < 0){
         fprint(2, "resize: init failed: %r\n");
         freeimage(new);
         goto Return;
@@ -6962,7 +6966,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     c->left = fi->left;
     if(f->display == nil)
         return 1;
-    flushimage(f->display, 0);	/* flush any pending errors */
+    flushimage(f->display, false);	/* flush any pending errors */
     b = bufimage(f->display, 37);
     if(b == 0)
         return 0;
@@ -7296,7 +7300,7 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
     }
 
     d = i->display;
-    flushimage(d, 0);	/* make sure subsequent flush is for us only */
+    flushimage(d, false);	/* make sure subsequent flush is for us only */
     ntot = 0;
     while(r.min.y < r.max.y){
         a = bufimage(d, 1+4+4*4);
@@ -7317,7 +7321,7 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
         BPLONG(a+9, r.min.y);
         BPLONG(a+13, r.max.x);
         BPLONG(a+17, r.min.y+dy);
-        if(flushimage(d, 0) < 0)
+        if(flushimage(d, false) < 0)
             return -1;
         n = read(d->fd, data+ntot, ndata-ntot);
         if(n < 0)
@@ -7697,7 +7701,7 @@ loadimage(Image *i, Rectangle r, uchar *data, int ndata)
         data += n;
         r.min.y += dy;
     }
-    if(flushimage(i->display, 0) < 0)
+    if(flushimage(i->display, false) < 0)
         return -1;
     return ndata;
 }
@@ -8371,7 +8375,7 @@ allocscreen(Image *image, Image *fill, int public)
         BPLONG(a+5, image->id);
         BPLONG(a+9, fill->id);
         a[13] = public;
-        if(flushimage(d, 0) != -1)
+        if(flushimage(d, false) != -1)
             break;
     }
     s->display = d;
@@ -8403,7 +8407,7 @@ freescreen(Screen *s)
      * flush(1) because screen is likely holding last reference to
      * window, and want it to disappear visually.
      */
-    if(flushimage(d, 1) < 0)
+    if(flushimage(d, true) < 0)
         return -1;
     free(s);
     return 1;
@@ -8429,7 +8433,7 @@ publicscreen(Display *d, int id, ulong chan)
     a[0] = 'S';
     BPLONG(a+1, id);
     BPLONG(a+5, chan);
-    if(flushimage(d, 0) < 0)
+    if(flushimage(d, false) < 0)
         goto Error;
 
     s->display = d;
@@ -9168,7 +9172,7 @@ originwindow(Image *w, Point log, Point scr)
     uchar *b;
     Point delta;
 
-    flushimage(w->display, 0);
+    flushimage(w->display, false);
     b = bufimage(w->display, 1+4+2*4+2*4);
     if(b == nil)
         return 0;
@@ -9178,7 +9182,7 @@ originwindow(Image *w, Point log, Point scr)
     BPLONG(b+9, log.y);
     BPLONG(b+13, scr.x);
     BPLONG(b+17, scr.y);
-    if(flushimage(w->display, 1) < 0)
+    if(flushimage(w->display, true) < 0)
         return -1;
     delta = subpt(log, w->r.min);
     w->r = rectaddpt(w->r, delta);
@@ -10100,7 +10104,7 @@ int
 readmouse(Mousectl *mc)
 {
     if(mc->image)
-        flushimage(mc->image->display, 1);
+        flushimage(mc->image->display, true);
     if(recv(mc->c, &mc->Mouse) < 0){
         fprint(2, "readmouse: %r\n");
         return -1;
@@ -11134,12 +11138,12 @@ extract(void)
         /* if locking is being done by program, this means it can't depend on automatic flush in emouse() etc. */
         if(canqlock(&display->qlock)){
             if(display->bufp > display->buf)
-                flushimage(display, 1);
+                flushimage(display, true);
             unlockdisplay(display);
         }
     }else
         if(display->bufp > display->buf)
-            flushimage(display, 1);
+            flushimage(display, true);
 loop:
     if((n=read(epipe[0], ebuf, EMAXMSG+1)) < 0
     || ebuf[0] >= MAXSLAVE)
@@ -12021,7 +12025,7 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     }
     freeimage(save);
     replclipr(view, 0, sc);
-    flushimage(display, 1);
+    flushimage(display, true);
     if(lasti >= 0){
         menu->lasthit = lasti+off;
         return menu->lasthit;
@@ -12307,10 +12311,10 @@ menuscan(Menu *menu, int but, Mouse *m, Rectangle textr, int off, int lasti, Ima
     int i;
 
     paintitem(menu, textr, off, lasti, 1, save, nil);
-    flushimage(display, 1);	/* in case display->locking is set */
+    flushimage(display, true);	/* in case display->locking is set */
     *m = emouse();
     while(m->buttons & (1<<(but-1))){
-        flushimage(display, 1);	/* in case display->locking is set */
+        flushimage(display, true);	/* in case display->locking is set */
         *m = emouse();
         i = menusel(textr, m->xy);
         if(i != -1 && i == lasti)
@@ -12456,7 +12460,7 @@ emenuhit(int but, Mouse *m, Menu *menu)
                     menuscrollpaint(scrollr, off, nitem, nitemdrawn);
                 }
             }
-            flushimage(display, 1);	/* in case display->locking is set */
+            flushimage(display, true);	/* in case display->locking is set */
             *m = emouse();
         }
     }
