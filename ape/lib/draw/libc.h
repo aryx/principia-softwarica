@@ -15,6 +15,30 @@
 #include <fmt.h>
 #include <signal.h>
 
+// pad stuff
+typedef uchar byte;
+typedef int bool;
+enum _bool {
+  false = 0,
+  true = 1
+};
+typedef byte bool_byte;
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
+typedef int fdt; // file descriptor type
+#define OK_0 0
+#define OK_1 1
+#define ERROR_0 0
+#define ERROR_1 1
+#define ERROR_NEG1 (-1)
+typedef int error0; // 0 is the error value
+typedef int error1; // 1 is the error value
+typedef int errorneg1; // -1 is the error value
+// end pad stuff
+
+
+
 typedef
 struct Qid
 {

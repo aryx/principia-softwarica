@@ -506,10 +506,12 @@ extern	Rectangle	ZR;
  */
 extern	Display	*display;
 extern	Font		*font;
-extern	Image	*screen;
-extern	Screen	*_screen;
+extern	Image	*view; // was called screen before
+extern	Screen	*screen; // was called _screen before
+
 extern	int	_cursorfd;
 extern	int	_drawdebug;	/* set to 1 to see errors from flushimage */
+
 extern	void	_setdrawop(Display*, Drawop);
 
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
