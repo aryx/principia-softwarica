@@ -47,7 +47,7 @@ clean:
 
 # codemap.opt has some issue with light db and graph db loading :(
 visual:
-	~/pfff/codemap -no_legend -no_symlinks -filter cpp -ss 2 .
+	~/pfff/codemap -no_legend -symlinks -filter xix -ss 2 .
 graph:
 	~/pfff/codegraph -derived_data -lang c -build .
 tags:
