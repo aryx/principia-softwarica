@@ -19,6 +19,8 @@ compile:
 	cd sys/src && mk all
 	cd sys/src/cmd && mk install
 	cd sys/src/9/pc && mk && mk install
+	mkdir -p ROOT/386/bin/ape/
+	cp ROOT/386/bin/rc ROOT/386/bin/ape/sh
 
 disk:
 	umount -f $(DISK) || echo not mounted
