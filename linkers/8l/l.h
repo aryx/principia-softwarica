@@ -274,6 +274,8 @@ enum pxxx {
     Pq		= 0xff,	/* both escape */
     Pb		= 0xfe,	/* byte operands */
 };
+
+
 /*e: enum pxxx(x86) */
 /*s: enum rxxx */
 enum rxxx {
@@ -330,7 +332,7 @@ union Buf
         char	obuf[MAXIO];			/* output buffer */
         byte	ibuf[MAXIO];			/* input buffer */
     };
-    char	dbuf[1];
+    char	dbuf[1]; // variable size
 };
 /*e: struct Buf */
 extern union Buf buf;

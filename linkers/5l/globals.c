@@ -116,7 +116,9 @@ char*	libraryobj[50];
 int	libraryp;
 /*e: global libraryp */
 
-//global xrefresolv
+/*s: global xrefresolv */
+bool	xrefresolv;
+/*e: global xrefresolv */
 /*s: global hunk */
 char*	hunk;
 /*e: global hunk */

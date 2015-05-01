@@ -453,7 +453,6 @@ aclass(Adr *a)
         case D_AUTO:
             instoffset = autosize + a->offset;
             goto aconsize;
-
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
         case D_PARAM:
             instoffset = autosize + a->offset + 4L;

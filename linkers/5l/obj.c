@@ -353,10 +353,12 @@ addlibpath(char *arg)
         else
             maxlibdir *= 2;
         p = malloc(maxlibdir*sizeof(*p));
+        /*s: [[addlibpath()]] sanity check p */
         if(p == nil) {
             diag("out of memory");
             errorexit();
         }
+        /*e: [[addlibpath()]] sanity check p */
         memmove(p, libdir, nlibdir*sizeof(*p));
         free(libdir);
         libdir = p;
@@ -387,11 +389,25 @@ void
 loadlib(void)
 {
     int i;
-
+    long h;
+    Sym *s;
+loop:
+    /*s: [[loadlib()]] reset xrefresolv */
+    xrefresolv = false;
+    /*e: [[loadlib()]] reset xrefresolv */
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
+    /*s: [[loadlib()]] if xrefresolv */
+    if(xrefresolv)
+        for(h=0; h<nelem(hash); h++)
+             for(s = hash[h]; s != S; s = s->link)
+                 if(s->type == SXREF) {
+                     DBG("symbol %s still not resolved, looping\n", s->name);//pad
+                     goto loop;
+                 }
+    /*e: [[loadlib()]] if xrefresolv */
 }
 /*e: function loadlib */
 
@@ -493,7 +509,9 @@ objfile(char *file)
         for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
 
             s = lookup(e+5, 0);
-            if(s->type == SXREF) {
+            // loading only the object files containing symbols we are looking for
+            if(s->type == SXREF || 
+               (s->type == SNONE && strcmp(s->name, "main") == 0)) {
                 sprint(pname, "%s(%s)", file, s->name);
                 DBG("%5.2f library: %s\n", cputime(), pname);
             
@@ -521,6 +539,9 @@ objfile(char *file)
                     errorexit();
                 }
                 work = true; // maybe some new SXREF has been found in ldobj()
+               /*s: [[objfile()]] an SXREF was found hook */
+               xrefresolv = true;
+               /*e: [[objfile()]] an SXREF was found hook */
             }
         }
     }
@@ -1324,25 +1345,30 @@ doprof1(void)
         if(p->as == ATEXT) {
             q = prg();
             q->line = p->line;
+
+            // add_list(q, datap)
             q->link = datap;
             datap = q;
 
+            // DATA __mcount +n*4(SB), 4,  $p->syn //$
             q->as = ADATA;
             q->from.type = D_OREG;
             q->from.symkind = D_EXTERN;
             q->from.offset = n*4;
             q->from.sym = s;
-            q->reg = 4;
+            q->reg = 4; // size of this DATA slice
             q->to = p->from;
             q->to.type = D_CONST;
 
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+            
             q->link = p->link;
             p->link = q;
             p = q;
 
+            // MOVW p->s + n*4+4(SB), R11
             p->as = AMOVW;
             p->from.type = D_OREG;
             p->from.symkind = D_EXTERN;
@@ -1358,6 +1384,7 @@ doprof1(void)
             p->link = q;
             p = q;
 
+            // ADD, $1, R11 //$
             p->as = AADD;
             p->from.type = D_CONST;
             p->from.offset = 1;
@@ -1371,6 +1398,7 @@ doprof1(void)
             p->link = q;
             p = q;
 
+            // MOVW R11, 
             p->as = AMOVW;
             p->from.type = D_REG;
             p->from.reg = REGTMP;

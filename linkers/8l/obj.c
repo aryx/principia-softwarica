@@ -42,7 +42,9 @@ char*	libraryobj[50];
 int	libraryp;
 /*e: global libraryp */
 
-//global xrefresolv
+/*s: global xrefresolv */
+bool	xrefresolv;
+/*e: global xrefresolv */
 
 /*s: global version */
 int	version = 0;
@@ -257,16 +259,8 @@ main(int argc, char *argv[])
     /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
 
     /*s: [[main()]] adjust HEADTYPE if debug flags(x86) */
-    if(!debug['9'] && !debug['U'] && !debug['B'])
-        debug[DEFAULT] = true;
-
     if(HEADTYPE == -1) {
-        if(debug['U'])
-            HEADTYPE = 1;
-        if(debug['B'])
-            HEADTYPE = 2;
-        if(debug['9'])
-            HEADTYPE = 2;
+      HEADTYPE = DEFAULT;
     }
     /*e: [[main()]] adjust HEADTYPE if debug flags(x86) */
     switch(HEADTYPE) {
@@ -533,10 +527,12 @@ addlibpath(char *arg)
         else
             maxlibdir *= 2;
         p = malloc(maxlibdir*sizeof(*p));
+        /*s: [[addlibpath()]] sanity check p */
         if(p == nil) {
             diag("out of memory");
             errorexit();
         }
+        /*e: [[addlibpath()]] sanity check p */
         memmove(p, libdir, nlibdir*sizeof(*p));
         free(libdir);
         libdir = p;
@@ -567,11 +563,25 @@ void
 loadlib(void)
 {
     int i;
-
+    long h;
+    Sym *s;
+loop:
+    /*s: [[loadlib()]] reset xrefresolv */
+    xrefresolv = false;
+    /*e: [[loadlib()]] reset xrefresolv */
     for(i=0; i<libraryp; i++) {
         DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
         objfile(library[i]);
     }
+    /*s: [[loadlib()]] if xrefresolv */
+    if(xrefresolv)
+        for(h=0; h<nelem(hash); h++)
+             for(s = hash[h]; s != S; s = s->link)
+                 if(s->type == SXREF) {
+                     DBG("symbol %s still not resolved, looping\n", s->name);//pad
+                     goto loop;
+                 }
+    /*e: [[loadlib()]] if xrefresolv */
 }
 /*e: function loadlib */
 
@@ -673,7 +683,9 @@ objfile(char *file)
         for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
 
             s = lookup(e+5, 0);
-            if(s->type == SXREF) {
+            // loading only the object files containing symbols we are looking for
+            if(s->type == SXREF || 
+               (s->type == SNONE && strcmp(s->name, "main") == 0)) {
                 sprint(pname, "%s(%s)", file, s->name);
                 DBG("%5.2f library: %s\n", cputime(), pname);
             
@@ -701,6 +713,9 @@ objfile(char *file)
                     errorexit();
                 }
                 work = true; // maybe some new SXREF has been found in ldobj()
+               /*s: [[objfile()]] an SXREF was found hook */
+               xrefresolv = true;
+               /*e: [[objfile()]] an SXREF was found hook */
             }
         }
     }

@@ -360,7 +360,7 @@ union Buf
         char	obuf[MAXIO];			/* output buffer */
         byte	ibuf[MAXIO];			/* input buffer */
     };
-    char	dbuf[1];
+    char	dbuf[1]; // variable size
 };
 /*e: struct Buf */
 extern union Buf buf;

@@ -174,6 +174,8 @@ Here are other candidates that were considered but ultimately discarded:
 % plan9 approach to linking is a bit different. The linker actually
 % generates also the machine code. The object format is not the ISA.
 % Simpler that way. This may also allows inter-lib linking-time optimisations!
+% (for now mostly deadcode elimination I think which reduces size of
+%  binaries, which is good because plan9 does not have shared libs).
 % Also there is no dynamic linking by default. Simpler approach
 % again.
 
@@ -213,10 +215,10 @@ License.
 % and after linking see all the wagons really after each other and
 % the links resolved.
 % Also agglomerate the code, and the data of the different modules together,
-% and pack them.
+% and pack them (so actually it reorders subparts of the wagon ...).
 
 % why the term loader instead of linker?
-% maybe because load the objects and libs and then link them
+% maybe because it loads the objects and the libs and then link them
 % (but first it "loads" them)
 
 % For plan9 the linker is also generating the
@@ -402,6 +404,27 @@ struct	Exec
 % specific stuff and libmach is mostly about generic reading interface 
 % to many specifics
 % (and not just 5l)
+
+%load objs on command line.
+%load libs but only their objects containing symbols we are looking for 
+% (symbols uses mentioned in object files and so marked as SXREF)
+%fixpoint
+%=> produce smaller binaries
+
+% How does handle mutually recursive object files?
+%  for objects passed on the command line it loads every symbols
+%  and at first some symbols get their type as SXREF (placeholder) but then
+%  when you load the second object it sets it as a STEXT or SDATA.
+% How automatically grab all the necessary libs?
+%  magic #pragma and special ANAME code in the .8?
+
+% Note that the linker loads lazily the objects in a library.
+% It loads only what is necessary, that is objects in a lib
+% containing symbols that are "looked for" that is symbols
+% that are SXREF.
+% (with a special case for _main which is not looked by
+%  anything by default and so there is lookup(INITENTRY, 0)->type = SXREF
+%  in the main of 8l/5l).
 
 
 %###############################################################################
@@ -1212,10 +1235,10 @@ if(INITENTRY == nil) {
 %Why when have libs we set _main as SXREF? and why when -l we don't?
 % by creating a new entry and setting it to SXREF (default is SNONE) we will
 % force in loadlib() to consider _main as a starting point as we marked
-% is a undefined (undefined but looked for)
+% it as an undefined (undefined but looked for!)
 
 % _main! not main, because _main is defined in libc and then call your main?
-% SXREF means?
+%less: SXREF means?
 
 \section{Loading the objects, [[objfile()]]}
 
@@ -1283,12 +1306,14 @@ if(f < 0) {
 % ldobj() is actually also loading libraries when they are mentioned
 % explicitly as in 5l ... libxxx.a or via 5l ... -lxxx
 
+% but this chunk will be explained later.
+%    <<[[objfile()]] when file is a library>>
+% regarding the automatic libs, see below.
+
+
 % so loading objects with ldbobj() will modify some of the globals below
 
 % then if(load_libs) loadlib()  in the main flow
-
-% todo: it does some uniq? there is an order? this is why
-% we need xrefresolv?
 
 <<global library>>=
 // array<option<filename>>
@@ -1310,7 +1335,7 @@ char*	libraryobj[50];
 
 
 
-<<function loadlib>>=
+<<function loadlib simple version>>=
 void
 loadlib(void)
 {
@@ -1322,23 +1347,8 @@ loadlib(void)
     }
 }
 @
-
-%old:
-%    long h;
-%    Sym *s;
-%loop:
-%    <<[[loadlib()]] reset xrefresolv>>
-%    for(i=0; i<libraryp; i++) {
-%        DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
-%        objfile(library[i]);
-%    }
-%    <<[[loadlib()]] if xrefresolv>>
-%
-% this allows to have mutually dependent libraries, but I don't think
-% it's a good idea, ocaml does not allow it, so I commented it for now.
-% If people have mutually dependent, they'll have to mention
-% the same lib multiple time on the command line!
-
+% simple version because in practice we want to allow mutually 
+% dependent libs, see section later
 
 
 
@@ -2582,7 +2592,9 @@ while(work) {
     for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
 
         s = lookup(e+5, 0);
-        if(s->type == SXREF) {
+        // loading only the object files containing symbols we are looking for
+        if(s->type == SXREF || 
+           (s->type == SNONE && strcmp(s->name, "main") == 0)) {
             sprint(pname, "%s(%s)", file, s->name);
             DBG("%5.2f library: %s\n", cputime(), pname);
             
@@ -2605,6 +2617,7 @@ while(work) {
                 errorexit();
             }
             work = true; // maybe some new SXREF has been found in ldobj()
+           <<[[objfile()]] an SXREF was found hook>>
         }
     }
 }
@@ -2626,9 +2639,20 @@ out:
 
 % double loop!  while work, for ;;
 % this is where we include all relevant entities(actually object files), 
-% and only those,
+% and only those!!!
 % so 5l can produce small binaries (good because plan9 does not have
 % shared libraries).
+% Remember that lookup returns a symbol with SNONE when it didn't
+% find a symbol (not SXREF).
+% This is also why we do the lookup(INITENTRY, 0)->type = SXREF
+% in main to force the loading of the object defining _main in libc.a
+% which in turn will provoke the loading of more code.
+
+%ugly: I added a special hack regarding "main" because of ocamlc.
+% in ocamlc the main() is in libcamrun.a, so in the library, but
+% library passed to the command line are not considered magic libs
+% where a fixpoint is done for mutually dependent libs (see section
+% below), so I had to cheat.
 
 <<[[objfile()]] sanity check library header size and content>>=
 if(l != SAR_HDR) {
@@ -2649,30 +2673,63 @@ if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
 @
 
 
-% Why need multi pass for libs? ocamlc does not allow this, so I commented
-% it for now
-%  ...
-%            work = true;
-%            xrefresolv = true;
-%  ...
-%<<global xrefresolv>>=
-%bool	xrefresolv;
-%@
-%
-%<<[[loadlib()]] reset xrefresolv>>=
-%xrefresolv = false;
-%@
-%
-%<<[[loadlib()]] if xrefresolv>>=
-%if(xrefresolv)
-%    for(h=0; h<nelem(hash); h++)
-%         for(s = hash[h]; s != S; s = s->link)
-%             if(s->type == SXREF) {
-%                 DBG("symbol %s still not resolved, looping\n", s->name);//pad
-%                 goto loop;
-%             }
-%@
+\section{Mutually dependent libraries}
+% in advanced topic?
+
+
+<<function loadlib>>=
+void
+loadlib(void)
+{
+    int i;
+    long h;
+    Sym *s;
+loop:
+    <<[[loadlib()]] reset xrefresolv>>
+    for(i=0; i<libraryp; i++) {
+        DBG("%5.2f autolib: %s (from %s)\n", cputime(), library[i], libraryobj[i]);
+        objfile(library[i]);
+    }
+    <<[[loadlib()]] if xrefresolv>>
+}
+@
+
+% this allows to have mutually dependent libraries, but I don't think
+% it's a good idea, ocaml does not allow it.
+%% If people have mutually dependent, they'll have to mention
+%% the same lib multiple time on the command line!
+
+% but ironically ocamlc requires to have support for mutually 
+% dependent libraries :) indeed under plan9 I pass
+% libcamlrun.a which defines main, but depend on ape/libap.a which
+% defines an _main which calls a main.
+
+% note that this is only for the libs in librarp, so only
+% for the automagic libraries! Not for the libs passed on the
+% command line
+
+<<global xrefresolv>>=
+bool	xrefresolv;
+@
+
+<<[[loadlib()]] reset xrefresolv>>=
+xrefresolv = false;
+@
+
+<<[[loadlib()]] if xrefresolv>>=
+if(xrefresolv)
+    for(h=0; h<nelem(hash); h++)
+         for(s = hash[h]; s != S; s = s->link)
+             if(s->type == SXREF) {
+                 DBG("symbol %s still not resolved, looping\n", s->name);//pad
+                 goto loop;
+             }
+@
 % still some unresolved symbols, loop
+
+<<[[objfile()]] an SXREF was found hook>>=
+xrefresolv = true;
+@
 
 \section{Loading libraries semi automatically [[5l -lxxx]]}
 
@@ -6244,7 +6301,7 @@ void
 datblk(long s, long n, bool sstring)
 {
     Prog *p;
-    long a, l
+    long a, l;
     int i, c;
     <<[[datblk()]] locals>>
 
@@ -6285,7 +6342,7 @@ datblk(long s, long n, bool sstring)
 }
 @
 
-<<[[datblk()]] locals>>
+<<[[datblk()]] locals>>=
 long j;
 @
 
@@ -6310,7 +6367,7 @@ case D_SCONST:
 @
 
 
-<<[[datblk()]] locals>>
+<<[[datblk()]] locals>>=
 Sym *v;
 char *cast;
 long d;
@@ -7551,6 +7608,7 @@ if(debug['t']) {
       }
 }
 @
+
 
 
 
@@ -9001,7 +9059,7 @@ case AMOVWD:
 
 
 
-<<[[datblk()]] locals>>
+<<[[datblk()]] locals>>=
 long fl;
 @
 

@@ -551,18 +551,26 @@ asmlc(void)
 
 /*s: function datblk(arm) */
 void
-datblk(long s, long n, bool str)
+datblk(long s, long n, bool sstring)
 {
-    Sym *v;
     Prog *p;
-    char *cast;
-    long a, l, fl, j, d;
+    long a, l;
     int i, c;
+    /*s: [[datblk()]] locals */
+    long j;
+    /*x: [[datblk()]] locals */
+    Sym *v;
+    char *cast;
+    long d;
+    /*x: [[datblk()]] locals */
+    long fl;
+    /*e: [[datblk()]] locals */
 
     memset(buf.dbuf, 0, n+Dbufslop);
 
     for(p = datap; p != P; p = p->link) {
-        if(str != (p->from.sym->type == SSTRING))
+
+        if(sstring != (p->from.sym->type == SSTRING))
             continue;
 
         curp = p;
@@ -582,6 +590,7 @@ datblk(long s, long n, bool str)
         if(l >= n)
             continue;
 
+        /*s: [[datblk()]] sanity check multiple initialization */
         if(p->as != AINIT && p->as != ADYNT) {
             for(j=l+(c-i)-1; j>=l; j--)
                 if(buf.dbuf[j]) {
@@ -590,37 +599,17 @@ datblk(long s, long n, bool str)
                     break;
                 }
         }
+        /*e: [[datblk()]] sanity check multiple initialization */
 
         switch(p->to.type) {
-
-        case D_FCONST:
-            switch(c) {
-            default:
-            case 4:
-                fl = ieeedtof(p->to.ieee);
-                cast = (char*)&fl;
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[fnuxi4[i]];
-                    l++;
-                }
-                break;
-            case 8:
-                cast = (char*)p->to.ieee;
-                for(; i<c; i++) {
-                    buf.dbuf[l] = cast[fnuxi8[i]];
-                    l++;
-                }
-                break;
-            }
-            break;
-
+        /*s: [[datblk()]] switch type of destination cases */
         case D_SCONST:
             for(; i<c; i++) {
                 buf.dbuf[l] = p->to.sval[i];
                 l++;
             }
             break;
-
+        /*x: [[datblk()]] switch type of destination cases */
         case D_CONST:
             d = p->to.offset;
             v = p->to.sym;
@@ -668,7 +657,28 @@ datblk(long s, long n, bool str)
                 break;
             }
             break;
-
+        /*x: [[datblk()]] switch type of destination cases */
+        case D_FCONST:
+            switch(c) {
+            default:
+            case 4:
+                fl = ieeedtof(p->to.ieee);
+                cast = (char*)&fl;
+                for(; i<c; i++) {
+                    buf.dbuf[l] = cast[fnuxi4[i]];
+                    l++;
+                }
+                break;
+            case 8:
+                cast = (char*)p->to.ieee;
+                for(; i<c; i++) {
+                    buf.dbuf[l] = cast[fnuxi8[i]];
+                    l++;
+                }
+                break;
+            }
+            break;
+        /*e: [[datblk()]] switch type of destination cases */
         default:
             diag("unknown mode in initialization%P", p);
             break;
