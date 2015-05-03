@@ -36,6 +36,7 @@ struct	Event
 {
     int		kbdc;
     Mouse	mouse;
+
     int		n;		/* number of characters in message */
     void	*v;		/* data unpacked by general event-handling function */
     uchar	data[EMAXMSG];	/* message from an arbitrary file descriptor */
@@ -64,6 +65,7 @@ extern int	 ecanread(ulong);
 extern Mouse	emouse(void);
 extern int	 	ekbd(void);
 extern ulong	etimer(ulong, int);
+
 extern int	 	ecanmouse(void);
 extern int	 	ecankbd(void);
 

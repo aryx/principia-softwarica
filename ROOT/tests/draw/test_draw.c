@@ -1,6 +1,11 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <event.h>
+
+void  eresized(int x) {
+    print("eresized %d\n", x);
+}
 
 void main(void) {
   
@@ -20,6 +25,12 @@ void main(void) {
   string(view, Pt(200, 200), display->black, ZP, font, "this is a test");
 
   flushimage(display, 1);
-  sleep(5000); // msec
 
+  //sleep(5000); // msec
+  einit(Ekeyboard);
+
+  for(;;) {
+    res = ekbd();
+    print("key =%d\n", res);
+  }
 }

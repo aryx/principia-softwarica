@@ -17388,7 +17388,7 @@ dirfixed(byte *p, byte *e, DirEntry *d)
 \subsection{Overview}
 
 % interrupt i8042intr 
-% -> kbdputsc (accumulate, handle special keys)
+% -> kbdputsc (accumulate, handle special keys) sc for scan code
 % -> kbdputc (which adjust kbd circular buffer);
 
 % interrupt kbdcclock 
@@ -17409,6 +17409,7 @@ enum {
 
     PF=         Spec|0x20,  /* num pad function key */
     View=       Spec|0x00,  /* view (shift window up) */
+
     Shift=      Spec|0x60,
     Break=      Spec|0x61,
     Ctrl=       Spec|0x62,
@@ -17470,6 +17471,8 @@ Rune kbtab[Nscan] =
 % hash<scan_code, Rune>, 
 % can see Ctrl, Shift, Alt here (but not Altgr? Altgr is in ktabesc1)
 
+% See Compiler.nw to see how then a character is translated in an integer,
+% and actually here as a Rune.
 
 <<global kbtabshift(x86)>>=
 Rune kbtabshift[Nscan] =
@@ -17610,7 +17613,7 @@ i8042intr(Ureg*, void*)
 @
 
 
-% called from the interrupt, call kbdputc(c)
+% i8042intr -> <> -> kbdputc
 <<function kbdputsc(x86)>>=
 /*
  * Scan code processing
@@ -17722,6 +17725,10 @@ kbdputsc(byte k, int external)
 % about keyup, when type 'a', get 1e, when release get 9e, so 1e+0x80
 % do not put char instead of byte for 'k', otherwise will get weird
 % behavior like Left generating a 2.
+%note that it does not send the Ctr key event to the process (so different
+% than gtk where can get notified when you just pressed a key, any key,
+% and also when it's released. Here even in raw mode there are some
+% processing done)
 
 \ifallcode
 <<[[kbdputsc()]] ensures c is in boundary(x86)>>=
@@ -18859,7 +18866,7 @@ Dev consdevtab = {
 
 \subsection{[[/dev/consctl]] and raw input}
 
-% who needs raw input? well rio?
+% who needs raw input? well rio, efuns!
 
 <<[[ConsKbd]] other fields>>=
 bool raw;        /* true if we shouldn't process input */
@@ -21681,6 +21688,9 @@ bool havetsc;
 % so maybe not that interesting
 
 \section{Overview}
+
+% we have one machine timer, but we want many processes to have
+% different alarms.
 
 % different capabilities? timer, clock, rtc, ??
 
