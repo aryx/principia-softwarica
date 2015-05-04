@@ -24,6 +24,9 @@ void main(void) {
   for(;;) {
     res = ekbd();
     print("key =%d\n", res);
+    if(res == 9) {
+      exit(2);
+    }
   }
 
 }
