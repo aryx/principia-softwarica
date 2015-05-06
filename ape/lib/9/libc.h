@@ -16,6 +16,13 @@
 #include <signal.h>
 #include <time.h>
 
+// pad stuff
+typedef int bool;
+enum _bool {
+  false = 0,
+  true = 1
+};
+
 #define	nelem(x)	(sizeof(x)/sizeof((x)[0]))
 
 extern	int	tokenize(char*, char**, int);

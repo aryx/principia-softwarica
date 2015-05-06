@@ -454,6 +454,7 @@ extern	int	toupper(int);
 
 // misc
 extern	double	charstod(int(*)(void*), void*);
+// modified in place, so type should really be void cleanname(INOUT char*);
 extern	char*	cleanname(char*);
 extern	int		encodefmt(Fmt*);
 extern	int		getfields(char*, char**, int, int, char*);
