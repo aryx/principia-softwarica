@@ -49,7 +49,9 @@ main(int argc, char *argv[])
 	ot = findoty();
 	oname = ot->oname;
 	append(&cpp, "cpp");
-	append(&cpp, "-D__STDC__=1");	/* ANSI says so */
+	append(&cpp, "-D__STDC__");	/* ANSI says so */
+    // was -D__STDC__=1 but seems like rc does not like the =xx syntax
+    // when copy pasting a pcc -v command to the terminal
 	append(&cpp, "-N");		/* turn off standard includes */
 	append(&cc, ot->cc);
 	append(&ld, ot->ld);
