@@ -36,3 +36,25 @@ SRC_VIEWS= \
 # y.tab.[ch]
 
 #less: can remove yaccpars, unix compatibility
+
+sync::
+	$(MAKE) sync_ml
+
+
+CAML=/home/pad/github/fork-ocaml
+
+SRC_VIEWS_ML=\
+  $(CAML)/lex/syntax.mli \
+  $(CAML)/lex/output.mli \
+  $(CAML)/lex/output.ml \
+  $(CAML)/lex/lexgen.mli \
+  $(CAML)/lex/lexgen.ml \
+  $(CAML)/lex/compact.mli \
+  $(CAML)/lex/compact.ml \
+  $(CAML)/lex/main.ml \
+
+
+SYNCWEB_ML=~/github/syncweb/syncweb -md5sum_in_auxfile -less_marks -lang ocaml
+
+sync_ml:
+	for i in $(SRC_VIEWS_ML); do echo $$i; $(SYNCWEB_ML) $(SRC_ORIG) $$i || exit 1; done

@@ -6543,3 +6543,885 @@ int	gtnm(void);
 @
 
 
+\section{[[ocamllex/]]}
+
+\subsection*{[[lex/syntax.mli]]}
+
+<<type Syntax.location>>=
+(* The shallow abstract syntax *)
+
+type location =
+    Location of int * int
+@
+
+<<type Syntax.regular_expression>>=
+type regular_expression =
+    Epsilon
+  | Characters of int list
+  | Sequence of regular_expression * regular_expression
+  | Alternative of regular_expression * regular_expression
+  | Repetition of regular_expression
+@
+
+<<type Syntax.lexer_definition>>=
+type lexer_definition =
+    { header: location;
+      entrypoints: (string * (regular_expression * location) list) list;
+      trailer: location }
+@
+
+
+%-------------------------------------------------------------
+
+<<lex/syntax.mli>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+<<type Syntax.location>>
+
+<<type Syntax.regular_expression>>
+
+<<type Syntax.lexer_definition>>
+@
+
+
+\subsection*{[[lex/output.mli]]}
+
+<<signature Output.output_lexdef>>=
+(* Output the DFA tables and its entry points *)
+
+val output_lexdef:
+      in_channel -> out_channel ->
+      Syntax.location ->
+      Compact.lex_tables ->
+      Lexgen.automata_entry list ->
+      Syntax.location ->
+      unit
+@
+
+
+%-------------------------------------------------------------
+
+<<lex/output.mli>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+<<signature Output.output_lexdef>>
+@
+
+
+\subsection*{[[lex/output.ml]]}
+
+<<constant Output.copy_buffer>>=
+(* To copy the ML code fragments *)
+
+let copy_buffer = String.create 1024
+@
+
+<<function Output.copy_chunk_unix>>=
+let copy_chunk_unix ic oc (Location(start,stop)) =
+  seek_in ic start;
+  let n = ref (stop - start) in
+  while !n > 0 do
+    let m = input ic copy_buffer 0 (min !n 1024) in
+    output oc copy_buffer 0 m;
+    n := !n - m
+  done
+@
+
+
+<<constant Output.copy_chunk>>=
+let copy_chunk =
+  match Sys.os_type with
+  | _       -> copy_chunk_unix
+@
+
+<<function Output.output_byte>>=
+(* To output an array of short ints, encoded as a string *)
+
+let output_byte oc b =
+  output_char oc '\\';
+  output_char oc (Char.chr(48 + b / 100));
+  output_char oc (Char.chr(48 + (b / 10) mod 10));
+  output_char oc (Char.chr(48 + b mod 10))
+@
+
+<<function Output.output_array>>=
+let output_array oc v =
+  output_string oc "   \"";
+  for i = 0 to Array.length v - 1 do
+    output_byte oc (v.(i) land 0xFF);
+    output_byte oc ((v.(i) asr 8) land 0xFF);
+    if i land 7 = 7 then output_string oc "\\\n    "
+  done;
+  output_string oc "\""
+@
+
+<<function Output.output_tables>>=
+(* Output the tables *)
+
+let output_tables oc tbl =
+  output_string oc "let lex_tables = {\n";
+  fprintf oc "  Lexing.lex_base = \n%a;\n" output_array tbl.tbl_base;
+  fprintf oc "  Lexing.lex_backtrk = \n%a;\n" output_array tbl.tbl_backtrk;
+  fprintf oc "  Lexing.lex_default = \n%a;\n" output_array tbl.tbl_default;
+  fprintf oc "  Lexing.lex_trans = \n%a;\n" output_array tbl.tbl_trans;
+  fprintf oc "  Lexing.lex_check = \n%a\n" output_array tbl.tbl_check;
+  output_string oc "}\n\n"
+@
+
+<<function Output.output_entry>>=
+(* Output the entries *)
+
+let output_entry ic oc e =
+  fprintf oc "%s lexbuf = %s_rec lexbuf %d\n"
+          e.auto_name e.auto_name e.auto_initial_state;
+  fprintf oc "and %s_rec lexbuf state =\n" e.auto_name;
+  fprintf oc "  match Lexing.engine lex_tables state lexbuf with\n    ";
+  let first = ref true in
+  List.iter
+    (fun (num, loc) ->
+      if !first then first := false else fprintf oc "  | ";
+      fprintf oc "%d -> (" num;
+      copy_chunk ic oc loc;
+      fprintf oc ")\n")
+    e.auto_actions;
+  fprintf oc "  | n -> lexbuf.Lexing.refill_buff lexbuf; %s_rec lexbuf n\n\n"
+          e.auto_name
+@
+
+<<function Output.output_lexdef>>=
+(* Main output function *)
+
+let output_lexdef ic oc header tables entry_points trailer =
+  Printf.printf "%d states, %d transitions, table size %d bytes\n"
+    (Array.length tables.tbl_base)
+    (Array.length tables.tbl_trans)
+    (2 * (Array.length tables.tbl_base + Array.length tables.tbl_backtrk +
+          Array.length tables.tbl_default + Array.length tables.tbl_trans +
+          Array.length tables.tbl_check));
+  flush stdout;
+  copy_chunk ic oc header;
+  output_tables oc tables;
+  begin match entry_points with
+    [] -> ()
+  | entry1 :: entries ->
+      output_string oc "let rec "; output_entry ic oc entry1;
+      List.iter
+        (fun e -> output_string oc "and "; output_entry ic oc e)
+        entries
+  end;
+  copy_chunk ic oc trailer
+@
+
+
+%-------------------------------------------------------------
+
+<<lex/output.ml>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+(* Output the DFA tables and its entry points *)
+
+open Printf
+open Syntax
+open Lexgen
+open Compact
+
+<<constant Output.copy_buffer>>
+
+<<function Output.copy_chunk_unix>>
+
+<<constant Output.copy_chunk>>
+
+<<function Output.output_byte>>
+
+<<function Output.output_array>>
+
+<<function Output.output_tables>>
+
+<<function Output.output_entry>>
+
+<<function Output.output_lexdef>>
+@
+
+
+\subsection*{[[lex/lexgen.mli]]}
+
+<<type Lexgen.automata>>=
+type automata =
+    Perform of int
+  | Shift of automata_trans * automata_move array
+@
+
+<<type Lexgen.automata_trans>>=
+and automata_trans =
+    No_remember
+  | Remember of int
+@
+
+<<type Lexgen.automata_move>>=
+and automata_move =
+    Backtrack
+  | Goto of int
+@
+
+<<type Lexgen.automata_entry>>=
+(* Representation of entry points *)
+
+type automata_entry =
+  { auto_name: string;
+    auto_initial_state: int;
+    auto_actions: (int * Syntax.location) list }
+@
+
+<<signature Lexgen.make_dfa>>=
+(* The entry point *)
+
+val make_dfa: Syntax.lexer_definition -> automata_entry list * automata array
+@
+
+
+%-------------------------------------------------------------
+
+<<lex/lexgen.mli>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+(* Representation of automata *)
+
+<<type Lexgen.automata>>
+<<type Lexgen.automata_trans>>
+<<type Lexgen.automata_move>>
+
+<<type Lexgen.automata_entry>>
+
+<<signature Lexgen.make_dfa>>
+@
+
+
+\subsection*{[[lex/lexgen.ml]]}
+
+<<type Lexgen.regexp>>=
+(* Deep abstract syntax for regular expressions *)
+
+type regexp =
+    Empty
+  | Chars of int
+  | Action of int
+  | Seq of regexp * regexp
+  | Alt of regexp * regexp
+  | Star of regexp
+@
+
+<<type Lexgen.lexer_entry>>=
+type lexer_entry =
+  { lex_name: string;
+    lex_regexp: regexp;
+    lex_actions: (int * location) list }
+@
+
+<<constant Lexgen.chars>>=
+(* From shallow to deep syntax *)
+
+let chars = ref ([] : int list list)
+@
+
+<<constant Lexgen.chars_count>>=
+let chars_count = ref 0
+@
+
+<<constant Lexgen.actions>>=
+let actions = ref ([] : (int * location) list)
+@
+
+<<constant Lexgen.actions_count>>=
+let actions_count = ref 0
+@
+
+<<function Lexgen.encode_regexp>>=
+let rec encode_regexp = function
+    Epsilon -> Empty
+  | Characters cl ->
+      let n = !chars_count in
+      chars := cl :: !chars;
+      incr chars_count;
+      Chars(n)
+  | Sequence(r1,r2) ->
+      Seq(encode_regexp r1, encode_regexp r2)
+  | Alternative(r1,r2) ->
+      Alt(encode_regexp r1, encode_regexp r2)
+  | Repetition r ->
+      Star (encode_regexp r)
+@
+
+<<function Lexgen.encode_casedef>>=
+let encode_casedef casedef =
+  List.fold_left
+   (fun reg (expr, act) ->
+     let act_num = !actions_count in
+     incr actions_count;
+     actions := (act_num, act) :: !actions;
+     Alt(reg, Seq(encode_regexp expr, Action act_num)))
+   Empty
+   casedef
+@
+
+<<function Lexgen.encode_lexdef>>=
+let encode_lexdef def =
+  chars := [];
+  chars_count := 0;
+  let entry_list =
+    List.map
+      (fun (entry_name, casedef) ->
+        actions := [];
+        actions_count := 0;
+        let re = encode_casedef casedef in
+        { lex_name = entry_name;
+          lex_regexp = re;
+          lex_actions = List.rev !actions })
+      def.entrypoints in
+  let chr = Array.of_list (List.rev !chars) in
+  chars := [];
+  actions := [];
+  (chr, entry_list)
+@
+
+<<type Lexgen.transition>>=
+(* To generate directly a NFA from a regular expression.
+   Confer Aho-Sethi-Ullman, dragon book, chap. 3 *)
+
+type transition =
+    OnChars of int
+  | ToAction of int
+@
+
+<<function Lexgen.nullable>>=
+let rec nullable = function
+    Empty      -> true
+  | Chars _    -> false
+  | Action _   -> false
+  | Seq(r1,r2) -> nullable r1 & nullable r2
+  | Alt(r1,r2) -> nullable r1 or nullable r2
+  | Star r     -> true
+@
+
+<<function Lexgen.firstpos>>=
+let rec firstpos = function
+    Empty      -> TransSet.empty
+  | Chars pos  -> TransSet.add (OnChars pos) TransSet.empty
+  | Action act -> TransSet.add (ToAction act) TransSet.empty
+  | Seq(r1,r2) -> if nullable r1
+                  then TransSet.union (firstpos r1) (firstpos r2)
+                  else firstpos r1
+  | Alt(r1,r2) -> TransSet.union (firstpos r1) (firstpos r2)
+  | Star r     -> firstpos r
+@
+
+<<function Lexgen.lastpos>>=
+let rec lastpos = function
+    Empty      -> TransSet.empty
+  | Chars pos  -> TransSet.add (OnChars pos) TransSet.empty
+  | Action act -> TransSet.add (ToAction act) TransSet.empty
+  | Seq(r1,r2) -> if nullable r2
+                  then TransSet.union (lastpos r1) (lastpos r2)
+                  else lastpos r2
+  | Alt(r1,r2) -> TransSet.union (lastpos r1) (lastpos r2)
+  | Star r     -> lastpos r
+@
+
+<<function Lexgen.followpos>>=
+let followpos size entry_list =
+  let v = Array.create size TransSet.empty in
+  let fill_pos first = function
+      OnChars pos -> v.(pos) <- TransSet.union first v.(pos)
+    | ToAction _  -> () in
+  let rec fill = function
+      Seq(r1,r2) ->
+        fill r1; fill r2;
+        TransSet.iter (fill_pos (firstpos r2)) (lastpos r1)
+    | Alt(r1,r2) ->
+        fill r1; fill r2
+    | Star r ->
+        fill r;
+        TransSet.iter (fill_pos (firstpos r)) (lastpos r)
+    | _ -> () in
+  List.iter (fun entry -> fill entry.lex_regexp) entry_list;
+  v
+@
+
+<<constant Lexgen.no_action>>=
+let no_action = max_int
+@
+
+<<function Lexgen.split_trans_set>>=
+let split_trans_set trans_set =
+  TransSet.fold
+    (fun trans (act, pos_set as act_pos_set) ->
+      match trans with
+        OnChars pos -> (act, pos :: pos_set)
+      | ToAction act1 -> if act1 < act then (act1, pos_set) else act_pos_set)
+    trans_set
+    (no_action, [])
+@
+
+<<constant Lexgen.state_map>>=
+let state_map = ref (StateMap.empty: (transition Set.t, int) StateMap.t)
+@
+
+<<constant Lexgen.todo>>=
+let todo = (Stack.create() : (transition Set.t * int) Stack.t)
+@
+
+<<constant Lexgen.next_state_num>>=
+let next_state_num = ref 0
+@
+
+<<function Lexgen.reset_state_mem>>=
+let reset_state_mem () =
+  state_map := StateMap.empty;
+  Stack.clear todo;
+  next_state_num := 0
+@
+
+<<function Lexgen.get_state>>=
+let get_state st = 
+  try
+    StateMap.find st !state_map
+  with Not_found ->
+    let num = !next_state_num in
+    incr next_state_num;
+    state_map := StateMap.add st num !state_map;
+    Stack.push (st, num) todo;
+    num
+@
+
+<<function Lexgen.map_on_all_states>>=
+let map_on_all_states f =
+  let res = ref [] in
+  begin try
+    while true do
+      let (st, i) = Stack.pop todo in
+      let r = f st in
+      res := (r, i) :: !res
+    done
+  with Stack.Empty -> ()
+  end;
+  !res
+@
+
+<<function Lexgen.goto_state>>=
+let goto_state st =
+  if TransSet.is_empty st then Backtrack else Goto (get_state st)
+@
+
+<<function Lexgen.transition_from>>=
+let transition_from chars follow pos_set = 
+  let tr = Array.create 257 TransSet.empty in
+  let shift = Array.create 257 Backtrack in
+    List.iter
+      (fun pos ->
+        List.iter
+          (fun c ->
+             tr.(c) <- TransSet.union tr.(c) follow.(pos))
+          chars.(pos))
+      pos_set;
+    for i = 0 to 256 do
+      shift.(i) <- goto_state tr.(i)
+    done;
+    shift
+@
+
+<<function Lexgen.translate_state>>=
+let translate_state chars follow state =
+  match split_trans_set state with
+    (n, []) -> Perform n
+  | (n, ps) -> Shift((if n = no_action then No_remember else Remember n),
+                     transition_from chars follow ps)
+@
+
+<<function Lexgen.make_dfa>>=
+let make_dfa lexdef =
+  let (chars, entry_list) = encode_lexdef lexdef in
+  let follow = followpos (Array.length chars) entry_list in
+  reset_state_mem();
+  let initial_states =
+    List.map
+      (fun le ->
+        { auto_name = le.lex_name;
+          auto_initial_state = get_state(firstpos le.lex_regexp);
+          auto_actions = le.lex_actions })
+      entry_list in
+  let states = map_on_all_states (translate_state chars follow) in
+  let actions = Array.create !next_state_num (Perform 0) in
+  List.iter (fun (act, i) -> actions.(i) <- act) states;
+  reset_state_mem();
+  (initial_states, actions)
+@
+
+
+%-------------------------------------------------------------
+
+<<lex/lexgen.ml>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+(* Compiling a lexer definition *)
+
+open Syntax
+
+<<type Lexgen.regexp>>
+
+<<type Lexgen.lexer_entry>>
+    
+(* Representation of automata *)
+
+<<type Lexgen.automata>>
+<<type Lexgen.automata_trans>>
+<<type Lexgen.automata_move>>
+
+<<type Lexgen.automata_entry>>
+    
+<<constant Lexgen.chars>>
+<<constant Lexgen.chars_count>>
+<<constant Lexgen.actions>>
+<<constant Lexgen.actions_count>>
+
+<<function Lexgen.encode_regexp>>
+
+<<function Lexgen.encode_casedef>>
+
+<<function Lexgen.encode_lexdef>>
+
+<<type Lexgen.transition>>
+
+module TransSet = Set
+
+<<function Lexgen.nullable>>
+
+<<function Lexgen.firstpos>>
+
+<<function Lexgen.lastpos>>
+
+<<function Lexgen.followpos>>
+
+<<constant Lexgen.no_action>>
+
+<<function Lexgen.split_trans_set>>
+
+module StateMap = Map
+
+<<constant Lexgen.state_map>>
+<<constant Lexgen.todo>>
+<<constant Lexgen.next_state_num>>
+
+<<function Lexgen.reset_state_mem>>
+
+<<function Lexgen.get_state>>
+
+<<function Lexgen.map_on_all_states>>
+
+<<function Lexgen.goto_state>>
+
+<<function Lexgen.transition_from>>
+
+<<function Lexgen.translate_state>>
+
+<<function Lexgen.make_dfa>>
+@
+
+
+\subsection*{[[lex/compact.mli]]}
+
+<<type Compact.lex_tables>>=
+(* Compaction of an automata *)
+
+type lex_tables =
+  { tbl_base: int array;                 (* Perform / Shift *)
+    tbl_backtrk: int array;              (* No_remember / Remember *)
+    tbl_default: int array;              (* Default transition *)
+    tbl_trans: int array;                (* Transitions (compacted) *)
+    tbl_check: int array }               (* Check (compacted) *)
+@
+
+<<signature Compact.compact_tables>>=
+val compact_tables: Lexgen.automata array -> lex_tables
+@
+
+
+%-------------------------------------------------------------
+
+<<lex/compact.mli>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+<<type Compact.lex_tables>>
+
+<<signature Compact.compact_tables>>
+@
+
+
+\subsection*{[[lex/compact.ml]]}
+
+<<function Compact.most_frequent_elt>>=
+(* Determine the integer occurring most frequently in an array *)
+
+let most_frequent_elt v =
+  let frequencies = Hashtbl.create 17 in
+  let max_freq = ref 0 in
+  let most_freq = ref (v.(0)) in
+  for i = 0 to Array.length v - 1 do
+    let e = v.(i) in
+    let r =
+      try
+        Hashtbl.find frequencies e
+      with Not_found ->
+        let r = ref 1 in Hashtbl.add frequencies e r; r in
+    incr r;
+    if !r > !max_freq then begin max_freq := !r; most_freq := e end
+  done;
+  !most_freq
+@
+
+<<function Compact.non_default_elements>>=
+(* Transform an array into a list of (position, non-default element) *)
+
+let non_default_elements def v =
+  let rec nondef i =
+    if i >= Array.length v then [] else begin
+      let e = v.(i) in
+      if e = def then nondef(i+1) else (i, e) :: nondef(i+1)
+    end in
+  nondef 0
+@
+
+<<function Compact.grow_transitions>>=
+let grow_transitions () =
+  let old_trans = !trans
+  and old_check = !check in
+  let n = Array.length old_trans in
+  trans := Array.create (2*n) 0;
+  Array.blit old_trans 0 !trans 0 !last_used;
+  check := Array.create (2*n) (-1);
+  Array.blit old_check 0 !check 0 !last_used
+@
+
+<<function Compact.pack_moves>>=
+let pack_moves state_num move_t =
+  let move_v = Array.create 257 0 in
+  for i = 0 to 256 do
+    move_v.(i) <-
+      (match move_t.(i) with
+        Backtrack -> -1
+      | Goto n -> n)
+  done;
+  let default = most_frequent_elt move_v in
+  let nondef = non_default_elements default move_v in
+  let rec pack_from b =
+    while b + 257 > Array.length !trans do grow_transitions() done;
+    let rec try_pack = function
+      [] -> b
+    | (pos, v) :: rem ->
+        if !check.(b + pos) = -1 then try_pack rem else pack_from (b+1) in
+    try_pack nondef in
+  let base = pack_from 0 in
+  List.iter
+    (fun (pos, v) ->
+      !trans.(base + pos) <- v;
+      !check.(base + pos) <- state_num)
+    nondef;
+  if base + 257 > !last_used then last_used := base + 257;
+  (base, default)
+@
+
+<<function Compact.compact_tables>>=
+let compact_tables state_v =
+  let n = Array.length state_v in
+  let base = Array.create n 0
+  and backtrk = Array.create n (-1)
+  and default = Array.create n 0 in
+  for i = 0 to n - 1 do
+    match state_v.(i) with
+      Perform n ->
+        base.(i) <- -(n+1)
+    | Shift(trans, move) ->
+        begin match trans with
+          No_remember -> ()
+        | Remember n -> backtrk.(i) <- n
+        end;
+        let (b, d) = pack_moves i move in
+        base.(i) <- b;
+        default.(i) <- d
+  done;
+  { tbl_base = base;
+    tbl_backtrk = backtrk;
+    tbl_default = default;
+    tbl_trans = Array.sub !trans 0 !last_used;
+    tbl_check = Array.sub !check 0 !last_used }
+@
+
+
+%-------------------------------------------------------------
+
+<<lex/compact.ml>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+(* Compaction of an automata *)
+
+open Lexgen
+
+<<function Compact.most_frequent_elt>>
+
+<<function Compact.non_default_elements>>
+
+(* Compact the transition and check arrays *)
+
+let trans = ref(Array.create 1024 0)
+and check = ref(Array.create 1024 (-1))
+and last_used = ref 0
+
+<<function Compact.grow_transitions>>
+
+<<function Compact.pack_moves>>
+
+<<type Compact.lex_tables>>
+
+<<function Compact.compact_tables>>
+
+
+@
+
+
+\subsection*{[[lex/main.ml]]}
+
+<<function Main.main>>=
+let main () =
+  if Array.length Sys.argv != 2 then begin
+    prerr_endline "Usage: ocamllex <input file>";
+    exit 2
+  end;
+  let source_name = Sys.argv.(1) in
+  let dest_name =
+    if Filename.check_suffix source_name ".mll" 
+    then Filename.chop_suffix source_name ".mll" ^ ".ml"
+    else source_name ^ ".ml" 
+  in
+  let ic = open_in source_name in
+  let oc = open_out dest_name in
+  let lexbuf = Lexing.from_channel ic in
+  let def =
+    try
+      Parser.lexer_definition Lexer.main lexbuf
+    with exn ->
+      close_out oc;
+      Sys.remove dest_name;
+      begin match exn with
+        Parsing.Parse_error ->
+          prerr_string "Syntax error around char ";
+          prerr_int (Lexing.lexeme_start lexbuf);
+          prerr_endline "."
+      | Lexer.Lexical_error s ->
+          prerr_string "Lexical error around char ";
+          prerr_int (Lexing.lexeme_start lexbuf);
+          prerr_string ": ";
+          prerr_string s;
+          prerr_endline "."
+      | _ -> raise exn
+      end;
+      exit 2 in
+  let (entries, transitions) = Lexgen.make_dfa def in
+  let tables = Compact.compact_tables transitions in
+  Output.output_lexdef ic oc def.header tables entries def.trailer;
+  close_in ic;
+  close_out oc
+@
+
+<<toplevel Main._1>>=
+let _ = Printexc.catch main (); exit 0
+@
+
+
+%-------------------------------------------------------------
+
+<<lex/main.ml>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+(* The lexer generator. Command-line parsing. *)
+
+open Syntax
+open Lexgen
+open Output
+
+<<function Main.main>>
+
+<<toplevel Main._1>>
+
+@
+
+
