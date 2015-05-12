@@ -52,6 +52,8 @@ SRC_VIEWS_ML=\
   $(CAML)/lex/compact.mli \
   $(CAML)/lex/compact.ml \
   $(CAML)/lex/main.ml \
+  $(CAML)/stdlib/lexing.mli \
+  $(CAML)/stdlib/lexing.ml \
 
 
 SYNCWEB_ML=~/github/syncweb/syncweb -md5sum_in_auxfile -less_marks -lang ocaml
