@@ -74,8 +74,7 @@
 % Config
 %------------------------------------------------------------------------------
 \allcodefalse
-% used for forward decl, pragmas, func decl, extern decl, stats, #ifdef,
-% debugging macros
+% used for?
 
 %\setcounter{tocdepth}{1}
 
@@ -147,11 +146,16 @@ Here are other candidates that were considered but ultimately discarded:
 \item Flex and Bison
 \item Antlr
 \end{itemize}
+% Prolog DCG
+% EDSL for regexps or grammar?
+% Many lexers are handwritten (e.g. in Plan9), and many grammars
+% are also handwritten (seems to have some advantages for IDE, e.g.
+% jetbrains does this, but also now hack/flow)
 
 % Berkeley Yacc
 % Unix Lex?
-% go yacc! a port of yacc.c to go by go authors, might be interesting
-% to contrast C and Go
+% go-yacc! a port of yacc.c to Go by Go authors, might be interesting
+% to contrast C and Go.
 
 % ocamllex: 1000 LOC vs the 3000 of plan9 lex
 % ocamlyacc: 6000 LOC, vs the 3000 of plan9 yacc
@@ -212,6 +216,7 @@ if Array.length Sys.argv != 2 then begin
   exit 2
 end;
 @
+% .mll to .ml
 
 \section{[[yacc]] services}
 
@@ -224,12 +229,6 @@ end;
 \section{Bootstrapping}
 
 %###############################################################################
-
-
-
-
-
-
 
 \chapter{Lex}
 
@@ -248,10 +247,10 @@ type regular_expression =
   | Repetition of regular_expression
 @
 
-% Characters could be combination of Alternative and Char 
+% Characters could be a combination of Alternative and Char 
 % but maybe useful optimisation?
 
-% so X? is really X | Epsilon and X+ is X X*
+% so 'X?' is really 'X | Epsilon' and 'X+' is 'X X*'
 
 
 \subsection{Abstract syntax tree}
@@ -285,6 +284,7 @@ type regexp =
   | Alt of regexp * regexp
   | Star of regexp
 @
+% Chars??
 
 <<type Lexgen.lexer_entry>>=
 type lexer_entry =
@@ -311,6 +311,7 @@ type automata =
 @
 % usually automata array!
 %val make_dfa: Syntax.lexer_definition -> automata_entry list * automata array
+% so array of array when have Shift.
 
 <<type Lexgen.automata_trans>>=
 and automata_trans =
@@ -323,6 +324,8 @@ and automata_move =
     Backtrack
   | Goto of int
 @
+
+%TODO: dump example for calc/lexer.mll
 
 \subsection{Optimised compacted automata}
 
@@ -371,7 +374,9 @@ type lexbuf =
 \section{[[main()]]}
 
 <<toplevel Main._1>>=
-let _ = Printexc.catch main (); exit 0
+let _ = 
+  Printexc.catch main (); 
+  exit 0
 @
 
 
@@ -439,7 +444,6 @@ val output_lexdef:
 
 \section{Lexing}
 % :) self-reference
-
 % another example of use after calc/lexer.mll :)
 
 <<lex/lexer.mll>>=
@@ -472,17 +476,19 @@ exception Lexical_error of string
 %less: no 'let', could be nice to use to illustrate all features :)
 
 
-% the tokens are?
-% defined in parser.mly, but could be defined in the header
-% (like we do in efuns/prog_modes/ocaml_mode.mll for instan
-
+% the tokens are defined in parser.mly, but they could be defined in the header
+% (like we do in efuns/prog_modes/ocaml_mode.mll for instance)
 <<type Parser.token>>=
-%token <string> Tident
+%token Trule Tparse Tand
 %token <int> Tchar
 %token <string> Tstring
+%token Tstar Tmaybe Tplus Tor Tlparen Trparen 
+%token Tlbracket Trbracket Tcaret Tdash 
+%token Tunderscore Teof
 %token <Syntax.location> Taction
-%token Trule Tparse Tand Tequal Tend Tor Tunderscore Teof Tlbracket Trbracket
-%token Tstar Tmaybe Tplus Tlparen Trparen Tcaret Tdash Tlet
+%token Tlet Tequal 
+%token <string> Tident
+%token Tend  
 @
 % see parser.mly, it expands in a type token = TIdent of string | ...
 
@@ -576,6 +582,11 @@ and comment = parse
 @
 % have seen all the keywords (except let)
 
+% there is a 'shortest' keyword in recent ocamllex, probably
+% it's like the ? perl greedy operator
+
+%TODO: 'as' is useful
+
 \subsection{Operators}
 
 <<[[Lexer.main()]] operator cases>>=
@@ -584,7 +595,6 @@ and comment = parse
 @
 % regexp! see AST correspondance!
 % how is sorted priority? in ab*, the star is just for 'b' or for ab?
-
 
 <<[[Lexer.main()]] operator cases>>=
 | '?'  { Tmaybe }
@@ -628,6 +638,7 @@ and comment = parse
 @
 
 % use Buffer instead? or just use ^ like I was doing originally?
+% actually that's what they do in recent ocamllex
 
 <<Lexer helper functions and globals>>=
 let initial_string_buffer = String.create 256
@@ -723,6 +734,7 @@ let char_for_decimal_code lexbuf i =
 <<Lexer helper functions and globals>>=
 let brace_depth = ref 0
 @
+% need to count them, because the code in action can use '}'
 
 <<rule Lexer.action>>=
 and action = parse
@@ -800,15 +812,15 @@ open Syntax
 
 
 <<grammar>>=
-<<lexer top rule>>
+<<lex top rule>>
 
-<<lexer header rule>>
+<<lex header rule>>
 
-<<lexer named regexp rule>>
+<<lex named regexp rule>>
 
-<<lexer rule rule>>
+<<lex rule rule>>
 
-<<lexer regexp rule>>
+<<lex regexp rule>>
 
 @
 
@@ -816,30 +828,30 @@ open Syntax
 
 % no action rule as it's actually just a token
 
-\subsection{Grammar entry point}
+\subsection{Lexer definition entry point}
 
 <<Parser entry points types>>=
 %start lexer_definition
 %type <Syntax.lexer_definition> lexer_definition
 @
 
-<<lexer top rule>>=
+<<lex top rule>>=
 lexer_definition:
     header named_regexps Trule definition other_definitions header Tend
-        { {header = $1;
-           entrypoints = $4 :: List.rev $5;
-           trailer = $6} }
+        { { header = $1;
+            entrypoints = $4 :: List.rev $5;
+            trailer = $6
+           } 
+         }
 ;
 @
 
 \subsection{Header and trailer}
 
-<<lexer header rule>>=
+<<lex header rule>>=
 header:
-    Taction
-        { $1 }
-  | /*epsilon*/
-        { Location(0,0) }
+    Taction      { $1 }
+  | /*epsilon*/  { Location(0,0) }
 ;
 @
 %$ 
@@ -847,7 +859,8 @@ header:
 
 \subsection{Rule}
 
-<<lexer rule rule>>=
+% rule X = parse ...
+<<lex rule rule>>=
 definition:
     Tident Tequal entry
         { ($1,$3) }
@@ -873,11 +886,16 @@ other_definitions:
 rest_of_entry:
     rest_of_entry Tor case
         { $3::$1 }
-  |
+  | /*epsilon*/
         { [] }
 ;
 @
 %$
+
+
+%less: in recent ocamllex the lexer can take more arguments, which is
+% useful, for instance in my PHP lexer I pass the beginning symbol
+% so that the rule called know what to look for to close it.
 
 \subsection{Regexps}
 
@@ -893,7 +911,7 @@ rest_of_entry:
 
 % left Tstar?? but it's not a binary operator
 
-<<lexer regexp rule>>=
+<<lex regexp rule>>=
 regexp:
     Tchar
         { Characters [$1] }
@@ -905,38 +923,29 @@ regexp:
         { Sequence($1,$2) }
   | Tlparen regexp Trparen
         { $2 }
-  | Tident
-        { try
-            Hashtbl.find named_regexps $1
-          with Not_found ->
-            prerr_string "Reference to unbound regexp name `";
-            prerr_string $1;
-            prerr_string "' at char ";
-            prerr_int (Parsing.symbol_start());
-            prerr_newline();
-            exit 2 }
+  <<rule regexp cases>>
+;
+@
+%$
 
+\subsubsection{Sugar regexps}
+
+<<rule regexp cases>>=
   | regexp Tmaybe
         { Alternative($1, Epsilon) }
   | regexp Tplus
         { Sequence($1, Repetition $1) }
-  | Tstring
-        { regexp_for_string $1 }
-  | Tlbracket char_class Trbracket
-        { Characters $2 }
-  | Tunderscore
-        { Characters all_chars }
-
-  | Teof
-        { Characters [256] }
-;
 @
-
-\subsubsection{Sugar regexps}
+%$
 
 \subsubsection{Range regexps}
 
-<<lexer regexp rule>>=
+<<rule regexp cases>>=
+  | Tlbracket char_class Trbracket
+        { Characters $2 }
+@
+
+<<lex regexp rule>>=
 char_class:
     Tcaret char_class1
         { subtract all_chars $2 }
@@ -956,15 +965,6 @@ char_class1:
 %$
 
 <<parser helper functions and globals>>=
-let regexp_for_string s =
-  let rec re_string n =
-    if n >= String.length s then Epsilon
-    else if succ n = String.length s then Characters([Char.code (s.[n])])
-    else Sequence(Characters([Char.code (s.[n])]), re_string (succ n))
-  in re_string 0
-@
-
-<<parser helper functions and globals>>=
 let char_class c1 c2 =
   let rec cl n =
     if n > c2 then [] else n :: cl(succ n)
@@ -982,10 +982,29 @@ let rec subtract l1 l2 =
   | a::r -> if List.mem a l2 then subtract r l2 else a :: subtract r l2
 @
 
+
 \subsubsection{Named regexps}
 % aliases
 
-<<lexer named regexp rule>>=
+<<parser helper functions and globals>>=
+let named_regexps =
+  (Hashtbl.create 13 : (string, regular_expression) Hashtbl.t)
+@
+
+<<rule regexp cases>>=
+  | Tident
+        { try
+            Hashtbl.find named_regexps $1
+          with Not_found ->
+            prerr_string "Reference to unbound regexp name `";
+            prerr_string $1;
+            prerr_string "' at char ";
+            prerr_int (Parsing.symbol_start());
+            prerr_newline();
+            exit 2 }
+@
+
+<<lex named regexp rule>>=
 named_regexps:
     named_regexps Tlet Tident Tequal regexp
         { Hashtbl.add named_regexps $3 $5 }
@@ -994,10 +1013,31 @@ named_regexps:
 ;
 @
 
-<<parser helper functions and globals>>=
-let named_regexps =
-  (Hashtbl.create 13 : (string, regular_expression) Hashtbl.t)
+
+\subsubsection{Other regexps}
+
+<<rule regexp cases>>=
+  | Tstring
+        { regexp_for_string $1 }
 @
+%$
+
+<<parser helper functions and globals>>=
+let regexp_for_string s =
+  let rec re_string n =
+    if n >= String.length s then Epsilon
+    else if succ n = String.length s then Characters([Char.code (s.[n])])
+    else Sequence(Characters([Char.code (s.[n])]), re_string (succ n))
+  in re_string 0
+@
+
+<<rule regexp cases>>=
+  | Tunderscore
+        { Characters all_chars }
+  | Teof
+        { Characters [256] }
+@
+
 
 \section{Compiling}
 
@@ -1026,6 +1066,7 @@ let named_regexps =
 
 
 
+%###############################################################################
 
 
 \chapter{Yacc}
