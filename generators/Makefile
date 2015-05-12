@@ -40,7 +40,6 @@ SRC_VIEWS= \
 sync::
 	$(MAKE) sync_ml
 
-
 CAML=/home/pad/github/fork-ocaml
 
 SRC_VIEWS_ML=\
@@ -52,6 +51,7 @@ SRC_VIEWS_ML=\
   $(CAML)/lex/compact.mli \
   $(CAML)/lex/compact.ml \
   $(CAML)/lex/main.ml \
+  $(CAML)/lex/lexer.mll \
   $(CAML)/stdlib/lexing.mli \
   $(CAML)/stdlib/lexing.ml \
 
@@ -60,3 +60,12 @@ SYNCWEB_ML=~/github/syncweb/syncweb -md5sum_in_auxfile -less_marks -lang ocaml
 
 sync_ml:
 	for i in $(SRC_VIEWS_ML); do echo $$i; $(SYNCWEB_ML) $(SRC_ORIG) $$i || exit 1; done
+
+
+sync::
+	$(MAKE) sync_yacc
+
+SYNCWEB_YACC=~/github/syncweb/syncweb -md5sum_in_auxfile -less_marks -lang ocamlyacc
+sync_yacc:
+	$(SYNCWEB_YACC) $(SRC_ORIG) $(CAML)/lex/parser.mly
+
