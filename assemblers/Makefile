@@ -19,9 +19,9 @@ TEX=Assembler.tex
 SRC_ORIG=Assembler.nw Assembler_extra.nw Assembler_x86.nw
 
 SRC_VIEWS= \
-  ../include/arm/5.out.h\
-  ../include/386/8.out.h\
-  ../include/common.out.h\
+  ../include/arch/arm/5.out.h\
+  ../include/arch/386/8.out.h\
+  ../include/devel/output/common.out.h\
   misc/data2s.c\
   aa/aa.h\
   aa/compat.c\

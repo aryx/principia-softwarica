@@ -25,9 +25,9 @@ SRC_ORIG=Kernel.nw Kernel_extra.nw
 
 SRC_VIEWS= \
   ../lib_core/libc/9syscall/sys.h\
-  ../include/trace.h\
-  ../include/tos.h\
-  ../include/386/ureg.h\
+  ../include/devel/internals/trace.h\
+  ../include/devel/internals/tos.h\
+  ../include/arch/386/ureg.h\
   arch/386/arch.c \
   arch/386/bios32.c \
   arch/386/dat_arch.h \

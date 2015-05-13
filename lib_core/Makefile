@@ -20,7 +20,7 @@ SRC_ORIG=Libcore.nw Libcore_extra.nw
 
 # from list_graphics originally
 SRC_VIEWS= \
-   ../include/thread.h\
+   ../include/ipc/thread.h\
    libthread/dial.c\
    libthread/ref.c\
    libthread/threadimpl.h\

@@ -20,9 +20,9 @@ SRC_ORIG=Windows.nw Windows_extra.nw
 
 # from list_windows originally
 SRC_VIEWS= \
-   ../include/complete.h\
-   ../include/frame.h\
-   ../include/plumb.h\
+   ../include/strings/complete.h\
+   ../include/gui/frame.h\
+   ../include/ipc/plumb.h\
    rio/dat.h\
    rio/globals.c\
    rio/data.c\

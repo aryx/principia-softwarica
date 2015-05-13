@@ -1,6 +1,6 @@
 /*s: assemblers/5a/a.h */
 #include "../aa/aa.h"
-#include "arm/5.out.h"
+#include <arm/5.out.h>
 
 typedef	struct	Gen	Gen;
 

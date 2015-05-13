@@ -20,13 +20,13 @@ SRC_ORIG=Graphics.nw Graphics_extra.nw
 
 # from list_graphics originally
 SRC_VIEWS= \
-   ../include/cursor.h\
-   ../include/draw.h\
-   ../include/event.h\
-   ../include/keyboard.h\
-   ../include/memdraw.h\
-   ../include/memlayer.h\
-   ../include/mouse.h\
+   ../include/graphics/cursor.h\
+   ../include/graphics/draw.h\
+   ../include/graphics/input/event.h\
+   ../include/graphics/input/keyboard.h\
+   ../include/graphics/input/mouse.h\
+   ../include/graphics/internals/memdraw.h\
+   ../include/graphics/internals/memlayer.h\
    libdraw/misc.c\
    libdraw/alloc.c\
    libdraw/allocimagemix.c\
