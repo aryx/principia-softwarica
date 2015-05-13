@@ -25,9 +25,10 @@ In many of those programs there are support for both the x86 and ARM
 architectures. We chose x86 because it's the most common desktop
 machine (and also it's not that bad according to Linus:
 http://yarchive.net/comp/linux/x86.html). We chose ARM because it is
-far simpler and elegant than x86 (RISC are usually better than CISC);
-ARM is as simple as MIPS and it's alive as it is the most common
-mobile machine (it's in every phone and also in the raspberry PI!).
+far simpler and elegant than x86 (RISC are usually better than CISC).
+We chose ARM over MIPS because ARM is almost as simple as MIPS but
+it's far more alive as it is the most common mobile machine (it's in
+every phone and also in the raspberry PI!).
 
 related work:
  - GNU (Richard Stallman et al.)
@@ -40,8 +41,8 @@ related work:
  - ...
 
 Here are other series of software not covered by principa softwarica:
- - office: word processor, spreadsheet, pixel/vectorized drawing programs
-   (Alto Bravo, appleII Visicalc)
+ - office: word processor, spreadsheet, pixel or vectorized drawing programs
+   (Alto Bravo, appleII Visicalc, MacPaint)
  - communication: email, chat, forums, social network
    (???)
  - information/digital age: web browser/server, digital store, search engine
@@ -60,4 +61,4 @@ A few other meta programs are included in a separate project, pfff:
  - scheck: program to verify other programs.
 
 This project is dedicated to professor Chazarain and his motto
-"Implanter pour mieux comprendre"!
+"Implanter pour mieux comprendre"! (implement to better understand)
