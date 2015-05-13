@@ -6568,6 +6568,8 @@ int	gtnm(void);
 
 <<type Syntax.regular_expression>>
 
+<<type Syntax.action>>
+
 <<type Syntax.rule>>
 
 <<type Syntax.lexer_definition>>
@@ -6744,81 +6746,6 @@ open Compact
 \subsection*{[[lex/lexgen.ml]]}
 
 
-<<constant Lexgen.no_action>>=
-let no_action = max_int
-@
-
-<<function Lexgen.split_trans_set>>=
-let split_trans_set trans_set =
-  Set.fold
-    (fun trans (act, pos_set as act_pos_set) ->
-      match trans with
-        OnChars pos -> (act, pos :: pos_set)
-      | ToAction act1 -> if act1 < act then (act1, pos_set) else act_pos_set)
-    trans_set
-    (no_action, [])
-@
-
-
-
-<<function Lexgen.get_state>>=
-let get_state st = 
-  try
-    Map.find st !state_map
-  with Not_found ->
-    let num = !next_state_num in
-    incr next_state_num;
-    state_map := Map.add st num !state_map;
-    Stack.push (st, num) todo;
-    num
-@
-
-<<function Lexgen.map_on_all_states>>=
-let map_on_all_states f =
-  let res = ref [] in
-  begin try
-    while true do
-      let (st, i) = Stack.pop todo in
-      let r = f st in
-      res := (r, i) :: !res
-    done
-  with Stack.Empty -> ()
-  end;
-  !res
-@
-
-<<function Lexgen.goto_state>>=
-let goto_state st =
-  if Set.is_empty st then Backtrack else Goto (get_state st)
-@
-
-<<function Lexgen.transition_from>>=
-let transition_from chars follow pos_set = 
-  let tr = Array.create 257 Set.empty in
-  let shift = Array.create 257 Backtrack in
-    List.iter
-      (fun pos ->
-        List.iter
-          (fun c ->
-             tr.(c) <- Set.union tr.(c) follow.(pos))
-          chars.(pos))
-      pos_set;
-    for i = 0 to 256 do
-      shift.(i) <- goto_state tr.(i)
-    done;
-    shift
-@
-
-<<function Lexgen.translate_state>>=
-let translate_state chars follow state =
-  match split_trans_set state with
-    (n, []) -> Perform n
-  | (n, ps) -> Shift((if n = no_action then No_remember else Remember n),
-                     transition_from chars follow ps)
-@
-
-
-
 %-------------------------------------------------------------
 
 <<lex/lexgen.ml>>=
@@ -6856,7 +6783,13 @@ open Syntax
 
 <<function Lexgen.encode_lexdef>>
 
+
+(* To generate directly a NFA from a regular expression.
+   Confer Aho-Sethi-Ullman, dragon book, chap. 3 *)
+
 <<type Lexgen.transition>>
+
+<<type Lexgen.state>>
 
 <<function Lexgen.nullable>>
 
@@ -6906,77 +6839,6 @@ open Syntax
 
 
 \subsection*{[[lex/compact.ml]]}
-
-<<function Compact.most_frequent_elt>>=
-(* Determine the integer occurring most frequently in an array *)
-
-let most_frequent_elt v =
-  let frequencies = Hashtbl.create 17 in
-  let max_freq = ref 0 in
-  let most_freq = ref (v.(0)) in
-  for i = 0 to Array.length v - 1 do
-    let e = v.(i) in
-    let r =
-      try
-        Hashtbl.find frequencies e
-      with Not_found ->
-        let r = ref 1 in Hashtbl.add frequencies e r; r in
-    incr r;
-    if !r > !max_freq then begin max_freq := !r; most_freq := e end
-  done;
-  !most_freq
-@
-
-<<function Compact.non_default_elements>>=
-(* Transform an array into a list of (position, non-default element) *)
-
-let non_default_elements def v =
-  let rec nondef i =
-    if i >= Array.length v then [] else begin
-      let e = v.(i) in
-      if e = def then nondef(i+1) else (i, e) :: nondef(i+1)
-    end in
-  nondef 0
-@
-
-<<function Compact.grow_transitions>>=
-let grow_transitions () =
-  let old_trans = !trans
-  and old_check = !check in
-  let n = Array.length old_trans in
-  trans := Array.create (2*n) 0;
-  Array.blit old_trans 0 !trans 0 !last_used;
-  check := Array.create (2*n) (-1);
-  Array.blit old_check 0 !check 0 !last_used
-@
-
-<<function Compact.pack_moves>>=
-let pack_moves state_num move_t =
-  let move_v = Array.create 257 0 in
-  for i = 0 to 256 do
-    move_v.(i) <-
-      (match move_t.(i) with
-        Backtrack -> -1
-      | Goto n -> n)
-  done;
-  let default = most_frequent_elt move_v in
-  let nondef = non_default_elements default move_v in
-  let rec pack_from b =
-    while b + 257 > Array.length !trans do grow_transitions() done;
-    let rec try_pack = function
-      [] -> b
-    | (pos, v) :: rem ->
-        if !check.(b + pos) = -1 then try_pack rem else pack_from (b+1) in
-    try_pack nondef in
-  let base = pack_from 0 in
-  List.iter
-    (fun (pos, v) ->
-      !trans.(base + pos) <- v;
-      !check.(base + pos) <- state_num)
-    nondef;
-  if base + 257 > !last_used then last_used := base + 257;
-  (base, default)
-@
 
 
 
@@ -7138,6 +7000,9 @@ type lex_tables =
 
 <<type Lexing.lex_tables>>
 
+(* take an integer representing a state and return an integer representing
+ * an action_id
+ *)
 external engine: lex_tables -> int -> lexbuf -> int = "lex_engine"
 @
 
@@ -7231,7 +7096,7 @@ let from_string s =
     lex_last_action = 0;
     lex_eof_reached = true }
 @
-
+% why s ^ ""? to build a new string so safe?
 
 
 <<function Lexing.lexeme>>=

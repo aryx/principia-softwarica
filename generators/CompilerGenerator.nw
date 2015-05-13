@@ -12,12 +12,13 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - type more ocamllex! use more type aliases instead of using everywhere
+% - typed more ocamllex! use more type aliases instead of using everywhere
 %   'int' which is not very informative and actually confusing
 
 %thx to codemap/codegraph:
 
 %thx to this manual, better understand lex/yacc:
+% - priority of actions when two matches
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -92,9 +93,9 @@ Principia Softwarica: Lex and Yacc
 }\\
 {version 0.1}
 }
-% for once it's not really Plan9, the lex and yacc seems really to
+% For once it's not really Plan9, the lex and yacc seems really to
 % come from Unix with a small port to Plan9, as opposed to the other
-% document I've already written which are really Plan9 software
+% document I've already written which are really Plan9 software.
 
 \author{
 Yoann Padioleau\\
@@ -143,13 +144,21 @@ Lex and Yacc.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
+% We gonna present ocamllex actually. Shorter code and easier code 
+% to explain than the original lex.
+% And for yacc??
+
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
 \item Flex and Bison
+% LOC?
 \item Antlr
+% LOC?
 \end{itemize}
+
 % Prolog DCG
 % EDSL for regexps or grammar?
+
 % Many lexers are handwritten (e.g. in Plan9), and many grammars
 % are also handwritten (seems to have some advantages for IDE, e.g.
 % jetbrains does this, but also now hack/flow)
@@ -157,10 +166,11 @@ Here are other candidates that were considered but ultimately discarded:
 % Berkeley Yacc
 % Unix Lex?
 % go-yacc! a port of yacc.c to Go by Go authors, might be interesting
-% to contrast C and Go.
+% to contrast C and Go. 3464 LOC
 
 % ocamllex: 1000 LOC vs the 3000 of plan9 lex
 % ocamlyacc: 6000 LOC, vs the 3000 of plan9 yacc
+% byacc:??
 % menhir? 21 000 LOC of ocaml, hmm bigger than my fork-ocaml, lol
 
 % see also sed/awk? 
@@ -273,20 +283,9 @@ type char_ = int
 
 % so 'X?' is really 'X | Epsilon' and 'X+' is 'X X*'
 
+%TODO: toy example? and its dump? unit test (parse string) = AST value?
 
 \subsection{Abstract syntax tree}
-
-<<type Syntax.location>>=
-type location =
-    Location of charpos * charpos
-@
-% header/trailer/action slice, int = charpos
-%(there are so many use of int that it's better to differentiate them)
-
-<<type Syntax.charpos>>=
-type charpos = int
-@
-%pad: I added this
 
 <<type Syntax.lexer_definition>>=
 type lexer_definition =
@@ -300,12 +299,33 @@ type lexer_definition =
 % the list is a kind of Alternative, but it's alternatives with different
 % actions.
 
+<<type Syntax.location>>=
+type location =
+    Location of charpos * charpos
+@
+% header/trailer/action slice, int = charpos
+%(there are so many use of int that it's better to differentiate them)
+
+<<type Syntax.charpos>>=
+type charpos = int
+@
+%pad: I added this
+
+
 <<type Syntax.rule>>=
-type rule = string * (regular_expression * location) list
+type rule = string * (regular_expression * action) list
+@
+%pad: I added this
+
+<<type Syntax.action>>=
+type action = location
 @
 %pad: I added this
 
 \subsection{Automata}
+
+% An automata is a set of initial states corresponding to the
+% different rules, and a transition table (a kind of matrix)
 
 <<type Lexgen.automata_entry>>=
 (* Representation of entry points *)
@@ -313,7 +333,7 @@ type rule = string * (regular_expression * location) list
 type automata_entry =
   { auto_name: string;
     auto_initial_state: int;
-    auto_actions: (action_id * Syntax.location) list;
+    auto_actions: (action_id * Syntax.action) list;
   }
 @
 %less: automata_rule? instead of entry? 
@@ -330,26 +350,35 @@ type action_id = int
 
 <<type Lexgen.automata>>=
 type automata =
-    Perform of int (* ?? *)
-  | Shift of automata_trans * automata_move array
+    Perform of action_id
+  (* idx of the array is an integer between 0 and 256, a char_ *)
+  | Shift of automata_trans * automata_move array 
 @
-% usually automata array! but idx of this automata is? state?
+%todo: bad name automata
+% usually automata array! 
 %val make_dfa: Syntax.lexer_definition -> automata_entry list * automata array
-% so array of array when have Shift.
+% so array of array when have Shift. Kinda of a matrix with
+% row = state and col = character.
+% idx of this automata is state!
+%FIGURE: TODO where show example of matrix for a simple regexp/automata
 
 <<type Lexgen.automata_trans>>=
 and automata_trans =
     No_remember
-  | Remember of int (* ?? *)
+  | Remember of action_id
 @
-% int ??
+% when there is a rule like "if" { Tif } | ['a'-'z']+ { Tident }
+% then once you've read "if", you don't know yet, you still
+% need to "shift" but remember that there was a possible
+% action if we have to backtrack
 
 <<type Lexgen.automata_move>>=
 and automata_move =
     Backtrack
-  | Goto of int (* ?? *)
+  | Goto of int
 @
-% int ?? and index in automata_move array is?
+% int is another state here, and the index in automata_move array
+% is character
 
 
 % need backtrace, because need lookahead(1) because when
@@ -359,19 +388,6 @@ and automata_move =
 
 %TODO: dump example for calc/lexer.mll
 
-\subsection{Optimised compacted automata}
-
-<<type Compact.lex_tables>>=
-(* Compaction of an automata *)
-
-type lex_tables =
-  { tbl_base: int array;                 (* Perform / Shift *)
-    tbl_backtrk: int array;              (* No_remember / Remember *)
-    tbl_default: int array;              (* Default transition *)
-    tbl_trans: int array;                (* Transitions (compacted) *)
-    tbl_check: int array }               (* Check (compacted) *)
-@
-%val compact_tables: Lexgen.automata array -> lex_tables
 
 \subsection{Runtime lexbuf}
 
@@ -459,6 +475,7 @@ val make_dfa: Syntax.lexer_definition -> automata_entry list * automata array
 <<signature Compact.compact_tables>>=
 val compact_tables: Lexgen.automata array -> lex_tables
 @
+% will see lex_tables later
 
 
 <<signature Output.output_lexdef>>=
@@ -477,6 +494,11 @@ val output_lexdef:
 \section{Lexing}
 % :) self-reference
 % another example of use after calc/lexer.mll :)
+
+%less: might have been better to not use lex so at least
+% can see an alternative way to write lexer, that is by hand
+% which can help also to understand and better appreciate
+% certain things.
 
 % this is the lexer definition to lex lexer definitions ... hmmm
 
@@ -1087,15 +1109,16 @@ let regexp_for_string s =
 
 <<function Lexgen.make_dfa>>=
 let make_dfa lexdef =
-
-  let (charsets, lexer_entries) = encode_lexdef lexdef in
-  let (automata_entries, actions) = encode_lexentries charsets lexer_entries in
-  automata_entries, actions
+  let (charsets, lex_entries) = 
+    encode_lexdef lexdef in
+  let (automata_entries, automata_transitions) = 
+    encode_lexentries charsets lex_entries in
+  automata_entries, automata_transitions
 @
-%actions ... meh confusing with lexer actions
+%old: was actions ... but confusing with Syntax.action
 
 % each "entry" gets a different automata_entry, but they all share
-% the same automata array.
+% the same automata transitions (=~ matrix).
 
 \subsection{Normalized regexps}
 % Normalized ... hmmm
@@ -1118,17 +1141,16 @@ type regexp =
   | Alt of regexp * regexp
   | Star of regexp
 @
-% diff with regular_expression? This is one "unified" regexp
-% where the actions are in! One step closer to the unified automaton
-% and action dispatcher.
-%less: Chars of char_range_id | Action of action_id
-%less: type action_id = int?
+% diff with regular_expression? This is one "unified" regexp where
+% the different cases of a rule has been merged and
+% where the actions are also merged in! One step closer to
+% the unified automaton and action dispatcher we will see later.
 
 <<type Lexgen.lexer_entry>>=
 type lexer_entry =
   { lex_name: string;
     lex_regexp: regexp;
-    lex_actions: (action_id * Syntax.location) list;
+    lex_actions: (action_id * Syntax.action) list;
   }
 @
 
@@ -1217,19 +1239,36 @@ let rec encode_regexp = function
   | Repetition r ->
       Star (encode_regexp r)
 @
+% cl are normalized? sorted?
 
-\subsection{NFA}
+\subsection{DFA}
+
+% Deterministic Finite Automaton.
+% Idea is that have states, and edges/transitions.
+
+%(* To generate directly a NFA from a regular expression.
+%   Confer Aho-Sethi-Ullman, dragon book, chap. 3 *)
+%apparently in latest ocamllex they optimized even more and use 
+% "Extension to tagged automata - Ville Larikari"
+%less: bad comment? he means DFA not NFA?
+
 
 <<type Lexgen.transition>>=
-(* To generate directly a NFA from a regular expression.
-   Confer Aho-Sethi-Ullman, dragon book, chap. 3 *)
-
 type transition =
     OnChars of charset_id
   | ToAction of action_id
 @
-%apparently in latest ocamllex they optimized even more and use 
-% "Extension to tagged automata - Ville Larikari"
+
+<<type Lexgen.state>>=
+type state = transition Set.t
+@
+% so a state is a place where you are ready to transition over lots 
+% of charsets and to perform different actions, and so it's actually
+% represented as a set of transition you can do from.
+% A macrostate. Remember the NFA to DFA algorithm where you
+% merge different state in a union state.
+% Convenient because then to know the transition to do from there,
+% just look at the value of the state.
 
 
 <<function Lexgen.reset_state_mem>>=
@@ -1240,11 +1279,18 @@ let reset_state_mem () =
 @
 
 <<constant Lexgen.state_map>>=
-let state_map = ref (Map.empty: (transition Set.t, int) Map.t)
+let state_map = ref (Map.empty: (state, int) Map.t)
 @
 
+
+
+% idea of NFA to DFA is to create macrostates so if
+% can from the start either go to state 1 or state 2 reading 'a'
+% then you create a macro state 1_and_2.
+% similar here?
+
 <<constant Lexgen.todo>>=
-let todo = (Stack.create() : (transition Set.t * int) Stack.t)
+let todo = (Stack.create() : (state * int) Stack.t)
 @
 
 <<constant Lexgen.next_state_num>>=
@@ -1254,30 +1300,41 @@ let next_state_num = ref 0
 
 
 <<function Lexgen.encode_lexentries>>=
-let encode_lexentries charsets entries =
-  let follow = followpos (Array.length charsets) entries in
-
+let encode_lexentries charsets lexentries =
   reset_state_mem();
-  let initial_states =
-    entries |> List.map (fun entry ->
+
+  (* pass 1 on lexentries, get the initial states *)
+  let automata_entries =
+    lexentries |> List.map (fun entry ->
         { auto_name    = entry.lex_name;
           auto_actions = entry.lex_actions;
+          (* get_state() will populate todo and state_map globals *)
           auto_initial_state = get_state (firstpos entry.lex_regexp);
         }
      )
   in
-  let states = map_on_all_states (translate_state charsets follow) in
-  let actions = Array.create !next_state_num (Perform 0) in
-  states |> List.iter (fun (act, i) -> actions.(i) <- act);
-  (initial_states, actions)
+  (* pass 2 on lexentries, get the transitions *)
+
+  let follow = followpos (Array.length charsets) lexentries in
+  let states = 
+    map_on_all_states (fun st -> translate_state charsets follow st) 
+  in
+  let transitions = Array.create !next_state_num (Perform 0) in
+  states |> List.iter (fun (act, i) -> transitions.(i) <- act);
+  (automata_entries, transitions)
 @
 %note: was 'chars' but prefer charsets
 %old:  reset_state_mem(); at the end, but redundant I think
+%old: was actions, but again confusing
 
-
-\subsubsection{[[first_pos()]]}
+\subsubsection{Initial states}
 
 % pos? meh
+% but Dragon book used those function names
+
+% remember that lexdef is a unified regexp so all the cases
+% have been merged as an Alt so firstpos will return
+% a big set for the beginning.
 
 <<function Lexgen.firstpos>>=
 let rec firstpos = function
@@ -1301,14 +1358,102 @@ let rec nullable = function
   | Star r     -> true
 @
 
-\subsubsection{[[follow_pos()]]}
+<<function Lexgen.get_state>>=
+let get_state st = 
+  try
+    Map.find st !state_map
+  with Not_found ->
+    let num = !next_state_num in
+    incr next_state_num;
+    state_map := Map.add st num !state_map;
+    Stack.push (st, num) todo;
+    num
+@
+
+% so if regexp = "ab"
+% then firstpos = OnChars 'a' which will then be mapped to
+% a state 0?
+
+% what todo is for? see below.
+
+\subsubsection{Transitions}
+
+<<function Lexgen.map_on_all_states>>=
+let map_on_all_states f =
+  let res = ref [] in
+  begin try
+    while true do
+      let (st, i) = Stack.pop todo in
+      let r = f st in
+      res := (r, i) :: !res
+    done
+  with Stack.Empty -> ()
+  end;
+  !res
+@
+
+<<function Lexgen.translate_state>>=
+let translate_state charsets follow = 
+ fun state ->
+  match split_trans_set state with
+    (n, []) -> Perform n
+  | (n, ps) -> Shift((if n = no_action then No_remember else Remember n),
+                     transition_from charsets follow ps)
+@
+
+% split transition set, one action and a union of charsets
+<<function Lexgen.split_trans_set>>=
+let split_trans_set trans_set =
+  Set.fold (fun trans (act, pos_set as act_pos_set) ->
+      match trans with
+        OnChars pos -> (act, pos :: pos_set)
+      | ToAction act1 -> if act1 < act then (act1, pos_set) else act_pos_set
+   ) trans_set (no_action, [])
+@
+% first action has priority!!! lexing rule! the order matters!
+% so if do  "if" and later an ident rule, then the first
+% action will be executed
+
+<<constant Lexgen.no_action>>=
+let no_action = (max_int: action_id)
+@
+% use max_int because do < above.
+
+
+% the meat! finally!
+% why 257? 0-255 for chars, then 256 for eof! so length = 257.
+<<function Lexgen.transition_from>>=
+let transition_from charsets follow pos_set = 
+  let tr    = Array.create 257 Set.empty in
+  pos_set |> List.iter (fun pos ->
+     charsets.(pos) |> List.iter (fun c ->
+           tr.(c) <- Set.union tr.(c) follow.(pos)
+      )
+  );
+
+  let shift = Array.create 257 Backtrack in
+  for i = 0 to 256 do
+    shift.(i) <- goto_state tr.(i)
+  done;
+  shift
+@
+
+<<function Lexgen.goto_state>>=
+let goto_state st =
+  if Set.is_empty st 
+  then Backtrack 
+  (* can create a new state in todo *)
+  else Goto (get_state st)
+@
+
 
 <<function Lexgen.followpos>>=
-let followpos size entry_list =
-  let v = Array.create size Set.empty in
+let followpos size_charsets entries =
+  let v = Array.create size_charsets Set.empty in
   let fill_pos first = function
       OnChars pos -> v.(pos) <- Set.union first v.(pos)
-    | ToAction _  -> () in
+    | ToAction _  -> () 
+  in
   let rec fill = function
       Seq(r1,r2) ->
         fill r1; fill r2;
@@ -1319,9 +1464,11 @@ let followpos size entry_list =
         fill r;
         Set.iter (fill_pos (firstpos r)) (lastpos r)
     | _ -> () in
-  List.iter (fun entry -> fill entry.lex_regexp) entry_list;
+  entries |> List.iter (fun entry -> fill entry.lex_regexp);
   v
 @
+%TODOL ??? need the Dragon Book I think.
+
 
 <<function Lexgen.lastpos>>=
 let rec lastpos = function
@@ -1338,23 +1485,39 @@ let rec lastpos = function
 
 \section{Optimizing}
 
-% compact_tables
+\subsection{Compacted automata}
+
+<<type Compact.lex_tables>>=
+(* Compaction of an automata *)
+
+type lex_tables =
+  { tbl_base: int array;                 (* Perform / Shift *)
+    tbl_backtrk: int array;              (* No_remember / Remember *)
+    tbl_default: int array;              (* Default transition *)
+
+    tbl_trans: int array;                (* Transitions (compacted) *)
+    tbl_check: int array }               (* Check (compacted) *)
+@
+%val compact_tables: Lexgen.automata array -> lex_tables
+
+\subsection{[[compact_tables()]]}
+
 
 <<function Compact.compact_tables>>=
 let compact_tables state_v =
   let n = Array.length state_v in
-  let base = Array.create n 0
-  and backtrk = Array.create n (-1)
-  and default = Array.create n 0 in
+  let base = Array.create n 0 in
+  let backtrk = Array.create n (-1) in
+  let default = Array.create n 0 in
   for i = 0 to n - 1 do
     match state_v.(i) with
       Perform n ->
         base.(i) <- -(n+1)
     | Shift(trans, move) ->
-        begin match trans with
+        (match trans with
           No_remember -> ()
         | Remember n -> backtrk.(i) <- n
-        end;
+        );
         let (b, d) = pack_moves i move in
         base.(i) <- b;
         default.(i) <- d
@@ -1364,6 +1527,78 @@ let compact_tables state_v =
     tbl_default = default;
     tbl_trans = Array.sub !trans 0 !last_used;
     tbl_check = Array.sub !check 0 !last_used }
+@
+
+
+<<function Compact.pack_moves>>=
+let pack_moves state_num move_t =
+  let move_v = Array.create 257 0 in
+  for i = 0 to 256 do
+    move_v.(i) <-
+      (match move_t.(i) with
+        Backtrack -> -1
+      | Goto n -> n)
+  done;
+  let default = most_frequent_elt move_v in
+  let nondef = non_default_elements default move_v in
+  let rec pack_from b =
+    while b + 257 > Array.length !trans do grow_transitions() done;
+    let rec try_pack = function
+      [] -> b
+    | (pos, v) :: rem ->
+        if !check.(b + pos) = -1 then try_pack rem else pack_from (b+1) in
+    try_pack nondef in
+  let base = pack_from 0 in
+  List.iter
+    (fun (pos, v) ->
+      !trans.(base + pos) <- v;
+      !check.(base + pos) <- state_num)
+    nondef;
+  if base + 257 > !last_used then last_used := base + 257;
+  (base, default)
+@
+
+<<function Compact.grow_transitions>>=
+let grow_transitions () =
+  let old_trans = !trans
+  and old_check = !check in
+  let n = Array.length old_trans in
+  trans := Array.create (2*n) 0;
+  Array.blit old_trans 0 !trans 0 !last_used;
+  check := Array.create (2*n) (-1);
+  Array.blit old_check 0 !check 0 !last_used
+@
+
+<<function Compact.non_default_elements>>=
+(* Transform an array into a list of (position, non-default element) *)
+
+let non_default_elements def v =
+  let rec nondef i =
+    if i >= Array.length v then [] else begin
+      let e = v.(i) in
+      if e = def then nondef(i+1) else (i, e) :: nondef(i+1)
+    end in
+  nondef 0
+@
+
+<<function Compact.most_frequent_elt>>=
+(* Determine the integer occurring most frequently in an array *)
+
+let most_frequent_elt v =
+  let frequencies = Hashtbl.create 17 in
+  let max_freq = ref 0 in
+  let most_freq = ref (v.(0)) in
+  for i = 0 to Array.length v - 1 do
+    let e = v.(i) in
+    let r =
+      try
+        Hashtbl.find frequencies e
+      with Not_found ->
+        let r = ref 1 in Hashtbl.add frequencies e r; r in
+    incr r;
+    if !r > !max_freq then begin max_freq := !r; most_freq := e end
+  done;
+  !most_freq
 @
 
 
