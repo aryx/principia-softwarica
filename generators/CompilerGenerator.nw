@@ -12,21 +12,22 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - typed more ocamllex! use more type aliases instead of using everywhere
-%   'int' which is not very informative and actually confusing
+% - use more type aliases instead of (ab)using 'int' everywhere
+%   which is not very informative and actually confusing
 
 %thx to codemap/codegraph:
 
 %thx to this manual, better understand lex/yacc:
-% - priority of actions when two matches
+% - priority of actions when two case matches (e.g kwd prio over ident 
+%   if case is before)
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
-% - TODO read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the file before
+% - read Extra section, identify concepts, first TOC
+% - SEMI distribute parts of the file before
 % - TODO nullify, boolify, typeify,    scheckify
 % - TODO aspecify advanced features!
 % - TODO add figures
@@ -93,9 +94,6 @@ Principia Softwarica: Lex and Yacc
 }\\
 {version 0.1}
 }
-% For once it's not really Plan9, the lex and yacc seems really to
-% come from Unix with a small port to Plan9, as opposed to the other
-% document I've already written which are really Plan9 software.
 
 \author{
 Yoann Padioleau\\
@@ -144,9 +142,13 @@ Lex and Yacc.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
-% We gonna present ocamllex actually. Shorter code and easier code 
+% We gonna present ocamllex actually. Shorter code and easier
 % to explain than the original lex.
-% And for yacc??
+% And for yacc?? ml-yacc port?
+
+%% For once it's not really Plan9, the lex and yacc seems really to
+%% come from Unix with a small port to Plan9, as opposed to the other
+%% document I've already written which are really Plan9 software.
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
@@ -154,24 +156,27 @@ Here are other candidates that were considered but ultimately discarded:
 % LOC?
 \item Antlr
 % LOC?
+\item Ometa
+% ??
 \end{itemize}
 
 % Prolog DCG
 % EDSL for regexps or grammar?
 
-% Many lexers are handwritten (e.g. in Plan9), and many grammars
-% are also handwritten (seems to have some advantages for IDE, e.g.
-% jetbrains does this, but also now hack/flow)
-
 % Berkeley Yacc
 % Unix Lex?
 % go-yacc! a port of yacc.c to Go by Go authors, might be interesting
-% to contrast C and Go. 3464 LOC
+%   to contrast C and Go. 3464 LOC
 
 % ocamllex: 1000 LOC vs the 3000 of plan9 lex
 % ocamlyacc: 6000 LOC, vs the 3000 of plan9 yacc
 % byacc:??
 % menhir? 21 000 LOC of ocaml, hmm bigger than my fork-ocaml, lol
+
+
+% Many lexers are actually handwritten (e.g. in Plan9), and many grammars
+% are also handwritten (seems to have some advantages for IDE, e.g.
+% jetbrains does this, but also now hack/flow)
 
 % see also sed/awk? 
 
@@ -182,6 +187,7 @@ Here are other candidates that were considered but ultimately discarded:
 % you need to know about lex & yacc :) because we gonne use
 % lex and yacc to explain the code of lex and yacc. hmm.
 
+% Dragon book also useful.
 %(* To generate directly a NFA from a regular expression.
 %   Confer Aho-Sethi-Ullman, dragon book, chap. 3 *)
 
@@ -190,8 +196,8 @@ Here are other candidates that were considered but ultimately discarded:
 
 \section{Copyright}
 
-Most of this document is actually source code from Plan9, so
-those parts are copyright by Lucent Technologies Inc.
+Most of this document is actually source code from OCaml, so
+those parts are copyright by INRIA.
 The prose is mine and is licensed under the GNU Free Documentation
 License.
 
@@ -216,9 +222,13 @@ License.
 \section{Lex and yacc principles}
 
 % DSL! The first ones!
+% Helpers for compiler writers (or nowadays for any tools working
+% on source code, e.g. linters, refactorers, smart completion backend, 
+% code indexers, etc).
 
-% there is usually a lex/yacc interface they need to agree on,
-% but actually lex can also work without yacc, and yacc without lex.
+% There is usually a lex/yacc interface they need to agree on,
+% but actually lex can also work without yacc (give type of tokens)
+% and yacc without lex (write a yylex() function).
 
 \section{[[lex]] services}
 
@@ -248,7 +258,7 @@ end;
 
 % Essentially a DSL to go from regexps -> automatons (DFA)
 % Automaton so given a character at a time it transitions to
-% the right state and entering certain final states then triggers
+% the right state and entering certain (final) states triggers
 % a special action (usually returning a token constructor to be then
 % consumed by the yacc parser).
 
@@ -273,6 +283,8 @@ type regular_expression =
 % Characters could be a combination of Alternative and Char 
 % but maybe useful optimisation?
 
+% so 'X?' is really 'X | Epsilon' and 'X+' is 'X X*'
+
 <<type Syntax.char_>>=
 type char_ = int
 @
@@ -280,8 +292,6 @@ type char_ = int
 % why 'int list'? why not 'char list'? because we will use
 % eof as a special marker with a special value (256). 
 % (But maybe could have used 'char option' where None = eof)
-
-% so 'X?' is really 'X | Epsilon' and 'X+' is 'X X*'
 
 %TODO: toy example? and its dump? unit test (parse string) = AST value?
 
@@ -299,11 +309,15 @@ type lexer_definition =
 % the list is a kind of Alternative, but it's alternatives with different
 % actions.
 
+% in the original lex the rule list is implemented via different
+% "prefix" e.g. <COMMENT>/ ... INITIAL/... but ocamllex way
+% is cleaner I think. Just reuse a concept we already know, function!
+
 <<type Syntax.location>>=
 type location =
     Location of charpos * charpos
 @
-% header/trailer/action slice, int = charpos
+% header/trailer/action slice
 %(there are so many use of int that it's better to differentiate them)
 
 <<type Syntax.charpos>>=
@@ -316,16 +330,22 @@ type charpos = int
 type rule = string * (regular_expression * action) list
 @
 %pad: I added this
+%less: could have type case = regular_regular * action and so case list
 
 <<type Syntax.action>>=
 type action = location
 @
 %pad: I added this
 
+
+%TODO: toy example? and its dump? unit test (parse string) = AST value?
+
+
 \subsection{Automata}
 
 % An automata is a set of initial states corresponding to the
-% different rules, and a transition table (a kind of matrix)
+% different rules, and a shared transition table, which
+% is a kind of matrix
 
 <<type Lexgen.automata_entry>>=
 (* Representation of entry points *)
@@ -338,28 +358,33 @@ type automata_entry =
 @
 %less: automata_rule? instead of entry? 
 
+% could do type state_id = int; but by now
+% we have refined all int types so the remaining ints
+% should be all about automaton state ids.
+
 <<type Lexgen.action_id>>=
 type action_id = int
 @
 %pad: I added this
 
-% could do type state_id = int; but by now
-% we have refined all int types so the remaining ints
-% should be all about automaton state ids.
-
+<<type Lexgen.automata_matrix>>=
+(* indexed by state number *)
+type automata_matrix = automata_row array
+@
+%pad: I added this
 
 <<type Lexgen.automata>>=
-type automata =
+type automata_row =
     Perform of action_id
-  (* idx of the array is an integer between 0 and 256, a char_ *)
+  (* indexed by an integer between 0 and 256(eof), that is a char_ *)
   | Shift of automata_trans * automata_move array 
 @
-%todo: bad name automata
-% usually automata array! 
-%val make_dfa: Syntax.lexer_definition -> automata_entry list * automata array
-% so array of array when have Shift. Kinda of a matrix with
+%old: was automata, but automata_row is more accurate
+%val make_dfa: Syntax.lexer_definition -> automata_entry list * automata_matrix
+
+% So array of array when have Shift. Kinda of a matrix with
 % row = state and col = character.
-% idx of this automata is state!
+
 %FIGURE: TODO where show example of matrix for a simple regexp/automata
 
 <<type Lexgen.automata_trans>>=
@@ -381,10 +406,10 @@ and automata_move =
 % is character
 
 
-% need backtrace, because need lookahead(1) because when
+% need backtrak, because need lookahead(1) because when
 % see "then" you don't know yet if you want to trigger the
-% action related to then or look for another character because it
-% could be an identifier like thenbla
+% action related to 'then' or look for another character because it
+% could be an identifier like 'thenbla'
 
 %TODO: dump example for calc/lexer.mll
 
@@ -469,11 +494,11 @@ let main () =
 <<signature Lexgen.make_dfa>>=
 (* The entry point *)
 
-val make_dfa: Syntax.lexer_definition -> automata_entry list * automata array
+val make_dfa: Syntax.lexer_definition -> automata_entry list * automata_matrix
 @
 
 <<signature Compact.compact_tables>>=
-val compact_tables: Lexgen.automata array -> lex_tables
+val compact_tables: Lexgen.automata_matrix -> lex_tables
 @
 % will see lex_tables later
 
@@ -1498,7 +1523,7 @@ type lex_tables =
     tbl_trans: int array;                (* Transitions (compacted) *)
     tbl_check: int array }               (* Check (compacted) *)
 @
-%val compact_tables: Lexgen.automata array -> lex_tables
+%val compact_tables: Lexgen.automata_matrix -> lex_tables
 
 \subsection{[[compact_tables()]]}
 
