@@ -7812,6 +7812,55 @@ open Parsing
 
 @
 
+\subsection*{[[yacc2/lexer.mll]]}
+
+<<backward compatible lexing rules (yacc)>>=
+(* to be backward compatible with ocamlyacc *)
+and action2 = parse
+| '{' 
+    { incr brace_depth;
+      action2 lexbuf }
+| "%}" 
+    { decr brace_depth;
+      if !brace_depth == 0 
+      then Lexing.lexeme_start lexbuf 
+      else action2 lexbuf }
+| "}" 
+    { decr brace_depth;
+      if !brace_depth == 0 
+      then Lexing.lexeme_start lexbuf 
+      else action2 lexbuf }
+| "(*" 
+    { comment_depth := 1;
+      comment lexbuf;
+      action2 lexbuf }
+
+| eof { raise (Lexical_error "unterminated action") }
+| _   { action2 lexbuf }
+
+(* to be backward compatible with ocamlyacc *)
+and comment2 = parse
+| "*/" { () }
+| ['*''/']+ { comment2 lexbuf }
+| eof { raise (Lexical_error "unterminated C comment") }
+| _   { comment2 lexbuf }
+@
+
+
+<<[[Lexer.main()]] backward compatible cases (yacc)>>=
+(* to be backward compatible with ocamlyacc *)
+| "%%" { main lexbuf }
+| "%{" 
+    { let n1 = Lexing.lexeme_end lexbuf in
+      brace_depth := 1;
+      let n2 = action2 lexbuf in
+      TAction(Location(n1, n2)) }
+| "/*" { comment2 lexbuf; main lexbuf }
+@
+
+
+\subsection*{[[yacc2/parser.mly]]}
+
 
 \subsection*{[[yacc2/main.ml]]}
 
@@ -7841,8 +7890,6 @@ open Ast
 <<toplevel Main._1 (yacc)>>
 @
 
-
-\section{[[stdlib/]]}
 
 \subsection*{[[stdlib/parsing.mli]]}
 

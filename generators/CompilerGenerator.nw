@@ -602,7 +602,7 @@ val output_lexdef:
 % which can help also to understand and better appreciate
 % certain things.
 
-% this is the lexer definition to lex lexer definitions ... hmmm
+% this is the lexer definition of lex lexer definitions ... hmmm
 
 <<lex/lexer.mll>>=
 <<copyright ocamllex>>
@@ -969,14 +969,14 @@ open Ast
 
 %%
 
-<<grammar>>
+<<grammar (lex)>>
 
 %%
 @
 % header, rules, trailer
 
 
-<<grammar>>=
+<<grammar (lex)>>=
 <<lex top rule>>
 
 <<lex header rule>>
@@ -2131,9 +2131,330 @@ let start_symbol def =
 @
 
 
+
 \section{Lexing}
 
+<<yacc2/lexer.mll>>=
+{
+<<copyright ocamlyacc>>
+
+open Ast (* Location *)
+open Parser
+
+exception Lexical_error of string
+
+<<Lexer helper functions and globals (yacc)>>
+}
+
+<<rule Lexer.main (yacc)>>
+
+<<rule Lexer.action (yacc)>>
+
+<<rule Lexer.comment (yacc)>>
+
+<<rule Lexer.angle (yacc)>>
+
+<<backward compatible lexing rules (yacc)>>
+@
+
+
+<<type Parser.token (yacc)>>=
+%token <Ast.term> TTerm
+%token <Ast.nonterm> TNonterm
+%token Ttoken Tprec Tstart Ttype
+%token TColon TOr TSemicolon
+%token <string> TAngle
+%token <Ast.location> TAction
+%token TEOF
+@
+% see parser.mly, it expands in a type token = TIdent of string | ...
+
+
+
+<<rule Lexer.main (yacc)>>=
+rule main = parse
+  <<[[Lexer.main()]] space case (yacc)>>
+  <<[[Lexer.main()]] comment case (yacc)>>
+  <<[[Lexer.main()]] keyword or identifier case (yacc)>>
+  <<[[Lexer.main()]] action case (yacc)>>
+  <<[[Lexer.main()]] operator cases (yacc)>>
+  <<[[Lexer.main()]] type case (yacc)>>
+  <<[[Lexer.main()]] backward compatible cases (yacc)>>
+| eof  { TEOF }
+| _
+    { raise(Lexical_error
+             ("illegal character " ^ String.escaped(Lexing.lexeme lexbuf))) }
+@
+
+
+
+\subsection{Comments}
+
+<<[[Lexer.main()]] space case (yacc)>>=
+| [' ' '\010' '\013' '\009' '\012' ] + 
+    { main lexbuf }
+@
+
+<<[[Lexer.main()]] comment case (yacc)>>=
+| "(*" 
+    { comment_depth := 1;
+      comment lexbuf;
+      main lexbuf }
+@
+
+<<Lexer helper functions and globals (yacc)>>=
+let comment_depth = ref 0
+@
+
+<<rule Lexer.comment (yacc)>>=
+and comment = parse
+| "(*" 
+    { incr comment_depth; 
+      comment lexbuf }
+| "*)" 
+    { decr comment_depth;
+      if !comment_depth == 0 
+      then () 
+      else comment lexbuf }
+
+| eof { raise(Lexical_error "unterminated comment") }
+| _ { comment lexbuf }
+@
+
+\subsection{Keywords and identifiers}
+
+<<[[Lexer.main()]] keyword or identifier case (yacc)>>=
+(* terminals, uppercase *)
+| ['A'-'Z' ] ['A'-'Z' 'a'-'z' '\'' '_' '0'-'9'] *
+    { TTerm (T (Lexing.lexeme lexbuf)) }
+(* nonterminals, lowercase *)
+| ['a'-'z' ] ['A'-'Z' 'a'-'z' '\'' '_' '0'-'9'] *
+    { TNonterm (NT (Lexing.lexeme lexbuf)) }
+(* directives, % prefixed *)
+| '%' ['A'-'Z' 'a'-'z'] ['A'-'Z' 'a'-'z' '\'' '_' '0'-'9'] *
+    { match Lexing.lexeme lexbuf with
+      | "%token" -> Ttoken
+      | "%prec" -> Tprec
+      | "%start" -> Tstart
+      | "%type" -> Ttype
+      | s -> failwith ("Unknown directive: " ^ s)
+    }
+@
+
+\subsection{Operators}
+
+<<[[Lexer.main()]] operator cases (yacc)>>=
+| ':'  { TColon }
+| '|'  { TOr }
+| ';'  { TSemicolon }
+@
+
+
+\subsection{Actions}
+
+<<[[Lexer.main()]] action case (yacc)>>=
+(* actions and header/trailer *)
+| '{' 
+    { let n1 = Lexing.lexeme_end lexbuf in
+      brace_depth := 1;
+      let n2 = action lexbuf in
+      TAction(Location(n1, n2)) }
+@
+
+<<Lexer helper functions and globals (yacc)>>=
+let brace_depth = ref 0
+@
+
+
+<<rule Lexer.action (yacc)>>=
+(* TODO: handle $x *)
+and action = parse
+| '{' 
+    { incr brace_depth;
+      action lexbuf }
+| '}' 
+    { decr brace_depth;
+      if !brace_depth == 0 
+      then Lexing.lexeme_start lexbuf 
+      else action lexbuf }
+| "(*" 
+    { comment_depth := 1;
+      comment lexbuf;
+      action lexbuf }
+
+| eof { raise (Lexical_error "unterminated action") }
+| _   { action lexbuf }
+@
+%$
+
+\subsection{Types}
+
+<<[[Lexer.main()]] type case (yacc)>>=
+(* for types *)
+| '<'  { TAngle (angle lexbuf) }
+@
+
+<<rule Lexer.angle (yacc)>>=
+and angle = parse
+| '>' { "" }
+| eof { raise(Lexical_error "unterminated type") }
+| [^'>']+ { let s = Lexing.lexeme lexbuf in s ^ angle lexbuf }
+| _ { let s = Lexing.lexeme lexbuf in s ^ angle lexbuf }
+@
+
+
 \section{Parsing}
+% :) self-reference
+
+% this is the parser definition of yacc parser definitions ... hmmm
+
+%(* The lexical analyzer for lexer definitions. Bootstrapped! *)
+
+
+\subsection{Overview}
+
+<<yacc2/parser.mly>>=
+%{
+<<copyright ocamlyacc>>
+open Ast
+
+%}
+
+<<type Parser.token (yacc)>>
+
+<<Parser entry point definition (yacc)>>
+
+%%
+
+<<grammar (yacc)>>
+
+@
+
+<<grammar (yacc)>>=
+<<yacc top rule>>
+
+<<yacc header rule>>
+
+<<yacc directive rule>>
+
+<<yacc grammar rule>>
+
+<<yacc rule rule>>
+
+<<yacc extra rules>>
+@
+% rule rule :) again
+
+\subsection{Parser definition entry point}
+
+<<Parser entry point definition (yacc)>>=
+%start parser_definition
+%type <Ast.parser_definition> parser_definition
+@
+
+<<yacc top rule>>=
+parser_definition: header directives_opt grammar header_opt TEOF 
+  { { header = $1; directives = $2; grm = $3; trailer = $4 } }
+;
+@
+
+
+
+\subsection{Header and trailer}
+
+<<yacc header rule>>=
+header: TAction { $1 }
+;
+@
+%$
+
+
+<<yacc extra rules>>=
+header_opt:
+          { Ast.noloc }
+ | header { $1 }  
+;
+@
+%$
+
+
+\subsection{Grammar rule}
+
+<<yacc grammar rule>>=
+grammar: rules_opt { $1 }
+;
+@
+%$
+
+<<yacc rule rule>>=
+rule_: TNonterm TColon cases TSemicolon 
+  { $3 |> List.map (fun (case, action) -> 
+    { lhs = $1; rhs = case; act = action }) 
+  }
+;
+@
+% rule rule :)
+
+<<yacc rule rule>>=
+cases: 
+   symbols_opt TAction           { [$1, $2] }
+ | symbols_opt TAction TOr cases { ($1, $2)::$4 }
+;
+@
+%$
+
+<<yacc rule rule>>=
+symbol: 
+   TTerm    { Term $1 }
+ | TNonterm { Nonterm $1 }
+;
+@
+
+
+<<yacc extra rules>>=
+rules_opt: 
+                   { [] }
+ | rule_ rules_opt { $1 @ $2 }
+;
+symbols_opt:
+                      { [] }
+ | symbol symbols_opt { $1::$2 }
+;
+@
+
+\subsection{Directives}
+
+<<yacc directive rule>>=
+directive:
+   Ttoken type_opt terms { $3 |> List.map (fun t -> Token ($2, t)) }
+ | Tprec                 { [Prec ()] }
+ | Tstart TNonterm       { [Start $2] }
+ | Ttype TAngle TNonterm { [Type ($2, $3)] }
+;
+@
+%$
+
+
+<<yacc extra rules>>=
+directives_opt:
+                            { [] }
+ | directive directives_opt { $1 @ $2 }
+;
+type_opt:
+          { None }
+ | TAngle { Some $1 }  
+;
+terms: TTerm terms_opt { $1::$2 }
+;
+
+terms_opt:
+                   { [] }
+ | TTerm terms_opt { $1::$2 }
+;
+@
+%$
+
+
 
 \section{Checking}
 

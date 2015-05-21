@@ -71,6 +71,7 @@ SRC_VIEWS_ML=\
   $(CAML)/yacc2/dump.mli \
   $(CAML)/yacc2/dump.ml \
   $(CAML)/yacc2/tests.ml \
+  $(CAML)/yacc2/lexer.mll \
   $(CAML)/yacc2/main.ml \
   $(CAML)/stdlib/parsing.mli \
   $(CAML)/stdlib/parsing.ml \
@@ -88,4 +89,5 @@ sync::
 SYNCWEB_YACC=~/github/syncweb/syncweb -md5sum_in_auxfile -less_marks -lang ocamlyacc
 sync_yacc:
 	$(SYNCWEB_YACC) $(SRC_ORIG) $(CAML)/lex/parser.mly
+	$(SYNCWEB_YACC) $(SRC_ORIG) $(CAML)/yacc2/parser.mly
 
