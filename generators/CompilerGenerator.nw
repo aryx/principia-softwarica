@@ -15,6 +15,9 @@
 % - use more type aliases instead of (ab)using 'int' everywhere in ocamllex
 %   which is not very informative and actually confusing
 % - integrate back the simpler lex code generator
+% - make more explicit the char_ and its range and the special handling
+%   of eof which was spreaded and hidden at many places (with magic numbers
+%   like Array.create ... 257)
 
 %thx to codemap/codegraph:
 
@@ -106,7 +109,7 @@ with code from\\
 Xavier Leroy and Yoann Padioleau
 }
 % Lesk, Erik scmidt(lex), Xavier Leroy(ocamllex)
-% Jonhson(yacc), Corbett(byacc), Pad (ocamlyacc2)
+% Jonhson(yacc), Corbett(byacc), Pad (ocamlyacc)
 
 \maketitle 
 \onecolumn
@@ -141,13 +144,15 @@ Xavier Leroy and Yoann Padioleau
 \section{Motivations}
 
 The goal of this book is to present in full details the source code of
+the lexer and parser code generators
 Lex and Yacc.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
 % We gonna present ocamllex actually. Shorter code and easier
 % to explain than the original lex. And we gonna present
-% also a yacc clone written in ocaml (mine), to be coherent.
+% also a yacc clone written in ocaml (mine), also arguably
+% easier to explain (and also to be coherent).
 
 %% More than 15 years ago I didnt think I could write a yacc. It's
 %% actually doable. The existing clones are not "unreachable". Their
@@ -227,8 +232,26 @@ License.
 (***********************************************************************)
 @
 
+<<copyright ocamlyacc>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+@
+
 \section{Acknowledgments}
 
+% dragon book :)
 
 \chapter{Overview}
 
@@ -275,16 +298,17 @@ end;
 \section{Bootstrapping}
 
 % Note that you can bootstrap by yourself manually.
-% The .mll and .mly for ocamllex and ocamlyacc are fairly small
+% The .mll and .mly files of ocamllex and ocamlyacc are fairly small
 % so you could manually generate the code for them by running
 % in your head the generation algorithm. You could also simply entering
-% the AST directoy corresponding to the .mll and .mly.
+% the AST directly corresponding to the .mll and .mly.
 
 %###############################################################################
 
 \chapter{Lex}
 
 % Essentially a DSL to go from regexps -> automatons (DFA)
+
 % Automaton so given a character it transitions to
 % the right state one character at a time and entering certain (final) 
 % states triggers a special action (usually returning a token 
@@ -1722,9 +1746,24 @@ let copy_buffer = String.create 1024
 
 \chapter{Yacc}
 
-% essentially a DSL to go from grammar -> pushdown automaton
+% essentially a DSL to go from CFG grammar -> pushdown automaton
 
 \section{Core data structures}
+
+\subsection{Grammar}
+
+<<type Ast.grammar (yacc)>>=
+type grammar = rule_ list
+@
+
+<<type Ast.rule_ (yacc)>>=
+  and rule_ = {
+    lhs: nonterm;
+    rhs: symbol list;
+    act: action;
+  }
+@
+
 
 \section{[[main()]]}
 
