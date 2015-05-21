@@ -6551,12 +6551,12 @@ int	gtnm(void);
 
 \section{[[ocamllex/]]}
 
-\subsection*{[[lex/syntax.mli]]}
+\subsection*{[[lex/ast.ml]]}
 
 
 %-------------------------------------------------------------
 
-<<lex/syntax.mli>>=
+<<lex/ast.ml>>=
 <<copyright ocamllex>>
 (* The shallow abstract syntax *)
 
@@ -6565,6 +6565,21 @@ int	gtnm(void);
 <<type Syntax.location>>
 
 <<type Syntax.char_>>
+
+let char_class c1 c2 =
+  let rec cl n =
+    if n > c2 then [] else n :: cl(succ n)
+  in cl c1
+
+(* CONFIG *)
+let charset_size = 256
+let char_eof = 256
+let all_chars = char_class 0 255
+(* alt:
+let charset_size = 255
+let char_eof = 0
+let all_chars = char_class 1 255
+*)
 
 <<type Syntax.regular_expression>>
 
@@ -6585,6 +6600,15 @@ int	gtnm(void);
 <<lex/output.mli>>=
 <<copyright ocamllex>>
 <<signature Output.output_lexdef>>
+
+val output_lexdef_simple:
+      in_channel -> out_channel ->
+      Ast.location (* header *) ->
+      Lexgen.automata_entry list * Lexgen.automata_matrix ->
+      Ast.location (* trailer *) ->
+      unit
+
+
 @
 
 
@@ -6598,7 +6622,7 @@ int	gtnm(void);
 (* Output the DFA tables and its entry points *)
 
 open Printf
-open Syntax
+open Ast
 open Lexgen
 open Compact
 
@@ -6615,6 +6639,176 @@ open Compact
 <<function Output.output_entry>>
 
 <<function Output.output_lexdef>>
+
+(*****************************************************************************)
+(* Simpler version *)
+(*****************************************************************************)
+
+let debug = ref true
+
+(* 1- Generating the actions *)
+
+let output_action ic oc (i,act) =
+  output_string oc ("action_" ^ string_of_int i ^ " lexbuf = (\n");
+  if !debug 
+  then output_string oc (" log \"action_" ^ string_of_int i ^ "\";\n");
+  copy_chunk ic oc act;
+  output_string oc ")\nand ";
+  ()
+
+(* 2- Generating the states *)
+
+let states = ref ([||] : Lexgen.automata_matrix)
+
+let enumerate_vect v =
+  let rec enum env pos =
+    if pos >= Array.length v 
+    then env 
+    else
+      try
+        let pl = List.assoc v.(pos) env in
+          pl := pos :: !pl; enum env (succ pos)
+        with Not_found ->
+          enum ((v.(pos), ref [pos]) :: env) (succ pos) 
+  in
+  Sort.list
+    (fun (e1, pl1) (e2, pl2) -> List.length !pl1 >= List.length !pl2)
+    (enum [] 0)
+
+let output_move oc = function
+    Backtrack ->
+      if !debug
+      then output_string oc "log \"backtrack\"; ";
+      output_string oc "backtrack lexbuf"
+  | Goto dest ->
+      match !states.(dest) with
+        Perform act_num ->
+          output_string oc ("action_" ^ string_of_int act_num ^ " lexbuf")
+      | _ ->
+          (* Many states are just Perform so this explains why there is some
+           * big jumps in the generated files from e.g. state_3 to state_9
+           * without any intermediate state_4 function; it's because state 4
+           * was a Perform.
+           *)
+          output_string oc ("state_" ^ string_of_int dest ^ " lexbuf")
+
+let output_char_for_read oc = function
+    '\''  -> output_string oc "\\'"
+  | '\\' -> output_string oc "\\\\"
+  | '\n' -> output_string oc "\\n"
+  | '\t' -> output_string oc "\\t"
+  | c ->
+      let n = Char.code c in
+      if n >= 32 && n < 127 then
+        output_char oc c
+      else begin
+        output_char oc '\\';
+        output_char oc (Char.chr (48 + n / 100));
+        output_char oc (Char.chr (48 + (n / 10) mod 10));
+        output_char oc (Char.chr (48 + n mod 10))
+      end
+
+let rec output_chars oc = function
+    [] ->
+      failwith "output_chars"
+  | [c] ->
+      if c <= 255 then begin
+      output_string oc "'";
+      output_char_for_read oc (Char.chr c);
+      output_string oc "'"
+      end else output_string oc "'\\000'"
+  | c::cl ->
+      if c <= 255 then begin
+      output_string oc "'";
+      output_char_for_read oc (Char.chr c);
+      output_string oc "'|";
+      output_chars oc cl
+      end else output_string oc "'\\000'"
+
+let output_one_trans oc (dest, chars) =
+  output_chars oc !chars;
+  output_string oc " -> ";
+  output_move oc dest;
+  output_string oc "\n |  ";
+  ()
+
+let output_all_trans oc trans =
+  output_string oc "  let c = Lexing.get_next_char lexbuf in\n";
+  if !debug
+  then output_string oc "  log (\"consuming:\" ^ (Char.escaped c));\n";
+  output_string oc "  match c with\n    ";
+  match enumerate_vect trans with
+    [] ->
+      failwith "output_all_trans"
+  | (default, _) :: rest ->
+      List.iter (output_one_trans oc) rest;
+      output_string oc "_ -> ";
+      output_move oc default;
+      output_string oc "\nand ";
+      ()
+
+let output_state oc state_num = function
+    Perform i ->
+      ()
+  | Shift(what_to_do, moves) ->
+      output_string oc
+        ("state_"  ^ string_of_int state_num ^ " lexbuf =\n");
+      if !debug 
+      then output_string oc("  log \"state_" ^string_of_int state_num^ "\";\n");
+
+    (match what_to_do with
+      No_remember -> ()
+    | Remember i ->
+        output_string oc "  lexbuf.lex_last_pos <- lexbuf.lex_curr_pos;\n";
+        output_string oc ("  lexbuf.lex_last_action_simple <- Obj.magic action_" ^
+                             string_of_int i ^ ";\n")
+    );
+    output_all_trans oc moves
+
+(* 3- Generating the entry points *)
+          
+let rec output_entries oc = function
+    [] -> failwith "output_entries"
+  | entry :: rest ->
+      let name = entry.auto_name in
+      let state_num = entry.auto_initial_state in
+      output_string oc (name ^ " lexbuf =\n");
+      if !debug 
+      then output_string oc ("log \"" ^ name ^ "\";\n");
+      output_string oc "  Lexing.start_lexing lexbuf;\n";
+      output_string oc ("  state_" ^ string_of_int state_num ^ " lexbuf\n");
+      match rest with
+        [] -> output_string oc "\n"; ()
+      | _  -> output_string oc "\nand "; output_entries oc rest
+
+(* All together *)
+
+let output_lexdef_simple ic oc header (initial_st, st) trailer =
+  print_int (Array.length st); print_string " states, ";
+(*  print_int (List.length actions); print_string " actions."; *)
+  print_newline();
+  (* for the labels *)
+  output_string oc "open Lexing\n\n";
+  if !debug
+  then output_string oc
+    "let log x = print_endline (\"LEX: \" ^ x); flush stdout\n";
+  copy_chunk ic oc header;
+  output_string oc "\nlet rec ";
+  states := st;
+  initial_st |> List.iter (fun entry ->
+    let actions = entry.auto_actions in
+    List.iter (output_action ic oc) actions;
+    output_string oc "\n";
+  );
+  output_string oc "\n";
+  for i = 0 to Array.length st - 1 do
+    output_state oc i st.(i)
+  done;
+  output_string oc "\n";
+  output_entries oc initial_st;
+  output_string oc "\n";
+  copy_chunk ic oc trailer
+
 @
 
 
@@ -6650,7 +6844,7 @@ open Compact
 <<copyright ocamllex>>
 (* Compiling a lexer definition *)
 
-open Syntax
+open Ast
 
 <<type Lexgen.action_id>>
 
@@ -6781,7 +6975,7 @@ open Lexgen
 <<copyright ocamllex>>
 (* The lexer generator. Command-line parsing. *)
 
-open Syntax
+open Ast
 open Lexgen
 open Output
 
@@ -6859,7 +7053,7 @@ val lexeme_end : lexbuf -> int
 
 <<stdlib/lexing.mli>>=
 <<copyright ocamllex>>
-(* Module [Lexing]: the run-time library for lexers generated by [camllex] *)
+(* Module [Lexing]: the run-time library for lexers generated by [ocamllex] *)
 
 (*** Lexer buffers *)
 
@@ -6893,6 +7087,15 @@ val lexeme_end : lexbuf -> int
  * an action_id
  *)
 external engine: lex_tables -> int -> lexbuf -> int = "lex_engine"
+
+
+(* functions used by the generated scanners using the simple code generation
+ *  method *)
+val get_next_char : lexbuf -> char
+val backtrack : lexbuf -> 'a
+
+val start_lexing : lexbuf -> unit
+
 @
 
 \subsection*{[[lex/parser.mly]]}
@@ -6956,6 +7159,7 @@ let from_function f =
     lex_curr_pos = 1024;
     lex_last_pos = 1024;
     lex_last_action = 0;
+    lex_last_action_simple = dummy_action;
     lex_eof_reached = false }
 @
 
@@ -6974,6 +7178,7 @@ let from_string s =
     lex_curr_pos = 0;
     lex_last_pos = 0;
     lex_last_action = 0;
+    lex_last_action_simple = dummy_action;
     lex_eof_reached = true }
 @
 % why s ^ ""? to build a new string so safe?
@@ -7007,11 +7212,14 @@ let lexeme_end lexbuf =
 <<stdlib/lexing.ml>>=
 <<copyright ocamllex>>
 
+(* coupling: lexbuf and lexing.c lexer_buffer must match! *)
 <<type Lexing.lexbuf>>
+
+let dummy_action x = failwith "lexing: empty token"
+
 
 <<type Lexing.lex_tables>>
 
-external engine: lex_tables -> int -> lexbuf -> int = "lex_engine"
 
 <<function Lexing.lex_refill>>
 
@@ -7029,5 +7237,47 @@ external engine: lex_tables -> int -> lexbuf -> int = "lex_engine"
 
 <<function Lexing.lexeme_end>>
 
+(*****************************************************************************)
+(* Helpers for lexers using the compact code generation method *)
+(*****************************************************************************)
+
+(*less: put lex_tables also here *)
+
+external engine: lex_tables -> int -> lexbuf -> int = "lex_engine"
+
+
+(*****************************************************************************)
+(* Helpers for lexers using the simple code generation method *)
+(*****************************************************************************)
+
+let get_next_char lexbuf =
+  let p = lexbuf.lex_curr_pos in
+  if p < lexbuf.lex_buffer_len then begin
+    let c = String.unsafe_get lexbuf.lex_buffer p in
+    lexbuf.lex_curr_pos <- p + 1;
+    c
+  end else begin
+    lexbuf.refill_buff lexbuf;
+    let p = lexbuf.lex_curr_pos in
+    let c = String.unsafe_get lexbuf.lex_buffer p in
+    lexbuf.lex_curr_pos <- p + 1;
+    c
+  end
+
+
+let start_lexing lexbuf =
+  lexbuf.lex_start_pos <- lexbuf.lex_curr_pos;
+  lexbuf.lex_last_action_simple <- dummy_action
+
+let backtrack lexbuf =
+  lexbuf.lex_curr_pos <- lexbuf.lex_last_pos;
+  Obj.magic(lexbuf.lex_last_action_simple lexbuf)
+
+
 @
+
+
+\section{[[ocamlyacc/]]}
+
+
 

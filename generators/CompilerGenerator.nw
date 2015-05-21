@@ -20,6 +20,7 @@
 %thx to this manual, better understand lex/yacc:
 % - priority of actions when two case matches (e.g kwd prio over ident 
 %   if case is before)
+% - important subtelities of backtracking (or peek) and eof handling
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -100,10 +101,10 @@ Yoann Padioleau\\
 \texttt{yoann.padioleau@gmail.com}\\
 \\
 with code from\\
-Xavier Leroy and ?
+Xavier Leroy and Yoann Padioleau
 }
-% Erik scmidt, xavier leroy
-% jonhson, corbett
+% Lesk, Erik scmidt(lex), Xavier Leroy(ocamllex)
+% Jonhson(yacc), Corbett(byacc), Pad (ocamlyacc2)
 
 \maketitle 
 \onecolumn
@@ -143,16 +144,20 @@ Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
 % We gonna present ocamllex actually. Shorter code and easier
-% to explain than the original lex.
-% And for yacc?? ml-yacc port?
+% to explain than the original lex. And we gonna present
+% also a yacc clone written in ocaml (mine).
 
-%% For once it's not really Plan9, the lex and yacc seems really to
-%% come from Unix with a small port to Plan9, as opposed to the other
-%% document I've already written which are really Plan9 software.
+%% More than 15 years ago I didnt think I could write a yacc. It's
+%% actually doable. The existing clones are not unreachable. Their
+%% code is not that big. Their algorithms not that hard!
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
-\item Flex and Bison
+\item Unix Lex and Yacc
+%% For once the lex and yacc in Plan9 seems really to
+%% come from Unix, with only a small port to Plan9 (as opposed to the other
+%% document I've already written which are really Plan9 software)
+\item GNU Flex and Bison
 % LOC?
 \item Antlr
 % LOC?
@@ -160,18 +165,22 @@ Here are other candidates that were considered but ultimately discarded:
 % ??
 \end{itemize}
 
+% other lex/yacc clones:
+% - Unix Lex in Plan9 (2800LOC use yacc), Unix Yacc in plan9 (3200LOC in 1 file)
+% - ocamllex (756LOC for old simpler version), ocamlyacc (byacc clone 6000LOC)
+% - ml-lex (1380LOC, no lex/yacc used), ml-yacc (4700LOC, lex/yacc used)
+%   contains some very nice documentation btw, user manuals and docs on the
+%   internals, but code is too much functorized and complicated IMHO
+% - Alex (2900LOC, use lex/yacc), Happy (4900LOC, use lex/yacc)
+% - Berkeley Yacc (7320LOC)
+% - go-yacc! a port of yacc.c to Go by Go authors, might be interesting
+%   to contrast C and Go. 3464 LOC so similar.
+% - JLex, cup
+% - menhir: 21000 LOC of ocaml, hmm bigger than my fork of ocaml, lol
+
 % Prolog DCG
+% GLR
 % EDSL for regexps or grammar?
-
-% Berkeley Yacc
-% Unix Lex?
-% go-yacc! a port of yacc.c to Go by Go authors, might be interesting
-%   to contrast C and Go. 3464 LOC
-
-% ocamllex: 1000 LOC vs the 3000 of plan9 lex
-% ocamlyacc: 6000 LOC, vs the 3000 of plan9 yacc
-% byacc:??
-% menhir? 21 000 LOC of ocaml, hmm bigger than my fork-ocaml, lol
 
 
 % Many lexers are actually handwritten (e.g. in Plan9), and many grammars
@@ -240,11 +249,20 @@ end;
 @
 % .mll to .ml
 
+% diff with traditional lex: not the <xxx>/ thing (but equivalent
+% with having multiple rules, which is better I think as it does
+% not require a new prefix rule concept).
+
+% diff with traditional yacc: use constructor so can't use
+% characters in the grammar as in '+' (since in yacc the token
+% is an int/char). But more consistent and cleaner I think.
+
 \section{[[yacc]] services}
 
 \section{Toy calculator example}
 
-% show generated code too? Can have toy generated code?
+% show generated code too? Can have toy generated code? YES for lex
+% at least
 
 \section{Code organization}
 
@@ -252,19 +270,29 @@ end;
 
 \section{Bootstrapping}
 
+% Note that you can bootstrap by yourself manually.
+% The .mll and .mly for ocamllex and ocamlyacc are fairly small
+% so you could manually generate the code for them by running
+% in your head the generation algorithm. You could also simply entering
+% the AST directoy corresponding to the .mll and .mly.
+
 %###############################################################################
 
 \chapter{Lex}
 
 % Essentially a DSL to go from regexps -> automatons (DFA)
-% Automaton so given a character at a time it transitions to
-% the right state and entering certain (final) states triggers
-% a special action (usually returning a token constructor to be then
-% consumed by the yacc parser).
+% Automaton so given a character it transitions to
+% the right state one character at a time and entering certain (final) 
+% states triggers a special action (usually returning a token 
+% constructor to be then consumed by the yacc parser).
 
 % Why use regexps and not automaton directly? Because regexps are more
 % convenient, more declarative! And they can be then compiled 
 % to efficient code.
+
+% see Assembler.nw code to handle floats or integers, really
+% painful and long! glad we have regexps and not automatons for that.
+%less: give both versions, see the productivity win!
 
 
 \section{Core data structures}
@@ -299,6 +327,10 @@ type char_ = int
 % so maybe they used 0 as eof before.
 
 %TODO: toy example? and its dump? unit test (parse string) = AST value?
+
+% In C actually they abuse int to represent tokens and chars together
+% so that one can use '(' in the grammar. They can do that by
+% starting all special tokens after 256.
 
 \subsection{Abstract syntax tree}
 
@@ -358,7 +390,7 @@ type action = location
 type automata_entry =
   { auto_name: string;
     auto_initial_state: int;
-    auto_actions: (action_id * Syntax.action) list;
+    auto_actions: (action_id * Ast.action) list;
   }
 @
 %less: automata_rule? instead of entry? 
@@ -426,7 +458,7 @@ and automata_move =
 % (at least use the Lexeme.xxx API functions)
 
 <<type Lexing.lexbuf>>=
-(* The run-time library for lexers generated by camllex *)
+(* The run-time library for lexers generated by ocamllex *)
 (* The type of lexer buffers. A lexer buffer is the argument passed
    to the scanning functions defined by the generated scanners.
    The lexer buffer holds the current state of the scanner, plus
@@ -440,12 +472,23 @@ type lexbuf =
     mutable lex_abs_pos : int;
     mutable lex_start_pos : int;
     mutable lex_curr_pos : int;
-    mutable lex_last_pos : int;
 
+    mutable lex_last_pos : int;
     mutable lex_last_action : int;
-    mutable lex_eof_reached : bool 
+
+    mutable lex_eof_reached : bool;
+
+    (* used by lexers generated using the simpler code generation method *)
+    mutable lex_last_action_simple : lexbuf -> Obj.t;
   }
 @
+% lex_last_pos works with  lex_last_action so when backtrack
+% you also restore that so you can run the action with the right
+% lexeme range
+
+% lex_start_pos is for Lexing.lex_start and also Lexing.lexeme.
+% It's set in Lexing.start_lexing each time we call a new
+% rule.
 
 %less: put the Lexeme.xxx API functions here?
 
@@ -483,11 +526,15 @@ let main () =
   in
   (* compiling *)
   let (entries, transitions) = Lexgen.make_dfa def in
+
+(* CONFIG
+  Output.output_lexdef_simple ic oc 
+    def.header (entries, transitions) def.trailer;
+*)
   (* optimizing *)
   let tables = Compact.compact_tables transitions in
   (* generating *)
   Output.output_lexdef ic oc def.header tables entries def.trailer;
-
   close_in ic;
   close_out oc
 @
@@ -499,24 +546,18 @@ let main () =
 <<signature Lexgen.make_dfa>>=
 (* The entry point *)
 
-val make_dfa: Syntax.lexer_definition -> automata_entry list * automata_matrix
+val make_dfa: Ast.lexer_definition -> automata_entry list * automata_matrix
 @
-
-<<signature Compact.compact_tables>>=
-val compact_tables: Lexgen.automata_matrix -> lex_tables
-@
-% will see lex_tables later
-
 
 <<signature Output.output_lexdef>>=
 (* Output the DFA tables and its entry points *)
 
 val output_lexdef:
       in_channel -> out_channel ->
-      Syntax.location (* header *) ->
+      Ast.location (* header *) ->
       Compact.lex_tables ->
       Lexgen.automata_entry list ->
-      Syntax.location (* trailer *) ->
+      Ast.location (* trailer *) ->
       unit
 @
 
@@ -537,7 +578,7 @@ val output_lexdef:
 (* The lexical analyzer for lexer definitions. Bootstrapped! *)
 
 {
-open Syntax
+open Ast
 open Parser
 
 exception Lexical_error of string
@@ -570,7 +611,7 @@ exception Lexical_error of string
 %token Tstar Tmaybe Tplus Tor Tlparen Trparen 
 %token Tlbracket Trbracket Tcaret Tdash 
 %token Tunderscore Teof
-%token <Syntax.location> Taction
+%token <Ast.location> Taction
 %token Tlet Tequal 
 %token <string> Tident
 %token Tend  
@@ -605,6 +646,8 @@ rule main = parse
 @
 % C-j, C-m, tab, C-l
 
+% so until now was mostly pl-independent, but here we start
+% to really be a lex for ocaml
 <<[[Lexer.main()]] comment case>>=
 | "(*" 
   { comment_depth := 1;
@@ -874,7 +917,7 @@ and action = parse
 /* The grammar for lexer definitions */
 
 %{
-open Syntax
+open Ast
 
 (* Auxiliaries for the parser. *)
 <<parser helper functions and globals>>
@@ -923,7 +966,7 @@ open Syntax
 
 <<Parser entry points types>>=
 %start lexer_definition
-%type <Syntax.lexer_definition> lexer_definition
+%type <Ast.lexer_definition> lexer_definition
 @
 
 <<lex top rule>>=
@@ -999,6 +1042,7 @@ rest_of_entry:
 %left Tstar
 %left Tplus
 @
+%TODO: 15 s/r conflicts right now. Fix them!
 
 % left Tstar?? but it's not a binary operator
 
@@ -1057,14 +1101,9 @@ char_class1:
 %$
 
 <<parser helper functions and globals>>=
-let char_class c1 c2 =
-  let rec cl n =
-    if n > c2 then [] else n :: cl(succ n)
-  in cl c1
 @
 
 <<parser helper functions and globals>>=
-let all_chars = char_class 0 255
 @
 % but not eof!
 
@@ -1128,7 +1167,7 @@ let regexp_for_string s =
   | Tunderscore
         { Characters all_chars }
   | Teof
-        { Characters [256] }
+        { Characters [Ast.char_eof] }
 @
 % which is why we use 'int' and not 'char'
 % used to be '\000' in older version
@@ -1137,6 +1176,14 @@ let regexp_for_string s =
 
 % ok so now have the AST of a lexer definition, which are
 % multiple "entries" with different cases with regexps and actions.
+
+% there are different techniques to "compile" this:
+% - transform first in NFA, then determinize to get a DFA
+%   Idea there is to have macrostates where you
+%   merge different states in a union state
+% - transform in NFA and then run algorithm on this NFA to simulate
+%   it (thompson algo?)
+% - transfrom from regexp to DFA directly (lex)
 
 <<function Lexgen.make_dfa>>=
 let make_dfa lexdef =
@@ -1152,7 +1199,7 @@ let make_dfa lexdef =
 % the same automata transitions (=~ matrix).
 
 \subsection{Normalized regexps}
-% Normalized ... hmmm
+% Normalized ... hmmm unified? singlify?
 
 % goal here is to generate a single regexp for the
 % different cases of a single rule, and to put the actions
@@ -1181,7 +1228,7 @@ type regexp =
 type lexer_entry =
   { lex_name: string;
     lex_regexp: regexp;
-    lex_actions: (action_id * Syntax.action) list;
+    lex_actions: (action_id * Ast.action) list;
   }
 @
 
@@ -1200,7 +1247,7 @@ let chars_count = ref (0: charset_id)
 
 
 <<constant Lexgen.actions>>=
-let actions = ref ([] : (action_id * Syntax.location) list)
+let actions = ref ([] : (action_id * Ast.location) list)
 @
 % mapping from id to action. really an assoc.
 <<constant Lexgen.actions_count>>=
@@ -1216,9 +1263,11 @@ let actions_count = ref (0: action_id)
 let encode_lexdef def =
   chars := [];
   chars_count := 0;
+(* CONFIG   actions_count := 0; *)
   let entries =
     def.entrypoints |> List.map (fun (entry_name, casedef) ->
         actions := [];
+        (* CONFIG !! for simpler output can't do that *)
         actions_count := 0;
         let re = encode_casedef casedef in
         { lex_name = entry_name;
@@ -1279,8 +1328,6 @@ let rec encode_regexp = function
 
 %(* To generate directly a NFA from a regular expression.
 %   Confer Aho-Sethi-Ullman, dragon book, chap. 3 *)
-%apparently in latest ocamllex they optimized even more and use 
-% "Extension to tagged automata - Ville Larikari"
 %less: bad comment? he means DFA not NFA?
 
 
@@ -1361,7 +1408,8 @@ let encode_lexentries charsets lexentries =
 \subsubsection{Initial states}
 
 % pos? meh
-% but Dragon book used those function names
+% but Dragon book used those function names, because indeed it's
+% in spirit represents a pos??
 
 % remember that lexdef is a unified regexp so all the cases
 % have been merged as an Alt so firstpos will return
@@ -1455,15 +1503,15 @@ let no_action = (max_int: action_id)
 % why 257? 0-255 for chars, then 256 for eof! so length = 257.
 <<function Lexgen.transition_from>>=
 let transition_from charsets follow pos_set = 
-  let tr    = Array.create 257 Set.empty in
+  let tr    = Array.create (Ast.charset_size + 1) Set.empty in
   pos_set |> List.iter (fun pos ->
      charsets.(pos) |> List.iter (fun c ->
            tr.(c) <- Set.union tr.(c) follow.(pos)
       )
   );
 
-  let shift = Array.create 257 Backtrack in
-  for i = 0 to 256 do
+  let shift = Array.create (Ast.charset_size + 1) Backtrack in
+  for i = 0 to Ast.charset_size do
     shift.(i) <- goto_state tr.(i)
   done;
   shift
@@ -1672,10 +1720,49 @@ let copy_buffer = String.create 1024
 
 % essentially a DSL to go from grammar -> pushdown automaton
 
+\section{Core data structures}
+
+\section{[[main()]]}
+
+\section{Lexing}
+
+\section{Parsing}
+
+\section{Compiling}
+
+% this would be so much easier in prolog ...
+% all those first, follow, lr0, which are really about
+% set manipulations and exploring space, this could be done more
+% succintely in prolog
+
+\section{Generating}
+
+\section{Running}
+
 \chapter{Advanced Features}
+
+% for lex: 'as' which apparently comes with a lot more code
 
 \section{[[left]], [[right]], [[assoc]]}
 
+
+\chapter{Debugging Support}
+
+% see my debug flag in ocamllex, hmm but it's more
+% for debugging my own code right now
+
+% see also OCAMLRUNPARAM=p for yacc
+% see grammar.output?
+% imitate menhir?
+
+\section{[[#line]]}
+
+% useful to generate some special directives in the generated code
+% that indicates from where certain parts of the code comes from
+% so that error report can redirect to the original file instead
+% of the generated one (that we don't want the programmer to modify)
+
+\section{Traces}
 
 
 \chapter{Optimisations}
@@ -1687,6 +1774,9 @@ let copy_buffer = String.create 1024
 % Idea is that the matrix has lots of repetitions.
 % Mostly goes to the same state for a large range of character
 % (which will be stored in  'default' below)
+
+%apparently in latest ocamllex they optimized even more and use 
+% "Extension to tagged automata - Ville Larikari"
 
 
 <<type Compact.lex_tables>>=
@@ -1711,6 +1801,10 @@ type lex_tables =
 
 
 \subsection{[[compact_tables()]]}
+
+<<signature Compact.compact_tables>>=
+val compact_tables: Lexgen.automata_matrix -> lex_tables
+@
 
 
 <<function Compact.compact_tables>>=
@@ -1862,13 +1956,21 @@ type lex_tables =
 @
 
 \subsection{C transition engine}
+% another opti
+%todo: bench
 
 \section{Yacc}
+
+% kernel items
+
+% compaction
 
 \chapter{Advanced Topics}
 
 \section{Unicode}
 
+% ulex? char_ is problematic but should be easy to change
+% no? instead of get_next_char it would be get_next_unicode_char?
 
 
 \chapter{Conclusion}
@@ -1877,8 +1979,13 @@ type lex_tables =
 
 \chapter{Debugging}
 
+% can also use the debug of ocamllex to help debug ocamllex
+% itself if you think the generated code is wrong and you want
+% to trace it.
+
 \chapter{Error Managment}
 
+% Main of lex
 <<[[Main.main()]] report error exn>>=
 (match exn with
   Parsing.Parse_error ->
@@ -1910,6 +2017,8 @@ type lex_tables =
 \label{sec:glossary}
 
 \begin{verbatim}
+
+
 \end{verbatim}
 
 \chapter*{Indexes}

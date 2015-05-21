@@ -43,7 +43,7 @@ sync::
 CAML=/home/pad/github/fork-ocaml
 
 SRC_VIEWS_ML=\
-  $(CAML)/lex/syntax.mli \
+  $(CAML)/lex/ast.ml \
   $(CAML)/lex/output.mli \
   $(CAML)/lex/output.ml \
   $(CAML)/lex/lexgen.mli \
