@@ -54,6 +54,26 @@ SRC_VIEWS_ML=\
   $(CAML)/lex/lexer.mll \
   $(CAML)/stdlib/lexing.mli \
   $(CAML)/stdlib/lexing.ml \
+  $(CAML)/yacc2/ast.ml \
+  $(CAML)/yacc2/check.mli \
+  $(CAML)/yacc2/check.ml \
+  $(CAML)/yacc2/lr0.mli \
+  $(CAML)/yacc2/lr0.ml \
+  $(CAML)/yacc2/first_follow.mli \
+  $(CAML)/yacc2/first_follow.ml \
+  $(CAML)/yacc2/lrtables.ml \
+  $(CAML)/yacc2/slr.mli \
+  $(CAML)/yacc2/slr.ml \
+  $(CAML)/yacc2/lalr.mli \
+  $(CAML)/yacc2/lalr.ml \
+  $(CAML)/yacc2/output.mli \
+  $(CAML)/yacc2/output.ml \
+  $(CAML)/yacc2/dump.mli \
+  $(CAML)/yacc2/dump.ml \
+  $(CAML)/yacc2/tests.ml \
+  $(CAML)/yacc2/main.ml \
+  $(CAML)/stdlib/parsing.mli \
+  $(CAML)/stdlib/parsing.ml \
 
 
 SYNCWEB_ML=~/github/syncweb/syncweb -md5sum_in_auxfile -less_marks -lang ocaml

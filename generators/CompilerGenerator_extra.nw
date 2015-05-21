@@ -6547,7 +6547,9 @@ int	gtnm(void);
 
 
 
+\section{[[generators/yacc/libyacc]]}
 
+\subsection*{[[generators/yacc/yaccpar]]}
 
 \section{[[ocamllex/]]}
 
@@ -6985,10 +6987,27 @@ open Output
 
 @
 
-\subsection*{[[lex.lexer.mll]]}
+\subsection*{[[lex/lexer.mll]]}
 
 
 %----------------------------------------------------
+
+
+\subsection*{[[lex/parser.mly]]}
+
+<<copyright ocamllex bis>>=
+/***********************************************************************/
+/*                                                                     */
+/*                           Objective Caml                            */
+/*                                                                     */
+/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
+/*                                                                     */
+/*  Copyright 1996 Institut National de Recherche en Informatique et   */
+/*  Automatique.  Distributed only by permission.                      */
+/*                                                                     */
+/***********************************************************************/
+@
+% C style comment, for parser.mly
 
 
 \subsection*{[[stdlib/lexing.mli]]}
@@ -7097,23 +7116,6 @@ val backtrack : lexbuf -> 'a
 val start_lexing : lexbuf -> unit
 
 @
-
-\subsection*{[[lex/parser.mly]]}
-
-<<copyright ocamllex bis>>=
-/***********************************************************************/
-/*                                                                     */
-/*                           Objective Caml                            */
-/*                                                                     */
-/*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         */
-/*                                                                     */
-/*  Copyright 1996 Institut National de Recherche en Informatique et   */
-/*  Automatique.  Distributed only by permission.                      */
-/*                                                                     */
-/***********************************************************************/
-@
-% C style comment, for parser.mly
-
 
 \subsection*{[[stdlib/lexing.ml]]}
 
@@ -7279,5 +7281,2624 @@ let backtrack lexbuf =
 
 \section{[[ocamlyacc/]]}
 
+\subsection*{[[yacc2/ast.ml]]}
+
+<<enum Ast.term (yacc)>>=
+(* uppercase string *)
+type term = T of string
+(* lowercase string *)
+@
+
+<<enum Ast.nonterm (yacc)>>=
+(* lowercase string *)
+type nonterm = NT of string
+@
+
+<<enum Ast.symbol (yacc)>>=
+type symbol = Term of term | Nonterm of nonterm
+@
+
+<<enum Ast.charpos (yacc)>>=
+type charpos = int
+@
+
+<<enum Ast.location (yacc)>>=
+type location =
+    Location of charpos * charpos
+(* the slice may contain the special $<digit> markers *)
+@
+%$
+
+<<enum Ast.action (yacc)>>=
+(* the slice may contain the special $<digit> markers *)
+type action = location
+@
+%$
+
+<<enum Ast.grammar (yacc)>>=
+type grammar = rule_ list
+@
+
+<<enum Ast.rule_ (yacc)>>=
+  and rule_ = {
+    lhs: nonterm;
+    rhs: symbol list;
+    act: action;
+  }
+@
+
+<<enum Ast.directive (yacc)>>=
+type directive =
+  | Token of type_ option * term
+  | Start of nonterm
+  | Type of type_ * nonterm
+
+  | Prec of unit (* TODO *)
+@
+
+<<enum Ast.type_ (yacc)>>=
+  and type_ = string
+@
+
+<<enum Ast.parser_definition (yacc)>>=
+(* main data structure *)
+type parser_definition = {
+  header: location;
+  directives: directive list;
+  grm: grammar;
+  trailer: location;
+}
+@
+
+<<constant Ast.noloc (yacc)>>=
+let noloc = Location(0, 0)
+@
+
+<<constant Ast.start_nonterminal (yacc)>>=
+(* They should not conflict with user-defined terminals or non terminals
+ * because nonterminals cannot contain '$' according to lexer.mll and 
+ * terminals must start with an uppercase letter according again
+ * to lexer.mll
+ *)
+let start_nonterminal = NT "S$"
+@
+
+<<constant Ast.dollar_terminal (yacc)>>=
+let dollar_terminal = T "$"
+@
+%$
+
+<<function Ast.start_symbol (yacc)>>=
+(*****************************************************************************)
+
+let start_symbol def =
+  try 
+    (match
+      def.directives |> List.find (function
+        | Start x -> true
+        | _ -> false
+      )
+     with
+     | Start x -> x
+     | _ -> failwith "impossible"
+    )
+  with Not_found -> failwith "no start symbol found"
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/ast.ml>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+
+(*****************************************************************************)
+(* Types *)
+(*****************************************************************************)
+
+<<enum Ast.term (yacc)>>
+<<enum Ast.nonterm (yacc)>>
+
+<<enum Ast.symbol (yacc)>>
+
+<<enum Ast.charpos (yacc)>>
+<<enum Ast.location (yacc)>>
+<<enum Ast.action (yacc)>>
+
+<<enum Ast.grammar (yacc)>>
+<<enum Ast.rule_ (yacc)>>
+
+<<enum Ast.directive (yacc)>>
+
+<<enum Ast.type_ (yacc)>>
+
+<<enum Ast.parser_definition (yacc)>>
+
+<<constant Ast.noloc (yacc)>>
+
+(* for the augmented grammar *)
+
+<<constant Ast.start_nonterminal (yacc)>>
+<<constant Ast.dollar_terminal (yacc)>>
+
+(*****************************************************************************)
+(* Helpers *)
+<<function Ast.start_symbol (yacc)>>
+@
+
+
+\subsection*{[[yacc2/check.mli]]}
+
+<<enum Check.error (yacc)>>=
+type error = unit
+@
+
+<<exception Check.Error (yacc)>>=
+exception Error of error
+@
+
+<<signature Check.check (yacc)>>=
+val check: Ast.parser_definition -> unit
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/check.mli>>=
+
+<<enum Check.error (yacc)>>
+
+<<exception Check.Error (yacc)>>
+
+<<signature Check.check (yacc)>>
+@
+
+
+\subsection*{[[yacc2/check.ml]]}
+
+<<enum Check.error (yacc2/check.ml) (yacc)>>=
+(*****************************************************************************)
+
+type error = unit
+@
+
+<<exception Check.Error (yacc2/check.ml) (yacc)>>=
+exception Error of error
+@
+
+<<function Check.report_error (yacc)>>=
+(*****************************************************************************)
+
+let report_error err =
+  failwith "TODO"
+@
+
+<<function Check.check (yacc)>>=
+(*****************************************************************************)
+
+let check def =
+  failwith "TODO"
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/check.ml>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+open Ast
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+
+(* TODO:
+ * - exist 'start', and 'type' directives
+ * - classic use/def: remember set of terms and non terms and look
+ *   for use of undefined symbols, or unused symbols.
+ * - wrong $ number, too big
+ * - typechecking (but this is done for free by ocaml in the generated code)
+ *)
+
+(*****************************************************************************)
+(* Types *)
+<<enum Check.error (yacc2/check.ml) (yacc)>>
+
+<<exception Check.Error (yacc2/check.ml) (yacc)>>
+
+(*****************************************************************************)
+(* Helpers *)
+<<function Check.report_error (yacc)>>
+
+(*****************************************************************************)
+(* Main entry point *)
+<<function Check.check (yacc)>>
+
+@
+%$
+
+
+\subsection*{[[yacc2/lr0.mli]]}
+
+<<enum Lr0.ruleidx (yacc)>>=
+(* the index of the rule in env.g *)
+type ruleidx = R of int
+(* the dot position in the rhs of a rule *)
+@
+
+<<enum Lr0.dotidx (yacc)>>=
+(* the dot position in the rhs of a rule *)
+type dotidx = D of int
+@
+
+<<enum Lr0.stateid (yacc)>>=
+type stateid = S of int
+@
+
+<<enum Lr0.item (yacc)>>=
+(* as mentionned in the dragon book *)
+type item = ruleidx * dotidx
+@
+
+<<enum Lr0.items (yacc)>>=
+(* a.k.a an LR0 state *)
+type items = item Set.t
+@
+
+<<enum Lr0.env (yacc)>>=
+type env = {
+  (* augmented grammar where r0 is $S -> start_original_grammar *)
+  g: Ast.rule_ array;
+}
+@
+%$
+
+<<enum Lr0.automaton (yacc)>>=
+type automaton = {
+  states: items Set.t;
+  (* state 0 is the starting state *)
+  int_to_state: items array;
+  state_to_int: (items, stateid) Map.t;
+  (* goto mapping *)
+  trans: (items * Ast.symbol, items) Map.t;
+}
+@
+
+<<signature Lr0.mk_env_augmented_grammar (yacc)>>=
+val mk_env_augmented_grammar: Ast.nonterm (* start *) -> Ast.grammar -> env
+@
+
+<<signature Lr0.closure (yacc)>>=
+val closure: env -> items -> items
+@
+
+<<signature Lr0.goto (yacc)>>=
+val goto: env -> items -> Ast.symbol -> items
+@
+
+<<signature Lr0.canonical_lr0_automaton (yacc)>>=
+(* assumes augmented grammar *)
+val canonical_lr0_automaton: env -> automaton
+@
+
+<<signature Lr0.after_dot (yacc)>>=
+(* helper functions used also by slr.ml *)
+val after_dot: Ast.rule_ -> dotidx -> Ast.symbol option
+@
+
+<<signature Lr0.all_symbols (yacc)>>=
+val all_symbols: env -> Ast.symbol Set.t
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/lr0.mli>>=
+
+<<enum Lr0.ruleidx (yacc)>>
+<<enum Lr0.dotidx (yacc)>>
+
+<<enum Lr0.stateid (yacc)>>
+
+<<enum Lr0.item (yacc)>>
+
+<<enum Lr0.items (yacc)>>
+
+<<enum Lr0.env (yacc)>>
+
+<<enum Lr0.automaton (yacc)>>
+
+<<signature Lr0.mk_env_augmented_grammar (yacc)>>
+
+<<signature Lr0.closure (yacc)>>
+
+<<signature Lr0.goto (yacc)>>
+
+<<signature Lr0.canonical_lr0_automaton (yacc)>>
+
+
+<<signature Lr0.after_dot (yacc)>>
+
+<<signature Lr0.all_symbols (yacc)>>
+@
+
+
+\subsection*{[[yacc2/lr0.ml]]}
+
+<<enum Lr0.ruleidx (yacc2/lr0.ml) (yacc)>>=
+(* the index of the rule in env.g *)
+type ruleidx = R of int
+(* the dot position in the rhs of a rule *)
+@
+
+<<enum Lr0.dotidx (yacc2/lr0.ml) (yacc)>>=
+(* the dot position in the rhs of a rule *)
+type dotidx = D of int
+@
+
+<<enum Lr0.stateid (yacc2/lr0.ml) (yacc)>>=
+type stateid = S of int
+@
+
+<<enum Lr0.item (yacc2/lr0.ml) (yacc)>>=
+(* as mentionned in the dragon book *)
+type item = ruleidx * dotidx
+@
+
+<<enum Lr0.items (yacc2/lr0.ml) (yacc)>>=
+(* a.k.a an LR0 state *)
+type items = item Set.t
+@
+
+<<enum Lr0.env (yacc2/lr0.ml) (yacc)>>=
+type env = {
+  (* augmented grammar where r0 is e' -> start_original_grammar *)
+  g: Ast.rule_ array;
+}
+@
+
+<<enum Lr0.automaton (yacc2/lr0.ml) (yacc)>>=
+type automaton = {
+  states: items Set.t;
+  (* state 0 is the starting state *)
+  int_to_state: items array;
+  state_to_int: (items, stateid) Map.t;
+  (* goto mapping *)
+  trans: (items * Ast.symbol, items) Map.t;
+}
+@
+
+<<function Lr0.mk_env_augmented_grammar (yacc)>>=
+(*****************************************************************************)
+
+let mk_env_augmented_grammar start xs =
+  let noloc = Location (0, 0) in
+  let start = {lhs = Ast.start_nonterminal; rhs =[Nonterm start]; act=noloc} in
+  { g = Array.of_list (start::xs) }
+@
+
+<<function Lr0.rule_at (yacc)>>=
+let rule_at (R idx) env =
+@
+
+<<function Lr0.rules_of (yacc)>>=
+let rules_of nt env =
+  let res = ref [] in
+  env.g |> Array.iteri (fun idx r ->
+    if r.lhs = nt
+    then res := (R idx) :: !res
+  );
+  List.rev !res
+@
+
+<<function Lr0.after_dot (yacc)>>=
+let after_dot r (D idx) =
+  try Some (List.nth r.rhs idx)
+  with Failure _ -> None
+@
+
+<<function Lr0.move_dot_right (yacc)>>=
+let move_dot_right (D idx) = 
+  (D (idx + 1))
+@
+
+<<function Lr0.all_symbols (yacc)>>=
+let all_symbols env =
+  env.g |> Array.fold_left (fun acc r ->
+    ((Nonterm r.lhs)::r.rhs) |> List.fold_left (fun acc symbol ->
+      Set.add symbol acc
+      ) acc
+  ) Set.empty
+@
+
+<<function Lr0.closure (yacc)>>=
+(* todo: opti: use kernel items *)
+let closure env items =
+  let result = ref items in
+
+  let added = ref true in
+  while !added do
+    added := false;
+
+    !result |> Set.iter (fun item ->
+      let ridx, didx = item in
+      let r = rule_at ridx env in
+
+      match after_dot r didx with
+      | Some (Nonterm b) ->
+          let rules_idx = rules_of b env in
+          rules_idx |> List.iter (fun ridx ->
+            let item = (ridx, D 0) in
+            if not (Set.mem item !result) then begin
+              added := true;
+              result := Set.add item !result;
+            end
+          )
+      | _ -> ()
+    )
+  done;
+  !result
+@
+
+<<function Lr0.goto (yacc)>>=
+let goto env items symbol =
+  let start =
+    Set.fold (fun item acc ->
+      let ridx, didx = item in
+      let r = rule_at ridx env in
+      match after_dot r didx with
+      | Some symbol2 when symbol = symbol2 ->
+          Set.add (ridx, move_dot_right didx) acc
+      | _ -> acc
+    ) items Set.empty
+  in
+  closure env start
+@
+
+<<function Lr0.canonical_lr0_automaton (yacc)>>=
+(*****************************************************************************)
+
+let canonical_lr0_automaton env =
+  let start_item = (R 0, D 0) in
+  let start_items = closure env (Set.singleton start_item) in
+  let result = ref (Set.singleton start_items) in
+  let transitions = ref Map.empty in
+  let symbols = all_symbols env in
+  
+  let added = ref true in
+  while !added do
+    added := false;
+
+    !result |> Set.iter (fun items ->
+      symbols |> Set.iter (fun symb ->
+        let itemset = goto env items symb in
+        if not (Set.is_empty itemset) && not (Map.mem (items, symb)!transitions)
+        then transitions := Map.add (items, symb) itemset !transitions;
+
+        if not (Set.is_empty itemset) && not (Set.mem itemset !result) 
+        then begin
+          added := true;
+          result := Set.add itemset !result;
+        end
+      )
+    )
+  done;
+  let states = !result in
+  let trans = !transitions in
+
+  (* put start state first in the list of states *)
+  let states_without_start = Set.remove start_items states |> Set.elements  in
+  let states_list = start_items::states_without_start in
+
+  let int_to_items = states_list |> Array.of_list in
+  let items_to_int = 
+    let x = ref Map.empty in
+    int_to_items |> Array.iteri (fun i items ->
+      x := Map.add items (S i) !x
+    );
+    !x
+  in
+  { states = states;
+    int_to_state = int_to_items;
+    state_to_int = items_to_int;
+    trans = trans
+  }
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/lr0.ml>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+open Ast
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Computing the LR(0) automaton for a context free grammar, using
+ * the algorithm described in the dragon book in chapter 4.
+ *)
+
+(*****************************************************************************)
+(* Types *)
+(*****************************************************************************)
+
+<<enum Lr0.ruleidx (yacc2/lr0.ml) (yacc)>>
+<<enum Lr0.dotidx (yacc2/lr0.ml) (yacc)>>
+
+<<enum Lr0.stateid (yacc2/lr0.ml) (yacc)>>
+
+<<enum Lr0.item (yacc2/lr0.ml) (yacc)>>
+
+<<enum Lr0.items (yacc2/lr0.ml) (yacc)>>
+
+<<enum Lr0.env (yacc2/lr0.ml) (yacc)>>
+
+<<enum Lr0.automaton (yacc2/lr0.ml) (yacc)>>
+
+(*****************************************************************************)
+(* Helpers *)
+<<function Lr0.mk_env_augmented_grammar (yacc)>>
+
+
+<<function Lr0.rule_at (yacc)>>
+  env.g.(idx)
+
+<<function Lr0.rules_of (yacc)>>
+
+<<function Lr0.after_dot (yacc)>>
+
+<<function Lr0.move_dot_right (yacc)>>
+
+<<function Lr0.all_symbols (yacc)>>
+
+
+(*****************************************************************************)
+(* Algorithms *)
+(*****************************************************************************)
+
+<<function Lr0.closure (yacc)>>
+
+
+<<function Lr0.goto (yacc)>>
+
+(*****************************************************************************)
+(* Main entry point *)
+<<function Lr0.canonical_lr0_automaton (yacc)>>
+@
+
+
+\subsection*{[[yacc2/first_follow.mli]]}
+
+<<enum First_follow.first (yacc)>>=
+type first = (Ast.symbol, Ast.term Set.t) Map.t
+@
+
+<<enum First_follow.epsilon (yacc)>>=
+type epsilon = Ast.nonterm Set.t
+@
+
+<<signature First_follow.compute_first (yacc)>>=
+val compute_first: Ast.grammar -> first * epsilon
+@
+
+<<enum First_follow.follow (yacc)>>=
+type follow = (Ast.nonterm, Ast.term Set.t) Map.t
+@
+
+<<signature First_follow.compute_follow (yacc)>>=
+(* take Lr0.env for its augmented grammar *)
+val compute_follow: Lr0.env -> first * epsilon -> follow
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/first_follow.mli>>=
+
+<<enum First_follow.first (yacc)>>
+
+<<enum First_follow.epsilon (yacc)>>
+
+<<signature First_follow.compute_first (yacc)>>
+
+<<enum First_follow.follow (yacc)>>
+
+<<signature First_follow.compute_follow (yacc)>>
+@
+
+
+\subsection*{[[yacc2/first_follow.ml]]}
+
+<<enum First_follow.first (yacc2/first_follow.ml) (yacc)>>=
+(*****************************************************************************)
+
+type first = (Ast.symbol, Ast.term Set.t) Map.t
+@
+
+<<enum First_follow.epsilon (yacc2/first_follow.ml) (yacc)>>=
+type epsilon = Ast.nonterm Set.t
+@
+
+<<enum First_follow.follow (yacc2/first_follow.ml) (yacc)>>=
+type follow = (Ast.nonterm, Ast.term Set.t) Map.t
+@
+
+<<function First_follow.first_of_sequence (yacc)>>=
+(*****************************************************************************)
+
+let rec first_of_sequence (first, epsilon) xs =
+  match xs with
+  | [] -> Set.empty
+  | x::xs ->
+      let set = Map.find x first in
+      (match x with
+      | Term _ -> set
+      | Nonterm nt ->
+          if Set.mem nt epsilon
+          then Set.union set (first_of_sequence (first, epsilon) xs)
+          else set
+      )
+@
+
+<<function First_follow.epsilon_of_sequence (yacc)>>=
+let rec epsilon_of_sequence epsilon xs =
+  match xs with
+  | [] -> true
+  | x::xs ->
+      (match x with
+      | Term _ -> false
+      | Nonterm nt ->
+          Set.mem nt epsilon && epsilon_of_sequence epsilon xs
+      )
+(*****************************************************************************)
+@
+
+<<function First_follow.compute_first (yacc)>>=
+(*****************************************************************************)
+
+let compute_first grm =
+  (* faster to use an hashtbl? could use Hashtbl.replace which would
+   * be faster?
+   *)
+  let first = ref Map.empty in
+  let epsilon = ref Set.empty in
+
+  (* initialize first *)
+  grm |> List.iter (fun r ->
+    if not (Map.mem (Nonterm r.lhs) !first)
+    then first := !first |> Map.add (Nonterm r.lhs) Set.empty ;
+    r.rhs |> List.iter (function
+      | Term t ->
+        if not (Map.mem (Term t) !first)
+        then first := !first |> Map.add (Term t) (Set.singleton t);
+      | Nonterm _  -> ()
+    )
+  );
+
+  (* fixpoint *)
+  let added = ref true in
+  while !added do
+    added := false;
+
+    grm |> List.iter (fun r ->
+      let lhs = Nonterm r.lhs in
+      if r.rhs = [] && not (Set.mem r.lhs !epsilon)
+      then begin 
+        added := true;
+        epsilon := Set.add r.lhs !epsilon;
+      end;
+
+      let rec aux all_before_are_nullable xs =
+        match xs with
+        | [] -> 
+            if all_before_are_nullable && not (Set.mem r.lhs !epsilon)
+            then begin 
+              epsilon := Set.add r.lhs !epsilon;
+              added := true;
+            end
+        | x::xs when all_before_are_nullable ->
+            (* less: if check.ml use/def check has been done correctly,
+             * we should never get some Not_found here
+             *)
+             let first_x = try Map.find x !first with Not_found -> Set.empty in
+             let old = try Map.find lhs !first with Not_found -> Set.empty in
+             if not (Set.is_empty first_x) && 
+                not (Set.subset first_x old)
+             then begin 
+               first := !first |> Map.add(Nonterm r.lhs)(Set.union old first_x);
+               added := true
+             end;
+             (match x with
+             | Term _ -> (* we can stop here *) ()
+             | Nonterm nt ->
+                if Set.mem nt !epsilon
+                then aux true xs
+             )
+        | _ -> ()
+      in
+      aux true r.rhs
+    )
+  done;
+  !first, !epsilon
+@
+
+<<function First_follow.compute_follow (yacc)>>=
+(* assumes augmented grammar *)
+let compute_follow env (first, epsilon) =
+  let follow = ref Map.empty in
+
+  (* initialize first *)
+  env.g |> Array.iter (fun r ->
+    if not (Map.mem r.lhs !follow)
+    then follow := !follow |> Map.add r.lhs Set.empty ;
+  );
+  (* follow($S) = { $ } *)
+  follow := !follow |> Map.add Ast.start_nonterminal 
+      (Set.singleton Ast.dollar_terminal);
+
+  (* fixpoint *)
+  let added = ref true in
+  while !added do
+    added := false;
+
+    env.g |> Array.iter (fun r ->
+      let rec aux xs =
+        match xs with
+        | [] -> ()
+        | x::beta ->
+          (match x with
+          (* A -> alpha B beta *)
+          | Nonterm b ->
+              let set = first_of_sequence (first, epsilon) beta in
+              let oldb = Map.find b !follow in
+              if not (Set.is_empty set) &&
+                 not (Set.subset set oldb) then begin
+                  follow := !follow |> Map.add b (Set.union oldb set);
+                  added := true
+                end;
+              if epsilon_of_sequence epsilon beta
+              then begin
+                let oldb = Map.find b !follow in
+                let follow_a = Map.find r.lhs !follow in
+                if not (Set.is_empty follow_a) &&
+                   not (Set.subset follow_a oldb) then begin
+                     follow := !follow |> Map.add b (Set.union oldb follow_a);
+                     added := true
+                   end;
+              end;
+              aux beta
+          | Term _ -> aux beta
+          )
+      in
+      aux r.rhs
+    )
+  done;
+  !follow
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/first_follow.ml>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+open Ast
+open Lr0 (* for the augmented grammar *)
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Computing the first and follow set for a context free grammar, using
+ * the algorithm described in the dragon book in chapter 4.
+ * 
+ * The only difference with the dragon book is that I've split their
+ * FIRST into a first map and an epsilon set, so epsilon is never
+ * in first.
+ *)
+
+(*****************************************************************************)
+(* Types *)
+<<enum First_follow.first (yacc2/first_follow.ml) (yacc)>>
+
+<<enum First_follow.epsilon (yacc2/first_follow.ml) (yacc)>>
+
+<<enum First_follow.follow (yacc2/first_follow.ml) (yacc)>>
+
+(*****************************************************************************)
+(* Helpers *)
+<<function First_follow.first_of_sequence (yacc)>>
+
+
+<<function First_follow.epsilon_of_sequence (yacc)>>
+(* Algorithms *)
+<<function First_follow.compute_first (yacc)>>
+
+
+
+<<function First_follow.compute_follow (yacc)>>
+@
+
+
+\subsection*{[[yacc2/lrtables.ml]]}
+
+<<enum Lrtables.action (yacc)>>=
+type action =
+  | Shift of Lr0.stateid
+  | Reduce of Lr0.ruleidx
+  | Accept
+  | Error
+@
+
+<<enum Lrtables.action_table (yacc)>>=
+(* term can be also the special "$" terminal.
+ * Everything not in the list is an Error action, so this
+ * list should not contain any Error.
+ *)
+type action_table = 
+    ((Lr0.stateid * Ast.term) * action) list
+@
+%$
+
+<<enum Lrtables.goto_table (yacc)>>=
+type goto_table = 
+    ((Lr0.stateid * Ast.nonterm) * Lr0.stateid) list
+@
+
+<<enum Lrtables.lr_tables (yacc)>>=
+type lr_tables = action_table * goto_table
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/lrtables.ml>>=
+
+<<enum Lrtables.action (yacc)>>
+
+<<enum Lrtables.action_table (yacc)>>
+
+<<enum Lrtables.goto_table (yacc)>>
+    
+<<enum Lrtables.lr_tables (yacc)>>
+
+@
+
+
+\subsection*{[[yacc2/slr.mli]]}
+
+<<signature Slr.lr_tables (yacc)>>=
+val lr_tables: 
+  Lr0.env -> Lr0.automaton -> First_follow.follow -> Lrtables.lr_tables
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/slr.mli>>=
+
+<<signature Slr.lr_tables (yacc)>>
+@
+
+
+\subsection*{[[yacc2/slr.ml]]}
+
+<<function Slr.filter_some (yacc)>>=
+(* from my common.ml *)
+let rec filter_some = function
+  | [] -> []
+  | None :: l -> filter_some l
+  | Some e :: l -> e :: filter_some l
+@
+
+<<function Slr.map_filter (yacc)>>=
+let map_filter f xs = xs |> List.map f |> filter_some
+@
+
+<<function Slr.lr_tables (yacc)>>=
+(*****************************************************************************)
+
+let lr_tables env auto follow =
+  let trans = auto.trans |> Map.to_list in
+
+  let action_tables =
+    Map.fold (fun items stateid acc ->
+      Set.fold (fun item acc ->
+        let (R ridx, didx) = item in
+        let r = env.g.(ridx) in
+        match Lr0.after_dot r didx with
+        (* a shift *)
+        | Some (Term t) -> 
+            let items2 = Map.find (items, (Term t)) auto.trans in
+            let dst = Map.find items2 auto.state_to_int in
+            ((stateid, t), Shift dst)::acc
+        | Some (Nonterm _) -> acc
+        (* a reduction *)
+        | None -> 
+            if r.lhs = Ast.start_nonterminal
+            then ((stateid, Ast.dollar_terminal), Accept)::acc
+            else
+              let terms = Map.find r.lhs follow in
+              let xs = Set.elements terms in
+              (xs |> List.map (fun t -> (stateid, t), Reduce (R ridx))) @ acc
+      ) items acc
+    ) auto.state_to_int []
+  in
+
+
+  let goto_tables =
+    trans |> map_filter (fun ((items1, symb), items2) ->
+      match symb with
+      | Nonterm nt ->
+        let src = Map.find items1 auto.state_to_int in
+        let dst = Map.find items2 auto.state_to_int in
+        Some ((src, nt), dst)
+      | _ -> None
+    )
+  in
+
+  action_tables, goto_tables
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/slr.ml>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+open Ast
+open Lr0
+open Lrtables
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Computing the SLR(1) tables for a context free grammar using
+ * the algorithm described in the dragon book in chapter 4.
+ *)
+
+(*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+
+<<function Slr.filter_some (yacc)>>
+
+<<function Slr.map_filter (yacc)>>
+
+
+(*****************************************************************************)
+(* Main entry point *)
+<<function Slr.lr_tables (yacc)>>
+@
+
+
+\subsection*{[[yacc2/lalr.mli]]}
+
+
+%-------------------------------------------------------------
+
+<<yacc2/lalr.mli>>=
+@
+
+
+\subsection*{[[yacc2/lalr.ml]]}
+
+
+%-------------------------------------------------------------
+
+<<yacc2/lalr.ml>>=
+@
+
+
+\subsection*{[[yacc2/output.mli]]}
+
+<<signature Output.output_parser (yacc)>>=
+val output_parser: 
+  Ast.parser_definition -> Lr0.env -> Lrtables.lr_tables -> 
+  in_channel -> out_channel -> unit
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/output.mli>>=
+
+<<signature Output.output_parser (yacc)>>
+@
+
+
+\subsection*{[[yacc2/output.ml]]}
+
+<<constant Output.copy_buffer (yacc)>>=
+(*****************************************************************************)
+
+let copy_buffer = String.create 1024
+@
+
+<<function Output.get_chunk (yacc)>>=
+let get_chunk ic (Location(start,stop)) =
+  seek_in ic start;
+  let buf = Buffer.create 1024 in
+
+  let n = ref (stop - start) in
+  while !n > 0 do
+    let m = input ic copy_buffer 0 (min !n 1024) in
+    Buffer.add_string buf (String.sub copy_buffer 0 m);
+    n := !n - m
+  done;
+  Buffer.contents buf
+@
+
+<<function Output.copy_chunk (yacc)>>=
+let copy_chunk ic oc (Location(start,stop)) =
+  seek_in ic start;
+  let n = ref (stop - start) in
+  while !n > 0 do
+    let m = input ic copy_buffer 0 (min !n 1024) in
+    output oc copy_buffer 0 m;
+    n := !n - m
+  done
+@
+
+<<function Output.replace_dollar_underscore (yacc)>>=
+(* actually does the replacment in place 
+ * less: we could use Str instead, but this adds a dependency.
+ *  Str.global_replace (Str.regexp_string "$") "_" s
+ *)
+let replace_dollar_underscore s =
+  let rec aux startpos =
+    try
+      let idx = String.index_from s startpos '$' in
+      String.set s idx '_';
+      aux (idx+1)
+    with Not_found -> ()
+  in
+  aux 0;
+  s
+@
+
+<<constant Output.spf (yacc)>>=
+let spf = Printf.sprintf
+@
+
+<<function Output.int_of_char (yacc)>>=
+(* todo: what about $22? what error message give if type and $x ? *)
+let int_of_char c =
+  let i = Char.code c in
+  if i <= Char.code '9' && i >= Char.code '1'
+  then i - Char.code '0'
+  else failwith (spf "the characted %c is not a char" c)
+@
+
+<<function Output.extract_dollars_set (yacc)>>=
+let extract_dollars_set s =
+  let set = ref Set.empty in
+  let rec aux startpos =
+    try
+      let idx = String.index_from s startpos '$' in
+      let c = String.get s (idx + 1) in
+      set := Set.add (int_of_char c) !set;
+      aux (idx + 2)
+    with Not_found | Invalid_argument _ | Failure _ -> ()
+  in
+  aux 0;
+  !set
+@
+%$
+
+<<function Output.output_parser (yacc)>>=
+(*****************************************************************************)
+
+let output_parser def env lrtables ic oc =
+  let pf x = Printf.fprintf oc x in
+  let (action_table, goto_table) = lrtables in
+
+  let htype = Hashtbl.create 13 in
+  def.directives |> List.iter (function
+    | Token (Some s, t) -> Hashtbl.add htype (Term t) s
+    | Type (s, nt) -> Hashtbl.add htype (Nonterm nt) s
+    | _ -> ()
+  );
+
+  pf "type token =\n";
+  def.directives |> List.iter (function
+    | Token (sopt, (T s)) ->
+      pf " | %s%s\n" s
+        (match sopt with
+        | None -> ""
+        | Some s -> spf " of %s" s
+        )
+    | _ -> ()
+  );
+
+  copy_chunk ic oc def.header;
+  pf "\n";
+  pf "let user_actions = [|\n";
+  env.g |> Array.iteri (fun i r ->
+    if i = 0
+    then pf "  (fun __parser_env -> failwith \"parser\");\n"
+    else begin
+      let s = get_chunk ic r.act in
+      (* ugly: right now have to be before replace_dollar_underscore
+       * because replace_dollar_underscore does side effect on s
+       *)
+      let dollars = extract_dollars_set s in
+      let s' = replace_dollar_underscore s in
+      let symbs = Array.of_list (Nonterm (NT "_fake_"):: r.rhs) in
+      pf "  (fun __parser_env -> \n";
+      dollars |> Set.iter (fun i ->
+        pf "     let _%d = (Parsing.peek_val_simple __parser_env %d : %s) in\n"
+          i i
+          (* type info on terminal or on non terminal *)
+          (let symb = symbs.(i) in
+           if not (Hashtbl.mem htype symb)
+           then
+             (match symb with
+             | Nonterm (NT s) -> "'" ^ s
+             | Term _ -> failwith "you try to access a token with no value"
+             )
+           else Hashtbl.find htype symb
+          )
+      );
+
+      pf "    Obj.repr((\n";
+      pf "      "; 
+      pf "%s" s';
+      pf "   )";
+      if Hashtbl.mem htype (Nonterm r.lhs)
+      then pf ": %s" (Hashtbl.find htype (Nonterm r.lhs))
+      else ();
+      pf ")\n";
+      pf "   );\n";
+    end
+  );
+  pf "|]\n";
+  copy_chunk ic oc def.trailer;
+
+
+  pf "\n";
+  pf "open Parsing\n";
+
+  (* for debugging support *)
+  pf "let string_of_token = function\n";
+  def.directives |> List.iter (function
+    | Token (sopt, (T s)) ->
+      pf " | %s%s -> \"%s\"\n" s
+        (match sopt with
+        | None -> ""
+        | Some s -> " _"
+        )
+        s
+    | _ -> ()
+  );
+  pf "\n";
+
+  (* the main tables *)
+  pf "let lrtables = {\n";
+
+  (* the action table *)
+  pf "  action = (function\n";
+  action_table |> List.iter (fun ((S id, T t), action) ->
+    (* if reached a state where there is dollar involved, means
+     * we're ok!
+     *)
+    if t = "$"
+    then begin 
+      (* in practice the '_' will be the TEOF token returned another time
+       * by the lexer.
+       *)
+      pf "   | S %d, _ -> " id;
+      (match action with
+      | Reduce (R ridx) ->
+          let r = env.g.(ridx) in
+          let n = List.length r.rhs in
+          let (NT l) = r.lhs in
+          pf "Reduce (NT \"%s\", %d, RA %d)" l n ridx
+      | Accept -> pf "Accept"
+      | _ -> failwith "impossible to have a non reduce or accept action on $"
+      );
+      pf "\n";
+    end
+    else begin
+      pf "   | S %d, %s%s -> " id t
+        (if Hashtbl.mem htype (Term (T t)) 
+         then " _"
+         else ""
+        );
+      (match action with
+      | Shift (S id) -> pf "Shift (S %d)" id
+      | Accept -> pf "Accept"
+      | Reduce (R ridx) ->
+          let r = env.g.(ridx) in
+          let n = List.length r.rhs in
+          let (NT l) = r.lhs in
+          pf "Reduce (NT \"%s\", %d, RA %d)" l n ridx
+      | Error -> failwith "Error should not be in action tables"
+      );
+      pf "\n";
+    end
+  );
+
+  pf "    | _ -> raise Parse_error\n";
+  pf "  );\n";
+
+
+  (* the goto table *)
+  pf "  goto = (function\n";
+  goto_table |> List.iter (fun ((S id1, NT nt), S id2) ->
+    pf "  | S %d, NT \"%s\" -> S %d\n" id1 nt id2
+  );
+  pf "    | _ -> raise Parse_error\n";
+  pf "  );\n";
+  pf "}\n";
+
+
+  (* the main entry point *)
+  let nt = Ast.start_symbol def in
+  let (NT start) = nt in
+
+  pf "let %s lexfun lexbuf =\n" start;
+  pf "  Parsing.yyparse_simple lrtables user_actions lexfun string_of_token lexbuf\n";
+  ()
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/output.ml>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+open Ast
+open Lr0
+open Lrtables
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+
+(*****************************************************************************)
+(* Helpers *)
+<<constant Output.copy_buffer (yacc)>>
+
+<<function Output.get_chunk (yacc)>>
+
+<<function Output.copy_chunk (yacc)>>
+
+<<function Output.replace_dollar_underscore (yacc)>>
+
+<<constant Output.spf (yacc)>>
+
+<<function Output.int_of_char (yacc)>>
+
+<<function Output.extract_dollars_set (yacc)>>
+
+
+(*****************************************************************************)
+(* Main entry point *)
+<<function Output.output_parser (yacc)>>
+
+@
+
+
+\subsection*{[[yacc2/dump.mli]]}
+
+<<signature Dump.dump_item (yacc)>>=
+val dump_item: Lr0.env -> Lr0.item -> unit
+@
+
+<<signature Dump.dump_items (yacc)>>=
+val dump_items: Lr0.env -> Lr0.items -> unit
+@
+
+<<signature Dump.dump_lr0_automaton (yacc)>>=
+val dump_lr0_automaton: Lr0.env -> Lr0.automaton -> unit
+@
+
+<<signature Dump.dump_lrtables (yacc)>>=
+val dump_lrtables: Lr0.env -> Lrtables.lr_tables -> unit
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/dump.mli>>=
+
+<<signature Dump.dump_item (yacc)>>
+
+<<signature Dump.dump_items (yacc)>>
+
+<<signature Dump.dump_lr0_automaton (yacc)>>
+
+<<signature Dump.dump_lrtables (yacc)>>
+@
+
+
+\subsection*{[[yacc2/dump.ml]]}
+
+<<enum Dump.either (yacc)>>=
+(* common.ml *)
+
+type ('a,'b) either = Left of 'a | Right of 'b
+@
+
+<<function Dump.partition_either (yacc)>>=
+let partition_either f l =
+  let rec part_either left right = function
+  | [] -> (List.rev left, List.rev right)
+  | x :: l ->
+      (match f x with
+      | Left  e -> part_either (e :: left) right l
+      | Right e -> part_either left (e :: right) l) in
+  part_either [] [] l
+@
+
+<<function Dump.hash_of_list (yacc)>>=
+let hash_of_list xs =
+  let h = Hashtbl.create 101 in
+  xs |> List.iter (fun (k, v) -> Hashtbl.replace h k v);
+  h
+@
+
+<<function Dump.string_of_symbol (yacc)>>=
+let string_of_symbol s =
+  match s with
+  (* in ocamlyacc terminals are constructors and so are uppercase and
+   * so non terminals are lowercase, but it's the opposite convention
+   * used in the dragon book, so here we dump in the dragon book
+   * way so it's easier to compare what we generate with what
+   * the dragon book says we should generate
+   *)
+  | Nonterm (NT s) -> String.uppercase s
+  | Term (T s) ->
+    (match s with
+    (* special cases for arith.mly and tests.ml grammar toy examples *)
+    | "PLUS" -> "+"
+    | "MULT" -> "*"
+    | "TOPAR" -> "("
+    | "TCPAR" -> ")"
+
+    | _ -> String.lowercase s
+    )
+@
+
+<<constant Dump.pf (yacc)>>=
+let pf = Printf.printf
+@
+
+<<constant Dump.spf (yacc)>>=
+let spf = Printf.sprintf
+@
+
+<<function Dump.string_of_action (yacc)>>=
+let string_of_action x =
+  match x with
+  | Lrtables.Shift (S d) -> spf "s%d" d
+  | Lrtables.Reduce (R d) -> spf "r%d" d
+  | Lrtables.Accept -> spf "acc"
+  | Lrtables.Error -> ""
+@
+
+<<function Dump.dump_symbol (yacc)>>=
+(*****************************************************************************)
+
+let dump_symbol s =
+  print_string (string_of_symbol s)
+@
+
+<<function Dump.dump_item (yacc)>>=
+let dump_item env item =
+  let (R idx, D didx) = item in
+  let r = env.g.(idx) in
+
+  dump_symbol (Nonterm r.lhs);
+  print_space ();
+  print_string "->";
+  open_box 0;
+  print_space ();
+  r.rhs |> Array.of_list |> Array.iteri (fun i s ->
+    if i = didx
+    then begin 
+      print_string ".";
+      print_space ();
+    end;
+    dump_symbol s;
+    print_space ();
+  );
+  if didx = List.length r.rhs then begin
+      print_string ".";
+  end;
+
+  close_box ();
+(*  print_space (); print_string "(R"; print_int idx; print_string ")" *)
+  ()
+@
+
+<<function Dump.dump_items (yacc)>>=
+let dump_items env items =
+  items 
+  |> Set.elements |> List.sort (fun (R a, _) (R b, _) -> a - b)
+  |> List.iter (fun item -> 
+    open_box 0;
+    dump_item env item;
+    close_box ();
+    print_newline ();
+  )
+@
+
+<<function Dump.dump_lr0_automaton (yacc)>>=
+let dump_lr0_automaton env auto =
+
+  open_box 0;
+
+  (* the states *)
+  auto.int_to_state |> Array.iteri (fun i items ->
+    print_string "I"; print_int i; print_newline ();
+    open_box 2;
+    dump_items env items;
+    close_box ();
+    print_newline ();
+  );
+
+  (* the transitions *)
+  auto.trans |> Map.iter (fun (items1, symb) items2 ->
+    let (S src) = Map.find items1 auto.state_to_int in
+    let (S dst) = Map.find items2 auto.state_to_int in
+    print_string "I"; print_int src;
+    print_string " --"; dump_symbol symb; print_string "-->";
+    print_string " I"; print_int dst;
+    print_newline ()
+  );
+
+  close_box ()
+@
+
+<<function Dump.dump_lrtables (yacc)>>=
+let dump_lrtables env lrtables =
+  let symbols = Lr0.all_symbols env in
+  let (action_table, goto_table) = lrtables in
+  let haction = hash_of_list action_table in
+  let hgoto = hash_of_list goto_table in
+
+  let (terms, nonterms) = 
+    symbols |> Set.elements |> partition_either (function
+      | Term t -> Left t
+      | Nonterm nt -> Right nt
+    )
+  in
+  let terms = terms @ [Ast.dollar_terminal] in
+  let max_state = 
+    action_table |> List.fold_left (fun acc (((S stateid), _), _) ->
+      max acc stateid
+    ) 0
+  in
+  
+  (* print headers *)
+  pf "   ";
+  terms |> List.iter (fun t ->
+    let s = string_of_symbol (Term t) in
+    pf "%3s " s;
+  );
+  pf "  ";
+  nonterms |> List.iter (fun nt ->
+    let s = string_of_symbol (Nonterm nt) in
+    pf "%3s " s;
+  );
+  pf "\n";
+
+  let conflicts = ref [] in
+  
+  for i = 0 to max_state do
+    pf "%2d " i;
+    terms |> List.iter (fun t ->
+      let xs = Hashtbl.find_all haction (S i, t) in
+      (match xs with
+      | [] -> pf "%3s " " "
+      | [x] -> pf "%3s " (string_of_action x)
+      | x::xs -> 
+        pf "%3s " "!?!";
+        conflicts := (S i, t, x::xs)::!conflicts
+      );
+    );
+    pf "  ";
+    nonterms |> List.iter (fun nt ->
+      let xs = Hashtbl.find_all hgoto (S i, nt) in
+      (match xs with
+      | [] -> pf "%3s " " "
+      | [S d] -> pf "%3d " d
+      | x::xs -> pf "%3s " "!?!"
+      );
+    );
+
+    pf "\n";
+  done;
+  pf "\n";
+  pf "%d conflicts\n" (List.length !conflicts);
+  pf "\n";
+  ()
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/dump.ml>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+
+open Format
+
+open Ast
+open Lr0
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+
+(* TODO: does not indent things correctly, even after an
+ * open_box 2; I don't understand
+ *)
+
+(*****************************************************************************)
+(* Helpers *)
+(*****************************************************************************)
+
+<<enum Dump.either (yacc)>>
+
+<<function Dump.partition_either (yacc)>>
+
+<<function Dump.hash_of_list (yacc)>>
+
+
+
+
+
+<<function Dump.string_of_symbol (yacc)>>
+
+<<constant Dump.pf (yacc)>>
+<<constant Dump.spf (yacc)>>
+
+<<function Dump.string_of_action (yacc)>>
+
+
+(*****************************************************************************)
+(* Dumpers *)
+<<function Dump.dump_symbol (yacc)>>
+
+<<function Dump.dump_item (yacc)>>
+
+<<function Dump.dump_items (yacc)>>
+
+<<function Dump.dump_lr0_automaton (yacc)>>
+
+
+<<function Dump.dump_lrtables (yacc)>>
+
+@
+
+
+\subsection*{[[yacc2/tests.ml]]}
+
+<<constant Tests.noloc (yacc)>>=
+(* from tests/yacc/arith.mly which is a copy of the representative grammar in
+ * the dragon book in 4.1
+ * $S -> E         (R0)
+ * E -> E + T | T  (R1, R2)
+ * T -> T * F | F  (R3, R4)
+ * F -> ( E ) | id (R5, R6)
+ *)
+let noloc = Location (0, 0)
+@
+%$
+
+<<constant Tests.arith (yacc)>>=
+let arith =
+    [{lhs = NT "e";
+      rhs = [Nonterm (NT "e"); Term (T "PLUS");  Nonterm (NT "t")];
+      act = noloc};
+     {lhs = NT "e"; 
+      rhs = [Nonterm (NT "t")];
+      act = noloc};
+     {lhs = NT "t";
+      rhs = [Nonterm (NT "t"); Term (T "MULT"); Nonterm (NT "f")];
+      act = noloc};
+     {lhs = NT "t"; rhs = [Nonterm (NT "f")];
+      act = noloc};
+     {lhs = NT "f";
+      rhs = [Term (T "TOPAR"); Nonterm (NT "e"); Term (T "TCPAR")];
+      act = noloc};
+     {lhs = NT "f"; 
+      rhs = [Term (T "ID")];
+      act = noloc}]
+(*
+let augmented_arith =
+  {lhs = NT "$S"; rhs = [Nonterm (NT "e")]; act = noloc} :: arith
+*)
+@
+%$
+
+<<function Tests.test_lr0 (yacc)>>=
+(*
+let augmented_arith =
+  {lhs = NT "$S"; rhs = [Nonterm (NT "e")]; act = noloc} :: arith
+*)
+
+
+let test_lr0 () =
+  let env = Lr0.mk_env_augmented_grammar (NT "e") arith in
+
+  (* closure *)
+  let items = Set.singleton (R 0, D 0) in
+  let i0 = Lr0.closure env items in
+  let _xs = Set.elements i0 in
+  (* [(R 0, D 0); (R 1, D 0); (R 2, D 0); (R 3, D 0); (R 4, D 0); (R 5, D 0);
+   (R 6, D 0)] *)
+  
+  (* goto *)
+  let items = Set.of_list [(R 0, D 1); (R 1, D 1)] in
+  let i6 = Lr0.goto env items (Term (T "PLUS")) in
+  let _xs = Set.elements i6 in
+  (* [(R 1, D 2); (R 3, D 0); (R 4, D 0); (R 5, D 0); (R 6, D 0)] *)
+  ()
+@
+%$
+
+<<function Tests.test_slr (yacc)>>=
+let test_slr () =
+  let env = Lr0.mk_env_augmented_grammar (NT "e") arith in
+
+  (* automaton *)
+  let auto = Lr0.canonical_lr0_automaton env in
+  
+  (* first, follow *)
+  let (first, eps) = First_follow.compute_first arith in
+  let follow = First_follow.compute_follow env (first, eps) in
+  
+  (* slr tables *)
+  let tables = Slr.lr_tables env auto follow in
+
+  Dump.dump_lrtables env tables;
+  ()
+@
+
+<<constant Tests.arith_ll (yacc)>>=
+(*
+ * E -> E E'
+ * E' -> + T E' | epsilon
+ * T -> F T'
+ * T' -> * F T' | epsilon
+ * F -> ( E ) | id
+ *)
+let arith_ll = 
+    [
+     {lhs = NT "e";
+      rhs = [Nonterm (NT "t"); Nonterm (NT "e'")];
+      act = noloc};
+     {lhs = NT "e'"; 
+      rhs = [Term (T "PLUS"); Nonterm (NT "t"); Nonterm (NT "e'")];
+      act = noloc};
+     {lhs = NT "e'"; 
+      rhs = [];
+      act = noloc};
+     {lhs = NT "t";
+      rhs = [Nonterm (NT "f"); Nonterm (NT "t'")];
+      act = noloc};
+     {lhs = NT "t'"; 
+      rhs = [Term (T "MULT"); Nonterm (NT "f"); Nonterm (NT "t'")];
+      act = noloc};
+     {lhs = NT "t'"; 
+      rhs = [];
+      act = noloc};
+     {lhs = NT "f";
+      rhs = [Term (T "TOPAR"); Nonterm (NT "e"); Term (T "TCPAR")];
+      act = noloc};
+     {lhs = NT "f"; 
+      rhs = [Term (T "ID")];
+      act = noloc}]
+@
+
+<<function Tests.test_first_follow (yacc)>>=
+let test_first_follow () =
+  let (first, eps) = First_follow.compute_first arith_ll in
+  let _first' = first |> Map.to_list |> List.map (fun (t, set) -> 
+    t, Set.elements set)
+  in
+  let _eps' = Set.elements eps in
+
+  let env = Lr0.mk_env_augmented_grammar (NT "e") arith_ll in
+  let follow = First_follow.compute_follow env (first, eps) in
+  let _follow' = follow |> Map.to_list |> List.map (fun (t, set) ->
+    t, Set.elements set)
+  in
+  ()
+@
+
+<<enum Tests.token (yacc)>>=
+type token =
+  | T0
+  | TEOF
+@
+
+<<function Tests.test_lr_engine (yacc)>>=
+(* what we should generate *)
+let test_lr_engine () =
+  let tokens = ref [T0; TEOF] in
+  let lexbuf = Lexing.from_string "fake" in
+  
+  let lexfun _lexbuf =
+    match !tokens with
+    | [] -> failwith "no more tokens"
+    | x::xs ->
+      tokens := xs;
+      x
+  in
+  let lrtables = {
+    Parsing.action = (function 
+      | (S 0, T0) -> Shift (S 1)
+      | (S 1, TEOF) -> Reduce (1, NT "S", RA "S")
+      | (S 2, TEOF) -> Accept
+      | _ -> raise Parsing.Parse_error
+    );
+    Parsing.goto = (function
+      | S 0, NT "S" -> S 2
+      | _ -> raise Parsing.Parse_error
+    );
+  }
+  in
+  
+  Parsing.yyparse_simple lrtables lexfun lexbuf
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/tests.ml>>=
+open Ast
+open Lr0
+
+<<constant Tests.noloc (yacc)>>
+<<constant Tests.arith (yacc)>>
+<<function Tests.test_lr0 (yacc)>>
+  
+<<function Tests.test_slr (yacc)>>
+
+
+<<constant Tests.arith_ll (yacc)>>
+
+<<function Tests.test_first_follow (yacc)>>
+
+
+open Parsing2
+module Parsing = Parsing2
+
+<<enum Tests.token (yacc)>>
+
+<<function Tests.test_lr_engine (yacc)>>
+
+
+@
+
+
+\subsection*{[[yacc2/main.ml]]}
+
+<<function Main.main (yacc)>>=
+(*****************************************************************************)
+
+let main () =
+
+  if Array.length Sys.argv != 2 then begin
+    prerr_endline "Usage: ocamlyacc <input file>";
+    exit 2
+  end;
+
+  let source_name = Sys.argv.(1) in
+
+  let dest_name =
+    if Filename.check_suffix source_name ".mly" 
+    then Filename.chop_suffix source_name ".mly" ^ ".ml"
+    else source_name ^ ".ml" 
+  in
+  let ic = open_in source_name in
+  let lexbuf = Lexing.from_channel ic in
+
+  (* parsing *)
+  let def =
+    try
+      Parser.parser_definition Lexer.main lexbuf
+    with exn ->
+      Sys.remove dest_name;
+       (match exn with
+         Parsing.Parse_error ->
+           prerr_string "Syntax error around char ";
+           prerr_int (Lexing.lexeme_start lexbuf);
+           prerr_endline "."
+       | Lexer.Lexical_error s ->
+           prerr_string "Lexical error around char ";
+           prerr_int (Lexing.lexeme_start lexbuf);
+           prerr_string ": ";
+           prerr_string s;
+           prerr_endline "."
+       | _ -> raise exn
+       );
+      exit 2 
+  in
+  let env = Lr0.mk_env_augmented_grammar (Ast.start_symbol def) def.grm  in
+  let automaton = Lr0.canonical_lr0_automaton env in
+  Dump.dump_lr0_automaton env automaton;
+  
+  let (first, eps) = First_follow.compute_first def.grm in
+  let follow = First_follow.compute_follow env (first, eps) in
+  let tables = Slr.lr_tables env automaton follow in
+  Dump.dump_lrtables env tables;
+
+  let oc = open_out dest_name in
+  Output.output_parser def env tables ic oc;
+  close_out oc;
+  ()
+@
+
+<<toplevel Main._1 (yacc)>>=
+let _ = 
+  Tests.test_lr0 ();
+  Tests.test_first_follow ();
+  Tests.test_slr ();
+  Tests.test_lr_engine ();
+
+  Printexc.catch main (); 
+  exit 0
+@
+
+
+%-------------------------------------------------------------
+
+<<yacc2/main.ml>>=
+(* Yoann Padioleau
+ *
+ * Copyright (C) 2015 Yoann Padioleau
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License
+ * version 2.1 as published by the Free Software Foundation, with the
+ * special exception on linking described in file license.txt.
+ *
+ * This library is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the file
+ * license.txt for more details.
+ *)
+open Ast
+
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(*
+ *
+ * todo:
+ *  - handle priorities, precedences
+ *  - EBNF support!
+ *)
+
+(*****************************************************************************)
+(* Main entry point *)
+<<function Main.main (yacc)>>
+
+<<toplevel Main._1 (yacc)>>
+@
+
+
+\section{[[stdlib/]]}
+
+\subsection*{[[stdlib/parsing.mli]]}
+
+<<signature Parsing.symbol_start (yacc)>>=
+(* Module [Parsing]: the run-time library for parsers generated by [ocamlyacc]*)
+
+val symbol_start : unit -> int
+@
+
+<<signature Parsing.symbol_end (yacc)>>=
+val symbol_end : unit -> int
+        (* [symbol_start] and [symbol_end] are to be called in the action part
+           of a grammar rule only. They return the position of the string that
+           matches the left-hand side of the rule: [symbol_start()] returns
+           the position of the first character; [symbol_end()] returns the
+           position of the last character, plus one. The first character
+           in a file is at position 0. *)
+@
+
+<<signature Parsing.rhs_start (yacc)>>=
+val rhs_start: int -> int
+@
+
+<<signature Parsing.rhs_end (yacc)>>=
+val rhs_end: int -> int
+        (* Same as [symbol_start] and [symbol_end], but return the
+           position of the string matching the [n]th item on the
+           right-hand side of the rule, where [n] is the integer parameter
+           to [lhs_start] and [lhs_end]. [n] is 1 for the leftmost item. *)
+@
+
+<<signature Parsing.clear_parser (yacc)>>=
+val clear_parser : unit -> unit
+        (* Empty the parser stack. Call it just after a parsing function
+           has returned, to remove all pointers from the parser stack
+           to structures that were built by semantic actions during parsing.
+           This is optional, but lowers the memory requirements of the
+           programs. *)
+@
+
+<<exception Parsing.Parse_error (yacc)>>=
+exception Parse_error
+        (* Raised when a parser encounters a syntax error.
+           Can also be raised from the action part of a grammar rule,
+           to initiate error recovery. *)
+@
+
+<<enum Parsing.parse_tables (yacc)>>=
+type parse_tables =
+  { actions : (parser_env -> Obj.t) array;
+    transl_const : int array;
+    transl_block : int array;
+    lhs : string;
+    len : string;
+    defred : string;
+    dgoto : string;
+    sindex : string;
+    rindex : string;
+    gindex : string;
+    tablesize : int;
+    table : string;
+    check : string;
+    error_function : string -> unit }
+@
+
+<<exception Parsing.YYexit (yacc)>>=
+exception YYexit of Obj.t
+@
+
+<<signature Parsing.yyparse (yacc)>>=
+val yyparse :
+      parse_tables -> int -> (Lexing.lexbuf -> 'a) -> Lexing.lexbuf -> 'b
+@
+
+<<signature Parsing.peek_val (yacc)>>=
+val peek_val : parser_env -> int -> 'a
+@
+
+<<signature Parsing.is_current_lookahead (yacc)>>=
+val is_current_lookahead : 'a -> bool
+@
+
+<<signature Parsing.parse_error (yacc)>>=
+val parse_error : string -> unit
+@
+
+<<enum Parsing.stateid (yacc)>>=
+(* functions and types used by the generated parsers using the simple code
+ * generation method *)
+
+type stateid = S of int
+@
+
+<<enum Parsing.nonterm (yacc)>>=
+type nonterm = NT of string
+(* index in the rule actions table passed to yyparse *)
+@
+
+<<enum Parsing.rule_action (yacc)>>=
+(* index in the rule actions table passed to yyparse *)
+type rule_action = RA of int
+@
+
+<<enum Parsing.action (yacc)>>=
+type action = 
+  | Shift of stateid
+  | Reduce of nonterm * int (* size of rhs of the rule *) * rule_action
+  | Accept
+@
+
+<<enum Parsing.lr_tables (yacc)>>=
+type 'tok lr_tables = {
+  action: stateid * 'tok -> action;
+  goto: stateid * nonterm -> stateid;
+}
+@
+
+<<enum Parsing.rules_actions (yacc)>>=
+type rules_actions = (parser_env_simple -> Obj.t) array
+@
+
+<<signature Parsing.peek_val_simple (yacc)>>=
+val peek_val_simple: parser_env_simple -> int -> 'a
+@
+
+<<signature Parsing.yyparse_simple (yacc)>>=
+val yyparse_simple:
+  'tok lr_tables -> rules_actions ->
+  (Lexing.lexbuf -> 'tok) -> ('tok -> string) -> Lexing.lexbuf -> 'a
+@
+
+
+%-------------------------------------------------------------
+
+<<stdlib/parsing.mli>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+<<signature Parsing.symbol_start (yacc)>>
+<<signature Parsing.symbol_end (yacc)>>
+<<signature Parsing.rhs_start (yacc)>>
+<<signature Parsing.rhs_end (yacc)>>
+<<signature Parsing.clear_parser (yacc)>>
+
+<<exception Parsing.Parse_error (yacc)>>
+
+(*--*)
+
+(* The following definitions are used by the generated parsers only.
+   They are not intended to be used by user programs. *)
+
+type parser_env
+
+<<enum Parsing.parse_tables (yacc)>>
+
+<<exception Parsing.YYexit (yacc)>>
+
+<<signature Parsing.yyparse (yacc)>>
+<<signature Parsing.peek_val (yacc)>>
+<<signature Parsing.is_current_lookahead (yacc)>>
+<<signature Parsing.parse_error (yacc)>>
+
+
+
+<<enum Parsing.stateid (yacc)>>
+<<enum Parsing.nonterm (yacc)>>
+<<enum Parsing.rule_action (yacc)>>
+<<enum Parsing.action (yacc)>>
+
+<<enum Parsing.lr_tables (yacc)>>
+
+type parser_env_simple
+<<enum Parsing.rules_actions (yacc)>>
+
+<<signature Parsing.peek_val_simple (yacc)>>
+
+
+<<signature Parsing.yyparse_simple (yacc)>>
+
+@
+
+
+\subsection*{[[stdlib/parsing.ml]]}
+
+<<enum Parsing.parser_env (yacc)>>=
+(* Internal interface to the parsing engine *)
+
+type parser_env =
+  { mutable s_stack : int array;        (* States *)
+    mutable v_stack : Obj.t array;      (* Semantic attributes *)
+
+    mutable symb_start_stack : int array; (* Start positions *)
+    mutable symb_end_stack : int array;   (* End positions *)
+
+    mutable stacksize : int;            (* Size of the stacks *)
+    mutable stackbase : int;            (* Base sp for current parse *)
+
+    mutable curr_char : int;            (* Last token read *)
+    mutable lval : Obj.t;               (* Its semantic attribute *)
+
+    mutable symb_start : int;           (* Start pos. of the current symbol*)
+    mutable symb_end : int;             (* End pos. of the current symbol *)
+
+    mutable asp : int;                  (* The stack pointer for attributes *)
+    mutable rule_len : int;             (* Number of rhs items in the rule *)
+    mutable rule_number : int;          (* Rule number to reduce by *)
+
+    mutable sp : int;                   (* Saved sp for parse_engine *)
+    mutable state : int;                (* Saved state for parse_engine *)
+    mutable errflag : int }             (* Saved error flag for parse_engine *)
+@
+
+<<enum Parsing.parse_tables (stdlib/parsing.ml) (yacc)>>=
+(* coupling: parse_tables and parsing.c parse_tables must match! *)
+
+type parse_tables =
+  { actions : (parser_env -> Obj.t) array;
+    transl_const : int array;
+    transl_block : int array;
+    lhs : string;
+    len : string;
+    defred : string;
+    dgoto : string;
+    sindex : string;
+    rindex : string;
+    gindex : string;
+    tablesize : int;
+    table : string;
+    check : string;
+    error_function : string -> unit }
+@
+
+<<exception Parsing.YYexit (stdlib/parsing.ml) (yacc)>>=
+exception YYexit of Obj.t
+@
+
+<<exception Parsing.Parse_error (stdlib/parsing.ml) (yacc)>>=
+exception Parse_error
+@
+
+<<enum Parsing.parser_input (yacc)>>=
+type parser_input =
+    Start
+  | Token_read
+  | Stacks_grown_1
+  | Stacks_grown_2
+  | Semantic_action_computed
+  | Error_detected
+@
+
+<<enum Parsing.parser_output (yacc)>>=
+type parser_output =
+    Read_token
+  | Raise_parse_error
+  | Grow_stacks_1
+  | Grow_stacks_2
+  | Compute_semantic_action
+  | Call_error_function
+@
+
+<<constant Parsing.env (yacc)>>=
+let env =
+  { s_stack = Array.create 100 0;
+    v_stack = Array.create 100 (Obj.repr ());
+    symb_start_stack = Array.create 100 0;
+    symb_end_stack = Array.create 100 0;
+    stacksize = 100;
+    stackbase = 0;
+    curr_char = 0;
+    lval = Obj.repr ();
+    symb_start = 0;
+    symb_end = 0;
+    asp = 0;
+    rule_len = 0;
+    rule_number = 0;
+    sp = 0;
+    state = 0;
+    errflag = 0 }
+@
+
+<<function Parsing.grow_stacks (yacc)>>=
+let grow_stacks() =
+  let oldsize = env.stacksize in
+  let newsize = oldsize * 2 in
+  let new_s = Array.create newsize 0
+  and new_v = Array.create newsize (Obj.repr ())
+  and new_start = Array.create newsize 0
+  and new_end = Array.create newsize 0 in
+    Array.blit env.s_stack 0 new_s 0 oldsize;
+    env.s_stack <- new_s;
+    Array.blit env.v_stack 0 new_v 0 oldsize;
+    env.v_stack <- new_v;
+    Array.blit env.symb_start_stack 0 new_start 0 oldsize;
+    env.symb_start_stack <- new_start;
+    Array.blit env.symb_end_stack 0 new_end 0 oldsize;
+    env.symb_end_stack <- new_end;
+    env.stacksize <- newsize
+@
+
+<<function Parsing.clear_parser (yacc)>>=
+let clear_parser() =
+  Array.fill env.v_stack 0 env.stacksize (Obj.repr ());
+  env.lval <- Obj.repr ()
+@
+
+<<constant Parsing.current_lookahead_fun (yacc)>>=
+let current_lookahead_fun = ref (fun (x: Obj.t) -> false)
+@
+
+<<function Parsing.yyparse (yacc)>>=
+let yyparse tables start lexer lexbuf =
+  let rec loop cmd arg =
+    match parse_engine tables env cmd arg with
+      Read_token ->
+        let t = Obj.repr(lexer lexbuf) in
+        env.symb_start <- lexbuf.lex_abs_pos + lexbuf.lex_start_pos;
+        env.symb_end   <- lexbuf.lex_abs_pos + lexbuf.lex_curr_pos;
+        loop Token_read t
+    | Raise_parse_error ->
+        raise Parse_error
+    | Compute_semantic_action ->
+        let (action, value) =
+          try
+            (Semantic_action_computed, tables.actions.(env.rule_number) env)
+          with Parse_error ->
+            (Error_detected, Obj.repr ()) in
+        loop action value
+    | Grow_stacks_1 ->
+        grow_stacks(); loop Stacks_grown_1 (Obj.repr ())
+    | Grow_stacks_2 ->
+        grow_stacks(); loop Stacks_grown_2 (Obj.repr ())
+    | Call_error_function ->
+        tables.error_function "syntax error";
+        loop Error_detected (Obj.repr ()) in
+  let init_asp = env.asp
+  and init_sp = env.sp
+  and init_stackbase = env.stackbase
+  and init_state = env.state
+  and init_curr_char = env.curr_char
+  and init_errflag = env.errflag in
+  env.stackbase <- env.sp + 1;
+  env.curr_char <- start;
+  try
+    loop Start (Obj.repr ())
+  with exn ->
+    let curr_char = env.curr_char in
+    env.asp <- init_asp;
+    env.sp <- init_sp;
+    env.stackbase <- init_stackbase;
+    env.state <- init_state;
+    env.curr_char <- init_curr_char;
+    env.errflag <- init_errflag;
+    match exn with
+      YYexit v ->
+        Obj.magic v
+    | _ ->
+        current_lookahead_fun :=
+          (fun tok ->
+            if Obj.is_block tok
+            then tables.transl_block.(Obj.tag tok) = curr_char
+            else tables.transl_const.(Obj.magic tok) = curr_char);
+        raise exn
+@
+
+<<function Parsing.peek_val (yacc)>>=
+let peek_val env n =
+  Obj.magic env.v_stack.(env.asp - n)
+@
+
+<<function Parsing.symbol_start (yacc)>>=
+let symbol_start () =
+  if env.rule_len > 0
+  then env.symb_start_stack.(env.asp - env.rule_len + 1)
+  else env.symb_end_stack.(env.asp)
+@
+
+<<function Parsing.symbol_end (yacc)>>=
+let symbol_end () =
+@
+
+<<function Parsing.rhs_start (yacc)>>=
+let rhs_start n =
+@
+
+<<function Parsing.rhs_end (yacc)>>=
+let rhs_end n =
+@
+
+<<function Parsing.is_current_lookahead (yacc)>>=
+let is_current_lookahead tok =
+  (!current_lookahead_fun)(Obj.repr tok)
+@
+
+<<function Parsing.parse_error (yacc)>>=
+let parse_error (msg: string) = ()
+@
+
+<<enum Parsing.stateid (stdlib/parsing.ml) (yacc)>>=
+(*****************************************************************************)
+
+type stateid = S of int
+(* less: could be an index, but easier for debug to use the original name *)
+@
+
+<<enum Parsing.nonterm (stdlib/parsing.ml) (yacc)>>=
+(* less: could be an index, but easier for debug to use the original name *)
+type nonterm = NT of string
+(* index in the rule actions table passed to yyparse *)
+@
+
+<<enum Parsing.rule_action (stdlib/parsing.ml) (yacc)>>=
+(* index in the rule actions table passed to yyparse *)
+type rule_action = RA of int
+@
+
+<<enum Parsing.action (stdlib/parsing.ml) (yacc)>>=
+type action = 
+  | Shift of stateid
+  | Reduce of nonterm * int (* size of rhs of the rule *) * rule_action
+  | Accept
+@
+
+<<enum Parsing.lr_tables (stdlib/parsing.ml) (yacc)>>=
+type 'tok lr_tables = {
+  action: stateid * 'tok -> action;
+  goto: stateid * nonterm -> stateid;
+}
+@
+
+<<enum Parsing.parser_env_simple (yacc)>>=
+type parser_env_simple = {
+  states: stateid Stack.t;
+  (* todo: opti: could use a growing array as one oftens needs to index it
+   * with the peek_val
+   * The semantic attributes (token value or non terminal value).
+   *)
+  values: Obj.t Stack.t;
+  mutable current_rule_len: int;
+}
+@
+
+<<enum Parsing.rules_actions (stdlib/parsing.ml) (yacc)>>=
+type rules_actions = (parser_env_simple -> Obj.t) array
+@
+
+<<constant Parsing.spf (yacc)>>=
+let spf = Printf.sprintf
+@
+
+<<constant Parsing.debug (yacc)>>=
+let debug = ref true
+@
+
+<<function Parsing.log (yacc)>>=
+let log x = 
+  if !debug
+  then begin
+    print_endline ("YACC: " ^ x); flush stdout
+  end
+@
+
+<<function Parsing.peek_val_simple (yacc)>>=
+let peek_val_simple env i =
+  if i < 1 && i >= env.current_rule_len
+  then failwith (spf "peek_val_simple invalid argument %d" i)
+  else Obj.magic (Stack.nth (env.current_rule_len - i) env.values)
+@
+
+<<function Parsing.value_of_tok (yacc)>>=
+(* hmm, imitate what is done in parsing.c. A big ugly but tricky
+ * to do otherwise and have a generic LR parsing engine.
+ *)
+let value_of_tok t =
+  if Obj.is_block t
+  then Obj.field t 0
+  else Obj.repr ()
+@
+
+<<function Parsing.yyparse_simple (yacc)>>=
+let yyparse_simple lrtables rules_actions lexfun string_of_tok lexbuf =
+
+  let env = {
+    states = Stack.create ();
+    values = Stack.create ();
+    current_rule_len = 0;
+  }
+  in
+  
+  env.states |> Stack.push (S 0);
+  let a = ref (lexfun lexbuf) in
+
+  let finished = ref false in
+  let res = ref (Obj.repr ()) in
+  while not !finished do
+    
+    let s = Stack.top env.states in
+    log (spf "state %d, tok = %s" (let (S x) = s in x) (string_of_tok !a));
+
+    match lrtables.action (s, !a) with
+    | Shift t ->
+        log (spf "shift to %d" (let (S x) = t in x));
+        env.states |> Stack.push t;
+        env.values |> Stack.push (value_of_tok (Obj.repr !a));
+        a := lexfun lexbuf;
+    | Reduce (nt, n, ra) ->
+        for i = 1 to n do
+          Stack.pop env.states |> ignore
+        done;
+        let s = Stack.top env.states in
+        env.states |> Stack.push (lrtables.goto (s, nt));
+        let (NT ntstr) = nt in
+        let (RA raidx) = ra in
+        env.current_rule_len <- n;
+        let v = rules_actions.(raidx) env in
+        for i = 1 to n do
+          Stack.pop env.values |> ignore
+        done;
+        env.values |> Stack.push v;
+        log (spf "reduce %s, ra = %d" ntstr raidx);
+    | Accept ->
+        log "done!";
+        finished := true;
+        res := Stack.top env.values;
+  done;
+  Obj.magic !res
+@
+
+
+%-------------------------------------------------------------
+
+<<stdlib/parsing.ml>>=
+(***********************************************************************)
+(*                                                                     *)
+(*                           Objective Caml                            *)
+(*                                                                     *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt         *)
+(*                                                                     *)
+(*  Copyright 1996 Institut National de Recherche en Informatique et   *)
+(*  Automatique.  Distributed only by permission.                      *)
+(*                                                                     *)
+(***********************************************************************)
+
+(* The parsing engine *)
+
+open Lexing
+
+<<enum Parsing.parser_env (yacc)>>
+
+<<enum Parsing.parse_tables (stdlib/parsing.ml) (yacc)>>
+
+<<exception Parsing.YYexit (stdlib/parsing.ml) (yacc)>>
+<<exception Parsing.Parse_error (stdlib/parsing.ml) (yacc)>>
+
+<<enum Parsing.parser_input (yacc)>>
+
+<<enum Parsing.parser_output (yacc)>>
+
+external parse_engine :
+    parse_tables -> parser_env -> parser_input -> Obj.t -> parser_output
+    = "parse_engine"
+
+<<constant Parsing.env (yacc)>>
+
+<<function Parsing.grow_stacks (yacc)>>
+
+<<function Parsing.clear_parser (yacc)>>
+
+<<constant Parsing.current_lookahead_fun (yacc)>>
+
+<<function Parsing.yyparse (yacc)>>
+
+<<function Parsing.peek_val (yacc)>>
+
+<<function Parsing.symbol_start (yacc)>>
+<<function Parsing.symbol_end (yacc)>>
+  env.symb_end_stack.(env.asp)
+
+<<function Parsing.rhs_start (yacc)>>
+  env.symb_start_stack.(env.asp - (env.rule_len - n))
+<<function Parsing.rhs_end (yacc)>>
+  env.symb_end_stack.(env.asp - (env.rule_len - n))
+
+<<function Parsing.is_current_lookahead (yacc)>>
+
+<<function Parsing.parse_error (yacc)>>
+
+
+(*****************************************************************************)
+(* Helpers for parsers using the simple code generation method *)
+<<enum Parsing.stateid (stdlib/parsing.ml) (yacc)>>
+<<enum Parsing.nonterm (stdlib/parsing.ml) (yacc)>>
+<<enum Parsing.rule_action (stdlib/parsing.ml) (yacc)>>
+
+<<enum Parsing.action (stdlib/parsing.ml) (yacc)>>
+
+<<enum Parsing.lr_tables (stdlib/parsing.ml) (yacc)>>
+
+
+<<enum Parsing.parser_env_simple (yacc)>>
+
+<<enum Parsing.rules_actions (stdlib/parsing.ml) (yacc)>>
+
+<<constant Parsing.spf (yacc)>>
+
+<<constant Parsing.debug (yacc)>>
+<<function Parsing.log (yacc)>>
+
+
+
+
+
+
+<<function Parsing.peek_val_simple (yacc)>>
+
+
+<<function Parsing.value_of_tok (yacc)>>
+
+
+
+<<function Parsing.yyparse_simple (yacc)>>
+  
+@
 
 
