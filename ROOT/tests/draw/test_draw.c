@@ -7,6 +7,8 @@ void  eresized(int x) {
     print("eresized %d\n", x);
 }
 
+extern	void	_exits(char *);
+
 void main(void) {
   
   int res;
@@ -32,5 +34,10 @@ void main(void) {
   for(;;) {
     res = ekbd();
     print("key =%d\n", res);
+
+    if(res == 9) {
+      //_exits("done");
+      exits("done");
+    }
   }
 }

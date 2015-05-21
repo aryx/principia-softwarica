@@ -3,6 +3,9 @@
 #include <draw.h>
 #include <event.h>
 
+
+extern	void	_EXITS(char *);
+
 void  eresized(int x) {
     print("eresized %d\n", x);
 }
@@ -10,6 +13,7 @@ void  eresized(int x) {
 void main(void) {
   
   int res;
+  Image *color;
 
   res = initdraw(nil, nil, "test_draw");
   if (res < 0) {
@@ -17,16 +21,22 @@ void main(void) {
     exit(0);
   }
 
-  //sleep(5);
+  color = allocimage(display, Rect(0,0,1,1), view->chan, 1, DMagenta);
+  draw(view, view->r, color, nil, ZP);
 
-  einit(Ekeyboard);
+  line(view, Pt(10, 10), Pt(100, 100), Endarrow, Endarrow, 10, display->black, ZP);
 
-  for(;;) {
-    res = ekbd();
-    print("key =%d\n", res);
-    if(res == 9) {
-      exit(2);
-    }
-  }
+  sleep(5);
+
+//  einit(Ekeyboard);
+//
+//  for(;;) {
+//    res = ekbd();
+//    print("key =%d\n", res);
+//    if(res == 9) {
+//      //exit(2);
+//      _EXITS("foo");
+//    }
+//  }
 
 }
