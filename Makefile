@@ -92,7 +92,7 @@ lpdistclean:
 	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i lpdistclean || exit 1; done 
 
 visual2:
-	~/pfff/codemap.opt -no_legend -no_symlinks -filter nw -ss 2 .
+	~/pfff/codemap.opt -no_legend -symlinks -filter nw -ss 2 .
 
 
 #	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
