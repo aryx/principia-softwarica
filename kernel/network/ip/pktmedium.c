@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/pktmedium.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -13,6 +14,7 @@ static void pktunbind(Ipifc*);
 static void pktbwrite(Ipifc*, Block*, int, uchar*);
 static void pktin(Fs*, Ipifc*, Block*);
 
+/*s: global pktmedium */
 Medium pktmedium =
 {
 .name=      "pkt",
@@ -25,7 +27,9 @@ Medium pktmedium =
 .bwrite=    pktbwrite,
 .pktin=     pktin,
 };
+/*e: global pktmedium */
 
+/*s: function pktbind */
 /*
  *  called to bind an IP ifc to an ethernet device
  *  called with ifc wlock'd
@@ -35,7 +39,9 @@ pktbind(Ipifc*, int argc, char **argv)
 {
     USED(argc, argv);
 }
+/*e: function pktbind */
 
+/*s: function pktunbind */
 /*
  *  called with ifc wlock'd
  */
@@ -43,7 +49,9 @@ static void
 pktunbind(Ipifc*)
 {
 }
+/*e: function pktunbind */
 
+/*s: function pktbwrite */
 /*
  *  called by ipoput with a single packet to write
  */
@@ -56,7 +64,9 @@ pktbwrite(Ipifc *ifc, Block *bp, int, uchar*)
         qpass(ifc->conv->sq, copyblock(bp, BLEN(bp)));
     qpass(ifc->conv->rq, bp);
 }
+/*e: function pktbwrite */
 
+/*s: function pktin */
 /*
  *  called with ifc rlocked when someone write's to 'data'
  */
@@ -71,9 +81,13 @@ pktin(Fs *f, Ipifc *ifc, Block *bp)
         ipiput4(f, ifc, bp);
     }
 }
+/*e: function pktin */
 
+/*s: function pktmediumlink */
 void
 pktmediumlink(void)
 {
     addipmedium(&pktmedium);
 }
+/*e: function pktmediumlink */
+/*e: kernel/network/ip/pktmedium.c */

@@ -1,127 +1,143 @@
+/*s: networking/ip/imap4d/store.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <auth.h>
 #include "imap4d.h"
 
+/*s: global flagMap */
 static NamedInt	flagMap[] =
 {
-	{"\\Seen",	MSeen},
-	{"\\Answered",	MAnswered},
-	{"\\Flagged",	MFlagged},
-	{"\\Deleted",	MDeleted},
-	{"\\Draft",	MDraft},
-	{"\\Recent",	MRecent},
-	{nil,		0}
+    {"\\Seen",	MSeen},
+    {"\\Answered",	MAnswered},
+    {"\\Flagged",	MFlagged},
+    {"\\Deleted",	MDeleted},
+    {"\\Draft",	MDraft},
+    {"\\Recent",	MRecent},
+    {nil,		0}
 };
+/*e: global flagMap */
 
+/*s: function storeMsg */
 int
 storeMsg(Box *box, Msg *m, int uids, void *vst)
 {
-	Store *st;
-	int f, flags;
+    Store *st;
+    int f, flags;
 
-	USED(uids);
+    USED(uids);
 
-	if(m->expunged)
-		return uids;
+    if(m->expunged)
+        return uids;
 
-	st = vst;
-	flags = st->flags;
+    st = vst;
+    flags = st->flags;
 
-	f = m->flags;
-	if(st->sign == '+')
-		f |= flags;
-	else if(st->sign == '-')
-		f &= ~flags;
-	else
-		f = flags;
+    f = m->flags;
+    if(st->sign == '+')
+        f |= flags;
+    else if(st->sign == '-')
+        f &= ~flags;
+    else
+        f = flags;
 
-	/*
-	 * not allowed to change the recent flag
-	 */
-	f = (f & ~MRecent) | (m->flags & MRecent);
-	setFlags(box, m, f);
+    /*
+     * not allowed to change the recent flag
+     */
+    f = (f & ~MRecent) | (m->flags & MRecent);
+    setFlags(box, m, f);
 
-	if(st->op != STFlagsSilent){
-		m->sendFlags = 1;
-		box->sendFlags = 1;
-	}
+    if(st->op != STFlagsSilent){
+        m->sendFlags = 1;
+        box->sendFlags = 1;
+    }
 
-	return 1;
+    return 1;
 }
+/*e: function storeMsg */
 
+/*s: function setFlags */
 /*
  * update flags & global flag counts in box
  */
 void
 setFlags(Box *box, Msg *m, int f)
 {
-	if(f == m->flags)
-		return;
+    if(f == m->flags)
+        return;
 
-	box->dirtyImp = 1;
-	if((f & MRecent) != (m->flags & MRecent)){
-		if(f & MRecent)
-			box->recent++;
-		else
-			box->recent--;
-	}
-	m->flags = f;
+    box->dirtyImp = 1;
+    if((f & MRecent) != (m->flags & MRecent)){
+        if(f & MRecent)
+            box->recent++;
+        else
+            box->recent--;
+    }
+    m->flags = f;
 }
+/*e: function setFlags */
 
+/*s: function sendFlags */
 void
 sendFlags(Box *box, int uids)
 {
-	Msg *m;
+    Msg *m;
 
-	if(!box->sendFlags)
-		return;
+    if(!box->sendFlags)
+        return;
 
-	box->sendFlags = 0;
-	for(m = box->msgs; m != nil; m = m->next){
-		if(!m->expunged && m->sendFlags){
-			Bprint(&bout, "* %lud FETCH (", m->seq);
-			if(uids)
-				Bprint(&bout, "uid %lud ", m->uid);
-			Bprint(&bout, "FLAGS (");
-			writeFlags(&bout, m, 1);
-			Bprint(&bout, "))\r\n");
-			m->sendFlags = 0;
-		}
-	}
+    box->sendFlags = 0;
+    for(m = box->msgs; m != nil; m = m->next){
+        if(!m->expunged && m->sendFlags){
+            Bprint(&bout, "* %lud FETCH (", m->seq);
+            if(uids)
+                Bprint(&bout, "uid %lud ", m->uid);
+            Bprint(&bout, "FLAGS (");
+            writeFlags(&bout, m, 1);
+            Bprint(&bout, "))\r\n");
+            m->sendFlags = 0;
+        }
+    }
 }
+/*e: function sendFlags */
 
+/*s: function writeFlags */
 void
 writeFlags(Biobuf *b, Msg *m, int recentOk)
 {
-	char *sep;
-	int f;
+    char *sep;
+    int f;
 
-	sep = "";
-	for(f = 0; flagMap[f].name != nil; f++){
-		if((m->flags & flagMap[f].v)
-		&& (flagMap[f].v != MRecent || recentOk)){
-			Bprint(b, "%s%s", sep, flagMap[f].name);
-			sep = " ";
-		}
-	}
+    sep = "";
+    for(f = 0; flagMap[f].name != nil; f++){
+        if((m->flags & flagMap[f].v)
+        && (flagMap[f].v != MRecent || recentOk)){
+            Bprint(b, "%s%s", sep, flagMap[f].name);
+            sep = " ";
+        }
+    }
 }
+/*e: function writeFlags */
 
+/*s: function msgSeen */
 int
 msgSeen(Box *box, Msg *m)
 {
-	if(m->flags & MSeen)
-		return 0;
-	m->flags |= MSeen;
-	box->sendFlags = 1;
-	m->sendFlags = 1;
-	box->dirtyImp = 1;
-	return 1;
+    if(m->flags & MSeen)
+        return 0;
+    m->flags |= MSeen;
+    box->sendFlags = 1;
+    m->sendFlags = 1;
+    box->dirtyImp = 1;
+    return 1;
 }
+/*e: function msgSeen */
 
+/*s: function mapFlag */
 ulong
 mapFlag(char *name)
 {
-	return mapInt(flagMap, name);
+    return mapInt(flagMap, name);
 }
+/*e: function mapFlag */
+/*e: networking/ip/imap4d/store.c */

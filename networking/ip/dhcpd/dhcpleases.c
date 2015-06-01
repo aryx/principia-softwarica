@@ -1,3 +1,4 @@
+/*s: networking/ip/dhcpd/dhcpleases.c */
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
@@ -7,39 +8,48 @@
 
 extern	char *binddir;
 
+/*s: global now (networking/ip/dhcpd/dhcpleases.c) */
 long now;
+/*e: global now (networking/ip/dhcpd/dhcpleases.c) */
+/*s: global blog (networking/ip/dhcpd/dhcpleases.c) */
 char *blog = "ipboot";
+/*e: global blog (networking/ip/dhcpd/dhcpleases.c) */
+/*s: global minlease (networking/ip/dhcpd/dhcpleases.c) */
 int minlease = MinLease;
+/*e: global minlease (networking/ip/dhcpd/dhcpleases.c) */
 
+/*s: function main (networking/ip/dhcpd/dhcpleases.c) */
 void
 main(void)
 {
-	Dir *all;
-	int i, nall, fd;
-	Binding b;
+    Dir *all;
+    int i, nall, fd;
+    Binding b;
 
-	fmtinstall('E', eipfmt);
-	fmtinstall('I', eipfmt);
-	fmtinstall('V', eipfmt);
-	fmtinstall('M', eipfmt);
+    fmtinstall('E', eipfmt);
+    fmtinstall('I', eipfmt);
+    fmtinstall('V', eipfmt);
+    fmtinstall('M', eipfmt);
 
-	fd = open(binddir, OREAD);
-	if(fd < 0)
-		sysfatal("opening %s: %r", binddir);
-	nall = dirreadall(fd, &all);
-	if(nall < 0)
-		sysfatal("reading %s: %r", binddir);
-	close(fd);
+    fd = open(binddir, OREAD);
+    if(fd < 0)
+        sysfatal("opening %s: %r", binddir);
+    nall = dirreadall(fd, &all);
+    if(nall < 0)
+        sysfatal("reading %s: %r", binddir);
+    close(fd);
 
-	b.boundto = 0;
-	b.lease = b.offer = 0;
-	now = time(0);
-	for(i = 0; i < nall; i++){
-		if(parseip(b.ip, all[i].name) == -1 || syncbinding(&b, 0) < 0)
-			continue;
-		if(b.lease > now)
-			print("%I leased by %s until %s", b.ip, b.boundto,
-				ctime(b.lease));
-	}
-	exits(0);
+    b.boundto = 0;
+    b.lease = b.offer = 0;
+    now = time(0);
+    for(i = 0; i < nall; i++){
+        if(parseip(b.ip, all[i].name) == -1 || syncbinding(&b, 0) < 0)
+            continue;
+        if(b.lease > now)
+            print("%I leased by %s until %s", b.ip, b.boundto,
+                ctime(b.lease));
+    }
+    exits(0);
 }
+/*e: function main (networking/ip/dhcpd/dhcpleases.c) */
+/*e: networking/ip/dhcpd/dhcpleases.c */

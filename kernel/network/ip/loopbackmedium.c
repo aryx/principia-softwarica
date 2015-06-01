@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/loopbackmedium.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -7,21 +8,26 @@
 
 #include "ip.h"
 
+/*s: enum _anon_ (kernel/network/ip/loopbackmedium.c) */
 enum
 {
     Maxtu=  16*1024,
 };
+/*e: enum _anon_ (kernel/network/ip/loopbackmedium.c) */
 
 typedef struct LB LB;
+/*s: struct LB */
 struct LB
 {
     Proc    *readp;
     Queue   *q;
     Fs  *f;
 };
+/*e: struct LB */
 
 static void loopbackread(void *a);
 
+/*s: function loopbackbind */
 static void
 loopbackbind(Ipifc *ifc, int, char**)
 {
@@ -36,7 +42,9 @@ loopbackbind(Ipifc *ifc, int, char**)
     kproc("loopbackread", loopbackread, ifc);
 
 }
+/*e: function loopbackbind */
 
+/*s: function loopbackunbind */
 static void
 loopbackunbind(Ipifc *ifc)
 {
@@ -53,7 +61,9 @@ loopbackunbind(Ipifc *ifc)
     qfree(lb->q);
     free(lb);
 }
+/*e: function loopbackunbind */
 
+/*s: function loopbackbwrite */
 static void
 loopbackbwrite(Ipifc *ifc, Block *bp, int, uchar*)
 {
@@ -64,7 +74,9 @@ loopbackbwrite(Ipifc *ifc, Block *bp, int, uchar*)
         ifc->outerr++;
     ifc->out++;
 }
+/*e: function loopbackbwrite */
 
+/*s: function loopbackread */
 static void
 loopbackread(void *a)
 {
@@ -100,7 +112,9 @@ loopbackread(void *a)
         poperror();
     }
 }
+/*e: function loopbackread */
 
+/*s: global loopbackmedium */
 Medium loopbackmedium =
 {
 .hsize=     0,
@@ -112,9 +126,13 @@ Medium loopbackmedium =
 .unbind=    loopbackunbind,
 .bwrite=    loopbackbwrite,
 };
+/*e: global loopbackmedium */
 
+/*s: function loopbackmediumlink */
 void
 loopbackmediumlink(void)
 {
     addipmedium(&loopbackmedium);
 }
+/*e: function loopbackmediumlink */
+/*e: kernel/network/ip/loopbackmedium.c */

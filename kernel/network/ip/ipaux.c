@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/ipaux.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -31,6 +32,7 @@
 //  [OSPF]      "OSPF",
 //};
 
+/*s: global v6Unspecified */
 /*
  *  well known IPv6 addresses
  */
@@ -40,26 +42,33 @@ uchar v6Unspecified[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0
 };
+/*e: global v6Unspecified */
+/*s: global v6loopback (kernel/network/ip/ipaux.c) */
 uchar v6loopback[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
+/*e: global v6loopback (kernel/network/ip/ipaux.c) */
 
+/*s: global v6linklocal (kernel/network/ip/ipaux.c) */
 uchar v6linklocal[IPaddrlen] = {
     0xfe, 0x80, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0
 };
+/*e: global v6linklocal (kernel/network/ip/ipaux.c) */
 //uchar v6linklocalmask[IPaddrlen] = {
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0xff, 0xff, 0xff,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0
+/*s: global v6llpreflen (kernel/network/ip/ipaux.c) */
 //};
 int v6llpreflen = 8;    /* link-local prefix length in bytes */
+/*e: global v6llpreflen (kernel/network/ip/ipaux.c) */
 
 //uchar v6multicast[IPaddrlen] = {
 //  0xff, 0, 0, 0,
@@ -73,6 +82,7 @@ int v6llpreflen = 8;    /* link-local prefix length in bytes */
 //  0, 0, 0, 0,
 //  0, 0, 0, 0
 //};
+/*s: global v6allnodesN */
 //int v6mcpreflen = 1;  /* multicast prefix length */
 
 uchar v6allnodesN[IPaddrlen] = {
@@ -81,11 +91,13 @@ uchar v6allnodesN[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
+/*e: global v6allnodesN */
 //uchar v6allroutersN[IPaddrlen] = {
 //  0xff, 0x01, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0x02
+/*s: global v6allnodesNmask */
 //};
 uchar v6allnodesNmask[IPaddrlen] = {
     0xff, 0xff, 0, 0,
@@ -93,6 +105,8 @@ uchar v6allnodesNmask[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0
 };
+/*e: global v6allnodesNmask */
+/*s: global v6allnodesL */
 //int v6aNpreflen = 2;  /* all nodes (N) prefix */
 
 uchar v6allnodesL[IPaddrlen] = {
@@ -101,11 +115,13 @@ uchar v6allnodesL[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
+/*e: global v6allnodesL */
 //uchar v6allroutersL[IPaddrlen] = {
 //  0xff, 0x02, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0x02
+/*s: global v6allnodesLmask */
 //};
 uchar v6allnodesLmask[IPaddrlen] = {
     0xff, 0xff, 0, 0,
@@ -113,6 +129,8 @@ uchar v6allnodesLmask[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0
 };
+/*e: global v6allnodesLmask */
+/*s: global v6solicitednode (kernel/network/ip/ipaux.c) */
 //int v6aLpreflen = 2;  /* all nodes (L) prefix */
 
 uchar v6solicitednode[IPaddrlen] = {
@@ -121,12 +139,14 @@ uchar v6solicitednode[IPaddrlen] = {
     0, 0, 0, 0x01,
     0xff, 0, 0, 0
 };
+/*e: global v6solicitednode (kernel/network/ip/ipaux.c) */
 //uchar v6solicitednodemask[IPaddrlen] = {
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0x0, 0x0, 0x0
 //};
+/*s: function ptclcsum */
 //int v6snpreflen = 13;
 
 ushort
@@ -185,12 +205,16 @@ ptclcsum(Block *bp, int offset, int len)
 
     return ~losum & 0xffff;
 }
+/*e: function ptclcsum */
 
+/*s: enum _anon_ (kernel/network/ip/ipaux.c) */
 enum
 {
     Isprefix= 16,
 };
+/*e: enum _anon_ (kernel/network/ip/ipaux.c) */
 
+/*s: function ipv62smcast */
 //#define CLASS(p) ((*(uchar*)(p))>>6)
 
 void
@@ -202,8 +226,10 @@ ipv62smcast(uchar *smcast, uchar *a)
     smcast[14] = a[14];
     smcast[15] = a[15];
 }
+/*e: function ipv62smcast */
 
 
+/*s: function parsemac */
 /*
  *  parse a hex mac address
  */
@@ -231,7 +257,9 @@ parsemac(uchar *to, char *from, int len)
     }
     return i;
 }
+/*e: function parsemac */
 
+/*s: function iphash */
 /*
  *  hashing tcp, udp, ... connections
  */
@@ -240,7 +268,9 @@ iphash(uchar *sa, ushort sp, uchar *da, ushort dp)
 {
     return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) % Nhash;
 }
+/*e: function iphash */
 
+/*s: function iphtadd */
 void
 iphtadd(Ipht *ht, Conv *c)
 {
@@ -271,7 +301,9 @@ iphtadd(Ipht *ht, Conv *c)
     ht->tab[hv] = h;
     unlock(ht);
 }
+/*e: function iphtadd */
 
+/*s: function iphtrem */
 void
 iphtrem(Ipht *ht, Conv *c)
 {
@@ -289,7 +321,9 @@ iphtrem(Ipht *ht, Conv *c)
         }
     unlock(ht);
 }
+/*e: function iphtrem */
 
+/*s: function iphtlook */
 /* look for a matching conversation with the following precedence
  *  connected && raddr,rport,laddr,lport
  *  announced && laddr,lport
@@ -366,3 +400,5 @@ iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
     unlock(ht);
     return nil;
 }
+/*e: function iphtlook */
+/*e: kernel/network/ip/ipaux.c */

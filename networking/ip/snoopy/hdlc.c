@@ -1,20 +1,24 @@
+/*s: networking/ip/snoopy/hdlc.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
 #include "dat.h"
 #include "protos.h"
 
+/*s: enum _anon_ (networking/ip/snoopy/hdlc.c) */
 enum {
-	HDLC_frame=	0x7e,
-	HDLC_esc=	0x7d,
+    HDLC_frame=	0x7e,
+    HDLC_esc=	0x7d,
 
-	/* PPP frame fields */
-	PPP_addr=	0xff,
-	PPP_ctl=	0x3,
-	PPP_initfcs=	0xffff,
-	PPP_goodfcs=	0xf0b8,
+    /* PPP frame fields */
+    PPP_addr=	0xff,
+    PPP_ctl=	0x3,
+    PPP_initfcs=	0xffff,
+    PPP_goodfcs=	0xf0b8,
 };
+/*e: enum _anon_ (networking/ip/snoopy/hdlc.c) */
 
+/*s: global fcstab */
 /*
  * Calculate FCS - rfc 1331
  */
@@ -53,123 +57,143 @@ ushort fcstab[256] =
       0xf78f, 0xe606, 0xd49d, 0xc514, 0xb1ab, 0xa022, 0x92b9, 0x8330,
       0x7bc7, 0x6a4e, 0x58d5, 0x495c, 0x3de3, 0x2c6a, 0x1ef1, 0x0f78
 };
+/*e: global fcstab */
 
+/*s: global inbuf */
 static uchar inbuf[16*1024];
+/*e: global inbuf */
+/*s: global inlen */
 static int inlen;
+/*e: global inlen */
 
+/*s: global p_mux (networking/ip/snoopy/hdlc.c) */
 static Mux p_mux[] =
 {
-	{"ppp",		(PPP_addr<<8)|PPP_ctl,	} ,
-	{0}
+    {"ppp",		(PPP_addr<<8)|PPP_ctl,	} ,
+    {0}
 };
+/*e: global p_mux (networking/ip/snoopy/hdlc.c) */
 
+/*s: enum _anon_ (networking/ip/snoopy/hdlc.c)2 */
 enum
 {
-	Ot = 1
+    Ot = 1
 };
+/*e: enum _anon_ (networking/ip/snoopy/hdlc.c)2 */
 
+/*s: function p_compile (networking/ip/snoopy/hdlc.c) */
 static void
 p_compile(Filter *f)
 {
-	Mux *m;
+    Mux *m;
 
-	for(m = p_mux; m->name != nil; m++)
-		if(strcmp(f->s, m->name) == 0){
-			f->pr = m->pr;
-			f->ulv = m->val;
-			f->subop = Ot;
-			return;
-		}
-	sysfatal("unknown ethernet field or protocol: %s", f->s);
+    for(m = p_mux; m->name != nil; m++)
+        if(strcmp(f->s, m->name) == 0){
+            f->pr = m->pr;
+            f->ulv = m->val;
+            f->subop = Ot;
+            return;
+        }
+    sysfatal("unknown ethernet field or protocol: %s", f->s);
 }
+/*e: function p_compile (networking/ip/snoopy/hdlc.c) */
 
+/*s: function p_filter (networking/ip/snoopy/hdlc.c) */
 static int
 p_filter(Filter *f, Msg *m)
 {
-	ulong t;
+    ulong t;
 
-	if(m->pe-m->ps < 2)
-		return 0;
+    if(m->pe-m->ps < 2)
+        return 0;
 
-	switch(f->subop){
-	case Ot:
-		t = (m->ps[0]<<8)|m->ps[1];
-		if(t != f->ulv)
-			return 0;
-		break;
-	}
-	return 1;
+    switch(f->subop){
+    case Ot:
+        t = (m->ps[0]<<8)|m->ps[1];
+        if(t != f->ulv)
+            return 0;
+        break;
+    }
+    return 1;
 }
+/*e: function p_filter (networking/ip/snoopy/hdlc.c) */
 
+/*s: function p_seprint (networking/ip/snoopy/hdlc.c) */
 static int
 p_seprint(Msg *m)
 {
-	ulong t;
+    ulong t;
 
-	if(m->pe-m->ps < 2)
-		return -1;
+    if(m->pe-m->ps < 2)
+        return -1;
 
-	t = (m->ps[0]<<8)|m->ps[1];
-	m->ps += 2;
-	demux(p_mux, t, t, m, &dump);
+    t = (m->ps[0]<<8)|m->ps[1];
+    m->ps += 2;
+    demux(p_mux, t, t, m, &dump);
 
-	return 0;
+    return 0;
 }
+/*e: function p_seprint (networking/ip/snoopy/hdlc.c) */
 
+/*s: function p_framer */
 static int
 p_framer(int fd, uchar *pkt, int pktlen)
 {
-	ushort fcs;
-	uchar *from, *efrom, *to, *eto;
-	int n;
-	ulong c;
+    ushort fcs;
+    uchar *from, *efrom, *to, *eto;
+    int n;
+    ulong c;
 
-	eto = pkt+pktlen;
-	for(;;){
-		efrom = memchr(inbuf, HDLC_frame, inlen);
-		if(efrom == nil){
-			if(inlen >= sizeof(inbuf))
-				inlen = 0;
-			n = read(fd, inbuf+inlen, sizeof(inbuf)-inlen);
-			if(n <= 0)
-				break;
-			inlen += n;
-			continue;
-		}
+    eto = pkt+pktlen;
+    for(;;){
+        efrom = memchr(inbuf, HDLC_frame, inlen);
+        if(efrom == nil){
+            if(inlen >= sizeof(inbuf))
+                inlen = 0;
+            n = read(fd, inbuf+inlen, sizeof(inbuf)-inlen);
+            if(n <= 0)
+                break;
+            inlen += n;
+            continue;
+        }
 
-		/* checksum and unescape the frame */
-		fcs = PPP_initfcs;
-		to = pkt;
-		for(from = inbuf; from < efrom;){
-			c = *from++;
-			if(c == HDLC_esc)
-				c = (*from++) ^ 0x20;
-			if(to < eto)
-				*to++ = c;
-			fcs = (fcs >> 8) ^ fcstab[(fcs ^ c) & 0xff];
-		}
+        /* checksum and unescape the frame */
+        fcs = PPP_initfcs;
+        to = pkt;
+        for(from = inbuf; from < efrom;){
+            c = *from++;
+            if(c == HDLC_esc)
+                c = (*from++) ^ 0x20;
+            if(to < eto)
+                *to++ = c;
+            fcs = (fcs >> 8) ^ fcstab[(fcs ^ c) & 0xff];
+        }
 
-		/* move down anything that's left */
-		inlen -= efrom+1-inbuf;
-		memmove(inbuf, efrom+1, inlen);
+        /* move down anything that's left */
+        inlen -= efrom+1-inbuf;
+        memmove(inbuf, efrom+1, inlen);
 
-		/* accept if this is a good packet */
-		if(fcs != PPP_goodfcs)
-			print("bad frame %ld %2.2ux %2.2ux!\n", to-pkt, pkt[0], pkt[1]);
-		else
-			return to-pkt;
-	}
-	return -1;
+        /* accept if this is a good packet */
+        if(fcs != PPP_goodfcs)
+            print("bad frame %ld %2.2ux %2.2ux!\n", to-pkt, pkt[0], pkt[1]);
+        else
+            return to-pkt;
+    }
+    return -1;
 }
+/*e: function p_framer */
 
+/*s: global hdlc */
 Proto hdlc =
 {
-	"hdlc",
-	p_compile,
-	p_filter,
-	p_seprint,
-	p_mux,
-	"%#.4lux",
-	nil,
-	p_framer,
+    "hdlc",
+    p_compile,
+    p_filter,
+    p_seprint,
+    p_mux,
+    "%#.4lux",
+    nil,
+    p_framer,
 };
+/*e: global hdlc */
+/*e: networking/ip/snoopy/hdlc.c */

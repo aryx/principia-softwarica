@@ -1,3 +1,4 @@
+/*s: kernel/network/netif.h */
 
 // todo: split in portdat_network.h? and portfns_network.h
 
@@ -6,6 +7,7 @@ typedef struct Netaddr  Netaddr;
 typedef struct Netfile  Netfile;
 typedef struct Netif  Netif;
 
+/*s: enum _anon_ (kernel/network/netif.h) */
 enum
 {
   Nmaxaddr= 64,
@@ -22,14 +24,22 @@ enum
   Nifstatqid,
   Nmtuqid,
 };
+/*e: enum _anon_ (kernel/network/netif.h) */
 
+/*s: macro NETTYPE */
 /*
  *  Macros to manage Qid's used for multiplexed devices
  */
 #define NETTYPE(x)  (((ulong)x)&0x1f)
+/*e: macro NETTYPE */
+/*s: macro NETID */
 #define NETID(x)  ((((ulong)x))>>5)
+/*e: macro NETID */
+/*s: macro NETQID */
 #define NETQID(i,t) ((((ulong)i)<<5)|(t))
+/*e: macro NETQID */
 
+/*s: struct Netfile */
 /*
  *  one per multiplexed connection
  */
@@ -51,7 +61,9 @@ struct Netfile
 
   Queue *in;      /* input buffer */
 };
+/*e: struct Netfile */
 
+/*s: struct Netaddr */
 /*
  *  a network address
  */
@@ -62,7 +74,9 @@ struct Netaddr
   uchar addr[Nmaxaddr];
   int ref;
 };
+/*e: struct Netaddr */
 
+/*s: struct Netif */
 /*
  *  a network interface
  */
@@ -110,6 +124,7 @@ struct Netif
   int (*hwmtu)(void*, int); /* get/set mtu */
   void  (*scanbs)(void*, uint); /* scan for base stations */
 };
+/*e: struct Netif */
 
 void  netifinit(Netif*, char*, int, ulong);
 Walkqid*  netifwalk(Netif*, Chan*, Chan*, char **, int);
@@ -122,6 +137,7 @@ int netifwstat(Netif*, Chan*, uchar*, int);
 int netifstat(Netif*, Chan*, uchar*, int);
 int activemulti(Netif*, uchar*, int);
 
+/*s: enum _anon_ (kernel/network/netif.h)2 */
 /*
  *  Ethernet specific
  */
@@ -137,7 +153,9 @@ enum
   ETIP4   = 0x0800,
   ETIP6   = 0x86DD,
 };
+/*e: enum _anon_ (kernel/network/netif.h)2 */
 
+/*s: struct Etherpkt */
 struct Etherpkt
 {
   uchar d[Eaddrlen];
@@ -145,5 +163,7 @@ struct Etherpkt
   uchar type[2];
   uchar data[1500];
 };
+/*e: struct Etherpkt */
 
 
+/*e: kernel/network/netif.h */

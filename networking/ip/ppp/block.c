@@ -1,47 +1,62 @@
+/*s: networking/ip/ppp/block.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
 #include <auth.h>
 #include "ppp.h"
 
+/*s: enum _anon_ (networking/ip/ppp/block.c) */
 enum
 {
-	PAD	= 128,
-	NLIST	= (1<<5),
-	BPOW	= 10,
+    PAD	= 128,
+    NLIST	= (1<<5),
+    BPOW	= 10,
 };
+/*e: enum _anon_ (networking/ip/ppp/block.c) */
 
 typedef struct Barena Barena;
+/*s: struct Barena */
 struct Barena
 {
-	QLock;
-	Block*	list[NLIST];
+    QLock;
+    Block*	list[NLIST];
 };
+/*e: struct Barena */
+/*s: global area */
 static Barena area;
+/*e: global area */
 
 #define ADEBUG if(0)
 
 
+/*s: enum _anon_ (networking/ip/ppp/block.c)2 */
 /*
  *  allocation tracing
  */
 enum
 {
-	Npc=	64,
+    Npc=	64,
 };
+/*e: enum _anon_ (networking/ip/ppp/block.c)2 */
 typedef struct Arefent Arefent;
+/*s: struct Arefent */
 struct Arefent
 {
-	uint	pc;
-	uint	n;
+    uint	pc;
+    uint	n;
 };
+/*e: struct Arefent */
 typedef struct Aref Aref;
+/*s: struct Aref */
 struct  Aref
 {
-	Arefent	tab[Npc];
-	QLock;
+    Arefent	tab[Npc];
+    QLock;
 };
+/*e: struct Aref */
+/*s: global arefblock */
 Aref arefblock;
+/*e: global arefblock */
 
 static ulong	callerpc(void*);
 static void	aref(Aref*, ulong);
@@ -50,82 +65,83 @@ static void	aunref(Aref*, ulong);
 Block*
 allocb(int len)
 {
-	int sz;
-	Block *bp, **l;
+    int sz;
+    Block *bp, **l;
 
-	len += PAD;
-	sz = (len>>BPOW)&(NLIST-1);
-	
-	qlock(&area);
-	l = &area.list[sz];
-	for(bp = *l; bp; bp = bp->flist) {
-		if(bp->bsz >= len) {
-			*l = bp->flist;
-			qunlock(&area);
+    len += PAD;
+    sz = (len>>BPOW)&(NLIST-1);
+    
+    qlock(&area);
+    l = &area.list[sz];
+    for(bp = *l; bp; bp = bp->flist) {
+        if(bp->bsz >= len) {
+            *l = bp->flist;
+            qunlock(&area);
 
-			bp->next = nil;
-			bp->list = nil;
-			bp->flist = nil;
-			bp->base = (uchar*)bp+sizeof(Block);
-			bp->rptr = bp->base+PAD;
-			bp->wptr = bp->rptr;
-			bp->lim  = bp->base+bp->bsz;
-			bp->flow = nil;
-			bp->flags= 0;
-			ADEBUG {
-				bp->pc = callerpc(&len);
-				aref(&arefblock, bp->pc);
-			}
-			return bp;
-		}
-		l = &bp->flist;
-	}
+            bp->next = nil;
+            bp->list = nil;
+            bp->flist = nil;
+            bp->base = (uchar*)bp+sizeof(Block);
+            bp->rptr = bp->base+PAD;
+            bp->wptr = bp->rptr;
+            bp->lim  = bp->base+bp->bsz;
+            bp->flow = nil;
+            bp->flags= 0;
+            ADEBUG {
+                bp->pc = callerpc(&len);
+                aref(&arefblock, bp->pc);
+            }
+            return bp;
+        }
+        l = &bp->flist;
+    }
 
-	qunlock(&area);
+    qunlock(&area);
 
-	bp = mallocz(sizeof(Block)+len, 1);
+    bp = mallocz(sizeof(Block)+len, 1);
 
-	bp->bsz  = len;
-	bp->base = (uchar*)bp+sizeof(Block);
-	bp->rptr = bp->base+PAD;
-	bp->wptr = bp->rptr;
-	bp->lim  = bp->base+len;
-	ADEBUG {
-		bp->pc = callerpc(&len);
-		aref(&arefblock, bp->pc);
-	}
-	return bp;
+    bp->bsz  = len;
+    bp->base = (uchar*)bp+sizeof(Block);
+    bp->rptr = bp->base+PAD;
+    bp->wptr = bp->rptr;
+    bp->lim  = bp->base+len;
+    ADEBUG {
+        bp->pc = callerpc(&len);
+        aref(&arefblock, bp->pc);
+    }
+    return bp;
 }
 
 void
 freeb(Block *bp)
 {
-	int sz;
-	Block **l, *next;
+    int sz;
+    Block **l, *next;
 
-	qlock(&area);
-	while(bp) {
-		sz = (bp->bsz>>BPOW)&(NLIST-1);
+    qlock(&area);
+    while(bp) {
+        sz = (bp->bsz>>BPOW)&(NLIST-1);
 
-		l = &area.list[sz];
-		bp->flist = *l;
-		*l = bp;
+        l = &area.list[sz];
+        bp->flist = *l;
+        *l = bp;
 
-		next = bp->next;
+        next = bp->next;
 
-		/* to catch use after free */
-		bp->rptr = (uchar*)0xdeadbabe;
-		bp->wptr = (uchar*)0xdeadbabe;
-		bp->next = (Block*)0xdeadbabe;
-		bp->list = (Block*)0xdeadbabe;
+        /* to catch use after free */
+        bp->rptr = (uchar*)0xdeadbabe;
+        bp->wptr = (uchar*)0xdeadbabe;
+        bp->next = (Block*)0xdeadbabe;
+        bp->list = (Block*)0xdeadbabe;
 
-		ADEBUG aunref(&arefblock, bp->pc);
+        ADEBUG aunref(&arefblock, bp->pc);
 
-		bp = next;
-	}
-	qunlock(&area);
+        bp = next;
+    }
+    qunlock(&area);
 }
 
+/*s: function concat */
 /*
  *  concatenate a list of blocks into a single one and make sure
  *  the result is at least min uchars
@@ -133,80 +149,86 @@ freeb(Block *bp)
 Block*
 concat(Block *bp)
 {
-	int len;
-	Block *nb, *f;
+    int len;
+    Block *nb, *f;
 
-	nb = allocb(blen(bp));
-	for(f = bp; f; f = f->next) {
-		len = BLEN(f);
-		memmove(nb->wptr, f->rptr, len);
-		nb->wptr += len;
-	}
-	freeb(bp);
-	return nb;
+    nb = allocb(blen(bp));
+    for(f = bp; f; f = f->next) {
+        len = BLEN(f);
+        memmove(nb->wptr, f->rptr, len);
+        nb->wptr += len;
+    }
+    freeb(bp);
+    return nb;
 }
+/*e: function concat */
 
+/*s: function blen */
 int
 blen(Block *bp)
 {
-	int len;
+    int len;
 
-	len = 0;
-	while(bp) {
-		len += BLEN(bp);
-		bp = bp->next;
-	}
-	return len;
+    len = 0;
+    while(bp) {
+        len += BLEN(bp);
+        bp = bp->next;
+    }
+    return len;
 }
+/*e: function blen */
 
+/*s: function pullup */
 Block *
 pullup(Block *bp, int n)
 {
-	int i;
-	Block *nbp;
+    int i;
+    Block *nbp;
 
-	/*
-	 *  this should almost always be true, the rest it
-	 *  just for to avoid every caller checking.
-	 */
-	if(BLEN(bp) >= n)
-		return bp;
+    /*
+     *  this should almost always be true, the rest it
+     *  just for to avoid every caller checking.
+     */
+    if(BLEN(bp) >= n)
+        return bp;
 
-	/*
-	 *  if not enough room in the first block,
-	 *  add another to the front of the list.
-	 */
-	if(bp->lim - bp->rptr < n){
-		nbp = allocb(n);
-		nbp->next = bp;
-		bp = nbp;
-	}
+    /*
+     *  if not enough room in the first block,
+     *  add another to the front of the list.
+     */
+    if(bp->lim - bp->rptr < n){
+        nbp = allocb(n);
+        nbp->next = bp;
+        bp = nbp;
+    }
 
-	/*
-	 *  copy uchars from the trailing blocks into the first
-	 */
-	n -= BLEN(bp);
-	while(nbp = bp->next){
-		i = BLEN(nbp);
-		if(i >= n) {
-			memmove(bp->wptr, nbp->rptr, n);
-			bp->wptr += n;
-			nbp->rptr += n;
-			return bp;
-		}
-		else {
-			memmove(bp->wptr, nbp->rptr, i);
-			bp->wptr += i;
-			bp->next = nbp->next;
-			nbp->next = nil;
-			freeb(nbp);
-			n -= i;
-		}
-	}
-	freeb(bp);
-	return nil;
+    /*
+     *  copy uchars from the trailing blocks into the first
+     */
+    n -= BLEN(bp);
+    while(nbp = bp->next){
+        i = BLEN(nbp);
+        if(i >= n) {
+            memmove(bp->wptr, nbp->rptr, n);
+            bp->wptr += n;
+            nbp->rptr += n;
+            return bp;
+        }
+        else {
+            memmove(bp->wptr, nbp->rptr, i);
+            bp->wptr += i;
+            bp->next = nbp->next;
+            nbp->next = nil;
+            freeb(nbp);
+            n -= i;
+        }
+    }
+    freeb(bp);
+    return nil;
 }
+/*e: function pullup */
 
+/*s: function padb */
 /*
  *  Pad a block to the front with n uchars.  This is used to add protocol
  *  headers to the front of blocks.
@@ -214,153 +236,167 @@ pullup(Block *bp, int n)
 Block*
 padb(Block *bp, int n)
 {
-	Block *nbp;
+    Block *nbp;
 
-	if(bp->rptr-bp->base >= n) {
-		bp->rptr -= n;
-		return bp;
-	}
-	else {
-		/* fprint(2, "padb: required %d PAD %d\n", n, PAD) = malloc(sizeof(*required %d PAD %d\n", n, PAD))); */
-		nbp = allocb(n);
-		nbp->wptr = nbp->lim;
-		nbp->rptr = nbp->wptr - n;
-		nbp->next = bp;
-		return nbp;
-	}
+    if(bp->rptr-bp->base >= n) {
+        bp->rptr -= n;
+        return bp;
+    }
+    else {
+        /* fprint(2, "padb: required %d PAD %d\n", n, PAD) = malloc(sizeof(*required %d PAD %d\n", n, PAD))); */
+        nbp = allocb(n);
+        nbp->wptr = nbp->lim;
+        nbp->rptr = nbp->wptr - n;
+        nbp->next = bp;
+        return nbp;
+    }
 } 
+/*e: function padb */
 
+/*s: function btrim */
 Block *
 btrim(Block *bp, int offset, int len)
 {
-	ulong l;
-	Block *nb, *startb;
+    ulong l;
+    Block *nb, *startb;
 
-	if(blen(bp) < offset+len) {
-		freeb(bp);
-		return nil;
-	}
+    if(blen(bp) < offset+len) {
+        freeb(bp);
+        return nil;
+    }
 
-	while((l = BLEN(bp)) < offset) {
-		offset -= l;
-		nb = bp->next;
-		bp->next = nil;
-		freeb(bp);
-		bp = nb;
-	}
+    while((l = BLEN(bp)) < offset) {
+        offset -= l;
+        nb = bp->next;
+        bp->next = nil;
+        freeb(bp);
+        bp = nb;
+    }
 
-	startb = bp;
-	bp->rptr += offset;
+    startb = bp;
+    bp->rptr += offset;
 
-	while((l = BLEN(bp)) < len) {
-		len -= l;
-		bp = bp->next;
-	}
+    while((l = BLEN(bp)) < len) {
+        len -= l;
+        bp = bp->next;
+    }
 
-	bp->wptr -= (BLEN(bp) - len);
-	bp->flags |= S_DELIM;
+    bp->wptr -= (BLEN(bp) - len);
+    bp->flags |= S_DELIM;
 
-	if(bp->next) {
-		freeb(bp->next);
-		bp->next = nil;
-	}
+    if(bp->next) {
+        freeb(bp->next);
+        bp->next = nil;
+    }
 
-	return startb;
+    return startb;
 }
+/*e: function btrim */
 
+/*s: function copyb */
 Block*
 copyb(Block *bp, int count)
 {
-	int l;
-	Block *nb, *head, **p;
+    int l;
+    Block *nb, *head, **p;
 
-	p = &head;
-	head = nil;
-	while(bp != nil && count != 0) {
-		l = BLEN(bp);
-		if(count < l)
-			l = count;
-		nb = allocb(l);
-		memmove(nb->wptr, bp->rptr, l);
-		nb->wptr += l;
-		count -= l;
-		nb->flags = bp->flags;
-		*p = nb;
-		p = &nb->next;
-		bp = bp->next;
-	}
-	if(count) {
-		nb = allocb(count);
-		memset(nb->wptr, 0, count);
-		nb->wptr += count;
-		nb->flags |= S_DELIM;
-		*p = nb;
-	}
-	if(blen(head) == 0)
-		fprint(2, "copyb: zero length\n");
+    p = &head;
+    head = nil;
+    while(bp != nil && count != 0) {
+        l = BLEN(bp);
+        if(count < l)
+            l = count;
+        nb = allocb(l);
+        memmove(nb->wptr, bp->rptr, l);
+        nb->wptr += l;
+        count -= l;
+        nb->flags = bp->flags;
+        *p = nb;
+        p = &nb->next;
+        bp = bp->next;
+    }
+    if(count) {
+        nb = allocb(count);
+        memset(nb->wptr, 0, count);
+        nb->wptr += count;
+        nb->flags |= S_DELIM;
+        *p = nb;
+    }
+    if(blen(head) == 0)
+        fprint(2, "copyb: zero length\n");
 
-	return head;
+    return head;
 }
+/*e: function copyb */
 
+/*s: function pullb */
 int
 pullb(Block **bph, int count)
 {
-	Block *bp;
-	int n, uchars;
+    Block *bp;
+    int n, uchars;
 
-	uchars = 0;
-	if(bph == nil)
-		return 0;
+    uchars = 0;
+    if(bph == nil)
+        return 0;
 
-	while(*bph != nil && count != 0) {
-		bp = *bph;
-		n = BLEN(bp);
-		if(count < n)
-			n = count;
-		uchars += n;
-		count -= n;
-		bp->rptr += n;
-		if(BLEN(bp) == 0) {
-			*bph = bp->next;
-			bp->next = nil;
-			freeb(bp);
-		}
-	}
-	return uchars;
+    while(*bph != nil && count != 0) {
+        bp = *bph;
+        n = BLEN(bp);
+        if(count < n)
+            n = count;
+        uchars += n;
+        count -= n;
+        bp->rptr += n;
+        if(BLEN(bp) == 0) {
+            *bph = bp->next;
+            bp->next = nil;
+            freeb(bp);
+        }
+    }
+    return uchars;
 }
+/*e: function pullb */
 
+/*s: function callerpc */
 /*
  *  handy routines for keeping track of allocations
  */
 static ulong
 callerpc(void *a)
 {
-	return ((ulong*)a)[-1];
+    return ((ulong*)a)[-1];
 }
+/*e: function callerpc */
+/*s: function aref */
 static void
 aref(Aref *ap, ulong pc)
 {
-	Arefent *a, *e;
+    Arefent *a, *e;
 
-	e = &ap->tab[Npc-1];
-	qlock(ap);
-	for(a = ap->tab; a < e; a++)
-		if(a->pc == pc || a->pc == 0)
-			break;
-	a->pc = pc;
-	a->n++;
-	qunlock(ap);
+    e = &ap->tab[Npc-1];
+    qlock(ap);
+    for(a = ap->tab; a < e; a++)
+        if(a->pc == pc || a->pc == 0)
+            break;
+    a->pc = pc;
+    a->n++;
+    qunlock(ap);
 }
+/*e: function aref */
+/*s: function aunref */
 static void
 aunref(Aref *ap, ulong pc)
 {
-	Arefent *a, *e;
+    Arefent *a, *e;
 
-	e = &ap->tab[Npc-1];
-	qlock(ap);
-	for(a = ap->tab; a < e; a++)
-		if(a->pc == pc || a->pc == 0)
-			break;
-	a->n--;
-	qunlock(ap);
+    e = &ap->tab[Npc-1];
+    qlock(ap);
+    for(a = ap->tab; a < e; a++)
+        if(a->pc == pc || a->pc == 0)
+            break;
+    a->n--;
+    qunlock(ap);
 }
+/*e: function aunref */
+/*e: networking/ip/ppp/block.c */

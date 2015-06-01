@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/devip.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -6,6 +7,7 @@
 #include    "../port/error.h"
 #include    "../ip/ip.h"
 
+/*s: enum _anon_ (kernel/network/ip/devip.c) */
 enum
 {
     Qtopdir=    1,      /* top level directory */
@@ -44,15 +46,30 @@ enum
 
     Nfs=        128,
 };
+/*e: enum _anon_ (kernel/network/ip/devip.c) */
+/*s: macro TYPE */
 #define TYPE(x)     ( ((ulong)(x).path) & Masktype )
+/*e: macro TYPE */
+/*s: macro CONV */
 #define CONV(x)     ( (((ulong)(x).path) >> Shiftconv) & Maskconv )
+/*e: macro CONV */
+/*s: macro PROTO */
 #define PROTO(x)    ( (((ulong)(x).path) >> Shiftproto) & Maskproto )
+/*e: macro PROTO */
+/*s: macro QID */
 #define QID(p, c, y)    ( ((p)<<(Shiftproto)) | ((c)<<Shiftconv) | (y) )
+/*e: macro QID */
 
+/*s: global network */
 static char network[] = "network";
+/*e: global network */
 
+/*s: global fslock */
 QLock   fslock;
+/*e: global fslock */
+/*s: global ipfs */
 Fs  *ipfs[Nfs]; /* attached fs's */
+/*e: global ipfs */
 //Queue *qlog;
 
 extern  void nullmediumlink(void);
@@ -62,6 +79,7 @@ Conv*   Fsprotoclone(Proto*, char*);
 char*   Fsstdbind(Conv*, char**, int);
 void    closeconv(Conv*);
 
+/*s: function ip3gen */
 static int
 ip3gen(Chan *c, int i, Dir *dp)
 {
@@ -107,7 +125,9 @@ ip3gen(Chan *c, int i, Dir *dp)
     devdir(c, q, p, 0, cv->owner, 0444, dp);
     return 1;
 }
+/*e: function ip3gen */
 
+/*s: function ip2gen */
 static int
 ip2gen(Chan *c, int i, Dir *dp)
 {
@@ -125,7 +145,9 @@ ip2gen(Chan *c, int i, Dir *dp)
     }
     return -1;
 }
+/*e: function ip2gen */
 
+/*s: function ip1gen */
 static int
 ip1gen(Chan *c, int i, Dir *dp)
 {
@@ -172,7 +194,9 @@ ip1gen(Chan *c, int i, Dir *dp)
         dp->mtime = f->ndbmtime;
     return 1;
 }
+/*e: function ip1gen */
 
+/*s: function ipgen */
 static int
 ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 {
@@ -245,7 +269,9 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     }
     return -1;
 }
+/*e: function ipgen */
 
+/*s: function ipreset */
 static void
 ipreset(void)
 {
@@ -258,7 +284,9 @@ ipreset(void)
     fmtinstall('V', eipfmt);
     fmtinstall('M', eipfmt);
 }
+/*e: function ipreset */
 
+/*s: function ipgetfs */
 static Fs*
 ipgetfs(int dev)
 {
@@ -284,7 +312,9 @@ ipgetfs(int dev)
 
     return ipfs[dev];
 }
+/*e: function ipgetfs */
 
+/*s: function newipaux */
 IPaux*
 newipaux(char *owner, char *tag)
 {
@@ -300,9 +330,13 @@ newipaux(char *owner, char *tag)
     memmove(a->tag, tag, n);
     return a;
 }
+/*e: function newipaux */
 
+/*s: macro ATTACHER */
 #define ATTACHER(c) (((IPaux*)((c)->aux))->owner)
+/*e: macro ATTACHER */
 
+/*s: function ipattach */
 static Chan*
 ipattach(char* spec)
 {
@@ -322,7 +356,9 @@ ipattach(char* spec)
 
     return c;
 }
+/*e: function ipattach */
 
+/*s: function ipwalk */
 static Walkqid*
 ipwalk(Chan* c, Chan *nc, char **name, int nname)
 {
@@ -334,14 +370,18 @@ ipwalk(Chan* c, Chan *nc, char **name, int nname)
         w->clone->aux = newipaux(a->owner, a->tag);
     return w;
 }
+/*e: function ipwalk */
 
 
+/*s: function ipstat */
 static int
 ipstat(Chan* c, uchar* db, int n)
 {
     return devstat(c, db, n, nil, 0, ipgen);
 }
+/*e: function ipstat */
 
+/*s: function incoming */
 static int
 incoming(void* arg)
 {
@@ -350,13 +390,17 @@ incoming(void* arg)
     conv = arg;
     return conv->incall != nil;
 }
+/*e: function incoming */
 
+/*s: global m2p */
 static int m2p[] = {
     [OREAD]     4,
     [OWRITE]    2,
     [ORDWR]     6
 };
+/*e: global m2p */
 
+/*s: function ipopen */
 static Chan*
 ipopen(Chan* c, int omode)
 {
@@ -508,19 +552,25 @@ ipopen(Chan* c, int omode)
     c->offset = 0;
     return c;
 }
+/*e: function ipopen */
 
+/*s: function ipcreate */
 static void
 ipcreate(Chan*, char*, int, ulong)
 {
     error(Eperm);
 }
+/*e: function ipcreate */
 
+/*s: function ipremove */
 static void
 ipremove(Chan*)
 {
     error(Eperm);
 }
+/*e: function ipremove */
 
+/*s: function ipwstat */
 static int
 ipwstat(Chan *c, uchar *dp, int n)
 {
@@ -551,7 +601,9 @@ ipwstat(Chan *c, uchar *dp, int n)
     }
     return n;
 }
+/*e: function ipwstat */
 
+/*s: function closeconv */
 void
 closeconv(Conv *cv)
 {
@@ -584,7 +636,9 @@ closeconv(Conv *cv)
     cv->state = Idle;
     qunlock(cv);
 }
+/*e: function closeconv */
 
+/*s: function ipclose */
 static void
 ipclose(Chan* c)
 {
@@ -612,12 +666,16 @@ ipclose(Chan* c)
     free(((IPaux*)c->aux)->owner);
     free(c->aux);
 }
+/*e: function ipclose */
 
+/*s: enum _anon_ (kernel/network/ip/devip.c)2 */
 enum
 {
     Statelen=   32*1024,
 };
+/*e: enum _anon_ (kernel/network/ip/devip.c)2 */
 
+/*s: function ipread */
 static long
 ipread(Chan *ch, void *a, long n, vlong off)
 {
@@ -708,7 +766,9 @@ ipread(Chan *ch, void *a, long n, vlong off)
         return rv;
     }
 }
+/*e: function ipread */
 
+/*s: function ipbread */
 static Block*
 ipbread(Chan* ch, long n, ulong offset)
 {
@@ -726,7 +786,9 @@ ipbread(Chan* ch, long n, ulong offset)
         return devbread(ch, n, offset);
     }
 }
+/*e: function ipbread */
 
+/*s: function setladdr */
 /*
  *  set local address to be that of the ifc closest to remote address
  */
@@ -735,7 +797,9 @@ setladdr(Conv* c)
 {
     findlocalip(c->p->f, c->laddr, c->raddr);
 }
+/*e: function setladdr */
 
+/*s: function setluniqueport */
 /*
  *  set a local port making sure the quad of raddr,rport,laddr,lport is unique
  */
@@ -768,7 +832,9 @@ setluniqueport(Conv* c, int lport)
     qunlock(p);
     return nil;
 }
+/*e: function setluniqueport */
 
+/*s: function lportinuse */
 /*
  * is lport in use by anyone?
  */
@@ -782,7 +848,9 @@ lportinuse(Proto *p, ushort lport)
             return 1;
     return 0;
 }
+/*e: function lportinuse */
 
+/*s: function setlport */
 /*
  *  pick a local port and set it
  */
@@ -834,7 +902,9 @@ chosen:
     qunlock(p);
     return nil;
 }
+/*e: function setlport */
 
+/*s: function setladdrport */
 /*
  *  set a local address and port from a string of the form
  *  [address!]port[!r]
@@ -892,7 +962,9 @@ setladdrport(Conv* c, char* str, int announcing)
         rv = setluniqueport(c, lport);
     return rv;
 }
+/*e: function setladdrport */
 
+/*s: function setraddrport */
 static char*
 setraddrport(Conv* c, char* str)
 {
@@ -912,7 +984,9 @@ setraddrport(Conv* c, char* str)
     }
     return nil;
 }
+/*e: function setraddrport */
 
+/*s: function Fsstdconnect */
 /*
  *  called by protocol connect routine to set addresses
  */
@@ -951,6 +1025,8 @@ Fsstdconnect(Conv *c, char *argv[], int argc)
 
     return nil;
 }
+/*e: function Fsstdconnect */
+/*s: function connected */
 /*
  *  initiate connection and sleep till its set up
  */
@@ -959,6 +1035,8 @@ connected(void* a)
 {
     return ((Conv*)a)->state == Connected;
 }
+/*e: function connected */
+/*s: function connectctlmsg */
 static void
 connectctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
 {
@@ -986,7 +1064,9 @@ connectctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
     if(c->cerr[0] != '\0')
         error(c->cerr);
 }
+/*e: function connectctlmsg */
 
+/*s: function Fsstdannounce */
 /*
  *  called by protocol announce routine to set addresses
  */
@@ -1003,7 +1083,9 @@ Fsstdannounce(Conv* c, char* argv[], int argc)
     }
     return "bad args to announce";
 }
+/*e: function Fsstdannounce */
 
+/*s: function announced */
 /*
  *  initiate announcement and sleep till its set up
  */
@@ -1012,6 +1094,8 @@ announced(void* a)
 {
     return ((Conv*)a)->state == Announced;
 }
+/*e: function announced */
+/*s: function announcectlmsg */
 static void
 announcectlmsg(Proto *x, Conv *c, Cmdbuf *cb)
 {
@@ -1039,7 +1123,9 @@ announcectlmsg(Proto *x, Conv *c, Cmdbuf *cb)
     if(c->cerr[0] != '\0')
         error(c->cerr);
 }
+/*e: function announcectlmsg */
 
+/*s: function Fsstdbind */
 /*
  *  called by protocol bind routine to set addresses
  */
@@ -1054,7 +1140,9 @@ Fsstdbind(Conv* c, char* argv[], int argc)
     }
     return "bad args to bind";
 }
+/*e: function Fsstdbind */
 
+/*s: function bindctlmsg */
 static void
 bindctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
 {
@@ -1067,7 +1155,9 @@ bindctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
     if(p != nil)
         error(p);
 }
+/*e: function bindctlmsg */
 
+/*s: function tosctlmsg */
 static void
 tosctlmsg(Conv *c, Cmdbuf *cb)
 {
@@ -1076,7 +1166,9 @@ tosctlmsg(Conv *c, Cmdbuf *cb)
     else
         c->tos = atoi(cb->f[1]);
 }
+/*e: function tosctlmsg */
 
+/*s: function ttlctlmsg */
 static void
 ttlctlmsg(Conv *c, Cmdbuf *cb)
 {
@@ -1085,7 +1177,9 @@ ttlctlmsg(Conv *c, Cmdbuf *cb)
     else
         c->ttl = atoi(cb->f[1]);
 }
+/*e: function ttlctlmsg */
 
+/*s: function ipwrite */
 static long
 ipwrite(Chan* ch, void *v, long n, vlong off)
 {
@@ -1191,7 +1285,9 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
     }
     return n;
 }
+/*e: function ipwrite */
 
+/*s: function ipbwrite */
 static long
 ipbwrite(Chan* ch, Block* bp, ulong offset)
 {
@@ -1218,7 +1314,9 @@ ipbwrite(Chan* ch, Block* bp, ulong offset)
         return devbwrite(ch, bp, offset);
     }
 }
+/*e: function ipbwrite */
 
+/*s: global ipdevtab */
 Dev ipdevtab = {
     .dc       =    'I',
     .name     =    "ip",
@@ -1239,7 +1337,9 @@ Dev ipdevtab = {
     .remove   =    ipremove,
     .wstat    =    ipwstat,
 };
+/*e: global ipdevtab */
 
+/*s: function Fsproto */
 int
 Fsproto(Fs *f, Proto *p)
 {
@@ -1266,6 +1366,7 @@ Fsproto(Fs *f, Proto *p)
 
     return 0;
 }
+/*e: function Fsproto */
 
 /*
  *  return true if this protocol is
@@ -1277,6 +1378,7 @@ Fsproto(Fs *f, Proto *p)
 //  return f->t2p[proto] != nil;
 //}
 
+/*s: function Fsprotoclone */
 /*
  *  called with protocol locked
  */
@@ -1352,7 +1454,9 @@ retry:
     qunlock(c);
     return c;
 }
+/*e: function Fsprotoclone */
 
+/*s: function Fsconnected */
 int
 Fsconnected(Conv* c, char* msg)
 {
@@ -1373,7 +1477,9 @@ Fsconnected(Conv* c, char* msg)
     wakeup(&c->cr);
     return 0;
 }
+/*e: function Fsconnected */
 
+/*s: function Fsrcvpcol */
 Proto*
 Fsrcvpcol(Fs* f, uchar proto)
 {
@@ -1382,13 +1488,17 @@ Fsrcvpcol(Fs* f, uchar proto)
     else
         return f->t2p[proto];
 }
+/*e: function Fsrcvpcol */
 
+/*s: function Fsrcvpcolx */
 Proto*
 Fsrcvpcolx(Fs *f, uchar proto)
 {
     return f->t2p[proto];
 }
+/*e: function Fsrcvpcolx */
 
+/*s: function Fsnewcall */
 /*
  *  called with protocol locked
  */
@@ -1436,7 +1546,9 @@ Fsnewcall(Conv *c, uchar *raddr, ushort rport, uchar *laddr, ushort lport, uchar
 
     return nc;
 }
+/*e: function Fsnewcall */
 
+/*s: function ndbwrite */
 long
 ndbwrite(Fs *f, char *a, ulong off, int n)
 {
@@ -1450,7 +1562,9 @@ ndbwrite(Fs *f, char *a, ulong off, int n)
     f->ndbmtime = seconds();
     return n;
 }
+/*e: function ndbwrite */
 
+/*s: function scalednconv */
 ulong
 scalednconv(void)
 {
@@ -1458,3 +1572,5 @@ scalednconv(void)
         return Nchans*4;
     return Nchans;
 }
+/*e: function scalednconv */
+/*e: kernel/network/ip/devip.c */

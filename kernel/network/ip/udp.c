@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/udp.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -9,8 +10,11 @@
 #include    "ipv6.h"
 
 
+/*s: constant DPRINT */
 #define DPRINT if(0)print
+/*e: constant DPRINT */
 
+/*s: enum _anon_ (kernel/network/ip/udp.c) */
 enum
 {
     UDP_UDPHDR_SZ   = 8,
@@ -29,8 +33,10 @@ enum
     Udptickms   = 100,
     Udpmaxxmit  = 10,
 };
+/*e: enum _anon_ (kernel/network/ip/udp.c) */
 
 typedef struct Udp4hdr Udp4hdr;
+/*s: struct Udp4hdr */
 struct Udp4hdr
 {
     /* ip header */
@@ -51,8 +57,10 @@ struct Udp4hdr
     uchar   udplen[2];  /* data length */
     uchar   udpcksum[2];    /* Checksum */
 };
+/*e: struct Udp4hdr */
 
 typedef struct Udp6hdr Udp6hdr;
+/*s: struct Udp6hdr */
 struct Udp6hdr {
     uchar viclfl[4];
     uchar len[2];
@@ -67,9 +75,11 @@ struct Udp6hdr {
     uchar   udplen[2];  /* data length */
     uchar   udpcksum[2];    /* Checksum */
 };
+/*e: struct Udp6hdr */
 
 /* MIB II counters */
 typedef struct Udpstats Udpstats;
+/*s: struct Udpstats */
 struct Udpstats
 {
     uvlong  udpInDatagrams;
@@ -77,8 +87,10 @@ struct Udpstats
     ulong   udpInErrors;
     uvlong  udpOutDatagrams;
 };
+/*e: struct Udpstats */
 
 typedef struct Udppriv Udppriv;
+/*s: struct Udppriv */
 struct Udppriv
 {
     Ipht        ht;
@@ -90,6 +102,7 @@ struct Udppriv
     ulong       csumerr;        /* checksum errors */
     ulong       lenerr;         /* short packet */
 };
+/*e: struct Udppriv */
 
 //void (*etherprofiler)(char *name, int qlen);
 void udpkick(void *x, Block *bp);
@@ -98,12 +111,15 @@ void udpkick(void *x, Block *bp);
  *  protocol specific part of Conv
  */
 typedef struct Udpcb Udpcb;
+/*s: struct Udpcb */
 struct Udpcb
 {
     QLock;
     uchar   headers;
 };
+/*e: struct Udpcb */
 
+/*s: function udpconnect */
 static char*
 udpconnect(Conv *c, char **argv, int argc)
 {
@@ -119,8 +135,10 @@ udpconnect(Conv *c, char **argv, int argc)
     iphtadd(&upriv->ht, c);
     return nil;
 }
+/*e: function udpconnect */
 
 
+/*s: function udpstate */
 static int
 udpstate(Conv *c, char *state, int n)
 {
@@ -130,7 +148,9 @@ udpstate(Conv *c, char *state, int n)
         c->wq ? qlen(c->wq) : 0
     );
 }
+/*e: function udpstate */
 
+/*s: function udpannounce */
 static char*
 udpannounce(Conv *c, char** argv, int argc)
 {
@@ -146,14 +166,18 @@ udpannounce(Conv *c, char** argv, int argc)
 
     return nil;
 }
+/*e: function udpannounce */
 
+/*s: function udpcreate */
 static void
 udpcreate(Conv *c)
 {
     c->rq = qopen(128*1024, Qmsg, 0, 0);
     c->wq = qbypass(udpkick, c);
 }
+/*e: function udpcreate */
 
+/*s: function udpclose */
 static void
 udpclose(Conv *c)
 {
@@ -175,7 +199,9 @@ udpclose(Conv *c)
     ucb = (Udpcb*)c->ptcl;
     ucb->headers = 0;
 }
+/*e: function udpclose */
 
+/*s: function udpkick */
 void
 udpkick(void *x, Block *bp)
 {
@@ -320,7 +346,9 @@ udpkick(void *x, Block *bp)
     }
     upriv->ustats.udpOutDatagrams++;
 }
+/*e: function udpkick */
 
+/*s: function udpiput */
 void
 udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 {
@@ -510,7 +538,9 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     qunlock(c);
 
 }
+/*e: function udpiput */
 
+/*s: function udpctl */
 char*
 udpctl(Conv *c, char **f, int n)
 {
@@ -525,7 +555,9 @@ udpctl(Conv *c, char **f, int n)
     }
     return "unknown control request";
 }
+/*e: function udpctl */
 
+/*s: function udpadvise */
 void
 udpadvise(Proto *udp, Block *bp, char *msg)
 {
@@ -580,7 +612,9 @@ udpadvise(Proto *udp, Block *bp, char *msg)
     qunlock(udp);
     freeblist(bp);
 }
+/*e: function udpadvise */
 
+/*s: function udpstats */
 int
 udpstats(Proto *udp, char *buf, int len)
 {
@@ -594,7 +628,9 @@ udpstats(Proto *udp, char *buf, int len)
         upriv->ustats.udpInErrors,
         upriv->ustats.udpOutDatagrams);
 }
+/*e: function udpstats */
 
+/*s: function udpinit */
 void
 udpinit(Fs *fs)
 {
@@ -618,3 +654,5 @@ udpinit(Fs *fs)
 
     Fsproto(fs, udp);
 }
+/*e: function udpinit */
+/*e: kernel/network/ip/udp.c */

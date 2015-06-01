@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/chandial.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -10,11 +11,14 @@ typedef struct DS DS;
 static Chan*    call(char*, char*, DS*);
 static void _dial_string_parse(char*, DS*);
 
+/*s: enum _anon_ (kernel/network/ip/chandial.c) */
 enum
 {
     Maxstring=  128,
 };
+/*e: enum _anon_ (kernel/network/ip/chandial.c) */
 
+/*s: struct DS (kernel/network/ip/chandial.c) */
 struct DS
 {
     char    buf[Maxstring];         /* dist string */
@@ -25,7 +29,9 @@ struct DS
     char    *dir;
     Chan    **ctlp;
 };
+/*e: struct DS (kernel/network/ip/chandial.c) */
 
+/*s: function chandial */
 /*
  *  the dialstring is of the form '[/net/]proto!dest'
  */
@@ -47,7 +53,9 @@ chandial(char *dest, char *local, char *dir, Chan **ctlp)
     snprint(clone, sizeof(clone), "%s/%s/clone", ds.netdir, ds.proto);
     return call(clone, ds.rem, &ds);
 }
+/*e: function chandial */
 
+/*s: function call (kernel/network/ip/chandial.c) */
 static Chan*
 call(char *clone, char *dest, DS *ds)
 {
@@ -90,7 +98,9 @@ call(char *clone, char *dest, DS *ds)
     return dchan;
 
 }
+/*e: function call (kernel/network/ip/chandial.c) */
 
+/*s: function _dial_string_parse (kernel/network/ip/chandial.c) */
 /*
  *  parse a dial string
  */
@@ -122,3 +132,5 @@ _dial_string_parse(char *str, DS *ds)
         ds->rem = p + 1;
     }
 }
+/*e: function _dial_string_parse (kernel/network/ip/chandial.c) */
+/*e: kernel/network/ip/chandial.c */

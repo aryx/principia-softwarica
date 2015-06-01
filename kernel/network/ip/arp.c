@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/arp.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -8,6 +9,7 @@
 #include "ip.h"
 #include "ipv6.h"
 
+/*s: enum _anon_ (kernel/network/ip/arp.c) */
 /*
  *  address resolution tables
  */
@@ -20,14 +22,18 @@ enum
     AOK     = 1,
     AWAIT       = 2,
 };
+/*e: enum _anon_ (kernel/network/ip/arp.c) */
 
+/*s: global arpstate */
 char *arpstate[] =
 {
     "UNUSED",
     "OK",
     "WAIT",
 };
+/*e: global arpstate */
 
+/*s: struct Arp */
 /*
  *  one per Fs
  */
@@ -42,15 +48,23 @@ struct Arp
     Rendez  rxmtq;
     Block   *dropf, *dropl;
 };
+/*e: struct Arp */
 
+/*s: global Ebadarp */
 char *Ebadarp = "bad arp";
+/*e: global Ebadarp */
 
+/*s: macro haship */
 #define haship(s) ((s)[IPaddrlen-1]%NHASH)
+/*e: macro haship */
 
+/*s: global ReTransTimer */
 int     ReTransTimer = RETRANS_TIMER;
+/*e: global ReTransTimer */
 
 static void     rxmitproc(void *v);
 
+/*s: function arpinit */
 void
 arpinit(Fs *f)
 {
@@ -60,7 +74,9 @@ arpinit(Fs *f)
     f->arp->dropf = f->arp->dropl = nil;
     kproc("rxmitproc", rxmitproc, f->arp);
 }
+/*e: function arpinit */
 
+/*s: function newarp6 */
 /*
  *  create a new arp entry for an ip address.
  */
@@ -158,7 +174,9 @@ newarp6(Arp *arp, uchar *ip, Ipifc *ifc, int addrxt)
 
     return a;
 }
+/*e: function newarp6 */
 
+/*s: function cleanarpent */
 /* called with arp qlocked */
 
 void
@@ -196,7 +214,9 @@ cleanarpent(Arp *arp, Arpent *a)
     a->last = nil;
     a->ifc = nil;
 }
+/*e: function cleanarpent */
 
+/*s: function arpget */
 /*
  *  fill in the media address if we have it.  Otherwise return an
  *  Arpent that represents the state of the address resolution FSM
@@ -250,7 +270,9 @@ arpget(Arp *arp, Block *bp, int version, Ipifc *ifc, uchar *ip, uchar *mac)
     qunlock(arp);
     return nil;
 }
+/*e: function arpget */
 
+/*s: function arprelease */
 /*
  * called with arp locked
  */
@@ -259,7 +281,9 @@ arprelease(Arp *arp, Arpent*)
 {
     qunlock(arp);
 }
+/*e: function arprelease */
 
+/*s: function arpresolve */
 /*
  * Copy out the mac address from the Arpent.  Return the
  * block waiting to get sent to this mac address.
@@ -293,7 +317,9 @@ arpresolve(Arp *arp, Arpent *a, Medium *type, uchar *mac)
 
     return bp;
 }
+/*e: function arpresolve */
 
+/*s: function arpenter */
 void
 arpenter(Fs *fs, int version, uchar *ip, uchar *mac, int n, int refresh)
 {
@@ -397,7 +423,9 @@ arpenter(Fs *fs, int version, uchar *ip, uchar *mac, int n, int refresh)
 
     qunlock(arp);
 }
+/*e: function arpenter */
 
+/*s: function arpwrite */
 int
 arpwrite(Fs *fs, char *s, int len)
 {
@@ -514,21 +542,29 @@ arpwrite(Fs *fs, char *s, int len)
 
     return len;
 }
+/*e: function arpwrite */
 
+/*s: enum _anon_ (kernel/network/ip/arp.c)2 */
 enum
 {
     Alinelen=   90,
 };
+/*e: enum _anon_ (kernel/network/ip/arp.c)2 */
 
+/*s: global aformat */
 char *aformat = "%-6.6s %-8.8s %-40.40I %-32.32s\n";
+/*e: global aformat */
 
+/*s: function convmac */
 static void
 convmac(char *p, char *ep, uchar *mac, int n)
 {
     while(n-- > 0)
         p = seprint(p, ep, "%2.2ux", *mac++);
 }
+/*e: function convmac */
 
+/*s: function arpread */
 int
 arpread(Arp *arp, char *p, ulong offset, int len)
 {
@@ -560,7 +596,9 @@ arpread(Arp *arp, char *p, ulong offset, int len)
 
     return n;
 }
+/*e: function arpread */
 
+/*s: function rxmitsols */
 extern int
 rxmitsols(Arp *arp)
 {
@@ -651,7 +689,9 @@ dodrops:
     return nrxt;
 
 }
+/*e: function rxmitsols */
 
+/*s: function rxready */
 static int
 rxready(void *v)
 {
@@ -662,7 +702,9 @@ rxready(void *v)
 
     return x;
 }
+/*e: function rxready */
 
+/*s: function rxmitproc */
 static void
 rxmitproc(void *v)
 {
@@ -683,4 +725,6 @@ rxmitproc(void *v)
             tsleep(&arp->rxmtq, returnfalse, 0, wakeupat);
     }
 }
+/*e: function rxmitproc */
 
+/*e: kernel/network/ip/arp.c */

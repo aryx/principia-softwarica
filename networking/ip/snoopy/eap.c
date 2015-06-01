@@ -1,3 +1,4 @@
+/*s: networking/ip/snoopy/eap.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -5,57 +6,66 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
+/*s: struct Hdr (networking/ip/snoopy/eap.c) */
 struct Hdr
 {
-	uchar	code;
-	uchar	id;
-	uchar	len[2];	/* length including this header */
+    uchar	code;
+    uchar	id;
+    uchar	len[2];	/* length including this header */
 
-	uchar	tp;	/* optional, only for Request/Response */
+    uchar	tp;	/* optional, only for Request/Response */
 };
+/*e: struct Hdr (networking/ip/snoopy/eap.c) */
 
+/*s: enum _anon_ (networking/ip/snoopy/eap.c) */
 enum
 {
-	EAPHDR=	4,	/* sizeof(code)+sizeof(id)+sizeof(len) */
-	TPHDR= 1,	/* sizeof(tp) */
+    EAPHDR=	4,	/* sizeof(code)+sizeof(id)+sizeof(len) */
+    TPHDR= 1,	/* sizeof(tp) */
 
-	/* eap types */
-	Request = 1,
-	Response,
-	Success,
-	Fail,
+    /* eap types */
+    Request = 1,
+    Response,
+    Success,
+    Fail,
 
-	/* eap request/response sub-types */
-	Identity = 1,		/* Identity */
-	Notify,		/* Notification */
-	Nak,			/* Nak (Response only) */
-	Md5,		/* MD5-challenge */
-	Otp,			/* one time password */
-	Gtc,			/* generic token card */
-	Ttls = 21,		/* tunneled TLS */
-	Xpnd = 254,	/* expanded types */
-	Xprm,		/* experimental use */
+    /* eap request/response sub-types */
+    Identity = 1,		/* Identity */
+    Notify,		/* Notification */
+    Nak,			/* Nak (Response only) */
+    Md5,		/* MD5-challenge */
+    Otp,			/* one time password */
+    Gtc,			/* generic token card */
+    Ttls = 21,		/* tunneled TLS */
+    Xpnd = 254,	/* expanded types */
+    Xprm,		/* experimental use */
 };
+/*e: enum _anon_ (networking/ip/snoopy/eap.c) */
 
+/*s: enum _anon_ (networking/ip/snoopy/eap.c)2 */
 enum
 {
-	Ot,
+    Ot,
 };
+/*e: enum _anon_ (networking/ip/snoopy/eap.c)2 */
 
+/*s: global p_mux (networking/ip/snoopy/eap.c) */
 static Mux p_mux[] =
 {
-	{ "eap_identity", Identity, },
-	{ "eap_notify", Notify, },
-	{ "eap_nak", Nak, },
-	{ "eap_md5", Md5, },
-	{ "eap_otp", Otp, },
-	{ "eap_gtc", Gtc, },
-	{ "ttls", Ttls, },
-	{ "eap_xpnd", Xpnd, },
-	{ "eap_xprm", Xprm, }, 
-	{ 0 }
+    { "eap_identity", Identity, },
+    { "eap_notify", Notify, },
+    { "eap_nak", Nak, },
+    { "eap_md5", Md5, },
+    { "eap_otp", Otp, },
+    { "eap_gtc", Gtc, },
+    { "ttls", Ttls, },
+    { "eap_xpnd", Xpnd, },
+    { "eap_xprm", Xprm, }, 
+    { 0 }
 };
+/*e: global p_mux (networking/ip/snoopy/eap.c) */
 
+/*s: global eapsubtype */
 static char *eapsubtype[256] =
 {
 [Identity]	"Identity",
@@ -68,180 +78,198 @@ static char *eapsubtype[256] =
 [Xpnd]	"Xpnd",
 [Xprm]	"Xprm",
 };
+/*e: global eapsubtype */
 
 
+/*s: function p_compile (networking/ip/snoopy/eap.c) */
 static void
 p_compile(Filter *f)
 {
-	Mux *m;
+    Mux *m;
 
-	for(m = p_mux; m->name != nil; m++)
-		if(strcmp(f->s, m->name) == 0){
-			f->pr = m->pr;
-			f->ulv = m->val;
-			f->subop = Ot;
-			return;
-		}
-	sysfatal("unknown eap field or type: %s", f->s);
+    for(m = p_mux; m->name != nil; m++)
+        if(strcmp(f->s, m->name) == 0){
+            f->pr = m->pr;
+            f->ulv = m->val;
+            f->subop = Ot;
+            return;
+        }
+    sysfatal("unknown eap field or type: %s", f->s);
 }
+/*e: function p_compile (networking/ip/snoopy/eap.c) */
 
+/*s: function p_filter (networking/ip/snoopy/eap.c) */
 static int
 p_filter(Filter *f, Msg *m)
 {
-	Hdr *h;
-	int len;
+    Hdr *h;
+    int len;
 
-	if(f->subop != Ot)
-		return 0;
+    if(f->subop != Ot)
+        return 0;
 
-	if(m->pe - m->ps < EAPHDR)
-		return -1;
+    if(m->pe - m->ps < EAPHDR)
+        return -1;
 
-	h = (Hdr*)m->ps;
+    h = (Hdr*)m->ps;
 
-	/* truncate the message if there's extra */
-	/* len includes header */
-	len = NetS(h->len);
-	if(m->ps+len < m->pe)
-		m->pe = m->ps+len;
-	else if(m->ps+len > m->pe)
-		return -1;
-	m->ps += EAPHDR;
+    /* truncate the message if there's extra */
+    /* len includes header */
+    len = NetS(h->len);
+    if(m->ps+len < m->pe)
+        m->pe = m->ps+len;
+    else if(m->ps+len > m->pe)
+        return -1;
+    m->ps += EAPHDR;
 
-	if(h->code != Request && h->code != Response)
-		return 0;
-	m->ps += TPHDR;
+    if(h->code != Request && h->code != Response)
+        return 0;
+    m->ps += TPHDR;
 
-	if(h->tp == f->ulv)
-		return 1;
+    if(h->tp == f->ulv)
+        return 1;
 
-	return 0;
+    return 0;
 }
+/*e: function p_filter (networking/ip/snoopy/eap.c) */
 
+/*s: function op (networking/ip/snoopy/eap.c) */
 static char*
 op(int i)
 {
-	static char x[20];
+    static char x[20];
 
-	switch(i){
-	case Request:
-		return "Request";
-	case Response:
-		return "Response";
-	case Success:
-		return "Success";
-	case Fail:
-		return "Fail";
-	default:
-		sprint(x, "%1d", i);
-		return x;
-	}
+    switch(i){
+    case Request:
+        return "Request";
+    case Response:
+        return "Response";
+    case Success:
+        return "Success";
+    case Fail:
+        return "Fail";
+    default:
+        sprint(x, "%1d", i);
+        return x;
+    }
 }
+/*e: function op (networking/ip/snoopy/eap.c) */
 
+/*s: function subop */
 static char*
 subop(uchar val)
 {
-	static char x[20], *p;
+    static char x[20], *p;
 
-	p = eapsubtype[val];
-	if(p != nil)
-		return p;
-	else {
-		sprint(x, "%1d", val);
-		return x;
-	}
+    p = eapsubtype[val];
+    if(p != nil)
+        return p;
+    else {
+        sprint(x, "%1d", val);
+        return x;
+    }
 }
+/*e: function subop */
 
+/*s: function p_seprint (networking/ip/snoopy/eap.c) */
 static int
 p_seprint(Msg *m)
 {
-	Hdr *h;
-	int len;
-	char *p, *e;
+    Hdr *h;
+    int len;
+    char *p, *e;
 
-	if(m->pe - m->ps < EAPHDR)
-		return -1;
+    if(m->pe - m->ps < EAPHDR)
+        return -1;
 
-	p = m->p;
-	e = m->e;
-	h = (Hdr*)m->ps;
+    p = m->p;
+    e = m->e;
+    h = (Hdr*)m->ps;
 
-	/* resize packet (should already be done by eapol) */
-	/* len includes header */
-	len = NetS(h->len);
-	if(m->ps+len < m->pe)
-		m->pe = m->ps+len;
-	else if(m->ps+len > m->pe)
-		return -1;
-	m->ps += EAPHDR;
+    /* resize packet (should already be done by eapol) */
+    /* len includes header */
+    len = NetS(h->len);
+    if(m->ps+len < m->pe)
+        m->pe = m->ps+len;
+    else if(m->ps+len > m->pe)
+        return -1;
+    m->ps += EAPHDR;
 
-	p = seprint(p, e, "id=%1d code=%s", h->id, op(h->code));
-	switch(h->code) {
-	case Request:
-	case Response:
-		m->ps += TPHDR;
-		p = seprint(p, e, " type=%s", subop(h->tp));
-		/* special case needed to print eap_notify notification as unicode */
-		demux(p_mux, h->tp, h->tp, m, &dump);
-		break;
-	default:
-		demux(p_mux, 0, 0, m, &dump);
-		break;
-	}
-	m->p = seprint(p, e, " len=%1d", len);
-	return 0;
+    p = seprint(p, e, "id=%1d code=%s", h->id, op(h->code));
+    switch(h->code) {
+    case Request:
+    case Response:
+        m->ps += TPHDR;
+        p = seprint(p, e, " type=%s", subop(h->tp));
+        /* special case needed to print eap_notify notification as unicode */
+        demux(p_mux, h->tp, h->tp, m, &dump);
+        break;
+    default:
+        demux(p_mux, 0, 0, m, &dump);
+        break;
+    }
+    m->p = seprint(p, e, " len=%1d", len);
+    return 0;
 }
+/*e: function p_seprint (networking/ip/snoopy/eap.c) */
 
+/*s: function p_seprintidentity */
 static int
 p_seprintidentity(Msg *m)
 {
-	char *ps, *pe, *z;
-	int len;
+    char *ps, *pe, *z;
+    int len;
 
-	m->pr = nil;
-	ps = (char*)m->ps;
-	pe = (char*)m->pe;
+    m->pr = nil;
+    ps = (char*)m->ps;
+    pe = (char*)m->pe;
 
-	/* we would like to do this depending on the 'context':
-	 *  - one for eap_identity request and
-	 *  - one for eap_identity response
-	 * but we've lost the context, or haven't we?
-	 * so we treat them the same, so we might erroneously
-	 * print a response as if it was a request. too bad. - axel
-	 */
-	for (z=ps; *z != '\0' && z+1 < pe; z++)
-		;
-	if (*z == '\0' && z+1 < pe) {
-		m->p = seprint(m->p, m->e, "prompt=(%s)", ps);
-		len = pe - (z+1);
-		m->p = seprint(m->p, m->e, " options=(%.*s)", len, z+1);
-	} else {
-		len = pe - ps;
-		m->p = seprint(m->p, m->e, "%.*s", len, ps);
-	}
-	return 0;
+    /* we would like to do this depending on the 'context':
+     *  - one for eap_identity request and
+     *  - one for eap_identity response
+     * but we've lost the context, or haven't we?
+     * so we treat them the same, so we might erroneously
+     * print a response as if it was a request. too bad. - axel
+     */
+    for (z=ps; *z != '\0' && z+1 < pe; z++)
+        ;
+    if (*z == '\0' && z+1 < pe) {
+        m->p = seprint(m->p, m->e, "prompt=(%s)", ps);
+        len = pe - (z+1);
+        m->p = seprint(m->p, m->e, " options=(%.*s)", len, z+1);
+    } else {
+        len = pe - ps;
+        m->p = seprint(m->p, m->e, "%.*s", len, ps);
+    }
+    return 0;
 }
+/*e: function p_seprintidentity */
 
+/*s: global eap */
 Proto eap =
 {
-	"eap",
-	p_compile,
-	p_filter,
-	p_seprint,
-	p_mux,
-	"%lud",
-	nil,
-	defaultframer,
+    "eap",
+    p_compile,
+    p_filter,
+    p_seprint,
+    p_mux,
+    "%lud",
+    nil,
+    defaultframer,
 };
+/*e: global eap */
 
+/*s: global eap_identity */
 Proto eap_identity =
 {
-	"eap_identity",
-	p_compile,
-	p_filter,
-	p_seprintidentity,
-	nil,
-	nil,
-	nil,
-	defaultframer,
+    "eap_identity",
+    p_compile,
+    p_filter,
+    p_seprintidentity,
+    nil,
+    nil,
+    nil,
+    defaultframer,
 };
+/*e: global eap_identity */
+/*e: networking/ip/snoopy/eap.c */

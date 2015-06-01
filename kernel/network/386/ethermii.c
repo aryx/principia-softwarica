@@ -1,3 +1,4 @@
+/*s: kernel/network/386/ethermii.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "mem.h"
@@ -10,6 +11,7 @@
 #include "etherif.h"
 #include "ethermii.h"
 
+/*s: function mii */
 int
 mii(Mii* mii, int mask)
 {
@@ -61,7 +63,9 @@ mii(Mii* mii, int mask)
     }
     return rmask;
 }
+/*e: function mii */
 
+/*s: function miimir */
 int
 miimir(Mii* mii, int r)
 {
@@ -69,7 +73,9 @@ miimir(Mii* mii, int r)
         return -1;
     return mii->mir(mii, mii->curphy->phyno, r);
 }
+/*e: function miimir */
 
+/*s: function miimiw */
 int
 miimiw(Mii* mii, int r, int data)
 {
@@ -77,7 +83,9 @@ miimiw(Mii* mii, int r, int data)
         return -1;
     return mii->miw(mii, mii->curphy->phyno, r, data);
 }
+/*e: function miimiw */
 
+/*s: function miireset */
 int
 miireset(Mii* mii)
 {
@@ -92,7 +100,9 @@ miireset(Mii* mii)
 
     return 0;
 }
+/*e: function miireset */
 
+/*s: function miiane */
 int
 miiane(Mii* mii, int a, int p, int e)
 {
@@ -157,7 +167,9 @@ miiane(Mii* mii, int a, int p, int e)
 
     return 0;
 }
+/*e: function miiane */
 
+/*s: function miistatus */
 int
 miistatus(Mii* mii)
 {
@@ -233,3 +245,5 @@ miistatus(Mii* mii)
 
     return 0;
 }
+/*e: function miistatus */
+/*e: kernel/network/386/ethermii.c */

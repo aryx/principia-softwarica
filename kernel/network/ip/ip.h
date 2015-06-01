@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/ip.h */
 
 // This file references also code in lib_networking (linked with the kernel).
 // Those functions are also exported in include/ip.h.
@@ -37,6 +38,7 @@ typedef struct  v6params  v6params;
 #pragma incomplete IP
 #pragma incomplete Netlog
 
+/*s: enum _anon_ (kernel/network/ip/ip.h) */
 enum
 {
   Addrlen=  64,
@@ -70,7 +72,9 @@ enum
 
   Maxpath = 64,
 };
+/*e: enum _anon_ (kernel/network/ip/ip.h) */
 
+/*s: enum _anon_ (kernel/network/ip/ip.h)2 */
 enum
 {
   Idle=   0,
@@ -79,7 +83,9 @@ enum
   Connecting= 3,
   Connected=  4,
 };
+/*e: enum _anon_ (kernel/network/ip/ip.h)2 */
 
+/*s: enum _anon_ (kernel/network/ip/ip.h)3 */
 /* MIB II counters */
 enum
 {
@@ -105,7 +111,9 @@ enum
 
   Nipstats,
 };
+/*e: enum _anon_ (kernel/network/ip/ip.h)3 */
 
+/*s: struct Fragment4 */
 struct Fragment4
 {
   Block*  blist;
@@ -115,7 +123,9 @@ struct Fragment4
   ushort  id;
   ulong   age;
 };
+/*e: struct Fragment4 */
 
+/*s: struct Fragment6 */
 struct Fragment6
 {
   Block*  blist;
@@ -125,7 +135,9 @@ struct Fragment6
   uint  id;
   ulong   age;
 };
+/*e: struct Fragment6 */
 
+/*s: struct Ipfrag */
 //@Scheck: used only for its macro below, could maybe simplify?
 struct Ipfrag
 {
@@ -134,9 +146,13 @@ struct Ipfrag
 
   uchar payload[];
 };
+/*e: struct Ipfrag */
 
+/*s: constant IPFRAGSZ */
 #define IPFRAGSZ offsetof(Ipfrag, payload[0])
+/*e: constant IPFRAGSZ */
 
+/*s: struct IP */
 /* an instance of IP */
 struct IP
 {
@@ -154,7 +170,9 @@ struct IP
 
   int   iprouting;  /* true if we route like a gateway */
 };
+/*e: struct IP */
 
+/*s: struct Ip4hdr */
 /* on the wire packet header */
 struct Ip4hdr
 {
@@ -169,7 +187,9 @@ struct Ip4hdr
   uchar src[4];   /* IP source */
   uchar dst[4];   /* IP destination */
 };
+/*e: struct Ip4hdr */
 
+/*s: struct Conv */
 /*
  *  one per conversation directory
  */
@@ -226,7 +246,9 @@ struct Conv
   Route *r;     /* last route used */
   ulong rgen;     /* routetable generation for *r */
 };
+/*e: struct Conv */
 
+/*s: struct Medium */
 struct Medium
 {
   char  *name;
@@ -263,7 +285,9 @@ struct Medium
 
   int unbindonclose;  /* if non-zero, unbind on last close */
 };
+/*e: struct Medium */
 
+/*s: struct Iplifc (kernel/network/ip/ip.h) */
 /* logical interface associated with a physical one */
 struct Iplifc
 {
@@ -280,7 +304,9 @@ struct Iplifc
   Iplink  *link;    /* addresses linked to this lifc */
   Iplifc  *next;
 };
+/*e: struct Iplifc (kernel/network/ip/ip.h) */
 
+/*s: struct Iplink */
 /* binding twixt Ipself and Iplifc */
 struct Iplink
 {
@@ -292,9 +318,11 @@ struct Iplink
   Iplink  *next;    /* free list */
   int ref;
 };
+/*e: struct Iplink */
 
 /* rfc 2461, pp.40—43. */
 
+/*s: struct Routerparams */
 /* default values, one per stack */
 struct Routerparams {
   int mflag;    /* flag: managed address configuration */
@@ -307,11 +335,15 @@ struct Routerparams {
   int ttl;    /* cur hop count limit */
   int routerlt; /* router lifetime */
 };
+/*e: struct Routerparams */
 
+/*s: struct Hostparams */
 struct Hostparams {
   int rxmithost;
 };
+/*e: struct Hostparams */
 
+/*s: struct Ipifc (kernel/network/ip/ip.h) */
 struct Ipifc
 {
   RWlock;
@@ -344,7 +376,9 @@ struct Ipifc
   Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
           used only if node is router */
 };
+/*e: struct Ipifc (kernel/network/ip/ip.h) */
 
+/*s: struct Ipmulti */
 /*
  *  one per multicast-lifc pair used by a Conv
  */
@@ -354,7 +388,9 @@ struct Ipmulti
   uchar ia[IPaddrlen];
   Ipmulti *next;
 };
+/*e: struct Ipmulti */
 
+/*s: enum _anon_ (kernel/network/ip/ip.h)4 */
 /*
  *  hash table for 2 ip addresses + 2 ports
  */
@@ -368,21 +404,27 @@ enum
   IPmatchaddr,    /* addr!* */
   IPmatchpa,    /* addr!port */
 };
+/*e: enum _anon_ (kernel/network/ip/ip.h)4 */
+/*s: struct Iphash */
 struct Iphash
 {
   Iphash  *next;
   Conv  *c;
   int match;
 };
+/*e: struct Iphash */
+/*s: struct Ipht */
 struct Ipht
 {
   Lock;
   Iphash  *tab[Nipht];
 };
+/*e: struct Ipht */
 void iphtadd(Ipht*, Conv*);
 void iphtrem(Ipht*, Conv*);
 Conv* iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp);
 
+/*s: struct Proto */
 /*
  *  one per multiplexed protocol
  */
@@ -418,8 +460,10 @@ struct Proto
 
   void    *priv;
 };
+/*e: struct Proto */
 
 
+/*s: struct Fs */
 /*
  *  one per IP protocol stack
  */
@@ -449,7 +493,9 @@ struct Fs
   int ndbvers;
   long  ndbmtime;
 };
+/*e: struct Fs */
 
+/*s: struct v6router */
 /* one per default router known to host */
 struct v6router {
   uchar inuse;
@@ -459,7 +505,9 @@ struct v6router {
   long  ltorigin;
   Routerparams  rp;
 };
+/*e: struct v6router */
 
+/*s: struct v6params */
 struct v6params
 {
   Routerparams  rp;   /* v6 params, one copy per node now */
@@ -468,6 +516,7 @@ struct v6params
   int   cdrouter; /* uses only v6rlist[cdrouter] if   */
           /* cdrouter >= 0. */
 };
+/*e: struct v6params */
 
 int Fsconnected(Conv*, char*);
 Conv* Fsnewcall(Conv*, uchar*, ushort, uchar*, ushort, uchar);
@@ -482,6 +531,7 @@ char* Fsstdannounce(Conv*, char**, int);
 //char* Fsstdbind(Conv*, char**, int);
 ulong scalednconv(void);
 //void  closeconv(Conv*);
+/*s: enum _anon_ (kernel/network/ip/ip.h)5 */
 /*
  *  logging
  */
@@ -504,6 +554,7 @@ enum
   Logesp=   1<<17,
   Logtcpwin=  1<<18,
 };
+/*e: enum _anon_ (kernel/network/ip/ip.h)5 */
 
 void  netloginit(Fs*);
 void  netlogopen(Fs*);
@@ -527,6 +578,7 @@ typedef struct Routewalk Routewalk;
 typedef struct V4route V4route;
 typedef struct V6route V6route;
 
+/*s: enum _anon_ (kernel/network/ip/ip.h)6 */
 enum
 {
 
@@ -539,7 +591,9 @@ enum
   Rmulti=   (1<<5),   /* a multicast self address */
   Rproxy=   (1<<6),   /* this route should be proxied */
 };
+/*e: enum _anon_ (kernel/network/ip/ip.h)6 */
 
+/*s: struct Routewalk */
 struct Routewalk
 {
   int o;
@@ -549,7 +603,9 @@ struct Routewalk
   void* state;
   void  (*walk)(Route*, Routewalk*);
 };
+/*e: struct Routewalk */
 
+/*s: struct RouteTree */
 struct  RouteTree
 {
   Route*  right;
@@ -562,21 +618,27 @@ struct  RouteTree
   char  tag[4];
   int ref;
 };
+/*e: struct RouteTree */
 
+/*s: struct V4route */
 struct V4route
 {
   ulong address;
   ulong endaddress;
   uchar gate[IPv4addrlen];
 };
+/*e: struct V4route */
 
+/*s: struct V6route */
 struct V6route
 {
   ulong address[IPllen];
   ulong endaddress[IPllen];
   uchar gate[IPaddrlen];
 };
+/*e: struct V6route */
 
+/*s: struct Route */
 struct Route
 {
   RouteTree;
@@ -586,6 +648,7 @@ struct Route
     V4route v4;
   };
 };
+/*e: struct Route */
 extern void v4addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type);
 extern void v6addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type);
 extern void v4delroute(Fs *f, uchar *a, uchar *mask, int dolock);
@@ -602,6 +665,7 @@ extern void routetype(int, char*);
  *  devip.c
  */
 
+/*s: struct IPaux */
 /*
  *  Hanging off every ip channel's ->aux is the following structure.
  *  It maintains the state used by devip and iproute.
@@ -611,9 +675,11 @@ struct IPaux
   char  *owner;   /* the user that did the attach */
   char  tag[4];
 };
+/*e: struct IPaux */
 
 extern IPaux* newipaux(char*, char*);
 
+/*s: struct Arpent */
 /*
  *  arp.c
  */
@@ -634,6 +700,7 @@ struct Arpent
   Ipifc *ifc;
   uchar ifcid;      /* must match ifc->id */
 };
+/*e: struct Arpent */
 
 extern void arpinit(Fs*);
 extern int  arpread(Arp*, char*, ulong, int);
@@ -659,8 +726,12 @@ extern void v4tov6(uchar *v6, uchar *v4);
 extern int  v6tov4(uchar *v4, uchar *v6);
 extern int  eipfmt(Fmt*);
 
+/*s: macro ipmove (kernel/network/ip/ip.h) */
 #define ipmove(x, y) memmove(x, y, IPaddrlen)
+/*e: macro ipmove (kernel/network/ip/ip.h) */
+/*s: macro ipcmp (kernel/network/ip/ip.h) */
 #define ipcmp(x, y) ( (x)[IPaddrlen-1] != (y)[IPaddrlen-1] || memcmp(x, y, IPaddrlen) )
+/*e: macro ipcmp (kernel/network/ip/ip.h) */
 
 extern uchar IPv4bcast[IPaddrlen];
 //extern uchar IPv4bcastobs[IPaddrlen];
@@ -670,7 +741,9 @@ extern uchar IPnoaddr[IPaddrlen];
 extern uchar v4prefix[IPaddrlen];
 extern uchar IPallbits[IPaddrlen];
 
+/*s: constant NOW */
 #define NOW TK2MS(CPUS(0)->ticks)
+/*e: constant NOW */
 
 /*
  *  media
@@ -747,3 +820,4 @@ extern Chan*  chandial(char*, char*, char*, Chan**);
  *  global to all of the stack
  */
 //extern void (*igmpreportfn)(Ipifc*, uchar*);
+/*e: kernel/network/ip/ip.h */

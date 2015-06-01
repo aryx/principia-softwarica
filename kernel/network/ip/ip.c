@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/ip.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -7,8 +8,11 @@
 
 #include    "ip.h"
 
+/*s: macro BLKIPVER */
 #define BLKIPVER(xp)    (((Ip4hdr*)((xp)->rp))->vihl&0xF0)
+/*e: macro BLKIPVER */
 
+/*s: global statnames */
 static char *statnames[] =
 {
 [Forwarding]    "Forwarding",
@@ -31,19 +35,25 @@ static char *statnames[] =
 [FragFails] "FragFails",
 [FragCreates]   "FragCreates",
 };
+/*e: global statnames */
 
+/*s: macro BLKIP */
 #define BLKIP(xp)   ((Ip4hdr*)((xp)->rp))
+/*e: macro BLKIP */
+/*s: macro BKFG */
 /*
  * This sleazy macro relies on the media header size being
  * larger than sizeof(Ipfrag). ipreassemble checks this is true
  */
 #define BKFG(xp)    ((Ipfrag*)((xp)->base))
+/*e: macro BKFG */
 
 ushort      ipcsum(uchar*);
 Block*      ip4reassemble(IP*, int, Block*, Ip4hdr*);
 void        ipfragfree4(IP*, Fragment4*);
 Fragment4*  ipfragallo4(IP*);
 
+/*s: function ip_init_6 */
 void
 ip_init_6(Fs *f)
 {
@@ -67,7 +77,9 @@ ip_init_6(Fs *f)
 
     f->v6p          = v6p;
 }
+/*e: function ip_init_6 */
 
+/*s: function initfrag */
 void
 initfrag(IP *ip, int size)
 {
@@ -94,7 +106,9 @@ initfrag(IP *ip, int size)
 
     ip->fragfree6[size-1].next = nil;
 }
+/*e: function initfrag */
 
+/*s: function ip_init */
 void
 ip_init(Fs *f)
 {
@@ -106,7 +120,9 @@ ip_init(Fs *f)
 
     ip_init_6(f);
 }
+/*e: function ip_init */
 
+/*s: function iprouting */
 void
 iprouting(Fs *f, int on)
 {
@@ -116,7 +132,9 @@ iprouting(Fs *f, int on)
     else
         f->ip->stats[Forwarding] = 1;
 }
+/*e: function iprouting */
 
+/*s: function ipoput4 */
 int
 ipoput4(Fs *f, Block *bp, int gating, int ttl, int tos, Conv *c)
 {
@@ -304,7 +322,9 @@ free:
     freeblist(bp);
     return rv;
 }
+/*e: function ipoput4 */
 
+/*s: function ipiput4 */
 void
 ipiput4(Fs *f, Ipifc *ifc, Block *bp)
 {
@@ -450,7 +470,9 @@ if(r->ifc == nil) panic("nil route rfc");
     ip->stats[InUnknownProtos]++;
     freeblist(bp);
 }
+/*e: function ipiput4 */
 
+/*s: function ipstats */
 int
 ipstats(Fs *f, char *buf, int len)
 {
@@ -467,7 +489,9 @@ ipstats(Fs *f, char *buf, int len)
         p = seprint(p, e, "%s: %llud\n", statnames[i], ip->stats[i]);
     return p - buf;
 }
+/*e: function ipstats */
 
+/*s: function ip4reassemble */
 Block*
 ip4reassemble(IP *ip, int offset, Block *bp, Ip4hdr *ih)
 {
@@ -631,7 +655,9 @@ ip4reassemble(IP *ip, int offset, Block *bp, Ip4hdr *ih)
     qunlock(&ip->fraglock4);
     return nil;
 }
+/*e: function ip4reassemble */
 
+/*s: function ipfragfree4 */
 /*
  * ipfragfree4 - Free a list of fragments - assume hold fraglock4
  */
@@ -660,7 +686,9 @@ ipfragfree4(IP *ip, Fragment4 *frag)
     ip->fragfree4 = frag;
 
 }
+/*e: function ipfragfree4 */
 
+/*s: function ipfragallo4 */
 /*
  * ipfragallo4 - allocate a reassembly queue - assume hold fraglock4
  */
@@ -683,7 +711,9 @@ ipfragallo4(IP *ip)
 
     return f;
 }
+/*e: function ipfragallo4 */
 
+/*s: function ipcsum */
 ushort
 ipcsum(uchar *addr)
 {
@@ -704,3 +734,5 @@ ipcsum(uchar *addr)
 
     return (sum^0xffff);
 }
+/*e: function ipcsum */
+/*e: kernel/network/ip/ip.c */

@@ -1,3 +1,4 @@
+/*s: networking/ip/httpd/httpd.c */
 #include <u.h>
 #include <libc.h>
 #include <auth.h>
@@ -6,32 +7,48 @@
 #include "httpd.h"
 #include "httpsrv.h"
 
+/*s: enum _anon_ (networking/ip/httpd/httpd.c) */
 enum {
-	Nbuckets	= 256,
+    Nbuckets	= 256,
 };
+/*e: enum _anon_ (networking/ip/httpd/httpd.c) */
 
 typedef struct Strings		Strings;
 typedef struct System		System;
 
+/*s: struct Strings */
 struct Strings
 {
-	char	*s1;
-	char	*s2;
+    char	*s1;
+    char	*s2;
 };
+/*e: struct Strings */
+/*s: struct System */
 struct System {
-	char	*rsys;
-	ulong	reqs;
-	ulong	first;
-	ulong	last;
-	System	*next;			/* next in chain */
+    char	*rsys;
+    ulong	reqs;
+    ulong	first;
+    ulong	last;
+    System	*next;			/* next in chain */
 };
+/*e: struct System */
 
+/*s: global netdir (networking/ip/httpd/httpd.c) */
 char	*netdir;
+/*e: global netdir (networking/ip/httpd/httpd.c) */
+/*s: global HTTPLOG */
 char	*HTTPLOG = "httpd/log";
+/*e: global HTTPLOG */
 
+/*s: global netdirb */
 static	char		netdirb[256];
+/*e: global netdirb */
+/*s: global namespace (networking/ip/httpd/httpd.c) */
 static	char		*namespace;
+/*e: global namespace (networking/ip/httpd/httpd.c) */
+/*s: global syss */
 static	System		syss[Nbuckets];
+/*e: global syss */
 
 static	void		becomenone(char*);
 static	char		*csquery(char*, char*, char*);
@@ -43,178 +60,199 @@ static	char*		stripprefix(char*, char*);
 static	char*		sysdom(void);
 static	int		notfound(HConnect *c, char *url);
 
+/*s: global certificate */
 uchar *certificate;
+/*e: global certificate */
+/*s: global certlen */
 int certlen;
+/*e: global certlen */
+/*s: global certchain */
 PEMChain *certchain;	
+/*e: global certchain */
 
+/*s: function usage (networking/ip/httpd/httpd.c) */
 void
 usage(void)
 {
-	fprint(2, "usage: httpd [-c certificate] [-C CAchain] [-a srvaddress] "
-		"[-d domain] [-n namespace] [-w webroot]\n");
-	exits("usage");
+    fprint(2, "usage: httpd [-c certificate] [-C CAchain] [-a srvaddress] "
+        "[-d domain] [-n namespace] [-w webroot]\n");
+    exits("usage");
 }
+/*e: function usage (networking/ip/httpd/httpd.c) */
 
+/*s: function main (networking/ip/httpd/httpd.c) */
 void
 main(int argc, char **argv)
 {
-	char *address;
+    char *address;
 
-	namespace = nil;
-	address = nil;
-	hmydomain = nil;
-	netdir = "/net";
-	fmtinstall('D', hdatefmt);
-	fmtinstall('H', httpfmt);
-	fmtinstall('U', hurlfmt);
-	ARGBEGIN{
-	case 'c':
-		certificate = readcert(EARGF(usage()), &certlen);
-		if(certificate == nil)
-			sysfatal("reading certificate: %r");
-		break;
-	case 'C':
-		certchain = readcertchain(EARGF(usage()));
-		if (certchain == nil)
-			sysfatal("reading certificate chain: %r");
-		break;
-	case 'n':
-		namespace = EARGF(usage());
-		break;
-	case 'a':
-		address = EARGF(usage());
-		break;
-	case 'd':
-		hmydomain = EARGF(usage());
-		break;
-	case 'w':
-		webroot = EARGF(usage());
-		break;
-	default:
-		usage();
-		break;
-	}ARGEND
+    namespace = nil;
+    address = nil;
+    hmydomain = nil;
+    netdir = "/net";
+    fmtinstall('D', hdatefmt);
+    fmtinstall('H', httpfmt);
+    fmtinstall('U', hurlfmt);
+    ARGBEGIN{
+    case 'c':
+        certificate = readcert(EARGF(usage()), &certlen);
+        if(certificate == nil)
+            sysfatal("reading certificate: %r");
+        break;
+    case 'C':
+        certchain = readcertchain(EARGF(usage()));
+        if (certchain == nil)
+            sysfatal("reading certificate chain: %r");
+        break;
+    case 'n':
+        namespace = EARGF(usage());
+        break;
+    case 'a':
+        address = EARGF(usage());
+        break;
+    case 'd':
+        hmydomain = EARGF(usage());
+        break;
+    case 'w':
+        webroot = EARGF(usage());
+        break;
+    default:
+        usage();
+        break;
+    }ARGEND
 
-	if(argc)
-		usage();
+    if(argc)
+        usage();
 
-	if(namespace == nil)
-		namespace = "/lib/namespace.httpd";
-	if(address == nil)
-		address = "*";
-	if(webroot == nil)
-		webroot = "/usr/web";
-	else{
-		cleanname(webroot);
-		if(webroot[0] != '/')
-			webroot = "/usr/web";
-	}
+    if(namespace == nil)
+        namespace = "/lib/namespace.httpd";
+    if(address == nil)
+        address = "*";
+    if(webroot == nil)
+        webroot = "/usr/web";
+    else{
+        cleanname(webroot);
+        if(webroot[0] != '/')
+            webroot = "/usr/web";
+    }
 
-	switch(rfork(RFNOTEG|RFPROC|RFFDG|RFNAMEG)) {
-	case -1:
-		sysfatal("fork");
-	case 0:
-		break;
-	default:
-		exits(nil);
-	}
+    switch(rfork(RFNOTEG|RFPROC|RFFDG|RFNAMEG)) {
+    case -1:
+        sysfatal("fork");
+    case 0:
+        break;
+    default:
+        exits(nil);
+    }
 
-	/*
-	 * open all files we might need before castrating namespace
-	 */
-	time(nil);
-	if(hmydomain == nil)
-		hmydomain = sysdom();
-	syslog(0, HTTPLOG, nil);
-	logall[0] = open("/sys/log/httpd/0", OWRITE);
-	logall[1] = open("/sys/log/httpd/1", OWRITE);
-	logall[2] = open("/sys/log/httpd/clf", OWRITE);
-	redirectinit();
-	contentinit();
-	urlinit();
-	statsinit();
+    /*
+     * open all files we might need before castrating namespace
+     */
+    time(nil);
+    if(hmydomain == nil)
+        hmydomain = sysdom();
+    syslog(0, HTTPLOG, nil);
+    logall[0] = open("/sys/log/httpd/0", OWRITE);
+    logall[1] = open("/sys/log/httpd/1", OWRITE);
+    logall[2] = open("/sys/log/httpd/clf", OWRITE);
+    redirectinit();
+    contentinit();
+    urlinit();
+    statsinit();
 
-	becomenone(namespace);
-	dolisten(netmkaddr(address, "tcp", certificate == nil ? "http" : "https"));
-	exits(nil);
+    becomenone(namespace);
+    dolisten(netmkaddr(address, "tcp", certificate == nil ? "http" : "https"));
+    exits(nil);
 }
+/*e: function main (networking/ip/httpd/httpd.c) */
 
+/*s: function becomenone */
 static void
 becomenone(char *namespace)
 {
-	int fd;
+    int fd;
 
-	fd = open("#c/user", OWRITE);
-	if(fd < 0 || write(fd, "none", strlen("none")) < 0)
-		sysfatal("can't become none");
-	close(fd);
-	if(newns("none", nil) < 0)
-		sysfatal("can't build normal namespace");
-	if(addns("none", namespace) < 0)
-		sysfatal("can't build httpd namespace");
+    fd = open("#c/user", OWRITE);
+    if(fd < 0 || write(fd, "none", strlen("none")) < 0)
+        sysfatal("can't become none");
+    close(fd);
+    if(newns("none", nil) < 0)
+        sysfatal("can't build normal namespace");
+    if(addns("none", namespace) < 0)
+        sysfatal("can't build httpd namespace");
 }
+/*e: function becomenone */
 
+/*s: function mkconnect */
 static HConnect*
 mkconnect(char *scheme, char *port)
 {
-	HConnect *c;
+    HConnect *c;
 
-	c = ezalloc(sizeof(HConnect));
-	c->hpos = c->header;
-	c->hstop = c->header;
-	c->replog = writelog;
-	c->scheme = scheme;
-	c->port = port;
-	return c;
+    c = ezalloc(sizeof(HConnect));
+    c->hpos = c->header;
+    c->hstop = c->header;
+    c->replog = writelog;
+    c->scheme = scheme;
+    c->port = port;
+    return c;
 }
+/*e: function mkconnect */
 
+/*s: function mkhspriv */
 static HSPriv*
 mkhspriv(void)
 {
-	HSPriv *p;
+    HSPriv *p;
 
-	p = ezalloc(sizeof(HSPriv));
-	return p;
+    p = ezalloc(sizeof(HSPriv));
+    return p;
 }
+/*e: function mkhspriv */
 
+/*s: function hashstr (networking/ip/httpd/httpd.c) */
 static uint 
 hashstr(char* key)
 {
-	/* asu works better than pjw for urls */
-	uchar *k = (unsigned char*)key;
-	uint h = 0;
+    /* asu works better than pjw for urls */
+    uchar *k = (unsigned char*)key;
+    uint h = 0;
 
-	while(*k!=0)
-		h = 65599*h + *k++;
+    while(*k!=0)
+        h = 65599*h + *k++;
         return h;
 }
+/*e: function hashstr (networking/ip/httpd/httpd.c) */
 
+/*s: function hashsys */
 static System *
 hashsys(char *rsys)
 {
-	int notme;
-	System *sys;
+    int notme;
+    System *sys;
 
-	sys = syss + hashstr(rsys) % nelem(syss);
-	/* if the bucket is empty, just use it, else find or allocate ours */
-	if(sys->rsys != nil) {
-		/* find match or chain end */
-		for(; notme = (strcmp(sys->rsys, rsys) != 0) &&
-		    sys->next != nil; sys = sys->next)
-			;
-		if(notme) {
-			sys->next = malloc(sizeof *sys);  /* extend chain */
-			sys = sys->next;
-		} else
-			return sys;
-	}
-	if(sys != nil) {
-		memset(sys, 0, sizeof *sys);
-		sys->rsys = strdup(rsys);
-	}
-	return sys;
+    sys = syss + hashstr(rsys) % nelem(syss);
+    /* if the bucket is empty, just use it, else find or allocate ours */
+    if(sys->rsys != nil) {
+        /* find match or chain end */
+        for(; notme = (strcmp(sys->rsys, rsys) != 0) &&
+            sys->next != nil; sys = sys->next)
+            ;
+        if(notme) {
+            sys->next = malloc(sizeof *sys);  /* extend chain */
+            sys = sys->next;
+        } else
+            return sys;
+    }
+    if(sys != nil) {
+        memset(sys, 0, sizeof *sys);
+        sys->rsys = strdup(rsys);
+    }
+    return sys;
 }
+/*e: function hashsys */
 
+/*s: function isswamped */
 /*
  * be sure to call this at least once per listen in the parent,
  * to update the hash chains.
@@ -224,413 +262,427 @@ hashsys(char *rsys)
 static int
 isswamped(char *rsys)
 {
-	ulong period;
-	System *sys = hashsys(rsys);
+    ulong period;
+    System *sys = hashsys(rsys);
 
-	if(sys == nil)
-		return 0;
-	sys->last = time(nil);
-	if(sys->first == 0)
-		sys->first = sys->last;
-	period = sys->first - sys->last;
-	return ++sys->reqs > 30 && period > 30 && sys->reqs / period >= 2;
+    if(sys == nil)
+        return 0;
+    sys->last = time(nil);
+    if(sys->first == 0)
+        sys->first = sys->last;
+    period = sys->first - sys->last;
+    return ++sys->reqs > 30 && period > 30 && sys->reqs / period >= 2;
 }
+/*e: function isswamped */
 
+/*s: function throttle */
 /* must only be called in child */
 static void
 throttle(int nctl, NetConnInfo *nci, int swamped)
 {
-	if(swamped || isswamped(nci->rsys)) {		/* shed load */
-		syslog(0, HTTPLOG, "overloaded by %s", nci->rsys);
-		sleep(30);
-		close(nctl);
-		exits(nil);
-	}
+    if(swamped || isswamped(nci->rsys)) {		/* shed load */
+        syslog(0, HTTPLOG, "overloaded by %s", nci->rsys);
+        sleep(30);
+        close(nctl);
+        exits(nil);
+    }
 }
+/*e: function throttle */
 
+/*s: function dolisten */
 static void
 dolisten(char *address)
 {
-	HSPriv *hp;
-	HConnect *c;
-	NetConnInfo *nci;
-	char ndir[NETPATHLEN], dir[NETPATHLEN], *p, *scheme;
-	int ctl, nctl, data, t, ok, spotchk, swamped;
-	TLSconn conn;
+    HSPriv *hp;
+    HConnect *c;
+    NetConnInfo *nci;
+    char ndir[NETPATHLEN], dir[NETPATHLEN], *p, *scheme;
+    int ctl, nctl, data, t, ok, spotchk, swamped;
+    TLSconn conn;
 
-	spotchk = 0;
-	syslog(0, HTTPLOG, "httpd starting");
-	ctl = announce(address, dir);
-	if(ctl < 0){
-		syslog(0, HTTPLOG, "can't announce on %s: %r", address);
-		return;
-	}
-	strcpy(netdirb, dir);
-	p = nil;
-	if(netdir[0] == '/'){
-		p = strchr(netdirb+1, '/');
-		if(p != nil)
-			*p = '\0';
-	}
-	if(p == nil)
-		strcpy(netdirb, "/net");
-	netdir = netdirb;
+    spotchk = 0;
+    syslog(0, HTTPLOG, "httpd starting");
+    ctl = announce(address, dir);
+    if(ctl < 0){
+        syslog(0, HTTPLOG, "can't announce on %s: %r", address);
+        return;
+    }
+    strcpy(netdirb, dir);
+    p = nil;
+    if(netdir[0] == '/'){
+        p = strchr(netdirb+1, '/');
+        if(p != nil)
+            *p = '\0';
+    }
+    if(p == nil)
+        strcpy(netdirb, "/net");
+    netdir = netdirb;
 
-	for(;;){
+    for(;;){
 
-		/*
-		 *  wait for a call (or an error)
-		 */
-		nctl = listen(dir, ndir);
-		if(nctl < 0){
-			syslog(0, HTTPLOG, "can't listen on %s: %r", address);
-			syslog(0, HTTPLOG, "ctls = %d", ctl);
-			return;
-		}
-		swamped = 0;
-		nci = getnetconninfo(ndir, -1);
-		if (nci)
-			swamped = isswamped(nci->rsys);
+        /*
+         *  wait for a call (or an error)
+         */
+        nctl = listen(dir, ndir);
+        if(nctl < 0){
+            syslog(0, HTTPLOG, "can't listen on %s: %r", address);
+            syslog(0, HTTPLOG, "ctls = %d", ctl);
+            return;
+        }
+        swamped = 0;
+        nci = getnetconninfo(ndir, -1);
+        if (nci)
+            swamped = isswamped(nci->rsys);
 
-		/*
-		 *  start a process for the service
-		 */
-		switch(rfork(RFFDG|RFPROC|RFNOWAIT|RFNAMEG)){
-		case -1:
-			close(nctl);
-			continue;
-		case 0:
-			/*
-			 *  see if we know the service requested
-			 */
-			data = accept(ctl, ndir);
-			if(data >= 0 && certificate != nil){
-				memset(&conn, 0, sizeof(conn));
-				conn.cert = certificate;
-				conn.certlen = certlen;
-				if (certchain != nil)
-					conn.chain = certchain;
-				data = tlsServer(data, &conn);
-				scheme = "https";
-			}else
-				scheme = "http";
-			if(data < 0){
-				syslog(0, HTTPLOG, "can't open %s/data: %r", ndir);
-				exits(nil);
-			}
-			dup(data, 0);
-			dup(data, 1);
-			dup(data, 2);
-			close(data);
-			close(ctl);
-			close(nctl);
+        /*
+         *  start a process for the service
+         */
+        switch(rfork(RFFDG|RFPROC|RFNOWAIT|RFNAMEG)){
+        case -1:
+            close(nctl);
+            continue;
+        case 0:
+            /*
+             *  see if we know the service requested
+             */
+            data = accept(ctl, ndir);
+            if(data >= 0 && certificate != nil){
+                memset(&conn, 0, sizeof(conn));
+                conn.cert = certificate;
+                conn.certlen = certlen;
+                if (certchain != nil)
+                    conn.chain = certchain;
+                data = tlsServer(data, &conn);
+                scheme = "https";
+            }else
+                scheme = "http";
+            if(data < 0){
+                syslog(0, HTTPLOG, "can't open %s/data: %r", ndir);
+                exits(nil);
+            }
+            dup(data, 0);
+            dup(data, 1);
+            dup(data, 2);
+            close(data);
+            close(ctl);
+            close(nctl);
 
-			if (nci == nil)
-				nci = getnetconninfo(ndir, -1);
-			c = mkconnect(scheme, nci->lserv);
-			hp = mkhspriv();
-			hp->remotesys = nci->rsys;
-			hp->remoteserv = nci->rserv;
-			c->private = hp;
+            if (nci == nil)
+                nci = getnetconninfo(ndir, -1);
+            c = mkconnect(scheme, nci->lserv);
+            hp = mkhspriv();
+            hp->remotesys = nci->rsys;
+            hp->remoteserv = nci->rserv;
+            c->private = hp;
 
-			hinit(&c->hin, 0, Hread);
-			hinit(&c->hout, 1, Hwrite);
+            hinit(&c->hin, 0, Hread);
+            hinit(&c->hout, 1, Hwrite);
 
-			/*
-			 * serve requests until a magic request.
-			 * later requests have to come quickly.
-			 * only works for http/1.1 or later.
-			 */
-			for(t = 15*60*1000; ; t = 15*1000){
-				throttle(nctl, nci, swamped);
-				if(hparsereq(c, t) <= 0)
-					exits(nil);
-				ok = doreq(c);
+            /*
+             * serve requests until a magic request.
+             * later requests have to come quickly.
+             * only works for http/1.1 or later.
+             */
+            for(t = 15*60*1000; ; t = 15*1000){
+                throttle(nctl, nci, swamped);
+                if(hparsereq(c, t) <= 0)
+                    exits(nil);
+                ok = doreq(c);
 
-				hflush(&c->hout);
+                hflush(&c->hout);
 
-				if(c->head.closeit || ok < 0)
-					exits(nil);
+                if(c->head.closeit || ok < 0)
+                    exits(nil);
 
-				hreqcleanup(c);
-			}
-			/* not reached */
+                hreqcleanup(c);
+            }
+            /* not reached */
 
-		default:
-			close(nctl);
-			break;
-		}
+        default:
+            close(nctl);
+            break;
+        }
 
-		if(++spotchk > 50){
-			spotchk = 0;
-			redirectinit();
-			contentinit();
-			urlinit();
-			statsinit();
-		}
-	}
+        if(++spotchk > 50){
+            spotchk = 0;
+            redirectinit();
+            contentinit();
+            urlinit();
+            statsinit();
+        }
+    }
 }
+/*e: function dolisten */
 
+/*s: function doreq */
 static int
 doreq(HConnect *c)
 {
-	HSPriv *hp;
-	Strings ss;
-	char *magic, *uri, *newuri, *origuri, *newpath, *hb;
-	char virtualhost[100], logfd0[10], logfd1[10], vers[16];
-	int n, nredirect;
-	uint flags;
+    HSPriv *hp;
+    Strings ss;
+    char *magic, *uri, *newuri, *origuri, *newpath, *hb;
+    char virtualhost[100], logfd0[10], logfd1[10], vers[16];
+    int n, nredirect;
+    uint flags;
 
-	/*
-	 * munge uri for magic
-	 */
-	uri = c->req.uri;
-	nredirect = 0;
-	werrstr("");
+    /*
+     * munge uri for magic
+     */
+    uri = c->req.uri;
+    nredirect = 0;
+    werrstr("");
 top:
-	if(++nredirect > 10){
-		if(hparseheaders(c, 15*60*1000) < 0)
-			exits("failed");
-		werrstr("redirection loop");
-		return hfail(c, HNotFound, uri);
-	}
-	ss = stripmagic(c, uri);
-	uri = ss.s1;
-	origuri = uri;
-	magic = ss.s2;
-	if(magic)
-		goto magic;
+    if(++nredirect > 10){
+        if(hparseheaders(c, 15*60*1000) < 0)
+            exits("failed");
+        werrstr("redirection loop");
+        return hfail(c, HNotFound, uri);
+    }
+    ss = stripmagic(c, uri);
+    uri = ss.s1;
+    origuri = uri;
+    magic = ss.s2;
+    if(magic)
+        goto magic;
 
-	/*
-	 * Apply redirects.  Do this before reading headers
-	 * (if possible) so that we can redirect to magic invisibly.
-	 */
-	flags = 0;
-	if(origuri[0]=='/' && origuri[1]=='~'){
-		n = strlen(origuri) + 4 + UTFmax;
-		newpath = halloc(c, n);
-		snprint(newpath, n, "/who/%s", origuri+2);
-		c->req.uri = newpath;
-		newuri = newpath;
-	}else if(origuri[0]=='/' && origuri[1]==0){
-		/* can't redirect / until we read the headers below */
-		newuri = nil;
-	}else
-		newuri = redirect(c, origuri, &flags);
+    /*
+     * Apply redirects.  Do this before reading headers
+     * (if possible) so that we can redirect to magic invisibly.
+     */
+    flags = 0;
+    if(origuri[0]=='/' && origuri[1]=='~'){
+        n = strlen(origuri) + 4 + UTFmax;
+        newpath = halloc(c, n);
+        snprint(newpath, n, "/who/%s", origuri+2);
+        c->req.uri = newpath;
+        newuri = newpath;
+    }else if(origuri[0]=='/' && origuri[1]==0){
+        /* can't redirect / until we read the headers below */
+        newuri = nil;
+    }else
+        newuri = redirect(c, origuri, &flags);
 
-	if(newuri != nil){
-		if(flags & Redirsilent) {
-			c->req.uri = uri = newuri;
-			logit(c, "%s: silent replacement %s", origuri, uri);
-			goto top;
-		}
-		if(hparseheaders(c, 15*60*1000) < 0)
-			exits("failed");
-		if(flags & Redirperm) {
-			logit(c, "%s: permanently moved to %s", origuri, newuri);
-			return hmoved(c, newuri);
-		} else if (flags & (Redironly | Redirsubord))
-			logit(c, "%s: top-level or many-to-one replacement %s",
-				origuri, uri);
+    if(newuri != nil){
+        if(flags & Redirsilent) {
+            c->req.uri = uri = newuri;
+            logit(c, "%s: silent replacement %s", origuri, uri);
+            goto top;
+        }
+        if(hparseheaders(c, 15*60*1000) < 0)
+            exits("failed");
+        if(flags & Redirperm) {
+            logit(c, "%s: permanently moved to %s", origuri, newuri);
+            return hmoved(c, newuri);
+        } else if (flags & (Redironly | Redirsubord))
+            logit(c, "%s: top-level or many-to-one replacement %s",
+                origuri, uri);
 
-		/*
-		 * try temporary redirect instead of permanent
-		 */
-		if (http11(c))
-			return hredirected(c, "307 Temporary Redirect", newuri);
-		else
-			return hredirected(c, "302 Temporary Redirect", newuri);
-	}
+        /*
+         * try temporary redirect instead of permanent
+         */
+        if (http11(c))
+            return hredirected(c, "307 Temporary Redirect", newuri);
+        else
+            return hredirected(c, "302 Temporary Redirect", newuri);
+    }
 
-	/*
-	 * for magic we exec a new program and serve no more requests
-	 */
+    /*
+     * for magic we exec a new program and serve no more requests
+     */
 magic:
-	if(magic != nil && strcmp(magic, "httpd") != 0){
-		snprint(c->xferbuf, HBufSize, "/bin/ip/httpd/%s", magic);
-		snprint(logfd0, sizeof(logfd0), "%d", logall[0]);
-		snprint(logfd1, sizeof(logfd1), "%d", logall[1]);
-		snprint(vers, sizeof(vers), "HTTP/%d.%d", c->req.vermaj, c->req.vermin);
-		hb = hunload(&c->hin);
-		if(hb == nil){
-			hfail(c, HInternal);
-			return -1;
-		}
-		hp = c->private;
-		execl(c->xferbuf, magic, "-d", hmydomain, "-w", webroot,
-			"-s", c->scheme, "-p", c->port,
-			"-r", hp->remotesys, "-N", netdir, "-b", hb,
-			"-L", logfd0, logfd1, "-R", c->header,
-			c->req.meth, vers, uri, c->req.search, nil);
-		logit(c, "no magic %s uri %s", magic, uri);
-		hfail(c, HNotFound, uri);
-		return -1;
-	}
+    if(magic != nil && strcmp(magic, "httpd") != 0){
+        snprint(c->xferbuf, HBufSize, "/bin/ip/httpd/%s", magic);
+        snprint(logfd0, sizeof(logfd0), "%d", logall[0]);
+        snprint(logfd1, sizeof(logfd1), "%d", logall[1]);
+        snprint(vers, sizeof(vers), "HTTP/%d.%d", c->req.vermaj, c->req.vermin);
+        hb = hunload(&c->hin);
+        if(hb == nil){
+            hfail(c, HInternal);
+            return -1;
+        }
+        hp = c->private;
+        execl(c->xferbuf, magic, "-d", hmydomain, "-w", webroot,
+            "-s", c->scheme, "-p", c->port,
+            "-r", hp->remotesys, "-N", netdir, "-b", hb,
+            "-L", logfd0, logfd1, "-R", c->header,
+            c->req.meth, vers, uri, c->req.search, nil);
+        logit(c, "no magic %s uri %s", magic, uri);
+        hfail(c, HNotFound, uri);
+        return -1;
+    }
 
-	/*
-	 * normal case is just file transfer
-	 */
-	if(hparseheaders(c, 15*60*1000) < 0)
-		exits("failed");
-	if(origuri[0] == '/' && origuri[1] == 0){	
-		snprint(virtualhost, sizeof virtualhost, "http://%s/", c->head.host);
-		newuri = redirect(c, virtualhost, nil);
-		if(newuri == nil)
-			newuri = redirect(c, origuri, nil);
-		if(newuri)
-			return hmoved(c, newuri);
-	}
-	if(!http11(c) && !c->head.persist)
-		c->head.closeit = 1;
-	return send(c);
+    /*
+     * normal case is just file transfer
+     */
+    if(hparseheaders(c, 15*60*1000) < 0)
+        exits("failed");
+    if(origuri[0] == '/' && origuri[1] == 0){	
+        snprint(virtualhost, sizeof virtualhost, "http://%s/", c->head.host);
+        newuri = redirect(c, virtualhost, nil);
+        if(newuri == nil)
+            newuri = redirect(c, origuri, nil);
+        if(newuri)
+            return hmoved(c, newuri);
+    }
+    if(!http11(c) && !c->head.persist)
+        c->head.closeit = 1;
+    return send(c);
 }
+/*e: function doreq */
 
+/*s: function send (networking/ip/httpd/httpd.c) */
 static int
 send(HConnect *c)
 {
-	Dir *dir;
-	char *w, *w2, *p, *masque;
-	int fd, fd1, n, force301, ok;
+    Dir *dir;
+    char *w, *w2, *p, *masque;
+    int fd, fd1, n, force301, ok;
 
 /*
-	if(c->req.search)
-		return hfail(c, HNoSearch, c->req.uri);
+    if(c->req.search)
+        return hfail(c, HNoSearch, c->req.uri);
  */
-	if(strcmp(c->req.meth, "GET") != 0 && strcmp(c->req.meth, "HEAD") != 0)
-		return hunallowed(c, "GET, HEAD");
-	if(c->head.expectother || c->head.expectcont)
-		return hfail(c, HExpectFail);
+    if(strcmp(c->req.meth, "GET") != 0 && strcmp(c->req.meth, "HEAD") != 0)
+        return hunallowed(c, "GET, HEAD");
+    if(c->head.expectother || c->head.expectcont)
+        return hfail(c, HExpectFail);
 
-	masque = masquerade(c->head.host);
+    masque = masquerade(c->head.host);
 
-	/*
-	 * check for directory/file mismatch with trailing /,
-	 * and send any redirections.
-	 */
-	n = strlen(webroot) + strlen(masque) + strlen(c->req.uri) +
-		STRLEN("/index.html") + STRLEN("/.httplogin") + 1;
-	w = halloc(c, n);
-	strcpy(w, webroot);
-	strcat(w, masque);
-	strcat(w, c->req.uri);
+    /*
+     * check for directory/file mismatch with trailing /,
+     * and send any redirections.
+     */
+    n = strlen(webroot) + strlen(masque) + strlen(c->req.uri) +
+        STRLEN("/index.html") + STRLEN("/.httplogin") + 1;
+    w = halloc(c, n);
+    strcpy(w, webroot);
+    strcat(w, masque);
+    strcat(w, c->req.uri);
 
-	/*
-	 *  favicon can be overridden by hostname.ico
-	 */
-	if(strcmp(c->req.uri, "/favicon.ico") == 0){
-		w2 = halloc(c, n+strlen(c->head.host)+2);
-		strcpy(w2, webroot);
-		strcat(w2, masque);
-		strcat(w2, "/");
-		strcat(w2, c->head.host);
-		strcat(w2, ".ico");
-		if(access(w2, AREAD)==0)
-			w = w2;
-	}
+    /*
+     *  favicon can be overridden by hostname.ico
+     */
+    if(strcmp(c->req.uri, "/favicon.ico") == 0){
+        w2 = halloc(c, n+strlen(c->head.host)+2);
+        strcpy(w2, webroot);
+        strcat(w2, masque);
+        strcat(w2, "/");
+        strcat(w2, c->head.host);
+        strcat(w2, ".ico");
+        if(access(w2, AREAD)==0)
+            w = w2;
+    }
 
-	/*
-	 * don't show the contents of .httplogin
-	 */
-	n = strlen(w);
-	if(strcmp(w+n-STRLEN(".httplogin"), ".httplogin") == 0)
-		return notfound(c, c->req.uri);
+    /*
+     * don't show the contents of .httplogin
+     */
+    n = strlen(w);
+    if(strcmp(w+n-STRLEN(".httplogin"), ".httplogin") == 0)
+        return notfound(c, c->req.uri);
 
-	fd = open(w, OREAD);
-	if(fd < 0 && strlen(masque)>0 && strncmp(c->req.uri, masque, strlen(masque)) == 0){
-		// may be a URI from before virtual hosts;  try again without masque
-		strcpy(w, webroot);
-		strcat(w, c->req.uri);
-		fd = open(w, OREAD);
-	}
-	if(fd < 0)
-		return notfound(c, c->req.uri);
-	dir = dirfstat(fd);
-	if(dir == nil){
-		close(fd);
-		return hfail(c, HInternal);
-	}
-	p = strchr(w, '\0');
-	if(dir->mode & DMDIR){
-		free(dir);
-		if(p > w && p[-1] == '/'){
-			strcat(w, "index.html");
-			force301 = 0;
-		}else{
-			strcat(w, "/index.html");
-			force301 = 1;
-		}
-		fd1 = open(w, OREAD);
-		if(fd1 < 0){
-			close(fd);
-			return notfound(c, c->req.uri);
-		}
-		c->req.uri = w + strlen(webroot) + strlen(masque);
-		if(force301 && c->req.vermaj){
-			close(fd);
-			close(fd1);
-			return hmoved(c, c->req.uri);
-		}
-		close(fd);
-		fd = fd1;
-		dir = dirfstat(fd);
-		if(dir == nil){
-			close(fd);
-			return hfail(c, HInternal);
-		}
-	}else if(p > w && p[-1] == '/'){
-		free(dir);
-		close(fd);
-		*strrchr(c->req.uri, '/') = '\0';
-		return hmoved(c, c->req.uri);
-	}
+    fd = open(w, OREAD);
+    if(fd < 0 && strlen(masque)>0 && strncmp(c->req.uri, masque, strlen(masque)) == 0){
+        // may be a URI from before virtual hosts;  try again without masque
+        strcpy(w, webroot);
+        strcat(w, c->req.uri);
+        fd = open(w, OREAD);
+    }
+    if(fd < 0)
+        return notfound(c, c->req.uri);
+    dir = dirfstat(fd);
+    if(dir == nil){
+        close(fd);
+        return hfail(c, HInternal);
+    }
+    p = strchr(w, '\0');
+    if(dir->mode & DMDIR){
+        free(dir);
+        if(p > w && p[-1] == '/'){
+            strcat(w, "index.html");
+            force301 = 0;
+        }else{
+            strcat(w, "/index.html");
+            force301 = 1;
+        }
+        fd1 = open(w, OREAD);
+        if(fd1 < 0){
+            close(fd);
+            return notfound(c, c->req.uri);
+        }
+        c->req.uri = w + strlen(webroot) + strlen(masque);
+        if(force301 && c->req.vermaj){
+            close(fd);
+            close(fd1);
+            return hmoved(c, c->req.uri);
+        }
+        close(fd);
+        fd = fd1;
+        dir = dirfstat(fd);
+        if(dir == nil){
+            close(fd);
+            return hfail(c, HInternal);
+        }
+    }else if(p > w && p[-1] == '/'){
+        free(dir);
+        close(fd);
+        *strrchr(c->req.uri, '/') = '\0';
+        return hmoved(c, c->req.uri);
+    }
 
-	ok = authorize(c, w);
-	if(ok <= 0){
-		free(dir);
-		close(fd);
-		return ok;
-	}
+    ok = authorize(c, w);
+    if(ok <= 0){
+        free(dir);
+        close(fd);
+        return ok;
+    }
 
-	return sendfd(c, fd, dir, nil, nil);
+    return sendfd(c, fd, dir, nil, nil);
 }
+/*e: function send (networking/ip/httpd/httpd.c) */
 
+/*s: function stripmagic */
 static Strings
 stripmagic(HConnect *hc, char *uri)
 {
-	Strings ss;
-	char *newuri, *prog, *s;
+    Strings ss;
+    char *newuri, *prog, *s;
 
-	prog = stripprefix("/magic/", uri);
-	if(prog == nil){
-		ss.s1 = uri;
-		ss.s2 = nil;
-		return ss;
-	}
+    prog = stripprefix("/magic/", uri);
+    if(prog == nil){
+        ss.s1 = uri;
+        ss.s2 = nil;
+        return ss;
+    }
 
-	s = strchr(prog, '/');
-	if(s == nil)
-		newuri = "";
-	else{
-		newuri = hstrdup(hc, s);
-		*s = 0;
-		s = strrchr(s, '/');
-		if(s != nil && s[1] == 0)
-			*s = 0;
-	}
-	ss.s1 = newuri;
-	ss.s2 = prog;
-	return ss;
+    s = strchr(prog, '/');
+    if(s == nil)
+        newuri = "";
+    else{
+        newuri = hstrdup(hc, s);
+        *s = 0;
+        s = strrchr(s, '/');
+        if(s != nil && s[1] == 0)
+            *s = 0;
+    }
+    ss.s1 = newuri;
+    ss.s2 = prog;
+    return ss;
 }
+/*e: function stripmagic */
 
+/*s: function stripprefix */
 static char*
 stripprefix(char *pre, char *str)
 {
-	while(*pre)
-		if(*str++ != *pre++)
-			return nil;
-	return str;
+    while(*pre)
+        if(*str++ != *pre++)
+            return nil;
+    return str;
 }
+/*e: function stripprefix */
 
+/*s: function notfound */
 /*
  * couldn't open a file
  * figure out why and return and error message
@@ -638,62 +690,68 @@ stripprefix(char *pre, char *str)
 static int
 notfound(HConnect *c, char *url)
 {
-	c->xferbuf[0] = 0;
-	rerrstr(c->xferbuf, sizeof c->xferbuf);
-	if(strstr(c->xferbuf, "file does not exist") != nil)
-		return hfail(c, HNotFound, url);
-	if(strstr(c->xferbuf, "permission denied") != nil)
-		return hfail(c, HUnauth, url);
-	return hfail(c, HNotFound, url);
+    c->xferbuf[0] = 0;
+    rerrstr(c->xferbuf, sizeof c->xferbuf);
+    if(strstr(c->xferbuf, "file does not exist") != nil)
+        return hfail(c, HNotFound, url);
+    if(strstr(c->xferbuf, "permission denied") != nil)
+        return hfail(c, HUnauth, url);
+    return hfail(c, HNotFound, url);
 }
+/*e: function notfound */
 
+/*s: function sysdom */
 static char*
 sysdom(void)
 {
-	char *dn;
+    char *dn;
 
-	dn = csquery("sys" , sysname(), "dom");
-	if(dn == nil)
-		dn = "who cares";
-	return dn;
+    dn = csquery("sys" , sysname(), "dom");
+    if(dn == nil)
+        dn = "who cares";
+    return dn;
 }
+/*e: function sysdom */
 
+/*s: function csquery (networking/ip/httpd/httpd.c) */
 /*
  *  query the connection server
  */
 static char*
 csquery(char *attr, char *val, char *rattr)
 {
-	char token[64+4];
-	char buf[256], *p, *sp;
-	int fd, n;
+    char token[64+4];
+    char buf[256], *p, *sp;
+    int fd, n;
 
-	if(val == nil || val[0] == 0)
-		return nil;
-	snprint(buf, sizeof(buf), "%s/cs", netdir);
-	fd = open(buf, ORDWR);
-	if(fd < 0)
-		return nil;
-	fprint(fd, "!%s=%s", attr, val);
-	seek(fd, 0, 0);
-	snprint(token, sizeof(token), "%s=", rattr);
-	for(;;){
-		n = read(fd, buf, sizeof(buf)-1);
-		if(n <= 0)
-			break;
-		buf[n] = 0;
-		p = strstr(buf, token);
-		if(p != nil && (p == buf || *(p-1) == 0)){
-			close(fd);
-			sp = strchr(p, ' ');
-			if(sp)
-				*sp = 0;
-			p = strchr(p, '=');
-			if(p == nil)
-				return nil;
-			return estrdup(p+1);
-		}
-	}
-	close(fd);
-	return nil;
+    if(val == nil || val[0] == 0)
+        return nil;
+    snprint(buf, sizeof(buf), "%s/cs", netdir);
+    fd = open(buf, ORDWR);
+    if(fd < 0)
+        return nil;
+    fprint(fd, "!%s=%s", attr, val);
+    seek(fd, 0, 0);
+    snprint(token, sizeof(token), "%s=", rattr);
+    for(;;){
+        n = read(fd, buf, sizeof(buf)-1);
+        if(n <= 0)
+            break;
+        buf[n] = 0;
+        p = strstr(buf, token);
+        if(p != nil && (p == buf || *(p-1) == 0)){
+            close(fd);
+            sp = strchr(p, ' ');
+            if(sp)
+                *sp = 0;
+            p = strchr(p, '=');
+            if(p == nil)
+                return nil;
+            return estrdup(p+1);
+        }
+    }
+    close(fd);
+    return nil;
 }
+/*e: function csquery (networking/ip/httpd/httpd.c) */
+/*e: networking/ip/httpd/httpd.c */

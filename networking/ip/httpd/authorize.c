@@ -1,3 +1,4 @@
+/*s: networking/ip/httpd/authorize.c */
 #include <u.h>
 #include <libc.h>
 #include <auth.h>
@@ -6,12 +7,15 @@
 
 static char*	readfile(char*);
 
+/*s: constant UNAUTHED */
 /*
  * these should be done better; see the response codes in /lib/rfc/rfc2616 for
  * more info on what should be included.
  */
 #define UNAUTHED	"You are not authorized to see this area.\n"
+/*e: constant UNAUTHED */
 
+/*s: function authorize */
 /*
  * check for authorization for some parts of the server tree.
  * the user name supplied with the authorization request is ignored;
@@ -25,92 +29,96 @@ static char*	readfile(char*);
 int
 authorize(HConnect *c, char *file)
 {
-	char *p, *p0;
-	Hio *hout;
-	char *buf;
-	int i, n;
-	char *t[257];
+    char *p, *p0;
+    Hio *hout;
+    char *buf;
+    int i, n;
+    char *t[257];
 
-	p0 = halloc(c, strlen(file)+STRLEN("/.httplogin")+1);
-	strcpy(p0, file);
-	for(;;){
-		p = strrchr(p0, '/');
-		if(p == nil)
-			return hfail(c, HInternal);
-		if(*(p+1) != 0)
-			break;
+    p0 = halloc(c, strlen(file)+STRLEN("/.httplogin")+1);
+    strcpy(p0, file);
+    for(;;){
+        p = strrchr(p0, '/');
+        if(p == nil)
+            return hfail(c, HInternal);
+        if(*(p+1) != 0)
+            break;
 
-		/* ignore trailing '/'s */
-		*p = 0;
-	}
-	strcpy(p, "/.httplogin");
+        /* ignore trailing '/'s */
+        *p = 0;
+    }
+    strcpy(p, "/.httplogin");
 
-	buf = readfile(p0);
-	if(buf == nil){
-		return 1;
-	}
-	n = tokenize(buf, t, nelem(t));
-	
-	if(c->head.authuser != nil && c->head.authpass != 0){
-		for(i = 1; i+1 < n; i += 2){
-			if(strcmp(t[i], c->head.authuser) == 0
-			&& strcmp(t[i+1], c->head.authpass) == 0){
-				free(buf);
-				return 1;
-			}
-		}
-	}
+    buf = readfile(p0);
+    if(buf == nil){
+        return 1;
+    }
+    n = tokenize(buf, t, nelem(t));
+    
+    if(c->head.authuser != nil && c->head.authpass != 0){
+        for(i = 1; i+1 < n; i += 2){
+            if(strcmp(t[i], c->head.authuser) == 0
+            && strcmp(t[i+1], c->head.authpass) == 0){
+                free(buf);
+                return 1;
+            }
+        }
+    }
 
-	hout = &c->hout;
-	hprint(hout, "%s 401 Unauthorized\r\n", hversion);
-	hprint(hout, "Server: Plan9\r\n");
-	hprint(hout, "Date: %D\r\n", time(nil));
-	hprint(hout, "WWW-Authenticate: Basic realm=\"%s\"\r\n", t[0]);
-	hprint(hout, "Content-Type: text/html\r\n");
-	hprint(hout, "Content-Length: %d\r\n", STRLEN(UNAUTHED));
-	if(c->head.closeit)
-		hprint(hout, "Connection: close\r\n");
-	else if(!http11(c))
-		hprint(hout, "Connection: Keep-Alive\r\n");
-	hprint(hout, "\r\n");
-	if(strcmp(c->req.meth, "HEAD") != 0)
-		hprint(hout, "%s", UNAUTHED);
-	writelog(c, "Reply: 401 Unauthorized\n");
-	free(buf);
-	return hflush(hout);
+    hout = &c->hout;
+    hprint(hout, "%s 401 Unauthorized\r\n", hversion);
+    hprint(hout, "Server: Plan9\r\n");
+    hprint(hout, "Date: %D\r\n", time(nil));
+    hprint(hout, "WWW-Authenticate: Basic realm=\"%s\"\r\n", t[0]);
+    hprint(hout, "Content-Type: text/html\r\n");
+    hprint(hout, "Content-Length: %d\r\n", STRLEN(UNAUTHED));
+    if(c->head.closeit)
+        hprint(hout, "Connection: close\r\n");
+    else if(!http11(c))
+        hprint(hout, "Connection: Keep-Alive\r\n");
+    hprint(hout, "\r\n");
+    if(strcmp(c->req.meth, "HEAD") != 0)
+        hprint(hout, "%s", UNAUTHED);
+    writelog(c, "Reply: 401 Unauthorized\n");
+    free(buf);
+    return hflush(hout);
 }
+/*e: function authorize */
 
+/*s: function readfile (networking/ip/httpd/authorize.c) */
 static char*
 readfile(char *file)
 {
-	Dir *d;
-	int fd;
-	char *buf;
-	int n, len;
+    Dir *d;
+    int fd;
+    char *buf;
+    int n, len;
 
-	fd = open(file, OREAD);
-	if(fd < 0)
-		return nil;
-	d = dirfstat(fd);
-	if(d == nil){		/* shouldn't happen */
-		close(fd);
-		return nil;
-	}
-	len = d->length;
-	free(d);
+    fd = open(file, OREAD);
+    if(fd < 0)
+        return nil;
+    d = dirfstat(fd);
+    if(d == nil){		/* shouldn't happen */
+        close(fd);
+        return nil;
+    }
+    len = d->length;
+    free(d);
 
-	buf = malloc(len+1);
-	if(buf == 0){
-		close(fd);
-		return nil;
-	}
+    buf = malloc(len+1);
+    if(buf == 0){
+        close(fd);
+        return nil;
+    }
 
-	n = readn(fd, buf, len);
-	close(fd);
-	if(n <= 0){
-		free(buf);
-		return nil;
-	}
-	buf[n] = '\0';
-	return buf;
+    n = readn(fd, buf, len);
+    close(fd);
+    if(n <= 0){
+        free(buf);
+        return nil;
+    }
+    buf[n] = '\0';
+    return buf;
 }
+/*e: function readfile (networking/ip/httpd/authorize.c) */
+/*e: networking/ip/httpd/authorize.c */

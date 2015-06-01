@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/ptclbsum.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -6,10 +7,17 @@
 #include    "../port/error.h"
 #include    "ip.h"
 
+/*s: global endian (kernel/network/ip/ptclbsum.c) */
 static  short   endian  = 1;
+/*e: global endian (kernel/network/ip/ptclbsum.c) */
+/*s: global aendian (kernel/network/ip/ptclbsum.c) */
 static  uchar*  aendian = (uchar*)&endian;
+/*e: global aendian (kernel/network/ip/ptclbsum.c) */
+/*s: constant LITTLE (kernel/network/ip/ptclbsum.c) */
 #define LITTLE  *aendian
+/*e: constant LITTLE (kernel/network/ip/ptclbsum.c) */
 
+/*s: function ptclbsum (kernel/network/ip/ptclbsum.c) */
 ushort
 ptclbsum(uchar *addr, int len)
 {
@@ -70,3 +78,5 @@ ptclbsum(uchar *addr, int len)
 
     return losum & 0xffff;
 }
+/*e: function ptclbsum (kernel/network/ip/ptclbsum.c) */
+/*e: kernel/network/ip/ptclbsum.c */

@@ -1,3 +1,4 @@
+/*s: kernel/network/386/etherigbe.c */
 /*
  * Intel 8254[340]NN Gigabit Ethernet PCI Controllers
  * as found on the Intel PRO/1000 series of adapters:
@@ -27,6 +28,7 @@
 #include "etherif.h"
 #include "ethermii.h"
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c) */
 enum {
     i82542      = (0x1000<<16)|0x8086,
     i82543gc    = (0x1004<<16)|0x8086,
@@ -46,7 +48,9 @@ enum {
     i82546gb    = (0x1079<<16)|0x8086,
     i82546eb    = (0x1010<<16)|0x8086,
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c) */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)2 */
 enum {
     Ctrl        = 0x00000000,   /* Device Control */
     Ctrldup     = 0x00000004,   /* Device Control Duplicate */
@@ -114,7 +118,9 @@ enum {
     Rah     = 0x00005404,   /* Receive Address High */
     Manc        = 0x00005820,   /* Management Control */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)2 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)3 */
 enum {                  /* Ctrl */
     Bem     = 0x00000002,   /* Big Endian Mode */
     Prior       = 0x00000004,   /* Priority on the PCI bus */
@@ -138,7 +144,9 @@ enum {                  /* Ctrl */
     Tfce        = 0x10000000,   /* Transmit Flow Control Enable */
     Vme     = 0x40000000,   /* VLAN Mode Enable */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)3 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)4 */
 /*
  * can't find Tckok nor Rbcok in any Intel docs,
  * but even 82543gc docs define Lanid.
@@ -165,7 +173,9 @@ enum {                  /* Status */
     Pcix100     = 0x00004000,   /* 66-100MHz */
     Pcix133     = 0x00008000,   /* 100-133MHz */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)4 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)5 */
 enum {                  /* Ctrl and Status */
     Fd      = 0x00000001,   /* Full-Duplex */
     AsdvMASK    = 0x00000300,
@@ -174,7 +184,9 @@ enum {                  /* Ctrl and Status */
     Asdv100     = 0x00000100,   /* 100Mb/s */
     Asdv1000    = 0x00000200,   /* 1000Mb/s */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)5 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)6 */
 enum {                  /* Eecd */
     Sk      = 0x00000001,   /* Clock input to the EEPROM */
     Cs      = 0x00000002,   /* Chip Select */
@@ -187,7 +199,9 @@ enum {                  /* Eecd */
     Eeszaddr    = 0x00000400,   /* EEPROM size for 8254[17] */
     Spi     = 0x00002000,   /* EEPROM is SPI not Microwire */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)6 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)7 */
 enum {                  /* Ctrlext */
     Gpien       = 0x0000000F,   /* General Purpose Interrupt Enables */
     SwdpinshiMASK   = 0x000000F0,   /* Software Defined Pins - hi nibble */
@@ -199,7 +213,9 @@ enum {                  /* Ctrlext */
     Ips     = 0x00004000,   /* Invert Power State */
     Spdbyps     = 0x00008000,   /* Speed Select Bypass */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)7 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)8 */
 enum {                  /* EEPROM content offsets */
     Ea      = 0x00,     /* Ethernet Address */
     Cf      = 0x03,     /* Compatibility Field */
@@ -211,7 +227,9 @@ enum {                  /* EEPROM content offsets */
     Vid     = 0x0E,     /* Vendor ID */
     Icw2        = 0x0F,     /* Initialization Control Word 2 */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)8 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)9 */
 enum {                  /* Mdic */
     MDIdMASK    = 0x0000FFFF,   /* Data */
     MDIdSHIFT   = 0,
@@ -225,7 +243,9 @@ enum {                  /* Mdic */
     MDIie       = 0x20000000,   /* Interrupt Enable */
     MDIe        = 0x40000000,   /* Error */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)9 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)10 */
 enum {                  /* Icr, Ics, Ims, Imc */
     Txdw        = 0x00000001,   /* Transmit Descriptor Written Back */
     Txqe        = 0x00000002,   /* Transmit Queue Empty */
@@ -241,7 +261,9 @@ enum {                  /* Icr, Ics, Ims, Imc */
     Gpi2        = 0x00002000,
     Gpi3        = 0x00004000,
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)10 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)11 */
 /*
  * The Mdic register isn't implemented on the 82543GC,
  * the software defined pins are used instead.
@@ -256,7 +278,9 @@ enum {
     Mdr     = ((1<<0)<<SwdpinshiSHIFT), /* reset */
     Mdro        = ((1<<0)<<SwdpiohiSHIFT),  /* pin direction */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)11 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)12 */
 enum {                  /* Txcw */
     TxcwFd      = 0x00000020,   /* Full Duplex */
     TxcwHd      = 0x00000040,   /* Half Duplex */
@@ -270,7 +294,9 @@ enum {                  /* Txcw */
     TxcwConfig  = 0x40000000,   /* Transmit COnfig Control */
     TxcwAne     = 0x80000000,   /* Auto-Negotiation Enable */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)12 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)13 */
 enum {                  /* Rxcw */
     Rxword      = 0x0000FFFF,   /* Data from auto-negotiation process */
     Rxnocarrier = 0x04000000,   /* Carrier Sense indication */
@@ -280,7 +306,9 @@ enum {                  /* Rxcw */
     Rxsync      = 0x40000000,   /* Lost bit synchronization indication */
     Anc     = 0x80000000,   /* Auto Negotiation Complete */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)13 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)14 */
 enum {                  /* Rctl */
     Rrst        = 0x00000001,   /* Receiver Software Reset */
     Ren     = 0x00000002,   /* Receiver Enable */
@@ -317,7 +345,9 @@ enum {                  /* Rctl */
     Bsex        = 0x02000000,   /* Buffer Size Extension */
     Secrc       = 0x04000000,   /* Strip CRC from incoming packet */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)14 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)15 */
 enum {                  /* Tctl */
     Trst        = 0x00000001,   /* Transmitter Software Reset */
     Ten     = 0x00000002,   /* Transmit Enable */
@@ -331,7 +361,9 @@ enum {                  /* Tctl */
     Rtlc        = 0x01000000,   /* Re-transmit on Late Collision */
     Nrtu        = 0x02000000,   /* No Re-transmit on Underrrun */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)15 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)16 */
 enum {                  /* [RT]xdctl */
     PthreshMASK = 0x0000003F,   /* Prefetch Threshold */
     PthreshSHIFT    = 0,
@@ -343,24 +375,32 @@ enum {                  /* [RT]xdctl */
     LthreshMASK = 0xFE000000,   /* Low Threshold */
     LthreshSHIFT    = 25,
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)16 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)17 */
 enum {                  /* Rxcsum */
     PcssMASK    = 0x000000FF,   /* Packet Checksum Start */
     PcssSHIFT   = 0,
     Ipofl       = 0x00000100,   /* IP Checksum Off-load Enable */
     Tuofl       = 0x00000200,   /* TCP/UDP Checksum Off-load Enable */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)17 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)18 */
 enum {                  /* Manc */
     Arpen       = 0x00002000,   /* Enable ARP Request Filtering */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)18 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)19 */
 enum {                  /* Receive Delay Timer Ring */
     DelayMASK   = 0x0000FFFF,   /* delay timer in 1.024nS increments */
     DelaySHIFT  = 0,
     Fpd     = 0x80000000,   /* Flush partial Descriptor Block */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)19 */
 
+/*s: struct Rd */
 typedef struct Rd {         /* Receive Descriptor */
     uint    addr[2];
     ushort  length;
@@ -369,7 +409,9 @@ typedef struct Rd {         /* Receive Descriptor */
     uchar   errors;
     ushort  special;
 } Rd;
+/*e: struct Rd */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)20 */
 enum {                  /* Rd status */
     Rdd     = 0x01,     /* Descriptor Done */
     Reop        = 0x02,     /* End of Packet */
@@ -379,7 +421,9 @@ enum {                  /* Rd status */
     Ipcs        = 0x40,     /* IP Checksum Calculated on Packet */
     Pif     = 0x80,     /* Passed in-exact filter */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)20 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)21 */
 enum {                  /* Rd errors */
     Ce      = 0x01,     /* CRC Error or Alignment Error */
     Se      = 0x02,     /* Symbol Error */
@@ -389,8 +433,10 @@ enum {                  /* Rd errors */
     Ipe     = 0x40,     /* IP Checksum Error */
     Rxe     = 0x80,     /* RX Data Error */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)21 */
 
 typedef struct Td Td;
+/*s: struct Td */
 struct Td {             /* Transmit Descriptor */
     union {
         uint    addr[2];    /* Data */
@@ -406,7 +452,9 @@ struct Td {             /* Transmit Descriptor */
     uint    control;
     uint    status;
 };
+/*e: struct Td */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)22 */
 enum {                  /* Td control */
     LenMASK     = 0x000FFFFF,   /* Data/Packet Length Field */
     LenSHIFT    = 0,
@@ -423,7 +471,9 @@ enum {                  /* Td control */
     Vle     = 0x40000000,   /* VLAN Packet Enable */
     Ide     = 0x80000000,   /* Interrupt Delay Enable */
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)22 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)23 */
 enum {                  /* Td status */
     Tdd     = 0x00000001,   /* Descriptor Done */
     Ec      = 0x00000002,   /* Excess Collisions */
@@ -441,15 +491,19 @@ enum {                  /* Td status */
     MssMASK     = 0xFFFF0000,   /* Maximum Segment Size (Tse) */
     MssSHIFT    = 16,
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)23 */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)24 */
 enum {
     Nrd     = 256,      /* multiple of 8 */
     Ntd     = 64,       /* multiple of 8 */
     Nrb     = 1024,     /* private receive buffers per Ctlr */
     Rbsz        = 2048,
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)24 */
 
 typedef struct CtlrEtherIgbe CtlrEtherIgbe;
+/*s: struct CtlrEtherIgbe */
 struct CtlrEtherIgbe {
     int port;
     Pcidev* pcidev;
@@ -512,16 +566,30 @@ struct CtlrEtherIgbe {
     int fcrtl;
     int fcrth;
 };
+/*e: struct CtlrEtherIgbe */
 
+/*s: macro csr32r */
 #define csr32r(c, r)    (*((c)->nic+((r)/4)))
+/*e: macro csr32r */
+/*s: macro csr32w */
 #define csr32w(c, r, v) (*((c)->nic+((r)/4)) = (v))
+/*e: macro csr32w */
 
+/*s: global igbectlrhead */
 static CtlrEtherIgbe* igbectlrhead;
+/*e: global igbectlrhead */
+/*s: global igbectlrtail */
 static CtlrEtherIgbe* igbectlrtail;
+/*e: global igbectlrtail */
 
+/*s: global igberblock */
 static Lock igberblock;     /* free receive Blocks */
+/*e: global igberblock */
+/*s: global igberbpool */
 static Block* igberbpool;   /* receive Blocks for all igbe controllers */
+/*e: global igberbpool */
 
+/*s: global statistics */
 static char* statistics[Nstatistics] = {
     "CRC Error",
     "Alignment Error",
@@ -588,7 +656,9 @@ static char* statistics[Nstatistics] = {
     "TCP Segmentation Context Transmitted",
     "TCP Segmentation Context Fail",
 };
+/*e: global statistics */
 
+/*s: function igbeifstat */
 static long
 igbeifstat(Ether* edev, void* a, long n, ulong offset)
 {
@@ -673,15 +743,21 @@ igbeifstat(Ether* edev, void* a, long n, ulong offset)
 
     return n;
 }
+/*e: function igbeifstat */
 
+/*s: enum _anon_ (kernel/network/386/etherigbe.c)25 */
 enum {
     CMrdtr,
 };
+/*e: enum _anon_ (kernel/network/386/etherigbe.c)25 */
 
+/*s: global igbectlmsg */
 static Cmdtab igbectlmsg[] = {
     CMrdtr, "rdtr", 2,
 };
+/*e: global igbectlmsg */
 
+/*s: function igbectl */
 static long
 igbectl(Ether* edev, void* buf, long n)
 {
@@ -715,7 +791,9 @@ igbectl(Ether* edev, void* buf, long n)
 
     return n;
 }
+/*e: function igbectl */
 
+/*s: function igbepromiscuous */
 static void
 igbepromiscuous(void* arg, int on)
 {
@@ -735,7 +813,9 @@ igbepromiscuous(void* arg, int on)
         rctl &= ~(Upe|Mpe);
     csr32w(ctlr, Rctl, rctl|Mpe);   /* temporarily keep Mpe on */
 }
+/*e: function igbepromiscuous */
 
+/*s: function igbemulticast */
 static void
 igbemulticast(void* arg, uchar* addr, int add)
 {
@@ -762,7 +842,9 @@ igbemulticast(void* arg, uchar* addr, int add)
 
     csr32w(ctlr, Mta+x*4, ctlr->mta[x]);
 }
+/*e: function igbemulticast */
 
+/*s: function igberballoc */
 static Block*
 igberballoc(void)
 {
@@ -778,7 +860,9 @@ igberballoc(void)
 
     return bp;
 }
+/*e: function igberballoc */
 
+/*s: function igberbfree */
 static void
 igberbfree(Block* bp)
 {
@@ -791,7 +875,9 @@ igberbfree(Block* bp)
     igberbpool = bp;
     iunlock(&igberblock);
 }
+/*e: function igberbfree */
 
+/*s: function igbeim */
 static void
 igbeim(CtlrEtherIgbe* ctlr, int im)
 {
@@ -800,13 +886,17 @@ igbeim(CtlrEtherIgbe* ctlr, int im)
     csr32w(ctlr, Ims, ctlr->im);
     iunlock(&ctlr->imlock);
 }
+/*e: function igbeim */
 
+/*s: function igbelim */
 static int
 igbelim(void* ctlr)
 {
     return ((CtlrEtherIgbe*)ctlr)->lim != 0;
 }
+/*e: function igbelim */
 
+/*s: function igbelproc */
 static void
 igbelproc(void* arg)
 {
@@ -892,7 +982,9 @@ enable:
         sleep(&ctlr->lrendez, igbelim, ctlr);
     }
 }
+/*e: function igbelproc */
 
+/*s: function igbetxinit */
 static void
 igbetxinit(CtlrEtherIgbe* ctlr)
 {
@@ -974,7 +1066,9 @@ igbetxinit(CtlrEtherIgbe* ctlr)
     r |= Ten;
     csr32w(ctlr, Tctl, r);
 }
+/*e: function igbetxinit */
 
+/*s: function igbetransmit */
 static void
 igbetransmit(Ether* edev)
 {
@@ -1028,7 +1122,9 @@ igbetransmit(Ether* edev)
 
     iunlock(&ctlr->tlock);
 }
+/*e: function igbetransmit */
 
+/*s: function igbereplenish */
 static void
 igbereplenish(CtlrEtherIgbe* ctlr)
 {
@@ -1058,7 +1154,9 @@ igbereplenish(CtlrEtherIgbe* ctlr)
     ctlr->rdt = rdt;
     csr32w(ctlr, Rdt, rdt);
 }
+/*e: function igbereplenish */
 
+/*s: function igberxinit */
 static void
 igberxinit(CtlrEtherIgbe* ctlr)
 {
@@ -1107,13 +1205,17 @@ igberxinit(CtlrEtherIgbe* ctlr)
      */
     csr32w(ctlr, Rxcsum, ETHERHDRSIZE<<PcssSHIFT);
 }
+/*e: function igberxinit */
 
+/*s: function igberim */
 static int
 igberim(void* ctlr)
 {
     return ((CtlrEtherIgbe*)ctlr)->rim != 0;
 }
+/*e: function igberim */
 
+/*s: function igberproc */
 static void
 igberproc(void* arg)
 {
@@ -1195,7 +1297,9 @@ igberproc(void* arg)
             igbereplenish(ctlr);
     }
 }
+/*e: function igberproc */
 
+/*s: function igbeattach */
 static void
 igbeattach(Ether* edev)
 {
@@ -1267,7 +1371,9 @@ igbeattach(Ether* edev)
     qunlock(&ctlr->alock);
     poperror();
 }
+/*e: function igbeattach */
 
+/*s: function igbeinterrupt */
 static void
 igbeinterrupt(Ureg*, void* arg)
 {
@@ -1310,7 +1416,9 @@ igbeinterrupt(Ureg*, void* arg)
     if(txdw)
         igbetransmit(edev);
 }
+/*e: function igbeinterrupt */
 
+/*s: function i82543mdior */
 static int
 i82543mdior(CtlrEtherIgbe* ctlr, int n)
 {
@@ -1332,7 +1440,9 @@ i82543mdior(CtlrEtherIgbe* ctlr, int n)
 
     return data;
 }
+/*e: function i82543mdior */
 
+/*s: function i82543mdiow */
 static int
 i82543mdiow(CtlrEtherIgbe* ctlr, int bits, int n)
 {
@@ -1355,7 +1465,9 @@ i82543mdiow(CtlrEtherIgbe* ctlr, int bits, int n)
 
     return 0;
 }
+/*e: function i82543mdiow */
 
+/*s: function i82543miimir */
 static int
 i82543miimir(Mii* mii, int pa, int ra)
 {
@@ -1380,7 +1492,9 @@ i82543miimir(Mii* mii, int pa, int ra)
 
     return data & 0xFFFF;
 }
+/*e: function i82543miimir */
 
+/*s: function i82543miimiw */
 static int
 i82543miimiw(Mii* mii, int pa, int ra, int data)
 {
@@ -1402,7 +1516,9 @@ i82543miimiw(Mii* mii, int pa, int ra, int data)
 
     return 0;
 }
+/*e: function i82543miimiw */
 
+/*s: function igbemiimir */
 static int
 igbemiimir(Mii* mii, int pa, int ra)
 {
@@ -1424,7 +1540,9 @@ igbemiimir(Mii* mii, int pa, int ra)
         return mdic & 0xFFFF;
     return -1;
 }
+/*e: function igbemiimir */
 
+/*s: function igbemiimiw */
 static int
 igbemiimiw(Mii* mii, int pa, int ra, int data)
 {
@@ -1446,7 +1564,9 @@ igbemiimiw(Mii* mii, int pa, int ra, int data)
         return 0;
     return -1;
 }
+/*e: function igbemiimiw */
 
+/*s: function igbemii */
 static int
 igbemii(CtlrEtherIgbe* ctlr)
 {
@@ -1568,7 +1688,9 @@ igbemii(CtlrEtherIgbe* ctlr)
     }
     return 0;
 }
+/*e: function igbemii */
 
+/*s: function at93c46io */
 static int
 at93c46io(CtlrEtherIgbe* ctlr, char* op, int data)
 {
@@ -1643,7 +1765,9 @@ at93c46io(CtlrEtherIgbe* ctlr, char* op, int data)
         return -1;
     return r;
 }
+/*e: function at93c46io */
 
+/*s: function at93c46r */
 static int
 at93c46r(CtlrEtherIgbe* ctlr)
 {
@@ -1716,7 +1840,9 @@ release:
         csr32w(ctlr, Eecd, eecd & ~Areq);
     return sum;
 }
+/*e: function at93c46r */
 
+/*s: function igbedetach */
 static int
 igbedetach(CtlrEtherIgbe* ctlr)
 {
@@ -1784,13 +1910,17 @@ igbedetach(CtlrEtherIgbe* ctlr)
 
     return 0;
 }
+/*e: function igbedetach */
 
+/*s: function igbeshutdown */
 static void
 igbeshutdown(Ether* ether)
 {
     igbedetach(ether->ctlr);
 }
+/*e: function igbeshutdown */
 
+/*s: function igbereset */
 static int
 igbereset(CtlrEtherIgbe* ctlr)
 {
@@ -1918,7 +2048,9 @@ igbereset(CtlrEtherIgbe* ctlr)
 
     return 0;
 }
+/*e: function igbereset */
 
+/*s: function igbepci */
 static void
 igbepci(void)
 {
@@ -1995,7 +2127,9 @@ igbepci(void)
         igbectlrtail = ctlr;
     }
 }
+/*e: function igbepci */
 
+/*s: function igbepnp */
 static int
 igbepnp(Ether* edev)
 {
@@ -2042,11 +2176,15 @@ igbepnp(Ether* edev)
 
     return 0;
 }
+/*e: function igbepnp */
 
+/*s: function etherigbelink */
 void
 etherigbelink(void)
 {
     addethercard("i82543", igbepnp);
     addethercard("igbe", igbepnp);
 }
+/*e: function etherigbelink */
 
+/*e: kernel/network/386/etherigbe.c */

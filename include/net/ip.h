@@ -1,18 +1,21 @@
+/*s: include/net/ip.h */
 #pragma	src	"/sys/src/libip"
 #pragma	lib	"libip.a"
 
+/*s: enum _anon_ */
 enum 
 {
-	IPaddrlen=	16,
-	IPv4addrlen=	4,
-	IPv4off=	12,
-	IPllen=		4,
-	IPV4HDR_LEN=	20,
+    IPaddrlen=	16,
+    IPv4addrlen=	4,
+    IPv4off=	12,
+    IPllen=		4,
+    IPV4HDR_LEN=	20,
 
-	/* vihl & vcf[0] values */
-	IP_VER4= 	0x40,
-	IP_VER6=	0x60,
+    /* vihl & vcf[0] values */
+    IP_VER4= 	0x40,
+    IP_VER6=	0x60,
 };
+/*e: enum _anon_ */
 
 /*
  *  for reading /net/ipifc
@@ -21,140 +24,160 @@ typedef struct Ipifc Ipifc;
 typedef struct Iplifc Iplifc;
 typedef struct Ipv6rp Ipv6rp;
 
+/*s: struct Iplifc */
 /* local address */
 struct Iplifc
 {
-	Iplifc	*next;
+    Iplifc	*next;
 
-	/* per address on the ip interface */
-	uchar	ip[IPaddrlen];
-	uchar	mask[IPaddrlen];
-	uchar	net[IPaddrlen];		/* ip & mask */
-	ulong	preflt;			/* preferred lifetime */
-	ulong	validlt;		/* valid lifetime */
+    /* per address on the ip interface */
+    uchar	ip[IPaddrlen];
+    uchar	mask[IPaddrlen];
+    uchar	net[IPaddrlen];		/* ip & mask */
+    ulong	preflt;			/* preferred lifetime */
+    ulong	validlt;		/* valid lifetime */
 };
+/*e: struct Iplifc */
 
+/*s: struct Ipv6rp */
 /* default values, one per stack */
 struct Ipv6rp
 {
-	int	mflag;
-	int	oflag;
-	int 	maxraint;
-	int	minraint;
-	int	linkmtu;
-	int	reachtime;
-	int	rxmitra;
-	int	ttl;
-	int	routerlt;	
+    int	mflag;
+    int	oflag;
+    int 	maxraint;
+    int	minraint;
+    int	linkmtu;
+    int	reachtime;
+    int	rxmitra;
+    int	ttl;
+    int	routerlt;	
 };
+/*e: struct Ipv6rp */
 
+/*s: struct Ipifc */
 /* actual interface */
 struct Ipifc
 {
-	Ipifc	*next;
-	Iplifc	*lifc;
+    Ipifc	*next;
+    Iplifc	*lifc;
 
-	/* per ip interface */
-	int	index;			/* number of interface in ipifc dir */
-	char	dev[64];
-	uchar	sendra6;		/* on == send router adv */
-	uchar	recvra6;		/* on == rcv router adv */
-	int	mtu;
-	ulong	pktin;
-	ulong	pktout;
-	ulong	errin;
-	ulong	errout;
-	Ipv6rp	rp;
+    /* per ip interface */
+    int	index;			/* number of interface in ipifc dir */
+    char	dev[64];
+    uchar	sendra6;		/* on == send router adv */
+    uchar	recvra6;		/* on == rcv router adv */
+    int	mtu;
+    ulong	pktin;
+    ulong	pktout;
+    ulong	errin;
+    ulong	errout;
+    Ipv6rp	rp;
 };
+/*e: struct Ipifc */
 
+/*s: macro ISIPV6MCAST */
 #define ISIPV6MCAST(addr)	((addr)[0] == 0xff)
+/*e: macro ISIPV6MCAST */
+/*s: macro ISIPV6LINKLOCAL */
 #define ISIPV6LINKLOCAL(addr) ((addr)[0] == 0xfe && ((addr)[1] & 0xc0) == 0x80)
+/*e: macro ISIPV6LINKLOCAL */
 
+/*s: enum _anon_ (include/net/ip.h) */
 /*
  * ipv6 constants
  * `ra' is `router advertisement', `rs' is `router solicitation'.
  * `na' is `neighbour advertisement'.
  */
 enum {
-	IPV6HDR_LEN	= 40,
+    IPV6HDR_LEN	= 40,
 
-	/* neighbour discovery option types */
-	V6nd_srclladdr	= 1,
-	V6nd_targlladdr	= 2,
-	V6nd_pfxinfo	= 3,
-	V6nd_redirhdr	= 4,
-	V6nd_mtu	= 5,
-	/* new since rfc2461; see iana.org/assignments/icmpv6-parameters */
-	V6nd_home	= 8,
-	V6nd_srcaddrs	= 9,		/* rfc3122 */
-	V6nd_ip		= 17,
-	/* /lib/rfc/drafts/draft-jeong-dnsop-ipv6-dns-discovery-12.txt */
-	V6nd_rdns	= 25,
-	/* plan 9 extensions */
-	V6nd_9fs	= 250,
-	V6nd_9auth	= 251,
+    /* neighbour discovery option types */
+    V6nd_srclladdr	= 1,
+    V6nd_targlladdr	= 2,
+    V6nd_pfxinfo	= 3,
+    V6nd_redirhdr	= 4,
+    V6nd_mtu	= 5,
+    /* new since rfc2461; see iana.org/assignments/icmpv6-parameters */
+    V6nd_home	= 8,
+    V6nd_srcaddrs	= 9,		/* rfc3122 */
+    V6nd_ip		= 17,
+    /* /lib/rfc/drafts/draft-jeong-dnsop-ipv6-dns-discovery-12.txt */
+    V6nd_rdns	= 25,
+    /* plan 9 extensions */
+    V6nd_9fs	= 250,
+    V6nd_9auth	= 251,
 
-	/* Router constants (all times in ms.) */
-	Maxv6initraintvl= 16000,
-	Maxv6initras	= 3,
-	Maxv6finalras	= 3,
-	Minv6interradelay= 3000,
-	Maxv6radelay	= 500,
+    /* Router constants (all times in ms.) */
+    Maxv6initraintvl= 16000,
+    Maxv6initras	= 3,
+    Maxv6finalras	= 3,
+    Minv6interradelay= 3000,
+    Maxv6radelay	= 500,
 
-	/* Host constants */
-	Maxv6rsdelay	= 1000,
-	V6rsintvl	= 4000,
-	Maxv6rss	= 3,
+    /* Host constants */
+    Maxv6rsdelay	= 1000,
+    V6rsintvl	= 4000,
+    Maxv6rss	= 3,
 
-	/* Node constants */
-	Maxv6mcastrss	= 3,
-	Maxv6unicastrss	= 3,
-	Maxv6anycastdelay= 1000,
-	Maxv6na		= 3,
-	V6reachabletime	= 30000,
-	V6retranstimer	= 1000,
-	V6initprobedelay= 5000,
+    /* Node constants */
+    Maxv6mcastrss	= 3,
+    Maxv6unicastrss	= 3,
+    Maxv6anycastdelay= 1000,
+    Maxv6na		= 3,
+    V6reachabletime	= 30000,
+    V6retranstimer	= 1000,
+    V6initprobedelay= 5000,
 };
+/*e: enum _anon_ (include/net/ip.h) */
 
 /* V6 header on the wire */
 typedef struct Ip6hdr Ip6hdr;
+/*s: struct Ip6hdr */
 struct Ip6hdr {
-	uchar	vcf[4];		/* version:4, traffic class:8, flow label:20 */
-	uchar	ploadlen[2];	/* payload length: packet length - 40 */
-	uchar	proto;		/* next header type */
-	uchar	ttl;		/* hop limit */
-	uchar	src[IPaddrlen];	/* source address */
-	uchar	dst[IPaddrlen];	/* destination address */
-	uchar	payload[];
+    uchar	vcf[4];		/* version:4, traffic class:8, flow label:20 */
+    uchar	ploadlen[2];	/* payload length: packet length - 40 */
+    uchar	proto;		/* next header type */
+    uchar	ttl;		/* hop limit */
+    uchar	src[IPaddrlen];	/* source address */
+    uchar	dst[IPaddrlen];	/* destination address */
+    uchar	payload[];
 };
+/*e: struct Ip6hdr */
 
 /*
  *  user-level icmpv6 with control message "headers"
  */
 typedef struct Icmp6hdr Icmp6hdr;
+/*s: struct Icmp6hdr */
 struct Icmp6hdr {
-	uchar	_0_[8];
-	uchar	laddr[IPaddrlen];	/* local address */
-	uchar	raddr[IPaddrlen];	/* remote address */
+    uchar	_0_[8];
+    uchar	laddr[IPaddrlen];	/* local address */
+    uchar	raddr[IPaddrlen];	/* remote address */
 };
+/*e: struct Icmp6hdr */
 
+/*s: enum _anon_ (include/net/ip.h)2 */
 /*
  *  user level udp headers with control message "headers"
  */
 enum 
 {
-	Udphdrsize=	52,	/* size of a Udphdr */
+    Udphdrsize=	52,	/* size of a Udphdr */
 };
+/*e: enum _anon_ (include/net/ip.h)2 */
 
 typedef struct Udphdr Udphdr;
+/*s: struct Udphdr */
 struct Udphdr
 {
-	uchar	raddr[IPaddrlen];	/* V6 remote address */
-	uchar	laddr[IPaddrlen];	/* V6 local address */
-	uchar	ifcaddr[IPaddrlen];	/* V6 ifc addr msg was received on */
-	uchar	rport[2];		/* remote port */
-	uchar	lport[2];		/* local port */
+    uchar	raddr[IPaddrlen];	/* V6 remote address */
+    uchar	laddr[IPaddrlen];	/* V6 local address */
+    uchar	ifcaddr[IPaddrlen];	/* V6 ifc addr msg was received on */
+    uchar	rport[2];		/* remote port */
+    uchar	lport[2];		/* local port */
 };
+/*e: struct Udphdr */
 
 uchar*	defmask(uchar*);
 void	maskip(uchar*, uchar*, uchar*);
@@ -183,8 +206,12 @@ ushort	ptclbsum(uchar*, int);
 int	v6tov4(uchar*, uchar*);
 void	v4tov6(uchar*, uchar*);
 
+/*s: macro ipcmp */
 #define	ipcmp(x, y) memcmp(x, y, IPaddrlen)
+/*e: macro ipcmp */
+/*s: macro ipmove */
 #define	ipmove(x, y) memmove(x, y, IPaddrlen)
+/*e: macro ipmove */
 
 extern uchar IPv4bcast[IPaddrlen];
 extern uchar IPv4bcastobs[IPaddrlen];
@@ -194,9 +221,12 @@ extern uchar IPnoaddr[IPaddrlen];
 extern uchar v4prefix[IPaddrlen];
 extern uchar IPallbits[IPaddrlen];
 
+/*s: macro CLASS */
 #define CLASS(p) ((*(uchar*)(p))>>6)
+/*e: macro CLASS */
 
 #pragma	varargck	type	"I"	uchar*
 #pragma	varargck	type	"V"	uchar*
 #pragma	varargck	type	"E"	uchar*
 #pragma	varargck	type	"M"	uchar*
+/*e: include/net/ip.h */

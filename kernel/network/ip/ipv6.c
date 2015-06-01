@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/ipv6.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -8,17 +9,25 @@
 #include    "ip.h"
 #include    "ipv6.h"
 
+/*s: enum _anon_ (kernel/network/ip/ipv6.c) */
 enum
 {
     IP6FHDR     = 8,        /* sizeof(Fraghdr6) */
 };
+/*e: enum _anon_ (kernel/network/ip/ipv6.c) */
 
+/*s: macro IPV6CLASS */
 #define IPV6CLASS(hdr)  (((hdr)->vcf[0]&0x0F)<<2 | ((hdr)->vcf[1]&0xF0)>>2)
+/*e: macro IPV6CLASS */
+/*s: macro BLKIPVER (kernel/network/ip/ipv6.c) */
 #define BLKIPVER(xp)    (((Ip6hdr*)((xp)->rp))->vcf[0] & 0xF0)
+/*e: macro BLKIPVER (kernel/network/ip/ipv6.c) */
+/*s: macro BKFG (kernel/network/ip/ipv6.c) */
 /*
  * This sleazy macro is stolen shamelessly from ip.c, see comment there.
  */
 #define BKFG(xp)    ((Ipfrag*)((xp)->base))
+/*e: macro BKFG (kernel/network/ip/ipv6.c) */
 
 Block*      ip6reassemble(IP*, int, Block*, Ip6hdr*);
 Fragment6*  ipfragallo6(IP*);
@@ -27,6 +36,7 @@ Block*      procopts(Block *bp);
 static Block*   procxtns(IP *ip, Block *bp, int doreasm);
 int     unfraglen(Block *bp, uchar *nexthdr, int setfh);
 
+/*s: function ipoput6 */
 int
 ipoput6(Fs *f, Block *bp, int gating, int ttl, int tos, Conv *c)
 {
@@ -221,7 +231,9 @@ free:
     freeblist(bp);
     return rv;
 }
+/*e: function ipoput6 */
 
+/*s: function ipiput6 */
 void
 ipiput6(Fs *f, Ipifc *ifc, Block *bp)
 {
@@ -337,7 +349,9 @@ ipiput6(Fs *f, Ipifc *ifc, Block *bp)
     ip->stats[InUnknownProtos]++;
     freeblist(bp);
 }
+/*e: function ipiput6 */
 
+/*s: function ipfragfree6 */
 /*
  * ipfragfree6 - copied from ipfragfree4 - assume hold fraglock6
  */
@@ -365,7 +379,9 @@ ipfragfree6(IP *ip, Fragment6 *frag)
     frag->next = ip->fragfree6;
     ip->fragfree6 = frag;
 }
+/*e: function ipfragfree6 */
 
+/*s: function ipfragallo6 */
 /*
  * ipfragallo6 - copied from ipfragalloc4
  */
@@ -388,7 +404,9 @@ ipfragallo6(IP *ip)
 
     return f;
 }
+/*e: function ipfragallo6 */
 
+/*s: function procxtns */
 static Block*
 procxtns(IP *ip, Block *bp, int doreasm)
 {
@@ -410,7 +428,9 @@ procxtns(IP *ip, Block *bp, int doreasm)
         bp = procopts(bp);
     return bp;
 }
+/*e: function procxtns */
 
+/*s: function unfraglen */
 /*
  * returns length of "Unfragmentable part", i.e., sum of lengths of ipv6 hdr,
  * hop-by-hop & routing headers if present; *nexthdr is set to nexthdr value
@@ -443,13 +463,17 @@ unfraglen(Block *bp, uchar *nexthdr, int setfh)
         *q = FH;
     return ufl;
 }
+/*e: function unfraglen */
 
+/*s: function procopts */
 Block*
 procopts(Block *bp)
 {
     return bp;
 }
+/*e: function procopts */
 
+/*s: function ip6reassemble */
 Block*
 ip6reassemble(IP* ip, int uflen, Block* bp, Ip6hdr* ih)
 {
@@ -619,3 +643,5 @@ ip6reassemble(IP* ip, int uflen, Block* bp, Ip6hdr* ih)
     qunlock(&ip->fraglock6);
     return nil;
 }
+/*e: function ip6reassemble */
+/*e: kernel/network/ip/ipv6.c */

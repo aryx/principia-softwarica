@@ -1,3 +1,4 @@
+/*s: networking/ip/snoopy/icmp.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -5,55 +6,68 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
+/*s: struct Hdr (networking/ip/snoopy/icmp.c) */
 struct Hdr
 {	uchar	type;
-	uchar	code;
-	uchar	cksum[2];	/* Checksum */
-	uchar	data[1];
+    uchar	code;
+    uchar	cksum[2];	/* Checksum */
+    uchar	data[1];
 };
+/*e: struct Hdr (networking/ip/snoopy/icmp.c) */
 
+/*s: enum _anon_ (networking/ip/snoopy/icmp.c) */
 enum
 {
-	ICMPLEN=	4,
+    ICMPLEN=	4,
 };
+/*e: enum _anon_ (networking/ip/snoopy/icmp.c) */
 
+/*s: enum _anon_ (networking/ip/snoopy/icmp.c)2 */
 enum
 {
-	Ot,	/* type */
-	Op,	/* next protocol */
+    Ot,	/* type */
+    Op,	/* next protocol */
 };
+/*e: enum _anon_ (networking/ip/snoopy/icmp.c)2 */
 
+/*s: global p_fields (networking/ip/snoopy/icmp.c) */
 static Field p_fields[] = 
 {
-	{"t",		Fnum,	Ot,	"type",	} ,
-	{0}
+    {"t",		Fnum,	Ot,	"type",	} ,
+    {0}
 };
+/*e: global p_fields (networking/ip/snoopy/icmp.c) */
 
+/*s: enum _anon_ (networking/ip/snoopy/icmp.c)3 */
 enum
 {
-	EchoRep=	0,
-	Unreachable=	3,
-	SrcQuench=	4,
-	Redirect=	5,
-	EchoReq=	8,
-	TimeExceed=	11,
-	ParamProb=	12,
-	TSreq=		13,
-	TSrep=		14,
-	InfoReq=	15,
-	InfoRep=	16,
+    EchoRep=	0,
+    Unreachable=	3,
+    SrcQuench=	4,
+    Redirect=	5,
+    EchoReq=	8,
+    TimeExceed=	11,
+    ParamProb=	12,
+    TSreq=		13,
+    TSrep=		14,
+    InfoReq=	15,
+    InfoRep=	16,
 };
+/*e: enum _anon_ (networking/ip/snoopy/icmp.c)3 */
 
+/*s: global p_mux (networking/ip/snoopy/icmp.c) */
 static Mux p_mux[] =
 {
-	{"ip",	Unreachable, },
-	{"ip",	SrcQuench, },
-	{"ip",	Redirect, },
-	{"ip",	TimeExceed, },
-	{"ip",	ParamProb, },
-	{0},
+    {"ip",	Unreachable, },
+    {"ip",	SrcQuench, },
+    {"ip",	Redirect, },
+    {"ip",	TimeExceed, },
+    {"ip",	ParamProb, },
+    {0},
 };
+/*e: global p_mux (networking/ip/snoopy/icmp.c) */
 
+/*s: global icmpmsg */
 char *icmpmsg[256] =
 {
 [EchoRep]	"EchoRep",
@@ -68,130 +82,140 @@ char *icmpmsg[256] =
 [InfoReq]	"InfoReq",
 [InfoRep]	"InfoRep",
 };
+/*e: global icmpmsg */
 
+/*s: function p_compile (networking/ip/snoopy/icmp.c) */
 static void
 p_compile(Filter *f)
 {
-	if(f->op == '='){
-		compile_cmp(icmp.name, f, p_fields);
-		return;
-	}
-	if(strcmp(f->s, "ip") == 0){
-		f->pr = p_mux->pr;
-		f->subop = Op;
-		return;
-	}
-	sysfatal("unknown icmp field or protocol: %s", f->s);
+    if(f->op == '='){
+        compile_cmp(icmp.name, f, p_fields);
+        return;
+    }
+    if(strcmp(f->s, "ip") == 0){
+        f->pr = p_mux->pr;
+        f->subop = Op;
+        return;
+    }
+    sysfatal("unknown icmp field or protocol: %s", f->s);
 }
+/*e: function p_compile (networking/ip/snoopy/icmp.c) */
 
+/*s: function p_filter (networking/ip/snoopy/icmp.c) */
 static int
 p_filter(Filter *f, Msg *m)
 {
-	Hdr *h;
+    Hdr *h;
 
-	if(m->pe - m->ps < ICMPLEN)
-		return 0;
+    if(m->pe - m->ps < ICMPLEN)
+        return 0;
 
-	h = (Hdr*)m->ps;
-	m->ps += ICMPLEN;
+    h = (Hdr*)m->ps;
+    m->ps += ICMPLEN;
 
-	switch(f->subop){
-	case Ot:
-		if(h->type == f->ulv)
-			return 1;
-		break;
-	case Op:
-		switch(h->type){
-		case Unreachable:
-		case TimeExceed:
-		case SrcQuench:
-		case Redirect:
-		case ParamProb:
-			m->ps += 4;
-			return 1;
-		}
-	}
-	return 0;
+    switch(f->subop){
+    case Ot:
+        if(h->type == f->ulv)
+            return 1;
+        break;
+    case Op:
+        switch(h->type){
+        case Unreachable:
+        case TimeExceed:
+        case SrcQuench:
+        case Redirect:
+        case ParamProb:
+            m->ps += 4;
+            return 1;
+        }
+    }
+    return 0;
 }
+/*e: function p_filter (networking/ip/snoopy/icmp.c) */
 
+/*s: function p_seprint (networking/ip/snoopy/icmp.c) */
 static int
 p_seprint(Msg *m)
 {
-	Hdr *h;
-	char *tn;
-	char *p = m->p;
-	char *e = m->e;
-	ushort cksum2, cksum;
+    Hdr *h;
+    char *tn;
+    char *p = m->p;
+    char *e = m->e;
+    ushort cksum2, cksum;
 
-	h = (Hdr*)m->ps;
-	m->ps += ICMPLEN;
-	m->pr = &dump;
+    h = (Hdr*)m->ps;
+    m->ps += ICMPLEN;
+    m->pr = &dump;
 
-	if(m->pe - m->ps < ICMPLEN)
-		return -1;
+    if(m->pe - m->ps < ICMPLEN)
+        return -1;
 
-	tn = icmpmsg[h->type];
-	if(tn == nil)
-		p = seprint(p, e, "t=%ud c=%d ck=%4.4ux", h->type,
-			h->code, (ushort)NetS(h->cksum));
-	else
-		p = seprint(p, e, "t=%s c=%d ck=%4.4ux", tn,
-			h->code, (ushort)NetS(h->cksum));
-	if(Cflag){
-		cksum = NetS(h->cksum);
-		h->cksum[0] = 0;
-		h->cksum[1] = 0;
-		cksum2 = ~ptclbsum((uchar*)h, m->pe - m->ps + ICMPLEN) & 0xffff;
-		if(cksum != cksum2)
-			p = seprint(p,e, " !ck=%4.4ux", cksum2);
-	}
-	switch(h->type){
-	case EchoRep:
-	case EchoReq:
-		m->ps += 4;
-		p = seprint(p, e, " id=%ux seq=%ux",
-			NetS(h->data), NetS(h->data+2));
-		break;
-	case TSreq:
-	case TSrep:
-		m->ps += 12;
-		p = seprint(p, e, " orig=%ud rcv=%ux xmt=%ux",
-			NetL(h->data), NetL(h->data+4),
-			NetL(h->data+8));
-		m->pr = nil;
-		break;
-	case InfoReq:
-	case InfoRep:
-		break;
-	case Unreachable:
-	case TimeExceed:
-	case SrcQuench:
-		m->ps += 4;
-		m->pr = &ip;
-		break;
-	case Redirect:
-		m->ps += 4;
-		m->pr = &ip;
-		p = seprint(p, e, "gw=%V", h->data);
-		break;
-	case ParamProb:
-		m->ps += 4;
-		m->pr = &ip;
-		p = seprint(p, e, "ptr=%2.2ux", h->data[0]);
-		break;
-	}
-	m->p = p;
-	return 0;
+    tn = icmpmsg[h->type];
+    if(tn == nil)
+        p = seprint(p, e, "t=%ud c=%d ck=%4.4ux", h->type,
+            h->code, (ushort)NetS(h->cksum));
+    else
+        p = seprint(p, e, "t=%s c=%d ck=%4.4ux", tn,
+            h->code, (ushort)NetS(h->cksum));
+    if(Cflag){
+        cksum = NetS(h->cksum);
+        h->cksum[0] = 0;
+        h->cksum[1] = 0;
+        cksum2 = ~ptclbsum((uchar*)h, m->pe - m->ps + ICMPLEN) & 0xffff;
+        if(cksum != cksum2)
+            p = seprint(p,e, " !ck=%4.4ux", cksum2);
+    }
+    switch(h->type){
+    case EchoRep:
+    case EchoReq:
+        m->ps += 4;
+        p = seprint(p, e, " id=%ux seq=%ux",
+            NetS(h->data), NetS(h->data+2));
+        break;
+    case TSreq:
+    case TSrep:
+        m->ps += 12;
+        p = seprint(p, e, " orig=%ud rcv=%ux xmt=%ux",
+            NetL(h->data), NetL(h->data+4),
+            NetL(h->data+8));
+        m->pr = nil;
+        break;
+    case InfoReq:
+    case InfoRep:
+        break;
+    case Unreachable:
+    case TimeExceed:
+    case SrcQuench:
+        m->ps += 4;
+        m->pr = &ip;
+        break;
+    case Redirect:
+        m->ps += 4;
+        m->pr = &ip;
+        p = seprint(p, e, "gw=%V", h->data);
+        break;
+    case ParamProb:
+        m->ps += 4;
+        m->pr = &ip;
+        p = seprint(p, e, "ptr=%2.2ux", h->data[0]);
+        break;
+    }
+    m->p = p;
+    return 0;
 }
+/*e: function p_seprint (networking/ip/snoopy/icmp.c) */
 
+/*s: global icmp */
 Proto icmp =
 {
-	"icmp",
-	p_compile,
-	p_filter,
-	p_seprint,
-	p_mux,
-	"%lud",
-	p_fields,
-	defaultframer,
+    "icmp",
+    p_compile,
+    p_filter,
+    p_seprint,
+    p_mux,
+    "%lud",
+    p_fields,
+    defaultframer,
 };
+/*e: global icmp */
+/*e: networking/ip/snoopy/icmp.c */

@@ -1,9 +1,13 @@
+/*s: kernel/network/386/etherif.h */
+/*s: enum _anon_ (kernel/network/386/etherif.h) */
 enum {
   MaxEther  = 48,
   Ntypes    = 8,
 };
+/*e: enum _anon_ (kernel/network/386/etherif.h) */
 
 typedef struct Ether Ether;
+/*s: struct Ether */
 struct Ether {
   ISAConf;      /* hardware info */
 
@@ -25,11 +29,17 @@ struct Ether {
 
   Netif;
 };
+/*e: struct Ether */
 
 extern Block* etheriq(Ether*, Block*, int);
 extern void addethercard(char*, int(*)(Ether*));
 //extern ulong ethercrc(uchar*, int);
+/*s: macro NEXT */
 //extern int parseether(uchar*, char*);
 
 #define NEXT(x, l)  (((x)+1)%(l))
+/*e: macro NEXT */
+/*s: macro PREV */
 #define PREV(x, l)  (((x) == 0) ? (l)-1: (x)-1)
+/*e: macro PREV */
+/*e: kernel/network/386/etherif.h */

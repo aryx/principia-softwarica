@@ -1,3 +1,4 @@
+/*s: networking/ip/snoopy/arp.c */
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
@@ -5,126 +6,145 @@
 #include "protos.h"
 
 typedef struct Hdr	Hdr;
+/*s: struct Hdr (networking/ip/snoopy/arp.c) */
 struct Hdr
 {
-	uchar	hrd[2];
-	uchar	pro[2];
-	uchar	hln;
-	uchar	pln;
-	uchar	op[2];
-	uchar	sha[6];
-	uchar	spa[4];
-	uchar	tha[6];
-	uchar	tpa[4];
+    uchar	hrd[2];
+    uchar	pro[2];
+    uchar	hln;
+    uchar	pln;
+    uchar	op[2];
+    uchar	sha[6];
+    uchar	spa[4];
+    uchar	tha[6];
+    uchar	tpa[4];
 };
+/*e: struct Hdr (networking/ip/snoopy/arp.c) */
 
+/*s: enum _anon_ (networking/ip/snoopy/arp.c) */
 enum
 {
-	ARPLEN=	28,
+    ARPLEN=	28,
 };
+/*e: enum _anon_ (networking/ip/snoopy/arp.c) */
 
+/*s: enum _anon_ (networking/ip/snoopy/arp.c)2 */
 enum
 {
-	Ospa,
-	Otpa,
-	Ostpa,
-	Osha,
-	Otha,
-	Ostha,
-	Opa,
+    Ospa,
+    Otpa,
+    Ostpa,
+    Osha,
+    Otha,
+    Ostha,
+    Opa,
 };
+/*e: enum _anon_ (networking/ip/snoopy/arp.c)2 */
 
+/*s: global p_fields (networking/ip/snoopy/arp.c) */
 static Field p_fields[] = 
 {
-	{"spa",		Fv4ip,	Ospa,	"protocol source",	} ,
-	{"tpa",		Fv4ip,	Otpa,	"protocol target",	} ,
-	{"a",		Fv4ip,	Ostpa,	"protocol source/target",	} ,
-	{"sha",		Fba,	Osha,	"hardware source",	} ,
-	{"tha",		Fba,	Otha,	"hardware target",	} ,
-	{"ah",	 	Fba,	Ostha,	"hardware source/target",	} ,
-	{0}
+    {"spa",		Fv4ip,	Ospa,	"protocol source",	} ,
+    {"tpa",		Fv4ip,	Otpa,	"protocol target",	} ,
+    {"a",		Fv4ip,	Ostpa,	"protocol source/target",	} ,
+    {"sha",		Fba,	Osha,	"hardware source",	} ,
+    {"tha",		Fba,	Otha,	"hardware target",	} ,
+    {"ah",	 	Fba,	Ostha,	"hardware source/target",	} ,
+    {0}
 };
+/*e: global p_fields (networking/ip/snoopy/arp.c) */
 
+/*s: function p_compile (networking/ip/snoopy/arp.c) */
 static void
 p_compile(Filter *f)
 {
-	if(f->op == '='){
-		compile_cmp(arp.name, f, p_fields);
-		return;
-	}
-	sysfatal("unknown arp field: %s", f->s);
+    if(f->op == '='){
+        compile_cmp(arp.name, f, p_fields);
+        return;
+    }
+    sysfatal("unknown arp field: %s", f->s);
 }
+/*e: function p_compile (networking/ip/snoopy/arp.c) */
 
+/*s: function p_filter (networking/ip/snoopy/arp.c) */
 static int
 p_filter(Filter *f, Msg *m)
 {
-	Hdr *h;
+    Hdr *h;
 
-	if(m->pe - m->ps < ARPLEN)
-		return 0;
+    if(m->pe - m->ps < ARPLEN)
+        return 0;
 
-	h = (Hdr*)m->ps;
-	m->ps += ARPLEN;
+    h = (Hdr*)m->ps;
+    m->ps += ARPLEN;
 
-	switch(f->subop){
-	case Ospa:
-		return h->pln == 4 && NetL(h->spa) == f->ulv;
-	case Otpa:
-		return h->pln == 4 && NetL(h->tpa) == f->ulv;
-	case Ostpa:
-		return h->pln == 4 && (NetL(h->tpa) == f->ulv ||
-			NetL(h->spa) == f->ulv);
-	case Osha:
-		return memcmp(h->sha, f->a, h->hln) == 0;
-	case Otha:
-		return memcmp(h->tha, f->a, h->hln) == 0;
-	case Ostha:
-		return memcmp(h->sha, f->a, h->hln)==0
-			||memcmp(h->tha, f->a, h->hln)==0;
-	}
-	return 0;
+    switch(f->subop){
+    case Ospa:
+        return h->pln == 4 && NetL(h->spa) == f->ulv;
+    case Otpa:
+        return h->pln == 4 && NetL(h->tpa) == f->ulv;
+    case Ostpa:
+        return h->pln == 4 && (NetL(h->tpa) == f->ulv ||
+            NetL(h->spa) == f->ulv);
+    case Osha:
+        return memcmp(h->sha, f->a, h->hln) == 0;
+    case Otha:
+        return memcmp(h->tha, f->a, h->hln) == 0;
+    case Ostha:
+        return memcmp(h->sha, f->a, h->hln)==0
+            ||memcmp(h->tha, f->a, h->hln)==0;
+    }
+    return 0;
 }
+/*e: function p_filter (networking/ip/snoopy/arp.c) */
 
+/*s: function p_seprint (networking/ip/snoopy/arp.c) */
 static int
 p_seprint(Msg *m)
 {
-	Hdr *h;
+    Hdr *h;
 
-	if(m->pe - m->ps < ARPLEN)
-		return -1;
+    if(m->pe - m->ps < ARPLEN)
+        return -1;
 
-	h = (Hdr*)m->ps;
-	m->ps += ARPLEN;
+    h = (Hdr*)m->ps;
+    m->ps += ARPLEN;
 
-	/* no next protocol */
-	m->pr = nil;
+    /* no next protocol */
+    m->pr = nil;
 
-	m->p = seprint(m->p, m->e, "op=%1d len=%1d/%1d spa=%V sha=%E tpa=%V tha=%E",
-			NetS(h->op), h->pln, h->hln,
-			h->spa, h->sha, h->tpa, h->tha);
-	return 0;
+    m->p = seprint(m->p, m->e, "op=%1d len=%1d/%1d spa=%V sha=%E tpa=%V tha=%E",
+            NetS(h->op), h->pln, h->hln,
+            h->spa, h->sha, h->tpa, h->tha);
+    return 0;
 }
+/*e: function p_seprint (networking/ip/snoopy/arp.c) */
 
+/*s: global arp */
 Proto arp =
 {
-	"arp",
-	p_compile,
-	p_filter,
-	p_seprint,
-	nil,
-	nil,
-	p_fields,
-	defaultframer,
+    "arp",
+    p_compile,
+    p_filter,
+    p_seprint,
+    nil,
+    nil,
+    p_fields,
+    defaultframer,
 };
+/*e: global arp */
 
+/*s: global rarp */
 Proto rarp =
 {
-	"rarp",
-	p_compile,
-	p_filter,
-	p_seprint,
-	nil,
-	nil,
-	p_fields,
-	defaultframer,
+    "rarp",
+    p_compile,
+    p_filter,
+    p_seprint,
+    nil,
+    nil,
+    p_fields,
+    defaultframer,
 };
+/*e: global rarp */
+/*e: networking/ip/snoopy/arp.c */

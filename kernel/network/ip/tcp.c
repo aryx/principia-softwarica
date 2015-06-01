@@ -1,3 +1,4 @@
+/*s: kernel/network/ip/tcp.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -7,6 +8,7 @@
 
 #include    "ip.h"
 
+/*s: enum _anon_ (kernel/network/ip/tcp.c) */
 enum
 {
     QMAX        = 64*1024-1,
@@ -89,7 +91,9 @@ enum
     Maxqscale   = 4,        /* maximum queuing scale */
     Defadvscale = 4,        /* default advertisement */
 };
+/*e: enum _anon_ (kernel/network/ip/tcp.c) */
 
+/*s: global tcpstates */
 /* Must correspond to the enumeration above */
 char *tcpstates[] =
 {
@@ -97,8 +101,10 @@ char *tcpstates[] =
     "Established",  "Finwait1", "Finwait2", "Close_wait",
     "Closing",  "Last_ack",     "Time_wait"
 };
+/*e: global tcpstates */
 
 typedef struct Tcptimer Tcptimer;
+/*s: struct Tcptimer */
 struct Tcptimer
 {
     Tcptimer    *next;
@@ -110,12 +116,14 @@ struct Tcptimer
     void    (*func)(void*);
     void    *arg;
 };
+/*e: struct Tcptimer */
 
 /*
  *  v4 and v6 pseudo headers used for
  *  checksuming tcp
  */
 typedef struct Tcp4hdr Tcp4hdr;
+/*s: struct Tcp4hdr */
 struct Tcp4hdr
 {
     uchar   vihl;       /* Version and header length */
@@ -139,8 +147,10 @@ struct Tcp4hdr
     /* Options segment */
     uchar   tcpopt[1];
 };
+/*e: struct Tcp4hdr */
 
 typedef struct Tcp6hdr Tcp6hdr;
+/*s: struct Tcp6hdr */
 struct Tcp6hdr
 {
     uchar   vcf[4];
@@ -160,6 +170,7 @@ struct Tcp6hdr
     /* Options segment */
     uchar   tcpopt[1];
 };
+/*e: struct Tcp6hdr */
 
 /*
  *  this represents the control info
@@ -168,6 +179,7 @@ struct Tcp6hdr
  *  a packet in htontcp{4,6}().
  */
 typedef struct Tcp Tcp;
+/*s: struct Tcp */
 struct  Tcp
 {
     ushort  source;
@@ -182,12 +194,14 @@ struct  Tcp
     ushort  mss;    /* max segment size option (if not zero) */
     ushort  len;    /* size of data */
 };
+/*e: struct Tcp */
 
 /*
  *  this header is malloc'd to thread together fragments
  *  waiting to be coalesced
  */
 typedef struct Reseq Reseq;
+/*s: struct Reseq */
 struct Reseq
 {
     Reseq   *next;
@@ -195,11 +209,13 @@ struct Reseq
     Block   *bp;
     ushort  length;
 };
+/*e: struct Reseq */
 
 /*
  *  the qlock in the Conv locks this structure
  */
 typedef struct Tcpctl Tcpctl;
+/*s: struct Tcpctl */
 struct Tcpctl
 {
     uchar   state;          /* Connection state */
@@ -271,6 +287,7 @@ struct Tcpctl
         Tcp6hdr tcp6hdr;
     } protohdr;     /* prototype header */
 };
+/*e: struct Tcpctl */
 
 /*
  *  New calls are put in limbo rather than having a conversation structure
@@ -286,6 +303,7 @@ struct Tcpctl
  *  there is no hashing of this list.
  */
 typedef struct Limbo Limbo;
+/*s: struct Limbo */
 struct Limbo
 {
     Limbo   *next;
@@ -303,9 +321,13 @@ struct Limbo
     uchar   version;    /* v4 or v6 */
     uchar   rexmits;    /* number of retransmissions */
 };
+/*e: struct Limbo */
 
+/*s: global tcp_irtt */
 int tcp_irtt = DEF_RTT; /* Initial guess at round trip time */
+/*e: global tcp_irtt */
 
+/*s: enum _anon_ (kernel/network/ip/tcp.c)2 */
 enum {
     /* MIB stats */
     MaxConn,
@@ -342,7 +364,9 @@ enum {
 
     Nstats
 };
+/*e: enum _anon_ (kernel/network/ip/tcp.c)2 */
 
+/*s: global statnames (kernel/network/ip/tcp.c) */
 static char *statnames[Nstats] =
 {
 [MaxConn]   "MaxConn",
@@ -376,8 +400,10 @@ static char *statnames[Nstats] =
 [RecoveryCwind] "RecoveryCwind",
 [RecoveryPA]    "RecoveryPA",
 };
+/*e: global statnames (kernel/network/ip/tcp.c) */
 
 typedef struct Tcppriv Tcppriv;
+/*s: struct Tcppriv */
 struct Tcppriv
 {
     /* List of active timers */
@@ -397,7 +423,9 @@ struct Tcppriv
 
     uvlong  stats[Nstats];
 };
+/*e: struct Tcppriv */
 
+/*s: global tcpporthogdefense */
 /*
  *  Setting tcpporthogdefense to non-zero enables Dong Lin's
  *  solution to hijacked systems staking out port's as a form
@@ -408,6 +436,7 @@ struct Tcppriv
  *  Look for tcpporthogdefense in the code.
  */
 int tcpporthogdefense = 0;
+/*e: global tcpporthogdefense */
 
 static  int addreseq(Fs*, Tcpctl*, Tcppriv*, Tcp*, Block*, ushort);
 static  int dumpreseq(Tcpctl*);
@@ -431,6 +460,7 @@ static  void    tcpsynackrtt(Conv*);
 static  void    tcptimeout(void*);
 static  int tcptrim(Tcpctl*, Tcp*, Block**, ushort*);
 
+/*s: function tcpsetstate */
 static void
 tcpsetstate(Conv *s, uchar newstate)
 {
@@ -468,7 +498,9 @@ tcpsetstate(Conv *s, uchar newstate)
     if(oldstate == Syn_sent && newstate != Closed)
         Fsconnected(s, nil);
 }
+/*e: function tcpsetstate */
 
+/*s: function tcpconnect */
 static char*
 tcpconnect(Conv *c, char **argv, int argc)
 {
@@ -486,7 +518,9 @@ tcpconnect(Conv *c, char **argv, int argc)
 
     return nil;
 }
+/*e: function tcpconnect */
 
+/*s: function tcpstate */
 static int
 tcpstate(Conv *c, char *state, int n)
 {
@@ -508,7 +542,9 @@ tcpstate(Conv *c, char *state, int n)
         s->timer.start, s->timer.count, s->rerecv,
         s->katimer.start, s->katimer.count);
 }
+/*e: function tcpstate */
 
+/*s: function tcpinuse */
 static int
 tcpinuse(Conv *c)
 {
@@ -517,7 +553,9 @@ tcpinuse(Conv *c)
     s = (Tcpctl*)(c->ptcl);
     return s->state != Closed;
 }
+/*e: function tcpinuse */
 
+/*s: function tcpannounce */
 static char*
 tcpannounce(Conv *c, char **argv, int argc)
 {
@@ -536,7 +574,9 @@ tcpannounce(Conv *c, char **argv, int argc)
 
     return nil;
 }
+/*e: function tcpannounce */
 
+/*s: function tcpclose */
 /*
  *  tcpclose is always called with the q locked
  */
@@ -580,7 +620,9 @@ tcpclose(Conv *c)
         break;
     }
 }
+/*e: function tcpclose */
 
+/*s: function tcpkick */
 static void
 tcpkick(void *x)
 {
@@ -613,9 +655,11 @@ tcpkick(void *x)
     qunlock(s);
     poperror();
 }
+/*e: function tcpkick */
 
 static int seq_lt(ulong, ulong);
 
+/*s: function tcprcvwin */
 static void
 tcprcvwin(Conv *s)              /* Call with tcb locked */
 {
@@ -638,7 +682,9 @@ tcprcvwin(Conv *s)              /* Call with tcb locked */
     tcb->rcv.wnd = w;
     tcb->rcv.wptr = tcb->rcv.nxt + w;
 }
+/*e: function tcprcvwin */
 
+/*s: function tcpacktimer */
 static void
 tcpacktimer(void *v)
 {
@@ -660,7 +706,9 @@ tcpacktimer(void *v)
     qunlock(s);
     poperror();
 }
+/*e: function tcpacktimer */
 
+/*s: function tcpcongestion */
 static void
 tcpcongestion(Tcpctl *tcb)
 {
@@ -673,11 +721,15 @@ tcpcongestion(Tcpctl *tcb)
     if(tcb->ssthresh < 2*tcb->mss)
         tcb->ssthresh = 2*tcb->mss;
 }
+/*e: function tcpcongestion */
 
+/*s: enum _anon_ (kernel/network/ip/tcp.c)3 */
 enum {
     L   = 2,    /* aggressive slow start; legal values ∈ (1.0, 2.0) */
 };
+/*e: enum _anon_ (kernel/network/ip/tcp.c)3 */
 
+/*s: function tcpabcincr */
 static void
 tcpabcincr(Tcpctl *tcb, uint acked)
 {
@@ -701,14 +753,18 @@ tcpabcincr(Tcpctl *tcb, uint acked)
         }
     }
 }
+/*e: function tcpabcincr */
 
+/*s: function tcpcreate */
 static void
 tcpcreate(Conv *c)
 {
     c->rq = qopen(QMAX, Qcoalesce, tcpacktimer, c);
     c->wq = qopen(QMAX, Qkick, tcpkick, c);
 }
+/*e: function tcpcreate */
 
+/*s: function timerstate */
 static void
 timerstate(Tcppriv *priv, Tcptimer *t, int newstate)
 {
@@ -740,7 +796,9 @@ timerstate(Tcppriv *priv, Tcptimer *t, int newstate)
     }
     t->state = newstate;
 }
+/*e: function timerstate */
 
+/*s: function tcpackproc */
 static void
 tcpackproc(void *a)
 {
@@ -786,7 +844,9 @@ tcpackproc(void *a)
         limborexmit(tcp);
     }
 }
+/*e: function tcpackproc */
 
+/*s: function tcpgo */
 static void
 tcpgo(Tcppriv *priv, Tcptimer *t)
 {
@@ -798,7 +858,9 @@ tcpgo(Tcppriv *priv, Tcptimer *t)
     timerstate(priv, t, TcptimerON);
     qunlock(&priv->tl);
 }
+/*e: function tcpgo */
 
+/*s: function tcphalt */
 static void
 tcphalt(Tcppriv *priv, Tcptimer *t)
 {
@@ -809,13 +871,17 @@ tcphalt(Tcppriv *priv, Tcptimer *t)
     timerstate(priv, t, TcptimerOFF);
     qunlock(&priv->tl);
 }
+/*e: function tcphalt */
 
+/*s: function backoff */
 static int
 backoff(int n)
 {
     return 1 << n;
 }
+/*e: function backoff */
 
+/*s: function localclose */
 static void
 localclose(Conv *s, char *reason)   /* called with tcb locked */
 {
@@ -845,7 +911,9 @@ localclose(Conv *s, char *reason)   /* called with tcb locked */
 
     tcpsetstate(s, Closed);
 }
+/*e: function localclose */
 
+/*s: function tcpmtu */
 /* mtu (- TCP + IP hdr len) of 1st hop */
 static int
 tcpmtu(Proto *tcp, uchar *addr, int version, uint *scale)
@@ -875,7 +943,9 @@ tcpmtu(Proto *tcp, uchar *addr, int version, uint *scale)
 
     return mtu;
 }
+/*e: function tcpmtu */
 
+/*s: function inittcpctl */
 static void
 inittcpctl(Conv *s, int mode)
 {
@@ -945,7 +1015,9 @@ inittcpctl(Conv *s, int mode)
     /* default is no window scaling */
     tcpsetscale(s, tcb, 0, 0);
 }
+/*e: function inittcpctl */
 
+/*s: function tcpstart */
 /*
  *  called with s qlocked
  */
@@ -989,6 +1061,7 @@ tcpstart(Conv *s, int mode)
         break;
     }
 }
+/*e: function tcpstart */
 
 //static char*
 //tcpflag(char *buf, char *e, ushort flag)
@@ -1010,6 +1083,7 @@ tcpstart(Conv *s, int mode)
 //      p = seprint(p, e, " FIN");
 //  USED(p);
 //  return buf;
+/*s: function htontcp6 */
 //}
 
 static Block*
@@ -1095,7 +1169,9 @@ htontcp6(Tcp *tcph, Block *data, Tcp6hdr *ph, Tcpctl *tcb)
 
     return data;
 }
+/*e: function htontcp6 */
 
+/*s: function htontcp4 */
 static Block*
 htontcp4(Tcp *tcph, Block *data, Tcp4hdr *ph, Tcpctl *tcb)
 {
@@ -1170,7 +1246,9 @@ htontcp4(Tcp *tcph, Block *data, Tcp4hdr *ph, Tcpctl *tcb)
 
     return data;
 }
+/*e: function htontcp4 */
 
+/*s: function ntohtcp6 */
 static int
 ntohtcp6(Tcp *tcph, Block **bpp)
 {
@@ -1233,7 +1311,9 @@ ntohtcp6(Tcp *tcph, Block **bpp)
     }
     return hdrlen;
 }
+/*e: function ntohtcp6 */
 
+/*s: function ntohtcp4 */
 static int
 ntohtcp4(Tcp *tcph, Block **bpp)
 {
@@ -1297,7 +1377,9 @@ ntohtcp4(Tcp *tcph, Block **bpp)
     }
     return hdrlen;
 }
+/*e: function ntohtcp4 */
 
+/*s: function tcpsndsyn */
 /*
  *  For outgoing calls, generate an initial sequence
  *  number and put a SYN on the send queue
@@ -1323,7 +1405,9 @@ tcpsndsyn(Conv *s, Tcpctl *tcb)
     tpriv = s->p->priv;
     tpriv->stats[Mss] = tcb->mss;
 }
+/*e: function tcpsndsyn */
 
+/*s: function sndrst */
 void
 sndrst(Proto *tcp, uchar *source, uchar *dest, ushort length, Tcp *seg, uchar version, char *reason)
 {
@@ -1406,7 +1490,9 @@ sndrst(Proto *tcp, uchar *source, uchar *dest, ushort length, Tcp *seg, uchar ve
         panic("sndrst2: version %d", version);
     }
 }
+/*e: function sndrst */
 
+/*s: function tcphangup */
 /*
  *  send a reset to the remote side and close the conversation
  *  called with s qlocked
@@ -1453,7 +1539,9 @@ tcphangup(Conv *s)
     poperror();
     return nil;
 }
+/*e: function tcphangup */
 
+/*s: function sndsynack */
 /*
  *  (re)send a SYN ACK
  */
@@ -1528,9 +1616,13 @@ sndsynack(Proto *tcp, Limbo *lp)
     lp->lastsend = NOW;
     return 0;
 }
+/*e: function sndsynack */
 
+/*s: macro hashipa (kernel/network/ip/tcp.c) */
 #define hashipa(a, p) ( ( (a)[IPaddrlen-2] + (a)[IPaddrlen-1] + p )&LHTMASK )
+/*e: macro hashipa (kernel/network/ip/tcp.c) */
 
+/*s: function limbo */
 /*
  *  put a call into limbo and respond with a SYN ACK
  *
@@ -1589,7 +1681,9 @@ limbo(Conv *s, uchar *source, uchar *dest, Tcp *seg, int version)
         free(lp);
     }
 }
+/*e: function limbo */
 
+/*s: function limborexmit */
 /*
  *  resend SYN ACK's once every SYNACK_RXTIMER ms.
  */
@@ -1639,7 +1733,9 @@ limborexmit(Proto *tcp)
     }
     qunlock(tcp);
 }
+/*e: function limborexmit */
 
+/*s: function limborst */
 /*
  *  lookup call in limbo.  if found, throw it out.
  *
@@ -1674,7 +1770,9 @@ limborst(Conv *s, Tcp *segp, uchar *src, uchar *dst, uchar version)
         break;
     }
 }
+/*e: function limborst */
 
+/*s: function initialwindow */
 static void
 initialwindow(Tcpctl *tcb)
 {
@@ -1686,7 +1784,9 @@ initialwindow(Tcpctl *tcb)
     else
         tcb->cwind = 2*tcb->mss;
 }
+/*e: function initialwindow */
 
+/*s: function tcpincoming */
 /*
  *  come here when we finally get an ACK to our SYN-ACK.
  *  lookup call in limbo.  if found, create a new conversation
@@ -1821,7 +1921,9 @@ tcpincoming(Conv *s, Tcp *segp, uchar *src, uchar *dst, uchar version)
 
     return new;
 }
+/*e: function tcpincoming */
 
+/*s: function seq_within */
 static int
 seq_within(ulong x, ulong low, ulong high)
 {
@@ -1835,31 +1937,41 @@ seq_within(ulong x, ulong low, ulong high)
     }
     return 0;
 }
+/*e: function seq_within */
 
+/*s: function seq_lt */
 static int
 seq_lt(ulong x, ulong y)
 {
     return (int)(x-y) < 0;
 }
+/*e: function seq_lt */
 
+/*s: function seq_le */
 static int
 seq_le(ulong x, ulong y)
 {
     return (int)(x-y) <= 0;
 }
+/*e: function seq_le */
 
+/*s: function seq_gt */
 static int
 seq_gt(ulong x, ulong y)
 {
     return (int)(x-y) > 0;
 }
+/*e: function seq_gt */
 
+/*s: function seq_ge */
 static int
 seq_ge(ulong x, ulong y)
 {
     return (int)(x-y) >= 0;
 }
+/*e: function seq_ge */
 
+/*s: function tcpsynackrtt */
 /*
  *  use the time between the first SYN and it's ack as the
  *  initial round trip time
@@ -1881,7 +1993,9 @@ tcpsynackrtt(Conv *s)
     /* halt round trip timer */
     tcphalt(tpriv, &tcb->rtt_timer);
 }
+/*e: function tcpsynackrtt */
 
+/*s: function update */
 static void
 update(Conv *s, Tcp *seg)
 {
@@ -2060,7 +2174,9 @@ done:
     tcb->backoff = 0;
     tcb->backedoff = 0;
 }
+/*e: function update */
 
+/*s: function tcpiput */
 static void
 tcpiput(Proto *tcp, Ipifc*, Block *bp)
 {
@@ -2539,7 +2655,9 @@ raise:
     freeblist(bp);
     tcpkick(s);
 }
+/*e: function tcpiput */
 
+/*s: function tcpoutput */
 /*
  *  always enters and exits with the s locked.  We drop
  *  the lock to ipoput the packet so some care has to be
@@ -2774,7 +2892,9 @@ tcpoutput(Conv *s)
         }
     }
 }
+/*e: function tcpoutput */
 
+/*s: function tcpsendka */
 /*
  *  the BSD convention (hack?) for keep alives.  resend last uchar acked.
  */
@@ -2831,7 +2951,9 @@ tcpsendka(Conv *s)
         ipoput6(s->p->f, hbp, 0, s->ttl, s->tos, s);
     }
 }
+/*e: function tcpsendka */
 
+/*s: function tcpsetkacounter */
 /*
  *  set connection to time out after 12 minutes
  */
@@ -2842,7 +2964,9 @@ tcpsetkacounter(Tcpctl *tcb)
     if(tcb->kacounter < 3)
         tcb->kacounter = 3;
 }
+/*e: function tcpsetkacounter */
 
+/*s: function tcpkeepalive */
 /*
  *  if we've timed out, close the connection
  *  otherwise, send a keepalive and restart the timer
@@ -2871,7 +2995,9 @@ tcpkeepalive(void *v)
     qunlock(s);
     poperror();
 }
+/*e: function tcpkeepalive */
 
+/*s: function tcpstartka */
 /*
  *  start keepalive timer
  */
@@ -2894,7 +3020,9 @@ tcpstartka(Conv *s, char **f, int n)
 
     return nil;
 }
+/*e: function tcpstartka */
 
+/*s: function tcpsetchecksum */
 /*
  *  turn checksums on/off
  */
@@ -2908,7 +3036,9 @@ tcpsetchecksum(Conv *s, char **f, int)
 
     return nil;
 }
+/*e: function tcpsetchecksum */
 
+/*s: function tcprxmit */
 /*
  *  retransmit (at most) one segment at snd.una.
  *  preserve cwind & snd.ptr
@@ -2936,7 +3066,9 @@ tcprxmit(Conv *s)
     tpriv = s->p->priv;
     tpriv->stats[RetransSegs]++;
 }
+/*e: function tcprxmit */
 
+/*s: function tcptimeout */
 /*
  *  TODO: RFC 4138 F-RTO
  */
@@ -3002,13 +3134,17 @@ tcptimeout(void *arg)
     qunlock(s);
     poperror();
 }
+/*e: function tcptimeout */
 
+/*s: function inwindow */
 static int
 inwindow(Tcpctl *tcb, int seq)
 {
     return seq_within(seq, tcb->rcv.nxt, tcb->rcv.nxt+tcb->rcv.wnd-1);
 }
+/*e: function inwindow */
 
+/*s: function procsyn */
 /*
  *  set up state for a received SYN (or SYN ACK) packet
  */
@@ -3037,7 +3173,9 @@ procsyn(Conv *s, Tcp *seg)
     tcb->snd.wnd = seg->wnd;
     initialwindow(tcb);
 }
+/*e: function procsyn */
 
+/*s: function dumpreseq */
 static int
 dumpreseq(Tcpctl *tcb)
 {
@@ -3053,7 +3191,9 @@ dumpreseq(Tcpctl *tcb)
     tcb->reseqlen = 0;
     return -1;
 }
+/*e: function dumpreseq */
 
+/*s: function logreseq */
 static void
 logreseq(Fs *f, Reseq *r, ulong n)
 {
@@ -3073,7 +3213,9 @@ logreseq(Fs *f, Reseq *r, ulong n)
         n = r->seg.seq + r->seg.len;
     }
 }
+/*e: function logreseq */
 
+/*s: function addreseq */
 static int
 addreseq(Fs *f, Tcpctl *tcb, Tcppriv *tpriv, Tcp *seg, Block *bp, ushort length)
 {
@@ -3122,7 +3264,9 @@ addreseq(Fs *f, Tcpctl *tcb, Tcppriv *tpriv, Tcp *seg, Block *bp, ushort length)
     }
     return 0;
 }
+/*e: function addreseq */
 
+/*s: function getreseq */
 static void
 getreseq(Tcpctl *tcb, Tcp *seg, Block **bp, ushort *length)
 {
@@ -3143,7 +3287,9 @@ getreseq(Tcpctl *tcb, Tcp *seg, Block **bp, ushort *length)
 
     free(rp);
 }
+/*e: function getreseq */
 
+/*s: function tcptrim */
 static int
 tcptrim(Tcpctl *tcb, Tcp *seg, Block **bp, ushort *length)
 {
@@ -3214,7 +3360,9 @@ tcptrim(Tcpctl *tcb, Tcp *seg, Block **bp, ushort *length)
     }
     return 0;
 }
+/*e: function tcptrim */
 
+/*s: function tcpadvise */
 static void
 tcpadvise(Proto *tcp, Block *bp, char *msg)
 {
@@ -3267,7 +3415,9 @@ tcpadvise(Proto *tcp, Block *bp, char *msg)
     qunlock(tcp);
     freeblist(bp);
 }
+/*e: function tcpadvise */
 
+/*s: function tcpporthogdefensectl */
 static char*
 tcpporthogdefensectl(char *val)
 {
@@ -3279,7 +3429,9 @@ tcpporthogdefensectl(char *val)
         return "unknown value for tcpporthogdefense";
     return nil;
 }
+/*e: function tcpporthogdefensectl */
 
+/*s: function tcpctl */
 /* called with c qlocked */
 static char*
 tcpctl(Conv* c, char** f, int n)
@@ -3294,7 +3446,9 @@ tcpctl(Conv* c, char** f, int n)
         return tcpporthogdefensectl(f[1]);
     return "unknown control request";
 }
+/*e: function tcpctl */
 
+/*s: function tcpstats */
 static int
 tcpstats(Proto *tcp, char *buf, int len)
 {
@@ -3309,7 +3463,9 @@ tcpstats(Proto *tcp, char *buf, int len)
         p = seprint(p, e, "%s: %llud\n", statnames[i], priv->stats[i]);
     return p - buf;
 }
+/*e: function tcpstats */
 
+/*s: function tcpgc */
 /*
  *  garbage collect any stale conversations:
  *  - SYN received but no SYN-ACK after 5 seconds (could be the SYN attack)
@@ -3354,7 +3510,9 @@ tcpgc(Proto *tcp)
     }
     return n;
 }
+/*e: function tcpgc */
 
+/*s: function tcpsettimer */
 static void
 tcpsettimer(Tcpctl *tcb)
 {
@@ -3371,7 +3529,9 @@ tcpsettimer(Tcpctl *tcb)
         x = 64000/MSPTICK;
     tcb->timer.start = x;
 }
+/*e: function tcpsettimer */
 
+/*s: function tcpinit */
 void
 tcpinit(Fs *fs)
 {
@@ -3399,7 +3559,9 @@ tcpinit(Fs *fs)
 
     Fsproto(fs, tcp);
 }
+/*e: function tcpinit */
 
+/*s: function tcpsetscale */
 static void
 tcpsetscale(Conv *s, Tcpctl *tcb, ushort rcvscale, ushort sndscale)
 {
@@ -3435,3 +3597,5 @@ tcpsetscale(Conv *s, Tcpctl *tcb, ushort rcvscale, ushort sndscale)
     qsetlimit(s->wq, tcb->window);
     tcprcvwin(s);
 }
+/*e: function tcpsetscale */
+/*e: kernel/network/ip/tcp.c */

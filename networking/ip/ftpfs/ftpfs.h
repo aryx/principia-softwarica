@@ -1,49 +1,58 @@
+/*s: networking/ip/ftpfs/ftpfs.h */
 typedef struct File	File;
 typedef struct Node	Node;
 typedef struct OS	OS;
 
 #pragma incomplete File
 
+/*s: enum _anon_ (networking/ip/ftpfs/ftpfs.h) */
 enum
 {
-	Maxpath=	512,
+    Maxpath=	512,
 };
+/*e: enum _anon_ (networking/ip/ftpfs/ftpfs.h) */
 
+/*s: struct Node */
 /* a tree for file path's - this mirrors the directory structure */
 struct Node
 {
-	String	*remname;
-	Dir	*d;
-	Node	*parent;
-	Node	*sibs;
-	Node	*children;
-	File	*fp;
-	short	depth;
-	char	chdirunknown;	/* true if QTDIR bit of files in this dir is unknown */
-	int	opens;
+    String	*remname;
+    Dir	*d;
+    Node	*parent;
+    Node	*sibs;
+    Node	*children;
+    File	*fp;
+    short	depth;
+    char	chdirunknown;	/* true if QTDIR bit of files in this dir is unknown */
+    int	opens;
 };
+/*e: struct Node */
 
+/*s: enum _anon_ (networking/ip/ftpfs/ftpfs.h)2 */
 /* OS types */
 enum
 {
-	Unix=		1,
-	Tops=		2,
-	Plan9=		3,
-	VM=		4,
-	VMS=		5,
-	MVS=		6,
-	NetWare=	7,
+    Unix=		1,
+    Tops=		2,
+    Plan9=		3,
+    VM=		4,
+    VMS=		5,
+    MVS=		6,
+    NetWare=	7,
 //	OS½=		8,
-	TSO=		9,
-	NT=		10,
-	Unknown=	11,
+    TSO=		9,
+    NT=		10,
+    Unknown=	11,
 };
+/*e: enum _anon_ (networking/ip/ftpfs/ftpfs.h)2 */
 
+/*s: struct OS */
 struct OS
 {
-	int	os;
-	char	*name;
+    int	os;
+    char	*name;
 };
+/*e: struct OS */
 extern OS oslist[];
 
 /* temporary files */
@@ -97,16 +106,37 @@ extern int defos;
 extern int quiet;
 extern char *user;
 
+/*s: macro ISCACHED */
 #define ISCACHED(x) ((x)->d->type)
+/*e: macro ISCACHED */
+/*s: macro UNCACHED */
 #define UNCACHED(x) (x)->d->type = 0
+/*e: macro UNCACHED */
+/*s: macro CACHED */
 #define CACHED(x) { (x)->d->type = 1; (x)->d->atime = time(0); }
+/*e: macro CACHED */
+/*s: macro ISOLD */
 #define ISOLD(x) (x)->d->atime + TIMEOUT < time(0)
+/*e: macro ISOLD */
+/*s: macro ISVALID */
 #define ISVALID(x) ((x)->d->dev)
+/*e: macro ISVALID */
+/*s: macro INVALID */
 #define INVALID(x) (x)->d->dev = 0
+/*e: macro INVALID */
+/*s: macro VALID */
 #define VALID(x) (x)->d->dev = 1
+/*e: macro VALID */
+/*s: constant TIMEOUT */
 #define TIMEOUT 5*60
+/*e: constant TIMEOUT */
+/*s: constant DMSYML */
 #define DMSYML 0x10000000
+/*e: constant DMSYML */
 
+/*s: constant MAXFDATA */
 #define MAXFDATA 8192
+/*e: constant MAXFDATA */
 
 extern char	net[];		/* network for connections */
+/*e: networking/ip/ftpfs/ftpfs.h */

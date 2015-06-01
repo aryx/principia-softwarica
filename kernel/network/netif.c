@@ -1,3 +1,4 @@
+/*s: kernel/network/netif.c */
 #include    "u.h"
 #include    "../port/lib.h"
 #include    "mem.h"
@@ -12,6 +13,7 @@ static char* matchtoken(char*, char*);
 static char* netmulti(Netif*, Netfile*, uchar*, int);
 static int parseaddr(uchar*, char*, int);
 
+/*s: function netifinit */
 /*
  *  set up a new network interface
  */
@@ -27,7 +29,9 @@ netifinit(Netif *nif, char *name, int nfile, ulong limit)
     memset(nif->f, 0, nfile*sizeof(Netfile*));
     nif->limit = limit;
 }
+/*e: function netifinit */
 
+/*s: function netifgen */
 /*
  *  generate a 3 level directory
  */
@@ -147,13 +151,17 @@ netifgen(Chan *c, char*, Dirtab *vp, int, int i, Dir *dp)
     }
     return 1;
 }
+/*e: function netifgen */
 
+/*s: function netifwalk */
 Walkqid*
 netifwalk(Netif *nif, Chan *c, Chan *nc, char **name, int nname)
 {
     return devwalk(c, nc, name, nname, (Dirtab *)nif, 0, netifgen);
 }
+/*e: function netifwalk */
 
+/*s: function netifopen */
 Chan*
 netifopen(Netif *nif, Chan *c, int omode)
 {
@@ -194,7 +202,9 @@ netifopen(Netif *nif, Chan *c, int omode)
     c->iounit = qiomaxatomic;
     return c;
 }
+/*e: function netifopen */
 
+/*s: function netifread */
 long
 netifread(Netif *nif, Chan *c, void *a, long n, ulong offset)
 {
@@ -252,7 +262,9 @@ netifread(Netif *nif, Chan *c, void *a, long n, ulong offset)
     error(Ebadarg);
     return -1;  /* not reached */
 }
+/*e: function netifread */
 
+/*s: function netifbread */
 Block*
 netifbread(Netif *nif, Chan *c, long n, ulong offset)
 {
@@ -261,7 +273,9 @@ netifbread(Netif *nif, Chan *c, long n, ulong offset)
 
     return qbread(nif->f[NETID(c->qid.path)]->in, n);
 }
+/*e: function netifbread */
 
+/*s: function typeinuse */
 /*
  *  make sure this type isn't already in use on this device
  */
@@ -283,7 +297,9 @@ typeinuse(Netif *nif, int type)
     }
     return 0;
 }
+/*e: function typeinuse */
 
+/*s: function netifwrite */
 /*
  *  the devxxx.c that calls us handles writing data, it knows best
  */
@@ -357,7 +373,9 @@ netifwrite(Netif *nif, Chan *c, void *a, long n)
     poperror();
     return n;
 }
+/*e: function netifwrite */
 
+/*s: function netifwstat */
 int
 netifwstat(Netif *nif, Chan *c, uchar *db, int n)
 {
@@ -385,13 +403,17 @@ netifwstat(Netif *nif, Chan *c, uchar *db, int n)
     free(dir);
     return m;
 }
+/*e: function netifwstat */
 
+/*s: function netifstat */
 int
 netifstat(Netif *nif, Chan *c, uchar *db, int n)
 {
     return devstat(c, db, n, (Dirtab *)nif, 0, netifgen);
 }
+/*e: function netifstat */
 
+/*s: function netifclose */
 void
 netifclose(Netif *nif, Chan *c)
 {
@@ -447,9 +469,13 @@ netifclose(Netif *nif, Chan *c)
     }
     qunlock(f);
 }
+/*e: function netifclose */
 
+/*s: global netlock */
 Lock netlock;
+/*e: global netlock */
 
+/*s: function netown */
 static int
 netown(Netfile *p, char *o, int omode)
 {
@@ -480,7 +506,9 @@ netown(Netfile *p, char *o, int omode)
     unlock(&netlock);
     return 0;
 }
+/*e: function netown */
 
+/*s: function openfile */
 /*
  *  Increment the reference count of a network device.
  *  If id < 0, return an unused ether device.
@@ -538,7 +566,9 @@ openfile(Netif *nif, int id)
     error(Enodev);
     return -1;  /* not reached */
 }
+/*e: function openfile */
 
+/*s: function matchtoken */
 /*
  *  look for a token starting a string,
  *  return a pointer to first non-space char after it
@@ -560,6 +590,7 @@ matchtoken(char *p, char *token)
         p++;
     return p;
 }
+/*e: function matchtoken */
 
 //void
 //hnputv(void *p, uvlong v)
@@ -569,6 +600,7 @@ matchtoken(char *p, char *token)
 //  a = p;
 //  hnputl(a, v>>32);
 //  hnputl(a+4, v);
+/*s: function hnputl (kernel/network/netif.c) */
 //}
 
 void
@@ -582,7 +614,9 @@ hnputl(void *p, uint v)
     a[2] = v>>8;
     a[3] = v;
 }
+/*e: function hnputl (kernel/network/netif.c) */
 
+/*s: function hnputs (kernel/network/netif.c) */
 void
 hnputs(void *p, ushort v)
 {
@@ -592,6 +626,7 @@ hnputs(void *p, ushort v)
     a[0] = v>>8;
     a[1] = v;
 }
+/*e: function hnputs (kernel/network/netif.c) */
 
 //uvlong
 //nhgetv(void *p)
@@ -600,6 +635,7 @@ hnputs(void *p, ushort v)
 //
 //  a = p;
 //  return ((vlong)nhgetl(a) << 32) | nhgetl(a+4);
+/*s: function nhgetl (kernel/network/netif.c) */
 //}
 
 uint
@@ -610,7 +646,9 @@ nhgetl(void *p)
     a = p;
     return (a[0]<<24)|(a[1]<<16)|(a[2]<<8)|(a[3]<<0);
 }
+/*e: function nhgetl (kernel/network/netif.c) */
 
+/*s: function nhgets (kernel/network/netif.c) */
 ushort
 nhgets(void *p)
 {
@@ -619,7 +657,9 @@ nhgets(void *p)
     a = p;
     return (a[0]<<8)|(a[1]<<0);
 }
+/*e: function nhgets (kernel/network/netif.c) */
 
+/*s: function hash */
 static ulong
 hash(uchar *a, int len)
 {
@@ -629,7 +669,9 @@ hash(uchar *a, int len)
         sum = (sum << 1) + *a++;
     return sum%Nmhash;
 }
+/*e: function hash */
 
+/*s: function activemulti */
 int
 activemulti(Netif *nif, uchar *addr, int alen)
 {
@@ -644,7 +686,9 @@ activemulti(Netif *nif, uchar *addr, int alen)
         }
     return 0;
 }
+/*e: function activemulti */
 
+/*s: function parseaddr */
 static int
 parseaddr(uchar *to, char *from, int alen)
 {
@@ -667,7 +711,9 @@ parseaddr(uchar *to, char *from, int alen)
     }
     return 0;
 }
+/*e: function parseaddr */
 
+/*s: function netmulti */
 /*
  *  keep track of multicast addresses
  */
@@ -727,3 +773,5 @@ netmulti(Netif *nif, Netfile *f, uchar *addr, int add)
     }
     return 0;
 }
+/*e: function netmulti */
+/*e: kernel/network/netif.c */

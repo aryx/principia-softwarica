@@ -1,3 +1,4 @@
+/*s: kernel/network/386/devether.c */
 #include "u.h"
 #include "../port/lib.h"
 #include "../port/error.h"
@@ -12,8 +13,11 @@
 
 #include "etherif.h"
 
+/*s: global etherxx */
 static Ether *etherxx[MaxEther];
+/*e: global etherxx */
 
+/*s: function etherattach */
 Chan*
 etherattach(char* spec)
 {
@@ -41,36 +45,48 @@ etherattach(char* spec)
     poperror();
     return chan;
 }
+/*e: function etherattach */
 
+/*s: function etherwalk */
 static Walkqid*
 etherwalk(Chan* chan, Chan* nchan, char** name, int nname)
 {
     return netifwalk(etherxx[chan->dev], chan, nchan, name, nname);
 }
+/*e: function etherwalk */
 
+/*s: function etherstat */
 static int
 etherstat(Chan* chan, uchar* dp, int n)
 {
     return netifstat(etherxx[chan->dev], chan, dp, n);
 }
+/*e: function etherstat */
 
+/*s: function etheropen */
 static Chan*
 etheropen(Chan* chan, int omode)
 {
     return netifopen(etherxx[chan->dev], chan, omode);
 }
+/*e: function etheropen */
 
+/*s: function ethercreate */
 static void
 ethercreate(Chan*, char*, int, ulong)
 {
 }
+/*e: function ethercreate */
 
+/*s: function etherclose */
 static void
 etherclose(Chan* chan)
 {
     netifclose(etherxx[chan->dev], chan);
 }
+/*e: function etherclose */
 
+/*s: function etherread */
 static long
 etherread(Chan* chan, void* buf, long n, vlong off)
 {
@@ -91,19 +107,25 @@ etherread(Chan* chan, void* buf, long n, vlong off)
 
     return netifread(ether, chan, buf, n, offset);
 }
+/*e: function etherread */
 
+/*s: function etherbread */
 static Block*
 etherbread(Chan* chan, long n, ulong offset)
 {
     return netifbread(etherxx[chan->dev], chan, n, offset);
 }
+/*e: function etherbread */
 
+/*s: function etherwstat */
 static int
 etherwstat(Chan* chan, uchar* dp, int n)
 {
     return netifwstat(etherxx[chan->dev], chan, dp, n);
 }
+/*e: function etherwstat */
 
+/*s: function etherrtrace */
 static void
 etherrtrace(Netfile* f, Etherpkt* pkt, int len)
 {
@@ -130,7 +152,9 @@ etherrtrace(Netfile* f, Etherpkt* pkt, int len)
     bp->wp += 64;
     qpass(f->in, bp);
 }
+/*e: function etherrtrace */
 
+/*s: function etheriq */
 Block*
 etheriq(Ether* ether, Block* bp, int fromwire)
 {
@@ -212,7 +236,9 @@ etheriq(Ether* ether, Block* bp, int fromwire)
 
     return bp;
 }
+/*e: function etheriq */
 
+/*s: function etheroq */
 static int
 etheroq(Ether* ether, Block* bp)
 {
@@ -250,7 +276,9 @@ etheroq(Ether* ether, Block* bp)
 
     return len;
 }
+/*e: function etheroq */
 
+/*s: function etherwrite */
 static long
 etherwrite(Chan* chan, void* buf, long n, vlong)
 {
@@ -298,7 +326,9 @@ etherwrite(Chan* chan, void* buf, long n, vlong)
 
     return etheroq(ether, bp);
 }
+/*e: function etherwrite */
 
+/*s: function etherbwrite */
 static long
 etherbwrite(Chan* chan, Block* bp, ulong)
 {
@@ -329,12 +359,16 @@ etherbwrite(Chan* chan, Block* bp, ulong)
 
     return etheroq(ether, bp);
 }
+/*e: function etherbwrite */
 
+/*s: global cards */
 static struct {
     char*   type;
     int (*reset)(Ether*);
 } cards[MaxEther+1];
+/*e: global cards */
 
+/*s: function addethercard */
 void
 addethercard(char* t, int (*r)(Ether*))
 {
@@ -346,7 +380,9 @@ addethercard(char* t, int (*r)(Ether*))
     cards[ncard].reset = r;
     ncard++;
 }
+/*e: function addethercard */
 
+/*s: function parseether (kernel/network/386/devether.c) */
 int
 parseether(uchar *to, char *from)
 {
@@ -369,7 +405,9 @@ parseether(uchar *to, char *from)
     }
     return 0;
 }
+/*e: function parseether (kernel/network/386/devether.c) */
 
+/*s: function etherprobe */
 static Ether*
 etherprobe(int cardno, int ctlrno)
 {
@@ -480,7 +518,9 @@ etherprobe(int cardno, int ctlrno)
 
     return ether;
 }
+/*e: function etherprobe */
 
+/*s: function etherreset */
 static void
 etherreset(void)
 {
@@ -510,7 +550,9 @@ etherreset(void)
         ctlrno++;
     }
 }
+/*e: function etherreset */
 
+/*s: function ethershutdown */
 static void
 ethershutdown(void)
 {
@@ -528,6 +570,7 @@ ethershutdown(void)
         (*ether->shutdown)(ether);
     }
 }
+/*e: function ethershutdown */
 
 
 //#define POLY 0xedb88320
@@ -548,6 +591,7 @@ ethershutdown(void)
 //      }
 //  }
 //  return crc;
+/*s: global etherdevtab */
 //}
 
 Dev etherdevtab = {
@@ -570,3 +614,5 @@ Dev etherdevtab = {
     .remove   =    devremove,
     .wstat    =    etherwstat,
 };
+/*e: global etherdevtab */
+/*e: kernel/network/386/devether.c */

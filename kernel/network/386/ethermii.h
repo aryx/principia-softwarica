@@ -1,6 +1,8 @@
+/*s: kernel/network/386/ethermii.h */
 typedef struct Mii Mii;
 typedef struct MiiPhy MiiPhy;
 
+/*s: enum _anon_ (kernel/network/386/ethermii.h) */
 enum {          /* registers */
   Bmcr    = 0x00,   /* Basic Mode Control */
   Bmsr    = 0x01,   /* Basic Mode Status */
@@ -18,7 +20,9 @@ enum {          /* registers */
   NMiiPhyr  = 32,
   NMiiPhy   = 32,
 };
+/*e: enum _anon_ (kernel/network/386/ethermii.h) */
 
+/*s: enum _anon_ (kernel/network/386/ethermii.h)2 */
 enum {          /* Bmcr */
   BmcrSs1   = 0x0040, /* Speed Select[1] */
   BmcrCte   = 0x0080, /* Collision Test Enable */
@@ -31,7 +35,9 @@ enum {          /* Bmcr */
   BmcrLe    = 0x4000, /* Loopback Enable */
   BmcrR   = 0x8000, /* Reset */
 };
+/*e: enum _anon_ (kernel/network/386/ethermii.h)2 */
 
+/*s: enum _anon_ (kernel/network/386/ethermii.h)3 */
 enum {          /* Bmsr */
   BmsrEc    = 0x0001, /* Extended Capability */
   BmsrJd    = 0x0002, /* Jabber Detect */
@@ -49,7 +55,9 @@ enum {          /* Bmsr */
   Bmsr100TXFD = 0x4000, /* 100BASE-TX FD Capable */
   Bmsr100T4 = 0x8000, /* 100BASE-T4 Capable */
 };
+/*e: enum _anon_ (kernel/network/386/ethermii.h)3 */
 
+/*s: enum _anon_ (kernel/network/386/ethermii.h)4 */
 enum {          /* Anar/Anlpar */
   Ana10HD   = 0x0020, /* Advertise 10BASE-T */
   Ana10FD   = 0x0040, /* Advertise 10BASE-T FD */
@@ -62,24 +70,32 @@ enum {          /* Anar/Anlpar */
   AnaAck    = 0x4000, /* Acknowledge */
   AnaNp   = 0x8000, /* Next Page Indication */
 };
+/*e: enum _anon_ (kernel/network/386/ethermii.h)4 */
 
+/*s: enum _anon_ (kernel/network/386/ethermii.h)5 */
 enum {          /* Mscr */
   Mscr1000THD = 0x0100, /* Advertise 1000BASE-T HD */
   Mscr1000TFD = 0x0200, /* Advertise 1000BASE-T FD */
 };
+/*e: enum _anon_ (kernel/network/386/ethermii.h)5 */
 
+/*s: enum _anon_ (kernel/network/386/ethermii.h)6 */
 enum {          /* Mssr */
   Mssr1000THD = 0x0400, /* Link Partner 1000BASE-T HD able */
   Mssr1000TFD = 0x0800, /* Link Partner 1000BASE-T FD able */
 };
+/*e: enum _anon_ (kernel/network/386/ethermii.h)6 */
 
+/*s: enum _anon_ (kernel/network/386/ethermii.h)7 */
 enum {          /* Esr */
   Esr1000THD  = 0x1000, /* 1000BASE-T HD Capable */
   Esr1000TFD  = 0x2000, /* 1000BASE-T FD Capable */
   Esr1000XHD  = 0x4000, /* 1000BASE-X HD Capable */
   Esr1000XFD  = 0x8000, /* 1000BASE-X FD Capable */
 };
+/*e: enum _anon_ (kernel/network/386/ethermii.h)7 */
 
+/*s: struct Mii */
 struct Mii {
   Lock;
   int nphy;
@@ -91,7 +107,9 @@ struct Mii {
   int (*mir)(Mii*, int, int);
   int (*miw)(Mii*, int, int, int);
 };
+/*e: struct Mii */
 
+/*s: struct MiiPhy */
 struct MiiPhy {
   Mii*  mii;
   int oui;
@@ -107,6 +125,7 @@ struct MiiPhy {
   int rfc;
   int tfc;
 };
+/*e: struct MiiPhy */
 
 extern int mii(Mii*, int);
 extern int miiane(Mii*, int, int, int);
@@ -114,3 +133,4 @@ extern int miimir(Mii*, int);
 extern int miimiw(Mii*, int, int);
 extern int miireset(Mii*);
 extern int miistatus(Mii*);
+/*e: kernel/network/386/ethermii.h */

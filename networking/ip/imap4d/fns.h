@@ -1,3 +1,4 @@
+/*s: networking/ip/imap4d/fns.h */
 /*
  * sorted by 4,/^$/|sort -bd +1
  */
@@ -116,10 +117,23 @@ void	writeFlags(Biobuf *b, Msg *m, int recentOk);
 #pragma	varargck argpos	bye		1
 #pragma	varargck argpos	debuglog	1
 
+/*s: macro MK */
 #define	MK(t)		((t*)emalloc(sizeof(t)))
+/*e: macro MK */
+/*s: macro MKZ */
 #define	MKZ(t)		((t*)ezmalloc(sizeof(t)))
+/*e: macro MKZ */
+/*s: macro MKN */
 #define	MKN(t,n)	((t*)emalloc((n)*sizeof(t)))
+/*e: macro MKN */
+/*s: macro MKNZ */
 #define	MKNZ(t,n)	((t*)ezmalloc((n)*sizeof(t)))
+/*e: macro MKNZ */
+/*s: macro MKNA */
 #define	MKNA(t,at,n)	((t*)emalloc(sizeof(t) + (n)*sizeof(at)))
+/*e: macro MKNA */
 
+/*s: macro STRLEN (networking/ip/imap4d/fns.h) */
 #define STRLEN(cs)	(sizeof(cs)-1)
+/*e: macro STRLEN (networking/ip/imap4d/fns.h) */
+/*e: networking/ip/imap4d/fns.h */
