@@ -16,7 +16,7 @@ TEX=Network.tex
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Network.nw Network_extra.nw
+SRC_ORIG=Network.nw Network_extra.nw Network_v6.nw
 
 # from list_networks originally
 SRC_VIEWS= \
