@@ -1643,7 +1643,7 @@ slave(Request *req)
         break;
     case 0:
         procsetname("request slave of pid %d", ppid);
- 		if(traceactivity)
+   if(traceactivity)
             dnslog("[%d] take activity from %d", getpid(), ppid);
         req->isslave = 1;	/* why not `= getpid()'? */
         break;

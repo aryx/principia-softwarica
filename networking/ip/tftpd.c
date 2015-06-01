@@ -225,7 +225,7 @@ main(int argc, char **argv)
         case 0:
             dfd = accept(lcfd, ldir);
             if(dfd < 0)
- 				exits(0);
+     exits(0);
             remoteaddr(ldir, raddr, sizeof(raddr));
             pid = getpid();
             syslog(0, flog, "tftp %d connection from %s dir %s",

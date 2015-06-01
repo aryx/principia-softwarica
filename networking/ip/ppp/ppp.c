@@ -429,7 +429,7 @@ getframe(PPP *ppp, int *protop)
         b = allocb(2000);
         len = b->lim - b->wptr;
         n = read(ppp->mediain, b->wptr, len);
- 		dmppkt("RX", b->wptr, n);
+   dmppkt("RX", b->wptr, n);
         if(n <= 0 || n == len){
             freeb(b);
 
@@ -474,7 +474,7 @@ getframe(PPP *ppp, int *protop)
                 buf->wptr = buf->rptr;
                 return nil;
             }
- 			dmppkt("RX", buf->wptr, n);
+    dmppkt("RX", buf->wptr, n);
             buf->wptr += n;
         }
 
@@ -623,7 +623,7 @@ putframe(PPP *ppp, int proto, Block *b)
 
     /* send */
     buf->wptr = to;
- 	dmppkt("TX", buf->rptr, BLEN(buf));
+  dmppkt("TX", buf->rptr, BLEN(buf));
     if(write(ppp->mediaout, buf->rptr, BLEN(buf)) < 0){
         qunlock(&ppp->outlock);
         return -1;
@@ -1059,7 +1059,7 @@ getopts(PPP *ppp, Pstate *p, Block *b)
             break;
         case Pipcp:
             if(validv4(ipaddr) && ppp->remotefrozen == 0)
- 				ipmove(ppp->remote, ipaddr);
+     ipmove(ppp->remote, ipaddr);
             break;
         }
         p->flags = flags;

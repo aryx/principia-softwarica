@@ -667,7 +667,7 @@ pptp(char *addr)
     ctlfd = dial(addr, nil, tcpdir, nil);
     if(ctlfd < 0)
         myfatal("dial %s: %r", addr);
- 	getaddrs();
+  getaddrs();
 
     rdchan = chancreate(sizeof(void*), 0);
     proccreate(pptpctlproc, nil, Stack);

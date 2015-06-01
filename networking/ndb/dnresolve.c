@@ -399,7 +399,7 @@ issuequery(Query *qp, char *name, int class, int depth, int recurse)
     }
 
     /*
- 	 *  walk up the domain name looking for
+   *  walk up the domain name looking for
      *  a name server for the domain.
      */
     for(cp = name; cp; cp = walkup(cp)){
