@@ -119,6 +119,8 @@ SRC_VIEWS= \
   ../networking/ip/snoopy/tcp.c\
   ../networking/ip/snoopy/udp.c\
   ../networking/ip/snoopy/ninep.c\
+  ../networking/ip/snoopy/dhcp.c\
+  ../networking/ip/snoopy/dump.c\
   \
   ../networking/ip/snoopy/aoe.c\
   ../networking/ip/snoopy/aoeata.c\
@@ -128,8 +130,6 @@ SRC_VIEWS= \
   ../networking/ip/snoopy/aoerr.c\
   ../networking/ip/snoopy/bootp.c\
   ../networking/ip/snoopy/cec.c\
-  ../networking/ip/snoopy/dhcp.c\
-  ../networking/ip/snoopy/dump.c\
   ../networking/ip/snoopy/eap.c\
   ../networking/ip/snoopy/eap_identity.c\
   ../networking/ip/snoopy/eapol.c\

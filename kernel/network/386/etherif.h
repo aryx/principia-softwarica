@@ -1,13 +1,15 @@
 /*s: kernel/network/386/etherif.h */
 /*s: enum _anon_ (kernel/network/386/etherif.h) */
 enum {
+  /*s: constant MaxEther */
   MaxEther  = 48,
+  /*e: constant MaxEther */
   Ntypes    = 8,
 };
 /*e: enum _anon_ (kernel/network/386/etherif.h) */
 
 typedef struct Ether Ether;
-/*s: struct Ether */
+/*s: struct Ether (kernel) */
 struct Ether {
   ISAConf;      /* hardware info */
 
@@ -29,7 +31,7 @@ struct Ether {
 
   Netif;
 };
-/*e: struct Ether */
+/*e: struct Ether (kernel) */
 
 extern Block* etheriq(Ether*, Block*, int);
 extern void addethercard(char*, int(*)(Ether*));

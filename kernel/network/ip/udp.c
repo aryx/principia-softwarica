@@ -35,7 +35,13 @@ enum
 };
 /*e: enum _anon_ (kernel/network/ip/udp.c) */
 
+// forward decl
 typedef struct Udp4hdr Udp4hdr;
+typedef struct Udp6hdr Udp6hdr;
+typedef struct Udpstats Udpstats;
+typedef struct Udppriv Udppriv;
+typedef struct Udpcb Udpcb;
+
 /*s: struct Udp4hdr */
 struct Udp4hdr
 {
@@ -59,7 +65,6 @@ struct Udp4hdr
 };
 /*e: struct Udp4hdr */
 
-typedef struct Udp6hdr Udp6hdr;
 /*s: struct Udp6hdr */
 struct Udp6hdr {
     uchar viclfl[4];
@@ -78,7 +83,6 @@ struct Udp6hdr {
 /*e: struct Udp6hdr */
 
 /* MIB II counters */
-typedef struct Udpstats Udpstats;
 /*s: struct Udpstats */
 struct Udpstats
 {
@@ -89,7 +93,6 @@ struct Udpstats
 };
 /*e: struct Udpstats */
 
-typedef struct Udppriv Udppriv;
 /*s: struct Udppriv */
 struct Udppriv
 {
@@ -110,7 +113,6 @@ void udpkick(void *x, Block *bp);
 /*
  *  protocol specific part of Conv
  */
-typedef struct Udpcb Udpcb;
 /*s: struct Udpcb */
 struct Udpcb
 {
@@ -638,6 +640,7 @@ udpinit(Fs *fs)
 
     udp = smalloc(sizeof(Proto));
     udp->priv = smalloc(sizeof(Udppriv));
+
     udp->name = "udp";
     udp->connect = udpconnect;
     udp->announce = udpannounce;

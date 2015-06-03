@@ -30,6 +30,7 @@ static Mux p_mux[] =
 {
     {"ip",		0x0800,	} ,
     {"arp",		0x0806,	} ,
+
     {"rarp",	0x0806,	} ,
     {"ip6", 	0x86dd, } ,
     {"pppoe_disc",	0x8863, },

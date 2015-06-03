@@ -11,6 +11,7 @@ uchar IPv4bcast[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
+
     0xff, 0xff, 0xff, 0xff
 };
 /*e: global IPv4bcast */
@@ -19,6 +20,7 @@ uchar IPv4allsys[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
+
     0xe0, 0, 0, 0x01
 };
 /*e: global IPv4allsys */
@@ -27,6 +29,7 @@ uchar IPv4allrouter[IPaddrlen] = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
+
     0xe0, 0, 0, 0x02
 };
 /*e: global IPv4allrouter */
@@ -47,15 +50,18 @@ uchar IPnoaddr[IPaddrlen];
  *  prefix of all v4 addresses
  */
 uchar v4prefix[IPaddrlen] = {
+    // first 12
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
+
+    // rest are ipv4 numbers
     0, 0, 0, 0
 };
 /*e: global v4prefix */
 
 /*s: function isv4 */
-int
+bool
 isv4(uchar *ip)
 {
     return memcmp(ip, v4prefix, IPv4off) == 0;
@@ -90,7 +96,7 @@ v4tov6(uchar *v6, uchar *v4)
 /*e: function v4tov6 */
 
 /*s: function v6tov4 */
-int
+errorneg1
 v6tov4(uchar *v4, uchar *v6)
 {
     if(v6[0] == 0
@@ -110,12 +116,12 @@ v6tov4(uchar *v4, uchar *v6)
         v4[1] = v6[13];
         v4[2] = v6[14];
         v4[3] = v6[15];
-        return 0;
+        return OK_0;
     } else {
         memset(v4, 0, 4);
         if(memcmp(v6, IPnoaddr, IPaddrlen) == 0)
-            return 0;
-        return -1;
+            return OK_0;
+        return ERROR_NEG1;
     }
 }
 /*e: function v6tov4 */

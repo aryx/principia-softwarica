@@ -20,9 +20,10 @@ static uchar loopbackmask[IPaddrlen] = {
 };
 /*e: global loopbackmask */
 
-// find first ip addr that isn't the friggin loopback address
 /*s: function myipaddr */
-// unless there are no others
+/* find first ip addr that isn't the friggin loopback address
+ * unless there are no others 
+ */
 int
 myipaddr(uchar *ip, char *net)
 {

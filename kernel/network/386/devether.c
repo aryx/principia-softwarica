@@ -13,9 +13,9 @@
 
 #include "etherif.h"
 
-/*s: global etherxx */
+/*s: global etherxx (kernel) */
 static Ether *etherxx[MaxEther];
-/*e: global etherxx */
+/*e: global etherxx (kernel) */
 
 /*s: function etherattach */
 Chan*
@@ -31,7 +31,7 @@ etherattach(char* spec)
         if((ctlrno == 0 && p == spec) || *p || (ctlrno >= MaxEther))
             error(Ebadarg);
     }
-    if(etherxx[ctlrno] == 0)
+    if(etherxx[ctlrno] == nil)
         error(Enodev);
 
     chan = devattach('l', spec);
@@ -572,47 +572,27 @@ ethershutdown(void)
 }
 /*e: function ethershutdown */
 
-
-//#define POLY 0xedb88320
-
-/* really slow 32 bit crc for ethers */
-//ulong
-//ethercrc(uchar *p, int len)
-//{
-//  int i, j;
-//  ulong crc, b;
-//
-//  crc = 0xffffffff;
-//  for(i = 0; i < len; i++){
-//      b = *p++;
-//      for(j = 0; j < 8; j++){
-//          crc = (crc>>1) ^ (((crc^b) & 1) ? POLY : 0);
-//          b >>= 1;
-//      }
-//  }
-//  return crc;
 /*s: global etherdevtab */
-//}
-
 Dev etherdevtab = {
     .dc       =    'l',
     .name     =    "ether",
+
+    .attach   =    etherattach,
+    .walk     =    etherwalk,
+    .open     =    etheropen,
+    .close    =    etherclose,
+    .read     =    etherread,
+    .write    =    etherwrite,
+    .stat     =    etherstat,
+    .wstat    =    etherwstat,
                
     .reset    =    etherreset,
     .init     =    devinit,
     .shutdown =    ethershutdown,
-    .attach   =    etherattach,
-    .walk     =    etherwalk,
-    .stat     =    etherstat,
-    .open     =    etheropen,
     .create   =    ethercreate,
-    .close    =    etherclose,
-    .read     =    etherread,
     .bread    =    etherbread,
-    .write    =    etherwrite,
     .bwrite   =    etherbwrite,
     .remove   =    devremove,
-    .wstat    =    etherwstat,
 };
 /*e: global etherdevtab */
 /*e: kernel/network/386/devether.c */

@@ -1506,7 +1506,7 @@ tcphangup(Conv *s)
 
     tcb = (Tcpctl*)s->ptcl;
     if(waserror())
-        return commonerror();
+        return up->errstr;
     if(ipcmp(s->raddr, IPnoaddr) != 0) {
         if(!waserror()){
             memset(&seg, 0, sizeof seg);

@@ -29,11 +29,16 @@ enum
 };
 /*e: enum _anon_ (networking/ip/rip.c) */
 
+// forward decl
+typedef struct Rip	Rip;
+typedef struct Ripmsg	Ripmsg;
+typedef struct Route	Route;
+typedef struct Ifc	Ifc;
+typedef struct Bnet Bnet;
 
 /*
  *  network info
  */
-typedef struct Rip	Rip;
 /*s: struct Rip */
 struct Rip
 {
@@ -44,7 +49,6 @@ struct Rip
     uchar	metric[4];
 };
 /*e: struct Rip */
-typedef struct Ripmsg	Ripmsg;
 /*s: struct Ripmsg */
 struct Ripmsg
 {
@@ -74,7 +78,6 @@ enum
 };
 /*e: enum _anon_ (networking/ip/rip.c)3 */
 
-typedef struct Route	Route;
 /*s: struct Route (networking/ip/rip.c) */
 struct Route
 {
@@ -97,7 +100,6 @@ struct {
 } ralloc;
 /*e: global ralloc */
 
-typedef struct Ifc	Ifc;
 /*s: struct Ifc */
 struct Ifc
 {
@@ -119,7 +121,6 @@ struct {
 /*
  *  specific networks to broadcast on
  */
-typedef struct Bnet Bnet;
 /*s: struct Bnet */
 struct Bnet
 {

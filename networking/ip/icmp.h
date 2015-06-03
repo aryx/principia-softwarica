@@ -45,6 +45,8 @@ enum
 /*e: enum _anon_ (networking/ip/icmp.h) */
 
 typedef struct Ip4hdr Ip4hdr;
+typedef struct Icmphdr Icmphdr;
+
 /*s: struct Ip4hdr (networking/ip/icmp.h) */
 struct Ip4hdr
 {
@@ -63,10 +65,7 @@ struct Ip4hdr
 };
 /*e: struct Ip4hdr (networking/ip/icmp.h) */
 
-// #define IP4HDRSZ offsetof(Ip4hdr, data[0])
-
 /* the icmp payload has the same format in v4 and v6 */
-typedef struct Icmphdr Icmphdr;
 /*s: struct Icmphdr */
 struct Icmphdr {
     uchar	type;
@@ -78,5 +77,6 @@ struct Icmphdr {
 };
 /*e: struct Icmphdr */
 
+// #define IP4HDRSZ offsetof(Ip4hdr, data[0])
 // #define ICMPHDRSZ offsetof(Icmphdr, data[0])
 /*e: networking/ip/icmp.h */

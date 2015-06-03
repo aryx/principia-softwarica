@@ -34,10 +34,11 @@ nullbwrite(Ipifc*, Block*, int, uchar*)
 /*s: global nullmedium */
 Medium nullmedium =
 {
-.name=      "null",
-.bind=      nullbind,
-.unbind=    nullunbind,
-.bwrite=    nullbwrite,
+    .name=      "null",
+
+    .bind=      nullbind,
+    .unbind=    nullunbind,
+    .bwrite=    nullbwrite,
 };
 /*e: global nullmedium */
 

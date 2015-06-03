@@ -4,10 +4,12 @@
 #include <bio.h>
 #include <ip.h>
 
+typedef struct Etherpkt	Etherpkt;
+typedef struct Ippkt	Ippkt;
+
 /*
  *  ether packet
  */
-typedef struct Etherpkt	Etherpkt;
 /*s: struct Etherpkt (networking/ip/measure.c) */
 struct Etherpkt {
     uchar d[6];
@@ -29,7 +31,6 @@ struct Etherpkt {
 /*
  *  ip packets
  */
-typedef struct Ippkt	Ippkt;
 /*s: struct Ippkt */
 struct Ippkt
 {

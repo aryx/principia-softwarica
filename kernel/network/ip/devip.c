@@ -11,6 +11,7 @@
 enum
 {
     Qtopdir=    1,      /* top level directory */
+
     Qtopbase,
     Qarp=       Qtopbase,
     Qbootp,
@@ -37,14 +38,18 @@ enum
 
     Logtype=    5,
     Masktype=   (1<<Logtype)-1,
+
     Logconv=    12,
     Maskconv=   (1<<Logconv)-1,
     Shiftconv=  Logtype,
+
     Logproto=   8,
     Maskproto=  (1<<Logproto)-1,
     Shiftproto= Logtype + Logconv,
 
+    /*s: constant Nfs */
     Nfs=        128,
+    /*e: constant Nfs */
 };
 /*e: enum _anon_ (kernel/network/ip/devip.c) */
 /*s: macro TYPE */
@@ -88,6 +93,7 @@ ip3gen(Chan *c, int i, Dir *dp)
     char *p;
 
     cv = ipfs[c->dev]->p[PROTO(c->qid)]->conv[CONV(c->qid)];
+
     if(cv->owner == nil)
         kstrdup(&cv->owner, eve);
     mkqid(&q, QID(PROTO(c->qid), CONV(c->qid), i), 0, QTFILE);
@@ -230,6 +236,7 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     case Qiproute:
     case Qipselftab:
         return ip1gen(c, TYPE(c->qid), dp);
+
     case Qprotodir:
         if(s == DEVDOTDOT){
             mkqid(&q, QID(0, 0, Qtopdir), 0, QTDIR);
@@ -257,6 +264,7 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
             return 1;
         }
         return ip3gen(c, s+Qconvbase, dp);
+
     case Qctl:
     case Qdata:
     case Qerr:
@@ -300,11 +308,13 @@ ipgetfs(int dev)
     qlock(&fslock);
     if(ipfs[dev] == nil){
         f = smalloc(sizeof(Fs));
+
         ip_init(f);
         arpinit(f);
         netloginit(f);
         for(i = 0; ipprotoinit[i]; i++)
             ipprotoinit[i](f);
+
         f->dev = dev;
         ipfs[dev] = f;
     }
@@ -321,7 +331,7 @@ newipaux(char *owner, char *tag)
     IPaux *a;
     int n;
 
-    a = smalloc(sizeof(*a));
+    a = smalloc(sizeof(IPaux));
     kstrdup(&a->owner, owner);
     memset(a->tag, ' ', sizeof(a->tag));
     n = strlen(tag);
@@ -352,7 +362,7 @@ ipattach(char* spec)
     mkqid(&c->qid, QID(0, 0, Qtopdir), 0, QTDIR);
     c->dev = dev;
 
-    c->aux = newipaux(commonuser(), "none");
+    c->aux = newipaux(up->user, "none");
 
     return c;
 }
@@ -366,8 +376,10 @@ ipwalk(Chan* c, Chan *nc, char **name, int nname)
     Walkqid* w;
 
     w = devwalk(c, nc, name, nname, nil, 0, ipgen);
+
     if(w != nil && w->clone != nil)
         w->clone->aux = newipaux(a->owner, a->tag);
+
     return w;
 }
 /*e: function ipwalk */
@@ -1241,7 +1253,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
         else if(strcmp(cb->f[0], "tos") == 0)
             tosctlmsg(c, cb);
         else if(strcmp(cb->f[0], "ignoreadvice") == 0)
-            c->ignoreadvice = 1;
+            c->ignoreadvice = true;
         else if(strcmp(cb->f[0], "addmulti") == 0){
             if(cb->nf < 2)
                 error("addmulti needs interface address");
@@ -1320,22 +1332,23 @@ ipbwrite(Chan* ch, Block* bp, ulong offset)
 Dev ipdevtab = {
     .dc       =    'I',
     .name     =    "ip",
+
+    .attach   =    ipattach,
+    .walk     =    ipwalk,
+    .open     =    ipopen,
+    .close    =    ipclose,
+    .read     =    ipread,
+    .write    =    ipwrite,
+    .stat     =    ipstat,
+    .wstat    =    ipwstat,
                
     .reset    =    ipreset,
     .init     =    devinit,
     .shutdown =    devshutdown,
-    .attach   =    ipattach,
-    .walk     =    ipwalk,
-    .stat     =    ipstat,
-    .open     =    ipopen,
     .create   =    ipcreate,
-    .close    =    ipclose,
-    .read     =    ipread,
     .bread    =    ipbread,
-    .write    =    ipwrite,
     .bwrite   =    ipbwrite,
     .remove   =    ipremove,
-    .wstat    =    ipwstat,
 };
 /*e: global ipdevtab */
 
@@ -1367,16 +1380,6 @@ Fsproto(Fs *f, Proto *p)
     return 0;
 }
 /*e: function Fsproto */
-
-/*
- *  return true if this protocol is
- *  built in
- */
-//int
-//Fsbuiltinproto(Fs* f, uchar proto)
-//{
-//  return f->t2p[proto] != nil;
-//}
 
 /*s: function Fsprotoclone */
 /*

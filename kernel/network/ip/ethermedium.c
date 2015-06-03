@@ -48,24 +48,30 @@ static void recvarpproc(void*);
 static void resolveaddr6(Ipifc *ifc, Arpent *a);
 static void etherpref2addr(uchar *pref, uchar *ea);
 
-/*s: global ethermedium */
+typedef struct  Etherrock Etherrock;
+typedef struct Etherarp Etherarp;
+
+/*s: global ethermedium (kernel) */
 Medium ethermedium =
 {
-.name=      "ether",
-.hsize=     14,
-.mintu=     60,
-.maxtu=     1514,
-.maclen=    6,
-.bind=      etherbind,
-.unbind=    etherunbind,
-.bwrite=    etherbwrite,
-.addmulti=  etheraddmulti,
-.remmulti=  etherremmulti,
-.ares=      arpenter,
-.areg=      sendgarp,
-.pref2addr= etherpref2addr,
+    .name=      "ether",
+
+    .hsize=     14,
+    .mintu=     60,
+    .maxtu=     1514,
+    .maclen=    6,
+
+    .bind=      etherbind,
+    .unbind=    etherunbind,
+    .bwrite=    etherbwrite,
+
+    .addmulti=  etheraddmulti,
+    .remmulti=  etherremmulti,
+    .ares=      arpenter,
+    .areg=      sendgarp,
+    .pref2addr= etherpref2addr,
 };
-/*e: global ethermedium */
+/*e: global ethermedium (kernel) */
 
 /*s: global gbemedium */
 Medium gbemedium =
@@ -86,7 +92,6 @@ Medium gbemedium =
 };
 /*e: global gbemedium */
 
-typedef struct  Etherrock Etherrock;
 /*s: struct Etherrock */
 struct Etherrock
 {
@@ -113,7 +118,6 @@ enum
 };
 /*e: enum _anon_ (kernel/network/ip/ethermedium.c) */
 
-typedef struct Etherarp Etherarp;
 /*s: struct Etherarp */
 struct Etherarp
 {

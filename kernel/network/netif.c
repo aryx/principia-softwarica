@@ -592,14 +592,6 @@ matchtoken(char *p, char *token)
 }
 /*e: function matchtoken */
 
-//void
-//hnputv(void *p, uvlong v)
-//{
-//  uchar *a;
-//
-//  a = p;
-//  hnputl(a, v>>32);
-//  hnputl(a+4, v);
 /*s: function hnputl (kernel/network/netif.c) */
 //}
 
@@ -628,13 +620,6 @@ hnputs(void *p, ushort v)
 }
 /*e: function hnputs (kernel/network/netif.c) */
 
-//uvlong
-//nhgetv(void *p)
-//{
-//  uchar *a;
-//
-//  a = p;
-//  return ((vlong)nhgetl(a) << 32) | nhgetl(a+4);
 /*s: function nhgetl (kernel/network/netif.c) */
 //}
 

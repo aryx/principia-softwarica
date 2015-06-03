@@ -5,13 +5,13 @@
 #include <string.h>
 #include "glob.h"
 
-/*s: function globnew */
 /*
  *  I wrote this glob so that there would be no limit
  *  on element or path size.  The one in rc is probably
  *  better, certainly faster. - presotto
  */
 
+/*s: function globnew */
 static Glob*
 globnew(void)
 {

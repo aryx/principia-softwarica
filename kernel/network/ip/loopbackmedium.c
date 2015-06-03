@@ -19,9 +19,9 @@ typedef struct LB LB;
 /*s: struct LB */
 struct LB
 {
-    Proc    *readp;
     Queue   *q;
     Fs  *f;
+    Proc    *readp;
 };
 /*e: struct LB */
 
@@ -33,7 +33,7 @@ loopbackbind(Ipifc *ifc, int, char**)
 {
     LB *lb;
 
-    lb = smalloc(sizeof(*lb));
+    lb = smalloc(sizeof(LB));
     lb->f = ifc->conv->p->f;
     lb->q = qopen(1024*1024, Qmsg, nil, nil);
     ifc->arg = lb;
@@ -54,7 +54,7 @@ loopbackunbind(Ipifc *ifc)
         postnote(lb->readp, 1, "unbind", 0);
 
     /* wait for reader to die */
-    while(lb->readp != 0)
+    while(lb->readp != nil)
         tsleep(&up->sleepr, returnfalse, 0, 300);
 
     /* clean up */
@@ -117,14 +117,16 @@ loopbackread(void *a)
 /*s: global loopbackmedium */
 Medium loopbackmedium =
 {
-.hsize=     0,
-.mintu=     0,
-.maxtu=     Maxtu,
-.maclen=    0,
-.name=      "loopback",
-.bind=      loopbackbind,
-.unbind=    loopbackunbind,
-.bwrite=    loopbackbwrite,
+    .name=      "loopback",
+
+    .hsize=     0,
+    .mintu=     0,
+    .maxtu=     Maxtu,
+    .maclen=    0,
+
+    .bind=      loopbackbind,
+    .unbind=    loopbackunbind,
+    .bwrite=    loopbackbwrite,
 };
 /*e: global loopbackmedium */
 

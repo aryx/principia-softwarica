@@ -1483,6 +1483,7 @@ ilinit(Fs *f)
 
     il = smalloc(sizeof(Proto));
     il->priv = smalloc(sizeof(Ilpriv));
+
     il->name = "il";
     il->connect = ilconnect;
     il->announce = ilannounce;

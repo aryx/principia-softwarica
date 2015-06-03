@@ -49,14 +49,14 @@ ipcharok(int c)
 /*e: function ipcharok */
 
 /*s: function delimchar */
-static int
+static bool
 delimchar(int c)
 {
     if(c == '\0')
-        return 1;
+        return true;
     if(c == '.' || c == ':' || isascii(c) && isalnum(c))
-        return 0;
-    return 1;
+        return false;
+    return true;
 }
 /*e: function delimchar */
 
@@ -72,7 +72,8 @@ delimchar(int c)
 vlong
 parseip(uchar *to, char *from)
 {
-    int i, elipsis = 0, v4 = 1;
+    int i, elipsis = 0;
+    bool v4 = true;
     ulong x;
     char *p, *op;
 
@@ -81,12 +82,13 @@ parseip(uchar *to, char *from)
     for(i = 0; i < IPaddrlen && ipcharok(*p); i+=2){
         op = p;
         x = strtoul(p, &p, 16);
-        if((*p == '.' && i <= IPaddrlen-4) || (*p == 0 && i == 0)){
+        if((*p == '.' && i <= IPaddrlen-4) || (*p == '\0' && i == 0)){
             /* ends with v4 */
             p = v4parseip(to+i, op);
             i += 4;
             break;
         }
+
         /* v6: at most 4 hex digits, followed by colon or delim */
         if(x != (ushort)x || *p != ':' && !delimchar(*p)) {
             memset(to, 0, IPaddrlen);
@@ -95,7 +97,7 @@ parseip(uchar *to, char *from)
         to[i] = x>>8;
         to[i+1] = x;
         if(*p == ':'){
-            v4 = 0;
+            v4 = false;
             if(*++p == ':'){	/* :: is elided zero short(s) */
                 if (elipsis) {
                     memset(to, 0, IPaddrlen);
@@ -115,6 +117,7 @@ parseip(uchar *to, char *from)
         memmove(&to[elipsis+IPaddrlen-i], &to[elipsis], i-elipsis);
         memset(&to[elipsis], 0, IPaddrlen-i);
     }
+
     if(v4){
         to[10] = to[11] = 0xff;
         return nhgetl(to + IPv4off);
@@ -168,32 +171,4 @@ parseipmask(uchar *to, char *from)
 }
 /*e: function parseipmask */
 
-/*s: function v4parsecidr */
-/*
- *  parse a v4 ip address/mask in cidr format
- */
-char*
-v4parsecidr(uchar *addr, uchar *mask, char *from)
-{
-    int i;
-    char *p;
-    uchar *a;
-
-    p = v4parseip(addr, from);
-
-    if(*p == '/'){
-        /* as a number of prefix bits */
-        i = strtoul(p+1, &p, 0);
-        if(i > 32)
-            i = 32;
-        memset(mask, 0, IPv4addrlen);
-        for(a = mask; i >= 8; i -= 8)
-            *a++ = 0xff;
-        if(i > 0)
-            *a = ~((1<<(8-i))-1);
-    } else 
-        memcpy(mask, defmask(addr), IPv4addrlen);
-    return p;
-}
-/*e: function v4parsecidr */
 /*e: lib_networking/libip/parseip.c */

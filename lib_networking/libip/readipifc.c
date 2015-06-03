@@ -4,48 +4,6 @@
 #include <ctype.h>
 #include <ip.h>
 
-/*s: function _readoldipifc */
-static Ipifc**
-_readoldipifc(char *buf, Ipifc **l, int index)
-{
-    char *f[200];
-    int i, n;
-    Ipifc *ifc;
-    Iplifc *lifc, **ll;
-
-    /* allocate new interface */
-    *l = ifc = mallocz(sizeof(Ipifc), 1);
-    if(ifc == nil)
-        return l;
-    l = &ifc->next;
-    ifc->index = index;
-
-    n = tokenize(buf, f, nelem(f));
-    if(n < 2)
-        return l;
-
-    strncpy(ifc->dev, f[0], sizeof ifc->dev);
-    ifc->dev[sizeof(ifc->dev) - 1] = 0;
-    ifc->mtu = strtoul(f[1], nil, 10);
-
-    ll = &ifc->lifc;
-    for(i = 2; n-i >= 7; i += 7){
-        /* allocate new local address */
-        *ll = lifc = mallocz(sizeof(Iplifc), 1);
-        ll = &lifc->next;
-
-        parseip(lifc->ip, f[i]);
-        parseipmask(lifc->mask, f[i+1]);
-        parseip(lifc->net, f[i+2]);
-        ifc->pktin = strtoul(f[i+3], nil, 10);
-        ifc->pktout = strtoul(f[i+4], nil, 10);
-        ifc->errin = strtoul(f[i+5], nil, 10);
-        ifc->errout = strtoul(f[i+6], nil, 10);
-    }
-    return l;
-}
-/*e: function _readoldipifc */
-
 /*s: function findfield */
 static char*
 findfield(char *name, char **f, int n)
@@ -80,8 +38,9 @@ _readipifc(char *file, Ipifc **l, int index)
     buf[n] = 0;
     close(fd);
 
-    if(strncmp(buf, "device", 6) != 0)
-        return _readoldipifc(buf, l, index);
+    //if(strncmp(buf, "device", 6) != 0)
+    //    return _readoldipifc(buf, l, index);
+
     /* ignore ifcs with no associated device */
     if(strncmp(buf+6, "  ", 2) == 0)
         return l;
@@ -107,22 +66,22 @@ lose:
         *l0 = nil;
         return l;
     }
-    ifc->mtu = strtoul(findfield("maxtu", f, n), nil, 10);
-    ifc->sendra6 = atoi(findfield("sendra", f, n));
-    ifc->recvra6 = atoi(findfield("recvra", f, n));
-    ifc->rp.mflag = atoi(findfield("mflag", f, n));
-    ifc->rp.oflag = atoi(findfield("oflag", f, n));
-    ifc->rp.maxraint = atoi(findfield("maxraint", f, n));
-    ifc->rp.minraint = atoi(findfield("minraint", f, n));
-    ifc->rp.linkmtu = atoi(findfield("linkmtu", f, n));
+    ifc->mtu          = strtoul(findfield("maxtu", f, n), nil, 10);
+    ifc->sendra6      = atoi(findfield("sendra", f, n));
+    ifc->recvra6      = atoi(findfield("recvra", f, n));
+    ifc->rp.mflag     = atoi(findfield("mflag", f, n));
+    ifc->rp.oflag     = atoi(findfield("oflag", f, n));
+    ifc->rp.maxraint  = atoi(findfield("maxraint", f, n));
+    ifc->rp.minraint  = atoi(findfield("minraint", f, n));
+    ifc->rp.linkmtu   = atoi(findfield("linkmtu", f, n));
     ifc->rp.reachtime = atoi(findfield("reachtime", f, n));
-    ifc->rp.rxmitra = atoi(findfield("rxmitra", f, n));
-    ifc->rp.ttl = atoi(findfield("ttl", f, n));
-    ifc->rp.routerlt = atoi(findfield("routerlt", f, n));
-    ifc->pktin = strtoul(findfield("pktin", f, n), nil, 10);
-    ifc->pktout = strtoul(findfield("pktout", f, n), nil, 10);
-    ifc->errin = strtoul(findfield("errin", f, n), nil, 10);
-    ifc->errout = strtoul(findfield("errout", f, n), nil, 10);
+    ifc->rp.rxmitra   = atoi(findfield("rxmitra", f, n));
+    ifc->rp.ttl       = atoi(findfield("ttl", f, n));
+    ifc->rp.routerlt  = atoi(findfield("routerlt", f, n));
+    ifc->pktin        = strtoul(findfield("pktin", f, n), nil, 10);
+    ifc->pktout       = strtoul(findfield("pktout", f, n), nil, 10);
+    ifc->errin        = strtoul(findfield("errin", f, n), nil, 10);
+    ifc->errout       = strtoul(findfield("errout", f, n), nil, 10);
 
     /* now read the addresses */
     ll = &ifc->lifc;
@@ -182,7 +141,7 @@ readipifc(char *net, Ipifc *ifc, int index)
     l = &ifc;
     ifc = nil;
 
-    if(net == 0)
+    if(net == nil)
         net = "/net";
     snprint(directory, sizeof(directory), "%s/ipifc", net);
 

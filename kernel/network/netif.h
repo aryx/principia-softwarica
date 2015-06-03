@@ -76,7 +76,7 @@ struct Netaddr
 };
 /*e: struct Netaddr */
 
-/*s: struct Netif */
+/*s: struct Netif (kernel) */
 /*
  *  a network interface
  */
@@ -99,9 +99,8 @@ struct Netif
   int mtu;
   uchar addr[Nmaxaddr];
   uchar bcast[Nmaxaddr];
-  Netaddr *maddr;     /* known multicast addresses */
-  int nmaddr;     /* number of known multicast addresses */
-  Netaddr *mhash[Nmhash];   /* hash table of multicast addresses */
+
+
   int prom;     /* number of promiscuous opens */
   int scan;     /* number of base station scanners */
   int all;      /* number of -1 multiplexors */
@@ -119,12 +118,21 @@ struct Netif
 
   /* routines for touching the hardware */
   void  *arg;
+
   void  (*promiscuous)(void*, int);
-  void  (*multicast)(void*, uchar*, int);
   int (*hwmtu)(void*, int); /* get/set mtu */
   void  (*scanbs)(void*, uint); /* scan for base stations */
+
+  /*s: [[Netif(kernel)]] multicast fields */
+  Netaddr *maddr;     /* known multicast addresses */
+  int nmaddr;     /* number of known multicast addresses */
+  Netaddr *mhash[Nmhash];   /* hash table of multicast addresses */
+  /*e: [[Netif(kernel)]] multicast fields */
+  /*s: [[Netif(kernel)]] multicast methods */
+  void  (*multicast)(void*, uchar*, int);
+  /*e: [[Netif(kernel)]] multicast methods */
 };
-/*e: struct Netif */
+/*e: struct Netif (kernel) */
 
 void  netifinit(Netif*, char*, int, ulong);
 Walkqid*  netifwalk(Netif*, Chan*, Chan*, char **, int);
@@ -161,6 +169,7 @@ struct Etherpkt
   uchar d[Eaddrlen];
   uchar s[Eaddrlen];
   uchar type[2];
+
   uchar data[1500];
 };
 /*e: struct Etherpkt */

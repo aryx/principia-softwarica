@@ -3,6 +3,7 @@
 // This file references also code in lib_networking (linked with the kernel).
 // Those functions are also exported in include/ip.h.
 
+// forward decl
 typedef struct  Conv  Conv;
 typedef struct  Fragment4 Fragment4;
 typedef struct  Fragment6 Fragment6;
@@ -42,7 +43,9 @@ typedef struct  v6params  v6params;
 enum
 {
   Addrlen=  64,
+  /*s: constant Maxproto */
   Maxproto= 20,
+  /*e: constant Maxproto */
   Nhash=    64,
   Maxincall=  32, /* max. conn.s in listen q not accepted yet */
   Nchans=   1024,
@@ -117,11 +120,14 @@ enum
 struct Fragment4
 {
   Block*  blist;
-  Fragment4*  next;
+
   ulong   src;
   ulong   dst;
   ushort  id;
   ulong   age;
+
+  // Extra
+  Fragment4*  next;
 };
 /*e: struct Fragment4 */
 
@@ -152,25 +158,32 @@ struct Ipfrag
 #define IPFRAGSZ offsetof(Ipfrag, payload[0])
 /*e: constant IPFRAGSZ */
 
-/*s: struct IP */
+/*s: struct IP (kernel) */
 /* an instance of IP */
 struct IP
 {
-  uvlong    stats[Nipstats];
-
-  QLock   fraglock4;
   Fragment4*  flisthead4;
   Fragment4*  fragfree4;
+
+  /*s: [[IP(kernel)]] stat fields */
+  uvlong    stats[Nipstats];
+  /*e: [[IP(kernel)]] stat fields */
+  /*s: [[IP(kernel)]] routing fields */
+  bool iprouting;  /* true if we route like a gateway */
+  /*e: [[IP(kernel)]] routing fields */
+
+  /*s: [[IP(kernel)]] ipv6 fields */
+    QLock   fraglock6;
+    Fragment6*  flisthead6;
+    Fragment6*  fragfree6;
+    Ref   id6;
+  /*e: [[IP(kernel)]] ipv6 fields */
+
+  // Extra
+  QLock   fraglock4;
   Ref   id4;
-
-  QLock   fraglock6;
-  Fragment6*  flisthead6;
-  Fragment6*  fragfree6;
-  Ref   id6;
-
-  int   iprouting;  /* true if we route like a gateway */
 };
-/*e: struct IP */
+/*e: struct IP (kernel) */
 
 /*s: struct Ip4hdr */
 /* on the wire packet header */
@@ -189,30 +202,36 @@ struct Ip4hdr
 };
 /*e: struct Ip4hdr */
 
-/*s: struct Conv */
+/*s: struct Conv (kernel) */
 /*
  *  one per conversation directory
  */
 struct Conv
 {
-  QLock;
 
-  int x;      /* conversation index */
-  Proto*  p;
-
-  int restricted;   /* remote port is restricted */
-  uint  ttl;      /* max time to live */
-  uint  tos;      /* type of service */
-  int ignoreadvice;   /* don't terminate connection on icmp errors */
-
-  uchar ipversion;
   uchar laddr[IPaddrlen]; /* local IP address */
   uchar raddr[IPaddrlen]; /* remote IP address */
   ushort  lport;      /* local port number */
   ushort  rport;      /* remote port number */
 
+  uchar ipversion;
+
   char  *owner;     /* protections */
   int perm;
+
+  /*s: [[Conv(kernel)]] routing fields */
+  Route *r;     /* last route used */
+  ulong rgen;     /* routetable generation for *r */
+  /*e: [[Conv(kernel)]] routing fields */
+  /*s: [[Conv(kernel)]] multicast fields */
+  Ipmulti *multi;     /* multicast bindings for this interface */
+  /*e: [[Conv(kernel)]] multicast fields */
+  /*s: [[Conv(kernel)]] other fields */
+  int restricted;   /* remote port is restricted */
+  uint  ttl;      /* max time to live */
+  uint  tos;      /* type of service */
+  bool ignoreadvice;   /* don't terminate connection on icmp errors */
+
   int inuse;      /* opens of listen/data/ctl */
   int length;
   int state;
@@ -239,30 +258,46 @@ struct Conv
   QLock listenq;
   Rendez  listenr;
 
-  Ipmulti *multi;     /* multicast bindings for this interface */
-
   void* ptcl;     /* protocol specific stuff */
+  /*e: [[Conv(kernel)]] other fields */
 
-  Route *r;     /* last route used */
-  ulong rgen;     /* routetable generation for *r */
+  // Extra
+  QLock;
+  /*s: [[Conv(kernel)]] extra fields */
+  // ref<Proto> reverse of Proto.conv[this.x]
+  Proto*  p;
+  // index in Proto.conv[]
+  int x;      /* conversation index */
+  /*e: [[Conv(kernel)]] extra fields */
 };
-/*e: struct Conv */
+/*e: struct Conv (kernel) */
 
-/*s: struct Medium */
+/*s: struct Medium (kernel) */
 struct Medium
 {
   char  *name;
+
   int hsize;    /* medium header size */
   int mintu;    /* default min mtu */
   int maxtu;    /* default max mtu */
   int maclen;   /* mac address length  */
+ 
+  // the methods
   void  (*bind)(Ipifc*, int, char**);
   void  (*unbind)(Ipifc*);
+
   void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
 
+  /*s: [[Medium(kernel)]] multicast methods */
   /* for arming interfaces to receive multicast */
   void  (*addmulti)(Ipifc *ifc, uchar *a, uchar *ia);
   void  (*remmulti)(Ipifc *ifc, uchar *a, uchar *ia);
+
+  /* for routing multicast groups */
+  void  (*joinmulti)(Ipifc *ifc, uchar *a, uchar *ia);
+  void  (*leavemulti)(Ipifc *ifc, uchar *a, uchar *ia);
+  /*e: [[Medium(kernel)]] multicast methods */
+  /*s: [[Medium(kernel)]] other methods */
 
   /* process packets written to 'data' */
   void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
@@ -272,9 +307,6 @@ struct Medium
   void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
   void  (*flushroutes)(Ipifc *ifc);
 
-  /* for routing multicast groups */
-  void  (*joinmulti)(Ipifc *ifc, uchar *a, uchar *ia);
-  void  (*leavemulti)(Ipifc *ifc, uchar *a, uchar *ia);
 
   /* address resolution */
   void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
@@ -282,12 +314,15 @@ struct Medium
 
   /* v6 address generation */
   void  (*pref2addr)(uchar *pref, uchar *ea);
+  /*e: [[Medium(kernel)]] other methods */
+  /*s: [[Medium(kernel)]] other fields */
+  bool unbindonclose;  /* if non-zero, unbind on last close */
+  /*e: [[Medium(kernel)]] other fields */
 
-  int unbindonclose;  /* if non-zero, unbind on last close */
 };
-/*e: struct Medium */
+/*e: struct Medium (kernel) */
 
-/*s: struct Iplifc (kernel/network/ip/ip.h) */
+/*s: struct Iplifc (kernel) */
 /* logical interface associated with a physical one */
 struct Iplifc
 {
@@ -295,16 +330,25 @@ struct Iplifc
   uchar mask[IPaddrlen];
   uchar remote[IPaddrlen];
   uchar net[IPaddrlen];
+
+  /*s: [[Iplifc(kernel)]] other fields */
   uchar tentative;  /* =1 => v6 dup disc on, =0 => confirmed unique */
   uchar onlink;   /* =1 => onlink, =0 offlink. */
   uchar autoflag; /* v6 autonomous flag */
   long  validlt;  /* v6 valid lifetime */
   long  preflt;   /* v6 preferred lifetime */
   long  origint;  /* time when addr was added */
-  Iplink  *link;    /* addresses linked to this lifc */
+  /*e: [[Iplifc(kernel)]] other fields */
+
+  // Extra
+  /*s: [[Iplifc(kernel)]] extra fields */
+  // list<ref_own<Iplifc>>, head = Ipifc.lifc
   Iplifc  *next;
+  /*x: [[Iplifc(kernel)]] extra fields */
+  Iplink  *link;    /* addresses linked to this lifc */
+  /*e: [[Iplifc(kernel)]] extra fields */
 };
-/*e: struct Iplifc (kernel/network/ip/ip.h) */
+/*e: struct Iplifc (kernel) */
 
 /*s: struct Iplink */
 /* binding twixt Ipself and Iplifc */
@@ -343,19 +387,33 @@ struct Hostparams {
 };
 /*e: struct Hostparams */
 
-/*s: struct Ipifc (kernel/network/ip/ip.h) */
+/*s: struct Ipifc (kernel) */
 struct Ipifc
 {
-  RWlock;
-
-  Conv  *conv;    /* link to its conversation structure */
   char  dev[64];  /* device we're attached to */
-  Medium  *m;   /* Media pointer */
+
   int maxtu;    /* Maximum transfer unit */
   int mintu;    /* Minumum tranfer unit */
   int mbps;   /* megabits per second */
+
+  Medium  *m;   /* Media pointer */
   void  *arg;   /* medium specific */
-  int reassemble; /* reassemble IP packets before forwarding */
+  uchar mac[MAClen];  /* MAC address */
+
+  // list<ref_own<Iplifc>>, next = Iplifc.next
+  Iplifc  *lifc;    /* logical interfaces on this physical one */
+
+  /*s: [[Ipifc(kernel)]] stat fields */
+  ulong in, out;  /* message statistics */
+  ulong inerr, outerr;  /* ... */
+  /*e: [[Ipifc(kernel)]] stat fields */
+  /*s: [[Ipifc(kernel)]] ipv6 fields */
+  uchar sendra6;  /* flag: send router advs on this ifc */
+  uchar recvra6;  /* flag: recv router advs on this ifc */
+  /*e: [[Ipifc(kernel)]] ipv6 fields */
+  /*s: [[Ipifc(kernel)]] other fields */
+  Conv  *conv;    /* link to its conversation structure */
+  bool reassemble; /* reassemble IP packets before forwarding */
 
   /* these are used so that we can unbind on the fly */
   Lock  idlock;
@@ -363,20 +421,16 @@ struct Ipifc
   int ref;    /* number of proc's using this ipifc */
   Rendez  wait;   /* where unbinder waits for ref == 0 */
   int unbinding;
-
-  uchar mac[MAClen];  /* MAC address */
-
-  Iplifc  *lifc;    /* logical interfaces on this physical one */
-
-  ulong in, out;  /* message statistics */
-  ulong inerr, outerr;  /* ... */
-
-  uchar sendra6;  /* flag: send router advs on this ifc */
-  uchar recvra6;  /* flag: recv router advs on this ifc */
+  /*x: [[Ipifc(kernel)]] other fields */
   Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
           used only if node is router */
+  /*e: [[Ipifc(kernel)]] other fields */
+
+  //Extra
+  RWlock;
+
 };
-/*e: struct Ipifc (kernel/network/ip/ip.h) */
+/*e: struct Ipifc (kernel) */
 
 /*s: struct Ipmulti */
 /*
@@ -405,6 +459,7 @@ enum
   IPmatchpa,    /* addr!port */
 };
 /*e: enum _anon_ (kernel/network/ip/ip.h)4 */
+
 /*s: struct Iphash */
 struct Iphash
 {
@@ -420,21 +475,20 @@ struct Ipht
   Iphash  *tab[Nipht];
 };
 /*e: struct Ipht */
+
 void iphtadd(Ipht*, Conv*);
 void iphtrem(Ipht*, Conv*);
 Conv* iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp);
 
-/*s: struct Proto */
+/*s: struct Proto (kernel) */
 /*
  *  one per multiplexed protocol
  */
 struct Proto
 {
-  QLock;
   char*   name;   /* protocol name */
-  int   x;    /* protocol index */
-  int   ipproto;  /* ip protocol type */
 
+  /*s: [[Proto(kernel)]] methods */
   char*   (*connect)(Conv*, char**, int);
   char*   (*announce)(Conv*, char**, int);
   char*   (*bind)(Conv*, char**, int);
@@ -449,51 +503,82 @@ struct Proto
   int   (*remote)(Conv*, char*, int);
   int   (*inuse)(Conv*);
   int   (*gc)(Proto*);  /* returns true if any conversations are freed */
+  /*e: [[Proto(kernel)]] methods */
 
-  Fs    *f;   /* file system this proto is part of */
+  // growing_array<ref_own<Proto>>, size = Proto.nc
   Conv    **conv;   /* array of conversations */
-  int   ptclsize; /* size of per protocol ctl block */
   int   nc;   /* number of conversations */
-  int   ac;
+  int   ac; // number of active conversations??
+
+  /*s: [[Proto(kernel)]] other fields */
+  int   ipproto;  /* ip protocol type */
+
+
+  int   ptclsize; /* size of per protocol ctl block */
   Qid   qid;    /* qid for protocol directory */
   ushort    nextrport;
+  /*e: [[Proto(kernel)]] other fields */
 
   void    *priv;
+
+  // Extra
+  QLock;
+  /*s: [[Proto(kernel)]] extra fields */
+  // ref<Fs>, reverse of Fs.p[this.x]
+  Fs    *f;   /* file system this proto is part of */
+  // index in Fs.p[]
+  int   x;    /* protocol index */
+  /*e: [[Proto(kernel)]] extra fields */
 };
-/*e: struct Proto */
+/*e: struct Proto (kernel) */
 
 
-/*s: struct Fs */
+/*s: struct Fs (kernel) */
 /*
  *  one per IP protocol stack
  */
 struct Fs
 {
-  RWlock;
-  int dev;
-
-  int np;
+  // array<option<ref_own<Proto>>>, size is Fs.np
   Proto*  p[Maxproto+1];    /* list of supported protocols */
-  Proto*  t2p[256];   /* vector of all protocols */
-  Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
-  Proto*  ipmux;      /* kludge for finding an ip multiplexor */
+  int np;
 
   IP  *ip;
   Ipselftab *self;
+
+  /*s: [[Fs(kernel)]] arp fields */
   Arp *arp;
-  v6params  *v6p;
-
+  /*e: [[Fs(kernel)]] arp fields */
+  /*s: [[Fs(kernel)]] routing fields */
   Route *v4root[1<<Lroot];  /* v4 routing forest */
-  Route *v6root[1<<Lroot];  /* v6 routing forest */
   Route *queue;     /* used as temp when reinjecting routes */
-
-  Netlog  *alog;
-
+  /*e: [[Fs(kernel)]] routing fields */
+  /*s: [[Fs(kernel)]] ndb fields */
   char  ndb[1024];    /* an ndb entry for this interface */
   int ndbvers;
   long  ndbmtime;
+  /*e: [[Fs(kernel)]] ndb fields */
+  /*s: [[Fs(kernel)]] logging fields */
+  Netlog  *alog;
+  /*e: [[Fs(kernel)]] logging fields */
+  /*s: [[Fs(kernel)]] ipv6 fields */
+    v6params  *v6p;
+    Route *v6root[1<<Lroot];  /* v6 routing forest */
+  /*e: [[Fs(kernel)]] ipv6 fields */
+  /*s: [[Fs(kernel)]] other fields */
+  Proto*  t2p[256];   /* vector of all protocols */
+
+  Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
+  Proto*  ipmux;      /* kludge for finding an ip multiplexor */
+  /*e: [[Fs(kernel)]] other fields */
+ 
+  // Extra
+  RWlock;
+  /*s: [[Fs(kernel)]] extra fields */
+  int dev; // idx in ipfs
+  /*e: [[Fs(kernel)]] extra fields */
 };
-/*e: struct Fs */
+/*e: struct Fs (kernel) */
 
 /*s: struct v6router */
 /* one per default router known to host */
@@ -800,16 +885,11 @@ extern ushort ptclcsum(Block*, int, int);
 extern void ip_init(Fs*);
 //extern void update_mtucache(uchar*, ulong);
 //extern ulong  restrict_mtu(uchar*, ulong);
+
 /*
  * bootp.c
  */
 extern int  bootpread(char*, ulong, int);
-
-/*
- *  resolving inferno/plan9 differences
- */
-char*   commonuser(void);
-char*   commonerror(void);
 
 /*
  * chandial.c

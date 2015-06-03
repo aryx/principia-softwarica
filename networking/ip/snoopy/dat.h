@@ -111,6 +111,7 @@ struct Filter {
 
 extern void	yyinit(char*);
 extern int	yyparse(void);
+
 extern Filter*	newfilter(void);
 extern void	compile_cmp(char*, Filter*, Field*);
 extern void	demux(Mux*, ulong, ulong, Msg*, Proto*);

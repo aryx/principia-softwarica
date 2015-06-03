@@ -5,9 +5,16 @@
 /*s: enum _anon_ */
 enum 
 {
+    /*s: constant IPaddrlen */
     IPaddrlen=	16,
+    /*e: constant IPaddrlen */
+    /*s: constant IPv4addrlen */
     IPv4addrlen=	4,
+    /*e: constant IPv4addrlen */
+    /*s: constant IPv4off */
     IPv4off=	12,
+    /*e: constant IPv4off */
+
     IPllen=		4,
     IPV4HDR_LEN=	20,
 
@@ -17,27 +24,39 @@ enum
 };
 /*e: enum _anon_ */
 
-/*
- *  for reading /net/ipifc
- */
+// forward decl
 typedef struct Ipifc Ipifc;
 typedef struct Iplifc Iplifc;
 typedef struct Ipv6rp Ipv6rp;
+typedef struct Ip6hdr Ip6hdr;
+typedef struct Icmp6hdr Icmp6hdr;
+typedef struct Udphdr Udphdr;
 
-/*s: struct Iplifc */
+/*
+ *  for reading /net/ipifc
+ */
+
+/*s: struct Iplifc (user) */
 /* local address */
 struct Iplifc
 {
-    Iplifc	*next;
-
     /* per address on the ip interface */
     uchar	ip[IPaddrlen];
     uchar	mask[IPaddrlen];
     uchar	net[IPaddrlen];		/* ip & mask */
+
+    /*s: [[Iplifc(user)]] other fields */
     ulong	preflt;			/* preferred lifetime */
     ulong	validlt;		/* valid lifetime */
+    /*e: [[Iplifc(user)]] other fields */
+
+    // Extra
+    /*s: [[Iplifc(user)]] extra fields */
+    // list<ref_own<Iplifc>>, head = Ipifc.lifc
+    Iplifc	*next;
+    /*e: [[Iplifc(user)]] extra fields */
 };
-/*e: struct Iplifc */
+/*e: struct Iplifc (user) */
 
 /*s: struct Ipv6rp */
 /* default values, one per stack */
@@ -55,26 +74,36 @@ struct Ipv6rp
 };
 /*e: struct Ipv6rp */
 
-/*s: struct Ipifc */
+/*s: struct Ipifc (user) */
 /* actual interface */
 struct Ipifc
 {
-    Ipifc	*next;
-    Iplifc	*lifc;
-
     /* per ip interface */
     int	index;			/* number of interface in ipifc dir */
     char	dev[64];
-    uchar	sendra6;		/* on == send router adv */
-    uchar	recvra6;		/* on == rcv router adv */
     int	mtu;
+    // list<ref_own<Iplifc> (next = Iplifc.next)
+    Iplifc	*lifc;
+
+    /*s: [[Ipifc(user)]] stat fields */
     ulong	pktin;
     ulong	pktout;
     ulong	errin;
     ulong	errout;
-    Ipv6rp	rp;
+    /*e: [[Ipifc(user)]] stat fields */
+    /*s: [[Ipifc(user)]] ipv6 fields */
+        Ipv6rp	rp;
+    /*x: [[Ipifc(user)]] ipv6 fields */
+        uchar	sendra6;		/* on == send router adv */
+        uchar	recvra6;		/* on == rcv router adv */
+    /*e: [[Ipifc(user)]] ipv6 fields */
+
+    //Extra
+    /*s: [[Ipifc(user)]] extra fields */
+    Ipifc	*next;
+    /*e: [[Ipifc(user)]] extra fields */
 };
-/*e: struct Ipifc */
+/*e: struct Ipifc (user) */
 
 /*s: macro ISIPV6MCAST */
 #define ISIPV6MCAST(addr)	((addr)[0] == 0xff)
@@ -131,9 +160,8 @@ enum {
 };
 /*e: enum _anon_ (include/net/ip.h) */
 
-/* V6 header on the wire */
-typedef struct Ip6hdr Ip6hdr;
 /*s: struct Ip6hdr */
+/* V6 header on the wire */
 struct Ip6hdr {
     uchar	vcf[4];		/* version:4, traffic class:8, flow label:20 */
     uchar	ploadlen[2];	/* payload length: packet length - 40 */
@@ -145,11 +173,10 @@ struct Ip6hdr {
 };
 /*e: struct Ip6hdr */
 
+/*s: struct Icmp6hdr */
 /*
  *  user-level icmpv6 with control message "headers"
  */
-typedef struct Icmp6hdr Icmp6hdr;
-/*s: struct Icmp6hdr */
 struct Icmp6hdr {
     uchar	_0_[8];
     uchar	laddr[IPaddrlen];	/* local address */
@@ -167,13 +194,13 @@ enum
 };
 /*e: enum _anon_ (include/net/ip.h)2 */
 
-typedef struct Udphdr Udphdr;
 /*s: struct Udphdr */
 struct Udphdr
 {
     uchar	raddr[IPaddrlen];	/* V6 remote address */
     uchar	laddr[IPaddrlen];	/* V6 local address */
     uchar	ifcaddr[IPaddrlen];	/* V6 ifc addr msg was received on */
+
     uchar	rport[2];		/* remote port */
     uchar	lport[2];		/* local port */
 };
@@ -181,12 +208,12 @@ struct Udphdr
 
 uchar*	defmask(uchar*);
 void	maskip(uchar*, uchar*, uchar*);
-int	eipfmt(Fmt*);
-int	isv4(uchar*);
+int		eipfmt(Fmt*);
+bool	isv4(uchar*);
 vlong	parseip(uchar*, char*);
 vlong	parseipmask(uchar*, char*);
 char*	v4parseip(uchar*, char*);
-char*	v4parsecidr(uchar*, uchar*, char*);
+//char*	v4parsecidr(uchar*, uchar*, char*);
 int	parseether(uchar*, char*);
 int	myipaddr(uchar*, char*);
 int	myetheraddr(uchar*, char*);
@@ -195,15 +222,15 @@ int	equivip6(uchar*, uchar*);
 
 Ipifc*	readipifc(char*, Ipifc*, int);
 
-void	hnputv(void*, uvlong);
-void	hnputl(void*, uint);
 void	hnputs(void*, ushort);
-uvlong	nhgetv(void*);
-uint	nhgetl(void*);
+void	hnputl(void*, uint);
+void	hnputv(void*, uvlong);
 ushort	nhgets(void*);
+uint	nhgetl(void*);
+uvlong	nhgetv(void*);
 ushort	ptclbsum(uchar*, int);
 
-int	v6tov4(uchar*, uchar*);
+int		v6tov4(uchar*, uchar*);
 void	v4tov6(uchar*, uchar*);
 
 /*s: macro ipcmp */

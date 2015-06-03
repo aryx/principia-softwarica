@@ -31,7 +31,9 @@ int notkbd;
 static char *srv;
 /*e: global srv */
 
+// forward decl
 typedef struct Comm Comm;
+
 /*s: struct Comm */
 struct Comm {
     int returns;

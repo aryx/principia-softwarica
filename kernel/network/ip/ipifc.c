@@ -163,7 +163,7 @@ ipifcbind(Conv *c, char **argv, int argc)
     ifc->m = m;
     ifc->mintu = ifc->m->mintu;
     ifc->maxtu = ifc->m->maxtu;
-    if(ifc->m->unbindonclose == 0)
+    if(ifc->m->unbindonclose == false)
         ifc->conv->inuse++;
     ifc->rp.mflag = 0;      /* default not managed */
     ifc->rp.oflag = 0;
@@ -207,7 +207,7 @@ ipifcunbind(Ipifc *ifc)
     wlock(ifc);
 
     /* dissociate routes */
-    if(ifc->m != nil && ifc->m->unbindonclose == 0)
+    if(ifc->m != nil && ifc->m->unbindonclose == false)
         ifc->conv->inuse--;
     ifc->ifcid++;
 

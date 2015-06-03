@@ -30,9 +30,10 @@ int
 eipfmt(Fmt *f)
 {
     char buf[5*8];
-    static char *efmt = "%.2ux%.2ux%.2ux%.2ux%.2ux%.2ux";
-    static char *ifmt = "%d.%d.%d.%d";
-    uchar *p, ip[16];
+    static char *efmt = "%.2ux%.2ux%.2ux%.2ux%.2ux%.2ux"; // ethernet
+    static char *ifmt = "%d.%d.%d.%d"; // internet, v4
+    uchar *p;
+    uchar ip[16];
     ulong *lp;
     ushort s;
     int i, j, n, eln, eli;

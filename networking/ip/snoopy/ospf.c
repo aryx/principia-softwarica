@@ -6,11 +6,12 @@
 #include "dat.h"
 #include "protos.h"
 
+typedef struct Ospfpkt	Ospfpkt;
+typedef struct Ospfhello	Ospfhello;
 
 /*
  *  OSPF packets
  */
-typedef struct Ospfpkt	Ospfpkt;
 /*s: struct Ospfpkt */
 struct Ospfpkt
 {
@@ -89,7 +90,6 @@ ospfauth(Ospfpkt *ospf)
 }
 /*e: function ospfauth */
 
-typedef struct Ospfhello	Ospfhello;
 /*s: struct Ospfhello */
 struct Ospfhello
 {

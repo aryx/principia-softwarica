@@ -1,0 +1,289 @@
+
+<<[[defmask()]] if ipv6>>=
+else {
+    if(ipcmp(ip, v6loopback) == 0)
+        return IPallbits;
+    else if(memcmp(ip, v6linklocal, v6llpreflen) == 0)
+        return v6linklocalmask;
+    else if(memcmp(ip, v6solicitednode, v6snpreflen) == 0)
+        return v6solicitednodemask;
+    else if(memcmp(ip, v6multicast, v6mcpreflen) == 0)
+        return v6multicastmask;
+    return IPallbits;
+}
+@
+
+<<[[Ipifc(user)]] ipv6 fields>>=
+    Ipv6rp	rp;
+@
+
+<<[[Ipifc(user)]] ipv6 fields>>=
+    uchar	sendra6;		/* on == send router adv */
+    uchar	recvra6;		/* on == rcv router adv */
+@
+
+<<[[Fs(kernel)]] ipv6 fields>>=
+  v6params  *v6p;
+  Route *v6root[1<<Lroot];  /* v6 routing forest */
+@
+
+<<[[IP(kernel)]] ipv6 fields>>=
+  QLock   fraglock6;
+  Fragment6*  flisthead6;
+  Fragment6*  fragfree6;
+  Ref   id6;
+@
+
+<<[[Ipifc(kernel)]] ipv6 fields>>=
+uchar sendra6;  /* flag: send router advs on this ifc */
+uchar recvra6;  /* flag: recv router advs on this ifc */
+@
+% mimic user side, ipv6 stuff?
+
+
+% ip_init -> <>
+<<function ip_init_6>>=
+void
+ip_init_6(Fs *f)
+{
+    v6params *v6p;
+
+    v6p = smalloc(sizeof(v6params));
+
+    v6p->rp.mflag       = 0;        /* default not managed */
+    v6p->rp.oflag       = 0;
+    v6p->rp.maxraint    = 600000;   /* millisecs */
+    v6p->rp.minraint    = 200000;
+    v6p->rp.linkmtu     = 0;        /* no mtu sent */
+    v6p->rp.reachtime   = 0;
+    v6p->rp.rxmitra     = 0;
+    v6p->rp.ttl     = MAXTTL;
+    v6p->rp.routerlt    = 3 * v6p->rp.maxraint;
+
+    v6p->hp.rxmithost   = 1000;     /* v6 RETRANS_TIMER */
+
+    v6p->cdrouter       = -1;
+
+    f->v6p          = v6p;
+}
+@
+
+
+<<struct Ipv6rp>>=
+/* default values, one per stack */
+struct Ipv6rp
+{
+    int	mflag;
+    int	oflag;
+    int 	maxraint;
+    int	minraint;
+    int	linkmtu;
+    int	reachtime;
+    int	rxmitra;
+    int	ttl;
+    int	routerlt;	
+};
+@
+
+<<macro ISIPV6MCAST>>=
+#define ISIPV6MCAST(addr)	((addr)[0] == 0xff)
+@
+
+<<macro ISIPV6LINKLOCAL>>=
+#define ISIPV6LINKLOCAL(addr) ((addr)[0] == 0xfe && ((addr)[1] & 0xc0) == 0x80)
+@
+
+<<enum _anon_ (include/net/ip.h)>>=
+/*
+ * ipv6 constants
+ * `ra' is `router advertisement', `rs' is `router solicitation'.
+ * `na' is `neighbour advertisement'.
+ */
+enum {
+    IPV6HDR_LEN	= 40,
+
+    /* neighbour discovery option types */
+    V6nd_srclladdr	= 1,
+    V6nd_targlladdr	= 2,
+    V6nd_pfxinfo	= 3,
+    V6nd_redirhdr	= 4,
+    V6nd_mtu	= 5,
+    /* new since rfc2461; see iana.org/assignments/icmpv6-parameters */
+    V6nd_home	= 8,
+    V6nd_srcaddrs	= 9,		/* rfc3122 */
+    V6nd_ip		= 17,
+    /* /lib/rfc/drafts/draft-jeong-dnsop-ipv6-dns-discovery-12.txt */
+    V6nd_rdns	= 25,
+    /* plan 9 extensions */
+    V6nd_9fs	= 250,
+    V6nd_9auth	= 251,
+
+    /* Router constants (all times in ms.) */
+    Maxv6initraintvl= 16000,
+    Maxv6initras	= 3,
+    Maxv6finalras	= 3,
+    Minv6interradelay= 3000,
+    Maxv6radelay	= 500,
+
+    /* Host constants */
+    Maxv6rsdelay	= 1000,
+    V6rsintvl	= 4000,
+    Maxv6rss	= 3,
+
+    /* Node constants */
+    Maxv6mcastrss	= 3,
+    Maxv6unicastrss	= 3,
+    Maxv6anycastdelay= 1000,
+    Maxv6na		= 3,
+    V6reachabletime	= 30000,
+    V6retranstimer	= 1000,
+    V6initprobedelay= 5000,
+};
+@
+
+<<struct Ip6hdr>>=
+/* V6 header on the wire */
+struct Ip6hdr {
+    uchar	vcf[4];		/* version:4, traffic class:8, flow label:20 */
+    uchar	ploadlen[2];	/* payload length: packet length - 40 */
+    uchar	proto;		/* next header type */
+    uchar	ttl;		/* hop limit */
+    uchar	src[IPaddrlen];	/* source address */
+    uchar	dst[IPaddrlen];	/* destination address */
+    uchar	payload[];
+};
+@
+
+<<struct Icmp6hdr>>=
+/*
+ *  user-level icmpv6 with control message "headers"
+ */
+struct Icmp6hdr {
+    uchar	_0_[8];
+    uchar	laddr[IPaddrlen];	/* local address */
+    uchar	raddr[IPaddrlen];	/* remote address */
+};
+@
+
+
+<<function equivip6>>=
+bool
+equivip6(uchar *a, uchar *b)
+{
+    int i;
+
+    for(i = 0; i < IPaddrlen; i++)
+        if(a[i] != b[i])
+            return false;
+    return true;
+}
+@
+
+
+<<global v6loopback>>=
+static uchar v6loopback[IPaddrlen] = {
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0x01
+};
+@
+
+<<global v6linklocal>>=
+static uchar v6linklocal[IPaddrlen] = {
+    0xfe, 0x80, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0
+};
+@
+
+<<global v6linklocalmask>>=
+static uchar v6linklocalmask[IPaddrlen] = {
+    0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff,
+    0, 0, 0, 0,
+    0, 0, 0, 0
+};
+@
+
+<<global v6llpreflen>>=
+static int v6llpreflen = 8;	/* link-local prefix length in bytes */
+@
+
+<<global v6multicast>>=
+static uchar v6multicast[IPaddrlen] = {
+    0xff, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0
+};
+@
+
+<<global v6multicastmask>>=
+static uchar v6multicastmask[IPaddrlen] = {
+    0xff, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0
+};
+@
+
+<<global v6mcpreflen>>=
+static int v6mcpreflen = 1;	/* multicast prefix length */
+@
+
+<<global v6solicitednode>>=
+static uchar v6solicitednode[IPaddrlen] = {
+    0xff, 0x02, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0, 0x01,
+    0xff, 0, 0, 0
+};
+@
+
+<<global v6solicitednodemask>>=
+static uchar v6solicitednodemask[IPaddrlen] = {
+    0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff,
+    0xff, 0x0, 0x0, 0x0
+};
+@
+
+<<global v6snpreflen>>=
+static int v6snpreflen = 13;
+@
+
+
+
+<<function v6tov4>>=
+errorneg1
+v6tov4(uchar *v4, uchar *v6)
+{
+    if(v6[0] == 0
+    && v6[1] == 0
+    && v6[2] == 0
+    && v6[3] == 0
+    && v6[4] == 0
+    && v6[5] == 0
+    && v6[6] == 0
+    && v6[7] == 0
+    && v6[8] == 0
+    && v6[9] == 0
+    && v6[10] == 0xff
+    && v6[11] == 0xff)
+    {
+        v4[0] = v6[12];
+        v4[1] = v6[13];
+        v4[2] = v6[14];
+        v4[3] = v6[15];
+        return OK_0;
+    } else {
+        memset(v4, 0, 4);
+        if(memcmp(v6, IPnoaddr, IPaddrlen) == 0)
+            return OK_0;
+        return ERROR_NEG1;
+    }
+}
+@
