@@ -39,9 +39,11 @@ enum
     /*s: [[Qid]] conversation extra cases */
     Qerr,
     Qlisten,
+    /*x: [[Qid]] conversation extra cases */
+    Qstatus,
+    /*x: [[Qid]] conversation extra cases */
     Qlocal,
     Qremote,
-    Qstatus,
     /*x: [[Qid]] conversation extra cases */
     Qsnoop,
     /*e: [[Qid]] conversation extra cases */
@@ -78,7 +80,7 @@ enum
 #define PROTO(x)    ( (((ulong)(x).path) >> Shiftproto) & Maskproto )
 /*e: macro PROTO */
 /*s: macro QID */
-#define QID(p, c, y)    ( ((p)<<(Shiftproto)) | ((c)<<Shiftconv) | (y) )
+#define QID(p, cv, y)    ( ((p)<<(Shiftproto)) | ((cv)<<Shiftconv) | (y) )
 /*e: macro QID */
 
 /*s: global network */
@@ -132,15 +134,15 @@ ip3gen(Chan *c, int i, Dir *dp)
         devdir(c, q, "listen", 0, cv->owner, cv->perm, dp);
         return 1;
     /*x: [[ip3gen()]] switch TYPE qid cases */
+    case Qstatus:
+        p = "status";
+        break;
+    /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qlocal:
         p = "local";
         break;
     case Qremote:
         p = "remote";
-        break;
-    /*x: [[ip3gen()]] switch TYPE qid cases */
-    case Qstatus:
-        p = "status";
         break;
     /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qsnoop:
@@ -370,12 +372,14 @@ newipaux(char *owner, char *tag)
     int n;
 
     a = smalloc(sizeof(IPaux));
+
     kstrdup(&a->owner, owner);
     memset(a->tag, ' ', sizeof(a->tag));
     n = strlen(tag);
     if(n > sizeof(a->tag))
         n = sizeof(a->tag);
     memmove(a->tag, tag, n);
+
     return a;
 }
 /*e: function newipaux */
@@ -481,6 +485,35 @@ ipopen(Chan* c, int omode)
             error(Eperm);
         break;
     /*x: [[ipopen()]] switch TYPE qid cases */
+    case Qctl:
+    case Qdata:
+    case Qerr:
+        p = f->p[PROTO(c->qid)];
+        qlock(p);
+        cv = p->conv[CONV(c->qid)];
+        qlock(cv);
+        if(waserror()) {
+            qunlock(cv);
+            qunlock(p);
+            nexterror();
+        }
+        if((perm & (cv->perm>>6)) != perm) {
+            if(strcmp(ATTACHER(c), cv->owner) != 0)
+                error(Eperm);
+            if((perm & cv->perm) != perm)
+                error(Eperm);
+
+        }
+        cv->inuse++;
+        if(cv->inuse == 1){
+            kstrdup(&cv->owner, ATTACHER(c));
+            cv->perm = 0660;
+        }
+        qunlock(cv);
+        qunlock(p);
+        poperror();
+        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
     case Qlisten:
         cv = f->p[PROTO(c->qid)]->conv[CONV(c->qid)];
         if((perm & (cv->perm>>6)) != perm) {
@@ -551,35 +584,6 @@ ipopen(Chan* c, int omode)
             break;
         }
         mkqid(&c->qid, QID(p->x, cv->x, Qctl), 0, QTFILE);
-        break;
-    /*x: [[ipopen()]] switch TYPE qid cases */
-    case Qctl:
-    case Qdata:
-    case Qerr:
-        p = f->p[PROTO(c->qid)];
-        qlock(p);
-        cv = p->conv[CONV(c->qid)];
-        qlock(cv);
-        if(waserror()) {
-            qunlock(cv);
-            qunlock(p);
-            nexterror();
-        }
-        if((perm & (cv->perm>>6)) != perm) {
-            if(strcmp(ATTACHER(c), cv->owner) != 0)
-                error(Eperm);
-            if((perm & cv->perm) != perm)
-                error(Eperm);
-
-        }
-        cv->inuse++;
-        if(cv->inuse == 1){
-            kstrdup(&cv->owner, ATTACHER(c));
-            cv->perm = 0660;
-        }
-        qunlock(cv);
-        qunlock(p);
-        poperror();
         break;
     /*x: [[ipopen()]] switch TYPE qid cases */
     case Qarp:
@@ -746,7 +750,7 @@ ipread(Chan *ch, void *a, long n, vlong off)
 {
     Fs *f;
     Proto *x;
-    Conv *c;
+    Conv *cv;
     char *buf, *p;
     long rv;
     ulong offset = off;
@@ -761,6 +765,10 @@ ipread(Chan *ch, void *a, long n, vlong off)
     case Qconvdir:
         return devdirread(ch, a, n, 0, 0, ipgen);
     /*x: [[ipread()]] switch TYPE qid cases */
+    case Qerr:
+        cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+        return qread(cv->eq, a, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
     case Qctl:
         buf = smalloc(16);
         snprint(buf, 16, "%lud", CONV(ch->qid));
@@ -769,52 +777,8 @@ ipread(Chan *ch, void *a, long n, vlong off)
         return rv;
     /*x: [[ipread()]] switch TYPE qid cases */
     case Qdata:
-        c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-        return qread(c->rq, a, n);
-    /*x: [[ipread()]] switch TYPE qid cases */
-    case Qremote:
-        buf = smalloc(Statelen);
-        x = f->p[PROTO(ch->qid)];
-        c = x->conv[CONV(ch->qid)];
-        if(x->remote == nil) {
-            snprint(buf, Statelen, "%I!%d\n", c->raddr, c->rport);
-        } else {
-            // Protocol dispatch
-            (*x->remote)(c, buf, Statelen-2);
-        }
-        rv = readstr(offset, p, n, buf);
-        free(buf);
-        return rv;
-    /*x: [[ipread()]] switch TYPE qid cases */
-    case Qlocal:
-        buf = smalloc(Statelen);
-        x = f->p[PROTO(ch->qid)];
-        c = x->conv[CONV(ch->qid)];
-        if(x->local == nil) {
-            snprint(buf, Statelen, "%I!%d\n", c->laddr, c->lport);
-        } else {
-            // Protocol dispatch
-            (*x->local)(c, buf, Statelen-2);
-        }
-        rv = readstr(offset, p, n, buf);
-        free(buf);
-        return rv;
-    /*x: [[ipread()]] switch TYPE qid cases */
-    case Qstatus:
-        buf = smalloc(Statelen);
-        x = f->p[PROTO(ch->qid)];
-        c = x->conv[CONV(ch->qid)];
-
-        // Protocol dispatch
-        (*x->state)(c, buf, Statelen-2);
-
-        rv = readstr(offset, p, n, buf);
-        free(buf);
-        return rv;
-    /*x: [[ipread()]] switch TYPE qid cases */
-    case Qerr:
-        c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-        return qread(c->eq, a, n);
+        cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+        return qread(cv->rq, a, n);
     /*x: [[ipread()]] switch TYPE qid cases */
     case Qstats:
         x = f->p[PROTO(ch->qid)];
@@ -825,6 +789,46 @@ ipread(Chan *ch, void *a, long n, vlong off)
         // Protocol dispatch
         (*x->stats)(x, buf, Statelen);
 
+        rv = readstr(offset, p, n, buf);
+        free(buf);
+        return rv;
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qstatus:
+        buf = smalloc(Statelen);
+        x = f->p[PROTO(ch->qid)];
+        cv = x->conv[CONV(ch->qid)];
+
+        // Protocol dispatch
+        (*x->state)(cv, buf, Statelen-2);
+
+        rv = readstr(offset, p, n, buf);
+        free(buf);
+        return rv;
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qlocal:
+        buf = smalloc(Statelen);
+        x = f->p[PROTO(ch->qid)];
+        cv = x->conv[CONV(ch->qid)];
+        if(x->local == nil) {
+            snprint(buf, Statelen, "%I!%d\n", cv->laddr, cv->lport);
+        } else {
+            // Protocol dispatch
+            (*x->local)(cv, buf, Statelen-2);
+        }
+        rv = readstr(offset, p, n, buf);
+        free(buf);
+        return rv;
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qremote:
+        buf = smalloc(Statelen);
+        x = f->p[PROTO(ch->qid)];
+        cv = x->conv[CONV(ch->qid)];
+        if(x->remote == nil) {
+            snprint(buf, Statelen, "%I!%d\n", cv->raddr, cv->rport);
+        } else {
+            // Protocol dispatch
+            (*x->remote)(cv, buf, Statelen-2);
+        }
         rv = readstr(offset, p, n, buf);
         free(buf);
         return rv;
@@ -848,8 +852,8 @@ ipread(Chan *ch, void *a, long n, vlong off)
         return netlogread(f, a, offset, n);
     /*x: [[ipread()]] switch TYPE qid cases */
     case Qsnoop:
-        c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-        return qread(c->sq, a, n);
+        cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+        return qread(cv->sq, a, n);
     /*e: [[ipread()]] switch TYPE qid cases */
     default:
         error(Eperm);
@@ -1070,7 +1074,7 @@ setraddrport(Conv* c, char* str)
     p = strchr(p, '!');
     if(p){
         if(strstr(p, "!r") != nil)
-            c->restricted = 1;
+            c->restricted = true;
     }
     return nil;
 }
@@ -1220,13 +1224,13 @@ announcectlmsg(Proto *x, Conv *c, Cmdbuf *cb)
  *  called by protocol bind routine to set addresses
  */
 char*
-Fsstdbind(Conv* c, char* argv[], int argc)
+Fsstdbind(Conv* cv, char* argv[], int argc)
 {
     switch(argc){
     default:
         break;
     case 2:
-        return setladdrport(c, argv[1], 0);
+        return setladdrport(cv, argv[1], 0);
     }
     return "bad args to bind";
 }
@@ -1234,15 +1238,15 @@ Fsstdbind(Conv* c, char* argv[], int argc)
 
 /*s: function bindctlmsg */
 static void
-bindctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
+bindctlmsg(Proto *x, Conv *cv, Cmdbuf *cb)
 {
     char *p;
 
     if(x->bind == nil)
-        p = Fsstdbind(c, cb->f, cb->nf);
+        p = Fsstdbind(cv, cb->f, cb->nf);
     else
         // Protocol dispatch
-        p = x->bind(c, cb->f, cb->nf);
+        p = x->bind(cv, cb->f, cb->nf);
     if(p != nil)
         error(p);
 }
@@ -1274,7 +1278,7 @@ ttlctlmsg(Conv *c, Cmdbuf *cb)
 static long
 ipwrite(Chan* ch, void *v, long n, vlong off)
 {
-    Conv *c;
+    Conv *cv;
     Proto *x;
     char *p;
     Cmdbuf *cb;
@@ -1288,24 +1292,14 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
 
     switch(TYPE(ch->qid)){
     /*s: [[ipwrite()]] switch TYPE qid cases */
-    case Qdata:
-        x = f->p[PROTO(ch->qid)];
-        c = x->conv[CONV(ch->qid)];
-
-        if(c->wq == nil)
-            error(Eperm);
-
-        qwrite(c->wq, a, n);
-        break;
-    /*x: [[ipwrite()]] switch TYPE qid cases */
     case Qctl:
         x = f->p[PROTO(ch->qid)];
-        c = x->conv[CONV(ch->qid)];
+        cv = x->conv[CONV(ch->qid)];
         cb = parsecmd(a, n);
 
-        qlock(c);
+        qlock(cv);
         if(waserror()) {
-            qunlock(c);
+            qunlock(cv);
             free(cb);
             nexterror();
         }
@@ -1313,59 +1307,71 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
             error("short control request");
 
         if(strcmp(cb->f[0], "connect") == 0)
-            connectctlmsg(x, c, cb);
+            connectctlmsg(x, cv, cb);
         else if(strcmp(cb->f[0], "announce") == 0)
-            announcectlmsg(x, c, cb);
+            announcectlmsg(x, cv, cb);
         else if(strcmp(cb->f[0], "bind") == 0)
-            bindctlmsg(x, c, cb);
+            bindctlmsg(x, cv, cb);
+
+
         else if(strcmp(cb->f[0], "ttl") == 0)
-            ttlctlmsg(c, cb);
+            ttlctlmsg(cv, cb);
         else if(strcmp(cb->f[0], "tos") == 0)
-            tosctlmsg(c, cb);
+            tosctlmsg(cv, cb);
         else if(strcmp(cb->f[0], "ignoreadvice") == 0)
-            c->ignoreadvice = true;
+            cv->ignoreadvice = true;
         else if(strcmp(cb->f[0], "addmulti") == 0){
             if(cb->nf < 2)
                 error("addmulti needs interface address");
             if(cb->nf == 2){
-                if(!ipismulticast(c->raddr))
+                if(!ipismulticast(cv->raddr))
                     error("addmulti for a non multicast address");
                 if (parseip(ia, cb->f[1]) == -1)
                     error(Ebadip);
-                ipifcaddmulti(c, c->raddr, ia);
+                ipifcaddmulti(cv, cv->raddr, ia);
             } else {
                 if (parseip(ia, cb->f[1]) == -1 ||
                     parseip(ma, cb->f[2]) == -1)
                     error(Ebadip);
                 if(!ipismulticast(ma))
                     error("addmulti for a non multicast address");
-                ipifcaddmulti(c, ma, ia);
+                ipifcaddmulti(cv, ma, ia);
             }
         } else if(strcmp(cb->f[0], "remmulti") == 0){
             if(cb->nf < 2)
                 error("remmulti needs interface address");
-            if(!ipismulticast(c->raddr))
+            if(!ipismulticast(cv->raddr))
                 error("remmulti for a non multicast address");
             if (parseip(ia, cb->f[1]) == -1)
                 error(Ebadip);
-            ipifcremmulti(c, c->raddr, ia);
+            ipifcremmulti(cv, cv->raddr, ia);
         } else if(strcmp(cb->f[0], "maxfragsize") == 0){
             if(cb->nf < 2)
                 error("maxfragsize needs size");
 
-            c->maxfragsize = (int)strtol(cb->f[1], nil, 0);
+            cv->maxfragsize = (int)strtol(cb->f[1], nil, 0);
 
         } 
         else if(x->ctl != nil) {
             // Protocol dispatch
-            p = x->ctl(c, cb->f, cb->nf);
+            p = x->ctl(cv, cb->f, cb->nf);
             if(p != nil)
                 error(p);
         } else
             error("unknown control request");
-        qunlock(c);
+        qunlock(cv);
         free(cb);
         poperror();
+        break;
+    /*x: [[ipwrite()]] switch TYPE qid cases */
+    case Qdata:
+        x = f->p[PROTO(ch->qid)];
+        cv = x->conv[CONV(ch->qid)];
+
+        if(cv->wq == nil)
+            error(Eperm);
+
+        qwrite(cv->wq, a, n);
         break;
     /*x: [[ipwrite()]] switch TYPE qid cases */
     case Qarp:
@@ -1451,20 +1457,23 @@ Fsproto(Fs *f, Proto *p)
 
     p->f = f;
 
+    /*s: [[Fsproto()]] adjust f->t2p */
     if(p->ipproto > 0){
         if(f->t2p[p->ipproto] != nil)
             return -1;
         f->t2p[p->ipproto] = p;
     }
+    /*e: [[Fsproto()]] adjust f->t2p */
 
     p->qid.type = QTDIR;
     p->qid.path = QID(f->np, 0, Qprotodir);
-    p->conv = malloc(sizeof(Conv*)*(p->nc+1));
+    p->conv = malloc(sizeof(Conv*) * (p->nc+1));
     if(p->conv == nil)
         panic("Fsproto");
 
-    p->x = f->np;
     p->nextrport = 600;
+
+    p->x = f->np;
     f->p[f->np++] = p;
 
     return 0;
@@ -1478,45 +1487,45 @@ Fsproto(Fs *f, Proto *p)
 Conv*
 Fsprotoclone(Proto *p, char *user)
 {
-    Conv *c, **pp, **ep;
+    Conv *cv, **pp, **ep;
 
 retry:
-    c = nil;
+    cv = nil;
     ep = &p->conv[p->nc];
     for(pp = p->conv; pp < ep; pp++) {
-        c = *pp;
-        if(c == nil){
-            c = malloc(sizeof(Conv));
-            if(c == nil)
+        cv = *pp;
+        if(cv == nil){
+            cv = malloc(sizeof(Conv));
+            if(cv == nil)
                 error(Enomem);
-            qlock(c);
-            c->p = p;
-            c->x = pp - p->conv;
+            qlock(cv);
+            cv->p = p;
+            cv->x = pp - p->conv;
             if(p->ptclsize != 0){
-                c->ptcl = malloc(p->ptclsize);
-                if(c->ptcl == nil) {
-                    free(c);
+                cv->ptcl = malloc(p->ptclsize);
+                if(cv->ptcl == nil) {
+                    free(cv);
                     error(Enomem);
                 }
             }
-            *pp = c;
+            *pp = cv;
             p->ac++;
-            c->eq = qopen(1024, Qmsg, 0, 0);
+            cv->eq = qopen(1024, Qmsg, 0, 0);
 
             // !! Protocol dispatch !!! will create extra queues
-            (*p->create)(c);
+            (*p->create)(cv);
 
             break;
         }
-        if(canqlock(c)){
+        if(canqlock(cv)){
             /*
              *  make sure both processes and protocol
              *  are done with this Conv
              */
-            if(c->inuse == 0 && (p->inuse == nil || (*p->inuse)(c) == 0))
+            if(cv->inuse == 0 && (p->inuse == nil || (*p->inuse)(cv) == 0))
                 break;
 
-            qunlock(c);
+            qunlock(cv);
         }
     }
 
@@ -1531,25 +1540,25 @@ retry:
         return nil;
     }
 
-    c->inuse = 1;
-    kstrdup(&c->owner, user);
-    c->perm = 0660;
-    c->state = Idle;
-    ipmove(c->laddr, IPnoaddr);
-    ipmove(c->raddr, IPnoaddr);
-    c->r = nil;
-    c->rgen = 0;
-    c->lport = 0;
-    c->rport = 0;
-    c->restricted = 0;
-    c->maxfragsize = 0;
-    c->ttl = MAXTTL;
-    qreopen(c->rq);
-    qreopen(c->wq);
-    qreopen(c->eq);
+    cv->inuse = 1;
+    kstrdup(&cv->owner, user);
+    cv->perm = 0660;
+    cv->state = Idle;
+    ipmove(cv->laddr, IPnoaddr);
+    ipmove(cv->raddr, IPnoaddr);
+    cv->r = nil;
+    cv->rgen = 0;
+    cv->lport = 0;
+    cv->rport = 0;
+    cv->restricted = 0;
+    cv->maxfragsize = 0;
+    cv->ttl = MAXTTL;
+    qreopen(cv->rq);
+    qreopen(cv->wq);
+    qreopen(cv->eq);
 
-    qunlock(c);
-    return c;
+    qunlock(cv);
+    return cv;
 }
 /*e: function Fsprotoclone */
 

@@ -9616,7 +9616,7 @@ setraddrport(Conv* c, char* str)
     p = strchr(p, '!');
     if(p){
         if(strstr(p, "!r") != nil)
-            c->restricted = 1;
+            c->restricted = true;
     }
     return nil;
 }
@@ -9764,22 +9764,6 @@ announcectlmsg(Proto *x, Conv *c, Cmdbuf *cb)
 }
 @
 
-<<function Fsstdbind>>=
-/*
- *  called by protocol bind routine to set addresses
- */
-char*
-Fsstdbind(Conv* c, char* argv[], int argc)
-{
-    switch(argc){
-    default:
-        break;
-    case 2:
-        return setladdrport(c, argv[1], 0);
-    }
-    return "bad args to bind";
-}
-@
 
 
 <<function tosctlmsg>>=
@@ -11731,122 +11715,6 @@ struct Etherarp
 static char *nbmsg = "nonblocking";
 @
 
-<<function etherbind>>=
-/*
- *  called to bind an IP ifc to an ethernet device
- *  called with ifc wlock'd
- */
-static void
-etherbind(Ipifc *ifc, int argc, char **argv)
-{
-    Chan *mchan4, *cchan4, *achan, *mchan6, *cchan6, *schan;
-    char addr[Maxpath]; //char addr[2*KNAMELEN];
-    char dir[Maxpath];  //char dir[2*KNAMELEN];
-    char *buf;
-    int n;
-    char *ptr;
-    Etherrock *er;
-
-    if(argc < 2)
-        error(Ebadarg);
-
-    mchan4 = cchan4 = achan = mchan6 = cchan6 = nil;
-    buf = nil;
-    if(waserror()){
-        if(mchan4 != nil)
-            cclose(mchan4);
-        if(cchan4 != nil)
-            cclose(cchan4);
-        if(achan != nil)
-            cclose(achan);
-        if(mchan6 != nil)
-            cclose(mchan6);
-        if(cchan6 != nil)
-            cclose(cchan6);
-        if(buf != nil)
-            free(buf);
-        nexterror();
-    }
-
-    /*
-     *  open ipv4 conversation
-     *
-     *  the dial will fail if the type is already open on
-     *  this device.
-     */
-    snprint(addr, sizeof(addr), "%s!0x800", argv[2]);   /* ETIP4 */
-    mchan4 = chandial(addr, nil, dir, &cchan4);
-
-    /*
-     *  make it non-blocking
-     */
-    devtab[cchan4->type]->write(cchan4, nbmsg, strlen(nbmsg), 0);
-
-    /*
-     *  get mac address and speed
-     */
-    snprint(addr, sizeof(addr), "%s/stats", argv[2]);
-    buf = smalloc(512);
-    schan = namec(addr, Aopen, OREAD, 0);
-    if(waserror()){
-        cclose(schan);
-        nexterror();
-    }
-    n = devtab[schan->type]->read(schan, buf, 511, 0);
-    cclose(schan);
-    poperror();
-    buf[n] = 0;
-
-    ptr = strstr(buf, "addr: ");
-    if(!ptr)
-        error(Eio);
-    ptr += 6;
-    parsemac(ifc->mac, ptr, 6);
-
-    ptr = strstr(buf, "mbps: ");
-    if(ptr){
-        ptr += 6;
-        ifc->mbps = atoi(ptr);
-    } else
-        ifc->mbps = 100;
-
-    /*
-     *  open arp conversation
-     */
-    snprint(addr, sizeof(addr), "%s!0x806", argv[2]);   /* ETARP */
-    achan = chandial(addr, nil, nil, nil);
-
-    /*
-     *  open ipv6 conversation
-     *
-     *  the dial will fail if the type is already open on
-     *  this device.
-     */
-    snprint(addr, sizeof(addr), "%s!0x86DD", argv[2]);  /* ETIP6 */
-    mchan6 = chandial(addr, nil, dir, &cchan6);
-
-    /*
-     *  make it non-blocking
-     */
-    devtab[cchan6->type]->write(cchan6, nbmsg, strlen(nbmsg), 0);
-
-    er = smalloc(sizeof(*er));
-    er->mchan4 = mchan4;
-    er->cchan4 = cchan4;
-    er->achan = achan;
-    er->mchan6 = mchan6;
-    er->cchan6 = cchan6;
-    er->f = ifc->conv->p->f;
-    ifc->arg = er;
-
-    free(buf);
-    poperror();
-
-    kproc("etherread4", etherread4, ifc);
-    kproc("recvarpproc", recvarpproc, ifc);
-    kproc("etherread6", etherread6, ifc);
-}
-@
 
 <<function etherunbind>>=
 /*
@@ -17047,67 +16915,10 @@ enum
 
 
 
-<<struct Udpstats>>=
-struct Udpstats
-{
-    uvlong  udpInDatagrams;
-    ulong   udpNoPorts;
-    ulong   udpInErrors;
-    uvlong  udpOutDatagrams;
-};
-@
 
-<<struct Udppriv>>=
-struct Udppriv
-{
-    Ipht        ht;
 
-    /* MIB counters */
-    Udpstats    ustats;
 
-    /* non-MIB stats */
-    ulong       csumerr;        /* checksum errors */
-    ulong       lenerr;         /* short packet */
-};
-@
 
-<<struct Udpcb>>=
-struct Udpcb
-{
-    QLock;
-    uchar   headers;
-};
-@
-
-<<function udpconnect>>=
-static char*
-udpconnect(Conv *c, char **argv, int argc)
-{
-    char *e;
-    Udppriv *upriv;
-
-    upriv = c->p->priv;
-    e = Fsstdconnect(c, argv, argc);
-    Fsconnected(c, e);
-    if(e != nil)
-        return e;
-
-    iphtadd(&upriv->ht, c);
-    return nil;
-}
-@
-
-<<function udpstate>>=
-static int
-udpstate(Conv *c, char *state, int n)
-{
-    return snprint(state, n, "%s qin %d qout %d\n",
-        c->inuse ? "Open" : "Closed",
-        c->rq ? qlen(c->rq) : 0,
-        c->wq ? qlen(c->wq) : 0
-    );
-}
-@
 
 <<function udpannounce>>=
 static char*
@@ -17127,14 +16938,6 @@ udpannounce(Conv *c, char** argv, int argc)
 }
 @
 
-<<function udpcreate>>=
-static void
-udpcreate(Conv *c)
-{
-    c->rq = qopen(128*1024, Qmsg, 0, 0);
-    c->wq = qbypass(udpkick, c);
-}
-@
 
 <<function udpclose>>=
 static void
@@ -17160,152 +16963,6 @@ udpclose(Conv *c)
 }
 @
 
-<<function udpkick>>=
-void
-udpkick(void *x, Block *bp)
-{
-    Conv *c = x;
-    Udp4hdr *uh4;
-    Udp6hdr *uh6;
-    ushort rport;
-    uchar laddr[IPaddrlen], raddr[IPaddrlen];
-    Udpcb *ucb;
-    int dlen, ptcllen;
-    Udppriv *upriv;
-    Fs *f;
-    int version;
-    Conv *rc;
-
-    upriv = c->p->priv;
-    f = c->p->f;
-
-//  netlog(c->p->f, Logudp, "udp: kick\n"); /* frequent and uninteresting */
-    if(bp == nil)
-        return;
-
-    ucb = (Udpcb*)c->ptcl;
-    switch(ucb->headers) {
-    case 7:
-        /* get user specified addresses */
-        bp = pullupblock(bp, UDP_USEAD7);
-        if(bp == nil)
-            return;
-        ipmove(raddr, bp->rp);
-        bp->rp += IPaddrlen;
-        ipmove(laddr, bp->rp);
-        bp->rp += IPaddrlen;
-        /* pick interface closest to dest */
-        if(ipforme(f, laddr) != Runi)
-            findlocalip(f, laddr, raddr);
-        bp->rp += IPaddrlen;        /* Ignore ifc address */
-        rport = nhgets(bp->rp);
-        bp->rp += 2+2;          /* Ignore local port */
-        break;
-    default:
-        rport = 0;
-        break;
-    }
-
-    if(ucb->headers) {
-        if(memcmp(laddr, v4prefix, IPv4off) == 0
-        || ipcmp(laddr, IPnoaddr) == 0)
-            version = 4;
-        else
-            version = 6;
-    } else {
-        if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
-            memcmp(c->laddr, v4prefix, IPv4off) == 0)
-            || ipcmp(c->raddr, IPnoaddr) == 0)
-            version = 4;
-        else
-            version = 6;
-    }
-
-    dlen = blocklen(bp);
-
-    /* fill in pseudo header and compute checksum */
-    switch(version){
-    case V4:
-        bp = padblock(bp, UDP4_IPHDR_SZ+UDP_UDPHDR_SZ);
-        if(bp == nil)
-            return;
-
-        uh4 = (Udp4hdr *)(bp->rp);
-        ptcllen = dlen + UDP_UDPHDR_SZ;
-        uh4->Unused = 0;
-        uh4->udpproto = IP_UDPPROTO;
-        uh4->frag[0] = 0;
-        uh4->frag[1] = 0;
-        hnputs(uh4->udpplen, ptcllen);
-        if(ucb->headers) {
-            v6tov4(uh4->udpdst, raddr);
-            hnputs(uh4->udpdport, rport);
-            v6tov4(uh4->udpsrc, laddr);
-            rc = nil;
-        } else {
-            v6tov4(uh4->udpdst, c->raddr);
-            hnputs(uh4->udpdport, c->rport);
-            if(ipcmp(c->laddr, IPnoaddr) == 0)
-                findlocalip(f, c->laddr, c->raddr);
-            v6tov4(uh4->udpsrc, c->laddr);
-            rc = c;
-        }
-        hnputs(uh4->udpsport, c->lport);
-        hnputs(uh4->udplen, ptcllen);
-        uh4->udpcksum[0] = 0;
-        uh4->udpcksum[1] = 0;
-        hnputs(uh4->udpcksum,
-               ptclcsum(bp, UDP4_PHDR_OFF, dlen+UDP_UDPHDR_SZ+UDP4_PHDR_SZ));
-        uh4->vihl = IP_VER4;
-        ipoput4(f, bp, 0, c->ttl, c->tos, rc);
-        break;
-
-    case V6:
-        bp = padblock(bp, UDP6_IPHDR_SZ+UDP_UDPHDR_SZ);
-        if(bp == nil)
-            return;
-
-        /*
-         * using the v6 ip header to create pseudo header
-         * first then reset it to the normal ip header
-         */
-        uh6 = (Udp6hdr *)(bp->rp);
-        memset(uh6, 0, 8);
-        ptcllen = dlen + UDP_UDPHDR_SZ;
-        hnputl(uh6->viclfl, ptcllen);
-        uh6->hoplimit = IP_UDPPROTO;
-        if(ucb->headers) {
-            ipmove(uh6->udpdst, raddr);
-            hnputs(uh6->udpdport, rport);
-            ipmove(uh6->udpsrc, laddr);
-            rc = nil;
-        } else {
-            ipmove(uh6->udpdst, c->raddr);
-            hnputs(uh6->udpdport, c->rport);
-            if(ipcmp(c->laddr, IPnoaddr) == 0)
-                findlocalip(f, c->laddr, c->raddr);
-            ipmove(uh6->udpsrc, c->laddr);
-            rc = c;
-        }
-        hnputs(uh6->udpsport, c->lport);
-        hnputs(uh6->udplen, ptcllen);
-        uh6->udpcksum[0] = 0;
-        uh6->udpcksum[1] = 0;
-        hnputs(uh6->udpcksum,
-               ptclcsum(bp, UDP6_PHDR_OFF, dlen+UDP_UDPHDR_SZ+UDP6_PHDR_SZ));
-        memset(uh6, 0, 8);
-        uh6->viclfl[0] = IP_VER6;
-        hnputs(uh6->len, ptcllen);
-        uh6->nextheader = IP_UDPPROTO;
-        ipoput6(f, bp, 0, c->ttl, c->tos, rc);
-        break;
-
-    default:
-        panic("udpkick: version %d", version);
-    }
-    upriv->ustats.udpOutDatagrams++;
-}
-@
 
 <<function udpiput>>=
 void
@@ -17499,22 +17156,6 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 }
 @
 
-<<function udpctl>>=
-char*
-udpctl(Conv *c, char **f, int n)
-{
-    Udpcb *ucb;
-
-    ucb = (Udpcb*)c->ptcl;
-    if(n == 1){
-        if(strcmp(f[0], "headers") == 0){
-            ucb->headers = 7;   /* new headers format */
-            return nil;
-        }
-    }
-    return "unknown control request";
-}
-@
 
 <<function udpadvise>>=
 void
@@ -17570,22 +17211,6 @@ udpadvise(Proto *udp, Block *bp, char *msg)
     }
     qunlock(udp);
     freeblist(bp);
-}
-@
-
-<<function udpstats>>=
-int
-udpstats(Proto *udp, char *buf, int len)
-{
-    Udppriv *upriv;
-
-    upriv = udp->priv;
-    return snprint(buf, len, "InDatagrams: %llud\nNoPorts: %lud\n"
-        "InErrors: %lud\nOutDatagrams: %llud\n",
-        upriv->ustats.udpInDatagrams,
-        upriv->ustats.udpNoPorts,
-        upriv->ustats.udpInErrors,
-        upriv->ustats.udpOutDatagrams);
 }
 @
 

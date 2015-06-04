@@ -87,6 +87,7 @@ struct Netif
   /* multiplexing */
   char  name[KNAMELEN];   /* for top level directory */
   int nfile;      /* max number of Netfiles */
+
   Netfile **f;
 
   /* about net */

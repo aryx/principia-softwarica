@@ -52,6 +52,7 @@ struct Udp4hdr
     uchar   id[2];      /* Identification */
     uchar   frag[2];    /* Fragment information */
     uchar   Unused;
+
     uchar   udpproto;   /* Protocol */
     uchar   udpplen[2]; /* Header plus data length */
     uchar   udpsrc[IPv4addrlen];    /* Ip source */
@@ -98,12 +99,13 @@ struct Udppriv
 {
     Ipht        ht;
 
+    /*s: [[Udppriv]] stat fields */
     /* MIB counters */
     Udpstats    ustats;
-
     /* non-MIB stats */
     ulong       csumerr;        /* checksum errors */
     ulong       lenerr;         /* short packet */
+    /*e: [[Udppriv]] stat fields */
 };
 /*e: struct Udppriv */
 
@@ -117,7 +119,9 @@ void udpkick(void *x, Block *bp);
 struct Udpcb
 {
     QLock;
+    /*s: [[Idpcb]] other fields */
     uchar   headers;
+    /*e: [[Idpcb]] other fields */
 };
 /*e: struct Udpcb */
 
@@ -142,12 +146,12 @@ udpconnect(Conv *c, char **argv, int argc)
 
 /*s: function udpstate */
 static int
-udpstate(Conv *c, char *state, int n)
+udpstate(Conv *cv, char *state, int n)
 {
     return snprint(state, n, "%s qin %d qout %d\n",
-        c->inuse ? "Open" : "Closed",
-        c->rq ? qlen(c->rq) : 0,
-        c->wq ? qlen(c->wq) : 0
+        cv->inuse ? "Open" : "Closed",
+        cv->rq ? qlen(cv->rq) : 0,
+        cv->wq ? qlen(cv->wq) : 0
     );
 }
 /*e: function udpstate */
@@ -172,10 +176,10 @@ udpannounce(Conv *c, char** argv, int argc)
 
 /*s: function udpcreate */
 static void
-udpcreate(Conv *c)
+udpcreate(Conv *cv)
 {
-    c->rq = qopen(128*1024, Qmsg, 0, 0);
-    c->wq = qbypass(udpkick, c);
+    cv->rq = qopen(128*1024, Qmsg, 0, 0);
+    cv->wq = qbypass(udpkick, cv);
 }
 /*e: function udpcreate */
 
@@ -642,16 +646,20 @@ udpinit(Fs *fs)
     udp->priv = smalloc(sizeof(Udppriv));
 
     udp->name = "udp";
+    udp->create = udpcreate;
+
     udp->connect = udpconnect;
     udp->announce = udpannounce;
     udp->ctl = udpctl;
-    udp->state = udpstate;
-    udp->create = udpcreate;
     udp->close = udpclose;
     udp->rcv = udpiput;
     udp->advise = udpadvise;
+
+    udp->state = udpstate;
     udp->stats = udpstats;
+
     udp->ipproto = IP_UDPPROTO;
+
     udp->nc = Nchans;
     udp->ptclsize = sizeof(Udpcb);
 

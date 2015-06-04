@@ -123,10 +123,10 @@ ipfindmedium(char *name)
 /*s: function ipifcbind */
 /*
  *  attach a device (or pkt driver) to the interface.
- *  called with c locked
+ *  called with cv locked
  */
 static char*
-ipifcbind(Conv *c, char **argv, int argc)
+ipifcbind(Conv *cv, char **argv, int argc)
 {
     Ipifc *ifc;
     Medium *m;
@@ -134,7 +134,7 @@ ipifcbind(Conv *c, char **argv, int argc)
     if(argc < 2)
         return Ebadarg;
 
-    ifc = (Ipifc*)c->ptcl;
+    ifc = (Ipifc*)cv->ptcl;
 
     /* bind the device to the interface */
     m = ipfindmedium(argv[1]);
@@ -151,6 +151,7 @@ ipifcbind(Conv *c, char **argv, int argc)
         nexterror();
     }
 
+    // This time Medium dispatch
     /* do medium specific binding */
     (*m->bind)(ifc, argc, argv);
 
@@ -158,15 +159,17 @@ ipifcbind(Conv *c, char **argv, int argc)
     if(argc > 2)
         strncpy(ifc->dev, argv[2], sizeof(ifc->dev));
     else
-        snprint(ifc->dev, sizeof ifc->dev, "%s%d", m->name, c->x);
+        snprint(ifc->dev, sizeof ifc->dev, "%s%d", m->name, cv->x);
     ifc->dev[sizeof(ifc->dev)-1] = 0;
 
     /* set up parameters */
     ifc->m = m;
+
     ifc->mintu = ifc->m->mintu;
     ifc->maxtu = ifc->m->maxtu;
     if(ifc->m->unbindonclose == false)
         ifc->conv->inuse++;
+
     ifc->rp.mflag = 0;      /* default not managed */
     ifc->rp.oflag = 0;
     ifc->rp.maxraint = 600000;  /* millisecs */
@@ -181,9 +184,9 @@ ipifcbind(Conv *c, char **argv, int argc)
     ifc->ifcid++;
 
     /* reopen all the queues closed by a previous unbind */
-    qreopen(c->rq);
-    qreopen(c->eq);
-    qreopen(c->sq);
+    qreopen(cv->rq);
+    qreopen(cv->eq);
+    qreopen(cv->sq);
 
     wunlock(ifc);
     poperror();
@@ -353,18 +356,19 @@ ipifckick(void *x)
  *  called when a new ipifc structure is created
  */
 static void
-ipifccreate(Conv *c)
+ipifccreate(Conv *cv)
 {
     Ipifc *ifc;
 
-    c->rq = qopen(QMAX, 0, 0, 0);
-    c->sq = qopen(QMAX, 0, 0, 0);
-    c->wq = qopen(QMAX, Qkick, ipifckick, c);
+    cv->rq = qopen(QMAX, 0, 0, 0);
+    cv->sq = qopen(QMAX, 0, 0, 0);
+    cv->wq = qopen(QMAX, Qkick, ipifckick, cv);
 
-    ifc = (Ipifc*)c->ptcl;
-    ifc->conv = c;
-    ifc->unbinding = 0;
+    ifc = (Ipifc*)cv->ptcl;
     ifc->m = nil;
+
+    ifc->conv = cv;
+    ifc->unbinding = 0;
     ifc->reassemble = 0;
 }
 /*e: function ipifccreate */
@@ -411,11 +415,15 @@ ipifcsetmtu(Ipifc *ifc, char **argv, int argc)
  *  add an address to an interface.
  */
 char*
-ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp)
+ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
 {
-    int i, type, mtu, sendnbrdisc = 0;
-    uchar ip[IPaddrlen], mask[IPaddrlen], rem[IPaddrlen];
-    uchar bcast[IPaddrlen], net[IPaddrlen];
+    int i, mtu, sendnbrdisc = 0;
+    int type;
+    uchar ip[IPaddrlen];
+    uchar mask[IPaddrlen];
+    uchar rem[IPaddrlen];
+    uchar bcast[IPaddrlen];
+    uchar net[IPaddrlen];
     Iplifc *lifc, **l;
     Fs *f;
 
@@ -428,6 +436,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp)
     memset(ip, 0, IPaddrlen);
     memset(mask, 0, IPaddrlen);
     memset(rem, 0, IPaddrlen);
+
     switch(argc){
     case 6:
         if(strcmp(argv[5], "proxy") == 0)
@@ -461,8 +470,10 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp)
     default:
         return Ebadarg;
     }
+
     if(isv4(ip))
-        tentative = 0;
+        tentative = false;
+
     wlock(ifc);
 
     /* ignore if this is already a local address for this ifc */
@@ -483,11 +494,13 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp)
 
     /* add the address to the list of logical ifc's for this ifc */
     lifc = smalloc(sizeof(Iplifc));
+
     ipmove(lifc->local, ip);
     ipmove(lifc->mask, mask);
     ipmove(lifc->remote, rem);
     ipmove(lifc->net, net);
     lifc->tentative = tentative;
+
     if(lifcp) {
         lifc->onlink = lifcp->onlink;
         lifc->autoflag = lifcp->autoflag;
@@ -812,15 +825,15 @@ ipifcra6(Ipifc *ifc, char **argv, int argc)
 /*s: function ipifcctl */
 /*
  *  non-standard control messages.
- *  called with c->car locked.
+ *  called with cv->car locked.
  */
 static char*
-ipifcctl(Conv* c, char** argv, int argc)
+ipifcctl(Conv* cv, char** argv, int argc)
 {
     Ipifc *ifc;
     int i;
 
-    ifc = (Ipifc*)c->ptcl;
+    ifc = (Ipifc*)cv->ptcl;
     if(strcmp(argv[0], "add") == 0)
         return ipifcadd(ifc, argv, argc, 0, nil);
 
@@ -844,7 +857,7 @@ ipifcctl(Conv* c, char** argv, int argc)
         i = 1;
         if(argc > 1)
             i = atoi(argv[1]);
-        iprouting(c->p->f, i);
+        iprouting(cv->p->f, i);
         return nil;
     }
     else if(strcmp(argv[0], "add6") == 0)
@@ -872,26 +885,31 @@ ipifcinit(Fs *f)
     ipifc = smalloc(sizeof(Proto));
 
     ipifc->name = "ipifc";
+    ipifc->create = ipifccreate;
+    ipifc->bind = ipifcbind;
+ 
     ipifc->connect = ipifcconnect;
     ipifc->announce = nil;
-    ipifc->bind = ipifcbind;
-
-    ipifc->state = ipifcstate;
-    ipifc->create = ipifccreate;
     ipifc->close = ipifcclose;
     ipifc->rcv = nil;
     ipifc->ctl = ipifcctl;
     ipifc->advise = nil;
-    ipifc->stats = ipifcstats;
     ipifc->inuse = ipifcinuse;
+
     ipifc->local = ipifclocal;
+    ipifc->state = ipifcstate;
+    ipifc->stats = ipifcstats;
 
     ipifc->ipproto = -1;
+
     ipifc->nc = Maxmedia;
     ipifc->ptclsize = sizeof(Ipifc);
 
+    /*s: [[ipifcinit()]] modify f */
     f->ipifc = ipifc;   /* hack for ipifcremroute, findipifc, ... */
+    /*x: [[ipifcinit()]] modify f */
     f->self = smalloc(sizeof(Ipselftab));   /* hack for ipforme */
+    /*e: [[ipifcinit()]] modify f */
 
     Fsproto(f, ipifc);
 }

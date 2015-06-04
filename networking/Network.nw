@@ -12,6 +12,9 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
+% - untangled all those features, arp, multicast, with those big structures
+%   that were hard to understand
+% - use cv not c for conversation, less confusing with channel
 
 %thx to codemap/codegraph/scheck:
 % - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -103,7 +106,7 @@
 
 \title{
 {\Huge 
-Principia Softwarica: Plan9 Networking [[/net/]]
+Principia Softwarica: The Plan9 Network Stack [[/net/]]
 }\\
 {version 0.1}
 }
@@ -163,8 +166,7 @@ Here are other candidates that were considered but ultimately discarded:
 % have strong reputation
 \end{itemize}
 
-%TODO: use IL instead? code dispo in 9legacy?
-
+%meh:
 %http://jvns.ca/blog/2014/08/12/what-happens-if-you-write-a-tcp-stack-in-python/
 
 \section{Getting started}
@@ -172,11 +174,17 @@ Here are other candidates that were considered but ultimately discarded:
 
 \section{Requirements}
 
+% Tannenbaum computer networks book?
+% Computer networks, a top-down approach?
+% tcp/ip ...?
+
+
 %Intro to computer networks (free, but maybe not that good)
 %http://intronetworks.cs.luc.edu/
 
 % "The organization of networks in plan9".ps
 % il.ps
+% ip(8?)
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -196,19 +204,31 @@ License.
 \section{Network principles}
 
 % local (mac) address, ethernet, ARP discovery, local area network
+% old: ipx?
 
 % packets! and actually whole idea of network abstraction is to
 % provide what seems like an arbitrary length or even continuous stream
 % of data on top of this fixed packet. A bit similar to file and fs
 % which are on top of disk blocks.
 
-
 \section{Internetworking principles}
 
 % ip, inter network, routing, gateway
 % (packets become really useful there because big sharing)
 
+\section{Network stack principles}
+
+% ip stack goal is to multiplex access to network device?
+% and to provide different encoding protocols?
+
 \section{[[/net]] services}
+
+% In plan9 every kernel service is implemented as a file server.
+% Everything is a file. So a connexion to a remote machine is
+% a file in plan9 (in unix it's a socket, which is a kind of file,
+% it has a fd, and can even be on the fs sometimes).
+% In unix configure the file/socket via ioctl. In plan9 it's
+% via the fs and via a control file. /net/<proto>/<conv>/ctl
 
 % see 'network plan9'.ps
 
@@ -224,7 +244,7 @@ License.
 
 % /net/<proto>/<conv>/ for the most part.
 
-%todo: then how initiate connextion manually? using just the shell!
+%todo: then how initiate connexion manually? using just the shell!
 % echo 'connect ???' > /net/udp/clone ? then cat /net/udp/x/data ?
 % and somewhere echo in udp?
 % can emulate named pipe?
@@ -250,18 +270,29 @@ License.
 % like reading/writing to a file, except the file represent a connection
 % to somewhere else, not a local file.
 
-% link-layer: ethernet, (arp, ip, ... aoe)
-% network-layer: ip (routing)
-% transport-layer: (udp, tcp, icmp, il, ... )
+% link-layer: ethernet, (arp, ... aoe)
+% network-layer: ip (routing, icmp?)
+% transport-layer: (udp, tcp, il, ... )
 % "applications" protocol (dhcp, dns, telnetd, http, imap, ...)
 % actual applications (telnet, ping, ...)
 
 % encapsulation each time
 
-
 % Proto vs Fs vs Ipifc vs Netif
 
+% OO like interface, with class and methods, and some private
+% fields.
+
+% f = fs
+% cv = conversation
+% c = channel (TODO or conversation sometimes, but we should rename it)
+% p = protocol
+
 \section{Trace of a ping}
+
+\section{Trace of a network write}
+
+%\section{Trace of an RPC}
 
 %###############################################################################
 
@@ -269,7 +300,7 @@ License.
 
 \section{IP address}
 
-% universal
+% universal (later we will see URL, even more general)
 % inter-network
 
 %less: typedef uchar ippart ? typedef uchar* ip? 
@@ -406,7 +437,7 @@ maskip(uchar *from, uchar *mask, uchar *to)
 
 % how used by programmer? readipifc()?
 % hmm but not that useful in practice no? or because dial uses that?
-% Need that to know who you are ... like hostname.
+% Need that to know who you are ... like hostname?
 
 % /net/ipifc/x/stats?
 % in ip.h
@@ -428,9 +459,9 @@ struct Ipifc
     <<[[Ipifc(user)]] extra fields>>
 };
 @
-% echo 'bind ether path' > /net/ipifc/x/ctl
+% echo 'bind ether /net/ether0' > /net/ipifc/x/ctl
 
-%less: what is inside dev[64]?
+% what is inside dev[64]? /net/ether0
 
 <<[[Ipifc(user)]] stat fields>>=
 ulong	pktin;
@@ -481,11 +512,11 @@ ulong	validlt;		/* valid lifetime */
 
 \subsection{Kernel side}
 
-% who points to that in the kernel? actually there is no single
+%todo: who points to that in the kernel? actually there is no single
 % ipifc global in the kernel because a machine can have multiple ips
 % (e.g. a bridge), and so the user access the one he wants via
 % /net/ipifc/.
-% OK but when go to /net/tcp/clone, get which interface??
+%todo: OK but when go to /net/tcp/clone, get which interface??
 
 <<struct Ipifc (kernel)>>=
 struct Ipifc
@@ -513,6 +544,8 @@ struct Ipifc
 };
 @
 
+% what is inside dev[64]? /net/ether0
+
 <<[[Ipifc(kernel)]] stat fields>>=
 ulong in, out;  /* message statistics */
 ulong inerr, outerr;  /* ... */
@@ -521,7 +554,7 @@ ulong inerr, outerr;  /* ... */
 <<[[Ipifc(kernel)]] other fields>>=
 Conv  *conv;    /* link to its conversation structure */
 @
-% will see later
+% will see later, but in ipifcadd can do  f = ifc->conv->p->f;
 
 
 
@@ -542,6 +575,10 @@ int unbinding;
 Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
         used only if node is router */
 @
+
+
+
+
 
 
 <<struct Iplifc (kernel)>>=
@@ -568,6 +605,8 @@ struct Iplifc
 Iplifc  *next;
 @
 
+
+
 %XXX
 <<[[Iplifc(kernel)]] extra fields>>=
 Iplink  *link;    /* addresses linked to this lifc */
@@ -585,10 +624,10 @@ long  origint;  /* time when addr was added */
 
 \section{Link [[Medium]], and [[media]]}
 
-% ethernet, 
+% e.g. for ethernet
 % see later: null, loopback, packet
 
-% pointed by Ipifc
+% see that it's pointed by Ipifc above
 
 <<struct Medium (kernel)>>=
 struct Medium
@@ -605,6 +644,8 @@ struct Medium
   void  (*unbind)(Ipifc*);
 
   void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
+  /* process packets written to 'data' */
+  void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
 
   <<[[Medium(kernel)]] multicast methods>>
   <<[[Medium(kernel)]] other methods>>
@@ -612,10 +653,16 @@ struct Medium
 
 };
 @
+% char**? array of string? to pass parameters to bind? e.g. path
+% in 'bind ether /net/ether0' ?
 
-% ipwrite (Ctl case) -> bindctlmsg -> ipifcbind <> 
-%  (as m->find <- ipfindmedium <- media[i] <- ???)
-% bind
+%todo: bwrite!! that's where you write the data???
+% and pktin is to read?
+
+%% ipwrite (Ctl case) -> bindctlmsg -> ipifcbind -> <> 
+%     (as m->find <- ipfindmedium <- media[i] <- ???)
+% void  (*bind)(Ipifc*, int, char**);
+
 
 <<global media>>=
 Medium *media[Maxmedia] = { 0 };
@@ -641,7 +688,8 @@ addipmedium(Medium *med)
         }
 }
 @
-
+% no warning if overflow?
+%less: boilerplate code, should have a generic function for that
 
 
 
@@ -654,9 +702,6 @@ bool unbindonclose;  /* if non-zero, unbind on last close */
 
 %XXX
 <<[[Medium(kernel)]] other methods>>=
-/* process packets written to 'data' */
-void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
-
 /* routes for router boards */
 void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
 void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
@@ -707,7 +752,9 @@ struct Fs
 };
 @
 % >> >> >>
+% why +1? because don't use first entry? because QID trick?
 
+%TODO: where is the info about ipifc? about the medium?
 
 <<constant Maxproto>>=
 Maxproto= 20,
@@ -724,10 +771,10 @@ Route *queue;     /* used as temp when reinjecting routes */
 
 %XXX
 <<[[Fs(kernel)]] other fields>>=
-Proto*  t2p[256];   /* vector of all protocols */
-
 Proto*  ipmux;      /* kludge for finding an ip multiplexor */
 @
+
+
 
 
 \subsection{[[ipfs]]}
@@ -741,6 +788,7 @@ Nfs=        128,
 @
 % Nb filesystem (not network file system)
 % in practice will have only one IP stack/fs, so Fs.dev will be 0
+% (so not sure you need such a big number ...)
 
 <<[[Fs(kernel)]] extra fields>>=
 int dev; // idx in ipfs
@@ -749,6 +797,7 @@ int dev; // idx in ipfs
 <<global fslock>>=
 QLock   fslock;
 @
+% to access ipfs?
 
 \subsection{[[IP]]}
 
@@ -787,16 +836,18 @@ struct Fragment4
 @
 % ulong for src and dst?
 
+%XXX
 <<[[IP(kernel)]] routing fields>>=
 bool iprouting;  /* true if we route like a gateway */
 @
 
+%XXX
 <<[[IP(kernel)]] stat fields>>=
 uvlong    stats[Nipstats];
 @
 
 
-\section{[[Proto]]cols}
+\subsection{[[Proto]]cols}
 
 % /net/<proto>/
 
@@ -815,9 +866,9 @@ struct Proto
   int   nc;   /* number of conversations */
   int   ac; // number of opened conversations
 
-  <<[[Proto(kernel)]] other fields>>
 
-  void    *priv;
+  <<[[Proto(kernel)]] priv fields>>
+  <<[[Proto(kernel)]] other fields>>
 
   // Extra
   QLock;
@@ -825,61 +876,89 @@ struct Proto
 };
 @
 
+
+
 <<[[Proto(kernel)]] extra fields>>=
 // ref<Fs>, reverse of Fs.p[this.x]
 Fs    *f;   /* file system this proto is part of */
 // index in Fs.p[]
 int   x;    /* protocol index */
 @
-% x is useful when building qid
+% (x is useful when building qid)
+% so get access to its ip stack via f so can access the method of the
+% ip stack and medium!
+
 
 % Actually  /net/ipifc/ will be a protocol itself! with a clone
 % and then with a conversation. Very general scheme.
 
-
-
-%XXX
-<<[[Proto(kernel)]] other fields>>=
-int   ipproto;  /* ip protocol type */
-
-ushort    nextrport;
-@
-
 <<[[Proto(kernel)]] other fields>>=
 Qid   qid;    /* qid for protocol directory */
 @
-% why need that?
+% need that?
+
+
+<<[[Proto(kernel)]] priv fields>>=
+void    *priv;
+@
+
 
 
 %XXX
-<<[[Proto(kernel)]] methods>>=
-// sysopen(/net/x/clone) -> ... -> ipopen -> Fsprotoclone -> <>
-void    (*create)(Conv*);
-// syswrite("bind ...", /net/x/y/ctl) -> ... -> ipwrite -> ... -> <>
-char*   (*bind)(Conv*, char**, int);
+<<[[Proto(kernel)]] other fields>>=
+ushort    nextrport;
+@
 
+
+<<[[Proto(kernel)]] methods>>=
+<<[[Proto(kernel)]] protocol methods>>
+<<[[Proto(kernel)]] conversation methods>>
+@
+
+
+% sysopen(/net/<proto>/clone) -> ... -> ipopen -> Fsprotoclone -> <>
+<<[[Proto(kernel)]] protocol methods>>=
+void    (*create)(Conv*);
+@
+% take the conversation created, so can adjust its structure
+% kinda of a ctor
+
+
+%syswrite("bind ...", /net/<proto>/<conv>/ctl) -> ... -> ipwrite -> ... -> <>
+<<[[Proto(kernel)]] conversation methods>>=
+char*   (*bind)(Conv*, char**, int);
+@
+%less: method only for ipifc?
+
+
+
+<<[[Proto(kernel)]] conversation methods>>=
 char*   (*connect)(Conv*, char**, int);
+@
+
+<<[[Proto(kernel)]] conversation methods>>=
 char*   (*announce)(Conv*, char**, int);
-int   (*state)(Conv*, char*, int);
+@
+
+
+%XXX
+<<[[Proto(kernel)]] conversation methods>>=
 void    (*close)(Conv*);
 void    (*rcv)(Proto*, Ipifc*, Block*);
 char*   (*ctl)(Conv*, char**, int);
 void    (*advise)(Proto*, Block*, char*);
-int   (*stats)(Proto*, char*, int);
-int   (*local)(Conv*, char*, int);
-int   (*remote)(Conv*, char*, int);
 int   (*inuse)(Conv*);
+@
+%XXX
+<<[[Proto(kernel)]] protocol methods>>=
 int   (*gc)(Proto*);  /* returns true if any conversations are freed */
 @
 
-\section{[[Conv]]ersations}
+\subsection{[[Conv]]ersations}
 
 % /net/<proto>/<conv>/
 
-% very general. (ab)used also for ipifc
-
-% conversation
-
+% A bit like a Channel (accessed indirectly via Chan->dev)
 <<struct Conv (kernel)>>=
 /*
  *  one per conversation directory
@@ -902,6 +981,7 @@ struct Conv
   <<[[Conv(kernel)]] routing fields>>
   <<[[Conv(kernel)]] multicast fields>>
   <<[[Conv(kernel)]] snoop fields>>
+  <<[[Conv(kernel)]] priv fields>>
   <<[[Conv(kernel)]] other fields>>
 
   // Extra
@@ -910,13 +990,23 @@ struct Conv
 };
 @
 
+% ip + port = is enough to establish a connexion
+% need ip + port in general
+% ipA!portA <-> ipB!portB
+
+% but actually Conv is general and (ab)used also for ipifc.
+% It's an overlay over channel with network related information.
+
+
 <<[[Conv(kernel)]] extra fields>>=
 // ref<Proto> reverse of Proto.conv[this.x]
 Proto*  p;
 // index in Proto.conv[]
 int x;      /* conversation index */
 @
-% x is useful when building qid
+% (x is useful when building qid)
+% so can get "class" via p so can access the method of the protocol from
+% a Conv
 
 
 
@@ -932,10 +1022,10 @@ Queue*  wq;     /* queued data waiting to be written */
 % setup in each create() method of each Proto
 
 
-<<[[Proto(kernel)]] other fields>>=
+<<[[Proto(kernel)]] priv fields>>=
 int   ptclsize; /* size of per protocol ctl block */
 @
-<<[[Conv(kernel)]] other fields>>=
+<<[[Conv(kernel)]] priv fields>>=
 void* ptcl;     /* protocol specific stuff */
 @
 % e.g. Ipifc ! when have a conversation with /net/ipifc/x/ctl
@@ -948,6 +1038,9 @@ void* ptcl;     /* protocol specific stuff */
 <<[[Conv(kernel)]] other fields>>=
 int inuse;      /* opens of listen/data/ctl */
 @
+% set to 1 in clone, incremented after each additional open
+
+
 
 
 %XXX
@@ -958,13 +1051,19 @@ ulong rgen;     /* routetable generation for *r */
 
 %XXX
 <<[[Conv(kernel)]] other fields>>=
-int restricted;   /* remote port is restricted */
 uint  ttl;      /* max time to live */
 uint  tos;      /* type of service */
-bool ignoreadvice;   /* don't terminate connection on icmp errors */
+@
 
+%XXX
+<<[[Conv(kernel)]] other fields>>=
 int length;
 int state;
+@
+%XXX
+<<[[Conv(kernel)]] other fields>>=
+bool restricted;   /* remote port is restricted */
+bool ignoreadvice;   /* don't terminate connection on icmp errors */
 
 int maxfragsize;    /* If set, used for fragmentation */
 
@@ -985,8 +1084,11 @@ Rendez  listenr;
 
 
 
-\section{Chan Qid, [[PROTO()]], [[CONV()], [[QID()]]]}
+\subsection{Chan Qid, [[PROTO()]], [[CONV()], [[QID()]]]}
 
+% In the end everything is a file in plan9, so connexion/sockets
+% will be channel with a qid in /net/.
+% Have a qid scheme to encode the type of channel.
 
 <<enum qid (kernel/network/ip/devip.c)>>=
 enum
@@ -1015,7 +1117,7 @@ enum
 % 5 bits for type, 12 bits for conversation, 8 bits for proto
 % => 25 bits
 
-%many of those qids will really behave like a socket.
+%many of those chans will really behave like a socket.
 
 
 <<enum misc (kernel/network/ip/devip.c)>>=
@@ -1045,16 +1147,17 @@ enum
 
 % ctor
 <<macro QID>>=
-#define QID(p, c, y)    ( ((p)<<(Shiftproto)) | ((c)<<Shiftconv) | (y) )
+#define QID(p, cv, y)    ( ((p)<<(Shiftproto)) | ((cv)<<Shiftconv) | (y) )
 @
 % >> >>
+
+% in ip3gen()
+%    cv = ipfs[c->dev]->p[PROTO(c->qid)]->conv[CONV(c->qid)];
 
 % with Chan.dev        => access Fs     (ipfs[c->dev])
 % with PROTO(Chan.qid) => access Proto  (...) 
 % with CONV(Chan.qid)  => Access Conv   (...)
 
-% in ip3gen()
-%    cv = ipfs[c->dev]->p[PROTO(c->qid)]->conv[CONV(c->qid)];
 
 
 % getters
@@ -1079,21 +1182,14 @@ enum
 
 
 %XXX
-<<[[Qid]] protocol extra cases>>=
-Qstats,
-@
-
 <<[[Qid]] conversation extra cases>>=
 Qerr,
 Qlisten,
-Qlocal,
-Qremote,
-Qstatus,
 @
 
 
 
-\section{XXX}
+
 
 \section{[[/net/ether]] filesystem}
 
@@ -1136,6 +1232,7 @@ struct Netif
   /* multiplexing */
   char  name[KNAMELEN];   /* for top level directory */
   int nfile;      /* max number of Netfiles */
+
   Netfile **f;
 
   /* about net */
@@ -1176,25 +1273,6 @@ struct Netif
   <<[[Netif(kernel)]] multicast methods>>
 };
 @
-
-\section{Routing table}
-
-% ARP allows local routing
-% /net/iproute allows inter-network routing, find gateway
-
-\section{Connexion}
-
-% ip + port = is enough to establish a connexion
-
-\subsection{Ports}
-
-% need ip + port in general
-
-21`% ipA!portA <-> ipB!portB
-
-
-
-
 
 
 
@@ -1289,11 +1367,14 @@ struct IPaux
   char  tag[4];
 };
 @
+%todo: tag?? "none" at the beginning?
+%less: why put that in the channel? why not in the conv? because need
+% faster access?
 
 <<macro ATTACHER>>=
 #define ATTACHER(c) (((IPaux*)((c)->aux))->owner)
 @
-
+% c is a chan
 
 % ipattach -> <>
 <<function newipaux>>=
@@ -1304,12 +1385,14 @@ newipaux(char *owner, char *tag)
     int n;
 
     a = smalloc(sizeof(IPaux));
+
     kstrdup(&a->owner, owner);
     memset(a->tag, ' ', sizeof(a->tag));
     n = strlen(tag);
     if(n > sizeof(a->tag))
         n = sizeof(a->tag);
     memmove(a->tag, tag, n);
+
     return a;
 }
 @
@@ -1352,45 +1435,10 @@ initfrag(IP *ip, int size)
 }
 @
 % 100 packets
+%less: boilerplate, classic list of used/free things
 
 \subsubsection{[[arpinit()]]}
 % will see later
-
-
-<<function arpinit>>=
-void
-arpinit(Fs *f)
-{
-    f->arp = smalloc(sizeof(Arp));
-    f->arp->f = f;
-    f->arp->rxmt = nil;
-    f->arp->dropf = f->arp->dropl = nil;
-    kproc("rxmitproc", rxmitproc, f->arp);
-}
-@
-
-<<function rxmitproc>>=
-static void
-rxmitproc(void *v)
-{
-    Arp *arp = v;
-    long wakeupat;
-
-    arp->rxmitp = up;
-    //print("arp rxmitproc started\n");
-    if(waserror()){
-        arp->rxmitp = 0;
-        pexit("hangup", 1);
-    }
-    for(;;){
-        wakeupat = rxmitsols(arp);
-        if(wakeupat == 0)
-            sleep(&arp->rxmtq, rxready, v);
-        else if(wakeupat > ReTransTimer/4)
-            tsleep(&arp->rxmtq, returnfalse, 0, wakeupat);
-    }
-}
-@
 
 \subsubsection{[[netloginit()]]}
 % see in appendix
@@ -1424,7 +1472,7 @@ rxmitproc(void *v)
 
 % /net/ether0/stats  give you also your mac address at the very end
 
-
+% ??? sysbind?? -> <> (as attach <- etherdevtab?.attach <- toplevel)
 <<function etherattach>>=
 Chan*
 etherattach(char* spec)
@@ -1456,24 +1504,6 @@ etherattach(char* spec)
 @
 % #l0 => spec = 0
 
-\subsection{Connecting ip to ethernet}
-% not really initialisation, more configuration, so could be moved
-% later, and in fact harder to explain now.
-
-%linux: ifconfig eth0 ...
-
-% open /net/ipifc/clone and start configure things.
-%  echo 'bind ether /net/ether0' > /net/ipifc/0/ctl
-%  echo 'add 10.0.2.15' > /net/ipifc/0/ctl
-% (but how I guessed my ip? ipconfig use dhcp?)
-
-% or use program:
-% $ ip/ipconfig
-% => /net/ipifc/0/... now contains an interface! connected to ethernet
-%    /net/ipifc/0/status is nice
-% => /net/arp now contains entries
-% => /net/iproute now contains entries
-
 \section{User side}
 
 \subsection{Connect manually}
@@ -1491,6 +1521,10 @@ etherattach(char* spec)
 
 
 \chapter{User/Kernel Bridge}
+
+% Will see how dispatch commands from user to kernel, via /net,
+% and how the kernel then dispatch internally the command to the right
+% protocol, to the right method, to the right medium.
 
 \section{IP device}
 
@@ -1535,9 +1569,13 @@ ipwalk(Chan* c, Chan *nc, char **name, int nname)
     return w;
 }
 @
-% =~ readdir
+% first chan created in ipattach will have a correct aux.
+% ipwalk =~ readdir
 
-% devwalk <- <> (as xx <- ipwalk)
+% Walkqid =~ Dirtab? so will call ipgen to fill entries
+% in Dirtab.
+
+% ipwalk -> devwalk <- <> (as xx <- ipwalk)
 <<function ipgen>>=
 static int
 ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
@@ -1554,15 +1592,16 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     return -1;
 }
 @
-% -1 means no more entries
+% -1 means no more entries?
 
+% ipgen means generate Dir entries or property for this qid.
 
 
 \subsubsection{[[/net/]]}
 
 % remember s is an integer to get the xth entry in the directory, 
 % or -1  (DEVDOTDOT). How knows when to stop? what is the max value
-% of s? see above, -1 when switch does not match anything?
+% of s? see above, -1!
 <<[[ipgen()]] switch TYPE qid cases>>=
 case Qtopdir:
     if(s == DEVDOTDOT){
@@ -1581,10 +1620,12 @@ case Qtopdir:
     s -= f->np;
     return ip1gen(c, s+Qtopbase, dp);
 @
+% first topdir, then protodir, then regular file in topdir
 
 <<global network>>=
 static char network[] = "network";
 @
+% for owner?
 
 
 \subsubsection{[[/net/xxx]]}
@@ -1649,6 +1690,10 @@ case Qprotodir:
     s -= f->p[PROTO(c->qid)]->ac;
     return ip2gen(c, s+Qprotobase, dp);
 @
+% conversation number is stable?? if open 2, close first, then
+% will get a hole? the directory seems very dynamic, so if you didn't
+% open a connexion with a previous conv number, you will get something
+% different?
 
 
 \subsubsection{[[/net/proto/xxx]]}
@@ -1754,24 +1799,10 @@ case Qlisten:
     return 1;
 @
 
-<<[[ip3gen()]] switch TYPE qid cases>>=
-case Qlocal:
-    p = "local";
-    break;
-case Qremote:
-    p = "remote";
-    break;
-@
 
+\subsection{Dispatch functions, [[ipxxx()]]}
 
-<<[[ip3gen()]] switch TYPE qid cases>>=
-case Qstatus:
-    p = "status";
-    break;
-@
-
-
-\subsection{[[ipopen()]]}
+\subsubsection{[[ipopen()]]}
 
 <<global m2p>>=
 static int m2p[] = {
@@ -1826,6 +1857,38 @@ case Qstats:
 
 
 
+
+% lots of noise, but mostly check perm and increment inuse
+<<[[ipopen()]] switch TYPE qid cases>>=
+case Qctl:
+case Qdata:
+case Qerr:
+    p = f->p[PROTO(c->qid)];
+    qlock(p);
+    cv = p->conv[CONV(c->qid)];
+    qlock(cv);
+    if(waserror()) {
+        qunlock(cv);
+        qunlock(p);
+        nexterror();
+    }
+    if((perm & (cv->perm>>6)) != perm) {
+        if(strcmp(ATTACHER(c), cv->owner) != 0)
+            error(Eperm);
+        if((perm & cv->perm) != perm)
+            error(Eperm);
+
+    }
+    cv->inuse++;
+    if(cv->inuse == 1){
+        kstrdup(&cv->owner, ATTACHER(c));
+        cv->perm = 0660;
+    }
+    qunlock(cv);
+    qunlock(p);
+    poperror();
+    break;
+@
 
 
 
@@ -1885,7 +1948,7 @@ case Qlisten:
     break;
 @
 
-\subsection{[[ipread()]]}
+\subsubsection{[[ipread()]]}
 
 <<function ipread>>=
 static long
@@ -1893,7 +1956,7 @@ ipread(Chan *ch, void *a, long n, vlong off)
 {
     Fs *f;
     Proto *x;
-    Conv *c;
+    Conv *cv;
     char *buf, *p;
     long rv;
     ulong offset = off;
@@ -1917,105 +1980,25 @@ case Qconvdir:
     return devdirread(ch, a, n, 0, 0, ipgen);
 @
 
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qctl:
-    buf = smalloc(16);
-    snprint(buf, 16, "%lud", CONV(ch->qid));
-    rv = readstr(offset, p, n, buf);
-    free(buf);
-    return rv;
-@
-% that's how you get your /x/
-
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qdata:
-    c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-    return qread(c->rq, a, n);
-@
 
 
 
-
-
-
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qremote:
-    buf = smalloc(Statelen);
-    x = f->p[PROTO(ch->qid)];
-    c = x->conv[CONV(ch->qid)];
-    if(x->remote == nil) {
-        snprint(buf, Statelen, "%I!%d\n", c->raddr, c->rport);
-    } else {
-        // Protocol dispatch
-        (*x->remote)(c, buf, Statelen-2);
-    }
-    rv = readstr(offset, p, n, buf);
-    free(buf);
-    return rv;
-@
-
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qlocal:
-    buf = smalloc(Statelen);
-    x = f->p[PROTO(ch->qid)];
-    c = x->conv[CONV(ch->qid)];
-    if(x->local == nil) {
-        snprint(buf, Statelen, "%I!%d\n", c->laddr, c->lport);
-    } else {
-        // Protocol dispatch
-        (*x->local)(c, buf, Statelen-2);
-    }
-    rv = readstr(offset, p, n, buf);
-    free(buf);
-    return rv;
-@
-
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qstatus:
-    buf = smalloc(Statelen);
-    x = f->p[PROTO(ch->qid)];
-    c = x->conv[CONV(ch->qid)];
-
-    // Protocol dispatch
-    (*x->state)(c, buf, Statelen-2);
-
-    rv = readstr(offset, p, n, buf);
-    free(buf);
-    return rv;
-@
-
-
-
-
+%XXX
 <<[[ipread()]] switch TYPE qid cases>>=
 case Qerr:
-    c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-    return qread(c->eq, a, n);
+    cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+    return qread(cv->eq, a, n);
 @
 
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qstats:
-    x = f->p[PROTO(ch->qid)];
-    if(x->stats == nil)
-        error("stats not implemented");
-    buf = smalloc(Statelen);
 
-    // Protocol dispatch
-    (*x->stats)(x, buf, Statelen);
-
-    rv = readstr(offset, p, n, buf);
-    free(buf);
-    return rv;
-@
-
-\subsection{[[ipwrite()]]}
+\subsubsection{[[ipwrite()]]}
 
 
 <<function ipwrite>>=
 static long
 ipwrite(Chan* ch, void *v, long n, vlong off)
 {
-    Conv *c;
+    Conv *cv;
     Proto *x;
     char *p;
     Cmdbuf *cb;
@@ -2036,17 +2019,6 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
 }
 @
 
-<<[[ipwrite()]] switch TYPE qid cases>>=
-case Qdata:
-    x = f->p[PROTO(ch->qid)];
-    c = x->conv[CONV(ch->qid)];
-
-    if(c->wq == nil)
-        error(Eperm);
-
-    qwrite(c->wq, a, n);
-    break;
-@
 
 
 \subsection{[[/net/x/clone]]}
@@ -2084,45 +2056,45 @@ case Qclone:
 Conv*
 Fsprotoclone(Proto *p, char *user)
 {
-    Conv *c, **pp, **ep;
+    Conv *cv, **pp, **ep;
 
 retry:
-    c = nil;
+    cv = nil;
     ep = &p->conv[p->nc];
     for(pp = p->conv; pp < ep; pp++) {
-        c = *pp;
-        if(c == nil){
-            c = malloc(sizeof(Conv));
-            if(c == nil)
+        cv = *pp;
+        if(cv == nil){
+            cv = malloc(sizeof(Conv));
+            if(cv == nil)
                 error(Enomem);
-            qlock(c);
-            c->p = p;
-            c->x = pp - p->conv;
+            qlock(cv);
+            cv->p = p;
+            cv->x = pp - p->conv;
             if(p->ptclsize != 0){
-                c->ptcl = malloc(p->ptclsize);
-                if(c->ptcl == nil) {
-                    free(c);
+                cv->ptcl = malloc(p->ptclsize);
+                if(cv->ptcl == nil) {
+                    free(cv);
                     error(Enomem);
                 }
             }
-            *pp = c;
+            *pp = cv;
             p->ac++;
-            c->eq = qopen(1024, Qmsg, 0, 0);
+            cv->eq = qopen(1024, Qmsg, 0, 0);
 
             // !! Protocol dispatch !!! will create extra queues
-            (*p->create)(c);
+            (*p->create)(cv);
 
             break;
         }
-        if(canqlock(c)){
+        if(canqlock(cv)){
             /*
              *  make sure both processes and protocol
              *  are done with this Conv
              */
-            if(c->inuse == 0 && (p->inuse == nil || (*p->inuse)(c) == 0))
+            if(cv->inuse == 0 && (p->inuse == nil || (*p->inuse)(cv) == 0))
                 break;
 
-            qunlock(c);
+            qunlock(cv);
         }
     }
 
@@ -2137,72 +2109,50 @@ retry:
         return nil;
     }
 
-    c->inuse = 1;
-    kstrdup(&c->owner, user);
-    c->perm = 0660;
-    c->state = Idle;
-    ipmove(c->laddr, IPnoaddr);
-    ipmove(c->raddr, IPnoaddr);
-    c->r = nil;
-    c->rgen = 0;
-    c->lport = 0;
-    c->rport = 0;
-    c->restricted = 0;
-    c->maxfragsize = 0;
-    c->ttl = MAXTTL;
-    qreopen(c->rq);
-    qreopen(c->wq);
-    qreopen(c->eq);
+    cv->inuse = 1;
+    kstrdup(&cv->owner, user);
+    cv->perm = 0660;
+    cv->state = Idle;
+    ipmove(cv->laddr, IPnoaddr);
+    ipmove(cv->raddr, IPnoaddr);
+    cv->r = nil;
+    cv->rgen = 0;
+    cv->lport = 0;
+    cv->rport = 0;
+    cv->restricted = 0;
+    cv->maxfragsize = 0;
+    cv->ttl = MAXTTL;
+    qreopen(cv->rq);
+    qreopen(cv->wq);
+    qreopen(cv->eq);
 
-    qunlock(c);
-    return c;
+    qunlock(cv);
+    return cv;
 }
 @
 
 \subsection{[[/net/x/y/ctl]]}
 
-<<[[ipopen()]] switch TYPE qid cases>>=
+<<[[ipread()]] switch TYPE qid cases>>=
 case Qctl:
-case Qdata:
-case Qerr:
-    p = f->p[PROTO(c->qid)];
-    qlock(p);
-    cv = p->conv[CONV(c->qid)];
-    qlock(cv);
-    if(waserror()) {
-        qunlock(cv);
-        qunlock(p);
-        nexterror();
-    }
-    if((perm & (cv->perm>>6)) != perm) {
-        if(strcmp(ATTACHER(c), cv->owner) != 0)
-            error(Eperm);
-        if((perm & cv->perm) != perm)
-            error(Eperm);
-
-    }
-    cv->inuse++;
-    if(cv->inuse == 1){
-        kstrdup(&cv->owner, ATTACHER(c));
-        cv->perm = 0660;
-    }
-    qunlock(cv);
-    qunlock(p);
-    poperror();
-    break;
+    buf = smalloc(16);
+    snprint(buf, 16, "%lud", CONV(ch->qid));
+    rv = readstr(offset, p, n, buf);
+    free(buf);
+    return rv;
 @
-
+% that's how you get your /x/
 
 
 <<[[ipwrite()]] switch TYPE qid cases>>=
 case Qctl:
     x = f->p[PROTO(ch->qid)];
-    c = x->conv[CONV(ch->qid)];
+    cv = x->conv[CONV(ch->qid)];
     cb = parsecmd(a, n);
 
-    qlock(c);
+    qlock(cv);
     if(waserror()) {
-        qunlock(c);
+        qunlock(cv);
         free(cb);
         nexterror();
     }
@@ -2210,84 +2160,324 @@ case Qctl:
         error("short control request");
 
     if(strcmp(cb->f[0], "connect") == 0)
-        connectctlmsg(x, c, cb);
+        connectctlmsg(x, cv, cb);
     else if(strcmp(cb->f[0], "announce") == 0)
-        announcectlmsg(x, c, cb);
+        announcectlmsg(x, cv, cb);
     else if(strcmp(cb->f[0], "bind") == 0)
-        bindctlmsg(x, c, cb);
+        bindctlmsg(x, cv, cb);
+
+
     else if(strcmp(cb->f[0], "ttl") == 0)
-        ttlctlmsg(c, cb);
+        ttlctlmsg(cv, cb);
     else if(strcmp(cb->f[0], "tos") == 0)
-        tosctlmsg(c, cb);
+        tosctlmsg(cv, cb);
     else if(strcmp(cb->f[0], "ignoreadvice") == 0)
-        c->ignoreadvice = true;
+        cv->ignoreadvice = true;
     else if(strcmp(cb->f[0], "addmulti") == 0){
         if(cb->nf < 2)
             error("addmulti needs interface address");
         if(cb->nf == 2){
-            if(!ipismulticast(c->raddr))
+            if(!ipismulticast(cv->raddr))
                 error("addmulti for a non multicast address");
             if (parseip(ia, cb->f[1]) == -1)
                 error(Ebadip);
-            ipifcaddmulti(c, c->raddr, ia);
+            ipifcaddmulti(cv, cv->raddr, ia);
         } else {
             if (parseip(ia, cb->f[1]) == -1 ||
                 parseip(ma, cb->f[2]) == -1)
                 error(Ebadip);
             if(!ipismulticast(ma))
                 error("addmulti for a non multicast address");
-            ipifcaddmulti(c, ma, ia);
+            ipifcaddmulti(cv, ma, ia);
         }
     } else if(strcmp(cb->f[0], "remmulti") == 0){
         if(cb->nf < 2)
             error("remmulti needs interface address");
-        if(!ipismulticast(c->raddr))
+        if(!ipismulticast(cv->raddr))
             error("remmulti for a non multicast address");
         if (parseip(ia, cb->f[1]) == -1)
             error(Ebadip);
-        ipifcremmulti(c, c->raddr, ia);
+        ipifcremmulti(cv, cv->raddr, ia);
     } else if(strcmp(cb->f[0], "maxfragsize") == 0){
         if(cb->nf < 2)
             error("maxfragsize needs size");
 
-        c->maxfragsize = (int)strtol(cb->f[1], nil, 0);
+        cv->maxfragsize = (int)strtol(cb->f[1], nil, 0);
 
     } 
     else if(x->ctl != nil) {
         // Protocol dispatch
-        p = x->ctl(c, cb->f, cb->nf);
+        p = x->ctl(cv, cb->f, cb->nf);
         if(p != nil)
             error(p);
     } else
         error("unknown control request");
-    qunlock(c);
+    qunlock(cv);
     free(cb);
     poperror();
     break;
 @
 
-
-\subsection{[[/net/x/y/ctl bind]]}
+\subsubsection{Bind}
 
 % ipwrite (Qctl case) -> <>
 <<function bindctlmsg>>=
 static void
-bindctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
+bindctlmsg(Proto *x, Conv *cv, Cmdbuf *cb)
 {
     char *p;
 
     if(x->bind == nil)
-        p = Fsstdbind(c, cb->f, cb->nf);
+        p = Fsstdbind(cv, cb->f, cb->nf);
     else
         // Protocol dispatch
-        p = x->bind(c, cb->f, cb->nf);
+        p = x->bind(cv, cb->f, cb->nf);
     if(p != nil)
         error(p);
 }
 @
 
+<<function Fsstdbind>>=
+/*
+ *  called by protocol bind routine to set addresses
+ */
+char*
+Fsstdbind(Conv* cv, char* argv[], int argc)
+{
+    switch(argc){
+    default:
+        break;
+    case 2:
+        return setladdrport(cv, argv[1], 0);
+    }
+    return "bad args to bind";
+}
+@
+
+\subsubsection{Connect}
+
+\subsubsection{Announce}
+
+\subsubsection{Other}
+
+\subsection{[[/net/x/y/data]]}
+
+<<[[ipread()]] switch TYPE qid cases>>=
+case Qdata:
+    cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+    return qread(cv->rq, a, n);
+@
+
+<<[[ipwrite()]] switch TYPE qid cases>>=
+case Qdata:
+    x = f->p[PROTO(ch->qid)];
+    cv = x->conv[CONV(ch->qid)];
+
+    if(cv->wq == nil)
+        error(Eperm);
+
+    qwrite(cv->wq, a, n);
+    break;
+@
+
+\subsection{Other files}
+
+\subsubsection{[[/net/x/stats]]}
+
+<<[[Qid]] protocol extra cases>>=
+Qstats,
+@
+
+<<[[Proto(kernel)]] protocol methods>>=
+int   (*stats)(Proto*, char*, int);
+@
+<<[[ipread()]] switch TYPE qid cases>>=
+case Qstats:
+    x = f->p[PROTO(ch->qid)];
+    if(x->stats == nil)
+        error("stats not implemented");
+    buf = smalloc(Statelen);
+
+    // Protocol dispatch
+    (*x->stats)(x, buf, Statelen);
+
+    rv = readstr(offset, p, n, buf);
+    free(buf);
+    return rv;
+@
+
+\subsubsection{[[/net/x/y/status]]}
+
+<<[[Qid]] conversation extra cases>>=
+Qstatus,
+@
+<<[[ip3gen()]] switch TYPE qid cases>>=
+case Qstatus:
+    p = "status";
+    break;
+@
+
+<<[[Proto(kernel)]] conversation methods>>=
+int   (*state)(Conv*, char*, int);
+@
+<<[[ipread()]] switch TYPE qid cases>>=
+case Qstatus:
+    buf = smalloc(Statelen);
+    x = f->p[PROTO(ch->qid)];
+    cv = x->conv[CONV(ch->qid)];
+
+    // Protocol dispatch
+    (*x->state)(cv, buf, Statelen-2);
+
+    rv = readstr(offset, p, n, buf);
+    free(buf);
+    return rv;
+@
+
+
+\subsubsection{[[/net/x/y/local]], [[/net/x/y/remote]]}
+
+<<[[Qid]] conversation extra cases>>=
+Qlocal,
+Qremote,
+@
+<<[[ip3gen()]] switch TYPE qid cases>>=
+case Qlocal:
+    p = "local";
+    break;
+case Qremote:
+    p = "remote";
+    break;
+@
+
+<<[[Proto(kernel)]] conversation methods>>=
+int   (*local)(Conv*, char*, int);
+@
+
+<<[[ipread()]] switch TYPE qid cases>>=
+case Qlocal:
+    buf = smalloc(Statelen);
+    x = f->p[PROTO(ch->qid)];
+    cv = x->conv[CONV(ch->qid)];
+    if(x->local == nil) {
+        snprint(buf, Statelen, "%I!%d\n", cv->laddr, cv->lport);
+    } else {
+        // Protocol dispatch
+        (*x->local)(cv, buf, Statelen-2);
+    }
+    rv = readstr(offset, p, n, buf);
+    free(buf);
+    return rv;
+@
+
+
+
+<<[[Proto(kernel)]] conversation methods>>=
+int   (*remote)(Conv*, char*, int);
+@
+
+<<[[ipread()]] switch TYPE qid cases>>=
+case Qremote:
+    buf = smalloc(Statelen);
+    x = f->p[PROTO(ch->qid)];
+    cv = x->conv[CONV(ch->qid)];
+    if(x->remote == nil) {
+        snprint(buf, Statelen, "%I!%d\n", cv->raddr, cv->rport);
+    } else {
+        // Protocol dispatch
+        (*x->remote)(cv, buf, Statelen-2);
+    }
+    rv = readstr(offset, p, n, buf);
+    free(buf);
+    return rv;
+@
+
+\section{Ethernet device}
+
+
+<<global etherdevtab>>=
+Dev etherdevtab = {
+    .dc       =    'l',
+    .name     =    "ether",
+
+    .attach   =    etherattach,
+    .walk     =    etherwalk,
+    .open     =    etheropen,
+    .close    =    etherclose,
+    .read     =    etherread,
+    .write    =    etherwrite,
+    .stat     =    etherstat,
+    .wstat    =    etherwstat,
+               
+    .reset    =    etherreset,
+    .init     =    devinit,
+    .shutdown =    ethershutdown,
+    .create   =    ethercreate,
+    .bread    =    etherbread,
+    .bwrite   =    etherbwrite,
+    .remove   =    devremove,
+};
+@
+
+
+\section{Ethernet medium}
+
+% before IP? kinda more low level (but less general)
+% called a medium?
+
+% there are other physical device, but we'll focus on this one,
+% most common
+
+% physical 48bits address.
+
+<<global ethermedium (kernel)>>=
+Medium ethermedium =
+{
+    .name=      "ether",
+
+    .hsize=     14,
+    .mintu=     60,
+    .maxtu=     1514,
+    .maclen=    6,
+
+    .bind=      etherbind,
+    .unbind=    etherunbind,
+    .bwrite=    etherbwrite,
+
+    .addmulti=  etheraddmulti,
+    .remmulti=  etherremmulti,
+    .ares=      arpenter,
+    .areg=      sendgarp,
+    .pref2addr= etherpref2addr,
+};
+@
+% maxtu = 1500 + 14 for header
+% maclen = 6 = 48 bits
+
+
+<<global etherbroadcast>>=
+static uchar etherbroadcast[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+@
+
+
+
+
+\section{Streams}
+
+% like bidirectional pipes. Producer/consumer like pipes, but
+% bidirectional.
+
+
+
+
+
+
+\chapter{Configuration}
 
 \section{[[/net/ipifc/]] protocol}
+
+% use the protocol scheme to configure.
+%alt: some special file in /net/ like /net/medium, /net/ip
 
 \subsection{Protocol initialisation}
 
@@ -2301,39 +2491,38 @@ ipifcinit(Fs *f)
     ipifc = smalloc(sizeof(Proto));
 
     ipifc->name = "ipifc";
+    ipifc->create = ipifccreate;
+    ipifc->bind = ipifcbind;
+ 
     ipifc->connect = ipifcconnect;
     ipifc->announce = nil;
-    ipifc->bind = ipifcbind;
-
-    ipifc->state = ipifcstate;
-    ipifc->create = ipifccreate;
     ipifc->close = ipifcclose;
     ipifc->rcv = nil;
     ipifc->ctl = ipifcctl;
     ipifc->advise = nil;
-    ipifc->stats = ipifcstats;
     ipifc->inuse = ipifcinuse;
+
     ipifc->local = ipifclocal;
+    ipifc->state = ipifcstate;
+    ipifc->stats = ipifcstats;
 
     ipifc->ipproto = -1;
+
     ipifc->nc = Maxmedia;
     ipifc->ptclsize = sizeof(Ipifc);
 
-    f->ipifc = ipifc;   /* hack for ipifcremroute, findipifc, ... */
-    f->self = smalloc(sizeof(Ipselftab));   /* hack for ipforme */
+    <<[[ipifcinit()]] modify f>>
 
     Fsproto(f, ipifc);
 }
 @
+%less: make it a global with intializer?
+%less: no remote method?
+%alt: why not do via global? why smalloc? to not pay memory if don't use
+% the network? meh.
 
-<<[[Fs(kernel)]] other fields>>=
-Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
-@
-
-<<[[Fs(kernel)]] other fields>>=
-Ipselftab *self;
-@
-
+%    ipifc->nc = Maxmedia;
+% max conversation
 
 
 <<function Fsproto>>=
@@ -2345,63 +2534,104 @@ Fsproto(Fs *f, Proto *p)
 
     p->f = f;
 
-    if(p->ipproto > 0){
-        if(f->t2p[p->ipproto] != nil)
-            return -1;
-        f->t2p[p->ipproto] = p;
-    }
+    <<[[Fsproto()]] adjust f->t2p>>
 
     p->qid.type = QTDIR;
     p->qid.path = QID(f->np, 0, Qprotodir);
-    p->conv = malloc(sizeof(Conv*)*(p->nc+1));
+    p->conv = malloc(sizeof(Conv*) * (p->nc+1));
     if(p->conv == nil)
         panic("Fsproto");
 
-    p->x = f->np;
     p->nextrport = 600;
+
+    p->x = f->np;
     f->p[f->np++] = p;
 
     return 0;
 }
 @
 
+<<[[Fsproto()]] adjust f->t2p>>=
+if(p->ipproto > 0){
+    if(f->t2p[p->ipproto] != nil)
+        return -1;
+    f->t2p[p->ipproto] = p;
+}
+@
 
+<<[[Fs(kernel)]] other fields>>=
+// map<enum<protocol_type>, ref<Proto>>
+Proto*  t2p[256];   /* vector of all protocols */
+@
+<<[[Proto(kernel)]] other fields>>=
+// enum<protocol_type>
+int   ipproto;  /* ip protocol type */
+@
+
+
+
+
+<<[[ipifcinit()]] modify f>>=
+f->ipifc = ipifc;   /* hack for ipifcremroute, findipifc, ... */
+@
+%XXX
+<<[[Fs(kernel)]] other fields>>=
+Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
+@
+% hack? or fundamental? but not that it's a Proto, not an Ipifc.
+
+
+%XXX
+<<[[ipifcinit()]] modify f>>=
+f->self = smalloc(sizeof(Ipselftab));   /* hack for ipforme */
+@
+%XXX
+<<[[Fs(kernel)]] other fields>>=
+Ipselftab *self;
+@
 
 \subsection{[[/net/ipifc/clone]]}
 
 %// sysopen(/net/ipifc/clone) -> ... -> ipopen -> Fsprotoclone -> <>
-%  (as x->bind <- ...)
+%  (as x->create <- ...)
 <<function ipifccreate>>=
 /*
  *  called when a new ipifc structure is created
  */
 static void
-ipifccreate(Conv *c)
+ipifccreate(Conv *cv)
 {
     Ipifc *ifc;
 
-    c->rq = qopen(QMAX, 0, 0, 0);
-    c->sq = qopen(QMAX, 0, 0, 0);
-    c->wq = qopen(QMAX, Qkick, ipifckick, c);
+    cv->rq = qopen(QMAX, 0, 0, 0);
+    cv->sq = qopen(QMAX, 0, 0, 0);
+    cv->wq = qopen(QMAX, Qkick, ipifckick, cv);
 
-    ifc = (Ipifc*)c->ptcl;
-    ifc->conv = c;
-    ifc->unbinding = 0;
+    ifc = (Ipifc*)cv->ptcl;
     ifc->m = nil;
+
+    ifc->conv = cv;
+    ifc->unbinding = 0;
     ifc->reassemble = 0;
 }
 @
+% Ipifc has been smalloc generically by Fsprotoclone()
+% no medium yet!
 
-\subsection{[[/net/ipifc/x/ctl bind]]}
+
+% ip/ipconfig open this file and keeps it open forever
+
+\subsection{Binding medium, [[/net/ipifc/x/ctl bind]]}
 
 % ipwrite (Qctl case) -> bindctlmsg -> <> (as x->bind <- ipprotoinit[i] <- qmemu.c)
+% bind ether /net/ether0
 <<function ipifcbind>>=
 /*
  *  attach a device (or pkt driver) to the interface.
- *  called with c locked
+ *  called with cv locked
  */
 static char*
-ipifcbind(Conv *c, char **argv, int argc)
+ipifcbind(Conv *cv, char **argv, int argc)
 {
     Ipifc *ifc;
     Medium *m;
@@ -2409,7 +2639,7 @@ ipifcbind(Conv *c, char **argv, int argc)
     if(argc < 2)
         return Ebadarg;
 
-    ifc = (Ipifc*)c->ptcl;
+    ifc = (Ipifc*)cv->ptcl;
 
     /* bind the device to the interface */
     m = ipfindmedium(argv[1]);
@@ -2426,6 +2656,7 @@ ipifcbind(Conv *c, char **argv, int argc)
         nexterror();
     }
 
+    // This time Medium dispatch
     /* do medium specific binding */
     (*m->bind)(ifc, argc, argv);
 
@@ -2433,15 +2664,17 @@ ipifcbind(Conv *c, char **argv, int argc)
     if(argc > 2)
         strncpy(ifc->dev, argv[2], sizeof(ifc->dev));
     else
-        snprint(ifc->dev, sizeof ifc->dev, "%s%d", m->name, c->x);
+        snprint(ifc->dev, sizeof ifc->dev, "%s%d", m->name, cv->x);
     ifc->dev[sizeof(ifc->dev)-1] = 0;
 
     /* set up parameters */
     ifc->m = m;
+
     ifc->mintu = ifc->m->mintu;
     ifc->maxtu = ifc->m->maxtu;
     if(ifc->m->unbindonclose == false)
         ifc->conv->inuse++;
+
     ifc->rp.mflag = 0;      /* default not managed */
     ifc->rp.oflag = 0;
     ifc->rp.maxraint = 600000;  /* millisecs */
@@ -2456,9 +2689,9 @@ ipifcbind(Conv *c, char **argv, int argc)
     ifc->ifcid++;
 
     /* reopen all the queues closed by a previous unbind */
-    qreopen(c->rq);
-    qreopen(c->eq);
-    qreopen(c->sq);
+    qreopen(cv->rq);
+    qreopen(cv->eq);
+    qreopen(cv->sq);
 
     wunlock(ifc);
     poperror();
@@ -2484,24 +2717,22 @@ ipfindmedium(char *name)
 @
 % use global media
 
-
-\subsection{[[/net/ipifc/x/add add]]}
-
+\subsection{[[/net/ipifc/x/ctl]]}
 
 % ... -> ipwrite (Qctl case) -> <>
-%  (as x->bind <- ...)
+%  (as x->bind <- ...) because not a generic msg
 <<function ipifcctl>>=
 /*
  *  non-standard control messages.
- *  called with c->car locked.
+ *  called with cv->car locked.
  */
 static char*
-ipifcctl(Conv* c, char** argv, int argc)
+ipifcctl(Conv* cv, char** argv, int argc)
 {
     Ipifc *ifc;
     int i;
 
-    ifc = (Ipifc*)c->ptcl;
+    ifc = (Ipifc*)cv->ptcl;
     if(strcmp(argv[0], "add") == 0)
         return ipifcadd(ifc, argv, argc, 0, nil);
 
@@ -2525,7 +2756,7 @@ ipifcctl(Conv* c, char** argv, int argc)
         i = 1;
         if(argc > 1)
             i = atoi(argv[1]);
-        iprouting(c->p->f, i);
+        iprouting(cv->p->f, i);
         return nil;
     }
     else if(strcmp(argv[0], "add6") == 0)
@@ -2537,16 +2768,24 @@ ipifcctl(Conv* c, char** argv, int argc)
 @
 
 
+
+\subsection{Adding IP, [[/net/ipifc/x/ctl add]]}
+
+
 <<function ipifcadd>>=
 /*
  *  add an address to an interface.
  */
 char*
-ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp)
+ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
 {
-    int i, type, mtu, sendnbrdisc = 0;
-    uchar ip[IPaddrlen], mask[IPaddrlen], rem[IPaddrlen];
-    uchar bcast[IPaddrlen], net[IPaddrlen];
+    int i, mtu, sendnbrdisc = 0;
+    int type;
+    uchar ip[IPaddrlen];
+    uchar mask[IPaddrlen];
+    uchar rem[IPaddrlen];
+    uchar bcast[IPaddrlen];
+    uchar net[IPaddrlen];
     Iplifc *lifc, **l;
     Fs *f;
 
@@ -2559,6 +2798,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp)
     memset(ip, 0, IPaddrlen);
     memset(mask, 0, IPaddrlen);
     memset(rem, 0, IPaddrlen);
+
     switch(argc){
     case 6:
         if(strcmp(argv[5], "proxy") == 0)
@@ -2592,8 +2832,10 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp)
     default:
         return Ebadarg;
     }
+
     if(isv4(ip))
-        tentative = 0;
+        tentative = false;
+
     wlock(ifc);
 
     /* ignore if this is already a local address for this ifc */
@@ -2614,11 +2856,13 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, int tentative, Iplifc *lifcp)
 
     /* add the address to the list of logical ifc's for this ifc */
     lifc = smalloc(sizeof(Iplifc));
+
     ipmove(lifc->local, ip);
     ipmove(lifc->mask, mask);
     ipmove(lifc->remote, rem);
     ipmove(lifc->net, net);
     lifc->tentative = tentative;
+
     if(lifcp) {
         lifc->onlink = lifcp->onlink;
         lifc->autoflag = lifcp->autoflag;
@@ -2717,86 +2961,152 @@ out:
 
 
 
-\section{Ethernet medium}
 
-% before IP? kinda more low level (but less general)
-% called a medium?
+\section{Binding ethernet medium}
 
-% there are other physical device, but we'll focus on this one,
-% most common
+% not really initialisation, more configuration, so better moved
+% here, because harder to explain before.
 
-% physical 48bits address.
+%linux: ifconfig eth0 ...
 
-<<global ethermedium (kernel)>>=
-Medium ethermedium =
+% open /net/ipifc/clone and start configure things.
+%  echo 'bind ether /net/ether0' > /net/ipifc/0/ctl
+%  echo 'add 10.0.2.15' > /net/ipifc/0/ctl
+% (but how I guessed my ip? ipconfig use dhcp?)
+
+% or use program:
+% $ ip/ipconfig
+% => /net/ipifc/0/... now contains an interface! connected to ethernet
+%    /net/ipifc/0/status is nice
+% => /net/arp now contains entries
+% => /net/iproute now contains entries
+
+% Have seen the first part with bind of Ipifc Protocol.
+% Now will see the bind of the ethernet medium.
+
+
+\subsection{[[etherbind()]]}
+
+% ??? -> <>
+%   (as x->bind <- ...)
+<<function etherbind>>=
+/*
+ *  called to bind an IP ifc to an ethernet device
+ *  called with ifc wlock'd
+ */
+static void
+etherbind(Ipifc *ifc, int argc, char **argv)
 {
-    .name=      "ether",
+    Chan *mchan4, *cchan4, *achan, *mchan6, *cchan6, *schan;
+    char addr[Maxpath]; //char addr[2*KNAMELEN];
+    char dir[Maxpath];  //char dir[2*KNAMELEN];
+    char *buf;
+    int n;
+    char *ptr;
+    Etherrock *er;
 
-    .hsize=     14,
-    .mintu=     60,
-    .maxtu=     1514,
-    .maclen=    6,
+    if(argc < 2)
+        error(Ebadarg);
 
-    .bind=      etherbind,
-    .unbind=    etherunbind,
-    .bwrite=    etherbwrite,
+    mchan4 = cchan4 = achan = mchan6 = cchan6 = nil;
+    buf = nil;
+    if(waserror()){
+        if(mchan4 != nil)
+            cclose(mchan4);
+        if(cchan4 != nil)
+            cclose(cchan4);
+        if(achan != nil)
+            cclose(achan);
+        if(mchan6 != nil)
+            cclose(mchan6);
+        if(cchan6 != nil)
+            cclose(cchan6);
+        if(buf != nil)
+            free(buf);
+        nexterror();
+    }
 
-    .addmulti=  etheraddmulti,
-    .remmulti=  etherremmulti,
-    .ares=      arpenter,
-    .areg=      sendgarp,
-    .pref2addr= etherpref2addr,
-};
+    /*
+     *  open ipv4 conversation
+     *
+     *  the dial will fail if the type is already open on
+     *  this device.
+     */
+    snprint(addr, sizeof(addr), "%s!0x800", argv[2]);   /* ETIP4 */
+    mchan4 = chandial(addr, nil, dir, &cchan4);
+
+    /*
+     *  make it non-blocking
+     */
+    devtab[cchan4->type]->write(cchan4, nbmsg, strlen(nbmsg), 0);
+
+    /*
+     *  get mac address and speed
+     */
+    snprint(addr, sizeof(addr), "%s/stats", argv[2]);
+    buf = smalloc(512);
+    schan = namec(addr, Aopen, OREAD, 0);
+    if(waserror()){
+        cclose(schan);
+        nexterror();
+    }
+    n = devtab[schan->type]->read(schan, buf, 511, 0);
+    cclose(schan);
+    poperror();
+    buf[n] = 0;
+
+    ptr = strstr(buf, "addr: ");
+    if(!ptr)
+        error(Eio);
+    ptr += 6;
+    parsemac(ifc->mac, ptr, 6);
+
+    ptr = strstr(buf, "mbps: ");
+    if(ptr){
+        ptr += 6;
+        ifc->mbps = atoi(ptr);
+    } else
+        ifc->mbps = 100;
+
+    /*
+     *  open arp conversation
+     */
+    snprint(addr, sizeof(addr), "%s!0x806", argv[2]);   /* ETARP */
+    achan = chandial(addr, nil, nil, nil);
+
+    /*
+     *  open ipv6 conversation
+     *
+     *  the dial will fail if the type is already open on
+     *  this device.
+     */
+    snprint(addr, sizeof(addr), "%s!0x86DD", argv[2]);  /* ETIP6 */
+    mchan6 = chandial(addr, nil, dir, &cchan6);
+
+    /*
+     *  make it non-blocking
+     */
+    devtab[cchan6->type]->write(cchan6, nbmsg, strlen(nbmsg), 0);
+
+    er = smalloc(sizeof(*er));
+    er->mchan4 = mchan4;
+    er->cchan4 = cchan4;
+    er->achan = achan;
+    er->mchan6 = mchan6;
+    er->cchan6 = cchan6;
+    er->f = ifc->conv->p->f;
+    ifc->arg = er;
+
+    free(buf);
+    poperror();
+
+    kproc("etherread4", etherread4, ifc);
+    kproc("recvarpproc", recvarpproc, ifc);
+    kproc("etherread6", etherread6, ifc);
+}
 @
-% maxtu = 1500 + 14 for header
-% maclen = 6 = 48 bits
 
-
-<<global etherbroadcast>>=
-static uchar etherbroadcast[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-@
-
-
-
-
-\section{Ethernet device}
-
-
-
-<<global etherdevtab>>=
-Dev etherdevtab = {
-    .dc       =    'l',
-    .name     =    "ether",
-
-    .attach   =    etherattach,
-    .walk     =    etherwalk,
-    .open     =    etheropen,
-    .close    =    etherclose,
-    .read     =    etherread,
-    .write    =    etherwrite,
-    .stat     =    etherstat,
-    .wstat    =    etherwstat,
-               
-    .reset    =    etherreset,
-    .init     =    devinit,
-    .shutdown =    ethershutdown,
-    .create   =    ethercreate,
-    .bread    =    etherbread,
-    .bwrite   =    etherbwrite,
-    .remove   =    devremove,
-};
-@
-
-
-\section{Streams}
-
-% like bidirectional pipes. Producer/consumer like pipes, but
-% bidirectional.
-
-
-
-
-
+\subsection{[[chandial()]]}
 
 
 \chapter{IP}
@@ -3394,6 +3704,44 @@ struct Arpent
 };
 @
 
+\section{Initialisation}
+
+% ipattach -> ipgetfs -> <>
+<<function arpinit>>=
+void
+arpinit(Fs *f)
+{
+    f->arp = smalloc(sizeof(Arp));
+    f->arp->f = f;
+    f->arp->rxmt = nil;
+    f->arp->dropf = f->arp->dropl = nil;
+    kproc("rxmitproc", rxmitproc, f->arp);
+}
+@
+
+<<function rxmitproc>>=
+static void
+rxmitproc(void *v)
+{
+    Arp *arp = v;
+    long wakeupat;
+
+    arp->rxmitp = up;
+    //print("arp rxmitproc started\n");
+    if(waserror()){
+        arp->rxmitp = 0;
+        pexit("hangup", 1);
+    }
+    for(;;){
+        wakeupat = rxmitsols(arp);
+        if(wakeupat == 0)
+            sleep(&arp->rxmtq, rxready, v);
+        else if(wakeupat > ReTransTimer/4)
+            tsleep(&arp->rxmtq, returnfalse, 0, wakeupat);
+    }
+}
+@
+
 
 \section{[[/net/arp]]}
 
@@ -3424,6 +3772,9 @@ case Qiproute:
 
 
 \chapter{Routes}
+
+% ARP allows local routing
+% /net/iproute allows inter-network routing, find gateway
 
 \section{[[/net/ipselftab]]}
 
@@ -3464,22 +3815,14 @@ case Qiproute:
 
 
 \chapter{UDP}
-% Unreliable, Unordered
+% Unreliable, Unordered :)
 
-<<struct Udphdr>>=
-struct Udphdr
-{
-    uchar	raddr[IPaddrlen];	/* V6 remote address */
-    uchar	laddr[IPaddrlen];	/* V6 local address */
-    uchar	ifcaddr[IPaddrlen];	/* V6 ifc addr msg was received on */
+% when do ip/ipconfig then can see that 4 InDatagrams and 2 OutDatagrams
+% and 2 ports :)
 
-    uchar	rport[2];		/* remote port */
-    uchar	lport[2];		/* local port */
-};
-@
+\section{Protocol initialisation}
 
-
-
+% ipattach -> ipgetfs -> <> (as ipprotoinit[i] <- ...)
 <<function udpinit>>=
 void
 udpinit(Fs *fs)
@@ -3490,22 +3833,83 @@ udpinit(Fs *fs)
     udp->priv = smalloc(sizeof(Udppriv));
 
     udp->name = "udp";
+    udp->create = udpcreate;
+
     udp->connect = udpconnect;
     udp->announce = udpannounce;
     udp->ctl = udpctl;
-    udp->state = udpstate;
-    udp->create = udpcreate;
     udp->close = udpclose;
     udp->rcv = udpiput;
     udp->advise = udpadvise;
+
+    udp->state = udpstate;
     udp->stats = udpstats;
+
     udp->ipproto = IP_UDPPROTO;
+
     udp->nc = Nchans;
     udp->ptclsize = sizeof(Udpcb);
 
     Fsproto(fs, udp);
 }
 @
+%less: make it a global with intializer?
+
+\section{Protocol data structures}
+
+\subsection{[[Udppriv]]}
+
+% protocol priv
+<<struct Udppriv>>=
+struct Udppriv
+{
+    Ipht        ht;
+
+    <<[[Udppriv]] stat fields>>
+};
+@
+
+
+\subsection{[[Udpcb]]}
+
+% conversation priv
+
+<<struct Udpcb>>=
+struct Udpcb
+{
+    QLock;
+    <<[[Idpcb]] other fields>>
+};
+@
+
+\subsection{Statistics}
+
+% C-s one of this field and you'll understand what does what :)
+% which is why it can be useful to present early.
+%less: or present with /net/udp/stats later?
+
+<<[[Udppriv]] stat fields>>=
+/* MIB counters */
+Udpstats    ustats;
+/* non-MIB stats */
+ulong       csumerr;        /* checksum errors */
+ulong       lenerr;         /* short packet */
+@
+%MIB?
+
+<<struct Udpstats>>=
+struct Udpstats
+{
+    uvlong  udpInDatagrams;
+    ulong   udpNoPorts;
+    ulong   udpInErrors;
+    uvlong  udpOutDatagrams;
+};
+@
+
+
+
+\section{Protocol header}
 
 <<struct Udp4hdr>>=
 struct Udp4hdr
@@ -3517,6 +3921,7 @@ struct Udp4hdr
     uchar   id[2];      /* Identification */
     uchar   frag[2];    /* Fragment information */
     uchar   Unused;
+
     uchar   udpproto;   /* Protocol */
     uchar   udpplen[2]; /* Header plus data length */
     uchar   udpsrc[IPv4addrlen];    /* Ip source */
@@ -3529,9 +3934,270 @@ struct Udp4hdr
     uchar   udpcksum[2];    /* Checksum */
 };
 @
+% do not change the order here :)
 
+
+<<struct Udphdr>>=
+struct Udphdr
+{
+    uchar	raddr[IPaddrlen];	/* V6 remote address */
+    uchar	laddr[IPaddrlen];	/* V6 local address */
+    uchar	ifcaddr[IPaddrlen];	/* V6 ifc addr msg was received on */
+
+    uchar	rport[2];		/* remote port */
+    uchar	lport[2];		/* local port */
+};
+@
+% do not change the order here :)
+
+\section{[[/net/tcp/clone]]}
+
+<<function udpcreate>>=
+static void
+udpcreate(Conv *cv)
+{
+    cv->rq = qopen(128*1024, Qmsg, 0, 0);
+    cv->wq = qbypass(udpkick, cv);
+}
+@
+
+\section{[[/net/tcp/ctl]]}
+
+\subsection{Connect}
+
+<<function udpconnect>>=
+static char*
+udpconnect(Conv *c, char **argv, int argc)
+{
+    char *e;
+    Udppriv *upriv;
+
+    upriv = c->p->priv;
+    e = Fsstdconnect(c, argv, argc);
+    Fsconnected(c, e);
+    if(e != nil)
+        return e;
+
+    iphtadd(&upriv->ht, c);
+    return nil;
+}
+@
+
+\subsection{Other}
+
+% need that? remove?
+
+<<[[Idpcb]] other fields>>=
+uchar   headers;
+@
+
+<<function udpctl>>=
+char*
+udpctl(Conv *c, char **f, int n)
+{
+    Udpcb *ucb;
+
+    ucb = (Udpcb*)c->ptcl;
+    if(n == 1){
+        if(strcmp(f[0], "headers") == 0){
+            ucb->headers = 7;   /* new headers format */
+            return nil;
+        }
+    }
+    return "unknown control request";
+}
+@
+
+\section{IO}
+
+\subsection{kick}
+
+<<function udpkick>>=
+void
+udpkick(void *x, Block *bp)
+{
+    Conv *c = x;
+    Udp4hdr *uh4;
+    Udp6hdr *uh6;
+    ushort rport;
+    uchar laddr[IPaddrlen], raddr[IPaddrlen];
+    Udpcb *ucb;
+    int dlen, ptcllen;
+    Udppriv *upriv;
+    Fs *f;
+    int version;
+    Conv *rc;
+
+    upriv = c->p->priv;
+    f = c->p->f;
+
+//  netlog(c->p->f, Logudp, "udp: kick\n"); /* frequent and uninteresting */
+    if(bp == nil)
+        return;
+
+    ucb = (Udpcb*)c->ptcl;
+    switch(ucb->headers) {
+    case 7:
+        /* get user specified addresses */
+        bp = pullupblock(bp, UDP_USEAD7);
+        if(bp == nil)
+            return;
+        ipmove(raddr, bp->rp);
+        bp->rp += IPaddrlen;
+        ipmove(laddr, bp->rp);
+        bp->rp += IPaddrlen;
+        /* pick interface closest to dest */
+        if(ipforme(f, laddr) != Runi)
+            findlocalip(f, laddr, raddr);
+        bp->rp += IPaddrlen;        /* Ignore ifc address */
+        rport = nhgets(bp->rp);
+        bp->rp += 2+2;          /* Ignore local port */
+        break;
+    default:
+        rport = 0;
+        break;
+    }
+
+    if(ucb->headers) {
+        if(memcmp(laddr, v4prefix, IPv4off) == 0
+        || ipcmp(laddr, IPnoaddr) == 0)
+            version = 4;
+        else
+            version = 6;
+    } else {
+        if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
+            memcmp(c->laddr, v4prefix, IPv4off) == 0)
+            || ipcmp(c->raddr, IPnoaddr) == 0)
+            version = 4;
+        else
+            version = 6;
+    }
+
+    dlen = blocklen(bp);
+
+    /* fill in pseudo header and compute checksum */
+    switch(version){
+    case V4:
+        bp = padblock(bp, UDP4_IPHDR_SZ+UDP_UDPHDR_SZ);
+        if(bp == nil)
+            return;
+
+        uh4 = (Udp4hdr *)(bp->rp);
+        ptcllen = dlen + UDP_UDPHDR_SZ;
+        uh4->Unused = 0;
+        uh4->udpproto = IP_UDPPROTO;
+        uh4->frag[0] = 0;
+        uh4->frag[1] = 0;
+        hnputs(uh4->udpplen, ptcllen);
+        if(ucb->headers) {
+            v6tov4(uh4->udpdst, raddr);
+            hnputs(uh4->udpdport, rport);
+            v6tov4(uh4->udpsrc, laddr);
+            rc = nil;
+        } else {
+            v6tov4(uh4->udpdst, c->raddr);
+            hnputs(uh4->udpdport, c->rport);
+            if(ipcmp(c->laddr, IPnoaddr) == 0)
+                findlocalip(f, c->laddr, c->raddr);
+            v6tov4(uh4->udpsrc, c->laddr);
+            rc = c;
+        }
+        hnputs(uh4->udpsport, c->lport);
+        hnputs(uh4->udplen, ptcllen);
+        uh4->udpcksum[0] = 0;
+        uh4->udpcksum[1] = 0;
+        hnputs(uh4->udpcksum,
+               ptclcsum(bp, UDP4_PHDR_OFF, dlen+UDP_UDPHDR_SZ+UDP4_PHDR_SZ));
+        uh4->vihl = IP_VER4;
+        ipoput4(f, bp, 0, c->ttl, c->tos, rc);
+        break;
+
+    case V6:
+        bp = padblock(bp, UDP6_IPHDR_SZ+UDP_UDPHDR_SZ);
+        if(bp == nil)
+            return;
+
+        /*
+         * using the v6 ip header to create pseudo header
+         * first then reset it to the normal ip header
+         */
+        uh6 = (Udp6hdr *)(bp->rp);
+        memset(uh6, 0, 8);
+        ptcllen = dlen + UDP_UDPHDR_SZ;
+        hnputl(uh6->viclfl, ptcllen);
+        uh6->hoplimit = IP_UDPPROTO;
+        if(ucb->headers) {
+            ipmove(uh6->udpdst, raddr);
+            hnputs(uh6->udpdport, rport);
+            ipmove(uh6->udpsrc, laddr);
+            rc = nil;
+        } else {
+            ipmove(uh6->udpdst, c->raddr);
+            hnputs(uh6->udpdport, c->rport);
+            if(ipcmp(c->laddr, IPnoaddr) == 0)
+                findlocalip(f, c->laddr, c->raddr);
+            ipmove(uh6->udpsrc, c->laddr);
+            rc = c;
+        }
+        hnputs(uh6->udpsport, c->lport);
+        hnputs(uh6->udplen, ptcllen);
+        uh6->udpcksum[0] = 0;
+        uh6->udpcksum[1] = 0;
+        hnputs(uh6->udpcksum,
+               ptclcsum(bp, UDP6_PHDR_OFF, dlen+UDP_UDPHDR_SZ+UDP6_PHDR_SZ));
+        memset(uh6, 0, 8);
+        uh6->viclfl[0] = IP_VER6;
+        hnputs(uh6->len, ptcllen);
+        uh6->nextheader = IP_UDPPROTO;
+        ipoput6(f, bp, 0, c->ttl, c->tos, rc);
+        break;
+
+    default:
+        panic("udpkick: version %d", version);
+    }
+    upriv->ustats.udpOutDatagrams++;
+}
+@
+
+\subsection{iput}
+
+\section{Other files}
+
+\subsection{[[/net/tcp/stats]]}
+
+<<function udpstats>>=
+int
+udpstats(Proto *udp, char *buf, int len)
+{
+    Udppriv *upriv;
+
+    upriv = udp->priv;
+    return snprint(buf, len, "InDatagrams: %llud\nNoPorts: %lud\n"
+        "InErrors: %lud\nOutDatagrams: %llud\n",
+        upriv->ustats.udpInDatagrams,
+        upriv->ustats.udpNoPorts,
+        upriv->ustats.udpInErrors,
+        upriv->ustats.udpOutDatagrams);
+}
+@
+
+\subsection{[[/net/tcp/x/status]]}
+
+<<function udpstate>>=
+static int
+udpstate(Conv *cv, char *state, int n)
+{
+    return snprint(state, n, "%s qin %d qout %d\n",
+        cv->inuse ? "Open" : "Closed",
+        cv->rq ? qlen(cv->rq) : 0,
+        cv->wq ? qlen(cv->wq) : 0
+    );
+}
+@
 
 \chapter{IL}
+
+%was in 9legacy since it has been deleted of recent plan9
 
 <<function ilinit>>=
 void
@@ -4270,8 +4936,8 @@ case Qsnoop:
 
 <<[[ipread()]] switch TYPE qid cases>>=
 case Qsnoop:
-    c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-    return qread(c->sq, a, n);
+    cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+    return qread(cv->sq, a, n);
 @
 
 
@@ -4333,7 +4999,7 @@ usage(void)
 
 % a few things have a format accepting "*"
 
-\chapter{Other Medium}
+\chapter{Extra Mediums}
 
 \section{Null medium}
 
@@ -4385,7 +5051,7 @@ nullmediumlink(void)
 % alternative to ethernet
 
 
-\chapter{Other Protocols}
+\chapter{Extra Protocols}
 
 \section{ICMP}
 % for ping

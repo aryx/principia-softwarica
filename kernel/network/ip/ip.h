@@ -237,18 +237,20 @@ struct Conv
   Ref snoopers;   /* number of processes with snoop open */
   Queue*  sq;     /* snooping queue */
   /*e: [[Conv(kernel)]] snoop fields */
-  /*s: [[Conv(kernel)]] other fields */
+  /*s: [[Conv(kernel)]] priv fields */
   void* ptcl;     /* protocol specific stuff */
-  /*x: [[Conv(kernel)]] other fields */
+  /*e: [[Conv(kernel)]] priv fields */
+  /*s: [[Conv(kernel)]] other fields */
   int inuse;      /* opens of listen/data/ctl */
   /*x: [[Conv(kernel)]] other fields */
-  int restricted;   /* remote port is restricted */
   uint  ttl;      /* max time to live */
   uint  tos;      /* type of service */
-  bool ignoreadvice;   /* don't terminate connection on icmp errors */
-
+  /*x: [[Conv(kernel)]] other fields */
   int length;
   int state;
+  /*x: [[Conv(kernel)]] other fields */
+  bool restricted;   /* remote port is restricted */
+  bool ignoreadvice;   /* don't terminate connection on icmp errors */
 
   int maxfragsize;    /* If set, used for fragmentation */
 
@@ -293,6 +295,8 @@ struct Medium
   void  (*unbind)(Ipifc*);
 
   void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
+  /* process packets written to 'data' */
+  void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
 
   /*s: [[Medium(kernel)]] multicast methods */
   /* for arming interfaces to receive multicast */
@@ -304,9 +308,6 @@ struct Medium
   void  (*leavemulti)(Ipifc *ifc, uchar *a, uchar *ia);
   /*e: [[Medium(kernel)]] multicast methods */
   /*s: [[Medium(kernel)]] other methods */
-  /* process packets written to 'data' */
-  void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
-
   /* routes for router boards */
   void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
   void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
@@ -495,23 +496,32 @@ struct Proto
   char*   name;   /* protocol name */
 
   /*s: [[Proto(kernel)]] methods */
-  // sysopen(/net/x/clone) -> ... -> ipopen -> Fsprotoclone -> <>
+  /*s: [[Proto(kernel)]] protocol methods */
   void    (*create)(Conv*);
-  // syswrite("bind ...", /net/x/y/ctl) -> ... -> ipwrite -> ... -> <>
+  /*x: [[Proto(kernel)]] protocol methods */
+  int   (*gc)(Proto*);  /* returns true if any conversations are freed */
+  /*x: [[Proto(kernel)]] protocol methods */
+  int   (*stats)(Proto*, char*, int);
+  /*e: [[Proto(kernel)]] protocol methods */
+  /*s: [[Proto(kernel)]] conversation methods */
   char*   (*bind)(Conv*, char**, int);
-
+  /*x: [[Proto(kernel)]] conversation methods */
   char*   (*connect)(Conv*, char**, int);
+  /*x: [[Proto(kernel)]] conversation methods */
   char*   (*announce)(Conv*, char**, int);
-  int   (*state)(Conv*, char*, int);
+  /*x: [[Proto(kernel)]] conversation methods */
   void    (*close)(Conv*);
   void    (*rcv)(Proto*, Ipifc*, Block*);
   char*   (*ctl)(Conv*, char**, int);
   void    (*advise)(Proto*, Block*, char*);
-  int   (*stats)(Proto*, char*, int);
-  int   (*local)(Conv*, char*, int);
-  int   (*remote)(Conv*, char*, int);
   int   (*inuse)(Conv*);
-  int   (*gc)(Proto*);  /* returns true if any conversations are freed */
+  /*x: [[Proto(kernel)]] conversation methods */
+  int   (*state)(Conv*, char*, int);
+  /*x: [[Proto(kernel)]] conversation methods */
+  int   (*local)(Conv*, char*, int);
+  /*x: [[Proto(kernel)]] conversation methods */
+  int   (*remote)(Conv*, char*, int);
+  /*e: [[Proto(kernel)]] conversation methods */
   /*e: [[Proto(kernel)]] methods */
 
   // growing_array<option<ref_own<Proto>>>, size = Proto.nc
@@ -519,17 +529,20 @@ struct Proto
   int   nc;   /* number of conversations */
   int   ac; // number of opened conversations
 
-  /*s: [[Proto(kernel)]] other fields */
-  int   ipproto;  /* ip protocol type */
 
-  ushort    nextrport;
-  /*x: [[Proto(kernel)]] other fields */
+  /*s: [[Proto(kernel)]] priv fields */
+  void    *priv;
+  /*x: [[Proto(kernel)]] priv fields */
+  int   ptclsize; /* size of per protocol ctl block */
+  /*e: [[Proto(kernel)]] priv fields */
+  /*s: [[Proto(kernel)]] other fields */
   Qid   qid;    /* qid for protocol directory */
   /*x: [[Proto(kernel)]] other fields */
-  int   ptclsize; /* size of per protocol ctl block */
+  ushort    nextrport;
+  /*x: [[Proto(kernel)]] other fields */
+  // enum<protocol_type>
+  int   ipproto;  /* ip protocol type */
   /*e: [[Proto(kernel)]] other fields */
-
-  void    *priv;
 
   // Extra
   QLock;
@@ -575,9 +588,10 @@ struct Fs
     Route *v6root[1<<Lroot];  /* v6 routing forest */
   /*e: [[Fs(kernel)]] ipv6 fields */
   /*s: [[Fs(kernel)]] other fields */
-  Proto*  t2p[256];   /* vector of all protocols */
-
   Proto*  ipmux;      /* kludge for finding an ip multiplexor */
+  /*x: [[Fs(kernel)]] other fields */
+  // map<enum<protocol_type>, ref<Proto>>
+  Proto*  t2p[256];   /* vector of all protocols */
   /*x: [[Fs(kernel)]] other fields */
   Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
   /*x: [[Fs(kernel)]] other fields */
