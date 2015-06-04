@@ -8,6 +8,10 @@
 
 #include	"ip.h"
 
+typedef struct Ilcb Ilcb;
+typedef struct Ilhdr Ilhdr;
+typedef struct Ilpriv Ilpriv;
+
 /*s: enum _anon_ (kernel/network/ip/il.c) */
 enum				/* Connection state */
 {
@@ -92,7 +96,6 @@ enum
 };
 /*e: enum _anon_ (kernel/network/ip/il.c)4 */
 
-typedef struct Ilcb Ilcb;
 /*s: struct Ilcb */
 struct Ilcb			/* Control block */
 {
@@ -148,7 +151,6 @@ enum
 };
 /*e: enum _anon_ (kernel/network/ip/il.c)5 */
 
-typedef struct Ilhdr Ilhdr;
 /*s: struct Ilhdr */
 struct Ilhdr
 {
@@ -207,7 +209,6 @@ static char *statnames[] =
 };
 /*e: global statnames (kernel/network/ip/il.c) */
 
-typedef struct Ilpriv Ilpriv;
 /*s: struct Ilpriv */
 struct Ilpriv
 {
@@ -251,6 +252,8 @@ void	ilcbinit(Ilcb*);
 int	later(ulong, ulong, char*);
 void	ilreject(Fs*, Ilhdr*);
 void	illocalclose(Conv *c);
+
+
 /*s: global ilcksum */
     int 	ilcksum = 1;
 /*e: global ilcksum */

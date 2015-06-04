@@ -36,9 +36,9 @@ struct Ether {
 extern Block* etheriq(Ether*, Block*, int);
 extern void addethercard(char*, int(*)(Ether*));
 //extern ulong ethercrc(uchar*, int);
-/*s: macro NEXT */
 //extern int parseether(uchar*, char*);
 
+/*s: macro NEXT */
 #define NEXT(x, l)  (((x)+1)%(l))
 /*e: macro NEXT */
 /*s: macro PREV */

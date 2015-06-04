@@ -8,6 +8,8 @@
 
 #include "ip.h"
 
+typedef struct Icmppriv Icmppriv;
+
 /*s: struct Icmp */
 typedef struct Icmp {
     uchar   vihl;       /* Version and header length */
@@ -109,7 +111,6 @@ static char *statnames[Nstats] =
 };
 /*e: global statnames (kernel/network/ip/icmp.c) */
 
-typedef struct Icmppriv Icmppriv;
 /*s: struct Icmppriv */
 struct Icmppriv
 {

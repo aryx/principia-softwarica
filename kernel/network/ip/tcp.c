@@ -8,6 +8,15 @@
 
 #include    "ip.h"
 
+typedef struct Tcptimer Tcptimer;
+typedef struct Tcp4hdr Tcp4hdr;
+typedef struct Tcp6hdr Tcp6hdr;
+typedef struct Tcp Tcp;
+typedef struct Reseq Reseq;
+typedef struct Tcpctl Tcpctl;
+typedef struct Limbo Limbo;
+typedef struct Tcppriv Tcppriv;
+
 /*s: enum _anon_ (kernel/network/ip/tcp.c) */
 enum
 {
@@ -103,7 +112,6 @@ char *tcpstates[] =
 };
 /*e: global tcpstates */
 
-typedef struct Tcptimer Tcptimer;
 /*s: struct Tcptimer */
 struct Tcptimer
 {
@@ -122,7 +130,6 @@ struct Tcptimer
  *  v4 and v6 pseudo headers used for
  *  checksuming tcp
  */
-typedef struct Tcp4hdr Tcp4hdr;
 /*s: struct Tcp4hdr */
 struct Tcp4hdr
 {
@@ -149,7 +156,6 @@ struct Tcp4hdr
 };
 /*e: struct Tcp4hdr */
 
-typedef struct Tcp6hdr Tcp6hdr;
 /*s: struct Tcp6hdr */
 struct Tcp6hdr
 {
@@ -178,7 +184,6 @@ struct Tcp6hdr
  *  a packet in ntohtcp{4,6}() and stuck into
  *  a packet in htontcp{4,6}().
  */
-typedef struct Tcp Tcp;
 /*s: struct Tcp */
 struct  Tcp
 {
@@ -200,7 +205,6 @@ struct  Tcp
  *  this header is malloc'd to thread together fragments
  *  waiting to be coalesced
  */
-typedef struct Reseq Reseq;
 /*s: struct Reseq */
 struct Reseq
 {
@@ -214,7 +218,6 @@ struct Reseq
 /*
  *  the qlock in the Conv locks this structure
  */
-typedef struct Tcpctl Tcpctl;
 /*s: struct Tcpctl */
 struct Tcpctl
 {
@@ -302,7 +305,6 @@ struct Tcpctl
  *  of 70000 limbo'd calls.  Not great for a linear list but doable.  Therefore
  *  there is no hashing of this list.
  */
-typedef struct Limbo Limbo;
 /*s: struct Limbo */
 struct Limbo
 {
@@ -402,7 +404,6 @@ static char *statnames[Nstats] =
 };
 /*e: global statnames (kernel/network/ip/tcp.c) */
 
-typedef struct Tcppriv Tcppriv;
 /*s: struct Tcppriv */
 struct Tcppriv
 {

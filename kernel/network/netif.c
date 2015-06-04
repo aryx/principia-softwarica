@@ -593,8 +593,6 @@ matchtoken(char *p, char *token)
 /*e: function matchtoken */
 
 /*s: function hnputl (kernel/network/netif.c) */
-//}
-
 void
 hnputl(void *p, uint v)
 {
@@ -621,8 +619,6 @@ hnputs(void *p, ushort v)
 /*e: function hnputs (kernel/network/netif.c) */
 
 /*s: function nhgetl (kernel/network/netif.c) */
-//}
-
 uint
 nhgetl(void *p)
 {

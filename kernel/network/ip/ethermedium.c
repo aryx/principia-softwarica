@@ -11,6 +11,9 @@
 #include "ipv6.h"
 
 typedef struct Etherhdr Etherhdr;
+typedef struct  Etherrock Etherrock;
+typedef struct Etherarp Etherarp;
+
 /*s: struct Etherhdr */
 struct Etherhdr
 {
@@ -48,8 +51,6 @@ static void recvarpproc(void*);
 static void resolveaddr6(Ipifc *ifc, Arpent *a);
 static void etherpref2addr(uchar *pref, uchar *ea);
 
-typedef struct  Etherrock Etherrock;
-typedef struct Etherarp Etherarp;
 
 /*s: global ethermedium (kernel) */
 Medium ethermedium =

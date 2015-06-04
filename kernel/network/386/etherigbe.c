@@ -28,6 +28,10 @@
 #include "etherif.h"
 #include "ethermii.h"
 
+typedef struct Td Td;
+typedef struct CtlrEtherIgbe CtlrEtherIgbe;
+
+
 /*s: enum _anon_ (kernel/network/386/etherigbe.c) */
 enum {
     i82542      = (0x1000<<16)|0x8086,
@@ -435,7 +439,6 @@ enum {                  /* Rd errors */
 };
 /*e: enum _anon_ (kernel/network/386/etherigbe.c)21 */
 
-typedef struct Td Td;
 /*s: struct Td */
 struct Td {             /* Transmit Descriptor */
     union {
@@ -502,7 +505,6 @@ enum {
 };
 /*e: enum _anon_ (kernel/network/386/etherigbe.c)24 */
 
-typedef struct CtlrEtherIgbe CtlrEtherIgbe;
 /*s: struct CtlrEtherIgbe */
 struct CtlrEtherIgbe {
     int port;

@@ -8,6 +8,8 @@
 
 #include "ip.h"
 
+typedef struct LB LB;
+
 /*s: enum _anon_ (kernel/network/ip/loopbackmedium.c) */
 enum
 {
@@ -15,7 +17,6 @@ enum
 };
 /*e: enum _anon_ (kernel/network/ip/loopbackmedium.c) */
 
-typedef struct LB LB;
 /*s: struct LB */
 struct LB
 {
