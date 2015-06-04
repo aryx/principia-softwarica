@@ -211,6 +211,7 @@ struct Conv
 
   uchar laddr[IPaddrlen]; /* local IP address */
   uchar raddr[IPaddrlen]; /* remote IP address */
+
   ushort  lport;      /* local port number */
   ushort  rport;      /* remote port number */
 

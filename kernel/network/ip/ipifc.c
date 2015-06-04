@@ -17,7 +17,9 @@ extern char*    ipifcrem(Ipifc *ifc, char **argv, int argc);
 
 /*s: enum _anon_ (kernel/network/ip/ipifc.c) */
 enum {
+    /*s: constant Maxmedia */
     Maxmedia    = 32,
+    /*e: constant Maxmedia */
     Nself       = Maxmedia*5,
     NHASH       = 1<<6,
     NCACHE      = 256,
@@ -358,6 +360,7 @@ ipifccreate(Conv *c)
     c->rq = qopen(QMAX, 0, 0, 0);
     c->sq = qopen(QMAX, 0, 0, 0);
     c->wq = qopen(QMAX, Qkick, ipifckick, c);
+
     ifc = (Ipifc*)c->ptcl;
     ifc->conv = c;
     ifc->unbinding = 0;
@@ -812,7 +815,7 @@ ipifcra6(Ipifc *ifc, char **argv, int argc)
  *  called with c->car locked.
  */
 static char*
-ipifcctl(Conv* c, char**argv, int argc)
+ipifcctl(Conv* c, char** argv, int argc)
 {
     Ipifc *ifc;
     int i;
@@ -820,6 +823,7 @@ ipifcctl(Conv* c, char**argv, int argc)
     ifc = (Ipifc*)c->ptcl;
     if(strcmp(argv[0], "add") == 0)
         return ipifcadd(ifc, argv, argc, 0, nil);
+
     else if(strcmp(argv[0], "try") == 0)
         return ipifcadd(ifc, argv, argc, 1, nil);
     else if(strcmp(argv[0], "remove") == 0)
@@ -866,10 +870,12 @@ ipifcinit(Fs *f)
     Proto *ipifc;
 
     ipifc = smalloc(sizeof(Proto));
+
     ipifc->name = "ipifc";
     ipifc->connect = ipifcconnect;
     ipifc->announce = nil;
     ipifc->bind = ipifcbind;
+
     ipifc->state = ipifcstate;
     ipifc->create = ipifccreate;
     ipifc->close = ipifcclose;
@@ -879,6 +885,7 @@ ipifcinit(Fs *f)
     ipifc->stats = ipifcstats;
     ipifc->inuse = ipifcinuse;
     ipifc->local = ipifclocal;
+
     ipifc->ipproto = -1;
     ipifc->nc = Maxmedia;
     ipifc->ptclsize = sizeof(Ipifc);
