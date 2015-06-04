@@ -39,14 +39,22 @@ char *arpstate[] =
  */
 struct Arp
 {
-    QLock;
-    Fs  *f;
-    Arpent  *hash[NHASH];
-    Arpent  cache[NCACHE];
     Arpent  *rxmt;
     Proc    *rxmitp;    /* neib sol re-transmit proc */
+
     Rendez  rxmtq;
     Block   *dropf, *dropl;
+
+    Arpent  *hash[NHASH];
+    Arpent  cache[NCACHE];
+
+    // Extra
+    QLock;
+    /*s: [[Arp]] extra fields */
+    // ref<Fs>, reverse of Fs.arp
+    Fs  *f;
+    /*e: [[Arp]] extra fields */
+
 };
 /*e: struct Arp */
 

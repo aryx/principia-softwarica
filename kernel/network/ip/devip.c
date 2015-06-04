@@ -7,35 +7,50 @@
 #include    "../port/error.h"
 #include    "../ip/ip.h"
 
-/*s: enum _anon_ (kernel/network/ip/devip.c) */
+/*s: enum qid (kernel/network/ip/devip.c) */
 enum
 {
     Qtopdir=    1,      /* top level directory */
 
     Qtopbase,
     Qarp=       Qtopbase,
-    Qbootp,
-    Qndb,
     Qiproute,
+    /*s: [[Qid]] toplevel extra cases */
     Qipselftab,
+    /*x: [[Qid]] toplevel extra cases */
+    Qndb,
+    /*x: [[Qid]] toplevel extra cases */
+    Qbootp,
+    /*x: [[Qid]] toplevel extra cases */
     Qlog,
+    /*e: [[Qid]] toplevel extra cases */
 
     Qprotodir,          /* directory for a protocol */
     Qprotobase,
     Qclone=     Qprotobase,
+    /*s: [[Qid]] protocol extra cases */
     Qstats,
+    /*e: [[Qid]] protocol extra cases */
 
     Qconvdir,           /* directory for a conversation */
     Qconvbase,
     Qctl=       Qconvbase,
     Qdata,
+    /*s: [[Qid]] conversation extra cases */
     Qerr,
     Qlisten,
     Qlocal,
     Qremote,
     Qstatus,
+    /*x: [[Qid]] conversation extra cases */
     Qsnoop,
+    /*e: [[Qid]] conversation extra cases */
+};
+/*e: enum qid (kernel/network/ip/devip.c) */
 
+/*s: enum misc (kernel/network/ip/devip.c) */
+enum
+{
     Logtype=    5,
     Masktype=   (1<<Logtype)-1,
 
@@ -51,7 +66,8 @@ enum
     Nfs=        128,
     /*e: constant Nfs */
 };
-/*e: enum _anon_ (kernel/network/ip/devip.c) */
+/*e: enum misc (kernel/network/ip/devip.c) */
+
 /*s: macro TYPE */
 #define TYPE(x)     ( ((ulong)(x).path) & Masktype )
 /*e: macro TYPE */
@@ -96,37 +112,45 @@ ip3gen(Chan *c, int i, Dir *dp)
 
     if(cv->owner == nil)
         kstrdup(&cv->owner, eve);
+
     mkqid(&q, QID(PROTO(c->qid), CONV(c->qid), i), 0, QTFILE);
 
     switch(i) {
-    default:
-        return -1;
+    /*s: [[ip3gen()]] switch TYPE qid cases */
     case Qctl:
         devdir(c, q, "ctl", 0, cv->owner, cv->perm, dp);
         return 1;
     case Qdata:
         devdir(c, q, "data", qlen(cv->rq), cv->owner, cv->perm, dp);
         return 1;
+    /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qerr:
         devdir(c, q, "err", qlen(cv->eq), cv->owner, cv->perm, dp);
         return 1;
+    /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qlisten:
         devdir(c, q, "listen", 0, cv->owner, cv->perm, dp);
         return 1;
+    /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qlocal:
         p = "local";
         break;
     case Qremote:
         p = "remote";
         break;
+    /*x: [[ip3gen()]] switch TYPE qid cases */
+    case Qstatus:
+        p = "status";
+        break;
+    /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qsnoop:
         if(strcmp(cv->p->name, "ipifc") != 0)
             return -1;
         devdir(c, q, "snoop", qlen(cv->sq), cv->owner, 0400, dp);
         return 1;
-    case Qstatus:
-        p = "status";
-        break;
+    /*e: [[ip3gen()]] switch TYPE qid cases */
+    default:
+        return -1;
     }
     devdir(c, q, p, 0, cv->owner, 0444, dp);
     return 1;
@@ -169,35 +193,44 @@ ip1gen(Chan *c, int i, Dir *dp)
     prot = 0666;
     mkqid(&q, QID(0, 0, i), 0, QTFILE);
     switch(i) {
-    default:
-        return -1;
+    /*s: [[ip1gen()]] switch TYPE qid cases */
     case Qarp:
         p = "arp";
         prot = 0664;
         break;
-    case Qbootp:
-        p = "bootp";
+    /*x: [[ip1gen()]] switch TYPE qid cases */
+    case Qipselftab:
+        p = "ipselftab";
+        prot = 0444;
         break;
+    /*x: [[ip1gen()]] switch TYPE qid cases */
+    case Qiproute:
+        p = "iproute";
+        prot = 0664;
+        break;
+    /*x: [[ip1gen()]] switch TYPE qid cases */
     case Qndb:
         p = "ndb";
         len = strlen(f->ndb);
         q.vers = f->ndbvers;
         break;
-    case Qiproute:
-        p = "iproute";
-        prot = 0664;
+    /*x: [[ip1gen()]] switch TYPE qid cases */
+    case Qbootp:
+        p = "bootp";
         break;
-    case Qipselftab:
-        p = "ipselftab";
-        prot = 0444;
-        break;
+    /*x: [[ip1gen()]] switch TYPE qid cases */
     case Qlog:
         p = "log";
         break;
+    /*e: [[ip1gen()]] switch TYPE qid cases */
+    default:
+        return -1;
     }
     devdir(c, q, p, len, network, prot, dp);
+    /*s: [[ipgen()]] if Qndb, adjust mtime */
     if(i == Qndb && f->ndbmtime > kerndate)
         dp->mtime = f->ndbmtime;
+    /*e: [[ipgen()]] if Qndb, adjust mtime */
     return 1;
 }
 /*e: function ip1gen */
@@ -206,13 +239,14 @@ ip1gen(Chan *c, int i, Dir *dp)
 static int
 ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 {
+    Fs *f;
     Qid q;
     Conv *cv;
-    Fs *f;
 
     f = ipfs[c->dev];
 
     switch(TYPE(c->qid)) {
+    /*s: [[ipgen()]] switch TYPE qid cases */
     case Qtopdir:
         if(s == DEVDOTDOT){
             mkqid(&q, QID(0, 0, Qtopdir), 0, QTDIR);
@@ -229,14 +263,15 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         }
         s -= f->np;
         return ip1gen(c, s+Qtopbase, dp);
+    /*x: [[ipgen()]] switch TYPE qid cases */
     case Qarp:
-    case Qbootp:
-    case Qndb:
     case Qlog:
     case Qiproute:
     case Qipselftab:
+    case Qbootp:
+    case Qndb:
         return ip1gen(c, TYPE(c->qid), dp);
-
+    /*x: [[ipgen()]] switch TYPE qid cases */
     case Qprotodir:
         if(s == DEVDOTDOT){
             mkqid(&q, QID(0, 0, Qtopdir), 0, QTDIR);
@@ -253,9 +288,11 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         }
         s -= f->p[PROTO(c->qid)]->ac;
         return ip2gen(c, s+Qprotobase, dp);
+    /*x: [[ipgen()]] switch TYPE qid cases */
     case Qclone:
     case Qstats:
         return ip2gen(c, TYPE(c->qid), dp);
+    /*x: [[ipgen()]] switch TYPE qid cases */
     case Qconvdir:
         if(s == DEVDOTDOT){
             s = PROTO(c->qid);
@@ -264,7 +301,7 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
             return 1;
         }
         return ip3gen(c, s+Qconvbase, dp);
-
+    /*x: [[ipgen()]] switch TYPE qid cases */
     case Qctl:
     case Qdata:
     case Qerr:
@@ -274,6 +311,7 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     case Qstatus:
     case Qsnoop:
         return ip3gen(c, TYPE(c->qid), dp);
+    /*e: [[ipgen()]] switch TYPE qid cases */
     }
     return -1;
 }
@@ -357,11 +395,12 @@ ipattach(char* spec)
     if(dev >= Nfs)
         error("bad specification");
 
+    // initialize ip stack
     ipgetfs(dev);
+
     c = devattach('I', spec);
     mkqid(&c->qid, QID(0, 0, Qtopdir), 0, QTDIR);
     c->dev = dev;
-
     c->aux = newipaux(up->user, "none");
 
     return c;
@@ -416,97 +455,32 @@ static int m2p[] = {
 static Chan*
 ipopen(Chan* c, int omode)
 {
-    Conv *cv, *nc;
-    Proto *p;
-    int perm;
     Fs *f;
+    int perm;
+    Proto *p;
+    Conv *cv, *nc;
 
     perm = m2p[omode&3];
 
     f = ipfs[c->dev];
 
     switch(TYPE(c->qid)) {
-    default:
-        break;
-    case Qndb:
-        if(omode & (OWRITE|OTRUNC) && !iseve())
-            error(Eperm);
-        if((omode & (OWRITE|OTRUNC)) == (OWRITE|OTRUNC))
-            f->ndb[0] = 0;
-        break;
-    case Qlog:
-        netlogopen(f);
-        break;
-    case Qiproute:
-    case Qarp:
-        if(omode != OREAD && !iseve())
-            error(Eperm);
-        break;
+    /*s: [[ipopen()]] switch TYPE qid cases */
     case Qtopdir:
     case Qprotodir:
     case Qconvdir:
+
+    case Qbootp:
+    case Qipselftab:
+
     case Qstatus:
     case Qremote:
     case Qlocal:
     case Qstats:
-    case Qbootp:
-    case Qipselftab:
         if(omode != OREAD)
             error(Eperm);
         break;
-    case Qsnoop:
-        if(omode != OREAD)
-            error(Eperm);
-        p = f->p[PROTO(c->qid)];
-        cv = p->conv[CONV(c->qid)];
-        if(strcmp(ATTACHER(c), cv->owner) != 0 && !iseve())
-            error(Eperm);
-        incref(&cv->snoopers);
-        break;
-    case Qclone:
-        p = f->p[PROTO(c->qid)];
-        qlock(p);
-        if(waserror()){
-            qunlock(p);
-            nexterror();
-        }
-        cv = Fsprotoclone(p, ATTACHER(c));
-        qunlock(p);
-        poperror();
-        if(cv == nil) {
-            error(Enodev);
-            break;
-        }
-        mkqid(&c->qid, QID(p->x, cv->x, Qctl), 0, QTFILE);
-        break;
-    case Qdata:
-    case Qctl:
-    case Qerr:
-        p = f->p[PROTO(c->qid)];
-        qlock(p);
-        cv = p->conv[CONV(c->qid)];
-        qlock(cv);
-        if(waserror()) {
-            qunlock(cv);
-            qunlock(p);
-            nexterror();
-        }
-        if((perm & (cv->perm>>6)) != perm) {
-            if(strcmp(ATTACHER(c), cv->owner) != 0)
-                error(Eperm);
-            if((perm & cv->perm) != perm)
-                error(Eperm);
-
-        }
-        cv->inuse++;
-        if(cv->inuse == 1){
-            kstrdup(&cv->owner, ATTACHER(c));
-            cv->perm = 0660;
-        }
-        qunlock(cv);
-        qunlock(p);
-        poperror();
-        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
     case Qlisten:
         cv = f->p[PROTO(c->qid)]->conv[CONV(c->qid)];
         if((perm & (cv->perm>>6)) != perm) {
@@ -557,6 +531,85 @@ ipopen(Chan* c, int omode)
         }
         closeconv(cv);
         poperror();
+        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
+    case Qclone:
+        p = f->p[PROTO(c->qid)];
+
+        qlock(p);
+        if(waserror()){
+            qunlock(p);
+            nexterror();
+        }
+
+        cv = Fsprotoclone(p, ATTACHER(c));
+
+        qunlock(p);
+        poperror();
+        if(cv == nil) {
+            error(Enodev);
+            break;
+        }
+        mkqid(&c->qid, QID(p->x, cv->x, Qctl), 0, QTFILE);
+        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
+    case Qctl:
+    case Qdata:
+    case Qerr:
+        p = f->p[PROTO(c->qid)];
+        qlock(p);
+        cv = p->conv[CONV(c->qid)];
+        qlock(cv);
+        if(waserror()) {
+            qunlock(cv);
+            qunlock(p);
+            nexterror();
+        }
+        if((perm & (cv->perm>>6)) != perm) {
+            if(strcmp(ATTACHER(c), cv->owner) != 0)
+                error(Eperm);
+            if((perm & cv->perm) != perm)
+                error(Eperm);
+
+        }
+        cv->inuse++;
+        if(cv->inuse == 1){
+            kstrdup(&cv->owner, ATTACHER(c));
+            cv->perm = 0660;
+        }
+        qunlock(cv);
+        qunlock(p);
+        poperror();
+        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
+    case Qarp:
+    case Qiproute:
+        if(omode != OREAD && !iseve())
+            error(Eperm);
+        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
+    case Qndb:
+        if(omode & (OWRITE|OTRUNC) && !iseve())
+            error(Eperm);
+        if((omode & (OWRITE|OTRUNC)) == (OWRITE|OTRUNC))
+            f->ndb[0] = 0;
+        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
+    case Qlog:
+        netlogopen(f);
+        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
+    case Qsnoop:
+        if(omode != OREAD)
+            error(Eperm);
+        p = f->p[PROTO(c->qid)];
+        cv = p->conv[CONV(c->qid)];
+        if(strcmp(ATTACHER(c), cv->owner) != 0 && !iseve())
+            error(Eperm);
+        incref(&cv->snoopers);
+        break;
+    /*e: [[ipopen()]] switch TYPE qid cases */
+    default:
         break;
     }
     c->mode = openmode(omode);
@@ -691,41 +744,34 @@ enum
 static long
 ipread(Chan *ch, void *a, long n, vlong off)
 {
-    Conv *c;
+    Fs *f;
     Proto *x;
+    Conv *c;
     char *buf, *p;
     long rv;
-    Fs *f;
     ulong offset = off;
 
     f = ipfs[ch->dev];
 
     p = a;
     switch(TYPE(ch->qid)) {
-    default:
-        error(Eperm);
+    /*s: [[ipread()]] switch TYPE qid cases */
     case Qtopdir:
     case Qprotodir:
     case Qconvdir:
         return devdirread(ch, a, n, 0, 0, ipgen);
-    case Qarp:
-        return arpread(f->arp, a, offset, n);
-    case Qbootp:
-        return bootpread(a, offset, n);
-    case Qndb:
-        return readstr(offset, a, n, f->ndb);
-    case Qiproute:
-        return routeread(f, a, offset, n);
-    case Qipselftab:
-        return ipselftabread(f, a, offset, n);
-    case Qlog:
-        return netlogread(f, a, offset, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
     case Qctl:
         buf = smalloc(16);
         snprint(buf, 16, "%lud", CONV(ch->qid));
         rv = readstr(offset, p, n, buf);
         free(buf);
         return rv;
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qdata:
+        c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+        return qread(c->rq, a, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
     case Qremote:
         buf = smalloc(Statelen);
         x = f->p[PROTO(ch->qid)];
@@ -733,11 +779,13 @@ ipread(Chan *ch, void *a, long n, vlong off)
         if(x->remote == nil) {
             snprint(buf, Statelen, "%I!%d\n", c->raddr, c->rport);
         } else {
+            // Protocol dispatch
             (*x->remote)(c, buf, Statelen-2);
         }
         rv = readstr(offset, p, n, buf);
         free(buf);
         return rv;
+    /*x: [[ipread()]] switch TYPE qid cases */
     case Qlocal:
         buf = smalloc(Statelen);
         x = f->p[PROTO(ch->qid)];
@@ -745,37 +793,67 @@ ipread(Chan *ch, void *a, long n, vlong off)
         if(x->local == nil) {
             snprint(buf, Statelen, "%I!%d\n", c->laddr, c->lport);
         } else {
+            // Protocol dispatch
             (*x->local)(c, buf, Statelen-2);
         }
         rv = readstr(offset, p, n, buf);
         free(buf);
         return rv;
+    /*x: [[ipread()]] switch TYPE qid cases */
     case Qstatus:
         buf = smalloc(Statelen);
         x = f->p[PROTO(ch->qid)];
         c = x->conv[CONV(ch->qid)];
+
+        // Protocol dispatch
         (*x->state)(c, buf, Statelen-2);
+
         rv = readstr(offset, p, n, buf);
         free(buf);
         return rv;
-    case Qdata:
-        c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-        return qread(c->rq, a, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
     case Qerr:
         c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
         return qread(c->eq, a, n);
-    case Qsnoop:
-        c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-        return qread(c->sq, a, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
     case Qstats:
         x = f->p[PROTO(ch->qid)];
         if(x->stats == nil)
             error("stats not implemented");
         buf = smalloc(Statelen);
+
+        // Protocol dispatch
         (*x->stats)(x, buf, Statelen);
+
         rv = readstr(offset, p, n, buf);
         free(buf);
         return rv;
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qarp:
+        return arpread(f->arp, a, offset, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qipselftab:
+        return ipselftabread(f, a, offset, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qiproute:
+        return routeread(f, a, offset, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qndb:
+        return readstr(offset, a, n, f->ndb);
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qbootp:
+        return bootpread(a, offset, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qlog:
+        return netlogread(f, a, offset, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qsnoop:
+        c = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+        return qread(c->sq, a, n);
+    /*e: [[ipread()]] switch TYPE qid cases */
+    default:
+        error(Eperm);
+
     }
 }
 /*e: function ipread */
@@ -1163,6 +1241,7 @@ bindctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
     if(x->bind == nil)
         p = Fsstdbind(c, cb->f, cb->nf);
     else
+        // Protocol dispatch
         p = x->bind(c, cb->f, cb->nf);
     if(p != nil)
         error(p);
@@ -1208,8 +1287,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
     f = ipfs[ch->dev];
 
     switch(TYPE(ch->qid)){
-    default:
-        error(Eperm);
+    /*s: [[ipwrite()]] switch TYPE qid cases */
     case Qdata:
         x = f->p[PROTO(ch->qid)];
         c = x->conv[CONV(ch->qid)];
@@ -1219,16 +1297,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
 
         qwrite(c->wq, a, n);
         break;
-    case Qarp:
-        return arpwrite(f, a, n);
-    case Qiproute:
-        return routewrite(f, ch, a, n);
-    case Qlog:
-        netlogctl(f, a, n);
-        return n;
-    case Qndb:
-        return ndbwrite(f, a, offset, n);
-        break;
+    /*x: [[ipwrite()]] switch TYPE qid cases */
     case Qctl:
         x = f->p[PROTO(ch->qid)];
         c = x->conv[CONV(ch->qid)];
@@ -1242,6 +1311,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
         }
         if(cb->nf < 1)
             error("short control request");
+
         if(strcmp(cb->f[0], "connect") == 0)
             connectctlmsg(x, c, cb);
         else if(strcmp(cb->f[0], "announce") == 0)
@@ -1285,7 +1355,9 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
 
             c->maxfragsize = (int)strtol(cb->f[1], nil, 0);
 
-        } else if(x->ctl != nil) {
+        } 
+        else if(x->ctl != nil) {
+            // Protocol dispatch
             p = x->ctl(c, cb->f, cb->nf);
             if(p != nil)
                 error(p);
@@ -1294,6 +1366,24 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
         qunlock(c);
         free(cb);
         poperror();
+        break;
+    /*x: [[ipwrite()]] switch TYPE qid cases */
+    case Qarp:
+        return arpwrite(f, a, n);
+    /*x: [[ipwrite()]] switch TYPE qid cases */
+    case Qiproute:
+        return routewrite(f, ch, a, n);
+    /*x: [[ipwrite()]] switch TYPE qid cases */
+    case Qndb:
+        return ndbwrite(f, a, offset, n);
+        break;
+    /*x: [[ipwrite()]] switch TYPE qid cases */
+    case Qlog:
+        netlogctl(f, a, n);
+        return n;
+    /*e: [[ipwrite()]] switch TYPE qid cases */
+    default:
+        error(Eperm);
     }
     return n;
 }
@@ -1412,7 +1502,10 @@ retry:
             *pp = c;
             p->ac++;
             c->eq = qopen(1024, Qmsg, 0, 0);
+
+            // !! Protocol dispatch !!! will create extra queues
             (*p->create)(c);
+
             break;
         }
         if(canqlock(c)){
@@ -1426,6 +1519,7 @@ retry:
             qunlock(c);
         }
     }
+
     if(pp >= ep) {
         if(p->gc)
             print("Fsprotoclone: garbage collecting Convs\n");
