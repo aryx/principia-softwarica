@@ -220,6 +220,12 @@ struct Conv
   char  *owner;     /* protections */
   int perm;
 
+  /*s: [[Conv(kernel)]] queue fields */
+  Queue*  eq;     /* returned error packets */
+  /*x: [[Conv(kernel)]] queue fields */
+  Queue*  rq;     /* queued data waiting to be read */
+  Queue*  wq;     /* queued data waiting to be written */
+  /*e: [[Conv(kernel)]] queue fields */
   /*s: [[Conv(kernel)]] routing fields */
   Route *r;     /* last route used */
   ulong rgen;     /* routetable generation for *r */
@@ -227,13 +233,20 @@ struct Conv
   /*s: [[Conv(kernel)]] multicast fields */
   Ipmulti *multi;     /* multicast bindings for this interface */
   /*e: [[Conv(kernel)]] multicast fields */
+  /*s: [[Conv(kernel)]] snoop fields */
+  Ref snoopers;   /* number of processes with snoop open */
+  Queue*  sq;     /* snooping queue */
+  /*e: [[Conv(kernel)]] snoop fields */
   /*s: [[Conv(kernel)]] other fields */
+  void* ptcl;     /* protocol specific stuff */
+  /*x: [[Conv(kernel)]] other fields */
+  int inuse;      /* opens of listen/data/ctl */
+  /*x: [[Conv(kernel)]] other fields */
   int restricted;   /* remote port is restricted */
   uint  ttl;      /* max time to live */
   uint  tos;      /* type of service */
   bool ignoreadvice;   /* don't terminate connection on icmp errors */
 
-  int inuse;      /* opens of listen/data/ctl */
   int length;
   int state;
 
@@ -246,20 +259,12 @@ struct Conv
   Conv* incall;     /* calls waiting to be listened for */
   Conv* next;
 
-  Queue*  rq;     /* queued data waiting to be read */
-  Queue*  wq;     /* queued data waiting to be written */
-  Queue*  eq;     /* returned error packets */
-  Queue*  sq;     /* snooping queue */
-  Ref snoopers;   /* number of processes with snoop open */
-
   QLock car;
   Rendez  cr;
   char  cerr[ERRMAX];
 
   QLock listenq;
   Rendez  listenr;
-
-  void* ptcl;     /* protocol specific stuff */
   /*e: [[Conv(kernel)]] other fields */
 
   // Extra
@@ -299,7 +304,6 @@ struct Medium
   void  (*leavemulti)(Ipifc *ifc, uchar *a, uchar *ia);
   /*e: [[Medium(kernel)]] multicast methods */
   /*s: [[Medium(kernel)]] other methods */
-
   /* process packets written to 'data' */
   void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
 
@@ -307,7 +311,6 @@ struct Medium
   void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
   void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
   void  (*flushroutes)(Ipifc *ifc);
-
 
   /* address resolution */
   void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
@@ -329,8 +332,9 @@ struct Iplifc
 {
   uchar local[IPaddrlen];
   uchar mask[IPaddrlen];
-  uchar remote[IPaddrlen];
   uchar net[IPaddrlen];
+
+  uchar remote[IPaddrlen];
 
   /*s: [[Iplifc(kernel)]] other fields */
   uchar tentative;  /* =1 => v6 dup disc on, =0 => confirmed unique */
@@ -414,6 +418,7 @@ struct Ipifc
   /*e: [[Ipifc(kernel)]] ipv6 fields */
   /*s: [[Ipifc(kernel)]] other fields */
   Conv  *conv;    /* link to its conversation structure */
+  /*x: [[Ipifc(kernel)]] other fields */
   bool reassemble; /* reassemble IP packets before forwarding */
 
   /* these are used so that we can unbind on the fly */
@@ -490,11 +495,14 @@ struct Proto
   char*   name;   /* protocol name */
 
   /*s: [[Proto(kernel)]] methods */
+  // sysopen(/net/x/clone) -> ... -> ipopen -> Fsprotoclone -> <>
+  void    (*create)(Conv*);
+  // syswrite("bind ...", /net/x/y/ctl) -> ... -> ipwrite -> ... -> <>
+  char*   (*bind)(Conv*, char**, int);
+
   char*   (*connect)(Conv*, char**, int);
   char*   (*announce)(Conv*, char**, int);
-  char*   (*bind)(Conv*, char**, int);
   int   (*state)(Conv*, char*, int);
-  void    (*create)(Conv*);
   void    (*close)(Conv*);
   void    (*rcv)(Proto*, Ipifc*, Block*);
   char*   (*ctl)(Conv*, char**, int);
@@ -506,18 +514,19 @@ struct Proto
   int   (*gc)(Proto*);  /* returns true if any conversations are freed */
   /*e: [[Proto(kernel)]] methods */
 
-  // growing_array<ref_own<Proto>>, size = Proto.nc
+  // growing_array<option<ref_own<Proto>>>, size = Proto.nc
   Conv    **conv;   /* array of conversations */
   int   nc;   /* number of conversations */
-  int   ac; // number of active conversations??
+  int   ac; // number of opened conversations
 
   /*s: [[Proto(kernel)]] other fields */
   int   ipproto;  /* ip protocol type */
 
-
-  int   ptclsize; /* size of per protocol ctl block */
-  Qid   qid;    /* qid for protocol directory */
   ushort    nextrport;
+  /*x: [[Proto(kernel)]] other fields */
+  Qid   qid;    /* qid for protocol directory */
+  /*x: [[Proto(kernel)]] other fields */
+  int   ptclsize; /* size of per protocol ctl block */
   /*e: [[Proto(kernel)]] other fields */
 
   void    *priv;
@@ -545,7 +554,6 @@ struct Fs
   int np;
 
   IP  *ip;
-  Ipselftab *self;
 
   /*s: [[Fs(kernel)]] arp fields */
   Arp *arp;
@@ -569,8 +577,11 @@ struct Fs
   /*s: [[Fs(kernel)]] other fields */
   Proto*  t2p[256];   /* vector of all protocols */
 
-  Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
   Proto*  ipmux;      /* kludge for finding an ip multiplexor */
+  /*x: [[Fs(kernel)]] other fields */
+  Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
+  /*x: [[Fs(kernel)]] other fields */
+  Ipselftab *self;
   /*e: [[Fs(kernel)]] other fields */
  
   // Extra
@@ -765,16 +776,17 @@ struct IPaux
 
 extern IPaux* newipaux(char*, char*);
 
-/*s: struct Arpent */
 /*
  *  arp.c
  */
+/*s: struct Arpent */
 struct Arpent
 {
   uchar ip[IPaddrlen];
   uchar mac[MAClen];
+
   Medium  *type;      /* media type */
-  Arpent* hash;
+
   Block*  hold;
   Block*  last;
   uint  ctime;      /* time entry was created or refreshed */
@@ -783,8 +795,11 @@ struct Arpent
   Arpent  *nextrxt;   /* re-transmit chain */
   uint  rtime;      /* time for next retransmission */
   uchar rxtsrem;
-  Ipifc *ifc;
   uchar ifcid;      /* must match ifc->id */
+
+  // Extra
+  Arpent* hash;
+  Ipifc *ifc;
 };
 /*e: struct Arpent */
 

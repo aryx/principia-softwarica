@@ -84,7 +84,9 @@ void
 initfrag(IP *ip, int size)
 {
     Fragment4 *fq4, *eq4;
-    Fragment6 *fq6, *eq6;
+    /*s: [[initfrag()]] locals */
+        Fragment6 *fq6, *eq6;
+    /*e: [[initfrag()]] locals */
 
     ip->fragfree4 = (Fragment4*)malloc(sizeof(Fragment4) * size);
     if(ip->fragfree4 == nil)
@@ -96,15 +98,17 @@ initfrag(IP *ip, int size)
 
     ip->fragfree4[size-1].next = nil;
 
-    ip->fragfree6 = (Fragment6*)malloc(sizeof(Fragment6) * size);
-    if(ip->fragfree6 == nil)
-        panic("initfrag");
+    /*s: [[initfrag()]] ipv6 init fragfree6 */
+        ip->fragfree6 = (Fragment6*)malloc(sizeof(Fragment6) * size);
+        if(ip->fragfree6 == nil)
+            panic("initfrag");
 
-    eq6 = &ip->fragfree6[size];
-    for(fq6 = ip->fragfree6; fq6 < eq6; fq6++)
-        fq6->next = fq6+1;
+        eq6 = &ip->fragfree6[size];
+        for(fq6 = ip->fragfree6; fq6 < eq6; fq6++)
+            fq6->next = fq6+1;
 
-    ip->fragfree6[size-1].next = nil;
+        ip->fragfree6[size-1].next = nil;
+    /*e: [[initfrag()]] ipv6 init fragfree6 */
 }
 /*e: function initfrag */
 
@@ -118,7 +122,9 @@ ip_init(Fs *f)
     initfrag(ip, 100);
     f->ip = ip;
 
+    /*s: [[ip_init()]] ipv6 init */
     ip_init_6(f);
+    /*e: [[ip_init()]] ipv6 init */
 }
 /*e: function ip_init */
 
