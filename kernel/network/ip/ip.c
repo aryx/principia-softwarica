@@ -142,7 +142,7 @@ iprouting(Fs *f, int on)
 
 /*s: function ipoput4 */
 int
-ipoput4(Fs *f, Block *bp, int gating, int ttl, int tos, Conv *c)
+ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
 {
     Ipifc *ifc;
     uchar *gate;
@@ -233,7 +233,10 @@ ipoput4(Fs *f, Block *bp, int gating, int ttl, int tos, Conv *c)
         eh->cksum[1] = 0;
         hnputs(eh->cksum, ipcsum(&eh->vihl));
         assert(bp->next == nil);
+
+        // Medium dispatch
         ifc->m->bwrite(ifc, bp, V4, gate);
+
         runlock(ifc);
         poperror();
         return 0;

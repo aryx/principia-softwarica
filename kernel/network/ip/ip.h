@@ -92,7 +92,7 @@ enum state
 
 /*s: enum _anon_ (kernel/network/ip/ip.h)3 */
 /* MIB II counters */
-enum
+enum mib_two_counters
 {
   Forwarding,
   DefaultTTL,
@@ -168,6 +168,7 @@ struct IP
   Fragment4*  fragfree4;
 
   /*s: [[IP(kernel)]] stat fields */
+  // map<enum<mibcounter>, uvlong>
   uvlong    stats[Nipstats];
   /*e: [[IP(kernel)]] stat fields */
   /*s: [[IP(kernel)]] routing fields */
@@ -721,20 +722,24 @@ struct Routewalk
 };
 /*e: struct Routewalk */
 
-/*s: struct RouteTree */
+/*s: struct RouteTree (kernel) */
 struct  RouteTree
 {
   Route*  right;
   Route*  left;
   Route*  mid;
+
   uchar depth;
   uchar type;
+
   uchar ifcid;    /* must match ifc->id */
-  Ipifc *ifc;
+
+  Ipifc *ifc; // !!!
+
   char  tag[4];
   int ref;
 };
-/*e: struct RouteTree */
+/*e: struct RouteTree (kernel) */
 
 /*s: struct V4route */
 struct V4route
@@ -754,7 +759,7 @@ struct V6route
 };
 /*e: struct V6route */
 
-/*s: struct Route */
+/*s: struct Route (kernel) */
 struct Route
 {
   RouteTree;
@@ -764,13 +769,15 @@ struct Route
     V4route v4;
   };
 };
-/*e: struct Route */
+/*e: struct Route (kernel) */
 extern void v4addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type);
-extern void v6addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type);
 extern void v4delroute(Fs *f, uchar *a, uchar *mask, int dolock);
-extern void v6delroute(Fs *f, uchar *a, uchar *mask, int dolock);
 extern Route* v4lookup(Fs *f, uchar *a, Conv *c);
+
+extern void v6addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type);
+extern void v6delroute(Fs *f, uchar *a, uchar *mask, int dolock);
 extern Route* v6lookup(Fs *f, uchar *a, Conv *c);
+
 extern long routeread(Fs *f, char*, ulong, int);
 extern long routewrite(Fs *f, Chan*, char*, int);
 extern void routetype(int, char*);

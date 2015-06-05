@@ -194,7 +194,7 @@ enum
 };
 /*e: enum _anon_ (include/net/ip.h)2 */
 
-/*s: struct Udphdr */
+/*s: struct Udphdr (user) */
 struct Udphdr
 {
     uchar	raddr[IPaddrlen];	/* V6 remote address */
@@ -204,7 +204,7 @@ struct Udphdr
     uchar	rport[2];		/* remote port */
     uchar	lport[2];		/* local port */
 };
-/*e: struct Udphdr */
+/*e: struct Udphdr (user) */
 
 uchar*	defmask(uchar*);
 void	maskip(uchar*, uchar*, uchar*);

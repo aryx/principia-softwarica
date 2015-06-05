@@ -154,16 +154,20 @@ enum
 /*s: struct Ilhdr */
 struct Ilhdr
 {
+    /* ip header */
     uchar	vihl;		/* Version and header length */
     uchar	tos;		/* Type of service */
     uchar	length[2];	/* packet length */
     uchar	id[2];		/* Identification */
     uchar	frag[2];	/* Fragment information */
     uchar	ttl;		/* Time to live */
+
     uchar	proto;		/* Protocol */
     uchar	cksum[2];	/* Header checksum */
     uchar	src[4];		/* Ip source */
     uchar	dst[4];		/* Ip destination */
+
+    /* IL header */
     uchar	ilsum[2];	/* Checksum including header */
     uchar	illen[2];	/* Packet length */
     uchar	iltype;		/* Packet type */
@@ -1488,20 +1492,27 @@ ilinit(Fs *f)
     il->priv = smalloc(sizeof(Ilpriv));
 
     il->name = "il";
+    il->create = ilcreate;
+    il->rcv = iliput;
+
     il->connect = ilconnect;
     il->announce = ilannounce;
-    il->state = ilstate;
-    il->create = ilcreate;
-    il->close = ilclose;
-    il->rcv = iliput;
     il->ctl = nil;
+
+    il->close = ilclose;
     il->advise = iladvise;
+
+    il->state = ilstate;
     il->stats = ilxstats;
+
     il->inuse = ilinuse;
+
     il->gc = nil;
     il->ipproto = IP_ILPROTO;
+
     il->nc = scalednconv();
     il->ptclsize = sizeof(Ilcb);
+
     Fsproto(f, il);
 }
 /*e: function ilinit */

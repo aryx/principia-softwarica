@@ -27,7 +27,9 @@ enum
     UDP6_PHDR_OFF = 0,
 
     IP_UDPPROTO = 17,
+    /*s: constant UDP_USEAD7 */
     UDP_USEAD7  = 52,
+    /*e: constant UDP_USEAD7 */
 
     Udprxms     = 200,
     Udptickms   = 100,
@@ -83,8 +85,8 @@ struct Udp6hdr {
 };
 /*e: struct Udp6hdr */
 
-/* MIB II counters */
 /*s: struct Udpstats */
+/* MIB II counters */
 struct Udpstats
 {
     uvlong  udpInDatagrams;
@@ -129,14 +131,14 @@ struct Udpcb
 static char*
 udpconnect(Conv *c, char **argv, int argc)
 {
-    char *e;
+    char *err;
     Udppriv *upriv;
 
     upriv = c->p->priv;
-    e = Fsstdconnect(c, argv, argc);
-    Fsconnected(c, e);
-    if(e != nil)
-        return e;
+    err = Fsstdconnect(c, argv, argc);
+    Fsconnected(c, err);
+    if(err != nil)
+        return err;
 
     iphtadd(&upriv->ht, c);
     return nil;
@@ -160,13 +162,13 @@ udpstate(Conv *cv, char *state, int n)
 static char*
 udpannounce(Conv *c, char** argv, int argc)
 {
-    char *e;
+    char *err;
     Udppriv *upriv;
 
     upriv = c->p->priv;
-    e = Fsstdannounce(c, argv, argc);
-    if(e != nil)
-        return e;
+    err = Fsstdannounce(c, argv, argc);
+    if(err != nil)
+        return err;
     Fsconnected(c, nil);
     iphtadd(&upriv->ht, c);
 
@@ -212,16 +214,19 @@ void
 udpkick(void *x, Block *bp)
 {
     Conv *c = x;
+    Conv *rc;
     Udp4hdr *uh4;
-    Udp6hdr *uh6;
+    uchar laddr[IPaddrlen];
+    uchar raddr[IPaddrlen];
     ushort rport;
-    uchar laddr[IPaddrlen], raddr[IPaddrlen];
     Udpcb *ucb;
-    int dlen, ptcllen;
     Udppriv *upriv;
+    int dlen, ptcllen;
     Fs *f;
     int version;
-    Conv *rc;
+    /*s: [[udpkick()]] locals */
+    Udp6hdr *uh6;
+    /*e: [[udpkick()]] locals */
 
     upriv = c->p->priv;
     f = c->p->f;
@@ -230,6 +235,7 @@ udpkick(void *x, Block *bp)
     if(bp == nil)
         return;
 
+    /*s: [[udpkick()]] set rport to 0 or do special headers processing */
     ucb = (Udpcb*)c->ptcl;
     switch(ucb->headers) {
     case 7:
@@ -252,21 +258,26 @@ udpkick(void *x, Block *bp)
         rport = 0;
         break;
     }
-
+    /*e: [[udpkick()]] set rport to 0 or do special headers processing */
+    /*s: [[udpkick()]] set version to V4 or V6 */
+    /*s: [[udpkick()]] set version to V4 or V6 if special headers */
     if(ucb->headers) {
         if(memcmp(laddr, v4prefix, IPv4off) == 0
         || ipcmp(laddr, IPnoaddr) == 0)
-            version = 4;
+            version = V4;
         else
-            version = 6;
-    } else {
+            version = V6;
+    }
+    /*e: [[udpkick()]] set version to V4 or V6 if special headers */
+    else {
         if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
             memcmp(c->laddr, v4prefix, IPv4off) == 0)
             || ipcmp(c->raddr, IPnoaddr) == 0)
-            version = 4;
+            version = V4;
         else
-            version = 6;
+            version = V6;
     }
+    /*e: [[udpkick()]] set version to V4 or V6 */
 
     dlen = blocklen(bp);
 
@@ -284,12 +295,15 @@ udpkick(void *x, Block *bp)
         uh4->frag[0] = 0;
         uh4->frag[1] = 0;
         hnputs(uh4->udpplen, ptcllen);
+        /*s: [[udpkick()]] if special headers */
         if(ucb->headers) {
             v6tov4(uh4->udpdst, raddr);
             hnputs(uh4->udpdport, rport);
             v6tov4(uh4->udpsrc, laddr);
             rc = nil;
-        } else {
+        } 
+        /*e: [[udpkick()]] if special headers */
+        else {
             v6tov4(uh4->udpdst, c->raddr);
             hnputs(uh4->udpdport, c->rport);
             if(ipcmp(c->laddr, IPnoaddr) == 0)
@@ -299,14 +313,19 @@ udpkick(void *x, Block *bp)
         }
         hnputs(uh4->udpsport, c->lport);
         hnputs(uh4->udplen, ptcllen);
+
         uh4->udpcksum[0] = 0;
         uh4->udpcksum[1] = 0;
         hnputs(uh4->udpcksum,
                ptclcsum(bp, UDP4_PHDR_OFF, dlen+UDP_UDPHDR_SZ+UDP4_PHDR_SZ));
         uh4->vihl = IP_VER4;
-        ipoput4(f, bp, 0, c->ttl, c->tos, rc);
+
+        // Let's go
+        ipoput4(f, bp, false, c->ttl, c->tos, rc);
+
         break;
 
+    /*s: [[udpkick()]] switch version ipv6 case */
     case V6:
         bp = padblock(bp, UDP6_IPHDR_SZ+UDP_UDPHDR_SZ);
         if(bp == nil)
@@ -346,6 +365,8 @@ udpkick(void *x, Block *bp)
         uh6->nextheader = IP_UDPPROTO;
         ipoput6(f, bp, 0, c->ttl, c->tos, rc);
         break;
+
+    /*e: [[udpkick()]] switch version ipv6 case */
 
     default:
         panic("udpkick: version %d", version);
@@ -647,13 +668,13 @@ udpinit(Fs *fs)
 
     udp->name = "udp";
     udp->create = udpcreate;
+    udp->rcv = udpiput;
 
     udp->connect = udpconnect;
     udp->announce = udpannounce;
     udp->ctl = udpctl;
 
     udp->close = udpclose;
-    udp->rcv = udpiput;
     udp->advise = udpadvise;
 
     udp->state = udpstate;

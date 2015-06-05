@@ -257,36 +257,6 @@ static int v6snpreflen = 13;
 
 
 
-<<function v6tov4>>=
-errorneg1
-v6tov4(uchar *v4, uchar *v6)
-{
-    if(v6[0] == 0
-    && v6[1] == 0
-    && v6[2] == 0
-    && v6[3] == 0
-    && v6[4] == 0
-    && v6[5] == 0
-    && v6[6] == 0
-    && v6[7] == 0
-    && v6[8] == 0
-    && v6[9] == 0
-    && v6[10] == 0xff
-    && v6[11] == 0xff)
-    {
-        v4[0] = v6[12];
-        v4[1] = v6[13];
-        v4[2] = v6[14];
-        v4[3] = v6[15];
-        return OK_0;
-    } else {
-        memset(v4, 0, 4);
-        if(memcmp(v6, IPnoaddr, IPaddrlen) == 0)
-            return OK_0;
-        return ERROR_NEG1;
-    }
-}
-@
 
 
 <<[[ip_init()]] ipv6 init>>=
@@ -794,4 +764,63 @@ struct Udp6hdr {
     uchar   udplen[2];  /* data length */
     uchar   udpcksum[2];    /* Checksum */
 };
+@
+
+<<[[udpkick()]] locals>>=
+Udp6hdr *uh6;
+@
+
+<<[[udpkick()]] switch version ipv6 case>>=
+case V6:
+    bp = padblock(bp, UDP6_IPHDR_SZ+UDP_UDPHDR_SZ);
+    if(bp == nil)
+        return;
+
+    /*
+     * using the v6 ip header to create pseudo header
+     * first then reset it to the normal ip header
+     */
+    uh6 = (Udp6hdr *)(bp->rp);
+    memset(uh6, 0, 8);
+    ptcllen = dlen + UDP_UDPHDR_SZ;
+    hnputl(uh6->viclfl, ptcllen);
+    uh6->hoplimit = IP_UDPPROTO;
+    if(ucb->headers) {
+        ipmove(uh6->udpdst, raddr);
+        hnputs(uh6->udpdport, rport);
+        ipmove(uh6->udpsrc, laddr);
+        rc = nil;
+    } else {
+        ipmove(uh6->udpdst, c->raddr);
+        hnputs(uh6->udpdport, c->rport);
+        if(ipcmp(c->laddr, IPnoaddr) == 0)
+            findlocalip(f, c->laddr, c->raddr);
+        ipmove(uh6->udpsrc, c->laddr);
+        rc = c;
+    }
+    hnputs(uh6->udpsport, c->lport);
+    hnputs(uh6->udplen, ptcllen);
+    uh6->udpcksum[0] = 0;
+    uh6->udpcksum[1] = 0;
+    hnputs(uh6->udpcksum,
+           ptclcsum(bp, UDP6_PHDR_OFF, dlen+UDP_UDPHDR_SZ+UDP6_PHDR_SZ));
+    memset(uh6, 0, 8);
+    uh6->viclfl[0] = IP_VER6;
+    hnputs(uh6->len, ptcllen);
+    uh6->nextheader = IP_UDPPROTO;
+    ipoput6(f, bp, 0, c->ttl, c->tos, rc);
+    break;
+
+@
+
+<<[[udpkick()]] set version to V4 or V6>>=
+<<[[udpkick()]] set version to V4 or V6 if special headers>>
+else {
+    if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
+        memcmp(c->laddr, v4prefix, IPv4off) == 0)
+        || ipcmp(c->raddr, IPnoaddr) == 0)
+        version = V4;
+    else
+        version = V6;
+}
 @
