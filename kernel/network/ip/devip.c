@@ -1585,13 +1585,12 @@ Fsconnected(Conv* c, char* msg)
     case Connecting:
         c->state = Connected;
         break;
-    }
     /*s: [[Fsconnected()]] switch state cases */
     case Announcing:
         c->state = Announced;
         break;
     /*e: [[Fsconnected()]] switch state cases */
-
+    }
     wakeup(&c->cr);
     return 0;
 }
