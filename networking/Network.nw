@@ -1022,11 +1022,22 @@ void    *priv;
 % sysopen(/net/<proto>/clone) -> ... -> ipopen -> Fsprotoclone -> <>
 <<[[Proto(kernel)]] protocol methods>>=
 void    (*create)(Conv*);
+@
+% Take the conversation created, so can adjust its structure.
+% Kinda of a ctor. Create() will setup a callback (xxxkick) on the
+% writing queue which will add the header before the data to send.
+% So create is kinda a (*send) method too.
+% void xxxkick(Conv *cv, Block *bp)
+
+% ipclose -> closeconv -> <>
+<<[[Proto(kernel)]] protocol methods>>=
 void    (*close)(Conv*);
 @
-% take the conversation created, so can adjust its structure.
-% kinda of a ctor
 
+% ??? -> ipiput4 -> <>
+<<[[Proto(kernel)]] conversation methods>>=
+void    (*rcv)(Proto*, Ipifc*, Block*);
+@
 
 %syswrite("bind ...", /net/<proto>/<conv>/ctl) -> ... -> ipwrite -> ... -> <>
 <<[[Proto(kernel)]] conversation ctl methods>>=
@@ -1034,12 +1045,11 @@ char*   (*bind)(Conv*, char**, int);
 @
 %less: method only for ipifc?
 
-
+%syswrite("connect", /net/<proto>/<conv>/ctl) -> ... -> ipwrite -> ... -> <>
 <<[[Proto(kernel)]] conversation ctl methods>>=
 char*   (*connect)(Conv*, char**, int);
 char*   (*announce)(Conv*, char**, int);
 @
-
 <<[[Proto(kernel)]] conversation ctl methods>>=
 char*   (*ctl)(Conv*, char**, int);
 @
@@ -1047,18 +1057,8 @@ char*   (*ctl)(Conv*, char**, int);
 % e.g. when do 'add ...' for /net/ipifc/x/ctl
 
 
-%XXX
-<<[[Proto(kernel)]] conversation methods>>=
-void    (*rcv)(Proto*, Ipifc*, Block*);
-void    (*advise)(Proto*, Block*, char*);
-int   (*inuse)(Conv*);
-@
+% will introduce other methods later.
 
-
-%XXX
-<<[[Proto(kernel)]] other fields>>=
-ushort    nextrport;
-@
 
 \subsection{[[Conv]]ersations}
 
@@ -1102,6 +1102,8 @@ struct Conv
 % need ip + port in general
 % ipA!portA <-> ipB!portB
 
+
+
 % but actually Conv is general and (ab)used also for ipifc.
 % It's an overlay over channel with network related information.
 
@@ -1115,6 +1117,12 @@ int x;      /* conversation index */
 % (x is useful when building qid)
 % so can get "class" via p so can access the method of the protocol from
 % a Conv
+
+
+<<[[Proto(kernel)]] other fields>>=
+ushort    nextrport;
+@
+% when look for fresh new port, where to start from
 
 
 
@@ -1158,6 +1166,8 @@ void* ptcl;     /* protocol specific stuff */
 <<[[Proto(kernel)]] priv fields>>=
 int   ptclsize; /* size of per protocol ctl block */
 @
+
+
 
 
 
@@ -1455,6 +1465,9 @@ struct V4route
 % in ipoput4:
 %    r = v4lookup(f, eh->dst, c);
 %    ifc = r->ifc !!
+
+
+
 
 
 
@@ -2372,13 +2385,21 @@ if(canqlock(cv)){
      *  make sure both processes and protocol
      *  are done with this Conv
      */
-    if(cv->inuse == 0 && (p->inuse == nil || (*p->inuse)(cv) == 0))
+    if(cv->inuse == 0 && (p->inuse == nil || 
+        // Protocol dispatch
+        (*p->inuse)(cv) == false)
+      )
         break;
 
     qunlock(cv);
 }
 @
 % dead? purpose?
+
+<<[[Proto(kernel)]] conversation methods>>=
+bool   (*inuse)(Conv*);
+@
+% dead?
 
 \subsubsection{Garbage collecting}
 
@@ -2968,13 +2989,14 @@ ipifcinit(Fs *f)
 
     ipifc->name = "ipifc";
     ipifc->create = ipifccreate;
+    ipifc->close = ipifcclose;
+
     ipifc->bind = ipifcbind;
- 
     ipifc->connect = ipifcconnect;
     ipifc->announce = nil;
-    ipifc->close = ipifcclose;
-    ipifc->rcv = nil;
     ipifc->ctl = ipifcctl;
+
+    ipifc->rcv = nil;
     ipifc->advise = nil;
     ipifc->inuse = ipifcinuse;
 
@@ -3749,6 +3771,10 @@ struct Ip4hdr
 };
 @
 
+\section{IP protocols}
+
+%todo: setting port functions here?
+
 \section{IO}
 
 % put the hnputs, hngets here
@@ -3757,7 +3783,7 @@ struct Ip4hdr
 
 % IP out put v4
 
-% udpkick | ... -> <>
+% syswrite(..., /net/x/y/data) -> udpkick | ... -> <>
 <<function ipoput4>>=
 int
 ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
@@ -3956,6 +3982,158 @@ free:
 \subsubsection{Fragmentation}
 
 \subsection{Reading, [[ipiput4()]]}
+
+
+% ??? network interrupt?? -> <>
+<<function ipiput4>>=
+void
+ipiput4(Fs *f, Ipifc *ifc, Block *bp)
+{
+    int hl;
+    int hop, tos, proto, olen;
+    Ip4hdr *h;
+    Proto *p;
+    ushort frag;
+    int notforme;
+    uchar *dp, v6dst[IPaddrlen];
+    IP *ip;
+    Route *r;
+    Conv conv;
+
+    if(BLKIPVER(bp) != IP_VER4) {
+        ipiput6(f, ifc, bp);
+        return;
+    }
+
+    ip = f->ip;
+    ip->stats[InReceives]++;
+
+    /*
+     *  Ensure we have all the header info in the first
+     *  block.  Make life easier for other protocols by
+     *  collecting up to the first 64 bytes in the first block.
+     */
+    if(BLEN(bp) < 64) {
+        hl = blocklen(bp);
+        if(hl < IP4HDR)
+            hl = IP4HDR;
+        if(hl > 64)
+            hl = 64;
+        bp = pullupblock(bp, hl);
+        if(bp == nil)
+            return;
+    }
+
+    h = (Ip4hdr*)(bp->rp);
+
+    /* dump anything that whose header doesn't checksum */
+    if((bp->flag & Bipck) == 0 && ipcsum(&h->vihl)) {
+        ip->stats[InHdrErrors]++;
+        netlog(f, Logip, "ip: checksum error %V\n", h->src);
+        freeblist(bp);
+        return;
+    }
+    v4tov6(v6dst, h->dst);
+    notforme = ipforme(f, v6dst) == 0;
+
+    /* Check header length and version */
+    if((h->vihl&0x0F) != IP_HLEN4) {
+        hl = (h->vihl&0xF)<<2;
+        if(hl < (IP_HLEN4<<2)) {
+            ip->stats[InHdrErrors]++;
+            netlog(f, Logip, "ip: %V bad hivl %ux\n", h->src, h->vihl);
+            freeblist(bp);
+            return;
+        }
+        /* If this is not routed strip off the options */
+        if(notforme == 0) {
+            olen = nhgets(h->length);
+            dp = bp->rp + (hl - (IP_HLEN4<<2));
+            memmove(dp, h, IP_HLEN4<<2);
+            bp->rp = dp;
+            h = (Ip4hdr*)(bp->rp);
+            h->vihl = (IP_VER4|IP_HLEN4);
+            hnputs(h->length, olen-hl+(IP_HLEN4<<2));
+        }
+    }
+
+    /* route */
+    if(notforme) {
+        if(!ip->iprouting){
+            freeblist(bp);
+            return;
+        }
+
+        /* don't forward to source's network */
+        memset(&conv, 0, sizeof conv);
+        conv.r = nil;
+        r = v4lookup(f, h->dst, &conv);
+        if(r == nil || r->ifc == ifc){
+            ip->stats[OutDiscards]++;
+            freeblist(bp);
+            return;
+        }
+
+        /* don't forward if packet has timed out */
+        hop = h->ttl;
+        if(hop < 1) {
+            ip->stats[InHdrErrors]++;
+            icmpttlexceeded(f, ifc->lifc->local, bp);
+            freeblist(bp);
+            return;
+        }
+
+        /* reassemble if the interface expects it */
+if(r->ifc == nil) panic("nil route rfc");
+        if(r->ifc->reassemble){
+            frag = nhgets(h->frag);
+            if(frag) {
+                h->tos = 0;
+                if(frag & IP_MF)
+                    h->tos = 1;
+                bp = ip4reassemble(ip, frag, bp, h);
+                if(bp == nil)
+                    return;
+                h = (Ip4hdr*)(bp->rp);
+            }
+        }
+
+        ip->stats[ForwDatagrams]++;
+        tos = h->tos;
+        hop = h->ttl;
+        ipoput4(f, bp, 1, hop - 1, tos, &conv);
+        return;
+    }
+
+    frag = nhgets(h->frag);
+    if(frag) {
+        h->tos = 0;
+        if(frag & IP_MF)
+            h->tos = 1;
+        bp = ip4reassemble(ip, frag, bp, h);
+        if(bp == nil)
+            return;
+        h = (Ip4hdr*)(bp->rp);
+    }
+
+    /* don't let any frag info go up the stack */
+    h->frag[0] = 0;
+    h->frag[1] = 0;
+
+    proto = h->proto;
+    p = Fsrcvpcol(f, proto);
+    if(p != nil && p->rcv != nil) {
+        ip->stats[InDelivers]++;
+
+        // Protocol dispatch
+        (*p->rcv)(p, ifc, bp);
+        return;
+    }
+    ip->stats[InDiscards]++;
+    ip->stats[InUnknownProtos]++;
+    freeblist(bp);
+}
+@
 
 
 
@@ -4915,13 +5093,13 @@ udpinit(Fs *fs)
 
     udp->name = "udp";
     udp->create = udpcreate;
-    udp->rcv = udpiput;
+    udp->close = udpclose;
 
     udp->connect = udpconnect;
     udp->announce = udpannounce;
     udp->ctl = udpctl;
 
-    udp->close = udpclose;
+    udp->rcv = udpiput;
     udp->advise = udpadvise;
 
     udp->state = udpstate;
@@ -4936,6 +5114,10 @@ udpinit(Fs *fs)
 }
 @
 %less: make it a global with intializer?
+
+<<constant IP_UDPPROTO>>=
+IP_UDPPROTO = 17,
+@
 
 \section{Protocol data structures}
 
@@ -5009,6 +5191,27 @@ struct Udp4hdr
 % essential IP header + port info.
 % why another checksum?
 
+<<constant UDP4_IPHDR_SZ>>=
+UDP4_IPHDR_SZ = 20,
+@
+%less: could factorize and have a IPHDR_SZ?
+
+<<constant UDP_UDPHDR_SZ>>=
+UDP_UDPHDR_SZ   = 8,
+@
+
+<<constant UDP4_PHDR_OFF>>=
+UDP4_PHDR_OFF = 8,
+@
+% can be different than UDP_UDPHDR_SZ?
+
+<<constant UDP4_PHDR_SZ>>=
+UDP4_PHDR_SZ = 12,
+@
+% diff with UDP_UDPHDR_SZ?
+
+
+
 
 <<struct Udphdr (user)>>=
 struct Udphdr
@@ -5035,6 +5238,31 @@ udpcreate(Conv *cv)
 }
 @
 % the wq will be accessed via /net/x/y/data
+
+% ipclose -> closeconv -> <> (as x->close)
+<<function udpclose>>=
+static void
+udpclose(Conv *c)
+{
+    Udpcb *ucb;
+    Udppriv *upriv;
+
+    upriv = c->p->priv;
+    iphtrem(&upriv->ht, c);
+
+    c->state = Idle;
+    qclose(c->rq);
+    qclose(c->wq);
+    qclose(c->eq);
+    ipmove(c->laddr, IPnoaddr);
+    ipmove(c->raddr, IPnoaddr);
+    c->lport = 0;
+    c->rport = 0;
+
+    ucb = (Udpcb*)c->ptcl;
+    ucb->headers = 0;
+}
+@
 
 \section{[[/net/tcp/x/ctl]]}
 
@@ -5086,6 +5314,7 @@ udpannounce(Conv *c, char** argv, int argc)
 
 \subsection{Writing, [[udpkick()]]}
 
+
 % ??? -> <> (as x->??   <- udpcreate <- ...)
 <<function udpkick>>=
 void
@@ -5094,10 +5323,6 @@ udpkick(void *x, Block *bp)
     Conv *c = x;
     Conv *rc;
     Udp4hdr *uh4;
-    uchar laddr[IPaddrlen];
-    uchar raddr[IPaddrlen];
-    ushort rport;
-    Udpcb *ucb;
     Udppriv *upriv;
     int dlen, ptcllen;
     Fs *f;
@@ -5111,7 +5336,7 @@ udpkick(void *x, Block *bp)
     if(bp == nil)
         return;
 
-    <<[[udpkick()]] set rport to 0 or do special headers processing>>
+    <<[[udpkick()]] special headers processing>>
     <<[[udpkick()]] set version to V4 or V6>>
 
     dlen = blocklen(bp);
@@ -5148,7 +5373,7 @@ udpkick(void *x, Block *bp)
                ptclcsum(bp, UDP4_PHDR_OFF, dlen+UDP_UDPHDR_SZ+UDP4_PHDR_SZ));
         uh4->vihl = IP_VER4;
 
-        // Let's go
+        // Let's go, let's send the data
         ipoput4(f, bp, false, c->ttl, c->tos, rc);
 
         break;
@@ -5167,6 +5392,7 @@ udpkick(void *x, Block *bp)
 \subsection{Reading, [[udpiput()]]}
 % read, iput
 
+%TODO LP split
 % -> <> (as x->rcv)
 <<function udpiput>>=
 void
@@ -5174,11 +5400,14 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 {
     int len;
     Udp4hdr *uh4;
-    Udp6hdr *uh6;
     Conv *c;
+
     Udpcb *ucb;
     uchar raddr[IPaddrlen], laddr[IPaddrlen];
     ushort rport, lport;
+
+    Udp6hdr *uh6;
+
     Udppriv *upriv;
     Fs *f;
     int version;
@@ -5190,7 +5419,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     upriv->ustats.udpInDatagrams++;
 
     uh4 = (Udp4hdr*)(bp->rp);
-    version = ((uh4->vihl&0xF0)==IP_VER6) ? 6 : 4;
+    version = ((uh4->vihl&0xF0)==IP_VER6) ? V6 : V4;
 
     /* Put back pseudo header for checksum
      * (remember old values for icmpnoconv()) */
@@ -5219,6 +5448,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         uh4->Unused = ottl;
         hnputs(uh4->udpplen, olen);
         break;
+
     case V6:
         uh6 = (Udp6hdr*)(bp->rp);
         len = nhgets(uh6->udplen);
@@ -5359,6 +5589,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 
 }
 @
+% pass to reading queue! if not full, otherwise have to drop
 
 % lots of hngets
 
@@ -5399,8 +5630,8 @@ udpstate(Conv *cv, char *state, int n)
 
 \section{Advanced features}
 
-\subsection{New headers format}
-% need that? remove?
+\subsection{User level UDP headers}
+% need that? remove? for debugging?
 
 %\subsection{[[Udpcb]]}
 % conversation priv
@@ -5439,7 +5670,14 @@ udpctl(Conv *c, char **f, int n)
 UDP_USEAD7  = 52,
 @
 
-<<[[udpkick()]] set rport to 0 or do special headers processing>>=
+<<[[udpkick()]] locals>>=
+Udpcb *ucb;
+uchar laddr[IPaddrlen];
+uchar raddr[IPaddrlen];
+ushort rport;
+@
+
+<<[[udpkick()]] special headers processing>>=
 ucb = (Udpcb*)c->ptcl;
 switch(ucb->headers) {
 case 7:
@@ -5451,6 +5689,7 @@ case 7:
     bp->rp += IPaddrlen;
     ipmove(laddr, bp->rp);
     bp->rp += IPaddrlen;
+
     /* pick interface closest to dest */
     if(ipforme(f, laddr) != Runi)
         findlocalip(f, laddr, raddr);
@@ -6480,6 +6719,13 @@ loopbackbwrite(Ipifc *ifc, Block *bp, int, uchar*)
 
 \section{ICMP}
 % for ping
+
+% put before? in Advanced topics? more important than other protocols?
+% A Meta protocol?
+
+<<[[Proto(kernel)]] conversation methods>>=
+void    (*advise)(Proto*, Block*, char*);
+@
 
 \section{RUDP}
 

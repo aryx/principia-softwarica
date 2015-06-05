@@ -4128,153 +4128,6 @@ iprouting(Fs *f, int on)
 @
 
 
-<<function ipiput4>>=
-void
-ipiput4(Fs *f, Ipifc *ifc, Block *bp)
-{
-    int hl;
-    int hop, tos, proto, olen;
-    Ip4hdr *h;
-    Proto *p;
-    ushort frag;
-    int notforme;
-    uchar *dp, v6dst[IPaddrlen];
-    IP *ip;
-    Route *r;
-    Conv conv;
-
-    if(BLKIPVER(bp) != IP_VER4) {
-        ipiput6(f, ifc, bp);
-        return;
-    }
-
-    ip = f->ip;
-    ip->stats[InReceives]++;
-
-    /*
-     *  Ensure we have all the header info in the first
-     *  block.  Make life easier for other protocols by
-     *  collecting up to the first 64 bytes in the first block.
-     */
-    if(BLEN(bp) < 64) {
-        hl = blocklen(bp);
-        if(hl < IP4HDR)
-            hl = IP4HDR;
-        if(hl > 64)
-            hl = 64;
-        bp = pullupblock(bp, hl);
-        if(bp == nil)
-            return;
-    }
-
-    h = (Ip4hdr*)(bp->rp);
-
-    /* dump anything that whose header doesn't checksum */
-    if((bp->flag & Bipck) == 0 && ipcsum(&h->vihl)) {
-        ip->stats[InHdrErrors]++;
-        netlog(f, Logip, "ip: checksum error %V\n", h->src);
-        freeblist(bp);
-        return;
-    }
-    v4tov6(v6dst, h->dst);
-    notforme = ipforme(f, v6dst) == 0;
-
-    /* Check header length and version */
-    if((h->vihl&0x0F) != IP_HLEN4) {
-        hl = (h->vihl&0xF)<<2;
-        if(hl < (IP_HLEN4<<2)) {
-            ip->stats[InHdrErrors]++;
-            netlog(f, Logip, "ip: %V bad hivl %ux\n", h->src, h->vihl);
-            freeblist(bp);
-            return;
-        }
-        /* If this is not routed strip off the options */
-        if(notforme == 0) {
-            olen = nhgets(h->length);
-            dp = bp->rp + (hl - (IP_HLEN4<<2));
-            memmove(dp, h, IP_HLEN4<<2);
-            bp->rp = dp;
-            h = (Ip4hdr*)(bp->rp);
-            h->vihl = (IP_VER4|IP_HLEN4);
-            hnputs(h->length, olen-hl+(IP_HLEN4<<2));
-        }
-    }
-
-    /* route */
-    if(notforme) {
-        if(!ip->iprouting){
-            freeblist(bp);
-            return;
-        }
-
-        /* don't forward to source's network */
-        memset(&conv, 0, sizeof conv);
-        conv.r = nil;
-        r = v4lookup(f, h->dst, &conv);
-        if(r == nil || r->ifc == ifc){
-            ip->stats[OutDiscards]++;
-            freeblist(bp);
-            return;
-        }
-
-        /* don't forward if packet has timed out */
-        hop = h->ttl;
-        if(hop < 1) {
-            ip->stats[InHdrErrors]++;
-            icmpttlexceeded(f, ifc->lifc->local, bp);
-            freeblist(bp);
-            return;
-        }
-
-        /* reassemble if the interface expects it */
-if(r->ifc == nil) panic("nil route rfc");
-        if(r->ifc->reassemble){
-            frag = nhgets(h->frag);
-            if(frag) {
-                h->tos = 0;
-                if(frag & IP_MF)
-                    h->tos = 1;
-                bp = ip4reassemble(ip, frag, bp, h);
-                if(bp == nil)
-                    return;
-                h = (Ip4hdr*)(bp->rp);
-            }
-        }
-
-        ip->stats[ForwDatagrams]++;
-        tos = h->tos;
-        hop = h->ttl;
-        ipoput4(f, bp, 1, hop - 1, tos, &conv);
-        return;
-    }
-
-    frag = nhgets(h->frag);
-    if(frag) {
-        h->tos = 0;
-        if(frag & IP_MF)
-            h->tos = 1;
-        bp = ip4reassemble(ip, frag, bp, h);
-        if(bp == nil)
-            return;
-        h = (Ip4hdr*)(bp->rp);
-    }
-
-    /* don't let any frag info go up the stack */
-    h->frag[0] = 0;
-    h->frag[1] = 0;
-
-    proto = h->proto;
-    p = Fsrcvpcol(f, proto);
-    if(p != nil && p->rcv != nil) {
-        ip->stats[InDelivers]++;
-        (*p->rcv)(p, ifc, bp);
-        return;
-    }
-    ip->stats[InDiscards]++;
-    ip->stats[InUnknownProtos]++;
-    freeblist(bp);
-}
-@
 
 <<function ipstats>>=
 int
@@ -10602,6 +10455,7 @@ icmpiput(Proto *icmp, Ipifc*, Block *bp)
         p = (Icmp *)bp->rp;
         pr = Fsrcvpcolx(icmp->f, p->proto);
         if(pr != nil && pr->advise != nil) {
+            // Protocol dispatch
             (*pr->advise)(pr, bp, msg);
             return;
         }
@@ -10621,6 +10475,7 @@ icmpiput(Proto *icmp, Ipifc*, Block *bp)
             p = (Icmp *)bp->rp;
             pr = Fsrcvpcolx(icmp->f, p->proto);
             if(pr != nil && pr->advise != nil) {
+                // Protocol dispatch
                 (*pr->advise)(pr, bp, m2);
                 return;
             }
@@ -16028,16 +15883,15 @@ static	ulong	scalediv, scalemul;
 <<enum _anon_ (kernel/network/ip/udp.c)>>=
 enum
 {
-    UDP_UDPHDR_SZ   = 8,
+    <<constant UDP_UDPHDR_SZ>>
 
-    UDP4_PHDR_OFF = 8,
-    UDP4_PHDR_SZ = 12,
-    UDP4_IPHDR_SZ = 20,
-    UDP6_IPHDR_SZ = 40,
-    UDP6_PHDR_SZ = 40,
-    UDP6_PHDR_OFF = 0,
+    <<constant UDP4_PHDR_OFF>>
+    <<constant UDP4_PHDR_SZ>>
+    <<constant UDP4_IPHDR_SZ>>
 
-    IP_UDPPROTO = 17,
+    <<constant UDP6_xxx>>
+    <<constant IP_UDPPROTO>>
+
     <<constant UDP_USEAD7>>
 
     Udprxms     = 200,
@@ -16045,39 +15899,8 @@ enum
     Udpmaxxmit  = 10,
 };
 @
+%less: dead constants?
 
-
-
-
-
-
-
-
-
-
-<<function udpclose>>=
-static void
-udpclose(Conv *c)
-{
-    Udpcb *ucb;
-    Udppriv *upriv;
-
-    upriv = c->p->priv;
-    iphtrem(&upriv->ht, c);
-
-    c->state = 0;
-    qclose(c->rq);
-    qclose(c->wq);
-    qclose(c->eq);
-    ipmove(c->laddr, IPnoaddr);
-    ipmove(c->raddr, IPnoaddr);
-    c->lport = 0;
-    c->rport = 0;
-
-    ucb = (Udpcb*)c->ptcl;
-    ucb->headers = 0;
-}
-@
 
 
 
@@ -16166,6 +15989,10 @@ typedef struct Udpstats Udpstats;
 typedef struct Udppriv Udppriv;
 typedef struct Udpcb Udpcb;
 
+//void (*etherprofiler)(char *name, int qlen);
+void udpkick(void *x, Block *bp);
+
+
 <<struct Udp4hdr>>
 
 <<struct Udp6hdr>>
@@ -16173,9 +16000,6 @@ typedef struct Udpcb Udpcb;
 <<struct Udpstats>>
 
 <<struct Udppriv>>
-
-//void (*etherprofiler)(char *name, int qlen);
-void udpkick(void *x, Block *bp);
 
 /*
  *  protocol specific part of Conv
