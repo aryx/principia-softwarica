@@ -361,8 +361,9 @@ ipifccreate(Conv *cv)
     Ipifc *ifc;
 
     cv->rq = qopen(QMAX, 0, 0, 0);
-    cv->sq = qopen(QMAX, 0, 0, 0);
     cv->wq = qopen(QMAX, Qkick, ipifckick, cv);
+
+    cv->sq = qopen(QMAX, 0, 0, 0);
 
     ifc = (Ipifc*)cv->ptcl;
     ifc->m = nil;
@@ -864,6 +865,8 @@ ipifcctl(Conv* cv, char** argv, int argc)
         return ipifcadd6(ifc, argv, argc);
     else if(strcmp(argv[0], "ra6") == 0)
         return ipifcra6(ifc, argv, argc);
+
+
     return "unsupported ctl";
 }
 /*e: function ipifcctl */

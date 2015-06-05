@@ -3541,6 +3541,7 @@ tcpinit(Fs *fs)
 
     tcp = smalloc(sizeof(Proto));
     tpriv = tcp->priv = smalloc(sizeof(Tcppriv));
+
     tcp->name = "tcp";
     tcp->connect = tcpconnect;
     tcp->announce = tcpannounce;
@@ -3553,6 +3554,7 @@ tcpinit(Fs *fs)
     tcp->stats = tcpstats;
     tcp->inuse = tcpinuse;
     tcp->gc = tcpgc;
+
     tcp->ipproto = IP_TCPPROTO;
     tcp->nc = scalednconv();
     tcp->ptclsize = sizeof(Tcpctl);

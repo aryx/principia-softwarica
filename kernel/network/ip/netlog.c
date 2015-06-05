@@ -18,17 +18,22 @@ enum {
  *  action log
  */
 struct Netlog {
-    Lock;
     int opens;
+
+    // array<char> of size Nlog
     char*   buf;
-    char    *end;
-    char    *rptr;
     int len;
+
+    char    *rptr;
+    char    *end;
+
 
     int logmask;            /* mask of things to debug */
     uchar   iponly[IPaddrlen];      /* ip address to print debugging for */
     int iponlyset;
 
+    // Extra
+    Lock;
     QLock;
     Rendez;
 };
@@ -134,7 +139,7 @@ netlogclose(Fs *f)
 /*e: function netlogclose */
 
 /*s: function netlogready */
-static int
+static bool
 netlogready(void *a)
 {
     Fs *f = a;

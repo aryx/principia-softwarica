@@ -79,7 +79,7 @@ struct Ipv6rp
 struct Ipifc
 {
     /* per ip interface */
-    int	index;			/* number of interface in ipifc dir */
+
     char	dev[64];
     int	mtu;
     // list<ref_own<Iplifc> (next = Iplifc.next)
@@ -101,6 +101,8 @@ struct Ipifc
     //Extra
     /*s: [[Ipifc(user)]] extra fields */
     Ipifc	*next;
+    /*x: [[Ipifc(user)]] extra fields */
+    int	index;			/* number of interface in ipifc dir */
     /*e: [[Ipifc(user)]] extra fields */
 };
 /*e: struct Ipifc (user) */

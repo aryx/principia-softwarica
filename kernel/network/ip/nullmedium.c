@@ -38,6 +38,7 @@ Medium nullmedium =
 
     .bind=      nullbind,
     .unbind=    nullunbind,
+
     .bwrite=    nullbwrite,
 };
 /*e: global nullmedium */

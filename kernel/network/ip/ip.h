@@ -78,7 +78,7 @@ enum
 /*e: enum _anon_ (kernel/network/ip/ip.h) */
 
 /*s: enum _anon_ (kernel/network/ip/ip.h)2 */
-enum state
+enum conversation_state
 {
   Idle=   0,
 
@@ -101,15 +101,22 @@ enum mib_two_counters
   InAddrErrors,
   ForwDatagrams,
   InUnknownProtos,
+
+  // In stats
   InDiscards,
   InDelivers,
+
+  // Out stats
   OutRequests,
   OutDiscards,
   OutNoRoutes,
+
   ReasmTimeout,
   ReasmReqds,
   ReasmOKs,
   ReasmFails,
+
+  // Fragments
   FragOKs,
   FragFails,
   FragCreates,
@@ -223,14 +230,14 @@ struct Conv
   char  *owner;     /* protections */
   int perm;
 
-  // enum<state>
+  // enum<conversation_state>
   int state;
 
   /*s: [[Conv(kernel)]] queue fields */
-  Queue*  eq;     /* returned error packets */
-  /*x: [[Conv(kernel)]] queue fields */
   Queue*  rq;     /* queued data waiting to be read */
   Queue*  wq;     /* queued data waiting to be written */
+  /*x: [[Conv(kernel)]] queue fields */
+  Queue*  eq;     /* returned error packets */
   /*e: [[Conv(kernel)]] queue fields */
   /*s: [[Conv(kernel)]] routing fields */
   Route *r;     /* last route used */
@@ -247,6 +254,8 @@ struct Conv
   void* ptcl;     /* protocol specific stuff */
   /*e: [[Conv(kernel)]] priv fields */
   /*s: [[Conv(kernel)]] other fields */
+  Rendez  cr;
+  /*x: [[Conv(kernel)]] other fields */
   int inuse;      /* opens of listen/data/ctl */
   /*x: [[Conv(kernel)]] other fields */
   uint  ttl;      /* max time to live */
@@ -267,11 +276,11 @@ struct Conv
   Conv* next;
 
   QLock car;
-  Rendez  cr;
-  char  cerr[ERRMAX];
 
   QLock listenq;
   Rendez  listenr;
+  /*x: [[Conv(kernel)]] other fields */
+  char  cerr[ERRMAX];
   /*e: [[Conv(kernel)]] other fields */
 
   // Extra
@@ -403,13 +412,13 @@ struct Ipifc
 {
   char  dev[64];  /* device we're attached to */
 
+  Medium  *m;   /* Media pointer */
+
   int maxtu;    /* Maximum transfer unit */
   int mintu;    /* Minumum tranfer unit */
   int mbps;   /* megabits per second */
-
-  Medium  *m;   /* Media pointer */
-  void  *arg;   /* medium specific */
   uchar mac[MAClen];  /* MAC address */
+  void  *arg;   /* medium specific */
 
   // list<ref_own<Iplifc>>, next = Iplifc.next
   Iplifc  *lifc;    /* logical interfaces on this physical one */
@@ -503,6 +512,7 @@ struct Proto
   /*s: [[Proto(kernel)]] methods */
   /*s: [[Proto(kernel)]] protocol methods */
   void    (*create)(Conv*);
+  void    (*close)(Conv*);
   /*x: [[Proto(kernel)]] protocol methods */
   int   (*gc)(Proto*);  /* returns true if any conversations are freed */
   /*x: [[Proto(kernel)]] protocol methods */
@@ -524,7 +534,6 @@ struct Proto
   int   (*remote)(Conv*, char*, int);
   /*e: [[Proto(kernel)]] conversation inspection methods */
   /*s: [[Proto(kernel)]] conversation methods */
-  void    (*close)(Conv*);
   void    (*rcv)(Proto*, Ipifc*, Block*);
   void    (*advise)(Proto*, Block*, char*);
   int   (*inuse)(Conv*);
@@ -765,8 +774,8 @@ struct Route
   RouteTree;
 
   union {
-    V6route v6;
     V4route v4;
+    V6route v6;
   };
 };
 /*e: struct Route (kernel) */

@@ -60,6 +60,8 @@ struct Netfile
   int nmaddr;     /* number of multicast addresses */
 
   Queue *in;      /* input buffer */
+
+  // Extra
 };
 /*e: struct Netfile */
 
@@ -82,8 +84,6 @@ struct Netaddr
  */
 struct Netif
 {
-  QLock;
-
   /* multiplexing */
   char  name[KNAMELEN];   /* for top level directory */
   int nfile;      /* max number of Netfiles */
@@ -132,6 +132,10 @@ struct Netif
   /*s: [[Netif(kernel)]] multicast methods */
   void  (*multicast)(void*, uchar*, int);
   /*e: [[Netif(kernel)]] multicast methods */
+
+  // Extra
+  QLock;
+
 };
 /*e: struct Netif (kernel) */
 

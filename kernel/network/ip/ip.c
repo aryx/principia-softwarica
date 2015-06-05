@@ -95,7 +95,6 @@ initfrag(IP *ip, int size)
     eq4 = &ip->fragfree4[size];
     for(fq4 = ip->fragfree4; fq4 < eq4; fq4++)
         fq4->next = fq4+1;
-
     ip->fragfree4[size-1].next = nil;
 
     /*s: [[initfrag()]] ipv6 init fragfree6 */

@@ -135,6 +135,7 @@ udpconnect(Conv *c, char **argv, int argc)
     Udppriv *upriv;
 
     upriv = c->p->priv;
+
     err = Fsstdconnect(c, argv, argc);
     Fsconnected(c, err);
     if(err != nil)
@@ -166,10 +167,12 @@ udpannounce(Conv *c, char** argv, int argc)
     Udppriv *upriv;
 
     upriv = c->p->priv;
+
     err = Fsstdannounce(c, argv, argc);
     if(err != nil)
         return err;
     Fsconnected(c, nil);
+
     iphtadd(&upriv->ht, c);
 
     return nil;

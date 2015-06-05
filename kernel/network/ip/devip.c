@@ -37,16 +37,18 @@ enum
     Qctl=       Qconvbase,
     Qdata,
     /*s: [[Qid]] conversation extra cases */
-    Qerr,
     Qlisten,
+    /*x: [[Qid]] conversation extra cases */
+    Qerr,
     /*x: [[Qid]] conversation extra cases */
     Qstatus,
     /*x: [[Qid]] conversation extra cases */
     Qlocal,
     Qremote,
-    /*x: [[Qid]] conversation extra cases */
-    Qsnoop,
     /*e: [[Qid]] conversation extra cases */
+    /*s: [[Qid]] conversation extra cases, last entry */
+    Qsnoop,
+    /*e: [[Qid]] conversation extra cases, last entry */
 };
 /*e: enum qid (kernel/network/ip/devip.c) */
 
@@ -126,12 +128,12 @@ ip3gen(Chan *c, int i, Dir *dp)
         devdir(c, q, "data", qlen(cv->rq), cv->owner, cv->perm, dp);
         return 1;
     /*x: [[ip3gen()]] switch TYPE qid cases */
-    case Qerr:
-        devdir(c, q, "err", qlen(cv->eq), cv->owner, cv->perm, dp);
-        return 1;
-    /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qlisten:
         devdir(c, q, "listen", 0, cv->owner, cv->perm, dp);
+        return 1;
+    /*x: [[ip3gen()]] switch TYPE qid cases */
+    case Qerr:
+        devdir(c, q, "err", qlen(cv->eq), cv->owner, cv->perm, dp);
         return 1;
     /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qstatus:
@@ -478,8 +480,8 @@ ipopen(Chan* c, int omode)
     case Qipselftab:
 
     case Qstatus:
-    case Qremote:
     case Qlocal:
+    case Qremote:
     case Qstats:
         if(omode != OREAD)
             error(Eperm);
@@ -686,23 +688,29 @@ closeconv(Conv *cv)
         return;
     }
 
+    /*s: [[closeconv()]] close incoming calls */
     /* close all incoming calls since no listen will ever happen */
     for(nc = cv->incall; nc; nc = cv->incall){
         cv->incall = nc->next;
         closeconv(nc);
     }
     cv->incall = nil;
+    /*e: [[closeconv()]] close incoming calls */
 
     kstrdup(&cv->owner, network);
     cv->perm = 0660;
 
+    /*s: [[closeconv()]] if multi, call ipifcremmulti */
     while((mp = cv->multi) != nil)
         ipifcremmulti(cv, mp->ma, mp->ia);
+    /*e: [[closeconv()]] if multi, call ipifcremmulti */
 
     cv->r = nil;
     cv->rgen = 0;
+    // Protocol dispatch
     cv->p->close(cv);
     cv->state = Idle;
+
     qunlock(cv);
 }
 /*e: function closeconv */
@@ -769,10 +777,6 @@ ipread(Chan *ch, void *a, long n, vlong off)
     case Qconvdir:
         return devdirread(ch, a, n, 0, 0, ipgen);
     /*x: [[ipread()]] switch TYPE qid cases */
-    case Qerr:
-        cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
-        return qread(cv->eq, a, n);
-    /*x: [[ipread()]] switch TYPE qid cases */
     case Qctl:
         buf = smalloc(16);
         snprint(buf, 16, "%lud", CONV(ch->qid));
@@ -783,6 +787,10 @@ ipread(Chan *ch, void *a, long n, vlong off)
     case Qdata:
         cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
         return qread(cv->rq, a, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qerr:
+        cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
+        return qread(cv->eq, a, n);
     /*x: [[ipread()]] switch TYPE qid cases */
     case Qstats:
         x = f->p[PROTO(ch->qid)];
@@ -1091,27 +1099,27 @@ setraddrport(Conv* c, char* str)
 char*
 Fsstdconnect(Conv *c, char *argv[], int argc)
 {
-    char *p;
+    char *err;
 
     switch(argc) {
     default:
         return "bad args to connect";
     case 2:
-        p = setraddrport(c, argv[1]);
-        if(p != nil)
-            return p;
+        err = setraddrport(c, argv[1]);
+        if(err != nil)
+            return err;
         setladdr(c);
-        p = setlport(c);
-        if (p != nil)
-            return p;
+        err = setlport(c);
+        if (err != nil)
+            return err;
         break;
     case 3:
-        p = setraddrport(c, argv[1]);
-        if(p != nil)
-            return p;
-        p = setladdrport(c, argv[2], 0);
-        if(p != nil)
-            return p;
+        err = setraddrport(c, argv[1]);
+        if(err != nil)
+            return err;
+        err = setladdrport(c, argv[2], 0);
+        if(err != nil)
+            return err;
     }
 
     if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
@@ -1128,7 +1136,7 @@ Fsstdconnect(Conv *c, char *argv[], int argc)
 /*
  *  initiate connection and sleep till its set up
  */
-static int
+static bool
 connected(void* a)
 {
     return ((Conv*)a)->state == Connected;
@@ -1136,9 +1144,9 @@ connected(void* a)
 /*e: function connected */
 /*s: function connectctlmsg */
 static void
-connectctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
+connectctlmsg(Proto *p, Conv *c, Cmdbuf *cb)
 {
-    char *p;
+    char *err;
 
     if(c->state != Idle)
         error(Econinuse);
@@ -1146,13 +1154,13 @@ connectctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
     c->state = Connecting;
     c->cerr[0] = '\0';
 
-    if(x->connect == nil)
+    if(p->connect == nil)
         error("connect not supported");
     // Protocol dispatch
-    p = x->connect(c, cb->f, cb->nf);
+    err = p->connect(c, cb->f, cb->nf);
 
-    if(p != nil)
-        error(p);
+    if(err != nil)
+        error(err);
 
     qunlock(c);
     if(waserror()){
@@ -1191,7 +1199,7 @@ Fsstdannounce(Conv* c, char* argv[], int argc)
 /*
  *  initiate announcement and sleep till its set up
  */
-static int
+static bool
 announced(void* a)
 {
     return ((Conv*)a)->state == Announced;
@@ -1199,9 +1207,9 @@ announced(void* a)
 /*e: function announced */
 /*s: function announcectlmsg */
 static void
-announcectlmsg(Proto *x, Conv *c, Cmdbuf *cb)
+announcectlmsg(Proto *p, Conv *c, Cmdbuf *cb)
 {
-    char *p;
+    char *err;
 
     if(c->state != Idle)
         error(Econinuse);
@@ -1209,13 +1217,13 @@ announcectlmsg(Proto *x, Conv *c, Cmdbuf *cb)
     c->state = Announcing;
     c->cerr[0] = '\0';
 
-    if(x->announce == nil)
+    if(p->announce == nil)
         error("announce not supported");
     // Protocol dispatch
-    p = x->announce(c, cb->f, cb->nf);
+    err = p->announce(c, cb->f, cb->nf);
 
-    if(p != nil)
-        error(p);
+    if(err != nil)
+        error(err);
 
     qunlock(c);
     if(waserror()){
@@ -1503,14 +1511,17 @@ Fsprotoclone(Proto *p, char *user)
 
 retry:
     cv = nil;
+    /*s: [[Fsprotoclone()]] finding an available conversation in the protocol */
     ep = &p->conv[p->nc];
     for(pp = p->conv; pp < ep; pp++) {
         cv = *pp;
+        // found an available entry
         if(cv == nil){
             cv = malloc(sizeof(Conv));
             if(cv == nil)
                 error(Enomem);
             qlock(cv);
+
             cv->p = p;
             cv->x = pp - p->conv;
             if(p->ptclsize != 0){
@@ -1529,6 +1540,7 @@ retry:
 
             break;
         }
+        /*s: [[Fsprotoclone()]] if canqlock */
         if(canqlock(cv)){
             /*
              *  make sure both processes and protocol
@@ -1539,18 +1551,25 @@ retry:
 
             qunlock(cv);
         }
+        /*e: [[Fsprotoclone()]] if canqlock */
     }
-
+    /*e: [[Fsprotoclone()]] finding an available conversation in the protocol */
+    /*s: [[Fsprotoclone()]] if no more available conv, garbage collect and retry */
     if(pp >= ep) {
         if(p->gc)
             print("Fsprotoclone: garbage collecting Convs\n");
-        if(p->gc != nil && (*p->gc)(p))
+        if(p->gc != nil &&
+            // Protocol dispatch
+            (*p->gc)(p)
+           )
             goto retry;
+
         /* debugging: do we ever get here? */
         if (cpuserver)
             panic("Fsprotoclone: all conversations in use");
         return nil;
     }
+    /*e: [[Fsprotoclone()]] if no more available conv, garbage collect and retry */
 
     cv->inuse = 1;
     kstrdup(&cv->owner, user);
@@ -1558,13 +1577,16 @@ retry:
     cv->state = Idle;
     ipmove(cv->laddr, IPnoaddr);
     ipmove(cv->raddr, IPnoaddr);
-    cv->r = nil;
-    cv->rgen = 0;
     cv->lport = 0;
     cv->rport = 0;
-    cv->restricted = 0;
+
+    cv->r = nil;
+    cv->rgen = 0;
+
+    cv->restricted = false;
     cv->maxfragsize = 0;
     cv->ttl = MAXTTL;
+
     qreopen(cv->rq);
     qreopen(cv->wq);
     qreopen(cv->eq);
