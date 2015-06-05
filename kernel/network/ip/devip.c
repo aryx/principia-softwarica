@@ -715,21 +715,25 @@ ipclose(Chan* c)
 
     f = ipfs[c->dev];
     switch(TYPE(c->qid)) {
-    default:
-        break;
-    case Qlog:
-        if(c->flag & COPEN)
-            netlogclose(f);
-        break;
-    case Qdata:
+    /*s: [[ipclose()]] switch TYPE qid cases */
     case Qctl:
+    case Qdata:
     case Qerr:
         if(c->flag & COPEN)
             closeconv(f->p[PROTO(c->qid)]->conv[CONV(c->qid)]);
         break;
+    /*x: [[ipclose()]] switch TYPE qid cases */
+    case Qlog:
+        if(c->flag & COPEN)
+            netlogclose(f);
+        break;
+    /*x: [[ipclose()]] switch TYPE qid cases */
     case Qsnoop:
         if(c->flag & COPEN)
             decref(&f->p[PROTO(c->qid)]->conv[CONV(c->qid)]->snoopers);
+        break;
+    /*e: [[ipclose()]] switch TYPE qid cases */
+    default:
         break;
     }
     free(((IPaux*)c->aux)->owner);
@@ -1136,13 +1140,17 @@ connectctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
 {
     char *p;
 
-    if(c->state != 0)
+    if(c->state != Idle)
         error(Econinuse);
+
     c->state = Connecting;
     c->cerr[0] = '\0';
+
     if(x->connect == nil)
         error("connect not supported");
+    // Protocol dispatch
     p = x->connect(c, cb->f, cb->nf);
+
     if(p != nil)
         error(p);
 
@@ -1195,13 +1203,17 @@ announcectlmsg(Proto *x, Conv *c, Cmdbuf *cb)
 {
     char *p;
 
-    if(c->state != 0)
+    if(c->state != Idle)
         error(Econinuse);
+
     c->state = Announcing;
     c->cerr[0] = '\0';
+
     if(x->announce == nil)
         error("announce not supported");
+    // Protocol dispatch
     p = x->announce(c, cb->f, cb->nf);
+
     if(p != nil)
         error(p);
 
@@ -1310,9 +1322,9 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
             connectctlmsg(x, cv, cb);
         else if(strcmp(cb->f[0], "announce") == 0)
             announcectlmsg(x, cv, cb);
+
         else if(strcmp(cb->f[0], "bind") == 0)
             bindctlmsg(x, cv, cb);
-
 
         else if(strcmp(cb->f[0], "ttl") == 0)
             ttlctlmsg(cv, cb);
@@ -1570,15 +1582,15 @@ Fsconnected(Conv* c, char* msg)
         strncpy(c->cerr, msg, ERRMAX-1);
 
     switch(c->state){
-
-    case Announcing:
-        c->state = Announced;
-        break;
-
     case Connecting:
         c->state = Connected;
         break;
     }
+    /*s: [[Fsconnected()]] switch state cases */
+    case Announcing:
+        c->state = Announced;
+        break;
+    /*e: [[Fsconnected()]] switch state cases */
 
     wakeup(&c->cr);
     return 0;

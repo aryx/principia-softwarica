@@ -651,6 +651,7 @@ udpinit(Fs *fs)
     udp->connect = udpconnect;
     udp->announce = udpannounce;
     udp->ctl = udpctl;
+
     udp->close = udpclose;
     udp->rcv = udpiput;
     udp->advise = udpadvise;

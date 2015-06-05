@@ -3609,16 +3609,6 @@ enum
 };
 @
 
-<<enum _anon_ (kernel/network/ip/ip.h)2>>=
-enum
-{
-  Idle=   0,
-  Announcing= 1,
-  Announced=  2,
-  Connecting= 3,
-  Connected=  4,
-};
-@
 
 <<enum _anon_ (kernel/network/ip/ip.h)3>>=
 /* MIB II counters */
@@ -9331,70 +9321,7 @@ ipwstat(Chan *c, uchar *dp, int n)
 }
 @
 
-<<function closeconv>>=
-void
-closeconv(Conv *cv)
-{
-    Conv *nc;
-    Ipmulti *mp;
 
-    qlock(cv);
-
-    if(--cv->inuse > 0) {
-        qunlock(cv);
-        return;
-    }
-
-    /* close all incoming calls since no listen will ever happen */
-    for(nc = cv->incall; nc; nc = cv->incall){
-        cv->incall = nc->next;
-        closeconv(nc);
-    }
-    cv->incall = nil;
-
-    kstrdup(&cv->owner, network);
-    cv->perm = 0660;
-
-    while((mp = cv->multi) != nil)
-        ipifcremmulti(cv, mp->ma, mp->ia);
-
-    cv->r = nil;
-    cv->rgen = 0;
-    cv->p->close(cv);
-    cv->state = Idle;
-    qunlock(cv);
-}
-@
-
-<<function ipclose>>=
-static void
-ipclose(Chan* c)
-{
-    Fs *f;
-
-    f = ipfs[c->dev];
-    switch(TYPE(c->qid)) {
-    default:
-        break;
-    case Qlog:
-        if(c->flag & COPEN)
-            netlogclose(f);
-        break;
-    case Qdata:
-    case Qctl:
-    case Qerr:
-        if(c->flag & COPEN)
-            closeconv(f->p[PROTO(c->qid)]->conv[CONV(c->qid)]);
-        break;
-    case Qsnoop:
-        if(c->flag & COPEN)
-            decref(&f->p[PROTO(c->qid)]->conv[CONV(c->qid)]->snoopers);
-        break;
-    }
-    free(((IPaux*)c->aux)->owner);
-    free(c->aux);
-}
-@
 
 <<enum _anon_ (kernel/network/ip/devip.c)2>>=
 enum
@@ -9622,46 +9549,6 @@ setraddrport(Conv* c, char* str)
 }
 @
 
-<<function Fsstdconnect>>=
-/*
- *  called by protocol connect routine to set addresses
- */
-char*
-Fsstdconnect(Conv *c, char *argv[], int argc)
-{
-    char *p;
-
-    switch(argc) {
-    default:
-        return "bad args to connect";
-    case 2:
-        p = setraddrport(c, argv[1]);
-        if(p != nil)
-            return p;
-        setladdr(c);
-        p = setlport(c);
-        if (p != nil)
-            return p;
-        break;
-    case 3:
-        p = setraddrport(c, argv[1]);
-        if(p != nil)
-            return p;
-        p = setladdrport(c, argv[2], 0);
-        if(p != nil)
-            return p;
-    }
-
-    if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
-        memcmp(c->laddr, v4prefix, IPv4off) == 0)
-        || ipcmp(c->raddr, IPnoaddr) == 0)
-        c->ipversion = V4;
-    else
-        c->ipversion = V6;
-
-    return nil;
-}
-@
 
 <<function connected>>=
 /*
@@ -9674,54 +9561,7 @@ connected(void* a)
 }
 @
 
-<<function connectctlmsg>>=
-static void
-connectctlmsg(Proto *x, Conv *c, Cmdbuf *cb)
-{
-    char *p;
 
-    if(c->state != 0)
-        error(Econinuse);
-    c->state = Connecting;
-    c->cerr[0] = '\0';
-    if(x->connect == nil)
-        error("connect not supported");
-    p = x->connect(c, cb->f, cb->nf);
-    if(p != nil)
-        error(p);
-
-    qunlock(c);
-    if(waserror()){
-        qlock(c);
-        nexterror();
-    }
-    sleep(&c->cr, connected, c);
-    qlock(c);
-    poperror();
-
-    if(c->cerr[0] != '\0')
-        error(c->cerr);
-}
-@
-
-<<function Fsstdannounce>>=
-/*
- *  called by protocol announce routine to set addresses
- */
-char*
-Fsstdannounce(Conv* c, char* argv[], int argc)
-{
-    memset(c->raddr, 0, sizeof(c->raddr));
-    c->rport = 0;
-    switch(argc){
-    default:
-        break;
-    case 2:
-        return setladdrport(c, argv[1], 1);
-    }
-    return "bad args to announce";
-}
-@
 
 <<function announced>>=
 /*
@@ -9734,35 +9574,6 @@ announced(void* a)
 }
 @
 
-<<function announcectlmsg>>=
-static void
-announcectlmsg(Proto *x, Conv *c, Cmdbuf *cb)
-{
-    char *p;
-
-    if(c->state != 0)
-        error(Econinuse);
-    c->state = Announcing;
-    c->cerr[0] = '\0';
-    if(x->announce == nil)
-        error("announce not supported");
-    p = x->announce(c, cb->f, cb->nf);
-    if(p != nil)
-        error(p);
-
-    qunlock(c);
-    if(waserror()){
-        qlock(c);
-        nexterror();
-    }
-    sleep(&c->cr, announced, c);
-    qlock(c);
-    poperror();
-
-    if(c->cerr[0] != '\0')
-        error(c->cerr);
-}
-@
 
 
 
@@ -9821,28 +9632,6 @@ ipbwrite(Chan* ch, Block* bp, ulong offset)
 
 
 
-<<function Fsconnected>>=
-int
-Fsconnected(Conv* c, char* msg)
-{
-    if(msg != nil && *msg != '\0')
-        strncpy(c->cerr, msg, ERRMAX-1);
-
-    switch(c->state){
-
-    case Announcing:
-        c->state = Announced;
-        break;
-
-    case Connecting:
-        c->state = Connected;
-        break;
-    }
-
-    wakeup(&c->cr);
-    return 0;
-}
-@
 
 <<function Fsrcvpcol>>=
 Proto*
@@ -16920,23 +16709,6 @@ enum
 
 
 
-<<function udpannounce>>=
-static char*
-udpannounce(Conv *c, char** argv, int argc)
-{
-    char *e;
-    Udppriv *upriv;
-
-    upriv = c->p->priv;
-    e = Fsstdannounce(c, argv, argc);
-    if(e != nil)
-        return e;
-    Fsconnected(c, nil);
-    iphtadd(&upriv->ht, c);
-
-    return nil;
-}
-@
 
 
 <<function udpclose>>=

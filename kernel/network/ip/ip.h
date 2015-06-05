@@ -78,11 +78,13 @@ enum
 /*e: enum _anon_ (kernel/network/ip/ip.h) */
 
 /*s: enum _anon_ (kernel/network/ip/ip.h)2 */
-enum
+enum state
 {
   Idle=   0,
+
   Announcing= 1,
   Announced=  2,
+
   Connecting= 3,
   Connected=  4,
 };
@@ -220,6 +222,9 @@ struct Conv
   char  *owner;     /* protections */
   int perm;
 
+  // enum<state>
+  int state;
+
   /*s: [[Conv(kernel)]] queue fields */
   Queue*  eq;     /* returned error packets */
   /*x: [[Conv(kernel)]] queue fields */
@@ -247,7 +252,6 @@ struct Conv
   uint  tos;      /* type of service */
   /*x: [[Conv(kernel)]] other fields */
   int length;
-  int state;
   /*x: [[Conv(kernel)]] other fields */
   bool restricted;   /* remote port is restricted */
   bool ignoreadvice;   /* don't terminate connection on icmp errors */
@@ -503,24 +507,26 @@ struct Proto
   /*x: [[Proto(kernel)]] protocol methods */
   int   (*stats)(Proto*, char*, int);
   /*e: [[Proto(kernel)]] protocol methods */
-  /*s: [[Proto(kernel)]] conversation methods */
+  /*s: [[Proto(kernel)]] conversation ctl methods */
   char*   (*bind)(Conv*, char**, int);
-  /*x: [[Proto(kernel)]] conversation methods */
+  /*x: [[Proto(kernel)]] conversation ctl methods */
   char*   (*connect)(Conv*, char**, int);
-  /*x: [[Proto(kernel)]] conversation methods */
   char*   (*announce)(Conv*, char**, int);
-  /*x: [[Proto(kernel)]] conversation methods */
+  /*x: [[Proto(kernel)]] conversation ctl methods */
+  char*   (*ctl)(Conv*, char**, int);
+  /*e: [[Proto(kernel)]] conversation ctl methods */
+  /*s: [[Proto(kernel)]] conversation inspection methods */
+  int   (*state)(Conv*, char*, int);
+  /*x: [[Proto(kernel)]] conversation inspection methods */
+  int   (*local)(Conv*, char*, int);
+  /*x: [[Proto(kernel)]] conversation inspection methods */
+  int   (*remote)(Conv*, char*, int);
+  /*e: [[Proto(kernel)]] conversation inspection methods */
+  /*s: [[Proto(kernel)]] conversation methods */
   void    (*close)(Conv*);
   void    (*rcv)(Proto*, Ipifc*, Block*);
-  char*   (*ctl)(Conv*, char**, int);
   void    (*advise)(Proto*, Block*, char*);
   int   (*inuse)(Conv*);
-  /*x: [[Proto(kernel)]] conversation methods */
-  int   (*state)(Conv*, char*, int);
-  /*x: [[Proto(kernel)]] conversation methods */
-  int   (*local)(Conv*, char*, int);
-  /*x: [[Proto(kernel)]] conversation methods */
-  int   (*remote)(Conv*, char*, int);
   /*e: [[Proto(kernel)]] conversation methods */
   /*e: [[Proto(kernel)]] methods */
 
@@ -528,7 +534,6 @@ struct Proto
   Conv    **conv;   /* array of conversations */
   int   nc;   /* number of conversations */
   int   ac; // number of opened conversations
-
 
   /*s: [[Proto(kernel)]] priv fields */
   void    *priv;
