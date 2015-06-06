@@ -3594,12 +3594,14 @@ enum
   /* ip versions */
   V4=   4,
   V6=   6,
+
   IP_VER4=  0x40,
   IP_VER6=  0x60,
   IP_HLEN4= 5,    /* v4: Header length in words */
   IP_DF=    0x4000,   /* v4: Don't fragment */
   IP_MF=    0x2000,   /* v4: More fragments */
   IP4HDR=   20,   /* sizeof(Ip4hdr) */
+
   <<constant IP_MAX>>
 
   /* 2^Lroot trees in the root table */
@@ -3696,22 +3698,7 @@ enum
 };
 @
 
-<<struct Iphash>>=
-struct Iphash
-{
-  Iphash  *next;
-  Conv  *c;
-  int match;
-};
-@
 
-<<struct Ipht>>=
-struct Ipht
-{
-  Lock;
-  Iphash  *tab[Nipht];
-};
-@
 
 
 
@@ -3744,7 +3731,6 @@ enum
 <<enum _anon_ (kernel/network/ip/ip.h)6>>=
 enum
 {
-
   /* type bits */
   Rv4=    (1<<0),   /* this is a version 4 route */
   Rifc=   (1<<1),   /* this route is a directly connected interface */
@@ -4075,30 +4061,6 @@ extern Chan*  chandial(char*, char*, char*, Chan**);
 #define BLKIPVER(xp)    (((Ip4hdr*)((xp)->rp))->vihl&0xF0)
 @
 
-<<global statnames>>=
-static char *statnames[] =
-{
-[Forwarding]    "Forwarding",
-[DefaultTTL]    "DefaultTTL",
-[InReceives]    "InReceives",
-[InHdrErrors]   "InHdrErrors",
-[InAddrErrors]  "InAddrErrors",
-[ForwDatagrams] "ForwDatagrams",
-[InUnknownProtos]   "InUnknownProtos",
-[InDiscards]    "InDiscards",
-[InDelivers]    "InDelivers",
-[OutRequests]   "OutRequests",
-[OutDiscards]   "OutDiscards",
-[OutNoRoutes]   "OutNoRoutes",
-[ReasmTimeout]  "ReasmTimeout",
-[ReasmReqds]    "ReasmReqds",
-[ReasmOKs]  "ReasmOKs",
-[ReasmFails]    "ReasmFails",
-[FragOKs]   "FragOKs",
-[FragFails] "FragFails",
-[FragCreates]   "FragCreates",
-};
-@
 
 <<macro BLKIP>>=
 #define BLKIP(xp)   ((Ip4hdr*)((xp)->rp))
@@ -4117,10 +4079,10 @@ static char *statnames[] =
 
 <<function iprouting>>=
 void
-iprouting(Fs *f, int on)
+iprouting(Fs *f, bool on)
 {
     f->ip->iprouting = on;
-    if(f->ip->iprouting==0)
+    if(f->ip->iprouting == false)
         f->ip->stats[Forwarding] = 2;
     else
         f->ip->stats[Forwarding] = 1;
@@ -4129,190 +4091,7 @@ iprouting(Fs *f, int on)
 
 
 
-<<function ipstats>>=
-int
-ipstats(Fs *f, char *buf, int len)
-{
-    IP *ip;
-    char *p, *e;
-    int i;
 
-    ip = f->ip;
-    ip->stats[DefaultTTL] = MAXTTL;
-
-    p = buf;
-    e = p+len;
-    for(i = 0; i < Nipstats; i++)
-        p = seprint(p, e, "%s: %llud\n", statnames[i], ip->stats[i]);
-    return p - buf;
-}
-@
-
-<<function ip4reassemble>>=
-Block*
-ip4reassemble(IP *ip, int offset, Block *bp, Ip4hdr *ih)
-{
-    int fend;
-    ushort id;
-    Fragment4 *f, *fnext;
-    ulong src, dst;
-    Block *bl, **l, *last, *prev;
-    int ovlap, len, fragsize, pktposn;
-
-    src = nhgetl(ih->src);
-    dst = nhgetl(ih->dst);
-    id = nhgets(ih->id);
-
-    /*
-     *  block lists are too hard, pullupblock into a single block
-     */
-    if(bp->next){
-        bp = pullupblock(bp, blocklen(bp));
-        ih = (Ip4hdr*)(bp->rp);
-    }
-
-    qlock(&ip->fraglock4);
-
-    /*
-     *  find a reassembly queue for this fragment
-     */
-    for(f = ip->flisthead4; f; f = fnext){
-        fnext = f->next;    /* because ipfragfree4 changes the list */
-        if(f->src == src && f->dst == dst && f->id == id)
-            break;
-        if(f->age < NOW){
-            ip->stats[ReasmTimeout]++;
-            ipfragfree4(ip, f);
-        }
-    }
-
-    /*
-     *  if this isn't a fragmented packet, accept it
-     *  and get rid of any fragments that might go
-     *  with it.
-     */
-    if(!ih->tos && (offset & ~(IP_MF|IP_DF)) == 0) {
-        if(f != nil) {
-            ipfragfree4(ip, f);
-            ip->stats[ReasmFails]++;
-        }
-        qunlock(&ip->fraglock4);
-        return bp;
-    }
-
-    if(bp->base+IPFRAGSZ >= bp->rp){
-        bp = padblock(bp, IPFRAGSZ);
-        bp->rp += IPFRAGSZ;
-    }
-
-    BKFG(bp)->foff = offset<<3;
-    BKFG(bp)->flen = nhgets(ih->length)-IP4HDR;
-
-    /* First fragment allocates a reassembly queue */
-    if(f == nil) {
-        f = ipfragallo4(ip);
-        f->id = id;
-        f->src = src;
-        f->dst = dst;
-
-        f->blist = bp;
-
-        qunlock(&ip->fraglock4);
-        ip->stats[ReasmReqds]++;
-        return nil;
-    }
-
-    /*
-     *  find the new fragment's position in the queue
-     */
-    prev = nil;
-    l = &f->blist;
-    bl = f->blist;
-    while(bl != nil && BKFG(bp)->foff > BKFG(bl)->foff) {
-        prev = bl;
-        l = &bl->next;
-        bl = bl->next;
-    }
-
-    /* Check overlap of a previous fragment - trim away as necessary */
-    if(prev) {
-        ovlap = BKFG(prev)->foff + BKFG(prev)->flen - BKFG(bp)->foff;
-        if(ovlap > 0) {
-            if(ovlap >= BKFG(bp)->flen) {
-                freeblist(bp);
-                qunlock(&ip->fraglock4);
-                return nil;
-            }
-            BKFG(prev)->flen -= ovlap;
-        }
-    }
-
-    /* Link onto assembly queue */
-    bp->next = *l;
-    *l = bp;
-
-    /* Check to see if succeeding segments overlap */
-    if(bp->next) {
-        l = &bp->next;
-        fend = BKFG(bp)->foff + BKFG(bp)->flen;
-        /* Take completely covered segments out */
-        while(*l) {
-            ovlap = fend - BKFG(*l)->foff;
-            if(ovlap <= 0)
-                break;
-            if(ovlap < BKFG(*l)->flen) {
-                BKFG(*l)->flen -= ovlap;
-                BKFG(*l)->foff += ovlap;
-                /* move up ih hdrs */
-                memmove((*l)->rp + ovlap, (*l)->rp, IP4HDR);
-                (*l)->rp += ovlap;
-                break;
-            }
-            last = (*l)->next;
-            (*l)->next = nil;
-            freeblist(*l);
-            *l = last;
-        }
-    }
-
-    /*
-     *  look for a complete packet.  if we get to a fragment
-     *  without IP_MF set, we're done.
-     */
-    pktposn = 0;
-    for(bl = f->blist; bl; bl = bl->next) {
-        if(BKFG(bl)->foff != pktposn)
-            break;
-        if((BLKIP(bl)->frag[0]&(IP_MF>>8)) == 0) {
-            bl = f->blist;
-            len = nhgets(BLKIP(bl)->length);
-            bl->wp = bl->rp + len;
-
-            /* Pullup all the fragment headers and
-             * return a complete packet
-             */
-            for(bl = bl->next; bl; bl = bl->next) {
-                fragsize = BKFG(bl)->flen;
-                len += fragsize;
-                bl->rp += IP4HDR;
-                bl->wp = bl->rp + fragsize;
-            }
-
-            bl = f->blist;
-            f->blist = nil;
-            ipfragfree4(ip, f);
-            ih = BLKIP(bl);
-            hnputs(ih->length, len);
-            qunlock(&ip->fraglock4);
-            ip->stats[ReasmOKs]++;
-            return bl;
-        }
-        pktposn += BKFG(bl)->flen;
-    }
-    qunlock(&ip->fraglock4);
-    return nil;
-}
-@
 
 <<function ipfragfree4>>=
 /*
@@ -4506,6 +4285,7 @@ enum
   /* ethernet packet types */
   ETARP   = 0x0806,
   ETIP4   = 0x0800,
+
   ETIP6   = 0x86DD,
 };
 @
@@ -5173,6 +4953,7 @@ nhgetl(void *p)
     return (a[0]<<24)|(a[1]<<16)|(a[2]<<8)|(a[3]<<0);
 }
 @
+% >> >> >> >> >> 
 
 <<function nhgets (kernel/network/netif.c)>>=
 ushort
@@ -5184,6 +4965,7 @@ nhgets(void *p)
     return (a[0]<<8)|(a[1]<<0);
 }
 @
+% >> >> >>
 
 <<function hash>>=
 static ulong
@@ -5196,6 +4978,7 @@ hash(uchar *a, int len)
     return sum%Nmhash;
 }
 @
+% >>
 
 <<function activemulti>>=
 int
@@ -7787,6 +7570,7 @@ at93c46io(CtlrEtherIgbe* ctlr, char* op, int data)
     return r;
 }
 @
+% >> >> >>
 
 <<function at93c46r>>=
 static int
@@ -9999,6 +9783,7 @@ static void     rxmitproc(void *v);
 
 <<struct Icmp>>=
 typedef struct Icmp {
+    // ip header
     uchar   vihl;       /* Version and header length */
     uchar   tos;        /* Type of service */
     uchar   length[2];  /* packet length */
@@ -10009,6 +9794,8 @@ typedef struct Icmp {
     uchar   ipcksum[2]; /* Header checksum */
     uchar   src[4];     /* Ip source */
     uchar   dst[4];     /* Ip destination */
+
+    // icmp specifics
     uchar   type;
     uchar   code;
     uchar   cksum[2];
@@ -13184,13 +12971,6 @@ ipifcconnect(Conv* c, char **argv, int argc)
 @
 
 
-<<function ipifcstats>>=
-int
-ipifcstats(Proto *ipifc, char *buf, int len)
-{
-    return ipstats(ipifc->f, buf, len);
-}
-@
 
 
 <<function addselfcache>>=
