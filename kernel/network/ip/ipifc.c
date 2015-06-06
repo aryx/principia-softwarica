@@ -369,8 +369,8 @@ ipifccreate(Conv *cv)
     ifc->m = nil;
 
     ifc->conv = cv;
-    ifc->unbinding = 0;
-    ifc->reassemble = 0;
+    ifc->unbinding = false;
+    ifc->reassemble = false;
 }
 /*e: function ipifccreate */
 
@@ -844,6 +844,7 @@ ipifcctl(Conv* cv, char** argv, int argc)
         return ipifcrem(ifc, argv, argc);
     else if(strcmp(argv[0], "unbind") == 0)
         return ipifcunbind(ifc);
+
     else if(strcmp(argv[0], "joinmulti") == 0)
         return ipifcjoinmulti(ifc, argv, argc);
     else if(strcmp(argv[0], "leavemulti") == 0)
@@ -851,7 +852,7 @@ ipifcctl(Conv* cv, char** argv, int argc)
     else if(strcmp(argv[0], "mtu") == 0)
         return ipifcsetmtu(ifc, argv, argc);
     else if(strcmp(argv[0], "reassemble") == 0){
-        ifc->reassemble = 1;
+        ifc->reassemble = true;
         return nil;
     }
     else if(strcmp(argv[0], "iprouting") == 0){
@@ -889,13 +890,14 @@ ipifcinit(Fs *f)
 
     ipifc->name = "ipifc";
     ipifc->create = ipifccreate;
+    ipifc->close = ipifcclose;
+
     ipifc->bind = ipifcbind;
- 
     ipifc->connect = ipifcconnect;
     ipifc->announce = nil;
-    ipifc->close = ipifcclose;
-    ipifc->rcv = nil;
     ipifc->ctl = ipifcctl;
+
+    ipifc->rcv = nil;
     ipifc->advise = nil;
     ipifc->inuse = ipifcinuse;
 

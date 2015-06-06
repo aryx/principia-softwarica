@@ -48,7 +48,9 @@ enum
   /*e: constant Maxproto */
   Nhash=    64,
   Maxincall=  32, /* max. conn.s in listen q not accepted yet */
+  /*s: constant Nchans */
   Nchans=   1024,
+  /*e: constant Nchans */
   MAClen=   16,   /* longest mac address */
 
   MAXTTL=   255,
@@ -68,7 +70,9 @@ enum
   IP_DF=    0x4000,   /* v4: Don't fragment */
   IP_MF=    0x2000,   /* v4: More fragments */
   IP4HDR=   20,   /* sizeof(Ip4hdr) */
+  /*s: constant IP_MAX */
   IP_MAX=   64*1024,  /* Max. Internet packet size, v4 & v6 */
+  /*e: constant IP_MAX */
 
   /* 2^Lroot trees in the root table */
   Lroot=    10,
@@ -116,7 +120,7 @@ enum mib_two_counters
   ReasmOKs,
   ReasmFails,
 
-  // Fragments
+  // Out fragments
   FragOKs,
   FragFails,
   FragCreates,
@@ -175,7 +179,7 @@ struct IP
   Fragment4*  fragfree4;
 
   /*s: [[IP(kernel)]] stat fields */
-  // map<enum<mibcounter>, uvlong>
+  // map<enum<mib_two_counters>, uvlong>
   uvlong    stats[Nipstats];
   /*e: [[IP(kernel)]] stat fields */
   /*s: [[IP(kernel)]] routing fields */
@@ -205,8 +209,12 @@ struct Ip4hdr
   uchar id[2];    /* ip->identification */
   uchar frag[2];  /* Fragment information */
   uchar ttl;        /* Time to live */
+
+  // enum<protocol_type>
   uchar proto;    /* Protocol */
+
   uchar cksum[2]; /* Header checksum */
+
   uchar src[4];   /* IP source */
   uchar dst[4];   /* IP destination */
 };
@@ -266,7 +274,6 @@ struct Conv
   bool restricted;   /* remote port is restricted */
   bool ignoreadvice;   /* don't terminate connection on icmp errors */
 
-  int maxfragsize;    /* If set, used for fragmentation */
 
   /* udp specific */
   int headers;    /* data src/dst headers in udp */
@@ -281,6 +288,8 @@ struct Conv
   Rendez  listenr;
   /*x: [[Conv(kernel)]] other fields */
   char  cerr[ERRMAX];
+  /*x: [[Conv(kernel)]] other fields */
+  int maxfragsize;    /* If set, used for fragmentation */
   /*e: [[Conv(kernel)]] other fields */
 
   // Extra
@@ -434,17 +443,17 @@ struct Ipifc
   /*s: [[Ipifc(kernel)]] other fields */
   Conv  *conv;    /* link to its conversation structure */
   /*x: [[Ipifc(kernel)]] other fields */
-  bool reassemble; /* reassemble IP packets before forwarding */
-
   /* these are used so that we can unbind on the fly */
   Lock  idlock;
   uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
   int ref;    /* number of proc's using this ipifc */
   Rendez  wait;   /* where unbinder waits for ref == 0 */
-  int unbinding;
+  bool unbinding;
   /*x: [[Ipifc(kernel)]] other fields */
   Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
           used only if node is router */
+  /*x: [[Ipifc(kernel)]] other fields */
+  bool reassemble; /* reassemble IP packets before forwarding */
   /*e: [[Ipifc(kernel)]] other fields */
 
   //Extra
@@ -512,6 +521,7 @@ struct Proto
   /*s: [[Proto(kernel)]] methods */
   /*s: [[Proto(kernel)]] protocol methods */
   void    (*create)(Conv*);
+  /*x: [[Proto(kernel)]] protocol methods */
   void    (*close)(Conv*);
   /*x: [[Proto(kernel)]] protocol methods */
   int   (*gc)(Proto*);  /* returns true if any conversations are freed */
@@ -535,8 +545,10 @@ struct Proto
   /*e: [[Proto(kernel)]] conversation inspection methods */
   /*s: [[Proto(kernel)]] conversation methods */
   void    (*rcv)(Proto*, Ipifc*, Block*);
+  /*x: [[Proto(kernel)]] conversation methods */
+  bool   (*inuse)(Conv*);
+  /*x: [[Proto(kernel)]] conversation methods */
   void    (*advise)(Proto*, Block*, char*);
-  int   (*inuse)(Conv*);
   /*e: [[Proto(kernel)]] conversation methods */
   /*e: [[Proto(kernel)]] methods */
 
@@ -603,14 +615,14 @@ struct Fs
     Route *v6root[1<<Lroot];  /* v6 routing forest */
   /*e: [[Fs(kernel)]] ipv6 fields */
   /*s: [[Fs(kernel)]] other fields */
-  Proto*  ipmux;      /* kludge for finding an ip multiplexor */
-  /*x: [[Fs(kernel)]] other fields */
   // map<enum<protocol_type>, ref<Proto>>
   Proto*  t2p[256];   /* vector of all protocols */
   /*x: [[Fs(kernel)]] other fields */
   Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
   /*x: [[Fs(kernel)]] other fields */
   Ipselftab *self;
+  /*x: [[Fs(kernel)]] other fields */
+  Proto*  ipmux;      /* kludge for finding an ip multiplexor */
   /*e: [[Fs(kernel)]] other fields */
  
   // Extra
@@ -741,9 +753,8 @@ struct  RouteTree
   uchar depth;
   uchar type;
 
-  uchar ifcid;    /* must match ifc->id */
-
   Ipifc *ifc; // !!!
+  uchar ifcid;    /* must match ifc->id */
 
   char  tag[4];
   int ref;

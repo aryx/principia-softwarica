@@ -37,9 +37,9 @@ enum
     Qctl=       Qconvbase,
     Qdata,
     /*s: [[Qid]] conversation extra cases */
-    Qlisten,
-    /*x: [[Qid]] conversation extra cases */
     Qerr,
+    /*x: [[Qid]] conversation extra cases */
+    Qlisten,
     /*x: [[Qid]] conversation extra cases */
     Qstatus,
     /*x: [[Qid]] conversation extra cases */
@@ -128,12 +128,12 @@ ip3gen(Chan *c, int i, Dir *dp)
         devdir(c, q, "data", qlen(cv->rq), cv->owner, cv->perm, dp);
         return 1;
     /*x: [[ip3gen()]] switch TYPE qid cases */
-    case Qlisten:
-        devdir(c, q, "listen", 0, cv->owner, cv->perm, dp);
-        return 1;
-    /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qerr:
         devdir(c, q, "err", qlen(cv->eq), cv->owner, cv->perm, dp);
+        return 1;
+    /*x: [[ip3gen()]] switch TYPE qid cases */
+    case Qlisten:
+        devdir(c, q, "listen", 0, cv->owner, cv->perm, dp);
         return 1;
     /*x: [[ip3gen()]] switch TYPE qid cases */
     case Qstatus:
@@ -516,6 +516,26 @@ ipopen(Chan* c, int omode)
         poperror();
         break;
     /*x: [[ipopen()]] switch TYPE qid cases */
+    case Qclone:
+        p = f->p[PROTO(c->qid)];
+
+        qlock(p);
+        if(waserror()){
+            qunlock(p);
+            nexterror();
+        }
+
+        cv = Fsprotoclone(p, ATTACHER(c));
+
+        qunlock(p);
+        poperror();
+        if(cv == nil) {
+            error(Enodev);
+            break;
+        }
+        mkqid(&c->qid, QID(p->x, cv->x, Qctl), 0, QTFILE);
+        break;
+    /*x: [[ipopen()]] switch TYPE qid cases */
     case Qlisten:
         cv = f->p[PROTO(c->qid)]->conv[CONV(c->qid)];
         if((perm & (cv->perm>>6)) != perm) {
@@ -566,26 +586,6 @@ ipopen(Chan* c, int omode)
         }
         closeconv(cv);
         poperror();
-        break;
-    /*x: [[ipopen()]] switch TYPE qid cases */
-    case Qclone:
-        p = f->p[PROTO(c->qid)];
-
-        qlock(p);
-        if(waserror()){
-            qunlock(p);
-            nexterror();
-        }
-
-        cv = Fsprotoclone(p, ATTACHER(c));
-
-        qunlock(p);
-        poperror();
-        if(cv == nil) {
-            error(Enodev);
-            break;
-        }
-        mkqid(&c->qid, QID(p->x, cv->x, Qctl), 0, QTFILE);
         break;
     /*x: [[ipopen()]] switch TYPE qid cases */
     case Qarp:
@@ -707,8 +707,10 @@ closeconv(Conv *cv)
 
     cv->r = nil;
     cv->rgen = 0;
+
     // Protocol dispatch
     cv->p->close(cv);
+
     cv->state = Idle;
 
     qunlock(cv);
@@ -1340,6 +1342,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
             tosctlmsg(cv, cb);
         else if(strcmp(cb->f[0], "ignoreadvice") == 0)
             cv->ignoreadvice = true;
+
         else if(strcmp(cb->f[0], "addmulti") == 0){
             if(cb->nf < 2)
                 error("addmulti needs interface address");
@@ -1365,13 +1368,16 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
             if (parseip(ia, cb->f[1]) == -1)
                 error(Ebadip);
             ipifcremmulti(cv, cv->raddr, ia);
-        } else if(strcmp(cb->f[0], "maxfragsize") == 0){
+        }
+        /*s: [[ipwrite()]], Qctl case, switch command esleif cases */
+        else if(strcmp(cb->f[0], "maxfragsize") == 0){
             if(cb->nf < 2)
                 error("maxfragsize needs size");
 
             cv->maxfragsize = (int)strtol(cb->f[1], nil, 0);
 
         } 
+        /*e: [[ipwrite()]], Qctl case, switch command esleif cases */
         else if(x->ctl != nil) {
             // Protocol dispatch
             p = x->ctl(cv, cb->f, cb->nf);
@@ -1515,7 +1521,7 @@ retry:
     ep = &p->conv[p->nc];
     for(pp = p->conv; pp < ep; pp++) {
         cv = *pp;
-        // found an available entry
+        // found an unallocated entry in the array
         if(cv == nil){
             cv = malloc(sizeof(Conv));
             if(cv == nil)
@@ -1546,7 +1552,10 @@ retry:
              *  make sure both processes and protocol
              *  are done with this Conv
              */
-            if(cv->inuse == 0 && (p->inuse == nil || (*p->inuse)(cv) == 0))
+            if(cv->inuse == 0 && (p->inuse == nil || 
+                // Protocol dispatch
+                (*p->inuse)(cv) == false)
+              )
                 break;
 
             qunlock(cv);
@@ -1622,8 +1631,10 @@ Fsconnected(Conv* c, char* msg)
 Proto*
 Fsrcvpcol(Fs* f, uchar proto)
 {
+    /*s: [[Fsrcvpcol()]] if ipmux */
     if(f->ipmux)
         return f->ipmux;
+    /*e: [[Fsrcvpcol()]] if ipmux */
     else
         return f->t2p[proto];
 }

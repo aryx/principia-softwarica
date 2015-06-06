@@ -429,6 +429,7 @@ icmpiput(Proto *icmp, Ipifc*, Block *bp)
         p = (Icmp *)bp->rp;
         pr = Fsrcvpcolx(icmp->f, p->proto);
         if(pr != nil && pr->advise != nil) {
+            // Protocol dispatch
             (*pr->advise)(pr, bp, msg);
             return;
         }
@@ -448,6 +449,7 @@ icmpiput(Proto *icmp, Ipifc*, Block *bp)
             p = (Icmp *)bp->rp;
             pr = Fsrcvpcolx(icmp->f, p->proto);
             if(pr != nil && pr->advise != nil) {
+                // Protocol dispatch
                 (*pr->advise)(pr, bp, m2);
                 return;
             }

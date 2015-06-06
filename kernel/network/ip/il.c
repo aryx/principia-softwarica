@@ -8,19 +8,22 @@
 
 #include	"ip.h"
 
+// forward decl
 typedef struct Ilcb Ilcb;
 typedef struct Ilhdr Ilhdr;
 typedef struct Ilpriv Ilpriv;
 
 /*s: enum _anon_ (kernel/network/ip/il.c) */
-enum				/* Connection state */
+enum il_state				/* Connection state */
 {
     Ilclosed,
+
     Ilsyncer,
     Ilsyncee,
     Ilestablished,
     Illistening,
     Ilclosing,
+
     Ilopening,		/* only for file server */
 };
 /*e: enum _anon_ (kernel/network/ip/il.c) */
@@ -85,7 +88,9 @@ enum
     DefByteRate	= 100,		/* assume a megabit link */
     DefRtt		= 50,		/* cross country on a great day */
 
+    /*s: constant Maxrq(IL) */
     Maxrq		= 64*1024,
+    /*e: constant Maxrq(IL) */
 };
 /*e: enum _anon_ (kernel/network/ip/il.c)3 */
 
@@ -99,8 +104,11 @@ enum
 /*s: struct Ilcb */
 struct Ilcb			/* Control block */
 {
+    // enum<il_state>
     int	state;		/* Connection state */
+
     Conv	*conv;
+
     QLock	ackq;		/* Unacknowledged queue */
     Block	*unacked;
     Block	*unackedtail;
@@ -143,13 +151,25 @@ struct Ilcb			/* Control block */
 /*s: enum _anon_ (kernel/network/ip/il.c)5 */
 enum
 {
+    /*s: constant IL_xxxSIZE */
     IL_IPSIZE 	= 20,
     IL_HDRSIZE	= 18,	
-    IL_LISTEN	= 0,
-    IL_CONNECT	= 1,
+    /*e: constant IL_xxxSIZE */
+    /*s: constant IP_ILPROTO */
     IP_ILPROTO	= 40,
+    /*x: constant IP_ILPROTO */
+    #define	IP_ILPROTO	40
+    /*e: constant IP_ILPROTO */
+
 };
 /*e: enum _anon_ (kernel/network/ip/il.c)5 */
+
+/*s: enum mode (kernel/network/ip/il.c) */
+enum mode {
+    IL_LISTEN	= 0,
+    IL_CONNECT	= 1,
+};
+/*e: enum mode (kernel/network/ip/il.c) */
 
 /*s: struct Ilhdr */
 struct Ilhdr
@@ -180,7 +200,7 @@ struct Ilhdr
 /*e: struct Ilhdr */
 
 /*s: enum _anon_ (kernel/network/ip/il.c)6 */
-enum
+enum il_stat
 {
     InMsgs,
     OutMsgs,
@@ -218,15 +238,19 @@ struct Ilpriv
 {
     Ipht	ht;
 
-    uvlong	stats[Nstats];
+    ulong	dup;
+    ulong	dupb;
 
+    /*s: [[Ilpriv]] stat fields */
     ulong	csumerr;		/* checksum errors */
     ulong	hlenerr;		/* header length error */
     ulong	lenerr;			/* short packet */
     ulong	order;			/* out of order */
     ulong	rexmit;			/* retransmissions */
-    ulong	dup;
-    ulong	dupb;
+    /*x: [[Ilpriv]] stat fields */
+    // map<enum<il_stat>, uvlong>
+    uvlong	stats[Nstats];
+    /*e: [[Ilpriv]] stat fields */
 
     /* keeping track of the ack kproc */
     int	ackprocstarted;
@@ -235,7 +259,6 @@ struct Ilpriv
 /*e: struct Ilpriv */
 
 /* state for query/dataquery messages */
-
 
 void	ilsendctl(Conv*, Ilhdr*, int, ulong, ulong, int);
 void	ilackq(Ilcb*, Block*);
@@ -259,9 +282,11 @@ void	illocalclose(Conv *c);
 
 
 /*s: global ilcksum */
-    int 	ilcksum = 1;
+bool 	ilcksum = true;
 /*e: global ilcksum */
+/*s: global scalexxx */
 static	ulong	scalediv, scalemul;
+/*e: global scalexxx */
 /*s: global etime */
 static	char	*etime = "connection timed out";
 /*e: global etime */
@@ -270,22 +295,24 @@ static	char	*etime = "connection timed out";
 static char*
 ilconnect(Conv *c, char **argv, int argc)
 {
-    char *e, *p;
-    int fast;
+    char *err;
+    char *p;
+    bool fast = false;
 
+    /*s: [[ilconnect()]] set fast */
     /* huge hack to quickly try an il connection */
-    fast = 0;
     if(argc > 1){
         p = strstr(argv[1], "!fasttimeout");
         if(p != nil){
-            *p = 0;
-            fast = 1;
+            *p = '\0';
+            fast = true;
         }
     }
+    /*e: [[ilconnect()]] set fast */
 
-    e = Fsstdconnect(c, argv, argc);
-    if(e != nil)
-        return e;
+    err = Fsstdconnect(c, argv, argc);
+    if(err != nil)
+        return err;
     return ilstart(c, IL_CONNECT, fast);
 }
 /*e: function ilconnect */
@@ -323,14 +350,14 @@ ilinuse(Conv *c)
 static char*
 ilannounce(Conv *c, char **argv, int argc)
 {
-    char *e;
+    char *err;
 
-    e = Fsstdannounce(c, argv, argc);
-    if(e != nil)
-        return e;
-    e = ilstart(c, IL_LISTEN, 0);
-    if(e != nil)
-        return e;
+    err = Fsstdannounce(c, argv, argc);
+    if(err != nil)
+        return err;
+    err = ilstart(c, IL_LISTEN, false);
+    if(err != nil)
+        return err;
     Fsconnected(c, nil);
 
     return nil;
@@ -448,6 +475,7 @@ ilkick(void *x, Block *bp)
         hnputs(ih->ilsum, ptclcsum(bp, IL_IPSIZE, dlen+IL_HDRSIZE));
 
     ilackq(ic, bp);
+
     qunlock(&ic->ackq);
 
     /* Start the round trip timer for this packet if the timer is free */
@@ -459,7 +487,10 @@ ilkick(void *x, Block *bp)
 
     if(later(NOW, ic->timeout, nil))
         ilsettimeout(ic);
-    ipoput4(f, bp, 0, c->ttl, c->tos, c);
+
+    // Let's go, let's send the data
+    ipoput4(f, bp, false, c->ttl, c->tos, c);
+
     priv->stats[OutMsgs]++;
 }
 /*e: function ilkick */
@@ -683,7 +714,9 @@ iliput(Proto *il, Ipifc*, Block *bp)
         qunlock(s);
         nexterror();
     }
+
     ilprocess(s, ih, bp);
+
     qunlock(s);
     poperror();
     return;
@@ -1112,10 +1145,10 @@ if(ipc->p==nil)
     panic("ipc->p is nil");
 
     //netlog(ipc->p->f, Logilmsg, "ctl(%s id %d ack %d %d->%d)\n",
-//		iltype[ih->iltype], nhgetl(ih->ilid), nhgetl(ih->ilack), 
-//		nhgets(ih->ilsrc), nhgets(ih->ildst));
+    //		iltype[ih->iltype], nhgetl(ih->ilid), nhgetl(ih->ilack), 
+    //		nhgets(ih->ilsrc), nhgets(ih->ildst));
 
-    ipoput4(ipc->p->f, bp, 0, ttl, tos, ipc);
+    ipoput4(ipc->p->f, bp, false, ttl, tos, ipc);
 }
 /*e: function ilsendctl */
 
@@ -1327,7 +1360,7 @@ ilcbinit(Ilcb *ic)
 
 /*s: function ilstart */
 char*
-ilstart(Conv *c, int type, int fasttimeout)
+ilstart(Conv *c, int type, bool fasttimeout)
 {
     Ilcb *ic;
     Ilpriv *ipriv;
@@ -1361,17 +1394,17 @@ ilstart(Conv *c, int type, int fasttimeout)
     };
 
     switch(type) {
-    default:
-        //netlog(c->p->f, Logil, "il: start: type %d\n", type);
+    case IL_CONNECT:
+        ic->state = Ilsyncer;
+        iphtadd(&ipriv->ht, c);
+        ilsendctl(c, nil, Ilsync, ic->start, ic->recvd, 0);
         break;
     case IL_LISTEN:
         ic->state = Illistening;
         iphtadd(&ipriv->ht, c);
         break;
-    case IL_CONNECT:
-        ic->state = Ilsyncer;
-        iphtadd(&ipriv->ht, c);
-        ilsendctl(c, nil, Ilsync, ic->start, ic->recvd, 0);
+    default:
+        //netlog(c->p->f, Logil, "il: start: type %d\n", type);
         break;
     }
 
@@ -1493,19 +1526,19 @@ ilinit(Fs *f)
 
     il->name = "il";
     il->create = ilcreate;
-    il->rcv = iliput;
+    il->close = ilclose;
 
     il->connect = ilconnect;
     il->announce = ilannounce;
     il->ctl = nil;
 
-    il->close = ilclose;
-    il->advise = iladvise;
+    il->rcv = iliput;
 
     il->state = ilstate;
     il->stats = ilxstats;
 
     il->inuse = ilinuse;
+    il->advise = iladvise;
 
     il->gc = nil;
     il->ipproto = IP_ILPROTO;

@@ -624,15 +624,14 @@ Conv  *conv;    /* link to its conversation structure */
 
 %XXX
 <<[[Ipifc(kernel)]] other fields>>=
-bool reassemble; /* reassemble IP packets before forwarding */
-
 /* these are used so that we can unbind on the fly */
 Lock  idlock;
 uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
 int ref;    /* number of proc's using this ipifc */
 Rendez  wait;   /* where unbinder waits for ref == 0 */
-int unbinding;
+bool unbinding;
 @
+%todo: dead unbinding?
 
 %XXX routing fields?
 <<[[Ipifc(kernel)]] other fields>>=
@@ -838,10 +837,6 @@ Route *queue;     /* used as temp when reinjecting routes */
 % >> >> 
 
 
-%XXX
-<<[[Fs(kernel)]] other fields>>=
-Proto*  ipmux;      /* kludge for finding an ip multiplexor */
-@
 
 
 
@@ -888,6 +883,13 @@ struct IP
   Ref   id4;
 };
 @
+% id4 will be IP packet identifier, incremented each time
+% (why need an id??)
+
+% Fragments because idea of IP is to have packets, and so if
+% one tried to send too big data, it's splitted in multiple
+% packets, and the IP stack will then reassemble them
+% (but this is different from TCP?)
 
 <<struct Fragment4>>=
 struct Fragment4
@@ -903,11 +905,11 @@ struct Fragment4
   Fragment4*  next;
 };
 @
-% ulong for src and dst? ports?
+% ulong for src and dst? ports? fragment number?
 
 
 <<[[IP(kernel)]] stat fields>>=
-// map<enum<mibcounter>, uvlong>
+// map<enum<mib_two_counters>, uvlong>
 uvlong    stats[Nipstats];
 @
 
@@ -938,7 +940,7 @@ enum mib_two_counters
   ReasmOKs,
   ReasmFails,
 
-  // Fragments
+  // Out fragments
   FragOKs,
   FragFails,
   FragCreates,
@@ -1147,6 +1149,8 @@ Queue*  wq;     /* queued data waiting to be written */
 % setup in each create() method of each Proto
 % will be accessed via /net/x/y/data
 
+% conversation are two ways? can read and write in /net/x/y/data?
+
 
 <<[[Conv(kernel)]] queue fields>>=
 Queue*  eq;     /* returned error packets */
@@ -1201,7 +1205,6 @@ int length;
 bool restricted;   /* remote port is restricted */
 bool ignoreadvice;   /* don't terminate connection on icmp errors */
 
-int maxfragsize;    /* If set, used for fragmentation */
 
 /* udp specific */
 int headers;    /* data src/dst headers in udp */
@@ -1220,6 +1223,7 @@ Rendez  listenr;
 <<[[Conv(kernel)]] other fields>>=
 char  cerr[ERRMAX];
 @
+
 
 
 \subsection{Chan Qid, [[PROTO()]], [[CONV()]], [[QID()]]}
@@ -1320,10 +1324,6 @@ enum
 
 
 
-%XXX
-<<[[Qid]] conversation extra cases>>=
-Qlisten,
-@
 
 
 
@@ -1416,8 +1416,51 @@ struct Netif
 };
 @
 
+\section{IP header}
+
+<<struct Ip4hdr>>=
+/* on the wire packet header */
+struct Ip4hdr
+{
+  uchar vihl;   /* Version and header length */
+  uchar tos;    /* Type of service */
+  uchar length[2];  /* packet length */
+  uchar id[2];    /* ip->identification */
+  uchar frag[2];  /* Fragment information */
+  uchar ttl;        /* Time to live */
+
+  // enum<protocol_type>
+  uchar proto;    /* Protocol */
+
+  uchar cksum[2]; /* Header checksum */
+
+  uchar src[4];   /* IP source */
+  uchar dst[4];   /* IP destination */
+};
+@
+% Do not change the order here!
+
+% id will be IP.id4, incremented in ipoput
+
+<<[[Fs(kernel)]] other fields>>=
+// map<enum<protocol_type>, ref<Proto>>
+Proto*  t2p[256];   /* vector of all protocols */
+@
+<<[[Proto(kernel)]] other fields>>=
+// enum<protocol_type>
+int   ipproto;  /* ip protocol type */
+@
+
+
+% so when will receive a packet, we will know to which
+% protocol to dispatch.
+% It means also you can't have more than 256 Protocols!
 
 \section{Route}
+
+% this is the link with ipifc! From a conv you get an IP
+% and via vlookup4 you get a Route which is then linked to an ipifc!
+% From there you can then send or receive the data to/from the medium
 
 <<struct Route (kernel)>>=
 struct Route
@@ -1441,14 +1484,14 @@ struct  RouteTree
   uchar depth;
   uchar type;
 
-  uchar ifcid;    /* must match ifc->id */
-
   Ipifc *ifc; // !!!
+  uchar ifcid;    /* must match ifc->id */
 
   char  tag[4];
   int ref;
 };
 @
+% why need ifcid?
 
 
 <<struct V4route>>=
@@ -1980,12 +2023,6 @@ case Qdata:
 
 
 
-%XXX
-<<[[ip3gen()]] switch TYPE qid cases>>=
-case Qlisten:
-    devdir(c, q, "listen", 0, cv->owner, cv->perm, dp);
-    return 1;
-@
 
 
 \subsection{Dispatch functions, [[ipxxx()]]}
@@ -2081,62 +2118,6 @@ case Qerr:
 
 
 
-
-%XXX
-<<[[ipopen()]] switch TYPE qid cases>>=
-case Qlisten:
-    cv = f->p[PROTO(c->qid)]->conv[CONV(c->qid)];
-    if((perm & (cv->perm>>6)) != perm) {
-        if(strcmp(ATTACHER(c), cv->owner) != 0)
-            error(Eperm);
-        if((perm & cv->perm) != perm)
-            error(Eperm);
-
-    }
-
-    if(cv->state != Announced)
-        error("not announced");
-
-    if(waserror()){
-        closeconv(cv);
-        nexterror();
-    }
-    qlock(cv);
-    cv->inuse++;
-    qunlock(cv);
-
-    nc = nil;
-    while(nc == nil) {
-        /* give up if we got a hangup */
-        if(qisclosed(cv->rq))
-            error("listen hungup");
-
-        qlock(&cv->listenq);
-        if(waserror()) {
-            qunlock(&cv->listenq);
-            nexterror();
-        }
-
-        /* wait for a connect */
-        sleep(&cv->listenr, incoming, cv);
-
-        qlock(cv);
-        nc = cv->incall;
-        if(nc != nil){
-            cv->incall = nc->next;
-            mkqid(&c->qid, QID(PROTO(c->qid), nc->x, Qctl), 0, QTFILE);
-            kstrdup(&cv->owner, ATTACHER(c));
-        }
-        qunlock(cv);
-
-        qunlock(&cv->listenq);
-        poperror();
-    }
-    closeconv(cv);
-    poperror();
-    break;
-@
-
 \subsubsection{[[ipclose()]]}
 
 <<function ipclose>>=
@@ -2189,8 +2170,10 @@ closeconv(Conv *cv)
 
     cv->r = nil;
     cv->rgen = 0;
+
     // Protocol dispatch
     cv->p->close(cv);
+
     cv->state = Idle;
 
     qunlock(cv);
@@ -2350,7 +2333,7 @@ retry:
 ep = &p->conv[p->nc];
 for(pp = p->conv; pp < ep; pp++) {
     cv = *pp;
-    // found an available entry
+    // found an unallocated entry in the array
     if(cv == nil){
         cv = malloc(sizeof(Conv));
         if(cv == nil)
@@ -2379,6 +2362,8 @@ for(pp = p->conv; pp < ep; pp++) {
 }
 @
 
+\subsubsection{Reuse an unused entry}
+
 <<[[Fsprotoclone()]] if canqlock>>=
 if(canqlock(cv)){
     /*
@@ -2394,12 +2379,13 @@ if(canqlock(cv)){
     qunlock(cv);
 }
 @
-% dead? purpose?
+% can reuse an existing conv that was allocated, but need to make
+% sure noone is using it
 
 <<[[Proto(kernel)]] conversation methods>>=
 bool   (*inuse)(Conv*);
 @
-% dead?
+
 
 \subsubsection{Garbage collecting}
 
@@ -2466,6 +2452,7 @@ case Qctl:
         tosctlmsg(cv, cb);
     else if(strcmp(cb->f[0], "ignoreadvice") == 0)
         cv->ignoreadvice = true;
+
     else if(strcmp(cb->f[0], "addmulti") == 0){
         if(cb->nf < 2)
             error("addmulti needs interface address");
@@ -2491,13 +2478,8 @@ case Qctl:
         if (parseip(ia, cb->f[1]) == -1)
             error(Ebadip);
         ipifcremmulti(cv, cv->raddr, ia);
-    } else if(strcmp(cb->f[0], "maxfragsize") == 0){
-        if(cb->nf < 2)
-            error("maxfragsize needs size");
-
-        cv->maxfragsize = (int)strtol(cb->f[1], nil, 0);
-
-    } 
+    }
+    <<[[ipwrite()]], Qctl case, switch command esleif cases>>
     else if(x->ctl != nil) {
         // Protocol dispatch
         p = x->ctl(cv, cb->f, cb->nf);
@@ -2775,6 +2757,73 @@ case Qerr:
 @
 % read only
 
+\subsection{[[/net/x/y/listen]]}
+% ?????
+
+<<[[Qid]] conversation extra cases>>=
+Qlisten,
+@
+<<[[ip3gen()]] switch TYPE qid cases>>=
+case Qlisten:
+    devdir(c, q, "listen", 0, cv->owner, cv->perm, dp);
+    return 1;
+@
+
+<<[[ipopen()]] switch TYPE qid cases>>=
+case Qlisten:
+    cv = f->p[PROTO(c->qid)]->conv[CONV(c->qid)];
+    if((perm & (cv->perm>>6)) != perm) {
+        if(strcmp(ATTACHER(c), cv->owner) != 0)
+            error(Eperm);
+        if((perm & cv->perm) != perm)
+            error(Eperm);
+
+    }
+
+    if(cv->state != Announced)
+        error("not announced");
+
+    if(waserror()){
+        closeconv(cv);
+        nexterror();
+    }
+    qlock(cv);
+    cv->inuse++;
+    qunlock(cv);
+
+    nc = nil;
+    while(nc == nil) {
+        /* give up if we got a hangup */
+        if(qisclosed(cv->rq))
+            error("listen hungup");
+
+        qlock(&cv->listenq);
+        if(waserror()) {
+            qunlock(&cv->listenq);
+            nexterror();
+        }
+
+        /* wait for a connect */
+        sleep(&cv->listenr, incoming, cv);
+
+        qlock(cv);
+        nc = cv->incall;
+        if(nc != nil){
+            cv->incall = nc->next;
+            mkqid(&c->qid, QID(PROTO(c->qid), nc->x, Qctl), 0, QTFILE);
+            kstrdup(&cv->owner, ATTACHER(c));
+        }
+        qunlock(cv);
+
+        qunlock(&cv->listenq);
+        poperror();
+    }
+    closeconv(cv);
+    poperror();
+    break;
+@
+
+
 \subsection{Other files}
 
 \subsubsection{[[/net/x/stats]]}
@@ -3022,6 +3071,9 @@ ipifcinit(Fs *f)
 %    ipifc->nc = Maxmedia;
 % max conversation
 
+% ipproto = -1 cos fake protocol, we will not receive any packet
+% from the ethernet to be directed to this protocol (which is why
+% also rcv is nil)
 
 <<function Fsproto>>=
 int
@@ -3048,7 +3100,7 @@ Fsproto(Fs *f, Proto *p)
     return 0;
 }
 @
-%nextrport ?
+%nextrport = next receive port?
 
 <<[[Fsproto()]] adjust f->t2p>>=
 if(p->ipproto > 0){
@@ -3057,15 +3109,9 @@ if(p->ipproto > 0){
     f->t2p[p->ipproto] = p;
 }
 @
+% so given an ip package just received, can look at proto field
+% and dispatch to the right protocol!
 
-<<[[Fs(kernel)]] other fields>>=
-// map<enum<protocol_type>, ref<Proto>>
-Proto*  t2p[256];   /* vector of all protocols */
-@
-<<[[Proto(kernel)]] other fields>>=
-// enum<protocol_type>
-int   ipproto;  /* ip protocol type */
-@
 
 
 
@@ -3111,8 +3157,8 @@ ipifccreate(Conv *cv)
     ifc->m = nil;
 
     ifc->conv = cv;
-    ifc->unbinding = 0;
-    ifc->reassemble = 0;
+    ifc->unbinding = false;
+    ifc->reassemble = false;
 }
 @
 % Ipifc has been smalloc generically by Fsprotoclone()
@@ -3242,6 +3288,7 @@ ipifcctl(Conv* cv, char** argv, int argc)
         return ipifcrem(ifc, argv, argc);
     else if(strcmp(argv[0], "unbind") == 0)
         return ipifcunbind(ifc);
+
     else if(strcmp(argv[0], "joinmulti") == 0)
         return ipifcjoinmulti(ifc, argv, argc);
     else if(strcmp(argv[0], "leavemulti") == 0)
@@ -3249,7 +3296,7 @@ ipifcctl(Conv* cv, char** argv, int argc)
     else if(strcmp(argv[0], "mtu") == 0)
         return ipifcsetmtu(ifc, argv, argc);
     else if(strcmp(argv[0], "reassemble") == 0){
-        ifc->reassemble = 1;
+        ifc->reassemble = true;
         return nil;
     }
     else if(strcmp(argv[0], "iprouting") == 0){
@@ -3613,12 +3660,15 @@ etherbind(Ipifc *ifc, int argc, char **argv)
 \section{Routes}
 
 
+\section{Advanced configurations}
 
 
 
 
 
 \chapter{IP}
+
+% RFC 79, Internet Protocol
 
 \section{IP addresses}
 
@@ -3754,21 +3804,38 @@ equivip4(uchar *a, uchar *b)
 
 \section{IP header}
 
-<<struct Ip4hdr>>=
-/* on the wire packet header */
-struct Ip4hdr
+% now in core DS
+
+\subsection{Byte ordering}
+
+% put the hnputs, hngets here
+
+
+\subsection{Checksum}
+
+% fault tolerance! important
+
+<<function ipcsum>>=
+ushort
+ipcsum(uchar *addr)
 {
-  uchar vihl;   /* Version and header length */
-  uchar tos;    /* Type of service */
-  uchar length[2];  /* packet length */
-  uchar id[2];    /* ip->identification */
-  uchar frag[2];  /* Fragment information */
-  uchar ttl;        /* Time to live */
-  uchar proto;    /* Protocol */
-  uchar cksum[2]; /* Header checksum */
-  uchar src[4];   /* IP source */
-  uchar dst[4];   /* IP destination */
-};
+    int len;
+    ulong sum;
+
+    sum = 0;
+    len = (addr[0]&0xf)<<2;
+
+    while(len > 0) {
+        sum += addr[0]<<8 | addr[1] ;
+        len -= 2;
+        addr += 2;
+    }
+
+    sum = (sum & 0xffff) + (sum >> 16);
+    sum = (sum & 0xffff) + (sum >> 16);
+
+    return (sum^0xffff);
+}
 @
 
 \section{IP protocols}
@@ -3777,26 +3844,24 @@ struct Ip4hdr
 
 \section{IO}
 
-% put the hnputs, hngets here
 
 \subsection{Writing, [[ipoput4()]]}
-
-% IP out put v4
+% IP out-put v4
 
 % syswrite(..., /net/x/y/data) -> udpkick | ... -> <>
 <<function ipoput4>>=
 int
 ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
 {
-    Ipifc *ifc;
-    uchar *gate;
-    ulong fragoff;
-    Block *xp, *nb;
-    Ip4hdr *eh, *feh;
-    int lid, len, seglen, chunk, dlen, blklen, offset, medialen;
-    Route *r, *sr;
     IP *ip;
-    int rv = 0;
+    Ip4hdr *eh;
+    Ipifc *ifc;
+    Route *r, *sr;
+    uchar *gate;
+    int len, medialen;
+    int rv = OK_0;
+
+    <<[[ipoput4()]] locals>>
 
     ip = f->ip;
 
@@ -3808,166 +3873,33 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
     /* Number of uchars in data and ip header to write */
     len = blocklen(bp);
 
-    if(gating){
-        chunk = nhgets(eh->length);
-        if(chunk > len){
-            ip->stats[OutDiscards]++;
-            netlog(f, Logip, "short gated packet\n");
-            goto free;
-        }
-        if(chunk < len)
-            len = chunk;
-    }
-    if(len >= IP_MAX){
-        ip->stats[OutDiscards]++;
-        netlog(f, Logip, "exceeded ip max size %V\n", eh->dst);
-        goto free;
-    }
+    <<[[ipoput4()]] if gating>>
+
+    <<[[ipoput4()]] error if too big packet of length len>>
 
     r = v4lookup(f, eh->dst, c);
-    if(r == nil){
-        ip->stats[OutNoRoutes]++;
-        netlog(f, Logip, "no interface %V\n", eh->dst);
-        rv = -1;
-        goto free;
-    }
+    <<[[ipoput4()]] error if no route r>>
 
     ifc = r->ifc;
-    if(r->type & (Rifc|Runi))
-        gate = eh->dst;
-    else
-    if(r->type & (Rbcast|Rmulti)) {
-        gate = eh->dst;
-        sr = v4lookup(f, eh->src, nil);
-        if(sr != nil && (sr->type & Runi))
-            ifc = sr->ifc;
-    }
-    else
-        gate = r->v4.gate;
+    <<[[ipoput4()]] set gate according to type of route>>
 
-    if(!gating)
+    if(!gating) {
         eh->vihl = IP_VER4|IP_HLEN4;
-    eh->ttl = ttl;
-    if(!gating)
         eh->tos = tos;
-
-    if(!canrlock(ifc))
-        goto free;
-    if(waserror()){
-        runlock(ifc);
-        nexterror();
     }
-    if(ifc->m == nil)
-        goto raise;
+    eh->ttl = ttl;
+
+    <<[[ipoput4()]] rlock ifc, goto free if cant>>
+    <<[[ipoput4()]] error if no medium attached to interface ifc>>
 
     /* If we dont need to fragment just send it */
-    if(c && c->maxfragsize && c->maxfragsize < ifc->maxtu)
-        medialen = c->maxfragsize - ifc->m->hsize;
+    <<[[ipoput4()]] if manual fragmentation setting>>
     else
         medialen = ifc->maxtu - ifc->m->hsize;
-    if(len <= medialen) {
-        if(!gating)
-            hnputs(eh->id, incref(&ip->id4));
-        hnputs(eh->length, len);
-        if(!gating){
-            eh->frag[0] = 0;
-            eh->frag[1] = 0;
-        }
-        eh->cksum[0] = 0;
-        eh->cksum[1] = 0;
-        hnputs(eh->cksum, ipcsum(&eh->vihl));
-        assert(bp->next == nil);
 
-        // Medium dispatch
-        ifc->m->bwrite(ifc, bp, V4, gate);
+    <<[[ipoput4()]] if no need to fragment, write simply to medium and return>>
+    <<[[ipoput4()]] else, need to fragment>>
 
-        runlock(ifc);
-        poperror();
-        return 0;
-    }
-
-if((eh->frag[0] & (IP_DF>>8)) && !gating) print("%V: DF set\n", eh->dst);
-
-    if(eh->frag[0] & (IP_DF>>8)){
-        ip->stats[FragFails]++;
-        ip->stats[OutDiscards]++;
-        icmpcantfrag(f, bp, medialen);
-        netlog(f, Logip, "%V: eh->frag[0] & (IP_DF>>8)\n", eh->dst);
-        goto raise;
-    }
-
-    seglen = (medialen - IP4HDR) & ~7;
-    if(seglen < 8){
-        ip->stats[FragFails]++;
-        ip->stats[OutDiscards]++;
-        netlog(f, Logip, "%V seglen < 8\n", eh->dst);
-        goto raise;
-    }
-
-    dlen = len - IP4HDR;
-    xp = bp;
-    if(gating)
-        lid = nhgets(eh->id);
-    else
-        lid = incref(&ip->id4);
-
-    offset = IP4HDR;
-    while(xp != nil && offset && offset >= BLEN(xp)) {
-        offset -= BLEN(xp);
-        xp = xp->next;
-    }
-    xp->rp += offset;
-
-    if(gating)
-        fragoff = nhgets(eh->frag)<<3;
-    else
-        fragoff = 0;
-    dlen += fragoff;
-    for(; fragoff < dlen; fragoff += seglen) {
-        nb = allocb(IP4HDR+seglen);
-        feh = (Ip4hdr*)(nb->rp);
-
-        memmove(nb->wp, eh, IP4HDR);
-        nb->wp += IP4HDR;
-
-        if((fragoff + seglen) >= dlen) {
-            seglen = dlen - fragoff;
-            hnputs(feh->frag, fragoff>>3);
-        }
-        else
-            hnputs(feh->frag, (fragoff>>3)|IP_MF);
-
-        hnputs(feh->length, seglen + IP4HDR);
-        hnputs(feh->id, lid);
-
-        /* Copy up the data area */
-        chunk = seglen;
-        while(chunk) {
-            if(!xp) {
-                ip->stats[OutDiscards]++;
-                ip->stats[FragFails]++;
-                freeblist(nb);
-                netlog(f, Logip, "!xp: chunk %d\n", chunk);
-                goto raise;
-            }
-            blklen = chunk;
-            if(BLEN(xp) < chunk)
-                blklen = BLEN(xp);
-            memmove(nb->wp, xp->rp, blklen);
-            nb->wp += blklen;
-            xp->rp += blklen;
-            chunk -= blklen;
-            if(xp->rp == xp->wp)
-                xp = xp->next;
-        }
-
-        feh->cksum[0] = 0;
-        feh->cksum[1] = 0;
-        hnputs(feh->cksum, ipcsum(&feh->vihl));
-        ifc->m->bwrite(ifc, nb, V4, gate);
-        ip->stats[FragCreates]++;
-    }
-    ip->stats[FragOKs]++;
 raise:
     runlock(ifc);
     poperror();
@@ -3977,12 +3909,188 @@ free:
 }
 @
 
+\subsubsection{Finding the gateway}
+
+<<[[ipoput4()]] set gate according to type of route>>=
+if(r->type & (Rifc|Runi))
+    gate = eh->dst;
+else
+if(r->type & (Rbcast|Rmulti)) {
+    gate = eh->dst;
+    sr = v4lookup(f, eh->src, nil);
+    if(sr != nil && (sr->type & Runi))
+        ifc = sr->ifc;
+}
+else
+    gate = r->v4.gate;
+@
+
 \subsubsection{Small send}
+
+<<[[ipoput4()]] if no need to fragment, write simply to medium and return>>=
+if(len <= medialen) {
+    if(!gating)
+        hnputs(eh->id, incref(&ip->id4));
+    hnputs(eh->length, len);
+    // no fragment
+    if(!gating){
+        eh->frag[0] = 0;
+        eh->frag[1] = 0;
+    }
+    eh->cksum[0] = 0;
+    eh->cksum[1] = 0;
+    hnputs(eh->cksum, ipcsum(&eh->vihl));
+    assert(bp->next == nil);
+
+    // Medium dispatch
+    ifc->m->bwrite(ifc, bp, V4, gate);
+
+    runlock(ifc);
+    poperror();
+    return OK_0;
+}
+@
 
 \subsubsection{Fragmentation}
 
+<<[[ipoput4()]] locals>>=
+Ip4hdr *feh;
+ulong fragoff;
+Block *xp, *nb;
+int lid, seglen, chunk, dlen, blklen, offset;
+@
+
+<<[[ipoput4()]] else, need to fragment>>=
+if((eh->frag[0] & (IP_DF>>8)) && !gating) print("%V: DF set\n", eh->dst);
+
+if(eh->frag[0] & (IP_DF>>8)){
+    ip->stats[FragFails]++;
+    ip->stats[OutDiscards]++;
+    icmpcantfrag(f, bp, medialen);
+    netlog(f, Logip, "%V: eh->frag[0] & (IP_DF>>8)\n", eh->dst);
+    goto raise;
+}
+
+seglen = (medialen - IP4HDR) & ~7;
+if(seglen < 8){
+    ip->stats[FragFails]++;
+    ip->stats[OutDiscards]++;
+    netlog(f, Logip, "%V seglen < 8\n", eh->dst);
+    goto raise;
+}
+
+dlen = len - IP4HDR;
+xp = bp;
+if(gating)
+    lid = nhgets(eh->id);
+else
+    lid = incref(&ip->id4);
+
+offset = IP4HDR;
+while(xp != nil && offset && offset >= BLEN(xp)) {
+    offset -= BLEN(xp);
+    xp = xp->next;
+}
+xp->rp += offset;
+
+if(gating)
+    fragoff = nhgets(eh->frag)<<3;
+else
+    fragoff = 0;
+dlen += fragoff;
+
+for(; fragoff < dlen; fragoff += seglen) {
+    nb = allocb(IP4HDR+seglen);
+    feh = (Ip4hdr*)(nb->rp);
+
+    memmove(nb->wp, eh, IP4HDR);
+    nb->wp += IP4HDR;
+
+    if((fragoff + seglen) >= dlen) {
+        seglen = dlen - fragoff;
+        hnputs(feh->frag, fragoff>>3);
+    }
+    else
+        hnputs(feh->frag, (fragoff>>3)|IP_MF);
+
+    hnputs(feh->length, seglen + IP4HDR);
+    hnputs(feh->id, lid);
+
+    /* Copy up the data area */
+    chunk = seglen;
+    while(chunk) {
+        if(!xp) {
+            ip->stats[OutDiscards]++;
+            ip->stats[FragFails]++;
+            freeblist(nb);
+            netlog(f, Logip, "!xp: chunk %d\n", chunk);
+            goto raise;
+        }
+        blklen = chunk;
+        if(BLEN(xp) < chunk)
+            blklen = BLEN(xp);
+        memmove(nb->wp, xp->rp, blklen);
+        nb->wp += blklen;
+        xp->rp += blklen;
+        chunk -= blklen;
+        if(xp->rp == xp->wp)
+            xp = xp->next;
+    }
+
+    feh->cksum[0] = 0;
+    feh->cksum[1] = 0;
+    hnputs(feh->cksum, ipcsum(&feh->vihl));
+
+    // Medium dispatch, send this fragment
+    ifc->m->bwrite(ifc, nb, V4, gate);
+
+    ip->stats[FragCreates]++;
+}
+ip->stats[FragOKs]++;
+@
+
+
+\subsubsection{Error managment}
+
+<<constant IP_MAX>>=
+IP_MAX=   64*1024,  /* Max. Internet packet size, v4 & v6 */
+@
+
+<<[[ipoput4()]] error if too big packet of length len>>=
+if(len >= IP_MAX){
+    ip->stats[OutDiscards]++;
+    netlog(f, Logip, "exceeded ip max size %V\n", eh->dst);
+    goto free;
+}
+@
+
+<<[[ipoput4()]] error if no route r>>=
+if(r == nil){
+    ip->stats[OutNoRoutes]++;
+    netlog(f, Logip, "no interface %V\n", eh->dst);
+    rv = -1;
+    goto free;
+}
+@
+
+<<[[ipoput4()]] error if no medium attached to interface ifc>>=
+if(ifc->m == nil)
+    goto raise;
+@
+
+<<[[ipoput4()]] rlock ifc, goto free if cant>>=
+if(!canrlock(ifc))
+    goto free;
+if(waserror()){
+    runlock(ifc);
+    nexterror();
+}
+@
+
 \subsection{Reading, [[ipiput4()]]}
 
+% you don't know what is the destination! As opposed to
+% ipoput, here there is not yet any associated Conv.
 
 % ??? network interrupt?? -> <>
 <<function ipiput4>>=
@@ -4101,7 +4209,9 @@ if(r->ifc == nil) panic("nil route rfc");
         ip->stats[ForwDatagrams]++;
         tos = h->tos;
         hop = h->ttl;
-        ipoput4(f, bp, 1, hop - 1, tos, &conv);
+
+        ipoput4(f, bp, true, hop - 1, tos, &conv);
+
         return;
     }
 
@@ -4122,6 +4232,7 @@ if(r->ifc == nil) panic("nil route rfc");
 
     proto = h->proto;
     p = Fsrcvpcol(f, proto);
+
     if(p != nil && p->rcv != nil) {
         ip->stats[InDelivers]++;
 
@@ -4129,6 +4240,7 @@ if(r->ifc == nil) panic("nil route rfc");
         (*p->rcv)(p, ifc, bp);
         return;
     }
+
     ip->stats[InDiscards]++;
     ip->stats[InUnknownProtos]++;
     freeblist(bp);
@@ -4136,7 +4248,23 @@ if(r->ifc == nil) panic("nil route rfc");
 @
 
 
+\subsubsection{Protocol dispatching}
 
+<<function Fsrcvpcol>>=
+Proto*
+Fsrcvpcol(Fs* f, uchar proto)
+{
+    <<[[Fsrcvpcol()]] if ipmux>>
+    else
+        return f->t2p[proto];
+}
+@
+
+\subsubsection{Small receive}
+
+\subsubsection{Defragmentation}
+
+\subsubsection{Error managment}
 
 \section{IP Interface}
 
@@ -4382,6 +4510,62 @@ myipaddr(uchar *ip, char *net)
     ipmove(ip, IPnoaddr);
     return -1;
 }
+@
+
+\section{Advanced features}
+
+\subsection{Gating}
+
+<<[[ipoput4()]] if gating>>=
+if(gating){
+    chunk = nhgets(eh->length);
+    if(chunk > len){
+        ip->stats[OutDiscards]++;
+        netlog(f, Logip, "short gated packet\n");
+        goto free;
+    }
+    if(chunk < len)
+        len = chunk;
+}
+@
+
+\subsection{Manual fragmentation setting}
+
+<<[[ipoput4()]] if manual fragmentation setting>>=
+if(c && c->maxfragsize && c->maxfragsize < ifc->maxtu)
+    medialen = c->maxfragsize - ifc->m->hsize;
+@
+
+<<[[Conv(kernel)]] other fields>>=
+int maxfragsize;    /* If set, used for fragmentation */
+@
+
+<<[[ipwrite()]], Qctl case, switch command esleif cases>>=
+else if(strcmp(cb->f[0], "maxfragsize") == 0){
+    if(cb->nf < 2)
+        error("maxfragsize needs size");
+
+    cv->maxfragsize = (int)strtol(cb->f[1], nil, 0);
+
+} 
+@
+
+\subsection{IP forwarding}
+
+<<[[Ipifc(kernel)]] other fields>>=
+bool reassemble; /* reassemble IP packets before forwarding */
+@
+
+\subsection{IP multiplexer}
+
+%XXX
+<<[[Fs(kernel)]] other fields>>=
+Proto*  ipmux;      /* kludge for finding an ip multiplexor */
+@
+
+<<[[Fsrcvpcol()]] if ipmux>>=
+if(f->ipmux)
+    return f->ipmux;
 @
 
 \chapter{Ethernet}
@@ -5073,6 +5257,8 @@ routewrite(Fs *f, Chan *c, char *p, int n)
 \chapter{Basic Transmission, UDP}
 % Unreliable, Unordered :)
 
+%RFC 768 User Datagram Protocol
+
 % when do ip/ipconfig then can see that 4 InDatagrams and 2 OutDatagrams
 % and 2 ports :)
 
@@ -5100,10 +5286,11 @@ udpinit(Fs *fs)
     udp->ctl = udpctl;
 
     udp->rcv = udpiput;
-    udp->advise = udpadvise;
 
     udp->state = udpstate;
     udp->stats = udpstats;
+
+    udp->advise = udpadvise;
 
     udp->ipproto = IP_UDPPROTO;
 
@@ -5114,10 +5301,17 @@ udpinit(Fs *fs)
 }
 @
 %less: make it a global with intializer?
+% no ->inuse! because UDP is not a connected protocol? because
+% it's stateless?
 
 <<constant IP_UDPPROTO>>=
 IP_UDPPROTO = 17,
 @
+
+<<constant Nchans>>=
+Nchans=   1024,
+@
+% kernel/.../ip.h
 
 \section{Protocol data structures}
 
@@ -5132,7 +5326,7 @@ struct Udppriv
     <<[[Udppriv]] stat fields>>
 };
 @
-%todo: Ipht?
+%todo: Ipht? Ip hash table?
 
 \subsection{Statistics}
 
@@ -5173,7 +5367,7 @@ struct Udp4hdr
     uchar   length[2];  /* packet length */
     uchar   id[2];      /* Identification */
     uchar   frag[2];    /* Fragment information */
-    uchar   Unused;
+    uchar   Unused; // ttl
 
     uchar   udpproto;   /* Protocol */
     uchar   udpplen[2]; /* Header plus data length */
@@ -5189,7 +5383,8 @@ struct Udp4hdr
 @
 % do not change the order here :)
 % essential IP header + port info.
-% why another checksum?
+% why another checksum? because the other is the header checksum!
+% here we want a checksum of the data.
 
 <<constant UDP4_IPHDR_SZ>>=
 UDP4_IPHDR_SZ = 20,
@@ -5643,6 +5838,7 @@ struct Udpcb
     <<[[Idpcb]] other fields>>
 };
 @
+%todo: need QLock really?
 
 
 <<[[Idpcb]] other fields>>=
@@ -5724,6 +5920,10 @@ if(ucb->headers) {
 
 \chapter{Reliable Transmission, IL}
 
+% For Internet Link
+
+% see il.ps
+
 %was in 9legacy since it has been deleted of recent plan9
 
 \section{Protocol initialisation}
@@ -5741,19 +5941,19 @@ ilinit(Fs *f)
 
     il->name = "il";
     il->create = ilcreate;
-    il->rcv = iliput;
+    il->close = ilclose;
 
     il->connect = ilconnect;
     il->announce = ilannounce;
     il->ctl = nil;
 
-    il->close = ilclose;
-    il->advise = iladvise;
+    il->rcv = iliput;
 
     il->state = ilstate;
     il->stats = ilxstats;
 
     il->inuse = ilinuse;
+    il->advise = iladvise;
 
     il->gc = nil;
     il->ipproto = IP_ILPROTO;
@@ -5765,23 +5965,66 @@ ilinit(Fs *f)
 }
 @
 
+<<constant IP_ILPROTO>>=
+IP_ILPROTO	= 40,
+@
+
+% as opposed to UDP we will need to do some adjustments based on
+% time feedback on how long a packet ack, congestion, etc.
+<<function inittimescale>>=
+/* calculate scale constants that converts fast ticks to ms (more or less) */
+static void
+inittimescale(void)
+{
+    uvlong hz;
+
+    fastticks(&hz);
+    if(hz > 1000){
+        scalediv = hz/1000;
+        scalemul = 1;
+    } else {
+        scalediv = 1;
+        scalemul = 1000/hz;
+    }
+}
+@
+
+<<global scalexxx>>=
+static	ulong	scalediv, scalemul;
+@
+
+
+<<function scalednconv>>=
+ulong
+scalednconv(void)
+{
+    if(cpuserver && conf.npage*BY2PG >= 128*MB)
+        return Nchans*4;
+    return Nchans;
+}
+@
+
 \section{Protocol data structures}
 
 \subsection{IL state}
 
+% look nice, simple
 <<enum _anon_ (kernel/network/ip/il.c)>>=
-enum				/* Connection state */
+enum il_state				/* Connection state */
 {
     Ilclosed,
+
     Ilsyncer,
     Ilsyncee,
     Ilestablished,
     Illistening,
     Ilclosing,
+
     Ilopening,		/* only for file server */
 };
 @
-% look nice, simple
+%note: il.ps does not have Illistening but 
+%note: il.ps does not have Ilopening
 
 <<global ilstates>>=
 char	*ilstates[] = 
@@ -5796,9 +6039,170 @@ char	*ilstates[] =
 };
 @
 
+% ... -> Fsprotoclone -> <>
+<<function ilinuse>>=
+static int
+ilinuse(Conv *c)
+{
+    Ilcb *ic;
+
+    ic = (Ilcb*)(c->ptcl);
+    return ic->state != Ilclosed;
+
+}
+@
+% there is a state now, and even if the inuse is at zero, the
+% conversation may still be in use and must be propery shutdown
+
+\subsection{IL control packet type}
+
+<<enum _anon_ (kernel/network/ip/il.c)2>>=
+enum				/* Packet types */
+{
+    Ilsync,
+    Ildata,
+    Ildataquery,
+    Ilack,
+    Ilquery,
+    Ilstate,
+    Ilclose,
+};
+@
+
+<<global iltype>>=
+char	*iltype[] = 
+{	
+    "sync",
+    "data",
+    "dataquery",
+    "ack",
+    "query",
+    "state",
+    "close" 
+};
+@
+
+\subsection{[[Ilcb]]}
+% private to conv
+
+% TODO: LP split!
+<<struct Ilcb>>=
+struct Ilcb			/* Control block */
+{
+    // enum<il_state>
+    int	state;		/* Connection state */
+
+    Conv	*conv;
+
+    QLock	ackq;		/* Unacknowledged queue */
+    Block	*unacked;
+    Block	*unackedtail;
+    ulong	unackedbytes;
+    QLock	outo;		/* Out of order packet queue */
+    Block	*outoforder;
+    ulong	next;		/* Id of next to send */
+    ulong	recvd;		/* Last packet received */
+    ulong	acksent;	/* Last packet acked */
+    ulong	start;		/* Local start id */
+    ulong	rstart;		/* Remote start id */
+    int	window;		/* Maximum receive window */
+    int	rxquery;	/* number of queries on this connection */
+    int	rxtot;		/* number of retransmits on this connection */
+    int	rexmit;		/* number of retransmits of *unacked */
+    ulong	qt[Nqt+1];	/* state table for query messages */
+    int	qtx;		/* ... index into qt */
+
+    /* if set, fasttimeout causes a connection request to terminate after 4*Iltickms */
+    int	fasttimeout;
+
+    /* timers */
+    ulong	lastxmit;	/* time of last xmit */
+    ulong	lastrecv;	/* time of last recv */
+    ulong	timeout;	/* retransmission time for *unacked */
+    ulong	acktime;	/* time to send next ack */
+    ulong	querytime;	/* time to send next query */
+
+    /* adaptive measurements */
+    int	delay;		/* Average of the fixed rtt delay */
+    int	rate;		/* Average uchar rate */
+    int	mdev;		/* Mean deviation of rtt */
+    int	maxrtt;		/* largest rtt seen */
+    ulong	rttack;		/* The ack we are waiting for */
+    int	rttlen;		/* Length of rttack packet */
+    uvlong	rttstart;	/* Time we issued rttack packet */
+};
+@
+
+
+
 \subsection{[[Ilpriv]]}
+% private to protocol
+
+<<struct Ilpriv>>=
+struct Ilpriv
+{
+    Ipht	ht;
+
+    ulong	dup;
+    ulong	dupb;
+
+    <<[[Ilpriv]] stat fields>>
+
+    /* keeping track of the ack kproc */
+    int	ackprocstarted;
+    QLock	apl;
+};
+@
 
 \subsection{Statistics}
+
+<<[[Ilpriv]] stat fields>>=
+ulong	csumerr;		/* checksum errors */
+ulong	hlenerr;		/* header length error */
+ulong	lenerr;			/* short packet */
+ulong	order;			/* out of order */
+ulong	rexmit;			/* retransmissions */
+@
+
+<<[[Ilpriv]] stat fields>>=
+// map<enum<il_stat>, uvlong>
+uvlong	stats[Nstats];
+@
+
+<<enum _anon_ (kernel/network/ip/il.c)6>>=
+enum il_stat
+{
+    InMsgs,
+    OutMsgs,
+    CsumErrs,		/* checksum errors */
+    HlenErrs,		/* header length error */
+    LenErrs,		/* short packet */
+    OutOfOrder,		/* out of order */
+    Retrans,		/* retransmissions */
+    DupMsg,
+    DupBytes,
+    DroppedMsgs,
+
+    Nstats,
+};
+@
+
+<<global statnames (kernel/network/ip/il.c)>>=
+static char *statnames[] =
+{
+[InMsgs]	"InMsgs",
+[OutMsgs]	"OutMsgs",
+[CsumErrs]	"CsumErrs",
+[HlenErrs]	"HlenErr",
+[LenErrs]	"LenErrs",
+[OutOfOrder]	"OutOfOrder",
+[Retrans]	"Retrans",
+[DupMsg]	"DupMsg",
+[DupBytes]	"DupBytes",
+[DroppedMsgs]	"DroppedMsgs",
+};
+@
+
 
 \section{Protocol header}
 
@@ -5829,31 +6233,775 @@ struct Ilhdr
     uchar	ilack[4];	/* Acked sequence */
 };
 @
+% do not change the order!
+
+<<constant IL_xxxSIZE>>=
+IL_IPSIZE 	= 20,
+IL_HDRSIZE	= 18,	
+@
 
 \section{[[/net/il/clone]]}
 
+<<function ilcreate>>=
+static void
+ilcreate(Conv *c)
+{
+    c->rq = qopen(Maxrq, 0, 0, c);
+    c->wq = qbypass(ilkick, c);
+}
+@
+
+<<constant Maxrq(IL)>>=
+Maxrq		= 64*1024,
+@
+
+% see also inuse() above, related to clone
+
 \section{[[/net/il/x/ctl]]}
+
+<<enum mode (kernel/network/ip/il.c)>>=
+enum mode {
+    IL_LISTEN	= 0,
+    IL_CONNECT	= 1,
+};
+@
 
 \subsection{Connect}
 
+<<function ilconnect>>=
+static char*
+ilconnect(Conv *c, char **argv, int argc)
+{
+    char *err;
+    char *p;
+    bool fast = false;
+
+    <<[[ilconnect()]] set fast>>
+
+    err = Fsstdconnect(c, argv, argc);
+    if(err != nil)
+        return err;
+    return ilstart(c, IL_CONNECT, fast);
+}
+@
+
+
+
 \subsection{Announce}
+
+<<function ilannounce>>=
+/* called with c locked */
+static char*
+ilannounce(Conv *c, char **argv, int argc)
+{
+    char *err;
+
+    err = Fsstdannounce(c, argv, argc);
+    if(err != nil)
+        return err;
+    err = ilstart(c, IL_LISTEN, false);
+    if(err != nil)
+        return err;
+    Fsconnected(c, nil);
+
+    return nil;
+}
+@
+
 
 \section{IO}
 
 \subsection{Writing, [[ilkick()]]}
 
+<<function ilkick>>=
+void
+ilkick(void *x, Block *bp)
+{
+    Conv *c = x;
+    Ilhdr *ih;
+    Ilcb *ic;
+    int dlen;
+    ulong id, ack;
+    Fs *f;
+    Ilpriv *priv;
+
+    f = c->p->f;
+    priv = c->p->priv;
+    ic = (Ilcb*)c->ptcl;
+
+    if(bp == nil)
+        return;
+
+    switch(ic->state) {
+    case Ilclosed:
+    case Illistening:
+    case Ilclosing:
+        freeblist(bp);
+        qhangup(c->rq, nil);
+        return;
+    }
+
+    dlen = blocklen(bp);
+
+    /* Make space to fit il & ip */
+    bp = padblock(bp, IL_IPSIZE+IL_HDRSIZE);
+    ih = (Ilhdr *)(bp->rp);
+    ih->vihl = IP_VER4;
+
+    /* Ip fields */
+    ih->frag[0] = 0;
+    ih->frag[1] = 0;
+    v6tov4(ih->dst, c->raddr);
+    v6tov4(ih->src, c->laddr);
+    ih->proto = IP_ILPROTO;
+
+    /* Il fields */
+    hnputs(ih->illen, dlen+IL_HDRSIZE);
+    hnputs(ih->ilsrc, c->lport);
+    hnputs(ih->ildst, c->rport);
+
+    qlock(&ic->ackq);
+    id = ic->next++;
+    hnputl(ih->ilid, id);
+    ack = ic->recvd;
+    hnputl(ih->ilack, ack);
+    ic->acksent = ack;
+    ic->acktime = NOW + AckDelay;
+    ih->iltype = Ildata;
+    ih->ilspec = 0;
+    ih->ilsum[0] = 0;
+    ih->ilsum[1] = 0;
+
+    /* Checksum of ilheader plus data (not ip & no pseudo header) */
+    if(ilcksum)
+        hnputs(ih->ilsum, ptclcsum(bp, IL_IPSIZE, dlen+IL_HDRSIZE));
+
+    ilackq(ic, bp);
+
+    qunlock(&ic->ackq);
+
+    /* Start the round trip timer for this packet if the timer is free */
+    if(ic->rttack == 0) {
+        ic->rttack = id;
+        ic->rttstart = fastticks(nil);
+        ic->rttlen = dlen + IL_IPSIZE + IL_HDRSIZE;
+    }
+
+    if(later(NOW, ic->timeout, nil))
+        ilsettimeout(ic);
+
+    // Let's go, let's send the data
+    ipoput4(f, bp, false, c->ttl, c->tos, c);
+
+    priv->stats[OutMsgs]++;
+}
+@
+
 \subsection{Reading, [[iliput()]]}
+
+<<function iliput>>=
+void
+iliput(Proto *il, Ipifc*, Block *bp)
+{
+    char *st;
+    Ilcb *ic;
+    Ilhdr *ih;
+    uchar raddr[IPaddrlen];
+    uchar laddr[IPaddrlen];
+    ushort sp, dp, csum;
+    int plen, illen;
+    Conv *new, *s;
+    Ilpriv *ipriv;
+
+    ipriv = il->priv;
+
+    ih = (Ilhdr *)bp->rp;
+    plen = blocklen(bp);
+    if(plen < IL_IPSIZE+IL_HDRSIZE){
+        //netlog(il->f, Logil, "il: hlenerr\n");
+        ipriv->stats[HlenErrs]++;
+        goto raise;
+    }
+
+    illen = nhgets(ih->illen);
+    if(illen+IL_IPSIZE > plen){
+        //netlog(il->f, Logil, "il: lenerr\n");
+        ipriv->stats[LenErrs]++;
+        goto raise;
+    }
+
+    sp = nhgets(ih->ildst);
+    dp = nhgets(ih->ilsrc);
+    v4tov6(raddr, ih->src);
+    v4tov6(laddr, ih->dst);
+
+    if((csum = ptclcsum(bp, IL_IPSIZE, illen)) != 0) {
+        if(ih->iltype > Ilclose)
+            st = "?";
+        else
+            st = iltype[ih->iltype];
+        ipriv->stats[CsumErrs]++;
+        //netlog(il->f, Logil, "il: cksum %ux %s, pkt(%ux id %ud ack %I/%d->%d)\n",
+//			csum, st, nhgetl(ih->ilid), nhgetl(ih->ilack), raddr, sp, dp);
+        goto raise;
+    }
+
+    qlock(il);
+    s = iphtlook(&ipriv->ht, raddr, dp, laddr, sp);
+    if(s == nil){
+        if(ih->iltype == Ilsync)
+            ilreject(il->f, ih);		/* no listener */
+        qunlock(il);
+        goto raise;
+    }
+
+    ic = (Ilcb*)s->ptcl;
+    if(ic->state == Illistening){
+        if(ih->iltype != Ilsync){
+            qunlock(il);
+            if(ih->iltype > Ilclose)
+                st = "?";
+            else
+                st = iltype[ih->iltype];
+            ilreject(il->f, ih);		/* no channel and not sync */
+            //netlog(il->f, Logil, "il: no channel, pkt(%s id %ud ack %ud %I/%ud->%ud)\n",
+//				st, nhgetl(ih->ilid), nhgetl(ih->ilack), raddr, sp, dp); 
+            goto raise;
+        }
+
+        new = Fsnewcall(s, raddr, dp, laddr, sp, V4);
+        if(new == nil){
+            qunlock(il);
+            //netlog(il->f, Logil, "il: bad newcall %I/%ud->%ud\n", raddr, sp, dp);
+            ilsendctl(s, ih, Ilclose, 0, nhgetl(ih->ilid), 0);
+            goto raise;
+        }
+        s = new;
+
+        ic = (Ilcb*)s->ptcl;
+    
+        ic->conv = s;
+        ic->state = Ilsyncee;
+        ilcbinit(ic);
+        ic->rstart = nhgetl(ih->ilid);
+        iphtadd(&ipriv->ht, s);
+    }
+
+    qlock(s);
+    qunlock(il);
+    if(waserror()){
+        qunlock(s);
+        nexterror();
+    }
+
+    ilprocess(s, ih, bp);
+
+    qunlock(s);
+    poperror();
+    return;
+raise:
+    freeblist(bp);
+}
+@
+
+
+\section{State machine}
+
+% two-way handshake
+
+\subsection{[[ilsendctl()]]}
+
+<<function ilsendctl>>=
+void
+ilsendctl(Conv *ipc, Ilhdr *inih, int type, ulong id, ulong ack, int ilspec)
+{
+    Ilhdr *ih;
+    Ilcb *ic;
+    Block *bp;
+    int ttl, tos;
+
+    bp = allocb(IL_IPSIZE+IL_HDRSIZE);
+    bp->wp += IL_IPSIZE+IL_HDRSIZE;
+
+    ih = (Ilhdr *)(bp->rp);
+    ih->vihl = IP_VER4;
+
+    /* Ip fields */
+    ih->proto = IP_ILPROTO;
+    hnputs(ih->illen, IL_HDRSIZE);
+    ih->frag[0] = 0;
+    ih->frag[1] = 0;
+    if(inih) {
+        hnputl(ih->dst, nhgetl(inih->src));
+        hnputl(ih->src, nhgetl(inih->dst));
+        hnputs(ih->ilsrc, nhgets(inih->ildst));
+        hnputs(ih->ildst, nhgets(inih->ilsrc));
+        hnputl(ih->ilid, nhgetl(inih->ilack));
+        hnputl(ih->ilack, nhgetl(inih->ilid));
+        ttl = MAXTTL;
+        tos = DFLTTOS;
+    }
+    else {
+        v6tov4(ih->dst, ipc->raddr);
+        v6tov4(ih->src, ipc->laddr);
+        hnputs(ih->ilsrc, ipc->lport);
+        hnputs(ih->ildst, ipc->rport);
+        hnputl(ih->ilid, id);
+        hnputl(ih->ilack, ack);
+        ic = (Ilcb*)ipc->ptcl;
+        ic->acksent = ack;
+        ic->acktime = NOW;
+        ttl = ipc->ttl;
+        tos = ipc->tos;
+    }
+    ih->iltype = type;
+    ih->ilspec = ilspec;
+    ih->ilsum[0] = 0;
+    ih->ilsum[1] = 0;
+
+    if(ilcksum)
+        hnputs(ih->ilsum, ptclcsum(bp, IL_IPSIZE, IL_HDRSIZE));
+
+if(ipc==nil)
+    panic("ipc is nil caller is %#p", getcallerpc(&ipc));
+if(ipc->p==nil)
+    panic("ipc->p is nil");
+
+    //netlog(ipc->p->f, Logilmsg, "ctl(%s id %d ack %d %d->%d)\n",
+    //		iltype[ih->iltype], nhgetl(ih->ilid), nhgetl(ih->ilack), 
+    //		nhgets(ih->ilsrc), nhgets(ih->ildst));
+
+    ipoput4(ipc->p->f, bp, false, ttl, tos, ipc);
+}
+@
+% ipc for conv ??
+
+
+\subsection{[[ilprocess()]]}
+
+<<function ilprocess>>=
+/* DEBUG */
+void
+ilprocess(Conv *s, Ilhdr *h, Block *bp)
+{
+    Ilcb *ic;
+
+    ic = (Ilcb*)s->ptcl;
+
+    USED(ic);
+    //netlog(s->p->f, Logilmsg, "%11s rcv %lud/%lud snt %lud/%lud pkt(%s id %d ack %ud %ud->%ud) ",
+//		ilstates[ic->state],  ic->rstart, ic->recvd, ic->start, 
+//		ic->next, iltype[h->iltype], nhgetl(h->ilid), 
+//		nhgetl(h->ilack), nhgets(h->ilsrc), nhgets(h->ildst));
+
+    _ilprocess(s, h, bp);
+
+    //netlog(s->p->f, Logilmsg, "%11s rcv %lud snt %lud\n", ilstates[ic->state], ic->recvd, ic->next);
+}
+@
+
+
+<<function _ilprocess>>=
+void
+_ilprocess(Conv *s, Ilhdr *h, Block *bp)
+{
+    Ilcb *ic;
+    ulong id, ack;
+    Ilpriv *priv;
+
+    id = nhgetl(h->ilid);
+    ack = nhgetl(h->ilack);
+
+    ic = (Ilcb*)s->ptcl;
+
+    ic->lastrecv = NOW;
+    ic->querytime = NOW + QueryTime;
+    priv = s->p->priv;
+    priv->stats[InMsgs]++;
+
+    switch(ic->state) {
+    default:
+        //netlog(s->p->f, Logil, "il: unknown state %d\n", ic->state);
+    case Ilclosed:
+        freeblist(bp);
+        break;
+    case Ilsyncer:
+        switch(h->iltype) {
+        default:
+            break;
+        case Ilsync:
+            if(ack != ic->start)
+                ilhangup(s, "connection rejected");
+            else {
+                ic->recvd = id;
+                ic->rstart = id;
+                ilsendctl(s, nil, Ilack, ic->next, ic->recvd, 0);
+                ic->state = Ilestablished;
+                ic->fasttimeout = 0;
+                ic->rexmit = 0;
+                Fsconnected(s, nil);
+                ilpullup(s);
+            }
+            break;
+        case Ilclose:
+            if(ack == ic->start)
+                ilhangup(s, "connection rejected");
+            break;
+        }
+        freeblist(bp);
+        break;
+    case Ilsyncee:
+        switch(h->iltype) {
+        default:
+            break;
+        case Ilsync:
+            if(id != ic->rstart || ack != 0){
+                illocalclose(s);
+            } else {
+                ic->recvd = id;
+                ilsendctl(s, nil, Ilsync, ic->start, ic->recvd, 0);
+            }
+            break;
+        case Ilack:
+            if(ack == ic->start) {
+                ic->state = Ilestablished;
+                ic->fasttimeout = 0;
+                ic->rexmit = 0;
+                ilpullup(s);
+            }
+            break;
+        case Ildata:
+            if(ack == ic->start) {
+                ic->state = Ilestablished;
+                ic->fasttimeout = 0;
+                ic->rexmit = 0;
+                goto established;
+            }
+            break;
+        case Ilclose:
+            if(ack == ic->start)
+                ilhangup(s, "remote close");
+            break;
+        }
+        freeblist(bp);
+        break;
+    case Ilestablished:
+    established:
+        switch(h->iltype) {
+        case Ilsync:
+            if(id != ic->rstart)
+                ilhangup(s, "remote close");
+            else
+                ilsendctl(s, nil, Ilack, ic->next, ic->rstart, 0);
+            freeblist(bp);	
+            break;
+        case Ildata:
+            /*
+             * avoid consuming all the mount rpc buffers in the
+             * system.  if the input queue is too long, drop this
+             * packet.
+             */
+            if (s->rq && qlen(s->rq) >= Maxrq) {
+                priv->stats[DroppedMsgs]++;
+                freeblist(bp);
+                break;
+            }
+
+            ilackto(ic, ack, bp);
+            iloutoforder(s, h, bp);
+            ilpullup(s);
+            break;
+        case Ildataquery:
+            ilackto(ic, ack, bp);
+            iloutoforder(s, h, bp);
+            ilpullup(s);
+            ilsendctl(s, nil, Ilstate, ic->next, ic->recvd, h->ilspec);
+            break;
+        case Ilack:
+            ilackto(ic, ack, bp);
+            freeblist(bp);
+            break;
+        case Ilquery:
+            ilackto(ic, ack, bp);
+            ilsendctl(s, nil, Ilstate, ic->next, ic->recvd, h->ilspec);
+            freeblist(bp);
+            break;
+        case Ilstate:
+            if(ack >= ic->rttack)
+                ic->rttack = 0;
+            ilackto(ic, ack, bp);
+            if(h->ilspec > Nqt)
+                h->ilspec = 0;
+            if(ic->qt[h->ilspec] > ack){
+                ilrexmit(ic);
+                ilsettimeout(ic);
+            }
+            freeblist(bp);
+            break;
+        case Ilclose:
+            freeblist(bp);
+            if(ack < ic->start || ack > ic->next) 
+                break;
+            ic->recvd = id;
+            ilsendctl(s, nil, Ilclose, ic->next, ic->recvd, 0);
+            ic->state = Ilclosing;
+            ilsettimeout(ic);
+            ilfreeq(ic);
+            break;
+        }
+        break;
+    case Illistening:
+        freeblist(bp);
+        break;
+    case Ilclosing:
+        switch(h->iltype) {
+        case Ilclose:
+            ic->recvd = id;
+            ilsendctl(s, nil, Ilclose, ic->next, ic->recvd, 0);
+            if(ack == ic->next)
+                ilhangup(s, nil);
+            break;
+        default:
+            break;
+        }
+        freeblist(bp);
+        break;
+    }
+}
+@
+
+
+\subsection{Start}
+% Closed
+
+% (ilconnect | ilannounce) -> <>
+<<function ilstart>>=
+char*
+ilstart(Conv *c, int type, bool fasttimeout)
+{
+    Ilcb *ic;
+    Ilpriv *ipriv;
+    char kpname[KNAMELEN];
+
+    ipriv = c->p->priv;
+
+    if(ipriv->ackprocstarted == 0){
+        qlock(&ipriv->apl);
+        if(ipriv->ackprocstarted == 0){
+            sprint(kpname, "#I%dilack", c->p->f->dev);
+            kproc(kpname, ilackproc, c->p);
+            ipriv->ackprocstarted = 1;
+        }
+        qunlock(&ipriv->apl);
+    }
+
+    ic = (Ilcb*)c->ptcl;
+    ic->conv = c;
+
+    if(ic->state != Ilclosed)
+        return nil;
+
+    ilcbinit(ic);
+
+    if(fasttimeout){
+        /* timeout if we can't connect quickly */
+        ic->fasttimeout = 1;
+        ic->timeout = NOW+Iltickms;
+        ic->rexmit = MaxRexmit - 4;
+    };
+
+    switch(type) {
+    case IL_CONNECT:
+        ic->state = Ilsyncer;
+        iphtadd(&ipriv->ht, c);
+        ilsendctl(c, nil, Ilsync, ic->start, ic->recvd, 0);
+        break;
+    case IL_LISTEN:
+        ic->state = Illistening;
+        iphtadd(&ipriv->ht, c);
+        break;
+    default:
+        //netlog(c->p->f, Logil, "il: start: type %d\n", type);
+        break;
+    }
+
+    return nil;
+}
+@
+
+
+
+<<function ilcbinit>>=
+void
+ilcbinit(Ilcb *ic)
+{
+    ic->start = nrand(0x1000000);
+    ic->next = ic->start+1;
+    ic->recvd = 0;
+    ic->window = Defaultwin;
+    ic->unackedbytes = 0;
+    ic->unacked = nil;
+    ic->outoforder = nil;
+    ic->rexmit = 0;
+    ic->rxtot = 0;
+    ic->rxquery = 0;
+    ic->qtx = 1;
+    ic->fasttimeout = 0;
+
+    /* timers */
+    ic->delay = DefRtt<<LogAGain;
+    ic->mdev = DefRtt<<LogDGain;
+    ic->rate = DefByteRate<<LogAGain;
+    ic->querytime = NOW + QueryTime;
+    ic->lastrecv = NOW;	/* or we'll timeout right away */
+    ilsettimeout(ic);
+}
+@
+% >> >> >>
+
+\subsection{Close}
+% Closing
+
+% ipclose -> closeconv -> <>
+<<function ilclose>>=
+static void
+ilclose(Conv *c)
+{
+    Ilcb *ic;
+
+    ic = (Ilcb*)c->ptcl;
+
+    qclose(c->rq);
+    qclose(c->wq);
+    qclose(c->eq);
+
+    switch(ic->state) {
+    case Ilclosing:
+    case Ilclosed:
+        break;
+    case Ilsyncer:
+    case Ilsyncee:
+    case Ilestablished:
+        ic->state = Ilclosing;
+        ilsettimeout(ic);
+        ilsendctl(c, nil, Ilclose, ic->next, ic->recvd, 0);
+        break;
+    case Illistening:
+        illocalclose(c);
+        break;
+    }
+    ilfreeq(ic);
+}
+@
+
+<<function illocalclose>>=
+void
+illocalclose(Conv *c)
+{
+    Ilcb *ic;
+    Ilpriv *ipriv;
+
+    ipriv = c->p->priv;
+    ic = (Ilcb*)c->ptcl;
+    ic->state = Ilclosed;
+    iphtrem(&ipriv->ht, c);
+    ipmove(c->laddr, IPnoaddr);
+    c->lport = 0;
+}
+@
+
+\subsection{Syncer}
+
+\subsection{Syncee}
+
+\subsection{Establised}
+
+\section{Features}
+
+%\subsection{Delimiters preservation} ??
+% apparently TCP does not have this
+
+\subsection{Reliable datagram service}
+% via chcksum?
+
+<<global ilcksum>>=
+bool 	ilcksum = true;
+@
+% note that the ip checksum is on its header, here its on its
+% data.
+
+\subsection{In sequence delivery}
+
+\subsection{Retransmission of lost messages}
+
+\subsection{Out-of-order messages saving}
+
+\subsection{Adaptive timeouts}
+
+\subsection{Keep-alive}
+% to counter denial of service?
 
 \section{Other files}
 
 \subsection{[[/net/il/stats]]}
 
+<<function ilxstats>>=
+int
+ilxstats(Proto *il, char *buf, int len)
+{
+    Ilpriv *priv;
+    char *p, *e;
+    int i;
+
+    priv = il->priv;
+    p = buf;
+    e = p+len;
+    for(i = 0; i < Nstats; i++)
+        p = seprint(p, e, "%s: %llud\n", statnames[i], priv->stats[i]);
+    return p - buf;
+}
+@
+
 \subsection{[[/net/il/x/status]]}
+
+<<function ilstate>>=
+static int
+ilstate(Conv *c, char *state, int n)
+{
+    Ilcb *ic;
+
+    ic = (Ilcb*)(c->ptcl);
+    return snprint(state, n, "%s qin %d qout %d del %5.5d Br %5.5d md %5.5d una %5.5lud rex %5.5d rxq %5.5d max %5.5d\n",
+        ilstates[ic->state],
+        c->rq ? qlen(c->rq) : 0,
+        c->wq ? qlen(c->wq) : 0,
+        ic->delay>>LogAGain, ic->rate>>LogAGain, ic->mdev>>LogDGain,
+        ic->unackedbytes, ic->rxtot, ic->rxquery, ic->maxrtt);
+}
+@
 
 \section{Advanced features}
 
+\subsection{Fast timeout}
+
+<<[[ilconnect()]] set fast>>=
+/* huge hack to quickly try an il connection */
+if(argc > 1){
+    p = strstr(argv[1], "!fasttimeout");
+    if(p != nil){
+        *p = '\0';
+        fast = true;
+    }
+}
+@
+
+\subsection{Special extension}
+% ilspec field
+
 
 \chapter{Standard Reliable Transmission, TCP}
+
+% RFC 793, Transmission Control Protocol
 
 <<function tcpinit>>=
 void

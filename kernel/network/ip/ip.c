@@ -143,15 +143,20 @@ iprouting(Fs *f, int on)
 int
 ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
 {
+    IP *ip;
+    Ip4hdr *eh;
     Ipifc *ifc;
+    Route *r, *sr;
     uchar *gate;
+    int len, medialen;
+    int rv = OK_0;
+
+    /*s: [[ipoput4()]] locals */
+    Ip4hdr *feh;
     ulong fragoff;
     Block *xp, *nb;
-    Ip4hdr *eh, *feh;
-    int lid, len, seglen, chunk, dlen, blklen, offset, medialen;
-    Route *r, *sr;
-    IP *ip;
-    int rv = 0;
+    int lid, seglen, chunk, dlen, blklen, offset;
+    /*e: [[ipoput4()]] locals */
 
     ip = f->ip;
 
@@ -163,6 +168,7 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
     /* Number of uchars in data and ip header to write */
     len = blocklen(bp);
 
+    /*s: [[ipoput4()]] if gating */
     if(gating){
         chunk = nhgets(eh->length);
         if(chunk > len){
@@ -173,21 +179,28 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
         if(chunk < len)
             len = chunk;
     }
+    /*e: [[ipoput4()]] if gating */
+
+    /*s: [[ipoput4()]] error if too big packet of length len */
     if(len >= IP_MAX){
         ip->stats[OutDiscards]++;
         netlog(f, Logip, "exceeded ip max size %V\n", eh->dst);
         goto free;
     }
+    /*e: [[ipoput4()]] error if too big packet of length len */
 
     r = v4lookup(f, eh->dst, c);
+    /*s: [[ipoput4()]] error if no route r */
     if(r == nil){
         ip->stats[OutNoRoutes]++;
         netlog(f, Logip, "no interface %V\n", eh->dst);
         rv = -1;
         goto free;
     }
+    /*e: [[ipoput4()]] error if no route r */
 
     ifc = r->ifc;
+    /*s: [[ipoput4()]] set gate according to type of route */
     if(r->type & (Rifc|Runi))
         gate = eh->dst;
     else
@@ -199,31 +212,41 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
     }
     else
         gate = r->v4.gate;
+    /*e: [[ipoput4()]] set gate according to type of route */
 
-    if(!gating)
+    if(!gating) {
         eh->vihl = IP_VER4|IP_HLEN4;
-    eh->ttl = ttl;
-    if(!gating)
         eh->tos = tos;
+    }
+    eh->ttl = ttl;
 
+    /*s: [[ipoput4()]] rlock ifc, goto free if cant */
     if(!canrlock(ifc))
         goto free;
     if(waserror()){
         runlock(ifc);
         nexterror();
     }
+    /*e: [[ipoput4()]] rlock ifc, goto free if cant */
+    /*s: [[ipoput4()]] error if no medium attached to interface ifc */
     if(ifc->m == nil)
         goto raise;
+    /*e: [[ipoput4()]] error if no medium attached to interface ifc */
 
     /* If we dont need to fragment just send it */
+    /*s: [[ipoput4()]] if manual fragmentation setting */
     if(c && c->maxfragsize && c->maxfragsize < ifc->maxtu)
         medialen = c->maxfragsize - ifc->m->hsize;
+    /*e: [[ipoput4()]] if manual fragmentation setting */
     else
         medialen = ifc->maxtu - ifc->m->hsize;
+
+    /*s: [[ipoput4()]] if no need to fragment, write simply to medium and return */
     if(len <= medialen) {
         if(!gating)
             hnputs(eh->id, incref(&ip->id4));
         hnputs(eh->length, len);
+        // no fragment
         if(!gating){
             eh->frag[0] = 0;
             eh->frag[1] = 0;
@@ -238,10 +261,11 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
 
         runlock(ifc);
         poperror();
-        return 0;
+        return OK_0;
     }
-
-if((eh->frag[0] & (IP_DF>>8)) && !gating) print("%V: DF set\n", eh->dst);
+    /*e: [[ipoput4()]] if no need to fragment, write simply to medium and return */
+    /*s: [[ipoput4()]] else, need to fragment */
+    if((eh->frag[0] & (IP_DF>>8)) && !gating) print("%V: DF set\n", eh->dst);
 
     if(eh->frag[0] & (IP_DF>>8)){
         ip->stats[FragFails]++;
@@ -278,6 +302,7 @@ if((eh->frag[0] & (IP_DF>>8)) && !gating) print("%V: DF set\n", eh->dst);
     else
         fragoff = 0;
     dlen += fragoff;
+
     for(; fragoff < dlen; fragoff += seglen) {
         nb = allocb(IP4HDR+seglen);
         feh = (Ip4hdr*)(nb->rp);
@@ -319,10 +344,15 @@ if((eh->frag[0] & (IP_DF>>8)) && !gating) print("%V: DF set\n", eh->dst);
         feh->cksum[0] = 0;
         feh->cksum[1] = 0;
         hnputs(feh->cksum, ipcsum(&feh->vihl));
+
+        // Medium dispatch, send this fragment
         ifc->m->bwrite(ifc, nb, V4, gate);
+
         ip->stats[FragCreates]++;
     }
     ip->stats[FragOKs]++;
+    /*e: [[ipoput4()]] else, need to fragment */
+
 raise:
     runlock(ifc);
     poperror();
@@ -448,7 +478,9 @@ if(r->ifc == nil) panic("nil route rfc");
         ip->stats[ForwDatagrams]++;
         tos = h->tos;
         hop = h->ttl;
-        ipoput4(f, bp, 1, hop - 1, tos, &conv);
+
+        ipoput4(f, bp, true, hop - 1, tos, &conv);
+
         return;
     }
 
@@ -469,11 +501,15 @@ if(r->ifc == nil) panic("nil route rfc");
 
     proto = h->proto;
     p = Fsrcvpcol(f, proto);
+
     if(p != nil && p->rcv != nil) {
         ip->stats[InDelivers]++;
+
+        // Protocol dispatch
         (*p->rcv)(p, ifc, bp);
         return;
     }
+
     ip->stats[InDiscards]++;
     ip->stats[InUnknownProtos]++;
     freeblist(bp);

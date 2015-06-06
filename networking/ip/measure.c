@@ -52,6 +52,8 @@ struct Ippkt
 #define IP_HDRSIZE	20
 /*e: constant IP_HDRSIZE */
 /*s: constant IP_UDPPROTO */
+IP_UDPPROTO = 17,
+/*x: constant IP_UDPPROTO */
 #define IP_UDPPROTO	17
 /*e: constant IP_UDPPROTO */
 /*s: constant IP_MBONEPROTO */
@@ -61,6 +63,8 @@ struct Ippkt
 #define IP_TCPPROTO	6
 /*e: constant IP_TCPPROTO */
 /*s: constant IP_ILPROTO */
+IP_ILPROTO	= 40,
+/*x: constant IP_ILPROTO */
 #define	IP_ILPROTO	40
 /*e: constant IP_ILPROTO */
 /*s: constant IP_ICMPPROTO */

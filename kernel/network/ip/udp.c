@@ -17,16 +17,31 @@
 /*s: enum _anon_ (kernel/network/ip/udp.c) */
 enum
 {
+    /*s: constant UDP_UDPHDR_SZ */
     UDP_UDPHDR_SZ   = 8,
+    /*e: constant UDP_UDPHDR_SZ */
 
+    /*s: constant UDP4_PHDR_OFF */
     UDP4_PHDR_OFF = 8,
+    /*e: constant UDP4_PHDR_OFF */
+    /*s: constant UDP4_PHDR_SZ */
     UDP4_PHDR_SZ = 12,
+    /*e: constant UDP4_PHDR_SZ */
+    /*s: constant UDP4_IPHDR_SZ */
     UDP4_IPHDR_SZ = 20,
+    /*e: constant UDP4_IPHDR_SZ */
+
+    /*s: constant UDP6_xxx */
     UDP6_IPHDR_SZ = 40,
     UDP6_PHDR_SZ = 40,
     UDP6_PHDR_OFF = 0,
-
+    /*e: constant UDP6_xxx */
+    /*s: constant IP_UDPPROTO */
     IP_UDPPROTO = 17,
+    /*x: constant IP_UDPPROTO */
+    #define IP_UDPPROTO	17
+    /*e: constant IP_UDPPROTO */
+
     /*s: constant UDP_USEAD7 */
     UDP_USEAD7  = 52,
     /*e: constant UDP_USEAD7 */
@@ -44,6 +59,10 @@ typedef struct Udpstats Udpstats;
 typedef struct Udppriv Udppriv;
 typedef struct Udpcb Udpcb;
 
+//void (*etherprofiler)(char *name, int qlen);
+void udpkick(void *x, Block *bp);
+
+
 /*s: struct Udp4hdr */
 struct Udp4hdr
 {
@@ -53,7 +72,7 @@ struct Udp4hdr
     uchar   length[2];  /* packet length */
     uchar   id[2];      /* Identification */
     uchar   frag[2];    /* Fragment information */
-    uchar   Unused;
+    uchar   Unused; // ttl
 
     uchar   udpproto;   /* Protocol */
     uchar   udpplen[2]; /* Header plus data length */
@@ -110,9 +129,6 @@ struct Udppriv
     /*e: [[Udppriv]] stat fields */
 };
 /*e: struct Udppriv */
-
-//void (*etherprofiler)(char *name, int qlen);
-void udpkick(void *x, Block *bp);
 
 /*
  *  protocol specific part of Conv
@@ -198,7 +214,7 @@ udpclose(Conv *c)
     upriv = c->p->priv;
     iphtrem(&upriv->ht, c);
 
-    c->state = 0;
+    c->state = Idle;
     qclose(c->rq);
     qclose(c->wq);
     qclose(c->eq);
@@ -219,15 +235,16 @@ udpkick(void *x, Block *bp)
     Conv *c = x;
     Conv *rc;
     Udp4hdr *uh4;
-    uchar laddr[IPaddrlen];
-    uchar raddr[IPaddrlen];
-    ushort rport;
-    Udpcb *ucb;
     Udppriv *upriv;
     int dlen, ptcllen;
     Fs *f;
     int version;
     /*s: [[udpkick()]] locals */
+    Udpcb *ucb;
+    uchar laddr[IPaddrlen];
+    uchar raddr[IPaddrlen];
+    ushort rport;
+    /*x: [[udpkick()]] locals */
     Udp6hdr *uh6;
     /*e: [[udpkick()]] locals */
 
@@ -238,7 +255,7 @@ udpkick(void *x, Block *bp)
     if(bp == nil)
         return;
 
-    /*s: [[udpkick()]] set rport to 0 or do special headers processing */
+    /*s: [[udpkick()]] special headers processing */
     ucb = (Udpcb*)c->ptcl;
     switch(ucb->headers) {
     case 7:
@@ -250,6 +267,7 @@ udpkick(void *x, Block *bp)
         bp->rp += IPaddrlen;
         ipmove(laddr, bp->rp);
         bp->rp += IPaddrlen;
+
         /* pick interface closest to dest */
         if(ipforme(f, laddr) != Runi)
             findlocalip(f, laddr, raddr);
@@ -261,7 +279,7 @@ udpkick(void *x, Block *bp)
         rport = 0;
         break;
     }
-    /*e: [[udpkick()]] set rport to 0 or do special headers processing */
+    /*e: [[udpkick()]] special headers processing */
     /*s: [[udpkick()]] set version to V4 or V6 */
     /*s: [[udpkick()]] set version to V4 or V6 if special headers */
     if(ucb->headers) {
@@ -323,7 +341,7 @@ udpkick(void *x, Block *bp)
                ptclcsum(bp, UDP4_PHDR_OFF, dlen+UDP_UDPHDR_SZ+UDP4_PHDR_SZ));
         uh4->vihl = IP_VER4;
 
-        // Let's go
+        // Let's go, let's send the data
         ipoput4(f, bp, false, c->ttl, c->tos, rc);
 
         break;
@@ -384,11 +402,14 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 {
     int len;
     Udp4hdr *uh4;
-    Udp6hdr *uh6;
     Conv *c;
+
     Udpcb *ucb;
     uchar raddr[IPaddrlen], laddr[IPaddrlen];
     ushort rport, lport;
+
+    Udp6hdr *uh6;
+
     Udppriv *upriv;
     Fs *f;
     int version;
@@ -400,7 +421,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     upriv->ustats.udpInDatagrams++;
 
     uh4 = (Udp4hdr*)(bp->rp);
-    version = ((uh4->vihl&0xF0)==IP_VER6) ? 6 : 4;
+    version = ((uh4->vihl&0xF0)==IP_VER6) ? V6 : V4;
 
     /* Put back pseudo header for checksum
      * (remember old values for icmpnoconv()) */
@@ -429,6 +450,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         uh4->Unused = ottl;
         hnputs(uh4->udpplen, olen);
         break;
+
     case V6:
         uh6 = (Udp6hdr*)(bp->rp);
         len = nhgets(uh6->udplen);
@@ -671,17 +693,18 @@ udpinit(Fs *fs)
 
     udp->name = "udp";
     udp->create = udpcreate;
-    udp->rcv = udpiput;
+    udp->close = udpclose;
 
     udp->connect = udpconnect;
     udp->announce = udpannounce;
     udp->ctl = udpctl;
 
-    udp->close = udpclose;
-    udp->advise = udpadvise;
+    udp->rcv = udpiput;
 
     udp->state = udpstate;
     udp->stats = udpstats;
+
+    udp->advise = udpadvise;
 
     udp->ipproto = IP_UDPPROTO;
 
