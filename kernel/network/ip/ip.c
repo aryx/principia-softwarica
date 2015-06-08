@@ -22,15 +22,19 @@ static char *statnames[] =
 [InAddrErrors]  "InAddrErrors",
 [ForwDatagrams] "ForwDatagrams",
 [InUnknownProtos]   "InUnknownProtos",
+
 [InDiscards]    "InDiscards",
 [InDelivers]    "InDelivers",
+
 [OutRequests]   "OutRequests",
 [OutDiscards]   "OutDiscards",
 [OutNoRoutes]   "OutNoRoutes",
+
 [ReasmTimeout]  "ReasmTimeout",
 [ReasmReqds]    "ReasmReqds",
 [ReasmOKs]  "ReasmOKs",
 [ReasmFails]    "ReasmFails",
+
 [FragOKs]   "FragOKs",
 [FragFails] "FragFails",
 [FragCreates]   "FragCreates",
@@ -129,10 +133,10 @@ ip_init(Fs *f)
 
 /*s: function iprouting */
 void
-iprouting(Fs *f, int on)
+iprouting(Fs *f, bool on)
 {
     f->ip->iprouting = on;
-    if(f->ip->iprouting==0)
+    if(f->ip->iprouting == false)
         f->ip->stats[Forwarding] = 2;
     else
         f->ip->stats[Forwarding] = 1;

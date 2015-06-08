@@ -12,6 +12,7 @@ typedef struct Icmppriv Icmppriv;
 
 /*s: struct Icmp */
 typedef struct Icmp {
+    // ip header
     uchar   vihl;       /* Version and header length */
     uchar   tos;        /* Type of service */
     uchar   length[2];  /* packet length */
@@ -22,6 +23,8 @@ typedef struct Icmp {
     uchar   ipcksum[2]; /* Header checksum */
     uchar   src[4];     /* Ip source */
     uchar   dst[4];     /* Ip destination */
+
+    // icmp specifics
     uchar   type;
     uchar   code;
     uchar   cksum[2];

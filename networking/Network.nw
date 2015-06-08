@@ -13,10 +13,10 @@
 
 %thx to LP, changed for the better a few things:
 % - untangled all those features, arp, multicast, with those big structures
-%   that were hard to understand. Aspectized many features too.
+%   that were hard to understand.
 % - use cv not c for conversation, less confusing with channel, use err
 %   not p, use err not s, ...
-% - use Idle, not 0 when can
+% - use Idle, not 0 when can, use V4 not 4,
 % - removed deadcode: ?? unbindonclose?
 
 %thx to codemap/codegraph/scheck:
@@ -171,8 +171,8 @@ Here are other candidates that were considered but ultimately discarded:
 \item XINU
 \item Linux
 \item FreeBSD
+% FreeBSD have strong reputation regarding its network stack
 \item Minix
-% have strong reputation
 \end{itemize}
 
 %meh:
@@ -228,7 +228,7 @@ License.
 
 \section{Internetworking principles}
 
-% ip universal adress, inter network, routing, gateway
+% ip universal address, inter network, routing, gateway
 % (packets become really useful there because big sharing)
 
 % tcp: because route can be complex, and can use different routes,
@@ -238,6 +238,7 @@ License.
 \section{Network stack principles}
 
 % ip stack goal is to multiplex access to network device?
+% and then to demultiplex when receive (by address, by protocol)
 % and to provide different encoding protocols providing different
 % kinds of services
 
@@ -306,6 +307,8 @@ License.
 
 % encapsulation each time, more headers each time.
 
+% packet vs frame vs stream
+
 % Proto vs Fs vs Ipifc vs Netif
 
 % OO like interface, with class and methods, and some private
@@ -320,6 +323,8 @@ License.
 \section{Trace of a ping}
 
 \section{Trace of a network write}
+
+\section{Trace of a network read}
 
 %\section{Trace of an RPC}
 
@@ -592,12 +597,12 @@ struct Ipifc
   char  dev[64];  /* device we're attached to */
 
   Medium  *m;   /* Media pointer */
+  uchar mac[MAClen];  /* MAC address */
+  void  *arg;   /* medium specific */
 
   int maxtu;    /* Maximum transfer unit */
   int mintu;    /* Minumum tranfer unit */
   int mbps;   /* megabits per second */
-  uchar mac[MAClen];  /* MAC address */
-  void  *arg;   /* medium specific */
 
   // list<ref_own<Iplifc>>, next = Iplifc.next
   Iplifc  *lifc;    /* logical interfaces on this physical one */
@@ -704,6 +709,7 @@ struct Medium
   int hsize;    /* medium header size */
   int mintu;    /* default min mtu */
   int maxtu;    /* default max mtu */
+
   int maclen;   /* mac address length  */
  
   // the methods
@@ -893,7 +899,9 @@ struct IP
 % Fragments because idea of IP is to have packets, and so if
 % one tried to send too big data, it's splitted in multiple
 % packets, and the IP stack will then reassemble them
-% (but this is different from TCP?)
+% (but this is different from TCP, because here it's done
+% in one hop, so it's reliable. No reordering needed, the fragments
+% will arrive in order).
 
 <<struct Fragment4>>=
 struct Fragment4
@@ -1154,11 +1162,12 @@ int x;      /* conversation index */
 % so can get "class" via p so can access the method of the protocol from
 % a Conv
 
-
+%XXX
 <<[[Proto(kernel)]] other fields>>=
 ushort    nextrport;
 @
-% when look for fresh new port, where to start from
+% when look for fresh new port, where to start from, but who allocates
+% new ports? not the user?
 
 
 
@@ -1195,7 +1204,7 @@ Queue*  eq;     /* returned error packets */
 Rendez  cr;
 @
 % e.g. when connect, need to sleep until someone connects
-% with you, so will sleep on that.
+% with you (via an announce), so will sleep on that.
 
 <<[[Conv(kernel)]] priv fields>>=
 void* ptcl;     /* protocol specific stuff */
@@ -1564,6 +1573,8 @@ struct Iphash
   int match;
 };
 @
+% Conv connexion!
+
 
 
 
@@ -2533,7 +2544,7 @@ case Qctl:
             error(Ebadip);
         ipifcremmulti(cv, cv->raddr, ia);
     }
-    <<[[ipwrite()]], Qctl case, switch command esleif cases>>
+    <<[[ipwrite()]], Qctl case, switch command elseif cases>>
     else if(x->ctl != nil) {
         // Protocol dispatch
         p = x->ctl(cv, cb->f, cb->nf);
@@ -2780,18 +2791,17 @@ case Qdata:
     cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
     return qread(cv->rq, a, n);
 @
+% read on rq
 
 <<[[ipwrite()]] switch TYPE qid cases>>=
 case Qdata:
-    x = f->p[PROTO(ch->qid)];
-    cv = x->conv[CONV(ch->qid)];
-
+    cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
     if(cv->wq == nil)
         error(Eperm);
-
     qwrite(cv->wq, a, n);
     break;
 @
+% write on wq
 
 \subsection{[[/net/x/y/err]]}
 
@@ -3374,7 +3384,7 @@ ipifcctl(Conv* cv, char** argv, int argc)
 
 \subsection{Adding IP, [[/net/ipifc/x/ctl add]]}
 
-
+%TODO: lp split
 <<function ipifcadd>>=
 /*
  *  add an address to an interface.
@@ -4007,6 +4017,12 @@ if(len <= medialen) {
 
 \subsubsection{Fragmentation}
 
+% Note that different from TCP packeting and reliable
+% reordering. Here it's a packet to send through an hardware medium,
+% e.g ethernet, it's reliable, there is no long distance. You fragment
+% the packet to go to the gateway and the gateway will reassemble it
+% and maybe refragment if it's medium also has a limited capacity.
+
 <<[[ipoput4()]] locals>>=
 Ip4hdr *feh;
 ulong fragoff;
@@ -4303,6 +4319,7 @@ if(r->ifc == nil) panic("nil route rfc");
 
 
 \subsubsection{Protocol dispatching}
+% protocol demultiplexing
 
 <<function Fsrcvpcol>>=
 Proto*
@@ -4486,6 +4503,8 @@ ip4reassemble(IP *ip, int offset, Block *bp, Ip4hdr *ih)
 
 
 \subsubsection{Error managment}
+
+
 
 \section{IP Interface}
 
@@ -4787,10 +4806,11 @@ if(c && c->maxfragsize && c->maxfragsize < ifc->maxtu)
 @
 
 <<[[Conv(kernel)]] other fields>>=
+// option<int>, None = 0
 int maxfragsize;    /* If set, used for fragmentation */
 @
 
-<<[[ipwrite()]], Qctl case, switch command esleif cases>>=
+<<[[ipwrite()]], Qctl case, switch command elseif cases>>=
 else if(strcmp(cb->f[0], "maxfragsize") == 0){
     if(cb->nf < 2)
         error("maxfragsize needs size");
@@ -4935,6 +4955,8 @@ struct Etherhdr
     uchar   t[2];
 };
 @
+%typedef byte etheraddr[6]
+
 % ethermedium.c
 
 \section{Ethernet packet}
@@ -5635,6 +5657,8 @@ struct Udp4hdr
 % essential IP header + port info.
 % why another checksum? because the other is the header checksum!
 % here we want a checksum of the data.
+%less: why do not use the IpHeader; anonymous field to factorize
+% structure definitions? also better see what is udp specific then.
 
 <<constant UDP4_IPHDR_SZ>>=
 UDP4_IPHDR_SZ = 20,
@@ -7288,8 +7312,10 @@ tcpinit(Fs *fs)
 
 \chapter{Applications}
 
-\section{Telnet}
+\section{Remote shell, Telnet}
 % works on top of TCP?
+
+\section{Remote file access, TFTP}
 
 \chapter{Remote Procedure Call, 9P}
 
@@ -7892,10 +7918,11 @@ usage(void)
 
 \chapter{Profiling}
 
-% /net/x/stats? hmm it's more for user than for programmer of the
-% network stack itself, but yes it can be useful too.
 
 \section{[[/net/x/stats]]}
+
+% /net/x/stats? hmm it's more for user than for programmer of the
+% network stack itself, but yes it can be useful too.
 
 % /net/ipifc/stats
 % /net/icmp/stats
@@ -8196,4 +8223,3 @@ void    (*advise)(Proto*, Block*, char*);
 %******************************************************************************
 
 \end{document}
-

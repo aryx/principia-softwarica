@@ -64,12 +64,14 @@ enum
   /* ip versions */
   V4=   4,
   V6=   6,
+
   IP_VER4=  0x40,
   IP_VER6=  0x60,
   IP_HLEN4= 5,    /* v4: Header length in words */
   IP_DF=    0x4000,   /* v4: Don't fragment */
   IP_MF=    0x2000,   /* v4: More fragments */
   IP4HDR=   20,   /* sizeof(Ip4hdr) */
+
   /*s: constant IP_MAX */
   IP_MAX=   64*1024,  /* Max. Internet packet size, v4 & v6 */
   /*e: constant IP_MAX */
@@ -289,6 +291,7 @@ struct Conv
   /*x: [[Conv(kernel)]] other fields */
   char  cerr[ERRMAX];
   /*x: [[Conv(kernel)]] other fields */
+  // option<int>, None = 0
   int maxfragsize;    /* If set, used for fragmentation */
   /*e: [[Conv(kernel)]] other fields */
 
@@ -311,6 +314,7 @@ struct Medium
   int hsize;    /* medium header size */
   int mintu;    /* default min mtu */
   int maxtu;    /* default max mtu */
+
   int maclen;   /* mac address length  */
  
   // the methods
@@ -422,12 +426,12 @@ struct Ipifc
   char  dev[64];  /* device we're attached to */
 
   Medium  *m;   /* Media pointer */
+  uchar mac[MAClen];  /* MAC address */
+  void  *arg;   /* medium specific */
 
   int maxtu;    /* Maximum transfer unit */
   int mintu;    /* Minumum tranfer unit */
   int mbps;   /* megabits per second */
-  uchar mac[MAClen];  /* MAC address */
-  void  *arg;   /* medium specific */
 
   // list<ref_own<Iplifc>>, next = Iplifc.next
   Iplifc  *lifc;    /* logical interfaces on this physical one */
@@ -719,7 +723,6 @@ typedef struct V6route V6route;
 /*s: enum _anon_ (kernel/network/ip/ip.h)6 */
 enum
 {
-
   /* type bits */
   Rv4=    (1<<0),   /* this is a version 4 route */
   Rifc=   (1<<1),   /* this route is a directly connected interface */

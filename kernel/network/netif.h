@@ -164,6 +164,7 @@ enum
   /* ethernet packet types */
   ETARP   = 0x0806,
   ETIP4   = 0x0800,
+
   ETIP6   = 0x86DD,
 };
 /*e: enum _anon_ (kernel/network/netif.h)2 */

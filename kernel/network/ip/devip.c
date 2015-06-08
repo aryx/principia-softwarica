@@ -1369,7 +1369,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
                 error(Ebadip);
             ipifcremmulti(cv, cv->raddr, ia);
         }
-        /*s: [[ipwrite()]], Qctl case, switch command esleif cases */
+        /*s: [[ipwrite()]], Qctl case, switch command elseif cases */
         else if(strcmp(cb->f[0], "maxfragsize") == 0){
             if(cb->nf < 2)
                 error("maxfragsize needs size");
@@ -1377,7 +1377,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
             cv->maxfragsize = (int)strtol(cb->f[1], nil, 0);
 
         } 
-        /*e: [[ipwrite()]], Qctl case, switch command esleif cases */
+        /*e: [[ipwrite()]], Qctl case, switch command elseif cases */
         else if(x->ctl != nil) {
             // Protocol dispatch
             p = x->ctl(cv, cb->f, cb->nf);
@@ -1391,12 +1391,9 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
         break;
     /*x: [[ipwrite()]] switch TYPE qid cases */
     case Qdata:
-        x = f->p[PROTO(ch->qid)];
-        cv = x->conv[CONV(ch->qid)];
-
+        cv = f->p[PROTO(ch->qid)]->conv[CONV(ch->qid)];
         if(cv->wq == nil)
             error(Eperm);
-
         qwrite(cv->wq, a, n);
         break;
     /*x: [[ipwrite()]] switch TYPE qid cases */
