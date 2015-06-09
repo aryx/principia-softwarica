@@ -80,7 +80,7 @@ struct Ipifc
 {
     /* per ip interface */
 
-    char	dev[64];
+    char	dev[64]; // e.g. "/net/ether0"
     int	mtu;
     // list<ref_own<Iplifc> (next = Iplifc.next)
     Iplifc	*lifc;

@@ -424,8 +424,8 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     int type;
     uchar ip[IPaddrlen];
     uchar mask[IPaddrlen];
+    uchar net[IPaddrlen]; // ip & mask
     uchar rem[IPaddrlen];
-    uchar net[IPaddrlen];
     Iplifc *lifc, **l;
     Fs *f;
 
@@ -447,24 +447,28 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
 
     switch(argc){
     /*s: [[ipifcadd()]] switch argc, proxy case, and fall through */
+    // add <ip> <mask> <rem> <mtu> proxy
     case 6:
         if(strcmp(argv[5], "proxy") == 0)
             type |= Rproxy;
         /* fall through */
     /*e: [[ipifcadd()]] switch argc, proxy case, and fall through */
     /*s: [[ipifcadd()]] switch argc, mtu setting case, and fall through */
+    // add <ip> <mask> <rem> <mtu>
     case 5:
         mtu = strtoul(argv[4], 0, 0);
         if(mtu >= ifc->m->mintu && mtu <= ifc->m->maxtu)
             ifc->maxtu = mtu;
         /* fall through */
     /*e: [[ipifcadd()]] switch argc, mtu setting case, and fall through */
+    // add <ip> <mask> <rem>
     case 4:
         if (parseip(ip, argv[1]) == -1 || parseip(rem, argv[3]) == -1)
             return Ebadip;
         parseipmask(mask, argv[2]);
         maskip(rem, mask, net);
         break;
+    // add <ip> <mask>
     case 3:
         if (parseip(ip, argv[1]) == -1)
             return Ebadip;
@@ -472,6 +476,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         maskip(ip, mask, rem);
         maskip(rem, mask, net);
         break;
+    // simplest case, add <ip>
     case 2:
         if (parseip(ip, argv[1]) == -1)
             return Ebadip;
@@ -524,8 +529,8 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         lifc->validlt = lifc->preflt = ~0L;
         lifc->origint = NOW / 1000;
     }
+    // add_tail(lifc, ifc->lifc)
     lifc->next = nil;
-
     for(l = &ifc->lifc; *l; l = &(*l)->next)
         ;
     *l = lifc;
@@ -890,7 +895,6 @@ ipifcctl(Conv* cv, char** argv, int argc)
         return ipifcadd6(ifc, argv, argc);
     else if(strcmp(argv[0], "ra6") == 0)
         return ipifcra6(ifc, argv, argc);
-
 
     return "unsupported ctl";
 }

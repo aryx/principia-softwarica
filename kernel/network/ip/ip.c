@@ -193,6 +193,7 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
     }
     /*e: [[ipoput4()]] error if too big packet of length len */
 
+    // Finding the route for the destination!
     r = v4lookup(f, eh->dst, c);
     /*s: [[ipoput4()]] error if no route r */
     if(r == nil){
@@ -271,9 +272,10 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
     }
     /*e: [[ipoput4()]] if no need to fragment, write simply to medium and return */
     /*s: [[ipoput4()]] else, need to fragment */
-    if((eh->frag[0] & (IP_DF>>8)) && !gating) print("%V: DF set\n", eh->dst);
 
     if(eh->frag[0] & (IP_DF>>8)){
+        if (!gating) 
+          print("%V: DF set\n", eh->dst);
         ip->stats[FragFails]++;
         ip->stats[OutDiscards]++;
         icmpcantfrag(f, bp, medialen);
@@ -485,7 +487,7 @@ ipiput4(Fs *f, Ipifc *ifc, Block *bp)
             }
 
             /* reassemble if the interface expects it */
-    if(r->ifc == nil) panic("nil route rfc");
+            if(r->ifc == nil) panic("nil route rfc");
             if(r->ifc->reassemble){
                 frag = nhgets(h->frag);
                 if(frag) {

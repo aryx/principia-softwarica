@@ -3570,6 +3570,11 @@ main(int argc, char **argv)
 
 \subsection*{[[kernel/network/ip/ip.h]]}
 
+<<constant Nhash>>=
+Nhash=    64,
+@
+
+
 <<enum _anon_ (kernel/network/ip/ip.h)>>=
 enum
 {
@@ -3580,7 +3585,7 @@ enum
   <<constant Nchans>>
   MAClen=   16,   /* longest mac address */
 
-  MAXTTL=   255,
+  <<constant MAXTTL>>
   DFLTTOS=  0,
 
   IPaddrlen=  16,
@@ -3592,9 +3597,10 @@ enum
   V4=   4,
   V6=   6,
 
-  IP_VER4=  0x40,
+  <<constant IP_VER4>>
+  <<constant IP_HLEN4>>
   IP_VER6=  0x60,
-  IP_HLEN4= 5,    /* v4: Header length in words */
+
   IP_DF=    0x4000,   /* v4: Don't fragment */
   IP_MF=    0x2000,   /* v4: More fragments */
   IP4HDR=   20,   /* sizeof(Ip4hdr) */
@@ -8581,7 +8587,7 @@ ipwstat(Chan *c, uchar *dp, int n)
 <<enum _anon_ (kernel/network/ip/devip.c)2>>=
 enum
 {
-    Statelen=   32*1024,
+    <<constant Statelen>>
 };
 @
 
@@ -8722,87 +8728,6 @@ chosen:
 }
 @
 
-<<function setladdrport>>=
-/*
- *  set a local address and port from a string of the form
- *  [address!]port[!r]
- */
-char*
-setladdrport(Conv* c, char* str, int announcing)
-{
-    char *p;
-    char *rv;
-    ushort lport;
-    uchar addr[IPaddrlen];
-
-    /*
-     *  ignore restricted part if it exists.  it's
-     *  meaningless on local ports.
-     */
-    p = strchr(str, '!');
-    if(p != nil){
-        *p++ = 0;
-        if(strcmp(p, "r") == 0)
-            p = nil;
-    }
-
-    c->lport = 0;
-    if(p == nil){
-        if(announcing)
-            ipmove(c->laddr, IPnoaddr);
-        else
-            setladdr(c);
-        p = str;
-    } else {
-        if(strcmp(str, "*") == 0)
-            ipmove(c->laddr, IPnoaddr);
-        else {
-            if(parseip(addr, str) == -1)
-                return Ebadip;
-            if(ipforme(c->p->f, addr))
-                ipmove(c->laddr, addr);
-            else
-                return "not a local IP address";
-        }
-    }
-
-    /* one process can get all connections */
-    if(announcing && strcmp(p, "*") == 0){
-        if(!iseve())
-            error(Eperm);
-        return setluniqueport(c, 0);
-    }
-
-    lport = atoi(p);
-    if(lport <= 0)
-        rv = setlport(c);
-    else
-        rv = setluniqueport(c, lport);
-    return rv;
-}
-@
-
-<<function setraddrport>>=
-static char*
-setraddrport(Conv* c, char* str)
-{
-    char *p;
-
-    p = strchr(str, '!');
-    if(p == nil)
-        return "malformed address";
-    *p++ = 0;
-    if (parseip(c->raddr, str) == -1)
-        return Ebadip;
-    c->rport = atoi(p);
-    p = strchr(p, '!');
-    if(p){
-        if(strstr(p, "!r") != nil)
-            c->restricted = true;
-    }
-    return nil;
-}
-@
 
 
 
@@ -12161,9 +12086,6 @@ struct Ipmcast
 #define hashipa(a) ( ( ((a)[IPaddrlen-2]<<8) | (a)[IPaddrlen-1] )%NHASH )
 @
 
-<<global tifc>>=
-static char tifc[] = "ifc ";
-@
 
 
 
@@ -18287,13 +18209,6 @@ static int seq_lt(ulong, ulong);
 
 \subsection*{[[kernel/network/ip/inferno.c]]}
 
-<<function bootpread>>=
-int
-bootpread(char*, ulong, int)
-{
-    return  0;
-}
-@
 
 
 %-------------------------------------------------------------

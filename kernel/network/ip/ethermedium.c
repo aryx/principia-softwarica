@@ -70,6 +70,7 @@ Medium ethermedium =
     .remmulti=  etherremmulti,
     .ares=      arpenter,
     .areg=      sendgarp,
+
     .pref2addr= etherpref2addr,
 };
 /*e: global ethermedium (kernel) */

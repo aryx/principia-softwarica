@@ -18,6 +18,7 @@
 %   not p, use err not s, ...
 % - use Idle, not 0 when can, use V4 not 4,
 % - removed deadcode: ?? unbindonclose?
+% - TODO introduce ipv4, ipaddr typedefs?
 
 %thx to codemap/codegraph/scheck:
 % - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -32,6 +33,9 @@
 %thx to this manual, better understand networking:
 % - TODO ether, ip, udp, tcp, actually I didn't know 
 %   that much about network
+% - realize that having 2 ip interfaces is essential, not a feature, because
+%   for internetworking to work you need gateways that connect 2 separate
+%   network, and so this machine will have 2 interfaces
 % - TODO does not need much to configure initially; can do things manually
 %   without ipconfig and actually you need to do very few things
 % - TODO ping, I never understood how it worked, and also
@@ -228,8 +232,10 @@ License.
 
 \section{Internetworking principles}
 
-% ip universal address, inter network, routing, gateway
+% ip universal address, inter network, routing, gateway, multiple interfaces
 % (packets become really useful there because big sharing)
+
+% gateways are really important, and so is having multiple IPs.
 
 % tcp: because route can be complex, and can use different routes,
 % so can arrive in different order, so need protocol, ack, retransmit,
@@ -270,6 +276,8 @@ License.
 % echo 'connect ???' > /net/udp/clone ? then cat /net/udp/x/data ?
 % and somewhere echo in udp?
 % can emulate named pipe?
+
+% then when have a gateway, will have 2 ifc, 2 mediums, 2 ips
 
 
 %note: The network ip stack is served as a file server in plan9, and
@@ -332,24 +340,30 @@ License.
 
 \chapter{Core Data Structures}
 
-\section{IP addresses}
+\section{Universal identifier, IP addresses}
+% machine identifier
 
-% universal (later we will see URL, even more general)
+% universal 
+%note: (later in HTTP section we will see URL, even more general)
 % inter-network
 
 %less: typedef uchar ippart ? 
 % typedef uchar[16] ip? typedef uchar[4] ipv4
-
-
-<<constant IPaddrlen>>=
-IPaddrlen=	16,
-@
-% 16 bytes IP(v6) address
+% cast automatically to uchar* ?
 
 <<constant IPv4addrlen>>=
 IPv4addrlen=	4,
 @
 % this will be used for the IP address in the actual header and frame formats
+
+
+<<constant IPaddrlen>>=
+IPaddrlen=	16,
+@
+% this is used internally to store addresses, to be the more general.
+% 16 bytes IP(v6) address
+% ex of address? facebook adress? 2a03:2880:2110:df07:face:b00c:0:1:
+
 
 
 \subsection{IPv4 vs IPv6}
@@ -443,14 +457,21 @@ v6tov4(uchar *v4, uchar *v6)
 % pointer to the address in the header as first argument
 % and the cv->laddr or cv->raddr as second argument.
 
-\subsection{Class}
+\subsection{Class and network identifier}
+
+% "conceptually an internet address is a pair (netid, hostid)
+% where netid identifies a network, and hostid identifies a host
+% on that network" xinu book
+
+% tricky encoding, ip address can refer to network, convention
+% to never use 0, so 10.0.2.0 means the network
 
 <<macro CLASS>>=
 #define CLASS(p) ((*(uchar*)(p))>>6)
 @
 % ?? first 2 bits of first number in IP?
 
-\subsection{Mask}
+\subsection{Network mask}
 
 % return ipv6
 <<function defmask>>=
@@ -466,23 +487,24 @@ defmask(uchar *ip)
 
 <<global classmask>>=
 static uchar classmask[4][16] = {
-    // class 0
+    // class A
     0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  
     0xff,0x00,0x00,0x00, // 255.0.0.0
-    // class 1
+    // class A
     0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  
     0xff,0x00,0x00,0x00, // 255.0.0.0
-    // class 2
+    // class B
     0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  
     0xff,0xff,0x00,0x00, // 255.255.0.0
-    // class 3
+    // class C
     0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  
     0xff,0xff,0xff,0x00, // 255.255.255.0
 };
 @
-% class use 2 bits, so 4 entries
+% class use 2 bits, so 4 entries, (but 00 and 01 are for class A)
 % 255.255.etc
 % use IPADDRLen instead of 16?
+%less: could do nested { }, [0] = { }, [1] = { } ...
 
 
 <<function maskip>>=
@@ -496,7 +518,11 @@ maskip(uchar *from, uchar *mask, uchar *to)
 }
 @
 
-\subsection{Move, comparisons}
+% netid = ip & mask.
+
+
+\subsection{Other operations}
+%Reset, move, comparison
 
 % used a lot to reset an address
 <<global IPnoaddr>>=
@@ -518,7 +544,8 @@ uchar IPnoaddr[IPaddrlen];
 
 %\subsection{Forme} ?
 
-\section{IP Interface, [[Ipifc]]}
+\section{IP Interfaces, [[Ipifc]]}
+% 's', for gateways
 
 % /net/ipifc/...
 
@@ -540,7 +567,7 @@ struct Ipifc
 {
     /* per ip interface */
 
-    char	dev[64];
+    char	dev[64]; // e.g. "/net/ether0"
     int	mtu;
     // list<ref_own<Iplifc> (next = Iplifc.next)
     Iplifc	*lifc;
@@ -566,7 +593,9 @@ ulong	errout;
 <<[[Ipifc(user)]] extra fields>>=
 Ipifc	*next;
 @
-% readipifc can return the list of all interfaces
+% readipifc can return the list of all interfaces.
+% We will need this for gateways which have multiple interfaces, multiple IPs
+% connecting two separate networks.
 
 <<[[Ipifc(user)]] extra fields>>=
 int	index;			/* number of interface in ipifc dir */
@@ -590,7 +619,7 @@ struct Iplifc
 @
 % finally an IP! our IP
 %less: local? or logical?
-% echo 'add localip' > /net/ipicf/x/ctl
+% echo 'add <localip>' > /net/ipicf/x/ctl
 
 %less: can have multiple IP connected to same device? what for?
 <<[[Iplifc(user)]] extra fields>>=
@@ -608,10 +637,16 @@ ulong	validlt;		/* valid lifetime */
 
 %todo: who points to that in the kernel? actually there is no single
 % ipifc global in the kernel because a machine can have multiple ips
-% (e.g. a bridge), and so the user access the one he wants via
-% /net/ipifc/.
-%todo: OK but when go to /net/tcp/clone, get which interface??
+% (e.g. a gateway), and so the user access the one he wants via
+% /net/ipifc/ and the ipifc is part of a route.
 % in Route there is a Ipifc! returned via v4lookup()
+%todo: OK but when go to /net/tcp/clone, get which interface??
+
+% in fact gateways are essential to the internet, they are the one
+% that makes possible to have intern-networking, so having
+% multiple interface and multiple IPs is not a nice feature to have,
+% it's essential. One can't provide a network stack without support
+% for gateways.
 
 <<struct Ipifc (kernel)>>=
 struct Ipifc
@@ -638,18 +673,22 @@ struct Ipifc
 
 };
 @
+%less: have a priv field for medium arg private pointer?
 
-% what is inside dev[64]? /net/ether0
 
 <<[[Ipifc(kernel)]] stat fields>>=
-ulong in, out;  /* message statistics */
-ulong inerr, outerr;  /* ... */
+/* message statistics */
+ulong in;
+ulong out;  
+ulong inerr;
+ulong outerr;
 @
 
 <<[[Ipifc(kernel)]] other fields>>=
 Conv  *conv;    /* link to its conversation structure */
 @
-% will see later, but in ipifcadd can do  f = ifc->conv->p->f;
+% /net/ipfc/x/...
+% will see later, but in ipifcadd can then do  f = ifc->conv->p->f;
 
 
 
@@ -680,9 +719,9 @@ struct Iplifc
 {
   uchar local[IPaddrlen];
   uchar mask[IPaddrlen];
-  uchar net[IPaddrlen];
+  uchar net[IPaddrlen]; // local & mask?
 
-  uchar remote[IPaddrlen];
+  uchar remote[IPaddrlen]; // ??
 
   <<[[Iplifc(kernel)]] other fields>>
 
@@ -715,7 +754,7 @@ long  preflt;   /* v6 preferred lifetime */
 long  origint;  /* time when addr was added */
 @
 
-\section{Link [[Medium]], and [[media]]}
+\section{Physical link [[Medium]], and [[media]]}
 
 % e.g. for ethernet
 % see later: null, loopback, packet
@@ -737,12 +776,15 @@ struct Medium
   void  (*bind)(Ipifc*, int, char**);
   void  (*unbind)(Ipifc*);
 
+  // write packets on the physical network
   void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
   /* process packets written to 'data' */
   void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
 
   <<[[Medium(kernel)]] multicast methods>>
   <<[[Medium(kernel)]] other methods>>
+  <<[[Medium(kernel)]] ipv6 methods>>
+
   <<[[Medium(kernel)]] other fields>>
 
 };
@@ -809,10 +851,8 @@ void  (*flushroutes)(Ipifc *ifc);
 /* address resolution */
 void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
 void  (*areg)(Ipifc*, uchar*);      /* register */
-
-/* v6 address generation */
-void  (*pref2addr)(uchar *pref, uchar *ea);
 @
+
 
 %\subsection{Ethernet medium}
 
@@ -877,6 +917,7 @@ Nfs=        128,
 % Nb filesystem (not network file system)
 % in practice will have only one IP stack/fs, so Fs.dev will be 0
 %less: (so not sure you need such a big number ...)
+%todo: when need to have multiple protocol stack?
 
 <<[[Fs(kernel)]] extra fields>>=
 int dev; // idx in ipfs
@@ -897,6 +938,8 @@ struct IP
   Fragment4*  flisthead4;
   Fragment4*  fragfree4;
 
+  Ref   id4;
+
   <<[[IP(kernel)]] stat fields>>
   <<[[IP(kernel)]] routing fields>>
 
@@ -904,7 +947,6 @@ struct IP
 
   // Extra
   QLock   fraglock4;
-  Ref   id4;
 };
 @
 % id4 will be IP packet identifier, incremented each time
@@ -1022,7 +1064,7 @@ static char *statnames[] =
  */
 struct Proto
 {
-  char*   name;   /* protocol name */
+  char*   name;   /* protocol name */ // e.g. "udp", "tcp", etc
 
   <<[[Proto(kernel)]] methods>>
 
@@ -1096,12 +1138,6 @@ void    (*close)(Conv*);
 void    (*rcv)(Proto*, Ipifc*, Block*);
 @
 
-%syswrite("bind ...", /net/<proto>/<conv>/ctl) -> ... -> ipwrite -> ... -> <>
-<<[[Proto(kernel)]] conversation ctl methods>>=
-char*   (*bind)(Conv*, char**, int);
-@
-%less: method only for ipifc?
-
 %syswrite("connect", /net/<proto>/<conv>/ctl) -> ... -> ipwrite -> ... -> <>
 <<[[Proto(kernel)]] conversation ctl methods>>=
 char*   (*connect)(Conv*, char**, int);
@@ -1113,6 +1149,12 @@ char*   (*ctl)(Conv*, char**, int);
 % if protocol specific ctl message, call this general handler,
 % e.g. when do 'add ...' for /net/ipifc/x/ctl
 
+%syswrite("bind ...", /net/<proto>/<conv>/ctl) -> ... -> ipwrite -> ... -> <>
+<<[[Proto(kernel)]] conversation ctl methods>>=
+char*   (*bind)(Conv*, char**, int);
+@
+%less: method only for ipifc?
+
 
 % will introduce other methods later.
 
@@ -1122,6 +1164,7 @@ char*   (*ctl)(Conv*, char**, int);
 % /net/<proto>/<conv>/
 
 % A bit like a Channel (accessed indirectly via Chan->dev, ipfs and the qid)
+% Big structure ... a bit like Proc for Kernel.nw, central structure.
 <<struct Conv (kernel)>>=
 /*
  *  one per conversation directory
@@ -1135,9 +1178,6 @@ struct Conv
   ushort  lport;      /* local port number */
   ushort  rport;      /* remote port number */
 
-  // enum<v6_or_v4>
-  uchar ipversion;
-
   char  *owner;     /* protections */
   int perm;
 
@@ -1145,11 +1185,13 @@ struct Conv
   int state;
 
   <<[[Conv(kernel)]] queue fields>>
+  <<[[Conv(kernel)]] listen fields>>
   <<[[Conv(kernel)]] routing fields>>
   <<[[Conv(kernel)]] multicast fields>>
   <<[[Conv(kernel)]] snoop fields>>
   <<[[Conv(kernel)]] priv fields>>
   <<[[Conv(kernel)]] other fields>>
+  <<[[Conv(kernel)]] ipv6 fields>>
 
   // Extra
   QLock;
@@ -1254,18 +1296,11 @@ int length;
 bool restricted;   /* remote port is restricted */
 bool ignoreadvice;   /* don't terminate connection on icmp errors */
 
-
 /* udp specific */
 int headers;    /* data src/dst headers in udp */
 int reliable;   /* true if reliable udp */
 
-Conv* incall;     /* calls waiting to be listened for */
-Conv* next;
-
 QLock car;
-
-QLock listenq;
-Rendez  listenr;
 @
 
 % error managment fields?
@@ -1380,34 +1415,6 @@ enum
 
 \section{[[/net/ether]] filesystem}
 
-\subsection{[[Netfile]]}
-
-<<struct Netfile>>=
-/*
- *  one per multiplexed connection
- */
-struct Netfile
-{
-  QLock;
-
-  int inuse;
-  ulong mode;
-  char  owner[KNAMELEN];
-
-  int type;     /* multiplexor type */
-  int prom;     /* promiscuous mode */
-  int scan;     /* base station scanning interval */
-  int bridge;     /* bridge mode */
-  int headersonly;    /* headers only - no data */
-  uchar maddr[8];   /* bitmask of multicast addresses requested */
-  int nmaddr;     /* number of multicast addresses */
-
-  Queue *in;      /* input buffer */
-
-  // Extra
-};
-@
-
 \subsection{[[Netif]]}
 
 <<struct Netif (kernel)>>=
@@ -1418,17 +1425,19 @@ struct Netif
 {
   /* multiplexing */
   char  name[KNAMELEN];   /* for top level directory */
-  int nfile;      /* max number of Netfiles */
 
+  // growing_array?<option<ref_own<Netfile>>>
   Netfile **f;
+  int nfile;      /* max number of Netfiles */
 
   /* about net */
   int limit;      /* flow control */
   int alen;     /* address length */
   int mbps;     /* megabits per sec */
   int link;     /* link status */
+
   int minmtu;
-  int   maxmtu;
+  int maxmtu;
   int mtu;
   uchar addr[Nmaxaddr];
   uchar bcast[Nmaxaddr];
@@ -1465,6 +1474,34 @@ struct Netif
 };
 @
 
+\subsection{[[Netfile]]}
+
+<<struct Netfile>>=
+/*
+ *  one per multiplexed connection
+ */
+struct Netfile
+{
+  QLock;
+
+  int inuse;
+  ulong mode;
+  char  owner[KNAMELEN];
+
+  int type;     /* multiplexor type */
+  int prom;     /* promiscuous mode */
+  int scan;     /* base station scanning interval */
+  int bridge;     /* bridge mode */
+  int headersonly;    /* headers only - no data */
+  uchar maddr[8];   /* bitmask of multicast addresses requested */
+  int nmaddr;     /* number of multicast addresses */
+
+  Queue *in;      /* input buffer */
+
+  // Extra
+};
+@
+
 \section{IP header}
 
 <<struct Ip4hdr>>=
@@ -1488,9 +1525,8 @@ struct Ip4hdr
 };
 @
 % Do not change the order here!
-
-
 % id will be IP.id4, incremented in ipoput
+% use byte not int, to avoid byte order issues
 
 <<[[Fs(kernel)]] other fields>>=
 // map<enum<protocol_type>, ref<Proto>>
@@ -1506,11 +1542,17 @@ int   ipproto;  /* ip protocol type */
 % protocol to dispatch.
 % It means also you can't have more than 256 Protocols!
 
-\section{IP address hashtable, [[Ipht]]}
+\section{Addresses hashtable, [[Ipht]]}
+% it's actually (IP|star * port|star)
 
 % another link with Conv!
 
-% used in Udppriv, Ilpriv, present later?
+% used in Udppriv, Ilpriv, presented later when
+% a protocol needs to remember the set of open connexions
+% and the ip of those connexions so when a packet arrive
+% from somewhere, we can know which conversation is associated
+% with this connexion.
+
 <<struct Ipht>>=
 /*
  *  hash table for 2 ip addresses + 2 ports
@@ -1562,15 +1604,13 @@ enum matchtype {
 ulong
 iphash(uchar *sa, ushort sp, uchar *da, ushort dp)
 {
-    return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) % Nhash;
+    return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) 
+      % Nipht; // pad's first network bugfix :)
 }
 @
 % >> >> >>
-%bug? should be Nipht no?
+%bug: was Nhash instead of Nipht :)
 
-<<constant Nhash>>=
-Nhash=    64,
-@
 
 % if you want to connect, then need to give exact address and port
 % if you announce, then you can give regexps
@@ -1715,26 +1755,6 @@ iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
 Route *r;     /* last route used */
 @
 
-
-<<[[Conv(kernel)]] routing fields>>=
-ulong rgen;     /* routetable generation for *r */
-@
-
-
-
-%XXX
-<<[[Fs(kernel)]] routing fields>>=
-Route *v4root[1<<Lroot];  /* v4 routing forest */
-@
-% >> >> 
-
-<<[[Fs(kernel)]] routing fields>>=
-Route *queue;     /* used as temp when reinjecting routes */
-@
-
-
-
-
 % this is the link with ipifc! From a conv you get an IP
 % and via vlookup4 you get a Route which is then linked to an ipifc!
 % From there you can then send or receive the data to/from the medium
@@ -1742,14 +1762,27 @@ Route *queue;     /* used as temp when reinjecting routes */
 <<struct Route (kernel)>>=
 struct Route
 {
-  RouteTree;
-
   union {
     V4route v4;
     <<[[Route]] ipv6 route union case>>
   };
+
+  RouteTree;
 };
 @
+
+<<struct V4route>>=
+struct V4route
+{
+  ulong address;
+  ulong endaddress;
+  uchar gate[IPv4addrlen];
+};
+@
+% ulong address? ip32 bit in host format?
+% gateway! then need using ARP to get from ip gateway to MAC gateway!
+
+
 
 <<struct RouteTree (kernel)>>=
 struct  RouteTree
@@ -1757,12 +1790,7 @@ struct  RouteTree
   // bitset<enum<route_type> >
   uchar type;
 
-  uchar depth;
-
   Ipifc *ifc; // !!!
-
-  char  tag[4];
-  int ref;
 
   <<[[Routetree]] other fields>>
 
@@ -1773,8 +1801,16 @@ struct  RouteTree
 
 };
 @
-% why need ifcid? because ifc may have changed! it may have been
-% binded to something else
+% those are Route*, not RouteTree
+%todo: why not move those fields in the Route instead?
+% anyway it's an inlined structure but it would be clearer I think
+
+%XXX
+<<[[Routetree]] other fields>>=
+  uchar depth;
+  char  tag[4];
+  int ref;
+@
 
 
 <<enum _anon_ (kernel/network/ip/ip.h)6>>=
@@ -1800,20 +1836,27 @@ enum route_type
 
 
 
-<<struct V4route>>=
-struct V4route
-{
-  ulong address;
-  ulong endaddress;
-  uchar gate[IPv4addrlen];
-};
-@
-% ulong address?
-% gateway! then need using ARP to get from ip gateway to MAC gateway!
 
 % in ipoput4:
 %    r = v4lookup(f, eh->dst, c);
 %    ifc = r->ifc !!
+
+
+%XXX
+<<[[Conv(kernel)]] routing fields>>=
+ulong rgen;     /* routetable generation for *r */
+@
+
+%XXX
+<<[[Fs(kernel)]] routing fields>>=
+Route *v4root[1<<Lroot];  /* v4 routing forest */
+@
+% >> >> 
+%XXX
+<<[[Fs(kernel)]] routing fields>>=
+Route *queue;     /* used as temp when reinjecting routes */
+@
+
 
 \section{Blocks}
 
@@ -2523,11 +2566,6 @@ for(nc = cv->incall; nc; nc = cv->incall){
 cv->incall = nil;
 @
 
-%XXX
-<<[[closeconv()]] if multi, call ipifcremmulti>>=
-while((mp = cv->multi) != nil)
-    ipifcremmulti(cv, mp->ma, mp->ia);
-@
 
 
 \subsubsection{[[ipread()]]}
@@ -2691,13 +2729,13 @@ for(pp = p->conv; pp < ep; pp++) {
 
         break;
     }
-    <<[[Fsprotoclone()]] if canqlock>>
+    <<[[Fsprotoclone()]] if found an unused entry>>
 }
 @
 
 \subsubsection{Reuse an unused entry}
 
-<<[[Fsprotoclone()]] if canqlock>>=
+<<[[Fsprotoclone()]] if found an unused entry>>=
 if(canqlock(cv)){
     /*
      *  make sure both processes and protocol
@@ -2713,7 +2751,8 @@ if(canqlock(cv)){
 }
 @
 % can reuse an existing conv that was allocated, but need to make
-% sure noone is using it
+% sure noone is using it (and if you can't lock it, then for sure
+% it means it was in use
 
 <<[[Proto(kernel)]] conversation methods>>=
 bool   (*inuse)(Conv*);
@@ -3046,6 +3085,90 @@ case Announcing:
     break;
 @    
 
+\subsubsection{Port settings}
+
+<<function setladdrport>>=
+/*
+ *  set a local address and port from a string of the form
+ *  [address!]port[!r]
+ */
+char*
+setladdrport(Conv* c, char* str, int announcing)
+{
+    char *p;
+    char *rv;
+    ushort lport;
+    uchar addr[IPaddrlen];
+
+    /*
+     *  ignore restricted part if it exists.  it's
+     *  meaningless on local ports.
+     */
+    p = strchr(str, '!');
+    if(p != nil){
+        *p++ = 0;
+        if(strcmp(p, "r") == 0)
+            p = nil;
+    }
+
+    c->lport = 0;
+    if(p == nil){
+        if(announcing)
+            ipmove(c->laddr, IPnoaddr);
+        else
+            setladdr(c);
+        p = str;
+    } else {
+        if(strcmp(str, "*") == 0)
+            ipmove(c->laddr, IPnoaddr);
+        else {
+            if(parseip(addr, str) == -1)
+                return Ebadip;
+            if(ipforme(c->p->f, addr))
+                ipmove(c->laddr, addr);
+            else
+                return "not a local IP address";
+        }
+    }
+
+    /* one process can get all connections */
+    if(announcing && strcmp(p, "*") == 0){
+        if(!iseve())
+            error(Eperm);
+        return setluniqueport(c, 0);
+    }
+
+    lport = atoi(p);
+    if(lport <= 0)
+        rv = setlport(c);
+    else
+        rv = setluniqueport(c, lport);
+    return rv;
+}
+@
+
+<<function setraddrport>>=
+static char*
+setraddrport(Conv* c, char* str)
+{
+    char *p;
+
+    p = strchr(str, '!');
+    if(p == nil)
+        return "malformed address";
+    *p++ = 0;
+    if (parseip(c->raddr, str) == -1)
+        return Ebadip;
+    c->rport = atoi(p);
+    p = strchr(p, '!');
+    if(p){
+        if(strstr(p, "!r") != nil)
+            c->restricted = true;
+    }
+    return nil;
+}
+@
+
 
 \subsection{[[/net/x/y/data]]}
 
@@ -3086,6 +3209,7 @@ case Qerr:
 
 \subsection{[[/net/x/y/listen]]}
 % ?????
+
 
 <<[[Qid]] conversation extra cases>>=
 Qlisten,
@@ -3150,6 +3274,15 @@ case Qlisten:
     break;
 @
 
+<<[[Conv(kernel)]] listen fields>>=
+Conv* incall;     /* calls waiting to be listened for */
+Conv* next;
+QLock listenq;
+Rendez  listenr;
+@
+
+
+
 
 \subsection{Other files}
 
@@ -3175,6 +3308,10 @@ case Qstats:
     rv = readstr(offset, p, n, buf);
     free(buf);
     return rv;
+@
+
+<<constant Statelen>>=
+    Statelen=   32*1024,
 @
 
 \subsubsection{[[/net/x/y/status]]}
@@ -3321,6 +3458,7 @@ Medium ethermedium =
     .remmulti=  etherremmulti,
     .ares=      arpenter,
     .areg=      sendgarp,
+
     .pref2addr= etherpref2addr,
 };
 @
@@ -3442,7 +3580,7 @@ if(p->ipproto > 0){
 
 
 
-
+%XXX
 <<[[ipifcinit()]] modify f>>=
 f->ipifc = ipifc;   /* hack for ipifcremroute, findipifc, ... */
 @
@@ -3573,6 +3711,8 @@ ipifcbind(Conv *cv, char **argv, int argc)
 }
 @
 
+% why need ifcid? because ifc may have changed! it may have been
+% binded to something else
 <<[[Routetree]] other fields>>=
 uchar ifcid;    /* must match ifc->id */
 @
@@ -3647,7 +3787,6 @@ ipifcctl(Conv* cv, char** argv, int argc)
     else if(strcmp(argv[0], "ra6") == 0)
         return ipifcra6(ifc, argv, argc);
 
-
     return "unsupported ctl";
 }
 @
@@ -3669,8 +3808,8 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     int type;
     uchar ip[IPaddrlen];
     uchar mask[IPaddrlen];
+    uchar net[IPaddrlen]; // ip & mask
     uchar rem[IPaddrlen];
-    uchar net[IPaddrlen];
     Iplifc *lifc, **l;
     Fs *f;
 
@@ -3689,12 +3828,14 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     switch(argc){
     <<[[ipifcadd()]] switch argc, proxy case, and fall through>>
     <<[[ipifcadd()]] switch argc, mtu setting case, and fall through>>
+    // add <ip> <mask> <rem>
     case 4:
         if (parseip(ip, argv[1]) == -1 || parseip(rem, argv[3]) == -1)
             return Ebadip;
         parseipmask(mask, argv[2]);
         maskip(rem, mask, net);
         break;
+    // add <ip> <mask>
     case 3:
         if (parseip(ip, argv[1]) == -1)
             return Ebadip;
@@ -3702,6 +3843,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         maskip(ip, mask, rem);
         maskip(rem, mask, net);
         break;
+    // simplest case, add <ip>
     case 2:
         if (parseip(ip, argv[1]) == -1)
             return Ebadip;
@@ -3754,8 +3896,8 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         lifc->validlt = lifc->preflt = ~0L;
         lifc->origint = NOW / 1000;
     }
+    // add_tail(lifc, ifc->lifc)
     lifc->next = nil;
-
     for(l = &ifc->lifc; *l; l = &(*l)->next)
         ;
     *l = lifc;
@@ -3791,6 +3933,285 @@ out:
 @
 
 
+<<global tifc>>=
+static char tifc[] = "ifc ";
+@
+
+
+\section{IP Interface, user side}
+
+\subsection{Parsing}
+
+<<function readipifc>>=
+Ipifc*
+readipifc(char *net, Ipifc *ifc, int index)
+{
+    int fd, i, n;
+    Dir *dir;
+    char directory[128];
+    char buf[128];
+    Ipifc **l;
+
+    _freeifc(ifc);
+
+    l = &ifc;
+    ifc = nil;
+
+    if(net == nil)
+        net = "/net";
+    snprint(directory, sizeof(directory), "%s/ipifc", net);
+
+    if(index >= 0){
+        snprint(buf, sizeof(buf), "%s/%d/status", directory, index);
+        _readipifc(buf, l, index);
+    } else {
+        fd = open(directory, OREAD);
+        if(fd < 0)
+            return nil;
+        n = dirreadall(fd, &dir);
+        close(fd);
+
+        for(i = 0; i < n; i++){
+            if(strcmp(dir[i].name, "clone") == 0)
+                continue;
+            if(strcmp(dir[i].name, "stats") == 0)
+                continue;
+            snprint(buf, sizeof(buf), "%s/%s/status", directory, dir[i].name);
+            l = _readipifc(buf, l, atoi(dir[i].name));
+        }
+        free(dir);
+    }
+
+    return ifc;
+}
+@
+
+
+<<function _readipifc>>=
+static Ipifc**
+_readipifc(char *file, Ipifc **l, int index)
+{
+    int i, n, fd, lines;
+    char buf[4*1024];
+    char *line[32];
+    char *f[64];
+    Ipifc *ifc, **l0;
+    Iplifc *lifc, **ll;
+
+    /* read the file */
+    fd = open(file, OREAD);
+    if(fd < 0)
+        return l;
+    n = 0;
+    while((i = read(fd, buf+n, sizeof(buf)-1-n)) > 0 && n < sizeof(buf) - 1)
+        n += i;
+    buf[n] = 0;
+    close(fd);
+
+    //if(strncmp(buf, "device", 6) != 0)
+    //    return _readoldipifc(buf, l, index);
+
+    /* ignore ifcs with no associated device */
+    if(strncmp(buf+6, "  ", 2) == 0)
+        return l;
+    /* allocate new interface */
+    *l = ifc = mallocz(sizeof(Ipifc), 1);
+    if(ifc == nil)
+        return l;
+    l0 = l;
+    l = &ifc->next;
+    ifc->index = index;
+
+    lines = getfields(buf, line, nelem(line), 1, "\n");
+
+    /* pick off device specific info(first line) */
+    n = tokenize(line[0], f, nelem(f));
+    if(n%2 != 0)
+        goto lose;
+    strncpy(ifc->dev, findfield("device", f, n), sizeof(ifc->dev));
+    ifc->dev[sizeof(ifc->dev)-1] = 0;
+    if(ifc->dev[0] == 0){
+lose:
+        free(ifc);
+        *l0 = nil;
+        return l;
+    }
+    ifc->mtu          = strtoul(findfield("maxtu", f, n), nil, 10);
+    ifc->sendra6      = atoi(findfield("sendra", f, n));
+    ifc->recvra6      = atoi(findfield("recvra", f, n));
+    ifc->rp.mflag     = atoi(findfield("mflag", f, n));
+    ifc->rp.oflag     = atoi(findfield("oflag", f, n));
+    ifc->rp.maxraint  = atoi(findfield("maxraint", f, n));
+    ifc->rp.minraint  = atoi(findfield("minraint", f, n));
+    ifc->rp.linkmtu   = atoi(findfield("linkmtu", f, n));
+    ifc->rp.reachtime = atoi(findfield("reachtime", f, n));
+    ifc->rp.rxmitra   = atoi(findfield("rxmitra", f, n));
+    ifc->rp.ttl       = atoi(findfield("ttl", f, n));
+    ifc->rp.routerlt  = atoi(findfield("routerlt", f, n));
+    ifc->pktin        = strtoul(findfield("pktin", f, n), nil, 10);
+    ifc->pktout       = strtoul(findfield("pktout", f, n), nil, 10);
+    ifc->errin        = strtoul(findfield("errin", f, n), nil, 10);
+    ifc->errout       = strtoul(findfield("errout", f, n), nil, 10);
+
+    /* now read the addresses */
+    ll = &ifc->lifc;
+    for(i = 1; i < lines; i++){
+        n = tokenize(line[i], f, nelem(f));
+        if(n < 5)
+            break;
+
+        /* allocate new local address */
+        *ll = lifc = mallocz(sizeof(Iplifc), 1);
+        ll = &lifc->next;
+
+        parseip(lifc->ip, f[0]);
+        parseipmask(lifc->mask, f[1]);
+        parseip(lifc->net, f[2]);
+
+        lifc->validlt = strtoul(f[3], nil, 10);
+        lifc->preflt = strtoul(f[4], nil, 10);
+    }
+
+    return l;
+}
+@
+
+
+<<function _freeifc>>=
+static void
+_freeifc(Ipifc *ifc)
+{
+    Ipifc *next;
+    Iplifc *lnext, *lifc;
+
+    if(ifc == nil)
+        return;
+    for(; ifc; ifc = next){
+        next = ifc->next;
+        for(lifc = ifc->lifc; lifc; lifc = lnext){
+            lnext = lifc->next;
+            free(lifc);
+        }
+        free(ifc);
+    }
+}
+@
+
+<<function findfield>>=
+static char*
+findfield(char *name, char **f, int n)
+{
+    int i;
+
+    for(i = 0; i < n-1; i++)
+        if(strcmp(f[i], name) == 0)
+            return f[i+1];
+    return "";
+}
+@
+
+%<<function _readoldipifc>>=
+%static Ipifc**
+%_readoldipifc(char *buf, Ipifc **l, int index)
+%{
+%    char *f[200];
+%    int i, n;
+%    Ipifc *ifc;
+%    Iplifc *lifc, **ll;
+%
+%    /* allocate new interface */
+%    *l = ifc = mallocz(sizeof(Ipifc), 1);
+%    if(ifc == nil)
+%        return l;
+%    l = &ifc->next;
+%    ifc->index = index;
+%
+%    n = tokenize(buf, f, nelem(f));
+%    if(n < 2)
+%        return l;
+%
+%    strncpy(ifc->dev, f[0], sizeof ifc->dev);
+%    ifc->dev[sizeof(ifc->dev) - 1] = 0;
+%    ifc->mtu = strtoul(f[1], nil, 10);
+%
+%    ll = &ifc->lifc;
+%    for(i = 2; n-i >= 7; i += 7){
+%        /* allocate new local address */
+%        *ll = lifc = mallocz(sizeof(Iplifc), 1);
+%        ll = &lifc->next;
+%
+%        parseip(lifc->ip, f[i]);
+%        parseipmask(lifc->mask, f[i+1]);
+%        parseip(lifc->net, f[i+2]);
+%        ifc->pktin = strtoul(f[i+3], nil, 10);
+%        ifc->pktout = strtoul(f[i+4], nil, 10);
+%        ifc->errin = strtoul(f[i+5], nil, 10);
+%        ifc->errout = strtoul(f[i+6], nil, 10);
+%    }
+%    return l;
+%}
+%@
+
+
+\subsection{[[/net/ipifc/x]]}
+
+<<function myipaddr>>=
+/* find first ip addr that isn't the friggin loopback address
+ * unless there are no others 
+ */
+int
+myipaddr(uchar *ip, char *net)
+{
+    Ipifc *nifc;
+    Iplifc *lifc;
+    static Ipifc *ifc;
+    uchar mynet[IPaddrlen];
+
+    ifc = readipifc(net, ifc, -1);
+    for(nifc = ifc; nifc; nifc = nifc->next)
+        for(lifc = nifc->lifc; lifc; lifc = lifc->next){
+            maskip(lifc->ip, loopbackmask, mynet);
+            if(ipcmp(mynet, loopbacknet) == 0){
+                continue;
+            }
+            if(ipcmp(lifc->ip, IPnoaddr) != 0){
+                ipmove(ip, lifc->ip);
+                return 0;
+            }
+        }
+    ipmove(ip, IPnoaddr);
+    return -1;
+}
+@
+
+\subsection{[[/net/ipifc/stats]]}
+
+<<function ipifcstats>>=
+int
+ipifcstats(Proto *ipifc, char *buf, int len)
+{
+    return ipstats(ipifc->f, buf, len);
+}
+@
+
+<<function ipstats>>=
+int
+ipstats(Fs *f, char *buf, int len)
+{
+    IP *ip;
+    char *p, *e;
+    int i;
+
+    ip = f->ip;
+    ip->stats[DefaultTTL] = MAXTTL;
+
+    p = buf;
+    e = p+len;
+    for(i = 0; i < Nipstats; i++)
+        p = seprint(p, e, "%s: %llud\n", statnames[i], ip->stats[i]);
+    return p - buf;
+}
+@
 
 
 \section{Binding ethernet medium}
@@ -3947,6 +4368,7 @@ etherbind(Ipifc *ifc, int argc, char **argv)
 \subsection{MTU}
 
 <<[[ipifcadd()]] switch argc, mtu setting case, and fall through>>=
+// add <ip> <mask> <rem> <mtu>
 case 5:
     mtu = strtoul(argv[4], 0, 0);
     if(mtu >= ifc->m->mintu && mtu <= ifc->m->maxtu)
@@ -3987,6 +4409,13 @@ ttlctlmsg(Conv *c, Cmdbuf *cb)
         c->ttl = atoi(cb->f[1]);
 }
 @
+
+<<constant MAXTTL>>=
+MAXTTL=   255,
+@
+
+
+
 
 
 \chapter{Internetwork Transport, IP}
@@ -4131,7 +4560,9 @@ equivip4(uchar *a, uchar *b)
 
 \subsection{Byte ordering}
 
-% put the hnputs, hngets here
+% Network standard byte order
+
+% put the nhgets, hngets here
 
 
 \subsection{Checksum}
@@ -4221,17 +4652,13 @@ ipcsum(uchar *addr)
 }
 @
 
-\section{IP protocols}
-
-%todo: setting port functions here?
-
 \section{IO}
-
 
 \subsection{Writing, [[ipoput4()]]}
 % IP out-put v4
 
 % syswrite(..., /net/x/y/data) -> udpkick | ... -> <>
+% assume bp has already an IP header with many fields already set (e.g. dst)
 <<function ipoput4>>=
 int
 ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
@@ -4260,6 +4687,7 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
 
     <<[[ipoput4()]] error if too big packet of length len>>
 
+    // Finding the route for the destination!
     r = v4lookup(f, eh->dst, c);
     <<[[ipoput4()]] error if no route r>>
 
@@ -4292,6 +4720,16 @@ free:
 }
 @
 
+
+\subsubsection{Header constants}
+
+<<constant IP_VER4>>=
+IP_VER4=  0x40,
+@
+<<constant IP_HLEN4>>=
+IP_HLEN4= 5,    /* v4: Header length in words */
+@
+
 \subsubsection{Finding the gateway}
 
 <<[[ipoput4()]] set gate according to type of route>>=
@@ -4304,6 +4742,8 @@ else
 @
 
 \subsubsection{Small send}
+
+% setting id field, increment id4
 
 <<[[ipoput4()]] if no need to fragment, write simply to medium and return>>=
 if(len <= medialen) {
@@ -4336,6 +4776,7 @@ if(len <= medialen) {
 % e.g ethernet, it's reliable, there is no long distance. You fragment
 % the packet to go to the gateway and the gateway will reassemble it
 % and maybe refragment if it's medium also has a limited capacity.
+% The order is always correct.
 
 <<[[ipoput4()]] locals>>=
 Ip4hdr *feh;
@@ -4345,9 +4786,10 @@ int lid, seglen, chunk, dlen, blklen, offset;
 @
 
 <<[[ipoput4()]] else, need to fragment>>=
-if((eh->frag[0] & (IP_DF>>8)) && !gating) print("%V: DF set\n", eh->dst);
 
 if(eh->frag[0] & (IP_DF>>8)){
+    if (!gating) 
+      print("%V: DF set\n", eh->dst);
     ip->stats[FragFails]++;
     ip->stats[OutDiscards]++;
     icmpcantfrag(f, bp, medialen);
@@ -4858,280 +5300,6 @@ ipfragallo4(IP *ip)
 @
 
 
-\section{IP Interface}
-
-\subsection{Parsing}
-
-<<function readipifc>>=
-Ipifc*
-readipifc(char *net, Ipifc *ifc, int index)
-{
-    int fd, i, n;
-    Dir *dir;
-    char directory[128];
-    char buf[128];
-    Ipifc **l;
-
-    _freeifc(ifc);
-
-    l = &ifc;
-    ifc = nil;
-
-    if(net == nil)
-        net = "/net";
-    snprint(directory, sizeof(directory), "%s/ipifc", net);
-
-    if(index >= 0){
-        snprint(buf, sizeof(buf), "%s/%d/status", directory, index);
-        _readipifc(buf, l, index);
-    } else {
-        fd = open(directory, OREAD);
-        if(fd < 0)
-            return nil;
-        n = dirreadall(fd, &dir);
-        close(fd);
-
-        for(i = 0; i < n; i++){
-            if(strcmp(dir[i].name, "clone") == 0)
-                continue;
-            if(strcmp(dir[i].name, "stats") == 0)
-                continue;
-            snprint(buf, sizeof(buf), "%s/%s/status", directory, dir[i].name);
-            l = _readipifc(buf, l, atoi(dir[i].name));
-        }
-        free(dir);
-    }
-
-    return ifc;
-}
-@
-
-
-<<function _readipifc>>=
-static Ipifc**
-_readipifc(char *file, Ipifc **l, int index)
-{
-    int i, n, fd, lines;
-    char buf[4*1024];
-    char *line[32];
-    char *f[64];
-    Ipifc *ifc, **l0;
-    Iplifc *lifc, **ll;
-
-    /* read the file */
-    fd = open(file, OREAD);
-    if(fd < 0)
-        return l;
-    n = 0;
-    while((i = read(fd, buf+n, sizeof(buf)-1-n)) > 0 && n < sizeof(buf) - 1)
-        n += i;
-    buf[n] = 0;
-    close(fd);
-
-    //if(strncmp(buf, "device", 6) != 0)
-    //    return _readoldipifc(buf, l, index);
-
-    /* ignore ifcs with no associated device */
-    if(strncmp(buf+6, "  ", 2) == 0)
-        return l;
-    /* allocate new interface */
-    *l = ifc = mallocz(sizeof(Ipifc), 1);
-    if(ifc == nil)
-        return l;
-    l0 = l;
-    l = &ifc->next;
-    ifc->index = index;
-
-    lines = getfields(buf, line, nelem(line), 1, "\n");
-
-    /* pick off device specific info(first line) */
-    n = tokenize(line[0], f, nelem(f));
-    if(n%2 != 0)
-        goto lose;
-    strncpy(ifc->dev, findfield("device", f, n), sizeof(ifc->dev));
-    ifc->dev[sizeof(ifc->dev)-1] = 0;
-    if(ifc->dev[0] == 0){
-lose:
-        free(ifc);
-        *l0 = nil;
-        return l;
-    }
-    ifc->mtu          = strtoul(findfield("maxtu", f, n), nil, 10);
-    ifc->sendra6      = atoi(findfield("sendra", f, n));
-    ifc->recvra6      = atoi(findfield("recvra", f, n));
-    ifc->rp.mflag     = atoi(findfield("mflag", f, n));
-    ifc->rp.oflag     = atoi(findfield("oflag", f, n));
-    ifc->rp.maxraint  = atoi(findfield("maxraint", f, n));
-    ifc->rp.minraint  = atoi(findfield("minraint", f, n));
-    ifc->rp.linkmtu   = atoi(findfield("linkmtu", f, n));
-    ifc->rp.reachtime = atoi(findfield("reachtime", f, n));
-    ifc->rp.rxmitra   = atoi(findfield("rxmitra", f, n));
-    ifc->rp.ttl       = atoi(findfield("ttl", f, n));
-    ifc->rp.routerlt  = atoi(findfield("routerlt", f, n));
-    ifc->pktin        = strtoul(findfield("pktin", f, n), nil, 10);
-    ifc->pktout       = strtoul(findfield("pktout", f, n), nil, 10);
-    ifc->errin        = strtoul(findfield("errin", f, n), nil, 10);
-    ifc->errout       = strtoul(findfield("errout", f, n), nil, 10);
-
-    /* now read the addresses */
-    ll = &ifc->lifc;
-    for(i = 1; i < lines; i++){
-        n = tokenize(line[i], f, nelem(f));
-        if(n < 5)
-            break;
-
-        /* allocate new local address */
-        *ll = lifc = mallocz(sizeof(Iplifc), 1);
-        ll = &lifc->next;
-
-        parseip(lifc->ip, f[0]);
-        parseipmask(lifc->mask, f[1]);
-        parseip(lifc->net, f[2]);
-
-        lifc->validlt = strtoul(f[3], nil, 10);
-        lifc->preflt = strtoul(f[4], nil, 10);
-    }
-
-    return l;
-}
-@
-
-
-<<function _freeifc>>=
-static void
-_freeifc(Ipifc *ifc)
-{
-    Ipifc *next;
-    Iplifc *lnext, *lifc;
-
-    if(ifc == nil)
-        return;
-    for(; ifc; ifc = next){
-        next = ifc->next;
-        for(lifc = ifc->lifc; lifc; lifc = lnext){
-            lnext = lifc->next;
-            free(lifc);
-        }
-        free(ifc);
-    }
-}
-@
-
-<<function findfield>>=
-static char*
-findfield(char *name, char **f, int n)
-{
-    int i;
-
-    for(i = 0; i < n-1; i++)
-        if(strcmp(f[i], name) == 0)
-            return f[i+1];
-    return "";
-}
-@
-
-%<<function _readoldipifc>>=
-%static Ipifc**
-%_readoldipifc(char *buf, Ipifc **l, int index)
-%{
-%    char *f[200];
-%    int i, n;
-%    Ipifc *ifc;
-%    Iplifc *lifc, **ll;
-%
-%    /* allocate new interface */
-%    *l = ifc = mallocz(sizeof(Ipifc), 1);
-%    if(ifc == nil)
-%        return l;
-%    l = &ifc->next;
-%    ifc->index = index;
-%
-%    n = tokenize(buf, f, nelem(f));
-%    if(n < 2)
-%        return l;
-%
-%    strncpy(ifc->dev, f[0], sizeof ifc->dev);
-%    ifc->dev[sizeof(ifc->dev) - 1] = 0;
-%    ifc->mtu = strtoul(f[1], nil, 10);
-%
-%    ll = &ifc->lifc;
-%    for(i = 2; n-i >= 7; i += 7){
-%        /* allocate new local address */
-%        *ll = lifc = mallocz(sizeof(Iplifc), 1);
-%        ll = &lifc->next;
-%
-%        parseip(lifc->ip, f[i]);
-%        parseipmask(lifc->mask, f[i+1]);
-%        parseip(lifc->net, f[i+2]);
-%        ifc->pktin = strtoul(f[i+3], nil, 10);
-%        ifc->pktout = strtoul(f[i+4], nil, 10);
-%        ifc->errin = strtoul(f[i+5], nil, 10);
-%        ifc->errout = strtoul(f[i+6], nil, 10);
-%    }
-%    return l;
-%}
-%@
-
-
-\subsection{[[/net/ipifc/x]]}
-
-<<function myipaddr>>=
-/* find first ip addr that isn't the friggin loopback address
- * unless there are no others 
- */
-int
-myipaddr(uchar *ip, char *net)
-{
-    Ipifc *nifc;
-    Iplifc *lifc;
-    static Ipifc *ifc;
-    uchar mynet[IPaddrlen];
-
-    ifc = readipifc(net, ifc, -1);
-    for(nifc = ifc; nifc; nifc = nifc->next)
-        for(lifc = nifc->lifc; lifc; lifc = lifc->next){
-            maskip(lifc->ip, loopbackmask, mynet);
-            if(ipcmp(mynet, loopbacknet) == 0){
-                continue;
-            }
-            if(ipcmp(lifc->ip, IPnoaddr) != 0){
-                ipmove(ip, lifc->ip);
-                return 0;
-            }
-        }
-    ipmove(ip, IPnoaddr);
-    return -1;
-}
-@
-
-\subsection{[[/net/ipifc/stats]]}
-
-<<function ipifcstats>>=
-int
-ipifcstats(Proto *ipifc, char *buf, int len)
-{
-    return ipstats(ipifc->f, buf, len);
-}
-@
-
-<<function ipstats>>=
-int
-ipstats(Fs *f, char *buf, int len)
-{
-    IP *ip;
-    char *p, *e;
-    int i;
-
-    ip = f->ip;
-    ip->stats[DefaultTTL] = MAXTTL;
-
-    p = buf;
-    e = p+len;
-    for(i = 0; i < Nipstats; i++)
-        p = seprint(p, e, "%s: %llud\n", statnames[i], ip->stats[i]);
-    return p - buf;
-}
-@
 
 \section{Advanced features}
 
@@ -5172,7 +5340,10 @@ else if(strcmp(cb->f[0], "maxfragsize") == 0){
 } 
 @
 
+% no framentation IP_DF here
+
 \subsection{Routing}
+% Router?
 
 <<[[ipiput4()]] locals>>=
 int hop, tos;
@@ -5208,7 +5379,7 @@ Conv conv;
         }
 
         /* reassemble if the interface expects it */
-if(r->ifc == nil) panic("nil route rfc");
+        if(r->ifc == nil) panic("nil route rfc");
         if(r->ifc->reassemble){
             frag = nhgets(h->frag);
             if(frag) {
@@ -5254,6 +5425,8 @@ Proto*  ipmux;      /* kludge for finding an ip multiplexor */
 if(f->ipmux)
     return f->ipmux;
 @
+
+
 
 \chapter{Physical Transport, Ethernet}
 
@@ -7865,64 +8038,9 @@ tcpinit(Fs *fs)
 
 \section{IPv6}
 
-\section{Network database, [[ndb]]}
-
-<<[[Fs(kernel)]] ndb fields>>=
-char  ndb[1024];    /* an ndb entry for this interface */
-int ndbvers;
-long  ndbmtime;
-@
-
-\subsection{[[/net/ndb]]}
-
-<<[[Qid]] toplevel extra cases>>=
-Qndb,
-@
-
-<<[[ip1gen()]] switch TYPE qid cases>>=
-case Qndb:
-    p = "ndb";
-    len = strlen(f->ndb);
-    q.vers = f->ndbvers;
-    break;
-@
-<<[[ipgen()]] if Qndb, adjust mtime>>=
-if(i == Qndb && f->ndbmtime > kerndate)
-    dp->mtime = f->ndbmtime;
-@
-<<[[ipopen()]] switch TYPE qid cases>>=
-case Qndb:
-    if(omode & (OWRITE|OTRUNC) && !iseve())
-        error(Eperm);
-    if((omode & (OWRITE|OTRUNC)) == (OWRITE|OTRUNC))
-        f->ndb[0] = 0;
-    break;
-@
-
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qndb:
-    return readstr(offset, a, n, f->ndb);
-@
-
-<<[[ipwrite()]] switch TYPE qid cases>>=
-case Qndb:
-    return ndbwrite(f, a, offset, n);
-    break;
-@
-
-
-\section{Connection Server}
-% abstract away different address schemes
-
-\section{Packet filter}
-% /net/ipmux
-
-\section{Sniffing}
-
-% promiscuous mode for ethernet, get all packets even those
-% which don't have your MAC as a recipient
-
 \section{Broadcast}
+
+% convention is that address has all 1s
 
 
 <<[[ipoput4()]] adjust gate and ifc if broadcast or multicast case>>=
@@ -7980,6 +8098,11 @@ void  (*leavemulti)(Ipifc *ifc, uchar *a, uchar *ia);
 Ipmulti *multi;     /* multicast bindings for this interface */
 @
 
+<<[[closeconv()]] if multi, call ipifcremmulti>>=
+while((mp = cv->multi) != nil)
+    ipifcremmulti(cv, mp->ma, mp->ia);
+@
+
 <<[[Netif(kernel)]] multicast fields>>=
 Netaddr *maddr;     /* known multicast addresses */
 int nmaddr;     /* number of known multicast addresses */
@@ -8024,6 +8147,65 @@ if(tentative && sendnbrdisc)
     icmpns(f, 0, SRC_UNSPEC, ip, TARG_MULTI, ifc->mac);
 @
 
+\section{Packet filter}
+
+% /net/ipmux
+
+\section{Network database, [[ndb]]}
+%less: or mv in advanced features of Name resolution chapter?
+
+<<[[Fs(kernel)]] ndb fields>>=
+char  ndb[1024];    /* an ndb entry for this interface */
+int ndbvers;
+long  ndbmtime;
+@
+
+\subsection{[[/net/ndb]]}
+
+<<[[Qid]] toplevel extra cases>>=
+Qndb,
+@
+
+<<[[ip1gen()]] switch TYPE qid cases>>=
+case Qndb:
+    p = "ndb";
+    len = strlen(f->ndb);
+    q.vers = f->ndbvers;
+    break;
+@
+<<[[ipgen()]] if Qndb, adjust mtime>>=
+if(i == Qndb && f->ndbmtime > kerndate)
+    dp->mtime = f->ndbmtime;
+@
+<<[[ipopen()]] switch TYPE qid cases>>=
+case Qndb:
+    if(omode & (OWRITE|OTRUNC) && !iseve())
+        error(Eperm);
+    if((omode & (OWRITE|OTRUNC)) == (OWRITE|OTRUNC))
+        f->ndb[0] = 0;
+    break;
+@
+
+<<[[ipread()]] switch TYPE qid cases>>=
+case Qndb:
+    return readstr(offset, a, n, f->ndb);
+@
+
+<<[[ipwrite()]] switch TYPE qid cases>>=
+case Qndb:
+    return ndbwrite(f, a, offset, n);
+    break;
+@
+
+
+\section{Connection Server}
+% abstract away different address schemes
+
+\section{Sniffing}
+
+% promiscuous mode for ethernet, get all packets even those
+% which don't have your MAC as a recipient
+
 \section{Point to point interface}
 
 <<[[ipifcadd()]] check for point to point interface>>=
@@ -8043,6 +8225,7 @@ if((type & (Rproxy|Rptpt)) == (Rproxy|Rptpt)){
 \section{Proxy}
 
 <<[[ipifcadd()]] switch argc, proxy case, and fall through>>=
+// add <ip> <mask> <rem> <mtu> proxy
 case 6:
     if(strcmp(argv[5], "proxy") == 0)
         type |= Rproxy;
@@ -8052,6 +8235,7 @@ case 6:
 \section{Bootp}
 
 \subsection{[[/net/bootp]]}
+% dead?
 
 <<[[Qid]] toplevel extra cases>>=
 Qbootp,
@@ -8065,6 +8249,15 @@ case Qbootp:
 case Qbootp:
     return bootpread(a, offset, n);
 @
+
+<<function bootpread>>=
+int
+bootpread(char*, ulong, int)
+{
+    return  0;
+}
+@
+%dead? then remove entirely inferno.c then
 
 
 \chapter{Conclusion}

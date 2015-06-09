@@ -55,7 +55,9 @@ enum
   /*e: constant Nchans */
   MAClen=   16,   /* longest mac address */
 
+  /*s: constant MAXTTL */
   MAXTTL=   255,
+  /*e: constant MAXTTL */
   DFLTTOS=  0,
 
   IPaddrlen=  16,
@@ -67,9 +69,14 @@ enum
   V4=   4,
   V6=   6,
 
+  /*s: constant IP_VER4 */
   IP_VER4=  0x40,
-  IP_VER6=  0x60,
+  /*e: constant IP_VER4 */
+  /*s: constant IP_HLEN4 */
   IP_HLEN4= 5,    /* v4: Header length in words */
+  /*e: constant IP_HLEN4 */
+  IP_VER6=  0x60,
+
   IP_DF=    0x4000,   /* v4: Don't fragment */
   IP_MF=    0x2000,   /* v4: More fragments */
   IP4HDR=   20,   /* sizeof(Ip4hdr) */

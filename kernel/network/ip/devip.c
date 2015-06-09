@@ -754,7 +754,9 @@ ipclose(Chan* c)
 /*s: enum _anon_ (kernel/network/ip/devip.c)2 */
 enum
 {
-    Statelen=   32*1024,
+    /*s: constant Statelen */
+        Statelen=   32*1024,
+    /*e: constant Statelen */
 };
 /*e: enum _anon_ (kernel/network/ip/devip.c)2 */
 
@@ -1545,7 +1547,7 @@ retry:
 
             break;
         }
-        /*s: [[Fsprotoclone()]] if canqlock */
+        /*s: [[Fsprotoclone()]] if found an unused entry */
         if(canqlock(cv)){
             /*
              *  make sure both processes and protocol
@@ -1559,7 +1561,7 @@ retry:
 
             qunlock(cv);
         }
-        /*e: [[Fsprotoclone()]] if canqlock */
+        /*e: [[Fsprotoclone()]] if found an unused entry */
     }
     /*e: [[Fsprotoclone()]] finding an available conversation in the protocol */
     /*s: [[Fsprotoclone()]] if no more available conv, garbage collect and retry */
