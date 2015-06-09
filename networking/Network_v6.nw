@@ -831,3 +831,97 @@ UDP6_PHDR_SZ = 40,
 UDP6_PHDR_OFF = 0,
 @
 
+<<[[ipiput4()]] call ipiput6 if block is not ipv4>>=
+if(BLKIPVER(bp) != IP_VER4) {
+    ipiput6(f, ifc, bp);
+    return;
+}
+@
+
+<<[[udpiput()]] locals>>=
+Udp6hdr *uh6;
+int oviclfl;
+@
+
+<<[[udpiput()]] checking checksum ipv6 case>>=
+case V6:
+    uh6 = (Udp6hdr*)(bp->rp);
+    len = nhgets(uh6->udplen);
+    oviclfl = nhgetl(uh6->viclfl);
+    olen = nhgets(uh6->len);
+    ottl = uh6->hoplimit;
+    ipmove(raddr, uh6->udpsrc);
+    ipmove(laddr, uh6->udpdst);
+    lport = nhgets(uh6->udpdport);
+    rport = nhgets(uh6->udpsport);
+    memset(uh6, 0, 8);
+    hnputl(uh6->viclfl, len);
+    uh6->hoplimit = IP_UDPPROTO;
+    if(ptclcsum(bp, UDP6_PHDR_OFF, len+UDP6_PHDR_SZ)) {
+        upriv->ustats.udpInErrors++;
+        netlog(f, Logudp, "udp: checksum error %I\n", raddr);
+        DPRINT("udp: checksum error %I\n", raddr);
+        freeblist(bp);
+        return;
+    }
+    hnputl(uh6->viclfl, oviclfl);
+    hnputs(uh6->len, olen);
+    uh6->nextheader = IP_UDPPROTO;
+    uh6->hoplimit = ottl;
+    break;
+@
+
+<<[[udpiput()]] no conversation found, ipv6 case>>=
+case V6:
+    icmphostunr(f, ifc, bp, Icmp6_port_unreach, 0);
+    break;
+@
+
+<<[[udpiput()]] trim the packet, ipv6 case>>=
+case V6:
+    bp = trimblock(bp, UDP6_IPHDR_SZ+UDP_UDPHDR_SZ, len);
+    break;
+@
+
+<<[[rr()]] else if ipv6 address>>=
+else
+    h = V6H(r->v6.address);
+@
+
+<<[[udpkick()]] set version to V4 or V6 if special headers>>=
+if(ucb->headers) {
+    if(memcmp(laddr, v4prefix, IPv4off) == 0
+    || ipcmp(laddr, IPnoaddr) == 0)
+        version = V4;
+    else
+        version = V6;
+}
+@
+
+<<[[udpiput()]] new conv to create, ipv6 case>>=
+case V6:
+    ipmove(laddr, ifc->lifc->local);
+    break;
+@
+
+<<[[udpiput()]] set version to V4 or V6>>=
+version = ((uh4->vihl&0xF0)==IP_VER6) ? V6 : V4;
+@
+
+<<[[Route]] ipv6 route union case>>=
+V6route v6;
+@
+
+<<[[Fsstdconnect()]] set ipversion field to V4 or V6>>=
+if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
+     memcmp(c->laddr, v4prefix, IPv4off) == 0)
+    || ipcmp(c->raddr, IPnoaddr) == 0)
+    c->ipversion = V4;
+else
+    c->ipversion = V6;
+@
+
+<<[[ipifcadd()]] add route if ipv6 case>>=
+else
+    v6addroute(f, tifc, rem, mask, rem, type);
+@

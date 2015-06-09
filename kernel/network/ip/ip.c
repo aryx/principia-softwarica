@@ -208,12 +208,14 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
     if(r->type & (Rifc|Runi))
         gate = eh->dst;
     else
+    /*s: [[ipoput4()]] adjust gate and ifc if broadcast or multicast case */
     if(r->type & (Rbcast|Rmulti)) {
         gate = eh->dst;
         sr = v4lookup(f, eh->src, nil);
         if(sr != nil && (sr->type & Runi))
             ifc = sr->ifc;
     }
+    /*e: [[ipoput4()]] adjust gate and ifc if broadcast or multicast case */
     else
         gate = r->v4.gate;
     /*e: [[ipoput4()]] set gate according to type of route */
@@ -370,25 +372,36 @@ free:
 void
 ipiput4(Fs *f, Ipifc *ifc, Block *bp)
 {
-    int hl;
-    int hop, tos, proto, olen;
-    Ip4hdr *h;
-    Proto *p;
-    ushort frag;
-    int notforme;
-    uchar *dp, v6dst[IPaddrlen];
     IP *ip;
+    Ip4hdr *h;
+    uchar v6dst[IPaddrlen];
+    // enum<protocol_type>
+    int proto;
+    Proto *p;
+    bool notforme;
+    /*s: [[ipiput4()]] locals */
+    int hl;
+    int olen;
+    uchar *dp;
+    /*x: [[ipiput4()]] locals */
+    ushort frag;
+    /*x: [[ipiput4()]] locals */
+    int hop, tos;
     Route *r;
     Conv conv;
+    /*e: [[ipiput4()]] locals */
 
+    /*s: [[ipiput4()]] call ipiput6 if block is not ipv4 */
     if(BLKIPVER(bp) != IP_VER4) {
         ipiput6(f, ifc, bp);
         return;
     }
+    /*e: [[ipiput4()]] call ipiput6 if block is not ipv4 */
 
     ip = f->ip;
     ip->stats[InReceives]++;
 
+    /*s: [[ipiput4()]] ensure we have all the header in the first block */
     /*
      *  Ensure we have all the header info in the first
      *  block.  Make life easier for other protocols by
@@ -404,9 +417,11 @@ ipiput4(Fs *f, Ipifc *ifc, Block *bp)
         if(bp == nil)
             return;
     }
+    /*e: [[ipiput4()]] ensure we have all the header in the first block */
 
     h = (Ip4hdr*)(bp->rp);
 
+    /*s: [[ipiput4()]] check header checksum */
     /* dump anything that whose header doesn't checksum */
     if((bp->flag & Bipck) == 0 && ipcsum(&h->vihl)) {
         ip->stats[InHdrErrors]++;
@@ -414,9 +429,12 @@ ipiput4(Fs *f, Ipifc *ifc, Block *bp)
         freeblist(bp);
         return;
     }
+    /*e: [[ipiput4()]] check header checksum */
+
     v4tov6(v6dst, h->dst);
     notforme = ipforme(f, v6dst) == 0;
 
+    /*s: [[ipiput4()]] check header length and version */
     /* Check header length and version */
     if((h->vihl&0x0F) != IP_HLEN4) {
         hl = (h->vihl&0xF)<<2;
@@ -427,7 +445,7 @@ ipiput4(Fs *f, Ipifc *ifc, Block *bp)
             return;
         }
         /* If this is not routed strip off the options */
-        if(notforme == 0) {
+        if(notforme == false) {
             olen = nhgets(h->length);
             dp = bp->rp + (hl - (IP_HLEN4<<2));
             memmove(dp, h, IP_HLEN4<<2);
@@ -437,57 +455,62 @@ ipiput4(Fs *f, Ipifc *ifc, Block *bp)
             hnputs(h->length, olen-hl+(IP_HLEN4<<2));
         }
     }
+    /*e: [[ipiput4()]] check header length and version */
 
-    /* route */
-    if(notforme) {
-        if(!ip->iprouting){
-            freeblist(bp);
-            return;
-        }
-
-        /* don't forward to source's network */
-        memset(&conv, 0, sizeof conv);
-        conv.r = nil;
-        r = v4lookup(f, h->dst, &conv);
-        if(r == nil || r->ifc == ifc){
-            ip->stats[OutDiscards]++;
-            freeblist(bp);
-            return;
-        }
-
-        /* don't forward if packet has timed out */
-        hop = h->ttl;
-        if(hop < 1) {
-            ip->stats[InHdrErrors]++;
-            icmpttlexceeded(f, ifc->lifc->local, bp);
-            freeblist(bp);
-            return;
-        }
-
-        /* reassemble if the interface expects it */
-if(r->ifc == nil) panic("nil route rfc");
-        if(r->ifc->reassemble){
-            frag = nhgets(h->frag);
-            if(frag) {
-                h->tos = 0;
-                if(frag & IP_MF)
-                    h->tos = 1;
-                bp = ip4reassemble(ip, frag, bp, h);
-                if(bp == nil)
-                    return;
-                h = (Ip4hdr*)(bp->rp);
+    /*s: [[ipiput4()]] if notforme */
+        /* route */
+        if(notforme) {
+            if(!ip->iprouting){
+                freeblist(bp);
+                return;
             }
+
+            /* don't forward to source's network */
+            memset(&conv, 0, sizeof conv);
+            conv.r = nil;
+            r = v4lookup(f, h->dst, &conv);
+            if(r == nil || r->ifc == ifc){
+                ip->stats[OutDiscards]++;
+                freeblist(bp);
+                return;
+            }
+
+            /* don't forward if packet has timed out */
+            hop = h->ttl;
+            if(hop < 1) {
+                ip->stats[InHdrErrors]++;
+                icmpttlexceeded(f, ifc->lifc->local, bp);
+                freeblist(bp);
+                return;
+            }
+
+            /* reassemble if the interface expects it */
+    if(r->ifc == nil) panic("nil route rfc");
+            if(r->ifc->reassemble){
+                frag = nhgets(h->frag);
+                if(frag) {
+                    h->tos = 0;
+                    if(frag & IP_MF)
+                        h->tos = 1;
+                    bp = ip4reassemble(ip, frag, bp, h);
+                    if(bp == nil)
+                        return;
+                    h = (Ip4hdr*)(bp->rp);
+                }
+            }
+
+            ip->stats[ForwDatagrams]++;
+            tos = h->tos;
+            hop = h->ttl;
+
+            ipoput4(f, bp, true, hop - 1, tos, &conv);
+
+            return;
         }
+    /*e: [[ipiput4()]] if notforme */
+    // else have a ipforme
 
-        ip->stats[ForwDatagrams]++;
-        tos = h->tos;
-        hop = h->ttl;
-
-        ipoput4(f, bp, true, hop - 1, tos, &conv);
-
-        return;
-    }
-
+    /*s: [[ipiput4()]] possibly defragment and reassemble */
     frag = nhgets(h->frag);
     if(frag) {
         h->tos = 0;
@@ -498,6 +521,7 @@ if(r->ifc == nil) panic("nil route rfc");
             return;
         h = (Ip4hdr*)(bp->rp);
     }
+    /*e: [[ipiput4()]] possibly defragment and reassemble */
 
     /* don't let any frag info go up the stack */
     h->frag[0] = 0;

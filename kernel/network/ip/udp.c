@@ -118,6 +118,7 @@ struct Udpstats
 /*s: struct Udppriv */
 struct Udppriv
 {
+    // hash<(ipaddr * port) , ref<Conv>>
     Ipht        ht;
 
     /*s: [[Udppriv]] stat fields */
@@ -400,29 +401,32 @@ udpkick(void *x, Block *bp)
 void
 udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 {
-    int len;
-    Udp4hdr *uh4;
-    Conv *c;
-
-    Udpcb *ucb;
-    uchar raddr[IPaddrlen], laddr[IPaddrlen];
-    ushort rport, lport;
-
-    Udp6hdr *uh6;
-
     Udppriv *upriv;
     Fs *f;
+    Udp4hdr *uh4;
     int version;
-    int ottl, oviclfl, olen;
+    uchar raddr[IPaddrlen], laddr[IPaddrlen];
+    ushort rport, lport;
+    Conv *c;
+    Udpcb *ucb;
+    int len;
+    /*s: [[udpiput()]] locals */
+    int ottl, olen;
+    /*x: [[udpiput()]] locals */
+    Udp6hdr *uh6;
+    int oviclfl;
+    /*e: [[udpiput()]] locals */
     uchar *p;
 
     upriv = udp->priv;
-    f = udp->f;
     upriv->ustats.udpInDatagrams++;
-
+    f = udp->f;
     uh4 = (Udp4hdr*)(bp->rp);
+    /*s: [[udpiput()]] set version to V4 or V6 */
     version = ((uh4->vihl&0xF0)==IP_VER6) ? V6 : V4;
+    /*e: [[udpiput()]] set version to V4 or V6 */
 
+    /*s: [[udpiput()]] checking checksum and setting rxxx, lxxx */
     /* Put back pseudo header for checksum
      * (remember old values for icmpnoconv()) */
     switch(version) {
@@ -451,6 +455,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         hnputs(uh4->udpplen, olen);
         break;
 
+    /*s: [[udpiput()]] checking checksum ipv6 case */
     case V6:
         uh6 = (Udp6hdr*)(bp->rp);
         len = nhgets(uh6->udplen);
@@ -476,14 +481,19 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         uh6->nextheader = IP_UDPPROTO;
         uh6->hoplimit = ottl;
         break;
+    /*e: [[udpiput()]] checking checksum ipv6 case */
+
     default:
         panic("udpiput: version %d", version);
         return; /* to avoid a warning */
     }
+    /*e: [[udpiput()]] checking checksum and setting rxxx, lxxx */
 
     qlock(udp);
 
+    // find the corresponding conversation
     c = iphtlook(&upriv->ht, raddr, rport, laddr, lport);
+    /*s: [[udpiput()]] if no conversation found */
     if(c == nil){
         /* no conversation found */
         upriv->ustats.udpNoPorts++;
@@ -495,9 +505,11 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         case V4:
             icmpnoconv(f, bp);
             break;
-        case V6:
-            icmphostunr(f, ifc, bp, Icmp6_port_unreach, 0);
-            break;
+         /*s: [[udpiput()]] no conversation found, ipv6 case */
+         case V6:
+             icmphostunr(f, ifc, bp, Icmp6_port_unreach, 0);
+             break;
+         /*e: [[udpiput()]] no conversation found, ipv6 case */
         default:
             panic("udpiput2: version %d", version);
         }
@@ -505,29 +517,36 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         freeblist(bp);
         return;
     }
+    /*e: [[udpiput()]] if no conversation found */
+
     ucb = (Udpcb*)c->ptcl;
 
     if(c->state == Announced){
         if(ucb->headers == 0){
             /* create a new conversation */
+            /*s: [[udpiput()]] new conv to create, adjust laddr if not Runi */
             if(ipforme(f, laddr) != Runi) {
                 switch(version){
                 case V4:
                     v4tov6(laddr, ifc->lifc->local);
                     break;
+                /*s: [[udpiput()]] new conv to create, ipv6 case */
                 case V6:
                     ipmove(laddr, ifc->lifc->local);
                     break;
+                /*e: [[udpiput()]] new conv to create, ipv6 case */
                 default:
                     panic("udpiput3: version %d", version);
                 }
             }
+            /*e: [[udpiput()]] new conv to create, adjust laddr if not Runi */
             c = Fsnewcall(c, raddr, rport, laddr, lport, version);
             if(c == nil){
                 qunlock(udp);
                 freeblist(bp);
                 return;
             }
+            // port may have changed?
             iphtadd(&upriv->ht, c);
             ucb = (Udpcb*)c->ptcl;
         }
@@ -536,6 +555,8 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     qlock(c);
     qunlock(udp);
 
+
+    /*s: [[udpiput()]] trim the packet, adjust bp removing header */
     /*
      * Trim the packet down to data size
      */
@@ -544,9 +565,11 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     case V4:
         bp = trimblock(bp, UDP4_IPHDR_SZ+UDP_UDPHDR_SZ, len);
         break;
+    /*s: [[udpiput()]] trim the packet, ipv6 case */
     case V6:
         bp = trimblock(bp, UDP6_IPHDR_SZ+UDP_UDPHDR_SZ, len);
         break;
+    /*e: [[udpiput()]] trim the packet, ipv6 case */
     default:
         bp = nil;
         panic("udpiput4: version %d", version);
@@ -558,10 +581,12 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         upriv->lenerr++;
         return;
     }
+    /*e: [[udpiput()]] trim the packet, adjust bp removing header */
 
     netlog(f, Logudpmsg, "udp: %I.%d -> %I.%d l %d\n", raddr, rport,
            laddr, lport, len);
 
+    /*s: [[udpiput()]] if special headers */
     switch(ucb->headers){
     case 7:
         /* pass the src address */
@@ -574,10 +599,12 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         hnputs(p, lport);
         break;
     }
+    /*e: [[udpiput()]] if special headers */
 
     if(bp->next)
         bp = concatblock(bp);
 
+    /*s: [[udpiput()]] if reading queue is full */
     if(qfull(c->rq)){
         qunlock(c);
         netlog(f, Logudp, "udp: qfull %I.%d -> %I.%d\n", raddr, rport,
@@ -585,6 +612,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
         freeblist(bp);
         return;
     }
+    /*e: [[udpiput()]] if reading queue is full */
 
     qpass(c->rq, bp);
     qunlock(c);

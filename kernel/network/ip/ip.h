@@ -46,7 +46,9 @@ enum
   /*s: constant Maxproto */
   Maxproto= 20,
   /*e: constant Maxproto */
+  /*s: constant Nhash */
   Nhash=    64,
+  /*e: constant Nhash */
   Maxincall=  32, /* max. conn.s in listen q not accepted yet */
   /*s: constant Nchans */
   Nchans=   1024,
@@ -102,7 +104,9 @@ enum mib_two_counters
 {
   Forwarding,
   DefaultTTL,
+
   InReceives,
+
   InHdrErrors,
   InAddrErrors,
   ForwDatagrams,
@@ -138,6 +142,7 @@ struct Fragment4
 
   ulong   src;
   ulong   dst;
+
   ushort  id;
   ulong   age;
 
@@ -235,6 +240,7 @@ struct Conv
   ushort  lport;      /* local port number */
   ushort  rport;      /* remote port number */
 
+  // enum<v6_or_v4>
   uchar ipversion;
 
   char  *owner;     /* protections */
@@ -251,6 +257,7 @@ struct Conv
   /*e: [[Conv(kernel)]] queue fields */
   /*s: [[Conv(kernel)]] routing fields */
   Route *r;     /* last route used */
+  /*x: [[Conv(kernel)]] routing fields */
   ulong rgen;     /* routetable generation for *r */
   /*e: [[Conv(kernel)]] routing fields */
   /*s: [[Conv(kernel)]] multicast fields */
@@ -267,9 +274,6 @@ struct Conv
   Rendez  cr;
   /*x: [[Conv(kernel)]] other fields */
   int inuse;      /* opens of listen/data/ctl */
-  /*x: [[Conv(kernel)]] other fields */
-  uint  ttl;      /* max time to live */
-  uint  tos;      /* type of service */
   /*x: [[Conv(kernel)]] other fields */
   int length;
   /*x: [[Conv(kernel)]] other fields */
@@ -290,6 +294,10 @@ struct Conv
   Rendez  listenr;
   /*x: [[Conv(kernel)]] other fields */
   char  cerr[ERRMAX];
+  /*x: [[Conv(kernel)]] other fields */
+  uint  tos;      /* type of service */
+  /*x: [[Conv(kernel)]] other fields */
+  uint  ttl;      /* max time to live */
   /*x: [[Conv(kernel)]] other fields */
   // option<int>, None = 0
   int maxfragsize;    /* If set, used for fragmentation */
@@ -365,8 +373,8 @@ struct Iplifc
   uchar remote[IPaddrlen];
 
   /*s: [[Iplifc(kernel)]] other fields */
-  uchar tentative;  /* =1 => v6 dup disc on, =0 => confirmed unique */
   uchar onlink;   /* =1 => onlink, =0 offlink. */
+  uchar tentative;  /* =1 => v6 dup disc on, =0 => confirmed unique */
   uchar autoflag; /* v6 autonomous flag */
   long  validlt;  /* v6 valid lifetime */
   long  preflt;   /* v6 preferred lifetime */
@@ -449,13 +457,14 @@ struct Ipifc
   /*x: [[Ipifc(kernel)]] other fields */
   /* these are used so that we can unbind on the fly */
   Lock  idlock;
-  uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
   int ref;    /* number of proc's using this ipifc */
   Rendez  wait;   /* where unbinder waits for ref == 0 */
   bool unbinding;
   /*x: [[Ipifc(kernel)]] other fields */
   Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
           used only if node is router */
+  /*x: [[Ipifc(kernel)]] other fields */
+  uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
   /*x: [[Ipifc(kernel)]] other fields */
   bool reassemble; /* reassemble IP packets before forwarding */
   /*e: [[Ipifc(kernel)]] other fields */
@@ -479,34 +488,47 @@ struct Ipmulti
 /*e: struct Ipmulti */
 
 /*s: enum _anon_ (kernel/network/ip/ip.h)4 */
-/*
- *  hash table for 2 ip addresses + 2 ports
- */
 enum
 {
+  /*s: constant Nipht */
   Nipht=    521,  /* convenient prime */
+  /*e: constant Nipht */
+};
+/*e: enum _anon_ (kernel/network/ip/ip.h)4 */
 
+/*s: enum matchtype */
+enum matchtype {
   IPmatchexact= 0,  /* match on 4 tuple */
+
   IPmatchany,   /* *!* */
   IPmatchport,    /* *!port */
   IPmatchaddr,    /* addr!* */
   IPmatchpa,    /* addr!port */
 };
-/*e: enum _anon_ (kernel/network/ip/ip.h)4 */
+/*e: enum matchtype */
 
 /*s: struct Iphash */
 struct Iphash
 {
-  Iphash  *next;
   Conv  *c;
+  // enum<matchtype>
   int match;
+
+  // Extra
+  Iphash  *next;
 };
 /*e: struct Iphash */
 /*s: struct Ipht */
+/*
+ *  hash table for 2 ip addresses + 2 ports
+ */
 struct Ipht
 {
-  Lock;
+  // hash<ipconvhash, ref<Conv>>, next = Iphash.next
   Iphash  *tab[Nipht];
+
+  // Extra
+  Lock;
 };
 /*e: struct Ipht */
 
@@ -604,6 +626,7 @@ struct Fs
   /*e: [[Fs(kernel)]] arp fields */
   /*s: [[Fs(kernel)]] routing fields */
   Route *v4root[1<<Lroot];  /* v4 routing forest */
+  /*x: [[Fs(kernel)]] routing fields */
   Route *queue;     /* used as temp when reinjecting routes */
   /*e: [[Fs(kernel)]] routing fields */
   /*s: [[Fs(kernel)]] ndb fields */
@@ -721,15 +744,18 @@ typedef struct V4route V4route;
 typedef struct V6route V6route;
 
 /*s: enum _anon_ (kernel/network/ip/ip.h)6 */
-enum
+enum route_type
 {
   /* type bits */
   Rv4=    (1<<0),   /* this is a version 4 route */
   Rifc=   (1<<1),   /* this route is a directly connected interface */
   Rptpt=    (1<<2),   /* this route is a pt to pt interface */
+
   Runi=   (1<<3),   /* a unicast self address */
+
   Rbcast=   (1<<4),   /* a broadcast self address */
   Rmulti=   (1<<5),   /* a multicast self address */
+
   Rproxy=   (1<<6),   /* this route should be proxied */
 };
 /*e: enum _anon_ (kernel/network/ip/ip.h)6 */
@@ -749,18 +775,25 @@ struct Routewalk
 /*s: struct RouteTree (kernel) */
 struct  RouteTree
 {
+  // bitset<enum<route_type> >
+  uchar type;
+
+  uchar depth;
+
+  Ipifc *ifc; // !!!
+
+  char  tag[4];
+  int ref;
+
+  /*s: [[Routetree]] other fields */
+  uchar ifcid;    /* must match ifc->id */
+  /*e: [[Routetree]] other fields */
+
+  // Extra
   Route*  right;
   Route*  left;
   Route*  mid;
 
-  uchar depth;
-  uchar type;
-
-  Ipifc *ifc; // !!!
-  uchar ifcid;    /* must match ifc->id */
-
-  char  tag[4];
-  int ref;
 };
 /*e: struct RouteTree (kernel) */
 
@@ -789,7 +822,9 @@ struct Route
 
   union {
     V4route v4;
+    /*s: [[Route]] ipv6 route union case */
     V6route v6;
+    /*e: [[Route]] ipv6 route union case */
   };
 };
 /*e: struct Route (kernel) */
@@ -844,6 +879,7 @@ struct Arpent
   Arpent  *nextrxt;   /* re-transmit chain */
   uint  rtime;      /* time for next retransmission */
   uchar rxtsrem;
+
   uchar ifcid;      /* must match ifc->id */
 
   // Extra

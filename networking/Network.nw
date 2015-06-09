@@ -496,6 +496,28 @@ maskip(uchar *from, uchar *mask, uchar *to)
 }
 @
 
+\subsection{Move, comparisons}
+
+% used a lot to reset an address
+<<global IPnoaddr>>=
+uchar IPnoaddr[IPaddrlen];
+@
+%    ipmove(cv->laddr, IPnoaddr);
+
+<<macro ipmove (kernel/network/ip/ip.h)>>=
+#define ipmove(x, y) memmove(x, y, IPaddrlen)
+@
+
+<<macro ipcmp (kernel/network/ip/ip.h)>>=
+#define ipcmp(x, y) ( (x)[IPaddrlen-1] != (y)[IPaddrlen-1] || memcmp(x, y, IPaddrlen) )
+@
+% first part is opti? fastest path is last elt of address is different?
+
+
+
+
+%\subsection{Forme} ?
+
 \section{IP Interface, [[Ipifc]]}
 
 % /net/ipifc/...
@@ -635,7 +657,6 @@ Conv  *conv;    /* link to its conversation structure */
 <<[[Ipifc(kernel)]] other fields>>=
 /* these are used so that we can unbind on the fly */
 Lock  idlock;
-uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
 int ref;    /* number of proc's using this ipifc */
 Rendez  wait;   /* where unbinder waits for ref == 0 */
 bool unbinding;
@@ -686,8 +707,8 @@ Iplink  *link;    /* addresses linked to this lifc */
 
 %XXX
 <<[[Iplifc(kernel)]] other fields>>=
-uchar tentative;  /* =1 => v6 dup disc on, =0 => confirmed unique */
 uchar onlink;   /* =1 => onlink, =0 offlink. */
+uchar tentative;  /* =1 => v6 dup disc on, =0 => confirmed unique */
 uchar autoflag; /* v6 autonomous flag */
 long  validlt;  /* v6 valid lifetime */
 long  preflt;   /* v6 preferred lifetime */
@@ -839,13 +860,6 @@ Maxproto= 20,
 @
 
 
-%XXX
-<<[[Fs(kernel)]] routing fields>>=
-Route *v4root[1<<Lroot];  /* v4 routing forest */
-Route *queue;     /* used as temp when reinjecting routes */
-@
-% >> >> 
-
 
 
 
@@ -910,6 +924,7 @@ struct Fragment4
 
   ulong   src;
   ulong   dst;
+
   ushort  id;
   ulong   age;
 
@@ -932,7 +947,9 @@ enum mib_two_counters
 {
   Forwarding,
   DefaultTTL,
+
   InReceives,
+
   InHdrErrors,
   InAddrErrors,
   ForwDatagrams,
@@ -994,10 +1011,6 @@ static char *statnames[] =
 
 
 
-%XXX
-<<[[IP(kernel)]] routing fields>>=
-bool iprouting;  /* true if we route like a gateway */
-@
 
 \subsection{[[Proto]]cols}
 
@@ -1122,6 +1135,7 @@ struct Conv
   ushort  lport;      /* local port number */
   ushort  rport;      /* remote port number */
 
+  // enum<v6_or_v4>
   uchar ipversion;
 
   char  *owner;     /* protections */
@@ -1226,18 +1240,10 @@ int inuse;      /* opens of listen/data/ctl */
 
 
 
-%XXX
-<<[[Conv(kernel)]] routing fields>>=
-Route *r;     /* last route used */
-ulong rgen;     /* routetable generation for *r */
-@
 
 
-%XXX
-<<[[Conv(kernel)]] other fields>>=
-uint  ttl;      /* max time to live */
-uint  tos;      /* type of service */
-@
+
+
 
 %XXX
 <<[[Conv(kernel)]] other fields>>=
@@ -1483,6 +1489,7 @@ struct Ip4hdr
 @
 % Do not change the order here!
 
+
 % id will be IP.id4, incremented in ipoput
 
 <<[[Fs(kernel)]] other fields>>=
@@ -1499,7 +1506,234 @@ int   ipproto;  /* ip protocol type */
 % protocol to dispatch.
 % It means also you can't have more than 256 Protocols!
 
+\section{IP address hashtable, [[Ipht]]}
+
+% another link with Conv!
+
+% used in Udppriv, Ilpriv, present later?
+<<struct Ipht>>=
+/*
+ *  hash table for 2 ip addresses + 2 ports
+ */
+struct Ipht
+{
+  // hash<ipconvhash, ref<Conv>>, next = Iphash.next
+  Iphash  *tab[Nipht];
+
+  // Extra
+  Lock;
+};
+@
+
+<<constant Nipht>>=
+Nipht=    521,  /* convenient prime */
+@
+
+<<struct Iphash>>=
+struct Iphash
+{
+  Conv  *c;
+  // enum<matchtype>
+  int match;
+
+  // Extra
+  Iphash  *next;
+};
+@
+% Conv connexion!
+
+<<enum matchtype>>=
+enum matchtype {
+  IPmatchexact= 0,  /* match on 4 tuple */
+
+  IPmatchany,   /* *!* */
+  IPmatchport,    /* *!port */
+  IPmatchaddr,    /* addr!* */
+  IPmatchpa,    /* addr!port */
+};
+@
+
+
+
+<<function iphash>>=
+/*
+ *  hashing tcp, udp, ... connections
+ */
+ulong
+iphash(uchar *sa, ushort sp, uchar *da, ushort dp)
+{
+    return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) % Nhash;
+}
+@
+% >> >> >>
+%bug? should be Nipht no?
+
+<<constant Nhash>>=
+Nhash=    64,
+@
+
+% if you want to connect, then need to give exact address and port
+% if you announce, then you can give regexps
+<<function iphtadd>>=
+void
+iphtadd(Ipht *ht, Conv *c)
+{
+    ulong hv;
+    Iphash *h;
+
+    hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
+    h = smalloc(sizeof(Iphash));
+    if(ipcmp(c->raddr, IPnoaddr) != 0)
+        h->match = IPmatchexact;
+    else {
+        if(ipcmp(c->laddr, IPnoaddr) != 0){
+            if(c->lport == 0)
+                h->match = IPmatchaddr;
+            else
+                h->match = IPmatchpa;
+        } else {
+            if(c->lport == 0)
+                h->match = IPmatchany;
+            else
+                h->match = IPmatchport;
+        }
+    }
+    h->c = c;
+
+    lock(ht);
+    h->next = ht->tab[hv];
+    ht->tab[hv] = h;
+    unlock(ht);
+}
+@
+
+<<function iphtrem>>=
+void
+iphtrem(Ipht *ht, Conv *c)
+{
+    ulong hv;
+    Iphash **l, *h;
+
+    hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
+    lock(ht);
+    for(l = &ht->tab[hv]; (*l) != nil; l = &(*l)->next)
+        if((*l)->c == c){
+            h = *l;
+            (*l) = h->next;
+            free(h);
+            break;
+        }
+    unlock(ht);
+}
+@
+
+<<function iphtlook>>=
+/* look for a matching conversation with the following precedence
+ *  connected && raddr,rport,laddr,lport
+ *  announced && laddr,lport
+ *  announced && *,lport
+ *  announced && laddr,*
+ *  announced && *,*
+ */
+Conv*
+iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
+{
+    ulong hv;
+    Iphash *h;
+    Conv *c;
+
+    /* exact 4 pair match (connection) */
+    hv = iphash(sa, sp, da, dp);
+    lock(ht);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchexact) {
+          c = h->c;
+          if(sp == c->rport && dp == c->lport
+             && ipcmp(sa, c->raddr) == 0 && ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
+        }
+    }
+
+    /* match local address and port */
+    hv = iphash(IPnoaddr, 0, da, dp);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchpa) {
+          c = h->c;
+          if(dp == c->lport && ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
+       }
+    }
+
+    /* match just port */
+    hv = iphash(IPnoaddr, 0, IPnoaddr, dp);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchport) {
+          c = h->c;
+          if(dp == c->lport){
+              unlock(ht);
+              return c;
+          }
+        }
+    }
+
+    /* match local address */
+    hv = iphash(IPnoaddr, 0, da, 0);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchaddr) {
+          c = h->c;
+          if(ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
+        }
+    }
+
+    /* look for something that matches anything */
+    hv = iphash(IPnoaddr, 0, IPnoaddr, 0);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchany) {
+          c = h->c;
+          unlock(ht);
+          return c;
+        }
+    }
+    unlock(ht);
+    return nil;
+}
+@
+
+
+
+
 \section{Route}
+
+<<[[Conv(kernel)]] routing fields>>=
+Route *r;     /* last route used */
+@
+
+
+<<[[Conv(kernel)]] routing fields>>=
+ulong rgen;     /* routetable generation for *r */
+@
+
+
+
+%XXX
+<<[[Fs(kernel)]] routing fields>>=
+Route *v4root[1<<Lroot];  /* v4 routing forest */
+@
+% >> >> 
+
+<<[[Fs(kernel)]] routing fields>>=
+Route *queue;     /* used as temp when reinjecting routes */
+@
+
+
+
 
 % this is the link with ipifc! From a conv you get an IP
 % and via vlookup4 you get a Route which is then linked to an ipifc!
@@ -1512,7 +1746,7 @@ struct Route
 
   union {
     V4route v4;
-    V6route v6;
+    <<[[Route]] ipv6 route union case>>
   };
 };
 @
@@ -1520,21 +1754,50 @@ struct Route
 <<struct RouteTree (kernel)>>=
 struct  RouteTree
 {
+  // bitset<enum<route_type> >
+  uchar type;
+
+  uchar depth;
+
+  Ipifc *ifc; // !!!
+
+  char  tag[4];
+  int ref;
+
+  <<[[Routetree]] other fields>>
+
+  // Extra
   Route*  right;
   Route*  left;
   Route*  mid;
 
-  uchar depth;
-  uchar type;
-
-  Ipifc *ifc; // !!!
-  uchar ifcid;    /* must match ifc->id */
-
-  char  tag[4];
-  int ref;
 };
 @
-% why need ifcid?
+% why need ifcid? because ifc may have changed! it may have been
+% binded to something else
+
+
+<<enum _anon_ (kernel/network/ip/ip.h)6>>=
+enum route_type
+{
+  /* type bits */
+  Rv4=    (1<<0),   /* this is a version 4 route */
+  Rifc=   (1<<1),   /* this route is a directly connected interface */
+  Rptpt=    (1<<2),   /* this route is a pt to pt interface */
+
+  Runi=   (1<<3),   /* a unicast self address */
+
+  Rbcast=   (1<<4),   /* a broadcast self address */
+  Rmulti=   (1<<5),   /* a multicast self address */
+
+  Rproxy=   (1<<6),   /* this route should be proxied */
+};
+@
+% >> >> >> >> >> >> >>
+% will see this different type in advanced section. The simplest one
+% for now is Runi
+%less: reorder? put Runi first?
+
 
 
 <<struct V4route>>=
@@ -1552,30 +1815,18 @@ struct V4route
 %    r = v4lookup(f, eh->dst, c);
 %    ifc = r->ifc !!
 
+\section{Blocks}
 
-\section{Ipht}
+% DS of the kernel
 
-% another link with Conv!
-
-<<struct Ipht>>=
-struct Ipht
-{
-  Lock;
-  Iphash  *tab[Nipht];
-};
+<<macro BLKIPVER>>=
+#define BLKIPVER(xp)    (((Ip4hdr*)((xp)->rp))->vihl&0xF0)
 @
 
-<<struct Iphash>>=
-struct Iphash
-{
-  Iphash  *next;
-  Conv  *c;
-  int match;
-};
+
+<<macro BLKIP>>=
+#define BLKIP(xp)   ((Ip4hdr*)((xp)->rp))
 @
-% Conv connexion!
-
-
 
 
 
@@ -1840,15 +2091,32 @@ Dev ipdevtab = {
     .stat     =    ipstat,
     .wstat    =    ipwstat,
                
+    .create   =    ipcreate,
+    .remove   =    ipremove,
+    .bread    =    ipbread,
+    .bwrite   =    ipbwrite,
     .reset    =    ipreset,
     .init     =    devinit,
     .shutdown =    devshutdown,
-    .create   =    ipcreate,
-    .bread    =    ipbread,
-    .bwrite   =    ipbwrite,
-    .remove   =    ipremove,
 };
 @
+
+<<function ipcreate>>=
+static void
+ipcreate(Chan*, char*, int, ulong)
+{
+    error(Eperm);
+}
+@
+
+<<function ipremove>>=
+static void
+ipremove(Chan*)
+{
+    error(Eperm);
+}
+@
+
 
 \subsection{[[/net]] hierarchy and [[ipwalk()]]}
 
@@ -2677,12 +2945,7 @@ Fsstdconnect(Conv *c, char *argv[], int argc)
             return err;
     }
 
-    if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
-        memcmp(c->laddr, v4prefix, IPv4off) == 0)
-        || ipcmp(c->raddr, IPnoaddr) == 0)
-        c->ipversion = V4;
-    else
-        c->ipversion = V6;
+    <<[[Fsstdconnect()]] set ipversion field to V4 or V6>>
 
     return nil;
 }
@@ -3310,6 +3573,15 @@ ipifcbind(Conv *cv, char **argv, int argc)
 }
 @
 
+<<[[Routetree]] other fields>>=
+uchar ifcid;    /* must match ifc->id */
+@
+
+<<[[Ipifc(kernel)]] other fields>>=
+uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
+@
+
+
 <<function ipfindmedium>>=
 /*
  *  find the medium with this name
@@ -3384,7 +3656,6 @@ ipifcctl(Conv* cv, char** argv, int argc)
 
 \subsection{Adding IP, [[/net/ipifc/x/ctl add]]}
 
-%TODO: lp split
 <<function ipifcadd>>=
 /*
  *  add an address to an interface.
@@ -3392,15 +3663,18 @@ ipifcctl(Conv* cv, char** argv, int argc)
 char*
 ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
 {
-    int i, mtu, sendnbrdisc = 0;
+    int i;
+    int mtu;
+    // enum<route_type>
     int type;
     uchar ip[IPaddrlen];
     uchar mask[IPaddrlen];
     uchar rem[IPaddrlen];
-    uchar bcast[IPaddrlen];
     uchar net[IPaddrlen];
     Iplifc *lifc, **l;
     Fs *f;
+
+    <<[[ipifcadd()]] locals>>
 
     if(ifc->m == nil)
         return "ipifc not yet bound to device";
@@ -3413,15 +3687,8 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     memset(rem, 0, IPaddrlen);
 
     switch(argc){
-    case 6:
-        if(strcmp(argv[5], "proxy") == 0)
-            type |= Rproxy;
-        /* fall through */
-    case 5:
-        mtu = strtoul(argv[4], 0, 0);
-        if(mtu >= ifc->m->mintu && mtu <= ifc->m->maxtu)
-            ifc->maxtu = mtu;
-        /* fall through */
+    <<[[ipifcadd()]] switch argc, proxy case, and fall through>>
+    <<[[ipifcadd()]] switch argc, mtu setting case, and fall through>>
     case 4:
         if (parseip(ip, argv[1]) == -1 || parseip(rem, argv[3]) == -1)
             return Ebadip;
@@ -3493,81 +3760,32 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         ;
     *l = lifc;
 
-    /* check for point-to-point interface */
-    if(ipcmp(ip, v6loopback)) /* skip v6 loopback, it's a special address */
-    if(ipcmp(mask, IPallbits) == 0)
-        type |= Rptpt;
+    <<[[ipifcadd()]] check for point to point interface>>
 
     /* add local routes */
     if(isv4(ip))
         v4addroute(f, tifc, rem+IPv4off, mask+IPv4off, rem+IPv4off, type);
-    else
-        v6addroute(f, tifc, rem, mask, rem, type);
+    <<[[ipifcadd()]] add route if ipv6 case>>
 
     addselfcache(f, ifc, lifc, ip, Runi);
 
-    if((type & (Rproxy|Rptpt)) == (Rproxy|Rptpt)){
-        ipifcregisterproxy(f, ifc, rem);
-        goto out;
-    }
+    <<[[ipifcadd()]] register proxy if point to point interface or proxy>>
 
     if(isv4(ip) || ipcmp(ip, IPnoaddr) == 0) {
-        /* add subnet directed broadcast address to the self cache */
-        for(i = 0; i < IPaddrlen; i++)
-            bcast[i] = (ip[i] & mask[i]) | ~mask[i];
-        addselfcache(f, ifc, lifc, bcast, Rbcast);
-
-        /* add subnet directed network address to the self cache */
-        for(i = 0; i < IPaddrlen; i++)
-            bcast[i] = (ip[i] & mask[i]) & mask[i];
-        addselfcache(f, ifc, lifc, bcast, Rbcast);
-
-        /* add network directed broadcast address to the self cache */
-        memmove(mask, defmask(ip), IPaddrlen);
-        for(i = 0; i < IPaddrlen; i++)
-            bcast[i] = (ip[i] & mask[i]) | ~mask[i];
-        addselfcache(f, ifc, lifc, bcast, Rbcast);
-
-        /* add network directed network address to the self cache */
-        memmove(mask, defmask(ip), IPaddrlen);
-        for(i = 0; i < IPaddrlen; i++)
-            bcast[i] = (ip[i] & mask[i]) & mask[i];
-        addselfcache(f, ifc, lifc, bcast, Rbcast);
-
-        addselfcache(f, ifc, lifc, IPv4bcast, Rbcast);
+        <<[[ipifcadd()]] add broadcast addresses to self cache>>
     }
     else {
-        if(ipcmp(ip, v6loopback) == 0) {
-            /* add node-local mcast address */
-            addselfcache(f, ifc, lifc, v6allnodesN, Rmulti);
-
-            /* add route for all node multicast */
-            v6addroute(f, tifc, v6allnodesN, v6allnodesNmask,
-                v6allnodesN, Rmulti);
-        }
-
-        /* add all nodes multicast address */
-        addselfcache(f, ifc, lifc, v6allnodesL, Rmulti);
-
-        /* add route for all nodes multicast */
-        v6addroute(f, tifc, v6allnodesL, v6allnodesLmask, v6allnodesL,
-            Rmulti);
-
-        /* add solicited-node multicast address */
-        ipv62smcast(bcast, ip);
-        addselfcache(f, ifc, lifc, bcast, Rmulti);
-
-        sendnbrdisc = 1;
+        <<[[ipifcadd()]] add multicast addresses to self cache>>
     }
 
     /* register the address on this network for address resolution */
     if(isv4(ip) && ifc->m->areg != nil)
+        // Medium dispatch
         (*ifc->m->areg)(ifc, ip);
 
 out:
     wunlock(ifc);
-    if(tentative && sendnbrdisc)
-        icmpns(f, 0, SRC_UNSPEC, ip, TARG_MULTI, ifc->mac);
+    <<[[ipifcadd()]] if tentative and broacast>>
     return nil;
 }
 @
@@ -3726,11 +3944,52 @@ etherbind(Ipifc *ifc, int argc, char **argv)
 
 \section{Advanced configurations}
 
+\subsection{MTU}
+
+<<[[ipifcadd()]] switch argc, mtu setting case, and fall through>>=
+case 5:
+    mtu = strtoul(argv[4], 0, 0);
+    if(mtu >= ifc->m->mintu && mtu <= ifc->m->maxtu)
+        ifc->maxtu = mtu;
+    /* fall through */
+@
+
+\subsection{TOS}
+
+<<[[Conv(kernel)]] other fields>>=
+uint  tos;      /* type of service */
+@
+
+<<function tosctlmsg>>=
+static void
+tosctlmsg(Conv *c, Cmdbuf *cb)
+{
+    if(cb->nf < 2)
+        c->tos = 0;
+    else
+        c->tos = atoi(cb->f[1]);
+}
+@
+
+\subsection{TTL}
+
+<<[[Conv(kernel)]] other fields>>=
+uint  ttl;      /* max time to live */
+@
+
+<<function ttlctlmsg>>=
+static void
+ttlctlmsg(Conv *c, Cmdbuf *cb)
+{
+    if(cb->nf < 2)
+        c->ttl = MAXTTL;
+    else
+        c->ttl = atoi(cb->f[1]);
+}
+@
 
 
-
-
-\chapter{IP}
+\chapter{Internetwork Transport, IP}
 
 % RFC 79, Internet Protocol
 
@@ -3879,6 +4138,66 @@ equivip4(uchar *a, uchar *b)
 
 % fault tolerance! important
 
+<<function ptclcsum>>=
+ushort
+ptclcsum(Block *bp, int offset, int len)
+{
+    uchar *addr;
+    ulong losum, hisum;
+    ushort csum;
+    int odd, blocklen, x;
+
+    /* Correct to front of data area */
+    while(bp != nil && offset && offset >= BLEN(bp)) {
+        offset -= BLEN(bp);
+        bp = bp->next;
+    }
+    if(bp == nil)
+        return 0;
+
+    addr = bp->rp + offset;
+    blocklen = BLEN(bp) - offset;
+
+    if(bp->next == nil) {
+        if(blocklen < len)
+            len = blocklen;
+        return ~ptclbsum(addr, len) & 0xffff;
+    }
+
+    losum = 0;
+    hisum = 0;
+
+    odd = 0;
+    while(len) {
+        x = blocklen;
+        if(len < x)
+            x = len;
+
+        csum = ptclbsum(addr, x);
+        if(odd)
+            hisum += csum;
+        else
+            losum += csum;
+        odd = (odd+x) & 1;
+        len -= x;
+
+        bp = bp->next;
+        if(bp == nil)
+            break;
+        blocklen = BLEN(bp);
+        addr = bp->rp;
+    }
+
+    losum += hisum>>8;
+    losum += (hisum&0xff)<<8;
+    while((csum = losum>>16) != 0)
+        losum = csum + (losum & 0xffff);
+
+    return ~losum & 0xffff;
+}
+@
+
+
 <<function ipcsum>>=
 ushort
 ipcsum(uchar *addr)
@@ -3979,12 +4298,7 @@ free:
 if(r->type & (Rifc|Runi))
     gate = eh->dst;
 else
-if(r->type & (Rbcast|Rmulti)) {
-    gate = eh->dst;
-    sr = v4lookup(f, eh->src, nil);
-    if(sr != nil && (sr->type & Runi))
-        ifc = sr->ifc;
-}
+<<[[ipoput4()]] adjust gate and ifc if broadcast or multicast case>>
 else
     gate = r->v4.gate;
 @
@@ -4159,142 +4473,46 @@ if(waserror()){
 
 \subsection{Reading, [[ipiput4()]]}
 
-% you don't know what is the destination! As opposed to
+% here you don't know what is the destination conversation! As opposed to
 % ipoput, here there is not yet any associated Conv.
+% This function actually do dispatch the packet to the right protocol,
+% which then will possibly dispatch to the right conversation (or create
+% a new one) 
 
-% ??? network interrupt?? -> <>
+% loopbackread | network interrupt?? -> <>
 <<function ipiput4>>=
 void
 ipiput4(Fs *f, Ipifc *ifc, Block *bp)
 {
-    int hl;
-    int hop, tos, proto, olen;
-    Ip4hdr *h;
-    Proto *p;
-    ushort frag;
-    int notforme;
-    uchar *dp, v6dst[IPaddrlen];
     IP *ip;
-    Route *r;
-    Conv conv;
+    Ip4hdr *h;
+    uchar v6dst[IPaddrlen];
+    // enum<protocol_type>
+    int proto;
+    Proto *p;
+    bool notforme;
+    <<[[ipiput4()]] locals>>
 
-    if(BLKIPVER(bp) != IP_VER4) {
-        ipiput6(f, ifc, bp);
-        return;
-    }
+    <<[[ipiput4()]] call ipiput6 if block is not ipv4>>
 
     ip = f->ip;
     ip->stats[InReceives]++;
 
-    /*
-     *  Ensure we have all the header info in the first
-     *  block.  Make life easier for other protocols by
-     *  collecting up to the first 64 bytes in the first block.
-     */
-    if(BLEN(bp) < 64) {
-        hl = blocklen(bp);
-        if(hl < IP4HDR)
-            hl = IP4HDR;
-        if(hl > 64)
-            hl = 64;
-        bp = pullupblock(bp, hl);
-        if(bp == nil)
-            return;
-    }
+    <<[[ipiput4()]] ensure we have all the header in the first block>>
 
     h = (Ip4hdr*)(bp->rp);
 
-    /* dump anything that whose header doesn't checksum */
-    if((bp->flag & Bipck) == 0 && ipcsum(&h->vihl)) {
-        ip->stats[InHdrErrors]++;
-        netlog(f, Logip, "ip: checksum error %V\n", h->src);
-        freeblist(bp);
-        return;
-    }
+    <<[[ipiput4()]] check header checksum>>
+
     v4tov6(v6dst, h->dst);
     notforme = ipforme(f, v6dst) == 0;
 
-    /* Check header length and version */
-    if((h->vihl&0x0F) != IP_HLEN4) {
-        hl = (h->vihl&0xF)<<2;
-        if(hl < (IP_HLEN4<<2)) {
-            ip->stats[InHdrErrors]++;
-            netlog(f, Logip, "ip: %V bad hivl %ux\n", h->src, h->vihl);
-            freeblist(bp);
-            return;
-        }
-        /* If this is not routed strip off the options */
-        if(notforme == 0) {
-            olen = nhgets(h->length);
-            dp = bp->rp + (hl - (IP_HLEN4<<2));
-            memmove(dp, h, IP_HLEN4<<2);
-            bp->rp = dp;
-            h = (Ip4hdr*)(bp->rp);
-            h->vihl = (IP_VER4|IP_HLEN4);
-            hnputs(h->length, olen-hl+(IP_HLEN4<<2));
-        }
-    }
+    <<[[ipiput4()]] check header length and version>>
 
-    /* route */
-    if(notforme) {
-        if(!ip->iprouting){
-            freeblist(bp);
-            return;
-        }
+    <<[[ipiput4()]] if notforme>>
+    // else have a ipforme
 
-        /* don't forward to source's network */
-        memset(&conv, 0, sizeof conv);
-        conv.r = nil;
-        r = v4lookup(f, h->dst, &conv);
-        if(r == nil || r->ifc == ifc){
-            ip->stats[OutDiscards]++;
-            freeblist(bp);
-            return;
-        }
-
-        /* don't forward if packet has timed out */
-        hop = h->ttl;
-        if(hop < 1) {
-            ip->stats[InHdrErrors]++;
-            icmpttlexceeded(f, ifc->lifc->local, bp);
-            freeblist(bp);
-            return;
-        }
-
-        /* reassemble if the interface expects it */
-if(r->ifc == nil) panic("nil route rfc");
-        if(r->ifc->reassemble){
-            frag = nhgets(h->frag);
-            if(frag) {
-                h->tos = 0;
-                if(frag & IP_MF)
-                    h->tos = 1;
-                bp = ip4reassemble(ip, frag, bp, h);
-                if(bp == nil)
-                    return;
-                h = (Ip4hdr*)(bp->rp);
-            }
-        }
-
-        ip->stats[ForwDatagrams]++;
-        tos = h->tos;
-        hop = h->ttl;
-
-        ipoput4(f, bp, true, hop - 1, tos, &conv);
-
-        return;
-    }
-
-    frag = nhgets(h->frag);
-    if(frag) {
-        h->tos = 0;
-        if(frag & IP_MF)
-            h->tos = 1;
-        bp = ip4reassemble(ip, frag, bp, h);
-        if(bp == nil)
-            return;
-        h = (Ip4hdr*)(bp->rp);
-    }
+    <<[[ipiput4()]] possibly defragment and reassemble>>
 
     /* don't let any frag info go up the stack */
     h->frag[0] = 0;
@@ -4317,6 +4535,46 @@ if(r->ifc == nil) panic("nil route rfc");
 }
 @
 
+\subsubsection{Checks}
+
+<<[[ipiput4()]] check header checksum>>=
+/* dump anything that whose header doesn't checksum */
+if((bp->flag & Bipck) == 0 && ipcsum(&h->vihl)) {
+    ip->stats[InHdrErrors]++;
+    netlog(f, Logip, "ip: checksum error %V\n", h->src);
+    freeblist(bp);
+    return;
+}
+@
+
+<<[[ipiput4()]] locals>>=
+int hl;
+int olen;
+uchar *dp;
+@
+
+<<[[ipiput4()]] check header length and version>>=
+/* Check header length and version */
+if((h->vihl&0x0F) != IP_HLEN4) {
+    hl = (h->vihl&0xF)<<2;
+    if(hl < (IP_HLEN4<<2)) {
+        ip->stats[InHdrErrors]++;
+        netlog(f, Logip, "ip: %V bad hivl %ux\n", h->src, h->vihl);
+        freeblist(bp);
+        return;
+    }
+    /* If this is not routed strip off the options */
+    if(notforme == false) {
+        olen = nhgets(h->length);
+        dp = bp->rp + (hl - (IP_HLEN4<<2));
+        memmove(dp, h, IP_HLEN4<<2);
+        bp->rp = dp;
+        h = (Ip4hdr*)(bp->rp);
+        h->vihl = (IP_VER4|IP_HLEN4);
+        hnputs(h->length, olen-hl+(IP_HLEN4<<2));
+    }
+}
+@
 
 \subsubsection{Protocol dispatching}
 % protocol demultiplexing
@@ -4334,6 +4592,23 @@ Fsrcvpcol(Fs* f, uchar proto)
 \subsubsection{Small receive}
 
 \subsubsection{Defragmentation}
+
+<<[[ipiput4()]] locals>>=
+ushort frag;
+@
+
+<<[[ipiput4()]] possibly defragment and reassemble>>=
+frag = nhgets(h->frag);
+if(frag) {
+    h->tos = 0;
+    if(frag & IP_MF)
+        h->tos = 1;
+    bp = ip4reassemble(ip, frag, bp, h);
+    if(bp == nil)
+        return;
+    h = (Ip4hdr*)(bp->rp);
+}
+@
 
 <<function ip4reassemble>>=
 Block*
@@ -4504,6 +4779,83 @@ ip4reassemble(IP *ip, int offset, Block *bp, Ip4hdr *ih)
 
 \subsubsection{Error managment}
 
+\subsubsection{Misc}
+
+<<[[ipiput4()]] ensure we have all the header in the first block>>=
+/*
+ *  Ensure we have all the header info in the first
+ *  block.  Make life easier for other protocols by
+ *  collecting up to the first 64 bytes in the first block.
+ */
+if(BLEN(bp) < 64) {
+    hl = blocklen(bp);
+    if(hl < IP4HDR)
+        hl = IP4HDR;
+    if(hl > 64)
+        hl = 64;
+    bp = pullupblock(bp, hl);
+    if(bp == nil)
+        return;
+}
+@
+
+\section{Fragments}
+
+<<function ipfragfree4>>=
+/*
+ * ipfragfree4 - Free a list of fragments - assume hold fraglock4
+ */
+void
+ipfragfree4(IP *ip, Fragment4 *frag)
+{
+    Fragment4 *fl, **l;
+
+    if(frag->blist)
+        freeblist(frag->blist);
+
+    frag->src = 0;
+    frag->id = 0;
+    frag->blist = nil;
+
+    l = &ip->flisthead4;
+    for(fl = *l; fl; fl = fl->next) {
+        if(fl == frag) {
+            *l = frag->next;
+            break;
+        }
+        l = &fl->next;
+    }
+
+    frag->next = ip->fragfree4;
+    ip->fragfree4 = frag;
+
+}
+@
+
+<<function ipfragallo4>>=
+/*
+ * ipfragallo4 - allocate a reassembly queue - assume hold fraglock4
+ */
+Fragment4 *
+ipfragallo4(IP *ip)
+{
+    Fragment4 *f;
+
+    while(ip->fragfree4 == nil) {
+        /* free last entry on fraglist */
+        for(f = ip->flisthead4; f->next; f = f->next)
+            ;
+        ipfragfree4(ip, f);
+    }
+    f = ip->fragfree4;
+    ip->fragfree4 = f->next;
+    f->next = ip->flisthead4;
+    ip->flisthead4 = f;
+    f->age = NOW + 30000;
+
+    return f;
+}
+@
 
 
 \section{IP Interface}
@@ -4820,11 +5172,76 @@ else if(strcmp(cb->f[0], "maxfragsize") == 0){
 } 
 @
 
+\subsection{Routing}
+
+<<[[ipiput4()]] locals>>=
+int hop, tos;
+Route *r;
+Conv conv;
+@
+
+<<[[ipiput4()]] if notforme>>=
+    /* route */
+    if(notforme) {
+        if(!ip->iprouting){
+            freeblist(bp);
+            return;
+        }
+
+        /* don't forward to source's network */
+        memset(&conv, 0, sizeof conv);
+        conv.r = nil;
+        r = v4lookup(f, h->dst, &conv);
+        if(r == nil || r->ifc == ifc){
+            ip->stats[OutDiscards]++;
+            freeblist(bp);
+            return;
+        }
+
+        /* don't forward if packet has timed out */
+        hop = h->ttl;
+        if(hop < 1) {
+            ip->stats[InHdrErrors]++;
+            icmpttlexceeded(f, ifc->lifc->local, bp);
+            freeblist(bp);
+            return;
+        }
+
+        /* reassemble if the interface expects it */
+if(r->ifc == nil) panic("nil route rfc");
+        if(r->ifc->reassemble){
+            frag = nhgets(h->frag);
+            if(frag) {
+                h->tos = 0;
+                if(frag & IP_MF)
+                    h->tos = 1;
+                bp = ip4reassemble(ip, frag, bp, h);
+                if(bp == nil)
+                    return;
+                h = (Ip4hdr*)(bp->rp);
+            }
+        }
+
+        ip->stats[ForwDatagrams]++;
+        tos = h->tos;
+        hop = h->ttl;
+
+        ipoput4(f, bp, true, hop - 1, tos, &conv);
+
+        return;
+    }
+@
+
+<<[[IP(kernel)]] routing fields>>=
+bool iprouting;  /* true if we route like a gateway */
+@
+
 \subsection{Forwarding}
 
 <<[[Ipifc(kernel)]] other fields>>=
 bool reassemble; /* reassemble IP packets before forwarding */
 @
+
 
 \subsection{IP multiplexer}
 
@@ -4838,7 +5255,7 @@ if(f->ipmux)
     return f->ipmux;
 @
 
-\chapter{Ethernet}
+\chapter{Physical Transport, Ethernet}
 
 % ethernet = CSMA-CD (carrier sense multiple access - collision detection)
 % with smart binary exponential backoff with random variation when have
@@ -5025,6 +5442,7 @@ struct Arpent
   Arpent  *nextrxt;   /* re-transmit chain */
   uint  rtime;      /* time for next retransmission */
   uchar rxtsrem;
+
   uchar ifcid;      /* must match ifc->id */
 
   // Extra
@@ -5264,6 +5682,55 @@ arpwrite(Fs *fs, char *s, int len)
 % ARP allows local routing
 % /net/iproute allows inter-network routing, find gateway
 
+
+<<function v4lookup>>=
+Route*
+v4lookup(Fs *f, uchar *a, Conv *c)
+{
+    Route *p, *q;
+    ulong la;
+    uchar gate[IPaddrlen];
+    Ipifc *ifc;
+
+    if(c != nil && c->r != nil && c->r->ifc != nil && c->rgen == v4routegeneration)
+        return c->r;
+
+    la = nhgetl(a);
+    q = nil;
+    for(p=f->v4root[V4H(la)]; p;)
+        if(la >= p->v4.address) {
+            if(la <= p->v4.endaddress) {
+                q = p;
+                p = p->mid;
+            } else
+                p = p->right;
+        } else
+            p = p->left;
+
+    if(q && (q->ifc == nil || q->ifcid != q->ifc->ifcid)){
+        if(q->type & Rifc) {
+            hnputl(gate+IPv4off, q->v4.address);
+            memmove(gate, v4prefix, IPv4off);
+        } else
+            v4tov6(gate, q->v4.gate);
+        ifc = findipifc(f, gate, q->type);
+        if(ifc == nil)
+            return nil;
+        q->ifc = ifc;
+        q->ifcid = ifc->ifcid;
+    }
+
+    if(c != nil){
+        c->r = q;
+        c->rgen = v4routegeneration;
+    }
+
+    return q;
+}
+@
+
+
+
 \section{[[/net/ipselftab]]}
 
 <<[[Qid]] toplevel extra cases>>=
@@ -5422,8 +5889,7 @@ rr(Route *r, Routewalk *rw)
 
     if(r->type & Rv4)
         h = V4H(r->v4.address);
-    else
-        h = V6H(r->v6.address);
+    <<[[rr()]] else if ipv6 address>>
 
     if(h == rw->h)
         rw->walk(r, rw);
@@ -5526,8 +5992,9 @@ routewrite(Fs *f, Chan *c, char *p, int n)
 @
 
 
-\chapter{Basic Transmission, UDP}
-% Unreliable, Unordered :)
+\chapter{Basic Communication, UDP}
+% U for Unreliable, Unordered :)
+% Transmission?
 
 %RFC 768 User Datagram Protocol
 
@@ -5593,12 +6060,13 @@ Nchans=   1024,
 <<struct Udppriv>>=
 struct Udppriv
 {
+    // hash<(ipaddr * port) , ref<Conv>>
     Ipht        ht;
 
     <<[[Udppriv]] stat fields>>
 };
 @
-%todo: Ipht? Ip hash table?
+%todo: Ipht? Ip hash table? for the Conv dispatch?
 
 \subsection{Statistics}
 
@@ -5694,7 +6162,7 @@ struct Udphdr
 };
 @
 % do not change the order here :)
-% who uses that?
+%dead? who uses that?
 
 \section{[[/net/tcp/clone]]}
 
@@ -5867,134 +6335,45 @@ udpkick(void *x, Block *bp)
 void
 udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 {
-    int len;
-    Udp4hdr *uh4;
-    Conv *c;
-
-    Udpcb *ucb;
-    uchar raddr[IPaddrlen], laddr[IPaddrlen];
-    ushort rport, lport;
-
-    Udp6hdr *uh6;
-
     Udppriv *upriv;
     Fs *f;
+    Udp4hdr *uh4;
     int version;
-    int ottl, oviclfl, olen;
+    uchar raddr[IPaddrlen], laddr[IPaddrlen];
+    ushort rport, lport;
+    Conv *c;
+    Udpcb *ucb;
+    int len;
+    <<[[udpiput()]] locals>>
     uchar *p;
 
     upriv = udp->priv;
-    f = udp->f;
     upriv->ustats.udpInDatagrams++;
-
+    f = udp->f;
     uh4 = (Udp4hdr*)(bp->rp);
-    version = ((uh4->vihl&0xF0)==IP_VER6) ? V6 : V4;
+    <<[[udpiput()]] set version to V4 or V6>>
 
-    /* Put back pseudo header for checksum
-     * (remember old values for icmpnoconv()) */
-    switch(version) {
-    case V4:
-        ottl = uh4->Unused;
-        uh4->Unused = 0;
-        len = nhgets(uh4->udplen);
-        olen = nhgets(uh4->udpplen);
-        hnputs(uh4->udpplen, len);
-
-        v4tov6(raddr, uh4->udpsrc);
-        v4tov6(laddr, uh4->udpdst);
-        lport = nhgets(uh4->udpdport);
-        rport = nhgets(uh4->udpsport);
-
-        if(nhgets(uh4->udpcksum)) {
-            if(ptclcsum(bp, UDP4_PHDR_OFF, len+UDP4_PHDR_SZ)) {
-                upriv->ustats.udpInErrors++;
-                netlog(f, Logudp, "udp: checksum error %I\n", raddr);
-                DPRINT("udp: checksum error %I\n", raddr);
-                freeblist(bp);
-                return;
-            }
-        }
-        uh4->Unused = ottl;
-        hnputs(uh4->udpplen, olen);
-        break;
-
-    case V6:
-        uh6 = (Udp6hdr*)(bp->rp);
-        len = nhgets(uh6->udplen);
-        oviclfl = nhgetl(uh6->viclfl);
-        olen = nhgets(uh6->len);
-        ottl = uh6->hoplimit;
-        ipmove(raddr, uh6->udpsrc);
-        ipmove(laddr, uh6->udpdst);
-        lport = nhgets(uh6->udpdport);
-        rport = nhgets(uh6->udpsport);
-        memset(uh6, 0, 8);
-        hnputl(uh6->viclfl, len);
-        uh6->hoplimit = IP_UDPPROTO;
-        if(ptclcsum(bp, UDP6_PHDR_OFF, len+UDP6_PHDR_SZ)) {
-            upriv->ustats.udpInErrors++;
-            netlog(f, Logudp, "udp: checksum error %I\n", raddr);
-            DPRINT("udp: checksum error %I\n", raddr);
-            freeblist(bp);
-            return;
-        }
-        hnputl(uh6->viclfl, oviclfl);
-        hnputs(uh6->len, olen);
-        uh6->nextheader = IP_UDPPROTO;
-        uh6->hoplimit = ottl;
-        break;
-    default:
-        panic("udpiput: version %d", version);
-        return; /* to avoid a warning */
-    }
+    <<[[udpiput()]] checking checksum and setting rxxx, lxxx>>
 
     qlock(udp);
 
+    // find the corresponding conversation
     c = iphtlook(&upriv->ht, raddr, rport, laddr, lport);
-    if(c == nil){
-        /* no conversation found */
-        upriv->ustats.udpNoPorts++;
-        qunlock(udp);
-        netlog(f, Logudp, "udp: no conv %I!%d -> %I!%d\n", raddr, rport,
-               laddr, lport);
+    <<[[udpiput()]] if no conversation found>>
 
-        switch(version){
-        case V4:
-            icmpnoconv(f, bp);
-            break;
-        case V6:
-            icmphostunr(f, ifc, bp, Icmp6_port_unreach, 0);
-            break;
-        default:
-            panic("udpiput2: version %d", version);
-        }
-
-        freeblist(bp);
-        return;
-    }
     ucb = (Udpcb*)c->ptcl;
 
     if(c->state == Announced){
         if(ucb->headers == 0){
             /* create a new conversation */
-            if(ipforme(f, laddr) != Runi) {
-                switch(version){
-                case V4:
-                    v4tov6(laddr, ifc->lifc->local);
-                    break;
-                case V6:
-                    ipmove(laddr, ifc->lifc->local);
-                    break;
-                default:
-                    panic("udpiput3: version %d", version);
-                }
-            }
+            <<[[udpiput()]] new conv to create, adjust laddr if not Runi>>
             c = Fsnewcall(c, raddr, rport, laddr, lport, version);
             if(c == nil){
                 qunlock(udp);
                 freeblist(bp);
                 return;
             }
+            // port may have changed?
             iphtadd(&upriv->ht, c);
             ucb = (Udpcb*)c->ptcl;
         }
@@ -6003,65 +6382,184 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     qlock(c);
     qunlock(udp);
 
-    /*
-     * Trim the packet down to data size
-     */
-    len -= UDP_UDPHDR_SZ;
-    switch(version){
-    case V4:
-        bp = trimblock(bp, UDP4_IPHDR_SZ+UDP_UDPHDR_SZ, len);
-        break;
-    case V6:
-        bp = trimblock(bp, UDP6_IPHDR_SZ+UDP_UDPHDR_SZ, len);
-        break;
-    default:
-        bp = nil;
-        panic("udpiput4: version %d", version);
-    }
-    if(bp == nil){
-        qunlock(c);
-        netlog(f, Logudp, "udp: len err %I.%d -> %I.%d\n", raddr, rport,
-               laddr, lport);
-        upriv->lenerr++;
-        return;
-    }
+
+    <<[[udpiput()]] trim the packet, adjust bp removing header>>
 
     netlog(f, Logudpmsg, "udp: %I.%d -> %I.%d l %d\n", raddr, rport,
            laddr, lport, len);
 
-    switch(ucb->headers){
-    case 7:
-        /* pass the src address */
-        bp = padblock(bp, UDP_USEAD7);
-        p = bp->rp;
-        ipmove(p, raddr); p += IPaddrlen;
-        ipmove(p, laddr); p += IPaddrlen;
-        ipmove(p, ifc->lifc->local); p += IPaddrlen;
-        hnputs(p, rport); p += 2;
-        hnputs(p, lport);
-        break;
-    }
+    <<[[udpiput()]] if special headers>>
 
     if(bp->next)
         bp = concatblock(bp);
 
-    if(qfull(c->rq)){
-        qunlock(c);
-        netlog(f, Logudp, "udp: qfull %I.%d -> %I.%d\n", raddr, rport,
-               laddr, lport);
-        freeblist(bp);
-        return;
-    }
+    <<[[udpiput()]] if reading queue is full>>
 
     qpass(c->rq, bp);
     qunlock(c);
 
 }
 @
-% pass to reading queue! if not full, otherwise have to drop
+% pass to reading queue of conversation! if not full, otherwise have to drop
 
 % lots of hngets
 
+\subsubsection{New conversation}
+
+<<function Fsnewcall>>=
+/*
+ *  called with protocol locked
+ */
+Conv*
+Fsnewcall(Conv *c, uchar *raddr, ushort rport, uchar *laddr, ushort lport, uchar version)
+{
+    Conv *nc;
+    Conv **l;
+    int i;
+
+    qlock(c);
+    i = 0;
+    for(l = &c->incall; *l; l = &(*l)->next)
+        i++;
+    if(i >= Maxincall) {
+        static bool beenhere;
+
+        qunlock(c);
+        if (!beenhere) {
+            beenhere = true;
+            print("Fsnewcall: incall queue full (%d) on port %d\n",
+                i, c->lport);
+        }
+        return nil;
+    }
+
+    /* find a free conversation */
+    nc = Fsprotoclone(c->p, network);
+    if(nc == nil) {
+        qunlock(c);
+        return nil;
+    }
+    ipmove(nc->raddr, raddr);
+    nc->rport = rport;
+    ipmove(nc->laddr, laddr);
+    nc->lport = lport;
+
+    nc->next = nil;
+    *l = nc;
+
+    nc->state = Connected;
+    nc->ipversion = version;
+
+    qunlock(c);
+
+    wakeup(&c->listenr);
+
+    return nc;
+}
+@
+
+
+\subsubsection{Checks}
+
+<<[[udpiput()]] locals>>=
+int ottl, olen;
+@
+
+<<[[udpiput()]] checking checksum and setting rxxx, lxxx>>=
+/* Put back pseudo header for checksum
+ * (remember old values for icmpnoconv()) */
+switch(version) {
+case V4:
+    ottl = uh4->Unused;
+    uh4->Unused = 0;
+    len = nhgets(uh4->udplen);
+    olen = nhgets(uh4->udpplen);
+    hnputs(uh4->udpplen, len);
+
+    v4tov6(raddr, uh4->udpsrc);
+    v4tov6(laddr, uh4->udpdst);
+    lport = nhgets(uh4->udpdport);
+    rport = nhgets(uh4->udpsport);
+
+    if(nhgets(uh4->udpcksum)) {
+        if(ptclcsum(bp, UDP4_PHDR_OFF, len+UDP4_PHDR_SZ)) {
+            upriv->ustats.udpInErrors++;
+            netlog(f, Logudp, "udp: checksum error %I\n", raddr);
+            DPRINT("udp: checksum error %I\n", raddr);
+            freeblist(bp);
+            return;
+        }
+    }
+    uh4->Unused = ottl;
+    hnputs(uh4->udpplen, olen);
+    break;
+
+<<[[udpiput()]] checking checksum ipv6 case>>
+
+default:
+    panic("udpiput: version %d", version);
+    return; /* to avoid a warning */
+}
+@
+
+\subsubsection{Trim the packet}
+
+<<[[udpiput()]] trim the packet, adjust bp removing header>>=
+/*
+ * Trim the packet down to data size
+ */
+len -= UDP_UDPHDR_SZ;
+switch(version){
+case V4:
+    bp = trimblock(bp, UDP4_IPHDR_SZ+UDP_UDPHDR_SZ, len);
+    break;
+<<[[udpiput()]] trim the packet, ipv6 case>>
+default:
+    bp = nil;
+    panic("udpiput4: version %d", version);
+}
+if(bp == nil){
+    qunlock(c);
+    netlog(f, Logudp, "udp: len err %I.%d -> %I.%d\n", raddr, rport,
+           laddr, lport);
+    upriv->lenerr++;
+    return;
+}
+@
+
+\subsubsection{Error managment}
+
+<<[[udpiput()]] if no conversation found>>=
+if(c == nil){
+    /* no conversation found */
+    upriv->ustats.udpNoPorts++;
+    qunlock(udp);
+    netlog(f, Logudp, "udp: no conv %I!%d -> %I!%d\n", raddr, rport,
+           laddr, lport);
+
+    switch(version){
+    case V4:
+        icmpnoconv(f, bp);
+        break;
+     <<[[udpiput()]] no conversation found, ipv6 case>>
+    default:
+        panic("udpiput2: version %d", version);
+    }
+
+    freeblist(bp);
+    return;
+}
+@
+
+<<[[udpiput()]] if reading queue is full>>=
+if(qfull(c->rq)){
+    qunlock(c);
+    netlog(f, Logudp, "udp: qfull %I.%d -> %I.%d\n", raddr, rport,
+           laddr, lport);
+    freeblist(bp);
+    return;
+}
+@
 
 \section{Other files}
 
@@ -6098,6 +6596,21 @@ udpstate(Conv *cv, char *state, int n)
 @
 
 \section{Advanced features}
+
+\subsection{Not regular forme}
+
+<<[[udpiput()]] new conv to create, adjust laddr if not Runi>>=
+if(ipforme(f, laddr) != Runi) {
+    switch(version){
+    case V4:
+        v4tov6(laddr, ifc->lifc->local);
+        break;
+    <<[[udpiput()]] new conv to create, ipv6 case>>
+    default:
+        panic("udpiput3: version %d", version);
+    }
+}
+@
 
 \subsection{User level UDP headers}
 % need that? remove? for debugging?
@@ -6174,15 +6687,6 @@ default:
 }
 @
 
-<<[[udpkick()]] set version to V4 or V6 if special headers>>=
-if(ucb->headers) {
-    if(memcmp(laddr, v4prefix, IPv4off) == 0
-    || ipcmp(laddr, IPnoaddr) == 0)
-        version = V4;
-    else
-        version = V6;
-}
-@
 
 <<[[udpkick()]] if special headers>>=
 if(ucb->headers) {
@@ -6193,7 +6697,23 @@ if(ucb->headers) {
 } 
 @
 
-\chapter{Reliable Transmission, IL}
+
+<<[[udpiput()]] if special headers>>=
+switch(ucb->headers){
+case 7:
+    /* pass the src address */
+    bp = padblock(bp, UDP_USEAD7);
+    p = bp->rp;
+    ipmove(p, raddr); p += IPaddrlen;
+    ipmove(p, laddr); p += IPaddrlen;
+    ipmove(p, ifc->lifc->local); p += IPaddrlen;
+    hnputs(p, rport); p += 2;
+    hnputs(p, lport);
+    break;
+}
+@
+
+\chapter{Reliable Communication, IL}
 
 % For Internet Link
 
@@ -7274,7 +7794,7 @@ if(argc > 1){
 % ilspec field
 
 
-\chapter{Standard Reliable Transmission, TCP}
+\chapter{Standard Reliable Communication, TCP}
 
 % RFC 793, Transmission Control Protocol
 
@@ -7404,6 +7924,46 @@ case Qndb:
 
 \section{Broadcast}
 
+
+<<[[ipoput4()]] adjust gate and ifc if broadcast or multicast case>>=
+if(r->type & (Rbcast|Rmulti)) {
+    gate = eh->dst;
+    sr = v4lookup(f, eh->src, nil);
+    if(sr != nil && (sr->type & Runi))
+        ifc = sr->ifc;
+}
+@
+
+<<[[ipifcadd()]] locals>>=
+uchar bcast[IPaddrlen];
+@
+
+<<[[ipifcadd()]] add broadcast addresses to self cache>>=
+/* add subnet directed broadcast address to the self cache */
+for(i = 0; i < IPaddrlen; i++)
+    bcast[i] = (ip[i] & mask[i]) | ~mask[i];
+addselfcache(f, ifc, lifc, bcast, Rbcast);
+
+/* add subnet directed network address to the self cache */
+for(i = 0; i < IPaddrlen; i++)
+    bcast[i] = (ip[i] & mask[i]) & mask[i];
+addselfcache(f, ifc, lifc, bcast, Rbcast);
+
+/* add network directed broadcast address to the self cache */
+memmove(mask, defmask(ip), IPaddrlen);
+for(i = 0; i < IPaddrlen; i++)
+    bcast[i] = (ip[i] & mask[i]) | ~mask[i];
+addselfcache(f, ifc, lifc, bcast, Rbcast);
+
+/* add network directed network address to the self cache */
+memmove(mask, defmask(ip), IPaddrlen);
+for(i = 0; i < IPaddrlen; i++)
+    bcast[i] = (ip[i] & mask[i]) & mask[i];
+addselfcache(f, ifc, lifc, bcast, Rbcast);
+
+addselfcache(f, ifc, lifc, IPv4bcast, Rbcast);
+@
+
 \section{Multicast}
 
 <<[[Medium(kernel)]] multicast methods>>=
@@ -7428,6 +7988,65 @@ Netaddr *mhash[Nmhash];   /* hash table of multicast addresses */
 
 <<[[Netif(kernel)]] multicast methods>>=
 void  (*multicast)(void*, uchar*, int);
+@
+
+
+<<[[ipifcadd()]] add multicast addresses to self cache>>=
+if(ipcmp(ip, v6loopback) == 0) {
+    /* add node-local mcast address */
+    addselfcache(f, ifc, lifc, v6allnodesN, Rmulti);
+
+    /* add route for all node multicast */
+    v6addroute(f, tifc, v6allnodesN, v6allnodesNmask,
+        v6allnodesN, Rmulti);
+}
+
+/* add all nodes multicast address */
+addselfcache(f, ifc, lifc, v6allnodesL, Rmulti);
+
+/* add route for all nodes multicast */
+v6addroute(f, tifc, v6allnodesL, v6allnodesLmask, v6allnodesL,
+    Rmulti);
+
+/* add solicited-node multicast address */
+ipv62smcast(bcast, ip);
+addselfcache(f, ifc, lifc, bcast, Rmulti);
+
+sendnbrdisc = true;
+@
+
+<<[[ipifcadd()]] locals>>=
+bool sendnbrdisc = false;
+@
+
+<<[[ipifcadd()]] if tentative and broacast>>=
+if(tentative && sendnbrdisc)
+    icmpns(f, 0, SRC_UNSPEC, ip, TARG_MULTI, ifc->mac);
+@
+
+\section{Point to point interface}
+
+<<[[ipifcadd()]] check for point to point interface>>=
+/* check for point-to-point interface */
+if(ipcmp(ip, v6loopback)) /* skip v6 loopback, it's a special address */
+if(ipcmp(mask, IPallbits) == 0)
+    type |= Rptpt;
+@
+
+<<[[ipifcadd()]] register proxy if point to point interface or proxy>>=
+if((type & (Rproxy|Rptpt)) == (Rproxy|Rptpt)){
+    ipifcregisterproxy(f, ifc, rem);
+    goto out;
+}
+@
+
+\section{Proxy}
+
+<<[[ipifcadd()]] switch argc, proxy case, and fall through>>=
+case 6:
+    if(strcmp(argv[5], "proxy") == 0)
+        type |= Rproxy;
+    /* fall through */
 @
 
 \section{Bootp}

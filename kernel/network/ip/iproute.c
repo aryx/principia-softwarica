@@ -22,7 +22,8 @@ static Route*   v6freelist;
 /*s: global routelock */
 static RWlock   routelock;
 /*e: global routelock */
-static ulong    v4routegeneration, v6routegeneration;
+static ulong v4routegeneration;
+static ulong v6routegeneration;
 
 /*s: function freeroute */
 static void
@@ -750,8 +751,10 @@ rr(Route *r, Routewalk *rw)
 
     if(r->type & Rv4)
         h = V4H(r->v4.address);
+    /*s: [[rr()]] else if ipv6 address */
     else
         h = V6H(r->v6.address);
+    /*e: [[rr()]] else if ipv6 address */
 
     if(h == rw->h)
         rw->walk(r, rw);

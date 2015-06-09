@@ -403,9 +403,6 @@ uchar IPallbits[IPaddrlen] = {
 };
 @
 
-<<global IPnoaddr>>=
-uchar IPnoaddr[IPaddrlen];
-@
 
 
 
@@ -3578,7 +3575,7 @@ enum
 {
   Addrlen=  64,
   <<constant Maxproto>>
-  Nhash=    64,
+  <<constant Nhash>>
   Maxincall=  32, /* max. conn.s in listen q not accepted yet */
   <<constant Nchans>>
   MAClen=   16,   /* longest mac address */
@@ -3683,18 +3680,9 @@ struct Ipmulti
 @
 
 <<enum _anon_ (kernel/network/ip/ip.h)4>>=
-/*
- *  hash table for 2 ip addresses + 2 ports
- */
 enum
 {
-  Nipht=    521,  /* convenient prime */
-
-  IPmatchexact= 0,  /* match on 4 tuple */
-  IPmatchany,   /* *!* */
-  IPmatchport,    /* *!port */
-  IPmatchaddr,    /* addr!* */
-  IPmatchpa,    /* addr!port */
+  <<constant Nipht>>
 };
 @
 
@@ -3728,19 +3716,6 @@ enum
 };
 @
 
-<<enum _anon_ (kernel/network/ip/ip.h)6>>=
-enum
-{
-  /* type bits */
-  Rv4=    (1<<0),   /* this is a version 4 route */
-  Rifc=   (1<<1),   /* this route is a directly connected interface */
-  Rptpt=    (1<<2),   /* this route is a pt to pt interface */
-  Runi=   (1<<3),   /* a unicast self address */
-  Rbcast=   (1<<4),   /* a broadcast self address */
-  Rmulti=   (1<<5),   /* a multicast self address */
-  Rproxy=   (1<<6),   /* this route should be proxied */
-};
-@
 
 <<struct Routewalk>>=
 struct Routewalk
@@ -3760,13 +3735,6 @@ struct Routewalk
 
 
 
-<<macro ipmove (kernel/network/ip/ip.h)>>=
-#define ipmove(x, y) memmove(x, y, IPaddrlen)
-@
-
-<<macro ipcmp (kernel/network/ip/ip.h)>>=
-#define ipcmp(x, y) ( (x)[IPaddrlen-1] != (y)[IPaddrlen-1] || memcmp(x, y, IPaddrlen) )
-@
 
 <<constant NOW>>=
 #define NOW TK2MS(CPUS(0)->ticks)
@@ -3853,6 +3821,8 @@ typedef struct  v6params  v6params;
 <<struct Ipmulti>>
 
 <<enum _anon_ (kernel/network/ip/ip.h)4>>
+
+<<enum matchtype>>
 
 <<struct Iphash>>
 <<struct Ipht>>
@@ -4057,14 +4027,6 @@ extern Chan*  chandial(char*, char*, char*, Chan**);
 
 \subsection*{[[kernel/network/ip/ip.c]]}
 
-<<macro BLKIPVER>>=
-#define BLKIPVER(xp)    (((Ip4hdr*)((xp)->rp))->vihl&0xF0)
-@
-
-
-<<macro BLKIP>>=
-#define BLKIP(xp)   ((Ip4hdr*)((xp)->rp))
-@
 
 <<macro BKFG>>=
 /*
@@ -4086,66 +4048,6 @@ iprouting(Fs *f, bool on)
         f->ip->stats[Forwarding] = 2;
     else
         f->ip->stats[Forwarding] = 1;
-}
-@
-
-
-
-
-
-<<function ipfragfree4>>=
-/*
- * ipfragfree4 - Free a list of fragments - assume hold fraglock4
- */
-void
-ipfragfree4(IP *ip, Fragment4 *frag)
-{
-    Fragment4 *fl, **l;
-
-    if(frag->blist)
-        freeblist(frag->blist);
-
-    frag->src = 0;
-    frag->id = 0;
-    frag->blist = nil;
-
-    l = &ip->flisthead4;
-    for(fl = *l; fl; fl = fl->next) {
-        if(fl == frag) {
-            *l = frag->next;
-            break;
-        }
-        l = &fl->next;
-    }
-
-    frag->next = ip->fragfree4;
-    ip->fragfree4 = frag;
-
-}
-@
-
-<<function ipfragallo4>>=
-/*
- * ipfragallo4 - allocate a reassembly queue - assume hold fraglock4
- */
-Fragment4 *
-ipfragallo4(IP *ip)
-{
-    Fragment4 *f;
-
-    while(ip->fragfree4 == nil) {
-        /* free last entry on fraglist */
-        for(f = ip->flisthead4; f->next; f = f->next)
-            ;
-        ipfragfree4(ip, f);
-    }
-    f = ip->fragfree4;
-    ip->fragfree4 = f->next;
-    f->next = ip->flisthead4;
-    ip->flisthead4 = f;
-    f->age = NOW + 30000;
-
-    return f;
 }
 @
 
@@ -8640,21 +8542,6 @@ incoming(void* arg)
 
 
 
-<<function ipcreate>>=
-static void
-ipcreate(Chan*, char*, int, ulong)
-{
-    error(Eperm);
-}
-@
-
-<<function ipremove>>=
-static void
-ipremove(Chan*)
-{
-    error(Eperm);
-}
-@
 
 <<function ipwstat>>=
 static int
@@ -8920,34 +8807,6 @@ setraddrport(Conv* c, char* str)
 
 
 
-
-
-
-
-
-<<function tosctlmsg>>=
-static void
-tosctlmsg(Conv *c, Cmdbuf *cb)
-{
-    if(cb->nf < 2)
-        c->tos = 0;
-    else
-        c->tos = atoi(cb->f[1]);
-}
-@
-
-<<function ttlctlmsg>>=
-static void
-ttlctlmsg(Conv *c, Cmdbuf *cb)
-{
-    if(cb->nf < 2)
-        c->ttl = MAXTTL;
-    else
-        c->ttl = atoi(cb->f[1]);
-}
-@
-
-
 <<function ipbwrite>>=
 static long
 ipbwrite(Chan* ch, Block* bp, ulong offset)
@@ -8990,55 +8849,6 @@ Fsrcvpcolx(Fs *f, uchar proto)
 }
 @
 
-<<function Fsnewcall>>=
-/*
- *  called with protocol locked
- */
-Conv*
-Fsnewcall(Conv *c, uchar *raddr, ushort rport, uchar *laddr, ushort lport, uchar version)
-{
-    Conv *nc;
-    Conv **l;
-    int i;
-
-    qlock(c);
-    i = 0;
-    for(l = &c->incall; *l; l = &(*l)->next)
-        i++;
-    if(i >= Maxincall) {
-        static int beenhere;
-
-        qunlock(c);
-        if (!beenhere) {
-            beenhere = 1;
-            print("Fsnewcall: incall queue full (%d) on port %d\n",
-                i, c->lport);
-        }
-        return nil;
-    }
-
-    /* find a free conversation */
-    nc = Fsprotoclone(c->p, network);
-    if(nc == nil) {
-        qunlock(c);
-        return nil;
-    }
-    ipmove(nc->raddr, raddr);
-    nc->rport = rport;
-    ipmove(nc->laddr, laddr);
-    nc->lport = lport;
-    nc->next = nil;
-    *l = nc;
-    nc->state = Connected;
-    nc->ipversion = version;
-
-    qunlock(c);
-
-    wakeup(&c->listenr);
-
-    return nc;
-}
-@
 
 <<function ndbwrite>>=
 long
@@ -11827,51 +11637,6 @@ v4delroute(Fs *f, uchar *a, uchar *mask, int dolock)
 @
 
 
-<<function v4lookup>>=
-Route*
-v4lookup(Fs *f, uchar *a, Conv *c)
-{
-    Route *p, *q;
-    ulong la;
-    uchar gate[IPaddrlen];
-    Ipifc *ifc;
-
-    if(c != nil && c->r != nil && c->r->ifc != nil && c->rgen == v4routegeneration)
-        return c->r;
-
-    la = nhgetl(a);
-    q = nil;
-    for(p=f->v4root[V4H(la)]; p;)
-        if(la >= p->v4.address) {
-            if(la <= p->v4.endaddress) {
-                q = p;
-                p = p->mid;
-            } else
-                p = p->right;
-        } else
-            p = p->left;
-
-    if(q && (q->ifc == nil || q->ifcid != q->ifc->ifcid)){
-        if(q->type & Rifc) {
-            hnputl(gate+IPv4off, q->v4.address);
-            memmove(gate, v4prefix, IPv4off);
-        } else
-            v4tov6(gate, q->v4.gate);
-        ifc = findipifc(f, gate, q->type);
-        if(ifc == nil)
-            return nil;
-        q->ifc = ifc;
-        q->ifcid = ifc->ifcid;
-    }
-
-    if(c != nil){
-        c->r = q;
-        c->rgen = v4routegeneration;
-    }
-
-    return q;
-}
-@
 
 
 <<function routetype>>=
@@ -12030,7 +11795,8 @@ static void calcd(Route*);
 <<global v4freelist>>
 <<global v6freelist>>
 <<global routelock>>
-static ulong    v4routegeneration, v6routegeneration;
+static ulong v4routegeneration;
+static ulong v6routegeneration;
 
 <<function freeroute>>
 
@@ -12187,66 +11953,6 @@ uchar v6solicitednode[IPaddrlen] = {
 };
 @
 
-<<function ptclcsum>>=
-//int v6snpreflen = 13;
-
-ushort
-ptclcsum(Block *bp, int offset, int len)
-{
-    uchar *addr;
-    ulong losum, hisum;
-    ushort csum;
-    int odd, blocklen, x;
-
-    /* Correct to front of data area */
-    while(bp != nil && offset && offset >= BLEN(bp)) {
-        offset -= BLEN(bp);
-        bp = bp->next;
-    }
-    if(bp == nil)
-        return 0;
-
-    addr = bp->rp + offset;
-    blocklen = BLEN(bp) - offset;
-
-    if(bp->next == nil) {
-        if(blocklen < len)
-            len = blocklen;
-        return ~ptclbsum(addr, len) & 0xffff;
-    }
-
-    losum = 0;
-    hisum = 0;
-
-    odd = 0;
-    while(len) {
-        x = blocklen;
-        if(len < x)
-            x = len;
-
-        csum = ptclbsum(addr, x);
-        if(odd)
-            hisum += csum;
-        else
-            losum += csum;
-        odd = (odd+x) & 1;
-        len -= x;
-
-        bp = bp->next;
-        if(bp == nil)
-            break;
-        blocklen = BLEN(bp);
-        addr = bp->rp;
-    }
-
-    losum += hisum>>8;
-    losum += (hisum&0xff)<<8;
-    while((csum = losum>>16) != 0)
-        losum = csum + (losum & 0xffff);
-
-    return ~losum & 0xffff;
-}
-@
 
 <<enum _anon_ (kernel/network/ip/ipaux.c)>>=
 enum
@@ -12299,148 +12005,6 @@ parsemac(uchar *to, char *from, int len)
 }
 @
 
-<<function iphash>>=
-/*
- *  hashing tcp, udp, ... connections
- */
-ulong
-iphash(uchar *sa, ushort sp, uchar *da, ushort dp)
-{
-    return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) % Nhash;
-}
-@
-
-<<function iphtadd>>=
-void
-iphtadd(Ipht *ht, Conv *c)
-{
-    ulong hv;
-    Iphash *h;
-
-    hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
-    h = smalloc(sizeof(*h));
-    if(ipcmp(c->raddr, IPnoaddr) != 0)
-        h->match = IPmatchexact;
-    else {
-        if(ipcmp(c->laddr, IPnoaddr) != 0){
-            if(c->lport == 0)
-                h->match = IPmatchaddr;
-            else
-                h->match = IPmatchpa;
-        } else {
-            if(c->lport == 0)
-                h->match = IPmatchany;
-            else
-                h->match = IPmatchport;
-        }
-    }
-    h->c = c;
-
-    lock(ht);
-    h->next = ht->tab[hv];
-    ht->tab[hv] = h;
-    unlock(ht);
-}
-@
-
-<<function iphtrem>>=
-void
-iphtrem(Ipht *ht, Conv *c)
-{
-    ulong hv;
-    Iphash **l, *h;
-
-    hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
-    lock(ht);
-    for(l = &ht->tab[hv]; (*l) != nil; l = &(*l)->next)
-        if((*l)->c == c){
-            h = *l;
-            (*l) = h->next;
-            free(h);
-            break;
-        }
-    unlock(ht);
-}
-@
-
-<<function iphtlook>>=
-/* look for a matching conversation with the following precedence
- *  connected && raddr,rport,laddr,lport
- *  announced && laddr,lport
- *  announced && *,lport
- *  announced && laddr,*
- *  announced && *,*
- */
-Conv*
-iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
-{
-    ulong hv;
-    Iphash *h;
-    Conv *c;
-
-    /* exact 4 pair match (connection) */
-    hv = iphash(sa, sp, da, dp);
-    lock(ht);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchexact)
-            continue;
-        c = h->c;
-        if(sp == c->rport && dp == c->lport
-        && ipcmp(sa, c->raddr) == 0 && ipcmp(da, c->laddr) == 0){
-            unlock(ht);
-            return c;
-        }
-    }
-
-    /* match local address and port */
-    hv = iphash(IPnoaddr, 0, da, dp);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchpa)
-            continue;
-        c = h->c;
-        if(dp == c->lport && ipcmp(da, c->laddr) == 0){
-            unlock(ht);
-            return c;
-        }
-    }
-
-    /* match just port */
-    hv = iphash(IPnoaddr, 0, IPnoaddr, dp);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchport)
-            continue;
-        c = h->c;
-        if(dp == c->lport){
-            unlock(ht);
-            return c;
-        }
-    }
-
-    /* match local address */
-    hv = iphash(IPnoaddr, 0, da, 0);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchaddr)
-            continue;
-        c = h->c;
-        if(ipcmp(da, c->laddr) == 0){
-            unlock(ht);
-            return c;
-        }
-    }
-
-    /* look for something that matches anything */
-    hv = iphash(IPnoaddr, 0, IPnoaddr, 0);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchany)
-            continue;
-        c = h->c;
-        unlock(ht);
-        return c;
-    }
-    unlock(ht);
-    return nil;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -12523,6 +12087,8 @@ iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0x0, 0x0, 0x0
 //};
+//int v6snpreflen = 13;
+
 <<function ptclcsum>>
 
 <<enum _anon_ (kernel/network/ip/ipaux.c)>>

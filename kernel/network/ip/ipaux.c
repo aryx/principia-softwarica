@@ -146,9 +146,9 @@ uchar v6solicitednode[IPaddrlen] = {
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0x0, 0x0, 0x0
 //};
-/*s: function ptclcsum */
 //int v6snpreflen = 13;
 
+/*s: function ptclcsum */
 ushort
 ptclcsum(Block *bp, int offset, int len)
 {
@@ -278,7 +278,7 @@ iphtadd(Ipht *ht, Conv *c)
     Iphash *h;
 
     hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
-    h = smalloc(sizeof(*h));
+    h = smalloc(sizeof(Iphash));
     if(ipcmp(c->raddr, IPnoaddr) != 0)
         h->match = IPmatchexact;
     else {
@@ -342,60 +342,60 @@ iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
     hv = iphash(sa, sp, da, dp);
     lock(ht);
     for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchexact)
-            continue;
-        c = h->c;
-        if(sp == c->rport && dp == c->lport
-        && ipcmp(sa, c->raddr) == 0 && ipcmp(da, c->laddr) == 0){
-            unlock(ht);
-            return c;
+        if(h->match == IPmatchexact) {
+          c = h->c;
+          if(sp == c->rport && dp == c->lport
+             && ipcmp(sa, c->raddr) == 0 && ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
         }
     }
 
     /* match local address and port */
     hv = iphash(IPnoaddr, 0, da, dp);
     for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchpa)
-            continue;
-        c = h->c;
-        if(dp == c->lport && ipcmp(da, c->laddr) == 0){
-            unlock(ht);
-            return c;
-        }
+        if(h->match == IPmatchpa) {
+          c = h->c;
+          if(dp == c->lport && ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
+       }
     }
 
     /* match just port */
     hv = iphash(IPnoaddr, 0, IPnoaddr, dp);
     for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchport)
-            continue;
-        c = h->c;
-        if(dp == c->lport){
-            unlock(ht);
-            return c;
+        if(h->match == IPmatchport) {
+          c = h->c;
+          if(dp == c->lport){
+              unlock(ht);
+              return c;
+          }
         }
     }
 
     /* match local address */
     hv = iphash(IPnoaddr, 0, da, 0);
     for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchaddr)
-            continue;
-        c = h->c;
-        if(ipcmp(da, c->laddr) == 0){
-            unlock(ht);
-            return c;
+        if(h->match == IPmatchaddr) {
+          c = h->c;
+          if(ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
         }
     }
 
     /* look for something that matches anything */
     hv = iphash(IPnoaddr, 0, IPnoaddr, 0);
     for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match != IPmatchany)
-            continue;
-        c = h->c;
-        unlock(ht);
-        return c;
+        if(h->match == IPmatchany) {
+          c = h->c;
+          unlock(ht);
+          return c;
+        }
     }
     unlock(ht);
     return nil;

@@ -37,7 +37,7 @@ related work:
  - Minix (Andrew Tannenbaum et al.)
  - XINU (Douglas Comer)
  - MMIX (Donald Knuth)
- - TempleOS
+ - TempleOS (Terry A. Davis)
  - ...
 
 Here are other series of software not covered by principa softwarica:

@@ -418,15 +418,22 @@ ipifcsetmtu(Ipifc *ifc, char **argv, int argc)
 char*
 ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
 {
-    int i, mtu, sendnbrdisc = 0;
+    int i;
+    int mtu;
+    // enum<route_type>
     int type;
     uchar ip[IPaddrlen];
     uchar mask[IPaddrlen];
     uchar rem[IPaddrlen];
-    uchar bcast[IPaddrlen];
     uchar net[IPaddrlen];
     Iplifc *lifc, **l;
     Fs *f;
+
+    /*s: [[ipifcadd()]] locals */
+    uchar bcast[IPaddrlen];
+    /*x: [[ipifcadd()]] locals */
+    bool sendnbrdisc = false;
+    /*e: [[ipifcadd()]] locals */
 
     if(ifc->m == nil)
         return "ipifc not yet bound to device";
@@ -439,15 +446,19 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     memset(rem, 0, IPaddrlen);
 
     switch(argc){
+    /*s: [[ipifcadd()]] switch argc, proxy case, and fall through */
     case 6:
         if(strcmp(argv[5], "proxy") == 0)
             type |= Rproxy;
         /* fall through */
+    /*e: [[ipifcadd()]] switch argc, proxy case, and fall through */
+    /*s: [[ipifcadd()]] switch argc, mtu setting case, and fall through */
     case 5:
         mtu = strtoul(argv[4], 0, 0);
         if(mtu >= ifc->m->mintu && mtu <= ifc->m->maxtu)
             ifc->maxtu = mtu;
         /* fall through */
+    /*e: [[ipifcadd()]] switch argc, mtu setting case, and fall through */
     case 4:
         if (parseip(ip, argv[1]) == -1 || parseip(rem, argv[3]) == -1)
             return Ebadip;
@@ -519,25 +530,32 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         ;
     *l = lifc;
 
+    /*s: [[ipifcadd()]] check for point to point interface */
     /* check for point-to-point interface */
     if(ipcmp(ip, v6loopback)) /* skip v6 loopback, it's a special address */
     if(ipcmp(mask, IPallbits) == 0)
         type |= Rptpt;
+    /*e: [[ipifcadd()]] check for point to point interface */
 
     /* add local routes */
     if(isv4(ip))
         v4addroute(f, tifc, rem+IPv4off, mask+IPv4off, rem+IPv4off, type);
+    /*s: [[ipifcadd()]] add route if ipv6 case */
     else
         v6addroute(f, tifc, rem, mask, rem, type);
+    /*e: [[ipifcadd()]] add route if ipv6 case */
 
     addselfcache(f, ifc, lifc, ip, Runi);
 
+    /*s: [[ipifcadd()]] register proxy if point to point interface or proxy */
     if((type & (Rproxy|Rptpt)) == (Rproxy|Rptpt)){
         ipifcregisterproxy(f, ifc, rem);
         goto out;
     }
+    /*e: [[ipifcadd()]] register proxy if point to point interface or proxy */
 
     if(isv4(ip) || ipcmp(ip, IPnoaddr) == 0) {
+        /*s: [[ipifcadd()]] add broadcast addresses to self cache */
         /* add subnet directed broadcast address to the self cache */
         for(i = 0; i < IPaddrlen; i++)
             bcast[i] = (ip[i] & mask[i]) | ~mask[i];
@@ -561,8 +579,10 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         addselfcache(f, ifc, lifc, bcast, Rbcast);
 
         addselfcache(f, ifc, lifc, IPv4bcast, Rbcast);
+        /*e: [[ipifcadd()]] add broadcast addresses to self cache */
     }
     else {
+        /*s: [[ipifcadd()]] add multicast addresses to self cache */
         if(ipcmp(ip, v6loopback) == 0) {
             /* add node-local mcast address */
             addselfcache(f, ifc, lifc, v6allnodesN, Rmulti);
@@ -583,17 +603,21 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         ipv62smcast(bcast, ip);
         addselfcache(f, ifc, lifc, bcast, Rmulti);
 
-        sendnbrdisc = 1;
+        sendnbrdisc = true;
+        /*e: [[ipifcadd()]] add multicast addresses to self cache */
     }
 
     /* register the address on this network for address resolution */
     if(isv4(ip) && ifc->m->areg != nil)
+        // Medium dispatch
         (*ifc->m->areg)(ifc, ip);
 
 out:
     wunlock(ifc);
+    /*s: [[ipifcadd()]] if tentative and broacast */
     if(tentative && sendnbrdisc)
         icmpns(f, 0, SRC_UNSPEC, ip, TARG_MULTI, ifc->mac);
+    /*e: [[ipifcadd()]] if tentative and broacast */
     return nil;
 }
 /*e: function ipifcadd */

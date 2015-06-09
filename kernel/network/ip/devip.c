@@ -1124,12 +1124,14 @@ Fsstdconnect(Conv *c, char *argv[], int argc)
             return err;
     }
 
+    /*s: [[Fsstdconnect()]] set ipversion field to V4 or V6 */
     if( (memcmp(c->raddr, v4prefix, IPv4off) == 0 &&
-        memcmp(c->laddr, v4prefix, IPv4off) == 0)
+         memcmp(c->laddr, v4prefix, IPv4off) == 0)
         || ipcmp(c->raddr, IPnoaddr) == 0)
         c->ipversion = V4;
     else
         c->ipversion = V6;
+    /*e: [[Fsstdconnect()]] set ipversion field to V4 or V6 */
 
     return nil;
 }
@@ -1461,13 +1463,13 @@ Dev ipdevtab = {
     .stat     =    ipstat,
     .wstat    =    ipwstat,
                
+    .create   =    ipcreate,
+    .remove   =    ipremove,
+    .bread    =    ipbread,
+    .bwrite   =    ipbwrite,
     .reset    =    ipreset,
     .init     =    devinit,
     .shutdown =    devshutdown,
-    .create   =    ipcreate,
-    .bread    =    ipbread,
-    .bwrite   =    ipbwrite,
-    .remove   =    ipremove,
 };
 /*e: global ipdevtab */
 
@@ -1661,11 +1663,11 @@ Fsnewcall(Conv *c, uchar *raddr, ushort rport, uchar *laddr, ushort lport, uchar
     for(l = &c->incall; *l; l = &(*l)->next)
         i++;
     if(i >= Maxincall) {
-        static int beenhere;
+        static bool beenhere;
 
         qunlock(c);
         if (!beenhere) {
-            beenhere = 1;
+            beenhere = true;
             print("Fsnewcall: incall queue full (%d) on port %d\n",
                 i, c->lport);
         }
@@ -1682,8 +1684,10 @@ Fsnewcall(Conv *c, uchar *raddr, ushort rport, uchar *laddr, ushort lport, uchar
     nc->rport = rport;
     ipmove(nc->laddr, laddr);
     nc->lport = lport;
+
     nc->next = nil;
     *l = nc;
+
     nc->state = Connected;
     nc->ipversion = version;
 
