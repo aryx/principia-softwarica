@@ -45,10 +45,10 @@ struct Iplifc
     uchar	mask[IPaddrlen];
     uchar	net[IPaddrlen];		/* ip & mask */
 
-    /*s: [[Iplifc(user)]] other fields */
+    /*s: [[Iplifc(user)]] ipv6 fields */
     ulong	preflt;			/* preferred lifetime */
     ulong	validlt;		/* valid lifetime */
-    /*e: [[Iplifc(user)]] other fields */
+    /*e: [[Iplifc(user)]] ipv6 fields */
 
     // Extra
     /*s: [[Iplifc(user)]] extra fields */

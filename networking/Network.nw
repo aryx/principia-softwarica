@@ -12,12 +12,13 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - untangled all those features, arp, multicast, with those big structures
-%   that were hard to understand.
+% - untangled all those features, multicast, broadcast, with those big
+%    structures that were hard to understand.
 % - use cv not c for conversation, less confusing with channel, use err
 %   not p, use err not s, ...
 % - use Idle, not 0 when can, use V4 not 4,
-% - removed deadcode: ?? unbindonclose?
+% - removed deadcode: /net/bootp,  Ipifc fields (unbinding, idlock, ...),
+%   Conv (length, car, headers, reliable, ...)
 % - TODO introduce ipv4, ipaddr typedefs?
 
 %thx to codemap/codegraph/scheck:
@@ -611,7 +612,7 @@ struct Iplifc
     uchar	mask[IPaddrlen];
     uchar	net[IPaddrlen];		/* ip & mask */
 
-    <<[[Iplifc(user)]] other fields>>
+    <<[[Iplifc(user)]] ipv6 fields>>
 
     // Extra
     <<[[Iplifc(user)]] extra fields>>
@@ -627,11 +628,6 @@ struct Iplifc
 Iplifc	*next;
 @
 
-%XXX
-<<[[Iplifc(user)]] other fields>>=
-ulong	preflt;			/* preferred lifetime */
-ulong	validlt;		/* valid lifetime */
-@
 
 \subsection{Kernel side}
 
@@ -665,6 +661,7 @@ struct Ipifc
   Iplifc  *lifc;    /* logical interfaces on this physical one */
 
   <<[[Ipifc(kernel)]] stat fields>>
+  <<[[Ipifc(kernel)]] routing fields>>
   <<[[Ipifc(kernel)]] ipv6 fields>>
   <<[[Ipifc(kernel)]] other fields>>
 
@@ -692,21 +689,13 @@ Conv  *conv;    /* link to its conversation structure */
 
 
 
-%XXX
-<<[[Ipifc(kernel)]] other fields>>=
-/* these are used so that we can unbind on the fly */
-Lock  idlock;
-int ref;    /* number of proc's using this ipifc */
-Rendez  wait;   /* where unbinder waits for ref == 0 */
-bool unbinding;
-@
-%todo: dead unbinding?
+%dead:  <<[[Ipifc(kernel)]] other fields>>=
+% bool unbinding;
+%/* these are used so that we can unbind on the fly */
+% Lock  idlock;
+% int ref;    /* number of proc's using this ipifc */
+% Rendez  wait;   /* where unbinder waits for ref == 0 */
 
-%XXX routing fields?
-<<[[Ipifc(kernel)]] other fields>>=
-Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
-        used only if node is router */
-@
 
 
 
@@ -723,7 +712,7 @@ struct Iplifc
 
   uchar remote[IPaddrlen]; // ??
 
-  <<[[Iplifc(kernel)]] other fields>>
+  <<[[Iplifc(kernel)]] ipv6 fields>>
 
   // Extra
   <<[[Iplifc(kernel)]] extra fields>>
@@ -744,15 +733,7 @@ Iplifc  *next;
 Iplink  *link;    /* addresses linked to this lifc */
 @
 
-%XXX
-<<[[Iplifc(kernel)]] other fields>>=
-uchar onlink;   /* =1 => onlink, =0 offlink. */
-uchar tentative;  /* =1 => v6 dup disc on, =0 => confirmed unique */
-uchar autoflag; /* v6 autonomous flag */
-long  validlt;  /* v6 valid lifetime */
-long  preflt;   /* v6 preferred lifetime */
-long  origint;  /* time when addr was added */
-@
+
 
 \section{Physical link [[Medium]], and [[media]]}
 
@@ -834,11 +815,6 @@ addipmedium(Medium *med)
 
 
 
-%XXX
-<<[[Medium(kernel)]] other fields>>=
-bool unbindonclose;  /* if non-zero, unbind on last close */
-@
-% DEAD?
 
 
 %XXX
@@ -942,7 +918,6 @@ struct IP
 
   <<[[IP(kernel)]] stat fields>>
   <<[[IP(kernel)]] routing fields>>
-
   <<[[IP(kernel)]] ipv6 fields>>
 
   // Extra
@@ -1190,6 +1165,8 @@ struct Conv
   <<[[Conv(kernel)]] multicast fields>>
   <<[[Conv(kernel)]] snoop fields>>
   <<[[Conv(kernel)]] priv fields>>
+  <<[[Conv(kernel)]] udp fields>>
+  <<[[Conv(kernel)]] error fields>>
   <<[[Conv(kernel)]] other fields>>
   <<[[Conv(kernel)]] ipv6 fields>>
 
@@ -1217,14 +1194,6 @@ int x;      /* conversation index */
 % (x is useful when building qid)
 % so can get "class" via p so can access the method of the protocol from
 % a Conv
-
-%XXX
-<<[[Proto(kernel)]] other fields>>=
-ushort    nextrport;
-@
-% when look for fresh new port, where to start from, but who allocates
-% new ports? not the user?
-
 
 
 <<enum _anon_ (kernel/network/ip/ip.h)2>>=
@@ -1255,6 +1224,10 @@ Queue*  wq;     /* queued data waiting to be written */
 Queue*  eq;     /* returned error packets */
 @
 % setup in Fsprotoclone generically
+<<[[Conv(kernel)]] error fields>>=
+char  cerr[ERRMAX];
+@
+
 
 <<[[Conv(kernel)]] other fields>>=
 Rendez  cr;
@@ -1272,8 +1245,6 @@ int   ptclsize; /* size of per protocol ctl block */
 
 
 
-
-
 <<[[Conv(kernel)]] other fields>>=
 int inuse;      /* opens of listen/data/ctl */
 @
@@ -1282,31 +1253,12 @@ int inuse;      /* opens of listen/data/ctl */
 
 
 
+%dead
+%<<[[Conv(kernel)]] other fields>>=
+%int length;
+%QLock car;
+%@
 
-
-
-
-
-%XXX
-<<[[Conv(kernel)]] other fields>>=
-int length;
-@
-%XXX
-<<[[Conv(kernel)]] other fields>>=
-bool restricted;   /* remote port is restricted */
-bool ignoreadvice;   /* don't terminate connection on icmp errors */
-
-/* udp specific */
-int headers;    /* data src/dst headers in udp */
-int reliable;   /* true if reliable udp */
-
-QLock car;
-@
-
-% error managment fields?
-<<[[Conv(kernel)]] other fields>>=
-char  cerr[ERRMAX];
-@
 
 
 
@@ -1859,6 +1811,13 @@ Route *queue;     /* used as temp when reinjecting routes */
 @
 
 
+<<[[Ipifc(kernel)]] routing fields>>=
+Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
+        used only if node is router */
+@
+
+
+
 \section{Blocks}
 
 % DS of the kernel
@@ -2247,10 +2206,10 @@ case Qarp:
 case Qlog:
 case Qiproute:
 case Qipselftab:
-case Qbootp:
 case Qndb:
     return ip1gen(c, TYPE(c->qid), dp);
 @
+%case Qbootp:
 
 <<function ip1gen>>=
 static int
@@ -2446,7 +2405,6 @@ case Qtopdir:
 case Qprotodir:
 case Qconvdir:
 
-case Qbootp:
 case Qipselftab:
 
 case Qstatus:
@@ -2457,6 +2415,7 @@ case Qstats:
         error(Eperm);
     break;
 @
+%case Qbootp:
 
 
 
@@ -2557,15 +2516,6 @@ closeconv(Conv *cv)
 }
 @
 
-%XXX
-<<[[closeconv()]] close incoming calls>>=
-/* close all incoming calls since no listen will ever happen */
-for(nc = cv->incall; nc; nc = cv->incall){
-    cv->incall = nc->next;
-    closeconv(nc);
-}
-cv->incall = nil;
-@
 
 
 
@@ -2811,48 +2761,9 @@ case Qctl:
     if(cb->nf < 1)
         error("short control request");
 
-    if(strcmp(cb->f[0], "connect") == 0)
-        connectctlmsg(x, cv, cb);
-    else if(strcmp(cb->f[0], "announce") == 0)
-        announcectlmsg(x, cv, cb);
-
-    else if(strcmp(cb->f[0], "bind") == 0)
-        bindctlmsg(x, cv, cb);
-
-    else if(strcmp(cb->f[0], "ttl") == 0)
-        ttlctlmsg(cv, cb);
-    else if(strcmp(cb->f[0], "tos") == 0)
-        tosctlmsg(cv, cb);
-    else if(strcmp(cb->f[0], "ignoreadvice") == 0)
-        cv->ignoreadvice = true;
-
-    else if(strcmp(cb->f[0], "addmulti") == 0){
-        if(cb->nf < 2)
-            error("addmulti needs interface address");
-        if(cb->nf == 2){
-            if(!ipismulticast(cv->raddr))
-                error("addmulti for a non multicast address");
-            if (parseip(ia, cb->f[1]) == -1)
-                error(Ebadip);
-            ipifcaddmulti(cv, cv->raddr, ia);
-        } else {
-            if (parseip(ia, cb->f[1]) == -1 ||
-                parseip(ma, cb->f[2]) == -1)
-                error(Ebadip);
-            if(!ipismulticast(ma))
-                error("addmulti for a non multicast address");
-            ipifcaddmulti(cv, ma, ia);
-        }
-    } else if(strcmp(cb->f[0], "remmulti") == 0){
-        if(cb->nf < 2)
-            error("remmulti needs interface address");
-        if(!ipismulticast(cv->raddr))
-            error("remmulti for a non multicast address");
-        if (parseip(ia, cb->f[1]) == -1)
-            error(Ebadip);
-        ipifcremmulti(cv, cv->raddr, ia);
-    }
-    <<[[ipwrite()]], Qctl case, switch command elseif cases>>
+    <<[[ipwrite()]] Qctl case, if connect string>>
+    <<[[ipwrite()]] Qctl case, else if announce string>>
+    <<[[ipwrite()]] Qctl case, else if other string>>
     else if(x->ctl != nil) {
         // Protocol dispatch
         p = x->ctl(cv, cb->f, cb->nf);
@@ -2866,44 +2777,12 @@ case Qctl:
     break;
 @
 
-\subsubsection{Bind}
-
-% ipwrite (Qctl case) -> <>
-<<function bindctlmsg>>=
-static void
-bindctlmsg(Proto *x, Conv *cv, Cmdbuf *cb)
-{
-    char *p;
-
-    if(x->bind == nil)
-        p = Fsstdbind(cv, cb->f, cb->nf);
-    else
-        // Protocol dispatch
-        p = x->bind(cv, cb->f, cb->nf);
-    if(p != nil)
-        error(p);
-}
-@
-
-% default method
-<<function Fsstdbind>>=
-/*
- *  called by protocol bind routine to set addresses
- */
-char*
-Fsstdbind(Conv* cv, char* argv[], int argc)
-{
-    switch(argc){
-    default:
-        break;
-    case 2:
-        return setladdrport(cv, argv[1], 0);
-    }
-    return "bad args to bind";
-}
-@
-
 \subsubsection{Connect}
+
+<<[[ipwrite()]] Qctl case, if connect string>>=
+if(strcmp(cb->f[0], "connect") == 0)
+    connectctlmsg(x, cv, cb);
+@
 
 <<function connectctlmsg>>=
 static void
@@ -3013,6 +2892,11 @@ Fsconnected(Conv* c, char* msg)
 
 \subsubsection{Announce}
 
+<<[[ipwrite()]] Qctl case, else if announce string>>=
+else if(strcmp(cb->f[0], "announce") == 0)
+    announcectlmsg(x, cv, cb);
+@
+
 <<function announcectlmsg>>=
 static void
 announcectlmsg(Proto *p, Conv *c, Cmdbuf *cb)
@@ -3087,6 +2971,74 @@ case Announcing:
 @    
 
 \subsubsection{Port settings}
+
+% port fields?
+<<[[Conv(kernel)]] other fields>>=
+bool restricted;   /* remote port is restricted */
+@
+<<[[Proto(kernel)]] other fields>>=
+ushort    nextrport;
+@
+% when look for fresh new port, where to start from, but who allocates
+% new ports? not the user?
+
+
+
+<<function setlport>>=
+/*
+ *  pick a local port and set it
+ */
+char *
+setlport(Conv* c)
+{
+    Proto *p;
+    int i, port;
+
+    p = c->p;
+    qlock(p);
+    if(c->restricted){
+        /* Restricted ports cycle between 600 and 1024. */
+        for(i=0; i<1024-600; i++){
+            if(p->nextrport >= 1024 || p->nextrport < 600)
+                p->nextrport = 600;
+            port = p->nextrport++;
+            if(!lportinuse(p, port))
+                goto chosen;
+        }
+    }else{
+        /*
+         * Unrestricted ports are chosen randomly
+         * between 2^15 and 2^16.  There are at most
+         * 4*Nchan = 4096 ports in use at any given time,
+         * so even in the worst case, a random probe has a
+         * 1 - 4096/2^15 = 87% chance of success.
+         * If 64 successive probes fail, there is a bug somewhere
+         * (or a once in 10^58 event has happened, but that's
+         * less likely than a venti collision).
+         */
+        for(i=0; i<64; i++){
+            port = (1<<15) + nrand(1<<15);
+            if(!lportinuse(p, port))
+                goto chosen;
+        }
+    }
+    qunlock(p);
+    /*
+     * debugging: let's see if we ever get this.
+     * if we do (and we're a cpu server), we might as well restart
+     * since we're now unable to service new connections.
+     */
+    panic("setlport: out of ports");
+    return "no ports available";
+
+chosen:
+    c->lport = port;
+    qunlock(p);
+    return nil;
+}
+@
+% >> >> 
+
 
 <<function setladdrport>>=
 /*
@@ -3170,6 +3122,48 @@ setraddrport(Conv* c, char* str)
 }
 @
 
+
+\subsubsection{Bind}
+
+<<[[ipwrite()]] Qctl case, else if other string>>=
+else if(strcmp(cb->f[0], "bind") == 0)
+    bindctlmsg(x, cv, cb);
+@
+
+% ipwrite (Qctl case) -> <>
+<<function bindctlmsg>>=
+static void
+bindctlmsg(Proto *x, Conv *cv, Cmdbuf *cb)
+{
+    char *p;
+
+    if(x->bind == nil)
+        p = Fsstdbind(cv, cb->f, cb->nf);
+    else
+        // Protocol dispatch
+        p = x->bind(cv, cb->f, cb->nf);
+    if(p != nil)
+        error(p);
+}
+@
+
+% default method
+<<function Fsstdbind>>=
+/*
+ *  called by protocol bind routine to set addresses
+ */
+char*
+Fsstdbind(Conv* cv, char* argv[], int argc)
+{
+    switch(argc){
+    default:
+        break;
+    case 2:
+        return setladdrport(cv, argv[1], 0);
+    }
+    return "bad args to bind";
+}
+@
 
 \subsection{[[/net/x/y/data]]}
 
@@ -3283,6 +3277,14 @@ Rendez  listenr;
 @
 
 
+<<[[closeconv()]] close incoming calls>>=
+/* close all incoming calls since no listen will ever happen */
+for(nc = cv->incall; nc; nc = cv->incall){
+    cv->incall = nc->next;
+    closeconv(nc);
+}
+cv->incall = nil;
+@
 
 
 \subsection{Other files}
@@ -3623,12 +3625,12 @@ ipifccreate(Conv *cv)
     ifc->m = nil;
 
     ifc->conv = cv;
-    ifc->unbinding = false;
     ifc->reassemble = false;
 }
 @
 % Ipifc has been smalloc generically by Fsprotoclone()
 % no medium yet!
+%dead:    ifc->unbinding = false;
 
 
 % ip/ipconfig open this file and keeps it open forever
@@ -3869,6 +3871,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
             if(lifcp) {
                 lifc->onlink = lifcp->onlink;
                 lifc->autoflag = lifcp->autoflag;
+
                 lifc->validlt = lifcp->validlt;
                 lifc->preflt = lifcp->preflt;
                 lifc->origint = lifcp->origint;
@@ -3889,6 +3892,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     if(lifcp) {
         lifc->onlink = lifcp->onlink;
         lifc->autoflag = lifcp->autoflag;
+
         lifc->validlt = lifcp->validlt;
         lifc->preflt = lifcp->preflt;
         lifc->origint = lifcp->origint;
@@ -4383,6 +4387,11 @@ case 5:
 uint  tos;      /* type of service */
 @
 
+<<[[ipwrite()]] Qctl case, else if other string>>=
+else if(strcmp(cb->f[0], "tos") == 0)
+    tosctlmsg(cv, cb);
+@
+
 <<function tosctlmsg>>=
 static void
 tosctlmsg(Conv *c, Cmdbuf *cb)
@@ -4400,6 +4409,11 @@ tosctlmsg(Conv *c, Cmdbuf *cb)
 uint  ttl;      /* max time to live */
 @
 
+<<[[ipwrite()]] Qctl case, else if other string>>=
+else if(strcmp(cb->f[0], "ttl") == 0)
+    ttlctlmsg(cv, cb);
+@
+
 <<function ttlctlmsg>>=
 static void
 ttlctlmsg(Conv *c, Cmdbuf *cb)
@@ -4415,6 +4429,29 @@ ttlctlmsg(Conv *c, Cmdbuf *cb)
 MAXTTL=   255,
 @
 
+\subsection{Unbind on close}
+
+<<[[Medium(kernel)]] other fields>>=
+bool unbindonclose;  /* if non-zero, unbind on last close */
+@
+
+<<function ipifcclose>>=
+/*
+ *  called after last close of ipifc data or ctl
+ *  called with c locked, we must unlock
+ */
+static void
+ipifcclose(Conv *c)
+{
+    Ipifc *ifc;
+    Medium *m;
+
+    ifc = (Ipifc*)c->ptcl;
+    m = ifc->m;
+    if(m && m->unbindonclose)
+        ipifcunbind(ifc);
+}
+@
 
 
 
@@ -5026,11 +5063,12 @@ if((h->vihl&0x0F) != IP_HLEN4) {
 Proto*
 Fsrcvpcol(Fs* f, uchar proto)
 {
-    <<[[Fsrcvpcol()]] if ipmux>>
-    else
-        return f->t2p[proto];
+   return f->t2p[proto];
 }
 @
+%dead?
+%    <<[[Fsrcvpcol()]] if ipmux>>
+%    else
 
 \subsubsection{Small receive}
 
@@ -5331,7 +5369,7 @@ if(c && c->maxfragsize && c->maxfragsize < ifc->maxtu)
 int maxfragsize;    /* If set, used for fragmentation */
 @
 
-<<[[ipwrite()]], Qctl case, switch command elseif cases>>=
+<<[[ipwrite()]] Qctl case, else if other string>>=
 else if(strcmp(cb->f[0], "maxfragsize") == 0){
     if(cb->nf < 2)
         error("maxfragsize needs size");
@@ -5415,17 +5453,17 @@ bool reassemble; /* reassemble IP packets before forwarding */
 @
 
 
-\subsection{IP multiplexer}
+%\subsection{IP multiplexer}
 
-%XXX
-<<[[Fs(kernel)]] other fields>>=
-Proto*  ipmux;      /* kludge for finding an ip multiplexor */
-@
-
-<<[[Fsrcvpcol()]] if ipmux>>=
-if(f->ipmux)
-    return f->ipmux;
-@
+%<<[[Fs(kernel)]] other fields>>=
+%Proto*  ipmux;      /* kludge for finding an ip multiplexor */
+%@
+%
+%<<[[Fsrcvpcol()]] if ipmux>>=
+%if(f->ipmux)
+%    return f->ipmux;
+%@
+%dead? seems not used
 
 
 
@@ -6771,6 +6809,18 @@ udpstate(Conv *cv, char *state, int n)
 
 \section{Advanced features}
 
+\subsection{Ignore advice}
+
+
+<<[[Conv(kernel)]] udp fields>>=
+bool ignoreadvice;   /* don't terminate connection on icmp errors */
+@
+
+<<[[ipwrite()]] Qctl case, else if other string>>=
+else if(strcmp(cb->f[0], "ignoreadvice") == 0)
+    cv->ignoreadvice = true;
+@
+
 \subsection{Not regular forme}
 
 <<[[udpiput()]] new conv to create, adjust laddr if not Runi>>=
@@ -6806,6 +6856,14 @@ struct Udpcb
 <<[[Idpcb]] other fields>>=
 uchar   headers;
 @
+
+%<<[[Conv(kernel)]] other fields>>=
+%/* udp specific */
+%int headers;    /* data src/dst headers in udp */
+%int reliable;   /* true if reliable udp */
+%@
+% dead, replaced by private field
+
 
 <<function udpctl>>=
 char*
@@ -8039,6 +8097,8 @@ tcpinit(Fs *fs)
 
 \section{IPv6}
 
+% See Network_v6.nw
+
 \section{Broadcast}
 
 % convention is that address has all 1s
@@ -8084,6 +8144,40 @@ addselfcache(f, ifc, lifc, IPv4bcast, Rbcast);
 @
 
 \section{Multicast}
+
+<<[[ipwrite()]] Qctl case, else if other string>>=
+else if(strcmp(cb->f[0], "addmulti") == 0){
+    if(cb->nf < 2)
+        error("addmulti needs interface address");
+    if(cb->nf == 2){
+        if(!ipismulticast(cv->raddr))
+            error("addmulti for a non multicast address");
+        if (parseip(ia, cb->f[1]) == -1)
+            error(Ebadip);
+        ipifcaddmulti(cv, cv->raddr, ia);
+    } else {
+        if (parseip(ia, cb->f[1]) == -1 ||
+            parseip(ma, cb->f[2]) == -1)
+            error(Ebadip);
+        if(!ipismulticast(ma))
+            error("addmulti for a non multicast address");
+        ipifcaddmulti(cv, ma, ia);
+    }
+} 
+@
+<<[[ipwrite()]] Qctl case, else if other string>>=
+else if(strcmp(cb->f[0], "remmulti") == 0){
+    if(cb->nf < 2)
+        error("remmulti needs interface address");
+    if(!ipismulticast(cv->raddr))
+        error("remmulti for a non multicast address");
+    if (parseip(ia, cb->f[1]) == -1)
+        error(Ebadip);
+    ipifcremmulti(cv, cv->raddr, ia);
+}
+@
+
+
 
 <<[[Medium(kernel)]] multicast methods>>=
 /* for arming interfaces to receive multicast */
@@ -8147,10 +8241,6 @@ bool sendnbrdisc = false;
 if(tentative && sendnbrdisc)
     icmpns(f, 0, SRC_UNSPEC, ip, TARG_MULTI, ifc->mac);
 @
-
-\section{Packet filter}
-
-% /net/ipmux
 
 \section{Network database, [[ndb]]}
 %less: or mv in advanced features of Name resolution chapter?
@@ -8233,32 +8323,37 @@ case 6:
     /* fall through */
 @
 
-\section{Bootp}
 
-\subsection{[[/net/bootp]]}
-% dead?
 
-<<[[Qid]] toplevel extra cases>>=
-Qbootp,
-@
-<<[[ip1gen()]] switch TYPE qid cases>>=
-case Qbootp:
-    p = "bootp";
-    break;
-@
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qbootp:
-    return bootpread(a, offset, n);
-@
+%\section{Packet filter}
+% /net/ipmux
 
-<<function bootpread>>=
-int
-bootpread(char*, ulong, int)
-{
-    return  0;
-}
-@
-%dead? then remove entirely inferno.c then
+%\section{Bootp}
+
+%\subsection{[[/net/bootp]]}
+%% dead?
+%
+%<<[[Qid]] toplevel extra cases>>=
+%Qbootp,
+%@
+%<<[[ip1gen()]] switch TYPE qid cases>>=
+%case Qbootp:
+%    p = "bootp";
+%    break;
+%@
+%<<[[ipread()]] switch TYPE qid cases>>=
+%case Qbootp:
+%    return bootpread(a, offset, n);
+%@
+%
+%<<function bootpread>>=
+%int
+%bootpread(char*, ulong, int)
+%{
+%    return  0;
+%}
+%@
+%%I removed entirely inferno.c
 
 
 \chapter{Conclusion}

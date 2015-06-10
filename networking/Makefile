@@ -68,7 +68,6 @@ SRC_VIEWS= \
   ../kernel/network/ip/il.c\
   ../kernel/network/ip/udp.c\
   ../kernel/network/ip/tcp.c\
-  ../kernel/network/ip/inferno.c\
   \
   ../networking/ip/ipconfig/ipconfig.h\
   ../networking/ip/ipconfig/main.c\
@@ -261,3 +260,4 @@ SRC_VIEWS= \
   ../kernel/network/ip/ipv6.h\
   ../networking/ip/ipconfig/ipv6.c\
 
+#  ../kernel/network/ip/inferno.c\

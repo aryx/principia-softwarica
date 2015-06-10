@@ -281,23 +281,18 @@ struct Conv
   /*s: [[Conv(kernel)]] priv fields */
   void* ptcl;     /* protocol specific stuff */
   /*e: [[Conv(kernel)]] priv fields */
+  /*s: [[Conv(kernel)]] udp fields */
+  bool ignoreadvice;   /* don't terminate connection on icmp errors */
+  /*e: [[Conv(kernel)]] udp fields */
+  /*s: [[Conv(kernel)]] error fields */
+  char  cerr[ERRMAX];
+  /*e: [[Conv(kernel)]] error fields */
   /*s: [[Conv(kernel)]] other fields */
   Rendez  cr;
   /*x: [[Conv(kernel)]] other fields */
   int inuse;      /* opens of listen/data/ctl */
   /*x: [[Conv(kernel)]] other fields */
-  int length;
-  /*x: [[Conv(kernel)]] other fields */
   bool restricted;   /* remote port is restricted */
-  bool ignoreadvice;   /* don't terminate connection on icmp errors */
-
-  /* udp specific */
-  int headers;    /* data src/dst headers in udp */
-  int reliable;   /* true if reliable udp */
-
-  QLock car;
-  /*x: [[Conv(kernel)]] other fields */
-  char  cerr[ERRMAX];
   /*x: [[Conv(kernel)]] other fields */
   uint  tos;      /* type of service */
   /*x: [[Conv(kernel)]] other fields */
@@ -383,14 +378,15 @@ struct Iplifc
 
   uchar remote[IPaddrlen]; // ??
 
-  /*s: [[Iplifc(kernel)]] other fields */
+  /*s: [[Iplifc(kernel)]] ipv6 fields */
+  long  preflt;   /* v6 preferred lifetime */
+  long  validlt;  /* v6 valid lifetime */
+  /*x: [[Iplifc(kernel)]] ipv6 fields */
   uchar onlink;   /* =1 => onlink, =0 offlink. */
   uchar tentative;  /* =1 => v6 dup disc on, =0 => confirmed unique */
   uchar autoflag; /* v6 autonomous flag */
-  long  validlt;  /* v6 valid lifetime */
-  long  preflt;   /* v6 preferred lifetime */
   long  origint;  /* time when addr was added */
-  /*e: [[Iplifc(kernel)]] other fields */
+  /*e: [[Iplifc(kernel)]] ipv6 fields */
 
   // Extra
   /*s: [[Iplifc(kernel)]] extra fields */
@@ -462,21 +458,16 @@ struct Ipifc
   ulong inerr;
   ulong outerr;
   /*e: [[Ipifc(kernel)]] stat fields */
+  /*s: [[Ipifc(kernel)]] routing fields */
+  Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
+          used only if node is router */
+  /*e: [[Ipifc(kernel)]] routing fields */
   /*s: [[Ipifc(kernel)]] ipv6 fields */
   uchar sendra6;  /* flag: send router advs on this ifc */
   uchar recvra6;  /* flag: recv router advs on this ifc */
   /*e: [[Ipifc(kernel)]] ipv6 fields */
   /*s: [[Ipifc(kernel)]] other fields */
   Conv  *conv;    /* link to its conversation structure */
-  /*x: [[Ipifc(kernel)]] other fields */
-  /* these are used so that we can unbind on the fly */
-  Lock  idlock;
-  int ref;    /* number of proc's using this ipifc */
-  Rendez  wait;   /* where unbinder waits for ref == 0 */
-  bool unbinding;
-  /*x: [[Ipifc(kernel)]] other fields */
-  Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
-          used only if node is router */
   /*x: [[Ipifc(kernel)]] other fields */
   uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
   /*x: [[Ipifc(kernel)]] other fields */
@@ -605,10 +596,10 @@ struct Proto
   /*s: [[Proto(kernel)]] other fields */
   Qid   qid;    /* qid for protocol directory */
   /*x: [[Proto(kernel)]] other fields */
-  ushort    nextrport;
-  /*x: [[Proto(kernel)]] other fields */
   // enum<protocol_type>
   int   ipproto;  /* ip protocol type */
+  /*x: [[Proto(kernel)]] other fields */
+  ushort    nextrport;
   /*e: [[Proto(kernel)]] other fields */
 
   // Extra
@@ -662,8 +653,6 @@ struct Fs
   Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
   /*x: [[Fs(kernel)]] other fields */
   Ipselftab *self;
-  /*x: [[Fs(kernel)]] other fields */
-  Proto*  ipmux;      /* kludge for finding an ip multiplexor */
   /*e: [[Fs(kernel)]] other fields */
  
   // Extra

@@ -369,7 +369,6 @@ ipifccreate(Conv *cv)
     ifc->m = nil;
 
     ifc->conv = cv;
-    ifc->unbinding = false;
     ifc->reassemble = false;
 }
 /*e: function ipifccreate */
@@ -501,6 +500,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
             if(lifcp) {
                 lifc->onlink = lifcp->onlink;
                 lifc->autoflag = lifcp->autoflag;
+
                 lifc->validlt = lifcp->validlt;
                 lifc->preflt = lifcp->preflt;
                 lifc->origint = lifcp->origint;
@@ -521,6 +521,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     if(lifcp) {
         lifc->onlink = lifcp->onlink;
         lifc->autoflag = lifcp->autoflag;
+
         lifc->validlt = lifcp->validlt;
         lifc->preflt = lifcp->preflt;
         lifc->origint = lifcp->origint;

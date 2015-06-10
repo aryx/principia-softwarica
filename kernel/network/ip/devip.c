@@ -20,8 +20,6 @@ enum
     /*x: [[Qid]] toplevel extra cases */
     Qndb,
     /*x: [[Qid]] toplevel extra cases */
-    Qbootp,
-    /*x: [[Qid]] toplevel extra cases */
     Qlog,
     /*e: [[Qid]] toplevel extra cases */
 
@@ -219,10 +217,6 @@ ip1gen(Chan *c, int i, Dir *dp)
         q.vers = f->ndbvers;
         break;
     /*x: [[ip1gen()]] switch TYPE qid cases */
-    case Qbootp:
-        p = "bootp";
-        break;
-    /*x: [[ip1gen()]] switch TYPE qid cases */
     case Qlog:
         p = "log";
         break;
@@ -272,7 +266,6 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     case Qlog:
     case Qiproute:
     case Qipselftab:
-    case Qbootp:
     case Qndb:
         return ip1gen(c, TYPE(c->qid), dp);
     /*x: [[ipgen()]] switch TYPE qid cases */
@@ -476,7 +469,6 @@ ipopen(Chan* c, int omode)
     case Qprotodir:
     case Qconvdir:
 
-    case Qbootp:
     case Qipselftab:
 
     case Qstatus:
@@ -860,9 +852,6 @@ ipread(Chan *ch, void *a, long n, vlong off)
     /*x: [[ipread()]] switch TYPE qid cases */
     case Qndb:
         return readstr(offset, a, n, f->ndb);
-    /*x: [[ipread()]] switch TYPE qid cases */
-    case Qbootp:
-        return bootpread(a, offset, n);
     /*x: [[ipread()]] switch TYPE qid cases */
     case Qlog:
         return netlogread(f, a, offset, n);
@@ -1332,21 +1321,35 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
         if(cb->nf < 1)
             error("short control request");
 
+        /*s: [[ipwrite()]] Qctl case, if connect string */
         if(strcmp(cb->f[0], "connect") == 0)
             connectctlmsg(x, cv, cb);
+        /*e: [[ipwrite()]] Qctl case, if connect string */
+        /*s: [[ipwrite()]] Qctl case, else if announce string */
         else if(strcmp(cb->f[0], "announce") == 0)
             announcectlmsg(x, cv, cb);
-
+        /*e: [[ipwrite()]] Qctl case, else if announce string */
+        /*s: [[ipwrite()]] Qctl case, else if other string */
         else if(strcmp(cb->f[0], "bind") == 0)
             bindctlmsg(x, cv, cb);
-
-        else if(strcmp(cb->f[0], "ttl") == 0)
-            ttlctlmsg(cv, cb);
+        /*x: [[ipwrite()]] Qctl case, else if other string */
         else if(strcmp(cb->f[0], "tos") == 0)
             tosctlmsg(cv, cb);
+        /*x: [[ipwrite()]] Qctl case, else if other string */
+        else if(strcmp(cb->f[0], "ttl") == 0)
+            ttlctlmsg(cv, cb);
+        /*x: [[ipwrite()]] Qctl case, else if other string */
+        else if(strcmp(cb->f[0], "maxfragsize") == 0){
+            if(cb->nf < 2)
+                error("maxfragsize needs size");
+
+            cv->maxfragsize = (int)strtol(cb->f[1], nil, 0);
+
+        } 
+        /*x: [[ipwrite()]] Qctl case, else if other string */
         else if(strcmp(cb->f[0], "ignoreadvice") == 0)
             cv->ignoreadvice = true;
-
+        /*x: [[ipwrite()]] Qctl case, else if other string */
         else if(strcmp(cb->f[0], "addmulti") == 0){
             if(cb->nf < 2)
                 error("addmulti needs interface address");
@@ -1364,7 +1367,9 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
                     error("addmulti for a non multicast address");
                 ipifcaddmulti(cv, ma, ia);
             }
-        } else if(strcmp(cb->f[0], "remmulti") == 0){
+        } 
+        /*x: [[ipwrite()]] Qctl case, else if other string */
+        else if(strcmp(cb->f[0], "remmulti") == 0){
             if(cb->nf < 2)
                 error("remmulti needs interface address");
             if(!ipismulticast(cv->raddr))
@@ -1373,15 +1378,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
                 error(Ebadip);
             ipifcremmulti(cv, cv->raddr, ia);
         }
-        /*s: [[ipwrite()]], Qctl case, switch command elseif cases */
-        else if(strcmp(cb->f[0], "maxfragsize") == 0){
-            if(cb->nf < 2)
-                error("maxfragsize needs size");
-
-            cv->maxfragsize = (int)strtol(cb->f[1], nil, 0);
-
-        } 
-        /*e: [[ipwrite()]], Qctl case, switch command elseif cases */
+        /*e: [[ipwrite()]] Qctl case, else if other string */
         else if(x->ctl != nil) {
             // Protocol dispatch
             p = x->ctl(cv, cb->f, cb->nf);
@@ -1632,12 +1629,7 @@ Fsconnected(Conv* c, char* msg)
 Proto*
 Fsrcvpcol(Fs* f, uchar proto)
 {
-    /*s: [[Fsrcvpcol()]] if ipmux */
-    if(f->ipmux)
-        return f->ipmux;
-    /*e: [[Fsrcvpcol()]] if ipmux */
-    else
-        return f->t2p[proto];
+   return f->t2p[proto];
 }
 /*e: function Fsrcvpcol */
 
