@@ -298,6 +298,7 @@ iphtadd(Ipht *ht, Conv *c)
     h->c = c;
 
     lock(ht);
+    // add_hash(h, ht)
     h->next = ht->tab[hv];
     ht->tab[hv] = h;
     unlock(ht);
@@ -313,6 +314,7 @@ iphtrem(Ipht *ht, Conv *c)
 
     hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
     lock(ht);
+    // del_hash(hv, ht)
     for(l = &ht->tab[hv]; (*l) != nil; l = &(*l)->next)
         if((*l)->c == c){
             h = *l;

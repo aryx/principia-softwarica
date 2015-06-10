@@ -92,7 +92,7 @@ enum
 };
 /*e: enum _anon_ (kernel/network/ip/ip.h) */
 
-/*s: enum _anon_ (kernel/network/ip/ip.h)2 */
+/*s: enum conversation_state */
 enum conversation_state
 {
   Idle=   0,
@@ -103,7 +103,7 @@ enum conversation_state
   Connecting= 3,
   Connected=  4,
 };
-/*e: enum _anon_ (kernel/network/ip/ip.h)2 */
+/*e: enum conversation_state */
 
 /*s: enum _anon_ (kernel/network/ip/ip.h)3 */
 /* MIB II counters */
@@ -286,9 +286,10 @@ struct Conv
   /*s: [[Conv(kernel)]] error fields */
   char  cerr[ERRMAX];
   /*e: [[Conv(kernel)]] error fields */
-  /*s: [[Conv(kernel)]] other fields */
+  /*s: [[Conv(kernel)]] synchronisation fields */
   Rendez  cr;
-  /*x: [[Conv(kernel)]] other fields */
+  /*e: [[Conv(kernel)]] synchronisation fields */
+  /*s: [[Conv(kernel)]] other fields */
   int inuse;      /* opens of listen/data/ctl */
   /*x: [[Conv(kernel)]] other fields */
   bool restricted;   /* remote port is restricted */
@@ -322,6 +323,7 @@ struct Medium
   char  *name;
 
   int hsize;    /* medium header size */
+
   int mintu;    /* default min mtu */
   int maxtu;    /* default max mtu */
 
@@ -623,11 +625,11 @@ struct Proto
  */
 struct Fs
 {
+  IP  *ip;
+
   // array<option<ref_own<Proto>>>, size is Fs.np
   Proto*  p[Maxproto+1];    /* list of supported protocols */
   int np;
-
-  IP  *ip;
 
   /*s: [[Fs(kernel)]] arp fields */
   Arp *arp;

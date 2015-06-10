@@ -117,12 +117,15 @@ v6tov4(uchar *v4, uchar *v6)
         v4[2] = v6[14];
         v4[3] = v6[15];
         return OK_0;
-    } else {
-        memset(v4, 0, 4);
-        if(memcmp(v6, IPnoaddr, IPaddrlen) == 0)
-            return OK_0;
-        return ERROR_NEG1;
     }
+    /*s: [[v6tov4()]] else if ipv6 address */
+    else {
+           memset(v4, 0, 4);
+           if(memcmp(v6, IPnoaddr, IPaddrlen) == 0)
+               return OK_0;
+           return ERROR_NEG1;
+    }
+    /*e: [[v6tov4()]] else if ipv6 address */
 }
 /*e: function v6tov4 */
 /*e: lib_networking/libip/ipaux.c */

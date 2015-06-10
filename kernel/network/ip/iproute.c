@@ -22,7 +22,9 @@ static Route*   v6freelist;
 /*s: global routelock */
 static RWlock   routelock;
 /*e: global routelock */
+/*s: global v4routegeneration */
 static ulong v4routegeneration;
+/*e: global v4routegeneration */
 static ulong v6routegeneration;
 
 /*s: function freeroute */

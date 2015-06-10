@@ -111,12 +111,9 @@ ip3gen(Chan *c, int i, Dir *dp)
     char *p;
 
     cv = ipfs[c->dev]->p[PROTO(c->qid)]->conv[CONV(c->qid)];
-
     if(cv->owner == nil)
         kstrdup(&cv->owner, eve);
-
     mkqid(&q, QID(PROTO(c->qid), CONV(c->qid), i), 0, QTFILE);
-
     switch(i) {
     /*s: [[ip3gen()]] switch TYPE qid cases */
     case Qctl:
@@ -183,15 +180,16 @@ ip2gen(Chan *c, int i, Dir *dp)
 static int
 ip1gen(Chan *c, int i, Dir *dp)
 {
+    Fs *f;
     Qid q;
-    char *p;
     int prot;
     int len = 0;
-    Fs *f;
+    char *p;
+    /*s: [[ip1gen()]] locals */
     extern ulong    kerndate;
+    /*e: [[ip1gen()]] locals */
 
     f = ipfs[c->dev];
-
     prot = 0666;
     mkqid(&q, QID(0, 0, i), 0, QTFILE);
     switch(i) {
@@ -242,7 +240,6 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
     Conv *cv;
 
     f = ipfs[c->dev];
-
     switch(TYPE(c->qid)) {
     /*s: [[ipgen()]] switch TYPE qid cases */
     case Qtopdir:
@@ -260,13 +257,13 @@ ipgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
             return 1;
         }
         s -= f->np;
-        return ip1gen(c, s+Qtopbase, dp);
+        return ip1gen(c, Qtopbase+s, dp);
     /*x: [[ipgen()]] switch TYPE qid cases */
     case Qarp:
-    case Qlog:
     case Qiproute:
     case Qipselftab:
     case Qndb:
+    case Qlog:
         return ip1gen(c, TYPE(c->qid), dp);
     /*x: [[ipgen()]] switch TYPE qid cases */
     case Qprotodir:
@@ -459,10 +456,8 @@ ipopen(Chan* c, int omode)
     Proto *p;
     Conv *cv, *nc;
 
-    perm = m2p[omode&3];
-
     f = ipfs[c->dev];
-
+    perm = m2p[omode&3];
     switch(TYPE(c->qid)) {
     /*s: [[ipopen()]] switch TYPE qid cases */
     case Qtopdir:
@@ -671,7 +666,9 @@ void
 closeconv(Conv *cv)
 {
     Conv *nc;
+    /*s: [[closeconv()]] locals */
     Ipmulti *mp;
+    /*e: [[closeconv()]] locals */
 
     qlock(cv);
 
@@ -679,7 +676,6 @@ closeconv(Conv *cv)
         qunlock(cv);
         return;
     }
-
     /*s: [[closeconv()]] close incoming calls */
     /* close all incoming calls since no listen will ever happen */
     for(nc = cv->incall; nc; nc = cv->incall){
@@ -691,18 +687,14 @@ closeconv(Conv *cv)
 
     kstrdup(&cv->owner, network);
     cv->perm = 0660;
-
     /*s: [[closeconv()]] if multi, call ipifcremmulti */
     while((mp = cv->multi) != nil)
         ipifcremmulti(cv, mp->ma, mp->ia);
     /*e: [[closeconv()]] if multi, call ipifcremmulti */
-
     cv->r = nil;
     cv->rgen = 0;
-
     // Protocol dispatch
     cv->p->close(cv);
-
     cv->state = Idle;
 
     qunlock(cv);
@@ -764,7 +756,6 @@ ipread(Chan *ch, void *a, long n, vlong off)
     ulong offset = off;
 
     f = ipfs[ch->dev];
-
     p = a;
     switch(TYPE(ch->qid)) {
     /*s: [[ipread()]] switch TYPE qid cases */
@@ -1095,8 +1086,6 @@ Fsstdconnect(Conv *c, char *argv[], int argc)
     char *err;
 
     switch(argc) {
-    default:
-        return "bad args to connect";
     case 2:
         err = setraddrport(c, argv[1]);
         if(err != nil)
@@ -1113,6 +1102,8 @@ Fsstdconnect(Conv *c, char *argv[], int argc)
         err = setladdrport(c, argv[2], 0);
         if(err != nil)
             return err;
+    default:
+        return "bad args to connect";
     }
 
     /*s: [[Fsstdconnect()]] set ipversion field to V4 or V6 */
@@ -1153,7 +1144,6 @@ connectctlmsg(Proto *p, Conv *c, Cmdbuf *cb)
         error("connect not supported");
     // Protocol dispatch
     err = p->connect(c, cb->f, cb->nf);
-
     if(err != nil)
         error(err);
 
@@ -1293,18 +1283,19 @@ ttlctlmsg(Conv *c, Cmdbuf *cb)
 static long
 ipwrite(Chan* ch, void *v, long n, vlong off)
 {
-    Conv *cv;
-    Proto *x;
-    char *p;
-    Cmdbuf *cb;
-    uchar ia[IPaddrlen], ma[IPaddrlen];
     Fs *f;
+    Proto *x;
+    Conv *cv;
+    char *p; // err?
+    Cmdbuf *cb;
     char *a;
     ulong offset = off;
+    /*s: [[ipwrite()]] locals */
+    uchar ia[IPaddrlen], ma[IPaddrlen];
+    /*e: [[ipwrite()]] locals */
 
-    a = v;
     f = ipfs[ch->dev];
-
+    a = v;
     switch(TYPE(ch->qid)){
     /*s: [[ipwrite()]] switch TYPE qid cases */
     case Qctl:
@@ -1579,9 +1570,12 @@ retry:
     /*e: [[Fsprotoclone()]] if no more available conv, garbage collect and retry */
 
     cv->inuse = 1;
+
     kstrdup(&cv->owner, user);
     cv->perm = 0660;
+
     cv->state = Idle;
+
     ipmove(cv->laddr, IPnoaddr);
     ipmove(cv->raddr, IPnoaddr);
     cv->lport = 0;
