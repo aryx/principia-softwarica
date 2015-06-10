@@ -865,26 +865,14 @@ ipifcctl(Conv* cv, char** argv, int argc)
     int i;
 
     ifc = (Ipifc*)cv->ptcl;
+    /*s: [[ipifcctl()]] if add string */
     if(strcmp(argv[0], "add") == 0)
-        return ipifcadd(ifc, argv, argc, 0, nil);
-
+        return ipifcadd(ifc, argv, argc, false, nil);
+    /*e: [[ipifcctl()]] if add string */
+    /*s: [[ipifcctl()]] else if other string */
     else if(strcmp(argv[0], "try") == 0)
-        return ipifcadd(ifc, argv, argc, 1, nil);
-    else if(strcmp(argv[0], "remove") == 0)
-        return ipifcrem(ifc, argv, argc);
-    else if(strcmp(argv[0], "unbind") == 0)
-        return ipifcunbind(ifc);
-
-    else if(strcmp(argv[0], "joinmulti") == 0)
-        return ipifcjoinmulti(ifc, argv, argc);
-    else if(strcmp(argv[0], "leavemulti") == 0)
-        return ipifcleavemulti(ifc, argv, argc);
-    else if(strcmp(argv[0], "mtu") == 0)
-        return ipifcsetmtu(ifc, argv, argc);
-    else if(strcmp(argv[0], "reassemble") == 0){
-        ifc->reassemble = true;
-        return nil;
-    }
+        return ipifcadd(ifc, argv, argc, true, nil);
+    /*x: [[ipifcctl()]] else if other string */
     else if(strcmp(argv[0], "iprouting") == 0){
         i = 1;
         if(argc > 1)
@@ -892,10 +880,33 @@ ipifcctl(Conv* cv, char** argv, int argc)
         iprouting(cv->p->f, i);
         return nil;
     }
+    /*x: [[ipifcctl()]] else if other string */
+    else if(strcmp(argv[0], "mtu") == 0)
+        return ipifcsetmtu(ifc, argv, argc);
+    /*x: [[ipifcctl()]] else if other string */
+    else if(strcmp(argv[0], "remove") == 0)
+        return ipifcrem(ifc, argv, argc);
+    /*x: [[ipifcctl()]] else if other string */
+    else if(strcmp(argv[0], "unbind") == 0)
+        return ipifcunbind(ifc);
+    /*x: [[ipifcctl()]] else if other string */
+    else if(strcmp(argv[0], "reassemble") == 0){
+        ifc->reassemble = true;
+        return nil;
+    }
+    /*x: [[ipifcctl()]] else if other string */
+    else if(strcmp(argv[0], "joinmulti") == 0)
+        return ipifcjoinmulti(ifc, argv, argc);
+    /*x: [[ipifcctl()]] else if other string */
+    else if(strcmp(argv[0], "leavemulti") == 0)
+        return ipifcleavemulti(ifc, argv, argc);
+    /*x: [[ipifcctl()]] else if other string */
     else if(strcmp(argv[0], "add6") == 0)
         return ipifcadd6(ifc, argv, argc);
+    /*x: [[ipifcctl()]] else if other string */
     else if(strcmp(argv[0], "ra6") == 0)
         return ipifcra6(ifc, argv, argc);
+    /*e: [[ipifcctl()]] else if other string */
 
     return "unsupported ctl";
 }

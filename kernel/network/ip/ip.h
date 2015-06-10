@@ -201,7 +201,6 @@ struct IP
   /*s: [[IP(kernel)]] routing fields */
   bool iprouting;  /* true if we route like a gateway */
   /*e: [[IP(kernel)]] routing fields */
-
   /*s: [[IP(kernel)]] ipv6 fields */
     QLock   fraglock6;
     Fragment6*  flisthead6;
@@ -327,16 +326,29 @@ struct Medium
   int maxtu;    /* default max mtu */
 
   int maclen;   /* mac address length  */
- 
-  // the methods
+
+  /*s: [[Medium(kernel)]] methods */
+  /*s: [[Medium(kernel)]] binding methods */
   void  (*bind)(Ipifc*, int, char**);
   void  (*unbind)(Ipifc*);
-
+  /*e: [[Medium(kernel)]] binding methods */
+  /*s: [[Medium(kernel)]] io methods */
   // write packets on the physical network
   void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
   /* process packets written to 'data' */
   void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
-
+  /*e: [[Medium(kernel)]] io methods */
+  /*s: [[Medium(kernel)]] address resolution methods */
+  /* address resolution */
+  void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
+  void  (*areg)(Ipifc*, uchar*);      /* register */
+  /*e: [[Medium(kernel)]] address resolution methods */
+  /*s: [[Medium(kernel)]] route methods */
+  /* routes for router boards */
+  void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
+  void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
+  void  (*flushroutes)(Ipifc *ifc);
+  /*e: [[Medium(kernel)]] route methods */
   /*s: [[Medium(kernel)]] multicast methods */
   /* for arming interfaces to receive multicast */
   void  (*addmulti)(Ipifc *ifc, uchar *a, uchar *ia);
@@ -346,20 +358,11 @@ struct Medium
   void  (*joinmulti)(Ipifc *ifc, uchar *a, uchar *ia);
   void  (*leavemulti)(Ipifc *ifc, uchar *a, uchar *ia);
   /*e: [[Medium(kernel)]] multicast methods */
-  /*s: [[Medium(kernel)]] other methods */
-  /* routes for router boards */
-  void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
-  void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
-  void  (*flushroutes)(Ipifc *ifc);
-
-  /* address resolution */
-  void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
-  void  (*areg)(Ipifc*, uchar*);      /* register */
-  /*e: [[Medium(kernel)]] other methods */
   /*s: [[Medium(kernel)]] ipv6 methods */
   /* v6 address generation */
   void  (*pref2addr)(uchar *pref, uchar *ea);
   /*e: [[Medium(kernel)]] ipv6 methods */
+  /*e: [[Medium(kernel)]] methods */
 
   /*s: [[Medium(kernel)]] other fields */
   bool unbindonclose;  /* if non-zero, unbind on last close */

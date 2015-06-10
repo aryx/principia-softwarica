@@ -752,19 +752,8 @@ struct Medium
   int maxtu;    /* default max mtu */
 
   int maclen;   /* mac address length  */
- 
-  // the methods
-  void  (*bind)(Ipifc*, int, char**);
-  void  (*unbind)(Ipifc*);
 
-  // write packets on the physical network
-  void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
-  /* process packets written to 'data' */
-  void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
-
-  <<[[Medium(kernel)]] multicast methods>>
-  <<[[Medium(kernel)]] other methods>>
-  <<[[Medium(kernel)]] ipv6 methods>>
+  <<[[Medium(kernel)]] methods>>
 
   <<[[Medium(kernel)]] other fields>>
 
@@ -784,6 +773,27 @@ struct Medium
 %     (as m->find <- ipfindmedium <- media[i] <- ???)
 % void  (*bind)(Ipifc*, int, char**);
 
+
+<<[[Medium(kernel)]] methods>>=
+<<[[Medium(kernel)]] binding methods>>
+<<[[Medium(kernel)]] io methods>>
+<<[[Medium(kernel)]] address resolution methods>>
+<<[[Medium(kernel)]] route methods>>
+<<[[Medium(kernel)]] multicast methods>>
+<<[[Medium(kernel)]] ipv6 methods>>
+@
+
+<<[[Medium(kernel)]] binding methods>>=
+void  (*bind)(Ipifc*, int, char**);
+void  (*unbind)(Ipifc*);
+@
+
+<<[[Medium(kernel)]] io methods>>=
+// write packets on the physical network
+void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
+/* process packets written to 'data' */
+void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
+@
 
 <<global media>>=
 Medium *media[Maxmedia] = { 0 };
@@ -813,21 +823,6 @@ addipmedium(Medium *med)
 %less: boilerplate code, should have a generic function for that
 
 
-
-
-
-
-%XXX
-<<[[Medium(kernel)]] other methods>>=
-/* routes for router boards */
-void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
-void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
-void  (*flushroutes)(Ipifc *ifc);
-
-/* address resolution */
-void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
-void  (*areg)(Ipifc*, uchar*);      /* register */
-@
 
 
 %\subsection{Ethernet medium}
@@ -3758,37 +3753,8 @@ ipifcctl(Conv* cv, char** argv, int argc)
     int i;
 
     ifc = (Ipifc*)cv->ptcl;
-    if(strcmp(argv[0], "add") == 0)
-        return ipifcadd(ifc, argv, argc, 0, nil);
-
-    else if(strcmp(argv[0], "try") == 0)
-        return ipifcadd(ifc, argv, argc, 1, nil);
-    else if(strcmp(argv[0], "remove") == 0)
-        return ipifcrem(ifc, argv, argc);
-    else if(strcmp(argv[0], "unbind") == 0)
-        return ipifcunbind(ifc);
-
-    else if(strcmp(argv[0], "joinmulti") == 0)
-        return ipifcjoinmulti(ifc, argv, argc);
-    else if(strcmp(argv[0], "leavemulti") == 0)
-        return ipifcleavemulti(ifc, argv, argc);
-    else if(strcmp(argv[0], "mtu") == 0)
-        return ipifcsetmtu(ifc, argv, argc);
-    else if(strcmp(argv[0], "reassemble") == 0){
-        ifc->reassemble = true;
-        return nil;
-    }
-    else if(strcmp(argv[0], "iprouting") == 0){
-        i = 1;
-        if(argc > 1)
-            i = atoi(argv[1]);
-        iprouting(cv->p->f, i);
-        return nil;
-    }
-    else if(strcmp(argv[0], "add6") == 0)
-        return ipifcadd6(ifc, argv, argc);
-    else if(strcmp(argv[0], "ra6") == 0)
-        return ipifcra6(ifc, argv, argc);
+    <<[[ipifcctl()]] if add string>>
+    <<[[ipifcctl()]] else if other string>>
 
     return "unsupported ctl";
 }
@@ -3796,7 +3762,20 @@ ipifcctl(Conv* cv, char** argv, int argc)
 
 
 
-\subsection{Adding IP, [[/net/ipifc/x/ctl add]]}
+
+
+
+\subsection{Adding an IP, [[/net/ipifc/x/ctl add]]}
+
+<<[[ipifcctl()]] if add string>>=
+if(strcmp(argv[0], "add") == 0)
+    return ipifcadd(ifc, argv, argc, false, nil);
+@
+
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "try") == 0)
+    return ipifcadd(ifc, argv, argc, true, nil);
+@
 
 <<function ipifcadd>>=
 /*
@@ -4370,6 +4349,31 @@ etherbind(Ipifc *ifc, int argc, char **argv)
 
 \section{Advanced configurations}
 
+\subsection{Routing}
+% quite important, for gateways?
+
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "iprouting") == 0){
+    i = 1;
+    if(argc > 1)
+        i = atoi(argv[1]);
+    iprouting(cv->p->f, i);
+    return nil;
+}
+@
+
+<<function iprouting>>=
+void
+iprouting(Fs *f, bool on)
+{
+    f->ip->iprouting = on;
+    if(f->ip->iprouting == false)
+        f->ip->stats[Forwarding] = 2;
+    else
+        f->ip->stats[Forwarding] = 1;
+}
+@
+
 \subsection{MTU}
 
 <<[[ipifcadd()]] switch argc, mtu setting case, and fall through>>=
@@ -4380,6 +4384,32 @@ case 5:
         ifc->maxtu = mtu;
     /* fall through */
 @
+
+
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "mtu") == 0)
+    return ipifcsetmtu(ifc, argv, argc);
+@
+
+<<function ipifcsetmtu>>=
+/*
+ *  change an interface's mtu
+ */
+char*
+ipifcsetmtu(Ipifc *ifc, char **argv, int argc)
+{
+    int mtu;
+
+    if(argc < 2 || ifc->m == nil)
+        return Ebadarg;
+    mtu = strtoul(argv[1], 0, 0);
+    if(mtu < ifc->m->mintu || mtu > ifc->m->maxtu)
+        return Ebadarg;
+    ifc->maxtu = mtu;
+    return nil;
+}
+@
+
 
 \subsection{TOS}
 
@@ -4452,6 +4482,119 @@ ipifcclose(Conv *c)
         ipifcunbind(ifc);
 }
 @
+
+\subsection{Dynamic interface, removing, unbinding, etc}
+
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "remove") == 0)
+    return ipifcrem(ifc, argv, argc);
+@
+
+%less: comment not valid anymore? car not a conv field anymore
+<<function ipifcrem>>=
+/*
+ *  remove an address from an interface.
+ *  called with c->car locked
+ */
+char*
+ipifcrem(Ipifc *ifc, char **argv, int argc)
+{
+    char *rv;
+    uchar ip[IPaddrlen], mask[IPaddrlen], rem[IPaddrlen];
+    Iplifc *lifc;
+
+    if(argc < 3)
+        return Ebadarg;
+
+    if (parseip(ip, argv[1]) == -1)
+        return Ebadip;
+    parseipmask(mask, argv[2]);
+    if(argc < 4)
+        maskip(ip, mask, rem);
+    else
+        if (parseip(rem, argv[3]) == -1)
+            return Ebadip;
+
+    wlock(ifc);
+
+    /*
+     *  find address on this interface and remove from chain.
+     *  for pt to pt we actually specify the remote address as the
+     *  addresss to remove.
+     */
+    for(lifc = ifc->lifc; lifc != nil; lifc = lifc->next) {
+        if (memcmp(ip, lifc->local, IPaddrlen) == 0
+        && memcmp(mask, lifc->mask, IPaddrlen) == 0
+        && memcmp(rem, lifc->remote, IPaddrlen) == 0)
+            break;
+    }
+
+    rv = ipifcremlifc(ifc, lifc);
+    wunlock(ifc);
+    return rv;
+}
+@
+
+
+
+
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "unbind") == 0)
+    return ipifcunbind(ifc);
+@
+
+<<function ipifcunbind>>=
+/*
+ *  detach a device from an interface, close the interface
+ *  called with ifc->conv closed
+ */
+static char*
+ipifcunbind(Ipifc *ifc)
+{
+    char *err;
+
+    if(waserror()){
+        wunlock(ifc);
+        nexterror();
+    }
+    wlock(ifc);
+
+    /* dissociate routes */
+    if(ifc->m != nil && ifc->m->unbindonclose == false)
+        ifc->conv->inuse--;
+    ifc->ifcid++;
+
+    /* disassociate logical interfaces (before zeroing ifc->arg) */
+    while(ifc->lifc){
+        err = ipifcremlifc(ifc, ifc->lifc);
+        /*
+         * note: err non-zero means lifc not found,
+         * which can't happen in this case.
+         */
+        if(err)
+            error(err);
+    }
+
+    /* disassociate device */
+    if(ifc->m && ifc->m->unbind)
+        (*ifc->m->unbind)(ifc);
+    memset(ifc->dev, 0, sizeof(ifc->dev));
+    ifc->arg = nil;
+    ifc->reassemble = 0;
+
+    /* close queues to stop queuing of packets */
+    qclose(ifc->conv->rq);
+    qclose(ifc->conv->wq);
+    qclose(ifc->conv->sq);
+
+    ifc->m = nil;
+    wunlock(ifc);
+    poperror();
+    return nil;
+}
+@
+
+
 
 
 
@@ -5446,10 +5589,17 @@ Conv conv;
 bool iprouting;  /* true if we route like a gateway */
 @
 
-\subsection{Forwarding}
+\subsection{Reassembling}
 
 <<[[Ipifc(kernel)]] other fields>>=
 bool reassemble; /* reassemble IP packets before forwarding */
+@
+
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "reassemble") == 0){
+    ifc->reassemble = true;
+    return nil;
+}
 @
 
 
@@ -5604,6 +5754,14 @@ struct Etherpkt
 
 
 \chapter{Finding Machines Locally, ARP}
+
+%XXX
+<<[[Medium(kernel)]] address resolution methods>>=
+/* address resolution */
+void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
+void  (*areg)(Ipifc*, uchar*);      /* register */
+@
+
 
 <<[[Fs(kernel)]] arp fields>>=
 Arp *arp;
@@ -5890,6 +6048,14 @@ arpwrite(Fs *fs, char *s, int len)
 
 
 \chapter{Finding Machines Globally, Routes}
+
+%XXX
+<<[[Medium(kernel)]] route methods>>=
+/* routes for router boards */
+void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
+void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
+void  (*flushroutes)(Ipifc *ifc);
+@
 
 % ARP allows local routing
 % /net/iproute allows inter-network routing, find gateway
@@ -8177,6 +8343,14 @@ else if(strcmp(cb->f[0], "remmulti") == 0){
 }
 @
 
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "joinmulti") == 0)
+    return ipifcjoinmulti(ifc, argv, argc);
+@
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "leavemulti") == 0)
+    return ipifcleavemulti(ifc, argv, argc);
+@
 
 
 <<[[Medium(kernel)]] multicast methods>>=

@@ -4045,17 +4045,6 @@ extern Chan*  chandial(char*, char*, char*, Chan**);
 
 
 
-<<function iprouting>>=
-void
-iprouting(Fs *f, bool on)
-{
-    f->ip->iprouting = on;
-    if(f->ip->iprouting == false)
-        f->ip->stats[Forwarding] = 2;
-    else
-        f->ip->stats[Forwarding] = 1;
-}
-@
 
 
 
@@ -12036,56 +12025,6 @@ struct Ipmcast
 
 
 
-<<function ipifcunbind>>=
-/*
- *  detach a device from an interface, close the interface
- *  called with ifc->conv closed
- */
-static char*
-ipifcunbind(Ipifc *ifc)
-{
-    char *err;
-
-    if(waserror()){
-        wunlock(ifc);
-        nexterror();
-    }
-    wlock(ifc);
-
-    /* dissociate routes */
-    if(ifc->m != nil && ifc->m->unbindonclose == false)
-        ifc->conv->inuse--;
-    ifc->ifcid++;
-
-    /* disassociate logical interfaces (before zeroing ifc->arg) */
-    while(ifc->lifc){
-        err = ipifcremlifc(ifc, ifc->lifc);
-        /*
-         * note: err non-zero means lifc not found,
-         * which can't happen in this case.
-         */
-        if(err)
-            error(err);
-    }
-
-    /* disassociate device */
-    if(ifc->m && ifc->m->unbind)
-        (*ifc->m->unbind)(ifc);
-    memset(ifc->dev, 0, sizeof(ifc->dev));
-    ifc->arg = nil;
-    ifc->reassemble = 0;
-
-    /* close queues to stop queuing of packets */
-    qclose(ifc->conv->rq);
-    qclose(ifc->conv->wq);
-    qclose(ifc->conv->sq);
-
-    ifc->m = nil;
-    wunlock(ifc);
-    poperror();
-    return nil;
-}
-@
 
 <<global sfixedformat>>=
 char sfixedformat[] = "device %s maxtu %d sendra %d recvra %d mflag %d oflag"
@@ -12194,24 +12133,6 @@ ipifckick(void *x)
 
 
 
-<<function ipifcsetmtu>>=
-/*
- *  change an interface's mtu
- */
-char*
-ipifcsetmtu(Ipifc *ifc, char **argv, int argc)
-{
-    int mtu;
-
-    if(argc < 2 || ifc->m == nil)
-        return Ebadarg;
-    mtu = strtoul(argv[1], 0, 0);
-    if(mtu < ifc->m->mintu || mtu > ifc->m->maxtu)
-        return Ebadarg;
-    ifc->maxtu = mtu;
-    return nil;
-}
-@
 
 
 <<function ipifcremlifc>>=
@@ -12260,49 +12181,6 @@ ipifcremlifc(Ipifc *ifc, Iplifc *lifc)
 }
 @
 
-<<function ipifcrem>>=
-/*
- *  remove an address from an interface.
- *  called with c->car locked
- */
-char*
-ipifcrem(Ipifc *ifc, char **argv, int argc)
-{
-    char *rv;
-    uchar ip[IPaddrlen], mask[IPaddrlen], rem[IPaddrlen];
-    Iplifc *lifc;
-
-    if(argc < 3)
-        return Ebadarg;
-
-    if (parseip(ip, argv[1]) == -1)
-        return Ebadip;
-    parseipmask(mask, argv[2]);
-    if(argc < 4)
-        maskip(ip, mask, rem);
-    else
-        if (parseip(rem, argv[3]) == -1)
-            return Ebadip;
-
-    wlock(ifc);
-
-    /*
-     *  find address on this interface and remove from chain.
-     *  for pt to pt we actually specify the remote address as the
-     *  addresss to remove.
-     */
-    for(lifc = ifc->lifc; lifc != nil; lifc = lifc->next) {
-        if (memcmp(ip, lifc->local, IPaddrlen) == 0
-        && memcmp(mask, lifc->mask, IPaddrlen) == 0
-        && memcmp(rem, lifc->remote, IPaddrlen) == 0)
-            break;
-    }
-
-    rv = ipifcremlifc(ifc, lifc);
-    wunlock(ifc);
-    return rv;
-}
-@
 
 <<function ipifcaddroute>>=
 /*
