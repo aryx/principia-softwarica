@@ -569,12 +569,12 @@ struct Proto
   int   (*stats)(Proto*, char*, int);
   /*e: [[Proto(kernel)]] protocol methods */
   /*s: [[Proto(kernel)]] conversation ctl methods */
-  char*   (*bind)(Conv*, char**, int);
-  /*x: [[Proto(kernel)]] conversation ctl methods */
   char*   (*connect)(Conv*, char**, int);
   char*   (*announce)(Conv*, char**, int);
   /*x: [[Proto(kernel)]] conversation ctl methods */
   char*   (*ctl)(Conv*, char**, int);
+  /*x: [[Proto(kernel)]] conversation ctl methods */
+  char*   (*bind)(Conv*, char**, int);
   /*e: [[Proto(kernel)]] conversation ctl methods */
   /*s: [[Proto(kernel)]] conversation inspection methods */
   int   (*state)(Conv*, char*, int);
