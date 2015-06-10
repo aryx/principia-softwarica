@@ -839,6 +839,7 @@ struct Route
     V6route v6;
     /*e: [[Route]] ipv6 route union case */
   };
+
 };
 /*e: struct Route (kernel) */
 extern void v4addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type);
