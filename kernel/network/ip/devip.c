@@ -1480,8 +1480,6 @@ Fsproto(Fs *f, Proto *p)
     }
     /*e: [[Fsproto()]] adjust f->t2p */
 
-    p->qid.type = QTDIR;
-    p->qid.path = QID(f->np, 0, Qprotodir);
     p->conv = malloc(sizeof(Conv*) * (p->nc+1));
     if(p->conv == nil)
         panic("Fsproto");

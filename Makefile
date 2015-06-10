@@ -33,7 +33,8 @@ disk:
 run:
 	qemu-system-i386 -smp 4 -m 512 \
            -kernel sys/src/9/pc/9$(CONFIG) \
-           -hda dosdisk.img 
+           -hda dosdisk.img \
+#           -net nic,model=ne2k_pci -net user
 #-fda ~/floppy.img
 #-hda ~/plan9.raw.img
 #-cdrom plan9.iso? does not work?

@@ -273,22 +273,24 @@ struct Conv
   /*s: [[Conv(kernel)]] multicast fields */
   Ipmulti *multi;     /* multicast bindings for this interface */
   /*e: [[Conv(kernel)]] multicast fields */
+  /*s: [[Conv(kernel)]] udp fields */
+  bool ignoreadvice;   /* don't terminate connection on icmp errors */
+  /*e: [[Conv(kernel)]] udp fields */
+
+  /*s: [[Conv(kernel)]] synchronisation fields */
+  Rendez  cr;
+  /*e: [[Conv(kernel)]] synchronisation fields */
+  /*s: [[Conv(kernel)]] priv fields */
+  void* ptcl;     /* protocol specific stuff */
+  /*e: [[Conv(kernel)]] priv fields */
   /*s: [[Conv(kernel)]] snoop fields */
   Ref snoopers;   /* number of processes with snoop open */
   Queue*  sq;     /* snooping queue */
   /*e: [[Conv(kernel)]] snoop fields */
-  /*s: [[Conv(kernel)]] priv fields */
-  void* ptcl;     /* protocol specific stuff */
-  /*e: [[Conv(kernel)]] priv fields */
-  /*s: [[Conv(kernel)]] udp fields */
-  bool ignoreadvice;   /* don't terminate connection on icmp errors */
-  /*e: [[Conv(kernel)]] udp fields */
   /*s: [[Conv(kernel)]] error fields */
   char  cerr[ERRMAX];
   /*e: [[Conv(kernel)]] error fields */
-  /*s: [[Conv(kernel)]] synchronisation fields */
-  Rendez  cr;
-  /*e: [[Conv(kernel)]] synchronisation fields */
+
   /*s: [[Conv(kernel)]] other fields */
   int inuse;      /* opens of listen/data/ctl */
   /*x: [[Conv(kernel)]] other fields */
@@ -558,7 +560,6 @@ struct Proto
   /*s: [[Proto(kernel)]] methods */
   /*s: [[Proto(kernel)]] protocol methods */
   void    (*create)(Conv*);
-  /*x: [[Proto(kernel)]] protocol methods */
   void    (*close)(Conv*);
   /*x: [[Proto(kernel)]] protocol methods */
   int   (*gc)(Proto*);  /* returns true if any conversations are freed */
@@ -600,8 +601,6 @@ struct Proto
   int   ptclsize; /* size of per protocol ctl block */
   /*e: [[Proto(kernel)]] priv fields */
   /*s: [[Proto(kernel)]] other fields */
-  Qid   qid;    /* qid for protocol directory */
-  /*x: [[Proto(kernel)]] other fields */
   // enum<protocol_type>
   int   ipproto;  /* ip protocol type */
   /*x: [[Proto(kernel)]] other fields */

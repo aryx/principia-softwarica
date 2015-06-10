@@ -17,7 +17,7 @@
 #define	SEEK		10
 /*e: sys.h file syscalls */
 /*s: sys.h directory syscalls */
-#define	CREATE	        11
+#define	CREATE		11
 #define	REMOVE		12
 #define	CHDIR		13
 #define	FD2PATH		14
@@ -36,10 +36,10 @@
 #define	ALARM		23
 /*e: sys.h time syscalls */
 /*s: sys.h ipc syscalls */
+#define	PIPE		26
+
 #define	NOTIFY		24
 #define	NOTED		25
-
-#define	PIPE		26
 
 #define	SEGATTACH	27
 #define	SEGDETACH	28

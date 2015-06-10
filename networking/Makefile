@@ -35,12 +35,6 @@ SRC_VIEWS= \
   ../lib_networking/libip/readipifc.c\
   ../lib_networking/libip/tests/testreadipifc.c\
   \
-  ../networking/ip/ping.c\
-  ../networking/ip/traceroute.c\
-  ../networking/ip/gping.c\
-  ../networking/ip/hogports.c\
-  ../networking/ip/udpecho.c\
-  \
   ../kernel/network/ip/ip.h\
   ../kernel/network/ip/ip.c\
   ../kernel/network/portfns_network.h\
@@ -68,6 +62,20 @@ SRC_VIEWS= \
   ../kernel/network/ip/il.c\
   ../kernel/network/ip/udp.c\
   ../kernel/network/ip/tcp.c\
+  \
+  ../kernel/network/ip/icmp6.c\
+  ../kernel/network/ip/ipv6.c\
+  ../kernel/network/ip/ipv6.h\
+
+#  ../kernel/network/ip/inferno.c\
+
+SRC_VIEWS_BIG= \
+  \
+  ../networking/ip/ping.c\
+  ../networking/ip/traceroute.c\
+  ../networking/ip/gping.c\
+  ../networking/ip/hogports.c\
+  ../networking/ip/udpecho.c\
   \
   ../networking/ip/ipconfig/ipconfig.h\
   ../networking/ip/ipconfig/main.c\
@@ -151,8 +159,6 @@ SRC_VIEWS= \
   ../networking/ip/snoopy/rtcp.c\
   ../networking/ip/snoopy/rtp.c\
   ../networking/ip/snoopy/ttls.c\
-  \
-  \
   \
   ../networking/ip/rarpd.c\
   ../networking/ip/rlogind.c\
@@ -255,9 +261,4 @@ SRC_VIEWS= \
   ../networking/ip/pptp.c\
   ../networking/ip/pptpd.c\
   \
-  ../kernel/network/ip/icmp6.c\
-  ../kernel/network/ip/ipv6.c\
-  ../kernel/network/ip/ipv6.h\
   ../networking/ip/ipconfig/ipv6.c\
-
-#  ../kernel/network/ip/inferno.c\

@@ -61,4 +61,37 @@ TEXT outl(SB), $0
         MOVL    long+4(FP), AX
         OUTL
         RET
+
+TEXT insb(SB), $0
+      MOVL    port+0(FP), DX
+      MOVL    address+4(FP), DI
+      MOVL    count+8(FP), CX
+      CLD
+      REP;    INSB
+      RET
+
+TEXT insl(SB), $0
+      MOVL    port+0(FP), DX
+      MOVL    address+4(FP), DI
+      MOVL    count+8(FP), CX
+      CLD
+      REP;    INSL
+      RET
+
+TEXT outsb(SB), $0
+      MOVL    port+0(FP), DX
+      MOVL    address+4(FP), SI
+      MOVL    count+8(FP), CX
+      CLD
+      REP;    OUTSB
+      RET
+
+TEXT outsl(SB), $0
+      MOVL    port+0(FP), DX
+      MOVL    address+4(FP), SI
+      MOVL    count+8(FP), CX
+      CLD
+      REP;    OUTSL
+      RET
+
 /*e: l_io.s */

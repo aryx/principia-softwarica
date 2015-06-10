@@ -116,7 +116,7 @@ void  idle(void);
 void  idlehands(void);
 //@Scheck: Assembly
 int inb(int);
-//void  insb(int, void*, int);
+void  insb(int, void*, int); // used only by ether8390 for now
 //@Scheck: Assembly
 ushort  ins(int);
 //@Scheck: Assembly
@@ -167,7 +167,7 @@ uchar nvramread(int);
 void  nvramwrite(int, uchar);
 //@Scheck: Assembly
 void  outb(int, int);
-//void  outsb(int, void*, int);
+void  outsb(int, void*, int); // used only by ether8390 for now
 //@Scheck: Assembly
 void  outs(int, ushort);
 //@Scheck: Assembly

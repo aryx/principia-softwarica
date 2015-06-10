@@ -35,11 +35,13 @@ enum {
 
 /*s: enum specialkey(x86) */
 enum {
-    Spec=       0xF800,     /* Unicode private space */
     KF=         0xF000,     /* function key (begin Unicode private space) */
+    Spec=       0xF800,     /* Unicode private space */
+
 
     PF=         Spec|0x20,  /* num pad function key */
     View=       Spec|0x00,  /* view (shift window up) */
+
     Shift=      Spec|0x60,
     Break=      Spec|0x61,
     Ctrl=       Spec|0x62,
@@ -52,6 +54,8 @@ enum {
     Kmouse=     Spec|0x100,
 
     No=         0x00,       /* peter */
+
+    /* KF|1, KF|2, ..., KF|0xC is F1, F2, ..., F12 */
 
     Home=       KF|13,
     Up=         KF|14,
@@ -424,8 +428,8 @@ kbdputsc(byte k, int external)
     }
     /*e: [[kbdputsc()]] esc key handling part1 and possible return(x86) */
 
-    keyup = c & 0x80; // key released
-    c &= 0x7f;
+    keyup = c & 0x80; // key released (1 bit)
+    c &= 0x7f; // 128
 
     /*s: [[kbdputsc()]] ensures c is in boundary(x86) */
     if(c > sizeof kbtab){
