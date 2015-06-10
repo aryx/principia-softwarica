@@ -1321,7 +1321,7 @@ struct Netaddr
  */
 enum
 {
-  Eaddrlen= 6,
+  <<constant Eaddrlen>>
   ETHERMINTU =  60,   /* minimum transmit size */
   ETHERMAXTU =  1514,   /* maximum transmit size */
   ETHERHDRSIZE =  14,   /* size of an ethernet header */
@@ -2887,16 +2887,7 @@ ethercrc(uchar *p, int len)
 #define Dp8390BufSz	256
 @
 
-<<macro regr>>=
-/*
- * x86-specific code.
- */
-#define regr(c, r)	inb((c)->port+(r))
-@
 
-<<macro regw>>=
-#define regw(c, r, v)	outb((c)->port+(r), (v))
-@
 
 <<function rdread>>=
 static void
@@ -2918,55 +2909,14 @@ rdread(Dp8390* ctlr, void* to, int len)
 }
 @
 
-<<function rdwrite>>=
-static void
-rdwrite(Dp8390* ctlr, void* from, int len)
-{
-    switch(ctlr->width){
-    default:
-        panic("dp8390 rdwrite: width %d\n", ctlr->width);
-        break;
-
-    case 2:
-        outss(ctlr->data, from, len/2);
-        break;
-
-    case 1:
-        outsb(ctlr->data, from, len);
-        break;
-    }
-}
-@
 
 
 %-------------------------------------------------------------
 
 <<kernel/network/386/ether8390.h>>=
-/*
- * Ctlr for the boards using the National Semiconductor DP8390
- * and SMC 83C90 Network Interface Controller.
- * Common code is in ether8390.c.
- */
-typedef struct {
-    Lock;
 
-    ulong	port;			/* I/O address of 8390 */
-    ulong	data;			/* I/O data port if no shared memory */
-
-    uchar	width;			/* data transfer width in bytes */
-    uchar	ram;			/* true if card has shared memory */
-    uchar	dummyrr;		/* do dummy remote read */
-
-    uchar	nxtpkt;			/* receive: software bndry */
-    uchar	pstart;
-    uchar	pstop;
-
-    int	txbusy;			/* transmit */
-    uchar	tstart;			/* 8390 ring addresses */
-
-    uchar	mar[8];			/* shadow multicast address registers */
-    int	mref[64];		/* reference counts for multicast groups */
-} Dp8390;
+typedef struct Dp8390 Dp8390;
+<<struct Dp8390>>
 
 <<constant Dp8390BufSz>>
 
@@ -3135,724 +3085,31 @@ struct Hdr {
 };
 @
 
-<<function dp8390getea>>=
-void
-dp8390getea(Ether* ether, uchar* ea)
-{
-    Dp8390 *ctlr;
-    uchar cr;
-    int i;
-
-    ctlr = ether->ctlr;
-
-    /*
-     * Get the ethernet address from the chip.
-     * Take care to restore the command register
-     * afterwards.
-     */
-    ilock(ctlr);
-    cr = regr(ctlr, Cr) & ~Txp;
-    regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
-    for(i = 0; i < Eaddrlen; i++)
-        ea[i] = regr(ctlr, Par0+i);
-    regw(ctlr, Cr, cr);
-    iunlock(ctlr);
-}
-@
-
-<<function dp8390setea>>=
-void
-dp8390setea(Ether* ether)
-{
-    int i;
-    uchar cr;
-    Dp8390 *ctlr;
-
-    ctlr = ether->ctlr;
-
-    /*
-     * Set the ethernet address into the chip.
-     * Take care to restore the command register
-     * afterwards. Don't care about multicast
-     * addresses as multicast is never enabled
-     * (currently).
-     */
-    ilock(ctlr);
-    cr = regr(ctlr, Cr) & ~Txp;
-    regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
-    for(i = 0; i < Eaddrlen; i++)
-        regw(ctlr, Par0+i, ether->ea[i]);
-    regw(ctlr, Cr, cr);
-    iunlock(ctlr);
-}
-@
-
-<<function _dp8390read>>=
-static void*
-_dp8390read(Dp8390* ctlr, void* to, ulong from, ulong len)
-{
-    uchar cr;
-    int timo;
-
-    /*
-     * Read some data at offset 'from' in the card's memory
-     * using the DP8390 remote DMA facility, and place it at
-     * 'to' in main memory, via the I/O data port.
-     */
-    cr = regr(ctlr, Cr) & ~Txp;
-    regw(ctlr, Cr, Page0|RdABORT|Sta);
-    regw(ctlr, Isr, Rdc);
-
-    /*
-     * Set up the remote DMA address and count.
-     */
-    len = ROUNDUP(len, ctlr->width);
-    regw(ctlr, Rbcr0, len & 0xFF);
-    regw(ctlr, Rbcr1, (len>>8) & 0xFF);
-    regw(ctlr, Rsar0, from & 0xFF);
-    regw(ctlr, Rsar1, (from>>8) & 0xFF);
-
-    /*
-     * Start the remote DMA read and suck the data
-     * out of the I/O port.
-     */
-    regw(ctlr, Cr, Page0|RdREAD|Sta);
-    rdread(ctlr, to, len);
-
-    /*
-     * Wait for the remote DMA to complete. The timeout
-     * is necessary because this routine may be called on
-     * a non-existent chip during initialisation and, due
-     * to the miracles of the bus, it's possible to get this
-     * far and still be talking to a slot full of nothing.
-     */
-    for(timo = 10000; (regr(ctlr, Isr) & Rdc) == 0 && timo; timo--)
-            ;
-
-    regw(ctlr, Isr, Rdc);
-    regw(ctlr, Cr, cr);
-
-    return to;
-}
-@
-
-<<function dp8390read>>=
-void*
-dp8390read(Dp8390* ctlr, void* to, ulong from, ulong len)
-{
-    void *v;
-
-    ilock(ctlr);
-    v = _dp8390read(ctlr, to, from, len);
-    iunlock(ctlr);
-
-    return v;
-}
-@
-
-<<function dp8390write>>=
-static void*
-dp8390write(Dp8390* ctlr, ulong to, void* from, ulong len)
-{
-    ulong crda;
-    uchar cr;
-    int timo, width;
-
-top:
-    /*
-     * Write some data to offset 'to' in the card's memory
-     * using the DP8390 remote DMA facility, reading it at
-     * 'from' in main memory, via the I/O data port.
-     */
-    cr = regr(ctlr, Cr) & ~Txp;
-    regw(ctlr, Cr, Page0|RdABORT|Sta);
-    regw(ctlr, Isr, Rdc);
-
-    len = ROUNDUP(len, ctlr->width);
-
-    /*
-     * Set up the remote DMA address and count.
-     * This is straight from the DP8390[12D] datasheet,
-     * hence the initial set up for read.
-     * Assumption here that the A7000 EtherV card will
-     * never need a dummyrr.
-     */
-    if(ctlr->dummyrr && (ctlr->width == 1 || ctlr->width == 2)){
-        if(ctlr->width == 2)
-            width = 1;
-        else
-            width = 0;
-        crda = to-1-width;
-        regw(ctlr, Rbcr0, (len+1+width) & 0xFF);
-        regw(ctlr, Rbcr1, ((len+1+width)>>8) & 0xFF);
-        regw(ctlr, Rsar0, crda & 0xFF);
-        regw(ctlr, Rsar1, (crda>>8) & 0xFF);
-        regw(ctlr, Cr, Page0|RdREAD|Sta);
-    
-        for(timo=0;; timo++){
-            if(timo > 10000){
-                print("ether8390: dummyrr timeout; assuming nodummyrr\n");
-                ctlr->dummyrr = 0;
-                goto top;
-            }
-            crda = regr(ctlr, Crda0);
-            crda |= regr(ctlr, Crda1)<<8;
-            if(crda == to){
-                /*
-                 * Start the remote DMA write and make sure
-                 * the registers are correct.
-                 */
-                regw(ctlr, Cr, Page0|RdWRITE|Sta);
-    
-                crda = regr(ctlr, Crda0);
-                crda |= regr(ctlr, Crda1)<<8;
-                if(crda != to)
-                    panic("crda write %lud to %lud\n", crda, to);
-    
-                break;
-            }
-        }
-    }
-    else{
-        regw(ctlr, Rsar0, to & 0xFF);
-        regw(ctlr, Rsar1, (to>>8) & 0xFF);
-        regw(ctlr, Rbcr0, len & 0xFF);
-        regw(ctlr, Rbcr1, (len>>8) & 0xFF);
-        regw(ctlr, Cr, Page0|RdWRITE|Sta);
-    }
-
-    /*
-     * Pump the data into the I/O port
-     * then wait for the remote DMA to finish.
-     */
-    rdwrite(ctlr, from, len);
-    for(timo = 10000; (regr(ctlr, Isr) & Rdc) == 0 && timo; timo--)
-            ;
-
-    regw(ctlr, Isr, Rdc);
-    regw(ctlr, Cr, cr);
-
-    return (void*)to;
-}
-@
-
-<<function ringinit>>=
-static void
-ringinit(Dp8390* ctlr)
-{
-    regw(ctlr, Pstart, ctlr->pstart);
-    regw(ctlr, Pstop, ctlr->pstop);
-    regw(ctlr, Bnry, ctlr->pstop-1);
-
-    regw(ctlr, Cr, Page1|RdABORT|Stp);
-    regw(ctlr, Curr, ctlr->pstart);
-    regw(ctlr, Cr, Page0|RdABORT|Stp);
-
-    ctlr->nxtpkt = ctlr->pstart;
-}
-@
-
-<<function getcurr>>=
-static uchar
-getcurr(Dp8390* ctlr)
-{
-    uchar cr, curr;
-
-    cr = regr(ctlr, Cr) & ~Txp;
-    regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
-    curr = regr(ctlr, Curr);
-    regw(ctlr, Cr, cr);
-
-    return curr;
-}
-@
-
-<<function receive (kernel/network/386/ether8390.c)>>=
-static void
-receive(Ether* ether)
-{
-    Dp8390 *ctlr;
-    uchar curr, *p;
-    Hdr hdr;
-    ulong count, data, len;
-    Block *bp;
-
-    ctlr = ether->ctlr;
-    for(curr = getcurr(ctlr); ctlr->nxtpkt != curr; curr = getcurr(ctlr)){
-        data = ctlr->nxtpkt*Dp8390BufSz;
-        if(ctlr->ram)
-            memmove(&hdr, (void*)(ether->mem+data), sizeof(Hdr));
-        else
-            _dp8390read(ctlr, &hdr, data, sizeof(Hdr));
-
-        /*
-         * Don't believe the upper byte count, work it
-         * out from the software next-page pointer and
-         * the current next-page pointer.
-         */
-        if(hdr.next > ctlr->nxtpkt)
-            len = hdr.next - ctlr->nxtpkt - 1;
-        else
-            len = (ctlr->pstop-ctlr->nxtpkt) + (hdr.next-ctlr->pstart) - 1;
-        if(hdr.len0 > (Dp8390BufSz-sizeof(Hdr)))
-            len--;
-
-        len = ((len<<8)|hdr.len0)-4;
-
-        /*
-         * Chip is badly scrogged, reinitialise the ring.
-         */
-        if(hdr.next < ctlr->pstart || hdr.next >= ctlr->pstop
-          || len < 60 || len > sizeof(Etherpkt)){
-            print("dp8390: H%2.2ux+%2.2ux+%2.2ux+%2.2ux,%lud\n",
-                hdr.status, hdr.next, hdr.len0, hdr.len1, len);
-            regw(ctlr, Cr, Page0|RdABORT|Stp);
-            ringinit(ctlr);
-            regw(ctlr, Cr, Page0|RdABORT|Sta);
-
-            return;
-        }
-
-        /*
-         * If it's a good packet read it in to the software buffer.
-         * If the packet wraps round the hardware ring, read it in
-         * two pieces.
-         */
-        if((hdr.status & (Fo|Fae|Crce|Prxok)) == Prxok && (bp = iallocb(len))){
-            p = bp->rp;
-            bp->wp = p+len;
-            data += sizeof(Hdr);
-
-            if((data+len) >= ctlr->pstop*Dp8390BufSz){
-                count = ctlr->pstop*Dp8390BufSz - data;
-                if(ctlr->ram)
-                    memmove(p, (void*)(ether->mem+data), count);
-                else
-                    _dp8390read(ctlr, p, data, count);
-                p += count;
-                data = ctlr->pstart*Dp8390BufSz;
-                len -= count;
-            }
-            if(len){
-                if(ctlr->ram)
-                    memmove(p, (void*)(ether->mem+data), len);
-                else
-                    _dp8390read(ctlr, p, data, len);
-            }
-
-            /*
-             * Copy the packet to whoever wants it.
-             */
-            etheriq(ether, bp, 1);
-        }
-
-        /*
-         * Finished with this packet, update the
-         * hardware and software ring pointers.
-         */
-        ctlr->nxtpkt = hdr.next;
-
-        hdr.next--;
-        if(hdr.next < ctlr->pstart)
-            hdr.next = ctlr->pstop-1;
-        regw(ctlr, Bnry, hdr.next);
-    }
-}
-@
-
-<<function txstart>>=
-static void
-txstart(Ether* ether)
-{
-    int len;
-    Dp8390 *ctlr;
-    Block *bp;
-    uchar minpkt[ETHERMINTU], *rp;
-
-    ctlr = ether->ctlr;
-
-    /*
-     * This routine is called both from the top level and from interrupt
-     * level and expects to be called with ctlr already locked.
-     */
-    if(ctlr->txbusy)
-        return;
-    bp = qget(ether->oq);
-    if(bp == nil)
-        return;
-
-    /*
-     * Make sure the packet is of minimum length;
-     * copy it to the card's memory by the appropriate means;
-     * start the transmission.
-     */
-    len = BLEN(bp);
-    rp = bp->rp;
-    if(len < ETHERMINTU){
-        rp = minpkt;
-        memmove(rp, bp->rp, len);
-        memset(rp+len, 0, ETHERMINTU-len);
-        len = ETHERMINTU;
-    }
-
-    if(ctlr->ram)
-        memmove((void*)(ether->mem+ctlr->tstart*Dp8390BufSz), rp, len);
-    else
-        dp8390write(ctlr, ctlr->tstart*Dp8390BufSz, rp, len);
-    freeb(bp);
-
-    regw(ctlr, Tbcr0, len & 0xFF);
-    regw(ctlr, Tbcr1, (len>>8) & 0xFF);
-    regw(ctlr, Cr, Page0|RdABORT|Txp|Sta);
-
-    ether->outpackets++;
-    ctlr->txbusy = 1;
-}
-@
-
-<<function transmit>>=
-static void
-transmit(Ether* ether)
-{
-    Dp8390 *ctlr;
-
-    ctlr = ether->ctlr;
-
-    ilock(ctlr);
-    txstart(ether);
-    iunlock(ctlr);
-}
-@
-
-<<function overflow>>=
-static void
-overflow(Ether *ether)
-{
-    Dp8390 *ctlr;
-    uchar txp;
-    int resend;
-
-    ctlr = ether->ctlr;
-
-    /*
-     * The following procedure is taken from the DP8390[12D] datasheet,
-     * it seems pretty adamant that this is what has to be done.
-     */
-    txp = regr(ctlr, Cr) & Txp;
-    regw(ctlr, Cr, Page0|RdABORT|Stp);
-    delay(2);
-    regw(ctlr, Rbcr0, 0);
-    regw(ctlr, Rbcr1, 0);
-
-    resend = 0;
-    if(txp && (regr(ctlr, Isr) & (Txe|Ptx)) == 0)
-        resend = 1;
-
-    regw(ctlr, Tcr, LpbkNIC);
-    regw(ctlr, Cr, Page0|RdABORT|Sta);
-    receive(ether);
-    regw(ctlr, Isr, Ovw);
-    regw(ctlr, Tcr, LpbkNORMAL);
-
-    if(resend)
-        regw(ctlr, Cr, Page0|RdABORT|Txp|Sta);
-}
-@
-
-<<function interrupt>>=
-static void
-interrupt(Ureg*, void* arg)
-{
-    Ether *ether;
-    Dp8390 *ctlr;
-    uchar isr, r;
-
-    ether = arg;
-    ctlr = ether->ctlr;
-
-    /*
-     * While there is something of interest,
-     * clear all the interrupts and process.
-     */
-    ilock(ctlr);
-    regw(ctlr, Imr, 0x00);
-    while(isr = (regr(ctlr, Isr) & (Cnt|Ovw|Txe|Rxe|Ptx|Prx))){
-        if(isr & Ovw){
-            overflow(ether);
-            regw(ctlr, Isr, Ovw);
-            ether->overflows++;
-        }
-
-        /*
-         * Packets have been received.
-         * Take a spin round the ring.
-         */
-        if(isr & (Rxe|Prx)){
-            receive(ether);
-            regw(ctlr, Isr, Rxe|Prx);
-        }
-
-        /*
-         * A packet completed transmission, successfully or
-         * not. Start transmission on the next buffered packet,
-         * and wake the output routine.
-         */
-        if(isr & (Txe|Ptx)){
-            r = regr(ctlr, Tsr);
-            if((isr & Txe) && (r & (Cdh|Fu|Crs|Abt))){
-                print("dp8390: Tsr %#2.2ux", r);
-                ether->oerrs++;
-            }
-
-            regw(ctlr, Isr, Txe|Ptx);
-
-            if(isr & Ptx)
-                ether->outpackets++;
-            ctlr->txbusy = 0;
-            txstart(ether);
-        }
-
-        if(isr & Cnt){
-            ether->frames += regr(ctlr, Ref0);
-            ether->crcs += regr(ctlr, Ref1);
-            ether->buffs += regr(ctlr, Ref2);
-            regw(ctlr, Isr, Cnt);
-        }
-    }
-    regw(ctlr, Imr, Cnt|Ovw|Txe|Rxe|Ptx|Prx);
-    iunlock(ctlr);
-}
-@
-
-<<global allmar>>=
-static uchar allmar[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-@
-
-<<function setfilter>>=
-static void
-setfilter(Ether *ether, Dp8390 *ctlr)
-{
-    uchar r, cr;
-    int i;
-    uchar *mar;
-
-    r = Ab;
-    mar = 0;
-    if(ether->prom){
-        r |= Pro|Am;
-        mar = allmar;
-    } else if(ether->nmaddr){
-        r |= Am;
-        mar = ctlr->mar;
-    }
-    if(mar){
-        cr = regr(ctlr, Cr) & ~Txp;
-        regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
-        for(i = 0; i < 8; i++)
-            regw(ctlr, Mar0+i, *(mar++));
-        regw(ctlr, Cr, cr);
-    }
-    regw(ctlr, Rcr, r);
-}
-@
-
-<<function promiscuous>>=
-static void
-promiscuous(void *arg, int )
-{
-    Ether *ether;
-    Dp8390 *ctlr;
-
-    ether = arg;
-    ctlr = ether->ctlr;
-
-    ilock(ctlr);
-    setfilter(ether, ctlr);
-    iunlock(ctlr);
-}
-@
-
-<<function setbit>>=
-static void
-setbit(Dp8390 *ctlr, int bit, int on)
-{
-    int i, h;
-
-    i = bit/8;
-    h = bit%8;
-    if(on){
-        if(++(ctlr->mref[bit]) == 1)
-            ctlr->mar[i] |= 1<<h;
-    } else {
-        if(--(ctlr->mref[bit]) <= 0){
-            ctlr->mref[bit] = 0;
-            ctlr->mar[i] &= ~(1<<h);
-        }
-    }
-}
-@
-
-<<global reverse>>=
-static uchar reverse[64];
-@
-
-<<function multicast>>=
-static void
-multicast(void* arg, uchar *addr, int on)
-{
-    Ether *ether;
-    Dp8390 *ctlr;
-    int i;
-    ulong h;
-
-    ether = arg;
-    ctlr = ether->ctlr;
-    if(reverse[1] == 0){
-        for(i = 0; i < 64; i++)
-            reverse[i] = ((i&1)<<5) | ((i&2)<<3) | ((i&4)<<1)
-                   | ((i&8)>>1) | ((i&16)>>3) | ((i&32)>>5);
-    }
-
-    /*
-     *  change filter bits
-     */
-    h = ethercrc(addr, 6);
-    ilock(ctlr);
-    setbit(ctlr, reverse[h&0x3f], on);
-    setfilter(ether, ctlr);
-    iunlock(ctlr);
-}
-@
-
-<<function attach>>=
-static void
-attach(Ether* ether)
-{
-    Dp8390 *ctlr;
-    uchar r;
-
-    ctlr = ether->ctlr;
-
-    /*
-     * Enable the chip for transmit/receive.
-     * The init routine leaves the chip in monitor
-     * mode. Clear the missed-packet counter, it
-     * increments while in monitor mode.
-     * Sometimes there's an interrupt pending at this
-     * point but there's nothing in the Isr, so
-     * any pending interrupts are cleared and the
-     * mask of acceptable interrupts is enabled here.
-     */
-    r = Ab;
-    if(ether->prom)
-        r |= Pro;
-    if(ether->nmaddr)
-        r |= Am;
-    ilock(ctlr);
-    regw(ctlr, Isr, 0xFF);
-    regw(ctlr, Imr, Cnt|Ovw|Txe|Rxe|Ptx|Prx);
-    regw(ctlr, Rcr, r);
-    r = regr(ctlr, Ref2);
-    regw(ctlr, Tcr, LpbkNORMAL);
-    iunlock(ctlr);
-    USED(r);
-}
-@
-
-<<function disable>>=
-static void
-disable(Dp8390* ctlr)
-{
-    int timo;
-
-    /*
-     * Stop the chip. Set the Stp bit and wait for the chip
-     * to finish whatever was on its tiny mind before it sets
-     * the Rst bit.
-     * The timeout is needed because there may not be a real
-     * chip there if this is called when probing for a device
-     * at boot.
-     */
-    regw(ctlr, Cr, Page0|RdABORT|Stp);
-    regw(ctlr, Rbcr0, 0);
-    regw(ctlr, Rbcr1, 0);
-    for(timo = 10000; (regr(ctlr, Isr) & Rst) == 0 && timo; timo--)
-            ;
-}
-@
-
-<<function shutdown>>=
-static void
-shutdown(Ether *ether)
-{
-    Dp8390 *ctlr;
-
-    ctlr = ether->ctlr;
-    disable(ctlr);
-}
-@
-
-<<function dp8390reset>>=
-int
-dp8390reset(Ether* ether)
-{
-    Dp8390 *ctlr;
-
-    ctlr = ether->ctlr;
-
-    /*
-     * This is the initialisation procedure described
-     * as 'mandatory' in the datasheet, with references
-     * to the 3C503 technical reference manual.
-     */ 
-    disable(ctlr);
-    if(ctlr->width != 1)
-        regw(ctlr, Dcr, Ft4WORD|Ls|Wts);
-    else
-        regw(ctlr, Dcr, Ft4WORD|Ls);
-
-    regw(ctlr, Rbcr0, 0);
-    regw(ctlr, Rbcr1, 0);
-
-    regw(ctlr, Tcr, LpbkNIC);
-    regw(ctlr, Rcr, Mon);
-
-    /*
-     * Init the ring hardware and software ring pointers.
-     * Can't initialise ethernet address as it may not be
-     * known yet.
-     */
-    ringinit(ctlr);
-    regw(ctlr, Tpsr, ctlr->tstart);
-
-    /*
-     * Clear any pending interrupts and mask then all off.
-     */
-    regw(ctlr, Isr, 0xFF);
-    regw(ctlr, Imr, 0);
-
-    /*
-     * Leave the chip initialised,
-     * but in monitor mode.
-     */
-    regw(ctlr, Cr, Page0|RdABORT|Sta);
-
-    /*
-     * Set up the software configuration.
-     */
-    ether->attach = attach;
-    ether->transmit = transmit;
-    ether->interrupt = interrupt;
-    ether->shutdown = shutdown;
-    ether->ifstat = 0;
-
-    ether->promiscuous = promiscuous;
-    ether->multicast = multicast;
-    ether->arg = ether;
-
-    return 0;
-}
-@
+%dead?
+%<<function dp8390getea>>=
+%void
+%dp8390getea(Ether* ether, uchar* ea)
+%{
+%    Dp8390 *ctlr;
+%    uchar cr;
+%    int i;
+%
+%    ctlr = ether->ctlr;
+%
+%    /*
+%     * Get the ethernet address from the chip.
+%     * Take care to restore the command register
+%     * afterwards.
+%     */
+%    ilock(ctlr);
+%    cr = regr(ctlr, Cr) & ~Txp;
+%    regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
+%    for(i = 0; i < Eaddrlen; i++)
+%        ea[i] = regr(ctlr, Par0+i);
+%    regw(ctlr, Cr, cr);
+%    iunlock(ctlr);
+%}
+%@
 
 
 %-------------------------------------------------------------
@@ -3891,10 +3148,10 @@ dp8390reset(Ether* ether)
 <<enum _anon_ (kernel/network/386/ether8390.c)7>>
 
 typedef struct Hdr Hdr;
+
+
 <<struct Hdr (kernel/network/386/ether8390.c)>>
 
-
-<<function dp8390getea>>
 
 <<function dp8390setea>>
 
@@ -3912,11 +3169,11 @@ typedef struct Hdr Hdr;
 
 <<function txstart>>
 
-<<function transmit>>
+<<function transmit (kernel/network/386/ether8390.c)>>
 
 <<function overflow>>
 
-<<function interrupt>>
+<<function interrupt (kernel/network/386/ether8390.c)>>
 
 <<global allmar>>
 
@@ -3943,247 +3200,12 @@ typedef struct Hdr Hdr;
 \subsection*{[[kernel/network/386/ether2000.c]]}
 
 <<enum _anon_ (kernel/network/386/ether2000.c)>>=
-/*
- * Driver written for the 'Notebook Computer Ethernet LAN Adapter',
- * a plug-in to the bus-slot on the rear of the Gateway NOMAD 425DXL
- * laptop. The manual says NE2000 compatible.
- * The interface appears to be pretty well described in the National
- * Semiconductor Local Area Network Databook (1992) as one of the
- * AT evaluation cards.
- *
- * The NE2000 is really just a DP8390[12] plus a data port
- * and a reset port.
- */
 enum {
     Data		= 0x10,		/* offset from I/O base of data port */
     Reset		= 0x1F,		/* offset from I/O base of reset port */
 };
 @
 
-<<struct Ctlr>>=
-typedef struct Ctlr {
-    Pcidev*	pcidev;
-    Ctlr*	next;
-    int	active;
-} Ctlr;
-@
-
-<<global ctlrhead>>=
-static Ctlr* ctlrhead;
-@
-
-<<global ctlrtail>>=
-static Ctlr* ctlrtail;
-@
-
-<<global ne2000pci>>=
-static struct {
-    char*	name;
-    int	id;
-} ne2000pci[] = {
-    { "Realtek 8029",	(0x8029<<16)|0x10EC, },
-    { "Winbond 89C940",	(0x0940<<16)|0x1050, },
-    { nil },
-};
-@
-
-<<function ne2000match>>=
-static Ctlr*
-ne2000match(Ether* edev, int id)
-{
-    int port;
-    Pcidev *p;
-    Ctlr *ctlr;
-
-    /*
-     * Any adapter matches if no edev->port is supplied,
-     * otherwise the ports must match.
-     */
-    for(ctlr = ctlrhead; ctlr != nil; ctlr = ctlr->next){
-        if(ctlr->active)
-            continue;
-        p = ctlr->pcidev;
-        if(((p->did<<16)|p->vid) != id)
-            continue;
-        port = p->mem[0].bar & ~0x01;
-        if(edev->port != 0 && edev->port != port)
-            continue;
-
-        /*
-         * It suffices to fill these in,
-         * the rest is gleaned from the card.
-         */
-        edev->port = port;
-        edev->irq = p->intl;
-
-        ctlr->active = 1;
-
-        return ctlr;
-    }
-
-    return nil;
-}
-@
-
-<<function ne2000pnp>>=
-static void
-ne2000pnp(Ether* edev)
-{
-    int i, id;
-    Pcidev *p;
-    Ctlr *ctlr;
-
-    /*
-     * Make a list of all ethernet controllers
-     * if not already done.
-     */
-    if(ctlrhead == nil){
-        p = nil;
-        while(p = pcimatch(p, 0, 0)){
-            if(p->ccrb != 0x02 || p->ccru != 0)
-                continue;
-            ctlr = malloc(sizeof(Ctlr));
-            if(ctlr == nil)
-                error(Enomem);
-            ctlr->pcidev = p;
-
-            if(ctlrhead != nil)
-                ctlrtail->next = ctlr;
-            else
-                ctlrhead = ctlr;
-            ctlrtail = ctlr;
-        }
-    }
-
-    /*
-     * Is it a card with an unrecognised vid+did?
-     * Normally a search is made through all the found controllers
-     * for one which matches any of the known vid+did pairs.
-     * If a vid+did pair is specified a search is made for that
-     * specific controller only.
-     */
-    id = 0;
-    for(i = 0; i < edev->nopt; i++){
-        if(cistrncmp(edev->opt[i], "id=", 3) == 0)
-            id = strtol(&edev->opt[i][3], nil, 0);
-    }
-
-    if(id != 0)
-        ne2000match(edev, id);
-    else for(i = 0; ne2000pci[i].name; i++){
-        if(ne2000match(edev, ne2000pci[i].id) != nil)
-            break;
-    }
-}
-@
-
-<<function ne2000reset>>=
-static int
-ne2000reset(Ether* edev)
-{
-    ushort buf[16];
-    ulong port;
-    Dp8390 *dp8390;
-    int i;
-    uchar ea[Eaddrlen];
-
-    if(edev->port == 0)
-        ne2000pnp(edev);
-
-    /*
-     * Set up the software configuration.
-     * Use defaults for irq, mem and size
-     * if not specified.
-     * Must have a port, no more default.
-     */
-    if(edev->port == 0)
-        return -1;
-    if(edev->irq == 0)
-        edev->irq = 2;
-    if(edev->mem == 0)
-        edev->mem = 0x4000;
-    if(edev->size == 0)
-        edev->size = 16*1024;
-    port = edev->port;
-
-    if(ioalloc(edev->port, 0x20, 0, "ne2000") < 0)
-        return -1;
-
-    edev->ctlr = malloc(sizeof(Dp8390));
-    dp8390 = edev->ctlr;
-    if(dp8390 == nil)
-        error(Enomem);
-    dp8390->width = 2;
-    dp8390->ram = 0;
-
-    dp8390->port = port;
-    dp8390->data = port+Data;
-
-    dp8390->tstart = HOWMANY(edev->mem, Dp8390BufSz);
-    dp8390->pstart = dp8390->tstart + HOWMANY(sizeof(Etherpkt), Dp8390BufSz);
-    dp8390->pstop = dp8390->tstart + HOWMANY(edev->size, Dp8390BufSz);
-
-    dp8390->dummyrr = 1;
-    for(i = 0; i < edev->nopt; i++){
-        if(strcmp(edev->opt[i], "nodummyrr"))
-            continue;
-        dp8390->dummyrr = 0;
-        break;
-    }
-
-    /*
-     * Reset the board. This is done by doing a read
-     * followed by a write to the Reset address.
-     */
-    buf[0] = inb(port+Reset);
-    delay(2);
-    outb(port+Reset, buf[0]);
-    delay(2);
-    
-    /*
-     * Init the (possible) chip, then use the (possible)
-     * chip to read the (possible) PROM for ethernet address
-     * and a marker byte.
-     * Could just look at the DP8390 command register after
-     * initialisation has been tried, but that wouldn't be
-     * enough, there are other ethernet boards which could
-     * match.
-     * Parallels has buf[0x0E] == 0x00 whereas real hardware
-     * usually has 0x57.
-     */
-    dp8390reset(edev);
-    memset(buf, 0, sizeof(buf));
-    dp8390read(dp8390, buf, 0, sizeof(buf));
-    i = buf[0x0E] & 0xFF;
-    if((i != 0x00 && i != 0x57) || (buf[0x0F] & 0xFF) != 0x57){
-        iofree(edev->port);
-        free(edev->ctlr);
-        return -1;
-    }
-
-    /*
-     * Stupid machine. Shorts were asked for,
-     * shorts were delivered, although the PROM is a byte array.
-     * Set the ethernet address.
-     */
-    memset(ea, 0, Eaddrlen);
-    if(memcmp(ea, edev->ea, Eaddrlen) == 0){
-        for(i = 0; i < sizeof(edev->ea); i++)
-            edev->ea[i] = buf[i];
-    }
-    dp8390setea(edev);
-
-    return 0;
-}
-@
-
-<<function ether2000link>>=
-void
-ether2000link(void)
-{
-    addethercard("NE2000", ne2000reset);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -4201,13 +3223,25 @@ ether2000link(void)
 #include "etherif.h"
 #include "ether8390.h"
 
+/*
+ * Driver written for the 'Notebook Computer Ethernet LAN Adapter',
+ * a plug-in to the bus-slot on the rear of the Gateway NOMAD 425DXL
+ * laptop. The manual says NE2000 compatible.
+ * The interface appears to be pretty well described in the National
+ * Semiconductor Local Area Network Databook (1992) as one of the
+ * AT evaluation cards.
+ *
+ * The NE2000 is really just a DP8390[12] plus a data port
+ * and a reset port.
+ */
+
 <<enum _anon_ (kernel/network/386/ether2000.c)>>
 
 typedef struct Ctlr Ctlr;
-<<struct Ctlr>>
+<<struct Ctlr (kernel/network/386/ether2000.c)>>
 
-<<global ctlrhead>>
-<<global ctlrtail>>
+<<global ctlrhead (kernel/network/386/ether2000.c)>>
+<<global ctlrtail (kernel/network/386/ether2000.c)>>
 
 <<global ne2000pci>>
 

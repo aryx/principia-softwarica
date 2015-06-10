@@ -122,6 +122,7 @@ struct Netif
   /* routines for touching the hardware */
   void  *arg;
 
+  /*s: [[Netif(kernel)]] methods */
   void  (*promiscuous)(void*, int);
   int (*hwmtu)(void*, int); /* get/set mtu */
   void  (*scanbs)(void*, uint); /* scan for base stations */
@@ -134,6 +135,7 @@ struct Netif
   /*s: [[Netif(kernel)]] multicast methods */
   void  (*multicast)(void*, uchar*, int);
   /*e: [[Netif(kernel)]] multicast methods */
+  /*e: [[Netif(kernel)]] methods */
 
   // Extra
   QLock;
@@ -158,7 +160,9 @@ int activemulti(Netif*, uchar*, int);
  */
 enum
 {
+  /*s: constant Eaddrlen */
   Eaddrlen= 6,
+  /*e: constant Eaddrlen */
   ETHERMINTU =  60,   /* minimum transmit size */
   ETHERMAXTU =  1514,   /* maximum transmit size */
   ETHERHDRSIZE =  14,   /* size of an ethernet header */

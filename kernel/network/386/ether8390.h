@@ -1,17 +1,18 @@
 /*s: kernel/network/386/ether8390.h */
+
+typedef struct Dp8390 Dp8390;
+/*s: struct Dp8390 */
 /*
  * Ctlr for the boards using the National Semiconductor DP8390
  * and SMC 83C90 Network Interface Controller.
  * Common code is in ether8390.c.
  */
-typedef struct {
-    Lock;
-
+struct Dp8390 {
     ulong	port;			/* I/O address of 8390 */
     ulong	data;			/* I/O data port if no shared memory */
 
     uchar	width;			/* data transfer width in bytes */
-    uchar	ram;			/* true if card has shared memory */
+    bool	ram;			/* true if card has shared memory */
     uchar	dummyrr;		/* do dummy remote read */
 
     uchar	nxtpkt;			/* receive: software bndry */
@@ -21,9 +22,15 @@ typedef struct {
     int	txbusy;			/* transmit */
     uchar	tstart;			/* 8390 ring addresses */
 
+    /*s: [[Dp8390]] multicast fields */
     uchar	mar[8];			/* shadow multicast address registers */
     int	mref[64];		/* reference counts for multicast groups */
-} Dp8390;
+    /*e: [[Dp8390]] multicast fields */
+
+    // Extra
+    Lock;
+};
+/*e: struct Dp8390 */
 
 /*s: constant Dp8390BufSz */
 #define Dp8390BufSz	256

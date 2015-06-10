@@ -11,7 +11,6 @@
 #include "etherif.h"
 #include "ether8390.h"
 
-/*s: enum _anon_ (kernel/network/386/ether2000.c) */
 /*
  * Driver written for the 'Notebook Computer Ethernet LAN Adapter',
  * a plug-in to the bus-slot on the rear of the Gateway NOMAD 425DXL
@@ -23,6 +22,8 @@
  * The NE2000 is really just a DP8390[12] plus a data port
  * and a reset port.
  */
+
+/*s: enum _anon_ (kernel/network/386/ether2000.c) */
 enum {
     Data		= 0x10,		/* offset from I/O base of data port */
     Reset		= 0x1F,		/* offset from I/O base of reset port */
@@ -30,20 +31,20 @@ enum {
 /*e: enum _anon_ (kernel/network/386/ether2000.c) */
 
 typedef struct Ctlr Ctlr;
-/*s: struct Ctlr */
-typedef struct Ctlr {
+/*s: struct Ctlr (kernel/network/386/ether2000.c) */
+struct Ctlr {
     Pcidev*	pcidev;
     Ctlr*	next;
     int	active;
-} Ctlr;
-/*e: struct Ctlr */
+};
+/*e: struct Ctlr (kernel/network/386/ether2000.c) */
 
-/*s: global ctlrhead */
+/*s: global ctlrhead (kernel/network/386/ether2000.c) */
 static Ctlr* ctlrhead;
-/*e: global ctlrhead */
-/*s: global ctlrtail */
+/*e: global ctlrhead (kernel/network/386/ether2000.c) */
+/*s: global ctlrtail (kernel/network/386/ether2000.c) */
 static Ctlr* ctlrtail;
-/*e: global ctlrtail */
+/*e: global ctlrtail (kernel/network/386/ether2000.c) */
 
 /*s: global ne2000pci */
 static struct {
@@ -147,7 +148,7 @@ ne2000pnp(Ether* edev)
 /*e: function ne2000pnp */
 
 /*s: function ne2000reset */
-static int
+static errorneg1
 ne2000reset(Ether* edev)
 {
     ushort buf[16];
@@ -158,6 +159,8 @@ ne2000reset(Ether* edev)
 
     if(edev->port == 0)
         ne2000pnp(edev);
+    if(edev->port == 0)
+        return ERROR_NEG1;
 
     /*
      * Set up the software configuration.
@@ -165,8 +168,6 @@ ne2000reset(Ether* edev)
      * if not specified.
      * Must have a port, no more default.
      */
-    if(edev->port == 0)
-        return -1;
     if(edev->irq == 0)
         edev->irq = 2;
     if(edev->mem == 0)
@@ -176,14 +177,15 @@ ne2000reset(Ether* edev)
     port = edev->port;
 
     if(ioalloc(edev->port, 0x20, 0, "ne2000") < 0)
-        return -1;
+        return ERROR_NEG1;
 
     edev->ctlr = malloc(sizeof(Dp8390));
     dp8390 = edev->ctlr;
     if(dp8390 == nil)
         error(Enomem);
+
     dp8390->width = 2;
-    dp8390->ram = 0;
+    dp8390->ram = false;
 
     dp8390->port = port;
     dp8390->data = port+Data;
@@ -220,14 +222,17 @@ ne2000reset(Ether* edev)
      * Parallels has buf[0x0E] == 0x00 whereas real hardware
      * usually has 0x57.
      */
+
+    // will fill in the Ether callbacks
     dp8390reset(edev);
+
     memset(buf, 0, sizeof(buf));
     dp8390read(dp8390, buf, 0, sizeof(buf));
     i = buf[0x0E] & 0xFF;
     if((i != 0x00 && i != 0x57) || (buf[0x0F] & 0xFF) != 0x57){
         iofree(edev->port);
         free(edev->ctlr);
-        return -1;
+        return ERROR_NEG1;
     }
 
     /*
@@ -242,7 +247,7 @@ ne2000reset(Ether* edev)
     }
     dp8390setea(edev);
 
-    return 0;
+    return OK_0;
 }
 /*e: function ne2000reset */
 

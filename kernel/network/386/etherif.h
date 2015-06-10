@@ -11,25 +11,42 @@ enum {
 typedef struct Ether Ether;
 /*s: struct Ether (kernel) */
 struct Ether {
-  ISAConf;      /* hardware info */
 
-  int ctlrno;
-  int tbdf;     /* type+busno+devno+funcno */
   uchar ea[Eaddrlen];
 
+  /*s: [[Ether]] methods */
+  /*s: [[ether]] mounting methods */
   void  (*attach)(Ether*);  /* filled in by reset routine */
   void  (*detach)(Ether*);
+  /*e: [[ether]] mounting methods */
+  /*s: [[ether]] io methods */
   void  (*transmit)(Ether*);
   void  (*interrupt)(Ureg*, void*);
+  /*e: [[ether]] io methods */
+  /*s: [[ether]] other methods */
   long  (*ifstat)(Ether*, void*, long, ulong);
   long  (*ctl)(Ether*, void*, long); /* custom ctl messages */
   void  (*power)(Ether*, int);  /* power on/off */
   void  (*shutdown)(Ether*);  /* shutdown hardware before reboot */
+  /*e: [[ether]] other methods */
+  /*e: [[Ether]] methods */
+
+  /*s: [[Ether]] priv fields */
   void  *ctlr;
+  /*e: [[Ether]] priv fields */
+  /*s: [[Ether]] other fields */
+  int tbdf;     /* type+busno+devno+funcno */
+  /*e: [[Ether]] other fields */
 
   Queue*  oq;
 
+  ISAConf;      /* hardware info */
   Netif;
+
+  // Extra
+  /*s: [[Ether]] extra fields */
+  int ctlrno;
+  /*e: [[Ether]] extra fields */
 };
 /*e: struct Ether (kernel) */
 

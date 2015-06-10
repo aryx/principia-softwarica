@@ -41,7 +41,9 @@ etherattach(char* spec)
     }
     chan->dev = ctlrno;
     if(etherxx[ctlrno]->attach)
+        // Ethernet controller dispatch
         etherxx[ctlrno]->attach(etherxx[ctlrno]);
+
     poperror();
     return chan;
 }

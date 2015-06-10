@@ -64,12 +64,14 @@ Medium ethermedium =
 
     .bind=      etherbind,
     .unbind=    etherunbind,
+
     .bwrite=    etherbwrite,
+
+    .ares=      arpenter,
+    .areg=      sendgarp,
 
     .addmulti=  etheraddmulti,
     .remmulti=  etherremmulti,
-    .ares=      arpenter,
-    .areg=      sendgarp,
 
     .pref2addr= etherpref2addr,
 };

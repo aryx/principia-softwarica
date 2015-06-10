@@ -156,6 +156,8 @@ enum {					/* Rsr */
 /*e: enum _anon_ (kernel/network/386/ether8390.c)7 */
 
 typedef struct Hdr Hdr;
+
+
 /*s: struct Hdr (kernel/network/386/ether8390.c) */
 struct Hdr {
     uchar	status;
@@ -165,31 +167,6 @@ struct Hdr {
 };
 /*e: struct Hdr (kernel/network/386/ether8390.c) */
 
-
-/*s: function dp8390getea */
-void
-dp8390getea(Ether* ether, uchar* ea)
-{
-    Dp8390 *ctlr;
-    uchar cr;
-    int i;
-
-    ctlr = ether->ctlr;
-
-    /*
-     * Get the ethernet address from the chip.
-     * Take care to restore the command register
-     * afterwards.
-     */
-    ilock(ctlr);
-    cr = regr(ctlr, Cr) & ~Txp;
-    regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
-    for(i = 0; i < Eaddrlen; i++)
-        ea[i] = regr(ctlr, Par0+i);
-    regw(ctlr, Cr, cr);
-    iunlock(ctlr);
-}
-/*e: function dp8390getea */
 
 /*s: function dp8390setea */
 void
@@ -541,7 +518,7 @@ txstart(Ether* ether)
 }
 /*e: function txstart */
 
-/*s: function transmit */
+/*s: function transmit (kernel/network/386/ether8390.c) */
 static void
 transmit(Ether* ether)
 {
@@ -553,7 +530,7 @@ transmit(Ether* ether)
     txstart(ether);
     iunlock(ctlr);
 }
-/*e: function transmit */
+/*e: function transmit (kernel/network/386/ether8390.c) */
 
 /*s: function overflow */
 static void
@@ -590,7 +567,7 @@ overflow(Ether *ether)
 }
 /*e: function overflow */
 
-/*s: function interrupt */
+/*s: function interrupt (kernel/network/386/ether8390.c) */
 static void
 interrupt(Ureg*, void* arg)
 {
@@ -653,7 +630,7 @@ interrupt(Ureg*, void* arg)
     regw(ctlr, Imr, Cnt|Ovw|Txe|Rxe|Ptx|Prx);
     iunlock(ctlr);
 }
-/*e: function interrupt */
+/*e: function interrupt (kernel/network/386/ether8390.c) */
 
 /*s: global allmar */
 static uchar allmar[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
@@ -868,13 +845,16 @@ dp8390reset(Ether* ether)
      */
     regw(ctlr, Cr, Page0|RdABORT|Sta);
 
+
+
     /*
      * Set up the software configuration.
      */
     ether->attach = attach;
+    ether->shutdown = shutdown;
+
     ether->transmit = transmit;
     ether->interrupt = interrupt;
-    ether->shutdown = shutdown;
     ether->ifstat = 0;
 
     ether->promiscuous = promiscuous;

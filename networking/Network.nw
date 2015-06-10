@@ -234,6 +234,9 @@ License.
 % (packets become really useful there because big sharing).
 % gateways are really important, and so is having multiple IPs.
 
+% general datagram and specific fragments, 
+% to abstract away from particular physical link constraints.
+
 % tcp: because route can be complex, and can use different routes,
 % so can arrive in different order, so need protocol, ack, retransmit,
 % reorder, etc. Tricky.
@@ -272,6 +275,8 @@ License.
 %    echo 'add 10.0.0.15' > /net/ipifc/x/ctl
 % enough? need also to write arp no? and a few routes?
 
+% ether0 means first ethernet controller, like in linux ifcfg0
+
 % see http://wiki.qemu.org/Documentation/Networking
 % for the configuration when running plan9 under qemu,
 % ip = 10.0.2.15, gw = 10.0.2.2, dns = 10.0.2.3
@@ -301,7 +306,7 @@ License.
 
 % include/ip.h
 % lib_networking/libip/
-% kernel/network/, devip, devether, udp.c, tpc.c, and etherigbe.c
+% kernel/network/, devip, devether, udp.c, tpc.c, and ether2000.c, etherigbe.c
 % networking/...
 
 \section{Software architecture}
@@ -323,7 +328,8 @@ License.
 
 % encapsulation each time, more headers each time.
 
-% packet vs frame vs stream
+% packet (network) vs frame (ethernet) vs datagram and fragments (ip) 
+% vs continuous stream (user)
 
 % Proto vs Fs vs Ipifc vs Netif
 
@@ -444,7 +450,7 @@ v6tov4(uchar *v4, uchar *v6)
 % pointer to the address in the header as first argument
 % and the cv->laddr or cv->raddr as second argument.
 
-\subsection{Class and network identifier}
+\subsection{Network class and network identifier}
 
 % "conceptually an internet address is a pair (netid, hostid)
 % where netid identifies a network, and hostid identifies a host
@@ -722,10 +728,14 @@ Iplink  *link;    /* addresses linked to this lifc */
 
 
 
-\section{Physical link [[Medium]], and [[media]]}
+\section{Physical link}
 
 % e.g. for ethernet
 % see later: null, loopback, packet
+
+
+\subsection{[[Medium]]}
+% general interface
 
 % see that it's pointed by Ipifc above
 
@@ -757,13 +767,17 @@ struct Medium
 <<[[Medium(kernel)]] ipv6 methods>>
 @
 
+%% ipwrite (Ctl case) -> bindctlmsg -> ipifcbind -> <>  (for bind)
+%     (as m->bind <- ipfindmedium <- media[i] <- ???)
 <<[[Medium(kernel)]] binding methods>>=
 void  (*bind)(Ipifc*, int, char**);
 void  (*unbind)(Ipifc*);
 @
-
 % char**? array of string? to pass parameters to bind? e.g. path
 % in 'bind ether /net/ether0' ?
+% this will call findipmedium that will explore for instance
+% all medium and media, and ethernetmedium which in turn
+% will explore all ethernet controllers in etherxx.
 
 <<[[Medium(kernel)]] io methods>>=
 // write packets on the physical network
@@ -775,17 +789,14 @@ void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
 %bwrite!! that's where you write the data! note that pass just ip,
 % no port here, we are at IP layer. Has to be scheduled as can have
 % many processes wanting to write to the medium
+
 %pktin!! that's where you read packets from the network, which has to
 % be routed to the right place, how?? Has to be decomposed and dispatched
 % so need a global map of ip+port info.
 
-%% ipwrite (Ctl case) -> bindctlmsg -> ipifcbind -> <> 
-%     (as m->find <- ipfindmedium <- media[i] <- ???)
-% void  (*bind)(Ipifc*, int, char**);
 
 
-
-
+\subsection{[[media]]}
 
 <<global media>>=
 Medium *media[Maxmedia] = { 0 };
@@ -815,9 +826,128 @@ addipmedium(Medium *med)
 %less: boilerplate code, should have a generic function for that
 
 
+\subsection{Ethernet medium}
+
+% before IP? kinda more low level (but less general)
+
+% there are other physical device/medium, but we'll focus on this one,
+% most common
+
+<<constant Eaddrlen>>=
+Eaddrlen= 6,
+@
+% physical 48bits address.
+
+% will be added to media[] in?
+<<global ethermedium (kernel)>>=
+Medium ethermedium =
+{
+    .name=      "ether",
+
+    .hsize=     14,
+    .mintu=     60,
+    .maxtu=     1514,
+    .maclen=    6,
+
+    .bind=      etherbind,
+    .unbind=    etherunbind,
+
+    .bwrite=    etherbwrite,
+
+    .ares=      arpenter,
+    .areg=      sendgarp,
+
+    .addmulti=  etheraddmulti,
+    .remmulti=  etherremmulti,
+
+    .pref2addr= etherpref2addr,
+};
+@
+% maxtu = 1500 + 14 for header
+% maclen = 6 = 48 bits
+%TODO: no pktin??? 
 
 
-%\subsection{Ethernet medium}
+<<global etherbroadcast>>=
+static uchar etherbroadcast[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+@
+
+%todo: mv later what is below?
+
+\subsection{[[Ether]]net controller and [[etherxx]]}
+
+<<global etherxx (kernel)>>=
+static Ether *etherxx[MaxEther];
+@
+<<constant MaxEther>>=
+MaxEther  = 48,
+@
+
+%XXX
+<<struct Ether (kernel)>>=
+struct Ether {
+
+  uchar ea[Eaddrlen];
+
+  <<[[Ether]] methods>>
+
+  <<[[Ether]] priv fields>>
+  <<[[Ether]] other fields>>
+
+  Queue*  oq;
+
+  ISAConf;      /* hardware info */
+  Netif;
+
+  // Extra
+  <<[[Ether]] extra fields>>
+};
+@
+% in 386 because ISAConf?
+% Netif later
+
+<<[[Ether]] extra fields>>=
+int ctlrno;
+@
+% index in etherxx?
+
+% e.g. Dp8390 structure
+<<[[Ether]] priv fields>>=
+void  *ctlr;
+@
+
+%XXX
+<<[[Ether]] other fields>>=
+int tbdf;     /* type+busno+devno+funcno */
+@
+
+
+<<[[Ether]] methods>>=
+<<[[ether]] mounting methods>>
+<<[[ether]] io methods>>
+<<[[ether]] other methods>>
+@
+
+<<[[ether]] mounting methods>>=
+void  (*attach)(Ether*);  /* filled in by reset routine */
+void  (*detach)(Ether*);
+@
+
+% but where is the data to transmit? in a global?
+<<[[ether]] io methods>>=
+void  (*transmit)(Ether*);
+void  (*interrupt)(Ureg*, void*);
+@
+
+
+
+%XXX
+<<[[ether]] other methods>>=
+long  (*ifstat)(Ether*, void*, long, ulong);
+long  (*ctl)(Ether*, void*, long); /* custom ctl messages */
+void  (*power)(Ether*, int);  /* power on/off */
+void  (*shutdown)(Ether*);  /* shutdown hardware before reboot */
+@
 
 %\subsection{Null medium}
 
@@ -886,7 +1016,7 @@ QLock   fslock;
 @
 % to access ipfs?
 
-\subsection{[[IP]] fragments and statistics}
+\subsection{[[IP]] fragments and IP statistics}
 %todo: rename, bad name, ip_fragments?
 
 % Fragments because idea of IP is to have packets, and so if
@@ -1401,17 +1531,21 @@ struct Netif
   /* routines for touching the hardware */
   void  *arg;
 
-  void  (*promiscuous)(void*, int);
-  int (*hwmtu)(void*, int); /* get/set mtu */
-  void  (*scanbs)(void*, uint); /* scan for base stations */
-
-  <<[[Netif(kernel)]] multicast fields>>
-  <<[[Netif(kernel)]] multicast methods>>
+  <<[[Netif(kernel)]] methods>>
 
   // Extra
   QLock;
 
 };
+@
+
+<<[[Netif(kernel)]] methods>>=
+void  (*promiscuous)(void*, int);
+int (*hwmtu)(void*, int); /* get/set mtu */
+void  (*scanbs)(void*, uint); /* scan for base stations */
+
+<<[[Netif(kernel)]] multicast fields>>
+<<[[Netif(kernel)]] multicast methods>>
 @
 
 \subsection{[[Netfile]]}
@@ -2055,12 +2189,16 @@ etherattach(char* spec)
     }
     chan->dev = ctlrno;
     if(etherxx[ctlrno]->attach)
+        // Ethernet controller dispatch
         etherxx[ctlrno]->attach(etherxx[ctlrno]);
+
     poperror();
     return chan;
 }
 @
 % #l0 => spec = 0
+
+% the attach method
 
 \section{User side}
 
@@ -3433,47 +3571,7 @@ Dev etherdevtab = {
 };
 @
 
-
-\section{Ethernet medium}
-
-% before IP? kinda more low level (but less general)
-% called a medium?
-
-% there are other physical device, but we'll focus on this one,
-% most common
-
-% physical 48bits address.
-
-<<global ethermedium (kernel)>>=
-Medium ethermedium =
-{
-    .name=      "ether",
-
-    .hsize=     14,
-    .mintu=     60,
-    .maxtu=     1514,
-    .maclen=    6,
-
-    .bind=      etherbind,
-    .unbind=    etherunbind,
-    .bwrite=    etherbwrite,
-
-    .addmulti=  etheraddmulti,
-    .remmulti=  etherremmulti,
-    .ares=      arpenter,
-    .areg=      sendgarp,
-
-    .pref2addr= etherpref2addr,
-};
-@
-% maxtu = 1500 + 14 for header
-% maclen = 6 = 48 bits
-
-
-<<global etherbroadcast>>=
-static uchar etherbroadcast[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-@
-
+\subsection{[[/net/etherx]] hierarchy and [[etherwalk()]]}
 
 
 
@@ -4351,7 +4449,7 @@ etherbind(Ipifc *ifc, int argc, char **argv)
 
 \subsection{[[chandial()]]}
 
-\section{Routes}
+\section{Setting up routes}
 
 
 \section{Advanced configurations}
@@ -4840,6 +4938,66 @@ ipcsum(uchar *addr)
 }
 @
 
+\section{IP Fragments}
+
+<<function ipfragfree4>>=
+/*
+ * ipfragfree4 - Free a list of fragments - assume hold fraglock4
+ */
+void
+ipfragfree4(IP *ip, Fragment4 *frag)
+{
+    Fragment4 *fl, **l;
+
+    if(frag->blist)
+        freeblist(frag->blist);
+
+    frag->src = 0;
+    frag->id = 0;
+    frag->blist = nil;
+
+    l = &ip->flisthead4;
+    for(fl = *l; fl; fl = fl->next) {
+        if(fl == frag) {
+            *l = frag->next;
+            break;
+        }
+        l = &fl->next;
+    }
+
+    frag->next = ip->fragfree4;
+    ip->fragfree4 = frag;
+
+}
+@
+
+<<function ipfragallo4>>=
+/*
+ * ipfragallo4 - allocate a reassembly queue - assume hold fraglock4
+ */
+Fragment4 *
+ipfragallo4(IP *ip)
+{
+    Fragment4 *f;
+
+    while(ip->fragfree4 == nil) {
+        /* free last entry on fraglist */
+        for(f = ip->flisthead4; f->next; f = f->next)
+            ;
+        ipfragfree4(ip, f);
+    }
+    f = ip->fragfree4;
+    ip->fragfree4 = f->next;
+    f->next = ip->flisthead4;
+    ip->flisthead4 = f;
+    f->age = NOW + 30000;
+
+    return f;
+}
+@
+
+
+
 \section{IO}
 
 \subsection{Writing, [[ipoput4()]]}
@@ -5222,7 +5380,8 @@ Fsrcvpcol(Fs* f, uchar proto)
 
 \subsubsection{Small receive}
 
-\subsubsection{Defragmentation}
+\subsubsection{Reassembling}
+% defragmentation
 
 <<[[ipiput4()]] locals>>=
 ushort frag;
@@ -5430,66 +5589,6 @@ if(BLEN(bp) < 64) {
 }
 @
 
-\section{Fragments}
-
-<<function ipfragfree4>>=
-/*
- * ipfragfree4 - Free a list of fragments - assume hold fraglock4
- */
-void
-ipfragfree4(IP *ip, Fragment4 *frag)
-{
-    Fragment4 *fl, **l;
-
-    if(frag->blist)
-        freeblist(frag->blist);
-
-    frag->src = 0;
-    frag->id = 0;
-    frag->blist = nil;
-
-    l = &ip->flisthead4;
-    for(fl = *l; fl; fl = fl->next) {
-        if(fl == frag) {
-            *l = frag->next;
-            break;
-        }
-        l = &fl->next;
-    }
-
-    frag->next = ip->fragfree4;
-    ip->fragfree4 = frag;
-
-}
-@
-
-<<function ipfragallo4>>=
-/*
- * ipfragallo4 - allocate a reassembly queue - assume hold fraglock4
- */
-Fragment4 *
-ipfragallo4(IP *ip)
-{
-    Fragment4 *f;
-
-    while(ip->fragfree4 == nil) {
-        /* free last entry on fraglist */
-        for(f = ip->flisthead4; f->next; f = f->next)
-            ;
-        ipfragfree4(ip, f);
-    }
-    f = ip->fragfree4;
-    ip->fragfree4 = f->next;
-    f->next = ip->flisthead4;
-    ip->flisthead4 = f;
-    f->age = NOW + 30000;
-
-    return f;
-}
-@
-
-
-
 \section{Advanced features}
 
 \subsection{Gating}
@@ -5635,42 +5734,6 @@ else if(strcmp(argv[0], "reassemble") == 0){
 
 
 
-
-%todo: mv later what is below?
-
-<<global etherxx (kernel)>>=
-static Ether *etherxx[MaxEther];
-@
-<<constant MaxEther>>=
-MaxEther  = 48,
-@
-
-<<struct Ether (kernel)>>=
-struct Ether {
-  ISAConf;      /* hardware info */
-
-  int ctlrno;
-  int tbdf;     /* type+busno+devno+funcno */
-  uchar ea[Eaddrlen];
-
-  void  (*attach)(Ether*);  /* filled in by reset routine */
-  void  (*detach)(Ether*);
-  void  (*transmit)(Ether*);
-  void  (*interrupt)(Ureg*, void*);
-  long  (*ifstat)(Ether*, void*, long, ulong);
-  long  (*ctl)(Ether*, void*, long); /* custom ctl messages */
-  void  (*power)(Ether*, int);  /* power on/off */
-  void  (*shutdown)(Ether*);  /* shutdown hardware before reboot */
-  void  *ctlr;
-
-  Queue*  oq;
-
-  Netif;
-};
-@
-% in 386 because ISAConf?
-
-
 \section{Ethernet addresses}
 
 \subsection{Parsing}
@@ -5758,6 +5821,14 @@ struct Etherpkt
 };
 @
 % netif.h
+
+\section{IO}
+
+\subsection{Writing}
+
+\subsection{Reading}
+
+\section{Advanced features}
 
 
 \chapter{Finding Machines Locally, ARP}
@@ -8272,8 +8343,6 @@ tcpinit(Fs *fs)
 
 % See Network_v6.nw
 
-\section{Wifi}
-
 \section{Broadcast}
 
 % convention is that address has all 1s
@@ -8518,7 +8587,11 @@ case 6:
     /* fall through */
 @
 
+\section{Wifi}
 
+\section{VLAN}
+
+\section{VPN}
 
 %\section{Packet filter}
 % /net/ipmux
@@ -9037,9 +9110,1046 @@ usage(void)
 % have seen already all those err, most protocol methods return
 % a char* which is an error string or nil.
 
-\chapter{Ethernet Intel Pro/1000 Driver}
+\chapter{Ethernet NE2000 Driver}
 % like I did in Graphics.nw and the VGA driver
-% or NE2000! simpler
+% with again a classic device, the NE2000! (I even got it, like for the cirrus)
+% alt: Intel Pro/1000  but far bigger
+
+\section{Data structures}
+
+\subsection{Ethernet [[Dp8390]] controller}
+
+% priv field Ether.ctrl
+<<struct Dp8390>>=
+/*
+ * Ctlr for the boards using the National Semiconductor DP8390
+ * and SMC 83C90 Network Interface Controller.
+ * Common code is in ether8390.c.
+ */
+struct Dp8390 {
+    ulong	port;			/* I/O address of 8390 */
+    ulong	data;			/* I/O data port if no shared memory */
+
+    uchar	width;			/* data transfer width in bytes */
+    bool	ram;			/* true if card has shared memory */
+    uchar	dummyrr;		/* do dummy remote read */
+
+    uchar	nxtpkt;			/* receive: software bndry */
+    uchar	pstart;
+    uchar	pstop;
+
+    int	txbusy;			/* transmit */
+    uchar	tstart;			/* 8390 ring addresses */
+
+    <<[[Dp8390]] multicast fields>>
+
+    // Extra
+    Lock;
+};
+@
+
+
+\section{Initialisation}
+
+% qemu.c -> <>
+<<function ether2000link>>=
+void
+ether2000link(void)
+{
+    addethercard("NE2000", ne2000reset);
+}
+@
+
+% ??? -> <> (as ?? <- addethercard(..., <>) <- ether2000link)
+<<function ne2000reset>>=
+static errorneg1
+ne2000reset(Ether* edev)
+{
+    ushort buf[16];
+    ulong port;
+    Dp8390 *dp8390;
+    int i;
+    uchar ea[Eaddrlen];
+
+    if(edev->port == 0)
+        ne2000pnp(edev);
+    if(edev->port == 0)
+        return ERROR_NEG1;
+
+    /*
+     * Set up the software configuration.
+     * Use defaults for irq, mem and size
+     * if not specified.
+     * Must have a port, no more default.
+     */
+    if(edev->irq == 0)
+        edev->irq = 2;
+    if(edev->mem == 0)
+        edev->mem = 0x4000;
+    if(edev->size == 0)
+        edev->size = 16*1024;
+    port = edev->port;
+
+    if(ioalloc(edev->port, 0x20, 0, "ne2000") < 0)
+        return ERROR_NEG1;
+
+    edev->ctlr = malloc(sizeof(Dp8390));
+    dp8390 = edev->ctlr;
+    if(dp8390 == nil)
+        error(Enomem);
+
+    dp8390->width = 2;
+    dp8390->ram = false;
+
+    dp8390->port = port;
+    dp8390->data = port+Data;
+
+    dp8390->tstart = HOWMANY(edev->mem, Dp8390BufSz);
+    dp8390->pstart = dp8390->tstart + HOWMANY(sizeof(Etherpkt), Dp8390BufSz);
+    dp8390->pstop = dp8390->tstart + HOWMANY(edev->size, Dp8390BufSz);
+
+    dp8390->dummyrr = 1;
+    for(i = 0; i < edev->nopt; i++){
+        if(strcmp(edev->opt[i], "nodummyrr"))
+            continue;
+        dp8390->dummyrr = 0;
+        break;
+    }
+
+    /*
+     * Reset the board. This is done by doing a read
+     * followed by a write to the Reset address.
+     */
+    buf[0] = inb(port+Reset);
+    delay(2);
+    outb(port+Reset, buf[0]);
+    delay(2);
+    
+    /*
+     * Init the (possible) chip, then use the (possible)
+     * chip to read the (possible) PROM for ethernet address
+     * and a marker byte.
+     * Could just look at the DP8390 command register after
+     * initialisation has been tried, but that wouldn't be
+     * enough, there are other ethernet boards which could
+     * match.
+     * Parallels has buf[0x0E] == 0x00 whereas real hardware
+     * usually has 0x57.
+     */
+
+    // will fill in the Ether callbacks
+    dp8390reset(edev);
+
+    memset(buf, 0, sizeof(buf));
+    dp8390read(dp8390, buf, 0, sizeof(buf));
+    i = buf[0x0E] & 0xFF;
+    if((i != 0x00 && i != 0x57) || (buf[0x0F] & 0xFF) != 0x57){
+        iofree(edev->port);
+        free(edev->ctlr);
+        return ERROR_NEG1;
+    }
+
+    /*
+     * Stupid machine. Shorts were asked for,
+     * shorts were delivered, although the PROM is a byte array.
+     * Set the ethernet address.
+     */
+    memset(ea, 0, Eaddrlen);
+    if(memcmp(ea, edev->ea, Eaddrlen) == 0){
+        for(i = 0; i < sizeof(edev->ea); i++)
+            edev->ea[i] = buf[i];
+    }
+    dp8390setea(edev);
+
+    return OK_0;
+}
+@
+
+<<function dp8390read>>=
+void*
+dp8390read(Dp8390* ctlr, void* to, ulong from, ulong len)
+{
+    void *v;
+
+    ilock(ctlr);
+    v = _dp8390read(ctlr, to, from, len);
+    iunlock(ctlr);
+
+    return v;
+}
+@
+
+
+<<function dp8390reset>>=
+int
+dp8390reset(Ether* ether)
+{
+    Dp8390 *ctlr;
+
+    ctlr = ether->ctlr;
+
+    /*
+     * This is the initialisation procedure described
+     * as 'mandatory' in the datasheet, with references
+     * to the 3C503 technical reference manual.
+     */ 
+    disable(ctlr);
+    if(ctlr->width != 1)
+        regw(ctlr, Dcr, Ft4WORD|Ls|Wts);
+    else
+        regw(ctlr, Dcr, Ft4WORD|Ls);
+
+    regw(ctlr, Rbcr0, 0);
+    regw(ctlr, Rbcr1, 0);
+
+    regw(ctlr, Tcr, LpbkNIC);
+    regw(ctlr, Rcr, Mon);
+
+    /*
+     * Init the ring hardware and software ring pointers.
+     * Can't initialise ethernet address as it may not be
+     * known yet.
+     */
+    ringinit(ctlr);
+    regw(ctlr, Tpsr, ctlr->tstart);
+
+    /*
+     * Clear any pending interrupts and mask then all off.
+     */
+    regw(ctlr, Isr, 0xFF);
+    regw(ctlr, Imr, 0);
+
+    /*
+     * Leave the chip initialised,
+     * but in monitor mode.
+     */
+    regw(ctlr, Cr, Page0|RdABORT|Sta);
+
+
+
+    /*
+     * Set up the software configuration.
+     */
+    ether->attach = attach;
+    ether->shutdown = shutdown;
+
+    ether->transmit = transmit;
+    ether->interrupt = interrupt;
+    ether->ifstat = 0;
+
+    ether->promiscuous = promiscuous;
+    ether->multicast = multicast;
+    ether->arg = ether;
+
+    return 0;
+}
+@
+
+<<function ringinit>>=
+static void
+ringinit(Dp8390* ctlr)
+{
+    regw(ctlr, Pstart, ctlr->pstart);
+    regw(ctlr, Pstop, ctlr->pstop);
+    regw(ctlr, Bnry, ctlr->pstop-1);
+
+    regw(ctlr, Cr, Page1|RdABORT|Stp);
+    regw(ctlr, Curr, ctlr->pstart);
+    regw(ctlr, Cr, Page0|RdABORT|Stp);
+
+    ctlr->nxtpkt = ctlr->pstart;
+}
+@
+
+
+<<function dp8390setea>>=
+void
+dp8390setea(Ether* ether)
+{
+    int i;
+    uchar cr;
+    Dp8390 *ctlr;
+
+    ctlr = ether->ctlr;
+
+    /*
+     * Set the ethernet address into the chip.
+     * Take care to restore the command register
+     * afterwards. Don't care about multicast
+     * addresses as multicast is never enabled
+     * (currently).
+     */
+    ilock(ctlr);
+    cr = regr(ctlr, Cr) & ~Txp;
+    regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
+    for(i = 0; i < Eaddrlen; i++)
+        regw(ctlr, Par0+i, ether->ea[i]);
+    regw(ctlr, Cr, cr);
+    iunlock(ctlr);
+}
+@
+
+
+<<function disable>>=
+static void
+disable(Dp8390* ctlr)
+{
+    int timo;
+
+    /*
+     * Stop the chip. Set the Stp bit and wait for the chip
+     * to finish whatever was on its tiny mind before it sets
+     * the Rst bit.
+     * The timeout is needed because there may not be a real
+     * chip there if this is called when probing for a device
+     * at boot.
+     */
+    regw(ctlr, Cr, Page0|RdABORT|Stp);
+    regw(ctlr, Rbcr0, 0);
+    regw(ctlr, Rbcr1, 0);
+    for(timo = 10000; (regr(ctlr, Isr) & Rst) == 0 && timo; timo--)
+            ;
+}
+@
+
+<<function shutdown>>=
+static void
+shutdown(Ether *ether)
+{
+    Dp8390 *ctlr;
+
+    ctlr = ether->ctlr;
+    disable(ctlr);
+}
+@
+
+
+
+\section{Mounting}
+
+<<function attach>>=
+static void
+attach(Ether* ether)
+{
+    Dp8390 *ctlr;
+    uchar r;
+
+    ctlr = ether->ctlr;
+
+    /*
+     * Enable the chip for transmit/receive.
+     * The init routine leaves the chip in monitor
+     * mode. Clear the missed-packet counter, it
+     * increments while in monitor mode.
+     * Sometimes there's an interrupt pending at this
+     * point but there's nothing in the Isr, so
+     * any pending interrupts are cleared and the
+     * mask of acceptable interrupts is enabled here.
+     */
+    r = Ab;
+    if(ether->prom)
+        r |= Pro;
+    if(ether->nmaddr)
+        r |= Am;
+    ilock(ctlr);
+    regw(ctlr, Isr, 0xFF);
+    regw(ctlr, Imr, Cnt|Ovw|Txe|Rxe|Ptx|Prx);
+    regw(ctlr, Rcr, r);
+    r = regr(ctlr, Ref2);
+    regw(ctlr, Tcr, LpbkNORMAL);
+    iunlock(ctlr);
+    USED(r);
+}
+@
+
+
+\section{IO}
+
+<<macro regw>>=
+#define regw(c, r, v)	outb((c)->port+(r), (v))
+@
+
+<<macro regr>>=
+/*
+ * x86-specific code.
+ */
+#define regr(c, r)	inb((c)->port+(r))
+@
+
+\subsection{Writing}
+
+<<function transmit (kernel/network/386/ether8390.c)>>=
+static void
+transmit(Ether* ether)
+{
+    Dp8390 *ctlr;
+
+    ctlr = ether->ctlr;
+
+    ilock(ctlr);
+    txstart(ether);
+    iunlock(ctlr);
+}
+@
+
+<<function txstart>>=
+static void
+txstart(Ether* ether)
+{
+    int len;
+    Dp8390 *ctlr;
+    Block *bp;
+    uchar minpkt[ETHERMINTU], *rp;
+
+    ctlr = ether->ctlr;
+
+    /*
+     * This routine is called both from the top level and from interrupt
+     * level and expects to be called with ctlr already locked.
+     */
+    if(ctlr->txbusy)
+        return;
+    bp = qget(ether->oq);
+    if(bp == nil)
+        return;
+
+    /*
+     * Make sure the packet is of minimum length;
+     * copy it to the card's memory by the appropriate means;
+     * start the transmission.
+     */
+    len = BLEN(bp);
+    rp = bp->rp;
+    if(len < ETHERMINTU){
+        rp = minpkt;
+        memmove(rp, bp->rp, len);
+        memset(rp+len, 0, ETHERMINTU-len);
+        len = ETHERMINTU;
+    }
+
+    if(ctlr->ram)
+        memmove((void*)(ether->mem+ctlr->tstart*Dp8390BufSz), rp, len);
+    else
+        dp8390write(ctlr, ctlr->tstart*Dp8390BufSz, rp, len);
+    freeb(bp);
+
+    regw(ctlr, Tbcr0, len & 0xFF);
+    regw(ctlr, Tbcr1, (len>>8) & 0xFF);
+    regw(ctlr, Cr, Page0|RdABORT|Txp|Sta);
+
+    ether->outpackets++;
+    ctlr->txbusy = 1;
+}
+@
+
+<<function dp8390write>>=
+static void*
+dp8390write(Dp8390* ctlr, ulong to, void* from, ulong len)
+{
+    ulong crda;
+    uchar cr;
+    int timo, width;
+
+top:
+    /*
+     * Write some data to offset 'to' in the card's memory
+     * using the DP8390 remote DMA facility, reading it at
+     * 'from' in main memory, via the I/O data port.
+     */
+    cr = regr(ctlr, Cr) & ~Txp;
+    regw(ctlr, Cr, Page0|RdABORT|Sta);
+    regw(ctlr, Isr, Rdc);
+
+    len = ROUNDUP(len, ctlr->width);
+
+    /*
+     * Set up the remote DMA address and count.
+     * This is straight from the DP8390[12D] datasheet,
+     * hence the initial set up for read.
+     * Assumption here that the A7000 EtherV card will
+     * never need a dummyrr.
+     */
+    if(ctlr->dummyrr && (ctlr->width == 1 || ctlr->width == 2)){
+        if(ctlr->width == 2)
+            width = 1;
+        else
+            width = 0;
+        crda = to-1-width;
+        regw(ctlr, Rbcr0, (len+1+width) & 0xFF);
+        regw(ctlr, Rbcr1, ((len+1+width)>>8) & 0xFF);
+        regw(ctlr, Rsar0, crda & 0xFF);
+        regw(ctlr, Rsar1, (crda>>8) & 0xFF);
+        regw(ctlr, Cr, Page0|RdREAD|Sta);
+    
+        for(timo=0;; timo++){
+            if(timo > 10000){
+                print("ether8390: dummyrr timeout; assuming nodummyrr\n");
+                ctlr->dummyrr = 0;
+                goto top;
+            }
+            crda = regr(ctlr, Crda0);
+            crda |= regr(ctlr, Crda1)<<8;
+            if(crda == to){
+                /*
+                 * Start the remote DMA write and make sure
+                 * the registers are correct.
+                 */
+                regw(ctlr, Cr, Page0|RdWRITE|Sta);
+    
+                crda = regr(ctlr, Crda0);
+                crda |= regr(ctlr, Crda1)<<8;
+                if(crda != to)
+                    panic("crda write %lud to %lud\n", crda, to);
+    
+                break;
+            }
+        }
+    }
+    else{
+        regw(ctlr, Rsar0, to & 0xFF);
+        regw(ctlr, Rsar1, (to>>8) & 0xFF);
+        regw(ctlr, Rbcr0, len & 0xFF);
+        regw(ctlr, Rbcr1, (len>>8) & 0xFF);
+        regw(ctlr, Cr, Page0|RdWRITE|Sta);
+    }
+
+    /*
+     * Pump the data into the I/O port
+     * then wait for the remote DMA to finish.
+     */
+    rdwrite(ctlr, from, len);
+    for(timo = 10000; (regr(ctlr, Isr) & Rdc) == 0 && timo; timo--)
+            ;
+
+    regw(ctlr, Isr, Rdc);
+    regw(ctlr, Cr, cr);
+
+    return (void*)to;
+}
+@
+
+<<function rdwrite>>=
+static void
+rdwrite(Dp8390* ctlr, void* from, int len)
+{
+    switch(ctlr->width){
+    default:
+        panic("dp8390 rdwrite: width %d\n", ctlr->width);
+        break;
+
+    case 2:
+        outss(ctlr->data, from, len/2);
+        break;
+
+    case 1:
+        outsb(ctlr->data, from, len);
+        break;
+    }
+}
+@
+
+
+
+
+\subsection{Reading}
+
+<<function interrupt (kernel/network/386/ether8390.c)>>=
+static void
+interrupt(Ureg*, void* arg)
+{
+    Ether *ether;
+    Dp8390 *ctlr;
+    uchar isr, r;
+
+    ether = arg;
+    ctlr = ether->ctlr;
+
+    /*
+     * While there is something of interest,
+     * clear all the interrupts and process.
+     */
+    ilock(ctlr);
+    regw(ctlr, Imr, 0x00);
+    while(isr = (regr(ctlr, Isr) & (Cnt|Ovw|Txe|Rxe|Ptx|Prx))){
+        if(isr & Ovw){
+            overflow(ether);
+            regw(ctlr, Isr, Ovw);
+            ether->overflows++;
+        }
+
+        /*
+         * Packets have been received.
+         * Take a spin round the ring.
+         */
+        if(isr & (Rxe|Prx)){
+            receive(ether);
+            regw(ctlr, Isr, Rxe|Prx);
+        }
+
+        /*
+         * A packet completed transmission, successfully or
+         * not. Start transmission on the next buffered packet,
+         * and wake the output routine.
+         */
+        if(isr & (Txe|Ptx)){
+            r = regr(ctlr, Tsr);
+            if((isr & Txe) && (r & (Cdh|Fu|Crs|Abt))){
+                print("dp8390: Tsr %#2.2ux", r);
+                ether->oerrs++;
+            }
+
+            regw(ctlr, Isr, Txe|Ptx);
+
+            if(isr & Ptx)
+                ether->outpackets++;
+            ctlr->txbusy = 0;
+            txstart(ether);
+        }
+
+        if(isr & Cnt){
+            ether->frames += regr(ctlr, Ref0);
+            ether->crcs += regr(ctlr, Ref1);
+            ether->buffs += regr(ctlr, Ref2);
+            regw(ctlr, Isr, Cnt);
+        }
+    }
+    regw(ctlr, Imr, Cnt|Ovw|Txe|Rxe|Ptx|Prx);
+    iunlock(ctlr);
+}
+@
+
+<<function receive (kernel/network/386/ether8390.c)>>=
+static void
+receive(Ether* ether)
+{
+    Dp8390 *ctlr;
+    uchar curr, *p;
+    Hdr hdr;
+    ulong count, data, len;
+    Block *bp;
+
+    ctlr = ether->ctlr;
+    for(curr = getcurr(ctlr); ctlr->nxtpkt != curr; curr = getcurr(ctlr)){
+        data = ctlr->nxtpkt*Dp8390BufSz;
+        if(ctlr->ram)
+            memmove(&hdr, (void*)(ether->mem+data), sizeof(Hdr));
+        else
+            _dp8390read(ctlr, &hdr, data, sizeof(Hdr));
+
+        /*
+         * Don't believe the upper byte count, work it
+         * out from the software next-page pointer and
+         * the current next-page pointer.
+         */
+        if(hdr.next > ctlr->nxtpkt)
+            len = hdr.next - ctlr->nxtpkt - 1;
+        else
+            len = (ctlr->pstop-ctlr->nxtpkt) + (hdr.next-ctlr->pstart) - 1;
+        if(hdr.len0 > (Dp8390BufSz-sizeof(Hdr)))
+            len--;
+
+        len = ((len<<8)|hdr.len0)-4;
+
+        /*
+         * Chip is badly scrogged, reinitialise the ring.
+         */
+        if(hdr.next < ctlr->pstart || hdr.next >= ctlr->pstop
+          || len < 60 || len > sizeof(Etherpkt)){
+            print("dp8390: H%2.2ux+%2.2ux+%2.2ux+%2.2ux,%lud\n",
+                hdr.status, hdr.next, hdr.len0, hdr.len1, len);
+            regw(ctlr, Cr, Page0|RdABORT|Stp);
+            ringinit(ctlr);
+            regw(ctlr, Cr, Page0|RdABORT|Sta);
+
+            return;
+        }
+
+        /*
+         * If it's a good packet read it in to the software buffer.
+         * If the packet wraps round the hardware ring, read it in
+         * two pieces.
+         */
+        if((hdr.status & (Fo|Fae|Crce|Prxok)) == Prxok && (bp = iallocb(len))){
+            p = bp->rp;
+            bp->wp = p+len;
+            data += sizeof(Hdr);
+
+            if((data+len) >= ctlr->pstop*Dp8390BufSz){
+                count = ctlr->pstop*Dp8390BufSz - data;
+                if(ctlr->ram)
+                    memmove(p, (void*)(ether->mem+data), count);
+                else
+                    _dp8390read(ctlr, p, data, count);
+                p += count;
+                data = ctlr->pstart*Dp8390BufSz;
+                len -= count;
+            }
+            if(len){
+                if(ctlr->ram)
+                    memmove(p, (void*)(ether->mem+data), len);
+                else
+                    _dp8390read(ctlr, p, data, len);
+            }
+
+            /*
+             * Copy the packet to whoever wants it.
+             */
+            etheriq(ether, bp, 1);
+        }
+
+        /*
+         * Finished with this packet, update the
+         * hardware and software ring pointers.
+         */
+        ctlr->nxtpkt = hdr.next;
+
+        hdr.next--;
+        if(hdr.next < ctlr->pstart)
+            hdr.next = ctlr->pstop-1;
+        regw(ctlr, Bnry, hdr.next);
+    }
+}
+@
+% >> >>
+
+<<function getcurr>>=
+static uchar
+getcurr(Dp8390* ctlr)
+{
+    uchar cr, curr;
+
+    cr = regr(ctlr, Cr) & ~Txp;
+    regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
+    curr = regr(ctlr, Curr);
+    regw(ctlr, Cr, cr);
+
+    return curr;
+}
+@
+
+
+<<function _dp8390read>>=
+static void*
+_dp8390read(Dp8390* ctlr, void* to, ulong from, ulong len)
+{
+    uchar cr;
+    int timo;
+
+    /*
+     * Read some data at offset 'from' in the card's memory
+     * using the DP8390 remote DMA facility, and place it at
+     * 'to' in main memory, via the I/O data port.
+     */
+    cr = regr(ctlr, Cr) & ~Txp;
+    regw(ctlr, Cr, Page0|RdABORT|Sta);
+    regw(ctlr, Isr, Rdc);
+
+    /*
+     * Set up the remote DMA address and count.
+     */
+    len = ROUNDUP(len, ctlr->width);
+    regw(ctlr, Rbcr0, len & 0xFF);
+    regw(ctlr, Rbcr1, (len>>8) & 0xFF);
+    regw(ctlr, Rsar0, from & 0xFF);
+    regw(ctlr, Rsar1, (from>>8) & 0xFF);
+
+    /*
+     * Start the remote DMA read and suck the data
+     * out of the I/O port.
+     */
+    regw(ctlr, Cr, Page0|RdREAD|Sta);
+    rdread(ctlr, to, len);
+
+    /*
+     * Wait for the remote DMA to complete. The timeout
+     * is necessary because this routine may be called on
+     * a non-existent chip during initialisation and, due
+     * to the miracles of the bus, it's possible to get this
+     * far and still be talking to a slot full of nothing.
+     */
+    for(timo = 10000; (regr(ctlr, Isr) & Rdc) == 0 && timo; timo--)
+            ;
+
+    regw(ctlr, Isr, Rdc);
+    regw(ctlr, Cr, cr);
+
+    return to;
+}
+@
+
+
+
+<<function overflow>>=
+static void
+overflow(Ether *ether)
+{
+    Dp8390 *ctlr;
+    uchar txp;
+    int resend;
+
+    ctlr = ether->ctlr;
+
+    /*
+     * The following procedure is taken from the DP8390[12D] datasheet,
+     * it seems pretty adamant that this is what has to be done.
+     */
+    txp = regr(ctlr, Cr) & Txp;
+    regw(ctlr, Cr, Page0|RdABORT|Stp);
+    delay(2);
+    regw(ctlr, Rbcr0, 0);
+    regw(ctlr, Rbcr1, 0);
+
+    resend = 0;
+    if(txp && (regr(ctlr, Isr) & (Txe|Ptx)) == 0)
+        resend = 1;
+
+    regw(ctlr, Tcr, LpbkNIC);
+    regw(ctlr, Cr, Page0|RdABORT|Sta);
+    receive(ether);
+    regw(ctlr, Isr, Ovw);
+    regw(ctlr, Tcr, LpbkNORMAL);
+
+    if(resend)
+        regw(ctlr, Cr, Page0|RdABORT|Txp|Sta);
+}
+@
+
+
+\section{Advanced features}
+
+\subsection{Multicast}
+
+<<[[Dp8390]] multicast fields>>=
+uchar	mar[8];			/* shadow multicast address registers */
+int	mref[64];		/* reference counts for multicast groups */
+@
+
+<<global reverse>>=
+static uchar reverse[64];
+@
+
+<<function multicast>>=
+static void
+multicast(void* arg, uchar *addr, int on)
+{
+    Ether *ether;
+    Dp8390 *ctlr;
+    int i;
+    ulong h;
+
+    ether = arg;
+    ctlr = ether->ctlr;
+    if(reverse[1] == 0){
+        for(i = 0; i < 64; i++)
+            reverse[i] = ((i&1)<<5) | ((i&2)<<3) | ((i&4)<<1)
+                   | ((i&8)>>1) | ((i&16)>>3) | ((i&32)>>5);
+    }
+
+    /*
+     *  change filter bits
+     */
+    h = ethercrc(addr, 6);
+    ilock(ctlr);
+    setbit(ctlr, reverse[h&0x3f], on);
+    setfilter(ether, ctlr);
+    iunlock(ctlr);
+}
+@
+
+<<global allmar>>=
+static uchar allmar[8] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+@
+
+<<function setbit>>=
+static void
+setbit(Dp8390 *ctlr, int bit, int on)
+{
+    int i, h;
+
+    i = bit/8;
+    h = bit%8;
+    if(on){
+        if(++(ctlr->mref[bit]) == 1)
+            ctlr->mar[i] |= 1<<h;
+    } else {
+        if(--(ctlr->mref[bit]) <= 0){
+            ctlr->mref[bit] = 0;
+            ctlr->mar[i] &= ~(1<<h);
+        }
+    }
+}
+@
+
+
+<<function setfilter>>=
+static void
+setfilter(Ether *ether, Dp8390 *ctlr)
+{
+    uchar r, cr;
+    int i;
+    uchar *mar;
+
+    r = Ab;
+    mar = 0;
+    if(ether->prom){
+        r |= Pro|Am;
+        mar = allmar;
+    } else if(ether->nmaddr){
+        r |= Am;
+        mar = ctlr->mar;
+    }
+    if(mar){
+        cr = regr(ctlr, Cr) & ~Txp;
+        regw(ctlr, Cr, Page1|(~(Ps1|Ps0) & cr));
+        for(i = 0; i < 8; i++)
+            regw(ctlr, Mar0+i, *(mar++));
+        regw(ctlr, Cr, cr);
+    }
+    regw(ctlr, Rcr, r);
+}
+@
+
+\subsection{Promiscuous mode}
+
+<<function promiscuous>>=
+static void
+promiscuous(void *arg, int )
+{
+    Ether *ether;
+    Dp8390 *ctlr;
+
+    ether = arg;
+    ctlr = ether->ctlr;
+
+    ilock(ctlr);
+    setfilter(ether, ctlr);
+    iunlock(ctlr);
+}
+@
+
+\subsection{Power managment}
+
+\subsection{Plug and play}
+
+<<struct Ctlr (kernel/network/386/ether2000.c)>>=
+struct Ctlr {
+    Pcidev*	pcidev;
+    Ctlr*	next;
+    int	active;
+};
+@
+
+<<global ctlrhead (kernel/network/386/ether2000.c)>>=
+static Ctlr* ctlrhead;
+@
+
+<<global ctlrtail (kernel/network/386/ether2000.c)>>=
+static Ctlr* ctlrtail;
+@
+
+
+<<function ne2000pnp>>=
+static void
+ne2000pnp(Ether* edev)
+{
+    int i, id;
+    Pcidev *p;
+    Ctlr *ctlr;
+
+    /*
+     * Make a list of all ethernet controllers
+     * if not already done.
+     */
+    if(ctlrhead == nil){
+        p = nil;
+        while(p = pcimatch(p, 0, 0)){
+            if(p->ccrb != 0x02 || p->ccru != 0)
+                continue;
+            ctlr = malloc(sizeof(Ctlr));
+            if(ctlr == nil)
+                error(Enomem);
+            ctlr->pcidev = p;
+
+            if(ctlrhead != nil)
+                ctlrtail->next = ctlr;
+            else
+                ctlrhead = ctlr;
+            ctlrtail = ctlr;
+        }
+    }
+
+    /*
+     * Is it a card with an unrecognised vid+did?
+     * Normally a search is made through all the found controllers
+     * for one which matches any of the known vid+did pairs.
+     * If a vid+did pair is specified a search is made for that
+     * specific controller only.
+     */
+    id = 0;
+    for(i = 0; i < edev->nopt; i++){
+        if(cistrncmp(edev->opt[i], "id=", 3) == 0)
+            id = strtol(&edev->opt[i][3], nil, 0);
+    }
+
+    if(id != 0)
+        ne2000match(edev, id);
+    else for(i = 0; ne2000pci[i].name; i++){
+        if(ne2000match(edev, ne2000pci[i].id) != nil)
+            break;
+    }
+}
+@
+
+<<global ne2000pci>>=
+static struct {
+    char*	name;
+    int	id;
+} ne2000pci[] = {
+    { "Realtek 8029",	(0x8029<<16)|0x10EC, },
+    { "Winbond 89C940",	(0x0940<<16)|0x1050, },
+    { nil },
+};
+@
+
+
+<<function ne2000match>>=
+static Ctlr*
+ne2000match(Ether* edev, int id)
+{
+    int port;
+    Pcidev *p;
+    Ctlr *ctlr;
+
+    /*
+     * Any adapter matches if no edev->port is supplied,
+     * otherwise the ports must match.
+     */
+    for(ctlr = ctlrhead; ctlr != nil; ctlr = ctlr->next){
+        if(ctlr->active)
+            continue;
+        p = ctlr->pcidev;
+        if(((p->did<<16)|p->vid) != id)
+            continue;
+        port = p->mem[0].bar & ~0x01;
+        if(edev->port != 0 && edev->port != port)
+            continue;
+
+        /*
+         * It suffices to fill these in,
+         * the rest is gleaned from the card.
+         */
+        edev->port = port;
+        edev->irq = p->intl;
+
+        ctlr->active = 1;
+
+        return ctlr;
+    }
+
+    return nil;
+}
+@
+
 
 \chapter{Libc}
 
@@ -9299,6 +10409,15 @@ void    (*advise)(Proto*, Block*, char*);
 \label{sec:glossary}
 
 \begin{verbatim}
+MTU
+TTL
+TOS
+IP
+UDP
+TCP
+IL
+IFC
+ICMP
 \end{verbatim}
 
 \chapter*{Indexes}
