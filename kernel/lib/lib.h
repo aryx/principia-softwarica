@@ -19,14 +19,14 @@ enum _bool {
 typedef uchar byte;
 typedef ushort bool_ushort;
 typedef int fdt; // file descriptor type
-typedef int errorcode0;
-typedef int errorcode1;
-typedef int errorcodeneg1;
 #define OK_0 0
 #define OK_1 1
 #define ERROR_0 0
 #define ERROR_1 1
 #define ERROR_NEG1 (-1)
+typedef int error0;
+typedef int error1;
+typedef int errorneg1;
 /*e: pad basic types */
 
 /*s: lib.h forward decl */

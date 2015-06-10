@@ -1129,7 +1129,7 @@ makescreenimage(void)
 /*e: function makescreenimage */
 
 /*s: function initscreenimage */
-static errorcode0
+static error0
 initscreenimage(void)
 {
     if(screenimage != nil)
