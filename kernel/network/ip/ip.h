@@ -191,7 +191,6 @@ struct IP
 {
   Fragment4*  flisthead4;
   Fragment4*  fragfree4;
-
   Ref   id4;
 
   /*s: [[IP(kernel)]] stat fields */
@@ -201,6 +200,7 @@ struct IP
   /*s: [[IP(kernel)]] routing fields */
   bool iprouting;  /* true if we route like a gateway */
   /*e: [[IP(kernel)]] routing fields */
+
   /*s: [[IP(kernel)]] ipv6 fields */
     QLock   fraglock6;
     Fragment6*  flisthead6;
@@ -323,11 +323,10 @@ struct Medium
   char  *name;
 
   int hsize;    /* medium header size */
+  int maclen;   /* mac address length  */
 
   int mintu;    /* default min mtu */
   int maxtu;    /* default max mtu */
-
-  int maclen;   /* mac address length  */
 
   /*s: [[Medium(kernel)]] methods */
   /*s: [[Medium(kernel)]] binding methods */
@@ -360,6 +359,7 @@ struct Medium
   void  (*joinmulti)(Ipifc *ifc, uchar *a, uchar *ia);
   void  (*leavemulti)(Ipifc *ifc, uchar *a, uchar *ia);
   /*e: [[Medium(kernel)]] multicast methods */
+
   /*s: [[Medium(kernel)]] ipv6 methods */
   /* v6 address generation */
   void  (*pref2addr)(uchar *pref, uchar *ea);
@@ -467,10 +467,7 @@ struct Ipifc
   Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
           used only if node is router */
   /*e: [[Ipifc(kernel)]] routing fields */
-  /*s: [[Ipifc(kernel)]] ipv6 fields */
-  uchar sendra6;  /* flag: send router advs on this ifc */
-  uchar recvra6;  /* flag: recv router advs on this ifc */
-  /*e: [[Ipifc(kernel)]] ipv6 fields */
+
   /*s: [[Ipifc(kernel)]] other fields */
   Conv  *conv;    /* link to its conversation structure */
   /*x: [[Ipifc(kernel)]] other fields */
@@ -478,6 +475,10 @@ struct Ipifc
   /*x: [[Ipifc(kernel)]] other fields */
   bool reassemble; /* reassemble IP packets before forwarding */
   /*e: [[Ipifc(kernel)]] other fields */
+  /*s: [[Ipifc(kernel)]] ipv6 fields */
+  uchar sendra6;  /* flag: send router advs on this ifc */
+  uchar recvra6;  /* flag: recv router advs on this ifc */
+  /*e: [[Ipifc(kernel)]] ipv6 fields */
 
   //Extra
   RWlock;
@@ -647,10 +648,7 @@ struct Fs
   /*s: [[Fs(kernel)]] logging fields */
   Netlog  *alog;
   /*e: [[Fs(kernel)]] logging fields */
-  /*s: [[Fs(kernel)]] ipv6 fields */
-    v6params  *v6p;
-    Route *v6root[1<<Lroot];  /* v6 routing forest */
-  /*e: [[Fs(kernel)]] ipv6 fields */
+
   /*s: [[Fs(kernel)]] other fields */
   // map<enum<protocol_type>, ref<Proto>>
   Proto*  t2p[256];   /* vector of all protocols */
@@ -659,6 +657,10 @@ struct Fs
   /*x: [[Fs(kernel)]] other fields */
   Ipselftab *self;
   /*e: [[Fs(kernel)]] other fields */
+  /*s: [[Fs(kernel)]] ipv6 fields */
+    v6params  *v6p;
+    Route *v6root[1<<Lroot];  /* v6 routing forest */
+  /*e: [[Fs(kernel)]] ipv6 fields */
  
   // Extra
   RWlock;

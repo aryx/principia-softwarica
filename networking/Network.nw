@@ -18,7 +18,7 @@
 %   not p, use err not s, ...
 % - use Idle, not 0 when can, use V4 not 4,
 % - removed deadcode: /net/bootp,  Ipifc fields (unbinding, idlock, ...),
-%   Conv (length, car, headers, reliable, ...)
+%   Conv (length, car, headers, reliable, ...), Proto (qid)
 % - TODO introduce ipv4, ipaddr typedefs?
 
 %thx to codemap/codegraph/scheck:
@@ -34,14 +34,12 @@
 %thx to this manual, better understand networking:
 % - TODO ether, ip, udp, tcp, actually I didn't know 
 %   that much about network
-% - realize that having 2 ip interfaces is essential, not a feature, because
-%   for internetworking to work you need gateways that connect 2 separate
-%   network, and so this machine will have 2 interfaces
+% - realize that having two ip interfaces is essential, not a feature, because
+%   for internetworking to work you need gateways that connect two separate
+%   networks, and so this machine will have two interfaces
 % - TODO does not need much to configure initially; can do things manually
 %   without ipconfig and actually you need to do very few things
-% - TODO ping, I never understood how it worked, and also
-%   why it does not work right now under plan9! I can't ping www.google.com
-%   IP
+% - TODO ping, I never understood how it worked (but does not work under qemu)
 % - TODO ppp?
 
 
@@ -414,18 +412,10 @@ isv4(uchar *ip)
 void
 v4tov6(uchar *v6, uchar *v4)
 {
-    v6[0] = 0;
-    v6[1] = 0;
-    v6[2] = 0;
-    v6[3] = 0;
-    v6[4] = 0;
-    v6[5] = 0;
-    v6[6] = 0;
-    v6[7] = 0;
-    v6[8] = 0;
-    v6[9] = 0;
-    v6[10] = 0xff;
-    v6[11] = 0xff;
+    v6[0] = 0; v6[1] = 0; v6[2] = 0; v6[3] = 0;
+    v6[4] = 0; v6[5] = 0; v6[6] = 0; v6[7] = 0;
+    v6[8] = 0; v6[9] = 0; v6[10] = 0xff; v6[11] = 0xff;
+
     v6[12] = v4[0];
     v6[13] = v4[1];
     v6[14] = v4[2];
@@ -437,18 +427,9 @@ v4tov6(uchar *v6, uchar *v4)
 errorneg1
 v6tov4(uchar *v4, uchar *v6)
 {
-    if(v6[0] == 0
-    && v6[1] == 0
-    && v6[2] == 0
-    && v6[3] == 0
-    && v6[4] == 0
-    && v6[5] == 0
-    && v6[6] == 0
-    && v6[7] == 0
-    && v6[8] == 0
-    && v6[9] == 0
-    && v6[10] == 0xff
-    && v6[11] == 0xff)
+    if(v6[0] == 0 && v6[1] == 0 && v6[2] == 0 && v6[3] == 0
+    && v6[4] == 0 && v6[5] == 0 && v6[6] == 0 && v6[7] == 0
+    && v6[8] == 0 && v6[9] == 0 && v6[10] == 0xff && v6[11] == 0xff)
     {
         v4[0] = v6[12];
         v4[1] = v6[13];
@@ -667,8 +648,9 @@ struct Ipifc
 
   <<[[Ipifc(kernel)]] stat fields>>
   <<[[Ipifc(kernel)]] routing fields>>
-  <<[[Ipifc(kernel)]] ipv6 fields>>
+
   <<[[Ipifc(kernel)]] other fields>>
+  <<[[Ipifc(kernel)]] ipv6 fields>>
 
   //Extra
   RWlock;
@@ -694,7 +676,8 @@ Conv  *conv;    /* link to its conversation structure */
 
 
 
-%dead:  <<[[Ipifc(kernel)]] other fields>>=
+%dead: 
+% <<[[Ipifc(kernel)]] other fields>>=
 % bool unbinding;
 %/* these are used so that we can unbind on the fly */
 % Lock  idlock;
@@ -752,11 +735,10 @@ struct Medium
   char  *name;
 
   int hsize;    /* medium header size */
+  int maclen;   /* mac address length  */
 
   int mintu;    /* default min mtu */
   int maxtu;    /* default max mtu */
-
-  int maclen;   /* mac address length  */
 
   <<[[Medium(kernel)]] methods>>
 
@@ -771,11 +753,24 @@ struct Medium
 <<[[Medium(kernel)]] address resolution methods>>
 <<[[Medium(kernel)]] route methods>>
 <<[[Medium(kernel)]] multicast methods>>
+
 <<[[Medium(kernel)]] ipv6 methods>>
+@
+
+<<[[Medium(kernel)]] binding methods>>=
+void  (*bind)(Ipifc*, int, char**);
+void  (*unbind)(Ipifc*);
 @
 
 % char**? array of string? to pass parameters to bind? e.g. path
 % in 'bind ether /net/ether0' ?
+
+<<[[Medium(kernel)]] io methods>>=
+// write packets on the physical network
+void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
+/* process packets written to 'data' */
+void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
+@
 
 %bwrite!! that's where you write the data! note that pass just ip,
 % no port here, we are at IP layer. Has to be scheduled as can have
@@ -788,17 +783,7 @@ struct Medium
 %     (as m->find <- ipfindmedium <- media[i] <- ???)
 % void  (*bind)(Ipifc*, int, char**);
 
-<<[[Medium(kernel)]] binding methods>>=
-void  (*bind)(Ipifc*, int, char**);
-void  (*unbind)(Ipifc*);
-@
 
-<<[[Medium(kernel)]] io methods>>=
-// write packets on the physical network
-void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
-/* process packets written to 'data' */
-void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
-@
 
 
 
@@ -839,10 +824,8 @@ addipmedium(Medium *med)
 
 \section{[[/net]] filesystem}
 
-
-\subsection{[[Fs]]}
+\subsection{[[Fs]] and [[ipfs]]}
 % rename? Slashnetfs?
-% file system. For /net/ essentially
 
 <<struct Fs (kernel)>>=
 /*
@@ -860,8 +843,9 @@ struct Fs
   <<[[Fs(kernel)]] routing fields>>
   <<[[Fs(kernel)]] ndb fields>>
   <<[[Fs(kernel)]] logging fields>>
-  <<[[Fs(kernel)]] ipv6 fields>>
+
   <<[[Fs(kernel)]] other fields>>
+  <<[[Fs(kernel)]] ipv6 fields>>
  
   // Extra
   RWlock;
@@ -879,11 +863,7 @@ Maxproto= 20,
 
 
 
-
-
-
-
-\subsection{[[ipfs]]}
+%\subsection{[[ipfs]]}
 
 <<global ipfs>>=
 Fs  *ipfs[Nfs]; /* attached fs's */
@@ -906,20 +886,29 @@ QLock   fslock;
 @
 % to access ipfs?
 
-\subsection{[[IP]]}
+\subsection{[[IP]] fragments and statistics}
+%todo: rename, bad name, ip_fragments?
 
-%todo: rename, bad name
+% Fragments because idea of IP is to have packets, and so if
+% one tried to send too big data, it's splitted in multiple
+% packets, and the IP stack will then reassemble them
+% (but this is different from TCP, because here it's done
+% in one hop, so it's reliable. No reordering needed, the fragments
+% will arrive in order).
+% So IP abstract away physical capacity. You just have to care
+% about a standard Datagram maximum size, and IP will do the rest.
+
 <<struct IP (kernel)>>=
 /* an instance of IP */
 struct IP
 {
   Fragment4*  flisthead4;
   Fragment4*  fragfree4;
-
   Ref   id4;
 
   <<[[IP(kernel)]] stat fields>>
   <<[[IP(kernel)]] routing fields>>
+
   <<[[IP(kernel)]] ipv6 fields>>
 
   // Extra
@@ -929,12 +918,6 @@ struct IP
 % id4 will be IP packet identifier, incremented each time
 % (why need an id??)
 
-% Fragments because idea of IP is to have packets, and so if
-% one tried to send too big data, it's splitted in multiple
-% packets, and the IP stack will then reassemble them
-% (but this is different from TCP, because here it's done
-% in one hop, so it's reliable. No reordering needed, the fragments
-% will arrive in order).
 
 <<struct Fragment4>>=
 struct Fragment4
@@ -951,7 +934,8 @@ struct Fragment4
   Fragment4*  next;
 };
 @
-%todo: ulong for src and dst? ports? fragment number?
+%todo: ulong for src and dst? ports? fragment number? adress in iphost
+% format?
 
 
 <<[[IP(kernel)]] stat fields>>=
@@ -1075,16 +1059,17 @@ int   x;    /* protocol index */
 % Actually  /net/ipifc/ will be a protocol itself! with a clone
 % and then with a conversation. Very general scheme.
 
-<<[[Proto(kernel)]] other fields>>=
-Qid   qid;    /* qid for protocol directory */
-@
-% need that?
+%dead:
+%<<[[Proto(kernel)]] other fields>>=
+%Qid   qid;    /* qid for protocol directory */
+%@
+% who need that?
 
 
 <<[[Proto(kernel)]] priv fields>>=
 void    *priv;
 @
-
+% quite important, Udppriv, Ilpriv
 
 
 <<[[Proto(kernel)]] methods>>=
@@ -1096,8 +1081,10 @@ void    *priv;
 
 
 % sysopen(/net/<proto>/clone) -> ... -> ipopen -> Fsprotoclone -> <>
+% ipclose -> closeconv -> <>
 <<[[Proto(kernel)]] protocol methods>>=
 void    (*create)(Conv*);
+void    (*close)(Conv*);
 @
 % Take the conversation created, so can adjust its structure.
 % Kinda of a ctor. Create() will setup a callback (xxxkick) on the
@@ -1105,15 +1092,15 @@ void    (*create)(Conv*);
 % So create is kinda a (*send) method too.
 % void xxxkick(Conv *cv, Block *bp)
 
-% ipclose -> closeconv -> <>
-<<[[Proto(kernel)]] protocol methods>>=
-void    (*close)(Conv*);
-@
 
 % ??? -> ipiput4 -> <>
 <<[[Proto(kernel)]] conversation methods>>=
 void    (*rcv)(Proto*, Ipifc*, Block*);
 @
+% no send? this is for dispatching to the right conversation
+% but in sending we know the conversation associated with the channel,
+% so the sending is actually associated with create() which sets
+% the xxxkick functions.
 
 %syswrite("connect", /net/<proto>/<conv>/ctl) -> ... -> ipwrite -> ... -> <>
 <<[[Proto(kernel)]] conversation ctl methods>>=
@@ -1133,7 +1120,7 @@ char*   (*bind)(Conv*, char**, int);
 %less: method only for ipifc?
 
 
-% will introduce other methods later.
+% will introduce also some other methods later.
 
 
 \subsection{[[Conv]]ersations}
@@ -1165,11 +1152,13 @@ struct Conv
   <<[[Conv(kernel)]] listen fields>>
   <<[[Conv(kernel)]] routing fields>>
   <<[[Conv(kernel)]] multicast fields>>
-  <<[[Conv(kernel)]] snoop fields>>
-  <<[[Conv(kernel)]] priv fields>>
   <<[[Conv(kernel)]] udp fields>>
-  <<[[Conv(kernel)]] error fields>>
+
   <<[[Conv(kernel)]] synchronisation fields>>
+  <<[[Conv(kernel)]] priv fields>>
+  <<[[Conv(kernel)]] snoop fields>>
+  <<[[Conv(kernel)]] error fields>>
+
   <<[[Conv(kernel)]] other fields>>
   <<[[Conv(kernel)]] ipv6 fields>>
 
@@ -1252,7 +1241,7 @@ int inuse;      /* opens of listen/data/ctl */
 % set to 1 in clone, incremented after each additional open
 
 
-%dead
+%dead:
 %<<[[Conv(kernel)]] other fields>>=
 %int length;
 %QLock car;
@@ -8282,6 +8271,8 @@ tcpinit(Fs *fs)
 
 % See Network_v6.nw
 
+\section{Wifi}
+
 \section{Broadcast}
 
 % convention is that address has all 1s
@@ -9296,6 +9287,7 @@ void    (*advise)(Proto*, Block*, char*);
 
 #include "Network_extra.nw"
 #include "Network_v6.nw"
+#include "Network_apps.nw"
 
 \fi
 
