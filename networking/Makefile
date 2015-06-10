@@ -45,6 +45,9 @@ SRC_VIEWS= \
   ../kernel/network/386/etherigbe.c\
   ../kernel/network/386/ethermii.c\
   ../kernel/network/386/ethermii.h\
+  ../kernel/network/386/ether8390.h\
+  ../kernel/network/386/ether8390.c\
+  ../kernel/network/386/ether2000.c\
   ../kernel/network/ip/devip.c\
   \
   ../kernel/network/ip/arp.c\
