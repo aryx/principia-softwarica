@@ -248,9 +248,6 @@ struct Conv
   ushort  lport;      /* local port number */
   ushort  rport;      /* remote port number */
 
-  // enum<v6_or_v4>
-  uchar ipversion;
-
   char  *owner;     /* protections */
   int perm;
 
@@ -263,6 +260,12 @@ struct Conv
   /*x: [[Conv(kernel)]] queue fields */
   Queue*  eq;     /* returned error packets */
   /*e: [[Conv(kernel)]] queue fields */
+  /*s: [[Conv(kernel)]] listen fields */
+  Conv* incall;     /* calls waiting to be listened for */
+  Conv* next;
+  QLock listenq;
+  Rendez  listenr;
+  /*e: [[Conv(kernel)]] listen fields */
   /*s: [[Conv(kernel)]] routing fields */
   Route *r;     /* last route used */
   /*x: [[Conv(kernel)]] routing fields */
@@ -288,18 +291,11 @@ struct Conv
   bool restricted;   /* remote port is restricted */
   bool ignoreadvice;   /* don't terminate connection on icmp errors */
 
-
   /* udp specific */
   int headers;    /* data src/dst headers in udp */
   int reliable;   /* true if reliable udp */
 
-  Conv* incall;     /* calls waiting to be listened for */
-  Conv* next;
-
   QLock car;
-
-  QLock listenq;
-  Rendez  listenr;
   /*x: [[Conv(kernel)]] other fields */
   char  cerr[ERRMAX];
   /*x: [[Conv(kernel)]] other fields */
@@ -310,6 +306,10 @@ struct Conv
   // option<int>, None = 0
   int maxfragsize;    /* If set, used for fragmentation */
   /*e: [[Conv(kernel)]] other fields */
+  /*s: [[Conv(kernel)]] ipv6 fields */
+  // enum<v6_or_v4>
+  uchar ipversion;
+  /*e: [[Conv(kernel)]] ipv6 fields */
 
   // Extra
   QLock;
@@ -337,6 +337,7 @@ struct Medium
   void  (*bind)(Ipifc*, int, char**);
   void  (*unbind)(Ipifc*);
 
+  // write packets on the physical network
   void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
   /* process packets written to 'data' */
   void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
@@ -359,10 +360,12 @@ struct Medium
   /* address resolution */
   void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
   void  (*areg)(Ipifc*, uchar*);      /* register */
-
+  /*e: [[Medium(kernel)]] other methods */
+  /*s: [[Medium(kernel)]] ipv6 methods */
   /* v6 address generation */
   void  (*pref2addr)(uchar *pref, uchar *ea);
-  /*e: [[Medium(kernel)]] other methods */
+  /*e: [[Medium(kernel)]] ipv6 methods */
+
   /*s: [[Medium(kernel)]] other fields */
   bool unbindonclose;  /* if non-zero, unbind on last close */
   /*e: [[Medium(kernel)]] other fields */
@@ -376,9 +379,9 @@ struct Iplifc
 {
   uchar local[IPaddrlen];
   uchar mask[IPaddrlen];
-  uchar net[IPaddrlen];
+  uchar net[IPaddrlen]; // local & mask?
 
-  uchar remote[IPaddrlen];
+  uchar remote[IPaddrlen]; // ??
 
   /*s: [[Iplifc(kernel)]] other fields */
   uchar onlink;   /* =1 => onlink, =0 offlink. */
@@ -453,8 +456,11 @@ struct Ipifc
   Iplifc  *lifc;    /* logical interfaces on this physical one */
 
   /*s: [[Ipifc(kernel)]] stat fields */
-  ulong in, out;  /* message statistics */
-  ulong inerr, outerr;  /* ... */
+  /* message statistics */
+  ulong in;
+  ulong out;  
+  ulong inerr;
+  ulong outerr;
   /*e: [[Ipifc(kernel)]] stat fields */
   /*s: [[Ipifc(kernel)]] ipv6 fields */
   uchar sendra6;  /* flag: send router advs on this ifc */
@@ -550,7 +556,7 @@ Conv* iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp);
  */
 struct Proto
 {
-  char*   name;   /* protocol name */
+  char*   name;   /* protocol name */ // e.g. "udp", "tcp", etc
 
   /*s: [[Proto(kernel)]] methods */
   /*s: [[Proto(kernel)]] protocol methods */
