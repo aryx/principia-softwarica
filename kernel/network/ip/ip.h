@@ -792,14 +792,13 @@ struct  RouteTree
   // bitset<enum<route_type> >
   uchar type;
 
-  uchar depth;
-
   Ipifc *ifc; // !!!
 
-  char  tag[4];
-  int ref;
-
   /*s: [[Routetree]] other fields */
+    uchar depth;
+    char  tag[4];
+    int ref;
+  /*x: [[Routetree]] other fields */
   uchar ifcid;    /* must match ifc->id */
   /*e: [[Routetree]] other fields */
 
