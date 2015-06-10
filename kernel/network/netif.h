@@ -86,17 +86,19 @@ struct Netif
 {
   /* multiplexing */
   char  name[KNAMELEN];   /* for top level directory */
-  int nfile;      /* max number of Netfiles */
 
+  // growing_array?<option<ref_own<Netfile>>>
   Netfile **f;
+  int nfile;      /* max number of Netfiles */
 
   /* about net */
   int limit;      /* flow control */
   int alen;     /* address length */
   int mbps;     /* megabits per sec */
   int link;     /* link status */
+
   int minmtu;
-  int   maxmtu;
+  int maxmtu;
   int mtu;
   uchar addr[Nmaxaddr];
   uchar bcast[Nmaxaddr];

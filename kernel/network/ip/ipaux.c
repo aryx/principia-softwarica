@@ -266,7 +266,8 @@ parsemac(uchar *to, char *from, int len)
 ulong
 iphash(uchar *sa, ushort sp, uchar *da, ushort dp)
 {
-    return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) % Nhash;
+    return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) 
+      % Nipht; // pad's first network bugfix :)
 }
 /*e: function iphash */
 
