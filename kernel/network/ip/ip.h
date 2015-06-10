@@ -192,6 +192,8 @@ struct IP
   Fragment4*  flisthead4;
   Fragment4*  fragfree4;
 
+  Ref   id4;
+
   /*s: [[IP(kernel)]] stat fields */
   // map<enum<mib_two_counters>, uvlong>
   uvlong    stats[Nipstats];
@@ -209,7 +211,6 @@ struct IP
 
   // Extra
   QLock   fraglock4;
-  Ref   id4;
 };
 /*e: struct IP (kernel) */
 
