@@ -226,7 +226,7 @@ Ipifc *ipifcs;
 char	eaddr[16];		/* ascii ethernet address */
 /*e: global eaddr */
 /*s: global ipaddr */
-char	ipaddr[64];		/* ascii internet address */
+char	ipaddr_ascii[64];		/* ascii internet address */
 /*e: global ipaddr */
 /*s: global ipa */
 uchar	ipa[IPaddrlen];		/* binary internet address */
@@ -1094,9 +1094,9 @@ readipinterfaces(void)
 {
     if(myipaddr(ipa, mntpt) != 0)
         ipmove(ipa, IPnoaddr);
-    sprint(ipaddr, "%I", ipa);
+    sprint(ipaddr_ascii, "%I", ipa);
     if (debug)
-        syslog(0, "dns", "ipaddr is %s\n", ipaddr);
+        syslog(0, "dns", "ipaddr is %s\n", ipaddr_ascii);
 }
 /*e: function readipinterfaces */
 
@@ -1150,7 +1150,7 @@ ipid(void)
         if(mysysname == 0){
             t = nil;
             if(isvalidip(ipa))
-                free(ndbgetvalue(db, &s, "ip", ipaddr, "sys", &t));
+                free(ndbgetvalue(db, &s, "ip", ipaddr_ascii, "sys", &t));
             if(t == nil){
                 for(f = 0; f < 3; f++){
                     snprint(buf, sizeof buf, "%s/ether%d", mntpt, f);
@@ -1173,7 +1173,7 @@ ipid(void)
 
         /* nothing else worked, use the ip address */
         if(mysysname == 0 && isvalidip(ipa))
-            mysysname = strdup(ipaddr);
+            mysysname = strdup(ipaddr_ascii);
 
 
         /* set /dev/sysname if we now know it */
@@ -1234,7 +1234,7 @@ netinit(int background)
 
     if(debug)
         syslog(0, logfile, "mysysname %s eaddr %s ipaddr %s ipa %I\n",
-            mysysname?mysysname:"???", eaddr, ipaddr, ipa);
+            mysysname?mysysname:"???", eaddr, ipaddr_ascii, ipa);
 
     if(background){
         unlock(&netlock);
@@ -1526,7 +1526,7 @@ iplookup(Network *np, char *host, char *serv, int nolookup)
      *  need to search for
      */
     if(*host == '$'){
-        if(ipattrlookup(db, ipaddr, host+1, dollar, sizeof dollar))
+        if(ipattrlookup(db, ipaddr_ascii, host+1, dollar, sizeof dollar))
             host = dollar;
     }
 
@@ -1978,7 +1978,7 @@ ipinfoquery(Mfile *mf, char **list, int n)
         n--;
     }else{
         attr = "ip";
-        val = ipaddr;
+        val = ipaddr_ascii;
     }
 
     if(n < 1)

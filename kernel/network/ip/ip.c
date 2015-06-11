@@ -572,7 +572,7 @@ ip4reassemble(IP *ip, int offset, Block *bp, Ip4hdr *ih)
     int fend;
     ushort id;
     Fragment4 *f, *fnext;
-    ulong src, dst;
+    iplong src, dst;
     Block *bl, **l, *last, *prev;
     int ovlap, len, fragsize, pktposn;
 

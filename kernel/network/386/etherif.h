@@ -12,7 +12,7 @@ typedef struct Ether Ether;
 /*s: struct Ether (kernel) */
 struct Ether {
 
-  uchar ea[Eaddrlen];
+  eaddr ea;
 
   /*s: [[Ether]] methods */
   /*s: [[ether]] mounting methods */

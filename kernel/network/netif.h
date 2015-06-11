@@ -175,6 +175,10 @@ enum
 };
 /*e: enum _anon_ (kernel/network/netif.h)2 */
 
+/*s: typedef eaddr */
+typedef uchar eaddr[Eaddrlen];
+/*e: typedef eaddr */
+
 /*s: struct Etherpkt */
 struct Etherpkt
 {

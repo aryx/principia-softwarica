@@ -1,14 +1,15 @@
 /*s: kernel/network/ip/ip.h */
 
+// coupling: include/ip.h
 // This file references also code in lib_networking (linked with the kernel).
 // Those functions are also exported in include/ip.h.
+// Some types are duplicated with include/ip.h.
 
-// forward decl
+// forward decls
 typedef struct  Conv  Conv;
 typedef struct  Fragment4 Fragment4;
 typedef struct  Fragment6 Fragment6;
 typedef struct  Fs  Fs;
-typedef union Hwaddr  Hwaddr;
 typedef struct  IP  IP;
 typedef struct  IPaux IPaux;
 typedef struct  Ip4hdr  Ip4hdr;
@@ -27,7 +28,6 @@ typedef struct  Proto Proto;
 typedef struct  Arpent  Arpent;
 typedef struct  Arp Arp;
 typedef struct  Route Route;
-
 typedef struct  Routerparams  Routerparams;
 typedef struct  Hostparams  Hostparams;
 typedef struct  v6router  v6router;
@@ -65,10 +65,6 @@ enum
   IPv4off=  12,
   IPllen=   4,
 
-  /* ip versions */
-  V4=   4,
-  V6=   6,
-
   /*s: constant IP_VER4 */
   IP_VER4=  0x40,
   /*e: constant IP_VER4 */
@@ -93,6 +89,27 @@ enum
   Maxpath = 64,
 };
 /*e: enum _anon_ (kernel/network/ip/ip.h) */
+
+/*s: enum ip_version */
+/* ip versions */
+enum ip_version {
+  V4=   4,
+  V6=   6,
+};
+/*e: enum ip_version */
+
+/*s: typedef ipv4 */
+typedef uchar ipv4[IPv4addrlen];
+/*e: typedef ipv4 */
+/*s: typedef ipaddr */
+typedef uchar ipaddr[IPaddrlen];
+/*e: typedef ipaddr */
+/*s: typedef iplong */
+typedef ulong iplong;
+/*e: typedef iplong */
+/*s: typedef ipv4or6 */
+typedef uchar* ipv4or6;
+/*e: typedef ipv4or6 */
 
 /*s: enum conversation_state */
 enum conversation_state
@@ -149,8 +166,8 @@ struct Fragment4
 {
   Block*  blist;
 
-  ulong   src;
-  ulong   dst;
+  iplong   src;
+  iplong   dst;
 
   ushort  id;
   ulong   age;
@@ -231,8 +248,8 @@ struct Ip4hdr
 
   uchar cksum[2]; /* Header checksum */
 
-  uchar src[4];   /* IP source */
-  uchar dst[4];   /* IP destination */
+  ipv4 src;   /* IP source */
+  ipv4 dst;   /* IP destination */
 };
 /*e: struct Ip4hdr */
 
@@ -243,8 +260,8 @@ struct Ip4hdr
 struct Conv
 {
 
-  uchar laddr[IPaddrlen]; /* local IP address */
-  uchar raddr[IPaddrlen]; /* remote IP address */
+  ipaddr laddr; /* local IP address */
+  ipaddr raddr; /* remote IP address */
 
   ushort  lport;      /* local port number */
   ushort  rport;      /* remote port number */
@@ -339,7 +356,7 @@ struct Medium
   /*e: [[Medium(kernel)]] binding methods */
   /*s: [[Medium(kernel)]] io methods */
   // write packets on the physical network
-  void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
+  void  (*bwrite)(Ipifc *ifc, Block *b, int version, ipv4or6 ip);
   /*x: [[Medium(kernel)]] io methods */
   /* process packets written to 'data' */
   void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
@@ -381,11 +398,11 @@ struct Medium
 /* logical interface associated with a physical one */
 struct Iplifc
 {
-  uchar local[IPaddrlen];
-  uchar mask[IPaddrlen];
-  uchar net[IPaddrlen]; // local & mask?
+  ipaddr local;
+  ipaddr mask;
+  ipaddr net; // local & mask?
 
-  uchar remote[IPaddrlen]; // ??
+  ipaddr remote; // ??
 
   /*s: [[Iplifc(kernel)]] ipv6 fields */
   long  preflt;   /* v6 preferred lifetime */
@@ -817,10 +834,10 @@ struct  RouteTree
 /*s: struct V4route */
 struct V4route
 {
-  ulong address;
-  ulong endaddress;
+  iplong address;
+  iplong endaddress;
 
-  uchar gate[IPv4addrlen];
+  ipv4 gate;
 };
 /*e: struct V4route */
 

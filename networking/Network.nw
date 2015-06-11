@@ -12,14 +12,15 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - untangled all those features, routing, gateway, forwarding, multicast, 
-%    broadcast, with those big structures that were hard to understand.
+% - introduce ipv4, ipaddr, iplong typedefs, which helped to actually 
+%   see the case where a function takes subtely a ipv4or6
 % - use cv not c for conversation, less confusing with channel, use err
 %   not p, use err not s, ...
 % - use Idle, not 0 when can, use V4 not 4,
 % - removed deadcode: /net/bootp,  Ipifc fields (unbinding, idlock, ...),
-%   Conv (length, car, headers, reliable, ...), Proto (qid)
-% - TODO introduce ipv4, ipaddr typedefs?
+%   Conv (length, car, headers, reliable, ...), Proto (qid), Hwhdr
+% - untangled all those features, routing, gateway, forwarding, multicast, 
+%    broadcast, with those big structures that were hard to understand.
 
 %thx to codemap/codegraph/scheck:
 % - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -305,6 +306,8 @@ License.
 \section{Code organization}
 
 % include/ip.h
+% kernel/network/ip/ip.h (duplicate stuff with include/ip.h, similar
+%  to the include/libc.h vs kernel/lib/lib.h)
 % lib_networking/libip/
 % kernel/network/, devip, devether, udp.c, tpc.c, and ether2000.c, etherigbe.c
 % networking/...
@@ -354,22 +357,26 @@ License.
 
 \chapter{Core Data Structures}
 
-\section{Universal identifier, IP addresses}
+\section{Universal identifiers, IP addresses}
 % machine identifier
 
 % universal 
 %note: (later in HTTP section we will see URL, even more general)
 % inter-network
 
-%less: typedef uchar ippart ? 
-% typedef uchar[16] ip? typedef uchar[4] ipv4
-% cast automatically to uchar* ?
-
 <<constant IPv4addrlen>>=
 IPv4addrlen=	4,
 @
 % this will be used for the IP address in the actual header and frame formats
 
+<<typedef ipv4>>=
+typedef uchar ipv4[IPv4addrlen];
+@
+%pad: I introduced that, I like types!
+% Xinu book does the same (it was called IPaddr there)
+
+
+\subsection{IPv4 vs IPv6}
 
 <<constant IPaddrlen>>=
 IPaddrlen=	16,
@@ -378,14 +385,16 @@ IPaddrlen=	16,
 % 16 bytes IP(v6) address
 % ex of address? facebook address? 2a03:2880:2110:df07:face:b00c:0:1:
 
-
-\subsection{IPv4 vs IPv6}
+<<typedef ipaddr>>=
+typedef uchar ipaddr[IPaddrlen];
+@
+%less: ipv6?
 
 <<global v4prefix>>=
 /*
  *  prefix of all v4 addresses
  */
-uchar v4prefix[IPaddrlen] = {
+ipaddr v4prefix = {
     // first 12
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -402,7 +411,7 @@ IPv4off=	12,
 
 <<function isv4>>=
 bool
-isv4(uchar *ip)
+isv4(ipaddr ip)
 {
     return memcmp(ip, v4prefix, IPv4off) == 0;
 }
@@ -415,7 +424,7 @@ isv4(uchar *ip)
  *  up the usual case
  */
 void
-v4tov6(uchar *v6, uchar *v4)
+v4tov6(ipaddr v6, ipv4 v4)
 {
     v6[0] = 0; v6[1] = 0; v6[2] = 0; v6[3] = 0;
     v6[4] = 0; v6[5] = 0; v6[6] = 0; v6[7] = 0;
@@ -430,7 +439,7 @@ v4tov6(uchar *v6, uchar *v4)
 
 <<function v6tov4>>=
 errorneg1
-v6tov4(uchar *v4, uchar *v6)
+v6tov4(ipv4 v4, ipaddr v6)
 {
     if(v6[0] == 0 && v6[1] == 0 && v6[2] == 0 && v6[3] == 0
     && v6[4] == 0 && v6[5] == 0 && v6[6] == 0 && v6[7] == 0
@@ -449,6 +458,18 @@ v6tov4(uchar *v4, uchar *v6)
 % pointer to the address in the header as first argument
 % and the cv->laddr or cv->raddr as second argument.
 
+<<typedef ipv4or6>>=
+typedef uchar* ipv4or6;
+@
+
+<<enum ip_version>>=
+/* ip versions */
+enum ip_version {
+  V4=   4,
+  V6=   6,
+};
+@
+
 \subsection{Network class and network identifier}
 
 % "conceptually an internet address is a pair (netid, hostid)
@@ -462,13 +483,14 @@ v6tov4(uchar *v4, uchar *v6)
 #define CLASS(p) ((*(uchar*)(p))>>6)
 @
 % ?? first 2 bits of first number in IP?
+% assumes ipv4 I think
 
 \subsection{Network mask}
 
 % return ipv6
 <<function defmask>>=
 uchar*
-defmask(uchar *ip)
+defmask(ipaddr ip)
 {
     if(isv4(ip))
         return classmask[ip[IPv4off]>>6];
@@ -478,7 +500,7 @@ defmask(uchar *ip)
 %less: why not use CLASS? instead of >>6 above?
 
 <<global classmask>>=
-static uchar classmask[4][16] = {
+static ipaddr classmask[4] = {
     // class A
     0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  
     0xff,0x00,0x00,0x00, // 255.0.0.0
@@ -501,7 +523,7 @@ static uchar classmask[4][16] = {
 
 <<function maskip>>=
 void
-maskip(uchar *from, uchar *mask, uchar *to)
+maskip(ipaddr from, ipaddr mask, ipaddr to)
 {
     int i;
 
@@ -519,15 +541,16 @@ maskip(uchar *from, uchar *mask, uchar *to)
 
 % nhxxx network to host, hn host to network
 
-% ulong vs uchar[4]
-%todo: another typedef?   iph;  ip_ulong;  
+<<typedef iplong>>=
+typedef ulong iplong;
+@
 
 \subsection{Other address operations}
 %reset, move, comparison
 
 % used a lot to reset an address
 <<global IPnoaddr>>=
-uchar IPnoaddr[IPaddrlen];
+ipaddr IPnoaddr;
 @
 <<macro ipmove (kernel/network/ip/ip.h)>>=
 #define ipmove(x, y) memmove(x, y, IPaddrlen)
@@ -609,9 +632,9 @@ int	index;			/* number of interface in ipifc dir */
 struct Iplifc
 {
     /* per address on the ip interface */
-    uchar	ip[IPaddrlen];
-    uchar	mask[IPaddrlen];
-    uchar	net[IPaddrlen];		/* ip & mask */
+    ipaddr	ip;
+    ipaddr	mask;
+    ipaddr	net;		/* ip & mask */
 
     <<[[Iplifc(user)]] ipv6 fields>>
 
@@ -708,11 +731,11 @@ Conv  *conv;    /* link to its conversation structure */
 /* logical interface associated with a physical one */
 struct Iplifc
 {
-  uchar local[IPaddrlen];
-  uchar mask[IPaddrlen];
-  uchar net[IPaddrlen]; // local & mask?
+  ipaddr local;
+  ipaddr mask;
+  ipaddr net; // local & mask?
 
-  uchar remote[IPaddrlen]; // ??
+  ipaddr remote; // ??
 
   <<[[Iplifc(kernel)]] ipv6 fields>>
 
@@ -785,8 +808,9 @@ void  (*unbind)(Ipifc*);
 
 <<[[Medium(kernel)]] io methods>>=
 // write packets on the physical network
-void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
+void  (*bwrite)(Ipifc *ifc, Block *b, int version, ipv4or6 ip);
 @
+% version = v4 or v6
 
 %bwrite!! that's where you write the data! note that pass just ip,
 % no port here, we are at IP layer. Has to be scheduled as can have
@@ -847,6 +871,11 @@ Eaddrlen= 6,
 @
 % physical 48bits address.
 
+<<typedef eaddr>>=
+typedef uchar eaddr[Eaddrlen];
+@
+% like in Xinu
+
 % will be added to media[] in?
 <<global ethermedium (kernel)>>=
 Medium ethermedium =
@@ -896,7 +925,7 @@ MaxEther  = 48,
 <<struct Ether (kernel)>>=
 struct Ether {
 
-  uchar ea[Eaddrlen];
+  eaddr ea;
 
   <<[[Ether]] methods>>
 
@@ -1082,8 +1111,8 @@ struct Fragment4
 {
   Block*  blist;
 
-  ulong   src;
-  ulong   dst;
+  iplong   src;
+  iplong   dst;
 
   ushort  id;
   ulong   age;
@@ -1294,8 +1323,8 @@ char*   (*bind)(Conv*, char**, int);
 struct Conv
 {
 
-  uchar laddr[IPaddrlen]; /* local IP address */
-  uchar raddr[IPaddrlen]; /* remote IP address */
+  ipaddr laddr; /* local IP address */
+  ipaddr raddr; /* remote IP address */
 
   ushort  lport;      /* local port number */
   ushort  rport;      /* remote port number */
@@ -1622,8 +1651,8 @@ struct Ip4hdr
 
   uchar cksum[2]; /* Header checksum */
 
-  uchar src[4];   /* IP source */
-  uchar dst[4];   /* IP destination */
+  ipv4 src;   /* IP source */
+  ipv4 dst;   /* IP destination */
 };
 @
 % Do not change the order here!
@@ -1703,7 +1732,7 @@ enum matchtype {
  *  hashing tcp, udp, ... connections
  */
 ulong
-iphash(uchar *sa, ushort sp, uchar *da, ushort dp)
+iphash(ipaddr sa, ushort sp, ipaddr da, ushort dp)
 {
     return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) 
       % Nipht; // pad's first network bugfix :)
@@ -1779,7 +1808,7 @@ iphtrem(Ipht *ht, Conv *c)
  *  announced && *,*
  */
 Conv*
-iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
+iphtlook(Ipht *ht, ipaddr sa, ushort sp, ipaddr da, ushort dp)
 {
     ulong hv;
     Iphash *h;
@@ -1898,10 +1927,10 @@ struct Route
 <<struct V4route>>=
 struct V4route
 {
-  ulong address;
-  ulong endaddress;
+  iplong address;
+  iplong endaddress;
 
-  uchar gate[IPv4addrlen];
+  ipv4 gate;
 };
 @
 %todo: rename address to startaddress;
@@ -5474,7 +5503,7 @@ ip4reassemble(IP *ip, int offset, Block *bp, Ip4hdr *ih)
     int fend;
     ushort id;
     Fragment4 *f, *fnext;
-    ulong src, dst;
+    iplong src, dst;
     Block *bl, **l, *last, *prev;
     int ovlap, len, fragsize, pktposn;
 
@@ -6207,7 +6236,7 @@ arpwrite(Fs *fs, char *s, int len)
 % a is a ipv4!
 <<function v4lookup>>=
 Route*
-v4lookup(Fs *f, uchar *a, Conv *c)
+v4lookup(Fs *f, ipv4 a, Conv *c)
 {
     Route *p, *q;
     ulong la;

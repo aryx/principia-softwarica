@@ -89,7 +89,7 @@ Cfg	cfg;
 int	debug;
 /*e: global debug (networking/ndb/dns.c) */
 /*s: global ipaddr (networking/ndb/dns.c) */
-uchar	ipaddr[IPaddrlen];	/* my ip address */
+uchar	myip[IPaddrlen];	/* my ip address */
 /*e: global ipaddr (networking/ndb/dns.c) */
 /*s: global maxage */
 int	maxage = Defmaxage;
@@ -262,14 +262,14 @@ main(int argc, char *argv[])
     fmtinstall('F', fcallfmt);
     dninit();
     /* this really shouldn't be fatal */
-    if(myipaddr(ipaddr, mntpt) < 0)
+    if(myipaddr(myip, mntpt) < 0)
         sysfatal("can't read my ip address");
     dnslog("starting %s%sdns %s%s%son %I's %s",
         (cfg.straddle? "straddling ": ""),
         (cfg.cachedb? "caching ": ""),
         (cfg.serve?   "udp server ": ""),
         (cfg.justforw? "forwarding-only ": ""),
-        (cfg.resolver? "resolver ": ""), ipaddr, mntpt);
+        (cfg.resolver? "resolver ": ""), myip, mntpt);
 
     opendatabase();
     now = time(nil);		/* open time files before we fork */

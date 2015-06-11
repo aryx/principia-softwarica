@@ -4,7 +4,7 @@
 #include <ip.h>
 
 /*s: global classmask */
-static uchar classmask[4][16] = {
+static ipaddr classmask[4] = {
     // class A
     0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  0xff,0xff,0xff,0xff,  
     0xff,0x00,0x00,0x00, // 255.0.0.0
@@ -91,7 +91,7 @@ static int v6snpreflen = 13;
 
 /*s: function defmask */
 uchar*
-defmask(uchar *ip)
+defmask(ipaddr ip)
 {
     if(isv4(ip))
         return classmask[ip[IPv4off]>>6];
@@ -113,7 +113,7 @@ defmask(uchar *ip)
 
 /*s: function maskip */
 void
-maskip(uchar *from, uchar *mask, uchar *to)
+maskip(ipaddr from, ipaddr mask, ipaddr to)
 {
     int i;
 

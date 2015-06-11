@@ -24,6 +24,17 @@ enum
 };
 /*e: enum _anon_ */
 
+/*s: typedef ipv4 */
+typedef uchar ipv4[IPv4addrlen];
+/*e: typedef ipv4 */
+/*s: typedef ipaddr */
+typedef uchar ipaddr[IPaddrlen];
+/*e: typedef ipaddr */
+/*s: typedef iplong */
+typedef ulong iplong;
+/*e: typedef iplong */
+
+
 // forward decl
 typedef struct Ipifc Ipifc;
 typedef struct Iplifc Iplifc;
@@ -41,9 +52,9 @@ typedef struct Udphdr Udphdr;
 struct Iplifc
 {
     /* per address on the ip interface */
-    uchar	ip[IPaddrlen];
-    uchar	mask[IPaddrlen];
-    uchar	net[IPaddrlen];		/* ip & mask */
+    ipaddr	ip;
+    ipaddr	mask;
+    ipaddr	net;		/* ip & mask */
 
     /*s: [[Iplifc(user)]] ipv6 fields */
     ulong	preflt;			/* preferred lifetime */
@@ -162,6 +173,7 @@ enum {
 };
 /*e: enum _anon_ (include/net/ip.h) */
 
+
 /*s: struct Ip6hdr */
 /* V6 header on the wire */
 struct Ip6hdr {
@@ -186,15 +198,12 @@ struct Icmp6hdr {
 };
 /*e: struct Icmp6hdr */
 
-/*s: enum _anon_ (include/net/ip.h)2 */
+/*s: constant Udphdrsize */
 /*
  *  user level udp headers with control message "headers"
  */
-enum 
-{
-    Udphdrsize=	52,	/* size of a Udphdr */
-};
-/*e: enum _anon_ (include/net/ip.h)2 */
+#define Udphdrsize 52 /* size of a Udphdr */
+/*e: constant Udphdrsize */
 
 /*s: struct Udphdr (user) */
 struct Udphdr
@@ -208,7 +217,7 @@ struct Udphdr
 };
 /*e: struct Udphdr (user) */
 
-uchar*	defmask(uchar*);
+uchar*	defmask(ipaddr);
 void	maskip(uchar*, uchar*, uchar*);
 int		eipfmt(Fmt*);
 bool	isv4(uchar*);

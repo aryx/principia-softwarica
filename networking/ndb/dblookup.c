@@ -815,7 +815,7 @@ dnforceage(void)
 }
 /*e: function dnforceage */
 
-extern uchar	ipaddr[IPaddrlen];	/* my ip address */
+extern uchar	myip[IPaddrlen];	/* my ip address */
 
 /*s: function lookupinfo */
 /*
@@ -829,7 +829,7 @@ lookupinfo(char *attr)
     char *a[2];
     Ndbtuple *t;
 
-    snprint(buf, sizeof buf, "%I", ipaddr);
+    snprint(buf, sizeof buf, "%I", myip);
     a[0] = attr;
 
     lock(&dblock);
@@ -906,7 +906,7 @@ myaddr(char *addr)
     char buf[64];
     Biobuf *bp;
 
-    snprint(buf, sizeof buf, "%I", ipaddr);
+    snprint(buf, sizeof buf, "%I", myip);
     if (strcmp(addr, buf) == 0) {
         dnslog("rejecting my ip %s as local dns server", addr);
         return 1;
@@ -943,7 +943,7 @@ static QLock locdnslck;
 
 /*s: function addlocaldnsserver */
 static void
-addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
+addlocaldnsserver(DN *dp, int class, char *myip, int i)
 {
     int n;
     DN *nsdp;
@@ -952,20 +952,20 @@ addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
     uchar ip[IPaddrlen];
 
     /* reject our own ip addresses so we don't query ourselves via udp */
-    if (myaddr(ipaddr))
+    if (myaddr(myip))
         return;
 
     qlock(&locdnslck);
     for (n = 0; n < i && n < nelem(locdns) && locdns[n]; n++)
-        if (strcmp(locdns[n], ipaddr) == 0) {
+        if (strcmp(locdns[n], myip) == 0) {
             dnslog("rejecting duplicate local dns server ip %s",
-                ipaddr);
+                myip);
             qunlock(&locdnslck);
             return;
         }
     if (n < nelem(locdns))
         if (locdns[n] == nil || ++n < nelem(locdns))
-            locdns[n] = strdup(ipaddr); /* remember 1st few local ns */
+            locdns[n] = strdup(myip); /* remember 1st few local ns */
     qunlock(&locdnslck);
 
     /* ns record for name server, make up an impossible name */
@@ -981,11 +981,11 @@ addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
     rrattach(rp, Authoritative);	/* will not attach rrs in my area */
 
     /* A or AAAA record */
-    if (parseip(ip, ipaddr) >= 0 && isv4(ip))
+    if (parseip(ip, myip) >= 0 && isv4(ip))
         rp = rralloc(Ta);
     else
         rp = rralloc(Taaaa);
-    rp->ip = dnlookup(ipaddr, class, 1);
+    rp->ip = dnlookup(myip, class, 1);
     rp->owner = nsdp;
     rp->local = 1;
     rp->db = 1;
@@ -993,7 +993,7 @@ addlocaldnsserver(DN *dp, int class, char *ipaddr, int i)
     rp->ttl = (1UL<<31)-1;
     rrattach(rp, Authoritative);	/* will not attach rrs in my area */
 
-    dnslog("added local dns server %s at %s", buf, ipaddr);
+    dnslog("added local dns server %s at %s", buf, myip);
 }
 /*e: function addlocaldnsserver */
 

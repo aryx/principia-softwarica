@@ -542,7 +542,7 @@ v6delroute(Fs *f, uchar *a, uchar *mask, int dolock)
 
 /*s: function v4lookup */
 Route*
-v4lookup(Fs *f, uchar *a, Conv *c)
+v4lookup(Fs *f, ipv4 a, Conv *c)
 {
     Route *p, *q;
     ulong la;

@@ -264,7 +264,7 @@ parsemac(uchar *to, char *from, int len)
  *  hashing tcp, udp, ... connections
  */
 ulong
-iphash(uchar *sa, ushort sp, uchar *da, ushort dp)
+iphash(ipaddr sa, ushort sp, ipaddr da, ushort dp)
 {
     return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) 
       % Nipht; // pad's first network bugfix :)
@@ -335,7 +335,7 @@ iphtrem(Ipht *ht, Conv *c)
  *  announced && *,*
  */
 Conv*
-iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
+iphtlook(Ipht *ht, ipaddr sa, ushort sp, ipaddr da, ushort dp)
 {
     ulong hv;
     Iphash *h;

@@ -42,14 +42,14 @@ uchar IPallbits[IPaddrlen] = {
 };
 /*e: global IPallbits */
 /*s: global IPnoaddr */
-uchar IPnoaddr[IPaddrlen];
+ipaddr IPnoaddr;
 /*e: global IPnoaddr */
 
 /*s: global v4prefix */
 /*
  *  prefix of all v4 addresses
  */
-uchar v4prefix[IPaddrlen] = {
+ipaddr v4prefix = {
     // first 12
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -62,7 +62,7 @@ uchar v4prefix[IPaddrlen] = {
 
 /*s: function isv4 */
 bool
-isv4(uchar *ip)
+isv4(ipaddr ip)
 {
     return memcmp(ip, v4prefix, IPv4off) == 0;
 }
@@ -74,7 +74,7 @@ isv4(uchar *ip)
  *  up the usual case
  */
 void
-v4tov6(uchar *v6, uchar *v4)
+v4tov6(ipaddr v6, ipv4 v4)
 {
     v6[0] = 0; v6[1] = 0; v6[2] = 0; v6[3] = 0;
     v6[4] = 0; v6[5] = 0; v6[6] = 0; v6[7] = 0;
@@ -89,7 +89,7 @@ v4tov6(uchar *v6, uchar *v4)
 
 /*s: function v6tov4 */
 errorneg1
-v6tov4(uchar *v4, uchar *v6)
+v6tov4(ipv4 v4, ipaddr v6)
 {
     if(v6[0] == 0 && v6[1] == 0 && v6[2] == 0 && v6[3] == 0
     && v6[4] == 0 && v6[5] == 0 && v6[6] == 0 && v6[7] == 0
