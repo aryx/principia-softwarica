@@ -85,8 +85,10 @@ enum
   IP_MAX=   64*1024,  /* Max. Internet packet size, v4 & v6 */
   /*e: constant IP_MAX */
 
+  /*s: constant Lroot */
   /* 2^Lroot trees in the root table */
   Lroot=    10,
+  /*e: constant Lroot */
 
   Maxpath = 64,
 };
@@ -338,6 +340,7 @@ struct Medium
   /*s: [[Medium(kernel)]] io methods */
   // write packets on the physical network
   void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
+  /*x: [[Medium(kernel)]] io methods */
   /* process packets written to 'data' */
   void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
   /*e: [[Medium(kernel)]] io methods */
@@ -350,7 +353,6 @@ struct Medium
   /* routes for router boards */
   void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
   void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
-  void  (*flushroutes)(Ipifc *ifc);
   /*e: [[Medium(kernel)]] route methods */
   /*s: [[Medium(kernel)]] multicast methods */
   /* for arming interfaces to receive multicast */
@@ -409,13 +411,16 @@ struct Iplifc
 /* binding twixt Ipself and Iplifc */
 struct Iplink
 {
+  ulong expire;
+
   Ipself  *self;
   Iplifc  *lifc;
+
+  // Extra
+  int ref;
+  Iplink  *next;    /* free list */
   Iplink  *selflink;  /* next link for this local address */
   Iplink  *lifclink;  /* next link for this ifc */
-  ulong expire;
-  Iplink  *next;    /* free list */
-  int ref;
 };
 /*e: struct Iplink */
 
@@ -635,6 +640,9 @@ struct Fs
   Arp *arp;
   /*e: [[Fs(kernel)]] arp fields */
   /*s: [[Fs(kernel)]] routing fields */
+  Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
+  /*x: [[Fs(kernel)]] routing fields */
+  // hash<ip, ref<Route>> where hash function is V4H
   Route *v4root[1<<Lroot];  /* v4 routing forest */
   /*x: [[Fs(kernel)]] routing fields */
   Route *queue;     /* used as temp when reinjecting routes */
@@ -651,8 +659,6 @@ struct Fs
   /*s: [[Fs(kernel)]] other fields */
   // map<enum<protocol_type>, ref<Proto>>
   Proto*  t2p[256];   /* vector of all protocols */
-  /*x: [[Fs(kernel)]] other fields */
-  Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
   /*x: [[Fs(kernel)]] other fields */
   Ipselftab *self;
   /*e: [[Fs(kernel)]] other fields */
@@ -757,6 +763,7 @@ enum route_type
 {
   /* type bits */
   Rv4=    (1<<0),   /* this is a version 4 route */
+
   Rifc=   (1<<1),   /* this route is a directly connected interface */
   Rptpt=    (1<<2),   /* this route is a pt to pt interface */
 
@@ -790,11 +797,13 @@ struct  RouteTree
   Ipifc *ifc; // !!!
 
   /*s: [[Routetree]] other fields */
-    uchar depth;
-    char  tag[4];
-    int ref;
+  char  tag[4];
+  /*x: [[Routetree]] other fields */
+  int ref;
   /*x: [[Routetree]] other fields */
   uchar ifcid;    /* must match ifc->id */
+  /*x: [[Routetree]] other fields */
+  uchar depth;
   /*e: [[Routetree]] other fields */
 
   // Extra
@@ -810,6 +819,7 @@ struct V4route
 {
   ulong address;
   ulong endaddress;
+
   uchar gate[IPv4addrlen];
 };
 /*e: struct V4route */
@@ -889,11 +899,11 @@ struct Arpent
   uint  rtime;      /* time for next retransmission */
   uchar rxtsrem;
 
+  Ipifc *ifc;
   uchar ifcid;      /* must match ifc->id */
 
   // Extra
   Arpent* hash;
-  Ipifc *ifc;
 };
 /*e: struct Arpent */
 

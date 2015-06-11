@@ -16,16 +16,19 @@ static void calcd(Route*);
 /* these are used for all instances of IP */
 static Route*   v4freelist;
 /*e: global v4freelist */
-/*s: global v6freelist */
-static Route*   v6freelist;
-/*e: global v6freelist */
-/*s: global routelock */
-static RWlock   routelock;
-/*e: global routelock */
 /*s: global v4routegeneration */
 static ulong v4routegeneration;
 /*e: global v4routegeneration */
+/*s: global routelock */
+static RWlock   routelock;
+/*e: global routelock */
+
+/*s: global v6freelist */
+static Route*   v6freelist;
+/*e: global v6freelist */
+/*s: global v6routegeneration */
 static ulong v6routegeneration;
+/*e: global v6routegeneration */
 
 /*s: function freeroute */
 static void
@@ -37,8 +40,10 @@ freeroute(Route *r)
     r->right = nil;
     if(r->type & Rv4)
         l = &v4freelist;
+    /*s: [[freeroute()]] if ipv6 route */
     else
         l = &v6freelist;
+    /*e: [[freeroute()]] if ipv6 route */
     r->mid = *l;
     *l = r;
 }
@@ -55,10 +60,13 @@ allocroute(int type)
     if(type & Rv4){
         n = sizeof(RouteTree) + sizeof(V4route);
         l = &v4freelist;
-    } else {
+    }
+    /*s: [[allocroute()]] if ipv6 route */
+    else {
         n = sizeof(RouteTree) + sizeof(V6route);
         l = &v6freelist;
     }
+    /*e: [[allocroute()]] if ipv6 route */
 
     r = *l;
     if(r != nil){
@@ -69,6 +77,7 @@ allocroute(int type)
             panic("out of routing nodes");
     }
     memset(r, 0, n);
+
     r->type = type;
     r->ifc = nil;
     r->ref = 1;
@@ -139,6 +148,7 @@ rangecompare(Route *a, Route *b)
 
         if(a->v4.address <= b->v4.address
         && a->v4.endaddress >= b->v4.endaddress){
+
             if(a->v4.address == b->v4.address
             && a->v4.endaddress == b->v4.endaddress)
                 return Requals;
@@ -146,7 +156,7 @@ rangecompare(Route *a, Route *b)
         }
         return Rcontained;
     }
-
+    /*s: [[rangecompare()]] if ipv6 routes */
     if(lcmp(a->v6.endaddress, b->v6.address) < 0)
         return Rpreceeds;
 
@@ -162,6 +172,7 @@ rangecompare(Route *a, Route *b)
     }
 
     return Rcontained;
+    /*e: [[rangecompare()]] if ipv6 routes */
 }
 /*e: function rangecompare */
 
@@ -326,9 +337,9 @@ void
 v4addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type)
 {
     Route *p;
-    ulong sa;
     ulong m;
-    ulong ea;
+    ulong sa; // start address
+    ulong ea; // end address
     int h, eh;
 
     m = nhgetl(mask);
@@ -345,11 +356,13 @@ v4addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type)
 
         wlock(&routelock);
         addnode(f, &f->v4root[h], p);
+        /*s: [[v4addroute()]] if f has a route queue */
         while(p = f->queue) {
             f->queue = p->mid;
             walkadd(f, &f->v4root[h], p->left);
             freeroute(p);
         }
+        /*e: [[v4addroute()]] if f has a route queue */
         wunlock(&routelock);
     }
     v4routegeneration++;
@@ -440,7 +453,7 @@ looknode(Route **cur, Route *r)
 
 /*s: function v4delroute */
 void
-v4delroute(Fs *f, uchar *a, uchar *mask, int dolock)
+v4delroute(Fs *f, uchar *a, uchar *mask, bool dolock)
 {
     Route **r, *p;
     Route rt;
@@ -533,14 +546,19 @@ v4lookup(Fs *f, uchar *a, Conv *c)
 {
     Route *p, *q;
     ulong la;
+    /*s: [[v4lookup()]] locals */
     uchar gate[IPaddrlen];
     Ipifc *ifc;
+    /*e: [[v4lookup()]] locals */
 
+    /*s: [[v4lookup()]] return cached route if still valid route */
     if(c != nil && c->r != nil && c->r->ifc != nil && c->rgen == v4routegeneration)
         return c->r;
+    /*e: [[v4lookup()]] return cached route if still valid route */
 
     la = nhgetl(a);
     q = nil;
+    /*s: [[v4lookup()]] ternary search for route q for la in route forest */
     for(p=f->v4root[V4H(la)]; p;)
         if(la >= p->v4.address) {
             if(la <= p->v4.endaddress) {
@@ -550,19 +568,22 @@ v4lookup(Fs *f, uchar *a, Conv *c)
                 p = p->right;
         } else
             p = p->left;
-
+    /*e: [[v4lookup()]] ternary search for route q for la in route forest */
+    /*s: [[v4lookup()]] make sure route q has an up to date ifc */
     if(q && (q->ifc == nil || q->ifcid != q->ifc->ifcid)){
         if(q->type & Rifc) {
             hnputl(gate+IPv4off, q->v4.address);
             memmove(gate, v4prefix, IPv4off);
         } else
             v4tov6(gate, q->v4.gate);
+
         ifc = findipifc(f, gate, q->type);
         if(ifc == nil)
             return nil;
         q->ifc = ifc;
         q->ifcid = ifc->ifcid;
     }
+    /*e: [[v4lookup()]] make sure route q has an up to date ifc */
 
     if(c != nil){
         c->r = q;

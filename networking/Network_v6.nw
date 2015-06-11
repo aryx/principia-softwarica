@@ -965,6 +965,17 @@ uchar autoflag; /* v6 autonomous flag */
 long  origint;  /* time when addr was added */
 @
 
+<<[[ipifcadd()]] set tentative for ipv6>>=
+    if(isv4(ip))
+        tentative = false;
+@
+
+<<[[ipifcctl()]] else if other string>>=
+else if(strcmp(argv[0], "try") == 0)
+    return ipifcadd(ifc, argv, argc, true, nil);
+@
+
+
 <<[[ipifcctl()]] else if other string>>=
 else if(strcmp(argv[0], "add6") == 0)
     return ipifcadd6(ifc, argv, argc);
@@ -972,4 +983,136 @@ else if(strcmp(argv[0], "add6") == 0)
 <<[[ipifcctl()]] else if other string>>=
 else if(strcmp(argv[0], "ra6") == 0)
     return ipifcra6(ifc, argv, argc);
+@
+
+<<[[ipifcadd()]] if ipv6 tentative and broacast>>=
+if(tentative && sendnbrdisc)
+    icmpns(f, 0, SRC_UNSPEC, ip, TARG_MULTI, ifc->mac);
+@
+
+<<[[ipifcadd()]] locals>>=
+bool sendnbrdisc = false;
+@
+
+<<[[ipifcadd()]] if ipv6 add multicast addresses to self cache>>=
+else {
+    if(ipcmp(ip, v6loopback) == 0) {
+        /* add node-local mcast address */
+        addselfcache(f, ifc, lifc, v6allnodesN, Rmulti);
+    
+        /* add route for all node multicast */
+        v6addroute(f, tifc, v6allnodesN, v6allnodesNmask,
+            v6allnodesN, Rmulti);
+    }
+    
+    /* add all nodes multicast address */
+    addselfcache(f, ifc, lifc, v6allnodesL, Rmulti);
+    
+    /* add route for all nodes multicast */
+    v6addroute(f, tifc, v6allnodesL, v6allnodesLmask, v6allnodesL,
+        Rmulti);
+    
+    /* add solicited-node multicast address */
+    ipv62smcast(bcast, ip);
+    addselfcache(f, ifc, lifc, bcast, Rmulti);
+    
+    sendnbrdisc = true;
+}
+@
+
+
+<<[[ipifcadd()]] set ipv6 fields for lifc>>=
+lifc->tentative = tentative;
+if(lifcp) {
+    lifc->onlink = lifcp->onlink;
+    lifc->autoflag = lifcp->autoflag;
+
+    lifc->validlt = lifcp->validlt;
+    lifc->preflt = lifcp->preflt;
+    lifc->origint = lifcp->origint;
+} else {        /* default values */
+    lifc->onlink = lifc->autoflag = 1;
+    lifc->validlt = lifc->preflt = ~0L;
+    lifc->origint = NOW / 1000;
+}
+@
+
+<<[[ipifcadd()]] when already local address for ifc, copy ipv6 fields>>=
+if(lifc->tentative != tentative)
+    lifc->tentative = tentative;
+if(lifcp) {
+    lifc->onlink = lifcp->onlink;
+    lifc->autoflag = lifcp->autoflag;
+
+    lifc->validlt = lifcp->validlt;
+    lifc->preflt = lifcp->preflt;
+    lifc->origint = lifcp->origint;
+}
+@
+
+<<[[ipifcremlifc()]] if ipv6 local>>=
+else {
+    v6delroute(f, lifc->remote, lifc->mask, 1);
+    if(ipcmp(lifc->local, v6loopback) == 0)
+        /* remove route for all node multicast */
+        v6delroute(f, v6allnodesN, v6allnodesNmask, 1);
+    else if(memcmp(lifc->local, v6linklocal, v6llpreflen) == 0)
+        /* remove route for all link multicast */
+        v6delroute(f, v6allnodesL, v6allnodesLmask, 1);
+}
+@
+
+
+<<[[allocroute()]] if ipv6 route>>=
+else {
+    n = sizeof(RouteTree) + sizeof(V6route);
+    l = &v6freelist;
+}
+@
+
+<<[[freeroute()]] if ipv6 route>>=
+else
+    l = &v6freelist;
+@
+
+<<[[rangecompare()]] if ipv6 routes>>=
+if(lcmp(a->v6.endaddress, b->v6.address) < 0)
+    return Rpreceeds;
+
+if(lcmp(a->v6.address, b->v6.endaddress) > 0)
+    return Rfollows;
+
+if(lcmp(a->v6.address, b->v6.address) <= 0
+&& lcmp(a->v6.endaddress, b->v6.endaddress) >= 0){
+    if(lcmp(a->v6.address, b->v6.address) == 0
+    && lcmp(a->v6.endaddress, b->v6.endaddress) == 0)
+            return Requals;
+    return Rcontains;
+}
+
+return Rcontained;
+@
+
+<<function lcmp>>=
+/*
+ *   compare 2 v6 addresses
+ */
+static int
+lcmp(ulong *a, ulong *b)
+{
+    int i;
+
+    for(i = 0; i < IPllen; i++){
+        if(a[i] > b[i])
+            return 1;
+        if(a[i] < b[i])
+            return -1;
+    }
+    return 0;
+}
+@
+
+
+<<global v6routegeneration>>=
+static ulong v6routegeneration;
 @

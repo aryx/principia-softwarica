@@ -199,14 +199,14 @@ ip1gen(Chan *c, int i, Dir *dp)
         prot = 0664;
         break;
     /*x: [[ip1gen()]] switch TYPE qid cases */
-    case Qipselftab:
-        p = "ipselftab";
-        prot = 0444;
-        break;
-    /*x: [[ip1gen()]] switch TYPE qid cases */
     case Qiproute:
         p = "iproute";
         prot = 0664;
+        break;
+    /*x: [[ip1gen()]] switch TYPE qid cases */
+    case Qipselftab:
+        p = "ipselftab";
+        prot = 0444;
         break;
     /*x: [[ip1gen()]] switch TYPE qid cases */
     case Qndb:
@@ -835,11 +835,11 @@ ipread(Chan *ch, void *a, long n, vlong off)
     case Qarp:
         return arpread(f->arp, a, offset, n);
     /*x: [[ipread()]] switch TYPE qid cases */
-    case Qipselftab:
-        return ipselftabread(f, a, offset, n);
-    /*x: [[ipread()]] switch TYPE qid cases */
     case Qiproute:
         return routeread(f, a, offset, n);
+    /*x: [[ipread()]] switch TYPE qid cases */
+    case Qipselftab:
+        return ipselftabread(f, a, offset, n);
     /*x: [[ipread()]] switch TYPE qid cases */
     case Qndb:
         return readstr(offset, a, n, f->ndb);

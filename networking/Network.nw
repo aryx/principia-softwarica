@@ -379,7 +379,6 @@ IPaddrlen=	16,
 % ex of address? facebook address? 2a03:2880:2110:df07:face:b00c:0:1:
 
 
-
 \subsection{IPv4 vs IPv6}
 
 <<global v4prefix>>=
@@ -513,6 +512,15 @@ maskip(uchar *from, uchar *mask, uchar *to)
 
 % netid = ip & mask.
 
+\subsection{Network byte order}
+% not only related to IP address, but don't know where
+% to put this section and can be opportunity to define ip_long;
+% that will be used later for the Route DS.
+
+% nhxxx network to host, hn host to network
+
+% ulong vs uchar[4]
+%todo: another typedef?   iph;  ip_ulong;  
 
 \subsection{Other address operations}
 %reset, move, comparison
@@ -713,7 +721,7 @@ struct Iplifc
 };
 @
 % local = ip?
-% remote??
+% remote?? rename to gateway?
 
 <<[[Iplifc(kernel)]] extra fields>>=
 // list<ref_own<Iplifc>>, head = Ipifc.lifc
@@ -721,10 +729,6 @@ Iplifc  *next;
 @
 
 
-%XXX
-<<[[Iplifc(kernel)]] extra fields>>=
-Iplink  *link;    /* addresses linked to this lifc */
-@
 
 
 
@@ -782,17 +786,22 @@ void  (*unbind)(Ipifc*);
 <<[[Medium(kernel)]] io methods>>=
 // write packets on the physical network
 void  (*bwrite)(Ipifc *ifc, Block *b, int version, uchar *ip);
-/* process packets written to 'data' */
-void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
 @
 
 %bwrite!! that's where you write the data! note that pass just ip,
 % no port here, we are at IP layer. Has to be scheduled as can have
 % many processes wanting to write to the medium
 
+%XXX
+<<[[Medium(kernel)]] io methods>>=
+/* process packets written to 'data' */
+void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
+@
 %pktin!! that's where you read packets from the network, which has to
 % be routed to the right place, how?? Has to be decomposed and dispatched
 % so need a global map of ip+port info.
+% I don't think so, it's when someone write to /net/ipifc/x/data
+% which I don't know what it means
 
 
 
@@ -1016,6 +1025,25 @@ QLock   fslock;
 @
 % to access ipfs?
 
+
+
+<<[[Fs(kernel)]] routing fields>>=
+Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
+@
+%note: it's a Proto, not an Ipifc. But then can get the ipifc
+% by look at the conversations in this Proto and the priv
+% field of those conversation.
+% I put in 'routing' category because it is.
+% it's not really a kludge/hack, it's fundamental. It's
+% for findipifc().
+% At some point given an IP you will need in v4lookup() to find the
+%  gateway and so which ipifc
+% to connect this ip, to find the route, and so you'll need
+% to look at the IP in the lifc of an ifc.
+
+
+
+
 \subsection{[[IP]] fragments and IP statistics}
 %todo: rename, bad name, ip_fragments?
 
@@ -1065,7 +1093,7 @@ struct Fragment4
 };
 @
 %todo: ulong for src and dst? ports? fragment number? adress in iphost
-% format?
+% format? ip_ulong;
 
 
 <<[[IP(kernel)]] stat fields>>=
@@ -1824,7 +1852,9 @@ iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp)
 
 
 
-\section{Route}
+\section{Routes}
+
+\subsection{Single [[Route]]}
 
 <<[[Conv(kernel)]] routing fields>>=
 Route *r;     /* last route used */
@@ -1835,6 +1865,7 @@ ulong rgen;     /* routetable generation for *r */
 @
 % when things change
 
+% rename? v4rgen?
 <<global v4routegeneration>>=
 static ulong v4routegeneration;
 @
@@ -1857,17 +1888,27 @@ struct Route
 };
 @
 %NOTE: if change the order and put RouteTree after the union
-% then ip/ipconfig generates a kernel oops. Weird.
+% then ip/ipconfig generates a kernel oops. 
+% It's because allocroute() does this weird alloc to optimize things.
+% By default a malloc(sizeof(Route)) will waste the space of v6addr.
+
+
+
 
 <<struct V4route>>=
 struct V4route
 {
   ulong address;
   ulong endaddress;
+
   uchar gate[IPv4addrlen];
 };
 @
-% ulong address? ip32 bit in host format?
+%todo: rename address to startaddress;
+% ulong address? ip32 bit in host format.
+% range of address managed by this gateway. Use ip_ilong here
+% because we will need to compare the asked ip to this range
+
 % gateway! then need using ARP to get from ip gateway to MAC gateway!
 
 
@@ -1890,15 +1931,11 @@ struct  RouteTree
 };
 @
 % note that those are Route*, not RouteTree
-%todo: why not move those fields in the Route instead?
-% anyway it's an inlined structure but it would be clearer I think
 
-%XXX
-<<[[Routetree]] other fields>>=
-  uchar depth;
-  char  tag[4];
-  int ref;
-@
+% in ipoput4:
+%    r = v4lookup(f, eh->dst, c);
+%    ifc = r->ifc !!
+
 
 % routes are linked together so we can gc them when an interface
 % is changed or the topology changed in which case we need to invalidate
@@ -1906,11 +1943,24 @@ struct  RouteTree
 
 
 
+% for debugging? to know which kind of rout it is? e.g. "ifc"
+<<[[Routetree]] other fields>>=
+char  tag[4];
+@
+
+%XXX
+<<[[Routetree]] other fields>>=
+int ref;
+@
+% can have multiple reference to this route? when returned in v4lookup?
+
+
 <<enum _anon_ (kernel/network/ip/ip.h)6>>=
 enum route_type
 {
   /* type bits */
   Rv4=    (1<<0),   /* this is a version 4 route */
+
   Rifc=   (1<<1),   /* this route is a directly connected interface */
   Rptpt=    (1<<2),   /* this route is a pt to pt interface */
 
@@ -1930,29 +1980,26 @@ enum route_type
 
 
 
-
-% in ipoput4:
-%    r = v4lookup(f, eh->dst, c);
-%    ifc = r->ifc !!
-
-
-
-%XXX
-<<[[Fs(kernel)]] routing fields>>=
-Route *v4root[1<<Lroot];  /* v4 routing forest */
-@
-% >> >> 
-%XXX
-<<[[Fs(kernel)]] routing fields>>=
-Route *queue;     /* used as temp when reinjecting routes */
-@
-
 %XXX
 <<[[Ipifc(kernel)]] routing fields>>=
 Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
         used only if node is router */
 @
 
+
+\subsection{Routing forest}
+
+
+<<[[Fs(kernel)]] routing fields>>=
+// hash<ip, ref<Route>> where hash function is V4H
+Route *v4root[1<<Lroot];  /* v4 routing forest */
+@
+% >>
+
+<<constant Lroot>>=
+/* 2^Lroot trees in the root table */
+Lroot=    10,
+@
 
 
 \section{Blocks}
@@ -3631,7 +3678,7 @@ ipifcinit(Fs *f)
 }
 @
 %less: make it a global with intializer?
-%less: no remote method?
+%note: no remote method, we abuse the protocol here.
 %alt: why not do via global? why smalloc? to not pay memory if don't use
 % the network? meh.
 
@@ -3682,26 +3729,15 @@ if(p->ipproto > 0){
 
 
 
-
-%XXX
 <<[[ipifcinit()]] modify f>>=
 f->ipifc = ipifc;   /* hack for ipifcremroute, findipifc, ... */
 @
-%XXX
-<<[[Fs(kernel)]] other fields>>=
-Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
-@
-% hack? or fundamental? but not that it's a Proto, not an Ipifc.
+% It's not an hack! it's fundamental, so in v4lookup() we
+% can call findipifc and from an Fs get the good Ipifc
+% (which then contain the right medium to reach the right gateway)
 
 
-%XXX
-<<[[ipifcinit()]] modify f>>=
-f->self = smalloc(sizeof(Ipselftab));   /* hack for ipforme */
-@
-%XXX
-<<[[Fs(kernel)]] other fields>>=
-Ipselftab *self;
-@
+
 
 \subsection{[[/net/ipifc/clone]]}
 
@@ -3731,7 +3767,6 @@ ipifccreate(Conv *cv)
 % Ipifc has been smalloc generically by Fsprotoclone()
 % no medium yet!
 %dead:    ifc->unbinding = false;
-
 
 % ip/ipconfig open this file and keeps it open forever
 
@@ -3814,15 +3849,19 @@ ipifcbind(Conv *cv, char **argv, int argc)
 }
 @
 
+%less: rename to generation field?
+<<[[Ipifc(kernel)]] other fields>>=
+uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
+@
+% a bit like process, when get a ref to a Proc, need also ensure
+% it was the proc with a certain id that you were associated to
+
 % why need ifcid? because ifc may have changed! it may have been
 % binded to something else
 <<[[Routetree]] other fields>>=
 uchar ifcid;    /* must match ifc->id */
 @
 
-<<[[Ipifc(kernel)]] other fields>>=
-uchar ifcid;    /* incremented each 'bind/unbind/add/remove' */
-@
 
 
 <<function ipfindmedium>>=
@@ -3877,11 +3916,7 @@ if(strcmp(argv[0], "add") == 0)
     return ipifcadd(ifc, argv, argc, false, nil);
 @
 
-<<[[ipifcctl()]] else if other string>>=
-else if(strcmp(argv[0], "try") == 0)
-    return ipifcadd(ifc, argv, argc, true, nil);
-@
-
+% tentative is for ipv6 stuff
 <<function ipifcadd>>=
 /*
  *  add an address to an interface.
@@ -3915,76 +3950,22 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     switch(argc){
     <<[[ipifcadd()]] switch argc, proxy case, and fall through>>
     <<[[ipifcadd()]] switch argc, mtu setting case, and fall through>>
-    // add <ip> <mask> <rem>
-    case 4:
-        if (parseip(ip, argv[1]) == -1 || parseip(rem, argv[3]) == -1)
-            return Ebadip;
-        parseipmask(mask, argv[2]);
-        maskip(rem, mask, net);
-        break;
-    // add <ip> <mask>
-    case 3:
-        if (parseip(ip, argv[1]) == -1)
-            return Ebadip;
-        parseipmask(mask, argv[2]);
-        maskip(ip, mask, rem);
-        maskip(rem, mask, net);
-        break;
-    // simplest case, add <ip>
-    case 2:
-        if (parseip(ip, argv[1]) == -1)
-            return Ebadip;
-        memmove(mask, defmask(ip), IPaddrlen);
-        maskip(ip, mask, rem);
-        maskip(rem, mask, net);
-        break;
+    <<[[ipifcadd()]] switch argc cases, setting ip, mask, net, rem>>
     default:
         return Ebadarg;
     }
 
-    if(isv4(ip))
-        tentative = false;
-
+    <<[[ipifcadd()]] set tentative for ipv6>>
     wlock(ifc);
-
-    /* ignore if this is already a local address for this ifc */
-    for(lifc = ifc->lifc; lifc; lifc = lifc->next) {
-        if(ipcmp(lifc->local, ip) == 0) {
-            if(lifc->tentative != tentative)
-                lifc->tentative = tentative;
-            if(lifcp) {
-                lifc->onlink = lifcp->onlink;
-                lifc->autoflag = lifcp->autoflag;
-
-                lifc->validlt = lifcp->validlt;
-                lifc->preflt = lifcp->preflt;
-                lifc->origint = lifcp->origint;
-            }
-            goto out;
-        }
-    }
+    <<[[ipifcadd()]] check if already a local address for this ifc>>
 
     /* add the address to the list of logical ifc's for this ifc */
     lifc = smalloc(sizeof(Iplifc));
-
     ipmove(lifc->local, ip);
     ipmove(lifc->mask, mask);
     ipmove(lifc->remote, rem);
     ipmove(lifc->net, net);
-    lifc->tentative = tentative;
-
-    if(lifcp) {
-        lifc->onlink = lifcp->onlink;
-        lifc->autoflag = lifcp->autoflag;
-
-        lifc->validlt = lifcp->validlt;
-        lifc->preflt = lifcp->preflt;
-        lifc->origint = lifcp->origint;
-    } else {        /* default values */
-        lifc->onlink = lifc->autoflag = 1;
-        lifc->validlt = lifc->preflt = ~0L;
-        lifc->origint = NOW / 1000;
-    }
+    <<[[ipifcadd()]] set ipv6 fields for lifc>>
     // add_tail(lifc, ifc->lifc)
     lifc->next = nil;
     for(l = &ifc->lifc; *l; l = &(*l)->next)
@@ -4005,9 +3986,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     if(isv4(ip) || ipcmp(ip, IPnoaddr) == 0) {
         <<[[ipifcadd()]] add broadcast addresses to self cache>>
     }
-    else {
-        <<[[ipifcadd()]] add multicast addresses to self cache>>
-    }
+    <<[[ipifcadd()]] if ipv6 add multicast addresses to self cache>>
 
     /* register the address on this network for address resolution */
     if(isv4(ip) && ifc->m->areg != nil)
@@ -4016,14 +3995,52 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
 
 out:
     wunlock(ifc);
-    <<[[ipifcadd()]] if tentative and broacast>>
+    <<[[ipifcadd()]] if ipv6 tentative and broacast>>
     return nil;
 }
 @
 
+%todo: <rem> is remote for gateway?
+<<[[ipifcadd()]] switch argc cases, setting ip, mask, net, rem>>=
+// add <ip> <mask> <rem>
+case 4:
+    if (parseip(ip, argv[1]) == -1 || parseip(rem, argv[3]) == -1)
+        return Ebadip;
+    parseipmask(mask, argv[2]);
+    maskip(rem, mask, net);
+    break;
+// add <ip> <mask>
+case 3:
+    if (parseip(ip, argv[1]) == -1)
+        return Ebadip;
+    parseipmask(mask, argv[2]);
+    maskip(ip, mask, rem);
+    maskip(rem, mask, net);
+    break;
+// simplest case, add <ip>
+case 2:
+    if (parseip(ip, argv[1]) == -1)
+        return Ebadip;
+    memmove(mask, defmask(ip), IPaddrlen);
+    maskip(ip, mask, rem);
+    maskip(rem, mask, net);
+    break;
+@
 
 <<global tifc>>=
 static char tifc[] = "ifc ";
+@
+% tag
+
+
+<<[[ipifcadd()]] check if already a local address for this ifc>>=
+/* ignore if this is already a local address for this ifc */
+for(lifc = ifc->lifc; lifc; lifc = lifc->next) {
+    if(ipcmp(lifc->local, ip) == 0) {
+        <<[[ipifcadd()]] when already local address for ifc, copy ipv6 fields>>
+        goto out;
+    }
+}
 @
 
 
@@ -4451,10 +4468,15 @@ etherbind(Ipifc *ifc, int argc, char **argv)
 
 \section{Setting up routes}
 
+% have seen in ipifcadd() the call to v4addroute and
+% the call to the areg method for the associated medium
+% as well as the registration of ip in the self cache.
+
+% will explain more about Route in Route chapter.
 
 \section{Advanced configurations}
 
-\subsection{Routing}
+\subsection{IP Routing}
 % quite important, for gateways?
 
 <<[[ipifcctl()]] else if other string>>=
@@ -4564,30 +4586,6 @@ ttlctlmsg(Conv *c, Cmdbuf *cb)
 MAXTTL=   255,
 @
 
-\subsection{Unbind on close}
-
-<<[[Medium(kernel)]] other fields>>=
-bool unbindonclose;  /* if non-zero, unbind on last close */
-@
-
-<<function ipifcclose>>=
-/*
- *  called after last close of ipifc data or ctl
- *  called with c locked, we must unlock
- */
-static void
-ipifcclose(Conv *c)
-{
-    Ipifc *ifc;
-    Medium *m;
-
-    ifc = (Ipifc*)c->ptcl;
-    m = ifc->m;
-    if(m && m->unbindonclose)
-        ipifcunbind(ifc);
-}
-@
-
 \subsection{Dynamic interface, removing, unbinding, etc}
 
 <<[[ipifcctl()]] else if other string>>=
@@ -4640,6 +4638,45 @@ ipifcrem(Ipifc *ifc, char **argv, int argc)
 }
 @
 
+<<function ipifcremlifc>>=
+/*
+ *  remove a logical interface from an ifc
+ *  always called with ifc wlock'd
+ */
+static char*
+ipifcremlifc(Ipifc *ifc, Iplifc *lifc)
+{
+    Iplifc **l;
+    Fs *f;
+
+    f = ifc->conv->p->f;
+
+    /*
+     *  find address on this interface and remove from chain.
+     *  for pt to pt we actually specify the remote address as the
+     *  addresss to remove.
+     */
+    for(l = &ifc->lifc; *l != nil && *l != lifc; l = &(*l)->next)
+        ;
+    if(*l == nil)
+        return "address not on this interface";
+    *l = lifc->next;
+
+    /* disassociate any addresses */
+    while(lifc->link)
+        remselfcache(f, ifc, lifc, lifc->link->self->a);
+
+    /* remove the route for this logical interface */
+    if(isv4(lifc->local))
+        v4delroute(f, lifc->remote+IPv4off, lifc->mask+IPv4off, 1);
+    <<[[ipifcremlifc()]] if ipv6 local>>
+
+    free(lifc);
+    return nil;
+}
+@
+
+
 
 
 
@@ -4685,7 +4722,7 @@ ipifcunbind(Ipifc *ifc)
         (*ifc->m->unbind)(ifc);
     memset(ifc->dev, 0, sizeof(ifc->dev));
     ifc->arg = nil;
-    ifc->reassemble = 0;
+    ifc->reassemble = false;
 
     /* close queues to stop queuing of packets */
     qclose(ifc->conv->rq);
@@ -4702,6 +4739,31 @@ ipifcunbind(Ipifc *ifc)
 
 
 
+
+
+\subsection{Unbind on close}
+
+<<[[Medium(kernel)]] other fields>>=
+bool unbindonclose;  /* if non-zero, unbind on last close */
+@
+
+<<function ipifcclose>>=
+/*
+ *  called after last close of ipifc data or ctl
+ *  called with c locked, we must unlock
+ */
+static void
+ipifcclose(Conv *c)
+{
+    Ipifc *ifc;
+    Medium *m;
+
+    ifc = (Ipifc*)c->ptcl;
+    m = ifc->m;
+    if(m && m->unbindonclose)
+        ipifcunbind(ifc);
+}
+@
 
 
 \chapter{Internetwork Transport, IP}
@@ -4845,10 +4907,15 @@ equivip4(uchar *a, uchar *b)
 % now in core DS
 
 \subsection{Byte ordering}
-
 % Network standard byte order
 
 % put the nhgets, hngets here
+
+% (nh|hn)(get|put)(l|s)
+% nh = network to host
+% hn = host to network
+% l = long
+% s = short
 
 
 \subsection{Checksum}
@@ -5891,11 +5958,11 @@ struct Arpent
   uint  rtime;      /* time for next retransmission */
   uchar rxtsrem;
 
+  Ipifc *ifc;
   uchar ifcid;      /* must match ifc->id */
 
   // Extra
   Arpent* hash;
-  Ipifc *ifc;
 };
 @
 
@@ -6127,54 +6194,31 @@ arpwrite(Fs *fs, char *s, int len)
 
 \chapter{Finding Machines Globally, Routes}
 
-%XXX
-<<[[Medium(kernel)]] route methods>>=
-/* routes for router boards */
-void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
-void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
-void  (*flushroutes)(Ipifc *ifc);
-@
 
 % ARP allows local routing
 % /net/iproute allows inter-network routing, find gateway
 
+% Have seen already the Route DS in Core DS chapter
+% and the v4root forest in Fs.
 
+\section{[[v4lookup()]]}
+
+% ipoput4 | ... -> <>
+% a is a ipv4!
 <<function v4lookup>>=
 Route*
 v4lookup(Fs *f, uchar *a, Conv *c)
 {
     Route *p, *q;
     ulong la;
-    uchar gate[IPaddrlen];
-    Ipifc *ifc;
+    <<[[v4lookup()]] locals>>
 
-    if(c != nil && c->r != nil && c->r->ifc != nil && c->rgen == v4routegeneration)
-        return c->r;
+    <<[[v4lookup()]] return cached route if still valid route>>
 
     la = nhgetl(a);
     q = nil;
-    for(p=f->v4root[V4H(la)]; p;)
-        if(la >= p->v4.address) {
-            if(la <= p->v4.endaddress) {
-                q = p;
-                p = p->mid;
-            } else
-                p = p->right;
-        } else
-            p = p->left;
-
-    if(q && (q->ifc == nil || q->ifcid != q->ifc->ifcid)){
-        if(q->type & Rifc) {
-            hnputl(gate+IPv4off, q->v4.address);
-            memmove(gate, v4prefix, IPv4off);
-        } else
-            v4tov6(gate, q->v4.gate);
-        ifc = findipifc(f, gate, q->type);
-        if(ifc == nil)
-            return nil;
-        q->ifc = ifc;
-        q->ifcid = ifc->ifcid;
-    }
+    <<[[v4lookup()]] ternary search for route q for la in route forest>>
+    <<[[v4lookup()]] make sure route q has an up to date ifc>>
 
     if(c != nil){
         c->r = q;
@@ -6184,55 +6228,446 @@ v4lookup(Fs *f, uchar *a, Conv *c)
     return q;
 }
 @
+% maybe will return nil
 
-
-
-\section{[[/net/ipselftab]]}
-
-<<[[Qid]] toplevel extra cases>>=
-Qipselftab,
+<<[[v4lookup()]] ternary search for route q for la in route forest>>=
+for(p=f->v4root[V4H(la)]; p;)
+    if(la >= p->v4.address) {
+        if(la <= p->v4.endaddress) {
+            q = p;
+            p = p->mid;
+        } else
+            p = p->right;
+    } else
+        p = p->left;
 @
 
-<<[[ip1gen()]] switch TYPE qid cases>>=
-case Qipselftab:
-    p = "ipselftab";
-    prot = 0444;
-    break;
+<<macro V4H>>=
+#define V4H(a)  ((a&0x07ffffff)>>(32-Lroot-5))
 @
-<<[[ipread()]] switch TYPE qid cases>>=
-case Qipselftab:
-    return ipselftabread(f, a, offset, n);
+% ??? Lroot = 10, so why the -5?
+
+
+%todo: ok so what happen if ip really out of range of current network?
+% no entry then? how find one?
+% the basic routes added in ipifcadd are enough?
+
+
+<<[[v4lookup()]] return cached route if still valid route>>=
+if(c != nil && c->r != nil && c->r->ifc != nil && c->rgen == v4routegeneration)
+    return c->r;
 @
 
-<<function ipselftabread>>=
-long
-ipselftabread(Fs *f, char *cp, ulong offset, int n)
+
+
+<<[[v4lookup()]] locals>>=
+uchar gate[IPaddrlen];
+Ipifc *ifc;
+@
+<<[[v4lookup()]] make sure route q has an up to date ifc>>=
+if(q && (q->ifc == nil || q->ifcid != q->ifc->ifcid)){
+    if(q->type & Rifc) {
+        hnputl(gate+IPv4off, q->v4.address);
+        memmove(gate, v4prefix, IPv4off);
+    } else
+        v4tov6(gate, q->v4.gate);
+
+    ifc = findipifc(f, gate, q->type);
+    if(ifc == nil)
+        return nil;
+    q->ifc = ifc;
+    q->ifcid = ifc->ifcid;
+}
+@
+% in v4addroute actually you do very little, you don't set
+% ifcid and ifc so this path will be triggered for each first
+% v4lookup
+
+\section{[[findipifc()]]}
+
+<<function findipifc>>=
+/*
+ *  find the ifc on same net as the remote system.  If none,
+ *  return nil.
+ */
+Ipifc*
+findipifc(Fs *f, uchar *remote, int type)
 {
-    int i, m, nifc, off;
-    Ipself *p;
-    Iplink *link;
-    char state[8];
+    Ipifc *ifc, *x;
+    Iplifc *lifc;
+    Conv **cp, **e;
+    uchar gnet[IPaddrlen], xmask[IPaddrlen];
 
-    m = 0;
-    off = offset;
-    qlock(f->self);
-    for(i = 0; i < NHASH && m < n; i++){
-        for(p = f->self->hash[i]; p != nil && m < n; p = p->next){
-            nifc = 0;
-            for(link = p->link; link; link = link->selflink)
-                nifc++;
-            routetype(p->type, state);
-            m += snprint(cp + m, n - m, stformat, p->a, nifc, state);
-            if(off > 0){
-                off -= m;
-                m = 0;
+    x = nil;
+    memset(xmask, 0, IPaddrlen);
+
+    /* find most specific match */
+    e = &f->ipifc->conv[f->ipifc->nc];
+    for(cp = f->ipifc->conv; cp < e; cp++){
+        if(*cp == nil)
+            continue;
+        ifc = (Ipifc*)(*cp)->ptcl;
+        for(lifc = ifc->lifc; lifc; lifc = lifc->next){
+            maskip(remote, lifc->mask, gnet);
+            if(ipcmp(gnet, lifc->net) == 0){
+                if(x == nil || ipcmp(lifc->mask, xmask) > 0){
+                    x = ifc;
+                    ipmove(xmask, lifc->mask);
+                }
             }
         }
     }
-    qunlock(f->self);
-    return m;
+    if(x != nil)
+        return x;
+
+    <<[[findipifc()]] if broadcast or multicast route>>
+    return nil;
 }
 @
+
+\section{Adding routes, [[v4addroute()]]}
+
+% in ipifcadd()
+%        v4addroute(f, tifc, rem+IPv4off, mask+IPv4off, rem+IPv4off, type);
+
+% ipifcadd (type = Rifc) | routewrite | ... -> <>
+% pass an ip and a gateway, but really we use 'a' only for a range
+<<function v4addroute>>=
+void
+v4addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type)
+{
+    Route *p;
+    ulong m;
+    ulong sa; // start address
+    ulong ea; // end address
+    int h, eh;
+
+    m = nhgetl(mask);
+    sa = nhgetl(a) & m;
+    ea = sa | ~m;
+
+    eh = V4H(ea);
+    for(h=V4H(sa); h<=eh; h++) {
+        p = allocroute(Rv4 | type);
+        p->v4.address = sa;
+        p->v4.endaddress = ea;
+        memmove(p->v4.gate, gate, sizeof(p->v4.gate));
+        memmove(p->tag, tag, sizeof(p->tag));
+
+        wlock(&routelock);
+        addnode(f, &f->v4root[h], p);
+        <<[[v4addroute()]] if f has a route queue>>
+        wunlock(&routelock);
+    }
+    v4routegeneration++;
+
+    ipifcaddroute(f, Rv4, a, mask, gate, type);
+}
+@
+
+<<global routelock>>=
+static RWlock   routelock;
+@
+% protects?
+
+
+
+\section{Broadcast routes}
+
+\section{Route managment}
+
+<<global v4freelist>>=
+/* these are used for all instances of IP */
+static Route*   v4freelist;
+@
+% who initializes this? put = nil?
+
+\subsection{Allocation}
+
+<<function allocroute>>=
+static Route*
+allocroute(int type)
+{
+    Route *r;
+    int n;
+    Route **l;
+
+    if(type & Rv4){
+        n = sizeof(RouteTree) + sizeof(V4route);
+        l = &v4freelist;
+    }
+    <<[[allocroute()]] if ipv6 route>>
+
+    r = *l;
+    if(r != nil){
+        *l = r->mid;
+    } else {
+        r = malloc(n);
+        if(r == nil)
+            panic("out of routing nodes");
+    }
+    memset(r, 0, n);
+
+    r->type = type;
+    r->ifc = nil;
+    r->ref = 1;
+
+    return r;
+}
+@
+% tricky malloc here! optimisation, but makes a few things more
+% complicated
+
+\subsection{Free}
+
+<<function freeroute>>=
+static void
+freeroute(Route *r)
+{
+    Route **l;
+
+    r->left = nil;
+    r->right = nil;
+    if(r->type & Rv4)
+        l = &v4freelist;
+    <<[[freeroute()]] if ipv6 route>>
+    r->mid = *l;
+    *l = r;
+}
+@
+
+\subsection{Insertion}
+
+<<enum _anon_ (kernel/network/ip/iproute.c)>>=
+/*
+ *  compare 2 v4 or v6 ranges
+ */
+enum
+{
+    Rpreceeds,
+    Rfollows,
+    Requals,
+    Rcontains,
+    Rcontained,
+};
+@
+
+<<function rangecompare>>=
+static int
+rangecompare(Route *a, Route *b)
+{
+    if(a->type & Rv4){
+        if(a->v4.endaddress < b->v4.address)
+            return Rpreceeds;
+
+        if(a->v4.address > b->v4.endaddress)
+            return Rfollows;
+
+        if(a->v4.address <= b->v4.address
+        && a->v4.endaddress >= b->v4.endaddress){
+
+            if(a->v4.address == b->v4.address
+            && a->v4.endaddress == b->v4.endaddress)
+                return Requals;
+            return Rcontains;
+        }
+        return Rcontained;
+    }
+    <<[[rangecompare()]] if ipv6 routes>>
+}
+@
+
+
+<<function addnode>>=
+/*
+ *  add a new node to the tree
+ */
+static void
+addnode(Fs *f, Route **cur, Route *new)
+{
+    Route *p;
+
+    p = *cur;
+    if(p == 0) {
+        *cur = new;
+        new->depth = 1;
+        return;
+    }
+
+    switch(rangecompare(new, p)){
+    case Rpreceeds:
+        addnode(f, &p->left, new);
+        break;
+    case Rfollows:
+        addnode(f, &p->right, new);
+        break;
+    case Rcontains:
+        /*
+         *  if new node is superset
+         *  of tree node,
+         *  replace tree node and
+         *  queue tree node to be
+         *  merged into root.
+         */
+        *cur = new;
+        new->depth = 1;
+        addqueue(&f->queue, p);
+        break;
+    case Requals:
+        /*
+         *  supercede the old entry if the old one isn't
+         *  a local interface.
+         */
+        if((p->type & Rifc) == 0){
+            p->type = new->type;
+            p->ifcid = -1;
+            copygate(p, new);
+        } else if(new->type & Rifc)
+            p->ref++;
+        freeroute(new);
+        break;
+    case Rcontained:
+        addnode(f, &p->mid, new);
+        break;
+    }
+
+    balancetree(cur);
+}
+@
+
+<<function copygate>>=
+static void
+copygate(Route *old, Route *new)
+{
+    if(new->type & Rv4)
+        memmove(old->v4.gate, new->v4.gate, IPv4addrlen);
+    else
+        memmove(old->v6.gate, new->v6.gate, IPaddrlen);
+}
+@
+
+
+<<[[v4addroute()]] if f has a route queue>>=
+while(p = f->queue) {
+    f->queue = p->mid;
+    walkadd(f, &f->v4root[h], p->left);
+    freeroute(p);
+}
+@
+
+<<[[Fs(kernel)]] routing fields>>=
+Route *queue;     /* used as temp when reinjecting routes */
+@
+
+<<function walkadd>>=
+/*
+ *  walk down a tree adding nodes back in
+ */
+static void
+walkadd(Fs *f, Route **root, Route *p)
+{
+    Route *l, *r;
+
+    l = p->left;
+    r = p->right;
+    p->left = 0;
+    p->right = 0;
+    addnode(f, root, p);
+    if(l)
+        walkadd(f, root, l);
+    if(r)
+        walkadd(f, root, r);
+}
+@
+
+
+<<function addqueue>>=
+static void
+addqueue(Route **q, Route *r)
+{
+    Route *l;
+
+    if(r == nil)
+        return;
+
+    l = allocroute(r->type);
+    l->mid = *q;
+    *q = l;
+    l->left = r;
+}
+@
+
+
+\subsection{Balancing}
+
+<<[[Routetree]] other fields>>=
+uchar depth;
+@
+
+<<function balancetree>>=
+/*
+ *  balance the tree at the current node
+ */
+static void
+balancetree(Route **cur)
+{
+    Route *p, *l, *r;
+    int dl, dr;
+
+    /*
+     * if left and right are
+     * too out of balance,
+     * rotate tree node
+     */
+    p = *cur;
+    dl = 0; if(l = p->left) dl = l->depth;
+    dr = 0; if(r = p->right) dr = r->depth;
+
+    if(dl > dr+1) {
+        p->left = l->right;
+        l->right = p;
+        *cur = l;
+        calcd(p);
+        calcd(l);
+    } else
+    if(dr > dl+1) {
+        p->right = r->left;
+        r->left = p;
+        *cur = r;
+        calcd(p);
+        calcd(r);
+    } else
+        calcd(p);
+}
+@
+
+<<function calcd>>=
+/*
+ *  calculate depth
+ */
+static void
+calcd(Route *p)
+{
+    Route *q;
+    int d;
+
+    if(p) {
+        d = 0;
+        q = p->left;
+        if(q)
+            d = q->depth;
+        q = p->right;
+        if(q && q->depth > d)
+            d = q->depth;
+        q = p->mid;
+        if(q && q->depth > d)
+            d = q->depth;
+        p->depth = d+1;
+    }
+}
+@
+
+
 
 
 \section{[[/net/iproutes]]}
@@ -6274,6 +6709,10 @@ routeread(Fs *f, char *p, ulong offset, int n)
 }
 @
 
+<<global rformat>>=
+static char *rformat = "%-15I %-4M %-15I %4.4s %4.4s %3s\n";
+@
+
 <<function sprintroute>>=
 /*
  *  this code is not in rr to reduce stack size
@@ -6304,6 +6743,60 @@ sprintroute(Route *r, Routewalk *rw)
         rw->p = p;
 }
 @
+
+<<function convroute>>=
+void
+convroute(Route *r, uchar *addr, uchar *mask, uchar *gate, char *t, int *nifc)
+{
+    int i;
+
+    if(r->type & Rv4){
+        memmove(addr, v4prefix, IPv4off);
+        hnputl(addr+IPv4off, r->v4.address);
+        memset(mask, 0xff, IPv4off);
+        hnputl(mask+IPv4off, ~(r->v4.endaddress ^ r->v4.address));
+        memmove(gate, v4prefix, IPv4off);
+        memmove(gate+IPv4off, r->v4.gate, IPv4addrlen);
+    } else {
+        for(i = 0; i < IPllen; i++){
+            hnputl(addr + 4*i, r->v6.address[i]);
+            hnputl(mask + 4*i, ~(r->v6.endaddress[i] ^ r->v6.address[i]));
+        }
+        memmove(gate, r->v6.gate, IPaddrlen);
+    }
+
+    routetype(r->type, t);
+
+    if(r->ifc)
+        *nifc = r->ifc->conv->x;
+    else
+        *nifc = -1;
+}
+@
+
+<<function routetype>>=
+void
+routetype(int type, char *p)
+{
+    memset(p, ' ', 4);
+    p[4] = 0;
+    if(type & Rv4)
+        *p++ = '4';
+    else
+        *p++ = '6';
+    if(type & Rifc)
+        *p++ = 'i';
+    if(type & Runi)
+        *p++ = 'u';
+    else if(type & Rbcast)
+        *p++ = 'b';
+    else if(type & Rmulti)
+        *p++ = 'm';
+    if(type & Rptpt)
+        *p = 'p';
+}
+@
+
 
 
 
@@ -6446,6 +6939,531 @@ routewrite(Fs *f, Chan *c, char *p, int n)
     return n;
 }
 @
+
+<<function iproute>>=
+Route *
+iproute(Fs *fs, uchar *ip)
+{
+    if(isv4(ip))
+        return v4lookup(fs, ip+IPv4off, nil);
+    else
+        return v6lookup(fs, ip, nil);
+}
+@
+
+
+<<function printroute>>=
+static void
+printroute(Route *r)
+{
+    int nifc;
+    char t[5], *iname, ifbuf[5];
+    uchar addr[IPaddrlen], mask[IPaddrlen], gate[IPaddrlen];
+
+    convroute(r, addr, mask, gate, t, &nifc);
+    iname = "-";
+    if(nifc != -1) {
+        iname = ifbuf;
+        snprint(ifbuf, sizeof ifbuf, "%d", nifc);
+    }
+    print(rformat, addr, mask, gate, t, r->tag, iname);
+}
+@
+
+
+\section{Self cache}
+% needed? opti? put in advanced features?
+
+% who uses that???
+
+<<[[Fs(kernel)]] other fields>>=
+Ipselftab *self;
+@
+
+<<[[Iplifc(kernel)]] extra fields>>=
+Iplink  *link;    /* addresses linked to this lifc */
+@
+
+
+% ??? -> <>
+<<function ipforme>>=
+/*
+ *  returns
+ *  0       - no match
+ *  Runi
+ *  Rbcast
+ *  Rmcast
+ */
+int
+ipforme(Fs *f, uchar *addr)
+{
+    Ipself *p;
+
+    p = f->self->hash[hashipa(addr)];
+    for(; p; p = p->next){
+        if(ipcmp(addr, p->a) == 0)
+            return p->type;
+    }
+
+    /* hack to say accept anything */
+    if(f->self->acceptall)
+        return Runi;
+    return 0;
+}
+@
+
+
+
+\subsection{Data structures}
+
+<<struct Ipselftab>>=
+struct Ipselftab
+{
+    int inited;
+    bool acceptall;  /* true if an interface has the null address */
+
+    Ipself  *hash[NHASH];   /* hash chains */
+
+    // Extra
+    QLock;
+
+};
+@
+<<[[ipifcinit()]] modify f>>=
+f->self = smalloc(sizeof(Ipselftab));   /* hack for ipforme */
+@
+
+
+<<struct Ipself>>=
+/*
+ *  cache of local addresses (addresses we answer to)
+ */
+struct Ipself
+{
+    uchar   type;       /* type of address */
+    uchar   a[IPaddrlen];
+
+    ulong   expire;
+
+    //Extra
+    int ref;
+    Ipself  *hnext;     /* next address in the hash table */
+    Iplink  *link;      /* binding twixt Ipself and Ipifc */
+    Ipself  *next;      /* free list */
+};
+@
+
+<<struct Iplink>>=
+/* binding twixt Ipself and Iplifc */
+struct Iplink
+{
+  ulong expire;
+
+  Ipself  *self;
+  Iplifc  *lifc;
+
+  // Extra
+  int ref;
+  Iplink  *next;    /* free list */
+  Iplink  *selflink;  /* next link for this local address */
+  Iplink  *lifclink;  /* next link for this ifc */
+};
+@
+
+
+
+\subsection{Adding IPs}
+
+<<function addselfcache>>=
+/*
+ *  add to self routing cache
+ *  called with c->car locked
+ */
+static void
+addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a, int type)
+{
+    Ipself *p;
+    Iplink *lp;
+    int h;
+
+    qlock(f->self);
+
+    /* see if the address already exists */
+    h = hashipa(a);
+    for(p = f->self->hash[h]; p; p = p->next)
+        if(memcmp(a, p->a, IPaddrlen) == 0)
+            break;
+
+    /* allocate a local address and add to hash chain */
+    if(p == nil){
+        p = smalloc(sizeof(*p));
+        ipmove(p->a, a);
+        p->type = type;
+        p->next = f->self->hash[h];
+        f->self->hash[h] = p;
+
+        /* if the null address, accept all packets */
+        if(ipcmp(a, v4prefix) == 0 || ipcmp(a, IPnoaddr) == 0)
+            f->self->acceptall = true;
+    }
+
+    /* look for a link for this lifc */
+    for(lp = p->link; lp; lp = lp->selflink)
+        if(lp->lifc == lifc)
+            break;
+
+    /* allocate a lifc-to-local link and link to both */
+    if(lp == nil){
+        lp = smalloc(sizeof(*lp));
+        lp->ref = 1;
+        lp->lifc = lifc;
+        lp->self = p;
+        lp->selflink = p->link;
+        p->link = lp;
+        lp->lifclink = lifc->link;
+        lifc->link = lp;
+
+        /* add to routing table */
+        if(isv4(a))
+            v4addroute(f, tifc, a+IPv4off, IPallbits+IPv4off,
+                a+IPv4off, type);
+        else
+            v6addroute(f, tifc, a, IPallbits, a, type);
+
+        if((type & Rmulti) && ifc->m->addmulti != nil)
+            (*ifc->m->addmulti)(ifc, a, lifc->local);
+    } else
+        lp->ref++;
+
+    qunlock(f->self);
+}
+@
+
+<<macro hashipa>>=
+/* quick hash for ip addresses */
+#define hashipa(a) ( ( ((a)[IPaddrlen-2]<<8) | (a)[IPaddrlen-1] )%NHASH )
+@
+
+\subsection{Removing IPs}
+
+<<function remselfcache>>=
+/*
+ *  Decrement reference for this address on this link.
+ *  Unlink from selftab if this is the last ref.
+ *  called with c->car locked
+ */
+static void
+remselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a)
+{
+    Ipself *p, **l;
+    Iplink *link, **l_self, **l_lifc;
+
+    qlock(f->self);
+
+    /* find the unique selftab entry */
+    l = &f->self->hash[hashipa(a)];
+    for(p = *l; p; p = *l){
+        if(ipcmp(p->a, a) == 0)
+            break;
+        l = &p->next;
+    }
+
+    if(p == nil)
+        goto out;
+
+    /*
+     *  walk down links from an ifc looking for one
+     *  that matches the selftab entry
+     */
+    l_lifc = &lifc->link;
+    for(link = *l_lifc; link; link = *l_lifc){
+        if(link->self == p)
+            break;
+        l_lifc = &link->lifclink;
+    }
+
+    if(link == nil)
+        goto out;
+
+    /*
+     *  walk down the links from the selftab looking for
+     *  the one we just found
+     */
+    l_self = &p->link;
+    for(link = *l_self; link; link = *l_self){
+        if(link == *l_lifc)
+            break;
+        l_self = &link->selflink;
+    }
+
+    if(link == nil)
+        panic("remselfcache");
+
+    if(--(link->ref) != 0)
+        goto out;
+
+    if((p->type & Rmulti) && ifc->m->remmulti != nil)
+        (*ifc->m->remmulti)(ifc, a, lifc->local);
+
+    /* ref == 0, remove from both chains and free the link */
+    *l_lifc = link->lifclink;
+    *l_self = link->selflink;
+    iplinkfree(link);
+
+    if(p->link != nil)
+        goto out;
+
+    /* remove from routing table */
+    if(isv4(a))
+        v4delroute(f, a+IPv4off, IPallbits+IPv4off, 1);
+    else
+        v6delroute(f, a, IPallbits, 1);
+
+    /* no more links, remove from hash and free */
+    *l = p->next;
+    ipselffree(p);
+
+    /* if IPnoaddr, forget */
+    if(ipcmp(a, v4prefix) == 0 || ipcmp(a, IPnoaddr) == 0)
+        f->self->acceptall = false;
+
+out:
+    qunlock(f->self);
+}
+@
+
+\subsection{[[/net/ipselftab]]}
+
+<<[[Qid]] toplevel extra cases>>=
+Qipselftab,
+@
+
+<<[[ip1gen()]] switch TYPE qid cases>>=
+case Qipselftab:
+    p = "ipselftab";
+    prot = 0444;
+    break;
+@
+<<[[ipread()]] switch TYPE qid cases>>=
+case Qipselftab:
+    return ipselftabread(f, a, offset, n);
+@
+
+<<function ipselftabread>>=
+long
+ipselftabread(Fs *f, char *cp, ulong offset, int n)
+{
+    int i, m, nifc, off;
+    Ipself *p;
+    Iplink *link;
+    char state[8];
+
+    m = 0;
+    off = offset;
+    qlock(f->self);
+    for(i = 0; i < NHASH && m < n; i++){
+        for(p = f->self->hash[i]; p != nil && m < n; p = p->next){
+            nifc = 0;
+            for(link = p->link; link; link = link->selflink)
+                nifc++;
+            routetype(p->type, state);
+            m += snprint(cp + m, n - m, stformat, p->a, nifc, state);
+            if(off > 0){
+                off -= m;
+                m = 0;
+            }
+        }
+    }
+    qunlock(f->self);
+    return m;
+}
+@
+
+\section{Advanced features}
+
+\subsection{Removing routes}
+
+% ipifcremxxx -> <>
+<<function v4delroute>>=
+void
+v4delroute(Fs *f, uchar *a, uchar *mask, bool dolock)
+{
+    Route **r, *p;
+    Route rt;
+    int h, eh;
+    ulong m;
+
+    m = nhgetl(mask);
+    rt.v4.address = nhgetl(a) & m;
+    rt.v4.endaddress = rt.v4.address | ~m;
+    rt.type = Rv4;
+
+    eh = V4H(rt.v4.endaddress);
+    for(h=V4H(rt.v4.address); h<=eh; h++) {
+        if(dolock)
+            wlock(&routelock);
+        r = looknode(&f->v4root[h], &rt);
+        if(r) {
+            p = *r;
+            if(--(p->ref) == 0){
+                *r = 0;
+                addqueue(&f->queue, p->left);
+                addqueue(&f->queue, p->mid);
+                addqueue(&f->queue, p->right);
+                freeroute(p);
+                while(p = f->queue) {
+                    f->queue = p->mid;
+                    walkadd(f, &f->v4root[h], p->left);
+                    freeroute(p);
+                }
+            }
+        }
+        if(dolock)
+            wunlock(&routelock);
+    }
+    v4routegeneration++;
+
+    ipifcremroute(f, Rv4, a, mask);
+}
+@
+
+
+<<function looknode>>=
+Route**
+looknode(Route **cur, Route *r)
+{
+    Route *p;
+
+    for(;;){
+        p = *cur;
+        if(p == 0)
+            return 0;
+
+        switch(rangecompare(r, p)){
+        case Rcontains:
+            return 0;
+        case Rpreceeds:
+            cur = &p->left;
+            break;
+        case Rfollows:
+            cur = &p->right;
+            break;
+        case Rcontained:
+            cur = &p->mid;
+            break;
+        case Requals:
+            return cur;
+        }
+    }
+}
+@
+
+
+\subsection{Flushing routes}
+
+<<function routeflush>>=
+/*
+ *  recurse until one route is deleted
+ *    returns 0 if nothing is deleted, 1 otherwise
+ */
+int
+routeflush(Fs *f, Route *r, char *tag)
+{
+    if(r == nil)
+        return 0;
+    if(routeflush(f, r->mid, tag))
+        return 1;
+    if(routeflush(f, r->left, tag))
+        return 1;
+    if(routeflush(f, r->right, tag))
+        return 1;
+    if((r->type & Rifc) == 0){
+        if(tag == nil || strncmp(tag, r->tag, sizeof(r->tag)) == 0){
+            delroute(f, r, 0);
+            return 1;
+        }
+    }
+    return 0;
+}
+@
+
+
+<<function delroute>>=
+/*
+ *  this code is not in routeflush to reduce stack size
+ */
+void
+delroute(Fs *f, Route *r, int dolock)
+{
+    uchar addr[IPaddrlen];
+    uchar mask[IPaddrlen];
+    uchar gate[IPaddrlen];
+    char t[5];
+    int nifc;
+
+    convroute(r, addr, mask, gate, t, &nifc);
+    if(r->type & Rv4)
+        v4delroute(f, addr+IPv4off, mask+IPv4off, dolock);
+    else
+        v6delroute(f, addr, mask, dolock);
+}
+@
+
+\subsection{Router boards}
+
+<<[[Medium(kernel)]] route methods>>=
+/* routes for router boards */
+void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
+void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
+@
+%dead: void  (*flushroutes)(Ipifc *ifc);
+
+% v4addroute -> <>
+<<function ipifcaddroute>>=
+/*
+ * distribute routes to active interfaces like the
+ * TRIP linecards
+ */
+void
+ipifcaddroute(Fs *f, int vers, uchar *addr, uchar *mask, uchar *gate, int type)
+{
+    Medium *m;
+    Conv **cp, **e;
+    Ipifc *ifc;
+
+    e = &f->ipifc->conv[f->ipifc->nc];
+    for(cp = f->ipifc->conv; cp < e; cp++){
+        if(*cp != nil) {
+            ifc = (Ipifc*)(*cp)->ptcl;
+            m = ifc->m;
+            if(m && m->addroute)
+                m->addroute(ifc, vers, addr, mask, gate, type);
+        }
+    }
+}
+@
+
+% v4delroute -> <>
+<<function ipifcremroute>>=
+void
+ipifcremroute(Fs *f, int vers, uchar *addr, uchar *mask)
+{
+    Medium *m;
+    Conv **cp, **e;
+    Ipifc *ifc;
+
+    e = &f->ipifc->conv[f->ipifc->nc];
+    for(cp = f->ipifc->conv; cp < e; cp++){
+        if(*cp != nil) {
+            ifc = (Ipifc*)(*cp)->ptcl;
+            m = ifc->m;
+            if(m && m->remroute)
+                m->remroute(ifc, vers, addr, mask);
+        }
+    }
+}
+@
+
 
 
 \chapter{Basic Communication, UDP}
@@ -8344,7 +9362,6 @@ tcpinit(Fs *fs)
 % See Network_v6.nw
 
 \section{Broadcast}
-
 % convention is that address has all 1s
 
 
@@ -8356,6 +9373,20 @@ if(r->type & (Rbcast|Rmulti)) {
         ifc = sr->ifc;
 }
 @
+
+<<[[findipifc()]] if broadcast or multicast route>>=
+/* for now for broadcast and multicast, just use first interface */
+if(type & (Rbcast|Rmulti)){
+    for(cp = f->ipifc->conv; cp < e; cp++){
+        if(*cp == 0)
+            continue;
+        ifc = (Ipifc*)(*cp)->ptcl;
+        if(ifc->lifc != nil)
+            return ifc;
+    }
+}
+@
+
 
 <<[[ipifcadd()]] locals>>=
 uchar bcast[IPaddrlen];
@@ -8386,6 +9417,22 @@ addselfcache(f, ifc, lifc, bcast, Rbcast);
 
 addselfcache(f, ifc, lifc, IPv4bcast, Rbcast);
 @
+
+
+<<global IPv4bcast>>=
+/*
+ *  well known IP addresses
+ */
+uchar IPv4bcast[IPaddrlen] = {
+    0, 0, 0, 0,
+    0, 0, 0, 0,
+    0, 0, 0xff, 0xff,
+
+    0xff, 0xff, 0xff, 0xff
+};
+@
+
+
 
 \section{Multicast}
 
@@ -8468,38 +9515,8 @@ void  (*multicast)(void*, uchar*, int);
 @
 
 
-<<[[ipifcadd()]] add multicast addresses to self cache>>=
-if(ipcmp(ip, v6loopback) == 0) {
-    /* add node-local mcast address */
-    addselfcache(f, ifc, lifc, v6allnodesN, Rmulti);
 
-    /* add route for all node multicast */
-    v6addroute(f, tifc, v6allnodesN, v6allnodesNmask,
-        v6allnodesN, Rmulti);
-}
 
-/* add all nodes multicast address */
-addselfcache(f, ifc, lifc, v6allnodesL, Rmulti);
-
-/* add route for all nodes multicast */
-v6addroute(f, tifc, v6allnodesL, v6allnodesLmask, v6allnodesL,
-    Rmulti);
-
-/* add solicited-node multicast address */
-ipv62smcast(bcast, ip);
-addselfcache(f, ifc, lifc, bcast, Rmulti);
-
-sendnbrdisc = true;
-@
-
-<<[[ipifcadd()]] locals>>=
-bool sendnbrdisc = false;
-@
-
-<<[[ipifcadd()]] if tentative and broacast>>=
-if(tentative && sendnbrdisc)
-    icmpns(f, 0, SRC_UNSPEC, ip, TARG_MULTI, ifc->mac);
-@
 
 \section{Network database, [[ndb]]}
 %less: or mv in advanced features of Name resolution chapter?

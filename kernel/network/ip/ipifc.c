@@ -37,12 +37,15 @@ Medium *media[Maxmedia] = { 0 };
  */
 struct Ipself
 {
+    uchar   type;       /* type of address */
     uchar   a[IPaddrlen];
+
+    ulong   expire;
+
+    //Extra
+    int ref;
     Ipself  *hnext;     /* next address in the hash table */
     Iplink  *link;      /* binding twixt Ipself and Ipifc */
-    ulong   expire;
-    uchar   type;       /* type of address */
-    int ref;
     Ipself  *next;      /* free list */
 };
 /*e: struct Ipself */
@@ -50,10 +53,14 @@ struct Ipself
 /*s: struct Ipselftab */
 struct Ipselftab
 {
-    QLock;
     int inited;
-    int acceptall;  /* true if an interface has the null address */
+    bool acceptall;  /* true if an interface has the null address */
+
     Ipself  *hash[NHASH];   /* hash chains */
+
+    // Extra
+    QLock;
+
 };
 /*e: struct Ipselftab */
 
@@ -232,7 +239,7 @@ ipifcunbind(Ipifc *ifc)
         (*ifc->m->unbind)(ifc);
     memset(ifc->dev, 0, sizeof(ifc->dev));
     ifc->arg = nil;
-    ifc->reassemble = 0;
+    ifc->reassemble = false;
 
     /* close queues to stop queuing of packets */
     qclose(ifc->conv->rq);
@@ -460,6 +467,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
             ifc->maxtu = mtu;
         /* fall through */
     /*e: [[ipifcadd()]] switch argc, mtu setting case, and fall through */
+    /*s: [[ipifcadd()]] switch argc cases, setting ip, mask, net, rem */
     // add <ip> <mask> <rem>
     case 4:
         if (parseip(ip, argv[1]) == -1 || parseip(rem, argv[3]) == -1)
@@ -483,18 +491,21 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         maskip(ip, mask, rem);
         maskip(rem, mask, net);
         break;
+    /*e: [[ipifcadd()]] switch argc cases, setting ip, mask, net, rem */
     default:
         return Ebadarg;
     }
 
-    if(isv4(ip))
-        tentative = false;
-
+    /*s: [[ipifcadd()]] set tentative for ipv6 */
+        if(isv4(ip))
+            tentative = false;
+    /*e: [[ipifcadd()]] set tentative for ipv6 */
     wlock(ifc);
-
+    /*s: [[ipifcadd()]] check if already a local address for this ifc */
     /* ignore if this is already a local address for this ifc */
     for(lifc = ifc->lifc; lifc; lifc = lifc->next) {
         if(ipcmp(lifc->local, ip) == 0) {
+            /*s: [[ipifcadd()]] when already local address for ifc, copy ipv6 fields */
             if(lifc->tentative != tentative)
                 lifc->tentative = tentative;
             if(lifcp) {
@@ -505,19 +516,20 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
                 lifc->preflt = lifcp->preflt;
                 lifc->origint = lifcp->origint;
             }
+            /*e: [[ipifcadd()]] when already local address for ifc, copy ipv6 fields */
             goto out;
         }
     }
+    /*e: [[ipifcadd()]] check if already a local address for this ifc */
 
     /* add the address to the list of logical ifc's for this ifc */
     lifc = smalloc(sizeof(Iplifc));
-
     ipmove(lifc->local, ip);
     ipmove(lifc->mask, mask);
     ipmove(lifc->remote, rem);
     ipmove(lifc->net, net);
+    /*s: [[ipifcadd()]] set ipv6 fields for lifc */
     lifc->tentative = tentative;
-
     if(lifcp) {
         lifc->onlink = lifcp->onlink;
         lifc->autoflag = lifcp->autoflag;
@@ -530,6 +542,7 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         lifc->validlt = lifc->preflt = ~0L;
         lifc->origint = NOW / 1000;
     }
+    /*e: [[ipifcadd()]] set ipv6 fields for lifc */
     // add_tail(lifc, ifc->lifc)
     lifc->next = nil;
     for(l = &ifc->lifc; *l; l = &(*l)->next)
@@ -587,31 +600,31 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
         addselfcache(f, ifc, lifc, IPv4bcast, Rbcast);
         /*e: [[ipifcadd()]] add broadcast addresses to self cache */
     }
+    /*s: [[ipifcadd()]] if ipv6 add multicast addresses to self cache */
     else {
-        /*s: [[ipifcadd()]] add multicast addresses to self cache */
         if(ipcmp(ip, v6loopback) == 0) {
             /* add node-local mcast address */
             addselfcache(f, ifc, lifc, v6allnodesN, Rmulti);
-
+    
             /* add route for all node multicast */
             v6addroute(f, tifc, v6allnodesN, v6allnodesNmask,
                 v6allnodesN, Rmulti);
         }
-
+    
         /* add all nodes multicast address */
         addselfcache(f, ifc, lifc, v6allnodesL, Rmulti);
-
+    
         /* add route for all nodes multicast */
         v6addroute(f, tifc, v6allnodesL, v6allnodesLmask, v6allnodesL,
             Rmulti);
-
+    
         /* add solicited-node multicast address */
         ipv62smcast(bcast, ip);
         addselfcache(f, ifc, lifc, bcast, Rmulti);
-
+    
         sendnbrdisc = true;
-        /*e: [[ipifcadd()]] add multicast addresses to self cache */
     }
+    /*e: [[ipifcadd()]] if ipv6 add multicast addresses to self cache */
 
     /* register the address on this network for address resolution */
     if(isv4(ip) && ifc->m->areg != nil)
@@ -620,10 +633,10 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
 
 out:
     wunlock(ifc);
-    /*s: [[ipifcadd()]] if tentative and broacast */
+    /*s: [[ipifcadd()]] if ipv6 tentative and broacast */
     if(tentative && sendnbrdisc)
         icmpns(f, 0, SRC_UNSPEC, ip, TARG_MULTI, ifc->mac);
-    /*e: [[ipifcadd()]] if tentative and broacast */
+    /*e: [[ipifcadd()]] if ipv6 tentative and broacast */
     return nil;
 }
 /*e: function ipifcadd */
@@ -659,6 +672,7 @@ ipifcremlifc(Ipifc *ifc, Iplifc *lifc)
     /* remove the route for this logical interface */
     if(isv4(lifc->local))
         v4delroute(f, lifc->remote+IPv4off, lifc->mask+IPv4off, 1);
+    /*s: [[ipifcremlifc()]] if ipv6 local */
     else {
         v6delroute(f, lifc->remote, lifc->mask, 1);
         if(ipcmp(lifc->local, v6loopback) == 0)
@@ -668,6 +682,7 @@ ipifcremlifc(Ipifc *ifc, Iplifc *lifc)
             /* remove route for all link multicast */
             v6delroute(f, v6allnodesL, v6allnodesLmask, 1);
     }
+    /*e: [[ipifcremlifc()]] if ipv6 local */
 
     free(lifc);
     return nil;
@@ -870,9 +885,6 @@ ipifcctl(Conv* cv, char** argv, int argc)
         return ipifcadd(ifc, argv, argc, false, nil);
     /*e: [[ipifcctl()]] if add string */
     /*s: [[ipifcctl()]] else if other string */
-    else if(strcmp(argv[0], "try") == 0)
-        return ipifcadd(ifc, argv, argc, true, nil);
-    /*x: [[ipifcctl()]] else if other string */
     else if(strcmp(argv[0], "iprouting") == 0){
         i = 1;
         if(argc > 1)
@@ -900,6 +912,9 @@ ipifcctl(Conv* cv, char** argv, int argc)
     /*x: [[ipifcctl()]] else if other string */
     else if(strcmp(argv[0], "leavemulti") == 0)
         return ipifcleavemulti(ifc, argv, argc);
+    /*x: [[ipifcctl()]] else if other string */
+    else if(strcmp(argv[0], "try") == 0)
+        return ipifcadd(ifc, argv, argc, true, nil);
     /*x: [[ipifcctl()]] else if other string */
     else if(strcmp(argv[0], "add6") == 0)
         return ipifcadd6(ifc, argv, argc);
@@ -990,7 +1005,7 @@ addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a, int type)
 
         /* if the null address, accept all packets */
         if(ipcmp(a, v4prefix) == 0 || ipcmp(a, IPnoaddr) == 0)
-            f->self->acceptall = 1;
+            f->self->acceptall = true;
     }
 
     /* look for a link for this lifc */
@@ -1161,7 +1176,7 @@ remselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a)
 
     /* if IPnoaddr, forget */
     if(ipcmp(a, v4prefix) == 0 || ipcmp(a, IPnoaddr) == 0)
-        f->self->acceptall = 0;
+        f->self->acceptall = false;
 
 out:
     qunlock(f->self);
@@ -1268,7 +1283,7 @@ findipifc(Fs *f, uchar *remote, int type)
     /* find most specific match */
     e = &f->ipifc->conv[f->ipifc->nc];
     for(cp = f->ipifc->conv; cp < e; cp++){
-        if(*cp == 0)
+        if(*cp == nil)
             continue;
         ifc = (Ipifc*)(*cp)->ptcl;
         for(lifc = ifc->lifc; lifc; lifc = lifc->next){
@@ -1284,6 +1299,7 @@ findipifc(Fs *f, uchar *remote, int type)
     if(x != nil)
         return x;
 
+    /*s: [[findipifc()]] if broadcast or multicast route */
     /* for now for broadcast and multicast, just use first interface */
     if(type & (Rbcast|Rmulti)){
         for(cp = f->ipifc->conv; cp < e; cp++){
@@ -1294,6 +1310,7 @@ findipifc(Fs *f, uchar *remote, int type)
                 return ifc;
         }
     }
+    /*e: [[findipifc()]] if broadcast or multicast route */
     return nil;
 }
 /*e: function findipifc */
