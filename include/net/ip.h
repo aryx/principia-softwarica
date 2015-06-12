@@ -181,8 +181,8 @@ struct Ip6hdr {
     uchar	ploadlen[2];	/* payload length: packet length - 40 */
     uchar	proto;		/* next header type */
     uchar	ttl;		/* hop limit */
-    uchar	src[IPaddrlen];	/* source address */
-    uchar	dst[IPaddrlen];	/* destination address */
+    ipaddr	src;	/* source address */
+    ipaddr	dst;	/* destination address */
     uchar	payload[];
 };
 /*e: struct Ip6hdr */
@@ -193,8 +193,8 @@ struct Ip6hdr {
  */
 struct Icmp6hdr {
     uchar	_0_[8];
-    uchar	laddr[IPaddrlen];	/* local address */
-    uchar	raddr[IPaddrlen];	/* remote address */
+    ipaddr	laddr;	/* local address */
+    ipaddr	raddr;	/* remote address */
 };
 /*e: struct Icmp6hdr */
 
@@ -218,9 +218,9 @@ struct Udphdr
 /*e: struct Udphdr (user) */
 
 uchar*	defmask(ipaddr);
-void	maskip(uchar*, uchar*, uchar*);
+void	maskip(ipaddr, ipaddr, ipaddr);
 int		eipfmt(Fmt*);
-bool	isv4(uchar*);
+bool	isv4(ipaddr);
 vlong	parseip(uchar*, char*);
 vlong	parseipmask(uchar*, char*);
 char*	v4parseip(uchar*, char*);

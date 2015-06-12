@@ -981,7 +981,7 @@ ipifcinit(Fs *f)
  *  called with c->car locked
  */
 static void
-addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a, int type)
+addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, ipaddr a, int type)
 {
     Ipself *p;
     Iplink *lp;
@@ -1104,7 +1104,7 @@ ipselffree(Ipself *p)
  *  called with c->car locked
  */
 static void
-remselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a)
+remselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, ipaddr a)
 {
     Ipself *p, **l;
     Iplink *link, **l_self, **l_lifc;
@@ -1247,7 +1247,7 @@ iptentative(Fs *f, uchar *addr)
  *  Rmcast
  */
 int
-ipforme(Fs *f, uchar *addr)
+ipforme(Fs *f, ipaddr addr)
 {
     Ipself *p;
 
@@ -1270,7 +1270,7 @@ ipforme(Fs *f, uchar *addr)
  *  return nil.
  */
 Ipifc*
-findipifc(Fs *f, uchar *remote, int type)
+findipifc(Fs *f, ipaddr remote, int type)
 {
     Ipifc *ifc, *x;
     Iplifc *lifc;

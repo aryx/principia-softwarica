@@ -334,7 +334,7 @@ addnode(Fs *f, Route **cur, Route *new)
 
 /*s: function v4addroute */
 void
-v4addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type)
+v4addroute(Fs *f, char *tag, ipv4 a, ipv4 mask, ipv4 gate, int type)
 {
     Route *p;
     ulong m;
@@ -453,7 +453,7 @@ looknode(Route **cur, Route *r)
 
 /*s: function v4delroute */
 void
-v4delroute(Fs *f, uchar *a, uchar *mask, bool dolock)
+v4delroute(Fs *f, ipv4 a, ipv4 mask, bool dolock)
 {
     Route **r, *p;
     Route rt;
@@ -872,7 +872,7 @@ routeflush(Fs *f, Route *r, char *tag)
 
 /*s: function iproute */
 Route *
-iproute(Fs *fs, uchar *ip)
+iproute(Fs *fs, ipaddr ip)
 {
     if(isv4(ip))
         return v4lookup(fs, ip+IPv4off, nil);

@@ -483,6 +483,10 @@ v6tov4(ipv4 v4, ipaddr v6)
 typedef uchar* ipv4or6;
 @
 
+<<typedef ipv4p>>=
+typedef uchar* ipv4p;
+@
+
 <<enum ip_version>>=
 /* ip versions */
 enum ip_version {
@@ -710,6 +714,8 @@ Iplifc	*next;
 
 
 \subsection{Kernel side}
+
+% typedef maddr?
 
 <<struct Ipifc (kernel)>>=
 struct Ipifc
@@ -4671,7 +4677,7 @@ ipifcclose(Conv *c)
 %ex: ip address 10.0.0.2
 <<function v4parseip>>=
 char*
-v4parseip(uchar *to, char *from)
+v4parseip(ipv4 to, char *from)
 {
     int i;
     char *p;
@@ -4715,7 +4721,7 @@ v4parseip(uchar *to, char *from)
  * set `to' to something distinctive in the case of a parse error.
  */
 vlong
-parseip(uchar *to, char *from)
+parseip(ipaddr to, char *from)
 {
     int i, elipsis = 0;
     bool v4 = true;
@@ -4783,7 +4789,7 @@ parseip(uchar *to, char *from)
 
 <<function equivip4>>=
 bool
-equivip4(uchar *a, uchar *b)
+equivip4(ipv4 a, ipv4 b)
 {
     int i;
 
@@ -4974,7 +4980,7 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
     Ip4hdr *eh;
     Ipifc *ifc;
     Route *r, *sr;
-    uchar *gate;
+    ipv4p gate;
     int len, medialen;
     int rv = OK_0;
 
@@ -5701,9 +5707,10 @@ else if(strcmp(argv[0], "reassemble") == 0){
 
 %ex: mac address f8:ed:a5:74:92:a1
 % strtoul? uchar because ip are 4 integers between 0 and 255
+%note: no eaddr here for to, because this code is in libip/
 <<function parseether>>=
 errorneg1
-parseether(uchar *to, char *from)
+parseether(uchar* to, char *from)
 {
     char nip[4];
     char *p;
@@ -5760,8 +5767,8 @@ myetheraddr(uchar *to, char *dev)
 <<struct Etherhdr>>=
 struct Etherhdr
 {
-    uchar   d[6];
-    uchar   s[6];
+    eaddr   d;
+    eaddr   s;
     uchar   t[2];
 };
 @
@@ -6186,7 +6193,7 @@ if(q && (q->ifc == nil || q->ifcid != q->ifc->ifcid)){
  *  return nil.
  */
 Ipifc*
-findipifc(Fs *f, uchar *remote, int type)
+findipifc(Fs *f, ipaddr remote, int type)
 {
     Ipifc *ifc, *x;
     Iplifc *lifc;
@@ -6229,7 +6236,7 @@ findipifc(Fs *f, uchar *remote, int type)
 % pass an ip and a gateway, but really we use 'a' only for a range
 <<function v4addroute>>=
 void
-v4addroute(Fs *f, char *tag, uchar *a, uchar *mask, uchar *gate, int type)
+v4addroute(Fs *f, char *tag, ipv4 a, ipv4 mask, ipv4 gate, int type)
 {
     Route *p;
     ulong m;
@@ -6835,7 +6842,7 @@ routewrite(Fs *f, Chan *c, char *p, int n)
 
 <<function iproute>>=
 Route *
-iproute(Fs *fs, uchar *ip)
+iproute(Fs *fs, ipaddr ip)
 {
     if(isv4(ip))
         return v4lookup(fs, ip+IPv4off, nil);
@@ -6888,7 +6895,7 @@ Iplink  *link;    /* addresses linked to this lifc */
  *  Rmcast
  */
 int
-ipforme(Fs *f, uchar *addr)
+ipforme(Fs *f, ipaddr addr)
 {
     Ipself *p;
 
@@ -6973,7 +6980,7 @@ struct Iplink
  *  called with c->car locked
  */
 static void
-addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a, int type)
+addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, ipaddr a, int type)
 {
     Ipself *p;
     Iplink *lp;
@@ -7046,7 +7053,7 @@ addselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a, int type)
  *  called with c->car locked
  */
 static void
-remselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, uchar *a)
+remselfcache(Fs *f, Ipifc *ifc, Iplifc *lifc, ipaddr a)
 {
     Ipself *p, **l;
     Iplink *link, **l_self, **l_lifc;
@@ -7179,7 +7186,7 @@ ipselftabread(Fs *f, char *cp, ulong offset, int n)
 % ipifcremxxx -> <>
 <<function v4delroute>>=
 void
-v4delroute(Fs *f, uchar *a, uchar *mask, bool dolock)
+v4delroute(Fs *f, ipv4 a, ipv4 mask, bool dolock)
 {
     Route **r, *p;
     Route rt;
@@ -7996,7 +8003,7 @@ iphtlook(Ipht *ht, ipaddr sa, ushort sp, ipaddr da, ushort dp)
  *  called with protocol locked
  */
 Conv*
-Fsnewcall(Conv *c, uchar *raddr, ushort rport, uchar *laddr, ushort lport, uchar version)
+Fsnewcall(Conv *c, ipaddr raddr, ushort rport, ipaddr laddr, ushort lport, uchar version)
 {
     Conv *nc;
     Conv **l;
@@ -8619,8 +8626,8 @@ struct Ilhdr
 
     uchar	proto;		/* Protocol */
     uchar	cksum[2];	/* Header checksum */
-    uchar	src[4];		/* Ip source */
-    uchar	dst[4];		/* Ip destination */
+    ipv4	src;		/* Ip source */
+    ipv4	dst;		/* Ip destination */
 
     /* IL header */
     uchar	ilsum[2];	/* Checksum including header */
@@ -9802,7 +9809,7 @@ eipfmt(Fmt *f)
     static char *efmt = "%.2ux%.2ux%.2ux%.2ux%.2ux%.2ux"; // ethernet
     static char *ifmt = "%d.%d.%d.%d"; // internet, v4
     uchar *p;
-    uchar ip[16];
+    ipaddr ip;
     ulong *lp;
     ushort s;
     int i, j, n, eln, eli;

@@ -33,7 +33,7 @@ eipfmt(Fmt *f)
     static char *efmt = "%.2ux%.2ux%.2ux%.2ux%.2ux%.2ux"; // ethernet
     static char *ifmt = "%d.%d.%d.%d"; // internet, v4
     uchar *p;
-    uchar ip[16];
+    ipaddr ip;
     ulong *lp;
     ushort s;
     int i, j, n, eln, eli;

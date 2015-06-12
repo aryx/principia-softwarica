@@ -4,7 +4,7 @@
 
 /*s: function parseether */
 errorneg1
-parseether(uchar *to, char *from)
+parseether(uchar* to, char *from)
 {
     char nip[4];
     char *p;

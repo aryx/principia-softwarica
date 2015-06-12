@@ -116,6 +116,9 @@ typedef ulong iplong;
 /*s: typedef ipv4or6 */
 typedef uchar* ipv4or6;
 /*e: typedef ipv4or6 */
+/*s: typedef ipv4p */
+typedef uchar* ipv4p;
+/*e: typedef ipv4p */
 
 /*s: enum conversation_state */
 enum conversation_state

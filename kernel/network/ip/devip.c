@@ -1638,7 +1638,7 @@ Fsrcvpcolx(Fs *f, uchar proto)
  *  called with protocol locked
  */
 Conv*
-Fsnewcall(Conv *c, uchar *raddr, ushort rport, uchar *laddr, ushort lport, uchar version)
+Fsnewcall(Conv *c, ipaddr raddr, ushort rport, ipaddr laddr, ushort lport, uchar version)
 {
     Conv *nc;
     Conv **l;

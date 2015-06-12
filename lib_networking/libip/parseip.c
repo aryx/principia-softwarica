@@ -6,7 +6,7 @@
 
 /*s: function v4parseip */
 char*
-v4parseip(uchar *to, char *from)
+v4parseip(ipv4 to, char *from)
 {
     int i;
     char *p;
@@ -70,7 +70,7 @@ delimchar(int c)
  * set `to' to something distinctive in the case of a parse error.
  */
 vlong
-parseip(uchar *to, char *from)
+parseip(ipaddr to, char *from)
 {
     int i, elipsis = 0;
     bool v4 = true;

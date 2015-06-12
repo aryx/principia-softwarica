@@ -151,7 +151,7 @@ ipoput4(Fs *f, Block *bp, bool gating, int ttl, int tos, Conv *c)
     Ip4hdr *eh;
     Ipifc *ifc;
     Route *r, *sr;
-    uchar *gate;
+    ipv4p gate;
     int len, medialen;
     int rv = OK_0;
 

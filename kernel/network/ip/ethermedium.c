@@ -17,8 +17,8 @@ typedef struct Etherarp Etherarp;
 /*s: struct Etherhdr */
 struct Etherhdr
 {
-    uchar   d[6];
-    uchar   s[6];
+    eaddr   d;
+    eaddr   s;
     uchar   t[2];
 };
 /*e: struct Etherhdr */

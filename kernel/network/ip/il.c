@@ -184,8 +184,8 @@ struct Ilhdr
 
     uchar	proto;		/* Protocol */
     uchar	cksum[2];	/* Header checksum */
-    uchar	src[4];		/* Ip source */
-    uchar	dst[4];		/* Ip destination */
+    ipv4	src;		/* Ip source */
+    ipv4	dst;		/* Ip destination */
 
     /* IL header */
     uchar	ilsum[2];	/* Checksum including header */

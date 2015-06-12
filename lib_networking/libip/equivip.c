@@ -5,7 +5,7 @@
 
 /*s: function equivip4 */
 bool
-equivip4(uchar *a, uchar *b)
+equivip4(ipv4 a, ipv4 b)
 {
     int i;
 
