@@ -6,14 +6,15 @@ CONFIG=qemu
 all:
 	make compile && make disk && make run
 
-# need also kencc and plan9port binaries in PATH
+# You'll need also kencc and plan9port binaries in PATH
 setup_host:
 	sudo ln -s `pwd`/root/386 /386
 	sudo ln -s `pwd`/root/arm /arm
 	sudo ln -s `pwd`/root/lib /lib
 	sudo ln -s `pwd`/sys /sys
+# this last one will be problematic on linux
 
-#assumes you have done source env.sh, or have a 'mk' wrapper that does that
+# This assumes you have done source env.sh, or have a good 'mk' wrapper
 compile:
 	cd ROOT && mk
 	cd sys/src && mk all
@@ -44,6 +45,9 @@ clean:
 	cd sys/src; mk clean
 	cd sys/src/9/pc; mk clean
 	cd ROOT; mk clean
+
+clean_pfff:
+	mv PFFF_* *.marshall *.opti layer* pfff.log .pfff/
 
 
 # codemap.opt has some issue with light db and graph db loading :(
