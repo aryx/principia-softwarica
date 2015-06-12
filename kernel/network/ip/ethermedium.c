@@ -24,7 +24,7 @@ struct Etherhdr
 /*e: struct Etherhdr */
 
 /*s: global ipbroadcast */
-static uchar ipbroadcast[IPaddrlen] = {
+static ipaddr ipbroadcast = {
     0xff,0xff,0xff,0xff,
     0xff,0xff,0xff,0xff,
     0xff,0xff,0xff,0xff,
@@ -33,7 +33,7 @@ static uchar ipbroadcast[IPaddrlen] = {
 /*e: global ipbroadcast */
 
 /*s: global etherbroadcast */
-static uchar etherbroadcast[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+static eaddr etherbroadcast = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 /*e: global etherbroadcast */
 
 static void etherread4(void *a);
@@ -550,7 +550,7 @@ resolveaddr6(Ipifc *ifc, Arpent *a)
     int sflag;
     Block *bp;
     Etherrock *er = ifc->arg;
-    uchar ipsrc[IPaddrlen];
+    ipaddr ipsrc;
 
     /* don't do anything if it's been less than a second since the last */
     if(NOW - a->ctime < ReTransTimer){
@@ -629,7 +629,7 @@ recvarp(Ipifc *ifc)
     int n;
     Block *ebp, *rbp;
     Etherarp *e, *r;
-    uchar ip[IPaddrlen];
+    ipaddr ip;
     static uchar eprinted[4];
     Etherrock *er = ifc->arg;
 

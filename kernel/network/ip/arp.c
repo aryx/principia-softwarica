@@ -237,7 +237,7 @@ arpget(Arp *arp, Block *bp, int version, Ipifc *ifc, uchar *ip, uchar *mac)
     int hash;
     Arpent *a;
     Medium *type = ifc->m;
-    uchar v6ip[IPaddrlen];
+    ipaddr v6ip;
 
     if(version == V4){
         v4tov6(v6ip, ip);
@@ -337,7 +337,7 @@ arpenter(Fs *fs, int version, uchar *ip, uchar *mac, int n, int refresh)
     Ipifc *ifc;
     Medium *type;
     Block *bp, *next;
-    uchar v6ip[IPaddrlen];
+    ipaddr v6ip;
 
     arp = fs->arp;
 
@@ -444,7 +444,8 @@ arpwrite(Fs *fs, char *s, int len)
     Arpent *a, *fl, **l;
     Medium *m;
     char *f[4], buf[256];
-    uchar ip[IPaddrlen], mac[MAClen];
+    ipaddr ip;
+    uchar mac[MAClen];
 
     arp = fs->arp;
 
@@ -614,7 +615,7 @@ rxmitsols(Arp *arp)
     Block *next, *xp;
     Arpent *a, *b, **l;
     Fs *f;
-    uchar ipsrc[IPaddrlen];
+    ipaddr ipsrc;
     Ipifc *ifc = nil;
     long nrxt;
 

@@ -547,7 +547,7 @@ v4lookup(Fs *f, ipv4 a, Conv *c)
     Route *p, *q;
     ulong la;
     /*s: [[v4lookup()]] locals */
-    uchar gate[IPaddrlen];
+    ipaddr gate;
     Ipifc *ifc;
     /*e: [[v4lookup()]] locals */
 
@@ -733,7 +733,7 @@ sprintroute(Route *r, Routewalk *rw)
 {
     int nifc, n;
     char t[5], *iname, ifbuf[5];
-    uchar addr[IPaddrlen], mask[IPaddrlen], gate[IPaddrlen];
+    ipaddr addr, mask, gate;
     char *p;
 
     convroute(r, addr, mask, gate, t, &nifc);
@@ -832,9 +832,7 @@ routeread(Fs *f, char *p, ulong offset, int n)
 void
 delroute(Fs *f, Route *r, int dolock)
 {
-    uchar addr[IPaddrlen];
-    uchar mask[IPaddrlen];
-    uchar gate[IPaddrlen];
+    ipaddr addr, mask, gate;
     char t[5];
     int nifc;
 
@@ -889,7 +887,7 @@ printroute(Route *r)
 {
     int nifc;
     char t[5], *iname, ifbuf[5];
-    uchar addr[IPaddrlen], mask[IPaddrlen], gate[IPaddrlen];
+    ipaddr addr, mask, gate;
 
     convroute(r, addr, mask, gate, t, &nifc);
     iname = "-";
@@ -908,9 +906,7 @@ routewrite(Fs *f, Chan *c, char *p, int n)
     int h, changed;
     char *tag;
     Cmdbuf *cb;
-    uchar addr[IPaddrlen];
-    uchar mask[IPaddrlen];
-    uchar gate[IPaddrlen];
+    ipaddr addr, mask, gate;
     IPaux *a, *na;
     Route *q;
 

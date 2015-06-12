@@ -76,8 +76,8 @@ struct Udp4hdr
 
     uchar   udpproto;   /* Protocol */
     uchar   udpplen[2]; /* Header plus data length */
-    uchar   udpsrc[IPv4addrlen];    /* Ip source */
-    uchar   udpdst[IPv4addrlen];    /* Ip destination */
+    ipv4    udpsrc;    /* Ip source */
+    ipv4    udpdst;    /* Ip destination */
 
     /* udp header */
     uchar   udpsport[2];    /* Source port */
@@ -242,8 +242,7 @@ udpkick(void *x, Block *bp)
     int version;
     /*s: [[udpkick()]] locals */
     Udpcb *ucb;
-    uchar laddr[IPaddrlen];
-    uchar raddr[IPaddrlen];
+    ipaddr laddr, raddr;
     ushort rport;
     /*x: [[udpkick()]] locals */
     Udp6hdr *uh6;
@@ -405,7 +404,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     Fs *f;
     Udp4hdr *uh4;
     int version;
-    uchar raddr[IPaddrlen], laddr[IPaddrlen];
+    ipaddr raddr, laddr;
     ushort rport, lport;
     Conv *c;
     Udpcb *ucb;
@@ -643,7 +642,7 @@ udpadvise(Proto *udp, Block *bp, char *msg)
 {
     Udp4hdr *h4;
     Udp6hdr *h6;
-    uchar source[IPaddrlen], dest[IPaddrlen];
+    ipaddr source, dest;
     ushort psource, pdest;
     Conv *s, **p;
     int version;

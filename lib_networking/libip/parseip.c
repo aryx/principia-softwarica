@@ -12,7 +12,7 @@ v4parseip(uchar *to, char *from)
     char *p;
 
     p = from;
-    for(i = 0; i < 4 && *p; i++){
+    for(i = 0; i < IPv4addrlen && *p; i++){
         to[i] = strtoul(p, &p, 0);
         if(*p == '.')
             p++;

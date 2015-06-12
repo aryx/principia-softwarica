@@ -33,14 +33,15 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand networking:
-% - TODO ether, ip, udp, tcp, actually I didn't know 
+% - SEMI ether, ip, udp, tcp, actually I didn't know 
 %   that much about network
 % - realize that having two ip interfaces is essential, not a feature, because
 %   for internetworking to work you need gateways that connect two separate
 %   networks, and so this machine will have two interfaces
-% - TODO does not need much to configure initially; can do things manually
+% - TODO you don't need much to configure initially; can do things manually
 %   without ipconfig and actually you need to do very few things
-% - TODO ping, I never understood how it worked (but does not work under qemu)
+% - TODO ping, I never understood how it worked (but does not work under qemu),
+%   but it's the network stack that answers to ping, not a daemon, not inetd.
 % - TODO ppp?
 
 
@@ -170,6 +171,10 @@ a network stack.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
+% We chose plan9 network stack. Again partly for consistency. But again
+% because cleaner I think. Also IL is easier to explain than TCP
+% while conveying its most important ideas.
+
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
 \item XINU
@@ -182,6 +187,9 @@ Here are other candidates that were considered but ultimately discarded:
 %meh:
 %http://jvns.ca/blog/2014/08/12/what-happens-if-you-write-a-tcp-stack-in-python/
 
+% a few tags used in this file
+% - ocaml: to give a hint on how rewriting C in OCaml could improve things
+
 \section{Getting started}
 
 
@@ -191,6 +199,7 @@ Here are other candidates that were considered but ultimately discarded:
 % Computer networks, a top-down approach?
 % tcp/ip ...?
 %ref: "packet communication" from the same collection that lion's book
+
 %Intro to computer networks (free, but maybe not that good)
 %   http://intronetworks.cs.luc.edu/
 
@@ -209,6 +218,10 @@ The prose is mine and is licensed under the GNU Free Documentation
 License.
 
 \section{Acknowledgments}
+
+I would like to acknowledge of course Plan9's authors who wrote
+most of this book: Dave Presotto, Phil Winterbottom, and many other
+people from Bell Labs.
 
 
 \chapter{Overview}
@@ -242,17 +255,19 @@ License.
 % so can arrive in different order, so need protocol, ack, retransmit,
 % reorder, etc. Tricky.
 
-\section{Network stack principles}
-
-% ip stack goal is to multiplex access to network device?
-% and then to demultiplex when receive (by address, by protocol)
-% and to provide different encoding protocols providing different
-% kinds of services.
-
+% A virtual network.
 % A bit similar to memory, where have physical memory but abstracted
 % away with virtual memory. In the same way with network have
 % physical address and local area network but build on top of that
-% virtual address and a virtual global network.
+% virtual addresses and a virtual global network.
+
+\section{Network stack principles}
+
+% ip stack goal is to multiplex access to network device.
+% and then to demultiplex when receive (by address, by protocol)
+% and to provide different encoding protocols providing different
+% kinds of services. Also goal is to provide means to configure.
+
 
 \section{[[/net]] services}
 
@@ -334,6 +349,9 @@ License.
 % packet (network) vs frame (ethernet) vs datagram and fragments (ip) 
 % vs continuous stream (user)
 
+% use network transport, gateways, and at some point when on same
+% physical local network, use physical transport and ethernet.
+
 % Proto vs Fs vs Ipifc vs Netif
 
 % OO like interface, with class and methods, and some private
@@ -357,12 +375,12 @@ License.
 
 \chapter{Core Data Structures}
 
-\section{Universal identifiers, IP addresses}
+\section{IP addresses}
 % machine identifier
+% Universal identifiers, 
 
-% universal 
-%note: (later in HTTP section we will see URL, even more general)
-% inter-network
+% universal, inter-network
+%note: later in HTTP section we will see URL, even more universal/general
 
 <<constant IPv4addrlen>>=
 IPv4addrlen=	4,
@@ -375,15 +393,18 @@ typedef uchar ipv4[IPv4addrlen];
 %pad: I introduced that, I like types!
 % Xinu book does the same (it was called IPaddr there)
 
+% 4 bytes, 2^32 = 4M, so can't have more than 4M machines :)
+% enter ipv6.
 
 \subsection{IPv4 vs IPv6}
 
 <<constant IPaddrlen>>=
 IPaddrlen=	16,
 @
-% this is used internally to store addresses, to be the more general.
+% this is used internally to store addresses, to be generic.
 % 16 bytes IP(v6) address
-% ex of address? facebook address? 2a03:2880:2110:df07:face:b00c:0:1:
+% ex of address? facebook address? 2a03:2880:2110:df07:face:b00c:0:1: :)
+% why from 4 to 16? why so much more?
 
 <<typedef ipaddr>>=
 typedef uchar ipaddr[IPaddrlen];
@@ -478,6 +499,8 @@ enum ip_version {
 
 % tricky encoding, ip address can refer to network, convention
 % to never use 0, so 10.0.2.0 means the network
+%ocaml: have cleaner type? because 0 and 255 means something special
+% so Ip of netid * (Machine | Network | Broadcast) ?
 
 <<macro CLASS>>=
 #define CLASS(p) ((*(uchar*)(p))>>6)
@@ -485,9 +508,14 @@ enum ip_version {
 % ?? first 2 bits of first number in IP?
 % assumes ipv4 I think
 
+% so given an IP dst, you can know if it's on the same physical local network
+% than you in which case you can switch to the physical transport
+% and not network transport.
+
 \subsection{Network mask}
 
-% return ipv6
+%todo: return ipaddr, but have trouble to use ipaddr here as a return type.
+% 8c then complains
 <<function defmask>>=
 uchar*
 defmask(ipaddr ip)
@@ -517,7 +545,6 @@ static ipaddr classmask[4] = {
 @
 % class use 2 bits, so 4 entries, (but 00 and 01 are for class A)
 % 255.255.etc
-% use IPADDRLen instead of 16?
 %less: could do nested { }, [0] = { }, [1] = { } ...
 
 
@@ -535,11 +562,11 @@ maskip(ipaddr from, ipaddr mask, ipaddr to)
 % netid = ip & mask.
 
 \subsection{Network byte order}
-% not only related to IP address, but don't know where
-% to put this section and can be opportunity to define ip_long;
+% This is not only related to IP address, but I don't know where
+% to put this section and can be opportunity to define 'ip_long'
 % that will be used later for the Route DS.
 
-% nhxxx network to host, hn host to network
+% nhxxx network to host, hnxxx host to network
 
 <<typedef iplong>>=
 typedef ulong iplong;
@@ -555,7 +582,11 @@ ipaddr IPnoaddr;
 <<macro ipmove (kernel/network/ip/ip.h)>>=
 #define ipmove(x, y) memmove(x, y, IPaddrlen)
 @
+%reset:
 %    ipmove(cv->laddr, IPnoaddr);
+% or
+%    memset(ip, 0, IPaddrlen);
+
 
 <<macro ipcmp (kernel/network/ip/ip.h)>>=
 #define ipcmp(x, y) ( (x)[IPaddrlen-1] != (y)[IPaddrlen-1] || memcmp(x, y, IPaddrlen) )
@@ -567,6 +598,32 @@ ipaddr IPnoaddr;
 
 %\subsection{Forme} ?
 % ipforme()?
+
+\section{IP header}
+
+<<struct Ip4hdr>>=
+/* on the wire packet header */
+struct Ip4hdr
+{
+  uchar vihl;   /* Version and header length */
+  uchar tos;    /* Type of service */
+  uchar length[2];  /* packet length */
+  uchar id[2];    /* ip->identification */
+  uchar frag[2];  /* Fragment information */
+  uchar ttl;        /* Time to live */
+
+  // enum<protocol_type>
+  uchar proto;    /* Protocol */
+
+  uchar cksum[2]; /* Header checksum */
+
+  ipv4 src;   /* IP source */
+  ipv4 dst;   /* IP destination */
+};
+@
+% Do not change the order here!
+% 'Ip4hdr.id' will be IP.id4, incremented in ipoput
+% This uses uchar/byte not int or short, to avoid byte order issues.
 
 \section{IP Interfaces, [[Ipifc]]}
 % 's', for gateways
@@ -654,19 +711,6 @@ Iplifc	*next;
 
 \subsection{Kernel side}
 
-%todo: who points to that in the kernel? actually there is no single
-% ipifc global in the kernel because a machine can have multiple ips
-% (e.g. a gateway), and so the user access the one he wants via
-% /net/ipifc/ and the ipifc is part of a route.
-% in Route there is a Ipifc! returned via v4lookup()
-%todo: OK but when go to /net/tcp/clone, get which interface??
-
-% in fact gateways are essential to the internet, they are the one
-% that makes possible to have intern-networking, so having
-% multiple interface and multiple IPs is not a nice feature to have,
-% it's essential. One can't provide a network stack without support
-% for gateways.
-
 <<struct Ipifc (kernel)>>=
 struct Ipifc
 {
@@ -695,6 +739,22 @@ struct Ipifc
 };
 @
 %less: have a priv field for medium arg private pointer?
+
+%Who points to that in the kernel? actually there is no single
+% ipifc global in the kernel because a machine can have multiple ips
+% (e.g. a gateway), and so the user access the one he wants via
+% /net/ipifc/ and the ipifc is part of a route.
+% in Route there is a Ipifc! returned via v4lookup()
+%OK but when go to /net/tcp/clone, get which interface? you don't get
+% any yet, you have to state which IP address you want to send your packet
+% and given this address v4lookup() then will find the right interface.
+
+% in fact gateways are essential to the internet, they are the one
+% that makes possible to have intern-networking, so having
+% multiple interface and multiple IPs is not a nice feature to have,
+% it's essential. One can't provide a network stack without support
+% for gateways.
+
 
 
 <<[[Ipifc(kernel)]] stat fields>>=
@@ -725,8 +785,6 @@ Conv  *conv;    /* link to its conversation structure */
 
 
 
-
-
 <<struct Iplifc (kernel)>>=
 /* logical interface associated with a physical one */
 struct Iplifc
@@ -743,8 +801,8 @@ struct Iplifc
   <<[[Iplifc(kernel)]] extra fields>>
 };
 @
-% local = ip?
-% remote?? rename to gateway?
+% local = your ip. rename myip?
+%less: remote?? rename to gateway?
 
 <<[[Iplifc(kernel)]] extra fields>>=
 // list<ref_own<Iplifc>>, head = Ipifc.lifc
@@ -759,7 +817,6 @@ Iplifc  *next;
 
 % e.g. for ethernet
 % see later: null, loopback, packet
-
 
 \subsection{[[Medium]]}
 % general interface
@@ -788,9 +845,9 @@ struct Medium
 <<[[Medium(kernel)]] binding methods>>
 <<[[Medium(kernel)]] io methods>>
 <<[[Medium(kernel)]] address resolution methods>>
-<<[[Medium(kernel)]] route methods>>
-<<[[Medium(kernel)]] multicast methods>>
 
+<<[[Medium(kernel)]] router methods>>
+<<[[Medium(kernel)]] multicast methods>>
 <<[[Medium(kernel)]] ipv6 methods>>
 @
 
@@ -802,7 +859,7 @@ void  (*unbind)(Ipifc*);
 @
 % char**? array of string? to pass parameters to bind? e.g. path
 % in 'bind ether /net/ether0' ?
-% this will call findipmedium that will explore for instance
+% this will call findipmedium() that will explore for instance
 % all medium and media, and ethernetmedium which in turn
 % will explore all ethernet controllers in etherxx.
 
@@ -811,19 +868,23 @@ void  (*unbind)(Ipifc*);
 void  (*bwrite)(Ipifc *ifc, Block *b, int version, ipv4or6 ip);
 @
 % version = v4 or v6
+% why need to pass an ip? it's the ip in the local network?
+% but why the physical transport needs that?
 
 %bwrite!! that's where you write the data! note that pass just ip,
 % no port here, we are at IP layer. Has to be scheduled as can have
 % many processes wanting to write to the medium
+
+
 
 %XXX
 <<[[Medium(kernel)]] io methods>>=
 /* process packets written to 'data' */
 void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
 @
-%pktin!! that's where you read packets from the network, which has to
-% be routed to the right place, how?? Has to be decomposed and dispatched
-% so need a global map of ip+port info.
+%pktin!! that's where you read packets from the network? which has to
+% be routed to the right place? how? Has to be decomposed and dispatched
+% so need a global map of ip+port info?
 % I don't think so, it's when someone write to /net/ipifc/x/data
 % which I don't know what it means
 
@@ -837,6 +898,9 @@ Medium *media[Maxmedia] = { 0 };
 <<constant Maxmedia>>=
 Maxmedia    = 32,
 @
+%less: could instead put this global in qemu.c directly, so no
+% need for those addipmedium function below. Or because
+% want things to be dynamic?
 
 % ?? -> <>  ? qemu.c links() and ethermediumlink?
 <<function addipmedium>>=
@@ -855,13 +919,12 @@ addipmedium(Medium *med)
         }
 }
 @
-% no warning if overflow?
+%less: could give warning if no slot found
 %less: boilerplate code, should have a generic function for that
 
 
 \subsection{Ethernet medium}
-
-% before IP? kinda more low level (but less general)
+% put before IP? kinda more low level (but less general)
 
 % there are other physical device/medium, but we'll focus on this one,
 % most common
@@ -874,9 +937,9 @@ Eaddrlen= 6,
 <<typedef eaddr>>=
 typedef uchar eaddr[Eaddrlen];
 @
-% like in Xinu
+%pad: I added that (Xinu does that too, was called Eaddr there)
 
-% will be added to media[] in?
+% will be added to media[] in qemu.c via addipmedium()
 <<global ethermedium (kernel)>>=
 Medium ethermedium =
 {
@@ -903,16 +966,16 @@ Medium ethermedium =
 @
 % maxtu = 1500 + 14 for header
 % maclen = 6 = 48 bits
-%TODO: no pktin??? 
+%TODO: no pktin?
 
 
 <<global etherbroadcast>>=
-static uchar etherbroadcast[] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+static eaddr etherbroadcast = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 @
 
 %todo: mv later what is below?
 
-\subsection{[[Ether]]net controller and [[etherxx]]}
+\subsection{[[Ether]]net controllers and [[etherxx]]}
 
 <<global etherxx (kernel)>>=
 static Ether *etherxx[MaxEther];
@@ -927,32 +990,35 @@ struct Ether {
 
   eaddr ea;
 
-  <<[[Ether]] methods>>
-
-  <<[[Ether]] priv fields>>
-  <<[[Ether]] other fields>>
-
   Queue*  oq;
 
   ISAConf;      /* hardware info */
   Netif;
+
+  <<[[Ether]] methods>>
+
+  <<[[Ether]] priv fields>>
+  <<[[Ether]] other fields>>
 
   // Extra
   <<[[Ether]] extra fields>>
 };
 @
 % in 386 because ISAConf?
-% Netif later
+% We will netif later
 
 <<[[Ether]] extra fields>>=
 int ctlrno;
 @
 % index in etherxx?
 
+% oq = output queue? what about input? no queue?
+
 % e.g. Dp8390 structure
 <<[[Ether]] priv fields>>=
 void  *ctlr;
 @
+%less: rename priv?
 
 %XXX
 <<[[Ether]] other fields>>=
@@ -963,6 +1029,7 @@ int tbdf;     /* type+busno+devno+funcno */
 <<[[Ether]] methods>>=
 <<[[ether]] mounting methods>>
 <<[[ether]] io methods>>
+
 <<[[ether]] other methods>>
 @
 
@@ -1020,14 +1087,12 @@ struct Fs
   <<[[Fs(kernel)]] extra fields>>
 };
 @
-% >> >> >>
 % why +1? because don't use first entry? because QID trick?
-
-%TODO: where is the info about ipifc? about the medium?
 
 <<constant Maxproto>>=
 Maxproto= 20,
 @
+
 
 
 
@@ -1040,8 +1105,8 @@ Fs  *ipfs[Nfs]; /* attached fs's */
 <<constant Nfs>>=
 Nfs=        128,
 @
-% Nb filesystem (not network file system)
-% in practice will have only one IP stack/fs, so Fs.dev will be 0
+% Nb filesystem (not Network file system)
+% in practice we will have only one IP stack/fs, so Fs.dev will be 0
 %less: (so not sure you need such a big number ...)
 %todo: when need to have multiple protocol stack?
 
@@ -1055,20 +1120,24 @@ QLock   fslock;
 % to access ipfs?
 
 
+%Where is the info about ipifc? about the medium? it's indirectly
+% in fs->p[ipifc]->cv[0]->priv
+% or fs->ipifc->cv[0]->priv
 
 <<[[Fs(kernel)]] routing fields>>=
 Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
 @
-%note: it's a Proto, not an Ipifc. But then can get the ipifc
+%note: it's a Proto, not an Ipifc. But then you can get the ipifc
 % by look at the conversations in this Proto and the priv
 % field of those conversation.
 % I put in 'routing' category because it is.
-% it's not really a kludge/hack, it's fundamental. It's
+% It's not really a kludge/hack, it's fundamental. It's
 % for findipifc().
 % At some point given an IP you will need in v4lookup() to find the
-%  gateway and so which ipifc
+% gateway and so which ipifc
 % to connect this ip, to find the route, and so you'll need
-% to look at the IP in the lifc of an ifc.
+% to look at the IP in the lifc of the different ifcs and look at their
+% netid.
 
 
 
@@ -1076,21 +1145,25 @@ Proto*  ipifc;      /* kludge for ipifcremroute & ipifcaddroute */
 \subsection{[[IP]] fragments and IP statistics}
 %todo: rename, bad name, ip_fragments?
 
-% Fragments because idea of IP is to have packets, and so if
-% one tried to send too big data, it's splitted in multiple
+% Fragments because idea of IP is to have packets, 
+% So IP abstract away physical capacity. You just have to care
+% about a standard Datagram maximum size, and IP will do the rest.
+
+% So if one tried to send too big data, it's splitted in multiple
 % packets, and the IP stack will then reassemble them
 % (but this is different from TCP, because here it's done
 % in one hop, so it's reliable. No reordering needed, the fragments
 % will arrive in order).
-% So IP abstract away physical capacity. You just have to care
-% about a standard Datagram maximum size, and IP will do the rest.
 
 <<struct IP (kernel)>>=
 /* an instance of IP */
 struct IP
 {
+  // list<ref_own<Fragment>>, next = Fragment4.next
   Fragment4*  flisthead4;
+  // list<ref_own<Fragment>>, next = Fragment4.next
   Fragment4*  fragfree4;
+
   Ref   id4;
 
   <<[[IP(kernel)]] stat fields>>
@@ -1103,12 +1176,13 @@ struct IP
 };
 @
 % id4 will be IP packet identifier, incremented each time
-% (why need an id??)
+% (why need an id?? xinu says it's to help gateways ...
 
 
 <<struct Fragment4>>=
 struct Fragment4
 {
+  // list<ref_own<Block>> ? next = Block.???
   Block*  blist;
 
   iplong   src;
@@ -1118,11 +1192,16 @@ struct Fragment4
   ulong   age;
 
   // Extra
-  Fragment4*  next;
+  <<[[Fragment4]] extra fields>>
 };
 @
 %todo: ulong for src and dst? ports? fragment number? adress in iphost
 % format? ip_ulong;
+
+<<[[Fragment4]] extra fields>>=
+Fragment4*  next;
+@
+
 
 
 <<[[IP(kernel)]] stat fields>>=
@@ -1212,7 +1291,7 @@ static char *statnames[] =
  */
 struct Proto
 {
-  char*   name;   /* protocol name */ // e.g. "udp", "tcp", etc
+  char*   name;   /* protocol name */ // e.g. "udp", "tcp", "ipfc", etc
 
   <<[[Proto(kernel)]] methods>>
 
@@ -1241,6 +1320,22 @@ int   x;    /* protocol index */
 % (x is useful when building qid)
 % so get access to its ip stack via f so can access the method of the
 % ip stack and medium!
+
+
+% remember 'Ip4hdr.proto'
+<<[[Fs(kernel)]] other fields>>=
+// map<enum<protocol_type>, ref<Proto>>
+Proto*  t2p[256];   /* vector of all protocols */
+@
+<<[[Proto(kernel)]] other fields>>=
+// enum<protocol_type>
+int   ipproto;  /* ip protocol type */
+@
+% so when will receive a packet, we will know to which
+% protocol to dispatch.
+% It means also you can't have more than 256 (toplevel) Protocols!
+
+
 
 
 % Actually  /net/ipifc/ will be a protocol itself! with a clone
@@ -1277,15 +1372,16 @@ void    (*close)(Conv*);
 % Kinda of a ctor. Create() will setup a callback (xxxkick) on the
 % writing queue which will add the header before the data to send.
 % So create is kinda a (*send) method too.
-% void xxxkick(Conv *cv, Block *bp)
+% void xxxkick(Conv *cv, Block *bp).
 
 
 % ??? -> ipiput4 -> <>
 <<[[Proto(kernel)]] conversation methods>>=
 void    (*rcv)(Proto*, Ipifc*, Block*);
 @
-% no send? this is for dispatching to the right conversation
-% but in sending we know the conversation associated with the channel,
+% This is for dispatching to the right conversation.
+
+% no send? in sending we know the conversation associated with the channel,
 % so the sending is actually associated with create() which sets
 % the xxxkick functions.
 
@@ -1294,6 +1390,8 @@ void    (*rcv)(Proto*, Ipifc*, Block*);
 char*   (*connect)(Conv*, char**, int);
 char*   (*announce)(Conv*, char**, int);
 @
+
+
 <<[[Proto(kernel)]] conversation ctl methods>>=
 char*   (*ctl)(Conv*, char**, int);
 @
@@ -1306,8 +1404,7 @@ char*   (*bind)(Conv*, char**, int);
 @
 %less: method only for ipifc?
 
-
-% will introduce also some other methods later.
+% will introduce some extra methods later.
 
 
 \subsection{[[Conv]]ersations}
@@ -1338,13 +1435,14 @@ struct Conv
   <<[[Conv(kernel)]] queue fields>>
   <<[[Conv(kernel)]] listen fields>>
   <<[[Conv(kernel)]] routing fields>>
-  <<[[Conv(kernel)]] multicast fields>>
-  <<[[Conv(kernel)]] udp fields>>
 
   <<[[Conv(kernel)]] synchronisation fields>>
   <<[[Conv(kernel)]] priv fields>>
   <<[[Conv(kernel)]] snoop fields>>
   <<[[Conv(kernel)]] error fields>>
+
+  <<[[Conv(kernel)]] udp fields>>
+  <<[[Conv(kernel)]] multicast fields>>
 
   <<[[Conv(kernel)]] other fields>>
   <<[[Conv(kernel)]] ipv6 fields>>
@@ -1387,6 +1485,12 @@ enum conversation_state
 };
 @
 
+<<[[Conv(kernel)]] synchronisation fields>>=
+Rendez  cr;
+@
+% e.g. when connect, need to sleep until someone connects
+% with you (via an announce), so will sleep on that.
+
 
 <<[[Conv(kernel)]] queue fields>>=
 Queue*  rq;     /* queued data waiting to be read */
@@ -1394,23 +1498,15 @@ Queue*  wq;     /* queued data waiting to be written */
 @
 % setup in each create() method of each Proto
 % will be accessed via /net/x/y/data, in read or write
-% conversation are two ways, can read and write in /net/x/y/data, full duplex
+% conversation are two ways, can read and write in /net/x/y/data, 
+% full duplex
 
 
-<<[[Conv(kernel)]] queue fields>>=
-Queue*  eq;     /* returned error packets */
-@
-% setup in Fsprotoclone generically
 <<[[Conv(kernel)]] error fields>>=
 char  cerr[ERRMAX];
 @
 
 
-<<[[Conv(kernel)]] synchronisation fields>>=
-Rendez  cr;
-@
-% e.g. when connect, need to sleep until someone connects
-% with you (via an announce), so will sleep on that.
 
 <<[[Conv(kernel)]] priv fields>>=
 void* ptcl;     /* protocol specific stuff */
@@ -1544,6 +1640,7 @@ enum
 
 \subsection{[[Netif]]}
 
+%XXX
 <<struct Netif (kernel)>>=
 /*
  *  a network interface
@@ -1553,37 +1650,29 @@ struct Netif
   /* multiplexing */
   char  name[KNAMELEN];   /* for top level directory */
 
-  // growing_array?<option<ref_own<Netfile>>>
+  // growing_array?<option<ref_own<Netfile>>>, size = nfile?
   Netfile **f;
   int nfile;      /* max number of Netfiles */
 
   /* about net */
-  int limit;      /* flow control */
   int alen;     /* address length */
-  int mbps;     /* megabits per sec */
   int link;     /* link status */
+
+  int limit;      /* flow control */
 
   int minmtu;
   int maxmtu;
   int mtu;
+  int mbps;     /* megabits per sec */
+
   uchar addr[Nmaxaddr];
   uchar bcast[Nmaxaddr];
-
 
   int prom;     /* number of promiscuous opens */
   int scan;     /* number of base station scanners */
   int all;      /* number of -1 multiplexors */
 
-  /* statistics */
-  int misses;
-  uvlong  inpackets;
-  uvlong  outpackets;
-  int crcs;   /* input crc errors */
-  int oerrs;    /* output errors */
-  int frames;   /* framing errors */
-  int overflows;  /* packet overflows */
-  int buffs;    /* buffering errors */
-  int soverflows; /* software overflow */
+  <<[[Netif(kernel)]] stat fields>>
 
   /* routines for touching the hardware */
   void  *arg;
@@ -1605,286 +1694,54 @@ void  (*scanbs)(void*, uint); /* scan for base stations */
 <<[[Netif(kernel)]] multicast methods>>
 @
 
+
+<<[[Netif(kernel)]] stat fields>>=
+/* statistics */
+int misses;
+uvlong  inpackets;
+uvlong  outpackets;
+int crcs;   /* input crc errors */
+int oerrs;    /* output errors */
+int frames;   /* framing errors */
+int overflows;  /* packet overflows */
+int buffs;    /* buffering errors */
+int soverflows; /* software overflow */
+@
+
 \subsection{[[Netfile]]}
 
+%XXX
 <<struct Netfile>>=
 /*
  *  one per multiplexed connection
  */
 struct Netfile
 {
-  QLock;
-
   int inuse;
   ulong mode;
   char  owner[KNAMELEN];
+
+  Queue *in;      /* input buffer */
 
   int type;     /* multiplexor type */
   int prom;     /* promiscuous mode */
   int scan;     /* base station scanning interval */
   int bridge;     /* bridge mode */
   int headersonly;    /* headers only - no data */
+
   uchar maddr[8];   /* bitmask of multicast addresses requested */
   int nmaddr;     /* number of multicast addresses */
 
-  Queue *in;      /* input buffer */
-
   // Extra
+  QLock;
 };
 @
-
-\section{IP header}
-
-<<struct Ip4hdr>>=
-/* on the wire packet header */
-struct Ip4hdr
-{
-  uchar vihl;   /* Version and header length */
-  uchar tos;    /* Type of service */
-  uchar length[2];  /* packet length */
-  uchar id[2];    /* ip->identification */
-  uchar frag[2];  /* Fragment information */
-  uchar ttl;        /* Time to live */
-
-  // enum<protocol_type>
-  uchar proto;    /* Protocol */
-
-  uchar cksum[2]; /* Header checksum */
-
-  ipv4 src;   /* IP source */
-  ipv4 dst;   /* IP destination */
-};
-@
-% Do not change the order here!
-% id will be IP.id4, incremented in ipoput
-% use uchar/byte not int or short, probably to avoid byte order issues.
-
-<<[[Fs(kernel)]] other fields>>=
-// map<enum<protocol_type>, ref<Proto>>
-Proto*  t2p[256];   /* vector of all protocols */
-@
-<<[[Proto(kernel)]] other fields>>=
-// enum<protocol_type>
-int   ipproto;  /* ip protocol type */
-@
-
-% so when will receive a packet, we will know to which
-% protocol to dispatch.
-% It means also you can't have more than 256 (toplevel) Protocols!
-
-\section{Addresses hashtable, [[Ipht]]}
-% it's actually (IP|star * port|star)
-
-% another link with Conv!
-
-% used in Udppriv, Ilpriv, presented later when
-% a protocol needs to remember the set of open connexions
-% and the ip of those connexions so when a packet arrive
-% from somewhere, we can know which conversation is associated
-% with this connexion.
-
-<<struct Ipht>>=
-/*
- *  hash table for 2 ip addresses + 2 ports
- */
-struct Ipht
-{
-  // hash<ipconvhash, ref<Conv>>, next = Iphash.next
-  Iphash  *tab[Nipht];
-
-  // Extra
-  Lock;
-};
-@
-
-<<constant Nipht>>=
-Nipht=    521,  /* convenient prime */
-@
-
-<<struct Iphash>>=
-struct Iphash
-{
-  Conv  *c;
-  // enum<matchtype>
-  int match;
-
-  // Extra
-  Iphash  *next;
-};
-@
-% Conv connexion!
-
-<<enum matchtype>>=
-enum matchtype {
-  IPmatchexact= 0,  /* match on 4 tuple */
-
-  IPmatchany,   /* *!* */
-  IPmatchport,    /* *!port */
-  IPmatchaddr,    /* addr!* */
-  IPmatchpa,    /* addr!port */
-};
-@
-
-
-
-<<function iphash>>=
-/*
- *  hashing tcp, udp, ... connections
- */
-ulong
-iphash(ipaddr sa, ushort sp, ipaddr da, ushort dp)
-{
-    return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) 
-      % Nipht; // pad's first network bugfix :)
-}
-@
-% >> >> >>
-%bug: was Nhash instead of Nipht :)
-
-
-% if you want to connect, then need to give exact address and port
-% if you announce, then you can give regexps
-<<function iphtadd>>=
-void
-iphtadd(Ipht *ht, Conv *c)
-{
-    ulong hv;
-    Iphash *h;
-
-    hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
-    h = smalloc(sizeof(Iphash));
-    if(ipcmp(c->raddr, IPnoaddr) != 0)
-        h->match = IPmatchexact;
-    else {
-        if(ipcmp(c->laddr, IPnoaddr) != 0){
-            if(c->lport == 0)
-                h->match = IPmatchaddr;
-            else
-                h->match = IPmatchpa;
-        } else {
-            if(c->lport == 0)
-                h->match = IPmatchany;
-            else
-                h->match = IPmatchport;
-        }
-    }
-    h->c = c;
-
-    lock(ht);
-    // add_hash(h, ht)
-    h->next = ht->tab[hv];
-    ht->tab[hv] = h;
-    unlock(ht);
-}
-@
-
-<<function iphtrem>>=
-void
-iphtrem(Ipht *ht, Conv *c)
-{
-    ulong hv;
-    Iphash **l, *h;
-
-    hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
-    lock(ht);
-    // del_hash(hv, ht)
-    for(l = &ht->tab[hv]; (*l) != nil; l = &(*l)->next)
-        if((*l)->c == c){
-            h = *l;
-            (*l) = h->next;
-            free(h);
-            break;
-        }
-    unlock(ht);
-}
-@
-
-<<function iphtlook>>=
-/* look for a matching conversation with the following precedence
- *  connected && raddr,rport,laddr,lport
- *  announced && laddr,lport
- *  announced && *,lport
- *  announced && laddr,*
- *  announced && *,*
- */
-Conv*
-iphtlook(Ipht *ht, ipaddr sa, ushort sp, ipaddr da, ushort dp)
-{
-    ulong hv;
-    Iphash *h;
-    Conv *c;
-
-    /* exact 4 pair match (connection) */
-    hv = iphash(sa, sp, da, dp);
-    lock(ht);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match == IPmatchexact) {
-          c = h->c;
-          if(sp == c->rport && dp == c->lport
-             && ipcmp(sa, c->raddr) == 0 && ipcmp(da, c->laddr) == 0){
-              unlock(ht);
-              return c;
-          }
-        }
-    }
-
-    /* match local address and port */
-    hv = iphash(IPnoaddr, 0, da, dp);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match == IPmatchpa) {
-          c = h->c;
-          if(dp == c->lport && ipcmp(da, c->laddr) == 0){
-              unlock(ht);
-              return c;
-          }
-       }
-    }
-
-    /* match just port */
-    hv = iphash(IPnoaddr, 0, IPnoaddr, dp);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match == IPmatchport) {
-          c = h->c;
-          if(dp == c->lport){
-              unlock(ht);
-              return c;
-          }
-        }
-    }
-
-    /* match local address */
-    hv = iphash(IPnoaddr, 0, da, 0);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match == IPmatchaddr) {
-          c = h->c;
-          if(ipcmp(da, c->laddr) == 0){
-              unlock(ht);
-              return c;
-          }
-        }
-    }
-
-    /* look for something that matches anything */
-    hv = iphash(IPnoaddr, 0, IPnoaddr, 0);
-    for(h = ht->tab[hv]; h != nil; h = h->next){
-        if(h->match == IPmatchany) {
-          c = h->c;
-          unlock(ht);
-          return c;
-        }
-    }
-    unlock(ht);
-    return nil;
-}
-@
-
-
-
 
 \section{Routes}
 
 \subsection{Single [[Route]]}
 
+% memoized
 <<[[Conv(kernel)]] routing fields>>=
 Route *r;     /* last route used */
 @
@@ -1892,7 +1749,9 @@ Route *r;     /* last route used */
 <<[[Conv(kernel)]] routing fields>>=
 ulong rgen;     /* routetable generation for *r */
 @
-% when things change
+% when things change, invent a special name? uptodate_check?
+% generation? generation field! it's an opti in some sense, to make
+% sure the memoization is valid.
 
 % rename? v4rgen?
 <<global v4routegeneration>>=
@@ -1934,12 +1793,11 @@ struct V4route
 };
 @
 %todo: rename address to startaddress;
-% ulong address? ip32 bit in host format.
-% range of address managed by this gateway. Use ip_ilong here
-% because we will need to compare the asked ip to this range
+% range of address managed by this gateway. We use iplong
+% because we will need to do comparison operations between the asked ip
+% and this range.
 
-% gateway! then need using ARP to get from ip gateway to MAC gateway!
-
+% gate = gateway! then need using ARP to get from ip gateway to MAC gateway!
 
 
 <<struct RouteTree (kernel)>>=
@@ -1948,7 +1806,7 @@ struct  RouteTree
   // bitset<enum<route_type> >
   uchar type;
 
-  Ipifc *ifc; // !!!
+  Ipifc *ifc; // !!! the missing link!
 
   <<[[Routetree]] other fields>>
 
@@ -3266,7 +3124,7 @@ setladdrport(Conv* c, char* str, int announcing)
     char *p;
     char *rv;
     ushort lport;
-    uchar addr[IPaddrlen];
+    ipaddr addr;
 
     /*
      *  ignore restricted part if it exists.  it's
@@ -3400,6 +3258,13 @@ case Qdata:
 % write on wq
 
 \subsection{[[/net/x/y/err]]}
+
+<<[[Conv(kernel)]] queue fields>>=
+Queue*  eq;     /* returned error packets */
+@
+% accessed via /net/x/y/err?
+% setup in Fsprotoclone generically
+
 
 <<[[Qid]] conversation extra cases>>=
 Qerr,
@@ -3957,10 +3822,10 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     int mtu;
     // enum<route_type>
     int type;
-    uchar ip[IPaddrlen];
-    uchar mask[IPaddrlen];
-    uchar net[IPaddrlen]; // ip & mask
-    uchar rem[IPaddrlen];
+    ipaddr ip;
+    ipaddr mask;
+    ipaddr net; // ip & mask
+    ipaddr rem;
     Iplifc *lifc, **l;
     Fs *f;
 
@@ -4294,13 +4159,13 @@ findfield(char *name, char **f, int n)
 /* find first ip addr that isn't the friggin loopback address
  * unless there are no others 
  */
-int
-myipaddr(uchar *ip, char *net)
+errorneg1
+myipaddr(ipaddr ip, char *net)
 {
     Ipifc *nifc;
     Iplifc *lifc;
     static Ipifc *ifc;
-    uchar mynet[IPaddrlen];
+    ipaddr mynet;
 
     ifc = readipifc(net, ifc, -1);
     for(nifc = ifc; nifc; nifc = nifc->next)
@@ -4311,11 +4176,11 @@ myipaddr(uchar *ip, char *net)
             }
             if(ipcmp(lifc->ip, IPnoaddr) != 0){
                 ipmove(ip, lifc->ip);
-                return 0;
+                return OK_0;
             }
         }
     ipmove(ip, IPnoaddr);
-    return -1;
+    return ERROR_NEG1;
 }
 @
 
@@ -4632,7 +4497,7 @@ char*
 ipifcrem(Ipifc *ifc, char **argv, int argc)
 {
     char *rv;
-    uchar ip[IPaddrlen], mask[IPaddrlen], rem[IPaddrlen];
+    ipaddr ip, mask, rem;
     Iplifc *lifc;
 
     if(argc < 3)
@@ -4812,7 +4677,7 @@ v4parseip(uchar *to, char *from)
     char *p;
 
     p = from;
-    for(i = 0; i < 4 && *p; i++){
+    for(i = 0; i < IPv4addrlen && *p; i++){
         to[i] = strtoul(p, &p, 0);
         if(*p == '.')
             p++;
@@ -5370,7 +5235,7 @@ ipiput4(Fs *f, Ipifc *ifc, Block *bp)
 {
     IP *ip;
     Ip4hdr *h;
-    uchar v6dst[IPaddrlen];
+    ipaddr v6dst;
     // enum<protocol_type>
     int proto;
     Proto *p;
@@ -5909,8 +5774,8 @@ struct Etherhdr
 <<struct Etherpkt>>=
 struct Etherpkt
 {
-  uchar d[Eaddrlen];
-  uchar s[Eaddrlen];
+  eaddr d;
+  eaddr s;
   uchar type[2];
 
   uchar data[1500];
@@ -5973,7 +5838,7 @@ Fs  *f;
 <<struct Arpent>>=
 struct Arpent
 {
-  uchar ip[IPaddrlen];
+  ipaddr ip;
   uchar mac[MAClen];
 
   Medium  *type;      /* media type */
@@ -6111,7 +5976,8 @@ arpwrite(Fs *fs, char *s, int len)
     Arpent *a, *fl, **l;
     Medium *m;
     char *f[4], buf[256];
-    uchar ip[IPaddrlen], mac[MAClen];
+    ipaddr ip;
+    uchar mac[MAClen];
 
     arp = fs->arp;
 
@@ -6290,7 +6156,7 @@ if(c != nil && c->r != nil && c->r->ifc != nil && c->rgen == v4routegeneration)
 
 
 <<[[v4lookup()]] locals>>=
-uchar gate[IPaddrlen];
+ipaddr gate;
 Ipifc *ifc;
 @
 <<[[v4lookup()]] make sure route q has an up to date ifc>>=
@@ -6325,7 +6191,7 @@ findipifc(Fs *f, uchar *remote, int type)
     Ipifc *ifc, *x;
     Iplifc *lifc;
     Conv **cp, **e;
-    uchar gnet[IPaddrlen], xmask[IPaddrlen];
+    ipaddr gnet, xmask;
 
     x = nil;
     memset(xmask, 0, IPaddrlen);
@@ -6751,7 +6617,7 @@ sprintroute(Route *r, Routewalk *rw)
 {
     int nifc, n;
     char t[5], *iname, ifbuf[5];
-    uchar addr[IPaddrlen], mask[IPaddrlen], gate[IPaddrlen];
+    ipaddr addr, mask, gate;
     char *p;
 
     convroute(r, addr, mask, gate, t, &nifc);
@@ -6889,9 +6755,7 @@ routewrite(Fs *f, Chan *c, char *p, int n)
     int h, changed;
     char *tag;
     Cmdbuf *cb;
-    uchar addr[IPaddrlen];
-    uchar mask[IPaddrlen];
-    uchar gate[IPaddrlen];
+    ipaddr addr, mask, gate;
     IPaux *a, *na;
     Route *q;
 
@@ -6987,7 +6851,7 @@ printroute(Route *r)
 {
     int nifc;
     char t[5], *iname, ifbuf[5];
-    uchar addr[IPaddrlen], mask[IPaddrlen], gate[IPaddrlen];
+    ipaddr addr, mask, gate;
 
     convroute(r, addr, mask, gate, t, &nifc);
     iname = "-";
@@ -7070,7 +6934,7 @@ f->self = smalloc(sizeof(Ipselftab));   /* hack for ipforme */
 struct Ipself
 {
     uchar   type;       /* type of address */
-    uchar   a[IPaddrlen];
+    ipaddr   a;
 
     ulong   expire;
 
@@ -7424,9 +7288,7 @@ routeflush(Fs *f, Route *r, char *tag)
 void
 delroute(Fs *f, Route *r, int dolock)
 {
-    uchar addr[IPaddrlen];
-    uchar mask[IPaddrlen];
-    uchar gate[IPaddrlen];
+    ipaddr addr, mask, gate;
     char t[5];
     int nifc;
 
@@ -7440,7 +7302,7 @@ delroute(Fs *f, Route *r, int dolock)
 
 \subsection{Router boards}
 
-<<[[Medium(kernel)]] route methods>>=
+<<[[Medium(kernel)]] router methods>>=
 /* routes for router boards */
 void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
 void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
@@ -7571,6 +7433,140 @@ struct Udppriv
 @
 %todo: Ipht? Ip hash table? for the Conv dispatch?
 
+\subsection{Addresses hashtable, [[Ipht]]}
+% mv later? need to be in core DS? maybe put with UDP dispatch?
+
+% it's actually (IP|star * port|star)
+
+% another link with Conv!
+
+% used in Udppriv, Ilpriv, presented later when
+% a protocol needs to remember the set of open connexions
+% and the ip of those connexions so when a packet arrive
+% from somewhere, we can know which conversation is associated
+% with this connexion.
+
+
+<<struct Ipht>>=
+/*
+ *  hash table for 2 ip addresses + 2 ports
+ */
+struct Ipht
+{
+  // hash<ipconvhash, ref<Conv>>, next = Iphash.next
+  Iphash  *tab[Nipht];
+
+  // Extra
+  Lock;
+};
+@
+
+<<constant Nipht>>=
+Nipht=    521,  /* convenient prime */
+@
+
+<<struct Iphash>>=
+struct Iphash
+{
+  Conv  *c;
+  // enum<matchtype>
+  int match;
+
+  // Extra
+  Iphash  *next;
+};
+@
+% Conv connexion!
+
+<<enum matchtype>>=
+enum matchtype {
+  IPmatchexact= 0,  /* match on 4 tuple */
+
+  IPmatchany,   /* *!* */
+  IPmatchport,    /* *!port */
+  IPmatchaddr,    /* addr!* */
+  IPmatchpa,    /* addr!port */
+};
+@
+
+
+
+<<function iphash>>=
+/*
+ *  hashing tcp, udp, ... connections
+ */
+ulong
+iphash(ipaddr sa, ushort sp, ipaddr da, ushort dp)
+{
+    return ((sa[IPaddrlen-1]<<24) ^ (sp << 16) ^ (da[IPaddrlen-1]<<8) ^ dp ) 
+      % Nipht; // pad's first network bugfix :)
+}
+@
+% >> >> >>
+%bug: was Nhash instead of Nipht :)
+
+
+% if you want to connect, then need to give exact address and port
+% if you announce, then you can give regexps
+<<function iphtadd>>=
+void
+iphtadd(Ipht *ht, Conv *c)
+{
+    ulong hv;
+    Iphash *h;
+
+    hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
+    h = smalloc(sizeof(Iphash));
+    if(ipcmp(c->raddr, IPnoaddr) != 0)
+        h->match = IPmatchexact;
+    else {
+        if(ipcmp(c->laddr, IPnoaddr) != 0){
+            if(c->lport == 0)
+                h->match = IPmatchaddr;
+            else
+                h->match = IPmatchpa;
+        } else {
+            if(c->lport == 0)
+                h->match = IPmatchany;
+            else
+                h->match = IPmatchport;
+        }
+    }
+    h->c = c;
+
+    lock(ht);
+    // add_hash(h, ht)
+    h->next = ht->tab[hv];
+    ht->tab[hv] = h;
+    unlock(ht);
+}
+@
+
+<<function iphtrem>>=
+void
+iphtrem(Ipht *ht, Conv *c)
+{
+    ulong hv;
+    Iphash **l, *h;
+
+    hv = iphash(c->raddr, c->rport, c->laddr, c->lport);
+    lock(ht);
+    // del_hash(hv, ht)
+    for(l = &ht->tab[hv]; (*l) != nil; l = &(*l)->next)
+        if((*l)->c == c){
+            h = *l;
+            (*l) = h->next;
+            free(h);
+            break;
+        }
+    unlock(ht);
+}
+@
+
+
+
+
+
 \subsection{Statistics}
 
 % C-s one of this field and you'll understand what does what :)
@@ -7614,8 +7610,8 @@ struct Udp4hdr
 
     uchar   udpproto;   /* Protocol */
     uchar   udpplen[2]; /* Header plus data length */
-    uchar   udpsrc[IPv4addrlen];    /* Ip source */
-    uchar   udpdst[IPv4addrlen];    /* Ip destination */
+    ipv4    udpsrc;    /* Ip source */
+    ipv4    udpdst;    /* Ip destination */
 
     /* udp header */
     uchar   udpsport[2];    /* Source port */
@@ -7656,9 +7652,9 @@ UDP4_PHDR_SZ = 12,
 <<struct Udphdr (user)>>=
 struct Udphdr
 {
-    uchar	raddr[IPaddrlen];	/* V6 remote address */
-    uchar	laddr[IPaddrlen];	/* V6 local address */
-    uchar	ifcaddr[IPaddrlen];	/* V6 ifc addr msg was received on */
+    ipaddr	raddr;	/* V6 remote address */
+    ipaddr	laddr;	/* V6 local address */
+    ipaddr	ifcaddr;	/* V6 ifc addr msg was received on */
 
     uchar	rport[2];		/* remote port */
     uchar	lport[2];		/* local port */
@@ -7842,7 +7838,7 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
     Fs *f;
     Udp4hdr *uh4;
     int version;
-    uchar raddr[IPaddrlen], laddr[IPaddrlen];
+    ipaddr raddr, laddr;
     ushort rport, lport;
     Conv *c;
     Udpcb *ucb;
@@ -7906,6 +7902,92 @@ udpiput(Proto *udp, Ipifc *ifc, Block *bp)
 % pass to reading queue of conversation! if not full, otherwise have to drop
 
 % lots of hngets
+
+\subsubsection{Conversation dispatch}
+
+% iphtlook()
+
+<<function iphtlook>>=
+/* look for a matching conversation with the following precedence
+ *  connected && raddr,rport,laddr,lport
+ *  announced && laddr,lport
+ *  announced && *,lport
+ *  announced && laddr,*
+ *  announced && *,*
+ */
+Conv*
+iphtlook(Ipht *ht, ipaddr sa, ushort sp, ipaddr da, ushort dp)
+{
+    ulong hv;
+    Iphash *h;
+    Conv *c;
+
+    /* exact 4 pair match (connection) */
+    hv = iphash(sa, sp, da, dp);
+    lock(ht);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchexact) {
+          c = h->c;
+          if(sp == c->rport && dp == c->lport
+             && ipcmp(sa, c->raddr) == 0 && ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
+        }
+    }
+
+    /* match local address and port */
+    hv = iphash(IPnoaddr, 0, da, dp);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchpa) {
+          c = h->c;
+          if(dp == c->lport && ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
+       }
+    }
+
+    /* match just port */
+    hv = iphash(IPnoaddr, 0, IPnoaddr, dp);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchport) {
+          c = h->c;
+          if(dp == c->lport){
+              unlock(ht);
+              return c;
+          }
+        }
+    }
+
+    /* match local address */
+    hv = iphash(IPnoaddr, 0, da, 0);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchaddr) {
+          c = h->c;
+          if(ipcmp(da, c->laddr) == 0){
+              unlock(ht);
+              return c;
+          }
+        }
+    }
+
+    /* look for something that matches anything */
+    hv = iphash(IPnoaddr, 0, IPnoaddr, 0);
+    for(h = ht->tab[hv]; h != nil; h = h->next){
+        if(h->match == IPmatchany) {
+          c = h->c;
+          unlock(ht);
+          return c;
+        }
+    }
+    unlock(ht);
+    return nil;
+}
+@
+
+
+
 
 \subsubsection{New conversation}
 
@@ -8179,8 +8261,7 @@ UDP_USEAD7  = 52,
 
 <<[[udpkick()]] locals>>=
 Udpcb *ucb;
-uchar laddr[IPaddrlen];
-uchar raddr[IPaddrlen];
+ipaddr laddr, raddr;
 ushort rport;
 @
 
@@ -8471,6 +8552,7 @@ struct Ilpriv
     QLock	apl;
 };
 @
+% Ipht there too
 
 \subsection{Statistics}
 
@@ -8724,8 +8806,7 @@ iliput(Proto *il, Ipifc*, Block *bp)
     char *st;
     Ilcb *ic;
     Ilhdr *ih;
-    uchar raddr[IPaddrlen];
-    uchar laddr[IPaddrlen];
+    ipaddr raddr, laddr;
     ushort sp, dp, csum;
     int plen, illen;
     Conv *new, *s;
@@ -9418,7 +9499,7 @@ if(type & (Rbcast|Rmulti)){
 
 
 <<[[ipifcadd()]] locals>>=
-uchar bcast[IPaddrlen];
+ipaddr bcast;
 @
 
 <<[[ipifcadd()]] add broadcast addresses to self cache>>=
@@ -9452,7 +9533,7 @@ addselfcache(f, ifc, lifc, IPv4bcast, Rbcast);
 /*
  *  well known IP addresses
  */
-uchar IPv4bcast[IPaddrlen] = {
+ipaddr IPv4bcast = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
@@ -9465,8 +9546,30 @@ uchar IPv4bcast[IPaddrlen] = {
 
 \section{Multicast}
 
+<<struct Ipmulti>>=
+/*
+ *  one per multicast-lifc pair used by a Conv
+ */
+struct Ipmulti
+{
+  ipaddr ma;
+  ipaddr ia;
+  Ipmulti *next;
+};
+@
+
+<<struct Ipmcast>>=
+struct Ipmcast
+{
+    Ipmcast *next;
+    ipaddr   ma;  /* multicast address */
+    ipaddr   ia;  /* interface address */
+};
+@
+
+
 <<[[ipwrite()]] locals>>=
-uchar ia[IPaddrlen], ma[IPaddrlen];
+ipaddr ia, ma;
 @
 
 <<[[ipwrite()]] Qctl case, else if other string>>=
@@ -9824,7 +9927,7 @@ struct Netlog {
 
 
     int logmask;            /* mask of things to debug */
-    uchar   iponly[IPaddrlen];      /* ip address to print debugging for */
+    ipaddr   iponly;      /* ip address to print debugging for */
     int iponlyset;
 
     // Extra
@@ -10215,7 +10318,7 @@ ne2000reset(Ether* edev)
     ulong port;
     Dp8390 *dp8390;
     int i;
-    uchar ea[Eaddrlen];
+    eaddr ea;
 
     if(edev->port == 0)
         ne2000pnp(edev);

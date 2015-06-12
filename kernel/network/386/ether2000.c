@@ -155,7 +155,7 @@ ne2000reset(Ether* edev)
     ulong port;
     Dp8390 *dp8390;
     int i;
-    uchar ea[Eaddrlen];
+    eaddr ea;
 
     if(edev->port == 0)
         ne2000pnp(edev);

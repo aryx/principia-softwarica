@@ -376,7 +376,7 @@ ipiput4(Fs *f, Ipifc *ifc, Block *bp)
 {
     IP *ip;
     Ip4hdr *h;
-    uchar v6dst[IPaddrlen];
+    ipaddr v6dst;
     // enum<protocol_type>
     int proto;
     Proto *p;

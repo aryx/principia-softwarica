@@ -163,8 +163,8 @@ struct Tcp6hdr
     uchar   ploadlen[2];
     uchar   proto;
     uchar   ttl;
-    uchar   tcpsrc[IPaddrlen];
-    uchar   tcpdst[IPaddrlen];
+    ipaddr   tcpsrc;
+    ipaddr   tcpdst;
     uchar   tcpsport[2];
     uchar   tcpdport[2];
     uchar   tcpseq[4];
@@ -310,8 +310,8 @@ struct Limbo
 {
     Limbo   *next;
 
-    uchar   laddr[IPaddrlen];
-    uchar   raddr[IPaddrlen];
+    ipaddr   laddr;
+    ipaddr   raddr;
     ushort  lport;
     ushort  rport;
     ulong   irs;        /* initial received sequence */
@@ -2187,7 +2187,7 @@ tcpiput(Proto *tcp, Ipifc*, Block *bp)
     int hdrlen;
     Tcpctl *tcb;
     ushort length, csum;
-    uchar source[IPaddrlen], dest[IPaddrlen];
+    ipaddr source, dest;
     Conv *s;
     Fs *f;
     Tcppriv *tpriv;
@@ -3370,8 +3370,7 @@ tcpadvise(Proto *tcp, Block *bp, char *msg)
     Tcp4hdr *h4;
     Tcp6hdr *h6;
     Tcpctl *tcb;
-    uchar source[IPaddrlen];
-    uchar dest[IPaddrlen];
+    ipaddr source, dest;
     ushort psource, pdest;
     Conv *s, **p;
 

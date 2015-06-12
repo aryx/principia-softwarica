@@ -208,9 +208,9 @@ struct Icmp6hdr {
 /*s: struct Udphdr (user) */
 struct Udphdr
 {
-    uchar	raddr[IPaddrlen];	/* V6 remote address */
-    uchar	laddr[IPaddrlen];	/* V6 local address */
-    uchar	ifcaddr[IPaddrlen];	/* V6 ifc addr msg was received on */
+    ipaddr	raddr;	/* V6 remote address */
+    ipaddr	laddr;	/* V6 local address */
+    ipaddr	ifcaddr;	/* V6 ifc addr msg was received on */
 
     uchar	rport[2];		/* remote port */
     uchar	lport[2];		/* local port */
@@ -251,13 +251,13 @@ void	v4tov6(uchar*, uchar*);
 #define	ipmove(x, y) memmove(x, y, IPaddrlen)
 /*e: macro ipmove */
 
-extern uchar IPv4bcast[IPaddrlen];
-extern uchar IPv4bcastobs[IPaddrlen];
-extern uchar IPv4allsys[IPaddrlen];
-extern uchar IPv4allrouter[IPaddrlen];
-extern uchar IPnoaddr[IPaddrlen];
-extern uchar v4prefix[IPaddrlen];
-extern uchar IPallbits[IPaddrlen];
+extern ipaddr IPv4bcast;
+extern ipaddr IPv4bcastobs;
+extern ipaddr IPv4allsys;
+extern ipaddr IPv4allrouter;
+extern ipaddr IPnoaddr;
+extern ipaddr v4prefix;
+extern ipaddr IPallbits;
 
 /*s: macro CLASS */
 #define CLASS(p) ((*(uchar*)(p))>>6)

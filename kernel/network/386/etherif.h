@@ -14,6 +14,11 @@ struct Ether {
 
   eaddr ea;
 
+  Queue*  oq;
+
+  ISAConf;      /* hardware info */
+  Netif;
+
   /*s: [[Ether]] methods */
   /*s: [[ether]] mounting methods */
   void  (*attach)(Ether*);  /* filled in by reset routine */
@@ -23,6 +28,7 @@ struct Ether {
   void  (*transmit)(Ether*);
   void  (*interrupt)(Ureg*, void*);
   /*e: [[ether]] io methods */
+
   /*s: [[ether]] other methods */
   long  (*ifstat)(Ether*, void*, long, ulong);
   long  (*ctl)(Ether*, void*, long); /* custom ctl messages */
@@ -37,11 +43,6 @@ struct Ether {
   /*s: [[Ether]] other fields */
   int tbdf;     /* type+busno+devno+funcno */
   /*e: [[Ether]] other fields */
-
-  Queue*  oq;
-
-  ISAConf;      /* hardware info */
-  Netif;
 
   // Extra
   /*s: [[Ether]] extra fields */

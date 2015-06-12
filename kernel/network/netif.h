@@ -45,23 +45,23 @@ enum
  */
 struct Netfile
 {
-  QLock;
-
   int inuse;
   ulong mode;
   char  owner[KNAMELEN];
+
+  Queue *in;      /* input buffer */
 
   int type;     /* multiplexor type */
   int prom;     /* promiscuous mode */
   int scan;     /* base station scanning interval */
   int bridge;     /* bridge mode */
   int headersonly;    /* headers only - no data */
+
   uchar maddr[8];   /* bitmask of multicast addresses requested */
   int nmaddr;     /* number of multicast addresses */
 
-  Queue *in;      /* input buffer */
-
   // Extra
+  QLock;
 };
 /*e: struct Netfile */
 
@@ -87,27 +87,29 @@ struct Netif
   /* multiplexing */
   char  name[KNAMELEN];   /* for top level directory */
 
-  // growing_array?<option<ref_own<Netfile>>>
+  // growing_array?<option<ref_own<Netfile>>>, size = nfile?
   Netfile **f;
   int nfile;      /* max number of Netfiles */
 
   /* about net */
-  int limit;      /* flow control */
   int alen;     /* address length */
-  int mbps;     /* megabits per sec */
   int link;     /* link status */
+
+  int limit;      /* flow control */
 
   int minmtu;
   int maxmtu;
   int mtu;
+  int mbps;     /* megabits per sec */
+
   uchar addr[Nmaxaddr];
   uchar bcast[Nmaxaddr];
-
 
   int prom;     /* number of promiscuous opens */
   int scan;     /* number of base station scanners */
   int all;      /* number of -1 multiplexors */
 
+  /*s: [[Netif(kernel)]] stat fields */
   /* statistics */
   int misses;
   uvlong  inpackets;
@@ -118,6 +120,7 @@ struct Netif
   int overflows;  /* packet overflows */
   int buffs;    /* buffering errors */
   int soverflows; /* software overflow */
+  /*e: [[Netif(kernel)]] stat fields */
 
   /* routines for touching the hardware */
   void  *arg;
@@ -182,8 +185,8 @@ typedef uchar eaddr[Eaddrlen];
 /*s: struct Etherpkt */
 struct Etherpkt
 {
-  uchar d[Eaddrlen];
-  uchar s[Eaddrlen];
+  eaddr d;
+  eaddr s;
   uchar type[2];
 
   uchar data[1500];

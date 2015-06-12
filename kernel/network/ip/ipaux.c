@@ -36,7 +36,7 @@
 /*
  *  well known IPv6 addresses
  */
-uchar v6Unspecified[IPaddrlen] = {
+ipaddr v6Unspecified = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -44,7 +44,7 @@ uchar v6Unspecified[IPaddrlen] = {
 };
 /*e: global v6Unspecified */
 /*s: global v6loopback (kernel/network/ip/ipaux.c) */
-uchar v6loopback[IPaddrlen] = {
+ipaddr v6loopback = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -53,14 +53,14 @@ uchar v6loopback[IPaddrlen] = {
 /*e: global v6loopback (kernel/network/ip/ipaux.c) */
 
 /*s: global v6linklocal (kernel/network/ip/ipaux.c) */
-uchar v6linklocal[IPaddrlen] = {
+ipaddr v6linklocal = {
     0xfe, 0x80, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0
 };
 /*e: global v6linklocal (kernel/network/ip/ipaux.c) */
-//uchar v6linklocalmask[IPaddrlen] = {
+//ipaddr v6linklocalmask = {
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0xff, 0xff, 0xff,
 //  0, 0, 0, 0,
@@ -70,13 +70,13 @@ uchar v6linklocal[IPaddrlen] = {
 int v6llpreflen = 8;    /* link-local prefix length in bytes */
 /*e: global v6llpreflen (kernel/network/ip/ipaux.c) */
 
-//uchar v6multicast[IPaddrlen] = {
+//ipaddr v6multicast = {
 //  0xff, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0
 //};
-//uchar v6multicastmask[IPaddrlen] = {
+//ipaddr v6multicastmask = {
 //  0xff, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0,
@@ -85,21 +85,21 @@ int v6llpreflen = 8;    /* link-local prefix length in bytes */
 /*s: global v6allnodesN */
 //int v6mcpreflen = 1;  /* multicast prefix length */
 
-uchar v6allnodesN[IPaddrlen] = {
+ipaddr v6allnodesN = {
     0xff, 0x01, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
 /*e: global v6allnodesN */
-//uchar v6allroutersN[IPaddrlen] = {
+//ipaddr v6allroutersN = {
 //  0xff, 0x01, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0x02
 /*s: global v6allnodesNmask */
 //};
-uchar v6allnodesNmask[IPaddrlen] = {
+ipaddr v6allnodesNmask = {
     0xff, 0xff, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -109,21 +109,21 @@ uchar v6allnodesNmask[IPaddrlen] = {
 /*s: global v6allnodesL */
 //int v6aNpreflen = 2;  /* all nodes (N) prefix */
 
-uchar v6allnodesL[IPaddrlen] = {
+ipaddr v6allnodesL = {
     0xff, 0x02, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0x01
 };
 /*e: global v6allnodesL */
-//uchar v6allroutersL[IPaddrlen] = {
+//ipaddr v6allroutersL = {
 //  0xff, 0x02, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0,
 //  0, 0, 0, 0x02
 /*s: global v6allnodesLmask */
 //};
-uchar v6allnodesLmask[IPaddrlen] = {
+ipaddr v6allnodesLmask = {
     0xff, 0xff, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
@@ -133,14 +133,14 @@ uchar v6allnodesLmask[IPaddrlen] = {
 /*s: global v6solicitednode (kernel/network/ip/ipaux.c) */
 //int v6aLpreflen = 2;  /* all nodes (L) prefix */
 
-uchar v6solicitednode[IPaddrlen] = {
+ipaddr v6solicitednode = {
     0xff, 0x02, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0x01,
     0xff, 0, 0, 0
 };
 /*e: global v6solicitednode (kernel/network/ip/ipaux.c) */
-//uchar v6solicitednodemask[IPaddrlen] = {
+//ipaddr v6solicitednodemask = {
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0xff, 0xff, 0xff,
 //  0xff, 0xff, 0xff, 0xff,

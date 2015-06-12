@@ -1005,7 +1005,7 @@ setladdrport(Conv* c, char* str, int announcing)
     char *p;
     char *rv;
     ushort lport;
-    uchar addr[IPaddrlen];
+    ipaddr addr;
 
     /*
      *  ignore restricted part if it exists.  it's
@@ -1291,7 +1291,7 @@ ipwrite(Chan* ch, void *v, long n, vlong off)
     char *a;
     ulong offset = off;
     /*s: [[ipwrite()]] locals */
-    uchar ia[IPaddrlen], ma[IPaddrlen];
+    ipaddr ia, ma;
     /*e: [[ipwrite()]] locals */
 
     f = ipfs[ch->dev];

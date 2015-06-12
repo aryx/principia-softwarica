@@ -259,7 +259,7 @@ icmpunreachable(Fs *f, Block *bp, int code, int seq)
     Block   *nbp;
     Icmp    *p, *np;
     int i;
-    uchar   addr[IPaddrlen];
+    ipaddr   addr;
 
     p = (Icmp *)bp->rp;
 
@@ -314,7 +314,7 @@ goticmpkt(Proto *icmp, Block *bp)
 {
     Conv    **c, *s;
     Icmp    *p;
-    uchar   dst[IPaddrlen];
+    ipaddr  dst;
     ushort  recid;
 
     p = (Icmp *) bp->rp;
@@ -478,7 +478,7 @@ icmpadvise(Proto *icmp, Block *bp, char *msg)
 {
     Conv    **c, *s;
     Icmp    *p;
-    uchar   dst[IPaddrlen];
+    ipaddr   dst;
     ushort  recid;
 
     p = (Icmp *) bp->rp;

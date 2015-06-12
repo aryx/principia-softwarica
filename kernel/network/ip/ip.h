@@ -60,9 +60,15 @@ enum
   /*e: constant MAXTTL */
   DFLTTOS=  0,
 
-  IPaddrlen=  16,
-  IPv4addrlen=  4,
-  IPv4off=  12,
+  /*s: constant IPaddrlen */
+  IPaddrlen=	16,
+  /*e: constant IPaddrlen */
+  /*s: constant IPv4addrlen */
+  IPv4addrlen=	4,
+  /*e: constant IPv4addrlen */
+  /*s: constant IPv4off */
+  IPv4off=	12,
+  /*e: constant IPv4off */
   IPllen=   4,
 
   /*s: constant IP_VER4 */
@@ -164,6 +170,7 @@ enum mib_two_counters
 /*s: struct Fragment4 */
 struct Fragment4
 {
+  // list<ref_own<Block>> ? next = Block.???
   Block*  blist;
 
   iplong   src;
@@ -173,7 +180,9 @@ struct Fragment4
   ulong   age;
 
   // Extra
+  /*s: [[Fragment4]] extra fields */
   Fragment4*  next;
+  /*e: [[Fragment4]] extra fields */
 };
 /*e: struct Fragment4 */
 
@@ -208,8 +217,11 @@ struct Ipfrag
 /* an instance of IP */
 struct IP
 {
+  // list<ref_own<Fragment>>, next = Fragment4.next
   Fragment4*  flisthead4;
+  // list<ref_own<Fragment>>, next = Fragment4.next
   Fragment4*  fragfree4;
+
   Ref   id4;
 
   /*s: [[IP(kernel)]] stat fields */
@@ -289,12 +301,6 @@ struct Conv
   /*x: [[Conv(kernel)]] routing fields */
   ulong rgen;     /* routetable generation for *r */
   /*e: [[Conv(kernel)]] routing fields */
-  /*s: [[Conv(kernel)]] multicast fields */
-  Ipmulti *multi;     /* multicast bindings for this interface */
-  /*e: [[Conv(kernel)]] multicast fields */
-  /*s: [[Conv(kernel)]] udp fields */
-  bool ignoreadvice;   /* don't terminate connection on icmp errors */
-  /*e: [[Conv(kernel)]] udp fields */
 
   /*s: [[Conv(kernel)]] synchronisation fields */
   Rendez  cr;
@@ -309,6 +315,13 @@ struct Conv
   /*s: [[Conv(kernel)]] error fields */
   char  cerr[ERRMAX];
   /*e: [[Conv(kernel)]] error fields */
+
+  /*s: [[Conv(kernel)]] udp fields */
+  bool ignoreadvice;   /* don't terminate connection on icmp errors */
+  /*e: [[Conv(kernel)]] udp fields */
+  /*s: [[Conv(kernel)]] multicast fields */
+  Ipmulti *multi;     /* multicast bindings for this interface */
+  /*e: [[Conv(kernel)]] multicast fields */
 
   /*s: [[Conv(kernel)]] other fields */
   int inuse;      /* opens of listen/data/ctl */
@@ -366,11 +379,12 @@ struct Medium
   void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
   void  (*areg)(Ipifc*, uchar*);      /* register */
   /*e: [[Medium(kernel)]] address resolution methods */
-  /*s: [[Medium(kernel)]] route methods */
+
+  /*s: [[Medium(kernel)]] router methods */
   /* routes for router boards */
   void  (*addroute)(Ipifc *ifc, int, uchar*, uchar*, uchar*, int);
   void  (*remroute)(Ipifc *ifc, int, uchar*, uchar*);
-  /*e: [[Medium(kernel)]] route methods */
+  /*e: [[Medium(kernel)]] router methods */
   /*s: [[Medium(kernel)]] multicast methods */
   /* for arming interfaces to receive multicast */
   void  (*addmulti)(Ipifc *ifc, uchar *a, uchar *ia);
@@ -380,7 +394,6 @@ struct Medium
   void  (*joinmulti)(Ipifc *ifc, uchar *a, uchar *ia);
   void  (*leavemulti)(Ipifc *ifc, uchar *a, uchar *ia);
   /*e: [[Medium(kernel)]] multicast methods */
-
   /*s: [[Medium(kernel)]] ipv6 methods */
   /* v6 address generation */
   void  (*pref2addr)(uchar *pref, uchar *ea);
@@ -516,8 +529,8 @@ struct Ipifc
  */
 struct Ipmulti
 {
-  uchar ma[IPaddrlen];
-  uchar ia[IPaddrlen];
+  ipaddr ma;
+  ipaddr ia;
   Ipmulti *next;
 };
 /*e: struct Ipmulti */
@@ -577,7 +590,7 @@ Conv* iphtlook(Ipht *ht, uchar *sa, ushort sp, uchar *da, ushort dp);
  */
 struct Proto
 {
-  char*   name;   /* protocol name */ // e.g. "udp", "tcp", etc
+  char*   name;   /* protocol name */ // e.g. "udp", "tcp", "ipfc", etc
 
   /*s: [[Proto(kernel)]] methods */
   /*s: [[Proto(kernel)]] protocol methods */
@@ -811,7 +824,7 @@ struct  RouteTree
   // bitset<enum<route_type> >
   uchar type;
 
-  Ipifc *ifc; // !!!
+  Ipifc *ifc; // !!! the missing link!
 
   /*s: [[Routetree]] other fields */
   char  tag[4];
@@ -902,7 +915,7 @@ extern IPaux* newipaux(char*, char*);
 /*s: struct Arpent */
 struct Arpent
 {
-  uchar ip[IPaddrlen];
+  ipaddr ip;
   uchar mac[MAClen];
 
   Medium  *type;      /* media type */
@@ -955,13 +968,13 @@ extern int  eipfmt(Fmt*);
 #define ipcmp(x, y) ( (x)[IPaddrlen-1] != (y)[IPaddrlen-1] || memcmp(x, y, IPaddrlen) )
 /*e: macro ipcmp (kernel/network/ip/ip.h) */
 
-extern uchar IPv4bcast[IPaddrlen];
-//extern uchar IPv4bcastobs[IPaddrlen];
-//extern uchar IPv4allsys[IPaddrlen];
-//extern uchar IPv4allrouter[IPaddrlen];
-extern uchar IPnoaddr[IPaddrlen];
-extern uchar v4prefix[IPaddrlen];
-extern uchar IPallbits[IPaddrlen];
+extern ipaddr IPv4bcast;
+extern ipaddr IPnoaddr;
+extern ipaddr v4prefix;
+extern ipaddr IPallbits;
+//extern ipaddr IPv4bcastobs;
+//extern ipaddr IPv4allsys;
+//extern ipaddr IPv4allrouter;
 
 /*s: constant NOW */
 #define NOW TK2MS(CPUS(0)->ticks)

@@ -7,7 +7,7 @@
 /*
  *  well known IP addresses
  */
-uchar IPv4bcast[IPaddrlen] = {
+ipaddr IPv4bcast = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
@@ -16,7 +16,7 @@ uchar IPv4bcast[IPaddrlen] = {
 };
 /*e: global IPv4bcast */
 /*s: global IPv4allsys */
-uchar IPv4allsys[IPaddrlen] = {
+ipaddr IPv4allsys = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
@@ -25,7 +25,7 @@ uchar IPv4allsys[IPaddrlen] = {
 };
 /*e: global IPv4allsys */
 /*s: global IPv4allrouter */
-uchar IPv4allrouter[IPaddrlen] = {
+ipaddr IPv4allrouter = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
@@ -34,7 +34,7 @@ uchar IPv4allrouter[IPaddrlen] = {
 };
 /*e: global IPv4allrouter */
 /*s: global IPallbits */
-uchar IPallbits[IPaddrlen] = {
+ipaddr IPallbits = {
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,

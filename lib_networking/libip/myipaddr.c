@@ -4,7 +4,7 @@
 #include <ip.h>
 
 /*s: global loopbacknet */
-static uchar loopbacknet[IPaddrlen] = {
+static ipaddr loopbacknet = {
     0, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0xff, 0xff,
@@ -12,7 +12,7 @@ static uchar loopbacknet[IPaddrlen] = {
 };
 /*e: global loopbacknet */
 /*s: global loopbackmask */
-static uchar loopbackmask[IPaddrlen] = {
+static ipaddr loopbackmask = {
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff,
@@ -24,13 +24,13 @@ static uchar loopbackmask[IPaddrlen] = {
 /* find first ip addr that isn't the friggin loopback address
  * unless there are no others 
  */
-int
-myipaddr(uchar *ip, char *net)
+errorneg1
+myipaddr(ipaddr ip, char *net)
 {
     Ipifc *nifc;
     Iplifc *lifc;
     static Ipifc *ifc;
-    uchar mynet[IPaddrlen];
+    ipaddr mynet;
 
     ifc = readipifc(net, ifc, -1);
     for(nifc = ifc; nifc; nifc = nifc->next)
@@ -41,11 +41,11 @@ myipaddr(uchar *ip, char *net)
             }
             if(ipcmp(lifc->ip, IPnoaddr) != 0){
                 ipmove(ip, lifc->ip);
-                return 0;
+                return OK_0;
             }
         }
     ipmove(ip, IPnoaddr);
-    return -1;
+    return ERROR_NEG1;
 }
 /*e: function myipaddr */
 /*e: lib_networking/libip/myipaddr.c */

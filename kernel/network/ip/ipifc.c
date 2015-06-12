@@ -38,7 +38,7 @@ Medium *media[Maxmedia] = { 0 };
 struct Ipself
 {
     uchar   type;       /* type of address */
-    uchar   a[IPaddrlen];
+    ipaddr   a;
 
     ulong   expire;
 
@@ -73,8 +73,8 @@ typedef struct Ipmcast Ipmcast;
 struct Ipmcast
 {
     Ipmcast *next;
-    uchar   ma[IPaddrlen];  /* multicast address */
-    uchar   ia[IPaddrlen];  /* interface address */
+    ipaddr   ma;  /* multicast address */
+    ipaddr   ia;  /* interface address */
 };
 /*e: struct Ipmcast */
 
@@ -428,15 +428,15 @@ ipifcadd(Ipifc *ifc, char **argv, int argc, bool tentative, Iplifc *lifcp)
     int mtu;
     // enum<route_type>
     int type;
-    uchar ip[IPaddrlen];
-    uchar mask[IPaddrlen];
-    uchar net[IPaddrlen]; // ip & mask
-    uchar rem[IPaddrlen];
+    ipaddr ip;
+    ipaddr mask;
+    ipaddr net; // ip & mask
+    ipaddr rem;
     Iplifc *lifc, **l;
     Fs *f;
 
     /*s: [[ipifcadd()]] locals */
-    uchar bcast[IPaddrlen];
+    ipaddr bcast;
     /*x: [[ipifcadd()]] locals */
     bool sendnbrdisc = false;
     /*e: [[ipifcadd()]] locals */
@@ -698,7 +698,7 @@ char*
 ipifcrem(Ipifc *ifc, char **argv, int argc)
 {
     char *rv;
-    uchar ip[IPaddrlen], mask[IPaddrlen], rem[IPaddrlen];
+    ipaddr ip, mask, rem;
     Iplifc *lifc;
 
     if(argc < 3)
@@ -1275,7 +1275,7 @@ findipifc(Fs *f, uchar *remote, int type)
     Ipifc *ifc, *x;
     Iplifc *lifc;
     Conv **cp, **e;
-    uchar gnet[IPaddrlen], xmask[IPaddrlen];
+    ipaddr gnet, xmask;
 
     x = nil;
     memset(xmask, 0, IPaddrlen);
@@ -1413,7 +1413,7 @@ findlocalip(Fs *f, uchar *local, uchar *remote)
 {
     int version, atype = unspecifiedv6, atypel = unknownv6;
     int atyper, deprecated;
-    uchar gate[IPaddrlen], gnet[IPaddrlen];
+    ipaddr gate, gnet;
     Ipifc *ifc;
     Iplifc *lifc;
     Route *r;
@@ -1570,7 +1570,7 @@ int
 ipproxyifc(Fs *f, Ipifc *ifc, uchar *ip)
 {
     Route *r;
-    uchar net[IPaddrlen];
+    ipaddr net;
     Iplifc *lifc;
 
     /* see if this is a direct connected pt to pt address */
@@ -1738,7 +1738,7 @@ ipifcregisterproxy(Fs *f, Ipifc *ifc, uchar *ip)
     Ipifc *nifc;
     Iplifc *lifc;
     Medium *m;
-    uchar net[IPaddrlen];
+    ipaddr net;
 
     /* register the address on any network that will proxy for us */
     e = &f->ipifc->conv[f->ipifc->nc];

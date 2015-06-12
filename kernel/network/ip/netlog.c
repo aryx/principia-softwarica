@@ -29,7 +29,7 @@ struct Netlog {
 
 
     int logmask;            /* mask of things to debug */
-    uchar   iponly[IPaddrlen];      /* ip address to print debugging for */
+    ipaddr   iponly;      /* ip address to print debugging for */
     int iponlyset;
 
     // Extra

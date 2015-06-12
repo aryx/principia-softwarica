@@ -545,7 +545,7 @@ struct CtlrEtherIgbe {
     uint    ipcs;
     uint    tcpcs;
 
-    uchar   ra[Eaddrlen];       /* receive address */
+    eaddr   ra;       /* receive address */
     ulong   mta[128];       /* multicast table array */
 
     Rendez  rrendez;

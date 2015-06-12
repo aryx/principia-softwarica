@@ -627,8 +627,7 @@ iliput(Proto *il, Ipifc*, Block *bp)
     char *st;
     Ilcb *ic;
     Ilhdr *ih;
-    uchar raddr[IPaddrlen];
-    uchar laddr[IPaddrlen];
+    ipaddr raddr, laddr;
     ushort sp, dp, csum;
     int plen, illen;
     Conv *new, *s;
@@ -1442,7 +1441,7 @@ iladvise(Proto *il, Block *bp, char *msg)
 {
     Ilhdr *h;
     Ilcb *ic;		
-    uchar source[IPaddrlen], dest[IPaddrlen];
+    ipaddr source, dest;
     ushort psource;
     Conv *s, **p;
 
