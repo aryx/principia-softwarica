@@ -27,11 +27,11 @@
 % - saw duplication between cc.h and aa.h
 
 %thx to this manual, better understand compilers and C:
-% - TODO assignment of structures?
+% - TODO assignment of structures? deep copy?
 % - TODO x++ and ++x in complex situations
 % - TODO initialisation of complex globals, e.g. znode, all fields set to 0?
 % - TODO what happen if pass array in func? int foo(int arr[4]), pass
-%   actually a pointer?
+%   actually a pointer? see Network.nw
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -214,7 +214,7 @@ Here are other candidates that were considered but ultimately discarded:
 % - small interpreter: https://github.com/zsaleeba/picoc
 % - https://github.com/rui314/8cc
 %   but no yacc
-% - seeking collaborators https://github.com/andrewchambers/cc inspired
+% - https://github.com/andrewchambers/cc, seeking collaborators, inspired
 %   by tcc and 8cc apparently, written in Go
 
 % a few tags used in this file
@@ -266,7 +266,7 @@ License.
 % Assembly is essentially:
 %  - simple arith and memory instructions 
 %  - labels and jmps
-%  - simple stack handling locals, params, and calls
+%  - simple stack when you have to manually handle locals, params, and calls
 %  - simple data structure, bytes
 % The goal of the C compiler is to translate in this simpler language
 % the more complex construct of C.
@@ -292,7 +292,8 @@ License.
 %  - simpler?
 %  - bitfields? so can match more directly hardware specifics?
 
-% will present frontend, and backend.
+% principles also of frontend and backend.
+% We will present below both the frontend and backend.
 
 \section{[[5c]] services}
 
@@ -377,9 +378,6 @@ License.
 % TODO add check for code not using return value (e.g.
 %  in xdecl rule where call dodecl() which returns a node).
 
-% C vs assembly? typechecking! more structured, formulas, etc.
-% see codegen: again.
-
 % "who says C is simple"
 %http://www.eecs.berkeley.edu/~necula/cil/cil016.html
 
@@ -402,7 +400,8 @@ License.
 
 % cc.h (vs gc.h (not garbage collector, g for? nongeneric? generation? hmmm))
 % no lex (handcrafted lex.c), yacc (cc.y, y.tab.h, y.tab.c)
-%  (why no lex? to avoid bootstrapping issues?)
+%  (why no lex? to avoid bootstrapping issues? they don't like lex?
+%   because of unicode which lex does not handle well anyway?)
 %  mac.c = macro (included cpp)
 % globals.c, utils.c, compat.c
 
@@ -438,7 +437,6 @@ License.
 % reg.c = register, on assembly! but the Reg structure itself
 %  seems actually generic.
 
-% a few conventions? see glossary!
 
 \section{Software architecture}
 
@@ -447,6 +445,7 @@ License.
 % lexer -> preprocessor -> parser -> ast -> visit and gen assembly -> opti
 %  -> object ARM code.
 % with optimisations done?
+
 % no CFG :( no IL. Register allocator optimizer is done via peep?
 % vs tiger book?
 
@@ -464,6 +463,13 @@ License.
 % and other ... stuff.
 % - charles forsith on 9fans
 
+% name conventions:
+% - s symbol? (todo change to sym?)
+% - o Oxxx of node_kind
+% - a Axxx of opcode_kind of assembly
+
+% see also glossary, su = struct/union, sue = struct/union/enum
+
 \section{Bootstrapping}
 
 % diagram en T? reference recent Go bootstrapping effort?
@@ -478,7 +484,7 @@ License.
 % need to represent program in memory. propram is essentially
 % a tree of expr|stmt|... with different kinds of nodes.
 
-%figure: AST concept, tree of expression 1+2*3, with OCONST, OADD, OMUL.
+%FIGURE: AST concept, tree of expression 1+2*3, with OCONST, OADD, OMUL.
 % simple.
 
 \subsection*{[[Node]]}
@@ -572,6 +578,7 @@ struct	Node
 % warnings anyway
 %still?: different split? identifier field where have sym and storage? 
 
+% put value fields here?
 % How things are represented for
 % - OCONST: additional vconst and fconst field
 % - OSTRING, OLSTRING: cstring and rstring fields
@@ -608,6 +615,11 @@ Sym*	sym; // for ONAME, ODOT/OELEM, OSTRUCT/OUNION
 
 
 
+% for declaration nodes?
+<<[[Node]] type and storage fields>>=
+// enum<storage_class>
+char	class;
+@
 
 % for declaration nodes?
 <<enum storage_class>>=
@@ -630,11 +642,6 @@ enum storage_class
 % strings are also using CSTATIC!
 % have also CTYPEDEF here, so can have typedef trick in yylex().
 
-% for declaration nodes?
-<<[[Node]] type and storage fields>>=
-// enum<storage_class>
-char	class;
-@
 
 
 
@@ -643,7 +650,7 @@ char	class;
 <<[[Node]] code generation fields>>=
 // address-able, used as a bool to mark lvalues, if can assign you can take
 // the address of. used by xcom() to assign ``addressibility''.
-// also (ab)used as a bool for to mark label uses (true = used in a goto)
+// also (ab)used as a bool to mark label uses (true = used in a goto)
 char	addable;
 @
 
@@ -658,7 +665,7 @@ char	complex;
 
 
 
-% int -> char ... for op, hmmm
+%less: int -> char ... for op, hmmm
 <<function new>>=
 Node*
 new(int t, Node *l, Node *r)
@@ -719,12 +726,13 @@ new1(int o, Node *l, Node *r)
 % in tcomo() during typechecking to make more explicit certain
 % cast for instance, and when we are not sure there is something
 % to base line upon (maybe l and r are empty).
+% Post parsing nodes.
 
 
 <<global znode>>=
 Node	znode;
 @
- % set all fields to zero? why?
+% This get its fields set to zero by default? Semantic of C?
 
 \subsection*{[[Type]]}
 
@@ -744,22 +752,29 @@ enum type_kind
 <<type cases>>=
 TCHAR,
 TUCHAR,
+
 TSHORT,
 TUSHORT,
+
 TINT,
 TUINT,
+
 TLONG,
 TULONG,
+
 TVLONG,
 TUVLONG,
-TFLOAT,
-TDOUBLE,
 @
 % C syntax for types is ugly, and allows many different schemes
 % such as signed int; int; int signed; ... but in the end
-% just have those 12 basic types!
+% just have those 10 basic types! (and the floats below)
 %coupling: with the global 'tab' which use initialisers that
 % assumes a certain order
+
+<<type cases>>=
+TFLOAT,
+TDOUBLE,
+@
 
 <<type cases>>=
 TVOID,
@@ -774,14 +789,15 @@ TSTRUCT,
 TUNION,
 TENUM,
 @
-% IND for indirect probably, meaning pointer. C power!
-% Note that even if array access are unsugar in pointer arithmetic access, 
+%IND for indirect probably, meaning pointer. C power!
+%Note that even if array access are unsugar in pointer arithmetic access, 
 % type declarations are not; we keep the array vs pointer info here.
-% Note that no TYPEDEF!
+%Note that no TYPEDEF!
 %note that originally if you changed the order above then you 
 % would get some segfaults in tests/5c and mk testall. This was
 % because the code was using simple initialisers instead of array
-% initialisers e.g. for the global 'tab'. I fixed it.
+% initialisers e.g. for the global 'tab'. I fixed it so it should
+% be ok to reorder now.
 
 
 
@@ -821,7 +837,7 @@ struct	Type
 %    is defined, or if it was defined before, the symbol for
 %    this structure will link via suetag to a TSTRUCT type
 %    where the link will have been set to the body of the struct.
-%    how then represent the list of the fields? via down?
+%    How then represent the list of the fields? via down???
 %  - TYPEDEF? they are not in enum type_kind! they are substitued
 %    at use time? where?
 %  - TFUNC: the return is in the link, the parameters in the down
@@ -832,11 +848,11 @@ struct	Type
 Sym*	sym; // for TSTRUCT/TUNION/TENUM
 @
 
-
-
-% for expression nodes?
-% important field! typechecking! set in parsing when can
-% (e.g. for cast where have type, for return where have also spec)
+% Ok now let's see the link between Node and Type
+% (for expression nodes only).
+% Important field! typechecking! Set in parsing when can
+% (e.g. for cast where have type, for return where have also spec).
+% See in typechecking for every nodes later.
 <<[[Node]] type and storage fields>>=
 Type*	type;
 @
@@ -853,8 +869,15 @@ char	etype;
 % annoying those n->etype = (s->type?): s->type->etype: TVOID;
 
 
+<<[[Type]] qualifier fields>>=
+// enum<qualifier>
+char	garb;
+@
+% note that can be at different level! can have  const * const *x;
+% tricky.
+%less: rename qualifier
 
-% gxxx for 'garbage' but should be renamed qualifier
+% Gxxx for 'garbage' :) but should be renamed qualifier so Qxxx
 <<enum qualifier>>=
 enum qualifier
 {
@@ -870,15 +893,6 @@ enum qualifier
 @
 % >> >> >> >>
 % see also gnames in debugging section
-
-
-<<[[Type]] qualifier fields>>=
-// enum<qualifier>
-char	garb;
-@
-% note that can be at different level! can have  const * const *x;
-% tricky.
-%less: rename qualifier
 
 % storage class is not there! it's an attribute of the 
 % variable, not of the type of the variable, so it's
@@ -921,7 +935,7 @@ typ(int et, Type *d)
 <<[[Type]] code generation fields>>=
 long	width; // ewidth[Type.etype]
 @
-% semantic phase?
+% semantic phase? for codegen?
 
 
 <<function copytyp>>=
@@ -935,8 +949,9 @@ copytyp(Type *t)
     return nt;
 }
 @
+% typ will copy.
 
-
+%Why see that global? because often used?
 <<global types>>=
 Type*	types[NTYPE];
 @
@@ -991,6 +1006,7 @@ struct	Sym
     //    and also enum constants)
     //  - tags (struct/union/enum) 
     //  - labels (for the goto)
+    // and also during parsing for:
     //  - macros (the #define)
     //  - keywords lexeme (abuse)
 
@@ -1021,6 +1037,9 @@ struct	Sym
     <<[[Sym]] extra fields>>
 };
 @
+% note that the value fields are not in a union! because have multiple
+% namespace so depending on the context you want to get different values
+% for the same symbol 's'. 
 %coupling: if add a field here, don't forget to update Decl too
 % and especially its "sym copy fields" section
 
@@ -1031,9 +1050,11 @@ struct	Sym
 % - labels, see s->label
 % - macro, see s->macros
 %note that fields are not here as they are not in the global namespace.
+
 %Does Sym handles well the different namespaces? What if struct and local
 % with same name? It's not a union! the Decl value will determine
 % which field to look for.
+
 %Can have struct x x;
 % it can be the same symbol, but in a struct context we will use
 % Sym.suetag, in other context Sym.type!
@@ -1078,13 +1099,22 @@ for(i=0; i<NHASH; i++)
 
 
 
+<<function slookup>>=
+Sym*
+slookup(char *s)
+{
 
-<<constant NSYMB>>=
-#define	NSYMB		1500
+    strcpy(symb, s);
+    return lookup();
+}
 @
+
 
 <<global symb>>=
 char	symb[NSYMB];
+@
+<<constant NSYMB>>=
+#define	NSYMB		1500
 @
 
 
@@ -1127,18 +1157,9 @@ lookup(void)
 }
 @
 
-<<function slookup>>=
-Sym*
-slookup(char *s)
-{
-
-    strcpy(symb, s);
-    return lookup();
-}
-@
 
 
-
+% complex sub structure :)
 <<[[Sym]] identifier value fields>>=
 <<[[Sym]] identifier value, type and storage fields>>
 <<[[Sym]] identifier value, scope fields>>
@@ -1153,14 +1174,14 @@ Type*	type;
 // enum<storage_class>
 char	class;
 @
-% similar to Node.type Decl.type, and now Sym.type
+% similar to Node.type, Decl.type (below), and now Sym.type
 % note that this class field is then used by the lexer
 % for the typedef trick!
 
 <<[[Sym]] identifier value, scope fields>>=
 ushort	block;
 @
-% see also Decl.block
+% see also Decl.block (below)
 
 
 <<[[Sym]] macro value fields>>=
@@ -1177,6 +1198,7 @@ char*	macro;
 // enum<lexeme>
 ushort	lexical;
 @
+% for if, then, where value is then TIF, ...
 
 
 <<function syminit>>=
@@ -1215,9 +1237,15 @@ enum namespace
 @
 % this type is for the different C namespaces which are
 %  identifier, sue tags, and labels. See K&R book?
-% DAUTO(declaration?), TAUTO(temporary), LAUTO(lexeme), CAUTO(class), 
-%  hmmm that's a lot of AUTO.
 %todo: DAUTO is a bad name, DIDENT would be better no? and SUE -> DTAG?
+%Lots of XAUTO:
+% - DAUTO(declaration?), 
+% - TAUTO(temporary), 
+% - LAUTO(lexeme), 
+% - CAUTO(class), 
+% hmmm that's a lot.
+
+%ocaml: DMARK is ugly, we should just use a list of list.
 
 <<struct Decl>>=
 struct	Decl
@@ -1233,8 +1261,11 @@ struct	Decl
 };
 @
 %less: rename val? to kind? or namespace?
+% this val will help to know then which 'xxx value field' makes sense
+% in this context for this symbol.
+%ocaml: if had cleaner ADT would not need to overload Sym.
 
-% have a sym copy fields, because when add an ident in a scope,
+% have this 'sym copy fields' above, because when add an ident in a scope,
 % we mask the previous one, but we want to remember the previous
 % one when we exit the scope to restore it in the global symbol
 % table.
@@ -1242,7 +1273,7 @@ struct	Decl
 
 % stack because nested scopes
 <<global dclstack>>=
-// list<ref_own<Decl>> (next = Decl.link)
+// list<list<ref_own<Decl>>> (next = Decl.link, nested lists via DMARK)
 Decl*	dclstack;
 @
 %ocaml: but should have a list of list? ugly but do ia via DMARK
@@ -1415,6 +1446,7 @@ case DLABEL:
 % and there is no global labels, so safe to set to Z.
 % see dcllabels(), maybe they are not added in the current
 % scope but the function scope?
+%lint: start to to do lint check at parsing time :)
 
 
 <<[[revertdcl()]] switch declaration type cases>>=
@@ -1473,7 +1505,6 @@ d->aused = s->aused;
         char*   s;
         long    l;
     } sval;
-
     Sym*    sym;
 
    <<[[union yacc]] other fields>>
@@ -1501,6 +1532,7 @@ d->aused = s->aused;
 % L for Lexeme probably
 % so have LDOUBLE and TDOUBLE (and even BDOUBLE)
 
+% small language in the end :)
 
 
 
@@ -1530,6 +1562,7 @@ struct	Prog
 @
 % lineno! for debugger! so generated object file will contain
 % line information of the C code.
+% 'char' is enough, less than 255 ARM opcodes :)
 
 
 % really ARM specific
@@ -1557,9 +1590,10 @@ struct	Adr
     <<[[Adr]] type fields(arm)>>
 };
 @
-%less: use union for first 5?
+%less: use union for the values?
 %Similar to Gen in Assembler.nw and Adr in Linker.nw. Some differences?:
 % - ??
+%aspectize float? ieee?
 
 <<constant A>>=
 #define	A	((Adr*)nil)
@@ -1580,6 +1614,7 @@ char	symkind;
 @
 %old: was name, but symkind is less confusing (did the same in
 % Assembler.nw and Linker.nw)
+%todo: put in 'value fields' instead?
 
 
 <<global zprog>>=
@@ -1611,7 +1646,8 @@ zprog.scond = COND_ALWAYS;
 <<global thechar>>=
 int	thechar;
 @
-% 5
+% '5' 
+%less: Why 'int' and not 'char' ?
 
 <<global thestring>>=
 char*	thestring;
@@ -1700,6 +1736,7 @@ case 'o':
 
 
 <<[[main()]] locals>>=
+char *p;
 char **np;
 int maxdef;
 @
@@ -1719,15 +1756,13 @@ case 'D':
                 memmove(np, defs, (maxdef - 50) * sizeof *np);
             defs = np;
         }
+
         defs[ndef++] = p;
         dodefine(p);
     }
     break;
 @
 
-<<[[main()]] locals>>=
-char *p;
-@
 <<[[main()]] command line processing>>=
 case 'I':
     p = ARGF();
@@ -1800,7 +1835,7 @@ compile(char *infile, char **defs, int ndef)
     newio();
     first = false;
 
-    <<[[compile()]] use ANSI preprocessor>>
+    <<[[compile()]] if use ANSI preprocessor>>
     else {
         if(strcmp(infile, "stdin") == 0)
             newfile(infile, 0);
@@ -1812,6 +1847,7 @@ compile(char *infile, char **defs, int ndef)
     yyparse();
 
     if(!debug['a'] && !debug['Z'])
+        // Another important call, calls outcode()
         gclean();
     return nerrors;
 }
@@ -1820,6 +1856,7 @@ compile(char *infile, char **defs, int ndef)
 
 % main -> compile -> yyparse -> yylex -> macxxx
 %                            -> codgen (portable) -> gen
+%                 -> gclean -> outcode
 
 
 <<[[cinit()]] lexing globals initialization>>=
@@ -1893,7 +1930,38 @@ int i, c, fd[2];
 % ok now details each functions called.
 % yyparse() will see in parsing section though.
 
-\section{[[tinit()]]}
+\section{[[gclean()]]}
+% mv earlier? just after compile?
+
+
+% main -> compile -> yyparse; <>
+<<function gclean(arm)>>=
+void
+gclean(void)
+{
+    int i;
+    Sym *s;
+
+    <<[[gclean()]] sanity check reg>>
+
+    <<[[gclean()]] adjust symstring width>>
+    <<[[gclean()]] adjust symrathole width>>
+
+    <<[[gclean()]] generate all AGLOBL pseudo opcodes>>
+    <<[[gclean()]] generate last opcode, AEND>>
+
+    // generate the whole output file using outbuf global
+    outcode();
+}
+@
+
+
+
+
+
+\section{Initializations}
+
+\subsection{[[tinit()]]}
 % type initialisation?
 
 % main -> <>
@@ -1935,7 +2003,7 @@ urk(char *name, int max, int i)
 
 
 
-\section{[[cinit()]]}
+\subsection{[[cinit()]]}
 % C lexing/parsing language initialisation?
 
 % main -> <>
@@ -1987,7 +2055,7 @@ if(getwd(pathname, 99) == 0) {
 }
 @
 
-\section{[[ginit()]]}
+\subsection{[[ginit()]]}
 % generation code initialisation
 
 % main -> <>
@@ -2006,32 +2074,9 @@ ginit(void)
 @
 
 
-\section{[[arginit()]]}
+\subsection{[[arginit()]]}
 
 % see later
-
-\section{[[gclean()]]}
-
-
-% main -> compile -> yyparse; <>
-<<function gclean(arm)>>=
-void
-gclean(void)
-{
-    int i;
-    Sym *s;
-
-    <<[[gclean()]] sanity check reg>>
-
-    <<[[gclean()]] adjust symstring width>>
-    <<[[gclean()]] adjust symrathole width>>
-
-    <<[[gclean()]] generate all AGLOBL pseudo opcodes>>
-    <<[[gclean()]] generate last opcode, AEND>>
-    // generate the whole output file using outbuf global
-    outcode();
-}
-@
 
 \chapter{Input}
 % similar to Assembler, could reuse
@@ -2498,7 +2543,7 @@ talph:
 % of the symbol.
 % Is there any issue when do  xxx xxx; ? no because
 % xdecor actually uses ltag with LNAME | LTYPE.
-% (but no conflict?)
+% (but no conflict????)
 
 
 <<[[yylex()]] alpha case, return LTYPE if typedef symbol s>>=
@@ -2518,6 +2563,9 @@ case '*':
 @
 % else return character itself, which is ok since yacc have
 % a special case for single character terminals.
+
+%ocaml: lex would be better than this code. It will handle
+% internally the backtrack.
 
 <<[[yylex()]] switch c cases>>=
 case '%':
@@ -2734,6 +2782,7 @@ ncu:
     t = TINT;
     goto nret;
 @
+%ocaml: lex definitely better I think
 
 <<[[yylex()]] labels>>=
 nret:
@@ -2876,6 +2925,7 @@ caseout:
         return LFCONST;
     return LDCONST;
 @
+%ocaml: lex definitely better I think
 
 \section{Characters}
 
@@ -3228,8 +3278,9 @@ getcom(void)
 
 \chapter{Preprocessing}
 
-% similar to Assembler.nw again, except here have the possiblity
-% to also call an external program.
+% similar to Assembler.nw again, except here have also the possiblity
+% to call an external program (e.g. /bin/cpp which is a bit different
+% than the builtin cpp)
 
 
 % Builtin in the binary. A bit of code duplication with the
@@ -4269,6 +4320,8 @@ getnsn(void)
 %  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
 %(compared to ocamlyacc can have actions in the middle, and they count
 % as indexable elements for the $xxx ($1, $2, etc))
+%todo: how can have action in the middle? when shift you don't know
+% yet i
 
 <<cc/cc.y>>=
 %{
@@ -4311,6 +4364,9 @@ getnsn(void)
 <<[[union yacc]] other fields>>=
 Node*   node;
 @
+% the union is for the $x which can be token in the lexer,
+% but here they will correspond also to some nonterminals,
+% and so we get nodes now in the union!
 
 % see Node also in Core data structure section, with Z, left/right, new(), etc
 
@@ -4354,7 +4410,8 @@ prog:
 <<ebnf grammar rules>>
 @
 
-
+%FIGURE: show peigne of prog when have multiple xdecl and the derivation
+% tree.
 
 <<constant YYMAXDEPTH>>=
 //@Scheck: used in t.tab.c probably
@@ -5074,6 +5131,7 @@ if(n != Z) {
 <<pexpr rule>>
 @
 % xu = extended unary(cast), u = unary, p = primary expr
+% cexpr? comma expr?
 
 <<expr rule>>=
 expr:
@@ -5096,16 +5154,17 @@ pexpr:
 @
 %$
 
-<<expression nodes>>=
-OCOMMA,
-@
-
 <<expressions rules>>=
 cexpr:
     expr
 |   cexpr ',' cexpr { $$ = new(OCOMMA, $1, $3); }
 @
 %$
+
+<<expression nodes>>=
+OCOMMA,
+@
+
 
 
 
@@ -5190,9 +5249,9 @@ OMOD,
 OAND,
 OOR,
 OXOR,
+
 OASHL,
 OASHR,
-
 @
 % OAS ... rename? so less confusing with the other assign nodes?
 
@@ -5201,6 +5260,7 @@ OASHR,
 |   expr '&' expr  { $$ = new(OAND, $1, $3); }
 |   expr '^' expr  { $$ = new(OXOR, $1, $3); }
 |   expr '|' expr  { $$ = new(OOR, $1, $3); }
+
 |   expr LRSH expr { $$ = new(OASHR, $1, $3); }
 |   expr LLSH expr { $$ = new(OASHL, $1, $3); }
 @
@@ -5262,6 +5322,7 @@ OGE,
 <<expr rule>>=
 |   expr LEQ expr  { $$ = new(OEQ, $1, $3); }
 |   expr LNE expr  { $$ = new(ONE, $1, $3); }
+
 |   expr '<' expr  { $$ = new(OLT, $1, $3); }
 |   expr '>' expr  { $$ = new(OGT, $1, $3); }
 |   expr LLE expr  { $$ = new(OLE, $1, $3); }
@@ -5438,7 +5499,7 @@ name:
         $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
         $$->xoffset = $1->offset;
         $$->class = $1->class;
-         <<name rule, LNAME case, adjust more fields>>
+        <<name rule, LNAME case, adjust more fields>>
     }
 @
 % similar to tag rule
@@ -6115,7 +6176,7 @@ init1(Sym *s, Type *t, long o, int exflag)
     }
 }
 @
-
+%TODO: lp split, big func
 
 
 <<function newlist>>=
@@ -8126,7 +8187,7 @@ abdecor3:
 
 % as we visit we will create new ASM instructions, linked
 % together that will be then serialized and written to a file
-% (see outcode). So nextpc() is here to create those new instruction
+% (see outcode()). So nextpc() is here to create those new instruction
 % and increment the pc global counter.
 
 <<global pc>>=
@@ -8146,10 +8207,10 @@ nextpc(void)
 
     p = alloc(sizeof(Prog));
     *p = zprog;
-    p->lineno = nearln;
+    p->lineno = nearln; // so origin tracking in db from assembly to C
     pc++;
 
-    // add_end_list(p, firstp/lastp)
+    // add_tail(p, firstp/lastp)
     if(firstp == P) {
         firstp = p;
         lastp = p;
@@ -8199,7 +8260,7 @@ Prog*	link;
 Prog*	lastp;
 @
 
-% firstp/lastp are used only by outcode()
+% firstp/lastp are used only by outcode() (and nextpc())
 
 <<[[ginit()]] initialisation>>=
 firstp = P;
@@ -8237,9 +8298,11 @@ gpseudo(int a, Sym *s, Node *n)
 @
 % pc--, like in Assembler?
 
+% naddr()?
 
 \subsection{[[gextern()]]}
 
+%todo: be consistent, don't use 'a' for opcode (above) and for Node (below)
 <<function gextern(arm)>>=
 void
 gextern(Sym *s, Node *a, long o, long w)
@@ -8297,7 +8360,7 @@ patch(Prog *op, long pc)
 \subsection{[[gins()]] and [[naddr()]]}
 
 % gmove | ... -> <>
-% pre: the from and to nodes should be very basic,
+% pre: the from (f) and to (t) nodes should be very basic,
 % constants, or names, or simple indirection of names or constants
 % see naddr() and the goto bad.
 % It must generates something that the assembler can grok, so can't
@@ -8786,7 +8849,7 @@ gopcode(int o, Node *f1, Node *f2, Node *t)
 \subsection{[[reg]]}
 
 <<global reg(arm)>>=
-// map<enum<registr>, bool>
+// map<enum<registr>, int>
 char	reg[NREG+NFREG];
 @
 % could be a bool, but some nodes can use the same
@@ -9042,6 +9105,7 @@ complex(Node *n)
 
 % n = node of the blocks OLIST, nn = node of the xdecor (should be ONAME)
 % cc2/pgen.c  
+% ?? -> <>
 <<function codgen>>=
 //@Scheck: used by cc.y
 void codgen(Node *n, Node *nn)
@@ -16027,6 +16091,9 @@ typeext(Type *st, Node *l)
 
 \section{Const checking}
 
+% qualifiers were called garbage, so I guess ken does
+% not respect that much const.
+
 \section{Format arguments checking}
 % cool, like in ocamlc!
 
@@ -16751,6 +16818,8 @@ if(!canreach) {
     }
 }
 @
+% no OCONTINUE? because no need special handle, go through default and warning
+% 'switch body below'? where is it?
 
 
 % deadheads -> <>
@@ -16873,7 +16942,7 @@ if(canreach && thisfntype->link->etype != TVOID){
  *	(ADDR(IND x)) ==> x
  *	remove some zero operands
  *	remove no op casts
- *	evaluate constants
+ *	evaluate constants // important one!
  */
 void
 ccom(Node *n)
@@ -20343,6 +20412,8 @@ BtoF(long b)
 
 \section{Peephole optimizer, [[peep()]]}
 
+% local opti, looking at the code like in a peep hole
+
 % codgen -> regopt -> <>
 <<function peep(arm)>>=
 void
@@ -22831,6 +22902,14 @@ if(a == ATEXT)
 @
 
 
+
+
+
+
+
+
+
+
 \chapter{Advanced Topics}
 
 \section{Advanced C features}
@@ -24188,6 +24267,7 @@ case TVLONG:
 @
 
 \section{Complex values}
+% complex as in math, imaginary numbers
 
 \subsection{Complex type}
 
@@ -25171,7 +25251,7 @@ convvtox(vlong c, int et)
 #define	CPP	"/bin/cpp"
 @
 
-<<[[compile()]] use ANSI preprocessor>>=
+<<[[compile()]] if use ANSI preprocessor>>=
 /* Use an ANSI preprocessor */
 if(debug['p']) {
     if(myaccess(infile) < 0) {
@@ -26405,7 +26485,8 @@ diag(Node *n, char *fmt, ...)
 
 \section{Memory managment}
 % same in Linker/assembler, not sure why they just don't use malloc?
-% to avoid dependencies to libc? for bootstrapping reasons?
+% to avoid dependencies to libc? for bootstrapping reasons? because
+% compiler anyway never frees so can optimize things?
 
 <<constant NHUNK>>=
 #define	NHUNK		50000L
@@ -26449,6 +26530,7 @@ gethunk(void)
     thunk += nh;
 }
 @
+% sbrk! raw memory managment
 
 <<constant MAXALIGN>>=
 #define	MAXALIGN	7
@@ -26509,13 +26591,13 @@ malloc(ulong n)
 }
 @
 
-% hmm so no free ... maybe ok in a compiler context?
 <<function free>>=
 void
 free(void*)
 {
 }
 @
+% hmm so no free ... maybe ok in a compiler context?
 
 <<function setmalloctag>>=
 //@Scheck: looks dead, but because we redefine malloc/free we must also redefine that

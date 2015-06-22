@@ -16,9 +16,10 @@
 %   see the case where a function takes subtely a ipv4or6
 % - use cv not c for conversation, less confusing with channel, use err
 %   not p, use err not s, ...
-% - use Idle, not 0 when can, use V4 not 4,
+% - use Idle not 0 when can, use V4 not 4, V6 not 6,
 % - removed deadcode: /net/bootp,  Ipifc fields (unbinding, idlock, ...),
-%   Conv (length, car, headers, reliable, ...), Proto (qid), Hwhdr
+%   Conv fiels (length, car, headers, reliable, ...), Proto fields (qid), 
+%   Hwhdr structure, ...
 % - untangled all those features, routing, gateway, forwarding, multicast, 
 %    broadcast, with those big structures that were hard to understand.
 
@@ -43,6 +44,7 @@
 % - TODO ping, I never understood how it worked (but does not work under qemu),
 %   but it's the network stack that answers to ping, not a daemon, not inetd.
 % - TODO ppp?
+% - TODO jacobson algorithm? congestion control?
 
 
 %history LP-ization:
@@ -186,6 +188,9 @@ Here are other candidates that were considered but ultimately discarded:
 
 %meh:
 %http://jvns.ca/blog/2014/08/12/what-happens-if-you-write-a-tcp-stack-in-python/
+
+% very good look at network stack with many diagnostics tools involved:
+%https://blog.cloudflare.com/how-to-receive-a-million-packets/
 
 % a few tags used in this file
 % - ocaml: to give a hint on how rewriting C in OCaml could improve things
@@ -357,6 +362,7 @@ people from Bell Labs.
 % OO like interface, with class and methods, and some private
 % fields.
 
+% name conventions:
 % f = /net fs
 % cv = conversation
 % c = channel (TODO or conversation sometimes, but we should rename them)
@@ -391,7 +397,10 @@ IPv4addrlen=	4,
 typedef uchar ipv4[IPv4addrlen];
 @
 %pad: I introduced that, I like types!
-% Xinu book does the same (it was called IPaddr there)
+% Xinu book does the same (it was called IPaddr there).
+% But at the same time in headers it's maybe better to see the exact byte
+% layout. So maybe having no intermediate typedefs is better.
+
 
 % 4 bytes, 2^32 = 4M, so can't have more than 4M machines :)
 % enter ipv6.
@@ -486,6 +495,8 @@ typedef uchar* ipv4or6;
 <<typedef ipv4p>>=
 typedef uchar* ipv4p;
 @
+% can't do ipaddr * :(, C is irregular, array are considered internally
+% as pointers when passed as parameters, but not otherwise.
 
 <<enum ip_version>>=
 /* ip versions */
@@ -575,6 +586,8 @@ maskip(ipaddr from, ipaddr mask, ipaddr to)
 <<typedef iplong>>=
 typedef ulong iplong;
 @
+% will need that when want to do arithmetic operations on addresses,
+% such as to check if they are in a certain range. See Route.
 
 \subsection{Other address operations}
 %reset, move, comparison
@@ -724,7 +737,6 @@ struct Ipifc
 
   Medium  *m;   /* Media pointer */
   uchar mac[MAClen];  /* MAC address */
-  void  *arg;   /* medium specific */
 
   int maxtu;    /* Maximum transfer unit */
   int mintu;    /* Minumum tranfer unit */
@@ -735,6 +747,7 @@ struct Ipifc
 
   <<[[Ipifc(kernel)]] stat fields>>
   <<[[Ipifc(kernel)]] routing fields>>
+  <<[[Ipifc(kernel)]] priv fields>>
 
   <<[[Ipifc(kernel)]] other fields>>
   <<[[Ipifc(kernel)]] ipv6 fields>>
@@ -744,7 +757,7 @@ struct Ipifc
 
 };
 @
-%less: have a priv field for medium arg private pointer?
+
 
 %Who points to that in the kernel? actually there is no single
 % ipifc global in the kernel because a machine can have multiple ips
@@ -896,6 +909,7 @@ void  (*pktin)(Fs *f, Ipifc *ifc, Block *bp);
 
 
 
+
 \subsection{[[media]]}
 
 <<global media>>=
@@ -980,6 +994,14 @@ static eaddr etherbroadcast = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 @
 
 %todo: mv later what is below?
+
+
+<<[[Ipifc(kernel)]] priv fields>>=
+void  *arg;   /* medium specific */
+@
+%todo: this is where there will be info on controller?
+%code: maybe class could be better here instead of all those privs
+% and unsafe cast.
 
 \subsection{[[Ether]]net controllers and [[etherxx]]}
 
@@ -1514,6 +1536,7 @@ char  cerr[ERRMAX];
 
 
 
+%less: rename priv?
 <<[[Conv(kernel)]] priv fields>>=
 void* ptcl;     /* protocol specific stuff */
 @
@@ -1998,7 +2021,7 @@ struct IPaux
   char  tag[4];
 };
 @
-%todo: tag?? "none" at the beginning?
+%todo: tag?? "none" at the beginning? again for introspection and debugging?
 %less: why put that in the channel? why not in the conv? because need
 % faster access?
 
@@ -4666,7 +4689,117 @@ ipifcclose(Conv *c)
 @
 
 
-\chapter{Internetwork Transport, IP}
+\chapter{Physical Transport, Ethernet}
+% Local Area Network Transport
+
+% ethernet = CSMA-CD (carrier sense multiple access - collision detection)
+% with smart binary exponential backoff with random variation when have
+% collision.
+
+% ethernet address on top of (CS)MA.
+
+
+
+
+\section{Ethernet addresses}
+
+\subsection{Parsing}
+
+%ex: mac address f8:ed:a5:74:92:a1
+% strtoul? uchar because ip are 4 integers between 0 and 255
+%note: no eaddr here for to, because this code is in libip/
+<<function parseether>>=
+errorneg1
+parseether(uchar* to, char *from)
+{
+    char nip[4];
+    char *p;
+    int i;
+
+    p = from;
+    for(i = 0; i < 6; i++){
+        if(*p == '\0')
+            return ERROR_NEG1;
+        nip[0] = *p++;
+        if(*p == '\0')
+            return ERROR_NEG1;
+        nip[1] = *p++;
+        nip[2] = '\0';
+        to[i] = strtoul(nip, 0, 16);
+        if(*p == ':')
+            p++;
+    }
+    return OK_0;
+}
+@
+
+\subsection{[[/net/etherx/addr]]}
+
+<<function myetheraddr>>=
+errorneg1
+myetheraddr(uchar *to, char *dev)
+{
+    int n, fd;
+    char buf[256];
+
+    if(*dev == '/')
+        sprint(buf, "%s/addr", dev);
+    else
+        sprint(buf, "/net/%s/addr", dev);
+
+    fd = open(buf, OREAD);
+    if(fd < 0)
+        return ERROR_NEG1;
+
+    n = read(fd, buf, sizeof buf -1 );
+    close(fd);
+    if(n <= 0)
+        return ERROR_NEG1;
+    buf[n] = '\0';
+
+    parseether(to, buf);
+    return OK_0;
+}
+@
+
+\section{Ethernet header}
+
+<<struct Etherhdr>>=
+struct Etherhdr
+{
+    eaddr   d;
+    eaddr   s;
+    uchar   t[2];
+};
+@
+%typedef byte etheraddr[6]
+
+% ethermedium.c
+
+\section{Ethernet packet}
+
+<<struct Etherpkt>>=
+struct Etherpkt
+{
+  eaddr d;
+  eaddr s;
+  uchar type[2];
+
+  uchar data[1500];
+};
+@
+% netif.h
+
+\section{IO}
+
+\subsection{Writing}
+
+\subsection{Reading}
+
+\section{Advanced features}
+
+
+\chapter{Inter Network Transport, IP}
 
 % RFC 79, Internet Protocol
 
@@ -5690,129 +5823,11 @@ else if(strcmp(argv[0], "reassemble") == 0){
 
 
 
-\chapter{Physical Transport, Ethernet}
-
-% ethernet = CSMA-CD (carrier sense multiple access - collision detection)
-% with smart binary exponential backoff with random variation when have
-% collision.
-
-% ethernet address on top of (CS)MA.
-
-
-
-
-\section{Ethernet addresses}
-
-\subsection{Parsing}
-
-%ex: mac address f8:ed:a5:74:92:a1
-% strtoul? uchar because ip are 4 integers between 0 and 255
-%note: no eaddr here for to, because this code is in libip/
-<<function parseether>>=
-errorneg1
-parseether(uchar* to, char *from)
-{
-    char nip[4];
-    char *p;
-    int i;
-
-    p = from;
-    for(i = 0; i < 6; i++){
-        if(*p == '\0')
-            return ERROR_NEG1;
-        nip[0] = *p++;
-        if(*p == '\0')
-            return ERROR_NEG1;
-        nip[1] = *p++;
-        nip[2] = '\0';
-        to[i] = strtoul(nip, 0, 16);
-        if(*p == ':')
-            p++;
-    }
-    return OK_0;
-}
-@
-
-\subsection{[[/net/etherx/addr]]}
-
-<<function myetheraddr>>=
-errorneg1
-myetheraddr(uchar *to, char *dev)
-{
-    int n, fd;
-    char buf[256];
-
-    if(*dev == '/')
-        sprint(buf, "%s/addr", dev);
-    else
-        sprint(buf, "/net/%s/addr", dev);
-
-    fd = open(buf, OREAD);
-    if(fd < 0)
-        return ERROR_NEG1;
-
-    n = read(fd, buf, sizeof buf -1 );
-    close(fd);
-    if(n <= 0)
-        return ERROR_NEG1;
-    buf[n] = '\0';
-
-    parseether(to, buf);
-    return OK_0;
-}
-@
-
-\section{Ethernet header}
-
-<<struct Etherhdr>>=
-struct Etherhdr
-{
-    eaddr   d;
-    eaddr   s;
-    uchar   t[2];
-};
-@
-%typedef byte etheraddr[6]
-
-% ethermedium.c
-
-\section{Ethernet packet}
-
-<<struct Etherpkt>>=
-struct Etherpkt
-{
-  eaddr d;
-  eaddr s;
-  uchar type[2];
-
-  uchar data[1500];
-};
-@
-% netif.h
-
-\section{IO}
-
-\subsection{Writing}
-
-\subsection{Reading}
-
-\section{Advanced features}
-
-
 \chapter{Finding Machines Locally, ARP}
-
-%XXX
-<<[[Medium(kernel)]] address resolution methods>>=
-/* address resolution */
-void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
-void  (*areg)(Ipifc*, uchar*);      /* register */
-@
-
 
 <<[[Fs(kernel)]] arp fields>>=
 Arp *arp;
 @
-
 
 <<struct Arp>>=
 /*
@@ -5866,6 +5881,16 @@ struct Arpent
   Arpent* hash;
 };
 @
+
+
+%XXX
+<<[[Medium(kernel)]] address resolution methods>>=
+/* address resolution */
+void  (*ares)(Fs*, int, uchar*, uchar*, int, int);  /* resolve */
+void  (*areg)(Ipifc*, uchar*);      /* register */
+@
+
+
 
 \section{Initialisation}
 
@@ -5930,6 +5955,7 @@ case Qiproute:
 case Qarp:
     return arpread(f->arp, a, offset, n);
 @
+%f is Fs.
 
 <<function arpread>>=
 int
@@ -7363,6 +7389,7 @@ ipifcremroute(Fs *f, int vers, uchar *addr, uchar *mask)
 @
 
 
+%\chapter{Internet Control, ICMP}
 
 \chapter{Basic Communication, UDP}
 % U for Unreliable, Unordered :)
@@ -9474,6 +9501,9 @@ tcpinit(Fs *fs)
 
 \chapter{Advanced Topics}
 
+\section{Flow Control}
+% congestion, van jacobson algorithm?
+
 \section{IPv6}
 
 % See Network_v6.nw
@@ -9749,8 +9779,10 @@ case 6:
 
 \section{VPN}
 
-%\section{Packet filter}
+\section{Packet filter}
 % /net/ipmux
+
+%Linux: iptables
 
 %\section{Bootp}
 
