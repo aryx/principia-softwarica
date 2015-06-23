@@ -7,17 +7,20 @@
 #include "fns.h"
 
 /*s: global symfil */
-char	*symfil;
+char	*symfil = nil;
 /*e: global symfil */
 /*s: global corfil */
-char	*corfil;
+char	*corfil = nil;
 /*e: global corfil */
 
 /*s: global dotmap */
 Map	*dotmap;
 /*e: global dotmap */
 
-int fsym, fcor;
+/*s: global fsym */
+fdt fsym;
+/*e: global fsym */
+int fcor;
 /*s: global fhdr (db/setup.c) */
 static Fhdr fhdr;
 /*e: global fhdr (db/setup.c) */
@@ -37,7 +40,7 @@ setsym(void)
     if (crackhdr(fsym, &fhdr)) {
         machbytype(fhdr.type);
         symmap = loadmap(symmap, fsym, &fhdr);
-        if (symmap == 0)
+        if (symmap == nil)
             symmap = dumbmap(fsym);
         if (syminit(fsym, &fhdr) < 0)
             dprint("%r\n");
@@ -89,7 +92,7 @@ extern Machdata i386mach;
 
 /*s: function dumbmap */
 Map *
-dumbmap(int fd)
+dumbmap(fdt fd)
 {
     Map *dumb;
 
@@ -155,15 +158,15 @@ cmdmap(Map *map)
 /*e: function cmdmap */
 
 /*s: function getfile */
-static int
+static fdt
 getfile(char *filnam, int cnt, int omode)
 {
-    int f;
+    fdt f;
 
-    if (filnam == 0)
-        return -1;
+    if (filnam == nil)
+        return ERROR_NEG1;
     if (strcmp(filnam, "-") == 0)
-        return 0;
+        return STDIN;
     f = open(filnam, omode|OCEXEC);
     if(f < 0 && omode == ORDWR){
         f = open(filnam, OREAD|OCEXEC);
@@ -175,7 +178,7 @@ getfile(char *filnam, int cnt, int omode)
             f = create(filnam, 1, 0666);
     if (f < 0) {
         dprint("cannot open `%s': %r\n", filnam);
-        return -1;
+        return ERROR_NEG1;
     }
     return f;
 }

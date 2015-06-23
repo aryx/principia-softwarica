@@ -11,9 +11,9 @@ extern	int	infile;
 extern	int	outfile;
 extern	int	maxpos;
 
-/*s: global Ipath */
 /* general printing routines ($) */
 
+/*s: global Ipath */
 char	*Ipath = INCDIR;
 /*e: global Ipath */
 /*s: global tracetype */
@@ -58,10 +58,11 @@ printtrace(int modif)
     char *fname;
     char buf[512];
 
-    if (cntflg==0)
+    if (cntflg==FALSE)
         cntval = -1;
-    switch (modif) {
 
+    switch (modif) {
+    /*s: [[printtrace()]] switch modif cases */
     case '<':
         if (cntval == 0) {
             while (readchar() != EOR)
@@ -183,6 +184,7 @@ printtrace(int modif)
         if (machbyname(fname) == 0)
             dprint("unknown name\n");;
         break;
+    /*e: [[printtrace()]] switch modif cases */
     default:
         error("bad `$' command");
     }

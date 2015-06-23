@@ -9,14 +9,14 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Debugger.tex.nw
+TEXMAIN=Debugger.nw
 TEX=Debugger.tex
 
 # set of noweb (.nw) files
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Debugger.tex.nw Debugger_extra.tex.nw
+SRC_ORIG=Debugger.nw Debugger_extra.nw
 
 #TODO: acid/dbg.y cc/acid.c?
 # TODO misc/leak misc/kmem? misc/umem? snap?

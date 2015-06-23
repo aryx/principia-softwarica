@@ -14,6 +14,8 @@
 typedef ulong WORD;
 typedef uvlong ADDR;
 
+typedef struct bkpt	BKPT;
+
 /*s: constant HUGEINT */
 #define	HUGEINT	0x7fffffff	/* enormous WORD */
 /*e: constant HUGEINT */
@@ -30,8 +32,6 @@ typedef uvlong ADDR;
 /*s: constant CMD_VERBS */
 #define CMD_VERBS	"?/=>!$: \t"
 /*e: constant CMD_VERBS */
-
-typedef	int	BOOL;
 
 /*s: constant MAXPOS */
 #define MAXPOS	80
@@ -65,13 +65,6 @@ typedef	int	BOOL;
 #define TB	'\t'
 /*e: constant TB */
 
-/*s: constant STDIN */
-//#define	STDIN	0
-/*e: constant STDIN */
-/*s: constant STDOUT */
-//#define	STDOUT	1
-/*e: constant STDOUT */
-
 /*s: constant TRUE */
 #define	TRUE	(-1)
 /*e: constant TRUE */
@@ -80,11 +73,10 @@ typedef	int	BOOL;
 /*e: constant FALSE */
 
 
-/*s: constant SINGLE */
 /*
  * run modes
  */
-
+/*s: constant SINGLE */
 #define	SINGLE	1
 /*e: constant SINGLE */
 /*s: constant CONTIN */
@@ -108,15 +100,16 @@ typedef	int	BOOL;
 #define	BKPTTMP	3	/* temporary; clear when it happens */
 /*e: constant BKPTTMP */
 
-typedef struct bkpt	BKPT;
 /*s: struct bkpt */
 struct bkpt {
     ADDR	loc;
+
     uchar	save[4];
     int	count;
     int	initcnt;
     int	flag;
     char	comm[MAXCOM];
+
     BKPT	*nxtbkpt;
 };
 /*e: struct bkpt */
@@ -145,11 +138,11 @@ extern	int	dotinc;
 
 extern	int	xargc;
 
-extern	BOOL	wtflag;
+extern	bool	wtflag;
 extern	char	*corfil, *symfil;
 extern	int	fcor, fsym;
-extern	BOOL	mkfault;
-extern	BOOL	regdirty;
+extern	bool	mkfault;
+extern	bool	regdirty;
 
 extern	int	pid;
 extern	int	pcsactive;
@@ -163,7 +156,7 @@ extern	int	ending;
 extern	Map	*cormap, *symmap, *dotmap;
 
 extern	BKPT	*bkpthead;
-extern	int	kflag;
+extern	bool	kflag;
 extern	int	lastc, peekc;
 
 // new decl, was in main.c before

@@ -30,9 +30,10 @@ subpcs(int modif)
     r = 0;
     keepnote=0;
     loopcnt=cntval;
-    switch (modif) {
 
-        /* delete breakpoint */
+    switch (modif) {
+    /*s: [[subpcs()]] switch modif cases */
+    /* delete breakpoint */
     case 'd': 
     case 'D':
         if ((bk=scanbkpt(dot)) == 0)
@@ -40,7 +41,7 @@ subpcs(int modif)
         bk->flag=BKPTCLR;
         return;
 
-        /* set breakpoint */
+    /* set breakpoint */
     case 'b': 
     case 'B':
         if (bk=scanbkpt(dot))
@@ -73,7 +74,7 @@ subpcs(int modif)
             return;
         error("bkpt command too long");
 
-        /* exit */
+    /* exit */
     case 'k' :
     case 'K':
         if (pid == 0)
@@ -83,7 +84,7 @@ subpcs(int modif)
         endpcs();
         return;
 
-        /* run program */
+    /* run program */
     case 'r': 
     case 'R':
         endpcs();
@@ -91,7 +92,7 @@ subpcs(int modif)
         runmode = CONTIN;
         break;
 
-        /* single step */
+    /* single step */
     case 's': 
         if (pid == 0) {
             setup();
@@ -120,7 +121,8 @@ subpcs(int modif)
         }
         loopcnt = 0;
         break;
-        /* continue with optional note */
+
+    /* continue with optional note */
     case 'c': 
     case 'C': 
         if (pid==0)
@@ -129,7 +131,8 @@ subpcs(int modif)
         keepnote=defval(1);
         break;
 
-    case 'n':	/* deal with notes */
+    /* deal with notes */
+    case 'n':	
         if (pid==0)
             error(NOPCS);
         n=defval(-1);
@@ -140,7 +143,8 @@ subpcs(int modif)
         notes();
         return;
 
-    case 'h':	/* halt the current process */
+    /* halt the current process */
+    case 'h':	
         if (adrflg && adrval == 0) {
             if (pid == 0)
                 error(NOPCS);
@@ -153,12 +157,13 @@ subpcs(int modif)
         }
         return;
 
-    case 'x':	/* continue executing the current process */
+    /* continue executing the current process */
+    case 'x':	
         if (pid == 0)
             error(NOPCS);
         ungrab();
         return;
-
+    /*e: [[subpcs()]] switch modif cases */
     default:
         error("bad `:' command");
     }
@@ -172,7 +177,7 @@ subpcs(int modif)
         dprint("breakpoint%16t");
     else
         dprint("stopped at%16t");
-    Return:
+Return:
     delbp();
     printpc();
     notes();

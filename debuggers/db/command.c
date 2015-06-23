@@ -13,7 +13,7 @@ char	BADEQ[] = "unexpected `='";
 /*e: global BADEQ */
 
 /*s: global executing */
-BOOL	executing;
+bool	executing;
 /*e: global executing */
 extern	Rune	*lp;
 
@@ -34,29 +34,39 @@ WORD loopcnt;
 int
 command(char *buf, int defcom)
 {
-    char	*reg;
-    char	savc;
-    Rune	*savlp=lp;
+    /*s: [[command()]] locals (db) */
+    static char lastcom = '=';
+    /*x: [[command()]] locals (db) */
+    Rune*   savlp = lp;
     char	savlc = lastc;
     char	savpc = peekc;
-    static char lastcom = '=', savecom = '=';
+    /*x: [[command()]] locals (db) */
+    char	*reg;
+    char	savc;
+    static char savecom = '=';
+    /*e: [[command()]] locals (db) */
 
+    /*s: [[command()]] initializations (db) */
     if (defcom == 0)
         defcom = lastcom;
     if (buf) {
         if (*buf==EOR)
-            return(FALSE);
+            return FALSE;
         clrinp();
         lp=(Rune*)buf;
     }
+    /*e: [[command()]] initializations (db) */
+
     do {
+        /*s: [[command()]] parse possibly first address, set dot */
         adrflg=expr(0);		/* first address */
         if (adrflg){
             dot=expv;
             ditto=expv;
         }
         adrval=dot;
-
+        /*e: [[command()]] parse possibly first address, set dot */
+        /*s: [[command()]] parse possibly count, set cntval */
         if (rdc()==',' && expr(0)) {	/* count */
             cntflg=TRUE;
             cntval=expv;
@@ -65,7 +75,9 @@ command(char *buf, int defcom)
             cntval=1;
             reread();
         }
+        /*e: [[command()]] parse possibly count, set cntval */
 
+        /*s: [[command()]] parse command, set lastcom */
         if (!eol(rdc()))
             lastcom=lastc;		/* command */
         else {
@@ -74,33 +86,21 @@ command(char *buf, int defcom)
             reread();
             lastcom=defcom;
         }
+        /*e: [[command()]] parse command, set lastcom */
         switch(lastcom) {
+        /*s: [[command()]] switch lastcom cases */
+        case '?':
         case '/':
         case '=':
-        case '?':
             savecom = lastcom;
             acommand(lastcom);
             break;
-
-        case '>':
-            lastcom = savecom; 
-            savc=rdc();
-            if (reg=regname(savc))
-                rput(cormap, reg, dot);
-            else	
-                error("bad variable");
-            break;
-
-        case '!':
-            lastcom=savecom;
-            shell(); 
-            break;
-
+        /*x: [[command()]] switch lastcom cases */
         case '$':
             lastcom=savecom;
             printtrace(nextchar()); 
             break;
-
+        /*x: [[command()]] switch lastcom cases */
         case ':':
             if (!executing) { 
                 executing=TRUE;
@@ -109,17 +109,34 @@ command(char *buf, int defcom)
                 lastcom=savecom;
             }
             break;
-
-        case 0:
+        /*x: [[command()]] switch lastcom cases */
+        case '>':
+            lastcom = savecom; 
+            savc=rdc();
+            if (reg=regname(savc))
+                rput(cormap, reg, dot);
+            else	
+                error("bad variable");
+            break;
+        /*x: [[command()]] switch lastcom cases */
+        case '!':
+            lastcom=savecom;
+            shell(); 
+            break;
+        /*x: [[command()]] switch lastcom cases */
+        case '\0':
             prints(DBNAME);
             break;
 
+        /*e: [[command()]] switch lastcom cases */
         default: 
             error("bad command");
         }
         flushbuf();
     } while (rdc()==';');
-    if (buf == 0)
+
+    /*s: [[command()]] finalizations (db) */
+    if (buf == nil)
         reread();
     else {
         clrinp();
@@ -131,6 +148,7 @@ command(char *buf, int defcom)
     if(adrflg)
         return dot;
     return 1;
+    /*e: [[command()]] finalizations (db) */
 }
 /*e: function command */
 
@@ -142,17 +160,17 @@ command(char *buf, int defcom)
 void
 acommand(int pc)
 {
-    int eqcom;
+    bool eqcom;
     Map *map;
     char *fmt;
     char buf[512];
 
     if (pc == '=') {
-        eqcom = 1;
+        eqcom = true;
         fmt = eqformat;
         map = dotmap;
     } else {
-        eqcom = 0;
+        eqcom = false;
         fmt = stformat;
         if (pc == '/')
             map = cormap;
@@ -164,8 +182,8 @@ acommand(int pc)
         error(buf);
     }
 
-    switch (rdc())
-    {
+    switch (rdc()) {
+    /*s: [[acommand()]] switch optional command suffix character */
     case 'm':
         if (eqcom)
             error(BADEQ); 
@@ -185,7 +203,7 @@ acommand(int pc)
             error(BADEQ); 
         cmdwrite(lastc, map);
         break;
-
+    /*e: [[acommand()]] switch optional command suffix character */
     default:
         reread();
         getformat(fmt);

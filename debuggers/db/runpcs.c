@@ -10,7 +10,7 @@
 
 
 /*s: global bpin */
-BOOL bpin;
+bool bpin;
 /*e: global bpin */
 
 

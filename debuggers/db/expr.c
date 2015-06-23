@@ -70,6 +70,7 @@ expr(int a)
 
     rdc();
     reread();
+
     rc=term(a);
     while (rc) {
         lhs = expv;
@@ -123,10 +124,10 @@ expr(int a)
 
         default:
             reread();
-            return(rc);
+            return rc;
         }
     }
-    return(rc);
+    return rc;
 }
 /*e: function expr */
 
@@ -143,34 +144,34 @@ term(int a)
         if (geta(cormap, expv, &e) < 0)
             error("%r");
         expv = e;
-        return(1);
+        return 1;
 
     case '@':
         term(a|1);
         if (geta(symmap, expv, &e) < 0)
             error("%r");
         expv = e;
-        return(1);
+        return 1;
 
     case '-':
         term(a|1);
         expv = -expv;
-        return(1);
+        return 1;
 
     case '~':
         term(a|1);
         expv = ~expv;
-        return(1);
+        return 1;
 
     case '(':
         expr(2);
         if (readchar()!=')')
             error("syntax error: `)' expected");
-        return(1);
+        return 1;
 
     default:
         reread();
-        return(item(a));
+        return item(a);
     }
 }
 /*e: function term */
@@ -277,7 +278,7 @@ getnum(int (*rdf)(void))
 {
     char *cp;
     int base, d;
-    BOOL fpnum;
+    bool fpnum;
     char num[MAXLIN];
 
     base = 0;

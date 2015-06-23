@@ -7,9 +7,9 @@
 // System calls tracer
 
 // was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
-/*s: enum _anon_ */
 // but most people knows better 'strace'
 
+/*s: enum _anon_ */
 enum {
     Stacksize	= 8*1024,
     Bufsize		= 8*1024,

@@ -1,685 +1,5 @@
 %TODO: acid/dbg.y!
 
-\section{[[tracers/]]}
-
-\subsection*{[[tracers/ktrace.c]]}
-
-<<global fhdr>>=
-static	Fhdr	fhdr;
-@
-
-<<global interactive>>=
-static	int	interactive = 0;
-@
-
-<<constant FRAMENAME>>=
-#define	FRAMENAME	".frame"
-@
-
-<<function usage>>=
-static void
-usage(void)
-{
-    fprint(2, "usage: ktrace [-i] kernel pc sp [link]\n");
-    exits("usage");
-}
-@
-
-<<function printaddr>>=
-static void
-printaddr(char *addr, uvlong pc)
-{
-    int i;
-    char *p;
-
-    /*
-     * reformat the following.
-     *
-     * foo+1a1 -> src(foo+0x1a1);
-     * 10101010 -> src(0x10101010);
-     */
-
-    if(strlen(addr) == 8 && strchr(addr, '+') == nil){
-        for(i=0; i<8; i++)
-            if(!isxdigit(addr[i]))
-                break;
-        if(i == 8){
-            print("src(%#.8llux); // 0x%s\n", pc, addr);
-            return;
-        }
-    }
-
-    if(p=strchr(addr, '+')){
-        *p++ = 0;
-        print("src(%#.8llux); // %s+0x%s\n", pc, addr, p);
-    }else
-        print("src(%#.8llux); // %s\n", pc, addr);
-}
-@
-
-<<global fmt>>=
-static void (*fmt)(char*, uvlong) = printaddr;
-@
-
-<<function main>>=
-void
-main(int argc, char *argv[])
-{
-    int (*t)(uvlong, uvlong, uvlong);
-    uvlong pc, sp, link;
-    int fd;
-
-    ARGBEGIN{
-    case 'i':
-        interactive = 1;
-        break;
-    default:
-        usage();
-    }ARGEND
-
-    link = 0;
-    t = rtrace;
-    switch(argc){
-    case 4:
-        t = rtrace;
-        link = strtoull(argv[3], 0, 16);
-        break;
-    case 3:
-        break;
-    default:
-        usage();
-    }
-    pc = strtoull(argv[1], 0, 16);
-    sp = strtoull(argv[2], 0, 16);
-    if(!interactive)
-        readstack();
-
-    fd = open(argv[0], OREAD);
-    if(fd < 0)
-        fatal("can't open %s: %r", argv[0]);
-    inithdr(fd);
-    switch(fhdr.magic){
-    case I_MAGIC:	/* intel 386 */
-        t = i386trace;
-        break;
-    case V_MAGIC:	/* mips 3000 */
-    case M_MAGIC:	/* mips 4000 */
-    case E_MAGIC:	/* arm 7-something */
-    case N_MAGIC:	/* mips 4000 LE */
-        t = rtrace;
-        break;
-    default:
-        fprint(2, "%s: warning: can't tell what type of stack %s uses; assuming it's %s\n",
-            argv0, argv[0], argc == 4 ? "risc" : "cisc");
-        break;
-    }
-    (*t)(pc, sp, link);
-    exits(0);
-}
-@
-
-<<function inithdr>>=
-static void
-inithdr(int fd)
-{
-    seek(fd, 0, 0);
-    if(!crackhdr(fd, &fhdr))
-        fatal("read text header");
-
-    if(syminit(fd, &fhdr) < 0)
-        fatal("%r\n");
-}
-@
-
-<<function rtrace>>=
-// for MIPS and ARM
-static int
-rtrace(uvlong pc, uvlong sp, uvlong link)
-{
-    Symbol s, f;
-    char buf[128];
-    uvlong oldpc;
-    int i;
-
-    i = 0;
-    while(findsym(pc, CTEXT, &s)) {
-        if(pc == s.value)	/* at first instruction */
-            f.value = 0;
-        else if(findlocal(&s, FRAMENAME, &f) == 0)
-            break;
-
-        symoff(buf, sizeof buf, pc, CANY);
-        fmt(buf, pc);
-
-        oldpc = pc;
-        if(s.type == 'L' || s.type == 'l' || pc <= s.value+mach->pcquant){
-            if(link == 0)
-                fprint(2, "%s: need to supply a valid link register\n", argv0);
-            pc = link;
-        }else{
-            pc = getval(sp);
-            if(pc == 0)
-                break;
-        }
-
-        if(pc == 0 || (pc == oldpc && f.value == 0))
-            break;
-
-        sp += f.value;
-
-        if(++i > 40)
-            break;
-    }
-    return i;
-}
-@
-
-<<function i386trace>>=
-static int
-i386trace(uvlong pc, uvlong sp, uvlong link)
-{
-    int i;
-    uvlong osp;
-    Symbol s, f;
-    char buf[128];
-
-    USED(link);
-    i = 0;
-    osp = 0;
-    while(findsym(pc, CTEXT, &s)) {
-
-        symoff(buf, sizeof buf, pc, CANY);
-        fmt(buf, pc);
-
-        if(pc != s.value) {	/* not at first instruction */
-            if(findlocal(&s, FRAMENAME, &f) == 0)
-                break;
-            sp += f.value-mach->szaddr;
-        }else if(strcmp(s.name, "forkret") == 0){
-            print("//passing interrupt frame; last pc found at sp=%#llux\n", osp);
-            sp +=  15 * mach->szaddr;		/* pop interrupt frame */
-        }
-
-        pc = getval(sp);
-        if(pc == 0 && strcmp(s.name, "forkret") == 0){
-            sp += 3 * mach->szaddr;			/* pop iret eip, cs, eflags */
-            print("//guessing call through invalid pointer, try again at sp=%#llux\n", sp);
-            s.name = "";
-            pc = getval(sp);
-        }
-        if(pc == 0) {
-            print("//didn't find pc at sp=%#llux, last pc found at sp=%#llux\n", sp, osp);
-            break;
-        }
-        osp = sp;
-
-        sp += mach->szaddr;
-        if(strcmp(s.name, "forkret") == 0)
-            sp += 2 * mach->szaddr;			/* pop iret cs, eflags */
-
-        if(++i > 40)
-            break;
-    }
-    return i;
-}
-@
-
-<<global naddr>>=
-int naddr;
-@
-
-<<global addr>>=
-uvlong addr[1024];
-@
-
-<<global val>>=
-uvlong val[1024];
-@
-
-<<function putval>>=
-static void
-putval(uvlong a, uvlong v)
-{
-    if(naddr < nelem(addr)){
-        addr[naddr] = a;
-        val[naddr] = v;
-        naddr++;
-    }
-}
-@
-
-<<function readstack>>=
-static void
-readstack(void)
-{
-    Biobuf b;
-    char *p;
-    char *f[64];
-    int nf, i;
-
-    Binit(&b, 0, OREAD);
-    while(p=Brdline(&b, '\n')){
-        p[Blinelen(&b)-1] = 0;
-        nf = tokenize(p, f, nelem(f));
-        for(i=0; i<nf; i++){
-            if(p=strchr(f[i], '=')){
-                *p++ = 0;
-                putval(strtoull(f[i], 0, 16), strtoull(p, 0, 16));
-            }
-        }
-    }
-}
-@
-
-<<function getval>>=
-static uvlong
-getval(uvlong a)
-{
-    char buf[256];
-    int i, n;
-    uvlong r;
-
-    if(interactive){
-        print("// data at %#8.8llux? ", a);
-        n = read(0, buf, sizeof(buf)-1);
-        if(n <= 0)
-            return 0;
-        buf[n] = '\0';
-        r = strtoull(buf, 0, 16);
-    }else{
-        r = 0;
-        for(i=0; i<naddr; i++)
-            if(addr[i] == a)
-                r = val[i];
-    }
-
-    return r;
-}
-@
-
-<<function fatal>>=
-static void
-fatal(char *fmt, ...)
-{
-    char buf[4096];
-    va_list arg;
-
-    va_start(arg, fmt);
-    vseprint(buf, buf+sizeof(buf), fmt, arg);
-    va_end(arg);
-    fprint(2, "ktrace: %s\n", buf);
-    exits(buf);
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<tracers/ktrace.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <ctype.h>
-
-#include <mach.h>
-
-// ktrace - interpret kernel stack dumps
-
-static	int	rtrace(uvlong, uvlong, uvlong);
-static	int	i386trace(uvlong, uvlong, uvlong);
-
-static	uvlong	getval(uvlong);
-static	void	inithdr(int);
-static	void	fatal(char*, ...);
-static	void	readstack(void);
-
-<<global fhdr>>
-<<global interactive>>
-
-<<constant FRAMENAME>>
-
-<<function usage>>
-
-<<function printaddr>>
-
-<<global fmt>>
-
-<<function main>>
-
-<<function inithdr>>
-
-<<function rtrace>>
-
-<<function i386trace>>
-
-<<global naddr>>
-<<global addr>>
-<<global val>>
-
-<<function putval>>
-
-<<function readstack>>
-
-<<function getval>>
-
-<<function fatal>>
-@
-
-
-\subsection*{[[tracers/strace.c]]}
-
-<<enum _anon_>>=
-// but most people knows better 'strace'
-
-enum {
-    Stacksize	= 8*1024,
-    Bufsize		= 8*1024,
-};
-@
-
-<<global out>>=
-Channel *out;
-@
-
-<<global quit>>=
-Channel *quit;
-@
-
-<<global forkc>>=
-Channel *forkc;
-@
-
-<<global nread>>=
-int nread = 0;
-@
-
-<<struct Str>>=
-struct Str {
-    char	*buf;
-    int	len;
-};
-@
-
-<<function die>>=
-void
-die(char *s)
-{
-    fprint(2, "%s\n", s);
-    exits(s);
-}
-@
-
-<<function cwrite>>=
-void
-cwrite(int fd, char *path, char *cmd, int len)
-{
-    werrstr("");
-    if (write(fd, cmd, len) < len) {
-        fprint(2, "cwrite: %s: failed writing %d bytes: %r\n",
-            path, len);
-        sendp(quit, nil);
-        threadexits(nil);
-    }
-}
-@
-
-<<function newstr>>=
-Str *
-newstr(void)
-{
-    Str *s;
-
-    s = mallocz(sizeof(Str) + Bufsize, 1);
-    if (s == nil)
-        sysfatal("malloc");
-    s->buf = (char *)&s[1];
-    return s;
-}
-@
-
-<<function reader>>=
-void
-reader(void *v)
-{
-    int cfd, tfd, forking = 0, exiting, pid, newpid;
-    char *ctl, *truss;
-    Str *s;
-    static char start[] = "start";
-    static char waitstop[] = "waitstop";
-
-    pid = (int)(uintptr)v;
-
-    ctl = smprint("/proc/%d/ctl", pid);
-    if ((cfd = open(ctl, OWRITE)) < 0)
-        die(smprint("%s: %r", ctl));
-
-    truss = smprint("/proc/%d/syscall", pid);
-    if ((tfd = open(truss, OREAD)) < 0)
-        die(smprint("%s: %r", truss));
-
-    /* child was stopped by hang msg earlier */
-    cwrite(cfd, ctl, waitstop, sizeof waitstop - 1);
-    // useful? if it was stopped, then why need waitstop?
-    // because the fork() has been done but maybe the child
-    // has not yet reached the exec() and got actually stopped!
-
-    cwrite(cfd, ctl, "startsyscall", 12);
-    s = newstr();
-    exiting = 0;
-    while((s->len = pread(tfd, s->buf, Bufsize - 1, 0)) >= 0){
-        if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
-            forking = 0;
-            newpid = strtol(&s->buf[3], 0, 0);
-            sendp(forkc, (void*)newpid);
-            procrfork(reader, (void*)newpid, Stacksize, 0);
-        }
-
-        /*
-         * There are three tests here and they (I hope) guarantee
-         * no false positives.
-         */
-        if (strstr(s->buf, " Rfork") != nil) {
-            char *a[8];
-            char *rf;
-
-            rf = strdup(s->buf);
-           if (tokenize(rf, a, 8) == 5 &&
-                strtoul(a[4], 0, 16) & RFPROC)
-                forking = 1;
-            free(rf);
-        } else if (strstr(s->buf, " Exits") != nil)
-            exiting = 1;
-
-        sendp(out, s);	/* print line from /proc/$child/syscall */
-        if (exiting) {
-            s = newstr();
-            strcpy(s->buf, "\n");
-            sendp(out, s);
-            break;
-        }
-
-        /* flush syscall trace buffer */
-        cwrite(cfd, ctl, "startsyscall", 12);
-        s = newstr();
-    }
-
-    sendp(quit, nil);
-    threadexitsall(nil);
-}
-@
-%$
-
-<<function writer>>=
-void
-writer(void *)
-{
-    int newpid;
-    Str *s;
-
-    // TODO use better initializer?
-    Alt a[4];
-
-    a[0].op = CHANRCV;
-    a[0].c = quit;
-    a[0].v = nil;
-
-    a[1].op = CHANRCV;
-    a[1].c = out;
-    a[1].v = &s;
-
-    a[2].op = CHANRCV;
-    a[2].c = forkc;
-    a[2].v = &newpid;
-
-    a[3].op = CHANEND;
-
-    for(;;)
-        switch(alt(a)){
-        case 0:			/* quit */
-            nread--;
-            if(nread <= 0)
-                goto done;
-            break;
-        case 1:			/* out */
-            /* it's a nice null terminated thing */
-            fprint(2, "%s", s->buf);
-            free(s);
-            break;
-        case 2:			/* forkc */
-            // procrfork(reader, (void*)newpid, Stacksize, 0);
-            nread++;
-            break;
-        }
-done:
-    exits(nil);
-}
-@
-
-<<function usage (tracers/strace.c)>>=
-void
-usage(void)
-{
-    fprint(2, "Usage: strace [-c cmd [arg...]] | [pid]\n");
-    exits("usage");
-}
-@
-
-<<function hang>>=
-void
-hang(void)
-{
-    int me;
-    char *myctl;
-    static char hang[] = "hang";
-
-    myctl = smprint("/proc/%d/ctl", getpid());
-    me = open(myctl, OWRITE);
-    if (me < 0)
-        sysfatal("can't open %s: %r", myctl);
-    cwrite(me, myctl, hang, sizeof hang - 1);
-    close(me);
-    free(myctl);
-}
-@
-
-<<function threadmain>>=
-void
-threadmain(int argc, char **argv)
-{
-    int pid;
-    char *cmd = nil;
-    char **args = nil;
-
-    /*
-     * don't bother with fancy arg processing, because it picks up options
-     * for the command you are starting.  Just check for -c as argv[1]
-     * and then take it from there.
-     */
-    if (argc < 2)
-        usage();
-    while (argv[1][0] == '-') {
-        switch(argv[1][1]) {
-        case 'c':
-            if (argc < 3)
-                usage();
-            cmd = strdup(argv[2]);
-            args = &argv[2];
-            break;
-        default:
-            usage();
-        }
-        ++argv;
-        --argc;
-    }
-
-    /* run a command? */
-    if(cmd) {
-        pid = fork();
-        if (pid < 0)
-            sysfatal("fork failed: %r");
-        if(pid == 0) {
-            hang();
-            exec(cmd, args);
-            if(cmd[0] != '/')
-                exec(smprint("/bin/%s", cmd), args);
-            sysfatal("exec %s failed: %r", cmd);
-        }
-    } else {
-        if(argc != 2)
-            usage();
-        pid = atoi(argv[1]);
-        //TODO? send a 'stop' to its ctl file?
-    }
-
-    out   = chancreate(sizeof(char*), 0);
-    quit  = chancreate(sizeof(char*), 0);
-    forkc = chancreate(sizeof(ulong *), 0);
-    nread++;
-    procrfork(writer, nil, Stacksize, 0);
-    reader((void*)pid);
-}
-@
-
-
-%-------------------------------------------------------------
-
-<<tracers/strace.c>>=
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <thread.h>
-
-// System calls tracer
-
-// was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
-<<enum _anon_>>
-
-<<global out>>
-<<global quit>>
-<<global forkc>>
-<<global nread>>
-
-typedef struct Str Str;
-<<struct Str>>
-
-<<function die>>
-
-<<function cwrite>>
-
-<<function newstr>>
-
-<<function reader>>
-
-<<function writer>>
-
-<<function usage (tracers/strace.c)>>
-
-<<function hang>>
-
-<<function threadmain>>
-@
-
-
 \section{[[db/]]}
 
 \subsection*{[[db/defs.h]]}
@@ -725,49 +45,35 @@ typedef struct Str Str;
 #define MAXARG	32
 @
 
-<<constant LINSIZ>>=
-#define LINSIZ	4096
-@
 
 <<constant MAXSYM>>=
 #define	MAXSYM	255
 @
 
-<<constant EOR>>=
-#define EOR	'\n'
-@
 
-<<constant SPC>>=
-#define SPC	' '
-@
 
-<<constant TB>>=
-#define TB	'\t'
-@
 
-<<constant STDIN>>=
-#define	STDIN	0
-@
-
-<<constant STDOUT>>=
-#define	STDOUT	1
-@
+%<<constant STDIN>>=
+%//#define	STDIN	0
+%@
+%
+%<<constant STDOUT>>=
+%//#define	STDOUT	1
+%@
 
 <<constant TRUE>>=
 #define	TRUE	(-1)
 @
+%todo: replace by true, false
 
 <<constant FALSE>>=
 #define	FALSE	0
 @
 
 <<constant SINGLE>>=
-/*
- * run modes
- */
-
 #define	SINGLE	1
 @
+%todo: enum?
 
 <<constant CONTIN>>=
 #define	CONTIN	2
@@ -793,17 +99,6 @@ typedef struct Str Str;
 #define	BKPTTMP	3	/* temporary; clear when it happens */
 @
 
-<<struct bkpt>>=
-struct bkpt {
-    ADDR	loc;
-    uchar	save[4];
-    int	count;
-    int	initcnt;
-    int	flag;
-    char	comm[MAXCOM];
-    BKPT	*nxtbkpt;
-};
-@
 
 <<constant BADREG>>=
 #define	BADREG	(-1)
@@ -832,14 +127,14 @@ struct bkpt {
 typedef ulong WORD;
 typedef uvlong ADDR;
 
+typedef struct bkpt	BKPT;
+
 <<constant HUGEINT>>
 
 <<constant MAXOFF>>
 <<constant INCDIR>>
 <<constant DBNAME>>
 <<constant CMD_VERBS>>
-
-typedef	int	BOOL;
 
 <<constant MAXPOS>>
 <<constant MAXLIN>>
@@ -853,13 +148,13 @@ typedef	int	BOOL;
 <<constant SPC>>
 <<constant TB>>
 
-<<constant STDIN>>
-<<constant STDOUT>>
-
 <<constant TRUE>>
 <<constant FALSE>>
 
 
+/*
+ * run modes
+ */
 <<constant SINGLE>>
 <<constant CONTIN>>
 
@@ -868,7 +163,6 @@ typedef	int	BOOL;
 <<constant BKPTSKIP>>
 <<constant BKPTTMP>>
 
-typedef struct bkpt	BKPT;
 <<struct bkpt>>
 
 <<constant BADREG>>
@@ -893,11 +187,11 @@ extern	int	dotinc;
 
 extern	int	xargc;
 
-extern	BOOL	wtflag;
+extern	bool	wtflag;
 extern	char	*corfil, *symfil;
 extern	int	fcor, fsym;
-extern	BOOL	mkfault;
-extern	BOOL	regdirty;
+extern	bool	mkfault;
+extern	bool	regdirty;
 
 extern	int	pid;
 extern	int	pcsactive;
@@ -909,7 +203,7 @@ extern	int	ending;
 extern	Map	*cormap, *symmap, *dotmap;
 
 extern	BKPT	*bkpthead;
-extern	int	kflag;
+extern	bool	kflag;
 extern	int	lastc, peekc;
 
 // new decl, was in main.c before
@@ -1020,35 +314,6 @@ int		valpr(long, int);
 
 \subsection*{[[db/utils.c]]}
 
-<<function error>>=
-/*
- * An error occurred; save the message for later printing,
- * close open files, and reset to main command loop.
- */
-void
-error(char *n)
-{
-    errmsg = n;
-    iclose(0, 1);
-    oclose();
-    flush();
-    delbp();
-    ending = 0;
-    longjmp(env, 1);
-}
-@
-
-<<function errors>>=
-void
-errors(char *m, char *n)
-{
-    static char buf[128];
-
-    sprint(buf, "%s: %s", m, n);
-    error(buf);
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -1069,30 +334,24 @@ errors(char *m, char *n)
 int wtflag = OREAD;
 @
 
-<<global kflag>>=
-BOOL kflag;
-@
 
 <<global mkfault>>=
-BOOL mkfault;
+bool mkfault;
 @
 
 <<global maxoff>>=
-ADDR maxoff;
+ADDR maxoff = MAXOFF;
 @
 
 <<global xargc>>=
 int xargc;		/* bullshit */
 @
 
-<<global errmsg>>=
-// was static in main.c
-char *errmsg;
-@
 
 <<global env>>=
 jmp_buf env;
 @
+
 
 <<global ending>>=
 // was in runpcs.c
@@ -1115,38 +374,16 @@ char note[NNOTE][ERRMAX];
 BKPT *bkpthead;
 @
 
-<<global adrval>>=
-// was in command.c
-WORD	adrval;
-@
 
-<<global adrflg>>=
-int	adrflg;
-@
 
-<<global expv>>=
-// was in expr.c
-uvlong	expv;
-@
 
 <<global pcsactive>>=
 // was in trcrun.c
 int pcsactive = 0;
 @
 
-<<global symmap>>=
-// was in setup.c
-Map	*symmap;
-@
 
-<<global cormap>>=
-Map	*cormap;
-@
 
-<<global dot>>=
-// was in command.c
-ADDR	dot;
-@
 
 <<global dotinc>>=
 int	dotinc;
@@ -1156,9 +393,6 @@ int	dotinc;
 ADDR	ditto;
 @
 
-<<global cntval>>=
-WORD cntval;
-@
 
 <<global cntflg>>=
 int	cntflg;
@@ -1211,17 +445,11 @@ int	cntflg;
 int	printcol = 0;
 @
 
-<<global infile>>=
-int	infile = STDIN;
-@
 
 <<global maxpos>>=
 int	maxpos = MAXPOS;
 @
 
-<<global stdout>>=
-Biobuf	stdout;
-@
 
 <<function printc>>=
 void
@@ -1231,14 +459,6 @@ printc(int c)
 }
 @
 
-<<function tconv>>=
-/* was move to next f1-sized tab stop; now just print a tab */
-int
-tconv(Fmt *f)
-{
-    return fmtstrcpy(f, "\t");
-}
-@
 
 <<function flushbuf>>=
 void
@@ -1393,14 +613,6 @@ dprint(char *fmt, ...)
 }
 @
 
-<<function outputinit>>=
-void
-outputinit(void)
-{
-    Binit(&stdout, 1, OWRITE);
-    fmtinstall('t', tconv);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1453,114 +665,11 @@ outputinit(void)
 
 \subsection*{[[db/input.c]]}
 
-<<global line>>=
-Rune	line[LINSIZ];
-@
 
-<<global lp>>=
-Rune	*lp;
-@
 
-<<global eof>>=
-int	eof;
-@
 
-<<function eol>>=
-/* input routines */
 
-int
-eol(int c)
-{
-    return(c==EOR || c==';');
-}
-@
 
-<<function rdc>>=
-int
-rdc(void)
-{
-    do {
-        readchar();
-    } while (lastc==SPC || lastc==TB);
-    return(lastc);
-}
-@
-
-<<function reread>>=
-void
-reread(void)
-{
-    peekc = lastc;
-}
-@
-
-<<function clrinp>>=
-void
-clrinp(void)
-{
-    flush();
-    lp = 0;
-    peekc = 0;
-}
-@
-
-<<function readrune>>=
-int
-readrune(int fd, Rune *r)
-{
-    char buf[UTFmax+1];
-    int i;
-
-    for(i=0; i<UTFmax && !fullrune(buf, i); i++)
-        if(read(fd, buf+i, 1) <= 0)
-            return -1;
-    buf[i] = 0;
-    chartorune(r, buf);
-    return 1;
-}
-@
-
-<<function readchar>>=
-int
-readchar(void)
-{
-    Rune *p;
-
-    if (eof)
-        lastc=0;
-    else if (peekc) {
-        lastc = peekc;
-        peekc = 0;
-    }
-    else {
-        if (lp==0) {
-            for (p = line; p < &line[LINSIZ-1]; p++) {
-                eof = readrune(infile, p) <= 0;
-                if (mkfault) {
-                    eof = 0;
-                    error(0);
-                }
-                if (eof) {
-                    p--;
-                    break;
-                }
-                if (*p == EOR) {
-                    if (p <= line)
-                        break;
-                    if (p[-1] != '\\')
-                        break;
-                    p -= 2;
-                }
-            }
-            p[1] = 0;
-            lp = line;
-        }
-        if ((lastc = *lp) != 0)
-            lp++;
-    }
-    return(lastc);
-}
-@
 
 <<function nextchar>>=
 int
@@ -1587,27 +696,6 @@ quotchar(void)
 }
 @
 
-<<function getformat>>=
-void
-getformat(char *deformat)
-{
-    char *fptr;
-    BOOL	quote;
-    Rune r;
-
-    fptr=deformat;
-    quote=FALSE;
-    while ((quote ? readchar()!=EOR : !eol(readchar()))){
-        r = lastc;
-        fptr += runetochar(fptr, &r);
-        if (lastc == '"')
-            quote = ~quote;
-    }
-    lp--;
-    if (fptr!=deformat)
-        *fptr = '\0';
-}
-@
 
 <<function isfileref>>=
 /*
@@ -1657,8 +745,11 @@ isfileref(void)
 <<global line>>
 extern	int	infile;
 <<global lp>>
-int	peekc,lastc = EOR;
+<<global peekc>>
+<<global lastc>>
 <<global eof>>
+
+/* input routines */
 
 <<function eol>>
 
@@ -1684,46 +775,7 @@ int	peekc,lastc = EOR;
 
 \subsection*{[[db/setup.c]]}
 
-<<global symfil>>=
-char	*symfil;
-@
 
-<<global corfil>>=
-char	*corfil;
-@
-
-<<global dotmap>>=
-Map	*dotmap;
-@
-
-<<global fhdr (db/setup.c)>>=
-static Fhdr fhdr;
-@
-
-<<function setsym>>=
-void
-setsym(void)
-{
-    Symbol s;
-
-    if((fsym = getfile(symfil, 1, wtflag)) < 0) {
-        symmap = dumbmap(-1);
-        return;
-    }
-    if (crackhdr(fsym, &fhdr)) {
-        machbytype(fhdr.type);
-        symmap = loadmap(symmap, fsym, &fhdr);
-        if (symmap == 0)
-            symmap = dumbmap(fsym);
-        if (syminit(fsym, &fhdr) < 0)
-            dprint("%r\n");
-        if (mach->sbreg && lookup(0, mach->sbreg, &s))
-            mach->sb = s.value;
-    }
-    else
-        symmap = dumbmap(fsym);
-}
-@
 
 <<function setcor>>=
 void
@@ -1760,22 +812,6 @@ setcor(void)
 }
 @
 
-<<function dumbmap>>=
-Map *
-dumbmap(int fd)
-{
-    Map *dumb;
-
-
-    dumb = newmap(0, 1);
-    setmap(dumb, fd, 0, 0xffffffff, 0, "data");
-    if (!mach) 			/* default machine = 386 */
-        mach = &mi386;
-    if (!machdata)
-        machdata = &i386mach;
-    return dumb;
-}
-@
 
 <<function cmdmap>>=
 /*
@@ -1827,32 +863,6 @@ cmdmap(Map *map)
 }
 @
 
-<<function getfile>>=
-static int
-getfile(char *filnam, int cnt, int omode)
-{
-    int f;
-
-    if (filnam == 0)
-        return -1;
-    if (strcmp(filnam, "-") == 0)
-        return 0;
-    f = open(filnam, omode|OCEXEC);
-    if(f < 0 && omode == ORDWR){
-        f = open(filnam, OREAD|OCEXEC);
-        if(f >= 0)
-            dprint("%s open read-only\n", filnam);
-    }
-    if (f < 0 && xargc > cnt)
-        if (wtflag)
-            f = create(filnam, 1, 0666);
-    if (f < 0) {
-        dprint("cannot open `%s': %r\n", filnam);
-        return -1;
-    }
-    return f;
-}
-@
 
 <<function kmsys>>=
 void
@@ -1919,7 +929,8 @@ attachprocess(void)
 
 <<global dotmap>>
 
-int fsym, fcor;
+<<global fsym>>
+int fcor;
 <<global fhdr (db/setup.c)>>
 
 static int getfile(char*, int, int);
@@ -1945,364 +956,7 @@ extern Machdata i386mach;
 
 \subsection*{[[db/format.c]]}
 
-<<function scanform>>=
-void
-scanform(long icount, int prt, char *ifp, Map *map, int literal)
-{
-    char	*fp;
-    char	c;
-    int	fcount;
-    ADDR	savdot;
-    int firstpass;
 
-    firstpass = 1;
-    while (icount) {
-        fp=ifp;
-        savdot=dot;
-        /*now loop over format*/
-        while (*fp) {
-            if (!isdigit(*fp))
-                fcount = 1;
-            else {
-                fcount = 0;
-                while (isdigit(c = *fp++)) {
-                    fcount *= 10;
-                    fcount += c-'0';
-                }
-                fp--;
-            }
-            if (*fp==0)
-                break;
-            fp=exform(fcount,prt,fp,map,literal,firstpass);
-            firstpass = 0;
-        }
-        dotinc=dot-savdot;
-        dot=savdot;
-        if (--icount)
-            dot=inkdot(dotinc);
-    }
-}
-@
-
-<<function exform>>=
-char *
-exform(int fcount, int prt, char *ifp, Map *map, int literal, int firstpass)
-{
-    /* execute single format item `fcount' times
-     * sets `dotinc' and moves `dot'
-     * returns address of next format item
-     */
-    uvlong	v;
-    ulong	w;
-    ADDR	savdot;
-    char	*fp;
-    char	c, modifier;
-    int	i;
-    ushort sh, *sp;
-    uchar ch, *cp;
-    Symbol s;
-    char buf[512];
-    extern int printcol;
-
-    fp = 0;
-    while (fcount > 0) {
-        fp = ifp;
-        c = *fp;
-        modifier = *fp++;
-        if (firstpass) {
-            firstpass = 0;
-            if (!literal  && (c == 'i' || c == 'I' || c == 'M')
-                    && (dot & (mach->pcquant-1))) {
-                dprint("warning: instruction not aligned");
-                printc('\n');
-            }
-            if (prt && modifier != 'a' && modifier != 'A') {
-                symoff(buf, 512, dot, CANY);
-                dprint("%s%c%16t", buf, map==symmap? '?':'/');
-            }
-        }
-        if (printcol==0 && modifier != 'a' && modifier != 'A')
-            dprint("\t\t");
-        switch(modifier) {
-
-        case SPC:
-        case TB:
-            dotinc = 0;
-            break;
-
-        case 't':
-        case 'T':
-            dprint("%*t", fcount);
-            dotinc = 0;
-            return(fp);
-
-        case 'a':
-            symoff(buf, sizeof(buf), dot, CANY);
-            dprint("%s%c%16t", buf, map==symmap? '?':'/');
-            dotinc = 0;
-            break;
-
-        case 'A':
-            dprint("%#llux%10t", dot);
-            dotinc = 0;
-            break;
-
-        case 'p':
-            if (get4(map, dot, &w) < 0)
-                error("%r");
-            symoff(buf, sizeof(buf), w, CANY);
-            dprint("%s%16t", buf);
-            dotinc = mach->szaddr;
-            break;
-
-        case 'u':
-        case 'd':
-        case 'x':
-        case 'o':
-        case 'q':
-            if (literal)
-                sh = (ushort) dot;
-            else if (get2(map, dot, &sh) < 0)
-                error("%r");
-            w = sh;
-            dotinc = 2;
-            if (c == 'u')
-                dprint("%-8lud", w);
-            else if (c == 'x')
-                dprint("%-8#lux", w);
-            else if (c == 'd')
-                dprint("%-8ld", w);
-            else if (c == 'o')
-                dprint("%-8#luo", w);
-            else if (c == 'q')
-                dprint("%-8#lo", w);
-            break;
-
-        case 'U':
-        case 'D':
-        case 'X':
-        case 'O':
-        case 'Q':
-            if (literal)
-                w = (long) dot;
-            else if (get4(map, dot, &w) < 0)
-                error("%r");
-            dotinc = 4;
-            if (c == 'U')
-                dprint("%-16lud", w);
-            else if (c == 'X')
-                dprint("%-16#lux", w);
-            else if (c == 'D')
-                dprint("%-16ld", w);
-            else if (c == 'O')
-                dprint("%-#16luo", w);
-            else if (c == 'Q')
-                dprint("%-#16lo", w);
-            break;
-        case 'Z':
-        case 'V':
-        case 'Y':
-            if (literal)
-                v = dot;
-            else if (get8(map, dot, &v) < 0)
-                error("%r");
-            dotinc = 8;
-            if (c == 'Y')
-                dprint("%-20#llux", v);
-            else if (c == 'V')
-                dprint("%-20lld", v);
-            else if (c == 'Z')
-                dprint("%-20llud", v);
-            break;
-        case 'B':
-        case 'b':
-        case 'c':
-        case 'C':
-            if (literal)
-                ch = (uchar) dot;
-            else if (get1(map, dot, &ch, 1)  < 0)
-                error("%r");
-            if (modifier == 'C')
-                printesc(ch);
-            else if (modifier == 'B' || modifier == 'b')
-                dprint("%-8#lux", (long) ch);
-            else
-                printc(ch);
-            dotinc = 1;
-            break;
-
-        case 'r':
-            if (literal)
-                sh = (ushort) dot;
-            else if (get2(map, dot, &sh) < 0)
-                error("%r");
-            dprint("%C", sh);
-            dotinc = 2;
-            break;
-
-        case 'R':
-            if (literal) {
-                sp = (ushort*) &dot;
-                dprint("%C%C", sp[0], sp[1]);
-                endline();
-                dotinc = 4;
-                break;
-            }
-            savdot=dot;
-            while ((i = get2(map, dot, &sh) > 0) && sh) {
-                dot=inkdot(2);
-                dprint("%C", sh);
-                endline();
-            }
-            if (i < 0)
-                error("%r");
-            dotinc = dot-savdot+2;
-            dot=savdot;
-            break;
-
-        case 's':
-            if (literal) {
-                cp = (uchar*) &dot;
-                for (i = 0; i < 4; i++)
-                    buf[i] = cp[i];
-                buf[i] = 0;
-                dprint("%s", buf);
-                endline();
-                dotinc = 4;
-                break;
-            }
-            savdot = dot;
-            for(;;){
-                i = 0;
-                do{
-                    if (get1(map, dot, (uchar*)&buf[i], 1) < 0)
-                        error("%r");
-                    dot = inkdot(1);
-                    i++;
-                }while(!fullrune(buf, i));
-                if(buf[0] == 0)
-                    break;
-                buf[i] = 0;
-                dprint("%s", buf);
-                endline();
-            }
-            dotinc = dot-savdot+1;
-            dot = savdot;
-            break;
-
-        case 'S':
-            if (literal) {
-                cp = (uchar*) &dot;
-                for (i = 0; i < 4; i++)
-                    printesc(cp[i]);
-                endline();
-                dotinc = 4;
-                break;
-            }
-            savdot=dot;
-            while ((i = get1(map, dot, &ch, 1) > 0) && ch) {
-                dot=inkdot(1);
-                printesc(ch);
-                endline();
-            }
-            if (i < 0)
-                error("%r");
-            dotinc = dot-savdot+1;
-            dot=savdot;
-            break;
-
-
-        case 'I':
-        case 'i':
-            i = machdata->das(map, dot, modifier, buf, sizeof(buf));
-            if (i < 0)
-                error("%r");
-            dotinc = i;
-            dprint("%s\n", buf);
-            break;
-
-        case 'M':
-            i = machdata->hexinst(map, dot, buf, sizeof(buf));
-            if (i < 0)
-                error("%r");
-            dotinc = i;
-            dprint("%s", buf);
-            if (*fp) {
-                dotinc = 0;
-                dprint("%48t");
-            } else
-                dprint("\n");
-            break;
-
-        case 'f':
-            /* BUG: 'f' and 'F' assume szdouble is sizeof(vlong) in the literal case */
-            if (literal) {
-                v = machdata->swav(dot);
-                memmove(buf, &v, mach->szfloat);
-            }else if (get1(map, dot, (uchar*)buf, mach->szfloat) < 0)
-                error("%r");
-            machdata->sftos(buf, sizeof(buf), (void*) buf);
-            dprint("%s\n", buf);
-            dotinc = mach->szfloat;
-            break;
-
-        case 'F':
-            /* BUG: 'f' and 'F' assume szdouble is sizeof(vlong) in the literal case */
-            if (literal) {
-                v = machdata->swav(dot);
-                memmove(buf, &v, mach->szdouble);
-            }else if (get1(map, dot, (uchar*)buf, mach->szdouble) < 0)
-                error("%r");
-            machdata->dftos(buf, sizeof(buf), (void*) buf);
-            dprint("%s\n", buf);
-            dotinc = mach->szdouble;
-            break;
-
-        case 'n':
-        case 'N':
-            printc('\n');
-            dotinc=0;
-            break;
-
-        case '"':
-            dotinc=0;
-            while (*fp != '"' && *fp)
-                printc(*fp++);
-            if (*fp)
-                fp++;
-            break;
-
-        case '^':
-            dot=inkdot(-dotinc*fcount);
-            return(fp);
-
-        case '+':
-            dot=inkdot((WORD)fcount);
-            return(fp);
-
-        case '-':
-            dot=inkdot(-(WORD)fcount);
-            return(fp);
-
-        case 'z':
-            if (findsym(dot, CTEXT, &s))
-                dprint("%s() ", s.name);
-            printsource(dot);
-            printc(EOR);
-            return fp;
-
-        default:
-            error("bad modifier");
-        }
-        if (map->seg[0].fd >= 0)
-            dot=inkdot(dotinc);
-        fcount--;
-        endline();
-    }
-
-    return(fp);
-}
-@
 
 <<function printesc>>=
 void
@@ -2565,210 +1219,6 @@ defval(WORD w)
 }
 @
 
-<<function expr>>=
-int
-expr(int a)
-{	/* term | term dyadic expr |  */
-    int	rc;
-    WORD	lhs;
-
-    rdc();
-    reread();
-    rc=term(a);
-    while (rc) {
-        lhs = expv;
-        switch ((int)readchar()) {
-
-        case '+':
-            term(a|1);
-            expv += lhs;
-            break;
-
-        case '-':
-            term(a|1);
-            expv = lhs - expv;
-            break;
-
-        case '#':
-            term(a|1);
-            expv = round(lhs,expv);
-            break;
-
-        case '*':
-            term(a|1);
-            expv *= lhs;
-            break;
-
-        case '%':
-            term(a|1);
-            if(expv != 0)
-                expv = lhs/expv;
-            else{
-                if(lhs)
-                    expv = 1;
-                else
-                    expv = 0;
-            }
-            break;
-
-        case '&':
-            term(a|1);
-            expv &= lhs;
-            break;
-
-        case '|':
-            term(a|1);
-            expv |= lhs;
-            break;
-
-        case ')':
-            if ((a&2)==0)
-                error("unexpected `)'");
-
-        default:
-            reread();
-            return(rc);
-        }
-    }
-    return(rc);
-}
-@
-
-<<function term>>=
-int
-term(int a)
-{	/* item | monadic item | (expr) | */
-    ADDR e;
-
-    switch ((int)readchar()) {
-
-    case '*':
-        term(a|1);
-        if (geta(cormap, expv, &e) < 0)
-            error("%r");
-        expv = e;
-        return(1);
-
-    case '@':
-        term(a|1);
-        if (geta(symmap, expv, &e) < 0)
-            error("%r");
-        expv = e;
-        return(1);
-
-    case '-':
-        term(a|1);
-        expv = -expv;
-        return(1);
-
-    case '~':
-        term(a|1);
-        expv = ~expv;
-        return(1);
-
-    case '(':
-        expr(2);
-        if (readchar()!=')')
-            error("syntax error: `)' expected");
-        return(1);
-
-    default:
-        reread();
-        return(item(a));
-    }
-}
-@
-
-<<function item>>=
-int
-item(int a)
-{	/* name [ . local ] | number | . | ^  | <register | 'x | | */
-    char	*base;
-    char	savc;
-    uvlong e;
-    Symbol s;
-    char gsym[MAXSYM], lsym[MAXSYM];
-
-    readchar();
-    if (isfileref()) {
-        readfname(gsym);
-        rdc();			/* skip white space */
-        if (lastc == ':') {	/* it better be */
-            rdc();		/* skip white space */
-            if (!getnum(readchar))
-                error("bad number");
-            if (expv == 0)
-                expv = 1;	/* file begins at line 1 */
-            expv = file2pc(gsym, expv);
-            if (expv == -1)
-                error("%r");
-            return 1;
-        }
-        error("bad file location");
-    } else if (symchar(0)) {	
-        readsym(gsym);
-        if (lastc=='.') {
-            readchar();	/* ugh */
-            if (lastc == '.') {
-                lsym[0] = '.';
-                readchar();
-                readsym(lsym+1);
-            } else if (symchar(0)) {
-                readsym(lsym);
-            } else
-                lsym[0] = 0;
-            if (localaddr(cormap, gsym, lsym, &e, rget) < 0)
-                error("%r");
-            expv = e;
-        }
-        else {
-            if (lookup(0, gsym, &s) == 0)
-                error("symbol not found");
-            expv = s.value;
-        }
-        reread();
-    } else if (getnum(readchar)) {
-        ;
-    } else if (lastc=='.') {	
-        readchar();
-        if (!symchar(0) && lastc != '.') {
-            expv = dot;
-        } else {
-            if (findsym(rget(cormap, mach->pc), CTEXT, &s) == 0)
-                error("no current function");
-            if (lastc == '.') {
-                lsym[0] = '.';
-                readchar();
-                readsym(lsym+1);
-            } else
-                readsym(lsym);
-            if (localaddr(cormap, s.name, lsym, &e, rget) < 0)
-                error("%r");
-            expv = e;
-        }	
-        reread();
-    } else if (lastc=='"') {
-        expv=ditto;
-    } else if (lastc=='+') {
-        expv=inkdot(dotinc);
-    } else if (lastc=='^') {
-        expv=inkdot(-dotinc);
-    } else if (lastc=='<') {
-        savc=rdc();
-        base = regname(savc);
-        expv = rget(cormap, base);
-    }
-    else if (lastc=='\'')
-        expv = ascval();
-    else if (a)
-        error("address expected");
-    else {	
-        reread();
-        return(0);
-    }
-    return(1);
-}
-@
 
 <<constant MAXBASE>>=
 #define	MAXBASE	16
@@ -2781,7 +1231,7 @@ getnum(int (*rdf)(void))
 {
     char *cp;
     int base, d;
-    BOOL fpnum;
+    bool fpnum;
     char num[MAXLIN];
 
     base = 0;
@@ -3338,8 +1788,6 @@ bkput(BKPT *bp, int install)
 \subsection*{[[db/print.c]]}
 
 <<global Ipath>>=
-/* general printing routines ($) */
-
 char	*Ipath = INCDIR;
 @
 %$
@@ -3372,151 +1820,6 @@ ptrace(Map *map, uvlong pc, uvlong sp, Symbol *sym)
 }
 @
 
-<<function printtrace>>=
-void
-printtrace(int modif)
-{
-    int i;
-    uvlong pc, sp, link;
-    ulong w;
-    BKPT *bk;
-    Symbol s;
-    int stack;
-    char *fname;
-    char buf[512];
-
-    if (cntflg==0)
-        cntval = -1;
-    switch (modif) {
-
-    case '<':
-        if (cntval == 0) {
-            while (readchar() != EOR)
-                ;
-            reread();
-            break;
-        }
-        if (rdc() == '<')
-            stack = 1;
-        else {
-            stack = 0;
-            reread();
-        }
-        fname = getfname();
-        redirin(stack, fname);
-        break;
-
-    case '>':
-        fname = getfname();
-        redirout(fname);
-        break;
-
-    case 'a':
-        attachprocess();
-        break;
-
-    case 'k':
-        kmsys();
-        break;
-
-    case 'q':
-    case 'Q':
-        done();
-
-    case 'w':
-        maxpos=(adrflg?adrval:MAXPOS);
-        break;
-
-    case 'S':
-        printsym();
-        break;
-
-    case 's':
-        maxoff=(adrflg?adrval:MAXOFF);
-        break;
-
-    case 'm':
-        printmap("? map", symmap);
-        printmap("/ map", cormap);
-        break;
-
-    case 0:
-    case '?':
-        if (pid)
-            dprint("pid = %d\n",pid);
-        else
-            prints("no process\n");
-        flushbuf();
-
-    case 'r':
-    case 'R':
-        printregs(modif);
-        return;
-
-    case 'f':
-    case 'F':
-        printfp(cormap, modif);
-        return;
-
-    case 'c':
-    case 'C':
-        tracetype = modif;
-        if (machdata->ctrace) {
-            if (adrflg) {
-                /*
-                 * trace from jmpbuf for multi-threaded code.
-                 * assume sp and pc are in adjacent locations
-                 * and mach->szaddr in size.
-                 */
-                if (geta(cormap, adrval, &sp) < 0 ||
-                    geta(cormap, adrval+mach->szaddr, &pc) < 0)
-                        error("%r");
-            } else {
-                sp = rget(cormap, mach->sp);
-                pc = rget(cormap, mach->pc);
-            }
-            if(mach->link)
-                link = rget(cormap, mach->link);
-            else
-                link = 0;
-            if (machdata->ctrace(cormap, pc, sp, link, ptrace) <= 0)
-                error("no stack frame");
-        }
-        break;
-
-        /*print externals*/
-    case 'e':
-        for (i = 0; globalsym(&s, i); i++) {
-            if (get4(cormap, s.value, &w) > 0)
-                dprint("%s/%12t%#lux\n", s.name, w);
-        }
-        break;
-
-        /*print breakpoints*/
-    case 'b':
-    case 'B':
-        for (bk=bkpthead; bk; bk=bk->nxtbkpt)
-            if (bk->flag) {
-                symoff(buf, 512, (WORD)bk->loc, CTEXT);
-                dprint(buf);
-                if (bk->count != 1)
-                    dprint(",%d", bk->count);
-                dprint(":%c %s", bk->flag == BKPTTMP ? 'B' : 'b', bk->comm);
-            }
-        break;
-
-    case 'M':
-        fname = getfname();
-        if (machbyname(fname) == 0)
-            dprint("unknown name\n");;
-        break;
-    default:
-        error("bad `$' command");
-    }
-
-}
-@
-%$
 
 <<function getfname>>=
 char *
@@ -3746,6 +2049,8 @@ extern	int	infile;
 extern	int	outfile;
 extern	int	maxpos;
 
+/* general printing routines ($) */
+
 <<global Ipath>>
 <<global tracetype>>
 static void	printfp(Map*, int);
@@ -3774,6 +2079,7 @@ static void	printfp(Map*, int);
 
 <<function printparams>>
 @
+%$
 
 
 \subsection*{[[db/command.c]]}
@@ -3783,7 +2089,7 @@ char	BADEQ[] = "unexpected `='";
 @
 
 <<global executing>>=
-BOOL	executing;
+bool	executing;
 @
 
 <<global eqformat>>=
@@ -3798,171 +2104,7 @@ char	stformat[ARB] = "zMi";
 WORD loopcnt;
 @
 
-<<function command>>=
-/* command decoding */
-int
-command(char *buf, int defcom)
-{
-    char	*reg;
-    char	savc;
-    Rune	*savlp=lp;
-    char	savlc = lastc;
-    char	savpc = peekc;
-    static char lastcom = '=', savecom = '=';
 
-    if (defcom == 0)
-        defcom = lastcom;
-    if (buf) {
-        if (*buf==EOR)
-            return(FALSE);
-        clrinp();
-        lp=(Rune*)buf;
-    }
-    do {
-        adrflg=expr(0);		/* first address */
-        if (adrflg){
-            dot=expv;
-            ditto=expv;
-        }
-        adrval=dot;
-
-        if (rdc()==',' && expr(0)) {	/* count */
-            cntflg=TRUE;
-            cntval=expv;
-        } else {
-            cntflg=FALSE;
-            cntval=1;
-            reread();
-        }
-
-        if (!eol(rdc()))
-            lastcom=lastc;		/* command */
-        else {
-            if (adrflg==0)
-                dot=inkdot(dotinc);
-            reread();
-            lastcom=defcom;
-        }
-        switch(lastcom) {
-        case '/':
-        case '=':
-        case '?':
-            savecom = lastcom;
-            acommand(lastcom);
-            break;
-
-        case '>':
-            lastcom = savecom; 
-            savc=rdc();
-            if (reg=regname(savc))
-                rput(cormap, reg, dot);
-            else	
-                error("bad variable");
-            break;
-
-        case '!':
-            lastcom=savecom;
-            shell(); 
-            break;
-
-        case '$':
-            lastcom=savecom;
-            printtrace(nextchar()); 
-            break;
-
-        case ':':
-            if (!executing) { 
-                executing=TRUE;
-                subpcs(nextchar());
-                executing=FALSE;
-                lastcom=savecom;
-            }
-            break;
-
-        case 0:
-            prints(DBNAME);
-            break;
-
-        default: 
-            error("bad command");
-        }
-        flushbuf();
-    } while (rdc()==';');
-    if (buf == 0)
-        reread();
-    else {
-        clrinp();
-        lp=savlp;
-        lastc = savlc;
-        peekc = savpc;
-    }
-
-    if(adrflg)
-        return dot;
-    return 1;
-}
-@
-%$
-
-<<function acommand>>=
-/*
- * [/?][wml]
- */
-
-void
-acommand(int pc)
-{
-    int eqcom;
-    Map *map;
-    char *fmt;
-    char buf[512];
-
-    if (pc == '=') {
-        eqcom = 1;
-        fmt = eqformat;
-        map = dotmap;
-    } else {
-        eqcom = 0;
-        fmt = stformat;
-        if (pc == '/')
-            map = cormap;
-        else
-            map = symmap;
-    }
-    if (!map) {
-        snprint(buf, sizeof(buf), "no map for %c", pc);
-        error(buf);
-    }
-
-    switch (rdc())
-    {
-    case 'm':
-        if (eqcom)
-            error(BADEQ); 
-        cmdmap(map);
-        break;
-
-    case 'L':
-    case 'l':
-        if (eqcom)
-            error(BADEQ); 
-        cmdsrc(lastc, map);
-        break;
-
-    case 'W':
-    case 'w':
-        if (eqcom)
-            error(BADEQ); 
-        cmdwrite(lastc, map);
-        break;
-
-    default:
-        reread();
-        getformat(fmt);
-        scanform(cntval, !eqcom, fmt, map, eqcom);
-    }
-}
-@
 
 <<function cmdsrc>>=
 void
@@ -4143,7 +2285,7 @@ extern	Rune	*lp;
 \subsection*{[[db/runpcs.c]]}
 
 <<global bpin>>=
-BOOL bpin;
+bool bpin;
 @
 
 <<function runpcs>>=
@@ -4382,173 +2524,6 @@ setbp(void)
 char	NOPCS[] = "no process";
 @
 
-<<function subpcs>>=
-/* sub process control */
-
-void
-subpcs(int modif)
-{
-    int	check;
-    int	runmode;
-    int	keepnote;
-    int	n, r;
-    long line, curr;
-    BKPT *bk;
-    char *comptr;
-
-    runmode=SINGLE;
-    r = 0;
-    keepnote=0;
-    loopcnt=cntval;
-    switch (modif) {
-
-        /* delete breakpoint */
-    case 'd': 
-    case 'D':
-        if ((bk=scanbkpt(dot)) == 0)
-            error("no breakpoint set");
-        bk->flag=BKPTCLR;
-        return;
-
-        /* set breakpoint */
-    case 'b': 
-    case 'B':
-        if (bk=scanbkpt(dot))
-            bk->flag=BKPTCLR;
-        for (bk=bkpthead; bk; bk=bk->nxtbkpt)
-            if (bk->flag == BKPTCLR)
-                break;
-        if (bk==0) {
-            bk = (BKPT *)malloc(sizeof(*bk));
-            if (bk == 0)
-                error("too many breakpoints");
-            bk->nxtbkpt=bkpthead;
-            bkpthead=bk;
-        }
-        bk->loc = dot;
-        bk->initcnt = bk->count = cntval;
-        bk->flag = modif == 'b' ? BKPTSET : BKPTTMP;
-        check=MAXCOM-1;
-        comptr=bk->comm;
-        rdc();
-        reread();
-        do {
-            *comptr++ = readchar();
-        } while (check-- && lastc!=EOR);
-        *comptr=0;
-        if(bk->comm[0] != EOR && cntflg == FALSE)
-            bk->initcnt = bk->count = HUGEINT;
-        reread();
-        if (check)
-            return;
-        error("bkpt command too long");
-
-        /* exit */
-    case 'k' :
-    case 'K':
-        if (pid == 0)
-            error(NOPCS);
-        dprint("%d: killed", pid);
-        pcsactive = 1;	/* force 'kill' ctl */
-        endpcs();
-        return;
-
-        /* run program */
-    case 'r': 
-    case 'R':
-        endpcs();
-        setup();
-        runmode = CONTIN;
-        break;
-
-        /* single step */
-    case 's': 
-        if (pid == 0) {
-            setup();
-            loopcnt--;
-        }
-        runmode=SINGLE;
-        keepnote=defval(1);
-        break;
-    case 'S':
-        if (pid == 0) {
-            setup();
-            loopcnt--;
-        }
-        keepnote=defval(1);
-        line = pc2line(rget(cormap, mach->pc));
-        n = loopcnt;
-        dprint("%s: running\n", symfil);
-        flush();
-        for (loopcnt = 1; n > 0; loopcnt = 1) {
-            r = runpcs(SINGLE, keepnote);
-            curr = pc2line(dot);
-            if (line != curr) {	/* on a new line of c */
-                line = curr;
-                n--;
-            }
-        }
-        loopcnt = 0;
-        break;
-        /* continue with optional note */
-    case 'c': 
-    case 'C': 
-        if (pid==0)
-            error(NOPCS);
-        runmode=CONTIN;
-        keepnote=defval(1);
-        break;
-
-    case 'n':	/* deal with notes */
-        if (pid==0)
-            error(NOPCS);
-        n=defval(-1);
-        if(n>=0 && n<nnote){
-            nnote--;
-            memmove(note[n], note[n+1], (nnote-n)*sizeof(note[0]));
-        }
-        notes();
-        return;
-
-    case 'h':	/* halt the current process */
-        if (adrflg && adrval == 0) {
-            if (pid == 0)
-                error(NOPCS);
-            ungrab();
-        }
-        else {
-            grab();
-            dprint("stopped at%16t");
-            goto Return;
-        }
-        return;
-
-    case 'x':	/* continue executing the current process */
-        if (pid == 0)
-            error(NOPCS);
-        ungrab();
-        return;
-
-    default:
-        error("bad `:' command");
-    }
-
-    if (loopcnt>0) {
-        dprint("%s: running\n", symfil);
-        flush();
-        r = runpcs(runmode,keepnote);
-    }
-    if (r)
-        dprint("breakpoint%16t");
-    else
-        dprint("stopped at%16t");
-    Return:
-    delbp();
-    printpc();
-    notes();
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -4571,157 +2546,11 @@ subpcs(int modif)
 \subsection*{[[db/main.c]]}
 
 <<global exitflg>>=
-int	exitflg;
+bool	exitflg;
 @
 
-<<function main (db/main.c)>>=
-void
-main(int argc, char **argv)
-{
-    char b1[100];
-    char b2[100];
-    char *s;
-    char *name;
 
-    name = 0;
-    outputinit();
-    maxoff = MAXOFF;
-    ARGBEGIN{
-    case 'k':
-        kflag = 1;
-        break;
-    case 'w':
-        wtflag = ORDWR;		/* suitable for open() */
-        break;
-    case 'I':
-        s = ARGF();
-        if(s == 0)
-            dprint("missing -I argument\n");
-        else
-            Ipath = s;
-        break;
-    case 'm':
-        name = ARGF();
-        if(name == 0)
-            dprint("missing -m argument\n");
-        break;
-    }ARGEND
-    symfil = 0;
-    corfil = 0;
-    if (argc > 0 && !alldigs(argv[0])) {
-        symfil = argv[0];
-        argv++;
-        argc--;
-    }
-    if(argc==1 && alldigs(argv[0])){
-        char *cpu, *p, *q;
 
-        pid = atoi(argv[0]);
-        pcsactive = 0;
-        if (!symfil) {
-            if(kflag){
-                cpu = getenv("cputype");
-                if(cpu == 0){
-                    cpu = "386";
-                    dprint("$cputype not set; assuming %s\n", cpu);
-                }
-                p = getenv("terminal");
-                if(p==0 || (p=strchr(p, ' '))==0 || p[1]==' ' || p[1]==0){
-                    strcpy(b1, "/386/9pc");
-                    dprint("missing or bad $terminal; assuming %s\n", b1);
-                }else{
-                    p++;
-                    q = strchr(p, ' ');
-                    if(q)
-                        *q = 0;
-                    sprint(b1, "/%s/9%s", cpu, p);
-                
-                }
-            }else
-                sprint(b1, "/proc/%s/text", argv[0]);
-            symfil = b1;
-        }
-        sprint(b2, "/proc/%s/mem", argv[0]);
-        corfil = b2;
-    } else if (argc > 0) {
-        fprint(2, "Usage: db [-kw] [-m machine] [-I dir] [symfile] [pid]\n");
-        exits("usage");
-    }
-    if (!symfil)
-        symfil = "8.out";
-    xargc = argc;
-    notify(fault);
-    setsym();
-    dotmap = dumbmap(-1);
-    if (name && machbyname(name) == 0)
-            dprint ("unknown machine %s", name);
-    dprint("%s binary\n", mach->name);
-    if(setjmp(env) == 0){
-        if (corfil) {
-            setcor();	/* could get error */
-            dprint("%s\n", machdata->excep(cormap, rget));
-            printpc();
-        }
-    }
-
-    setjmp(env);
-    if (executing)
-        delbp();
-    executing = FALSE;
-    for (;;) {
-        flushbuf();
-        if (errmsg) {
-            dprint(errmsg);
-            printc('\n');
-            errmsg = 0;
-            exitflg = 0;
-        }
-        if (mkfault) {
-            mkfault=0;
-            printc('\n');
-            prints(DBNAME);
-        }
-        clrinp();
-        rdc();
-        reread();
-        if (eof) {
-            if (infile == STDIN)
-                done();
-            iclose(-1, 0);
-            eof = 0;
-            longjmp(env, 1);
-        }
-        exitflg = 0;
-        command(0, 0);
-        reread();
-        if (rdc() != '\n')
-            error("newline expected");
-    }
-}
-@
-
-<<function alldigs>>=
-int
-alldigs(char *s)
-{
-    while(*s){
-        if(*s<'0' || '9'<*s)
-            return 0;
-        s++;
-    }
-    return 1;
-}
-@
-
-<<function done>>=
-void
-done(void)
-{
-    if (pid)
-        endpcs();
-    exits(exitflg? "error": 0);
-}
-@
 
 <<function fault>>=
 /*
@@ -4753,7 +2582,7 @@ fault(void *a, char *s)
 #include "fns.h"
 
 
-extern	BOOL	executing;
+extern	bool	executing;
 extern	int	infile;
 <<global exitflg>>
 extern	int	eof;
@@ -4784,6 +2613,683 @@ extern char *errmsg;
 
 
 
+
+
+\section{[[tracers/]]}
+
+\subsection*{[[tracers/ktrace.c]]}
+
+<<global fhdr>>=
+static	Fhdr	fhdr;
+@
+
+<<global interactive>>=
+static	int	interactive = 0;
+@
+
+<<constant FRAMENAME>>=
+#define	FRAMENAME	".frame"
+@
+
+<<function usage>>=
+static void
+usage(void)
+{
+    fprint(2, "usage: ktrace [-i] kernel pc sp [link]\n");
+    exits("usage");
+}
+@
+
+<<function printaddr>>=
+static void
+printaddr(char *addr, uvlong pc)
+{
+    int i;
+    char *p;
+
+    /*
+     * reformat the following.
+     *
+     * foo+1a1 -> src(foo+0x1a1);
+     * 10101010 -> src(0x10101010);
+     */
+
+    if(strlen(addr) == 8 && strchr(addr, '+') == nil){
+        for(i=0; i<8; i++)
+            if(!isxdigit(addr[i]))
+                break;
+        if(i == 8){
+            print("src(%#.8llux); // 0x%s\n", pc, addr);
+            return;
+        }
+    }
+
+    if(p=strchr(addr, '+')){
+        *p++ = 0;
+        print("src(%#.8llux); // %s+0x%s\n", pc, addr, p);
+    }else
+        print("src(%#.8llux); // %s\n", pc, addr);
+}
+@
+
+<<global fmt>>=
+static void (*fmt)(char*, uvlong) = printaddr;
+@
+
+<<function main>>=
+void
+main(int argc, char *argv[])
+{
+    int (*t)(uvlong, uvlong, uvlong);
+    uvlong pc, sp, link;
+    int fd;
+
+    ARGBEGIN{
+    case 'i':
+        interactive = 1;
+        break;
+    default:
+        usage();
+    }ARGEND
+
+    link = 0;
+    t = rtrace;
+    switch(argc){
+    case 4:
+        t = rtrace;
+        link = strtoull(argv[3], 0, 16);
+        break;
+    case 3:
+        break;
+    default:
+        usage();
+    }
+    pc = strtoull(argv[1], 0, 16);
+    sp = strtoull(argv[2], 0, 16);
+    if(!interactive)
+        readstack();
+
+    fd = open(argv[0], OREAD);
+    if(fd < 0)
+        fatal("can't open %s: %r", argv[0]);
+    inithdr(fd);
+    switch(fhdr.magic){
+    case I_MAGIC:	/* intel 386 */
+        t = i386trace;
+        break;
+    case E_MAGIC:	/* arm 7-something */
+        t = rtrace;
+        break;
+    default:
+        fprint(2, "%s: warning: can't tell what type of stack %s uses; assuming it's %s\n",
+            argv0, argv[0], argc == 4 ? "risc" : "cisc");
+        break;
+    }
+    (*t)(pc, sp, link);
+    exits(0);
+}
+@
+
+<<function inithdr>>=
+static void
+inithdr(int fd)
+{
+    seek(fd, 0, 0);
+    if(!crackhdr(fd, &fhdr))
+        fatal("read text header");
+
+    if(syminit(fd, &fhdr) < 0)
+        fatal("%r\n");
+}
+@
+
+<<function rtrace>>=
+// for MIPS and ARM
+static int
+rtrace(uvlong pc, uvlong sp, uvlong link)
+{
+    Symbol s, f;
+    char buf[128];
+    uvlong oldpc;
+    int i;
+
+    i = 0;
+    while(findsym(pc, CTEXT, &s)) {
+        if(pc == s.value)	/* at first instruction */
+            f.value = 0;
+        else if(findlocal(&s, FRAMENAME, &f) == 0)
+            break;
+
+        symoff(buf, sizeof buf, pc, CANY);
+        fmt(buf, pc);
+
+        oldpc = pc;
+        if(s.type == 'L' || s.type == 'l' || pc <= s.value+mach->pcquant){
+            if(link == 0)
+                fprint(2, "%s: need to supply a valid link register\n", argv0);
+            pc = link;
+        }else{
+            pc = getval(sp);
+            if(pc == 0)
+                break;
+        }
+
+        if(pc == 0 || (pc == oldpc && f.value == 0))
+            break;
+
+        sp += f.value;
+
+        if(++i > 40)
+            break;
+    }
+    return i;
+}
+@
+
+<<function i386trace>>=
+static int
+i386trace(uvlong pc, uvlong sp, uvlong link)
+{
+    int i;
+    uvlong osp;
+    Symbol s, f;
+    char buf[128];
+
+    USED(link);
+    i = 0;
+    osp = 0;
+    while(findsym(pc, CTEXT, &s)) {
+
+        symoff(buf, sizeof buf, pc, CANY);
+        fmt(buf, pc);
+
+        if(pc != s.value) {	/* not at first instruction */
+            if(findlocal(&s, FRAMENAME, &f) == 0)
+                break;
+            sp += f.value-mach->szaddr;
+        }else if(strcmp(s.name, "forkret") == 0){
+            print("//passing interrupt frame; last pc found at sp=%#llux\n", osp);
+            sp +=  15 * mach->szaddr;		/* pop interrupt frame */
+        }
+
+        pc = getval(sp);
+        if(pc == 0 && strcmp(s.name, "forkret") == 0){
+            sp += 3 * mach->szaddr;			/* pop iret eip, cs, eflags */
+            print("//guessing call through invalid pointer, try again at sp=%#llux\n", sp);
+            s.name = "";
+            pc = getval(sp);
+        }
+        if(pc == 0) {
+            print("//didn't find pc at sp=%#llux, last pc found at sp=%#llux\n", sp, osp);
+            break;
+        }
+        osp = sp;
+
+        sp += mach->szaddr;
+        if(strcmp(s.name, "forkret") == 0)
+            sp += 2 * mach->szaddr;			/* pop iret cs, eflags */
+
+        if(++i > 40)
+            break;
+    }
+    return i;
+}
+@
+
+<<global naddr>>=
+int naddr;
+@
+
+<<global addr>>=
+uvlong addr[1024];
+@
+
+<<global val>>=
+uvlong val[1024];
+@
+
+<<function putval>>=
+static void
+putval(uvlong a, uvlong v)
+{
+    if(naddr < nelem(addr)){
+        addr[naddr] = a;
+        val[naddr] = v;
+        naddr++;
+    }
+}
+@
+
+<<function readstack>>=
+static void
+readstack(void)
+{
+    Biobuf b;
+    char *p;
+    char *f[64];
+    int nf, i;
+
+    Binit(&b, 0, OREAD);
+    while(p=Brdline(&b, '\n')){
+        p[Blinelen(&b)-1] = 0;
+        nf = tokenize(p, f, nelem(f));
+        for(i=0; i<nf; i++){
+            if(p=strchr(f[i], '=')){
+                *p++ = 0;
+                putval(strtoull(f[i], 0, 16), strtoull(p, 0, 16));
+            }
+        }
+    }
+}
+@
+
+<<function getval>>=
+static uvlong
+getval(uvlong a)
+{
+    char buf[256];
+    int i, n;
+    uvlong r;
+
+    if(interactive){
+        print("// data at %#8.8llux? ", a);
+        n = read(0, buf, sizeof(buf)-1);
+        if(n <= 0)
+            return 0;
+        buf[n] = '\0';
+        r = strtoull(buf, 0, 16);
+    }else{
+        r = 0;
+        for(i=0; i<naddr; i++)
+            if(addr[i] == a)
+                r = val[i];
+    }
+
+    return r;
+}
+@
+
+<<function fatal>>=
+static void
+fatal(char *fmt, ...)
+{
+    char buf[4096];
+    va_list arg;
+
+    va_start(arg, fmt);
+    vseprint(buf, buf+sizeof(buf), fmt, arg);
+    va_end(arg);
+    fprint(2, "ktrace: %s\n", buf);
+    exits(buf);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<tracers/ktrace.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <ctype.h>
+
+#include <mach.h>
+
+// ktrace - interpret kernel stack dumps
+
+static	int	rtrace(uvlong, uvlong, uvlong);
+static	int	i386trace(uvlong, uvlong, uvlong);
+
+static	uvlong	getval(uvlong);
+static	void	inithdr(int);
+static	void	fatal(char*, ...);
+static	void	readstack(void);
+
+<<global fhdr>>
+<<global interactive>>
+
+<<constant FRAMENAME>>
+
+<<function usage>>
+
+<<function printaddr>>
+
+<<global fmt>>
+
+<<function main>>
+
+<<function inithdr>>
+
+<<function rtrace>>
+
+<<function i386trace>>
+
+<<global naddr>>
+<<global addr>>
+<<global val>>
+
+<<function putval>>
+
+<<function readstack>>
+
+<<function getval>>
+
+<<function fatal>>
+@
+
+
+\subsection*{[[tracers/strace.c]]}
+
+<<enum _anon_>>=
+enum {
+    Stacksize	= 8*1024,
+    Bufsize		= 8*1024,
+};
+@
+
+<<global out>>=
+Channel *out;
+@
+
+<<global quit>>=
+Channel *quit;
+@
+
+<<global forkc>>=
+Channel *forkc;
+@
+
+<<global nread>>=
+int nread = 0;
+@
+
+<<struct Str>>=
+struct Str {
+    char	*buf;
+    int	len;
+};
+@
+
+<<function die>>=
+void
+die(char *s)
+{
+    fprint(2, "%s\n", s);
+    exits(s);
+}
+@
+
+<<function cwrite>>=
+void
+cwrite(int fd, char *path, char *cmd, int len)
+{
+    werrstr("");
+    if (write(fd, cmd, len) < len) {
+        fprint(2, "cwrite: %s: failed writing %d bytes: %r\n",
+            path, len);
+        sendp(quit, nil);
+        threadexits(nil);
+    }
+}
+@
+
+<<function newstr>>=
+Str *
+newstr(void)
+{
+    Str *s;
+
+    s = mallocz(sizeof(Str) + Bufsize, 1);
+    if (s == nil)
+        sysfatal("malloc");
+    s->buf = (char *)&s[1];
+    return s;
+}
+@
+
+<<function reader>>=
+void
+reader(void *v)
+{
+    int cfd, tfd, forking = 0, exiting, pid, newpid;
+    char *ctl, *truss;
+    Str *s;
+    static char start[] = "start";
+    static char waitstop[] = "waitstop";
+
+    pid = (int)(uintptr)v;
+
+    ctl = smprint("/proc/%d/ctl", pid);
+    if ((cfd = open(ctl, OWRITE)) < 0)
+        die(smprint("%s: %r", ctl));
+
+    truss = smprint("/proc/%d/syscall", pid);
+    if ((tfd = open(truss, OREAD)) < 0)
+        die(smprint("%s: %r", truss));
+
+    /* child was stopped by hang msg earlier */
+    cwrite(cfd, ctl, waitstop, sizeof waitstop - 1);
+    // useful? if it was stopped, then why need waitstop?
+    // because the fork() has been done but maybe the child
+    // has not yet reached the exec() and got actually stopped!
+
+    cwrite(cfd, ctl, "startsyscall", 12);
+    s = newstr();
+    exiting = 0;
+    while((s->len = pread(tfd, s->buf, Bufsize - 1, 0)) >= 0){
+        if (forking && s->buf[1] == '=' && s->buf[3] != '-') {
+            forking = 0;
+            newpid = strtol(&s->buf[3], 0, 0);
+            sendp(forkc, (void*)newpid);
+            procrfork(reader, (void*)newpid, Stacksize, 0);
+        }
+
+        /*
+         * There are three tests here and they (I hope) guarantee
+         * no false positives.
+         */
+        if (strstr(s->buf, " Rfork") != nil) {
+            char *a[8];
+            char *rf;
+
+            rf = strdup(s->buf);
+           if (tokenize(rf, a, 8) == 5 &&
+                strtoul(a[4], 0, 16) & RFPROC)
+                forking = 1;
+            free(rf);
+        } else if (strstr(s->buf, " Exits") != nil)
+            exiting = 1;
+
+        sendp(out, s);	/* print line from /proc/$child/syscall */
+        if (exiting) {
+            s = newstr();
+            strcpy(s->buf, "\n");
+            sendp(out, s);
+            break;
+        }
+
+        /* flush syscall trace buffer */
+        cwrite(cfd, ctl, "startsyscall", 12);
+        s = newstr();
+    }
+
+    sendp(quit, nil);
+    threadexitsall(nil);
+}
+@
+%$
+
+<<function writer>>=
+void
+writer(void *)
+{
+    int newpid;
+    Str *s;
+
+    // TODO use better initializer?
+    Alt a[4];
+
+    a[0].op = CHANRCV;
+    a[0].c = quit;
+    a[0].v = nil;
+
+    a[1].op = CHANRCV;
+    a[1].c = out;
+    a[1].v = &s;
+
+    a[2].op = CHANRCV;
+    a[2].c = forkc;
+    a[2].v = &newpid;
+
+    a[3].op = CHANEND;
+
+    for(;;)
+        switch(alt(a)){
+        case 0:			/* quit */
+            nread--;
+            if(nread <= 0)
+                goto done;
+            break;
+        case 1:			/* out */
+            /* it's a nice null terminated thing */
+            fprint(2, "%s", s->buf);
+            free(s);
+            break;
+        case 2:			/* forkc */
+            // procrfork(reader, (void*)newpid, Stacksize, 0);
+            nread++;
+            break;
+        }
+done:
+    exits(nil);
+}
+@
+
+<<function usage (tracers/strace.c)>>=
+void
+usage(void)
+{
+    fprint(2, "Usage: strace [-c cmd [arg...]] | [pid]\n");
+    exits("usage");
+}
+@
+
+<<function hang>>=
+void
+hang(void)
+{
+    int me;
+    char *myctl;
+    static char hang[] = "hang";
+
+    myctl = smprint("/proc/%d/ctl", getpid());
+    me = open(myctl, OWRITE);
+    if (me < 0)
+        sysfatal("can't open %s: %r", myctl);
+    cwrite(me, myctl, hang, sizeof hang - 1);
+    close(me);
+    free(myctl);
+}
+@
+
+<<function threadmain>>=
+void
+threadmain(int argc, char **argv)
+{
+    int pid;
+    char *cmd = nil;
+    char **args = nil;
+
+    /*
+     * don't bother with fancy arg processing, because it picks up options
+     * for the command you are starting.  Just check for -c as argv[1]
+     * and then take it from there.
+     */
+    if (argc < 2)
+        usage();
+    while (argv[1][0] == '-') {
+        switch(argv[1][1]) {
+        case 'c':
+            if (argc < 3)
+                usage();
+            cmd = strdup(argv[2]);
+            args = &argv[2];
+            break;
+        default:
+            usage();
+        }
+        ++argv;
+        --argc;
+    }
+
+    /* run a command? */
+    if(cmd) {
+        pid = fork();
+        if (pid < 0)
+            sysfatal("fork failed: %r");
+        if(pid == 0) {
+            hang();
+            exec(cmd, args);
+            if(cmd[0] != '/')
+                exec(smprint("/bin/%s", cmd), args);
+            sysfatal("exec %s failed: %r", cmd);
+        }
+    } else {
+        if(argc != 2)
+            usage();
+        pid = atoi(argv[1]);
+        //TODO? send a 'stop' to its ctl file?
+    }
+
+    out   = chancreate(sizeof(char*), 0);
+    quit  = chancreate(sizeof(char*), 0);
+    forkc = chancreate(sizeof(ulong *), 0);
+    nread++;
+    procrfork(writer, nil, Stacksize, 0);
+    reader((void*)pid);
+}
+@
+
+
+%-------------------------------------------------------------
+
+<<tracers/strace.c>>=
+#include <u.h>
+#include <libc.h>
+#include <bio.h>
+#include <thread.h>
+
+// System calls tracer
+
+// was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
+// but most people knows better 'strace'
+
+<<enum _anon_>>
+
+<<global out>>
+<<global quit>>
+<<global forkc>>
+<<global nread>>
+
+typedef struct Str Str;
+<<struct Str>>
+
+<<function die>>
+
+<<function cwrite>>
+
+<<function newstr>>
+
+<<function reader>>
+
+<<function writer>>
+
+<<function usage (tracers/strace.c)>>
+
+<<function hang>>
+
+<<function threadmain>>
+@
 
 
 \section{[[acid/]]}
@@ -6289,7 +4795,7 @@ readtext(char *s)
     Value *v;
     uvlong length;
     Symbol sym;
-    extern Machdata mipsmach;
+    extern Machdata armmach;
 
     if(mtype != 0){
         symmap = newmap(0, 1);
@@ -6305,7 +4811,7 @@ readtext(char *s)
         return;
     }
 
-    machdata = &mipsmach;
+    machdata = &armmach;
 
     if(!crackhdr(text, &fhdr)) {
         print("can't decode file header\n");
@@ -10277,12 +8783,14 @@ installbuiltin(void)
 void
 dosysr1(Node *r, Node*)
 {
-    extern int sysr1(void);
+    extern int sysnop(void);
     
     r->op = OCONST;
     r->type = TINT;
     r->fmt = 'D';
-    r->ival = sysr1();
+//    r->ival = sysr1();
+//pad: now it's sysnop
+    r->ival = nop();
 }
 @
 

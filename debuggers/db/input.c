@@ -15,15 +15,20 @@ extern	int	infile;
 /*s: global lp */
 Rune	*lp;
 /*e: global lp */
-int	peekc,lastc = EOR;
+/*s: global peekc */
+int	peekc;
+/*e: global peekc */
+/*s: global lastc */
+int lastc = EOR;
+/*e: global lastc */
 /*s: global eof */
-int	eof;
+bool	eof;
 /*e: global eof */
 
-/*s: function eol */
 /* input routines */
 
-int
+/*s: function eol */
+bool
 eol(int c)
 {
     return(c==EOR || c==';');
@@ -37,7 +42,7 @@ rdc(void)
     do {
         readchar();
     } while (lastc==SPC || lastc==TB);
-    return(lastc);
+    return lastc;
 }
 /*e: function rdc */
 
@@ -54,7 +59,7 @@ void
 clrinp(void)
 {
     flush();
-    lp = 0;
+    lp = nil;
     peekc = 0;
 }
 /*e: function clrinp */
@@ -69,7 +74,7 @@ readrune(int fd, Rune *r)
     for(i=0; i<UTFmax && !fullrune(buf, i); i++)
         if(read(fd, buf+i, 1) <= 0)
             return -1;
-    buf[i] = 0;
+    buf[i] = '\0';
     chartorune(r, buf);
     return 1;
 }
@@ -82,18 +87,18 @@ readchar(void)
     Rune *p;
 
     if (eof)
-        lastc=0;
+        lastc='\0';
     else if (peekc) {
         lastc = peekc;
         peekc = 0;
     }
     else {
-        if (lp==0) {
+        if (lp==nil) {
             for (p = line; p < &line[LINSIZ-1]; p++) {
                 eof = readrune(infile, p) <= 0;
                 if (mkfault) {
                     eof = 0;
-                    error(0);
+                    error(nil);
                 }
                 if (eof) {
                     p--;
@@ -107,13 +112,13 @@ readchar(void)
                     p -= 2;
                 }
             }
-            p[1] = 0;
+            p[1] = '\0';
             lp = line;
         }
         if ((lastc = *lp) != 0)
             lp++;
     }
-    return(lastc);
+    return lastc;
 }
 /*e: function readchar */
 
@@ -147,7 +152,7 @@ void
 getformat(char *deformat)
 {
     char *fptr;
-    BOOL	quote;
+    bool	quote;
     Rune r;
 
     fptr=deformat;

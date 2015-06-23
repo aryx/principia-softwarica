@@ -6,14 +6,14 @@
 int wtflag = OREAD;
 /*e: global wtflag */
 /*s: global kflag */
-BOOL kflag;
+bool kflag;
 /*e: global kflag */
 
 /*s: global mkfault */
-BOOL mkfault;
+bool mkfault;
 /*e: global mkfault */
 /*s: global maxoff */
-ADDR maxoff;
+ADDR maxoff = MAXOFF;
 /*e: global maxoff */
 
 /*s: global xargc */

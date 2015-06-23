@@ -16,12 +16,12 @@ scanform(long icount, int prt, char *ifp, Map *map, int literal)
     char	c;
     int	fcount;
     ADDR	savdot;
-    int firstpass;
+    bool firstpass = true;
 
-    firstpass = 1;
     while (icount) {
         fp=ifp;
         savdot=dot;
+
         /*now loop over format*/
         while (*fp) {
             if (!isdigit(*fp))
@@ -37,7 +37,7 @@ scanform(long icount, int prt, char *ifp, Map *map, int literal)
             if (*fp==0)
                 break;
             fp=exform(fcount,prt,fp,map,literal,firstpass);
-            firstpass = 0;
+            firstpass = false;
         }
         dotinc=dot-savdot;
         dot=savdot;
@@ -49,7 +49,7 @@ scanform(long icount, int prt, char *ifp, Map *map, int literal)
 
 /*s: function exform */
 char *
-exform(int fcount, int prt, char *ifp, Map *map, int literal, int firstpass)
+exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
 {
     /* execute single format item `fcount' times
      * sets `dotinc' and moves `dot'
@@ -73,7 +73,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, int firstpass)
         c = *fp;
         modifier = *fp++;
         if (firstpass) {
-            firstpass = 0;
+            firstpass = false;
             if (!literal  && (c == 'i' || c == 'I' || c == 'M')
                     && (dot & (mach->pcquant-1))) {
                 dprint("warning: instruction not aligned");
@@ -86,8 +86,9 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, int firstpass)
         }
         if (printcol==0 && modifier != 'a' && modifier != 'A')
             dprint("\t\t");
-        switch(modifier) {
 
+        switch(modifier) {
+        /*s: [[exform()]] switch modifier cases */
         case SPC:
         case TB:
             dotinc = 0;
@@ -354,16 +355,18 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, int firstpass)
             printc(EOR);
             return fp;
 
+        /*e: [[exform()]] switch modifier cases */
         default:
             error("bad modifier");
         }
+
         if (map->seg[0].fd >= 0)
             dot=inkdot(dotinc);
         fcount--;
         endline();
     }
 
-    return(fp);
+    return fp;
 }
 /*e: function exform */
 
