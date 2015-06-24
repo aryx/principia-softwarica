@@ -1169,6 +1169,16 @@ procwrite(Chan *c, void *va, long n, vlong off)
         error(Eprocdied);
 
     switch(QID(c->qid)){
+
+    /*s: [[procwrite()]] cases */
+    case Qmem:
+        if(p->state != Stopped)
+            error(Ebadctl);
+
+        n = procctlmemio(p, offset, n, va, false);
+        break;
+    /*e: [[procwrite()]] cases */
+
     case Qctl:
         procctlreq(p, va, n);
         break;
@@ -1242,6 +1252,7 @@ procwrite(Chan *c, void *va, long n, vlong off)
         if(p->noteid != id)
             error(Ebadarg);
         break;
+
     default:
         pprint("unknown qid in procwrite\n");
         error(Egreg);
