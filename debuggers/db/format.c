@@ -394,7 +394,7 @@ inkdot(int incr)
     if ((incr >= 0 && newdot < dot)
     ||  (incr < 0 && newdot > dot))
         error("address wraparound");
-    return(newdot);
+    return newdot;
 }
 /*e: function inkdot */
 /*e: db/format.c */

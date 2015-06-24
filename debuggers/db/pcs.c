@@ -21,7 +21,7 @@ subpcs(int modif)
     // enum<runmode>
     int	runmode = SINGLE;
     int	check;
-    int	keepnote = 0;
+    bool keepnote = false;
     int	n;
     int r = 0;
     long line, curr;
@@ -47,7 +47,7 @@ subpcs(int modif)
             loopcnt--;
         }
         runmode=SINGLE;
-        keepnote=defval(1);
+        keepnote=defval(true);
         break;
     /*x: [[subpcs()]] switch modif cases */
     case 'S':
@@ -55,7 +55,8 @@ subpcs(int modif)
             setup();
             loopcnt--;
         }
-        keepnote=defval(1);
+        keepnote=defval(true);
+
         line = pc2line(rget(cormap, mach->pc));
         n = loopcnt;
         dprint("%s: running\n", symfil);
@@ -77,7 +78,7 @@ subpcs(int modif)
         if (pid == 0)
             error(NOPCS);
         dprint("%d: killed", pid);
-        pcsactive = 1;	/* force 'kill' ctl */
+        pcsactive = true;	/* force 'kill' ctl */
         endpcs();
         return;
     /*x: [[subpcs()]] switch modif cases */

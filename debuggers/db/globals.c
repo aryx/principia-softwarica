@@ -16,10 +16,6 @@ bool mkfault;
 ADDR maxoff = MAXOFF;
 /*e: global maxoff */
 
-/*s: global xargc */
-int xargc;		/* bullshit */
-/*e: global xargc */
-
 /*s: global errmsg */
 // was static in main.c
 char *errmsg;
@@ -28,9 +24,17 @@ char *errmsg;
 jmp_buf env;
 /*e: global env */
 
+/*s: global symmap */
+// was in setup.c
+Map	*symmap;
+/*e: global symmap */
+/*s: global cormap */
+Map	*cormap;
+/*e: global cormap */
+
 /*s: global ending */
 // was in runpcs.c
-int ending;
+bool ending;
 /*e: global ending */
 /*s: global pid */
 int pid;
@@ -46,32 +50,6 @@ char note[NNOTE][ERRMAX];
 BKPT *bkpthead;
 /*e: global bkpthead */
 
-/*s: global adrval */
-// was in command.c
-WORD	adrval;
-/*e: global adrval */
-/*s: global adrflg */
-bool	adrflg;
-/*e: global adrflg */
-
-/*s: global expv */
-// was in expr.c
-uvlong	expv;
-/*e: global expv */
-
-/*s: global pcsactive */
-// was in trcrun.c
-int pcsactive = 0;
-/*e: global pcsactive */
-
-/*s: global symmap */
-// was in setup.c
-Map	*symmap;
-/*e: global symmap */
-/*s: global cormap */
-Map	*cormap;
-/*e: global cormap */
-
 /*s: global dot */
 // was in command.c
 ADDR	dot;
@@ -82,10 +60,35 @@ int	dotinc;
 /*s: global ditto */
 ADDR	ditto;
 /*e: global ditto */
+
+/*s: global adrval */
+// was in command.c
+WORD	adrval;
+/*e: global adrval */
+/*s: global adrflg */
+bool	adrflg;
+/*e: global adrflg */
+
 /*s: global cntval */
 WORD cntval;
 /*e: global cntval */
 /*s: global cntflg */
 bool	cntflg;
 /*e: global cntflg */
+
+/*s: global expv */
+// was in expr.c
+uvlong	expv;
+/*e: global expv */
+
+/*s: global pcsactive */
+// was in trcrun.c
+bool pcsactive = false;
+/*e: global pcsactive */
+
+
+/*s: global xargc */
+int xargc;		/* bullshit */
+/*e: global xargc */
+
 /*e: db/globals.c */

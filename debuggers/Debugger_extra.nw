@@ -20,18 +20,9 @@
 #define	FALSE	0
 @
 
-
-
-
-
-
-<<constant BADREG>>=
-#define	BADREG	(-1)
-@
-
-<<constant NNOTE>>=
-#define	NNOTE 10
-@
+%<<constant BADREG>>=
+%#define	BADREG	(-1)
+%@
 
 
 %-------------------------------------------------------------
@@ -76,7 +67,6 @@ typedef struct bkpt	BKPT;
 <<constant TRUE>>
 <<constant FALSE>>
 
-
 /*
  * run modes
  */
@@ -93,54 +83,57 @@ typedef struct bkpt	BKPT;
 
 <<struct bkpt>>
 
-<<constant BADREG>>
-
 /*
  * common globals
  */
 
-extern	WORD	adrval;
-extern	uvlong	expv;
-extern	int	adrflg;
-extern	WORD	cntval;
-extern	int	cntflg;
-extern	WORD	loopcnt;
-extern	ADDR	maxoff;
-extern	ADDR	localval;
-extern	ADDR	maxfile;
-extern	ADDR	maxstor;
-
 extern	ADDR	dot;
 extern	int	dotinc;
+extern ADDR	ditto;
 
-extern	int	xargc;
+extern	int	adrflg;
+extern	WORD	adrval;
 
-extern	bool	wtflag;
-extern	char	*corfil, *symfil;
-extern	int	fcor, fsym;
-extern	bool	mkfault;
-extern	bool	regdirty;
+extern	int	cntflg;
+extern	WORD	cntval;
+extern	WORD	loopcnt;
+
+extern	uvlong	expv;
+
+extern	ADDR	maxoff;
 
 extern	int	pid;
+extern	char	*corfil, *symfil;
+extern	int	fcor, fsym;
+extern	Map	*cormap, *symmap, *dotmap;
 extern	int	pcsactive;
+extern	int	ending;
+extern	bool	mkfault;
+
+extern	BKPT	*bkpthead;
+
+extern	int	lastc, peekc;
 
 <<constant NNOTE>>
 extern	int	nnote;
 extern	char	note[NNOTE][ERRMAX];
 
-extern	int	ending;
-extern	Map	*cormap, *symmap, *dotmap;
+extern	int	xargc;
 
-extern	BKPT	*bkpthead;
+extern	bool	wtflag;
 extern	bool	kflag;
-extern	int	lastc, peekc;
 
 // new decl, was in main.c before
 extern char *errmsg;
 extern jmp_buf env;
 
-extern ADDR	ditto;
 @
+
+%dead:
+%extern	ADDR	localval;
+%extern	ADDR	maxfile;
+%extern	ADDR	maxstor;
+%extern	bool	regdirty;
 
 
 \subsection*{[[db/fns.h]]}
@@ -259,36 +252,6 @@ int		valpr(long, int);
 \subsection*{[[db/globals.c]]}
 
 
-
-
-<<global nnote>>=
-int nnote;
-@
-
-<<global note>>=
-char note[NNOTE][ERRMAX];
-@
-
-
-
-
-
-<<global pcsactive>>=
-// was in trcrun.c
-int pcsactive = 0;
-@
-
-
-
-
-<<global dotinc>>=
-int	dotinc;
-@
-
-
-
-
-
 %-------------------------------------------------------------
 
 <<db/globals.c>>=
@@ -300,10 +263,11 @@ int	dotinc;
 <<global mkfault>>
 <<global maxoff>>
 
-<<global xargc>>
-
 <<global errmsg>>
 <<global env>>
+
+<<global symmap>>
+<<global cormap>>
 
 <<global ending>>
 <<global pid>>
@@ -311,21 +275,23 @@ int	dotinc;
 <<global note>>
 <<global bkpthead>>
 
+<<global dot>>
+<<global dotinc>>
+<<global ditto>>
+
 <<global adrval>>
 <<global adrflg>>
+
+<<global cntval>>
+<<global cntflg>>
 
 <<global expv>>
 
 <<global pcsactive>>
 
-<<global symmap>>
-<<global cormap>>
 
-<<global dot>>
-<<global dotinc>>
-<<global ditto>>
-<<global cntval>>
-<<global cntflg>>
+<<global xargc>>
+
 @
 
 
@@ -333,16 +299,20 @@ int	dotinc;
 
 
 
-<<global maxpos>>=
-int	maxpos = MAXPOS;
-@
-
 
 <<function printc>>=
 void
 printc(int c)
 {
     dprint("%c", c);
+}
+@
+
+<<function prints>>=
+void
+prints(char *s)
+{
+    dprint("%s",s);
 }
 @
 
@@ -356,13 +326,6 @@ flushbuf(void)
 }
 @
 
-<<function prints>>=
-void
-prints(char *s)
-{
-    dprint("%s",s);
-}
-@
 
 <<function newline>>=
 void
@@ -424,15 +387,8 @@ iclose(int stack, int err)
 @
 %$
 
-<<function oclose>>=
-void
-oclose(void)
-{
-    flushbuf();
-    Bterm(&stdout);
-    Binit(&stdout, 1, OWRITE);
-}
-@
+% how can have multiple input file?
+
 
 <<function redirout>>=
 void
@@ -459,10 +415,27 @@ void
 endline(void)
 {
 
-    if (maxpos <= printcol)
+    if (printcol >= maxpos)
         newline();
 }
 @
+
+<<constant MAXPOS>>=
+#define MAXPOS	80
+@
+<<[[printtrace()]] switch modif cases>>=
+case 'w':
+    maxpos=(adrflg?adrval:MAXPOS);
+    break;
+@
+% 100 $w
+
+<<global maxpos>>=
+int	maxpos = MAXPOS;
+@
+
+
+
 
 <<function flush>>=
 void
@@ -525,20 +498,15 @@ flush(void)
 \subsection*{[[db/input.c]]}
 
 
-
-
-
-
-
 <<function nextchar>>=
 int
 nextchar(void)
 {
     if (eol(rdc())) {
         reread();
-        return(0);
+        return 0;
     }
-    return(lastc);
+    return lastc;
 }
 @
 
@@ -549,9 +517,9 @@ quotchar(void)
     if (readchar()=='\\')
         return(readchar());
     else if (lastc=='\'')
-        return(0);
+        return 0;
     else
-        return(lastc);
+        return lastc;
 }
 @
 
@@ -602,8 +570,9 @@ isfileref(void)
 #include "defs.h"
 #include "fns.h"
 
-<<global line>>
 extern	int	infile;
+
+<<global line>>
 <<global lp>>
 <<global peekc>>
 <<global lastc>>
@@ -637,142 +606,6 @@ extern	int	infile;
 
 
 
-<<function setcor>>=
-void
-setcor(void)
-{
-    int i;
-
-    if (cormap) {
-        for (i = 0; i < cormap->nsegs; i++)
-            if (cormap->seg[i].inuse)
-                close(cormap->seg[i].fd);
-    }
-
-    fcor = getfile(corfil, 2, ORDWR);
-    if (fcor <= 0) {
-        if (cormap)
-            free(cormap);
-        cormap = dumbmap(-1);
-        return;
-    }
-    if(pid > 0) {	/* provide addressability to executing process */
-        cormap = attachproc(pid, kflag, fcor, &fhdr);
-        if (!cormap)
-            cormap = dumbmap(-1);
-    } else {
-        cormap = newmap(cormap, 2);
-        if (!cormap)
-            cormap = dumbmap(-1);
-        setmap(cormap, fcor, fhdr.txtaddr, fhdr.txtaddr+fhdr.txtsz, fhdr.txtaddr, "text");
-        setmap(cormap, fcor, fhdr.dataddr, 0xffffffff, fhdr.dataddr, "data");
-    }
-    kmsys();
-    return;
-}
-@
-
-
-<<function cmdmap>>=
-/*
- * set up maps for a direct process image (/proc)
- */
-
-void
-cmdmap(Map *map)
-{
-    int i;
-    char name[MAXSYM];
-
-    extern char lastc;
-
-    rdc();
-    readsym(name);
-    i = findseg(map, name);
-    if (i < 0)	/* not found */
-        error("Invalid map name");
-
-    if (expr(0)) {
-        if (strcmp(name, "text") == 0)
-            textseg(expv, &fhdr);
-        map->seg[i].b = expv;
-    } else
-        error("Invalid base address"); 
-    if (expr(0))
-        map->seg[i].e = expv;
-    else
-        error("Invalid end address"); 
-    if (expr(0))
-        map->seg[i].f = expv; 
-    else
-        error("Invalid file offset"); 
-    if (rdc()=='?' && map == cormap) {
-        if (fcor)
-            close(fcor);
-        fcor=fsym;
-        corfil=symfil;
-        cormap = symmap;
-    } else if (lastc == '/' && map == symmap) {
-        if (fsym)
-            close(fsym);
-        fsym=fcor;
-        symfil=corfil;
-        symmap=cormap;
-    } else
-        reread();
-}
-@
-
-
-<<function kmsys>>=
-void
-kmsys(void)
-{
-    int i;
-
-    i = findseg(symmap, "text");
-    if (i >= 0) {
-        symmap->seg[i].b = symmap->seg[i].b&~mach->ktmask;
-        symmap->seg[i].e = ~0;
-    }
-    i = findseg(symmap, "data");
-    if (i >= 0) {
-        symmap->seg[i].b |= mach->kbase;
-        symmap->seg[i].e |= mach->kbase;
-    }
-}
-@
-
-<<function attachprocess>>=
-void
-attachprocess(void)
-{
-    char buf[100];
-    Dir *sym, *mem;
-    int fd;
-
-    if (!adrflg) {
-        dprint("used pid$a\n");
-        return;
-    }
-    sym = dirfstat(fsym);
-    sprint(buf, "/proc/%lud/mem", adrval);
-    corfil = buf;
-    setcor();
-    sprint(buf, "/proc/%lud/text", adrval);
-    fd = open(buf, OREAD);
-    mem = nil;
-    if (sym==nil || fd < 0 || (mem=dirfstat(fd))==nil
-                || sym->qid.path != mem->qid.path)
-        dprint("warning: text images may be inconsistent\n");
-    free(sym);
-    free(mem);
-    if (fd >= 0)
-        close(fd);
-}
-@
-%$
-
 
 %-------------------------------------------------------------
 
@@ -790,7 +623,7 @@ attachprocess(void)
 <<global dotmap>>
 
 <<global fsym>>
-int fcor;
+<<global fcor>>
 <<global fhdr (db/setup.c)>>
 
 static int getfile(char*, int, int);
@@ -831,19 +664,6 @@ printesc(int c)
 }
 @
 
-<<function inkdot>>=
-ADDR
-inkdot(int incr)
-{
-    ADDR	newdot;
-
-    newdot=dot+incr;
-    if ((incr >= 0 && newdot < dot)
-    ||  (incr < 0 && newdot > dot))
-        error("address wraparound");
-    return(newdot);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1034,16 +854,6 @@ fpin(char *buf)
 }
 @
 
-<<function defval>>=
-WORD
-defval(WORD w)
-{
-    if (expr(0))
-        return (expv);
-    else
-        return (w);
-}
-@
 
 
 <<constant MAXBASE>>=
@@ -1250,78 +1060,12 @@ extern	ADDR	ditto;
 
 \subsection*{[[db/trcrun.c]]}
 
-<<global child>>=
-int child;
-@
-
-<<global msgfd>>=
-int msgfd = -1;
-@
-
-<<global notefd>>=
-int notefd = -1;
-@
-
-<<global pcspid>>=
-int pcspid = -1;
-@
-
-<<function setpcs>>=
-void
-setpcs(void)
-{
-    char buf[128];
-
-    if(pid && pid != pcspid){
-        if(msgfd >= 0){
-            close(msgfd);
-            msgfd = -1;
-        }
-        if(notefd >= 0){
-            close(notefd);
-            notefd = -1;
-        }
-        pcspid = -1;
-        sprint(buf, "/proc/%d/ctl", pid);
-        msgfd = open(buf, OWRITE);
-        if(msgfd < 0)
-            error("can't open control file");
-        sprint(buf, "/proc/%d/note", pid);
-        notefd = open(buf, ORDWR);
-        if(notefd < 0)
-            error("can't open note file");
-        pcspid = pid;
-    }
-}
-@
 
 
-<<function unloadnote>>=
-/*
- * empty the note buffer and toss pending breakpoint notes
- */
-void
-unloadnote(void)
-{
-    char err[ERRMAX];
 
-    setpcs();
-    for(; nnote<NNOTE; nnote++){
-        switch(read(notefd, note[nnote], sizeof note[nnote])){
-        case -1:
-            errstr(err, sizeof err);
-            if(strcmp(err, "interrupted") != 0)
-                endpcs();
-            errors("can't read note file", err);
-        case 0:
-            return;
-        }
-        note[nnote][ERRMAX-1] = '\0';
-        if(strncmp(note[nnote], "sys: breakpoint", 15) == 0)
-            --nnote;
-    }
-}
-@
+
+
+
 
 <<function loadnote>>=
 /*
@@ -1374,84 +1118,11 @@ killpcs(void)
 #define MAXARG	32
 @
 
-<<function doexec>>=
-void
-doexec(void)
-{
-    char *argl[MAXARG];
-    char args[LINSIZ];
-    char *p;
-    char **ap;
-    char *thisarg;
-
-    ap = argl;
-    p = args;
-    *ap++ = symfil;
-    for (rdc(); lastc != EOR;) {
-        thisarg = p;
-        if (lastc == '<' || lastc == '>') {
-            *p++ = lastc;
-            rdc();
-        }
-        while (lastc != EOR && lastc != SPC && lastc != TB) {
-            *p++ = lastc;
-            readchar();
-        }
-        if (lastc == SPC || lastc == TB)
-            rdc();
-        *p++ = 0;
-        if (*thisarg == '<') {
-            close(0);
-            if (open(&thisarg[1], OREAD) < 0) {
-                print("%s: cannot open\n", &thisarg[1]);
-                _exits(0);
-            }
-        }
-        else if (*thisarg == '>') {
-            close(1);
-            if (create(&thisarg[1], OWRITE, 0666) < 0) {
-                print("%s: cannot create\n", &thisarg[1]);
-                _exits(0);
-            }
-        }
-        else
-            *ap++ = thisarg;
-    }
-    *ap = 0;
-    exec(symfil, argl);
-    perror(symfil);
-}
-@
 
 <<global procname>>=
 char	procname[100];
 @
 
-<<function startpcs>>=
-void
-startpcs(void)
-{
-    if ((pid = fork()) == 0) {
-        pid = getpid();
-        msgpcs("hang");
-        doexec();
-        exits(0);
-    }
-
-    if (pid == -1)
-        error("can't fork");
-    child++;
-    sprint(procname, "/proc/%d/mem", pid);
-    corfil = procname;
-    msgpcs("waitstop");
-    bpwait();
-    if (adrflg)
-        rput(cormap, mach->pc, adrval);
-    while (rdc() != EOR)
-        ;
-    reread();
-}
-@
 
 <<function runstep>>=
 void
@@ -1484,14 +1155,6 @@ runstep(uvlong loc, int keepnote)
 }
 @
 
-<<function bpwait>>=
-void
-bpwait(void)
-{
-    setcor();
-    unloadnote();
-}
-@
 
 <<function runrun>>=
 void
@@ -1628,33 +1291,6 @@ getfname(void)
 }
 @
 
-<<function printfp>>=
-static void
-printfp(Map *map, int modif)
-{
-    Reglist *rp;
-    int i;
-    int ret;
-    char buf[512];
-
-    for (i = 0, rp = mach->reglist; rp->rname; rp += ret) {
-        ret = 1;
-        if (!(rp->rflags&RFLT))
-            continue;
-        ret = fpformat(map, rp, buf, sizeof(buf), modif);
-        if (ret < 0) {
-            werrstr("Register %s: %r", rp->rname);
-            error("%r");
-        }
-            /* double column print */
-        if (i&0x01)
-            dprint("%40t%-8s%-12s\n", rp->rname, buf);
-        else
-            dprint("\t%-8s%-12s", rp->rname, buf);
-        i++;
-    }
-}
-@
 
 <<function redirin>>=
 void
@@ -1680,41 +1316,6 @@ redirin(int stack, char *file)
 @
 
 
-<<function printsym>>=
-/*
- *	dump the raw symbol table
- */
-void
-printsym(void)
-{
-    int i;
-    Sym *sp;
-
-    for (i = 0; sp = getsym(i); i++) {
-        switch(sp->type) {
-        case 't':
-        case 'l':
-            dprint("%16#llux t %s\n", sp->value, sp->name);
-            break;
-        case 'T':
-        case 'L':
-            dprint("%16#llux T %s\n", sp->value, sp->name);
-            break;
-        case 'D':
-        case 'd':
-        case 'B':
-        case 'b':
-        case 'a':
-        case 'p':
-        case 'm':
-            dprint("%16#llux %c %s\n", sp->value, sp->type, sp->name);
-            break;
-        default:
-            break;
-        }
-    }
-}
-@
 
 <<constant STRINGSZ>>=
 #define	STRINGSZ	128
@@ -1842,81 +1443,7 @@ WORD loopcnt;
 
 
 
-<<function cmdsrc>>=
-void
-cmdsrc(int c, Map *map)
-{
-    ulong w;
-    long locval, locmsk;
-    ADDR savdot;
-    ushort sh;
-    char buf[512];
-    int ret;
 
-    if (c == 'L')
-        dotinc = 4;
-    else
-        dotinc = 2;
-    savdot=dot;
-    expr(1); 
-    locval=expv;
-    if (expr(0))
-        locmsk=expv; 
-    else
-        locmsk = ~0;
-    if (c == 'L')
-        while ((ret = get4(map, dot, &w)) > 0 &&  (w&locmsk) != locval)
-            dot = inkdot(dotinc);
-    else
-        while ((ret = get2(map, dot, &sh)) > 0 && (sh&locmsk) != locval)
-            dot = inkdot(dotinc);
-    if (ret < 0) { 
-        dot=savdot; 
-        error("%r");
-    }
-    symoff(buf, 512, dot, CANY);
-    dprint(buf);
-}
-@
-
-<<global badwrite>>=
-static char badwrite[] = "can't write process memory or text image";
-@
-
-<<function cmdwrite>>=
-void
-cmdwrite(int wcom, Map *map)
-{
-    ADDR savdot;
-    char *format;
-    int pass;
-
-    if (wcom == 'w')
-        format = "x";
-    else
-        format = "X";
-    expr(1);
-    pass = 0;
-    do {
-        pass++;  
-        savdot=dot;
-        exform(1, 1, format, map, 0, pass);
-        dot=savdot;
-        if (wcom == 'W') {
-            if (put4(map, dot, expv) <= 0)
-                error(badwrite);
-        } else {
-            if (put2(map, dot, expv) <= 0)
-                error(badwrite);
-        }
-        savdot=dot;
-        dprint("=%8t"); 
-        exform(1, 0, format, map, 0, pass);
-        newline();
-    } while (expr(0));
-    dot=savdot;
-}
-@
 
 <<function regname>>=
 /*
@@ -2020,142 +1547,9 @@ extern	Rune	*lp;
 
 \subsection*{[[db/runpcs.c]]}
 
-<<global bpin>>=
-bool bpin;
-@
 
-<<function runpcs>>=
-/* service routines for sub process control */
 
-int
-runpcs(int runmode, int keepnote)
-{
-    int rc;
-    BKPT *bkpt;
 
-    rc = 0;
-    if (adrflg)
-        rput(cormap, mach->pc, dot);
-    dot = rget(cormap, mach->pc);
-    flush();
-    while (loopcnt-- > 0) {
-        if(loopcnt != 0)
-            printpc();
-        if (runmode == SINGLE) {
-            bkpt = scanbkpt(dot);
-            if (bkpt) {
-                switch(bkpt->flag){
-                case BKPTTMP:
-                    bkpt->flag = BKPTCLR;
-                    break;
-                case BKPTSKIP:
-                    bkpt->flag = BKPTSET;
-                    break;
-                }
-            }
-            runstep(dot, keepnote);
-        } else {
-            if ((bkpt = scanbkpt(rget(cormap, mach->pc))) != 0) {
-                execbkpt(bkpt, keepnote);
-                keepnote = 0;
-            }
-            setbp();
-            runrun(keepnote);
-        }
-        keepnote = 0;
-        delbp();
-        dot = rget(cormap, mach->pc);
-        /* real note? */
-        if (nnote > 0) {
-            keepnote = 1;
-            rc = 0;
-            continue;
-        }
-        bkpt = scanbkpt(dot);
-        if(bkpt == 0){
-            keepnote = 0;
-            rc = 0;
-            continue;
-        }
-        /* breakpoint */
-        if (bkpt->flag == BKPTTMP)
-            bkpt->flag = BKPTCLR;
-        else if (bkpt->flag == BKPTSKIP) {
-            execbkpt(bkpt, keepnote);
-            keepnote = 0;
-            loopcnt++;	/* we didn't really stop */
-            continue;
-        }
-        else {
-            bkpt->flag = BKPTSKIP;
-            --bkpt->count;
-            if ((bkpt->comm[0] == EOR || command(bkpt->comm, ':') != 0)
-            &&  bkpt->count != 0) {
-                execbkpt(bkpt, keepnote);
-                keepnote = 0;
-                loopcnt++;
-                continue;
-            }
-            bkpt->count = bkpt->initcnt;
-        }
-        rc = 1;
-    }
-    return(rc);
-}
-@
-
-<<global ending>>=
-// was in runpcs.c
-int ending;
-@
-
-<<function endpcs>>=
-/*
- * finish the process off;
- * kill if still running
- */
-
-void
-endpcs(void)
-{
-    BKPT *bk;
-
-    if(ending)
-        return;
-    ending = 1;
-    if (pid) {
-        if(pcsactive){
-            killpcs();
-            pcsactive = 0;
-        }
-        pid=0;
-        nnote=0;
-        for (bk=bkpthead; bk; bk = bk->nxtbkpt)
-            if (bk->flag == BKPTTMP)
-                bk->flag = BKPTCLR;
-            else if (bk->flag != BKPTCLR)
-                bk->flag = BKPTSET;
-    }
-    bpin = FALSE;
-    ending = 0;
-}
-@
-
-<<function setup>>=
-/*
- * start up the program to be debugged in a child
- */
-
-void
-setup(void)
-{
-
-    nnote = 0;
-    startpcs();
-    bpin = FALSE;
-    pcsactive = 1;
-}
-@
 
 <<function execbkpt>>=
 /*
@@ -2325,6 +1719,9 @@ extern char *errmsg;
 
 <<function fault>>
 @
+
+
+
 
 
 
@@ -3012,6 +2409,9 @@ typedef struct Str Str;
 
 <<function threadmain>>
 @
+
+
+
 
 
 \section{[[acid/]]}

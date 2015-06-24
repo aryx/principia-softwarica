@@ -47,14 +47,14 @@ main(int argc, char **argv)
             Ipath = s;
         break;
     /*x: [[main()]] command line processing (db) */
+    case 'w':
+        wtflag = ORDWR;		/* suitable for open() */
+        break;
+    /*x: [[main()]] command line processing (db) */
     case 'm':
         name = ARGF();
         if(name == nil)
             dprint("missing -m argument\n");
-        break;
-    /*x: [[main()]] command line processing (db) */
-    case 'w':
-        wtflag = ORDWR;		/* suitable for open() */
         break;
     /*x: [[main()]] command line processing (db) */
     case 'k':
@@ -72,7 +72,7 @@ main(int argc, char **argv)
     if(argc==1 && alldigs(argv[0])){
 
         pid = atoi(argv[0]);
-        pcsactive = 0;
+        pcsactive = false;
         if (!symfil) {
             /*s: [[main()]] when pid argument, if kflag */
             if(kflag){
@@ -113,15 +113,23 @@ main(int argc, char **argv)
         symfil = "8.out";
 
     /*s: [[main()]] initialization before repl (db) */
-
+    /*s: [[main()]] call notify */
     notify(fault);
-
+    /*e: [[main()]] call notify */
+    /*s: [[main()]] call setsym */
     setsym();
+    /*e: [[main()]] call setsym */
+    /*s: [[main()]] set dotmap */
     dotmap = dumbmap(-1);
+    /*e: [[main()]] set dotmap */
+    /*s: [[main()]] print binary architecture */
+    /*s: [[main()]] if db -m and unknown machine */
     if (name && machbyname(name) == 0)
             dprint ("unknown machine %s", name);
+    /*e: [[main()]] if db -m and unknown machine */
     dprint("%s binary\n", mach->name);
-
+    /*e: [[main()]] print binary architecture */
+    /*s: [[main()]] setjmp */
     if(setjmp(env) == 0){
         if (corfil) {
             setcor();	/* could get error */
@@ -129,11 +137,13 @@ main(int argc, char **argv)
             printpc();
         }
     }
-
     setjmp(env);
+    /*e: [[main()]] setjmp */
+    /*s: [[main()]] just before repl */
     if (executing)
         delbp();
     executing = FALSE;
+    /*e: [[main()]] just before repl */
     /*x: [[main()]] initialization before repl (db) */
     xargc = argc;
     /*e: [[main()]] initialization before repl (db) */

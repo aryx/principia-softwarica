@@ -20,7 +20,9 @@ Map	*dotmap;
 /*s: global fsym */
 fdt fsym;
 /*e: global fsym */
-int fcor;
+/*s: global fcor */
+fdt fcor;
+/*e: global fcor */
 /*s: global fhdr (db/setup.c) */
 static Fhdr fhdr;
 /*e: global fhdr (db/setup.c) */
@@ -197,9 +199,10 @@ kmsys(void)
 
     i = findseg(symmap, "text");
     if (i >= 0) {
-        symmap->seg[i].b = symmap->seg[i].b&~mach->ktmask;
+        symmap->seg[i].b = symmap->seg[i].b & ~mach->ktmask;
         symmap->seg[i].e = ~0;
     }
+
     i = findseg(symmap, "data");
     if (i >= 0) {
         symmap->seg[i].b |= mach->kbase;

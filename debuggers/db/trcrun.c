@@ -11,10 +11,10 @@
 int child;
 /*e: global child */
 /*s: global msgfd */
-int msgfd = -1;
+fdt msgfd = -1;
 /*e: global msgfd */
 /*s: global notefd */
-int notefd = -1;
+fdt notefd = -1;
 /*e: global notefd */
 /*s: global pcspid */
 int pcspid = -1;
@@ -37,14 +37,17 @@ setpcs(void)
             notefd = -1;
         }
         pcspid = -1;
+
         sprint(buf, "/proc/%d/ctl", pid);
         msgfd = open(buf, OWRITE);
         if(msgfd < 0)
             error("can't open control file");
+
         sprint(buf, "/proc/%d/note", pid);
         notefd = open(buf, ORDWR);
         if(notefd < 0)
             error("can't open note file");
+
         pcspid = pid;
     }
 }
@@ -168,7 +171,10 @@ doexec(void)
 
     ap = argl;
     p = args;
+    // argv[0] is the command itself
     *ap++ = symfil;
+
+    /*s: [[doexec()]] adjust argl if extra arguments */
     for (rdc(); lastc != EOR;) {
         thisarg = p;
         if (lastc == '<' || lastc == '>') {
@@ -199,7 +205,9 @@ doexec(void)
         else
             *ap++ = thisarg;
     }
-    *ap = 0;
+    /*e: [[doexec()]] adjust argl if extra arguments */
+    *ap = '\0';
+
     exec(symfil, argl);
     perror(symfil);
 }
@@ -213,22 +221,27 @@ char	procname[100];
 void
 startpcs(void)
 {
-    if ((pid = fork()) == 0) {
+    pid = fork();
+    // child
+    if (pid == 0) {
         pid = getpid();
         msgpcs("hang");
         doexec();
-        exits(0);
+        exits(nil);
     }
-
+    // parent
     if (pid == -1)
         error("can't fork");
     child++;
     sprint(procname, "/proc/%d/mem", pid);
     corfil = procname;
     msgpcs("waitstop");
+
+    // will call setcor()
     bpwait();
     if (adrflg)
         rput(cormap, mach->pc, adrval);
+
     while (rdc() != EOR)
         ;
     reread();

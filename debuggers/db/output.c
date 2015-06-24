@@ -148,7 +148,7 @@ void
 endline(void)
 {
 
-    if (maxpos <= printcol)
+    if (printcol >= maxpos)
         newline();
 }
 /*e: function endline */

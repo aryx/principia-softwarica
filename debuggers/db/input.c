@@ -8,10 +8,11 @@
 #include "defs.h"
 #include "fns.h"
 
+extern	int	infile;
+
 /*s: global line */
 Rune	line[LINSIZ];
 /*e: global line */
-extern	int	infile;
 /*s: global lp */
 Rune	*lp;
 /*e: global lp */
@@ -128,9 +129,9 @@ nextchar(void)
 {
     if (eol(rdc())) {
         reread();
-        return(0);
+        return 0;
     }
-    return(lastc);
+    return lastc;
 }
 /*e: function nextchar */
 
@@ -141,9 +142,9 @@ quotchar(void)
     if (readchar()=='\\')
         return(readchar());
     else if (lastc=='\'')
-        return(0);
+        return 0;
     else
-        return(lastc);
+        return lastc;
 }
 /*e: function quotchar */
 

@@ -18,9 +18,9 @@ bool bpin;
 /* service routines for sub process control */
 
 int
-runpcs(int runmode, int keepnote)
+runpcs(int runmode, bool keepnote)
 {
-    int rc;
+    int rc; // runcount
     BKPT *bkpt;
 
     rc = 0;
@@ -28,6 +28,7 @@ runpcs(int runmode, int keepnote)
         rput(cormap, mach->pc, dot);
     dot = rget(cormap, mach->pc);
     flush();
+
     while (loopcnt-- > 0) {
         if(loopcnt != 0)
             printpc();
@@ -47,23 +48,24 @@ runpcs(int runmode, int keepnote)
         } else {
             if ((bkpt = scanbkpt(rget(cormap, mach->pc))) != 0) {
                 execbkpt(bkpt, keepnote);
-                keepnote = 0;
+                keepnote = false;
             }
             setbp();
             runrun(keepnote);
         }
-        keepnote = 0;
+        keepnote = false;
         delbp();
         dot = rget(cormap, mach->pc);
+
         /* real note? */
         if (nnote > 0) {
-            keepnote = 1;
+            keepnote = true;
             rc = 0;
             continue;
         }
         bkpt = scanbkpt(dot);
         if(bkpt == 0){
-            keepnote = 0;
+            keepnote = false;
             rc = 0;
             continue;
         }
@@ -72,7 +74,7 @@ runpcs(int runmode, int keepnote)
             bkpt->flag = BKPTCLR;
         else if (bkpt->flag == BKPTSKIP) {
             execbkpt(bkpt, keepnote);
-            keepnote = 0;
+            keepnote = false;
             loopcnt++;	/* we didn't really stop */
             continue;
         }
@@ -82,7 +84,7 @@ runpcs(int runmode, int keepnote)
             if ((bkpt->comm[0] == EOR || command(bkpt->comm, ':') != 0)
             &&  bkpt->count != 0) {
                 execbkpt(bkpt, keepnote);
-                keepnote = 0;
+                keepnote = false;
                 loopcnt++;
                 continue;
             }
@@ -90,7 +92,7 @@ runpcs(int runmode, int keepnote)
         }
         rc = 1;
     }
-    return(rc);
+    return rc;
 }
 /*e: function runpcs */
 
@@ -99,7 +101,6 @@ runpcs(int runmode, int keepnote)
  * finish the process off;
  * kill if still running
  */
-
 void
 endpcs(void)
 {
@@ -107,11 +108,11 @@ endpcs(void)
 
     if(ending)
         return;
-    ending = 1;
+    ending = true;
     if (pid) {
         if(pcsactive){
             killpcs();
-            pcsactive = 0;
+            pcsactive = false;
         }
         pid=0;
         nnote=0;
@@ -122,7 +123,7 @@ endpcs(void)
                 bk->flag = BKPTSET;
     }
     bpin = FALSE;
-    ending = 0;
+    ending = false;
 }
 /*e: function endpcs */
 
@@ -130,7 +131,6 @@ endpcs(void)
 /*
  * start up the program to be debugged in a child
  */
-
 void
 setup(void)
 {
@@ -138,7 +138,7 @@ setup(void)
     nnote = 0;
     startpcs();
     bpin = FALSE;
-    pcsactive = 1;
+    pcsactive = true;
 }
 /*e: function setup */
 

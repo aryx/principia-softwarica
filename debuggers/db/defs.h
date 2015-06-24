@@ -76,7 +76,6 @@ typedef struct bkpt	BKPT;
 #define	FALSE	0
 /*e: constant FALSE */
 
-
 /*
  * run modes
  */
@@ -127,38 +126,36 @@ struct bkpt {
 };
 /*e: struct bkpt */
 
-/*s: constant BADREG */
-#define	BADREG	(-1)
-/*e: constant BADREG */
-
 /*
  * common globals
  */
 
-extern	WORD	adrval;
-extern	uvlong	expv;
-extern	int	adrflg;
-extern	WORD	cntval;
-extern	int	cntflg;
-extern	WORD	loopcnt;
-extern	ADDR	maxoff;
-extern	ADDR	localval;
-extern	ADDR	maxfile;
-extern	ADDR	maxstor;
-
 extern	ADDR	dot;
 extern	int	dotinc;
+extern ADDR	ditto;
 
-extern	int	xargc;
+extern	int	adrflg;
+extern	WORD	adrval;
 
-extern	bool	wtflag;
-extern	char	*corfil, *symfil;
-extern	int	fcor, fsym;
-extern	bool	mkfault;
-extern	bool	regdirty;
+extern	int	cntflg;
+extern	WORD	cntval;
+extern	WORD	loopcnt;
+
+extern	uvlong	expv;
+
+extern	ADDR	maxoff;
 
 extern	int	pid;
+extern	char	*corfil, *symfil;
+extern	int	fcor, fsym;
+extern	Map	*cormap, *symmap, *dotmap;
 extern	int	pcsactive;
+extern	int	ending;
+extern	bool	mkfault;
+
+extern	BKPT	*bkpthead;
+
+extern	int	lastc, peekc;
 
 /*s: constant NNOTE */
 #define	NNOTE 10
@@ -166,16 +163,13 @@ extern	int	pcsactive;
 extern	int	nnote;
 extern	char	note[NNOTE][ERRMAX];
 
-extern	int	ending;
-extern	Map	*cormap, *symmap, *dotmap;
+extern	int	xargc;
 
-extern	BKPT	*bkpthead;
+extern	bool	wtflag;
 extern	bool	kflag;
-extern	int	lastc, peekc;
 
 // new decl, was in main.c before
 extern char *errmsg;
 extern jmp_buf env;
 
-extern ADDR	ditto;
 /*e: db/defs.h */

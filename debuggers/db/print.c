@@ -71,6 +71,26 @@ printtrace(int modif)
         printmap("/ map", cormap);
         break;
     /*x: [[printtrace()]] switch modif cases */
+    case 'S':
+        printsym();
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    /*print externals*/
+    case 'e':
+        for (i = 0; globalsym(&s, i); i++) {
+            if (get4(cormap, s.value, &w) > 0)
+                dprint("%s/%12t%#lux\n", s.name, w);
+        }
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 0:
+    case '?':
+        if (pid)
+            dprint("pid = %d\n",pid);
+        else
+            prints("no process\n");
+        flushbuf();
+    /*x: [[printtrace()]] switch modif cases */
     case 'c':
     case 'C':
         tracetype = modif;
@@ -100,6 +120,11 @@ printtrace(int modif)
     case 'r':
     case 'R':
         printregs(modif);
+        return;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'f':
+    case 'F':
+        printfp(cormap, modif);
         return;
     /*x: [[printtrace()]] switch modif cases */
     case 'q':
@@ -136,37 +161,8 @@ printtrace(int modif)
         kmsys();
         break;
     /*x: [[printtrace()]] switch modif cases */
-    case 'w':
-        maxpos=(adrflg?adrval:MAXPOS);
-        break;
-    /*x: [[printtrace()]] switch modif cases */
-    case 'S':
-        printsym();
-        break;
-    /*x: [[printtrace()]] switch modif cases */
     case 's':
         maxoff=(adrflg?adrval:MAXOFF);
-        break;
-    /*x: [[printtrace()]] switch modif cases */
-    case 0:
-    case '?':
-        if (pid)
-            dprint("pid = %d\n",pid);
-        else
-            prints("no process\n");
-        flushbuf();
-    /*x: [[printtrace()]] switch modif cases */
-    case 'f':
-    case 'F':
-        printfp(cormap, modif);
-        return;
-    /*x: [[printtrace()]] switch modif cases */
-    /*print externals*/
-    case 'e':
-        for (i = 0; globalsym(&s, i); i++) {
-            if (get4(cormap, s.value, &w) > 0)
-                dprint("%s/%12t%#lux\n", s.name, w);
-        }
         break;
     /*x: [[printtrace()]] switch modif cases */
     case 'M':
@@ -188,6 +184,10 @@ printtrace(int modif)
                          bk->flag == BKPTTMP ? 'B' : 'b', 
                          bk->comm);
             }
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'w':
+        maxpos=(adrflg?adrval:MAXPOS);
         break;
     /*e: [[printtrace()]] switch modif cases */
     default:
