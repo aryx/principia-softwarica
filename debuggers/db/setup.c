@@ -165,21 +165,26 @@ getfile(char *filnam, int cnt, int omode)
 
     if (filnam == nil)
         return ERROR_NEG1;
+
     if (strcmp(filnam, "-") == 0)
         return STDIN;
     f = open(filnam, omode|OCEXEC);
+
+    /*s: [[getfile()]] error managment */
     if(f < 0 && omode == ORDWR){
         f = open(filnam, OREAD|OCEXEC);
         if(f >= 0)
             dprint("%s open read-only\n", filnam);
     }
-    if (f < 0 && xargc > cnt)
-        if (wtflag)
-            f = create(filnam, 1, 0666);
+    /*s: [[getfile()]] if wtflag */
+    if (f < 0 && xargc > cnt && wtflag)
+         f = create(filnam, 1, 0666);
+    /*e: [[getfile()]] if wtflag */
     if (f < 0) {
         dprint("cannot open `%s': %r\n", filnam);
         return ERROR_NEG1;
     }
+    /*e: [[getfile()]] error managment */
     return f;
 }
 /*e: function getfile */

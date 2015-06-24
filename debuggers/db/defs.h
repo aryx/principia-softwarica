@@ -11,8 +11,12 @@
 
 #include <mach.h>
 
-typedef ulong WORD;
+/*s: type ADDR */
 typedef uvlong ADDR;
+/*e: type ADDR */
+/*s: type WORD */
+typedef ulong WORD;
+/*e: type WORD */
 
 typedef struct bkpt	BKPT;
 
@@ -83,11 +87,10 @@ typedef struct bkpt	BKPT;
 #define	CONTIN	2
 /*e: constant CONTIN */
 
-/*s: constant BKPTCLR */
 /*
  * breakpoints
  */
-
+/*s: constant BKPTCLR */
 #define	BKPTCLR	0	/* not a real breakpoint */
 /*e: constant BKPTCLR */
 /*s: constant BKPTSET */
@@ -102,15 +105,25 @@ typedef struct bkpt	BKPT;
 
 /*s: struct bkpt */
 struct bkpt {
+    // address/symbol to break on
     ADDR	loc;
+    // enum<breakpoint_kind>
+    int	flag;
 
+    /*s: [[Bkpt]] other fields */
     uchar	save[4];
+
     int	count;
     int	initcnt;
-    int	flag;
+    /*x: [[Bkpt]] other fields */
     char	comm[MAXCOM];
+    /*e: [[Bkpt]] other fields */
 
+    // Extra
+    /*s: [[Bkpt]] extra fields */
+    // list<ref_own<BKPT>, head = bkpthead
     BKPT	*nxtbkpt;
+    /*e: [[Bkpt]] extra fields */
 };
 /*e: struct bkpt */
 
@@ -146,6 +159,7 @@ extern	bool	regdirty;
 
 extern	int	pid;
 extern	int	pcsactive;
+
 /*s: constant NNOTE */
 #define	NNOTE 10
 /*e: constant NNOTE */

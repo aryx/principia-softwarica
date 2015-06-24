@@ -4,55 +4,6 @@
 
 \subsection*{[[db/defs.h]]}
 
-<<constant HUGEINT>>=
-#define	HUGEINT	0x7fffffff	/* enormous WORD */
-@
-
-<<constant MAXOFF>>=
-#define	MAXOFF	0x1000000
-@
-
-<<constant INCDIR>>=
-#define	INCDIR	"/usr/lib/adb"
-@
-
-<<constant DBNAME>>=
-#define	DBNAME	"db\n"
-@
-
-<<constant CMD_VERBS>>=
-#define CMD_VERBS	"?/=>!$: \t"
-@
-%$
-
-<<constant MAXPOS>>=
-#define MAXPOS	80
-@
-
-<<constant MAXLIN>>=
-#define MAXLIN	128
-@
-
-<<constant ARB>>=
-#define	ARB	512
-@
-
-<<constant MAXCOM>>=
-#define MAXCOM	64
-@
-
-<<constant MAXARG>>=
-#define MAXARG	32
-@
-
-
-<<constant MAXSYM>>=
-#define	MAXSYM	255
-@
-
-
-
-
 %<<constant STDIN>>=
 %//#define	STDIN	0
 %@
@@ -65,39 +16,13 @@
 #define	TRUE	(-1)
 @
 %todo: replace by true, false
-
 <<constant FALSE>>=
 #define	FALSE	0
 @
 
-<<constant SINGLE>>=
-#define	SINGLE	1
-@
-%todo: enum?
 
-<<constant CONTIN>>=
-#define	CONTIN	2
-@
 
-<<constant BKPTCLR>>=
-/*
- * breakpoints
- */
 
-#define	BKPTCLR	0	/* not a real breakpoint */
-@
-
-<<constant BKPTSET>>=
-#define BKPTSET	1	/* real, ready to trap */
-@
-
-<<constant BKPTSKIP>>=
-#define BKPTSKIP 2	/* real, skip over it next time */
-@
-
-<<constant BKPTTMP>>=
-#define	BKPTTMP	3	/* temporary; clear when it happens */
-@
 
 
 <<constant BADREG>>=
@@ -124,8 +49,8 @@
 
 #include <mach.h>
 
-typedef ulong WORD;
-typedef uvlong ADDR;
+<<type ADDR>>
+<<type WORD>>
 
 typedef struct bkpt	BKPT;
 
@@ -158,6 +83,9 @@ typedef struct bkpt	BKPT;
 <<constant SINGLE>>
 <<constant CONTIN>>
 
+/*
+ * breakpoints
+ */
 <<constant BKPTCLR>>
 <<constant BKPTSET>>
 <<constant BKPTSKIP>>
@@ -195,6 +123,7 @@ extern	bool	regdirty;
 
 extern	int	pid;
 extern	int	pcsactive;
+
 <<constant NNOTE>>
 extern	int	nnote;
 extern	char	note[NNOTE][ERRMAX];
@@ -329,38 +258,8 @@ int		valpr(long, int);
 
 \subsection*{[[db/globals.c]]}
 
-<<global wtflag>>=
-// was in main.c
-int wtflag = OREAD;
-@
 
 
-<<global mkfault>>=
-bool mkfault;
-@
-
-<<global maxoff>>=
-ADDR maxoff = MAXOFF;
-@
-
-<<global xargc>>=
-int xargc;		/* bullshit */
-@
-
-
-<<global env>>=
-jmp_buf env;
-@
-
-
-<<global ending>>=
-// was in runpcs.c
-int ending;
-@
-
-<<global pid>>=
-int pid;
-@
 
 <<global nnote>>=
 int nnote;
@@ -370,9 +269,6 @@ int nnote;
 char note[NNOTE][ERRMAX];
 @
 
-<<global bkpthead>>=
-BKPT *bkpthead;
-@
 
 
 
@@ -389,14 +285,8 @@ int pcsactive = 0;
 int	dotinc;
 @
 
-<<global ditto>>=
-ADDR	ditto;
-@
 
 
-<<global cntflg>>=
-int	cntflg;
-@
 
 
 %-------------------------------------------------------------
@@ -441,9 +331,6 @@ int	cntflg;
 
 \subsection*{[[db/output.c]]}
 
-<<global printcol>>=
-int	printcol = 0;
-@
 
 
 <<global maxpos>>=
@@ -585,34 +472,6 @@ flush(void)
 }
 @
 
-<<function dprint>>=
-int
-dprint(char *fmt, ...)
-{
-    int n, w;
-    char *p;
-  char buf[4096];
-    Rune r;
-    va_list arg;
-
-    if(mkfault)
-        return -1;
-    va_start(arg, fmt);
-    n = vseprint(buf, buf+sizeof buf, fmt, arg) - buf;
-    va_end(arg);
-//Bprint(&stdout, "[%s]", fmt);
-    Bwrite(&stdout, buf, n);
-    for(p=buf; *p; p+=w){
-        w = chartorune(&r, p);
-        if(r == '\n')
-            printcol = 0;
-        else
-            printcol++;
-    }
-    return n;
-}
-@
-
 
 
 %-------------------------------------------------------------
@@ -728,6 +587,7 @@ isfileref(void)
     return 0;
 }
 @
+
 
 
 %-------------------------------------------------------------
@@ -1111,40 +971,6 @@ rput(Map *map, char *name, vlong v)
 }
 @
 
-<<function printregs>>=
-/*
- * print the registers
- */
-void
-printregs(int c)
-{
-    Reglist *rp;
-    int i;
-    uvlong v;
-
-    for (i = 1, rp = mach->reglist; rp->rname; rp++, i++) {
-        if ((rp->rflags & RFLT)) {
-            if (c != 'R')
-                continue;
-            if (rp->rformat == '8' || rp->rformat == '3')
-                continue;
-        }
-        v = getreg(cormap, rp);
-        if(rp->rformat == 'Y')
-            dprint("%-8s %-20#llux", rp->rname, v);
-        else
-            dprint("%-8s %-12#lux", rp->rname, (ulong)v);
-        if ((i % 3) == 0) {
-            dprint("\n");
-            i = 0;
-        }
-    }
-    if (i != 1)
-        dprint("\n");
-    dprint ("%s\n", machdata->excep(cormap, rget));
-    printpc();
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1224,6 +1050,10 @@ defval(WORD w)
 #define	MAXBASE	16
 @
 
+<<constant MAXLIN>>=
+#define MAXLIN	128
+@
+
 <<function getnum>>=
 /* service routines for expression reading */
 int
@@ -1287,6 +1117,10 @@ getnum(int (*rdf)(void))
         expv = fpin(num);
     return (1);
 }
+@
+
+<<constant MAXSYM>>=
+#define	MAXSYM	255
 @
 
 <<function readsym>>=
@@ -1461,21 +1295,6 @@ setpcs(void)
 }
 @
 
-<<function msgpcs>>=
-void
-msgpcs(char *msg)
-{
-    char err[ERRMAX];
-
-    setpcs();
-    if(write(msgfd, msg, strlen(msg)) < 0 && !ending){
-        errstr(err, sizeof err);
-        if(strcmp(err, "interrupted") != 0)
-            endpcs();
-        errors("can't write control file", err);
-    }
-}
-@
 
 <<function unloadnote>>=
 /*
@@ -1549,22 +1368,10 @@ killpcs(void)
 }
 @
 
-<<function grab>>=
-void
-grab(void)
-{
-    flush();
-    msgpcs("stop");
-    bpwait();
-}
-@
 
-<<function ungrab>>=
-void
-ungrab(void)
-{
-    msgpcs("start");
-}
+
+<<constant MAXARG>>=
+#define MAXARG	32
 @
 
 <<function doexec>>=
@@ -1787,38 +1594,15 @@ bkput(BKPT *bp, int install)
 
 \subsection*{[[db/print.c]]}
 
+<<constant INCDIR>>=
+#define	INCDIR	"/usr/lib/adb"
+@
+
 <<global Ipath>>=
 char	*Ipath = INCDIR;
 @
 %$
 
-<<global tracetype>>=
-static	int	tracetype;
-@
-
-<<function ptrace>>=
-/*
- *	callback on stack trace
- */
-static void
-ptrace(Map *map, uvlong pc, uvlong sp, Symbol *sym)
-{
-    char buf[512];
-
-    USED(map);
-    dprint("%s(", sym->name);
-    printparams(sym, sp);
-    dprint(") ");
-    printsource(sym->value);
-    dprint(" called from ");
-    symoff(buf, 512, pc, CTEXT);
-    dprint("%s ", buf);
-    printsource(pc);
-    dprint("\n");
-    if(tracetype == 'C')
-        printlocals(sym, sp);
-}
-@
 
 
 <<function getfname>>=
@@ -1895,28 +1679,6 @@ redirin(int stack, char *file)
 }
 @
 
-<<function printmap>>=
-void
-printmap(char *s, Map *map)
-{
-    int i;
-
-    if (!map)
-        return;
-    if (map == symmap)
-        dprint("%s%12t`%s'\n", s, fsym < 0 ? "-" : symfil);
-    else if (map == cormap)
-        dprint("%s%12t`%s'\n", s, fcor < 0 ? "-" : corfil);
-    else
-        dprint("%s\n", s);
-    for (i = 0; i < map->nsegs; i++) {
-        if (map->seg[i].inuse)
-            dprint("%s%8t%-16#llux %-16#llux %-16#llux\n",
-                map->seg[i].name, map->seg[i].b,
-                map->seg[i].e, map->seg[i].f);
-    }
-}
-@
 
 <<function printsym>>=
 /*
@@ -1991,25 +1753,6 @@ printpc(void)
 }
 @
 
-<<function printlocals>>=
-void
-printlocals(Symbol *fn, ADDR fp)
-{
-    int i;
-    ulong w;
-    Symbol s;
-
-    s = *fn;
-    for (i = 0; localsym(&s, i); i++) {
-        if (s.class != CAUTO)
-            continue;
-        if (get4(cormap, fp-s.value, &w) > 0)
-            dprint("%8t%s.%s/%10t%#lux\n", fn->name, s.name, w);
-        else
-            dprint("%8t%s.%s/%10t?\n", fn->name, s.name);
-    }
-}
-@
 
 <<function printparams>>=
 void
@@ -2092,13 +1835,6 @@ char	BADEQ[] = "unexpected `='";
 bool	executing;
 @
 
-<<global eqformat>>=
-char	eqformat[ARB] = "z";
-@
-
-<<global stformat>>=
-char	stformat[ARB] = "zMi";
-@
 
 <<global loopcnt>>=
 WORD loopcnt;
@@ -2368,6 +2104,11 @@ runpcs(int runmode, int keepnote)
 }
 @
 
+<<global ending>>=
+// was in runpcs.c
+int ending;
+@
+
 <<function endpcs>>=
 /*
  * finish the process off;
@@ -2430,22 +2171,6 @@ execbkpt(BKPT *bk, int keepnote)
 }
 @
 
-<<function scanbkpt>>=
-/*
- * find the breakpoint at adr, if any
- */
-
-BKPT *
-scanbkpt(ADDR adr)
-{
-    BKPT *bk;
-
-    for (bk = bkpthead; bk; bk = bk->nxtbkpt)
-        if (bk->flag != BKPTCLR && bk->loc == adr)
-            break;
-    return(bk);
-}
-@
 
 <<function delbp>>=
 /*
@@ -2520,9 +2245,6 @@ setbp(void)
 
 \subsection*{[[db/pcs.c]]}
 
-<<global NOPCS>>=
-char	NOPCS[] = "no process";
-@
 
 
 %-------------------------------------------------------------

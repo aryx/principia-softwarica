@@ -89,28 +89,37 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
 
         switch(modifier) {
         /*s: [[exform()]] switch modifier cases */
+        case 'I':
+        case 'i':
+            i = machdata->das(map, dot, modifier, buf, sizeof(buf));
+            if (i < 0)
+                error("%r");
+            dotinc = i;
+            dprint("%s\n", buf);
+            break;
+        /*x: [[exform()]] switch modifier cases */
         case SPC:
         case TB:
             dotinc = 0;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 't':
         case 'T':
             dprint("%*t", fcount);
             dotinc = 0;
             return(fp);
-
+        /*x: [[exform()]] switch modifier cases */
         case 'a':
             symoff(buf, sizeof(buf), dot, CANY);
             dprint("%s%c%16t", buf, map==symmap? '?':'/');
             dotinc = 0;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'A':
             dprint("%#llux%10t", dot);
             dotinc = 0;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'p':
             if (get4(map, dot, &w) < 0)
                 error("%r");
@@ -118,7 +127,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             dprint("%s%16t", buf);
             dotinc = mach->szaddr;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'u':
         case 'd':
         case 'x':
@@ -141,7 +150,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             else if (c == 'q')
                 dprint("%-8#lo", w);
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'U':
         case 'D':
         case 'X':
@@ -163,6 +172,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             else if (c == 'Q')
                 dprint("%-#16lo", w);
             break;
+        /*x: [[exform()]] switch modifier cases */
         case 'Z':
         case 'V':
         case 'Y':
@@ -178,6 +188,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             else if (c == 'Z')
                 dprint("%-20llud", v);
             break;
+        /*x: [[exform()]] switch modifier cases */
         case 'B':
         case 'b':
         case 'c':
@@ -194,7 +205,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
                 printc(ch);
             dotinc = 1;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'r':
             if (literal)
                 sh = (ushort) dot;
@@ -203,7 +214,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             dprint("%C", sh);
             dotinc = 2;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'R':
             if (literal) {
                 sp = (ushort*) &dot;
@@ -223,7 +234,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             dotinc = dot-savdot+2;
             dot=savdot;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 's':
             if (literal) {
                 cp = (uchar*) &dot;
@@ -253,7 +264,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             dotinc = dot-savdot+1;
             dot = savdot;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'S':
             if (literal) {
                 cp = (uchar*) &dot;
@@ -274,17 +285,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             dotinc = dot-savdot+1;
             dot=savdot;
             break;
-
-
-        case 'I':
-        case 'i':
-            i = machdata->das(map, dot, modifier, buf, sizeof(buf));
-            if (i < 0)
-                error("%r");
-            dotinc = i;
-            dprint("%s\n", buf);
-            break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'M':
             i = machdata->hexinst(map, dot, buf, sizeof(buf));
             if (i < 0)
@@ -297,7 +298,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             } else
                 dprint("\n");
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'f':
             /* BUG: 'f' and 'F' assume szdouble is sizeof(vlong) in the literal case */
             if (literal) {
@@ -309,7 +310,7 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             dprint("%s\n", buf);
             dotinc = mach->szfloat;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'F':
             /* BUG: 'f' and 'F' assume szdouble is sizeof(vlong) in the literal case */
             if (literal) {
@@ -321,13 +322,13 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             dprint("%s\n", buf);
             dotinc = mach->szdouble;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case 'n':
         case 'N':
             printc('\n');
             dotinc=0;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case '"':
             dotinc=0;
             while (*fp != '"' && *fp)
@@ -335,19 +336,19 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
             if (*fp)
                 fp++;
             break;
-
+        /*x: [[exform()]] switch modifier cases */
         case '^':
             dot=inkdot(-dotinc*fcount);
             return(fp);
-
+        /*x: [[exform()]] switch modifier cases */
         case '+':
             dot=inkdot((WORD)fcount);
             return(fp);
-
+        /*x: [[exform()]] switch modifier cases */
         case '-':
             dot=inkdot(-(WORD)fcount);
             return(fp);
-
+        /*x: [[exform()]] switch modifier cases */
         case 'z':
             if (findsym(dot, CTEXT, &s))
                 dprint("%s() ", s.name);

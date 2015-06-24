@@ -167,17 +167,23 @@ dprint(char *fmt, ...)
 {
     int n, w;
     char *p;
-  char buf[4096];
+    char buf[4096];
     Rune r;
     va_list arg;
 
+    /*s: [[dprint()]] return if mkfault */
     if(mkfault)
         return -1;
+    /*e: [[dprint()]] return if mkfault */
+
     va_start(arg, fmt);
     n = vseprint(buf, buf+sizeof buf, fmt, arg) - buf;
     va_end(arg);
-//Bprint(&stdout, "[%s]", fmt);
+
+    //Bprint(&stdout, "[%s]", fmt);
     Bwrite(&stdout, buf, n);
+
+    /*s: [[dprint()]] maintain printcol */
     for(p=buf; *p; p+=w){
         w = chartorune(&r, p);
         if(r == '\n')
@@ -185,6 +191,7 @@ dprint(char *fmt, ...)
         else
             printcol++;
     }
+    /*e: [[dprint()]] maintain printcol */
     return n;
 }
 /*e: function dprint */

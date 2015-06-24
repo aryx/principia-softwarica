@@ -18,72 +18,20 @@ char	NOPCS[] = "no process";
 void
 subpcs(int modif)
 {
+    // enum<runmode>
+    int	runmode = SINGLE;
     int	check;
-    int	runmode;
-    int	keepnote;
-    int	n, r;
+    int	keepnote = 0;
+    int	n;
+    int r = 0;
     long line, curr;
     BKPT *bk;
     char *comptr;
 
-    runmode=SINGLE;
-    r = 0;
-    keepnote=0;
     loopcnt=cntval;
 
     switch (modif) {
     /*s: [[subpcs()]] switch modif cases */
-    /* delete breakpoint */
-    case 'd': 
-    case 'D':
-        if ((bk=scanbkpt(dot)) == 0)
-            error("no breakpoint set");
-        bk->flag=BKPTCLR;
-        return;
-
-    /* set breakpoint */
-    case 'b': 
-    case 'B':
-        if (bk=scanbkpt(dot))
-            bk->flag=BKPTCLR;
-        for (bk=bkpthead; bk; bk=bk->nxtbkpt)
-            if (bk->flag == BKPTCLR)
-                break;
-        if (bk==0) {
-            bk = (BKPT *)malloc(sizeof(*bk));
-            if (bk == 0)
-                error("too many breakpoints");
-            bk->nxtbkpt=bkpthead;
-            bkpthead=bk;
-        }
-        bk->loc = dot;
-        bk->initcnt = bk->count = cntval;
-        bk->flag = modif == 'b' ? BKPTSET : BKPTTMP;
-        check=MAXCOM-1;
-        comptr=bk->comm;
-        rdc();
-        reread();
-        do {
-            *comptr++ = readchar();
-        } while (check-- && lastc!=EOR);
-        *comptr=0;
-        if(bk->comm[0] != EOR && cntflg == FALSE)
-            bk->initcnt = bk->count = HUGEINT;
-        reread();
-        if (check)
-            return;
-        error("bkpt command too long");
-
-    /* exit */
-    case 'k' :
-    case 'K':
-        if (pid == 0)
-            error(NOPCS);
-        dprint("%d: killed", pid);
-        pcsactive = 1;	/* force 'kill' ctl */
-        endpcs();
-        return;
-
     /* run program */
     case 'r': 
     case 'R':
@@ -91,7 +39,7 @@ subpcs(int modif)
         setup();
         runmode = CONTIN;
         break;
-
+    /*x: [[subpcs()]] switch modif cases */
     /* single step */
     case 's': 
         if (pid == 0) {
@@ -101,6 +49,7 @@ subpcs(int modif)
         runmode=SINGLE;
         keepnote=defval(1);
         break;
+    /*x: [[subpcs()]] switch modif cases */
     case 'S':
         if (pid == 0) {
             setup();
@@ -121,28 +70,17 @@ subpcs(int modif)
         }
         loopcnt = 0;
         break;
-
-    /* continue with optional note */
-    case 'c': 
-    case 'C': 
-        if (pid==0)
+    /*x: [[subpcs()]] switch modif cases */
+    /* exit */
+    case 'k' :
+    case 'K':
+        if (pid == 0)
             error(NOPCS);
-        runmode=CONTIN;
-        keepnote=defval(1);
-        break;
-
-    /* deal with notes */
-    case 'n':	
-        if (pid==0)
-            error(NOPCS);
-        n=defval(-1);
-        if(n>=0 && n<nnote){
-            nnote--;
-            memmove(note[n], note[n+1], (nnote-n)*sizeof(note[0]));
-        }
-        notes();
+        dprint("%d: killed", pid);
+        pcsactive = 1;	/* force 'kill' ctl */
+        endpcs();
         return;
-
+    /*x: [[subpcs()]] switch modif cases */
     /* halt the current process */
     case 'h':	
         if (adrflg && adrval == 0) {
@@ -156,12 +94,83 @@ subpcs(int modif)
             goto Return;
         }
         return;
-
+    /*x: [[subpcs()]] switch modif cases */
     /* continue executing the current process */
     case 'x':	
         if (pid == 0)
             error(NOPCS);
         ungrab();
+        return;
+    /*x: [[subpcs()]] switch modif cases */
+    /* set breakpoint */
+    case 'b': 
+    case 'B':
+        if (bk=scanbkpt(dot))
+            bk->flag=BKPTCLR;
+
+        /*s: [[subpcs()]] breakpoint case, find unused breakpoint bk or allocate one */
+        for (bk=bkpthead; bk; bk=bk->nxtbkpt)
+            if (bk->flag == BKPTCLR)
+                break;
+        if (bk==nil) {
+            bk = (BKPT *)malloc(sizeof(*bk));
+            if (bk == nil)
+                error("too many breakpoints");
+            bk->nxtbkpt=bkpthead;
+            bkpthead=bk;
+        }
+        /*e: [[subpcs()]] breakpoint case, find unused breakpoint bk or allocate one */
+
+        bk->loc = dot;
+        bk->flag = modif == 'b' ? BKPTSET : BKPTTMP;
+        bk->initcnt = bk->count = cntval;
+
+        /*s: [[subpcs()]] breakpoint case, set optional breakpoint command */
+        check=MAXCOM-1;
+        comptr=bk->comm;
+
+        rdc();
+        reread();
+
+        do {
+            *comptr++ = readchar();
+        } while (check-- && lastc!=EOR);
+        *comptr='\0';
+        if(bk->comm[0] != EOR && cntflg == FALSE)
+            bk->initcnt = bk->count = HUGEINT;
+        reread();
+        if (check)
+            return;
+        error("bkpt command too long");
+        /*e: [[subpcs()]] breakpoint case, set optional breakpoint command */
+    /*x: [[subpcs()]] switch modif cases */
+    /* delete breakpoint */
+    case 'd': 
+    case 'D':
+        if ((bk=scanbkpt(dot)) == 0)
+            error("no breakpoint set");
+        bk->flag=BKPTCLR;
+        return;
+    /*x: [[subpcs()]] switch modif cases */
+    /* continue with optional note */
+    case 'c': 
+    case 'C': 
+        if (pid==0)
+            error(NOPCS);
+        runmode=CONTIN;
+        keepnote=defval(1);
+        break;
+    /*x: [[subpcs()]] switch modif cases */
+    /* deal with notes */
+    case 'n':	
+        if (pid==0)
+            error(NOPCS);
+        n=defval(-1);
+        if(n>=0 && n<nnote){
+            nnote--;
+            memmove(note[n], note[n+1], (nnote-n)*sizeof(note[0]));
+        }
+        notes();
         return;
     /*e: [[subpcs()]] switch modif cases */
     default:
@@ -171,12 +180,13 @@ subpcs(int modif)
     if (loopcnt>0) {
         dprint("%s: running\n", symfil);
         flush();
-        r = runpcs(runmode,keepnote);
+        r = runpcs(runmode, keepnote);
     }
     if (r)
         dprint("breakpoint%16t");
     else
         dprint("stopped at%16t");
+
 Return:
     delbp();
     printpc();

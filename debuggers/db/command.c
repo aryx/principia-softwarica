@@ -81,7 +81,7 @@ command(char *buf, int defcom)
         if (!eol(rdc()))
             lastcom=lastc;		/* command */
         else {
-            if (adrflg==0)
+            if (adrflg==false)
                 dot=inkdot(dotinc);
             reread();
             lastcom=defcom;
@@ -156,7 +156,6 @@ command(char *buf, int defcom)
 /*
  * [/?][wml]
  */
-
 void
 acommand(int pc)
 {
@@ -189,7 +188,7 @@ acommand(int pc)
             error(BADEQ); 
         cmdmap(map);
         break;
-
+    /*x: [[acommand()]] switch optional command suffix character */
     case 'L':
     case 'l':
         if (eqcom)
@@ -197,6 +196,7 @@ acommand(int pc)
         cmdsrc(lastc, map);
         break;
 
+    /*x: [[acommand()]] switch optional command suffix character */
     case 'W':
     case 'w':
         if (eqcom)

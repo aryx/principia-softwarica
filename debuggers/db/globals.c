@@ -42,6 +42,7 @@ int nnote;
 char note[NNOTE][ERRMAX];
 /*e: global note */
 /*s: global bkpthead */
+// list<BKPT>, next = BKPT.next
 BKPT *bkpthead;
 /*e: global bkpthead */
 
@@ -50,7 +51,7 @@ BKPT *bkpthead;
 WORD	adrval;
 /*e: global adrval */
 /*s: global adrflg */
-int	adrflg;
+bool	adrflg;
 /*e: global adrflg */
 
 /*s: global expv */
@@ -85,6 +86,6 @@ ADDR	ditto;
 WORD cntval;
 /*e: global cntval */
 /*s: global cntflg */
-int	cntflg;
+bool	cntflg;
 /*e: global cntflg */
 /*e: db/globals.c */

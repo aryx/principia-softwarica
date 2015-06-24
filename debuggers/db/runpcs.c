@@ -160,8 +160,7 @@ execbkpt(BKPT *bk, int keepnote)
 /*
  * find the breakpoint at adr, if any
  */
-
-BKPT *
+BKPT*
 scanbkpt(ADDR adr)
 {
     BKPT *bk;
@@ -169,7 +168,7 @@ scanbkpt(ADDR adr)
     for (bk = bkpthead; bk; bk = bk->nxtbkpt)
         if (bk->flag != BKPTCLR && bk->loc == adr)
             break;
-    return(bk);
+    return bk;
 }
 /*e: function scanbkpt */
 

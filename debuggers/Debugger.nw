@@ -222,12 +222,17 @@ License.
 % see also Machine.nw, which has a similar interface.
 
 <<[[main()]] print usage and exit (db)>>=
-fprint(2, "Usage: db [-kw] [-m machine] [-I dir] [symfile] [pid]\n");
+fprint(2, "Usage: db [-kw] [-m machine] [-I dir] [symfile] [pid|cmd]\n");
 exits("usage");
 @
+%pad: I added the |cmd
 
-% db -c <cmd>
+% db <cmd>
 % db <pid>
+% I thought there was a  -c, but it's just that if non alldigits argv[0]
+% then it's assumed to be a program
+
+% then [addr] [,count] [command]
 
 % > main
 % =>  main() /tests/8c/helloc.c:5
@@ -258,9 +263,20 @@ exits("usage");
 
 % :r => run
 % :c => continue
-% :bmain => breakpoint main (can check with $b after)
+% main :b => breakpoint main (can check with $b after)
 
 %todo: ??? dump value of a global
+
+<<constant CMD_VERBS>>=
+#define CMD_VERBS	"?/=>!$: \t"
+@
+%$
+
+% many commands are either in lowercase or uppercase form,
+% where uppercase form is usually one providing more services,
+% e.g. specific to C.
+% So lowercase = assembly level, uppercase = C level.
+% ex: $c vs $C, :s vs :S 
 
 \section{Code organization}
 
@@ -274,23 +290,108 @@ exits("usage");
 
 \section{[[/proc/x/mem]]}
 
-\section{[[Map]]}
+\section{[[Mach]] and [[mach]]}
 
-\section{[[Bkpt]]}
+
+\section{[[Map]], [[symap]], [[cormap]], [[dotmap]]}
+
+% cormap, symmap, dotmap
+
+<<global symmap>>=
+// was in setup.c
+Map	*symmap;
+@
+% derived from text
+
+<<global cormap>>=
+Map	*cormap;
+@
+% derived from heap and stack?
+
+<<global dotmap>>=
+Map	*dotmap;
+@
+% ???
+
+
+\section{[[Addr]] and [[dot]]}
+
+<<type ADDR>>=
+typedef uvlong ADDR;
+@
+
+<<global dot>>=
+// was in command.c
+ADDR	dot;
+@
+% see also adrflg
+
+\section{[[cntval]]}
+
+<<type WORD>>=
+typedef ulong WORD;
+@
+
+<<global cntval>>=
+WORD cntval;
+@
+% see also ctnflag
+
+\section{[[Bkpt]] and [[bkpthead]]}
 
 <<struct bkpt>>=
 struct bkpt {
+    // address/symbol to break on
     ADDR	loc;
-
-    uchar	save[4];
-    int	count;
-    int	initcnt;
+    // enum<breakpoint_kind>
     int	flag;
-    char	comm[MAXCOM];
 
-    BKPT	*nxtbkpt;
+    <<[[Bkpt]] other fields>>
+
+    // Extra
+    <<[[Bkpt]] extra fields>>
 };
 @
+
+<<constant BKPTCLR>>=
+#define	BKPTCLR	0	/* not a real breakpoint */
+@
+%todo: enum? enum breakpoint_kind
+
+<<constant BKPTSET>>=
+#define BKPTSET	1	/* real, ready to trap */
+@
+<<constant BKPTSKIP>>=
+#define BKPTSKIP 2	/* real, skip over it next time */
+@
+<<constant BKPTTMP>>=
+#define	BKPTTMP	3	/* temporary; clear when it happens */
+@
+
+
+
+<<global bkpthead>>=
+// list<BKPT>, next = BKPT.next
+BKPT *bkpthead;
+@
+
+<<[[Bkpt]] extra fields>>=
+// list<ref_own<BKPT>, head = bkpthead
+BKPT	*nxtbkpt;
+@
+
+
+
+%XXX
+<<[[Bkpt]] other fields>>=
+uchar	save[4];
+
+int	count;
+int	initcnt;
+@
+
+
+
 
 \chapter{[[main()]]}
 
@@ -299,11 +400,13 @@ char	*symfil = nil;
 @
 % program to be debugged, containing symbol information, for text and data
 % or /proc/x/text
+% global so can be used by printmap()
 
 <<global corfil>>=
 char	*corfil = nil;
 @
 % memory, for the heap and stack, will be /proc/xxx/mem?
+% global so can be used by printmap()
 
 
 <<global infile>>=
@@ -348,6 +451,7 @@ main(int argc, char **argv)
         // clear input
         clrinp();
 
+        // go to next non whitespace char
         rdc();
         reread();
 
@@ -364,7 +468,55 @@ main(int argc, char **argv)
 @
 %dead? exitflg is never set to true anyway
 
-\section{[[outputinit()]] and [[stdout]]}
+<<function alldigs>>=
+bool
+alldigs(char *s)
+{
+    while(*s){
+        if(*s<'0' || '9'<*s)
+            return false;
+        s++;
+    }
+    return true;
+}
+@
+
+
+\section{Process attachment}
+
+% alternative is to run the program, which will be done with :r
+% which should then set pid
+
+
+<<global pid>>=
+int pid;
+@
+% = 0;
+
+<<[[main()]] locals (db)>>=
+char b1[100];
+char b2[100];
+@
+
+
+<<[[main()]] if pid argument, attach to existing process>>=
+if(argc==1 && alldigs(argv[0])){
+
+    pid = atoi(argv[0]);
+    pcsactive = 0;
+    if (!symfil) {
+        <<[[main()]] when pid argument, if kflag>>
+        else
+            sprint(b1, "/proc/%s/text", argv[0]);
+        symfil = b1;
+    }
+    sprint(b2, "/proc/%s/mem", argv[0]);
+    corfil = b2;
+}
+@
+
+
+\section{[[outputinit()]], [[dprint()]] and [[stdout]]}
 
 <<global stdout>>=
 Biobuf	stdout;
@@ -390,29 +542,50 @@ tconv(Fmt *f)
 @
 % ???
 
-\section{[[setsym()]] and [[symmap]]}
 
-<<global symmap>>=
-// was in setup.c
-Map	*symmap;
+<<function dprint>>=
+int
+dprint(char *fmt, ...)
+{
+    int n, w;
+    char *p;
+    char buf[4096];
+    Rune r;
+    va_list arg;
+
+    <<[[dprint()]] return if mkfault>>
+
+    va_start(arg, fmt);
+    n = vseprint(buf, buf+sizeof buf, fmt, arg) - buf;
+    va_end(arg);
+
+    //Bprint(&stdout, "[%s]", fmt);
+    Bwrite(&stdout, buf, n);
+
+    <<[[dprint()]] maintain printcol>>
+    return n;
+}
 @
-% derived from text
 
-<<global cormap>>=
-Map	*cormap;
+<<global printcol>>=
+int	printcol = 0;
 @
-% derived from heap and stack?
 
-<<global dotmap>>=
-Map	*dotmap;
+<<[[dprint()]] maintain printcol>>=
+for(p=buf; *p; p+=w){
+    w = chartorune(&r, p);
+    if(r == '\n')
+        printcol = 0;
+    else
+        printcol++;
+}
 @
-% ???
 
+\section{[[setsym()]]}
 
 <<global fhdr (db/setup.c)>>=
 static Fhdr fhdr;
 @
-
 
 <<global fsym>>=
 fdt fsym;
@@ -444,6 +617,14 @@ setsym(void)
 }
 @
 
+<<global wtflag>>=
+// was in main.c
+int wtflag = OREAD;
+@
+%OREAD = 0
+
+
+
 % return fdt or -1
 <<function getfile>>=
 static fdt
@@ -453,24 +634,30 @@ getfile(char *filnam, int cnt, int omode)
 
     if (filnam == nil)
         return ERROR_NEG1;
+
     if (strcmp(filnam, "-") == 0)
         return STDIN;
     f = open(filnam, omode|OCEXEC);
-    if(f < 0 && omode == ORDWR){
-        f = open(filnam, OREAD|OCEXEC);
-        if(f >= 0)
-            dprint("%s open read-only\n", filnam);
-    }
-    if (f < 0 && xargc > cnt)
-        if (wtflag)
-            f = create(filnam, 1, 0666);
-    if (f < 0) {
-        dprint("cannot open `%s': %r\n", filnam);
-        return ERROR_NEG1;
-    }
+
+    <<[[getfile()]] error managment>>
     return f;
 }
 @
+
+<<[[getfile()]] error managment>>=
+if(f < 0 && omode == ORDWR){
+    f = open(filnam, OREAD|OCEXEC);
+    if(f >= 0)
+        dprint("%s open read-only\n", filnam);
+}
+<<[[getfile()]] if wtflag>>
+if (f < 0) {
+    dprint("cannot open `%s': %r\n", filnam);
+    return ERROR_NEG1;
+}
+@
+
+
 
 <<function dumbmap>>=
 Map *
@@ -492,17 +679,6 @@ dumbmap(fdt fd)
 
 \section{[[clrinp()]], [[rdc()]], [[reread()]]}
 
-% poor's man command lexing
-
-<<global peekc>>=
-int	peekc;
-@
-
-<<global lastc>>=
-int lastc = EOR;
-@
-
-
 <<constant EOR>>=
 #define EOR	'\n'
 @
@@ -518,12 +694,29 @@ int lastc = EOR;
 
 
 
+% poor's man command lexing
+
+<<global peekc>>=
+int	peekc;
+@
+%todo: change type to Rune?
+
+<<global lastc>>=
+int lastc = EOR;
+@
+%todo: change type to Rune?
+%ugly all those globals
+
+
+
+
+
 
 
 <<global lp>>=
 Rune	*lp;
 @
-% ??
+% ?? l? p?
 
 
 <<function clrinp>>=
@@ -548,6 +741,10 @@ rdc(void)
 }
 @
 % ugly use of global, why readchar does not return a char instead?
+% kinda of lexing also here. 
+%less: rename? read_next_non_white_space_char()
+% often do rdc(); reread() to position yourself to next non whitespace char
+% so that the next readchar() is a character you want to dispatch on.
 
 
 <<function reread>>=
@@ -562,7 +759,7 @@ reread(void)
 
 \section{[[command()]]}
 
-% [addr] [, count] ?/=:$ command
+% [addr] [,count] [?/=:$ command]
 
 <<function command>>=
 /* command decoding */
@@ -591,14 +788,24 @@ command(char *buf, int defcom)
 @
 %$
 
-<<global dot>>=
-// was in command.c
-ADDR	dot;
+
+
+<<[[command()]] parse possibly count, set cntval>>=
+if (rdc()==',' && expr(0)) {	/* count */
+    cntflg=TRUE;
+    cntval=expv;
+} else {
+    cntflg=FALSE;
+    cntval=1;
+    reread();
+}
+@
+<<global cntflg>>=
+bool	cntflg;
 @
 
-<<global cntval>>=
-WORD cntval;
-@
+
+
 
 
 <<[[command()]] locals (db)>>=
@@ -662,7 +869,7 @@ static char savecom = '=';
 if (!eol(rdc()))
     lastcom=lastc;		/* command */
 else {
-    if (adrflg==0)
+    if (adrflg==false)
         dot=inkdot(dotinc);
     reread();
     lastcom=defcom;
@@ -676,7 +883,7 @@ eol(int c)
     return(c==EOR || c==';');
 }
 @
-
+% lexing too
 
 \section{[[done()]]}
 
@@ -709,6 +916,11 @@ done(void)
 \section{XXX}
 
 
+<<global mkfault>>=
+bool mkfault;
+@
+%dead? when set to true?
+
 <<[[main()]] in loop, handle mkfault (db)>>=
 if (mkfault) {
     mkfault=0;
@@ -717,8 +929,14 @@ if (mkfault) {
 }
 @
 
+<<[[dprint()]] return if mkfault>>=
+if(mkfault)
+    return -1;
+@
+
+%XXX
 <<[[main()]] initialization before repl (db)>>=
-xargc = argc;
+
 notify(fault);
 
 setsym();
@@ -742,16 +960,13 @@ executing = FALSE;
 @
 
 
+
+
+
+
+
 <<[[main()]] locals (db)>>=
 char *s;
-char *name = nil;
-@
-
-
-<<[[main()]] command line processing (db)>>=
-case 'w':
-    wtflag = ORDWR;		/* suitable for open() */
-    break;
 @
 <<[[main()]] command line processing (db)>>=
 case 'I':
@@ -762,53 +977,24 @@ case 'I':
         Ipath = s;
     break;
 @
+
+
+<<[[main()]] locals (db)>>=
+char *name = nil;
+@
+
 <<[[main()]] command line processing (db)>>=
 case 'm':
     name = ARGF();
-    if(name == 0)
+    if(name == nil)
         dprint("missing -m argument\n");
     break;
 @
 
-<<function alldigs>>=
-bool
-alldigs(char *s)
-{
-    while(*s){
-        if(*s<'0' || '9'<*s)
-            return false;
-        s++;
-    }
-    return true;
-}
-@
 
-\section{Process attachment}
+\chapter{Lexing}
 
-<<[[main()]] locals (db)>>=
-char b1[100];
-char b2[100];
-@
-
-
-<<[[main()]] if pid argument, attach to existing process>>=
-if(argc==1 && alldigs(argv[0])){
-
-    pid = atoi(argv[0]);
-    pcsactive = 0;
-    if (!symfil) {
-        <<[[main()]] when pid argument, if kflag>>
-        else
-            sprint(b1, "/proc/%s/text", argv[0]);
-        symfil = b1;
-    }
-    sprint(b2, "/proc/%s/mem", argv[0]);
-    corfil = b2;
-}
-@
-
-
-\chapter{Input}
+% See CMD_VERBS, crude input command language
 
 % modifies peekc, lastc, lp
 
@@ -1092,12 +1278,37 @@ item(int a)
 }
 @
 
+\chapter{Addresses}
 
-\chapter{Output}
+<<global adrflg>>=
+bool	adrflg;
+@
+
+<<global adrval>>=
+// was in command.c
+WORD	adrval;
+@
+
+
+<<[[command()]] parse possibly first address, set dot>>=
+adrflg=expr(0);		/* first address */
+if (adrflg){
+    dot=expv;
+    ditto=expv;
+}
+adrval=dot;
+@
+
+<<global ditto>>=
+ADDR	ditto;
+@
+
+\section{Symbolic addresses}
+
 
 \chapter{Commands}
 
-\section{Inspection commands, [[?/]]}
+\section{Formatting commands, [[?/=]]}
 
 <<[[command()]] switch lastcom cases>>=
 case '?':
@@ -1112,7 +1323,6 @@ case '=':
 /*
  * [/?][wml]
  */
-
 void
 acommand(int pc)
 {
@@ -1148,6 +1358,21 @@ acommand(int pc)
 }
 @
 
+
+<<constant ARB>>=
+#define	ARB	512
+@
+
+<<global eqformat>>=
+char	eqformat[ARB] = "z";
+@
+
+<<global stformat>>=
+char	stformat[ARB] = "zMi";
+@
+
+
+
 <<function getformat>>=
 void
 getformat(char *deformat)
@@ -1169,6 +1394,7 @@ getformat(char *deformat)
         *fptr = '\0';
 }
 @
+% lp-- ???
 
 
 <<function scanform>>=
@@ -1267,30 +1493,50 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
 }
 @
 
+\subsection{Disassembling, [[?i]]}
+
+<<[[exform()]] switch modifier cases>>=
+case 'I':
+case 'i':
+    i = machdata->das(map, dot, modifier, buf, sizeof(buf));
+    if (i < 0)
+        error("%r");
+    dotinc = i;
+    dprint("%s\n", buf);
+    break;
+@
+
+
+\subsection{XXX}
 
 <<[[exform()]] switch modifier cases>>=
 case SPC:
 case TB:
     dotinc = 0;
     break;
+@
 
+<<[[exform()]] switch modifier cases>>=
 case 't':
 case 'T':
     dprint("%*t", fcount);
     dotinc = 0;
     return(fp);
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'a':
     symoff(buf, sizeof(buf), dot, CANY);
     dprint("%s%c%16t", buf, map==symmap? '?':'/');
     dotinc = 0;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'A':
     dprint("%#llux%10t", dot);
     dotinc = 0;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'p':
     if (get4(map, dot, &w) < 0)
         error("%r");
@@ -1298,7 +1544,8 @@ case 'p':
     dprint("%s%16t", buf);
     dotinc = mach->szaddr;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'u':
 case 'd':
 case 'x':
@@ -1321,7 +1568,8 @@ case 'q':
     else if (c == 'q')
         dprint("%-8#lo", w);
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'U':
 case 'D':
 case 'X':
@@ -1343,6 +1591,8 @@ case 'Q':
     else if (c == 'Q')
         dprint("%-#16lo", w);
     break;
+@
+<<[[exform()]] switch modifier cases>>=
 case 'Z':
 case 'V':
 case 'Y':
@@ -1358,6 +1608,8 @@ case 'Y':
     else if (c == 'Z')
         dprint("%-20llud", v);
     break;
+@
+<<[[exform()]] switch modifier cases>>=
 case 'B':
 case 'b':
 case 'c':
@@ -1374,7 +1626,8 @@ case 'C':
         printc(ch);
     dotinc = 1;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'r':
     if (literal)
         sh = (ushort) dot;
@@ -1383,7 +1636,8 @@ case 'r':
     dprint("%C", sh);
     dotinc = 2;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'R':
     if (literal) {
         sp = (ushort*) &dot;
@@ -1403,7 +1657,8 @@ case 'R':
     dotinc = dot-savdot+2;
     dot=savdot;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 's':
     if (literal) {
         cp = (uchar*) &dot;
@@ -1433,7 +1688,8 @@ case 's':
     dotinc = dot-savdot+1;
     dot = savdot;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'S':
     if (literal) {
         cp = (uchar*) &dot;
@@ -1454,17 +1710,8 @@ case 'S':
     dotinc = dot-savdot+1;
     dot=savdot;
     break;
-
-
-case 'I':
-case 'i':
-    i = machdata->das(map, dot, modifier, buf, sizeof(buf));
-    if (i < 0)
-        error("%r");
-    dotinc = i;
-    dprint("%s\n", buf);
-    break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'M':
     i = machdata->hexinst(map, dot, buf, sizeof(buf));
     if (i < 0)
@@ -1477,7 +1724,8 @@ case 'M':
     } else
         dprint("\n");
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'f':
     /* BUG: 'f' and 'F' assume szdouble is sizeof(vlong) in the literal case */
     if (literal) {
@@ -1489,7 +1737,8 @@ case 'f':
     dprint("%s\n", buf);
     dotinc = mach->szfloat;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'F':
     /* BUG: 'f' and 'F' assume szdouble is sizeof(vlong) in the literal case */
     if (literal) {
@@ -1501,13 +1750,16 @@ case 'F':
     dprint("%s\n", buf);
     dotinc = mach->szdouble;
     break;
+@
 
+<<[[exform()]] switch modifier cases>>=
 case 'n':
 case 'N':
     printc('\n');
     dotinc=0;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case '"':
     dotinc=0;
     while (*fp != '"' && *fp)
@@ -1515,19 +1767,23 @@ case '"':
     if (*fp)
         fp++;
     break;
-
+@
+<<[[exform()]] switch modifier cases>>=
 case '^':
     dot=inkdot(-dotinc*fcount);
     return(fp);
-
+@
+<<[[exform()]] switch modifier cases>>=
 case '+':
     dot=inkdot((WORD)fcount);
     return(fp);
-
+@
+<<[[exform()]] switch modifier cases>>=
 case '-':
     dot=inkdot(-(WORD)fcount);
     return(fp);
-
+@
+<<[[exform()]] switch modifier cases>>=
 case 'z':
     if (findsym(dot, CTEXT, &s))
         dprint("%s() ", s.name);
@@ -1547,7 +1803,8 @@ case 'm':
         error(BADEQ); 
     cmdmap(map);
     break;
-
+@
+<<[[acommand()]] switch optional command suffix character>>=
 case 'L':
 case 'l':
     if (eqcom)
@@ -1555,6 +1812,8 @@ case 'l':
     cmdsrc(lastc, map);
     break;
 
+@
+<<[[acommand()]] switch optional command suffix character>>=
 case 'W':
 case 'w':
     if (eqcom)
@@ -1578,8 +1837,8 @@ case '$':
 void
 printtrace(int modif)
 {
+    <<[[printtrace()]] locals>>
     int i;
-    uvlong pc, sp, link;
     ulong w;
     BKPT *bk;
     Symbol s;
@@ -1600,77 +1859,56 @@ printtrace(int modif)
 @
 %$
 
+\subsection{Address maps, [[$m]]}
+%$
+
+% start easy
 
 <<[[printtrace()]] switch modif cases>>=
-case '<':
-    if (cntval == 0) {
-        while (readchar() != EOR)
-            ;
-        reread();
-        break;
-    }
-    if (rdc() == '<')
-        stack = 1;
-    else {
-        stack = 0;
-        reread();
-    }
-    fname = getfname();
-    redirin(stack, fname);
-    break;
-
-case '>':
-    fname = getfname();
-    redirout(fname);
-    break;
-
-case 'a':
-    attachprocess();
-    break;
-
-case 'k':
-    kmsys();
-    break;
-
-case 'q':
-case 'Q':
-    done();
-
-case 'w':
-    maxpos=(adrflg?adrval:MAXPOS);
-    break;
-
-case 'S':
-    printsym();
-    break;
-
-case 's':
-    maxoff=(adrflg?adrval:MAXOFF);
-    break;
-
 case 'm':
     printmap("? map", symmap);
     printmap("/ map", cormap);
     break;
+@
 
-case 0:
-case '?':
-    if (pid)
-        dprint("pid = %d\n",pid);
+<<function printmap>>=
+void
+printmap(char *s, Map *map)
+{
+    int i;
+
+    if (!map)
+        return;
+    if (map == symmap)
+        dprint("%s%12t`%s'\n", s, fsym < 0 ? "-" : symfil);
+    else if (map == cormap)
+        dprint("%s%12t`%s'\n", s, fcor < 0 ? "-" : corfil);
     else
-        prints("no process\n");
-    flushbuf();
+        dprint("%s\n", s);
 
-case 'r':
-case 'R':
-    printregs(modif);
-    return;
+    for (i = 0; i < map->nsegs; i++) {
+        if (map->seg[i].inuse)
+            dprint("%s%8t%-16#llux %-16#llux %-16#llux\n",
+                map->seg[i].name, 
+                map->seg[i].b,
+                map->seg[i].e, 
+                map->seg[i].f);
+    }
+}
+@
 
-case 'f':
-case 'F':
-    printfp(cormap, modif);
-    return;
+\subsection{Stack traces, [[$c]]}
+%$
 
+<<[[printtrace()]] locals>>=
+uvlong pc, sp, link;
+@
+
+<<global tracetype>>=
+static	int	tracetype;
+@
+
+<<[[printtrace()]] switch modif cases>>=
 case 'c':
 case 'C':
     tracetype = modif;
@@ -1696,28 +1934,206 @@ case 'C':
             error("no stack frame");
     }
     break;
+@
 
-    /*print externals*/
+% ??? -> <> (as x <- machdata->ctrace(..., <>) <- printtrace)
+<<function ptrace>>=
+/*
+ *	callback on stack trace
+ */
+static void
+ptrace(Map *map, uvlong pc, uvlong sp, Symbol *sym)
+{
+    char buf[512];
+
+    USED(map);
+    dprint("%s(", sym->name);
+    printparams(sym, sp);
+    dprint(") ");
+    printsource(sym->value);
+    dprint(" called from ");
+    symoff(buf, 512, pc, CTEXT);
+    dprint("%s ", buf);
+    printsource(pc);
+    dprint("\n");
+
+    if(tracetype == 'C')
+        printlocals(sym, sp);
+}
+@
+
+
+<<function printlocals>>=
+void
+printlocals(Symbol *fn, ADDR fp)
+{
+    int i;
+    ulong w;
+    Symbol s;
+
+    s = *fn;
+    for (i = 0; localsym(&s, i); i++) {
+        if (s.class != CAUTO)
+            continue;
+        if (get4(cormap, fp-s.value, &w) > 0)
+            dprint("%8t%s.%s/%10t%#lux\n", fn->name, s.name, w);
+        else
+            dprint("%8t%s.%s/%10t?\n", fn->name, s.name);
+    }
+}
+@
+
+\subsection{Registers, [[$r]]}
+%$
+
+<<[[printtrace()]] switch modif cases>>=
+case 'r':
+case 'R':
+    printregs(modif);
+    return;
+@
+
+
+<<function printregs>>=
+/*
+ * print the registers
+ */
+void
+printregs(int c)
+{
+    Reglist *rp;
+    int i;
+    uvlong v;
+
+    for (i = 1, rp = mach->reglist; rp->rname; rp++, i++) {
+        if ((rp->rflags & RFLT)) {
+            if (c != 'R')
+                continue;
+            if (rp->rformat == '8' || rp->rformat == '3')
+                continue;
+        }
+        v = getreg(cormap, rp);
+        if(rp->rformat == 'Y')
+            dprint("%-8s %-20#llux", rp->rname, v);
+        else
+            dprint("%-8s %-12#lux", rp->rname, (ulong)v);
+        if ((i % 3) == 0) {
+            dprint("\n");
+            i = 0;
+        }
+    }
+    if (i != 1)
+        dprint("\n");
+    dprint ("%s\n", machdata->excep(cormap, rget));
+    printpc();
+}
+@
+
+
+\subsection{Quitting, [[$q]]}
+%$
+
+%ugly: weird to be in a formatting commands
+<<[[printtrace()]] switch modif cases>>=
+case 'q':
+case 'Q':
+    done();
+@
+
+
+\subsection{XXX}
+
+<<[[printtrace()]] switch modif cases>>=
+case '<':
+    if (cntval == 0) {
+        while (readchar() != EOR)
+            ;
+        reread();
+        break;
+    }
+    if (rdc() == '<')
+        stack = 1;
+    else {
+        stack = 0;
+        reread();
+    }
+    fname = getfname();
+    redirin(stack, fname);
+    break;
+@
+<<[[printtrace()]] switch modif cases>>=
+case '>':
+    fname = getfname();
+    redirout(fname);
+    break;
+@
+
+<<[[printtrace()]] switch modif cases>>=
+case 'a':
+    attachprocess();
+    break;
+@
+
+<<[[printtrace()]] switch modif cases>>=
+case 'k':
+    kmsys();
+    break;
+@
+
+<<constant MAXPOS>>=
+#define MAXPOS	80
+@
+<<[[printtrace()]] switch modif cases>>=
+case 'w':
+    maxpos=(adrflg?adrval:MAXPOS);
+    break;
+@
+<<[[printtrace()]] switch modif cases>>=
+case 'S':
+    printsym();
+    break;
+@
+
+<<constant MAXOFF>>=
+#define	MAXOFF	0x1000000
+@
+<<global maxoff>>=
+ADDR maxoff = MAXOFF;
+@
+
+<<[[printtrace()]] switch modif cases>>=
+case 's':
+    maxoff=(adrflg?adrval:MAXOFF);
+    break;
+@
+<<[[printtrace()]] switch modif cases>>=
+case 0:
+case '?':
+    if (pid)
+        dprint("pid = %d\n",pid);
+    else
+        prints("no process\n");
+    flushbuf();
+@
+<<[[printtrace()]] switch modif cases>>=
+case 'f':
+case 'F':
+    printfp(cormap, modif);
+    return;
+@
+
+<<[[printtrace()]] switch modif cases>>=
+/*print externals*/
 case 'e':
     for (i = 0; globalsym(&s, i); i++) {
         if (get4(cormap, s.value, &w) > 0)
             dprint("%s/%12t%#lux\n", s.name, w);
     }
     break;
+@
 
-    /*print breakpoints*/
-case 'b':
-case 'B':
-    for (bk=bkpthead; bk; bk=bk->nxtbkpt)
-        if (bk->flag) {
-            symoff(buf, 512, (WORD)bk->loc, CTEXT);
-            dprint(buf);
-            if (bk->count != 1)
-                dprint(",%d", bk->count);
-            dprint(":%c %s", bk->flag == BKPTTMP ? 'B' : 'b', bk->comm);
-        }
-    break;
 
+<<[[printtrace()]] switch modif cases>>=
 case 'M':
     fname = getfname();
     if (machbyname(fname) == 0)
@@ -1745,17 +2161,16 @@ case ':':
 void
 subpcs(int modif)
 {
+    // enum<runmode>
+    int	runmode = SINGLE;
     int	check;
-    int	runmode;
-    int	keepnote;
-    int	n, r;
+    int	keepnote = 0;
+    int	n;
+    int r = 0;
     long line, curr;
     BKPT *bk;
     char *comptr;
 
-    runmode=SINGLE;
-    r = 0;
-    keepnote=0;
     loopcnt=cntval;
 
     switch (modif) {
@@ -1767,12 +2182,13 @@ subpcs(int modif)
     if (loopcnt>0) {
         dprint("%s: running\n", symfil);
         flush();
-        r = runpcs(runmode,keepnote);
+        r = runpcs(runmode, keepnote);
     }
     if (r)
         dprint("breakpoint%16t");
     else
         dprint("stopped at%16t");
+
 Return:
     delbp();
     printpc();
@@ -1781,58 +2197,22 @@ Return:
 @
 
 
+
+\subsection{Runmodes}
+
+<<constant SINGLE>>=
+#define	SINGLE	1
+@
+%todo: enum? enum runmode
+
+<<constant CONTIN>>=
+#define	CONTIN	2
+@
+% next breakpoint
+
+\subsection{Running, [[:r]]}
+
 <<[[subpcs()]] switch modif cases>>=
-/* delete breakpoint */
-case 'd': 
-case 'D':
-    if ((bk=scanbkpt(dot)) == 0)
-        error("no breakpoint set");
-    bk->flag=BKPTCLR;
-    return;
-
-/* set breakpoint */
-case 'b': 
-case 'B':
-    if (bk=scanbkpt(dot))
-        bk->flag=BKPTCLR;
-    for (bk=bkpthead; bk; bk=bk->nxtbkpt)
-        if (bk->flag == BKPTCLR)
-            break;
-    if (bk==0) {
-        bk = (BKPT *)malloc(sizeof(*bk));
-        if (bk == 0)
-            error("too many breakpoints");
-        bk->nxtbkpt=bkpthead;
-        bkpthead=bk;
-    }
-    bk->loc = dot;
-    bk->initcnt = bk->count = cntval;
-    bk->flag = modif == 'b' ? BKPTSET : BKPTTMP;
-    check=MAXCOM-1;
-    comptr=bk->comm;
-    rdc();
-    reread();
-    do {
-        *comptr++ = readchar();
-    } while (check-- && lastc!=EOR);
-    *comptr=0;
-    if(bk->comm[0] != EOR && cntflg == FALSE)
-        bk->initcnt = bk->count = HUGEINT;
-    reread();
-    if (check)
-        return;
-    error("bkpt command too long");
-
-/* exit */
-case 'k' :
-case 'K':
-    if (pid == 0)
-        error(NOPCS);
-    dprint("%d: killed", pid);
-    pcsactive = 1;	/* force 'kill' ctl */
-    endpcs();
-    return;
-
 /* run program */
 case 'r': 
 case 'R':
@@ -1840,7 +2220,11 @@ case 'R':
     setup();
     runmode = CONTIN;
     break;
+@
 
+\subsection{Stepping, [[:s]]}
+
+<<[[subpcs()]] switch modif cases>>=
 /* single step */
 case 's': 
     if (pid == 0) {
@@ -1850,6 +2234,10 @@ case 's':
     runmode=SINGLE;
     keepnote=defval(1);
     break;
+@
+
+
+<<[[subpcs()]] switch modif cases>>=
 case 'S':
     if (pid == 0) {
         setup();
@@ -1870,28 +2258,32 @@ case 'S':
     }
     loopcnt = 0;
     break;
+@
 
-/* continue with optional note */
-case 'c': 
-case 'C': 
-    if (pid==0)
-        error(NOPCS);
-    runmode=CONTIN;
-    keepnote=defval(1);
-    break;
+\subsection{Killing, [[:k]]}
 
-/* deal with notes */
-case 'n':	
-    if (pid==0)
+
+<<global NOPCS>>=
+char	NOPCS[] = "no process";
+@
+
+<<[[subpcs()]] switch modif cases>>=
+/* exit */
+case 'k' :
+case 'K':
+    if (pid == 0)
         error(NOPCS);
-    n=defval(-1);
-    if(n>=0 && n<nnote){
-        nnote--;
-        memmove(note[n], note[n+1], (nnote-n)*sizeof(note[0]));
-    }
-    notes();
+    dprint("%d: killed", pid);
+    pcsactive = 1;	/* force 'kill' ctl */
+    endpcs();
     return;
+@
 
+
+\subsection{Halting, [[:h]]}
+%??? in advanced topics?
+
+<<[[subpcs()]] switch modif cases>>=
 /* halt the current process */
 case 'h':	
     if (adrflg && adrval == 0) {
@@ -1905,7 +2297,47 @@ case 'h':
         goto Return;
     }
     return;
+@
 
+<<function ungrab>>=
+void
+ungrab(void)
+{
+    msgpcs("start");
+}
+@
+
+<<function grab>>=
+void
+grab(void)
+{
+    flush();
+    msgpcs("stop");
+    bpwait();
+}
+@
+
+<<function msgpcs>>=
+void
+msgpcs(char *msg)
+{
+    char err[ERRMAX];
+
+    setpcs();
+    if(write(msgfd, msg, strlen(msg)) < 0 && !ending){
+        errstr(err, sizeof err);
+        if(strcmp(err, "interrupted") != 0)
+            endpcs();
+        errors("can't write control file", err);
+    }
+}
+@
+
+
+
+\subsection{Unhalting, [[:x]]}
+
+<<[[subpcs()]] switch modif cases>>=
 /* continue executing the current process */
 case 'x':	
     if (pid == 0)
@@ -1916,39 +2348,140 @@ case 'x':
 
 \section{Breakpoints}
 
-\section{Addresses}
+<<function scanbkpt>>=
+/*
+ * find the breakpoint at adr, if any
+ */
+BKPT*
+scanbkpt(ADDR adr)
+{
+    BKPT *bk;
 
-<<global adrflg>>=
-int	adrflg;
-@
-
-<<global adrval>>=
-// was in command.c
-WORD	adrval;
-@
-
-
-<<[[command()]] parse possibly first address, set dot>>=
-adrflg=expr(0);		/* first address */
-if (adrflg){
-    dot=expv;
-    ditto=expv;
-}
-adrval=dot;
-@
-
-\section{Counts}
-
-<<[[command()]] parse possibly count, set cntval>>=
-if (rdc()==',' && expr(0)) {	/* count */
-    cntflg=TRUE;
-    cntval=expv;
-} else {
-    cntflg=FALSE;
-    cntval=1;
-    reread();
+    for (bk = bkpthead; bk; bk = bk->nxtbkpt)
+        if (bk->flag != BKPTCLR && bk->loc == adr)
+            break;
+    return bk;
 }
 @
+
+
+\subsection{Inspecting breakpoints, [[$b]]}
+%$
+
+<<[[printtrace()]] switch modif cases>>=
+/*print breakpoints*/
+case 'b':
+case 'B':
+    for (bk=bkpthead; bk; bk=bk->nxtbkpt)
+        if (bk->flag) {
+            symoff(buf, 512, (WORD)bk->loc, CTEXT);
+            dprint(buf);
+            if (bk->count != 1)
+                dprint(",%d", bk->count);
+            dprint(":%c %s", 
+                     bk->flag == BKPTTMP ? 'B' : 'b', 
+                     bk->comm);
+        }
+    break;
+@
+% symoff use a global?
+
+\subsection{Setting breakpoints, [[:b]]}
+
+<<[[subpcs()]] switch modif cases>>=
+/* set breakpoint */
+case 'b': 
+case 'B':
+    if (bk=scanbkpt(dot))
+        bk->flag=BKPTCLR;
+
+    <<[[subpcs()]] breakpoint case, find unused breakpoint bk or allocate one>>
+
+    bk->loc = dot;
+    bk->flag = modif == 'b' ? BKPTSET : BKPTTMP;
+    bk->initcnt = bk->count = cntval;
+
+    <<[[subpcs()]] breakpoint case, set optional breakpoint command>>
+@
+
+
+
+
+<<[[subpcs()]] breakpoint case, find unused breakpoint bk or allocate one>>=
+for (bk=bkpthead; bk; bk=bk->nxtbkpt)
+    if (bk->flag == BKPTCLR)
+        break;
+if (bk==nil) {
+    bk = (BKPT *)malloc(sizeof(*bk));
+    if (bk == nil)
+        error("too many breakpoints");
+    bk->nxtbkpt=bkpthead;
+    bkpthead=bk;
+}
+@
+
+
+
+
+\subsection{Deleting breakpoints, [[:d]]}
+
+<<[[subpcs()]] switch modif cases>>=
+/* delete breakpoint */
+case 'd': 
+case 'D':
+    if ((bk=scanbkpt(dot)) == 0)
+        error("no breakpoint set");
+    bk->flag=BKPTCLR;
+    return;
+@
+
+\subsection{Continuing execution, [[:c]]}
+
+<<[[subpcs()]] switch modif cases>>=
+/* continue with optional note */
+case 'c': 
+case 'C': 
+    if (pid==0)
+        error(NOPCS);
+    runmode=CONTIN;
+    keepnote=defval(1);
+    break;
+@
+
+\subsection{Advanced breakpoints}
+
+<<constant MAXCOM>>=
+#define MAXCOM	64
+@
+<<[[Bkpt]] other fields>>=
+char	comm[MAXCOM];
+@
+
+
+<<constant HUGEINT>>=
+#define	HUGEINT	0x7fffffff	/* enormous WORD */
+@
+
+<<[[subpcs()]] breakpoint case, set optional breakpoint command>>=
+check=MAXCOM-1;
+comptr=bk->comm;
+
+rdc();
+reread();
+
+do {
+    *comptr++ = readchar();
+} while (check-- && lastc!=EOR);
+*comptr='\0';
+if(bk->comm[0] != EOR && cntflg == FALSE)
+    bk->initcnt = bk->count = HUGEINT;
+reread();
+if (check)
+    return;
+error("bkpt command too long");
+@
+
+
 
 \section{Other commands}
 
@@ -1981,6 +2514,9 @@ case '\0':
 %$
 % how can have this?
 
+<<constant DBNAME>>=
+#define	DBNAME	"db\n"
+@
 
 
 \chapter{Metadata Generation}
@@ -1998,9 +2534,50 @@ case '\0':
 % when process crashes, it's still around, and can just run
 % ps; db <pid> to start inspect! really useful.
 
+\chapter{Advanced Features}
+
+\section{[[db -w]]}
+
+<<[[main()]] command line processing (db)>>=
+case 'w':
+    wtflag = ORDWR;		/* suitable for open() */
+    break;
+@
+
+<<[[getfile()]] if wtflag>>=
+if (f < 0 && xargc > cnt && wtflag)
+     f = create(filnam, 1, 0666);
+@
+
+<<global xargc>>=
+int xargc;		/* bullshit */
+@
+
+<<[[main()]] initialization before repl (db)>>=
+xargc = argc;
+@
+
+\section{Signals and notes}
+
+\subsection{[[:n]]}
+
+<<[[subpcs()]] switch modif cases>>=
+/* deal with notes */
+case 'n':	
+    if (pid==0)
+        error(NOPCS);
+    n=defval(-1);
+    if(n>=0 && n<nnote){
+        nnote--;
+        memmove(note[n], note[n+1], (nnote-n)*sizeof(note[0]));
+    }
+    notes();
+    return;
+@
+
 \chapter{Advanced Topics}
 
-\section{Kernel debugging}
+\section{Kernel debugging, [[db -k]]}
 
 <<global kflag>>=
 bool kflag;
@@ -2037,6 +2614,7 @@ if(kflag){
     }
 }
 @
+% b1 then flows into symfile
 
 
 \chapter{Conclusion}
@@ -2046,6 +2624,20 @@ if(kflag){
 
 \chapter{Debugging}
 % debugging the debugger
+
+
+
+\chapter{Error Managment}
+
+<<global env>>=
+jmp_buf env;
+@
+
+
+
+%        if (syminit(fsym, &fhdr) < 0)
+%            dprint("%r\n");
+% lots of error(%r)
 
 <<global errmsg>>=
 // was static in main.c
@@ -2091,13 +2683,6 @@ errors(char *m, char *n)
 }
 @
 
-
-\chapter{Error Managment}
-
-
-%        if (syminit(fsym, &fhdr) < 0)
-%            dprint("%r\n");
-% lots of error(%r)
 
 \chapter{Libc}
 

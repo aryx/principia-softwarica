@@ -40,6 +40,7 @@ ptrace(Map *map, uvlong pc, uvlong sp, Symbol *sym)
     dprint("%s ", buf);
     printsource(pc);
     dprint("\n");
+
     if(tracetype == 'C')
         printlocals(sym, sp);
 }
@@ -49,8 +50,10 @@ ptrace(Map *map, uvlong pc, uvlong sp, Symbol *sym)
 void
 printtrace(int modif)
 {
-    int i;
+    /*s: [[printtrace()]] locals */
     uvlong pc, sp, link;
+    /*e: [[printtrace()]] locals */
+    int i;
     ulong w;
     BKPT *bk;
     Symbol s;
@@ -63,75 +66,11 @@ printtrace(int modif)
 
     switch (modif) {
     /*s: [[printtrace()]] switch modif cases */
-    case '<':
-        if (cntval == 0) {
-            while (readchar() != EOR)
-                ;
-            reread();
-            break;
-        }
-        if (rdc() == '<')
-            stack = 1;
-        else {
-            stack = 0;
-            reread();
-        }
-        fname = getfname();
-        redirin(stack, fname);
-        break;
-
-    case '>':
-        fname = getfname();
-        redirout(fname);
-        break;
-
-    case 'a':
-        attachprocess();
-        break;
-
-    case 'k':
-        kmsys();
-        break;
-
-    case 'q':
-    case 'Q':
-        done();
-
-    case 'w':
-        maxpos=(adrflg?adrval:MAXPOS);
-        break;
-
-    case 'S':
-        printsym();
-        break;
-
-    case 's':
-        maxoff=(adrflg?adrval:MAXOFF);
-        break;
-
     case 'm':
         printmap("? map", symmap);
         printmap("/ map", cormap);
         break;
-
-    case 0:
-    case '?':
-        if (pid)
-            dprint("pid = %d\n",pid);
-        else
-            prints("no process\n");
-        flushbuf();
-
-    case 'r':
-    case 'R':
-        printregs(modif);
-        return;
-
-    case 'f':
-    case 'F':
-        printfp(cormap, modif);
-        return;
-
+    /*x: [[printtrace()]] switch modif cases */
     case 'c':
     case 'C':
         tracetype = modif;
@@ -157,16 +96,86 @@ printtrace(int modif)
                 error("no stack frame");
         }
         break;
-
-        /*print externals*/
+    /*x: [[printtrace()]] switch modif cases */
+    case 'r':
+    case 'R':
+        printregs(modif);
+        return;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'q':
+    case 'Q':
+        done();
+    /*x: [[printtrace()]] switch modif cases */
+    case '<':
+        if (cntval == 0) {
+            while (readchar() != EOR)
+                ;
+            reread();
+            break;
+        }
+        if (rdc() == '<')
+            stack = 1;
+        else {
+            stack = 0;
+            reread();
+        }
+        fname = getfname();
+        redirin(stack, fname);
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case '>':
+        fname = getfname();
+        redirout(fname);
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'a':
+        attachprocess();
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'k':
+        kmsys();
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'w':
+        maxpos=(adrflg?adrval:MAXPOS);
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'S':
+        printsym();
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 's':
+        maxoff=(adrflg?adrval:MAXOFF);
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 0:
+    case '?':
+        if (pid)
+            dprint("pid = %d\n",pid);
+        else
+            prints("no process\n");
+        flushbuf();
+    /*x: [[printtrace()]] switch modif cases */
+    case 'f':
+    case 'F':
+        printfp(cormap, modif);
+        return;
+    /*x: [[printtrace()]] switch modif cases */
+    /*print externals*/
     case 'e':
         for (i = 0; globalsym(&s, i); i++) {
             if (get4(cormap, s.value, &w) > 0)
                 dprint("%s/%12t%#lux\n", s.name, w);
         }
         break;
-
-        /*print breakpoints*/
+    /*x: [[printtrace()]] switch modif cases */
+    case 'M':
+        fname = getfname();
+        if (machbyname(fname) == 0)
+            dprint("unknown name\n");;
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    /*print breakpoints*/
     case 'b':
     case 'B':
         for (bk=bkpthead; bk; bk=bk->nxtbkpt)
@@ -175,14 +184,10 @@ printtrace(int modif)
                 dprint(buf);
                 if (bk->count != 1)
                     dprint(",%d", bk->count);
-                dprint(":%c %s", bk->flag == BKPTTMP ? 'B' : 'b', bk->comm);
+                dprint(":%c %s", 
+                         bk->flag == BKPTTMP ? 'B' : 'b', 
+                         bk->comm);
             }
-        break;
-
-    case 'M':
-        fname = getfname();
-        if (machbyname(fname) == 0)
-            dprint("unknown name\n");;
         break;
     /*e: [[printtrace()]] switch modif cases */
     default:
@@ -280,11 +285,14 @@ printmap(char *s, Map *map)
         dprint("%s%12t`%s'\n", s, fcor < 0 ? "-" : corfil);
     else
         dprint("%s\n", s);
+
     for (i = 0; i < map->nsegs; i++) {
         if (map->seg[i].inuse)
             dprint("%s%8t%-16#llux %-16#llux %-16#llux\n",
-                map->seg[i].name, map->seg[i].b,
-                map->seg[i].e, map->seg[i].f);
+                map->seg[i].name, 
+                map->seg[i].b,
+                map->seg[i].e, 
+                map->seg[i].f);
     }
 }
 /*e: function printmap */

@@ -25,11 +25,12 @@ void
 main(int argc, char **argv)
 {
     /*s: [[main()]] locals (db) */
-    char *s;
-    char *name = nil;
-    /*x: [[main()]] locals (db) */
     char b1[100];
     char b2[100];
+    /*x: [[main()]] locals (db) */
+    char *s;
+    /*x: [[main()]] locals (db) */
+    char *name = nil;
     /*x: [[main()]] locals (db) */
     char *cpu, *p, *q;
     /*e: [[main()]] locals (db) */
@@ -38,10 +39,6 @@ main(int argc, char **argv)
 
     ARGBEGIN{
     /*s: [[main()]] command line processing (db) */
-    case 'w':
-        wtflag = ORDWR;		/* suitable for open() */
-        break;
-    /*x: [[main()]] command line processing (db) */
     case 'I':
         s = ARGF();
         if(s == 0)
@@ -52,8 +49,12 @@ main(int argc, char **argv)
     /*x: [[main()]] command line processing (db) */
     case 'm':
         name = ARGF();
-        if(name == 0)
+        if(name == nil)
             dprint("missing -m argument\n");
+        break;
+    /*x: [[main()]] command line processing (db) */
+    case 'w':
+        wtflag = ORDWR;		/* suitable for open() */
         break;
     /*x: [[main()]] command line processing (db) */
     case 'k':
@@ -104,7 +105,7 @@ main(int argc, char **argv)
     /*e: [[main()]] if pid argument, attach to existing process */
     else if (argc > 0) {
         /*s: [[main()]] print usage and exit (db) */
-        fprint(2, "Usage: db [-kw] [-m machine] [-I dir] [symfile] [pid]\n");
+        fprint(2, "Usage: db [-kw] [-m machine] [-I dir] [symfile] [pid|cmd]\n");
         exits("usage");
         /*e: [[main()]] print usage and exit (db) */
     }
@@ -112,7 +113,7 @@ main(int argc, char **argv)
         symfil = "8.out";
 
     /*s: [[main()]] initialization before repl (db) */
-    xargc = argc;
+
     notify(fault);
 
     setsym();
@@ -133,6 +134,8 @@ main(int argc, char **argv)
     if (executing)
         delbp();
     executing = FALSE;
+    /*x: [[main()]] initialization before repl (db) */
+    xargc = argc;
     /*e: [[main()]] initialization before repl (db) */
 
     for (;;) {
@@ -158,6 +161,7 @@ main(int argc, char **argv)
         // clear input
         clrinp();
 
+        // go to next non whitespace char
         rdc();
         reread();
 
