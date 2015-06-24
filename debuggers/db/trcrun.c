@@ -32,10 +32,13 @@ setpcs(void)
             close(msgfd);
             msgfd = -1;
         }
+        /*s: [[setpcs()]] close previous notefd if changed process */
         if(notefd >= 0){
             close(notefd);
             notefd = -1;
         }
+        /*e: [[setpcs()]] close previous notefd if changed process */
+
         pcspid = -1;
 
         sprint(buf, "/proc/%d/ctl", pid);
@@ -43,10 +46,12 @@ setpcs(void)
         if(msgfd < 0)
             error("can't open control file");
 
+        /*s: [[setpcs()]] open notefd for new process */
         sprint(buf, "/proc/%d/note", pid);
         notefd = open(buf, ORDWR);
         if(notefd < 0)
             error("can't open note file");
+        /*e: [[setpcs()]] open notefd for new process */
 
         pcspid = pid;
     }
@@ -60,6 +65,7 @@ msgpcs(char *msg)
     char err[ERRMAX];
 
     setpcs();
+    dprint("--> %d: %s\n", pcspid, msg);
     if(write(msgfd, msg, strlen(msg)) < 0 && !ending){
         errstr(err, sizeof err);
         if(strcmp(err, "interrupted") != 0)
@@ -89,6 +95,7 @@ unloadnote(void)
         case 0:
             return;
         }
+
         note[nnote][ERRMAX-1] = '\0';
         if(strncmp(note[nnote], "sys: breakpoint", 15) == 0)
             --nnote;
@@ -227,7 +234,7 @@ startpcs(void)
         pid = getpid();
         msgpcs("hang");
         doexec();
-        exits(nil);
+        exits(nil); // reachable?
     }
     // parent
     if (pid == -1)
@@ -239,6 +246,7 @@ startpcs(void)
 
     // will call setcor()
     bpwait();
+
     if (adrflg)
         rput(cormap, mach->pc, adrval);
 
@@ -250,7 +258,7 @@ startpcs(void)
 
 /*s: function runstep */
 void
-runstep(uvlong loc, int keepnote)
+runstep(uvlong loc, bool keepnote)
 {
     int nfoll;
     uvlong foll[3];
@@ -271,11 +279,11 @@ runstep(uvlong loc, int keepnote)
         if(foll[i] == loc)
             error("can't single step: next instruction is dot");
         bkpt[i].loc = foll[i];
-        bkput(&bkpt[i], 1);
+        bkput(&bkpt[i], true);
     }
     runrun(keepnote);
     for(i=0; i<nfoll; i++)
-        bkput(&bkpt[i], 0);
+        bkput(&bkpt[i], false);
 }
 /*e: function runstep */
 
@@ -290,11 +298,11 @@ bpwait(void)
 
 /*s: function runrun */
 void
-runrun(int keepnote)
+runrun(bool keepnote)
 {
-    int on;
+    /*s: [[runrun()]] notes managment */
+    int on = nnote;
 
-    on = nnote;
     unloadnote();
     if(on != nnote){
         notes();
@@ -304,6 +312,8 @@ runrun(int keepnote)
         loadnote();
     else
         nnote = 0;
+    /*e: [[runrun()]] notes managment */
+
     flush();
     msgpcs("startstop");
     bpwait();
@@ -312,7 +322,7 @@ runrun(int keepnote)
 
 /*s: function bkput */
 void
-bkput(BKPT *bp, int install)
+bkput(BKPT *bp, bool install)
 {
     char buf[256];
     ADDR loc;
@@ -323,12 +333,14 @@ bkput(BKPT *bp, int install)
         loc = (*machdata->bpfix)(bp->loc);
     else
         loc = bp->loc;
+
     if(install){
         ret = get1(cormap, loc, bp->save, machdata->bpsize);
         if (ret > 0)
             ret = put1(cormap, loc, machdata->bpinst, machdata->bpsize);
     }else
         ret = put1(cormap, loc, bp->save, machdata->bpsize);
+
     if(ret < 0){
         sprint(buf, "can't set breakpoint at %#llux: %r", bp->loc);
         print(buf);

@@ -20,8 +20,8 @@ subpcs(int modif)
 {
     // enum<runmode>
     int	runmode = SINGLE;
-    int	check;
     bool keepnote = false;
+    int	check;
     int	n;
     int r = 0;
     long line, curr;
@@ -50,28 +50,6 @@ subpcs(int modif)
         keepnote=defval(true);
         break;
     /*x: [[subpcs()]] switch modif cases */
-    case 'S':
-        if (pid == 0) {
-            setup();
-            loopcnt--;
-        }
-        keepnote=defval(true);
-
-        line = pc2line(rget(cormap, mach->pc));
-        n = loopcnt;
-        dprint("%s: running\n", symfil);
-        flush();
-        for (loopcnt = 1; n > 0; loopcnt = 1) {
-            r = runpcs(SINGLE, keepnote);
-            curr = pc2line(dot);
-            if (line != curr) {	/* on a new line of c */
-                line = curr;
-                n--;
-            }
-        }
-        loopcnt = 0;
-        break;
-    /*x: [[subpcs()]] switch modif cases */
     /* exit */
     case 'k' :
     case 'K':
@@ -84,11 +62,13 @@ subpcs(int modif)
     /*x: [[subpcs()]] switch modif cases */
     /* halt the current process */
     case 'h':	
+        /*s: [[subpcs()]] halting case, if addr 0 specified */
         if (adrflg && adrval == 0) {
             if (pid == 0)
                 error(NOPCS);
             ungrab();
         }
+        /*e: [[subpcs()]] halting case, if addr 0 specified */
         else {
             grab();
             dprint("stopped at%16t");
@@ -160,6 +140,28 @@ subpcs(int modif)
             error(NOPCS);
         runmode=CONTIN;
         keepnote=defval(1);
+        break;
+    /*x: [[subpcs()]] switch modif cases */
+    case 'S':
+        if (pid == 0) {
+            setup();
+            loopcnt--;
+        }
+        keepnote=defval(true);
+
+        line = pc2line(rget(cormap, mach->pc));
+        n = loopcnt;
+        dprint("%s: running\n", symfil);
+        flush();
+        for (loopcnt = 1; n > 0; loopcnt = 1) {
+            r = runpcs(SINGLE, keepnote);
+            curr = pc2line(dot);
+            if (line != curr) {	/* on a new line of c */
+                line = curr;
+                n--;
+            }
+        }
+        loopcnt = 0;
         break;
     /*x: [[subpcs()]] switch modif cases */
     /* deal with notes */

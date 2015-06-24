@@ -16,6 +16,7 @@ error(char *n)
     flush();
     delbp();
     ending = 0;
+
     longjmp(env, 1);
 }
 /*e: function error */

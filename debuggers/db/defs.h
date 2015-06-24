@@ -109,9 +109,10 @@ struct bkpt {
     // enum<breakpoint_kind>
     int	flag;
 
-    /*s: [[Bkpt]] other fields */
-    uchar	save[4];
+    // original code at the breapoint
+    byte save[4];
 
+    /*s: [[Bkpt]] other fields */
     int	count;
     int	initcnt;
     /*x: [[Bkpt]] other fields */

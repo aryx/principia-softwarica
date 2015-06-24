@@ -8,9 +8,6 @@
 
 extern	bool	executing;
 extern	int	infile;
-/*s: global exitflg */
-bool	exitflg;
-/*e: global exitflg */
 extern	int	eof;
 
 int	alldigs(char*);
@@ -105,7 +102,7 @@ main(int argc, char **argv)
     /*e: [[main()]] if pid argument, attach to existing process */
     else if (argc > 0) {
         /*s: [[main()]] print usage and exit (db) */
-        fprint(2, "Usage: db [-kw] [-m machine] [-I dir] [symfile] [pid|cmd]\n");
+        fprint(2, "Usage: db [-kw] [-m machine] [-I dir] ([symfile]|[pid])\n");
         exits("usage");
         /*e: [[main()]] print usage and exit (db) */
     }
@@ -131,11 +128,13 @@ main(int argc, char **argv)
     /*e: [[main()]] print binary architecture */
     /*s: [[main()]] setjmp */
     if(setjmp(env) == 0){
+        /*s: [[main()]] if setjmp == 0 and corfil */
         if (corfil) {
             setcor();	/* could get error */
             dprint("%s\n", machdata->excep(cormap, rget));
             printpc();
         }
+        /*e: [[main()]] if setjmp == 0 and corfil */
     }
     setjmp(env);
     /*e: [[main()]] setjmp */
@@ -157,7 +156,6 @@ main(int argc, char **argv)
             dprint(errmsg);
             printc('\n');
             errmsg = nil;
-            exitflg = false;
         }
         /*e: [[main()]] in loop, handle errmsg (db) */
         /*s: [[main()]] in loop, handle mkfault (db) */
@@ -174,19 +172,18 @@ main(int argc, char **argv)
         // go to next non whitespace char
         rdc();
         reread();
-
         /*s: [[main()]] in loop, if eof (db) */
         if (eof) {
             if (infile == STDIN)
-                done();
+                done(); // will exits()
+            /*s: [[main()]] in loop, if eof, and if infile was not STDIN */
             iclose(-1, 0);
             eof = false;
-
             longjmp(env, 1);
+            /*e: [[main()]] in loop, if eof, and if infile was not STDIN */
         }
         /*e: [[main()]] in loop, if eof (db) */
 
-        exitflg = false;
         command(nil, 0);
 
         reread();
@@ -215,7 +212,7 @@ done(void)
 {
     if (pid)
         endpcs();
-    exits(exitflg? "error": nil);
+    exits(nil);
 }
 /*e: function done */
 

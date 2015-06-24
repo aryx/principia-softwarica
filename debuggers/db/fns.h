@@ -1,7 +1,7 @@
 /*s: db/fns.h */
 void		acommand(int);
 void		attachprocess(void);
-void		bkput(BKPT*, int);
+void		bkput(BKPT*, bool);
 void		bpwait(void);
 int		charpos(void);
 void		chkerr(void);

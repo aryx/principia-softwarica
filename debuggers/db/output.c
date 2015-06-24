@@ -165,11 +165,14 @@ flush(void)
 int
 dprint(char *fmt, ...)
 {
-    int n, w;
-    char *p;
     char buf[4096];
-    Rune r;
     va_list arg;
+    int n;
+    /*s: [[dprint()]] locals */
+    char *p;
+    Rune r;
+    int w;
+    /*e: [[dprint()]] locals */
 
     /*s: [[dprint()]] return if mkfault */
     if(mkfault)

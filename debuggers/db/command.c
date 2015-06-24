@@ -37,18 +37,18 @@ command(char *buf, int defcom)
     /*s: [[command()]] locals (db) */
     static char lastcom = '=';
     /*x: [[command()]] locals (db) */
-    Rune*   savlp = lp;
-    char	savlc = lastc;
-    char	savpc = peekc;
-    /*x: [[command()]] locals (db) */
     char	*reg;
     char	savc;
     static char savecom = '=';
+    /*x: [[command()]] locals (db) */
+    Rune*   savlp = lp;
+    char	savlc = lastc;
+    char	savpc = peekc;
     /*e: [[command()]] locals (db) */
 
-    /*s: [[command()]] initializations (db) */
     if (defcom == 0)
         defcom = lastcom;
+    /*s: [[command()]] initializations (db) */
     if (buf) {
         if (*buf==EOR)
             return FALSE;
@@ -58,14 +58,14 @@ command(char *buf, int defcom)
     /*e: [[command()]] initializations (db) */
 
     do {
-        /*s: [[command()]] parse possibly first address, set dot */
+        /*s: [[command()]] parse possibly address, set dot */
         adrflg=expr(0);		/* first address */
         if (adrflg){
             dot=expv;
             ditto=expv;
         }
         adrval=dot;
-        /*e: [[command()]] parse possibly first address, set dot */
+        /*e: [[command()]] parse possibly address, set dot */
         /*s: [[command()]] parse possibly count, set cntval */
         if (rdc()==',' && expr(0)) {	/* count */
             cntflg=TRUE;
@@ -76,17 +76,17 @@ command(char *buf, int defcom)
             reread();
         }
         /*e: [[command()]] parse possibly count, set cntval */
-
-        /*s: [[command()]] parse command, set lastcom */
+        /*s: [[command()]] parse possibly command, set lastcom */
         if (!eol(rdc()))
             lastcom=lastc;		/* command */
         else {
             if (adrflg==false)
                 dot=inkdot(dotinc);
-            reread();
             lastcom=defcom;
+            reread();
         }
-        /*e: [[command()]] parse command, set lastcom */
+        /*e: [[command()]] parse possibly command, set lastcom */
+
         switch(lastcom) {
         /*s: [[command()]] switch lastcom cases */
         case '?':
@@ -127,7 +127,6 @@ command(char *buf, int defcom)
         case '\0':
             prints(DBNAME);
             break;
-
         /*e: [[command()]] switch lastcom cases */
         default: 
             error("bad command");
@@ -144,11 +143,11 @@ command(char *buf, int defcom)
         lastc = savlc;
         peekc = savpc;
     }
+    /*e: [[command()]] finalizations (db) */
 
     if(adrflg)
         return dot;
     return 1;
-    /*e: [[command()]] finalizations (db) */
 }
 /*e: function command */
 

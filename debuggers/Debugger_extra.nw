@@ -144,7 +144,7 @@ extern jmp_buf env;
 <<db/fns.h>>=
 void		acommand(int);
 void		attachprocess(void);
-void		bkput(BKPT*, int);
+void		bkput(BKPT*, bool);
 void		bpwait(void);
 int		charpos(void);
 void		chkerr(void);
@@ -297,36 +297,6 @@ int		valpr(long, int);
 
 \subsection*{[[db/output.c]]}
 
-
-
-
-<<function printc>>=
-void
-printc(int c)
-{
-    dprint("%c", c);
-}
-@
-
-<<function prints>>=
-void
-prints(char *s)
-{
-    dprint("%s",s);
-}
-@
-
-
-<<function flushbuf>>=
-void
-flushbuf(void)
-{
-  if (printcol != 0)
-        printc(EOR);
-}
-@
-
-
 <<function newline>>=
 void
 newline(void)
@@ -335,6 +305,8 @@ newline(void)
 }
 @
 
+
+% hmm, why input stuff in output.c???
 <<constant MAXIFD>>=
 #define	MAXIFD	5
 @
@@ -437,13 +409,6 @@ int	maxpos = MAXPOS;
 
 
 
-<<function flush>>=
-void
-flush(void)
-{
-    Bflush(&stdout);
-}
-@
 
 
 
@@ -1124,86 +1089,9 @@ char	procname[100];
 @
 
 
-<<function runstep>>=
-void
-runstep(uvlong loc, int keepnote)
-{
-    int nfoll;
-    uvlong foll[3];
-    BKPT bkpt[3];
-    int i;
-
-    if(machdata->foll == 0){
-        dprint("stepping unimplemented; assuming not a branch\n");
-        nfoll = 1;
-        foll[0] = loc+mach->pcquant;
-    }else {
-        nfoll = machdata->foll(cormap, loc, rget, foll);
-        if (nfoll < 0)
-            error("%r");
-    }
-    memset(bkpt, 0, sizeof bkpt);
-    for(i=0; i<nfoll; i++){
-        if(foll[i] == loc)
-            error("can't single step: next instruction is dot");
-        bkpt[i].loc = foll[i];
-        bkput(&bkpt[i], 1);
-    }
-    runrun(keepnote);
-    for(i=0; i<nfoll; i++)
-        bkput(&bkpt[i], 0);
-}
-@
 
 
-<<function runrun>>=
-void
-runrun(int keepnote)
-{
-    int on;
 
-    on = nnote;
-    unloadnote();
-    if(on != nnote){
-        notes();
-        error("not running: new notes pending");
-    }
-    if(keepnote)
-        loadnote();
-    else
-        nnote = 0;
-    flush();
-    msgpcs("startstop");
-    bpwait();
-}
-@
-
-<<function bkput>>=
-void
-bkput(BKPT *bp, int install)
-{
-    char buf[256];
-    ADDR loc;
-    int ret;
-
-    errstr(buf, sizeof buf);
-    if(machdata->bpfix)
-        loc = (*machdata->bpfix)(bp->loc);
-    else
-        loc = bp->loc;
-    if(install){
-        ret = get1(cormap, loc, bp->save, machdata->bpsize);
-        if (ret > 0)
-            ret = put1(cormap, loc, machdata->bpinst, machdata->bpsize);
-    }else
-        ret = put1(cormap, loc, bp->save, machdata->bpsize);
-    if(ret < 0){
-        sprint(buf, "can't set breakpoint at %#llux: %r", bp->loc);
-        print(buf);
-        read(0, buf, 100);
-    }
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1321,38 +1209,7 @@ redirin(int stack, char *file)
 #define	STRINGSZ	128
 @
 
-<<function printsource>>=
-/*
- *	print the value of dot as file:line
- */
-void
-printsource(ADDR dot)
-{
-    char str[STRINGSZ];
 
-    if (fileline(str, STRINGSZ, dot))
-        dprint("%s", str);
-}
-@
-
-<<function printpc>>=
-void
-printpc(void)
-{
-    char buf[512];
-
-    dot = rget(cormap, mach->pc);
-    if(dot){
-        printsource((long)dot);
-        printc(' ');
-        symoff(buf, sizeof(buf), (long)dot, CTEXT);
-        dprint("%s/", buf);
-        if (machdata->das(cormap, dot, 'i', buf, sizeof(buf)) < 0)
-            error("%r");
-        dprint("%16t%s\n", buf);
-    }
-}
-@
 
 
 <<function printparams>>=
@@ -1432,9 +1289,6 @@ static void	printfp(Map*, int);
 char	BADEQ[] = "unexpected `='";
 @
 
-<<global executing>>=
-bool	executing;
-@
 
 
 <<global loopcnt>>=
@@ -1566,43 +1420,7 @@ execbkpt(BKPT *bk, int keepnote)
 @
 
 
-<<function delbp>>=
-/*
- * remove all breakpoints from the process' address space
- */
 
-void
-delbp(void)
-{
-    BKPT *bk;
-
-    if (bpin == FALSE || pid == 0)
-        return;
-    for (bk = bkpthead; bk; bk = bk->nxtbkpt)
-        if (bk->flag != BKPTCLR)
-            bkput(bk, 0);
-    bpin = FALSE;
-}
-@
-
-<<function setbp>>=
-/*
- * install all the breakpoints
- */
-
-void
-setbp(void)
-{
-    BKPT *bk;
-
-    if (bpin == TRUE || pid == 0)
-        return;
-    for (bk = bkpthead; bk; bk = bk->nxtbkpt)
-        if (bk->flag != BKPTCLR)
-            bkput(bk, 1);
-    bpin = TRUE;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1617,9 +1435,7 @@ setbp(void)
 #include "defs.h"
 #include "fns.h"
 
-
 <<global bpin>>
-
 
 <<function runpcs>>
 
@@ -1661,9 +1477,6 @@ setbp(void)
 
 \subsection*{[[db/main.c]]}
 
-<<global exitflg>>=
-bool	exitflg;
-@
 
 
 
@@ -1700,7 +1513,6 @@ fault(void *a, char *s)
 
 extern	bool	executing;
 extern	int	infile;
-<<global exitflg>>
 extern	int	eof;
 
 int	alldigs(char*);

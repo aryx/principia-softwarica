@@ -62,10 +62,10 @@ defval(WORD w)
 /*e: function defval */
 
 /*s: function expr */
-int
+bool
 expr(int a)
 {	/* term | term dyadic expr |  */
-    int	rc;
+    bool	rc;
     WORD	lhs;
 
     rdc();
@@ -132,7 +132,7 @@ expr(int a)
 /*e: function expr */
 
 /*s: function term */
-int
+bool
 term(int a)
 {	/* item | monadic item | (expr) | */
     ADDR e;
@@ -144,30 +144,30 @@ term(int a)
         if (geta(cormap, expv, &e) < 0)
             error("%r");
         expv = e;
-        return 1;
+        return true;
 
     case '@':
         term(a|1);
         if (geta(symmap, expv, &e) < 0)
             error("%r");
         expv = e;
-        return 1;
+        return true;
 
     case '-':
         term(a|1);
         expv = -expv;
-        return 1;
+        return true;
 
     case '~':
         term(a|1);
         expv = ~expv;
-        return 1;
+        return true;
 
     case '(':
         expr(2);
         if (readchar()!=')')
             error("syntax error: `)' expected");
-        return 1;
+        return true;
 
     default:
         reread();
@@ -177,7 +177,7 @@ term(int a)
 /*e: function term */
 
 /*s: function item */
-int
+bool
 item(int a)
 {	/* name [ . local ] | number | . | ^  | <register | 'x | | */
     char	*base;
@@ -187,6 +187,7 @@ item(int a)
     char gsym[MAXSYM], lsym[MAXSYM];
 
     readchar();
+
     if (isfileref()) {
         readfname(gsym);
         rdc();			/* skip white space */
@@ -199,7 +200,7 @@ item(int a)
             expv = file2pc(gsym, expv);
             if (expv == -1)
                 error("%r");
-            return 1;
+            return true;
         }
         error("bad file location");
     } else if (symchar(0)) {	
@@ -259,11 +260,11 @@ item(int a)
         expv = ascval();
     else if (a)
         error("address expected");
-    else {	
+    else {
         reread();
-        return(0);
+        return false;
     }
-    return(1);
+    return true;
 }
 /*e: function item */
 

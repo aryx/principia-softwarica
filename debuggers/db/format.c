@@ -390,10 +390,12 @@ inkdot(int incr)
 {
     ADDR	newdot;
 
-    newdot=dot+incr;
+    newdot = dot+incr;
+    /*s: [[inkdot()]] error managment */
     if ((incr >= 0 && newdot < dot)
     ||  (incr < 0 && newdot > dot))
         error("address wraparound");
+    /*e: [[inkdot()]] error managment */
     return newdot;
 }
 /*e: function inkdot */

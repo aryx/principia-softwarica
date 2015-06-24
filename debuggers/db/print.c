@@ -131,34 +131,8 @@ printtrace(int modif)
     case 'Q':
         done();
     /*x: [[printtrace()]] switch modif cases */
-    case '<':
-        if (cntval == 0) {
-            while (readchar() != EOR)
-                ;
-            reread();
-            break;
-        }
-        if (rdc() == '<')
-            stack = 1;
-        else {
-            stack = 0;
-            reread();
-        }
-        fname = getfname();
-        redirin(stack, fname);
-        break;
-    /*x: [[printtrace()]] switch modif cases */
-    case '>':
-        fname = getfname();
-        redirout(fname);
-        break;
-    /*x: [[printtrace()]] switch modif cases */
     case 'a':
         attachprocess();
-        break;
-    /*x: [[printtrace()]] switch modif cases */
-    case 'k':
-        kmsys();
         break;
     /*x: [[printtrace()]] switch modif cases */
     case 's':
@@ -184,6 +158,32 @@ printtrace(int modif)
                          bk->flag == BKPTTMP ? 'B' : 'b', 
                          bk->comm);
             }
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case '<':
+        if (cntval == 0) {
+            while (readchar() != EOR)
+                ;
+            reread();
+            break;
+        }
+        if (rdc() == '<')
+            stack = 1;
+        else {
+            stack = 0;
+            reread();
+        }
+        fname = getfname();
+        redirin(stack, fname);
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case '>':
+        fname = getfname();
+        redirout(fname);
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'k':
+        kmsys();
         break;
     /*x: [[printtrace()]] switch modif cases */
     case 'w':

@@ -43,6 +43,7 @@ int pid;
 int nnote;
 /*e: global nnote */
 /*s: global note */
+// array<option<ref_own<string>>, actual number of elts used = nnote
 char note[NNOTE][ERRMAX];
 /*e: global note */
 /*s: global bkpthead */

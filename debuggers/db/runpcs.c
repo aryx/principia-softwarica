@@ -8,22 +8,18 @@
 #include "defs.h"
 #include "fns.h"
 
-
 /*s: global bpin */
 bool bpin;
 /*e: global bpin */
 
-
 /*s: function runpcs */
 /* service routines for sub process control */
-
 int
 runpcs(int runmode, bool keepnote)
 {
-    int rc; // runcount
+    int rc = 0; // runcount
     BKPT *bkpt;
 
-    rc = 0;
     if (adrflg)
         rput(cormap, mach->pc, dot);
     dot = rget(cormap, mach->pc);
@@ -33,6 +29,7 @@ runpcs(int runmode, bool keepnote)
         if(loopcnt != 0)
             printpc();
         if (runmode == SINGLE) {
+            /*s: [[runpcs()]] in SINGLE mode, clean breakpoint if at dot */
             bkpt = scanbkpt(dot);
             if (bkpt) {
                 switch(bkpt->flag){
@@ -44,9 +41,10 @@ runpcs(int runmode, bool keepnote)
                     break;
                 }
             }
+            /*e: [[runpcs()]] in SINGLE mode, clean breakpoint if at dot */
             runstep(dot, keepnote);
         } else {
-            if ((bkpt = scanbkpt(rget(cormap, mach->pc))) != 0) {
+            if ((bkpt = scanbkpt(rget(cormap, mach->pc))) != nil) {
                 execbkpt(bkpt, keepnote);
                 keepnote = false;
             }
@@ -64,7 +62,7 @@ runpcs(int runmode, bool keepnote)
             continue;
         }
         bkpt = scanbkpt(dot);
-        if(bkpt == 0){
+        if(bkpt == nil){
             keepnote = false;
             rc = 0;
             continue;
@@ -186,7 +184,7 @@ delbp(void)
         return;
     for (bk = bkpthead; bk; bk = bk->nxtbkpt)
         if (bk->flag != BKPTCLR)
-            bkput(bk, 0);
+            bkput(bk, false);
     bpin = FALSE;
 }
 /*e: function delbp */
@@ -205,7 +203,7 @@ setbp(void)
         return;
     for (bk = bkpthead; bk; bk = bk->nxtbkpt)
         if (bk->flag != BKPTCLR)
-            bkput(bk, 1);
+            bkput(bk, true);
     bpin = TRUE;
 }
 /*e: function setbp */

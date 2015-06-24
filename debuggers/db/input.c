@@ -87,20 +87,22 @@ readchar(void)
 {
     Rune *p;
 
-    if (eof)
+    if (eof) {
         lastc='\0';
-    else if (peekc) {
+    } else if (peekc) {
         lastc = peekc;
         peekc = 0;
-    }
-    else {
+    } else {
+        /*s: [[readchar()]] if lp is nil read a line and set lp */
         if (lp==nil) {
             for (p = line; p < &line[LINSIZ-1]; p++) {
                 eof = readrune(infile, p) <= 0;
+                /*s: [[readchar()]] if mkfault */
                 if (mkfault) {
                     eof = 0;
                     error(nil);
                 }
+                /*e: [[readchar()]] if mkfault */
                 if (eof) {
                     p--;
                     break;
@@ -116,7 +118,9 @@ readchar(void)
             p[1] = '\0';
             lp = line;
         }
-        if ((lastc = *lp) != 0)
+        /*e: [[readchar()]] if lp is nil read a line and set lp */
+        lastc = *lp;
+        if (lastc != '\0')
             lp++;
     }
     return lastc;

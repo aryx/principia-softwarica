@@ -231,7 +231,7 @@ attachprocess(void)
     fd = open(buf, OREAD);
     mem = nil;
     if (sym==nil || fd < 0 || (mem=dirfstat(fd))==nil
-                || sym->qid.path != mem->qid.path)
+                 || sym->qid.path != mem->qid.path)
         dprint("warning: text images may be inconsistent\n");
     free(sym);
     free(mem);
