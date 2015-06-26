@@ -74,7 +74,7 @@ readrune(int fd, Rune *r)
 
     for(i=0; i<UTFmax && !fullrune(buf, i); i++)
         if(read(fd, buf+i, 1) <= 0)
-            return -1;
+            return -1; // EOF
     buf[i] = '\0';
     chartorune(r, buf);
     return 1;
@@ -96,7 +96,7 @@ readchar(void)
         /*s: [[readchar()]] if lp is nil read a line and set lp */
         if (lp==nil) {
             for (p = line; p < &line[LINSIZ-1]; p++) {
-                eof = readrune(infile, p) <= 0;
+                eof = (readrune(infile, p) <= 0);
                 /*s: [[readchar()]] if mkfault */
                 if (mkfault) {
                     eof = 0;

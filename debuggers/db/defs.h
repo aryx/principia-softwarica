@@ -104,7 +104,7 @@ typedef struct bkpt	BKPT;
 
 /*s: struct bkpt */
 struct bkpt {
-    // address/symbol to break on
+    // address to break on
     ADDR	loc;
     // enum<breakpoint_kind>
     int	flag;

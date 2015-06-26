@@ -51,8 +51,6 @@ void
 printtrace(int modif)
 {
     /*s: [[printtrace()]] locals */
-    uvlong pc, sp, link;
-    /*e: [[printtrace()]] locals */
     int i;
     ulong w;
     BKPT *bk;
@@ -60,6 +58,9 @@ printtrace(int modif)
     int stack;
     char *fname;
     char buf[512];
+    /*x: [[printtrace()]] locals */
+    uvlong pc, sp, link;
+    /*e: [[printtrace()]] locals */
 
     if (cntflg==FALSE)
         cntval = -1;

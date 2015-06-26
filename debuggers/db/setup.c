@@ -33,24 +33,41 @@ static int getfile(char*, int, int);
 void
 setsym(void)
 {
+    int ret;
+    /*s: [[setsym()]] locals */
     Symbol s;
+    /*e: [[setsym()]] locals */
 
-    if((fsym = getfile(symfil, 1, wtflag)) < 0) {
+    fsym = getfile(symfil, 1, wtflag);
+    /*s: [[setsym()]] error managment on fsym */
+    if(fsym < 0) {
         symmap = dumbmap(-1);
         return;
     }
-    if (crackhdr(fsym, &fhdr)) {
+    /*e: [[setsym()]] error managment on fsym */
+    ret = crackhdr(fsym, &fhdr);
+    if (ret) {
         machbytype(fhdr.type);
         symmap = loadmap(symmap, fsym, &fhdr);
+        /*s: [[setsym()]] error managment on symmap */
         if (symmap == nil)
             symmap = dumbmap(fsym);
-        if (syminit(fsym, &fhdr) < 0)
+        /*e: [[setsym()]] error managment on symmap */
+        ret = syminit(fsym, &fhdr);
+        /*s: [[setsym()]] error managment on syminit */
+        if (ret < 0)
             dprint("%r\n");
+        /*e: [[setsym()]] error managment on syminit */
+
+        /*s: [[setsym()]] if mach has sbreg */
         if (mach->sbreg && lookup(0, mach->sbreg, &s))
             mach->sb = s.value;
+        /*e: [[setsym()]] if mach has sbreg */
     }
+    /*s: [[setsym()]] error managment on crackhdr */
     else
         symmap = dumbmap(fsym);
+    /*e: [[setsym()]] error managment on crackhdr */
 }
 /*e: function setsym */
 
@@ -60,27 +77,34 @@ setcor(void)
 {
     int i;
 
+    /*s: [[setcor()]] free previous cormap */
     if (cormap) {
         for (i = 0; i < cormap->nsegs; i++)
             if (cormap->seg[i].inuse)
                 close(cormap->seg[i].fd);
     }
-
+    /*e: [[setcor()]] free previous cormap */
     fcor = getfile(corfil, 2, ORDWR);
+    /*s: [[setcor()]] error managment getfile */
     if (fcor <= 0) {
         if (cormap)
             free(cormap);
         cormap = dumbmap(-1);
         return;
     }
+    /*e: [[setcor()]] error managment getfile */
     if(pid > 0) {	/* provide addressability to executing process */
         cormap = attachproc(pid, kflag, fcor, &fhdr);
+        /*s: [[setcor()]] error managment cormap */
         if (!cormap)
             cormap = dumbmap(-1);
+        /*e: [[setcor()]] error managment cormap */
     } else {
         cormap = newmap(cormap, 2);
+        /*s: [[setcor()]] error managment cormap */
         if (!cormap)
             cormap = dumbmap(-1);
+        /*e: [[setcor()]] error managment cormap */
         setmap(cormap, fcor, fhdr.txtaddr, fhdr.txtaddr+fhdr.txtsz, fhdr.txtaddr, "text");
         setmap(cormap, fcor, fhdr.dataddr, 0xffffffff, fhdr.dataddr, "data");
     }
@@ -229,12 +253,14 @@ attachprocess(void)
     setcor();
     sprint(buf, "/proc/%lud/text", adrval);
     fd = open(buf, OREAD);
+    /*s: [[attachprocess()]] error managment */
     mem = nil;
     if (sym==nil || fd < 0 || (mem=dirfstat(fd))==nil
                  || sym->qid.path != mem->qid.path)
         dprint("warning: text images may be inconsistent\n");
     free(sym);
     free(mem);
+    /*e: [[attachprocess()]] error managment */
     if (fd >= 0)
         close(fd);
 }

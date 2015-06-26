@@ -16,7 +16,7 @@ TEX=Debugger.tex
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Debugger.nw Debugger_extra.nw
+SRC_ORIG=Debugger.nw Debugger_extra.nw Debugger_x86.nw
 
 #TODO: acid/dbg.y cc/acid.c?
 # TODO misc/leak misc/kmem? misc/umem? snap?

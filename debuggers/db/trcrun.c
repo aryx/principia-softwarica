@@ -62,16 +62,22 @@ setpcs(void)
 void
 msgpcs(char *msg)
 {
+    int ret;
+    /*s: [[msgpcs()]] locals */
     char err[ERRMAX];
+    /*e: [[msgpcs()]] locals */
 
     setpcs();
-    dprint("--> %d: %s\n", pcspid, msg);
-    if(write(msgfd, msg, strlen(msg)) < 0 && !ending){
+    //dprint("--> %d: %s\n", pcspid, msg);
+    ret = write(msgfd, msg, strlen(msg));
+    /*s: [[msgpcs()]] error managment */
+    if(ret < 0 && !ending){
         errstr(err, sizeof err);
         if(strcmp(err, "interrupted") != 0)
             endpcs();
         errors("can't write control file", err);
     }
+    /*e: [[msgpcs()]] error managment */
 }
 /*e: function msgpcs */
 
@@ -281,6 +287,7 @@ runstep(uvlong loc, bool keepnote)
         bkpt[i].loc = foll[i];
         bkput(&bkpt[i], true);
     }
+
     runrun(keepnote);
     for(i=0; i<nfoll; i++)
         bkput(&bkpt[i], false);

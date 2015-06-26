@@ -159,6 +159,7 @@ Here are other candidates that were considered but ultimately discarded:
 
 % other:
 % - godebug, apparently done via source code transformation
+% - trace-based debugger, a la mireille ducasse
 
 %http://blog.0x972.info/?d=2014/11/13/10/40/50-how-does-a-debugger-work
 %https://www.hackerschool.com/blog/5-learning-c-with-gdb
@@ -180,6 +181,8 @@ Here are other candidates that were considered but ultimately discarded:
 % docs/man/3/proc
 % docs/man/2/debugger
 
+% Partly Kernel.nw and its "Debugging Support" chapter
+
 \section{About this document}
 #include "../docs/latex/About.nw"
 
@@ -200,10 +203,11 @@ License.
 % First technique to debug, printf! A classic
 %less: add ref with codes are work that mention a lot the only use of printf
 % for debugging.
-% logging is good, see partial trace of execution.
+%logging is good, see partial trace of execution. Traces are good.
 
 % strace does automatic logging without any printf, based on syscalls;
 % a good boundary, a good granularity. 
+% There is also now 'ltrace'.
 
 % Good first way to debug issues, to get more insight on what's going on.
 % Simple, and very effective at finding many bugs, like
@@ -213,10 +217,12 @@ License.
 \section{[[strace]] services}
 
 % strace <cmd>
+% stace <pid> ?
 
 \section{Debugger principles}
 
-% naive = interpreter, cf Machine.nw, but very very slow.
+% Prgram to control another program.
+% Naive = interpreter, cf Machine.nw. Full control, but very very slow.
 % => need hardware (and kernel) debugging support! so fast!
 
 % simple: external child process that you can control (thx to kernel
@@ -289,9 +295,13 @@ exits("usage");
 
 % can also do  main ?i,  combining [addr] and [command]
 
+% symbols are ultimately translated into pure address, so then
+% everything is an address (ADDR).
+
 % RET => increment dot
  
 % $m => show address maps (text and data spec)
+%  (a bit more complete once the program is actually running)
 % $b => show breakpoints
 % $c => stacktrace
 % $C => stacktrace with parameters values! and locals! awesome! like in Perl!
@@ -309,16 +319,19 @@ exits("usage");
 % :c => continue
 % main :b => breakpoint main (can check with $b after)
 
-%todo: ??? dump value of a global:   global /
+%todo: ??? dump value of a global:   global /, or *global /
 
 
 % Many commands are either in lowercase or uppercase form,
 % where uppercase form is usually one providing more services,
 % and is often a source-level services for C.
-% So lowercase = assembly level, uppercase = C level.
+% So often lowercase = assembly level, uppercase = C level.
 % ex: $c vs $C, :s vs :S 
 
 \section{[[acid]] services}
+
+%related: python scripts to extend GDB so better display STL vectors
+% and so on?
 
 \section{Code organization}
 
@@ -326,10 +339,10 @@ exits("usage");
 %for db:
 %-------------
 
-%defs.h
-%fns.h
-%globals.c
-%utils.c
+%defs.h: DS, globals decls
+%fns.h: functions decls
+%globals.c: globals
+%utils.c: ??
 
 %command.c
 %expr.c
@@ -346,7 +359,7 @@ exits("usage");
 %setup.c
 %trcrun.c
 
-%main.c
+%main.c: entry point
 
 \section{Software architecture}
 
@@ -354,7 +367,8 @@ exits("usage");
 
 % Debugging process control debugged process via /proc/x/ctl!
 % access (and modify) its data via /proc/x/mem and /proc/x/text
-% Also support from libmach for generic symbols access, disassembler, etc.
+% Also support from libmach for generic symbols access, disassembler, 
+% register modification, even memory modification through Map.
 % To map addresses back to symbolic names.
 
 % FIGURE: state diagram with different messages in /proc/x/ctl
@@ -370,7 +384,8 @@ exits("usage");
 
 \section{Reflection, [[/proc/x/mem]]}
 
-% segments, text, data, and ublock.
+% segments, text, data, and ublock. Map everything, including kernel
+% per-process space.
 % "data" is actually for everything, static data, bss, stack.
 
 % ublock = register and process state.
@@ -388,16 +403,20 @@ exits("usage");
 % state. Useful.
 
 % "hang" (after exec)
-% "waitstop" (until debugged reaches hang)
+% "waitstop" (until debugged reaches hang and go in Stopped state), atomic
 
 % "start"
 % "stop"
+
+% "startstop", atomic
 
 \section{Breakpoint faulting instruction}
 
 % machdata->bpinst
 
 \section{User level fault handling, [[/proc/x/note]]}
+% Hmm actually need less than, just provide a way to understand
+% why the debugged process entered the Stopped state.
 
 \section{Core dumps and broken processes}
 
@@ -406,15 +425,41 @@ exits("usage");
 
 \chapter{Core Data Structures}
 
-\section{[[/proc/x/text]]}
+\section{[[Mach]] and [[mach]]}
+% put1? get1? 
+% rput? rget? register put/get
+% geta? get address
+
+%machdata->bpinst ! the instruction generating a sys: breakpoint
+
+\section{[[Map]]}
+
+% cormap, symmap, dotmap
+
+\section{[[Symbol]]}
+
+
+\section{[[/proc/x/text]] and [[symmap]]}
+
+<<global symmap>>=
+// was in setup.c
+Map	*symmap;
+@
+% derived from text
 
 % will be accessed via symmap
 
-\section{[[/proc/x/mem]]}
+
+\section{[[/proc/x/mem]] and [[cormap]]}
+
+<<global cormap>>=
+Map	*cormap;
+@
+% derived from heap and stack?
 
 % will be accessed via cormap, will set stuff there
 % to generate some fault (and so some notes)
-% via put1(), will also get stuff via get1()
+% via put1(), will also get stuff via get1(), rget(), etc.
 
 \section{[[/proc/x/ctl]], [[msgfd]] and [[msgpcs()]]}
 
@@ -463,50 +508,35 @@ setpcs(void)
 void
 msgpcs(char *msg)
 {
-    char err[ERRMAX];
+    int ret;
+    <<[[msgpcs()]] locals>>
 
     setpcs();
-    dprint("--> %d: %s\n", pcspid, msg);
-    if(write(msgfd, msg, strlen(msg)) < 0 && !ending){
-        errstr(err, sizeof err);
-        if(strcmp(err, "interrupted") != 0)
-            endpcs();
-        errors("can't write control file", err);
-    }
+    //dprint("--> %d: %s\n", pcspid, msg);
+    ret = write(msgfd, msg, strlen(msg));
+    <<[[msgpcs()]] error managment>>
 }
 @
+%todo: have a -d  where the dprint is not in comment
 
-
-\section{[[Mach]] and [[mach]]}
-% put1? get1? 
-% rput? rget? register put/get
-% geta? get address
-
-
-%machdata->bpinst ! the instruction generating a sys: breakpoint
-
-\section{[[Map]], [[symap]], [[cormap]]}
-
-% cormap, symmap, dotmap
-
-<<global symmap>>=
-// was in setup.c
-Map	*symmap;
+<<[[msgpcs()]] locals>>=
+char err[ERRMAX];
 @
-% derived from text
-
-<<global cormap>>=
-Map	*cormap;
+<<[[msgpcs()]] error managment>>=
+if(ret < 0 && !ending){
+    errstr(err, sizeof err);
+    if(strcmp(err, "interrupted") != 0)
+        endpcs();
+    errors("can't write control file", err);
+}
 @
-% derived from heap and stack?
-
-
 
 \section{[[Addr]] and [[dot]]}
 
 <<type ADDR>>=
 typedef uvlong ADDR;
 @
+%less: uvlong so portable to 32 and 64 bits archi?
 
 <<global dot>>=
 // was in command.c
@@ -529,7 +559,7 @@ WORD cntval;
 
 <<struct bkpt>>=
 struct bkpt {
-    // address/symbol to break on
+    // address to break on
     ADDR	loc;
     // enum<breakpoint_kind>
     int	flag;
@@ -613,6 +643,10 @@ int nnote;
 @
 
 
+
+
+
+
 \chapter{[[main()]]}
 
 <<global symfil>>=
@@ -657,11 +691,13 @@ main(int argc, char **argv)
     else if (argc > 0) {
         <<[[main()]] print usage and exit (db)>>
     }
-    if (!symfil)
+ 
+   if (!symfil)
         symfil = "8.out";
 
     <<[[main()]] initialization before repl (db)>>
 
+    // repl loop
     for (;;) {
         // clear output
         flushbuf();
@@ -734,8 +770,10 @@ if(setjmp(env) == 0){
 }
 setjmp(env);
 @
-% why 2 setjmp??
+% == 0 when first call, but further longjmp will not go there.
 
+%todo: why 2 setjmp? because we want to do the corfil only once?
+% but then just do it before ...
 
 
 \section{Process attachment, [[pid]]}
@@ -794,9 +832,7 @@ static Fhdr fhdr;
 <<global fsym>>=
 fdt fsym;
 @
-% why need that to be a global?
-
-
+% why need that to be a global? for printmap, attachprocess
 
 
 % main -> <>
@@ -804,28 +840,78 @@ fdt fsym;
 void
 setsym(void)
 {
-    Symbol s;
+    int ret;
+    <<[[setsym()]] locals>>
 
-    if((fsym = getfile(symfil, 1, wtflag)) < 0) {
-        symmap = dumbmap(-1);
-        return;
-    }
-    if (crackhdr(fsym, &fhdr)) {
+    fsym = getfile(symfil, 1, wtflag);
+    <<[[setsym()]] error managment on fsym>>
+    ret = crackhdr(fsym, &fhdr);
+    if (ret) {
         machbytype(fhdr.type);
         symmap = loadmap(symmap, fsym, &fhdr);
-        if (symmap == nil)
-            symmap = dumbmap(fsym);
-        if (syminit(fsym, &fhdr) < 0)
-            dprint("%r\n");
-        if (mach->sbreg && lookup(0, mach->sbreg, &s))
-            mach->sb = s.value;
+        <<[[setsym()]] error managment on symmap>>
+        ret = syminit(fsym, &fhdr);
+        <<[[setsym()]] error managment on syminit>>
+
+        <<[[setsym()]] if mach has sbreg>>
     }
-    else
-        symmap = dumbmap(fsym);
+    <<[[setsym()]] error managment on crackhdr>>
 }
 @
 % machbytype() !
 % syminit()!
+
+<<[[setsym()]] error managment on fsym>>=
+if(fsym < 0) {
+    symmap = dumbmap(-1);
+    return;
+}
+@
+<<[[setsym()]] error managment on symmap>>=
+if (symmap == nil)
+    symmap = dumbmap(fsym);
+@
+<<[[setsym()]] error managment on crackhdr>>=
+else
+    symmap = dumbmap(fsym);
+@
+<<[[setsym()]] error managment on syminit>>=
+if (ret < 0)
+    dprint("%r\n");
+@
+
+
+<<function dumbmap>>=
+Map *
+dumbmap(fdt fd)
+{
+    Map *dumb;
+
+
+    dumb = newmap(0, 1);
+    setmap(dumb, fd, 0, 0xffffffff, 0, "data");
+    if (!mach) 			/* default machine = 386 */
+        mach = &mi386;
+    if (!machdata)
+        machdata = &i386mach;
+    return dumb;
+}
+@
+
+
+
+
+<<[[setsym()]] locals>>=
+Symbol s;
+@
+<<[[setsym()]] if mach has sbreg>>=
+if (mach->sbreg && lookup(0, mach->sbreg, &s))
+    mach->sb = s.value;
+@
+
+
+
+
 
 <<global wtflag>>=
 // was in main.c
@@ -869,22 +955,6 @@ if (f < 0) {
 
 
 
-<<function dumbmap>>=
-Map *
-dumbmap(fdt fd)
-{
-    Map *dumb;
-
-
-    dumb = newmap(0, 1);
-    setmap(dumb, fd, 0, 0xffffffff, 0, "data");
-    if (!mach) 			/* default machine = 386 */
-        mach = &mi386;
-    if (!machdata)
-        machdata = &i386mach;
-    return dumb;
-}
-@
 
 \section{Memory file, [[setcor()]]}
 % Core memory file
@@ -896,40 +966,29 @@ if (corfil) {
     printpc();
 }
 @
+% excep?
 
 <<global fcor>>=
 fdt fcor;
 @
 
 
-% main (when corfile) | attachprocess | bpwait (<- startpcs) -> <>
+% main (when corfil) | attachprocess | bpwait (<- startpcs) -> <>
 <<function setcor>>=
 void
 setcor(void)
 {
     int i;
 
-    if (cormap) {
-        for (i = 0; i < cormap->nsegs; i++)
-            if (cormap->seg[i].inuse)
-                close(cormap->seg[i].fd);
-    }
-
+    <<[[setcor()]] free previous cormap>>
     fcor = getfile(corfil, 2, ORDWR);
-    if (fcor <= 0) {
-        if (cormap)
-            free(cormap);
-        cormap = dumbmap(-1);
-        return;
-    }
+    <<[[setcor()]] error managment getfile>>
     if(pid > 0) {	/* provide addressability to executing process */
         cormap = attachproc(pid, kflag, fcor, &fhdr);
-        if (!cormap)
-            cormap = dumbmap(-1);
+        <<[[setcor()]] error managment cormap>>
     } else {
         cormap = newmap(cormap, 2);
-        if (!cormap)
-            cormap = dumbmap(-1);
+        <<[[setcor()]] error managment cormap>>
         setmap(cormap, fcor, fhdr.txtaddr, fhdr.txtaddr+fhdr.txtsz, fhdr.txtaddr, "text");
         setmap(cormap, fcor, fhdr.dataddr, 0xffffffff, fhdr.dataddr, "data");
     }
@@ -941,7 +1000,26 @@ setcor(void)
 % attachproc in libmach
 
 
+<<[[setcor()]] free previous cormap>>=
+if (cormap) {
+    for (i = 0; i < cormap->nsegs; i++)
+        if (cormap->seg[i].inuse)
+            close(cormap->seg[i].fd);
+}
+@
 
+<<[[setcor()]] error managment getfile>>=
+if (fcor <= 0) {
+    if (cormap)
+        free(cormap);
+    cormap = dumbmap(-1);
+    return;
+}
+@
+<<[[setcor()]] error managment cormap>>=
+if (!cormap)
+    cormap = dumbmap(-1);
+@
 
 \section{Output, [[outputinit()]], [[dprint()]] and [[stdout]]}
 
@@ -1143,6 +1221,7 @@ reread(void)
 % [addr] [,count] [?/=:$ command]
 
 % main (in forloop) -> <>
+% often buf is nil and defcom is 0, and don't care about return value
 <<function command>>=
 /* command decoding */
 int
@@ -1150,8 +1229,6 @@ command(char *buf, int defcom)
 {
     <<[[command()]] locals (db)>>
 
-    if (defcom == 0)
-        defcom = lastcom;
     <<[[command()]] initializations (db)>>
 
     do {
@@ -1169,15 +1246,13 @@ command(char *buf, int defcom)
 
     <<[[command()]] finalizations (db)>>
 
-    if(adrflg)
-        return dot;
-    return 1;
+    <<[[command()]] return (db)>>
 }
 @
 %$
-%todo: Why returning something? main does not look at its return value
-% anyway.
-%less: why take buf in parameter? calls to command() with a buf?
+%Why returning something? main does not look at its return value anyway.
+%Why take buf in parameter? calls to command() with a buf?
+%We will see later! there is a command(bkpt->comm, ':')
 
 <<[[command()]] locals (db)>>=
 static char lastcom = '=';
@@ -1243,6 +1318,15 @@ else {
 }
 @
 % will see dotinc later.
+
+%we will see later a command(bkpt->comm, ':')
+
+<<[[command()]] initializations (db)>>=
+if (defcom == 0)
+    defcom = lastcom;
+@
+
+
 
 <<function eol>>=
 bool
@@ -1358,7 +1442,7 @@ readchar(void)
     return lastc;
 }
 @
-% have seen eof global before.
+% have seen eof global before. will be set below.
 
 <<global line>>=
 Rune	line[LINSIZ];
@@ -1370,7 +1454,7 @@ Rune	line[LINSIZ];
 <<[[readchar()]] if lp is nil read a line and set lp>>=
 if (lp==nil) {
     for (p = line; p < &line[LINSIZ-1]; p++) {
-        eof = readrune(infile, p) <= 0;
+        eof = (readrune(infile, p) <= 0);
         <<[[readchar()]] if mkfault>>
         if (eof) {
             p--;
@@ -1390,6 +1474,7 @@ if (lp==nil) {
 @
 % eof global actually set here!
 % clrinp() will set back lp to nil
+% can do \newline to enter multi line commands
 
 <<function readrune>>=
 int
@@ -1400,7 +1485,7 @@ readrune(int fd, Rune *r)
 
     for(i=0; i<UTFmax && !fullrune(buf, i); i++)
         if(read(fd, buf+i, 1) <= 0)
-            return -1;
+            return -1; // EOF
     buf[i] = '\0';
     chartorune(r, buf);
     return 1;
@@ -1647,6 +1732,9 @@ case '=':
     acommand(lastcom);
     break;
 @
+% savecom is for what? it's actually used when have a '$'
+% to not consider it as the saved last command.
+%less: rename save_last_acom?
 
 <<function acommand>>=
 /*
@@ -1706,7 +1794,7 @@ char	stformat[ARB] = "zMi";
 Map	*dotmap;
 @
 % so can have general mechanism in expr that works for =,
-% with a fake Map.
+% with a fake Map?
 <<[[main()]] set dotmap>>=
 dotmap = dumbmap(-1);
 @
@@ -1733,7 +1821,7 @@ getformat(char *deformat)
         *fptr = '\0';
 }
 @
-% lp-- ???
+% lp-- ??? get back in lp?
 
 
 <<function scanform>>=
@@ -2324,19 +2412,13 @@ case '$':
     break;
 @
 %$
+% to not save $ as a lastcom?
 
 <<function printtrace>>=
 void
 printtrace(int modif)
 {
     <<[[printtrace()]] locals>>
-    int i;
-    ulong w;
-    BKPT *bk;
-    Symbol s;
-    int stack;
-    char *fname;
-    char buf[512];
 
     if (cntflg==FALSE)
         cntval = -1;
@@ -2350,6 +2432,16 @@ printtrace(int modif)
 }
 @
 %$
+
+<<[[printtrace()]] locals>>=
+int i;
+ulong w;
+BKPT *bk;
+Symbol s;
+int stack;
+char *fname;
+char buf[512];
+@
 
 \subsection{Address maps, [[$m]]}
 %$
@@ -2637,6 +2729,8 @@ case 'a':
     attachprocess();
     break;
 @
+% will use addr specificied before as a pid.   <pid> $a
+
 <<function attachprocess>>=
 void
 attachprocess(void)
@@ -2655,20 +2749,23 @@ attachprocess(void)
     setcor();
     sprint(buf, "/proc/%lud/text", adrval);
     fd = open(buf, OREAD);
-    mem = nil;
-    if (sym==nil || fd < 0 || (mem=dirfstat(fd))==nil
-                 || sym->qid.path != mem->qid.path)
-        dprint("warning: text images may be inconsistent\n");
-    free(sym);
-    free(mem);
+    <<[[attachprocess()]] error managment>>
     if (fd >= 0)
         close(fd);
 }
 @
 %$
+% used pid$a ??? what is this error msg?
 
 
-
+<<[[attachprocess()]] error managment>>=
+mem = nil;
+if (sym==nil || fd < 0 || (mem=dirfstat(fd))==nil
+             || sym->qid.path != mem->qid.path)
+    dprint("warning: text images may be inconsistent\n");
+free(sym);
+free(mem);
+@
 
 
 <<constant MAXOFF>>=
@@ -2682,7 +2779,7 @@ case 's':
     maxoff=(adrflg?adrval:MAXOFF);
     break;
 @
-
+% ???
 
 
 <<[[printtrace()]] switch modif cases>>=
@@ -2716,7 +2813,9 @@ if (executing)
     delbp();
 executing = FALSE;
 @
-
+% can arrive here when an error occured somewhere in which
+% case we longjmp back and executing has not been set back to FALSE
+% and so we need to clean things up.
 
 
 <<function subpcs>>=
@@ -2870,7 +2969,7 @@ runpcs(int runmode, bool keepnote)
             bkpt->flag = BKPTSKIP;
             --bkpt->count;
             if ((bkpt->comm[0] == EOR || command(bkpt->comm, ':') != 0)
-            &&  bkpt->count != 0) {
+                && bkpt->count != 0) {
                 execbkpt(bkpt, keepnote);
                 keepnote = false;
                 loopcnt++;
@@ -2882,6 +2981,12 @@ runpcs(int runmode, bool keepnote)
     }
     return rc;
 }
+@
+
+<<[[command()]] return (db)>>=
+if(adrflg)
+    return dot;
+return 1;
 @
 
 
@@ -2928,8 +3033,8 @@ setup(void)
 
     nnote = 0;
     startpcs();
-    bpin = FALSE;
     pcsactive = true;
+    bpin = FALSE;
 }
 @
 % break point not installed yet, will be in setbp
@@ -3124,6 +3229,7 @@ runstep(uvlong loc, bool keepnote)
         bkpt[i].loc = foll[i];
         bkput(&bkpt[i], true);
     }
+
     runrun(keepnote);
     for(i=0; i<nfoll; i++)
         bkput(&bkpt[i], false);
@@ -3859,7 +3965,9 @@ case 'n':
 \appendix
 
 \chapter{Debugging}
-% debugging the debugger
+% debugging the debugger :)
+
+%less: have a -v where have more dprint(), e.g. in msgpcs()
 
 
 
@@ -3938,6 +4046,7 @@ oclose(void)
 
 \ifallcode
 #include "Debugger_extra.nw"
+#include "Debugger_x86.nw"
 \fi
 
 \chapter{Changelog}

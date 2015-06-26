@@ -80,7 +80,7 @@ runpcs(int runmode, bool keepnote)
             bkpt->flag = BKPTSKIP;
             --bkpt->count;
             if ((bkpt->comm[0] == EOR || command(bkpt->comm, ':') != 0)
-            &&  bkpt->count != 0) {
+                && bkpt->count != 0) {
                 execbkpt(bkpt, keepnote);
                 keepnote = false;
                 loopcnt++;
@@ -135,8 +135,8 @@ setup(void)
 
     nnote = 0;
     startpcs();
-    bpin = FALSE;
     pcsactive = true;
+    bpin = FALSE;
 }
 /*e: function setup */
 

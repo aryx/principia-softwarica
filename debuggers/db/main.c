@@ -106,7 +106,8 @@ main(int argc, char **argv)
         exits("usage");
         /*e: [[main()]] print usage and exit (db) */
     }
-    if (!symfil)
+ 
+   if (!symfil)
         symfil = "8.out";
 
     /*s: [[main()]] initialization before repl (db) */
@@ -147,6 +148,7 @@ main(int argc, char **argv)
     xargc = argc;
     /*e: [[main()]] initialization before repl (db) */
 
+    // repl loop
     for (;;) {
         // clear output
         flushbuf();

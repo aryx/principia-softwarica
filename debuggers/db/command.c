@@ -46,9 +46,10 @@ command(char *buf, int defcom)
     char	savpc = peekc;
     /*e: [[command()]] locals (db) */
 
+    /*s: [[command()]] initializations (db) */
     if (defcom == 0)
         defcom = lastcom;
-    /*s: [[command()]] initializations (db) */
+    /*x: [[command()]] initializations (db) */
     if (buf) {
         if (*buf==EOR)
             return FALSE;
@@ -145,9 +146,11 @@ command(char *buf, int defcom)
     }
     /*e: [[command()]] finalizations (db) */
 
+    /*s: [[command()]] return (db) */
     if(adrflg)
         return dot;
     return 1;
+    /*e: [[command()]] return (db) */
 }
 /*e: function command */
 
