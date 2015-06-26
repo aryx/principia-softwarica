@@ -29,7 +29,7 @@ static Fhdr fhdr;
 
 static int getfile(char*, int, int);
 
-/*s: function setsym */
+/*s: function setsym (db) */
 void
 setsym(void)
 {
@@ -69,7 +69,7 @@ setsym(void)
         symmap = dumbmap(fsym);
     /*e: [[setsym()]] error managment on crackhdr */
 }
-/*e: function setsym */
+/*e: function setsym (db) */
 
 /*s: function setcor */
 void

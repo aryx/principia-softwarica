@@ -22,7 +22,6 @@ SRC_ORIG=Linker.nw Linker_extra.nw
 SRC_VIEWS= \
   ../include/debug/a.out.h\
   ../include/debug/elf.h\
-  ../include/debug/mach.h\
   ../include/devel/output/ar.h\
   ../include/devel/output/bootexec.h\
   misc/ar.c\
@@ -52,19 +51,3 @@ SRC_VIEWS= \
   8l/asm.c\
   8l/span.c\
   8l/obj.c\
-  libmach/5.c\
-  libmach/5db.c\
-  libmach/5obj.c\
-  libmach/8.c\
-  libmach/8db.c\
-  libmach/8obj.c\
-  libmach/elf.h\
-  libmach/obj.h\
-  libmach/swap.c\
-  libmach/executable.c\
-  libmach/map.c\
-  libmach/sym.c\
-  libmach/access.c\
-  libmach/machdata.c\
-  libmach/obj.c\
-  libmach/setmach.c\

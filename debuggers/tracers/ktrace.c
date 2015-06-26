@@ -23,9 +23,9 @@ static	Fhdr	fhdr;
 static	int	interactive = 0;
 /*e: global interactive */
 
-/*s: constant FRAMENAME */
+/*s: constant FRAMENAME (ktrace) */
 #define	FRAMENAME	".frame"
-/*e: constant FRAMENAME */
+/*e: constant FRAMENAME (ktrace) */
 
 /*s: function usage */
 static void
@@ -182,7 +182,7 @@ rtrace(uvlong pc, uvlong sp, uvlong link)
 }
 /*e: function rtrace */
 
-/*s: function i386trace */
+/*s: function i386trace (ktrace) */
 static int
 i386trace(uvlong pc, uvlong sp, uvlong link)
 {
@@ -230,7 +230,7 @@ i386trace(uvlong pc, uvlong sp, uvlong link)
     }
     return i;
 }
-/*e: function i386trace */
+/*e: function i386trace (ktrace) */
 
 /*s: global naddr */
 int naddr;

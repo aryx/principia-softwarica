@@ -1,6 +1,6 @@
-/*s: include/elf.h */
+/*s: include/debug/elf.h */
 
-/*s: enum _anon_ */
+/*s: enum _anon_ (elf.h) */
 /* was in /sys/src/libmach/elf.h */
 enum {
     /* Ehdr codes */
@@ -71,7 +71,7 @@ enum {
     Salloc = 2,
     Sexec = 4,
 };
-/*e: enum _anon_ */
+/*e: enum _anon_ (elf.h) */
 
 typedef struct Ehdr Ehdr;
 typedef struct Phdr Phdr;
@@ -130,4 +130,4 @@ struct Shdr {
 /*s: constant ELF_MAG */
 #define	ELF_MAG		((0x7f<<24) | ('E'<<16) | ('L'<<8) | 'F')
 /*e: constant ELF_MAG */
-/*e: include/elf.h */
+/*e: include/debug/elf.h */

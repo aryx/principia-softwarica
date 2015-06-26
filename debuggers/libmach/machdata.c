@@ -315,7 +315,7 @@ beieee80ftos(char *buf, int n, void *s)
 
     /* exponent */
     x = ((reg[0]&0x7F)<<8) | reg[1];
-    if(x == 0)		/* number is ±0 */
+    if(x == 0)		/* number is + or - 0 */
         goto done;
     if(x == 0x7FFF){
         if(memcmp(reg+4, ieee+1, 8) == 0){ /* infinity */

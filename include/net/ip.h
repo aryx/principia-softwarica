@@ -75,7 +75,7 @@ struct Ipv6rp
 {
     int	mflag;
     int	oflag;
-    int 	maxraint;
+    int maxraint;
     int	minraint;
     int	linkmtu;
     int	reachtime;
@@ -91,8 +91,8 @@ struct Ipifc
 {
     /* per ip interface */
 
-    char	dev[64]; // e.g. "/net/ether0"
-    int	mtu;
+    char 	dev[64]; // e.g. "/net/ether0"
+    int		mtu;
     // list<ref_own<Iplifc> (next = Iplifc.next)
     Iplifc	*lifc;
 
@@ -103,10 +103,10 @@ struct Ipifc
     ulong	errout;
     /*e: [[Ipifc(user)]] stat fields */
     /*s: [[Ipifc(user)]] ipv6 fields */
-        Ipv6rp	rp;
+    Ipv6rp	rp;
     /*x: [[Ipifc(user)]] ipv6 fields */
-        uchar	sendra6;		/* on == send router adv */
-        uchar	recvra6;		/* on == rcv router adv */
+    uchar	sendra6;		/* on == send router adv */
+    uchar	recvra6;		/* on == rcv router adv */
     /*e: [[Ipifc(user)]] ipv6 fields */
 
     //Extra
@@ -239,6 +239,7 @@ void	hnputv(void*, uvlong);
 ushort	nhgets(void*);
 uint	nhgetl(void*);
 uvlong	nhgetv(void*);
+
 ushort	ptclbsum(uchar*, int);
 
 int		v6tov4(uchar*, uchar*);

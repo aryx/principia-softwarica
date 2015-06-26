@@ -9,12 +9,12 @@
 // was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
 // but most people knows better 'strace'
 
-/*s: enum _anon_ */
+/*s: enum _anon_ (strace) */
 enum {
     Stacksize	= 8*1024,
     Bufsize		= 8*1024,
 };
-/*e: enum _anon_ */
+/*e: enum _anon_ (strace) */
 
 /*s: global out */
 Channel *out;

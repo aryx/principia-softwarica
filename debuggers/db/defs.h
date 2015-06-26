@@ -20,9 +20,9 @@ typedef ulong WORD;
 
 typedef struct bkpt	BKPT;
 
-/*s: constant HUGEINT */
+/*s: constant HUGEINT (db) */
 #define	HUGEINT	0x7fffffff	/* enormous WORD */
-/*e: constant HUGEINT */
+/*e: constant HUGEINT (db) */
 
 /*s: constant MAXOFF */
 #define	MAXOFF	0x1000000
