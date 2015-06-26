@@ -1,1 +1,1 @@
-../../include/devel/output/a.out.h
+../../include/debug/a.out.h

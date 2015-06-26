@@ -1,1 +1,1 @@
-../../include/devel/output/elf.h
+../../include/debug/elf.h
