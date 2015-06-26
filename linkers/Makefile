@@ -20,11 +20,11 @@ SRC_ORIG=Linker.nw Linker_extra.nw
 
 # actually also dependency to 8c/enam.c and 5c/enam.c for anames
 SRC_VIEWS= \
-  ../include/devel/output/a.out.h\
-  ../include/devel/output/elf.h\
+  ../include/debug/a.out.h\
+  ../include/debug/elf.h\
+  ../include/debug/mach.h\
   ../include/devel/output/ar.h\
   ../include/devel/output/bootexec.h\
-  ../include/devel/output/mach.h\
   misc/ar.c\
   misc/nm.c\
   misc/size.c\
