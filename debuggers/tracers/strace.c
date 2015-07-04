@@ -1,10 +1,10 @@
 /*s: tracers/strace.c */
+// System calls tracer
+
 #include <u.h>
 #include <libc.h>
 #include <bio.h>
 #include <thread.h>
-
-// System calls tracer
 
 // was called ratrace, maybe in hommage to Ed Wood "Rat Race" movie
 // but most people knows better 'strace'
