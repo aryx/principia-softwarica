@@ -67,6 +67,10 @@ printtrace(int modif)
 
     switch (modif) {
     /*s: [[printtrace()]] switch modif cases */
+    case 'w':
+        maxpos=(adrflg?adrval:MAXPOS);
+        break;
+    /*x: [[printtrace()]] switch modif cases */
     case 'm':
         printmap("? map", symmap);
         printmap("/ map", cormap);
@@ -185,10 +189,6 @@ printtrace(int modif)
     /*x: [[printtrace()]] switch modif cases */
     case 'k':
         kmsys();
-        break;
-    /*x: [[printtrace()]] switch modif cases */
-    case 'w':
-        maxpos=(adrflg?adrval:MAXPOS);
         break;
     /*e: [[printtrace()]] switch modif cases */
     default:

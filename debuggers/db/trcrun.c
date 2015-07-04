@@ -227,7 +227,7 @@ doexec(void)
 /*e: function doexec */
 
 /*s: global procname */
-char	procname[100];
+static char	procname[100];
 /*e: global procname */
 
 /*s: function startpcs */
