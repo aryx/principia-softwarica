@@ -93,7 +93,7 @@
 
 \title{
 {\Huge 
-Principia Softwarica: Plan9 Tracers and Debuggers
+Principia Softwarica: Plan9 Debuggers and Tracers
 }\\
 {version 0.1}
 }
@@ -143,18 +143,21 @@ a debugger and tracer.
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 
-% We gonna present strace (actually was called ratrace), db (and maybe acid).
-% Small programs. Elegant. Simple.
+% We gonna present db (and maybe acid) and strace (actually was called
+% ratrace). Small programs. Elegant. Simple.
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
 \item gdb
 % dwarf debugging format?
-\item Linux strace
-\item Solaris dtrace
+\item lldb
+% other debugging format?
 \item valgrind
 \item ocamldebug
 % good, time travel, but first need to understand simpler debugger I think
+\item Linux strace
+\item Solaris dtrace
+% Very complete, very advanced, entire books on it
 \end{itemize}
 
 % other:
@@ -328,6 +331,12 @@ exits("usage");
 % So often lowercase = assembly level, uppercase = C level.
 % ex: $c vs $C, :s vs :S 
 
+%TODO
+%*** show at least the code of
+%some instructions generating a segfault!
+%create a simple segfault.c test file
+%and a session where can find and debug the bug
+
 \section{[[acid]] services}
 
 %related: python scripts to extend GDB so better display STL vectors
@@ -352,7 +361,8 @@ exits("usage");
 %output.c
 
 %print.c
-%regs.c
+
+%regs.c: rget(), rput()
 
 %pcs.c
 %runpcs.c
@@ -360,6 +370,10 @@ exits("usage");
 %trcrun.c
 
 %main.c: entry point
+
+%-------------
+%for libmach:
+%-------------
 
 \section{Software architecture}
 
@@ -382,7 +396,9 @@ exits("usage");
 \chapter{Kernel Support}
 % Context
 
-\section{Reflection, [[/proc/x/mem]]}
+\section{Memory access, [[/proc/x/mem]]}
+% Interprocess memory access?
+% or reflection?
 
 % segments, text, data, and ublock. Map everything, including kernel
 % per-process space.
@@ -425,19 +441,280 @@ exits("usage");
 
 \chapter{Core Data Structures}
 
+\section{Executable format, [[Fhdr]]}
+% generic
+
+<<struct Fhdr>>=
+/*
+ *	Common a.out header describing all architectures
+ */
+struct Fhdr
+{
+    char	*name;		/* identifier of executable */
+
+    // enum<executable_type>
+    byte	type;		/* file type - see codes above */
+
+    byte	hdrsz;		/* header size */
+    byte	_magic;		/* _MAGIC() magic */
+    byte	spare;
+
+    long	magic;		/* magic number */
+
+    uvlong	txtaddr;	/* text address */
+    vlong	txtoff;		/* start of text in file */
+    uvlong	dataddr;	/* start of data segment */
+    vlong	datoff;		/* offset to data seg in file */
+    vlong	symoff;		/* offset of symbol table in file */
+
+    uvlong	entry;		/* entry point */
+
+    vlong	sppcoff;	/* offset of sp-pc table in file */
+    vlong	lnpcoff;	/* offset of line number-pc table in file */
+
+    long	txtsz;		/* text size */
+    long	datsz;		/* size of data seg */
+    long	bsssz;		/* size of bss */
+
+    long	symsz;		/* size of symbol table */
+    long	sppcsz;		/* size of sp-pc table */ // unused
+    long	lnpcsz;		/* size of line number-pc table */
+
+};
+@
+% use uvlong to encompass 32 and 64 architecture.
+
+<<enum executable_type>>=
+/* types of executables */
+enum executable_type 
+{
+    FNONE = 0,		/* unidentified */
+
+    FI386,			/* 8.out */
+    FI386B,			/* I386 bootable */
+    FARM,			/* 5.out */
+    FARMB,			/* ARM bootable */
+};
+@
+
+%    FMIPS,			/* v.out */
+%    FMIPSB,			/* mips bootable */
+%    FSPARC,			/* k.out */
+%    FSPARCB,		/* Sparc bootable */
+%    F68020,			/* 2.out */
+%    F68020B,		/* 68020 bootable */
+%    FNEXTB,			/* Next bootable */
+%    FI960,			/* retired */
+%    FI960B,			/* retired */
+%    F3210,			/* retired */
+%    FMIPS2BE,		/* 4.out */
+%    F29000,			/* retired */
+%    FPOWER,			/* q.out */
+%    FPOWERB,		/* power pc bootable */
+%    FMIPS2LE,		/* 0.out */
+%    FALPHA,			/* retired */
+%    FALPHAB,		/* retired DEC Alpha bootable */
+%    FMIPSLE,		/* 3k little endian */
+%    FSPARC64,		/* retired */
+%    FAMD64,			/* 6.out */
+%    FAMD64B,		/* 6.out bootable */
+%    FPOWER64,		/* 9.out */
+%    FPOWER64B,		/* 9.out bootable */
+%    FARM64,			/* arm64 */
+%    FARM64B,		/* arm64 bootable */
+
+
 \section{[[Mach]] and [[mach]]}
+
 % put1? get1? 
 % rput? rget? register put/get
 % geta? get address
 
+
+<<struct Mach>>=
+/*
+ *	Machine-dependent data is stored in two structures:
+ *		Mach  - miscellaneous general parameters
+ *		Machdata - jump vector of service functions used by debuggers
+ *
+ *	Mach is defined in ?.c and set in executable.c
+ *
+ *	Machdata is defined in ?db.c
+ *		and set in the debugger startup.
+ */
+struct Mach{
+    char	*name;
+    // enum<machine_type>
+    int	mtype;			/* machine type code */
+
+    Reglist *reglist;		/* register set */
+    long	regsize;		/* sizeof registers in bytes */
+    long	fpregsize;		/* sizeof fp registers in bytes */
+
+    char	*pc;			/* pc name */
+    char	*sp;			/* sp name */
+    char	*link;			/* link register name */
+    char	*sbreg;			/* static base register name */
+    uvlong	sb;			/* static base register value */
+
+    int	pgsize;			/* page size */
+    uvlong	kbase;			/* kernel base address */
+    uvlong	ktmask;			/* ktzero = kbase & ~ktmask */
+    uvlong	utop;			/* user stack top */
+
+    int	pcquant;		/* quantization of pc */
+
+    int	szaddr;			/* sizeof(void*) */
+    int	szreg;			/* sizeof(register) */
+    int	szfloat;		/* sizeof(float) */
+    int	szdouble;		/* sizeof(double) */
+};
+@
+
+<<enum machine_type>>=
+/* machine types */
+enum machine_type 
+{
+    MI386,
+    MARM,
+};
+@
+%    MMIPS,			
+%    MSPARC,
+%    M68020,
+%    MI960,			/* retired */
+%    M3210,			/* retired */
+%    MMIPS2,
+%    NMIPS2,
+%    M29000,			/* retired */
+%    MPOWER,
+%    MALPHA,			/* retired */
+%    NMIPS,
+%    MSPARC64,		/* retired */
+%    MAMD64,
+%    MPOWER64,
+%    MARM64,
+
+
+<<struct Reglist>>=
+/*
+ *	machine register description
+ */
+struct Reglist {
+    char	*rname;		/* register name */
+
+    short	roffs;		/* offset in u-block */
+
+    // bitset<enum<register_flag>>
+    char	rflags;		/* INTEGER/FLOAT, WRITABLE */
+    char	rformat;	/* print format: 'x', 'X', 'f', '8', '3', 'Y', 'W' */
+};
+@
+
+<<enum register_flag>>=
+enum {					/* bits in rflags field */
+    RINT	= (0<<0),
+    RFLT	= (1<<0),
+
+    RRDONLY	= (1<<1),
+};
+@
+
+<<global mach>>=
+Mach	*mach = &mi386;			/* Global current machine table */
+@
+
+
+\section{[[Machdata]] and [[machdata]]}
+
 %machdata->bpinst ! the instruction generating a sys: breakpoint
+
+
+<<struct Machdata>>=
+struct	Machdata {		/* Machine-dependent debugger support */
+    uchar	bpinst[4];			/* break point instr. */
+    short	bpsize;				/* size of break point instr. */
+
+    ushort	(*swab)(ushort);		/* ushort to local byte order */
+    ulong	(*swal)(ulong);			/* ulong to local byte order */
+    uvlong	(*swav)(uvlong);		/* uvlong to local byte order */
+
+    int	(*ctrace)(Map*, uvlong, uvlong, uvlong, Tracer); /* C traceback */
+    uvlong	(*findframe)(Map*, uvlong, uvlong, uvlong, uvlong);/* frame finder */
+    char*	(*excep)(Map*, Rgetter);	/* last exception */
+    ulong	(*bpfix)(uvlong);		/* breakpoint fixup */
+
+    int	(*sftos)(char*, int, void*);	/* single precision float */
+    int	(*dftos)(char*, int, void*);	/* double precision float */
+
+    int	(*foll)(Map*, uvlong, Rgetter, uvlong*);/* follow set */
+
+    int	(*das)(Map*, uvlong, char, char*, int);	/* symbolic disassembly */
+    int	(*hexinst)(Map*, uvlong, char*, int); 	/* hex disassembly */
+    int	(*instsize)(Map*, uvlong);	/* instruction size */
+};
+@
 
 \section{[[Map]]}
 
 % cormap, symmap, dotmap
 
+<<struct Map>>=
+/*
+ * 	Structure to map a segment to a position in a file
+ */
+struct Map {
+    int	nsegs;			/* number of segments */
+    struct segment {		/* per-segment map */
+        char	*name;		/* the segment name */
+        int	fd;		/* file descriptor */
+
+        bool	inuse;		/* in use - not in use */
+        bool	cache;		/* should cache reads? */
+
+        uvlong	b;		/* base */
+        uvlong	e;		/* end */
+        vlong	f;		/* offset within file */
+
+    } seg[1];			/* actually n of these */
+};
+@
+
+
 \section{[[Symbol]]}
 
+<<struct Symbol>>=
+/*
+ *	Internal structure describing a symbol table entry
+ */
+struct Symbol {
+    void 	*handle;		/* used internally - owning func */
+    struct {
+        char	*name;
+        vlong	value;		/* address or stack offset */
+        char	type;		/* as in a.out.h */
+        char	class;		/* as above */
+        int	index;		/* in findlocal, globalsym, textsym */
+    };
+};
+@
+
+<<enum symbol_type>>=
+/* symbol table classes */
+enum symbol_type
+{
+    CNONE  = 0,	
+
+    CAUTO,
+    CPARAM,
+    CSTAB,
+    CTEXT,
+    CDATA,
+
+    CANY,			/* to look for any class */
+};
+@
+%CSTAB?
 
 \section{[[/proc/x/text]] and [[symmap]]}
 
@@ -858,6 +1135,7 @@ setsym(void)
     <<[[setsym()]] error managment on crackhdr>>
 }
 @
+% crachhdr()
 % machbytype() !
 % syminit()!
 
@@ -996,8 +1274,8 @@ setcor(void)
     return;
 }
 @
-
 % attachproc in libmach
+% newmap, setmap
 
 
 <<[[setcor()]] free previous cormap>>=
@@ -1259,6 +1537,9 @@ static char lastcom = '=';
 @
 % so if no command, then use lastcom, so newline will repeat last command.
 
+<<[[command()]] locals (db)>>=
+static char savecom = '=';
+@
 
 \subsection{Addresses}
 
@@ -1386,34 +1667,6 @@ done(void)
 %@
 %    exits(exitflg? "error": nil);
 
-\section{XXX Fault}
-
-
-<<global mkfault>>=
-bool mkfault;
-@
-%dead? when set to true?
-
-<<[[main()]] in loop, handle mkfault (db)>>=
-if (mkfault) {
-    mkfault=0;
-    printc('\n');
-    prints(DBNAME);
-}
-@
-
-<<[[dprint()]] return if mkfault>>=
-if(mkfault)
-    return -1;
-@
-
-<<[[readchar()]] if mkfault>>=
-if (mkfault) {
-    eof = 0;
-    error(nil);
-}
-@
-
 
 \chapter{[[libmach/]]}
 
@@ -1424,52 +1677,81 @@ if (mkfault) {
 
 \section{[[Fhdr]] and [[crackhdr()]]}
 
-<<struct Fhdr>>=
-/*
- *	Common a.out header describing all architectures
- */
-typedef struct Fhdr
+<<function crackhdr>>=
+int
+crackhdr(int fd, Fhdr *fp)
 {
-    char	*name;		/* identifier of executable */
-    byte	type;		/* file type - see codes above */
-    byte	hdrsz;		/* header size */
-    byte	_magic;		/* _MAGIC() magic */
-    byte	spare;
+    ExecTable *mp;
+    ExecHdr d;
+    int nb, ret;
+    ulong magic;
 
-    long	magic;		/* magic number */
+    fp->type = FNONE;
+    nb = read(fd, (char *)&d.e, sizeof(d.e));
+    if (nb <= 0)
+        return 0;
 
-    uvlong	txtaddr;	/* text address */
-    vlong	txtoff;		/* start of text in file */
-    uvlong	dataddr;	/* start of data segment */
-    vlong	datoff;		/* offset to data seg in file */
-    vlong	symoff;		/* offset of symbol table in file */
+    ret = 0;
+    magic = beswal(d.e.magic);		/* big-endian */
+    for (mp = exectab; mp->magic; mp++) {
+        if (nb < mp->hsize)
+            continue;
 
-    uvlong	entry;		/* entry point */
+        /*
+         * The magic number has morphed into something
+         * with fields (the straw was DYN_MAGIC) so now
+         * a flag is needed in Fhdr to distinguish _MAGIC()
+         * magic numbers from foreign magic numbers.
+         *
+         * This code is creaking a bit and if it has to
+         * be modified/extended much more it's probably
+         * time to step back and redo it all.
+         */
+        if(mp->_magic){
+            if(mp->magic != (magic & ~DYN_MAGIC))
+                continue;
 
-    vlong	sppcoff;	/* offset of sp-pc table in file */
-    vlong	lnpcoff;	/* offset of line number-pc table in file */
+//            if(mp->magic == V_MAGIC)
+//                mp = couldbe4k(mp);
 
-    long	txtsz;		/* text size */
-    long	datsz;		/* size of data seg */
-    long	bsssz;		/* size of bss */
+            if ((magic & DYN_MAGIC) && mp->dlmname != nil)
+                fp->name = mp->dlmname;
+            else
+                fp->name = mp->name;
+        }
+        else{
+            if(mp->magic != magic)
+                continue;
+            fp->name = mp->name;
+        }
+        fp->type = mp->type;
+        fp->hdrsz = mp->hsize;		/* will be zero on bootables */
+        fp->_magic = mp->_magic;
+        fp->magic = magic;
 
-    long	symsz;		/* size of symbol table */
-    long	sppcsz;		/* size of sp-pc table */ // unused
-    long	lnpcsz;		/* size of line number-pc table */
-
-} Fhdr;
+        mach = mp->mach;
+        if(mp->swal != nil)
+            hswal(&d, sizeof(d.e)/sizeof(ulong), mp->swal);
+        ret = mp->hparse(fd, fp, &d);
+        seek(fd, mp->hsize, 0);		/* seek to end of header */
+        break;
+    }
+    if(mp->magic == 0)
+        werrstr("unknown header type");
+    return ret;
+}
 @
-% use uvlong to encompass 32 and 64 architecture.
 
 
-% crackhdr() at least?
+\section{ARM}
 
 \section{[[Map]], [[syminit()]], [[loadmap()]]}
 
 \section{[[machdata]]}
 
+\section{Symbol table}
 
-\chapter{Input}
+\chapter{Command Input}
 
 % See CMD_VERBS, crude input command language
 
@@ -1545,7 +1827,21 @@ readrune(int fd, Rune *r)
 }
 @
 
-\chapter{Parsing}
+
+% command (for $ case) -> <>
+<<function nextchar>>=
+int
+nextchar(void)
+{
+    if (eol(rdc())) {
+        reread();
+        return 0;
+    }
+    return lastc;
+}
+@
+
+\chapter{Command Parsing}
 
 <<global expv>>=
 // was in expr.c
@@ -1775,7 +2071,397 @@ ADDR	ditto;
 
 \chapter{Commands}
 
-\section{Formatting commands, [[?/=]]}
+
+\section{Dumper commands, [[$]]}%$
+% actually it's also setters command for some of them, like $m
+
+<<[[command()]] switch lastcom cases>>=
+case '$':
+    lastcom=savecom;
+    printtrace(nextchar()); 
+    break;
+@
+%$
+% to not save $ as the lastcom
+
+<<function printtrace>>=
+void
+printtrace(int modif)
+{
+    <<[[printtrace()]] locals>>
+
+    if (cntflg==FALSE)
+        cntval = -1;
+
+    switch (modif) {
+    <<[[printtrace()]] switch modif cases>>
+    default:
+        error("bad `$' command");
+    }
+
+}
+@
+%$
+
+%XXX
+<<[[printtrace()]] locals>>=
+int i;
+ulong w;
+BKPT *bk;
+Symbol s;
+int stack;
+char *fname;
+char buf[512];
+@
+
+\subsection{Current process, [[$?]]}
+%$
+
+<<[[printtrace()]] switch modif cases>>=
+case 0:
+case '?':
+    if (pid)
+        dprint("pid = %d\n",pid);
+    else
+        prints("no process\n");
+    flushbuf();
+@
+% when have 0? when C-d in input of db?
+
+
+\subsection{Address maps, [[$m]]}
+%$
+
+% start easy
+
+<<[[printtrace()]] switch modif cases>>=
+case 'm':
+    printmap("? map", symmap);
+    printmap("/ map", cormap);
+    break;
+@
+
+<<function printmap>>=
+void
+printmap(char *s, Map *map)
+{
+    int i;
+
+    if (!map)
+        return;
+    if (map == symmap)
+        dprint("%s%12t`%s'\n", s, fsym < 0 ? "-" : symfil);
+    else if (map == cormap)
+        dprint("%s%12t`%s'\n", s, fcor < 0 ? "-" : corfil);
+    else
+        dprint("%s\n", s);
+
+    for (i = 0; i < map->nsegs; i++) {
+        if (map->seg[i].inuse)
+            dprint("%s%8t%-16#llux %-16#llux %-16#llux\n",
+                map->seg[i].name, 
+                map->seg[i].b,
+                map->seg[i].e, 
+                map->seg[i].f);
+    }
+}
+@
+
+\subsection{Symbols, [[$S]] and [[$e]]}
+%$
+
+<<[[printtrace()]] switch modif cases>>=
+case 'S':
+    printsym();
+    break;
+@
+
+% getsym is in libmach? set when machbytype on symfile?
+
+<<function printsym>>=
+/*
+ *	dump the raw symbol table
+ */
+void
+printsym(void)
+{
+    int i;
+    Sym *sp;
+
+    for (i = 0; sp = getsym(i); i++) {
+        switch(sp->type) {
+        case 't':
+        case 'l':
+            dprint("%16#llux t %s\n", sp->value, sp->name);
+            break;
+        case 'T':
+        case 'L':
+            dprint("%16#llux T %s\n", sp->value, sp->name);
+            break;
+        case 'D':
+        case 'd':
+        case 'B':
+        case 'b':
+        case 'a':
+        case 'p':
+        case 'm':
+            dprint("%16#llux %c %s\n", sp->value, sp->type, sp->name);
+            break;
+        default:
+            break;
+        }
+    }
+}
+@
+%less: default: print error message?
+
+<<[[printtrace()]] switch modif cases>>=
+/*print externals*/
+case 'e':
+    for (i = 0; globalsym(&s, i); i++) {
+        if (get4(cormap, s.value, &w) > 0)
+            dprint("%s/%12t%#lux\n", s.name, w);
+    }
+    break;
+@
+
+
+\subsection{Stack traces, [[$c]]}
+%$
+
+<<[[printtrace()]] locals>>=
+uvlong pc, sp, link;
+@
+
+<<global tracetype>>=
+static	int	tracetype;
+@
+% why need static? can't be local of printtrace? no because
+% use by ptrace callback
+%ocaml: closure!
+
+<<[[printtrace()]] switch modif cases>>=
+case 'c':
+case 'C':
+    tracetype = modif;
+    if (machdata->ctrace) {
+        if (adrflg) {
+            /*
+             * trace from jmpbuf for multi-threaded code.
+             * assume sp and pc are in adjacent locations
+             * and mach->szaddr in size.
+             */
+            if (geta(cormap, adrval, &sp) < 0 ||
+                geta(cormap, adrval+mach->szaddr, &pc) < 0)
+                    error("%r");
+        } else {
+            sp = rget(cormap, mach->sp);
+            pc = rget(cormap, mach->pc);
+        }
+        if(mach->link)
+            link = rget(cormap, mach->link);
+        else
+            link = 0;
+        if (machdata->ctrace(cormap, pc, sp, link, ptrace) <= 0)
+            error("no stack frame");
+    }
+    break;
+@
+
+% ??? -> <> (as x <- machdata->ctrace(..., <>) <- printtrace)
+<<function ptrace>>=
+/*
+ *	callback on stack trace
+ */
+static void
+ptrace(Map *map, uvlong pc, uvlong sp, Symbol *sym)
+{
+    char buf[512];
+
+    USED(map);
+    dprint("%s(", sym->name);
+    printparams(sym, sp);
+    dprint(") ");
+    printsource(sym->value);
+    dprint(" called from ");
+    symoff(buf, 512, pc, CTEXT);
+    dprint("%s ", buf);
+    printsource(pc);
+    dprint("\n");
+
+    if(tracetype == 'C')
+        printlocals(sym, sp);
+}
+@
+
+
+
+\subsection{Registers, [[$r]] and [[$f]]}
+%$
+
+<<[[printtrace()]] switch modif cases>>=
+case 'r':
+case 'R':
+    printregs(modif);
+    return;
+@
+
+
+<<function printregs>>=
+/*
+ * print the registers
+ */
+void
+printregs(int c)
+{
+    Reglist *rp;
+    int i;
+    uvlong v;
+
+    for (i = 1, rp = mach->reglist; rp->rname; rp++, i++) {
+        if ((rp->rflags & RFLT)) {
+            if (c != 'R')
+                continue;
+            if (rp->rformat == '8' || rp->rformat == '3')
+                continue;
+        }
+        v = getreg(cormap, rp);
+        if(rp->rformat == 'Y')
+            dprint("%-8s %-20#llux", rp->rname, v);
+        else
+            dprint("%-8s %-12#lux", rp->rname, (ulong)v);
+        if ((i % 3) == 0) {
+            dprint("\n");
+            i = 0;
+        }
+    }
+    if (i != 1)
+        dprint("\n");
+    dprint ("%s\n", machdata->excep(cormap, rget));
+    printpc();
+}
+@
+
+
+<<[[printtrace()]] switch modif cases>>=
+case 'f':
+case 'F':
+    printfp(cormap, modif);
+    return;
+@
+
+<<function printfp>>=
+static void
+printfp(Map *map, int modif)
+{
+    Reglist *rp;
+    int i;
+    int ret;
+    char buf[512];
+
+    for (i = 0, rp = mach->reglist; rp->rname; rp += ret) {
+        ret = 1;
+        if (!(rp->rflags & RFLT))
+            continue;
+        ret = fpformat(map, rp, buf, sizeof(buf), modif);
+        if (ret < 0) {
+            werrstr("Register %s: %r", rp->rname);
+            error("%r");
+        }
+            /* double column print */
+        if (i&0x01)
+            dprint("%40t%-8s%-12s\n", rp->rname, buf);
+        else
+            dprint("\t%-8s%-12s", rp->rname, buf);
+        i++;
+    }
+}
+@
+
+
+
+\subsection{Quitting, [[$q]]}
+%$
+
+%ugly: weird to be in a formatting commands
+<<[[printtrace()]] switch modif cases>>=
+case 'q':
+case 'Q':
+    done();
+@
+
+
+\subsection{XXX}
+
+
+<<[[printtrace()]] switch modif cases>>=
+case 'a':
+    attachprocess();
+    break;
+@
+% will use addr specificied before as a pid.   <pid> $a
+
+<<function attachprocess>>=
+void
+attachprocess(void)
+{
+    char buf[100];
+    Dir *sym, *mem;
+    int fd;
+
+    if (!adrflg) {
+        dprint("used pid$a\n");
+        return;
+    }
+    sym = dirfstat(fsym);
+    sprint(buf, "/proc/%lud/mem", adrval);
+    corfil = buf;
+    setcor();
+    sprint(buf, "/proc/%lud/text", adrval);
+    fd = open(buf, OREAD);
+    <<[[attachprocess()]] error managment>>
+    if (fd >= 0)
+        close(fd);
+}
+@
+%$
+% used pid$a ??? what is this error msg?
+
+
+<<[[attachprocess()]] error managment>>=
+mem = nil;
+if (sym==nil || fd < 0 || (mem=dirfstat(fd))==nil
+             || sym->qid.path != mem->qid.path)
+    dprint("warning: text images may be inconsistent\n");
+free(sym);
+free(mem);
+@
+
+
+<<constant MAXOFF>>=
+#define	MAXOFF	0x1000000
+@
+<<global maxoff>>=
+ADDR maxoff = MAXOFF;
+@
+<<[[printtrace()]] switch modif cases>>=
+case 's':
+    maxoff=(adrflg?adrval:MAXOFF);
+    break;
+@
+% ???
+
+
+<<[[printtrace()]] switch modif cases>>=
+case 'M':
+    fname = getfname();
+    if (machbyname(fname) == 0)
+        dprint("unknown name\n");;
+    break;
+@
+
+\section{Inspecting commands, [[?/=]]}
+% and modifying
 
 <<[[command()]] switch lastcom cases>>=
 case '?':
@@ -1829,6 +2515,7 @@ acommand(int pc)
 @
 %less: could rewrite using switch(pc) I think; duplicate instr but cleaner
 
+\subsection{Formats}
 
 <<constant ARB>>=
 #define	ARB	512
@@ -1973,7 +2660,34 @@ exform(int fcount, int prt, char *ifp, Map *map, int literal, bool firstpass)
 }
 @
 
-\subsection{Disassembling, [[?i]]}
+
+<<function endline>>=
+void
+endline(void)
+{
+
+    if (printcol >= maxpos)
+        newline();
+}
+@
+
+<<constant MAXPOS>>=
+#define MAXPOS	80
+@
+<<global maxpos>>=
+int	maxpos = MAXPOS;
+@
+
+<<[[printtrace()]] switch modif cases>>=
+case 'w':
+    maxpos=(adrflg?adrval:MAXPOS);
+    break;
+@
+% 100 $w
+
+
+
+\subsection{Instruction disassembling, [[?i]]}
 
 <<[[exform()]] switch modifier cases>>=
 case 'I':
@@ -1989,6 +2703,9 @@ case 'i':
 <<global dotinc>>=
 int	dotinc;
 @
+
+\subsection{Registers}
+
 
 
 \subsection{XXX}
@@ -2114,6 +2831,20 @@ case 'C':
     dotinc = 1;
     break;
 @
+
+<<function printesc>>=
+void
+printesc(int c)
+{
+    static char hex[] = "0123456789abcdef";
+
+    if (c < SPC || c >= 0177)
+        dprint("\\x%c%c", hex[(c&0xF0)>>4], hex[c&0xF]);
+    else
+        printc(c);
+}
+@
+
 
 <<[[exform()]] switch modifier cases>>=
 case 'r':
@@ -2454,394 +3185,14 @@ cmdwrite(int wcom, Map *map)
 }
 @
 
-
-\section{Dumper commands, [[$]]}%$
-% actually it's also setters command for some of them, like $m
-
-<<[[command()]] switch lastcom cases>>=
-case '$':
-    lastcom=savecom;
-    printtrace(nextchar()); 
-    break;
-@
-%$
-% to not save $ as a lastcom?
-
-<<function printtrace>>=
+<<function newline>>=
 void
-printtrace(int modif)
+newline(void)
 {
-    <<[[printtrace()]] locals>>
-
-    if (cntflg==FALSE)
-        cntval = -1;
-
-    switch (modif) {
-    <<[[printtrace()]] switch modif cases>>
-    default:
-        error("bad `$' command");
-    }
-
+    printc(EOR);
 }
 @
-%$
-
-<<[[printtrace()]] locals>>=
-int i;
-ulong w;
-BKPT *bk;
-Symbol s;
-int stack;
-char *fname;
-char buf[512];
-@
-
-\subsection{Address maps, [[$m]]}
-%$
-
-% start easy
-
-<<[[printtrace()]] switch modif cases>>=
-case 'm':
-    printmap("? map", symmap);
-    printmap("/ map", cormap);
-    break;
-@
-
-<<function printmap>>=
-void
-printmap(char *s, Map *map)
-{
-    int i;
-
-    if (!map)
-        return;
-    if (map == symmap)
-        dprint("%s%12t`%s'\n", s, fsym < 0 ? "-" : symfil);
-    else if (map == cormap)
-        dprint("%s%12t`%s'\n", s, fcor < 0 ? "-" : corfil);
-    else
-        dprint("%s\n", s);
-
-    for (i = 0; i < map->nsegs; i++) {
-        if (map->seg[i].inuse)
-            dprint("%s%8t%-16#llux %-16#llux %-16#llux\n",
-                map->seg[i].name, 
-                map->seg[i].b,
-                map->seg[i].e, 
-                map->seg[i].f);
-    }
-}
-@
-
-\subsection{Symbols, [[$S]] and [[$e]]}
-%$
-
-
-<<[[printtrace()]] switch modif cases>>=
-case 'S':
-    printsym();
-    break;
-@
-
-% getsym is in libmach? set when machbytype on symfile?
-
-<<function printsym>>=
-/*
- *	dump the raw symbol table
- */
-void
-printsym(void)
-{
-    int i;
-    Sym *sp;
-
-    for (i = 0; sp = getsym(i); i++) {
-        switch(sp->type) {
-        case 't':
-        case 'l':
-            dprint("%16#llux t %s\n", sp->value, sp->name);
-            break;
-        case 'T':
-        case 'L':
-            dprint("%16#llux T %s\n", sp->value, sp->name);
-            break;
-        case 'D':
-        case 'd':
-        case 'B':
-        case 'b':
-        case 'a':
-        case 'p':
-        case 'm':
-            dprint("%16#llux %c %s\n", sp->value, sp->type, sp->name);
-            break;
-        default:
-            break;
-        }
-    }
-}
-@
-
-
-<<[[printtrace()]] switch modif cases>>=
-/*print externals*/
-case 'e':
-    for (i = 0; globalsym(&s, i); i++) {
-        if (get4(cormap, s.value, &w) > 0)
-            dprint("%s/%12t%#lux\n", s.name, w);
-    }
-    break;
-@
-
-
-\subsection{Current process, [[$?]]}
-%$
-
-<<[[printtrace()]] switch modif cases>>=
-case 0:
-case '?':
-    if (pid)
-        dprint("pid = %d\n",pid);
-    else
-        prints("no process\n");
-    flushbuf();
-@
-% when have 0? when C-d in input of db?
-
-
-\subsection{Stack traces, [[$c]]}
-%$
-
-<<[[printtrace()]] locals>>=
-uvlong pc, sp, link;
-@
-
-<<global tracetype>>=
-static	int	tracetype;
-@
-% why need static? can't be local of printtrace? no because
-% use by ptrace callback
-%ocaml: closure!
-
-<<[[printtrace()]] switch modif cases>>=
-case 'c':
-case 'C':
-    tracetype = modif;
-    if (machdata->ctrace) {
-        if (adrflg) {
-            /*
-             * trace from jmpbuf for multi-threaded code.
-             * assume sp and pc are in adjacent locations
-             * and mach->szaddr in size.
-             */
-            if (geta(cormap, adrval, &sp) < 0 ||
-                geta(cormap, adrval+mach->szaddr, &pc) < 0)
-                    error("%r");
-        } else {
-            sp = rget(cormap, mach->sp);
-            pc = rget(cormap, mach->pc);
-        }
-        if(mach->link)
-            link = rget(cormap, mach->link);
-        else
-            link = 0;
-        if (machdata->ctrace(cormap, pc, sp, link, ptrace) <= 0)
-            error("no stack frame");
-    }
-    break;
-@
-
-% ??? -> <> (as x <- machdata->ctrace(..., <>) <- printtrace)
-<<function ptrace>>=
-/*
- *	callback on stack trace
- */
-static void
-ptrace(Map *map, uvlong pc, uvlong sp, Symbol *sym)
-{
-    char buf[512];
-
-    USED(map);
-    dprint("%s(", sym->name);
-    printparams(sym, sp);
-    dprint(") ");
-    printsource(sym->value);
-    dprint(" called from ");
-    symoff(buf, 512, pc, CTEXT);
-    dprint("%s ", buf);
-    printsource(pc);
-    dprint("\n");
-
-    if(tracetype == 'C')
-        printlocals(sym, sp);
-}
-@
-
-
-
-\subsection{Registers, [[$r]] and [[$f]]}
-%$
-
-<<[[printtrace()]] switch modif cases>>=
-case 'r':
-case 'R':
-    printregs(modif);
-    return;
-@
-
-
-<<function printregs>>=
-/*
- * print the registers
- */
-void
-printregs(int c)
-{
-    Reglist *rp;
-    int i;
-    uvlong v;
-
-    for (i = 1, rp = mach->reglist; rp->rname; rp++, i++) {
-        if ((rp->rflags & RFLT)) {
-            if (c != 'R')
-                continue;
-            if (rp->rformat == '8' || rp->rformat == '3')
-                continue;
-        }
-        v = getreg(cormap, rp);
-        if(rp->rformat == 'Y')
-            dprint("%-8s %-20#llux", rp->rname, v);
-        else
-            dprint("%-8s %-12#lux", rp->rname, (ulong)v);
-        if ((i % 3) == 0) {
-            dprint("\n");
-            i = 0;
-        }
-    }
-    if (i != 1)
-        dprint("\n");
-    dprint ("%s\n", machdata->excep(cormap, rget));
-    printpc();
-}
-@
-
-
-<<[[printtrace()]] switch modif cases>>=
-case 'f':
-case 'F':
-    printfp(cormap, modif);
-    return;
-@
-
-<<function printfp>>=
-static void
-printfp(Map *map, int modif)
-{
-    Reglist *rp;
-    int i;
-    int ret;
-    char buf[512];
-
-    for (i = 0, rp = mach->reglist; rp->rname; rp += ret) {
-        ret = 1;
-        if (!(rp->rflags&RFLT))
-            continue;
-        ret = fpformat(map, rp, buf, sizeof(buf), modif);
-        if (ret < 0) {
-            werrstr("Register %s: %r", rp->rname);
-            error("%r");
-        }
-            /* double column print */
-        if (i&0x01)
-            dprint("%40t%-8s%-12s\n", rp->rname, buf);
-        else
-            dprint("\t%-8s%-12s", rp->rname, buf);
-        i++;
-    }
-}
-@
-
-
-
-\subsection{Quitting, [[$q]]}
-%$
-
-%ugly: weird to be in a formatting commands
-<<[[printtrace()]] switch modif cases>>=
-case 'q':
-case 'Q':
-    done();
-@
-
-
-\subsection{XXX}
-
-
-<<[[printtrace()]] switch modif cases>>=
-case 'a':
-    attachprocess();
-    break;
-@
-% will use addr specificied before as a pid.   <pid> $a
-
-<<function attachprocess>>=
-void
-attachprocess(void)
-{
-    char buf[100];
-    Dir *sym, *mem;
-    int fd;
-
-    if (!adrflg) {
-        dprint("used pid$a\n");
-        return;
-    }
-    sym = dirfstat(fsym);
-    sprint(buf, "/proc/%lud/mem", adrval);
-    corfil = buf;
-    setcor();
-    sprint(buf, "/proc/%lud/text", adrval);
-    fd = open(buf, OREAD);
-    <<[[attachprocess()]] error managment>>
-    if (fd >= 0)
-        close(fd);
-}
-@
-%$
-% used pid$a ??? what is this error msg?
-
-
-<<[[attachprocess()]] error managment>>=
-mem = nil;
-if (sym==nil || fd < 0 || (mem=dirfstat(fd))==nil
-             || sym->qid.path != mem->qid.path)
-    dprint("warning: text images may be inconsistent\n");
-free(sym);
-free(mem);
-@
-
-
-<<constant MAXOFF>>=
-#define	MAXOFF	0x1000000
-@
-<<global maxoff>>=
-ADDR maxoff = MAXOFF;
-@
-<<[[printtrace()]] switch modif cases>>=
-case 's':
-    maxoff=(adrflg?adrval:MAXOFF);
-    break;
-@
-% ???
-
-
-<<[[printtrace()]] switch modif cases>>=
-case 'M':
-    fname = getfname();
-    if (machbyname(fname) == 0)
-        dprint("unknown name\n");;
-    break;
-@
+%less: inline
 
 \section{Sub process control commands, [[:]]}%$
 
@@ -2912,6 +3263,11 @@ Return:
 }
 @
 
+<<global loopcnt>>=
+WORD loopcnt;
+@
+% why need global? because used in runpcs too
+
 \subsection{[[printpc()]]}
 
 % subpbcs | main (when corfile) -> <>
@@ -2932,6 +3288,10 @@ printpc(void)
         dprint("%16t%s\n", buf);
     }
 }
+@
+
+<<constant STRINGSZ>>=
+#define	STRINGSZ	128
 @
 
 <<function printsource>>=
@@ -3125,6 +3485,13 @@ startpcs(void)
 }
 @
 
+<<global procname>>=
+static char	procname[100];
+@
+%pad: I added the static at least.
+%need global (static) because corfile points to it and outlive startpcs
+
+
 <<function bpwait>>=
 void
 bpwait(void)
@@ -3140,6 +3507,10 @@ int child;
 @
 
 \subsubsection{[[doexec()]]}
+
+<<constant MAXARG>>=
+#define MAXARG	32
+@
 
 <<function doexec>>=
 void
@@ -3345,6 +3716,16 @@ endpcs(void)
     ending = false;
 }
 @
+
+<<function killpcs>>=
+void
+killpcs(void)
+{
+    msgpcs("kill");
+}
+@
+
+
 
 <<global bpin>>=
 bool bpin;
@@ -3593,6 +3974,21 @@ delbp(void)
 }
 @
 
+\subsection{Executing breakpoints}
+
+<<function execbkpt>>=
+/*
+ * skip over a breakpoint:
+ * remove breakpoints, then single step
+ * so we can put it back
+ */
+void
+execbkpt(BKPT *bk, int keepnote)
+{
+    runstep(bk->loc, keepnote);
+    bk->flag = BKPTSET;
+}
+@
 
 \subsection{Breakpoints and notes}
 
@@ -3603,11 +3999,12 @@ delbp(void)
 
 \section{Other commands}
 
+
 <<[[command()]] locals (db)>>=
 char	*reg;
 char	savc;
-static char savecom = '=';
 @
+% need to be called savc?
 
 <<[[command()]] switch lastcom cases>>=
 case '>':
@@ -3618,27 +4015,6 @@ case '>':
     else	
         error("bad variable");
     break;
-@
-
-<<[[command()]] switch lastcom cases>>=
-case '!':
-    lastcom=savecom;
-    shell(); 
-    break;
-@
-
-
-
-<<[[command()]] switch lastcom cases>>=
-case '\0':
-    prints(DBNAME);
-    break;
-@
-%$
-% how can have this? when eof? but then have if(eof) before no?
-
-<<constant DBNAME>>=
-#define	DBNAME	"db\n"
 @
 
 
@@ -3685,6 +4061,31 @@ case 'S':
 \section{Stack traces, [[$S]]}
 %$
 
+
+<<function printparams>>=
+void
+printparams(Symbol *fn, ADDR fp)
+{
+    int i;
+    Symbol s;
+    ulong w;
+    int first = 0;
+
+    fp += mach->szaddr;			/* skip saved pc */
+    s = *fn;
+    for (i = 0; localsym(&s, i); i++) {
+        if (s.class != CPARAM)
+            continue;
+        if (first++)
+            dprint(", ");
+        if (get4(cormap, fp+s.value, &w) > 0)
+            dprint("%s=%#lux", s.name, w);
+    }
+}
+@
+
+
+
 % ... -> ptrace -> <>
 <<function printlocals>>=
 void
@@ -3706,10 +4107,15 @@ printlocals(Symbol *fn, ADDR fp)
 }
 @
 
+\chapter{[[/bin/strace]]}
+
+% good to see first? allow to understand /proc/x/ctl?
+% things that will be needed later.
+% maybe not
 
 \chapter{Advanced Features}
 
-\section{Advanced breakpoints}
+\section{Conditional breakpoints}
 
 <<constant MAXCOM>>=
 #define MAXCOM	64
@@ -3744,7 +4150,7 @@ error("bkpt command too long");
 
 
 
-\subsection{Non stdin debugging commands}
+%\subsection{Non stdin debugging commands}
 
 % dead code? who calls command with a buf? when have advanced breakpoints!
 
@@ -3778,6 +4184,85 @@ else {
 
 \section{Input file debugging commands}
 % meh
+
+% hmm, why input stuff in output.c???
+<<constant MAXIFD>>=
+#define	MAXIFD	5
+@
+
+<<global istack>>=
+struct {
+    int	fd;
+    int	r9;
+} istack[MAXIFD];
+@
+
+<<global ifiledepth>>=
+int	ifiledepth;
+@
+
+<<function iclose>>=
+void
+iclose(int stack, int err)
+{
+    if (err) {
+        if (infile) {
+            close(infile);
+            infile=STDIN;
+        }
+        while (--ifiledepth >= 0)
+            if (istack[ifiledepth].fd)
+                close(istack[ifiledepth].fd);
+        ifiledepth = 0;
+    } else if (stack == 0) {
+        if (infile) {
+            close(infile);
+            infile=STDIN;
+        }
+    } else if (stack > 0) {
+        if (ifiledepth >= MAXIFD)
+            error("$<< nested too deeply");
+        istack[ifiledepth].fd = infile;
+        ifiledepth++;
+        infile = STDIN;
+    } else {
+        if (infile) {
+            close(infile); 
+            infile=STDIN;
+        }
+        if (ifiledepth > 0) {
+            infile = istack[--ifiledepth].fd;
+        }
+    }
+}
+@
+%$
+
+% how can have multiple input file?
+
+
+<<function redirout>>=
+void
+redirout(char *file)
+{
+    int fd;
+
+    if (file == 0){
+        oclose();
+        return;
+    }
+    flushbuf();
+    if ((fd = open(file, 1)) >= 0)
+        seek(fd, 0L, 2);
+    else if ((fd = create(file, 1, 0666)) < 0)
+        error("cannot create");
+    Bterm(&stdout);
+    Binit(&stdout, fd, OWRITE);
+}
+@
+
+
+
 
 <<[[printtrace()]] switch modif cases>>=
 case '<':
@@ -3833,6 +4318,62 @@ longjmp(env, 1);
 % back before the for(;;) and so loop forever? no because
 % infile will have changed
 
+\section{Formatted output}
+
+<<[[command()]] switch lastcom cases>>=
+case '\0':
+    prints(DBNAME);
+    break;
+@
+%$
+% how can have this? when eof? but then have if(eof) before no?
+
+<<constant DBNAME>>=
+#define	DBNAME	"db\n"
+@
+
+\section{Shell output}
+
+<<[[command()]] switch lastcom cases>>=
+case '!':
+    lastcom=savecom;
+    shell(); 
+    break;
+@
+
+<<function shell>>=
+/*
+ * shell escape
+ */
+
+void
+shell(void)
+{
+    int	rc, unixpid;
+    char *argp = (char*)lp;
+
+    while (lastc!=EOR)
+        rdc();
+    if ((unixpid=fork())==0) {
+        *lp=0;
+        execl("/bin/rc", "rc", "-c", argp, nil);
+        exits("execl");				/* botch */
+    } else if (unixpid == -1) {
+        error("cannot fork");
+    } else {
+        mkfault = 0;
+        while ((rc = waitpid()) != unixpid){
+            if(rc == -1 && mkfault){
+                mkfault = 0;
+                continue;
+            }
+            break;
+        }
+        prints("!"); 
+        reread();
+    }
+}
+@
 
 \section{[[db -w]]}
 % ???
@@ -3884,8 +4425,12 @@ if (name && machbyname(name) == 0)
         dprint ("unknown machine %s", name);
 @
 
-\section{Kernel debugging, [[db -k]]}
+\section{Kernel debugging}
 % have a special chapter for Kernel debugging, with ktrace too?
+
+\subsection{[[/bin/ktrace]]}
+
+\subsection{[[db -k]]}
 
 <<global kflag>>=
 bool kflag;
@@ -3958,10 +4503,97 @@ kmsys(void)
 
 \section{Signals and notes}
 
+\subsection{Debugger notes}
+
 <<[[main()]] call notify>>=
 notify(fault);
 @
 
+<<function fault>>=
+/*
+ * An interrupt occurred;
+ * seek to the end of the current file
+ * and remember that there was a fault.
+ */
+void
+fault(void *a, char *s)
+{
+    USED(a);
+    if(strncmp(s, "interrupt", 9) == 0){
+        seek(infile, 0L, 2);
+        mkfault++;
+        noted(NCONT);
+    }
+    noted(NDFLT);
+}
+@
+
+<<global mkfault>>=
+bool mkfault;
+@
+%dead? when set to true?
+
+<<[[main()]] in loop, handle mkfault (db)>>=
+if (mkfault) {
+    mkfault=0;
+    printc('\n');
+    prints(DBNAME);
+}
+@
+
+<<[[dprint()]] return if mkfault>>=
+if(mkfault)
+    return -1;
+@
+
+<<[[readchar()]] if mkfault>>=
+if (mkfault) {
+    eof = 0;
+    error(nil);
+}
+@
+
+
+
+\subsection{Debugged notes}
+
+
+<<function loadnote>>=
+/*
+ * reload the note buffer
+ */
+void
+loadnote(void)
+{
+    int i;
+    char err[ERRMAX];
+
+    setpcs();
+    for(i=0; i<nnote; i++){
+        if(write(notefd, note[i], strlen(note[i])) < 0){
+            errstr(err, sizeof err);
+            if(strcmp(err, "interrupted") != 0)
+                endpcs();
+            errors("can't write note file", err);
+        }
+    }
+    nnote = 0;
+}
+@
+
+<<function notes>>=
+void
+notes(void)
+{
+    int n;
+
+    if(nnote == 0)
+        return;
+    dprint("notes:\n");
+    for(n=0; n<nnote; n++)
+        dprint("%d:\t%s\n", n, note[n]);
+}
+@
 
 
 % ((grab | startpcs ) -> bpwait) | ??? -> <>
