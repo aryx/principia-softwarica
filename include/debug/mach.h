@@ -4,44 +4,61 @@
  */
 #include "a.out.h"
 //TODO: include "elf.h" too? and macho.h?
+
 #pragma	src	"/sys/src/libmach"
 #pragma	lib	"libmach.a"
 
-/*s: enum _anon_ (include/mach.h) */
 /*
  *	Supported architectures:
  *		i386,
  *		arm
  */
-/* machine types */
-enum
-{
-    MI386,
-    MARM,
 
-//TODO another enum
+/*s: enum executable_type */
 /* types of executables */
+enum executable_type 
+{
     FNONE = 0,		/* unidentified */
 
     FI386,			/* 8.out */
     FI386B,			/* I386 bootable */
     FARM,			/* 5.out */
     FARMB,			/* ARM bootable */
-
+};
+/*e: enum executable_type */
+/*s: enum machine_type */
+/* machine types */
+enum machine_type 
+{
+    MI386,
+    MARM,
+};
+/*e: enum machine_type */
+/*s: enum dissembler_type */
 /* dissembler types */
+enum dissembler_type
+{
     ANONE = 0,		
 
     AI386,
     AI8086,			/* oh god */
     AARM,
-
+};
+/*e: enum dissembler_type */
+/*s: enum object_file_type */
 /* object file types */
+enum object_file_type
+{
     Obj386 = 0,			/* .8 */
     ObjArm,			/* .5 */
 
     Maxobjtype,
-
+};
+/*e: enum object_file_type */
+/*s: enum symbol_type */
 /* symbol table classes */
+enum symbol_type
+{
     CNONE  = 0,	
     CAUTO,
     CPARAM,
@@ -50,13 +67,14 @@ enum
     CDATA,
     CANY,			/* to look for any class */
 };
-/*e: enum _anon_ (include/mach.h) */
+/*e: enum symbol_type */
 
 typedef	struct	Map	Map;
 typedef struct	Symbol	Symbol;
 typedef	struct	Reglist	Reglist;
 typedef	struct	Mach	Mach;
 typedef	struct	Machdata Machdata;
+typedef struct  Fhdr Fhdr;
 
 /*s: struct Map */
 /*
@@ -67,11 +85,14 @@ struct Map {
     struct segment {		/* per-segment map */
         char	*name;		/* the segment name */
         int	fd;		/* file descriptor */
-        int	inuse;		/* in use - not in use */
-        int	cache;		/* should cache reads? */
+
+        bool	inuse;		/* in use - not in use */
+        bool	cache;		/* should cache reads? */
+
         uvlong	b;		/* base */
         uvlong	e;		/* end */
         vlong	f;		/* offset within file */
+
     } seg[1];			/* actually n of these */
 };
 /*e: struct Map */
@@ -125,20 +146,26 @@ enum {					/* bits in rflags field */
  */
 struct Mach{
     char	*name;
+    // enum<machine_type>
     int	mtype;			/* machine type code */
+
     Reglist *reglist;		/* register set */
     long	regsize;		/* sizeof registers in bytes */
     long	fpregsize;		/* sizeof fp registers in bytes */
+
     char	*pc;			/* pc name */
     char	*sp;			/* sp name */
     char	*link;			/* link register name */
     char	*sbreg;			/* static base register name */
     uvlong	sb;			/* static base register value */
+
     int	pgsize;			/* page size */
     uvlong	kbase;			/* kernel base address */
     uvlong	ktmask;			/* ktzero = kbase & ~ktmask */
     uvlong	utop;			/* user stack top */
+
     int	pcquant;		/* quantization of pc */
+
     int	szaddr;			/* sizeof(void*) */
     int	szreg;			/* sizeof(register) */
     int	szfloat;		/* sizeof(float) */
@@ -159,13 +186,17 @@ struct	Machdata {		/* Machine-dependent debugger support */
     ushort	(*swab)(ushort);		/* ushort to local byte order */
     ulong	(*swal)(ulong);			/* ulong to local byte order */
     uvlong	(*swav)(uvlong);		/* uvlong to local byte order */
+
     int	(*ctrace)(Map*, uvlong, uvlong, uvlong, Tracer); /* C traceback */
     uvlong	(*findframe)(Map*, uvlong, uvlong, uvlong, uvlong);/* frame finder */
     char*	(*excep)(Map*, Rgetter);	/* last exception */
     ulong	(*bpfix)(uvlong);		/* breakpoint fixup */
+
     int	(*sftos)(char*, int, void*);	/* single precision float */
     int	(*dftos)(char*, int, void*);	/* double precision float */
+
     int	(*foll)(Map*, uvlong, Rgetter, uvlong*);/* follow set */
+
     int	(*das)(Map*, uvlong, char, char*, int);	/* symbolic disassembly */
     int	(*hexinst)(Map*, uvlong, char*, int); 	/* hex disassembly */
     int	(*instsize)(Map*, uvlong);	/* instruction size */
@@ -176,10 +207,13 @@ struct	Machdata {		/* Machine-dependent debugger support */
 /*
  *	Common a.out header describing all architectures
  */
-typedef struct Fhdr
+struct Fhdr
 {
     char	*name;		/* identifier of executable */
+
+    // enum<executable_type>
     byte	type;		/* file type - see codes above */
+
     byte	hdrsz;		/* header size */
     byte	_magic;		/* _MAGIC() magic */
     byte	spare;
@@ -205,7 +239,7 @@ typedef struct Fhdr
     long	sppcsz;		/* size of sp-pc table */ // unused
     long	lnpcsz;		/* size of line number-pc table */
 
-} Fhdr;
+};
 /*e: struct Fhdr */
 
 extern	int	asstype;	/* dissembler type - machdata.c */
