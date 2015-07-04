@@ -1,0 +1,224 @@
+from http://pages.cs.wisc.edu/~madthanu/qual-notes/plan9.txt
+found via hackernews
+
+Notes on "Plan 9 from Bell Labs" by Rob Pike et al.
+------------
+Motivation
+
+Design
+	* Shared multi-processor servers provide computing cycles remotely
+		- But, end-users don't *need* to run their computations in these
+	* File servers are located near these computing servers
+	* "Workstations" with keyboard, mouse, and screen, act as terminals
+		- Temporarily personalized when each user "logs in"
+		- Different from terminals of the timesharing era, since Plan 9 terminals can act essentially as separate computers
+		- Different from PCs, because Plan 9 terminals are not permanently user-specific, but personalized on demand
+	* All services (e.g. file service) present in the network export file hierarchies
+	* Each "client" can have a local namespace
+		- Local namespace means a local FS hierarchy, that links into different parts of the global file hierarchy
+		- The local namespace is uniform, i.e. /bin always represents the list of command programs (the files in the directory may vary though), in each local namespace
+		- Think chroot
+		- What is a client? -- explained later
+		- How exactly is the local namespace maintained? -- explained later
+	* 9P is the protocol used for the global (distributed / networked) file system
+		- Controls file systems, not just files -- explained later
+		- File access is at the level of bytes (not blocks)
+		- Server resolves path names, but the local namespace is always maintained only by the client
+
+The Command-level View
+	* Windowing system, called 8 1/2, is used as the base interface
+		- No notion of UNIX-style teletype ...
+		- Text editing operations are designed for text in a screen, as opposed to on a line-printing console, i.e., you can scroll and edit previous lines.
+		- Things like copy, paste present in the basic text editing interface provided by 8 1/2
+	* Each window starts with an application (shell usually)
+		- When new applications are started, they *usually* replace the application in the current window, as opposed to creating a new window
+		- Each window corresponds to a separate file-system local namespace (and vice-versa)
+		- There are files such as /dev/cons (for console), /dev/mouse (for mouse), /dev/bitblt (for bitmapped display), in each local namespace, corresponding uniquely to that window
+			= Contrastingly, in X, each remote application consciously makes a network call to access things corresponding to /dev/cons, /dev/mouse etc.
+		- A window created with /dev/cons pointing to the local console, can be made to run an application remotely in the compute server - ***in the words of Barney Stinson, this is legen...dary***
+	* The command set (things like /bin/ls) are similar to UNIX, but not equal (nor compatible).
+
+The File Server
+	* Central file server, presents a single file hierarchy over the network
+	* Storage in three levels: main-memory, bunch of disks, and a WORM (Write-once-read-many)
+	* Main memory acts as cache to disks, and ***disks to WORM***
+	* WORM capacity is considered infinite
+	* Snapshots of the hierarchy, taken every day, is stored in the WORM, and can be accessed by referring to /n/dump
+	* Snapshots are usually accessed by the users themselves, but in case of a disaster, can be used as a complete system backup (this is very slow)
+	* Access permissions to files are preserved in the snapshots, but the snapshots cannot be overwritten (even if the file has write permission)
+		- A public-readable file is snapshotted as permanently public-readable: security concerns
+
+Unusual File Servers
+	* A variety of servers can export services as files, and clients can mount the files on their local namespaces
+	* 8 1/2 exports things like /dev/console
+		- 8 1/2 serves same files required for its implementation, so 8 1/2 can be run recursively
+		- 8 1/2 does things like input line buffering etc, by making reads to /dev/console wait until the enter key is pressed
+	* "ftpfs" acts as a client to an external FTP server, and exports files at /n/ftp
+		- Lots of caching
+	* "exportfs" is an user process that exports portions of its local namespace
+		- Used by the "import" command, which starts an exportfs in a remote machine, and imports the exported files here.
+			= E.g. "import helix /net" replaces the /net directory of the local namespace with the /net directory of the helix machine - ***legen...dary***
+		- Used by the "cpu" command, which starts an exportfs on the local machine, then runs a command in a remote machine, with its namespace importing the exported files - ***legen...dary***
+
+Configurability and Administration
+	* A single PC, or a large distributed system, can act as a Plan 9 system
+		- Computing and file services are centralized in each installation
+	* One main file server holds all system files (for all supported hardware architectures too)
+		- Updates needs to be installed only there
+		- Also, single /etc/passwd file on the main server, user management is thus centralized
+		- No need for DNS. Central file contains IP to machine translations (and maybe other configuration for the network too ?).
+		- Negative consequence: limited scalability
+	* Snapshotting - no need to backup
+	* Central servers - only the server hardware needs to be updated frequently, terminals only in 5 years
+
+C Programming
+	* Most programs written in C. Other common languages are shell scripting, and a C-like concurrent language called Alef.
+	* Plan 9 has some minor extensions to C, but also major restrictions
+		- All restrictions posed by ANSI
+		- Fewer preprocessor directives
+	* Some standard library calls are different from their POSIX versions
+	* Plan 9 supports 16-bit Unicode
+		- These guys invented UTF-8 !!!
+		- Existing software had to be adapted for this
+	* Some software for Plan 9, such as tex, maintained by the UNIX community, do not follow these conventions
+		- Built through a porting environment
+
+Portability and Compilation
+	* Typical Plan 9 installation consists of many machines of many architectures.
+	* Need to follow standard coventions for data transmission
+		- Data is communicated mostly as text
+		- If binary format is necessary, use byte stream with a predefined encoding
+		- If complex format with data structure, marshall it
+		- Programs, including the kernel, commonly use files to present their data
+	* Each supported architecture has it's own compiler and loader
+		- Compiler / loader of any architecture can be used on any other architecture (i.e. cross compilation is common)
+			= Possible to compile in an x86 machine, , and do the loading with a SPARC, a program to be run on a MIPS
+		- Compiler / loader is named after the target architecture (e.g. C compiler for x86 is called "8c").
+		- Compiler / loader output is suffixed with the name of the target architecture (instead of "hello.o", produces "hello.8")
+		- "Make" takes the name of the target architecture as an environment variable.
+			= Supports parallel compilation for many different target architectures.
+
+Parallel Programming
+	* "rfork()" system call is a fine-grained version of fork
+		- Allows to specify what resources should be shared, copied, or created anew for the child
+		- Can be used with a special flag, so that instead of creating a child, it changes resource allocation to current process
+		- Used to implement fork(), and Alef's parallel threads
+		- Many programmers use rfork() in different ways
+	* Two ways to share memory - rfork(), and segattach()
+		- segattach() similar to mmap in Linux with MAP_SHARED
+	* "rendezvous" system call is used for processes to synchronize
+		- rendezvous(tag, value) sleeps until another process calls rendezvous with same tag. The processes exchange values at that point.
+		- Alef uses it to implement loads of synchronization mechanisms
+	* Spin locks are provided by an arch-dependent library at user level.
+	* Kernel provides as little parallel programming primitives as possible.
+	* Common uses of parallel programming in Plan 9:
+		- Plan 9 has only blocking system calls. Asychronicity can be obtained through forking.
+		- Multi-threaded user-level file servers are the common way to implement services.
+
+Implementation of Name Spaces
+	* mount(), unmount(), and bind()
+		- bind() duplicates an existing point in the namespace to another point
+		- mount() needs a connection to a file server as a parameter
+	* Concept of union directories - legen...dary
+		- Multiple mounts or binds can be stacked on to a single mountpoint
+		- Parameters to mount and bind specify whether the new mount is to be stacked to the top or bottom in the mountpoint
+		- Another parameter denotes, for each mount in an union, whether file creation is allowed for the mount source
+		- File creation in the union results in creating a file in the first source which allowed creation
+	* Each device driver exports a directory called '#c', where c is the type of device
+		- Needed to bootstrap the namespace building process, since when it boots up, /dev will not yet be mounted
+		- For example, a serial port driver exports for each device, a control file and data file in the #t directory
+			= Control file eliminates the ioctl syscall
+			= Common to configure or debug devices using shell scripts
+	* Philosophy of 9P:
+		- Don't invent a new protocol for each service (rlogin, X, FTP)
+		- Instead, implement services atop file operations, which are managed by 9P
+		- Unlike NFS, 9P treats files as sequence of bytes
+		- Unlike NFS, 9P is stateful
+	* Working of 9P (did not read through thoroughly):
+		- Each client machine establishes a connection to the server, and performs a bilateral authentication
+		- Each user performs an "attach" to the server through this connection
+		- Every attached user gets something similar to a file descriptor, currently pointing to the root of the exported hierarchy
+		- The fd can be made to "walk through" the hierarchy, cloned, opened for reads and writes, closed, or used to delete the "file" permanently
+		- Internally, 9P works either through RPC connections, or direct function calls in the kernel
+		- Kernel translates each file operation into the corresponding function call / RPC call
+			= The mount table contains the list of mountpoints
+			= Walks consult to the mount table to switch to a new server
+			= In the case of union mounts, kinda, multiple consultations are done for a single walk
+			= The mount driver is the only RPC driver in the system
+		- Each file is finally translated into the tuple (major device number, minor device number, inode number, version number)
+			= Version number is updated when file is modified, can be used for cache coherency
+
+File Caching
+	* The 9P protocol has no explicit caching support
+	* Version number can be used, by clients, for some weakly coherent form of caching
+		- Used to cache text/program segments in binaries
+			= At each open, cached version number is verified with server's version number
+		- Also used to build a local caching file server
+		- Can be used to build a "file caching in local memory" implementation, if needed
+
+Network and Communication Devices (skipped most parts)
+	* All administration (even bind/socket/accept) is done through files and directories
+		- Supposedly awesome
+
+Kernel Structure for Networks (skipped)
+
+IL protocol (skipped)
+	* TCP and UDP are not good enough for Plan 9
+	* IL is similar to TCP, but:
+		- A process can have only a single outstanding 9P request, so no need for flow control
+		- IL does not do blind retransmission
+	* Smaller, faster than TCP, works for both the Internet and local Ethernets
+
+Overview of Authentication
+	* Authentication happens between clients and servers
+		- Bilateral
+		- Servers act on behalf of some user, as do clients, so authentication is considered to be happening between two users
+	* Similar to Kerberos
+		- But, involves randomly generated "challenge" by the client and the server, for each auth
+		- Hence, no need for clock synchronization
+		- Also, supports the "speaks for" relationship
+	* No firewalls
+		- Firewalls are icky
+
+Authenticating External Connections (kinda skipped)
+	* For things like Telnet or FTP, use hand-held DES calculators
+		- Not OTP. Just DES calculators.
+
+Special Users
+	* No installation-wide super user
+	* Servers have special administrative users
+		- But, with limited power. File server admins cannot read a user's private file.
+	* Administrative user's key is stored in the server's NVRAM, and is used during communication with Auth server.
+	* Special "none" user, analogous to anonymous users in FTP
+	* File servers export only a restricted namespace (as opposed to the entire file system hierarchy beginning with the root)
+
+"cpu" Command, and Proxied Authentication
+	* Review: "cpu" command allows to run a command on a remote (CPU) server, while the output is still on the current terminal
+	* Uses "speaks for" relationship
+		- The CPU server first does authentication with the client (user) requesting the cpu command		
+		- Authentication server stores the "speaks for" relationship after that
+			= That is, only if, the admin user of the CPU server is alowed to speak for the client
+		- Auth server grants tickets for other services with the "speaks for" in mind
+		- Also works if the users are in different domains
+
+File Permissions
+	* Similar to unix, user/group/others with read/write/execute,search
+	* A group is just a user with a list of other users
+	* There can be one leader for each group
+	* For regular files, default owner is file creator, default group is inherited from directory
+	* For device files, kernel specializes permissions for the file according to the user requesting access
+	* Default permissions for other files depend on their usage
+		- Process files default to being entirely private for the owner (creator of the process)
+	* Stupidity: With the dump file system, and the entire permissions thing, becomes really hard to reuse user names
+		- What if an user is deleted? (Not answered in the paper)
+
+Permission (skipped)
+
+Discussion (skipped)
+	* Though file-based computing is used extensively, doesn't take it too far
+		- E.g. Creating processes requires calls like fork() and exec(), instead of writing to a "procctl" file in /proc
+		- E.g. Plan 9 does not put machine's netwok names in the file naming interface
+	* Streams not used correctly in the kernel. Should change design if the system was reimplemented.
+	* Stupidity: There is no way to "refer" to a process'es name space (for example, to hand-over the namespace on to another process)
+		- Except when a child is inheriting it directly
+	* Plan 9 is used daily
