@@ -322,8 +322,11 @@ int
 arm_class(instruction w)
 {
     int class;
+    // enum<opcode>
     int op;
+    /*s: [[arm_class()]] locals */
     int x;
+    /*e: [[arm_class()]] locals */
    
     class = (w >> 25) & 0x7;
     switch(class) {

@@ -149,7 +149,6 @@ with code from\\
 
 The goal of this book is to present in full details the source code of
 an hardware emulator.
-% aka simulator/emulator
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 % and hardware is really the bottom of the hood :)
@@ -176,12 +175,12 @@ you fully understand how things work under the hood.
 
 Here are other candidates that were considered but ultimately discarded:
 \begin{itemize}
-\item spim
+\item SPIM
 % but dead archi (ARM mostly a MIPS anyway), and LOC actually not that small
 % and hybrid as work on assembly, not actual binary format
-\item spocketnes
+\item Spocketnes
 % nice, rust!
-\item qemu
+\item Qemu
 % big (but interesting opti that would be nice to port to 5i)
 \item MAME and MESS
 % huge set of emulations, gameboy, nes, z80, ti85, ...
@@ -407,26 +406,26 @@ enum opcode_category
 
 <<enum opcode>>=
 enum opcode {
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     // Arithmetic and logic opcodes
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     <<arith/logic opcodes>>
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     // Memory MOV opcodes
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     <<memory opcodes>>
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     // Branching opcodes
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     <<branching opcodes>>
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     // Syscall opcode
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     <<syscall opcodes>>
 
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     // Other opcodes
-    // ----------------------------------------------------------------------
+    // -----------------------------------------
     OUNDEF   = 89
 };
 @
@@ -630,7 +629,7 @@ char*	file = "5.out";
 %less: has to be a global too? used by initstk but could be
 % passed as a parameter.
 
-% fdt binary. Has to be a global? used in vaddr() for lazy Text access
+% fdt binary. Has to be a global? used in page_of_vaddr() for lazy Text access
 <<global text>>=
 fdt text;
 @
@@ -941,7 +940,7 @@ uintptr dot;
 <<[[cmd()]] locals>>=
 char *p;
 @
-
+% will contain the input string command
 
 % most of actual code is in debugger section
 <<function cmd>>=
@@ -1259,8 +1258,9 @@ int
 arm_class(instruction w)
 {
     int class;
+    // enum<opcode>
     int op;
-    int x;
+    <<[[arm_class()]] locals>>
    
     class = (w >> 25) & 0x7;
     switch(class) {
@@ -1317,6 +1317,10 @@ OMVN = 15,
 %// TST, TEQ, CMP,    CMN
 %// MOV,    MVN
 
+
+<<[[arm_class()]] locals>>=
+int x;
+@
 
 <<[[arm_class()]] class cases>>=
 case 0:	/* data processing r,r,r */
@@ -2642,6 +2646,13 @@ case 7:	/* coprocessor crap */ // and syscall
 % - ADC/... transfer to undef
 % - RFE see above
 
+
+
+
+
+
+
+
 \chapter{Memory}
 
 % we proxy memory ourselves, so virtual mem address correspond
@@ -2655,18 +2666,17 @@ case 7:	/* coprocessor crap */ // and syscall
 % of page faults, device interrupts, etc.
 % see also Syscalls chapter.
 
-\section{[[vaddr()]]}
+\section{[[page_of_vaddr()]]}
 
-%rename page_of_vaddr?
-<<function vaddr>>=
+<<function page_of_vaddr>>=
 void*
-vaddr(uintptr addr)
+page_of_vaddr(uintptr addr)
 {
     Segment *s, *es;
     int off, foff, l, n;
     byte **p, *a;
 
-    <<[[vaddr()]] TLB handling>>
+    <<[[page_of_vaddr()]] TLB handling>>
 
     es = &memory.seg[Nseg];
     for(s = memory.seg; s < es; s++) {
@@ -2682,9 +2692,9 @@ vaddr(uintptr addr)
             s->rss++;
 
             switch(s->type) {
-            <<[[vaddr()]] page fault, switch segment type cases>>
+            <<[[page_of_vaddr()]] page fault, switch segment type cases>>
             default:
-                fatal(false, "vaddr");
+                fatal(false, "page_of_vaddr");
             }
         }
     }
@@ -2695,28 +2705,31 @@ vaddr(uintptr addr)
     return nil;		/*to stop compiler whining*/
 }
 @
+%old: was called vaddr
 
 \section{Page faults}
 
-<<[[vaddr()]] page fault, switch segment type cases>>=
+% demand loading
+
+<<[[page_of_vaddr()]] page fault, switch segment type cases>>=
 case Text:
     *p = emalloc(BY2PG);
     if(seek(text, s->fileoff+(off*BY2PG), 0) < 0)
-        fatal(true, "vaddr text seek");
+        fatal(true, "page_of_vaddr text seek");
     if(read(text, *p, BY2PG) < 0)
-        fatal(true, "vaddr text read");
+        fatal(true, "page_of_vaddr text read");
     return *p;
 @
 
-<<[[vaddr()]] page fault, switch segment type cases>>=
+<<[[page_of_vaddr()]] page fault, switch segment type cases>>=
 case Data:
     *p = emalloc(BY2PG);
     foff = s->fileoff+(off*BY2PG);
     if(seek(text, foff, 0) < 0)
-        fatal(true, "vaddr text seek");
+        fatal(true, "page_of_vaddr text seek");
     n = read(text, *p, BY2PG);
     if(n < 0)
-        fatal(true, "vaddr text read");
+        fatal(true, "page_of_vaddr text read");
     if(foff + n > s->fileend) {
         l = BY2PG - (s->fileend-foff);
         a = *p+(s->fileend-foff);
@@ -2725,7 +2738,7 @@ case Data:
     return *p;
 @
 
-<<[[vaddr()]] page fault, switch segment type cases>>=
+<<[[page_of_vaddr()]] page fault, switch segment type cases>>=
 case Bss:
 case Stack:
     *p = emalloc(BY2PG);
@@ -2734,6 +2747,8 @@ case Stack:
 
 
 \section{[[Tlb]]}
+
+% just to gather stats
 
 <<struct Tlb>>=
 struct Tlb
@@ -2762,7 +2777,7 @@ tlb.tlbsize = 24;
 @
 
 
-<<[[vaddr()]] TLB handling>>=
+<<[[page_of_vaddr()]] TLB handling>>=
 if(tlb.on)
     dotlb(addr);
 @
@@ -2805,7 +2820,7 @@ ifetch(uintptr addr)
     <<[[ifetch()]] instruction cache handling>>
     iprof[(addr-textbase)/PROFGRAN]++;
 
-    va = vaddr(addr); // get page
+    va = page_of_vaddr(addr); // get page
     va += addr&(BY2PG-1); // restore offset in page
 
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
@@ -2862,7 +2877,7 @@ getmem_b(uintptr addr)
 
     <<[[getmem_x()]] if membpt>>
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
     return va[0];
 }
@@ -2885,7 +2900,7 @@ getmem_h(uintptr addr)
     }
     <<[[getmem_x()]] if membpt>>
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
     return va[1]<<8 | va[0];
@@ -2912,14 +2927,15 @@ getmem_w(uintptr addr)
     }
     <<[[getmem_x()]] if membpt>>
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
 }
 @
 % >> >> >> >>
-% similar, if 4 bytes aligned then simple
+% similar, if 4 bytes aligned then simple because pages are
+% 4096 so 4 bytes aligned too.
 
 
 
@@ -2974,7 +2990,7 @@ putmem_b(uintptr addr, byte data)
 {
     byte *va;
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
     va[0] = data;
 
@@ -2982,6 +2998,8 @@ putmem_b(uintptr addr, byte data)
 }
 @
 
+% the putmem_xxx do not accept unaligned addr as opposed to the
+% getmem_xxx
 
 <<function putmem_h>>=
 void
@@ -2994,7 +3012,7 @@ putmem_h(uintptr addr, ushort data)
         longjmp(errjmp, 0);
     }
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
     va[1] = data>>8;
@@ -3016,7 +3034,7 @@ putmem_w(uintptr addr, ulong data)
         longjmp(errjmp, 0);
     }
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
     va[3] = data>>24;
@@ -5045,6 +5063,7 @@ if(bplist)
 @
 
 \subsection{Memory breakpoint}
+% nice!
 
 <<global membpt>>=
 bool membpt;

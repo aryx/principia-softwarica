@@ -8,7 +8,7 @@
 #include "arm.h"
 /*e: basic includes */
 
-void*		vaddr(ulong);
+void*		page_of_vaddr(ulong);
 
 /*s: function ifetch */
 instruction
@@ -27,7 +27,7 @@ ifetch(uintptr addr)
     /*e: [[ifetch()]] instruction cache handling */
     iprof[(addr-textbase)/PROFGRAN]++;
 
-    va = vaddr(addr); // get page
+    va = page_of_vaddr(addr); // get page
     va += addr&(BY2PG-1); // restore offset in page
 
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
@@ -82,7 +82,7 @@ getmem_w(uintptr addr)
         brkchk(addr, Read);
     /*e: [[getmem_x()]] if membpt */
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
     return va[3]<<24 | va[2]<<16 | va[1]<<8 | va[0];
@@ -109,7 +109,7 @@ getmem_h(uintptr addr)
         brkchk(addr, Read);
     /*e: [[getmem_x()]] if membpt */
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
     return va[1]<<8 | va[0];
@@ -127,7 +127,7 @@ getmem_b(uintptr addr)
         brkchk(addr, Read);
     /*e: [[getmem_x()]] if membpt */
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
     return va[0];
 }
@@ -152,7 +152,7 @@ putmem_h(uintptr addr, ushort data)
         longjmp(errjmp, 0);
     }
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
     va[1] = data>>8;
@@ -176,7 +176,7 @@ putmem_w(uintptr addr, ulong data)
         longjmp(errjmp, 0);
     }
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
 
     va[3] = data>>24;
@@ -197,7 +197,7 @@ putmem_b(uintptr addr, byte data)
 {
     byte *va;
 
-    va = vaddr(addr);
+    va = page_of_vaddr(addr);
     va += addr&(BY2PG-1);
     va[0] = data;
 
@@ -276,18 +276,18 @@ dotlb(uintptr vaddr)
 }
 /*e: function dotlb */
 
-/*s: function vaddr */
+/*s: function page_of_vaddr */
 void*
-vaddr(uintptr addr)
+page_of_vaddr(uintptr addr)
 {
     Segment *s, *es;
     int off, foff, l, n;
     byte **p, *a;
 
-    /*s: [[vaddr()]] TLB handling */
+    /*s: [[page_of_vaddr()]] TLB handling */
     if(tlb.on)
         dotlb(addr);
-    /*e: [[vaddr()]] TLB handling */
+    /*e: [[page_of_vaddr()]] TLB handling */
 
     es = &memory.seg[Nseg];
     for(s = memory.seg; s < es; s++) {
@@ -303,37 +303,37 @@ vaddr(uintptr addr)
             s->rss++;
 
             switch(s->type) {
-            /*s: [[vaddr()]] page fault, switch segment type cases */
+            /*s: [[page_of_vaddr()]] page fault, switch segment type cases */
             case Text:
                 *p = emalloc(BY2PG);
                 if(seek(text, s->fileoff+(off*BY2PG), 0) < 0)
-                    fatal(true, "vaddr text seek");
+                    fatal(true, "page_of_vaddr text seek");
                 if(read(text, *p, BY2PG) < 0)
-                    fatal(true, "vaddr text read");
+                    fatal(true, "page_of_vaddr text read");
                 return *p;
-            /*x: [[vaddr()]] page fault, switch segment type cases */
+            /*x: [[page_of_vaddr()]] page fault, switch segment type cases */
             case Data:
                 *p = emalloc(BY2PG);
                 foff = s->fileoff+(off*BY2PG);
                 if(seek(text, foff, 0) < 0)
-                    fatal(true, "vaddr text seek");
+                    fatal(true, "page_of_vaddr text seek");
                 n = read(text, *p, BY2PG);
                 if(n < 0)
-                    fatal(true, "vaddr text read");
+                    fatal(true, "page_of_vaddr text read");
                 if(foff + n > s->fileend) {
                     l = BY2PG - (s->fileend-foff);
                     a = *p+(s->fileend-foff);
                     memset(a, 0, l);
                 }
                 return *p;
-            /*x: [[vaddr()]] page fault, switch segment type cases */
+            /*x: [[page_of_vaddr()]] page fault, switch segment type cases */
             case Bss:
             case Stack:
                 *p = emalloc(BY2PG);
                 return *p;
-            /*e: [[vaddr()]] page fault, switch segment type cases */
+            /*e: [[page_of_vaddr()]] page fault, switch segment type cases */
             default:
-                fatal(false, "vaddr");
+                fatal(false, "page_of_vaddr");
             }
         }
     }
@@ -343,5 +343,5 @@ vaddr(uintptr addr)
     longjmp(errjmp, 0);
     return nil;		/*to stop compiler whining*/
 }
-/*e: function vaddr */
+/*e: function page_of_vaddr */
 /*e: machine/5i/mem.c */
