@@ -83,10 +83,11 @@ initmemory(void)
 void
 inithdr(fdt fd)
 {
+    /*s: [[inithdr()]] locals */
     Symbol s;
-
     // from libmach.a
     extern Machdata armmach;
+    /*e: [[inithdr()]] locals */
 
     seek(fd, 0, SEEK__START);
     if (!crackhdr(fd, &fhdr))
@@ -95,15 +96,19 @@ inithdr(fdt fd)
     if(fhdr.type != FARM )
         fatal(false, "bad magic number: %d %d", fhdr.type, FARM);
 
+    /*s: [[inithdr()]] symmap initialisation */
     if (syminit(fd, &fhdr) < 0)
         fatal(false, "%r\n");
 
     symmap = loadmap(symmap, fd, &fhdr);
-
+    /*e: [[inithdr()]] symmap initialisation */
+    /*s: [[inithdr()]] mach initialisation */
     //???
     if (mach->sbreg && lookup(0, mach->sbreg, &s))
         mach->sb = s.value;
     machdata = &armmach;
+    /*e: [[inithdr()]] mach initialisation */
+
 }
 /*e: function inithdr */
 

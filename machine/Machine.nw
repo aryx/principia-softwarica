@@ -251,7 +251,7 @@ License.
 
 % memory access (load/store archi on ARM) (Imem)
 % add/sub/mul in hardware! sometimes also div! (Iarith)
-% branching (Ibranch)
+% branching (Ibranch), most basic one can do, jmp
 % interrupt for external device (avoid attente active) (Isyscall)
 % floating optional (Ifloat?)
 
@@ -705,18 +705,12 @@ void main(int argc, char **argv)
 Fhdr	fhdr;
 @
 
-<<global symmap>>=
-Map *symmap;		
-@
 
 <<function inithdr>>=
 void
 inithdr(fdt fd)
 {
-    Symbol s;
-
-    // from libmach.a
-    extern Machdata armmach;
+    <<[[inithdr()]] locals>>
 
     seek(fd, 0, SEEK__START);
     if (!crackhdr(fd, &fhdr))
@@ -725,18 +719,42 @@ inithdr(fdt fd)
     if(fhdr.type != FARM )
         fatal(false, "bad magic number: %d %d", fhdr.type, FARM);
 
-    if (syminit(fd, &fhdr) < 0)
-        fatal(false, "%r\n");
+    <<[[inithdr()]] symmap initialisation>>
+    <<[[inithdr()]] mach initialisation>>
 
-    symmap = loadmap(symmap, fd, &fhdr);
-
-    //???
-    if (mach->sbreg && lookup(0, mach->sbreg, &s))
-        mach->sb = s.value;
-    machdata = &armmach;
 }
 @
+
+
+% need that below?
+
+<<global symmap>>=
+Map *symmap;		
+@
+% need that?
+
+<<[[inithdr()]] symmap initialisation>>=
+if (syminit(fd, &fhdr) < 0)
+    fatal(false, "%r\n");
+
+symmap = loadmap(symmap, fd, &fhdr);
+@
+
+
+
+<<[[inithdr()]] locals>>=
+Symbol s;
+// from libmach.a
+extern Machdata armmach;
+@
 % need machdata = &armmach? what for?
+
+<<[[inithdr()]] mach initialisation>>=
+//???
+if (mach->sbreg && lookup(0, mach->sbreg, &s))
+    mach->sb = s.value;
+machdata = &armmach;
+@
 
 \section{[[initmemory()]]}
 
@@ -1052,9 +1070,16 @@ int count;
 % are not visible registers. But maybe inside the processor
 % there are those kinds of registers hidden, especially ir
 % (but probably not ip). So maybe make sense to keep them in regs.
-% (but maybe still better to rename them, intern_ar)
+%todo: but maybe still better to rename them, intern_ar! will then
+% be easier also to grep for them and see if they are used outside run()
+%are those fields used outside run()? could be locals then no?
+%  - ip is used outside run() mostly for reg->ip.name
+%    so could have a global instead like instr_name
+%  - instr_opcode is used in itrace(), and in undef()
+%  - ar is used in itrace()
 <<[[Registers]] other fields>>=
 uintptr		ar;    // reg.r[REGPC]
+
 instruction	instr;    // ifetch(reg.ar)
 //enum<opcode>
 int			instr_opcode; // arm_class(reg.instr)
@@ -1063,10 +1088,6 @@ Inst*		ip;    // &itab[reg.instr_opcode]
 %note: I renamed class to instr_opcode now that we consider more this an
 % opcode. I also renamed ir to instr.
 
-% are those fields used outside run()? could be locals then no?
-%  - ip is used outside run() mostly for reg->ip.name
-%    so could have a global instead like instr_name
-%  - instr_opocde is used in itrace(), and in undef
 
 
 % main -> cmd -> colon -> <> -> armclass!!
@@ -1289,10 +1310,6 @@ arm_class(instruction w)
 
 \subsection{Arithmetic}
 
-\subsubsection{Opcode extraction}
-% at least for the first time we see that we can have a named
-% section about it, to repeat what was done in the arm_class section
-
 <<arith/logic opcodes>>=
 OAND = 0,
 OEOR = 1, 
@@ -1316,6 +1333,10 @@ OMVN = 15,
 %// ADD, SUB,   RSB, ADC, SBC, RSC
 %// TST, TEQ, CMP,    CMN
 %// MOV,    MVN
+
+\subsubsection{Opcode extraction}
+% at least for the first time we see that we can have a named
+% section about it, to repeat what was done in the arm_class section
 
 
 <<[[arm_class()]] locals>>=
@@ -1660,21 +1681,13 @@ else
 @
 % >> >> >>
 
-<<[[arm_class()]] class cases>>=
-case 1:	/* data processing i,r,r */
- op = CARITH3 + ((w >> 21) & 0xf);
- break;
-@
-%48
 
 <<arith/logic opcodes>>=
 CARITH0 = 0,  // r,r,r
 CARITH1 = 16, // r<>r, r, r
 CARITH2 = 32, // r<>#, r, r
-CARITH3 = 48, // i,r,r
 @
-%TODO? could be outside the enum opcode? as a set of #define?
-% after all it's useful really only in the parsing of instructions.
+
 
 
 <<[[itab]] elements>>=
@@ -1806,69 +1819,6 @@ if(trace)
 \fi
 
 
-
-
-<<[[itab]] elements>>=
-//i,r,r
-[OAND +CARITH3] =  { Idp3,		"AND",	Iarith },	
-[OEOR +CARITH3] =  { Idp3,		"EOR",	Iarith },	
-[OSUB +CARITH3] =  { Idp3,		"SUB",	Iarith },	
-[ORSB +CARITH3] =  { Idp3,		"RSB",	Iarith },	
-[OADD +CARITH3] =  { Idp3,		"ADD",	Iarith },	
-[OADC +CARITH3] =  { Idp3,		"ADC",	Iarith },	
-[OSBC +CARITH3] =  { Idp3,		"SBC",	Iarith },	
-[ORSC +CARITH3] =  { Idp3,		"RSC",	Iarith },	
-[OTST +CARITH3] =  { Idp3,		"TST",	Iarith },	
-[OTEQ +CARITH3] =  { Idp3,		"TEQ",	Iarith },	
-[OCMP +CARITH3] =  { Idp3,		"CMP",	Iarith },	
-[OCMN +CARITH3] =  { Idp3,		"CMN",	Iarith },	
-[OORR +CARITH3] =  { Idp3,		"ORR",	Iarith },	
-[OMOV +CARITH3] =  { Idp3,		"MOV",	Iarith },	
-[OBIC +CARITH3] =  { Idp3,		"BIC",	Iarith },	
-[OMVN +CARITH3] =  { Idp3,		"MVN",	Iarith },	
-@
-
-
-<<function Idp3>>=
-/*
- * data processing instruction #<>#,R,R
- */
-void
-Idp3(instruction inst)
-{
-    int rn, rd, sc;
-    long o1, o2;
-
-    rn = (inst>>16) & 0xf;
-    rd = (inst>>12) & 0xf;
-    o1 = reg.r[rn];
-    if(rn == REGPC)
-        o1 += 8;
-
-    o2 = inst & 0xff;
-    sc = (inst>>7) & 0x1e;
-    o2 = (o2 >> sc) | (o2 << (32 - sc));
-
-    dpex(inst, o1, o2, rd);
-
-    <<[[Idp3()]] trace>>
-    <<[[Idpx()]] compensate REGPC>>
-}
-@
-% >>
-
-\ifallcode
-<<[[Idp3()]] trace>>=
-if(trace)
-    itrace("%s%s\t#%x,R%d,R%d =#%x",
-        reg.ip->name, cond[reg.instr_cond], o2, rn, rd,
-        reg.r[rd]);
-@
-\fi
-
-
-%todo: do an enum SH_LEFT | SH_RIGHT
-
 % shift(rm, op, rs or #, true if rs)
 <<function shift>>=
 long
@@ -1930,6 +1880,83 @@ shift(long v, int st, int sc, bool isreg)
 }
 @
 
+
+
+\subsubsection{Immediate values}
+
+<<[[arm_class()]] class cases>>=
+case 1:	/* data processing i,r,r */
+ op = CARITH3 + ((w >> 21) & 0xf);
+ break;
+@
+%48
+
+<<arith/logic opcodes>>=
+CARITH3 = 48, // i,r,r
+@
+%TODO? could be outside the enum opcode? as a set of #define?
+% after all it's useful really only in the parsing of instructions.
+
+<<[[itab]] elements>>=
+//i,r,r
+[OAND +CARITH3] =  { Idp3,		"AND",	Iarith },	
+[OEOR +CARITH3] =  { Idp3,		"EOR",	Iarith },	
+[OSUB +CARITH3] =  { Idp3,		"SUB",	Iarith },	
+[ORSB +CARITH3] =  { Idp3,		"RSB",	Iarith },	
+[OADD +CARITH3] =  { Idp3,		"ADD",	Iarith },	
+[OADC +CARITH3] =  { Idp3,		"ADC",	Iarith },	
+[OSBC +CARITH3] =  { Idp3,		"SBC",	Iarith },	
+[ORSC +CARITH3] =  { Idp3,		"RSC",	Iarith },	
+[OTST +CARITH3] =  { Idp3,		"TST",	Iarith },	
+[OTEQ +CARITH3] =  { Idp3,		"TEQ",	Iarith },	
+[OCMP +CARITH3] =  { Idp3,		"CMP",	Iarith },	
+[OCMN +CARITH3] =  { Idp3,		"CMN",	Iarith },	
+[OORR +CARITH3] =  { Idp3,		"ORR",	Iarith },	
+[OMOV +CARITH3] =  { Idp3,		"MOV",	Iarith },	
+[OBIC +CARITH3] =  { Idp3,		"BIC",	Iarith },	
+[OMVN +CARITH3] =  { Idp3,		"MVN",	Iarith },	
+@
+
+
+<<function Idp3>>=
+/*
+ * data processing instruction #<>#,R,R
+ */
+void
+Idp3(instruction inst)
+{
+    int rn, rd, sc;
+    long o1, o2;
+
+    rn = (inst>>16) & 0xf;
+    rd = (inst>>12) & 0xf;
+    o1 = reg.r[rn];
+    if(rn == REGPC)
+        o1 += 8;
+
+    o2 = inst & 0xff;
+    sc = (inst>>7) & 0x1e;
+    o2 = (o2 >> sc) | (o2 << (32 - sc));
+
+    dpex(inst, o1, o2, rd);
+
+    <<[[Idp3()]] trace>>
+    <<[[Idpx()]] compensate REGPC>>
+}
+@
+% >>
+
+\ifallcode
+<<[[Idp3()]] trace>>=
+if(trace)
+    itrace("%s%s\t#%x,R%d,R%d =#%x",
+        reg.ip->name, cond[reg.instr_cond], o2, rn, rd,
+        reg.r[rd]);
+@
+\fi
+
+
+%todo: do an enum SH_LEFT | SH_RIGHT
 
 
 
