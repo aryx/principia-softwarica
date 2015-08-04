@@ -199,7 +199,7 @@ runcmp(void)
     case 0xe:	/* al */	return true;
     case 0xf:	/* nv */	return false;
     default:
-        Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
+        Bprint(bout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.instr_cond, reg.cc1, reg.cc2);
         undef(reg.instr);
         return false;
@@ -221,7 +221,7 @@ runteq(void)
     case 0xe:	/* al */	return true;
     case 0xf:	/* nv */	return false;
     default:
-        Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
+        Bprint(bout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.instr_cond, reg.cc1, reg.cc2);
         undef(reg.instr);
         return false;
@@ -243,7 +243,7 @@ runtst(void)
     case 0xe:	/* al */	return true;
     case 0xf:	/* nv */	return false;
     default:
-        Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
+        Bprint(bout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.instr_cond, reg.cc1, reg.cc2);
         undef(reg.instr);
         return false;
@@ -279,7 +279,7 @@ run(void)
             execute = runtst();
             break;
         default:
-            Bprint(bioout, "unimplemented compare operation %x\n",
+            Bprint(bout, "unimplemented compare operation %x\n",
                 reg.compare_op);
             return;
         }
@@ -311,7 +311,7 @@ run(void)
 void
 undef(instruction inst)
 {
-    Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux op %d\n",
+    Bprint(bout, "undefined instruction trap pc #%lux inst %.8lux op %d\n",
         reg.r[REGPC], inst, reg.instr_opcode);
     longjmp(errjmp, 0);
 }
@@ -501,7 +501,7 @@ dpex(instruction inst, long o1, long o2, int rd)
             Symbol s;
 
             findsym(o1 + o2, CTEXT, &s);
-            Bprint(bioout, "%8lux return to %lux %s r0=%lux\n",
+            Bprint(bout, "%8lux return to %lux %s r0=%lux\n",
                         reg.r[REGPC], o1 + o2, s.name, reg.r[REGRET]);
         }
         /*e: [[dpex()]] if calltree, when add operation */
@@ -1186,11 +1186,11 @@ Ibl(instruction inst)
     /*s: [[Ibl()]] if calltree */
     if(calltree) {
         findsym(v, CTEXT, &s);
-        Bprint(bioout, "%8lux %s(", reg.r[REGPC], s.name);
+        Bprint(bout, "%8lux %s(", reg.r[REGPC], s.name);
         printparams(&s, reg.r[REGSP]);
-        Bprint(bioout, "from ");
+        Bprint(bout, "from ");
         printsource(reg.r[REGPC]);
-        Bputc(bioout, '\n');
+        Bputc(bout, '\n');
     }
     /*e: [[Ibl()]] if calltree */
     reg.r[REGLINK] = reg.r[REGPC] + 4;

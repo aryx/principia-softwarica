@@ -36,9 +36,9 @@ itrace(char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
-    Bprint(bioout, "%8lux %.8lux %2d %s\n", 
+    Bprint(bout, "%8lux %.8lux %2d %s\n", 
                      reg.ar, reg.instr, reg.instr_opcode, buf);	
-    Bflush(bioout);
+    Bflush(bout);
 }
 /*e: function itrace */
 
@@ -48,15 +48,15 @@ dumpreg(void)
 {
     int i;
 
-    Bprint(bioout, "PC  #%-8lux SP  #%-8lux \n",
+    Bprint(bout, "PC  #%-8lux SP  #%-8lux \n",
                 reg.r[REGPC], reg.r[REGSP]);
 
     for(i = 0; i < 16; i++) {
         if((i%4) == 0 && i != 0)
-            Bprint(bioout, "\n");
-        Bprint(bioout, "R%-2d #%-8lux ", i, reg.r[i]);
+            Bprint(bout, "\n");
+        Bprint(bout, "R%-2d #%-8lux ", i, reg.r[i]);
     }
-    Bprint(bioout, "\n");
+    Bprint(bout, "\n");
 }
 /*e: function dumpreg */
 

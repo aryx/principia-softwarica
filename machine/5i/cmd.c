@@ -115,7 +115,7 @@ expr(char *addr)
     numsym(addr, &t2);
     switch(op) {
     default:
-        Bprint(bioout, "expr syntax\n");
+        Bprint(bout, "expr syntax\n");
         return 0;
     case '+':
         t += t2;
@@ -219,20 +219,20 @@ colon(char *addr, char *cp)
         break;
     /*e: [[colon()]] command cases */
     default:
-        Bprint(bioout, "?\n");
+        Bprint(bout, "?\n");
         return;
     }
 
     dot = reg.r[REGPC];
 
-    Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
+    Bprint(bout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
     /*s: [[colon()]] print current instruction */
     symoff(tbuf, sizeof(tbuf), dot, CTEXT);
-    Bprint(bioout, tbuf);
+    Bprint(bout, tbuf);
     if(fmt == 'z')
         printsource(dot);
     /*e: [[colon()]] print current instruction */
-    Bprint(bioout, "\n");
+    Bprint(bout, "\n");
 }
 /*e: function colon */
 
@@ -303,7 +303,7 @@ dollar(char *cp)
             break;
         /*e: [[dollar()]] t cases */
         default:
-            Bprint(bioout, "$t[0sic]\n"); //$
+            Bprint(bout, "$t[0sic]\n"); //$
             break;
         }
         break;
@@ -312,7 +312,7 @@ dollar(char *cp)
         cp++;
         switch(*cp) {
         default:
-            Bprint(bioout, "$i[itsa]\n"); //$
+            Bprint(bout, "$i[itsa]\n"); //$
             break;
         case 'i':
             isum();
@@ -334,7 +334,7 @@ dollar(char *cp)
             break;
         }
     default:
-        Bprint(bioout, "?\n");
+        Bprint(bout, "?\n");
         break;
 
     }
@@ -352,72 +352,72 @@ pfmt(char fmt, int mem, ulong val)
     c = 0;
     switch(fmt) {
     case 'o':
-        c = Bprint(bioout, "%-4lo ", mem? (ushort)getmem_2(dot): val);
+        c = Bprint(bout, "%-4lo ", mem? (ushort)getmem_2(dot): val);
         inc = 2;
         break;
 
     case 'O':
-        c = Bprint(bioout, "%-8lo ", mem? getmem_4(dot): val);
+        c = Bprint(bout, "%-8lo ", mem? getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'q':
-        c = Bprint(bioout, "%-4lo ", mem? (short)getmem_2(dot): val);
+        c = Bprint(bout, "%-4lo ", mem? (short)getmem_2(dot): val);
         inc = 2;
         break;
 
     case 'Q':
-        c = Bprint(bioout, "%-8lo ", mem? (long)getmem_4(dot): val);
+        c = Bprint(bout, "%-8lo ", mem? (long)getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'd':
-        c = Bprint(bioout, "%-5ld ", mem? (short)getmem_2(dot): val);
+        c = Bprint(bout, "%-5ld ", mem? (short)getmem_2(dot): val);
         inc = 2;
         break;
 
 
     case 'D':
-        c = Bprint(bioout, "%-8ld ", mem? (long)getmem_4(dot): val);
+        c = Bprint(bout, "%-8ld ", mem? (long)getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'x':
-        c = Bprint(bioout, "#%-4lux ", mem? (long)getmem_2(dot): val);
+        c = Bprint(bout, "#%-4lux ", mem? (long)getmem_2(dot): val);
         inc = 2;
         break;
 
     case 'X':
-        c = Bprint(bioout, "#%-8lux ", mem? (long)getmem_4(dot): val);
+        c = Bprint(bout, "#%-8lux ", mem? (long)getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'u':
-        c = Bprint(bioout, "%-5ld ", mem? (ushort)getmem_2(dot): val);
+        c = Bprint(bout, "%-5ld ", mem? (ushort)getmem_2(dot): val);
         inc = 2;
         break;
 
     case 'U':
-        c = Bprint(bioout, "%-8ld ", mem? (ulong)getmem_4(dot): val);
+        c = Bprint(bout, "%-8ld ", mem? (ulong)getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'b':
-        c = Bprint(bioout, "%-3ld ", mem? getmem_b(dot): val);
+        c = Bprint(bout, "%-3ld ", mem? getmem_b(dot): val);
         inc = 1;
         break;
 
     case 'c':
-        c = Bprint(bioout, "%c ", (int)(mem? getmem_b(dot): val));
+        c = Bprint(bout, "%c ", (int)(mem? getmem_b(dot): val));
         inc = 1;
         break;
 
     case 'C':
         ch = mem? getmem_b(dot): val;
         if(isprint(ch))
-            c = Bprint(bioout, "%c ", ch);
+            c = Bprint(bout, "%c ", ch);
         else
-            c = Bprint(bioout, "\\x%.2x ", ch);
+            c = Bprint(bout, "\\x%.2x ", ch);
         inc = 1;
         break;
 
@@ -427,7 +427,7 @@ pfmt(char fmt, int mem, ulong val)
             str[i++] = ch;
         str[i] = '\0';
         dot += i;
-        c = Bprint(bioout, "%s", str);
+        c = Bprint(bout, "%s", str);
         inc = 0;
         break;
 
@@ -439,28 +439,28 @@ pfmt(char fmt, int mem, ulong val)
         dot += i;
         for(p = str; *p; p++)
             if(isprint(*p))
-                c += Bprint(bioout, "%c", *p);
+                c += Bprint(bout, "%c", *p);
             else
-                c += Bprint(bioout, "\\x%.2ux", *p);
+                c += Bprint(bout, "\\x%.2ux", *p);
         inc = 0;
         break;
 
     case 'Y':
         p = ctime(mem? getmem_b(dot): val);
         p[30] = '\0';
-        c = Bprint(bioout, "%s", p);
+        c = Bprint(bout, "%s", p);
         inc = 4;
         break;
 
     case 'a':
         symoff(str, sizeof(str), dot, CTEXT);
-        c = Bprint(bioout, str);
+        c = Bprint(bout, str);
         inc = 0;
         break;
 
     case 'e':
         for(i = 0; globalsym(&s, i); i++)
-            Bprint(bioout, "%-15s #%lux\n", s.name,	getmem_4(s.value));
+            Bprint(bout, "%-15s #%lux\n", s.name,	getmem_4(s.value));
         inc = 0;
         break;
 
@@ -468,10 +468,10 @@ pfmt(char fmt, int mem, ulong val)
     case 'i':
         inc = machdata->das(symmap, dot, fmt, str, sizeof(str));
         if(inc < 0) {
-            Bprint(bioout, "5i: %r\n");
+            Bprint(bout, "5i: %r\n");
             return 0;
         }
-        c = Bprint(bioout, "\t%s", str);
+        c = Bprint(bout, "\t%s", str);
         break;
 
     case 'n':
@@ -497,13 +497,13 @@ pfmt(char fmt, int mem, ulong val)
 
     case 'z':
         if(findsym(dot, CTEXT, &s))
-            Bprint(bioout, "  %s() ", s.name);
+            Bprint(bout, "  %s() ", s.name);
         printsource(dot);
         inc = 0;
         break;
 
     default:
-        Bprint(bioout, "bad modifier\n");
+        Bprint(bout, "bad modifier\n");
         return 0;
     }
     return c;
@@ -523,7 +523,7 @@ eval(char *addr, char *p)
         p[1] = '\0';
     }
     pfmt(*p, 0, val);
-    Bprint(bioout, "\n");
+    Bprint(bout, "\n");
 }
 /*e: function eval */
 
@@ -536,13 +536,13 @@ quesie(char *p)
 
     c = 0;
     symoff(tbuf, sizeof(tbuf), dot, CTEXT);
-    Bprint(bioout, "%s?\t", tbuf);
+    Bprint(bout, "%s?\t", tbuf);
 
     while(*p) {
         p = nextc(p);
         if(*p == '"') {
             for(p++; *p && *p != '"'; p++) {
-                Bputc(bioout, *p);
+                Bputc(bout, *p);
                 c++;
             }
             if(*p)
@@ -563,16 +563,16 @@ quesie(char *p)
             c += pfmt(*p, 1, 0);
             dot += inc;
             if(c > width) {
-                Bprint(bioout, "\n");
+                Bprint(bout, "\n");
                 symoff(tbuf, sizeof(tbuf), dot, CTEXT);
-                Bprint(bioout, "%s?\t", tbuf);
+                Bprint(bout, "%s?\t", tbuf);
                 c = 0;
             }
         }
         fmt = *p++;
         p = nextc(p);
     }
-    Bprint(bioout, "\n");
+    Bprint(bout, "\n");
 }
 /*e: function quesie */
 
@@ -618,7 +618,7 @@ setreg(char *addr, char *cp)
             return;
         }
     }
-    Bprint(bioout, "bad register\n");
+    Bprint(bout, "bad register\n");
 }
 /*e: function setreg */
 
@@ -649,7 +649,7 @@ cmd(void)
     /*e: [[cmd()]] initialisation */
 
     for(;;) {
-        Bflush(bioout);
+        Bflush(bout);
         /*s: [[cmd()]] read and parse command and address from user input */
         p = buf;
         n = 0;
@@ -718,7 +718,7 @@ cmd(void)
             break;
         /*e: [[cmd()]] command cases */
         default:
-            Bprint(bioout, "?\n");
+            Bprint(bout, "?\n");
             break;
         }
     }

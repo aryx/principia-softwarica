@@ -17,7 +17,7 @@ ifetch(uintptr addr)
     byte *va;
 
     if(addr&3) {
-        Bprint(bioout, "Address error (I-fetch) vaddr %.8lux\n", addr);
+        Bprint(bout, "Address error (I-fetch) vaddr %.8lux\n", addr);
         longjmp(errjmp, 0);
     }
 
@@ -148,7 +148,7 @@ putmem_h(uintptr addr, ushort data)
     byte *va;
 
     if(addr&1) {
-        Bprint(bioout, "Address error (Store) vaddr %.8lux\n", addr);
+        Bprint(bout, "Address error (Store) vaddr %.8lux\n", addr);
         longjmp(errjmp, 0);
     }
 
@@ -172,7 +172,7 @@ putmem_w(uintptr addr, ulong data)
     byte *va;
 
     if(addr&3) {
-        Bprint(bioout, "Address error (Store) vaddr %.8lux\n", addr);
+        Bprint(bout, "Address error (Store) vaddr %.8lux\n", addr);
         longjmp(errjmp, 0);
     }
 
@@ -236,7 +236,7 @@ memio(char *mb, uintptr mem, int size, int dir)
     case MemReadstring:
         for(;;) {
             if(size-- == 0) {
-                Bprint(bioout, "memio: user/kernel copy too long for arm\n");
+                Bprint(bout, "memio: user/kernel copy too long for arm\n");
                 longjmp(errjmp, 0);
             }
             c = getmem_b(mem++);
@@ -338,8 +338,8 @@ vaddr(uintptr addr)
         }
     }
     // reach here if didn't find any segment with relevant range
-    Bprint(bioout, "User TLB miss vaddr 0x%.8lux\n", addr);
-    Bflush(bioout);
+    Bprint(bout, "User TLB miss vaddr 0x%.8lux\n", addr);
+    Bflush(bout);
     longjmp(errjmp, 0);
     return nil;		/*to stop compiler whining*/
 }

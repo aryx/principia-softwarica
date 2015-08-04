@@ -69,7 +69,7 @@ char*	sysctab[] =
 void
 sysnop(void)
 {
-    Bprint(bioout, "nop system call %s\n", sysctab[reg.r[1]]);
+    Bprint(bout, "nop system call %s\n", sysctab[reg.r[1]]);
     /*s: [[sysnop]] strace */
     if(sysdbg)
         itrace("nop()");
@@ -223,10 +223,10 @@ sysexits(void)
     count = 1;
     if(str != 0) {
         memio(buf, str, sizeof buf, MemRead);
-        Bprint(bioout, "exits(%s)\n", buf);
+        Bprint(bout, "exits(%s)\n", buf);
     }
     else
-        Bprint(bioout, "exits(0)\n");
+        Bprint(bout, "exits(0)\n");
 }
 /*e: function sysexits */
 
@@ -419,7 +419,7 @@ syswrite(vlong offset)
     a = getmem_w(reg.r[REGSP]+8);
     size = getmem_w(reg.r[REGSP]+12);
 
-    Bflush(bioout);
+    Bflush(bout);
     buf = memio(0, a, size, MemRead);
     n = pwrite(fd, buf, size, offset);
     if(n < 0)
@@ -559,7 +559,7 @@ sysnotify(void)
 void
 sysawait(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysawait */
@@ -567,7 +567,7 @@ sysawait(void)
 void
 sysrfork(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysrfork */
@@ -575,7 +575,7 @@ sysrfork(void)
 void
 syswstat(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function syswstat */
@@ -583,7 +583,7 @@ syswstat(void)
 void
 sysfwstat(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysfwstat */
@@ -591,7 +591,7 @@ sysfwstat(void)
 void
 sysnoted(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysnoted */
@@ -599,7 +599,7 @@ sysnoted(void)
 void
 syssegattach(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function syssegattach */
@@ -607,7 +607,7 @@ syssegattach(void)
 void
 syssegdetach(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function syssegdetach */
@@ -615,7 +615,7 @@ syssegdetach(void)
 void
 syssegfree(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function syssegfree */
@@ -623,7 +623,7 @@ syssegfree(void)
 void
 syssegflush(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function syssegflush */
@@ -631,7 +631,7 @@ syssegflush(void)
 void
 sysrendezvous(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysrendezvous */
@@ -639,7 +639,7 @@ sysrendezvous(void)
 void
 sysunmount(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysunmount */
@@ -648,7 +648,7 @@ sysunmount(void)
 void
 syssegbrk(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function syssegbrk */
@@ -656,7 +656,7 @@ syssegbrk(void)
 void
 sysmount(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysmount */
@@ -664,7 +664,7 @@ sysmount(void)
 void
 sysalarm(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysalarm */
@@ -672,7 +672,7 @@ sysalarm(void)
 void
 sysexec(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysexec */
@@ -681,7 +681,7 @@ sysexec(void)
 void
 sysfauth(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysfauth */
@@ -689,7 +689,7 @@ sysfauth(void)
 void
 sysfversion(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 /*e: function sysfversion */
@@ -758,9 +758,9 @@ Ssyscall(instruction _unused)
     call = reg.r[REGARG];
 
     if(call < 0 || call >= nelem(systab) || systab[call] == nil) {
-        Bprint(bioout, "bad system call %d (%#ux)\n", call, call);
+        Bprint(bout, "bad system call %d (%#ux)\n", call, call);
         dumpreg();
-        Bflush(bioout);
+        Bflush(bout);
         return;
     }
 
@@ -770,7 +770,7 @@ Ssyscall(instruction _unused)
     // dispatch!
     (*systab[call])();
 
-    Bflush(bioout);
+    Bflush(bout);
 }
 /*e: function Ssyscall */
 /*e: machine/5i/syscall.c */

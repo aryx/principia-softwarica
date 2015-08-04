@@ -102,7 +102,7 @@
 
 \title{
 {\Huge 
-Principia Softwarica: Plan9 ARM Simulator [[5i]]
+Principia Softwarica: Plan9 ARM Emulator [[5i]]
 }\\
 {version 0.1}
 }
@@ -148,8 +148,8 @@ with code from\\
 \section{Motivations}
 
 The goal of this book is to present in full details the source code of
-an hardware simulator.
-% aka emulator
+an hardware emulator.
+% aka simulator/emulator
 Why? Because I think it makes you a better programmer if
 you fully understand how things work under the hood.
 % and hardware is really the bottom of the hood :)
@@ -204,8 +204,8 @@ Here are other candidates that were considered but ultimately discarded:
 
 % 5i though is not a complete simulator. Good for ISA simulation, but not
 % for low level stuff like interrupts, page faults, running modes,
-% booting, etc. You can just run simple (plan9) programs on it; definitely not
-% a kernel.
+% booting, etc. You can just run simple (plan9) programs on it but
+% you can not definitely run a kernel on it.
 
 % Moreover we will use C, so for OAND for instance we do
 % regxxx & regyyy, so we cheat in some sense :) (just like when
@@ -270,8 +270,9 @@ License.
 
 % vs turing machine? add() in turing machine?
 
-\section{Simulator principles}
-% simulator vs emulator? emulator can cheat more?
+\section{Emulator principles}
+% simulator vs emulator? emulator can cheat more? And indeed
+% 5i cheats a bit as it emulates the OS.
 
 % =~ interpreter.
 
@@ -285,6 +286,8 @@ License.
 % also good to do $t :c
 % so have a trace with all the instructions
 
+% See also Debugger.nw
+
 \section{Input binary executable}
 
 % a.out header, and then ARM
@@ -297,8 +300,9 @@ License.
 
 %TODO: have a disassembler? could be interesting to show
 % some example of binary and what Assembly it corresponds too.
+% libmach does that no?
 
-%TOOD: could also show some assembly and show the binary
+%TODO: could also show some assembly and show the binary
 % For instance can see AB that does the +8 implicitly.
 % so if want to jump to next instruction there will be actually
 % a -4 in the value of AB.
@@ -357,8 +361,8 @@ License.
 %5i.c
 
 \section{Software architecture}
-% (was Architecture overview but oxymoron, an architecture is already
-% an overview)
+%old: was Architecture overview but oxymoron, an architecture is already
+% an overview
 
 % Use libmach a bit: crackhdr(), symbol map.
 % But archi is so simple that no need parsing: just read ulong (instruction)
@@ -377,7 +381,7 @@ License.
 
 \chapter{Core Data Structures}
 
-\section{[[Opcode]] and [[Instruction]]}
+\section{[[Instruction]] and [[Opcode]] }
 
 <<typedef instruction>>=
 typedef ulong instruction;
@@ -512,7 +516,7 @@ Inst itab[] =
 [OUNDEF] =  { undef,		"UNDEF", Imisc},
 @
 
-%ex (and evolution of array):
+%ex (and the evolutions I did on this array):
 %  { Imul,	"MUL",	Iarith }, /* 64 */
 %  [64] =  { Imul,	"MUL",	Iarith },
 %  [CMUL] =  { Imul,	"MUL",	Iarith },
@@ -618,11 +622,13 @@ Memory memory;
 \chapter{[[main()]]}
 
 %input: file => fdt => biobuf bi => bin
-%output: bo => bioout
+%output: bo => bout
 
 <<global file>>=
 char*	file = "5.out";
 @
+%less: has to be a global too? used by initstk but could be
+% passed as a parameter.
 
 % fdt binary. Has to be a global? used in vaddr() for lazy Text access
 <<global text>>=
@@ -635,12 +641,14 @@ fdt text;
 Biobuf	bi, bo;
 @
 %note: was bp, but I renamed bo
+%less: has to be globals? could be locals of main?
 
 % in globals.c
 <<global bixxx>>=
-Biobuf *bin, *bioout;
+Biobuf *bin, *bout;
 @
-% point to bi, bp;
+% point to bi, bo (was bp);
+%old: was bioout, but more consistent to use bout
 
 
 <<function main>>=
@@ -651,9 +659,9 @@ void main(int argc, char **argv)
     argc--;
     argv++;
 
-    bioout = &bo;
+    bout = &bo;
     bin = &bi;
-    Binit(bioout, STDOUT, OWRITE);
+    Binit(bout, STDOUT, OWRITE);
     Binit(bin, STDIN, OREAD);
 
     <<[[main()]] tlb initialisation>>
@@ -667,16 +675,16 @@ void main(int argc, char **argv)
     if(text < 0)
         fatal(true, "open text '%s'", file);
 
-    Bprint(bioout, "5i\n");
+    Bprint(bout, "5i\n");
 
     inithdr(text);
-    initmap();
+    initmemory();
     initstk(argc, argv);
 
     cmd();
 }
 @
-%me: better do initmap() here instead of doing it in initstk()
+%me: better do initmemory() here instead of doing it in initstk()
 
 
 % stuff from mach.h:
@@ -692,7 +700,8 @@ void main(int argc, char **argv)
 \section{[[inithdr()]]}
 
 % from mach.h
-% could mv as a local in main() instead of this global?
+%less: could mv as a local in main() instead of this global?
+% and  pass fhdr as a parameter to initstk and initmemory
 <<global fhdr>>=
 Fhdr	fhdr;
 @
@@ -710,7 +719,7 @@ inithdr(fdt fd)
     // from libmach.a
     extern Machdata armmach;
 
-    seek(fd, 0, 0);
+    seek(fd, 0, SEEK__START);
     if (!crackhdr(fd, &fhdr))
         fatal(false, "read text header");
 
@@ -730,7 +739,7 @@ inithdr(fdt fd)
 @
 % need machdata = &armmach? what for?
 
-\section{[[initmap()]]}
+\section{[[initmemory()]]}
 
 <<enum _anon_ (machine/5i/arm.h)7>>=
 enum
@@ -765,54 +774,57 @@ enum
 
 
 
-
-% could pass fhdr as a parameter instead of using global
-% could use ROUNDUP()
-<<function initmap>>=
+%less: could use ROUNDUP()
+%less: t -> endpg_text, d -> endpg_data, b -> endpg_bss
+<<function initmemory>>=
 void
-initmap(void)
+initmemory(void)
 {
     uintptr t, d, b, bssend;
-    Segment *s;
+    <<[[initmemory()]] locals>>
 
     t = (fhdr.txtaddr+fhdr.txtsz+(BY2PG-1)) & ~(BY2PG-1);
     d = (t + fhdr.datsz + (BY2PG-1)) & ~(BY2PG-1);
     bssend = t + fhdr.datsz + fhdr.bsssz;
     b = (bssend + (BY2PG-1)) & ~(BY2PG-1);
 
-    <<[[initmap()]] Text segment initilisation>>
-    <<[[initmap()]] Data segment initilisation>>
-    <<[[initmap()]] Bss segment initilisation>>
-    <<[[initmap()]] Stack segment initilisation>>
+    <<[[initmemory()]] Text segment initilisation>>
+    <<[[initmemory()]] Data segment initilisation>>
+    <<[[initmemory()]] Bss segment initilisation>>
+    <<[[initmemory()]] Stack segment initilisation>>
 
     reg.r[REGPC] = fhdr.entry;
 }
 @
 % note that bssend does not start at round page, not needed! can
 % just follow directly data
+%old: was called initmap()
 
+<<[[initmemory()]] locals>>=
+Segment *s;
+@
 
-<<[[initmap()]] Text segment initilisation>>=
+<<[[initmemory()]] Text segment initilisation>>=
 s = &memory.seg[Text];
 s->type = Text;
 s->base = fhdr.txtaddr - fhdr.hdrsz;
 s->end = t;
 s->fileoff = fhdr.txtoff - fhdr.hdrsz;
 s->fileend = s->fileoff + fhdr.txtsz;
-s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
 @
 
 <<global textbase>>=
 uintptr	textbase;
 @
-% who else use that?
+%less: who else use that? iprofile(), ifetch()
 
-<<[[initmap()]] Text segment initilisation>>=
+<<[[initmemory()]] Text segment initilisation>>=
 textbase = s->base;
 @
 
 
-<<[[initmap()]] Data segment initilisation>>=
+<<[[initmemory()]] Data segment initilisation>>=
 s = &memory.seg[Data];
 s->type = Data;
 s->base = t;
@@ -821,32 +833,35 @@ s->fileoff = fhdr.datoff;
 s->fileend = s->fileoff + fhdr.datsz;
 s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
 @
+%less: t+d-t ?? why not just d :) just for symetry with s->base
+% that uses t?
 
 <<global datasize>>=
 int	datasize;
 @
-% who use that?
+%less: who use that? sysbrk()
 
-<<[[initmap()]] Data segment initilisation>>=
+<<[[initmemory()]] Data segment initilisation>>=
 datasize = fhdr.datsz;
 @
 
 
-<<[[initmap()]] Bss segment initilisation>>=
+<<[[initmemory()]] Bss segment initilisation>>=
 s = &memory.seg[Bss];
 s->type = Bss;
 s->base = d;
 s->end = d+(b-d);
-s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
 @
 % this can be extended by brk()!
+%less: d+b-d ??
 
-<<[[initmap()]] Stack segment initilisation>>=
+<<[[initmemory()]] Stack segment initilisation>>=
 s = &memory.seg[Stack];
 s->type = Stack;
 s->base = STACKTOP-STACKSIZE;
 s->end = STACKTOP;
-s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
+s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
 @
 % this can't be extended :(
 
@@ -940,13 +955,13 @@ cmd(void)
     <<[[cmd()]] initialisation>>
 
     for(;;) {
-        Bflush(bioout);
+        Bflush(bout);
         <<[[cmd()]] read and parse command and address from user input>>
 
         switch(*p) {
         <<[[cmd()]] command cases>>
         default:
-            Bprint(bioout, "?\n");
+            Bprint(bout, "?\n");
             break;
         }
     }
@@ -977,15 +992,15 @@ colon(char *addr, char *cp)
     /* These fall through to print the stopped address */
     <<[[colon()]] command cases>>
     default:
-        Bprint(bioout, "?\n");
+        Bprint(bout, "?\n");
         return;
     }
 
     dot = reg.r[REGPC];
 
-    Bprint(bioout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
+    Bprint(bout, "%s at #%lux ", atbpt? "breakpoint": "stopped", dot);
     <<[[colon()]] print current instruction>>
-    Bprint(bioout, "\n");
+    Bprint(bout, "\n");
 }
 @
 
@@ -1144,7 +1159,7 @@ case CCtst:
     execute = runtst();
     break;
 default:
-    Bprint(bioout, "unimplemented compare operation %x\n",
+    Bprint(bout, "unimplemented compare operation %x\n",
         reg.compare_op);
     return;
 }
@@ -1178,7 +1193,7 @@ runcmp(void)
     case 0xe:	/* al */	return true;
     case 0xf:	/* nv */	return false;
     default:
-        Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
+        Bprint(bout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.instr_cond, reg.cc1, reg.cc2);
         undef(reg.instr);
         return false;
@@ -1204,7 +1219,7 @@ runteq(void)
     case 0xe:	/* al */	return true;
     case 0xf:	/* nv */	return false;
     default:
-        Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
+        Bprint(bout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.instr_cond, reg.cc1, reg.cc2);
         undef(reg.instr);
         return false;
@@ -1226,7 +1241,7 @@ runtst(void)
     case 0xe:	/* al */	return true;
     case 0xf:	/* nv */	return false;
     default:
-        Bprint(bioout, "unimplemented condition prefix %x (%ld %ld)\n",
+        Bprint(bout, "unimplemented condition prefix %x (%ld %ld)\n",
             reg.instr_cond, reg.cc1, reg.cc2);
         undef(reg.instr);
         return false;
@@ -2674,8 +2689,8 @@ vaddr(uintptr addr)
         }
     }
     // reach here if didn't find any segment with relevant range
-    Bprint(bioout, "User TLB miss vaddr 0x%.8lux\n", addr);
-    Bflush(bioout);
+    Bprint(bout, "User TLB miss vaddr 0x%.8lux\n", addr);
+    Bflush(bout);
     longjmp(errjmp, 0);
     return nil;		/*to stop compiler whining*/
 }
@@ -2783,7 +2798,7 @@ ifetch(uintptr addr)
     byte *va;
 
     if(addr&3) {
-        Bprint(bioout, "Address error (I-fetch) vaddr %.8lux\n", addr);
+        Bprint(bout, "Address error (I-fetch) vaddr %.8lux\n", addr);
         longjmp(errjmp, 0);
     }
 
@@ -2975,7 +2990,7 @@ putmem_h(uintptr addr, ushort data)
     byte *va;
 
     if(addr&1) {
-        Bprint(bioout, "Address error (Store) vaddr %.8lux\n", addr);
+        Bprint(bout, "Address error (Store) vaddr %.8lux\n", addr);
         longjmp(errjmp, 0);
     }
 
@@ -2997,7 +3012,7 @@ putmem_w(uintptr addr, ulong data)
     byte *va;
 
     if(addr&3) {
-        Bprint(bioout, "Address error (Store) vaddr %.8lux\n", addr);
+        Bprint(bout, "Address error (Store) vaddr %.8lux\n", addr);
         longjmp(errjmp, 0);
     }
 
@@ -3027,7 +3042,7 @@ putmem_v(uintptr addr, uvlong data)
 
 
 
-\chapter{Syscalls}
+\chapter{Syscalls Emulation}
 
 % emulation/proxy at syscall level.
 % Qemu is at hardware device level
@@ -3154,9 +3169,9 @@ Ssyscall(instruction _unused)
     call = reg.r[REGARG];
 
     if(call < 0 || call >= nelem(systab) || systab[call] == nil) {
-        Bprint(bioout, "bad system call %d (%#ux)\n", call, call);
+        Bprint(bout, "bad system call %d (%#ux)\n", call, call);
         dumpreg();
-        Bflush(bioout);
+        Bflush(bout);
         return;
     }
 
@@ -3166,7 +3181,7 @@ Ssyscall(instruction _unused)
     // dispatch!
     (*systab[call])();
 
-    Bflush(bioout);
+    Bflush(bout);
 }
 @
 
@@ -3211,7 +3226,7 @@ memio(char *mb, uintptr mem, int size, int dir)
     case MemReadstring:
         for(;;) {
             if(size-- == 0) {
-                Bprint(bioout, "memio: user/kernel copy too long for arm\n");
+                Bprint(bout, "memio: user/kernel copy too long for arm\n");
                 longjmp(errjmp, 0);
             }
             c = getmem_b(mem++);
@@ -3237,7 +3252,7 @@ memio(char *mb, uintptr mem, int size, int dir)
 void
 sysnop(void)
 {
-    Bprint(bioout, "nop system call %s\n", sysctab[reg.r[1]]);
+    Bprint(bout, "nop system call %s\n", sysctab[reg.r[1]]);
     <<[[sysnop]] strace>>
 }
 @
@@ -3443,7 +3458,7 @@ syswrite(vlong offset)
     a = getmem_w(reg.r[REGSP]+8);
     size = getmem_w(reg.r[REGSP]+12);
 
-    Bflush(bioout);
+    Bflush(bout);
     buf = memio(0, a, size, MemRead);
     n = pwrite(fd, buf, size, offset);
     if(n < 0)
@@ -3690,10 +3705,10 @@ sysexits(void)
     count = 1;
     if(str != 0) {
         memio(buf, str, sizeof buf, MemRead);
-        Bprint(bioout, "exits(%s)\n", buf);
+        Bprint(bout, "exits(%s)\n", buf);
     }
     else
-        Bprint(bioout, "exits(0)\n");
+        Bprint(bout, "exits(0)\n");
 }
 @
 
@@ -3768,7 +3783,7 @@ sysnotify(void)
 void
 sysrfork(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3777,7 +3792,7 @@ sysrfork(void)
 void
 sysexec(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3787,7 +3802,7 @@ sysexec(void)
 void
 sysawait(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3798,7 +3813,7 @@ sysawait(void)
 void
 syswstat(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3807,7 +3822,7 @@ syswstat(void)
 void
 sysfwstat(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3818,7 +3833,7 @@ sysfwstat(void)
 void
 sysnoted(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3827,7 +3842,7 @@ sysnoted(void)
 void
 syssegattach(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3836,7 +3851,7 @@ syssegattach(void)
 void
 syssegdetach(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3845,7 +3860,7 @@ syssegdetach(void)
 void
 syssegfree(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3854,7 +3869,7 @@ syssegfree(void)
 void
 syssegflush(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3863,7 +3878,7 @@ syssegflush(void)
 void
 syssegbrk(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3873,7 +3888,7 @@ syssegbrk(void)
 void
 sysrendezvous(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3883,7 +3898,7 @@ sysrendezvous(void)
 void
 sysmount(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3892,7 +3907,7 @@ sysmount(void)
 void
 sysunmount(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3902,7 +3917,7 @@ sysunmount(void)
 void
 sysalarm(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3911,7 +3926,7 @@ sysalarm(void)
 void
 sysfauth(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -3920,7 +3935,7 @@ sysfauth(void)
 void
 sysfversion(void)
 {
-    Bprint(bioout, "No system call %s\n", sysctab[reg.r[REGARG]]);
+    Bprint(bout, "No system call %s\n", sysctab[reg.r[REGARG]]);
     exits(0);
 }
 @
@@ -4144,7 +4159,7 @@ expr(char *addr)
     numsym(addr, &t2);
     switch(op) {
     default:
-        Bprint(bioout, "expr syntax\n");
+        Bprint(bout, "expr syntax\n");
         return 0;
     case '+':
         t += t2;
@@ -4262,7 +4277,7 @@ dollar(char *cp)
             break;
         <<[[dollar()]] t cases>>
         default:
-            Bprint(bioout, "$t[0sic]\n"); //$
+            Bprint(bout, "$t[0sic]\n"); //$
             break;
         }
         break;
@@ -4271,7 +4286,7 @@ dollar(char *cp)
         cp++;
         switch(*cp) {
         default:
-            Bprint(bioout, "$i[itsa]\n"); //$
+            Bprint(bout, "$i[itsa]\n"); //$
             break;
         case 'i':
             isum();
@@ -4293,7 +4308,7 @@ dollar(char *cp)
             break;
         }
     default:
-        Bprint(bioout, "?\n");
+        Bprint(bout, "?\n");
         break;
 
     }
@@ -4313,7 +4328,7 @@ char tbuf[512];
 
 <<[[colon()]] print current instruction>>=
 symoff(tbuf, sizeof(tbuf), dot, CTEXT);
-Bprint(bioout, tbuf);
+Bprint(bout, tbuf);
 if(fmt == 'z')
     printsource(dot);
 @
@@ -4376,72 +4391,72 @@ pfmt(char fmt, int mem, ulong val)
     c = 0;
     switch(fmt) {
     case 'o':
-        c = Bprint(bioout, "%-4lo ", mem? (ushort)getmem_2(dot): val);
+        c = Bprint(bout, "%-4lo ", mem? (ushort)getmem_2(dot): val);
         inc = 2;
         break;
 
     case 'O':
-        c = Bprint(bioout, "%-8lo ", mem? getmem_4(dot): val);
+        c = Bprint(bout, "%-8lo ", mem? getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'q':
-        c = Bprint(bioout, "%-4lo ", mem? (short)getmem_2(dot): val);
+        c = Bprint(bout, "%-4lo ", mem? (short)getmem_2(dot): val);
         inc = 2;
         break;
 
     case 'Q':
-        c = Bprint(bioout, "%-8lo ", mem? (long)getmem_4(dot): val);
+        c = Bprint(bout, "%-8lo ", mem? (long)getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'd':
-        c = Bprint(bioout, "%-5ld ", mem? (short)getmem_2(dot): val);
+        c = Bprint(bout, "%-5ld ", mem? (short)getmem_2(dot): val);
         inc = 2;
         break;
 
 
     case 'D':
-        c = Bprint(bioout, "%-8ld ", mem? (long)getmem_4(dot): val);
+        c = Bprint(bout, "%-8ld ", mem? (long)getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'x':
-        c = Bprint(bioout, "#%-4lux ", mem? (long)getmem_2(dot): val);
+        c = Bprint(bout, "#%-4lux ", mem? (long)getmem_2(dot): val);
         inc = 2;
         break;
 
     case 'X':
-        c = Bprint(bioout, "#%-8lux ", mem? (long)getmem_4(dot): val);
+        c = Bprint(bout, "#%-8lux ", mem? (long)getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'u':
-        c = Bprint(bioout, "%-5ld ", mem? (ushort)getmem_2(dot): val);
+        c = Bprint(bout, "%-5ld ", mem? (ushort)getmem_2(dot): val);
         inc = 2;
         break;
 
     case 'U':
-        c = Bprint(bioout, "%-8ld ", mem? (ulong)getmem_4(dot): val);
+        c = Bprint(bout, "%-8ld ", mem? (ulong)getmem_4(dot): val);
         inc = 4;
         break;
 
     case 'b':
-        c = Bprint(bioout, "%-3ld ", mem? getmem_b(dot): val);
+        c = Bprint(bout, "%-3ld ", mem? getmem_b(dot): val);
         inc = 1;
         break;
 
     case 'c':
-        c = Bprint(bioout, "%c ", (int)(mem? getmem_b(dot): val));
+        c = Bprint(bout, "%c ", (int)(mem? getmem_b(dot): val));
         inc = 1;
         break;
 
     case 'C':
         ch = mem? getmem_b(dot): val;
         if(isprint(ch))
-            c = Bprint(bioout, "%c ", ch);
+            c = Bprint(bout, "%c ", ch);
         else
-            c = Bprint(bioout, "\\x%.2x ", ch);
+            c = Bprint(bout, "\\x%.2x ", ch);
         inc = 1;
         break;
 
@@ -4451,7 +4466,7 @@ pfmt(char fmt, int mem, ulong val)
             str[i++] = ch;
         str[i] = '\0';
         dot += i;
-        c = Bprint(bioout, "%s", str);
+        c = Bprint(bout, "%s", str);
         inc = 0;
         break;
 
@@ -4463,28 +4478,28 @@ pfmt(char fmt, int mem, ulong val)
         dot += i;
         for(p = str; *p; p++)
             if(isprint(*p))
-                c += Bprint(bioout, "%c", *p);
+                c += Bprint(bout, "%c", *p);
             else
-                c += Bprint(bioout, "\\x%.2ux", *p);
+                c += Bprint(bout, "\\x%.2ux", *p);
         inc = 0;
         break;
 
     case 'Y':
         p = ctime(mem? getmem_b(dot): val);
         p[30] = '\0';
-        c = Bprint(bioout, "%s", p);
+        c = Bprint(bout, "%s", p);
         inc = 4;
         break;
 
     case 'a':
         symoff(str, sizeof(str), dot, CTEXT);
-        c = Bprint(bioout, str);
+        c = Bprint(bout, str);
         inc = 0;
         break;
 
     case 'e':
         for(i = 0; globalsym(&s, i); i++)
-            Bprint(bioout, "%-15s #%lux\n", s.name,	getmem_4(s.value));
+            Bprint(bout, "%-15s #%lux\n", s.name,	getmem_4(s.value));
         inc = 0;
         break;
 
@@ -4492,10 +4507,10 @@ pfmt(char fmt, int mem, ulong val)
     case 'i':
         inc = machdata->das(symmap, dot, fmt, str, sizeof(str));
         if(inc < 0) {
-            Bprint(bioout, "5i: %r\n");
+            Bprint(bout, "5i: %r\n");
             return 0;
         }
-        c = Bprint(bioout, "\t%s", str);
+        c = Bprint(bout, "\t%s", str);
         break;
 
     case 'n':
@@ -4521,13 +4536,13 @@ pfmt(char fmt, int mem, ulong val)
 
     case 'z':
         if(findsym(dot, CTEXT, &s))
-            Bprint(bioout, "  %s() ", s.name);
+            Bprint(bout, "  %s() ", s.name);
         printsource(dot);
         inc = 0;
         break;
 
     default:
-        Bprint(bioout, "bad modifier\n");
+        Bprint(bout, "bad modifier\n");
         return 0;
     }
     return c;
@@ -4547,7 +4562,7 @@ eval(char *addr, char *p)
         p[1] = '\0';
     }
     pfmt(*p, 0, val);
-    Bprint(bioout, "\n");
+    Bprint(bout, "\n");
 }
 @
 
@@ -4560,13 +4575,13 @@ quesie(char *p)
 
     c = 0;
     symoff(tbuf, sizeof(tbuf), dot, CTEXT);
-    Bprint(bioout, "%s?\t", tbuf);
+    Bprint(bout, "%s?\t", tbuf);
 
     while(*p) {
         p = nextc(p);
         if(*p == '"') {
             for(p++; *p && *p != '"'; p++) {
-                Bputc(bioout, *p);
+                Bputc(bout, *p);
                 c++;
             }
             if(*p)
@@ -4587,16 +4602,16 @@ quesie(char *p)
             c += pfmt(*p, 1, 0);
             dot += inc;
             if(c > width) {
-                Bprint(bioout, "\n");
+                Bprint(bout, "\n");
                 symoff(tbuf, sizeof(tbuf), dot, CTEXT);
-                Bprint(bioout, "%s?\t", tbuf);
+                Bprint(bout, "%s?\t", tbuf);
                 c = 0;
             }
         }
         fmt = *p++;
         p = nextc(p);
     }
-    Bprint(bioout, "\n");
+    Bprint(bout, "\n");
 }
 @
 
@@ -4624,7 +4639,7 @@ setreg(char *addr, char *cp)
             return;
         }
     }
-    Bprint(bioout, "bad register\n");
+    Bprint(bout, "bad register\n");
 }
 @
 
@@ -4641,15 +4656,15 @@ dumpreg(void)
 {
     int i;
 
-    Bprint(bioout, "PC  #%-8lux SP  #%-8lux \n",
+    Bprint(bout, "PC  #%-8lux SP  #%-8lux \n",
                 reg.r[REGPC], reg.r[REGSP]);
 
     for(i = 0; i < 16; i++) {
         if((i%4) == 0 && i != 0)
-            Bprint(bioout, "\n");
-        Bprint(bioout, "R%-2d #%-8lux ", i, reg.r[i]);
+            Bprint(bout, "\n");
+        Bprint(bout, "R%-2d #%-8lux ", i, reg.r[i]);
     }
-    Bprint(bioout, "\n");
+    Bprint(bout, "\n");
 }
 @
 
@@ -4704,7 +4719,7 @@ printsource(long dot)
     char str[STRINGSZ];
 
     if (fileline(str, STRINGSZ, dot))
-        Bprint(bioout, "%s", str);
+        Bprint(bout, "%s", str);
 }
 @
 
@@ -4719,7 +4734,7 @@ printlocals(Symbol *fn, ulong fp)
     for (i = 0; localsym(&s, i); i++) {
         if (s.class != CAUTO)
             continue;
-        Bprint(bioout, "\t%s=#%lux\n", s.name, getmem_4(fp-s.value));
+        Bprint(bout, "\t%s=#%lux\n", s.name, getmem_4(fp-s.value));
     }
 }
 @
@@ -4738,10 +4753,10 @@ printparams(Symbol *fn, ulong fp)
         if (s.class != CPARAM)
             continue;
         if (first++)
-            Bprint(bioout, ", ");
-        Bprint(bioout, "%s=#%lux", s.name, getmem_4(fp+s.value));
+            Bprint(bout, ", ");
+        Bprint(bout, "%s=#%lux", s.name, getmem_4(fp+s.value));
     }
-    Bprint(bioout, ") ");
+    Bprint(bout, ") ");
 }
 @
 
@@ -4767,7 +4782,7 @@ stktrace(int modif)
     i = 0;
     while (findsym(pc, CTEXT, &s)) {
         if(strcmp(STARTSYM, s.name) == 0) {
-            Bprint(bioout, "%s() at #%llux\n", s.name, s.value);
+            Bprint(bout, "%s() at #%llux\n", s.name, s.value);
             break;
         }
         if (pc == s.value)	/* at first instruction */
@@ -4778,18 +4793,18 @@ stktrace(int modif)
             pc = reg.r[REGLINK];
         else pc = getmem_4(sp);
         sp += f.value;
-        Bprint(bioout, "%s(", s.name);
+        Bprint(bout, "%s(", s.name);
         printparams(&s, sp);
         printsource(s.value);
-        Bprint(bioout, " called from ");
+        Bprint(bout, " called from ");
         symoff(buf, sizeof(buf), pc-8, CTEXT);
-        Bprint(bioout, buf);
+        Bprint(bout, buf);
         printsource(pc-8);
-        Bprint(bioout, "\n");
+        Bprint(bout, "\n");
         if(modif == 'C')
             printlocals(&s, sp);
         if(++i > 40){
-            Bprint(bioout, "(trace truncated)\n");
+            Bprint(bout, "(trace truncated)\n");
             break;
         }
     }
@@ -4815,7 +4830,7 @@ if(calltree && rd == REGPC && o2 == 0) {
     Symbol s;
 
     findsym(o1 + o2, CTEXT, &s);
-    Bprint(bioout, "%8lux return to %lux %s r0=%lux\n",
+    Bprint(bout, "%8lux return to %lux %s r0=%lux\n",
                 reg.r[REGPC], o1 + o2, s.name, reg.r[REGRET]);
 }
 @
@@ -4827,11 +4842,11 @@ if(calltree && rd == REGPC && o2 == 0) {
 <<[[Ibl()]] if calltree>>=
 if(calltree) {
     findsym(v, CTEXT, &s);
-    Bprint(bioout, "%8lux %s(", reg.r[REGPC], s.name);
+    Bprint(bout, "%8lux %s(", reg.r[REGPC], s.name);
     printparams(&s, reg.r[REGSP]);
-    Bprint(bioout, "from ");
+    Bprint(bout, "from ");
     printsource(reg.r[REGPC]);
-    Bputc(bioout, '\n');
+    Bputc(bout, '\n');
 }
 @
 
@@ -4899,36 +4914,36 @@ dobplist(void)
     for(b = bplist; b; b = b->next) {
         switch(b->type) {
         case Instruction:
-            Bprint(bioout, "0x%lux,%d:b %d done, at ", b->addr, b->count, b->done);
+            Bprint(bout, "0x%lux,%d:b %d done, at ", b->addr, b->count, b->done);
             symoff(buf, sizeof(buf), b->addr, CTEXT);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
 
         case Access:
-            Bprint(bioout, "0x%lux,%d:ba %d done, at ", b->addr, b->count, b->done);
+            Bprint(bout, "0x%lux,%d:ba %d done, at ", b->addr, b->count, b->done);
             symoff(buf, sizeof(buf), b->addr, CDATA);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
 
         case Read:
-            Bprint(bioout, "0x%lux,%d:br %d done, at ", b->addr, b->count, b->done);
+            Bprint(bout, "0x%lux,%d:br %d done, at ", b->addr, b->count, b->done);
             symoff(buf, sizeof(buf), b->addr, CDATA);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
 
         case Write:
-            Bprint(bioout, "0x%lux,%d:bw %d done, at ", b->addr, b->count, b->done);
+            Bprint(bout, "0x%lux,%d:bw %d done, at ", b->addr, b->count, b->done);
             symoff(buf, sizeof(buf), b->addr, CDATA);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
 
         case Equal:
-            Bprint(bioout, "0x%lux,%d:be at ", b->addr, b->count);
+            Bprint(bout, "0x%lux,%d:be at ", b->addr, b->count);
             symoff(buf, sizeof(buf), b->addr, CDATA);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
         }
-        Bprint(bioout, "\n");
+        Bprint(bout, "\n");
     }
 }
 @
@@ -4992,7 +5007,7 @@ delbpt(char *addr)
         l = &b->next;	
     }
 
-    Bprint(bioout, "no breakpoint\n");
+    Bprint(bout, "no breakpoint\n");
 }
 @
 
@@ -5073,11 +5088,11 @@ ulong *iprof;
 PROFGRAN	= 4,
 @
 
-<<[[initmap()]] Text segment initilisation>>=
-<<[[initmap()]] iprof allocation>>
+<<[[initmemory()]] Text segment initilisation>>=
+<<[[initmemory()]] iprof allocation>>
 @
 
-<<[[initmap()]] iprof allocation>>=
+<<[[initmemory()]] iprof allocation>>=
 iprof = emalloc(((s->end - s->base)/PROFGRAN)*sizeof(long));
 @
 
@@ -5121,7 +5136,7 @@ isum(void)
         if(i->name && i->count)
             total += i->count;
 
-    Bprint(bioout, "\nInstruction summary.\n\n");
+    Bprint(bout, "\nInstruction summary.\n\n");
 
     for(j = 0; tables[j]; j++) {
         for(i = tables[j]; i->func; i++) {
@@ -5131,11 +5146,11 @@ isum(void)
                     continue;
                 pct = Percent(i->count, total);
                 if(pct != 0)
-                    Bprint(bioout, "%-8ud %3d%% %s\n",
+                    Bprint(bout, "%-8ud %3d%% %s\n",
                         i->count, Percent(i->count,
                         total), i->name);
                 else
-                    Bprint(bioout, "%-8ud      %s\n",
+                    Bprint(bout, "%-8ud      %s\n",
                         i->count, i->name);
 
 
@@ -5162,31 +5177,31 @@ isum(void)
         }
     }
 
-    Bprint(bioout, "\n%-8ud      Memory cycles\n", mems+total);	
-    Bprint(bioout, "%-8ud %3d%% Instruction cycles\n",
+    Bprint(bout, "\n%-8ud      Memory cycles\n", mems+total);	
+    Bprint(bout, "%-8ud %3d%% Instruction cycles\n",
             total, Percent(total, mems+total));
-    Bprint(bioout, "%-8ud %3d%% Data cycles\n\n",
+    Bprint(bout, "%-8ud %3d%% Data cycles\n\n",
             mems, Percent(mems, mems+total));	
 
-    Bprint(bioout, "%-8ud %3d%% Arithmetic\n",
+    Bprint(bout, "%-8ud %3d%% Arithmetic\n",
             arith, Percent(arith, total));
 
-    Bprint(bioout, "%-8ud %3d%% System calls\n",
+    Bprint(bout, "%-8ud %3d%% System calls\n",
             syscall, Percent(syscall, total));
 
-    Bprint(bioout, "%-8ud %3d%% Branches\n",
+    Bprint(bout, "%-8ud %3d%% Branches\n",
             branch, Percent(branch, total));
 
-    Bprint(bioout, "   %-8ud %3d%% Branches taken\n",
+    Bprint(bout, "   %-8ud %3d%% Branches taken\n",
             taken, Percent(taken, branch));
 
-    Bprint(bioout, "   %-8ud %3d%% Delay slots\n",
+    Bprint(bout, "   %-8ud %3d%% Delay slots\n",
             useddelay, Percent(useddelay, branch));
 
-    Bprint(bioout, "   %-8ud %3d%% Unused delay slots\n", 
+    Bprint(bout, "   %-8ud %3d%% Unused delay slots\n", 
             branch-useddelay, Percent(branch-useddelay, branch));
 
-    Bprint(bioout, "%-8ud %3d%% Program total delay slots\n",
+    Bprint(bout, "%-8ud %3d%% Program total delay slots\n",
             nopcount, Percent(nopcount, total));
 }
 @
@@ -5198,13 +5213,13 @@ tlbsum(void)
     if(tlb.on == false)
         return;
 
-    Bprint(bioout, "\n\nTlb summary\n");
+    Bprint(bout, "\n\nTlb summary\n");
 
-    Bprint(bioout, "\n%-8d User entries\n", tlb.tlbsize);
-    Bprint(bioout, "%-8d Accesses\n", tlb.hit+tlb.miss);
-    Bprint(bioout, "%-8d Tlb hits\n", tlb.hit);
-    Bprint(bioout, "%-8d Tlb misses\n", tlb.miss);
-    Bprint(bioout, "%7d%% Hit rate\n", Percent(tlb.hit, tlb.hit+tlb.miss));
+    Bprint(bout, "\n%-8d User entries\n", tlb.tlbsize);
+    Bprint(bout, "%-8d Accesses\n", tlb.hit+tlb.miss);
+    Bprint(bout, "%-8d Tlb hits\n", tlb.hit);
+    Bprint(bout, "%-8d Tlb misses\n", tlb.miss);
+    Bprint(bout, "%7d%% Hit rate\n", Percent(tlb.hit, tlb.hit+tlb.miss));
 }
 @
 
@@ -5226,11 +5241,11 @@ segsum(void)
     Segment *s;
     int i;
 
-    Bprint(bioout, "\n\nMemory Summary\n\n");
-    Bprint(bioout, "      Base     End      Resident References\n");
+    Bprint(bout, "\n\nMemory Summary\n\n");
+    Bprint(bout, "      Base     End      Resident References\n");
     for(i = 0; i < Nseg; i++) {
         s = &memory.seg[i];
-        Bprint(bioout, "%-5s %.8lux %.8lux %-8d %-8d\n",
+        Bprint(bout, "%-5s %.8lux %.8lux %-8d %-8d\n",
                 stype[i], s->base, s->end, s->rss*BY2PG, s->refs);
     }
 }
@@ -5292,19 +5307,19 @@ iprofile(void)
     for(b = 0; b < i; b++)
         total += aprof[b].count;
 
-    Bprint(bioout, "  cycles     %% symbol          file\n");
+    Bprint(bout, "  cycles     %% symbol          file\n");
     for(b = 0; b < i; b++) {
         if(aprof[b].count == 0)
             continue;
 
-        Bprint(bioout, "%8ld %3ld.%ld %-15s ",
+        Bprint(bout, "%8ld %3ld.%ld %-15s ",
             aprof[b].count,
             100*aprof[b].count/total,
             (1000*aprof[b].count/total)%10,
             aprof[b].s.name);
 
         printsource(aprof[b].s.value);
-        Bputc(bioout, '\n');
+        Bputc(bout, '\n');
     }
     memset(prof, 0, sizeof(Prof)*i);
 }
@@ -5397,9 +5412,9 @@ itrace(char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
-    Bprint(bioout, "%8lux %.8lux %2d %s\n", 
+    Bprint(bout, "%8lux %.8lux %2d %s\n", 
                      reg.ar, reg.instr, reg.instr_opcode, buf);	
-    Bflush(bioout);
+    Bflush(bout);
 }
 @
 %note: didn't have the bflush at the end, but I think better to flush here
@@ -5463,7 +5478,7 @@ setjmp(errjmp);
 void
 undef(instruction inst)
 {
-    Bprint(bioout, "undefined instruction trap pc #%lux inst %.8lux op %d\n",
+    Bprint(bout, "undefined instruction trap pc #%lux inst %.8lux op %d\n",
         reg.r[REGPC], inst, reg.instr_opcode);
     longjmp(errjmp, 0);
 }

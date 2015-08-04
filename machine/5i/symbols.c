@@ -22,7 +22,7 @@ printsource(long dot)
     char str[STRINGSZ];
 
     if (fileline(str, STRINGSZ, dot))
-        Bprint(bioout, "%s", str);
+        Bprint(bout, "%s", str);
 }
 /*e: function printsource */
 
@@ -37,7 +37,7 @@ printlocals(Symbol *fn, ulong fp)
     for (i = 0; localsym(&s, i); i++) {
         if (s.class != CAUTO)
             continue;
-        Bprint(bioout, "\t%s=#%lux\n", s.name, getmem_4(fp-s.value));
+        Bprint(bout, "\t%s=#%lux\n", s.name, getmem_4(fp-s.value));
     }
 }
 /*e: function printlocals */
@@ -56,10 +56,10 @@ printparams(Symbol *fn, ulong fp)
         if (s.class != CPARAM)
             continue;
         if (first++)
-            Bprint(bioout, ", ");
-        Bprint(bioout, "%s=#%lux", s.name, getmem_4(fp+s.value));
+            Bprint(bout, ", ");
+        Bprint(bout, "%s=#%lux", s.name, getmem_4(fp+s.value));
     }
-    Bprint(bioout, ") ");
+    Bprint(bout, ") ");
 }
 /*e: function printparams */
 
@@ -84,7 +84,7 @@ stktrace(int modif)
     i = 0;
     while (findsym(pc, CTEXT, &s)) {
         if(strcmp(STARTSYM, s.name) == 0) {
-            Bprint(bioout, "%s() at #%llux\n", s.name, s.value);
+            Bprint(bout, "%s() at #%llux\n", s.name, s.value);
             break;
         }
         if (pc == s.value)	/* at first instruction */
@@ -95,18 +95,18 @@ stktrace(int modif)
             pc = reg.r[REGLINK];
         else pc = getmem_4(sp);
         sp += f.value;
-        Bprint(bioout, "%s(", s.name);
+        Bprint(bout, "%s(", s.name);
         printparams(&s, sp);
         printsource(s.value);
-        Bprint(bioout, " called from ");
+        Bprint(bout, " called from ");
         symoff(buf, sizeof(buf), pc-8, CTEXT);
-        Bprint(bioout, buf);
+        Bprint(bout, buf);
         printsource(pc-8);
-        Bprint(bioout, "\n");
+        Bprint(bout, "\n");
         if(modif == 'C')
             printlocals(&s, sp);
         if(++i > 40){
-            Bprint(bioout, "(trace truncated)\n");
+            Bprint(bout, "(trace truncated)\n");
             break;
         }
     }

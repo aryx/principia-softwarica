@@ -20,36 +20,36 @@ dobplist(void)
     for(b = bplist; b; b = b->next) {
         switch(b->type) {
         case Instruction:
-            Bprint(bioout, "0x%lux,%d:b %d done, at ", b->addr, b->count, b->done);
+            Bprint(bout, "0x%lux,%d:b %d done, at ", b->addr, b->count, b->done);
             symoff(buf, sizeof(buf), b->addr, CTEXT);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
 
         case Access:
-            Bprint(bioout, "0x%lux,%d:ba %d done, at ", b->addr, b->count, b->done);
+            Bprint(bout, "0x%lux,%d:ba %d done, at ", b->addr, b->count, b->done);
             symoff(buf, sizeof(buf), b->addr, CDATA);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
 
         case Read:
-            Bprint(bioout, "0x%lux,%d:br %d done, at ", b->addr, b->count, b->done);
+            Bprint(bout, "0x%lux,%d:br %d done, at ", b->addr, b->count, b->done);
             symoff(buf, sizeof(buf), b->addr, CDATA);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
 
         case Write:
-            Bprint(bioout, "0x%lux,%d:bw %d done, at ", b->addr, b->count, b->done);
+            Bprint(bout, "0x%lux,%d:bw %d done, at ", b->addr, b->count, b->done);
             symoff(buf, sizeof(buf), b->addr, CDATA);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
 
         case Equal:
-            Bprint(bioout, "0x%lux,%d:be at ", b->addr, b->count);
+            Bprint(bout, "0x%lux,%d:be at ", b->addr, b->count);
             symoff(buf, sizeof(buf), b->addr, CDATA);
-            Bprint(bioout, buf);
+            Bprint(bout, buf);
             break;
         }
-        Bprint(bioout, "\n");
+        Bprint(bout, "\n");
     }
 }
 /*e: function dobplist */
@@ -113,7 +113,7 @@ delbpt(char *addr)
         l = &b->next;	
     }
 
-    Bprint(bioout, "no breakpoint\n");
+    Bprint(bout, "no breakpoint\n");
 }
 /*e: function delbpt */
 

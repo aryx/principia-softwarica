@@ -20,34 +20,36 @@ Biobuf	bi, bo;
 Fhdr	fhdr;
 /*e: global fhdr */
 
-/*s: function initmap */
+/*s: function initmemory */
 void
-initmap(void)
+initmemory(void)
 {
     uintptr t, d, b, bssend;
+    /*s: [[initmemory()]] locals */
     Segment *s;
+    /*e: [[initmemory()]] locals */
 
     t = (fhdr.txtaddr+fhdr.txtsz+(BY2PG-1)) & ~(BY2PG-1);
     d = (t + fhdr.datsz + (BY2PG-1)) & ~(BY2PG-1);
     bssend = t + fhdr.datsz + fhdr.bsssz;
     b = (bssend + (BY2PG-1)) & ~(BY2PG-1);
 
-    /*s: [[initmap()]] Text segment initilisation */
+    /*s: [[initmemory()]] Text segment initilisation */
     s = &memory.seg[Text];
     s->type = Text;
     s->base = fhdr.txtaddr - fhdr.hdrsz;
     s->end = t;
     s->fileoff = fhdr.txtoff - fhdr.hdrsz;
     s->fileend = s->fileoff + fhdr.txtsz;
-    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
-    /*x: [[initmap()]] Text segment initilisation */
+    s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
+    /*x: [[initmemory()]] Text segment initilisation */
     textbase = s->base;
-    /*x: [[initmap()]] Text segment initilisation */
-    /*s: [[initmap()]] iprof allocation */
+    /*x: [[initmemory()]] Text segment initilisation */
+    /*s: [[initmemory()]] iprof allocation */
     iprof = emalloc(((s->end - s->base)/PROFGRAN)*sizeof(long));
-    /*e: [[initmap()]] iprof allocation */
-    /*e: [[initmap()]] Text segment initilisation */
-    /*s: [[initmap()]] Data segment initilisation */
+    /*e: [[initmemory()]] iprof allocation */
+    /*e: [[initmemory()]] Text segment initilisation */
+    /*s: [[initmemory()]] Data segment initilisation */
     s = &memory.seg[Data];
     s->type = Data;
     s->base = t;
@@ -55,27 +57,27 @@ initmap(void)
     s->fileoff = fhdr.datoff;
     s->fileend = s->fileoff + fhdr.datsz;
     s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
-    /*x: [[initmap()]] Data segment initilisation */
+    /*x: [[initmemory()]] Data segment initilisation */
     datasize = fhdr.datsz;
-    /*e: [[initmap()]] Data segment initilisation */
-    /*s: [[initmap()]] Bss segment initilisation */
+    /*e: [[initmemory()]] Data segment initilisation */
+    /*s: [[initmemory()]] Bss segment initilisation */
     s = &memory.seg[Bss];
     s->type = Bss;
     s->base = d;
     s->end = d+(b-d);
-    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
-    /*e: [[initmap()]] Bss segment initilisation */
-    /*s: [[initmap()]] Stack segment initilisation */
+    s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
+    /*e: [[initmemory()]] Bss segment initilisation */
+    /*s: [[initmemory()]] Stack segment initilisation */
     s = &memory.seg[Stack];
     s->type = Stack;
     s->base = STACKTOP-STACKSIZE;
     s->end = STACKTOP;
-    s->table = emalloc(((s->end - s->base)/BY2PG)*sizeof(byte*));
-    /*e: [[initmap()]] Stack segment initilisation */
+    s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
+    /*e: [[initmemory()]] Stack segment initilisation */
 
     reg.r[REGPC] = fhdr.entry;
 }
-/*e: function initmap */
+/*e: function initmemory */
 
 /*s: function inithdr */
 void
@@ -86,7 +88,7 @@ inithdr(fdt fd)
     // from libmach.a
     extern Machdata armmach;
 
-    seek(fd, 0, 0);
+    seek(fd, 0, SEEK__START);
     if (!crackhdr(fd, &fhdr))
         fatal(false, "read text header");
 
@@ -175,9 +177,9 @@ void main(int argc, char **argv)
     argc--;
     argv++;
 
-    bioout = &bo;
+    bout = &bo;
     bin = &bi;
-    Binit(bioout, STDOUT, OWRITE);
+    Binit(bout, STDOUT, OWRITE);
     Binit(bin, STDIN, OREAD);
 
     /*s: [[main()]] tlb initialisation */
@@ -194,10 +196,10 @@ void main(int argc, char **argv)
     if(text < 0)
         fatal(true, "open text '%s'", file);
 
-    Bprint(bioout, "5i\n");
+    Bprint(bout, "5i\n");
 
     inithdr(text);
-    initmap();
+    initmemory();
     initstk(argc, argv);
 
     cmd();

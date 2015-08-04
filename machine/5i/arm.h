@@ -363,7 +363,7 @@ extern	Inst		itab[];
 extern	instruction	dot;
 extern	int		count;
 
-extern	Biobuf*		bioout;
+extern	Biobuf*		bout;
 extern	Biobuf*		bin;
 extern	int		text;
 extern	ulong	textbase;

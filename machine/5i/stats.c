@@ -40,7 +40,7 @@ isum(void)
         if(i->name && i->count)
             total += i->count;
 
-    Bprint(bioout, "\nInstruction summary.\n\n");
+    Bprint(bout, "\nInstruction summary.\n\n");
 
     for(j = 0; tables[j]; j++) {
         for(i = tables[j]; i->func; i++) {
@@ -50,11 +50,11 @@ isum(void)
                     continue;
                 pct = Percent(i->count, total);
                 if(pct != 0)
-                    Bprint(bioout, "%-8ud %3d%% %s\n",
+                    Bprint(bout, "%-8ud %3d%% %s\n",
                         i->count, Percent(i->count,
                         total), i->name);
                 else
-                    Bprint(bioout, "%-8ud      %s\n",
+                    Bprint(bout, "%-8ud      %s\n",
                         i->count, i->name);
 
 
@@ -81,31 +81,31 @@ isum(void)
         }
     }
 
-    Bprint(bioout, "\n%-8ud      Memory cycles\n", mems+total);	
-    Bprint(bioout, "%-8ud %3d%% Instruction cycles\n",
+    Bprint(bout, "\n%-8ud      Memory cycles\n", mems+total);	
+    Bprint(bout, "%-8ud %3d%% Instruction cycles\n",
             total, Percent(total, mems+total));
-    Bprint(bioout, "%-8ud %3d%% Data cycles\n\n",
+    Bprint(bout, "%-8ud %3d%% Data cycles\n\n",
             mems, Percent(mems, mems+total));	
 
-    Bprint(bioout, "%-8ud %3d%% Arithmetic\n",
+    Bprint(bout, "%-8ud %3d%% Arithmetic\n",
             arith, Percent(arith, total));
 
-    Bprint(bioout, "%-8ud %3d%% System calls\n",
+    Bprint(bout, "%-8ud %3d%% System calls\n",
             syscall, Percent(syscall, total));
 
-    Bprint(bioout, "%-8ud %3d%% Branches\n",
+    Bprint(bout, "%-8ud %3d%% Branches\n",
             branch, Percent(branch, total));
 
-    Bprint(bioout, "   %-8ud %3d%% Branches taken\n",
+    Bprint(bout, "   %-8ud %3d%% Branches taken\n",
             taken, Percent(taken, branch));
 
-    Bprint(bioout, "   %-8ud %3d%% Delay slots\n",
+    Bprint(bout, "   %-8ud %3d%% Delay slots\n",
             useddelay, Percent(useddelay, branch));
 
-    Bprint(bioout, "   %-8ud %3d%% Unused delay slots\n", 
+    Bprint(bout, "   %-8ud %3d%% Unused delay slots\n", 
             branch-useddelay, Percent(branch-useddelay, branch));
 
-    Bprint(bioout, "%-8ud %3d%% Program total delay slots\n",
+    Bprint(bout, "%-8ud %3d%% Program total delay slots\n",
             nopcount, Percent(nopcount, total));
 }
 /*e: function isum */
@@ -117,13 +117,13 @@ tlbsum(void)
     if(tlb.on == false)
         return;
 
-    Bprint(bioout, "\n\nTlb summary\n");
+    Bprint(bout, "\n\nTlb summary\n");
 
-    Bprint(bioout, "\n%-8d User entries\n", tlb.tlbsize);
-    Bprint(bioout, "%-8d Accesses\n", tlb.hit+tlb.miss);
-    Bprint(bioout, "%-8d Tlb hits\n", tlb.hit);
-    Bprint(bioout, "%-8d Tlb misses\n", tlb.miss);
-    Bprint(bioout, "%7d%% Hit rate\n", Percent(tlb.hit, tlb.hit+tlb.miss));
+    Bprint(bout, "\n%-8d User entries\n", tlb.tlbsize);
+    Bprint(bout, "%-8d Accesses\n", tlb.hit+tlb.miss);
+    Bprint(bout, "%-8d Tlb hits\n", tlb.hit);
+    Bprint(bout, "%-8d Tlb misses\n", tlb.miss);
+    Bprint(bout, "%7d%% Hit rate\n", Percent(tlb.hit, tlb.hit+tlb.miss));
 }
 /*e: function tlbsum */
 
@@ -138,11 +138,11 @@ segsum(void)
     Segment *s;
     int i;
 
-    Bprint(bioout, "\n\nMemory Summary\n\n");
-    Bprint(bioout, "      Base     End      Resident References\n");
+    Bprint(bout, "\n\nMemory Summary\n\n");
+    Bprint(bout, "      Base     End      Resident References\n");
     for(i = 0; i < Nseg; i++) {
         s = &memory.seg[i];
-        Bprint(bioout, "%-5s %.8lux %.8lux %-8d %-8d\n",
+        Bprint(bout, "%-5s %.8lux %.8lux %-8d %-8d\n",
                 stype[i], s->base, s->end, s->rss*BY2PG, s->refs);
     }
 }
@@ -203,19 +203,19 @@ iprofile(void)
     for(b = 0; b < i; b++)
         total += aprof[b].count;
 
-    Bprint(bioout, "  cycles     %% symbol          file\n");
+    Bprint(bout, "  cycles     %% symbol          file\n");
     for(b = 0; b < i; b++) {
         if(aprof[b].count == 0)
             continue;
 
-        Bprint(bioout, "%8ld %3ld.%ld %-15s ",
+        Bprint(bout, "%8ld %3ld.%ld %-15s ",
             aprof[b].count,
             100*aprof[b].count/total,
             (1000*aprof[b].count/total)%10,
             aprof[b].s.name);
 
         printsource(aprof[b].s.value);
-        Bputc(bioout, '\n');
+        Bputc(bout, '\n');
     }
     memset(prof, 0, sizeof(Prof)*i);
 }
