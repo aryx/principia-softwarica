@@ -1,7 +1,14 @@
+#############################################################################
+# Configuration section
+#############################################################################
 # on a MAC
 DISK="/Volumes/DISK Image"
 
 CONFIG=qemu
+
+##############################################################################
+# Top rules
+##############################################################################
 
 all:
 	make compile && make disk && make run
@@ -50,6 +57,10 @@ clean_pfff:
 	mv PFFF_* *.marshall *.opti layer* pfff.log .pfff/
 
 
+##############################################################################
+# Developer rules
+##############################################################################
+
 # codemap.opt has some issue with light db and graph db loading :(
 visual:
 	~/pfff/codemap.opt -no_legend -symlinks -filter xix -ss 2 .
@@ -82,6 +93,9 @@ graph_windows2:
 	~/pfff/codegraph -derived_data -lang c -build include/ lib_graphics/ windows/
 
 
+##############################################################################
+# Literate Programming rules
+##############################################################################
 
 NWDIRS=kernel windows shells \
        assemblers compilers linkers\
