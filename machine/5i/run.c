@@ -506,6 +506,7 @@ dpex(instruction inst, long o1, long o2, int rd)
         }
         /*e: [[dpex()]] if calltree, when add operation */
         reg.r[rd] = o1 + o2;
+
         if(inst & Sbit) {
             if((XCAST(o1) + XCAST(o2)) & (1LL << 32))
                 reg.cbit = true;

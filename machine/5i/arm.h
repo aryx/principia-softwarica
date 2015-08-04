@@ -47,7 +47,7 @@ struct Breakpoint
 /*e: struct Breakpoint */
 
 /*s: enum ixxx */
-enum ixxx
+enum opcode_category
 {
     Iarith,
     Imem,
@@ -194,7 +194,7 @@ struct Inst
 {
     void 	(*func)(instruction);
     char*	name;
-    // enum<ixxx>
+    // enum<opcode_category>
     int	type;
 
     /*s: [[Inst]] profiling fields */
