@@ -60,6 +60,7 @@ typedef long fpos_t;
 #define	stdin	(&_IO_stream[0])
 #define	stdout	(&_IO_stream[1])
 #define	_IO_CHMASK	0377		/* mask for 8 bit characters */
+
 FILE *tmpfile(void);
 char *tmpnam(char *);
 int fclose(FILE *);
