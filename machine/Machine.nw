@@ -13,11 +13,11 @@
 
 %thx to LP, changed for the better a few things:
 % - reorg itab, simplified armclass(), see more repetitions, more
-%   logical order, less undef "classes", introduced opcode enum
+%   logical order, less undef "classes", introduced enum Opcode
 % - deadcode: struct Mul, Imul
 
 %thx to codemap/codegraph/scheck:
-% - use cg to reduce backward deps, introduce globals.c, utils.c,
+% - use cg to reduce backward deps, introduced globals.c, utils.c,
 %   (harder to understand non layered code)
 % - use scheck to remove deadcode, dead prototypes, useless export
 %   or mv as forward decl
@@ -26,7 +26,8 @@
 %   relevant file (or even function), better cluster the code
 %   (harder to understand non functional code using lots of globals)
 
-%thx to this manual, better understand machine:
+%thx to this manual, better understand machine/emulator/simulator:
+% - a bit the difference between a simulator and emulator
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -34,12 +35,12 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
-%    * TODO [[xxx]] other fields, [[xxx]] extra fields
+%    * [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
 % - distribute parts of the Extra section in the main file
-% - SEMI understand main(), LP split main, improve TOC
-% - SEMI understand main functions, LP split, cluster, improve TOC
-% - SEMI LP split the structures, use datalog for flow to field info
+% - understand main(), LP split main, improve TOC
+% - understand main functions, LP split, cluster, improve TOC
+% - LP split the structures, use datalog for flow to field info
 % - SEMI nullify, boolify, enumify,  typeify,    scheckify, plan9ify
 % - aspecify advanced features! remove useless features
 % - TODO add figures
@@ -59,10 +60,8 @@
 %note: required by noweblatexpad for the \t \l \n in this file
 \usepackage{fancyvrb}
 \usepackage{url}
-\iffinal
 \usepackage{hyperref}
  \hypersetup{colorlinks=true}
-\fi
 \usepackage[pageref]{backref}
  \def\backref{{\footnotesize cited page(s)}~}
 %\usepackage{cleveref} %\cref
@@ -74,23 +73,27 @@
  %  but eat the bottom when very low
  %\usepackage{fullpage} is deprecated 
  % => do the more manual below:
- \addtolength{\oddsidemargin}{-.850in}
- \addtolength{\evensidemargin}{-.850in}
- \addtolength{\textwidth}{1.70in}
- \addtolength{\topmargin}{-.850in}
- \addtolength{\textheight}{1.70in}
+%% \addtolength{\oddsidemargin}{-.850in}
+%% \addtolength{\evensidemargin}{-.850in}
+%% \addtolength{\textwidth}{1.70in}
+%% \addtolength{\topmargin}{-.850in}
+%% \addtolength{\textheight}{1.70in}
 %\usepackage{minitoc}
 
+\begin{document}
 %------------------------------------------------------------------------------
 % Macros
 %------------------------------------------------------------------------------
+
 \input{../docs/latex/Macros}
 
 %------------------------------------------------------------------------------
 % Config
 %------------------------------------------------------------------------------
 \allcodefalse
-% used for Extra (decls (func, extern, forward), pragmas), if(trace)
+% used for:
+%  - Extra (decls (func, extern, forward), pragmas), 
+%  - if(trace)
 
 %\setcounter{tocdepth}{1}
 
@@ -98,14 +101,15 @@
 % Title
 %******************************************************************************
 
-\begin{document}
 
 \title{
 {\Huge 
-Principia Softwarica: Plan9 ARM Emulator [[5i]]
+Principia Softwarica: The ARM Emulator [[5i]]
 }\\
 {version 0.1}
 }
+% Machine in title? hmm but not really machine emulator
+% Plan9 in title? could be a subtitle
 
 \author{
 Yoann Padioleau\\
@@ -116,110 +120,298 @@ with code from\\
 }
 
 \maketitle 
+
 \onecolumn
 \hrule
-\begin{quote}
-    Copyright \copyright{} 2014, 2015 Yoann Padioleau \\
-    Permission is granted to copy, distribute and/or modify this document,
-    except all the source code it contains, under the terms of the GNU Free
-    Documentation License, Version 1.3.
-\end{quote}
+\input{../docs/latex/Copyright}
+\input{../docs/latex/CopyrightPlan9}
 \hrule
 
 %CONFIG: \dominitoc
 
-\iffinal
 \begingroup
 \hypersetup{linkcolor=blue}
 % need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
 \twocolumn
 \tableofcontents
 \endgroup
-\else
-\tableofcontents
-\fi
 
 %******************************************************************************
 % Body
 %******************************************************************************
+\onecolumn
 
 \chapter{Introduction}
 
 \section{Motivations}
 
-The goal of this book is to present in full details the source code of
-an hardware emulator.
-Why? Because I think it makes you a better programmer if
-you fully understand how things work under the hood.
-% and hardware is really the bottom of the hood :)
-% In the end hardware is a kind of software (so definitely softwarica
-% material); hardware is a kind of an interpreter (But infinite meta loop?)
+The goal of this book is to present with full details the source code of
+a \co{machine emulator}.
+%
+Why? Because we think you are a better programmer if
+you fully understand how things work under the hood,
+and the machine is really at the bottom of what is under the hood.
+% computer vs machine vs architecture vs hardware vs processor vs cpu?
 
-% Understanding ISA is also useful for other parts of principia,
-% assembler/compiler/linker
-% (especially since in plan9 the architecture specific stuff is distributed
-% in those 3 things). Here is an executable spec of the machine!
-% it also helps a bit to understand kernel, its API and some of its
-% semantic (see syscall chapter, e.g. sysbrk() is nice).
+Every other books in \principia will describe software
+that ultimately run on a specific architecture. For the
+assembler and linker books, we will even describe software that 
+generate \co{binary codes} for a specific architecture.
+% actually in plan9 the assembler does not generate ARM code, but
+% it still generates binary code specific to a machine
+It is thus useful, especially to understand the
+assembler, linker, and also compiler, 
+% especially in plan9 where the arch specific stuff is spread in those 3 things
+to have somewhere the full description of the 
+\co{instruction set} (ISA) of an architecture: 
+its binary format, mnemonic names, and also semantics.
+%
+In fact, the hardware can also be seen as a kind of software: a machine
+is an \co{interpreter} for a very low level language, and so
+it is definitely {\em softwarica} material. The binary format
+of the instructions and their semantics can be described 
+simply by explaining the code of this interpreter.
+% concrete machine, virtual machine.
 
-% present 5i, ARM simulator.
-% (why i? why not 5e? or 5s? i for interpreter?)
+% ISA spec vs simulator vs emulator
+We will not describe though in this book a machine in the form of
+a program of an hardware description language such as VHDL
+working at the granularity of logic gates ([[or]], [[and]], [[nand]], etc).
+For such an approach we recommend the great 
+book {\em The Elements of Computing Systems}~\cite{tecs} 
+and its companion website \url{http://www.nand2tetris.org}.
+Instead we will present the source code of an \co{emulator}
+written in the high-level language C, which allows us to describe
+a relatively complex architecture and its machine language in a book
+of a reasonable size.
+%Of course disadvantage ... self-reference looping issue
+An emulator can be viewed as an executable specification
+of a machine.
+%
+\footnote{
+This will be useful also for testing purpose when we will
+describe in other books the assembler, compiler, and linker.
+}
 
-% why 5i vs vi? because ARM is alive! raspberry! all phones!
-% (but better vi/? it had float? also simpler instruction format?)
-% why 5i vs 8i? there is no 8i :) x86 too ugly! 
-% (well it's not that bad actually according to 
-% torvalds: http://yarchive.net/comp/linux/x86.html but still)
-
+We will explain in this book the code of an ARM emulator: 
+[[5i]]\footnote{\url{http://plan9.bell-labs.com/magic/man2html/1/vi}},
+which is about 4200 lines of code (LOC).
 % LOC: 4196
+[[5i]] simulates the execution of an ARM binary in a \plan environment.
+% from man page.
+The [[5]] comes from the \plan convention to name architecture
+with a number or single letter (0 is MIPS, 5 is ARM, 8 is x86, etc),
+and the [[i]] probably means interpreter.
+% or instruction
 
-Here are other candidates that were considered but ultimately discarded:
-\begin{itemize}
-\item SPIM
-% but dead archi (ARM mostly a MIPS anyway), and LOC actually not that small
-% and hybrid as work on assembly, not actual binary format
-\item Spocketnes
-% nice, rust!
-\item Qemu
-% big (but interesting opti that would be nice to port to 5i)
-\item MAME and MESS
-% huge set of emulations, gameboy, nes, z80, ti85, ...
-\end{itemize}
+We chose ARM over x86 because even if x86 is the processor in most
+desktop machines today, ARM has a far simpler architecture.
+% actually there is no 8i :) It's not that bad according to 
+% torvalds: http://yarchive.net/comp/linux/x86.html but still.
+Indeed, \co{RISC} (Reduced Instruction Set Computer) machines such as an ARM, as
+their name suggest, have a smaller set of instructions
+than \co{CISC} (Complex Instruction Set Computer) machines such as an x86,
+and have also simpler instructions. The code
+of an ARM emulator is thus smaller and simpler to describe, while
+still conveying in our opinion the essence of all machines.
 
-% others:
-% - Knuth MIX, MMIX, and their interpreter mixal, MDK, and mmixware
-% - pep/8 simulator (mentioned in cs illuminated book)
-% - harm? significantly shorter in haskell? does not look like shorter ...
-% - 9front/games/gb? gameboy emulator?
-% - risc-V simulator? (spike?) riscv.org
-% - https://github.com/gto76/comp-cpp, 4bit educational computer, 7 ISA
-% - one page cpu of recc http://recc.robertelder.org/op-cpu.txt
+We chose ARM over MIPS, because even if the MIPS is a RISC machine
+probably simpler than the ARM, 
+%LOC vi=?
+there is not much remaining MIPS
+machines around. The ARM on the other hand is very much alive;
+it is the most popular processor in phones today. It is also the
+processor of the very cheap Raspberry Pi\footnote{
+\url{https://www.raspberrypi.org/}} machine, a machine
+used by many electronic hobbyist, which
+makes it also a great candidate for our teaching purpose.
 
+Note that [[5i]] is not a complete hardware simulator though.
+It simulates all of the basic instructions, and so is
+a good reference for the ARM ISA, but it does not handle
+low level things such as hardware interrupts, devices,
+coprocessor instructions, kernel and user modes, or the booting process. 
+The only system instruction partially handled is the software
+interrupt, and it is emulated by mimicing the semantics of 
+the \plan system calls.
+\footnote{
+This book thus also helps a bit to understand the kernel,
+especially its API and the semantics of a few important
+system calls such as [[sysbrk()]].
+}
+% as the emulator emulates the kernel/user boundary.
+[[5i]] can run simple \plan programs compiled for the ARM, but
+it can not run for instance a kernel. We think though that it's
+a good compromise for education purpose.
 
-%http://stackoverflow.com/questions/448673/how-do-emulators-work-and-how-are-they-written/448689#448689
+Note also that because we will describe a C program, and not a VHDL program, 
+this has a few disadvantages. Indeed, to simulate for instance
+the [[AND]] ARM instruction, we will show C code
+such as:
 
-% pretty simple, pretty similar:
-%http://www.felixangell.com/virtual-machine-in-c/
+<<instruction interpreter simplified snippet>>=
+case AND_INSTRUCTION: 
+  register3 = register1 & register2;
+  ...
+  break
+@
 
-% 5i though is not a complete simulator. Good for ISA simulation, but not
-% for low level stuff like interrupts, page faults, running modes,
-% booting, etc. You can just run simple (plan9) programs on it but
-% you can not definitely run a kernel on it.
-
-% Moreover we will use C, so for OAND for instance we do
-% regxxx & regyyy, so we cheat in some sense :) (just like when
-% write a lisp interpreter in lisp, he does not help to understand
-% all concepts, e.g. how a GC works). So here it does not help
-% to understand how the architecture work at the bit level,
-% or how to implement an adder, or a multiplier (but see TECS
-% for that!). This is still useful to get a quick overview
-% of the fundamental capabilities/features offered by some hardware.
+which uses the C [[&]] binary and operator.
+We are cheating in some sense, just like when someone describes the
+code of a Lisp interpreter written in Lisp: it does
+not help to understand fully how Lisp is implemented
+and for instance how a garbage collector works. 
+%
+In our case, using C does not
+help to understand how certain operations works at the bit level,
+how for instance a 32 bits adder, or multiplier, or multiplexer works.
+\footnote{Again we recommend~\cite{tecs} for that}
+Is is still useful though to get an overview of
+the fundamental capabilities and features offered
+by most hardware and to better understand the ARM ISA.
 % Actually it also helps to see capabilities/features of operating systems
 % as emulate/proxy OS API.
 
+Here are other hardware emulators or simulators that
+were considered for this book but ultimately discarded:
+\begin{itemize}
+
+\item SPIM\footnote{\url{http://pages.cs.wisc.edu/~larus/spim.html}}
+%https://en.wikipedia.org/wiki/SPIM
+is a MIPS processor emulator. It is maybe one of
+the first hardware emulator written for education purpose. 
+It is described in the classic architecture book~\cite{patterson}.
+But as said earlier, MIPS is unfortunately a dying machine.
+% (ARM mostly a MIPS anyway),
+Moreover, SPIM can not really execute binary MIPS programs.
+Instead it interprets assembly MIPS programs. This hybrid
+approach would then force us to describe the SPIM assembly scanner
+and parser instead of focusing on the binary format of instructions,
+which is in our opinion an important thing to understand for \principia.
+Finally, the 15000 LOC of SPIM are actually quite bigger than 
+the 4200 LOC of [[5i]].
+%LOC =~ 15000
+
+\item QEMU\footnote{\url{http://www.qemu.org}}
+%https://en.wikipedia.org/wiki/QEMU
+is a popular and fast emulator supporting many architectures,
+including ARM and x86.
+It uses dynamic binary translation instead of the simple interpretation
+scheme used by [[5i]] which improves a lot its performance.
+It emulates everything (system instructions, faults, devices, etc), and so can
+run entire kernels. It is very big though: more than 1M LOC in total.
+Even its [[hw/arm]] subdirectory is already more than 25 000 LOC.
+% qemu itself: 1113677 LOC
+% qemu/hw/arm already 25000 LOC.
+% big (but interesting opti that would be nice to port to 5i)
+
+\item MAME\footnote{\url{http://www.mame.net/}}
+%which has merged back MESS %http://www.mess.org/
+%https://en.wikipedia.org/wiki/MAME, 
+%https://en.wikipedia.org/wiki/MESS
+is a popular emulator for arcade machines (R-type, Pong, etc),
+consoles (Atari 2600, Nes, Gameboy, NeoGeo, etc), calculators (ti85, etc)
+and vintage computers (Alto, z80, atari ST, amiga, etc). 
+It is used mainly to play old video games programmed for old systems
+on modern computers. It supports hundreds of
+such systems and can play thousands of vintage
+video games. But because of that, its codebase is also very big:
+almost 5M LOC.
+%LOC: 4922087
+Is is too hard to describe this emulator in a book though, 
+even if we would focus just on one specific machine it supports.
+
+%\item Spocketnes
+% nice, rust!
+%\item Gb
+% - 9front/games/gb? gameboy emulator?
+
+\item Hack\footnote{\url{http://www.nand2tetris.org/05.php}} 
+is a very simple machine described in~\cite{tecs}
+used for educational purpose. Its emulator consists
+of 7000 LOC. It also comes with a very nice debugger of 
+6000 LOC.
+%LOC hack/: 7853
+%LOC hackGUI: 6728
+Hack is a great resource to learn about architecture and how
+a simple CPU works. It is though too restricted and arguably too simple
+for \principia. It describes a machine that does not
+exist for real and for which very few tools have been written.
+For instance, there is neither a C compiler targeting this architecture
+nor a windowing system.
+
+\item MMIX\footnote{\url{http://www-cs-faculty.stanford.edu/~uno/mmix.html}}
+%https://en.wikipedia.org/wiki/MMIX
+and its ancestor MIX
+%https://en.wikipedia.org/wiki/MIX
+are simple computers designed by Donald Knuth
+and used in his classic book serie 
+{\em The Art of Computer Programming}~\cite{the-art}.
+%https://en.wikipedia.org/wiki/The_Art_of_Computer_Programming
+
+% - and their interpreter mixal, MDK, and mmixware
+% similar to Hack, restricted.
+
+\end{itemize}
+
+%other:
+% - risc-V simulator? (spike?) riscv.org, actually a QEMU module too
+%   https://github.com/riscv/riscv-isa-sim LOC?
+% - pep/8 simulator (mentioned in cs illuminated book)
+% - https://github.com/gto76/comp-cpp, 4bit educational computer, 7 ISA
+% - one page cpu of recc http://recc.robertelder.org/op-cpu.txt
+% - harm? significantly shorter in haskell? does not look like shorter ...
+% - pretty simple, pretty similar:
+%   http://www.felixangell.com/virtual-machine-in-c/
+% - http://courses.missouristate.edu/KenVollmar/MARS/
+%   java IDE for mips assembly programming
+% - gxemul http://en.wikipedia.org/wiki/GXemul
+% - YAMS and buenos
+% - Little Man Computer, 1965 educational machine
+%   https://en.wikipedia.org/wiki/Little_man_computer
+
 \section{Getting started}
 
+To play with [[5i]] you'll first need to install
+the \plan fork used in \principia. See \urlprincipia.
+Once installed, you can test [[5i]] under \plan with:
+
+\begin{verbatim}
+[1] $ cd /tests/5a/
+[2] $ 5a helloa.s
+[3] $ 5l helloa.5 -o helloa
+[4] $ 5i helloa
+[5] 5i> :c
+[6] hello world
+[7] exists(end)
+[8] stopped at #1068 _main+48
+[9] $
+\end{verbatim}
+
+The commands in lines 2 and 3 respectively assemble and link
+the very simple [[helloa.s]] hello world ARM assembly program.
+Line 4 runs the emulator.
+[[5i]] has an interface similar to a debugger
+and so the input command [[:c]] entered after the [[5i>]] prompt
+is used to tell the emulator
+to continue the execution of the emulated program [[helloa]].
+[[5i]] then simulates the program, which outputs [[hello world]]
+at line 6, and then output a few debugging
+information at the end before exiting at lines 7 and 8.
+
 \section{Requirements}
+
+% know C, 
+% understand basic of architecture and CPU
+% (register, memory).
+
+%one page ARM reference guide
+
+% ARM pdf manual
+% (I didn't use them though)
+
+
+%http://stackoverflow.com/questions/448673/how-do-emulators-work-and-how-are-they-written/448689#448689
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -231,7 +423,7 @@ those parts are copyright by Lucent Technologies Inc.
 The prose is mine and is licensed under the GNU Free Documentation
 License.
 
-\section{Acknowledgments}
+%\section{Acknowledgments}
 
 
 \chapter{Overview}
@@ -268,6 +460,8 @@ License.
 % - security hardware support?
 
 % vs turing machine? add() in turing machine?
+% mini interpreter in machine is a kind of universal turing machine:
+% it take in its memory/tape a program M and runs it
 
 \section{Emulator principles}
 % simulator vs emulator? emulator can cheat more? And indeed
@@ -326,6 +520,8 @@ License.
 % refresher on bit manip?
 % w&1<<7, x& ~(BYPG-1), 31<<7, x>>25 & 0xf, etc
 
+%http://blogs.msdn.com/b/ntdebugging/archive/2013/11/22/understanding-arm-assembly-part-1.aspx
+
 \section{Code organization}
 
 %arm.h: DS, forward decl (a dat.h + fns.h)
@@ -376,7 +572,16 @@ License.
 % note that no deps to 5.out.h here, it's the final binary format,
 % not the plan9 object ARM format.
 
+\section{Bootstrapping}
+
 %###############################################################################
+
+\twocolumn
+\addtolength{\oddsidemargin}{-.850in}
+\addtolength{\evensidemargin}{-.850in}
+\addtolength{\textwidth}{1.70in}
+\addtolength{\topmargin}{-.850in}
+\addtolength{\textheight}{1.70in}
 
 \chapter{Core Data Structures}
 
@@ -423,9 +628,7 @@ enum opcode {
     // -----------------------------------------
     <<syscall opcodes>>
 
-    // -----------------------------------------
-    // Other opcodes
-    // -----------------------------------------
+    // for opcodes not handled by 5i
     OUNDEF   = 89
 };
 @
@@ -512,7 +715,7 @@ Inst itab[] =
 % an actual instruction into something we can execute.
 
 <<[[itab]] elements>>=
-[OUNDEF] =  { undef,		"UNDEF", Imisc},
+[OUNDEF] =  { &undef,		"UNDEF", Imisc},
 @
 
 %ex (and the evolutions I did on this array):
@@ -575,6 +778,21 @@ enum segment_kind
 @
 %old: Stack used to be first, but more logical in this order
 
+<<struct Memory>>=
+struct Memory
+{
+    //map<enum<segment_kind>, Segment>
+    Segment	seg[Nseg];
+};
+@
+% so model is process virtual memory, not machine physical memory with
+% 0 to 4GB, and page tables, and so on. 5i is limited.
+
+<<global memory>>=
+Memory memory;
+@
+
+
 <<struct Segment>>=
 struct Segment
 {
@@ -598,17 +816,6 @@ struct Segment
 % filexxx
 
 
-<<struct Memory>>=
-struct Memory
-{
-    //map<enum<segment_kind>, Segment>
-    Segment	seg[Nseg];
-};
-@
-
-<<global memory>>=
-Memory memory;
-@
 
 
 
@@ -5575,13 +5782,25 @@ erealloc(void *a, ulong oldsize, ulong size)
 #include "Machine_extra.nw"
 \fi
 
+
 \chapter{Changelog}
 \label{sec:changelog}
+
+\onecolumn
+\addtolength{\oddsidemargin}{+.850in}
+\addtolength{\evensidemargin}{+.850in}
+\addtolength{\textwidth}{-1.70in}
+\addtolength{\topmargin}{+.850in}
+\addtolength{\textheight}{-1.70in}
 
 \chapter{Glossary}
 \label{sec:glossary}
 
 \begin{verbatim}
+RISC Reduced Instruction Set Computer
+CISC Complex Instruction Set Computer
+ARM Akorn 
+ISA Instruction Set Architecture
 \end{verbatim}
 
 \chapter*{Indexes}
@@ -5603,6 +5822,23 @@ erealloc(void *a, ulong oldsize, ulong size)
 \bibitem[3]{syncweb} Yoann Padioleau,
 {\em Syncweb, literate programming meets unison}, 
 \url{http://padator.org/software/project-syncweb/readme.txt}
+
+\bibitem[4]{tecs} Noam Nisan and Shimon Shocken,
+{\em The Elements of Computing Systems}, 
+MIT Press, 2005
+%\bibitem[5]{nand2tetris} Noam Nisan et al.,
+%{\em From NAND to Tetris}, 
+%\url{http://www.nand2tetris.org}
+
+\bibitem[6]{patterson} David A. Patterson and John L. Hennessy,
+{\em Computer Organization and Design: The Hardware/Software Interface}, 
+MIT Press, 2005
+
+\bibitem[7]{the-art} Donald Knuth,
+{\em The Art of Computer Programming}, Volume 1, 2, 3 and 4
+Addison-Wesley
+
+
 
 \end{thebibliography}
 
