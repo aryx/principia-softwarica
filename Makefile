@@ -1,3 +1,4 @@
+TOP=.
 #############################################################################
 # Configuration section
 #############################################################################
@@ -111,8 +112,13 @@ lpdistclean:
 	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i lpdistclean || exit 1; done 
 
 visual2:
-	~/pfff/codemap.opt -no_legend -symlinks -filter nw -ss 2 .
+	~/pfff/codemap.opt -no_legend -symlinks -filter nw -ss 2 -ft 1.0 .
 
+NOWEB=~/github/syncweb/scripts/noweblatex
+pdf:
+	$(NOWEB) Principia.nw > Principia.tex
+	pdflatex Principia.tex
+	pdflatex Principia.tex
 
 #	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
 #	cp sys/src/9/pc/init.h kernel/init/user/preboot
