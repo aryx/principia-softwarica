@@ -1,6 +1,6 @@
 
 Open source is good, but clean and well documented source is even better!
-Principia softwarica is a set of books explaining essential ``meta'' programs
+Principia softwarica is a serie of books explaining essential ``meta'' programs
 which are programs dealing with other programs (aka system software):
 
  - kernel/shell/windows = programs that manage and launch other programs
