@@ -5,7 +5,7 @@
 %******************************************************************************
 \newif\iffinal
 \newif\ifverbose
-\finaltrue\verbosefalse % see also other newif in Macros.tex
+\finaltrue\verbosetrue % see also other newif in Macros.tex
 
 %------------------------------------------------------------------------------
 %history: 
@@ -15,12 +15,12 @@
 %  - better organisation of the code, my TOC is better than the few existing
 %    files (that didn't have very good names)
 %  - removed deadcode (Ref, imm2, con2, NMACRO, CLAST, isreg, ...)
-%  - renamed some enums (as => opcode, _ => operand_kind)
+%  - renamed some enums (as => opcode, <noname> => operand_kind)
 %  - reordered opcodes and operand kinds, and cleaned them:
 %     * removed opcodes (ADWORD, ABX, ...)
 %     * removed operand kinds (D_GOK, D_ADDR, D_OCONST, ...)
 %  - introduced sym_kind, splitted from operand_kind, for ANAME
-%  - factorize more code between arm and x86 (abusing LP chunks)
+%  - factorized more code between arm and x86 (abusing LP chunks)
 %  - removed a few grammar rules, weird operand forms that were not used anyway
 %    as well as the optional comma here and there
 %  - TODO rename types, clearer, Gen? as Adr? or Operand? (and Gen2? as Prog?)
@@ -28,7 +28,7 @@
 %thx to codemap/codegraph/scheck:
 % - factorized code in aa/
 % - TODO mv errorexit, alloc, in utils.c instead of lexbody.c, same for gethunk
-% - TODO have a main.c?
+% - TODO have a main.c? instead of putting it in lex.c?
 
 %thx to this manual, better understand assembly and assembler:
 % - can actually understand the assembly code in Kernel.nw :) param1+0(FP)
@@ -64,10 +64,8 @@
 %note: required by noweblatexpad for the \t \l \n in this file
 \usepackage{fancyvrb}
 \usepackage{url}
-\iffinal
 \usepackage{hyperref}
  \hypersetup{colorlinks=true}
-\fi
 \usepackage[pageref]{backref}
  \def\backref{{\footnotesize cited page(s)}~}
 %\usepackage{cleveref} %\cref
@@ -79,11 +77,11 @@
  %  but eat the bottom when very low
  %\usepackage{fullpage} is deprecated 
  % => do the more manual below:
- \addtolength{\oddsidemargin}{-.850in}
- \addtolength{\evensidemargin}{-.850in}
- \addtolength{\textwidth}{1.70in}
- \addtolength{\topmargin}{-.850in}
- \addtolength{\textheight}{1.70in}
+\addtolength{\oddsidemargin}{-.850in}
+\addtolength{\evensidemargin}{-.850in}
+\addtolength{\textwidth}{1.70in}
+\addtolength{\topmargin}{-.850in}
+\addtolength{\textheight}{1.70in}
 %\usepackage{minitoc}
 
 %------------------------------------------------------------------------------
@@ -95,8 +93,10 @@
 % Config
 %------------------------------------------------------------------------------
 \allcodefalse
-% used for forward decl, pragmas, func decl, extern decl, stats, #ifdef,
-% debugging macros
+% ifallcode is used for:
+%  - forward decl, func decl, extern decl, #ifdef, pragmas (stuff in Extra.nw)
+%  - misc opcodes (e.g. MVN)
+%  - misc optional syntactic elements (e.g. commas)
 
 %\setcounter{tocdepth}{1}
 
@@ -108,12 +108,12 @@
 
 \title{
 {\Huge 
-Principia Softwarica: The Plan9 Assembler [[5a]]
+Principia Softwarica: The ARM Assembler [[5a]]
 }\\
-ARM (32 bits) edition\\
 {version 0.1}
-}
+\l ARM (32 bits) edition, and Plan9 in core title?
 %alt: 8a x86 (32 bits) edition, see Assembler_x86.nw
+}
 
 \author{
 Yoann Padioleau\\
@@ -124,28 +124,19 @@ Rob Pike
 }
 
 \maketitle 
+
 \onecolumn
 \hrule
-\begin{quote}
-    Copyright \copyright{} 2014, 2015 Yoann Padioleau \\
-    Permission is granted to copy, distribute and/or modify this document,
-    except all the source code it contains, under the terms of the GNU Free
-    Documentation License, Version 1.3.
-\end{quote}
+\input{../docs/latex/Copyright}
+\input{../docs/latex/CopyrightPlan9}
 \hrule
+\twocolumn
 
-%CONFIG: \dominitoc
-
-\iffinal
 \begingroup
 \hypersetup{linkcolor=blue}
 % need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
-\twocolumn
 \tableofcontents
 \endgroup
-\else
-\tableofcontents
-\fi
 
 %******************************************************************************
 % Body
@@ -155,71 +146,163 @@ Rob Pike
 
 \section{Motivations}
 
-The goal of this book is to present in full details the source code of
-an assembler.
-Why? Because I think it makes you a better programmer if
-you fully understand how things work under the hood.
+The goal of this book is to present with full details the source code of
+an {assembler}.
+Why? Because we think you are a better programmer if you fully understand
+how things work under the hood, and 
+an assembler is an essential part of any {software development toolchains}.
+Indeed, compilers for higher level languages such as C usually
+\n 5c actually does not really rely on the external assembler 5a
+\n but gcc/ocamlopt do generate assembly and call external assembler gas
+do not generate directly {machine code} but instead rely
+on an assembler (and linker) for their final code-generation step.
+Moreover, even if most programmers very rarely write {assembly} code,
+understanding an assembly language, and so also what an assembler does,
+is essential to understand low-level concepts such as 
+binary logic and arithmetic, memory operations, pointers, 
+stack processing, frames,
+interrupts
+and to understand what a compiler generates. Note also that some
+code, especially in the kernel, can not be written in C and has to be
+written in assembly.
 
-% Assembler essential part. Can't do without assembler. 
-% Some code in the kernel can not be written in C, and
-% we don't want to generate machine code manually.
+We will explain in this book the code of the ARM assembler
+[[5a]]\furl{http://plan9.bell-labs.com/magic/man2html/1/8a},
+which is about 4100 lines of code (LOC).
+\n LOC: 4064, see make loc (or cm -test_loc)
+Like for most books in \principia, we chose a \plan software because
+they are simple, small, elegant, open source, and they form together
+a coherent set of software.
 
-% we gonna focus on plan9 assemblers because
-% they are simple, short code, and consistent with the rest of my
-% endeavour :)
-% we choose 5a, simpler than 8a: ARM(v6) RISC simpler than x86 CISC. Moreover
-% we have the full executable spec of ARM in 5i/! so it helps to understand
-% the semantic of the ASM instructions.
-% ARM like in raspberry or many phones. Most popular archi.
+Like for the other \principia books covering the software
+development toolchain, we chose the ARM architecture
+variant, in this case of the \plan assembler ([[5a]]),
+and not for instance the x86 variant ([[8a]]), for
+reasons of simplicity. Indeed RISC machines
+are far simpler than CISC machines. Moreover, the availability
+under \plan of an ARM emulator ([[5i]]) helps to understand
+the semantics of the assembly instructions used in [[5a]].
+\n Using x86 also make it more error prone when want to change things
+\n because we would have also to change kencc (e.g. error prone to change
+\n the order of asm instructions).
 
-%note: better to do manual with ARM for assembler/compiler/linker. Simpler.
-% Using x86 also make it more error prone when want to change things
-% because we would have also to change kencc (e.g. error prone to change
-% the order of asm instructions).
-
-Here are other candidates that were considered but ultimately discarded:
+Here are other assemblers that were considered for this book but
+ultimately discarded:
 \begin{itemize}
-\item gas
-\item nasm
-\item dev86
+
+\item The GNU Assembler [[gas]],
+part of the [[binutils]] software, is very big (350K LOC).
+Even its ARM-specific file [[gas/config/tc-arm.c]] is already 25K LOC.
+\n binutils is 3.4M LOC (LOC counted without testsuite)
+
+\item NASM, a popular x86 assembler (using the Intel
+syntax, as opposed to [[gas]] which uses the \att syntax),
+is also large (50K LOC).
+\n popular on linux especially, but also works on windows and mac
+\l also fasm, masm, tasm, seems popular
+
+\item MMIXAL, an assembler for the MMIX fictional machine
+invented by Donald Knuth is a small and very well documented
+program. Its literate source is about 3200 LOC.
+\l and mixal? used in the mdk?
+
 \end{itemize}
+
 %other:
-% - mixal, assembler and interpreter of Knuth's MIX language
+% - dev86
+% - fbas, use lex and yacc, 720 LOC, but looks really simplified
+% - llvm has one? well the IR of llvm is a kind of assembler, but portable
 % - pep/8 assembler?
 % - https://github.com/trillek-team/computer-toolkit include
-%   toy asm, linker, and even toy C compiler
+%   a toy asm, linker, and even a toy C compiler
 % - http://www.compilers.de/vasm.html (also vbcc and vlink)
+% - see also hex2c? the assembler in subc-2014, ...
+% - assembler for hack:?
 
+Note that the \plan assembler output differs slightly from
+other traditional assemblers. The object files generated by [[5a]]
+are ARM specific, but they do not contain really machine code. Instead
+an object is essentially the serialized form of the abstract syntax
+tree of the assembly source. The actual machine code
+generation is performed by the linker [[5l]].
+We think it's actually a better design because it leads to
+less code in total and simpler code.
+\n a critique of go/plan9 toolchain though:
+\n - http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
+\n   https://news.ycombinator.com/item?id=8815778
+\n   http://www.reddit.com/r/programming/comments/2riayd/golang_is_trash/
 
-% a disadvantage of 5a is that it generates just a special kind of object
-% code, the actual machine code generation is done by the linker. 
-% A bit unusual maybe.
-
-% critique of go/plan9 toolchain:
-% - http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
-% - https://news.ycombinator.com/item?id=8815778
-% - http://www.reddit.com/r/programming/comments/2riayd/golang_is_trash/
-
-%see also hex2c? the assembler in subc-2014, ...
+\n more recently:
+\n - TAL, typed assembly language
+\n - coq macro assembler
 
 
 \section{Getting started}
 
-% copy Kernel.nw section?
+To play with [[5a]] you'll first need to install
+the \plan fork used in \principia. See \urlprincipia.
+Once installed, you can test [[5a]] under \plan with:
+
+\begin{verbatim}
+[1] $ cd /tests/5a
+[2] $ 5a helloa.s
+[3] $ 5l helloa.5 -o helloa
+[4] $ ./helloa
+[5] hello world
+[6] $
+\end{verbatim}
+
+The command in Line 2 {assembles} the very simple [[helloa.s]] hello world
+ARM assembly program and generates the [[helloa.5]] ARM object file.
+Line 3 then links the object file and generates the final ARM binary [[helloa]].
+Line 4, which assumes you are under an ARM machine (e.g. a Raspberry Pi),
+launchs the program.
+
+Note that It's easy under \plan to cross compile for other architectures:
+you can use the same commands.
+\l because magic /bin, and also because special 5 convention
+To play with [[5a]] under an x86 machine you just need
+after the linking step to use the ARM emulator [[5i]]:
+
+\begin{verbatim}
+...
+[4] $ 5i helloa
+...
+\end{verbatim}
+
+See the \book{Emulator} for more information on [[5i]].
 
 \section{Requirements}
 
-% know at least one assembler, concepts: labels, mov, SP, FP, jmp,
-% symbol defs/uses, external symbols.
-% know a bit about architecture (helps to understand Machine.nw)
-% maybe Machine.nw is actually a necessary requirment?
+Because most of this book is made of C source code, 
+you'll need to have a good knowledge of 
+the C programming language~\cite{k-r} to understand it. 
+% Can read Compiler.pdf :) but a bit self reference.
 
-% asm.ps
-% 8a/5a(1)
+Note that this book is not an introduction to 
+assembly programming.
+We assume you already know an assembly language and that
+you have a basic understanding of computer architecture and
+how an assembler works. We assume you are already familiar with concepts such as
+{registers}, {stack pointer}, {program counter},
+{mov}, 
+{labels}, {branching}, {symbols}, {frames}.
+We assume you already know most of the theory; this book is here to
+cover the practice.
 
-%MIPS assembly tutorial, might give some ideas (use spim)
+It is not necessary to know the ARM architecture to
+understand this book, but
+we recommend to use the \book{Emulator} to understand fully
+the semantics of some assembly instructions.
+\l maybe Machine.nw is actually a necessary requirment?
+
+%asm.ps
+%8a/5a(1)
+%https://golang.org/doc/asm
+%
+
+\l MIPS assembly tutorial, might give some ideas (use spim)
 %http://programmedlessons.org/AssemblyTutorial/index.html
-
 
 
 \section{About this document}
@@ -234,237 +317,279 @@ License.
 
 \section{Acknowledgments}
 
+I would like to acknowledge of course the author of
+[[5a]], Rob Pike, 
+who wrote in some sense most of this book.
+
+
+
+
+
 
 \chapter{Overview}
 
 \section{Assembler principles}
 
-% goal of assembler is to have a programming language close to
-% the machine code, but more convenient than binary. "as close
-% as possible but not closer" :)
-% essentially a textual form of a binary format.
-% mnemonic and symbolic addresses -> object/machine code
+\begin{verbatim}
 
-% history: (probably)
-% at the beginning was writing binary, then mnemonic but still hardcoded
-% address, and then finally symbolic addresses.
-% First symbol defs/uses in the same file (e.g. labels), but then could also
-% split the code in multiple assembly files and symbols can
-% reference external files. Introduced then the linker to
-% link together all those assembly objects.
+ goal of assembler is to have a programming language close to
+ the machine code, but more convenient than binary. "as close
+ as possible but not closer" :)
+ essentially a textual form of a binary format.
+ mnemonic and symbolic addresses -> object/machine code
 
-% usually 2 passes for assembler itself as can reference labels
-% coming later.
+ history: (probably)
+ at the beginning was writing binary, then mnemonic but still hardcoded
+ address, and then finally symbolic addresses.
+ First symbol defs/uses in the same file (e.g. labels), but then could also
+ split the code in multiple assembly files and symbols can
+ reference external files. Introduced then the linker to
+ link together all those assembly objects.
 
-% Object code is not the final code, it is then processed by a linker. 
-% So the assembler must output code that must be "resolved" later, with 
-% some symbol table information in the object for the linker
-% to know what to do and where to patch things.
-% The .o is really like a module, the really lowest level module abstraction.
-% And a module define some symbols (for TEXT/GLOBL)
-% and use external symbols.
-% The objects will also be concatenated together so branch/jmp addresses
-% need also to be "relocated", and the same for the reference to 
-% external symbols.
+ usually 2 passes for assembler itself as can reference labels
+ coming later.
 
-% less: look at TECS section on assembler?
+ Object code is not the final code, it is then processed by a linker. 
+ So the assembler must output code that must be "resolved" later, with 
+ some symbol table information in the object for the linker
+ to know what to do and where to patch things.
+ The .o is really like a module, the really lowest level module abstraction.
+ And a module define some symbols (for TEXT/GLOBL)
+ and use external symbols.
+ The objects will also be concatenated together so branch/jmp addresses
+ need also to be "relocated", and the same for the reference to 
+ external symbols.
 
-% put some concrete examples where see two assemblies, with symbols
-% defined and used, and how the linker resolve and then relocate those things?
+ less: look at TECS section on assembler?
+
+ put some concrete examples where see two assemblies, with symbols
+ defined and used, and how the linker resolve and then relocate those things?
+
+\end{verbatim}
 
 \section{[[5a]] services}
 
-% command line interface? -o outfile,   -D -I (cpp),  -f -m for debug
-% env: INCLUDE (for cpp, similar to -I), NPROC (when multi files?)
+\begin{verbatim}
 
-% 5a has a few more features than just mnemonic and symbolc addresses:
-%  - can also have some simple constant expression.
-%  - have also "variables" (symbolic name of constants)
-%  - can also have macros and includes! cpp.
-%    (really convenient, can define new instructions thx to macro and
-%     bitshift as in:
-%     #define MCRR(coproc, op, rd, rn, crm) \
-% 	    WORD $(0xec400000|(rn)<<16|(rd)<<12|(coproc)<<8|(op)<<4|(crm))
-%  - 5a also support some virtual opcode, to go around some of the restrictions
-%    of certain architecture, so have a very general MOV even though
-%    the actual archi supports only simple LOAD/STORE. But you have
-%    to know the target language because some combinations will actually
-%    be forbidden at link-time
+ command line interface? -o outfile,   -D -I (cpp),  -f -m for debug
+ env: INCLUDE (for cpp, similar to -I), NPROC (when multi files?)
 
-% normally generate (relocatable) machine code, but here 5a is actually
-% a bit unusual.
+ 5a has a few more features than just mnemonic and symbolc addresses:
+  - can also have some simple constant expression.
+  - have also "variables" (symbolic name of constants)
+  - can also have macros and includes! cpp.
+    (really convenient, can define new instructions thx to macro and
+     bitshift as in:
+     #define MCRR(coproc, op, rd, rn, crm) \
+ 	    WORD $(0xec400000|(rn)< <16|(rd)< <12|(coproc)< <8|(op)< <4|(crm))
+  - 5a also support some virtual opcode, to go around some of the restrictions
+    of certain architecture, so have a very general MOV even though
+    the actual archi supports only simple LOAD/STORE. But you have
+    to know the target language because some combinations will actually
+    be forbidden at link-time
+
+ normally generate (relocatable) machine code, but here 5a is actually
+ a bit unusual.
+\end{verbatim}
 
 
 \section{[[helloworld.s]]}
 
-% see tests/5a/helloa.s
-% print "hello world" with mov, int(swi). No libc! Using a simple _main.
-% as simple as possible.
+\begin{verbatim}
 
-% show commands, 5a, 5l, ./xxx
+ see tests/5a/helloa.s
+ print "hello world" with mov, int(swi). No libc! Using a simple _main.
+ as simple as possible.
 
-% can also maybe show one that use libc, use 5c -S hello.c
+ show commands, 5a, 5l, ./xxx
 
-% show binary format? hexdump? 
-% (hmmm actually not binary instruction format! see section below)
+ can also maybe show one that use libc, use 5c -S hello.c
 
-% try show code using TEXT, DATA, GLOBL, different addressing modes, etc
-% show the advantage of assembly, that is mnemonic and symbolic addresses!
+ show binary format? hexdump? 
+ (hmmm actually not binary instruction format! see section below)
 
-% maybe good to show a few more example of asm, to get a feel for the language
-% e.g. the code of strchr, div, etc.
+ try show code using TEXT, DATA, GLOBL, different addressing modes, etc
+ show the advantage of assembly, that is mnemonic and symbolic addresses!
+
+ maybe good to show a few more example of asm, to get a feel for the language
+ e.g. the code of strchr, div, etc.
+\end{verbatim}
 
 
 \section{ARM}
-% ARMv6, like in Raspberry :)
 
-% opcode format, see 5i/
-% but actually it's more the job of 5l and optab to do that.
-% 5a just try to mimic closely the ISA (but actually it also
-% introducing some virtual/fake opcodes).
+\begin{verbatim}
+
+ ARMv6, like in Raspberry :)
+
+ opcode format, see 5i/
+ but actually it's more the job of 5l and optab to do that.
+ 5a just try to mimic closely the ISA (but actually it also
+ introducing some virtual/fake opcodes).
+
+\end{verbatim}
 
 \section{Input assembly language}
 
-% specifics of 5a? 
-% left to right assignment, AT&T syntax, normal :)
-% the different addressing modes for MOV.
+\begin{verbatim}
 
-%concepts: 
-% - labels suffixed with :
-% - constants, prefixed with $ (why? to avoid ambiguity with what?)
-%   otherwise regular numbers are offset like 32(SP)
-% - external symbols = fully unresolved! will be resolved at linking time
-%   but needs to keep the name in the symbol table and the place where it
-%   was referenced
-%   (note that external entities are not even declared, any use of a symbol
-%    not defined in the file is an external reference)
-%    less: maybe this should be fixed, easy to make a typo)
-% - use '(' xxx ')' for memory dereference. so 4(FP) really means
-%   *fp + 4 (which in C could be written  fp[4] if fp was a byte pointer.
+ specifics of 5a? 
+ left to right assignment, AT&T syntax, normal :)
+ the different addressing modes for MOV.
 
-% special registers for addressing: PC, SB, FP, SP
-% for text, data, param, locals
-% (hmm has FP special register in 5a?)
+concepts: 
+ - labels suffixed with :
+ - constants, prefixed with $ (why? to avoid ambiguity with what?)
+   otherwise regular numbers are offset like 32(SP)
+ - external symbols = fully unresolved! will be resolved at linking time
+   but needs to keep the name in the symbol table and the place where it
+   was referenced
+   (note that external entities are not even declared, any use of a symbol
+    not defined in the file is an external reference)
+    less: maybe this should be fixed, easy to make a typo)
+ - use '(' xxx ')' for memory dereference. so 4(FP) really means
+   *fp + 4 (which in C could be written  fp[4] if fp was a byte pointer.
 
-% 8 bytes limit for strings (so if longer have to split manually,
-% a bit annoying but can use data2s too)
+ special registers for addressing: PC, SB, FP, SP
+ for text, data, param, locals
+ (hmm has FP special register in 5a?)
 
-% (LONG is a macro?)
-%        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
-%vs
-%        LONG    $_start-KZERO(SB)          /* load_addr */
-%why need SB in second case? because it refers to symbol in certain section?
-% it's to take the address of _start symbol in SB and adjust
-% by removing KZERO to it. tricky. It's really $  _start(SB) - KZERO
+ 8 bytes limit for strings (so if longer have to split manually,
+ a bit annoying but can use data2s too)
 
-% it does not have extern declaration, but any ref is implicitely
-% an extern.
+ (LONG is a macro?)
+        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
+vs
+        LONG    $_start-KZERO(SB)          /* load_addr */
+why need SB in second case? because it refers to symbol in certain section?
+ it's to take the address of _start symbol in SB and adjust
+ by removing KZERO to it. tricky. It's really $  _start(SB) - KZERO
 
-%\section{Runtime conventions}
-% FP, SP, BL, etc?
-
-%from div.s
-%Q	= 0
-%N	= 1
-%D	= 2
-%CC	= 3
-%TMP	= 11
-%
-%TEXT	save<>(SB), 1, $0
-%	MOVW	R(Q), 0(FP)
-%	MOVW	R(N), 4(FP)
-%	MOVW	R(D), 8(FP)
-%	MOVW	R(CC), 12(FP)
-%
-%	MOVW	R(TMP), R(Q)		/* numerator */
-%	MOVW	20(FP), R(D)		/* denominator */
-%	CMP	$0, R(D)
-%	BNE	s1
-%	MOVW	-1(R(D)), R(TMP)	/* divide by zero fault */
-%s1:	RET
-%
-%TEXT	rest<>(SB), 1, $0
-%	MOVW	0(FP), R(Q)
-%	MOVW	4(FP), R(N)
-%	MOVW	8(FP), R(D)
-%	MOVW	12(FP), R(CC)
-%/*
-% * return to caller
-% * of rest<>
-% */
-%	MOVW	0(R13), R14
-%	ADD	$20, R13
-%	B	(R14)
+ it does not have extern declaration, but any ref is implicitely
+ an extern.
 
 
-%todo: also TEXT foo, 0, $20
-% is then translated in some instructions related to R13?
+section{Runtime conventions}
+ FP, SP, BL, etc?
+
+from div.s
+Q	= 0
+N	= 1
+D	= 2
+CC	= 3
+TMP	= 11
+
+TEXT	save<>(SB), 1, $0
+	MOVW	R(Q), 0(FP)
+	MOVW	R(N), 4(FP)
+	MOVW	R(D), 8(FP)
+	MOVW	R(CC), 12(FP)
+
+	MOVW	R(TMP), R(Q)		/* numerator */
+	MOVW	20(FP), R(D)		/* denominator */
+	CMP	$0, R(D)
+	BNE	s1
+	MOVW	-1(R(D)), R(TMP)	/* divide by zero fault */
+s1:	RET
+
+TEXT	rest<>(SB), 1, $0
+	MOVW	0(FP), R(Q)
+	MOVW	4(FP), R(N)
+	MOVW	8(FP), R(D)
+	MOVW	12(FP), R(CC)
+/*
+ * return to caller
+ * of rest<>
+ */
+	MOVW	0(R13), R14
+	ADD	$20, R13
+	B	(R14)
+
+
+todo: also TEXT foo, 0, $20
+ is then translated in some instructions related to R13?
+
+\end{verbatim}
 
 \section{Output object format}
 
-% .5 format? a kind of .o, but 5l does actually the job to turn into ARM ISA
-% so it's really more a marshalled file of simple data structures that is
-% ARM specific only because of the set of opcode and registers really.
+\begin{verbatim}
 
-%less: could simplify the code at some point and use Ocaml
-% and just marshall the ADT, and do same in linker => shorter code!
-%update: hmm but the format is actually not that complicated, so we may win
-% but not that big probably. Also nice to have a format that other programs
-% coded in different languages can read.
+ .5 format? a kind of .o, but 5l does actually the job to turn into ARM ISA
+ so it's really more a marshalled file of simple data structures that is
+ ARM specific only because of the set of opcode and registers really.
 
-% put copy paste of Object format section here?
-% Figure!
+less: could simplify the code at some point and use Ocaml
+ and just marshall the ADT, and do same in linker => shorter code!
+update: hmm but the format is actually not that complicated, so we may win
+ but not that big probably. Also nice to have a format that other programs
+ coded in different languages can read.
+
+ put copy paste of Object format section here?
+ Figure!
+
+\end{verbatim}
 
 \section{Code organization}
 
-% arch generic: aa/, arch specific: xa/
-% same for header, common.out.h and arm/5.out.h or 386/8.out.h!
-%actually lots of assembler related stuff is in libmach/
-%and lots in the linker.
+\begin{verbatim}
 
-%aa/aa.h:
-%aa/compat.c: 
-%aa/globals.c:
-%aa/lexbody.c: many helper functions, not just lexer helper)
-% (todo: split lex specific helper vs non lex specific)
-%aa/macbody.c: cpp helpers (include, macro, pragmas),
-% mac = macro (not macos :)
+ arch generic: aa/, arch specific: xa/
+ same for header, common.out.h and arm/5.out.h or 386/8.out.h!
+actually lots of assembler related stuff is in libmach/
+and lots in the linker.
 
-%5a/a.h:
-%5a/a.y: the grammar (and calls to outcode)
-%5a/globals.c: just nullgen (because Gen ARM specific so not in aa/)
-%5a/lex.c: the lexer and also main()
+aa/aa.h:
+aa/compat.c: 
+aa/globals.c:
+aa/lexbody.c: many helper functions, not just lexer helper)
+ (todo: split lex specific helper vs non lex specific)
+aa/macbody.c: cpp helpers (include, macro, pragmas),
+ mac = macro (not macos :)
+
+5a/a.h:
+5a/a.y: the grammar (and calls to outcode)
+5a/globals.c: just nullgen (because Gen ARM specific so not in aa/)
+5a/lex.c: the lexer and also main()
+
+\end{verbatim}
 
 \section{Software architecture}
 
-% main -> assemble -> (2 passes) 
-%   -> yyparse -> yylex
-%              -> outcode (increments pc and in pass2 output!)
+\begin{verbatim}
 
-% text -> grammar -> symbols -> codegen
-% does not return an AST (but kinda build one for each instruction), 
-% abuse tokens and the grammar to do some computations 
-% (the classic old way to do things)
+ main -> assemble -> (2 passes) 
+   -> yyparse -> yylex
+              -> outcode (increments pc and in pass2 output!)
 
-% assembler generates an object file that is ARM specific, but not 
-% matching exactly the ARM instruction set! 5l/asm.c is doing the
-% real conversion
-% (why? because 5l does some inter-lib optimizations? a la llvm? nice design!?)
-% it generates an "object", a kind of .o except it's really not a .o like
-% in Linux :) it's a serialized/marshalled data structure (opcode+operands+...)
+ text -> grammar -> symbols -> codegen
+ does not return an AST (but kinda build one for each instruction), 
+ abuse tokens and the grammar to do some computations 
+ (the classic old way to do things)
+
+ assembler generates an object file that is ARM specific, but not 
+ matching exactly the ARM instruction set! 5l/asm.c is doing the
+ real conversion
+ (why? because 5l does some inter-lib optimizations? a la llvm? nice design!?)
+ it generates an "object", a kind of .o except it's really not a .o like
+ in Linux :) it's a serialized/marshalled data structure (opcode+operands+...)
 
 
-% relation with other tools? 5c, 5l? easy, do for instance:
-% git grep AADDB
-%assemblers/8a/lex.c:    "ADDB",		LTYPE3,	AADDB,
-%compilers/8c/peep.c:    case AADDB:	/* rhs rar */
-%compilers/8c/reg.c:        case AADDB:
-%compilers/8c/txt.c:            a = AADDB;
-%include/386/8.out.h:    AADDB,
-%linkers/8l/optab.c:    { AADDB,	yxorb,	Px, 0x04,0x80,(00),0x00,0x02 },
+ relation with other tools? 5c, 5l? easy, do for instance:
+ git grep AADDB
+assemblers/8a/lex.c:    "ADDB",		LTYPE3,	AADDB,
+compilers/8c/peep.c:    case AADDB:	/* rhs rar */
+compilers/8c/reg.c:        case AADDB:
+compilers/8c/txt.c:            a = AADDB;
+include/386/8.out.h:    AADDB,
+linkers/8l/optab.c:    { AADDB,	yxorb,	Px, 0x04,0x80,(00),0x00,0x02 },
 
+\end{verbatim}
+
+\section{Book structure}
 
 %###############################################################################
+
 
 \chapter{Core Data Structures}
 
@@ -5965,7 +6090,11 @@ if(argc > 1) {
 
 \chapter{Conclusion}
 
+% see linker! next book to read, logically.
 
+% see compiler
+
+% see disassembler
 
 
 
