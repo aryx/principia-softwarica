@@ -19,22 +19,24 @@ TEX=Assembler.tex
 SRC_ORIG=Assembler.nw Assembler_extra.nw Assembler_x86.nw
 
 SRC_VIEWS= \
-  ../include/arch/arm/5.out.h\
-  ../include/arch/386/8.out.h\
-  ../include/devel/output/common.out.h\
-  misc/data2s.c\
   aa/aa.h\
   aa/compat.c\
   aa/globals.c\
   aa/lexbody.c\
   aa/macbody.c\
+  ../include/arch/arm/5.out.h\
   5a/a.h\
   5a/globals.c\
   5a/lex.c\
   5a/a.y\
+
+XX=\
+  ../include/arch/386/8.out.h\
+  ../include/devel/output/common.out.h\
+  misc/data2s.c\
   8a/a.h\
   8a/globals.c\
   8a/lex.c\
-  8a/a.y
+  8a/a.y \
 
 #skip: 8a/y.tab.[ch], comes from 8a/a.y

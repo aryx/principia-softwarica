@@ -808,7 +808,7 @@ l1:
     if(isspace(c)) {
         if(c == '\n') {
             lineno++;
-            return ';';
+            return ';'; // newline transformed in fake ';'
         }
         goto l0;
     }
