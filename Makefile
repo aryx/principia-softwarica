@@ -63,14 +63,19 @@ clean_pfff:
 ##############################################################################
 
 # codemap.opt has some issue with light db and graph db loading :(
+#-symlinks
 visual:
-	~/pfff/codemap.opt -no_legend -symlinks -filter xix -ss 2 .
+	~/pfff/codemap.opt -screen_size 2 -no_legend -filter xix .
 graph:
 	~/pfff/codegraph -derived_data -lang c -build .
 tags:
 	~/pfff/codegraph -derived_data -lang c -build .
 check:
 	~/pfff/scheck -filter 3 -lang c .
+
+
+loc:
+	~/pfff/codemap.opt -screen_size 2 -no_legend -filter xix -test_loc .
 
 
 #todo? add libc, lib_networking, lib_memlayer/lib_memdraw/lib_draw, libmp?
@@ -112,7 +117,7 @@ lpdistclean:
 	set -e; for i in $(NWDIRS); do $(MAKE) -C $$i lpdistclean || exit 1; done 
 
 visual2:
-	~/pfff/codemap.opt -no_legend -symlinks -filter nw -ss 2 -ft 1.0 .
+	~/pfff/codemap.opt -no_legend -symlinks -filter nw -ft 1.0 .
 
 NOWEB=~/github/syncweb/scripts/noweblatex
 pdf:
