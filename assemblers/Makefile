@@ -30,6 +30,7 @@ SRC_VIEWS= \
   5a/lex.c\
   5a/a.y\
 
+# temporarily split from SRC_VIEWS for 'make loc'
 XX=\
   ../include/arch/386/8.out.h\
   ../include/devel/output/common.out.h\

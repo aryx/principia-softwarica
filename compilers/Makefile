@@ -52,6 +52,8 @@ SRC_VIEWS= \
    5c/mul.c\
    5c/reg.c\
    5c/cgen.c\
+
+XX=\
    8c/enam.c\
    8c/gc.h\
    8c/machcap.c\

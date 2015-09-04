@@ -59,9 +59,6 @@ SRC_VIEWS= \
   libmach/5.c\
   libmach/5db.c\
   libmach/5obj.c\
-  libmach/8.c\
-  libmach/8db.c\
-  libmach/8obj.c\
   libmach/elf.h\
   libmach/obj.h\
   libmach/swap.c\
@@ -72,6 +69,11 @@ SRC_VIEWS= \
   libmach/machdata.c\
   libmach/obj.c\
   libmach/setmach.c\
+
+XX=\
+  libmach/8.c\
+  libmach/8db.c\
+  libmach/8obj.c\
 
 
 # not acid/y.tab.[ch]

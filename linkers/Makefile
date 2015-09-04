@@ -39,6 +39,8 @@ SRC_VIEWS= \
   5l/span.c\
   5l/obj.c\
   5l/noop.c\
+
+XX=\
   8l/elf.h\
   8l/elf.c\
   8l/l.h\
