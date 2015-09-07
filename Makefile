@@ -123,6 +123,7 @@ NOWEB=~/github/syncweb/scripts/noweblatex
 pdf:
 	$(NOWEB) Principia.nw > Principia.tex
 	pdflatex Principia.tex
+	bibtex Principia
 	pdflatex Principia.tex
 
 #	cp sys/src/9/pc/apbootstrap.h kernel/init/386/
