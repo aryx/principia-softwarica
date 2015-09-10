@@ -9,11 +9,9 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Assembler.nw
-TEX=Assembler.tex
+DOC=Assembler
 
 # set of noweb (.nw) files
-
 # must be in the same order of the #include for syncweb multi files support
 # to work
 SRC_ORIG=Assembler.nw Assembler_extra.nw Assembler_x86.nw
