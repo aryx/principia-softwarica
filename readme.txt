@@ -76,6 +76,3 @@ A few other meta programs are included in a separate project (pfff):
  - codemap/codegraph/codequery: programs to help understand other programs
  - sgrep/spatch: programs to search and transform other programs
  - scheck: program to verify other programs
-
-This project is dedicated to professor Chazarain and his motto
-"Implanter pour mieux comprendre"! (implement to better understand)
