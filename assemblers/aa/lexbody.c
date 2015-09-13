@@ -1,58 +1,12 @@
 /*s: assemblers/aa/lexbody.c */
 #include "aa.h"
 
+// forward decls
 void prfile(long l);
 
 /*
  * common code for all the assemblers
  */
-
-/*s: function alloc */
-/*
- * real allocs
- */
-void*
-alloc(long n)
-{
-    void *p;
-
-    while((uintptr)hunk & MAXALIGN) {
-        hunk++;
-        nhunk--;
-    }
-
-    while(nhunk < n)
-        gethunk();
-    p = hunk;
-    nhunk -= n;
-    hunk += n;
-
-    return p;
-}
-/*e: function alloc */
-
-/*s: function allocn */
-void*
-allocn(void *p, long on, long n)
-{
-    void *q;
-
-    q = (uchar*)p + on;
-    if(q != hunk || nhunk < n) {
-
-        while(nhunk < on+n)
-            gethunk();
-        memmove(hunk, p, on);
-        p = hunk;
-        hunk += on;
-        nhunk -= on;
-
-    }
-    hunk += n;
-    nhunk -= n;
-    return p;
-}
-/*e: function allocn */
 
 /*s: function setinclude */
 void
@@ -73,17 +27,6 @@ setinclude(char *p)
     include[ninclude++] = p;
 }
 /*e: function setinclude */
-
-/*s: function errorexit */
-void
-errorexit(void)
-{
-
-    if(outfile)
-        remove(outfile);
-    exits("error");
-}
-/*e: function errorexit */
 
 /*s: function pushio */
 void

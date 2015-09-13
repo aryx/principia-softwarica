@@ -1,6 +1,7 @@
 /*s: assemblers/aa/macbody.c */
 #include "aa.h"
 
+// forward decls
 void	macund(void);
 void	macdef(void);
 void	macinc(void);
@@ -863,25 +864,4 @@ linehist(char *f, int local_line)
 }
 /*e: function linehist */
 
-/*s: function gethunk */
-void
-gethunk(void)
-{
-    char *h;
-    long nh;
-
-    nh = NHUNK;
-    if(thunk >= 10L*NHUNK)
-        nh = 10L*NHUNK;
-
-    h = (char*)sbrk(nh);
-    if(h == (char*)-1) {
-        yyerror("out of memory");
-        errorexit();
-    }
-    hunk = h;
-    nhunk = nh;
-    thunk += nh;
-}
-/*e: function gethunk */
 /*e: assemblers/aa/macbody.c */
