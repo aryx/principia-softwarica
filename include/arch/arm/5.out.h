@@ -17,7 +17,7 @@ enum registr {
     /* compiler allocates external registers R10 down */
     REGTMP =	11,
     /*e: [[regxxx]] compiler conventions cases */
-    REGSB =		12, // SB? segment base?
+    REGSB =		12, // static base
 
     REGSP =		13,
     REGLINK =	14,

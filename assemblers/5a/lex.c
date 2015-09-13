@@ -52,7 +52,7 @@ main(int argc, char *argv[])
     /*e: [[main()]] command line processing */
     } ARGEND
 
-    if(*argv == 0) {
+    if(*argv == '\0') {
         print("usage: %ca [-options] file.s\n", thechar);
         errorexit();
     }
