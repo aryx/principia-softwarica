@@ -1,7 +1,7 @@
 
 Open source is good, but clean and well documented source is even better!
 Principia softwarica is a serie of books explaining essential ``meta'' programs
-which are programs dealing with other programs (aka system software):
+which are programs dealing with other programs (a.k.a system software):
 
  - kernel/shell/windows = programs that manage and launch other programs
  - network = programs to help other programs communicate with each other
@@ -60,7 +60,7 @@ not covered by principa softwarica:
  - office: word processor, spreadsheet, presentations, 
    pixel or vectorized drawing programs, publishing, database
    (Alto Bravo, appleII Visicalc, Powerpoint?, MacPaint, Publisher?, ingres?)
- - personal information manager: contact, calendar, alarm, notes, calc,..
+ - personal information manager: contact, calendar, alarm, notes, calc, ...
    (Newton)
  - digital art revolution: photo, music, video, books
    (iLife)
