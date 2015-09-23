@@ -487,7 +487,6 @@ struct Ipifc
 
   Medium  *m;   /* Media pointer */
   uchar mac[MAClen];  /* MAC address */
-  void  *arg;   /* medium specific */
 
   int maxtu;    /* Maximum transfer unit */
   int mintu;    /* Minumum tranfer unit */
@@ -507,6 +506,9 @@ struct Ipifc
   Routerparams rp;  /* router parameters as in RFC 2461, pp.40—43.
           used only if node is router */
   /*e: [[Ipifc(kernel)]] routing fields */
+  /*s: [[Ipifc(kernel)]] priv fields */
+  void  *arg;   /* medium specific */
+  /*e: [[Ipifc(kernel)]] priv fields */
 
   /*s: [[Ipifc(kernel)]] other fields */
   Conv  *conv;    /* link to its conversation structure */
