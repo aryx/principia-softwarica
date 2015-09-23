@@ -4,7 +4,7 @@
 #include <ip.h>
 #include "dat.h"
 #include "protos.h"
-#include "../../ndb/dns.h"
+#include "../ndb/dns.h"
 
 /*s: global rrtname */
 /* names of RR types - /sys/src/cmd/ndb/dn.c:/rrtname */

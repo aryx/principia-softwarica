@@ -2,7 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <ip.h>
-#include "../icmp.h"
+#include "../../ip/icmp.h"
 
 /*s: function catch (networking/ip/dhcpd/ping.c) */
 static void
