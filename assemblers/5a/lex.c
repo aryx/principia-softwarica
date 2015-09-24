@@ -82,44 +82,6 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "RFE",		LRET, ARFE,
     /*x: [[itab]] elements */
-    ".EQ",		LCOND,	0,
-    ".NE",		LCOND,	1,
-    ".CS",		LCOND,	2,
-    ".HS",		LCOND,	2,
-    ".CC",		LCOND,	3,
-    ".LO",		LCOND,	3,
-    ".MI",		LCOND,	4,
-    ".PL",		LCOND,	5,
-    ".VS",		LCOND,	6,
-    ".VC",		LCOND,	7,
-    ".HI",		LCOND,	8,
-    ".LS",		LCOND,	9,
-    ".GE",		LCOND,	10,
-    ".LT",		LCOND,	11,
-    ".GT",		LCOND,	12,
-    ".LE",		LCOND,	13,
-    ".AL",		LCOND,	Always,
-    /*x: [[itab]] elements */
-    ".U",		LS,	C_UBIT,
-    ".S",		LS,	C_SBIT,
-    ".W",		LS,	C_WBIT,
-    ".P",		LS,	C_PBIT,
-    /*x: [[itab]] elements */
-    ".PW",		LS,	C_WBIT|C_PBIT,
-    ".WP",		LS,	C_WBIT|C_PBIT,
-    /*x: [[itab]] elements */
-    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
-    ".IAW",		LS,	C_WBIT|C_UBIT,
-    ".DBW",		LS,	C_WBIT|C_PBIT,
-    ".DAW",		LS,	C_WBIT,
-
-    ".IB",		LS,	C_PBIT|C_UBIT,
-    ".IA",		LS,	C_UBIT,
-    ".DB",		LS,	C_PBIT,
-    ".DA",		LS,	0,
-    /*x: [[itab]] elements */
-    ".F",		LS,	C_FBIT,
-    /*x: [[itab]] elements */
     "R0",		LREG,	0,
     "R1",		LREG,	1,
     "R2",		LREG,	2,
@@ -157,6 +119,44 @@ struct Itab itab[] =
     "WORD",		LWORD, AWORD,
     /*x: [[itab]] elements */
     "END",		LEND, AEND,
+    /*x: [[itab]] elements */
+    ".EQ",		LCOND,	0,
+    ".NE",		LCOND,	1,
+    ".CS",		LCOND,	2,
+    ".HS",		LCOND,	2,
+    ".CC",		LCOND,	3,
+    ".LO",		LCOND,	3,
+    ".MI",		LCOND,	4,
+    ".PL",		LCOND,	5,
+    ".VS",		LCOND,	6,
+    ".VC",		LCOND,	7,
+    ".HI",		LCOND,	8,
+    ".LS",		LCOND,	9,
+    ".GE",		LCOND,	10,
+    ".LT",		LCOND,	11,
+    ".GT",		LCOND,	12,
+    ".LE",		LCOND,	13,
+    ".AL",		LCOND,	Always,
+    /*x: [[itab]] elements */
+    ".U",		LS,	C_UBIT,
+    ".S",		LS,	C_SBIT,
+    ".W",		LS,	C_WBIT,
+    ".P",		LS,	C_PBIT,
+    /*x: [[itab]] elements */
+    ".PW",		LS,	C_WBIT|C_PBIT,
+    ".WP",		LS,	C_WBIT|C_PBIT,
+    /*x: [[itab]] elements */
+    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
+    ".IAW",		LS,	C_WBIT|C_UBIT,
+    ".DBW",		LS,	C_WBIT|C_PBIT,
+    ".DAW",		LS,	C_WBIT,
+
+    ".IB",		LS,	C_PBIT|C_UBIT,
+    ".IA",		LS,	C_UBIT,
+    ".DB",		LS,	C_PBIT,
+    ".DA",		LS,	0,
+    /*x: [[itab]] elements */
+    ".F",		LS,	C_FBIT,
     /*x: [[itab]] elements */
     "MULL",		LMULL, AMULL,
     "MULAL",	LMULL, AMULAL,

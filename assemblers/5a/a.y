@@ -50,8 +50,6 @@
 %token  <sym>   LNAME LLAB LVAR
 /*e: token declarations(arm) */
 /*s: type declarations(arm) */
-%type   <lval>  cond
-/*x: type declarations(arm) */
 %type   <gen> imsr
 /*x: type declarations(arm) */
 %type   <gen> reg imm shift
@@ -73,6 +71,8 @@
 %type   <lval>  offset
 /*x: type declarations(arm) */
 %type   <lval>  con expr 
+/*x: type declarations(arm) */
+%type   <lval>  cond
 /*x: type declarations(arm) */
 %type   <gen>   regreg
 /*x: type declarations(arm) */
