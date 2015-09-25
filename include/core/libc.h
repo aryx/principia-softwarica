@@ -726,7 +726,7 @@ extern	int		fd2path(int, char*, int);
 extern	int		pipe(int*);
 extern	long	pread(int, void*, long, vlong);
 extern	long	preadv(int, IOchunk*, int, vlong);
-extern	long	pwrite(int, void*, long, vlong);
+extern	long	pwrite(fdt, void*, long, vlong);
 extern	long	pwritev(int, IOchunk*, int, vlong);
 extern	long	read(int, void*, long);
 extern	long	readn(int, void*, long);
