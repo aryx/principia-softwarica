@@ -88,6 +88,7 @@
 %  - forward decl, func decl, extern decl, #ifdef, pragmas (stuff in Extra.nw)
 %  - misc opcodes (e.g. MVN)
 %  - misc optional syntactic elements (e.g. commas)
+%  - grammar literate boilerplate
 
 %\setcounter{tocdepth}{1}
 
@@ -183,6 +184,9 @@ over writing directly machine code?
 can they be used to implement higher level constructs in languages
 such as C?
 %tags: c-target
+
+\item How function calls are implemented? What is a frame?
+What is a frame pointer?
 
 \item What is in an object file? What difference there is
 between an object file and an executable?
@@ -315,6 +319,7 @@ after the linking step to use the ARM emulator [[5i]] instead:
 \end{verbatim}
 
 See the \book{Emulator} for more information on [[5i]].
+\l actually cool cos can be used as an assembly debugger too
 
 \section{Requirements}
 
@@ -330,8 +335,7 @@ Note that this book is not an introduction to
 assembly programming.
 We assume you already know an assembly language
 \l not necessarily the one used by 5a
-and that
-you have a basic understanding of computer architecture and
+and that you have a basic understanding of computer architecture and
 how an assembler works. We assume you are already familiar 
 with concepts such as
 {registers}, {stack pointer}, {frame pointer}, {program counter},
@@ -348,12 +352,12 @@ the semantics of some assembly instructions.
 \l maybe Machine.nw is actually a necessary requirment?
 
 It is also useful to read the documentation of
-the \plan assemblers available in the \plan
-repository itself, in 
+the \plan assemblers available in our \plan repository, in 
 [[docs/articles/asm.pdf]] and
 [[docs/man/1/8a]]\footnote{Despite its name this document also covers [[5a]]}.
 There are also some extra notes about the assemblers
 at \url{https://golang.org/doc/asm} which can be useful.
+\l Go used to use the plan9 developer toolchain, made by same authors :)
 
 \l MIPS assembly tutorial, might give some ideas (use spim)
 %http://programmedlessons.org/AssemblyTutorial/index.html
@@ -386,7 +390,6 @@ who wrote in some sense most of this book.
 An {\em assembler} is a program that translates source code
 written in an {assembly} programming language into
 {machine code}, or into an {object code} close to machine code.
-\l look at TECS section on assembler?
 %
 An {\em assembly} langage is a low-level programming language mimicing
 closely the {instructions} of a machine, but using a {textual}
@@ -463,10 +466,8 @@ This is why the object file
 \l because we want separate compilation
 must contain, in addition to machine code, enough information
 about the {external} symbols this assembly file is using
-(as well as the symbols it defines) 
-so that another tool, the {linker} can
-later fully {resolve} all the symbol references used in all the
-files.
+(as well as the symbols it defines)  so that another tool, the {\em linker}
+can later fully {resolve} all the symbol references used in all the files.
 %
 In essence, an object file is really the simplest form
 of a {module}: it packs code, data, and information
@@ -517,8 +518,13 @@ option.
 \l env: INCLUDE (for cpp, similar to -I), NPROC (when multi files?)
 
 
-
 \section{[[helloworld.s]]}
+
+% show example of C code first? because pwrite special. take care of vlong!
+
+Here is a simple assembly program [[helloworld.s]]
+to print [[Hello World]] which we will use as a quick
+ARM and assembly tutorial:
 
 \begin{verbatim}
 
@@ -533,12 +539,34 @@ option.
  show binary format? hexdump? 
  (hmmm actually not binary instruction format! see section below)
 
- try show code using TEXT, DATA, GLOBL, different addressing modes, etc
+ show code using TEXT, DATA, GLOBL, different addressing modes, etc
  show the advantage of assembly, that is mnemonic and symbolic addresses!
-
- maybe good to show a few more example of asm, to get a feel for the language
- e.g. the code of strchr, div, etc.
 \end{verbatim}
+
+%TEXT getcallerpc(SB), 1, $-4
+%	MOVW	0(R13), R0 /* R13 = SP */
+%	RET
+% 1 attribute???
+
+% Frame for call vs frame for syscall? different? R0 is not the first
+% argument anymore!
+
+% I reserve 20 for 4 arguments, even though first is in R0
+% because this space can also be used to save R0 in case
+% we need R0, and because last arg of pwrite is a vlong so need 8!
+% and do 20(SP) because when say $20 there is an implicit +4 for save PC
+% when not a leaf
+
+% I was doing MOVW 0, R1 which translates to MOVW 0(R0), R1 (not sure why)
+% instead of MOVW $0, R1 and so had some segfaults at 0xc because
+% R0 was return value from syscall which was lenght printed = 0xc
+
+% show actual code? echo '$t :c' | 5i helloa
+
+\n for Linux: http://sysdigcloud.com/fascinating-world-linux-system-calls/
+
+\l show more examples? to get a feel for the lang e.g. code of strchr, div,...
+
 
 
 \section{The ARM architecture}
@@ -556,7 +584,7 @@ option.
 
 \section{Input assembly language}
 
-We describe quickly here the main syntax of the ARM assembly
+We describe quickly here the main syntactical elements of the ARM assembly
 language used by [[5a]]. We recommend to read though
 [[docs/articles/asm.pdf]] for more complete information.
 
@@ -597,6 +625,7 @@ why need SB in second case? because it refers to symbol in certain section?
  it does not have extern declaration, but any ref is implicitely
  an extern.
 
+B xxx vs B xxx(SB)
 
 section{Runtime conventions}
  FP, SP, BL, etc?
@@ -643,10 +672,10 @@ todo: also TEXT foo, 0, $20
 The assembly language supported by [[5a]] has a few more features beyond
 mnemonics and symbolic addresses:
 \begin{itemize}
-\item constant expressions as operands, e.g. [[ADD R1, 1<<6 | 3, R4]],
+\item constant {\em expressions} as operands, e.g. [[ADD R1, 1<<6 | 3, R4]],
 which are evaluated at {assembly time}.
 
-\item an embedded {macro-processor} similar to [[cpp]] with
+\item an embedded {\em macro-processor} similar to [[cpp]] with
 features such as [[#include]] and [[#define]]. [[5a]] is thus
 what people calls a {macro-assembler}.
 %
@@ -1058,7 +1087,6 @@ short	reg;
 %token  <lval>  LR LREG  LPSR
 %token  <lval>  LF LFREG  LFCR 
 %token  <lval>  LC LCREG
-
 /* bits */
 %token  <lval>  LCOND
 %token  <lval>  LS LAT
@@ -1067,7 +1095,8 @@ short	reg;
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
 /* names */
-%token  <sym>   LNAME LLAB LVAR
+%token  <sym>   LNAME LLAB
+%token  <sym>   LVAR
 @
 %dead: LTYPEX LTYPEF LTYPEG LTYPED
 %old: used to be LTYPE1 LTYPE2 LTYPEI etc, but better to give clearer names
@@ -2160,7 +2189,7 @@ case '.':
 @
 % why not simply goto talph for '.'? avoid duplicate the cp = symb; cp++ ...
 
-\section{Characters}
+\section{Characters (and escape)}
 
 <<[[yylex()]] switch c cases>>=
 case '\'':
@@ -2173,7 +2202,7 @@ case '\'':
     return LCONST;
 @
 
-\section{Escaping characters}
+%\section{Escaping characters}
 %Special characters?
 
 % e is usually ' or ", the ending characher (and also char you have to escape)
@@ -2213,6 +2242,7 @@ loop:
     switch(c)
     {
     case '\n':	goto loop;
+
     case 'n':	return '\n';
     case 't':	return '\t';
     case 'b':	return '\b';
@@ -3501,16 +3531,30 @@ getnsn(void)
 
 
 
+
+
+
+
+
+
+
+
 \chapter{Parsing}
 \label{chap:parsing}
 
 \section{Overview}
 
-% assume understand yacc! if not read classic book on lex&yacc
-%  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
+In this chapter we assume you know how to read a Yacc grammar.
+We recommend~\cite{lexyacc} to learn more about Yacc.
+You can also read the original Yacc paper at [[docs/articles/unix/yacc.pdf]]
+in our \plan repository, or our \book{Code Generators} to fully
+understand how Yacc works.
 
 % actually not context free, parsing a file modify the kind
 % of some tokens, e.g. labels, lval.
+
+Here is the outline of the yacc grammar file for the ARM assembly
+language supported by [[5a]]:
 
 <<5a/a.y>>=
 %{
@@ -3524,10 +3568,10 @@ getnsn(void)
 <<grammar(arm)>>
 @
 %$
+\n classic Yacc
 
 
 % have seen token declaration in Core Data structures already.
-
 
 <<grammar(arm)>>=
 prog:
@@ -3539,6 +3583,7 @@ prog:
 <<cond rule(arm)>>
 <<operand rules(arm)>>
 <<helper rules(arm)>>
+
 <<constant expression rules>>
 <<float rules>>
 <<opt rules>>
@@ -4050,6 +4095,8 @@ imsr:
 \ifallcode
 <<operand rules(arm)>>=
 <<gen rule>>
+<<spreg rule(arm)>>
+<<sreg rule(arm)>>
 @
 <<misc rules>>=
 <<oreg rule>>
@@ -4099,8 +4146,13 @@ reg:
 %type   <lval>  sreg spreg 
 @
 
+<<spreg rule(arm)>>=
+spreg:
+  sreg
+@
 
-<<operand rules(arm)>>=
+
+<<sreg rule(arm)>>=
 sreg:
   LREG
 | LR '(' expr ')'
@@ -4109,20 +4161,9 @@ sreg:
       print("register value out of range\n");
   $$ = $3;
  }
-| LPC { $$ = REGPC; }
 @
 %$
-% why 2 rules? anyway people can use R12 to encode LSP so why
-% not have a simple reg rule that allows all those registers directly?
 
-<<operand rules(arm)>>=
-spreg:
-  sreg
-| LSP { $$ = REGSP; }
-@
-%$
-% why another one again? in which context we don't accept LSP?
-% and also in which context we don't accept LPC?
 
 <<[[itab]] elements>>=
 "R0",		LREG,	0,
@@ -4149,6 +4190,22 @@ spreg:
 
 
 
+
+%XXX
+<<spreg rule(arm)>>=
+| LSP { $$ = REGSP; }
+@
+%$
+% why another one again? in which context we don't accept LSP?
+% and also in which context we don't accept LPC?
+
+<<sreg rule(arm)>>=
+| LPC { $$ = REGPC; }
+@
+%$
+% why 2 rules? anyway people can use R13 to encode LSP so why
+% not have a simple reg rule that allows all those registers directly?
+
 \subsection{Constants}
 
 % con = constant
@@ -4171,6 +4228,11 @@ imm: '$' con
 
 % see con section below, essentially static-time integer constants
 % (not float, not string)
+
+<<con rule>>=
+con:
+  LCONST
+@
 
 % float constants are in another category, actually they
 % are allowed only for ximm and so for MOV and DATA categories.
@@ -4256,6 +4318,7 @@ rcon:
 % really does too much work here and close to ARM concrete bits
 
 \subsection{Memory (de)references, pointers}
+% indirect addressing?
 % was "Memory references"
 % arguments to MOVW
 % Pointers? or Memory dereference actually? or both :)
@@ -4838,6 +4901,11 @@ AEND,
  }
 @
 
+<<con rule>>=
+| LVAR         { $$ = $1->value; }
+@
+%$
+
 \section{Constant expressions}
 
 % it's not Fortran, we're making an assembler :)
@@ -4858,14 +4926,11 @@ AEND,
 % lower in the file = higher priority, earlier = lower priority
 
 <<constant expression rules>>=
-con:
-  LCONST
-| LVAR         { $$ = $1->value; }
-| '-' con      { $$ = -$2; }
-| '+' con      { $$ = $2; }
-| '~' con      { $$ = ~$2; }
-| '(' expr ')' { $$ = $2; }
+<<con rule>>
+<<expr rule>>
+@
 
+<<expr rule>>=
 expr:
   con
 | expr '+' expr     { $$ = $1 + $3; }
@@ -4880,6 +4945,16 @@ expr:
 | expr '|' expr     { $$ = $1 | $3; }
 
 @
+
+
+
+<<con rule>>
+| '-' con      { $$ = -$2; }
+| '+' con      { $$ = $2; }
+| '~' con      { $$ = ~$2; }
+| '(' expr ')' { $$ = $2; }
+@
+%$
 
 % convenient to have this, when combined with macros it
 % can do powerful stuff!
