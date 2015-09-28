@@ -681,7 +681,7 @@ hello world
 
 \subsection*{Pseudo instructions}
 
-This program defines three {symbols}:
+The [[helloworld.s]] program defines three {symbols}:
 two {procedures} [[_main()]] and [[exit()]], and one {global} [[hello]].
 %
 The two procedures are introduced via the [[TEXT]] 
@@ -770,6 +770,7 @@ at the address {denoted} by [[R2]] plus [[6]].
 The assembly instruction [[MOVB N, O(B)]] roughly corresponds
 to the following C statement [[B[O] = N]], if [[B]] is a byte pointer,
 which is also equivalent to [[*(B+O) = N]].
+\l what a strange syntax ...
 [[O]] is called the {\em offset}, which is applied to 
 a pointer [[B]] called the {\em base}.
 This addressing mode is called {\em indirect with offset}.
@@ -812,7 +813,7 @@ do not correspond exactly to machine registers.
 Indeed, ARM has already a register, [[R15]], which 
 represents the program counter. 
 Because ARM has fixed-length instructions of 4 bytes,
-the value of [[R15]] is a multiple of 4. The pseudo-register
+the value of [[R15]] is always a multiple of 4. The pseudo-register
 [[PC]] instead counts instructions, not bytes of data. So,
 to branch to the second following instruction (that is to skip
 one instruction) one does [[B 2(PC)]].
@@ -852,35 +853,39 @@ in the stack.
 
 \end{itemize}
 
-In this tutorial we will avoid using those pseudo-registers, except
-[[SB]] because we have no choice.
+In this tutorial we will avoid using those pseudo-registers (except
+[[SB]] because we have no choice).
 Indeed, they may simplify things in the long term but they
 add some extra complexities at the beginning.
 \l generic, hide normally pecularities, complexities, but add some complexity
 
 \subsection*{Call stack}
 
-Line 6 through 18 set characters in the [[hello]] global
-array of characters. 
+Line 6 through 18 set characters in the [[hello]] global array of characters. 
 %
-We can now examine Line 20 through 29 which build the arguments for the system
-call performed Line 31 (with the software interrupt instruction
+We can now examine Line 20 through 29 which build the arguments for the
+system call performed Line 31 (with the software interrupt instruction
 [[SWI]]). Arguments, in function calls or system calls, are
-hold in the stack. 
+hold primarily in the stack. \footnote{We will see later that
+[[R0]] under \plan plays also a special role regarding arguments because of 
+some C compiler and kernel conventions}.
 As said in the previous section, [[R13]] is the ARM stack pointer register.
 \n I use R13 and not SP because SP is a pseudo which get played with
 \n in the linker, so simpler use directly R13 to minimize explanations
 Here is a representation of the stack when the [[hello]] program
-is loaded in memory by the kernel:
+is loaded in memory by the kernel
+(the stack grows downward so high addresses are at the top
+in the diagram):
 
 \begin{verbatim}
         |       |
         |       |
 R13 +-> +-------+
 \end{verbatim}
+\n OSTEP book uses stack growing upward
 
-[[R13]] is initialized by the kernel before it jumps
-to the entry point of the binary program.
+[[R13]] is initialized by the kernel before the kernel gives
+control to the entry point of the binary program.
 Its value is very high in the virtual memory address
 space ([[0x7fffff58]]).
 Here is a dump of the registers using the emulator/debugger [[5i]] 
@@ -896,52 +901,92 @@ R8  #0        R9  #0        R10 #0        R11 #0
 R12 #0        R13 #7fffff58 R14 #0        R15 #1020
 \end{verbatim}
 \t look at Machine.nw, see how initialize registers in initmem? initstk?
+\l SP here is the machine SP, not assembler SP
 
-The stack grows downward so high addresses are at the top
-in the diagrams. Remember that the second argument
-to the [[TEXT]] pseudo-instruction 
-number of bytes,
-this procedure will need for its {\em locals} in the {stack}
 
-One of the effect of the 
+Remember that the second argument
+to the [[TEXT]] pseudo-instruction is the number of bytes
+this procedure will need for its {\em locals} in the {stack}.
+So, when assembled the [[TEXT]] pseudo-instruction Line~1
+should generate a machine instruction which decrements
+R13 by 20. In fact, the actual generated instruction decrements
+R13 by 24. 
+\l in fact it also does also some magic with R14
+Indeed, we will see later why we need to store an extra word
+in the stack before the arguments.
+%
+So here is the representation of the stack after Line~1
+when the processor starts to execute the instruction Line~2:
 
 \begin{verbatim}
         |       |
         |       |
-        +-------+
+    +24 +-------+ <-+ old value of R13
         |       |
-        +-------+
+    +20 +-------+
         |       |
-        +-------+
+    +16 +-------+
         |       |
-        +-------+
+    +12 +-------+
         |       |
-        +-------+
+     +8 +-------+
+        |       |
+     +4 +-------+ <- start of arguments
         |       |
 R13 +-> +-------+
 \end{verbatim}
 
-%R13 magic, $20
+Here is the same stack before Line~31 after the arguments
+to the system call have been set in the stack by
+Line~20 through 28:
 
+\begin{verbatim}
+        |       |
+        |       |
+    +24 +-------+ <-+ old value of R13
+        |  0    |
+    +20 +-------+
+        |  0    |
+    +16 +-------+
+        |  12   |
+    +12 +-------+
+        |&hello |
+     +8 +-------+
+        |  1    |
+     +4 +-------+ <- start of arguments
+        |       |
+R13 +-> +-------+
+\end{verbatim}
+\l remember 0 0 because vlong offset
 
-% I reserve 20 for 4 arguments, even though first is in R0
-% because this space can also be used to save R0 in case
-% we need R0, and because last arg of pwrite is a vlong so need 8!
-% and do 20(SP) because when say $20 there is an implicit +4 for save PC
-% when not a leaf
-
-
+\l getcallerpc code? with special minus 4
 %TEXT getcallerpc(SB), 1, $-4
 %	MOVW	0(R13), R0 /* R13 = SP */
 %	RET
-% 1 attribute???
+% 1 attribute??? need diagram again
 
 \subsection*{System call}
 
-% Frame for call vs frame for syscall? different? R0 is not the first
-% argument anymore!
+The \plan kernel system call convention is to have all
+the arguments in the stack and to use [[R0]] to hold
+the system call code. The magic constant value [[9]]
+at Line~29 is the code corresponding to the [[PWRITE]]
+system call. See [[lib_core/libc/9syscall/sys.h]].
+\n R0 is not the first argument anymore
+The [[SWI]] instruction Line~31 then performs the system call
+and jump in the kernel.
 
-\subsection*{Branch and link}
+\subsection*{Function call, branch and link}
+
+% Frame for call vs frame for syscall? different? 
+
+% and do 20(SP) because when say $20 there is an implicit +4 for save PC
+% when not a leaf
+
+% even though first is in R0 because this space can also be used to save R0
+% in case we need R0.
+
+
 
 % then BL
 % R14. normally CALL and push on stack return address,
