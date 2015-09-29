@@ -311,7 +311,7 @@ The command in Line 2 {assembles} the very simple [[hello.s]]
 ARM assembly program and generates the [[hello.5]] ARM object file.
 Line 3 then {links} the object file and generates the final 
 ARM binary executable [[hello]].
-Line 4, which assumes you are under an ARM machine (e.g. a Raspberry Pi),
+Line 4, which assumes you are under an ARM machine (e.g. a Raspberry Pi)
 {launchs} the program.
 
 Note that it is easy under \plan to {cross compile} from another architecture:
@@ -362,7 +362,7 @@ the semantics of some assembly instructions.
 \l maybe Machine.nw is actually a necessary requirment?
 
 It can be also useful to read the documentation of
-the \plan assemblers available in our \plan repository, in 
+the \plan assemblers available in our \plan repository in 
 [[docs/articles/asm.pdf]] and
 [[docs/man/1/8a]]\footnote{Despite its name this document also covers [[5a]]}.
 There are also some extra notes about the assemblers
@@ -480,7 +480,7 @@ about the {external} symbols this assembly file is using
 can later fully {resolve} all the symbol references used in all the files.
 %
 In essence, an object file is really the simplest form
-of a {module}: it packs code, data, and information
+of a {\em module}: it packs code, data, and information
 about {exported} and {imported} entities.
 \l but no properties for those entities, so not a real interface
 
@@ -587,7 +587,7 @@ It is a small wrapper around the {software interrupt} ARM instruction
 [[SWI]] which performs a {\em system call} (also known as a {\em syscall}).
 \l more on this SWI later
 %
-Here is its prototype defined in [[libc.h]]:
+Here is the prototype of [[pwrite()]] defined in [[include/core/libc.h]]:
 
 <<prototype pwrite in libc.h>>=
 extern	long	pwrite(fdt, void*, long, vlong);
@@ -603,6 +603,7 @@ and finally a [[vlong]] seeking offset.
 %
 Most of the parameters take 4 bytes except the [[vlong]] which takes 8 bytes.
 \l will be important, see later
+\l pwrite is the syscall, not write, vlong seek is for protocol atomicity, 2in1
 
 \subsection*{The program}
 
@@ -708,14 +709,15 @@ In Asm9 all constants are prefixed by a dollar.
 % R0 was return value from syscall which was lenght printed = 0xc
 %
 For [[GLOBL]] the constant value represents the size, in number of
-bytes, this global will use. For [[hello]] it is [[12]],
-the length of the [["hello world\n"]] string.
+bytes, this global will use. For [[hello]] it is [[12]], enough
+to hold the [["hello world\n"]] string.
 %
 For [[TEXT]] the constant value represents the size, in number of bytes,
 this procedure will need for its {\em locals} in the {stack}. 
 For [[_main()]] it is [[20]], the
 number of bytes needed to hold all the {arguments} in the stack
 to the [[PWRITE]] system call 
+\l locals and arguments are the same
 \l to the [[pwrite()]] function and 
 (4 for the file descriptor integer, plus 4 for for the string pointer,
 plus 4 for the size, plus 8 for the [[vlong]] offset).
@@ -724,8 +726,9 @@ plus 4 for the size, plus 8 for the [[vlong]] offset).
 Note that the linker, [[5l]], is looking for a procedure named
 [[_main]] for the entry point of the executable it generates,
 even though the entry point of C programs is [[main]], not [[_main]].
-This is because the core C library defines a [[_main()]] procedure,
-written in assembly, which calls [[main()]].
+This is because the core C library defines a [[_main()]] procedure
+written in assembly which does some core initialisations
+and then calls [[main()]].
 In our example we do not use and so do not link the C library, so we must
 define our own [[_main()]] entry point procedure.
 
@@ -750,7 +753,7 @@ in the {register} [[R2]].
 There are 16 ARM registers named [[R0]] to [[R15]].
 Note that Asm9 uses a {left-to-right} assignment syntax\footnote{called the
 \att syntax as opposed to the Intel syntax which is right-to-left}.
-Moreover, In Asm9 [[MOV]] instructions are suffixed with a letter
+Moreover, in Asm9 [[MOV]] instructions are suffixed with a letter
 corresponding to a size: [[W]] for word, [[B]] for byte, etc.
 \l hmm also sometimes MOVBU, gas does that too
 \l also MOV is virtual instr, see later; 
@@ -778,7 +781,7 @@ which is also equivalent to [[*(B+O) = N]].
 a pointer [[B]] called the {\em base}.
 This addressing mode is called {\em indirect with offset}.
 The [[()]] around the register corresponds rougly to the 
-C {derefencing} operator [[*]].
+C {dereferencing} operator [[*]].
 \l why not MOVB 'W', 6(R2)? because linker limitations
 \l  but it does some magic for other virtual instr, so why not this one?
 \l  because cc didn't need it?
@@ -786,7 +789,7 @@ C {derefencing} operator [[*]].
 
 In fact, Line 6 introduced also an addressing mode.
 The syntax [[hello(SB)]] is reminescent of the base
-and offset addressing mode we have just seen before.
+and offset addressing mode we have just seen.
 [[SB]] stands for {\em static base} register.
 It refers to the beginning of the address space of the program.
 \n more on this later, it's a pseudo, it's not needed, it's weird
@@ -813,9 +816,9 @@ C {address} operator [[&]].
 (virtual) {\em program counter}. 
 Similar to pseudo-instructions, pseudo-registers
 do not correspond exactly to machine registers.
-Indeed, the ARM has already a register, [[R15]], which 
+Indeed, the ARM has already a hardware register, [[R15]], which 
 represents the program counter. 
-Because ARM has fixed-length instructions of 4 bytes,
+Because the ARM has fixed-length instructions of 4 bytes,
 the value of [[R15]] is always a multiple of 4. The pseudo-register
 [[PC]] instead counts instructions, not bytes of data. So,
 to branch to the second following instruction (that is to skip
@@ -910,7 +913,8 @@ R12 #0        R13 #7fffff58 R14 #0        R15 #1020
 
 Remember that the second argument
 to the [[TEXT]] pseudo-instruction is the number of bytes
-this procedure will need for its {\em locals} in the {stack}.
+this procedure will need for its locals in the {stack}.
+\l locals, arguments
 So, when assembled the [[TEXT]] pseudo-instruction Line~1
 should generate a machine instruction which decrements
 R13 by 20. In fact, the actual generated instruction decrements
@@ -935,7 +939,7 @@ when the processor starts to execute the instruction Line~2:
         |       |
      +8 +-------+
         |       |
-     +4 +-------+ <- start of arguments
+     +4 +-------+ <- start of "locals"
         |       |
 R13 +-> +-------+
 \end{verbatim}
@@ -956,7 +960,7 @@ to the system call have been set by Line~20 through 28:
         |&hello |
      +8 +-------+
         |  1    |
-     +4 +-------+ <- start of arguments
+     +4 +-------+ <- start of PWRITE arguments
         |       |
 R13 +-> +-------+
 \end{verbatim}
@@ -972,9 +976,11 @@ R13 +-> +-------+
 
 The \plan kernel syscall calling convention is to have all
 the arguments in the stack and to use [[R0]] to hold
-the system call code. The magic constant value [[9]]
+the syscall ``code''. The magic constant value [[9]]
 at Line~29 is the code corresponding to the [[PWRITE]]
-system call. See [[lib_core/libc/9syscall/sys.h]].
+system call. See the file [[lib_core/libc/9syscall/sys.h]] 
+which defines all those syscall codes.
+\l could actually #include and use PWRITE
 \n R0 is not the first argument anymore
 The [[SWI]] instruction Line~31 then performs the system call
 and jumps in the kernel.
@@ -991,6 +997,7 @@ and then jump/branch to the code of the callee.
 Then, a corresponding [[RET]] instruction in the callee
 will pop back this value in the program counter to return back
 to the caller.
+\l and add 4? or it's done before?
 \l classic use of stack, can do recursive functions like that
 %
 In the ARM, [[BL]] instead saves the value of the program
@@ -1026,15 +1033,16 @@ to the caller in case [[R14]] needs to be saved.
 
 \subsection*{Virtual instructions}
 
-The leaf detection is done {statically} by the linker, [[5l]],
+The leaf detection is done ({statically}) by the linker, [[5l]],
 since it is the program generating actually the machine code in \plan,
 and so the program which needs this information to optimize machine code.
 %
-A leaf is any procedure which does not contain any [[BL]] instruction,
+A leaf is simply any procedure which does not contain any [[BL]] instruction,
 for instance [[exit]] in our example\footnote{[[SWI]] does not count 
-as a function call;
-the kernel saves all the registers of the calling process somewhere
-including [[R14]]}.
+as a function call; [[R14]] is not overwritten by [[SWI]].
+}.
+\l In any case the kernel saves all the registers of the calling process?
+\l actually only when context switch no?
 [[_main]] on the opposite is not a leaf function since it is
 using [[BL]] Line~32.
 %
@@ -1044,7 +1052,7 @@ The same is true for the [[RET]] instruction, Line~33 and 45,
 which we call a {\em virtual instruction}.
 Indeed, the ARM does not have any [[RET]] instruction.
 %
-The following diagram describes what machine code is generated
+The following diagram describes roughly what machine code is generated
 for the pseudo and virtual instructions [[TEXT]] and [[RET]]
 of a simple procedure [[foo]], depending on whether this
 procedure is a leaf or not:
@@ -1058,7 +1066,9 @@ TEXT foo(SB), $4   MOVW R14, 0(SP)          SUB SP, $4, SP
 ----------------  -----------------------  ------------------
   assembly code    machine code non-leaf    machine code leaf
 \end{verbatim}
-\n -fomit-frame-pointer! no need save SP in the stack!
+\l actually it is a MOVW.P or something in one single instruction
+\n real world: -fomit-frame-pointer! no need save SP in the stack!
+\n but then harder to walk the stack!
 \n can statically know when do RET what you allocated already,
 \n can restore old SP easily.
 
@@ -1073,7 +1083,6 @@ in Asm5 one can use the very general [[MOV]]
 even though the ARM processor supports only the
 more basics and separate [[LOAD]] and [[STORE]] instructions.
 \n actually there is a MOV and it's LDR and STR but same basic idea
-\n also NOP, and RET (which some nice sugar with B vs BL)
 \l but a bit leaky abstraction because the linker puts later some restrictions
 
 Instructions Line~40 though 44 are similar to the instructions
@@ -1091,15 +1100,20 @@ even if Line~48 {\em declares} the [[hello]] global with the [[GLOBL]]
 pseudo-instruction, it is the [[DATA]] instruction which {\em defines}
 the content of the global. 
 %
-The arguments of [[DATA]] are in order the symbol of the global,
+The arguments of [[DATA]] are in order:
+\begin{enumerate}
+\item the symbol of the global,
 possibly with an offset (here [[+0]]), and as always for references to
-globals or procedures the [[(SB)]] base, then a slash followed
+globals or procedures the [[(SB)]] base
+
+\item a slash followed
 by an integer between 1 and 8 representing the size in
-number of bytes this [[DATA]] instruction is defining (here [[/6]]), 
+number of bytes this [[DATA]] instruction is defining (here [[/6]])
 \l but no dollar here, hmmm
-and for the second argument a constant.
-The constant can be an integer, a character, or a string of
+ 
+\item a constant, which can be an integer, a character, or a string of
 less than 8 bytes.
+\end{enumerate}
 \l a bit weird those constraints and conventions
 
 To define data which takes more than 8 bytes, one needs
@@ -1255,6 +1269,7 @@ similar code in the \book{Compiler}.
 are convenient for the programmer (or compiler writer).
 Indeed, they can hide some architecture restrictions or peculiarities. 
 \l makes asm a bit more portable
+\n MOV, NOP, RET 
 
 \item {\em symbolic constants}, e.g. [[TMP = 11 ... MOV R1, R(TMP)]],
 which were called originally (and ironically) {\em variables}.
