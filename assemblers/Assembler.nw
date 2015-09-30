@@ -363,7 +363,7 @@ the semantics of some assembly instructions.
 
 It can be also useful to read the documentation of
 the \plan assemblers available in our \plan repository in 
-[[docs/articles/asm.pdf]] and
+[[assemblers/docs/asm.pdf]] and
 [[docs/man/1/8a]]\footnote{Despite its name this document also covers [[5a]]}.
 \n 'as' article in unix programmer's manual? seems unrelated to 5a.
 There are also some extra notes about the assemblers
@@ -1132,7 +1132,7 @@ GLOBL   hello(SB), $12
 DATA    hello+0(SB)/8, $"hello wo"
 DATA    hello+8(SB)/4, $"rld\n"
 \end{verbatim}
-\l see data2c also
+\l see data2s also
 
 \l need the antislash z?
 %The [[\z]] are the equivalent of [[\0]] in C and represents
@@ -1144,16 +1144,17 @@ DATA    hello+8(SB)/4, $"rld\n"
 
 \section{The ARM architecture}
 
-ARM is actually at the same time 
+ARM represents different things. It is
 a family of RISC machines, 
 a family of instruction set architectures (ISAs), and 
-a family of processors. 
+also a family of processors. 
 %
 But, up until now, and also for the rest of this document, 
-when we use the term ARM we mean the {\em ARMv6} instruction set architecture
-which (confusingly) is used in the {\em ARM11} 32 bits processor 
+when we use the term ARM we mean the {\em ARMv6} instruction set architecture.
+Confusingly, ARMv6 is the instruction set
+used in the {\em ARM11} 32 bits processor 
 family~\furl{http://www.arm.com/products/processors/classic/arm11/?tab=Specifications}.
-The ARM11 processor family powers many smartphones as well as the Raspberry Pi.
+This family powers many smartphones as well as the Raspberry Pi.
 \l ARM1136
 
 Because an assembly language mimics closely the instructions
@@ -1177,50 +1178,171 @@ to understand this document.
 
 \section{Input assembly language}
 
-We summarize here the main syntactical elements of Asm9.
-We recommend to read though [[docs/articles/asm.pdf]] for more
+We have covered already in the previous sections 
+many features of the assembly language Asm5,
+the language used by the input files to the assembler [[5a]].
+In this section we summarize those features and
+give a more systematic description of the assembly language Asm5.
+We recommend to read though [[assemblers/docs/asm.pdf]] for more
 information.
+\n but not really more complete information, my tutorial is better
+\l this is not a reference manual, but it is enough to help implement
+
+\subsection*{Lexical elements}
+
+The main lexical elements of Asm5 (and also of Asm9) are:
+\n implementer POV
+\begin{itemize}
+\item {integers}, e.g. [[42]]
+
+\item {characters}, e.g. [['W']]
+
+\item {strings}, e.g. [["hello wo"]]. Strings are limited
+to 8 characters.
+\l why? meh
+
+\l float? see later
+
+\item {predefined identifiers} in uppercase, used for 
+mnemomics ([[ADD]]), 
+registers ([[R0]]), 
+pseudo-instructions ([[TEXT]]) and 
+pseudo registers ([[PC]])
+\l keywords
+
+\item identifiers in lowercase, used for 
+symbols ([[_main]]) and 
+labels ([[later]])
+\l have to be lowercase?
+
+\item comments, e.g. [[/* not reached */]], using the same
+syntax than C comments, which are ignored
+
+\item space and tabs, which are also ignored
+
+\item newline, which is actually internally transformed in a semicolon.
+The semicolon is an instruction separator in Asm5. So, one can then either 
+write multiple instructions on different lines,
+or 
+multiple instructions on the same line but separated by an explicit [[;]].
+
+\item operators, e.g. \$, [[()]], [[/]], [[+]], etc,
+which have different meanings depending on the context
+
+\end{itemize}
+\l also cpp lexical elements
+
+\subsection*{Syntactical elements}
+
+The main syntactical element of Asm5 is the {instruction}.
+An Asm5 file is made essentially of a list of instructions, usually
+one per line. 
+An instruction is composed of a mnemonic, also known as
+the {opcode}, followed possibly by 1, 2 or 3 {operands}. 
+A line can also contain a {label} definition which is an identifier
+followed by a colon, e.g. [[later:]].
+
+\subsection*{Opcodes}
+
+Opcodes correspond to different kinds of operations:
+\begin{itemize}
+\item machine instructions, e.g. [[B]], [[SWI]]
+
+\item pseudo instructions, e.g. [[TEXT]], [[GLOBL]]
+
+\item virtual instructions, e.g. [[RET]], [[MOVW]]
+
+\end{itemize}
+
+\subsection*{Operands}
+
+Depending on the opcode, different kinds of operands are possible:
+\begin{itemize}
+\item constants, which in Asm5 are always prefixed with a dollar,
+e.g. \$42, \$[['W']]
+\l why? to avoid ambiguity with what? otherwise offset like 32(SP) have no dol
+
+\item registers, named [[R0]] to [[R15]] in Asm5
+
+\item pseudo registers, named [[PC]], [[SP]], [[FP]], and [[SB]]
+in Asm9
+
+\item labels
+\l B xx vs B(SB)
+
+\item a memory reference, which we will describe later
+
+\end{itemize}
+
+\subsection*{Addessing modes}
+
+Memory references appear mainly in branching
+instructions (e.g. [[BL]]), memory moves (e.g. [[MOVW]]),
+and as well in entity definitions (e.g. [[TEXT]]).
+Asm9 use a left-to-right assignment syntax for moves,
+\l AT&T syntax, normal
+so [[MOVW (R1), R2]] means moving the content at
+the address denoted by [[R1]] into [[R2]].
+%
+There are multiple ways to reference memory in Asm5,
+called {memory addressing modes}:
+\begin{itemize}
+
+\item {indirect}, using [[()]] around a register or
+pseudo register, e.g. [[(R1)]], which means
+the content at the address denoted by [[R1]]
+
+\item {indirect with offset}, e.g. [[4(R1)]],
+which means the content at the address denoted by [[R1]]
+plus 4. Note that there is no prefixing dollars for offsets.
+
+\item {symbol}, which are always written as offset
+to a pseudo register, e.g. [[hello(SB)]],
+which means the content at the address denoted by the symbol
+[[hello]].
+With [[SB]] the symbol denotes a global or procedure,
+with [[SP]] a local variable, and 
+with [[FP]] an argument.
+\l and PC?
+\l for Text, data, param, locals
+
+\item {symbol with offset}, e.g. [[hello+4(SB)]],
+which means the content at the address denoted by the global symbol
+[[hello]] plus 4.
+\l p+0(FP) is a comment!
+
+\item {symbol address}, using \$ before the symbol,
+e.g. \$[[hello(SB)]] which means the address itself of the symbol
+[[hello]].
+
+\end{itemize}
+
+\l note TEXT is actually an operand and a memory reference :)
+\l take some examples, e.g. start-KZERO(SB), and explain? see comment in .tex
+%concepts: 
+% - external symbols = fully unresolved! will be resolved at linking time
+%   but needs to keep the name in the symbol table and the place where it
+%   was referenced
+%   (note that external entities are not even declared, any use of a symbol
+%    not defined in the file is an external reference)
+%    less: maybe this should be fixed, easy to make a typo)
+%
+%
+% (LONG is a macro?)
+%        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
+%vs
+%        LONG    $_start-KZERO(SB)          /* load_addr */
+%
+%why need SB in second case? because it refers to symbol in certain section?
+% it's to take the address of _start symbol in SB and adjust
+% by removing KZERO to it. tricky. It's really $  _start(SB) - KZERO
+%
+% it does not have extern declaration, but any ref is implicitely
+% an extern.
+
+\section{Runtime conventions}
 
 \begin{verbatim}
-
- specifics of 5a? 
- left to right assignment, AT&T syntax, normal :)
- the different addressing modes for MOV.
-
-concepts: 
- - labels suffixed with :
- - constants, prefixed with $ (why? to avoid ambiguity with what?)
-   otherwise regular numbers are offset like 32(SP)
- - external symbols = fully unresolved! will be resolved at linking time
-   but needs to keep the name in the symbol table and the place where it
-   was referenced
-   (note that external entities are not even declared, any use of a symbol
-    not defined in the file is an external reference)
-    less: maybe this should be fixed, easy to make a typo)
- - use '(' xxx ')' for memory dereference. so 4(FP) really means
-   *fp + 4 (which in C could be written  fp[4] if fp was a byte pointer.
-
- special registers for addressing: PC, SB, FP, SP
- for text, data, param, locals
- (hmm has FP special register in 5a?)
-
- 8 bytes limit for strings (so if longer have to split manually,
- a bit annoying but can use data2s too)
-
- (LONG is a macro?)
-        LONG    $-(0x1BADB002 + 0x00010003)     /* checksum */
-vs
-        LONG    $_start-KZERO(SB)          /* load_addr */
-why need SB in second case? because it refers to symbol in certain section?
- it's to take the address of _start symbol in SB and adjust
- by removing KZERO to it. tricky. It's really $  _start(SB) - KZERO
-
- it does not have extern declaration, but any ref is implicitely
- an extern.
-
-B xxx vs B xxx(SB)
-
-section{Runtime conventions}
  FP, SP, BL, etc?
 
 from div.s
@@ -4135,14 +4257,14 @@ getnsn(void)
 
 In this chapter we assume you know how to read a Yacc grammar.
 We recommend~\cite{lexyacc} to learn more about Yacc.
-You can also read the original Yacc paper at [[docs/articles/unix/yacc.pdf]]
+You can also read the original Yacc paper at [[generators/docs/yacc.pdf]]
 in our \plan repository, or our \book{Code Generators} to fully
 understand how Yacc works.
 
 % actually not context free, parsing a file modify the kind
 % of some tokens, e.g. labels, lval.
 
-Here is the outline of the yacc grammar file for the ARM assembly
+Here is the outline of the yacc grammar file for Asm5, the ARM assembly
 language supported by [[5a]]:
 
 <<5a/a.y>>=
