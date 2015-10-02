@@ -2147,6 +2147,7 @@ the value of those parameters:
 \l speak now about the 2second register which is abused for: TEXT/DATA attr?
 
 \section{[[Token]] and [[itab]]}
+\label{sec:token}
 
 The Yacc-based parser of [[5a]], called via [[yyparse()]],
 is taking as input a set of {tokens}.
@@ -2303,6 +2304,9 @@ in this document but the first entry is shown above for [[NOP]].
 \t in yylex when parse an identifier, looks in itab if equal string
 \t in which case return the appropriate token
 
+\l actually this array is used in xinit to populate hash table of symbols
+\l so it's fast.
+
 \section{[[Sym]] and [[hash]]}
 \label{sec:sym}
 
@@ -2311,9 +2315,6 @@ in this document but the first entry is shown above for [[NOP]].
 % of what symbolic names are used, their type (labels vs variables
 % vs parameter vs local vs function).
 
-% This symbol table is abused also by the lexer.
-
-% (actually generic struct in aa/)
 <<struct Sym>>=
 struct	Sym
 {
@@ -2327,6 +2328,7 @@ struct	Sym
     // ---------------------------------------------------------
     // The "key"
     // ---------------------------------------------------------
+    // ref_own<string>
     char	*name;
 
     // ---------------------------------------------------------
@@ -2350,8 +2352,9 @@ struct	Sym
     <<[[Sym]] extra fields>>
 };
 @
-%note: value is a vlong in va/
-%note: there is no symkind here, this is stored outside the Sym
+\n archi: value is a vlong in va/
+\l there is no symkind here, this is stored outside the Sym
+\l This symbol table is abused also by the lexer.
 
 % this is used for user defined names (e.g. TEXT foo), but
 % abused also for keywords operand like AL, AX, and also for opcode
@@ -2359,7 +2362,13 @@ struct	Sym
 % note: because of hash below that means that all MOVB in a file
 % are shared when lexing
 %    // see also itab[i].type and itab[i].value
-% archi: not that in va/ value is a vlong, not a long // archi: vlong in va/!!
+
+<<[[Sym]] lexeme value fields>>=
+//enum<token_code> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
+ushort	type;
+@
+
+
 
 <<constant NHASH>>=
 #define	NHASH		503
@@ -2382,6 +2391,17 @@ Sym*	link;
 #define	S	((Sym*)nil)
 @
 
+
+<<function slookup>>=
+Sym*
+slookup(char *s)
+{
+
+    strcpy(symb, s);
+    return lookup();
+}
+@
+% cleaner interface at least
 
 
 <<constant NSYMB>>=
@@ -2415,15 +2435,18 @@ lookup(void)
 
     c = symb[0];
     for(s = hash[h]; s != S; s = s->link) {
+        // fast path
         if(s->name[0] != c)
             continue;
+        // slow path
         if(memcmp(s->name, symb, l) == 0)
             return s;
     }
-    s = alloc(sizeof(*s));
+    s = alloc(sizeof(Sym));
     s->name = alloc(l);
     memmove(s->name, symb, l);
 
+    // add_hash(s, hash)
     s->link = hash[h];
     hash[h] = s;
 
@@ -2443,17 +2466,6 @@ syminit(Sym *s)
 @
 
 
-<<function slookup>>=
-Sym*
-slookup(char *s)
-{
-
-    strcpy(symb, s);
-    return lookup();
-}
-@
-% cleaner interface at least
-
 %dead:
 %<<[[Sym]] other fields>>=
 %Ref*	ref; // unused for 5a, matters?
@@ -2467,10 +2479,6 @@ slookup(char *s)
 %@
 
 
-<<[[Sym]] lexeme value fields>>=
-//enum<token_kind> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
-ushort	type;
-@
 
 \section{[[Sym_kind]]}
 
@@ -2481,22 +2489,20 @@ ushort	type;
 % to use them e.g. MOV.
 
 <<[[Gen]] other fields>>=
-// option<Sym>
+// option<ref_??<Sym>>
 Sym*	sym;
 @
 %less: maybe should rename this field 'name'? and then use name_kind?
 
-% example: TEXT foo(SB) ... or MOV $1, bar(SB) or BL bar(SB).
-% in the case of MOV $1, bar(SB), the Gen structure
-% for the first operand will be a D_CONST of offset/value 1.
-% For the second operand will be a D_OREG with 
-% with symkind = D_EXTERN (SB), offset 0, and sym "bar".
-
-
-% Assembler is outputing a (spreaded) symbol table in the object file.
-% Important job of assembler is to prepare for linker, to enable
-% the linker to link modules together and so to resolve references 
-% to external symbols.
+<<[[Gen]] other fields>>=
+// option<sym_kind>, None = N_NONE
+short	symkind;
+@
+%old: was called name, but confusing I think, name as a field was used in
+% many structures and it's actually not a name
+%less: rename to name_kind? rename also the sym field above?
+%note: that thre symkind is a property of the Gen and not Sym
+% because people disambiguate at each use, foo(SB), foo+0(FP), etc.
 
 <<enum sym_kind(arm)>>=
 enum sym_kind {
@@ -2508,15 +2514,19 @@ enum sym_kind {
 % and used only for the ANAME pseudo opcode. In 5l/ there is
 % actually a separate Dconv and Nconv (but in 8l/ they are together).
 
-<<[[Gen]] other fields>>=
-// option<sym_kind>, None = N_NONE
-short	symkind;
-@
-%old: was called name, but confusing I think, name as a field was used in
-% many structures and it's actually not a name
-%less: rename to name_kind? rename also the sym field above?
-%note: that thre symkind is a property of the Gen and not Sym
-% because people disambiguate at each use, foo(SB), foo+0(FP), etc.
+% EXAMPLE: TEXT foo(SB) ... or MOV $1, bar+4(SB) or BL bar(SB).
+% in the case of MOV $1, bar+4(SB), the Gen structure
+% for the first operand will be a D_CONST of offset/value 1.
+% For the second operand will be a D_OREG with 
+% with symkind = D_EXTERN (SB), offset 0, and sym "bar".
+
+
+% Assembler is outputing a (spreaded) symbol table in the object file.
+% Important job of assembler is to prepare for linker, to enable
+% the linker to link modules together and so to resolve references 
+% to external symbols.
+
+
 
 %note that can have symkind set but not necessarality a sym,
 % but it's in the degenerated case of con ( pointer ) which
@@ -2604,6 +2614,7 @@ case 'o':
 \section{[[cinit()]]}
 \label{sec:nullgen}
 
+% main -> <>
 <<function cinit(arm)>>=
 void
 cinit(void)
@@ -2630,8 +2641,8 @@ Gen	nullgen;
 <<[[cinit()]] nullgen initialisation>>=
 nullgen.type = D_NONE;
 nullgen.reg = R_NONE;
-nullgen.sym = S;
 nullgen.symkind = N_NONE;
+nullgen.sym = S;
 nullgen.offset = 0;
 if(FPCHIP)
     nullgen.dval = 0;
@@ -2813,7 +2824,7 @@ cclean(void)
 \chapter{Input}
 \label{chap:input}
 
-% yyparse() actually calls yylex() that calls reading file functions (GETC)
+% yyparse -> yylex -> GETC | ...
 
 <<global lineno>>=
 long	lineno;
@@ -2839,7 +2850,7 @@ int	peekc = IGN;
 #define	EOF		(-1)
 @
 
-
+% FIGURE?
 
 % assemble -> <> (before yyparse, in both passes)
 % call at the beginning of each pass with the file to assemble
@@ -3191,7 +3202,7 @@ aloop:
 
     <<[[yylex()]] if macro symbol>>
 
-    if(s->type == 0)
+    if(s->type == 0) // when can this happen?
         s->type = LNAME;
 
     if(s->type == LNAME || s->type == LVAR || s->type == LLAB) {
@@ -3416,146 +3427,8 @@ case '"':
         yyerror("string constant too long");
     return LSCONST;
 @
-% limited to 8 bytes, hence the data2c script
 
 
-\section{[[getc()]], [[unget()]], [[getnsc()]]}
-
-% from now on those functions are actually used by the preprocessing
-% code, not by the basic lexer (yylex) that actually implement
-% his own getnsc(), getcom(), getsym() via cases
-% (hmmm maybe could factorize things?)
-
-% helpers for other functions
-
-% int? why not uint? GETC can return EOF but not this function!
-<<function getc>>=
-int
-getc(void)
-{
-    int c;
-
-    c = peekc;
-    if(c != IGN) {
-        peekc = IGN;
-        return c;
-    }
-
-    c = GETC();
-
-    if(c == '\n')
-        lineno++;
-    if(c == EOF) {
-        yyerror("End of file");
-        errorexit();
-    }
-    return c;
-}
-@
-
-
-% what if had already a peekc? because called unget 2 times?
-% should raise Impossible!
-<<function unget>>=
-void
-unget(int c)
-{
-    peekc = c;
-    if(c == '\n')
-        lineno--;
-}
-@
-
-% get non space char (they really like short cryptic names)
-<<function getnsc>>=
-int
-getnsc(void)
-{
-    int c;
-
-    for(;;) {
-        c = getc();
-        if(!isspace(c) || c == '\n')
-            return c;
-    }
-}
-@
-
-
-
-\section{[[getsym()]]}
-% mv with Keywords and identifier section?
-
-<<function getsym>>=
-Sym*
-getsym(void)
-{
-    int c;
-    char *cp;
-
-    c = getnsc();
-    if(!isalpha(c) && c != '_' && c < Runeself) {
-        unget(c);
-        return S;
-    }
-    for(cp = symb;;) {
-        if(cp <= symb+NSYMB-4)
-            *cp++ = c;
-        c = getc();
-        if(isalnum(c) || c == '_' || c >= Runeself)
-            continue;
-        unget(c);
-        break;
-    }
-    *cp = 0;
-    if(cp > symb+NSYMB-4)
-        yyerror("symbol too large: %s", symb);
-    return lookup();
-}
-@
-
-\section{[[getcom()]]}
-% mv with Comments section above?
-
-<<function getcom>>=
-int
-getcom(void)
-{
-    int c;
-
-    for(;;) {
-        c = getnsc();
-        if(c != '/')
-            break;
-        c = getc();
-        if(c == '/') {
-            while(c != '\n')
-                c = getc();
-            break;
-        }
-        if(c != '*')
-            break;
-        c = getc();
-        for(;;) {
-            if(c == '*') {
-                c = getc();
-                if(c != '/')
-                    continue;
-                c = getc();
-                break;
-            }
-            if(c == '\n') {
-                yyerror("comment across newline");
-                break;
-            }
-            c = getc();
-        }
-        if(c == '\n')
-            break;
-    }
-    return c;
-}
-@
 
 \chapter{Preprocessing}
 \label{chap:preprocessing}
@@ -4669,14 +4542,146 @@ getnsn(void)
 @
 
 
+\section{[[getxxx()]]}
+
+% from now on those functions are actually used by the preprocessing
+% code, not by the basic lexer (yylex) that actually implement
+% his own getnsc(), getcom(), getsym() via cases
+% (hmmm maybe could factorize things?)
+
+\subsection{[[getc()]], [[unget()]], [[getnsc()]]}
+
+
+% helpers for other functions
+
+% int? why not uint? GETC can return EOF but not this function!
+<<function getc>>=
+int
+getc(void)
+{
+    int c;
+
+    c = peekc;
+    if(c != IGN) {
+        peekc = IGN;
+        return c;
+    }
+
+    c = GETC();
+
+    if(c == '\n')
+        lineno++;
+    if(c == EOF) {
+        yyerror("End of file");
+        errorexit();
+    }
+    return c;
+}
+@
+
+
+% what if had already a peekc? because called unget 2 times?
+% should raise Impossible!
+<<function unget>>=
+void
+unget(int c)
+{
+    peekc = c;
+    if(c == '\n')
+        lineno--;
+}
+@
+
+% get non space char (they really like short cryptic names)
+<<function getnsc>>=
+int
+getnsc(void)
+{
+    int c;
+
+    for(;;) {
+        c = getc();
+        if(!isspace(c) || c == '\n')
+            return c;
+    }
+}
+@
 
 
 
+\subsection{[[getsym()]]}
+% mv with Keywords and identifier section?
 
+<<function getsym>>=
+Sym*
+getsym(void)
+{
+    int c;
+    char *cp;
 
+    c = getnsc();
+    if(!isalpha(c) && c != '_' && c < Runeself) {
+        unget(c);
+        return S;
+    }
+    for(cp = symb;;) {
+        if(cp <= symb+NSYMB-4)
+            *cp++ = c;
+        c = getc();
+        if(isalnum(c) || c == '_' || c >= Runeself)
+            continue;
+        unget(c);
+        break;
+    }
+    *cp = 0;
+    if(cp > symb+NSYMB-4)
+        yyerror("symbol too large: %s", symb);
+    return lookup();
+}
+@
 
+\subsection{[[getcom()]]}
+% mv with Comments section above?
 
+<<function getcom>>=
+int
+getcom(void)
+{
+    int c;
 
+    for(;;) {
+        c = getnsc();
+        if(c != '/')
+            break;
+        c = getc();
+        if(c == '/') {
+            while(c != '\n')
+                c = getc();
+            break;
+        }
+        if(c != '*')
+            break;
+        c = getc();
+        for(;;) {
+            if(c == '*') {
+                c = getc();
+                if(c != '/')
+                    continue;
+                c = getc();
+                break;
+            }
+            if(c == '\n') {
+                yyerror("comment across newline");
+                break;
+            }
+            c = getc();
+        }
+        if(c == '\n')
+            break;
+    }
+    return c;
+}
+@
 
 \chapter{Parsing}
 \label{chap:parsing}
@@ -4706,8 +4711,13 @@ language supported by [[5a]]:
 %$
 \n classic Yacc
 
-
-% have seen token declaration in Core Data structures already.
+The [[union]] and [[token]] declarations {directives} have been
+already described in Section~\ref{sec:token}.
+The [[type]] declarations will be described gradually in this chapter. 
+The [[priority]] declarations are used only for the constant
+expressions and will be described in Section~\ref{sec:constant-expr}.
+The [[grammar]] part is the most important one,
+it defines the different grammar rules:
 
 <<grammar(arm)>>=
 prog:
@@ -4728,6 +4738,31 @@ prog:
 \l actually not context free, parsing a file modify the kind
 \l of some tokens, e.g. labels, lval.
 
+An Asm5 [[prog]]ram is either an empty file or a
+set of lines.
+% FIGURE with derivation where see set of lines?
+
+A [[line]] can be an [[inst]]ruction followed by a semicolon.
+Remember that the lexer transformed newlines in semicolons.
+\l so can either pack in one line with ';' or use newline (haskell spirit :) )
+
+<<line rule(arm)>>=
+line:
+  inst ';'
+@
+
+A line can also be empty, or contain the special [[error]] Yacc
+token (used for error recovery, see~\cite{lexyacc}).
+\l to got until next ; (that is newline)?
+
+<<line rule(arm)>>=
+| ';'
+| error ';'
+@
+
+In Section~\ref{sec:label-def} we will see that a line
+can also contain label definitions.
+
 % assembly file is made of lines containing instructions or labels.
 % instructions are mostly a single opcode with 0, 1, 2 or 3 operands
 % where each operand can be a register, or constant, or address, etc.
@@ -4736,24 +4771,6 @@ prog:
 % there are some special opcodes like TEXT which don't translate
 % in binary code but are useful for ? (symbol resolving?)
 % They are called pseudo-opcodes.
-
-
-<<line rule(arm)>>=
-line:
-  inst ';'
-@
-
-
-% note that newline are translated in ';' by the lexer
-% so can either pack in one line with ';' or use newline
-% (haskell spirit :) )
-
-
-<<line rule(arm)>>=
-| ';'
-| error ';'
-@
-% error? yacc trick for synchronization? to got until next ; (that is newline)?
 
 \section{Instructions}
 
@@ -5117,7 +5134,6 @@ ABLE,
 ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
 @
 % actually no RET in ARM, so virtual/fake-opcode
-% (works with BL?)
 
 <<[[itab]] elements>>=
 "RET",		LRET, ARET,
@@ -5159,8 +5175,6 @@ ASWI, // syscall
 % but not sure it needs an argument in plan9 context,
 % and anyway was doing stupid things like SWI 0  in 9syscall/mkfile
 % which was weird, at least should be SWI $0
-
-
 %\ifallcode
 %<<inst rule(arm)>>=
 %| LSWI cond gen { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
@@ -5188,6 +5202,7 @@ ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
 
 
 \section{Label definitions and [[pc]]}
+\label{sec:label-def}
 
 % this is incremented in outcode() after each instruction 
 % (except for ADATA and AGLOBL)
@@ -5428,6 +5443,7 @@ ximm:
 
 \subsection{Shift registers}
 % register and constant in some sense
+% mv in advanced topics?
 
 <<operand_kind cases>>=
 D_SHIFT,
@@ -5668,6 +5684,7 @@ offset:
 %$
 %less: rename offset_opt?
 
+%section{Static names?, local names?}
 
 <<name rule>>=
 | LNAME '<' '>' offset '(' LSB ')'
@@ -6046,6 +6063,7 @@ AEND,
 %$
 
 \section{Constant expressions}
+\label{sec:constant-expr}
 
 % it's not Fortran, we're making an assembler :)
 % so it's constant expressions here!
@@ -6148,6 +6166,7 @@ cond:
 @
 %less: use COND_ALWAYS now?
 
+
 \section{Special bits}
 % sign? long? p bit, w bit, ???
 
@@ -6236,6 +6255,11 @@ comma:
 \section{[[yyparse()]]}
 
 % essentially generated code by yacc, that is calling yylex
+
+
+
+
+
 
 
 \chapter{Object Generation}
@@ -7665,6 +7689,8 @@ if(debug['f'])
         print("%4ld: <pop>\n", lineno);
 @
 
+
+
 \chapter{Error Managment}
 \label{chap:error}
 
@@ -7716,7 +7742,7 @@ yyerror(char *a, ...)
 
 
 
-\chapter{Libc}
+\chapter{Utilities}
 \label{chap:libc}
 
 \section{Memory managment}
@@ -7826,19 +7852,20 @@ allocn(void *p, long on, long n)
 #include "Assembler_x86.nw"
 \fi
 
-\chapter{Changelog}
-\label{sec:changelog}
+%\chapter{Changelog}
+%\label{sec:changelog}
 
 \chapter{Glossary}
 \label{sec:glossary}
 
 \begin{verbatim}
 ISA = Instruction Set Architecture
+AST = Abstract Syntax Tree
 PC = Program Counter
 SP = Stack Pointer
 FP = Frame Pointer
 SB = Static Base register
-AST = Abstract Syntax Tree
+BL = Branch and Link
 \end{verbatim}
 
 \chapter*{Indexes}
