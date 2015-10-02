@@ -1258,7 +1258,9 @@ The main lexical elements of Asm5 (and also of Asm9) are:
 to 8 characters or less though.
 \l why? meh
 
-\l float? see later
+\item {\em floats}, e.g. [[4.2]]
+
+
 
 \item {\em predefined identifiers} in uppercase, used for 
 mnemomics ([[ADD]]), 
@@ -1714,8 +1716,8 @@ the yacc action for [[inst]] is triggered,
 which calls the function [[outcode()]] with the AST of the 
 parsed instruction.
 \l actually 5 subASTs arguments but they represent the AST
-%ocaml: could return full AST, list of instr and then outcode of that
 % 5a abuse tokens and the grammar to do some computations (classic old style)
+%ocaml: could return full AST, list of instr and then outcode of that.
 
 [[outcode()]] outputs then the serialized form of the instruction AST
 in the object file, but only when the global value of [[pass]] is 2.
@@ -1817,18 +1819,22 @@ errors in Appendix~\ref{chap:error}.
     Fred Brooks}
 \end{flushright}
 \end{verse}
+\n actually I think the original quote is with "flowchart" and "tables"
 
-% first 3 sections are really about AST: opcode, register, operand_kind/Gen.
-
-% Instructions are made of an opcode and operands, which can be
-% registers, immediate values, or memory addresses.
-% (actually for ARM there also a COND and some bit modifiers).
-% Memory addresses can use symbolic names.
+In this chapter we will present the main data structures used by [[5a]].
+The first three sections together form
+the abstract syntax tree (AST) of an instruction:
+the opcode, the register which is a kind of operand,
+and the other kinds of operands.
+Then we will see the tokens and end with the symbol table.
 
 \section{[[Opcode]]}
 \label{sec:opcode}
 
-% include/arm/5.out.h (used to be just 5c/5.out.h)
+All Asm5 instructions (machine, pseudo, virtual) have an opcode
+defined in [[include/arch/arm/5.out.h]] by the following type:
+\l used to be just 5c/5.out.h
+
 <<enum opcode(arm)>>=
 // coupling: with 5c/enam.c
 enum opcode
@@ -1843,6 +1849,7 @@ enum opcode
     <<add/sub opcodes>>
     <<mul/div/mod opcodes>>
     <<bitshift opcodes>>
+    // works with the branching opcodes
     <<comparison opcodes>>
     // ---------------------------------------------------------
     // Branching opcodes
@@ -1870,9 +1877,9 @@ enum opcode
     ALAST,
 };
 @
-%note: was called 'enum as'
-%note: the enum must contain less than 256 elements, as we rely on 
-% sending ANAME as a byte in zname(), and all opcode as a byte in zaddr()
+\t rename Opcode, use uppercase for enum too?
+\l why Axxx? Assembly?
+%old: was called 'enum as'
 %note: I reordered a lot the original opcodes. Note that it can be dangerous
 % for backward compatiblity to do so. Indeed 'ld' and 'as' need to agree
 % with each other; one can't use a library compiled (or cross compiled) 
@@ -1880,23 +1887,50 @@ enum opcode
 % by a 5a relying on another order. So can have some subtle errors if
 % want to play with what is cross-compiled! So make sure to recompile your
 % libc if you modify 5l or 5a or 5.out.h
-%note: the actual binary code generation is done in the linker, so
-% the order of the opcode below does not have to match the opcode order
-% for the ARM. Actually I have reordered them to be more logical
-% e.g. AND, ORR, EOR are closer together.
+
+\n the enum must contain less than 256 elements, as we rely on 
+\n  sending ANAME as a byte in zname(), and all opcode as a byte in zaddr()
+\n the order of the opcode below does not have to match the opcode order
+% (Actually I have reordered them to be more logical
+% e.g. AND, ORR, EOR are closer together.)
+% the actual binary code generation is done in the linker
 %less: Could analyze *.s in plan9 and do some stats? or use cg on the
 %  whole plan9 and see how much AXXX is used
 
-% The opcodes mimic closely the ISA of ARM (see Machine.nw):
-% for arith, branching, memory, syscalls.
-% But there are additional "pseudo" opcodes (aka asm directives) like ATEXT. 
-% There are also "virtual" opcodes! ANOP is such a virtual/fake opcode.
-% also RET, MOV, SLL, BEQ, etc.
+The opcodes follow closely the instruction set (ISA) of the ARM
+(see the \book{Emulator}), e.g. [[ASUB]] for the [[SUB]] machine instruction.
+They have been divided in different categories: 
+arithmetic and logic, 
+branching, 
+memory,
+system, 
+and float.
+Moreover, Asm5 introduces pseudo opcodes for the pseudo-instructions.
+The different opcodes will be presented gradually in this
+document.
 
-% no PUSH/POP? stack is sugar over MOV with specific conventions.
+The [[AXXX]] opcode represents the {invalid} opcode, put in
+first position in the enum probably as a form of defensive programming.
+%ocaml: ugly, should not need that if had strong enum case checker
+[[ALAST]] is an {\em end marker}, a C idiom which makes it easy to loop
+over all the opcodes or to declare an array of opcodes.
+%
+[[ANOP]] is a {virtual instruction} removed by [[5l]]. It is
+occasionally used by the assembly generator in [[5c]] to
+represent an instruction without any effect.
+\l not clear why need that at all, but USED and profiler might use that?
+\l also RET, MOV, SLL, BEQ, etc.
+\l no PUSH/POP? stack is sugar over MOV with specific conventions.
 
-\section{[[Register]]}
+\section{[[Registr]]}
 \label{sec:register}
+
+ARM has 16 registers named [[R0]] to [[R15]].
+They are represented simply by an integer in [[5a]]: 
+0 is [[R0]], 1 is [[R1]], etc.
+%ocaml: a big ugly because then have the issue with R_NONE
+The following type introduces some convenient names for some of the
+{special registers} we have seen before:
 
 <<enum regxxx(arm)>>=
 enum registr {
@@ -1910,34 +1944,46 @@ enum registr {
     NREG = 16,
 };
 @
-% REGSB is new! Machine.nw does not have it.
-% REGFP? not in ARM, but 5a has a fake register LFP (not sure
-% which actual register will be used for it though)
+\n can not use register, it is a reserved keyword
 
-% NREG used to represent NONE for the outcode reg parameter
-% but I prefer now R_NONE below.
+Again, [[NREG]] is not a register but an end marker. 
+One can then easily declare an array of 16 registers
+with [[int myregs[NREG];]].
+%
+Note than [[REGSB]] is not a special ARM register;
+it is reserved though by the assembler and linker for a special use.
+\t ref to section that explain more REGSB
+\l REGSB is new! Machine.nw does not have it.
+
+\t REGFP? not in ARM, but 5a has a fake register LFP (not sure
+\l which actual register will be used for it though)
+
+There are few situations where something, e.g. an operand,
+can be a register or nothing. We can not use 0 to represent nothing since it
+is used already to encode [[R0]] so the following
+constant represents nothing:
 
 <<constant R_NONE(arm)>>=
 #define R_NONE 16
 @
+%old: NREG used to represent NONE in the outcode reg param; I prefer R_NONE
+%ocaml: None
 
-% there are also 
+The ARM has also float registers, coprocessor registers,
+and status registers, but they will be introduced later.
 % - float registers Fxxx
 % - coprocessor registers Cxxx
 % - and also the status register PCR (and FPCR)
 
 
-\section{[[Operand]]}
+\section{Operand}
 \label{sec:operand}
-%[[Operand_kind]] and [[Gen]]
+\t rename Gen to Operand so better section name
+\t Why Gen anyway? general? generic? =~ Adr of Linker.
 
-% many instructions have 2 or 3 operands, e.g. ADD X1, X2, X3,
-% MOV X1, X2 where they can all be registers, or sometimes they can be
-% constants. 
-
-% 'type' encodes the kind of the operands. see later D_REG, D_CONST, etc. 
-% how get the remaining info? e.g. for D_BRANCH to get the symbol or int 
-% you will have too look in Gen.value. For D_CONST it's Gen.offset.
+A register is only one kind of operand.
+Constants (integers, floats, or strings) are another kind.
+The following type is used to represent all kinds of operands: 
 
 <<struct Gen(arm)>>=
 struct	Gen
@@ -1950,44 +1996,18 @@ struct	Gen
         double	dval;
         char	sval[8];
     };
+    // option<enum<registr>>, None = R_NONE
+    short	reg;
+
     <<[[Gen]] other fields>>
 };
 @
-%offset is used for:
-% - offset
-% - constant
-% - register for REGREG
-% - bitset of register for MOVM
-% - ??
-%less: rename operand? Why gen anyway? generic? =~ Adr of Linker.
-%less: can have an union? operand_kind will be good enough?
-
-%less: rename offset? to generic_value? or generic_long? or lval?
-% but it's true in many places it's used to encode an offset to
-% a base (a reg, a name).
-% e.g. for D_SHIFT the long is used really to encode the whole
-% thing with some bits for the shift kind, some bits for the register, etc.
-% see the many uses cases of offset in zaddr() switch about operand_kind ...
-%mimic what is in union token too
-
-<<enum operand_kind(arm)>>=
-enum operand_kind {
-    D_NONE,
-    <<operand_kind cases>>
-};
-@
-%less: why D_ prefix? 
-%dead: D_GOK, D_ADDR (valid for x86 but unused for arm)/* type/name */ for GOK
-%note: I reordered again a lot things, which like for opcode has some impact
-% on 5l. Now D_REG, D_CONST, D_SHIFT are closer (to mimic imsr rule).
-%See Dconv in Linker for dumper (which can help to undertand things too)
-
-
-%note: An ADT would be far better than this enum and separate Sym 
-% and Gen (=~ Adr). So it works with Gen so it's really
+%old: I introduced the union? can have it? operand_kind will be good enough?
+%ocaml: An ADT would be far better than this enum, D_NONE, and separate Sym 
 % type operand = 
 %  | D_REG of register // and offset?
 %  | D_CONST of int
+%  | D_OREG of register * offset
 %  | Branch of offset (PC)
 %  | Extern of name * offset (SB) ?
 %less: maybe by playing with Literate Programming I can reproduce a kind of ADT?
@@ -1996,30 +2016,122 @@ enum operand_kind {
 % type instr = 
 %  | TEXT of name * attribute list * int (* locals *)
 %   ...
-%   
 % type reg = 
 %   ...
 
+The [[type]] field is used to encode the kind of the operand.
+It is a [[short]] but really it can only take values of the
+[[operand_kind]] enum we define below (hence the comment):
 
-<<[[Gen]] other fields>>=
-// option<enum<register>>, None = R_NONE
-short	reg;
+<<enum operand_kind(arm)>>=
+enum operand_kind {
+    D_NONE,
+
+    D_CONST,
+    D_SCONST,
+    D_FCONST,
+
+    D_REG,
+    <<operand_kind cases>>
+};
 @
-% many operands are either directly a register (D_REG), or an offset
-% to a register (D_OREG), so most operands involve at least one register
-% (this make the link with the previous section also)
+\l why D_ prefix? 
+%dead: D_GOK, D_ADDR (valid for x86 but unused for arm)/* type/name */ for GOK
+%note: I reordered again a lot things, which like for opcode has some impact
+% on 5l. Now D_REG, D_CONST, D_SHIFT are closer (to mimic imsr rule).
+%See Dconv in Linker for dumper (which can help to undertand things too)
+
+The union in [[Gen]] represents the value of the operand, which has to 
+be interpreted in different ways depending on the kind of the 
+operand: 
+for integer constants ([[D_CONST]]) the [[offset]] field is used,
+for string constants ([[D_SCONST]]) the [[sval]] field,
+and for float constants ([[D_FCONST]]) the [[fval]] field.
+Remember that characters are converted in integers so
+there is no need for a [[D_CHARCONST]] and [[cval]] field.
+%
+The [[long]] element of the union is called [[offset]],
+and not [[lval]], because it is abused to represent
+different things, not just integer (or character) constants,
+as we will see soon.
+%ocaml: ugly
+
+The [[D_NONE]] case is used only at the beginning, when initializing
+a new operand in [[nullgen()]], and should be used to represent
+an operand which has not be defined yet.
+%
+[[D_REG]] is used to represent register operands. In that
+case it is the [[Gen.reg]] field which encodes
+the actual register.
+
+For indirect operand, e.g. [[(R1)]], 
+or indirect with offset operand, e.g. [[4(R1)]]
+the following case is used:
+
+<<operand_kind cases>>=
+D_OREG,
+@
+
+In those cases the register is encoded in the [[Gen.reg]] field,
+and the optional offset in [[Gen.offset]] (hence the name).
+\l offset is abused for many things, see the comment in .tex
+% - offset
+% - constant
+% - register for REGREG
+% - bitset of register for MOVM
+% - ??
+%less: rename offset? to generic_value? or generic_long? or lval?
+% but it's true in many places it's used to encode an offset to
+% a base (a reg, a name).
+% e.g. for D_SHIFT the long is used really to encode the whole
+% thing with some bits for the shift kind, some bits for the register, etc.
+% see the many uses cases of offset in zaddr() switch about operand_kind ...
+%mimic what is in union token too
 
 
-% ok but what about an Instruction data structure?
-% usually ADD, R1, R2, R3 
-% =~ Prog of Linker (but without opcode)?
-% how encoded the whole instruction? 
-% right now it's done via multiple parameters to outcode.
-% less: define a structure?
-% then can speak about the 2second register which is abused for:
-%  - TEXT attribute
-%  - DATA attribute
-%  - ?
+\section{Instruction}
+%    outcode(AEND, Always, &nullgen, R_NONE, &nullgen);
+
+There is no type to represent the full AST of an instruction.
+\l =~ Prog of Linker (but without opcode)?
+Instead, multiple parameters of the [[outcode()]]
+functions are used to pass the different components
+of an instruction. Here is the signature of [[outcode()]]:
+%ocaml: could define a record
+
+<<signature outcode(arm)>>=
+void	outcode(int opcode, int cond, Gen* opd1, int reg, Gen* opd3);
+@
+
+Here is an example of use of [[outcode()]] to output
+the serialized form of the instruction [[SUB $14, R2, R3]]:
+%$
+
+%EXAMPLE:
+<<example outcode>>=
+Gen operand1 = { .type = D_CONST; .offset = 14; ...};
+Gen operand3 = { .type = D_REG;   .reg = 3; ... };
+outcode(ASUB, Always, &operand1, 2, &operand3);
+@
+
+The [[Always]] constant and the second parameter of [[outcode()]]
+are used to represent the {\em conditional execution} of an instruction.
+It is an ARM feature we will explain later in Section~\ref{sec:cond-exec}
+(and in the \book{Emulator}).
+%
+The fourth parameter is an integer and not a [[Gen*]] because
+when ARM instructions have 3 operands, the middle one is always
+a register. 
+Depending on the number of operands, here are constraints on 
+the value of those parameters:
+\begin{itemize}
+\item 0 operand: [[opd1]] and [[opd3]] are [[NULL]], [[reg]] is [[R_NONE]]
+\item 1 operand: [[opd3]] is [[NULL]], [[reg]] is [[R_NONE]]
+\item 2 operands: [[reg]] is [[R_NONE]]
+\item 3 operands: no constraint, every parameter is used
+\end{itemize}
+
+\l speak now about the 2second register which is abused for: TEXT/DATA attr?
 
 \section{[[Token]] and [[itab]]}
 
@@ -5110,9 +5222,9 @@ gen:
 
 \subsection{Registers}
 
-<<operand_kind cases>>=
-D_REG,
-@
+%<<operand_kind cases>>=
+%D_REG,
+%@
 % works with Gen structure, as shown below
 
 <<operand rules(arm)>>=
@@ -5197,9 +5309,10 @@ sreg:
 % prefix with $ (why? ambiguity with what?) to differentiate
 % with just con where it's a omem (see section below)
 
-<<operand_kind cases>>=
-D_CONST,
-@
+%<<operand_kind cases>>=
+%D_CONST,
+%@
+%in core ds now
 
 <<operand rules(arm)>>=
 imm: '$' con
@@ -5309,9 +5422,9 @@ rcon:
 % Pointers? or Memory dereference actually? or both :)
 
 % O_REG = offset reg?
-<<operand_kind cases>>=
-D_OREG,
-@
+%<<operand_kind cases>>=
+%D_OREG,
+%@
 % when do MOV R1, (R2) => means in cell pointer by R2, so
 % it's really like *r2 = r1
 
@@ -5651,9 +5764,9 @@ D_PSR,
 \subsection{String constants}
 %\subsection{Other forms}
 
-<<operand_kind cases>>=
-D_SCONST,
-@
+%<<operand_kind cases>>=
+%D_SCONST,
+%@
 % string constant
 
 
@@ -5912,6 +6025,7 @@ expr:
 
 
 \section{Conditional execution}
+\label{sec:cond-exec}
 
 % seen most opcodes have this LTYPExxx cond op1, op2, ...
 
@@ -6812,10 +6926,10 @@ enum fregister {
 
 <<operand_kind cases>>=
 D_FREG,
-D_FCONST,
 D_FPCR,
 @
 % FPCR is the float pending of D_PSR?
+% also FCONST we have seen before in core DS
 
 <<[[zaddr()]] cases>>=
 case D_FREG:
@@ -7639,7 +7753,12 @@ allocn(void *p, long on, long n)
 \label{sec:glossary}
 
 \begin{verbatim}
-ISA Instruction Set Architecture
+ISA = Instruction Set Architecture
+PC = Program Counter
+SP = Stack Pointer
+FP = Frame Pointer
+SB = Static Base register
+AST = Abstract Syntax Tree
 \end{verbatim}
 
 \chapter*{Indexes}
