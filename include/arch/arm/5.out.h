@@ -49,9 +49,9 @@ enum opcode
     AXXX,
 
     ANOP, // VIRTUAL removed by linker
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     // Arithmetic and logic opcodes
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     /*s: logic opcodes */
     AAND,
     AORR,
@@ -89,6 +89,7 @@ enum opcode
     ASRA,
     ASLL,
     /*e: bitshift opcodes */
+    // works with the branching opcodes
     /*s: comparison opcodes */
     ATST,
     ATEQ,
@@ -96,9 +97,9 @@ enum opcode
     /*x: comparison opcodes */
     ACMN,
     /*e: comparison opcodes */
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     // Branching opcodes
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     /*s: branching opcodes */
     AB,
     ABL, // branch and link, =~ CALL
@@ -126,9 +127,9 @@ enum opcode
     /*x: branching opcodes */
     ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
     /*e: branching opcodes */
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     // Memory MOV opcodes
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     /*s: mov opcodes */
     AMOVW, // VIRTUAL, transformed in load and store instructions
     /*x: mov opcodes */
@@ -145,17 +146,17 @@ enum opcode
     ASWPW,
     ASWPBU,
     /*e: swap opcodes */
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     // Syscall
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     /*s: interrupt opcodes */
     ASWI, // syscall
     /*x: interrupt opcodes */
     ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
     /*e: interrupt opcodes */
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     // Float opcodes
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     /*s: float mov opcodes */
     AMOVWD,
     AMOVWF,
@@ -180,9 +181,9 @@ enum opcode
     ASQRTF,
     ASQRTD,
     /*e: float arithmetic opcodes */
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     // Pseudo opcodes
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     /*s: pseudo opcodes */
     ATEXT,
     AGLOBL,
@@ -214,50 +215,49 @@ enum opcode
 /*s: enum operand_kind(arm) */
 enum operand_kind {
     D_NONE,
-    /*s: operand_kind cases */
-    D_REG,
-    /*x: operand_kind cases */
+
     D_CONST,
+    D_SCONST,
+    D_FCONST,
+
+    D_REG,
+    /*s: operand_kind cases */
+    D_OREG,
     /*x: operand_kind cases */
     D_SHIFT,
     /*x: operand_kind cases */
-    D_OREG,
-    /*x: operand_kind cases */
     D_BRANCH,
     /*x: operand_kind cases */
-    D_PSR,
-    /*x: operand_kind cases */
-    D_SCONST,
+    D_FREG,
+    D_FPCR,
     /*x: operand_kind cases */
     D_REGREG,
     /*x: operand_kind cases */
-    D_FREG,
-    D_FCONST,
-    D_FPCR,
+    D_PSR,
     /*e: operand_kind cases */
 };
 /*e: enum operand_kind(arm) */
 
 /*s: enum sym_kind(arm) */
 enum sym_kind {
-   N_NONE,
-   /*s: sym_kind cases */
-   D_EXTERN, // text/data/bss values (from SB)
-   D_AUTO,   // stack values (from SP)
-   D_PARAM,  // parameter (from FP)
-   /*x: sym_kind cases */
-   D_STATIC, // data static variables (from SB)
-   /*x: sym_kind cases */
-   D_FILE,
-   /*x: sym_kind cases */
-   D_FILE1, // used by linker only?
-   /*e: sym_kind cases */
+    N_NONE,
+
+    D_EXTERN, // text/data/bss values (from SB)
+    D_AUTO,   // stack values (from SP)
+    D_PARAM,  // parameter (from FP)
+    /*s: sym_kind cases */
+    D_STATIC, // data static variables (from SB)
+    /*x: sym_kind cases */
+    D_FILE,
+    /*x: sym_kind cases */
+    D_FILE1, // used by linker only?
+    /*e: sym_kind cases */
 };
 /*e: enum sym_kind(arm) */
 
-/*s: constant NSNAME(arm) */
+/*s: constant NSNAME */
 #define	NSNAME		8
-/*e: constant NSNAME(arm) */
+/*e: constant NSNAME */
 
 // Attributes
 /*s: constant NOPROF(arm) */

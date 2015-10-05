@@ -11,7 +11,6 @@
 #include <common.out.h>
 
 #pragma	lib	"../aa/aa.a$O"
-//$
 
 // was originally in a XXX/Y.out.h (but was always the same in all archi)
 // most of the content below was originally copy pasted in 8a/a.h, 5a/a.h, etc
@@ -58,27 +57,18 @@ typedef	struct	Hist Hist;
 /*s: struct Sym */
 struct	Sym
 {
-    // Symbolic names are used for: 
-    //  - identifiers (e.g. TEXT foo, or MOV foo(SB), R1)
-    //  - labels (bar:), 
-    //  - variables (VAR=xxx)
-    //  - macros (#define MACRO)
-    //  - keywords lexemes (abuse), opcodes (AMOV) or registers (LR1), see itab
+    // Sym is (ab)used to represent many things in the assembler:
+    //   symbols, labels, but also macros, opcodes, registers, etc
 
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     // The "key"
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
+    // ref_own<string>
     char	*name;
 
-    // ----------------------------------------------------------------------
-    // The "value" for the different "namespaces"
-    // ----------------------------------------------------------------------
-
-    // generic value
-    //  - ?? for identifiers?
-    //  - pc for labels, 
-    //  - value for variables
-    //  - enum<opcode|operand_kind|registr|...> for keywords
+    // ---------------------------------------------------------
+    // The generic "value"
+    // ---------------------------------------------------------
     long	value; 
 
     /*s: [[Sym]] identifier value fields */
@@ -90,13 +80,13 @@ struct	Sym
     char*	macro;
     /*e: [[Sym]] macro value fields */
     /*s: [[Sym]] lexeme value fields */
-    //enum<token_kind> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
+    //enum<token_code> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
     ushort	type;
     /*e: [[Sym]] lexeme value fields */
 
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     // Extra
-    // ----------------------------------------------------------------------
+    // ---------------------------------------------------------
     /*s: [[Sym]] extra fields */
     // list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
     Sym*	link;

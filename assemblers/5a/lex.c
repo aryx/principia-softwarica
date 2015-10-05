@@ -7,15 +7,15 @@ struct Itab
 {
     char	*name;
 
-    //enum<token_kind>
+    //enum<token_code>
     ushort	type;
-    //enum<opcode|operand_kind|sym_kind|registr> | int
+    //enum<opcode|registr|...> | int
     ushort	value;
 };
 /*e: struct Itab(arm) */
 
 /*s: global itab(arm) */
-// map<string, (token_kind * enum<opcode|register|...>)>
+// map<string, (token_code * token_value)>
 struct Itab itab[] =
 {
     "NOP",		LMISC, ANOP,
@@ -109,9 +109,6 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "PC",		LPC,	D_BRANCH,
     /*x: [[itab]] elements */
-    "CPSR",		LPSR,	0,
-    "SPSR",		LPSR,	1,
-    /*x: [[itab]] elements */
     "TEXT",		LDEF, ATEXT,
     "GLOBL",	LDEF, AGLOBL,
     /*x: [[itab]] elements */
@@ -137,33 +134,6 @@ struct Itab itab[] =
     ".GT",		LCOND,	12,
     ".LE",		LCOND,	13,
     ".AL",		LCOND,	Always,
-    /*x: [[itab]] elements */
-    ".U",		LS,	C_UBIT,
-    ".S",		LS,	C_SBIT,
-    ".W",		LS,	C_WBIT,
-    ".P",		LS,	C_PBIT,
-    /*x: [[itab]] elements */
-    ".PW",		LS,	C_WBIT|C_PBIT,
-    ".WP",		LS,	C_WBIT|C_PBIT,
-    /*x: [[itab]] elements */
-    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
-    ".IAW",		LS,	C_WBIT|C_UBIT,
-    ".DBW",		LS,	C_WBIT|C_PBIT,
-    ".DAW",		LS,	C_WBIT,
-
-    ".IB",		LS,	C_PBIT|C_UBIT,
-    ".IA",		LS,	C_UBIT,
-    ".DB",		LS,	C_PBIT,
-    ".DA",		LS,	0,
-    /*x: [[itab]] elements */
-    ".F",		LS,	C_FBIT,
-    /*x: [[itab]] elements */
-    "MULL",		LMULL, AMULL,
-    "MULAL",	LMULL, AMULAL,
-    "MULLU",	LMULL, AMULLU,
-    "MULALU",	LMULL, AMULALU,
-    /*x: [[itab]] elements */
-    "MULA",		LMULA, AMULA,
     /*x: [[itab]] elements */
     "MOVD",		LMOV, AMOVD,
     "MOVDF",	LMOV, AMOVDF,
@@ -209,7 +179,17 @@ struct Itab itab[] =
     "FPSR",		LFCR,	0,
     "FPCR",		LFCR,	1,
     /*x: [[itab]] elements */
+    "MULL",		LMULL, AMULL,
+    "MULAL",	LMULL, AMULAL,
+    "MULLU",	LMULL, AMULLU,
+    "MULALU",	LMULL, AMULALU,
+    /*x: [[itab]] elements */
+    "MULA",		LMULA, AMULA,
+    /*x: [[itab]] elements */
     "MOVM",		LMOVM, AMOVM,
+    /*x: [[itab]] elements */
+    "CPSR",		LPSR,	0,
+    "SPSR",		LPSR,	1,
     /*x: [[itab]] elements */
     "MCR",		LSYSTEM, 0,
     "MRC",		LSYSTEM, 1,
@@ -232,6 +212,26 @@ struct Itab itab[] =
     "C13",		LCREG,	13,
     "C14",		LCREG,	14,
     "C15",		LCREG,	15,
+    /*x: [[itab]] elements */
+    ".U",		LS,	C_UBIT,
+    ".S",		LS,	C_SBIT,
+    ".W",		LS,	C_WBIT,
+    ".P",		LS,	C_PBIT,
+    /*x: [[itab]] elements */
+    ".PW",		LS,	C_WBIT|C_PBIT,
+    ".WP",		LS,	C_WBIT|C_PBIT,
+    /*x: [[itab]] elements */
+    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
+    ".IAW",		LS,	C_WBIT|C_UBIT,
+    ".DBW",		LS,	C_WBIT|C_PBIT,
+    ".DAW",		LS,	C_WBIT,
+
+    ".IB",		LS,	C_PBIT|C_UBIT,
+    ".IA",		LS,	C_UBIT,
+    ".DB",		LS,	C_PBIT,
+    ".DA",		LS,	0,
+    /*x: [[itab]] elements */
+    ".F",		LS,	C_FBIT,
     /*e: [[itab]] elements */
     0
 };
@@ -247,8 +247,8 @@ cinit(void)
     /*s: [[cinit()]] nullgen initialisation */
     nullgen.type = D_NONE;
     nullgen.reg = R_NONE;
-    nullgen.sym = S;
     nullgen.symkind = N_NONE;
+    nullgen.sym = S;
     nullgen.offset = 0;
     if(FPCHIP)
         nullgen.dval = 0;
@@ -260,8 +260,8 @@ cinit(void)
         hash[i] = S;
     for(i=0; itab[i].name; i++) {
         s = slookup(itab[i].name);
-        s->type = itab[i].type;
         s->value = itab[i].value;
+        s->type = itab[i].type;
     }
     /*e: [[cinit()]] hash initialisation from itab */
     /*s: [[cinit()]] pathname initialisation from cwd */
@@ -277,11 +277,10 @@ cinit(void)
 
 /*s: function syminit */
 void
-syminit(Sym *s)
+syminit(Sym *sym)
 {
-
-    s->type = LNAME;
-    s->value = 0;
+    sym->type = LNAME;
+    sym->value = 0;
 }
 /*e: function syminit */
 
@@ -319,10 +318,12 @@ l1:
     }
 
     if(isspace(c)) {
+        /*s: [[yylex()]] if c is newline */
         if(c == '\n') {
             lineno++;
             return ';'; // newline transformed in fake ';'
         }
+        /*e: [[yylex()]] if c is newline */
         goto l0;
     }
 
@@ -408,10 +409,10 @@ l1:
         }
         /*e: [[yylex()]] if macro symbol */
 
-        if(s->type == 0)
+        if(s->type == 0) // when can this happen?
             s->type = LNAME;
 
-        if(s->type == LNAME || s->type == LVAR || s->type == LLAB) {
+        if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
             yylval.sym = s;
         } else {
             yylval.lval = s->value;

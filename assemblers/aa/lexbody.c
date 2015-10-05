@@ -104,35 +104,45 @@ slookup(char *s)
 Sym*
 lookup(void)
 {
-    Sym *s;
+    Sym *sym;
     long h;
     char *p;
-    int c, l;
+    int c;
+    int len;
 
+    /*s: [[lookup()]] compute hash value [[h]] of [[symb]] */
+    // h = hashcode(symb)
     h = 0;
     for(p=symb; c = *p; p++)
         h = h+h+h + c;
-    l = (p - symb) + 1;
+    len = (p - symb) + 1;
     if(h < 0)
         h = ~h;
     h %= NHASH;
+    /*e: [[lookup()]] compute hash value [[h]] of [[symb]] */
 
     c = symb[0];
-    for(s = hash[h]; s != S; s = s->link) {
-        if(s->name[0] != c)
+    // lookup(sym->name, h, hash)
+    for(sym = hash[h]; sym != S; sym = sym->link) {
+        // fast path
+        if(sym->name[0] != c)
             continue;
-        if(memcmp(s->name, symb, l) == 0)
-            return s;
+        // slow path
+        if(memcmp(sym->name, symb, len) == 0)
+            return sym;
     }
-    s = alloc(sizeof(*s));
-    s->name = alloc(l);
-    memmove(s->name, symb, l);
+    /*s: [[lookup()]] if symbol name not found */
+    sym = alloc(sizeof(Sym));
+    sym->name = alloc(len);
+    memmove(sym->name, symb, len);
 
-    s->link = hash[h];
-    hash[h] = s;
+    // add_hash(sym, hash)
+    sym->link = hash[h];
+    hash[h] = sym;
 
-    syminit(s);
-    return s;
+    syminit(sym);
+    return sym;
+    /*e: [[lookup()]] if symbol name not found */
 }
 /*e: function lookup */
 
@@ -476,6 +486,7 @@ loop:
     switch(c)
     {
     case '\n':	goto loop;
+
     case 'n':	return '\n';
     case 't':	return '\t';
     case 'b':	return '\b';

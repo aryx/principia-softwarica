@@ -1,6 +1,7 @@
 /*s: assemblers/5a/main.c */
 #include "a.h"
 
+// forward decls
 void	cinit(void);
 int		assemble(char*);
 void	cclean(void);
@@ -267,10 +268,6 @@ zaddr(Gen *a, int symidx)
         }
         break;
     /*x: [[zaddr()]] cases */
-    case D_REGREG:
-        Bputc(&obuf, a->offset);
-        break;
-    /*x: [[zaddr()]] cases */
     case D_FREG:
     case D_FPCR:
         break;
@@ -285,6 +282,10 @@ zaddr(Gen *a, int symidx)
         Bputc(&obuf, e.h>>8);
         Bputc(&obuf, e.h>>16);
         Bputc(&obuf, e.h>>24);
+        break;
+    /*x: [[zaddr()]] cases */
+    case D_REGREG:
+        Bputc(&obuf, a->offset);
         break;
     /*e: [[zaddr()]] cases */
     default:

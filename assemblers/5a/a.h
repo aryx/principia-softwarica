@@ -23,14 +23,14 @@ struct	Gen
         double	dval;
         char	sval[8];
     };
-    /*s: [[Gen]] other fields */
-    // option<enum<register>>, None = R_NONE
+    // option<enum<registr>>, None = R_NONE
     short	reg;
-    /*x: [[Gen]] other fields */
-    // option<Sym>
+
+    /*s: [[Gen]] other fields */
+    // option<ref<Sym>>, Sym reference owned by hash
     Sym*	sym;
     /*x: [[Gen]] other fields */
-    // option<sym_kind>, None = N_NONE
+    // option<enum<sym_kind>>, None = N_NONE
     short	symkind;
     /*e: [[Gen]] other fields */
 };
@@ -46,7 +46,9 @@ extern	Biobuf	obuf;
 
 // for a.y
 long	yylex(void);
-void	outcode(int, int, Gen*, int, Gen*);
+/*s: signature outcode(arm) */
+void	outcode(int opcode, int cond, Gen* opd1, int reg, Gen* opd3);
+/*e: signature outcode(arm) */
 
 int	escchar(int);
 //Sym*	getsym(void);
@@ -85,6 +87,7 @@ void	cclean(void);
 void	zname(char*, int, int);
 void	zaddr(Gen*, int);
 int	filbuf(void);
+
 void	domacro(void);
 void	macund(void);
 void	macdef(void);
@@ -94,6 +97,7 @@ void	maclin(void);
 void	macprag(void);
 void	macif(int);
 void	macend(void);
+
 void	outhist(void);
 void	prfile(long);
 void	linehist(char*, int);

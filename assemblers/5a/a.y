@@ -4,11 +4,11 @@
 %}
 /*s: union token(arm) */
 %union {
- //   enum<opcode>   (for LTYPEx/...) 
- // | enum<registr> (for LREG/...)
- // | enum<cond>     (for LCOND) 
- // ...
- // | long (for LCONST)
+ // long for LCONST
+ // and enum<opcode>  for LARITH/...
+ // and enum<registr> for LREG/...
+ // and enum<cond>    for LCOND
+ // and ...
  long   lval;
 
  double dval;    // for LFCONST
@@ -30,29 +30,30 @@
 /*e: priority and associativity declarations */
 /*s: token declarations(arm) */
 /* opcodes */
-%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LSWI LRET
 %token  <lval>  LDEF LDATA LWORD LEND
-%token  <lval>  LSYSTEM LARITHFLOAT LCMPFLOAT LMULL LMULA LMOVM LMVN LMISC
+%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LSWI LRET
+%token  <lval>  LSYSTEM LMISC
+%token  <lval>  LARITHFLOAT LCMPFLOAT  LMULL LMULA  LMOVM LMVN
 /* registers */
-%token  <lval>  LSP LSB LFP LPC
+%token  <lval>  LPC LSP LFP LSB
 %token  <lval>  LR LREG  LPSR
 %token  <lval>  LF LFREG  LFCR 
 %token  <lval>  LC LCREG
-
-/* bits */
-%token  <lval>  LCOND
-%token  <lval>  LS LAT
 /* constants */
 %token  <lval>  LCONST 
 %token  <dval>  LFCONST
 %token  <sval>  LSCONST
 /* names */
-%token  <sym>   LNAME LLAB LVAR
+%token  <sym>   LNAME LLAB
+%token  <sym>   LVAR
+/* bits */
+%token  <lval>  LCOND
+%token  <lval>  LS LAT
 /*e: token declarations(arm) */
 /*s: type declarations(arm) */
 %type   <gen> imsr
 /*x: type declarations(arm) */
-%type   <gen> reg imm shift
+%type   <gen> imm shift reg
 /*x: type declarations(arm) */
 %type   <gen>   gen 
 /*x: type declarations(arm) */
@@ -74,9 +75,9 @@
 /*x: type declarations(arm) */
 %type   <lval>  cond
 /*x: type declarations(arm) */
-%type   <gen>   regreg
-/*x: type declarations(arm) */
 %type <gen> freg fcon frcon
+/*x: type declarations(arm) */
+%type   <gen>   regreg
 /*x: type declarations(arm) */
 %type   <lval>  reglist
 /*x: type declarations(arm) */
@@ -198,6 +199,14 @@ inst:
 | LEND { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
+ * floating-point coprocessor
+ */
+| LMISC cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LARITHFLOAT cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
+| LARITHFLOAT cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
+| LCMPFLOAT cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
+/*x: inst rule(arm) */
+/*
  * MULL hi,lo,r1,r2
  */
 | LMULL cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
@@ -211,14 +220,6 @@ inst:
   $7.offset = $9;
   outcode($1, $2, &$3, $5.reg, &$7);
  }
-/*x: inst rule(arm) */
-/*
- * floating-point coprocessor
- */
-| LMISC cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
-| LARITHFLOAT cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
-| LARITHFLOAT cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
-| LCMPFLOAT cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * MOVM
@@ -274,24 +275,17 @@ cond:
 /*e: cond rule(arm) */
 /*s: operand rules(arm) */
 imsr:
-  reg
-| imm
+  imm
 | shift
+| reg
 /*x: operand rules(arm) */
 /*s: gen rule */
 gen:
-  reg
-| ximm
+  ximm
 | shift
+| reg
 /*x: gen rule */
 | oreg
-/*x: gen rule */
-| LPSR
- {
-  $$ = nullgen;
-  $$.type = D_PSR;
-  $$.reg = $1;
- }
 /*x: gen rule */
 | freg
 /*x: gen rule */
@@ -301,7 +295,32 @@ gen:
   $$.type = D_FPCR;
   $$.reg = $1;
  }
+/*x: gen rule */
+| LPSR
+ {
+  $$ = nullgen;
+  $$.type = D_PSR;
+  $$.reg = $1;
+ }
 /*e: gen rule */
+/*s: spreg rule(arm) */
+spreg:
+  sreg
+/*x: spreg rule(arm) */
+| LSP { $$ = REGSP; }
+/*e: spreg rule(arm) */
+/*s: sreg rule(arm) */
+sreg:
+  LREG
+| LR '(' expr ')'
+ {
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
+ }
+/*x: sreg rule(arm) */
+| LPC { $$ = REGPC; }
+/*e: sreg rule(arm) */
 /*x: operand rules(arm) */
 /*s: ximm rule */
 ximm:
@@ -335,20 +354,6 @@ reg:
   $$.type = D_REG;
   $$.reg = $1;
  }
-/*x: operand rules(arm) */
-sreg:
-  LREG
-| LR '(' expr ')'
- {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
- }
-| LPC { $$ = REGPC; }
-/*x: operand rules(arm) */
-spreg:
-  sreg
-| LSP { $$ = REGSP; }
 /*x: operand rules(arm) */
 imm: '$' con
  {
@@ -476,15 +481,20 @@ offset:
 | '+' con    { $$ = $2; }
 | '-' con    { $$ = -$2; }
 /*e: helper rules(arm) */
+
 /*s: constant expression rules */
+/*s: con rule */
 con:
   LCONST
-| LVAR         { $$ = $1->value; }
+/*x: con rule */
 | '-' con      { $$ = -$2; }
 | '+' con      { $$ = $2; }
 | '~' con      { $$ = ~$2; }
 | '(' expr ')' { $$ = $2; }
-
+/*x: con rule */
+| LVAR         { $$ = $1->value; }
+/*e: con rule */
+/*s: expr rule */
 expr:
   con
 | expr '+' expr     { $$ = $1 + $3; }
@@ -498,6 +508,7 @@ expr:
 | expr '^' expr     { $$ = $1 ^ $3; }
 | expr '|' expr     { $$ = $1 | $3; }
 
+/*e: expr rule */
 /*e: constant expression rules */
 /*s: float rules */
 freg:
