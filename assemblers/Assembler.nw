@@ -2108,7 +2108,8 @@ but they will be introduced later.
 \section{[[Operand]]}
 \label{sec:operand}
 \t rename Gen to Operand so better section name
-\t Why Gen anyway? general? generic? =~ Adr of Linker.
+\t Why Gen anyway? gen rule in grammar. General opd? generic? 
+\n =~ Adr of Linker. 
 
 A register is only one kind of operand.
 Constants (integers, floats, or strings) are another kind.
@@ -2557,6 +2558,7 @@ lookup(void)
     <<[[lookup()]] compute hash value [[h]] of [[symb]]>>
 
     c = symb[0];
+    // lookup(sym->name, h, hash)
     for(sym = hash[h]; sym != S; sym = sym->link) {
         // fast path
         if(sym->name[0] != c)
@@ -2593,6 +2595,7 @@ until the end character (0) and also compute the length
 of the symbol in [[len]]:
 
 <<[[lookup()]] compute hash value [[h]] of [[symb]]>>=
+// h = hashcode(symb)
 h = 0;
 for(p=symb; c = *p; p++)
     h = h+h+h + c;
@@ -3364,7 +3367,8 @@ int c1;
 
 
 \section{Newlines}
-% and semicolons?
+\l and semicolons in title?
+\label{sec:semicolon}
 
 <<[[yylex()]] switch c cases>>=
 case '\n':
@@ -4927,16 +4931,20 @@ getcom(void)
 }
 @
 
+
+
+
+
 \chapter{Parsing}
 \label{chap:parsing}
-
-\section{Overview}
 
 In this chapter we assume you know how to read a Yacc grammar.
 We recommend~\cite{lexyacc} to learn more about Yacc.
 You can also read the original Yacc paper at [[generators/docs/yacc.pdf]]
 in our \plan repository, or read our \book{Code Generators} to fully
 understand how Yacc works.
+
+\section{Overview}
 
 Here is the outline of the yacc grammar file for Asm5, the ARM assembly
 language supported by [[5a]]:
@@ -4960,7 +4968,7 @@ already described in Section~\ref{sec:token}.
 The [[type]] declarations will be described gradually in this chapter. 
 The [[priority]] declarations are used only for the constant
 expressions and will be described in Section~\ref{sec:constant-expr}.
-The [[grammar]] part is the most important one,
+The [[grammar]] part is the most important one;
 it defines the different grammar rules:
 
 <<grammar(arm)>>=
@@ -4987,7 +4995,8 @@ set of lines.
 % FIGURE with derivation where see set of lines?
 
 A [[line]] can be an [[inst]]ruction followed by a semicolon.
-Remember that the lexer transformed newlines in semicolons.
+Remember that the lexer transformed newlines in semicolons
+in Section~\ref{sec:semicolon}.
 \l so can either pack in one line with ';' or use newline (haskell spirit :) )
 
 <<line rule(arm)>>=
@@ -5464,6 +5473,8 @@ long	pc;
   line
 @
 
+% not context free grammar! modify lexer behavior from parser.
+% similar in C for typedefs. ugly a bit,
 <<line rule(arm)>>=
 | LLAB ':'
  {
@@ -5501,13 +5512,13 @@ Gen    gen;
 % e.g. for first operand of ADD
 <<operand rules(arm)>>=
 imsr:
-  reg
-| imm
+  imm
 | shift
+| reg
 @
 
 <<type declarations(arm)>>=
-%type   <gen> reg imm shift
+%type   <gen> imm shift reg
 @
 
 
@@ -5540,9 +5551,9 @@ imsr:
 
 <<gen rule>>=
 gen:
-  reg
-| ximm
+  ximm
 | shift
+| reg
 @
 % so close to imsr. close except ximm instead of imm (extended immediate).
 % see below.
@@ -5594,7 +5605,8 @@ sreg:
  }
 @
 %$
-
+\t s? 
+\l expr! see later
 
 <<[[itab]] elements>>=
 "R0",		LREG,	0,
@@ -5619,7 +5631,7 @@ sreg:
 "R",		LR,	0,
 @
 
-
+% note that different from pseudo register!
 
 
 %XXX
@@ -5763,6 +5775,8 @@ rcon:
 % when do MOV R1, (R2) => means in cell pointer by R2, so
 % it's really like *r2 = r1
 
+% offset reg, indirect reg, indirect or offset reg, name indirect reg 
+% see section ref manual on different addressing modes
 
 % start of difference with imsr!
 <<gen rule>>=
@@ -5926,6 +5940,8 @@ offset:
 %$
 %less: rename offset_opt?
 
+
+
 %section{Static names?, local names?}
 
 <<name rule>>=
@@ -5968,10 +5984,8 @@ D_STATIC, // data static variables (from SB)
   $$.type = D_CONST;
  }
 @
-% was $ oreg, but i think it makes more sense to have just '$' name
-% could simplify to $name? maybe could be better to have
-% it's to get the address of name?
-%todo:? a special D_ADDR? instead of abusing D_CONST?
+%old: was $ oreg, but i think it makes more sense to have just '$' name
+%less: a special D_ADDR instead of abusing D_CONST?
 
 % a bit confusing that can have gen -> oreg, and also gen -> ximm -> $ oreg
 % because MOV support powerful addressing modes? with multiple
@@ -6159,6 +6173,7 @@ AGLOBL,
 | LDEF name ',' con ',' imm { outcode($1, Always, &$2, $4, &$6); }
 @
 %$
+% pseudo-instr are kinda instr, operands too, symbol ref too
 
 % TEXT is for procedures, code symbols, that will go in the TEXT section
 % GLOBL is to declare data symbols (globals indeed), that will go in DATA sect
@@ -6169,6 +6184,7 @@ AGLOBL,
 
 % what is the middle con? for attributes? e.g. for NOPROF, DUPOK?
 % but then what is 4 for??
+% see Section in advanced topics
 
 % the imm can be negative! so SP will be decrememted. This is useful
 % for stuff that needs to access the parameter of the enclosing function?
@@ -6229,6 +6245,7 @@ AWORD,
 <<pseudo opcodes>>=
 AEND,
 @
+% not the same than ALAST
 
 <<[[itab]] elements>>=
 "END",		LEND, AEND,
@@ -6249,29 +6266,6 @@ AEND,
 %\subsection{[[MOVW/MOVL]]}
 %\subsection{[[IMUL]]}
 
-\section{Symbolic constants}
-\n useful, meh cpp can do that too. Was originally called Var, hmm
-
-
-<<line rule(arm)>>=
-| LNAME '=' expr ';'
- {
-  $1->type = LVAR;
-  $1->value = $3;
- }
-| LVAR '=' expr ';'
- {
-  if($1->value != $3)
-   yyerror("redeclaration of %s", $1->name);
-  $1->value = $3;
- }
-@
-
-<<con rule>>=
-| LVAR         { $$ = $1->value; }
-@
-%$
-
 \section{Constant expressions}
 \label{sec:constant-expr}
 
@@ -6281,6 +6275,19 @@ AEND,
 <<type declarations(arm)>>=
 %type   <lval>  con expr 
 @
+
+<<con rule>>=
+| '-' con      { $$ = -$2; }
+| '+' con      { $$ = $2; }
+| '~' con      { $$ = ~$2; }
+| '(' expr ')' { $$ = $2; }
+@
+%$
+
+% convenient to have this, when combined with macros it
+% can do powerful stuff!
+
+
 
 <<priority and associativity declarations>>=
 %left   '|'
@@ -6315,17 +6322,30 @@ expr:
 
 
 
+
+
+\section{Symbolic constants}
+\n useful, meh cpp can do that too. Was originally called Var, hmm
+
+
+<<line rule(arm)>>=
+| LNAME '=' expr ';'
+ {
+  $1->type = LVAR;
+  $1->value = $3;
+ }
+| LVAR '=' expr ';'
+ {
+  if($1->value != $3)
+   yyerror("redeclaration of %s", $1->name);
+  $1->value = $3;
+ }
+@
+
 <<con rule>>=
-| '-' con      { $$ = -$2; }
-| '+' con      { $$ = $2; }
-| '~' con      { $$ = ~$2; }
-| '(' expr ')' { $$ = $2; }
+| LVAR         { $$ = $1->value; }
 @
 %$
-
-% convenient to have this, when combined with macros it
-% can do powerful stuff!
-
 
 \section{Conditional execution}
 \label{sec:cond-exec}
@@ -6408,6 +6428,7 @@ comma:
 \label{chap:generation}
 
 % it's object generation, not machine code generation ... 5l/optab.c does this.
+% so see linker book for that.
 
 % Note also that we must output code that will be part of a bigger set.
 % An object is really a module, defining symbols and using external symbols.
