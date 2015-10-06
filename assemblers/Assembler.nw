@@ -2922,6 +2922,7 @@ if(FPCHIP)
 for(i=0; i<sizeof(nullgen.sval); i++)
     nullgen.sval[i] = 0;
 @
+\fi
 %todo: now that I use an union, this code is valid about dval and sval?
 % can't use N_NONE because this function is in aa/ and N_NONE is
 % in 5a/a.h
@@ -3149,23 +3150,88 @@ if(p) {
 \chapter{Input}
 \label{chap:input}
 
-% yyparse -> yylex -> GETC | ...
+Now that we have seen [[assemble()]], we we can start
+explaining the different components in the assembling
+pipeline, starting in this chapter with the input functions.
+
+We have mentioned before [[pinit()]] which initializes
+globals related to input. We will also describe below
+[[GETC()]], which uses those globals,
+and is called by the lexer [[yylex()]] (called itself
+by the parser [[yyparse()]]) to get the next character from
+the input assembly file (or one of its included file).
+
+\section{[[pinit()]]}
+\t rename pass_init?
+
+[[pinit()]] initializes a few globals related to input.
+It is called at the beginning of each pass in [[assemble()]]:
+
+<<function pinit>>=
+/// main -> assemble -> { <> ; yyparse } x 2
+void
+pinit(char *f)
+{
+    <<[[[pinit()]] locals>>
+
+    lineno = 1;
+    peekc = IGN;
+
+    newio(); // set ionext
+    newfile(f, FD_NONE); // use ionext, set iostack, set fi
+
+    <<[[pinit()]] initialisations>>
+}
+@
+
+\ifallcode
+<<[[[pinit()]] locals>>=
+int i;
+Sym *s;
+@
+
+<<[[pinit()]] initialisations>>=
+<<[[pinit]] symcounter and h initialisation>>
+<<[[pinit]] hash macro field reset>>
+@
+\fi
+
+The [[lineno]] global tracks the current line number and will be
+incremented by the lexer for each newlines. It is also used
+in the object code generator to remember where each
+instruction comes from. This will be useful for debugging.
 
 <<global lineno>>=
 long	lineno;
 @
-% this is incremented by the lexer, and is also outputted
-% in the object code for each instruction! so can trace back
-% the line of an instruction!
-% Is it after #include expansion line number?
-% less: rename glineno?
+\t Is it after #include expansion line number?
+%less: rename glineno?
+%ocaml: could be embedded in the token, so no need global
 
 
-% =~ yyback(1) trick, used by yylex() and getc(), and?? cg?
+The [[peekc]] global below will be also used by the lexer.
+%
+When trying to identify a token, e.g. an identifier, it is
+frequent to read characters until the current character
+does not satisfy a certain criteria, e.g. being a letter.
+In that case one has read too far in the input file
+and one should go back one character using [[seek()]].
+%
+Another technique is to store instead in a global
+this extra character, and to make sure the
+the function reading characters from the input file
+first look in this global:
+
 <<global peekc>>=
+// option<unicode>, None = IGN
 int	peekc = IGN;
 @
-% used to be set in cinit()
+\l =~ yyback(1) trick, used by yylex() and getc(), and?? cg?
+%pad: used to be set in cinit()
+
+\plan uses unicodes so characters are actually integers.
+A few constants are used to represent special characters;
+they are negatives to not conflict with regular unicode characters:
 
 <<constant IGN>>=
 #define	IGN		(-2)
@@ -3175,117 +3241,123 @@ int	peekc = IGN;
 #define	EOF		(-1)
 @
 
-% FIGURE?
-
-% assemble -> <> (before yyparse, in both passes)
-% call at the beginning of each pass with the file to assemble
-<<function pinit>>=
-void
-pinit(char *f)
-{
-    int i;
-    Sym *s;
-
-    lineno = 1;
-    pc = 0;
-
-    newio();
-    newfile(f, -1);
-    peekc = IGN;
-
-    <<[[pinit]] symcounter and h initialisation>>
-    <<[[pinit]] hash macro field reset>>
-}
-@
 
 
 \section{Files managment, [[iostack]]}
 
-% 5a supports #include  so have to open files, and also close them
-%less: better to separate concern and have cpp in a different program?
+[[5a]] is a macro-assembler which embeds his own [[cpp]]-like preprocessor.
+%
+Note that [[5a]] could also instead rely on an external 
+preprocessor, which would factorize code with [[5c]],
+but that would be slower because of the need to fork
+another process in the assembling pipeline.
+\n meh, better to separate concern and have cpp in a different program?
+%
+Because [[5a]] supports [[#include]], the input assembly file can include
+another file, which itself can include another file and so on.
+So, we may have to open many files,
+amd when a file has been fully processed, we need to go back
+to the file which was including it (the {\em includer}).
+This suggests a {\em stack} data structure, a stack of opened input file.
+The following structure represents an element of this stack,
+essentially an opened file with a file descriptor in [[Io.f]]:
 
-<<constant BUFSIZ>>=
-#define	BUFSIZ		8192
-@
-
-% hmm, could they use shorter fieldnames ...
 <<struct Io>>=
 struct	Io
 {
-    char	b[BUFSIZ];
-
-    // -1 if not opened yet
+    // option<fdt>, None = FD_NONE
     fdt	f;
-
-    // like Fi, saved IO buffer status
-    char*	p;
-    short	c;
-
+    <<[[Io]] buffer fields>>
     // Extra
     <<[[Io]] extra fields>>
 };
 @
+\n hmm, could they use shorter fieldnames ...
 
-% list/stack because of #include, iostack point to head and currently
-% opened and processed file
+The global [[iostack]] represents the {top} of the stack, that
+is the current file being scanned:
+
 <<global iostack>>=
-// list<Io> (next = Io.link)
+// list<ref_own<Io> (next = Io.link)
 Io*	iostack = I;
 @
 % used to be set in cinit()
 
+One can implement a stack in C using a list:
+
 <<[[Io]] extra fields>>=
+// list<ref_own<Io>>, head = iostack (or iofree)
 Io*	link;
 @
-
 <<constant I>>=
 #define	I	((Io*)nil)
 @
 
 
-<<global iofree>>=
-// list<IO>, next = IO.link
-Io*	iofree = I;
-@
+The main job of [[newio()]] is to make point
+the global [[ionext]] to a newly allocated [[Io]]
+which can be used later by [[newfile()]]:
+%ocaml: so many globals
 
 <<global ionext>>=
 // option<ref<IO>>
 Io*	ionext;
 @
 
-% assemble -> pinit -> <>
 <<function newio>>=
+/// main -> assemble -> pinit -> <>; newfile
 void
 newio(void)
 {
     Io *i;
-    static int pushdepth = 0;
 
-    i = iofree;
-    if(i == I) {
-        pushdepth++;
-        if(pushdepth > 1000) {
-            yyerror("macro/io expansion too deep");
-            errorexit();
-        }
-        //todo: check error code?
-        i = alloc(sizeof(Io));
-    } else
-        iofree = i->link;
-    i->c = 0;
-    i->f = -1;
+    <<[[newio()]] allocate a new Io in [[i]] or find a free one>>
     ionext = i;
+    i->c = 0;
+    i->f = FD_NONE;
 }
 @
 
+The [[Io]] allocator could be simply a call to [[malloc()]].
+The matching call to [[free()]] then should be in the code which
+closes the opened file when the content if fully read.
+Instead, [[5a]] uses the common C technique of {\em free list}
+to manage [[Io]]s and so can ``recycle'' an [[Io]] 
+for another opened file:
 
-% assemble -> pinit -> <>
+<<global iofree>>=
+// list<IO>, next = IO.link
+Io*	iofree = I;
+@
+
+<<[[newio()]] allocate a new Io in [[i]] or find a free one>>=
+static int pushdepth = 0;
+
+i = iofree;
+if(i == I) {
+    pushdepth++;
+    if(pushdepth > 1000) {
+        yyerror("macro/io expansion too deep");
+        errorexit();
+    }
+    //todo: check error code?
+    i = alloc(sizeof(Io));
+} else
+    iofree = i->link;
+@
+
+
+[[newfile()]] assumes [[ionext]] has been set
+correctly in [[newio()]] and open finally the input assembly file:
+
 <<function newfile>>=
+/// main -> assemble -> pinit -> newio; <>
 void
-newfile(char *s, int f)
+newfile(char *s, fdt f)
 {
     Io *i;
 
+    // add_list(ionext, iostack)
     i = ionext;
     i->link = iostack;
     iostack = i;
@@ -3303,28 +3375,74 @@ newfile(char *s, int f)
 @
 
 \section{Buffer managment, [[fi]]}
-% buffered IO
 
-% File input?
+Once the input file is opened, the lexer needs to look
+at its content one character at a time.
+%
+Instead of using many system calls to [[read(..., 1)]] to read
+one character at a time, which would be slow,
+[[5a]] instead calls
+[[read()]] once in a while to fill a large
+{\em input buffer}, and then use auxillary functions
+to move pointers in this buffer. This buffer is simply
+an array of character in [[Io]]:
+%ocaml: buffered IO should be done in library
+
+<<[[Io]] buffer fields>>=
+char	b[BUFSIZ];
+@
+<<constant BUFSIZ>>=
+#define	BUFSIZ		8192
+@
+
+A few functions below are using the global [[fi]] which contains
+pointers in the buffer of the currently processed input file:
+
+<<global fi>>=
+struct Fi fi;
+@
+
 <<struct Fi>>=
 struct Fi
 {
     // ref<char>, pointer in buffer (of Io.b)
     char*	p;
-    // remaining count in buffer (of Io.b)
+    // remaining characters in buffer to read (of Io.b)
     int	c;
 };
 @
+\l File input
 
-% global IO buffer
-<<global fi>>=
-struct Fi fi;
+Once we processed an included file we need to
+go back to the includer file, which is using thanks
+to [[iostack->link]], but we also need to remember
+where we were in the includer file:
+
+<<[[Io]] buffer fields>>=
+// like Fi, saved IO buffer pointers
+char*	p;
+short	c;
 @
+\l unicode input but here char pointer!
 
+\section{[[GETC()]]}
+
+We can finally see the code of [[GETC()]] which
+is a macro called many times in [[yylex()]] to
+get the next character from the input file, and which
+uses the global [[fi]] we have seen above:
 
 <<function GETC>>=
+/// main -> assemble -> yyparse -> yylex -> <>
 #define	GETC()		((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
 @
+\l a bit tricky; also unicode but here 0xff, it's a character
+
+Note that even if [[5a]] accepts unicode characters, [[GETC()]]
+returns only basic characters. The type of [[Fi.p]] and [[Io.b]]
+are [[char]] pointers.
+\l and so? there are functions later that reconstruct unicode from
+\l set of chars? what if incomplete unicode char in buffer boundary?
 
 <<function filbuf>>=
 int
@@ -3336,8 +3454,10 @@ loop:
     i = iostack;
     if(i == I)
         return EOF;
-    if(i->f < 0)
-        goto pop;
+    if(i->f < 0) // When this happens?
+        goto pop; 
+
+    // system call! fill really the buffer
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     if(fi.c < 0) {
         close(i->f);
@@ -3347,20 +3467,74 @@ loop:
     fi.p = i->b + 1;
     return i->b[0];
 
+<<[[filbuf()]] pop>>
+}
+@
+
+The [[-1]] above is because [[Fi.c]] represents the remaining
+characters to read, so if [[read()]] returns only 1,
+meaning one character only was read, then this character
+will be return and there is nothing else to read after.
+%
+Figure~\ref{fig:input-buffer} represents the evolution of the state
+of [[fi]] while the input buffer get filled and later consume.
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+0                                                      8192 
++-------------------------------------------------------+
+|                                                       |
++-------------------------------------------------------+
+^
+|                             
+fi.p   (fi.c = 0)
+
+(a) Empty buffer iostack->b
+
+0                                                      8192 
++-------------------------------------------------------+
+|h|e|l|l|o|:|     ...                               |M|O|
++-------------------------------------------------------+
+  ^<---------------------------------------------------->
+  |                       fi.c = 8191
+  fi.p 
+
+(b) After first call to GETC(): returned 'h', 
+    increment fi.p, decrement fi.c
+
+\end{verbatim}
+\caption{Evolution of the input buffer}\label{fig:input-buffer}
+\end{figure}
+
+
+When there is nothing more to read in the file,
+we need to [[pop()]] the file from [[iostack]] and
+update [[fi]] to point to the input buffer of the includer file:
+
+<<[[filbuf()]] pop>>=
 pop:
+    // pop(iostack)
     iostack = i->link;
+    // push(i, iofree)
     i->link = iofree;
     iofree = i;
+
+    // i = top(iostack), the fresh top of the stack input file
     i = iostack;
     if(i == I)
         return EOF;
+    // restore file pointers
     fi.p = i->p;
     fi.c = i->c;
     if(--fi.c < 0)
         goto loop;
     return *fi.p++;
-}
 @
+
+
+
+
+
 
 
 
@@ -5547,9 +5721,14 @@ ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
 
 % this is incremented in outcode() after each instruction 
 % (except for ADATA and AGLOBL)
+% this is set in pinit() to 0
 % less: even ATEXT increments PC? hmm maybe simpler that way
 <<global pc>>=
 long	pc;
+@
+
+<<[[pinit]] initialisations>>=
+pc = 0;
 @
 
 <<line rule(arm)>>=
