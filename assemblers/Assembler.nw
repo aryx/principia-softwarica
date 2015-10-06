@@ -1211,7 +1211,7 @@ functions.
 This is an optimisation similar to the one we have seen previously
 with the link register. For certain simple and small functions,
 everything can be done using just registers, without having to use
-the stack and so (slow) memory.
+the stack and so the (slow) memory.
 
 Figure~\ref{fig:stack-c-pwrite} shows how the stack would
 look like is we were calling the C function [[pwrite()]]
@@ -1759,32 +1759,8 @@ the main data flow of [[5a]].
 \caption{Control flow diagram of [[5a]]}\label{fig:controlflow}
 \end{figure}
 \l add chapter ref in the box? next to the box?
-
-%            +-------------+                       
-%            |    main     |                       
-%            +------+------+                       
-%                   |                              
-%                   |                              
-%            +------v------+                       
-%            |  assemble   +---------------+       
-%            +----+--+-----+               |       
-%                 |  |                     |       
-%                 |  |                     |       
-%            +----v--v-----+      +--------v------+
-%            |  yyparse    |      |    cclean     |
-%            +---+----+----+      +---------------+
-%                |    |                    |        
-%       +--------+    +-------+            |        
-%       |                     |            |        
-%+------v-------+      +------v-----+      |        
-%|   yylex      |      |  outcode   <------+        
-%+------+-------+      +------------+              
-%       |                                          
-%       |                                          
-%+------v-------+                                  
-%|    macxxx    |                                  
-%+--------------+                                  
-\l alternative with cclean, but maybe not important
+%ocaml: if the code was more functional the diagram would be just a pipeline!
+\n alternative with cclean? not that important so better to remove it
 
 
 \begin{figure}[!]\centering
@@ -1942,7 +1918,7 @@ errors in Appendix~\ref{chap:error}.
 \end{verse}
 \n actually I think the original quote is with "flowchart" and "tables"
 
-In this chapter we will present the main data structures used by [[5a]].
+In this chapter we will present the core data structures used by [[5a]].
 The first three sections contain the definitions
 of the different components making together the abstract syntax tree (AST) 
 of an instruction:
@@ -2534,7 +2510,7 @@ slookup(char *s)
 It internally modifies the global [[symb]] 
 (used also by [[yylex()]] as we will see later) 
 before calling [[lookup()]].
-%ocaml: global are bad, slookup cleaner than lookup, should not need symb
+%ocaml: globals are bad, slookup cleaner than lookup, should not need symb
 
 <<global symb>>=
 char	symb[NSYMB];
@@ -2801,28 +2777,54 @@ since the [[sym]] field in the case is NULL.
 
 
 
-\chapter{[[main()]]}
+\chapter{Main Functions}
 \label{chap:main}
 
-% default object suffix, to generate foo.5
+We now switch to a top-down approach where we describe
+the main functions of [[5a]] starting from [[main()]]
+down to [[assemble()]].
+
+\section{[[main()]]}
+
+Before showing the code of [[main()]] we first introduce
+a few globals set by [[main()]].
+%
+A common pair of globals in \plan code
+are [[thechar]] and [[thestring]] which both represent
+the current architecture.
+%
+As said in the introduction, \plan by convention 
+represents architectures with a single character: 
+[['0']] is MIPS, 
+[['5']] is ARM, 
+[['8']] is x86, etc.
+%
+This character is used by [[5a]] for instance
+for the filename extension of object files (e.g. [[hello.5]]): 
+
 <<global thechar>>=
 int	thechar;
 @
-% int? no char? then use Rune!
+\l int? no char? then use Rune!
 
-% to find archi specific core header files, /arm/include/...
+[[thestring]] contains the longer, more readable, version
+of the architecture, e.g. [["arm"]] for [[5]].
+
 <<global thestring>>=
 char*	thestring;
 @
 
-% -o
-<<global outfile>>=
-char*	outfile = nil;
-@
-% hmm could be 5.out instead no? hmm no, it will be set
-% to {basename(input_file)}.{thechar} in assemble()
+This is used by [[5a]] for instance to find architecture
+specific system header files, e.g. in [[/arm/include/...]].
+Indeed, [[5a]] is a macro-processor in which [[#include]] have
+a default {\em search path} (represented by
+the global [[include]] in [[main()]] below).
 
 
+We can now present the code of [[main()]], the entry point of [[5a]].
+The most important thing is the call to [[assemble()]] at the
+end, with the filename of the assembly file to process 
+passed through a command line argument:
 
 <<function main(arm)>>=
 void
@@ -2854,6 +2856,17 @@ main(int argc, char *argv[])
 }
 @
 
+
+Another important global set possibly by [[main()]]
+is [[outfile]] which stores the name of the output object file,
+and which can be modified by the [[-o]] option:
+
+<<global outfile>>=
+char*	outfile = nil;
+@
+\l hmm could be 5.out instead no? hmm no, it will be set
+\l to {basename(input_file)}.{thechar} in assemble()
+
 <<[[main()]] command line processing>>=
 case 'o':
     outfile = ARGF();
@@ -2868,8 +2881,11 @@ case 'o':
 \label{sec:nullgen}
 \t rename to just init? why the C?
 
-% main -> <>
+[[cinit()]] contains a few globals initialisations:
+%ocaml: do not need that as initialisations are more flexible in ocaml
+
 <<function cinit(arm)>>=
+/// main -> <>
 void
 cinit(void)
 {
@@ -2881,23 +2897,26 @@ cinit(void)
     <<[[cinit()]] pathname initialisation from cwd>>
 }
 @
-% used to do more initialisation here, but instead move the init
-% at the def location
-% very similar to the x86 version, except the few change for nullgen fields
+%old: used to do more initialisation here, but instead move the init at def loc
+\n very similar to the x86 version, except the few change for nullgen fields
 
-% see cinit()
+[[nullgen]] is a global we will often see later used to initialize
+fresh operands in code such as [[newopd = nullgen;]]:
+
 <<global nullgen>>=
 Gen	nullgen;
 @
 
-
-
 <<[[cinit()]] nullgen initialisation>>=
-nullgen.type = D_NONE;
-nullgen.reg = R_NONE;
+nullgen.type    = D_NONE; // no type set yet
+nullgen.reg     = R_NONE;
 nullgen.symkind = N_NONE;
 nullgen.sym = S;
-nullgen.offset = 0;
+nullgen.offset = 0; // part of an union
+@
+
+\ifallcode
+<<[[cinit()]] nullgen initialisation>>=
 if(FPCHIP)
     nullgen.dval = 0;
 for(i=0; i<sizeof(nullgen.sval); i++)
@@ -2906,17 +2925,21 @@ for(i=0; i<sizeof(nullgen.sval); i++)
 %todo: now that I use an union, this code is valid about dval and sval?
 % can't use N_NONE because this function is in aa/ and N_NONE is
 % in 5a/a.h
+%ocaml: merge with def, use nice record syntax
 
 
 % cwd, for #include "" (cwd can change as one include other files)
 %  =~ dirname(current_file)
-% less: rename? dirname_of_input_file? (actually it's really
-% dirname_of_current_input_file as 5a can process multiple files,
-% but it would complicate things; multifile is an advanced topic)
+
+[[pathname]] represents the {\em current working directory} 
+(CWD). This is used also for the [[#include]] search path.
+
 <<global pathname>>=
 char*	pathname;
 @
-
+%less: rename? dirname_of_input_file? (actually it's really
+% dirname_of_current_input_file as 5a can process multiple files,
+% but it would complicate things; multifile is an advanced topic)
 
 <<[[cinit()]] pathname initialisation from cwd>>=
 pathname = allocn(pathname, 0, 100);
@@ -2926,35 +2949,39 @@ if(getwd(pathname, 99) == 0) {
         strcpy(pathname, "/???");
 }
 @
+%???
+\t mv later? with #include?
 
 \section{[[assemble()]]}
 
-% there are 2 passes.
-% This global is used outside assemble() in the grammar! and outcode().
-% the idea is actually to parse two times, but to do different things the
-% second time. Abusing grammar actions (old style).
+Because one can reference labels defined later in an assembly file,
+a common approach to assembling is to use a two-pass algorithm.
+The first pass focuses on the {\em definitions} of labels;
+by the end of the file the values of all labels are known.
+The second pass focuses on the {\em uses} of labels and leverages
+the information computed in the first pass.
+%
+This is the strategy used by [[5a]]
+and so an important global is [[pass]] which stores
+in which pass we currently are (1 or 2):
+\l alternatives to two-pass algo: lazy, patch back
+
 <<global pass>>=
 // 1|2
 int	pass;
 @
+%ocaml: need this to be a global? could instead parse asm, return AST
+% and then algo in two passes on the AST, a visitor and then generator.
 
-
-<<[[assemble()]] locals>>=
-char *p;
-fdt of; // outfile
-int i;
-@
-
-% outfile(string) -> of(fd) -> obuf(biobuf)
-% the actual content of the object file 5a generates
-<<global obuf>>=
-Biobuf	obuf;
-@
+This global is set by [[assemble()]] below and is used
+in a few places in the grammar as well as in [[outcode()]]:
 
 <<function assemble>>=
-int
+error1
 assemble(char *infile)
 {
+    fdt of; // outfile
+    char *p;
     <<[[assemble()]] locals>>
 
     <<[[assemble()]] set p to basename(infile) and adjust include>>
@@ -2992,13 +3019,75 @@ assemble(char *infile)
     return nerrors;
 }
 @
-%note: I renamed parameter to infile, to better contrast with outfile
+%pad: I renamed parameter to infile, to better contrast with outfile
+
+Essentially [[assemble()]] calls [[yyparse()]]
+two times, with the appropriate value in [[pass]], after
+having initialized some globals related to the input file via [[pinit()]].
+This means the input assembly file is parsed two times, but
+the actions in the grammar do different things the second time.
+%ocaml: ugly globals, dont see clearly, also ugly parse two times
+
+Another global initialized by [[assemble()]] is [[obuf]],
+the output buffer which will contain the content
+of the object file [[5a]] generates:
+
+% outfile(filename) -> of(fd) -> obuf(biobuf)
+<<global obuf>>=
+Biobuf	obuf;
+@
+%ocaml: why another global, ugly, because yyparse inflexible?
+
+This will be used notably by [[outcode()]].
+The main output data flow in [[assemble()]] is to go from
+the name of the output file ([[outfile]]), 
+to an output file descriptor ([[of]]),
+to finally an output buffer ([[obuf]]).
+%
+Note that many globals are used for output data (e.g. [[obuf]])
+as well as input data (see [[pinit()]]),
+which makes the code harder to read. 
+This is probably because the interface
+of [[yyparse]], the function generated by Yacc,
+does not take any argument nor return anything, so we
+are forced to use globals.
+
+The function below is called just before returning
+from [[assemble()]] and is used to to add the last
+instruction in the object file: [[AEND]].
+It is a special marker used by [[5l]].
+\t need AEND? yes, the linker wants an AEND, and I think
+\l when use a library, can have multiple objects concatenated
+\l in which case AEND is a marker for the end of an object.
+
+<<function cclean(arm)>>=
+/// main -> assemble -> <>
+void
+cclean(void)
+{
+
+    outcode(AEND, Always, &nullgen, R_NONE, &nullgen);
+    Bflush(&obuf);
+}
+@
+
+[[assemble()]] returns the number of errors it found,
+or 0 if everything went fine. It is using the global [[nerrors]].
+See Appendix~\ref{chap:error} for the error managment globals and functions.
 
 
 
+\ifallcode
+<<[[assemble()]] locals>>=
+int i;
+@
+\fi
 
+The remaining code in [[assemble()]] is mostly
+filename manipulations and modifying globals used
+for [[#include]] processing:
 
-
+This is temporary used to compute [[outfile]] later:
 <<[[assemble()]] locals>>=
 char ofile[100];
 @
@@ -3014,6 +3103,9 @@ if(p) {
 } else
     p = ofile;
 @
+
+Note that [[utfrrune()]] returns the last occurence of a Rune.
+A {\em rune} is a unicode character in \plan terminology.
 
 <<[[assemble()]] set outfile to {basename(infile)}.{thechar}>>=
 // outfile =  p =~ s/.s/.5/;
@@ -3047,21 +3139,9 @@ if(p) {
     }
 }
 @
+\l see Section X
 
 
-
-<<function cclean(arm)>>=
-void
-cclean(void)
-{
-
-    outcode(AEND, Always, &nullgen, R_NONE, &nullgen);
-    Bflush(&obuf);
-}
-@
-% need AEND? yes, the linker wants an AEND, and I think
-% when use a library, can have multiple objects concatenated
-% in which case AEND is a marker for the end of an object.
 
 
 
@@ -8145,6 +8225,7 @@ BL = Branch and Link
 RISC = Reduced Instruction Set Computer
 CISC = Complex Instruction Set Computer
 ARM  = Akorn Risc Machines
+CWD = Current Working Directory
 \end{verbatim}
 
 \chapter*{Indexes}
