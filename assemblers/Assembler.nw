@@ -1895,7 +1895,7 @@ instruction in the binary comes from, or what is the
 original name of the procedure containing a specific
 machine instruction.
 %
-Chapter~\ref{chap:advanced} presents advanced
+Chapter~\ref{chap:advanced} presents other
 assembly features which we did not present 
 before to simplify the explanations, for instance
 the support for floats. Those features tend to crosscut
@@ -1928,7 +1928,8 @@ errors in Appendix~\ref{chap:error}.
 
 In this chapter we will present the core data structures used by [[5a]].
 The first three sections contain the definitions
-of the different components making together the abstract syntax tree (AST) 
+of the different components of the abstract syntax tree (AST) 
+\l not really a tree though
 of an instruction:
 the opcode, 
 the register (which is a kind of operand),
@@ -3757,7 +3758,9 @@ or labels or symbols in the global [[hash]] symbol table:
 \t itab!
 
 <<[[yylex()]] locals>>=
+// ref<char>, pointer in symb
 char *cp;
+// ref<Symbol>, owned by hash
 Sym *s;
 @
 
@@ -3834,7 +3837,6 @@ recognizes a different kind of number:
 if(isdigit(c))
     goto tnum;
 @
-
 <<[[yylex()]] switch c cases>>=
 // case '0'..'9': (isdigit())
 tnum:
@@ -3855,6 +3857,7 @@ tnum:
 if(sizeof(yylval.lval) == sizeof(vlong))
     yylval.lval = strtoll(symb, nil, 10);
 else
+@
 \fi
 \t delete? dead code for 5a and 8a
 
@@ -3864,7 +3867,7 @@ else
 Most of the magic for decimal numbers is done
 by [[strtol()]] from the core C library:
 
-<<[[yylex()]] in number case, decimal dc label handling>>
+<<[[yylex()]] in number case, decimal dc label handling>>=
 dc:
     for(;;) {
         if(!isdigit(c))
@@ -3891,7 +3894,7 @@ ncu:
 @
 \l ncu?
 
-\subsection{Hexadecimal and octal}
+\subsection{Hexadecimals and octals}
 
 [[strtol()]] does not unfortunately handle hexadecimal
 or octal numbers so we have to do things manually:
@@ -3985,8 +3988,8 @@ caseout:
     }
 @
 
-A dot without numbers before can be the start of a float or
-the start of an identifier, or simply the dot character in Asm5:
+A dot without numbers before can be in Asm5 the start of a float or
+the start of an identifier, or simply the dot character:
 
 <<[[yylex()]] switch c cases>>=
 case '.':
@@ -4006,7 +4009,9 @@ case '.':
 @
 \l why not simply goto talph for '.'? avoid duplicate the cp = symb; ...
 
-\section{Characters (and escape)}
+\section{Characters (and escapes)}
+
+Characters in Asm5 are converted in integers:
 
 <<[[yylex()]] switch c cases>>=
 case '\'':
@@ -4015,6 +4020,7 @@ case '\'':
         c = '\'';
     if(escchar('\'') != EOF)
         yyerror("missing '");
+
     yylval.lval = c;
     return LCONST;
 @
@@ -4023,7 +4029,7 @@ case '\'':
 %Special characters?
 
 % e is usually ' or ", the ending characher (and also char you have to escape)
-% use Rune instead of int?
+\t use Rune instead of int?
 <<function escchar>>=
 int
 escchar(int e)
@@ -4031,7 +4037,7 @@ escchar(int e)
     int c, l;
 
 loop:
-    c = getc();
+    c = getc(); // not GETC?
     if(c == '\n') {
         yyerror("newline in string");
         return EOF;
@@ -4075,6 +4081,33 @@ loop:
 @
 % they abuse EOF to mean end of string
 
+
+% int? why not uint? GETC can return EOF but not this function!
+<<function getc>>=
+int
+getc(void)
+{
+    int c;
+
+    c = peekc;
+    if(c != IGN) {
+        peekc = IGN;
+        return c;
+    }
+
+    c = GETC();
+
+    if(c == '\n')
+        lineno++;
+    if(c == EOF) {
+        yyerror("End of file");
+        errorexit();
+    }
+    return c;
+}
+@
+
+
 \section{Strings}
 
 <<[[yylex()]] switch c cases>>=
@@ -4094,6 +4127,9 @@ case '"':
         yyerror("string constant too long");
     return LSCONST;
 @
+\l abuse c1
+
+
 
 
 
@@ -5226,30 +5262,7 @@ getnsn(void)
 
 % helpers for other functions
 
-% int? why not uint? GETC can return EOF but not this function!
-<<function getc>>=
-int
-getc(void)
-{
-    int c;
-
-    c = peekc;
-    if(c != IGN) {
-        peekc = IGN;
-        return c;
-    }
-
-    c = GETC();
-
-    if(c == '\n')
-        lineno++;
-    if(c == EOF) {
-        yyerror("End of file");
-        errorexit();
-    }
-    return c;
-}
-@
+% getc() is presented before
 
 
 % what if had already a peekc? because called unget 2 times?
@@ -5362,10 +5375,10 @@ getcom(void)
 \chapter{Parsing}
 \label{chap:parsing}
 
-In this chapter we will present the {grammar} of Asm5,
+In this chapter we present the {grammar} of Asm5,
 the ARM assembly language supported by [[5a]].
-Yacc will then generate from this grammar
-the [[yyparse()]] parsing function.
+Yacc generates from this grammar the [[yyparse()]] parsing function
+which is called by [[assemble()]].
 %
 We assume you know how to read a Yacc grammar.
 We recommend~\cite{lexyacc} to learn more about Yacc.
@@ -5375,7 +5388,7 @@ understand how Yacc works.
 
 \section{Overview}
 
-Here is the outline of the yacc grammar file for Asm5:
+Here is the outline of the Yacc grammar file for Asm5:
 
 <<5a/a.y>>=
 %{
@@ -5493,6 +5506,8 @@ inst:
 @
 %$
 % arith operator of Machine.nw, but also SLL, SRL,   DIV, MOD, ...
+
+% $1 is yylval! so for LARITH token code it will be the actual enum opcode
 
 % ADD X1, X2, X3, imsr = immediate or shift (will see later) or register 
 % e.g. ADD 10, R1, R2 (code 3 addresses, well 3 registers).
@@ -6133,7 +6148,26 @@ ximm:
 % see later the extension, MOV allows more forms of constants
 % (e.g. string constants, float constants)
 
-\subsection{Shift registers}
+
+
+%\subsection{String constants}
+
+%<<operand_kind cases>>=
+%D_SCONST,
+%@
+% string constant
+
+<<ximm rule>>=
+| '$' LSCONST
+ {
+  $$ = nullgen;
+  $$.type = D_SCONST;
+  memcpy($$.sval, $2, sizeof($$.sval));
+ }
+@
+
+
+\subsection{Shifted registers}
 % register and constant in some sense
 % mv in advanced topics?
 
@@ -6260,7 +6294,7 @@ ireg:
 
 
 
-\subsection{Named memory locations}
+\subsection{Named memory locations, symbols}
 % (different from labels, which are just for code refs)
 
 
@@ -6428,7 +6462,7 @@ D_STATIC, // data static variables (from SB)
 % indirections?
 
 
-\subsection{Code references and label uses}
+\subsection{Code references, labels}
 % hmm con(PC) is not really named code
 
 <<operand_kind cases>>=
@@ -6513,24 +6547,8 @@ rel:
 
 
 
-\subsection{String constants}
+
 %\subsection{Other forms}
-
-%<<operand_kind cases>>=
-%D_SCONST,
-%@
-% string constant
-
-
-<<ximm rule>>=
-| '$' LSCONST
- {
-  $$ = nullgen;
-  $$.type = D_SCONST;
-  memcpy($$.sval, $2, sizeof($$.sval));
- }
-@
-
 
 %<<operand_kind cases>>=
 %D_OCONST,
@@ -6642,6 +6660,8 @@ AGLOBL,
 %   <adjust SP>
 
 \subsection{[[WORD/DATA]]}
+
+% have not seen that in tutorial
 
 <<pseudo opcodes>>=
 ADATA,
@@ -6852,7 +6872,9 @@ comma:
 
 \section{[[yyparse()]]}
 
-% essentially generated code by yacc, that is calling yylex
+% have seen no call yo yylex! because it is assumed by convention.
+% yyparse generated by yacc, and is calling an yylex someone
+% must defined.
 
 
 
@@ -7395,7 +7417,7 @@ while(p) {
 
 
 
-\chapter{Advanced Topics}
+\chapter{Other Features}
 \label{chap:advanced}
 
 \section{Float instructions}
