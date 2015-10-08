@@ -245,6 +245,7 @@ the object file is essentially the {serialized form} of the
 {abstract syntax tree} of the assembly source. 
 \l Ref to later? maybe hard to understand. 
 The actual machine code generation is performed by the linker [[5l]].
+\t so see linker book for this part!
 We think though that it is actually a better design because it leads to
 less code in total and also to simpler code.
 \n a critique of go/plan9 toolchain though, see comment in .tex:
@@ -260,7 +261,7 @@ which were ultimately discarded:
 
 \item The GNU Assembler [[gas]], part of the [[binutils]] package, 
 is probably the most used open source assembler.
-It supports many architectures.
+It supports many architectures, including ARM and x86.
 It is called internally by [[gcc]] and so is indirectly
 used to assemble most open source software.
 \l maybe clang/llvm competes a bit now
@@ -481,10 +482,10 @@ A key feature of assemblers is to allow the use of {\em symbolic addresses}
 as operands, freeing the programmer from tedious manual calculations.
 %
 Indeed, in assembly a programmer can {{define}} {\em symbols} designating
-certain memory areas (for data or code)
+certain memory areas (for data or code),
 \n use 'symbols' not 'labels', more general; they are in symbol table of binary
 \n put globals or functions, hmm but label make things more general
-and then {{use}} those symbols as operands.
+and can then {{use}} those symbols as operands.
 For instance [[B foobar]] allows to {branch} (jump) 
 to the code following the [[foobar]] symbol. 
 \n actually it is B foobar(SB) in 5a if foobar is a symbol and not a label
@@ -500,7 +501,7 @@ So, the main functions of an assembler are typically:
 \n function almost in a literal way; those phases correspond almost to 5a funcs
 \begin{enumerate}
 \item to {\em parse} an input textual file,
-\item to {\em check} that the combinations of mnemonics and operands form 
+\item to {\em check} that the combinations of opcodes and operands form 
 valid machine instructions,
 \n in 5a actually a few checks are delayed until linking
 \item to {\em compute} the concrete values of symbolic addresses
@@ -513,7 +514,7 @@ defined later in the file)
 
 In fact most assemblers do not generate the final machine code but instead
 generate an {\em object code}, which is mostly machine code but
-with extra information about {unresolved} symbols.
+with extra information about {\em unresolved symbols}.
 \n local labels disappear? Yes! in 5a at least
 %
 Indeed, even if for small programs the definitions and uses of symbolic
@@ -764,7 +765,7 @@ In Asm9 all constants are prefixed by a dollar.
 % R0 was return value from syscall which was lenght printed = 0xc
 %
 For [[GLOBL]] the constant value represents the size, in number of
-bytes, this global will use. For [[hello]] Line~48 it is [[12]], enough
+bytes, this global will use. For [[hello]] Line~48 it is [[12]]; enough
 to hold the [["hello world\n"]] string.
 %
 For [[TEXT]] the constant value represents the size, in number of bytes,
@@ -785,8 +786,10 @@ even though the entry point of C programs is [[main]], not [[_main]].
 This is because the core C library defines a [[_main()]] procedure
 written in assembly which does some core initialisations
 and then calls [[main()]].
-In our example we do not use and so do not link the C library, so we must
-define our own [[_main()]] entry point procedure.
+In our example we do not use and so do not link the C library, 
+to simplify things,
+\l but in the end meh
+so we must define our own [[_main()]] entry point procedure.
 
 %real-world: use .text, .data
 
@@ -855,9 +858,10 @@ and offset addressing mode we have just seen.
 It refers to the beginning of the address space of the program.
 \n more on this later, it's a pseudo, it's not needed, it's weird
 In Asm9 all references to global data and procedures
-are written as offsets to [[SB]] (for definition references
-see Line 1, 38, 48, and 49, and for use references
-see Line 6, 22, and 32).
+are written as offsets to [[SB]] 
+\t offset cos in the end symbols will have static address and so static offset
+(for definition references see Line 1, 38, 48, and 49, and 
+for use references see Line 6, 22, and 32).
 %
 The instruction [[MOVW foo(SB), R1]] will move the {\em content}
 at the address denoted by the symbol [[foo]] into [[R1]].
@@ -884,6 +888,7 @@ the value of [[R15]] is always a multiple of 4. The pseudo-register
 [[PC]] instead counts instructions, not bytes of data. So,
 to branch to the second following instruction (that is to skip
 one instruction) one does [[B 2(PC)]].
+\t which is really *(PC+2)
 It is equivalent to [[B 8(R15)]].
 \l I think it is equivalent
 \n branch are absolute, PC plus 2 is absolute
@@ -937,8 +942,8 @@ Line 6 through 18 set characters in the [[hello]] global array of characters.
 We can now examine Line 20 through 29 which build the {arguments} for the
 system call performed Line 31 (with the software interrupt instruction
 [[SWI]]). Arguments, in function calls or system calls, are by {convention}
-hold primarily in the stack. We will see later that
-[[R0]] under \plan plays also a special role regarding arguments because of 
+in \plan hold primarily in the stack. We will see later that
+[[R0]] plays also a special role regarding arguments because of 
 some C and kernel {\em calling conventions}.
 \l convention to be in stack, but convenient, for recursive
 As said in the previous section, [[R13]] is the ARM stack pointer register.
@@ -1079,6 +1084,7 @@ use the [[BL]] instruction which stands for {\em branch and link}.
 Some processors such as the x86 have a [[CALL]] instruction 
 which when executed push on the stack the value of the program counter
 and then jump/branch to the code of the callee.
+\t put diagram of recursive call here? how the magic works!
 Then, a corresponding [[RET]] instruction in the callee
 will pop back this value in the program counter to return back
 to the caller.
@@ -1086,7 +1092,7 @@ to the caller.
 \l classic use of stack, can do recursive functions like that
 %
 In the ARM, [[BL]] instead saves the value of the program
-counter ([[R15]]) in a special register, [[R14]], 
+counter [[R15]] in the special register [[R14]] 
 known as the {\em link register}, and then jump to the callee. 
 
 
@@ -1107,7 +1113,7 @@ another function via [[BL]] which would overwrite [[R14]].
 See the \book{Emulator} for more information on the ARM. 
 %
 Non-leaf functions are the reason the [[TEXT]] pseudo-instruction
-allocates one more word that its second operand, e.g. 24
+allocates one more word than its second operand, e.g. 24
 instead of 20 for [[_main]] Line~1, to hold the return address
 to the caller in case [[R14]] needs to be saved.
 
@@ -1201,7 +1207,9 @@ The calling conventions we use in this tutorial come from the
 {\em C calling conventions} used by the C compiler [[5c]].
 Indeed, the assembly code generated by [[5c]] assumes
 arguments are passed in a certain way and the stack
-pointer has a certain value. We use similar conventions
+pointer has a certain value. 
+\t because you need that! you need at least a convention
+We use similar conventions
 in this tutorial because the code we present
 performs a system call and the \plan{} {kernel calling conventions}
 are derived from the C calling conventions. Indeed, the kernel
@@ -1214,7 +1222,9 @@ In fact [[R0]] is also used to store the return value of C
 functions.
 \l except for vlong? and float?
 This is an optimisation similar to the one we have seen previously
-with the link register. For certain simple and small functions,
+with the link register. 
+\l but compiler opti, not hardware opti
+For certain simple and small functions,
 everything can be done using just registers, without having to use
 the stack and so the (slow) memory.
 
@@ -1250,7 +1260,7 @@ the code generated by [[5c]] for a function call does not
 bother to store it also in the stack. But, similar to the
 link register optimisation, an extra word in the stack is still allocated
 for the first argument in case the callee need to overwrite [[R0]]
-in which case it can save its value in the stack.
+in which case it can save first its value in the stack.
 \l note that like R14 we save extra space in caller without knowing
 \l if callee really needs it.
 
@@ -1262,19 +1272,19 @@ the stack arguments could be ``below'' the stack pointer,
 the responsability to manage the return address in the stack
 could be done by the callee instead of the caller.
 The actual {\em C calling conventions} implemented by [[5c]]
-are a nice comprimise between simplicity and speed.
+are though a nice compromise between simplicity and speed.
 
 Because most assembly code interoperate with C code,
 they can also be {\em assembly calling conventions}.
-The only calling convention imposed by Asm5
+Note that the only calling convention imposed by Asm5
 is the extra word in the stack above [[R13]] to store
 the return address to the caller, because of the
-code generated for [[TEXT]] and [[RET]] by [[5a]].
+code generated for [[TEXT]] and [[RET]] by [[5l]].
 
 \subsection{Data layout}
 
 The last piece of assembly code we need to explain is Line~49 which initializes
-(partly) the content of the [[hello]] global. Indeed, 
+(partially) the content of the [[hello]] global. Indeed, 
 even if Line~48 {\em declares} the [[hello]] global with the [[GLOBL]] 
 pseudo-instruction, it is the [[DATA]] instruction which {\em defines}
 the content of the global. 
@@ -1298,8 +1308,8 @@ less than 8 bytes.
 To define data which takes more than 8 bytes, one needs
 to use multiple [[DATA]] instructions. For instance
 to define completely [[hello]], which would remove the need
-for Line~6 to 18 (added for education purpose in this tutorial),
-one could have done:
+for Line~6 to 18 (added for educational purposes in this tutorial),
+one could have done instead:
 
 <<full definition of [[hello]] content>>=
 GLOBL   hello(SB), $12
@@ -1319,7 +1329,7 @@ DATA    hello+8(SB)/4, $"rld\n"
 
 \section{The ARM architecture}
 
-ARM represents different things. It is
+ARM represents different things: it is
 a family of RISC machines, 
 a family of instruction set architectures (ISAs), and 
 also a family of processors. 
@@ -1371,15 +1381,15 @@ information.
 The main lexical elements of Asm5 (and also of Asm9) are:
 \n implementer POV
 \begin{itemize}
-\item {\em integers}, e.g. [[42]]
+\item {\em integers}, e.g. [[42]], [[0x12]], [[0666]]
 
-\item {\em characters}, e.g. [['W']]
+\item {\em characters}, e.g. [['W']], [['\n']], [['\007]]
 
 \item {\em strings}, e.g. [["hello wo"]]. Strings are limited
-to 8 characters or less though.
+to 8 characters or less.
 \l why? meh
 
-\item {\em floats}, e.g. [[4.2]]
+\item {\em floats}, e.g. [[4.2]], [[10e43]]
 
 
 
@@ -1395,13 +1405,13 @@ symbols ([[_main]]) and
 labels ([[later]])
 \l have to be lowercase?
 
-\item {\em comments}, e.g. [[/* not reached */]], using the same
-syntax than C comments, which are ignored
+\item {\em comments}, e.g. [[/* not reached */]], [[// comment]].
+They use the same syntax than C comments and are ignored by [[5a]].
 
-\item {\em spaces} and {\em tabs}, which are also ignored
+\item {\em spaces} and {\em tabs}, which are also ignored by [[5a]]
 
 \item {\em newlines}, which are actually internally transformed in semicolons.
-The semicolon is an instruction {separator} in Asm5. So, one can then either 
+The semicolon is an instruction {separator} in Asm9. So, one can then either 
 write multiple instructions on different lines,
 or multiple instructions on the same line but separated by an explicit [[;]].
 
@@ -1452,7 +1462,7 @@ e.g. \$42, \$[['W']]
 \item {\em pseudo-registers}, named [[PC]], [[SP]], [[FP]], and [[SB]]
 in Asm9
 
-\item {\em label references}
+\item {\em label references}, e.g. [[later]]
 \l B xx vs B(SB)
 
 \item {\em memory references}, which we describe below
@@ -1461,8 +1471,9 @@ in Asm9
 
 \subsection{Addessing modes}
 
-Memory references appear mainly in branching
-instructions (e.g. [[BL]]), memory moves (e.g. [[MOVW]]),
+Memory references appear mainly in 
+memory moves (e.g. [[MOVW]]),
+branching instructions (e.g. [[BL]]), 
 as well as in entity definitions (e.g. [[TEXT]]).
 %
 There are multiple ways to reference memory in Asm5,
@@ -1481,6 +1492,7 @@ plus 4. Note that there is no prefixing dollars for offsets.
 to a pseudo-register, e.g. [[hello(SB)]],
 which means the content at the address denoted by the symbol
 [[hello]].
+\t offset cos at some point symbol become static address and so number/offset
 With [[SB]] the symbol denotes a global or procedure,
 with [[SP]] a local variable, and 
 with [[FP]] an argument.
@@ -1490,6 +1502,7 @@ with [[FP]] an argument.
 \item {\em symbol reference with offset}, e.g. [[hello+4(SB)]],
 which means the content at the address denoted by the global symbol
 [[hello]] plus 4.
+\t plus SB, hmm
 \l p plus 0(FP) is a comment
 
 \item {\em symbol address}, using \$ before the symbol,
@@ -1547,7 +1560,7 @@ does not support any mnemonic for some of the advanced
 {coprocessor} ARM instructions, one can simply define and use
 the macro [[MCRR]] defined below
 which encodes the binary format of the instruction directly.
-%
+
 We will not explain though in this book the code related
 to this embedded macro processor as we will explain
 similar code in the \book{Compiler}.
@@ -1571,13 +1584,13 @@ this feature has been removed from our version of [[5a]].
 
 @
 %$
-
+\t WORD instruction?
 %
 
 \section{Output object format}
 
-As said in the introduction, The {object files} generated by [[5a]],
-which use the [[.5]] filename extension,
+As said in the introduction, the {object files} generated by [[5a]],
+which use the~[[.5]] filename extension,
 are ARM-specific, but they do not contain really machine code. Instead
 an object file contains the {serialized form} of the 
 {abstract syntax tree} of the assembly source. 
@@ -1603,7 +1616,7 @@ since the ARM is a RISC machine ([[8a]] needs 2 bytes to represent
 an x86 opcode).
 %
 Another byte is used to encode the {\em kind} of the first operand
-(an integer constant, a register, nothing, etc) followed by
+(an integer constant, a register, a memory address, nothing, etc) followed by
 a serie of bytes encoding the actual operand information 
 (e.g. 4 bytes for an integer constant, 1 byte for the register number, etc).
 %
@@ -1639,7 +1652,7 @@ of an object file.
 |    (1 Byte)      |
 +------------------+  <--- start of the .5 file 
 \end{verbatim}
-\caption{File format of [[.5]] object file}\label{fig:object-format}
+\caption{File format of a [[.5]] object file}\label{fig:object-format}
 \end{figure}
 
 \t symbol table about unresolved? imported and exported? at the end of file
@@ -1672,8 +1685,8 @@ as well as in [[include/arch/arm/5.out.h]]
 \toprule
 {\bf File} & {\bf Description} & {\bf Entities} & {\bf Chapters} & {\bf LOC} \\
 \otoprule
-[[aa/aa.h]] & Symbol table and input related structures & [[Sym]], [[Htab]], [[Fi]], [[Io]] & \ref{chap:core-ds}, \ref{chap:input} & 243 \\
-%, [[Hist]]
+[[aa/aa.h]] & Symbol table and input related structures & [[Sym]], [[Fi]], [[Io]] & \ref{chap:core-ds}, \ref{chap:input} & 243 \\
+%, [[Hist]] [[Htab]],
 [[include/.../5.out.h]] & ARM opcodes, operand kinds, registers & [[Opcode]], [[Operand_kind]],  & \ref{chap:core-ds} & 300 \\
  & & [[Register]] & & \\
 [[5a/a.h]] & ARM operand & [[Gen]] & \ref{chap:core-ds} & 103 \\
@@ -1902,9 +1915,11 @@ the support for floats. Those features tend to crosscut
 many components with extensions to the lexer, the parser,
 and the code generator.
 %
-Finally Chapter~\ref{chap:conclusion} concludes.
+Finally Chapter~\ref{chap:conclusion} concludes
+and give pointers to which further book to read in the
+\principia serie.
 
-Some appendices present the code for non-functional properties,
+Some appendices present the code of non-functional properties,
 e.g. code to help debug [[5a]] itself in 
 Appendix~\ref{chap:debugging-appendix}, or to manage
 errors in Appendix~\ref{chap:error}.
@@ -2135,8 +2150,8 @@ struct	Gen
 
 The [[type]] field is used to encode the {\em kind} of the operand.
 It is a [[short]] but really it can only take values of the
-[[operand_kind]] enumeration we define below 
-(hence the {\em typing} comment above):
+[[operand_kind]] enumeration (hence the {\em typing} comment above)
+we define below:
 
 <<enum operand_kind(arm)>>=
 enum operand_kind {
@@ -2166,7 +2181,8 @@ Remember that characters are converted in integers so
 there is no need for a [[D_CHARCONST]] and [[cval]] field.
 %
 The [[long]] element of the union is called [[offset]],
-and not [[lval]], because it is (ab)used to represent
+and not [[lval]] (which would be more consistent with the
+other union fields) because it is (ab)used to represent
 different things, not just integer (or character) constants,
 as we will see soon.
 %ocaml: ugly
@@ -2174,7 +2190,7 @@ as we will see soon.
 The [[D_NONE]] case is used only at the beginning, when initializing
 a new operand in [[nullgen()]], and should be used to represent
 an operand which has not be defined yet.
-%
+
 [[D_REG]] is used to represent register operands. In that
 case it is the [[Gen.reg]] field which encodes
 the actual register.
@@ -2182,7 +2198,7 @@ the actual register.
 
 For indirect operands, e.g. [[(R1)]], 
 or indirect with offset operands, e.g. [[4(R1)]]
-the following case is used:
+the following new operand kind is used:
 
 <<operand_kind cases>>=
 D_OREG,
@@ -2206,6 +2222,7 @@ and the optional offset in [[Gen.offset]] (hence the name).
 % see the many uses cases of offset in zaddr() switch about operand_kind ...
 %mimic what is in union token too
 
+%EXAMPLE value here?
 
 \section{Instructions}
 %    outcode(AEND, Always, &nullgen, R_NONE, &nullgen);
@@ -2335,8 +2352,8 @@ Here is an excerpt of the [[y.tab.h]] file generated by Yacc:
 @
 %ocaml: ugly sugar, would be simpler have a simple ADT hiding all this shit
 
-The value of those integers is high to not conflict with
-the value of regular {unicode} characters. 
+The values of those integers are high to not conflict with
+the values of regular {unicode} characters. 
 Indeed [[yylex()]]
 can return single-character tokens in which case there is no
 need to give them a name.
@@ -2430,7 +2447,8 @@ associates a {name} to a {value}:
 struct	Sym
 {
     // Sym is (ab)used to represent many things in the assembler:
-    //   symbols, labels, but also macros, opcodes, registers, etc
+    //   symbols, labels, but also macros, tokens for opcodes 
+    //   and registers, etc
 
     // ---------------------------------------------------------
     // The "key"
@@ -2473,7 +2491,7 @@ One way to implement a hash table in C is to use a big array
 of lists, also known as an array of buckets:
 
 <<global hash>>=
-// hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
+// hash<string, ref_own<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 @
 \t diff with h?
@@ -2544,8 +2562,8 @@ lookup(void)
 
     <<[[lookup()]] compute hash value [[h]] of [[symb]]>>
 
+    // lookup(symb, hash)
     c = symb[0];
-    // lookup(sym->name, h, hash)
     for(sym = hash[h]; sym != S; sym = sym->link) {
         // fast path
         if(sym->name[0] != c)
@@ -2578,7 +2596,7 @@ return sym;
 @
 
 The hashing code iterates over the characters in [[symb]]
-until the end character (0) and also compute the length
+until the end-of-string character ([[0]]) and also compute the length
 of the symbol in [[len]]:
 
 <<[[lookup()]] compute hash value [[h]] of [[symb]]>>=
@@ -2601,8 +2619,8 @@ represent and keep track of many different things in [[5a]]:
 contains eventually the value of the (virtual) program counter [[pc]]
 at the label definition
 
-\item {\em symbols}, for procedures,
-[[TEXT foo(SB)]]) and globals ([[GLOBL hello(SB)]]),
+\item {\em symbols}, for procedures
+([[TEXT foo(SB)]]) and globals ([[GLOBL hello(SB)]]),
 \l and also parameters and locals!
 in which case [[Sym.value]] is not used since the address
 of global symbols are resolved by [[5l]].
@@ -2623,7 +2641,7 @@ the text of the macro as we will see in Section~\ref{sec:macro-sym-field}.
 in which case [[Sym.value]] contain the constant value
 
 \item {\em predefined identifiers}, 
-for opcodes ([[AMOV]]) and registers([[R1]]), in which case
+for opcodes ([[AMOV]]) and registers ([[R1]]), in which case
 [[Sym.value]] contain the appropriate enumeration value.
 \l ugly abuse
 
@@ -2652,7 +2670,7 @@ for(i=0; itab[i].name; i++) {
 
 In the case of predefined identifiers, another field of [[Sym]]
 is used to also store the token code of the identifier
-(in addition to the enum value of the opcode or register
+(in addition to the enumeration value of the opcode or register
 stored in [[Sym.value]]):
 
 <<[[Sym]] lexeme value fields>>=
@@ -2695,7 +2713,7 @@ Now that we have seen the [[Sym]] structure, we
 can present the [[sym]] field of the [[Gen]] structure:
 
 <<[[Gen]] other fields>>=
-// option<ref<Sym>>, Sym reference owned by hash
+// option<ref<Sym>>, ref owned by hash
 Sym*	sym;
 @
 %less: maybe should rename this field 'name'? and then use name_kind?
@@ -2746,7 +2764,7 @@ So, the C value of the operand in the example above is:
 \n the symkind is a property of the Gen and not Sym!
 \l because people disambiguate at each use, foo(SB), foo _plus_ 0(FP), etc.
 
-Note that there is no special operand type such as [[D_ADDRESS]]
+Note that there is no special operand kind such as [[D_ADDRESS]]
 to encode operands such as \$[[hello(SB)]]. Instead
 the [[D_CONST]] type is (ab)used:
 %EXAMPLE:
@@ -2760,7 +2778,7 @@ the [[D_CONST]] type is (ab)used:
 \end{verbatim}
 
 There is no ambiguity with the representation of simple constants
-since the [[sym]] field in the case is NULL.
+since the [[sym]] field in those cases would be NULL.
 \l moreover address is a kind of constant? actually make sense to use dollar
 \l but what is the code generated?
 
@@ -2925,7 +2943,7 @@ nullgen.type    = D_NONE; // no type set yet
 nullgen.reg     = R_NONE;
 nullgen.symkind = N_NONE;
 nullgen.sym = S;
-nullgen.offset = 0; // part of an union
+nullgen.offset = 0; // part of a union
 @
 
 \ifallcode
@@ -3036,7 +3054,7 @@ assemble(char *infile)
 %pad: I renamed parameter to infile, to better contrast with outfile
 
 Essentially [[assemble()]] calls [[yyparse()]]
-two times, with the appropriate value in [[pass]], after
+two times, with the appropriate value set in [[pass]], after
 having initialized some globals related to the input file via [[pinit()]].
 This means the input assembly file is parsed two times, but
 the actions in the grammar do different things the second time.
@@ -3063,7 +3081,7 @@ as well as input data (see [[pinit()]]),
 which makes the code harder to read. 
 This is probably because the interface
 for [[yyparse]], the function generated by Yacc,
-os a function which does not take any argument nor return anything, so we
+is a function which does not take any argument nor return anything, so we
 are forced to use globals.
 
 The function below is called just before returning
@@ -3100,8 +3118,8 @@ int i;
 The remaining code in [[assemble()]] is mostly
 filename manipulations and modifying globals used
 for [[#include]] processing.
-%
-This is temporary used to compute [[outfile]] later:
+Those filename manipulatons start with the temporary [[ofile]]
+used to compute [[outfile]] later:
 <<[[assemble()]] locals>>=
 char ofile[100];
 @
@@ -3163,7 +3181,7 @@ if(p) {
 \chapter{Input}
 \label{chap:input}
 
-Now that we have seen [[assemble()]], we we can start
+Now that we have seen [[assemble()]], we can start
 explaining the different components in the assembling
 pipeline, starting in this chapter with the input functions.
 
@@ -3185,7 +3203,7 @@ It is called at the beginning of each pass in [[assemble()]]:
 void
 pinit(char *f)
 {
-    <<[[[pinit()]] locals>>
+    <<[[pinit()]] locals>>
 
     lineno = 1;
 
@@ -3198,7 +3216,7 @@ pinit(char *f)
 
 
 \ifallcode
-<<[[[pinit()]] locals>>=
+<<[[pinit()]] locals>>=
 int i;
 Sym *s;
 @
@@ -3221,24 +3239,25 @@ long	lineno;
 %less: rename glineno?
 %ocaml: could be embedded in the token, so no need global
 
-
+The calls to [[newio()]] and [[newfile()]] will be explained below.
 
 \section{Files managment, [[iostack]]}
 
-[[5a]] is a macro-assembler which embeds his own [[cpp]]-like preprocessor.
-%
+[[5a]] is a macro-assembler which embeds his own [[cpp]]-like preprocessor
+\footnote{
 Note that [[5a]] could also instead rely on an external 
 preprocessor, which would factorize code with [[5c]],
 but that would be slower because of the need to fork
 another process in the assembling pipeline.
 \n meh, better to separate concern and have cpp in a different program?
+}.
 %
 Because [[5a]] supports [[#include]], the input assembly file can include
 another file, which itself can include another file and so on.
 So, we may have to open many files,
-amd when a file has been fully processed, we need to go back
-to the file which was including it (the {\em includer}).
-This suggests a {\em stack} data structure, a stack of opened input file.
+and when a file has been fully processed, we need to go back
+to the file which was including it, the {\em includer}.
+This suggests a {\em stack} data structure: a stack of opened input file.
 The following structure represents an element of this stack,
 essentially an opened file with a file descriptor in [[Io.f]]:
 
@@ -3293,10 +3312,11 @@ newio(void)
 
     <<[[newio()]] allocate a new Io in [[i]] or find a free one>>
     ionext = i;
-    i->c = 0;
     i->f = FD_NONE;
+    i->c = 0;
 }
 @
+%ocaml: why not return it? because dont want caller to free it?
 
 The [[Io]] allocator could be simply a call to [[malloc()]].
 The matching call to [[free()]] then should be in the code which
@@ -3354,14 +3374,14 @@ newfile(char *s, fdt f)
     linehist(s, 0);
 }
 @
-\l will see linehist later
+\t will see linehist later
 
 \section{Buffer managment, [[fi]]}
 
 Once the input file is opened, the lexer needs to look
 at its content one character at a time.
 %
-Instead of using many system calls to [[read(..., 1)]] to read
+Instead of using many system calls such as [[read(..., 1)]] to read
 one character at a time, which would be slow,
 [[5a]] instead calls
 [[read()]] once in a while to fill a large
@@ -3378,7 +3398,7 @@ char	b[BUFSIZ];
 @
 
 A few functions below are using the global [[fi]] which contains
-pointers in the buffer of the currently processed input file:
+pointers in the input buffer of the currently processed input file:
 
 <<global fi>>=
 struct Fi fi;
@@ -3387,9 +3407,9 @@ struct Fi fi;
 <<struct Fi>>=
 struct Fi
 {
-    // ref<char>, pointer in buffer (of Io.b)
+    // ref<char>, pointer in Io.b
     char*	p;
-    // remaining characters in buffer to read (of Io.b)
+    // remaining characters in Io.b to read
     int	c;
 };
 @
@@ -3397,11 +3417,11 @@ struct Fi
 
 Once we processed an included file we need to
 go back to the includer file (which can be found easily thanks
-to [[iostack->link]]). We also need to remember
-where we were in the includer file:
+to [[iostack->link]]). But we also need to remember
+where we were in the includer file, hence those extra fields:
 
 <<[[Io]] buffer fields>>=
-// like Fi, saved IO buffer pointers
+// like Fi, saved pointers in IO.b
 char*	p;
 short	c;
 @
@@ -3451,7 +3471,8 @@ loop:
 The [[-1]] above is because [[Fi.c]] represents the remaining
 characters to read, so if [[read()]] returns only 1,
 meaning one character only was read, then this character
-will be return and there is nothing else to read after.
+will be returned and so there is nothing else to read after,
+in which case [[Fi.c]] should be 0 (hence the [[-1]]).
 %
 Figure~\ref{fig:input-buffer} represents the evolution of the state
 of [[fi]] while the input buffer gets filled.
@@ -3546,8 +3567,8 @@ the lexer to be represented by a function called [[yylex()]].
 %
 This function does not take any
 argument (hence the use of many globals), and must return
-the {\em code} of a token, or [[-1]] when there is no
-more token to read (EOF), or a single character if the
+the {\em code} of a token, or [[-1]] (EOF) when there is no
+more token to read, or a single character if the
 token is simply a single character:
 %ocaml: EOF needs special care also in ocamlyacc and ocamllex
 
@@ -3571,7 +3592,7 @@ Again, see~\cite{lexyacc} for more information on Yacc.
 
 [[yylex()]] is essentially an {\em automata} 
 reading characters (with [[GETC()]]) 
-in a loop (with the label [[l0]] and [[goto]] below),
+in a loop (with the label [[l0:]] and [[goto]] below),
 using a big [[switch]] on the current character read ([[c]])
 to transition states (using [[goto]]s again as we will see), 
 until a full token is formed:
@@ -3595,6 +3616,7 @@ l1:
 
     if(isspace(c)) {
         <<[[yylex()]] if c is newline>>
+        // ignore spaces
         goto l0;
     }
 
@@ -3691,6 +3713,10 @@ if(c == '\n') {
 @
 \l note also lineno++
 
+Note that because the token in a single character, it can
+be returned directly. There is no need to invent
+a [[LSEMICOLON]] token code.
+
 <<[[yylex()]] switch c cases>>=
 case '\n':
     lineno++;
@@ -3774,36 +3800,34 @@ if(isalpha(c))
 case '_':
 case '@':
 // case 'a'..'z' 'A'..'Z': (isalpha())
-// case '.' too
 talph:
     cp = symb;
 
 aloop:
     *cp++ = c;
     c = GETC();
-    if(isalpha(c) || isdigit(c) || c == '_' || c == '$') // $
+    if(isalpha(c) || isdigit(c) || c == '_' || c == '$')
         goto aloop;
-    // went too far, yyback(1)
+    // went too far
     peekc = c;
 
     *cp = '\0';
     s = lookup(); // uses symb global and so cp
-
     <<[[yylex()]] if macro symbol>>
-
     if(s->type == 0) // when can this happen?
         s->type = LNAME;
-
     <<[[yylex()]] in identifier case, set yylval>>
     return s->type;
 @
+%$
+%ocaml: use of peekc is yyback(1)
 \l @? maybe remove it so it would also remove the need for LAT token_kind
 \t possible to have s->type == 0? if new sym theni it is set to LNAME in syminit
 
 Remember that [[Sym.type]] contains the token code of
 the ``symbol''.
-The union [[yylval]] is set according to the kind of the symbol,
-the actual [[Sym]] for labels and symbols, the enum value
+The union [[yylval]] is set according to the kind of the symbol:
+the actual [[Sym]] for labels and symbols, the enumeration value
 for predefined identifiers (mnemonics):
 
 <<[[yylex()]] in identifier case, set yylval>>=
@@ -4009,15 +4033,31 @@ case '.':
 @
 \l why not simply goto talph for '.'? avoid duplicate the cp = symb; ...
 
-\section{Characters (and escapes)}
+\section{Characters (and escape sequences)}
+\l unicode?
 
-Characters in Asm5 are converted in integers:
+Asm5 allows {\em escape sequences}, which are started with
+an antislash, to represent special characters. This is similar to C.
+For instance 
+[['\n']] represents the newline character,
+[['\007']] the character with the octal value [[7]], or
+\l interet? why not write 007 outside quote? because it's typed as a char!
+\l and it is more readable IMHO, I prefer '\0' to 0.
+[['\'']] the quote character itself.
+\l special chars because no representation otherwise? or because self escape!
+
+The function [[escchar()]] below is a wrapper around
+[[GETC()]] which returns also the next
+character unless it is the start of an escape sequence
+(the antislash) in which case it returns the value
+of the parsed escape sequence (the special character).
+Note that characters in Asm5 are converted in integers, hence
+the [[LCONST]] token code below:
 
 <<[[yylex()]] switch c cases>>=
 case '\'':
     c = escchar('\'');
-    if(c == EOF)
-        c = '\'';
+    <<[[yylex()]] in character case, if c is EOF>>
     if(escchar('\'') != EOF)
         yyerror("missing '");
 
@@ -4025,11 +4065,36 @@ case '\'':
     return LCONST;
 @
 
+There are two calls to [[escchar()]]: the first to consume the character
+after the first quote, e.g. [[a]] in [['a']],
+and the second to consume the ending quote itself.
+%FIGURE?
+%
+Indeed, [[escchar()]] returns the special code EOF if 
+the character read is the same than the character passed as an argument, 
+here the quote.
+
+%Note also that the code itself below uses also escape sequences
+%(to represent the quote character):
+\l self!
+
+The code below is to deal with the sequence [[''']], which
+is parsed as a single quote:
+
+<<[[yylex()]] in character case, if c is EOF>>=
+if(c == EOF)
+    c = '\'';
+@
+
 %\section{Escaping characters}
 %Special characters?
 
-% e is usually ' or ", the ending characher (and also char you have to escape)
-\t use Rune instead of int?
+The argument to [[escchar()]] is the character used to mark the
+end of the ``entity'', here
+a quote [[']] because we are parsing characters. In the
+next section the argument to [[escchar()]] will be the
+double quote [["]] character because we will parse strings.
+
 <<function escchar>>=
 int
 escchar(int e)
@@ -4037,7 +4102,7 @@ escchar(int e)
     int c, l;
 
 loop:
-    c = getc(); // not GETC?
+    c = getc(); // not GETC
     if(c == '\n') {
         yyerror("newline in string");
         return EOF;
@@ -4047,24 +4112,12 @@ loop:
             return EOF;
         return c;
     }
+    // else c is '\\'
     c = getc();
-    if(c >= '0' && c <= '7') {
-        l = c - '0';
-        c = getc();
-        if(c >= '0' && c <= '7') {
-            l = l*8 + c-'0';
-            c = getc();
-            if(c >= '0' && c <= '7') {
-                l = l*8 + c-'0';
-                return l;
-            }
-        }
-        peekc = c;
-        return l;
-    }
+    <<[[escchar()]] if octal character>>
     switch(c)
     {
-    case '\n':	goto loop;
+    case '\n':	goto loop; // multi line strings
 
     case 'n':	return '\n';
     case 't':	return '\t';
@@ -4072,17 +4125,17 @@ loop:
     case 'r':	return '\r';
     case 'f':	return '\f';
 
-    case 'a':	return 0x07;
-    case 'v':	return 0x0b;
-    case 'z':	return 0x00;
+    <<[[escchar()]] switch cases>>
     }
     return c;
 }
 @
-% they abuse EOF to mean end of string
+\t use Rune instead of int?
+\l they abuse EOF to mean end of string
 
+[[getc()]] is a small wrapper over [[GETC()]] which
+automatically handles [[lineno]]:
 
-% int? why not uint? GETC can return EOF but not this function!
 <<function getc>>=
 int
 getc(void)
@@ -4106,7 +4159,34 @@ getc(void)
     return c;
 }
 @
+\l int? why not uint? GETC can return EOF but not this function!
 
+
+<<[[escchar()]] if octal character>>=
+if(c >= '0' && c <= '7') {
+    l = c - '0';
+    c = getc();
+    if(c >= '0' && c <= '7') {
+        l = l*8 + c-'0';
+        c = getc();
+        if(c >= '0' && c <= '7') {
+            l = l*8 + c-'0';
+            return l;
+        }
+    }
+    peekc = c;
+    return l;
+}
+@
+
+Asm5 allows a few more escape sequences compared to C:
+
+<<[[escchar()]] switch cases>>=
+case 'a':	return 0x07;
+case 'v':	return 0x0b;
+case 'z':	return 0x00;
+@
+\l meh
 
 \section{Strings}
 
@@ -4128,7 +4208,7 @@ case '"':
     return LSCONST;
 @
 \l abuse c1
-
+\t works nullgen.sval?? add the appropriate 0? why not just *cp = '\0' ?
 
 
 
@@ -4143,6 +4223,8 @@ case '"':
 % Builtin in the binary. A bit of code duplication with the
 % compiler, but maybe it makes compilation faster because
 % there is no fork at all!
+
+\section{[[mactab]] and [[domacro()]]}
 
 <<global mactab>>=
 struct
@@ -8348,10 +8430,11 @@ if(argc > 1) {
 \chapter{Conclusion}
 \label{chap:conclusion}
 
-%missing features: ORG, but ld can do -Txx
-
 % see linker! next book to read, logically.
+% indeed trad job of assembler is actually done by linker in plan9.
 % some assembler related stuff is in libmach/ and lots in the linker.
+
+%missing features: ORG, but ld can do -Txx
 
 % see compiler
 
