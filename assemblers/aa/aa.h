@@ -44,6 +44,7 @@ typedef	struct	Hist Hist;
 #define	IGN		(-2)
 /*e: constant IGN */
 /*s: function GETC */
+/// main -> assemble -> yyparse -> yylex -> <>
 #define	GETC()		((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
 /*e: function GETC */
 /*s: constant NHASH */
@@ -58,7 +59,8 @@ typedef	struct	Hist Hist;
 struct	Sym
 {
     // Sym is (ab)used to represent many things in the assembler:
-    //   symbols, labels, but also macros, opcodes, registers, etc
+    //   symbols, labels, but also macros, tokens for opcodes 
+    //   and registers, etc
 
     // ---------------------------------------------------------
     // The "key"
@@ -100,9 +102,9 @@ struct	Sym
 /*s: struct Fi */
 struct Fi
 {
-    // ref<char>, pointer in buffer (of Io.b)
+    // ref<char>, pointer in Io.b
     char*	p;
-    // remaining count in buffer (of Io.b)
+    // remaining characters in Io.b to read
     int	c;
 };
 /*e: struct Fi */
@@ -111,17 +113,18 @@ extern struct Fi fi;
 /*s: struct Io */
 struct	Io
 {
-    char	b[BUFSIZ];
-
-    // -1 if not opened yet
+    // option<fdt>, None = FD_NONE
     fdt	f;
-
-    // like Fi, saved IO buffer status
+    /*s: [[Io]] buffer fields */
+    char	b[BUFSIZ];
+    /*x: [[Io]] buffer fields */
+    // like Fi, saved pointers in IO.b
     char*	p;
     short	c;
-
+    /*e: [[Io]] buffer fields */
     // Extra
     /*s: [[Io]] extra fields */
+    // list<ref_own<Io>>, head = iostack (or iofree)
     Io*	link;
     /*e: [[Io]] extra fields */
 };
@@ -129,6 +132,8 @@ struct	Io
 /*s: constant I */
 #define	I	((Io*)nil)
 /*e: constant I */
+
+#define FD_NONE (-1)
 
 /*s: struct Htab */
 struct Htab

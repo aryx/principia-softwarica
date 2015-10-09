@@ -106,12 +106,12 @@ main(int argc, char *argv[])
 /*e: function main(arm) */
 
 /*s: function assemble */
-int
+error1
 assemble(char *infile)
 {
-    /*s: [[assemble()]] locals */
-    char *p;
     fdt of; // outfile
+    char *p;
+    /*s: [[assemble()]] locals */
     int i;
     /*x: [[assemble()]] locals */
     char ofile[100];
@@ -196,6 +196,7 @@ assemble(char *infile)
 /*e: function assemble */
 
 /*s: function cclean(arm) */
+/// main -> assemble -> <>
 void
 cclean(void)
 {

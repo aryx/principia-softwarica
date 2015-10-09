@@ -45,10 +45,13 @@ pushio(void)
 /*e: function pushio */
 
 /*s: function newio */
+/// main -> assemble -> pinit -> <>; newfile
 void
 newio(void)
 {
     Io *i;
+
+    /*s: [[newio()]] allocate a new Io in [[i]] or find a free one */
     static int pushdepth = 0;
 
     i = iofree;
@@ -62,24 +65,28 @@ newio(void)
         i = alloc(sizeof(Io));
     } else
         iofree = i->link;
-    i->c = 0;
-    i->f = -1;
+    /*e: [[newio()]] allocate a new Io in [[i]] or find a free one */
     ionext = i;
+    i->f = FD_NONE;
+    i->c = 0;
 }
 /*e: function newio */
 
 /*s: function newfile */
+/// main -> assemble -> pinit -> { newio; <> }
+/// yylex -> macinc -> <>
 void
-newfile(char *s, int f)
+newfile(char *s, fdt f)
 {
     Io *i;
 
+    // add_list(ionext, iostack)
     i = ionext;
     i->link = iostack;
     iostack = i;
 
     i->f = f;
-    if(i->f < 0)
+    if(i->f == FD_NONE)
         i->f = open(s, 0);
     if(i->f < 0) {
         yyerror("%ca: %r: %s", thechar, s);
@@ -121,8 +128,8 @@ lookup(void)
     h %= NHASH;
     /*e: [[lookup()]] compute hash value [[h]] of [[symb]] */
 
+    // lookup(symb, hash)
     c = symb[0];
-    // lookup(sym->name, h, hash)
     for(sym = hash[h]; sym != S; sym = sym->link) {
         // fast path
         if(sym->name[0] != c)
@@ -458,7 +465,7 @@ escchar(int e)
     int c, l;
 
 loop:
-    c = getc();
+    c = getc(); // not GETC
     if(c == '\n') {
         yyerror("newline in string");
         return EOF;
@@ -468,7 +475,9 @@ loop:
             return EOF;
         return c;
     }
+    // else c is '\\'
     c = getc();
+    /*s: [[escchar()]] if octal character */
     if(c >= '0' && c <= '7') {
         l = c - '0';
         c = getc();
@@ -483,9 +492,10 @@ loop:
         peekc = c;
         return l;
     }
+    /*e: [[escchar()]] if octal character */
     switch(c)
     {
-    case '\n':	goto loop;
+    case '\n':	goto loop; // multi line strings
 
     case 'n':	return '\n';
     case 't':	return '\t';
@@ -493,28 +503,32 @@ loop:
     case 'r':	return '\r';
     case 'f':	return '\f';
 
+    /*s: [[escchar()]] switch cases */
     case 'a':	return 0x07;
     case 'v':	return 0x0b;
     case 'z':	return 0x00;
+    /*e: [[escchar()]] switch cases */
     }
     return c;
 }
 /*e: function escchar */
 
 /*s: function pinit */
+/// main -> assemble -> { <> ; yyparse } x 2
 void
 pinit(char *f)
 {
+    /*s: [[pinit()]] locals */
     int i;
     Sym *s;
+    /*e: [[pinit()]] locals */
 
     lineno = 1;
-    pc = 0;
 
-    newio();
-    newfile(f, -1);
-    peekc = IGN;
+    newio(); // set ionext
+    newfile(f, FD_NONE); // use ionext, set iostack, set fi
 
+    /*s: [[pinit()]] initialisations */
     /*s: [[pinit]] symcounter and h initialisation */
     symcounter = 1;
     for(i=0; i<NSYM; i++) {
@@ -527,6 +541,9 @@ pinit(char *f)
         for(s = hash[i]; s != S; s = s->link)
             s->macro = nil;
     /*e: [[pinit]] hash macro field reset */
+    /*x: [[pinit()]] initialisations */
+    peekc = IGN;
+    /*e: [[pinit()]] initialisations */
 }
 /*e: function pinit */
 
@@ -540,8 +557,10 @@ loop:
     i = iostack;
     if(i == I)
         return EOF;
-    if(i->f < 0)
-        goto pop;
+    if(i->f < 0) // When this happens?
+        goto pop; 
+
+    // system call! fill really the buffer
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     if(fi.c < 0) {
         close(i->f);
@@ -551,18 +570,25 @@ loop:
     fi.p = i->b + 1;
     return i->b[0];
 
+/*s: [[filbuf()]] pop */
 pop:
+    // pop(iostack)
     iostack = i->link;
+    // push(i, iofree)
     i->link = iofree;
     iofree = i;
+
+    // i = top(iostack), the fresh top of the stack input file
     i = iostack;
     if(i == I)
         return EOF;
+    // restore file pointers
     fi.p = i->p;
     fi.c = i->c;
     if(--fi.c < 0)
         goto loop;
     return *fi.p++;
+/*e: [[filbuf()]] pop */
 }
 /*e: function filbuf */
 

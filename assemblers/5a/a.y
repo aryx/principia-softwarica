@@ -2,7 +2,7 @@
 %{
 #include "a.h"
 %}
-/*s: union token(arm) */
+/*s: union declaration(arm) */
 %union {
  // long for LCONST
  // and enum<opcode>  for LARITH/...
@@ -15,11 +15,11 @@
  char   sval[8]; // for LSCONST
  Sym    *sym;    // for LNAME/LLAB/LVAR
 
- /*s: [[Token]] other fields(arm) */
+ /*s: union declaration other fields(arm) */
  Gen    gen;
- /*e: [[Token]] other fields(arm) */
+ /*e: union declaration other fields(arm) */
 }
-/*e: union token(arm) */
+/*e: union declaration(arm) */
 /*s: priority and associativity declarations */
 %left   '|'
 %left   '^'
@@ -59,7 +59,7 @@
 /*x: type declarations(arm) */
 %type   <gen>   ximm
 /*x: type declarations(arm) */
-%type   <lval>  sreg spreg 
+%type   <lval>  regi regi_nosp
 /*x: type declarations(arm) */
 %type   <lval>  rcon
 /*x: type declarations(arm) */
@@ -87,10 +87,11 @@
 /*e: type declarations(arm) */
 %%
 /*s: grammar(arm) */
+/*s: prog rule(arm) */
 prog:
   /* empty */
 | prog line
-
+/*e: prog rule(arm) */
 /*s: line rule(arm) */
 line:
   inst ';'
@@ -130,14 +131,8 @@ inst:
 /*
  * AND/OR/ADD/SUB/...
  */
-  LARITH cond imsr ',' spreg ',' reg { outcode($1, $2, &$3, $5, &$7); }
-| LARITH cond imsr ',' spreg ','     { outcode($1, $2, &$3, $5, &nullgen); }
-| LARITH cond imsr ',' reg           { outcode($1, $2, &$3, R_NONE, &$5); }
-/*x: inst rule(arm) */
-/*
- * CMP
- */
-| LCMP cond imsr ',' spreg { outcode($1, $2, &$3, $5, &nullgen); }
+  LARITH cond imsr ',' regi ',' reg { outcode($1, $2, &$3, $5, &$7); }
+| LARITH cond imsr ',' reg          { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * MOVW
@@ -163,14 +158,19 @@ inst:
 | LBRANCH cond nireg { outcode($1, $2, &nullgen, R_NONE, &$3); }
 /*x: inst rule(arm) */
 /*
- * BEQ/...
- */
-| LBCOND rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
-/*x: inst rule(arm) */
-/*
  * RET
  */
 | LRET cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+/*x: inst rule(arm) */
+/*
+ * CMP
+ */
+| LCMP cond imsr ',' regi { outcode($1, $2, &$3, $5, &nullgen); }
+/*x: inst rule(arm) */
+/*
+ * BEQ/...
+ */
+| LBCOND rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
 /*x: inst rule(arm) */
 /*
  * SWI
@@ -214,7 +214,7 @@ inst:
 /*
  * MULA hi,lo,r1,r2
  */
-| LMULA cond reg ',' reg ',' reg ',' spreg 
+| LMULA cond reg ',' reg ',' reg ',' regi 
  {
   $7.type = D_REGREG;
   $7.offset = $9;
@@ -246,7 +246,7 @@ inst:
 /*
  * MCR MRC
  */
-| LSYSTEM cond con ',' expr ',' spreg ',' creg ',' creg oexpr
+| LSYSTEM cond con ',' expr ',' regi ',' creg ',' creg oexpr
  {
   Gen g;
 
@@ -266,13 +266,6 @@ inst:
   outcode(AWORD, Always, &nullgen, R_NONE, &g);
  }
 /*e: inst rule(arm) */
-/*s: cond rule(arm) */
-cond:
-  /* empty */ { $$ = Always; }
-| cond LCOND  { $$ = ($1 & ~C_SCOND) | $2; }
-/*x: cond rule(arm) */
-| cond LS    { $$ = $1 | $2; }
-/*e: cond rule(arm) */
 /*s: operand rules(arm) */
 imsr:
   imm
@@ -304,13 +297,13 @@ gen:
  }
 /*e: gen rule */
 /*s: spreg rule(arm) */
-spreg:
-  sreg
+regi:
+  regi_nosp
 /*x: spreg rule(arm) */
 | LSP { $$ = REGSP; }
 /*e: spreg rule(arm) */
 /*s: sreg rule(arm) */
-sreg:
+regi_nosp:
   LREG
 | LR '(' expr ')'
  {
@@ -331,12 +324,6 @@ ximm:
   $$.offset = $2;
  }
 /*x: ximm rule */
-| '$' name
- {
-  $$ = $2;
-  $$.type = D_CONST;
- }
-/*x: ximm rule */
 | '$' LSCONST
  {
   $$ = nullgen;
@@ -344,11 +331,17 @@ ximm:
   memcpy($$.sval, $2, sizeof($$.sval));
  }
 /*x: ximm rule */
+| '$' name
+ {
+  $$ = $2;
+  $$.type = D_CONST;
+ }
+/*x: ximm rule */
 | fcon
 /*e: ximm rule */
 /*x: operand rules(arm) */
 reg:
- spreg
+ regi
  {
   $$ = nullgen;
   $$.type = D_REG;
@@ -363,25 +356,25 @@ imm: '$' con
  }
 /*x: operand rules(arm) */
 shift:
- spreg '<' '<' rcon
+ regi '<' '<' rcon
  {
   $$ = nullgen;
   $$.type = D_SHIFT;
   $$.offset = $1 | $4 | (0 << 5);
  }
-| spreg '>' '>' rcon
+| regi '>' '>' rcon
  {
   $$ = nullgen;
   $$.type = D_SHIFT;
   $$.offset = $1 | $4 | (1 << 5);
  }
-| spreg '-' '>' rcon
+| regi '-' '>' rcon
  {
   $$ = nullgen;
   $$.type = D_SHIFT;
   $$.offset = $1 | $4 | (2 << 5);
  }
-| spreg LAT '>' rcon
+| regi LAT '>' rcon
  {
   $$ = nullgen;
   $$.type = D_SHIFT;
@@ -448,7 +441,7 @@ rel:
 /*x: operand rules(arm) */
 /* for MULL */
 regreg:
- '(' spreg ',' spreg ')'
+ '(' regi ',' regi ')'
  {
   $$ = nullgen;
   $$.type = D_REGREG;
@@ -456,31 +449,6 @@ regreg:
   $$.offset = $4;
  }
 /*e: operand rules(arm) */
-/*s: helper rules(arm) */
-rcon:
-  spreg
- {
-  if($$ < 0 || $$ >= NREG)
-      print("register value out of range\n");
-  $$ = (($1&15) << 8) | (1 << 4);
- }
-| con
- {
-  if($$ < 0 || $$ >= 32)
-      print("shift value out of range\n");
-  $$ = ($1&31) << 7;
- }
-/*x: helper rules(arm) */
-pointer:
-  LSB
-| LSP
-| LFP
-/*x: helper rules(arm) */
-offset:
- /* empty */ { $$ = 0; }
-| '+' con    { $$ = $2; }
-| '-' con    { $$ = -$2; }
-/*e: helper rules(arm) */
 
 /*s: constant expression rules */
 /*s: con rule */
@@ -510,6 +478,13 @@ expr:
 
 /*e: expr rule */
 /*e: constant expression rules */
+/*s: cond rule(arm) */
+cond:
+  /* empty */ { $$ = Always; }
+| cond LCOND  { $$ = ($1 & ~C_SCOND) | $2; }
+/*x: cond rule(arm) */
+| cond LS    { $$ = $1 | $2; }
+/*e: cond rule(arm) */
 /*s: float rules */
 freg:
   LFREG
@@ -543,6 +518,32 @@ frcon:
   freg
 | fcon
 /*e: float rules */
+
+/*s: helper rules(arm) */
+rcon:
+  regi
+ {
+  if($$ < 0 || $$ >= NREG)
+      print("register value out of range\n");
+  $$ = (($1&15) << 8) | (1 << 4);
+ }
+| con
+ {
+  if($$ < 0 || $$ >= 32)
+      print("shift value out of range\n");
+  $$ = ($1&31) << 7;
+ }
+/*x: helper rules(arm) */
+pointer:
+  LSB
+| LSP
+| LFP
+/*x: helper rules(arm) */
+offset:
+ /* empty */ { $$ = 0; }
+| '+' con    { $$ = $2; }
+| '-' con    { $$ = -$2; }
+/*e: helper rules(arm) */
 /*s: opt rules */
 comma:
   /* empty */
@@ -563,7 +564,7 @@ oreg:
 /*x: misc rules */
 ioreg:
   ireg
-| con '(' sreg ')'
+| con '(' regi_nosp ')'
  {
   $$ = nullgen;
   $$.type = D_OREG;
@@ -572,7 +573,7 @@ ioreg:
  }
 /*x: misc rules */
 ireg:
- '(' spreg ')'
+ '(' regi ')'
  {
   $$ = nullgen;
   $$.type = D_OREG;
@@ -585,8 +586,8 @@ nireg:
 | ireg
 /*x: misc rules */
 reglist:
-  spreg           { $$ = 1 << $1; }
-| spreg '-' spreg
+  regi           { $$ = 1 << $1; }
+| regi '-' regi
  {
   int i;
   $$=0;
@@ -595,7 +596,7 @@ reglist:
   for(i=$3; i<=$1; i++)
       $$ |= 1<<i;
  }
-| spreg comma reglist { $$ = (1<<$1) | $3; }
+| regi comma reglist { $$ = (1<<$1) | $3; }
 /*x: misc rules */
 creg:
   LCREG

@@ -13,7 +13,7 @@ struct Htab h[NSYM];
 bool	debug[256];
 /*e: global debug */
 /*s: global hash */
-// hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
+// hash<string, ref_own<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 /*e: global hash */
 /*s: global Dlist */
@@ -45,7 +45,7 @@ Io*	iofree = I;
 Io*	ionext;
 /*e: global ionext */
 /*s: global iostack */
-// list<Io> (next = Io.link)
+// list<ref_own<Io> (next = Io.link)
 Io*	iostack = I;
 /*e: global iostack */
 /*s: global lineno */
@@ -74,6 +74,7 @@ char*	pathname;
 long	pc;
 /*e: global pc */
 /*s: global peekc */
+// option<Rune>, None = IGN
 int	peekc = IGN;
 /*e: global peekc */
 /*s: global symcounter */

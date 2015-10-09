@@ -52,58 +52,81 @@ enum opcode
     // ---------------------------------------------------------
     // Arithmetic and logic opcodes
     // ---------------------------------------------------------
-    /*s: logic opcodes */
+    /*s: [[Opcode]] cases, logic opcodes */
     AAND,
     AORR,
     AEOR,
-    /*x: logic opcodes */
+    /*x: [[Opcode]] cases, logic opcodes */
     ABIC,
-    /*e: logic opcodes */
-    /*s: add/sub opcodes */
+    /*e: [[Opcode]] cases, logic opcodes */
+    /*s: [[Opcode]] cases, add/sub opcodes */
     AADD,
     ASUB,
-    /*x: add/sub opcodes */
+    /*x: [[Opcode]] cases, add/sub opcodes */
     ARSB,
     AADC,
     ASBC,
     ARSC,
-    /*e: add/sub opcodes */
-    /*s: mul/div/mod opcodes */
+    /*e: [[Opcode]] cases, add/sub opcodes */
+    /*s: [[Opcode]] cases, mul/div/mod opcodes */
     AMUL,
     ADIV, // VIRTUAL, transformed to call to _div
     AMOD, // VIRTUAL, transformed to call to _mod
-    /*x: mul/div/mod opcodes */
+    /*x: [[Opcode]] cases, mul/div/mod opcodes */
     AMULL,
     AMULAL,
     AMULLU,
     AMULALU,
-    /*x: mul/div/mod opcodes */
+    /*x: [[Opcode]] cases, mul/div/mod opcodes */
     AMULA,
-    /*x: mul/div/mod opcodes */
+    /*x: [[Opcode]] cases, mul/div/mod opcodes */
     AMULU,
     ADIVU, // VIRTUAL, transformed to call to _divu
     AMODU, // VIRTUAL, transformed to call to _modu
-    /*e: mul/div/mod opcodes */
-    /*s: bitshift opcodes */
-    ASRL,
-    ASRA,
+    /*e: [[Opcode]] cases, mul/div/mod opcodes */
+    /*s: [[Opcode]] cases, bitshift opcodes */
     ASLL,
-    /*e: bitshift opcodes */
+    ASRL,
+    /*x: [[Opcode]] cases, bitshift opcodes */
+    ASRA,
+    /*e: [[Opcode]] cases, bitshift opcodes */
     // works with the branching opcodes
-    /*s: comparison opcodes */
+    /*s: [[Opcode]] cases, comparison opcodes */
+    ACMP,
+    /*x: [[Opcode]] cases, comparison opcodes */
     ATST,
     ATEQ,
-    ACMP,
-    /*x: comparison opcodes */
+    /*x: [[Opcode]] cases, comparison opcodes */
     ACMN,
-    /*e: comparison opcodes */
+    /*e: [[Opcode]] cases, comparison opcodes */
     // ---------------------------------------------------------
-    // Branching opcodes
+    // Memory MOV opcodes
     // ---------------------------------------------------------
-    /*s: branching opcodes */
-    AB,
-    ABL, // branch and link, =~ CALL
-    /*x: branching opcodes */
+    /*s: [[Opcode]] cases, mov opcodes */
+    AMOVW, // VIRTUAL, transformed in load and store instructions
+    AMOVB,
+    AMOVBU,
+    AMOVH,
+    AMOVHU,
+    /*x: [[Opcode]] cases, mov opcodes */
+    AMVN,
+    /*x: [[Opcode]] cases, mov opcodes */
+    AMOVM,
+    /*e: [[Opcode]] cases, mov opcodes */
+    /*s: [[Opcode]] cases, swap opcodes */
+    ASWPW,
+    ASWPBU,
+    /*e: [[Opcode]] cases, swap opcodes */
+    // ---------------------------------------------------------
+    // Control flow opcodes
+    // ---------------------------------------------------------
+    /*s: [[Opcode]] cases, branching opcodes */
+    AB,  // =~ JMP
+    /*x: [[Opcode]] cases, branching opcodes */
+    ABL, // =~ CALL, Branch and Link
+    /*x: [[Opcode]] cases, branching opcodes */
+    ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
+    /*x: [[Opcode]] cases, branching opcodes */
     /* 
      * Do not reorder or fragment the conditional branch 
      * opcodes, or the predication code will break 
@@ -124,40 +147,19 @@ enum opcode
     ABGT,
     ABLE,
     //ABAL? (always) done via AB, ABNV (never) done via ANOP probably
-    /*x: branching opcodes */
-    ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
-    /*e: branching opcodes */
-    // ---------------------------------------------------------
-    // Memory MOV opcodes
-    // ---------------------------------------------------------
-    /*s: mov opcodes */
-    AMOVW, // VIRTUAL, transformed in load and store instructions
-    /*x: mov opcodes */
-    AMOVB,
-    AMOVBU,
-    AMOVH,
-    AMOVHU,
-    /*x: mov opcodes */
-    AMVN,
-    /*x: mov opcodes */
-    AMOVM,
-    /*e: mov opcodes */
-    /*s: swap opcodes */
-    ASWPW,
-    ASWPBU,
-    /*e: swap opcodes */
+    /*e: [[Opcode]] cases, branching opcodes */
     // ---------------------------------------------------------
     // Syscall
     // ---------------------------------------------------------
-    /*s: interrupt opcodes */
+    /*s: [[Opcode]] cases, interrupt opcodes */
     ASWI, // syscall
-    /*x: interrupt opcodes */
+    /*x: [[Opcode]] cases, interrupt opcodes */
     ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
-    /*e: interrupt opcodes */
+    /*e: [[Opcode]] cases, interrupt opcodes */
     // ---------------------------------------------------------
     // Float opcodes
     // ---------------------------------------------------------
-    /*s: float mov opcodes */
+    /*s: [[Opcode]] cases, float mov opcodes */
     AMOVWD,
     AMOVWF,
     AMOVDW,
@@ -166,8 +168,8 @@ enum opcode
     AMOVDF,
     AMOVF,
     AMOVD,
-    /*e: float mov opcodes */
-    /*s: float arithmetic opcodes */
+    /*e: [[Opcode]] cases, float mov opcodes */
+    /*s: [[Opcode]] cases, float arithmetic opcodes */
     ACMPF,
     ACMPD,
     AADDF,
@@ -180,33 +182,33 @@ enum opcode
     ADIVD,
     ASQRTF,
     ASQRTD,
-    /*e: float arithmetic opcodes */
+    /*e: [[Opcode]] cases, float arithmetic opcodes */
     // ---------------------------------------------------------
     // Pseudo opcodes
     // ---------------------------------------------------------
-    /*s: pseudo opcodes */
+    /*s: [[Opcode]] cases, pseudo opcodes */
     ATEXT,
     AGLOBL,
-    /*x: pseudo opcodes */
+    /*x: [[Opcode]] cases, pseudo opcodes */
     ADATA,
     AWORD,
-    /*x: pseudo opcodes */
+    /*x: [[Opcode]] cases, pseudo opcodes */
     AEND,
-    /*x: pseudo opcodes */
+    /*x: [[Opcode]] cases, pseudo opcodes */
     ANAME,
-    /*x: pseudo opcodes */
+    /*x: [[Opcode]] cases, pseudo opcodes */
     AHISTORY,
-    /*x: pseudo opcodes */
+    /*x: [[Opcode]] cases, pseudo opcodes */
     ACASE,
     ABCASE,
-    /*x: pseudo opcodes */
+    /*x: [[Opcode]] cases, pseudo opcodes */
     ASIGNAME,
-    /*x: pseudo opcodes */
+    /*x: [[Opcode]] cases, pseudo opcodes */
     AGOK,
-    /*x: pseudo opcodes */
+    /*x: [[Opcode]] cases, pseudo opcodes */
     ADYNT,
     AINIT,
-    /*e: pseudo opcodes */
+    /*e: [[Opcode]] cases, pseudo opcodes */
 
     ALAST,
 };

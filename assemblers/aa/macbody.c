@@ -55,7 +55,7 @@ getsym(void)
         unget(c);
         break;
     }
-    *cp = 0;
+    *cp = '\0';
     if(cp > symb+NSYMB-4)
         yyerror("symbol too large: %s", symb);
     return lookup();
@@ -180,6 +180,7 @@ struct
 /*e: global mactab */
 
 /*s: function domacro */
+/// main -> assemble -> yyparse -> yylex -> <>
 void
 domacro(void)
 {

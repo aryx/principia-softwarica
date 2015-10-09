@@ -27,7 +27,7 @@ struct	Gen
     short	reg;
 
     /*s: [[Gen]] other fields */
-    // option<ref<Sym>>, Sym reference owned by hash
+    // option<ref<Sym>>, ref owned by hash
     Sym*	sym;
     /*x: [[Gen]] other fields */
     // option<enum<sym_kind>>, None = N_NONE
@@ -45,7 +45,10 @@ extern	char*	thestring;
 extern	Biobuf	obuf;
 
 // for a.y
+/*s: signature yylex */
+// unit -> (enum<token_code> | -1 (EOF) | Rune)
 long	yylex(void);
+/*e: signature yylex */
 /*s: signature outcode(arm) */
 void	outcode(int opcode, int cond, Gen* opd1, int reg, Gen* opd3);
 /*e: signature outcode(arm) */
