@@ -32,11 +32,13 @@
 % - have a main.c instead of putting everything in lex.c
 
 %thx to this manual, better understand assembly and assembler:
-% - an object file is really a module, the simplest/lowest module abstraction
-% - calling conventions, they are really that on ARM: conventions
+% - an object file is really a module: the simplest/lowest-level mod abstraction
+% - calling conventions, they are really that on ARM, conventions
 % - can actually understand the assembly code in Kernel.nw :) param1+0(FP)
 % - the difference betweeen GLOBL and DATA, declaration vs definition
-% - TODO bit shift logic vs arith
+% - TODO bit shift logic vs arith?
+% - TODO MOVs and unsigned?
+% - TODO swap
 % - TODO -fpic?
 
 %history LP-ization:
@@ -89,7 +91,7 @@
 \allcodefalse
 % ifallcode is used for:
 %  - forward decl, func decl, extern decl, #ifdef, pragmas (stuff in Extra.nw)
-%  - misc opcodes (e.g. MVN)
+%  - STILL? misc opcodes (e.g. MVN)
 %  - misc optional syntactic elements (e.g. commas)
 %  - grammar literate boilerplate
 
@@ -178,7 +180,7 @@ and has to be written in assembly.
 
 Here are a few questions we hope this book will answer:
 \begin{itemize}
-\item What is the list of all low-level instructions?
+\item What is the list of all assembly instructions?
 What a typical computer can do?
 
 \item What are the essential features of an assembler? How they help
@@ -187,6 +189,7 @@ over writing directly machine code?
 \item What are the most important assembly constructs? How
 can they be used to implement high-level constructs in languages
 such as C?
+\n labels is here, and it's assembly only, it's not in Machine.nw
 %tags: compiler:
 
 \item How function calls are implemented? What is a frame?
@@ -208,6 +211,8 @@ between an object file and an executable?
 %tags: turing: fundamental opcodes
 %tags: ocaml: to give a hint on how rewriting C in OCaml could improve things
 %tags: real-world: to relate to other assemblers
+%tags: compiler: give idea of what 5c does
+%tags: self-ref: opcodes to implement assembler itself!
 
 \section{The \plan ARM assembler, [[5a]]}
 
@@ -256,6 +261,7 @@ less code in total and also to simpler code.
 % - http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
 %   with https://news.ycombinator.com/item?id=8815778
 %   and http://www.reddit.com/r/programming/comments/2riayd/golang_is_trash/
+\l say also Asm5 is not _direct_ representation of underlying ARM machine?
 
 \section{Other assemblers}
 
@@ -315,19 +321,23 @@ on real machines.
 
 \l lots of other assemblers, see the comment in the .tex
 %other:
+% - llvm has one? well the IR of llvm is a kind of assembler, but portable
 % - http://www.compilers.de/vasm.html (also vbcc and vlink)
 %   recent fork: http://sun.hasenbraten.de/vasm/, used in amiga tutorial,
-% - llvm has one? well the IR of llvm is a kind of assembler, but portable
+%mini:
 % - fbas, use lex and yacc, 720 LOC, but looks really simplified
-% - pep/8 assembler?
 % - https://github.com/trillek-team/computer-toolkit include
 %   a toy asm, linker, and even a toy C compiler
 % - see also hex2c? the assembler in subc-2014, ...
+%education:
+% - pep/8 assembler?
 % - web based assembler+debugger, teaching purpose: http://yasp.me/
+%research:
 % - piton, a proven assembler in boyer moore
+% - TAL typed assembly language, 
+% - Coq macro assembler
 %see also http://www.tldp.org/HOWTO/Assembly-HOWTO/other.html
 
-\n more recently: TAL typed assembly language, Coq macro assembler, LLVM IR?
 
 \section{Getting started}
 \label{sec:getting-started}
@@ -351,14 +361,14 @@ ARM assembly program and generates the [[hello.5]] ARM {object file}.
 \n define object file? partly defined before in motivations
 Line 3 then {links} the object file and generates the final 
 ARM binary executable [[hello]].
-Line 4, which assumes you are under an ARM machine (e.g. a Raspberry Pi)
+Line 4, which assumes you are under an ARM machine (e.g. a Raspberry Pi),
 {launchs} the program.
 
-Note that it is easy under \plan to {cross compile} from another architecture:
+Note that it is easy under \plan to {cross compile} from another architecture;
 you can use the same commands, [[5a]], [[5l]], etc.
 \l because magic /bin, and also because special 5 convention
-To play with [[5a]] under an x86 machine you just need
-after the linking step to use the ARM emulator [[5i]] instead:
+To play with [[5a]] under an x86 machine you just need then
+after the linking step to use the ARM emulator [[5i]]:
 
 \begin{verbatim}
 ...
@@ -662,6 +672,7 @@ Most of the parameters take 4 bytes except the [[vlong]] which takes 8 bytes.
 \l pwrite is the syscall, not write, vlong seek is for protocol atomicity, 2in1
 
 \subsection{The program}
+\label{sec:hello-program}
 
 We now have enough background to present the [[helloworld.s]]
 program:
@@ -921,6 +932,8 @@ For the ARM, [[SB]] is related to the machine register [[R12]].
 variables in the stack.
 \l also called auto, but local maybe bad name; it is also for callee args
 For the ARM, [[SP]] is related to the (real) stack pointer register [[R13]].
+\l apparently it points to the top of the local stack frame! so offset
+\l must be negative
 
 \item [[FP]], the {\em frame pointer}, used to access the arguments
 of the procedure in the stack.
@@ -1109,8 +1122,8 @@ counter to the value in the link register via: [[B (R14)]].
 %
 If the function is not a leaf, then the value in [[R14]]
 must be saved somewhere, in the stack, before the function calls
-another function via [[BL]] which would overwrite [[R14]].
-See the \book{Emulator} for more information on the ARM. 
+another function via [[BL]] which would overwrite [[R14]]
+(see the \book{Emulator} for more information on the ARM and [[BL]]). 
 %
 Non-leaf functions are the reason the [[TEXT]] pseudo-instruction
 allocates one more word than its second operand, e.g. 24
@@ -1134,7 +1147,7 @@ using [[BL]] Line~32.
 %
 The actual machine instructions generated for the [[TEXT]] pseudo-instruction
 depends on whether the function is a leaf. 
-The same is true for the [[RET]] instruction, Line~33 and 45,
+The same is true for [[RET]], Line~33 and 45,
 which is called a {\em virtual instruction}.
 \l we call it that way? or asm.pdf does?
 Indeed, the ARM does not have any [[RET]] instruction.
@@ -1143,14 +1156,14 @@ Figure~\ref{fig:virtual-text-ret}
 describes roughly what machine code is generated
 for the pseudo and virtual instructions [[TEXT]] and [[RET]]
 of a simple procedure [[foo]], depending on whether this
-procedure is a leaf or not:
+procedure is a leaf or not.
 
 \begin{figure}[!]\centering
 \begin{verbatim}
 TEXT foo(SB), $0   MOVW R14, 0(SP)          
-                   SUB SP, $4, SP
+                   SUB $4, SP, SP
  ...               ...                      ...
-                   ADD SP, $4, SP           
+                   ADD $4, SP, SP           
  RET               B 0(SP)                  B (R14)
 ----------------  -----------------------  ------------------
   assembly code    machine code non-leaf    machine code leaf
@@ -1158,6 +1171,7 @@ TEXT foo(SB), $0   MOVW R14, 0(SP)
 \caption{Machine code for pseudo/virtual instructions [[TEXT]] and [[RET]]}
 \label{fig:virtual-text-ret}
 \end{figure}
+\t but SP is virtual above? or R13?
 \l actually for TEXT it is a single MOVW.?? R14, #-4(R13) 
 \l  and for RET it is MOVW.P #4(R13), R15
 \l and actually it's ADD 0, R14, R15 instead of B (R14) (5l opti?)
@@ -1293,7 +1307,7 @@ The operands of [[DATA]] are in order:
 \begin{enumerate}
 \item the symbol of the global,
 possibly with an offset (here [[+0]]), and as always for references to
-globals or procedures the [[(SB)]] base
+globals or procedures the [[(SB)]] suffix
 
 \item a slash followed
 by an integer between 1 and 8 representing the size in
@@ -1367,7 +1381,8 @@ We have covered already in Section~\ref{sec:helloworld}
 many features of the assembly language Asm5,
 the language used by the input files of the assembler [[5a]].
 In this section we summarize those features and
-give a more systematic description of Asm5.
+give a more systematic description of Asm5, which should
+help solidify your understanding of Asm5.
 We recommend to read though [[assemblers/docs/asm.pdf]] for more
 information.
 \n but not really more complete information, my tutorial is better
@@ -1397,8 +1412,15 @@ to 8 characters or less.
 opcodes ([[ADD]]), 
 registers ([[R0]]), 
 pseudo-instructions ([[TEXT]]) and 
-pseudo registers ([[PC]])
+pseudo registers ([[PC]]).
 \l keywords
+
+\begin{quote}
+  ``Instructions, registers, and assembler directives are always in
+  UPPER CASE to remind you that assembly programming is a fraught
+  endeavor.'' - Rob Pike
+\end{quote}
+\n https://golang.org/doc/asm (cited also from golang is trash article)
 
 \item {\em identifiers} in lowercase, used for 
 symbols ([[_main]]) and 
@@ -1408,15 +1430,19 @@ labels ([[later]])
 \item {\em comments}, e.g. [[/* not reached */]], [[// comment]].
 They use the same syntax than C comments and are ignored by [[5a]].
 
-\item {\em spaces} and {\em tabs}, which are also ignored by [[5a]]
+\item {\em spaces} and {\em tabs}, which are also ignored by [[5a]].
+By convention though it is common to indent with a tab most
+instructions except the pseudo instructions like [[TEXT]] which
+are kept in the first column.
 
 \item {\em newlines}, which are actually internally transformed in semicolons.
-The semicolon is an instruction {separator} in Asm9. So, one can then either 
+The semicolon is an instruction {terminator} in Asm9. So, one can then either 
+\n yep terminator, not separator, see inst grammar rule
 write multiple instructions on different lines,
 or multiple instructions on the same line but separated by an explicit [[;]].
 
 \item {\em operators}, e.g. \$, [[()]], [[/]], [[+]], [[;]], [[<>]], etc,
-which have different meanings depending on the context
+which can have different meanings depending on the context
 
 \end{itemize}
 \l also cpp lexical elements
@@ -1513,10 +1539,13 @@ e.g. \$[[hello(SB)]], which means the address of the symbol
 
 \end{itemize}
 
-Note that Asm9 uses a left-to-right assignment syntax for moves,
+Note that Asm9 uses a left-to-right assignment syntax. For moves,
 \l AT&T syntax, normal
-so [[MOVW (R1), R2]] means moving the content at
-the address denoted by [[R1]] into [[R2]].
+[[MOVW (R1), R2]] means moving the content at
+the address denoted by [[R1]] into [[R2]]. The same
+is true for other instructions such as [[ADD]] where the
+destination register is the last operand and the sources the two
+first operands.
 
 \t note TEXT has actually an operand and it is a memory reference :)
 \l take some examples, e.g. start-KZERO(SB), and explain? see comment in .tex
@@ -1852,13 +1881,13 @@ of different kinds of identifiers, for instance labels.
 During lexing, when a new identifier is encountered, a new
 symbol in the {\em symbol table} [[hash]] is created. 
 %
-During parsing, once the identifier is recognized as
+During parsing, once an identifier is recognized as
 a label, because it is followed by a colon token,
 its {\em type} in the symbol table is changed to a label type, 
 and its value is set to be the current value of the global [[pc]].
 %
 During the second pass, any reference to this label 
-can be resolved by looking at the value of the label in the symbol
+can be resolved by simply looking at the value of the label in the symbol
 table.
 
 \n talk about cclean? maybe not that important, a big ugly, no need AEND
@@ -1906,8 +1935,7 @@ for instance add line information in the object code.
 One can then know, when debugging a binary program,
 to which original line and which source file an
 instruction in the binary comes from, or what is the
-original name of the procedure containing a specific
-machine instruction.
+original name of the procedure containing this instruction.
 %
 Chapter~\ref{chap:advanced} presents other
 assembly features which we did not present 
@@ -1965,7 +1993,7 @@ defined in [[include/arch/arm/5.out.h]] by the following type:
 
 <<enum opcode(arm)>>=
 // coupling: with 5c/enam.c
-enum opcode
+enum Opcode
 {
     AXXX,
 
@@ -1977,8 +2005,6 @@ enum opcode
     <<[[Opcode]] cases, add/sub opcodes>>
     <<[[Opcode]] cases, mul/div/mod opcodes>>
     <<[[Opcode]] cases, bitshift opcodes>>
-    // works with the branching opcodes
-    <<[[Opcode]] cases, comparison opcodes>>
     // ---------------------------------------------------------
     // Memory MOV opcodes
     // ---------------------------------------------------------
@@ -1987,6 +2013,7 @@ enum opcode
     // ---------------------------------------------------------
     // Control flow opcodes
     // ---------------------------------------------------------
+    <<[[Opcode]] cases, comparison opcodes>>
     <<[[Opcode]] cases, branching opcodes>>
     // ---------------------------------------------------------
     // Syscall
@@ -2005,7 +2032,6 @@ enum opcode
     ALAST,
 };
 @
-\t rename Opcode? use uppercase for enum too?
 \l why Axxx? Assembly?
 %old: was called 'enum as'
 %note: I reordered a lot the original opcodes. Note that it can be dangerous
@@ -2026,7 +2052,8 @@ enum opcode
 %  whole plan9 and see how much AXXX is used
 
 The opcodes follow closely the instruction set (ISA) of the ARM
-(see the \book{Emulator}), e.g. [[ASUB]] for the [[SUB]] machine instruction.
+(see the \book{Emulator}) and are all prefixed by an [[A]].
+For instance, [[ASUB]] corresponds to the [[SUB]] machine instruction.
 They have been divided in different categories: 
 arithmetic and logic, 
 memory,
@@ -2061,8 +2088,8 @@ The following type introduces some convenient names for some of the
 {special registers} we have seen before:
 
 <<enum regxxx(arm)>>=
-enum registr {
-    <<[[regxxx]] compiler conventions cases>>
+enum Register {
+    <<[[Register]] compiler conventions cases>>
     REGSB =		12, // static base
 
     REGSP =		13,
@@ -2121,6 +2148,7 @@ struct	Gen
     // enum<operand_kind>
     short	type;
 
+    // switch on Gen.type
     union {
         long	offset; // offset or generic value
         double	dval;
@@ -2155,7 +2183,7 @@ It is a [[short]] but really it can only take values of the
 we define below:
 
 <<enum operand_kind(arm)>>=
-enum operand_kind {
+enum Operand_kind {
     D_NONE,
 
     D_CONST,
@@ -2163,7 +2191,7 @@ enum operand_kind {
     D_FCONST,
 
     D_REG,
-    <<operand_kind cases>>
+    <<[[Operand_kind]] cases>>
 };
 @
 \l why Dxxx prefix? 
@@ -2201,14 +2229,22 @@ For indirect operands, e.g. [[(R1)]],
 or indirect with offset operands, e.g. [[4(R1)]]
 the following new operand kind is used:
 
-<<operand_kind cases>>=
+<<[[Operand_kind]] cases>>=
 D_OREG,
 @
 \l oreg for offset register?
 
 In those cases the register is encoded in the [[Gen.reg]] field,
 and the optional offset in [[Gen.offset]] (hence the name).
-\l an example follow below
+%EXAMPLE:
+Here is the C value of the operand mentioned above:
+\begin{verbatim}
+// operand value for: 4(R1)
+{ offset = 4;          // 4
+  reg    = 1;          // R1
+  type = D_OREG;       // (...)
+}
+\end{verbatim}
 \l offset is abused for many things, see the comment in .tex
 % - offset
 % - constant
@@ -2223,7 +2259,6 @@ and the optional offset in [[Gen.offset]] (hence the name).
 % see the many uses cases of offset in zaddr() switch about operand_kind ...
 %mimic what is in union token too
 
-%EXAMPLE value here?
 
 \section{Instructions}
 \label{sec:outcode-signature}
@@ -2252,8 +2287,7 @@ outcode(ASUB, Always, &operand1, 2, &operand3);
 
 The [[Always]] constant and the second parameter of [[outcode()]]
 are used to represent the {\em conditional execution} of an instruction.
-It is an ARM feature we will explain later in Section~\ref{sec:cond-exec}
-(and in the \book{Emulator}).
+It is an ARM feature we will explain later in Section~\ref{sec:cond-exec}.
 %
 The fourth parameter is an integer and not a [[Gen*]] because
 when ARM instructions have 3 operands, the middle one is always
@@ -2372,16 +2406,13 @@ a token can hold:
  // and enum<registr> for LREG/...
  // and enum<cond>    for LCOND
  // and ...
- long   lval;
-
+ long   lval;    // for LCONST/LARITH/LREG/LCOND/...
  double dval;    // for LFCONST
  char   sval[8]; // for LSCONST
- Sym    *sym;    // for LNAME/LLAB/LVAR
 
  <<union declaration other fields(arm)>>
 }
 @
-\t mutual ref with sym here where sym has itself a type that is the token_kind
 \l could use NSNAME here instead of char sval[8] ? and at a few other places?
 \l note that 8, here is the restriction on 8bytes strings
 
@@ -2464,9 +2495,9 @@ struct	Sym
     // ---------------------------------------------------------
     long	value; 
 
-    <<[[Sym]] identifier value fields>>
-    <<[[Sym]] macro value fields>>
-    <<[[Sym]] lexeme value fields>>
+    <<[[Sym]] identifier fields>>
+    <<[[Sym]] macro fields>>
+    <<[[Sym]] token fields>>
 
     // ---------------------------------------------------------
     // Extra
@@ -2484,6 +2515,8 @@ be represented by the following [[Sym]]:
 [[{ .name = "later"; .value = 2; ... }]] as
 the label is defined after the 2nd instruction in the program.
 \l virtual PC!
+
+
 
 The symbol table itself is represented by a global {hash table}
 called [[hash]]. It makes sense to use a global because
@@ -2676,12 +2709,28 @@ is used to also store the token code of the identifier
 (in addition to the enumeration value of the opcode or register
 stored in [[Sym.value]]):
 
-<<[[Sym]] lexeme value fields>>=
+<<[[Sym]] token fields>>=
 //enum<token_code> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
 ushort	type;
 @
 \l see also itab[i].type and itab[i].value
 \l used by?
+
+
+
+[[Sym]] is part of the token union we have seen in the previous
+sections. Indeed the token value for 
+symbols ([[LNAME]]), 
+labels ([[LLAB]]), 
+and symbolic constants ([[LVAR]])
+is a reference to its [[Sym]] in the symbol table:
+
+<<union declaration other fields(arm)>>=
+Sym    *sym;    // for LNAME/LLAB/LVAR
+@
+\t mutual ref with sym here where sym has itself a type that is the token_kind
+
+
 
 The function below is called by [[lookup()]] when
 a new symbol is created to reset some of its fields:
@@ -3223,11 +3272,6 @@ pinit(char *f)
 int i;
 Sym *s;
 @
-
-<<[[pinit()]] initialisations>>=
-<<[[pinit]] symcounter and h initialisation>>
-<<[[pinit]] hash macro field reset>>
-@
 \fi
 
 The [[lineno]] global tracks the current line number and will be
@@ -3240,7 +3284,8 @@ long	lineno;
 @
 \t Is it after #include expansion line number?
 %less: rename glineno?
-%ocaml: could be embedded in the token, so no need global
+%ocaml: could be embedded in the token, so no need global, no need getc
+% vs GETC, unget, etc. Less mess.
 
 The calls to [[newio()]] and [[newfile()]] will be explained below.
 
@@ -3253,6 +3298,7 @@ preprocessor, which would factorize code with [[5c]],
 but that would be slower because of the need to fork
 another process in the assembling pipeline.
 \n meh, better to separate concern and have cpp in a different program?
+\l actually they factorized a bit originally bug was ugly lexbody, macbody, etc
 }.
 %
 Because [[5a]] supports [[#include]], the input assembly file can include
@@ -3535,11 +3581,12 @@ pop:
 \plan uses unicodes so characters are actually integers.
 A few constants are used to represent special characters;
 they are negatives to not conflict with regular unicode characters:
+\t MEH
 
 <<constant EOF>>=
 #define	EOF		(-1)
 @
-
+\t MEH
 
 %Note that even if [[5a]] accepts unicode characters, [[GETC()]]
 %returns only basic characters. The type of [[Fi.p]] and [[Io.b]]
@@ -3585,7 +3632,7 @@ long	yylex(void);
 to store the {\em value} of the token
 which is a union type (see Section~\ref{sec:token}).
 This value can then be retrieved via the \$$n$ notation
-in the Yacc actions.
+in the Yacc actions as we will see in Chapter~\ref{chap:parsing}.
 %
 Again, see~\cite{lexyacc} for more information on Yacc.
 %ocaml: should use lex. Simpler. But maybe to avoid bootstrapping issues?
@@ -3597,7 +3644,7 @@ Again, see~\cite{lexyacc} for more information on Yacc.
 reading characters (with [[GETC()]]) 
 in a loop (with the label [[l0:]] and [[goto]] below),
 using a big [[switch]] on the current character read ([[c]])
-to transition states (using [[goto]]s again as we will see), 
+to transition states (using more labels and [[goto]]s as we will see), 
 until a full token is formed:
 
 <<function yylex>>=
@@ -4036,7 +4083,7 @@ case '.':
 @
 \l why not simply goto talph for '.'? avoid duplicate the cp = symb; ...
 
-\section{Characters (and escape sequences)}
+\section{Characters and escape sequences}
 \l unicode?
 
 Asm5 allows {\em escape sequences}, which are started with
@@ -4640,13 +4687,13 @@ for(i=0; i<nDlist; i++)
         dodefine(Dlist[i]);
 @
 
-<<[[Sym]] macro value fields>>=
+<<[[Sym]] macro fields>>=
 //option<string>, for '#define FOO xxx' expansion
 char*	macro;
 @
 \label{sec:macro-sym-field}
 
-<<[[pinit]] hash macro field reset>>=
+<<[[pinit]] initialisations>>=
 for(i=0; i<NHASH; i++)
     for(s = hash[i]; s != S; s = s->link)
         s->macro = nil;
@@ -5472,11 +5519,11 @@ Yacc generates from this grammar the [[yyparse()]] parsing function
 which is called by [[assemble()]] and which internally
 calls [[yylex()]].
 %
-We assume you know how to read a Yacc grammar.
-We recommend~\cite{lexyacc} to learn more about Yacc.
-You can also read the original Yacc paper at [[generators/docs/yacc.pdf]]
+We assume you know how to read a Yacc grammar, otherwise
+read~\cite{lexyacc}
+(you can also read the original Yacc paper at [[generators/docs/yacc.pdf]]
 in our \plan repository, or read our \book{Code Generators} to fully
-understand how Yacc works.
+understand how Yacc works).
 
 \section{Overview}
 
@@ -5500,11 +5547,13 @@ The [[%union]] and [[%token]] {directives} have been
 already described in Section~\ref{sec:token}.
 The [[%type]] declarations will be described gradually in this chapter. 
 The priority declarations are used only for the constant
-expressions feature and will be described in Section~\ref{sec:constant-expr}.
+expressions (an advanced Asm5 feature) and will be described in
+Section~\ref{sec:constant-expr}.
 
-The grammar part is the most important one.
-It defines the different parsing {\em rules}
-which will be presented gradually in the following sections:
+The grammar part at the end is the most important one.
+It contains the different parsing {\em rules}
+which will be presented gradually in this chapter:
+\n and also some in other features chapter
 
 <<grammar(arm)>>=
 <<prog rule(arm)>>
@@ -5520,14 +5569,13 @@ which will be presented gradually in the following sections:
 <<opt rules>>
 <<misc rules>>
 @
-\l actually not context free, parsing a file modify the kind
-\l of some tokens, e.g. labels, lval.
+\l actually not context free; parsing a file modify the kind of toks (LLAB)
 
 Essentially, an assembly program is made of a set lines containing
-instructions or labels. Instructions are made of an opcode followed by
-0, 1, 2 or 3 operands. Each operand can either be a register, a
-constant, an address, or certain combinations of the previous elements
-(e.g. a register and constant offset).
+instructions or labels. Instructions are made of an opcode followed 
+possibly by a few operands. Each operand can either be a register, a
+constant, a symbol, or certain combinations of the previous elements
+(e.g. a register and constant offset forming an address).
 
 More formally, an Asm5 [[prog]]ram is either an empty file or a
 set of [[line]]s:
@@ -5539,8 +5587,8 @@ prog:
 \l FIGURE with derivation where see set of lines?
 
 A [[line]] can be an [[inst]]ruction followed by a semicolon
-(remember that the lexer transformed newlines in semicolons
-in Section~\ref{sec:semicolon}):
+(remember that the lexer transforms newlines in semicolons
+as explained in Section~\ref{sec:semicolon}):
 \l so can either pack in one line with ';' or use newline (haskell spirit :) )
 
 <<line rule(arm)>>=
@@ -5549,7 +5597,7 @@ line:
 @
 
 It can also be empty, or contain the special [[error]] Yacc
-token (used for error recovery, see~\cite{lexyacc}):
+token used for error recovery (see~\cite{lexyacc}):
 \l to got until next ; (that is newline)?
 
 <<line rule(arm)>>=
@@ -5559,15 +5607,18 @@ token (used for error recovery, see~\cite{lexyacc}):
 
 In the following section we will focus on the [[inst]]ruction
 rule and see the different opcodes of Asm5.
-We will also try to discuss how those opcodes can be used
-to implement higher-level constructs of languages such as C.
-\l which will also help to understand them, why they are useful,when to use them
 In Section~\ref{sec:label-def} we will see that a line
 can also contain label definitions.
 Then, in Section~\ref{sec:operands-grammar} we will focus on the
-operands of Asm5. We will then explore a few advanced
-features of Asm5 and conclude this chapter by discussing
-the generated code for [[yyparse()]].
+operands of Asm5. 
+We will then explore a few advanced features of Asm5.
+%compiler:
+While presenting the syntax for the different features of Asm5
+in this chapter, we will also try to discuss how those features can be used
+to implement higher-level constructs of languages such as C.
+\l which will also help to understand them, why they are useful,when to use them
+We will conclude this chapter by discussing the generated code
+for [[yyparse()]] by Yacc.
 
 \section{Instructions}
 
@@ -5583,6 +5634,8 @@ the \book{Emulator}.
 
 \subsection{Arithmetic and logic}
 
+%turing: fundamental!
+
 \subsubsection{Logic}
 
 Here are the boolean logic opcodes of Asm5,
@@ -5592,7 +5645,7 @@ overviewed in Section~\ref{sec:opcode}:
 <<[[Opcode]] cases, logic opcodes>>=
 AAND,
 AORR,
-AEOR,
+AEOR, // aka XOR
 @
 \n not exactly the ARM order, e.g. I prefer to put closer AAND and AORR
 
@@ -5606,22 +5659,24 @@ the symbol table [[hash]] as explained in Section~\ref{sec:sym}):
 "EOR",		LARITH,	AEOR,
 @
 
-Here are some examples of Asm5 boolean instructions:
+The logic instructions take either 2 or 3 operands,
+mostly registers. Usually the first two operands are combined
+and the result stored in the third operand.
+Here are some examples:
 \begin{verbatim}
-AND $0x0f, R1, R2
-OR  $0xff, R2 // <=> OR $0xff, R2, R2
+AND $0x0f, R1, R2 // R2 = R1 & 0x0f;
+ORR  $0xff, R2    // <=> ORR $0xff, R2, R2
 \end{verbatim}
 %$
 \l if middle register is NONE then ADD X1, X2 -> ADD X1, X2, X2 (plus=)
 
-The boolean logic instructions have the same syntax than other
-arithmetic instructions; they take either 2 or 3 operands,
-mostly registers:
+Logic instructions have the same syntax than
+arithmetic instructions in Asm5 and so use the same grammar rule:
 
 <<inst rule(arm)>>=
 inst:
 /*
- * AND/OR/ADD/SUB/...
+ * AND/ORR/ADD/SUB/...
  */
   LARITH cond imsr ',' regi ',' reg { outcode($1, $2, &$3, $5, &$7); }
 | LARITH cond imsr ',' reg          { outcode($1, $2, &$3, R_NONE, &$5); }
@@ -5631,33 +5686,45 @@ inst:
 %old: spreg -> regi
 \l arith operator of Machine.nw, but also SLL, SRL,   DIV, MOD, ...
 
-The \$$n$ Yacc notation in the {actions} gives access  to
-the {\em value} of the nth terminal or non-terminal in the rule.
-This value is stored in the global [[yylval]] set by the lexer.
-\t but how manage multiple values then at the same time? array ?
+The \$$n$ Yacc notation, in the {\em actions} between braces, 
+gives access to the {\em value} of the nth {terminal} or 
+{non-terminal} in the rule.
+For terminals, this value is derived from the global [[yylval]]
+set by the lexer.
+\l how manage multiple values then at the same time? array ? see \book{Yacc}
 Here are the different values for the different elements
-in the first [[inst]] rule above:
+in the first rule of [[inst]] above:
 
 \begin{enumerate}
-\item [[LARITH]] is the token code for all arithmetic and logic mnemonics.
+\item [[LARITH]] is the {token code} for all arithmetic and logic mnemonics.
 \$1 contains the enumeration value of the corresponding opcode,
-for instance [[AAND]] if the parsed token was [["AND"]]
+for instance [[AAND]] if the lexed token was [["AND"]]
 (see the [[itab]] entries above)
 
 \item [[cond]] represents the {\em conditional execution} of an instruction.
 It is an ARM feature we will explain later in Section~\ref{sec:cond-exec}.
+Every Asm5 instruction rules have a non-terminal [[cond]] after
+the opcode.
 
-\item [[imsr]] is a shortand for: [[im]]mediate or [[s]]hifted-register
-or [[r]]egister. Those are operands we will describe
+\item [[imsr]] is a shortand for: 
+[[im]]mediate (constant) or 
+[[s]]hifted-register or 
+[[r]]egister. 
+Those are operands we will describe
 in Section~\ref{sec:imsr}. \$3 is of type [[Gen]], the
 generalized form of operand we described in Section~\ref{sec:operand}.
 
-\item [[regi]] is a register. \$5\footnote{\$4 corresponds to the comma
-preceding [[regi]]}
-is an integer representing
-the register, e.g. 10 for [[R10]].
+\item the first comma, a single-character token without
+any value
+\l or ascii code?
 
-\item [[reg]] is also a register but which is wrapped
+\item [[regi]] is a register. \$5
+%\footnote{\$4 corresponds to the comma preceding [[regi]]}
+is an integer representing the register, e.g. 10 for [[R10]].
+
+\item the second comma
+
+\item [[reg]] is also a register but wrapped
 in a [[Gen]]. We use a [[Gen]] for \$7 and an integer
 for \$5 because of the signature of [[outcode()]]
 described in Section~\ref{sec:outcode-signature}.
@@ -5679,23 +5746,26 @@ The three opcodes in this section have a direct correspondance
 with the following C operators: [[&]], [[|]], and [[^]].
 They can also be used to encode boolean expressions
 involving [[&&]] and [[||]].
-\t how NOT?
-They are useful in many contexts:
-complex conditions in [[if]] and [[while]] statements ([[if(e1 && e2)]],
+\t how NOT? MVN?
+Those logic operators are useful in many contexts:
+complex conditions in [[if]] and [[while]] statements ([[if(e1 && e2)]]),
 boolean variables ([[bool b = b1 || b2;]]),
 bitsets operations ([[set1 | set2]]),
 bit extraction ([[x & 0x4]]),
 bitmask ([[y & 0xff]]), 
 etc.
-\t heavily used in emulator book, binary format manip, with bit shift
+%self-ref:
+Those operators are heavily used in the \book{Emulator}. Indeed,
+managing the binary format of ARM instructions requires many bit
+manipulations in the emulator.
 
 %turing:
 Boolean logic is at the foundation of mathematics and
 so it is also logic (no pun intended) to have boolean opcodes
 as fundamental opcodes of the computer.
-In fact, the whole computer can be made using just the 
-Nand logic gate\cite{tecs}.
-\l vs turing? von newmann? they assume basic math lang which is logic + arith
+In fact, a whole computer can be made using just the 
+Nand logic gate~\cite{tecs}.
+\l vs turing? von newmann? they assume basic math lang which is logic and arith
 
 \subsubsection{Add/sub}
 
@@ -5710,6 +5780,11 @@ ASUB,
 "SUB",		LARITH,	ASUB,
 @
 
+As said in the previous section,
+arithmetic instructions have the same syntax than
+logic instructions in Asm5 and so use the same grammar rule
+involving the [[LARITH]] token code.
+
 
 %compiler: 
 Again, The two opcodes above have a direct correspondance
@@ -5721,31 +5796,46 @@ used heavily for instance in numerical algorithms.
 %is usually encoded as a memory reference with a base ([[x]])
 %and an offset which is the location of the field in the structure.
 \l for x->fld, but can do MOV for that
+%turing: fundamental arith in turing machine language
 
 % see also Comparison section, part of Arith opcode in Machine.nw
 
-\ifallcode
-<<[[Opcode]] cases, logic opcodes>>=
-ABIC,
-@
-<<[[Opcode]] cases, add/sub opcodes>>=
-ARSB,
-AADC,
-ASBC,
-ARSC,
+
+
+
+\subsubsection{Mul/div/mod}
+
+%compiler:
+The three opcodes below are in direct correspondance
+with the following C operators: [[*]], [[/]], [[%]].
+
+<<[[Opcode]] cases, mul/div/mod opcodes>>=
+AMUL,
+ADIV, // VIRTUAL, transformed to call to _div
+AMOD, // VIRTUAL, transformed to call to _mod
 @
 <<[[itab]] elements>>=
-"BIC",		LARITH,	ABIC,
-"RSB",		LARITH,	ARSB,
-"ADC",		LARITH,	AADC,
-"SBC",		LARITH,	ASBC,
-"RSC",		LARITH,	ARSC,
+"MUL",		LARITH, AMUL,
+"DIV",		LARITH,	ADIV,
+"MOD",		LARITH,	AMOD,
 @
-\fi
+
+The ARM actually has no [[DIV]] or [[MOD]] instruction.
+Those virtual instructions are converted by [[5l]] in
+calls to assembly functions of the core C library
+([[_div()]] and [[_mod()]])
+which implement the division and modulo algorithm in software.
+\t using other more basic instruction, such as? bit shift??
+\l in which file?
+% compiler: need also mul for array access, need base + idx * size of entry.
+%  for pointer arithmetic in general!
+
+
 
 
 \subsubsection{Bit shift}
 
+%compiler:
 The two opcodes below are in direct correspondance
 with the following C operators: [[<<]], and [[>>]]:
 \l Shift left logic, Shift right logic
@@ -5761,22 +5851,29 @@ ASRL,
 @
 
 
-ARM actually does not really have those opcodes; it does
-not have the mnemonic opcode names above. 
-Instead, the ARM has a more general approach to bit shifting. Indeed,
-operands of many operations ([[ADD]], [[SUB]],
-etc) can be bitshifted as explained later in Section~\ref{sec:shift-register}.
+The ARM does not really have those opcodes; it does
+not use those mnemonics for bit shift operations.
+Instead, the ARM has a more general approach to bit shifting:
+{\em operands} of many operations ([[AND]], [[SUB]],
+etc) can be registers with {\em shift annotations}
+as explained later in Section~\ref{sec:shift-register}.
 %
 The opcodes above are thus translated by [[5l]] in the [[MOV]] ARM
 instruction (which confusingly as nothing to do with
-the Asm5 virtual instruction MOV we will see later)
+the Asm5 virtual instruction [[MOV]] we will see later)
 with bitshifted register operands.
 \n not really virtual
 
-%compiler: 
-\t used in this file actually MCRR, zaddr :) bit manip, binary format
-\t heavily used in Emulator book
-\t also useful for multiplication optimisation (when power of 2)
+%self-ref:
+Bit shift operations are used in this document for the
+[[MCRR]] macro in Section~\ref{sec:mcrr-macro}, and as we will
+see later in Section~\ref{sec:outcode} when generating
+the (binary) object file. They are also heavily used
+in the \book{Emulator} because of the binary format of ARM instructions.
+\t for what? to extract bit, make bits, etc
+\l for MCRR it is assembly code, but for the rest it is in C code. confusing?
+%compiler:
+\t also useful for multiplication optimisation (when power of 2), but faster?
 
 \ifallcode
 <<[[Opcode]] cases, bitshift opcodes>>=
@@ -5789,39 +5886,96 @@ ASRA,
 \t actually ASRL is not used by 5c
 \fi
 
-\subsubsection{Mul/div/mod}
+\subsubsection{Other opcodes}
 
-The three opcodes below are in direct correspondance
-with the following C operators: [[*]], [[/]], [[%]].
+There are a few additional Asm5 opcodes related to
+arithmetic and logic, mimicing ARM instructions,
+but they are less useful:
 
-<<[[Opcode]] cases, mul/div/mod opcodes>>=
-AMUL,
-ADIV, // VIRTUAL, transformed to call to _div
-AMOD, // VIRTUAL, transformed to call to _mod
+<<[[Opcode]] cases, logic opcodes>>=
+ABIC,
 @
 <<[[itab]] elements>>=
-"MUL",		LARITH, AMUL,
-"DIV",		LARITH,	ADIV,
-"MOD",		LARITH,	AMOD,
+"BIC",		LARITH,	ABIC,
 @
 
-Again, the ARM actually has no [[DIV]] or [[MOD]] instruction.
-Those virtual instructions are converted by [[5l]] in
-calls to assembly functions of the core C library
-which implement the division and modulo algorithm in software
-([[_div()]] and [[_mod()]]).
-\l in which file?
-% compiler: need also mul for array access, need base + idx * size of entry.
-%  for pointer arithmetic in general!
+<<[[Opcode]] cases, add/sub opcodes>>=
+ARSB,
+AADC,
+ASBC,
+ARSC,
+@
+<<[[itab]] elements>>=
+"RSB",		LARITH,	ARSB,
+"ADC",		LARITH,	AADC,
+"SBC",		LARITH,	ASBC,
+"RSC",		LARITH,	ARSC,
+@
+
+% optional? not used a single time in arm/*.s, used a bit in 5c/
+<<[[Opcode]] cases, add/sub opcodes>>=
+AMVN, // MOV negative, but nothing to do with MOVW
+@
+\l there is also a MOV in 5i, but it has nothing to do with MOVW too
+<<[[itab]] elements>>=
+"MVN",		LMVN, AMVN,	/* op2 ignored */
+@
+\t op2 ignored?? then why no simplify rule below?
+<<inst rule(arm)>>=
+/*
+ * MVN
+ */
+| LMVN cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
+@
 
 
+Many of those opcodes are never used in the assembly code generated by [[5c]].
+See the \book{Emulator} to learn about their semantics.
+%ex: ABIC, AADC, ASBC, ARSC
+% ARSB seems used, AMVN too
 
 
 \subsection{Memory}
 
-% ARM has load/store, but plan9 has MOV as a virtual/fake-opcode.
+%turing: machine is von newman model, memory is everything
+%compiler: 
+% store simple data(int), complex (aggregate), store results, 
+% store pointers! need powerful memory assign.
 
-\subsubsection{Moves}
+\l moves and swaps
+
+
+\subsubsection{Moves, loads, and stores}
+
+Because the ARM is a RISC machine, all memory references in the ARM
+are restricted to mostly two machine instructions: 
+\n mostly because of SWAP too below
+[[LDR]] for load register, and 
+[[STR]] for store register.
+%
+In Asm5 those two instructions are unified in the
+single virtual instruction [[MOV]]. 
+[[MOV]]s are converted by [[5l]] in the appropriate
+machine instruction depending on the operands:
+
+\begin{verbatim}
+MOVW R1, (R2)  // This is a store
+MOVW (R2), R1  // This is a load
+\end{verbatim}
+
+[[MOV]]s come in different variants, depending on the size
+of the memory moved:
+
+\begin{itemize}
+\item [[MOVW]] for moving words (4 bytes)
+\item [[MOVB]] for moving bytes (1 byte)
+\item [[MOVBU]] for moving unsigned bytes (1 byte)
+\item [[MOVH]] for moving half words (2 bytes)
+\item [[MOVHU]] for moving unsigned half words (2 bytes)
+\end{itemize}
+\t why unsigned?
+
+Here are the corresponding Asm5 opcodes:
 
 <<[[Opcode]] cases, mov opcodes>>=
 AMOVW, // VIRTUAL, transformed in load and store instructions
@@ -5838,49 +5992,66 @@ AMOVHU,
 "MOVHU",	LMOV, AMOVHU,
 @
 
+[[MOV]]s take a new kind of operand, [[gen]], which
+is very general (hence the name). [[gen]] accepts
+(as we will see later in Section~\ref{sec:operands-grammar})
+registers, constants, but also many forms of memory references
+such as the indirect with offset addressing mode in [[4(R1)]]:
+
 <<inst rule(arm)>>=
 /*
  * MOVW
  */
 | LMOV cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
 @
-% gen for general?
 
-% But even if the grammar rule below looks very general, allowing to
-% do things like MOVW $1, 4(FP), the linker will actually
-% not accept that. The linker forces to decompose in two instructions
-% MOVW $1, R1, and then MOVW R1, 4(FP), which is closer to
-% what the ARM accept, simple load and store.
-% See optab possibilities for AMOVW.
+Note that even if the grammar rule above is very general,
+allowing to write things like [[MOVW (R13), 6(R2)]], %$
+the linker [[5l]] will actually not accept those instructions
+and report an error at linking time.
+\l a bit ugly
+Indeed, the linker will force the programmer to decompose the preceding
+instruction in two simpler instructions,
+which are then closer to the simple [[LDR]] and [[STR]] machine instructions
+of the ARM:
 
-% can do e.g. MOVW R2, (R3)?
-% with the load/store of ARM it would be: LOAD R3, R4; store R2, R4?
+\begin{verbatim}
+MOVW (R13), R1
+MOVW R1, 6(R2)
+\end{verbatim}
 
+This is why in the [[helloworld.s]] program 
+in Section~\ref{sec:hello-program} we wrote code like:
+\begin{verbatim}
+MOVW $'W', R1        
+MOVB R1, 6(R2) // can not write MOVB $'W', 6(R2) directly
+MOVW $'o', R1        
+MOVB R1, 7(R2) // can not write MOVB $'o', 7(R2) directly
+\end{verbatim}
 
-% compiler: machine is von newman model, memory is everything.
-% store simple data(int), complex (aggregate), store results, 
-% store pointers! need powerful memory assign.
+Because [[MOVW]] is anyway a virtual instruction, one could wonder
+why the linker, instead of reporting an error,
+could not generate automatically the multiple [[LDR]] and [[STR]]
+instructions which are needed. 
+After all, [[5l]] transforms already certain Asm5 
+virtual instructions such as [[DIV]] or [[MOD]]
+in multiple machine instructions as we will see in the \book{Linker}.
+%
+My guess is that even though virtual instructions allows
+to abstract certain peculiarities (separate [[LDR]] and [[STR]] instructions),
+hide certain optimisations (code generated for leaf functions for [[TEXT]]
+and [[RET]]), or
+overcome certain limitations (no [[DIV]] and [[MOD]]), 
+an assembly language should still try to mimic as closely
+as possible the instructions of a machine.
+By being forced to decompose and so to write two 
+instructions in the example above, it is arguably
+easier for the programmer then to evaluate the number of cycles
+a procedure will take, or the number of memory references the procedure
+does, by just counting lines.
+\l exact? fixed number of cycle in ARM?
+\l See optab possibilities for AMOVW in Linker.nw
 
-
-
-
-\ifallcode
-% optional? not used a single time in arm/*.s, used a bit in 5c/
-<<[[Opcode]] cases, mov opcodes>>=
-AMVN,
-@
-% MOV negative
-%//AMOV, redundant with the other MOV operations
-<<[[itab]] elements>>=
-"MVN",		LMVN, AMVN,	/* op2 ignored */
-@
-<<inst rule(arm)>>=
-/*
- * MVN
- */
-| LMVN cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
-@
-\fi
 
 
 
@@ -5918,11 +6089,6 @@ ASWPBU,
 <<[[Opcode]] cases, branching opcodes>>=
 AB,  // =~ JMP
 @
-% compiler: if, while, for, switch, they all rely on the
-% very basic building block of jmp, conditional or not (goto xxx, if(yyy))
-
-% BL is ARM specific opti for CALL to leaf functions. Branch and Link.
-
 <<[[itab]] elements>>=
 "B",		LBRANCH, AB,
 @
@@ -5940,6 +6106,12 @@ AB,  // =~ JMP
 % in 'rel' it's just label! so BL foo_ret_lbl (and D_BRANCH)
 % in 'nireg' it's name so it can be BL foo+0(SB) (and D_OREG)
 
+% compiler: if, while, for, switch, they all rely on the
+% very basic building block of jmp, conditional or not (goto xxx, if(yyy))
+
+% BL is ARM specific opti for CALL to leaf functions. Branch and Link.
+
+
 \subsubsection{Function call and return}
 
 <<[[Opcode]] cases, branching opcodes>>=
@@ -5954,12 +6126,9 @@ ABL, // =~ CALL, Branch and Link
 <<[[Opcode]] cases, branching opcodes>>=
 ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
 @
-% actually no RET in ARM, so virtual/fake-opcode
-
 <<[[itab]] elements>>=
 "RET",		LRET, ARET,
 @
-
 <<inst rule(arm)>>=
 /*
  * RET
@@ -5971,9 +6140,8 @@ ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
 % whether it was a leaf or not. The machine can handle the specifics for us!
 
 \subsubsection{Conditional jump and comparisons}
-%note: was actually part of arithmetic in Machine.nw so
-% kinda make sense to put it here too, though
-% it has some logic too to put it just before branching
+\n was actually part of arithmetic in Machine.nw
+% but kinda make sense to put it here instead.
 
 % didn't see in our tutorial, print hello world too simple, no
 % if.
@@ -6004,30 +6172,6 @@ ACMP,
 % and they need to act on it (see also branching)
 %todo: (but why 3 different tests? one not enough?)
 
-
-
-\ifallcode
-<<[[Opcode]] cases, comparison opcodes>>=
-ATST,
-ATEQ,
-@
-<<[[itab]] elements>>=
-"TST",		LCMP,	ATST,
-"TEQ",		LCMP,	ATEQ,
-@
-\l similar to ACMP, seems more advanced, not sure needs that, 
-\n 5c uses only ACMP
-
-
-<<[[Opcode]] cases, comparison opcodes>>=
-ACMN,
-@
-% CMP negative
-<<[[itab]] elements>>=
-"CMN",		LCMP,	ACMN,
-@
-\l uses a bit to optimize
-\fi
 
 
 
@@ -6084,6 +6228,30 @@ ABLE,
 @
 
 
+
+
+\ifallcode
+<<[[Opcode]] cases, comparison opcodes>>=
+ATST,
+ATEQ,
+@
+<<[[itab]] elements>>=
+"TST",		LCMP,	ATST,
+"TEQ",		LCMP,	ATEQ,
+@
+\l similar to ACMP, seems more advanced, not sure needs that, 
+\n 5c uses only ACMP
+
+
+<<[[Opcode]] cases, comparison opcodes>>=
+ACMN,
+@
+% CMP negative
+<<[[itab]] elements>>=
+"CMN",		LCMP,	ACMN,
+@
+\l uses a bit to optimize
+\fi
 
 
 
@@ -6185,6 +6353,11 @@ pc = 0;
 \label{sec:operands-grammar}
 \label{sec:imsr}
 
+<<type declarations(arm)>>=
+%type   <gen> imsr
+@
+\l until now no type for inst, because does not return, call outcode.
+
 % this is the rest from the %union
 <<union declaration other fields(arm)>>=
 Gen    gen;
@@ -6196,10 +6369,6 @@ Gen    gen;
 % shift = shifted register or constant
 
 % imsr = immediate or shift or register
-
-<<type declarations(arm)>>=
-%type   <gen> imsr
-@
 
 % e.g. for first operand of ADD
 <<operand rules(arm)>>=
@@ -6348,6 +6517,9 @@ regi_nosp:
 
 \subsection{Immediate constants}
 
+% of course need constant :)
+%turing: 
+
 % con = constant
 % prefix with $ (why? ambiguity with what?) to differentiate
 % with just con where it's a omem (see section below)
@@ -6419,7 +6591,7 @@ ximm:
 % register and constant in some sense
 % mv in advanced topics?
 
-<<operand_kind cases>>=
+<<[[Operand_kind]] cases>>=
 D_SHIFT,
 @
 
@@ -6714,7 +6886,7 @@ D_STATIC, // data static variables (from SB)
 \subsection{Code references, labels}
 % hmm con(PC) is not really named code
 
-<<operand_kind cases>>=
+<<[[Operand_kind]] cases>>=
 D_BRANCH,
 @
 %/* type */ FOR BRANCH
@@ -7185,6 +7357,7 @@ comma:
 % via the ANAME.
 
 \section{Instruction output, [[outcode()]]}
+\label{sec:outcode}
 
 % used for all opcodes, even pseudo opcodes.
 % very generic form, 3 operands (but many times they
@@ -7435,7 +7608,7 @@ int	symcounter;
 %old: was called sym, but I renamed it to avoid overloading the sym name
 % (as a global, as a field)
 
-<<[[Sym]] identifier value fields>>=
+<<[[Sym]] identifier fields>>=
 // index in h when the Sym is really a symbol, 0 when not a symbol
 int	symidx;
 @
@@ -7448,7 +7621,7 @@ int	symidx;
 % there too now
 
 
-<<[[pinit]] symcounter and h initialisation>>=
+<<[[pinit]] initialisations>>=
 symcounter = 1;
 for(i=0; i<NSYM; i++) {
     h[i].symkind = 0; // N_NONE
@@ -7813,7 +7986,7 @@ enum fregister {
 %$
 % LMISC, meh
 
-<<operand_kind cases>>=
+<<[[Operand_kind]] cases>>=
 D_FREG,
 D_FPCR,
 @
@@ -7984,7 +8157,7 @@ AMULA,
 
 
 
-<<operand_kind cases>>=
+<<[[Operand_kind]] cases>>=
 D_REGREG,
 @
 
@@ -8168,7 +8341,7 @@ reglist:
 %	MOVW	R1, CPSR
 
 
-<<operand_kind cases>>=
+<<[[Operand_kind]] cases>>=
 D_PSR,
 @
 % similar to D_REG really, just with special register, so reg field
@@ -8397,7 +8570,7 @@ ASIGNAME,
 % constants defined in 5.out.h that are used only
 % in compiler context.
 % for 5c! conventions! (not used at all by 5a, but in 5.out.h for other tools)
-<<[[regxxx]] compiler conventions cases>>=
+<<[[Register]] compiler conventions cases>>=
 REGRET =	0,
 REGARG =	0,
 /* compiler allocates R1 up as temps */
@@ -8604,11 +8777,13 @@ if(argc > 1) {
 % indeed trad job of assembler is actually done by linker in plan9.
 % some assembler related stuff is in libmach/ and lots in the linker.
 
+% but really assembler, linker, arm emulator are books strongly connected.
+
 %missing features: ORG, but ld can do -Txx
 
 % see compiler
+% see disassembler? in debugger?
 
-% see disassembler
 
 
 
@@ -8834,7 +9009,8 @@ allocn(void *p, long on, long n)
 %\chapter{Changelog}
 %\label{sec:changelog}
 
-\chapter{Glossary}
+\chapter*{Glossary}
+\addcontentsline{toc}{chapter}{Glossary}
 \label{sec:glossary}
 
 \begin{verbatim}
