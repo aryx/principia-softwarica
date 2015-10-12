@@ -14,8 +14,7 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Kernel.nw
-TEX=Kernel.tex
+DOC=Kernel
 
 # set of noweb (.nw) files
 

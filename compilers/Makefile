@@ -9,8 +9,7 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Compiler.nw
-TEX=Compiler.tex
+DOC=Compiler
 
 # set of noweb (.nw) files
 
