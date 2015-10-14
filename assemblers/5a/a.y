@@ -9,14 +9,14 @@
  // and enum<registr> for LREG/...
  // and enum<cond>    for LCOND
  // and ...
- long   lval;
-
+ long   lval;    // for LCONST/LARITH/LREG/LCOND/...
  double dval;    // for LFCONST
  char   sval[8]; // for LSCONST
- Sym    *sym;    // for LNAME/LLAB/LVAR
 
  /*s: union declaration other fields(arm) */
- Gen    gen;
+ Sym    *sym;    // for LNAME/LLAB/LVAR
+ /*x: union declaration other fields(arm) */
+ Gen    genval;
  /*e: union declaration other fields(arm) */
 }
 /*e: union declaration(arm) */
@@ -30,10 +30,10 @@
 /*e: priority and associativity declarations */
 /*s: token declarations(arm) */
 /* opcodes */
-%token  <lval>  LDEF LDATA LWORD LEND
-%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LSWI LRET
-%token  <lval>  LSYSTEM LMISC
+%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LRET LMISC
+%token  <lval>  LSWI LSYSTEM 
 %token  <lval>  LARITHFLOAT LCMPFLOAT  LMULL LMULA  LMOVM LMVN
+%token  <lval>  LDEF LDATA LWORD LEND
 /* registers */
 %token  <lval>  LPC LSP LFP LSB
 %token  <lval>  LR LREG  LPSR
@@ -51,33 +51,32 @@
 %token  <lval>  LS LAT
 /*e: token declarations(arm) */
 /*s: type declarations(arm) */
-%type   <gen> imsr
+%type   <genval> imsr
+%type   <genval> imm shift reg
 /*x: type declarations(arm) */
-%type   <gen> imm shift reg
+%type   <genval>   gen 
 /*x: type declarations(arm) */
-%type   <gen>   gen 
-/*x: type declarations(arm) */
-%type   <gen>   ximm
+%type   <genval>   ximm
 /*x: type declarations(arm) */
 %type   <lval>  regi regi_nosp
 /*x: type declarations(arm) */
 %type   <lval>  rcon
 /*x: type declarations(arm) */
-%type   <gen> oreg ioreg ireg nireg 
+%type   <genval> oreg ioreg ireg nireg 
 /*x: type declarations(arm) */
-%type   <gen>   name 
+%type   <genval>   name 
 %type   <lval>  pointer
 /*x: type declarations(arm) */
-%type   <gen>   rel
+%type   <genval>   rel
 %type   <lval>  offset
-/*x: type declarations(arm) */
-%type   <lval>  con expr 
 /*x: type declarations(arm) */
 %type   <lval>  cond
 /*x: type declarations(arm) */
-%type <gen> freg fcon frcon
+%type   <lval>  con expr 
 /*x: type declarations(arm) */
-%type   <gen>   regreg
+%type <genval> freg fcon frcon
+/*x: type declarations(arm) */
+%type   <genval>   regreg
 /*x: type declarations(arm) */
 %type   <lval>  reglist
 /*x: type declarations(arm) */
@@ -108,9 +107,10 @@ line:
 /*x: line rule(arm) */
 | LLAB ':'
  {
-  if($1->value != pc)
+  if($1->value != pc) {
    yyerror("redeclaration of %s", $1->name);
-  $1->value = pc;
+   $1->value = pc;
+  }
  }
   line
 /*x: line rule(arm) */
@@ -129,15 +129,10 @@ line:
 /*s: inst rule(arm) */
 inst:
 /*
- * AND/OR/ADD/SUB/...
+ * AND/ORR/ADD/SUB/...
  */
   LARITH cond imsr ',' regi ',' reg { outcode($1, $2, &$3, $5, &$7); }
 | LARITH cond imsr ',' reg          { outcode($1, $2, &$3, R_NONE, &$5); }
-/*x: inst rule(arm) */
-/*
- * MOVW
- */
-| LMOV cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * MVN
@@ -145,22 +140,22 @@ inst:
 | LMVN cond imsr ',' reg { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
+ * MOVW
+ */
+| LMOV cond gen ',' gen { outcode($1, $2, &$3, R_NONE, &$5); }
+/*x: inst rule(arm) */
+/*
  * SWAP
  */
-| LSWAP cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
 | LSWAP cond reg ',' ireg         { outcode($1, $2, &$5, $3.reg, &$3); }
 | LSWAP cond ireg ',' reg         { outcode($1, $2, &$3, $5.reg, &$5); }
+| LSWAP cond reg ',' ireg ',' reg { outcode($1, $2, &$5, $3.reg, &$7); }
 /*x: inst rule(arm) */
 /*
  * B/BL
  */
 | LBRANCH cond rel   { outcode($1, $2, &nullgen, R_NONE, &$3); }
 | LBRANCH cond nireg { outcode($1, $2, &nullgen, R_NONE, &$3); }
-/*x: inst rule(arm) */
-/*
- * RET
- */
-| LRET cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * CMP
@@ -171,6 +166,11 @@ inst:
  * BEQ/...
  */
 | LBCOND rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
+/*x: inst rule(arm) */
+/*
+ * RET
+ */
+| LRET cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 /*x: inst rule(arm) */
 /*
  * SWI
@@ -397,7 +397,7 @@ name:
   $$ = nullgen;
   $$.type = D_OREG;
   $$.sym = $1;
-  $$.symkind = D_STATIC;
+  $$.symkind = D_INTERN;
   $$.offset = $4;
  }
 /*x: name rule */
@@ -449,6 +449,13 @@ regreg:
   $$.offset = $4;
  }
 /*e: operand rules(arm) */
+/*s: cond rule(arm) */
+cond:
+  /* empty */ { $$ = Always; }
+| cond LCOND  { $$ = ($1 & ~C_SCOND) | $2; }
+/*x: cond rule(arm) */
+| cond LS    { $$ = $1 | $2; }
+/*e: cond rule(arm) */
 
 /*s: constant expression rules */
 /*s: con rule */
@@ -478,13 +485,6 @@ expr:
 
 /*e: expr rule */
 /*e: constant expression rules */
-/*s: cond rule(arm) */
-cond:
-  /* empty */ { $$ = Always; }
-| cond LCOND  { $$ = ($1 & ~C_SCOND) | $2; }
-/*x: cond rule(arm) */
-| cond LS    { $$ = $1 | $2; }
-/*e: cond rule(arm) */
 /*s: float rules */
 freg:
   LFREG

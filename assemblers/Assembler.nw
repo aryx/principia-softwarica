@@ -811,7 +811,12 @@ The first instruction of [[_main()]] Line 2
 is a jump, known as a {\em branch} in ARM (hence the [[B]]),
 to [[later]], which is a {\em label} defined Line~4.
 In Asm9 all label definitions are suffixed by a colon. 
-\l in some sense TEXT and GLOBL are also introducing labels
+%
+Labels are similar to symbols in that they allow to give
+a symbolic name to a memory area. Labels are restricted to code area
+though and are locals to an assembly file. There are used for
+intra-procedural jumps.
+\l also not suffixed by SB
 \l how actually translated? B 1543? relative to PC?(R15)?
 %
 The syntax for {comments} in Asm9 are the same than in C
@@ -951,6 +956,7 @@ add some extra complexities at the beginning.
 \l generic, hide normally pecularities, complexities, but add some complexity
 
 \subsection{Call stack}
+\label{sec:call-stack}
 
 Line 6 through 18 set characters in the [[hello]] global array of characters. 
 
@@ -1076,7 +1082,7 @@ R13 +-> +-------+
 %	RET
 % 1 attribute??? need diagram again
 
-\subsection{System call}
+\subsection{System calls}
 
 The \plan{} {\em kernel calling conventions} impose to have all
 the arguments in the stack ``above'' [[R13+4]],
@@ -1089,9 +1095,11 @@ which defines all those syscall codes.
 \n R0 is not the first argument anymore
 The [[SWI]] instruction Line~31 then performs the system call
 and jumps in the kernel.
+\l normally SWI has one operand in ARM, but in plan9 use R0 for that
 \l need extra words before arguments for syscall too? because C convention?
 
-\subsection{Function call}
+\subsection{Function calls}
+\label{sec:bl}
 \l branch and link
 
 Regular function calls in Asm5, e.g. the call to [[exit]] Line~32,
@@ -1134,6 +1142,7 @@ instead of 20 for [[_main]] Line~1, to hold the return address
 to the caller in case [[R14]] needs to be saved.
 
 \subsection{Virtual instructions}
+\label{sec:ret}
 
 The leaf detection is done ({statically}) by the linker, [[5l]],
 since it is the program generating actually the machine code in \plan,
@@ -1612,8 +1621,9 @@ similar code in the \book{Compiler}.
 
 \item {\em symbolic constants}, e.g. [[TMP = 11 ... MOV R1, R(TMP)]],
 which were called originally (and ironically) {\em variables}.
-Because they are redundant with the macro-processor, 
-this feature has been removed from our version of [[5a]].
+They are redundant with the [[#define]] of the macro-processor, 
+but were probably added before [[5a]] became a macro-assembler.
+%this feature has been removed from our version of [[5a]].
 \l use LVAR for lexeme name, hmmm
 
 \end{itemize}
@@ -1789,6 +1799,7 @@ Total & & & & 4098 \\
 \l could have a input.c and output.c
 
 \section{Software architecture}
+\label{sec:archi}
 
 Figure~\ref{fig:controlflow} describes roughly 
 the main control flow and main {components} of [[5a]], while
@@ -1887,7 +1898,7 @@ parsed instruction.
 in the object file, but only when the global value of [[pass]] is 2.
 Whatever the value of [[pass]], [[outcode()]]
 also increments each time [[pc]], a global representing the
-current value of the (virtual) program counter.
+current value of the {\em virtual program counter}.
 
 The lexing and parsing code internally use and modify a 
 {\em symbol table} called [[hash]], which keeps track of the value
@@ -2198,7 +2209,7 @@ struct	Gen
 % type reg = 
 %   ...
 
-The [[type]] field is used to encode the {\em kind} of the operand.
+The [[type]] field is used to encode the {\em operand kind}.
 It is a [[short]] but really it can only take values of the
 [[operand_kind]] enumeration (hence the {typing} comment)
 we define below:
@@ -2812,11 +2823,12 @@ enum sym_kind {
     N_NONE,
 
     D_EXTERN, // text/data/bss values (from SB)
-    D_AUTO,   // stack values (from SP)
+    D_LOCAL,  // stack values (from SP)
     D_PARAM,  // parameter (from FP)
     <<sym_kind cases>>
 };
 @
+%old: was D_AUTO instead of D_LOCAL but ugly C
 % use A_EXTERN? or N_EXTERN? is D_XXX because was in operand_kind before
 %/* name */ for D_EXTERN
 %note: this used to be with operand_kind, but they are really disjoint
@@ -4715,7 +4727,7 @@ char*	macro;
 @
 \label{sec:macro-sym-field}
 
-<<[[pinit]] initialisations>>=
+<<[[pinit()]] initialisations>>=
 for(i=0; i<NHASH; i++)
     for(s = hash[i]; s != S; s = s->link)
         s->macro = nil;
@@ -5701,6 +5713,7 @@ ORR $0xff, R2     // <=> ORR $0xff, R2, R2
 %$
 \l left-to-right
 \l if middle register is NONE then ADD X1, X2 -> ADD X1, X2, X2 (plus=)
+\t how do NOT?
 
 Logic instructions have the same syntax than
 arithmetic instructions in Asm5 and so they share 
@@ -5861,10 +5874,10 @@ AMOD, // VIRTUAL, transformed in call to _mod
 The ARM actually has no [[DIV]] or [[MOD]] instruction.
 Those virtual instructions are converted by [[5l]] in
 calls to assembly functions of the core C library
-([[_div()]] and [[_mod()]])
+[[_div()]] and [[_mod()]]
 which implement the division and modulo algorithm in software.
-\t using other more basic instruction, such as? bit shift??
-\l in which file?
+See Appendix~\ref{chap:examples} for the code of those
+assembly functions.
 % compiler: need also mul for array access, need base + idx * size of entry.
 %  for pointer arithmetic in general!
 
@@ -5926,7 +5939,7 @@ ASRA,
 \t actually ASRL is not used by 5c
 \fi
 
-\subsubsection{Other opcodes}
+\subsubsection{Other arithmetic and logic opcodes}
 
 There are a few additional Asm5 opcodes related to
 arithmetic and logic mimicing ARM instructions,
@@ -5951,6 +5964,7 @@ ARSC,
 "SBC",		LARITH,	ASBC,
 "RSC",		LARITH,	ARSC,
 @
+\t RSB? used by _div
 
 % optional? not used a single time in arm/*.s, used a bit in 5c/
 <<[[Opcode]] cases, add/sub opcodes>>=
@@ -5973,7 +5987,7 @@ Many of those opcodes are actually never used in the assembly
 code generated by the C compiler [[5c]].
 See the \book{Emulator} to learn about their semantics.
 %ex: ABIC, AADC, ASBC, ARSC
-% ARSB seems used, AMVN too
+% ARSB seems used (used also by _div), AMVN too
 
 
 \subsection{Memory}
@@ -6155,12 +6169,12 @@ The control flow constructs of Asm5 are in
 direct correspondance with C constructs:
 inconditional jump with [[goto]],
 conditional jump with [[if]],
-branch and link with function call and [[return]].
+branch and link with function call [[foo()]] and [[return]].
 
 \subsubsection{Jump (inconditional)}
 
-The most basic control flow is the direct jump, called
-branch in the ARM, hence the [[B]] below:
+The most basic control flow instruction of Asm5 is the direct jump, called
+{\em branch} in the ARM, hence the [[B]] below:
 
 <<[[Opcode]] cases, branching opcodes>>=
 AB,  // =~ JMP
@@ -6169,12 +6183,14 @@ AB,  // =~ JMP
 "B",		LBRANCH, AB,
 @
 
-The operands of a branch are 
-an offset to the PC pseudo-register ([[B 4(PC)]]), or 
-a label ([[B later]]), via the [[rel]] non-terminal (register or label), or
+The operand of a branch is either
+an offset to the PC pseudo-register (e.g. [[B 4(PC)]]), or 
+a label (e.g. [[B later]]), 
+via the [[rel]] (register or label) non-terminal below, or
 \l D_BRANCH
-a name/symbol ([[B foo(SB)]]) or 
-an indirect register ([[B (R3)]]), via [[nireg]] (name or indirect reg):
+a name/symbol (e.g. [[B foo(SB)]]) or 
+an indirect register (e.g. [[B (R3)]]), 
+via [[nireg]] (name or indirect register) below:
 \l D_OREG
 
 <<inst rule(arm)>>=
@@ -6193,10 +6209,6 @@ To not loop infinitely though one needs a way
 to escape the loop and jump elsewhere {\em if}
 a certain criteria is true.
 
-% compiler: if, while, for, switch, they all rely on the
-% very basic building block of jmp, conditional or not (goto xxx, if(yyy))
-
-
 \subsubsection{Conditional jump and comparisons}
 \n was actually part of arithmetic in Machine.nw
 % but kinda make sense to put it here instead.
@@ -6206,12 +6218,12 @@ did not contain any conditional jump.
 Indeed, printing [["hello world"]] is too simple; there
 was no need for such an instruction. 
 In the same way, there was also no need for an [[if]] 
-in the corresponding C program.
+in the corresponding [[helloworld1.c]] C program.
 %turing:
 The conditional jump though is a fundamental instruction.
 Without it programs would be just long sequence of instructions 
 or infinite loops.
-\l even BL would not help
+\l even BL would not help because BL is almost like a B
 
 The conditional jump instruction is usually preceded
 by a {comparison} instruction.
@@ -6236,8 +6248,9 @@ compare its two operands. Instead, it loads those two operands
 in some internal registers of the processor.
 Those internal registers can then be used by the instruction
 coming just after, the conditional jump, to actually compare
-using different {relational operators} those registers
+using different {\em relational operators} those registers
 and jump accordingly:
+\l so actually one compare instr and many conditional jump instrs
 
 <<[[Opcode]] cases, branching opcodes>>=
 /* 
@@ -6293,17 +6306,21 @@ ABLE, // <=
 \l no nireg here?
 \t unsigned!
 
-Here are an example of a comparison and a conditional jump:
+Here is an example of a comparison and conditional jump:
 
 \begin{verbatim}
     CMP $0, R1
-    BEQ zero
-    B nonzero 
-zero:
+    BEQ r1_is_zero
+    B r1_is_nonzero 
+r1_is_zero:
     // R1 == 0
     ...
-nonzero:
+    B after
+r1_is_nonzero:
     // else
+    ...
+    // fallthrough
+after:
     ...
 \end{verbatim}
 
@@ -6311,17 +6328,26 @@ nonzero:
 All the control flow constructs of C ([[if]], [[while]], [[for]], etc)
 can be translated in assembly code using simply labels, branchs,
 and conditional jumps.
-
 %FIGURE? control flow diagrams translation with edges?
-%compiler: if, while, they all need to compare values
-% and they need to act on it (see also branching)
-% when combine with goto can also do loops
+
+The [[B]]$xx$ Asm5 instructions are actually virtual instructions.
+Similar to the bitshift operations, the ARM provides a more
+general approach to conditional jump where {\em every instruction
+can be conditionally executed}. The opcodes above are thus
+translated by [[5l]] in the [[B]] ARM instruction
+with special bits set to mark the instruction for
+conditional execution. See the \book{Emulator} for
+more information or Section~\ref{sec:cond-exec}.
+%
+Similar to the bitshift operations, Asm5 provides
+those specialised virtual instructions jumps because
+they correspond more to what assembly programmers
+expect from an assembly language.
 
 
-
-There are a few additional Asm5 opcodes similar to
+There are a few additional Asm5 comparison opcodes similar to
 [[CMP]] mimicing ARM instructions, but they
-are less useful. Some of them are not even used by [[5c]]:
+are less useful. Some of them again are not even used by [[5c]]:
 
 <<[[Opcode]] cases, comparison opcodes>>=
 ATST,
@@ -6339,11 +6365,19 @@ ACMN, // CMP negative
 \subsubsection{Function call and return}
 
 %turing:
-\l turing complete already. CMP and Bxx are enough.
-\l no need for function.
-\l in fact no really CALL in ARM, just BL, very very basic.
-\l call is really jump and stack! especially for recursive calls!
-\l convenient functions for soft eng.
+The [[B]], [[CMP]], and [[B]]$xx$ instructions
+are enough to have a {Turing complete} machine.
+There is no need for a function call instruction; it
+would not add any expressivity to the computer.
+%
+In fact, there is no [[CALL]] or [[RET]] instruction in the ARM,
+but instead a very basic [[BL]] instruction.
+As explained in Section~\ref{sec:bl}, [[BL]] stands
+for {\em branch and link} because the instruction just
+saves the current value of the program counter ([[R15]])
+in a special {\em link register} ([[R14]]), and then branch/jump:
+\n should be called link and branch then
+\l why called link? because it create a link with the caller?
 
 <<[[Opcode]] cases, branching opcodes>>=
 ABL, // =~ CALL, Branch and Link
@@ -6352,7 +6386,62 @@ ABL, // =~ CALL, Branch and Link
 "BL",		LBRANCH, ABL,
 @
 
-\l same syntax than for B, but BL label??
+The [[BL]] instruction uses the same syntax than
+[[B]] and so use the same grammar rule
+involving the [[LBRANCH]] token code.
+Indeed, [[BL]] is really just a slightly different [[B]].
+%
+But, [[BL]] performs in one instruction something which is
+one of the building block for organizing code into functions.
+Indeed, by using [[BL]], the link register [[R14]],
+the stack pointer [[R13]], and symbols defined by [[TEXT]], one can easily
+simulate functions, function calls, and [[return]]
+as explained in Sections~\ref{sec:bl} and~\ref{sec:ret}.
+
+%turing:
+From a theoretical computer science point of view,
+functions do not add any expressivity to the machine
+language, but from a software 
+engineering perspective they are tremendously useful.
+Indeed, with functions one can decompose a big program 
+in multiple independent parts which can be programmed
+and understood in isolation.
+%
+Because those functions though must use and share the same
+machine registers, one needs to setup some {\em conventions}
+on how to use and {\em save} those registers so that code of one
+function can be programmed independently of the code of 
+another function.
+%
+In \plan the convention is as follows: ``a subroutine is responsible
+for saving its own registers, and therefore is free to use
+any registers without saving them''. 
+\n from asm.pdf
+This convention is also known as ``caller saves''. 
+%
+This means that if the body of a function [[foo]] uses the register [[R1]],
+and then must call another function [[bar]]
+(with [[BL bar(SB)]]), then [[foo]] must save
+the register [[R1]] somewhere if it plans to use its value
+after the call to [[bar]], because [[bar]] could have overwritten
+the value in [[R1]].
+%
+The stack is usually used to save the values in those registers.
+
+One needs also to setup {\em calling conventions} on how
+to pass arguments and use paramter in functions.
+In \plan the stack and [[R0]] are
+used to pass the arguments as explained in Section~\ref{sec:call-stack}.
+By using the stack and not fixed memory locations,
+functions can be called recursively.
+
+%FIGURE? show recursive calls?
+
+Asm5 provides the virtual instruction [[RET]] to make it
+easier for the programmer to manage the stack when returing
+from a function. Indeed, [[RET]] abstracts
+away the differences between leaf and non-leaf functions
+as explained in Section~\ref{sec:ret}:
 
 <<[[Opcode]] cases, branching opcodes>>=
 ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(SP), R15
@@ -6366,23 +6455,17 @@ ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(SP), R15
  */
 | LRET cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 @
-% because of B and BL (and as we will see in 5l STEXT and SLEAF),
-% it's convenient to have a general way to return from a procedure
-% whether it was a leaf or not. The machine can handle the specifics for us!
+\n we will see in 5l STEXT and SLEAF
 
 
 \subsection{Software interrupt}
 \l aka syscall
 \l interrupts and exceptions
 
-The software interrupt instruction is really a form of
-jump to a special area setup by the kernel.
-% kernel/user! fundamental API of assembly! the bridge!
-% open then the door for user process to access real hardware
-% (but in supervised mode of course)
-
-\l interrupt table normally?
-\l a form of function call (and later a form of RET)
+The software interrupt instruction [[SWI]] is really a form of
+function call but to a fixed special function of the kernel,
+which is why it does not take any operand:
+\l interrupt table normally? so take an argument. In ARM there is an argument.
 
 <<[[Opcode]] cases, interrupt opcodes>>=
 ASWI, // syscall
@@ -6397,7 +6480,6 @@ ASWI, // syscall
  */
 | LSWI cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 @
-%$
 %old: | LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
 % but not sure it needs an argument in plan9 context,
 % and anyway was doing stupid things like SWI 0  in 9syscall/mkfile
@@ -6409,9 +6491,17 @@ ASWI, // syscall
 %% just so can test things with kencc/5a, ignore actually the last argument
 %% otherwise the linker will fail.
 
+[[SWI]] is the fundamental building block for having a
+kernel program clearly separated from use programs and to have
+a safe way to go from user program to kernel code via the system
+call API bridge.
+\l open then the door for user process to access real hardware
+% (but in supervised mode of course)
 
-
-
+Asm5 provides also the virtual instruction [[RFE]] to return
+from kernel code to a user program. [[RFE]] is just
+a short alias to the more cryptic [[MOVM]] instruction
+we will describe in Section~\ref{sec:movm}.
 
 <<[[Opcode]] cases, interrupt opcodes>>=
 ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
@@ -6432,17 +6522,17 @@ ARFE, // VIRTUAL, return from exception/interrupt, MOVM.IA.S.W (R13), [R15]
 \n put after Operands? Merge with Code refs? maybe better after Instruction
 \n section as it is a kind of instr, and better have all opds in one section
 
-% this is incremented in outcode() after each instruction 
-% (except for ADATA and AGLOBL)
-% this is set in pinit() to 0
-% less: even ATEXT increments PC? hmm maybe simpler that way
-<<global pc>>=
-long	pc;
-@
-
-<<[[pinit]] initialisations>>=
-pc = 0;
-@
+Labels allow to give symbolic names to code addresses. They are a fundamental
+feature of any assembly language and makes assembly code significantly
+easier to understand and maintain.
+%compiler:
+Indeed, by using label names such as 
+[[_loop1]], [[if_zero]], or [[_else]], assembly code using 
+jumps (conditional or inconditional) can become closer
+to C code using statements such as [[for]] or [[if]].
+%
+Labels in Asm5 are defined on a line by using an identifier 
+followed by a colon:
 
 <<line rule(arm)>>=
 | LNAME ':'
@@ -6453,46 +6543,57 @@ pc = 0;
   line
 @
 
-% not context free grammar! modify lexer behavior from parser.
-% similar in C for typedefs. ugly a bit,
+Even though one could have multiple label definitions on a line,
+or even labels and machine instructions on the same line, it is
+a common practice to put the label definition alone on its own line,
+in the first column.
+
+The value of a label is the value of the {\em virtual program counter}
+at the label definition. This counter
+is stored in the global [[pc]], initialized to 0 before
+each pass and incremented by [[outcode()]] after each code instruction:
+\l (except for ADATA and AGLOBL)
+\l even ATEXT increments PC? hmm maybe simpler that way
+<<global pc>>=
+long	pc;
+@
+<<[[pinit()]] initialisations>>=
+pc = 0;
+@
+
+Once a label has been defined, the type of its
+token in the symbol table is changed to [[LLAB]]
+\footnote{This mean Yacc actions actually have a side effect on how
+the lexer behaves. Asm5 is thus not a context free grammar.
+This is similar to C where typedefs declarations change
+the token type of certain identifiers.
+}
+as shown in the rule above.
+Further use of this label in the rest of the program
+or in the next assembling pass will trigger then this rule:
+
 <<line rule(arm)>>=
 | LLAB ':'
  {
-  if($1->value != pc)
+  if($1->value != pc) {
    yyerror("redeclaration of %s", $1->name);
-  $1->value = pc;
+   $1->value = pc;
+  }
  }
   line
 @
 %$
 
-% note that labels are different from ATEXT! they are local
-% to the file, and so lead to local jmps. no need to relocate
-% those names (well actually we relocate them in 5l when
-% we put each object one after another, see the 'ipc' local variable)
-
 \section{Operands}
 \label{sec:operands-grammar}
 \label{sec:imsr}
 
-<<type declarations(arm)>>=
-%type   <gen> imsr
-@
-\l until now no type for inst, because does not return, call outcode.
+Now that we have seen almost all the instructions and opcodes of Asm5, we
+can switch to explain the operands of those instructions.
+%
+One of the first operand rule we saw in the previous section
+was [[imsr]], the first operand of opcodes such as [[AADD]] or [[AAND]]:
 
-% this is the rest from the %union
-<<union declaration other fields(arm)>>=
-Gen    gen;
-@
-% hmmm maybe confusing to have gen field and Gen type and gen grammar rule?
-
-% reg = register
-% imm = immediate
-% shift = shifted register or constant
-
-% imsr = immediate or shift or register
-
-% e.g. for first operand of ADD
 <<operand rules(arm)>>=
 imsr:
   imm
@@ -6500,22 +6601,41 @@ imsr:
 | reg
 @
 
-<<type declarations(arm)>>=
-%type   <gen> imm shift reg
-@
-
-
-% better to put gen rule here instead of rule about memory dereference.
-% That matches closely at first imsr with reg, ximm and shift.
-
-
+Rules which return values (in \$\$) must have their type declared
+in Yacc via a [[%type]] directive.
+Most operand rules have the [[genval]] type:
+%ocaml: no need, type inference!
 
 <<type declarations(arm)>>=
-%type   <gen>   gen 
+%type   <genval> imsr
+%type   <genval> imm shift reg
 @
-% gen? general? 
-% arguments to MOV have less restrictions
+\l until now no type for inst, because does not return, call outcode.
 
+In fact [[genval]] is not really a type
+but the name of one of the field of the Yacc [[%union]]
+declaration described partially in Section~\ref{sec:token}:
+
+<<union declaration other fields(arm)>>=
+Gen    genval;
+@
+%old: was gen, but then confusing with the gen rule, and more consistent genval
+
+The type of [[genval]] is [[Gen]], the
+generalized form of operand we described in Section~\ref{sec:operand}.
+Thanks to those [[%type]] and [[%union]] Yacc directives,
+the generated code by Yacc for the \$$nn$
+referring to non-terminals will access the appropriate field of 
+the union. In the same way, the [[%token]] and [[%union]] Yacc
+directives will guide Yacc to generate the right code
+for the \$$nn$ refering to terminals (the tokens).
+
+The [[gen]] operand rule, the operand of [[MOVW]], has the same type:
+
+<<type declarations(arm)>>=
+%type   <genval>   gen 
+@
+%old: was 'type   <gen>   gen', but confusing
 
 <<gen rule>>=
 gen:
@@ -6523,14 +6643,14 @@ gen:
 | shift
 | reg
 @
-% so close to imsr. close except ximm instead of imm (extended immediate).
-% see below.
-% and also will see later than the gen rule will grow
+
+Until now [[gen]] is close to [[imsr]], 
+except for the [[ximm]] (extended immediate) vs [[imm]] which we will
+explain soon, but we will see later extensions to the [[gen]] rule.
 
 <<type declarations(arm)>>=
-%type   <gen>   ximm
+%type   <genval>   ximm
 @
-
 
 
 
@@ -6556,6 +6676,11 @@ gen:
 %@
 % works with Gen structure, as shown below
 
+The [[reg]] rule allows to wrap in a [[Gen]]
+the integer representing the register number,
+and uses the [[D_REG]] {\em operand kind} we described
+in Section~\ref{sec:operand}:
+
 <<operand rules(arm)>>=
 reg:
  regi
@@ -6567,10 +6692,10 @@ reg:
 @
 %$
 
-% lval but really enum<registr>
 <<type declarations(arm)>>=
 %type   <lval>  regi regi_nosp
 @
+\l lval but really enum<registr>
 
 <<spreg rule(arm)>>=
 regi:
@@ -6590,8 +6715,7 @@ regi_nosp:
  }
 @
 %$
-%old: was called sreg, but prefer regi_nosp
-\t s? 
+%old: was called sreg, but prefer regi_nosp, why was called sreg??
 \l expr! see later
 
 <<[[itab]] elements>>=
@@ -6616,8 +6740,9 @@ regi_nosp:
 <<[[itab]] elements>>=
 "R",		LR,	0,
 @
+\l note that different from pseudo register!
 
-% note that different from pseudo register!
+
 
 
 %XXX
@@ -6645,6 +6770,8 @@ regi_nosp:
 % con = constant
 % prefix with $ (why? ambiguity with what?) to differentiate
 % with just con where it's a omem (see section below)
+% but 4 bytes instr, and space for opcode, cond, etc, so not so much
+%  for full spectre of 32 bits integers.
 
 %<<operand_kind cases>>=
 %D_CONST,
@@ -6797,7 +6924,7 @@ rcon:
 @
 
 <<type declarations(arm)>>=
-%type   <gen> oreg ioreg ireg nireg 
+%type   <genval> oreg ioreg ireg nireg 
 @
 
 % oreg? offset reg? 
@@ -6876,7 +7003,7 @@ nireg:
 
 
 <<type declarations(arm)>>=
-%type   <gen>   name 
+%type   <genval>   name 
 %type   <lval>  pointer
 @
 % name is an operand argument for BL (via nireg), but also
@@ -6929,7 +7056,7 @@ pointer:
 
 <<[[itab]] elements>>=
 "SB",		LSB,	D_EXTERN,
-"SP",		LSP,	D_AUTO,
+"SP",		LSP,	D_LOCAL,
 "FP",		LFP,	D_PARAM,
 @
 
@@ -6939,7 +7066,7 @@ pointer:
 
 %<<sym_kind cases>>=
 %D_EXTERN, // text/data/bss values (from SB)
-%D_AUTO,   // stack values (from SP)
+%D_LOCAL,   // stack values (from SP)
 %D_PARAM,  // parameter (from FP)
 %@
 
@@ -6963,15 +7090,16 @@ offset:
   $$ = nullgen;
   $$.type = D_OREG;
   $$.sym = $1;
-  $$.symkind = D_STATIC;
+  $$.symkind = D_INTERN;
   $$.offset = $4;
  }
 @
 %$
 
 <<sym_kind cases>>=
-D_STATIC, // data static variables (from SB)
+D_INTERN, // data static variables (from SB)
 @
+%old: was D_STATIC but ugly C name
 
 % well this is not really a name ...
 <<name rule>>=
@@ -7018,7 +7146,7 @@ D_BRANCH,
 @
 
 <<type declarations(arm)>>=
-%type   <gen>   rel
+%type   <genval>   rel
 %type   <lval>  offset
 @
 
@@ -7051,6 +7179,11 @@ rel:
 %$
 % branch are relative to current PC for ARM, but here
 % we deal with more absolute address.
+
+% can use labels defined in other procedures, see _div and _mod with out:
+
+% no need to relocate  those names (well actually we relocate them in 5l when
+% we put each object one after another, see the 'ipc' local variable)
 
 % it's an offset in the sense that it's like a 'LLAB offset (starting_pc)'
 % so offset to basis, which should be zero for this assembly
@@ -7153,6 +7286,9 @@ rel:
 
 % declare symbols, names, that other can either call (BL) or 
 % access (MOVW).
+% thet are kinda labels, just a bit more general, public!
+% labels are for statements, symbols for function or globals definitions,
+%  with parameters.
 
 <<[[Opcode]] cases, pseudo opcodes>>=
 ATEXT,
@@ -7647,7 +7783,7 @@ int	symidx;
 % there too now
 
 
-<<[[pinit]] initialisations>>=
+<<[[pinit()]] initialisations>>=
 symcounter = 1;
 for(i=0; i<NSYM; i++) {
     h[i].symkind = 0; // N_NONE
@@ -8142,7 +8278,7 @@ case D_FCONST:
 % >> >> >> >> >> >> >> >> >>
 
 <<type declarations(arm)>>=
-%type <gen> freg fcon frcon
+%type <genval> freg fcon frcon
 @
 
 % for MOV
@@ -8306,7 +8442,7 @@ D_REGREG,
 
 
 <<type declarations(arm)>>=
-%type   <gen>   regreg
+%type   <genval>   regreg
 @
 
 <<operand rules(arm)>>=
@@ -8332,6 +8468,7 @@ case D_REGREG:
 % abuse offset to represent a register
 
 \section{Multiple registers instructions}
+\label{sec:movm}
 
 % move many?
 <<[[Opcode]] cases, mov opcodes>>=
@@ -8900,20 +9037,27 @@ if(argc > 1) {
 \chapter{Conclusion}
 \label{chap:conclusion}
 
-% see linker! next book to read, logically.
-% indeed trad job of assembler is actually done by linker in plan9.
-% some assembler related stuff is in libmach/ and lots in the linker.
+You now know fully, to the smallest details, how
+the \plan ARM assembler [[5a]] works, and more
+generally how any assembler works.
 
-% but really assembler, linker, arm emulator are books strongly connected.
+The ARM machine code generation is not done by [[5a]] though,
+but by the linker [[5l]] in \plan which is a bit unconventional.
+So, we recommend to follow with the \book{Linker} book to
+understand this part. In any case, the linker and assembler
+being strongly connected in any system (for instance [[ld]] and [[gas]]
+are part of the same [[binutils]] package in the GNU system),
+the \book{Linker} is the logical next step after the \book{Assembler}.
+%
+We also suggest to read the \book{Emulator} which fully
+describes the semantics of the assembly instructions we have
+seen in this book.
+The \book{debugger} contains code to {\em disassemble}
+machine code which also relates to this book.
+Finally, reading the \book{Compiler} will now be easier now
+that you understand the assembly code generated by the compiler [[5c]].
 
 %missing features: ORG, but ld can do -Txx
-
-% see compiler
-% see disassembler? in debugger?
-
-
-
-
 
 
 \appendix
@@ -9125,6 +9269,70 @@ allocn(void *p, long on, long n)
 }
 @
 
+\chapter{Examples of Assembly Programs}
+\label{chap:examples}
+
+\section{[[_div()]]}
+\label{sec:_div}
+
+The [[_div]] function in [[lib_core/libc/arm/div.s]]
+implements in software the integer division since
+the ARM has no [[DIV]] instruction.
+
+<<function _div>>=
+TEXT	_div(SB), 1, $16
+	BL	save<>(SB)
+	CMP	$0, R(Q)
+	BGE	d1
+	RSB	$0, R(Q), R(Q)
+	CMP	$0, R(D)
+	BGE	d2
+	RSB	$0, R(D), R(D)
+d0:
+	BL	div<>(SB)		/* none/both neg */
+	MOVW	R(Q), R(TMP)
+	B	out
+d1:
+	CMP	$0, R(D)
+	BGE	d0
+	RSB	$0, R(D), R(D)
+    // Fallthrough
+d2:
+	BL	div<>(SB)		/* one neg */
+	RSB	$0, R(Q), R(TMP)
+	B	out
+
+out:
+	BL	rest<>(SB)
+	B	out
+@
+
+
+\l using more basic instruction, cant use DIV or MOD. use? bit shift??
+
+\section{[[_mod()]]}
+\label{sec:_mod}
+
+The [[_mod]] function in [[lib_core/libc/arm/div.s]]
+implements in software the integer modulo since
+the ARM has no [[MOD]] instruction.
+
+<<function _mod>>=
+TEXT	_mod(SB), 1, $16
+	BL	save<>(SB)
+	CMP	$0, R(D)
+	RSB.LT	$0, R(D), R(D)
+	CMP	$0, R(Q)
+	BGE	m1
+	RSB	$0, R(Q), R(Q)
+	BL	div<>(SB)		/* neg numerator */
+	RSB	$0, R(N), R(TMP)
+	B	out
+m1:
+	BL	div<>(SB)		/* pos numerator */
+	MOVW	R(N), R(TMP)
+	B	out
+@
 
 \chapter{Extra Code}
 

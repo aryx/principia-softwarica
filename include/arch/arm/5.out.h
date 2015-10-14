@@ -5,8 +5,8 @@
 // (or to recompile carefully everything).
 
 /*s: enum regxxx(arm) */
-enum registr {
-    /*s: [[regxxx]] compiler conventions cases */
+enum Register {
+    /*s: [[Register]] compiler conventions cases */
     REGRET =	0,
     REGARG =	0,
     /* compiler allocates R1 up as temps */
@@ -16,7 +16,7 @@ enum registr {
     REGEXT =	10, // R9/R10 possible 'extern register xxx;'
     /* compiler allocates external registers R10 down */
     REGTMP =	11,
-    /*e: [[regxxx]] compiler conventions cases */
+    /*e: [[Register]] compiler conventions cases */
     REGSB =		12, // static base
 
     REGSP =		13,
@@ -44,7 +44,7 @@ enum fregister {
 
 /*s: enum opcode(arm) */
 // coupling: with 5c/enam.c
-enum opcode
+enum Opcode
 {
     AXXX,
 
@@ -55,7 +55,7 @@ enum opcode
     /*s: [[Opcode]] cases, logic opcodes */
     AAND,
     AORR,
-    AEOR,
+    AEOR, // aka XOR
     /*x: [[Opcode]] cases, logic opcodes */
     ABIC,
     /*e: [[Opcode]] cases, logic opcodes */
@@ -67,11 +67,13 @@ enum opcode
     AADC,
     ASBC,
     ARSC,
+    /*x: [[Opcode]] cases, add/sub opcodes */
+    AMVN, // MOV negative, but nothing to do with MOVW
     /*e: [[Opcode]] cases, add/sub opcodes */
     /*s: [[Opcode]] cases, mul/div/mod opcodes */
     AMUL,
-    ADIV, // VIRTUAL, transformed to call to _div
-    AMOD, // VIRTUAL, transformed to call to _mod
+    ADIV, // VIRTUAL, transformed in call to _div
+    AMOD, // VIRTUAL, transformed in call to _mod
     /*x: [[Opcode]] cases, mul/div/mod opcodes */
     AMULL,
     AMULAL,
@@ -90,15 +92,6 @@ enum opcode
     /*x: [[Opcode]] cases, bitshift opcodes */
     ASRA,
     /*e: [[Opcode]] cases, bitshift opcodes */
-    // works with the branching opcodes
-    /*s: [[Opcode]] cases, comparison opcodes */
-    ACMP,
-    /*x: [[Opcode]] cases, comparison opcodes */
-    ATST,
-    ATEQ,
-    /*x: [[Opcode]] cases, comparison opcodes */
-    ACMN,
-    /*e: [[Opcode]] cases, comparison opcodes */
     // ---------------------------------------------------------
     // Memory MOV opcodes
     // ---------------------------------------------------------
@@ -109,8 +102,6 @@ enum opcode
     AMOVH,
     AMOVHU,
     /*x: [[Opcode]] cases, mov opcodes */
-    AMVN,
-    /*x: [[Opcode]] cases, mov opcodes */
     AMOVM,
     /*e: [[Opcode]] cases, mov opcodes */
     /*s: [[Opcode]] cases, swap opcodes */
@@ -120,33 +111,41 @@ enum opcode
     // ---------------------------------------------------------
     // Control flow opcodes
     // ---------------------------------------------------------
+    /*s: [[Opcode]] cases, comparison opcodes */
+    ACMP,
+    /*x: [[Opcode]] cases, comparison opcodes */
+    ATST,
+    ATEQ,
+    ACMN, // CMP negative
+    /*e: [[Opcode]] cases, comparison opcodes */
     /*s: [[Opcode]] cases, branching opcodes */
     AB,  // =~ JMP
-    /*x: [[Opcode]] cases, branching opcodes */
-    ABL, // =~ CALL, Branch and Link
-    /*x: [[Opcode]] cases, branching opcodes */
-    ARET, // VIRTUAL, transformed to B (R14) or MOV xxx(SP), R15
     /*x: [[Opcode]] cases, branching opcodes */
     /* 
      * Do not reorder or fragment the conditional branch 
      * opcodes, or the predication code will break 
      */ 
     // VIRTUAL, AB derivatives with condition code, see 5i/
-    ABEQ,
-    ABNE,
-    ABHS,
-    ABLO,
+    ABEQ, // ==
+    ABNE, // !=
+    ABHS, // >= unsigned
+    ABLO, // <  unsigned
     ABMI,
     ABPL,
     ABVS,
     ABVC,
-    ABHI,
-    ABLS,
-    ABGE,
-    ABLT,
-    ABGT,
-    ABLE,
-    //ABAL? (always) done via AB, ABNV (never) done via ANOP probably
+    ABHI, // >  unsigned
+    ABLS, // <= unsigned
+    ABGE, // >=
+    ABLT, // <
+    ABGT, // >
+    ABLE, // <=
+    //ABAL (always) done via AB
+    //ABNV (never) done via ANOP probably
+    /*x: [[Opcode]] cases, branching opcodes */
+    ABL, // =~ CALL, Branch and Link
+    /*x: [[Opcode]] cases, branching opcodes */
+    ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(SP), R15
     /*e: [[Opcode]] cases, branching opcodes */
     // ---------------------------------------------------------
     // Syscall
@@ -215,7 +214,7 @@ enum opcode
 /*e: enum opcode(arm) */
 
 /*s: enum operand_kind(arm) */
-enum operand_kind {
+enum Operand_kind {
     D_NONE,
 
     D_CONST,
@@ -223,20 +222,20 @@ enum operand_kind {
     D_FCONST,
 
     D_REG,
-    /*s: operand_kind cases */
+    /*s: [[Operand_kind]] cases */
     D_OREG,
-    /*x: operand_kind cases */
+    /*x: [[Operand_kind]] cases */
     D_SHIFT,
-    /*x: operand_kind cases */
+    /*x: [[Operand_kind]] cases */
     D_BRANCH,
-    /*x: operand_kind cases */
+    /*x: [[Operand_kind]] cases */
     D_FREG,
     D_FPCR,
-    /*x: operand_kind cases */
+    /*x: [[Operand_kind]] cases */
     D_REGREG,
-    /*x: operand_kind cases */
+    /*x: [[Operand_kind]] cases */
     D_PSR,
-    /*e: operand_kind cases */
+    /*e: [[Operand_kind]] cases */
 };
 /*e: enum operand_kind(arm) */
 
@@ -245,10 +244,10 @@ enum sym_kind {
     N_NONE,
 
     D_EXTERN, // text/data/bss values (from SB)
-    D_AUTO,   // stack values (from SP)
+    D_LOCAL,  // stack values (from SP)
     D_PARAM,  // parameter (from FP)
     /*s: sym_kind cases */
-    D_STATIC, // data static variables (from SB)
+    D_INTERN, // data static variables (from SB)
     /*x: sym_kind cases */
     D_FILE,
     /*x: sym_kind cases */

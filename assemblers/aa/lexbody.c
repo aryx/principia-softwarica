@@ -128,7 +128,7 @@ lookup(void)
     h %= NHASH;
     /*e: [[lookup()]] compute hash value [[h]] of [[symb]] */
 
-    // lookup(symb, hash)
+    // hash_lookup(symb, hash)
     c = symb[0];
     for(sym = hash[h]; sym != S; sym = sym->link) {
         // fast path
@@ -529,20 +529,19 @@ pinit(char *f)
     newfile(f, FD_NONE); // use ionext, set iostack, set fi
 
     /*s: [[pinit()]] initialisations */
-    /*s: [[pinit]] symcounter and h initialisation */
+    peekc = IGN;
+    /*x: [[pinit()]] initialisations */
+    for(i=0; i<NHASH; i++)
+        for(s = hash[i]; s != S; s = s->link)
+            s->macro = nil;
+    /*x: [[pinit()]] initialisations */
+    pc = 0;
+    /*x: [[pinit()]] initialisations */
     symcounter = 1;
     for(i=0; i<NSYM; i++) {
         h[i].symkind = 0; // N_NONE
         h[i].sym = S;
     }
-    /*e: [[pinit]] symcounter and h initialisation */
-    /*s: [[pinit]] hash macro field reset */
-    for(i=0; i<NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            s->macro = nil;
-    /*e: [[pinit]] hash macro field reset */
-    /*x: [[pinit()]] initialisations */
-    peekc = IGN;
     /*e: [[pinit()]] initialisations */
 }
 /*e: function pinit */

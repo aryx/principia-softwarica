@@ -27,20 +27,23 @@ struct Itab itab[] =
     "ADD",		LARITH,	AADD,
     "SUB",		LARITH,	ASUB,
     /*x: [[itab]] elements */
-    "BIC",		LARITH,	ABIC,
-    "RSB",		LARITH,	ARSB,
-    "ADC",		LARITH,	AADC,
-    "SBC",		LARITH,	ASBC,
-    "RSC",		LARITH,	ARSC,
+    "MUL",		LARITH, AMUL,
+    "DIV",		LARITH,	ADIV,
+    "MOD",		LARITH,	AMOD,
     /*x: [[itab]] elements */
     "SLL",		LARITH,	ASLL,
     "SRL",		LARITH,	ASRL,
     /*x: [[itab]] elements */
     "SRA",		LARITH,	ASRA,
     /*x: [[itab]] elements */
-    "MUL",		LARITH, AMUL,
-    "DIV",		LARITH,	ADIV,
-    "MOD",		LARITH,	AMOD,
+    "BIC",		LARITH,	ABIC,
+    /*x: [[itab]] elements */
+    "RSB",		LARITH,	ARSB,
+    "ADC",		LARITH,	AADC,
+    "SBC",		LARITH,	ASBC,
+    "RSC",		LARITH,	ARSC,
+    /*x: [[itab]] elements */
+    "MVN",		LMVN, AMVN,	/* op2 ignored */
     /*x: [[itab]] elements */
     "MOVW",		LMOV, AMOVW,
     "MOVB",		LMOV, AMOVB,
@@ -48,23 +51,12 @@ struct Itab itab[] =
     "MOVH",		LMOV, AMOVH,
     "MOVHU",	LMOV, AMOVHU,
     /*x: [[itab]] elements */
-    "MVN",		LMVN, AMVN,	/* op2 ignored */
-    /*x: [[itab]] elements */
     "SWPW",		LSWAP, ASWPW,
     "SWPBU",	LSWAP, ASWPBU,
     /*x: [[itab]] elements */
     "B",		LBRANCH, AB,
     /*x: [[itab]] elements */
-    "BL",		LBRANCH, ABL,
-    /*x: [[itab]] elements */
-    "RET",		LRET, ARET,
-    /*x: [[itab]] elements */
     "CMP",		LCMP,	ACMP,
-    /*x: [[itab]] elements */
-    "TST",		LCMP,	ATST,
-    "TEQ",		LCMP,	ATEQ,
-    /*x: [[itab]] elements */
-    "CMN",		LCMP,	ACMN,
     /*x: [[itab]] elements */
     "BEQ",		LBCOND,	ABEQ,
     "BNE",		LBCOND,	ABNE,
@@ -80,6 +72,14 @@ struct Itab itab[] =
     "BLT",		LBCOND,	ABLT,
     "BGT",		LBCOND,	ABGT,
     "BLE",		LBCOND,	ABLE,
+    /*x: [[itab]] elements */
+    "TST",		LCMP,	ATST,
+    "TEQ",		LCMP,	ATEQ,
+    "CMN",		LCMP,	ACMN,
+    /*x: [[itab]] elements */
+    "BL",		LBRANCH, ABL,
+    /*x: [[itab]] elements */
+    "RET",		LRET, ARET,
     /*x: [[itab]] elements */
     "SWI",		LSWI, ASWI,
     /*x: [[itab]] elements */
@@ -107,7 +107,7 @@ struct Itab itab[] =
     "@",		LAT,	0,
     /*x: [[itab]] elements */
     "SB",		LSB,	D_EXTERN,
-    "SP",		LSP,	D_AUTO,
+    "SP",		LSP,	D_LOCAL,
     "FP",		LFP,	D_PARAM,
     /*x: [[itab]] elements */
     "PC",		LPC,	D_BRANCH,

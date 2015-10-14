@@ -18,6 +18,7 @@ struct	Gen
     // enum<operand_kind>
     short	type;
 
+    // switch on Gen.type
     union {
         long	offset; // offset or generic value
         double	dval;

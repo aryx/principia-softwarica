@@ -23,13 +23,17 @@ SRC_VIEWS= \
   aa/utils.c\
   aa/lexbody.c\
   aa/macbody.c\
+  \
   ../include/devel/output/common.out.h\
   ../include/arch/arm/5.out.h\
+  \
   5a/a.h\
   5a/globals.c\
   5a/lex.c\
   5a/a.y\
   5a/main.c\
+  \
+  ../lib_core/libc/arm/div.s
 
 
 # temporarily split from SRC_VIEWS for 'make loc'

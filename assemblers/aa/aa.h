@@ -59,8 +59,8 @@ typedef	struct	Hist Hist;
 struct	Sym
 {
     // Sym is (ab)used to represent many things in the assembler:
-    //   symbols, labels, but also macros, tokens for opcodes 
-    //   and registers, etc
+    //   actual symbols, labels, but also macros,
+    //   tokens for opcodes and registers, etc
 
     // ---------------------------------------------------------
     // The "key"
@@ -73,18 +73,18 @@ struct	Sym
     // ---------------------------------------------------------
     long	value; 
 
-    /*s: [[Sym]] identifier value fields */
+    /*s: [[Sym]] identifier fields */
     // index in h when the Sym is really a symbol, 0 when not a symbol
     int	symidx;
-    /*e: [[Sym]] identifier value fields */
-    /*s: [[Sym]] macro value fields */
+    /*e: [[Sym]] identifier fields */
+    /*s: [[Sym]] macro fields */
     //option<string>, for '#define FOO xxx' expansion
     char*	macro;
-    /*e: [[Sym]] macro value fields */
-    /*s: [[Sym]] lexeme value fields */
+    /*e: [[Sym]] macro fields */
+    /*s: [[Sym]] token fields */
     //enum<token_code> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
     ushort	type;
-    /*e: [[Sym]] lexeme value fields */
+    /*e: [[Sym]] token fields */
 
     // ---------------------------------------------------------
     // Extra
