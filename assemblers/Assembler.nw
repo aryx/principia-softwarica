@@ -19,11 +19,14 @@
 %  - reordered opcodes and operand kinds, and cleaned them:
 %     * removed opcodes (ADWORD, ABX, ...)
 %     * removed operand kinds (D_GOK, D_ADDR, D_OCONST, ...)
-%  - introduced sym_kind, splitted from operand_kind, for ANAME
+%  - introduced sym_kind, splitted from operand_kind, for D_EXTERN, etc
 %  - factorized more code between ARM and x86 (abusing LP chunks)
-%  - removed a few grammar rules, weird operand forms that were not used anyway
-%    as well as the optional commas here and there
-%  - rename some grammar rules (spreg -> regi, sreg -> regi_nosp)
+%  - refactored the grammar:
+%     * removed a few rules, weird operand forms that were not used anyway,
+%        or introducing complexity (regi_nosp)
+%        as well as the optional commas here and there
+%     * rename some grammar rules (spreg -> regi, sreg -> regi_nosp),
+%     * inlined and removed intermediate rules not useful anymore: oreg, nireg?
 %  - TODO rename types, clearer, Gen? as Adr? or Operand? (and Gen2? as Prog?)
 
 %thx to codemap/codegraph/scheck:
@@ -213,7 +216,9 @@ between an object file and an executable?
 %tags: ocaml: to give a hint on how rewriting C in OCaml could improve things
 %tags: real-world: to relate to other assemblers
 %tags: compiler: give idea of what 5c does
-%tags: self-ref: opcodes to implement assembler itself!
+%tags: self-ref: opcodes to implement the assembler itself!
+%tags: kernel: for features essential to implement a kernel
+%tags: old: for original code I changed/removed to be clearer
 
 \section{The \plan ARM assembler, [[5a]]}
 
@@ -892,6 +897,7 @@ C {address} operator [[&]].
 \l this SB is weird
 
 \subsection{Pseudo-registers}
+\label{sec:pseudo-registers}
 
 [[SB]] is actually one of the few {\em pseudo-registers} in Asm9.
 [[PC]] is another one which corresponds to the
@@ -1512,6 +1518,7 @@ in Asm9
 \end{itemize}
 
 \subsection{Addessing modes}
+\label{sec:ref-addressing-modes}
 
 Memory references appear mainly in 
 memory moves (e.g. [[MOVW]]),
@@ -2064,27 +2071,22 @@ enum Opcode
     ALAST,
 };
 @
-\l why Axxx? Assembly?
 %old: was called 'enum as'
-%note: I reordered a lot the original opcodes. Note that it can be dangerous
+%note: I reordered a lot the original opcodes. e.g. AND, ORR, EOR are together.
+% Note that it can be dangerous
 % for backward compatiblity to do so. Indeed 'ld' and 'as' need to agree
 % with each other; one can't use a library compiled (or cross compiled) 
 % using a 5l relying on a certain order, and link object files compiled 
 % by a 5a relying on another order. So can have some subtle errors if
 % want to play with what is cross-compiled! So make sure to recompile your
 % libc if you modify 5l or 5a or 5.out.h
-
 \n the enum must contain less than 256 elements, as we rely on 
 \n  sending ANAME as a byte in zname(), and all opcode as a byte in zaddr()
-\n the order of the opcode below does not have to match the opcode order
-% (Actually I have reordered them to be more logical
-% e.g. AND, ORR, EOR are closer together.)
-% the actual binary code generation is done in the linker
-%less: Could analyze *.s in plan9 and do some stats? or use cg on the
-%  whole plan9 and see how much AXXX is used
+\l analyze *.s and do stats? Use cg on plan9/ and see how much AXXX is used?
 
 The opcodes follow closely the instruction set (ISA) of the ARM
 (see the \book{Emulator}) and are all prefixed by an [[A]].
+\l why Axxx? Assembly?
 For instance, [[ASUB]] corresponds to the [[SUB]] machine instruction.
 They have been divided in different categories: 
 arithmetic and logic, 
@@ -2153,7 +2155,7 @@ constant represents nothing:
 <<constant R_NONE(arm)>>=
 #define R_NONE 16
 @
-%old: NREG used to represent NONE in the outcode reg param; I prefer R_NONE
+%old: NREG used to represent also NONE in the outcode reg param; I prefer R_NONE
 %ocaml: None
 
 The ARM has also 
@@ -2182,7 +2184,7 @@ struct	Gen
 
     // switch on Gen.type
     union {
-        long	offset; // offset or generic value
+        long	offset; // offset or lval or bitshifted register
         double	dval;
         char	sval[8];
     };
@@ -2192,7 +2194,8 @@ struct	Gen
     <<[[Gen]] other fields>>
 };
 @
-%old: I introduced the union? can have it? operand_kind will be good enough?
+\t can use lval too now! after all it's an union now
+%old: I introduced the union. Can have it? operand_kind will be good enough?
 %ocaml: An ADT would be far better than this enum, D_NONE, and separate Sym 
 % type operand = 
 %  | D_REG of register // and offset?
@@ -5554,10 +5557,11 @@ Yacc generates from this grammar the [[yyparse()]] parsing function
 which is called by [[assemble()]] and which internally
 calls [[yylex()]].
 %
-We assume you know how to read a Yacc grammar, otherwise read~\cite{lexyacc}
-(you can also read the original Yacc paper at [[generators/docs/yacc.pdf]]
+We assume you know how to read a Yacc grammar, otherwise 
+read~\cite{lexyacc}\footnote{You can also read the original Yacc paper 
+at [[generators/docs/yacc.pdf]]
 in our \plan repository, or read our \book{Code Generators} to fully
-understand how Yacc works).
+understand how Yacc works}.
 
 \section{Overview}
 
@@ -5581,7 +5585,7 @@ The [[%union]] and [[%token]] {directives} have been
 already described in Section~\ref{sec:token}.
 The [[%type]] declarations will be described gradually in this chapter. 
 The priority declarations are used only for the constant
-expressions (an advanced Asm5 feature) and will be described in
+expressions (an advanced Asm9 feature) and will be described in
 Section~\ref{sec:constant-expr}.
 
 The grammar part at the end is the most important one.
@@ -5600,11 +5604,8 @@ which will be presented gradually in this chapter:
 <<float rules>>
 
 <<helper rules(arm)>>
-<<opt rules>>
-<<misc rules>>
 @
-\l actually not context free; parsing a file modify the kind of toks (LLAB)
-\t a bit messy those opt, helper, misc, unify!
+\n actually not context free; parsing a file modify the kind of toks (LLAB)
 
 Essentially, an assembly program is made of a set lines containing
 instructions or labels. Instructions are made of an opcode followed 
@@ -5641,21 +5642,22 @@ token used for error recovery (see~\cite{lexyacc}):
 @
 
 In the following section we will focus on the [[inst]]ruction
-rule and see the different opcodes of Asm5.
+rule and see the major opcodes of Asm5.
 In Section~\ref{sec:label-def} we will see that a line
 can also contain label definitions.
 Then, in Section~\ref{sec:operands-grammar} we will focus on the
-operands of Asm5. 
+major operands of Asm5. 
 We will then explore a few advanced features of Asm5.
 %compiler:
-While presenting the syntax for the different features of Asm5
-in this chapter, we will also try to discuss how those features can be used
+While presenting the syntax of the different features of Asm5,
+we will also try in this chapter to discuss how those features can be used
 to implement higher-level constructs of languages such as C.
 \l which will also help to understand them, why they are useful,when to use them
 We will conclude this chapter by discussing the generated code
 for [[yyparse()]] by Yacc.
 
 \section{Instructions}
+\n =~ statements
 
 Most instructions of Asm5 correspond to machine instructions
 of the ARM described in the \book{Emulator}, and can be
@@ -5689,7 +5691,7 @@ overviewed in Section~\ref{sec:opcode}:
 <<[[Opcode]] cases, logic opcodes>>=
 AAND,
 AORR,
-AEOR, // aka XOR
+AEOR, // a.k.a. XOR
 @
 \n not exactly the ARM order, e.g. I prefer to put closer AAND and AORR
 
@@ -5703,7 +5705,7 @@ the symbol table [[hash]] as explained in Section~\ref{sec:sym}):
 "EOR",		LARITH,	AEOR,
 @
 
-The logic instructions take either 2 or 3 operands,
+The logic opcodes take either 2 or 3 operands,
 mostly registers. Usually the first two operands are combined
 and the result stored in the third operand.
 Here are some examples:
@@ -5712,12 +5714,12 @@ AND $0x0f, R1, R2 // R2 = R1 & 0x0f;
 ORR $0xff, R2     // <=> ORR $0xff, R2, R2
 \end{verbatim}
 %$
-\l left-to-right
-\l if middle register is NONE then ADD X1, X2 -> ADD X1, X2, X2 (plus=)
+\n left-to-right
+\n if middle register is NONE then ADD X1, X2 -> ADD X1, X2, X2 (plus=)
 \t how do NOT?
 
 Logic instructions have the same syntax than
-arithmetic instructions in Asm5 and so they share 
+arithmetic instructions in Asm5 and so share 
 the same grammar rule:
 
 <<inst rule(arm)>>=
@@ -5730,20 +5732,20 @@ inst:
 @
 %$
 %old:| LARITH cond imsr ',' spreg ','   { outcode($1, $2, &$3, $5, &nullgen); }
-%old: spreg -> regi
-\l arith operator of Machine.nw, but also SLL, SRL,   DIV, MOD, ...
+\l arith operator of Machine.nw, but also virtual: SLL, SRL,   DIV, MOD, ...
 
-The \$$n$ Yacc notation, in the {\em actions} between braces, 
+The \$$n$ Yacc notation in the {\em actions} between braces
 gives access to the {\em value} of the nth {terminal} or 
 {non-terminal} in the rule.
-For terminals, this value is derived from the global [[yylval]]
+For terminals this value is derived from the global [[yylval]]
 set by the lexer.
-\l how manage multiple values then at the same time? array ? see \book{Yacc}
+\l for non-terminals? \$\$
+\n how manage multiple values then at the same time? array ? see \book{Yacc}
 Here are the different values for the different elements
 in the first rule of [[inst]] above:
 
 \begin{enumerate}
-\item [[LARITH]] is the {token code} for all arithmetic and logic mnemonics.
+\item [[LARITH]] is the {token name} for all arithmetic and logic mnemonics.
 \$1 contains the enumeration value of the corresponding opcode,
 for instance [[AAND]] if the lexed token was [["AND"]]
 (see the [[itab]] entries above)
@@ -5795,7 +5797,7 @@ with the following C operators: [[&]], [[|]], and [[^]].
 They can also be used to encode boolean expressions
 involving [[&&]] and [[||]].
 \t how NOT? MVN?
-Those logic operators are useful in many contexts:
+Those C operators are useful in many contexts:
 complex conditions in [[if]] and [[while]] statements ([[if(e1 && e2)]]),
 boolean variables ([[bool b = b1 || b2;]]),
 bitsets operations ([[set1 | set2]]),
@@ -5840,8 +5842,9 @@ involving the [[LARITH]] token code.
 %compiler: 
 Again, The two opcodes above have a direct correspondance
 with C operators: [[+]] and [[-]].
-\l which are used heavily for instance in numerical algorithms.
+\t complement a 2 arithmetic, no need different ops if signed or unsigned!
 \t overflow? signed vs unsigned?
+\l which are used heavily for instance in numerical algorithms.
 %
 %The C compiler uses also arithmetic opcodes to encode many things.
 %For instance, access to the field of a structure, e.g. [[x->fld]],
@@ -5886,24 +5889,27 @@ assembly functions.
 
 
 \subsubsection{Bit shift}
+\label{sec:bitshift-opcodes}
 
 %compiler:
-The two opcodes below are in direct correspondance
+The opcodes below are in direct correspondance
 with the following C operators: [[<<]], and [[>>]]:
-\l Shift left logic, Shift right logic
-\t actually maybe it is ASRA not ASRL!
 
 <<[[Opcode]] cases, bitshift opcodes>>=
-ASLL,
-ASRL,
+ASLL, // Shift Left  Logic, VIRTUAL transformed in bitshifted registers
+ASRL, // Shift Right Logic, VIRTUAL transformed in bitshifted registers
+ASRA, // Shift Right Arithmetic, VIRTUAL transformed in bitshifted registers
 @
 <<[[itab]] elements>>=
 "SLL",		LARITH,	ASLL,
 "SRL",		LARITH,	ASRL,
+"SRA",		LARITH,	ASRA,
 @
 
+\t arithmetic right shift?? vs logical right shift??
+\t how 5c decides which one to use? type checking? unsigned!
 
-The ARM does not really have those opcodes; it does
+The ARM does not really have those opcodes though; it does
 not use those mnemonics for bit shift operations.
 Instead, the ARM has a more general approach to bit shifting:
 {\em operands} of many operations ([[AND]], [[SUB]],
@@ -5917,28 +5923,19 @@ with bitshifted register operands.
 \n not really virtual
 
 %self-ref:
-Bit shift operations 
+Bit shift operations are also heavily used
+in the \book{Emulator} because of the binary format of 
+ARM instructions.
 %are used in this document for the
 %[[MCRR]] macro in Section~\ref{sec:mcrr-macro}, and as we will
 %see later in Section~\ref{sec:outcode} when generating
-%the (binary) object file. They 
-are also heavily used
-in the \book{Emulator} because of the binary format of ARM instructions.
+%the (binary) object file. 
+%also to encode the kind of the bitshift (tricky self ref).
 \t for what? to extract bit, make bits, etc
 \l for MCRR it is assembly code, but for the rest it is in C code. confusing?
 %compiler:
 \t also useful for multiplication optimisation (when power of 2), but faster?
 
-\ifallcode
-<<[[Opcode]] cases, bitshift opcodes>>=
-ASRA,
-@
-<<[[itab]] elements>>=
-"SRA",		LARITH,	ASRA,
-@
-\t arithmetic right shift?? vs logical right shift??
-\t actually ASRL is not used by 5c
-\fi
 
 \subsubsection{Other arithmetic and logic opcodes}
 
@@ -5993,7 +5990,8 @@ See the \book{Emulator} to learn about their semantics.
 
 \subsection{Memory}
 
-%turing: machine is von newman model, memory is everything
+%turing: 
+% machine is von newman model, memory is everything
 % but bottleneck, hence RISC model actually
 %compiler: 
 % store simple data(int), complex (aggregate), store results, 
@@ -6062,7 +6060,7 @@ such as the indirect with offset addressing mode in [[4(R1)]]:
 @
 
 Note that even if the grammar rule above is very general,
-allowing to write things like [[MOVW (R13), 6(R2)]], %$
+allowing to write things like [[MOVW (R13), 6(R2)]],
 the linker [[5l]] will actually not accept those instructions
 and report an error at linking time.
 \l a bit ugly
@@ -6158,7 +6156,7 @@ using [[SWPW]].
 \l x86 XCHG
 \l ref to other book?
 
-%compiler: concurrency
+
 
 \subsection{Control flow}
 \n was Branching but better control flow I think
@@ -6167,10 +6165,10 @@ using [[SWPW]].
 
 %compiler:
 The control flow constructs of Asm5 are in
-direct correspondance with C constructs:
+direct correspondance with certain C constructs:
 inconditional jump with [[goto]],
 conditional jump with [[if]],
-branch and link with function call [[foo()]] and [[return]].
+branch and link with function call [[x()]] and [[return]].
 
 \subsubsection{Jump (inconditional)}
 
@@ -6189,7 +6187,7 @@ an offset to the PC pseudo-register (e.g. [[B 4(PC)]]), or
 a label (e.g. [[B later]]), 
 via the [[rel]] (register or label) non-terminal below, or
 \l D_BRANCH
-a name/symbol (e.g. [[B foo(SB)]]) or 
+a name/symbol (e.g. [[B foo(SB)]]) or finally
 an indirect register (e.g. [[B (R3)]]), 
 via [[nireg]] (name or indirect register) below:
 \l D_OREG
@@ -6206,6 +6204,8 @@ via [[nireg]] (name or indirect register) below:
 
 %compiler:
 It is easy to implement loops using [[B]].
+The [[helloworld.s]] program in Section~\ref{sec:hello-program} 
+contains one (stupid) loop.
 To not loop infinitely though one needs a way
 to escape the loop and jump elsewhere {\em if}
 a certain criteria is true.
@@ -6222,9 +6222,9 @@ In the same way, there was also no need for an [[if]]
 in the corresponding [[helloworld1.c]] C program.
 %turing:
 The conditional jump though is a fundamental instruction.
-Without it programs would be just long sequence of instructions 
+Without it programs would be just long sequences of instructions 
 or infinite loops.
-\l even BL would not help because BL is almost like a B
+\n even BL would not help because BL is almost like a B
 
 The conditional jump instruction is usually preceded
 by a {comparison} instruction.
@@ -6248,7 +6248,7 @@ Note that despite its name, this instruction does not really
 compare its two operands. Instead, it loads those two operands
 in some internal registers of the processor.
 Those internal registers can then be used by the instruction
-coming just after, the conditional jump, to actually compare
+coming just after, for instance a conditional jump, to actually compare
 using different {\em relational operators} those registers
 and jump accordingly:
 \l so actually one compare instr and many conditional jump instrs
@@ -6263,10 +6263,10 @@ ABEQ, // ==
 ABNE, // !=
 ABHS, // >= unsigned
 ABLO, // <  unsigned
-ABMI,
-ABPL,
-ABVS,
-ABVC,
+ABMI, // ??
+ABPL, // ??
+ABVS, // ??
+ABVC, // ??
 ABHI, // >  unsigned
 ABLS, // <= unsigned
 ABGE, // >=
@@ -6276,6 +6276,7 @@ ABLE, // <=
 //ABAL (always) done via AB
 //ABNV (never) done via ANOP (see bcode[])
 @
+\n match closely things in Machine.nw
 %old: got rid of ABCS and ABCC, seems redundant
 % and does not match the ARM convention
 % ABCS,//not in 5i/cond, seems equivalent to ABHS
@@ -6305,7 +6306,7 @@ ABLE, // <=
 | LBCOND rel { outcode($1, Always, &nullgen, R_NONE, &$2); }
 @
 \l no nireg here?
-\t unsigned!
+\t explain the unsigned!
 
 Here is an example of a comparison and conditional jump:
 
@@ -6334,11 +6335,10 @@ and conditional jumps.
 The [[B]]$xx$ Asm5 instructions are actually virtual instructions.
 Similar to the bitshift operations, the ARM provides a more
 general approach to conditional jump where {\em every instruction
-can be conditionally executed}. The opcodes above are thus
-translated by [[5l]] in the [[B]] ARM instruction
-with special bits set to mark the instruction for
-conditional execution. See the \book{Emulator} for
-more information or Section~\ref{sec:cond-exec}.
+can be conditionally executed} as explained later in
+Section~\ref{sec:cond-exec}.
+The opcodes above are thus translated by [[5l]] in the [[B]] ARM instruction
+with special bits set to mark the instruction for conditional execution.
 %
 Similar to the bitshift operations, Asm5 provides
 those specialised virtual instructions jumps because
@@ -6389,11 +6389,11 @@ ABL, // =~ CALL, Branch and Link
 
 The [[BL]] instruction uses the same syntax than
 [[B]] and so use the same grammar rule
-involving the [[LBRANCH]] token code.
+involving the [[LBRANCH]] token name.
 Indeed, [[BL]] is really just a slightly different [[B]].
 %
-But, [[BL]] performs in one instruction something which is
-one of the building block for organizing code into functions.
+But, [[BL]] performs in one instruction something which can
+be used as a building block for organizing code into functions.
 Indeed, by using [[BL]], the link register [[R14]],
 the stack pointer [[R13]], and symbols defined by [[TEXT]], one can easily
 simulate functions, function calls, and [[return]]
@@ -6464,7 +6464,7 @@ ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(SP), R15
 \l interrupts and exceptions
 
 The software interrupt instruction [[SWI]] is really a form of
-function call but to a fixed special function of the kernel,
+function call but to a fixed special code area setup by the kernel,
 which is why it does not take any operand:
 \l interrupt table normally? so take an argument. In ARM there is an argument.
 
@@ -6485,6 +6485,7 @@ ASWI, // syscall
 % but not sure it needs an argument in plan9 context,
 % and anyway was doing stupid things like SWI 0  in 9syscall/mkfile
 % which was weird, at least should be SWI $0
+%old:
 %<<inst rule(arm)>>=
 %| LSWI cond gen { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
 %@
@@ -6492,8 +6493,9 @@ ASWI, // syscall
 %% just so can test things with kencc/5a, ignore actually the last argument
 %% otherwise the linker will fail.
 
+%kernel:
 [[SWI]] is the fundamental building block for having a
-kernel program clearly separated from use programs and to have
+kernel program clearly separated from user programs by providing
 a safe way to go from user program to kernel code via the system
 call API bridge.
 \l open then the door for user process to access real hardware
@@ -6562,12 +6564,12 @@ long	pc;
 pc = 0;
 @
 
-Once a label has been defined, the type of its
+Once a label has been defined, the code of its
 token in the symbol table is changed to [[LLAB]]
-\footnote{This mean Yacc actions actually have a side effect on how
+\footnote{This means Yacc actions actually have a side effect on how
 the lexer behaves. Asm5 is thus not a context free grammar.
 This is similar to C where typedefs declarations change
-the token type of certain identifiers.
+the token code of certain identifiers.
 }
 as shown in the rule above.
 Further use of this label in the rest of the program
@@ -6588,12 +6590,13 @@ or in the next assembling pass will trigger then this rule:
 \section{Operands}
 \label{sec:operands-grammar}
 \label{sec:imsr}
+\n =~ expressions
 
-Now that we have seen almost all the instructions and opcodes of Asm5, we
+Now that we have seen the major opcodes and instructions of Asm5, we
 can switch to explain the operands of those instructions.
 %
-One of the first operand rule we saw in the previous section
-was [[imsr]], the first operand of opcodes such as [[AADD]] or [[AAND]]:
+The first non-terminal corresponding to an operand we saw in this chapter
+was [[imsr]], the first operand of opcodes such as [[AADD]] or [[AORR]]:
 
 <<operand rules(arm)>>=
 imsr:
@@ -6601,6 +6604,8 @@ imsr:
 | shift
 | reg
 @
+
+The next three subsections will each cover one of the [[imsr]] alternatives.
 
 Rules which return values (in \$\$) must have their type declared
 in Yacc via a [[%type]] directive.
@@ -6625,19 +6630,23 @@ Gen    genval;
 
 The type of [[genval]] is [[Gen]], the
 generalized form of operand we described in Section~\ref{sec:operand}.
+%
 Thanks to those [[%type]] and [[%union]] Yacc directives,
 the generated code by Yacc for the \$$nn$
 referring to non-terminals will access the appropriate field of 
-the union. In the same way, the [[%token]] and [[%union]] Yacc
+the union. 
+%
+In the same way, the [[%token]] and [[%union]] Yacc
 directives will guide Yacc to generate the right code
 for the \$$nn$ refering to terminals (the tokens).
 
-The [[gen]] operand rule, the operand of [[MOVW]], has the same type:
+The [[gen]] operand rule, specifying the operands of [[MOVW]], 
+has the same type:
 
 <<type declarations(arm)>>=
 %type   <genval>   gen 
 @
-%old: was 'type   <gen>   gen', but confusing
+%old: was %type   <gen>   gen, but confusing
 
 <<gen rule>>=
 gen:
@@ -6659,15 +6668,11 @@ explain soon, but we will see later extensions to the [[gen]] rule.
 \ifallcode
 <<operand rules(arm)>>=
 <<gen rule>>
-<<spreg rule(arm)>>
-<<sreg rule(arm)>>
-@
-<<misc rules>>=
+<<regi rule(arm)>>
 <<oreg rule>>
-@
-<<operand rules(arm)>>=
 <<ximm rule>>
 @
+%old: <<regi_nosp rule(arm)>>
 \fi
 
 
@@ -6676,11 +6681,13 @@ explain soon, but we will see later extensions to the [[gen]] rule.
 %<<operand_kind cases>>=
 %D_REG,
 %@
-% works with Gen structure, as shown below
 
-The [[reg]] rule allows to wrap in a [[Gen]]
-the integer representing the register number,
-and uses the [[D_REG]] {\em operand kind} we described
+Most Asm5 instructions can take one, two, or even three
+registers as operands.
+%
+The [[reg]] rule below allows to wrap in a [[Gen]]
+the integer representing the register number.
+It uses the [[D_REG]] {\em operand kind} we described
 in Section~\ref{sec:operand}:
 
 <<operand rules(arm)>>=
@@ -6694,31 +6701,21 @@ reg:
 @
 %$
 
-<<type declarations(arm)>>=
-%type   <lval>  regi regi_nosp
-@
-\l lval but really enum<registr>
+[[regi]] (register integer) returns directly the register number:
 
-<<spreg rule(arm)>>=
-regi:
-  regi_nosp
+<<type declarations(arm)>>=
+%type   <lval>  regi
 @
 %old: was called spreg, but prefer regi
+\l lval but really enum<registr>
 
 
-<<sreg rule(arm)>>=
-regi_nosp:
+<<regi rule(arm)>>=
+regi:
   LREG
-| LR '(' expr ')'
- {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
- }
 @
-%$
-%old: was called sreg, but prefer regi_nosp, why was called sreg??
-\l expr! see later
+%old: was called sreg, but prefer regi_nosp, why was called sreg? simple reg?
+\l implicit $$ = $1 %$
 
 <<[[itab]] elements>>=
 "R0",		LREG,	0,
@@ -6739,46 +6736,62 @@ regi_nosp:
 "R15",		LREG,	15,
 @
 
+Asm5 allows also the [[R(xx)]] syntax to specify a register:
+
 <<[[itab]] elements>>=
 "R",		LR,	0,
 @
 \l note that different from pseudo register!
 
-
-
-
-%XXX
-<<spreg rule(arm)>>=
-| LSP { $$ = REGSP; }
+<<regi rule(arm)>>=
+| LR '(' expr ')'
+ {
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
+ }
 @
 %$
-% so here actually we get the real hardware register?!!! messy
-% why another one again? in which context we don't accept LSP?
-% and also in which context we don't accept LPC?
+\l expr! see later
 
-<<sreg rule(arm)>>=
-| LPC { $$ = REGPC; }
-@
+This feature can be useful when combined with the symbolic constant
+feature of Asm5, as shown in Appendix\ref{sec:_div}.
+One can achieve a similar effect though by using simply macros.
+
+
+%old: intermediate not needed anymore once got rid of virtual reg in regi.
+%type   <lval>  regi regi_nosp
+%<<regi rule(arm)>>=
+%regi:
+%  regi_nosp
+%@
+%<<regi_nosp rule(arm)>>=
+%| LPC { $$ = REGPC; }
+%@
+%<<regi rule(arm)>>=
+%| LSP { $$ = REGSP; }
+%@
 %$
-% but here it's actually hardware rgister??
-% why 2 rules? anyway people can use R13 to encode LSP so why
-% not have a simple reg rule that allows all those registers directly?
+% here it was actually hardware registers which I think is confusing
+% so I removed those rules.
+% Anyway people can use R13 to encode SP and R15 for PC so why
+% not have a simple reg rule that allows all those registers directly!
+% In which context we don't accept LSP? in which context we don't accept LPC?
 
 \subsection{Immediate constants}
-
-% of course need constant :)
-%turing: 
-
-% con = constant
-% prefix with $ (why? ambiguity with what?) to differentiate
-% with just con where it's a omem (see section below)
-% but 4 bytes instr, and space for opcode, cond, etc, so not so much
-%  for full spectre of 32 bits integers.
 
 %<<operand_kind cases>>=
 %D_CONST,
 %@
-%in core ds now
+
+Many instructions can take a register or an (immediate) constant
+as their first operand.
+%turing:
+This is pretty fundamental of course.
+%
+All constants in Asm9 are prefixed with a dollar:
+\l why? ambiguity with what? 
+\l to differentiate with just con where it's a omem (see section below)
 
 <<operand rules(arm)>>=
 imm: '$' con
@@ -6788,23 +6801,48 @@ imm: '$' con
   $$.offset = $2;
  }
 @
-% offset is bad field name. maybe a union with value would be nice.
-
-% see con section below, essentially static-time integer constants
-% (not float, not string)
+\l con = constant
+\t use lval here instead of offset
 
 <<con rule>>=
 con:
   LCONST
+| '-' con      { $$ = -$2; }
+| '+' con      { $$ = $2; }
+| '~' con      { $$ = ~$2; }
 @
+%$
+\n con extended later as expr
 
-% float constants are in another category, actually they
-% are allowed only for ximm and so for MOV and DATA categories.
+Note that the ARM uses fixed-length instructions of 32 bits.
+%
+Because a few of those 32 bits are used for the opcode 
+and a few more to encode the other operands, the range
+of the Asm5 constants is limited.
+For the arithmetic instructions, only 12 bits can be used for the
+constant, so in theory only constants between 0 and 4096
+could be represented. 
+\l and for the other instructions? for STR and LDR?
+%
+But, the ARM uses a clever trick
+and those 12 bits are actually divided in two parts:
+8 bits for a constant, and 
+4 bits for a {\em rotation} of this constant. 
+\n a bit different from the bitshifted registers we will see later, but related
+Not all 32 bits integers can be represented
+using that scheme but many important numbers like all
+the powers of 2 between 0 and 31 can be expressed, which
+is very useful in operations involving bitsets or bitmasks.
+See the \book{Emulator} for more information
+or \url{http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/}
+which is an excellent tutorial on the topic.
+\l also linker book
+\l "so you can set, clear, or toggle any bit with one instruction"
 
+[[MOV]]s instructions, which use the [[gen]] non-terminal
+as operand, which derives [[ximm]], can also take a constant as an
+operand:
 
-
-% this is used for MOV of course, because of gen, but also
-% for DATA, WORD
 <<ximm rule>>=
 ximm:
   '$' con
@@ -6814,17 +6852,16 @@ ximm:
   $$.offset = $2;
  }
 @
-% see later the extension, MOV allows more forms of constants
-% (e.g. string constants, float constants)
-
-
+\l also for DATA, WORD
+\l and range for LDR/STR for the immediate constant?
 
 %\subsection{String constants}
-
 %<<operand_kind cases>>=
 %D_SCONST,
 %@
-% string constant
+
+In fact, even string constants are possible operands of [[MOV]]s:
+\n see later also float
 
 <<ximm rule>>=
 | '$' LSCONST
@@ -6835,16 +6872,23 @@ ximm:
  }
 @
 
+For those cases the constant itself can not be encoded
+in 32 bits though. The address of the string,
+which will become an integer constant after linking,
+will be used instead in the generated ARM instruction.
+\l kinda automatic GLOBL/DATA done by linker
+\l related to $symbol(SB) %$ which also become an integer constant
 
 \subsection{Shifted registers}
 \label{sec:shift-register}
+\l mv in advanced topics?
 
-% register and constant in some sense
-% mv in advanced topics?
-
-<<[[Operand_kind]] cases>>=
-D_SHIFT,
-@
+As mentioned in Section~\ref{sec:bitshift-opcodes},
+in addition to the (virtual) instructions [[SLL]], [[SRL]], and [[SRA]], 
+Asm5 gives access to the ARM generalized approach to bitshift
+by allowing to use {\em shifted registers} as operands of many 
+arithmetic instructions:
+\l many or all?
 
 <<operand rules(arm)>>=
 shift:
@@ -6873,20 +6917,39 @@ shift:
   $$.offset = $1 | $4 | (3 << 5);
  }
 @
-\l argh, offset really abused
+\l argh, offset really abused, should use shift here
+%self-ref:
+\l use bitshift op in the code to handle bitshift, also use bitwise |, 
 
-<<[[itab]] elements>>=
-"@",		LAT,	0,
+This combines a register (a [[D_REG]]) and an immediate constant
+(a [[D_CONST]]) in a new kind of operand:
+\n in fact can be two D_REG rcon is register or con
+
+<<[[Operand_kind]] cases>>=
+D_SHIFT,
 @
-% hmm could remove @ from the identifier lexing section,
-% so then could just do '@' '>' instead of this indirection
 
+One can then use an opcode like [[ADD]] while at the same time
+doing a shift operation on one register and add the result
+to other registers in one single instruction:
+\begin{verbatim}
+ADD R1 << 8, R2, R3
+\end{verbatim}
+
+This opens many optimisations opportunities in the C compiler [[5c]].
+%
+Note that [[Gen.offset]] is used to encode the whole operand value
+\footnote{One could use [[Gen.reg]] and [[Gen.offset]] instead}:
+the first 4 bits (bits 0 to 3) are used for the register number (0 to 15),
+bits 5 and 6 are used to encode the kind of shift, e.g. [[0 << 5]]
+for a left shift, and bits 7 to 11  to encode either a small immediate constant
+or another register via [[rcon]] (register or constant) below.
+\n so a bit different from the imm rotate we saw before which uses 4 bits
 
 <<type declarations(arm)>>=
 %type   <lval>  rcon
 @
 
-% rcon, register or constant, spreg = sp or general register
 <<helper rules(arm)>>=
 rcon:
   regi
@@ -6902,44 +6965,78 @@ rcon:
   $$ = ($1&31) << 7;
  }
 @
-% really does too much work here and close to ARM concrete bits
+\l really does too much work here and close to ARM concrete bits
+
+The tricky [[Gen.offset]] encoding for bitshifted registers
+reflects how such operand are actually encoded in the binary
+format of ARM instructions.
+%
+
+In addition to the [[<<]] and 
+[[>>]] logical shift operators, Asm5 provides
+the [[->]] operator for right shift arithmetic
+and [[@>]] for right rotate.
+Again, see the \book{Emulator} for more information.
+Because [[@]] can be part of an identifier in Asm9, a special
+entry in [[itab]] had to be used to represent the single character:
+
+<<[[itab]] elements>>=
+"@",		LAT,	0,
+@
+\l could remove @ from the identifier lexing section,
+\l so then could just do '@' '>' instead of this indirection
+%ocaml: ugly to allow @ in identifiers
+
+
 
 \subsection{Memory (de)references, pointers}
-% indirect addressing?
-% was "Memory references"
-% arguments to MOVW
-% Pointers? or Memory dereference actually? or both :)
+\l indirect addressing?
 
-% O_REG = offset reg?
+We have seen the three components of the [[imsr]] operand rule
+used in arithmetic instructions:
+the immediate constant, the shifted register, and the register.
+\l Those are actually possible operands for other ARM instructions.
+%
+We will now focus on the [[MOVW]] instruction and its [[gen]]
+operand which is even more general (hence the name).
+Section~\ref{sec:ref-addressing-modes} listed the different
+ways to reference memory in Asm5, the different {memory addressing modes},
+for instance ``indirect with offset'' in [[4(R1)]].
+
+This is where we start to deviate from [[imsr]] in [[gen]]
+(in addition to the [[ximm]] vs [[imm]] difference):
+<<gen rule>>=
+| ioreg
+@
+%old: was oreg above
+%old: oreg is an intermediate rule which we do not need anymore
+%<<gen rule>>=
+%| oreg
+%@
+%<<oreg rule>>=
+%oreg:
+%  ioreg
+%@
+
+
 %<<operand_kind cases>>=
 %D_OREG,
 %@
-% when do MOV R1, (R2) => means in cell pointer by R2, so
-% it's really like *r2 = r1
 
-% offset reg, indirect reg, indirect or offset reg, name indirect reg 
-% see section ref manual on different addressing modes
-
-% start of difference with imsr!
-<<gen rule>>=
-| oreg
-@
+[[ireg]] (indirect register) allows to dereference a pointer
+stored in a register. [[ioreg]] (indirect offset register) 
+adds an offset to the memory address in the register.
+Both are using the [[D_OREG]] operand kind introduced in 
+Section~\ref{sec:operand}:
 
 <<type declarations(arm)>>=
-%type   <genval> oreg ioreg ireg nireg 
+%type   <genval> ioreg ireg
 @
 
-% oreg? offset reg? 
-<<oreg rule>>=
-oreg:
-  ioreg
-@
-
-% indirect or offset reg
-<<misc rules>>=
+<<operand rules(arm)>>=
 ioreg:
   ireg
-| con '(' regi_nosp ')'
+| con '(' regi ')'
  {
   $$ = nullgen;
   $$.type = D_OREG;
@@ -6947,11 +7044,12 @@ ioreg:
   $$.offset = $1;
  }
 @
+\l could inline in gen, but MOVM use ioreg directly
+%old: was regi_nosp here
+\t how offset encoded in instruction? range?
+\t remember that MOVW is a virtual instruction. LDR/STR are different.
 
-
-% ireg? indirect reg? 
-% used from ioreg (and so gen), and also specifically from SWAP
-<<misc rules>>=
+<<operand rules(arm)>>=
 ireg:
  '(' regi ')'
  {
@@ -6962,61 +7060,28 @@ ireg:
  }
 @
 %$
+\n could inline in ioreg, but swap use ireg directly
 
 
 
 
 \subsection{Named memory locations, symbols}
-% (different from labels, which are just for code refs)
+\n different from labels, which are just for code refs
 
+One can also use symbols (names) to reference memory in Asm5:
 
-% part of oreg? name is an offset to a reg?
-% Actually a name is really a constant offset to a base like LSB!!
-% it's implicitly a dereference so foo is really foo(SB); you want
-% $foo to get the actual address (and not content)
-<<oreg rule>>=
+<<gen rule>>=
 | name
 @
-
-
-% for BL, in addition to rel, can also have nireg
-<<misc rules>>=
-nireg:
-  name
-| ireg
-@
-%$
-%old: had a if with nothing in it, weird
-%  name
-% {
-%  $$ = $1;
-%  if($1.name != D_EXTERN && $1.name != D_STATIC) {
-%  }
-% }
-
-% BL ireg means have no idea where it jmps ... can this
-% create bugs in 5l that statically tries to find the necessary code?
-% well the address of a function should be taken somewhere so
-% the function should be considered unless one does really crazy
-% magic stuff.
-
-
-
-
+%old: inlined in gen now
+%<<oreg rule>>=
+%| name
+%@
 
 <<type declarations(arm)>>=
 %type   <genval>   name 
 %type   <lval>  pointer
 @
-% name is an operand argument for BL (via nireg), but also
-% for TEXT, and also for MOV (via oreg)
-
-\ifallcode
-<<operand rules(arm)>>=
-<<name rule>>
-@
-\fi
-
 
 <<name rule>>=
 name:
@@ -7030,48 +7095,65 @@ name:
  }
 @
 %$
+\l name is an operand for BL (via nireg), for TEXT, and for MOV
 
-% for TEXT foo(SB), ... or GLOBL. Definitions of names.
-% and also for references to names, like MOV count(SB), R1
-% (to get address of count? no, to get address you need $count(SB))
-% no LLAB here!
+Note that symbol operands use the same operand kind [[D_OREG]]
+than the indirect register with offset we have seen above.
+This is because a name can also be seen as a sort of offset to 
+one of the (pseudo) register we have seen in Section~\ref{sec:pseudo-registers} 
+(except [[PC]]):
 
-% (ab)used also in reference to parameters, as in
-% MOVL    count+8(FP), CX
-% the LNAME here is really just a symbol for debugging help.
-%less: actually maybe it's not just that, maybe you can
-% then do $count to get the address of this parameter?
-
-
-% the con (pointer) of 'name:' is not ambiguous with the con (sreg)
-% of 'oreg:'? no because pointer != sreg (well even if R12 is actually
-% LSB ...)
-
-% hmmm bad name? pointer_basis? but it's true we do '(' pointer ')'
-% where we really dereference the pointer (and then add an offset)
 <<helper rules(arm)>>=
 pointer:
   LSB
 | LSP
 | LFP
 @
+\n hmmm bad name? pointer_basis? but it's true we do '(' pointer ')'
+\n where we really dereference the pointer (and then add an offset)
+\t what is generated code by linker? address of symbol is really offset? R12?
 
 <<[[itab]] elements>>=
 "SB",		LSB,	D_EXTERN,
 "SP",		LSP,	D_LOCAL,
 "FP",		LFP,	D_PARAM,
 @
-
-
-% can do 
-%	BL	div(SB)  so it's SB but it's really a code reference
-
 %<<sym_kind cases>>=
 %D_EXTERN, // text/data/bss values (from SB)
 %D_LOCAL,   // stack values (from SP)
 %D_PARAM,  // parameter (from FP)
 %@
 
+Note that for locals and parameters the symbol name is
+not really necessary, which is why one can also reference
+parameters only with an offset, as in [[MOVM 4(FP), R1]]:
+
+<<gen rule>>=
+| con '(' pointer ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.sym = S;
+  $$.symkind = $3;
+  $$.offset = $1;
+ }
+@
+%$
+%old: was in name rule, but better in gen rule I think, it is not really a name
+\n could delete that too? hmm no, it's for anonymous params like 4(FP)
+\n the con (pointer) of 'name:' is not ambiguous with the con (sreg)
+% of 'oreg:'? no because pointer != sreg (well even if R12 is actually LSB ...)
+\l can also do 4(SB)? useful?
+
+The symbol for locals and parameters can be useful though as a comment,
+e.g. [[MOVW  count+4(FP), R1]].
+\t again what is the generated code by linker?
+The name is also kept in the symbol table of the object file which
+can be leveraged later by tools like debuggers.
+
+
+The name/``offset'' can also have an aditional offset applied
+to it:
 
 <<helper rules(arm)>>=
 offset:
@@ -7080,11 +7162,39 @@ offset:
 | '-' con    { $$ = -$2; }
 @
 %$
-%less: rename offset_opt?
+\l rename offset_opt?
 
+Using a [[name]] as part of a [[MOVM]] implicitly means
+a pointer dereference to access the value at the address
+denoted by the symbol, e.g. [[MOVM foo(SB), R1]].
+To get the address of the symbol
+itself one needs to prefix the name with a dollar,
+e.g. [[MOVM $foo(SB), R1]]. %$
+This is where [[ximm]] deviates from [[imm]]:
+
+<<ximm rule>>=
+| '$' name
+ {
+  $$ = $2;
+  $$.type = D_CONST;
+ }
+@
+%old: was $ oreg, but i think it makes more sense to have just '$' name
+\l a special D_ADDR instead of abusing D_CONST?
+\l a bit confusing that can have gen -> oreg, and also gen -> ximm -> $ oreg
+%$
+\l why not allowed in imm too? after all it can be computer statically
+
+Note that the [[name]] non-terminal can also be the operand
+of the [[TEXT]] pseudo-instruction as we will see soon,
+in which case it defines the symbol.
 
 
 %section{Static names?, local names?}
+
+Asm5 provides also a way to use {\em local} (a.k.a static)
+symbols for globals and procedures
+in a file by suffixing the name with angles:
 
 <<name rule>>=
 | LNAME '<' '>' offset '(' LSB ')'
@@ -7103,40 +7213,58 @@ D_INTERN, // data static variables (from SB)
 @
 %old: was D_STATIC but ugly C name
 
-% well this is not really a name ...
-<<name rule>>=
-| con '(' pointer ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.sym = S;
-  $$.symkind = $3;
-  $$.offset = $1;
- }
+Those names will not be visible outside the file, but they
+will also not conflict with identical names in other files.
+
+
+
+
+
+
+
+
+Branching instructions can also jump to symbols via 
+the [[nireg]] operand rule,
+as well as the address contained in registers:
+
+<<type declarations(arm)>>=
+%type   <genval>   nireg 
+@
+
+<<operand rules(arm)>>=
+nireg:
+  name
+| ireg
 @
 %$
-% could delete that too? hmm no, it's for anonymous params like 4(FP)
+\l for BL, in addition to rel, can also have nireg
+%old: had a if with nothing in it, weird
+%  name
+% {
+%  $$ = $1;
+%  if($1.name != D_EXTERN && $1.name != D_STATIC) {
+%  }
+% }
+
+% BL ireg means have no idea where it jmps ... can this
+% create bugs in 5l that statically tries to find the necessary code?
+% well the address of a function should be taken somewhere so
+% the function should be considered unless one does really crazy
+% magic stuff.
 
 
 
 
-<<ximm rule>>=
-| '$' name
- {
-  $$ = $2;
-  $$.type = D_CONST;
- }
+\ifallcode
+<<operand rules(arm)>>=
+<<name rule>>
 @
-%old: was $ oreg, but i think it makes more sense to have just '$' name
-%less: a special D_ADDR instead of abusing D_CONST?
-
-% a bit confusing that can have gen -> oreg, and also gen -> ximm -> $ oreg
-% because MOV support powerful addressing modes? with multiple
-% indirections?
-
+\fi
 
 \subsection{Code references, labels}
 % hmm con(PC) is not really named code
+
+% last kind of operand
 
 <<[[Operand_kind]] cases>>=
 D_BRANCH,
@@ -7161,12 +7289,6 @@ D_BRANCH,
 % (and the offset value is actually not relative to the current PC,
 % it's an absolute value, so it probably means more relocatable than
 % relative in the end)
-
-\ifallcode
-<<operand rules(arm)>>=
-<<rel rule>>
-@
-\fi
 
 <<rel rule>>=
 rel:
@@ -7226,9 +7348,18 @@ rel:
 
 
 
+\ifallcode
+<<operand rules(arm)>>=
+<<rel rule>>
+@
+\fi
+
+
+
 
 %\subsection{Other forms}
 
+%old:
 %<<operand_kind cases>>=
 %D_OCONST,
 %@
@@ -7243,6 +7374,7 @@ rel:
 % seems unused in ARM/*.s
 
 
+%old:
 %<<gen rule>>=
 %| con
 % {
@@ -7257,6 +7389,7 @@ rel:
 % how can be D_OREG when there are no registers involved.
 % I removed the rule, and rewrote calls to SWI to just be SWI
 
+%old:
 %<<gen rule>>=
 %| shift '(' regi ')'
 % {
@@ -7265,6 +7398,7 @@ rel:
 % }
 %@
 
+%old:
 %<<oreg rule>>=
 %| name '(' sreg ')'
 % {
@@ -7282,7 +7416,7 @@ rel:
 
 \section{Pseudo-instructions}
 \label{sec:pseudo}
-% aka assembly directives
+\l aka assembly directives
 
 \subsection{[[TEXT/GLOBL]]}
 
@@ -8024,9 +8158,6 @@ while(p) {
 @
 
 <<con rule>>=
-| '-' con      { $$ = -$2; }
-| '+' con      { $$ = $2; }
-| '~' con      { $$ = ~$2; }
 | '(' expr ')' { $$ = $2; }
 @
 %$
@@ -9275,6 +9406,7 @@ allocn(void *p, long on, long n)
 \label{chap:examples}
 
 \n seen [[helloworld.s]] before
+\l lib_core/libc/arm/tas.s
 
 \t getcallerpc? help illustrates calling convention? or too subtle?
 
