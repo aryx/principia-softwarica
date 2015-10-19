@@ -102,17 +102,8 @@
 %  - grammar literate boilerplate
 %  - STILL? misc opcodes (e.g. MVN)
 
-%\usepackage[margin=0.5in]{geometry}
-%  but eat the bottom when very low
-%\usepackage{fullpage} is deprecated 
-% => do the more manual below:
-%\addtolength{\oddsidemargin}{-.850in}
-%\addtolength{\evensidemargin}{-.850in}
-%\addtolength{\textwidth}{1.70in}
 \addtolength{\topmargin}{-.850in}
 \addtolength{\textheight}{1.70in}
-% too big constraints when in portrait mode, cause some WEIRD errors
-% in landscape it's ok though
 
 %\setcounter{tocdepth}{1}
 
@@ -338,7 +329,8 @@ on real machines.
 % - fbas, use lex and yacc, 720 LOC, but looks really simplified
 % - https://github.com/trillek-team/computer-toolkit include
 %   a toy asm, linker, and even a toy C compiler
-% - see also hex2c? the assembler in subc-2014, ...
+% - see also hex2c? 
+% - the assembler in subc-2014
 %education:
 % - pep/8 assembler?
 % - web based assembler+debugger, teaching purpose: http://yasp.me/
@@ -1677,7 +1669,7 @@ which use the~[[.5]] filename extension,
 are ARM-specific, but they do not contain really machine code. Instead
 an object file contains the {serialized form} of the 
 {abstract syntax tree} of the assembly source. 
-%dup: too many dup I think
+%dup: too many dup I think the sentence below so I commented it
 %The actual machine code generation is performed by the linker [[5l]].
 \t why better? because anyway cant resolve everything, and patch is complicated
 \t so simpler work on the original abstract syntax tree
@@ -2215,7 +2207,7 @@ struct	Gen
 
     // switch on Gen.type
     union {
-        long	offset; // offset or lval or bitshifted register
+        long	offset; // offset or lval or ...
         double	dval;
         char	sval[8];
     };
@@ -2225,7 +2217,7 @@ struct	Gen
     <<[[Gen]] other fields>>
 };
 @
-\t can use lval too now! after all it's an union now
+\t can use lval too now! after all it's an union now. make it a union too?
 %old: I introduced the union. Can have it? operand_kind will be good enough?
 %ocaml: An ADT would be far better than this enum, D_NONE, and separate Sym 
 % type operand = 
@@ -2280,7 +2272,8 @@ and not [[lval]] (which would be more consistent with the
 other union fields) because it is (ab)used to represent
 different things, not just integer (or character) constants,
 as we will see soon.
-%ocaml: ugly, for bitshift too! bit 5!
+%ocaml: ugly, offset abused for many different operand kind, should be union
+% see comment below
 
 The [[D_NONE]] case is used only at the beginning, when initializing
 a new operand in [[nullgen()]], and should be used to represent
@@ -2312,11 +2305,11 @@ Here is the C value of the operand mentioned above:
 }
 \end{verbatim}
 \l offset is abused for many things, see the comment in .tex
-% - offset
-% - constant
+% - offset (D_OREG)
+% - constant (D_CONST)
 % - instr binary format for bitshifted registers, with bit 0-3, 5-6, 7-11
-%   used to encode different parts
-% - register for REGREG
+%   used to encode different parts (D_SHIFT)
+% - register (D_REGREG)
 % - bitset of register for MOVM
 % - ??
 %less: rename offset? to generic_value? or generic_long? or lval?
@@ -2326,6 +2319,7 @@ Here is the C value of the operand mentioned above:
 % thing with some bits for the shift kind, some bits for the register, etc.
 % see the many uses cases of offset in zaddr() switch about operand_kind ...
 %mimic what is in union token too
+\t just add cases in the union with the long too!
 
 
 \section{Instructions}
@@ -2385,10 +2379,11 @@ tokens as well as the type of value they hold:
 
 <<token declarations(arm)>>=
 /* opcodes */
-%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LRET LMISC
+%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LRET
 %token  <lval>  LSWI LSYSTEM 
 %token  <lval>  LARITHFLOAT LCMPFLOAT  LMULL LMULA  LMOVM LMVN
 %token  <lval>  LDEF LDATA LWORD LEND
+%token  <lval>  LMISC
 /* registers */
 %token  <lval>  LPC LSP LFP LSB
 %token  <lval>  LR LREG  LPSR
@@ -2531,6 +2526,8 @@ is a pair of token code and token value.
 Elements of the [[itab]] array will be revealed gradually
 in this document but the first entry is shown above for [[NOP]].
 \l was LTYPEI, now LMISC, but should be LNOP? and then a nop grammar rule?
+\l in fact there is no rule with LMISC really to express NOP in a program!
+
 \t in yylex when parse an identifier, looks in itab if equal string
 \t in which case return the appropriate token
 
@@ -5443,6 +5440,9 @@ getnsn(void)
 % mv with Comments section above?
 
 
+
+
+
 \chapter{Parsing}
 \label{chap:parsing}
 
@@ -7592,7 +7592,8 @@ cond:
   /* empty */ { $$ = Always; }
 | cond LCOND  { $$ = ($1 & ~C_SCOND) | $2; }
 @
-\l multiple LCOND?? what for?
+\l multiple LCOND?? what for? it is because cond is used also for 
+\l special bits in which case can have list of them
 
 <<constant C_SCOND(arm)>>=
 /* scond byte */
@@ -7625,6 +7626,7 @@ cond:
 <<constant Always(arm)>>=
 #define    Always 14
 @
+% was in a.h, but better put in 5.out.h
 \l used as parameter to a few outcode
 \l use COND_ALWAYS instead?
 
@@ -7679,15 +7681,18 @@ We are now ready to present the last component in the
 assembling pipeline: the object code generation.
 %dup:
 As mentioned before, [[5a]] does not actually generate machine
-code (the linker does). 
+code (the linker does), 
 %
-The only thing [[5a]] does is to serialize the Asm5 instructions
-and to store the set of symbols used and defined in the file.
-Only labels are resolved by [[5a]].
-\l but they must be relocated too
+which simplifies things.
+Indeed, the only thing [[5a]] needs to do is to serialize the 
+Asm5 instructions and to record in the object file the set of 
+symbols used and defined in the assembly file.
+Note that labels are resolved by [[5a]] and so do not need to be
+stored in the object file.
+\l but use virtual code address; those addresses must be relocated too.
 %
 The \book{Linker} will describe then which machine code is generated from
-the object files generated by [[5a]] and how those object files
+the object files how those object files
 are combined to form an executable.
 \l 5l/optab.c does this
 
@@ -7747,8 +7752,8 @@ a complete understanding of Asm5.
 
 %trans:
 [[outcode()]], introduced in Section~\ref{sec:outcode-signature},
-is used many times in the grammar, as we have seen in the previous chapter,
-to serialize one instruction (machine, pseudo, or virtual):
+is used many times in the grammar (as we have seen in the previous chapter).
+It serializes one instruction (machine, pseudo, or virtual):
 
 <<function outcode(arm)>>=
 /// main -> assemble -> yyparse -> <>
@@ -7764,7 +7769,6 @@ outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
 
     <<[[outcode()]] st and sf computation, and possible calls to zname>>
 
-    // Instruction serialized format: opcode, cond, optional reg, line, operands
     Bputc(&obuf, opcode);
     Bputc(&obuf, scond);
     Bputc(&obuf, reg);
@@ -7785,10 +7789,11 @@ out:
 \l scond is cond bits and also special bits
 
 It also increments the virtual program counter
-[[pc] (used to resolve labels) for all instructions
+[[pc]] (used to resolve labels) for all instructions
 except the one related to the [[Data]] section of the executable.
-Indeed, [[DATA]] or [[GLOBL]] instructions could be intermixed
-with [[TEXT]] instructions.
+Indeed, [[DATA]] (or [[GLOBL]]) instructions can be mixed
+with [[TEXT]] instructions. They do not have to be at the
+end of the assembly file (even though this is a common practice).
 \n WORD is for the TEXT section too!
 
 % note that output line number here! useful for debugging information,
@@ -7842,7 +7847,6 @@ outopd(Gen *a, int symidx)
 {
     <<[[zaddr()]] locals>>
 
-    // operand format: operand kind, register, symidx, symkind, optional offset
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
     // idx in symbol table, 0 if no symbol involved in the operand
@@ -7927,6 +7931,8 @@ case D_SCONST:
 ANAME,
 @
 % could be renamed ASYM
+% part of opcode because need to be different than any other
+% for object reader to know what to do.
 
 %old: if ANAME is after AHISTORY in 5.out.h then got
 % some bugs in ar such as "inconsistent file xxx.5 in libc.a"
@@ -8118,21 +8124,24 @@ while(s != S) {
 \chapter{Debugging Support}
 \label{chap:debugging}
 
-% db has access to awesome metadata generated by 8s (and also 8c).
-
+% db has access to awesome metadata generated by 5s (and also 5c).
 %  main(argv=...) /home/pad/.../main.c called from _main+26 (.../main9.s:12)
+%  symbol for params and locals in object are debugging info. will see
+%  later how kept also by linker.
+%  here will see file/line information.
+% also for good error msg like  xxx.h from xxx.h from xxx.c ...
+
 
 % put here the +sp, +xxx locals/params format
 
-
 %real-world: in gas needs -g to keep debugging info in object file?
 
-% already symbol for params and locals in object are debugging info.
 
 \section{File and line information}
 
 \section{Tracing origin and [[Hist]]}
 \n could be in preprocessing chapter too, cos strongly related to that
+\n but even if no cpp, still need #line which needs a Hist I think
 
 % when error, need give line, but can be because of context,
 % so useful to give the full location of an error, that is the list
@@ -8154,7 +8163,7 @@ struct	Hist
     <<[[Hist]] extra fields>>
 };
 @
-%note: rename offset to local_line, clearer, and also avoid
+%old: rename offset to local_line, clearer, and also avoid
 % possible confusion with Gen.offset
 %abused for #pragma lib "xxx.a" where local_line is then -1. ugly.
 
@@ -8404,6 +8413,10 @@ while(p) {
 % why print each directory path separately?
 
 
+
+
+
+
 \chapter{Other Features}
 \label{chap:advanced}
 
@@ -8454,8 +8467,10 @@ expr:
 | expr '*' expr     { $$ = $1 * $3; }
 | expr '/' expr     { $$ = $1 / $3; }
 | expr '%' expr     { $$ = $1 % $3; }
+
 | expr '<' '<' expr { $$ = $1 << $4; }
 | expr '>' '>' expr { $$ = $1 >> $4; }
+
 | expr '&' expr     { $$ = $1 & $3; }
 | expr '^' expr     { $$ = $1 ^ $3; }
 | expr '|' expr     { $$ = $1 | $3; }
@@ -8508,6 +8523,7 @@ comma:
 \section{Float instructions and registers}
 \label{sec:float}
 
+%AST
 <<struct ieee>>=
 struct	ieee
 {
@@ -8518,8 +8534,9 @@ struct	ieee
 };
 @
 
+%OPCODE
 
-
+% Word, Double, Float? WDF?
 <<[[Opcode]] cases, float mov opcodes>>=
 AMOVWD,
 AMOVWF,
@@ -8545,6 +8562,7 @@ ADIVD,
 ASQRTF,
 ASQRTD,
 @
+% SQRT is an instr?
 
 <<[[itab]] elements>>=
 "MOVD",		LMOV, AMOVD,
@@ -8558,8 +8576,6 @@ ASQRTD,
 @
 
 <<[[itab]] elements>>=
-"SQRTF",	LMISC, ASQRTF,
-"SQRTD",	LMISC, ASQRTD,
 "CMPF",		LCMPFLOAT, ACMPF,
 "CMPD",		LCMPFLOAT, ACMPD,
 "ADDF",		LARITHFLOAT,	AADDF,
@@ -8570,8 +8586,12 @@ ASQRTD,
 "MULD",		LARITHFLOAT,	AMULD,
 "DIVF",		LARITHFLOAT,	ADIVF,
 "DIVD",		LARITHFLOAT,	ADIVD,
+"SQRTF",	LSQRTFLOAT, ASQRTF,
+"SQRTD",	LSQRTFLOAT, ASQRTD,
 @
+%old: SQRTxx was LMISC (which was LTYPEI), but better LSQRTFLOAT
 
+% commented in the original code
 %/*
 %    "ABSF",		LMISC, AABSF,
 %    "ABSD",		LMISC, AABSD,
@@ -8588,7 +8608,7 @@ ASQRTD,
 %*/
 
 
-
+%REGISTERS
 
 <<[[itab]] elements>>=
 "F",		LF,	0,
@@ -8628,23 +8648,22 @@ enum fregister {
     NFREG = 8,
 };
 @
-
 % NFREG used by 5c/ in char	reg[NREG+NFREG];
 % 8? looks like 16 above
 
-
+% GRAMMAR
 
 <<inst rule(arm)>>=
 /*
  * floating-point coprocessor
  */
-| LMISC cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 | LARITHFLOAT cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 | LARITHFLOAT cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
-| LCMPFLOAT cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
+| LCMPFLOAT  cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
+| LSQRTFLOAT cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 @
 %$
-% LMISC, meh
+
 
 <<[[Operand_kind]] cases>>=
 D_FREG,
@@ -8774,6 +8793,7 @@ ieeedtod(Ieee *ieee, double native)
 @
 % used only by a small if(FPCHIP) in cinit
 
+
 \section{Long multiplication instructions}
 \n advanced topic, so can also put D_REGREG here
 
@@ -8803,7 +8823,7 @@ AMULALU,
 | LMULL cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
 @
 %$
-% ugly $5.reg?
+% ugly $5.reg? why not use regi now?
 
 % multiply and accumulate
 <<[[Opcode]] cases, mul/div/mod opcodes>>=
@@ -8862,7 +8882,8 @@ case D_REGREG:
     Bputc(&obuf, a->offset);
     break;
 @
-% abuse offset to represent a register
+
+
 
 \section{Multiple registers instructions}
 \label{sec:movm}
@@ -9109,7 +9130,6 @@ oexpr:
 
 
 
-
 \section{Special bits}
 % sign? long? p bit, w bit, ???
 
@@ -9179,11 +9199,13 @@ oexpr:
 @
 
 
-\section{Compiler-only pseudo-instructions}
+\section{Compiler-only pseudo and virtual instructions}
+\l or virtual?
 
 % some of those are not really opcodes, they are entities 
 % just at the asm AST level produced internally by 5c.
 % they have no reading syntax.
+% ANOP is here. No reading syntax.
 
 % related to NOP, SHL, MOV, pseudo asm
 % that get translated in store/load on some archi.
@@ -9234,6 +9256,10 @@ ASIGNAME,
 <<[[Register]] compiler conventions cases>>=
 REGRET =	0,
 REGARG =	0,
+@
+% mv earlier? but cant put too early
+
+<<[[Register]] compiler conventions cases>>=
 /* compiler allocates R1 up as temps */
 /* compiler allocates register variables R2 up */
 REGMIN =	2,
@@ -9433,6 +9459,9 @@ if(argc > 1) {
 %        thestring = "thumb";
 %        break;
 
+
+
+
 \chapter{Conclusion}
 \label{chap:conclusion}
 
@@ -9440,21 +9469,23 @@ You now know how the \plan ARM assembler [[5a]] works,
 to the smallest details, and more generally how many 
 assembler works.
 
-The ARM machine code generation is not done by [[5a]] though,
-but by the linker [[5l]] which is a bit unconventional.
-So, we recommend to follow with the \book{Linker} to
-understand this part. In any case, the linker and assembler
-being strongly connected in any system (for instance [[ld]] and [[gas]]
-are part of the same [[binutils]] package in the GNU system),
+%dup:
+%The ARM machine code generation is not done by [[5a]] though,
+%but by the linker [[5l]] which is a bit unconventional.
+%So, we recommend to follow with the \book{Linker} to
+%understand this part. In any case, 
+The linker and assembler
+being strongly connected in any system, for instance [[ld]] and [[gas]]
+are part of the same [[binutils]] package in the GNU system,
 the \book{Linker} is the logical next step after the \book{Assembler}.
 %
 We also suggest to read the \book{Emulator} which fully
-describes the semantics of the assembly instructions we have
+describes the semantics of the machine instructions we have
 seen in this book.
 The \book{debugger} contains code to {\em disassemble}
 machine code which also relates to this book.
 Finally, reading the \book{Compiler} will now be easier now
-that you understand the assembly code generated by the compiler [[5c]].
+that you can understand the assembly code generated by the compiler [[5c]].
 
 %missing features: ORG, but ld can do -Txx
 
@@ -9564,6 +9595,8 @@ yyerror(char *a, ...)
 }
 @
 
+% could put prfile here, but can be better before to help
+% illustrate how to use Hist
 
 
 \chapter{Utilities}
@@ -9667,13 +9700,14 @@ allocn(void *p, long on, long n)
     return p;
 }
 @
+% there is no free!!?
 
 \chapter{Examples of Assembly Programs}
 \label{chap:examples}
 
 \n seen [[helloworld.s]] before
-\l lib_core/libc/arm/tas.s
 
+\l lib_core/libc/arm/tas.s
 \t getcallerpc? help illustrates calling convention? or too subtle?
 % but for sure this needs to be written in assembly!
 
@@ -9768,6 +9802,7 @@ CISC = Complex Instruction Set Computer
 ARM  = Akorn Risc Machines
 CWD = Current Working Directory
 EOF = End Of File
+IGN = Ignore
 \end{verbatim}
 
 \chapter*{Indexes}
