@@ -6,9 +6,11 @@ open Parse
 (*****************************************************************************)
 (* Prelude *)
 (*****************************************************************************)
-(* Limitations:
+(* Limitations compared to 5a:
  *  - does not handle unicode
  *  - does not recognize the uU lL suffix (but was skipped by 5a anyway)
+ *  - does not handle preprocessing directives, assume external cpp,
+ *    better to factorize code and separate concerns
  *)
 
 let line = ref 1
@@ -16,6 +18,7 @@ let line = ref 1
 let error s =
   failwith (spf "Lexical error: %s (line %d)" s !line)
 
+(* stricter: we disallow \ with unknown character *)
 let code_of_escape_char c =
   match c with
   | 'n' -> Char.code '\n' | 'r' -> Char.code '\r' 
@@ -72,7 +75,7 @@ rule token = parse
   (* ----------------------------------------------------------------------- *)
   (* Mnemonics and identifiers *)
   (* ----------------------------------------------------------------------- *)
-  | "R" (digit+ as d) 
+  | "R" (digit+ as s) 
       { let i = int_of_string s in 
         if i <= 15 && i >=0
         then TRxx i
@@ -103,7 +106,6 @@ rule token = parse
       | "CMP" -> TCMP CMP 
       | "TST" -> TCMP TST | "TEQ" -> TCMP TEQ | "CMN" -> TCMP CMN
       | "RET" -> TRET
-
       | "BEQ" -> Bxx EQ | "BNE" -> Bxx NE
       | "BGT" -> Bxx GT | "BLT" -> Bxx LT | "BGE" -> Bxx GE | "BLE" -> Bxx LE
       | "BHI" -> Bxx HI | "BLO" -> Bxx LO | "BHS" -> Bxx HS | "BLS" -> Bxx LS
@@ -116,7 +118,7 @@ rule token = parse
       | "TEXT" -> TTEXT | "GLOBL" -> TGLOBL
       | "WORD" -> TWORD | "DATA" -> TDATA
 
-      (* registers *)
+      (* registers (see also the special rule above for R digit+) *)
       | "R" -> TR
 
       (* pseudo registers *)
@@ -132,6 +134,7 @@ rule token = parse
       | ".MI" -> TCOND MI | ".PL" -> TCOND PL 
       | ".VS" -> TCOND VS | ".VC" -> TCOND VC
 
+      (* less: could impose is_lowercase? *)
       | _ -> TIDENT x
     }
 
@@ -164,16 +167,18 @@ rule token = parse
 
   (* ----------------------------------------------------------------------- *)
   | eof { EOF }
+  | _ { error "unrecognized character" }
 
 (*****************************************************************************)
 (* Rule char *)
 (*****************************************************************************)
 and char = parse
   | "''" { Char.code '\'' }
-  | "\\" (oct oct oct) as s "'" { int_of_string ("0o" ^ s) }
+  | "\\" ((oct oct oct) as s) "'" { int_of_string ("0o" ^ s) }
   | "\\" (['a'-'z'] as c) "'"   { code_of_escape_char c }
   | [^ '\\' '\'' '\n'] as c  "'"     { Char.code c }
   | '\n' { error "newline in character" }
+  | eof  { error "end of file in character" }
   | _    { error "missing '" }
 
 (*****************************************************************************)
@@ -181,13 +186,14 @@ and char = parse
 (*****************************************************************************)
 and string = parse
   | '"' { "" }
-  | "\\" (oct oct oct) as s
+  | "\\" ((oct oct oct) as s)
       { let i = int_of_string ("0o" ^ s) in string_of_ascii i ^ string lexbuf }
   | "\\" (['a'-'z'] as c) 
       { let i = code_of_escape_char c in string_of_ascii i ^ string lexbuf  }
   | [^ '\\' '"' '\n']+   
       { let x = Lexing.lexeme lexbuf in x ^ string lexbuf }
   | '\n' { error "newline in string" }
+  | eof  { error "end of file in string" }
   | _    { error "undefined character in string" }
 
 
@@ -195,8 +201,8 @@ and string = parse
 (* Rule comment *)
 (*****************************************************************************)
 and comment = parse
-  | "*/" { token lexbuf }
+  | "*/"          { token lexbuf }
   | [^ '*' '\n']+ { comment lexbuf }
-  | '*' { comment lexbuf }
-  | '\n' { incr line; comment lexbuf }
-  | eof { error "end of file in comment" }
+  | '*'           { comment lexbuf }
+  | '\n'          { incr line; comment lexbuf }
+  | eof           { error "end of file in comment" }

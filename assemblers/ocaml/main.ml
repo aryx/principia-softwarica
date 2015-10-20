@@ -1,11 +1,18 @@
 open Common
 
+(*****************************************************************************)
+(* Prelude *)
+(*****************************************************************************)
+(* Limitations compared to 5a:
+ *  - no parallel multi files thing (not the place anyway)
+ *)
+
 let thechar = '5'
 let thestring = "arm"
 
 let assemble infile outfile =
   let prog = Parse.parse infile in
-  (* TODO: solve labels *)
+  let prog = Resolve.resolve prog in
   Gen.save_obj prog outfile
 
 let main () =
@@ -22,6 +29,8 @@ let main () =
   )
   (spf "%ca [-options] file.s" thechar);
 
+  if !infile = ""
+  then failwith "we need an input file";
   if !outfile = ""
   then begin 
     let b = Filename.basename !infile in

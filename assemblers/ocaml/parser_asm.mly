@@ -18,29 +18,24 @@ let error s =
 /*(*2 opcodes *)*/
 /*(*-----------------------------------------*)*/
 
-%token <unit> TNOP
+%token TNOP
 %token <Ast.arith_code> TARITH
-
-%token <Ast.move_size> TMOV
-%token <Ast.move_size> TSWAP
-
-%token <unit> TB  TBL TRET
+%token <Ast.move_size> TMOV TSWAP
+%token TB  TBL TRET
 %token <Ast.cmp_opcode> TCMP   
 %token <Ast.condition> TBxx TCOND
+%token TSWI TRFE
 
-%token <unit> TSWI TRFE
-
-%token <unit> TTEXT TGLOBL 
-%token <unit> TDATA TWORD 
+%token TTEXT TGLOBL 
+%token TDATA TWORD 
 
 /*(*-----------------------------------------*)*/
 /*(*2 registers *)*/
 /*(*-----------------------------------------*)*/
 
 %token <Ast.register> TRxx
-%token <unit> TR
-
-%token <unit> TPC TSB TFP TSP
+%token TR
+%token TPC TSB TFP TSP
 
 /*(*-----------------------------------------*)*/
 /*(*2 Constants *)*/
@@ -59,15 +54,15 @@ let error s =
 /*(*2 Punctuation *)*/
 /*(*-----------------------------------------*)*/
 
-%token <unit> TSEMICOLON TDOT TCOMMA TDOLLAR
-%token <unit> TOPAR TCPAR
-%token <unit> EOF
+%token TSEMICOLON TDOT TCOMMA TDOLLAR
+%token TOPAR TCPAR
+%token EOF
 
 /*(*-----------------------------------------*)*/
 /*(*2 Operators *)*/
 /*(*-----------------------------------------*)*/
 
-%token <unit> TPLUS TMINUS TTILDE TMUL TDIV TMOD
+%token TPLUS TMINUS TTILDE TMUL TDIV TMOD
 
 /*(*************************************************************************)*/
 /*(*1 Priorities *)*/
@@ -88,6 +83,10 @@ let error s =
 
 program: lines EOF { List.rev $1 }
 
+lines: 
+ | /*empty*/  { [] }
+ | lines line { $2 @ $1 }
+
 line: 
  |               TSEMICOLON { [] }
  | instr         TSEMICOLON { [I $1] }
@@ -95,69 +94,73 @@ line:
  | TIDENT TCOLON line { $3 @ [L $1] }
 
 /*(*************************************************************************)*/
-/*(*1 Pseudo instruction *)*/
+/*(*1 Pseudo instructions *)*/
 /*(*************************************************************************)*/
 pseudo_instr:
- | TTEXT name attr_opt TCOMMA imm
- | TGLOBL name attr_opt TCOMMA imm
- | TDATA name TSLASH con TCOMMA ximm
+ | TTEXT  name attr_opt TCOMMA imm    { }
+ | TGLOBL name attr_opt TCOMMA imm    { }
+ | TDATA name TSLASH con TCOMMA ximm  { }
 
 attr_opt:
  | /* empty */ { [] }
- | TCOMMA con  { [$2] }
+ /*(* todo: would be better to have mnemonics for that too *)*/
+ | TCOMMA con  { match $2 with 0 -> [] | 1 -> NOPROF | 2 -> DUPOK }
 
 
 /*(*************************************************************************)*/
-/*(*1 Instruction *)*/
+/*(*1 Instructions *)*/
 /*(*************************************************************************)*/
 
 instr:
  | TNOP { }
 
- | TARITH cond  imsr TCOMMA reg TCOMMA reg
- | TARITH cond  imsr TCOMMA reg 
+ | TARITH cond  imsr TCOMMA reg TCOMMA reg { }
+ | TARITH cond  imsr TCOMMA reg            { }
 
- | TMOV   cond  gen  TCOMMA gen
+ | TMOV   cond  gen  TCOMMA gen  { }
 
- | TSWAP  cond  reg  TCOMMA ireg
- | TSWAP  cond  ireg TCOMMA reg
- | TSWAP  cond  reg  TCOMMA ireg TCOMMA reg
+ | TSWAP  cond  reg  TCOMMA ireg { }
+ | TSWAP  cond  ireg TCOMMA reg  { }
+ | TSWAP  cond  reg  TCOMMA ireg TCOMMA reg { }
 
- | TB  cond branch
- | TBL cond branch
- | TCMP cond imsr TCOMMA reg
- | TBxx cond rel
+ | TB  cond branch { }
+ | TBL cond branch { }
+ | TCMP cond imsr TCOMMA reg { } 
+ | TBxx cond rel { }
 
- | TRET cond
- | TSWI cond 
- | TRFE cond
+ | TRET cond { }
+ | TSWI cond { }
+ | TRFE cond { }
 
 /*(*************************************************************************)*/
-/*(*1 Operand *)*/
+/*(*1 Operands *)*/
 /*(*************************************************************************)*/
 
 imsr:
- | imm   { $1 }
+ | imm   { Imm $1 }
  | shift { $1 }
- | reg   { $1 }
+ | reg   { Reg $1 }
 
-imm: TDOLLAR con      { $1 }
+
+imm: TDOLLAR con      { $2 }
 
 con:
  | TINT { $1 }
  | TMINUS con { - $1 }
  | TPLUS  con { $1 }
- | TTILDE con { failwith "tilde??" }
+ | TTILDE con { failwith "TODO: tilde??" }
+
 
 reg:
  | TRxx                { $1 }
  | TR TOPar expr TCPar { R $2 }
 
+
 shift:
- | reg TSHL rcon
- | reg TSHR rcon
- | reg TSHMINUS rcon
- | reg TSHAT rcon
+ | reg TSHL rcon     { }
+ | reg TSHR rcon     { }
+ | reg TSHMINUS rcon { }
+ | reg TSHAT rcon    { }
 
 rcon:
  | reg { Left $1 }
@@ -166,14 +169,7 @@ rcon:
          else error "shift value out of range" 
        }
 
-branch: 
- | rel 
- | name
- | ireg
 
-rel:
- | TIDENT offset
- | con TOPAR TPC TCPAR
 
 gen:
  | ximm
@@ -190,12 +186,12 @@ ximm:
  | TDOLLAR name
 
 ioreg:
- | ireg
- | con TOPAR reg TCPAR
+ | ireg                { Indirect ($1, 0) }
+ | con TOPAR reg TCPAR { Indirect ($3, $1) }
 
-ireg: TOPAR reg TCPAR
+ireg: TOPAR reg TCPAR { $2 }
 
-name: TIDENT offset TOPAR pointer TCPAR
+name: TIDENT offset TOPAR pointer TCPAR { }
 
 pointer: 
  | TSB
@@ -208,15 +204,12 @@ offset:
  | TMINUS con  { - $2 }
 
 
-/*(*************************************************************************)*/
-/*(*1 Other *)*/
-/*(*************************************************************************)*/
- 
 
-/*(*************************************************************************)*/
-/*(*1 EBNF *)*/
-/*(*************************************************************************)*/
+branch: 
+ | rel   { $1 }
+ | name  { (* only SB? *) }
+ | ireg  { }
 
-lines: 
-| /*empty*/ { [] }
-| lines line { $2 @ $1 }
+rel:
+ | TIDENT offset        { Label ($1, $2) }
+ | con TOPAR TPC TCPAR  { Relative $1 }

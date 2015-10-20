@@ -3,9 +3,9 @@
 ##############################################################################
 
 SRC=common.ml \
- ast.ml \
- parser.ml lexer.ml parse.ml \
- resolve.ml gen.ml \
+ ast_asm.ml \
+ parser_asm.ml lexer_asm.ml parse_asm.ml \
+ resolve_labels.ml object_file.ml \
  main.ml
 
 OBJS=$(SRC:.ml=.cmo)
@@ -25,18 +25,18 @@ $(PROG): $(OBJS)
 clean::
 	rm -f $(PROG)
 
-lexer.ml: lexer.mll
+lexer_asm.ml: lexer_asm.mll
 	$(OCAMLLEX) $<
 clean::
-	rm -f lexer.ml
-beforedepend:: lexer.ml
+	rm -f lexer_asm.ml
+beforedepend:: lexer_asm.ml
 
 
-parser.ml parser.mli: parser.mly
+parser_asm.ml parser_asm.mli: parser_asm.mly
 	$(OCAMLYACC) $<
 clean::
-	rm -f parser.ml parser.mli parser.output
-beforedepend:: parser.ml parser.mli
+	rm -f parser_asm.ml parser_asm.mli parser_asm.output
+beforedepend:: parser_asm.ml parser_asm.mli
 
 
 ##############################################################################
