@@ -2138,7 +2138,7 @@ represent an instruction without any effect.
 ARM has 16 registers named [[R0]] to [[R15]].
 They are represented simply by an integer in [[5a]]: 
 0 is [[R0]], 1 is [[R1]], etc.
-%ocaml: a big ugly because then have the issue with R_NONE
+%ocaml: a bit ugly because then have the issue with R_NONE
 The following type introduces some convenient names for some of the
 {special registers} we have seen before:
 
@@ -2177,7 +2177,7 @@ constant represents nothing:
 #define R_NONE 16
 @
 %old: NREG used to represent also NONE in the outcode reg param; I prefer R_NONE
-%ocaml: None
+%ocaml: None, no need for special constant
 
 The ARM has also 
 float registers, 
@@ -2220,20 +2220,9 @@ struct	Gen
 \t can use lval too now! after all it's an union now. make it a union too?
 %old: I introduced the union. Can have it? operand_kind will be good enough?
 %ocaml: An ADT would be far better than this enum, D_NONE, and separate Sym 
-% type operand = 
-%  | D_REG of register // and offset?
-%  | D_CONST of int
-%  | D_OREG of register * offset
-%  | Branch of offset (PC)
-%  | Extern of name * offset (SB) ?
 %less: maybe by playing with Literate Programming I can reproduce a kind of ADT?
 % e.g. by introducing LSREG, and then the part of the enum register related
 % to LSREG?
-% type instr = 
-%  | TEXT of name * attribute list * int (* locals *)
-%   ...
-% type reg = 
-%   ...
 
 The [[type]] field is used to encode the {\em operand kind}.
 It is a [[short]] but really it can only take values of the
@@ -2312,6 +2301,7 @@ Here is the C value of the operand mentioned above:
 % - register (D_REGREG)
 % - bitset of register for MOVM
 % - ??
+%ocaml: split in ADT
 %less: rename offset? to generic_value? or generic_long? or lval?
 % but it's true in many places it's used to encode an offset to
 % a base (a reg, a name).
@@ -2330,7 +2320,7 @@ There is no type to represent the full AST of an instruction.
 Instead, multiple parameters of the [[outcode()]]
 functions are used to pass the different components
 of an instruction. Here is the signature of [[outcode()]]:
-%ocaml: could define a record
+%ocaml: could define a record at least, or better an ADT and a pair for cond
 \l =~ Prog of Linker (but without opcode)?
 
 <<signature outcode(arm)>>=
@@ -2574,6 +2564,7 @@ struct	Sym
 @
 %archi: value is a vlong in va/
 \n there is no symkind here, this is stored outside the Sym
+%ocaml: no need special type, just use hashtbl for symbol table, just for lbls
 
 For instance, the label [[later]] in the [[hello world]] program 
 Section~\ref{sec:helloworld}, once resolved, could
@@ -2602,6 +2593,7 @@ Sym*	hash[NHASH];
 #define	NHASH		503
 @
 \l choose as a prime, see below
+%ocaml: just use stdlib hashtbl
 
 One way to implement a list of something in C is to embed in
 this something a [[link]] field pointing to the next
@@ -2639,6 +2631,7 @@ slookup(char *s)
 }
 @
 \l cleaner interface at least
+%ocaml: use stdlib Hashtbl.find
 
 It internally modifies the global [[symb]] 
 (used also by [[yylex()]] as we will see later) 
@@ -2680,6 +2673,7 @@ lookup(void)
 @
 %old: s/s/sym/, s/l/len, less confusing I think
 \l standard way to use a hash table, so we don't elaborate
+%ocaml: use stdlib Hashtbl.find
 
 The code is using standard C idioms to iterate over a hash table.
 Note that if the symbol is not found in the symbol table,
@@ -2721,6 +2715,7 @@ represent and keep track of many different things in [[5a]]:
 \item {\em labels}, e.g. [[later:]], in which case [[Sym.value]]
 contains eventually the value of the (virtual) program counter [[pc]]
 at the label definition
+%ocaml: only thing needed
 
 \item {\em symbols}, for procedures
 ([[TEXT foo(SB)]]) and globals ([[GLOBL hello(SB)]]),
@@ -2739,14 +2734,17 @@ as we will see in Section~\ref{sec:symidx-sym-field}.
 a macro-assembler which embeds its own macroprocessor, in which case
 [[Sym.value]] is not used. Another field of [[Sym]] contains
 the text of the macro as we will see in Section~\ref{sec:macro-sym-field}.
+%ocaml: external cpp
 
 \item {\em symbolic constants}, e.g. [[RTMP = 10]], 
 in which case [[Sym.value]] contain the constant value
+%ocaml: useless feature
 
 \item {\em predefined identifiers}, 
 for opcodes ([[AMOV]]) and registers ([[R1]]), in which case
 [[Sym.value]] contain the appropriate enumeration value.
 \l ugly abuse
+%ocaml: do in lexer instead, not abuse symbol table
 
 \end{itemize}
 \n because of hash that means all MOVW in a file are shared when lexing
@@ -2838,6 +2836,7 @@ Sym*	sym;
 @
 %less: maybe should rename this field 'name'? and then use name_kind?
 \t actually also one of the union token case
+%ocaml: why need link? name not enough? need value just for labels
 
 This field is used for operands involving symbols. For instance
 in [[hello+4(SB)]], [[Gen.sym]] will point
@@ -3008,7 +3007,7 @@ main(int argc, char *argv[])
     exits(0);
 }
 @
-
+%ocaml: no need cinit, and include stuff can be done by outside cpp
 
 Another important global, set possibly by [[main()]],
 is [[outfile]] which stores the name of the output object file,
@@ -3175,6 +3174,8 @@ assemble(char *infile)
 }
 @
 %pad: I renamed parameter to infile, to better contrast with outfile
+%ocaml: use exception, no need fdt and buf intermediate, use Marshall
+% no need 2 parse, just return AST and resolve() and gen
 
 Essentially [[assemble()]] calls [[yyparse()]]
 two times, with the appropriate value set in [[pass]], after
@@ -3230,7 +3231,7 @@ cclean(void)
     Bflush(&obuf);
 }
 @
-
+%ocaml: not sure need that, should be done by ar or 5l
 
 
 
@@ -3260,6 +3261,7 @@ if(p) {
 } else
     p = ofile;
 @
+%ocaml: just use Filename stdlib
 
 Note that [[utfrrune()]] above returns the {\em last} occurence of a Rune.
 A {\em rune} is a unicode character in \plan terminology.
@@ -3279,7 +3281,7 @@ if(outfile){
 } else
     outfile = "/dev/null";
 @
-
+%ocaml: use Common.matched1
 
 <<[[assemble()]] locals>>=
 char incfile[20];
@@ -3297,7 +3299,7 @@ if(p) {
 }
 @
 \l see Section X
-
+%ocaml: external cpp
 
 
 
@@ -3340,7 +3342,8 @@ pinit(char *f)
     <<[[pinit()]] initialisations>>
 }
 @
-
+%ocaml: external cpp so no need newio, etc, and one pass lexing so no need line
+% initialisation here
 
 \ifallcode
 <<[[pinit()]] locals>>=
@@ -3520,6 +3523,7 @@ char	b[BUFSIZ];
 <<constant BUFSIZ>>=
 #define	BUFSIZ		8192
 @
+%ocaml: just use ocamllex which internally does that
 
 A few functions below are using the global [[fi]] which contains
 pointers in the input buffer of the currently processed input file:
@@ -3564,6 +3568,7 @@ uses the global [[fi]] we have seen above:
 #define	GETC()		((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
 @
 \l a bit tricky; also unicode but here 0xff, it's a character
+%ocaml: use ocamllex which does that internally
 
 <<function filbuf>>=
 int
@@ -3790,6 +3795,8 @@ int	peekc = IGN;
 <<[[pinit()]] initialisations>>=
 peekc = IGN;
 @
+%ocaml: no need that with ocamllex behavior to look for longer and
+% internally manage peekc/yyback
 
 
 Then we need to make sure the function reading characters 
@@ -3924,7 +3931,7 @@ Sym *s;
 if(isalpha(c))
     goto talph;
 @
-%ocaml: power case, character range ftw
+%ocaml: powerful case, character range ftw
 
 <<[[yylex()]] switch c cases>>=
 case '_':
@@ -3950,7 +3957,7 @@ aloop:
     return s->type;
 @
 %$
-%ocaml: use of peekc is yyback(1)
+%ocaml: use of peekc is yyback(1), but no need in ocamllex
 \l @? maybe remove it so it would also remove the need for LAT token_kind
 \t possible to have s->type == 0? if new sym theni it is set to LNAME in syminit
 
@@ -3967,6 +3974,8 @@ if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
     yylval.lval = s->value;
 }
 @
+%ocaml: ugly to have lexer/parser side effect, solve label in resolve()
+% after lexing/parsing
 
 \t note that LLAB set in grammar! so in pass2 or if defined before
 \t then return different token_kind! not context free.
@@ -4048,7 +4057,8 @@ ncu:
     while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
         c = GETC();
 @
-\l ncu?
+\l ncu? 
+\t code using that? then comment no?
 
 \subsection{Hexadecimals and octals}
 
@@ -4161,9 +4171,10 @@ case '.':
         goto casedot;
     }
     peekc = c;
-    return '.';
+    return '.'; // used case?
 @
 \l why not simply goto talph for '.'? avoid duplicate the cp = symb; ...
+\t single token '.' used?
 
 \section{Characters and escape sequences}
 \l unicode?
@@ -4368,7 +4379,7 @@ case '#':
 % actually expanded or defined macros or undef, in any case
 % no token to return, but iostack will have maybe changed,
 % or symbol table, and so GETC will maybe change.
-
+%ocaml: external cpp, just handle #line!!
 
 <<global mactab>>=
 struct
@@ -5477,6 +5488,7 @@ Here is the outline of the Yacc grammar file for Asm5:
 %$
 \n classic Yacc
 \n no %start? the first rule in the file is the default start?
+%ocaml: no need union, no need much type decls
 
 %toc:
 The [[%union]] and [[%token]] {directives} have been
@@ -5519,6 +5531,7 @@ prog:
 | prog line
 @
 \l FIGURE with derivation where see set of lines?
+%ocaml: no EOF?
 
 A [[line]] can be an [[inst]]ruction followed by a semicolon
 (remember that the lexer transforms newlines in semicolons
@@ -5848,17 +5861,17 @@ arithmetic and logic mimicing ARM instructions,
 but they are less useful:
 
 <<[[Opcode]] cases, logic opcodes>>=
-ABIC,
+ABIC, // ??
 @
 <<[[itab]] elements>>=
 "BIC",		LARITH,	ABIC,
 @
 
 <<[[Opcode]] cases, add/sub opcodes>>=
-ARSB,
-AADC,
-ASBC,
-ARSC,
+ARSB, // ??
+AADC, // Add and carry?
+ASBC, // Sub and carry?
+ARSC, // ??
 @
 <<[[itab]] elements>>=
 "RSB",		LARITH,	ARSB,
@@ -5876,7 +5889,7 @@ AMVN, // MOV negative, but nothing to do with MOVW
 <<[[itab]] elements>>=
 "MVN",		LMVN, AMVN,	/* op2 ignored */
 @
-\t op2 ignored?? then why no simplify rule below?
+\n op2 ignored means actually operand 3 ignored, hence the special rule below
 <<inst rule(arm)>>=
 /*
  * MVN
@@ -6839,6 +6852,7 @@ shift:
   $$.offset = $1 | $4 | (3 << 5);
  }
 @
+%ocaml: ugly to encode so much stuff in offset
 \l argh, offset really abused, should use shift here
 %self-ref:
 \l use bitshift op in the code to handle bitshift, also use bitwise |, 
@@ -6887,6 +6901,7 @@ rcon:
  }
 @
 \l really does too much work here and close to ARM concrete bits
+%ocaml: ugly to encode so much stuff in offset
 
 The tricky [[Gen.offset]] encoding for bitshifted registers
 reflects how such operands are actually encoded in the binary
@@ -6907,7 +6922,7 @@ entry in [[itab]] had to be used to represent the single character:
 \l could remove @ from the identifier lexing section,
 \l so then could just do '@' '>' instead of this indirection
 %ocaml: ugly to allow @ in identifiers
-
+\l At for Arithmetic?
 
 
 \subsection{Memory (de)references, pointers}
@@ -7066,6 +7081,7 @@ parameters only with an offset, as in [[MOVW 4(FP), R1]]:
  }
 @
 %$
+%ocaml: make sense to have anon with SB??
 %old: was in name rule, but better in gen rule I think, it is not really a name
 \n could delete that too? hmm no, it's for anonymous params like 4(FP)
 \n the con (pointer) of 'name:' is not ambiguous with the con (sreg)
@@ -7164,6 +7180,7 @@ nireg:
   name
 | ireg
 @
+\t could inline in parent
 %$
 \l for BL, in addition to rel, can also have nireg
 %old: had a if with nothing in it, weird
@@ -7553,6 +7570,7 @@ AEND,
 | LEND { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
 @
 %$
+%ocaml: do not need that I think
 
 The need for such an instruction in the assembly file is
 not clear. Having such a marker in the object file
@@ -7594,6 +7612,7 @@ cond:
 @
 \l multiple LCOND?? what for? it is because cond is used also for 
 \l special bits in which case can have list of them
+%ocaml: no need for this special bitset thing yet
 
 <<constant C_SCOND(arm)>>=
 /* scond byte */
@@ -7784,6 +7803,7 @@ out:
         pc++;
 }
 @
+%ocaml: just use Marshall
 %old: I renamed a to opcode
 \l less: rename reg to reg3? so less confusing with reg in zaddr?
 \l scond is cond bits and also special bits
@@ -7864,6 +7884,7 @@ outopd(Gen *a, int symidx)
 }
 @
 %old: was zaddr, but no idea why, clearer use outopd
+%ocaml: just use Marshall
 
 \ifallcode
 <<[[zaddr()]] locals>>=
