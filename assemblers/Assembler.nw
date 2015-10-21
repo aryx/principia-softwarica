@@ -367,7 +367,7 @@ Once installed, you can test [[5a]] under \plan with:
 5   hello world
 6   $
 \end{verbatim}
-\t 5l -?? so dumper of object file?
+\t 5l -v -W so dumper of object file?
 
 The command in Line 2 {assembles} the very simple [[hello.s]]
 ARM assembly program and generates the [[hello.5]] ARM {object file}.
@@ -1964,9 +1964,14 @@ table.
 
 \l Depends libc, libio
 
+
+
+
 %\section{Bootstrapping}
+
 % 5a is actually written in C :) not even asm! and also use yacc
-% bootstrap from scratch? punch card, hex-to-c, assembler in assembler, asm in C
+% bootstrap from scratch? punch card, hex-to-c, assembler in assembler, 
+% asm in C
 
 \section{Book structure}
 
@@ -2478,6 +2483,7 @@ a token can hold:
  <<union declaration other fields(arm)>>
 }
 @
+%ocaml: no need, included in token directives
 \l could use NSNAME here instead of char sval[8] ? and at a few other places?
 \l note that 8, here is the restriction on 8bytes strings
 
@@ -2741,6 +2747,8 @@ symbol table of the object file
 as we will see in Section~\ref{sec:symidx-sym-field}.
 \l symidx, but actually not sym, sym and symkind are in Gen, not Symbol
 \l also for SP and FP p _plus_ 0(FP)
+\t why need symbol in symbol table actually?
+
 
 \item {\em macros}, e.g [[#define FOO]], since [[5a]] is
 a macro-assembler which embeds its own macroprocessor, in which case
@@ -2853,6 +2861,7 @@ Sym*	sym;
 This field is used for operands involving symbols. For instance
 in [[hello+4(SB)]], [[Gen.sym]] will point
 to the symbol [[hello]] in the global [[hash]] table.
+\t but what for? just for the name? symkind is part of Gen too
 %
 An additional [[Gen]] field is used to represent
 the {\em kind} of the symbol:
@@ -2970,6 +2979,7 @@ for the filename extension of object files (e.g. [[hello.5]]):
 int	thechar;
 @
 \l int? no char? then use Rune!
+\n cant put = '5' here because this chunk is factorized for arm and x86
 
 [[thestring]] contains the longer, more readable, version
 of the architecture, e.g. [["arm"]] for [[5]].
@@ -3187,7 +3197,7 @@ assemble(char *infile)
 @
 %pad: I renamed parameter to infile, to better contrast with outfile
 %ocaml: use exception, no need fdt and buf intermediate, use Marshall
-% no need 2 parse, just return AST and resolve() and gen
+% no need 2 parse, just return AST and resolve() and save_obj()
 
 Essentially [[assemble()]] calls [[yyparse()]]
 two times, with the appropriate value set in [[pass]], after
@@ -4187,6 +4197,7 @@ case '.':
 @
 \l why not simply goto talph for '.'? avoid duplicate the cp = symb; ...
 \t single token '.' used?
+%ocaml: ocamllex returns the longest or the first in the list
 
 \section{Characters and escape sequences}
 \l unicode?
@@ -5360,6 +5371,7 @@ macprag(void)
 
 
 \section{[[#line]]}
+% most important one because if have no cpp, at least must handle this one!
 
 <<function maclin>>=
 void
@@ -6526,6 +6538,7 @@ or in the next assembling pass will trigger then this rule:
   line
 @
 %$
+%ocaml: no need special token and parser/lexer coop. Just postparsing resolve()
 
 Note that there is no use of [[outcode()]] here because labels
 can be fully resolved by the assembler. There is no need
@@ -7624,7 +7637,8 @@ cond:
 @
 \l multiple LCOND?? what for? it is because cond is used also for 
 \l special bits in which case can have list of them
-%ocaml: no need for this special bitset thing yet
+%ocaml: no need for this special bitset that early. Return one cond
+% and a list of constructor for the .S, .etc
 
 <<constant C_SCOND(arm)>>=
 /* scond byte */
@@ -7660,6 +7674,7 @@ cond:
 % was in a.h, but better put in 5.out.h
 \l used as parameter to a few outcode
 \l use COND_ALWAYS instead?
+\t in fact cond is also used for special bits like Sbit after 0xf
 
 So, the branching instruction [[BEQ]] we saw in
 Section~\ref{sec:conditional-jump} is really just 
@@ -7718,7 +7733,7 @@ which simplifies things.
 Indeed, the only thing [[5a]] needs to do is to serialize the 
 Asm5 instructions and to record in the object file the set of 
 symbols used and defined in the assembly file.
-Note that labels are resolved by [[5a]] and so do not need to be
+Note that labels are resolved by [[5a]] and so they do not need to be
 stored in the object file.
 \l but use virtual code address; those addresses must be relocated too.
 %
@@ -7739,7 +7754,7 @@ are combined to form an executable.
 We described rougly the format of the object files at the beginning
 of this book in Section~\ref{sec:object-format-part1}. 
 We can now describe more precisely this format since we have
-a complete understanding of Asm5.
+a better understanding of Asm5.
 
 
 % The format is very regular, essentially a list of instructions
@@ -7769,7 +7784,7 @@ a complete understanding of Asm5.
 % ANAME: symkind (1 byte), symidx (1 byte), string finished by \0
 % (hmm the symkind might be redundant then if it's already listed
 %  as part of the operand? no, it's because of the spreaded symbol
-%  table scheme)
+%  table scheme. ??????
 
 % the header is really just a set of ANAME and AHISTORY, and
 % AHISTORY use the same format than other instructions.
@@ -7783,7 +7798,8 @@ a complete understanding of Asm5.
 
 %trans:
 [[outcode()]], introduced in Section~\ref{sec:outcode-signature},
-is used many times in the grammar (as we have seen in the previous chapter).
+is used many times in the grammar.
+\l (as we have seen in the previous chapter).
 It serializes one instruction (machine, pseudo, or virtual):
 
 <<function outcode(arm)>>=
@@ -7816,7 +7832,7 @@ out:
 }
 @
 %ocaml: just use Marshall
-%old: I renamed a to opcode
+%old: I renamed 'a' to 'opcode', clearer I think
 \l less: rename reg to reg3? so less confusing with reg in zaddr?
 \l scond is cond bits and also special bits
 \t goto out, they did too much assembly :) but maybe ok for an assembler :)
@@ -7844,6 +7860,8 @@ if(opcode == AB){
 @
 % so B.NE get translated in BNE. Not that important though,
 % again this feature could be removed.
+\t scond is first 4 bytes for conditional ecev, but other bits used too
+\t  as we will see in Section~XX?
 
 <<global bcode(arm)>>=
 static int bcode[] =
@@ -7867,7 +7885,7 @@ static int bcode[] =
 };
 @
 
-
+% why not keep B.EQ ? to normalize to help 5l?
 
 \section{Operand output, [[outopd()]]}
 
@@ -7897,7 +7915,7 @@ outopd(Gen *a, int symidx)
 }
 @
 %old: was zaddr, but no idea why, clearer use outopd
-%ocaml: just use Marshall
+%ocaml: just use Marshall again in caller
 
 \ifallcode
 <<[[zaddr()]] locals>>=
@@ -7913,7 +7931,6 @@ case D_NONE:
     break;
 
 case D_REG:
-case D_PSR:
     break;
 
 case D_CONST:
@@ -7944,6 +7961,7 @@ case D_SCONST:
 
 \section{Symbol table, [[h]] and [[ANAME]]}
 \label{sec:symbols-out}
+
 %note: we could put Htab in Core DS, h is reset in pinit(), but it's
 % really just local to the Output code generation so I think
 % it is better to put this DS here I think.
@@ -7974,7 +7992,7 @@ ANAME,
 % libmach was not recompiled?
 
 % for operands involving symbols.
-% less: rename? out_symbol_reference?
+% less: rename? out_symbol_table_elt
 <<function zname(arm)>>=
 /// outcode -> <>
 void
@@ -7991,10 +8009,7 @@ zname(char *n, int symkind, int symidx)
     Bputc(&obuf, '\0');
 }
 @
-% note that labels do not generate code, they are local to the .o
-% and used to compute offsets (pc). TEXT/GLOBL generate symbols defs
-% and other opcodes generate symbol uses.
-
+% symkind redundant? maybe.
 % symidx may seem weird, why need idx if store the symbol entries
 % one after the other?
 
@@ -8173,6 +8188,8 @@ while(s != S) {
 
 \section{File and line information}
 
+% just global lineno, so how get from global line -> file x line
+
 \section{Tracing origin and [[Hist]]}
 \n could be in preprocessing chapter too, cos strongly related to that
 \n but even if no cpp, still need #line which needs a Hist I think
@@ -8344,8 +8361,6 @@ prfile(long l)
 %note: was called Header section, but
 % it's not really an header in traditional sense,
 % the object could be parsed without those AHISTORY and ANAME I think.
-%less: have a Debugging support section? where put lineno of outcode()
-% there?
 
 %todo: use 5l -v -W to see those AHISTORY and ANAME; it can help
 % debug things
@@ -8362,6 +8377,7 @@ AHISTORY,
 <<sym_kind cases>>=
 D_FILE,
 @
+\t useful? if remove symkind from ANAME, need that?
 
 
 
@@ -8518,7 +8534,6 @@ expr:
 \section{Symbolic constants}
 \n useful, meh cpp can do that too. Was originally called Var, hmm
 
-
 <<line rule(arm)>>=
 | LNAME '=' expr ';'
  {
@@ -8532,6 +8547,7 @@ expr:
   $1->value = $3;
  }
 @
+%ocaml: get rid of, cpp can do that; no need lexer/parser coop then.
 
 <<con rule>>=
 | LVAR         { $$ = $1->value; }
@@ -8827,9 +8843,11 @@ ieeedtod(Ieee *ieee, double native)
 @
 % used only by a small if(FPCHIP) in cinit
 
+%\section{Multiplication and accumlation}
 
 \section{Long multiplication instructions}
 \n advanced topic, so can also put D_REGREG here
+\l and multiply and accumulate
 
 %\subsubsection{Mul long}
 
@@ -8863,11 +8881,9 @@ AMULALU,
 <<[[Opcode]] cases, mul/div/mod opcodes>>=
 AMULA,
 @
-
 <<[[itab]] elements>>=
 "MULA",		LMULA, AMULA,
 @
-
 
 
 
@@ -8888,7 +8904,7 @@ D_REGREG,
 @
 %$
 % abuse offset, ADT would be better!
-
+\l could use regreg here
 
 
 
@@ -9063,6 +9079,11 @@ D_PSR,
 % similar to D_REG really, just with special register, so reg field
 % is enum<registr> | enum<status_registr>
 
+<<[[zaddr()]] cases>>=
+case D_PSR:
+    break;
+@
+
 <<gen rule>>=
 | LPSR
  {
@@ -9172,8 +9193,8 @@ oexpr:
 @
 
 <<[[itab]] elements>>=
-".U",		LS,	C_UBIT,
 ".S",		LS,	C_SBIT,
+".U",		LS,	C_UBIT,
 ".W",		LS,	C_WBIT,
 ".P",		LS,	C_PBIT,
 @
@@ -9183,6 +9204,8 @@ oexpr:
 #define	C_SBIT	(1<<4)
 @
 % >>
+\l after cond which use 4 bits (16 possibilities)
+
 
 <<constant C_PBIT(arm)>>=
 #define	C_PBIT	(1<<5)
@@ -9199,11 +9222,14 @@ oexpr:
 @
 % >>
 
+
+
 % composite
 <<[[itab]] elements>>=
 ".PW",		LS,	C_WBIT|C_PBIT,
 ".WP",		LS,	C_WBIT|C_PBIT,
 @
+\l meh
 
 % composite or alternate form
 <<[[itab]] elements>>=
@@ -9436,7 +9462,7 @@ bad:
 
 \section{Processing multiple files}
 
-% why need that? people can write mkfiles
+% why need that? people cant write mkfiles?
 
 <<[[main()]] locals>>=
 int nout, nproc, status;
@@ -9740,6 +9766,8 @@ allocn(void *p, long on, long n)
 \label{chap:examples}
 
 \n seen [[helloworld.s]] before
+\l could put simplified hello world here? with 5l -v -W ?
+\l and 5i machine trace?
 
 \l lib_core/libc/arm/tas.s
 \t getcallerpc? help illustrates calling convention? or too subtle?
@@ -9818,6 +9846,7 @@ m1:
 %\label{sec:changelog}
 % code via make loc = 4100 LOC
 % orig Assembler.nw = 6000 LOC, just lpized and comments in sections
+% now: 10000 LOC? so added 4000 LOE (Lines of explanations)
 
 \chapter*{Glossary}
 \addcontentsline{toc}{chapter}{Glossary}
