@@ -8,9 +8,10 @@ open Parse
 (*****************************************************************************)
 (* Limitations compared to 5a:
  *  - does not handle unicode
- *  - does not recognize the uU lL suffix (but was skipped by 5a anyway)
- *  - does not handle preprocessing directives, assume external cpp,
- *    better to factorize code and separate concerns
+ *  - does not recognize the uU lL suffix 
+%     (but was skipped by 5a anyway)
+ *  - does not handle preprocessing directives, assume external cpp
+ *    (but better to factorize code and separate concerns)
  *)
 
 let line = ref 1
@@ -63,7 +64,6 @@ rule token = parse
   (* ----------------------------------------------------------------------- *)
   | ';' { TSEMICOLON }
   | ',' { TCOMMA }
-  | '.' { TDOT }
   | '(' { TOPAR } | ')' { TCPAR }
   | '$' { TDOLLAR }
 
@@ -71,6 +71,9 @@ rule token = parse
   (* used for division and for DATA *)
   | '/' { TSLASH } 
   | '%' { TMOD }
+
+  (* has to be before the rule for identifiers *)
+  | '.' { TDOT }
 
   (* ----------------------------------------------------------------------- *)
   (* Mnemonics and identifiers *)
@@ -81,7 +84,8 @@ rule token = parse
         then TRxx i
         else error ("register number not valid")
       }
-    
+
+  (* actually for '.' 5a imposes to have an isalpha() after *)    
   | (letter | '_' | '@' | '.') (letter | digit | '_' | '$' )* {
       let s = Lexing.lexeme lexbuf in
       match x with
@@ -145,7 +149,8 @@ rule token = parse
   | "0x" hex+        { TINT (int_of_string (Lexing.lexeme lexbuf)) }
   | digit+           { TINT (int_of_string (Lexing.lexeme lexbuf)) }
 
-  | (digit+ | digit* '.' digit*) (['e''E'] ('+' | '-')? digit*)?
+  (* I impose some digit+ after '.' and after 'e' *)
+  | (digit+ | digit* '.' digit+) (['e''E'] ('+' | '-')? digit+)?
      { TFLOAT (float_of_string (Lexing.lexeme lexbuf)) }
 
   (* ----------------------------------------------------------------------- *)

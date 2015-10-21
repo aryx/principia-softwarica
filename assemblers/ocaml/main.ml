@@ -8,7 +8,6 @@ open Common
  *)
 
 let thechar = '5'
-let thestring = "arm"
 
 let assemble infile outfile =
   let prog = Parse.parse infile in

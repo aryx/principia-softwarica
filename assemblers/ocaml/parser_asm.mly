@@ -67,6 +67,12 @@ let error s =
 /*(*************************************************************************)*/
 /*(*1 Priorities *)*/
 /*(*************************************************************************)*/
+%left TOR
+%left TXOR
+%left TAND
+%left TLT TGT
+%left TPLUS TMINUS
+%left TMUL TDIV TMOD
 
 /*(*************************************************************************)*/
 /*(*1 Rules type declaration *)*/
@@ -149,11 +155,28 @@ con:
  | TMINUS con { - $1 }
  | TPLUS  con { $1 }
  | TTILDE con { failwith "TODO: tilde??" }
+ | TOPAR expr TCPAR { $2 }
+
+expr:
+ | con { $1 }
+
+ | expr TPLUS expr  { $1 + $3 }
+ | expr TMINUS expr { $1 - $3 }
+ | expr TMUL expr   { $1 * $3 }
+ | expr TDIV expr   { $1 / $3 }
+ | expr TMOD expr   { $1 % $3 }
+
+ | expr TLT TLT expr { $1 << $4 }
+ | expr TGT TGT expr { $1 >> $4 }
+
+ | expr TAND expr    { $1 & $3 }
+ | expr TOR expr     { $1 | $2 }
+ | expr TXOR expr    { $1 ^ $3 }
 
 
 reg:
  | TRxx                { $1 }
- | TR TOPar expr TCPar { R $2 }
+ | TR TOPAR expr TCPAR { R $2 }
 
 
 shift:
@@ -213,3 +236,6 @@ branch:
 rel:
  | TIDENT offset        { Label ($1, $2) }
  | con TOPAR TPC TCPAR  { Relative $1 }
+
+
+

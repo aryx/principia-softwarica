@@ -1,14 +1,13 @@
-(* TODO: remain object code gen chapter, debug chapter, and extensions
- *)
+(* TODO: remain object code gen chapter, debug chapter, and extensions *)
 
 (* ------------------------------------------------------------------------- *)
-(* Numbers and Names *)
+(* Numbers and Strings *)
 (* ------------------------------------------------------------------------- *)
 
 (* line# *)
 type pos = int 
 
-(* enough? on 64 bits machine it is enough :) *)
+(* enough for ARM 32 bits? on 64 bits machine it is enough :) *)
 type integer = int 
 (* virtual code address, increment by unit of 1 *)
 type code_address = int
@@ -42,7 +41,7 @@ type arith_operand =
 type mov_operand = 
   | Ximm of ximm
   | Indirect of register * offset
-  (* those are all specialized forms of indirect below *)
+  (* those below are all specialized forms of Indirect *)
   | Param of symbol option * offset (* FP *)
   | Local of symbol option * offset (* SP *)
   (* stricter: we disallow anonymous SB *)
@@ -65,7 +64,7 @@ type branch_operand =
   (* rel *)
   (* before resolve *)
   | Relative of int (* PC *)
-  | Label of label * offset 
+  | Label of label * offset (* useful to have offset? *)
   (* after resolve *)
   | Absolute of code_address
   
@@ -75,7 +74,7 @@ type branch_operand =
 (* ------------------------------------------------------------------------- *)
 
 type instr = 
-  | NOP (* virtual *)
+  | NOP (* virtual, removed by linker *)
 
   | Arith of arith_opcode * arith_operand * register * register option
 
@@ -92,15 +91,14 @@ type instr =
   | Bxx of condition * branch_operand (* virtual, sugar *) 
 
   | SWI
-  | RFE (* virtual, sugar *)
+  | RFE (* virtual, sugar for MOVM *)
 
   and arith_opcode = 
     (* logic *)
     | AND | ORR | EOR
     (* arith *)
-    | ADD | SUB | MUL 
-    | DIV | MOD (* virtual *)
-    | SLL | SRL | SRA (* virtual, sugar *)
+    | ADD | SUB | MUL | DIV | MOD (* DIV and MOD are virtual *)
+    | SLL | SRL | SRA (* virtual, sugar for bitshift register *)
     (* less useful *)
     | BIC  | ADC | SBC  | RSB | RSC
     (* middle operand always empty (could lift up and put special type) *)
@@ -123,7 +121,7 @@ type instr =
 type pseudo_instr =
   (* stricter: we allow only SB names (extern_symbol) *)
   | TEXT of extern_symbol (* offset is 0 *) * attributes * int
-  | GLOBL of extern_symbol * attributes * int
+  | GLOBL of extern_symbol (* offset can be <> 0?? *) * attributes * int
   | DATA of extern_symbol * int (* size *) * ximm
   | WORD of ximm
   and attributes = attribute list
@@ -139,6 +137,6 @@ type line =
   | L of label
 
 (* after resolve there is no more L and branch operand has no more 
- * Relative or Label
+ * Relative or Label (converted in Absolute)
  *)
 type program = (line * pos) list
