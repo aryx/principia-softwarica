@@ -19,14 +19,15 @@
 %  - reordered opcodes and operand kinds, and cleaned them:
 %     * removed opcodes (ADWORD, ABX, ...)
 %     * removed operand kinds (D_GOK, D_ADDR, D_OCONST, ...)
-%  - introduced sym_kind, splitted from operand_kind, for D_EXTERN, etc
+%  - introduced sym_kind, splitted from operand_kind, for D_EXTERN, D_PARAM, ..
 %  - factorized more code between ARM and x86 (abusing LP chunks)
 %  - refactored the grammar:
 %     * removed a few rules, weird operand forms that were not used anyway,
-%        or introducing complexity (regi_nosp)
-%        as well as the optional commas here and there
-%     * rename some grammar rules (spreg -> regi, sreg -> regi_nosp),
-%     * inlined and removed intermediate rules not useful anymore: oreg, nireg?
+%       or introducing complexity (regi_nosp), e.g. disallow pseudo-reg 
+%       in certain places.
+%     * removed also optional commas here and there
+%     * renamed some grammar rules (spreg -> regi, sreg -> regi_nosp),
+%     * inlined and removed intermediate rules not useful anymore: oreg
 %  - TODO rename types, clearer, Gen? as Adr? or Operand? (and Gen2? as Prog?)
 
 %thx to assemblers/ocaml:
@@ -233,6 +234,7 @@ which despite its name covers also [[5a]]}
 which is about 4100 lines of code (LOC).
 \n see make loc (or cm -test_loc)
 [[5a]] is written in C for the most part with its parser using also Yacc.
+\t ref to ocaml version in appendix?
 \l cite for C and Yacc?
 %
 Like for most books in \principia, we chose a \plan software because
@@ -1403,8 +1405,10 @@ Asm5 introduces also some pseudo-instructions, pseudo-registers,
 and virtual instructions, as we have seen in the previous section,
 and those will be fully explained in this document.
 
+%dup:
 As said briefly in the introduction, [[5a]] does not
 generate machine code, the linker [[5l]] does, 
+%
 so there is no need to know the binary format of ARM instructions
 to understand this document.
 \l opcode format, see 5i/ it's more the job of 5l and optab to do that.
@@ -1435,15 +1439,17 @@ The main lexical elements of Asm5 (and also of Asm9) are:
 \begin{itemize}
 \item {\em integers}, e.g. [[42]] (decimal), [[0x12]] (hexadecimal), [[0666]]
 (octal)
+\n hexa/octal is new, not in tutorial
 
 \item {\em characters}, e.g. [['W']], [['\n']], [['\007]]
+\n octal is new, not in tutorial
 
 \item {\em strings}, e.g. [["hello wo"]]. Strings are limited
 to 8 characters or less.
 \l why? meh
 
 \item {\em floats}, e.g. [[4.2]], [[10e43]]
-
+\n this is new, not in tutorial
 
 
 \item {\em predefined identifiers} in uppercase, used for the mnemonics of
@@ -1627,6 +1633,7 @@ first operands.
 
 \subsection{Advanced features}
 \label{sec:mcrr-macro}
+\n this is new, not in tutorial
 
 Asm9 has a few more features beyond mnemonics and symbolic addresses:
 \begin{itemize}
@@ -1742,9 +1749,10 @@ of an object file.
 \end{verbatim}
 \caption{File format of a [[.5]] object file}\label{fig:object-format}
 \end{figure}
-
 \t symbol table about unresolved? imported and exported? at the end of file
 \t actually use a very special encoding scheme, see sectionXX
+\l same for history at the beginnning of file, but it actually abuse
+%   instruction format with AHISTORY (but there are also lots of ANAME)
 
 %ocaml: just marshall the ADT, and unmarshall in linker => shorter code!
 %update: hmm but the format is actually not that complicated, so we may win
@@ -1773,7 +1781,7 @@ as well as in [[include/arch/arm/5.out.h]]
 \toprule
 {\bf File} & {\bf Description} & {\bf Entities} & {\bf Chapters} & {\bf LOC} \\
 \otoprule
-[[aa/aa.h]] & Symbol table and input related structures & [[Sym]], [[Fi]], [[Io]] & \ref{chap:core-ds}, \ref{chap:input} & 243 \\
+[[aa/aa.h]] & Symbol table and input related structures & [[Sym]], [[Io]], [[Fi]] & \ref{chap:core-ds}, \ref{chap:input} & 243 \\
 %, [[Hist]] [[Htab]],
 [[include/.../5.out.h]] & ARM opcodes, operand kinds, registers & [[Opcode]], [[Operand_kind]],  & \ref{chap:core-ds} & 300 \\
  & & [[Register]] & & \\
@@ -1782,7 +1790,7 @@ as well as in [[include/arch/arm/5.out.h]]
 
 \midrule
 
-[[aa/globals.c]] & Generic globals (e.g. output filename) & [[hash]], [[symb]], [[outfile]],   & \ref{chap:main} & 97 \\
+[[aa/globals.c]] & Generic globals (e.g. output filename) & [[hash]], [[symb]], [[outfile]],   & \ref{chap:core-ds}, \ref{chap:main} & 97 \\
  & & [[pass]], [[pc]] & & \\
 
 [[5a/globals.c]] & ARM-specific globals & [[nullgen]] & \ref{chap:main} & 7 \\
@@ -1794,7 +1802,7 @@ as well as in [[include/arch/arm/5.out.h]]
 
 \midrule
 
-[[aa/lexbody.c]] & IO and lexing utilities & [[yyerror()]], [[newfile()]] & \ref{chap:input} & 664 \\ 
+[[aa/lexbody.c]] & IO and lexing utilities & [[newfile()]], [[yyerror()]],  & \ref{chap:input}, \ref{chap:error} & 664 \\ 
 % also lookup(), hmmm
 
 
@@ -1889,7 +1897,7 @@ of the assembly file to process.
 %
 [[assemble()]], after further initialisations,
 uses then a two-pass algorithm and so calls 
-[[yyparse()]], the function generated by Yacc from the Asm5 grammar,
+[[yyparse()]], the function generated by [[yacc]] from the Asm5 grammar,
 two times. Doing so it also modifies the global [[pass]]: for the first
 call to [[yyparse()]] the value of [[pass]] is 1, and for the second
 call the value of [[pass]] is 2.
@@ -2139,6 +2147,7 @@ document.
 The [[AXXX]] opcode represents the {\em invalid opcode}. It is put in
 first position in the enumeration probably as a form of defensive programming.
 %ocaml: ugly, should not need that if had strong enum case checker
+%
 [[ALAST]] is an {\em end marker}: a C idiom which makes it easy to loop
 over all the opcodes or to declare an array of opcodes.
 %
@@ -2281,9 +2290,10 @@ as we will see soon.
 %ocaml: ugly, offset abused for many different operand kind, should be union
 % see comment below
 
-The [[D_NONE]] case is used only at the beginning, when initializing
-a new operand in [[nullgen()]], and should be used to represent
-an operand which has not be defined yet.
+The [[D_NONE]] case is used in [[nullgen()]] to
+represent the null operand. This is similar to [[R_NONE]].
+\t for opcodes with less than 1 operands, should be overwritten though
+%ocaml: again if ADT no need that
 
 [[D_REG]] is used to represent register operands. In that
 case it is the [[Gen.reg]] field which encodes
@@ -2364,8 +2374,8 @@ a register, so an integer is enough.
 Depending on the number of operands, here are the constraints on 
 the value of those parameters:
 \begin{itemize}
-\item 0 operand: [[opd1]] and [[opd3]] are [[NULL]], [[reg]] is [[R_NONE]]
-\item 1 operand: [[opd3]] is [[NULL]], [[reg]] is [[R_NONE]]
+\item 0 operand: [[opd1]] and [[opd3]] are [[nullgen]], [[reg]] is [[R_NONE]]
+\item 1 operand: [[opd3]] is [[nullgen]], [[reg]] is [[R_NONE]]
 \item 2 operands: [[reg]] is [[R_NONE]]
 \item 3 operands: no constraint, every parameter is used
 \end{itemize}
@@ -2421,7 +2431,7 @@ A token is really a pair composed of:
 \begin{itemize}
 \item a {\em code}, which is an integer representing
 the kind of the token. 
-Based on the directives above, Yacc will generate a [[y.tab.h]]
+Based on the directives above, [[yacc]] will generate a [[y.tab.h]]
 header file where all the token names are assigned a code.
 See an excerpt of this file below.
 For instance 
@@ -2443,7 +2453,7 @@ the value will be the opcode corresponding to the actual mnemonic
 \end{itemize}
 %ocaml: but value is in yyval global, ugly, just because C func cant return pair
 
-Here is an excerpt of the [[y.tab.h]] file generated by Yacc:
+Here is an excerpt of the [[y.tab.h]] file generated by [[yacc]]:
 
 <<5a/y.tab.h excerpt>>=
 ...
@@ -2761,6 +2771,7 @@ in which case [[Sym.value]] contain the constant value
 %ocaml: useless feature
 
 \item {\em predefined identifiers}, 
+\l use mnemonics?
 for opcodes ([[AMOV]]) and registers ([[R1]]), in which case
 [[Sym.value]] contain the appropriate enumeration value.
 \l ugly abuse
@@ -3230,7 +3241,7 @@ Note that many globals are used for output data (e.g. [[obuf]])
 as well as input data (see [[pinit()]]),
 which makes the code harder to read. 
 This is probably because the interface
-for [[yyparse]], the function generated by Yacc,
+for [[yyparse]], the function generated by [[yacc]],
 is a function which does not take any argument nor return anything, so we
 are forced to use globals.
 
@@ -3382,7 +3393,7 @@ instruction comes from. This will be useful for debugging.
 <<global lineno>>=
 long	lineno;
 @
-\t Is it after #include expansion? global line number
+\t Is it after #include expansion? global line number, subtle
 \l rename glineno?
 %ocaml: could be embedded in the token, so no need global, no need getc
 % vs GETC, unget, etc. Less mess.
@@ -3717,6 +3728,10 @@ before to get the next character in the currently processed input file.
 \section{[[yylex()]]}
 
 Even though [[5a]] is not using Lex, Yacc requires
+\t why not use Lex? (same question asked in soft archi section)
+% maybe to avoid bootstrapping issues?
+% hmm but they use yacc so ... (and lex uses yacc)
+% or maybe because if want to have builtin-cpp, easier to do without Lex?
 the lexer to be represented by a function called [[yylex()]]. 
 %
 This function does not take any
@@ -3737,10 +3752,6 @@ to store the {\em value} of the token
 which is a union type (see Section~\ref{sec:token}).
 This value can then be retrieved via the \$$n$ notation
 in the Yacc actions as we will see in Chapter~\ref{chap:parsing}.
-%ocaml: should use lex. Simpler. But maybe to avoid bootstrapping issues?
-% hmm but they use yacc so ... (and lex uses yacc)
-% or maybe because if want to have builtin-cpp, easier to do without Lex?
-
 
 [[yylex()]] is essentially an {\em automata} 
 reading characters (with [[GETC()]]) 
@@ -3748,6 +3759,7 @@ in a loop (with the label [[l0:]] and [[goto]] below),
 using a big [[switch]] on the current character read ([[c]])
 to transition states (using more labels and [[goto]]s as we will see), 
 until a full token is formed:
+%ocaml: should use lex. Simpler. 
 
 <<function yylex>>=
 /// main -> assemble -> yyparse -> <>
@@ -3982,6 +3994,7 @@ aloop:
 %ocaml: use of peekc is yyback(1), but no need in ocamllex
 \l @? maybe remove it so it would also remove the need for LAT token_kind
 \t possible to have s->type == 0? if new sym theni it is set to LNAME in syminit
+\t actually does not handle unicode identifiers? how works assembler in go?
 
 Remember that [[Sym.type]] contains the token code of
 the ``symbol''.
@@ -4000,7 +4013,7 @@ if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
 % after lexing/parsing
 
 \t note that LLAB set in grammar! so in pass2 or if defined before
-\t then return different token_kind! not context free.
+\t then return different token_kind! not context free. but need that??
 
 \section{Numbers}
 
@@ -4251,6 +4264,7 @@ is parsed as a single quote:
 if(c == EOF)
     c = '\'';
 @
+\l C does not allow ''' ?
 
 %\section{Escaping characters}
 %Special characters?
@@ -4298,6 +4312,7 @@ loop:
 @
 \t use Rune instead of int?
 \l they abuse EOF to mean end of string
+\n if not known antislash, then return the char, but should yyerror I think
 
 [[getc()]] is a small wrapper over [[GETC()]] which
 automatically handles [[lineno]]:
@@ -4345,6 +4360,7 @@ if(c >= '0' && c <= '7') {
     return l;
 }
 @
+\n can have 1, 2, or 3 oct, but no more
 
 Asm5 allows a few more escape sequences compared to C:
 
@@ -5006,7 +5022,7 @@ getsymdots(int *dots)
 }
 @
 
-\subsection{Macro Expansion}
+\subsection{Macro expansion}
 
 <<[[yylex()]] if macro symbol>>=
 if(s->macro) {
@@ -5484,15 +5500,16 @@ getnsn(void)
 In this chapter we present the Yacc {\em grammar} of Asm5,
 the ARM assembly language supported by [[5a]].
 %trans:
-Yacc generates from this grammar the [[yyparse()]] parsing function
+[[yacc]] generates from this grammar the [[yyparse()]] parsing function
 which is called by [[assemble()]] and which internally
 calls [[yylex()]].
 %
 We assume you know how to read a Yacc grammar, otherwise 
-read~\cite{lexyacc}\footnote{You can also read the original Yacc paper 
+read~\cite{lexyacc}\footnote{
+You can also read the original Yacc paper 
 at [[generators/docs/yacc.pdf]]
 in our \plan repository, or read our \book{Code Generators} to fully
-understand how Yacc works}.
+understand how Yacc works.}.
 
 \section{Overview}
 
@@ -5591,7 +5608,7 @@ we will also try in this chapter to discuss how those features can be used
 to implement higher-level constructs of languages such as C.
 \l which will also help to understand them, why they are useful,when to use them
 We will conclude this chapter by discussing the generated code
-for [[yyparse()]] by Yacc.
+for [[yyparse()]] by [[yacc]].
 
 \section{Instructions}
 \n =~ statements
@@ -5884,6 +5901,9 @@ There are a few additional Asm5 opcodes related to
 arithmetic and logic mimicing ARM instructions,
 but they are less useful:
 
+\t have we covered mostly all C operators?
+\l then explain how go from expr to instr?
+
 <<[[Opcode]] cases, logic opcodes>>=
 ABIC, // ??
 @
@@ -6048,7 +6068,9 @@ performs, by just counting lines.
 \l exact? fixed number of cycle in ARM?
 \l See optab possibilities for AMOVW in Linker.nw
 
-
+\t MOV fundamental for C. Record access, array access, var access,
+% ultimately is a MOV with possibly complex address computation before,
+% or for record can just base + offset for var + fld_offset.
 
 \subsubsection{Swaps}
 \l mv in advanced topics? what I did for Machine.nw?
@@ -6151,6 +6173,7 @@ via [[nireg]] (name or indirect register) below:
 It is easy to implement loops using [[B]].
 The [[helloworld.s]] program in Section~\ref{sec:hello-program} 
 contains one (stupid) loop.
+%trans:
 To not loop infinitely though one needs a way
 to escape the loop and jump elsewhere {\em if}
 a certain criteria is true.
@@ -6223,6 +6246,7 @@ ABLE, // <=
 //ABAL (always) done via AB
 //ABNV (never) done via ANOP (see bcode[])
 @
+\t what are the ????
 \n match closely things in Machine.nw
 %old: got rid of ABCS and ABCC, seems redundant
 % and does not match the ARM convention
@@ -6280,7 +6304,8 @@ and conditional jumps.
 %FIGURE? control flow diagrams translation with edges?
 
 The [[B]]$xx$ Asm5 instructions are actually virtual instructions.
-Similar to the bitshift operations, the ARM provides a more
+Similar to the bitshift operations vs the shifted-registers,
+the ARM provides a more
 general approach to conditional jump where {\em every instruction
 can be conditionally executed} as explained later in
 Section~\ref{sec:cond-exec}.
@@ -6290,7 +6315,10 @@ with special bits set to mark the instruction for conditional execution.
 Similar to the bitshift operations, Asm5 provides
 those specialised virtual instructions jumps because
 they correspond more to what assembly programmers
+(or compiler writers)
+\n probably the reason, to make code of 5c more similar to 8c/vc/...
 expect from an assembly language.
+
 
 
 There are a few additional Asm5 comparison opcodes similar to
@@ -6445,14 +6473,14 @@ ASWI, // syscall
 
 %kernel:
 [[SWI]] is the fundamental building block for having a
-kernel program clearly separated from user programs by providing
+kernel program clearly separated from user programs. It provides
 a safe way to go from user program to kernel code via the system
 call API bridge.
 \l open then the door for user process to access real hardware
 % (but in supervised mode of course)
 
 Asm5 provides also the virtual instruction [[RFE]] to return
-from kernel code to a user program. [[RFE]] is just
+from kernel code to a user program. [[RFE]] is actually just
 a short alias to the more cryptic [[MOVM]] instruction
 we will describe in Section~\ref{sec:movm}.
 
@@ -6523,6 +6551,10 @@ the lexer behaves. Asm5 is thus not a context free grammar.
 This is similar to C where typedefs declarations change
 the token code of certain identifiers.
 }
+\t why need that for LLAB? why need to make it a special token? 
+\t grammar ambiguity?
+\t also can have func and label with same name? anyway disambiguity
+%  with suffixing with (SB)
 as shown in the rule above.
 Further use of this label in the rest of the program
 or in the next assembling pass will trigger then this rule:
@@ -6591,12 +6623,12 @@ The type of [[genval]] is [[Gen]], the
 generalized form of operand we described in Section~\ref{sec:operand}.
 %
 Thanks to those [[%type]] and [[%union]] Yacc directives,
-the generated code by Yacc for the \$$n$
+the generated code by [[yacc]] for the \$$n$
 referring to non-terminals will access the appropriate field of 
 the union. 
 %
 In the same way, the [[%token]] and [[%union]] Yacc
-directives will guide Yacc to generate the right code
+directives will guide [[yacc]] to generate the right code
 for the \$$n$ refering to terminals (the tokens).
 
 The [[gen]] operand rule, specifying the operands of [[MOVW]], 
@@ -6616,7 +6648,7 @@ gen:
 
 For now [[gen]] is almost identical to [[imsr]], 
 except for the [[ximm]] (extended immediate) vs [[imm]] which we will
-explain soon, but we will see later extensions to the [[gen]] rule.
+explain soon, but we will see later also extensions to the [[gen]] rule.
 
 <<type declarations(arm)>>=
 %type   <genval>   ximm
@@ -6628,9 +6660,9 @@ explain soon, but we will see later extensions to the [[gen]] rule.
 <<operand rules(arm)>>=
 <<gen rule>>
 <<regi rule(arm)>>
-<<oreg rule>>
 <<ximm rule>>
 @
+%old: <<oreg rule>>
 %old: <<regi_nosp rule(arm)>>
 \fi
 
@@ -6775,10 +6807,11 @@ con:
 
 Note that the ARM uses fixed-length instructions of 32 bits.
 %
-Because a few of those 32 bits are used for the opcode 
+Because a few of those 32 bits are used to encode the opcode 
 and a few more to encode the other operands, the range
 of the Asm5 constants is limited.
-For the arithmetic instructions, only 12 bits can be used for the
+For the arithmetic instructions, only 12 bits of the instruction
+can be used for the
 constant, so in theory only constants between 0 and 4096
 could be represented. 
 \l and for the other instructions? for STR and LDR?
@@ -6791,6 +6824,8 @@ and those 12 bits are actually divided in two parts:
 Not all 32 bits integers can be represented
 using that scheme but many important numbers like all
 the powers of 2 between 0 and 31 can be expressed, which
+\n 4 bits so 16 shift + 8 bits for constant, not enough for all power? Yes,
+\n see url below, 4 bits rotation is special too!
 is very useful in operations involving bitsets or bitmasks.
 See the \book{Emulator} for more information
 or \url{http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/}
@@ -7042,6 +7077,7 @@ One can also use symbols (names) to reference memory in Asm5:
 %<<oreg rule>>=
 %| name
 %@
+\l but actually not just a name really, there can be an offset
 
 <<type declarations(arm)>>=
 %type   <genval>   name 
@@ -7069,6 +7105,8 @@ This is because a name can also be seen as a sort of offset to
 one of the (pseudo) register we have seen in 
 Section~\ref{sec:pseudo-registers}
 (except [[PC]]):
+\l PC is used only in one context, for jump, which we will see later
+\l but actually before it was used maybe in regi_nosp
 
 <<helper rules(arm)>>=
 pointer:
@@ -7092,7 +7130,9 @@ pointer:
 %@
 
 Note that for locals and parameters the symbol name is
-not really necessary, which is why one can also reference
+not really necessary,
+\l footnote here why useful?
+which is why one can also reference
 parameters only with an offset, as in [[MOVW 4(FP), R1]]:
 
 <<gen rule>>=
@@ -7236,7 +7276,7 @@ nireg:
 %trans:
 The last operand rule we have to see is
 %
-the operand for branching instructions ([[B]], [[BL]])
+one of the operand for branching instructions ([[B]], [[BL]])
 called [[rel]] (register or label):
 
 <<type declarations(arm)>>=
@@ -7635,17 +7675,6 @@ cond:
   /* empty */ { $$ = Always; }
 | cond LCOND  { $$ = ($1 & ~C_SCOND) | $2; }
 @
-\l multiple LCOND?? what for? it is because cond is used also for 
-\l special bits in which case can have list of them
-%ocaml: no need for this special bitset that early. Return one cond
-% and a list of constructor for the .S, .etc
-
-<<constant C_SCOND(arm)>>=
-/* scond byte */
-#define	C_SCOND	((1<<4)-1)
-@
-% >>
-\l why want to combine them???
 
 <<[[itab]] elements>>=
 ".EQ",		LCOND,	0,
@@ -7671,10 +7700,9 @@ cond:
 <<constant Always(arm)>>=
 #define    Always 14
 @
-% was in a.h, but better put in 5.out.h
+%old: was in a.h, but better put in 5.out.h
 \l used as parameter to a few outcode
 \l use COND_ALWAYS instead?
-\t in fact cond is also used for special bits like Sbit after 0xf
 
 So, the branching instruction [[BEQ]] we saw in
 Section~\ref{sec:conditional-jump} is really just 
@@ -7686,15 +7714,30 @@ They were originally designed to compensate for the lack
 of branch predicator in ARM CPUs
 by having code using less branches. See
 \url{https://en.wikipedia.org/wiki/ARM_architecture#Conditional_execution}
-for more information or the \book{Emulator}.
+or the \book{Emulator} for more information .
 \l http://stackoverflow.com/questions/22168992/why-are-conditionally-executed-instructions-not-present-in-later-arm-instruction
+
+The bit manipulation involving [[C_SCOND]] above is because
+the [[cond]] non-terminal in addition to the conditional
+execution also stores special ARM instruction bits 
+as explained in Section~\ref{sec:special-bits}:
+\n e.g. Sbit, after 0xf
+%ocaml: no need for this special bitset that early. Return one cond
+% and a list of constructor for the .S, .etc
+
+<<constant C_SCOND(arm)>>=
+/* scond byte */
+#define	C_SCOND	((1<<4)-1)
+@
+% >>
+\n 0xf
 
 
 
 \section{[[yyparse()]]}
 \label{sec:yyparse}
 
-Based on the grammar of Asm5 we have seen in this chapter, Yacc
+Based on the grammar of Asm5 we have seen in this chapter, [[yacc]]
 will generate:
 
 \begin{itemize}
@@ -7730,77 +7773,156 @@ As mentioned before, [[5a]] does not actually generate machine
 code (the linker does), 
 %
 which simplifies things.
+\l we must still output a thing that will be part of a bigger set.
+\l An object is really a module, defining symbols and using external symbols.
+\l So the code we output can be relocated! 
 Indeed, the only thing [[5a]] needs to do is to serialize the 
 Asm5 instructions and to record in the object file the set of 
 symbols used and defined in the assembly file.
-Note that labels are resolved by [[5a]] and so they do not need to be
-stored in the object file.
+\l so need to output information about use of external symbols! 'U'
+\l (and also information about symbols the module defines! 'T', 'D')
+Note that labels are resolved during parsing by [[5a]] and 
+so they do not need to be stored in the object file.
 \l but use virtual code address; those addresses must be relocated too.
 %
 The \book{Linker} will describe then which machine code is generated from
-the object files how those object files
+the object files and how those object files
 are combined to form an executable.
 \l 5l/optab.c does this
 
-% Note also that we must output code that will be part of a bigger set.
-% An object is really a module, defining symbols and using external symbols.
-% So the code we output can be relocated! so need to 
-% output information about use of external symbols! 'U'
-% (and also information about symbols the module defines! 'T', 'D')
+\l 5l -v -W to show?
 
 \section{Object format}
 
 %trans:
 We described rougly the format of the object files at the beginning
 of this book in Section~\ref{sec:object-format-part1}. 
-We can now describe more precisely this format since we have
+We can describe more precisely this format in 
+Figure~\ref{fig:object-format-complete} since we now have
 a better understanding of Asm5.
 
+\begin{figure}[!]\centering
+\begin{verbatim}
+                        ^-------------+
+                       /|             |
+                      / |             |
+                     /  |             |
+                    /   |  Operand 2  |
++--------------+    |   |             |
+|Instruction 4 |    |   |             |
+|              |    |   |             |       ^-------------+
++--------------+    |   |             |/-----/|             |
+|   Symbol3    |    |   +-------------X       |             |
++--------------+    |   |             |       |             |
+|   Symbol2    |    |   |             |       |Operand value|
++--------------+    |   |  Operand 1  |       |             |
+|              |    /   |             |       |             |
+|Instruction 3 |   /    |             |       |             |
+|              |  /     |             |       |             |
++--------------+ /      +-------------X       +-------------+
+|   Symbol1    |/       |             |\      | Symbol kind |
++--------------X        |    Line     | \     +-------------+
+|Instruction 2 |        |             |  \    |Symbol index |
+|              |        |             |   \   +-------------+
++--------------X        +-------------+    \  |  Register   |
+|Instruction 1 |\       |  Register   |     \ +-------------+
+|              | \      +-------------+      \|Operand kind |
++--------------+  \--\  |  Condition  |       v-------------+
+| Files/lines  |      \ +-------------+
+|   history    |       \|   Opcode    |
+|              |        v-------------+
++--------------+
 
-% The format is very regular, essentially a list of instructions
-% where each instruction is encoded as:
-%  - opcode (1 byte)
-%  - condition (1 byte)
-%  - register (1 byte) (most instrs have at least one register operand)
-%    (also abused to encode some symbol attributes, e.g. DUPOK)
-%  - line  (4 bytes)
-%  - operand1
-%  - operand2
-%  where the operands depending on the operand_kind can actually have
-%  different size. The register above is a kind of operand3.
+    File                  Instruction             Operand
+\end{verbatim}
+\caption{Complete file format of a [[.5]] object file}
+\label{fig:object-format-complete}
+\end{figure}
+
+\l do I repeat too much the code? too verbose? maybe
+
+The format of an object file is pretty regular, essentially a list
+of instructions where each instruction is encoded as:
+\begin{itemize}
+\item an opcode (1 byte), e.g. the value of [[ASUB]]
+
+\item a conditional execution (1 byte), e.g. the value of [[Always]]
+
+\item a register number (1 byte), e.g. 4 for [[R4]], 
+when an instruction has 3 operands or the value of [[R_NONE]]
+\l also abused to encode some symbol attributes, e.g. DUPOK
+
+\item a line number (4 bytes) encoded in an architecture
+independent way by having the bytes representing the lower
+part of the number first
+
+\item the first operand
+\n which can be null operand
+
+\item the second operand
+\n which can be null operand
+
+\l The register above is a kind of operand3.
+
+\end{itemize}
+
+The operands themselves are encoded as:
+\begin{itemize}
+\item the kind of the operand (1 byte), e.g. the value of [[D_REG]].
+Note that for opcodes with 0 or 1 operand, [[D_NONE]]
+represents the null operand.
+
+\item a register number (1 byte), e.g. 5 for [[R5]] when
+the operand involves a register (as in [[(R5)]]) or [[R_NONE]]
+\l for direct register, shifted register, and??
+
+\item an {\em index} (1 byte) in the {\em object file symbol table},
+e.g. 13 when the operand involves a symbol (as in [[hello(SB)]]).
+\l or 0 ?
+The encoding scheme for this symbol table will be described later.
+\l for D_OREG and also D_CONST (but really D_ADDR)
+
+\item the kind of the symbol (1 byte), e.g. the value of [[D_EXTERN]]
+when the operand involves a symbol or [[N_NONE]]
+
+\item the value of the operand, which has a variable size
+e.g. 4 bytes for the integer value of a [[D_CONST]]
+but 0 bytes for [[D_REG]] since the register number
+is stored already above.
+
+\end{itemize}
+
+A symbol reference in an operand
+is represented as an index in a symbol table.
+\l not to confuse with hash
+This symbol table could be stored at the beginning or end of the file.
+Instead, [[5a]] uses a rather complicated scheme 
+\t why? uselessly complicated? advantage? can have more incremental linker?
+explained in Section~\ref{sec:spreaded-symbol-table} where the symbol
+table is ``spread'' in the object file along with the instructions.
+\n ANAME: symkind (1 byte), symidx (1 byte), string finished by \0
+\t hmm the symkind might be redundant then if it's already listed
+\t  as part of the operand? no, it's because of the spreaded symbol
+\t table scheme. ??????
 %
-% the operands themselves have a specific format too
-%  - operand_kind (D_CONST, D_REG, etc)
-%  - register (again) if any
-%  - symidx if any (for D_OREG, and also D_CONST (but really D_ADDR))
-%  - symkind if any (for the same)
-%  - variable size data, nothing for D_REG, offset for D_OREG, 
-%    float for D_FLOAT, string for D_SCONST, ...
+The beginning of an object file contains files and lines information
+which will be explained in Section~\ref{sec:object-file-history}.
+\n the header is really just a set of ANAME and AHISTORY, and
+\n AHISTORY use the same format than other instructions.
 
-%TODO: figure!!
-
-% Then spreaded among those instructions are also symbol table
-% entries, using a weird scheme
-% ANAME: symkind (1 byte), symidx (1 byte), string finished by \0
-% (hmm the symkind might be redundant then if it's already listed
-%  as part of the operand? no, it's because of the spreaded symbol
-%  table scheme. ??????
-
-% the header is really just a set of ANAME and AHISTORY, and
-% AHISTORY use the same format than other instructions.
-
-% 5l then read back this format in a simple loop reading one
-% instruction at a time and maintaing the symbol table information
-% via the ANAME.
+\l 5l then read back this format in a simple loop reading one
+\l instruction at a time and maintaing the symbol table information
+\l via the ANAME.
 
 \section{Instruction output, [[outcode()]]}
 \label{sec:outcode}
 
 %trans:
-[[outcode()]], introduced in Section~\ref{sec:outcode-signature},
-is used many times in the grammar.
-\l (as we have seen in the previous chapter).
-It serializes one instruction (machine, pseudo, or virtual):
+The job of [[outcode()]], introduced in Section~\ref{sec:outcode-signature},
+and used many times in the grammar, is 
+mostly to serialize one instruction (machine, pseudo, or virtual)
+according to the format described previously:
+\n mostly because actually also serialize symbol table, and increment also pc
 
 <<function outcode(arm)>>=
 /// main -> assemble -> yyparse -> <>
@@ -7834,22 +7956,26 @@ out:
 %ocaml: just use Marshall
 %old: I renamed 'a' to 'opcode', clearer I think
 \l less: rename reg to reg3? so less confusing with reg in zaddr?
-\l scond is cond bits and also special bits
-\t goto out, they did too much assembly :) but maybe ok for an assembler :)
 
 It also increments the virtual program counter
 [[pc]] (used to resolve labels) for all instructions
 except the one related to the [[Data]] section of the executable.
-Indeed, [[DATA]] (or [[GLOBL]]) instructions can be mixed
-with [[TEXT]] instructions. They do not have to be at the
+Indeed, [[DATA]] or [[GLOBL]] instructions can be mixed
+with [[TEXT]] instructions; they do not have to be at the
 end of the assembly file (even though this is a common practice).
 \n WORD is for the TEXT section too!
 
-% note that output line number here! useful for debugging information,
-% to be ablt to go back from one instruction to the actual code!
-% (but lineno after #include expansion, see outhist() section
-% later so one can get from lineno to actual file+lineno
+Note the use of [[goto]] in the code above where an [[if]] would
+have been arguably clearer. This is perhaps the sign that
+the person who wrote this code likes too much assembly.
+\l maybe ok for an assembler :)
 
+\l note that output line number here! useful for debugging information,
+\l to be ablt to go back from one instruction to the actual code!
+\l (but lineno after #include expansion, see outhist() section
+\l later so one can get from lineno to actual file _plus_ lineno
+
+[[outcode()]] also {\em normalizes} the code:
 
 <<[[outcode()]] adjust opcode and scond when opcode is AB>>=
 /* hack to make B.NE etc. work: turn it into the corresponding conditional*/
@@ -7858,11 +7984,6 @@ if(opcode == AB){
     scond = (scond & ~0xf) | Always;
 }
 @
-% so B.NE get translated in BNE. Not that important though,
-% again this feature could be removed.
-\t scond is first 4 bytes for conditional ecev, but other bits used too
-\t  as we will see in Section~XX?
-
 <<global bcode(arm)>>=
 static int bcode[] =
 {
@@ -7885,12 +8006,21 @@ static int bcode[] =
 };
 @
 
-% why not keep B.EQ ? to normalize to help 5l?
+\t why not keep B.EQ ? to normalize to help 5l?
+
+%dup:
+The bit manipulation with [[scond]] above is because
+[[scond]] in addition to store the conditional execution
+also stores special ARM instruction bits
+as explained in Section~\ref{sec:special-bits}.
 
 \section{Operand output, [[outopd()]]}
 
-% s is index in h[] for symbol involved in the operand?
-% or 0 if no symbol involved for this operand?
+Assuming a symbol index parameter computed by the caller
+(and explained in Section~\ref{sec:spreaded-symbol-table}),
+[[outopd()]] outputs an operand
+according to the format described previously:
+
 <<function zaddr(arm)>>=
 /// main -> assemble -> yyparse -> outcode -> <>
 void
@@ -7902,7 +8032,7 @@ outopd(Gen *a, int symidx)
     Bputc(&obuf, a->reg);
     // idx in symbol table, 0 if no symbol involved in the operand
     Bputc(&obuf, symidx);
-    // symkind of the symbol, if any
+    // symkind of the symbol, or N_NONE
     Bputc(&obuf, a->symkind);
 
     switch(a->type) {
@@ -7925,6 +8055,9 @@ Ieee e;
 int i;
 @
 \fi
+
+The operand value has a variable size depending on the kind
+of the operand:
 
 <<[[zaddr()]] cases>>=
 case D_NONE:
@@ -7960,7 +8093,10 @@ case D_SCONST:
 
 
 \section{Symbol table, [[h]] and [[ANAME]]}
-\label{sec:symbols-out}
+\label{sec:spreaded-symbol-table}
+
+% 1 byte so 256 symbols maxi? no cos rotated symbol table!
+% tricky.
 
 %note: we could put Htab in Core DS, h is reset in pinit(), but it's
 % really just local to the Output code generation so I think
@@ -7985,6 +8121,7 @@ ANAME,
 % could be renamed ASYM
 % part of opcode because need to be different than any other
 % for object reader to know what to do.
+% this is why also later will have AHISTORY part of that too
 
 %old: if ANAME is after AHISTORY in 5.out.h then got
 % some bugs in ar such as "inconsistent file xxx.5 in libc.a"
@@ -8190,7 +8327,7 @@ while(s != S) {
 
 % just global lineno, so how get from global line -> file x line
 
-\section{Tracing origin and [[Hist]]}
+\section{Tracing line origin history, [[Hist]]}
 \n could be in preprocessing chapter too, cos strongly related to that
 \n but even if no cpp, still need #line which needs a Hist I think
 
@@ -8239,7 +8376,7 @@ Hist*	ehist;
 
 
 
-\section{[[linehist()]]}
+\section{Recording history, [[linehist()]]}
 
 <<function linehist>>=
 void
@@ -8299,7 +8436,7 @@ linehist(char *f, int local_line)
 % So can better understand actually the tracing mechanism.
 
 
-\section{[[prfile()]]}
+\section{Displaying history, [[prfile()]]}
 
 <<constant HISTSZ>>=
 #define	HISTSZ		20
@@ -8357,7 +8494,9 @@ prfile(long l)
 % when no filename it means it's a pop
 
 
-\section{[[outhist()]] and [[AHISTORY]]}
+\section{Saving history, [[outhist()]] and [[AHISTORY]]}
+\label{sec:object-file-history}
+
 %note: was called Header section, but
 % it's not really an header in traditional sense,
 % the object could be parsed without those AHISTORY and ANAME I think.
@@ -8467,10 +8606,12 @@ while(p) {
 
 
 
-\chapter{Other Features}
+\chapter{Advanced Topics}
 \label{chap:advanced}
 
-\section{Constant expressions}
+\section{Other assembler features}
+
+\subsection{Constant expressions}
 \label{sec:constant-expr}
 
 % it's not Fortran, we're making an assembler :)
@@ -8531,7 +8672,7 @@ expr:
 
 
 
-\section{Symbolic constants}
+\subsection{Symbolic constants}
 \n useful, meh cpp can do that too. Was originally called Var, hmm
 
 <<line rule(arm)>>=
@@ -8553,6 +8694,7 @@ expr:
 | LVAR         { $$ = $1->value; }
 @
 %$
+\n which can be derived by expr
 
 \ifallcode
 \section{Optional commas}
@@ -8569,8 +8711,10 @@ comma:
 @
 \fi
 
+\section{Other instructions and registers}
 
-\section{Float instructions and registers}
+\subsection{Floats}
+\n instructions and registers
 \label{sec:float}
 
 %AST
@@ -8843,11 +8987,38 @@ ieeedtod(Ieee *ieee, double native)
 @
 % used only by a small if(FPCHIP) in cinit
 
-%\section{Multiplication and accumlation}
+\subsection{Multiplication and accumulation}
 
-\section{Long multiplication instructions}
+% multiply and accumulate
+<<[[Opcode]] cases, mul/div/mod opcodes>>=
+AMULA,
+@
+<<[[itab]] elements>>=
+"MULA",		LMULA, AMULA,
+@
+
+<<inst rule(arm)>>=
+/*
+ * MULA hi,lo,r1,r2
+ */
+| LMULA cond reg ',' reg ',' reg ',' regi 
+ {
+  $7.type = D_REGREG;
+  $7.offset = $9;
+  outcode($1, $2, &$3, $5.reg, &$7);
+ }
+@
+%$
+% abuse offset, ADT would be better!
+\l could use regreg here
+
+<<[[Operand_kind]] cases>>=
+D_REGREG,
+@
+
+
+\subsection{Long multiplication}
 \n advanced topic, so can also put D_REGREG here
-\l and multiply and accumulate
 
 %\subsubsection{Mul long}
 
@@ -8877,34 +9048,10 @@ AMULALU,
 %$
 % ugly $5.reg? why not use regi now?
 
-% multiply and accumulate
-<<[[Opcode]] cases, mul/div/mod opcodes>>=
-AMULA,
-@
-<<[[itab]] elements>>=
-"MULA",		LMULA, AMULA,
-@
 
 
 
-<<[[Operand_kind]] cases>>=
-D_REGREG,
-@
 
-<<inst rule(arm)>>=
-/*
- * MULA hi,lo,r1,r2
- */
-| LMULA cond reg ',' reg ',' reg ',' regi 
- {
-  $7.type = D_REGREG;
-  $7.offset = $9;
-  outcode($1, $2, &$3, $5.reg, &$7);
- }
-@
-%$
-% abuse offset, ADT would be better!
-\l could use regreg here
 
 
 
@@ -8935,7 +9082,7 @@ case D_REGREG:
 
 
 
-\section{Multiple registers instructions}
+\subsection{Multiple registers move}
 \label{sec:movm}
 
 % move many?
@@ -9058,7 +9205,7 @@ reglist:
 %	MOVW	$0x10000,R3; \
 %	MOVW	R3,(R2)
 
-\section{Status register}
+\subsection{Status register}
 
 % status register, works with MOV but normally it's a special
 % ARM load/store instructions: MSR and MRS (here emulated by a single MOV)
@@ -9096,7 +9243,7 @@ case D_PSR:
 % Status register? move earlier? 
 
 
-\section{System instructions and registers}
+\subsection{Coprocessors}
 
 % Already seen 2 system instructions: SWI and RFE. Here are a few more.
 
@@ -9185,7 +9332,9 @@ oexpr:
 
 
 
-\section{Special bits}
+\subsection{Special bits}
+\label{sec:special-bits}
+
 % sign? long? p bit, w bit, ???
 
 <<cond rule(arm)>>=
@@ -9259,7 +9408,9 @@ oexpr:
 @
 
 
-\section{Compiler-only pseudo and virtual instructions}
+\section{Other pseudo and virtual instructions}
+
+\subsection{Compiler-only}
 \l or virtual?
 
 % some of those are not really opcodes, they are entities 
@@ -9334,7 +9485,7 @@ REGTMP =	11,
 %    REGTMPT =		7,
 % no REGFP??
 
-\section{Linker-only pseudo-instructions}
+\subsection{Linker-only}
 
 <<[[Opcode]] cases, pseudo opcodes>>=
 AGOK,
@@ -9364,7 +9515,7 @@ D_FILE1, // used by linker only?
 
 %dead: #define	ALLTHUMBS	(1<<2)
 
-\section{[[TEXT]] attributes}
+\subsection{[[TEXT]] attributes}
 \label{sec:attributes}
 \l also for GLOBL?
 
@@ -9384,6 +9535,7 @@ D_FILE1, // used by linker only?
 @
 
 \section{[[#pragma lib]] and automagic linking}
+\n related to linker-only but better separate
 
 % this is very very nice! remove so much headache,
 % no need ocamlfind, no need pkg-config, so simple ...
@@ -9549,6 +9701,8 @@ that you can understand the assembly code generated by the compiler [[5c]].
 
 %missing features: ORG, but ld can do -Txx
 
+\l could take original questions in intro one by one, itemized
+\l and explain or point to places in the book that explains
 
 \appendix
 
@@ -9834,6 +9988,35 @@ m1:
 	MOVW	R(N), R(TMP)
 	B	out
 @
+
+\chapter{[[5a]] in OCaml}
+
+% design decision: 
+% - external cpp, and really external,
+%   not even -D, -I. Can do that in Makefile with %.s : %.S   cpp ...
+% - use Lex instead of handcoded lexer (maybe related to previous point)
+% - object file is marshalled form of ocaml AST. Far simpler
+%   (but less open to other languages)
+
+\section{[[ast_asm.ml]]}
+
+\section{[[main.ml]]}
+
+\section{[[lexer_asm.mll]]}
+
+\section{[[parser_asm.mly]]}
+% small notes on List.rev opti because quadratic @
+
+\section{[[parse.ml]]}
+% and mli
+
+\section{[[resolve_labels.ml]]}
+% and mli
+
+\section{[[object_file.ml]]}
+% and mli
+
+\section{[[common.ml]]}
 
 \chapter{Extra Code}
 
