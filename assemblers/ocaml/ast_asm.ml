@@ -44,7 +44,7 @@ type mov_operand =
   (* those below are all specialized forms of Indirect *)
   | Param of symbol option * offset (* FP *)
   | Local of symbol option * offset (* SP *)
-  (* stricter: we disallow anonymous SB *)
+  (* stricter: we disallow anonymous offsets to SB *)
   | Extern of extern_symbol (* SB *)
 
 

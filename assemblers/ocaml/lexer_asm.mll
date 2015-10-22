@@ -179,7 +179,7 @@ rule token = parse
 (*****************************************************************************)
 and char = parse
   | "''" { Char.code '\'' }
-  | "\\" ((oct oct oct) as s) "'" { int_of_string ("0o" ^ s) }
+  | "\\" ((oct oct? oct?) as s) "'" { int_of_string ("0o" ^ s) }
   | "\\" (['a'-'z'] as c) "'"   { code_of_escape_char c }
   | [^ '\\' '\'' '\n'] as c  "'"     { Char.code c }
   | '\n' { error "newline in character" }
