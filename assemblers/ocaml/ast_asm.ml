@@ -1,4 +1,4 @@
-(* TODO: remain object code gen chapter, debug chapter, and extensions *)
+(* TODO: remain debugging chapter, and extensions *)
 
 (* ------------------------------------------------------------------------- *)
 (* Numbers and Strings *)
@@ -16,7 +16,7 @@ type offset = int
 
 type label = string
 type symbol = string
-type extern_symbol = symbol * bool (* static *) * offset
+type entity = symbol * bool (* static *)
 
 (* ------------------------------------------------------------------------- *)
 (* Operands *)
@@ -45,7 +45,7 @@ type mov_operand =
   | Param of symbol option * offset (* FP *)
   | Local of symbol option * offset (* SP *)
   (* stricter: we disallow anonymous offsets to SB *)
-  | Extern of extern_symbol (* SB *)
+  | Entity of entity * offset (* SB *) 
 
 
   and ximm =
@@ -53,12 +53,12 @@ type mov_operand =
     | String of string (* limited to 8 characters *)
     (* Float? *)
 
-    (* stricter: we disallow address of FP or SP *)
-    | Address of extern_symbol
+    (* stricter: we disallow address of FP or SP, and offset to SB *)
+    | Address of entity
 
 type branch_operand =
   (* nireg *)
-  | SymbolJump of extern_symbol
+  | SymbolJump of entity * offset
   | IndirectJump of register
 
   (* rel *)
@@ -119,10 +119,10 @@ type instr =
    and move_size = Byte of sign | Word | HalfWord of sign
 
 type pseudo_instr =
-  (* stricter: we allow only SB names (extern_symbol) *)
-  | TEXT of extern_symbol (* offset is 0 *) * attributes * int
-  | GLOBL of extern_symbol (* offset can be <> 0?? *) * attributes * int
-  | DATA of extern_symbol * int (* size *) * ximm
+  (* stricter: we allow only SB for TEXT and GLOBL, and no offset *)
+  | TEXT of symbol * attributes * int
+  | GLOBL of symbol (* can have offset? *) * attributes * int
+  | DATA of symbol * offset * int (* size *) * ximm
   | WORD of ximm
   and attributes = attribute list
   and attribute = DUPOK | NOPROF
