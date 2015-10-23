@@ -13,7 +13,7 @@
 
 %thx to LP, changed for the better a few things:
 %  - better organisation of the code, my TOC is better than the few existing
-%    files (which didn't have very good names)
+%    files (which didn't have very good names, and which I even split)
 %  - removed deadcode (Ref, imm2, con2, NMACRO, CLAST, isreg, ...)
 %  - renamed some enums (as => opcode, <noname> => operand_kind)
 %  - reordered opcodes and operand kinds, and cleaned them:
@@ -21,7 +21,7 @@
 %     * removed operand kinds (D_GOK, D_ADDR, D_OCONST, ...)
 %  - introduced sym_kind, splitted from operand_kind, for D_EXTERN, D_PARAM, ..
 %  - factorized more code between ARM and x86 (abusing LP chunks)
-%  - refactored the grammar:
+%  - refactored the ARM grammar:
 %     * removed a few rules, weird operand forms that were not used anyway,
 %       or introducing complexity (regi_nosp), e.g. disallow pseudo-reg 
 %       in certain places.
@@ -4448,7 +4448,7 @@ struct
 @
 % mac for macro (and not macos or macintosh), but used actually
 % for all cpp related constructs.
-% note: I reorganized the entries, but should not matter
+%old: I reorganized the entries, but should not matter
 
 
 % dispatcher, should rename because it's not just about macro =>
@@ -4577,18 +4577,18 @@ case 'I':
     break;
 @
 
-<<constant NINCLUDE>>=
-#define	NINCLUDE	10
-@
 
 % hmm rename? include_paths?
 <<global include>>=
 char*	include[NINCLUDE];
 @
-
+<<constant NINCLUDE>>=
+#define	NINCLUDE	10
+@
 <<global ninclude>>=
 int	ninclude;
 @
+\n set to 0 because global?
 
 <<function setinclude>>=
 void
@@ -4609,7 +4609,7 @@ setinclude(char *p)
     include[ninclude++] = p;
 }
 @
-
+\t why starts at 1? because include[0] is special, it is "." or dirname(infile)
 
 
 \subsection{[[#include]]}
@@ -4623,7 +4623,9 @@ setinclude(char *p)
 void
 macinc(void)
 {
-    int c0, c, i, f;
+    int c0;
+    int c, i;
+    fdt f = -1;
     char str[STRINGSZ], *hp;
 
     c0 = getnsc();
@@ -4641,20 +4643,19 @@ macinc(void)
             goto bad;
         *hp++ = c;
     }
-    *hp = 0;
+    *hp = '\0';
 
     c = getcom();
     if(c != '\n')
         goto bad;
 
-    f = -1;
     for(i=0; i<ninclude; i++) {
         if(i == 0 && c0 == '>')
             continue;
         strcpy(symb, include[i]);
         strcat(symb, "/");
         if(strcmp(symb, "./") == 0)
-            symb[0] = 0;
+            symb[0] = '\0';
         strcat(symb, str);
 
         f = open(symb, 0);
@@ -4665,10 +4666,11 @@ macinc(void)
     if(f < 0)
         strcpy(symb, str);
     c = strlen(symb) + 1;
+
     while(c & 3)
         c++;
-
     hp = malloc(c);
+
     memcpy(hp, symb, c);
 
     newio();
@@ -4696,6 +4698,7 @@ pushio(void)
         yyerror("botch in pushio");
         errorexit();
     }
+    // save current position in includer
     i->p = fi.p;
     i->c = fi.c;
 }
@@ -4740,7 +4743,7 @@ getcom(void)
     return c;
 }
 @
-
+\l dupe because reused code in different assemblers.
 
 
 
@@ -4762,7 +4765,6 @@ case 'D':
 <<global Dlist>>=
 char*	Dlist[30];
 @
-
 <<global nDlist>>=
 int	nDlist;
 @
@@ -4771,6 +4773,8 @@ int	nDlist;
 for(i=0; i<nDlist; i++)
         dodefine(Dlist[i]);
 @
+
+
 
 <<[[Sym]] macro fields>>=
 //option<string>, for '#define FOO xxx' expansion
@@ -4797,13 +4801,14 @@ dodefine(char *cp)
     strcpy(symb, cp);
     p = strchr(symb, '=');
     if(p) {
-        *p++ = 0;
+        *p++ = '\0';
         s = lookup();
         l = strlen(p) + 2;	/* +1 null, +1 nargs */
+
         while(l & 3)
             l++;
-
         x = malloc(l);
+
         *x = '\0';
         strcpy(x+1, p);
         s->macro = x;
@@ -4814,7 +4819,7 @@ dodefine(char *cp)
     <<[[dodefine()]] debug>>
 }
 @
-
+\l argh abuse macro to also store arguments
 
 
 \subsection{[[#define]]}
@@ -4830,7 +4835,8 @@ macdef(void)
 {
     Sym *s, *a;
     char *args[NARG], *np, *base;
-    int n, i, c, len, dots;
+    int n, i, c, len;
+    bool dots;
     int ischr;
 
     s = getsym();
@@ -4879,7 +4885,7 @@ macdef(void)
                 *np++ = c;
                 c = getc();
             }
-            *np = 0;
+            *np = '\0';
             for(i=0; i<n; i++)
                 if(strcmp(symb, args[i]) == 0)
                     break;
@@ -5007,7 +5013,7 @@ bad:
 
 <<function getsymdots>>=
 Sym*
-getsymdots(int *dots)
+getsymdots(bool *dots)
 {
     int c;
     Sym *s;
@@ -5023,7 +5029,7 @@ getsymdots(int *dots)
     }
     if(getc() != '.' || getc() != '.')
         yyerror("bad dots in macro");
-    *dots = 1;
+    *dots = true;
     return slookup("__VA_ARGS__");
 }
 @
@@ -5297,14 +5303,11 @@ bad:
 
 % effect of #pragma lib in .s ??
 
-<<[[macprag()]] locals>>=
-Sym *s;
-@
-
 <<function macprag>>=
 void
 macprag(void)
 {
+    Sym *s;
     <<[[macprag()]] locals>>
 
     s = getsym();
@@ -5428,17 +5431,18 @@ maclin(void)
             break;
         *cp++ = c;
     }
-    *cp = 0;
+    *cp = '\0';
     c = getcom();
     if(c != '\n')
         goto bad;
 
 nn:
     c = strlen(symb) + 1;
+
     while(c & 3)
         c++;
-
     cp = malloc(c);
+
     memcpy(cp, symb, c);
 
     <<[[maclin()]] call linehist>>
@@ -5451,7 +5455,7 @@ bad:
 }
 @
 
-% could move with the other getxxx()
+% get number?
 <<function getnsn>>=
 long
 getnsn(void)
@@ -8345,7 +8349,7 @@ The extra condition about [[oldsymcounter]] is to avoid
 an infinite loop in [[outcode()]] with code such 
 as [[MOVW bar(SB), bar(SB)]].
 
-
+\l Figure?
 
 %old:
 %<<[[outcode()]] st and sf computation, and possible calls to zname>>=
@@ -10154,7 +10158,7 @@ m1:
 \section{[[resolve_labels.ml]]}
 % and mli
 
-\section{[[object_file.ml]]}
+\section{[[object_code.ml]]}
 % and mli
 
 \section{[[common.ml]]}
