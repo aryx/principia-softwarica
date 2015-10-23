@@ -2875,8 +2875,8 @@ Sym*	sym;
 \t actually also one of the union token case
 %ocaml: why need link? name not enough? need value just for labels
 
-This field is used for operands involving symbols. For instance
-in [[hello+4(SB)]], [[Gen.sym]] will point
+This field is used for operands involving symbols or labels.
+For instance in [[hello+4(SB)]], [[Gen.sym]] will point
 to the symbol [[hello]] in the global [[hash]] table.
 \t but what for? just for the name? symkind is part of Gen too
 %
@@ -7304,9 +7304,10 @@ called [[rel]] (register or label):
 % resolved locally (no need symbols), but at the same time they will
 % also need to be relocated when all objects are attached after each
 % other
-% (and the offset value is actually not relative to the current PC,
+% update: the offset value is actually not relative to the current PC,
 % it's an absolute value, so it probably means more relocatable than
-% relative in the end)
+% relative in the end
+% update: but one of the rule of rel is actually a relative jump to PC
 
 <<rel rule>>=
 rel:
@@ -7319,6 +7320,7 @@ rel:
  }
 @
 %$
+\t sym saved, so can be saved in object file for debugging?
 
 This operand uses a new operand kind:
 \l could abuse D_CONST?
@@ -7801,8 +7803,8 @@ in the assembly file, and where those symbols are used,
 so that they can be resolved later by the linker.
 %
 Note that labels are resolved during parsing by [[5a]] and 
-so they do not need to be stored in the object file.
-\t but actually there for debugging purpose!
+so their definitions do not need to be stored in the object file.
+\t but the uses are there for debugging purpose!
 \l but use virtual code address; those addresses must be relocated too.
 %
 The \book{Linker} will describe then the reverse operation which
@@ -7875,7 +7877,7 @@ when an instruction has 3 operands or the value of [[R_NONE]]
 
 \item a line number (4 bytes) encoded in an architecture
 independent way by having the bytes representing the lower
-part of the number first
+part of the number first (little-endian).
 
 \item the first operand
 \n which can be null operand
@@ -7900,8 +7902,10 @@ the operand involves a register (as in [[(R5)]]) or [[R_NONE]]
 \item an {\em index} (1 byte) in the {\em object file symbol table},
 e.g. 13 when the operand involves a symbol (as in [[hello(SB)]])
 or 0.
+\t or label, saved for debugging
 The encoding scheme for this symbol table will be described later
 in Section~\ref{sec:spreaded-symbol-table}.
+
 \l for D_OREG and also D_CONST (but really D_ADDR)
 
 \item the kind of the symbol (1 byte), e.g. the value of [[D_EXTERN]]
@@ -8173,7 +8177,7 @@ The object file symbol table [[h]] is different from the symbol
 table [[hash]] we have described in Section~\ref{sec:hash}.
 Indeed [[hash]] is an hash table which keeps
 track of macros, predefined identifiers, labels, and symbols.
-The object file symbol table stores only symbols and is just
+The object file symbol table stores only symbols and labels and is just
 an array.
 
 The first entry in [[h]] is unused since 0 represents
@@ -8194,6 +8198,7 @@ for(i=0; i<NSYM; i++) {
     h[i].sym = S;
 }
 @
+\t still initialize h[0] because used later in symidx_of_symopt()
 \n cant use N_NONE because factorized with x86
 \l needed only for pass 2
 
@@ -8317,21 +8322,32 @@ if(idx < 0 || idx >= NSYM)
     idx = 0;
 @
 
+There is a rather complex condition which forces us to recompute
+[[sf]] and [[st]]:
+
 <<[[outcode()]] if jackpot condition goto jackpot>>=
 if (sf == st && sf != 0 && symcounter != oldsymcounter) 
    goto jackpot;
 @
-\t otherwise could loop on MOVW bar(SB), bar(SB)
 
-% if the first operand involved for instance a symbol with for index 41
-% and that the second operand involves a symbol not
-% yet seen and that the next free index turns out to be 41, 
-% then h[41].sym will change but sf now points to a wrong entry
-% and so you have to recompute sf.
-% this is very very subtle (too subtle I think).
+This situation can happen for instance when the first operand
+involves a symbol [[foo]] with an index of 10 ([[sf == 10]]) 
+and when the second operand involves another symbol [[bar]] not yet seen. 
+Because of the circular nature of [[h]], [[symcounter]] could have already
+done one full round and be back to the value of 10.
+This means the next entry is 10 and [[h[10].sym]] will be overwritten
+to point now to the symbol for [[bar]].
+In this case [[sf == st == 10]] but [[sf]] now points
+to a wrong entry. In that case we want to recompute [[sf]].
+\l why not infinite loop.
+\l this is very very subtle (too subtle I think).
+The extra condition about [[oldsymcounter]] is to avoid
+an infinite loop in [[outcode()]] with code such 
+as [[MOVW bar(SB), bar(SB)]].
 
 
 
+%old:
 %<<[[outcode()]] st and sf computation, and possible calls to zname>>=
 %jackpot:
 %
@@ -8395,8 +8411,6 @@ if (sf == st && sf != 0 && symcounter != oldsymcounter)
 %@
 % use a while so can break? argh, horrible. This code was really bad.
 
-
-
 \t nm
 \l so need to output information about use of external symbols! 'U'
 \l and also information about symbols the module defines! 'T', 'D'
@@ -8405,6 +8419,7 @@ if (sf == st && sf != 0 && symcounter != oldsymcounter)
 \chapter{Debugging Support}
 \label{chap:debugging}
 
+
 % db has access to awesome metadata generated by 5s (and also 5c).
 %  main(argv=...) /home/pad/.../main.c called from _main+26 (.../main9.s:12)
 %  symbol for params and locals in object are debugging info. will see
@@ -8412,6 +8427,7 @@ if (sf == st && sf != 0 && symcounter != oldsymcounter)
 %  here will see file/line information.
 % also for good error msg like  xxx.h from xxx.h from xxx.c ...
 
+% labels saved also in object file, for debugging.
 
 % put here the +sp, +xxx locals/params format
 
@@ -10132,7 +10148,7 @@ m1:
 \section{[[parser_asm.mly]]}
 % small notes on List.rev opti because quadratic @
 
-\section{[[parse.ml]]}
+\section{[[parse_asm.ml]]}
 % and mli
 
 \section{[[resolve_labels.ml]]}
