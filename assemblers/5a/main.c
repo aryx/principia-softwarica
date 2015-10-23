@@ -207,6 +207,7 @@ cclean(void)
 /*e: function cclean(arm) */
 
 /*s: function zname(arm) */
+/// outcode -> <>
 void
 zname(char *n, int symkind, int symidx)
 {
@@ -223,8 +224,9 @@ zname(char *n, int symkind, int symidx)
 /*e: function zname(arm) */
 
 /*s: function zaddr(arm) */
+/// main -> assemble -> yyparse -> outcode -> <>
 void
-zaddr(Gen *a, int symidx)
+outopd(Gen *a, int symidx)
 {
     /*s: [[zaddr()]] locals */
     long l;
@@ -233,12 +235,11 @@ zaddr(Gen *a, int symidx)
     int i;
     /*e: [[zaddr()]] locals */
 
-    // operand format: operand kind, register, symidx, symkind, optional offset
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
     // idx in symbol table, 0 if no symbol involved in the operand
     Bputc(&obuf, symidx);
-    // symkind of the symbol, if any
+    // symkind of the symbol, or N_NONE
     Bputc(&obuf, a->symkind);
 
     switch(a->type) {
@@ -247,7 +248,6 @@ zaddr(Gen *a, int symidx)
         break;
 
     case D_REG:
-    case D_PSR:
         break;
 
     case D_CONST:
@@ -288,6 +288,9 @@ zaddr(Gen *a, int symidx)
     case D_REGREG:
         Bputc(&obuf, a->offset);
         break;
+    /*x: [[zaddr()]] cases */
+    case D_PSR:
+        break;
     /*e: [[zaddr()]] cases */
     default:
         print("unknown type %d\n", a->type);
@@ -319,7 +322,39 @@ static int bcode[] =
 };
 /*e: global bcode(arm) */
 
+/*s: function symidx_of_symopt */
+int
+symidx_of_symopt(Sym *sym, int symkind)
+{
+    int idx = 0;
+   
+    if(sym != S) {
+        idx = sym->symidx;
+        /*s: [[symidx_of_symopt()]] sanity check idx */
+        if(idx < 0 || idx >= NSYM)
+            idx = 0;
+        /*e: [[symidx_of_symopt()]] sanity check idx */
+        
+        // already generated an ANAME for this symbol reference?
+        if((h[idx].symkind != symkind || h[idx].sym != sym)) {
+            sym->symidx = symcounter;
+            h[symcounter].sym = sym;
+            h[symcounter].symkind = symkind;
+            idx = symcounter;
+            zname(sym->name, symkind, symcounter);
+            
+            symcounter++;
+            if(symcounter >= NSYM)
+                // circular array
+                symcounter = 1;
+        }
+    }
+    return idx;
+}
+/*e: function symidx_of_symopt */
+
 /*s: function outcode(arm) */
+/// main -> assemble -> yyparse -> <>
 void
 outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
 {
@@ -328,9 +363,7 @@ outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
     int sf;
     // symbol to, index in h[]
     int st;
-    // enum<sym_kind>
-    int symkind;
-    Sym *s;
+    int oldsymcounter;
     /*e: [[outcode()]] locals */
 
     /*s: [[outcode()]] adjust opcode and scond when opcode is AB */
@@ -346,67 +379,15 @@ outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
 
     /*s: [[outcode()]] st and sf computation, and possible calls to zname */
     jackpot:
-
-    sf = 0;
-    s = g1->sym;
-
-    while(s != S) {
-        sf = s->symidx;
-
-        if(sf < 0 || sf >= NSYM)
-            sf = 0;
-
-        symkind = g1->symkind;
-
-        // already generated an ANAME for this symbol reference
-        if(h[sf].symkind == symkind)
-         if(h[sf].sym == s)
-            break;
-
-        s->symidx = symcounter;
-        h[symcounter].sym = s;
-        h[symcounter].symkind = symkind;
-        sf = symcounter;
-        zname(s->name, symkind, symcounter);
-
-        symcounter++;
-        if(symcounter >= NSYM)
-            symcounter = 1;
-        break;
-    }
-
-    st = 0;
-    s = g2->sym;
-
-    while(s != S) {
-        st = s->symidx;
-
-        if(st < 0 || st >= NSYM)
-            st = 0;
-
-        symkind = g2->symkind;
-
-        if(h[st].symkind == symkind)
-          if(h[st].sym == s)
-            break;
-
-        s->symidx = symcounter;
-        h[symcounter].sym = s;
-        h[symcounter].symkind = symkind;
-        st = symcounter;
-        zname(s->name, symkind, symcounter);
-
-        symcounter++;
-        if(symcounter >= NSYM)
-            symcounter = 1;
-
-        if(st == sf)
-            goto jackpot;
-        break;
-    }
+    oldsymcounter = symcounter;
+    sf = symidx_of_symopt(g1->sym, g1->symkind);
+    st = symidx_of_symopt(g2->sym, g2->symkind);
+    /*s: [[outcode()]] if jackpot condition goto jackpot */
+    if (sf == st && sf != 0 && symcounter != oldsymcounter) 
+       goto jackpot;
+    /*e: [[outcode()]] if jackpot condition goto jackpot */
     /*e: [[outcode()]] st and sf computation, and possible calls to zname */
 
-    // Instruction serialized format: opcode, cond, optional reg, line, operands
     Bputc(&obuf, opcode);
     Bputc(&obuf, scond);
     Bputc(&obuf, reg);
@@ -414,8 +395,8 @@ outcode(int opcode, int scond,  Gen *g1, int reg, Gen *g2)
     Bputc(&obuf, lineno>>8);
     Bputc(&obuf, lineno>>16);
     Bputc(&obuf, lineno>>24);
-    zaddr(g1, sf);
-    zaddr(g2, st);
+    outopd(g1, sf);
+    outopd(g2, st);
 
 out:
     if(opcode != AGLOBL && opcode != ADATA)
@@ -424,6 +405,7 @@ out:
 /*e: function outcode(arm) */
 
 /*s: function outhist(arm) */
+/// main -> assemble -> <> (at begining of pass 2)
 void
 outhist(void)
 {
@@ -485,8 +467,8 @@ outhist(void)
         Bputc(&obuf, h->line>>8);
         Bputc(&obuf, h->line>>16);
         Bputc(&obuf, h->line>>24);
-        zaddr(&nullgen, 0);
-        zaddr(&g, 0);
+        outopd(&nullgen, 0);
+        outopd(&g, 0);
     }
 }
 /*e: function outhist(arm) */

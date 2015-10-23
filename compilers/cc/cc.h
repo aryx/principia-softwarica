@@ -112,7 +112,7 @@ struct	Node
     /*s: [[Node]] code generation fields */
     // address-able, used as a bool to mark lvalues, if can assign you can take
     // the address of. used by xcom() to assign ``addressibility''.
-    // also (ab)used as a bool for to mark label uses (true = used in a goto)
+    // also (ab)used as a bool to mark label uses (true = used in a goto)
     char	addable;
     /*x: [[Node]] code generation fields */
     // complexity in number of registers. for register allocation?
@@ -158,6 +158,7 @@ struct	Sym
     //    and also enum constants)
     //  - tags (struct/union/enum) 
     //  - labels (for the goto)
+    // and also during parsing for:
     //  - macros (the #define)
     //  - keywords lexeme (abuse)
 
@@ -415,9 +416,9 @@ enum node_kind
     OAND,
     OOR,
     OXOR,
+
     OASHL,
     OASHR,
-
     /*x: expression nodes */
     OPOS,
     ONEG,
@@ -579,14 +580,19 @@ enum type_kind
     /*s: type cases */
     TCHAR,
     TUCHAR,
+
     TSHORT,
     TUSHORT,
+
     TINT,
     TUINT,
+
     TLONG,
     TULONG,
+
     TVLONG,
     TUVLONG,
+    /*x: type cases */
     TFLOAT,
     TDOUBLE,
     /*x: type cases */

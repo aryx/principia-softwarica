@@ -20,7 +20,7 @@ struct	Gen
 
     // switch on Gen.type
     union {
-        long	offset; // offset or generic value
+        long	offset; // offset or lval or ...
         double	dval;
         char	sval[8];
     };

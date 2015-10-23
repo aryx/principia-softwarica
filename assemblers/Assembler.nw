@@ -371,7 +371,6 @@ Once installed, you can test [[5a]] under \plan with:
 5   hello world
 6   $
 \end{verbatim}
-\t 5l -v -W so dumper of object file? maybe not yet?
 
 The command in Line 2 {assembles} the very simple [[hello.s]]
 ARM assembly program and generates the [[hello.5]] ARM {object file}.
@@ -596,7 +595,6 @@ usage: 5a [-options] file.s
 $ 5a foo.s
 $ 5l foo.5 bar.5 ...
 \end{verbatim}
-\t instruction to disassemble foo.5? db foo.5? or 5l -v -W?
 
 Given an input {assembly file} [[foo.s]], 
 [[5a]] outputs an {object file} [[foo.5]].
@@ -768,6 +766,8 @@ hello world
 \l show actual code? echo '$t :c' | 5i hello 
 %$
 \l show binary format? hexdump? (actually not bin instruction format! see below)
+\t instruction to disassemble foo.5? db foo.5? 
+\t 5l -v -W so dumper of object file? nm?
 
 Appendix~\ref{chap:examples} contains more examples of assembly programs.
 
@@ -2401,7 +2401,7 @@ tokens as well as the type of value they hold:
 /* opcodes */
 %token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LRET
 %token  <lval>  LSWI LSYSTEM 
-%token  <lval>  LARITHFLOAT LCMPFLOAT  LMULL LMULA  LMOVM LMVN
+%token  <lval>  LARITHFLOAT LCMPFLOAT LSQRTFLOAT  LMULL LMULA  LMOVM LMVN
 %token  <lval>  LDEF LDATA LWORD LEND
 %token  <lval>  LMISC
 /* registers */
@@ -2557,6 +2557,7 @@ in this document but the first entry is shown above for [[NOP]].
 
 \section{[[Sym]]bols and [[hash]] table}
 \label{sec:sym}
+\label{sec:hash}
 
 One of the main job of an assembler is to manage symbols
 and to resolve symbolic addresses. 
@@ -2634,7 +2635,7 @@ element in the list:
 // list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
 Sym*	link;
 @
-\t also h?
+\n also of the object file symbol table h? no h is just an array actually.
 
 The end of the list is represented by the null pointer:
 
@@ -2758,9 +2759,10 @@ Another field of [[Sym]] is used though to store
 meta-data about the symbol which will be stored in the 
 symbol table of the object file
 as we will see in Section~\ref{sec:symidx-sym-field}.
-\l symidx, but actually not sym, sym and symkind are in Gen, not Symbol
+\n symidx, but actually not symkind which is in Gen, not Symbol.
 \l also for SP and FP p _plus_ 0(FP)
-\t why need symbol in symbol table actually?
+\n Why need symbol in symbol table actually? to have a shared reference
+\n which can store symidx which is used in outcode()
 
 
 \item {\em macros}, e.g [[#define FOO]], since [[5a]] is
@@ -2841,6 +2843,7 @@ syminit(Sym *sym)
     sym->value = 0;
 }
 @
+\t not set symidx to 0??
 
 
 %dead:
@@ -4080,13 +4083,13 @@ dc:
     }
     <<[[yylex()]] in number case, in decimal case, float handling>>
     *cp = '\0';
-    <<[[yylex()]] in number case, if vlong lval>>
     yylval.lval = strtol(symb, nil, 10);
 
 <<[[yylex()]] in number case, in decimal case, ncu suffix label handling>>
     peekc = c;
     return LCONST;
 @
+%old:    <<[[yylex()]] in number case, if vlong lval>>
 
 The unsigned and long typed suffixes are ignored by Asm5:
 
@@ -5554,8 +5557,7 @@ which will be presented gradually in this chapter:
 <<operand rules(arm)>>
 <<cond rule(arm)>>
 
-<<constant expression rules>>
-<<float rules>>
+<<advanced topics rules>>
 
 <<helper rules(arm)>>
 @
@@ -5612,6 +5614,16 @@ to implement higher-level constructs of languages such as C.
 \l which will also help to understand them, why they are useful,when to use them
 We will conclude this chapter by discussing the generated code
 for [[yyparse()]] by [[yacc]].
+
+\ifallcode
+<<advanced topics rules>>=
+<<constant expression rules>>
+<<float rules>>
+<<reglist rule>>
+<<creg rule>>
+<<oexpr rule>>
+@
+\fi
 
 \section{Instructions}
 \n =~ statements
@@ -7562,9 +7574,10 @@ as explained in Section~\ref{sec:data}:
 
 <<[[Opcode]] cases, pseudo opcodes>>=
 ADATA,
+@
 <<[[itab]] elements>>=
 "DATA",		LDATA, ADATA,
-
+@
 <<inst rule(arm)>>=
 /*
  * DATA
@@ -7769,7 +7782,7 @@ grammar rule declared in the file: [[prog]].
 
 
 
-\chapter{Object Generation}
+\chapter{Object Code Generation}
 \label{chap:generation}
 
 %trans:
@@ -7780,24 +7793,25 @@ As mentioned before, [[5a]] does not actually generate machine
 code (the linker does), 
 %
 which simplifies things.
-\l we must still output a thing that will be part of a bigger set.
-\l An object is really a module, defining symbols and using external symbols.
-\l So the code we output can be relocated! 
-Indeed, the only thing [[5a]] needs to do is to serialize the 
-Asm5 instructions and to record in the object file the set of 
-symbols used and defined in the assembly file.
-\l so need to output information about use of external symbols! 'U'
-\l (and also information about symbols the module defines! 'T', 'D')
+Indeed, the only thing [[5a]] needs to do is to {serialize} the 
+Asm5 instructions and to record in the object file 
+the set of symbols used 
+\l (and defined) 
+in the assembly file, and where those symbols are used, 
+so that they can be resolved later by the linker.
+%
 Note that labels are resolved during parsing by [[5a]] and 
 so they do not need to be stored in the object file.
+\t but actually there for debugging purpose!
 \l but use virtual code address; those addresses must be relocated too.
 %
-The \book{Linker} will describe then which machine code is generated from
-the object files and how those object files
+The \book{Linker} will describe then the reverse operation which
+is to read an object file.
+\n ldobj()
+It will also describe which machine code
+is generated from the object files and how those object files
 are combined to form an executable.
-\l 5l/optab.c does this
-
-\l 5l -v -W to show?
+\n 5l/optab.c does this
 
 \section{Object format}
 
@@ -7846,12 +7860,12 @@ a better understanding of Asm5.
 \label{fig:object-format-complete}
 \end{figure}
 
-\l do I repeat too much the code? too verbose? maybe
-
 The format of an object file is pretty regular, essentially a list
 of instructions where each instruction is encoded as:
+\l do I repeat too much the code? too verbose? maybe
 \begin{itemize}
 \item an opcode (1 byte), e.g. the value of [[ASUB]]
+\n 1 byte enough for 256 opcodes, as explained in sec:object-format-part1
 
 \item a conditional execution (1 byte), e.g. the value of [[Always]]
 
@@ -7876,17 +7890,18 @@ part of the number first
 The operands themselves are encoded as:
 \begin{itemize}
 \item the kind of the operand (1 byte), e.g. the value of [[D_REG]].
-Note that for opcodes with 0 or 1 operand, [[D_NONE]]
-represents the null operand.
+Note that for opcodes with 0 or 1 operand, [[D_NONE]] is used
+to represent the null operand.
 
 \item a register number (1 byte), e.g. 5 for [[R5]] when
 the operand involves a register (as in [[(R5)]]) or [[R_NONE]]
 \l for direct register, shifted register, and??
 
 \item an {\em index} (1 byte) in the {\em object file symbol table},
-e.g. 13 when the operand involves a symbol (as in [[hello(SB)]]).
-\l or 0 ?
-The encoding scheme for this symbol table will be described later.
+e.g. 13 when the operand involves a symbol (as in [[hello(SB)]])
+or 0.
+The encoding scheme for this symbol table will be described later
+in Section~\ref{sec:spreaded-symbol-table}.
 \l for D_OREG and also D_CONST (but really D_ADDR)
 
 \item the kind of the symbol (1 byte), e.g. the value of [[D_EXTERN]]
@@ -7894,23 +7909,20 @@ when the operand involves a symbol or [[N_NONE]]
 
 \item the value of the operand, which has a variable size
 e.g. 4 bytes for the integer value of a [[D_CONST]]
-but 0 bytes for [[D_REG]] since the register number
+but 0 byte for [[D_REG]] since the register number
 is stored already above.
 
 \end{itemize}
 
-A symbol reference in an operand
-is represented as an index in a symbol table.
-\l not to confuse with hash
+A symbol reference in an operand is represented as an index in a symbol table,
+which saves space since the same symbol could be referenced many times.
+%ocaml: so kinda pointer to string, but Marshall does this for free!
+\n not to confuse with hash, symbol table of assembler vs object file stab
 This symbol table could be stored at the beginning or end of the file.
-Instead, [[5a]] uses a rather complicated scheme 
-\t why? uselessly complicated? advantage? can have more incremental linker?
+Instead, [[5a]] uses a rather sophisticated scheme 
 explained in Section~\ref{sec:spreaded-symbol-table} where the symbol
 table is ``spread'' in the object file along with the instructions.
 \n ANAME: symkind (1 byte), symidx (1 byte), string finished by \0
-\t hmm the symkind might be redundant then if it's already listed
-\t  as part of the operand? no, it's because of the spreaded symbol
-\t table scheme. ??????
 %
 The beginning of an object file contains files and lines information
 which will be explained in Section~\ref{sec:object-file-history}.
@@ -7920,6 +7932,9 @@ which will be explained in Section~\ref{sec:object-file-history}.
 \l 5l then read back this format in a simple loop reading one
 \l instruction at a time and maintaing the symbol table information
 \l via the ANAME.
+
+\t 5l -v -W to show?
+
 
 \section{Instruction output, [[outcode()]]}
 \label{sec:outcode}
@@ -7960,7 +7975,7 @@ out:
         pc++;
 }
 @
-%ocaml: just use Marshall
+%ocaml: just use Marshall, no need all those stuff
 %old: I renamed 'a' to 'opcode', clearer I think
 \l less: rename reg to reg3? so less confusing with reg in zaddr?
 
@@ -7971,8 +7986,6 @@ Indeed, [[DATA]] or [[GLOBL]] instructions can be mixed
 with [[TEXT]] instructions; they do not have to be at the
 end of the assembly file (even though this is a common practice).
 \n WORD is for the TEXT section too!
-
-\t 5l does the opposite, read format. not very hard. regular format.
 
 Note the use of [[goto]] in the code above where an [[if]] would
 have been arguably clearer. This is perhaps the sign that
@@ -8026,7 +8039,7 @@ as explained in Section~\ref{sec:special-bits}.
 
 \section{Operand output, [[outopd()]]}
 
-Assuming a symbol index parameter computed by the caller
+Assuming a symbol index parameter [[symidx]] computed by the caller
 (and explained in Section~\ref{sec:spreaded-symbol-table}),
 [[outopd()]] outputs an operand
 according to the format described previously:
@@ -8102,45 +8115,93 @@ case D_SCONST:
 @
 
 
-\section{Symbol table, [[h]] and [[ANAME]]}
+\section{Object file symbol table, [[h]] and [[ANAME]]}
 \label{sec:spreaded-symbol-table}
 
-% 1 byte so 256 symbols maxi? no cos rotated symbol table!
-% tricky.
+%trans:
+Operands can mention symbols which are important to keep track
+in the object file since those symbol references must be resolved
+later by the linker.
+% 
+Because only 1 byte is used in the format of the operand
+to store the index of the symbol involved,
+one could think Asm5 allows only 256 different symbols
+in an assembly file. But, the {\em object file symbol table}
+we will describe in this section,
+in addition to be {\em spread} in the object file, is also a
+{\em circular} table with 50 elements.
+This clever scheme allows any number of symbols in an object file
+as we will see.
+\n uselessly complicated? if want only 1 byte for index, then need a 
+\n circular thing and need to spread it.
+\l can have more incremental linker also?
 
-%note: we could put Htab in Core DS, h is reset in pinit(), but it's
-% really just local to the Output code generation so I think
-% it is better to put this DS here I think.
+The global [[h]] below mimics in memory this circular table:
+\l why global? why not static in outcode?
+\n there will be a similar variable in ldobj() in the linker
 
-% When an operand involves a symbol, the generated operand code 
-% contain an int that is an index in a symbol table! See zaddr().
-
-% the way this symbol table is stored in the object file is a bit
-% tricky. They could have put the table at the beginning
-% of the file (I think it would have been simpler). Instead
-% the symbol table is spreaded in the object file and they use
-% a circular array scheme.
-
-
-% so among all those instructions there are some symbol table
-% elements, ANAME.
-
-<<[[Opcode]] cases, pseudo opcodes>>=
-ANAME,
+<<global h>>=
+// array<ref<Sym> * int>
+struct Htab h[NSYM];
 @
-% could be renamed ASYM
-% part of opcode because need to be different than any other
-% for object reader to know what to do.
-% this is why also later will have AHISTORY part of that too
-% this is why also have AEND in enum.
+\t why call it h when really it's an array ...
+<<constant NSYM>>=
+#define	NSYM	50
+@
+\n need to be < 256 as currently use Bputc to marshall indexes in zaddr()
+\n need to be the same in 5l if dont use defensive programming
+\t but why not 255 then????
 
-%old: if ANAME is after AHISTORY in 5.out.h then got
-% some bugs in ar such as "inconsistent file xxx.5 in libc.a"
-%update: maybe it was because the Makefile pb where actually
-% libmach was not recompiled?
+<<struct Htab>>=
+struct Htab
+{
+    // ref<Sym>>
+    Sym*	sym;
+    //enum<sym_kind>
+    short	symkind;
+};
+@
+\n we could put Htab in Core DS, h is reset in pinit(), but it's
+\n really just local to the Output code generation so I think
+\n it is better to put this DS here I think.
+%old: I rename 'type' to symkind, to avoid confusion with Gen.type.
+% Htab is a sliced subset of Sym but just for the symbols 
+% (and an array insteaf of a hash, which is confusing name.
 
-% for operands involving symbols.
-% less: rename? out_symbol_table_elt
+
+The object file symbol table [[h]] is different from the symbol
+table [[hash]] we have described in Section~\ref{sec:hash}.
+Indeed [[hash]] is an hash table which keeps
+track of macros, predefined identifiers, labels, and symbols.
+The object file symbol table stores only symbols and is just
+an array.
+
+The first entry in [[h]] is unused since 0 represents
+the absence of symbol in the operand format.
+The next free entry is stored in the following global:
+
+<<global symcounter>>=
+int	symcounter;
+@
+%old: was called sym, but I renamed it to avoid overloading the sym name
+% (as a global, as a field)
+\l why not char instead? like symidx (or better byte)
+
+<<[[pinit()]] initialisations>>=
+symcounter = 1;
+for(i=0; i<NSYM; i++) {
+    h[i].symkind = 0; // N_NONE
+    h[i].sym = S;
+}
+@
+\n cant use N_NONE because factorized with x86
+\l needed only for pass 2
+
+As we will output instructions in [[outcode()]], new symbols
+will be referenced in operands and new entries in [[h]]
+will be created as we will see soon. To output
+in the object file a new entry, the following function is used:
+
 <<function zname(arm)>>=
 /// outcode -> <>
 void
@@ -8157,153 +8218,111 @@ zname(char *n, int symkind, int symidx)
     Bputc(&obuf, '\0');
 }
 @
-% symkind redundant? maybe.
-% symidx may seem weird, why need idx if store the symbol entries
-% one after the other?
+\l rename? out_symbol_table_elt
+\t symkind redundant? maybe.
+\n symidx redundant too? Why need idx if we store the symbol entries 
+\n  one after the other? Defensive programming? so can infer circular size?
 
+A new pseudo-opcode is used:
 
-<<struct Htab>>=
-struct Htab
-{
-    // ref<Sym>>
-    Sym*	sym;
-    //enum<sym_kind>
-    short	symkind;
-};
+<<[[Opcode]] cases, pseudo opcodes>>=
+ANAME,
 @
-%old: I rename 'type' to symkind, to avoid confusion with Gen.type.
-% Htab is a sliced subset of Sym but just for the symbols 
-% (and an array insteaf of a hash, which is confusing name.
+\n could be renamed ASYM
+%old: if ANAME is after AHISTORY in 5.out.h then got
+% some bugs in ar such as "inconsistent file xxx.5 in libc.a"
+%update: maybe it was because the Makefile pb where actually
+% libmach was not recompiled?
 
-<<constant NSYM>>=
-#define	NSYM	50
-@
-% limit on number of unresolved external symbols? Nope.
-% note: need to be < 256 as currently use Bputc to marshall 
-%  symbol indexes in zaddr().
+This constant must be part of the [[Opcode]] enum so that
+it is different from any other opcode. This makes the
+format of an object file unambiguous. Indeed, to read
+an object file, one can just read one byte and decide
+if the further bytes represent an instruction or an element
+of the symbol table.
+\t this is why also later will have AHISTORY part of that too
+\t this is why also have AEND in enum.
 
-
-% starts to be used at index 1, as 0 is used as index for none symbol.
-<<global h>>=
-// array<ref<Sym>>
-struct Htab h[NSYM];
-@
-% why call it h when really it's an array ...
-
-% h is an optimisation to avoid generating too many ANAME? But
-% why not a symbol table at the beginning of the file? why spread it?
-% because that way can use 1 byte for symbol idx and still have
-% infinite possibilities! tricky.
-
-% next free entry in h (actually can be reseted to 1)
-<<global symcounter>>=
-int	symcounter;
-@
-%less: why not char instead? like symidx (or better byte)
-%old: was called sym, but I renamed it to avoid overloading the sym name
-% (as a global, as a field)
-
-<<[[Sym]] identifier fields>>=
-// index in h when the Sym is really a symbol, 0 when not a symbol
-int	symidx;
-@
-\label{sec:symidx-sym-field}
-
-%old: was called 'sym', but really it's an index in h, and it was confusing
-% to have so many fields called sym already (as well as the global sym)
-% char enough??
-%old: was char, but in many places they use int for symcounter so I use int
-% there too now
-
-
-<<[[pinit()]] initialisations>>=
-symcounter = 1;
-for(i=0; i<NSYM; i++) {
-    h[i].symkind = 0; // N_NONE
-    h[i].sym = S;
-}
-@
-
-
-
-
-
+We can finally see the code in [[outcode()]] which maintains
+[[h]], manages the symbol indexes, and calls [[zname()]] when
+a new entry is needed. The locals below are set by this
+code. [[sf]] and [[st]] are passed to [[outopd()]]
+as we have seen in Section~\ref{sec:outcode}:
 
 <<[[outcode()]] locals>>=
 // symbol from, index in h[]
 int sf;
 // symbol to, index in h[]
 int st;
-// enum<sym_kind>
-int symkind;
-Sym *s;
+int oldsymcounter;
 @
 
+An additional field in [[Sym]] is needed to store
+the index of symbols already present in [[h]]:
 
-% TODO LP split and transform while into if, easier flow
-% and also can maybe factorize code?
+<<[[Sym]] identifier fields>>=
+// index in h when the Sym is a symbol, 0 otherwise
+int	symidx;
+@
+\label{sec:symidx-sym-field}
+%old: was called 'sym', but really it's an index in h, and it was confusing
+% to have so many fields called sym already (as well as the global sym)
+% char enough??
+%old: was char, but in many places they use int for symcounter so I use int
+% there too now
+\t set to 0 in syminit? apparently not
+
+The code below to compute [[sf]] and [[st]] is rather subtle:
+
 <<[[outcode()]] st and sf computation, and possible calls to zname>>=
 jackpot:
+oldsymcounter = symcounter;
+sf = symidx_of_symopt(g1->sym, g1->symkind);
+st = symidx_of_symopt(g2->sym, g2->symkind);
+<<[[outcode()]] if jackpot condition goto jackpot>>
+@
 
-sf = 0;
-s = g1->sym;
-
-while(s != S) {
-    sf = s->symidx;
-
-    if(sf < 0 || sf >= NSYM)
-        sf = 0;
-
-    symkind = g1->symkind;
-
-    // already generated an ANAME for this symbol reference
-    if(h[sf].symkind == symkind)
-     if(h[sf].sym == s)
-        break;
-
-    s->symidx = symcounter;
-    h[symcounter].sym = s;
-    h[symcounter].symkind = symkind;
-    sf = symcounter;
-    zname(s->name, symkind, symcounter);
-
-    symcounter++;
-    if(symcounter >= NSYM)
-        symcounter = 1;
-    break;
-}
-
-st = 0;
-s = g2->sym;
-
-while(s != S) {
-    st = s->symidx;
-
-    if(st < 0 || st >= NSYM)
-        st = 0;
-
-    symkind = g2->symkind;
-
-    if(h[st].symkind == symkind)
-      if(h[st].sym == s)
-        break;
-
-    s->symidx = symcounter;
-    h[symcounter].sym = s;
-    h[symcounter].symkind = symkind;
-    st = symcounter;
-    zname(s->name, symkind, symcounter);
-
-    symcounter++;
-    if(symcounter >= NSYM)
-        symcounter = 1;
-
-    if(st == sf)
-        goto jackpot;
-    break;
+<<function symidx_of_symopt>>=
+int
+symidx_of_symopt(Sym *sym, int symkind)
+{
+    int idx = 0;
+   
+    if(sym != S) {
+        idx = sym->symidx;
+        <<[[symidx_of_symopt()]] sanity check idx>>
+        
+        // already generated an ANAME for this symbol reference?
+        if((h[idx].symkind != symkind || h[idx].sym != sym)) {
+            sym->symidx = symcounter;
+            h[symcounter].sym = sym;
+            h[symcounter].symkind = symkind;
+            idx = symcounter;
+            zname(sym->name, symkind, symcounter);
+            
+            symcounter++;
+            if(symcounter >= NSYM)
+                // circular array
+                symcounter = 1;
+        }
+    }
+    return idx;
 }
 @
-% when jackpot can happen? 
+%pad: I introduced this function, because original code was to hard
+% to explain
+
+<<[[symidx_of_symopt()]] sanity check idx>>=
+if(idx < 0 || idx >= NSYM)
+    idx = 0;
+@
+
+<<[[outcode()]] if jackpot condition goto jackpot>>=
+if (sf == st && sf != 0 && symcounter != oldsymcounter) 
+   goto jackpot;
+@
+\t otherwise could loop on MOVW bar(SB), bar(SB)
+
 % if the first operand involved for instance a symbol with for index 41
 % and that the second operand involves a symbol not
 % yet seen and that the next free index turns out to be 41, 
@@ -8311,13 +8330,76 @@ while(s != S) {
 % and so you have to recompute sf.
 % this is very very subtle (too subtle I think).
 
-% replace by:
-%sf = symidx_of_symopt(g1->sym);
-%st = symidx_of_symopt(g2->sym);
-% if (sf == st && sf != 0 && symcounter actually changed) goto jackpot;
-%  (otherwise could loop on MOVW bar(SB), bar(SB)
 
 
+%<<[[outcode()]] st and sf computation, and possible calls to zname>>=
+%jackpot:
+%
+%sf = 0;
+%s = g1->sym;
+%
+%while(s != S) {
+%    sf = s->symidx;
+%
+%    if(sf < 0 || sf >= NSYM)
+%        sf = 0;
+%
+%    symkind = g1->symkind;
+%
+%    // already generated an ANAME for this symbol reference
+%    if(h[sf].symkind == symkind)
+%     if(h[sf].sym == s)
+%        break;
+%
+%    s->symidx = symcounter;
+%    h[symcounter].sym = s;
+%    h[symcounter].symkind = symkind;
+%    sf = symcounter;
+%    zname(s->name, symkind, symcounter);
+%
+%    symcounter++;
+%    if(symcounter >= NSYM)
+%        symcounter = 1;
+%    break;
+%}
+%
+%st = 0;
+%s = g2->sym;
+%
+%while(s != S) {
+%    st = s->symidx;
+%
+%    if(st < 0 || st >= NSYM)
+%        st = 0;
+%
+%    symkind = g2->symkind;
+%
+%    if(h[st].symkind == symkind)
+%      if(h[st].sym == s)
+%        break;
+%
+%    s->symidx = symcounter;
+%    h[symcounter].sym = s;
+%    h[symcounter].symkind = symkind;
+%    st = symcounter;
+%    zname(s->name, symkind, symcounter);
+%
+%    symcounter++;
+%    if(symcounter >= NSYM)
+%        symcounter = 1;
+%
+%    if(st == sf)
+%        goto jackpot;
+%    break;
+%}
+%@
+% use a while so can break? argh, horrible. This code was really bad.
+
+
+
+\t nm
+\l so need to output information about use of external symbols! 'U'
+\l and also information about symbols the module defines! 'T', 'D'
 
 
 \chapter{Debugging Support}
@@ -8571,8 +8653,8 @@ outhist(void)
         Bputc(&obuf, h->line>>8);
         Bputc(&obuf, h->line>>16);
         Bputc(&obuf, h->line>>24);
-        zaddr(&nullgen, 0);
-        zaddr(&g, 0);
+        outopd(&nullgen, 0);
+        outopd(&g, 0);
     }
 }
 @
@@ -9153,7 +9235,7 @@ AMOVM,
 @
 
 
-<<misc rules>>=
+<<reglist rule>>=
 reglist:
   regi           { $$ = 1 << $1; }
 | regi '-' regi
@@ -9165,9 +9247,10 @@ reglist:
   for(i=$3; i<=$1; i++)
       $$ |= 1<<i;
  }
-| regi comma reglist { $$ = (1<<$1) | $3; }
+| regi ',' reglist { $$ = (1<<$1) | $3; }
 @
 %$
+% was using comma here
 
 
 
@@ -9309,7 +9392,7 @@ case D_PSR:
 %type   <lval>  creg
 @
 
-<<misc rules>>=
+<<creg rule>>=
 creg:
   LCREG
 | LC '(' expr ')'
@@ -9348,7 +9431,7 @@ creg:
 @
 
 % other optional stuff
-<<opt rules>>=
+<<oexpr rule>>=
 /* for MCR */ 
 oexpr:
   /* empty */ { $$ = 0; }
@@ -9735,6 +9818,8 @@ that you can understand the assembly code generated by the compiler [[5c]].
 \chapter{Debugging}
 \label{chap:debugging-appendix}
 
+% debugging 5a itself, not debugging support as in chapter X.
+
 % not very powerful debugging options for 5a, mostly stuff
 % to debug cpp related issues.
 % less: 5l has actually more stuff, with dumpers for Gen, opcode, etc.
@@ -9790,6 +9875,7 @@ if(debug['f'])
 \label{chap:error}
 
 <<function errorexit>>=
+/// main | assemble | yyerror | ... -> <>
 void
 errorexit(void)
 {
@@ -9806,19 +9892,14 @@ int	nerrors = 0;
 % used to be initialized in cinit()
 
 <<function yyerror>>=
+/// assemble | yylex | yyparse | ... -> <>
 void
 yyerror(char *a, ...)
 {
     char buf[200];
     va_list arg;
 
-    /*
-     * hack to intercept message from yaccpar
-     */
-    if(strcmp(a, "syntax error") == 0) {
-        yyerror("syntax error, last name: %s", symb);
-        return;
-    }
+    <<[[yyerror()]] when called from yyparse>>
 
     prfile(lineno);
 
@@ -9827,6 +9908,7 @@ yyerror(char *a, ...)
     va_end(arg);
 
     print("%s\n", buf);
+
     nerrors++;
     if(nerrors > 10) {
         print("too many errors\n");
@@ -9838,6 +9920,15 @@ yyerror(char *a, ...)
 % could put prfile here, but can be better before to help
 % illustrate how to use Hist
 
+<<[[yyerror()]] when called from yyparse>>=
+/*
+ * hack to intercept message from yaccpar
+ */
+if(strcmp(a, "syntax error") == 0) {
+    yyerror("syntax error, last name: %s", symb);
+    return;
+}
+@
 
 \chapter{Utilities}
 \label{chap:libc}
@@ -9942,6 +10033,8 @@ allocn(void *p, long on, long n)
 @
 % there is no free!!?
 
+
+
 \chapter{Examples of Assembly Programs}
 \label{chap:examples}
 
@@ -10019,13 +10112,15 @@ m1:
 \label{chap:5a-ocaml}
 
 % design decisions: 
+% - no optimisations, space or speed, which guides many of the
+%   other decisions below.
 % - external cpp, and really external,
 %   not even -D, -I. Can do that in Makefile with %.s : %.S   cpp ...
 % - no symbolic constant feature, redundant with cpp
 % - use Lex instead of handcoded lexer 
 %   (maybe related to previous point)
 % - object file is marshalled form of ocaml AST. Far simpler!
-%   (but less open to other languages)
+%   (but less open to other languages; could use JSON but no ADT in JSON)
 % This decrements size of code, but also size of needed explanations!
 
 \section{[[ast_asm.ml]]}

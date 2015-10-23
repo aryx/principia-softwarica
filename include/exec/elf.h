@@ -1,4 +1,4 @@
-/*s: include/debug/elf.h */
+/*s: include/exec/elf.h */
 
 /*s: enum _anon_ (elf.h) */
 /* was in /sys/src/libmach/elf.h */
@@ -130,4 +130,4 @@ struct Shdr {
 /*s: constant ELF_MAG */
 #define	ELF_MAG		((0x7f<<24) | ('E'<<16) | ('L'<<8) | 'F')
 /*e: constant ELF_MAG */
-/*e: include/debug/elf.h */
+/*e: include/exec/elf.h */

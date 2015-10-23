@@ -71,6 +71,7 @@ gethunk(void)
 /*e: function gethunk */
 
 /*s: function errorexit */
+/// main | assemble | yyerror | ... -> <>
 void
 errorexit(void)
 {

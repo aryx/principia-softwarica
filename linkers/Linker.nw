@@ -364,6 +364,8 @@ who wrote in some sense most of this book.
 
 % full book on the subject
 
+% relocation! important concept
+
 % - http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
 % - http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
 % - http://www.lurklurk.org/linkers/linkers.html
@@ -632,7 +634,7 @@ struct	Sym
 % - no 'type' (token_kind) field, no 'macro' field
 % - no labels, they were translated in pc values.
 % - no symidx field (but was local to outcode())
-% - a new 'version' field; D_STATIC was in the Operand.symkind but the linker
+% - a new 'version' field; D_INTERN was in the Operand.symkind but the linker
 %   now manages multiple objects together where can have the same static name
 %   multiple times
 % - a new 'type' field for the section, the linker has to resolve
@@ -693,7 +695,7 @@ enum section
 % those are mostly sections, or subsections (e.g. SDATA1 of SDATA,
 %  and SLEAF/SCONST/STRING of STEXT)
 % note: a symbol is assigned SXREF in ldobj() when the obj introduces an ANAME
-%  about an D_EXTERN or D_STATIC symbol.
+%  about an D_EXTERN or D_INTERN symbol.
 
 
 
@@ -763,7 +765,7 @@ long	nsymbol;
 % can reput major opcode here, AADD, ATEXT, AB, etc?
 % and also R1, ... 
 % and also D_REG, ... 
-% and even D_STATIC, ...
+% and even D_INTERN, ...
 
 % Adr = Operand of instruction, e.g. in MOV AX, BX, then AX is a form of Adr
 <<struct Adr(arm)>>=
@@ -784,7 +786,7 @@ struct	Adr
 % Similar to Gen in Assembler.nw, but a few differences:
 % - ieee was dval, and sval was sval[8]
 % - have now a union for sym and autom, probably autom for the D_PARAM and
-%   D_AUTO cases
+%   D_LOCAL cases
 % - new 'class' field (but seems local to oplook())
 %see DConv
 %note: offset abused for REGREG in which case it's really a int4
@@ -798,8 +800,8 @@ struct	Adr
 %give a few examples? show man page where have all the addressing modes
 
 % one of the main thing a linker does is to relocate at the right place.
-% offset can be based on PC (for D_BRANCH), SB(for D_STATIC, D_EXTERN),
-% on FP(for D_PARAM), and on SP(for D_AUTO), 
+% offset can be based on PC (for D_BRANCH), SB(for D_INTERN, D_EXTERN),
+% on FP(for D_PARAM), and on SP(for D_LOCAL), 
 % or can be direct value (for D_CONST)
 
 
@@ -834,7 +836,7 @@ short	symkind;
 <<struct Auto(arm)>>=
 struct	Auto
 {
-    // enum<name_kind> (but D_AUTO or D_PARAM only?)
+    // enum<name_kind> (but D_LOCAL or D_PARAM only?)
     short	type;
 
     Sym*	asym;
@@ -1869,7 +1871,7 @@ long ipc;
 % so set to current pc when at the beginning of object
 
 
-% This is for the D_STATIC; to handle conflicts with different files
+% This is for the D_INTERN; to handle conflicts with different files
 % defining the same static entity. This is bumped each time
 % a new object file is parsed, so it's safe.
 <<global version>>=
@@ -2077,7 +2079,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return 0;	/*  force real diagnostic */
 
     }
-    <<[[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind>>
+    <<[[zaddr()]] adjust curauto for D_LOCAL or D_PARAM symkind>>
 
     return size;
 }
@@ -2155,12 +2157,12 @@ Auto *u;
 %old: t was i, but t(ype) better than i
 
 
-<<[[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind>>=
+<<[[zaddr()]] adjust curauto for D_LOCAL or D_PARAM symkind>>=
 s = a->sym;
 t = a->symkind;
 l = a->offset;
 
-if(s == S || (t != D_AUTO && t != D_PARAM))
+if(s == S || (t != D_LOCAL && t != D_PARAM))
     return size;
 
 for(u=curauto; u; u=u->link)
@@ -2356,7 +2358,7 @@ if(o == ANAME || o == ASIGNAME) {
     c -= 3;
 
     r = 0;
-    if(v == D_STATIC)
+    if(v == D_INTERN)
         r = version;
 
     s = lookup((char*)bloc, r);
@@ -2371,7 +2373,7 @@ if(o == ANAME || o == ASIGNAME) {
 
     h[o] = s;
 
-    if((v == D_EXTERN || v == D_STATIC) && s->type == SNONE)
+    if((v == D_EXTERN || v == D_INTERN) && s->type == SNONE)
         s->type = SXREF;
 
     <<[[ldobj()]] when ANAME opcode, if D_FILE>>
@@ -4482,7 +4484,7 @@ C_LEXT,
 %xxx+y(SB)
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
 case D_EXTERN:
-case D_STATIC:
+case D_INTERN:
     if(a->sym == nil || a->sym->name == nil) {
         print("null sym external\n");
         print("%D\n", a);
@@ -4512,11 +4514,11 @@ C_LAUTO,
 @
 
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_AUTO:
+case D_LOCAL:
     instoffset = autosize + a->offset;
     t = immaddr(instoffset);
     if(t){
-        <<[[aclass()]] if immfloat for D_AUTO or D_PARAM symbol>>
+        <<[[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol>>
         return immhalf(instoffset)? C_HAUTO : C_SAUTO;
     }
     return C_LAUTO;
@@ -4527,7 +4529,7 @@ case D_PARAM:
     instoffset = autosize + a->offset + 4L;
     t = immaddr(instoffset);
     if(t){
-        <<[[aclass()]] if immfloat for D_AUTO or D_PARAM symbol>>
+        <<[[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol>>
         return immhalf(instoffset)? C_HAUTO : C_SAUTO;
     }
     return C_LAUTO;
@@ -4619,7 +4621,7 @@ C_RECON,
 
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_EXTERN:
-case D_STATIC:
+case D_INTERN:
     s = a->sym;
     if(s == S) // no warning?
         break;
@@ -4672,7 +4674,7 @@ C_LACON,
 @
 
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_AUTO:
+case D_LOCAL:
     instoffset = autosize + a->offset;
     goto aconsize;
 @
@@ -4694,7 +4696,7 @@ aconsize:
 %    case D_OCONST:
 %        switch(a->name) {
 %        case D_EXTERN:
-%        case D_STATIC:
+%        case D_INTERN:
 %            s = a->sym;
 %            t = s->type;
 %            if(t == 0 || t == SXREF) {
@@ -6811,7 +6813,7 @@ asmsym(void)
             /* frame, auto and param after */
             putsymb(".frame", 'm', p->to.offset+4, 0);
             for(a=p->to.autom; a; a=a->link)
-                if(a->type == D_AUTO)
+                if(a->type == D_LOCAL)
                     putsymb(a->asym->name, 'a', -a->aoffset, 0);
                 else
                 if(a->type == D_PARAM)
@@ -8000,7 +8002,7 @@ export(void)
             buf[nb++] = *t;
             sv++;
             if(nb >= NSNAME){
-                p = newdata(str, sv-NSNAME, NSNAME, D_STATIC);
+                p = newdata(str, sv-NSNAME, NSNAME, D_INTERN);
                 p->to.type = D_SCONST;
                 p->to.sval = malloc(NSNAME);
                 memmove(p->to.sval, buf, NSNAME);
@@ -8013,13 +8015,13 @@ export(void)
         /* name */
         p = newdata(et, off, sizeof(long), D_EXTERN);
         off += sizeof(long);
-        p->to.symkind = D_STATIC;
+        p->to.symkind = D_INTERN;
         p->to.sym = str;
         p->to.offset = sv-n;
     }
 
     if(nb > 0){
-        p = newdata(str, sv-nb, nb, D_STATIC);
+        p = newdata(str, sv-nb, nb, D_INTERN);
         p->to.type = D_SCONST;
         p->to.sval = malloc(NSNAME);
         memmove(p->to.sval, buf, nb);
@@ -8556,7 +8558,7 @@ if(dlm) {
 case C_LCON:
     if(!dlm)
         break;
-    if(p->to.symkind != D_EXTERN && p->to.symkind != D_STATIC)
+    if(p->to.symkind != D_EXTERN && p->to.symkind != D_INTERN)
         break;
     // Fallthrough
 case C_ADDR:
@@ -9008,7 +9010,7 @@ C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
 C_HFAUTO,	/* both H and F */
 @
 
-<<[[aclass()]] if immfloat for D_AUTO or D_PARAM symbol>>=
+<<[[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol>>=
 if(immfloat(t))
     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
 @
@@ -10396,14 +10398,14 @@ Nconv(Fmt *fp)
             sprint(str, "%s+%ld(SB)", s->name, a->offset);
         break;
 
-    case D_STATIC:
+    case D_INTERN:
         if(s == S)
             sprint(str, "<>+%ld(SB)", a->offset);
         else
             sprint(str, "%s<>+%ld(SB)", s->name, a->offset);
         break;
 
-    case D_AUTO:
+    case D_LOCAL:
         if(s == S)
             sprint(str, "%ld(SP)", a->offset);
         else

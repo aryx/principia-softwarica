@@ -74,7 +74,7 @@ struct	Sym
     long	value; 
 
     /*s: [[Sym]] identifier fields */
-    // index in h when the Sym is really a symbol, 0 when not a symbol
+    // index in h when the Sym is a symbol, 0 otherwise
     int	symidx;
     /*e: [[Sym]] identifier fields */
     /*s: [[Sym]] macro fields */

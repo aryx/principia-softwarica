@@ -33,7 +33,6 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "SLL",		LARITH,	ASLL,
     "SRL",		LARITH,	ASRL,
-    /*x: [[itab]] elements */
     "SRA",		LARITH,	ASRA,
     /*x: [[itab]] elements */
     "BIC",		LARITH,	ABIC,
@@ -116,6 +115,7 @@ struct Itab itab[] =
     "GLOBL",	LDEF, AGLOBL,
     /*x: [[itab]] elements */
     "DATA",		LDATA, ADATA,
+    /*x: [[itab]] elements */
     "WORD",		LWORD, AWORD,
     /*x: [[itab]] elements */
     "END",		LEND, AEND,
@@ -147,8 +147,6 @@ struct Itab itab[] =
     "MOVWD",	LMOV, AMOVWD,
     "MOVWF",	LMOV, AMOVWF,
     /*x: [[itab]] elements */
-    "SQRTF",	LMISC, ASQRTF,
-    "SQRTD",	LMISC, ASQRTD,
     "CMPF",		LCMPFLOAT, ACMPF,
     "CMPD",		LCMPFLOAT, ACMPD,
     "ADDF",		LARITHFLOAT,	AADDF,
@@ -159,6 +157,8 @@ struct Itab itab[] =
     "MULD",		LARITHFLOAT,	AMULD,
     "DIVF",		LARITHFLOAT,	ADIVF,
     "DIVD",		LARITHFLOAT,	ADIVD,
+    "SQRTF",	LSQRTFLOAT, ASQRTF,
+    "SQRTD",	LSQRTFLOAT, ASQRTD,
     /*x: [[itab]] elements */
     "F",		LF,	0,
 
@@ -182,12 +182,12 @@ struct Itab itab[] =
     "FPSR",		LFCR,	0,
     "FPCR",		LFCR,	1,
     /*x: [[itab]] elements */
+    "MULA",		LMULA, AMULA,
+    /*x: [[itab]] elements */
     "MULL",		LMULL, AMULL,
     "MULAL",	LMULL, AMULAL,
     "MULLU",	LMULL, AMULLU,
     "MULALU",	LMULL, AMULALU,
-    /*x: [[itab]] elements */
-    "MULA",		LMULA, AMULA,
     /*x: [[itab]] elements */
     "MOVM",		LMOVM, AMOVM,
     /*x: [[itab]] elements */
@@ -216,8 +216,8 @@ struct Itab itab[] =
     "C14",		LCREG,	14,
     "C15",		LCREG,	15,
     /*x: [[itab]] elements */
-    ".U",		LS,	C_UBIT,
     ".S",		LS,	C_SBIT,
+    ".U",		LS,	C_UBIT,
     ".W",		LS,	C_WBIT,
     ".P",		LS,	C_PBIT,
     /*x: [[itab]] elements */
@@ -346,10 +346,6 @@ l1:
     /*e: [[yylex()]] before switch, if isxxx */
     switch(c) {
     /*s: [[yylex()]] switch c cases */
-    case '\n':
-        lineno++;
-        return ';';
-    /*x: [[yylex()]] switch c cases */
     case '/':
         c1 = GETC();
         if(c1 == '/') {
@@ -487,11 +483,6 @@ l1:
             goto casee;
         /*e: [[yylex()]] in number case, in decimal case, float handling */
         *cp = '\0';
-        /*s: [[yylex()]] in number case, if vlong lval */
-        if(sizeof(yylval.lval) == sizeof(vlong))
-            yylval.lval = strtoll(symb, nil, 10);
-        else
-        /*e: [[yylex()]] in number case, if vlong lval */
         yylval.lval = strtol(symb, nil, 10);
 
     /*s: [[yylex()]] in number case, in decimal case, ncu suffix label handling */
@@ -552,7 +543,7 @@ l1:
             goto casedot;
         }
         peekc = c;
-        return '.';
+        return '.'; // used case?
     /*x: [[yylex()]] switch c cases */
     case '\'':
         c = escchar('\'');

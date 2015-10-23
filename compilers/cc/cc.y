@@ -11,7 +11,6 @@
         char*   s;
         long    l;
     } sval;
-
     Sym*    sym;
 
    /*s: [[union yacc]] other fields */
@@ -465,6 +464,7 @@ expr:
 |   expr '&' expr  { $$ = new(OAND, $1, $3); }
 |   expr '^' expr  { $$ = new(OXOR, $1, $3); }
 |   expr '|' expr  { $$ = new(OOR, $1, $3); }
+
 |   expr LRSH expr { $$ = new(OASHR, $1, $3); }
 |   expr LLSH expr { $$ = new(OASHL, $1, $3); }
 /*x: expr rule */
@@ -473,6 +473,7 @@ expr:
 /*x: expr rule */
 |   expr LEQ expr  { $$ = new(OEQ, $1, $3); }
 |   expr LNE expr  { $$ = new(ONE, $1, $3); }
+
 |   expr '<' expr  { $$ = new(OLT, $1, $3); }
 |   expr '>' expr  { $$ = new(OGT, $1, $3); }
 |   expr LLE expr  { $$ = new(OLE, $1, $3); }
@@ -1017,9 +1018,9 @@ name:
         $$->etype = ($1->type != T) ? $1->type->etype : TVOID;
         $$->xoffset = $1->offset;
         $$->class = $1->class;
-         /*s: name rule, LNAME case, adjust more fields */
-         $1->aused = true;
-         /*e: name rule, LNAME case, adjust more fields */
+        /*s: name rule, LNAME case, adjust more fields */
+        $1->aused = true;
+        /*e: name rule, LNAME case, adjust more fields */
     }
 /*e: names rules */
 

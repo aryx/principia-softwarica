@@ -83,6 +83,7 @@ main(int argc, char *argv[])
 
     thechar = '5';
     thestring = "arm";   
+
     outfile = "5.out";
 
     /*s: [[main()]] debug initialization(arm) */
@@ -635,12 +636,12 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return 0;	/*  force real diagnostic */
 
     }
-    /*s: [[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind */
+    /*s: [[zaddr()]] adjust curauto for D_LOCAL or D_PARAM symkind */
     s = a->sym;
     t = a->symkind;
     l = a->offset;
 
-    if(s == S || (t != D_AUTO && t != D_PARAM))
+    if(s == S || (t != D_LOCAL && t != D_PARAM))
         return size;
 
     for(u=curauto; u; u=u->link)
@@ -659,7 +660,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     //add_list(u, curauto)
     u->link = curauto;
     curauto = u;
-    /*e: [[zaddr()]] adjust curauto for D_AUTO or D_PARAM symkind */
+    /*e: [[zaddr()]] adjust curauto for D_LOCAL or D_PARAM symkind */
 
     return size;
 }
@@ -984,7 +985,7 @@ loop:
         c -= 3;
 
         r = 0;
-        if(v == D_STATIC)
+        if(v == D_INTERN)
             r = version;
 
         s = lookup((char*)bloc, r);
@@ -1006,7 +1007,7 @@ loop:
 
         h[o] = s;
 
-        if((v == D_EXTERN || v == D_STATIC) && s->type == SNONE)
+        if((v == D_EXTERN || v == D_INTERN) && s->type == SNONE)
             s->type = SXREF;
 
         /*s: [[ldobj()]] when ANAME opcode, if D_FILE */

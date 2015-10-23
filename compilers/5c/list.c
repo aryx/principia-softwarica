@@ -304,11 +304,11 @@ Nconv(Fmt *fp)
         snprint(str, sizeof(str), "%s+%ld(SB)", s->name, a->offset);
         break;
 
-    case D_STATIC:
+    case D_INTERN:
         snprint(str, sizeof(str), "%s<>+%ld(SB)", s->name, a->offset);
         break;
 
-    case D_AUTO:
+    case D_LOCAL:
         snprint(str, sizeof(str), "%s-%ld(SP)", s->name, -a->offset);
         break;
 

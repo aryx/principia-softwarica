@@ -93,7 +93,9 @@ newfile(char *s, fdt f)
         errorexit();
     }
     fi.c = 0;
+    /*s: [[newfile()]] call linehist */
     linehist(s, 0);
+    /*e: [[newfile()]] call linehist */
 }
 /*e: function newfile */
 
@@ -563,7 +565,9 @@ loop:
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     if(fi.c < 0) {
         close(i->f);
+        /*s: [[filbuf()]] when close file, call linehist */
         linehist(nil, 0);
+        /*e: [[filbuf()]] when close file, call linehist */
         goto pop;
     }
     fi.p = i->b + 1;
@@ -592,12 +596,14 @@ pop:
 /*e: function filbuf */
 
 /*s: function yyerror */
+/// assemble | yylex | yyparse | ... -> <>
 void
 yyerror(char *a, ...)
 {
     char buf[200];
     va_list arg;
 
+    /*s: [[yyerror()]] when called from yyparse */
     /*
      * hack to intercept message from yaccpar
      */
@@ -605,6 +611,7 @@ yyerror(char *a, ...)
         yyerror("syntax error, last name: %s", symb);
         return;
     }
+    /*e: [[yyerror()]] when called from yyparse */
 
     prfile(lineno);
 
@@ -613,6 +620,7 @@ yyerror(char *a, ...)
     va_end(arg);
 
     print("%s\n", buf);
+
     nerrors++;
     if(nerrors > 10) {
         print("too many errors\n");
@@ -622,6 +630,7 @@ yyerror(char *a, ...)
 /*e: function yyerror */
 
 /*s: function prfile */
+/// yyerror -> <>
 void
 prfile(long l)
 {

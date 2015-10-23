@@ -279,14 +279,14 @@ Nconv(Fmt *fp)
             sprint(str, "%s+%ld(SB)", s->name, a->offset);
         break;
 
-    case D_STATIC:
+    case D_INTERN:
         if(s == S)
             sprint(str, "<>+%ld(SB)", a->offset);
         else
             sprint(str, "%s<>+%ld(SB)", s->name, a->offset);
         break;
 
-    case D_AUTO:
+    case D_LOCAL:
         if(s == S)
             sprint(str, "%ld(SP)", a->offset);
         else

@@ -64,10 +64,9 @@ void main(int argc, char *argv[])
     char **defs;
     int ndef;
     /*x: [[main()]] locals */
+    char *p;
     char **np;
     int maxdef;
-    /*x: [[main()]] locals */
-    char *p;
     /*x: [[main()]] locals */
     int nproc, nout, status, i;
     /*e: [[main()]] locals */
@@ -111,6 +110,7 @@ void main(int argc, char *argv[])
                     memmove(np, defs, (maxdef - 50) * sizeof *np);
                 defs = np;
             }
+
             defs[ndef++] = p;
             dodefine(p);
         }
@@ -286,7 +286,7 @@ compile(char *infile, char **defs, int ndef)
     newio();
     first = false;
 
-    /*s: [[compile()]] use ANSI preprocessor */
+    /*s: [[compile()]] if use ANSI preprocessor */
     /* Use an ANSI preprocessor */
     if(debug['p']) {
         if(myaccess(infile) < 0) {
@@ -340,7 +340,7 @@ compile(char *infile, char **defs, int ndef)
             break;
         }
     }
-    /*e: [[compile()]] use ANSI preprocessor */
+    /*e: [[compile()]] if use ANSI preprocessor */
     else {
         if(strcmp(infile, "stdin") == 0)
             newfile(infile, 0);
@@ -352,6 +352,7 @@ compile(char *infile, char **defs, int ndef)
     yyparse();
 
     if(!debug['a'] && !debug['Z'])
+        // Another important call, calls outcode()
         gclean();
     return nerrors;
 }

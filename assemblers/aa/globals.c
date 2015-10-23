@@ -5,7 +5,7 @@
 struct Fi fi;
 /*e: global fi */
 /*s: global h */
-// array<ref<Sym>>
+// array<ref<Sym> * int>
 struct Htab h[NSYM];
 /*e: global h */
 

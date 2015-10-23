@@ -112,6 +112,7 @@ struct	Prog
 /*s: struct Sym */
 struct	Sym
 {
+    // ref_own<string>
     char	*name;
     short	version; // for static names, each sym has a different version
 
@@ -149,7 +150,7 @@ struct	Sym
 /*s: struct Auto(arm) */
 struct	Auto
 {
-    // enum<name_kind> (but D_AUTO or D_PARAM only?)
+    // enum<name_kind> (but D_LOCAL or D_PARAM only?)
     short	type;
 
     Sym*	asym;

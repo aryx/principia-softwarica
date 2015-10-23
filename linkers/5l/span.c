@@ -321,7 +321,7 @@ aclass(Adr *a)
         switch(a->symkind) {
         /*s: [[aclass()]] D_OREG case, switch symkind cases */
         case D_EXTERN:
-        case D_STATIC:
+        case D_INTERN:
             if(a->sym == nil || a->sym->name == nil) {
                 print("null sym external\n");
                 print("%D\n", a);
@@ -360,14 +360,14 @@ aclass(Adr *a)
             }
             return C_LEXT;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
-        case D_AUTO:
+        case D_LOCAL:
             instoffset = autosize + a->offset;
             t = immaddr(instoffset);
             if(t){
-                /*s: [[aclass()]] if immfloat for D_AUTO or D_PARAM symbol */
+                /*s: [[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
-                /*e: [[aclass()]] if immfloat for D_AUTO or D_PARAM symbol */
+                /*e: [[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol */
                 return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
@@ -376,10 +376,10 @@ aclass(Adr *a)
             instoffset = autosize + a->offset + 4L;
             t = immaddr(instoffset);
             if(t){
-                /*s: [[aclass()]] if immfloat for D_AUTO or D_PARAM symbol */
+                /*s: [[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
-                /*e: [[aclass()]] if immfloat for D_AUTO or D_PARAM symbol */
+                /*e: [[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol */
                 return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
@@ -424,7 +424,7 @@ aclass(Adr *a)
             return C_LCON;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
         case D_EXTERN:
-        case D_STATIC:
+        case D_INTERN:
             s = a->sym;
             if(s == S) // no warning?
                 break;
@@ -450,7 +450,7 @@ aclass(Adr *a)
             diag("unknown section for %s", s->name);
             break;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
-        case D_AUTO:
+        case D_LOCAL:
             instoffset = autosize + a->offset;
             goto aconsize;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */

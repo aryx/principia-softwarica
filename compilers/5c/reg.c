@@ -634,7 +634,7 @@ mkvar(Adr *a, int docon)
         print("bit=%2d et=%2d %D\n", i, et, a);
 out:
     bit = blsh(i);
-    if(n == D_EXTERN || n == D_STATIC)
+    if(n == D_EXTERN || n == D_INTERN)
         for(z=0; z<BITS; z++)
             externs.b[z] |= bit.b[z];
     if(n == D_PARAM)

@@ -9,6 +9,7 @@ enum Register {
     /*s: [[Register]] compiler conventions cases */
     REGRET =	0,
     REGARG =	0,
+    /*x: [[Register]] compiler conventions cases */
     /* compiler allocates R1 up as temps */
     /* compiler allocates register variables R2 up */
     REGMIN =	2,
@@ -29,7 +30,6 @@ enum Register {
 /*s: constant R_NONE(arm) */
 #define R_NONE 16
 /*e: constant R_NONE(arm) */
-
 /*s: enum fregister(arm) */
 enum fregister {
     FREGRET = 0,
@@ -55,18 +55,18 @@ enum Opcode
     /*s: [[Opcode]] cases, logic opcodes */
     AAND,
     AORR,
-    AEOR, // aka XOR
+    AEOR, // a.k.a. XOR
     /*x: [[Opcode]] cases, logic opcodes */
-    ABIC,
+    ABIC, // ??
     /*e: [[Opcode]] cases, logic opcodes */
     /*s: [[Opcode]] cases, add/sub opcodes */
     AADD,
     ASUB,
     /*x: [[Opcode]] cases, add/sub opcodes */
-    ARSB,
-    AADC,
-    ASBC,
-    ARSC,
+    ARSB, // ??
+    AADC, // Add and carry?
+    ASBC, // Sub and carry?
+    ARSC, // ??
     /*x: [[Opcode]] cases, add/sub opcodes */
     AMVN, // MOV negative, but nothing to do with MOVW
     /*e: [[Opcode]] cases, add/sub opcodes */
@@ -75,25 +75,24 @@ enum Opcode
     ADIV, // VIRTUAL, transformed in call to _div
     AMOD, // VIRTUAL, transformed in call to _mod
     /*x: [[Opcode]] cases, mul/div/mod opcodes */
+    AMULA,
+    /*x: [[Opcode]] cases, mul/div/mod opcodes */
     AMULL,
     AMULAL,
     AMULLU,
     AMULALU,
-    /*x: [[Opcode]] cases, mul/div/mod opcodes */
-    AMULA,
     /*x: [[Opcode]] cases, mul/div/mod opcodes */
     AMULU,
     ADIVU, // VIRTUAL, transformed to call to _divu
     AMODU, // VIRTUAL, transformed to call to _modu
     /*e: [[Opcode]] cases, mul/div/mod opcodes */
     /*s: [[Opcode]] cases, bitshift opcodes */
-    ASLL,
-    ASRL,
-    /*x: [[Opcode]] cases, bitshift opcodes */
-    ASRA,
+    ASLL, // Shift Left  Logic, VIRTUAL transformed in bitshifted registers
+    ASRL, // Shift Right Logic, VIRTUAL transformed in bitshifted registers
+    ASRA, // Shift Right Arithmetic, VIRTUAL transformed in bitshifted registers
     /*e: [[Opcode]] cases, bitshift opcodes */
     // ---------------------------------------------------------
-    // Memory MOV opcodes
+    // Memory opcodes
     // ---------------------------------------------------------
     /*s: [[Opcode]] cases, mov opcodes */
     AMOVW, // VIRTUAL, transformed in load and store instructions
@@ -130,10 +129,10 @@ enum Opcode
     ABNE, // !=
     ABHS, // >= unsigned
     ABLO, // <  unsigned
-    ABMI,
-    ABPL,
-    ABVS,
-    ABVC,
+    ABMI, // ??
+    ABPL, // ??
+    ABVS, // ??
+    ABVC, // ??
     ABHI, // >  unsigned
     ABLS, // <= unsigned
     ABGE, // >=
@@ -141,14 +140,14 @@ enum Opcode
     ABGT, // >
     ABLE, // <=
     //ABAL (always) done via AB
-    //ABNV (never) done via ANOP probably
+    //ABNV (never) done via ANOP (see bcode[])
     /*x: [[Opcode]] cases, branching opcodes */
     ABL, // =~ CALL, Branch and Link
     /*x: [[Opcode]] cases, branching opcodes */
     ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(SP), R15
     /*e: [[Opcode]] cases, branching opcodes */
     // ---------------------------------------------------------
-    // Syscall
+    // System opcodes
     // ---------------------------------------------------------
     /*s: [[Opcode]] cases, interrupt opcodes */
     ASWI, // syscall
@@ -190,6 +189,7 @@ enum Opcode
     AGLOBL,
     /*x: [[Opcode]] cases, pseudo opcodes */
     ADATA,
+    /*x: [[Opcode]] cases, pseudo opcodes */
     AWORD,
     /*x: [[Opcode]] cases, pseudo opcodes */
     AEND,

@@ -158,6 +158,7 @@ gclean(void)
     nextpc();
     p->as = AEND;
     /*e: [[gclean()]] generate last opcode, AEND */
+
     // generate the whole output file using outbuf global
     outcode();
 }
@@ -170,10 +171,10 @@ nextpc(void)
 
     p = alloc(sizeof(Prog));
     *p = zprog;
-    p->lineno = nearln;
+    p->lineno = nearln; // so origin tracking in db from assembly to C
     pc++;
 
-    // add_end_list(p, firstp/lastp)
+    // add_tail(p, firstp/lastp)
     if(firstp == P) {
         firstp = p;
         lastp = p;
@@ -555,16 +556,16 @@ naddr(Node *n, Adr *a)
         a->offset = n->xoffset;
         a->sym = n->sym;
 
-        a->symkind = D_STATIC;
+        a->symkind = D_INTERN;
         switch(n->class) {
         case CSTATIC: 
-            a->symkind = D_STATIC;
+            a->symkind = D_INTERN;
             break;
         case CEXTERN: case CGLOBL:
             a->symkind = D_EXTERN;
             break;
         case CAUTO:
-            a->symkind = D_AUTO;
+            a->symkind = D_LOCAL;
             break;
         case CPARAM:
             a->symkind = D_PARAM;
@@ -1326,7 +1327,7 @@ gpseudo(int a, Sym *s, Node *n)
     p->as = a;
     p->from.type = D_OREG;
     p->from.sym = s;
-    p->from.symkind = (s->class == CSTATIC) ? D_STATIC : D_EXTERN;
+    p->from.symkind = (s->class == CSTATIC) ? D_INTERN : D_EXTERN;
     /*s: [[gpseudo()]] if TEXT, set possible TEXT attributes */
     if(a == ATEXT)
         p->reg = (profileflg ? 0 : NOPROF);

@@ -30,10 +30,11 @@
 /*e: priority and associativity declarations */
 /*s: token declarations(arm) */
 /* opcodes */
-%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LRET LMISC
+%token  <lval>  LARITH LCMP LBRANCH LBCOND LMOV LSWAP LRET
 %token  <lval>  LSWI LSYSTEM 
-%token  <lval>  LARITHFLOAT LCMPFLOAT  LMULL LMULA  LMOVM LMVN
+%token  <lval>  LARITHFLOAT LCMPFLOAT LSQRTFLOAT  LMULL LMULA  LMOVM LMVN
 %token  <lval>  LDEF LDATA LWORD LEND
+%token  <lval>  LMISC
 /* registers */
 %token  <lval>  LPC LSP LFP LSB
 %token  <lval>  LR LREG  LPSR
@@ -58,17 +59,19 @@
 /*x: type declarations(arm) */
 %type   <genval>   ximm
 /*x: type declarations(arm) */
-%type   <lval>  regi regi_nosp
+%type   <lval>  regi
 /*x: type declarations(arm) */
 %type   <lval>  rcon
 /*x: type declarations(arm) */
-%type   <genval> oreg ioreg ireg nireg 
+%type   <genval> ioreg ireg
 /*x: type declarations(arm) */
 %type   <genval>   name 
+%type   <lval>  offset
 %type   <lval>  pointer
 /*x: type declarations(arm) */
+%type   <genval>   nireg 
+/*x: type declarations(arm) */
 %type   <genval>   rel
-%type   <lval>  offset
 /*x: type declarations(arm) */
 %type   <lval>  cond
 /*x: type declarations(arm) */
@@ -201,15 +204,10 @@ inst:
 /*
  * floating-point coprocessor
  */
-| LMISC cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 | LARITHFLOAT cond frcon ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 | LARITHFLOAT cond frcon ',' LFREG ',' freg { outcode($1, $2, &$3, $5, &$7); }
-| LCMPFLOAT cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
-/*x: inst rule(arm) */
-/*
- * MULL hi,lo,r1,r2
- */
-| LMULL cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
+| LCMPFLOAT  cond freg ',' freg { outcode($1, $2, &$3, $5.reg, &nullgen); }
+| LSQRTFLOAT cond freg ',' freg { outcode($1, $2, &$3, R_NONE, &$5); }
 /*x: inst rule(arm) */
 /*
  * MULA hi,lo,r1,r2
@@ -220,6 +218,11 @@ inst:
   $7.offset = $9;
   outcode($1, $2, &$3, $5.reg, &$7);
  }
+/*x: inst rule(arm) */
+/*
+ * MULL hi,lo,r1,r2
+ */
+| LMULL cond reg ',' reg ',' regreg { outcode($1, $2, &$3, $5.reg, &$7); }
 /*x: inst rule(arm) */
 /*
  * MOVM
@@ -278,7 +281,18 @@ gen:
 | shift
 | reg
 /*x: gen rule */
-| oreg
+| ioreg
+/*x: gen rule */
+| name
+/*x: gen rule */
+| con '(' pointer ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.sym = S;
+  $$.symkind = $3;
+  $$.offset = $1;
+ }
 /*x: gen rule */
 | freg
 /*x: gen rule */
@@ -296,25 +310,17 @@ gen:
   $$.reg = $1;
  }
 /*e: gen rule */
-/*s: spreg rule(arm) */
+/*s: regi rule(arm) */
 regi:
-  regi_nosp
-/*x: spreg rule(arm) */
-| LSP { $$ = REGSP; }
-/*e: spreg rule(arm) */
-/*s: sreg rule(arm) */
-regi_nosp:
   LREG
+/*x: regi rule(arm) */
 | LR '(' expr ')'
  {
   if($3 < 0 || $3 >= NREG)
       print("register value out of range\n");
   $$ = $3;
  }
-/*x: sreg rule(arm) */
-| LPC { $$ = REGPC; }
-/*e: sreg rule(arm) */
-/*x: operand rules(arm) */
+/*e: regi rule(arm) */
 /*s: ximm rule */
 ximm:
   '$' con
@@ -381,6 +387,29 @@ shift:
   $$.offset = $1 | $4 | (3 << 5);
  }
 /*x: operand rules(arm) */
+ioreg:
+  ireg
+| con '(' regi ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.reg = $3;
+  $$.offset = $1;
+ }
+/*x: operand rules(arm) */
+ireg:
+ '(' regi ')'
+ {
+  $$ = nullgen;
+  $$.type = D_OREG;
+  $$.reg = $2;
+  $$.offset = 0;
+ }
+/*x: operand rules(arm) */
+nireg:
+  name
+| ireg
+/*x: operand rules(arm) */
 /*s: name rule */
 name:
   LNAME offset '(' pointer ')'
@@ -400,15 +429,6 @@ name:
   $$.symkind = D_INTERN;
   $$.offset = $4;
  }
-/*x: name rule */
-| con '(' pointer ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.sym = S;
-  $$.symkind = $3;
-  $$.offset = $1;
- }
 /*e: name rule */
 /*x: operand rules(arm) */
 /*s: rel rule */
@@ -426,9 +446,6 @@ rel:
   $$ = nullgen;
   if(pass == 2)
       yyerror("undefined label: %s", $1->name);
-  $$.type = D_BRANCH;
-  $$.sym = $1;
-  $$.offset = $2;
  }
 /*x: rel rule */
 | con '(' LPC ')'
@@ -457,14 +474,15 @@ cond:
 | cond LS    { $$ = $1 | $2; }
 /*e: cond rule(arm) */
 
+/*s: advanced topics rules */
 /*s: constant expression rules */
 /*s: con rule */
 con:
   LCONST
-/*x: con rule */
 | '-' con      { $$ = -$2; }
 | '+' con      { $$ = $2; }
 | '~' con      { $$ = ~$2; }
+/*x: con rule */
 | '(' expr ')' { $$ = $2; }
 /*x: con rule */
 | LVAR         { $$ = $1->value; }
@@ -477,8 +495,10 @@ expr:
 | expr '*' expr     { $$ = $1 * $3; }
 | expr '/' expr     { $$ = $1 / $3; }
 | expr '%' expr     { $$ = $1 % $3; }
+
 | expr '<' '<' expr { $$ = $1 << $4; }
 | expr '>' '>' expr { $$ = $1 >> $4; }
+
 | expr '&' expr     { $$ = $1 & $3; }
 | expr '^' expr     { $$ = $1 ^ $3; }
 | expr '|' expr     { $$ = $1 | $3; }
@@ -518,6 +538,37 @@ frcon:
   freg
 | fcon
 /*e: float rules */
+/*s: reglist rule */
+reglist:
+  regi           { $$ = 1 << $1; }
+| regi '-' regi
+ {
+  int i;
+  $$=0;
+  for(i=$1; i<=$3; i++)
+      $$ |= 1<<i;
+  for(i=$3; i<=$1; i++)
+      $$ |= 1<<i;
+ }
+| regi ',' reglist { $$ = (1<<$1) | $3; }
+/*e: reglist rule */
+/*s: creg rule */
+creg:
+  LCREG
+| LC '(' expr ')'
+ {
+  if($3 < 0 || $3 >= NREG)
+      print("register value out of range\n");
+  $$ = $3;
+ }
+/*e: creg rule */
+/*s: oexpr rule */
+/* for MCR */ 
+oexpr:
+  /* empty */ { $$ = 0; }
+| ',' expr    { $$ = $2; }
+/*e: oexpr rule */
+/*e: advanced topics rules */
 
 /*s: helper rules(arm) */
 rcon:
@@ -544,68 +595,5 @@ offset:
 | '+' con    { $$ = $2; }
 | '-' con    { $$ = -$2; }
 /*e: helper rules(arm) */
-/*s: opt rules */
-comma:
-  /* empty */
-| ',' comma
-/*x: opt rules */
-/* for MCR */ 
-oexpr:
-  /* empty */ { $$ = 0; }
-| ',' expr    { $$ = $2; }
-/*e: opt rules */
-/*s: misc rules */
-/*s: oreg rule */
-oreg:
-  ioreg
-/*x: oreg rule */
-| name
-/*e: oreg rule */
-/*x: misc rules */
-ioreg:
-  ireg
-| con '(' regi_nosp ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.reg = $3;
-  $$.offset = $1;
- }
-/*x: misc rules */
-ireg:
- '(' regi ')'
- {
-  $$ = nullgen;
-  $$.type = D_OREG;
-  $$.reg = $2;
-  $$.offset = 0;
- }
-/*x: misc rules */
-nireg:
-  name
-| ireg
-/*x: misc rules */
-reglist:
-  regi           { $$ = 1 << $1; }
-| regi '-' regi
- {
-  int i;
-  $$=0;
-  for(i=$1; i<=$3; i++)
-      $$ |= 1<<i;
-  for(i=$3; i<=$1; i++)
-      $$ |= 1<<i;
- }
-| regi comma reglist { $$ = (1<<$1) | $3; }
-/*x: misc rules */
-creg:
-  LCREG
-| LC '(' expr ')'
- {
-  if($3 < 0 || $3 >= NREG)
-      print("register value out of range\n");
-  $$ = $3;
- }
-/*e: misc rules */
 /*e: grammar(arm) */
 /*e: 5a/a.y */

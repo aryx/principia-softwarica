@@ -60,7 +60,7 @@ lookup(char *symb, int v)
     long h;
     int l, c;
 
-    // h = hash(symb, v)
+    // h = hashcode(symb, v)
     h = v;
     for(p=symb; *p; p++) {
         c = *p;
@@ -70,7 +70,7 @@ lookup(char *symb, int v)
     h &= 0xffffff;
     h %= NHASH;
     
-    // s = lookup(h, hash)
+    // s = lookup((s->name,v), h, hash)
     for(s = hash[h]; s != S; s = s->link)
         if(s->version == v)
             if(memcmp(s->name, symb, l) == 0)
@@ -85,6 +85,7 @@ lookup(char *symb, int v)
     s->value = 0;
     s->sig = 0;
 
+    // add_hash(s, hash)
     s->link = hash[h];
     hash[h] = s;
 

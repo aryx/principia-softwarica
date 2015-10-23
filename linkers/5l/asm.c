@@ -395,7 +395,7 @@ asmsym(void)
             /* frame, auto and param after */
             putsymb(".frame", 'm', p->to.offset+4, 0);
             for(a=p->to.autom; a; a=a->link)
-                if(a->type == D_AUTO)
+                if(a->type == D_LOCAL)
                     putsymb(a->asym->name, 'a', -a->aoffset, 0);
                 else
                 if(a->type == D_PARAM)
@@ -714,7 +714,7 @@ asmout(Prog *p, Optab *o)
         case C_LCON:
             if(!dlm)
                 break;
-            if(p->to.symkind != D_EXTERN && p->to.symkind != D_STATIC)
+            if(p->to.symkind != D_EXTERN && p->to.symkind != D_INTERN)
                 break;
             // Fallthrough
         case C_ADDR:

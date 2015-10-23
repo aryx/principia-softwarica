@@ -671,7 +671,9 @@ nn:
     cp = malloc(c);
     memcpy(cp, symb, c);
 
+    /*s: [[maclin()]] call linehist */
     linehist(cp, n);
+    /*e: [[maclin()]] call linehist */
     return;
 
 bad:

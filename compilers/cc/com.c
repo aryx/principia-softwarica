@@ -1048,7 +1048,7 @@ if(debug['y']) prtree(n, "final");
  *	(ADDR(IND x)) ==> x
  *	remove some zero operands
  *	remove no op casts
- *	evaluate constants
+ *	evaluate constants // important one!
  */
 void
 ccom(Node *n)

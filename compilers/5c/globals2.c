@@ -90,7 +90,7 @@ Node	znode;
 Prog	zprog;
 /*e: global zprog */
 /*s: global reg(arm) */
-// map<enum<registr>, bool>
+// map<enum<registr>, int>
 char	reg[NREG+NFREG];
 /*e: global reg(arm) */
 /*s: global exregoffset */

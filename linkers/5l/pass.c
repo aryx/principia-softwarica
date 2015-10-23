@@ -673,7 +673,7 @@ export(void)
             buf[nb++] = *t;
             sv++;
             if(nb >= NSNAME){
-                p = newdata(str, sv-NSNAME, NSNAME, D_STATIC);
+                p = newdata(str, sv-NSNAME, NSNAME, D_INTERN);
                 p->to.type = D_SCONST;
                 p->to.sval = malloc(NSNAME);
                 memmove(p->to.sval, buf, NSNAME);
@@ -686,13 +686,13 @@ export(void)
         /* name */
         p = newdata(et, off, sizeof(long), D_EXTERN);
         off += sizeof(long);
-        p->to.symkind = D_STATIC;
+        p->to.symkind = D_INTERN;
         p->to.sym = str;
         p->to.offset = sv-n;
     }
 
     if(nb > 0){
-        p = newdata(str, sv-nb, nb, D_STATIC);
+        p = newdata(str, sv-nb, nb, D_INTERN);
         p->to.type = D_SCONST;
         p->to.sval = malloc(NSNAME);
         memmove(p->to.sval, buf, nb);
