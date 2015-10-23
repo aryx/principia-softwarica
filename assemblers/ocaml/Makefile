@@ -5,7 +5,7 @@
 SRC=common.ml \
  ast_asm.ml \
  parser_asm.ml lexer_asm.ml parse_asm.ml \
- resolve_labels.ml object_file.ml \
+ resolve_labels.ml object_code.ml \
  main.ml
 
 OBJS=$(SRC:.ml=.cmo)
