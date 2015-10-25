@@ -1,5 +1,4 @@
 {
-open Common
 open Ast
 open Parse
 
@@ -9,13 +8,18 @@ open Parse
 (* Limitations compared to 5a:
  *  - does not handle unicode
  *  - does not recognize the uU lL suffix 
-%     (but was skipped by 5a anyway)
+ *    (but was skipped by 5a anyway)
  *  - does not handle preprocessing directives, assume external cpp
- *    (but better to factorize code and separate concerns)
+ *    (but better to factorize code and separate concerns anyway)
  *)
 
 let line = ref 1
 
+(* ex: #line 20 "foo.c" *)
+type line_directive = SharpLine of int * Common.filename
+let line_directives = ref []
+
+(* TODO: do like prfile? *)
 let error s =
   failwith (spf "Lexical error: %s (line %d)" s !line)
 
@@ -63,6 +67,7 @@ rule token = parse
   (* Symbols *)
   (* ----------------------------------------------------------------------- *)
   | ';' { TSEMICOLON }
+  | ':' { TCOLON }
   | ',' { TCOMMA }
   | '(' { TOPAR } | ')' { TCPAR }
   | '$' { TDOLLAR }
@@ -85,9 +90,10 @@ rule token = parse
         else error ("register number not valid")
       }
 
-  (* actually for '.' 5a imposes to have an isalpha() after *)    
+  (* looser: actually for '.' 5a imposes to have an isalpha() after *)    
   | (letter | '_' | '@' | '.') (letter | digit | '_' | '$' )* {
       let s = Lexing.lexeme lexbuf in
+      (* fast enough? I hope ocaml generate good code for strings matching *)
       match x with
       (* instructions *)
       | "NOP" -> TNOP
@@ -103,7 +109,7 @@ rule token = parse
       | "RSB" -> TARITH RSB | "RSC" -> TARITH RSC
 
       | "MOVW" -> TMOV Word
-      | "MOVB" -> TMOV (Byte Signed) | "MOVBU" -> TMOV (Byte Unsigned)
+      | "MOVB" -> TMOV (Byte     Signed) | "MOVBU" -> TMOV (Byte     Unsigned)
       | "MOVH" -> TMOV (HalfWord Signed) | "MOVHU" -> TMOV (HalfWord Unsigned)
 
       | "B" -> TB | "BL" -> TBL
@@ -149,7 +155,7 @@ rule token = parse
   | "0x" hex+        { TINT (int_of_string (Lexing.lexeme lexbuf)) }
   | digit+           { TINT (int_of_string (Lexing.lexeme lexbuf)) }
 
-  (* I impose some digit+ after '.' and after 'e' *)
+  (* stricter: I impose some digit+ after '.' and after 'e' *)
   | (digit+ | digit* '.' digit+) (['e''E'] ('+' | '-')? digit+)?
      { TFLOAT (float_of_string (Lexing.lexeme lexbuf)) }
 
@@ -168,7 +174,12 @@ rule token = parse
   (* ----------------------------------------------------------------------- *)
   (* Misc *)
   (* ----------------------------------------------------------------------- *)
-  (*| "#line" ... *)
+  (* stricter: I impose a filename *)
+  | "#line" space+ (digit+ as s1) space* ('"' ([^'"']* as s2) '"') {
+      let directive = SharpLine (int_of_string s1, s2) in
+      Common.push directive line_directives
+    }
+  | "#line" { error "syntax in #line" }
 
   (* ----------------------------------------------------------------------- *)
   | eof { EOF }

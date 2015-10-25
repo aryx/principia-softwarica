@@ -54,7 +54,7 @@ let error s =
 /*(*2 Punctuation *)*/
 /*(*-----------------------------------------*)*/
 
-%token TSEMICOLON TDOT TCOMMA TDOLLAR
+%token TSEMICOLON TCOLON TDOT TCOMMA TDOLLAR
 %token TOPAR TCPAR
 %token EOF
 
@@ -62,7 +62,9 @@ let error s =
 /*(*2 Operators *)*/
 /*(*-----------------------------------------*)*/
 
-%token TPLUS TMINUS TTILDE TMUL TDIV TMOD
+%token TSHL TSHR   TSHMINUS TSHAT
+%token TPLUS TMINUS TTILDE TMUL TMOD
+%token TSLASH
 
 /*(*************************************************************************)*/
 /*(*1 Priorities *)*/
@@ -72,14 +74,14 @@ let error s =
 %left TAND
 %left TLT TGT
 %left TPLUS TMINUS
-%left TMUL TDIV TMOD
+%left TMUL TSLASH TMOD
 
 /*(*************************************************************************)*/
 /*(*1 Rules type declaration *)*/
 /*(*************************************************************************)*/
 
-%start prog
-%type <Ast.program> program
+%type <Ast_asm.program> program
+%start program
 
 %%
 
@@ -102,15 +104,17 @@ line:
 /*(*************************************************************************)*/
 /*(*1 Pseudo instructions *)*/
 /*(*************************************************************************)*/
+/*(* can't factorize in attr_opt, shift/reduce conflict with TCOMMA *)*/
 pseudo_instr:
- | TTEXT  name attr_opt TCOMMA imm    { }
- | TGLOBL name attr_opt TCOMMA imm    { }
- | TDATA name TSLASH con TCOMMA ximm  { }
+ | TTEXT  name TCOMMA imm    { }
+ | TGLOBL name TCOMMA imm    { }
 
-attr_opt:
- | /* empty */ { [] }
  /*(* todo: would be better to have mnemonics for that too *)*/
- | TCOMMA con  { match $2 with 0 -> [] | 1 -> NOPROF | 2 -> DUPOK }
+ | TTEXT  name TCOMMA con TCOMMA imm    { }
+   /*{ match $2 with 0 -> [] | 1 -> NOPROF | 2 -> DUPOK }*/
+ | TGLOBL name TCOMMA con TCOMMA imm    { }
+   /*{ match $2 with 0 -> [] | 1 -> NOPROF | 2 -> DUPOK }*/
+ | TDATA name TSLASH con TCOMMA ximm  { }
 
 
 /*(*************************************************************************)*/
@@ -152,8 +156,8 @@ imm: TDOLLAR con      { $2 }
 
 con:
  | TINT { $1 }
- | TMINUS con { - $1 }
- | TPLUS  con { $1 }
+ | TMINUS con { - $2 }
+ | TPLUS  con { $2 }
  | TTILDE con { failwith "TODO: tilde??" }
  | TOPAR expr TCPAR { $2 }
 
@@ -163,20 +167,20 @@ expr:
  | expr TPLUS expr  { $1 + $3 }
  | expr TMINUS expr { $1 - $3 }
  | expr TMUL expr   { $1 * $3 }
- | expr TDIV expr   { $1 / $3 }
+ | expr TSLASH expr   { $1 / $3 }
  | expr TMOD expr   { $1 % $3 }
 
  | expr TLT TLT expr { $1 << $4 }
  | expr TGT TGT expr { $1 >> $4 }
 
  | expr TAND expr    { $1 & $3 }
- | expr TOR expr     { $1 | $2 }
+ | expr TOR expr     { $1 | $3 }
  | expr TXOR expr    { $1 ^ $3 }
 
 
 reg:
  | TRxx                { $1 }
- | TR TOPAR expr TCPAR { R $2 }
+ | TR TOPAR expr TCPAR { R $3 }
 
 
 shift:
@@ -195,18 +199,18 @@ rcon:
 
 
 gen:
- | ximm
- | shift
- | reg
+ | ximm  { $1 }
+ | shift { $1 }
+ | reg   { $1 }
 
- | ioreg
- | name
- | con TOPAR pointer TCPAR
+ | ioreg { $1 }
+ | name  { $1 }
+ | con TOPAR pointer TCPAR { failwith "TODO" }
 
 ximm:
- | TDOLLAR con { Imm $1 }
+ | TDOLLAR con     { Imm $2 }
  | TDOLLAR TSTRING { String $2 }
- | TDOLLAR name
+ | TDOLLAR name    { failwith "TODO" }
 
 ioreg:
  | ireg                { Indirect ($1, 0) }
@@ -217,9 +221,9 @@ ireg: TOPAR reg TCPAR { $2 }
 name: TIDENT offset TOPAR pointer TCPAR { }
 
 pointer: 
- | TSB
- | TSP
- | TFP
+ | TSB  { }
+ | TSP  { }
+ | TFP  { }
 
 offset:
  | /* empty */ { 0 }
@@ -238,4 +242,10 @@ rel:
  | con TOPAR TPC TCPAR  { Relative $1 }
 
 
+/*(*************************************************************************)*/
+/*(*1 Misc *)*/
+/*(*************************************************************************)*/
 
+cond:
+ | /* empty */ { }
+ | cond TCOND  { }

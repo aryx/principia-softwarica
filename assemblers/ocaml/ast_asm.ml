@@ -9,8 +9,8 @@ type pos = int
 
 (* enough for ARM 32 bits? on 64 bits machine it is enough :) *)
 type integer = int 
-(* virtual code address, increment by unit of 1 *)
-type code_address = int
+(* increments by unit of 1 *)
+type virtual_code_address = int
 (* can be 0, negative, positive *)
 type offset = int
 
@@ -63,10 +63,10 @@ type branch_operand =
 
   (* rel *)
   (* before resolve *)
-  | Relative of int (* PC *)
+  | Relative of int (* relative to PC, in units of virtual_code_address *)
   | Label of label * offset (* useful to have offset? *)
   (* after resolve *)
-  | Absolute of code_address
+  | Absolute of virtual_code_address
   
 
 (* ------------------------------------------------------------------------- *)
@@ -135,8 +135,6 @@ type line =
   | P of pseudo_instr
   | I of instr * condition option (* * bitset list *)
   | L of label
+  (* D of line_directive? use Lexer_asm.line_directives instead *)
 
-(* after resolve there is no more L and branch operand has no more 
- * Relative or Label (converted in Absolute)
- *)
 type program = (line * pos) list
