@@ -30,15 +30,15 @@
 %     * inlined and removed intermediate rules not useful anymore: oreg
 %  - TODO rename types, clearer, Gen? as Adr? or Operand? (and Gen2? as Prog?)
 
-%thx to assemblers/ocaml:
-%  - code can be so much simpler, no need so many globals
+%thx to assemblers/ocaml: 
+%  - see that code could be so much simpler, no need so many globals
+%  - could be stricter which would simplify things even more
 %  - there are really only 3 kinds of operands: for arith, for mov, for branch
 %    (see ast.ml)
 %  - outcode must increment pc for TEXT too, because can branch on TEXT
 %    and TEXT actually generates code, so if label just after TEXT,
 %    it must be a different pc than before TEXT!
 %    (see because while writing resolve() it is more explicit)
-%  - can be stricter which actually also simplify things
 % things which improved this document thx to assemblers/ocaml: ????
 
 %thx to codemap/codegraph/scheck:
@@ -64,13 +64,13 @@
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
-%   which also now split in chunks!
+% - split in chunks (some done automatically)
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
 % - distribute parts of the file before
 % - typeify, scheckify
-% - aspecify advanced features!
+% - aspectify advanced features!
 % - add explanations
 % - add figures
 
@@ -197,7 +197,7 @@ over writing directly machine code?
 can they be used to implement high-level constructs in languages
 such as C?
 \n labels is here, and it's assembly only, it's not in Machine.nw
-%tags: compiler:
+%compiler:
 
 \item How function calls are implemented? What is a frame?
 What is a frame pointer? How recursive functions are implemented?
@@ -215,15 +215,15 @@ between an object file and an executable?
 \n try questions more specific to asm, put the rest in Machine.nw
 \l what is position independent code? maybe linker issue
 
-%tags: turing: fundamental opcodes
-%tags: real-world: to relate to other assemblers
-%tags: compiler: give idea of what 5c does
-%tags: self-ref: opcodes to implement the assembler itself!
-%tags: kernel: for features essential to implement a kernel
-
-%tags: ocaml: to give a hint on how rewriting C in OCaml could improve things
-%tags: old: for original code I changed/removed to be clearer
-%tags: toc: trans: dup: example:
+%tags used in this file for different recurring themes:
+%turing: fundamental opcodes
+%self-ref: opcodes to implement the assembler itself!
+%compiler: give idea of what 5c does, what 5c needs
+%kernel: for features essential to implement a kernel
+%real-world: to relate to other assemblers
+%ocaml: to give a hint on how rewriting C in OCaml could improve things
+%old: for original code I changed/removed to be clearer
+%toc: %trans: %dup: %example:
 
 \section{The \plan ARM assembler, [[5a]]}
 
@@ -329,11 +329,15 @@ on real machines.
 
 \n assembler for hack? not included in distro, had to write ourselves!
 
-\l also fasm, masm, tasm, seems popular
+\l fasm 
 
 \end{itemize}
 
 \l lots of other assemblers, see the comment in the .tex
+%industry:
+% - masm (Microsoft)
+% - tasm (turbo, Borland)
+% - mpw? (Apple)
 %other:
 % - llvm has one? well the IR of llvm is a kind of assembler, but portable
 % - http://www.compilers.de/vasm.html (also vbcc and vlink)
@@ -439,6 +443,9 @@ There are also some extra notes about the assemblers
 at \url{https://golang.org/doc/asm} which can be useful.
 \n Go used to use the plan9 developer toolchain, made by same authors :)
 
+%Assemblers and loaders:
+%http://www.davidsalomon.name/assem.advertis/asl.pdf
+%TODO: get inspiration from TOC? similar?
 
 
 \section{About this document}
@@ -585,6 +592,10 @@ and finally {generates} the final binary executable.
 %
 \t The objects will also be concatenated together so branch/jmp addresses
 \t need also to be "relocated", and same for references to external symbols
+
+\t normally big concept in assembler is relocation, but job done
+\t by linker in case of plan9 so will not talk much about it
+\t WIKIPEDIA relocation?
 
 \section{[[5a]] command line interface}
 
@@ -753,7 +764,7 @@ We now have enough background to present the [[helloworld.s]] program:
 \t can do with SP instead of R13 so less leaky abstraction 4(R13)
 \l note that we call PWRITE syscall directly, not pwrite(), subtle
 
-%dup:
+%dup: from intro/getting-started
 To assemble, link, and execute this program, simply do
 like in Section~\ref{sec:getting-started}:
 \begin{verbatim}
@@ -1404,7 +1415,7 @@ Asm5 introduces also some pseudo-instructions, pseudo-registers,
 and virtual instructions, as we have seen in the previous section,
 and those will be fully explained in this document.
 
-%dup:
+%dup: from intro/5a
 As said briefly in the introduction, [[5a]] does not
 generate machine code, the linker [[5l]] does, 
 %
@@ -1570,22 +1581,24 @@ to a pseudo-register, e.g. [[hello(SB)]],
 which means the content at the address denoted by the symbol
 [[hello]].
 \t offset cos at some point symbol become static address and so number/offset
-With [[SB]] the symbol denotes a global or procedure,
-with [[SP]] a local variable, and 
-with [[FP]] an argument.
-\l and PC?
-\l for Text, data, param, locals
+\t actually here can have only SB I think. or 0(FP), 0(SP)
 
 \item {\em symbol reference with offset}, e.g. [[hello+4(SB)]],
 which means the content at the address denoted by the global symbol
 [[hello]] plus 4.
 %
+With [[SB]] the symbol denotes a global or procedure,
+with [[SP]] a local variable, and 
+with [[FP]] an argument.
+\l and PC?
+\l for Text, data, param, locals
+%
 For locals and arguments it is also common
 to use a symbol as in [[x+4(SP)]] or [[length+4(FP)]]. In those
 cases the symbol is just a comment to give a name to
-the local or argument. This comment though is kept in the
-symbol table of the object file and so can be used by debuggers.
-\t ref to later? no really ref to that right now.
+the local or argument. This ``comment'' though is kept in the
+symbol table of the object file as we will see in Chapter~\ref{chap:generation}
+and can be used by debuggers as we will see in Chapter~\ref{chap:debugging}.
 \t plus offset for SB has a meaning?
 
 
@@ -1679,7 +1692,7 @@ The [[WORD]] pseudo-instruction is described in Section~\ref{sec:WORD}.
 \section{Output object format}
 \label{sec:object-format-part1}
 
-%dup:
+%dup: from intro/5a
 As said in the introduction, the {object files} generated by [[5a]],
 which use the~[[.5]] filename extension,
 are ARM-specific, but they do not contain really machine code. Instead
@@ -2062,13 +2075,13 @@ Then we will see how tokens are represented.
 Finally we will present the symbol table which is
 a central data structure used by 
 the lexer,
-\n predefined identifiers
+\n predefined identifiers, but ugly
 the preprocessor, 
-\n macro body
-the parser, and 
-\n label values
-the object code generator.
-\n ?? 
+\n macro body, but ugly
+and the parser.
+\n label values, also links to Sym in operands
+\n and the object code generator? No. Use the links to Sym in passed operands.
+
 
 \section{[[Opcode]]}
 \label{sec:opcode}
@@ -2982,7 +2995,7 @@ a few globals set by [[main()]].
 A common pair of globals in \plan code
 are [[thechar]] and [[thestring]] which both represent
 the current architecture.
-%dup:
+%dup: from intro/5a
 As said in the introduction, \plan by convention 
 represents architectures with a single character: 
 [['0']] is MIPS, 
@@ -3393,6 +3406,7 @@ Sym *s;
 @
 \fi
 
+\label{sec:lineno}
 The [[lineno]] global tracks the current line number and will be
 incremented by the lexer for each newlines. It is used
 in the object code generator to remember where each
@@ -3875,7 +3889,7 @@ peekc = c1;
 \section{Newlines (and semicolons)}
 \label{sec:semicolon}
 
-%dup:
+%dup: from overview/input-lang
 As said in Section~\ref{sec:asm5-lexical},
 newlines in Asm5 are transformed in semicolons which
 are recognized as instruction terminators in the Asm5 grammar:
@@ -4685,6 +4699,8 @@ bad:
 }
 @
 
+\t how lineno? incremented by 1 and then start processing included file?
+\t or #include like non existent and replaced by content?
 
 
 <<function pushio>>=
@@ -4704,6 +4720,8 @@ pushio(void)
 }
 @
 
+% accept comment or space until newline
+% will increment lineno since use getc
 <<function getcom>>=
 int
 getcom(void)
@@ -5396,7 +5414,13 @@ macprag(void)
 
 
 \section{[[#line]]}
+\label{sec:sharp-line}
 % most important one because if have no cpp, at least must handle this one!
+
+% #line 3 "foo.c"
+% #line 3 is also possible in which case get <noname>
+
+% also useful for yacc, not just cpp.
 
 <<function maclin>>=
 void
@@ -5454,6 +5478,8 @@ bad:
     macend();
 }
 @
+\l does not handle escape char in string this time
+%BUG: accept newline?
 
 % get number?
 <<function getnsn>>=
@@ -5632,7 +5658,7 @@ for [[yyparse()]] by [[yacc]].
 \section{Instructions}
 \n =~ statements
 
-%dup:
+%dup: from core-ds/opcode
 Most instructions of Asm5 correspond to machine instructions
 of the ARM described in the \book{Emulator}, and can be
 grouped in the same categories: 
@@ -6369,7 +6395,7 @@ would not add any expressivity to the computer.
 %
 In fact, there is no [[CALL]] or [[RET]] instruction in the ARM,
 but instead a very basic [[BL]] instruction.
-%dup:
+%dup: from overview/hello/funcall
 As explained in Section~\ref{sec:bl}, [[BL]] stands
 for {\em branch and link} because the instruction just
 saves the current value of the program counter ([[R15]])
@@ -6426,7 +6452,7 @@ the value in [[R1]].
 %
 The stack is usually used to save the values in those registers.
 
-%dup:
+%dup: from overview/hello/call-stack
 One needs also to setup {\em calling conventions} on how
 to pass arguments and use paramter in functions.
 In \plan the stack and [[R0]] are
@@ -6546,6 +6572,7 @@ followed by a colon:
  }
   line
 @
+\t what for changing the type? for detection of duplicate!
 
 Even though one could have multiple label definitions on a line,
 or even labels and machine instructions on the same line, it is
@@ -6573,8 +6600,9 @@ This is similar to C where typedefs declarations change
 the token code of certain identifiers.
 }
 \t why need that for LLAB? why need to make it a special token? 
-\t grammar ambiguity?
-\t also can have func and label with same name? anyway disambiguity
+\t grammar ambiguity? NO just to do the redeclaration detection!
+\t also can have func and label with same name? I don't think so
+\t because then it's a label for the rest of the file!
 %  with suffixing with (SB)
 as shown in the rule above.
 Further use of this label in the rest of the program
@@ -6898,7 +6926,7 @@ will be used instead in the generated ARM instruction.
 \label{sec:shift-register}
 \l mv in advanced topics?
 
-%dup:
+%dup: from parsing/instr/bitshift
 As mentioned in Section~\ref{sec:bitshift-opcodes},
 in addition to the (virtual) instructions [[SLL]], [[SRL]], and [[SRA]], 
 Asm5 gives access to the ARM generalized approach to bitshift
@@ -7017,7 +7045,7 @@ the immediate constant, the shifted register, and the register.
 %toc:
 We will now focus on the [[MOVW]] instruction and its [[gen]]
 operand which is even more general (hence the name).
-%dup:
+%dup: from overview/input-lang
 Section~\ref{sec:ref-addressing-modes} listed the different
 ways to reference memory in Asm5, the different {memory addressing modes},
 for instance ``indirect with offset'' in [[4(R1)]].
@@ -7151,9 +7179,7 @@ pointer:
 %@
 
 Note that for locals and parameters the symbol name is
-not really necessary,
-\l footnote here why useful?
-which is why one can also reference
+not really necessary, which is why one can also reference
 parameters only with an offset, as in [[MOVW 4(FP), R1]]:
 
 <<gen rule>>=
@@ -7174,11 +7200,14 @@ parameters only with an offset, as in [[MOVW 4(FP), R1]]:
 % of 'oreg:'? no because pointer != sreg (well even if R12 is actually LSB ...)
 \l can also do 4(SB)? useful?
 
+%dup: from overview/input-language
 The use of symbols for locals and parameters can be useful though as comments,
-e.g. [[MOVW  count+4(FP), R1]].
+as in [[MOVW  count+4(FP), R1]].
 \t again what is the generated code by linker?
-The name is also kept in the symbol table of the object file which
-can be leveraged later by tools like debuggers.
+The symbol name is also kept in the symbol table of the object file
+as we will see in Chapter~\ref{chap:generating}
+which can be leveraged later by tools like debuggers
+as we will see in Chapter~\ref{chap:debugging}.
 
 
 The name/``offset'' can also have an aditional offset applied
@@ -7526,7 +7555,7 @@ which are really just concrete numbers. Those numbers, not names,
 are then used as arguments of machine instructions 
 such as [[LDR]] (to access globals), or [[BL]] (to call procedures).
 
-%dup:
+%dup: from ??
 Labels are similar to [[TEXT]] symbols but they are not public
 and do not have a size. This is because labels are used
 for intra-procedural jumps, while [[TEXT]] symbols are used
@@ -7794,7 +7823,7 @@ grammar rule declared in the file: [[prog]].
 %trans:
 We are now ready to present the last component in the
 assembling pipeline: the object code generation.
-%dup:
+%dup: from intro/5a
 As mentioned before, [[5a]] does not actually generate machine
 code (the linker does), 
 %
@@ -7820,6 +7849,7 @@ are combined to form an executable.
 \n 5l/optab.c does this
 
 \section{Object format}
+\label{sec:object-format-complete}
 
 %trans:
 We described rougly the format of the object files at the beginning
@@ -7881,7 +7911,9 @@ when an instruction has 3 operands or the value of [[R_NONE]]
 
 \item a line number (4 bytes) encoded in an architecture
 independent way by having the bytes representing the lower
-part of the number first (little-endian).
+part of the number stored first in the object file\footnote{
+Also known as the {\em little-endian} format
+}.
 
 \item the first operand
 \n which can be null operand
@@ -8039,7 +8071,7 @@ static int bcode[] =
 \t why not keep B.EQ ? to normalize helps 5l? but ironic that normalize
 \t in inverse direction of what ARM actually has.
 
-%dup:
+%dup: from parsing/cond-exec
 The bit manipulation with [[scond]] above is because
 [[scond]] in addition to store the conditional execution
 also stores special ARM instruction bits
@@ -8057,7 +8089,7 @@ according to the format described previously:
 void
 outopd(Gen *a, int symidx)
 {
-    <<[[zaddr()]] locals>>
+    <<[[zaddr()]] locals(arm)>>
 
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
@@ -8067,7 +8099,7 @@ outopd(Gen *a, int symidx)
     Bputc(&obuf, a->symkind);
 
     switch(a->type) {
-    <<[[zaddr()]] cases>>
+    <<[[zaddr()]] cases(arm)>>
     default:
         print("unknown type %d\n", a->type);
         exits("arg");
@@ -8079,7 +8111,7 @@ outopd(Gen *a, int symidx)
 %ocaml: just use Marshall again in caller
 
 \ifallcode
-<<[[zaddr()]] locals>>=
+<<[[zaddr()]] locals(arm)>>=
 long l;
 char *n;
 Ieee e;
@@ -8090,7 +8122,7 @@ int i;
 The operand value has a variable size depending on the kind
 of the operand:
 
-<<[[zaddr()]] cases>>=
+<<[[zaddr()]] cases(arm)>>=
 case D_NONE:
     break;
 
@@ -8130,6 +8162,7 @@ case D_SCONST:
 Operands can mention symbols which are important to keep track
 in the object file since those symbol references must be resolved
 later by the linker.
+\l or for param and local to help debuggers.
 % 
 Because only 1 byte is used in the format of the operand
 to store the index of the symbol involved,
@@ -8181,8 +8214,9 @@ The object file symbol table [[h]] is different from the symbol
 table [[hash]] we have described in Section~\ref{sec:hash}.
 Indeed [[hash]] is an hash table which keeps
 track of macros, predefined identifiers, labels, and symbols.
-The object file symbol table stores only symbols and labels and is just
-an array.
+The object file symbol table stores only symbols 
+(and labels but only for debugging purpose)
+and is just an array.
 
 The first entry in [[h]] is unused since 0 represents
 the absence of symbol in the operand format.
@@ -8326,7 +8360,7 @@ if(idx < 0 || idx >= NSYM)
     idx = 0;
 @
 
-There is a rather complex condition which forces us to recompute
+There is a rather complex condition which can force us to recompute
 [[sf]] and [[st]]:
 
 <<[[outcode()]] if jackpot condition goto jackpot>>=
@@ -8342,8 +8376,10 @@ done one full round and be back to the value of 10.
 This means the next entry is 10 and [[h[10].sym]] will be overwritten
 to point now to the symbol for [[bar]].
 In this case [[sf == st == 10]] but [[sf]] now points
-to a wrong entry. In that case we want to recompute [[sf]].
-\l why not infinite loop.
+to a wrong entry. In that case we want to recompute [[sf]]
+hence the [[goto]].
+\t why not infinite loop. what happens next iteration? h[idx].sym != sym
+\t so increment
 \l this is very very subtle (too subtle I think).
 The extra condition about [[oldsymcounter]] is to avoid
 an infinite loop in [[outcode()]] with code such 
@@ -8423,61 +8459,126 @@ as [[MOVW bar(SB), bar(SB)]].
 \chapter{Debugging Support}
 \label{chap:debugging}
 
+The \plan debugger [[db]], which we will describe in the \book{Debugger},
+has access to lots of {\em metadata} in the executable to help debug programs.
+For instance, here is a simplified output of [[db]] when 
+debugging a C program:
 
-% db has access to awesome metadata generated by 5s (and also 5c).
-%  main(argv=...) /home/pad/.../main.c called from _main+26 (.../main9.s:12)
-%  symbol for params and locals in object are debugging info. will see
-%  later how kept also by linker.
-%  here will see file/line information.
-% also for good error msg like  xxx.h from xxx.h from xxx.c ...
+\begin{verbatim}
+$ db hello
+...
+main(argv=...) /usr/.../main.c 
+      called from _main+26 (/sys/.../main9.s:12)
+...
+\end{verbatim}
+\t exact trace? no line number for main?
 
-% labels saved also in object file, for debugging.
+[[db]] knows from which file and which line a piece of machine
+code comes from. It also knows 
+the name of the function containing this piece of machine code, 
+the names of the parameters of this function, as well as 
+the name of the caller to this function, and finally the file and line
+of this caller function.
+\t illustrate with actual thing [[main()]], [[_main()]], etc
 
-% put here the +sp, +xxx locals/params format
+The metadata in the executable comes from
+corresponding metadata in the object files generated by [[5a]] (and [[5c]]). 
+%
+Indeed, the names of the symbols
+for the parameters, locals, and entities are kept in the object
+file as we have seen in the previous chapter. %clever\ref{chap:generation}
+\n we will see later how kept also by linker.
+%dup: overview/input-lang and parsing/operands/names
+This is why Asm5 programmers write code like [[MOVW  count+4(FP), R1]]
+even though [[count]] is not used to generate any machine code.
+Indeed this symbol is actually kept in the object file
+and then in the executable and can then be used by debuggers and tracers.
+%
+Labels are resolved during parsing by [[5a]] but the names of those
+labels are also kept in the object file symbol table.
+Their references in operands are kept too which again helps
+to debug programs.
+\l help debug jump?
+
+%toc:
+In this chapter we will focus on the file and line information 
+as the information about symbols has already been described in
+the previous chapter. %clever\ref{chap:generation}
 
 %real-world: in gas needs -g to keep debugging info in object file?
 
-
-\section{File and line information}
-
-% just global lineno, so how get from global line -> file x line
-
-\section{Tracing line origin history, [[Hist]]}
+\section{Line origin history, [[Hist]]}
 \n could be in preprocessing chapter too, cos strongly related to that
 \n but even if no cpp, still need #line which needs a Hist I think
 
-% when error, need give line, but can be because of context,
-% so useful to give the full location of an error, that is the list
-% of files that included it
-% TODO give example of why it's useful to not just have the final names
+Because [[5a]] is a macro-processor, the file and line origin of an
+instruction in the object file are not necessarily the assembly filename
+passed on the command line to [[5a]] and a line number in this file.
+Indeed, this file could have included via [[#include]] other files containing
+also assembly instructions.
+\n even though in practice it will be more constants
+Moreover, some assembly files are derived from C programs in which 
+case one would rather have the location metadata refers to line numbers
+in the original C programs (thanks to the [[#line]] directive 
+we saw in Section~\ref{sec:sharp-line}) than line numbers
+in the generated assembly programs.
+%
+So, recording only a line number in the format of an instruction
+as described in Section~\ref{sec:object-format-complete} seems
+insufficient; a filename should also be recorded.
 
-% keep track of where a token comes from, so that error
-% messages can look like
-%  xxx.h from xxx.h from xxx.c ...
+The global [[lineno]] we introduced in Section~\ref{sec:lineno},
+and which is used by [[outcode()]] to store the line number of an
+instruction in the object file, 
+is incremented after each newlines by the lexer (see
+for instance Section~\ref{sec:semicolon}).
+But, this is done while pre-processing the file which means [[lineno]]
+is actually more a {\em global line number} than a line number 
+in one file. What we need then is a way to go from a global line number
+to a filename and a {\em local line number}.
+
+The following structure will help to keep track of the 
+[[#include]] and [[#line]] directives used while pre-processing 
+the input file.
+This will allow us then to compute the file and local line number
+of a global line number.
+
 <<struct Hist>>=
 struct	Hist
 {
-    char*	filename;
+    char*	filename; // nil for a ``pop''
 
-    long	line;   // global line of this Hist
-    long	local_line; // local line for this hist 
+    // global line of this Hist
+    long	global_line;       
+    // 0 for #include, +n for #line, -1 for #pragma lib (ugly)
+    long	local_line; 
 
     // Extra
     <<[[Hist]] extra fields>>
 };
 @
-%old: rename offset to local_line, clearer, and also avoid
-% possible confusion with Gen.offset
-%abused for #pragma lib "xxx.a" where local_line is then -1. ugly.
+%old: renamed offset to local_line, clearer; avoid confusion with Gen.offset
+% also renamed line to global_line, more consistent.
+\t abused for #pragma lib "xxx.a" where local_line is then -1. ugly.
+
+The global [[hist]] below maintains a list of those [[Hist]].
+The first element of this list will be the input assembly file of [[5a]]
+passed on the command line.
 
 <<global hist>>=
 // list<ref_own<Hist>>, next = Hist.link
 Hist*	hist;
 @
-
+%ocaml: use a tree directly
 <<[[Hist]] extra fields>>=
+// list<ref<Hist>> from hist
 Hist*	link;
 @
+<<constant H>>=
+#define	H	((Hist*)nil)
+@
+
+We will need also a fast access to the tail of the list:
 
 <<global ehist>>=
 // ref<Hist>, end of list of hist
@@ -8485,27 +8586,19 @@ Hist*	ehist;
 @
 
 
-<<constant H>>=
-#define	H	((Hist*)nil)
-@
-
-
-
 \section{Recording history, [[linehist()]]}
+
+The only function modifying [[hist]] is [[linehist()]].
+It is called notably by [[newfile()]] which itself is called
+at the beginning in [[pinit()]] with the name of the input
+assembly file and later for each included file:
 
 <<[[newfile()]] call linehist>>=
 linehist(s, 0);
 @
 
-<<[[filbuf()]] when close file, call linehist>>=
-linehist(nil, 0);
-@
-
-<<[[maclin()]] call linehist>>=
-linehist(cp, n);
-@
-
 <<function linehist>>=
+/// (pinit | macinc -> newfile) | (GETC -> filbuf) | maclin -> <>
 void
 linehist(char *f, int local_line)
 {
@@ -8515,7 +8608,7 @@ linehist(char *f, int local_line)
 
     h = alloc(sizeof(Hist));
     h->filename = f;
-    h->line = lineno;
+    h->global_line = lineno;
     h->local_line = local_line;
 
     //add_list(hist, ehist, h)
@@ -8529,9 +8622,95 @@ linehist(char *f, int local_line)
     ehist = h;
 }
 @
+\n debug used in appendix
 
+It is also called for [[#line]] directives such as [[#line 10 "foo"]]:
 
-%% newflag dead? seems just set to false ... just one write.
+<<[[maclin()]] call linehist>>=
+linehist(cp, n);
+@
+
+Note that the included files form a tree. We use a list data
+structure though for [[hist]] which seems insufficient.
+But, the special value [[nil]]
+in a [[Hist]] encodes the end of a file which is enough
+to reconstruct a tree:
+
+<<[[filbuf()]] when close file, call linehist>>=
+linehist(nil, 0);
+@
+%ocaml: use a Tree directly
+
+Figure~\ref{fig:hist} illustrates the evolution of
+the global [[lineno]] on the content of [[/tests/cpp/foo.s]]
+(which includes other files) as well as the value
+of [[hist]] and [[ehist]] after having pre-processed the entire file.
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+                                               hist
+                                        +--------------------+
+     foo.s---------------------------+  |"foo.s", G1, L0     |
+ 1   |L1                             |  +--------------------+
+ 2   |L2                             |
+ 3   |L3 #include "foo.h"            |  +--------------------+
+     |   foo.h-------------------+   |  |"foo.h", G4, L0     |
+ 4   |   |L1 #include "foo1.h"   |   |  +--------------------+
+     |   |   foo1.h-----------+  |   |  |"foo1.h", G5, L0    |
+ 5   |   |   |L1              |  |   |  +--------------------+
+     |   |   +----------------+  |   |  |nil, G6, L0         |
+ 6   |   |L2                     |   |  +--------------------+
+ 7   |   |L3 #include "foo2.h"   |   |  +--------------------+
+     |   |   foo2.h-----------+  |   |  |"foo2.h", G8, L0    |
+ 8   |   |   |L1              |  |   |  +--------------------+
+     |   |   +----------------+  |   |  |nil, G9, L0         |
+ 9   |   |L4                     |   |  +--------------------+
+ 10  |   |L5                     |   |  +--------------------+
+     |   +-----------------------+   |  |nil, G11, L0        |
+ 11  |L4                             |  +--------------------+
+ 12  |L5 #include "bar.s"            |  +--------------------+
+     |   bar.s-------------------+   |  |"bar.s", G13, L0    |
+ 13  |   |L1                     |   |  +--------------------+
+ 14  |   |L2                     |   |  +--------------------+
+     |   +-----------------------+   |  |nil, G15, L0        |
+ 15  | L6                            |  +--------------------+
+ 16  | L7                            |  +--------------------+
+ 17  | L8#line 10 "foobar.c"         |  |"foobar.c", G18, L10|
+ 18  | L9                            |  +--------------------+
+ 19  |L10                            |  +--------------------+
+     +-------------------------------+  |nil, G20, L0        |
+                                        +--------------------+
+lineno          foo.s and                     ehist
+(global)     included files
+\end{verbatim}
+\caption{[[lineno]] and [[hist]] for [[/tests/cpp/foo.s]]}
+\label{fig:hist}
+\end{figure}
+
+One of the option of [[5a]] described in Section~\ref{sec:debug-line}
+helps to debug the debugging support code itself by logging
+the value of [[lineno]] and [[Hist]] elements in the
+calls to [[linehist()]]:
+
+\begin{verbatim}
+$ cd /tests/cpp
+$ 5a -f foo.s
+   1: foo.s
+   4: foo.h
+   5: foo1.h
+   6: <pop>
+   8: foo2.h
+   9: <pop>
+  11: <pop>
+  13: bar.s
+  15: <pop>
+  18: foobar.c (#line 10)
+  20: <pop>
+...
+\end{verbatim}
+\n actually logged two times because two pass algorithm of 5a
+
+%old: newflag dead? seems just set to false ... just one write.
 %% it's used in cc/ though, but we copy pasted code for macbody so
 % I think it's safe to delete it here.
 %<<global newflag>>=
@@ -8559,93 +8738,131 @@ linehist(char *f, int local_line)
 
 
 
-% I prefer to put prfile here rather than in the Error appendix.
-% So can better understand actually the tracing mechanism.
 
 
 \section{Displaying history, [[prfile()]]}
+\n I prefer to put prfile here rather than in the Error appendix.
+\n so can better understand actually the tracing mechanism.
+
+By keeping the full {history} of the [[#include]] directives, 
+\l and [[#line]] but less
+[[5a]] can also give better error message such as:
+
+\begin{verbatim}
+$ 5a foo.s
+foo.s:7 bar.s:2 redeclaration of lbl1
+\end{verbatim}
+\t 5c instead report:     bar.s:2 foo.s:5 not a function
+
+This means the error is in the file [[bar.s]] at line 2 and this
+file was actually included from [[foo.s]].
+\t actually seems buggy, should be foo.s:5. Copy Lconv in 5c.
+%
+\t especially useful for C code, where can be really tricky to fix error
+\t because of some ifdef, and losts of nested include to understand
+\t where it comes from
+%
+We are now ready to understand [[prfile()]] which
+is used when reporting error in [[5a]]. It converts
+a global line number [[l]] into a serie of filenames and line numbers
+representing the {history} of this global line.
+
+The size of this serie is limited to 20 elements:
 
 <<constant HISTSZ>>=
 #define	HISTSZ		20
 @
 
-% for nice error reporting with include trace
-%  l = lineno
+For instance with the data on Figure~\ref{fig:hist}, 
+[[prfile(14)]] should print:
+
+\begin{verbatim}
+foo.s:5 bar.s:2
+\end{verbatim}
+\t so why 7? I think code is buggy, copy what 5c does instead in Lconv
+
 <<function prfile>>=
 /// yyerror -> <>
 void
 prfile(long l)
 {
-    int i, n;
-    Hist *h;
     Hist a[HISTSZ];
+    int n = 0;
+    Hist *h;
+    int i;
     long d;
 
-    n = 0;
-    for(h = hist; h != H; h = h->link) {
-        if(l < h->line)
-            break;
-
-        if(h->filename) {
-            if(h->local_line == 0) {
-                if(n >= 0 && n < HISTSZ)
-                    a[n] = *h;
-                n++;
-            } else {
-                if(n > 0 && n < HISTSZ)
-                    if(a[n-1].local_line == 0) {
-                        a[n] = *h;
-                        n++;
-                    } else
-                        a[n-1] = *h;
-           }
-        }
-        // a pop
-        else {
-            n--;
-            if(n >= 0 && n < HISTSZ) {
-                d = h->line - a[n].line;
-                for(i=0; i<n; i++)
-                    a[i].line += d;
-            }
-        }
-    }
+    <<[[prfile()]] compute a and n>>
     if(n > HISTSZ)
         n = HISTSZ;
     for(i=0; i<n; i++)
         print("%s:%ld ", a[i].filename, 
-                         (long)(l - a[i].line + a[i].local_line + 1));
+                         (long)(l - a[i].global_line + a[i].local_line + 1));
 }
 @
-% see 5a -f to help understand a bit.
-% when no filename it means it's a pop
+%old: was using more break, I rewrote a bit
+
+The [[+1]] above is to have line numbers starting at 1.
+
+
+<<[[prfile()]] compute a and n>>=
+for(h = hist; h != H; h = h->link) {
+    if(l >= h->global_line) {
+        if(h->filename) {
+            // a #include
+            if(h->local_line == 0) {
+                if(n >= 0 && n < HISTSZ)
+                    a[n] = *h;
+                n++;
+            } 
+            <<[[prfile()]] compute a and n, when line directive>>
+        }
+        // a pop
+        else {
+            n--;
+            <<[[prfile()]] compute a and n, when pop, adjust parents>>
+        }
+    }
+}
+@
+
+\t need another field to correctly adjust the parents
+
+<<[[prfile()]] compute a and n, when pop, adjust parents>>=
+if(n >= 0 && n < HISTSZ) {
+    d = h->global_line - a[n].global_line;
+    for(i=0; i<n; i++)
+        a[i].global_line += d;
+}
+@
+
+<<[[prfile()]] compute a and n, when line directive>>=
+// a #line
+else {
+    if(n > 0 && n < HISTSZ)
+        // previous was a #include
+        if(a[n-1].local_line == 0) {
+            a[n] = *h;
+            n++;
+        } else
+            a[n-1] = *h;
+}
+@
 
 
 \section{Saving history, [[outhist()]] and [[AHISTORY]]}
 \label{sec:object-file-history}
+\n was called Header section, but not really an header in traditional sense,
+\n the object could be parsed without those AHISTORY and ANAME I think.
 
-%note: was called Header section, but
-% it's not really an header in traditional sense,
-% the object could be parsed without those AHISTORY and ANAME I think.
-
-%todo: use 5l -v -W to see those AHISTORY and ANAME; it can help
-% debug things
-
-<<[[Opcode]] cases, pseudo opcodes>>=
-AHISTORY,
-@
-% history? because trace history of a line if comes from some #include?
-
-% maybe good to take simplest case where have no #include,
-% then what will be the output?
-
-
-<<sym_kind cases>>=
-D_FILE,
-@
-\t useful? if remove symkind from ANAME, need that?
-
-
+We can now describe the only missing piece in the object file
+format in Figure~\ref{fig:object-format-complete}: the
+``files/lines history'' at the beginning of the object file.
+The function below is called by [[assemble()]] before
+the many calls to [[outcode()]] and essentially serializes [[hist]].
+To do so it is reusing (some would say abusing) the instruction
+format and the symbol table to respectively store the
+global and local line numbers in a [[Hist]] and the filename:
 
 <<function outhist(arm)>>=
 /// main -> assemble -> <> (at begining of pass 2)
@@ -8654,9 +8871,8 @@ outhist(void)
 {
     Gen g;
     Hist *h;
-    char *p, *op;
-    char *q;
-    int n;
+    char *p;
+    <<[[outhist()]] locals(arm)>>
 
     g = nullgen;
     for(h = hist; h != H; h = h->link) {
@@ -8668,21 +8884,47 @@ outhist(void)
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, Always);
-        Bputc(&obuf, 0); // reg, but could be R_NONE actually
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
+        Bputc(&obuf, 0); // reg, but could be R_NONE too 
+        Bputc(&obuf, h->global_line);
+        Bputc(&obuf, h->global_line>>8);
+        Bputc(&obuf, h->global_line>>16);
+        Bputc(&obuf, h->global_line>>24);
         outopd(&nullgen, 0);
         outopd(&g, 0);
     }
 }
 @
-% bug???? g.offset is used? do zaddr(&g, 0) but g.type = D_NONE
-% at this point which means the offset will not be used.
-% look at linker reading back code, excpect a D_CONST here?
-% this code works for 8a, but not for 5a because zaddr() is
-% different there.
+%ocaml: should not reuse same format than instruction
+\t bug???? g.offset is used? do zaddr(&g, 0) but g.type = D_NONE
+\t at this point which means the offset will not be used.
+\n this was working for 8a, but not for 5a because zaddr()(x86) is different.
+
+\t look at linker reading back code, expect a D_CONST here?
+
+\t use 5l -v -W to see those AHISTORY and ANAME; it can help debug things
+
+Again, just like for [[ANAME]], a new pseudo-opcode is used
+different from any other opcode, so that the linker
+can just read one byte in the object file and decide
+if the further bytes represent an instruction or an element
+of the symbol table or a line history element:
+
+<<[[Opcode]] cases, pseudo opcodes>>=
+AHISTORY,
+@
+
+% The filename string is encoded via ANAME
+% why not full string? why split in components???
+
+% maybe good to take simplest case where have no #include,
+% then what will be the output?
+
+
+<<[[outhist()]] locals(arm)>>=
+char *op;
+char *q;
+int n;
+@
 
 % remember that output lineno for each instruction!
 
@@ -8729,12 +8971,23 @@ while(p) {
 % why print each directory path separately?
 
 
+<<sym_kind cases>>=
+D_FILE,
+@
+\t useful? if remove symkind from ANAME, need that?
+
+
 
 
 
 
 \chapter{Advanced Topics}
 \label{chap:advanced}
+
+% essential features have been described. Can write
+% many assembly programs already like that. And assembler
+% fully functional. Here we will see advanced feature
+% more rarely used.
 
 \section{Other assembler features}
 
@@ -8993,13 +9246,13 @@ D_FPCR,
 % FPCR is the float pending of D_PSR?
 % also FCONST we have seen before in core DS
 
-<<[[zaddr()]] cases>>=
+<<[[zaddr()]] cases(arm)>>=
 case D_FREG:
 case D_FPCR:
     break;
 @
 
-<<[[zaddr()]] cases>>=
+<<[[zaddr()]] cases(arm)>>=
 case D_FCONST:
     ieeedtod(&e, a->dval);
     Bputc(&obuf, e.l);
@@ -9201,7 +9454,7 @@ regreg:
 
 
 
-<<[[zaddr()]] cases>>=
+<<[[zaddr()]] cases(arm)>>=
 case D_REGREG:
     Bputc(&obuf, a->offset);
     break;
@@ -9354,7 +9607,7 @@ D_PSR,
 % similar to D_REG really, just with special register, so reg field
 % is enum<registr> | enum<status_registr>
 
-<<[[zaddr()]] cases>>=
+<<[[zaddr()]] cases(arm)>>=
 case D_PSR:
     break;
 @
@@ -9541,6 +9794,9 @@ oexpr:
 
 \subsection{Compiler-only}
 \l or virtual?
+
+% because actually opcodes was written before 5a :)
+ 
 
 % some of those are not really opcodes, they are entities 
 % just at the asm AST level produced internally by 5c.
@@ -9803,6 +10059,7 @@ if(argc > 1) {
 
 
 
+
 \chapter{Conclusion}
 \label{chap:conclusion}
 
@@ -9810,7 +10067,7 @@ You now know how the \plan ARM assembler [[5a]] works,
 to the smallest details, and more generally how many 
 assembler works.
 
-%dup:
+%dup: from intro/5a BUT too many dup so commented.
 %The ARM machine code generation is not done by [[5a]] though,
 %but by the linker [[5l]] which is a bit unconventional.
 %So, we recommend to follow with the \book{Linker} to
@@ -9877,6 +10134,7 @@ if(debug['m'])
 @
 
 \section{[[5a -f]], line information debugging}
+\label{sec:debug-line}
 
 <<[[linehist()]] debug>>=
 if(debug['f'])
@@ -9889,6 +10147,7 @@ if(debug['f'])
         print("%4ld: <pop>\n", lineno);
 @
 
+% see section X for example of output
 
 
 \chapter{Error Managment}
@@ -9949,6 +10208,7 @@ if(strcmp(a, "syntax error") == 0) {
     return;
 }
 @
+
 
 \chapter{Utilities}
 \label{chap:libc}
@@ -10065,6 +10325,9 @@ allocn(void *p, long on, long n)
 \l lib_core/libc/arm/tas.s
 \t getcallerpc? help illustrates calling convention? or too subtle?
 % but for sure this needs to be written in assembly!
+
+\n lib_core/libc/arm/main9.s (and main9p.s) would be good but too important
+\n so put in \book{Core Libraries}
 
 \section{[[_div()]] and [[_mod()]]}
 \label{sec:_divmod}
@@ -10183,10 +10446,10 @@ m1:
 \begin{verbatim}
 ISA = Instruction Set Architecture
 AST = Abstract Syntax Tree
-PC = Program Counter
-SP = Stack Pointer
-FP = Frame Pointer
-SB = Static Base register
+PC = Program Counter (register)
+SP = Stack Pointer (register)
+FP = Frame Pointer (register)
+SB = Static Base (register)
 BL = Branch and Link
 RISC = Reduced Instruction Set Computer
 CISC = Complex Instruction Set Computer
