@@ -88,15 +88,6 @@
 %  - forward decl, func decl, extern decl, #ifdef, pragmas (stuff in Extra.nw)
 %  - ???
 
-%\setcounter{tocdepth}{1}
-
-%\usepackage[margin=0.5in]{geometry}
-%  but eat the bottom when very low
-%\usepackage{fullpage} is deprecated 
-% => do the more manual below:
-%\addtolength{\oddsidemargin}{-.850in}
-%\addtolength{\evensidemargin}{-.850in}
-%\addtolength{\textwidth}{1.70in}
 \addtolength{\topmargin}{-.850in}
 \addtolength{\textheight}{1.70in}
 
@@ -163,7 +154,7 @@ Here are a few questions we hope this book will answer:
 \begin{itemize}
 \item How conditionals, loops, and other control flow constructs
 get translated in basic jumps?
-%tags: codegen: to give a preview of how a C construct is translated to ASM
+%codegen:
 
 \item How arbitrary complex expressions are converted into simpler
 assembly instructions using a small set of registers?
@@ -176,7 +167,10 @@ to the caller?
 
 \end{itemize}
 
-%tags: ocaml: to give a hint on how rewriting C in OCaml could improve things
+%tags used for recurring themes:
+%ocaml: to give a hint on how rewriting C in OCaml could improve things
+%assembler: similar code in the assembler and how they relate
+%codegen: to give a preview of how a C construct is translated to ASM
 
 \section{[[5c]]}
 
@@ -741,7 +735,7 @@ new(int t, Node *l, Node *r)
 <<global lineno>>=
 long	lineno;
 @
-% incremented in lexer
+% incremented in lexer, global line number?
 
 
 <<global nearln>>=
@@ -25584,7 +25578,8 @@ struct Atab
 };
 @
 
-% location?
+% location!
+%assembler: similar to prfile() but used via %L e.g. in yyerror
 <<function Lconv>>=
 // int -> string?
 int
@@ -26463,6 +26458,7 @@ dbgdecl(Sym *s)
 \section{[[5c -???]], ???}
 
 \chapter{Error Managment}
+%assembler: very similar
 
 <<global nerrors>>=
 int	nerrors;
@@ -26487,18 +26483,15 @@ yyerror(char *fmt, ...)
     char buf[STRINGSZ];
     va_list arg;
 
-    /*
-     * hack to intercept message from yaccpar
-     */
-    if(strcmp(fmt, "syntax error") == 0) {
-        yyerror("syntax error, last name: %s", symb);
-        return;
-    }
+    <<[[yyerror()]] when called from yyparse>>
+
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
+
     Bprint(&diagbuf, "%L %s\n", lineno, buf);
     nerrors++;
+
     if(nerrors > 10) {
         Bprint(&diagbuf, "too many errors\n");
         errorexit();
@@ -26506,6 +26499,15 @@ yyerror(char *fmt, ...)
 }
 @
 
+<<[[yyerror()]] when called from yyparse>>=
+/*
+ * hack to intercept message from yaccpar
+ */
+if(strcmp(fmt, "syntax error") == 0) {
+    yyerror("syntax error, last name: %s", symb);
+    return;
+}
+@
 
 <<function diag>>=
 void
@@ -26517,6 +26519,7 @@ diag(Node *n, char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
+
     Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
 
     if(debug['X']){
