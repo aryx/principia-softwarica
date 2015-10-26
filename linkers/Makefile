@@ -15,7 +15,7 @@ DOC=Linker
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=Linker.nw Linker_extra.nw
+SRC_ORIG=Linker.nw Linker_extra.nw Linker_x86.nw
 
 # actually also dependency to 8c/enam.c and 5c/enam.c for anames
 SRC_VIEWS= \
