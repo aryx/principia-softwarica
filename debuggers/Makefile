@@ -9,11 +9,9 @@ include $(TOP)/docs/latex/Makefile.common
 # Literate Programming rules
 ##############################################################################
 
-TEXMAIN=Debugger.nw
-TEX=Debugger.tex
+DOC=Debugger
 
 # set of noweb (.nw) files
-
 # must be in the same order of the #include for syncweb multi files support
 # to work
 SRC_ORIG=Debugger.nw Debugger_extra.nw Debugger_x86.nw
