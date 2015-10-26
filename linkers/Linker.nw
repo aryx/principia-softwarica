@@ -28,7 +28,9 @@
 % - TODO what if have multiple object defining the same global?
 %   int x; int x; in different files? what if one also define value?
 %   what if both define value? DUPOK?
-% - that linker and loader are related by executable format and sections
+% - that linker and loader are related by executable format and sections,
+%   one generate data (the executable) that the other read (the kernel)
+% - TODO stuff about SB? where have mutual dependency?
 % - TODO fpic? 
 % - TODO dynamic linking? export table? import table?
 
@@ -65,14 +67,9 @@
  \hypersetup{colorlinks=true}
 \usepackage[pageref]{backref}
  \def\backref{{\footnotesize cited page(s)}~}
-% not in basicTex
-%\usepackage{cleveref} %\cref
-% not in basicTex, for multirow TOC!
-%\usepackage{multirow}
 \usepackage{booktabs} 
  \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
 \usepackage{graphicx}
-%\usepackage{minitoc}
 
 %------------------------------------------------------------------------------
 % Macros
@@ -113,7 +110,7 @@ Rob Pike
 
 \maketitle 
 %alt: 8l, x86 (32 bits) edition
-%ARM (32 bits) edition\\
+\l ARMv6 (32 bits) edition\\
 \l Rob pike really author also of linker?
 
 
@@ -179,11 +176,11 @@ which C source code corresponds a specific binary instruction?
 \l what is position independent code? maybe linker issue
 
 %tags used in this file for different recurring themes:
-%assembler-ds: it relate DS in linker to similar DS in 5a
+%assembler: it relate code in the linker to similar code in 5a
 
 %I also use "sanity check" in chunknames, to aspectize a bit error checking
 
-\section{The \plan linker, [[5l]]}
+\section{The \plan ARM linker, [[5l]]}
 
 We will explain in this book the code of the \plan ARM linker
 [[5l]]\footnote{\url{http://plan9.bell-labs.com/magic/man2html/1/8l},
@@ -231,6 +228,7 @@ Here are a few linkers that were considered for this book but
 which were ultimately discarded:
 \begin{itemize}
 \item GNU ld and the BFD library
+% BFD =~ libmach
 
 \item Gold
 
@@ -238,14 +236,18 @@ which were ultimately discarded:
 % smaller than 5l seems, 6000 LOC? but because machine code done
 % in as86 which is 12 500 LOC so as86+ld86 > 5a+5l
 
-\item vlink
-%  - http://www.compilers.de/vlink.html, part of vbcc and vasm
-
 \end{itemize}
 
 \l a few other linkers, see the comment in the .tex
-% other:
-
+%other:
+% - http://www.compilers.de/vlink.html, part of vbcc and vasm
+%mini:
+% - https://github.com/trillek-team/computer-toolkit (for space game)
+%   a toy asm, linker, and even a toy C compiler, for TR3200 machine
+%education:
+%  - subc-2014, sld, 700LOC?
+%modern:
+% - llvm has one?
 
 \section{Getting started}
 
@@ -309,6 +311,7 @@ It is not necessary to know the ARM architecture to understand
 most of this book. 
 %nodup: start deviation
 For the machine code generation part though,
+% chapter X
 %
 we highly recommend though to print the excellent one page
 colorful ARM reference guide
@@ -317,7 +320,6 @@ which will help you to visually understand the binary format of the
 instructions. This guide will be very helpful also
 to understand later the code doing bit manipulations to generate
 different parts of the instruction.
-
 %we recommend to read the \book{Emulator} to fully understand
 %the semantics of some instructions.
 
@@ -349,6 +351,7 @@ who wrote in some sense most of this book.
 % principle: link together object files. Resolve external symbols references.
 % Link defs to uses. An object is really the simplest/lowest module abstraction.
 % Also compute textsize, datasize, etc and adjust addresses.
+% {Sections}
 
 % ancestor is really CAT :) see bootstrapping from scratch
 %  and in the end ld is a kind of CAT too
@@ -410,7 +413,7 @@ usage(void)
 
 % env: $ccroot
 
-\section{[[hello.5]], [[world.5]]}
+\section{[[hello.5]] and [[world.5]]}
 
 % maybe can start with hello.s and world.s
 % and then some code in both, some data in both, so see
@@ -486,7 +489,8 @@ struct	Exec
 % some core initializations and then call main
 
 
-\section{Runtime conventions}
+\section{Conventions}
+% Calling, runtime, etc?
 % memory model when loaded in memory? need that? seems more cc material
 
 % frame format?
@@ -602,6 +606,9 @@ struct	Exec
 
 \section{Book structure}
 
+
+
+
 %###############################################################################
 
 \chapter{Core Data Structures}
@@ -646,7 +653,7 @@ struct	Sym
 % Explain special encart to related to code of 5a, because
 % similar but different. Can be nice too relate. But optional for reader.
 
-%assembler-ds: Similar to Sym in Assembler.nw, but a few differences:
+%assembler: Similar to Sym in Assembler.nw, but a few differences:
 % - no 'type' (token_kind) field, no 'macro' field
 % - no labels, they were translated in pc values.
 % - no symidx field (but was local to outcode())
@@ -762,6 +769,7 @@ lookup(char *symb, int v)
     return s;
 }
 @
+%ocaml: use stdlib Hashtbl.find, sad duplicate from 5a/
 
 <<global nsymbol linker>>=
 long	nsymbol;
@@ -799,7 +807,7 @@ struct	Adr
     <<[[Adr]] other fields>>
 };
 @
-%assembler-ds: Similar to Gen in Assembler.nw, but a few differences:
+%assembler: Similar to Gen in Assembler.nw, but a few differences:
 % - ieee was dval, and sval was sval[8]
 % - have now a union for sym and autom, probably autom for the D_PARAM and
 %   D_LOCAL cases
@@ -891,7 +899,7 @@ struct	Prog
     <<[[Prog]] extra fields>>
 };
 @
-% Similar to the arguments of outcode():
+%assembler: similar to the arguments of outcode():
 %  - as (opcode), from (g1), to (g2), reg, scond, and
 %    line field was a lineno global
 %  - ???
@@ -1112,7 +1120,9 @@ Prog	undefp;
 
 
 
-\chapter{[[main()]]}
+\chapter{Main Functions}
+
+\section{[[main()]]}
 
 % default object suffix, to generate x.out
 <<global thechar>>=
@@ -1184,7 +1194,7 @@ if(cout < 0) {
 }
 @
 
-\section{Arguments processing}
+\subsection{Arguments processing}
 
 <<[[main()]] command line processing(arm)>>=
 case 'o':
@@ -1333,7 +1343,7 @@ if(INITDAT != 0 && INITRND != 0)
 @
 
 
-\section{Main flow}
+\subsection{Main flow}
 \t could have a function link() just like have assemble() in Assembler.nw?
 % use stuff from main? then maybe good, can pass them around
 
@@ -1825,6 +1835,11 @@ undef(void)
 @
 
 
+
+
+
+
+
 \chapter{Loading Objects}
 %note: was called parsing, but objects are stored in a binary format so
 % "loading" is more appropriate I think
@@ -1872,7 +1887,7 @@ if(r < 100 && r < c) {		/* enough for largest prog */
 % >> >> >> >>
 % readsome() is in appendix too
 
-\section{A global and local [[pc]]}
+\section{A global and local program counter, [[pc]] and [[ipc]]}
 
 % each call to ldobj() will increment this pc
 <<global pc>>=
@@ -2754,7 +2769,7 @@ char	symname[]	= SYMDEF;
 % contains offsets for symbols which are not the offset of their TEXT
 % but the offset of their object file entry in the archive file.
 
-\section{Loading libraries manually [[5l libxxx.a]]}
+\section{Loading libraries manually, [[5l libxxx.a]]}
 
 <<[[objfile()]] other locals>>=
 struct ar_hdr arhdr;
@@ -2941,7 +2956,7 @@ if(xrefresolv)
 xrefresolv = true;
 @
 
-\section{Loading libraries semi automatically [[5l -lxxx]]}
+\section{Loading libraries semi automatically, [[5l -lxxx]]}
 
 \subsection{Library search path}
 
@@ -3084,7 +3099,7 @@ findlib(char *file)
 
 
 
-\section{Loading libraries automagically [[#pragma lib]]}
+\section{Loading libraries automagically, [[#pragma lib]]}
 % when done automatically
 
 % ldobj(case AHISTORY and local_line == -1 special mark) -> <>
@@ -3181,6 +3196,7 @@ addlib(char *obj)
 
 \chapter{Resolving}
 
+%trans:
 % Ok loading objects and libs has been done. Normally
 % have now a linked list of instructions in firstp, with a valid Prog->pc
 % and a good symbol table where can see for instance the pc
@@ -6746,11 +6762,21 @@ find1(long l, int c)
 @
 
 
+
+
+
+
+
+
+
+
+
+
 \chapter{Debugging Support}
 % Symbol Tables.
 % related to import/export table? I don't think so.
 
-% cooperation of 5s, 5c, and now last piece: 5l.
+% cooperation of 5a, 5c, and now last piece: 5l.
 
 % But then db has awesome information!
 % in db doing $C  dumps the stacktrace with parameters values! and locals!
@@ -6763,7 +6789,7 @@ find1(long l, int c)
 %  main(argv=...) /home/pad/.../main.c called from _main+26 (.../main9.s:12)
 
 
-\section{Symbol table, [[asmsym()]]}
+\section{Executable symbol table, [[asmsym()]]}
 
 % nm helloc actually does not show everything,
 % the 'f', 'p', and so are not shown by nm apparently.
@@ -7356,6 +7382,7 @@ if(p->reg & NOPROF) {
 % can copy Fhdr here.
 
 \chapter{Utilities}
+\l in appendix?
 
 \section{[[size]]}
 
@@ -8897,14 +8924,15 @@ if(*a >= '0' && *a <= '9')
 @
 
 
+\section{Other instructions}
 
-\section{Float instructions}
+\subsection{Float instructions}
 
 % string connection with the kernel floating port support.
 % see bcm/vfp3.c, bcm/fpiarm.c, etc
 
 
-\subsection{Operand kind}
+\subsubsection{Operand kind}
 
 <<[[zaddr()]] cases>>=
 case D_FREG:
@@ -8988,7 +9016,7 @@ ieeedtod(Ieee *ieeep)
 
 
 
-\subsection{Class}
+\subsubsection{Class}
 
 <<cxxx(arm) cases>>=
 C_FREG,
@@ -9048,7 +9076,7 @@ if(immfloat(t))
 @
 
 
-\subsection{XXX}
+\subsubsection{XXX}
 
 
 
@@ -9266,7 +9294,7 @@ case D_FCONST:
     break;
 @
 
-\subsection{Common float instructions}
+\subsubsection{Common float instructions}
 
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
@@ -9541,7 +9569,7 @@ case 69:	/* floating point load <- ADDR */
 @
 % >> >> >>
 
-\subsection{VFP hardware instructions, [[5l -f]]}
+\subsubsection{VFP hardware instructions, [[5l -f]]}
 
 
 
@@ -9698,7 +9726,7 @@ opvfprrr(int a, int sc)
 
 
 
-\subsection{Kernel emulation}
+\subsubsection{Kernel emulation}
 
 
 
@@ -9921,11 +9949,11 @@ olhrr(int i, int b, int r, int sc)
 
 
 
-\section{Division instructions}
+\subsection{Division instructions}
 
 % like for floats, different options
 
-\subsection{[[ADIV]] rewriting}
+\subsubsection{[[ADIV]] rewriting}
 
 %    /* MOV a,4(SP) */
 %    /* MOV b,REGTMP */
@@ -10066,7 +10094,7 @@ Prog*	prog_modu;
 @
 
 
-\subsection{[[initdiv()]]}
+\subsubsection{[[initdiv()]]}
 
 <<global sym_div(arm)>>=
 static	Sym*	sym_div;
@@ -10199,7 +10227,9 @@ case AMODU:
 % this notion of NOOP.
 
 
-\subsection{Kernel emulation, [[5l -M]]}
+\subsubsection{Kernel emulation, [[5l -M]]}
+% can access coprocessor from regular programs? so need syscall for float op?
+% argh.
 
 <<[[noops()]] second pass, ADIV rewrite, case ADIV and so on, if -M>>=
 if(debug['M'])
@@ -10233,7 +10263,7 @@ case 16:	/* div r,[r,]r */
 % >>
 
 
-\section{Multiple registers instructions}
+\subsection{Multiple registers instructions}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMOVM:
@@ -10319,8 +10349,11 @@ case 63:	/* bcase */
 
 \chapter{Conclusion}
 
+You now know how the \plan ARM linker [[5l]] works,
+to the smallest details, and more generally how many 
+linkers works.
 
-
+\l next step? kernel/loader. debugger which uses libmach. profiler.
 
 
 
@@ -10372,14 +10405,6 @@ default:
 
 % why called listinit??
 
-<<function prasm(arm)>>=
-void
-prasm(Prog *p)
-{
-    print("%P\n", p);
-}
-@
-
 
 <<function listinit(arm)>>=
 void
@@ -10394,6 +10419,8 @@ listinit(void)
     fmtinstall('N', Nconv);
 }
 @
+
+\subsection{Symbol kind dumper, [[Nconv()]]}
 
 <<function Nconv(arm)>>=
 int
@@ -10448,6 +10475,7 @@ Nconv(Fmt *fp)
 @
 
 
+\subsection{Conditional execution dumper, [[Cconv()]]}
 
 
 <<global strcond(arm)>>=
@@ -10494,6 +10522,7 @@ Cconv(Fmt *fp)
 @
 
 
+\subsection{Opcode dumper, [[Aconv()]]}
 
 
 
@@ -10517,7 +10546,15 @@ Aconv(Fmt *fp)
 @
 
 
+\subsection{Instruction dumper, [[Pconv()]]}
 
+<<function prasm(arm)>>=
+void
+prasm(Prog *p)
+{
+    print("%P\n", p);
+}
+@
 
 
 <<constant STRINGSZ>>=
@@ -10574,7 +10611,7 @@ Pconv(Fmt *fp)
 @
 
 
-
+\subsection{Operand dumper, [[Dconv()]]}
 
 
 <<function Dconv(arm)>>=
@@ -10714,6 +10751,7 @@ Dconv(Fmt *fp)
 
 
 
+\subsection{???, [[Sconv()]]}
 
 <<function Sconv(arm)>>=
 // ?? -> string
@@ -10761,20 +10799,21 @@ Sconv(Fmt *fp)
 
 
 \section{Verbose mode, [[5l -v]]}
-% and [[DBG()]]
+\l and [[DBG()]]
 
-%used to have lots of code like:
-%if(debug['v']) {
+%old: used to have lots of code like:
+% if(debug['v']) {
 %    Bprint(&bso, "HEADER = -H0x%ld -T0x%lux -D0x%lux -R0x%lux\n",
 %        HEADTYPE, INITTEXT, INITDAT, INITRND);
 %    Bflush(&bso);
 %}
 % (The Bflush was outside the if, but makes more sense like this I think)
-%but better to have a DBG macro for this
+% but better to have a DBG() macro for this
 
 <<macro DBG>>=
 #define DBG if(debug['v']) mylog
 @
+%pad: I introduced that
 
 <<function log>>=
 void mylog(char *fmt, ...) {
@@ -10787,6 +10826,7 @@ void mylog(char *fmt, ...) {
     Bflush(&bso);
 }
 @
+%pad: I introduced that
 
 \section{Object loading debugging, [[5l -W]]}
 % print object code when loading
@@ -10796,7 +10836,7 @@ void mylog(char *fmt, ...) {
 
 
 
-\section{Machine code debugging, [[5l -a]]}
+\section{Machine code generation debugging, [[5l -a]]}
 % print final concrete code in assembly language with addresses
 
 % if do 5l -a -a two times I think it will print a few more things
@@ -10849,7 +10889,8 @@ errorexit(void)
     exits(0);
 }
 @
-
+\l why exits(0) when call errorexit for regular exit? what 5a does?
+%assembler: similar
 
 
 % could use TNAME here too?
@@ -11287,6 +11328,19 @@ rnd(long v, long r)
 @
 
 
+
+\chapter{[[5l]] in OCaml}
+\label{chap:5l-ocaml}
+
+
+
+
+
+
+
+
+
+
 \chapter{Extra Code}
 
 \ifallcode
@@ -11296,6 +11350,9 @@ rnd(long v, long r)
 
 %\chapter{Changelog}
 %\label{sec:changelog}
+% code via make loc = 9700 LOC
+% orig Linker.nw = 11 340, just lpized and few comments, 101 pages pdf
+% now: ? LOC ? pages, so added ?? LOE (Lines of explanations)
 
 \chapter*{Glossary}
 \addcontentsline{toc}{chapter}{Glossary}
@@ -11305,6 +11362,9 @@ rnd(long v, long r)
 
 
 \end{verbatim}
+
+
+
 
 \chapter*{Indexes}
 \addcontentsline{toc}{chapter}{Index}
