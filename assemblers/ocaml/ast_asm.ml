@@ -39,6 +39,7 @@ type arith_operand =
     | Sh_minus | Sh_at
 
 type mov_operand = 
+  | Imsr of arith_operand
   | Ximm of ximm
   | Indirect of register * offset
   (* those below are all specialized forms of Indirect *)
@@ -47,12 +48,9 @@ type mov_operand =
   (* stricter: we disallow anonymous offsets to SB *)
   | Entity of entity * offset (* SB *) 
 
-
   and ximm =
-    | Imm2 of integer
     | String of string (* limited to 8 characters *)
     (* Float? *)
-
     (* stricter: we disallow address of FP or SP, and offset to SB *)
     | Address of entity
 
@@ -76,20 +74,23 @@ type branch_operand =
 type instr = 
   | NOP (* virtual, removed by linker *)
 
+  (* Arithmetic *)
   | Arith of arith_opcode * arith_operand * register * register option
 
+  (* Memory *)
   | MOV of move_size * mov_operand * mov_operand (* virtual *)
   | SWAP of move_size (* actually only (Byte x) *) * 
        register (* indirect *) * register * register option
 
+  (* Control flow *)
   | B of branch_operand
   | BL of branch_operand
   | RET (* virtual *)
-
   | Cmp of cmp_opcode * arith_operand * register
   (* TODO: normally just rel here, relative jump or label *)
   | Bxx of condition * branch_operand (* virtual, sugar *) 
 
+  (* System *)
   | SWI
   | RFE (* virtual, sugar for MOVM *)
 
@@ -123,7 +124,9 @@ type pseudo_instr =
   | TEXT of symbol * attributes * int
   | GLOBL of symbol (* can have offset? *) * attributes * int
   | DATA of symbol * offset * int (* size *) * ximm
-  | WORD of ximm
+  (* any ximm? even String? And Float? *)
+  | WORD of (int, ximm) Common.either
+
   and attributes = attribute list
   and attribute = DUPOK | NOPROF
 
