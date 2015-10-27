@@ -224,6 +224,7 @@ between an object file and an executable?
 %compiler: give idea of what 5c does, what 5c needs
 %kernel: for features essential to implement a kernel
 %real-world: to relate to other assemblers
+%style: Asm5 conventions
 %ocaml: to give a hint on how rewriting C in OCaml could improve things
 %old: for original code I changed/removed to be clearer
 %toc: %trans: %dup: %example:
@@ -315,6 +316,7 @@ large infrastructure, LLVM, with 1.3M LOC.
 syntax as opposed to [[gas]] (and [[5a]]) which uses the \att syntax.
 It is also fairly large: 50 000 LOC.
 \n popular on linux especially, but also works on windows and mac
+\l YASM a rewrite of NASM
 
 \item AS86, an x86 16-bit and 32-bit assembler, part of
 Bruce Evans' C compiler (BCC), is an historical assembler
@@ -984,6 +986,7 @@ allows the programmer to think in slightly higher-level terms,
 for [[PC]] in terms of instructions instead of bytes of data,
 and delegate some tedious tasks such as counting
 the size of instructions to the computer.
+\t for FP and SP it actually helps a lot for debugging format!
 
 Asm9 defines four pseudo-registers:
 \begin{itemize}
@@ -1011,6 +1014,8 @@ to [[R13]] for the ARM.
 \t related to SP? more on this later. ref to section in grammar?
 
 \end{itemize}
+
+
 
 In this tutorial we will avoid using those pseudo-registers (except
 [[SB]] because we have no choice).
@@ -1507,6 +1512,7 @@ pseudo registers ([[PC]]).
 \item {\em identifiers} in lowercase, used for 
 symbols ([[_main]]) and 
 labels ([[later]])
+%style:
 \l have to be lowercase?
 \l cant have DOT in it except at start, annoying, which is why in go code they
 \l use a special unicode that looks like dot
@@ -1515,6 +1521,7 @@ labels ([[later]])
 They use the same syntax than C comments and are ignored by [[5a]].
 
 \item {\em spaces} and {\em tabs}, which are also ignored by [[5a]].
+%style:
 By convention though it is common to indent with a tab most
 instructions except pseudo instructions like [[TEXT]] which
 are kept in the first column.
@@ -1571,11 +1578,13 @@ e.g. \$42, \$[['W']]
 
 \item {\em registers}, named [[R0]] to [[R15]] in Asm5
 
+\item {\em shifted registers}, which we will explain in
+Section~\ref{sec:shift-register}
+
 \item {\em pseudo-registers}, named [[PC]], [[SP]], [[FP]], and [[SB]]
 in Asm9
 \l actually cant anymore have them as operands directly
 
-\t forgot bit shifted registers, but too subtle here?
 
 \item {\em label references}, e.g. [[later]]
 \l B xx vs B(SB)
@@ -1750,8 +1759,8 @@ have the same form: an opcode followed by 0 to 3 operands.
 %
 One byte is enough to encode the opcode
 on the ARM since there are far less than 256 ARM opcodes (and
-very few pseudo-opcodes). Indeed the ARM is a RISC machine.
-[[8a]] on the opposite needs 2 bytes to represent an x86 opcode.
+very few pseudo-opcodes). Indeed the ARM is a RISC machine
+([[8a]] on the opposite needs 2 bytes to represent an x86 opcode).
 %
 Another byte is used to encode the {\em kind} of the first operand
 (e.g. an integer constant, a register, a memory address, nothing) followed by
@@ -2294,7 +2303,7 @@ struct	Gen
         char	sval[8];
     };
     // option<enum<registr>>, None = R_NONE
-    short	reg;
+    short	reg; // abused also to store a size for DATA
 
     <<[[Gen]] other fields>>
 };
@@ -5827,7 +5836,7 @@ is an integer representing the register, e.g. 10 for [[R10]].
 in a [[Gen]]. We use a [[Gen]] for \$7 and an integer
 for \$5 because of the signature of [[outcode()]]
 described in Section~\ref{sec:outcode-signature}.
-Indeed, when an ARM instruction have 3 operands, the middle one 
+Indeed, when an ARM instruction has 3 operands, the middle one 
 is always a register, so an integer is enough for the fourth
 argument to [[outcode()]].
 
@@ -6215,6 +6224,7 @@ processors.
 primitives. For instance the {\em test-and-set}
 function in \plan in [[lib_core/libc/arm/tas.s]] is
 using [[SWPW]].
+\t link to appendix?
 \l x86 XCHG
 \l ref to other book?
 
@@ -6393,12 +6403,12 @@ after:
 
 %compiler:
 All the control flow constructs of C ([[if]], [[while]], [[for]], etc)
-can be translated in assembly code using simply labels, branchs,
+can be translated in assembly code using simply labels, branches,
 and conditional jumps.
 %FIGURE? control flow diagrams translation with edges?
 
-The [[B]]$xx$ Asm5 instructions are actually virtual instructions.
-Similar to the bitshift operations vs the shifted-registers,
+The [[B]]$xx$ Asm5 instructions above are actually virtual instructions.
+Similar to the bitshift operations vs shifted-registers,
 the ARM provides a more
 general approach to conditional jump where {\em every instruction
 can be conditionally executed} as explained later in
@@ -6621,6 +6631,7 @@ followed by a colon:
 @
 \t what for changing the type? for detection of duplicate!
 
+%style:
 Even though one could have multiple label definitions on a line,
 or even labels and machine instructions on the same line, it is
 a common practice to put the label definition alone on its own line,
@@ -6899,6 +6910,7 @@ con:
 | '~' con      { $$ = ~$2; }
 @
 %$
+\l ex ~3L in Linker.nw for round_up like macro
 \n con extended later as expr
 
 Note that the ARM uses fixed-length instructions of 32 bits.
@@ -6920,7 +6932,7 @@ and those 12 bits are actually divided in two parts:
 Not all 32 bits integers can be represented
 using that scheme but many important numbers like all
 the powers of 2 between 0 and 31 can be expressed, which
-\n 4 bits so 16 shift + 8 bits for constant, not enough for all power? Yes,
+\n 4 bits so 16 shift _plus_ 8 bits for constant, not enough for all power? Yes,
 \n see url below, 4 bits rotation is special too!
 is very useful in operations involving bitsets or bitmasks.
 See the \book{Emulator} for more information
@@ -7008,6 +7020,7 @@ shift:
   $$.offset = $1 | $4 | (3 << 5);
  }
 @
+% >> >> >> >> >>
 %ocaml: ugly to encode so much stuff in offset
 \l argh, offset really abused, should use shift here
 %self-ref:
@@ -7026,7 +7039,7 @@ doing a shift operation on one of the register
 in one single instruction
 (which opens many optimisations opportunities in the C compiler [[5c]]):
 \begin{verbatim}
-ADD R1 << 8, R2, R3
+ADD R1 >> 8, R2, R3
 \end{verbatim}
 
 Note that [[Gen.offset]] is used to encode the whole operand value
@@ -7036,6 +7049,8 @@ bits 5 and 6 are used to encode the kind of shift, e.g. [[0 << 5]]
 for a left shift, and bits 7 to 11  to encode either a small immediate constant
 or another register via [[rcon]] (register or constant) below.
 \n so a bit different from the imm rotate we saw before which uses 4 bits
+%self-ref:
+\t see usefulness of those operators :)
 
 <<type declarations(arm)>>=
 %type   <lval>  rcon
@@ -7252,9 +7267,17 @@ The use of symbols for locals and parameters can be useful though as comments,
 as in [[MOVW  count+4(FP), R1]].
 \t again what is the generated code by linker?
 The symbol name is also kept in the symbol table of the object file
-as we will see in Chapter~\ref{chap:generating}
+as we will see in Chapter~\ref{chap:generation}
 which can be leveraged later by tools like debuggers
 as we will see in Chapter~\ref{chap:debugging}.
+\t in fact maybe main reason for those pseudo, easy debugging format!
+
+%real-world: no pseudo in real assembler. But all of that 
+% makes it easier to name local and params, and to provide
+% a better debugging experience. 5c can actually generate
+% via #line and good symbol name all the debugging info it needs.
+% No need DWARF or stabs. Actually 5c does not need #line because
+% it generates object files directly with the appropriate lineno.
 
 
 The name/``offset'' can also have an aditional offset applied
@@ -7325,7 +7348,7 @@ in a file by suffixing the name with angles:
 %$
 
 <<sym_kind cases>>=
-D_INTERN, // data static variables (from SB)
+D_INTERN, // local/static entities (from SB)
 @
 %old: was D_STATIC but ugly C name
 
@@ -7339,7 +7362,7 @@ will also not conflict with identical names in other files.
 
 
 
-Branching instructions can also jump to symbols via 
+Branching instructions (e.g. [[BL]]) can also jump to symbols via 
 the [[nireg]] operand rule,
 as well as the address contained in registers:
 
@@ -7645,7 +7668,7 @@ even when the procedure does not declare any local as in
 In some situations though the programmer would like to change
 this default behavior and not allocate anything at all in the stack
 in which case he must use [[$-4]]%$.
-\t appendix getcallerpc? for getcallerpc
+\t appendix getcallerpc which do that (and need to use that?)
 
 %real-world:
 % in gasm I think it's
@@ -7751,7 +7774,7 @@ AEND,
 The need for such an instruction in the assembly file is
 not clear. Having such a marker in the object file
 can be useful though. Indeed, when many object files are concatenated
-together in a library, the mark can be used to indicate
+together in a library, the [[AEND]] marker can be used to indicate
 object boundaries.
 \l meh, still linker could do that, but ldobj() is easier to write
 \l if AEND is an opcode, like ANAME, like AHISTORY
@@ -7819,21 +7842,23 @@ cond:
 So, the branching instruction [[BEQ]] we saw in
 Section~\ref{sec:conditional-jump} is really just 
 an alias for [[B.EQ]]. 
+\n hmm but outcode() will actually do the opposite
 %
-The need to conditionaly execute non-branching instruction
-such as addition may not be obvious. 
-They were originally designed to compensate for the lack
+The need to conditionaly execute non-branching instructions
+such as an addition may not be obvious. 
+This feature was originally designed to compensate for the lack
 of branch predicator in ARM CPUs
 by having code using less branches. See
 \url{https://en.wikipedia.org/wiki/ARM_architecture#Conditional_execution}
 or the \book{Emulator} for more information .
 \l http://stackoverflow.com/questions/22168992/why-are-conditionally-executed-instructions-not-present-in-later-arm-instruction
 
-The bit manipulation involving [[C_SCOND]] above is because
+The bit manipulations involving [[C_SCOND]] above is because
 the [[cond]] non-terminal in addition to the conditional
 execution also stores special ARM instruction bits 
 as explained in Section~\ref{sec:special-bits}:
 \n e.g. Sbit, after 0xf
+%self-ref: again see need for those operations
 %ocaml: no need for this special bitset that early. Return one cond
 % and a list of constructor for the .S, .etc
 
@@ -7987,13 +8012,14 @@ The operands themselves are encoded as:
 \item the kind of the operand (1 byte), e.g. the value of [[D_REG]].
 Note that for opcodes with 0 or 1 operand, [[D_NONE]] is used
 to represent the null operand.
+%ocaml: no need when use clean ADT
 
 \item a register number (1 byte), e.g. 5 for [[R5]] when
 the operand involves a register (as in [[(R5)]]) or [[R_NONE]]
 \l for direct register, shifted register, and??
 
 \item an {\em index} (1 byte) in the {\em object file symbol table},
-e.g. 13 when the operand involves a symbol (as in [[hello(SB)]])
+when the operand involves a symbol (as in [[hello(SB)]])
 or 0.
 \t or label, saved for debugging
 The encoding scheme for this symbol table will be described later
@@ -8001,7 +8027,7 @@ in Section~\ref{sec:spreaded-symbol-table}.
 
 \l for D_OREG and also D_CONST (but really D_ADDR)
 
-\item the kind of the symbol (1 byte), e.g. the value of [[D_EXTERN]]
+\item the kind of the symbol (1 byte), e.g. the value of [[D_EXTERN]],
 when the operand involves a symbol or [[N_NONE]]
 
 \item the value of the operand, which has a variable size
@@ -8018,7 +8044,9 @@ which saves space since the same symbol could be referenced many times.
 This symbol table could be stored at the beginning or end of the file.
 Instead, [[5a]] uses a rather sophisticated scheme 
 explained in Section~\ref{sec:spreaded-symbol-table} where the symbol
-table is ``spread'' in the object file along with the instructions.
+table is ``spread'' in the object file along with the instruction
+(represented by the [[Symbol]] cells in 
+Figure~\ref{fig:object-format-complete}).
 \n ANAME: symkind (1 byte), symidx (1 byte), string finished by \0
 %
 The beginning of an object file contains files and lines information
@@ -8079,11 +8107,14 @@ out:
 It also increments the virtual program counter
 [[pc]] (used to resolve labels) for all instructions
 except the one related to the [[Data]] section of the executable.
+%style:
 Indeed, [[DATA]] or [[GLOBL]] instructions can be mixed
-with [[TEXT]] instructions; they do not have to be at the
-end of the assembly file (even though this is a common practice).
+with [[TEXT]] instructions; 
+they do not have to be at the end of the assembly file 
+(even though this is a common practice).
 \n WORD is for the TEXT section too!
 
+%self-ref:
 Note the use of [[goto]] in the code above where an [[if]] would
 have been arguably clearer. This is perhaps the sign that
 the person who wrote this code likes too much assembly.
@@ -8164,7 +8195,8 @@ outopd(Gen *a, int symidx)
     }
 }
 @
-%old: was zaddr, but no idea why, clearer use outopd
+%old: was zaddr, but no idea why, z for output, addr because kinda
+% Adr used in Linker.nw. But clearer use outopd
 %ocaml: just use Marshall again in caller
 
 \ifallcode
@@ -8239,7 +8271,7 @@ The global [[h]] below mimics in memory this circular table:
 \n there will be a similar variable in ldobj() in the linker
 
 <<global h>>=
-// array<ref<Sym> * int>
+// array<ref<Sym> * enum<sym_kind>>
 struct Htab h[NSYM];
 @
 \t why call it h when really it's an array ...
@@ -8268,7 +8300,7 @@ struct Htab
 
 
 The object file symbol table [[h]] is different from the symbol
-table [[hash]] we have described in Section~\ref{sec:hash}.
+table [[hash]] we described in Section~\ref{sec:hash}.
 Indeed [[hash]] is an hash table which keeps
 track of macros, predefined identifiers, labels, and symbols.
 The object file symbol table stores only symbols 
@@ -8334,6 +8366,8 @@ ANAME,
 %update: maybe it was because the Makefile pb where actually
 % libmach was not recompiled?
 
+\l FIGURE? could extend object format figure
+
 This constant must be part of the [[Opcode]] enum so that
 it is different from any other opcode. This makes the
 format of an object file unambiguous. Indeed, to read
@@ -8347,7 +8381,7 @@ We can finally see the code in [[outcode()]] which maintains
 [[h]], manages the symbol indexes, and calls [[zname()]] when
 a new entry is needed. The locals below are set by this
 code. [[sf]] and [[st]] are passed to [[outopd()]]
-as we have seen in Section~\ref{sec:outcode}:
+(look at the code in Section~\ref{sec:outcode}):
 
 <<[[outcode()]] locals>>=
 // symbol from, index in h[]
@@ -8564,6 +8598,7 @@ as the information about symbols has already been described
 in the previous chapter. %clever\ref{chap:generation}
 
 %real-world: in gas needs -g to keep debugging info in object file?
+% DWARF is assembler debugging? STABS?
 
 \section{Line origin history, [[Hist]]}
 \n could be in Preprocess chapter, but even if no cpp, still need handle #line
@@ -8918,13 +8953,15 @@ else {
 \n Was called Header section, but not really an header in traditional sense.
 \n The object could be parsed without those AHISTORY and ANAME I think.
 
+%trans:
 We can now describe the only missing piece in the object file
-format in Figure~\ref{fig:object-format-complete}: the
-[[files/lines history]] at the beginning of the object file.
+format in Figure~\ref{fig:object-format-complete}: 
+%
+the [[files/lines history]] at the beginning of the object file.
 The function below is called by [[assemble()]] before
 the many calls to [[outcode()]] and essentially serializes [[hist]].
 To do so it is reusing (some would say abusing) the instruction
-format and the symbol table to respectively store the
+format and the symbol table format to respectively store the
 global/local line numbers in a [[Hist]] and its filename:
 
 <<function outhist(arm)>>=
@@ -9033,7 +9070,10 @@ A new kind of symbol is also used:
 <<sym_kind cases>>=
 D_FILE,
 @
-\t useful? if remove symkind from ANAME, need that?
+\t useful? if remove symkind from ANAME, need that? defensive programming?
+
+\l so have at beginning of file many ANAME:D_FILE/1, ANAME:D_FILE/1, and then
+\l later finally a real ANAME:D_EXTERN/1 reusing 1 too.
 
 
 The code below is to convert relative filenames into
@@ -10199,6 +10239,7 @@ The \book{Debugger} contains code to {\em disassemble}
 machine code which also relates to this book.
 Finally, reading the \book{Compiler} will now be easier now
 that you can understand the assembly code generated by the compiler [[5c]].
+\n in fact sim and gdb are part of binutils/ too
 
 %missing features: ORG, but ld can do -Txx
 
