@@ -147,8 +147,8 @@ the one generating finally the {executable}.
 There are very few books about linkers
 \n book mentioned later
 as opposed to compilers or kernels. 
-They are usually not studied in the computer science curriculum. 
-This is a pity because they are actually pretty central. 
+Linkers are usually not studied in the computer science curriculum. 
+This is a pity because they are pretty central.
 Indeed, they make the link (no pun intended) between the compiler
 and the kernel: the linker generates executables that the kernel
 will {load}. Without a linker there is no program to execute.
@@ -221,8 +221,7 @@ We think though that it is actually a better design because it leads to
 less code in total and also to simpler code.
 \l Explain why? because anyway linker need
 \l  deep knowledge of machine code format because need patch it
-\l  here and there, so why not put everything in it so assembler
-\l  then simpler 
+\l  here and there, so why not put everything in it so assembler then simpler 
 \l (but probably because there was only 5c/5l before and the responsabilities were shifted)
 %
 The \plan linker does also some deadcode elimination
@@ -283,6 +282,8 @@ which is smaller than AS86+LD86 at 18 600 LOC.
 \end{itemize}
 
 \l a few other linkers, see the comment in the .tex
+%industry:
+% - optlink, digital mars, very fast, written in assembly though
 %other:
 % - http://www.compilers.de/vlink.html, part of vbcc and vasm
 %mini:
@@ -395,26 +396,31 @@ who wrote in some sense most of this book.
 
 
 
+
+
 \chapter{Overview}
 
 \section{Linker principles}
 
 %https://en.wikipedia.org/wiki/Linker_%28computing%29
 
-% principle: link together object files. Resolve external symbols references.
-% Link defs to uses. An object is really the simplest/lowest module abstraction.
+% principle: link together object files. Link defs to uses.
+% Resolve external symbols references.
+% An object is really the simplest/lowest module abstraction.
 % Also compute textsize, datasize, etc and adjust addresses.
 % {Sections}
 
 % ancestor is really CAT :) see bootstrapping from scratch
 %  and in the end ld is a kind of CAT too
-% but no separate compilation advantage! library ar file also speedup things.
-% MMIXAL actually neglect linker and instead assume linker = cat :)
-%  now that memory is cheap, can do it
+% but no separate compilation advantage! 
+% library ar file also speedup things.
+% MMIXAL actually neglect linker and instead assume linker = cat :) same
+%  for fbas. Now that memory is cheap, can do it
 
 %figure: like a train, some wagons, and inside some unresolved references
 % and after linking see all the wagons really after each other and
 % the links resolved.
+% C1, D2,  C2, D2,   LIB1, ... -> C1C2LIB1/C1 D1D2
 % Also agglomerate the code, and the data of the different modules together,
 % and pack them (so actually it reorders subparts of the wagon ...).
 \n Put two assembly file with symbols defined and used, and how resolved
@@ -434,14 +440,15 @@ who wrote in some sense most of this book.
 
 % what about dynamic linking? see Advanced topics chapter.
 
-% full book on the subject
-
 % relocation! important concept
 
+
+% more info, cite, full book on the subject
+
+% many post on linkers or executables, show missing part in curriculum:
 % - http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
 % - http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
 % - http://www.lurklurk.org/linkers/linkers.html
-% - http://www.iecc.com/linker
 % - ian taylor posts http://www.airs.com/blog/archives/38
 %   TOC here: http://lwn.net/Articles/276782/
 % - https://github.com/0xAX/linux-insides/blob/master/Misc/linkers.md
@@ -479,6 +486,10 @@ usage(void)
 % in another object. 
 
 \section{Input object format}
+
+% could take figure in Assembler.nw and add the ANAME and AHISTORY?
+% or put concrete values everywhere?
+
 % the object file is the input this time 
 % (as opposed to 5a where it's the output)
 
@@ -506,6 +517,7 @@ usage(void)
 
 % see libmach to read back this executable!
 
+%FIGURE
 % so   .s --5a--> .o (.5) --5l--> .exe (5.out) --libmach--> readable
 % (hmm libmach is also reading .o (.5)
 
@@ -533,6 +545,7 @@ struct	Exec
     long	pcsz;		/* size of pc/line number table */
 };
 @
+\l and then from lineno you can get file/line thx to Hist?
 %old: _unused was actually:
 %    // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
 %    long	spsz;		/* size of pc/sp offset table */
@@ -659,7 +672,7 @@ struct	Exec
 
 \section{Book structure}
 
-
+%toc:
 
 
 %###############################################################################
@@ -706,7 +719,6 @@ struct	Sym
 %assembler:
 % Explain special encart to related to code of 5a, because
 % similar but different. Can be nice too relate. But optional for reader.
-
 %assembler: Similar to Sym in Assembler.nw, but a few differences:
 % - no 'type' (token_kind) field, no 'macro' field
 % - no labels, they were translated in pc values.
@@ -804,7 +816,7 @@ lookup(char *symb, int v)
             if(memcmp(s->name, symb, l) == 0)
                 return s;
 
-
+    // else
     s = malloc(sizeof(Sym));
     s->name = malloc(l + 1); // +1 again?
     memmove(s->name, symb, l);
@@ -817,16 +829,12 @@ lookup(char *symb, int v)
     s->link = hash[h];
     hash[h] = s;
 
-    nsymbol++;
+    <<[[lookup()]] profiling>>
     return s;
 }
 @
 %ocaml: use stdlib Hashtbl.find, sad duplicate from 5a/
 
-<<global nsymbol linker>>=
-long	nsymbol;
-@
-% for statistics
 
 % s->link will be described in Safe linking section
 
@@ -856,6 +864,9 @@ struct	Adr
         char*	sval;
     };
 
+    // option<enum<registr>> None = R_NONE
+    short	reg; 
+
     <<[[Adr]] other fields>>
 };
 @
@@ -881,14 +892,12 @@ struct	Adr
 % or can be direct value (for D_CONST)
 
 
-
-<<[[Adr]] other fields>>=
-// option<enum<registr>> None = R_NONE
-short	reg; 
-@
 % again a reg field ... because most operands involve a register
 %// Abused for NOPROF and DUPOK; abused for NOPROF function attributes
 %less: could use a union again?
+
+% Symbol in Asm5 are SB, FP/SP, but FP/SP symbols are really comments
+% what matters is offset.
 
 <<[[Adr]] other fields>>=
 union {
@@ -1396,10 +1405,10 @@ if(INITDAT != 0 && INITRND != 0)
 
 
 \subsection{Main flow}
-\t could have a function link() just like have assemble() in Assembler.nw?
-% use stuff from main? then maybe good, can pass them around
+\l could have a function link() just like have assemble() in Assembler.nw?
+% use stuff from main? then maybe good, can pass them around, more explicit
 
-% todo: later: all those functions that take no args are ugly, they use too
+%ocaml: all those functions that take no args are ugly, they use too
 % many globals, e.g. firstp, lastp, I should really rewrite the code
 % to be more functional.
 
@@ -1629,6 +1638,7 @@ loadlib(void)
 \section{Generating the executable, [[asmb()]]}
 % asmb? asm binary?
 
+%trans:
 % first function to actually use cout!
 
 <<function asmb(arm)>>=
@@ -1670,6 +1680,8 @@ long OFFSET;
 % was  a global but can not just be a local in asmb()
 
 \subsection{Header}
+
+% see Exec struct in Overview.
 
 <<[[asmb()]] header section>>=
 DBG("%5.2f header\n", cputime());
@@ -2732,6 +2744,9 @@ out:
     histfrog[histfrogp-1] = s;
 }
 @
+
+
+
 
 \chapter{Loading Libraries}
 
@@ -3885,6 +3900,8 @@ case ABCASE:
 %   while(q1 != P && q1->as == ANOP) 
 %       q1 = q1->link;
 %   p->cond = q1;
+
+
 
 
 \section{Laying out data, [[dodata()]]}
@@ -10987,6 +11004,14 @@ if(debug['v']) {
     Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
     Bflush(&bso);
 }
+@
+
+<<global nsymbol linker>>=
+long	nsymbol;
+@
+% for statistics
+<<[[lookup()]] profiling>>=
+nsymbol++;
 @
 
 \chapter{Utilities}
