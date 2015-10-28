@@ -25,6 +25,8 @@
 %thx to this manual, better understand linking:
 % - that an object is really a module, the simplest/lowest module abstraction
 %   with defs and uses to link together (for text and data).
+% - disk image of executable and memory image of program are different
+%   hence the -TText
 % - TODO what if have multiple object defining the same global?
 %   int x; int x; in different files? what if one also define value?
 %   what if both define value? DUPOK?
@@ -146,7 +148,7 @@ the one generating finally the {executable}.
 
 There are very few books about linkers
 \n book mentioned later
-as opposed to compilers or kernels. 
+as opposed to a myriad of books on compilers or kernels. 
 Linkers are usually not studied in the computer science curriculum. 
 This is a pity because they are pretty central.
 Indeed, they make the link (no pun intended) between the compiler
@@ -158,10 +160,12 @@ will {load}. Without a linker there is no program to execute.
 Here are a few questions we hope this book will answer:
 \begin{itemize}
 \item What is the format of object files?
+What is the format of libraries?
 
 \item What is the format of executables?
+What is the format of machine instructions?
 
-\item How object files get concatenated together
+\item How object files and libraries get concatenated together
 and patched to form the final executable?
 
 \item What is the difference between a linker and a loader?
@@ -169,14 +173,13 @@ and patched to form the final executable?
 \item How source code get linked and finally loaded in memory? 
 What is the memory image of a program? 
 How it relates to the original source code?
-How a debugger can display debugging information on a binary?
 
-\item What debugging information contains executables? How is it
-sufficient for source-level debuggers to work and to find
-which C source code corresponds a specific binary instruction?
+\item What debugging information contains executables? How
+source-level debuggers find which C source code corresponds 
+to a specific binary instruction?
 
 \end{itemize}
-\l what is position independent code? maybe linker issue
+\l what is position independent code? 
 
 %tags used in this file for different recurring themes:
 %assembler: relates code in the linker to similar code in 5a
@@ -228,6 +231,7 @@ less code in total and also to simpler code.
 %
 The \plan linker does also some deadcode elimination
 \l well just for libraries, and it is not really dead code
+\l and apparently it's pretty common for a linker to do that
 \l also instruction selection? more opti?
 \l This may also allows inter-lib linking-time optimisations!??
 which reduces the size of the binaries. 
@@ -246,7 +250,7 @@ which were ultimately discarded:
 
 \item The GNU Linker [[ld]], part of the [[binutils]] package,
 is probably the most used open source linker.
-It is using the Binary File Descriptor library ([[BFD]])
+It is using the Binary File Descriptor library (BFD)
 to read and write object files using different formats.
 It supports many architectures (ARM, x86, etc)
 as well as many executable and object file formats (ELF, [[a.out]], etc).
@@ -345,7 +349,9 @@ See the \book{Emulator} for more information on [[5i]].
 Because most of this book is made of C source code, 
 you will need to have a good knowledge of 
 the C programming language~\cite{k-r} to understand it.
-\l actually lots of bit manip, and C idioms used in Machine code gen chapter
+In fact, for Chapter~\ref{chap:arm-codegen} which generates
+machine code you will need a very good knowledge of C.
+Indeed the code does lots of bit manipulations and uses many C idioms.
 
 There are very few books explaining how a linker works.
 We can cite {\em Linkers and Loaders}~\cite{ll}
@@ -374,11 +380,11 @@ most of this book.
 For the machine code generation part though, in Chapter~\ref{chap:arm-codegen},
 we highly recommend to print the excellent one page
 colorful ARM reference guide
-\furl{http://re-eject.gbadev.org/files/armref.pdf}.
+\url{http://re-eject.gbadev.org/files/armref.pdf}.
 It will help you to visually understand the binary format of the
 instructions. This guide will be very helpful
 to understand the code doing bit manipulations to generate
-different parts of the instruction.
+different parts of the machine instruction.
 %we recommend to read the \book{Emulator} to fully understand
 %the semantics of some instructions.
 
@@ -389,8 +395,7 @@ different parts of the instruction.
 
 Most of this document is actually source code from Plan9, so
 those parts are copyright by Lucent Technologies Inc.
-The prose is mine and is licensed under the GNU Free Documentation
-License.
+The prose is mine and is licensed under the \license.
 
 \section{Acknowledgments}
 
@@ -408,50 +413,157 @@ who wrote in some sense most of this book.
 
 \section{Linker principles}
 
-%https://en.wikipedia.org/wiki/Linker_%28computing%29
+\n what, why
+A {\em linker} is a program which takes as input multiple
+{object files} and {combine} them to form an {executable}.
+\n combine will be explained later
+%dup: from Assembler.nw principles
+An {\em object file} is really the simplest form of
+a {\em module}. It packs code, data, and information
+about {exported} and {imported} entities.
+Object files are generated by {assemblers} and {compilers}.
+%
+An {\em executable} is a file containing machine instructions
+as well as data. The code and data are stored in different
+parts of the file called {\em sections}. The size and location
+of those sections are stored at the beginning of the file
+in a part called the {\em header}. There are different kinds of headers
+corresponding to different kinds of {\em executable formats}. In this
+book we will focus on the [[a.out]] format which is very simple.
+%
+Thanks to the header, a part of the kernel called the {\em loader}
+can know where the code and data are stored in the executable
+file as well as its entry point. The loader, 
+when instructed by the [[exec()]] system call,
+can then load in memory the different sections of 
+the executable file and start executing its code.
 
-% principle: link together object files. Link defs to uses.
-% Resolve external symbols references.
-% An object is really the simplest/lowest module abstraction.
+\n how
+Figure~\ref{fig:linker-overview} gives an overview of the linking
+process.
+%
+The linker first {\em concatenates} the code parts of the 
+different object files together 
+to form the {\em code section} ([[C1]] to [[C4]]). 
+It does the same for the data 
+to form the {\em data section} ([[D1]] and [[D2]]).
+%
+Then, it links the {\em uses} of {symbols} in those code (or data) parts,
+e.g. the call to [[fbar]] in [[C1]],
+to their {\em definitions} in possibly other code (or data) parts,
+here the definition of [[fbar]] in [[C2]].
+This is also called {\em resolving} the references to external symbols.
+%
+The linker can do so because once all the code parts are contatenated together, 
+the final {addresses} of the different {entities} can be known. 
+\l actually can need fixpoing on some archi, hmm
+So, in Figure~\ref{fig:linker-overview} the call to [[fbar]]
+can be transformed in a machine instruction to go to the
+address 100 where the code of [[fbar]] resides (assuming [[fbar]]
+was the first procedure in [[bar.5]] and so [[C2]]).
+\l actually disk image of executable does not necessarily match memory image
+\l so will probably be instead 4096 plus 32 plus 100
+
+Another important operation done by the linker is called {\em relocation}.
+%
+Remember from the \book{Assembler} that [[5a]] can resolve
+the use of {labels} in jump instructions as both the definitions and uses of
+those labels must be in the same file. The instructions generated
+for those jumps {assume} though that the code of the program was
+loaded at the memory address 0. 
+\l unless relative jump, but ARM can't do that
+For instance, to jump to
+a label [[foo]] which happens to be defined just before the 30th instruction 
+in a program [[foo.s]], 
+the instruction [[JMP 30]] will be generated in the object file,
+\l because 5a use virtual PC
+as shown in Figure~\ref{fig:linker-overview} for [[foo.5]].
+%
+Once the code of object files are concatenated together and put
+after the header, the linker must {\em relocate} 
+the jump instructions
+\l unless position independent code in which case no need relocation
+to take into account the new memory address origin
+where the object code containing the jump will be loaded.
+For our previous example, the linker generated
+the relocated instruction [[JMP 62]] in 
+Figure~\ref{fig:linker-overview} as [[C1]] is after the executable
+header which uses 32 bytes.
+\t and again disk image != memory image so probably JMP 4096 plus 32 plus 30
+\l and again can have fixpoint issue, and relaxation hints (cf wikipedia linker)
+%
 % Also compute textsize, datasize, etc and adjust addresses.
-% {Sections}
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+  lib.a------------+
+  |                |
+  |y.5------------+|
+  |+--------------+|
+  ||      D3      ||
+  |+--------------+|                      +------------+
+  ||      C5      ||                      |            |
+  |+--------------+|--+                   |  Metadata  |
+  |x.5------------+|  |                   |            |
+  |+--------------+|  |                   X------------+260
+  ||      C4      ||  |                  /|     D2     |
+  ||TEXT util     ||  |     Data section| +------------+240
+  |+--------------+|  |                  \|     D1     |
+  +----------------+  |                   X------------+220
+                      |                  /|     C4     |
+   bar.5----------+   |   +-----------+ / |            |
+   +--------------+   |   |  linker   | | +------------+200
+   |      C3      |   +-->|    (5l)   |-+>|     C3     |
+   |... CALL util |   |   +-----------+ | |.. CALL 200 |
+   +--------------+   |                 | +------------+150
+   |      D2      |---+                 / |     C2     |
+   +--------------+   |    Code section|  |            |
+   |      C2      |   |                 \ +------------+100
+   |TEXT fbar     |   |                 | |.. CALL 100 |
+   +--------------+   |                 \ |     C1     |
+                      |                  \|... JMP 62  |
+   foo.5----------+   |                   X------------+32
+   +--------------+   |                   |   header   |
+   |      D1      |   |                   |  (a.out)   |
+   +--------------+   |                   +------------+0
+   |... CALL fbar |---+
+   |      C1      |
+   |... JMP 30    |
+   +--------------+
+
+Input object files and                  Output executable
+       library
+\end{verbatim}
+\caption{Linker process overview}\label{fig:linker-overview}
+\end{figure}
 
 % ancestor is really CAT :) see bootstrapping from scratch
 %  and in the end ld is a kind of CAT too
-% but no separate compilation advantage! 
-% library ar file also speedup things.
 % MMIXAL actually neglect linker and instead assume linker = cat :) same
 %  for fbas. Now that memory is cheap, can do it
+% but no separate compilation advantage! 
 
-%figure: like a train, some wagons, and inside some unresolved references
-% and after linking see all the wagons really after each other and
-% the links resolved.
-% C1, D2,  C2, D2,   LIB1, ... -> C1C2LIB1/C1 D1D2
-% Also agglomerate the code, and the data of the different modules together,
-% and pack them (so actually it reorders subparts of the wagon ...).
-\n Put two assembly file with symbols defined and used, and how resolved
-\n abd how relocate?
+% also inconvenient.
+% library ar file also speedup things. essentially agglomerate of objects.
+% link only what is needed usually.
 
-% why the term loader instead of linker?
+
+
+% linker and loader strongly connected, just like assembler and linker.
+% Indeed one produces what the other consumes.
+% In fact early linker were called loader as doing directly.
+\l also linkage editor, etc.
+% With dynamic linking even more fuzzy lines.
 % because related when use dynamic linking. One part of linking
-% is done by the loader, so they are interconnected. But for plan9
+% is done by the loader, so they are interconnected. load-time, link-time.
+
+% For plan9
 % static linking only so can separate. Loader is in kernel.
-% (maybe because it loads the objects and the libs and then link them
-% (but first it "loads" them))
-% but linker setups things for loader, code section, data section, etc
+% Linker setups things for loader, code section, data section, etc
 % and loader is pretty simple, just load/copy (or actually lazy load/copy).
-
-% For plan9 the linker is also generating the
-% ISA binary code (what was usually done by the assembler)).
-
 % what about dynamic linking? see Advanced topics chapter.
 
-% relocation! important concept
-
-% executable format. object format.
-
 % more info, cite, full book on the subject
-
 % many post on linkers or executables, show missing part in curriculum:
 % - http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
 % - http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
@@ -466,15 +578,8 @@ who wrote in some sense most of this book.
 
 % command line interface? -o
 % also important -TText, see Kernel.nw
+% virtual memory. Relocation!
 
-<<function usage, linker>>=
-void
-usage(void)
-{
-    diag("usage: %s [-options] objects", argv0);
-    errorexit();
-}
-@
 % also can give libraries, which are really a file encapsulating
 % a set of objects (like tar). Archive.
 
@@ -1259,6 +1364,15 @@ out:
 %$
 
 
+<<function usage, linker>>=
+void
+usage(void)
+{
+    diag("usage: %s [-options] objects", argv0);
+    errorexit();
+}
+@
+
 <<[[main()]] sanity check cout>>=
 if(cout < 0) {
     diag("cannot create %s: %r", outfile);
@@ -1274,7 +1388,7 @@ case 'o':
     break;
 @
 
-\subsection{Executable format}
+\subsection{Executable format choice}
 
 % -H executable format (header type)
 <<global HEADTYPE>>=
@@ -10923,7 +11037,7 @@ void mylog(char *fmt, ...) {
 @
 %pad: I introduced that
 
-\section{Object loading debugging, [[5l -W]]}
+\section{Objects loading debugging, [[5l -W]]}
 % print object code when loading
 
 %ex: of output:
