@@ -38,7 +38,7 @@ static	int	maxlibdir = 0;
 void
 usage(void)
 {
-    printf("usage: %s [-options] objects", argv0);
+    print("usage: %s [-options] objects", argv0);
     errorexit();
 }
 /*e: function usage, linker */

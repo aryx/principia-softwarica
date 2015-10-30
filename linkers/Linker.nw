@@ -783,12 +783,14 @@ $ 5l hello2.5 world.5 /arm/lib/libc.a -o hello
 $ ./hello
 hello world
 \end{verbatim}
+\l footnote will see otherway pass C library Chapter X
 
 \begin{verbatim}
 $ nm hello.5
 T main
 T exit
 U hello
+
 $ nm world.5
 D hello
 \end{verbatim}
@@ -1448,7 +1450,7 @@ Prog*	datap = P;
 
 
 % When iterate over all instrs, if the instr is a ATEXT then store it here.
-% It's probably for error message, to say in which procedure we currently are.
+% very useful for error message, to say in which procedure we currently are.
 <<global curtext>>=
 //option<ref<Prog>> where Prog.as == ATEXT
 Prog*	curtext = P;
@@ -1587,7 +1589,7 @@ out:
 void
 usage(void)
 {
-    printf("usage: %s [-options] objects", argv0);
+    print("usage: %s [-options] objects", argv0);
     errorexit();
 }
 @
@@ -2162,6 +2164,7 @@ if(debug['a']) {
     Bflush(&bso);
 }
 @
+% -a  machine code generation debugging?
 
 \subsection{Data section}
 
@@ -3622,6 +3625,9 @@ addlib(char *obj)
 
 
 
+
+
+
 \chapter{Resolving}
 
 %trans:
@@ -3654,13 +3660,13 @@ dotext();
 % pointer to link a src to it's dest, and then far later assign
 % a absolute concrete pc to the instructions, then easy.
 
-% Note that there is a mutual recursive issue. To layout code
+% !!!! Note that there is a mutual recursive issue!!!!! To layout code
 % we need to know where the adress of the variables, but 
 % for that we need to know what is INITDAT but INITDAT is
 % after the text so need to layout the text and the size
 % of some instructions depends on the location of the data ...
 % Solved with the (SB) and R12 trick for the ARM.
-
+% otherwise? need fixpoint?
 
 %old:
 %   patch();
@@ -3669,7 +3675,6 @@ dotext();
 %   follow();
 %   if(firstp == P)
 %       goto out;
-
 %   noops();
 %   span();
 %
@@ -4469,6 +4474,7 @@ dotext(void)
     DBG("tsize = %lux\n", textsize);
 }
 @
+%old: was called span()
 %less: use orig instead of 'c' so match more dodata()?
 % but here it's really a concrete location whereas for dodata()
 % it's relative to INITDAT that we actually compute here.
@@ -4647,15 +4653,16 @@ xdefine(char *p, int t, long v)
 
 
 
+
+
 \chapter{Machine Code Generation (ARM)}
 \label{chap:arm-codegen}
 
+%dup:
 % The code generation is done by 5l, not 5a, surprisingly!
-% Why? Because it allows more optimisations? cross libs? as in llvm?
-% also more compact and simpler object format? and more cross platform?
 
 \section{[[Optab]] and [[optab]]}
-% hmm put in core DS? but it's really specific to the code generation chapter
+\n could put in core DS but it's really specific to the code generation chapter
 
 <<struct Optab(arm)>>=
 struct	Optab
@@ -4695,6 +4702,8 @@ struct	Optab
 % some fake/virtual opcodes that actually expands to 
 % multiple instructions, hence the size field above.
 
+% Also because of 12 bits immediate need special tricks, pool(),
+% RCON vs LCON, etc.
 
 %\section{[[optab]]}
 
@@ -4722,13 +4731,15 @@ Optab	optab[] =
 
 
 
-\section{[[Class]] and [[aclass()]]}
+\section{[[Operand_class]]}
 % was in core DS, but I think better here with Optab.
 
+\subsection{Basic classes}
 
-% seems called the class, see aclass(), a more precise operand_kind?
+% seems called the class, see aclass(), a more precise operand_kind
+% closer to the machine constraint as we will see in next section
 <<enum cxxx(arm)>>=
-enum classx {
+enum Operand_class {
     C_NONE		= 0,
 
     C_REG,
@@ -4743,6 +4754,7 @@ enum classx {
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };
 @
+%old: I renamed Operand_class, consistent with Operand_kind. C vs D.
 %diffs with operand_kind:
 % - OREG splitted in many xxxOREG and xxxEXT (SB), xxAUTO (FP, SP)
 % - D_CONST splitted in many xxxCON
@@ -4759,6 +4771,7 @@ enum classx {
 %
 
 
+\subsection{[[aclass()]]}
 
 <<function aclass(arm)>>=
 int
@@ -4793,144 +4806,7 @@ aclass(Adr *a)
 % is close and so could be stored in a half-word, or if
 % it's far away.
 
-
-
-\section{[[SB/R12]], Half, Small, Large, Rot, Neg, and [[aclass()]]}
-% those are some kinds of optimisations no?
-
-% The load/store ARM instructions take 2 registers (src_val, dst_address)
-% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
-% do negative offset with a bit).
-% That means that if you do  'MOVW $1, myglobal', naively you'll have to
-% encode it as 3 instructions:
-%     MOV $1, R1
-%     MOV $myglobal, R2
-%     STR R1, R2.
-% But if myglobal is not that far from address 0 and you have a special
-% register reserved that always contain 0 (e.g. R12),
-% then you could use the 12bits offset instead of using a register
-% and just do
-%     MOV $1, R1
-%     STR R1, R12+$myglobal
-% If you have a special register which always contain the value 1, 
-% then you do even better with just do 
-%     STR R0, R12+$myglobal! 
-% which is 3 times faster (well if the global address is in a cache).
-%
-% In practice the first page of the address space is always reserved
-% so it's better to store in R12 a bigger value. R12 will actually
-% be set to INITDAT+BIG.
-
-% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
-
-\subsection{[[SB/R12]]}
-
-<<[[dodata()]] define special symbols>>=
-xdefine("setR12", SDATA, 0L+BIG);
-@
-% the value here is a location for DATA, so there is
-% an implicit +INITDAT. Has to be, otherwise would have a mutually
-% recursive issue between dodata and dotext because dotext
-% need the layout of data, but this layout must start after the
-% text ...
-
-<<constant BIG>>=
-BIG		= (1<<12)-4,
-@
-% lib_core/libc/arm/main9.s will do 
-%	MOVW	$setR12(SB), R(sb)
-% before anything.
-
-% Note again that we cannot override setR12 address with our own data
-% because of the use of lots of symbols. It's the same for btext,
-% bdata, etc. Here we care actually only about the address, not the
-% content at that address.
-
-% why -4? otherwise could not reach the first data? offset
-% can be negative or positive so actually can cover 2 pages of
-% small data variables!
-
-
-\subsection{Immediate address}
-
-<<function immaddr(arm)>>=
-long
-immaddr(long v)
-{
-    if(v >= 0 && v <= 0xfff)
-        return (v & 0xfff) |
-            (1<<24) |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xfff && v < 0)
-        return (-v & 0xfff) |
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-% rename immsmall?
-% why 0xfff? = 4095 so a page.
-
-
-\subsection{Half immediate address}
-
-<<function immhalf(arm)>>=
-int
-immhalf(long v)
-{
-    if(v >= 0 && v <= 0xff)
-        return v |
-            (1<<24)  |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xff && v < 0)
-        return (-v & 0xff)|
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-% seems identical to immhalf no? no now it's 0xff! not 0xfff
-
-\subsection{Small (possibly rotated) immediate values}
-% small immediate (rotated) address
-
-% see Machine.nw and the ARM refcard to understand the code below.
-% RCON is for small immediate value, or rotated things of small 
-% immediate value.
-% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
-% hence the code below.
-
-<<function immrot(arm)>>=
-long
-immrot(ulong v)
-{
-    int i;
-
-    for(i=0; i<16; i++) {
-        if((v & ~0xff) == 0)
-            return (i<<8) | v | (1<<25);
-        v = (v<<2) | (v>>30);
-    }
-    return 0;
-}
-@
-% >> >>
-
-% there is code like
-%    o1 |= immrot(instoffset);
-% the 1<<25 means we are in the  i,r,r  case
-
-
-\subsection{[[instoffset]]}
-
-<<global instoffset(arm)>>=
-long	instoffset;
-@
-% instruction offset?
-% really needs to be a global? can't be just a local to aclass()?
-
-
-\subsection{[[aclass()]] refinments}
+\subsection{Refined classes}
 
 \subsubsection{[[D_OREG]]}
 
@@ -5040,7 +4916,7 @@ case D_NONE:
 
 
 
-\subsubsection{[[D_CONST]]}
+\subsection{[[D_CONST]]}
 
 <<[[aclass()]] switch type cases>>=
 case D_CONST:
@@ -5060,6 +4936,7 @@ C_LCON,
 %dead: C_SCON,		/* 0xffff */
 %in the end NCON is not different from LCON when you look at optab,
 % so perhaps it could be removed.
+%note that LCON is more "general" than the other, see cmp() later.
 
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_NONE:
@@ -5181,6 +5058,148 @@ aconsize:
 %            return C_LCON;
 %        }
 %        return C_GOK;
+
+
+
+\section{[[SB/R12]], Half, Small, Large, Rot, Neg}
+% Those are some kinds of optimisations? a bit but also need that
+% because expressivity Asm5 greater than what ARM can actually do sometimes.
+
+% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
+
+
+% The load/store ARM instructions take 2 registers (src_val, dst_address)
+% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
+% do negative offset with a bit).
+% That means that if you do  'MOVW $1, myglobal', naively you'll have to
+% encode it as 3 instructions:
+%     MOV $1, R1
+%     MOV $myglobal, R2
+%     STR R1, R2.
+% But if myglobal is not that far from address 0 and you have a special
+% register reserved that always contain 0 (e.g. R12),
+% then you could use the 12bits offset instead of using a register
+% and just do
+%     MOV $1, R1
+%     STR R1, R12+$myglobal
+% If you have a special register which always contain the value 1, 
+% then you do even better with just do 
+%     STR R0, R12+$myglobal! 
+% which is 3 times faster (well if the global address is in a cache).
+%
+% In practice the first page of the address space is always reserved
+% so it's better to store in R12 a bigger value. R12 will actually
+% be set to INITDAT+BIG.
+
+
+\subsection{[[SB/R12]]}
+
+<<[[dodata()]] define special symbols>>=
+xdefine("setR12", SDATA, 0L+BIG);
+@
+% the value here is a location for DATA, so there is
+% an implicit +INITDAT. Has to be, otherwise would have a mutually
+% recursive issue between dodata and dotext because dotext
+% need the layout of data, but this layout must start after the
+% text ...
+
+<<constant BIG>>=
+BIG		= (1<<12)-4,
+@
+% >>
+% lib_core/libc/arm/main9.s will do 
+%	MOVW	$setR12(SB), R(sb)
+% before anything.
+
+% Note again that we cannot override setR12 address with our own data
+% because of the use of lots of symbols. It's the same for btext,
+% bdata, etc. Here we care actually only about the address, not the
+% content at that address.
+
+% why -4? otherwise could not reach the first data? offset
+% can be negative or positive so actually can cover 2 pages of
+% small data variables!
+
+
+\subsection{Immediate address}
+
+<<function immaddr(arm)>>=
+long
+immaddr(long v)
+{
+    if(v >= 0 && v <= 0xfff)
+        return (v & 0xfff) |
+            (1<<24) |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xfff && v < 0)
+        return (-v & 0xfff) |
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+% rename immsmall?
+% why 0xfff? = 4095 so a page.
+
+
+\subsection{Half immediate address}
+
+<<function immhalf(arm)>>=
+int
+immhalf(long v)
+{
+    if(v >= 0 && v <= 0xff)
+        return v |
+            (1<<24)  |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xff && v < 0)
+        return (-v & 0xff)|
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+% seems identical to immhalf no? no now it's 0xff! not 0xfff
+
+\subsection{Small (possibly rotated) immediate values}
+% small immediate (rotated) address
+
+% see Machine.nw and the ARM refcard to understand the code below.
+% RCON is for small immediate value, or rotated things of small 
+% immediate value.
+% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
+% hence the code below.
+
+<<function immrot(arm)>>=
+long
+immrot(ulong v)
+{
+    int i;
+
+    for(i=0; i<16; i++) {
+        if((v & ~0xff) == 0)
+            return (i<<8) | v | (1<<25);
+        v = (v<<2) | (v>>30);
+    }
+    return 0;
+}
+@
+% >> >>
+
+% there is code like
+%    o1 |= immrot(instoffset);
+% the 1<<25 means we are in the  i,r,r  case
+
+
+\subsection{[[instoffset]]}
+
+<<global instoffset(arm)>>=
+long	instoffset;
+@
+% instruction offset?
+% really needs to be a global? can't be just a local to aclass()?
+
+
 
 
 \subsection{Pool}
@@ -5883,6 +5902,9 @@ case 0:		/* pseudo ops */
 % to go.
 
 \subsection{[[AWORD]]}
+
+% used for limitations of 5a, but also for addpool!
+% to deal with the ARM constraints on range of immediate values, addresses.
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AWORD:
@@ -6919,8 +6941,14 @@ case ARFE:
 
 <<[[optab]] entries>>=
 { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4, 0 },
+{ ASWI,		C_NONE,	C_NONE,	C_LCON,		10, 4, 0 },
+{ ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
 @
-%old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
+%pad: I added the entry for LCON to allow SWI $0 which make more sense to me
+% than SWI 0 which was used in 9syscall/mkfile originally
+%old: I used to comment the LOREG entry because SWI was not having
+% any argument in Assembler.nw, but now it has back an argument so
+% I put it back.
 
 <<[[asmout()]] switch on type cases>>=
 case 10:	/* swi [$con] */
@@ -10793,8 +10821,11 @@ case 63:	/* bcase */
 % how ugly it is for x86:
 % http://ewontfix.com/18/
 
+
+
 \chapter{Conclusion}
 
+%dup: (and adapted) Assembler.nw
 You now know how the \plan ARM linker [[5l]] works,
 to the smallest details, and more generally how many 
 linkers works.
@@ -11187,6 +11218,7 @@ Dconv(Fmt *fp)
 }
 @
 
+%old:
 %    case D_OCONST:
 %        sprint(str, "$*$%N", a);
 %        if(a->reg != R_NONE)
@@ -11369,6 +11401,10 @@ diag(char *fmt, ...)
 }
 @
 % ARM does not have the && !debug['A'], but probablt error no?
+
+\section{[[5l -A]]}
+% get all errors
+
 
 
 \chapter{Profiling}
@@ -11792,9 +11828,15 @@ rnd(long v, long r)
 \chapter{[[5l]] in OCaml}
 \label{chap:5l-ocaml}
 
-
 % yeah!!
 
+% design decisions: 
+% - no optimisations, space or speed, which guides many of the
+%   other decisions below.
+% - object file is marshalled form of ocaml AST. Far simpler!
+%   (but less open to other languages; could use JSON but no ADT in JSON)
+% - ??
+% This decrements size of code, but also size of needed explanations!
 
 
 

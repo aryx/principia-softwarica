@@ -242,7 +242,7 @@ enum optab_flag {
 };
 /*e: enum optab_flag(arm) */
 /*s: enum cxxx(arm) */
-enum classx {
+enum Operand_class {
     C_NONE		= 0,
 
     C_REG,

@@ -156,6 +156,8 @@ Optab	optab[] =
     { ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4, 0 },
     /*x: [[optab]] entries */
     { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4, 0 },
+    { ASWI,		C_NONE,	C_NONE,	C_LCON,		10, 4, 0 },
+    { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
     /*x: [[optab]] entries */
     { ARFE,		C_NONE,	C_NONE,	C_NONE,		41, 4, 0 },
     /*x: [[optab]] entries */
