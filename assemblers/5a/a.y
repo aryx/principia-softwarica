@@ -178,7 +178,7 @@ inst:
 /*
  * SWI
  */
-| LSWI cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+| LSWI cond gen { outcode($1, $2, &nullgen, R_NONE, &$3); }
 /*x: inst rule(arm) */
 /*
  * TEXT/GLOBL

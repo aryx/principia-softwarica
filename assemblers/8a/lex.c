@@ -1020,10 +1020,10 @@ outhist(void)
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, AHISTORY>>8);
 
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
+        Bputc(&obuf, h->global_line);
+        Bputc(&obuf, h->global_line>>8);
+        Bputc(&obuf, h->global_line>>16);
+        Bputc(&obuf, h->global_line>>24);
 
         zaddr(&nullgen, 0);
         zaddr(&g, 0);

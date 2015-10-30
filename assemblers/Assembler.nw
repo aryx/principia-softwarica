@@ -771,7 +771,7 @@ We now have enough background to present the [[helloworld.s]] program:
 28	        MOVW R1, 20(R13)
 29	        MOVW $9 /*PWRITE*/, R0
 30	        /* system call */
-31	        SWI
+31	        SWI $0
 32	        BL exit(SB)
 33	        RET /* not reached */
 34	loop:
@@ -784,7 +784,7 @@ We now have enough background to present the [[helloworld.s]] program:
 41	        MOVW R1, 4(R13)
 42	        MOVW $3 /*EXITS*/, R0
 43	        /* system call */
-44	        SWI
+44	        SWI $0
 45	        RET /* not reached */
 46	        
 47	                        
@@ -798,7 +798,6 @@ We now have enough background to present the [[helloworld.s]] program:
 \t can do with SP instead of R13 so less leaky abstraction 4(R13)?
 \l note that we call PWRITE syscall directly, not pwrite(), subtle
 
-\t put back argument to SWI but at least use dollar 0, not just 0
 
 %dup: from intro/getting-started
 To assemble, link, and execute this program, simply do
@@ -1155,11 +1154,17 @@ the syscall ``code''. The magic constant value [[9]]
 at Line~29 is the code corresponding to the [[PWRITE]]
 system call. See the file [[lib_core/libc/9syscall/sys.h]] 
 which defines all those syscall codes.
-\n could actually #include and use PWRITE but less feature to explain that way
-\n R0 is not the first argument anymore
+\n could actually #include this file and use PWRITE but 
+\n  but better to have less feature to explain in tutorial (here cpp)
+\n R0 is not the first argument anymore!
 The [[SWI]] instruction Line~31 then performs the system call
 and jumps in the kernel.
-\l normally SWI has one operand in ARM, but in plan9 use R0 for that
+%
+[[SWI]] has one operand in the ARM used to specify which entry
+in the {\em interrupt table} to go to, but \plan instead
+uses [[R0]] for that purpose. So, the operand of [[SWI]] is
+actually not used under \plan, hence the constant 0 passed
+to [[SWI]] in our program.
 \l need extra words before arguments for syscall too? because C convention?
 
 \subsection{Function calls}
@@ -6555,9 +6560,12 @@ ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(SP), R15
 \l interrupts and exceptions
 
 The software interrupt instruction [[SWI]] is really a form of
-function call but to a fixed special code area setup by the kernel,
-which is why it does not take any operand:
-\l interrupt table normally? so take an argument. In ARM there is an argument.
+function call but to a fixed set of special routines setup by the kernel.
+%dup: from tutorial
+Normally the argument to [[SWI]] specifies an entry in an
+{interrupt table} but under \plan this argument is actually not
+\t really that? and linker code generates what?
+used and instead [[R0]] is used to store the syscall code.
 
 <<[[Opcode]] cases, interrupt opcodes>>=
 ASWI, // syscall
@@ -6570,19 +6578,15 @@ ASWI, // syscall
 /*
  * SWI
  */
-| LSWI cond { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
+| LSWI cond gen { outcode($1, $2, &nullgen, R_NONE, &$3); }
 @
-%old: | LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
-% but not sure it needs an argument in plan9 context,
-% and anyway was doing stupid things like SWI 0  in 9syscall/mkfile
-% which was weird, at least should be SWI $0
-%old:
-%<<inst rule(arm)>>=
-%| LSWI cond gen { outcode($1, $2, &nullgen, R_NONE, &nullgen); }
-%@
-%%$
-%% just so can test things with kencc/5a, ignore actually the last argument
-%% otherwise the linker will fail.
+%$
+%old: was | LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
+% but in plan9 the argument is not used so I originally simplified by
+% removing the operand. Moreover 9syscall/mkfile was doing weird things 
+% like SWI 0; at least should be SWI $0, so it made sense to simplify.
+% But then it was creating differences with kencc, and anyway in the ARM
+%  it has an argument so I put back the arg.
 
 %kernel:
 [[SWI]] is the fundamental building block for having a
@@ -6949,6 +6953,10 @@ or \url{http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/}
 which is an excellent tutorial on the topic.
 \l also linker book
 \l "so you can set, clear, or toggle any bit with one instruction"
+
+\t so what happens if cant be represented? use Pool, in Linker, and REGTMP.
+\t and so actually generate 2 instructions. A bit like virtual then!
+\t but nice that Asm5 hides again those constraints.
 
 [[MOV]]s instructions, which use the [[gen]] non-terminal
 as operand, which derives [[ximm]], can also take a constant as an
@@ -7552,7 +7560,7 @@ in an absolute (virtual) code address thanks to [[pc]]):
 % no $ in front of con here?
 % was used in 9syscall for 'SWI 0' but not sure what it meant.
 % how can be D_OREG when there are no registers involved.
-% I removed the rule, and rewrote calls to SWI to just be SWI
+% I removed the rule, and rewrote calls to SWI to just be SWI $0
 
 %old:
 %<<gen rule>>=
@@ -10039,6 +10047,8 @@ REGTMP =	11,
 @
 % hmm regxxx is not really an enum as REGREG = REGARG, but still useful.
 
+% REGTMP used for pool in Linker, so very useful!
+
 %old:    /* used by the loader for thumb code */
 %    REGTMPT =		7,
 % no REGFP??
@@ -10148,7 +10158,7 @@ if(s && strcmp(s->name, "lib") == 0) {
 
     h = alloc(sizeof(Hist));
     h->filename = hp;
-    h->line = lineno;
+    h->global_line = lineno;
     h->local_line = -1; // special mark, ugly
 
     h->link = H;

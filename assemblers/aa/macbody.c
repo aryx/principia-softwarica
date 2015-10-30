@@ -794,7 +794,7 @@ macprag(void)
 
         h = alloc(sizeof(Hist));
         h->filename = hp;
-        h->line = lineno;
+        h->global_line = lineno;
         h->local_line = -1; // special mark, ugly
 
         h->link = H;
