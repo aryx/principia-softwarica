@@ -25,7 +25,7 @@ struct	Gen
         char	sval[8];
     };
     // option<enum<registr>>, None = R_NONE
-    short	reg;
+    short	reg; // abused also to store a size for DATA
 
     /*s: [[Gen]] other fields */
     // option<ref<Sym>>, ref owned by hash

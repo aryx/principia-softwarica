@@ -4,13 +4,12 @@
 #define	NSYM	50
 /*e: constant NSYM */
 
-// was originally in a xxx/y.out.h (but was always the same in all archi)
+// was originally in some xxx/y.out.h, but was always the same in all archi
 // hence the factorization here
+/*s: struct ieee */
 /*
  * this is the simulated IEEE floating point
  */
-typedef	struct	ieee	Ieee;
-/*s: struct ieee */
 struct	ieee
 {
     long	l;	/* contains ls-man	0xffffffff */
@@ -19,4 +18,5 @@ struct	ieee
                     ms-man	0x000fffff */
 };
 /*e: struct ieee */
+typedef	struct	ieee	Ieee;
 /*e: include/common.out.h */

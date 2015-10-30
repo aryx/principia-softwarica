@@ -39,6 +39,7 @@ pushio(void)
         yyerror("botch in pushio");
         errorexit();
     }
+    // save current position in includer
     i->p = fi.p;
     i->c = fi.c;
 }
@@ -634,45 +635,54 @@ yyerror(char *a, ...)
 void
 prfile(long l)
 {
-    int i, n;
-    Hist *h;
     Hist a[HISTSZ];
+    int n = 0;
+    Hist *h;
+    int i;
     long d;
 
-    n = 0;
+    /*s: [[prfile()]] compute a and n */
     for(h = hist; h != H; h = h->link) {
-        if(l < h->line)
-            break;
-
-        if(h->filename) {
-            if(h->local_line == 0) {
-                if(n >= 0 && n < HISTSZ)
-                    a[n] = *h;
-                n++;
-            } else {
-                if(n > 0 && n < HISTSZ)
-                    if(a[n-1].local_line == 0) {
+        if(l >= h->global_line) {
+            if(h->filename) {
+                // a #include
+                if(h->local_line == 0) {
+                    if(n >= 0 && n < HISTSZ)
                         a[n] = *h;
-                        n++;
-                    } else
-                        a[n-1] = *h;
-           }
-        }
-        // a pop
-        else {
-            n--;
-            if(n >= 0 && n < HISTSZ) {
-                d = h->line - a[n].line;
-                for(i=0; i<n; i++)
-                    a[i].line += d;
+                    n++;
+                } 
+                /*s: [[prfile()]] compute a and n, when line directive */
+                // a #line
+                else {
+                    if(n > 0 && n < HISTSZ)
+                        // previous was a #include
+                        if(a[n-1].local_line == 0) {
+                            a[n] = *h;
+                            n++;
+                        } else
+                            a[n-1] = *h; // overwrite previous #line
+                }
+                /*e: [[prfile()]] compute a and n, when line directive */
+            }
+            // a pop
+            else {
+                n--;
+                /*s: [[prfile()]] compute a and n, when pop, adjust parents */
+                if(n >= 0 && n < HISTSZ) {
+                    d = h->global_line - a[n].global_line;
+                    for(i=0; i<n; i++)
+                        a[i].global_line += d;
+                }
+                /*e: [[prfile()]] compute a and n, when pop, adjust parents */
             }
         }
     }
+    /*e: [[prfile()]] compute a and n */
     if(n > HISTSZ)
         n = HISTSZ;
     for(i=0; i<n; i++)
         print("%s:%ld ", a[i].filename, 
-                         (long)(l - a[i].line + a[i].local_line + 1));
+                         (long)(l - a[i].global_line + a[i].local_line + 1));
 }
 /*e: function prfile */
 

@@ -76,7 +76,7 @@ lookup(char *symb, int v)
             if(memcmp(s->name, symb, l) == 0)
                 return s;
 
-
+    // else
     s = malloc(sizeof(Sym));
     s->name = malloc(l + 1); // +1 again?
     memmove(s->name, symb, l);
@@ -89,7 +89,9 @@ lookup(char *symb, int v)
     s->link = hash[h];
     hash[h] = s;
 
+    /*s: [[lookup()]] profiling */
     nsymbol++;
+    /*e: [[lookup()]] profiling */
     return s;
 }
 /*e: function lookup */

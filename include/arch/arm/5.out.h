@@ -1,6 +1,6 @@
 /*s: include/arm/5.out.h */
 
-// Many of the types below are marshalled in the .5 object files
+// Many of the types below are serialized in the .5 object files
 // so take care when changing those types to not alter the order
 // (or to recompile carefully everything).
 
@@ -30,6 +30,7 @@ enum Register {
 /*s: constant R_NONE(arm) */
 #define R_NONE 16
 /*e: constant R_NONE(arm) */
+
 /*s: enum fregister(arm) */
 enum fregister {
     FREGRET = 0,
@@ -247,7 +248,7 @@ enum sym_kind {
     D_LOCAL,  // stack values (from SP)
     D_PARAM,  // parameter (from FP)
     /*s: sym_kind cases */
-    D_INTERN, // data static variables (from SB)
+    D_INTERN, // local/static entities (from SB)
     /*x: sym_kind cases */
     D_FILE,
     /*x: sym_kind cases */
@@ -267,8 +268,6 @@ enum sym_kind {
 /*s: constant DUPOK(arm) */
 #define DUPOK		(1<<1)
 /*e: constant DUPOK(arm) */
-//other attributes?
-//old: #define	ALLTHUMBS	(1<<2)
 
 /*s: constant C_SCOND(arm) */
 /* scond byte */

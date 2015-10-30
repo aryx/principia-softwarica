@@ -64,7 +64,7 @@ getsym(void)
 
 /*s: function getsymdots */
 Sym*
-getsymdots(int *dots)
+getsymdots(bool *dots)
 {
     int c;
     Sym *s;
@@ -80,7 +80,7 @@ getsymdots(int *dots)
     }
     if(getc() != '.' || getc() != '.')
         yyerror("bad dots in macro");
-    *dots = 1;
+    *dots = true;
     return slookup("__VA_ARGS__");
 }
 /*e: function getsymdots */
@@ -137,13 +137,14 @@ dodefine(char *cp)
     strcpy(symb, cp);
     p = strchr(symb, '=');
     if(p) {
-        *p++ = 0;
+        *p++ = '\0';
         s = lookup();
         l = strlen(p) + 2;	/* +1 null, +1 nargs */
+
         while(l & 3)
             l++;
-
         x = malloc(l);
+
         *x = '\0';
         strcpy(x+1, p);
         s->macro = x;
@@ -230,7 +231,8 @@ macdef(void)
 {
     Sym *s, *a;
     char *args[NARG], *np, *base;
-    int n, i, c, len, dots;
+    int n, i, c, len;
+    bool dots;
     int ischr;
 
     s = getsym();
@@ -279,7 +281,7 @@ macdef(void)
                 *np++ = c;
                 c = getc();
             }
-            *np = 0;
+            *np = '\0';
             for(i=0; i<n; i++)
                 if(strcmp(symb, args[i]) == 0)
                     break;
@@ -565,7 +567,9 @@ toobig:
 void
 macinc(void)
 {
-    int c0, c, i, f;
+    int c0;
+    int c, i;
+    fdt f = -1;
     char str[STRINGSZ], *hp;
 
     c0 = getnsc();
@@ -583,20 +587,19 @@ macinc(void)
             goto bad;
         *hp++ = c;
     }
-    *hp = 0;
+    *hp = '\0';
 
     c = getcom();
     if(c != '\n')
         goto bad;
 
-    f = -1;
     for(i=0; i<ninclude; i++) {
         if(i == 0 && c0 == '>')
             continue;
         strcpy(symb, include[i]);
         strcat(symb, "/");
         if(strcmp(symb, "./") == 0)
-            symb[0] = 0;
+            symb[0] = '\0';
         strcat(symb, str);
 
         f = open(symb, 0);
@@ -607,10 +610,11 @@ macinc(void)
     if(f < 0)
         strcpy(symb, str);
     c = strlen(symb) + 1;
+
     while(c & 3)
         c++;
-
     hp = malloc(c);
+
     memcpy(hp, symb, c);
 
     newio();
@@ -658,17 +662,18 @@ maclin(void)
             break;
         *cp++ = c;
     }
-    *cp = 0;
+    *cp = '\0';
     c = getcom();
     if(c != '\n')
         goto bad;
 
 nn:
     c = strlen(symb) + 1;
+
     while(c & 3)
         c++;
-
     cp = malloc(c);
+
     memcpy(cp, symb, c);
 
     /*s: [[maclin()]] call linehist */
@@ -746,9 +751,8 @@ bad:
 void
 macprag(void)
 {
-    /*s: [[macprag()]] locals */
     Sym *s;
-    /*x: [[macprag()]] locals */
+    /*s: [[macprag()]] locals */
     Hist *h;
     char *hp;
     int c0, c;
@@ -834,6 +838,7 @@ macend(void)
 /*e: function macend */
 
 /*s: function linehist */
+/// (pinit | macinc -> newfile) | (GETC -> filbuf) | maclin -> <>
 void
 linehist(char *f, int local_line)
 {
@@ -852,7 +857,7 @@ linehist(char *f, int local_line)
 
     h = alloc(sizeof(Hist));
     h->filename = f;
-    h->line = lineno;
+    h->global_line = lineno;
     h->local_line = local_line;
 
     //add_list(hist, ehist, h)

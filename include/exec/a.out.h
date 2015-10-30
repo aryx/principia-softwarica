@@ -1,4 +1,7 @@
 /*s: include/a.out.h */
+typedef	struct	Exec	Exec;
+typedef	struct	Sym	Sym;
+
 /*s: struct Exec */
 // a.out header format
 struct	Exec
@@ -19,7 +22,6 @@ struct	Exec
     long	pcsz;		/* size of pc/line number table */
 };
 /*e: struct Exec */
-typedef	struct	Exec	Exec;
 
 /*s: constant HDR_MAGIC */
 #define HDR_MAGIC	0x00008000		/* header expansion */
@@ -47,7 +49,6 @@ typedef	struct	Exec	Exec;
 #define	DYN_MAGIC	0x80000000		/* dlm */
 /*e: constant DYN_MAGIC */
 
-typedef	struct	Sym	Sym;
 /*s: struct Sym a.out.h */
 struct	Sym
 {

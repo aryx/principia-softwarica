@@ -228,12 +228,12 @@ zname(char *n, int symkind, int symidx)
 void
 outopd(Gen *a, int symidx)
 {
-    /*s: [[zaddr()]] locals */
+    /*s: [[zaddr()]] locals(arm) */
     long l;
     char *n;
     Ieee e;
     int i;
-    /*e: [[zaddr()]] locals */
+    /*e: [[zaddr()]] locals(arm) */
 
     Bputc(&obuf, a->type);
     Bputc(&obuf, a->reg);
@@ -243,7 +243,7 @@ outopd(Gen *a, int symidx)
     Bputc(&obuf, a->symkind);
 
     switch(a->type) {
-    /*s: [[zaddr()]] cases */
+    /*s: [[zaddr()]] cases(arm) */
     case D_NONE:
         break;
 
@@ -268,11 +268,11 @@ outopd(Gen *a, int symidx)
             n++;
         }
         break;
-    /*x: [[zaddr()]] cases */
+    /*x: [[zaddr()]] cases(arm) */
     case D_FREG:
     case D_FPCR:
         break;
-    /*x: [[zaddr()]] cases */
+    /*x: [[zaddr()]] cases(arm) */
     case D_FCONST:
         ieeedtod(&e, a->dval);
         Bputc(&obuf, e.l);
@@ -284,14 +284,14 @@ outopd(Gen *a, int symidx)
         Bputc(&obuf, e.h>>16);
         Bputc(&obuf, e.h>>24);
         break;
-    /*x: [[zaddr()]] cases */
+    /*x: [[zaddr()]] cases(arm) */
     case D_REGREG:
         Bputc(&obuf, a->offset);
         break;
-    /*x: [[zaddr()]] cases */
+    /*x: [[zaddr()]] cases(arm) */
     case D_PSR:
         break;
-    /*e: [[zaddr()]] cases */
+    /*e: [[zaddr()]] cases(arm) */
     default:
         print("unknown type %d\n", a->type);
         exits("arg");
@@ -411,31 +411,35 @@ outhist(void)
 {
     Gen g;
     Hist *h;
-    char *p, *op;
+    char *p;
+    /*s: [[outhist()]] locals(arm) */
     char *q;
     int n;
+    /*x: [[outhist()]] locals(arm) */
+    char *op;
+    /*e: [[outhist()]] locals(arm) */
 
     g = nullgen;
     for(h = hist; h != H; h = h->link) {
         p = h->filename;
 
         /*s: [[outhist()]] adjust p and op if p is relative filename */
-        op = nil;
-        if(p && p[0] != '/' && h->local_line == 0 && pathname){
-            if(pathname[0] == '/'){
-                op = p;
-                p = pathname;
-            }
+        if(p && p[0] != '/' && h->local_line == 0 && pathname && pathname[0] == '/') {
+            op = p; // save p
+            p = pathname; // start with cwd
+        } else {
+            op = nil; // start directly with p
         }
         /*e: [[outhist()]] adjust p and op if p is relative filename */
         /*s: [[outhist()]] output each path component as an ANAME */
+        // =~ split("/", p) ...
         while(p) {
             q = strchr(p, '/');
             if(q) {
                 n = q-p;
                 if(n == 0){
                     n = 1;	/* leading "/" */
-                    *p = '/';
+                    *p = '/'; // redundant?
                 }
                 q++;
             } else {
@@ -452,21 +456,23 @@ outhist(void)
                 Bputc(&obuf, '\0');
             }
             p = q;
+            /*s: [[outhist()]] adjust p and op if p was a relative filename */
             if(p == nil && op) {
                 p = op;
                 op = nil;
             }
+            /*e: [[outhist()]] adjust p and op if p was a relative filename */
         }
         /*e: [[outhist()]] output each path component as an ANAME */
         g.offset = h->local_line;
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, Always);
-        Bputc(&obuf, 0); // reg, but could be R_NONE actually
-        Bputc(&obuf, h->line);
-        Bputc(&obuf, h->line>>8);
-        Bputc(&obuf, h->line>>16);
-        Bputc(&obuf, h->line>>24);
+        Bputc(&obuf, 0); // reg, but could be R_NONE too 
+        Bputc(&obuf, h->global_line);
+        Bputc(&obuf, h->global_line>>8);
+        Bputc(&obuf, h->global_line>>16);
+        Bputc(&obuf, h->global_line>>24);
         outopd(&nullgen, 0);
         outopd(&g, 0);
     }

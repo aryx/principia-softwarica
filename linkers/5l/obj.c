@@ -38,7 +38,7 @@ static	int	maxlibdir = 0;
 void
 usage(void)
 {
-    diag("usage: %s [-options] objects", argv0);
+    printf("usage: %s [-options] objects", argv0);
     errorexit();
 }
 /*e: function usage, linker */
@@ -103,6 +103,7 @@ main(int argc, char *argv[])
             HEADTYPE = atolwhex(a);
         /* do something about setting INITTEXT */
         break;
+    /*x: [[main()]] command line processing(arm) */
     case 'T':
         a = ARGF();
         if(a)
@@ -113,11 +114,13 @@ main(int argc, char *argv[])
         if(a)
             INITDAT = atolwhex(a);
         break;
+    /*x: [[main()]] command line processing(arm) */
     case 'E':
         a = ARGF();
         if(a)
             INITENTRY = a;
         break;
+    /*x: [[main()]] command line processing(arm) */
     case 'R':
         a = ARGF();
         if(a)

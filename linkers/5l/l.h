@@ -50,10 +50,10 @@ struct	Adr
         char*	sval;
     };
 
-    /*s: [[Adr]] other fields */
     // option<enum<registr>> None = R_NONE
     short	reg; 
-    /*x: [[Adr]] other fields */
+
+    /*s: [[Adr]] other fields */
     union {
         Sym*	sym;
         Auto*	autom;
@@ -116,10 +116,13 @@ struct	Sym
     char	*name;
     short	version; // for static names, each sym has a different version
 
-    //enum<section>
-    short	type;
     // generic value, e.g. virtual pc for a TEXT procedure, size for GLOBL
     long	value; 
+
+    /*s: [[Sym]] section field */
+    //enum<section>
+    short	type;
+    /*e: [[Sym]] section field */
 
     /*s: [[Sym]] other fields */
     // md5sum of the type of the symbol
@@ -200,7 +203,7 @@ struct	Oprang
 /*e: struct Oprang(arm) */
 
 /*s: enum sxxx(arm) */
-enum section
+enum Section
 {
     SNONE = 0,
 

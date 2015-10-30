@@ -133,7 +133,9 @@ struct	Io
 #define	I	((Io*)nil)
 /*e: constant I */
 
+/*s: constant FD_NONE */
 #define FD_NONE (-1)
+/*e: constant FD_NONE */
 
 /*s: struct Htab */
 struct Htab
@@ -151,13 +153,16 @@ extern struct Htab h[NSYM];
 /*s: struct Hist */
 struct	Hist
 {
-    char*	filename;
+    char*	filename; // nil for a ``pop''
 
-    long	line;   // global line of this Hist
-    long	local_line; // local line for this hist 
+    // global line of this Hist
+    long	global_line;       
+    // 0 for #include, +n for #line, -1 for #pragma lib (ugly)
+    long	local_line; 
 
     // Extra
     /*s: [[Hist]] extra fields */
+    // list<ref<Hist>> from hist
     Hist*	link;
     /*e: [[Hist]] extra fields */
 };
@@ -167,24 +172,31 @@ struct	Hist
 /*e: constant H */
 
 
-
 // was in a.h
+
 extern	Sym*	hash[NHASH];
-extern	Hist*	hist;
-extern	char*	hunk;
-extern	char*	include[NINCLUDE];
-extern	Io*	iofree;
-extern	Io*	ionext;
-extern	Io*	iostack;
-extern	long	lineno;
-extern	int	nerrors;
-extern	long	nhunk;
-extern	int	ninclude;
 extern	char*	outfile;
 extern	long	pc;
-extern	int	peekc;
-extern	int	symcounter;
+
+extern	Io*	iostack;
+extern	Io*	iofree;
+extern	Io*	ionext;
+extern	char*	include[NINCLUDE];
+extern	int	ninclude;
+
 extern	char	symb[NSYMB];
+extern	int	peekc;
+
+extern	int	symcounter;
+
+extern	Hist*	hist;
+extern	long	lineno;
+
+extern	int	nerrors;
+
+extern	char*	hunk;
+extern	long	nhunk;
+
 extern	int	thechar;
 
 // for macbody, was in a.h
