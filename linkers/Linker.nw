@@ -472,7 +472,8 @@ process.
 %
 The linker first {\em concatenates} the code parts of the 
 different object files together 
-to form the {\em code section} (the code parts [[C1]] to [[C4]]). 
+to form the {\em code section} (the code parts [[C1]] to [[C4]]),
+also known as the {\em text section}.
 \n for 5l it actually transform them too, in machine instruction
 It does the same for the data 
 to form the {\em data section} ([[D1]] and [[D2]]).
@@ -703,40 +704,96 @@ is entired dedicated to the topic.
 %   pretty good use of nm, objdump, readelf, etc
 
 \section{[[5l]] command line interface}
+%dup: (and adapted) from Assembler.nw
 
-% command line interface? -o
-% also important -TText, see Kernel.nw
-% virtual memory. Relocation!
+The command line interface of the linker [[5l]] is pretty simple:
+\begin{verbatim}
+$ 5l
+usage: 5l [-options] objects
+$ 5l foo.5 bar.5 lib.a
+$ ./5.out
+\end{verbatim}
 
-hello.5 world.5 lib.a
+Given the set of {object files} [[foo.5]] and [[bar.5]],
+and a {library} [[lib.a]], 
+[[5l]] outputs an executable file called [[5.out]].
+\n look for _main. But explained later.
+%
+One can change this default behaviour by using the [[-o <outfile>]] option.
 
-% also can give libraries, which are really a file encapsulating
-% a set of objects (like tar). Archive.
+The default {executable format} is [[a.out]], a classic \unix format,
+but this can be changed by using the [[-H<num>]] option ([[H]] for header)
+as explained in Section~\ref{sec:choice-exec-format}.
+\l see adv topic for more e.g. ELF.
+One can also change the entry point of the program with [[-E<funcname>]] 
+which by default is [[_main]].
+\l link to section? also explain why not main instead of _main
+Other options related to debugging will be described later
+in Appendix~\ref{chap:debugging-appendix}.
 
-% env: $ccroot
+Another important option, [[-T<num>]], allows to change the (virtual)
+{memory address origin} of the code section ([[T]] for text section).
+In \plan the default value for this address is 4128.
+Indeed, the loader in the kernel
+loads executables after the first page (4096), and includes
+the header which is using 32 bytes, so the text section
+will start at the (virtual) memory address 4128. 
+The machine code generated for the jumps and calls
+must then assume the code will be loaded at 4128.
+One can also change the memory address origin of other sections
+as explained in Section~\ref{sec:choice-exec-format}.
+%
+Those options are almost never used by programmers, but they
+are necessary for producing special executables such as
+kernels or boot loaders as we will see in the \book{Kernel}.
+Indeed, those binaries will be loaded (by the bootstrapping process
+or firmware) at special memory addresses, 
+e.g. 0x80000000 for the ARM kernel, 0x7c00 for an x86 bootloader.
 
-% default a.out format! classic unix format.
-% see adv topic for more e.g. ELF.
+Another set of options are used to manage libraries,
+which are really files encapsulating a set of object files,
+\l like tar, actually ar means archive
+and will be introduced later in Chapter~\ref{chap:libraries}.
+
+\l also dynamic related options, -x -u
+
+\l env: $ccroot
+%$
+
 
 \section{[[hello.5]] and [[world.5]]}
 
-% maybe can start with hello.s and world.s
-% and then some code in both, some data in both, so see
-% when concatenate need put code together, data together,
-% relocate absolute virtual pc in second object, and link together things.
+\l adapt example in Assembler book. hello world too.
+\l but split in different files. and use libc.
+
+<<hello2.s>>=
+
+@
+\n call libc via fprint (cant print cos pointer func) which is more interesting
+
+
+<<world.s>>=
+@
 
 % show binary format? hexdump?
 
-% two modules where one call the other or use a definition defined
-% in another object. 
+\begin{verbatim}
+$ cd /tests/5l
+$ 5a hello2.s
+$ 5a world.s
+$ 5l hello2.5 world.5 /arm/lib/libc.a -o hello
+$ ./hello
+hello world
+\end{verbatim}
 
 \section{Input object format}
+
+% the object file is the input this time 
+% (as opposed to 5a where it's the output)
 
 % could take figure in Assembler.nw and add the ANAME and AHISTORY?
 % or put concrete values everywhere?
 
-% the object file is the input this time 
-% (as opposed to 5a where it's the output)
 
 % nm foo.5 => ? U? D? T?
 
@@ -747,21 +804,15 @@ hello.5 world.5 lib.a
 
 % put copy paste of Object format section here? of Assembler?
 
-% Figure!
-
 
 \section{Output executable format, [[a.out]]}
 % the output
-
-%http://jvns.ca/blog/2014/09/06/how-to-read-an-executable/
-%http://lowlevelbits.org/parse-mach-o-files/
 
 % plan9 is using the very simple a.out.h format.
 % but 5l can also generate different executable formats (well different
 % headers).
 
 % see libmach to read back this executable!
-
 %FIGURE
 % so   .s --5a--> .o (.5) --5l--> .exe (5.out) --libmach--> readable
 % (hmm libmach is also reading .o (.5)
@@ -795,6 +846,8 @@ struct	Exec
 %    // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
 %    long	spsz;		/* size of pc/sp offset table */
 
+% FIGURE with size corresponding to range vertical arrows
+
 
 % entry: it's usually not main but _main (or _mainp) which does
 % some core initializations and then call main
@@ -802,6 +855,8 @@ struct	Exec
 % see adv topic for other executable formats.
 
 
+%http://jvns.ca/blog/2014/09/06/how-to-read-an-executable/
+%http://lowlevelbits.org/parse-mach-o-files/
 
 
 
@@ -841,6 +896,7 @@ struct	Exec
 %5l/utils.c:
 %5l/compat.c:
 %5l/list.c: dumpers
+%5l/enam.c: which is a symlink in 5c/
 
 %5l/pass.c:
 %5l/span.c:
@@ -851,6 +907,8 @@ struct	Exec
 %5l/optab.c:
 
 %5l/obj.c: main()
+
+\n did not factorized in a ll/ this time, but factorized via LP
 
 \section{Software architecture}
 
@@ -868,6 +926,8 @@ struct	Exec
 % (symbols uses mentioned in object files and so marked as SXREF)
 %fixpoint
 %=> produce smaller binaries
+
+% will modify fields in Instr, e.g. pc. Imperative style.
 
 % How does handle mutually recursive object files?
 %  for objects passed on the command line it loads every symbols
@@ -946,6 +1006,10 @@ the code of an OCaml port of [[5l]].
 
 %toc:
 In this chapter we will present the core data structures used by [[5l]].
+% symbol table, manage which address and in which section will reside
+% a symbol. Then object file DS, essentially AST of assembly source
+% with opcodes and operands, and finally a few globals managing
+% list of instructions (code and data)
 
 \section{[[Sym]] and [[hash]]}
 
@@ -959,10 +1023,10 @@ struct	Sym
     char	*name;
     short	version; // for static names, each sym has a different version
 
-    //enum<section>
-    short	type;
     // generic value, e.g. virtual pc for a TEXT procedure, size for GLOBL
     long	value; 
+
+    <<[[Sym]] section field>>
 
     <<[[Sym]] other fields>>
     // Extra
@@ -1018,29 +1082,6 @@ Sym*	link;
 
 
 
-<<enum sxxx(arm)>>=
-enum section
-{
-    SNONE = 0,
-
-    STEXT,
-    SDATA,
-    SBSS,
-
-    SXREF,
-    <<enum sxxx cases>>
-};
-@
-% SSTACK? no! not in exec :) 
-% see also asmsym()
-% those are mostly sections, or subsections (e.g. SDATA1 of SDATA,
-%  and SLEAF/SCONST/STRING of STEXT)
-% note: a symbol is assigned SXREF in ldobj() when the obj introduces an ANAME
-%  about an D_EXTERN or D_INTERN symbol.
-% XREF, unknown reference
-
-
-
 % This function creates a new symbol if it does not exist.
 % v is for version, but really it's about handling static names.
 % (we could have a typedef int version;? and VERSION0 = 0 so clearer to read?
@@ -1091,6 +1132,35 @@ lookup(char *symb, int v)
 %assembler: same
 
 % s->link will be described in Safe linking section
+
+\section{[[Section]]}
+
+<<[[Sym]] section field>>=
+//enum<section>
+short	type;
+@
+
+<<enum sxxx(arm)>>=
+enum Section
+{
+    SNONE = 0,
+
+    STEXT,
+    SDATA,
+    SBSS,
+
+    SXREF,
+    <<enum sxxx cases>>
+};
+@
+% SSTACK? no! not in exec :) 
+% see also asmsym()
+% those are mostly sections, or subsections (e.g. SDATA1 of SDATA,
+%  and SLEAF/SCONST/STRING of STEXT)
+% note: a symbol is assigned SXREF in ldobj() when the obj introduces an ANAME
+%  about an D_EXTERN or D_INTERN symbol.
+% XREF, unknown reference
+
 
 \section{[[Opcode]] and [[Operand]]}
 
@@ -1506,10 +1576,11 @@ out:
 void
 usage(void)
 {
-    diag("usage: %s [-options] objects", argv0);
+    printf("usage: %s [-options] objects", argv0);
     errorexit();
 }
 @
+%old: was diag but then output ??none?? which is ugly
 
 <<[[main()]] sanity check cout>>=
 if(cout < 0) {
@@ -1527,6 +1598,7 @@ case 'o':
 @
 
 \subsection{Executable format choice}
+\label{sec:choice-exec-format}
 
 % -H executable format (header type)
 <<global HEADTYPE>>=
@@ -1534,6 +1606,16 @@ case 'o':
 short	HEADTYPE = -1; /* type of header */
 @
 % was int in ARM and long in x86, but I don't think it matters
+
+<<[[main()]] command line processing(arm)>>=
+case 'H':
+    a = ARGF();
+    if(a)
+        HEADTYPE = atolwhex(a);
+    /* do something about setting INITTEXT */
+    break;
+@
+
 
 
 
@@ -1548,28 +1630,7 @@ long	INITTEXT = -1; /* text location */
 long	INITDAT = -1; /* data location */
 @
 
-
-% -E default _main (or _mainp when -p)
-<<global INITENTRY>>=
-char*	INITENTRY = nil;		/* entry point */
-@
-
-
-% less important
-% -R text segment rounder at r multiple
-<<global INITRND>>=
-long	INITRND = -1; 		/* data round above text location */
-@
-
-
-
 <<[[main()]] command line processing(arm)>>=
-case 'H':
-    a = ARGF();
-    if(a)
-        HEADTYPE = atolwhex(a);
-    /* do something about setting INITTEXT */
-    break;
 case 'T':
     a = ARGF();
     if(a)
@@ -1580,11 +1641,31 @@ case 'D':
     if(a)
         INITDAT = atolwhex(a);
     break;
+@
+
+
+
+
+% -E default _main (or _mainp when -p)
+<<global INITENTRY>>=
+char*	INITENTRY = nil;		/* entry point */
+@
+<<[[main()]] command line processing(arm)>>=
 case 'E':
     a = ARGF();
     if(a)
         INITENTRY = a;
     break;
+@
+
+
+% less important
+% -R text segment rounder at r multiple
+<<global INITRND>>=
+long	INITRND = -1; 		/* data round above text location */
+@
+
+<<[[main()]] command line processing(arm)>>=
 case 'R':
     a = ARGF();
     if(a)
@@ -3013,6 +3094,7 @@ out:
 
 
 \chapter{Loading Libraries}
+\label{chap:libraries}
 
 % 5l actually loads only the object files in the librairies containing 
 % the functions/data which are mentionned by the main object files
