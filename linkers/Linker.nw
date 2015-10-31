@@ -323,6 +323,7 @@ Once installed, you can test [[5l]] under \plan with:
 5   hello world
 6   $
 \end{verbatim}
+\n minimal example here! no libc.a, just to make sure the minimal stuff works
 
 The command in Line 2 {assembles} the simple [[hello.s]]
 and [[world.s]] ARM assembly programs and generates the 
@@ -797,6 +798,8 @@ D hello
 \l ref to section where show code of nm? and talk libmach now?
 
 \l show binary format? hexdump?
+\t 5l -v -W => objects,  5l -v -a => generated code!!
+
 
 
 \section{Input object format}
@@ -2135,7 +2138,7 @@ for(p = firstp; p != P; p = p->link) {
     pc += o->size;
 }
 
-<<[[asmb()]] if debug a>>
+<<[[asmb()]] before cflush, debug>>
 cflush();
 
 <<[[asmb()]] TEXT section, output strings in text segment>>
@@ -2157,14 +2160,6 @@ if(p->pc != pc) {
 @
 % span() and asmb() should compute the same pc values
 
-
-<<[[asmb()]] if debug a>>=
-if(debug['a']) {
-    Bprint(&bso, "\n");
-    Bflush(&bso);
-}
-@
-% -a  machine code generation debugging?
 
 \subsection{Data section}
 
@@ -2389,9 +2384,7 @@ loop:
     // reading the object binary file, opposite of outcode() in Assembler.nw
     <<[[ldobj()]] read one instruction in p>>
     <<[[ldobj()]] sanity check p>>
-
-    if(debug['W'])
-        print("%P\n", p);
+    <<[[ldobj()]] debug>>
 
     switch(o) {
     <<[[ldobj()]] switch opcode cases(arm)>>
@@ -2825,9 +2818,7 @@ if(o == ANAME || o == ASIGNAME) {
     bloc = stop + 1;
 
     <<[[ldobj()]] if sig not zero>>
-
-    if(debug['W'])
-        print("	ANAME	%s\n", s->name);
+    <<[[ldobj()]] when ANAME, debug>>
 
     h[o] = s;
 
@@ -3633,6 +3624,7 @@ addlib(char *obj)
 %trans:
 % Ok loading objects and libs has been done. Normally
 % have now a linked list of instructions in firstp, with a valid Prog->pc
+% (still virtual program counter?)
 % and a good symbol table where can see for instance the pc
 % for every TEXT symbols.
 
@@ -3646,6 +3638,20 @@ noops();
 dodata();
 dotext();
 @
+%pad: I modified the original code, to simplify, to look more symetric
+%old:
+%   patch();
+%   <<[[main()]] call doprofxxx() if profiling>>
+%   dodata();
+%   follow();
+%   if(firstp == P)
+%       goto out;
+%   noops();
+%   span();
+% I think follow is optional, and the order can be changed as
+% some steps are independent I think. The test for firstp is not useful
+% I think if you remove follow.
+
 % dodata() must precede dotext(), e.g.
 % for SSTRING one must do dotata() before dotext.
 
@@ -3668,19 +3674,6 @@ dotext();
 % Solved with the (SB) and R12 trick for the ARM.
 % otherwise? need fixpoint?
 
-%old:
-%   patch();
-%   <<[[main()]] call doprofxxx() if profiling>>
-%   dodata();
-%   follow();
-%   if(firstp == P)
-%       goto out;
-%   noops();
-%   span();
-%
-% but I think follow is optional, the order can be changed as
-% some steps are independent I think, and test for firstp is not useful
-% I think if you remove follow.
 
 
 
@@ -4686,7 +4679,13 @@ struct	Optab
     <<[[Optab]] other fields>>
 };
 @
-% order is important, see optab[] global
+% The order of entries is important!!, see optab[] global, see ocmp()!
+% It does not matter for cmp() but it matters for ocmp().
+% The order for the operand class is also important!
+% For instance C_HFAUTO must be before C_LAUTO otherwise
+% the careful order of entries in optab will not be taken
+% into account.
+%ocaml: use a single pattern match so far easier.
 
 %ex of entries:
 % Optab	optab[] =
@@ -4701,9 +4700,10 @@ struct	Optab
 % ARM has fixed-length instructions, 4, but 5a/ support
 % some fake/virtual opcodes that actually expands to 
 % multiple instructions, hence the size field above.
-
+%
 % Also because of 12 bits immediate need special tricks, pool(),
-% RCON vs LCON, etc.
+% RCON vs LCON, etc. So there are many cases where we generate
+% for one Asm5 instruction multiple ARM instructions. 
 
 %\section{[[optab]]}
 
@@ -4739,6 +4739,7 @@ Optab	optab[] =
 % seems called the class, see aclass(), a more precise operand_kind
 % closer to the machine constraint as we will see in next section
 <<enum cxxx(arm)>>=
+// order of entries matter! coupling with cmp() and ocmp()
 enum Operand_class {
     C_NONE		= 0,
 
@@ -4770,6 +4771,8 @@ enum Operand_class {
 %        break;
 %
 
+%code: order of entries matter! look at code of cmp() to see which
+% classes are subclasses and must be after.
 
 \subsection{[[aclass()]]}
 
@@ -4823,6 +4826,7 @@ case D_OREG:
 % H S L ? half, small, large?
 <<cxxx(arm) cases>>=
 C_HEXT,
+<<cxxx(arm) cases, in C_xEXT, float cases>>
 C_SEXT,
 C_LEXT,
 @
@@ -4856,9 +4860,12 @@ case D_INTERN:
 
 <<cxxx(arm) cases>>=
 C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+<<cxxx(arm) cases, in C_xAUTO, float cases>>
 C_SAUTO,	/* -0xfff to 0xfff */
 C_LAUTO,
 @
+% the order matters! because of ocmp() and the order of entries in optab
+% hence the chynk for float here
 
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
 case D_LOCAL:
@@ -4886,6 +4893,7 @@ case D_PARAM:
 % RO? rotated?
 <<cxxx(arm) cases>>=
 C_HOREG,
+<<cxxx(arm) cases, in C_xOREG, float cases>>
 C_SOREG,
 C_LOREG,
 
@@ -4916,7 +4924,7 @@ case D_NONE:
 
 
 
-\subsection{[[D_CONST]]}
+\subsubsection{[[D_CONST]]}
 
 <<[[aclass()]] switch type cases>>=
 case D_CONST:
@@ -4933,6 +4941,7 @@ C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
 C_NCON,		/* ~RCON */
 C_LCON,
 @
+%TODO: must impose order with other xCON?
 %dead: C_SCON,		/* 0xffff */
 %in the end NCON is not different from LCON when you look at optab,
 % so perhaps it could be removed.
@@ -4955,6 +4964,8 @@ case D_NONE:
 %todo: D_ADDR?
 %\subsubsection{[[D_ADDR]]}
 % should not use D_CONST when really you use the address of a symbol
+
+
 
 % rotated External const
 <<cxxx(arm) cases>>=
@@ -5020,6 +5031,7 @@ case D_INTERN:
 C_RACON,
 C_LACON,
 @
+%RA Rotate Address? and Long Address?
 
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_LOCAL:
@@ -5481,12 +5493,14 @@ ocmp(const void *a1, const void *a2)
 }
 @
 %sort first by opcode, then class of first operand, then second, then thrd.
-%less: I'm not sure it's needed since in oplook() we just
-%  iterate over all the range for a certain opcode.
-%  hmm maybe if the order of the entries matter! if have
-%  some specific entries first and then a general one,
+%note: Is it needed since in oplook() we just
+% iterate over all the range for a certain opcode?
+% Yes it is needed! The order of the entries in optab matter, because have
+% some specific entries first and then a general one
+
 %TODO: which is why perhaps doing some += in the chunk for xxx
 % is not good?  
+%update: ??
 
 \subsection{[[oplook()]]}
 
@@ -5518,6 +5532,8 @@ oplook(Prog *p)
     e = oprange[r].stop;
     <<[[oplook()]] sanity check o>>
 
+    <<[[oplook()]] debug>>
+
     <<[[oplook()]] if use cache, part2>>
     else {
         for(; o<e; o++)
@@ -5530,19 +5546,16 @@ oplook(Prog *p)
     <<[[oplook()]] illegal combination error>>
 }
 @
-% the order to cmp is right? I think so, see the comment
-% about cmp()
-
-%    if(0) {
-%        print("oplook %A %d %d %d\n",
-%            (int)p->as, a1, a2, a3);
-%        print("		%d %d\n", p->from.type, p->to.type);
-%    }
+%pad: I rewrote this code to aspectize optimisations and have
+% a simpler version available
+% the order to cmp is right? I think so, see the comment about cmp().
+% So middle operand must be equal! (but anyway usually a register)
+% and rest must be compatible.
 
 
 
 
-% cmp for compatible?
+% cmp for compatible (not compare).
 % 'b' is the actual class of the operand, 'a' is the one mentionned
 % in optab which is actually compatible with a few concrete class.
 % e.g. an optab entry for C_LCON will also accomodate concrete operand
@@ -5603,7 +5616,9 @@ cmp(int a, int b)
     return false;
 }
 @
-
+% diff with ocmp? subtle. this is compatibility but it does not
+% car about the order of the operand classes. ocmp care about
+% the order! because it does not return a boolean but a cmp_result.
 
 
 
@@ -5794,7 +5809,9 @@ asmout(Prog *p, Optab *o)
 {
     // ARM 32 bits instructions
     long o1, o2, o3, o4, o5, o6;
+    // pc
     long v;
+    // misc
     int r, rf, rt, rt2;
     Sym *s;
 
@@ -5809,8 +5826,7 @@ asmout(Prog *p, Optab *o)
         break;
     }
 
-    if(debug['a'] > 1)
-        Bprint(&bso, "%2d ", o->type);
+    <<[[asmout()]] debug>>
 
     v = p->pc;
     switch(o->size) {
@@ -5829,36 +5845,29 @@ asmout(Prog *p, Optab *o)
 
 <<[[asmout()]] switch on size cases>>=
 case 4:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux\t%P\n", v, o1, p);
+    <<[[asmout()]] when 1 generated instruction, debug>>
     lputl(o1);
     break;
 case 8:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux%P\n", v, o1, o2, p);
+    <<[[asmout()]] when 2 generated instructions, debug>>
     lputl(o1);
     lputl(o2);
     break;
 case 12:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux%P\n", v, o1, o2, o3, p);
+    <<[[asmout()]] when 3 generated instructions, debug>>
     lputl(o1);
     lputl(o2);
     lputl(o3);
     break;
 case 16:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux%P\n",
-            v, o1, o2, o3, o4, p);
+    <<[[asmout()]] when 4 generated instructions, debug>>
     lputl(o1);
     lputl(o2);
     lputl(o3);
     lputl(o4);
     break;
 case 20:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
-            v, o1, o2, o3, o4, o5, p);
+    <<[[asmout()]] when 5 generated instructions, debug>>
     lputl(o1);
     lputl(o2);
     lputl(o3);
@@ -5866,9 +5875,7 @@ case 20:
     lputl(o5);
     break;
 case 24:
-    if(debug['a'])
-        Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
-            v, o1, o2, o3, o4, o5, o6, p);
+    <<[[asmout()]] when 6 generated instructions, debug>>
     lputl(o1);
     lputl(o2);
     lputl(o3);
@@ -7366,13 +7373,7 @@ putsymb(char *s, int t, long v, int ver)
     }
     symsize += 4 + 1 + i + 1;
 
-    if(debug['n']) {
-        <<[[putsymb()]] if z or Z in debug output>>
-        if(ver)
-            Bprint(&bso, "%c %.8lux %s<%d>\n", t, v, s, ver);
-        else
-            Bprint(&bso, "%c %.8lux %s\n", t, v, s);
-    }
+    <<[[putsymb()]] debug>>
 }
 @
 %>>
@@ -7403,18 +7404,6 @@ if(t == 'z' || t == 'Z') {
 }
 @
 
-<<[[putsymb()]] if z or Z in debug output>>=
-if(t == 'z' || t == 'Z') {
-    Bprint(&bso, "%c %.8lux ", t, v);
-    for(i=1; s[i] != 0 || s[i+1] != 0; i+=2) {
-        f = ((s[i]&0xff) << 8) | (s[i+1]&0xff);
-        Bprint(&bso, "/%x", f);
-    }
-    Bprint(&bso, "\n");
-    return;
-}
-@
-% >> >> >>
 
 \section{Line table, [[asmlc()]]}
 
@@ -9517,27 +9506,30 @@ immfloat(long v)
 }
 @
 
-<<cxxx(arm) cases>>=
+<<cxxx(arm) cases, in C_xEXT, float cases>>=
 C_FEXT,
 C_HFEXT,
 @
+%bug: must be inside C_xEXT, not after C_LEXT!
 
 <<[[aclass()]] if immfloat for D_EXTERN symbol>>=
 if(immfloat(t))
     return immhalf(instoffset)? C_HFEXT : C_FEXT;
 @
 
-<<cxxx(arm) cases>>=
+<<cxxx(arm) cases, in C_xAUTO, float cases>>=
 C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
 C_HFAUTO,	/* both H and F */
 @
+%bug: must be inside C_xAUTO, not after C_LAUTO! see long pb vlong.c :)
+% with addpool(), WORD d+4(FP), and illegal combination error.
 
 <<[[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol>>=
 if(immfloat(t))
     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
 @
 
-<<cxxx(arm) cases>>=
+<<cxxx(arm) cases, in C_xOREG, float cases>>=
 C_FOREG,
 C_HFOREG,
 @
@@ -11226,7 +11218,8 @@ Dconv(Fmt *fp)
 %        break;
 
 
-
+%TODO
+%\subsection{Operand class dumper, [[??conv()]]}
 
 
 
@@ -11308,6 +11301,19 @@ void mylog(char *fmt, ...) {
 %pad: I introduced that
 
 \section{Objects loading debugging, [[5l -W]]}
+
+<<[[ldobj()]] debug>>=
+if(debug['W'])
+    print("%P\n", p);
+@
+
+<<[[ldobj()]] when ANAME, debug>>=
+if(debug['W'])
+    print("	ANAME	%s\n", s->name);
+@
+
+\l -W for? what is the connexion to object loading?
+
 % print object code when loading
 
 % (but need good enam.c! up to date and in sync with 5.out.h)
@@ -11316,15 +11322,73 @@ void mylog(char *fmt, ...) {
 %ex: of output:
 
 
+\section{Opcode table debugging, [[5l -t]]}
+%pad: I added that
+
+<<[[oplook()]] debug>>=
+if(debug['t']) {
+    print("oplook %P %A %d %d %d\n",
+        p, (int)p->as, a1, a2, a3);
+}
+@
+%old: used to be under a if 0 but pretty useful when debugging issues
+%old:    print("		%d %d\n", p->from.type, p->to.type);
 
 
 \section{Machine code generation debugging, [[5l -a]]}
-% print final concrete code in assembly language with addresses
 
-% if do 5l -a -a two times I think it will print a few more things
+% print final concrete code in assembly language with addresses
+% very nice!
 
 %ex of output:
+% 00001020: e52de024 (12) MOVW.W R14, -36(R13)
+%  with lineno (12) but it's a global_lineno so take care
 
+% if do 5l -a -a two times then get also the o->type and so know
+% which case was triggered which is also very useful (remember MOVD
+% generation pb with addpool())
+
+
+<<[[asmout()]] when 1 generated instruction, debug>>=
+if(debug['a'])
+    Bprint(&bso, " %.8lux: %.8lux\t%P\n", v, o1, p);
+@
+<<[[asmout()]] when 2 generated instructions, debug>>=
+if(debug['a'])
+    Bprint(&bso, " %.8lux: %.8lux %.8lux%P\n", v, o1, o2, p);
+@
+<<[[asmout()]] when 3 generated instructions, debug>>=
+if(debug['a'])
+    Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux%P\n", v, o1, o2, o3, p);
+@
+<<[[asmout()]] when 4 generated instructions, debug>>=
+if(debug['a'])
+    Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux%P\n",
+        v, o1, o2, o3, o4, p);
+@
+<<[[asmout()]] when 5 generated instructions, debug>>=
+if(debug['a'])
+    Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
+        v, o1, o2, o3, o4, o5, p);
+@
+<<[[asmout()]] when 6 generated instructions, debug>>=
+if(debug['a'])
+    Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
+        v, o1, o2, o3, o4, o5, o6, p);
+@
+<<[[asmout()]] debug>>=
+if(debug['a'] > 1)
+    Bprint(&bso, "%2d ", o->type);
+@
+% when -a -a
+
+<<[[asmb()]] before cflush, debug>>=
+if(debug['a']) {
+    Bprint(&bso, "\n");
+    Bflush(&bso);
+}
+@
+% -a  machine code generation debugging?
 
 
 
@@ -11351,6 +11415,32 @@ void mylog(char *fmt, ...) {
 %        HEADTYPE = H_PLAN9;
 %}
 %@
+
+\section{Symbol table debugging, [[5l -n]]}
+
+<<[[putsymb()]] debug>>=
+if(debug['n']) {
+    <<[[putsymb()]] if z or Z in debug output>>
+    if(ver)
+        Bprint(&bso, "%c %.8lux %s<%d>\n", t, v, s, ver);
+    else
+        Bprint(&bso, "%c %.8lux %s\n", t, v, s);
+}
+@
+
+<<[[putsymb()]] if z or Z in debug output>>=
+if(t == 'z' || t == 'Z') {
+    Bprint(&bso, "%c %.8lux ", t, v);
+    for(i=1; s[i] != 0 || s[i+1] != 0; i+=2) {
+        f = ((s[i]&0xff) << 8) | (s[i+1]&0xff);
+        Bprint(&bso, "/%x", f);
+    }
+    Bprint(&bso, "\n");
+    return;
+}
+@
+% >> >> >>
+
 
 \chapter{Error Managment}
 \label{chap:error}
