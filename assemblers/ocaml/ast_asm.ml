@@ -72,8 +72,6 @@ type branch_operand =
 (* ------------------------------------------------------------------------- *)
 
 type instr = 
-  | NOP (* virtual, removed by linker *)
-
   (* Arithmetic *)
   | Arith of arith_opcode * arith_operand * register * register option
 
@@ -91,8 +89,12 @@ type instr =
   | Bxx of condition * branch_operand (* virtual, sugar *) 
 
   (* System *)
-  | SWI
+  | SWI of int
   | RFE (* virtual, sugar for MOVM *)
+
+  (* Misc *)
+  | NOP (* virtual, removed by linker, no reading syntax *)
+
 
   and arith_opcode = 
     (* logic *)
@@ -124,7 +126,7 @@ type pseudo_instr =
   | TEXT of symbol * attributes * int
   | GLOBL of symbol (* can have offset? *) * attributes * int
   | DATA of symbol * offset * int (* size *) * ximm
-  (* any ximm? even String? And Float? *)
+  (* any ximm? even String? And Float? for float should have DWORD? *)
   | WORD of (int, ximm) Common.either
 
   and attributes = attribute list

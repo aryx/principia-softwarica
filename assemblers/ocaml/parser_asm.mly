@@ -18,7 +18,6 @@ let error s =
 /*(*2 opcodes *)*/
 /*(*-----------------------------------------*)*/
 
-%token TNOP
 %token <Ast.arith_code> TARITH
 %token <Ast.move_size> TMOV TSWAP
 %token TB  TBL TRET
@@ -122,8 +121,6 @@ pseudo_instr:
 /*(*************************************************************************)*/
 
 instr:
- | TNOP { }
-
  | TARITH cond  imsr TCOMMA reg TCOMMA reg { }
  | TARITH cond  imsr TCOMMA reg            { }
 
@@ -137,9 +134,9 @@ instr:
  | TBL cond branch { }
  | TCMP cond imsr TCOMMA reg { } 
  | TBxx cond rel { }
-
  | TRET cond { }
- | TSWI cond { }
+
+ | TSWI cond imm { }
  | TRFE cond { }
 
 /*(*************************************************************************)*/
