@@ -1004,9 +1004,10 @@ loop:
             s->file = files-1;
         }
         /*e: [[ldobj()]] if sig not zero */
-
+        /*s: [[ldobj()]] when ANAME, debug */
         if(debug['W'])
             print("	ANAME	%s\n", s->name);
+        /*e: [[ldobj()]] when ANAME, debug */
 
         h[o] = s;
 
@@ -1052,9 +1053,10 @@ loop:
     if(p->reg > NREG)
         diag("register out of range %d", p->reg);
     /*e: [[ldobj()]] sanity check p */
-
+    /*s: [[ldobj()]] debug */
     if(debug['W'])
         print("%P\n", p);
+    /*e: [[ldobj()]] debug */
 
     switch(o) {
     /*s: [[ldobj()]] switch opcode cases(arm) */

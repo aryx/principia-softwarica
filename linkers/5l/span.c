@@ -526,6 +526,13 @@ oplook(Prog *p)
     }
     /*e: [[oplook()]] sanity check o */
 
+    /*s: [[oplook()]] debug */
+    if(debug['t']) {
+        print("oplook %P %A %d %d %d\n",
+            p, (int)p->as, a1, a2, a3);
+    }
+    /*e: [[oplook()]] debug */
+
     /*s: [[oplook()]] if use cache, part2 */
     if(usecache) {
         c1 = xcmp[a1];

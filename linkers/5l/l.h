@@ -242,6 +242,7 @@ enum optab_flag {
 };
 /*e: enum optab_flag(arm) */
 /*s: enum cxxx(arm) */
+// order of entries matter! coupling with cmp() and ocmp()
 enum Operand_class {
     C_NONE		= 0,
 
@@ -254,14 +255,26 @@ enum Operand_class {
 
     /*s: cxxx(arm) cases */
     C_HEXT,
+    /*s: cxxx(arm) cases, in C_xEXT, float cases */
+    C_FEXT,
+    C_HFEXT,
+    /*e: cxxx(arm) cases, in C_xEXT, float cases */
     C_SEXT,
     C_LEXT,
     /*x: cxxx(arm) cases */
     C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+    /*s: cxxx(arm) cases, in C_xAUTO, float cases */
+    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+    C_HFAUTO,	/* both H and F */
+    /*e: cxxx(arm) cases, in C_xAUTO, float cases */
     C_SAUTO,	/* -0xfff to 0xfff */
     C_LAUTO,
     /*x: cxxx(arm) cases */
     C_HOREG,
+    /*s: cxxx(arm) cases, in C_xOREG, float cases */
+    C_FOREG,
+    C_HFOREG,
+    /*e: cxxx(arm) cases, in C_xOREG, float cases */
     C_SOREG,
     C_LOREG,
 
@@ -282,15 +295,6 @@ enum Operand_class {
     C_FREG,
     C_FCON,
     C_FCR,
-    /*x: cxxx(arm) cases */
-    C_FEXT,
-    C_HFEXT,
-    /*x: cxxx(arm) cases */
-    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-    C_HFAUTO,	/* both H and F */
-    /*x: cxxx(arm) cases */
-    C_FOREG,
-    C_HFOREG,
     /*e: cxxx(arm) cases */
 
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops

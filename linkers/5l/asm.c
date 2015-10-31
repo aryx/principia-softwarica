@@ -87,12 +87,12 @@ asmb(void)
         pc += o->size;
     }
 
-    /*s: [[asmb()]] if debug a */
+    /*s: [[asmb()]] before cflush, debug */
     if(debug['a']) {
         Bprint(&bso, "\n");
         Bflush(&bso);
     }
-    /*e: [[asmb()]] if debug a */
+    /*e: [[asmb()]] before cflush, debug */
     cflush();
 
     /*s: [[asmb()]] TEXT section, output strings in text segment */
@@ -442,6 +442,7 @@ putsymb(char *s, int t, long v, int ver)
     }
     symsize += 4 + 1 + i + 1;
 
+    /*s: [[putsymb()]] debug */
     if(debug['n']) {
         /*s: [[putsymb()]] if z or Z in debug output */
         if(t == 'z' || t == 'Z') {
@@ -459,6 +460,7 @@ putsymb(char *s, int t, long v, int ver)
         else
             Bprint(&bso, "%c %.8lux %s\n", t, v, s);
     }
+    /*e: [[putsymb()]] debug */
 }
 /*e: function putsymb */
 
@@ -694,7 +696,9 @@ asmout(Prog *p, Optab *o)
 {
     // ARM 32 bits instructions
     long o1, o2, o3, o4, o5, o6;
+    // pc
     long v;
+    // misc
     int r, rf, rt, rt2;
     Sym *s;
 
@@ -1439,43 +1443,55 @@ asmout(Prog *p, Optab *o)
         break;
     }
 
+    /*s: [[asmout()]] debug */
     if(debug['a'] > 1)
         Bprint(&bso, "%2d ", o->type);
+    /*e: [[asmout()]] debug */
 
     v = p->pc;
     switch(o->size) {
     /*s: [[asmout()]] switch on size cases */
     case 4:
+        /*s: [[asmout()]] when 1 generated instruction, debug */
         if(debug['a'])
             Bprint(&bso, " %.8lux: %.8lux\t%P\n", v, o1, p);
+        /*e: [[asmout()]] when 1 generated instruction, debug */
         lputl(o1);
         break;
     case 8:
+        /*s: [[asmout()]] when 2 generated instructions, debug */
         if(debug['a'])
             Bprint(&bso, " %.8lux: %.8lux %.8lux%P\n", v, o1, o2, p);
+        /*e: [[asmout()]] when 2 generated instructions, debug */
         lputl(o1);
         lputl(o2);
         break;
     case 12:
+        /*s: [[asmout()]] when 3 generated instructions, debug */
         if(debug['a'])
             Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux%P\n", v, o1, o2, o3, p);
+        /*e: [[asmout()]] when 3 generated instructions, debug */
         lputl(o1);
         lputl(o2);
         lputl(o3);
         break;
     case 16:
+        /*s: [[asmout()]] when 4 generated instructions, debug */
         if(debug['a'])
             Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux%P\n",
                 v, o1, o2, o3, o4, p);
+        /*e: [[asmout()]] when 4 generated instructions, debug */
         lputl(o1);
         lputl(o2);
         lputl(o3);
         lputl(o4);
         break;
     case 20:
+        /*s: [[asmout()]] when 5 generated instructions, debug */
         if(debug['a'])
             Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
                 v, o1, o2, o3, o4, o5, p);
+        /*e: [[asmout()]] when 5 generated instructions, debug */
         lputl(o1);
         lputl(o2);
         lputl(o3);
@@ -1483,9 +1499,11 @@ asmout(Prog *p, Optab *o)
         lputl(o5);
         break;
     case 24:
+        /*s: [[asmout()]] when 6 generated instructions, debug */
         if(debug['a'])
             Bprint(&bso, " %.8lux: %.8lux %.8lux %.8lux %.8lux %.8lux %.8lux%P\n",
                 v, o1, o2, o3, o4, o5, o6, p);
+        /*e: [[asmout()]] when 6 generated instructions, debug */
         lputl(o1);
         lputl(o2);
         lputl(o3);
