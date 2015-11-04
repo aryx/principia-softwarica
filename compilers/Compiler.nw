@@ -73,7 +73,6 @@
 \usepackage{booktabs} 
  \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
 \usepackage{graphicx}
-%\usepackage{minitoc}
 
 %------------------------------------------------------------------------------
 % Macros
@@ -153,7 +152,7 @@ assembly, and ultimately machine code, is essential.
 Here are a few questions we hope this book will answer:
 \begin{itemize}
 \item How conditionals, loops, and other control flow constructs
-get translated in basic jumps?
+get translated in basic assembly jumps?
 %codegen:
 
 \item How arbitrary complex expressions are converted into simpler
@@ -743,6 +742,7 @@ new(int t, Node *l, Node *r)
 long	lineno;
 @
 % incremented in lexer, global line number?
+%assembler: same, global line number, because embedded cpp too and also #line
 
 
 <<global nearln>>=
@@ -1042,7 +1042,7 @@ types[TIND] = typ(TIND, types[TVOID]);
  
 
 
-\section{Symbol table, [[Sym]] and [[hash]]}
+\section{[[Sym]]bols and [[hash]] table}
 % another symbol table!
 
 <<struct Sym>>=
@@ -1119,20 +1119,17 @@ struct	Sym
 
 
 
-<<constant NHASH>>=
-#define	NHASH		1024
-@
-
 <<global hash>>=
 // hash<string, ref_own?<Sym>>, (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 @
-
+<<constant NHASH>>=
+#define	NHASH		1024
+@
 <<[[Sym]] extra fields>>=
 // list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
 Sym*	link;
 @
-
 <<constant S>>=
 #define	S	((Sym*)nil)
 @
@@ -1325,12 +1322,10 @@ Decl*	dclstack;
 @
 %ocaml: but should have a list of list? ugly but do ia via DMARK
 %see also firstdcl when parsing
-
 <<[[Decl]] extra fields>>=
 // list<ref_own<Decl> of dclstack
 Decl*	link;
 @
-
 <<constant D>>=
 #define	D	((Decl*)nil)
 @
@@ -1702,7 +1697,7 @@ zprog.scond = COND_ALWAYS;
 <<global thechar>>=
 int	thechar;
 @
-% '5' 
+% '5' convenient! for multiarchi! no conflicts! mk everything power!
 %less: Why 'int' and not 'char' ?
 
 <<global thestring>>=
@@ -1738,10 +1733,7 @@ void main(int argc, char *argv[])
 
     memset(debug, 0, sizeof(debug));
 
-    tinit(); // type globals initialisation
-    cinit(); // C lexing/parsing globals initialisation
-    ginit(); // arch dependent globals initialisation, 5c/8c/...
-    arginit(); // printf argument checking initialisation
+    <<[[main()]] xxxinit()>>
 
     outfile = nil;
 
@@ -1778,7 +1770,12 @@ thechar = '5';
 thestring = "arm";
 @
 
-
+<<[[main()]] xxxinit()>>=
+tinit(); // type globals initialisation
+cinit(); // C lexing/parsing globals initialisation
+ginit(); // arch dependent globals initialisation, 5c/8c/...
+arginit(); // printf argument checking initialisation
+@
 
 
 \section{Arguments processing}
@@ -2134,6 +2131,14 @@ ginit(void)
 
 % see later
 
+
+
+
+
+
+
+
+
 \chapter{Input}
 % similar to Assembler, could reuse
 
@@ -2302,6 +2307,10 @@ pop:
     return *fi.p++ & 0xff;
 }
 @
+
+
+
+
 
 
 \chapter{Lexing}
@@ -3199,6 +3208,90 @@ caselq:
 
 
 
+
+\chapter{Preprocessing}
+
+% similar to Assembler.nw again, except here have also the possiblity
+% to call an external program (e.g. /bin/cpp which is a bit different
+% than the builtin cpp)
+
+
+% Builtin in the binary. A bit of code duplication with the
+% assmembler, but maybe it makes compilation faster because
+% there is no fork at all!
+% builtin preprocessor integrated with lexer (benefit? faster? no fork?)
+% see also 5c -p
+
+% dupe with Assembler.nw, should try to factorize at some point
+
+<<global mactab>>=
+struct
+{
+    char	*macname;
+    void	(*macf)(void);
+} mactab[] =
+{
+    "ifdef",	nil,	/* macif(0) */
+    "ifndef",	nil,	/* macif(1) */
+    "else",	nil,	/* macif(2) */
+
+    "line",	maclin,
+    "define",	macdef,
+    "include",	macinc,
+    "undef",	macund,
+
+    "pragma",	macprag,
+    "endif",	macend,
+    0
+};
+@
+
+% dispatcher, should rename because it's not just about macro =>
+% less: parse_and_dispatch_pp_directive?
+<<function domacro>>=
+void
+domacro(void)
+{
+    int i;
+    Sym *s;
+
+    s = getsym();
+    if(s == S)
+        s = slookup("endif");
+
+    for(i=0; mactab[i].macname; i++)
+        if(strcmp(s->name, mactab[i].macname) == 0) {
+            if(mactab[i].macf)
+                // dispatcher!
+                (*mactab[i].macf)();
+            else
+                macif(i);
+            return;
+        }
+    yyerror("unknown #: %s", s->name);
+    macend();
+}
+@
+% abuse getsym just to get an ident, don't have to go through
+% lookup really
+
+<<function macend>>=
+void
+macend(void)
+{
+    int c;
+
+    for(;;) {
+        c = getnsc();
+        if(c < 0 || c == '\n')
+            return;
+    }
+}
+@
+% I don't think c can be < 0 here.
+
+
+
 \section{[[getc()]], [[unget()]], [[getnsc()]]}
 
 <<function getc>>=
@@ -3331,87 +3424,6 @@ getcom(void)
     return c;
 }
 @
-
-\chapter{Preprocessing}
-
-% similar to Assembler.nw again, except here have also the possiblity
-% to call an external program (e.g. /bin/cpp which is a bit different
-% than the builtin cpp)
-
-
-% Builtin in the binary. A bit of code duplication with the
-% assmembler, but maybe it makes compilation faster because
-% there is no fork at all!
-% builtin preprocessor integrated with lexer (benefit? faster? no fork?)
-% see also 5c -p
-
-% dupe with Assembler.nw, should try to factorize at some point
-
-<<global mactab>>=
-struct
-{
-    char	*macname;
-    void	(*macf)(void);
-} mactab[] =
-{
-    "ifdef",	nil,	/* macif(0) */
-    "ifndef",	nil,	/* macif(1) */
-    "else",	nil,	/* macif(2) */
-
-    "line",	maclin,
-    "define",	macdef,
-    "include",	macinc,
-    "undef",	macund,
-
-    "pragma",	macprag,
-    "endif",	macend,
-    0
-};
-@
-
-% dispatcher, should rename because it's not just about macro =>
-% less: parse_and_dispatch_pp_directive?
-<<function domacro>>=
-void
-domacro(void)
-{
-    int i;
-    Sym *s;
-
-    s = getsym();
-    if(s == S)
-        s = slookup("endif");
-
-    for(i=0; mactab[i].macname; i++)
-        if(strcmp(s->name, mactab[i].macname) == 0) {
-            if(mactab[i].macf)
-                // dispatcher!
-                (*mactab[i].macf)();
-            else
-                macif(i);
-            return;
-        }
-    yyerror("unknown #: %s", s->name);
-    macend();
-}
-@
-% abuse getsym just to get an ident, don't have to go through
-% lookup really
-
-<<function macend>>=
-void
-macend(void)
-{
-    int c;
-
-    for(;;) {
-        c = getnsc();
-        if(c < 0 || c == '\n')
-            return;
-    }
-}
-@
-% I don't think c can be < 0 here.
 
 \section{[[#include]]}
 % and [[-I]]
@@ -4361,6 +4373,9 @@ getnsn(void)
     return n;
 }
 @
+
+
+
 
 
 
@@ -26788,6 +26803,9 @@ enum os				/* also in ../{8a,5a,0a}.h */
     //Windows	= 1<<2,
 };
 @
+
+\chapter{[[5c]] in OCaml}
+% oh yeah!
 
 \chapter{Extra Code}
 
