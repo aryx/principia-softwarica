@@ -16,7 +16,7 @@
 % - introduced mylog() and DBG(), factorize tracing code
 % - removed many portable myxxx() wrappers
 % - removed some deadcode (C_LBRA, C_LECON, C_SCON, D_OCONST, regused)
-% - commented lots of code that was in dead ifdef or was related to
+% - commented lots of code that was in dead ifdefs or was related to
 %   dead alef features like BECOME
 
 %thx to codemap/codegraph:
@@ -32,9 +32,11 @@
 % - TODO what if have multiple object defining the same global?
 %   int x; int x; in different files? what if one also define value?
 %   what if both define value? DUPOK?
+% - TODO stuff about pool and in general many small mismatch between Asm5
+%   and actual ARM capacities
 % - TODO stuff about SB? where have mutual dependency?
-% - TODO fpic? 
 % - TODO dynamic linking? export table? import table?
+% - TODO fpic? 
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -48,8 +50,8 @@
 % - LP split the structures, use datalog for flow to field info
 % - SEMI nullify, boolify, typeify,    scheckify
 % - aspecify advanced features!
-% - TODO add figures
-% - TODO add explanations
+% - SEMI add figures
+% - SEMI add explanations
 
 %------------------------------------------------------------------------------
 % Packages
@@ -146,14 +148,14 @@ the linker is the final piece of any {development toolchain},
 the one generating finally the {executable}.
 \l often get errors from linker. never explained, maybe boring but important!
 
-There are very few books about linkers
+There are very few books about linkers,
 \n the linker/loader book is mentioned later
 as opposed to a myriad of books on compilers or kernels. 
 Linkers are usually not studied in the computer science curriculum. 
 This is a pity because they are pretty central.
 Indeed, they make the link (no pun intended) between the compiler
-and the kernel: the linker generates executables that the kernel
-will {load}. Without a linker there is no program to execute.
+and the kernel: the linker generates from {object files} {executables} 
+that the kernel will {load}. Without a linker there is no program to execute.
 \l linker/loader relation
 \l Many blog posts, show interest from people
 
@@ -185,7 +187,8 @@ to a specific binary instruction?
 \l how dynamic linking works? 
 
 %tags used in this file for different recurring themes:
-%assembler: relates code in the linker to similar code in 5a
+%assembler: relates code in the linker to similar (or absent) code in 5a
+%emulator: relates code in the linker to similar (or absent) code in 5i
 %sanity: I use "sanity check" in chunknames, to aspectize a bit error checking
 
 \section{The \plan ARM linker, [[5l]]}
@@ -228,18 +231,18 @@ Instead the object file is essentially the {serialized form} of the
 The linker [[5l]] generates the actual machine code.
 We think though that it is actually a better design because it leads to
 less code in total and also to simpler code.
-\t why? because anyway linker need
-\l  deep knowledge of machine code format because need patch it
-\l  here and there, so why not put everything in it so assembler then simpler 
-\t also better for opti. Things can do only when know actual size, such as
-\t length of offset. Compiler has not the knowledge for that.
+\t why? because anyway linker need deep knowledge of machine code format
+\l  because need patch it here and there, so why not put everything in it
+\l  so assembler then is simpler 
+\t Better for opti too. Things can be done only when know actual size, such as
+\l  length of offset. Compiler has not the knowledge for that.
 \n probably cos there was only 5c/5l before and responsabilities were shifted
 %
 The \plan linker does also some deadcode elimination
 \l well just for libraries, and it is not really dead code
 \l and apparently it's pretty common for a linker to do that
 \l also instruction selection? more opti?
-\l This may also allows inter-lib linking-time optimisations!??
+\l inter-lib linking-time optimisations!?
 which reduces the size of the binaries. 
 This is partly to compensate for the lack of shared libraries in \plan.
 \l but shared libraries are evil!
@@ -260,7 +263,7 @@ It is using the Binary File Descriptor library (BFD)
 to read and write object files using different formats.
 It supports many architectures (ARM, x86, etc)
 as well as many executable and object file formats (ELF, [[a.out]], etc).
-\l also dynamic libraries
+\l also dynamic libraries, ELF
 \n BFD =~ libmach
 It is fairly big though: 30K LOC for [[ld/]]
 and 500K LOC for [[bfd/]].
@@ -273,6 +276,9 @@ It supports also many architectures (ARM, x86, etc).
 It is unfortunately also fairly big: 153K LOC.
 Again, even the ARM-specific file [[gold/arm.cc]] has already 13 000 LOC.
 \n cplusplus
+\l show that useful to see how linker works! cf FB, so much time lost in ld
+\l and engineer didnt even think to rewrite ot, was deemed impossible to do
+\l barriers!
 
 \item The LLVM Linker [[lld]] aims to remove the current dependency to
 the host linker (e.g. [[ld]] under Linux) in the LLVM infrastructure.
@@ -286,7 +292,7 @@ It is smaller than [[ld]] and Gold but still fairly large: 71K LOC.
 \item LD86, an x86 16-bit and 32-bit linker, part of
 Bruce Evans' C compiler (BCC), is an historical linker
 used to compile old versions of Minix and Linux.
-\l syre?
+\l sure?
 It is fairly small: 6100 LOC, which is smaller than [[5l]].
 But, to be fair, [[5l]] does also machine code generation
 which is done instead by AS86 for LD86. [[5a]]+[[5l]] is 13 700 LOC
@@ -305,10 +311,11 @@ which is smaller than AS86+LD86 at 18 600 LOC.
 %education:
 %  - subc-2014, sld, 700LOC?
 %modern:
-%  - lldb seems to do advanced opti or going towards advanced opti with notion
+%  - lld seems to do advanced opti or going towards advanced opti with notion
 %    of Atoms vs Section (see lld/docs/design.rst)
 
 \section{Getting started}
+\label{sec:getting-started}
 
 %dup: Assembler.nw
 To play with [[5l]] you will first need to install
@@ -328,7 +335,7 @@ Once installed, you can test [[5l]] under \plan with:
 The command in Line 2 {assembles} the simple [[hello.s]]
 and [[world.s]] ARM assembly programs and generates the 
 [[hello.5]] and [[world.5]] ARM {object files}.
-\l define object file?
+\l define object file? .5? explained later.
 Line 3 then {links} the object files together and generates the final 
 ARM binary executable [[hello]].
 Line 4, which assumes you are under an ARM machine (e.g. a Raspberry Pi)
@@ -357,8 +364,9 @@ Because most of this book is made of C source code,
 you will need to have a good knowledge of 
 the C programming language~\cite{k-r} to understand it.
 %
-In fact, for Chapter~\ref{chap:arm-codegen} which generates
-machine code, you will need a very good knowledge of C.
+In fact, for Chapter~\ref{chap:arm-codegen} where we will
+see the code which generates machine code, 
+you will need a very good knowledge of C.
 Indeed the code does lots of bit manipulations and uses many C idioms.
 
 There are very few books explaining how a linker works.
@@ -375,7 +383,7 @@ the concepts and theories underlying the software we present.
 Reading the \book{Assembler} is a requirement to understand
 this book. Indeed, many data structures introduced
 and fully explained in the \book{Assembler} are similar
-to data structured used by [[5l]]. This is normal since
+to data structures used by [[5l]]. This is normal since
 the assembler generates what the linker consumes.
 Those data structures will be only quickly presented in this book.
 The same is true for the object file format which has been described at length
@@ -409,8 +417,8 @@ The prose is mine and is licensed under the \license.
 
 We would like to acknowledge of course the author of
 [[5l]], Rob Pike, 
-\t really Pike?
 who wrote in some sense most of this book.
+\t really Pike?
 
 
 
@@ -435,11 +443,11 @@ to understand the code we will show later.
 
 \section{Linker principles}
 
-\n what, why
+\n what
 A {\em linker} is a program which takes as input multiple
 {object files} and {combine} them to form an {executable}
 as shown in Figure~\ref{fig:linker-overview}.
-\l could have smaller picture? one that relates also to assembler and compiler?
+\t FIGURE smaller one? one that relates also to assembler and compiler
 \n combine will be explained later
 
 %dup: from Assembler.nw principles
@@ -484,6 +492,8 @@ Then, it links the {\em uses} of {symbols} in those code (or data) parts,
 e.g. the call to [[fbar]] in [[C1]],
 to their {\em definitions} in possibly other code (or data) parts,
 here the definition of [[fbar]] in [[C2]].
+
+\l alt: multics segmentation? where each object can be in own space?
 
 \begin{figure}[!]\centering
 \begin{verbatim}
@@ -557,6 +567,7 @@ those labels must be in the same file. The instructions generated
 for those jumps {assume} though that the code of the program was
 loaded at the (virtual) memory address 0. 
 \l unless relative jump, but ARM can't do that
+\l alt: mutlics segmentation? or PIC.
 For instance, to jump to
 a label [[foo]] which happens to be defined just before the 30th instruction 
 in a program [[foo.s]], 
@@ -591,16 +602,16 @@ the {\em disk image} of an executable generated by the linker
 does not necessarily matches exactly the {\em memory image}
 of the program when loaded in memory by the loader.
 An offset in the file does not necessarily correspond to an
-offset in memory even though we assume this is the case
+offset in memory even though we assumed this was the case
 in Figure~\ref{fig:linker-overview}.
 
 Under \plan, the header and code section are actually not loaded
-at the (virtual) memory address 0 but instead {\em after}
+at the (virtual) memory address 0 but instead after
 the first page at 4096 (4K). Indeed, the first page
 in the virtual address space of a program
 is reserved by the kernel and marked specially to generate
-faults when accessed. This helps for instance to
-track null pointer bugs.
+{faults} when accessed. This helps for instance to
+track {null pointer bugs}.
 %
 So, the instructions [[CALL fbar]] and [[JMP 30]]
 in Figure~\ref{fig:linker-overview}
@@ -632,16 +643,18 @@ Linkers and object files enable the use of {\em separate compilation}
 which in the long term saves lots of compilation time.
 \l well for 5l/5a maybe less cos heavy part is machine codegen done in 5l
 \l other advantages? more language independent? cat foo.c foo.ml would not work
+\l but could also use assembly as the common format, cat foo_c.s foo_ml.s
 %
 Those object files can actually be concatenated together to form
 {\em libraries} using a tool called [[ar]] (for archive).
-\l which really is kinda cat
+\l which really is kinda cat, and also really kinda tar (tape archive)
 The linker can also take as input a set of libraries as shown
 in Figure~\ref{fig:linker-overview} with [[lib.a]].
 %
 Those libraries are convenient for the programmer because one
 just has to remember the name of one file, e.g. [[libc.a]], instead
 of a possible long list of object files.
+\l other advantages?
 
 Moreover, the linker can also take care of including only
 the object files in the library that matters: the object files
@@ -652,7 +665,7 @@ decided to include in the executable the code of [[x.5]] ([[C4]]), which
 is part of [[lib.a]], 
 because it contains the definition of a procedure [[util()]] which
 is mentioned in the object [[bar.5]]. 
-\l well need fixpoint though, need take car
+\l well need fixpoint though, need take care
 It did not include the code from [[y.5]] though because such code 
 would be anyway {\em dead code} in the executable. 
 Such code would waste disk and memory space.
@@ -687,14 +700,16 @@ Section~\ref{sec:dynamic-linking}.
 \l can separate. Loader is in kernel.
 \l Linker setups things for loader, code section, data section, etc
 \l and loader is pretty simple, just load/copy (or actually lazy load/copy).
-
 \l Also compute textsize, datasize, etc and adjust addresses.
-\t issue with mutual reference of SB?
+
+\t talk now about issue with mutual reference of SB?
+
+\t dynamic linking and shared libraries are different? I think so.
 
 For more information on linkers and loaders we 
 recommend to read {\em Linkers and Loaders}~\cite{ll} which
 is entired dedicated to the topic.
-\l many post on linkers or executables, show missing part in curriculum:
+\l many post on linkers or executables, show it is a missing part of curriculum:
 % - http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
 % - http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
 % - http://www.lurklurk.org/linkers/linkers.html
@@ -707,7 +722,7 @@ is entired dedicated to the topic.
 \section{[[5l]] command line interface}
 %dup: (and adapted) from Assembler.nw
 
-The command line interface of the linker [[5l]] is pretty simple:
+The command line interface of [[5l]] is pretty simple:
 \begin{verbatim}
 $ 5l
 usage: 5l [-options] objects
@@ -732,6 +747,20 @@ which by default is [[_main]].
 Other options related to debugging will be described later
 in Appendix~\ref{chap:debugging-appendix}.
 
+%real-world:
+Executables generated by C compilers in \unix-like operating systems, 
+e.g. [[gcc]] under Linux, are usually called by default [[a.out]].
+\l even if ELF format actually
+\l why a.out? a? assembly output?
+But, under \plan, for the same reason ARM object files use the [[.5]] filename
+extension, ARM executables are called [[5.out]] not [[a.out]].
+This is more convenient in an operating system supporting 
+multiple architectures.
+That way, one can have in the same directory an ARM executable
+[[5.out]] and an x86 executable [[8.out]] without any name conflict.
+\l why not lib.5a then? solve conflict via /arm/lib/... /x86/lib/...
+
+
 Another important option, [[-T<num>]], allows to change the (virtual)
 {memory address origin} of the code section ([[T]] for text section).
 In \plan the default value for this address is 4128.
@@ -741,7 +770,7 @@ the header which is using 32 bytes, so the text section
 will start at the (virtual) memory address 4128. 
 The machine code generated for the jumps and calls
 must then assume the code will be loaded at 4128.
-One can also change the memory address origin of other sections
+One can also change the memory address origin of the data section
 as explained in Section~\ref{sec:choice-exec-format}.
 %
 Those options are almost never used by programmers, but they
@@ -764,43 +793,268 @@ and will be introduced later in Chapter~\ref{chap:libraries}.
 
 \section{[[hello.5]] and [[world.5]]}
 
-\l adapt example in Assembler book. hello world too.
-\l but split in different files. and use libc.
+%trans:
+In this section we adapted the [[helloworld.s]] example of the \book{Assembler}
+%toc:
+to illustrate the linking process with a concrete example. 
+The goal is also to learn to use the debugging options of [[5l]] as well
+as tools such as [[nm]].
+\l why? because useful to debug issues, to find where symbols are defined
+\l and to better understand indeed linking process
+
+\subsection{The source files}
+
+We splitted the original source file [[helloworld.s]] 
+in two files [[hello2.s]] and [[world.s]].
+We also use the C library functions [[fprint()]]
+and [[exits()]] (instead of using the [[PWRITE]] and [[EXITS]] 
+system calls):
 
 <<hello2.s>>=
-
+TEXT main(SB), $8
+        /* prepare call fprint(1,&hello) */
+        MOVW $1, R0
+        MOVW $hello(SB), R1
+        MOVW R1, 8(R13)
+        BL fprint(SB)
+        /* prepare call exit(0) */
+        MOVW $0, R0
+        BL exits(SB)
 @
-\n call libc via fprint (cant print cos pointer func) which is more interesting
-
+%$
+\t use FP instead of R13? 
+\n call libc via fprint/exits so != Assembler.nw, and use main not _main
+\n (cant call print cos pointer func so more complex) 
+\l weird but using only stack and not R0 at all also works
 
 <<world.s>>=
+GLOBL   hello(SB), $12
+DATA    hello+0(SB)/8, $"hello wo"
+DATA    hello+8(SB)/4, $"rld\n"
 @
+%$
 
+If you do not understand the code, or the calling
+conventions, read the \book{Assembler}.
+%
+Symbol definitions and uses are now spread over different files:
+the [[hello]] global is defined in [[world.s]] but used in [[hello2.s]].
+Moreover, the [[fprint()]] and [[exits()]] functions are defined in 
+source files of the C library but used in [[hello2.s]].
+
+\subsection{The linking command}
+
+To compile the previous program do:
 \begin{verbatim}
 $ cd /tests/5l
-$ 5a hello2.s
+$ 5a hello2.s -o hello.5
 $ 5a world.s
-$ 5l hello2.5 world.5 /arm/lib/libc.a -o hello
+$ 5l hello.5 world.5 /arm/lib/libc.a -o hello
 $ ./hello
 hello world
 \end{verbatim}
-\l footnote will see otherway pass C library Chapter X
+
+The main difference with the commands shown in 
+Section~\ref{sec:getting-started} is the use of the C library
+compiled for the ARM architecture: [[/arm/lib/libc.a]].
+We will see in chapter~\ref{chap:libraries} other
+ways to link libraries.
+
+\subsection{Inspecting objects with [[nm]]}
+
+One can use the tool [[nm]] to get the set of symbols defined or
+referenced in object files (this set is also called the [[n]]a[[m]]e list):
 
 \begin{verbatim}
 $ nm hello.5
-T main
-T exit
-U hello
+ U exits
+ U fprint
+ U hello
+ T main
 
 $ nm world.5
 D hello
 \end{verbatim}
-\l ref to section where show code of nm? and talk libmach now?
 
-\l show binary format? hexdump?
-\t 5l -v -W => objects,  5l -v -a => generated code!!
+[[nm]] can also be used on libraries:
 
+\begin{verbatim}
+$ nm /arm/lib/libc.a | grep fprint
+...
+fprint.5: T fprint
+...
+$ nm /arm/lib/libc.a | grep exits
+...
+atexit.5:         T exits
+...
+\end{verbatim}
 
+[[U]] stands for undefined,
+[[T]] for text (a defined procedure), and
+[[D]] for data (a defined global).
+%
+From the previous commands we can see that [[hello.5]] has three
+undefined symbol references, including [[hello]] which
+is a global data defined in [[world.5]]. The job of the linker
+is then to link those definitions to their uses.
+%
+There are other kinds of symbols and so other single letter codes
+used by [[nm]]. 
+The code of [[nm]] as well as all those single letters
+are described in Section~\ref{sec:nm-code}.
+\l nm is actually using libmach, crachhdr, etc, generic API for object manip
+\t put libmach/5obj.c in this book?
+
+\subsection{Inspecting objects with [[5l -W]]}
+
+Another way to inspect the content of object files, more complete, is to use
+the debugging option [[-W]] of [[5l]] (fully explained
+in Appendix~\ref{sec:debugging-loading}) which ``dumps''
+the instructions in the object files passed on the command line:
+\l close to disassembler, but actually easier
+\l disassembler is actually in libmach and used by db
+
+\begin{verbatim}
+$ 5l -W hello.5 world.5 /arm/lib/libc.a
+    ...
+	ANAME	main
+(1)	TEXT	main+0(SB),$8
+(4)	MOVW	$1,R0
+	ANAME	hello
+(5)	MOVW	$hello+0(SB),R1
+(5)	MOVW	R1,8(R13)
+	ANAME	fprint
+(6)	BL	,fprint+0(SB)
+(8)	MOVW	$0,R0
+	ANAME	exits
+(8)	BL	,exits+0(SB)
+(9)	END	,
+    ...
+	ANAME	hello
+(1)	GLOBL	hello+0(SB),$12
+(2)	DATA	hello+0(SB)/8,$"hell"
+(3)	DATA	hello+8(SB)/4,$"rld\n"
+(4)	END	,
+    ...
+	ANAME	_main
+(8)	TEXT	_main+0(SB),R1,$80
+	ANAME	setR12
+(10)	MOVW	$setR12+0(SB),R12
+	ANAME	_tos
+(11)	MOVW	R0,_tos+0(SB)
+   ...
+	ANAME	main
+(21)	BL	,main+0(SB)
+   ...
+\end{verbatim}
+
+The first two fragments show the instructions of [[hello.5]]
+and [[world.5]]. See the \book{Assembler} if you do not
+understand the opcodes or pseudo-opcodes, e.g. [[ANAME]].
+\t number? BUG? seems wrong line number
+
+The last fragment starting with [[ANAME _main]]
+shows the instructions of a procedure called [[_main]].
+%dup: (and adapted) from Assembler.nw
+The linker [[5l]] is looking by default for such a procedure
+for the entry point of the executables it generates
+(unless the [[-E]] option is used).
+%
+The reason for a default called [[_main]], and not [[main]],
+even though the entry point of C programs is [[main]],
+is because [[_main()]] is a procedure defined in the core C library.
+This procedure, written in assembly, does some core initialisations
+and then calls [[main()]] (as shown by the last dumped
+instruction [[BL main]]).
+[[5l]] is usually called to link C programs, and
+all those C programs assume a few core initialisations has
+been done before the call to [[main()]], hence the choice
+of [[_main]] as the default entry point.
+
+%real-world:
+\t readelf? objdump? 
+
+\subsection{Inspecting executables with [[5l -a]]}
+
+One can also display the generated machine code by using
+the debugging option [[-a]] of [[5l]] (fully explained
+in Appendix~\ref{sec:debugging-generated-code}):
+
+\begin{verbatim}
+$ 5l -a hello.5 world.5 /arm/lib/libc.a
+
+ 00001020:		(1)	TEXT	main+0(SB),$8
+ 00001020: e52de00c	(1)	MOVW.W	R14,-12(R13)
+ 00001024: e3a00001	(4)	MOVW	$1,R0
+ 00001028: e59f1884	(5)	MOVW	$hello+0(SB),R1
+ 0000102c: e58d1008	(5)	MOVW	R1,8(R13)
+ 00001030: eb0000bb	(6)	BL	,fprint+01324(BRANCH)
+ 00001034: e3a00000	(8)	MOVW	$0,R0
+ 00001038: eb00009a	(8)	BL	,exits+012a8(BRANCH)
+
+ 0000103c:		(8)	TEXT	_main+0(SB),R1,$80
+ 0000103c: e52de054	(8)	MOVW.W	R14,-84(R13)
+ 00001040: e59fc870	(10)	MOVW	$setR12+0(SB),R12
+ 00001044: e50c0fd0	(11)	MOVW	R0,_tos+0(SB)
+ ...
+ 00001068: ebffffec	(21)	BL	,main+01020(BRANCH)
+ ...
+
+ 000012a8:		(915)	TEXT	exits+0(SB),R1,$16
+ 000012a8: e52de014	(915)	MOVW.W	R14,-20(R13)
+ ...
+
+ 00001324:		(874)	TEXT	fprint+0(SB),R0,$20
+ 00001324: e52de018	(874)	MOVW.W	R14,-24(R13)
+ ...
+
+ 00006b50: e49df03c	(890)	MOVW.P	60(R13),R15
+\end{verbatim}
+\l 1020 = 4128 in hexa
+\l see resolved BL
+\t dollar hello? unresolved? not replaced by actual value??
+\l 6000 = ? just for including fprint and exits, hmmm
+
+\subsection{Inspecting executables with [[nm]]}
+
+[[nm]] can also be used on executables (here with the [[-n]] option
+to sort by address):
+
+\begin{verbatim}
+$ nm 5.out
+    1020 T main
+    103c T _main
+    ...
+    1080 l save
+    10a8 l rest
+    10c4 l div
+    110c T _div
+    1168 T _mod
+    ...
+    11d4 T atexit
+    1248 T atexitdont
+    12a8 T exits
+    ...
+    1324 T fprint
+    ...
+    6b58 T etext
+
+    7000 d onexlock
+    7000 D bdata
+    7010 D argv0
+    7014 D hello
+    7020 d _exitstr
+    ...
+    7940 D edata
+    7b44 B onex
+    7c50 B end
+    7ffc D setR12
+\end{verbatim}
+\t etext, bdata/edata, end
+\t setR12?
+\t hello, _existstr
+
+\l can also use db (or 5i) to inspect executable.
 
 \section{Input object format}
 
@@ -810,16 +1064,9 @@ D hello
 % could take figure in Assembler.nw and add the ANAME and AHISTORY?
 % or put concrete values everywhere?
 
-
-% nm foo.5 => ? U? D? T?
-
-% nm is actually using libmach, crachhdr, etc, generic API for object 
-% manipulation.
-
-% put libmach/5obj.c?
-
 % put copy paste of Object format section here? of Assembler?
 
+% 5l -W
 
 \section{Output executable format, [[a.out]]}
 % the output
@@ -828,15 +1075,10 @@ D hello
 % but 5l can also generate different executable formats (well different
 % headers).
 
-% see libmach to read back this executable!
-%FIGURE
-% so   .s --5a--> .o (.5) --5l--> .exe (5.out) --libmach--> readable
-% (hmm libmach is also reading .o (.5)
+% history? why called a.out? ok name of executable but why a?
+% assembler output?
 
 % include/exec/a.out.h
-% used by strip, libmach, but not really 5l.
-% should be 32 bytes (0x20)
-% see asmb() that generates this far below
 <<struct Exec>>=
 // a.out header format
 struct	Exec
@@ -857,19 +1099,29 @@ struct	Exec
     long	pcsz;		/* size of pc/line number table */
 };
 @
-\l and then from lineno you can get file/line thx to Hist?
 %old: _unused was actually:
 %    // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
 %    long	spsz;		/* size of pc/sp offset table */
 
+%used by strip, libmach, 
+%not used by 5l actually
+%should be 32 bytes (0x20)
+%see asmb() that generates this far below
+\l and then from lineno you can get file/line thx to Hist?
+
 % FIGURE with size corresponding to range vertical arrows
 
+% see libmach to read back this executable!
+%FIGURE
+% so   .s --5a--> .o (.5) --5l--> .exe (5.out) --libmach--> readable
+% (hmm libmach is also reading .o (.5)
+
+% no dynlink notion in a.out? need ELF for that?
 
 % entry: it's usually not main but _main (or _mainp) which does
 % some core initializations and then call main
 
 % see adv topic for other executable formats.
-
 
 %http://jvns.ca/blog/2014/09/06/how-to-read-an-executable/
 %http://lowlevelbits.org/parse-mach-o-files/
@@ -881,14 +1133,11 @@ struct	Exec
 
 %\section{Calling conventions}
 
-% Calling, runtime, etc?
 % memory model when loaded in memory? need that? seems more cc material
-
 % frame format?
 %  parameters (including space for first arg even if put in R0)
 %  saved PC (from REGLINK when not a leaf procedure)
 %  locals
-%
 % saved SP? assumer caller saves/restores registers including SP?
 
 % When want to call a procedure, need to save current place,
@@ -905,14 +1154,13 @@ struct	Exec
 \section{Code organization}
 
 % use also 5.out.h! but put in Assembler.nw
+% could use include/exec/a.out.h but does not
 
 %5l/l.h: data structures and prototypes (like a dat.h and fns.h)
 
 %5l/globals.c: globals
-%5l/utils.c:
-%5l/compat.c:
-%5l/list.c: dumpers
-%5l/enam.c: which is a symlink in 5c/
+
+%5l/obj.c: main()
 
 %5l/pass.c:
 %5l/span.c:
@@ -922,7 +1170,13 @@ struct	Exec
 %5l/asm.c: ARM machine code generation
 %5l/optab.c:
 
-%5l/obj.c: main()
+
+%5l/utils.c:
+%5l/compat.c:
+
+%5l/list.c: dumpers
+%5l/enam.c: which is a symlink in 5c/
+
 
 \n did not factorized in a ll/ this time, but factorized via LP
 
@@ -931,11 +1185,8 @@ struct	Exec
 % depends on include/arm/5.out.h for all assembly opcodes, registers, etc
 % (used to depend on 5c/ for one file ../5c/enam.c but now done via symlink)
 
-%linker vs libmach:
-% actually linker does not depend on libmach/! because it's writing 
-% specific stuff and libmach is mostly about generic reading interface 
-% to many specifics
-% (and not just 5l)
+% FIGURE control flow
+% FIGURE data flow
 
 %load objs on command line.
 %load libs but only their objects containing symbols we are looking for 
@@ -960,10 +1211,18 @@ struct	Exec
 %  anything by default and so there is lookup(INITENTRY, 0)->type = SXREF
 %  in the main of 8l/5l).
 
+
+%linker vs libmach:
+% actually linker does not depend on libmach/! because it's writing 
+% specific stuff and libmach is mostly about generic reading interface 
+% to many specifics
+% (and not just 5l)
+
+% FIGURE where see linker which does not use libmach, write vs read
+
 \section{Book structure}
 
 %dup: (and adapted) from Assembler.nw
-
 %trans: 
 We now have enough background to understand the source code of [[5l]].
 %toc:
@@ -978,24 +1237,25 @@ functions, e.g. [[asmb()]].
 %
 The following chapters will be dedicated to describe
 the main components of the linking pipeline:
-%
+%XXXX object loading, library loading, resolving, generating.
 %
 In Chapter~\ref{chap:debugging} we will describe the code
 responsible for adding debugging support in [[5l]], which
-for instance add line information in the executable. 
+for instance adds line information in the executable. 
 One can then know, when debugging a binary program,
 to which original line and which source file an
 instruction in the binary comes from, or what is the
 original name of the procedure containing this instruction.
 %
 Chapter~\ref{chap:advanced} presents other
-assembly features which we did not present 
+features of the linker which we did not present 
 before to simplify the explanations, for instance
 the support for floats. 
+\l or dynamic linking
 
 %toc:
 Some appendices present the code of non-functional properties:
-code to help debug [[5l]] itself in ppendix~\ref{chap:debugging-appendix}, and 
+code to help debug [[5l]] itself in Appendix~\ref{chap:debugging-appendix}, and 
 code to manage errors in Appendix~\ref{chap:error}.
 %
 Appendix~\ref{chap:libc} contains the code of generic
@@ -1004,6 +1264,9 @@ utilities used by [[5l]] but which are not specific to [[5l]].
 Finally, Appendix~\ref{chap:5l-ocaml} contains
 the code of an OCaml port of [[5l]].
 \t what for? :)
+
+
+
 
 %###############################################################################
 
@@ -1027,7 +1290,7 @@ In this chapter we will present the core data structures used by [[5l]].
 % with opcodes and operands, and finally a few globals managing
 % list of instructions (code and data)
 
-\section{[[Sym]] and [[hash]]}
+\section{[[Sym]]bols and [[hash]] table}
 
 % linker is a lot about resolving undefined symbols; linking definition to uses
 % at the right place, so symbols are pretty central!
@@ -1271,7 +1534,7 @@ struct	Auto
     <<[[Auto]] extra fields>>
 };
 @
-
+% Adr.sym vs Adr.autom.asym
 
 <<[[Auto]] extra fields>>=
 Auto*	link;
@@ -1334,6 +1597,9 @@ long	line;
 % so many ASM instructions have actually the same line because
 % one C expression can result in many ASM instructions.
 
+% up until now, very similar to Assembler.
+
+
 <<[[Prog]] other fields>>=
 long	pc;
 @
@@ -1394,13 +1660,10 @@ enum mark {
 Prog*	firstp;
 @
 % rename instrp?
-
-
 <<[[Prog]] extra fields>>=
-// list<ref<Prog>> from firstp/lastp, or datap/edatap
+// list<ref<Prog>> from firstp(/lastp), or datap(/edatap)
 Prog*	link;
 @
-
 <<constant P>>=
 #define	P		((Prog*)nil)
 @
@@ -1420,7 +1683,7 @@ Prog*	lastp;
 
 % list of procedures (ATEXT opcode), subset of firstp/lastp
 <<global textp>>=
-// list<ref<Prog>>, next = Prog.cond
+// list<ref<Prog>>, next = Prog.cond (really????)
 Prog*	textp = P;
 @
 
@@ -1501,10 +1764,13 @@ Prog	undefp;
 
 %---------------------------------------------
 
+%\section{[[Exec]]utable}
+% actually not used by 5l ...
+
 %\section{[[Optab]] and [[optab]]}?
 %hmm maybe better later
 
-%\section{[[Class]]}
+%\section{[[Operand_class]]}
 %hmm maybe better later
 
 %\section{[[Buf]] and [[buf]]}?
@@ -1535,7 +1801,7 @@ char	thechar;
 char*	thestring;
 @
 
-
+% why global? could pass around? for error msg?
 % -o, 
 <<global outfile>>=
 char*	outfile;
@@ -1604,6 +1870,7 @@ if(cout < 0) {
     errorexit();
 }
 @
+% appendix X for error managment
 
 \subsection{Arguments processing}
 
@@ -1623,6 +1890,35 @@ short	HEADTYPE = -1; /* type of header */
 @
 % was int in ARM and long in x86, but I don't think it matters
 
+%l.h
+<<enum headtype(arm)>>=
+/*
+ *	-H0				      no header
+ *	-H2 -T4128 -R4096	  is plan9 format
+ *	-H7				      is elf
+ */
+enum headtype {
+     H_NOTHING = 0,
+     H_PLAN9 = 2,
+     H_ELF = 7,
+};
+@
+%todo: H_OMACH
+%old:
+% *	-H1 -T0x10005000 -R4  is aif for risc os
+% *	-H3 -T0xF0000020 -R4  is NetBSD format
+% *	-H4				      is IXP1200 (raw)
+% *	-H5 -T0xC0008010 -R1024 	is ipaq
+% *	-H6 -R4096			   no header with segments padded to pages
+
+<<constant DEFAULT>>=
+#define	DEFAULT	H_PLAN9
+@
+%pad: I added that, before there was some stuff with -9 -B -U
+
+
+
+
 <<[[main()]] command line processing(arm)>>=
 case 'H':
     a = ARGF();
@@ -1631,7 +1927,7 @@ case 'H':
     /* do something about setting INITTEXT */
     break;
 @
-
+% atolwhex so can do -T0x2
 
 
 
@@ -1697,6 +1993,9 @@ long	HEADR; 		/* length of header */
 @
 
 
+
+
+
 <<[[main()]] set HEADTYPE, INITTEXT, INITDAT, etc>>=
 if(HEADTYPE == -1) {
     HEADTYPE = DEFAULT;
@@ -1713,31 +2012,6 @@ DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
 @
 %could put HEADTYPE=DEFAULT_HEADTYPE;
 
-%l.h
-<<enum headtype(arm)>>=
-/*
- *	-H0				      no header
- *	-H2 -T4128 -R4096	  is plan9 format
- *	-H7				      is elf
- */
-enum headtype {
-     H_NOTHING = 0,
-     H_PLAN9 = 2,
-     H_ELF = 7,
-};
-@
-%todo: H_OMACH
-%old:
-% *	-H1 -T0x10005000 -R4  is aif for risc os
-% *	-H3 -T0xF0000020 -R4  is NetBSD format
-% *	-H4				      is IXP1200 (raw)
-% *	-H5 -T0xC0008010 -R1024 	is ipaq
-% *	-H6 -R4096			   no header with segments padded to pages
-
-<<constant DEFAULT>>=
-#define	DEFAULT	H_PLAN9
-@
-%pad: I added that, before there was some stuff with -9 -B -U
 
 
 % -H2, see enum headtype in Overview chapter
@@ -1877,6 +2151,8 @@ if(INITENTRY == nil) {
 
 % _main! not main, because _main is defined in libc and then call your main?
 %less: SXREF means?
+
+
 
 \section{Loading the objects, [[objfile()]]}
 
@@ -2184,6 +2460,7 @@ for(t = 0; t < datsize; t += sizeof(buf)-100) {
 }
 @
 % what the fuss about those 100?? and what is sizeof(buf)?
+\t factorize code for those sizeof(buf)-100
 
 <<[[asmb()]] locals>>=
 long t, etext;
@@ -2661,6 +2938,7 @@ case ATEXT:
     //add_list(firstp, lastp, p)
     lastp->link = p;
     lastp = p;
+
     p->pc = pc;
     pc++;
 
@@ -2928,173 +3206,8 @@ if((files&15) == 0){
 }
 @
 
-\section{File and line information, [[AHISTORY]]}
-% tracing origin??
-
-
-<<global histfrog>>=
-Sym*	histfrog[MAXHIST];
-@
-
-<<constant MAXHIST>>=
-MAXHIST		= 20,	/* limit of path elements for history symbols */
-@
-
-<<global histfrogp>>=
-int	histfrogp;
-@
-
-
-
-
-
-% used by what? for debugging? when signature conflict! to print
-% current filenames in conflict
-
-
-% pn? filename of object file, but addlib() really abuse histgrog global
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AHISTORY:
-    if(p->to.offset == -1) {
-        addlib(pn);
-        histfrogp = 0;
-        goto loop;
-    }
-
-    addhist(p->line, D_FILE);		/* 'z' */
-    if(p->to.offset)
-        addhist(p->to.offset, D_FILE1);	/* 'Z' */
-    histfrogp = 0;
-    goto loop;
-@
-
-<<function addhist>>=
-void
-addhist(long line, int type)
-{
-    Auto *u;
-    Sym *s;
-    int i, j, k;
-
-    s = malloc(sizeof(Sym));
-    s->name = malloc(2*(histfrogp+1) + 1);
-
-    u = malloc(sizeof(Auto));
-    u->asym = s;
-    u->type = type;
-    u->aoffset = line;
-
-    u->link = curhist;
-    curhist = u;
-
-    j = 1;
-    for(i=0; i<histfrogp; i++) {
-        k = histfrog[i]->value;
-        s->name[j+0] = k>>8;
-        s->name[j+1] = k;
-        j += 2;
-    }
-}
-@
-
-
-
-<<global curhist>>=
-Auto*	curhist;
-@
-% like curauto
-
-% ldobj (case AEND | ATEXT | ??) -> <>
-<<function histtoauto>>=
-void
-histtoauto(void)
-{
-    Auto *l;
-
-    while(l = curhist) {
-        curhist = l->link;
-        l->link = curauto;
-        curauto = l;
-    }
-}
-@
-
-
-<<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>=
-histtoauto();
-@
-
-<<[[ldobj()]] case AEND, curauto adjustments with curhist>>=
-histtoauto();
-@
-
-
-
-
-<<enum sxxx cases>>=
-SFILE,
-@
-
-<<global histgen>>=
-int	histgen = 0;
-@
-
-<<[[ldobj()]] when ANAME opcode, if D_FILE>>=
-if(v == D_FILE) {
-    if(s->type != SFILE) {
-        histgen++;
-        s->type = SFILE;
-        s->value = histgen;
-    }
-    if(histfrogp < MAXHIST) {
-        histfrog[histfrogp] = s;
-        histfrogp++;
-    } else
-        collapsefrog(s);
-}
-@
-
-
-<<function collapsefrog>>=
-void
-collapsefrog(Sym *s)
-{
-    int i;
-
-    /*
-     * bad encoding of path components only allows
-     * MAXHIST components. if there is an overflow,
-     * first try to collapse xxx/..
-     */
-    for(i=1; i<histfrogp; i++)
-        if(strcmp(histfrog[i]->name+1, "..") == 0) {
-            memmove(histfrog+i-1, histfrog+i+1,
-                (histfrogp-i-1)*sizeof(histfrog[0]));
-            histfrogp--;
-            goto out;
-        }
-
-    /*
-     * next try to collapse .
-     */
-    for(i=0; i<histfrogp; i++)
-        if(strcmp(histfrog[i]->name+1, ".") == 0) {
-            memmove(histfrog+i, histfrog+i+1,
-                (histfrogp-i-1)*sizeof(histfrog[0]));
-            goto out;
-        }
-
-    /*
-     * last chance, just truncate from front
-     */
-    memmove(histfrog+0, histfrog+1,
-        (histfrogp-1)*sizeof(histfrog[0]));
-
-out:
-    histfrog[histfrogp-1] = s;
-}
-@
-
+%\section{File and line information, [[AHISTORY]]}
+% see debugging section
 
 
 
@@ -3114,6 +3227,8 @@ out:
 % are processed, etc.
 
 \section{[[ar]] format}
+
+% see ar(5) man page
 
 % from ar.h
 <<constant ARMAG>>=
@@ -3789,6 +3904,8 @@ mkfwd();
 % Interesting data structure overlay on top of a simple linked list
 % alternatives: 
 %  - a hashtbl on Prog.pc? to get a Prog from a specific pc
+
+% FIGURE
 
 <<constant LOG>>=
 #define	LOG	5
@@ -4809,7 +4926,14 @@ aclass(Adr *a)
 % is close and so could be stored in a half-word, or if
 % it's far away.
 
-\subsection{Refined classes}
+\subsection{Refined classes and [[instoffset]]}
+
+<<global instoffset(arm)>>=
+long	instoffset;
+@
+% instruction offset?
+% really needs to be a global? can't be just a local to aclass()?
+
 
 \subsubsection{[[D_OREG]]}
 
@@ -5203,19 +5327,10 @@ immrot(ulong v)
 % the 1<<25 means we are in the  i,r,r  case
 
 
-\subsection{[[instoffset]]}
-
-<<global instoffset(arm)>>=
-long	instoffset;
-@
-% instruction offset?
-% really needs to be a global? can't be just a local to aclass()?
-
-
-
 
 \subsection{Pool}
-% ????
+% see 5l -v -a, see WORD generated at the end for constants
+% that could not be encoded in one ARM instruction. Asm5 != ARMv6
 
 <<[[Optab]] other fields>>=
 // 0 | REGSB | REGSP
@@ -5935,7 +6050,7 @@ case 11:	/* word */
 @
 
 
-\subsection{Arithmetic opcodes}
+\subsection{Arithmetic and logic opcodes}
 
 \subsubsection{Logic, add/sub, comparisons, simple movs}
 
@@ -6393,7 +6508,7 @@ case 58:	/* movbu R,R */
 
 
 
-\subsection{Branching opcodes}
+\subsection{Control flow opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AB:
@@ -6937,7 +7052,7 @@ case 40:	/* swp oreg,reg,reg */
 @
 % >> >> >> >> >> >> >>
 
-\subsection{Interrupt opcodes}
+\subsection{Software interrupt opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ASWI:
@@ -6977,6 +7092,7 @@ case ASWI:	return o | (0xf<<24);
 <<[[optab]] entries>>=
 { ARFE,		C_NONE,	C_NONE,	C_NONE,		41, 4, 0 },
 @
+%emulator:
 % there is no RFE in Machine.nw because all the system
 % code is proxied, and so there is no assembly system code to emulate
 
@@ -6994,6 +7110,7 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
 <<constant Dbufslop>>=
 #define	Dbufslop	100
 @
+% ? slop?
 
 %sstring is bool used when call datblk for generating strings in text segment
 <<function datblk(arm)>>=
@@ -7377,6 +7494,176 @@ putsymb(char *s, int t, long v, int ver)
 }
 @
 %>>
+
+
+\section{File and line information, [[AHISTORY]]}
+% tracing origin??
+
+
+<<global histfrog>>=
+Sym*	histfrog[MAXHIST];
+@
+
+<<constant MAXHIST>>=
+MAXHIST		= 20,	/* limit of path elements for history symbols */
+@
+
+<<global histfrogp>>=
+int	histfrogp;
+@
+
+
+
+
+
+% used by what? for debugging? when signature conflict! to print
+% current filenames in conflict
+
+
+% pn? filename of object file, but addlib() really abuse histgrog global
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AHISTORY:
+    if(p->to.offset == -1) {
+        addlib(pn);
+        histfrogp = 0;
+        goto loop;
+    }
+
+    addhist(p->line, D_FILE);		/* 'z' */
+    if(p->to.offset)
+        addhist(p->to.offset, D_FILE1);	/* 'Z' */
+    histfrogp = 0;
+    goto loop;
+@
+
+<<function addhist>>=
+void
+addhist(long line, int type)
+{
+    Auto *u;
+    Sym *s;
+    int i, j, k;
+
+    s = malloc(sizeof(Sym));
+    s->name = malloc(2*(histfrogp+1) + 1);
+
+    u = malloc(sizeof(Auto));
+    u->asym = s;
+    u->type = type;
+    u->aoffset = line;
+
+    u->link = curhist;
+    curhist = u;
+
+    j = 1;
+    for(i=0; i<histfrogp; i++) {
+        k = histfrog[i]->value;
+        s->name[j+0] = k>>8;
+        s->name[j+1] = k;
+        j += 2;
+    }
+}
+@
+
+
+
+<<global curhist>>=
+Auto*	curhist;
+@
+% like curauto
+
+% ldobj (case AEND | ATEXT | ??) -> <>
+<<function histtoauto>>=
+void
+histtoauto(void)
+{
+    Auto *l;
+
+    while(l = curhist) {
+        curhist = l->link;
+        l->link = curauto;
+        curauto = l;
+    }
+}
+@
+
+
+<<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>=
+histtoauto();
+@
+
+<<[[ldobj()]] case AEND, curauto adjustments with curhist>>=
+histtoauto();
+@
+
+
+
+
+<<enum sxxx cases>>=
+SFILE,
+@
+
+<<global histgen>>=
+int	histgen = 0;
+@
+
+<<[[ldobj()]] when ANAME opcode, if D_FILE>>=
+if(v == D_FILE) {
+    if(s->type != SFILE) {
+        histgen++;
+        s->type = SFILE;
+        s->value = histgen;
+    }
+    if(histfrogp < MAXHIST) {
+        histfrog[histfrogp] = s;
+        histfrogp++;
+    } else
+        collapsefrog(s);
+}
+@
+
+
+<<function collapsefrog>>=
+void
+collapsefrog(Sym *s)
+{
+    int i;
+
+    /*
+     * bad encoding of path components only allows
+     * MAXHIST components. if there is an overflow,
+     * first try to collapse xxx/..
+     */
+    for(i=1; i<histfrogp; i++)
+        if(strcmp(histfrog[i]->name+1, "..") == 0) {
+            memmove(histfrog+i-1, histfrog+i+1,
+                (histfrogp-i-1)*sizeof(histfrog[0]));
+            histfrogp--;
+            goto out;
+        }
+
+    /*
+     * next try to collapse .
+     */
+    for(i=0; i<histfrogp; i++)
+        if(strcmp(histfrog[i]->name+1, ".") == 0) {
+            memmove(histfrog+i, histfrog+i+1,
+                (histfrogp-i-1)*sizeof(histfrog[0]));
+            goto out;
+        }
+
+    /*
+     * last chance, just truncate from front
+     */
+    memmove(histfrog+0, histfrog+1,
+        (histfrogp-1)*sizeof(histfrog[0]));
+
+out:
+    histfrog[histfrogp-1] = s;
+}
+@
+
+
 
 
 \section{Filenames}
@@ -7834,6 +8121,9 @@ if(p->reg & NOPROF) {
 
 % useful for the tracing instructions themselves ... hmmm
 
+
+
+
 \chapter{[[libmach/]]}
 
 % can copy Fhdr here.
@@ -7842,6 +8132,7 @@ if(p->reg & NOPROF) {
 \l in appendix?
 
 \section{[[size]]}
+\label{sec:size-code}
 
 % errort (0 is ok)
 <<function size>>=
@@ -7893,10 +8184,21 @@ main(int argc, char *argv[])
 @
 
 \section{[[nm]]}
+\label{sec:nm-code}
+
+% see nm(1)
+% use libmach!
+
+% table with letter -> definition? (but explained in nm(1) it is true)
+% or better do it via the code :)
 
 \section{[[ar]]}
+\label{sec:ar-code}
+
+% see ar(5) and ar(1)
 
 \section{[[strip]]}
+\label{sec:strip-code}
 
 
 
@@ -8232,7 +8534,8 @@ if(!(r->cond->mark&FOLL))
 
 \section{Strings in text segment, [[5l -t]]}
 
-% what for? so cannot be modified?
+% what for? so cannot be modified? text is marked as writable
+%  in Kernel.nw?
 % for constant strings? an optimisation?
 
 <<enum sxxx cases>>=
@@ -8290,8 +8593,8 @@ if(p->reg & DUPOK) {
 @
 
 \section{Dynamic linking}
-\l dynamic loading?
 \label{sec:dynamic-linking}
+\l dynamic loading?
 
 %http://harmful.cat-v.org/software/dynamic-linking/
 
@@ -9164,6 +9467,8 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
 % >> >> >> >> >> >> >> >>
 
 
+
+
 \section{Extra executable formats}
 \label{sec:other-executable-formats}
 
@@ -9374,6 +9679,8 @@ enum {
 
 
 \section{[[5l -E digits]]}
+
+% -E0x7c00 ?
 
 <<[[main()]] if digit INITENTRY>>=
 if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
@@ -10731,6 +11038,8 @@ case 16:	/* div r,[r,]r */
 
 \subsection{Multiple registers instructions}
 
+% used by RFE
+
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMOVM:
     break;
@@ -10807,7 +11116,8 @@ case 63:	/* bcase */
 @
 
 
-\section{Position Independent Code}
+\section{Position independent code (PIC)}
+
 %PIC, -fpic
 
 % how ugly it is for x86:
@@ -10817,12 +11127,13 @@ case 63:	/* bcase */
 
 \chapter{Conclusion}
 
-%dup: (and adapted) Assembler.nw
+%dup: (and adapted) from Assembler.nw
 You now know how the \plan ARM linker [[5l]] works,
 to the smallest details, and more generally how many 
 linkers works.
 
-\l next step? kernel/loader. debugger which uses libmach. profiler.
+\l next step? kernel/loader. 
+\l debugger which uses libmach. profiler.
 
 
 
@@ -10846,6 +11157,15 @@ bool	debug[128];
 @
 % why not 256 like in Assembler.nw?
 
+<<[[main()]] command line processing(arm)>>=
+default:
+    c = ARGC();
+    if(c >= 0 && c < sizeof(debug))
+        debug[c]++;
+    break;
+@
+
+
 
 % -A, see diag()
 
@@ -10855,20 +11175,12 @@ Biobuf	bso;
 @
 
 
-
 <<[[main()]] debug initialization(arm)>>=
 Binit(&bso, 1, OWRITE);
 listinit(); // fmtinstall()
 @
 %x86: memset(debug, false, sizeof(debug));
 
-<<[[main()]] command line processing(arm)>>=
-default:
-    c = ARGC();
-    if(c >= 0 && c < sizeof(debug))
-        debug[c]++;
-    break;
-@
 
 \section{Fmt}
 % dupe with Compiler.nw
@@ -10889,132 +11201,6 @@ listinit(void)
     fmtinstall('N', Nconv);
 }
 @
-
-\subsection{Symbol kind dumper, [[Nconv()]]}
-
-<<function Nconv(arm)>>=
-int
-Nconv(Fmt *fp)
-{
-    char str[STRINGSZ];
-    Adr *a;
-    Sym *s;
-
-    a = va_arg(fp->args, Adr*);
-    s = a->sym;
-
-    switch(a->symkind) {
-    case N_NONE:
-        sprint(str, "%ld", a->offset);
-        break;
-
-    case D_EXTERN:
-        if(s == S)
-            sprint(str, "%ld(SB)", a->offset);
-        else
-            sprint(str, "%s+%ld(SB)", s->name, a->offset);
-        break;
-
-    case D_INTERN:
-        if(s == S)
-            sprint(str, "<>+%ld(SB)", a->offset);
-        else
-            sprint(str, "%s<>+%ld(SB)", s->name, a->offset);
-        break;
-
-    case D_LOCAL:
-        if(s == S)
-            sprint(str, "%ld(SP)", a->offset);
-        else
-            sprint(str, "%s-%ld(SP)", s->name, -a->offset);
-        break;
-
-    case D_PARAM:
-        if(s == S)
-            sprint(str, "%ld(FP)", a->offset);
-        else
-            sprint(str, "%s+%ld(FP)", s->name, a->offset);
-        break;
-    default:
-        sprint(str, "GOK-name(%d)", a->symkind);
-        break;
-
-    }
-    return fmtstrcpy(fp, str);
-}
-@
-
-
-\subsection{Conditional execution dumper, [[Cconv()]]}
-
-
-<<global strcond(arm)>>=
-char*	strcond[16] =
-{
-    ".EQ",
-    ".NE",
-    ".HS",
-    ".LO",
-    ".MI",
-    ".PL",
-    ".VS",
-    ".VC",
-    ".HI",
-    ".LS",
-    ".GE",
-    ".LT",
-    ".GT",
-    ".LE",
-    "",
-    ".NV"
-};
-@
-
-<<function Cconv(arm)>>=
-int
-Cconv(Fmt *fp)
-{
-    char s[20];
-    int c;
-
-    c = va_arg(fp->args, int);
-    strcpy(s, strcond[c & C_SCOND]);
-    if(c & C_SBIT)
-        strcat(s, ".S");
-    if(c & C_PBIT)
-        strcat(s, ".P");
-    if(c & C_WBIT)
-        strcat(s, ".W");
-    if(c & C_UBIT)		/* ambiguous with FBIT */
-        strcat(s, ".U");
-    return fmtstrcpy(fp, s);
-}
-@
-
-
-\subsection{Opcode dumper, [[Aconv()]]}
-
-
-
-% defined in ../5c/enam.c, coupling with enum as in 5.out.h
-% extern	char*	anames[];
-
-<<function Aconv(arm)>>=
-// enum<opcode> -> string
-int
-Aconv(Fmt *fp)
-{
-    char *s;
-    int a;
-
-    a = va_arg(fp->args, int);
-    s = "???";
-    if(a >= AXXX && a < ALAST)
-        s = anames[a];
-    return fmtstrcpy(fp, s);
-}
-@
-
 
 \subsection{Instruction dumper, [[Pconv()]]}
 
@@ -11077,6 +11263,30 @@ Pconv(Fmt *fp)
 
     }
     return fmtstrcpy(fp, str);
+}
+@
+
+
+\subsection{Opcode dumper, [[Aconv()]]}
+
+
+
+% defined in ../5c/enam.c, coupling with enum as in 5.out.h
+% extern	char*	anames[];
+
+<<function Aconv(arm)>>=
+// enum<opcode> -> string
+int
+Aconv(Fmt *fp)
+{
+    char *s;
+    int a;
+
+    a = va_arg(fp->args, int);
+    s = "???";
+    if(a >= AXXX && a < ALAST)
+        s = anames[a];
+    return fmtstrcpy(fp, s);
 }
 @
 
@@ -11223,6 +11433,108 @@ Dconv(Fmt *fp)
 
 
 
+\subsection{Symbol kind dumper, [[Nconv()]]}
+
+<<function Nconv(arm)>>=
+int
+Nconv(Fmt *fp)
+{
+    char str[STRINGSZ];
+    Adr *a;
+    Sym *s;
+
+    a = va_arg(fp->args, Adr*);
+    s = a->sym;
+
+    switch(a->symkind) {
+    case N_NONE:
+        sprint(str, "%ld", a->offset);
+        break;
+
+    case D_EXTERN:
+        if(s == S)
+            sprint(str, "%ld(SB)", a->offset);
+        else
+            sprint(str, "%s+%ld(SB)", s->name, a->offset);
+        break;
+
+    case D_INTERN:
+        if(s == S)
+            sprint(str, "<>+%ld(SB)", a->offset);
+        else
+            sprint(str, "%s<>+%ld(SB)", s->name, a->offset);
+        break;
+
+    case D_LOCAL:
+        if(s == S)
+            sprint(str, "%ld(SP)", a->offset);
+        else
+            sprint(str, "%s-%ld(SP)", s->name, -a->offset);
+        break;
+
+    case D_PARAM:
+        if(s == S)
+            sprint(str, "%ld(FP)", a->offset);
+        else
+            sprint(str, "%s+%ld(FP)", s->name, a->offset);
+        break;
+    default:
+        sprint(str, "GOK-name(%d)", a->symkind);
+        break;
+
+    }
+    return fmtstrcpy(fp, str);
+}
+@
+
+
+\subsection{Conditional execution dumper, [[Cconv()]]}
+
+
+<<global strcond(arm)>>=
+char*	strcond[16] =
+{
+    ".EQ",
+    ".NE",
+    ".HS",
+    ".LO",
+    ".MI",
+    ".PL",
+    ".VS",
+    ".VC",
+    ".HI",
+    ".LS",
+    ".GE",
+    ".LT",
+    ".GT",
+    ".LE",
+    "",
+    ".NV"
+};
+@
+
+<<function Cconv(arm)>>=
+int
+Cconv(Fmt *fp)
+{
+    char s[20];
+    int c;
+
+    c = va_arg(fp->args, int);
+    strcpy(s, strcond[c & C_SCOND]);
+    if(c & C_SBIT)
+        strcat(s, ".S");
+    if(c & C_PBIT)
+        strcat(s, ".P");
+    if(c & C_WBIT)
+        strcat(s, ".W");
+    if(c & C_UBIT)		/* ambiguous with FBIT */
+        strcat(s, ".U");
+    return fmtstrcpy(fp, s);
+}
+@
+
+
 \subsection{???, [[Sconv()]]}
 
 <<function Sconv(arm)>>=
@@ -11301,11 +11613,13 @@ void mylog(char *fmt, ...) {
 %pad: I introduced that
 
 \section{Objects loading debugging, [[5l -W]]}
+\label{sec:debugging-loading}
 
 <<[[ldobj()]] debug>>=
 if(debug['W'])
     print("%P\n", p);
 @
+% see Pconv before
 
 <<[[ldobj()]] when ANAME, debug>>=
 if(debug['W'])
@@ -11336,6 +11650,7 @@ if(debug['t']) {
 
 
 \section{Machine code generation debugging, [[5l -a]]}
+\label{sec:debugging-generated-code}
 
 % print final concrete code in assembly language with addresses
 % very nice!
