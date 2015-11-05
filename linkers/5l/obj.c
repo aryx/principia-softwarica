@@ -1109,6 +1109,7 @@ loop:
         //add_list(firstp, lastp, p)
         lastp->link = p;
         lastp = p;
+
         p->pc = pc;
         pc++;
 

@@ -100,7 +100,7 @@ struct	Prog
 
     // Extra
     /*s: [[Prog]] extra fields */
-    // list<ref<Prog>> from firstp/lastp, or datap/edatap
+    // list<ref<Prog>> from firstp(/lastp), or datap(/edatap)
     Prog*	link;
     /*x: [[Prog]] extra fields */
     // list<ref<Prog>> from textp/etextp
@@ -213,9 +213,9 @@ enum Section
 
     SXREF,
     /*s: enum sxxx cases */
-    SFILE,
-    /*x: enum sxxx cases */
     SLEAF, // arm
+    /*x: enum sxxx cases */
+    SFILE,
     /*x: enum sxxx cases */
     SDATA1,
     /*x: enum sxxx cases */

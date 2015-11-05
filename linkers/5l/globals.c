@@ -168,7 +168,7 @@ long	pc = 0;
 long	symsize;
 /*e: global symsize */
 /*s: global textp */
-// list<ref<Prog>>, next = Prog.cond
+// list<ref<Prog>>, next = Prog.cond (really????)
 Prog*	textp = P;
 /*e: global textp */
 /*s: global textsize */

@@ -144,7 +144,7 @@ Dconv(Fmt *fp)
     switch(a->type) {
 
     case D_NONE:
-        str[0] = 0;
+        str[0] = '\0';
         if(a->symkind != D_NONE || a->reg != R_NONE || a->sym != S)
             sprint(str, "%N(R%d)(NONE)", a, a->reg);
         break;
@@ -229,12 +229,12 @@ Dconv(Fmt *fp)
         if(curp->cond != P) {
             v = curp->cond->pc;
             if(a->sym != S)
-                sprint(str, "%s+%.5lux(BRANCH)", a->sym->name, v);
+                sprint(str, "{%s}%.5lux(BRANCH)", a->sym->name, v);
             else
                 sprint(str, "%.5lux(BRANCH)", v);
         } else
             if(a->sym != S)
-                sprint(str, "%s+%ld(APC)", a->sym->name, a->offset);
+                sprint(str, "{%s}%ld(APC)", a->sym->name, a->offset);
             else
                 sprint(str, "%ld(APC)", a->offset);
         break;
@@ -276,28 +276,28 @@ Nconv(Fmt *fp)
         if(s == S)
             sprint(str, "%ld(SB)", a->offset);
         else
-            sprint(str, "%s+%ld(SB)", s->name, a->offset);
+            sprint(str, "{%s}%.5lux+%ld(SB)", s->name, s->value, a->offset);
         break;
 
     case D_INTERN:
         if(s == S)
             sprint(str, "<>+%ld(SB)", a->offset);
         else
-            sprint(str, "%s<>+%ld(SB)", s->name, a->offset);
+            sprint(str, "{%s<>}%.5lux+%ld(SB)", s->name, s->value, a->offset);
         break;
 
     case D_LOCAL:
         if(s == S)
             sprint(str, "%ld(SP)", a->offset);
         else
-            sprint(str, "%s-%ld(SP)", s->name, -a->offset);
+            sprint(str, "{%s}-%ld(SP)", s->name, -a->offset);
         break;
 
     case D_PARAM:
         if(s == S)
             sprint(str, "%ld(FP)", a->offset);
         else
-            sprint(str, "%s+%ld(FP)", s->name, a->offset);
+            sprint(str, "{%s}%ld(FP)", s->name, a->offset);
         break;
     default:
         sprint(str, "GOK-name(%d)", a->symkind);

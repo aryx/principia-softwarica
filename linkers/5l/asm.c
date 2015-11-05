@@ -1511,11 +1511,13 @@ asmout(Prog *p, Optab *o)
         lputl(o5);
         lputl(o6);
         break;
-    /*e: [[asmout()]] switch on size cases */
     default:
+        /*s: [[asmout()]] when other size, debug */
         if(debug['a'])
             Bprint(&bso, " %.8lux:\t\t%P\n", v, p);
+        /*e: [[asmout()]] when other size, debug */
         break;
+    /*e: [[asmout()]] switch on size cases */
     }
 }
 /*e: function asmout(arm) */
