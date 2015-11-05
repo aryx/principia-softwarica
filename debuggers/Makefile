@@ -53,6 +53,7 @@ SRC_VIEWS= \
    acid/builtin.c\
   \
   ../include/debug/mach.h\
+  ../include/exec/bootexec.h\
   \
   libmach/5.c\
   libmach/5db.c\
