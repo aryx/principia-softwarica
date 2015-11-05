@@ -22,11 +22,6 @@ SRC_VIEWS= \
   ../include/exec/a.out.h\
   ../include/exec/elf.h\
   ../include/devel/output/ar.h\
-  ../include/devel/output/bootexec.h\
-  misc/ar.c\
-  misc/nm.c\
-  misc/size.c\
-  misc/strip.c\
   5l/l.h\
   5l/globals.c\
   5l/optab.c\
@@ -38,10 +33,16 @@ SRC_VIEWS= \
   5l/span.c\
   5l/obj.c\
   5l/noop.c\
-
-XX=\
+  \
   8l/elf.h\
   8l/elf.c\
+
+XX=\
+  misc/ar.c\
+  misc/nm.c\
+  misc/size.c\
+  misc/strip.c\
+  \
   8l/l.h\
   8l/globals.c\
   8l/utils.c\
