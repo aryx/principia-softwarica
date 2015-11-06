@@ -450,8 +450,25 @@ to understand the code we will show later.
 A {\em linker} is a program which takes as input multiple
 {object files} and {combine} them to form an {executable}
 as shown in Figure~\ref{fig:linker-overview}.
-\t FIGURE smaller one? one that relates also to assembler and compiler
 \n combine will be explained later
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+         +-----------+
+         | assembler |
+foo.s -->|   (5a)    |--> foo.5 --+
+         +-----------+            |   +-----------+
+                                  |   |  linker   |
+         +-----------+            +-->|   (5l)    |--> 5.out
+         | compiler  |            |   +-----------+
+bar.c -->|   (5c)    |--> bar.5 --+
+         +-----------+
+
+Source files           Object files               Executable
+\end{verbatim}
+\caption{Linker inputs and output}\label{fig:linker-overview}
+\end{figure}
+
 
 %dup: from Assembler.nw principles
 An {\em object file} is really the simplest form of
@@ -475,11 +492,11 @@ Thanks to the header, a part of the kernel called the {\em loader}
 can know where the code and data are stored in the executable
 file as well as its entry point. The loader, 
 triggered by the [[exec()]] system call,
-can then load in memory the different sections of 
+can then load (copy) in memory the different sections of 
 the executable file and start executing its code.
 
 \n how
-Figure~\ref{fig:linker-overview} gives an overview of the linking
+Figure~\ref{fig:linker-process} gives an overview of the linking
 process.
 %
 The linker first {\em concatenates} the code parts of the 
@@ -538,8 +555,9 @@ here the definition of [[fbar]] in [[C2]].
 Input object files and                  Output executable
        library
 \end{verbatim}
-\caption{Linker process overview}\label{fig:linker-overview}
+\caption{Linker process overview}\label{fig:linker-process}
 \end{figure}
+\l actually in ARM it is BL not CALL and B not JMP
 
 \subsection{Symbol resolution}
 \n I didn't have subsections in Assembler.nw for its principles but I had a
@@ -549,12 +567,12 @@ Linking the use of symbols to their definitions
 is also called {\em resolving} the references to external symbols.
 \l well external and internal too actually
 %
-The linker can do so because it has access to all the code (or data), and
-once all the code (or data) parts are contatenated together, 
+The linker can do so because it has access to all the code (and data), and
+once all the code (and data) parts are contatenated together, 
 the final {addresses} of the different {entities} can be known. 
 \l actually can need fixpoing on some archi, hmm
 \l actually dynamic linking mean sometimes have still unresolved symbols
-So, in Figure~\ref{fig:linker-overview} the call to [[fbar]]
+So, in Figure~\ref{fig:linker-overview} the call to [[fbar]] in [[C1]]
 can be transformed in a machine instruction to go to the
 address 100 where the code of [[fbar]] resides (assuming [[fbar]]
 was the first procedure in [[bar.5]] and so [[C2]]).
@@ -643,7 +661,7 @@ generate directly an executable.}.
 %
 As programs grow larger, this approach becomes inconvenient though.
 
-Linkers and object files enable the use of {\em separate compilation}
+Linkers and object files enable {\em separate compilation}
 which in the long term saves lots of compilation time.
 \l well for 5l/5a maybe less cos heavy part is machine codegen done in 5l
 \l other advantages? more language independent? cat foo.c foo.ml would not work
@@ -668,7 +686,7 @@ For instance, in Figure~\ref{fig:linker-overview} the linker
 decided to include in the executable the code of [[x.5]] ([[C4]]), which
 is part of [[lib.a]], 
 because it contains the definition of a procedure [[util()]] which
-is mentioned in the object [[bar.5]]. 
+is mentioned in the object file [[bar.5]]. 
 \l well need fixpoint though, need take care
 It did not include the code from [[y.5]] though because such code 
 would be anyway {\em dead code} in the executable. 
@@ -722,6 +740,12 @@ is entired dedicated to the topic.
 % - https://github.com/0xAX/linux-insides/blob/master/Misc/linkers.md
 %   and http://0xax.gitbooks.io/linux-insides/content/Misc/linkers.html
 %   pretty good use of nm, objdump, readelf, etc
+
+%\subsection{Summary}
+\l put back essential steps? read object and lib, concatenate, 
+%   resolve and relocate, and finally generate. but explained in soft archi?
+
+\l which rougly correspond to different chapters
 
 \section{[[5l]] command line interface}
 %dup: (and adapted) from Assembler.nw
@@ -785,7 +809,7 @@ are necessary for producing special executables such as
 kernels or boot loaders as we will see in the \book{Kernel}.
 Indeed, those binaries will be loaded (by the bootstrapping process
 or firmware) at special memory addresses, 
-e.g. 0x80000000 for the ARM kernel, 0x7c00 for an x86 bootloader.
+e.g. 0x80000000 for the ARM \plan kernel, 0x7c00 for an x86 bootloader.
 
 Another set of options are used to manage libraries,
 which are really files encapsulating a set of object files,
@@ -810,6 +834,7 @@ as tools such as [[nm]].
 \l and indeed to better understand indeed linking process
 
 \subsection{The source files}
+\label{sec:hello-world-source}
 
 We splitted the original source file [[helloworld.s]] 
 in two files [[hello2.s]] and [[world.s]].
@@ -910,7 +935,7 @@ The job of the linker is then to link those definitions to their uses.
 %
 There are other kinds of symbols and so other single letter codes
 used by [[nm]]. Those codes as well as the source of
-[[nm]] will be described fully later in Section~\ref{sec:nm-code}.
+[[nm]] will be described fully later in Appendix~\ref{sec:nm-code}.
 
 \l nm is actually using libmach, crachhdr, etc, generic API for object manip
 \t put libmach/5obj.c in this book?
@@ -958,7 +983,8 @@ the instructions of the object files passed on the command line:
 \n this was actually done via kencc/5l
 \t why those lineno? seems wrong line number. BUG?
 \l remove those comma? 
-\n for dollar hello we should remove the (SB)? NO! it will use R12!
+\t for dollar hello we should remove the (SB)? NO! it will use R12!
+\t  but it will do R12 + 00014 no?
 \l have a D_ADDR? so cleaner?
 \l very close to assembler, indeed object file is just serialized asm source
 %pad: I changed the format to use {} and to show the value (here 00000) of syms
@@ -966,6 +992,12 @@ the instructions of the object files passed on the command line:
 The first two fragments show the instructions of [[hello.5]],
 from Line 3 to Line 14,
 and [[world.5]], from Line 16 to Line 20.
+The output is very similar to the assembly sources of
+Section~\ref{sec:hello-world-source}. 
+%dup: from intro/5l (itself dup from Assembler.nw)
+This is normal since under \plan an object file is essentially
+the serialized form of the abstract syntax tree of the assembly source.
+%
 See the \book{Assembler} if you do not
 understand the opcodes or pseudo-opcodes, e.g. [[ANAME]].
 
@@ -1027,22 +1059,22 @@ the debugging option [[-a]] of [[5l]]:
 10 00001038: eb00009a	(9)	BL	,{exits}012a8(BRANCH)       
 11
 12 0000103c:		(8)	TEXT	{_main}0103c+0(SB),R1,$80
-13 0000103c: e52de054	(8)	MOVW.W	R14,-84(R13)
-14 00001040: e59fc870	(10)	MOVW	${setR12}00ffc+0(SB),R12
-15 00001044: e50c0fd0	(11)	MOVW	R0,{_tos}0002c+0(SB)
+13 0000103c: e52de054	(8)	MOVW.W R14,-84(R13)
+14 00001040: e59fc870	(10) MOVW ${setR12}00ffc+0(SB),R12
+15 00001044: e50c0fd0	(11) MOVW R0,{_tos}0002c+0(SB)
 16 ...
-17 00001068: ebffffec	(21)	BL	,{main}01020(BRANCH)
+17 00001068: ebffffec	(21) BL	,{main}01020(BRANCH)
 18 ...
 19
-20 000012a8:		(915)	TEXT	{exits}012a8+0(SB),R1,$16
-21 000012a8: e52de014	(915)	MOVW.W	R14,-20(R13)
+20 000012a8:		(915) TEXT {exits}012a8+0(SB),R1,$16
+21 000012a8: e52de014	(915) MOVW.W	R14,-20(R13)
 22 ...
 23
-24 00001324:		(874)	TEXT	{fprint}01324+0(SB),R0,$20
-25 00001324: e52de018	(874)	MOVW.W	R14,-24(R13)
+24 00001324:		(874) TEXT {fprint}01324+0(SB),R0,$20
+25 00001324: e52de018	(874) MOVW.W	R14,-24(R13)
 26 ...
 27
-28 00006b50: e49df03c	(890)	MOVW.P	60(R13),R15
+28 00006b50: e49df03c	(890) MOVW.P	60(R13),R15
 \end{verbatim}
 \n this was also done via kencc/5l
 
@@ -1070,7 +1102,7 @@ see the procedure boundaries, e.g. Line 3 and Line 12.
 
 
 
-The first instruction Line 4 starts at 0x1020 which is equal to 4128.
+The first instruction Line 4 starts at [[01020]] which is equal to 4128.
 %dup: from overview/principles and overview/command-line
 Indeed, as said previously in Section~\ref{sec:kernel-load-4096},
 the kernel loads executables after the first page (4096)
@@ -1078,7 +1110,7 @@ and includes the [[a.out]] header which is using 32 bytes. Thus,
 the code starts at the memory address 4128.
 
 Note that even though it looks like there are two instructions
-at [[0x1020]], with Line 3 and Line 4, the first instruction ([[TEXT ...]])
+at [[01020]], with Line 3 and Line 4, the first instruction ([[TEXT ...]])
 is a pseudo-instruction which got transformed by the linker
 in the ARM instruction Line 4 ([[MOVW.M ...]]).
 \t lots to explain here, 8 vs 12, MOVW.M which does multiple things.
@@ -1097,13 +1129,13 @@ the memory addresses [[01324]] (Line 25)  and [[012a8]] (Line 21).
 The symbol value of [[hello]] Line~6 is [[00014]] which
 seems incorrect. Indeed, data should be stored after
 the code section and so the resolved address of [[hello]] should
-be beyond [[0x6b50]] (the address of the last instruction Line 28).
+be beyond [[06b50]] (the address of the last instruction Line 28).
 %dup: section just before
 But, the symbol value for data symbols contains the resolved address
 of the symbol as {\em an offset to the start of the data section}.
 The rational for this decision will be explained later
 in Section~\ref{sec:sb-r12}.
-Thus, the final address of [[hello]] is [[0x14 + INITDAT]]
+Thus, the final address of [[hello]] is [[014 + INITDAT]]
 where [[INITDAT]] will be shown in the next section.
 \l actually see also initialisation of R12 with  very tricky
 % MOVW	${setR12}00ffc+0(SB),R12
@@ -1116,8 +1148,10 @@ Appendix~\ref{sec:debugging-generated-code}.
 
 \subsection{Inspecting executables with [[nm]]}
 
-[[nm]] can also be used on executables (here with the [[-n]] option
-to sort by address):
+[[nm]] can also be used on executables. In that case [[nm]] not only displays
+the list of symbols, it also displays their addresses (in hexadecimal)
+when loaded
+in memory. Here it is used with the [[-n]] option to sort by addresses:
 
 \begin{verbatim}
 1 $ nm -n 5.out
@@ -1146,22 +1180,44 @@ to sort by address):
 \n this was also done via kencc/nm (actually inm)
 \l why etext not 6b54?
 
-We find the same resolved memory address we saw in the previous
-section with [[5l -a]], e.g. [[0x1324]] for [[fprint]].
-We can also see the address of data symbols.
+We find the same resolved memory addresses we saw in the previous
+section with [[5l -a]], e.g. [[1324]] (in hexadecimal) for [[fprint]]
+Line 10.
 
-% can see not only layout code, but also data.
-% can see 7000 and 7014 so that is what I said
-% (but still a lot to explain because generated code is not that too,
-%  see setR12)
-\t hello, 0x7020 - 0x7014 = 12 = size hello
+We can also now see the addresses of the data symbols.
+[[hello]] Line 16 is at the address [[7014]]. The data
+section starts at [[7000]] as indicated by the 
+{\em special symbol} [[bdata]] (begin data) Line 14. 
+So, [[INITDAT]] is [[7000]]
+which confirms that the address of [[hello]] is indeed
+[[14 + INITDAT]] ([[7014]]) as mentioned in the previous section.
+\l but still a lot to explain because generated code is not that too,see setR12
 
-\t small d means static symbol B means unitialized (BSS)
+The symbol after [[hello]] is [[_exitstr]] Line 17
+at address [[7020]]. This confirms that [[hello]] is using 
+12 bytes ([[0x7020]] - [[0x7014]] = [[0xc]] = 12) 
+as said in the source of [[world.s]]
+in Section~\ref{sec:hello-world-source}.
 
+The linker defines a set of special symbols:
+[[etext]] (end text) Line 12,
+[[bdata]] (begin data) Line 14,
+[[edata]] (end data) Line 19, and finally
+[[end]] Line 21.
+Those symbols are used only for their addresses and
+allows a form of {\em reflection} on the structure
+of the executable and its sections as explained
+in Section~\ref{sec:special-symbols}.
 
-\t etext, bdata/edata, end: lowest-level reflection! useful for kernel again.
-\t setR12? link to section?
-\t _existstr 
+Another special symbol, [[setR12]] Line 22
+plays a complex role in [[5l]]. This symbol is notably
+used by [[_main]] as indicated by the output of [[5l -W]]
+and [[5l -a]] we saw in the previous sections.
+Its role and its relationship with the pseudo-register
+[[SB]] will be explained later in Section~\ref{sec:sb-r12}.
+
+\l _existstr 
+\l small d means static symbol B means unitialized (BSS)
 
 \l can also use db (or 5i) to inspect executable.
 
@@ -1176,11 +1232,16 @@ to the \book{Assembler} where it was the output.
 The object file format has been fully described
 in the \book{Assembler} so we will not repeat
 those explanations here.
+%
+Section~\ref{sec:object-format} contains a figure
+summarizing the object file format. This figure is useful
+to understand the code which parses object files
+in Chapter~\ref{chap:loading-objects}.
 
-% could take figure in Assembler.nw and add the ANAME and AHISTORY?
-% or put concrete values everywhere?
+\l could take figure in Assembler.nw and add the ANAME and AHISTORY?
+\l or put concrete values everywhere?
 
-% 5l -W
+\l 5l -W also show format a bit
 
 \section{Output executable format, [[a.out]]}
 % the output
@@ -1307,6 +1368,9 @@ struct	Exec
 
 % FIGURE control flow
 % FIGURE data flow
+
+\l essential steps: read object and lib, concatenate, 
+%   resolve and relocate, and finally generate.
 
 %load objs on command line.
 %load libs but only their objects containing symbols we are looking for 
@@ -1582,6 +1646,8 @@ enum Section
 % - Operand_kind (enum operand_kind)
 % - also register aliases, e.g. REGLINK
 % see Aconv(opcode), Dconv(operand_kind)
+
+% remember opcode are actually not exactly ARM opcodes. superset.
 
 % can reput major opcode here, AADD, ATEXT, AB, etc?
 % and also R1, ... 
@@ -2686,6 +2752,7 @@ undef(void)
 % because it cares just about the symbol table?
 
 \section{Object format}
+\label{sec:object-format}
 % again ... repeat Assembler.nw section?
 
 \section{Buffered input, [[buf]]}
@@ -4844,7 +4911,9 @@ otxt = c;
 % */
 
 \section{Defining special symbols [[etext]], [[edata]], [[end]]}
+\label{sec:special-symbols}
 
+% reflection on executable structure and its section.
 % the kernel uses etext! edata! those are important special symbols.
 % some form of introspection capability.
 
@@ -12314,10 +12383,10 @@ rnd(long v, long r)
 }
 @
 
-\chapter{Linker-related Library and Programs}
+\chapter{Linker-related Programs}
 \label{chap:linker-related-programs}
 
-\section{[[libmach/]]}
+\section{[[mach.h]]}
 
 % can copy Fhdr here.
 
