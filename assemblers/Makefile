@@ -34,7 +34,7 @@ SRC_VIEWS= \
   5a/main.c\
   \
   ../lib_core/libc/arm/div.s
-#TODO: add 5a/tests/helloa.s at some point and many more .s
+#TODO: add 5a/tests/helloworld.s at some point and many more .s
 
 
 # temporarily split from SRC_VIEWS for 'make loc'
