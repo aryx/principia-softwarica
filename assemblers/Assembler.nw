@@ -223,6 +223,7 @@ between an object file and an executable?
 \n try questions more specific to asm, put the rest in Machine.nw (and Linker)
 \n binary format? no, in linker book because of \plan approach
 \n what is position independent code? no linker issue
+\l endianess? need to talk a bit when talk about vlong (jarod)
 
 %tags used in this file for different recurring themes:
 %turing: fundamental opcodes
@@ -283,6 +284,8 @@ Readers interested in this topic should also read the \book{Linker}}.
 We think though that it is actually a better design because it leads to
 less code in total and also to simpler code.
 \l where explain why better? later? or in Linker.nw?
+\l  indeed linker anyway need resolve symbol too and gen code too
+\l  so lets keep assembler as simple as possible so avoid code duplication
 \n a critique of go/plan9 toolchain though, see comment in .tex:
 % - http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
 %   with https://news.ycombinator.com/item?id=8815778
@@ -788,7 +791,7 @@ We now have enough background to present the [[helloworld.s]] program:
 16	        MOVB R1, 10(R2)
 17	        MOVW $'\n', R1
 18	        MOVB R1, 11(R2)
-19	        /* prepare the system call PWRITE(1,&hello,12,00) */
+19	        /* prepare the system call PWRITE(1,&hello,12,0LL) */
 20	        MOVW $1, R1
 21	        MOVW R1, 4(R13)
 22	        MOVW $hello(SB), R1
@@ -863,7 +866,7 @@ They are assembly-only constructs, also known as
 {\em assembly directives}. Indeed, the ARM processor
 has no notion of procedure names; it just manages numbers
 and concrete addresses.
-\l GLOBL allocate mem, and TEXT actually does magic stuff
+\l GLOBL allocate mem, and TEXT actually does magic stuff, so almost virtual
 
 The operands of the pseudo-instructions [[TEXT]] and [[GLOBL]]
 \n was arguments, but better operands, for uniformity, because they are really
@@ -1056,6 +1059,7 @@ In this tutorial we will avoid using those pseudo-registers (except
 Indeed, they may simplify things in the long term but they
 add some extra complexities at the beginning.
 \l generic, hide normally pecularities, complexities, but add some complexity
+\n indeed N_xxx not used that much in Assembler.nw but used more in Linker.nw
 
 \subsection{Call stack}
 \label{sec:call-stack}
@@ -1176,6 +1180,7 @@ R13 +-> +-------+
 \caption{Stack before Line 31}\label{fig:stack-line31}
 \end{figure}
 \l remember 0 0 because vlong offset
+\l need talk endianess if it was not 0 but 1. Which order then? (jarod)
 
 \subsection{System calls}
 
@@ -1298,6 +1303,8 @@ The virtual instruction [[RET]], just like the
 pseudo-instruction [[TEXT]], or the pseudo-registers, allows the programmer
 to think in slightly higher-level term and let the computer
 do the appropriate optimizations.
+\l TEXT is almost a virtual too. maybe say pseudo cos not just serie of instr
+\l  but also introduce a label (jarod)
 %
 In fact, [[MOVW]] is also a virtual instruction. It hides some 
 architecture restrictions and peculiarities regarding memory accesses.
@@ -1524,7 +1531,7 @@ The main lexical elements of Asm5 (and also of Asm9) are:
 (octal)
 \n hexa/octal is new, not in tutorial
 
-\item {\em characters}, e.g. [['W']], [['\n']], [['\007]]
+\item {\em characters}, e.g. [['W']], [['\n']], [['\007']]
 \n octal is new, not in tutorial
 
 \item {\em strings}, e.g. [["hello wo"]]. Strings are limited
@@ -1798,7 +1805,7 @@ absolute (virtual) addresses.
 \t but still need be relocated when concatenated
 
 A serialized instruction has also a pretty simple format
-since all instructions, including the pseudo-instructions.
+since all instructions, including the pseudo-instructions,
 have the same form: an opcode followed by 0 to 3 operands.
 %
 One byte is enough to encode the opcode
@@ -2122,7 +2129,7 @@ and give pointers to other books in the \principia serie.
 
 %toc:
 Some appendices present the code of non-functional properties:
-code to help debug [[5a]] itself in ppendix~\ref{chap:debugging-appendix}, and 
+code to help debug [[5a]] itself in Appendix~\ref{chap:debugging-appendix}, and 
 code to manage errors in Appendix~\ref{chap:error}.
 %
 Appendix~\ref{chap:libc} contains the code of generic
@@ -3004,9 +3011,9 @@ short	symkind;
 enum sym_kind {
     N_NONE,
 
-    D_EXTERN, // text/data/bss values (from SB)
-    D_LOCAL,  // stack values (from SP)
-    D_PARAM,  // parameter (from FP)
+    N_EXTERN, // text/data/bss values (from SB)
+    N_LOCAL,  // stack values (from SP)
+    N_PARAM,  // parameter (from FP)
     <<sym_kind cases>>
 };
 @
@@ -3016,6 +3023,7 @@ enum sym_kind {
 %note: this used to be with operand_kind, but they are really disjoint
 % and used only for the ANAME pseudo opcode. In 5l/ there is
 % actually a separate Dconv and Nconv (but in 8l/ they are together).
+%old: was D_xxx but better N_xxx, anyway more consistent with Nconv
 
 So, the C value of the operand in the example above is:
 %example:
@@ -3023,7 +3031,7 @@ So, the C value of the operand in the example above is:
 // operand value for: hello+4(SB)
 { sym = &<hello Sym>;  // hello
   offset = 4;          // +4
-  sym_kind = D_EXTERN; // SB
+  sym_kind = N_EXTERN; // SB
   type = D_OREG;       // (...)
 }
 \end{verbatim}
@@ -3039,7 +3047,7 @@ the [[D_CONST]] type is (ab)used:
 // operand value for: $hello(SB)
 { sym = &<hello Sym>;  // hello
   offset = 0;
-  sym_kind = D_EXTERN; // SB
+  sym_kind = N_EXTERN; // SB
   type = D_CONST;      // $
 }
 \end{verbatim}
@@ -7286,14 +7294,14 @@ pointer:
 \t what is generated code by linker? address of symbol is really offset? R12?
 
 <<[[itab]] elements>>=
-"SB",		LSB,	D_EXTERN,
-"SP",		LSP,	D_LOCAL,
-"FP",		LFP,	D_PARAM,
+"SB",		LSB,	N_EXTERN,
+"SP",		LSP,	N_LOCAL,
+"FP",		LFP,	N_PARAM,
 @
 %<<sym_kind cases>>=
-%D_EXTERN, // text/data/bss values (from SB)
-%D_LOCAL,   // stack values (from SP)
-%D_PARAM,  // parameter (from FP)
+%N_EXTERN, // text/data/bss values (from SB)
+%N_LOCAL,   // stack values (from SP)
+%N_PARAM,  // parameter (from FP)
 %@
 
 The name/``offset'' can also have an aditional offset applied
@@ -7405,14 +7413,14 @@ in a file by suffixing the name with angles:
   $$ = nullgen;
   $$.type = D_OREG;
   $$.sym = $1;
-  $$.symkind = D_INTERN;
+  $$.symkind = N_INTERN;
   $$.offset = $4;
  }
 @
 %$
 
 <<sym_kind cases>>=
-D_INTERN, // local/static entities (from SB)
+N_INTERN, // local/static entities (from SB)
 @
 %old: was D_STATIC but ugly C name
 
@@ -7446,7 +7454,7 @@ nireg:
 %  name
 % {
 %  $$ = $1;
-%  if($1.name != D_EXTERN && $1.name != D_STATIC) {
+%  if($1.name != N_EXTERN && $1.name != D_STATIC) {
 %  }
 % }
 
@@ -8094,7 +8102,7 @@ in Section~\ref{sec:spreaded-symbol-table}.
 
 \l for D_OREG and also D_CONST (but really D_ADDR)
 
-\item the kind of the symbol (1 byte), e.g. the value of [[D_EXTERN]],
+\item the kind of the symbol (1 byte), e.g. the value of [[N_EXTERN]],
 when the operand involves a symbol or [[N_NONE]]
 
 \item the value of the operand, which has a variable size
@@ -9145,7 +9153,7 @@ D_FILE,
 \t useful? if remove symkind from ANAME, need that? defensive programming?
 
 \l so have at beginning of file many ANAME:D_FILE/1, ANAME:D_FILE/1, and then
-\l later finally a real ANAME:D_EXTERN/1 reusing 1 too.
+\l later finally a real ANAME:N_EXTERN/1 reusing 1 too.
 
 
 The code below is to convert relative filenames into
@@ -9618,7 +9626,9 @@ D_REGREG,
 
 
 \subsection{Long multiplication}
+\t very long?
 \n advanced topic, so can also put D_REGREG here
+\l see also vlong argument in pwrite, and also endianess issue (jarod)
 
 %\subsubsection{Mul long}
 
