@@ -16,10 +16,6 @@
 #define	LIBNAMELEN	300
 /*e: constant LIBNAMELEN */
 
-void	addlibpath(char*);
-int		fileexists(char*);
-char*	findlib(char*);
-
 typedef	struct	Adr	Adr;
 typedef	struct	Sym	Sym;
 typedef	struct	Auto	Auto;
@@ -470,6 +466,10 @@ int	Dconv(Fmt*);
 int	Nconv(Fmt*);
 int	Pconv(Fmt*);
 int	Sconv(Fmt*);
+
+void	addlibpath(char*);
+int		fileexists(char*);
+char*	findlib(char*);
 
 int	aclass(Adr*);
 void	addhist(long, int);
