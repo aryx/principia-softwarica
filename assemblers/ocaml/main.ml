@@ -10,9 +10,9 @@ open Common
 let thechar = '5'
 
 let assemble infile outfile =
-  let prog = Parse.parse infile in
-  let prog = Resolve.resolve prog in
-  Gen.save_obj prog outfile
+  let prog = Parse_asm.parse infile in
+  let prog = Resolve_labels.resolve prog in
+  Object_code.save_obj prog outfile
 
 let main () =
   let infile = ref "" in
@@ -40,4 +40,5 @@ let main () =
   assemble !infile !outfile
   
 
-let _ = main ()
+let _ = 
+  main ()
