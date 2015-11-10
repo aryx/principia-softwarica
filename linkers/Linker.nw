@@ -13,11 +13,13 @@
 
 %thx to LP, changed for the better a few things:
 % - introduced HEADTYPE instead of hardcoded integers
-% - introduced mylog() and DBG(), factorize tracing code
+% - introduced mylog() and DBG() to factorize the tracing code
 % - removed many portable myxxx() wrappers
 % - removed some deadcode (C_LBRA, C_LECON, C_SCON, D_OCONST, regused)
 % - commented lots of code that was in dead ifdefs or was related to
 %   dead alef features like BECOME
+% - TODO reorganized the code to better match the chapters
+%   introduce more files main.c, lib.c, error.c, m.h
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
@@ -25,15 +27,17 @@
 %thx to this manual, better understand linking:
 % - that an object is really a module, the simplest/lowest module abstraction
 %   with defs and uses to link together (for text and data).
-% - that linker and loader are related by executable format and sections,
-%   one generate data (the executable) that the other read (the kernel)
+% - that linker and loader are related by executable format and sections;
+%   one generates data (the executable) that the other reads (the kernel)
 % - disk image of executable and memory image of program are different
 %   hence the -TText
-% - SEMI stuff about SB where have mutual dependency between dotext and dodata
+% - SEMI mutual dependency between dotext and dodata where need layout
+%   data before text but then need text before know where starts data
+%   (solved via SB/R12 for 5l)
 % - TODO what if have multiple object defining the same global?
 %   int x; int x; in different files? what if one also define value?
 %   what if both define value? DUPOK?
-% - TODO stuff about pool and in general many small mismatch between Asm5
+% - TODO stuff about pool and in general many small mismatches between Asm5
 %   and actual ARM capacities
 % - TODO dynamic linking? export table? import table?
 % - TODO fpic? 
@@ -1246,16 +1250,17 @@ The format of ARM object files is fully described
 in the \book{Assembler} so we will not repeat
 those explanations here.
 %
-Section~\ref{sec:dump-objects} contains the {dump}
-of a few of those object files and showed that
+Section~\ref{sec:object-format} contains a figure
+summarizing the ARM object file format though, which will be useful
+to understand the code of Chapter~\ref{chap:loading-objects}
+which loads object files.
+
+Note that Section~\ref{sec:dump-objects} contained the {dump}
+of a few of object files and showed that
 %dup: intro/5l, overview, etc, maybe too much?
 an object file is essentially
 the serialized form of the abstract syntax tree of an assembly source.
 
-Section~\ref{sec:object-format} contains a figure
-summarizing the ARM object file format, which will be useful
-to understand the code of Chapter~\ref{chap:loading-objects}
-which loads object files.
 
 \l could take figure in Assembler.nw and add the ANAME and AHISTORY?
 \l or put concrete values everywhere?
@@ -1437,38 +1442,99 @@ but the code of [[libmach]] itself will be shown in the
 
 \section{Code organization}
 
-% use also 5.out.h! but put in Assembler.nw
-
-% could use include/exec/a.out.h but does not
-% but use exec/elf.h so for consistency included
-
-%5l/l.h: data structures and prototypes (like a dat.h and fns.h)
-
-%5l/globals.c: globals
-
-%5l/obj.c: main()
-
-%5l/pass.c:
-%5l/span.c:
-
-%5l/noop.c: when an ASM opcode has actually no machine opcode (e.g. ADIV)
-
-%5l/asm.c: ARM machine code generation
-%5l/optab.c:
+%dup: (and adapted) from Assembler.nw
+Table~\ref{tab:code-orga} presents a short description
+of the source files used by [[5l]], 
+the main entities (structures, functions, globals, etc) the file defines,
+and the corresponding chapters in this document in which the code
+contained in the file is discussed.
+\n sorted by chapters, make more sense than sorted by dir
 
 
-%5l/utils.c:
-%5l/compat.c:
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{llllr}
+\toprule
+{\bf Function} & {\bf Chapters} & {\bf File} & {\bf Entities} & {\bf LOC} \\
+\otoprule
+Data structures & \ref{chap:core-ds} & [[l.h]] & [[Sym]], [[Section]], [[Instr]], [[Auto]], & 0 \\
+% headtype, Buf, ...
+and prototypes  & \ref{chap:arm-codegen} &         & [[Optab]], [[Oprang]], [[Operand_class]] & \\
+% like a dat.h and fns.h
+Globals         & \ref{chap:core-ds}, \ref{chap:main}               & [[globals.c]] & [[hash]], [[firstp]], [[textp]], [[textsize]], [[datsize]], ... & \\
+Entry point     & \ref{chap:main}    & [[main.c]] & [[main()]] & \\
+%pad: I created this file
 
-%5l/list.c: dumpers
+\midrule
+
+Object and library & \ref{chap:loading-objects} & [[obj.c]] & [[ldobj()]] & \\
+loading            & \ref{chap:loading-libraries} &         & [[loadlib()]] & \\
+
+Resolving          & \ref{chap:resolving} & [[pass.c]] & [[patch()]], [[dodata()]] & 0 \\
+and rewriting      &                      & [[noops.c]] & [[noops()]] & \\
+
+Code generation    & \ref{chap:arm-codegen} & [[span.c]] & [[dotext()]], [[oplook()]], [[buildop()]] & \\
+                   &                        & [[optab.c]] & [[optab[]]] & \\
+                   &                        & [[asm.c]]  & [[asmb()]], [[datblk()]], [[asmout()]]  & \\
+
+\midrule
+
+Elf constants     & \ref{chap:advanced} & [[elf.h]] & [[Ehdr32sz]] & \\       
+Elf generation   & \ref{chap:advanced} & [[elf.c]]  & [[elf32()]] & \\
+% actually in 8l/
+
+\midrule
+
+Dumpers            & \ref{chap:debugging-appendix} & [[list.c]] & [[prasm()]], [[Pconv()]], [[Dconv()]],  & \\
+                   &                               & [[enam.c]] & [[anames[]]] & \\
 %5l/enam.c: which is a symlink in 5c/
 
-%8l/elf.h
-%8l/elf.c
+Utilities          & \ref{chap:libc}        & [[utils.c]] & [[lookup()]], [[errorexit()]] & \\
+                   &                        & [[compat.c]] & [[malloc()]] & \\
+
+\otoprule
+Total & & & & 7900 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Source files of [[5l]]}
+\label{tab:code-orga}
+\end{table*}
+\n see SRC_VIEWS in the Makefile, and make loc
 
 \n did not factorized in a ll/ this time, but factorized via LP
+\n could put include/exec/a.out.h but 5l does not use it
+\n same for include/exec/elf.h
+
+Another important file not included in Table~\ref{tab:code-orga}
+is [[include/arch/arm/5.out.h]]. It contains the ARM opcode
+definitions used by [[5l]] but is already described
+in the \book{Assembler}.
+
+
 
 \section{Software architecture}
+
+%dup: from Assembler.nw
+Figure~\ref{fig:controlflow} describes roughly 
+the main control flow of [[5l]], while
+Figure~\ref{fig:dataflow} describes 
+the main data flow of [[5l]].
+%
+The main steps of the linking process of [[5l]] are:
+
+\begin{enumerate}
+\item {\em load} (read) the object files and libraries ([[objfile()]])
+and {concatenate} their code and data in different sections
+([[ldobj()]])
+
+\item {\em resolve} and {relocate} instructions ([[patch()]], ...)
+
+\item {\em generate} the executable with its header and
+machine code ([[asmb()]])
+
+\end{enumerate}
+
 
 \begin{figure}[!]\centering
 \begin{verbatim}
@@ -1490,44 +1556,135 @@ but the code of [[libmach]] itself will be shown in the
                 |+--->| dotext  |
                 |     +---------+
                 |                     +--------+
-                |                 +-->| asmout |
+                |                 +-->| datblk |
                 |   +---------+   |   +--------+
                 +-->|  asmb   |---+                Generating
                     +---------+   |   +--------+
-                                  +-->| datblk |
+                                  +-->| asmout |
                                       +--------+
 \end{verbatim}
 \caption{Control flow diagram of [[5l]]}\label{fig:controlflow}
 \end{figure}
+\n there is no loadlib(), it is an advanced  feature
+%ocaml: if was more functional we could annotate arrows with types,
+% and have more a pipeline than a tree of procedures
 
 \begin{figure}[!]\centering
 \begin{verbatim}
 object file-\
-             -+> instructions -+-> sections -> executable
-object file-/ |                |
-              +----------------+
+             > instructions -> sections -> graph -> executable
+object file-/                               
 
-           (use global symbol table)
+                      (use global symbol table)
 \end{verbatim}
 \caption{Data flow diagram of [[5l]]}\label{fig:dataflow}
 \end{figure}
+%ocaml: this is what I hope I will get, a transformation pipeline
+% not sure I need the graph though
 
+
+After some basic command line processing and initialisations,
+the function [[main()]] first calls [[objfile()]] for
+each object files and libraries to link. 
+\n also loadlib(), but it is for advanced autamagic lib feature
+%
+[[objfile()]] opens
+the object file or library and calls [[ldobj()]] to read
+its object code in memory, that is a {\em list of instructions}.
+%
+Doing so, [[ldobj()]] modifies also the globals [[firstp]], [[textp]],
+and [[datap]] containing respectively 
+the list of all {instructions}, 
+the list of {procedures}, and 
+the list of {data} instructions.
+Thus, all the code and data in the
+object files are concatenated together in the appropriate {\em sections}.
+\l also Instr.type field with section name
+
+[[ldobj()]] increments also a global [[pc]] after each code instruction
+read. [[pc]] represents the current value of 
+the {\em global (virtual) program counter}. Each code instruction
+in memory has a field [[Instr.pc]] with the value of [[pc]]
+at the moment the instruction was read.
+\n imperative style
+\t ldobj relocate jumping instruction, use global virtual pc instead of local.
+\t global because of all the objs, as opposed to Assembler
+\t virtual because virtual counter still! incremented by 1
+%
+Finally, [[ldobj()]] populates also a {\em symbol table} called [[hash]],
+which keeps track of different properties of symbols.
+One of this property, [[Sym.value]], initially contains
+a (virtual) program counter for symbols corresponding to procedures,
+and a size for symbols corresponding to globals.
+%
+This same field will contain at the end the resolved memory
+address of the procedure or global.
+
+
+After loading the object files
+[[main()]] calls a serie of functions ([[patch()]], [[noops()]], etc)
+which use the globals [[firstp]], [[textp]], and [[datap]] to
+process or rewrite list of instructions.
+%
+First, [[patch()]] transforms the list of code instructions in a global
+{\em graph of instructions} where branching instructions have their
+field [[Instr.cond]] points to the appropriate target instruction. 
+%
+To build this graph [[patch()]] is leveraging the symbol table
+computed previously
+to find the [[pc]] corresponding to a certain procedure symbol,
+and {\em index} all [[Instr.pc]] to find the instruction corresponding
+to a certain [[pc]].
+
+
+Once the graph has been built, there is no more need for the notion of
+{\em virtual} program counter. Every code references (symbols or
+absolute jumps) in branching
+instructions have been resolved. 
+%
+This allows in turn to transform safely the {\em virtual instructions} (see
+the \book{Assembler}) such as [[TEXT]], [[RET]], or [[NOP]] 
+in real instructions. 
+\l actually still not real real, use MOVW
+\l or do optimisations? e.g. ANOP
+Indeed, [[noops()]] can
+replace a virtual instruction by
+multiple instructions or even delete the instruction without
+any consequence on the other jumping instructions (as long
+at it maintains carefully the [[Instr.cond]] pointers of certain instructions).
+Before the graph of instructions, inserting or
+deleting an instruction would have forced to assign a new [[pc]]
+to each instruction and to relocate every jumping instructions.
+
+Once we have a graph of real code instructions and a list of data
+instructions, we can start to {\em layout} the code and data.
+[[dodata()]] assigns a memory address in [[Sym.value]] to each globals in
+[[datap]] as an offset to the start of the data section.
+\l e.g. 014 for hello
+%
+Then, [[dotext()]] does a similar thing for the code instructions.
+For those instructions [[Sym.value]] contains the final code address
+of the instruction.
+\l e.g. 0x1020 for main
+
+At this point, the size of the code section is known and stored
+in the global [[textsize]], as well as the size of the
+data section in the global [[datasize]].
+We can finally generate the executable and its header in
+[[asmb()]]. This function use two helpers functions, one
+to generate the data section [[datblk()]] and one to
+generate the code section [[asmout()]].
 
 % depends on include/arm/5.out.h for all assembly opcodes, registers, etc
 % (used to depend on 5c/ for one file ../5c/enam.c but now done via symlink)
 
-% FIGURE data flow
 
-\l essential steps: read object and lib, concatenate, 
-%   resolve and relocate, and finally generate.
 
-%load objs on command line.
 %load libs but only their objects containing symbols we are looking for 
 % (symbols uses mentioned in object files and so marked as SXREF)
 %fixpoint
 %=> produce smaller binaries
 
-% will modify fields in Instr, e.g. pc. Imperative style.
 
 % How does handle mutually recursive object files?
 %  for objects passed on the command line it loads every symbols
@@ -2912,6 +3069,8 @@ undef(void)
 \label{sec:object-format}
 % again ... repeat Assembler.nw section?
 
+% FIGURE but with ANAME and AHISTORY maybe
+
 \section{Buffered input, [[buf]]}
 
 % See buffer managment appendix,
@@ -2946,7 +3105,7 @@ if(r < 100 && r < c) {		/* enough for largest prog */
 
 \section{A global and local program counter, [[pc]] and [[ipc]]}
 
-% each call to ldobj() will increment this pc
+% each instruction read in ldobj() will increment this pc
 <<global pc>>=
 long	pc = 0;
 @
@@ -2985,11 +3144,11 @@ bool skip;
 % read instruction. Used for DUPOK for instance.
 
 
-% main -> objfile -> <>
 % f = fd of opened object file
 % c = size of object file, 
 % pn = filename of object, 
 <<function ldobj(arm)>>=
+/// main -> objfile -> <>
 void
 ldobj(fdt f, long c, char *pn)
 {
@@ -4099,6 +4258,11 @@ addlib(char *obj)
 \chapter{Resolving}
 \label{chap:resolving}
 
+% resolve different steps: 
+% - virtual program counter
+% - code refs, absolute jumps in term of virtual pc (labels)
+% - data refs
+
 %trans:
 % Ok loading objects and libs has been done. Normally
 % have now a linked list of instructions in firstp, with a valid Prog->pc
@@ -4703,6 +4867,8 @@ case ANOP:
     q1->mark |= p->mark;
     continue;
 @
+\l what about jump to ANOP if there was some? well
+\l need to adjust their cond field, see below
 
 % now that have also the ->cond for branches, we need
 % to take care and update those links as we removed
