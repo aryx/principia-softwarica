@@ -21,7 +21,7 @@ enum Register {
     REGSB =		12, // static base
 
     REGSP =		13,
-    REGLINK =	14,
+    REGLINK =		14,
     REGPC =		15,
 
     NREG = 16,
@@ -244,11 +244,11 @@ enum Operand_kind {
 enum sym_kind {
     N_NONE,
 
-    D_EXTERN, // text/data/bss values (from SB)
-    D_LOCAL,  // stack values (from SP)
-    D_PARAM,  // parameter (from FP)
+    N_EXTERN, // text/data/bss values (from SB)
+    N_LOCAL,  // stack values (from SP)
+    N_PARAM,  // parameter (from FP)
     /*s: sym_kind cases */
-    D_INTERN, // local/static entities (from SB)
+    N_INTERN, // local/static entities (from SB)
     /*x: sym_kind cases */
     D_FILE,
     /*x: sym_kind cases */

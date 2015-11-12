@@ -78,7 +78,7 @@ _read5(Biobuf *bp, Prog *p)
     skip(bp, 6);		/* scond(1), reg(1), lineno(4) */
     a = addr(bp);
     addr(bp);
-    if(a.type != D_OREG || a.name != D_INTERN && a.name != D_EXTERN)
+    if(a.type != D_OREG || a.name != N_INTERN && a.name != N_EXTERN)
         p->kind = aNone;
     p->sym = a.sym;
     return 1;
@@ -114,7 +114,7 @@ addr(Biobuf *bp)
         off |= Bgetc(bp) << 24;
         if(off < 0)
             off = -off;
-        if(a.sym && (a.name==D_PARAM || a.name==D_LOCAL))
+        if(a.sym && (a.name==N_PARAM || a.name==N_LOCAL))
             _offset(a.sym, off);
         break;
     case D_SCONST:
@@ -133,10 +133,10 @@ static char
 type2char(int t)
 {
     switch(t){
-    case D_EXTERN:		return 'U';
-    case D_INTERN:		return 'b';
-    case D_LOCAL:		return 'a';
-    case D_PARAM:		return 'p';
+    case N_EXTERN:		return 'U';
+    case N_INTERN:		return 'b';
+    case N_LOCAL:		return 'a';
+    case N_PARAM:		return 'p';
     default:		return UNKNOWN;
     }
 }
