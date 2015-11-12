@@ -113,7 +113,7 @@ Biobuf	outbuf;
 Biobuf	diagbuf;
 /*e: global diagbuf */
 /*s: global outfile */
-char*	outfile;
+char*	outfile = nil;
 /*e: global outfile */
 /*s: global pathname */
 char*	pathname;

@@ -58,8 +58,8 @@ struct	Adr
     char	type;
 
     long	offset; // generic value, offset or simple constant
-    double	dval;
     char	sval[NSNAME];
+    double	dval;
     Ieee	ieee;
 
     /*s: [[Adr]] other fields(arm) */

@@ -634,10 +634,10 @@ mkvar(Adr *a, int docon)
         print("bit=%2d et=%2d %D\n", i, et, a);
 out:
     bit = blsh(i);
-    if(n == D_EXTERN || n == D_INTERN)
+    if(n == N_EXTERN || n == N_INTERN)
         for(z=0; z<BITS; z++)
             externs.b[z] |= bit.b[z];
-    if(n == D_PARAM)
+    if(n == N_PARAM)
         for(z=0; z<BITS; z++)
             params.b[z] |= bit.b[z];
     if(v->etype != et || !typechlpfd[et])	/* funny punning */
@@ -1155,7 +1155,7 @@ addreg(Adr *a, int rn)
 {
 
     a->sym = 0;
-    a->symkind = D_NONE;
+    a->symkind = N_NONE;
     a->type = D_REG;
     a->reg = rn;
     if(rn >= NREG) {

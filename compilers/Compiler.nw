@@ -1670,7 +1670,7 @@ zprog.link = P;
 zprog.as = AGOK;
 zprog.reg = R_NONE;
 zprog.from.type = D_NONE;
-zprog.from.symkind = D_NONE;
+zprog.from.symkind = N_NONE;
 zprog.from.reg = R_NONE;
 zprog.to = zprog.from;
 zprog.scond = COND_ALWAYS;  
@@ -8353,7 +8353,7 @@ gpseudo(int a, Sym *s, Node *n)
     p->as = a;
     p->from.type = D_OREG;
     p->from.sym = s;
-    p->from.symkind = (s->class == CSTATIC) ? D_INTERN : D_EXTERN;
+    p->from.symkind = (s->class == CSTATIC) ? N_INTERN : N_EXTERN;
     <<[[gpseudo()]] if TEXT, set possible TEXT attributes>>
     naddr(n, &p->to);
     if(a == ADATA || a == AGLOBL)
@@ -8499,19 +8499,19 @@ case ONAME:
     a->offset = n->xoffset;
     a->sym = n->sym;
 
-    a->symkind = D_INTERN;
+    a->symkind = N_INTERN;
     switch(n->class) {
     case CSTATIC: 
-        a->symkind = D_INTERN;
+        a->symkind = N_INTERN;
         break;
     case CEXTERN: case CGLOBL:
-        a->symkind = D_EXTERN;
+        a->symkind = N_EXTERN;
         break;
     case CAUTO:
-        a->symkind = D_LOCAL;
+        a->symkind = N_LOCAL;
         break;
     case CPARAM:
-        a->symkind = D_PARAM;
+        a->symkind = N_PARAM;
         break;
     default:
         goto bad;
@@ -13251,26 +13251,34 @@ char*	anames[] =
     "ADC",
     "SBC",
     "RSC",
+    "MVN",
     "MUL",
     "DIV",
     "MOD",
+    "MULA",
     "MULL",
     "MULAL",
     "MULLU",
     "MULALU",
-    "MULA",
     "MULU",
     "DIVU",
     "MODU",
+    "SLL",
     "SRL",
     "SRA",
-    "SLL",
+    "MOVW",
+    "MOVB",
+    "MOVBU",
+    "MOVH",
+    "MOVHU",
+    "MOVM",
+    "SWPW",
+    "SWPBU",
+    "CMP",
     "TST",
     "TEQ",
-    "CMP",
     "CMN",
     "B",
-    "BL",
     "BEQ",
     "BNE",
     "BHS",
@@ -13285,16 +13293,8 @@ char*	anames[] =
     "BLT",
     "BGT",
     "BLE",
+    "BL",
     "RET",
-    "MOVW",
-    "MOVB",
-    "MOVBU",
-    "MOVH",
-    "MOVHU",
-    "MVN",
-    "MOVM",
-    "SWPW",
-    "SWPBU",
     "SWI",
     "RFE",
     "MOVWD",
@@ -19860,10 +19860,10 @@ mkvar(Adr *a, int docon)
         print("bit=%2d et=%2d %D\n", i, et, a);
 out:
     bit = blsh(i);
-    if(n == D_EXTERN || n == D_INTERN)
+    if(n == N_EXTERN || n == N_INTERN)
         for(z=0; z<BITS; z++)
             externs.b[z] |= bit.b[z];
-    if(n == D_PARAM)
+    if(n == N_PARAM)
         for(z=0; z<BITS; z++)
             params.b[z] |= bit.b[z];
     if(v->etype != et || !typechlpfd[et])	/* funny punning */
@@ -20401,7 +20401,7 @@ addreg(Adr *a, int rn)
 {
 
     a->sym = 0;
-    a->symkind = D_NONE;
+    a->symkind = N_NONE;
     a->type = D_REG;
     a->reg = rn;
     if(rn >= NREG) {
@@ -22056,7 +22056,7 @@ char	sig;
 
 <<[[zname()]] if generate signature for symbol s>>=
 if(debug['T'] && 
-   t == D_EXTERN && 
+   t == N_EXTERN && 
    s->sig != SIGDONE && 
    s->type != types[TENUM] && 
    s != symrathole){
@@ -25983,7 +25983,7 @@ Dconv(Fmt *fp)
 
     case D_NONE:
         str[0] = 0;
-        if(a->symkind != D_NONE || a->reg != R_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->reg != R_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(NONE)", a, a->reg);
         break;
 
@@ -26014,19 +26014,19 @@ Dconv(Fmt *fp)
 
     case D_REG:
         snprint(str, sizeof(str), "R%d", a->reg);
-        if(a->symkind != D_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_FREG:
         snprint(str, sizeof(str), "F%d", a->reg);
-        if(a->symkind != D_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_PSR:
         snprint(str, sizeof(str), "PSR");
-        if(a->symkind != D_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->sym != S)
             snprint(str, sizeof(str), "%N(PSR)(REG)", a);
         break;
 
@@ -26152,23 +26152,23 @@ Nconv(Fmt *fp)
         goto out;
     }
     switch(a->symkind) {
-    case D_NONE:
+    case N_NONE:
         snprint(str, sizeof(str), "%ld", a->offset);
         break;
 
-    case D_EXTERN:
+    case N_EXTERN:
         snprint(str, sizeof(str), "%s+%ld(SB)", s->name, a->offset);
         break;
 
-    case D_INTERN:
+    case N_INTERN:
         snprint(str, sizeof(str), "%s<>+%ld(SB)", s->name, a->offset);
         break;
 
-    case D_LOCAL:
+    case N_LOCAL:
         snprint(str, sizeof(str), "%s-%ld(SP)", s->name, -a->offset);
         break;
 
-    case D_PARAM:
+    case N_PARAM:
         snprint(str, sizeof(str), "%s+%ld(FP)", s->name, a->offset);
         break;
 

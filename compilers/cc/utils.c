@@ -83,6 +83,7 @@ yyerror(char *fmt, ...)
     char buf[STRINGSZ];
     va_list arg;
 
+    /*s: [[yyerror()]] when called from yyparse */
     /*
      * hack to intercept message from yaccpar
      */
@@ -90,11 +91,15 @@ yyerror(char *fmt, ...)
         yyerror("syntax error, last name: %s", symb);
         return;
     }
+    /*e: [[yyerror()]] when called from yyparse */
+
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
+
     Bprint(&diagbuf, "%L %s\n", lineno, buf);
     nerrors++;
+
     if(nerrors > 10) {
         Bprint(&diagbuf, "too many errors\n");
         errorexit();

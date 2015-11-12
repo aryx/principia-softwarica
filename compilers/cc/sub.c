@@ -1264,6 +1264,7 @@ diag(Node *n, char *fmt, ...)
     va_start(arg, fmt);
     vseprint(buf, buf+sizeof(buf), fmt, arg);
     va_end(arg);
+
     Bprint(&diagbuf, "%L %s\n", (n==Z)? nearln: n->lineno, buf);
 
     if(debug['X']){

@@ -500,7 +500,7 @@ zname(Biobuf *b, Sym *s, int t)
     n = s->name;
     /*s: [[zname()]] if generate signature for symbol s */
     if(debug['T'] && 
-       t == D_EXTERN && 
+       t == N_EXTERN && 
        s->sig != SIGDONE && 
        s->type != types[TENUM] && 
        s != symrathole){

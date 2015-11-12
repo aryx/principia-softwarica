@@ -61,31 +61,25 @@ void main(int argc, char *argv[])
     int err;
     int c;
     /*x: [[main()]] locals */
-    char **defs;
-    int ndef;
+    char **defs = nil;
+    int ndef = 0;
     /*x: [[main()]] locals */
     char *p;
     char **np;
-    int maxdef;
+    int maxdef = 0;
     /*x: [[main()]] locals */
     int nproc, nout, status, i;
     /*e: [[main()]] locals */
 
     memset(debug, 0, sizeof(debug));
 
+    /*s: [[main()]] xxxinit() */
     tinit(); // type globals initialisation
     cinit(); // C lexing/parsing globals initialisation
     ginit(); // arch dependent globals initialisation, 5c/8c/...
     arginit(); // printf argument checking initialisation
-
-    outfile = nil;
-
-    defs = nil;
-    ndef = 0;
-
+    /*e: [[main()]] xxxinit() */
     /*s: [[main()]] remaining initialisation */
-    maxdef = 0;
-    /*x: [[main()]] remaining initialisation */
     tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     /*x: [[main()]] remaining initialisation */
     profileflg = true;	/* #pragma can turn it off */
