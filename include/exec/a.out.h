@@ -3,7 +3,7 @@ typedef	struct	Exec	Exec;
 typedef	struct	Sym	Sym;
 
 /*s: struct Exec */
-// a.out header format
+// a.out header
 struct	Exec
 {
     long	magic;		/* magic number */
