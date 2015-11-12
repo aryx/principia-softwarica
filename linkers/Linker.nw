@@ -12,14 +12,14 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - introduced HEADTYPE instead of hardcoded integers
+% - introduced Headtype enum instead of hardcoded integers
 % - introduced mylog() and DBG() to factorize the tracing code
 % - removed many portable myxxx() wrappers
 % - removed some deadcode (C_LBRA, C_LECON, C_SCON, D_OCONST, regused)
 % - commented lots of code that was in dead ifdefs or was related to
 %   dead alef features like BECOME
 % - TODO reorganized the code to better match the chapters
-%   introduce more files: main.c, lib.c, error.c, m.h
+%   by introducing more files: main.c, lib.c, error.c, m.h
 % - reorganized code around INITENTRY, -l, -E digit, make default path
 %   more obvious
 
@@ -192,7 +192,7 @@ to a specific binary instruction?
 \end{itemize}
 \l what is position independent code? 
 \l how dynamic linking works? 
-\l endianess?
+\l endianess? see the inuxi stuff?
 
 %tags used in this file for different recurring themes:
 %assembler: relates code in the linker to similar (or absent) code in 5a
@@ -2581,7 +2581,8 @@ char*	outfile;
 @
 \l why global? could pass around? for error msg?
 
-The file descriptor of the created executable file is [[cout]]:
+The file descriptor of the created executable file is
+stored in the following global:
 
 <<global cout>>=
 fdt	cout = -1;
@@ -2637,8 +2638,7 @@ out:
 %$
 %old: set INITENTRY used to be in main flow after setting firstp/lastp
 % but better here I think
-\l mv initialize globals before? put all initialisations in it?
-\l  order important?
+\l mv initialize globals before? put all initialisations in it? order important?
 
 <<function usage, linker>>=
 void
@@ -2658,7 +2658,7 @@ if(cout < 0) {
 @
 
 The error managment functions [[diag()]] and [[errorexit()]]
-are shown in Appendix~\ref{chap:error}.
+are described in Appendix~\ref{chap:error}.
 \l ex of output? 
 \l %r is error return code of last syscall I think
 
@@ -2780,7 +2780,7 @@ default:
     diag("unknown -H option");
     errorexit();
 }
-<<[[main()]] last INITXXX adjustments>>
+<<[[main()]] sanity check INITXXX>>
 DBG("HEADER = -H%d -T0x%lux -D0x%lux -R0x%lux\n",
         HEADTYPE, INITTEXT, INITDAT, INITRND);
 @
@@ -2808,7 +2808,7 @@ case H_PLAN9:
 
 
 [[INITDAT]] is initially set to 0 but it will be modified later
-by [[dotext()]] to be the address of the next memory page
+by [[dotext()]] to contain the address of the next memory page
 after the code section.
 \l different page so can have different bits in kernel
 
@@ -2840,7 +2840,7 @@ case 'R':
 @
 
 
-<<[[main()]] last INITXXX adjustments>>=
+<<[[main()]] sanity check INITXXX>>=
 if(INITDAT != 0 && INITRND != 0)
     print("warning: -D0x%lux is ignored because of -R0x%lux\n",
         INITDAT, INITRND);
@@ -2868,14 +2868,14 @@ case 'E':
 
 %dup: introl/5l, overview/hello.5
 It is set by default to [[_main]] under \plan, 
-as explained in Section~\ref{sec:explain-_main}:
+for reasons explained in Section~\ref{sec:explain-_main}:
 
 <<[[main()]] set INITENTRY>>=
 if(INITENTRY == nil) {
     INITENTRY = "_main";
     <<[[main()]] adjust INITENTRY if profiling>>
 }
-<<[[main()]] if rare condition, do nothing, else>>
+<<[[main()]] if rare condition do nothing, else>>
   lookup(INITENTRY, 0)->type = SXREF;
 @
 %old: this was done originally after setting firstp below, but
@@ -2901,21 +2901,23 @@ if(INITENTRY == nil) {
 % The SXREF setting is done only when load_libs and only in the then branch.
 % But why not do lookup and set to SXREF the entry point all the time?
 % Why only when load_libs? and why not for digit INITENTRY?
-% Because if use -l and no -E we want INITENTRY to be first instruction?
-\t real reason? kernel use -l? and first obj is entry point?
-\t  but could -E _start no?
+% Because if use -l we want possibly INITENTRY to be first instruction?
+\t real reason? first obj is entry point? but could -E _start no?
 
 Unless some rare conditions we will explained in 
 Section~\ref{sec:loading-libraries-magically},
 the symbol for the entry point (usually [[_main]])
-is looked up. This will create a new symbol in the symbol table [[hash]]
+is looked up. 
+\t remember 0 is for version, and global symbol use 0
+This will create a new symbol in the symbol table [[hash]]
 as the symbol table is empty at the beginning.
 Then, by setting its section to [[SXREF]], the symbol for the entry
 point is marked as a ``wanted'' symbol.
 \l bootstrap!
 Hopefully the object files or libraries passed on the command
 line to [[5l]] will define this symbol. Otherwise,
-because of [[SXREF]], an error message will be displayed, for instance:
+because of [[SXREF]], an error message will be displayed
+at the very end by, for instance:
 
 \begin{verbatim}
 $ 5l no_main.5
@@ -2977,12 +2979,12 @@ The code
 Section~\ref{sec:loading-libraries-magically}),
 {\em resolve} symbols, 
 {\em generate} the executable, and finally 
-{\em check} if there is still some undefined symbols.
-\l e.g. if _main has been defined
+{\em check} if there is still some undefined symbols
+(e.g. whether [[_main]] has been found).
 %
 The first line allocates an empty instruction with [[prg()]].
 This first instruction is used as a {\em sentinel} which simplifies 
-code later modifying [[firstp/lastp]]. 
+code modifying later [[firstp/lastp]]. 
 This first empty instruction is then skipped a few lines later.
 %
 [[prg()]] uses the global [[zprg]] which is set to represent an empty
@@ -3028,11 +3030,13 @@ in [[include/arch/arm/5.out.h]].
 %
 [[AGOK]] (God Only Knows) is an opcode representing an 
 {undefined instruction}.
-It is recognized by some error managment code
+It is recognized by some error managment code in [[5l]]
 and used as a form of {defensive programming}.
+%ocaml: do not need that I think. typing and exhaustic check is better
+% than defensive programming
 \l sure it means god Only Knows? 
-\l could use AXXX? or ANOP? 5c generates some AGOK
-\t actually 5c generates some too, but to continue even when error (meh?)
+\l could use AXXX? or ANOP? 
+\t actually 5c generates some AGOK, but to continue even when error (meh?)
 
 %toc:
 The following sections will each describe one of the
@@ -3040,21 +3044,22 @@ component of [[5l]] mentioned in the main flow above.
 
 \section{Loading the objects and libraries, [[objfile()]]}
 
-% this function can actually also load libraries passed on the
-% command line when the file is a .a (and also core libs passed
-% via -lxxx)
+[[objfile()]] takes either the name of 
+an object file (e.g. [[foo.5]])
+or a library (e.g. [[libc.a]])
+and reads the object code in it.
+%
+First, [[objfile()]] opens and reads a few bytes of the file to decide
+whether it is an archive or an object file 
+\l why not use filename extension to decide?
+by checking if those bytes match an archive magic string ([[ARMAG]]).
+%
+Then it loads the file.
+The code below shows only the simple case where the file is an object file:
 
-% less: objfile -> ldobj and ldobj -> ldinstrs
-%  as it can actually load a slice of an object, just a procedure
-
-% essentially modify which globals?
-%  - should modify firstp! and textp, datap, lastp, etc
-%  - will modify libraryp probably, the cool pragma "autolib"
-%    which is why objfile() must be called before loadlib()
-
-% SARMAG = Size ARchive MAGic string
 
 <<function objfile>>=
+// main | loadlib  -> <>
 void
 objfile(char *file)
 {
@@ -3088,7 +3093,26 @@ objfile(char *file)
     <<[[objfile()]] when file is a library>>
 }
 @
-% see next chapter for ldobj()
+\l rename objfile -> ldobj and ldobj -> ldinstrs
+\l  as it can actually load a slice of an object, just a procedure
+\n portable function! (ldobj is not though)
+
+[[SARMAG]] above stands for Size of ARchive MAGic string.
+%
+The more complex case where the file is a library will
+be described in Chapter~\ref{chap:loading-libraries}.
+%
+The most important part in the code above is the call
+to [[ldboj()]] which loads in memory one object file.
+\l or part of a library seeked to right place
+Chapter~\ref{chap:loading-objects} will describe [[ldobj()]].
+
+\l essentially modify which globals?
+\l  - should modify firstp! and textp, datap, lastp, etc
+\l  - will modify libraryp probably, the cool pragma "autolib"
+\l    which is why objfile() must be called before loadlib()
+
+
 
 <<[[objfile()]] sanity check f>>=
 if(f < 0) {
@@ -3099,14 +3123,19 @@ if(f < 0) {
 
 \section{Resolving symbols, computing addresses}
 
-% see chapter, many phases, many passes
-% but actually not that many.
-
-
+%trans:
+The next step after loading the objects is to resolve
+the symbol references in it and to compute the final address
+of those symbols.
+%
+We will delay the explanations about this step to
+Chapter~\ref{chap:resolving} where multiple functions
+are used to do different passes on the set of instructions.
+\l use firstp/lastp, use hash, build graph of instruction, layout
 
 \section{Generating the executable, [[asmb()]]}
 \label{sec:gen-executable}
-% asmb? asm binary?
+\l asmb? asm binary? meh
 
 %trans:
 % first function to actually use cout!
@@ -3144,10 +3173,12 @@ asmb(void)
 <<[[asmb()]] locals>>=
 long OFFSET;
 @
-%<<global OFFSET(arm)>>=
-%long	OFFSET;
-%@
-% was  a global but can not just be a local in asmb()
+%old: was a global but can not just be a local in asmb()
+% <<global OFFSET(arm)>>=
+% long	OFFSET;
+% @
+
+
 
 \subsection{Header}
 
@@ -4739,7 +4770,7 @@ dotext();
 
 
 
-\section{Linking branch instructions, [[patch()]]}
+\section{Building the code instructions graph, [[patch()]]}
 \l no pun intended
 
 % needed because better to use pointers to virtual pc because
@@ -4968,7 +4999,7 @@ brloop(Prog *p)
 
 
 
-\section{Virtual opcode rewriting, [[noops()]]}
+\section{Virtual opcodes rewriting, [[noops()]]}
 
 % ARM only. there is a dostkoff in x86 but it's related only to the become
 % stuff that I have now deleted for the ARM.
