@@ -1276,6 +1276,7 @@ the serialized form of the abstract syntax tree of an assembly source.
 \l 5l -W also show format a bit
 
 \section{Output executable format, [[a.out]]}
+\label{sec:exec-format}
 
 \plan is using the very simple [[a.out]] executable format.
 \t ref? rfc?
@@ -2588,7 +2589,7 @@ stored in the following global:
 fdt	cout = -1;
 @
 \n cout =~ create(outfile)
-\l why need global for that? could be passed around too no?
+\l why need global for that? could be passed around too no? used only by asmb
 
 
 %dup: (and adapted) from Assembler
@@ -2677,7 +2678,7 @@ in this document.
 An important set of options deals with the executable format 
 and are presented below.
 
-\subsection{Executable format choice}
+\subsection{Executable format choice, [[5l -H]]}
 \label{sec:choice-exec-format}
 
 One of the most important option of [[5l]] is
@@ -2848,7 +2849,7 @@ if(INITDAT != 0 && INITRND != 0)
 \l less important I think
 
 
-\subsection{Executable entry point}
+\subsection{Executable entry point, , [[5l -E]]}
 \label{sec:choice-entry-point}
 
 The entry point of a program can also be modified
@@ -3055,7 +3056,9 @@ whether it is an archive or an object file
 by checking if those bytes match an archive magic string ([[ARMAG]]).
 %
 Then it loads the file.
-The code below shows only the simple case where the file is an object file:
+The code below shows only the simple case where the file is an object file.
+The more complex case where the file is a library will
+be described in Chapter~\ref{chap:loading-libraries}.
 
 
 <<function objfile>>=
@@ -3099,9 +3102,6 @@ objfile(char *file)
 
 [[SARMAG]] above stands for Size of ARchive MAGic string.
 %
-The more complex case where the file is a library will
-be described in Chapter~\ref{chap:loading-libraries}.
-%
 The most important part in the code above is the call
 to [[ldboj()]] which loads in memory one object file.
 \l or part of a library seeked to right place
@@ -3111,7 +3111,6 @@ Chapter~\ref{chap:loading-objects} will describe [[ldobj()]].
 \l  - should modify firstp! and textp, datap, lastp, etc
 \l  - will modify libraryp probably, the cool pragma "autolib"
 \l    which is why objfile() must be called before loadlib()
-
 
 
 <<[[objfile()]] sanity check f>>=
@@ -3124,13 +3123,13 @@ if(f < 0) {
 \section{Resolving symbols, computing addresses}
 
 %trans:
-The next step after loading the objects is to resolve
-the symbol references in it and to compute the final address
+The next step, after loading the objects, is to resolve
+the symbol references in those objects and to compute the final addresses
 of those symbols.
 %
 We will delay the explanations about this step to
-Chapter~\ref{chap:resolving} where multiple functions
-are used to do different passes on the set of instructions.
+Chapter~\ref{chap:resolving} where we will see multiple functions
+used to do different passes on the set of instructions.
 \l use firstp/lastp, use hash, build graph of instruction, layout
 
 \section{Generating the executable, [[asmb()]]}
@@ -3138,7 +3137,8 @@ are used to do different passes on the set of instructions.
 \l asmb? asm binary? meh
 
 %trans:
-% first function to actually use cout!
+After the symbols are resolved and their memory addresses computed, 
+we can finally generate the executable with [[asmb()]]:
 
 <<function asmb(arm)>>=
 void
@@ -3163,12 +3163,25 @@ asmb(void)
     cflush();
 }
 @
-% HEADER section at the end, paradoxal, but do SEEK, and because
-% the HEADER contain info about other sections such as size, so need
-% to know those size first.
-% no BSS section because the binary executable will not contain
-% anything related to BSS except its size.
+%ocaml: pass cout as a parameter
 
+[[asmb()]] does not take any argument but it uses the global [[cout]],
+which is initialized in [[main()]] with the file descriptor of the 
+executable file to generate.
+%
+Note that the order of operations above may seem incorrect.
+The code to generate the header is at the end, which seems paradoxal.
+\l even impossible, but SEEK
+But, the header contains information about other sections,
+their size. So, we need to first know thoses sizes 
+before generating the header, hence the order of operations.
+
+\l no BSS section because the binary executable will not contain
+\l  anything related to BSS except its size.
+
+[[asmb()]] uses the local [[OFFSET]] below to point
+to different parts of the executable file. It is passed
+to the C function [[seek()]] to move around in the file.
 
 <<[[asmb()]] locals>>=
 long OFFSET;
@@ -3182,7 +3195,10 @@ long OFFSET;
 
 \subsection{Header}
 
-% see Exec struct in Overview.
+The header generation relies on a set of globals, e.g.
+[[textsize]] or [[datsize]], to have been computed previously:
+\l but actually not in asmb but in dotext and dodata
+\l but symsize and lcsize are computed in asmb
 
 <<[[asmb()]] header section>>=
 DBG("%5.2f header\n", cputime());
@@ -3208,11 +3224,13 @@ case H_PLAN9:
 <<[[asmb()]] switch HEADTYPE (for header generation) cases(arm)>>
 }
 @
-% all those xxxsize are globals, modified by previous phases
-% s/0x647/E_MAGIC?
+\t s/0x647/E_MAGIC?
 
+See Section~\ref{sec:exec-format} to understand the format
+of the [[a.out]] header used by \plan.
 
-% less: could at least take initentry as a parameter instead of using a global
+The address of the entry point is looked up in the symbol table:
+
 <<function entryvalue(arm)>>=
 long
 entryvalue(void)
@@ -3237,7 +3255,8 @@ entryvalue(void)
     }
 }
 @
-
+%ocaml: could at least take initentry as a parameter instead of using a global
+\l SLEAF see later
 
 \subsection{Text section}
 
@@ -3373,13 +3392,15 @@ else {
     <<[[asmb()]] if dynamic module and no symbol table generation>>
 }
 @
-
+% say -s = strip? say see strip in appendix?
 
 
 \section{Checking for unresolved symbols, [[undef()]]}
 \label{sec:undef}
 
-% rename check_if_still_undefined_symbols()?
+The final step is making sure there is no more
+undefined symbols:
+
 <<function undef>>=
 void
 undef(void)
@@ -3393,7 +3414,8 @@ undef(void)
                 diag("%s: not defined", s->name);
 }
 @
-
+\l rename check_if_still_undefined_symbols()?
+\l famous not defined error msg!
 
 
 
@@ -3404,7 +3426,7 @@ undef(void)
 \label{chap:loading-objects}
 
 %trans:
-% seen main flow, but many functions, e.g. ldobj.
+% seen main flow, main functions, but remain e.g. ldobj.
 % start here linking pipeline
 
 %note: was called parsing, but objects are stored in a binary format so
