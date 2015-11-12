@@ -40,6 +40,7 @@ struct	Adr
     // enum<operand_kind> (D_NONE by default)
     short	type;
 
+    // switch on Adr.type
     union {
         long	offset;
         Ieee*	ieee;
@@ -50,13 +51,13 @@ struct	Adr
     short	reg; 
 
     /*s: [[Adr]] other fields */
+    // enum<sym_kind>
+    short	symkind;
+    /*x: [[Adr]] other fields */
     union {
         Sym*	sym;
         Auto*	autom;
     };
-    /*x: [[Adr]] other fields */
-    // enum<sym_kind>
-    short	symkind;
     /*x: [[Adr]] other fields */
     // option<enum<classx>>, 0 means None, i means i-1 is the class you want
     short	class;
@@ -67,7 +68,7 @@ struct	Adr
 /*s: struct Prog(arm) */
 struct	Prog
 {
-    //enum<opcode>
+    //enum<Opcode>
     byte	as;
 
     // operands
@@ -96,7 +97,7 @@ struct	Prog
 
     // Extra
     /*s: [[Prog]] extra fields */
-    // list<ref<Prog>> from firstp(/lastp), or datap(/edatap)
+    // list<ref<Prog>> from firstp(/lastp), or datap
     Prog*	link;
     /*x: [[Prog]] extra fields */
     // list<ref<Prog>> from textp/etextp
@@ -108,15 +109,18 @@ struct	Prog
 /*s: struct Sym */
 struct	Sym
 {
+    // The key
     // ref_own<string>
     char	*name;
-    short	version; // for static names, each sym has a different version
+    // 0 for global symbols, object file id for local symbols
+    short	version; 
 
-    // generic value, e.g. virtual pc for a TEXT procedure, size for GLOBL
+    // The generic value, 
+    // e.g. virtual pc for a TEXT procedure, size for GLOBL
     long	value; 
 
     /*s: [[Sym]] section field */
-    //enum<section>
+    //enum<Section>
     short	type;
     /*e: [[Sym]] section field */
 
@@ -136,7 +140,7 @@ struct	Sym
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
-    // hash<Sym.name * Sym.version, ref<Sym>> of hash
+    // list<ref<Sym>> bucket of hashtbl 'hash'
     Sym*	link;
     /*e: [[Sym]] extra fields */
 };
@@ -149,7 +153,7 @@ struct	Sym
 /*s: struct Auto(arm) */
 struct	Auto
 {
-    // enum<name_kind> (but D_LOCAL or D_PARAM only?)
+    // enum<name_kind> (but N_LOCAL or N_PARAM only?)
     short	type;
 
     Sym*	asym;
@@ -349,7 +353,7 @@ enum rxxx {
  *	-H2 -T4128 -R4096	  is plan9 format
  *	-H7				      is elf
  */
-enum headtype {
+enum Headtype {
      H_NOTHING = 0,
      H_PLAN9 = 2,
      H_ELF = 7,

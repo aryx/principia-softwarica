@@ -656,14 +656,14 @@ export(void)
         Bprint(&bso, "EXPORT: %s sig=%lux t=%d\n", s->name, s->sig, s->type);
 
         /* signature */
-        p = newdata(et, off, sizeof(long), D_EXTERN);
+        p = newdata(et, off, sizeof(long), N_EXTERN);
         off += sizeof(long);
         p->to.offset = s->sig;
 
         /* address */
-        p = newdata(et, off, sizeof(long), D_EXTERN);
+        p = newdata(et, off, sizeof(long), N_EXTERN);
         off += sizeof(long);
-        p->to.symkind = D_EXTERN;
+        p->to.symkind = N_EXTERN;
         p->to.sym = s;
 
         /* string */
@@ -673,7 +673,7 @@ export(void)
             buf[nb++] = *t;
             sv++;
             if(nb >= NSNAME){
-                p = newdata(str, sv-NSNAME, NSNAME, D_INTERN);
+                p = newdata(str, sv-NSNAME, NSNAME, N_INTERN);
                 p->to.type = D_SCONST;
                 p->to.sval = malloc(NSNAME);
                 memmove(p->to.sval, buf, NSNAME);
@@ -684,22 +684,22 @@ export(void)
         }
 
         /* name */
-        p = newdata(et, off, sizeof(long), D_EXTERN);
+        p = newdata(et, off, sizeof(long), N_EXTERN);
         off += sizeof(long);
-        p->to.symkind = D_INTERN;
+        p->to.symkind = N_INTERN;
         p->to.sym = str;
         p->to.offset = sv-n;
     }
 
     if(nb > 0){
-        p = newdata(str, sv-nb, nb, D_INTERN);
+        p = newdata(str, sv-nb, nb, N_INTERN);
         p->to.type = D_SCONST;
         p->to.sval = malloc(NSNAME);
         memmove(p->to.sval, buf, nb);
     }
 
     for(i = 0; i < 3; i++){
-        newdata(et, off, sizeof(long), D_EXTERN);
+        newdata(et, off, sizeof(long), N_EXTERN);
         off += sizeof(long);
     }
     et->value = off;

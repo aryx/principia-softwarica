@@ -395,10 +395,10 @@ asmsym(void)
             /* frame, auto and param after */
             putsymb(".frame", 'm', p->to.offset+4, 0);
             for(a=p->to.autom; a; a=a->link)
-                if(a->type == D_LOCAL)
+                if(a->type == N_LOCAL)
                     putsymb(a->asym->name, 'a', -a->aoffset, 0);
                 else
-                if(a->type == D_PARAM)
+                if(a->type == N_PARAM)
                     putsymb(a->asym->name, 'p', a->aoffset, 0);
         }
     }
@@ -718,7 +718,7 @@ asmout(Prog *p, Optab *o)
         case C_LCON:
             if(!dlm)
                 break;
-            if(p->to.symkind != D_EXTERN && p->to.symkind != D_INTERN)
+            if(p->to.symkind != N_EXTERN && p->to.symkind != N_INTERN)
                 break;
             // Fallthrough
         case C_ADDR:

@@ -10,7 +10,7 @@ union Buf buf;
 long	HEADR; 		/* length of header */
 /*e: global HEADR */
 /*s: global HEADTYPE */
-// enum<headtype>
+// enum<Headtype>
 short	HEADTYPE = -1; /* type of header */
 /*e: global HEADTYPE */
 /*s: global INITDAT */
@@ -64,7 +64,7 @@ Prog*	curp;
 Prog*	curtext = P;
 /*e: global curtext */
 /*s: global datap */
-// list<ref<Prog>>, next = Prog.next
+// list<ref<Prog>>, next = Prog.link
 Prog*	datap = P;
 /*e: global datap */
 /*s: global datsize */
@@ -90,7 +90,7 @@ char	fnuxi8[8];
 /*e: global fnuxi8 */
 
 /*s: global hash linker */
-// hash<Sym.name * Sym.version, ref<Sym>> (next = Sym.link)
+// hash<Sym.name * Sym.version, ref_own<Sym>> (next in bucket = Sym.link)
 Sym*	hash[NHASH];
 /*e: global hash linker */
 
@@ -168,7 +168,7 @@ long	pc = 0;
 long	symsize;
 /*e: global symsize */
 /*s: global textp */
-// list<ref<Prog>>, next = Prog.cond (really????)
+// list<ref<Prog>>, next = Prog.cond (initially)
 Prog*	textp = P;
 /*e: global textp */
 /*s: global textsize */

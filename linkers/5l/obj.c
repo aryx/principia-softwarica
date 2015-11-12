@@ -4,7 +4,7 @@
 
 #ifndef	DEFAULT
 /*s: constant DEFAULT */
-#define	DEFAULT	H_PLAN9
+#define	H_DEFAULT	H_PLAN9
 /*e: constant DEFAULT */
 #endif
 
@@ -72,8 +72,6 @@ void
 main(int argc, char *argv[])
 {
     /*s: [[main()]] locals(arm) */
-    bool load_libs;
-    /*x: [[main()]] locals(arm) */
     char *root;
     /*x: [[main()]] locals(arm) */
     int c;
@@ -115,16 +113,16 @@ main(int argc, char *argv[])
             INITDAT = atolwhex(a);
         break;
     /*x: [[main()]] command line processing(arm) */
-    case 'E':
-        a = ARGF();
-        if(a)
-            INITENTRY = a;
-        break;
-    /*x: [[main()]] command line processing(arm) */
     case 'R':
         a = ARGF();
         if(a)
             INITRND = atolwhex(a);
+        break;
+    /*x: [[main()]] command line processing(arm) */
+    case 'E':
+        a = ARGF();
+        if(a)
+            INITENTRY = a;
         break;
     /*x: [[main()]] command line processing(arm) */
     case 'L':
@@ -180,18 +178,18 @@ main(int argc, char *argv[])
     /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
     /*s: [[main()]] set HEADTYPE, INITTEXT, INITDAT, etc */
     if(HEADTYPE == -1) {
-        HEADTYPE = DEFAULT;
+        HEADTYPE = H_DEFAULT;
     }
     switch(HEADTYPE) {
     /*s: [[main()]] switch HEADTYPE cases(arm) */
     case H_PLAN9:
         HEADR = 32L;
         if(INITTEXT == -1)
-            INITTEXT = 4096+32;
+            INITTEXT = 4096+32; // 1 page + a.out header
         if(INITDAT == -1)
             INITDAT = 0;
         if(INITRND == -1)
-            INITRND = 4096;
+            INITRND = 4096; // 1 page
         break;
     /*x: [[main()]] switch HEADTYPE cases(arm) */
     case H_ELF:	/* elf executable */
@@ -216,10 +214,26 @@ main(int argc, char *argv[])
     if (INITTEXTP == -1)
         INITTEXTP = INITTEXT;
     /*e: [[main()]] last INITXXX adjustments */
-    DBG("HEADER = -H0x%d -T0x%lux -D0x%lux -R0x%lux\n",
+    DBG("HEADER = -H%d -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
     /*e: [[main()]] set HEADTYPE, INITTEXT, INITDAT, etc */
-
+    /*s: [[main()]] set INITENTRY */
+    if(INITENTRY == nil) {
+        INITENTRY = "_main";
+        /*s: [[main()]] adjust INITENTRY if profiling */
+        if(debug['p'])
+            INITENTRY = "_mainp";
+        /*e: [[main()]] adjust INITENTRY if profiling */
+    }
+    /*s: [[main()]] if rare condition, do nothing, else */
+    if(debug['l']) {}
+    else
+    /*x: [[main()]] if rare condition, do nothing, else */
+    if(*INITENTRY >= '0' && *INITENTRY <= '9') {}
+    else
+    /*e: [[main()]] if rare condition, do nothing, else */
+      lookup(INITENTRY, 0)->type = SXREF;
+    /*e: [[main()]] set INITENTRY */
     /*s: [[main()]] initialize globals(arm) */
     /*s: [[main()]] set zprg(arm) */
     zprg.as = AGOK;
@@ -230,8 +244,6 @@ main(int argc, char *argv[])
     zprg.from.reg = R_NONE;
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg(arm) */
-    /*x: [[main()]] initialize globals(arm) */
-    load_libs = !debug['l'];
     /*x: [[main()]] initialize globals(arm) */
     buildop();
     /*x: [[main()]] initialize globals(arm) */
@@ -251,32 +263,19 @@ main(int argc, char *argv[])
 
     // ------ main functions  ------
     /*s: [[main()]] cout is ready, LET'S GO(arm) */
+    // first empty instruction
     firstp = prg();
     lastp = firstp;
 
-    /*s: [[main()]] set INITENTRY */
-    if(INITENTRY == nil) {
-        INITENTRY = "_main";
-        /*s: [[main()]] adjust INITENTRY if profiling */
-        if(debug['p'])
-            INITENTRY = "_mainp";
-        /*e: [[main()]] adjust INITENTRY if profiling */
-        if(load_libs)
-            lookup(INITENTRY, 0)->type = SXREF;
-    } else {
-        /*s: [[main()]] if digit INITENTRY */
-        if(!(*INITENTRY >= '0' && *INITENTRY <= '9'))
-           lookup(INITENTRY, 0)->type = SXREF;
-        /*e: [[main()]] if digit INITENTRY */
-    }
-    /*e: [[main()]] set INITENTRY */
-
-    // Loading
+    // Loading (populates firstp/lastp, datap, textp/etextp, and hash)
     while(*argv)
         objfile(*argv++);
-    if(load_libs)
+    /*s: [[main()]] load implicit libraries */
+    if(!debug['l'])
         loadlib();
+    /*e: [[main()]] load implicit libraries */
 
+    // skip first empty instruction
     firstp = firstp->link;
     if(firstp == P)
         goto out;
@@ -639,12 +638,12 @@ zaddr(byte *p, Adr *a, Sym *h[])
         return 0;	/*  force real diagnostic */
 
     }
-    /*s: [[zaddr()]] adjust curauto for D_LOCAL or D_PARAM symkind */
+    /*s: [[zaddr()]] adjust curauto for N_LOCAL or N_PARAM symkind */
     s = a->sym;
     t = a->symkind;
     l = a->offset;
 
-    if(s == S || (t != D_LOCAL && t != D_PARAM))
+    if(s == S || (t != N_LOCAL && t != N_PARAM))
         return size;
 
     for(u=curauto; u; u=u->link)
@@ -663,7 +662,7 @@ zaddr(byte *p, Adr *a, Sym *h[])
     //add_list(u, curauto)
     u->link = curauto;
     curauto = u;
-    /*e: [[zaddr()]] adjust curauto for D_LOCAL or D_PARAM symkind */
+    /*e: [[zaddr()]] adjust curauto for N_LOCAL or N_PARAM symkind */
 
     return size;
 }
@@ -870,6 +869,7 @@ readsome(int f, byte *buf, byte *good, byte *stop, int max)
 /*e: function readsome */
 
 /*s: function ldobj(arm) */
+/// main -> objfile -> <>
 void
 ldobj(fdt f, long c, char *pn)
 {
@@ -988,7 +988,7 @@ loop:
         c -= 3;
 
         r = 0;
-        if(v == D_INTERN)
+        if(v == N_INTERN)
             r = version;
 
         s = lookup((char*)bloc, r);
@@ -1011,7 +1011,7 @@ loop:
 
         h[o] = s;
 
-        if((v == D_EXTERN || v == D_INTERN) && s->type == SNONE)
+        if((v == N_EXTERN || v == N_INTERN) && s->type == SNONE)
             s->type = SXREF;
 
         /*s: [[ldobj()]] when ANAME opcode, if D_FILE */
@@ -1106,14 +1106,14 @@ loop:
         s->value = pc;
 
         // like in default case
-        //add_list(firstp, lastp, p)
+        //add_queue(firstp, lastp, p)
         lastp->link = p;
         lastp = p;
 
         p->pc = pc;
         pc++;
 
-        //add_list(textp, etextp, p)
+        //add_queue(textp, etextp, p)
         if(textp == P) {
             textp = p;
             etextp = p;
@@ -1149,7 +1149,7 @@ loop:
         }
         /*e: [[ldobj()]] sanity check for ADATA symbol s */
 
-        //add_list(datap, edatap, p)
+        //add_queue(datap, p)
         p->link = datap;
         datap = p;
 
@@ -1268,7 +1268,7 @@ loop:
                 t->line = p->line;
                 t->from.type = D_OREG;
                 t->from.sym = s;
-                t->from.symkind = D_EXTERN;
+                t->from.symkind = N_EXTERN;
                 t->reg = 4;
                 t->to = p->from;
                 t->link = datap;
@@ -1276,7 +1276,7 @@ loop:
             }
             p->from.type = D_OREG;
             p->from.sym = s;
-            p->from.symkind = D_EXTERN;
+            p->from.symkind = N_EXTERN;
             p->from.offset = 0;
         }
         goto casedef;
@@ -1298,7 +1298,7 @@ loop:
                 t->line = p->line;
                 t->from.type = D_OREG;
                 t->from.sym = s;
-                t->from.symkind = D_EXTERN;
+                t->from.symkind = N_EXTERN;
                 t->reg = 8;
                 t->to = p->from;
                 t->link = datap;
@@ -1306,7 +1306,7 @@ loop:
             }
             p->from.type = D_OREG;
             p->from.sym = s;
-            p->from.symkind = D_EXTERN;
+            p->from.symkind = N_EXTERN;
             p->from.offset = 0;
         }
         goto casedef;
@@ -1321,7 +1321,7 @@ loop:
         if(p->to.type == D_BRANCH)
             p->to.offset += ipc;
 
-        //add_list(firstp, lastp, p)
+        //add_queue(firstp, lastp, p)
         lastp->link = p;
         lastp = p;
 
@@ -1360,7 +1360,7 @@ doprof1(void)
             // DATA __mcount +n*4(SB), 4,  $p->syn //$
             q->as = ADATA;
             q->from.type = D_OREG;
-            q->from.symkind = D_EXTERN;
+            q->from.symkind = N_EXTERN;
             q->from.offset = n*4;
             q->from.sym = s;
             q->reg = 4; // size of this DATA slice
@@ -1378,7 +1378,7 @@ doprof1(void)
             // MOVW p->s + n*4+4(SB), R11
             p->as = AMOVW;
             p->from.type = D_OREG;
-            p->from.symkind = D_EXTERN;
+            p->from.symkind = N_EXTERN;
             p->from.sym = s;
             p->from.offset = n*4 + 4;
             p->to.type = D_REG;
@@ -1410,7 +1410,7 @@ doprof1(void)
             p->from.type = D_REG;
             p->from.reg = REGTMP;
             p->to.type = D_OREG;
-            p->to.symkind = D_EXTERN;
+            p->to.symkind = N_EXTERN;
             p->to.sym = s;
             p->to.offset = n*4 + 4;
 
@@ -1425,7 +1425,7 @@ doprof1(void)
 
     q->as = ADATA;
     q->from.type = D_OREG;
-    q->from.symkind = D_EXTERN;
+    q->from.symkind = N_EXTERN;
     q->from.sym = s;
     q->reg = 4;
     q->to.type = D_CONST;

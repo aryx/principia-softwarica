@@ -272,28 +272,28 @@ Nconv(Fmt *fp)
         sprint(str, "%ld", a->offset);
         break;
 
-    case D_EXTERN:
+    case N_EXTERN:
         if(s == S)
             sprint(str, "%ld(SB)", a->offset);
         else
             sprint(str, "{%s}%.5lux+%ld(SB)", s->name, s->value, a->offset);
         break;
 
-    case D_INTERN:
+    case N_INTERN:
         if(s == S)
             sprint(str, "<>+%ld(SB)", a->offset);
         else
             sprint(str, "{%s<>}%.5lux+%ld(SB)", s->name, s->value, a->offset);
         break;
 
-    case D_LOCAL:
+    case N_LOCAL:
         if(s == S)
             sprint(str, "%ld(SP)", a->offset);
         else
             sprint(str, "{%s}-%ld(SP)", s->name, -a->offset);
         break;
 
-    case D_PARAM:
+    case N_PARAM:
         if(s == S)
             sprint(str, "%ld(FP)", a->offset);
         else

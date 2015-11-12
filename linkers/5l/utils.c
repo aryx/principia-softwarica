@@ -55,44 +55,53 @@ gethunk(void)
 Sym*
 lookup(char *symb, int v)
 {
-    Sym *s;
-    char *p;
+    Sym *sym;
     long h;
-    int l, c;
+    int len;
+    /*s: [[lookup()]] locals */
+    char *p;
+    int c;
+    /*e: [[lookup()]] locals */
 
-    // h = hashcode(symb, v)
+    /*s: [[lookup()]] compute hash value [[h]] of [[symb]] and [[v]], and [[len]] */
+    // h = hashcode(symb, v); 
+    // len = strlen(symb);
     h = v;
     for(p=symb; *p; p++) {
         c = *p;
         h = h+h+h + c;
     }
-    l = (p - symb) + 1;
+    len = (p - symb) + 1;
     h &= 0xffffff;
     h %= NHASH;
+    /*e: [[lookup()]] compute hash value [[h]] of [[symb]] and [[v]], and [[len]] */
     
-    // s = lookup((s->name,v), h, hash)
-    for(s = hash[h]; s != S; s = s->link)
-        if(s->version == v)
-            if(memcmp(s->name, symb, l) == 0)
-                return s;
+    // sym = hash_lookup((symb, v), h, hash)
+    for(sym = hash[h]; sym != S; sym = sym->link)
+        if(sym->version == v)
+            if(memcmp(sym->name, symb, len) == 0)
+                return sym;
 
+    /*s: [[lookup()]] if symbol name not found */
     // else
-    s = malloc(sizeof(Sym));
-    s->name = malloc(l + 1); // +1 again?
-    memmove(s->name, symb, l);
-    s->type = SNONE;
-    s->version = v;
-    s->value = 0;
-    s->sig = 0;
+    sym = malloc(sizeof(Sym));
+    sym->name = malloc(len + 1); // +1 again?
+    memmove(sym->name, symb, len);
+    sym->version = v;
 
-    // add_hash(s, hash)
-    s->link = hash[h];
-    hash[h] = s;
+    sym->value = 0;
+    sym->type = SNONE;
+    sym->sig = 0;
+
+    // add_hash(sym, hash)
+    sym->link = hash[h];
+    hash[h] = sym;
 
     /*s: [[lookup()]] profiling */
     nsymbol++;
     /*e: [[lookup()]] profiling */
-    return s;
+    return sym;
+    /*e: [[lookup()]] if symbol name not found */
 }
 /*e: function lookup */
 

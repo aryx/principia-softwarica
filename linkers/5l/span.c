@@ -320,8 +320,8 @@ aclass(Adr *a)
     case D_OREG:
         switch(a->symkind) {
         /*s: [[aclass()]] D_OREG case, switch symkind cases */
-        case D_EXTERN:
-        case D_INTERN:
+        case N_EXTERN:
+        case N_INTERN:
             if(a->sym == nil || a->sym->name == nil) {
                 print("null sym external\n");
                 print("%D\n", a);
@@ -352,34 +352,34 @@ aclass(Adr *a)
             instoffset = s->value + a->offset - BIG;
             t = immaddr(instoffset);
             if(t) {
-                /*s: [[aclass()]] if immfloat for D_EXTERN symbol */
+                /*s: [[aclass()]] if immfloat for N_EXTERN symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFEXT : C_FEXT;
-                /*e: [[aclass()]] if immfloat for D_EXTERN symbol */
+                /*e: [[aclass()]] if immfloat for N_EXTERN symbol */
                 return immhalf(instoffset)? C_HEXT : C_SEXT;
             }
             return C_LEXT;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
-        case D_LOCAL:
+        case N_LOCAL:
             instoffset = autosize + a->offset;
             t = immaddr(instoffset);
             if(t){
-                /*s: [[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol */
+                /*s: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
-                /*e: [[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol */
+                /*e: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
                 return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
-        case D_PARAM:
+        case N_PARAM:
             instoffset = autosize + a->offset + 4L;
             t = immaddr(instoffset);
             if(t){
-                /*s: [[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol */
+                /*s: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
-                /*e: [[aclass()]] if immfloat for D_LOCAL or D_PARAM symbol */
+                /*e: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
                 return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
@@ -423,8 +423,8 @@ aclass(Adr *a)
                 return C_NCON;
             return C_LCON;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
-        case D_EXTERN:
-        case D_INTERN:
+        case N_EXTERN:
+        case N_INTERN:
             s = a->sym;
             if(s == S) // no warning?
                 break;
@@ -450,11 +450,11 @@ aclass(Adr *a)
             diag("unknown section for %s", s->name);
             break;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
-        case D_LOCAL:
+        case N_LOCAL:
             instoffset = autosize + a->offset;
             goto aconsize;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
-        case D_PARAM:
+        case N_PARAM:
             instoffset = autosize + a->offset + 4L;
             goto aconsize;
         /*x: [[aclass()]] D_CONST case, switch symkind cases */
