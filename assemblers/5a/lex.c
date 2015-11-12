@@ -105,9 +105,9 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "@",		LAT,	0,
     /*x: [[itab]] elements */
-    "SB",		LSB,	D_EXTERN,
-    "SP",		LSP,	D_LOCAL,
-    "FP",		LFP,	D_PARAM,
+    "SB",		LSB,	N_EXTERN,
+    "SP",		LSP,	N_LOCAL,
+    "FP",		LFP,	N_PARAM,
     /*x: [[itab]] elements */
     "PC",		LPC,	D_BRANCH,
     /*x: [[itab]] elements */

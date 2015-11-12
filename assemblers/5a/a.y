@@ -426,7 +426,7 @@ name:
   $$ = nullgen;
   $$.type = D_OREG;
   $$.sym = $1;
-  $$.symkind = D_INTERN;
+  $$.symkind = N_INTERN;
   $$.offset = $4;
  }
 /*e: name rule */

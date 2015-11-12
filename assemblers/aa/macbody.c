@@ -415,8 +415,10 @@ macexpand(Sym *s, char *b)
     ob = b;
     if(*s->macro == 0) {
         strcpy(b, s->macro+1);
+        /*s: [[macexpand()]] debug part1 */
         if(debug['m'])
             print("#expand %s %s\n", s->name, ob);
+        /*e: [[macexpand()]] debug part1 */
         return;
     }
     
@@ -548,8 +550,10 @@ macexpand(Sym *s, char *b)
         b += strlen(arg[c]);
     }
     *b = 0;
+    /*s: [[macexpand()]] debug part2 */
     if(debug['m'])
         print("#expand %s %s\n", s->name, ob);
+    /*e: [[macexpand()]] debug part2 */
     return;
 
 bad:
