@@ -10,7 +10,7 @@ union Buf buf;
 long	HEADR; 		/* length of header */
 /*e: global HEADR */
 /*s: global HEADTYPE */
-// enum<Headtype>
+// option<enum<Headtype>>, None = -1
 short	HEADTYPE = -1; /* type of header */
 /*e: global HEADTYPE */
 /*s: global INITDAT */

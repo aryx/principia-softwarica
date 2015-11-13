@@ -55,7 +55,9 @@ struct	Adr
     short	symkind;
     /*x: [[Adr]] other fields */
     union {
+        // ref<Sym> of hash
         Sym*	sym;
+        // list<Auto>?? (next = Auto.link)
         Auto*	autom;
     };
     /*x: [[Adr]] other fields */
@@ -86,7 +88,7 @@ struct	Prog
     /*x: [[Prog]] other fields */
     long	pc;
     /*x: [[Prog]] other fields */
-    //bitset<enum<mark>>
+    //bitset<enum<Mark>>
     short	mark;
     /*x: [[Prog]] other fields */
     Prog*	forwd;
@@ -100,7 +102,8 @@ struct	Prog
     // list<ref<Prog>> from firstp(/lastp), or datap
     Prog*	link;
     /*x: [[Prog]] extra fields */
-    // list<ref<Prog>> from textp/etextp
+    // list<ref<Prog>> from textp/etextp initially
+    // ref<Prog> later for branch instructions
     Prog*	cond;
     /*e: [[Prog]] extra fields */
 };
@@ -156,6 +159,7 @@ struct	Auto
     // enum<name_kind> (but N_LOCAL or N_PARAM only?)
     short	type;
 
+    // option<ref<Sym>>
     Sym*	asym;
     long	aoffset;
 
@@ -302,7 +306,7 @@ enum Operand_class {
 /*e: enum cxxx(arm) */
 /*s: enum mark(arm) */
 /* mark flags */
-enum mark {
+enum Mark {
     /*s: enum mark cases */
     LEAF		= 1<<2,
     /*x: enum mark cases */
@@ -355,7 +359,7 @@ enum rxxx {
  */
 enum Headtype {
      H_NOTHING = 0,
-     H_PLAN9 = 2,
+     H_PLAN9 = 2, // a.k.a H_AOUT
      H_ELF = 7,
 };
 /*e: enum headtype(arm) */

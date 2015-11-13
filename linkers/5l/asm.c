@@ -42,6 +42,7 @@ entryvalue(void)
 /*e: function entryvalue(arm) */
 
 /*s: function asmb(arm) */
+/// main -> <>
 void
 asmb(void)
 {
@@ -51,37 +52,41 @@ asmb(void)
     Prog *p;
     Optab *o;
     /*x: [[asmb()]] locals */
-    long t, etext;
+    long t;
+    /*x: [[asmb()]] locals */
+    long etext;
     /*e: [[asmb()]] locals */
 
     DBG("%5.2f asm\n", cputime());
 
-    // TEXT SECTION
-    /*s: [[asmb()]] TEXT section */
+    // Text section
+    /*s: [[asmb()]] Text section */
     OFFSET = HEADR;
     seek(cout, OFFSET, SEEK__START);
-    pc = INITTEXT;
 
+    pc = INITTEXT;
     for(p = firstp; p != P; p = p->link) {
         /*s: adjust curtext when iterate over instructions p */
         if(p->as == ATEXT)
             curtext = p;
         /*e: adjust curtext when iterate over instructions p */
+        /*s: adjust autosize when iterate over instructions p */
         if(p->as == ATEXT) {
             autosize = p->to.offset + 4; // locals
         }
-        /*s: [[asmb()]] when in TEXT section, sanity check pc */
+        /*e: adjust autosize when iterate over instructions p */
+        curp = p;
+        /*s: [[asmb()]] in Text section generation, sanity check pc */
         if(p->pc != pc) {
             diag("phase error %lux sb %lux", p->pc, pc);
             if(!debug['a'])
                 prasm(curp);
             pc = p->pc;
         }
-        /*e: [[asmb()]] when in TEXT section, sanity check pc */
-        curp = p;
+        /*e: [[asmb()]] in Text section generation, sanity check pc */
 
-        // generate instruction!
-        o = oplook(p);	/* could probably avoid this call */
+        o = oplook(p);
+        // generate instruction(s)!
         asmout(p, o);
 
         pc += o->size;
@@ -95,7 +100,7 @@ asmb(void)
     /*e: [[asmb()]] before cflush, debug */
     cflush();
 
-    /*s: [[asmb()]] TEXT section, output strings in text segment */
+    /*s: [[asmb()]] Text section, output strings in text segment */
     /* output strings in text segment */
     etext = INITTEXT + textsize;
     for(t = pc; t < etext; t += sizeof(buf)-100) {
@@ -103,12 +108,12 @@ asmb(void)
             datblk(t, sizeof(buf)-100, true);
         else
             datblk(t, etext-t, true);
-    /*e: [[asmb()]] TEXT section, output strings in text segment */
+    /*e: [[asmb()]] Text section, output strings in text segment */
     }
-    /*e: [[asmb()]] TEXT section */
+    /*e: [[asmb()]] Text section */
 
-    // DATA SECTION
-    /*s: [[asmb()]] DATA section */
+    // Data section
+    /*s: [[asmb()]] Data section */
     curtext = P;
     switch(HEADTYPE) {
     case H_PLAN9:
@@ -138,10 +143,10 @@ asmb(void)
         else
             datblk(t, datsize-t, false);
     }
-    /*e: [[asmb()]] DATA section */
+    /*e: [[asmb()]] Data section */
 
-    // SYMBOL AND LINE TABLE
-    /*s: [[asmb()]] symbol and line table section */
+    // Symbol and Line table sections
+    /*s: [[asmb()]] symbol and line table sections */
     // modified by asmsym()
     symsize = 0;
     // modified by asmlc()
@@ -181,9 +186,9 @@ asmb(void)
         }
         /*e: [[asmb()]] if dynamic module and no symbol table generation */
     }
-    /*e: [[asmb()]] symbol and line table section */
+    /*e: [[asmb()]] symbol and line table sections */
 
-    // HEADER
+    // Header
     /*s: [[asmb()]] header section */
     DBG("%5.2f header\n", cputime());
 
@@ -204,6 +209,7 @@ asmb(void)
         lput(datsize);
         lput(bsssize);
         lput(symsize);			/* nsyms */
+
         lput(entryvalue());		/* va of entry */
         lput(0L);
         lput(lcsize);

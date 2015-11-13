@@ -99,7 +99,6 @@ main(int argc, char *argv[])
         a = ARGF();
         if(a)
             HEADTYPE = atolwhex(a);
-        /* do something about setting INITTEXT */
         break;
     /*x: [[main()]] command line processing(arm) */
     case 'T':
@@ -159,6 +158,7 @@ main(int argc, char *argv[])
     if(*argv == nil)
         usage();
 
+    /*s: [[main()]] initialize globals(arm) */
     /*s: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
     /*s: [[main()]] change root if ccroot */
     root = getenv("ccroot");
@@ -206,14 +206,11 @@ main(int argc, char *argv[])
         diag("unknown -H option");
         errorexit();
     }
-    /*s: [[main()]] last INITXXX adjustments */
+    /*s: [[main()]] sanity check INITXXX */
     if(INITDAT != 0 && INITRND != 0)
         print("warning: -D0x%lux is ignored because of -R0x%lux\n",
             INITDAT, INITRND);
-    /*x: [[main()]] last INITXXX adjustments */
-    if (INITTEXTP == -1)
-        INITTEXTP = INITTEXT;
-    /*e: [[main()]] last INITXXX adjustments */
+    /*e: [[main()]] sanity check INITXXX */
     DBG("HEADER = -H%d -T0x%lux -D0x%lux -R0x%lux\n",
             HEADTYPE, INITTEXT, INITDAT, INITRND);
     /*e: [[main()]] set HEADTYPE, INITTEXT, INITDAT, etc */
@@ -225,16 +222,16 @@ main(int argc, char *argv[])
             INITENTRY = "_mainp";
         /*e: [[main()]] adjust INITENTRY if profiling */
     }
-    /*s: [[main()]] if rare condition, do nothing, else */
+    /*s: [[main()]] if rare condition do nothing, else */
     if(debug['l']) {}
     else
-    /*x: [[main()]] if rare condition, do nothing, else */
+    /*x: [[main()]] if rare condition do nothing, else */
     if(*INITENTRY >= '0' && *INITENTRY <= '9') {}
     else
-    /*e: [[main()]] if rare condition, do nothing, else */
+    /*e: [[main()]] if rare condition do nothing, else */
       lookup(INITENTRY, 0)->type = SXREF;
     /*e: [[main()]] set INITENTRY */
-    /*s: [[main()]] initialize globals(arm) */
+    /*x: [[main()]] initialize globals(arm) */
     /*s: [[main()]] set zprg(arm) */
     zprg.as = AGOK;
     zprg.scond = COND_ALWAYS; 
@@ -281,7 +278,7 @@ main(int argc, char *argv[])
         goto out;
 
     // Resolving
-    /*s: [[main()]] resolving phases */
+    /*s: [[main()]] resolving phase */
     /*s: [[main()]] if export table or dynamic module(arm) */
     if(doexp || dlm){
         EXPTAB = "_exporttab";
@@ -319,7 +316,7 @@ main(int argc, char *argv[])
 
     dodata();
     dotext();
-    /*e: [[main()]] resolving phases */
+    /*e: [[main()]] resolving phase */
 
     // Generating (writing to cout, finally)
     asmb();
@@ -415,11 +412,12 @@ loop:
 /*e: function loadlib */
 
 /*s: function objfile */
+/// main | loadlib  -> <>
 void
 objfile(char *file)
 {
     fdt f;
-    long l;
+    long len;
     char magbuf[SARMAG];
     /*s: [[objfile()]] other locals */
     struct ar_hdr arhdr;
@@ -455,28 +453,28 @@ objfile(char *file)
     }
     /*e: [[objfile()]] sanity check f */
 
-    l = read(f, magbuf, SARMAG);
+    len = read(f, magbuf, SARMAG);
 
-    // is it a regular object (and not a library)
-    if(l != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
+    // is it a regular object? (not a library)
+    if(len != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
         /* load it as a regular file */
-        l = seek(f, 0L, SEEK__END);
+        len = seek(f, 0L, SEEK__END); // len = filesize(f);
         seek(f, 0L, SEEK__START);
 
         // the important call!
-        ldobj(f, l, file);
+        ldobj(f, len, file);
 
         close(f);
         return;
     }
-
+    // else
     /*s: [[objfile()]] when file is a library */
     DBG("%5.2f ldlib: %s\n", cputime(), file);
 
-    l = read(f, &arhdr, SAR_HDR);
+    len = read(f, &arhdr, SAR_HDR);
 
     /*s: [[objfile()]] sanity check library header size and content */
-    if(l != SAR_HDR) {
+    if(len != SAR_HDR) {
         diag("%s: short read on archive file symbol header", file);
         goto out;
     }
@@ -518,24 +516,24 @@ objfile(char *file)
                 sprint(pname, "%s(%s)", file, s->name);
                 DBG("%5.2f library: %s\n", cputime(), pname);
             
-                l = e[1] & 0xff;
-                l |= (e[2] & 0xff) << 8;
-                l |= (e[3] & 0xff) << 16;
-                l |= (e[4] & 0xff) << 24;
+                len = e[1] & 0xff;
+                len |= (e[2] & 0xff) << 8;
+                len |= (e[3] & 0xff) << 16;
+                len |= (e[4] & 0xff) << 24;
                 // >> >> >> >>
             
-                seek(f, l, SEEK__START);
-                l = read(f, &arhdr, SAR_HDR);
+                seek(f, len, SEEK__START);
+                len = read(f, &arhdr, SAR_HDR);
                 /*s: [[objfile()]] sanity check entry header */
-                if(l != SAR_HDR)
+                if(len != SAR_HDR)
                     goto bad;
                 if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
                     goto bad;
                 /*e: [[objfile()]] sanity check entry header */
-                l = atolwhex(arhdr.size);
+                len = atolwhex(arhdr.size);
 
                 // loading the object file containing the symbol
-                ldobj(f, l, pname);
+                ldobj(f, len, pname);
             
                 if(s->type == SXREF) {
                     diag("%s: failed to load: %s", file, s->name);

@@ -82,8 +82,8 @@ lookup(char *symb, int v)
             if(memcmp(sym->name, symb, len) == 0)
                 return sym;
 
-    /*s: [[lookup()]] if symbol name not found */
     // else
+    /*s: [[lookup()]] if symbol name not found */
     sym = malloc(sizeof(Sym));
     sym->name = malloc(len + 1); // +1 again?
     memmove(sym->name, symb, len);
