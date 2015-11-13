@@ -2353,7 +2353,7 @@ The following type is used to represent all kinds of operands:
 <<struct Gen(arm)>>=
 struct	Gen
 {
-    // enum<operand_kind>
+    // enum<Operand_kind>
     short	type;
 
     // switch on Gen.type
@@ -2362,7 +2362,7 @@ struct	Gen
         double	dval;
         char	sval[8];
     };
-    // option<enum<registr>>, None = R_NONE
+    // option<enum<Register>>, None = R_NONE
     short	reg; // abused also to store a size for DATA
 
     <<[[Gen]] other fields>>
@@ -2407,7 +2407,7 @@ be interpreted in different ways depending on the kind of the
 operand: 
 for integer constants ([[D_CONST]]) the [[offset]] field is used,
 for string constants ([[D_SCONST]]) the [[sval]] field,
-and for float constants ([[D_FCONST]]) the [[fval]] field.
+and for float constants ([[D_FCONST]]) the [[dval]] field.
 Remember that characters are converted in integers so
 there is no need for a [[D_CHARCONST]] and [[cval]] field.
 %
@@ -2419,7 +2419,7 @@ as we will see soon.
 %ocaml: ugly, offset abused for many different operand kind, should be union
 % see comment below
 
-The [[D_NONE]] case is used in [[nullgen()]] to
+The [[D_NONE]] case is used in [[nullgen]] to
 represent the null operand. This is similar to [[R_NONE]].
 \t for opcodes with less than 1 operands, should be overwritten though
 %ocaml: again if ADT no need that
@@ -2444,9 +2444,9 @@ and the optional offset in [[Gen.offset]] (hence the name).
 Here is the C value of the operand mentioned above:
 \begin{verbatim}
 // operand value for: 4(R1)
-{ offset = 4;          // 4
-  reg    = 1;          // R1
-  type = D_OREG;       // (...)
+{ .offset = 4;          // 4
+  .reg    = 1;          // R1
+  .type = D_OREG;       // (...)
 }
 \end{verbatim}
 \l offset is abused for many things, see the comment in .tex
@@ -2502,8 +2502,8 @@ a register, so an integer is enough.
 Depending on the number of operands, here are the constraints on 
 the value of those parameters:
 \begin{itemize}
-\item 0 operand: [[opd1]] and [[opd3]] are [[nullgen]], [[reg]] is [[R_NONE]]
-\item 1 operand: [[opd3]] is [[nullgen]], [[reg]] is [[R_NONE]]
+\item 0 operand: [[opd1]] and [[opd3]] are [[&nullgen]], [[reg]] is [[R_NONE]]
+\item 1 operand: [[opd3]] is [[&nullgen]], [[reg]] is [[R_NONE]]
 \item 2 operands: [[reg]] is [[R_NONE]]
 \item 3 operands: no constraint, every parameter is used
 \end{itemize}
@@ -2610,9 +2610,9 @@ a token can hold:
 <<union declaration(arm)>>=
 %union {
  // long for LCONST
- // and enum<opcode>  for LARITH/...
- // and enum<registr> for LREG/...
- // and enum<cond>    for LCOND
+ // and enum<Opcode>  for LARITH/...
+ // and enum<Register> for LREG/...
+ // and enum<Cond>    for LCOND
  // and ...
  long   lval;    // for LCONST/LARITH/LREG/LCOND/...
  double dval;    // for LFCONST
@@ -2645,7 +2645,7 @@ struct Itab
 
     //enum<token_code>
     ushort	type;
-    //enum<opcode|registr|...> | int
+    //enum<Opcode|Register|...> | int
     ushort	value;
 };
 @
@@ -2848,6 +2848,7 @@ hash[h] = sym;
 syminit(sym);
 return sym;
 @
+%old: was memmove but memcpy better (jarod)
 
 The hashing code iterates over the characters in [[symb]]
 until the end-of-string character ([[0]]) and also compute the length
@@ -3017,7 +3018,7 @@ An additional [[Gen]] field is used to represent
 the {\em kind} of the symbol:
 
 <<[[Gen]] other fields>>=
-// option<enum<sym_kind>>, None = N_NONE
+// option<enum<Sym_kind>>, None = N_NONE
 short	symkind;
 @
 %old: was called name, but confusing I think, name as a field was used in
@@ -3025,31 +3026,29 @@ short	symkind;
 %less: rename to name_kind? rename also the sym field above?
 
 <<enum sym_kind(arm)>>=
-enum sym_kind {
+enum Sym_kind {
     N_NONE,
 
     N_EXTERN, // text/data/bss values (from SB)
     N_LOCAL,  // stack values (from SP)
     N_PARAM,  // parameter (from FP)
-    <<sym_kind cases>>
+    <<[[Sym_kind]] cases>>
 };
 @
-%old: was D_AUTO instead of D_LOCAL but ugly C
-% use A_EXTERN? or N_EXTERN? is D_XXX because was in operand_kind before
-%/* name */ for D_EXTERN
-%note: this used to be with operand_kind, but they are really disjoint
+%old: this used to be with operand_kind, but they are really disjoint
 % and used only for the ANAME pseudo opcode. In 5l/ there is
 % actually a separate Dconv and Nconv (but in 8l/ they are together).
+%old: was D_AUTO instead of D_LOCAL but ugly C
 %old: was D_xxx but better N_xxx, anyway more consistent with Nconv
 
 So, the C value of the operand in the example above is:
 %example:
 \begin{verbatim}
 // operand value for: hello+4(SB)
-{ sym = &<hello Sym>;  // hello
-  offset = 4;          // +4
-  sym_kind = N_EXTERN; // SB
-  type = D_OREG;       // (...)
+{ .sym = &<hello Sym>;  // hello
+  .offset = 4;          // +4
+  .sym_kind = N_EXTERN; // SB
+  .type = D_OREG;       // (...)
 }
 \end{verbatim}
 \l could use reg? but then no need with (R12) and (SB)
@@ -3062,10 +3061,10 @@ the [[D_CONST]] type is (ab)used:
 %example:
 \begin{verbatim}
 // operand value for: $hello(SB)
-{ sym = &<hello Sym>;  // hello
-  offset = 0;
-  sym_kind = N_EXTERN; // SB
-  type = D_CONST;      // $
+{ .sym = &<hello Sym>;  // hello
+  .offset = 0;
+  .sym_kind = N_EXTERN; // SB
+  .type = D_CONST;      // $
 }
 \end{verbatim}
 
@@ -3146,6 +3145,7 @@ Indeed, [[5a]] is a macro-assembler in which [[#include]] have
 a default {\em search path} (represented by
 the global [[include]] in [[main()]] below).
 
+%trans:
 We can now present the code of [[main()]], the entry point of [[5a]].
 %
 The most important thing is the call to [[assemble()]] at the
@@ -7323,7 +7323,7 @@ pointer:
 "SP",		LSP,	N_LOCAL,
 "FP",		LFP,	N_PARAM,
 @
-%<<sym_kind cases>>=
+%<<[[Sym_kind]] cases>>=
 %N_EXTERN, // text/data/bss values (from SB)
 %N_LOCAL,   // stack values (from SP)
 %N_PARAM,  // parameter (from FP)
@@ -7429,6 +7429,7 @@ in which case it defines the symbol.
 %section{Static names?, local names?}
 
 Asm5 provides also a way to use {\em local} (a.k.a static)
+\l maybe bad name? confusing with params and locals which can have symbol too
 symbols for globals and procedures
 in a file by suffixing the name with angles:
 
@@ -7444,7 +7445,7 @@ in a file by suffixing the name with angles:
 @
 %$
 
-<<sym_kind cases>>=
+<<[[Sym_kind]] cases>>=
 N_INTERN, // local/static entities (from SB)
 @
 %old: was D_STATIC but ugly C name
@@ -8371,7 +8372,7 @@ The global [[h]] below mimics in memory this circular table:
 \n there will be a similar variable in ldobj() in the linker
 
 <<global h>>=
-// array<ref<Sym> * enum<sym_kind>>
+// array<ref<Sym> * enum<Sym_kind>>
 struct Htab h[NSYM];
 @
 \t why call it h when really it's an array ...
@@ -8387,7 +8388,7 @@ struct Htab
 {
     // ref<Sym>>
     Sym*	sym;
-    //enum<sym_kind>
+    //enum<Sym_kind>
     short	symkind;
 };
 @
@@ -9172,7 +9173,7 @@ This is because the code in the linker which loads the object file
 treats specially those entries in the object file symbol table.
 A new kind of symbol is also used:
 
-<<sym_kind cases>>=
+<<[[Sym_kind]] cases>>=
 D_FILE,
 @
 \t useful? if remove symkind from ANAME, need that? defensive programming?
@@ -9464,7 +9465,7 @@ ASQRTD,
 @
 
 <<enum fregister(arm)>>=
-enum fregister {
+enum Fregister {
     FREGRET = 0,
     /* compiler allocates register variables F0 up */
     FREGEXT = 7,
@@ -9862,7 +9863,7 @@ reglist:
 D_PSR,
 @
 % similar to D_REG really, just with special register, so reg field
-% is enum<registr> | enum<status_registr>
+% is enum<Register> | enum<Status_register>
 
 <<[[zaddr()]] cases(arm)>>=
 case D_PSR:
@@ -10155,7 +10156,7 @@ AINIT,
 
 
 % related to linker again, in addition to D_FILE there is:
-<<sym_kind cases>>=
+<<[[Sym_kind]] cases>>=
 D_FILE1, // used by linker only?
 @
 %todo: delete?
