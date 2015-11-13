@@ -142,7 +142,7 @@ struct Htab
 {
     // ref<Sym>>
     Sym*	sym;
-    //enum<sym_kind>
+    //enum<Sym_kind>
     short	symkind;
 };
 /*e: struct Htab */

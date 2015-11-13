@@ -15,7 +15,7 @@ typedef	struct	Gen	Gen;
 /*s: struct Gen(arm) */
 struct	Gen
 {
-    // enum<operand_kind>
+    // enum<Operand_kind>
     short	type;
 
     // switch on Gen.type
@@ -24,14 +24,14 @@ struct	Gen
         double	dval;
         char	sval[8];
     };
-    // option<enum<registr>>, None = R_NONE
+    // option<enum<Register>>, None = R_NONE
     short	reg; // abused also to store a size for DATA
 
     /*s: [[Gen]] other fields */
     // option<ref<Sym>>, ref owned by hash
     Sym*	sym;
     /*x: [[Gen]] other fields */
-    // option<enum<sym_kind>>, None = N_NONE
+    // option<enum<Sym_kind>>, None = N_NONE
     short	symkind;
     /*e: [[Gen]] other fields */
 };

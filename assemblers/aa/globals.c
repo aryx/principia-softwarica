@@ -67,7 +67,7 @@ int	nDlist;
 /*e: global nDlist */
 
 /*s: global h */
-// array<ref<Sym> * enum<sym_kind>>
+// array<ref<Sym> * enum<Sym_kind>>
 struct Htab h[NSYM];
 /*e: global h */
 /*s: global symcounter */

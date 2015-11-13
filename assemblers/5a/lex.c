@@ -9,7 +9,7 @@ struct Itab
 
     //enum<token_code>
     ushort	type;
-    //enum<opcode|registr|...> | int
+    //enum<Opcode|Register|...> | int
     ushort	value;
 };
 /*e: struct Itab(arm) */

@@ -32,7 +32,7 @@ enum Register {
 /*e: constant R_NONE(arm) */
 
 /*s: enum fregister(arm) */
-enum fregister {
+enum Fregister {
     FREGRET = 0,
     /* compiler allocates register variables F0 up */
     FREGEXT = 7,
@@ -241,19 +241,19 @@ enum Operand_kind {
 /*e: enum operand_kind(arm) */
 
 /*s: enum sym_kind(arm) */
-enum sym_kind {
+enum Sym_kind {
     N_NONE,
 
     N_EXTERN, // text/data/bss values (from SB)
     N_LOCAL,  // stack values (from SP)
     N_PARAM,  // parameter (from FP)
-    /*s: sym_kind cases */
+    /*s: [[Sym_kind]] cases */
     N_INTERN, // local/static entities (from SB)
-    /*x: sym_kind cases */
+    /*x: [[Sym_kind]] cases */
     D_FILE,
-    /*x: sym_kind cases */
+    /*x: [[Sym_kind]] cases */
     D_FILE1, // used by linker only?
-    /*e: sym_kind cases */
+    /*e: [[Sym_kind]] cases */
 };
 /*e: enum sym_kind(arm) */
 
