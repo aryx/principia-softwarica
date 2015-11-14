@@ -2124,7 +2124,7 @@ Here is the [[Operand]] type used by [[5l]]:
 <<struct Adr(arm)>>=
 struct	Adr
 {
-    // enum<operand_kind> (D_NONE by default)
+    // enum<Operand_kind> (D_NONE by default)
     short	type;
 
     // switch on Adr.type
@@ -2134,7 +2134,7 @@ struct	Adr
         char*	sval;
     };
 
-    // option<enum<registr>> None = R_NONE
+    // option<enum<Register>> None = R_NONE
     short	reg; 
 
     <<[[Adr]] other fields>>
@@ -2174,7 +2174,7 @@ e.g. [[N_EXTERN]], [[N_PARAM]], [[N_LOCAL]] (which are
 enumerations defined also in [[include/arch/arm/5.out.h]]):
 
 <<[[Adr]] other fields>>=
-// enum<sym_kind>
+// enum<Sym_kind>
 short	symkind;
 @
 %old: was called 'name' but confusing
@@ -2232,7 +2232,7 @@ and locals accessed by a procedure:
 <<struct Auto(arm)>>=
 struct	Auto
 {
-    // enum<name_kind> (but N_LOCAL or N_PARAM only?)
+    // enum<Sym_kind> (but N_LOCAL or N_PARAM only?)
     short	type;
 
     // option<ref<Sym>>
@@ -2254,6 +2254,8 @@ Those automatic variables are chained together:
 Auto*	link;
 @
 \t what for? do some basic checks? like right autosize?
+
+\t look code in asmsymb to understand how to use those fields
 
 \l talk about curauto and autosize here?
 \l  should be set to curauto for the TEXT instructions and its to Adr field
@@ -2300,7 +2302,7 @@ In that case the middle operand is always a register, hence
 the more specialized field below representing this middle operand:
 
 <<[[Prog]] other fields>>=
-// option<enum<registr>>, None = R_NONE
+// option<enum<Register>>, None = R_NONE
 short	reg;
 @
 \n very arm specific!
@@ -2310,7 +2312,7 @@ All ARM instructions have a {\em conditional execution}
 (see the \book{Assembler}):
 
 <<[[Prog]] other fields>>=
-// enum<instr_cond>
+// enum<Instr_cond>
 byte	scond;
 @
 \l also special bits
@@ -3529,34 +3531,77 @@ undef(void)
 
 
 
-
+%trans: ok seen asmb so at least know where we should go, what
+% it the goal (textsize, datsize, Sym.value, Instr.pc, etc)
 
 
 \chapter{Loading Objects}
 \label{chap:loading-objects}
-\l maybe unfortunate name? confusing with the loader in the kernel?
+\n was Parsing, but objects are stored in a binary format so loading is better
+\l but maybe bad name still. Confusing with the loader in the kernel?
 \l  which is why actually man/1/8l use the terms loader? it loads objects?
 
-%trans:
-% seen main flow, main functions, but remain e.g. ldobj.
-% start here linking pipeline
+%trans: %dup: (and quite adapted) from Assembler
+Now that we have seen the code or a high-level view of
+the code of the main functions of [[5l]], we can
+start to go deeper and detail the different components of the
+linking pipeline.
+%toc
+We start in this chapter with the loading of object files,
+which is performed mostly by [[ldobj()]].
 
-%note: was called parsing, but objects are stored in a binary format so
-% "loading" is more appropriate I think
-
-% does reverse operation than object generation in Assembler.nw, and more!
-
-%less: hmmm if C had proper ADT and a Marshall module that would be easier ...
-% (but maybe less other-languages friendly)
-%less: could factorize code with libmach?
-% why not using 5obj.c from libmach/? because 5obj.c is incomplete?
-% because it cares just about the symbol table?
+%ocaml: use Marshall (but less other-languages friendly)
 
 \section{Object file format, [[.5]]}
 \label{sec:object-format}
-% again ... repeat Assembler.nw section?
 
-% FIGURE but with ANAME and AHISTORY maybe
+%trans:
+Before showing the code of [[ldobj()]], we first describe
+the format of object files.
+%
+Figure~\ref{fig:object-format-complete} summarizes
+this format. See the \book{Assembler} for a more comprehensive
+description.
+
+%dup: from Assembler.nw with just added AHISTORY and ANAME
+\begin{figure}[!]\centering
+\begin{verbatim}
+                        ^-------------+
+                       /|             |
++--------------+      / |             |
+|Instruction 5 |     /  |             |
+|              |    /   |  Operand 2  |
++--------------+    |   |             |
+|Instruction 4 |    |   |             |
+|              |    |   |             |       ^-------------+
++--------------+    |   |             |/-----/|             |
+|  ANAME ...   |    |   +-------------X       |             |
++--------------+    |   |             |       |             |
+|  ANAME ...   |    |   |             |       |Operand value|
++--------------+    |   |  Operand 1  |       |             |
+|              |    /   |             |       |             |
+|Instruction 3 |   /    |             |       |             |
+|              |  /     |             |       |             |
++--------------+ /      +-------------X       +-------------+
+|  ANAME ...   |/       |             |\      | Symbol kind |
++--------------X        |    Line     | \     +-------------+
+|Instruction 2 |        |             |  \    |Symbol index |
+|              |        |             |   \   +-------------+
++--------------X        +-------------+    \  |  Register   |
+|Instruction 1 |\       |  Register   |     \ +-------------+
+|              | \      +-------------+      \|Operand kind |
++--------------+  \--\  |  Condition  |       v-------------+
+| Files/lines  |      \ +-------------+
+|   history    |       \|   Opcode    |
+|  (AHISTORY)  |        v-------------+
++--------------+
+
+    File                  Instruction             Operand
+\end{verbatim}
+\caption{Format of a [[.5]] object file}
+\label{fig:object-format-complete}
+\end{figure}
+
 
 \section{Buffered input, [[buf]]}
 
@@ -3570,6 +3615,8 @@ int r;
 @
 % and parameter 'int c'
 % bloc[xxx] will be what we will read from below in ldobj()
+
+\l FIGURE where see bloc, c, r and how they relate
 
 <<[[ldobj()]] bloc and bsize init>>=
 bsize = buf.ibuf;
@@ -3618,7 +3665,7 @@ int	version = 0;
 \t incode? so opposite of outcode? (but it was not good name either)
 
 <<[[ldobj()]] locals(arm)>>=
-// enum<opcode>
+// enum<Opcode>
 short o;
 Prog *p;
 @
@@ -3663,6 +3710,7 @@ loop:
     <<[[ldobj()]] sanity check opcode in range(arm)>>
 
     <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>
+    // else
 
     p = malloc(sizeof(Prog));
     p->as = o;
@@ -3713,6 +3761,8 @@ eof:
 
 
 
+
+% does reverse operation than object generation in Assembler.nw, and more!
 
 
 <<[[ldobj()]] read one instruction in p>>=
@@ -4024,9 +4074,11 @@ case AGLOBL:
     break;
 @
 % what is offset for AGLOBL? It should be the immediate constant size of 
-% the global. But how can s->value be different from 0 anyway?
+% the global. 
+% But how can s->value be different from 0 anyway?
 % the test p->to.offset > s->value seems to always return true to me.
 % or it's just to sanity check people entering negative size for the globals?
+\t transform in sanity check code and then simple s->value = p->to.offset;
 
 <<[[ldobj()]] sanity check for AGLOBL symbol s>>=
 if(s == S) {
@@ -5982,14 +6034,14 @@ BIG		= (1<<12)-4,
 <<struct Optab(arm)>>=
 struct	Optab
 {
-    // enum<opcode> from 5.out.h, (the opcode is the representant of a range)
+    // enum<Opcode> from 5.out.h, (the opcode is the representant of a range)
     byte	as;
 
-    // enum<cxxx>, possible operand_kind/class for first operand
+    // enum<Cxxx>, possible operand_kind/class for first operand
     short	a1;
-    // enum<cxxx>, possible operand_kind/class for second operand
+    // enum<Cxxx>, possible operand_kind/class for second operand
     short	a2;
-    // enum<cxxx>, possible operand_kind/class for third operand
+    // enum<Cxxx>, possible operand_kind/class for third operand
     short	a3;
 
     // idx for the code generator, see the giant switch in asmout()
@@ -6512,14 +6564,14 @@ immrot(ulong v)
 <<[[Optab]] other fields>>=
 // 0 | REGSB | REGSP
 short	param;
-// bitset<enum<optab_flag>>
+// bitset<enum<Optab_flag>>
 short	flag;
 @
 %old: was char, but ugly
 % order is important, see optab[] global
 
 <<enum optab_flag(arm)>>=
-enum optab_flag {
+enum Optab_flag {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
@@ -6707,7 +6759,7 @@ void
 buildop(void)
 {
     int i, n;
-    // enum<opcode> representing a range
+    // enum<Opcode> representing a range
     int r;
 
     <<[[buildop()]] initialize xcmp cache>>
@@ -6800,9 +6852,9 @@ ocmp(const void *a1, const void *a2)
 
 <<[[oplook()]] locals>>=
 Optab *o, *e;
-// enum<opcode>, to index oprange[]
+// enum<Opcode>, to index oprange[]
 int r;
-// enum<class>
+// enum<Class>
 int a1, a2, a3;
 @
 
@@ -6942,7 +6994,7 @@ byte	optab;
 % cache so second call to oplook() in asmb() is faster I think
 
 <<[[Adr]] other fields>>=
-// option<enum<classx>>, 0 means None, i means i-1 is the class you want
+// option<enum<Classx>>, 0 means None, i means i-1 is the class you want
 short	class;
 @
 %a more precise Adr.type
@@ -8591,125 +8643,7 @@ else {
 
 
 
-\section{Executable symbol table, [[asmsym()]]}
-
-% have seen object file symbol table, now executable symbol table.
-% but here really just for debugging (or for dyn linking too?)
-
-% nm helloc actually does not show everything,
-% the 'f', 'p', and so are not shown by nm apparently.
-% try 5l -n -o helloc helloc.5
-
-<<global symsize>>=
-long	symsize;
-@
-% for the a.out.h header
-
-
-%5l -n ...
-%T 000011d0 atexit
-%m 0000000c .frame
-%a 00000004 i
-%p 00000000 f
-
-
-
-<<function asmsym(arm)>>=
-/// main -> asmb -> <>
-void
-asmsym(void)
-{
-    Prog *p;
-    Auto *a;
-    Sym *s;
-    int h;
-
-    s = lookup("etext", 0);
-    if(s->type == STEXT)
-        putsymb(s->name, 'T', s->value, s->version);
-
-    for(h=0; h<NHASH; h++)
-        for(s=hash[h]; s!=S; s=s->link)
-            switch(s->type) {
-            case SDATA:
-                putsymb(s->name, 'D', s->value+INITDAT, s->version);
-                continue;
-            case SBSS:
-                putsymb(s->name, 'B', s->value+INITDAT, s->version);
-                continue;
-
-            case SCONST:
-                putsymb(s->name, 'D', s->value, s->version);
-                continue;
-            case SSTRING:
-                putsymb(s->name, 'T', s->value, s->version);
-                continue;
-
-            case SFILE:
-                putsymb(s->name, 'f', s->value, s->version);
-                continue;
-            }
-
-    for(p=textp; p!=P; p=p->cond) {
-        s = p->from.sym;
-        if(s->type == STEXT || s->type == SLEAF) {
-            /* filenames first */
-            <<[[asmsym()]] call putsymb for filenames>>
-            
-            if(s->type == STEXT)
-                putsymb(s->name, 'T', s->value, s->version);
-            else // SLEAF
-                putsymb(s->name, 'L', s->value, s->version);
-            
-            /* frame, auto and param after */
-            putsymb(".frame", 'm', p->to.offset+4, 0);
-            for(a=p->to.autom; a; a=a->link)
-                if(a->type == N_LOCAL)
-                    putsymb(a->asym->name, 'a', -a->aoffset, 0);
-                else
-                if(a->type == N_PARAM)
-                    putsymb(a->asym->name, 'p', a->aoffset, 0);
-        }
-    }
-    if(debug['v'] || debug['n']) {
-        Bprint(&bso, "symsize = %lud\n", symsize);
-        Bflush(&bso);
-    }
-}
-@
-
-
-
-
-<<function putsymb>>=
-void
-putsymb(char *s, int t, long v, int ver)
-{
-    int i, f;
-
-    if(t == 'f')
-        s++;
-
-    lput(v);
-    if(ver)
-        t += 'a' - 'A';
-    cput(t+0x80);			/* 0x80 is variable length */
-
-    <<[[putsymb()]] if z or Z>>
-    else {
-        for(i=0; s[i]; i++)
-            cput(s[i]);
-        cput('\0');
-    }
-    symsize += 4 + 1 + i + 1;
-
-    <<[[putsymb()]] debug>>
-}
-@
-%>>
-
-
-\section{File and line information, [[AHISTORY]]}
+\section{File and line information in objects, [[AHISTORY]]}
 \label{sec:lineno}
 
 % say chapter in \book{Assembler}. global line number after
@@ -8884,7 +8818,125 @@ out:
 
 
 
-\section{Filenames}
+\section{Executable symbol table, [[asmsym()]]}
+
+% have seen object file symbol table, now executable symbol table.
+% but here really just for debugging (or for dyn linking too?)
+
+% nm helloc actually does not show everything,
+% the 'f', 'p', and so are not shown by nm apparently.
+% try 5l -n -o helloc helloc.5
+
+<<global symsize>>=
+long	symsize;
+@
+% for the a.out.h header
+
+
+%5l -n ...
+%T 000011d0 atexit
+%m 0000000c .frame
+%a 00000004 i
+%p 00000000 f
+
+
+
+<<function asmsym(arm)>>=
+/// main -> asmb -> <>
+void
+asmsym(void)
+{
+    Prog *p;
+    Auto *a;
+    Sym *s;
+    int h;
+
+    s = lookup("etext", 0);
+    if(s->type == STEXT)
+        putsymb(s->name, 'T', s->value, s->version);
+
+    for(h=0; h<NHASH; h++)
+        for(s=hash[h]; s!=S; s=s->link)
+            switch(s->type) {
+            case SDATA:
+                putsymb(s->name, 'D', s->value+INITDAT, s->version);
+                continue;
+            case SBSS:
+                putsymb(s->name, 'B', s->value+INITDAT, s->version);
+                continue;
+
+            case SCONST:
+                putsymb(s->name, 'D', s->value, s->version);
+                continue;
+            case SSTRING:
+                putsymb(s->name, 'T', s->value, s->version);
+                continue;
+
+            case SFILE:
+                putsymb(s->name, 'f', s->value, s->version);
+                continue;
+            }
+
+    for(p=textp; p!=P; p=p->cond) {
+        s = p->from.sym;
+        if(s->type == STEXT || s->type == SLEAF) {
+            /* filenames first */
+            <<[[asmsym()]] call putsymb for filenames>>
+            
+            if(s->type == STEXT)
+                putsymb(s->name, 'T', s->value, s->version);
+            else // SLEAF
+                putsymb(s->name, 'L', s->value, s->version);
+            
+            /* frame, auto and param after */
+            putsymb(".frame", 'm', p->to.offset+4, 0);
+            for(a=p->to.autom; a; a=a->link)
+                if(a->type == N_LOCAL)
+                    putsymb(a->asym->name, 'a', -a->aoffset, 0);
+                else
+                if(a->type == N_PARAM)
+                    putsymb(a->asym->name, 'p', a->aoffset, 0);
+        }
+    }
+    if(debug['v'] || debug['n']) {
+        Bprint(&bso, "symsize = %lud\n", symsize);
+        Bflush(&bso);
+    }
+}
+@
+
+
+
+
+<<function putsymb>>=
+void
+putsymb(char *s, int t, long v, int ver)
+{
+    int i, f;
+
+    if(t == 'f')
+        s++;
+
+    lput(v);
+    if(ver)
+        t += 'a' - 'A';
+    cput(t+0x80);			/* 0x80 is variable length */
+
+    <<[[putsymb()]] if z or Z>>
+    else {
+        for(i=0; s[i]; i++)
+            cput(s[i]);
+        cput('\0');
+    }
+    symsize += 4 + 1 + i + 1;
+
+    <<[[putsymb()]] debug>>
+}
+@
+%>>
+
+
+\section{Filename symbols}
 
 % why they are shoved in to.autom with locals and params? a bit ugly
 <<[[asmsym()]] call putsymb for filenames>>=
@@ -9458,7 +9510,7 @@ int	exports;
 
 
 <<[[Sym]] other fields>>=
-// enum<section> too?
+// enum<Section> too?
 short	subtype;
 @
 %old: was char
@@ -12437,7 +12489,7 @@ Pconv(Fmt *fp)
 % extern	char*	anames[];
 
 <<function Aconv(arm)>>=
-// enum<opcode> -> string
+// enum<Opcode> -> string
 int
 Aconv(Fmt *fp)
 {
@@ -13427,6 +13479,10 @@ rnd(long v, long r)
 % so   .s --5a--> .o (.5) --5l--> .exe (5.out) --libmach--> readable
 % (hmm libmach is also reading .o (.5)
 
+\l could factorize code between ldobj and libmach?
+% why not using 5obj.c from libmach/? because 5obj.c is incomplete?
+% because it cares just about the symbol table?
+
 
 \section{[[size]]}
 \label{sec:size-code}
@@ -13499,6 +13555,7 @@ main(int argc, char *argv[])
 \section{[[strip]]}
 \label{sec:strip-code}
 
+% see also 5a -s and relevant code in chapter Debugger.
 
 
 
