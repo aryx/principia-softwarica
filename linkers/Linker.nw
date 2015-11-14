@@ -183,7 +183,8 @@ to form the final executable?
 \item What is the difference between a linker and a loader?
 
 \item What is the memory image of a program? 
-How it relates to the original source code?
+How it relates to the executable file? How it relates to
+the original source code?
 
 \item What debugging information contains executables? How
 source-level debuggers can find which C source code corresponds 
@@ -310,6 +311,7 @@ It is fairly small: 6100 LOC, which is smaller than [[5l]].
 But, to be fair, [[5l]] does also machine code generation
 which is done instead by AS86 for LD86. [[5a]]+[[5l]] is 12 000 LOC
 which is smaller than AS86+LD86 at 18 600 LOC.
+\l also ARM simpler than x86 (even for linker-related issues?)
 
 \end{itemize}
 \l add furl
@@ -577,6 +579,31 @@ Input object files and                  Output executable
 \l actually in ARM it is BL not CALL and B not JMP
 \l could be nice in final one to have arrow from CALL fbar to CALL 100
 
+\subsection{Separate compilation}
+\l and concatenation, separate and concatenate
+
+One of the main operation of a linker is to concatenate parts
+of different files. 
+\l actually in 5l less because generate also machine code
+In fact, the program [[cat]] can be seen as a very primitive linker.
+Instead of using a linker, one could use [[cat]] to concatenate
+multiple source programs together and compile/assemble the resulting single
+(big) file\footnote{
+Assuming the compiler/assembler could from one source file
+generate directly an executable.
+}.
+\l see bootstrapping from scratch, I mentioned that
+\l MMIXAL actually neglect linker and assume linker = cat :) Same for fbas. 
+\l Now that memory is cheap, can do it
+%
+As programs grow larger, this approach becomes inconvenient though.
+Linkers and object files enable {\em separate compilation}
+which in the long term saves lots of compilation time.
+\l well for 5l/5a maybe less cos heavy part is machine codegen done in 5l
+\l  other advantages? more language independent? cat foo.c foo.ml would not work
+\l  but could also use assembly as the common format, cat foo_c.s foo_ml.s
+
+
 \subsection{Symbol resolution}
 \n I didn't have subsections in Assembler.nw for its principles but I had a
 \n tutorial later with many subsections. Here no tut so subsec in Principles.
@@ -585,8 +612,8 @@ Linking the uses of symbols to their definitions
 is also called {\em resolving} the references to external symbols.
 \n well for 5l/5a it is external and internal actually
 %
-The linker can do so because it has access to all the code (and data), and
-once all the code (and data) parts are contatenated together, 
+The linker can do so because it has access to all the code (and data).
+Once all the code (and data) parts are contatenated together, 
 the final {addresses} of the different {entities} can be known. 
 \l actually can need fixpoing on some archi, hmm
 \l actually dynamic linking mean sometimes have still unresolved symbols
@@ -671,32 +698,10 @@ instructions with [[5l]] under \plan.
 \t notion of disk address vs (virtual) memory address
 
 \subsection{Libraries}
+\n used to have discussion here about [[cat]] and separate compilation
+\n  but better in different section
 
-One of the main operation of a linker is to concatenate parts
-of different files. 
-\l actually in 5l less because generate also machine code
-In fact, the program [[cat]] can be seen as a very primitive linker.
-Instead of using a linker, one could use [[cat]] to concatenate
-multiple source programs together and compile/assemble the resulting single
-(big) file\footnote{
-Assuming the compiler/assembler could from one source file
-generate directly an executable.
-}.
-\l see bootstrapping from scratch, I mentioned that
-\l MMIXAL actually neglect linker and assume linker = cat :) Same for fbas. 
-\l Now that memory is cheap, can do it
-
-%
-As programs grow larger, this approach becomes inconvenient though.
-
-Linkers and object files enable {\em separate compilation}
-which in the long term saves lots of compilation time.
-\l well for 5l/5a maybe less cos heavy part is machine codegen done in 5l
-\l  other advantages? more language independent? cat foo.c foo.ml would not work
-\l  but could also use assembly as the common format, cat foo_c.s foo_ml.s
-\l put that discussion before?
-%
-Those object files can actually be concatenated together to form
+Object files can be concatenated together to form
 {\em libraries} using a tool called [[ar]] (for archive).
 \l which really is kinda cat, and also really kinda tar (tape archive)
 The linker can also take as input a set of libraries as shown
@@ -736,13 +741,15 @@ Another popular form of linking is called {\em dynamic linking}.
 \l actually more popular, but bad
 Dynamic linking blurs the line between the responsabilities 
 of the linker and loader.
+\l dynamic linking vs dynamic loading? do both? or maybe not.
 Indeed, with dynamic linking an executable can still contain
 unresolved references to external symbols; the loader
 at {\em load-time} must, before loading the program in memory,
 link additional objects.
 \t also can be in the hand of the programmer, dynlink()
 \t  can link after being loaded.
-\t dynamic code is importnt? like living cell organism, auto modifiable!
+\t dynamic linking vs dynamic loading? relink and load, or load and reload?
+\t dynamic code is important? like living cell organism, auto modifiable!
 \l  (well but can still modify own source code, call 5a/5c/5l and exec())
 
 \plan opted mainly for static linking and so [[5l]] is mainly
@@ -763,7 +770,7 @@ Section~\ref{sec:dynamic-linking}.
 \t dynamic linking and shared libraries are different? I think so.
 
 \bigskip
-For more information on linkers and loaders 
+For more information on the principles of linkers and loaders 
 \l and dynamic linking?
 we recommend to read {\em Linkers and Loaders}~\cite{ll} which
 is entired dedicated to the topic.
@@ -1094,32 +1101,32 @@ the debugging option [[-a]] of [[5l]]:
 \begin{verbatim}
 1   $ 5l -a hello.5 world.5 /arm/lib/libc.a
 2 
-3  00001020:		(1)	TEXT	{main}01020+0(SB),$8
-4  00001020: e52de00c	(1)	MOVW.W	R14,-12(R13)
-5  00001024: e3a00001	(4)	MOVW	$1,R0
-6  00001028: e59f1884	(5)	MOVW	${hello}00014+0(SB),R1
-7  0000102c: e58d1008	(5)	MOVW	R1,8(R13)
-8  00001030: eb0000bb	(6)	BL	,{fprint}01324(BRANCH)
-9  00001034: e3a00000	(9)	MOVW	$0,R0
-10 00001038: eb00009a	(9)	BL	,{exits}012a8(BRANCH)       
+3  00001020:          (1) TEXT {main}01020+0(SB),$8
+4  00001020: e52de00c (1) MOVW.W R14,-12(R13)
+5  00001024: e3a00001 (4) MOVW $1,R0
+6  00001028: e59f1884 (5) MOVW ${hello}00014+0(SB),R1
+7  0000102c: e58d1008 (5) MOVW R1,8(R13)
+8  00001030: eb0000bb (6) BL ,{fprint}01324(BRANCH)
+9  00001034: e3a00000 (9) MOVW $0,R0
+10 00001038: eb00009a (9) BL ,{exits}012a8(BRANCH)       
 11
-12 0000103c:		(8)	TEXT	{_main}0103c+0(SB),R1,$80
-13 0000103c: e52de054	(8)	MOVW.W R14,-84(R13)
-14 00001040: e59fc870	(10) MOVW ${setR12}00ffc+0(SB),R12
-15 00001044: e50c0fd0	(11) MOVW R0,{_tos}0002c+0(SB)
+12 0000103c:          (8) TEXT {_main}0103c+0(SB),R1,$80
+13 0000103c: e52de054 (8) MOVW.W R14,-84(R13)
+14 00001040: e59fc870 (10) MOVW ${setR12}00ffc+0(SB),R12
+15 00001044: e50c0fd0 (11) MOVW R0,{_tos}0002c+0(SB)
 16 ...
-17 00001068: ebffffec	(21) BL	,{main}01020(BRANCH)
+17 00001068: ebffffec (21) BL ,{main}01020(BRANCH)
 18 ...
 19
-20 000012a8:		(915) TEXT {exits}012a8+0(SB),R1,$16
-21 000012a8: e52de014	(915) MOVW.W	R14,-20(R13)
+20 000012a8:          (915) TEXT {exits}012a8+0(SB),R1,$16
+21 000012a8: e52de014 (915) MOVW.W R14,-20(R13)
 22 ...
 23
-24 00001324:		(874) TEXT {fprint}01324+0(SB),R0,$20
-25 00001324: e52de018	(874) MOVW.W	R14,-24(R13)
+24 00001324:          (874) TEXT {fprint}01324+0(SB),R0,$20
+25 00001324: e52de018 (874) MOVW.W R14,-24(R13)
 26 ...
 27
-28 00006b50: e49df03c	(890) MOVW.P	60(R13),R15
+28 00006b50: e49df03c (890) MOVW.P 60(R13),R15
 \end{verbatim}
 \n this was also done via kencc/5l
 
@@ -3527,6 +3534,8 @@ undef(void)
 
 \chapter{Loading Objects}
 \label{chap:loading-objects}
+\l maybe unfortunate name? confusing with the loader in the kernel?
+\l  which is why actually man/1/8l use the terms loader? it loads objects?
 
 %trans:
 % seen main flow, main functions, but remain e.g. ldobj.
@@ -3779,9 +3788,9 @@ int size;
 
 % mostly reverse of zaddr() in Assembler.nw 
 \t inopd?
-% ldobj -> <>
 % return number of bytes read to read this Adr
 <<function zaddr(arm)>>=
+/// main -> objfile -> ldobj -> <>
 int
 zaddr(byte *p, Adr *a, Sym *h[])
 {
@@ -3987,6 +3996,7 @@ if(p->as == ATEXT) {
 <<global autosize(arm)>>=
 long	autosize;
 @
+\t rename stacksize?
 % size for the locals? (and params?)
 % used a lot by aclass()
 \l could be renamed curautosize
@@ -4762,8 +4772,8 @@ xrefresolv = true;
 
 % when done automatically
 
-% ldobj(case AHISTORY and local_line == -1 special mark) -> <>
 <<function addlib>>=
+/// ldobj(case AHISTORY and local_line == -1 special mark) -> <>
 void
 addlib(char *obj)
 {
@@ -4953,6 +4963,7 @@ Sym *s;
 % with opcode a == ABxx where q->pc == c where c is the branch offset value.
 
 <<function patch(arm)>>=
+/// main -> <>
 void
 patch(void)
 {
@@ -5067,8 +5078,8 @@ Prog*	forwd;
 %old: used to be part of an union with regused, but regused was actually
 % unused
 
-% main -> <> patch -> <>
 <<function mkfwd>>=
+/// main -> patch -> <>
 void
 mkfwd(void)
 {
@@ -5125,10 +5136,10 @@ if(q == P) {
 \subsection{Compacting chains of [[AB]], [[brloop()]]}
 
 
-% main -> patch -> <>
 %  p->cond = brloop(p->cond);
 % compact a chain of AB to the end, and "detect" infinite chain loops
 <<function brloop(arm)>>=
+/// main -> patch -> <>
 Prog*
 brloop(Prog *p)
 {
@@ -5163,6 +5174,7 @@ brloop(Prog *p)
 %machine opcode (e.g. ADIV, ARET) so was using a fake/virtual opcode
 
 <<function noops(arm)>>=
+/// main -> <>
 void
 noops(void)
 {
@@ -5552,6 +5564,7 @@ long	bsssize;
 % Note that Sym.value changes "type" going from a size to now a location.
 
 <<function dodata(arm)>>=
+/// main -> <>
 void
 dodata(void)
 {
@@ -5693,6 +5706,7 @@ int m, i;
 @
 
 <<function span(arm)>>=
+/// main -> <>
 void
 dotext(void)
 {
@@ -6688,6 +6702,7 @@ Oprang	oprange[ALAST];
 \subsection{[[buildop()]]}
 
 <<function buildop(arm)>>=
+/// main (init) -> <>
 void
 buildop(void)
 {
@@ -6743,8 +6758,8 @@ case AXXX:
 
 
 
-% buildop -> qsort(..., <>)
 <<function ocmp(arm)>>=
+/// main -> buildop -> qsort(..., <>)
 int
 ocmp(const void *a1, const void *a2)
 {
@@ -6793,8 +6808,8 @@ int a1, a2, a3;
 
 
 % leverage the sorted data structure computed by buildop()
-% dotext | asmb -> <>
 <<function oplook(arm)>>=
+/// main -> (dotext | asmb) -> <>
 Optab*
 oplook(Prog *p)
 {
@@ -7081,8 +7096,8 @@ nocache(Prog *p)
 
 \section{Text section, [[asmout()]]}
 
-% main -> asmb -> <> (in a for loop over all instructions)
 <<function asmout(arm)>>=
+/// main -> asmb -> <> (in a for loop over all instructions)
 void
 asmout(Prog *p, Optab *o)
 {
@@ -8599,8 +8614,8 @@ long	symsize;
 
 
 
-% main -> asmb -> <>
 <<function asmsym(arm)>>=
+/// main -> asmb -> <>
 void
 asmsym(void)
 {
@@ -8775,8 +8790,8 @@ Auto*	curhist;
 @
 % like curauto
 
-% ldobj (case AEND | ATEXT | ??) -> <>
 <<function histtoauto>>=
+/// ldobj (case AEND | ATEXT | ??) -> <>
 void
 histtoauto(void)
 {
@@ -9337,8 +9352,10 @@ if(p->reg & NOPROF) {
 \section{Dynamic linking}
 \label{sec:dynamic-linking}
 \l dynamic loading?
+\t dynamic linking vs dynamic loading?
 
 %http://harmful.cat-v.org/software/dynamic-linking/
+
 
 \subsection{Export table, [[5l -x]]}
 % what this is for?
@@ -10801,8 +10818,8 @@ case D_FCONST:
 
 % 8.out.h
 
-% ldobj -> <>
 <<function ieeedtof>>=
+/// main -> objfile -> ldobj -> <>
 long
 ieeedtof(Ieee *e)
 {
@@ -10830,8 +10847,8 @@ ieeedtof(Ieee *e)
 }
 @
 
-% Dconv -> <>
 <<function ieeedtod>>=
+/// Dconv -> <>
 double
 ieeedtod(Ieee *ieeep)
 {
