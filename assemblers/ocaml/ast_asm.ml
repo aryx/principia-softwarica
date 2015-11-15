@@ -39,7 +39,9 @@ type arith_operand =
     | Sh_minus | Sh_at
 
 type mov_operand = 
+  (* Immediate shift register *)
   | Imsr of arith_operand
+  (* eXtended immediate *)
   | Ximm of ximm
   | Indirect of register * offset
   (* those below are all specialized forms of Indirect *)
