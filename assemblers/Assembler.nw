@@ -183,8 +183,14 @@ understanding an assembly language, and so also what an assembler does,
 is essential to understand low-level fundamental concepts such as 
 {binary logic and arithmetic}, {memory operations}, {pointers}, 
 {stack processing}, {frames},
-{software interrupts}
-and to understand what a compiler generates. 
+{software interrupts}, and more.
+%
+Understanding assembly is also necessary to understand what
+a compiler generates. Moreover, most programmers will need at some point
+to look at the generated assembly code (or disassembled code)
+to optimize code or fix bugs.
+\l performance issue (alok), crack software :)
+%
 Note also that some code, especially in the kernel, can not be written in C
 and has to be written in assembly.
 
@@ -333,6 +339,7 @@ It is very big though:
 more code than [[5a]],
 and 3.4M LOC for the whole [[binutils]] package (not including the testsuite).
 Even the ARM-specific file [[gas/config/tc-arm.c]] has already 25 000 LOC.
+\l why so much bigger? (alok)
 
 \item LLVM Machine Code (MC) is a library part of the LLVM infrastructure
 to translate assembly into machine code. When used by
@@ -343,6 +350,9 @@ large infrastructure, LLVM, which has 1.3M LOC.
 
 \item NASM is a popular x86 assembler using the Intel
 syntax as opposed to [[gas]] (and [[5a]]) which uses the \att syntax.
+\t footnote ? boils down to mov src dst vs  mov dst src  (alok)
+\l also say each tool have its own minor variations (alok), .text vs TEXT, etc
+\l  no standard, arch specific anyway
 It is also fairly large: 50 000 LOC.
 \n popular on linux especially, but also works on windows and mac
 \l YASM a rewrite of NASM
@@ -567,6 +577,7 @@ format far more convenient for the programmer than the
 Note that each assembly language is specific to a computer architecture.
 \l and in fact even different assembler for same arch use different syntax
 \n so it is not portable; C is a portable assembler! Or need meta-assembler.
+\t ethymology of assembler/assembly? why call that way?
 
 Assembly languages use {\em mnemomics} to denote low-level {instructions}.
 %
@@ -2385,24 +2396,23 @@ struct	Gen
     union {
         long	offset; // offset or lval or ...
         double	dval;
-        char	sval[8];
+        char	sval[NSNAME];
     };
-    // option<enum<Register>>, None = R_NONE
+    // option<enum<Register>> (None = R_NONE)
     short	reg; // abused also to store a size for DATA
 
     <<[[Gen]] other fields>>
 };
 @
 \t rename Gen to Operand so better section name
-%old: was called Gen
 \t Why Gen anyway? gen rule in grammar. General opd? generic? 
-\n =~ Operand of Linker. 
 \t can use lval too now! after all it's an union now. make it a union too?
+\n =~ Operand of Linker. 
+%old: was called Gen
+%old: there was hardcoded 8 for sval, but bad cos not consistent
+% with nullgen.sval and some memcpy done later could fail (jarod, me)
 %old: I introduced the union. Can have it? operand_kind will be good enough?
 %ocaml: An ADT would be far better than this enum, D_NONE, and separate Sym 
-%less: maybe by playing with Literate Programming I can reproduce a kind of ADT?
-% e.g. by introducing LSREG, and then the part of the enum register related
-% to LSREG?
 
 The [[type]] field is used to encode the {\em operand kind}.
 It is a [[short]] but really it can only take values of the
@@ -2443,6 +2453,16 @@ different things, not just integer (or character) constants,
 as we will see soon.
 %ocaml: ugly, offset abused for many different operand kind, should be union
 % see comment below
+
+
+Strings in Asm5 are limited to 8 characters (but we will see
+later how to overcome this limitation):
+% from 5.out.h and 8.out.h
+<<constant NSNAME>>=
+#define	NSNAME		8
+@
+\l ref
+
 
 The [[D_NONE]] case is used in [[nullgen]] to
 represent the null operand. This is similar to [[R_NONE]].
@@ -2642,14 +2662,14 @@ a token can hold:
  // and ...
  long   lval;    // for LCONST/LARITH/LREG/LCOND/...
  double dval;    // for LFCONST
- char   sval[8]; // for LSCONST
+ char   sval[NSNAME]; // for LSCONST
 
  <<union declaration other fields(arm)>>
 }
 @
+%old: there was hardcoded 8 for sval, but bad cos not consistent
+% with Gen.sval and some memcpy done later could fail (jarod, me)
 %ocaml: no need, included in token directives
-\l could use NSNAME here instead of char sval[8] ? and at a few other places?
-\l note that 8, here is the restriction on 8bytes strings
 
 Again this directive is a bit complicated but things will be clearer
 later. The name of those fields, e.g. [[lval]], are actually
@@ -2659,7 +2679,9 @@ For instance \%[[token  <lval>  LCONST]] indicates that
 the [[LCONST]] tokens will use the [[lval]] field of the union
 to hold their values.
 \t will see Sym later
-\l this is used to typecheck things in Yacc. 
+\l this is used to typecheck things in Yacc.
+
+
 
 Another important data structure related to tokens
 is the [[Itab]] structure and the global [[itab]]:
@@ -2768,7 +2790,7 @@ One way to implement a hash table in C is to use a big array
 of lists, also known as an array of {buckets}:
 
 <<global hash>>=
-// hash<string, ref_own<Sym>>, (next in bucket = Sym.link)
+// hash<string, ref_own<Sym>> (next = Sym.link in bucket)
 Sym*	hash[NHASH];
 @
 \n diff with h? this is assembler symbol table, not object file symbol table
@@ -2783,7 +2805,7 @@ this something a [[link]] field pointing to the next
 element in the list:
 
 <<[[Sym]] extra fields>>=
-// list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
+// list<ref<Sym>> (from = hash)
 Sym*	link;
 @
 \n also of the object file symbol table h? no h is just an array actually.
@@ -3020,7 +3042,7 @@ Now that we have seen the [[Sym]] structure,
 we can present the [[sym]] field of the [[Gen]] structure:
 
 <<[[Gen]] other fields>>=
-// option<ref<Sym>>, ref owned by hash
+// option<ref<Sym>> (owner = hash)
 Sym*	sym;
 @
 %less: maybe should rename this field 'name'? and then use name_kind?
@@ -3044,7 +3066,7 @@ An additional [[Gen]] field is used to represent
 the {\em kind} of the symbol:
 
 <<[[Gen]] other fields>>=
-// option<enum<Sym_kind>>, None = N_NONE
+// option<enum<Sym_kind>> (None = N_NONE)
 short	symkind;
 @
 %old: was called name, but confusing I think, name as a field was used in
@@ -3418,12 +3440,15 @@ are forced to use globals.
 The function below is called just before returning
 from [[assemble()]] and is used to add the last
 instruction in the object file: [[AEND]].
-It is a special marker used by [[5l]].
+It is a special marker convenient to have 
+when dealing with {libraries} in [[5l]]. Indeed, libraries are little
+more than object files concatenated together
+and [[AEND]] marks represent object {boundaries}.
 \n need AEND? yes, the linker wants an AEND, and I think
 \n when use a library, can have multiple objects concatenated
-\n in which case AEND is a marker for the end of an obJect.
+\n in which case AEND is a marker for the end of an object.
 \n and to facilitate the job of ldobj, easy to use opcode too.
-\n (but in a clean world this could be done by linker)
+%ocaml: no need, libraries can be just Marshall of lists! boundaries clear!
 
 \label{sec:cclean}
 <<function cclean(arm)>>=
@@ -3599,7 +3624,7 @@ essentially an opened file with a file descriptor in [[Io.f]]:
 <<struct Io>>=
 struct	Io
 {
-    // option<fdt>, None = FD_NONE
+    // option<fdt> (None = FD_NONE)
     fdt	f;
     <<[[Io]] buffer fields>>
     // Extra
@@ -3624,7 +3649,7 @@ Io*	iostack = I;
 One can implement a stack in C using a list:
 
 <<[[Io]] extra fields>>=
-// list<ref_own<Io>>, head = iostack (or iofree)
+// list<ref_own<Io>> (from = iostack or iofree)
 Io*	link;
 @
 <<constant I>>=
@@ -3638,7 +3663,7 @@ which can be used later by [[newfile()]]:
 %ocaml: so many globals
 
 <<global ionext>>=
-// option<ref<IO>>
+// option<ref<Io>>
 Io*	ionext;
 @
 
@@ -3659,13 +3684,13 @@ newio(void)
 
 The [[Io]] allocator could be simply a call to [[malloc()]].
 The matching call to [[free()]] then should be in the code which
-closes the opened file when the content if fully read.
+closes the opened file when the content is fully read.
 Instead, [[5a]] uses the common C technique of {\em free list}
 to manage [[Io]]s and so can ``recycle'' an [[Io]] 
 for another opened file:
 
 <<global iofree>>=
-// list<IO>, next = IO.link
+// list<ref<Io>> (next = Io.link)
 Io*	iofree = I;
 @
 
@@ -3714,6 +3739,8 @@ newfile(char *s, fdt f)
 }
 @
 
+\t percent r, refer to error managment function
+
 \section{Buffer management, [[fi]]}
 
 Once the input file is opened,
@@ -3748,7 +3775,7 @@ struct Fi
     // ref<char>, pointer in Io.b
     char*	p;
     // remaining characters in Io.b to read
-    int	c;
+    int		c;
 };
 @
 \l File input
@@ -3760,7 +3787,7 @@ to [[iostack->link]]). But we also need to remember
 where we were in the includer file, hence those extra fields:
 
 <<[[Io]] buffer fields>>=
-// like Fi, saved pointers in IO.b
+// like Fi, saved pointers in Io.b
 char*	p;
 short	c;
 @
@@ -3955,7 +3982,7 @@ l0:
 l1:
     if(c == EOF) {
         peekc = EOF; // needed?
-        return -1;
+        return EOF;
     }
 
     if(isspace(c)) {
@@ -3974,6 +4001,7 @@ l1:
     return c;
 }
 @
+%old: was return -1, but return EOF better I think
 \t now return a long, fillbuf was returning an int. hmmm
 %ocaml: ugly to not take any input and use globals. Should take a lexbuf!
 % also with pattern character range no need ugly isalpha and isdigit
@@ -3995,7 +4023,7 @@ Another technique is to store instead in a global
 this extra character:
 
 <<global peekc>>=
-// option<Rune>, None = IGN
+// option<Rune> (None = IGN)
 int	peekc = IGN;
 @
 \t use Rune?
@@ -4063,9 +4091,15 @@ if(c == '\n') {
 @
 \l note also lineno plus plus
 
-Note that because the token in a single character, it can
+Note that because the token is a single character, it can
 be returned directly. There is no need to invent
 a [[LSEMICOLON]] token code.
+%
+%for jarod:
+As we will see in Section~\ref{sec:empty-instr}, the grammar
+of Asm5 allows empty instructions, so empty lines with just
+a newline, or lines with only comments do not pose any problem.
+
 
 %old:
 %<<[[yylex()]] switch c cases>>=
@@ -4274,12 +4308,16 @@ ncu:
         c = GETC();
 @
 \l ncu?  non current unit?
+\l note base 10 passed to strtol
 \t code using that? then comment no?
 
 \subsection{Hexadecimals and octals}
 
-[[strtol()]] does not unfortunately handle hexadecimal
-or octal numbers so we have to do things manually:
+[[strtol()]] does handle hexadecimal and octal numbers, 
+but for unknown reasons
+things are done manually for those numbers:
+\n it is handled by Linux (jarod) and actually also by plan9, see man page
+\t why not use strtol for that too??
 %ocaml: int_of_string does
 
 
@@ -4319,6 +4357,8 @@ for(;;) {
 goto ncu;
 @
 %ocaml: ugly 3 and 4 special code, ugly abuse c1, but convenient for the <<=
+% anyway just use int_of_string
+
 
 \subsection{Floats}
 
@@ -4955,7 +4995,7 @@ for(i=0; i<nDlist; i++)
 
 
 <<[[Sym]] macro fields>>=
-//option<string>, for '#define FOO xxx' expansion
+//option<string>  for '#define FOO xxx' expansion
 char*	macro;
 @
 \label{sec:macro-sym-field}
@@ -5778,6 +5818,7 @@ line:
   inst ';'
 @
 
+\label{sec:empty-instr}
 It can also be empty, or contain the special [[error]] Yacc
 token used for error recovery (see~\cite{lexyacc}):
 \l to got until next ; (that is newline)?
@@ -7881,6 +7922,7 @@ in a macro as shown in Section~\ref{sec:mcrr-macro}.
  
 
 \subsection{[[END]]}
+\label{sec:AEND}
 
 The [[END]] pseudo-instruction is a marker used
 to indicate the end of the instructions in the object file:
@@ -7899,15 +7941,17 @@ AEND,
 | LEND { outcode($1, Always, &nullgen, R_NONE, &nullgen); }
 @
 %$
-%ocaml: do not need that I think
+%ocaml: no need, use Marshall also for libs, Marshall list of objects.
 
 The need for such an instruction in the assembly file is
 not clear. Having such a marker in the object file
-can be useful though. Indeed, when many object files are concatenated
+can be useful though. 
+Indeed, when many object files are concatenated
 together in a library, the [[AEND]] marker can be used to indicate
 object boundaries.
 \l meh, still linker could do that, but ldobj() is easier to write
 \l if AEND is an opcode, like ANAME, like AHISTORY
+%ocaml: Marshall my friend!
 Note that [[5a]] automatically adds such a marker
 at the end of the generated object file
 via [[cclean()]] as seen in Section~\ref{sec:cclean}.
@@ -8368,10 +8412,6 @@ case D_SCONST:
     break;
 @
 
-% from 5.out.h and 8.out.h
-<<constant NSNAME>>=
-#define	NSNAME		8
-@
 
 
 \section{Object file symbol table, [[h]] and [[ANAME]]}
@@ -8796,12 +8836,12 @@ The first element of this list will be the input assembly file of [[5a]]
 passed on the command line.
 
 <<global hist>>=
-// list<ref_own<Hist>>, next = Hist.link
+// list<ref_own<Hist>> (next = Hist.link)
 Hist*	hist;
 @
 %ocaml: use a tree directly
 <<[[Hist]] extra fields>>=
-// list<ref<Hist>> from hist
+// list<ref<Hist>> (from = hist)
 Hist*	link;
 @
 <<constant H>>=
@@ -10506,6 +10546,10 @@ yyerror(char *a, ...)
     }
 }
 @
+\l a string -> fmt string ?
+
+\t percent r is error return code of last syscall I think, so common to have
+\t  it in fmt
 
 % could put prfile here, but can be better before to help
 % illustrate how to use Hist
