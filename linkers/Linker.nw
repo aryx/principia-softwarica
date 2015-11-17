@@ -204,6 +204,7 @@ to a specific binary instruction?
 \t put in conclusion non-trivial algo and data structures seen? see comment
 %data-structures (beyond list/hashtbl):
 % - AST again with enums, tag/union structure
+% - Buffer with reading window
 % - graph and pointers (from implicit graph in array with ref via pc integer)
 % - forward overlay link indexation (and associated faster search)
 % - pattern matching array dispatch table (with subtype notions)
@@ -211,22 +212,21 @@ to a specific binary instruction?
 
 %algorithms (beyond search/sort):
 % - unserialization/unmarshalling with shared enum and tags so simple dispath
-%   or with header specifying sizes
+%   or with header specifying sizes, and sliding input buffer window
 % - signature checking (header I_MAGIC, archive ARMAG, names ASIGNAME)
-%   (same for library, special signature magic number)
 % - smaller:
 %   * versioning for disambiguation (but gensym would be better term)
 %   * def/use link again via symbol table and special marks (SXREF)
 %   * lots of bit manipulations
+%   * AST rewriting and optimisations
+%   * dumpers
 % - =~ concatenation, resolution, relocation
 % - poolization?
-% - AST rewriting and optimisations
 % - program instrumentation for profiling
 % - reflection via special symbols
 % - endianess
 % - DFS? (follow?)
 % - special algos for dynamic linking?
-% - dumpers
 
 \section{The \plan ARM linker, [[5l]]}
 
@@ -665,6 +665,8 @@ the use of {labels} in jump instructions as both the definitions and uses of
 those labels must be in the same file. 
 \l in regular linker  same for calls to internal symbols? resolved but need
 \l  to be relocated?
+\n actually relocation is a kinda special case symbol resolution, could
+\n  change 5a to not resolve labels and use fake local symbols for labels.
 The instructions generated
 for those jumps {assume} though that the code of the program was
 loaded at the memory address 0. 
@@ -1602,14 +1604,14 @@ the main data flow of [[5l]].
 The main steps of the linking process of [[5l]] are:
 
 \begin{enumerate}
-\item {\em load} (read) the object files and libraries ([[objfile()]])
+\item to {\em load} (read) the object files and libraries ([[objfile()]])
 and {concatenate} their code and data in different sections
 ([[ldobj()]])
 
-\item {\em resolve} symbol references and 
+\item to {\em resolve} symbol references and 
 {relocate} branching instructions ([[patch()]], ...)
 
-\item {\em generate} the executable with its header and
+\item to {\em generate} the executable with its header and
 machine code ([[asmb()]])
 
 \end{enumerate}
@@ -1676,8 +1678,7 @@ its object code in memory, that is a {\em list of instructions}.
 %
 Doing so, [[ldobj()]] modifies also the globals [[firstp]] and [[datap]] 
 containing respectively 
-the list of {code instructions} and
-the list of {data instructions}.
+the list of {code instructions} and {data instructions}.
 \n also [[textp]] and the list of {procedures}, but less important now.
 Thus, all the code and data in the
 object files are concatenated together in the appropriate {\em sections}.
@@ -2191,7 +2192,7 @@ struct	Adr
 
 [[Operand]] is until now very similar to the [[Operand]] type used by [[5a]]
 and  described in the \book{Assembler}.
-The kind of the operand is also stored in [[Operand.type]], e.g.
+The {\em operand kind} is also stored in [[Operand.type]], e.g.
 [[D_CONST]], [[D_REG]], [[D_OREG]].
 \l talk about offset? and relocations?
 \l offset can be based on PC (for D_BRANCH), SB(for N_INTERN, N_EXTERN),
@@ -2203,7 +2204,7 @@ The [[Operand.reg]] field is also used for operands involving registers.
 Operands involving symbols use an [[Operand.sym]] field in [[5a]]
 but a slightly different structure is used in [[5l]] as explained later.
 %
-The kind of the symbol is also stored in a [[Operand.symkind]] field,
+The {\em symbol kind} is also stored in a [[Operand.symkind]] field,
 e.g. [[N_EXTERN]], [[N_PARAM]], [[N_LOCAL]] (which are
 enumerations defined also in [[include/arch/arm/5.out.h]]):
 
@@ -2385,6 +2386,7 @@ long	pc;
 \l needed for some check pc == p->pc somewhere.
 \t type is  long | addr ?
 
+%dup: overview/soft-archi 
 The virtual program counter is incremented after each code instruction
 is read in [[ldobj()]].
 %
@@ -3571,12 +3573,14 @@ undef(void)
 % it the goal (textsize, datsize, Sym.value, Instr.pc, etc)
 
 
+
+
 \chapter{Loading Objects}
 \label{chap:loading-objects}
-\n Was Parsing, but objs are stored in binary format so Loading better.
+\n Was Parsing ..., but objs are stored in binary format so Loading ... better.
 \n Confusing with the loader in the kernel? actually man/1/8l uses "loader".
-\n But it is true 5l is also loading/copying data from disk in memory,
-\n a bit like the kernel loader, except it is a different file format.
+\n  But 5l is actually also loading/copying data from disk in memory,
+\n  a bit like the kernel loader, except it is a different file format.
 
 %trans: %dup: (and quite adapted) from Assembler
 Now that we have seen the code or a high-level view of
@@ -3584,22 +3588,23 @@ the code of the main functions of [[5l]], we can
 start to go deeper and detail the different components of the
 linking pipeline.
 %toc
-We start in this chapter with the loading of object files
+We start in this chapter with the loading of object files in memory
 performed mostly by [[ldobj()]].
+\n mostly because also objfile
 
-%ocaml: use Marshall (but less friendly to other languages) and List.flatten
+%ocaml: use Marshall and List.flatten (but less friendly to other languages) 
 
 \section{Object file format, [[.5]]}
 \label{sec:object-format}
 
 %trans:
 Before reading the code of [[ldobj()]]
+it is good to have in mind the format of object files.
 %
-it is good to have in mind the format of object files
-summarized in Figure~\ref{fig:object-format-complete}.
+This format is summarized in Figure~\ref{fig:object-format-complete}.
 See the \book{Assembler} if you need a more comprehensive description.
 
-%dup: from Assembler.nw with just added AHISTORY and ANAME
+%dup: from Assembler.nw (just added AHISTORY,ANAME, AXXX)
 \begin{figure}[!]\centering
 \begin{verbatim}
                         ^-------------+
@@ -3628,7 +3633,7 @@ See the \book{Assembler} if you need a more comprehensive description.
 |              | \      +-------------+      \|Operand kind |
 +--------------+  \--\  |  Condition  |       v-------------+
 | Files/lines  |      \ +-------------+
-|   history    |       \|   Opcode    |
+|   history    |       \| AXXX Opcode |
 |  (AHISTORY)  |        v-------------+
 +--------------+
 
@@ -3638,85 +3643,71 @@ See the \book{Assembler} if you need a more comprehensive description.
 \label{fig:object-format-complete}
 \end{figure}
 
-
-\section{Buffered input, [[buf]]}
-
-% See buffer management appendix,
-% essentially this buf global! and buf.ibuf  which is is input buffer.
-
-<<[[ldobj()]] locals(arm)>>=
-byte *bloc;
-byte *bsize;
-int r;
-@
-% and parameter 'int c'
-% bloc[xxx] will be what we will read from below in ldobj()
-
-\l FIGURE where see bloc, c, r and how they relate
-
-<<[[ldobj()]] bloc and bsize init>>=
-bsize = buf.ibuf;
-bloc = buf.ibuf;
-@
-
-
-<<[[ldobj()]] read if needed in loop:, adjust bloc and bsize>>=
-r = bsize - bloc;
-if(r < 100 && r < c) {		/* enough for largest prog */
-    bsize = readsome(f, buf.ibuf, bloc, bsize, c);
-    if(bsize == 0)
-        goto eof;
-    bloc = buf.ibuf;
-    goto loop;
-}
-@
-% >> >> >> >>
-% readsome() is in appendix too
-
 \section{A global and local program counter, [[pc]] and [[ipc]]}
 
-% each instruction read in ldobj() will increment this pc
+%trans:? before ldobj see important global
+
+%dup: overview/soft-archi, core-ds/instr
+A very important global that will be used by [[ldobj()]] is
+the {\em virtual program counter}:
+
 <<global pc>>=
 long	pc = 0;
 @
 
-% internal pc? objects are loaded after each other,
-% but when had a local D_BRANCH then need now to adjust to a global value
+%dup: overview/soft-archi, core-ds/instr
+[[ldobj()]] will increment [[pc]] after each code instruction read. 
+%
+Note that [[pc]] is a {\em global} and so
+persists between different calls to [[ldobj()]]. Thus,
+all the instructions in the different object files will
+have a unique program counter value in [[Instr.pc]].
+\l that is the spirit of global concatenation
+
+[[ldobj()]] is also using the {\em local} below
+to store the value of the program counter at the beginning
+of the call:
+
 <<[[ldobj()]] locals(arm)>>=
 long ipc;
 @
-% so set to current pc when at the beginning of object
+\l internal pc? objects are loaded after each other,
 
-
-% This is for the N_INTERN; to handle conflicts with different files
-% defining the same static entity. This is bumped each time
-% a new object file is parsed, so it's safe.
-<<global version>>=
-int	version = 0;
-@
+This will be useful for {relocating} branching instructions
+as we will see soon.
 
 \section{Instructions input, [[ldobj()]]}
 
-
-\t incode? so opposite of outcode? (but it was not good name either)
+%trans:
+We can finally see the code of [[ldobj()]].
+%
+The function takes 3 parameters:
+[[f]] the file descriptor of the (opened) object file,
+[[c]] the size of this object file, and
+[[pn]] the name of this object file used mostly for error management.
+\t rename f -> fd, c -> len, pn -> filename
+%
+[[ldobj()]] essentially reads instructions from [[f]]
+in a loop where each iteration allocates a new instruction
+[[p]] with the opcode [[o]] and populate either
+[[firstp]] or [[datap]] depending on the opcode.
+\l and also [[hash]] for operands, and some opcodes too
 
 <<[[ldobj()]] locals(arm)>>=
 // enum<Opcode>
 short o;
 Prog *p;
 @
-% the instruction p will be allocated
 
-<<[[ldobj()]] locals(arm)>>=
-bool skip;
-@
-% If set to true then generate a NOP actually for the currently
-% read instruction. Used for DUPOK for instance.
+An important local is [[bloc]] which is a {\em cursor} in an
+{\em input buffer} derived from [[f]] as explained soon in 
+Section~\ref{sec:ldobj-input-buffer}.
+%
+It allows the code which parses instructions to access
+individual bytes of an instruction in the object file as 
+[[bloc[0]]], [[bloc[1]]], etc. 
+\l a bit like it was mmap'ed
 
-
-% f = fd of opened object file
-% c = size of object file, 
-% pn = filename of object, 
 <<function ldobj(arm)>>=
 /// main -> objfile -> <>
 void
@@ -3729,12 +3720,9 @@ ldobj(fdt f, long c, char *pn)
 
 // can come from AEND
 newloop:
+    // new object file
     ipc = pc;
-    version++;
-    skip = false;
-
-    memset(h, 0, sizeof(h));
-    histfrogp = 0;
+    <<[[ldobj()]] after newloop when new object file, more initializations>>
 
 loop:
     if(c <= 0)
@@ -3745,35 +3733,20 @@ loop:
     o = bloc[0];		/* as */
     <<[[ldobj()]] sanity check opcode in range(arm)>>
 
+    // dispatch opcode part one
     <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>
     // else
 
     p = malloc(sizeof(Prog));
     p->as = o;
-    // reading the object binary file, opposite of outcode() in Assembler.nw
     <<[[ldobj()]] read one instruction in p>>
+
     <<[[ldobj()]] sanity check p>>
     <<[[ldobj()]] debug>>
 
+    // dispatch opcode part two
     switch(o) {
     <<[[ldobj()]] switch opcode cases(arm)>>
-
-    default:
-    casedef:
-        if(skip)
-            nopout(p);
-
-        // putting each object after each other, local offset become global
-        if(p->to.type == D_BRANCH)
-            p->to.offset += ipc;
-
-        //add_queue(firstp, lastp, p)
-        lastp->link = p;
-        lastp = p;
-
-        p->pc = pc;
-        pc++;
-        break;
     }
     goto loop;
 
@@ -3781,33 +3754,51 @@ eof:
     diag("truncated object file: %s", pn);
 }
 @
+%old: I transformed the code to use malloc instead of gethunk()
 %bugfix: again on gethunk, was doing if(nhunk < ...) instead of while(nhunk...)
 % the bug seems only in arm, x86 does the correct while
-% but forsyth say anyway a hunk is begger than a Prog so a if would work too
+% but forsyth say anyway a hunk is bigger than a Prog so a if would work too
 
-%hmm when exit from this function without an error?
-% via AEND! that does have a return!
+%trans:
+[[ldobj()]] is a complex and very long function. We splitted it in many
+{chunks} to facilitate its comprehension.
+%toc:
+The rest of this chapter will detail most of those chunks.
+%
+Note that the code above looks like a loop which can
+finish only in an error. But, one of the chunk
+dealing with the [[AEND]] opcode (see Section~\ref{sec:aend})
+contains actually a [[return]] which can escape the loop.
+%
+In fact, [[AEND]] explains also the reason for the two
+loop labels [[newloop]] and [[loop]]. Indeed, [[ldobj()]] can
+also be used to read a whole library in which case
+we want to also iterate over the multiple object files 
+contained in one library file, which, as we will see in
+Chapter~\ref{chap:loading-libraries},
+are separated by the [[AEND]] opcode.
 
-%todo:how does p->to.offset += ipc; works with library code?
-% in objfile it seems we seek to the TEXT procedure we want but
-% this procedure may not be the beginning of the object, and
-% the D_BRANCH offsets are based on the beginning of the object file no?
+\subsection{Instruction input}
 
-
-
-
-
-
-% does reverse operation than object generation in Assembler.nw, and more!
+%trans:
+An important chunk of [[ldobj()]] deals with the parsing
+of an instruction whose binary format is described in 
+Figure~\ref{fig:object-format-complete}.
+%assembler:
+The code below does mostly the reverse operation
+of [[outcode()]] in the \book{Assembler}
+and {reads} one instruction:
 
 
 <<[[ldobj()]] read one instruction in p>>=
+// mostly opposite of outcode() in 5a
+// bloc[0] has been assigned in 'o' already above so continue from 1
 p->scond = bloc[1];
 p->reg   = bloc[2];
 p->line  = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
 r = 7;
-r += zaddr(bloc+7, &p->from, h);
-r += zaddr(bloc+r, &p->to, h);
+r += inopd(bloc+r, &p->from, h);
+r += inopd(bloc+r, &p->to, h);
 
 bloc += r;
 c -= r;
@@ -3816,6 +3807,13 @@ p->link = P;
 p->cond = P;
 @
 % >> >> >>
+\l extract func and call incode? so opposite of outcode? 
+% (but not good name either)
+
+The code to read an operand uses [[inopd()]] which is shown
+in the next section. Some of its arguments are
+related to the {\em object file symbol table} and will
+be fully explained in Section~\ref{sec:h}.
 
 
 <<[[ldobj()]] sanity check opcode in range(arm)>>=
@@ -3832,83 +3830,62 @@ if(p->reg > NREG)
 @
 
 
+\subsection{Operand input, [[inopd()]]}
 
-%\section{[[AGOK]]}
-% can happen? I think we can remove it, 5c can't produce such opcodes. Can it?
-% another kind of sanity check:
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AGOK:
-    diag("unknown opcode\n%P", p);
-    p->pc = pc;
-    pc++;
-    break;
-@
-%x86:     diag("%s: GOK opcode in %s", pn, TNAME);
+%assembler:
+[[inopd()]] does mostly the reverse of [[outopd()]]
+in the \book{Assembler}
+%
+and {reads} one operand from the object file.
+The format of an operand is also described in
+Figure~\ref{fig:object-format-complete}.
+%
+[[inopd()]] returns the number of bytes that were used to read
+this operand:
 
-
-
-% for e.g. ATEXT that are DUPOK
-<<function nopout>>=
-void
-nopout(Prog *p)
-{
-    p->as = ANOP;
-    p->from.type = D_NONE;
-    p->to.type = D_NONE;
-}
-@
-% why care about .type? because some code is look for
-% D_BRANCH, for symbols, and so putting D_NONE ensure those
-% code will not be triggred for what was transformed in NOP.
-
-
-
-
-
-\section{Operand input, [[zaddr()]]}
-
-<<[[zaddr()]] locals>>=
-int c; // symidx
-int size;
-@
-
-% mostly reverse of zaddr() in Assembler.nw 
-\t inopd?
-% return number of bytes read to read this Adr
-<<function zaddr(arm)>>=
+<<function inopd(arm)>>=
 /// main -> objfile -> ldobj -> <>
 int
-zaddr(byte *p, Adr *a, Sym *h[])
+inopd(byte *p, Adr *a, Sym *h[])
 {
-    <<[[zaddr()]] locals>>
+    int size; // returned
+    int c; // symidx
+    <<[[inopd()]] locals>>
 
     a->type = p[0];
     a->reg = p[1];
-    c = p[2];
-    <<[[zaddr()]] sanity check symbol range>>
+    <<[[inopd()]] sanity check register range>>
+    c = p[2]; // symidx
+    <<[[inopd()]] sanity check symbol range>>
     a->sym = h[c];
     a->symkind = p[3];
 
     size = 4;
 
-    <<[[zaddr()]] sanity check register range>>
-
     switch(a->type) {
-    <<[[zaddr()]] cases>>
+    <<[[inopd()]] cases>>
     default:
         print("unknown type %d\n", a->type);
         p[0] = ALAST+1;
         return 0;	/*  force real diagnostic */
 
     }
-    <<[[zaddr()]] adjust curauto for N_LOCAL or N_PARAM symkind>>
+    <<[[inopd()]] adjust curauto for N_LOCAL or N_PARAM symkind>>
 
     return size;
 }
 @
+%old: was called zaddr but I renamed to inopd
+%  similar to zaddr -> outopd in Assembler.nw
+%old: I moved the sanity check of register ranger closer to a->reg
 
+The local [[c]] contains a {\em symbol index}
+in the object file symbol table. This index and the
+table will be explained in Section~\ref{sec:h}.
 
-<<[[zaddr()]] cases>>=
+The operands have variable size depending on the operand kind:
+
+<<[[inopd()]] cases>>=
 case D_NONE:
 case D_REG:
 case D_PSR:
@@ -3938,22 +3915,7 @@ case D_SCONST:
 
 
 
-
-
-
-
-
-
-<<[[zaddr()]] sanity check symbol range>>=
-if(c < 0 || c > NSYM){
-    print("sym out of range: %d\n", c);
-    p[0] = ALAST+1;
-    return 0;
-}
-@
-% not sure those p[0] have any effects
-
-<<[[zaddr()]] sanity check register range>>=
+<<[[inopd()]] sanity check register range>>=
 if(a->reg < 0 || a->reg > NREG) {
     print("register out of range %d\n", a->reg);
     p[0] = ALAST+1;
@@ -3962,52 +3924,252 @@ if(a->reg < 0 || a->reg > NREG) {
 @
 
 
-\section{adjusting [[curauto]]}
+\subsection{Buffered input, [[buf]]}
 
-% parameters + locals list
-<<global curauto>>=
-Auto*	curauto;
+%trans:
+We can now explain the code connecting [[bloc]] 
+to the file descriptor [[f]].
+%
+To read object files, [[ldobj()]]
+uses a global called [[buf]] of type [[Buf]]
+as well as many utility functions forming a sort
+of {\em input/output buffer management} library. 
+This code is quite generic and independent of [[5l]] and so
+most of it is described in Appendix~\ref{sec:buffer-management}.
+\l they could use libbio?
+%ocaml: use stdlib
+%
+The most important thing for this chapter is that [[Buf.ibuf]]
+contains an array of bytes, the {\em input buffer}, 
+filled from time to time by the function [[readsome()]]. 
+A few locals of [[ldobj()]] are pointers in this array:
+
+<<[[ldobj()]] locals(arm)>>=
+// array<byte> (slice of buf.ibuf)
+byte *bloc;
+// ref<byte> (end pointer in buf.ibuf)
+byte *bsize;
+// remaining bytes, bsize - bloc
+int r;
 @
-% set for the first time where? bug? should be = nil?
+%old: was char, but I prefer byte
 
+%dup: loading-obj/ldobj
+[[bloc]] is a {\em cursor} in the input buffer which will be moved.
+%
+It allows the code which parses instructions to access
+individual bytes of an instruction in the object file as 
+[[bloc[0]]], [[bloc[1]]], etc, 
+as we have seen in the previous sections.
+%alt: could use mmap?
+%
+It is initialized to the start of the input buffer:
 
-<<[[zaddr()]] locals>>=
-int t, l;
-Sym *s;
-Auto *u;
-@
-%old: t was i, but t(ype) better than i
-
-
-<<[[zaddr()]] adjust curauto for N_LOCAL or N_PARAM symkind>>=
-s = a->sym;
-t = a->symkind;
-l = a->offset;
-
-if(s == S || (t != N_LOCAL && t != N_PARAM))
-    return size;
-
-for(u=curauto; u; u=u->link)
-    if(u->asym == s)
-     if(u->type == t) {
-        if(u->aoffset > l)
-            u->aoffset = l;
-        return size;
-    }
-
-u = malloc(sizeof(Auto));
-u->asym = s;
-u->type = t;
-u->aoffset = l;
-
-//add_list(u, curauto)
-u->link = curauto;
-curauto = u;
+<<[[ldobj()]] bloc and bsize init>>=
+bloc = buf.ibuf;
+bsize = buf.ibuf;
 @
 
-%\section{adjusting [[autosize?]]}
+Figure~\ref{fig:input-buffer} represents the evolution of the state
+of [[buf.ibuf]] while the input buffer gets filled by [[readsome()]].
 
-\section{[[ATEXT]]}
+%dup: (and adapted) from Assembler
+\begin{figure}[!]\centering
+\begin{verbatim}
+0                                                      8192 
++-------------------------------------------------------+
+|                                                       |
++-------------------------------------------------------+
+^
+|                             
+bloc, bsize             r = 0
+
+(a) Empty buffer in buf.ibuf
+
+0                                                      8192
++-------------------------------------------------------+
+|42|12|253|        ...                               |43|                       
++-------------------------------------------------------+
+^<----------------------------------------------------->^
+|              r                                        |
+bloc                                                  bsize
+
+(b) After first call to readsome(): returned bsize
+
+0                                                      8192
++-------------------------------------------------------+
+|42|12|253|        ...                               |43|                       
++-------------------------------------------------------+
+                ^<------------------------------------->^
+                |              r                        |
+               bloc                                   bsize
+
+\end{verbatim}
+\caption{Evolution of the input buffer and [[ldobj()]] pointers}
+\label{fig:input-buffer}
+\end{figure}
+
+The code to fill as needed the input buffer is below:
+
+<<[[ldobj()]] read if needed in loop:, adjust bloc and bsize>>=
+r = bsize - bloc;
+if(r < 100 && r < c) {		/* enough for largest prog */
+    bsize = readsome(f, buf.ibuf, bloc, bsize, c);
+    if(bsize == nil)
+        goto eof;
+    bloc = buf.ibuf; // readsome() does some memmove()
+    goto loop;
+}
+@
+%bug? if filename or string bigger than 100 in ANAME?
+
+The number [[100]] above represents a ``window'' large enough
+to read one full instruction from the object file.
+%
+At some point [[bloc]] will get close to [[bsize]]
+and [[readsome()]] will be called again, even if
+the input buffer contains still some unprocessed bytes.
+%
+This simplifies the code in [[ldobj()]] which can
+simply access [[bloc[0]]], [[bloc[1]]], etc without
+having to worry to call [[readsome()]] again.
+
+Figure~\ref{fig:input-buffer2} represents the evolution of the state
+of [[buf.ibuf]] while the input buffer gets filled another
+time by [[readsome()]].
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+0                                                      8192 
++-------------------------------------------------------+
+|                                                       |
++-------------------------------------------------------+
+^
+|                             
+bloc, bsize             r = 0
+
+(a) Empty buffer in buf.ibuf
+
+0                                                      8192
++-------------------------------------------------------+
+|42|12|253|        ...                               |43|                       
++-------------------------------------------------------+
+^<----------------------------------------------------->^
+|              r                                        |
+bloc                                                  bsize
+
+(b) After first call to readsome(): returned bsize
+
+0                                                      8192
++-------------------------------------------------------+
+|42|12|253|        ...                               |43|                       
++-------------------------------------------------------+
+                ^<------------------------------------->^
+                |              r                        |
+               bloc                                   bsize
+
+\end{verbatim}
+\caption{Evolution of the input buffer and [[readsome()]] pointers}
+\label{fig:input-buffer2}
+\end{figure}
+
+
+<<function readsome>>=
+byte*
+readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
+{
+    int n;
+
+    n = stop - good;
+    memmove(buf, good, stop - good);
+    stop = buf + n;
+    n = MAXIO - n;
+    if(n > max)
+        n = max;
+    n = read(f, stop, n);
+    if(n <= 0)
+        return 0;
+    return stop + n;
+}
+@
+\n was in appendix, but too close; only issue is MAXIO but can say it is 8192
+
+
+\section{Opcode dispatch}
+
+%\section{[[AGOK]]}
+% can happen? I think we can remove it, 5c can't produce such opcodes. Can it?
+% another kind of sanity check:
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AGOK:
+    diag("unknown opcode\n%P", p);
+    p->pc = pc;
+    pc++;
+    break;
+@
+%x86:     diag("%s: GOK opcode in %s", pn, TNAME);
+
+
+
+
+
+\subsection{[[A]]$xxx$}
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+default:
+casedef:
+    if(skip)
+        nopout(p);
+
+    // putting each object after each other, local offset become global
+    if(p->to.type == D_BRANCH)
+        p->to.offset += ipc;
+
+    //add_queue(firstp, lastp, p)
+    lastp->link = p;
+    lastp = p;
+
+    p->pc = pc;
+    pc++;
+    break;
+@
+
+
+%todo:how does p->to.offset += ipc; works with library code?
+% in objfile it seems we seek to the TEXT procedure we want but
+% this procedure may not be the beginning of the object, and
+% the D_BRANCH offsets are based on the beginning of the object file no?
+
+
+
+<<[[ldobj()]] locals(arm)>>=
+bool skip;
+@
+<<[[ldobj()]] after newloop when new object file, more initializations>>=
+skip = false;
+@
+% If set to true then generate a NOP actually for the currently
+% read instruction. Used for DUPOK for instance.
+
+
+% for e.g. ATEXT that are DUPOK
+<<function nopout>>=
+void
+nopout(Prog *p)
+{
+    p->as = ANOP;
+    p->from.type = D_NONE;
+    p->to.type = D_NONE;
+}
+@
+% why care about .type? because some code is look for
+% D_BRANCH, for symbols, and so putting D_NONE ensure those
+% code will not be triggred for what was transformed in NOP.
+
+
+
+
+\subsection{[[ATEXT]]}
 
 % abuse from = symbolname, to = immediate constant size for locals
 
@@ -4093,7 +4255,7 @@ long	autosize;
 % assumes caller saves/restores SP?
 
 
-\section{[[AGLOBL]]}
+\subsection{[[AGLOBL]]}
 
 % not added in any list? because bss?
 
@@ -4127,7 +4289,7 @@ if(s->type != SNONE && s->type != SXREF)
 %pad: the second check used to be written differently, but I prefer
 % it this way to mimic more what we do for ATEXT
 
-\section{[[ADATA]]}
+\subsection{[[ADATA]]}
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case ADATA:
@@ -4148,7 +4310,8 @@ if(p->from.sym == S) {
 }
 @
 
-\section{[[AEND]]}
+\subsection{[[AEND]]}
+\label{sec:aend}
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AEND:
@@ -4162,6 +4325,11 @@ case AEND:
 @
 % when goto newloop? when have stuff behind an AEND?
 % for library? aggregate to have AEND between files?
+% see next chapter.
+\t but seems like objfile call ldobj with len for just object file
+\t  so not sure why need newloop.
+
+% return! so escape loop and return from ldobj
 
 <<[[ldobj()]] case AEND, curauto adjustments>>=
 if(curtext != P)
@@ -4172,22 +4340,41 @@ curtext = P;
 
 
 \section{Symbol table, [[ANAME]]}
+\label{sec:h}
+
 % and [[ASIGNAME]]
 % spreaded symbol table
 
+% remember
+%r += inopd(bloc+r, &p->from, h);
 
-<<[[ldobj()]] locals(arm)>>=
-byte *stop;
-@
 
 <<[[ldobj()]] locals(arm)>>=
 Sym *h[NSYM];
 Sym *s;
 @
 
+<<[[ldobj()]] after newloop when new object file, more initializations>>=
+memset(h, 0, sizeof(h));
+@
+
+<<[[inopd()]] sanity check symbol range>>=
+if(c < 0 || c > NSYM){
+    print("sym out of range: %d\n", c);
+    p[0] = ALAST+1;
+    return 0;
+}
+@
+% not sure those p[0] have any effects
+
+
 <<[[ldobj()]] locals(arm)>>=
 int v;
 @
+<<[[ldobj()]] locals(arm)>>=
+byte *stop;
+@
+
 
 % it's not part of the switch, it's done before!
 <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>=
@@ -4242,6 +4429,18 @@ if(stop == nil){
 }
 @
 % >> >>
+
+
+% This is for the N_INTERN; to handle conflicts with different files
+% defining the same static entity. This is bumped each time
+% a new object file is parsed, so it's safe.
+<<global version>>=
+int	version = 0;
+@
+<<[[ldobj()]] after newloop when new object file, more initializations>>=
+version++;
+@
+
 
 \section{Safe linking with [[ASIGNAME]]}
 % put in advanced topics? At the same time safe linking is
@@ -4329,6 +4528,50 @@ if((files&15) == 0){
 
 
 
+\section{adjusting [[curauto]]}
+
+% parameters + locals list
+<<global curauto>>=
+Auto*	curauto;
+@
+% set for the first time where? bug? should be = nil?
+
+
+<<[[inopd()]] locals>>=
+int t, l;
+Sym *s;
+Auto *u;
+@
+%old: t was i, but t(ype) better than i
+
+
+<<[[inopd()]] adjust curauto for N_LOCAL or N_PARAM symkind>>=
+s = a->sym;
+t = a->symkind;
+l = a->offset;
+
+if(s == S || (t != N_LOCAL && t != N_PARAM))
+    return size;
+
+for(u=curauto; u; u=u->link)
+    if(u->asym == s)
+     if(u->type == t) {
+        if(u->aoffset > l)
+            u->aoffset = l;
+        return size;
+    }
+
+u = malloc(sizeof(Auto));
+u->asym = s;
+u->type = t;
+u->aoffset = l;
+
+//add_list(u, curauto)
+u->link = curauto;
+curauto = u;
+@
+
+%\section{adjusting [[autosize?]]}
 
 
 
@@ -4422,6 +4665,8 @@ char	symname[]	= SYMDEF;
 % actually don't seek to individual function. The symbol table
 % contains offsets for symbols which are not the offset of their TEXT
 % but the offset of their object file entry in the archive file.
+
+% AEND boundary mark
 
 \section{Loading libraries manually, [[5l libxxx.a]]}
 
@@ -8379,6 +8624,8 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
 @
 % ? slop?
 
+% use buf.dbuf, from union Buf. See appendix.
+
 %sstring is bool used when call datblk for generating strings in text segment
 <<function datblk(arm)>>=
 void
@@ -8706,6 +8953,11 @@ int	histfrogp;
 
 % used by what? for debugging? when signature conflict! to print
 % current filenames in conflict
+
+
+<<[[ldobj()]] after newloop when new object file, more initializations>>=
+histfrogp = 0;
+@
 
 
 % pn? filename of object file, but addlib() really abuse histgrog global
@@ -10885,13 +11137,13 @@ enum {
 
 \subsubsection{Operand kind}
 
-<<[[zaddr()]] cases>>=
+<<[[inopd()]] cases>>=
 case D_FREG:
 case D_FPCR:
     break;
 @
 
-<<[[zaddr()]] cases>>=
+<<[[inopd()]] cases>>=
 case D_FCONST:
     a->ieee = malloc(sizeof(Ieee));
 
@@ -13110,7 +13362,7 @@ nsymbol++;
 \chapter{Utilities}
 \label{chap:libc}
 
-\section{Memory managmnent}
+\section{Memory management}
 % same in Assembler.nw
 
 <<global hunk>>=
@@ -13211,7 +13463,8 @@ void setmalloctag(void *v, ulong pc)
 @
 
 
-\section{Buffer managmnent}
+\section{Buffer management}
+\label{sec:buffer-management}
 
 <<struct Buf>>=
 union Buf
@@ -13224,7 +13477,6 @@ union Buf
     char	dbuf[1]; // variable size
 };
 @
-
 <<constant MAXIO>>=
 MAXIO		= 8192,
 @
@@ -13234,25 +13486,8 @@ union Buf buf;
 @
 
 
-<<function readsome>>=
-byte*
-readsome(int f, byte *buf, byte *good, byte *stop, int max)
-{
-    int n;
-
-    n = stop - good;
-    memmove(buf, good, stop - good);
-    stop = buf + n;
-    n = MAXIO - n;
-    if(n > max)
-        n = max;
-    n = read(f, stop, n);
-    if(n <= 0)
-        return 0;
-    return stop + n;
-}
-@
-
+% see readsome() also but not as generic as rest below
+% and needed to undertand ldobj so put before
 
 
 %<<constant cbuf>>=
