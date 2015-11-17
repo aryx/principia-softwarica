@@ -67,7 +67,10 @@ type branch_operand =
   | Label of label * offset (* useful to have offset? *)
   (* after resolve *)
   | Absolute of virtual_code_address
-  
+
+(* todo: just transform labels in symbols? but then need to keep
+ * Relative jumps and remove Absolute.
+ *)  
 
 (* ------------------------------------------------------------------------- *)
 (* Instructions *)
