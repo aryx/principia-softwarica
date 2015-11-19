@@ -666,7 +666,7 @@ those labels must be in the same file.
 \l in regular linker  same for calls to internal symbols? resolved but need
 \l  to be relocated?
 \n actually relocation is a kinda special case symbol resolution, could
-\n  change 5a to not resolve labels and use fake local symbols for labels.
+\n  change 5a to not resolve labels and use fake private symbols for labels.
 The instructions generated
 for those jumps {assume} though that the code of the program was
 loaded at the memory address 0. 
@@ -1880,7 +1880,7 @@ struct	Sym
     // The key
     // ref_own<string>
     char	*name;
-    // 0 for global symbols, object file id for local symbols
+    // 0 for global symbols, object file id for private symbols
     short	version; 
 
     // The generic value, 
@@ -1902,20 +1902,24 @@ struct	Sym
 \label{sec:version}
 The key is made of a pair with the name of the symbol and a {\em version}.
 \l bad name?
-The version is used to differentiate {\em local symbols} 
+The version is used to differentiate {\em private symbols} 
 (a.k.a static symbols)
-\n local symbols are advanced feature but too important to delay because
+\n private symbols are advanced feature but too important to delay because
 \n  many interfaces like lookup take a version number.
-\l local symbols could be resolved in Assembler? kinda but want keep
+\l private symbols could be resolved in Assembler? kinda but want keep
 \l  symbol in executable for debugger and anyway linker need to resolve things
-\l  already so why not also resolve local symbols
+\l  already so why not also resolve private symbols
 in different object files using the same name, e.g. [[tmp<>]] 
 in [[foo.5]] and [[tmp<>]] in [[bar.5]]. 
-See the \book{Assembler} for more information about local symbols.
+%assembler:
+\l need that compare to assembler because now combine! so can have conflict
+See the \book{Assembler} for more information about private symbols.
 A version is a unique integer representing an object file,
 e.g. 1 for [[foo.5]] and 2 for [[bar.5]], so the two previous
 symbols can be designated respectively by [[tmp.1]] and [[tmp.2]].
 Global symbols have their version set to 0.
+
+\t #define VGLOBAL 0
 
 The meaning of [[Sym.value]] depends on the kind of the symbol.
 It also depends on the step in the linking pipeline. 
@@ -1980,7 +1984,7 @@ this something a [[link]] field pointing to the next
 element in the list:
 
 <<[[Sym]] extra fields>>=
-// list<ref<Sym>> (from hash)
+// list<ref<Sym>> (from = hash)
 Sym*	link;
 @
 
@@ -2512,7 +2516,7 @@ Instead, the [[GLOBL]] instructions when read modify the symbol table.
 Thanks to [[firstp]] and [[datap]] all the code and
 data instructions are separated in different {\em sections}.
 
-\subsection{Procedure instructions, [[textp/etextp]]}
+\subsection{Procedure declarations, [[textp/etextp]]}
 
 Another pair of globals keeps track of the 
 list of procedures (the [[TEXT]] pseudo-instructions):
@@ -2528,7 +2532,7 @@ Prog*	etextp = P;
 @
 \t seems dead, not used, could simplify
 
-The procedure instructions are chained together initially with
+The procedure instructions are chained together with
 another field of [[Instr]]:
 
 <<[[Prog]] extra fields>>=
@@ -2543,7 +2547,7 @@ to build a {\em graph of instruction}. Branching instructions
 will have their [[Instr.cond]] field points to the
 target instruction.
 
-The instructions in the list [[textp/etextp]]
+Note that the instructions in the list [[textp/etextp]]
 are a subset of the list of instructions in [[firstp/lastp]].
 
 
@@ -2689,6 +2693,7 @@ fdt	cout = -1;
 @
 \n cout =~ create(outfile)
 \l why need global for that? could be passed around too no? used only by asmb
+\l  and asmout
 
 
 %trans: %dup: (and adapted) from Assembler
@@ -2743,6 +2748,9 @@ out:
 @
 \l order important? if not then maybe can be introduced later gradually
 \t explain? or introduce gradually?
+
+
+
 
 <<function usage, linker>>=
 void
@@ -3583,7 +3591,7 @@ undef(void)
 
 \chapter{Loading Objects}
 \label{chap:loading-objects}
-\n Was Parsing ..., but objs are stored in binary format so Loading ... better.
+\n Was Parsing obj, but objs are stored in binary format so Loading obj better.
 \n Confusing with the loader in the kernel? actually man/1/8l uses "loader".
 \n  But 5l is actually also loading/copying data from disk in memory,
 \n  a bit like the kernel loader, except it is a different file format.
@@ -3596,7 +3604,7 @@ linking pipeline.
 %toc
 We start in this chapter with the loading of object files in memory
 performed mostly by [[ldobj()]].
-\n mostly because also objfile
+\n 'mostly' because also objfile()
 
 %ocaml: use Marshall and List.flatten (but less friendly to other languages) 
 
@@ -3650,6 +3658,7 @@ See the \book{Assembler} if you need more explanations.
 \end{figure}
 
 \section{A global and local program counter, [[pc]] and [[ipc]]}
+\l could be put later? if aspectize code doing ipc = pc in ldobj?
 
 %trans:? before ldobj see important global
 
@@ -3662,7 +3671,8 @@ long	pc = 0;
 @
 
 %dup: overview/soft-archi, core-ds/instr
-[[ldobj()]] will increment [[pc]] after each code instruction read. 
+[[ldobj()]] will increment [[pc]] after each code instruction read
+as we will see in Section~\ref{sec:opcode-dispatch}.
 %
 Note that [[pc]] is a {\em global} and so
 persists between different calls to [[ldobj()]]. Thus,
@@ -3698,7 +3708,7 @@ The function takes 3 parameters:
 in a loop where each iteration allocates a new instruction
 [[p]] with the opcode [[o]] and populates either
 [[firstp]] or [[datap]] depending on the opcode.
-\l and also [[hash]] for operands, and some opcodes too
+\l and also [[hash]] for operands, and some opcodes too, and also ANAME
 
 <<[[ldobj()]] locals(arm)>>=
 // enum<Opcode>
@@ -3747,6 +3757,8 @@ loop:
     p = malloc(sizeof(Prog));
     p->as = o;
     <<[[ldobj()]] read one instruction in p>>
+    p->link = P;
+    p->cond = P;
 
     <<[[ldobj()]] sanity check p>>
     <<[[ldobj()]] debug>>
@@ -3786,12 +3798,12 @@ contained in one library file, which, as we will see in
 Chapter~\ref{chap:loading-libraries},
 are separated by the [[AEND]] opcode.
 
-\subsection{Instruction input}
+\subsection{Single instruction input}
 
 %trans:
 An important chunk of [[ldobj()]] deals with the parsing
-of an instruction whose format is described in 
-Figure~\ref{fig:object-format-complete}.
+of one instruction whose format is described in 
+the middle of Figure~\ref{fig:object-format-complete}.
 %assembler:
 The code below does mostly the reverse operation
 of [[outcode()]] in the \book{Assembler}
@@ -3810,17 +3822,14 @@ r += inopd(bloc+r, &p->to, h);
 
 bloc += r;
 c -= r;
-
-p->link = P;
-p->cond = P;
 @
 % >> >> >>
 \l extract func and call incode? so opposite of outcode? 
 % (but not good name either)
 
 The code to read an operand uses [[inopd()]] which is shown
-in the next section. Its last argument is
-related to the {\em object file symbol table} and will
+in the next section. %clever \ref{sec:inopd}
+Its last argument is related to the {\em object file symbol table} and will
 be fully explained in Section~\ref{sec:h}.
 
 
@@ -3846,8 +3855,8 @@ if(p->reg > NREG)
 in the \book{Assembler}
 %
 and {reads} one operand from the object file.
-The format of an operand is also described in
-Figure~\ref{fig:object-format-complete}.
+The format of an operand is described 
+in the right of Figure~\ref{fig:object-format-complete}.
 %
 [[inopd()]] returns the number of bytes that were used to read
 this operand as operands can have different size:
@@ -3858,15 +3867,15 @@ int
 inopd(byte *p, Adr *a, Sym *h[])
 {
     int size; // returned
-    int c; // symidx
+    int symidx;
     <<[[inopd()]] locals>>
 
     a->type = p[0];
     a->reg = p[1];
     <<[[inopd()]] sanity check register range>>
-    c = p[2]; // symidx
+    symidx = p[2];
     <<[[inopd()]] sanity check symbol range>>
-    a->sym = h[c];
+    a->sym = h[symidx];
     a->symkind = p[3];
 
     size = 4;
@@ -3886,12 +3895,16 @@ inopd(byte *p, Adr *a, Sym *h[])
 @
 %old: was called zaddr but I renamed to inopd
 %  similar to zaddr -> outopd in Assembler.nw
+%  also c -> symidx
 %old: I moved the sanity check of register ranger closer to a->reg
+\l could do the set to SXREF when global symbol kind here
+\l  instead of in code handling ANAME (and its redundant symkind)
 
-The local [[c]] contains a {\em symbol index}
+The local [[symidx]] contains a {\em symbol index}
 in the object file symbol table [[h]] passed as a parameter. 
-This index and the table will be explained in Section~\ref{sec:h}.
-\t but important that Sym allocated and here a->sym will point to symbol table
+This index and the table will be explained in Section~\ref{sec:h},
+but the important result is that [[Operand.sym]] will point
+to a symbol in the symbol table [[hash]].
 
 The operands have variable size depending on the operand kind:
 
@@ -4002,6 +4015,7 @@ if(r < 100 && r < c) {		/* enough for largest prog */
 @
 \l need goto loop? can not just fallthrough?
 %bug? if filename or string bigger than 100 in ANAME?
+% no because the code above is only for for regular opcodes, not ANAME
 
 %dup: (and adapted) from Assembler
 \begin{figure}[!]\centering
@@ -4012,7 +4026,7 @@ if(r < 100 && r < c) {		/* enough for largest prog */
 +-------------------------------------------------------+
 ^
 |                             
-bloc, bsize             r = 0
+bloc, bsize             r = 0 (< 100)
 
 (a) Empty buffer in buf.ibuf
 
@@ -4057,7 +4071,7 @@ filled by more data from [[f]].
 +-------------------------------------------------------+
                                       ^<--------------->^
                                       |                 |
-                    ldobj() locals:  bloc     r      bsize
+                    ldobj() locals:  bloc   r = 99    bsize
                  readsome() locals:  good     n       stop
 
 (a) before second call to readsome()
@@ -4101,7 +4115,256 @@ readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
 \l also need handle max, show figure where bsize is not always
 \l  at the very end
 
+\subsection{Object file symbol table, [[h]] and [[ANAME]]}
+\label{sec:h}
+\n better put before Opcode dispatch so understand use of from->sym in ATEXT
+\n also closer to other discussions about object file format and readsome()
+
+%trans:
+Object files contain mostly instructions. They contain also 
+%
+an {\em object file symbol table} which is {\em spread}
+in the file and where each entry starts with the [[ANAME]] opcode,
+as shown in the left of Figure~\ref{fig:object-format-complete}.
+The object file symbol table is also a {\em circular} array.
+Its entries define symbols which are then referenced in operands
+of some following instructions via a {\em symbol index},
+as shown in the right of Figure~\ref{fig:object-format-complete}.
+%
+An important chunk of [[ldobj()]] deals with those [[ANAME]] entries.
+%
+The format of each {entry} starts with 
+the pseudo-opcode [[ANAME]]
+followed by the kind, 
+symbol index, and 
+name of the symbol.
+\t need kind? well to the SXREF below done only for global symbols.
+\t  but could be done in inopd instead?
+\t  yes but need for N_INTERN! so bump version and allocate different symbols!
+\t  but could be done again in inopd
+\t need index? fault-tolerance?
+%
+See the \book{Assembler} if you need more explanations.
+
+%dup: (and adapted) from Assembler
+The local [[h]] below mimics in memory this circular table:
+
+<<[[ldobj()]] locals(arm)>>=
+// array<option<ref<Sym>>>
+Sym *h[NSYM];
+@
+
+[[NSYM]] is a constant defined in [[include/objs/common.out.h]]
+which is also used by [[5a]] and so which was described already
+in the \book{Assembler}.
+\t include/devel/output/common.out.h  -> include/objs/ 
+%assembler:
+[[h]] was a global in [[5a]] but is a local variable in [[5l]] as
+each object file contains its own symbol table.
+\l also was Htab (=~ Sym x symkind) vs Sym
+%
+The table is reset for each new object file processed:
+
+<<[[ldobj()]] after newloop when new object file, more initializations>>=
+memset(h, 0, sizeof(h));
+@
+\l note newloop! because library have multi object files, multi symbol tables
+
+[[h]] is populated by [[ldobj()]] as the object file is read
+and new [[ANAME]] entries are found. [[ldobj()]]
+also populates the global symbol table [[hash]] via [[lookup()]].
+Figure~\ref{fig:object-h-hash} shows the relation
+between those data structures.
+%
+Remember that the first operand of an instruction like 
+[[MOVW foo(SB), R1]] is represented in the object file
+as 4 elements, as shown in the right of Figure~\ref{fig:object-format-complete},
+using 4 bytes: 
+the operand kind ([[D_OREG]]), 
+a possible register number ([[R_NONE]]),
+a symbol index ([[1]]), and
+a symbol kind ([[N_EXTERN]]).
+%
+This operand is summarized as [[idx:1 EXT]]
+in Figure~\ref{fig:object-h-hash}.
+
+\begin{figure}[!]\centering
+\begin{verbatim}
++--------------------+                                 +---+
+|AEND                |                                 |   |
++--------------------+                                 |   |
+|                    |                                 |   |
+|...                 |                                 |   |
+|                    |                  +----------+   +---+
+|                    |                  |...       |<--+-  |
++--------------------+                  +----------+   +---+
+|AMOVW idx:2 EXT, R3 |                                 |   |
+|                    |          +---+   +----------+   +---+
++--------------------+   +---+  |   |<--|"foo", ...|<--+-  |
+|ANAME EXT 2 "bar"   | 49|   |  +---+   +----------+   +---+
++--------------------+   +---+                ^        |   |
+|AMOVW R2, idx:1 EXT |   |   |                |        |   |
+|                    |   |   |                |        |   |
++--------------------+   |...|                |        |   |
+|AMOVW idx:1 EXT, R1 |   |   | +--------------+        |   |
+|                    |   |   | |                       |   |
++--------------------+   |   | |                       |   |
+|ANAME EXT 1 "foo"   |   +---+ |                       +---+
++--------------------+  2|  -+-+-+                     |   |
+|AADD R1, R2, R3     |   +---+ | |      +----------+   +---+
+|                    |  1|  -+-+ +----->|"bar", ...|<--+-  |
++--------------------+   +---+          +----------+   +---+
+|AHISTORY ...        |  0|   |                         |   |
++--------------------+   +---+                         +---+
+                                          Symbols
+      Object file          h                           hash
+\end{verbatim}
+\caption{Object file and values of [[h]] and [[hash]] in memory}
+\label{fig:object-h-hash}
+\end{figure}
+
+We can now see the local variables
+and the code of [[ldobj()]] dealing with [[ANAME]]
+(and also partially with [[ASIGNAME]] which will be explained 
+in section~\ref{sec:ASIGNAME}):
+
+<<[[ldobj()]] locals(arm)>>=
+// enum<Sym_kind>
+int k;
+int symidx;
+int v;
+// ref<byte> (in Buf.ibuf)
+byte *stop;
+@
+%pad: I introduced symidx, and renamed v -> k, and keep v for version
+
+
+<<[[ldobj()]] if ANAME or ASIGNAME(arm)>>=
+if(o == ANAME || o == ASIGNAME) {
+    sig = 0;
+    <<[[ldobj()]] if SIGNAME adjust sig>>
+
+    stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
+    <<[[ldobj()]] if stop is nil refill buffer and retry>>
+
+    k = bloc[1];	/* type */
+    symidx = bloc[2];	/* sym */
+
+    bloc += 3;
+    c -= 3;
+
+    v = 0; // global version by default
+    <<[[ldobj()]] when ANAME opcode, if private symbol adjust version>>
+
+    s = lookup((char*)bloc, v);
+
+    c -= &stop[1] - bloc;
+    bloc = stop + 1;
+
+    <<[[ldobj()]] if sig not zero>>
+    <<[[ldobj()]] when ANAME, debug>>
+
+    h[symidx] = s;
+
+    if((k == N_EXTERN || k == N_INTERN) && s->type == SNONE)
+        s->type = SXREF;
+
+    <<[[ldobj()]] when ANAME opcode, if D_FILE>>
+    goto loop;
+}
+@
+%ocaml: Marshall, oh my god we save so much code by using marshall
+%old: was abusing o to store symidx, r to store version, v to store name
+% I introduced instead symidx, v, n;
+\n it's not part of the switch, it's done before!
+\t what about symbol uses for params and locals with same name than globals?
+\t  5a accepts that? conflict?
+
+[[ldobj()]] first extracts the string from the 
+[[ANAME]] entry and calls [[lookup()]] on it.
+%
+This creates a new entry in the symbol table [[hash]],
+unless this symbol is a global symbol ([[v == 0]]) which was defined
+in another object file loaded before, or if the same symbol
+was introduced before in the same object file due to the circular
+nature of the object file symbol table.
+%
+[[ldobj()]] then updates [[h]] so further references
+of the symbol index in operands of instructions coming after
+will be transformed in pointers (in [[Operand.sym]]) to the right
+symbol entry in [[hash]]. Indeed, see the instruction
+[[a->sym = h[symidx]]] of [[inopd()]] in Section~\ref{sec:inopd}.
+%
+We can now also understand the sanity check of the symbol 
+index in [[inopd()]]:
+
+<<[[inopd()]] sanity check symbol range>>=
+if(symidx < 0 || symidx > NSYM){
+    print("sym out of range: %d\n", symidx);
+    p[0] = ALAST+1;
+    return 0;
+}
+@
+\l not sure those p[0] have any effects
+
+Note also that [[ldobj()]] sets the symbol section to [[SXREF]]
+for symbols refering to procedures or globals (e.g. [[foo(SB)]]
+but also [[tmp<>(SB)]]) if the symbol was just created.
+This symbol is now marked as ``wanted''.
+\l for objfile() and loadlib() to correctly work! checked by undef
+\t explain partially also why need redundant symkind in ANAME, because
+\t  job done here (but could be done instead in inopd() I think)
+
+The reading of an [[ANAME]] entry requires to have the full
+string (ending with [['\0']]) in the input buffer:
+
+% buffer management crap again
+<<[[ldobj()]] if stop is nil refill buffer and retry>>=
+if(stop == nil){
+    bsize = readsome(f, buf.ibuf, bloc, bsize, c);
+    if(bsize == nil)
+        goto eof;
+    bloc = buf.ibuf;
+    stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
+    if(stop == nil){
+        fprint(2, "%s: name too long\n", pn);
+        errorexit();
+    }
+}
+@
+% >> >>
+
+\subsection{Private symbols}
+
+As mentionned in Section~\ref{sec:version}, {private symbols}
+in different object files using the same name, e.g. [[tmp<>]] 
+in [[foo.5]] and [[tmp<>]] in [[bar.5]], can be differentiated
+thanks to a {\em version} number stored in a global:
+
+<<global version>>=
+int	version = 0;
+@
+
+This version is a unique integer representing an object file
+by simply incrementing it each time a new object file is parsed:
+
+<<[[ldobj()]] after newloop when new object file, more initializations>>=
+version++;
+@
+
+Every reference to a private symbol in an object file then uses
+the version corresponding to this object file:
+
+<<[[ldobj()]] when ANAME opcode, if private symbol adjust version>>=
+if(k == N_INTERN)
+    v = version;
+@
+
+
+
+
 \section{Opcode dispatch}
+\label{sec:opcode-dispatch}
 
 %trans:
 Once an instruction [[p]] with its opcode and operands have been read, 
@@ -4113,6 +4376,7 @@ The following sections describe the different [[case]]s of this
 [[switch]] which are mostly concerned with {pseudo-instructions}.
 
 \subsection{[[A]]$xxx$}
+\label{sec:axxx}
 
 The default case corresponds to regular instructions, e.g. [[AMUL]],
 that is non pseudo-instructions:
@@ -4227,7 +4491,9 @@ case ATEXT:
 \l see curtext
 
 The code is similar to the default case we have seen in 
-the previous section, but in addition 
+the previous section, 
+\t increment also pc! TEXT will become an instruction (or NOP?)
+but in addition 
 the symbol table [[hash]] is modified through [[s]], and 
 the list of procedures in [[textp]] is updated.
 %
@@ -4381,6 +4647,14 @@ allows to exit from [[ldobj()]] without any error.
 \subsection{[[AGOK]]}
 \label{sec:AGOK}
 
+[[AGOK]] (God Only Knows) is a pseudo-opcode used
+to initialize new instructions in [[5l]]. It is also used
+for the same reason in [[5c]].
+It should always be overriden at some point by a real opcode, 
+hence the warning code below:
+\l defensive programming? it continues? no errorexit?
+
+%sanity:
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AGOK:
     diag("unknown opcode\n%P", p);
@@ -4389,118 +4663,13 @@ case AGOK:
     break;
 @
 %x86:     diag("%s: GOK opcode in %s", pn, TNAME);
-
-% can happen? I think we can remove it, 5c can't produce such opcodes. Can it?
-% another kind of sanity check:
-\l could use AXXX? or ANOP? 
-\t actually 5c generates some AGOK, but to continue even when error (meh?)
+%ocaml: do not use, initialize instructions directly with right opcode
+\l could use AXXX? or ALAST?
 
 
-\section{Symbol table, [[ANAME]]}
-\label{sec:h}
-\l put earlier ? so better understand use of from->sym in ATEXT?
+\section{Safe linking, [[ASIGNAME]]}
+\label{sec:ASIGNAME}
 
-% and [[ASIGNAME]]
-% spreaded symbol table
-
-% remember
-%r += inopd(bloc+r, &p->from, h);
-
-
-
-<<[[ldobj()]] locals(arm)>>=
-Sym *h[NSYM];
-@
-<<[[ldobj()]] after newloop when new object file, more initializations>>=
-memset(h, 0, sizeof(h));
-@
-
-<<[[inopd()]] sanity check symbol range>>=
-if(c < 0 || c > NSYM){
-    print("sym out of range: %d\n", c);
-    p[0] = ALAST+1;
-    return 0;
-}
-@
-% not sure those p[0] have any effects
-
-
-<<[[ldobj()]] locals(arm)>>=
-int v;
-@
-<<[[ldobj()]] locals(arm)>>=
-byte *stop;
-@
-
-
-% it's not part of the switch, it's done before!
-<<[[ldobj()]] if ANAME or ASIGNAME(arm)>>=
-if(o == ANAME || o == ASIGNAME) {
-    sig = 0;
-    <<[[ldobj()]] if SIGNAME adjust sig>>
-
-    stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
-    <<[[ldobj()]] if stop is nil refill buffer and retry>>
-
-    v = bloc[1];	/* type */
-    o = bloc[2];	/* sym */
-    bloc += 3;
-    c -= 3;
-
-    r = 0;
-    if(v == N_INTERN)
-        r = version;
-
-    s = lookup((char*)bloc, r);
-
-    c -= &stop[1] - bloc;
-    bloc = stop + 1;
-
-    <<[[ldobj()]] if sig not zero>>
-    <<[[ldobj()]] when ANAME, debug>>
-
-    h[o] = s;
-
-    if((v == N_EXTERN || v == N_INTERN) && s->type == SNONE)
-        s->type = SXREF;
-
-    <<[[ldobj()]] when ANAME opcode, if D_FILE>>
-    goto loop;
-}
-@
-% SXREF! so mark the symbol as "we want to find its definition!" for
-% objfile() and loadlib() to correctly work!
-
-% buffer management crap again
-<<[[ldobj()]] if stop is nil refill buffer and retry>>=
-if(stop == nil){
-    bsize = readsome(f, buf.ibuf, bloc, bsize, c);
-    if(bsize == 0)
-        goto eof;
-    bloc = buf.ibuf;
-    stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
-    if(stop == nil){
-        fprint(2, "%s: name too long\n", pn);
-        errorexit();
-    }
-}
-@
-% >> >>
-
-
-% This is for the N_INTERN; to handle conflicts with different files
-% defining the same static entity. This is bumped each time
-% a new object file is parsed, so it's safe.
-<<global version>>=
-int	version = 0;
-@
-<<[[ldobj()]] after newloop when new object file, more initializations>>=
-version++;
-@
-
-
-
-\section{Safe linking with [[ASIGNAME]]}
 % put in advanced topics? At the same time safe linking is
 % an essential feature to me
 %note: cool, like in ocamlc! ocaml does that too, to make linking more safe!
@@ -4582,9 +4751,6 @@ if((files&15) == 0){
 
 %\section{File and line information, [[AHISTORY]]}
 % see debugging section
-
-
-
 
 \section{adjusting [[curauto]]}
 
@@ -4682,6 +4848,11 @@ long	autosize;
 
 \chapter{Loading Libraries}
 \label{chap:loading-libraries}
+
+%trans:
+% next in linking pileline is loading library. Actually also
+% performed partly by ldobj(). library is set of objects
+% so call ldobj too.
 
 % 5l actually loads only the object files in the librairies containing 
 % the functions/data which are mentionned by the main object files
