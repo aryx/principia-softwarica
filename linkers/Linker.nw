@@ -22,6 +22,7 @@
 %   by introducing more files: main.c, lib.c, error.c, m.h
 % - reorganized code around INITENTRY, -l, -E digit, make default path
 %   more obvious
+% - renames many local variables, more consistent (v = version, etc)
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
@@ -205,6 +206,7 @@ to a specific binary instruction?
 %data-structures (beyond list/hashtbl):
 % - AST again with enums, tag/union structure
 % - Buffer with reading window
+% - growing array
 % - graph and pointers (from implicit graph in array with ref via pc integer)
 % - forward overlay link indexation (and associated faster search)
 % - pattern matching array dispatch table (with subtype notions)
@@ -214,6 +216,9 @@ to a specific binary instruction?
 % - unserialization/unmarshalling with shared enum and tags so simple dispath
 %   or with header specifying sizes, and sliding input buffer window
 % - signature checking (header I_MAGIC, archive ARMAG, names ASIGNAME)
+% - DFS? (follow?)
+% - program instrumentation for profiling
+% - reflection via special symbols
 % - smaller:
 %   * versioning for disambiguation (but gensym would be better term)
 %   * def/use link again via symbol table and special marks (SXREF)
@@ -222,10 +227,7 @@ to a specific binary instruction?
 %   * dumpers
 % - =~ concatenation, resolution, relocation
 % - poolization?
-% - program instrumentation for profiling
-% - reflection via special symbols
-% - endianess
-% - DFS? (follow?)
+% - endianess?
 % - special algos for dynamic linking?
 
 \section{The \plan ARM linker, [[5l]]}
@@ -1127,6 +1129,8 @@ instruction Line 29.
 the C compiler [[5c]] assumes a few core initialisations has
 been done before the call to [[main()]], hence the choice
 of [[_main]] as the default entry point.
+%real-world: 
+% actually gcc transforms main in _main, so startup in Linux is ?? 
 
 For more information on [[5l -W]] see Appendix~\ref{sec:debugging-loading}.
 
@@ -2264,12 +2268,16 @@ What matters is the offset number. The symbol name is mostly
 a comment (which can be leveraged by tools such as debuggers though).
 This explains the use of a union below to differentiate
 those different kinds of symbol references:
+\t actually no!! autom used only for Text.to
+\t  I think better if was outside union. stupid opti.
+\t so maybe can actually introduce later this data structure?
+\t  or in separate section!!!
 
 <<[[Adr]] other fields>>=
 union {
     // ref<Sym> of hash
     Sym*	sym;
-    // list<Auto>?? (next = Auto.link)
+    // ref<Auto> | list<ref_own<Auto> (next = Auto.link)
     Auto*	autom;
 };
 @
@@ -2279,12 +2287,17 @@ union {
 
 
 Operands involving symbols refering to globals or procedures use the 
-[[sym]] field of the union, while operands involving
-parameters and local variables, also known as {\em automatic variables},
-\l bad name!
+[[sym]] field of the union. 
+Operands involving parameters and local variables, 
+which are really variables both stored in the {\em stack},
+also known as {\em automatic variables},
 use the [[autom]] field.
+\t NO!!! 
 
 %section{[[Auto]]matic variables}
+% or stack variables
+\t can be put after Instr actually. so can understand Text.to.autom
+\t  the .to
 
 
 The [[Auto]] structure is used to keep track of all the parameters
@@ -2299,7 +2312,7 @@ struct	Auto
     // enum<Sym_kind> (but N_LOCAL or N_PARAM only?)
     short	type;
 
-    // option<ref<Sym>>
+    // <ref<Sym>
     Sym*	asym;
     long	aoffset;
 
@@ -2312,9 +2325,10 @@ struct	Auto
 \l aoffset is a repeat of the offset of the operand?
 \t concrete example of value for an operand!!
 
-Those automatic variables are chained together:
+Those stack variables are chained together:
 
 <<[[Auto]] extra fields>>=
+// list<ref_own<Auto> (head = curauto = Instr.to.autom of TEXT instruction)
 Auto*	link;
 @
 \t what for? do some basic checks? like right autosize?
@@ -2576,8 +2590,9 @@ are a subset of the list of instructions in [[firstp/lastp]].
 
 During the linking process, we will iterate many times over
 the list of instructions. It is useful for error messages
-to store in globals in which procedure we currently are ([[curtext]]) and 
-which instruction we are currently processing ([[curp]]):
+to store in globals in which procedure we currently are ([[curtext]]) 
+\l actually also to link curauto
+and which instruction we are currently processing ([[curp]]):
 \n it's an error management issue but it is too important to be delayed
 
 
@@ -4270,7 +4285,6 @@ byte *stop;
 
 <<[[ldobj()]] if ANAME or ASIGNAME(arm)>>=
 if(o == ANAME || o == ASIGNAME) {
-    sig = 0;
     <<[[ldobj()]] if SIGNAME adjust sig>>
 
     stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
@@ -4363,7 +4377,7 @@ if(stop == nil){
 @
 % >> >>
 
-\subsection{Private symbols}
+\subsection{Private symbols and version}
 
 As mentionned in Section~\ref{sec:version}, {private symbols}
 in different object files using the same name, e.g. [[tmp<>]] 
@@ -4655,6 +4669,7 @@ and [[AEND]] marks represent object {boundaries}.
 case AEND:
     <<[[ldobj()]] case AEND, curauto adjustments with curhist>>
     <<[[ldobj()]] case AEND, curauto adjustments>>
+    curtext = P;
 
     if(c)
         goto newloop;
@@ -4696,116 +4711,62 @@ case AGOK:
 \l could use AXXX? or ALAST?
 
 
-\section{Safe linking, [[ASIGNAME]]}
-\label{sec:ASIGNAME}
+\section{Stack variables}
 
-% put in advanced topics? At the same time safe linking is
-% an essential feature to me
-%note: cool, like in ocamlc! ocaml does that too, to make linking more safe!
+%trans:
+% few other things done by ldobj(), regarding stack variables,
+% which will be used later? by what? resolving? generation?
 
-%todo: how disable this check? I think you can't, the only
-% way is to not generate those ASIGNAME in the first place
-% in the compiler by not adding -T to the compiling flags
+\subsection{adjusting [[autosize]]}
 
-% ASIGNAME is a pseudo opcode generated by 5c.
-% when 2 .c include some .h and reference an object, we
-% want that they refer to the same object with the same type!
+% global current size for stack variables of current procedure.
 
-<<[[Sym]] other fields>>=
-// md5sum of the type of the symbol
-long	sig;
+<<global autosize(arm)>>=
+long	autosize;
+@
+\t rename stacksize? curstacksize?
+% arm specific? not in x86?
+
+% used a lot by aclass(), for what?
+
+% round 4 bytes
+% add 4 to possibly save return address stored in REGLINK, used by RET
+% see assembler book.
+
+<<[[ldobj()]] in switch opcode ATEXT case, set autosize>>=
+autosize = (p->to.offset+3L) & ~3L;
+p->to.offset = autosize;
+autosize += 4;
 @
 
-<<[[ldobj()]] locals(arm)>>=
-ulong sig;
-@
+% as iterate in many algorithms, update autosize.
+% like update curtext.
 
-<<[[ldobj()]] if SIGNAME adjust sig>>=
-if(o == ASIGNAME){
-    sig = bloc[1] | (bloc[2]<<8) | (bloc[3]<<16) | (bloc[4]<<24);
-    bloc += 4;
-    c -= 4;
+<<adjust autosize when iterate over instructions p>>=
+if(p->as == ATEXT) {
+    autosize = p->to.offset + 4; // locals
 }
 @
-% >> >> >> >>
+% +4 again. see "runtime conventions" section?
 
 
-% s = ? symbol set in ldobj() to be?
-<<[[ldobj()]] if sig not zero>>=
-if(sig != 0){
-    if(s->sig != 0 && s->sig != sig)
-        diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
-    s->sig = sig;
-    s->file = files-1;
-}
-@
+%\subsection{[[Auto]]}
 
+\subsection{adjusting [[curauto]]}
 
-
-% local, but really kinda globals
-<<[[ldobj()]] locals(arm)>>=
-// growing_array<filename>  (grown for every 16 elements)
-static char **filen;
-// index of next free entry in filen
-static int files = 0;
-@
-
-<<[[Sym]] other fields>>=
-// idx in filen
-ushort	file;
-@
-
-
-<<[[ldobj()]] remember set of object filenames>>=
-<<[[ldobj()]] grow filen if not enough space>>
-filen[files++] = strdup(pn);
-@
-
-
-
-% new filen (not a static this time)
-<<[[ldobj()]] locals(arm)>>=
-char **nfilen;
-@
-
-% =~ realloc
-<<[[ldobj()]] grow filen if not enough space>>=
-if((files&15) == 0){
-    nfilen = malloc((files+16)*sizeof(char*));
-    memmove(nfilen, filen, files*sizeof(char*));
-    free(filen);
-    filen = nfilen;
-}
-@
-
-%\section{File and line information, [[AHISTORY]]}
-% see debugging section
-
-\section{adjusting [[curauto]]}
+% another global for set of stack variables
 
 % parameters + locals list
 <<global curauto>>=
+// list<ref<Auto>> (next = Auto.link)
 Auto*	curauto;
 @
 % set for the first time where? bug? should be = nil?
 
 
-<<[[ldobj()]] case AEND, curauto adjustments>>=
-if(curtext != P)
-    curtext->to.autom = curauto;
-curauto = nil;
-curtext = P;
-@
 
-<<[[ldobj()]] case ATEXT, if curtext not null adjustments for curauto>>=
-if(curtext != P) {
-    <<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>
-    curtext->to.autom = curauto;
-    curauto = nil;
-}
-@
-
-
+% put example of instruction.
+% put example of multiple instruction with same parameter.
 
 <<[[inopd()]] locals>>=
 int t, l;
@@ -4820,56 +4781,244 @@ s = a->sym;
 t = a->symkind;
 l = a->offset;
 
-if(s == S || (t != N_LOCAL && t != N_PARAM))
-    return size;
+// a parameter or local with a symbol, e.g. p+0(FP)
+if(s != S && (t == N_LOCAL || t == N_PARAM)) {
 
-for(u=curauto; u; u=u->link)
-    if(u->asym == s)
-     if(u->type == t) {
-        if(u->aoffset > l)
-            u->aoffset = l;
-        return size;
-    }
-
-u = malloc(sizeof(Auto));
-u->asym = s;
-u->type = t;
-u->aoffset = l;
-
-//add_list(u, curauto)
-u->link = curauto;
-curauto = u;
-@
-
-\section{adjusting [[autosize]]}
-
-
-<<[[ldobj()]] in switch opcode ATEXT case, set autosize>>=
-autosize = (p->to.offset+3L) & ~3L;
-p->to.offset = autosize;
-autosize += 4;
-@
-
-<<adjust autosize when iterate over instructions p>>=
-if(p->as == ATEXT) {
-    autosize = p->to.offset + 4; // locals
+    for(u=curauto; u; u=u->link)
+        if(u->asym == s)
+         if(u->type == t) {
+            if(u->aoffset > l)
+                u->aoffset = l; // diag()? inconcistent offset?
+            return size;
+        }
+    // else
+    
+    u = malloc(sizeof(Auto));
+    u->asym = s;
+    u->type = t;
+    u->aoffset = l;
+    
+    //add_list(u, curauto)
+    u->link = curauto;
+    curauto = u;
 }
 @
-% +4? locals + RETURN? see "runtime conventions" section.
+%old: was
+% if(s == S || (t != N_LOCAL && t != N_PARAM))
+%    return size;
+% but anyway has return size after
 
-% arm specficic
-<<global autosize(arm)>>=
-long	autosize;
+
+
+
+<<[[ldobj()]] case AEND, curauto adjustments>>=
+if(curtext != P)
+    curtext->to.autom = curauto;
+curauto = nil;
 @
-\t rename stacksize?
-% size for the locals? (and params?)
-% used a lot by aclass()
-\l could be renamed curautosize
+
+<<[[ldobj()]] case ATEXT, if curtext not null adjustments for curauto>>=
+if(curtext != P) {
+    <<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>
+    curtext->to.autom = curauto;
+    curauto = nil;
+}
+@
 
 
 
-% +4 for ? saved PC? what about saved SP? when RET?
-% assumes caller saves/restores SP?
+
+\section{Safe linking}
+\label{sec:ASIGNAME}
+\n in adv topic? safe linking is an essential feature IMHO!
+%ocaml: cool, like in ocamlc! ocaml does that too, to make linking more safe!
+
+An interesting feature of object files and [[5l]], 
+not present in traditional linkers,
+\l the linux kernel has something related to that
+is the possibility 
+(1) to attach {\em signatures} to symbols in object files, and 
+(2) to check for {\em signature compatibility} when the same symbol
+is mentioned multiple times in different object files.
+%
+This makes linking far {safer}.
+
+\subsection{Motivations}
+
+Imagine the following scenario: a file [[foo.c]]
+defines a function [[foo()]] taking two integer parameters
+and not returning anything.
+The function is exported in a header file [[foo.h]].
+Another file [[bar.c]] is including the header and
+calls [[foo()]] with two integers. Both files
+are compiled resulting in the object files [[foo.5]] and [[bar.5]] which
+can be linked together.
+%
+Later on, an additional
+parameter is added to [[foo()]] in [[foo.h]] and [[foo.c]]
+and [[foo.c]] is recompiled leading to a new [[foo.5]] object file.
+%
+At this point, without signatures, there is nothing that prevents
+the new [[foo.5]] and 
+the old [[bar.5]] 
+to be linked together to form an executable.
+%
+Traditional linkers will happily link those object
+files resulting in an executable
+which, at run-time, will not have the right behavior
+([[bar.5]] contains a call to [[foo()]] with not enough parameters).
+
+
+Of course, many projects use a [[Makefile]] where accurate
+file dependencies can alleviate the issue.
+%
+One can specify manually for instance that [[bar.5]] depends also
+on [[foo.h]]. Then, any modification of [[foo.h]] will trigger automatically
+the regeneration of [[bar.5]].
+%
+Dependencies can also be automatically generated by tools like [[gcc -MM]].
+%
+Still, it is easy to make mistakes and miss some dependencies,
+or to forget to use shared headers,
+in which case there is no tool to detect the possible linking
+of incompatible object files (except by running the executable
+and get occasionally a segmentation fault).
+
+\subsection{[[ASIGNAME]] and [[5c -T]]}
+
+When two C files reference the same entity,
+we want to enforce that those two references have the same {\em type}.
+\l enforced by compiler via shared header, at least compatible type.
+\l actually not really enforced by compiler, can do wrong extern declaration
+\l  if not using shared header
+%
+[[ASIGNAME]] is a pseudo-opcode generated by [[5c]] 
+when using the [[-T]] option ([[T]] for type)
+which attaches a signature to a symbol. It is an alternate to
+[[ANAME]] with 4 bytes after the [[ASIGNAME]] opcode,
+and before the symbol kind, to store a signature as a [[ulong]]:
+
+<<[[ldobj()]] locals(arm)>>=
+ulong sig;
+@
+<<[[ldobj()]] if SIGNAME adjust sig>>=
+sig = 0;
+if(o == ASIGNAME){
+    sig = bloc[1] | (bloc[2]<<8) | (bloc[3]<<16) | (bloc[4]<<24);
+    bloc += 4;
+    c -= 4;
+}
+@
+% >> >> >> >>
+
+This signature is stored as another symbol property:
+
+<<[[Sym]] other fields>>=
+// for instance last 32 bits of md5sum of the type of the symbol
+ulong	sig;
+@
+%old: was long, but not consistent with ulong sig; local in ldobj
+
+<<[[ldobj()]] if sig not zero>>=
+if(sig != 0){
+    <<[[ldobj()]] signature compatibility check>>
+    s->sig = sig;
+    <<[[ldobj()]] remember file introducing the symbol>>
+}
+@
+
+
+In practice, signatures are {derived} from the type
+of an entity by the compiler. 
+%
+For instance, in our scenario above,
+the signature of [[foo()]] in the object file could
+be the result of the last 32-bits of the {\em md5sum} of the string
+representing the type, e.g. [[md5sum("void(int,int)") == 0x4a2489a1]].
+%
+This signature would be attached to the symbol [[foo]] in
+[[foo.5]] and [[bar.5]].
+%
+Later on, when an integer parameter
+is added, the signature of [[foo]] in [[foo.5]] would become
+[[md5sum("void(int,int,int)") == 0x74100cff]].
+%
+The linking of the new [[foo.5]] and old [[bar.5]] would then
+be detected and prevented by the code below:
+
+
+<<[[ldobj()]] signature compatibility check>>=
+if(s->sig != 0 && s->sig != sig)
+    diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", 
+    s->sig, filen[s->file], 
+    sig, pn, 
+    s->name);
+@
+\n but must have every object file use ASIGNAME. If one use ANAME no check.
+
+The actual algoritm used by [[5c]] to compute the signature
+is actually not the md5sum. See the \book{Compiler}
+to learn more about how signatures are generated.
+\l by default 5c generates ANAME instead of ASIGNAME
+
+\subsection{Error managment}
+
+To give good error messages like:
+
+\begin{verbatim}
+$ 5l foo.5 bar.5
+bar: incompatible type signatures bde91c57(foo.5) and adb3322b(bar.5)
+  for foo
+\end{verbatim}
+%old: I split on two lines
+
+\noindent one needs to remember in the symbol which file introduced
+the symbol the first time. 
+[[Sym.file]] below contains an index
+in the private array [[filen]] representing the file:
+
+<<[[Sym]] other fields>>=
+// index in filen[]
+ushort	file;
+@
+%bug?  ushort? so can link 65536 files maximum
+%ocaml: just use string directly, will be shared!
+
+<<[[ldobj()]] locals(arm)>>=
+// growing_array<option<string>>  (grown for every 16 elements)
+static char **filen;
+// index of next free entry in filen
+static int files = 0;
+@
+
+<<[[ldobj()]] remember set of object filenames>>=
+<<[[ldobj()]] grow filen if not enough space>>
+filen[files++] = strdup(pn);
+@
+
+<<[[ldobj()]] remember file introducing the symbol>>=
+s->file = files-1;
+@
+
+[[filen]] is actually a {\em growing array}:
+
+<<[[ldobj()]] locals(arm)>>=
+char **nfilen; // new filen
+@
+<<[[ldobj()]] grow filen if not enough space>>=
+if((files&15) == 0){
+    nfilen = malloc((files+16)*sizeof(char*));
+    memmove(nfilen, filen, files*sizeof(char*));
+    free(filen);
+    filen = nfilen;
+}
+@
+\n =~ realloc
+
+%\section{File and line information, [[AHISTORY]]}
+% see debugging section
+
+
 
 
 
