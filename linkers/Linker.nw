@@ -616,7 +616,7 @@ Input object files and                  Output executable
 \l and concatenation, separate and concatenate
 
 One of the main operation of a linker is to concatenate parts
-of different files. 
+of different files together. 
 \l actually in 5l less because generate also machine code
 In fact, the program [[cat]] can be seen as a very primitive linker.
 Instead of using a linker, one could use [[cat]] to concatenate
@@ -783,7 +783,7 @@ unresolved references to external symbols; the loader
 at {\em load-time} must, before loading the program in memory,
 link additional objects.
 \t also can be in the hand of the programmer, dynlink()
-\t  can link after being loaded.
+\t  can link after being loaded. at {\em run-time}
 \t dynamic linking vs dynamic loading? relink and load, or load and reload?
 \t dynamic code is important? like living cell organism, auto modifiable!
 \l  (well but can still modify own source code, call 5a/5c/5l and exec())
@@ -1011,7 +1011,7 @@ atexit.5:         T exits
 [[D]] for data (a defined global).
 %
 From the previous commands we can see that [[hello.5]] has three
-undefined symbol references, including [[hello]] which
+{undefined symbol} references, including [[hello]] which
 is a global data defined in [[world.5]]. 
 %
 The job of the linker is then to link those definitions to their uses.
@@ -1093,7 +1093,7 @@ The symbol value corresponds normally to the
 resolved memory address of the symbol.
 But, almost all those values and addresses are null 
 when using [[-W]] because the option dumps instructions
-while the object files are read into memory, and so
+while the object files are read into memory, at the beginning, and so
 when the linker has not yet resolved any of those symbols.
 
 Once a global has been declared, e.g. [[hello]] Line 17,
@@ -1111,6 +1111,10 @@ shows the instructions of a procedure called [[_main]].
 The linker [[5l]] is looking by default for such a procedure
 for the {entry point} of the executables it generates
 (unless the [[-E]] option is used), which is why it is included.
+\t hmm but dumping option could dump everything of libc.a no? maybe
+\t  delay discussion about _main to next section with -a?
+\t  just do 5l -W hello.5 world.5 here? anyway can see error msg
+\t  with _main which we can link to next section
 %
 The reason for a default called [[_main]], and not [[main]],
 even though the entry point of C programs is [[main]],
@@ -1180,7 +1184,7 @@ source file (assembly or C)\footnote{
 See Section~\ref{sec:lineno} for more information about line numbers.
 }.
 %
-Finally, the last column displays the disassembled instruction
+Finally, the last column displays the disassembled instruction.
 \l actually not really disassembled
 As opposed to the previous section, the symbol values 
 are not null anymore and contain now the resolved memory address
@@ -1216,6 +1220,10 @@ address [[01020]].
 In the same way, the calls to [[fprint]] and [[exits]]
 Line 8 and 10 are fully resolved in respectively
 the memory addresses [[01324]] (Line 25)  and [[012a8]] (Line 21).
+
+\t discussion about _main? why included? 
+\t  say that 5l includes only code in libc.a that are needed. so
+\t  make sense exits and fprint, but _main?
 
 The symbol value of [[hello]] Line~6 is [[00014]] which
 seems incorrect. Indeed, data should be stored after
@@ -1290,6 +1298,9 @@ at address [[7020]]. This confirms that [[hello]] is using
 12 bytes ([[0x7020]] - [[0x7014]] = [[0xc]] = 12) 
 as said in the source of [[world.s]]
 in Section~\ref{sec:hello-world-source}.
+
+\t talk about _div, _mod,  because called by fprint
+\t  to linker include more functions recursively. 
 
 The linker defines a set of special symbols:
 [[etext]] (end text) Line 12,
@@ -1471,8 +1482,8 @@ Chapter~\ref{chap:debugging}.
 
 Note that the [[Exec]] structure is actually not used by
 the code of [[5l]] for {\em writing} the header.
-Instead, the function [[asmb()]]
-we will see in Section~\ref{sec:gen-executable} outputs
+Instead, the function [[asmb()]], which
+we will see in Section~\ref{sec:gen-executable}, outputs
 directly the bytes of the header with a serie
 of calls to the [[lput()]] (for out[[put]] [[long]])
 utility function.
@@ -1585,7 +1596,9 @@ Total & & & & 7900 \\
 
 Another important file not included in Table~\ref{tab:code-orga}
 is [[include/arch/arm/5.out.h]]. It contains the
-definition of the ARM assembly opcodes used by [[5l]]. It is not included here
+definition of the ARM assembly opcodes used by [[5l]]. 
+\l also operand kind, and object file related DS.
+It is not included here
 because its content is fully described already in the \book{Assembler}.
 \l registers too
 \n used to depend on 5c/ for one file ../5c/enam.c but now done via symlink
@@ -1604,15 +1617,15 @@ the main data flow of [[5l]].
 The main steps of the linking process of [[5l]] are:
 
 \begin{enumerate}
-\item to {\em load} (read) the object files and libraries ([[objfile()]])
+\item to {\em load} (read) the object files and libraries (via [[objfile()]])
 and {concatenate} their code and data in different sections
-([[ldobj()]])
+(via [[ldobj()]])
 
 \item to {\em resolve} symbol references and 
-{relocate} branching instructions ([[patch()]], ...)
+{relocate} branching instructions (via [[patch()]], ...)
 
 \item to {\em generate} the executable with its header and
-machine code ([[asmb()]])
+machine code (via [[asmb()]])
 
 \end{enumerate}
 
@@ -1674,14 +1687,15 @@ each object files and libraries to link.
 %
 [[objfile()]] opens
 the object file or library and calls [[ldobj()]] to read
-its object code in memory, that is a {\em list of instructions}.
+its object code in memory, which is mostly a {\em list of instructions}.
 %
 Doing so, [[ldobj()]] modifies also the globals [[firstp]] and [[datap]] 
 containing respectively 
+\t rename firstp to codep
 the list of {code instructions} and {data instructions}.
 \n also [[textp]] and the list of {procedures}, but less important now.
 Thus, all the code and data in the
-object files are concatenated together in the appropriate {\em sections}.
+object files are concatenated together in the appropriate {\em section}.
 \l also Instr.type field with section name
 
 [[ldobj()]] increments also a global [[pc]] after each code instruction
@@ -1700,9 +1714,12 @@ which keeps track of different {properties} of symbols.
 One of this property, [[Sym.value]], contains initially
 a virtual program counter for symbols corresponding to procedures,
 and a size for symbols corresponding to globals.
+\t will be used to resolve
 %
 This same field will contain at the end the resolved memory
 address of the procedure or global.
+\t really for Text? once resolved, Instr.pc of TEXT already has
+\t  resolved address, no need for its Sym.value to be updated
 
 
 After loading the object files,
@@ -1711,7 +1728,7 @@ which use the globals [[firstp]] and [[datap]] to
 process or rewrite list of instructions.
 %
 First, [[patch()]] transforms the list of code instructions in a
-{\em graph of instructions} where branching instructions have their
+{\em graph of instructions} where branching instructions have a
 field [[Instr.cond]] pointing to the appropriate target instruction. 
 \l FIGURE? too early maybe
 %
@@ -1719,8 +1736,8 @@ To build this graph [[patch()]] is leveraging the symbol table [[hash]]
 computed previously
 to find the program counter corresponding to a certain procedure symbol
 (in its [[Sym.value]] field)
-and {\em index} all [[Instr.pc]] to find the instruction pointer corresponding
-to a certain program counter.
+and {\em index} all [[Instr.pc]] to find the instruction pointer ([[Instr*]])
+corresponding to a certain program counter.
 
 
 Once the graph has been built, there is no more need for the notion of
@@ -1745,18 +1762,20 @@ to each instruction and to relocate every branching instructions.
 
 Once [[5l]] has a graph of real code instructions and a list of data
 instructions, it can start to {\em layout} the code and data.
-[[dodata()]] assigns a memory address in [[Sym.value]] to each globals in
-[[datap]] as an offset to the start of the data section.
+[[dodata()]] assigns a memory address in [[Sym.value]] to each 
+data definitions
+\n not global, because can have multiple DATA for one GLOBL
+in [[datap]] as an offset to the start of the data section.
 \l e.g. 014 for hello
 %
 Then, [[dotext()]] does a similar thing for the code instructions.
-For those code instructions [[Instr.pc]] contains now the final code address
+For those code instructions [[Instr.pc]] will contain now the final code address
 of the instruction (and not a virtual program counter anymore).
 \l e.g. 0x1020 for main
 \l so work by side effects, imperative style, on list of instructions
 
 At this point, the size of the code and data sections are known
-and stored respectively in [[textsize]] and [[datsize]].
+and stored respectively in the globals [[textsize]] and [[datsize]].
 %
 [[5l]] can finally call [[asmb()]] to generate the executable and 
 its header. This function uses two helpers functions: one
@@ -1824,10 +1843,11 @@ the ARM code generation of  instructions involving floats.
 %toc:
 Some appendices present the code of non-functional properties:
 the code to help debug [[5l]] itself in Appendix~\ref{chap:debugging-appendix}, the code to manage errors in Appendix~\ref{chap:error}, and
-the code to help profile [[5l]] in Appendix~\ref{chap:profiling-appendix}.
+the code which profiles [[5l]] itself in
+Appendix~\ref{chap:profiling-appendix}.
 %
 Appendix~\ref{chap:libc} contains the code of generic
-utilities used by [[5l]] but which are not specific to [[5l]].
+utility functions used by [[5l]] but which are not specific to [[5l]].
 %
 Appendix~\ref{chap:linker-related-programs} describes the code of small
 programs such as [[nm]] and [[ar]] which are related to the linker.
@@ -2375,6 +2395,7 @@ long	line;
 For more information on line numbers and debugging
 see Chapter~\ref{chap:debugging}.
 
+\bigskip
 %trans:
 Up until now, [[Instr]] is very similar to
 the type used in the \book{Assembler} to represent
@@ -2530,7 +2551,7 @@ Prog*	textp = P;
 // ref<Prog> (end from = textp)
 Prog*	etextp = P;
 @
-\t seems dead, not used, could simplify
+\n seems dead but not, used to link textp in right order
 
 The procedure instructions are chained together with
 another field of [[Instr]]:
@@ -2741,13 +2762,6 @@ out:
 %old: set INITENTRY used to be in main flow after setting firstp/lastp
 % but better here I think
 
-<<[[main()]] initialize globals(arm)>>=
-<<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>
-<<[[main()]] set HEADTYPE, INITTEXT, INITDAT, etc>>
-<<[[main()]] set INITENTRY>>
-@
-\l order important? if not then maybe can be introduced later gradually
-\t explain? or introduce gradually?
 
 
 
@@ -2772,7 +2786,16 @@ if(cout < 0) {
 The error management functions [[diag()]] and [[errorexit()]]
 are described in Appendix~\ref{chap:error}.
 \l ex of output? 
-\l %r is error return code of last syscall I think, put that in error section?
+\t Note percentr is error return code of last syscall I think
+
+
+<<[[main()]] initialize globals(arm)>>=
+<<[[main()]] addlibpath("/{thestring}/lib") or ccroot>>
+<<[[main()]] set HEADTYPE, INITTEXT, INITDAT, etc>>
+<<[[main()]] set INITENTRY>>
+@
+\l order important? if not then maybe can be introduced later gradually
+\t explain? or introduce gradually?
 
 \subsection{Arguments processing}
 
@@ -2825,9 +2848,9 @@ which is the executable format used by \plan:
 
 <<enum headtype(arm)>>=
 /*
- *	-H0				      no header
- *	-H2 -T4128 -R4096	  is plan9 format
- *	-H7				      is elf
+ *	-H0						no header
+ *	-H2 -T4128 -R4096		is plan9 format
+ *	-H7						is elf
  */
 enum Headtype {
      H_NOTHING = 0,
@@ -2857,13 +2880,14 @@ Section~\ref{sec:other-executable-formats}.
 
 
 The executable format dictates 
-the size of the header as well as 
-where the code and data sections will be loaded in memory
+the size of the header, 
+where the code section will be loaded in memory,
+and how the data section will follow the code section,
 by setting the following globals:
 %ocaml: has to be some globals? could not be passed to asmb? or in a struct?
 
 <<global HEADR>>=
-long	HEADR; 		/* length of header */
+long	HEADR; /* length of header */
 @
 \n 32 for a.out (0x20)
 \l long? really?
@@ -2876,7 +2900,7 @@ long	INITTEXT = -1; /* text location */
 \n -T text segment start virtual address (important! e.g. for kernel 0x7c00)
 
 <<global INITRND>>=
-long	INITRND = -1; 		/* data round above text location */
+long	INITRND = -1; /* data round above text location */
 @
 \n -R text segment rounder at r multiple
 
@@ -2903,6 +2927,7 @@ DBG("HEADER = -H%d -T0x%lux -D0x%lux -R0x%lux\n",
         HEADTYPE, INITTEXT, INITDAT, INITRND);
 @
 %old: was -H0x%d but no sense
+\t explain DBG?
 
 Here are the specifics for the [[a.out]] format under \plan:
 
@@ -3064,7 +3089,7 @@ we described in Section~\ref{sec:soft-archi}:
 firstp = prg();
 lastp = firstp;
 
-// Loading (populates firstp/lastp, datap, textp/etextp, and hash)
+// Loading (populates firstp/lasp, datap, textp/etextp, and hash)
 while(*argv)
     objfile(*argv++);
 <<[[main()]] load implicit libraries>>
@@ -3096,7 +3121,7 @@ undef();
 The code first 
 {\em loads} the object files and libraries passed on the command line
 (as well as possibly other ``implicit'' libraries as explained in 
-Section~\ref{sec:loading-libraries-magically}),
+Section~\ref{sec:loading-libraries-magically}), then
 {\em resolve} symbols, 
 {\em generate} the executable, and finally 
 {\em check} if there are still some undefined symbols
@@ -3225,6 +3250,7 @@ objfile(char *file)
 \l rename objfile -> ldobj and ldobj -> ldinstrs, f -> fd?
 \l  as it can actually load a slice of an object, just a procedure
 \n portable function! (ldobj is not though)
+\l explain DBG? used a bit for profiling here.
 
 [[SARMAG]] above stands for [[S]]ize of [[AR]]chive [[MAG]]ic string.
 %
@@ -3297,13 +3323,13 @@ asmb(void)
 
 [[asmb()]] does not take any argument but it uses the global [[cout]],
 which was initialized in [[main()]] with the file descriptor of the 
-executable file to generate.
+executable file, to output data in the executable.
 %
 Note that the order of operations above may seem incorrect.
 The code to generate the header is at the end, which seems paradoxal.
 \l even impossible, but SEEK
-But, the header contains information about the sections:
-their size. So, we first need to know thoses sizes 
+But, the header specifies the size of the sections,
+and So we first need to know thoses sizes
 before generating the header, hence the order of operations.
 \l actually textsize/datasize are known already, but not symsize
 
@@ -3400,15 +3426,16 @@ entryvalue(void)
 \subsection{Text section}
 
 %trans:
-The text section generation is a bit more complicated.
+The text section generation is of course more complicated.
 \l assumes layout code? well redo a bit with pc increment so assume less
 %
 [[asmb()]] iterates over all the code instructions
 and calls [[oplook()]] to get additional information [[o]] about 
 the instruction [[p]].
 Then it calls the important function [[asmout()]] which
-generates actual ARM instructions from [[p]] 
-(and which uses also the global [[cout]] to modify the executable file):
+generates actual ARM instructions from [[p]].
+[[asmout()]] also uses also the global [[cout]] to modify the 
+executable file.
 \l repeat too much the code?
 
 <<[[asmb()]] Text section>>=
@@ -3428,7 +3455,6 @@ for(p = firstp; p != P; p = p->link) {
 
     pc += o->size;
 }
-
 <<[[asmb()]] before cflush, debug>>
 cflush();
 
@@ -3462,9 +3488,9 @@ the generation of multiple ARM instructions.
 Indeed, the instructions of the assembly language of [[5a]], 
 and so the instructions in the object files, 
 do not match exactly ARM instructions.
-For instance the {virtual instruction} [[DIV]] has
+For instance, the {virtual instruction} [[DIV]] has
 no counterpart in the ARM and is converted in a serie of ARM 
-instructions which finishes by calling the function [[_div()]] 
+instructions which ends with the call to the function [[_div()]] 
 of the core C library.
 \t actually noops has rewritten DIV already
 \l same for MOVW, also constraints on immediate constant in ARM but not Asm5
@@ -3493,8 +3519,9 @@ Note that
 [[OFFSET]] is initialized to [[HEADR]] above while
 [[pc]] to [[INITTEXT]].
 %dup: overview/principles
-Indeed, offsets in the executable file are not memory addresses
-as explained in Section~\ref{sec:disk-image-vs-memory-image}.
+Indeed, offsets in the executable and memory addresses
+are different concepts, as explained in 
+Section~\ref{sec:disk-image-vs-memory-image}.
 
 
 
@@ -3509,8 +3536,9 @@ section assumed the layout of code has also been done (via [[dotext()]]).
 %dup: overview/tutorial overview/soft-archi, core-ds/sym
 The [[Sym.value]] field of all data symbols should now
 contain the address of the data 
-as an offset to the start of the data section, and 
-[[datsize]] should have been set.
+as an offset to the start of the data section, 
+\t (INITDAT)? or set actually by asmb?
+and [[datsize]] should have been set.
 
 
 \ifallcode
@@ -3542,7 +3570,7 @@ for(t = 0; t < datsize; t += sizeof(buf)-100) {
 \t factorize code for those sizeof(buf)-100
 \t no use of datap?
 
-Note that the code seeks to [[HEADR+textsize]], which
+Note again that the code seeks to [[HEADR+textsize]], which
 may not be a page boundary. This is fine
 %dup: overview/principles, previous section
 since offsets in the executable file are not memory addresses
@@ -3692,7 +3720,7 @@ long ipc;
 [[ipc]] will be used for {relocating} branching instructions
 as we will see in Section~\ref{sec:relocating}.
 
-\section{Instructions input, [[ldobj()]]}
+\section{Object code input, [[ldobj()]]}
 
 %trans:
 We can now see the code of [[ldobj()]].
@@ -4005,7 +4033,7 @@ The code to fill as needed the input buffer is below:
 
 <<[[ldobj()]] read if needed in loop:, adjust bloc and bsize>>=
 r = bsize - bloc;
-if(r < 100 && r < c) {		/* enough for largest prog */
+if(r < 100 && r < c) {		/* enough for largest instruction */
     bsize = readsome(f, buf.ibuf, bloc, bsize, c);
     if(bsize == nil)
         goto eof;
@@ -4013,9 +4041,10 @@ if(r < 100 && r < c) {		/* enough for largest prog */
     goto loop;
 }
 @
-\l need goto loop? can not just fallthrough?
+%old: comment was "largest prog" but Prog -> Instr so I changed it.
 %bug? if filename or string bigger than 100 in ANAME?
 % no because the code above is only for for regular opcodes, not ANAME
+\l need goto loop? can not just fallthrough?
 
 %dup: (and adapted) from Assembler
 \begin{figure}[!]\centering
@@ -4370,7 +4399,7 @@ if(k == N_INTERN)
 Once an instruction [[p]] with its opcode and operands have been read, 
 %
 [[ldobj()]] looks at the opcode and modifies different
-globals in a [[switch]] depending on the opcode value.
+globals in a [[switch]] on the opcode value.
 %toc:
 The following sections describe the different [[case]]s of this
 [[switch]] which are mostly concerned with {pseudo-instructions}.
@@ -4389,7 +4418,7 @@ default:
 casedef:
     <<[[ldobj()]] in switch opcode default case, if skip>>
 
-    // relocation, local offset becomes global
+    // relocation
     if(p->to.type == D_BRANCH)
         p->to.offset += ipc;
 
@@ -4504,7 +4533,7 @@ are updated. In particular,
 the virtual program counter of the procedure,
 %
 which will be useful for resolving branching instructions involving
-aprocedure names later in Chapter~\ref{chap:resolving}.
+the procedure's name later in Chapter~\ref{chap:resolving}.
 \l later Sym.value will be final address
 \l Sym.value = Instr.pc here
 
