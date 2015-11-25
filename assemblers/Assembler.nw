@@ -234,11 +234,13 @@ between an object file and an executable?
 %tags used in this file for different recurring themes:
  %turing: fundamental opcodes
  %self-ref: opcodes to implement the assembler itself!
+ %style: Asm5 conventions
  %compiler: give idea of what 5c does, what 5c needs
  %kernel: for features essential to implement a kernel
+ %
  %real-world: to relate to other assemblers
- %style: Asm5 conventions
  %ocaml: to give a hint on how rewriting C in OCaml could improve things
+ %alt: alternative technique
  %old: for original code I changed/removed to be clearer
  %toc: %trans: %dup: %example:
 
@@ -248,7 +250,7 @@ between an object file and an executable?
 %   with "sentinel" for defensive programming (AXXX), 
 %   and end marker enum trick (ALAST)
 % - circular/spreaded symbol table with small symbol index (1 byte)
-% - tree with flat list and special pop marker (hist)
+% - stack/tree with flat list and special pop marker (hist)
 % - buffer
 % - bitsets and lots of bit tricks (abuse though), abuse int also for NONE
 
@@ -447,6 +449,7 @@ Line 3 then {links} the object file and generates the final
 ARM binary {executable} [[hello]].
 Line 4, which assumes you are under an ARM machine (e.g. a Raspberry Pi),
 {launchs} the program.
+\l ref Raspberry?
 
 Note that it is easy under \plan to {cross compile} from another architecture;
 you can use the same commands, [[5a]], [[5l]], etc.
@@ -568,7 +571,7 @@ written in an {assembly} programming language into
 {machine code}, or into an {object code} close to machine code.
 \l figure? just box with foo.s -> foo.5 and source file and object file subtitle
 %
-An {\em assembly} langage is a low-level programming language mimicing
+An {\em assembly langage} is a low-level programming language mimicing
 closely the {instructions} of a machine, but using a {textual}
 format far more convenient for the programmer than the
 {binary} format used internally by computers.
@@ -862,6 +865,8 @@ We now have enough background to present the [[helloworld.s]] program:
 @
 %$
 \n No libc! Using a simple _main. As simple as possible.
+\n But this works only because we use Dollar.hello(SB) not hello(SB)
+\n  otherwise would have to set R12 appropriately.
 \l can also maybe show one that use libc, use 5c -S hello.c
 \t can do with SP instead of R13 so less leaky abstraction 4(R13)?
 \l note that we call PWRITE syscall directly, not pwrite(), subtle
@@ -889,7 +894,7 @@ Appendix~\ref{chap:examples} contains more examples of assembly programs.
 \subsection{Pseudo-instructions}
 \label{sec:pseudo-instructions}
 
-The [[helloworld.s]] program defines three {symbols}:
+The [[helloworld.s]] program defines three {\em symbols}:
 two {procedures} [[_main()]] and [[exit()]], and one {global} [[hello]].
 %
 The two procedures are introduced via the [[TEXT]] 
@@ -956,6 +961,7 @@ Labels are similar to symbols in that they allow to give
 a symbolic name to a memory area. Labels are restricted to code area
 though and are locals to an assembly file. There are used for
 intra-procedural jumps.
+\t locals -> private?
 \l also not suffixed by SB
 \n how actually translated? in absolute (virtual) code address.
 
@@ -964,7 +970,7 @@ The syntax for {comments} in Asm9 are the same than in C
 
 \subsection{Assignments}
 
-Line 6 places the {address} of the [[hello]] global
+Line 6 places the {\em address} of the [[hello]] global
 (suffixed again by [[(SB)]] which we will explain later)
 in the {register} [[R2]]. 
 There are 16 ARM registers named [[R0]] to [[R15]].
@@ -1000,7 +1006,7 @@ which is also equivalent to this other C statement [[*(B+O) = N]].
 [[O]] is called the {\em offset}, which is applied to 
 a pointer [[B]] called the {\em base}.
 This addressing mode is called {\em indirect with offset}.
-The [[()]] around the register corresponds rougly to the 
+The [[()]] around the register corresponds roughly to the 
 C {dereferencing} operator [[*]].
 \n why not MOVB 'W', 6(R2)? linker limitations and RISC LDR/STR (talked later)
 
@@ -1010,7 +1016,10 @@ and offset addressing mode we have just seen.
 [[SB]] stands for {\em static base} register.
 It refers to the beginning of the address space of the program.
 \n more on this later, it's a pseudo, it's not needed, it's weird
-In Asm9 all references to global data and procedures
+\n  because for TEXT reference, SB is actually not, but for GLOBL it is
+\n  and it is actually not start of address space but INITDAT+BIG (see 5l)
+\n  when used as hello(SB) (but not when used as dollar.hello(SB), hmm)
+In Asm9 all references to globals and procedures
 are written as offsets to [[SB]] 
 \t offset cos in the end symbols will have static address and so static offset?
 (for definition references see Line 1, 38, 48, and 49, and 
@@ -1020,7 +1029,7 @@ The instruction [[MOVW foo(SB), R1]] will move the {\em content}
 at the address denoted by the symbol [[foo]] into [[R1]].
 The instruction [[MOVW $foo(SB), R1]] %$
 will store the {\em address} denoted by the symbol [[foo]] in [[R1]].
-The \$ in that case corresponds rougly to the 
+The \$ in that case corresponds roughly to the 
 C {address} operator [[&]].
 \l ugly to overload dollar which is already used for constants? or because
 \l  in the end it will be a constant, it will be really an offset
@@ -1033,7 +1042,7 @@ C {address} operator [[&]].
 
 [[SB]] is actually one of the few {\em pseudo-registers} of Asm9.
 [[PC]] is another one which corresponds to the
-(virtual) {\em program counter}. 
+{\em virtual program counter}. 
 Similar to pseudo-instructions, pseudo-registers
 do not correspond exactly to machine registers.
 Indeed, the ARM has already a hardware register, [[R15]], which 
@@ -1051,6 +1060,8 @@ It is equivalent to [[B 8(R15)]].
 Why using pseudo-registers? The advantage of using [[2(PC)]]
 instead of [[8(R15)]] in Asm5 may look small. But, on some
 architectures the size of instructions is actually variable.
+\l actually how do in other assembler? allow B with PC?
+\n actually also variable with Asm5 as 1 instr may lead to multiple instr
 It is not trivial for instance on x86 to compute the number
 of bytes two arbitrary instructions are using.
 %
@@ -1104,8 +1115,9 @@ Line 6 through 18 set characters in the [[hello]] global array of characters.
 
 We can now examine Line 20 through 29 which build the {arguments} for the
 system call performed Line 31 (with the software interrupt instruction
-[[SWI]]). Arguments, in function calls or system calls, are by {convention}
-in \plan hold primarily in the stack. We will see later that
+[[SWI]]). {\em Arguments}, in function calls or system calls, 
+are by {convention}
+in \plan hold primarily in the {\em stack}. We will see later that
 [[R0]] plays also a special role regarding arguments because of 
 some C and kernel {\em calling conventions}.
 \l convention to be in stack, but convenient, for recursive
@@ -1114,7 +1126,7 @@ As said in the previous section, [[R13]] is the ARM stack pointer register.
 \n in the linker, so simpler use directly R13 to minimize explanations
 \t and also because I dont understand how to use SP properly ... hmmm
 Figure~\ref{fig:stack-start}
-is a representation of the stack when the [[hello]] program
+represents the stack when the [[hello]] program
 is loaded in memory by the kernel
 (the stack grows downward so high addresses are at the top in the diagram).
 \n OSTEP book uses stack growing upward
@@ -1139,7 +1151,7 @@ and especially the code of [[initmemory()]] in [[5i]].
 }:
 
 \begin{verbatim}
-$ 5i helloa
+$ 5i hello
 5i> $r
 ...
 R0  #7fffff70 R1  #7ffffffc R2  #0        R3  #0
@@ -1158,7 +1170,7 @@ R12 #0        R13 #7fffff58 R14 #0        R15 #1020
 %    reg.r[1] = STACKTOP-4;	/* Plan 9 profiling clock (why & why in R1?) */
 
 
-Remember that the second operand to the [[TEXT]] pseudo-instruction
+Remember that the second operand of the [[TEXT]] pseudo-instruction
 is the number of bytes this procedure will need for its {locals} in the {stack}.
 \l locals, arguments
 So, when assembled the [[TEXT]] pseudo-instruction Line~1
@@ -1167,7 +1179,7 @@ In fact, the actual generated instruction decrements R13 by 24;
 \l in fact it also does also some magic with R14
 we will see later why we need an extra word in the stack before the arguments.
 %
-Figure~\ref{fig:stack-line2} is the representation of the stack after Line~1
+Figure~\ref{fig:stack-line2} represents the stack after Line~1
 when the processor starts to execute the instruction Line~2.
 
 \begin{figure}[!]\centering
@@ -1233,7 +1245,7 @@ which defines all those syscall codes.
 The [[SWI]] instruction Line~31 then performs the system call
 and jumps in the kernel.
 %
-[[SWI]] has one operand in the ARM used to specify which entry
+[[SWI]] has one operand in the ARM, which is used to specify which entry
 in the {\em interrupt table} to go to, but \plan instead
 uses [[R0]] for that purpose. So, the operand of [[SWI]] is
 actually not used under \plan, hence the constant 0 passed
@@ -1249,17 +1261,17 @@ use the [[BL]] instruction which stands for {\em branch and link}.
 %
 Some processors such as the x86 have a [[CALL]] instruction 
 which when executed push on the stack the value of the program counter
-and then jump/branch to the code of the callee.
+and then jump/branch to the code of the {\em callee}.
 \l put diagram of recursive call here? how the magic works!
 Then, a corresponding [[RET]] instruction in the callee
 will pop back this value in the program counter to return back
-to the caller.
+to the {\em caller}.
 \t and add 4? or it's done before? see code of BL in Machine.nw
 \l classic use of stack, can do recursive functions like that
 %
 In the ARM, [[BL]] instead saves the value of the program
 counter [[R15]] in the special register [[R14]] 
-called the {\em link register}, and then jump to the callee. 
+called the {\em link register}, and then jumps to the callee. 
 
 
 The use of a special register to hold {return addresses}
@@ -1270,7 +1282,7 @@ Indeed, when a function does not call other functions,
 in which case it is called a {\em leaf} function, the value
 of [[R14]] does not need to be saved and so returning
 to the caller can be done quickly by setting the program
-counter to the value in the link register via: [[B (R14)]].
+counter to the value in the link register with [[B (R14)]].
 \l or MOVW R14, R15 but apparently 5l does the B above.
 %
 If the function is not a leaf, then the value in [[R14]]
@@ -1325,6 +1337,8 @@ TEXT foo(SB), $0   MOVW R14, 0(SP)
 \caption{Machine code for pseudo/virtual instructions [[TEXT]] and [[RET]]}
 \label{fig:virtual-text-ret}
 \end{figure}
+\t need to have dollar0 ? but then already means does not call anything no?
+\t  why need minus 4 on SP then since anyway we use space in caller?
 \t actually need -4? 
 \t but SP is virtual above? or R13?
 \t actually for TEXT it is a single MOVW.W R14, #-4(R13) 
@@ -1337,16 +1351,16 @@ TEXT foo(SB), $0   MOVW R14, 0(SP)
 
 The virtual instruction [[RET]], just like the 
 pseudo-instruction [[TEXT]], or the pseudo-registers, allows the programmer
-to think in slightly higher-level term and let the computer
+to think in slightly higher-level terms and let the computer
 do the appropriate optimizations.
 \l TEXT is almost a virtual too. maybe say pseudo cos not just serie of instr
 \l  but also introduce a label (jarod)
 %
 In fact, [[MOVW]] is also a virtual instruction. It hides some 
 architecture restrictions and peculiarities regarding memory accesses.
-in Asm5 one can use the very general [[MOV]]
+in Asm5 one can use the very general [[MOVW]]
 even though the ARM processor supports only the
-more basics and separate [[LOAD]] and [[STORE]] instructions.
+more basics and separate [[LDR]] (load) and [[STR]] (store) instructions.
 \n actually there is a MOV and it's LDR and STR but same basic idea
 \n and also MOVW generalizes MSR and MRS that mov StatusRegister
 \l but a bit leaky abstraction because the linker puts later some restrictions
@@ -1356,10 +1370,10 @@ more basics and separate [[LOAD]] and [[STORE]] instructions.
 \t  but also specify size locals which ultimately becomes an ARM instruction
 
 Instructions Line~40 though 44 are similar to the instructions
-we have seen before. They perform the system call [[exits(0)]]
+we have seen before; they perform the system call [[exits(0)]]
 which terminates the program. This is why a few instructions
-have been marked with a comment indicating those instructions
-can not be reached since the program will have exited already
+have been marked with a comment indicating the instruction
+could not be reached since the program will have exited already
 (and so will not perform the [[RET]]).
 
 \subsection{C calling conventions}
@@ -1373,7 +1387,7 @@ interrupt handler), is just a {\em convention}.
 %
 The ARM processor does not dictate any specific way to call procedures.
 In fact, it does not even have a notion of procedure.
-It only provides the [[BL]] machine instruction which saves 
+It only provides the [[BL]] machine instruction which just saves 
 [[R15]] in [[R14]]. The rest is a design choice.
 
 The calling conventions we use in this tutorial come from the
@@ -1446,7 +1460,7 @@ the stack arguments could be ``below'' the stack pointer,
 the responsability to manage the return address in the stack
 could be done by the callee instead of the caller.
 The actual {\em C calling conventions} implemented by [[5c]]
-are though a nice compromise between simplicity and speed.
+are a nice compromise between simplicity and speed.
 
 Because most assembly code interoperate with C code,
 the C calling conventions are also the {\em assembly calling conventions}
@@ -1485,8 +1499,9 @@ less than 8 bytes.
 \l a bit weird those constraints and conventions
 
 To define data which takes more than 8 bytes, one needs
-to use multiple [[DATA]] instructions. For instance
-to define completely [[hello]], which would remove the need
+to use multiple [[DATA]] instructions.
+%
+For instance, to define completely [[hello]], which would remove the need
 for Line~6 to 18 (added for educational purposes in this tutorial),
 one could have done instead:
 
@@ -1742,8 +1757,8 @@ Note that Asm9 uses a left-to-right assignment syntax. For moves,
 [[MOVW (R1), R2]] means moving the content at
 the address denoted by [[R1]] into [[R2]]. The same
 is true for other instructions such as [[ADD]] where the
-destination register is the last operand and the sources the two
-first operands.
+destination register is the last operand and the sources the first two
+operands.
 
 
 \l take some examples, e.g. start-KZERO(SB), and explain? see comment in .tex
@@ -1776,8 +1791,8 @@ first operands.
 
 Asm9 has a few more features beyond mnemonics and symbolic addresses:
 \begin{itemize}
-\item {\em constant  expressions} as operands, e.g. \$[[1<<6|3]],
-which are evaluated at {assembly time}.
+\item {\em constant  expressions} as operands, e.g. \$[[(1<<6|3)]],
+which are evaluated at {assemble time}.
 \t see Appendix for example of use?
 
 \item an embedded {\em macro-processor} similar to [[cpp]] with
@@ -1837,10 +1852,12 @@ an object file contains the {serialized form} of the
 
 Because an Asm5 file is essentially a list of instructions,
 its serialized form is simply a concatenation of serialized instructions.
-The resolution of label addresses is done by the assembler,
+The {resolution} of label addresses is done by the assembler,
 so label definitions do not need to be serialized.
 Label references in branching code are transformed in
-absolute (virtual) addresses.
+absolute addresses.
+\l absolute but in terms of virtual program counter scale, and starts a 0
+\l  so will need to be relocated
 \n NO concrete offsets to the [[PC]] pseudo-register.
 \t but still need be relocated when concatenated
 
@@ -1851,7 +1868,9 @@ have the same form: an opcode followed by 0 to 3 operands.
 One byte is enough to encode the opcode
 on the ARM since there are far less than 256 ARM opcodes (and
 very few pseudo-opcodes). Indeed the ARM is a RISC machine
-([[8a]] on the opposite needs 2 bytes to represent an x86 opcode).
+\footnote{
+[[8a]] on the opposite needs 2 bytes to represent an x86 opcode.
+}.
 %
 Another byte is used to encode the {\em kind} of the first operand
 (e.g. an integer constant, a register, a memory address, nothing) followed by
@@ -2045,7 +2064,7 @@ the function [[main()]] calls [[assemble()]] with the name
 of the assembly file to process. 
 %
 [[assemble()]], after further initialisations,
-uses then a two-pass algorithm and so calls 
+uses then a {two-pass} algorithm and so calls 
 [[yyparse()]], the function generated by [[yacc]] from the Asm5 grammar,
 two times. It also modifies the global [[pass]]: for the first
 call to [[yyparse()]] the value of [[pass]] is 1, and for the second
@@ -2311,10 +2330,10 @@ document.
 The [[AXXX]] opcode represents the {\em invalid opcode}. It is put in
 first position in the enumeration probably as a form of defensive programming.
 %ocaml: ugly, should not need that if had strong enum case checker
-%
+
 [[ALAST]] is an {\em end marker}: a C idiom which makes it easy to loop
 over all the opcodes or to declare an array of opcodes.
-%
+
 [[ANOP]] is a {virtual instruction} removed by [[5l]]. It is
 occasionally used by the assembly generator in [[5c]] to
 represent an instruction without any effect.
@@ -2441,8 +2460,8 @@ The union in [[Gen]] represents the {\em value} of the operand, which has to
 be interpreted in different ways depending on the kind of the 
 operand: 
 for integer constants ([[D_CONST]]) the [[offset]] field is used,
-for string constants ([[D_SCONST]]) the [[sval]] field,
-and for float constants ([[D_FCONST]]) the [[dval]] field.
+for string constants ([[D_SCONST]]) it is the [[sval]] field,
+and for float constants ([[D_FCONST]]) the [[dval]] field is used.
 Remember that characters are converted in integers so
 there is no need for a [[D_CHARCONST]] and [[cval]] field.
 %
@@ -2455,8 +2474,9 @@ as we will see soon.
 % see comment below
 
 
-Strings in Asm5 are limited to 8 characters (but we will see
-later how to overcome this limitation):
+Strings in Asm5 are limited to 8 characters 
+(but we will see later how to overcome this limitation):
+\l really? have seen already idea of multiple DATA
 % from 5.out.h and 8.out.h
 <<constant NSNAME>>=
 #define	NSNAME		8
@@ -2548,15 +2568,18 @@ Depending on the number of operands, here are the constraints on
 the value of those parameters:
 \begin{itemize}
 \item 0 operand: [[opd1]] and [[opd3]] are [[&nullgen]], [[reg]] is [[R_NONE]]
+\l could be different than nullgen? after all know not used?
 \item 1 operand: [[opd3]] is [[&nullgen]], [[reg]] is [[R_NONE]]
 \item 2 operands: [[reg]] is [[R_NONE]]
 \item 3 operands: no constraint, every parameter is used
 \end{itemize}
 
+
 \l speak now about the 2second register which is abused for: TEXT/DATA attr?
 
 \section{Tokens and [[itab]]}
 \label{sec:token}
+\label{sec:union}
 
 The Yacc-based parser of [[5a]], called via [[yyparse()]],
 is taking as input a set of {tokens}.
@@ -2643,7 +2666,7 @@ Here is an excerpt of the [[y.tab.h]] file generated by [[yacc]]:
 %ocaml: ugly sugar, would be simpler have a simple ADT hiding all this shit
 
 The values of those integers are high to not conflict with
-the values of regular {unicode} characters. 
+the values of regular {\em unicode} characters. 
 Indeed [[yylex()]]
 can return single-character tokens (e.g. [[';']]) in which case there is no
 need to give them a name.
@@ -2697,6 +2720,7 @@ struct Itab
     ushort	value;
 };
 @
+\t rename type to code?
 \t why Itab? Instruction table? it's not just for instruction, ren ttab?
 \t or mnemonics?
 \l  fregisters|sysregisters|sym_kind(pseudo-register) |operand_kind||...
@@ -2898,6 +2922,21 @@ return sym;
 @
 %old: was memmove but memcpy better (jarod)
 
+%The function below is called by [[lookup()]] when
+%a new symbol is created to reset some of its fields:
+
+<<function syminit>>=
+void
+syminit(Sym *sym)
+{
+    sym->type = LNAME;
+    sym->value = 0;
+}
+@
+\t not set symidx to 0??
+
+
+
 The hashing code iterates over the characters in [[symb]]
 until the end-of-string character ([[0]]) and also compute the length
 of the symbol in [[len]]:
@@ -2914,6 +2953,8 @@ h %= NHASH;
 @
 
 
+
+
 The symbol table [[hash]] and [[Sym]] are used (some could say abused) to 
 represent and keep track of many different things in [[5a]]:
 
@@ -2924,7 +2965,7 @@ at the label definition
 %ocaml: only thing needed
 
 \item {\em symbols}, for procedures
-([[TEXT foo(SB)]]) and globals ([[GLOBL hello(SB)]]),
+(e.g. [[TEXT foo(SB)]]) and globals (e.g. [[GLOBL hello(SB)]]),
 \l and also parameters and locals!
 in which case [[Sym.value]] is not used since the address
 of global symbols are resolved by [[5l]].
@@ -2946,13 +2987,13 @@ the text of the macro as we will see in Section~\ref{sec:macro-sym-field}.
 %ocaml: external cpp
 
 \item {\em symbolic constants}, e.g. [[RTMP = 10]], 
-in which case [[Sym.value]] contain the constant value
+in which case [[Sym.value]] contains the constant value
 %ocaml: useless feature
 
 \item {\em predefined identifiers}, 
 \l use mnemonics?
-for opcodes ([[AMOV]]) and registers ([[R1]]), in which case
-[[Sym.value]] contain the appropriate enumeration value.
+for opcodes (e.g. [[AMOV]]) and registers (e.g. [[R1]]), in which case
+[[Sym.value]] contains the appropriate enumeration value.
 \l ugly abuse
 %ocaml: do in lexer instead, not abuse symbol table
 
@@ -2987,13 +3028,15 @@ is used to also store the token code of the identifier
 //enum<token_code> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
 ushort	type;
 @
+\t also rename code?
 \l see also itab[i].type and itab[i].value
 \l used by?
 
 
 
-[[Sym]] is part of the token union we have seen in the previous
-sections. Indeed the token value for 
+[[Sym]] is part of the token union we have seen in the 
+previous section. %clever \ref{sec:union}
+Indeed the token value for 
 symbols ([[LNAME]]), 
 labels ([[LLAB]]), 
 and symbolic constants ([[LVAR]])
@@ -3004,21 +3047,29 @@ Sym    *sym;    // for LNAME/LLAB/LVAR
 @
 \t mutual ref with sym here where sym has itself a type that is the token_kind
 
+[[Sym]] is also an operand part:
 
-
-The function below is called by [[lookup()]] when
-a new symbol is created to reset some of its fields:
-
-<<function syminit>>=
-void
-syminit(Sym *sym)
-{
-    sym->type = LNAME;
-    sym->value = 0;
-}
+<<[[Gen]] other fields>>=
+// option<ref<Sym>> (owner = hash)
+Sym*	sym;
 @
-\t not set symidx to 0??
+%less: maybe should rename this field 'name'? and then use name_kind?
+%ocaml: why need link? name not enough? need value just for labels
 
+This field is used for operands involving symbols or labels.
+For instance in [[hello+4(SB)]], [[Gen.sym]] will point
+to the symbol [[hello]] in the global [[hash]] table.
+\t but what for? just for the name? symkind is part of Gen too
+\t  For linker I understand the need because has Sym has pc, memory address,
+\t  section, but in assembler? needs what properties of symbol?
+\t  I think it's just for the name, to share a string ... so save a bit space.
+\t  and also for labels it is useful to access its pc value.
+
+
+
+\t FIGURE where see pointers, so symbol table like a tree
+\l  and then one instr with some pointers! maybe two operands
+\l  with two sympols (even though linker will say no)
 
 %dead:
 %<<[[Sym]] other fields>>=
@@ -3037,32 +3088,11 @@ syminit(Sym *sym)
 \section{[[Sym_kind]]}
 
 %trans:
-Now that we have seen the [[Sym]] structure,
-%
-we can present the [[sym]] field of the [[Gen]] structure:
+%Now that we have seen the [[Sym]] structure,
+%we can present the [[sym]] field of the [[Gen]] structure:
 
-<<[[Gen]] other fields>>=
-// option<ref<Sym>> (owner = hash)
-Sym*	sym;
-@
-%less: maybe should rename this field 'name'? and then use name_kind?
-\t actually also one of the union token case
-%ocaml: why need link? name not enough? need value just for labels
-
-\t FIGURE where see pointers, so symbol table like a tree
-\l  and then one instr with some pointers! maybe two operands
-\l  with two sympols (even though linker will say no)
-
-This field is used for operands involving symbols or labels.
-For instance in [[hello+4(SB)]], [[Gen.sym]] will point
-to the symbol [[hello]] in the global [[hash]] table.
-\t but what for? just for the name? symkind is part of Gen too
-\t  For linker I understand the need because has Sym has pc, memory address,
-\t  section, but in assembler? needs what properties of symbol?
-\t  I think it's just for the name, to share a string ... so save a bit space.
-\t  and also for labels it is useful to access its pc value.
-%
-An additional [[Gen]] field is used to represent
+For operands involving symbols, e.g. [[hello+4(SB)]],
+an additional [[Gen]] field is used to represent
 the {\em kind} of the symbol:
 
 <<[[Gen]] other fields>>=
@@ -3334,7 +3364,7 @@ if(getwd(pathname, 99) == 0) {
 \section{[[assemble()]]}
 
 Because one can reference labels defined later in an assembly file,
-a common approach to assembling is to use a two-pass algorithm.
+a common approach for assembling is to use a {\em two-pass} algorithm.
 The first pass focuses on the {\em definitions} of labels;
 by the end of the file the values of all labels are known.
 The second pass focuses on the {\em uses} of labels and leverages
@@ -3380,7 +3410,7 @@ assemble(char *infile)
 
     pinit(infile);
     <<[[assemble()]] init Dlist after pinit>>
-    yyparse(); // calls outcode() but does nothing when pass == 1
+    yyparse(); // calls outcode() but does almost nothing when pass == 1
 
     if(nerrors) {
         cclean();
@@ -3476,7 +3506,7 @@ The remaining code in [[assemble()]] is mostly
 filename manipulations and modifying globals used
 for [[#include]] processing.
 Those filename manipulations start with the temporary [[ofile]]
-used to compute [[outfile]] later:
+which is used to compute [[outfile]] later:
 <<[[assemble()]] locals>>=
 char ofile[100];
 @
@@ -3547,7 +3577,7 @@ pipeline, starting in this chapter with the input functions.
 
 %toc:
 We have mentioned before [[pinit()]] which initializes
-globals related to input. We will also describe below
+globals related to input. We will also describe in this chapter
 [[GETC()]], which uses those globals,
 and is called by the lexer [[yylex()]] (called itself
 by the parser [[yyparse()]]) to get the next character from
@@ -3586,8 +3616,8 @@ Sym *s;
 
 \label{sec:lineno}
 The [[lineno]] global tracks the current line number and will be
-incremented by the lexer for each newlines. It is used
-in the object code generator to remember where each
+incremented by the lexer after each newlines. It is used
+in the object code generator to remember from where each
 instruction comes from. This will be useful for debugging.
 
 <<global lineno>>=
@@ -5890,7 +5920,7 @@ the \book{Emulator}.
 Here are the {bitwise} {boolean logic} opcodes of Asm5,
 %trans:
 which are enumeration cases of the [[Opcode]] type
-overviewed in Section~\ref{sec:opcode}:
+(overviewed in Section~\ref{sec:opcode}):
 
 <<[[Opcode]] cases, logic opcodes>>=
 AAND,
@@ -6406,15 +6436,19 @@ AB,  // =~ JMP
 "B",		LBRANCH, AB,
 @
 
-The operand of a branch is either
-an offset to the PC pseudo-register (e.g. [[B 4(PC)]]), or 
-a label (e.g. [[B later]]), 
-via the [[rel]] (register or label) non-terminal below, or
+The operand of a branch can be either:
+\begin{itemize}
+\item an offset to the PC pseudo-register (e.g. [[B 4(PC)]]),
+\item a label (e.g. [[B later]]),
 \l D_BRANCH
-a name/symbol (e.g. [[B foo(SB)]]) or finally
-an indirect register (e.g. [[B (R3)]]), 
-via [[nireg]] (name or indirect register) below:
+\item a symbol (e.g. [[B foo(SB)]]),
+\item an indirect register (e.g. [[B (R3)]]).
 \l D_OREG
+\end{itemize}
+
+The first two cases are covered by the 
+the [[rel]] (register or label) non-terminal below,
+the last two cases by [[nireg]] (name or indirect register).
 
 <<inst rule(arm)>>=
 /*
@@ -6454,7 +6488,7 @@ or infinite loops.
 \n even BL would not help because BL is almost like a B
 
 The conditional jump instruction is usually preceded
-by a {comparison} instruction.
+by a {\em comparison instruction}.
 The following opcode allows to ``compare'' two operands in Asm5:
 
 <<[[Opcode]] cases, comparison opcodes>>=
@@ -6566,7 +6600,8 @@ the ARM provides a more
 general approach to conditional jump where {\em every instruction
 can be conditionally executed} as explained later in
 Section~\ref{sec:cond-exec}.
-The opcodes above are thus translated by [[5l]] in the [[B]] ARM instruction
+The opcodes above are thus translated by [[5l]] in the [[B]] instruction
+\l note that this is done by 5l, not 5a, actually 5a normalize differently
 with special bits set to mark the instruction for conditional execution.
 %
 Similar to the bitshift operations, Asm5 provides
@@ -6580,7 +6615,7 @@ expect from an assembly language.
 
 There are a few additional Asm5 comparison opcodes similar to
 [[CMP]] mimicing ARM instructions, but they
-are less useful. Some of them again are not even used by [[5c]]:
+are less useful. Some of them, again, are not even used by [[5c]]:
 
 <<[[Opcode]] cases, comparison opcodes>>=
 ATST,
@@ -6640,17 +6675,20 @@ language, but from a software
 engineering perspective they are tremendously useful.
 Indeed, with functions one can decompose a big program 
 in multiple independent parts which can be programmed
-and understood in isolation.
+and understood in {\em isolation}.
 %
-Because those functions though must use and share the same
+Because those functions though must use and {\em share} the same
 machine registers, one needs to setup some {\em conventions}
-on how to use and {\em save} those registers so that code of one
+on how to use and {save} those registers so that code of one
 function can be programmed independently of the code of 
 another function.
 %
-In \plan the convention is as follows: ``a subroutine is responsible
+In \plan, the convention is as follows: 
+\begin{quote}
+``a subroutine is responsible
 for saving its own registers, and therefore is free to use
 any registers without saving them''. 
+  \end{quote}
 \n from asm.pdf
 This convention is also known as ``caller saves''. 
 %
@@ -6661,7 +6699,7 @@ the register [[R1]] somewhere if it plans to use its value
 after the call to [[bar]], because [[bar]] could have overwritten
 the value in [[R1]].
 %
-The stack is usually used to save the values in those registers.
+The stack is usually used to save the values of those registers.
 
 %dup: from overview/hello/call-stack
 One needs also to setup {\em calling conventions} on how
@@ -6682,7 +6720,7 @@ Asm5 provides the virtual instruction [[RET]] to make it
 easier for the programmer to manage the stack when returing
 from a function. Indeed, [[RET]] abstracts
 away the differences between leaf and non-leaf functions
-as explained in Section~\ref{sec:ret}:
+(as explained in Section~\ref{sec:ret}):
 
 <<[[Opcode]] cases, branching opcodes>>=
 ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(SP), R15
@@ -6725,6 +6763,7 @@ ASWI, // syscall
 | LSWI cond gen { outcode($1, $2, &nullgen, R_NONE, &$3); }
 @
 %$
+\l could be more restrictive than gen?
 %old: was | LTYPE6 cond comma gen { outcode($1, $2, &nullgen, R_NONE, &$4); }
 % but in plan9 the argument is not used so I originally simplified by
 % removing the operand. Moreover 9syscall/mkfile was doing weird things 
@@ -6790,7 +6829,7 @@ followed by a colon:
 
 %style:
 Even though one could have multiple label definitions on a line,
-or even labels and machine instructions on the same line, it is
+or even labels and instructions on the same line, it is
 a common practice to put the label definition alone on its own line,
 in the first column.
 
@@ -6875,7 +6914,7 @@ Most operand rules have the [[genval]] type:
 
 In fact, [[genval]] is not really a type
 but the name of one of the field of the Yacc [[%union]]
-declaration described partially in Section~\ref{sec:token}:
+declaration (described partially in Section~\ref{sec:token}):
 
 <<union declaration other fields(arm)>>=
 Gen    genval;
@@ -6908,11 +6947,12 @@ gen:
   ximm
 | shift
 | reg
+<<more gen rule>>
 @
 
 For now [[gen]] is almost identical to [[imsr]], 
 except for the [[ximm]] (extended immediate) vs [[imm]] which we will
-explain soon, but we will see later also extensions to the [[gen]] rule.
+explain soon, but we will see later many extensions to the [[gen]] rule.
 
 <<type declarations(arm)>>=
 %type   <genval>   ximm
@@ -7075,7 +7115,7 @@ Note that the ARM uses fixed-length instructions of 32 bits.
 Because a few of those 32 bits are used to encode the opcode 
 and a few more to encode the other operands, the range
 of the Asm5 constants is limited.
-For the arithmetic instructions, only 12 bits of the instruction
+For arithmetic instructions, only 12 bits of the instruction
 can be used for the
 constant, so in theory only constants between 0 and 4096
 could be represented. 
@@ -7092,7 +7132,7 @@ the powers of 2 between 0 and 31 can be expressed, which
 \n 4 bits so 16 shift _plus_ 8 bits for constant, not enough for all power? Yes,
 \n see url below, 4 bits rotation is special too!
 is very useful in operations involving bitsets or bitmasks.
-See the \book{Emulator} for more information
+See the \book{Emulator} and \book{Linker} for more information
 or \url{http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/}
 which is an excellent tutorial on the topic.
 \l also linker book
@@ -7103,7 +7143,7 @@ which is an excellent tutorial on the topic.
 \t but nice that Asm5 hides again those constraints.
 
 [[MOV]]s instructions, which use the [[gen]] non-terminal
-as operand, which derives [[ximm]], can also take a constant as an
+as operand (which derives [[ximm]]) can also take a constant as an
 operand:
 
 <<ximm rule>>=
@@ -7187,7 +7227,7 @@ shift:
 %self-ref:
 \l use bitshift op in the code to handle bitshift, also use bitwise |, 
 
-This combines a register (a [[D_REG]]) and an immediate constant
+A shifted-register combines a register (a [[D_REG]]) and an immediate constant
 (a [[D_CONST]]) in a new kind of operand:
 \n in fact can be two D_REG rcon is register or con
 
@@ -7270,12 +7310,12 @@ We will now focus on the [[MOVW]] instruction and its [[gen]]
 operand which is even more general (hence the name).
 %dup: from overview/input-lang
 Section~\ref{sec:ref-addressing-modes} listed the different
-ways to reference memory in Asm5, the different {memory addressing modes},
+ways to reference memory in Asm5 (the different {memory addressing modes}),
 for instance ``indirect with offset'' in [[4(R1)]].
 
 This is where we start to deviate from [[imsr]] in [[gen]]
 (in addition to the [[ximm]] vs [[imm]] difference):
-<<gen rule>>=
+<<more gen rule>>=
 | ioreg
 @
 %old: was oreg above
@@ -7296,8 +7336,8 @@ This is where we start to deviate from [[imsr]] in [[gen]]
 [[ireg]] (indirect register) allows to dereference a pointer
 stored in a register. [[ioreg]] (indirect offset register) 
 adds an offset to the memory address in the register.
-Both are using the [[D_OREG]] operand kind introduced in 
-Section~\ref{sec:operand}:
+Both are using the [[D_OREG]] operand kind (introduced in 
+Section~\ref{sec:operand}):
 
 <<type declarations(arm)>>=
 %type   <genval> ioreg ireg
@@ -7340,11 +7380,12 @@ ireg:
 \l and pseudo-registers
 \n different from labels, which are just for code refs
 
-One can also use symbols (names) to reference memory in Asm5:
+One can also use symbols to reference memory in Asm5:
 
-<<gen rule>>=
+<<more gen rule>>=
 | name
 @
+\t rename? not really a name, because has also offset and base
 %old: inlined in gen now
 %<<oreg rule>>=
 %| name
@@ -7373,7 +7414,7 @@ name:
 
 Note that symbol operands use the same operand kind [[D_OREG]]
 than the indirect register with offset we have seen above.
-This is because a name can also be seen as a sort of offset to 
+This is because a name can also be seen as a sort of ``offset'' to 
 one of the (pseudo) register we have seen in 
 Section~\ref{sec:pseudo-registers}
 (except [[PC]]):
@@ -7388,7 +7429,8 @@ pointer:
 @
 \n hmmm bad name? pointer_basis? but it's true we do '(' pointer ')'
 \n where we really dereference the pointer (and then add an offset)
-\t what is generated code by linker? address of symbol is really offset? R12?
+\n the linker generates really offset(R12) when dereferencing symbols
+\n  (but not when taking address of symbol)
 
 <<[[itab]] elements>>=
 "SB",		LSB,	N_EXTERN,
@@ -7419,7 +7461,7 @@ Note that for locals and parameters the symbol name is
 not really necessary, which is why one can also reference
 parameters only with an offset, as in [[MOVW 4(FP), R1]]:
 
-<<gen rule>>=
+<<more gen rule>>=
 | con '(' pointer ')'
  {
   $$ = nullgen;
@@ -7531,8 +7573,8 @@ will also not conflict with identical names in other files.
 
 
 Branching instructions (e.g. [[BL]]) can also jump to symbols via 
-the [[nireg]] operand rule,
-as well as the address contained in registers:
+the [[nireg]] operand rule below.
+They can also jump to the address contained in a register:
 
 <<type declarations(arm)>>=
 %type   <genval>   nireg 
@@ -7574,7 +7616,7 @@ nireg:
 %trans:
 The last operand rule we have to see is
 %
-one of the operand for branching instructions ([[B]], [[BL]])
+one of the operand rule of branching instructions ([[B]], [[BL]])
 called [[rel]] (register or label):
 
 <<type declarations(arm)>>=
@@ -7603,7 +7645,7 @@ rel:
 %$
 \t sym saved, so can be saved in object file for debugging?
 
-This operand uses a new operand kind:
+This operand uses a new kind of operand:
 \l could abuse D_CONST?
 
 <<[[Operand_kind]] cases>>=
@@ -7612,8 +7654,10 @@ D_BRANCH,
 %old: /* type */ FOR BRANCH
 
 The value for this kind of operands is 
-the {resolved} absolute (virtual) code address of
-the label. It is stored in [[Gen.offset]].
+the {resolved} absolute code address of the label. 
+It is stored in [[Gen.offset]].
+\t but core address still virtual in some sense (but not virtual mem sense)
+\t  it is virtual virtual
 \l remember that value of label in symbol table is virtual pc at def
 
 \l can use labels defined in other procedures, see _div and _mod with out:
@@ -7643,7 +7687,7 @@ that this identifier is really a [[LLAB]] not an [[LNAME]]:
 Another way to reference code is to add an offset
 to the virtual program counter [[PC]], allowing
 to make {\em relative jumps} (even though this is transformed
-in an absolute (virtual) code address thanks to [[pc]]):
+in an absolute code address thanks to [[pc]]):
 \l explain virtual code address, incremented by 1, same dimension than pseudo PC
 
 <<rel rule>>=
@@ -7691,7 +7735,7 @@ in an absolute (virtual) code address thanks to [[pc]]):
 
 
 %old:
-%<<gen rule>>=
+%<<more gen rule>>=
 %| con
 % {
 %  $$ = nullgen;
@@ -7706,7 +7750,7 @@ in an absolute (virtual) code address thanks to [[pc]]):
 % I removed the rule, and rewrote calls to SWI to just be SWI $0
 
 %old:
-%<<gen rule>>=
+%<<more gen rule>>=
 %| shift '(' regi ')'
 % {
 %  $$ = $1;
@@ -7754,7 +7798,7 @@ and which will eventually disappear after linking.
 
 {Symbols}, for procedures or globals, are {declared}
 respectively by the [[TEXT]] and [[GLOBL]] pseudo-instructions
-as explained in Section~\ref{sec:pseudo-instructions}:
+(as explained in Section~\ref{sec:pseudo-instructions}):
 
 <<[[Opcode]] cases, pseudo opcodes>>=
 ATEXT,
@@ -7809,20 +7853,20 @@ and do not have a size. This is because labels are used
 for intra-procedural jumps, while [[TEXT]] symbols are used
 for public procedures with parameters. 
 %
-Because labels are local to a file all the references to
+Because labels are private to a file, all the references to
 a label must be in the same file.
 \l actually not local to a procedure
 All those references can thus be {resolved} by the assembler
 and converted in absolute (virtual) code addresses in the object file.
 [[TEXT]] symbols on the opposite are public and may be referenced
-by other files which is why they have to be kept in the object file
+by other files which is why they have to be kept in the object file,
 to be resolved later by the linker.
 \l local calls could be resolved by assembler, but redundant
 
 [[TEXT]] pseudo-instructions are used by the linker to put the
-code of procedures in the [[Text]] {\em section} of the executable.
+code of procedures in the {\em text section} of the executable.
 [[GLOBL]] are used by the linker to allocate some space in the
-[[Data]] {\em section} of the executable.
+{\em data section} of the executable.
 
 Note that for procedures, the constant used to represent the size 
 of the locals can surprisingly also be [[$-4]].%$
@@ -7852,11 +7896,12 @@ in which case he must use [[$-4]]%$.
 \label{sec:WORD}
 
 %trans:
-[[GLOBL]] tells the linker to allocate some space in the [[Data]]
+[[GLOBL]] tells the linker to allocate some space in the data
 section of the executable but it is the
+\l actually also for BSS
 %
 [[DATA]] pseudo-instruction which tells the linker how to fill this space
-as explained in Section~\ref{sec:data}:
+(as explained in Section~\ref{sec:data}):
 
 <<[[Opcode]] cases, pseudo opcodes>>=
 ADATA,
@@ -7890,9 +7935,9 @@ DATA boot_CONF_outcode+0(SB)/8, $"\z\z\1\353\z\z\213\33"
 \l data2s
 
 %trans:
-[[DATA]] allows to put any value in the [[Data]] section of the executable.
+[[DATA]] allows to put any value in the data section of the executable.
 %
-A similar pseudo-instruction, [[WORD]], does the same for the [[Text]] section:
+A similar pseudo-instruction, [[WORD]], does the same for the text section:
 \l have not seen that in tutorial
 
 <<[[Opcode]] cases, pseudo opcodes>>=
@@ -8019,7 +8064,7 @@ an alias for [[B.EQ]].
 \n hmm but outcode() will actually do the opposite
 %
 The need to conditionaly execute non-branching instructions
-such as an addition may not be obvious. 
+(e.g. an addition) may not be obvious. 
 This feature was originally designed to compensate for the lack
 of branch predicator in ARM CPUs
 by having code using less branches. See
@@ -8030,7 +8075,7 @@ or the \book{Emulator} for more information .
 The bit manipulations involving [[C_SCOND]] above is because
 the [[cond]] non-terminal in addition to the conditional
 execution also stores special ARM instruction bits 
-as explained in Section~\ref{sec:special-bits}:
+(as explained in Section~\ref{sec:special-bits}):
 \n e.g. Sbit, after 0xf
 %self-ref: again see need for those operations
 %ocaml: no need for this special bitset that early. Return one cond
@@ -8108,9 +8153,9 @@ are combined to form an executable.
 \label{sec:object-format-complete}
 
 %trans:
-We described rougly the format of the object files at the beginning
+We described roughly the format of the object files at the beginning
 of this book in Section~\ref{sec:object-format-part1}. 
-We can describe more precisely this format in 
+We can now describe more precisely this format in 
 Figure~\ref{fig:object-format-complete} since we now have
 a better understanding of Asm5.
 
@@ -8242,7 +8287,8 @@ which will be explained in Section~\ref{sec:object-file-history}.
 The job of [[outcode()]], introduced in Section~\ref{sec:outcode-signature},
 and used many times in the grammar, is 
 mostly to serialize one instruction (machine, pseudo, or virtual)
-according to the format described previously:
+according to the format described 
+in the middle of Figure~\ref{fig:object-format-complete}:
 \n mostly because actually also serialize symbol table, and increment also pc
 
 <<function outcode(arm)>>=
@@ -8280,7 +8326,7 @@ out:
 
 It also increments the virtual program counter
 [[pc]] (used to resolve labels) for all instructions
-except the one related to the [[Data]] section of the executable.
+except the one related to the data section of the executable.
 %style:
 Indeed, [[DATA]] or [[GLOBL]] instructions can be mixed
 with [[TEXT]] instructions; 
@@ -8344,7 +8390,8 @@ as explained in Section~\ref{sec:special-bits}.
 Assuming a symbol index parameter [[symidx]] computed by the caller
 (and explained in Section~\ref{sec:spreaded-symbol-table}),
 [[outopd()]] outputs an operand
-according to the format described previously:
+according to the format described
+in the right of Figure~\ref{fig:object-format-complete}:
 
 <<function zaddr(arm)>>=
 /// main -> assemble -> yyparse -> outcode -> <>
@@ -8424,7 +8471,8 @@ later by the linker.
 \l or for param and local to help debuggers.
 % 
 Because only 1 byte is used in the format of the operand
-to store the index of the symbol involved,
+to store the index of the symbol involved 
+(see Section~\ref{sec:object-format-complete}),
 one could think Asm5 allows only 256 different symbols
 in an assembly file. But, the {\em object file symbol table}
 we will describe in this section,
@@ -8729,6 +8777,10 @@ as [[MOVW bar(SB), bar(SB)]].
 
 %real-world: objdump --syms foo.o
 
+
+
+
+
 \chapter{Debugging Support}
 \label{chap:debugging}
 
@@ -8765,8 +8817,9 @@ in the previous chapter. %clever\ref{chap:generation}
 %dup: overview/input-lang and parsing/operands/names
 This is why Asm5 programmers write code like [[MOVW  count+4(FP), R1]]
 even though [[count]] is not used to generate any machine code.
-Indeed this symbol is actually kept in the object file
-and then in the executable and can then be used by debuggers and tracers.
+Indeed, this symbol is actually kept in the object file
+and then transimitted in the executable and can 
+then be used by debuggers and tracers.
 %
 Labels are resolved during parsing by [[5a]] but the names of those
 labels are also kept in the object file symbol table.
@@ -9302,7 +9355,7 @@ if(p == nil && op) {
 %trans:
 We have described all the main features of Asm5 and [[5a]].
 You can write many assembly programs with all the
-instructions we described and 
+instructions we already described and 
 have a working assembler with all the code we already presented.
 %toc:
 In this chapter we will describe advanced features of Asm5
@@ -9582,7 +9635,7 @@ D_FPCR,
 @
 
 % for MOV
-<<gen rule>>=
+<<more gen rule>>=
 | freg
 @
 
@@ -9627,7 +9680,7 @@ frcon:
 
 
 
-<<gen rule>>=
+<<more gen rule>>=
 | LFCR
  {
   $$ = nullgen;
@@ -9946,7 +9999,7 @@ case D_PSR:
     break;
 @
 
-<<gen rule>>=
+<<more gen rule>>=
 | LPSR
  {
   $$ = nullgen;
@@ -10174,6 +10227,7 @@ AMODU, // VIRTUAL, transformed to call to _modu
 @
 % has no reading syntax, generated just in 5c
 
+% very important!!
 <<[[Opcode]] cases, pseudo opcodes>>=
 ASIGNAME,
 @
@@ -10227,8 +10281,8 @@ AGOK,
 ADYNT,
 AINIT,
 @
-% seems never assigned, maybe not used anymore? seems about
-% dynamic loading, alef stuff maybe?
+%asm.pdf says it's related to Alef
+% can be used also for dynamic loading?
 %todo: delete?
 
 
@@ -10419,9 +10473,9 @@ assembler works.
 %So, we recommend to follow with the \book{Linker} to
 %understand this part. In any case, 
 The linker and assembler
-being strongly connected in any system, for instance [[ld]] and [[gas]]
-are part of the same [[binutils]] package in the GNU system,
-the \book{Linker} is the logical next step after the \book{Assembler}.
+being strongly connected in any system (for instance [[ld]] and [[gas]]
+are part of the same [[binutils]] package in the GNU system),
+the \book{Linker} is the next logical step after the \book{Assembler}.
 %
 We also suggest to read the \book{Emulator} which fully
 describes the semantics of the machine instructions we have
@@ -10792,7 +10846,10 @@ m1:
 \label{chap:5a-ocaml}
 \n LFS thesis spirit :)
 
-% what for? goal? ocaml promotion :)
+% What for? goal? ocaml promotion :) see also even more essence.
+% Nice also because offer another "view". Can see full grammar for
+% instance below. Full AST. Instead of piece by piece in the main text.
+% Maybe help solidify even more.
 
 % design decisions: 
 % - no optimisations, space or speed, which guides many of the
@@ -10806,9 +10863,6 @@ m1:
 %   (but less open to other languages; could use JSON but no ADT in JSON)
 % This decrements size of code, but also size of needed explanations!
 
-% Nice also because offer another "view". Can see full grammar for
-% instance below. Full AST. Instead of piece by piece in the main text.
-% Maybe help solidify even more.
 
 \section{[[ast_asm.ml]]}
 
