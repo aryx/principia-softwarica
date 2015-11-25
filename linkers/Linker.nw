@@ -15,14 +15,16 @@
 % - introduced Headtype enum instead of hardcoded integers
 % - introduced mylog() and DBG() to factorize the tracing code
 % - removed many portable myxxx() wrappers
-% - removed some deadcode (C_LBRA, C_LECON, C_SCON, D_OCONST, regused)
-% - commented lots of code that was in dead ifdefs or was related to
-%   dead alef features like BECOME
+% - removed some deadcode 
+%    * C_LBRA, C_LECON, C_SCON, D_OCONST, regused
+%    * commented lots of code that was in dead ifdefs or was related to
+%      dead alef features like BECOME
+% - reorganized code
+%    * around INITENTRY, -l, -E digit, make default path
+%    * renames many local variables, more consistent (v = version, etc)
+%    * mv Autom out of union, remove union, was confusing
 % - TODO reorganized the code to better match the chapters
 %   by introducing more files: main.c, lib.c, error.c, m.h
-% - reorganized code around INITENTRY, -l, -E digit, make default path
-%   more obvious
-% - renames many local variables, more consistent (v = version, etc)
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
@@ -34,13 +36,13 @@
 %   one generates data (the executable) that the other reads (the kernel)
 % - disk image of executable and memory image of program are different
 %   hence the -TText
-% - SEMI mutual dependency between dotext and dodata where need layout
+% - mutual dependency between dotext and dodata where need layout
 %   data before text but then need text before know where starts data
 %   (solved via SB/R12 for 5l)
-% - TODO what if have multiple object defining the same global?
+% - SEMI what if have multiple object defining the same global?
 %   int x; int x; in different files? what if one also define value?
 %   what if both define value? DUPOK?
-% - TODO stuff about pool and in general many small mismatches between Asm5
+% - SEMI stuff about pool and in general many small mismatches between Asm5
 %   and actual ARM capacities
 % - TODO dynamic linking? export table? import table?
 % - TODO fpic? 
@@ -150,7 +152,8 @@ a {linker}.
 
 \section{Motivations}
 
-Why a linker? Because we think you are a better programmer if 
+Why a linker?
+Because we think you are a better programmer if 
 you fully understand how things work under the hood, and
 the linker is the final piece of any {development toolchain},
 the one generating finally the {executable}.
@@ -158,7 +161,7 @@ the one generating finally the {executable}.
 
 There are very few books about linkers,
 \n the linker/loader book is mentioned later
-as opposed to a myriad of books on compilers or kernels. 
+as opposed to a myriad of books on compilers or kernels.
 Linkers are usually not even studied during the computer science curriculum. 
 This is a pity because they are pretty central.
 Indeed, they make the link (no pun intended) between the compiler
@@ -201,6 +204,12 @@ to a specific binary instruction?
  %assembler: relates code in the linker to similar (or absent) code in 5a
  %emulator: relates code in the linker to similar (or absent) code in 5i
  %sanity: I use "sanity check" in chunknames, to aspectize a bit error checking
+ %
+ %real-world: to relate to other linker
+ %ocaml: to give a hint on how rewriting C in OCaml could improve things
+ %alt: alternative technique
+ %old: for original code I changed/removed to be clearer
+ %toc: %trans: %dup: %example:
 
 \t put in conclusion non-trivial algo and data structures seen? see comment
 %data-structures (beyond list/hashtbl):
@@ -290,6 +299,7 @@ This is partly to compensate for the lack of
 shared libraries in \plan.
 \l but shared libraries are evil! dynamic shared libraries?
 \l Also there is no dynamic linking by default. Simpler approach again.
+\t does also instruction selection? asmout, brloop are opti?
 
 \n critique of go/plan9 toolchain,
 %  -  http://dtrace.org/blogs/wesolows/2014/12/29/golang-is-trash/
@@ -650,7 +660,7 @@ is also called {\em resolving} the references to external symbols.
 The linker can do so because it has access to all the code (and data).
 Once all the code (and data) parts are contatenated together, 
 the final {addresses} of the different {entities} can be known. 
-\l actually can need fixpoing on some archi, hmm
+\l actually can need fixpoing on some archi, and in the end it is tricky
 \l actually dynamic linking mean sometimes have still unresolved symbols
 So, in Figure~\ref{fig:linker-process} the call to [[fbar]] in [[C1]]
 can be transformed in a machine instruction to go to the
@@ -696,6 +706,9 @@ header which uses 32 bytes.
 \n will see below that acutally not 62 but
 \l again can have fixpoint issue, and relaxation hints (cf wikipedia linker)
 
+%\subsection{Mutual dependency, fixpoint}
+% generic term used in Levine book for that?
+
 \subsection{Disk image versus memory image}
 \label{sec:disk-image-vs-memory-image}
 \l linker versus loader
@@ -730,10 +743,13 @@ in Figure~\ref{fig:linker-process}
 would be actually transformed respectively
 in the resolved [[CALL 4196]] and relocated [[JMP 4158]] 
 instructions with [[5l]] under \plan.
+\n 4128 because header
 \l while still refering to machine code stored at offset X in the executable
 \l say that could actually remove header when loaded in mem and so CALL 4164
 \t notion of Text origin? actually header is 4096
 \t notion of disk address vs (virtual) memory address
+
+\l FIGURE? where see disk image vs memory image? file offset vs memory offset?
 
 \subsection{Libraries}
 \n used to have discussion here about [[cat]] and separate compilation
@@ -787,7 +803,7 @@ link additional objects.
 \t also can be in the hand of the programmer, dynlink()
 \t  can link after being loaded. at {\em run-time}
 \t dynamic linking vs dynamic loading? relink and load, or load and reload?
-\t dynamic code is important? like living cell organism, auto modifiable!
+\t dynamic code is important? like living cell organism, self modifiable!
 \l  (well but can still modify own source code, call 5a/5c/5l and exec())
 
 \plan opted mainly for static linking and so [[5l]] is mainly
@@ -803,7 +819,7 @@ Section~\ref{sec:dynamic-linking}.
 \l and loader is pretty simple, just load/copy (or actually lazy load/copy).
 \l Also compute textsize, datasize, etc and adjust addresses.
 
-\t talk now about issue with mutual reference of SB?
+\t talk now about issue with mutual dependency reference of SB?
 
 \t dynamic linking and shared libraries are different? I think so.
 
@@ -826,7 +842,7 @@ is entired dedicated to the topic.
 \l put back essential steps? read object and lib, concatenate, 
 %   resolve and relocate, and finally generate. but explained in soft archi?
 
-\l which rougly correspond to different chapters
+\l which roughly correspond to different chapters
 
 \section{[[5l]] command line interface}
 
@@ -1138,6 +1154,7 @@ For more information on [[5l -W]] see Appendix~\ref{sec:debugging-loading}.
 \t readelf? objdump? 
 
 \subsection{Debugging machine code generation with [[5l -a]]}
+\label{sec:_main-set-r12}
 
 One can also display the generated machine code by using
 the debugging option [[-a]] of [[5l]]:
@@ -1324,7 +1341,7 @@ Its role and its relationship with the {pseudo-register}
 [[SB]] will be explained later in Section~\ref{sec:sb-r12}.
 
 \l _existstr 
-\l small d means static symbol B means unitialized (BSS)
+\l small d means private symbol B means unitialized (BSS)
 
 \l can also use db (or 5i) to inspect executable.
 
@@ -1425,7 +1442,7 @@ int global = 1; // Data section
 int another;    // BSS section
 \end{verbatim}
 
-\item [[Exec.syms]] and the executable symbol table will be discussed in 
+\item [[Exec.syms]] and the {executable symbol table} will be discussed in 
 Chapter~\ref{chap:debugging}.
 
 \item [[Exec.entry]] contains the memory address of the entry point
@@ -1549,11 +1566,11 @@ contained in the file is discussed.
 \toprule
 {\bf Function} & {\bf Chapters} & {\bf File} & {\bf Entities} & {\bf LOC} \\
 \otoprule
-Data structures & \ref{chap:core-ds} & [[l.h]] & [[Sym]], [[Section]], [[Instr]], [[Auto]], & 0 \\
+Data structures & \ref{chap:core-ds} & [[l.h]] & [[Sym]], [[Section]], [[Instr]] & 0 \\
 % headtype, Buf, ...
 and prototypes  & \ref{chap:arm-codegen} &         & [[Optab]], [[Oprang]], [[Operand_class]] & \\
 % like a dat.h and fns.h
-Globals         & \ref{chap:core-ds}, \ref{chap:main}               & [[globals.c]] & [[hash]], [[firstp]], [[textp]], [[textsize]], [[datsize]], ... & \\
+Globals         & \ref{chap:core-ds}, \ref{chap:main}               & [[globals.c]] & [[hash]], [[firstp]], [[datap]], [[textsize]], [[datsize]], ... & \\
 Entry point     & \ref{chap:main}    & [[main.c]] & [[main()]] & \\
 %pad: I created this file
 
@@ -1622,11 +1639,11 @@ The main steps of the linking process of [[5l]] are:
 
 \begin{enumerate}
 \item to {\em load} (read) the object files and libraries (via [[objfile()]])
-and {concatenate} their code and data in different sections
+and {concatenate} their code and data in different sections in memory
 (via [[ldobj()]])
 
-\item to {\em resolve} symbol references and 
-{relocate} branching instructions (via [[patch()]], ...)
+\item to {\em resolve} symbol references (via [[patch()]], ...)
+\n and {relocate} branching instructions; actually relocate done at load time
 
 \item to {\em generate} the executable with its header and
 machine code (via [[asmb()]])
@@ -1671,9 +1688,9 @@ machine code (via [[asmb()]])
 \begin{verbatim}
 object file-\                /- code graph -\ 
              > instructions -                > executable
-object file-/                \-    data    -/               
+object file-/                \- data list  -/               
 
-                      (use global symbol table)
+                  (use global symbol table)
 \end{verbatim}
 \caption{Data flow diagram of [[5l]]}\label{fig:dataflow}
 \end{figure}
@@ -1718,7 +1735,7 @@ which keeps track of different {properties} of symbols.
 One of this property, [[Sym.value]], contains initially
 a virtual program counter for symbols corresponding to procedures,
 and a size for symbols corresponding to globals.
-\t will be used to resolve
+This will be useful to resolve symbol references.
 %
 This same field will contain at the end the resolved memory
 address of the procedure or global.
@@ -1728,8 +1745,9 @@ address of the procedure or global.
 
 After loading the object files,
 [[main()]] calls a serie of functions ([[patch()]], [[noops()]], etc)
-which use the globals [[firstp]] and [[datap]] to
+which use the globals [[firstp]], [[datap]], and [[hash]] to
 process or rewrite list of instructions.
+\n actually does not really use datap, use more hash
 %
 First, [[patch()]] transforms the list of code instructions in a
 {\em graph of instructions} where branching instructions have a
@@ -1738,16 +1756,16 @@ field [[Instr.cond]] pointing to the appropriate target instruction.
 %
 To build this graph [[patch()]] is leveraging the symbol table [[hash]]
 computed previously
-to find the program counter corresponding to a certain procedure symbol
+to find the virtual program counter corresponding to a certain procedure symbol
 (in its [[Sym.value]] field)
 and {\em index} all [[Instr.pc]] to find the instruction pointer ([[Instr*]])
-corresponding to a certain program counter.
+corresponding to a certain virtual program counter.
 
 
 Once the graph has been built, there is no more need for the notion of
-virtual program counter. Every code references (symbols or
-absolute jumps) in branching
-instructions have been resolved. 
+virtual program counter. 
+Every code references (symbols or absolute jumps) in branching instructions
+have been resolved. 
 %
 This allows in turn to transform safely some {\em virtual instructions} (see
 the \book{Assembler}) such as [[RET]], [[DIV]], or [[NOP]] 
@@ -1760,16 +1778,20 @@ multiple instructions or even delete the instruction without
 any consequence on the other branching instructions (as long
 at it maintains carefully the [[Instr.cond]] pointers pointing
 to the original instruction).
+%
 Before the graph of instructions, inserting or
-deleting an instruction would have forced to assign a new program counter
-to each instruction and to relocate every branching instructions.
+deleting an instruction would have forced to assign a new 
+virtual program counter to each instruction and to relocate 
+every branching instructions.
 
-Once [[5l]] has a graph of real code instructions and a list of data
-instructions, it can start to {\em layout} the code and data.
+Once [[5l]] has the graph of real code instructions and the set of globals
+declarations, it can start to {\em layout} the code and data.
 [[dodata()]] assigns a memory address in [[Sym.value]] to each 
-data definitions
-\n not global, because can have multiple DATA for one GLOBL
-in [[datap]] as an offset to the start of the data section.
+globals in the symbol table
+as an offset to the start of the data section.
+\t again will explain rational for this decision and why not directly final
+\t  adress
+\n not 'data definitions in [[datap]]' layout does not need DATA
 \l e.g. 014 for hello
 %
 Then, [[dotext()]] does a similar thing for the code instructions.
@@ -1783,8 +1805,9 @@ and stored respectively in the globals [[textsize]] and [[datsize]].
 %
 [[5l]] can finally call [[asmb()]] to generate the executable and 
 its header. This function uses two helpers functions: one
-to fill the data section [[datblk()]] and one to
-generate ARM instructions in the code section [[asmout()]].
+to fill the data section [[datblk()]] 
+\n this time use the DATA
+and one to generate ARM instructions in the code section [[asmout()]].
 
 \l How does handle mutually recursive object files?
 %  for objects passed on the command line it loads every symbols
@@ -1818,7 +1841,7 @@ Then we will use a top-down approach in Chapter~\ref{chap:main} and
 starting from [[main()]] we will present the code, or a high-level
 view of the code of some of the main functions, e.g. [[asmb()]].
 %
-The following chapters will be used to describe
+The following chapters will describe
 the main components of the linking pipeline:
 Chapter~\ref{chap:loading-objects} will present the code to
 load object files,
@@ -1895,7 +1918,7 @@ One of the main job of a linker is to {resolve} symbol references
 by linking uses of a symbol to its definition.
 The {\em symbol table}, which keeps track of those symbols,
 is thus a central data structure of [[5l]].
-The structure below represents a symbol and its properties. 
+The structure below represents a symbol and its {properties}. 
 It essentially associates a {\em key} to a {\em value}:
 
 <<struct Sym>>=
@@ -2088,6 +2111,7 @@ hash[h] = sym;
 <<[[lookup()]] profiling>>
 return sym;
 @
+\t could have a syminit like in 5a
 \l why plus 1 ??
 
 % sym->sig will be described in Safe linking section
@@ -2153,8 +2177,8 @@ An object file contains essentially a list of {instructions} where
 each instruction is made of 
 an {\em opcode} with possibly 1, 2, or 3 {\em operands}.
 %
-The [[Opcode]] type, as well as [[Operand_kind]] and a few register
-aliases such as [[REGPC]], all used by [[5l]], are defined in
+The [[Opcode]] type, [[Operand_kind]] type, and a few register
+aliases such as [[REGPC]], all used by [[5l]], are all defined in
 [[include/arch/arm/5.out.h]]. 
 Those types are fully described in the \book{Assembler}. 
 %
@@ -2180,10 +2204,7 @@ as opcodes for {\em virtual instructions} such as [[ARET]] and [[AMOVW]].
 
 [[include/arch/arm/5.out.h]] does not define an [[Operand]] type though
 as the assembler and linker have slightly different needs for
-this data structure. 
-\l could be factorized, but also different Sym 
-%ocaml: could be the same
-Here is the [[Operand]] type used by [[5l]]:
+this data structure. Here is the [[Operand]] type used by [[5l]]:
 
 <<struct Adr(arm)>>=
 struct	Adr
@@ -2191,7 +2212,7 @@ struct	Adr
     // enum<Operand_kind> (D_NONE by default)
     short	type;
 
-    // switch on Adr.type
+    // switch on Operand.type
     union {
         long	offset;
         Ieee*	ieee;
@@ -2205,53 +2226,59 @@ struct	Adr
 };
 @
 \n see DConv too
-\t rename Operand!
-%old: was called Adr
 \n ATEXT arguments are also Adr (abuse)
-%ocaml: would be better if had ADT so can have better Instruction type instead
-% of those opcode, operand, Adr, and unions and all those comments
+\t rename Operand! 
+%old: was called Adr
 %note: offset abused for REGREG in which case it's really a int4
 % but otherwise it's often used as an offset in D_BRANCH, D_OREG
 % because indeed it's an offset to a basis (PC, SB, etc)
 %assembler: Similar to Gen in Assembler.nw, but a few differences:
 % - ieee was dval, and sval was sval[8]
-% - have now a union for sym and autom, probably autom for the N_PARAM and
-%   N_LOCAL cases
+% - have autom for TEXT  to keep track of N_PARAM and N_LOCAL for frame symbols
 % - new 'class' field (but seems local to oplook())
+% - the pointed Sym structure is a bit different
+%ocaml: could factorize with Operand of 5a
+%ocaml: would be better if had ADT so can have better Instruction type instead
+% of those opcode, operand, Adr, and unions and all those comments
 
-[[Operand]] is until now very similar to the [[Operand]] type used by [[5a]]
-and  described in the \book{Assembler}.
+%assembler:
+[[Operand]] is until now almost identical to the [[Operand]] type 
+used by [[5a]] and  described in the \book{Assembler}, except for
+the way float operands are represented ([[Ieee*]] versus a [[double]]).
 The {\em operand kind} is also stored in [[Operand.type]], e.g.
 [[D_CONST]], [[D_REG]], [[D_OREG]].
 \l talk about offset? and relocations?
 \l offset can be based on PC (for D_BRANCH), SB(for N_INTERN, N_EXTERN),
 \l  on FP(for N_PARAM), and on SP(for N_LOCAL), 
 \l  or can be direct value (for D_CONST)
-The [[Operand.reg]] field is also used for operands involving registers.
+[[Operand.reg]] is used again for operands involving registers.
 \l reg Abused for NOPROF and DUPOK? could use a union again?
+We will see later though additional fields specific to the linker.
 
-Operands involving symbols use an [[Operand.sym]] field in [[5a]]
-but a slightly different structure is used in [[5l]] as explained later.
-%
-The {\em symbol kind} is also stored in a [[Operand.symkind]] field,
+
+Operands involving symbols use an [[Operand.sym]] field and
+the {\em symbol kind} is also stored in a [[Operand.symkind]] field,
 e.g. [[N_EXTERN]], [[N_PARAM]], [[N_LOCAL]] (which are
 enumerations defined also in [[include/arch/arm/5.out.h]]):
 
 <<[[Adr]] other fields>>=
 // enum<Sym_kind>
 short	symkind;
+// option<ref<Sym>> (owner = hash)
+Sym*	sym;
 @
-%old: was called 'name' but confusing
+%old: was called 'name' but confusing, 
+%old: sym was part of a union with Auto, but better that way
 
 \l give a few examples of concrete operands? or refer to assembler book?
 
-Symbols references in the assembly languages of [[5a]], as well as in
+Symbols references in the assembly language of [[5a]], as well as in
 object files, are all represented as ``offsets'' to {\em pseudo-registers}:
 
 \begin{itemize}
 \item procedures and globals use the [[SB]] ({\em static base}) 
 pseudo-register, e.g. [[main(SB)]], [[hello(SB)]]. Their
-symbol kind is [[N_EXTERN]] (or [[N_INTERN]] for static symbols
+symbol kind is [[N_EXTERN]] (or [[N_INTERN]] for private symbols
 such as [[foo<>(SB)]]).
 
 \item parameters are accessed via the [[FP]] ({\em frame pointer})
@@ -2264,79 +2291,12 @@ e.g. [[v-8(SP)]]. Their symbol kind is [[N_LOCAL]].
 \end{itemize}
 
 The symbol name for parameters and locals is actually optional.
-What matters is the offset number. The symbol name is mostly
-a comment (which can be leveraged by tools such as debuggers though).
-This explains the use of a union below to differentiate
-those different kinds of symbol references:
-\t actually no!! autom used only for Text.to
-\t  I think better if was outside union. stupid opti.
-\t so maybe can actually introduce later this data structure?
-\t  or in separate section!!!
+What matters is the offset number for code generation. 
+The symbol name is mostly a comment.
+But, those symbols are still saved in the 
+{executable symbol table} as we will see in Chapter~\ref{chap:debugging},
+and so can be leveraged by tools such as debuggers.
 
-<<[[Adr]] other fields>>=
-union {
-    // ref<Sym> of hash
-    Sym*	sym;
-    // ref<Auto> | list<ref_own<Auto> (next = Auto.link)
-    Auto*	autom;
-};
-@
-\l rename autom and Auto
-\n autom because auto is a reserved keyword? but nothing to do with automata
-\l maybe better to rename local_or_param
-
-
-Operands involving symbols refering to globals or procedures use the 
-[[sym]] field of the union. 
-Operands involving parameters and local variables, 
-which are really variables both stored in the {\em stack},
-also known as {\em automatic variables},
-use the [[autom]] field.
-\t NO!!! 
-
-%section{[[Auto]]matic variables}
-% or stack variables
-\t can be put after Instr actually. so can understand Text.to.autom
-\t  the .to
-
-
-The [[Auto]] structure is used to keep track of all the parameters
-and locals accessed by a procedure:
-\t what for? do some magic stuff? autosize?
-\t really all?
-
-% for locals or param symbols
-<<struct Auto(arm)>>=
-struct	Auto
-{
-    // enum<Sym_kind> (but N_LOCAL or N_PARAM only?)
-    short	type;
-
-    // <ref<Sym>
-    Sym*	asym;
-    long	aoffset;
-
-    // Extra
-    <<[[Auto]] extra fields>>
-};
-@
-\t rename Var?
-\n Adr.sym vs Adr.autom.asym
-\l aoffset is a repeat of the offset of the operand?
-\t concrete example of value for an operand!!
-
-Those stack variables are chained together:
-
-<<[[Auto]] extra fields>>=
-// list<ref_own<Auto> (head = curauto = Instr.to.autom of TEXT instruction)
-Auto*	link;
-@
-\t what for? do some basic checks? like right autosize?
-
-\t look code in asmsymb to understand how to use those fields
-
-\l talk about curauto and autosize here?
-\l  should be set to curauto for the TEXT instructions and its to Adr field
 
 \section{[[Instr]]uction}
 
@@ -2438,6 +2398,8 @@ Later in the linking process [[Instr.pc]] will be assigned
 a {\em real program counter} which will be a multiple of 4 as 
 %dup: overview/5l-a
 the ARM uses fixed-length instructions of 4 bytes.
+
+\t Instr.cond here!
 
 Finally, the field below is used by different algorithms to
 temporarily {\em mark} instructions in the graph of instructions:
@@ -2546,12 +2508,15 @@ Prog*	datap = P;
 [[datap]] points to the last data instruction. 
 \l how access first? need first? no need because no order needed for data
 Note that [[GLOBL]] instructions are not part of this list.
-Instead, the [[GLOBL]] instructions when read modify the symbol table.
+Instead, the [[GLOBL]] instructions when read modify symbols
+in the symbol table.
 
 Thanks to [[firstp]] and [[datap]] all the code and
 data instructions are separated in different {\em sections}.
 
 \subsection{Procedure declarations, [[textp/etextp]]}
+\l used by follow and asmsym, so maybe could be put later?
+\l  would be better cos could also introduce Instr.cond differently
 
 Another pair of globals keeps track of the 
 list of procedures (the [[TEXT]] pseudo-instructions):
@@ -2591,7 +2556,7 @@ are a subset of the list of instructions in [[firstp/lastp]].
 During the linking process, we will iterate many times over
 the list of instructions. It is useful for error messages
 to store in globals in which procedure we currently are ([[curtext]]) 
-\l actually also to link curauto
+\n actually also to link curauto
 and which instruction we are currently processing ([[curp]]):
 \n it's an error management issue but it is too important to be delayed
 
@@ -2950,7 +2915,7 @@ Here are the specifics for the [[a.out]] format under \plan:
 case H_PLAN9:
     HEADR = 32L;
     if(INITTEXT == -1)
-        INITTEXT = 4096+32; // 1 page + a.out header
+        INITTEXT = 4096+32; // 1 page + a.out header, 4128
     if(INITDAT == -1)
         INITDAT = 0;
     if(INITRND == -1)
@@ -3104,7 +3069,7 @@ we described in Section~\ref{sec:soft-archi}:
 firstp = prg();
 lastp = firstp;
 
-// Loading (populates firstp/lasp, datap, textp/etextp, and hash)
+// Loading (populates firstp, datap, and hash)
 while(*argv)
     objfile(*argv++);
 <<[[main()]] load implicit libraries>>
@@ -3133,16 +3098,22 @@ undef();
 % many globals, e.g. firstp, lastp, I should really rewrite the code
 % to be more functional.
 
-The code first 
-{\em loads} the object files and libraries passed on the command line
+The code steps are:
+\begin{enumerate}
+\item to {\em load} the object files and libraries passed on the command line
 (as well as possibly other ``implicit'' libraries as explained in 
-Section~\ref{sec:loading-libraries-magically}), then
-{\em resolve} symbols, 
-{\em generate} the executable, and finally 
-{\em check} if there are still some undefined symbols
+Section~\ref{sec:loading-libraries-magically}),
+
+\item to {\em resolve} symbols, 
+
+\item to {\em generate} the executable, 
+
+\item to {\em check} finally if there are still some undefined symbols
 (e.g. whether [[_main]] has been defined).
-%
-The first line allocates an empty instruction with [[prg()]].
+
+\end{enumerate}
+
+The first line above allocates an empty instruction with [[prg()]].
 This first instruction is used as a {\em sentinel} which simplifies 
 code modifying later [[firstp/lastp]]. 
 This first empty instruction is then skipped a few lines later.
@@ -3297,7 +3268,8 @@ final addresses of those symbols.
 %
 We will delay the explanations about this step to
 Chapter~\ref{chap:resolving} where we will see multiple functions
-doing multiple passes on the set of instructions.
+doing multiple passes on the set of instructions
+and the symbol table.
 \l use firstp/lastp, use hash, build graph of instruction, layout
 
 \section{Generating the executable, [[asmb()]]}
@@ -3336,15 +3308,15 @@ asmb(void)
 %ocaml: pass cout as a parameter, and also list of instr, data, hash, etc
 \t cflush? shown in appendix, buffer management, cout
 
-[[asmb()]] does not take any argument but it uses the global [[cout]],
+[[asmb()]] does not take any argument. It uses the global [[cout]],
 which was initialized in [[main()]] with the file descriptor of the 
 executable file, to output data in the executable.
-%
+
 Note that the order of operations above may seem incorrect.
 The code to generate the header is at the end, which seems paradoxal.
 \l even impossible, but SEEK
 But, the header specifies the size of the sections,
-and So we first need to know thoses sizes
+and so we first need to know thoses sizes
 before generating the header, hence the order of operations.
 \l actually textsize/datasize are known already, but not symsize
 
@@ -3439,6 +3411,7 @@ entryvalue(void)
 \l SLEAF see later
 
 \subsection{Text section}
+\label{sec:asmb-text-section-overview}
 
 %trans:
 The text section generation is of course more complicated.
@@ -3500,9 +3473,11 @@ the total size will be a multiple of 4.
 
 Note that one instruction [[p]] can lead to
 the generation of multiple ARM instructions.
+%
 Indeed, the instructions of the assembly language of [[5a]], 
 and so the instructions in the object files, 
 do not match exactly ARM instructions.
+%
 For instance, the {virtual instruction} [[DIV]] has
 no counterpart in the ARM and is converted in a serie of ARM 
 instructions which ends with the call to the function [[_div()]] 
@@ -3544,13 +3519,13 @@ Section~\ref{sec:disk-image-vs-memory-image}.
 \subsection{Data section}
 
 %trans:
-The data section generation assumes the layout of data
+The data section generation assumes the layout of globals
 has already been done  (via [[dodata()]],
 just like the code section generation in the previous
 section assumed the layout of code has also been done (via [[dotext()]]).
 %dup: overview/tutorial overview/soft-archi, core-ds/sym
 The [[Sym.value]] field of all data symbols should now
-contain the address of the data 
+contain the address of the global
 as an offset to the start of the data section, 
 \t (INITDAT)? or set actually by asmb?
 and [[datsize]] should have been set.
@@ -3645,7 +3620,7 @@ the code of the main functions of [[5l]], we can
 start to go deeper and detail the different components of the
 linking pipeline.
 %toc
-We start in this chapter with the loading of object files in memory
+We start in this chapter with the {loading} of object files in memory
 performed mostly by [[ldobj()]].
 \n 'mostly' because also objfile()
 
@@ -3845,8 +3820,8 @@ are separated by the [[AEND]] opcode.
 
 %trans:
 An important chunk of [[ldobj()]] deals with the parsing
-of one instruction whose format is described in 
-the middle of Figure~\ref{fig:object-format-complete}.
+of one instruction whose format is described 
+in the middle of Figure~\ref{fig:object-format-complete}.
 %assembler:
 The code below does mostly the reverse operation
 of [[outcode()]] in the \book{Assembler}
@@ -4477,17 +4452,17 @@ a code instruction is read
 
 
 
-\subsection{[[ATEXT]]}
+\subsection{[[ATEXT]] and [[autosize]]}
 
 Remember from the \book{Assembler} that
 pseudo-instructions use the same format than regular instructions
 in the object file.
 \n actually everywhere, also in memory, a bit abuse
 %
-So, for the [[TEXT]] pseudo-instruction,
+So, for the [[TEXT]] pseudo-instruction, e.g. [[TEXT foo(SB), $8]], %$
 the name of the procedure is stored in the first operand 
 ([[Instr.from]])
-while the size for its local variables is stored in the second operand 
+while the size for its {local variables} is stored in the second operand 
 ([[Instr.to]]).
 In fact, [[Instr.from.sym]] is a pointer to a symbol in the
 symbol table [[hash]] (see the code of [[inopd()]] in Section~\ref{sec:inopd})
@@ -4508,7 +4483,6 @@ case ATEXT:
 
     s = p->from.sym;
     <<[[ldobj()]] sanity check for ATEXT symbol s>>
-
     s->type = STEXT;
     s->value = pc;
 
@@ -4534,14 +4508,10 @@ case ATEXT:
 \l see curtext
 
 The code is similar to the default case we have seen in 
-the previous section, 
-\t increment also pc! TEXT will become an instruction (or NOP?)
-but in addition 
-the symbol table [[hash]] is modified through [[s]], and 
-the list of procedures in [[textp]] is updated.
-%
-The section and value {properties} of the procedure symbol
-are updated. In particular, 
+the previous section.
+In addition, the list of procedures in [[textp]] is updated
+and the section and value {properties} of the procedure symbol
+are modified. In particular, 
 %dup: overview/soft-archi core-ds/symbol
 [[Sym.value]] contains now
 the virtual program counter of the procedure,
@@ -4550,6 +4520,15 @@ which will be useful for resolving branching instructions involving
 the procedure's name later in Chapter~\ref{chap:resolving}.
 \l later Sym.value will be final address
 \l Sym.value = Instr.pc here
+%
+%Note that the code above also increments [[pc]] because as we will see
+%in Section~\ref{sec:atext-patching} the [[TEXT]] pseudo-instruction
+%can acually be transformed in a real ARM instruction.
+%We would not want a branch to the procedure's symbol to be the same
+% than a branch to  ...
+\t maybe need increment pc independently of this special instruction
+
+
 
 <<[[ldobj()]] sanity check for ATEXT symbol s>>=
 if(s == S) {
@@ -4563,6 +4542,52 @@ if(!(s->type == SNONE || s->type == SXREF)) {
 @
 %old: s->type != SNONE && s->type != SXREF
 
+%\subsection{adjusting [[autosize]]}
+
+The size for the local variables of the current procedure
+is also stored in a global:
+
+<<global autosize(arm)>>=
+long	autosize;
+@
+\t rename stacksize? curstacksize?
+% arm specific? not in x86?
+% used a lot by aclass(), for what?
+
+Local variables, also known as {\em automatic variables},
+are hold in the {\em stack} of the process.
+%
+The size for those locals is specified in the procedure
+declaration, e.g. 8 in [[TEXT foo(sb), $8]], %$
+which will be enough to contain 2 locals using 4 bytes each.
+%
+In fact, [[5l]] first {rounds} the size at a 4 byte boundary
+and then increments it by 4:
+
+<<[[ldobj()]] in switch opcode ATEXT case, set autosize>>=
+p->to.offset = rnd(p->to.offset, 4);
+autosize = p->to.offset;
+autosize += 4;
+@
+%old:
+% autosize = (p->to.offset+3L) & ~3L;
+% p->to.offset = autosize;
+
+The reason for the 4 increment is to allocate space in the stack
+to possibly save the {\em return address} stored in [[REGLINK]].
+See the \book{Assembler} to refresh your memory
+about the {branch and link} instruction and the \plan{}
+{calling conventions}.
+\t ref to talk more about that in ATEXT patching and RET?
+
+Many algorithms will update [[autosize]] as follows while iterating
+over all the instructions, just like they do with [[curtext]]:
+
+<<adjust autosize when iterate over instructions p>>=
+if(p->as == ATEXT) {
+    autosize = p->to.offset + 4;
+}
+@
 
 
 
@@ -4572,7 +4597,7 @@ if(!(s->type == SNONE || s->type == SXREF)) {
 The code dealing with globals is simpler than the one dealing with procedures.
 %
 Remember that 
-for the [[GLOBL]] pseudo-instruction,
+for the [[GLOBL]] pseudo-instruction, e.g. [[GLOBL hello(SB), $12]], %$
 the symbol of the global is stored in the first operand  ([[Instr.from]])
 while its optional size is stored in the second operand ([[Instr.to]]):
 
@@ -4580,7 +4605,7 @@ while its optional size is stored in the second operand ([[Instr.to]]):
 case AGLOBL:
     s = p->from.sym;
     <<[[ldobj()]] sanity check for AGLOBL symbol s>>
-    s->type = SBSS; // for now SBSS; will be set maybe to SDATA in dodata()
+    s->type = SBSS; // for now; will be set maybe to SDATA in dodata()
     s->value = (p->to.offset > 0) ? p->to.offset : 0;
     break;
 @
@@ -4592,7 +4617,7 @@ case AGLOBL:
 \l could be even more succint?
 
 No list of instructions is modified. The only effect of a [[GLOBL]]
-{declaration} is the modification of the symbol table. 
+{declaration} is the modification of a symbol in the symbol table. 
 It is the [[DATA]] pseudo-instructions which populate the data section
 as we will see in the next section.
 %dup: overview/tutorial overview/soft-archi core-ds/sym main/gen/data
@@ -4711,121 +4736,6 @@ case AGOK:
 \l could use AXXX? or ALAST?
 
 
-\section{Stack variables}
-
-%trans:
-% few other things done by ldobj(), regarding stack variables,
-% which will be used later? by what? resolving? generation?
-
-\subsection{adjusting [[autosize]]}
-
-% global current size for stack variables of current procedure.
-
-<<global autosize(arm)>>=
-long	autosize;
-@
-\t rename stacksize? curstacksize?
-% arm specific? not in x86?
-
-% used a lot by aclass(), for what?
-
-% round 4 bytes
-% add 4 to possibly save return address stored in REGLINK, used by RET
-% see assembler book.
-
-<<[[ldobj()]] in switch opcode ATEXT case, set autosize>>=
-autosize = (p->to.offset+3L) & ~3L;
-p->to.offset = autosize;
-autosize += 4;
-@
-
-% as iterate in many algorithms, update autosize.
-% like update curtext.
-
-<<adjust autosize when iterate over instructions p>>=
-if(p->as == ATEXT) {
-    autosize = p->to.offset + 4; // locals
-}
-@
-% +4 again. see "runtime conventions" section?
-
-
-%\subsection{[[Auto]]}
-
-\subsection{adjusting [[curauto]]}
-
-% another global for set of stack variables
-
-% parameters + locals list
-<<global curauto>>=
-// list<ref<Auto>> (next = Auto.link)
-Auto*	curauto;
-@
-% set for the first time where? bug? should be = nil?
-
-
-
-% put example of instruction.
-% put example of multiple instruction with same parameter.
-
-<<[[inopd()]] locals>>=
-int t, l;
-Sym *s;
-Auto *u;
-@
-%old: t was i, but t(ype) better than i
-
-
-<<[[inopd()]] adjust curauto for N_LOCAL or N_PARAM symkind>>=
-s = a->sym;
-t = a->symkind;
-l = a->offset;
-
-// a parameter or local with a symbol, e.g. p+0(FP)
-if(s != S && (t == N_LOCAL || t == N_PARAM)) {
-
-    for(u=curauto; u; u=u->link)
-        if(u->asym == s)
-         if(u->type == t) {
-            if(u->aoffset > l)
-                u->aoffset = l; // diag()? inconcistent offset?
-            return size;
-        }
-    // else
-    
-    u = malloc(sizeof(Auto));
-    u->asym = s;
-    u->type = t;
-    u->aoffset = l;
-    
-    //add_list(u, curauto)
-    u->link = curauto;
-    curauto = u;
-}
-@
-%old: was
-% if(s == S || (t != N_LOCAL && t != N_PARAM))
-%    return size;
-% but anyway has return size after
-
-
-
-
-<<[[ldobj()]] case AEND, curauto adjustments>>=
-if(curtext != P)
-    curtext->to.autom = curauto;
-curauto = nil;
-@
-
-<<[[ldobj()]] case ATEXT, if curtext not null adjustments for curauto>>=
-if(curtext != P) {
-    <<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>
-    curtext->to.autom = curauto;
-    curauto = nil;
-}
-@
-
-
 
 
 \section{Safe linking}
@@ -4896,7 +4806,8 @@ we want to enforce that those two references have the same {\em type}.
 when using the [[-T]] option ([[T]] for type)
 which attaches a signature to a symbol. It is an alternate to
 [[ANAME]] with 4 bytes after the [[ASIGNAME]] opcode,
-and before the symbol kind, to store a signature as a [[ulong]]:
+and before the symbol kind, to store an additional signature
+as a [[ulong]]:
 
 <<[[ldobj()]] locals(arm)>>=
 ulong sig;
@@ -4950,9 +4861,9 @@ be detected and prevented by the code below:
 <<[[ldobj()]] signature compatibility check>>=
 if(s->sig != 0 && s->sig != sig)
     diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", 
-    s->sig, filen[s->file], 
-    sig, pn, 
-    s->name);
+         s->sig, filen[s->file], 
+         sig, pn, 
+         s->name);
 @
 \n but must have every object file use ASIGNAME. If one use ANAME no check.
 
@@ -4974,7 +4885,7 @@ bar: incompatible type signatures bde91c57(foo.5) and adb3322b(bar.5)
 
 \noindent one needs to remember in the symbol which file introduced
 the symbol the first time. 
-[[Sym.file]] below contains an index
+[[Sym.file]] below contains an {index}
 in the private array [[filen]] representing the file:
 
 <<[[Sym]] other fields>>=
@@ -5014,6 +4925,17 @@ if((files&15) == 0){
 }
 @
 \n =~ realloc
+
+Thanks to [[Sym.file]] and [[filen]], the two conflicting files
+can be displayed by the (repeated) code below:
+\begin{verbatim}
+diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", 
+    s->sig, filen[s->file], 
+    sig, pn, 
+    s->name);
+\end{verbatim}
+
+
 
 %\section{File and line information, [[AHISTORY]]}
 % see debugging section
@@ -5661,17 +5583,12 @@ addlib(char *obj)
 \chapter{Resolving}
 \label{chap:resolving}
 
-% resolve different steps: 
-% - virtual program counter
-% - code refs, absolute jumps in term of virtual pc (labels)
-% - data refs
-
 %trans:
-% Ok loading objects and libs has been done. Normally
-% have now a linked list of instructions in firstp, with a valid Prog->pc
-% (still virtual program counter?)
-% and a good symbol table where can see for instance the pc
-% for every TEXT symbols.
+Once the object files and libraries have been loaded, 
+%
+the next step in the linking pipeline is
+to {resolve} the symbol references in the instructions of those object files.
+Here is the responsible code:
 
 <<[[main()]] resolving phase>>=
 <<[[main()]] if export table or dynamic module(arm)>>
@@ -5693,58 +5610,387 @@ dotext();
 %       goto out;
 %   noops();
 %   span();
-% I think follow is optional, and the order can be changed as
-% some steps are independent I think. The test for firstp is not useful
-% I think if you remove follow.
+% so:
+% - span() -> dotext()
+% - I think follow() is optional, and the order can be changed as
+%   some steps are independent I think. 
+% - the test for firstp is not useful I think if you remove follow.
 
-% dodata() must precede dotext(), e.g.
-% for SSTRING one must do dotata() before dotext.
+%toc: %dup: overview/soft-archi
+[[patch()]] builds a graph of code instructions,
+[[noops()]] rewrites virtual instructions in real instructions,
+\n well still not completely real though
+[[dodata()]] {layout} data by assigning a memory address to each
+\n actually offset
+globals, and finally
+[[dotext()]] does a similar thing for the code, assigning a 
+{real code address} to each instruction.
 
-% what we need to resolve?
-% - code references
-% - data references
+%toc:
+In the first section of this chapter we will discuss the different
+issues in symbol resolution. We will also explain the need for
+the 4 functions above and the rational for the order of their calls.
+Then, the following sections will each explain one of the 4 functions
+above.
+\l then final discussions xdefine, SB/R12
 
-% For data(globl) references it's a symbol, so need to assign
-% an absolute location to this symbol. If it's a local or parameter
-% it's relative so easier.
-% For code they can be reduced to branch pc jump. If we use
-% pointer to link a src to it's dest, and then far later assign
-% a absolute concrete pc to the instructions, then easy.
+\section{Issues in symbol resolution}
 
-% !!!! Note that there is a mutual recursive issue!!!!! To layout code
-% we need to know where the addresses of the variables, but 
-% for that we need to know what is INITDAT but INITDAT is
-% after the text so need to layout the text and the size
-% of some instructions depends on the location of the data ...
-% Solved with the (SB) and R12 trick for the ARM.
-% otherwise? need fixpoint?
+The linker has mainly two kinds of references to resolve: 
+\begin{itemize}
+\item {\em code references} in branching instructions,
+e.g. [[BL foo(SB)]], which ultimately should be transformed
+in an ARM instruction with, as an operand, a concrete address in
+the {code section}, e.g. [[BL 0x1020]]
+\l can jump to a data?
+
+\item {\em data references} in memory instructions, 
+e.g. [[MOVW hello(SB), R1]], which ultimately should
+be transformed in an ARM instruction with, as an operand,
+a concrete address in the {data section}, e.g. [[LDR 0x7014(R0), R1]].
+\footnote{Remember from the \book{Assembler} that [[MOVW]] is 
+actually a {virtual instruction} which unifies the two
+separate ARM instructions [[LDR]] (load) and [[STR]] (store).
+}
+\n actually not  0x7014 but 0x14(R12), and actually not even than because of BIG
+\n actually has also memory reference in DATA instruction? ximm can have addr
+\t can have just address?
+
+\end{itemize}
+
+Note that some branching instructions have been
+{partially resolved} at this point.
+%
+Indeed, 
+branching to a {\em label} (e.g. [[B loop]]), or 
+{\em relative jumps} using the pseudo-register [[PC]] (e.g. [[B 2(PC)]]),
+have already been resolved and converted by the assembler [[5a]] in
+{\em absolute jumps} (e.g. [[B 13]]). See the \book{Assembler}.
+%
+Those absolute jumps
+have even been {relocated} by the linker to a new memory address
+origin in Section~\ref{sec:relocating} (e.g. [[B 113]]).
+
+Resolving and converting the remaining branching instructions 
+(e.g. [[BL foo(SB)]])
+to absolute jumps is very easy thanks to the symbol table and
+the [[Sym.value]] field of procedure symbols.
+%toc:
+There are still some remaining issues though that makes
+the resolving step non-trivial as we will see in the following
+sections.
+
+\subsection{Virtual program counter versus real code address}
+
+%trans:
+The first issue is that
+%
+the value in the absolute jump instructions we mentioned before refers to a 
+{\em virtual program counter} which is not a {\em real code address}.
+%dup: overview/soft-archi core-ds/instr loading/pc-ipc loading/axxx
+Indeed, the virtual program counter starts at 0
+and is incremented by 1 in [[ldobj()]] after each
+code instruction read. 
+%dup: overview/disk-image-mem-image overview/5l overview/5l-a main/-H
+Real code addresses on the other hand start at [[INITTEXT]] (4128 under \plan),
+%dup: overview/5l-a core-ds/instr main/asmb/text-sec 
+and because the ARM uses fixed-length instructions 
+of 4 bytes, are always a multiple of 4.
 
 
+Unfortunately, going from a virtual program counter to
+a real code address can not be done simply by 
+multiplying by~4 and adding [[INITTEXT]].
+%dup: main/asmb/text-section-gen-oplook
+Indeed, as said in Section~\ref{sec:asmb-text-section-overview},
+the instructions in object files do not match exactly 
+ARM instructions.
+%
+This means that one instruction in the object file
+may lead to the generation of multiple ARM instructions in
+the executable, or no instruction at all sometimes.
+%
+Even though the assembly language of [[5a]] tries to mimic
+closely the ARM instruction set, there is still a mismatch
+for a few reasons explained below:
+
+\begin{itemize}
+\item {\em virtual instructions} such as 
+%dup: main/asmb/text-sec 
+[[DIV]] have no counterpart in the ARM. 
+[[ADIV]] and [[AMOD]] are converted by [[5l]]
+in a serie of ARM 
+instructions which ends with the call to
+respectively [[_div()]] and [[_mod()]] of the core C library
+(see Section~\ref{sec:div-mod}) which implement
+in software the division and modulo algorithms (using [[ADD]],
+[[MUL]], [[SUB]], etc).
+\n ARET? well always one instr, but its MOVW could have different size
+\n  also profiling generate lots of instr
+\n ANOP? well could generate fake instr without side effect? can we?
+\n AMOVW? ok, constraint anyway for STR/LDR
+%real-world: pb specific to 5l?
+
+\item the {\em pseudo-instruction} [[TEXT]] leads to the generation of
+0, 1, or many ARM instructions depending on the situation. 
+Indeed, if the procedure 
+%is a {\em non-leaf} function (see Section~\ref{sec:leaf}) or 
+use some locals, it
+will need an extra ARM instruction to 
+%save the {\em link register}
+decrement the {\em stack pointer} (see Section~\ref{sec:atext-patching}).
+\l both can be done in one instruction, magic
+Moreover, if profiling is enabled, a few more ARM instructions will be added
+for the {instrumentation} of the procedure to gather statistics
+(see Chapter~\ref{chap:profiling}).
+%
+The same is true for [[RET]].
+%real-world: pb specific to 5l?
+
+\label{sec:constraints-immediate-and-offset}
+\item {\em constraints} on immediate constants and offsets
+imposed by the ARM are relaxed by [[5a]] and the object file.
+%dup: overview/5l-a core-ds/instr main/asmb/text-sec resolve/issue/
+As said before, the ARM uses fixed-length instructions of 4 bytes,
+%
+so for instructions involving immediate constants 
+(e.g. [[ADD $10256, R1, R2]]) %$
+or offsets (e.g. [[MOVW 54000(R0), R2]]), 
+%dup: (and adapted) from Assembler in parsing/immediage-constant 
+the range of those numbers is quite limited.
+%Indeed, a few of the 32 bits of an instruction are already used to encode
+%the opcode and a few more to encode the other operands.
+For arithmetic instructions, only 12 bits of the ARM instruction
+are available to encode the constant.
+%Even though the ARM uses a clever trick to represent numbers
+%using those 12 bits (see Section~\ref{sec:clever-trick-numbers}),
+%the set of numbers which can be represented is still limited.
+%
+This is why even a regular instruction such as [[ADD]] may lead
+to the generation of multiple ARM instructions.
+Indeed, if the instruction uses a big number, this number
+must first be loaded in a temporary register 
+(see Section~\ref{sec:pool-and-reg-tmp}).
+\t but how? same pb for loading it no?
+%real-world: specific 5l? how other assembler do? 
+% error message at assembly time?
+
+\end{itemize}
+
+%trans:
+Because of all of this, it is not trivial to convert a
+virtual program counter reference in a branching instruction
+to a real code address.
+\l how? alternative tech to graph?
+%
+The solution adopted by [[5l]] operates in three steps:
+
+\begin{enumerate}
+\item the function [[patch()]] builds
+a {\em graph of code instructions} by transforming the use
+of a virtual program counter {reference} 
+%in a branching instruction 
+to a real {pointer} ([[Instr*]]).
+%
+This pointer will be stored in the [[Instr.cond]] field
+of the branching instruction
+and will point to the target instruction
+having the specified virtual program counter in his [[Instr.pc]].
+
+\item the function [[dotext()]]
+sets [[pc]] to INITTEXT and
+iterates over all the code instructions. 
+For each instruction, [[dotext()]] computes the actual number
+of ARM instructions which are needed for this
+instruction (via [[oplook()]]), 
+set [[Instr.pc]] to [[pc]] which both represent now
+{\em real program counters}, 
+and increment [[pc]] accordingly.
+
+\item the code generator [[asmout()]] when involved with a branching
+instruction [[p]] can find the target code address
+by simply looking at [[p->cond->pc]].
+
+\end{enumerate}
+
+\l FIGURE illustrating process? item 1 and 2 combine to make possible 3
+
+%real-world: pb specific to 5a/5l? no virtual-instr in other assembler?
+% but also issue of size of instr no? and need relocate labels
+% which are complicated because of varying size of instr (and fixpoint?)?
+% alternative techniques to graph of code instruction?
+%alt: other technique? what I will use for 5l in ocaml?
+
+Thanks to the graph of code instructions, it is also easy
+after [[patch()]] to call [[noops()]] to rewrite virtual
+instructions in real instructions.
+\n and actually still not completely real, TEXT gets converted in MOVW
+\n but could be part of oplook() and could be done in asmout() instead
+%dup: overview/soft-archi
+Indeed, [[noops()]] can replace a virtual instruction by
+multiple ARM instructions
+or even delete the instruction without
+any consequence on the other branching instructions (as long
+at it maintains carefully the [[Instr.cond]] pointers pointing
+to the original instruction).
+%dup: overview/soft-archi
+Before the graph of instructions, inserting or
+deleting an instruction would have forced to assign a new 
+virtual program counter to each instruction and to relocate 
+every branching instructions.
+
+Thanks to the graph, it is also possible to perform some
+optimisations before code generation,
+such as dead code elimination,
+as we will see in Section~\ref{sec:optimisations}.
+\l actually double thanks to graph cos use graph to traverse and
+\l  thx to graph dont have to relocate every other stuff after
+\l can change "blocks" in graph. remove, strip,compact.
+
+
+\subsection{Data address and code size mutual dependency}
+\n was 'code instruction size' but too long title in TOC
+
+%trans:
+The second issue which makes the resolving step non-trivial is
+%
+the {\em mutual dependency} between the layout of code and data.
+\l define layout somewhere?
+Indeed, to generate code one needs to resolve memory instructions involving
+globals which means one must know the address of those globals.
+\n note that I use generate here, but it is also true for layout
+%
+This suggests to layout first data and then the code.
+%
+But, because those globals are in the data section, which is after the code
+section, one needs first to know at least the {size of the code section} to
+start to layout data. 
+%
+This suggests to layout first the code and then the data, 
+hence the mutual dependency.
+
+
+Of course, we just need the size of the code section to layout data,
+%alt: could also put data first in executable, would be simpler
+so we could first layout the code using {fake addresses} for the globals
+referenced in memory instructions. We would get a size
+\n actually no, estimation onyl
+for the code section which we could use as the starting
+point of the data section, to layout data. 
+Finally, we would layout the code a second time using 
+real addresses for the globals, this time to generate the real code.
+
+
+One difficulty is that the size of the code section computed
+during the first layout would be only an {estimation}.
+\t specific to ARM? then add ARM somewhere
+Indeed, some instructions involving globals may have different size
+\l well abuse of lang, some instr lead to generation of multiple ARM instr
+depending on the address of the global.
+\t recall hello(SB), ARM converted as offset really
+Offsets in ARM instructions
+have a limited range, as mentioned in the previous section.
+This means some memory instructions may require the use of an extra
+instruction if the address of the global happens to be large.
+\t but how bootstrapped? WORD and LDR
+ %clever \ref{sec:sec:constraints-immediate-and-offset}
+Using fake addresses during the first layout would be imprecise.
+%alt: put safe gap after estimation? and fixpoint? 
+
+The solution adopted by [[5l]] to solve the mutual dependency
+problem operates in three steps: 
+
+\begin{enumerate}
+\item the layout of data is done first, via [[dodata()]],
+by iterating over all the globals.
+\n using hash, not datap
+%dup: overview/5l-a overview-soft-archi
+But, each globals is assigned a memory address (in [[Sym.value]])
+as {\em an offset to the start of the data section},
+not an absolute address.
+%
+Note that the old value in [[Sym.value]] contained the size
+of the global which is used to layout globals one after the other.
+
+\item [[dotext()]] layouts code by iterating over all the instructions.
+But, it assumes the {\em reserved register} [[R12]] will, at {\em run-time},
+when the executable is executed,
+contain [[INITDAT]], the address of the start of the data section.
+\n actually not exactly that because BIG opti
+It also assumes every operands involving a global, 
+\t for deref and for addressof? or not for address of global!?
+e.g. [[MOVW hello(SB), R1]],
+will be transformed later (in [[asmout()]])
+as an {\em indirect with offset} operand
+(see the \book{Assembler}).
+%
+This operand will use [[R12]] as the {base} and 
+the [[Sym.value]] of the global (computed previously)
+as the offset, e.g.  [[LDR 14(R12), R1]].
+That way, [[dotext()]] can compute accurately the size of the
+instruction.
+
+\item one of the first instruction of the program must
+initialize [[R12]] with the value of [[INITDAT]].
+This value is recorded in the executable as a special symbol,
+[[setR12]], as a form of reflection explained in Section~\ref{sec:sb-r12}.
+\n actually opti so not that
+%
+In practice, the function [[_main()]], from the core
+C library, is the first function executed by
+the program (see Section~\ref{sec:choice-entry-point}).
+This is why one of its first instruction is:
+[[MOVW $setR12(SB), R12]].%$
+\t but absolute address? but then size of that?? bootstrap?
+\l see section X where see code of _main? well wrong code, subtle code.
+
+\end{enumerate}
+
+%alt: fixpoint?
+
+All of this explains the order of the calls we saw
+at the beginning of this chapter:
+
+\begin{verbatim}
+patch();
+noops();
+
+dodata();
+dotext();
+\end{verbatim}
+\l also for SSTRING one must do dotata() before dotext.
+\l other reasons?
+
+\bigskip
+%trans:
+Now that we have a better picture of how things work
+together to resolve symbols, we
+can go through the code of each of the functions above,
+starting with [[patch()]].
 
 
 \section{Building the code instructions graph, [[patch()]]}
-\l no pun intended
 
-% needed because better to use pointers to virtual pc because
-% we will change the linked list of instructions. remove, strip,
-% compact.
 
-% Set Prog->cond for the branch instructions.
+
+% Set Prog->cond for the branch instructions
+%  introduced sec:instr-cond
 % (before transform branch instructions using symbols in regular branch 
 % instructions using offsets (like labels))
 
+% later assign also real pc, and can do
 % curp->cond->pc so can see the actual value of the branch we go too.
 % (see DConv)
-
 
 % who will use this Prog->cond later? follow(), but if don't care
 % about unreachable instruction, is patch() useful????
 
 <<[[patch()]] locals>>=
-Prog *p, *q;
+Prog *p;
+Sym *s;
+Prog *q;
 int a;
 long c;
-Sym *s;
 @
 % essentially will add some links with p->cond = q;   for instruction p
 % with opcode a == ABxx where q->pc == c where c is the branch offset value.
@@ -5776,6 +6022,7 @@ patch(void)
     // pass 2
     for(p = firstp; p != P; p = p->link) {
         <<adjust curtext when iterate over instructions p>>
+
         if(p->cond != P && p->cond != UP) {
             p->cond = brloop(p->cond);
             if(p->cond != P)
@@ -5785,9 +6032,11 @@ patch(void)
     }
 }
 @
-%less: ARET in conditional? but ARET has no args in Assembler.nw
 %note: has the p->cond == UP because can have such things
-% done for SUNDEF sections
+% done for SUNDEF sections, and remember that cond set to P
+% in ldobj
+
+\t I dont understand pass 2 and brloop, when need that?
 
 % p->to.offset = p->cond->pc;
 % can have changed?? yes because of brloop()
@@ -5803,9 +6052,11 @@ Prog	undefp;
 <<constant UP>>=
 #define	UP	(&undefp)
 @
-
+% who does = UP?
 
 \subsection{Resolving branch instructions using symbols}
+
+% easy, look property of symbol in symbol table Sym.value = pc of procedure.
 
 <<[[patch()]] resolve branch instructions using symbols>>=
 a = p->as;
@@ -5822,6 +6073,8 @@ if((a == ABL || a == AB || a == ARET) &&
     }
 }
 @
+% not D_BRANCH? D_OREG? BL foo(SB)? from = ?
+\t ARET? but ARET has no args in Assembler.nw. Bug? because of SUNDEF?
 
 <<[[patch()]] switch section type for branch instruction, cases>>=
 default:
@@ -5830,18 +6083,44 @@ default:
     s->value = vexit;
     break;
 @
+\n see also SUNDEF case
+
 
 <<[[patch()]] locals>>=
 long vexit;
 @
-
 <<[[patch()]] initialisations>>=
 s = lookup("exit", 0);
 vexit = s->value;
 @
+% exit??? part of C library?
 
+\subsection{Finding instruction at [[pc]]}
+
+<<[[patch()]] find Prog reference q with pc == c>>=
+for(q = firstp; q != P;) {
+    if((q->forwd != P) && (c >= q->forwd->pc)) {
+        q = q->forwd; // big jump
+    } else {
+        if(c == q->pc)
+            break; // found it!
+        q = q->link; // small jump
+    }
+}
+if(q == P) {
+    diag("branch out of range %ld\n%P", c, p);
+    p->to.type = D_NONE;
+}
+@
 
 \subsection{Indexing [[pc]], forward links overlay}
+
+<<[[Prog]] other fields>>=
+Prog*	forwd;
+@
+%old: used to be part of an union with regused, but regused was actually
+% unused
+
 
 <<[[patch()]] initialisations>>=
 mkfwd();
@@ -5858,12 +6137,6 @@ mkfwd();
 <<constant LOG>>=
 #define	LOG	5
 @
-
-<<[[Prog]] other fields>>=
-Prog*	forwd;
-@
-%old: used to be part of an union with regused, but regused was actually
-% unused
 
 <<function mkfwd>>=
 /// main -> patch -> <>
@@ -5902,24 +6175,6 @@ mkfwd(void)
 }
 @
 
-\subsection{Finding instruction at [[pc]]}
-
-<<[[patch()]] find Prog reference q with pc == c>>=
-for(q = firstp; q != P;) {
-    if((q->forwd != P) && (c >= q->forwd->pc)) {
-        q = q->forwd; // big jump
-    } else {
-        if(c == q->pc)
-            break; // found it!
-        q = q->link; // small jump
-    }
-}
-if(q == P) {
-    diag("branch out of range %ld\n%P", c, p);
-    p->to.type = D_NONE;
-}
-@
-
 \subsection{Compacting chains of [[AB]], [[brloop()]]}
 
 
@@ -5947,7 +6202,7 @@ brloop(Prog *p)
     return P;
 }
 @
-% less: diag infinute loop detected?
+% less: diag infinite loop detected??
 
 
 
@@ -6170,12 +6425,9 @@ noops(void)
 %#endif
 
 \subsection{Leaf procedure optimisation}
-% could be put in Optimisation section?
+\label{sec:leaf}
 
-<<enum sxxx cases>>=
-SLEAF, // arm
-@
-% SLEAF? the special opti ARM has for leaf functions?
+% could be put in Optimisation section?
 
 % if leaf procedure, no need to save current SP, noone
 % will RET back to this procedure. Also
@@ -6205,7 +6457,18 @@ case ABL:
 % assumes can not make jump outside the function ...?
 % the assembler checks that?
 
+
+
+<<enum sxxx cases>>=
+SLEAF, // arm
+@
+% SLEAF? the special opti ARM has for leaf functions?
+%  but need a section for that? there is core doing different thing
+%  if SLEAF? just for putsymb? but could use mark too?
+
+
 \subsection{[[ATEXT]] patching}
+\label{sec:atext-patching}
 
 % if leaf procedure, no need to save REGLINK in the stack!
 % hence the autosize = 0 I think
@@ -6230,8 +6493,9 @@ case ATEXT:
         if(!autosize)
             break;
     }
+    // else
 
-    // MOVW R14, -autosize(SP)
+    // MOVW.W R14, -autosize(SP)
     q1 = prg();
     q1->as = AMOVW;
     q1->scond |= C_WBIT;
@@ -6239,16 +6503,19 @@ case ATEXT:
     q1->from.type = D_REG;
     q1->from.reg = REGLINK;
     q1->to.type = D_OREG;
-    q1->to.offset = -autosize;
     q1->to.reg = REGSP;
+    q1->to.offset = -autosize;
 
+    // insert_after(p, q1)
     q1->link = p->link;
     p->link = q1;
     break;
 @
 % wbit??
+% forgot Instr.pc ???? does not matter anymore, graph already built
 
 \subsection{[[ARET]] rewriting}
+\label{sec:ARET-rewrite}
 
 <<[[noops()]] second pass switch opcode cases>>=
 case ARET:
@@ -6276,6 +6543,10 @@ case ARET:
 
 
 \subsection{[[ANOP]] stripping}
+
+% generated by 5c?
+% generated also for DUPOK stuff, where all the instr of a procedures
+% are now NOP
 
 <<[[noops()]] first pass swith opcode cases>>=
 case ANOP:
@@ -6333,7 +6604,21 @@ case ABCASE:
 
 \section{Laying out data, [[dodata()]]}
 % computing datasize (and bsssize)
-% != generating DATA
+% != generating DATA which is done in asmb. Here just layout.
+
+% can be done before actually? independent? what matters
+% is that done before dotext() though! because
+% oplook! instoffset, etc.
+
+% The programmer specifies sizes for GLOBL, and their content via DATA,
+% but he does not want to care about the precise layout. Here we layout,
+% we put all the globals (spreaded in different instructions and different
+% object files) next to each other, assigning concrete locations 
+% (actually offset to INITDAT) to each GLOBL.
+% Note that Sym.value changes "type" going from a size to now a location.
+% size first so can add each time when iterate.
+
+% used in a.out header
 
 <<global datsize>>=
 long	datsize;
@@ -6343,23 +6628,21 @@ long	datsize;
 long	bsssize;
 @
 
-% The programmer specifies sizes for GLOBL, and their content via DATA,
-% but he does not want to care about the precise layout. Here we layout,
-% we put all the globals (spreaded in different instructions and different
-% object files) next to each other, assigning concrete locations 
-% (actually offset to INITDAT) to each GLOBL.
-% Note that Sym.value changes "type" going from a size to now a location.
 
 <<function dodata(arm)>>=
 /// main -> <>
 void
 dodata(void)
 {
-    int i, t;
-    Sym *s;
     Prog *p;
+    Sym *s;
+    // offset to start of data section
     long orig;
+    // size of data
     long v;
+    //enum<Section>
+    int t;
+    int i;
 
     DBG("%5.2f dodata\n", cputime());
 
@@ -6386,13 +6669,9 @@ dodata(void)
         t = s->type;
         if(t == SDATA || t == SBSS) {
             v = s->value;
-            if(v == 0) { // check
-                diag("%s: no size", s->name);
-                v = 1;
-            }
-            while(v & 3) // align
-                v++;
-            s->value = v; // adjust
+            <<[[dodata()]] sanity check size of data v>>
+            v = rnd(v , 4); // align
+            s->value = v;   // adjust
             <<[[dodata()]] if small data size>>
         }
     }
@@ -6405,22 +6684,16 @@ dodata(void)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t == SDATA) {
-            // s->value used to contain the size of the GLOBL, 
-            // now it's its location!
             v = s->value;
-            if(v == 0) {
-                diag("%s: no size", s->name);
-                v = 1;
-            }
+            // s->value used to contain the size of the GLOBL.
+            // Now it contains its location (as an offset to INITDAT)
             s->value = orig;
             orig += v;
         } else {
             <<[[dodata()]] pass2, retag small data>>
         }
     }
-
-    while(orig & 7)
-        orig++;
+    orig = rnd(orig, 8);
 
     datsize = orig;
 
@@ -6431,21 +6704,31 @@ dodata(void)
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         if(s->type == SBSS) {
-            // s->value used to contain the size of the GLOBL, 
-            // now it's its location
             v = s->value;
             s->value = orig;
             orig += v;
         }
     }
-    while(orig & 7)
-        orig++;
+    orig = rnd(orig, 8);
 
     bsssize = orig-datsize;
 
     <<[[dodata()]] define special symbols>>
 }
 @
+%old:
+%            while(v & 3) // align
+%                v++;
+%    while(orig & 7) // align
+%        orig++;
+%    while(orig & 7) // align
+%        orig++;
+%   better use rnd()
+%old: was doing <<[[dodata()]] sanity check size of data v>>
+% in pass2 for SDATA but not for BSS. I think more consistent not do it
+% anywhere, any redundant with check done in pass1.
+
+
 % now Sym.value for GLOBL is not the size anymore but the offset
 % (offset to INITDAT though) changed type!
 % note that first iteration is on datap instructions, the other
@@ -6455,7 +6738,15 @@ dodata(void)
 % of the text ... this is computed in dotext(). 
 % But does it have to be mutually recursive? If we there was not the
 % SSTRING thing, could we do just dotext() before dodata()?
+% NO! depending on address, cant refer directly in instruction. Need pool.
 
+
+<<[[dodata()]] sanity check size of data v>>=
+if(v == 0) { // check
+    diag("%s: no size", s->name);
+    v = 1;
+}
+@
 
 <<[[dodata()]] sanity check DATA instructions>>=
 if(s->type != SDATA)
@@ -6468,79 +6759,35 @@ if(v > s->value)
 @
 % p->reg for boundaries ('DATA name / con, ximm')
 
+
+
 \section{Laying out code, [[dotext()]]}
 % computing textsize
 % != generating TEXT
 
 % Adjusting pc and code addresses to concrete values, 
-% not symbolic pc! so then when generating the code for AB in
+% not virtual pc! so then when generating the code for AB in
 % the next chapter we can do p->cond->pc to know where to concretely jump.
 % Start of use of INITTEXT! switch from a symbolic pc to a real pc
 % where the size of the instructions now matter (hence use of oplook()).
+
+% set global for a.out header, and also for INITDAT as see end of dotext()
 
 <<global textsize>>=
 long	textsize;
 @
 
 
-<<[[span()]] locals>>=
+<<[[dotext()]] locals>>=
 Prog *p;
 Optab *o;
+Sym *s;
+// code address
 long c;
 long v;
-Sym *s;
 int m, i;
 @
 
-<<function span(arm)>>=
-/// main -> <>
-void
-dotext(void)
-{
-    <<[[span()]] locals>>
-
-    DBG("%5.2f span\n", cputime());
-
-    c = INITTEXT;
-    <<[[span()]] initialisation>>
-
-    for(p = firstp; p != P; p = p->link) {
-       <<adjust curtext when iterate over instructions p>>
-
-        p->pc = c;
-        o = oplook(p);
-        m = o->size;
-
-        if(m == 0) {
-            if(p->as == ATEXT) {
-                autosize = p->to.offset + 4;
-                if(p->from.sym != S)
-                    p->from.sym->value = c;
-                <<[[span()]] detect if large procedure>>
-            } else {
-                diag("zero-width instruction\n%P", p);
-            }
-        } else {
-            c += m;
-            <<[[span()]] pool handling for optab o>>
-        }
-    }
-
-    <<[[span()]] if string in text segment>>
-
-    c = rnd(c, 8);
-
-    textsize = c - INITTEXT;
-    <<[[span()]] define special symbols>>
-    if(INITRND)
-        INITDAT = rnd(c, INITRND);
-    DBG("tsize = %lux\n", textsize);
-}
-@
-%old: was called span()
-%less: use orig instead of 'c' so match more dodata()?
-% but here it's really a concrete location whereas for dodata()
-% it's relative to INITDAT that we actually compute here.
 
 % if assembly was simple, then simple to know the size
 % of instructions, 4, but some ASM instructions are virtual,
@@ -6548,26 +6795,81 @@ dotext(void)
 % this is subtle but explained later in next chapter.
 % for now imagine oplook as returning something with size 4.
 
-
 %Is there a mutual recursive problem? oplook call
 % aclass() which needs to know offset size, but we don't know
 % yet INITDAT and how far it will be from R12 or other stuff.
 % so bug? No because R12 will be INITDAT+BIG! this will not change.
 % subtle.
 
+<<function span(arm)>>=
+/// main -> <>
+void
+dotext(void)
+{
+    <<[[dotext()]] locals>>
+
+    DBG("%5.2f span\n", cputime());
+
+    c = INITTEXT;
+    <<[[dotext()]] initialisation>>
+
+    for(p = firstp; p != P; p = p->link) {
+       <<adjust curtext when iterate over instructions p>>
+       <<adjust autosize when iterate over instructions p>>
+
+        // real program counter transition
+        p->pc = c;
+
+        o = oplook(p);
+        m = o->size;
+        c += m;
+
+        if(m == 0) {
+            if(p->as == ATEXT) {
+                if(p->from.sym != S)
+                    p->from.sym->value = c;
+                <<[[dotext()]] detect if large procedure>>
+            } else {
+                diag("zero-width instruction\n%P", p);
+            }
+        } else {
+            <<[[dotext()]] pool handling for optab o>>
+        }
+    }
+
+    <<[[dotext()]] if string in text segment>>
+
+    c = rnd(c, 8);
+
+    textsize = c - INITTEXT;
+    <<[[dotext()]] define special symbols>>
+    if(INITRND)
+        INITDAT = rnd(c, INITRND);
+    DBG("tsize = %lux\n", textsize);
+}
+@
+%old:
+%  - was called span()
+%  - the c+=m was in second else branch, but I put before
+%  - the autosize adjustment was done later but actually bug?
+%    anyway if was ATEXT then no aclass call anyway
+%  - the curtext adjustment was done later too
+\t use orig instead of 'c' so match more dodata()?
+% but here it's really a concrete location whereas for dodata()
+% it's relative to INITDAT that we actually compute here.
+
+
 
 %\subsection{Large procedures}
-% need that?
 
-<<[[span()]] locals>>=
+<<[[dotext()]] locals>>=
 long    otxt;
 @
-
-<<[[span()]] initialisation>>=
+<<[[dotext()]] initialisation>>=
 otxt = c;
 @
 
-<<[[span()]] detect if large procedure>>=
+<<[[dotext()]] detect if large procedure>>=
 if(c - otxt >= 1L<<17) {
     diag("Procedure %s too large\n", TNAME);
     errorexit();
@@ -6575,22 +6877,17 @@ if(c - otxt >= 1L<<17) {
 otxt = c;
 @
 % >>
-%TODO: why big procedures are a problem???
-
-
+\t why large procedure special? because of limitations of ARM?
 %old: there was some special code to handle really large procedures
 % but the code looked buggy, so I commented it out for now.
 
-%<<[[span()]] locals>>=
+%<<[[dotext()]] locals>>=
 %bool bflag;
 %@
-%
-%<<[[span()]] initialisation>>=
+%<<[[dotext()]] initialisation>>=
 %bflag = false;
 %@
-%
-%
-%<<[[span()]] if large procedure set bflag>>=
+%<<[[dotext()]] if large procedure set bflag>>=
 %/* need passes to resolve branches */
 %if(c - otxt >= 1L<<17)
 %    bflag = true;
@@ -6598,7 +6895,7 @@ otxt = c;
 %% >>
 %
 %
-%<<[[span()]] if large procedure>>=
+%<<[[dotext()]] if large procedure>>=
 %/*
 % * if any procedure is large enough to
 % * generate a large SBRA branch, then
@@ -6628,7 +6925,7 @@ otxt = c;
 %    }
 %}
 %@
-%bug? does not have the [[span()]] if large procedure set bflag here?
+%bug? does not have the [[dotext()]] if large procedure set bflag here?
 
 %/* very larg branches
 %            if(o->type == 6 && p->cond) {
@@ -6654,12 +6951,44 @@ otxt = c;
 %            }
 % */
 
+
+
 \section{Defining special symbols [[etext]], [[edata]], [[end]]}
 \label{sec:special-symbols}
 
 % reflection on executable structure and its sections.
 % the kernel uses etext! edata! those are important special symbols.
 % some form of introspection capability.
+
+<<[[dotext()]] define special symbols>>=
+xdefine("etext", STEXT, INITTEXT+textsize);
+@
+%old: 
+%<<[[dodata()]] define special symbols>>=
+%xdefine("etext", STEXT, 0L);
+%@
+%and in span():
+%setext = lookup("etext", 0);
+%if(setext != S) {
+%    setext->value = c;
+%    textsize = c - INITTEXT;
+
+% so generated code which was using etext will now have good value
+
+<<function xdefine(arm)>>=
+void
+xdefine(char *p, int t, long v)
+{
+    Sym *s;
+
+    s = lookup(p, 0);
+    if(s->type == SNONE || s->type == SXREF) {
+        s->type = t;
+        s->value = v;
+    }
+}
+@
+
 
 % At this point we are in dodata() (or span()) in which case the 'value' field
 % is now really a location (relative to INITDAT though for SDATA and SBSS).
@@ -6681,51 +7010,26 @@ xdefine("end", SBSS, datsize+bsssize);
 % because it's in the BSS, but its location is its interesting value!
 
 
-<<[[span()]] define special symbols>>=
-xdefine("etext", STEXT, INITTEXT+textsize);
-@
-
-%old: 
-%<<[[dodata()]] define special symbols>>=
-%xdefine("etext", STEXT, 0L);
-%@
-%and in span():
-%setext = lookup("etext", 0);
-%if(setext != S) {
-%    setext->value = c;
-%    textsize = c - INITTEXT;
 
 
 
-<<function xdefine(arm)>>=
-void
-xdefine(char *p, int t, long v)
-{
-    Sym *s;
 
-    s = lookup(p, 0);
-    if(s->type == SNONE || s->type == SXREF) {
-        s->type = t;
-        s->value = v;
-    }
-}
-@
 
 \section{Mutual recursivity in layout and [[SB/R12]]}
 \label{sec:sb-r12}
 
-<<[[dodata()]] define special symbols>>=
-xdefine("setR12", SDATA, 0L+BIG);
-@
+% maybe can start with just 
+%  xdefine("setR12", SDATA, 0L);
+%  =~ bdata
 % the value here is a location for DATA, so there is
 % an implicit +INITDAT. Has to be, otherwise would have a mutually
 % recursive issue between dodata and dotext because dotext
 % need the layout of data, but this layout must start after the
 % text ...
 
-<<constant BIG>>=
-BIG		= (1<<12)-4,
-@
+
+% and  see R12 assigned to INITDAT and so further access to work.
+
 % >>
 % lib_core/libc/arm/main9.s will do 
 %	MOVW	$setR12(SB), R(sb)
@@ -6736,12 +7040,21 @@ BIG		= (1<<12)-4,
 % bdata, etc. Here we care actually only about the address, not the
 % content at that address.
 
+
+
+% then introduce BIG optimisation below, or put in
+% adv topic chapter with small data segment?
+
+<<[[dodata()]] define special symbols>>=
+xdefine("setR12", SDATA, 0L+BIG);
+@
+<<constant BIG>>=
+BIG		= (1<<12)-4,
+@
+
 % why -4? otherwise could not reach the first data? offset
 % can be negative or positive so actually can cover 2 pages of
 % small data variables!
-
-
-
 
 % In practice the first page of the address space is always reserved
 % so it's better to store in R12 a bigger value. R12 will actually
@@ -6755,12 +7068,25 @@ BIG		= (1<<12)-4,
 \chapter{Machine Code Generation}
 \label{chap:arm-codegen}
 
-%dup:
-% The code generation is done by 5l, not 5a, surprisingly!
+%trans:
+The final step of the linking pipeline is to generate code.
+% have seen asmb(), in Section X, generate header, code
+% section, data section. can now see missing piece
+%toc:
+% oplook, asmout, datblk.
+% First recall ARM instr format, and additional DS.
+
+%dup: The code generation is done by 5l, not 5a, surprisingly!
+%real-world:?
 
 \section{ARM instruction format}
 
 % ref to colorful guide again
+
+
+% immediate value, 8+4 bits
+
+% memory address and offsets, register + 12 bits (1 page)
 
 \section{[[Optab]] and [[optab]]}
 \label{sec:optab}
@@ -7190,6 +7516,8 @@ aconsize:
 
 
 \section{Half, Small, Large, Rot, Neg}
+\label{sec:clever-trick-numbers}
+
 % Those are some kinds of optimisations? a bit but also need that
 % because expressivity Asm5 greater than what ARM can actually do sometimes.
 
@@ -7293,6 +7621,27 @@ immrot(ulong v)
 
 
 \subsection{Pool}
+\label{sec:pool-and-reg-tmp}
+
+
+% was in Resolving/issue/virtual-pc
+%where the first instruction would load the big number from 
+%
+%% LDR $pool1, RTMP
+%% ADD RTMP, R1, R2
+%% DATA pool1+0/4 $10256
+%
+%somewhere in
+%a reserved register 
+%\l REGTMP
+%and where the second instruction would then 
+%substitutes the big number
+%
+% from the original
+%instruction in the following instruction.
+%\l actually two code and one data?
+
+
 % see 5l -v -a, see WORD generated at the end for constants
 % that could not be encoded in one ARM instruction. Asm5 != ARMv6
 
@@ -7317,7 +7666,7 @@ enum Optab_flag {
 
 
 
-<<[[span()]] pool handling for optab o>>=
+<<[[dotext()]] pool handling for optab o>>=
 switch(o->flag & (LFROM|LTO|LPOOL)) {
 case LFROM:
     addpool(p, &p->from);
@@ -8207,7 +8556,7 @@ case 4:		/* add $I,[R],R */
 
 
 
-
+\label{sec:add-regtmp}
 <<[[optab]] entries>>=
 { AADD,		C_NCON,	C_REG,	C_REG,		13, 8, 0 },
 { AADD,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
@@ -8220,6 +8569,7 @@ case 4:		/* add $I,[R],R */
 { ACMP,		C_LCON,	C_REG,	C_NONE,		13, 8, 0,	LFROM },
 @
 % the general case for big constants
+
 
 <<[[asmout()]] switch on type cases>>=
 case 13:	/* op $lcon, [R], R */
@@ -9346,7 +9696,6 @@ find1(long l, int c)
 %  main(argv=...) /home/pad/.../main.c called from _main+26 (.../main9.s:12)
 
 
-% important call: asmlc()?
 <<[[asmb()]] symbol and line table sections>>=
 // modified by asmsym()
 symsize = 0;
@@ -9378,6 +9727,269 @@ else {
 @
 % say -s = strip? say see strip in appendix?
 
+
+
+\section{Executable symbol table, [[asmsym()]]}
+
+% have seen object file symbol table, now executable symbol table.
+% but here really just for debugging (or for dyn linking too?)
+
+<<global symsize>>=
+long	symsize;
+@
+% for the a.out.h header
+
+
+
+% FIGURE? with format?
+
+
+<<function asmsym(arm)>>=
+/// main -> asmb -> <>
+void
+asmsym(void)
+{
+    Prog *p;
+    Auto *a;
+    Sym *s;
+    int h;
+
+    s = lookup("etext", 0);
+    if(s->type == STEXT)
+        putsymb(s->name, 'T', s->value, s->version);
+
+    for(h=0; h<NHASH; h++)
+        for(s=hash[h]; s!=S; s=s->link)
+            switch(s->type) {
+            case SDATA:
+                putsymb(s->name, 'D', s->value+INITDAT, s->version);
+                continue;
+            case SBSS:
+                putsymb(s->name, 'B', s->value+INITDAT, s->version);
+                continue;
+
+            case SCONST:
+                putsymb(s->name, 'D', s->value, s->version);
+                continue;
+            case SSTRING:
+                putsymb(s->name, 'T', s->value, s->version);
+                continue;
+
+            case SFILE:
+                putsymb(s->name, 'f', s->value, s->version);
+                continue;
+            }
+
+    for(p=textp; p!=P; p=p->cond) {
+        s = p->from.sym;
+        if(s->type == STEXT || s->type == SLEAF) {
+            /* filenames first */
+            <<[[asmsym()]] call putsymb for filenames>>
+            
+            if(s->type == STEXT)
+                putsymb(s->name, 'T', s->value, s->version);
+            else // SLEAF
+                putsymb(s->name, 'L', s->value, s->version);
+
+            <<[[asmsym()]] frame symbols>>
+        }
+    }
+    if(debug['v'] || debug['n']) {
+        Bprint(&bso, "symsize = %lud\n", symsize);
+        Bflush(&bso);
+    }
+}
+@
+
+
+
+
+<<function putsymb>>=
+void
+putsymb(char *s, int t, long v, int ver)
+{
+    int i, f;
+
+    if(t == 'f')
+        s++;
+
+    lput(v);
+    if(ver)
+        t += 'a' - 'A';
+    cput(t+0x80);			/* 0x80 is variable length */
+
+    <<[[putsymb()]] if z or Z>>
+    else {
+        for(i=0; s[i]; i++)
+            cput(s[i]);
+        cput('\0');
+    }
+    symsize += 4 + 1 + i + 1;
+
+    <<[[putsymb()]] debug>>
+}
+@
+%>>
+
+\section{Stack variables symbols}
+\l frame?
+
+%trans:
+% few other things done by ldobj(), regarding stack variables,
+% which will be used later? by what? resolving? generation?
+
+% nm helloc actually does not show everything,
+% the 'f', 'p', and so are not shown by nm apparently.
+% try 5l -n -o helloc helloc.5
+
+%5l -n ...
+%T 000011d0 atexit
+%m 0000000c .frame
+%a 00000004 i
+%p 00000000 f
+
+\subsection{[[Auto]]}
+
+Operands involving parameters and local variables, 
+which are really variables both stored in the {\em stack},
+also known as {\em automatic variables}.
+% Text keep track all of them in
+use the [[autom]] field.
+
+<<[[Adr]] other fields>>=
+// list<ref_own<Auto> (next = Auto.link), only used by TEXT instruction
+Auto*	autom;
+@
+%old:
+%   union {
+%       // ref<Sym> of hash
+%       Sym*	sym;
+%       // list<ref_own<Auto> (next = Auto.link)
+%       Auto*	autom;
+%   };
+% but really stupid opti that makes code harder to read and
+% less identical to Operand type of 5a
+\l rename autom and Auto
+\n autom because auto is a reserved keyword? but nothing to do with automata
+\l maybe better to rename local_or_param
+
+
+
+
+The [[Auto]] structure is used to keep track of all the parameters
+and locals accessed by a procedure:
+
+<<struct Auto(arm)>>=
+struct	Auto
+{
+    // enum<Sym_kind> (N_LOCAL or N_PARAM only)
+    short	type;
+
+    // <ref<Sym>
+    Sym*	asym;
+    long	aoffset;
+
+    // Extra
+    <<[[Auto]] extra fields>>
+};
+@
+\t rename Var?
+\l aoffset is a repeat of the offset of the operand?
+
+Those stack variables are chained together:
+
+<<[[Auto]] extra fields>>=
+// list<ref_own<Auto> (head = curauto = Instr.to.autom of TEXT instruction)
+Auto*	link;
+@
+
+
+\subsection{[[curauto]]}
+
+% another global for set of stack variables
+
+% parameters + locals list
+<<global curauto>>=
+// list<ref<Auto>> (next = Auto.link)
+Auto*	curauto;
+@
+% set for the first time where? bug? should be = nil?
+
+
+
+% put example of instruction.
+% put example of multiple instruction with same parameter.
+
+<<[[inopd()]] locals>>=
+int t, l;
+Sym *s;
+Auto *u;
+@
+%old: t was i, but t(ype) better than i
+
+
+<<[[inopd()]] adjust curauto for N_LOCAL or N_PARAM symkind>>=
+s = a->sym;
+t = a->symkind;
+l = a->offset;
+
+// a parameter or local with a symbol, e.g. p+0(FP)
+if(s != S && (t == N_LOCAL || t == N_PARAM)) {
+
+    for(u=curauto; u; u=u->link)
+        if(u->asym == s)
+         if(u->type == t) {
+            if(u->aoffset > l)
+                u->aoffset = l; // diag()? inconcistent offset?
+            return size;
+        }
+    // else
+    
+    u = malloc(sizeof(Auto));
+    u->asym = s;
+    u->type = t;
+    u->aoffset = l;
+    
+    //add_list(u, curauto)
+    u->link = curauto;
+    curauto = u;
+}
+@
+%old: was
+% if(s == S || (t != N_LOCAL && t != N_PARAM))
+%    return size;
+% but anyway has return size after
+
+
+
+
+<<[[ldobj()]] case AEND, curauto adjustments>>=
+if(curtext != P)
+    curtext->to.autom = curauto;
+curauto = nil;
+@
+
+<<[[ldobj()]] case ATEXT, if curtext not null adjustments for curauto>>=
+if(curtext != P) {
+    <<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>
+    curtext->to.autom = curauto;
+    curauto = nil;
+}
+@
+
+
+\subsection{Frame symbols}
+
+<<[[asmsym()]] frame symbols>>=
+/* frame, auto and param after */
+putsymb(".frame", 'm', p->to.offset+4, 0);
+for(a=p->to.autom; a; a=a->link)
+    if(a->type == N_LOCAL)
+        putsymb(a->asym->name, 'a', -a->aoffset, 0);
+    else
+    if(a->type == N_PARAM)
+        putsymb(a->asym->name, 'p', a->aoffset, 0);
+@
 
 
 \section{File and line information in objects, [[AHISTORY]]}
@@ -9560,124 +10172,6 @@ out:
 
 
 
-\section{Executable symbol table, [[asmsym()]]}
-
-% have seen object file symbol table, now executable symbol table.
-% but here really just for debugging (or for dyn linking too?)
-
-% nm helloc actually does not show everything,
-% the 'f', 'p', and so are not shown by nm apparently.
-% try 5l -n -o helloc helloc.5
-
-<<global symsize>>=
-long	symsize;
-@
-% for the a.out.h header
-
-
-%5l -n ...
-%T 000011d0 atexit
-%m 0000000c .frame
-%a 00000004 i
-%p 00000000 f
-
-
-
-<<function asmsym(arm)>>=
-/// main -> asmb -> <>
-void
-asmsym(void)
-{
-    Prog *p;
-    Auto *a;
-    Sym *s;
-    int h;
-
-    s = lookup("etext", 0);
-    if(s->type == STEXT)
-        putsymb(s->name, 'T', s->value, s->version);
-
-    for(h=0; h<NHASH; h++)
-        for(s=hash[h]; s!=S; s=s->link)
-            switch(s->type) {
-            case SDATA:
-                putsymb(s->name, 'D', s->value+INITDAT, s->version);
-                continue;
-            case SBSS:
-                putsymb(s->name, 'B', s->value+INITDAT, s->version);
-                continue;
-
-            case SCONST:
-                putsymb(s->name, 'D', s->value, s->version);
-                continue;
-            case SSTRING:
-                putsymb(s->name, 'T', s->value, s->version);
-                continue;
-
-            case SFILE:
-                putsymb(s->name, 'f', s->value, s->version);
-                continue;
-            }
-
-    for(p=textp; p!=P; p=p->cond) {
-        s = p->from.sym;
-        if(s->type == STEXT || s->type == SLEAF) {
-            /* filenames first */
-            <<[[asmsym()]] call putsymb for filenames>>
-            
-            if(s->type == STEXT)
-                putsymb(s->name, 'T', s->value, s->version);
-            else // SLEAF
-                putsymb(s->name, 'L', s->value, s->version);
-            
-            /* frame, auto and param after */
-            putsymb(".frame", 'm', p->to.offset+4, 0);
-            for(a=p->to.autom; a; a=a->link)
-                if(a->type == N_LOCAL)
-                    putsymb(a->asym->name, 'a', -a->aoffset, 0);
-                else
-                if(a->type == N_PARAM)
-                    putsymb(a->asym->name, 'p', a->aoffset, 0);
-        }
-    }
-    if(debug['v'] || debug['n']) {
-        Bprint(&bso, "symsize = %lud\n", symsize);
-        Bflush(&bso);
-    }
-}
-@
-
-
-
-
-<<function putsymb>>=
-void
-putsymb(char *s, int t, long v, int ver)
-{
-    int i, f;
-
-    if(t == 'f')
-        s++;
-
-    lput(v);
-    if(ver)
-        t += 'a' - 'A';
-    cput(t+0x80);			/* 0x80 is variable length */
-
-    <<[[putsymb()]] if z or Z>>
-    else {
-        for(i=0; s[i]; i++)
-            cput(s[i]);
-        cput('\0');
-    }
-    symsize += 4 + 1 + i + 1;
-
-    <<[[putsymb()]] debug>>
-}
-@
-%>>
-
-
 \section{Filename symbols}
 
 % why they are shoved in to.autom with locals and params? a bit ugly
@@ -9803,7 +10297,8 @@ asmlc(void)
 \chapter{Profiling Support}
 \label{chap:profiling}
 
-% surprising again that it's ld's job to add profiling in plan9
+% surprising again that it's ld's job to add profiling in plan9.
+% Thx to TEXT and RET virtual, super easy!
 
 % The code below is interesting because it inserts extra object code using
 % directly "AST" constructs, so it helps to understand the data structure!!
@@ -9821,6 +10316,7 @@ if(debug['p'])
 
 % 5l -p -1
 % before dotext() (it matters since doprof generates code)
+% before noops()?
 <<[[main()]] call doprofxxx() if profiling>>=
 if(debug['p'])
     if(debug['1'])
@@ -9936,7 +10432,7 @@ doprof1(void)
     s->value = n*4;
 }
 @
-
+\l could use textp
 
 \section{[[_profin()]]}
 
@@ -10812,10 +11308,12 @@ grow(Reloc *r)
 
 
 \subsection{[[ADYNT]]}
-% ???
+% asm.pdf says it was for alef, so maybe can remove?
+%  useful also for dynamic loading?
+%  seems more related to dynamic typing
+
 % mv with dlm?
 % seems never produced by 5a/5c
-% was for alef?
 
 
 <<[[ldobj()]] locals(arm)>>=
@@ -10912,6 +11410,7 @@ if(dlm) {
 { ATEXT,	C_ADDR,	C_NONE,	C_LCON, 	 0, 0, 0 },
 { ATEXT,	C_ADDR,	C_REG,	C_LCON, 	 0, 0, 0 },
 @
+% size 0 so catched in dotext()
 
 <<[[optab]] entries>>=
 { AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4, 0 },
@@ -11032,6 +11531,7 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
 
 
 \section{Optimisations}
+\label{sec:optimisations}
 
 \subsection{Opcode rewriting}
 % at loading time
@@ -11072,7 +11572,7 @@ case AADD:
 
 % otherwise have to decompose.
 
-\subsection{Small data layout}
+\subsection{Small data first}
 % improve data cache miss?
 
 <<enum sxxx cases>>=
@@ -11105,8 +11605,11 @@ if(t == SDATA1)
 
 
 
+%\subsection{compacting AB here?}
 
 \subsection{Removing useless instructions, [[follow()]]}
+\label{sec:opti-follow}
+
 % a space optimisation more than speed opti (but can help speed
 % a bit maybe because of icache)
 
@@ -12652,6 +13155,7 @@ olhrr(int i, int b, int r, int sc)
 
 
 \subsection{Division instructions}
+\label{sec:div-mod}
 
 % like for floats, different options
 
@@ -13084,7 +13588,7 @@ if(debug['t']) {
 
 
 % after has layout all the TEXT instrs, can put behind the strings.
-<<[[span()]] if string in text segment>>=
+<<[[dotext()]] if string in text segment>>=
 if(debug['t']) {
     /* 
      * add strings to text segment
@@ -14214,21 +14718,39 @@ atolwhex(char *s)
 
 \section{Mathematic functions}
 
+% rnd, exemple:  rnd(16, 8) = 16. rnd(17, 8) = 24
+
+\t maybe show code of alternatives?
+%alt: code like that too
+%   while(orig & 7) // align
+%     orig++;
+% or
+%   autosize = (p->to.offset+3L) & ~3L;
+% which is optimal when rnd at power of 2?
+
 <<function rnd>>=
 long
 rnd(long v, long r)
 {
     long c;
 
-    if(r <= 0)
-        return v;
+    <<[[rnd()]] if r is null or negative>>
     v += r - 1;
     c = v % r;
-    if(c < 0)
-        c += r;
+    <<[[rnd()]] if v was negative>>
     v -= c;
     return v;
 }
+@
+
+
+<<[[rnd()]] if r is null or negative>>=
+if(r <= 0)
+    return v;
+@
+<<[[rnd()]] if v was negative>>=
+if(c < 0)
+    c += r;
 @
 
 \chapter{Linker-related Programs}
