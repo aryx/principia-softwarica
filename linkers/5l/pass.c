@@ -2,14 +2,19 @@
 #include	"l.h"
 
 /*s: function dodata(arm) */
+/// main -> <>
 void
 dodata(void)
 {
-    int i, t;
-    Sym *s;
     Prog *p;
+    Sym *s;
+    // offset to start of data section
     long orig;
+    // size of data
     long v;
+    //enum<Section>
+    int t;
+    int i;
 
     DBG("%5.2f dodata\n", cputime());
 
@@ -58,13 +63,14 @@ dodata(void)
         t = s->type;
         if(t == SDATA || t == SBSS) {
             v = s->value;
+            /*s: [[dodata()]] sanity check size of data v */
             if(v == 0) { // check
                 diag("%s: no size", s->name);
                 v = 1;
             }
-            while(v & 3) // align
-                v++;
-            s->value = v; // adjust
+            /*e: [[dodata()]] sanity check size of data v */
+            v = rnd(v , 4); // align
+            s->value = v;   // adjust
             /*s: [[dodata()]] if small data size */
             /*
              *	assign 'small' variables to data segment
@@ -88,13 +94,9 @@ dodata(void)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t == SDATA) {
-            // s->value used to contain the size of the GLOBL, 
-            // now it's its location!
             v = s->value;
-            if(v == 0) {
-                diag("%s: no size", s->name);
-                v = 1;
-            }
+            // s->value used to contain the size of the GLOBL.
+            // Now it contains its location (as an offset to INITDAT)
             s->value = orig;
             orig += v;
         } else {
@@ -104,9 +106,7 @@ dodata(void)
             /*e: [[dodata()]] pass2, retag small data */
         }
     }
-
-    while(orig & 7)
-        orig++;
+    orig = rnd(orig, 8);
 
     datsize = orig;
 
@@ -117,15 +117,12 @@ dodata(void)
     for(i=0; i<NHASH; i++)
      for(s = hash[i]; s != S; s = s->link) {
         if(s->type == SBSS) {
-            // s->value used to contain the size of the GLOBL, 
-            // now it's its location
             v = s->value;
             s->value = orig;
             orig += v;
         }
     }
-    while(orig & 7)
-        orig++;
+    orig = rnd(orig, 8);
 
     bsssize = orig-datsize;
 
@@ -140,6 +137,7 @@ dodata(void)
 /*e: function dodata(arm) */
 
 /*s: function undef */
+/// main -> <>
 void
 undef(void)
 {
@@ -346,14 +344,17 @@ loop:
 /*e: function xfol(arm) */
 
 /*s: function patch(arm) */
+/// main -> <>
 void
 patch(void)
 {
+    Prog *p;
+    Prog *q;
+    long c; // not ulong?
     /*s: [[patch()]] locals */
-    Prog *p, *q;
-    int a;
-    long c;
     Sym *s;
+    // enum<Opcode>
+    int a;
     /*x: [[patch()]] locals */
     long vexit;
     /*e: [[patch()]] locals */
@@ -376,8 +377,8 @@ patch(void)
 
         /*s: [[patch()]] resolve branch instructions using symbols */
         a = p->as;
-        if((a == ABL || a == AB || a == ARET) &&
-           p->to.type != D_BRANCH && 
+        if((a == ABL || a == AB) &&
+           p->to.type != D_BRANCH &&  // must be D_OREG then
            p->to.sym != S) {
             s = p->to.sym;
             switch(s->type) {
@@ -390,6 +391,8 @@ patch(void)
                 diag("undefined: %s\n%P", s->name, p);
                 s->type = STEXT;
                 s->value = vexit;
+                p->to.offset = s->value;
+                p->to.type = D_BRANCH;
                 break;
             /*x: [[patch()]] switch section type for branch instruction, cases */
             case SUNDEF:
@@ -405,7 +408,7 @@ patch(void)
         /*e: [[patch()]] resolve branch instructions using symbols */
 
         if(p->to.type == D_BRANCH && p->cond != UP) {
-            c = p->to.offset;
+            c = p->to.offset; // target pc
             /*s: [[patch()]] find Prog reference q with pc == c */
             for(q = firstp; q != P;) {
                 if((q->forwd != P) && (c >= q->forwd->pc)) {
@@ -424,13 +427,14 @@ patch(void)
             p->cond = q;
         }
     }
-
     // pass 2
+    /*s: [[patch()]] optimisation pass */
     for(p = firstp; p != P; p = p->link) {
         /*s: adjust curtext when iterate over instructions p */
         if(p->as == ATEXT)
             curtext = p;
         /*e: adjust curtext when iterate over instructions p */
+
         if(p->cond != P && p->cond != UP) {
             p->cond = brloop(p->cond);
             if(p->cond != P)
@@ -438,6 +442,7 @@ patch(void)
                 p->to.offset = p->cond->pc;
         }
     }
+    /*e: [[patch()]] optimisation pass */
 }
 /*e: function patch(arm) */
 
@@ -445,6 +450,7 @@ patch(void)
 #define	LOG	5
 /*e: constant LOG */
 /*s: function mkfwd */
+/// main -> patch -> <>
 void
 mkfwd(void)
 {
@@ -484,6 +490,7 @@ mkfwd(void)
 /*e: function mkfwd */
 
 /*s: function brloop(arm) */
+/// main -> patch -> <>
 Prog*
 brloop(Prog *p)
 {
@@ -553,12 +560,16 @@ rnd(long v, long r)
 {
     long c;
 
+    /*s: [[rnd()]] if r is null or negative */
     if(r <= 0)
         return v;
+    /*e: [[rnd()]] if r is null or negative */
     v += r - 1;
     c = v % r;
+    /*s: [[rnd()]] if v was negative */
     if(c < 0)
         c += r;
+    /*e: [[rnd()]] if v was negative */
     v -= c;
     return v;
 }

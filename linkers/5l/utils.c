@@ -63,7 +63,7 @@ lookup(char *symb, int v)
     int c;
     /*e: [[lookup()]] locals */
 
-    /*s: [[lookup()]] compute hash value [[h]] of [[symb]] and [[v]], and [[len]] */
+    /*s: [[lookup()]] compute hash value [[h]] of [[(symb, v)]] and [[len]] */
     // h = hashcode(symb, v); 
     // len = strlen(symb);
     h = v;
@@ -74,7 +74,7 @@ lookup(char *symb, int v)
     len = (p - symb) + 1;
     h &= 0xffffff;
     h %= NHASH;
-    /*e: [[lookup()]] compute hash value [[h]] of [[symb]] and [[v]], and [[len]] */
+    /*e: [[lookup()]] compute hash value [[h]] of [[(symb, v)]] and [[len]] */
     
     // sym = hash_lookup((symb, v), h, hash)
     for(sym = hash[h]; sym != S; sym = sym->link)

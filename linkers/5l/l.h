@@ -21,7 +21,7 @@ typedef	struct	Sym	Sym;
 typedef	struct	Auto	Auto;
 typedef	struct	Prog	Prog;
 typedef	struct	Optab	Optab;
-typedef	struct	Oprang	Oprang;
+typedef	struct	Oprange	Oprange;
 typedef	struct	Count	Count;
 
 /*s: constant P */
@@ -37,32 +37,30 @@ typedef	struct	Count	Count;
 /*s: struct Adr(arm) */
 struct	Adr
 {
-    // enum<operand_kind> (D_NONE by default)
+    // enum<Operand_kind> (D_NONE by default)
     short	type;
 
-    // switch on Adr.type
+    // switch on Operand.type
     union {
         long	offset;
         Ieee*	ieee;
         char*	sval;
     };
 
-    // option<enum<registr>> None = R_NONE
+    // option<enum<Register>> None = R_NONE
     short	reg; 
 
     /*s: [[Adr]] other fields */
-    // enum<sym_kind>
+    // enum<Sym_kind>
     short	symkind;
+    // option<ref<Sym>> (owner = hash)
+    Sym*	sym;
     /*x: [[Adr]] other fields */
-    union {
-        // ref<Sym> of hash
-        Sym*	sym;
-        // list<Auto>?? (next = Auto.link)
-        Auto*	autom;
-    };
-    /*x: [[Adr]] other fields */
-    // option<enum<classx>>, 0 means None, i means i-1 is the class you want
+    // option<enum<Classx>>, 0 means None, i means i-1 is the class you want
     short	class;
+    /*x: [[Adr]] other fields */
+    // list<ref_own<Auto> (next = Auto.link), only used by TEXT instruction
+    Auto*	autom;
     /*e: [[Adr]] other fields */
 };
 /*e: struct Adr(arm) */
@@ -78,10 +76,10 @@ struct	Prog
     Adr	to;
 
     /*s: [[Prog]] other fields */
-    // option<enum<registr>>, None = R_NONE
+    // option<enum<Register>>, None = R_NONE
     short	reg;
     /*x: [[Prog]] other fields */
-    // enum<instr_cond>
+    // enum<Instr_cond>
     byte	scond;
     /*x: [[Prog]] other fields */
     long	line;
@@ -99,11 +97,11 @@ struct	Prog
 
     // Extra
     /*s: [[Prog]] extra fields */
-    // list<ref<Prog>> from firstp(/lastp), or datap
+    // list<ref<Prog>> (from = firstp or datap)
     Prog*	link;
     /*x: [[Prog]] extra fields */
-    // list<ref<Prog>> from textp/etextp initially
-    // ref<Prog> later for branch instructions
+    // list<ref<Prog>> (from = textp for TEXT instructions)
+    // ref<Prog> for branch instructions
     Prog*	cond;
     /*e: [[Prog]] extra fields */
 };
@@ -115,7 +113,7 @@ struct	Sym
     // The key
     // ref_own<string>
     char	*name;
-    // 0 for global symbols, object file id for local symbols
+    // 0 for global symbols, object file id for private symbols
     short	version; 
 
     // The generic value, 
@@ -128,13 +126,13 @@ struct	Sym
     /*e: [[Sym]] section field */
 
     /*s: [[Sym]] other fields */
-    // md5sum of the type of the symbol
-    long	sig;
+    // for instance last 32 bits of md5sum of the type of the symbol
+    ulong	sig;
     /*x: [[Sym]] other fields */
-    // idx in filen
+    // index in filen[]
     ushort	file;
     /*x: [[Sym]] other fields */
-    // enum<section> too?
+    // enum<Section> too?
     short	subtype;
     /*x: [[Sym]] other fields */
     short	become;
@@ -143,7 +141,7 @@ struct	Sym
     /*e: [[Sym]] other fields */
     // Extra
     /*s: [[Sym]] extra fields */
-    // list<ref<Sym>> bucket of hashtbl 'hash'
+    // list<ref<Sym>> (from = hash)
     Sym*	link;
     /*e: [[Sym]] extra fields */
 };
@@ -156,15 +154,16 @@ struct	Sym
 /*s: struct Auto(arm) */
 struct	Auto
 {
-    // enum<name_kind> (but N_LOCAL or N_PARAM only?)
+    // enum<Sym_kind> (N_LOCAL or N_PARAM only)
     short	type;
 
-    // option<ref<Sym>>
+    // <ref<Sym>
     Sym*	asym;
     long	aoffset;
 
     // Extra
     /*s: [[Auto]] extra fields */
+    // list<ref_own<Auto> (head = curauto = Instr.to.autom of TEXT instruction)
     Auto*	link;
     /*e: [[Auto]] extra fields */
 };
@@ -172,14 +171,14 @@ struct	Auto
 /*s: struct Optab(arm) */
 struct	Optab
 {
-    // enum<opcode> from 5.out.h, (the opcode is the representant of a range)
+    // enum<Opcode> from 5.out.h, (the opcode is the representant of a range)
     byte	as;
 
-    // enum<cxxx>, possible operand_kind/class for first operand
+    // enum<Cxxx>, possible operand_kind/class for first operand
     short	a1;
-    // enum<cxxx>, possible operand_kind/class for second operand
+    // enum<Cxxx>, possible operand_kind/class for second operand
     short	a2;
-    // enum<cxxx>, possible operand_kind/class for third operand
+    // enum<Cxxx>, possible operand_kind/class for third operand
     short	a3;
 
     // idx for the code generator, see the giant switch in asmout()
@@ -191,20 +190,20 @@ struct	Optab
     /*s: [[Optab]] other fields */
     // 0 | REGSB | REGSP
     short	param;
-    // bitset<enum<optab_flag>>
+    // bitset<enum<Optab_flag>>
     short	flag;
     /*e: [[Optab]] other fields */
 };
 /*e: struct Optab(arm) */
-/*s: struct Oprang(arm) */
-struct	Oprang
+/*s: struct Oprange(arm) */
+struct	Oprange
 {
     //index in sorted optab global
     Optab*	start;
     //index in sorted optab global
     Optab*	stop;
 };
-/*e: struct Oprang(arm) */
+/*e: struct Oprange(arm) */
 
 /*s: enum sxxx(arm) */
 enum Section
@@ -221,21 +220,21 @@ enum Section
     /*x: enum sxxx cases */
     SFILE,
     /*x: enum sxxx cases */
-    SDATA1,
-    /*x: enum sxxx cases */
-    SSTRING, // arm
-    /*x: enum sxxx cases */
     SIMPORT,
     SEXPORT,
     /*x: enum sxxx cases */
     SUNDEF,
     /*x: enum sxxx cases */
     SCONST,
+    /*x: enum sxxx cases */
+    SDATA1,
+    /*x: enum sxxx cases */
+    SSTRING, // arm
     /*e: enum sxxx cases */
 };
 /*e: enum sxxx(arm) */
 /*s: enum optab_flag(arm) */
-enum optab_flag {
+enum Optab_flag {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
@@ -318,7 +317,8 @@ enum Mark {
 /*s: enum misc_constant(arm) */
 enum misc_constants {
     /*s: constant BIG */
-    BIG		= (1<<12)-4,
+    //BIG		= (1<<12)-4,
+    BIG		= 0,
     /*e: constant BIG */
 
     /*s: constant STRINGSZ */
@@ -353,9 +353,9 @@ enum rxxx {
 
 /*s: enum headtype(arm) */
 /*
- *	-H0				      no header
- *	-H2 -T4128 -R4096	  is plan9 format
- *	-H7				      is elf
+ *	-H0						no header
+ *	-H2 -T4128 -R4096		is plan9 format
+ *	-H7						is elf
  */
 enum Headtype {
      H_NOTHING = 0,
@@ -421,7 +421,7 @@ extern	int	nerrors;
 extern	long	nhunk;
 extern long	nsymbol;
 extern	long	instoffset;
-extern	Oprang	oprange[ALAST];
+extern	Oprange	oprange[ALAST];
 extern	char*	outfile;
 extern	long	pc;
 extern	long	symsize;

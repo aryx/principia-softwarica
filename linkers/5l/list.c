@@ -72,7 +72,7 @@ Pconv(Fmt *fp)
 /*e: function Pconv(arm) */
 
 /*s: function Aconv(arm) */
-// enum<opcode> -> string
+// enum<Opcode> -> string
 int
 Aconv(Fmt *fp)
 {

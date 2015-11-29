@@ -15,6 +15,7 @@ static	Sym*	sym_modu;
 /*e: global sym_modu(arm) */
 
 /*s: function noops(arm) */
+/// main -> <>
 void
 noops(void)
 {
@@ -118,8 +119,9 @@ noops(void)
                 if(!autosize)
                     break;
             }
+            // else
 
-            // MOVW R14, -autosize(SP)
+            // MOVW.W R14, -autosize(SP)
             q1 = prg();
             q1->as = AMOVW;
             q1->scond |= C_WBIT;
@@ -127,9 +129,10 @@ noops(void)
             q1->from.type = D_REG;
             q1->from.reg = REGLINK;
             q1->to.type = D_OREG;
-            q1->to.offset = -autosize;
             q1->to.reg = REGSP;
+            q1->to.offset = -autosize;
 
+            // insert_after(p, q1)
             q1->link = p->link;
             p->link = q1;
             break;

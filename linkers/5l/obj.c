@@ -185,7 +185,7 @@ main(int argc, char *argv[])
     case H_PLAN9:
         HEADR = 32L;
         if(INITTEXT == -1)
-            INITTEXT = 4096+32; // 1 page + a.out header
+            INITTEXT = 4096+32; // 1 page + a.out header, 4128
         if(INITDAT == -1)
             INITDAT = 0;
         if(INITRND == -1)
@@ -264,7 +264,7 @@ main(int argc, char *argv[])
     firstp = prg();
     lastp = firstp;
 
-    // Loading (populates firstp/lastp, datap, textp/etextp, and hash)
+    // Loading (populates firstp, datap, and hash)
     while(*argv)
         objfile(*argv++);
     /*s: [[main()]] load implicit libraries */
@@ -418,7 +418,7 @@ objfile(char *file)
 {
     fdt f;
     long len;
-    char magbuf[SARMAG];
+    char magbuf[SARMAG]; // magic buffer
     /*s: [[objfile()]] other locals */
     struct ar_hdr arhdr;
     long off, esym, cnt;
@@ -556,54 +556,56 @@ objfile(char *file)
 }
 /*e: function objfile */
 
-/*s: function zaddr(arm) */
+/*s: function inopd(arm) */
+/// main -> objfile -> ldobj -> <>
 int
-zaddr(byte *p, Adr *a, Sym *h[])
+inopd(byte *p, Adr *a, Sym *h[])
 {
-    /*s: [[zaddr()]] locals */
-    int c; // symidx
-    int size;
-    /*x: [[zaddr()]] locals */
+    int size; // returned
+    int symidx;
+    /*s: [[inopd()]] locals */
     int t, l;
     Sym *s;
     Auto *u;
-    /*e: [[zaddr()]] locals */
+    /*e: [[inopd()]] locals */
 
     a->type = p[0];
     a->reg = p[1];
-    c = p[2];
-    /*s: [[zaddr()]] sanity check symbol range */
-    if(c < 0 || c > NSYM){
-        print("sym out of range: %d\n", c);
-        p[0] = ALAST+1;
-        return 0;
-    }
-    /*e: [[zaddr()]] sanity check symbol range */
-    a->sym = h[c];
-    a->symkind = p[3];
-
-    size = 4;
-
-    /*s: [[zaddr()]] sanity check register range */
+    /*s: [[inopd()]] sanity check register range */
     if(a->reg < 0 || a->reg > NREG) {
         print("register out of range %d\n", a->reg);
         p[0] = ALAST+1;
         return 0;	/*  force real diagnostic */
     }
-    /*e: [[zaddr()]] sanity check register range */
+    /*e: [[inopd()]] sanity check register range */
+    symidx = p[2];
+    /*s: [[inopd()]] sanity check symbol range */
+    if(symidx < 0 || symidx > NSYM){
+        print("sym out of range: %d\n", symidx);
+        p[0] = ALAST+1;
+        return 0;
+    }
+    /*e: [[inopd()]] sanity check symbol range */
+    a->sym = h[symidx];
+    a->symkind = p[3];
+
+    size = 4;
 
     switch(a->type) {
-    /*s: [[zaddr()]] cases */
+    /*s: [[inopd()]] cases */
+    // 0 byte
     case D_NONE:
     case D_REG:
     case D_PSR:
         break;
 
+    // 1 byte
     case D_REGREG:
         a->offset = p[4];
         size++;
         break;
 
+    // 4 bytes
     case D_CONST:
     case D_SHIFT:
     case D_OREG:
@@ -612,16 +614,17 @@ zaddr(byte *p, Adr *a, Sym *h[])
         size += 4;
         break;
 
+    // 8 bytes (NSNAME)
     case D_SCONST:
         a->sval = malloc(NSNAME);
         memmove(a->sval, p+4, NSNAME);
         size += NSNAME;
         break;
-    /*x: [[zaddr()]] cases */
+    /*x: [[inopd()]] cases */
     case D_FREG:
     case D_FPCR:
         break;
-    /*x: [[zaddr()]] cases */
+    /*x: [[inopd()]] cases */
     case D_FCONST:
         a->ieee = malloc(sizeof(Ieee));
 
@@ -629,44 +632,47 @@ zaddr(byte *p, Adr *a, Sym *h[])
         a->ieee->h = p[8] | (p[9]<<8) | (p[10]<<16) | (p[11]<<24);
         size += 8;
         break;
-    /*e: [[zaddr()]] cases */
+    /*e: [[inopd()]] cases */
     default:
         print("unknown type %d\n", a->type);
         p[0] = ALAST+1;
         return 0;	/*  force real diagnostic */
 
     }
-    /*s: [[zaddr()]] adjust curauto for N_LOCAL or N_PARAM symkind */
+    /*s: [[inopd()]] adjust curauto for N_LOCAL or N_PARAM symkind */
     s = a->sym;
     t = a->symkind;
     l = a->offset;
 
-    if(s == S || (t != N_LOCAL && t != N_PARAM))
-        return size;
+    // a parameter or local with a symbol, e.g. p+0(FP)
+    if(s != S && (t == N_LOCAL || t == N_PARAM)) {
 
-    for(u=curauto; u; u=u->link)
-        if(u->asym == s)
-         if(u->type == t) {
-            if(u->aoffset > l)
-                u->aoffset = l;
-            return size;
-        }
-
-    u = malloc(sizeof(Auto));
-    u->asym = s;
-    u->type = t;
-    u->aoffset = l;
-
-    //add_list(u, curauto)
-    u->link = curauto;
-    curauto = u;
-    /*e: [[zaddr()]] adjust curauto for N_LOCAL or N_PARAM symkind */
+        for(u=curauto; u; u=u->link)
+            if(u->asym == s)
+             if(u->type == t) {
+                if(u->aoffset > l)
+                    u->aoffset = l; // diag()? inconcistent offset?
+                return size;
+            }
+        // else
+    
+        u = malloc(sizeof(Auto));
+        u->asym = s;
+        u->type = t;
+        u->aoffset = l;
+    
+        //add_list(u, curauto)
+        u->link = curauto;
+        curauto = u;
+    }
+    /*e: [[inopd()]] adjust curauto for N_LOCAL or N_PARAM symkind */
 
     return size;
 }
-/*e: function zaddr(arm) */
+/*e: function inopd(arm) */
 
 /*s: function addlib */
+/// ldobj(case AHISTORY and local_line == -1 special mark) -> <>
 void
 addlib(char *obj)
 {
@@ -784,6 +790,7 @@ addhist(long line, int type)
 /*e: function addhist */
 
 /*s: function histtoauto */
+/// ldobj (case AEND | ATEXT | ??) -> <>
 void
 histtoauto(void)
 {
@@ -849,19 +856,19 @@ nopout(Prog *p)
 
 /*s: function readsome */
 byte*
-readsome(int f, byte *buf, byte *good, byte *stop, int max)
+readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
 {
     int n;
 
     n = stop - good;
-    memmove(buf, good, stop - good);
+    memmove(buf, good, n);
     stop = buf + n;
     n = MAXIO - n;
     if(n > max)
         n = max;
     n = read(f, stop, n);
     if(n <= 0)
-        return 0;
+        return nil;
     return stop + n;
 }
 /*e: function readsome */
@@ -872,35 +879,43 @@ void
 ldobj(fdt f, long c, char *pn)
 {
     /*s: [[ldobj()]] locals(arm) */
-    byte *bloc;
-    byte *bsize;
-    int r;
-    /*x: [[ldobj()]] locals(arm) */
     long ipc;
     /*x: [[ldobj()]] locals(arm) */
-    // enum<opcode>
+    // enum<Opcode>
     short o;
     Prog *p;
     /*x: [[ldobj()]] locals(arm) */
-    bool skip;
+    // array<byte> (slice of buf.ibuf)
+    byte *bloc;
+    // ref<byte> (end pointer in buf.ibuf)
+    byte *bsize;
+    // remaining bytes, bsize - bloc
+    int r;
     /*x: [[ldobj()]] locals(arm) */
+    // array<option<ref<Sym>>>
+    Sym *h[NSYM];
+    /*x: [[ldobj()]] locals(arm) */
+    // enum<Sym_kind>
+    int k;
+    int symidx;
+    int v;
+    // ref<byte> (in Buf.ibuf)
     byte *stop;
     /*x: [[ldobj()]] locals(arm) */
-    Sym *h[NSYM];
     Sym *s;
-    /*x: [[ldobj()]] locals(arm) */
-    int v;
     /*x: [[ldobj()]] locals(arm) */
     ulong sig;
     /*x: [[ldobj()]] locals(arm) */
-    // growing_array<filename>  (grown for every 16 elements)
+    // growing_array<option<string>>  (grown for every 16 elements)
     static char **filen;
     // index of next free entry in filen
     static int files = 0;
     /*x: [[ldobj()]] locals(arm) */
-    char **nfilen;
+    char **nfilen; // new filen
     /*x: [[ldobj()]] locals(arm) */
     Sym *di = S;
+    /*x: [[ldobj()]] locals(arm) */
+    bool skip;
     /*x: [[ldobj()]] locals(arm) */
     Prog *t;
     /*e: [[ldobj()]] locals(arm) */
@@ -917,18 +932,23 @@ ldobj(fdt f, long c, char *pn)
     filen[files++] = strdup(pn);
     /*e: [[ldobj()]] remember set of object filenames */
     /*s: [[ldobj()]] bloc and bsize init */
-    bsize = buf.ibuf;
     bloc = buf.ibuf;
+    bsize = buf.ibuf;
     /*e: [[ldobj()]] bloc and bsize init */
 
 // can come from AEND
 newloop:
+    // new object file
     ipc = pc;
-    version++;
-    skip = false;
-
+    /*s: [[ldobj()]] after newloop when new object file, more initializations */
     memset(h, 0, sizeof(h));
+    /*x: [[ldobj()]] after newloop when new object file, more initializations */
+    version++;
+    /*x: [[ldobj()]] after newloop when new object file, more initializations */
     histfrogp = 0;
+    /*x: [[ldobj()]] after newloop when new object file, more initializations */
+    skip = false;
+    /*e: [[ldobj()]] after newloop when new object file, more initializations */
 
 loop:
     if(c <= 0)
@@ -936,11 +956,11 @@ loop:
 
     /*s: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
     r = bsize - bloc;
-    if(r < 100 && r < c) {		/* enough for largest prog */
+    if(r < 100 && r < c) {		/* enough for largest instruction */
         bsize = readsome(f, buf.ibuf, bloc, bsize, c);
-        if(bsize == 0)
+        if(bsize == nil)
             goto eof;
-        bloc = buf.ibuf;
+        bloc = buf.ibuf; // readsome() does some memmove()
         goto loop;
     }
     /*e: [[ldobj()]] read if needed in loop:, adjust bloc and bsize */
@@ -954,10 +974,11 @@ loop:
     }
     /*e: [[ldobj()]] sanity check opcode in range(arm) */
 
+    // dispatch opcode part one
     /*s: [[ldobj()]] if ANAME or ASIGNAME(arm) */
     if(o == ANAME || o == ASIGNAME) {
-        sig = 0;
         /*s: [[ldobj()]] if SIGNAME adjust sig */
+        sig = 0;
         if(o == ASIGNAME){
             sig = bloc[1] | (bloc[2]<<8) | (bloc[3]<<16) | (bloc[4]<<24);
             bloc += 4;
@@ -969,7 +990,7 @@ loop:
         /*s: [[ldobj()]] if stop is nil refill buffer and retry */
         if(stop == nil){
             bsize = readsome(f, buf.ibuf, bloc, bsize, c);
-            if(bsize == 0)
+            if(bsize == nil)
                 goto eof;
             bloc = buf.ibuf;
             stop = memchr(&bloc[3], '\0', bsize-&bloc[3]);
@@ -980,26 +1001,36 @@ loop:
         }
         /*e: [[ldobj()]] if stop is nil refill buffer and retry */
 
-        v = bloc[1];	/* type */
-        o = bloc[2];	/* sym */
+        k = bloc[1];	/* type */
+        symidx = bloc[2];	/* sym */
+
         bloc += 3;
         c -= 3;
 
-        r = 0;
-        if(v == N_INTERN)
-            r = version;
+        v = 0; // global version by default
+        /*s: [[ldobj()]] when ANAME opcode, if private symbol adjust version */
+        if(k == N_INTERN)
+            v = version;
+        /*e: [[ldobj()]] when ANAME opcode, if private symbol adjust version */
 
-        s = lookup((char*)bloc, r);
+        s = lookup((char*)bloc, v);
 
         c -= &stop[1] - bloc;
         bloc = stop + 1;
 
         /*s: [[ldobj()]] if sig not zero */
         if(sig != 0){
+            /*s: [[ldobj()]] signature compatibility check */
             if(s->sig != 0 && s->sig != sig)
-                diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", s->sig, filen[s->file], sig, pn, s->name);
+                diag("incompatible type signatures %lux(%s) and %lux(%s) for %s", 
+                     s->sig, filen[s->file], 
+                     sig, pn, 
+                     s->name);
+            /*e: [[ldobj()]] signature compatibility check */
             s->sig = sig;
+            /*s: [[ldobj()]] remember file introducing the symbol */
             s->file = files-1;
+            /*e: [[ldobj()]] remember file introducing the symbol */
         }
         /*e: [[ldobj()]] if sig not zero */
         /*s: [[ldobj()]] when ANAME, debug */
@@ -1007,9 +1038,9 @@ loop:
             print("	ANAME	%s\n", s->name);
         /*e: [[ldobj()]] when ANAME, debug */
 
-        h[o] = s;
+        h[symidx] = s;
 
-        if((v == N_EXTERN || v == N_INTERN) && s->type == SNONE)
+        if((k == N_EXTERN || k == N_INTERN) && s->type == SNONE)
             s->type = SXREF;
 
         /*s: [[ldobj()]] when ANAME opcode, if D_FILE */
@@ -1029,24 +1060,26 @@ loop:
         goto loop;
     }
     /*e: [[ldobj()]] if ANAME or ASIGNAME(arm) */
+    // else
 
     p = malloc(sizeof(Prog));
     p->as = o;
-    // reading the object binary file, opposite of outcode() in Assembler.nw
     /*s: [[ldobj()]] read one instruction in p */
+    // mostly opposite of outcode() in 5a
+    // p->as = bloc[0] has been done already above so continue from bloc[1]
     p->scond = bloc[1];
     p->reg   = bloc[2];
     p->line  = bloc[3] | (bloc[4]<<8) | (bloc[5]<<16) | (bloc[6]<<24);
     r = 7;
-    r += zaddr(bloc+7, &p->from, h);
-    r += zaddr(bloc+r, &p->to, h);
+    r += inopd(bloc+r, &p->from, h);
+    r += inopd(bloc+r, &p->to, h);
 
     bloc += r;
     c -= r;
-
+    /*e: [[ldobj()]] read one instruction in p */
     p->link = P;
     p->cond = P;
-    /*e: [[ldobj()]] read one instruction in p */
+
     /*s: [[ldobj()]] sanity check p */
     if(p->reg > NREG)
         diag("register out of range %d", p->reg);
@@ -1056,10 +1089,24 @@ loop:
         print("%P\n", p);
     /*e: [[ldobj()]] debug */
 
+    // dispatch opcode part two
     switch(o) {
     /*s: [[ldobj()]] switch opcode cases(arm) */
-    case AGOK:
-        diag("unknown opcode\n%P", p);
+    default:
+    casedef:
+        /*s: [[ldobj()]] in switch opcode default case, if skip */
+        if(skip)
+            nopout(p);
+        /*e: [[ldobj()]] in switch opcode default case, if skip */
+
+        // relocation
+        if(p->to.type == D_BRANCH)
+            p->to.offset += ipc;
+
+        //add_queue(firstp, lastp, p)
+        lastp->link = p;
+        lastp = p;
+
         p->pc = pc;
         pc++;
         break;
@@ -1075,21 +1122,22 @@ loop:
         }
         /*e: [[ldobj()]] case ATEXT, if curtext not null adjustments for curauto */
         curtext = p;
-
+        /*s: [[ldobj()]] in switch opcode ATEXT case, reset skip */
         skip = false; // needed?
-
-        autosize = (p->to.offset+3L) & ~3L;
-        p->to.offset = autosize;
+        /*e: [[ldobj()]] in switch opcode ATEXT case, reset skip */
+        /*s: [[ldobj()]] in switch opcode ATEXT case, set autosize */
+        p->to.offset = rnd(p->to.offset, 4);
+        autosize = p->to.offset;
         autosize += 4;
+        /*e: [[ldobj()]] in switch opcode ATEXT case, set autosize */
 
         s = p->from.sym;
-
         /*s: [[ldobj()]] sanity check for ATEXT symbol s */
         if(s == S) {
             diag("TEXT must have a name\n%P", p);
             errorexit();
         }
-        if(s->type != SNONE && s->type != SXREF) {
+        if(!(s->type == SNONE || s->type == SXREF)) {
             /*s: [[ldobj()]] case ATEXT and section not SNONE or SXREF, if DUPOK */
             if(p->reg & DUPOK) {
                 skip = true;
@@ -1099,7 +1147,6 @@ loop:
             diag("redefinition: %s\n%P", s->name, p);
         }
         /*e: [[ldobj()]] sanity check for ATEXT symbol s */
-
         s->type = STEXT;
         s->value = pc;
 
@@ -1123,20 +1170,16 @@ loop:
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AGLOBL:
         s = p->from.sym;
-
         /*s: [[ldobj()]] sanity check for AGLOBL symbol s */
         if(s == S) {
             diag("GLOBL must have a name\n%P", p);
             errorexit();
         }
-        if(s->type != SNONE && s->type != SXREF)
+        if(!(s->type == SNONE || s->type == SXREF))
             diag("redefinition: %s\n%P", s->name, p);
         /*e: [[ldobj()]] sanity check for AGLOBL symbol s */
-
-        s->type = SBSS; // for now SBSS; will be set maybe to SDATA in dodata()
-        s->value = 0;
-        if(p->to.offset > s->value)
-            s->value = p->to.offset;
+        s->type = SBSS; // for now; will be set maybe to SDATA in dodata()
+        s->value = (p->to.offset > 0) ? p->to.offset : 0;
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ADATA:
@@ -1147,14 +1190,13 @@ loop:
         }
         /*e: [[ldobj()]] sanity check for ADATA symbol s */
 
-        //add_queue(datap, p)
+        //add_list(datap, p)
         p->link = datap;
         datap = p;
 
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AEND:
-
         /*s: [[ldobj()]] case AEND, curauto adjustments with curhist */
         histtoauto();
         /*e: [[ldobj()]] case AEND, curauto adjustments with curhist */
@@ -1162,12 +1204,18 @@ loop:
         if(curtext != P)
             curtext->to.autom = curauto;
         curauto = nil;
-        curtext = P;
         /*e: [[ldobj()]] case AEND, curauto adjustments */
+        curtext = P;
 
         if(c)
             goto newloop;
         return;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AGOK:
+        diag("unknown opcode\n%P", p);
+        p->pc = pc;
+        pc++;
+        break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AHISTORY:
         if(p->to.offset == -1) {
@@ -1181,24 +1229,6 @@ loop:
             addhist(p->to.offset, D_FILE1);	/* 'Z' */
         histfrogp = 0;
         goto loop;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
-    case ASUB:
-        if(p->from.type == D_CONST)
-         if(p->from.symkind == D_NONE)
-          if(p->from.offset < 0) {
-            p->from.offset = -p->from.offset;
-            p->as = AADD;
-        }
-        goto casedef;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
-    case AADD:
-        if(p->from.type == D_CONST)
-         if(p->from.symkind == D_NONE)
-          if(p->from.offset < 0) {
-            p->from.offset = -p->from.offset;
-            p->as = ASUB;
-        }
-        goto casedef;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ADYNT:
         if(p->to.sym == S) {
@@ -1244,6 +1274,24 @@ loop:
         datap = p;
         break;
 
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case ASUB:
+        if(p->from.type == D_CONST)
+         if(p->from.symkind == D_NONE)
+          if(p->from.offset < 0) {
+            p->from.offset = -p->from.offset;
+            p->as = AADD;
+        }
+        goto casedef;
+    /*x: [[ldobj()]] switch opcode cases(arm) */
+    case AADD:
+        if(p->from.type == D_CONST)
+         if(p->from.symkind == D_NONE)
+          if(p->from.offset < 0) {
+            p->from.offset = -p->from.offset;
+            p->as = ASUB;
+        }
+        goto casedef;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AMOVDF:
         if(!vfp || p->from.type != D_FCONST)
@@ -1309,23 +1357,6 @@ loop:
         }
         goto casedef;
     /*e: [[ldobj()]] switch opcode cases(arm) */
-
-    default:
-    casedef:
-        if(skip)
-            nopout(p);
-
-        // putting each object after each other, local offset become global
-        if(p->to.type == D_BRANCH)
-            p->to.offset += ipc;
-
-        //add_queue(firstp, lastp, p)
-        lastp->link = p;
-        lastp = p;
-
-        p->pc = pc;
-        pc++;
-        break;
     }
     goto loop;
 
@@ -1662,6 +1693,7 @@ find1(long l, int c)
 /*e: function find1 */
 
 /*s: function ieeedtof */
+/// main -> objfile -> ldobj -> <>
 long
 ieeedtof(Ieee *e)
 {
@@ -1690,6 +1722,7 @@ ieeedtof(Ieee *e)
 /*e: function ieeedtof */
 
 /*s: function ieeedtod */
+/// Dconv -> <>
 double
 ieeedtod(Ieee *ieeep)
 {

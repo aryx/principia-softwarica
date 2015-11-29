@@ -14,55 +14,63 @@ typedef struct Reloc Reloc;
 
 
 /*s: function span(arm) */
+/// main -> <>
 void
 dotext(void)
 {
-    /*s: [[span()]] locals */
+    /*s: [[dotext()]] locals */
     Prog *p;
     Optab *o;
+    Sym *s;
+    // code address
     long c;
     long v;
-    Sym *s;
     int m, i;
-    /*x: [[span()]] locals */
+    /*x: [[dotext()]] locals */
     long    otxt;
-    /*e: [[span()]] locals */
+    /*e: [[dotext()]] locals */
 
     DBG("%5.2f span\n", cputime());
 
     c = INITTEXT;
-    /*s: [[span()]] initialisation */
+    /*s: [[dotext()]] initialisation */
     otxt = c;
-    /*e: [[span()]] initialisation */
+    /*e: [[dotext()]] initialisation */
 
     for(p = firstp; p != P; p = p->link) {
        /*s: adjust curtext when iterate over instructions p */
        if(p->as == ATEXT)
            curtext = p;
        /*e: adjust curtext when iterate over instructions p */
+       /*s: adjust autosize when iterate over instructions p */
+       if(p->as == ATEXT) {
+           autosize = p->to.offset + 4;
+       }
+       /*e: adjust autosize when iterate over instructions p */
 
+        // real program counter transition
         p->pc = c;
+
         o = oplook(p);
         m = o->size;
+        c += m;
 
         if(m == 0) {
             if(p->as == ATEXT) {
-                autosize = p->to.offset + 4;
                 if(p->from.sym != S)
                     p->from.sym->value = c;
-                /*s: [[span()]] detect if large procedure */
+                /*s: [[dotext()]] detect if large procedure */
                 if(c - otxt >= 1L<<17) {
                     diag("Procedure %s too large\n", TNAME);
                     errorexit();
                 }
                 otxt = c;
-                /*e: [[span()]] detect if large procedure */
+                /*e: [[dotext()]] detect if large procedure */
             } else {
                 diag("zero-width instruction\n%P", p);
             }
         } else {
-            c += m;
-            /*s: [[span()]] pool handling for optab o */
+            /*s: [[dotext()]] pool handling for optab o */
             switch(o->flag & (LFROM|LTO|LPOOL)) {
             case LFROM:
                 addpool(p, &p->from);
@@ -83,11 +91,11 @@ dotext(void)
 
             if(blitrl)
                 checkpool(p);
-            /*e: [[span()]] pool handling for optab o */
+            /*e: [[dotext()]] pool handling for optab o */
         }
     }
 
-    /*s: [[span()]] if string in text segment */
+    /*s: [[dotext()]] if string in text segment */
     if(debug['t']) {
         /* 
          * add strings to text segment
@@ -103,14 +111,14 @@ dotext(void)
               c += v;
           }
     }
-    /*e: [[span()]] if string in text segment */
+    /*e: [[dotext()]] if string in text segment */
 
     c = rnd(c, 8);
 
     textsize = c - INITTEXT;
-    /*s: [[span()]] define special symbols */
+    /*s: [[dotext()]] define special symbols */
     xdefine("etext", STEXT, INITTEXT+textsize);
-    /*e: [[span()]] define special symbols */
+    /*e: [[dotext()]] define special symbols */
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);
@@ -136,13 +144,13 @@ checkpool(Prog *p)
 
 /*s: function flushpool(arm) */
 void
-flushpool(Prog *p, int skip)
+flushpool(Prog *p, bool skip)
 {
     Prog *q;
 
     if(blitrl) {
         if(skip){
-            if(debug['v'] && skip == 1)
+            if(debug['v'] && skip)
                 print("note: flush literal pool at %lux: len=%lud ref=%lux\n", p->pc+4, pool.size, pool.start);
             q = prg();
             q->as = AB;
@@ -263,7 +271,8 @@ immaddr(long v)
         return (v & 0xfff) |
             (1<<24) |	/* pre indexing */
             (1<<23);	/* pre indexing, up */
-    if(v >= -0xfff && v < 0)
+
+    if(v < 0 && v >= -0xfff)
         return (-v & 0xfff) |
             (1<<24);	/* pre indexing */
     return 0;
@@ -441,9 +450,10 @@ aclass(Adr *a)
             case SDATA: case SBSS: case SDATA1:
                 if(!dlm) {
                     instoffset = s->value + a->offset - BIG;
-                    if(immrot(instoffset) && instoffset != 0)
+                    if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
                         return C_RECON;
                 }
+                // else
                 instoffset = s->value + a->offset + INITDAT;
                 return C_LCON;
             }
@@ -477,14 +487,15 @@ aclass(Adr *a)
 /*e: function aclass(arm) */
 
 /*s: function oplook(arm) */
+/// main -> (dotext | asmb) -> <>
 Optab*
 oplook(Prog *p)
 {
     /*s: [[oplook()]] locals */
     Optab *o, *e;
-    // enum<opcode>, to index oprange[]
+    // enum<Opcode>, to index oprange[]
     int r;
-    // enum<class>
+    // enum<Class>
     int a1, a2, a3;
     /*x: [[oplook()]] locals */
     bool usecache = true;
@@ -621,6 +632,7 @@ cmp(int a, int b)
 /*e: function cmp(arm) */
 
 /*s: function ocmp(arm) */
+/// main -> buildop -> qsort(..., <>)
 int
 ocmp(const void *a1, const void *a2)
 {
@@ -656,11 +668,12 @@ ocmp(const void *a1, const void *a2)
 /*e: function ocmp(arm) */
 
 /*s: function buildop(arm) */
+/// main (init) -> <>
 void
 buildop(void)
 {
     int i, n;
-    // enum<opcode> representing a range
+    // enum<Opcode> representing a range
     int r;
 
     /*s: [[buildop()]] initialize xcmp cache */
@@ -711,6 +724,7 @@ buildop(void)
             oprange[AAND] = oprange[r];
             oprange[AEOR] = oprange[r];
             oprange[AORR] = oprange[r];
+
             oprange[ABIC] = oprange[r];
             oprange[ASUB] = oprange[r];
             oprange[ARSB] = oprange[r];

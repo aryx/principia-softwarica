@@ -7,7 +7,7 @@ union Buf buf;
 
 
 /*s: global HEADR */
-long	HEADR; 		/* length of header */
+long	HEADR; /* length of header */
 /*e: global HEADR */
 /*s: global HEADTYPE */
 // option<enum<Headtype>>, None = -1
@@ -17,7 +17,7 @@ short	HEADTYPE = -1; /* type of header */
 long	INITDAT = -1; /* data location */
 /*e: global INITDAT */
 /*s: global INITRND */
-long	INITRND = -1; 		/* data round above text location */
+long	INITRND = -1; /* data round above text location */
 /*e: global INITRND */
 /*s: global INITTEXT */
 long	INITTEXT = -1; /* text location */
@@ -50,6 +50,7 @@ char*	cbp;
 fdt	cout = -1;
 /*e: global cout */
 /*s: global curauto */
+// list<ref<Auto>> (next = Auto.link)
 Auto*	curauto;
 /*e: global curauto */
 /*s: global curhist */
@@ -64,7 +65,7 @@ Prog*	curp;
 Prog*	curtext = P;
 /*e: global curtext */
 /*s: global datap */
-// list<ref<Prog>>, next = Prog.link
+// list<ref_own<Prog>> (next = Prog.link)
 Prog*	datap = P;
 /*e: global datap */
 /*s: global datsize */
@@ -74,11 +75,11 @@ long	datsize;
 bool	debug[128];
 /*e: global debug */
 /*s: global etextp */
-// ref<Prog>, end of textp list
+// ref<Prog> (end from = textp)
 Prog*	etextp = P;
 /*e: global etextp */
 /*s: global firstp */
-// list<ref_own<Prog>>, next = Prog.link
+// list<ref_own<Prog>> (next = Prog.link)
 Prog*	firstp;
 /*e: global firstp */
 
@@ -90,7 +91,7 @@ char	fnuxi8[8];
 /*e: global fnuxi8 */
 
 /*s: global hash linker */
-// hash<Sym.name * Sym.version, ref_own<Sym>> (next in bucket = Sym.link)
+// hash<Sym.name * Sym.version, ref_own<Sym>> (next = Sym.link in bucket)
 Sym*	hash[NHASH];
 /*e: global hash linker */
 
@@ -156,7 +157,7 @@ long	nsymbol;
 long	instoffset;
 /*e: global instoffset(arm) */
 /*s: global oprange(arm) */
-Oprang	oprange[ALAST];
+Oprange	oprange[ALAST];
 /*e: global oprange(arm) */
 /*s: global outfile */
 char*	outfile;
@@ -168,7 +169,7 @@ long	pc = 0;
 long	symsize;
 /*e: global symsize */
 /*s: global textp */
-// list<ref<Prog>>, next = Prog.cond (initially)
+// list<ref<Prog>> (next = Prog.cond)
 Prog*	textp = P;
 /*e: global textp */
 /*s: global textsize */
