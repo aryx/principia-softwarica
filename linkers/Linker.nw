@@ -24,7 +24,7 @@
 %    * renames many local variables, more consistent (v = version, etc)
 %    * mv Autom out of union, remove union, was confusing
 % - TODO reorganized the code to better match the chapters
-%   by introducing more files: main.c, lib.c, error.c, m.h
+%    by introducing more files: main.c, lib.c, error.c, m.h
 
 %thx to codemap/codegraph:
 % - see subtle dependency to 8c/enam.c through anames
@@ -39,11 +39,13 @@
 % - mutual dependency between dotext and dodata where need layout
 %   data before text but then need text before know where starts data
 %   (solved via SB/R12 for 5l)
+% - SEMI many small mismatches between Asm5 and actual ARM capacities
+% - architecture constraints on immediate constants and offsets require
+%   tricks in the linker such as pooling, SB/R12, BIG, special bootstrap
+%   setR12 LCON, etc. (case also for x86?)
 % - SEMI what if have multiple object defining the same global?
 %   int x; int x; in different files? what if one also define value?
 %   what if both define value? DUPOK?
-% - SEMI stuff about pool and in general many small mismatches between Asm5
-%   and actual ARM capacities
 % - TODO dynamic linking? export table? import table?
 % - TODO fpic? 
 
@@ -199,22 +201,23 @@ to a specific binary instruction?
 \l how dynamic linking works? 
 \l how shared libraries works? 
 \l endianess? see the inuxi stuff?
+\l how handle arcitecture constraints
 
 %tags used in this file for different recurring themes:
  %assembler: relates code in the linker to similar (or absent) code in 5a
  %emulator: relates code in the linker to similar (or absent) code in 5i
  %sanity: I use "sanity check" in chunknames, to aspectize a bit error checking
  %
- %real-world: to relate to other linker
+ %real-world: to relate to other linkers
  %ocaml: to give a hint on how rewriting C in OCaml could improve things
- %alt: alternative technique
+ %alt: alternative techniques
  %old: for original code I changed/removed to be clearer
  %toc: %trans: %dup: %example:
 
-\t put in conclusion non-trivial algo and data structures seen? see comment
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
 %data-structures (beyond list/hashtbl):
 % - AST again with enums, tag/union structure
-% - Buffer with reading window
+% - Buffer with reading sliding window
 % - growing array
 % - graph and pointers (from implicit graph in array with ref via pc integer)
 % - forward overlay link indexation (and associated faster search)
@@ -222,9 +225,10 @@ to a specific binary instruction?
 %   and associated indexation (range and cmp and caching)
 
 %algorithms (beyond search/sort):
-% - unserialization/unmarshalling with shared enum and tags so simple dispath
+% - unserialization/unmarshalling with shared enum and tags so simple dispatch
 %   or with header specifying sizes, and sliding input buffer window
 % - signature checking (header I_MAGIC, archive ARMAG, names ASIGNAME)
+% - binary search (with overlay)
 % - DFS? (follow?)
 % - program instrumentation for profiling
 % - reflection via special symbols
@@ -706,8 +710,22 @@ header which uses 32 bytes.
 \n will see below that acutally not 62 but
 \l again can have fixpoint issue, and relaxation hints (cf wikipedia linker)
 
+
+\subsection{Architecture constraints}
+
+% resolving and relocating changes things! change addresses!
+% this in turns change other things on some archi.
+
+% some archi have constraints on size of immediate, offsets, etc.
+% when resolve and find out address of things, maybe can not use
+% regular instr. Have to adapt! find tricks!
+
+% but role of linker? other linkers also do pooling?
+
 %\subsection{Mutual dependency, fixpoint}
 % generic term used in Levine book for that?
+\t talk now about issue with mutual dependency reference of SB?
+
 
 \subsection{Disk image versus memory image}
 \label{sec:disk-image-vs-memory-image}
@@ -818,8 +836,6 @@ Section~\ref{sec:dynamic-linking}.
 \l Linker setups things for loader, code section, data section, etc
 \l and loader is pretty simple, just load/copy (or actually lazy load/copy).
 \l Also compute textsize, datasize, etc and adjust addresses.
-
-\t talk now about issue with mutual dependency reference of SB?
 
 \t dynamic linking and shared libraries are different? I think so.
 
@@ -957,7 +973,7 @@ TEXT main(SB), $8
 %$
 \n call libc via fprint/exits so != Assembler.nw, and use main not _main
 \n (cant call print cos pointer func so more complex) 
-\t use FP instead of R13? 
+\t use SP instead of R13? 
 \l weird but using only stack and not R0 at all also works
 
 <<linkers/5l/tests/world.s>>=
@@ -1075,8 +1091,8 @@ the instructions of the object files passed on the command line:
 20  (4)	END	,
 21  ...
 22      ANAME	_main
-23  (8)	TEXT	{_main}00000+0(SB),R1,$80
-24      ANAME	setR12
+23  (8)	TEXT	{_main}00000+0(SB),R1,$802
+4      ANAME	setR12
 25  (10)MOVW	${setR12}00000+0(SB),R12
 26      ANAME	_tos
 27  (11)MOVW	R0,{_tos}00000+0(SB)
@@ -1087,7 +1103,7 @@ the instructions of the object files passed on the command line:
 \n this was actually done via kencc/5l
 \t why those lineno? seems wrong line number. BUG?
 \l remove those comma? 
-\t for dollar hello we should remove the (SB)? NO! it will use R12!
+\t for dollar hello we should remove the (SB)? NO! it can use R12!
 \t  but it will do R12 plus 00014 no?
 \l have a D_ADDR? so cleaner?
 \l very close to assembler, indeed object file is just serialized asm source
@@ -1254,13 +1270,20 @@ be beyond [[06b50]] (the address of the last instruction Line 28).
 But, the symbol value for data symbols contains the resolved address
 of the symbol as {\em an offset to the start of the data section}.
 The rational for this decision will be explained later
-in Section~\ref{sec:sb-r12}.
+in Chapter~\ref{chap:resolving}.
 Thus, the final address of [[hello]] is [[014 + INITDAT]]
 where [[INITDAT]] is the address where starts the data section.
 \t so if really disassemble e59f1884? get what? 7014? or BIG-7014?
 \l actually see also initialisation of R12 with  very tricky
 % MOVW	${setR12}00ffc+0(SB),R12
 % which really is   MOVW    0xffc(R12=0), R12
+\t put actual machine code! cos what is shown is not really machine code.
+\t  the disassembly is original object instruction.
+\t  real machine instruction is  
+\t     ADD 14, R12, R1        (Well actually because of BIG it's not that)
+\t  or
+\t     LDR xxx(R15), R1  with Pool.
+
 
 \l 6000 = ? just for including fprint and exits, hmmm
 
@@ -1349,6 +1372,50 @@ Its role and its relationship with the {pseudo-register}
 % how better view of objects and executables? will refine below?
 
 
+\section{ARM architecture}
+% constraints
+
+% constraints on immediate constants, offsets
+
+\subsection{Immediate constants range}
+
+% ADD I, R1, R2
+
+% clever trick, but still limited.
+
+% pooling
+% load numbers from memory. DATA. 
+% REGTMP
+
+% but then address of DATA? see next section,
+
+\subsection{Offsets range}
+
+% different addressing mode in Assembler, indirect, ...
+% but in the end can be reduced to indirect with offset.
+
+% xxx(R1)
+
+% special case SB, hello+whatever(SB), $hello+whatever(SB)
+
+% show actual code of 
+%  MOVW $hello(SB), R2    ==>   ADD offset1, R12, R2    or LDR offset2(R15),R2
+%   (and ADD itself can use REGTMP)
+% and
+%  MOVW hello(SB), R2     ==>   LDR offset(R12), R2  or LDR offset3(R15),RTMP;
+%   LDR RTMP, R2
+
+\subsection{Jump range}
+
+%  BL foo(SB)
+
+\subsection{Code pooling}
+% big number bootstrap?
+
+% so if address of DATA too far too? :) can boostrap
+% with PC and WORD!
+% (could also use ADD, MUL, whatever to produce big number)
+
 \section{Input object format}
 
 The object file is now the input, as opposed
@@ -1408,8 +1475,8 @@ struct	Exec
 };
 @
 %old: _unused was actually:
-%    // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
-%    long	spsz;		/* size of pc/sp offset table */
+%  // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
+%  long	spsz;		/* size of pc/sp offset table */
 
 Figure~\ref{fig:executable-format} illustrates the format of
 [[a.out]] executables.
@@ -1568,7 +1635,7 @@ contained in the file is discussed.
 \otoprule
 Data structures & \ref{chap:core-ds} & [[l.h]] & [[Sym]], [[Section]], [[Instr]] & 0 \\
 % headtype, Buf, ...
-and prototypes  & \ref{chap:arm-codegen} &         & [[Optab]], [[Oprang]], [[Operand_class]] & \\
+and prototypes  & \ref{chap:arm-codegen} &         & [[Optab]], [[Oprange]], [[Operand_class]] & \\
 % like a dat.h and fns.h
 Globals         & \ref{chap:core-ds}, \ref{chap:main}               & [[globals.c]] & [[hash]], [[firstp]], [[datap]], [[textsize]], [[datsize]], ... & \\
 Entry point     & \ref{chap:main}    & [[main.c]] & [[main()]] & \\
@@ -2754,7 +2821,7 @@ usage(void)
     errorexit();
 }
 @
-%old: was diag(...) but then output ??none?? which was ugly
+%old: was diag(...) not print(...) but then output ??none?? which was ugly
 
 <<[[main()]] sanity check cout>>=
 if(cout < 0) {
@@ -3504,6 +3571,8 @@ if(p->pc != pc) {
     pc = p->pc;
 }
 @
+\l actually good to do that, can have bugs where size of things
+\l  can have changed (see the mutual dependency issue discussed later)
 
 Note that 
 [[OFFSET]] is initialized to [[HEADR]] above while
@@ -3711,6 +3780,7 @@ long ipc;
 as we will see in Section~\ref{sec:relocating}.
 
 \section{Object code input, [[ldobj()]]}
+\label{sec:ldobj}
 
 %trans:
 We can now see the code of [[ldobj()]].
@@ -3911,7 +3981,7 @@ inopd(byte *p, Adr *a, Sym *h[])
     return size;
 }
 @
-%old: was called zaddr but I renamed to inopd
+%old: was called zaddr() but I renamed to inopd()
 %  similar to zaddr -> outopd in Assembler.nw
 %  also c -> symidx
 %old: I moved the sanity check of register ranger closer to a->reg
@@ -4881,7 +4951,7 @@ $ 5l foo.5 bar.5
 bar: incompatible type signatures bde91c57(foo.5) and adb3322b(bar.5)
   for foo
 \end{verbatim}
-%old: I split on two lines
+%pad: I split on two lines
 
 \noindent one needs to remember in the symbol which file introduced
 the symbol the first time. 
@@ -5642,6 +5712,7 @@ The linker has mainly two kinds of references to resolve:
 e.g. [[BL foo(SB)]], which ultimately should be transformed
 in an ARM instruction with, as an operand, a concrete address in
 the {code section}, e.g. [[BL 0x1020]]
+\l actually ARM use relative jumps
 \l can jump to a data?
 
 \item {\em data references} in memory instructions, 
@@ -5654,7 +5725,6 @@ separate ARM instructions [[LDR]] (load) and [[STR]] (store).
 }
 \n actually not  0x7014 but 0x14(R12), and actually not even than because of BIG
 \n actually has also memory reference in DATA instruction? ximm can have addr
-\t can have just address?
 
 \end{itemize}
 
@@ -5666,6 +5736,7 @@ branching to a {\em label} (e.g. [[B loop]]), or
 {\em relative jumps} using the pseudo-register [[PC]] (e.g. [[B 2(PC)]]),
 have already been resolved and converted by the assembler [[5a]] in
 {\em absolute jumps} (e.g. [[B 13]]). See the \book{Assembler}.
+%alt: alt to convert to absolute virtual jump? keep label in .obj?
 %
 Those absolute jumps
 have even been {relocated} by the linker to a new memory address
@@ -5696,6 +5767,7 @@ Real code addresses on the other hand start at [[INITTEXT]] (4128 under \plan),
 %dup: overview/5l-a core-ds/instr main/asmb/text-sec 
 and because the ARM uses fixed-length instructions 
 of 4 bytes, are always a multiple of 4.
+\l note though that ARM wants relative jumps ...
 
 
 Unfortunately, going from a virtual program counter to
@@ -5725,6 +5797,8 @@ respectively [[_div()]] and [[_mod()]] of the core C library
 (see Section~\ref{sec:div-mod}) which implement
 in software the division and modulo algorithms (using [[ADD]],
 [[MUL]], [[SUB]], etc).
+\n but then could have done expansion in ldobj()? maybe, but then
+\n  need relocate branching instr
 \n ARET? well always one instr, but its MOVW could have different size
 \n  also profiling generate lots of instr
 \n ANOP? well could generate fake instr without side effect? can we?
@@ -5743,6 +5817,7 @@ decrement the {\em stack pointer} (see Section~\ref{sec:atext-patching}).
 Moreover, if profiling is enabled, a few more ARM instructions will be added
 for the {instrumentation} of the procedure to gather statistics
 (see Chapter~\ref{chap:profiling}).
+\n again, could have done expansion in ldobj(), but still need relocate then
 %
 The same is true for [[RET]].
 %real-world: pb specific to 5l?
@@ -5769,9 +5844,10 @@ are available to encode the constant.
 This is why even a regular instruction such as [[ADD]] may lead
 to the generation of multiple ARM instructions.
 Indeed, if the instruction uses a big number, this number
+\l actually not necessaraly big, just one that is not immrot()
 must first be loaded in a temporary register 
 (see Section~\ref{sec:pool-and-reg-tmp}).
-\t but how? same pb for loading it no?
+\t but how? same pb for loading it no? refer to Overview!
 %real-world: specific 5l? how other assembler do? 
 % error message at assembly time?
 
@@ -5810,6 +5886,7 @@ and increment [[pc]] accordingly.
 \item the code generator [[asmout()]] when involved with a branching
 instruction [[p]] can find the target code address
 by simply looking at [[p->cond->pc]].
+\l and compute a relative jump by [[p->pc - p->cond->pc - 8]]
 
 \end{enumerate}
 
@@ -5828,7 +5905,7 @@ instructions in real instructions.
 \n but could be part of oplook() and could be done in asmout() instead
 %dup: overview/soft-archi
 Indeed, [[noops()]] can replace a virtual instruction by
-multiple ARM instructions
+multiple ARM instructions chained together
 or even delete the instruction without
 any consequence on the other branching instructions (as long
 at it maintains carefully the [[Instr.cond]] pointers pointing
@@ -5836,7 +5913,7 @@ to the original instruction).
 %dup: overview/soft-archi
 Before the graph of instructions, inserting or
 deleting an instruction would have forced to assign a new 
-virtual program counter to each instruction and to relocate 
+virtual program counter to all the following instructions and to relocate 
 every branching instructions.
 
 Thanks to the graph, it is also possible to perform some
@@ -5878,7 +5955,7 @@ referenced in memory instructions. We would get a size
 for the code section which we could use as the starting
 point of the data section, to layout data. 
 Finally, we would layout the code a second time using 
-real addresses for the globals, this time to generate the real code.
+real addresses for the globals this time, to generate the real code.
 
 
 One difficulty is that the size of the code section computed
@@ -5887,13 +5964,14 @@ during the first layout would be only an {estimation}.
 Indeed, some instructions involving globals may have different size
 \l well abuse of lang, some instr lead to generation of multiple ARM instr
 depending on the address of the global.
-\t recall hello(SB), ARM converted as offset really
+\t refer to overview! address become offset.
 Offsets in ARM instructions
-have a limited range, as mentioned in the previous section.
+have a limited range, as mentioned 
+in the previous section. %clever \ref{sec:sec:constraints-immediate-and-offset}
+%
 This means some memory instructions may require the use of an extra
 instruction if the address of the global happens to be large.
 \t but how bootstrapped? WORD and LDR
- %clever \ref{sec:sec:constraints-immediate-and-offset}
 Using fake addresses during the first layout would be imprecise.
 %alt: put safe gap after estimation? and fixpoint? 
 
@@ -5918,17 +5996,20 @@ when the executable is executed,
 contain [[INITDAT]], the address of the start of the data section.
 \n actually not exactly that because BIG opti
 It also assumes every operands involving a global, 
-\t for deref and for addressof? or not for address of global!?
 e.g. [[MOVW hello(SB), R1]],
 will be transformed later (in [[asmout()]])
 as an {\em indirect with offset} operand
 (see the \book{Assembler}).
+\t actually not all are like that, can use also Pool if LCON
 %
 This operand will use [[R12]] as the {base} and 
 the [[Sym.value]] of the global (computed previously)
 as the offset, e.g.  [[LDR 14(R12), R1]].
 That way, [[dotext()]] can compute accurately the size of the
 instruction.
+\t but what if offset too large? then will use Pool, but anyway,
+\t  it's not gonna change, still not fake address! second layout
+\t  would be the same
 
 \item one of the first instruction of the program must
 initialize [[R12]] with the value of [[INITDAT]].
@@ -5941,7 +6022,8 @@ C library, is the first function executed by
 the program (see Section~\ref{sec:choice-entry-point}).
 This is why one of its first instruction is:
 [[MOVW $setR12(SB), R12]].%$
-\t but absolute address? but then size of that?? bootstrap?
+\t But then size of that? how bootstrap?
+\t  special case to use LCON not RECON!! subtle
 \l see section X where see code of _main? well wrong code, subtle code.
 
 \end{enumerate}
@@ -5958,6 +6040,7 @@ noops();
 dodata();
 dotext();
 \end{verbatim}
+\n actually dodata() could be before patch I think.
 \l also for SSTRING one must do dotata() before dotext.
 \l other reasons?
 
@@ -5971,35 +6054,26 @@ starting with [[patch()]].
 
 \section{Building the code instructions graph, [[patch()]]}
 
-
-
-% Set Prog->cond for the branch instructions
-%  introduced sec:instr-cond
-% (before transform branch instructions using symbols in regular branch 
-% instructions using offsets (like labels))
-
-% later assign also real pc, and can do
-% curp->cond->pc so can see the actual value of the branch we go too.
-% (see DConv)
-
-% who will use this Prog->cond later? follow(), but if don't care
-% about unreachable instruction, is patch() useful????
-
-<<[[patch()]] locals>>=
-Prog *p;
-Sym *s;
-Prog *q;
-int a;
-long c;
-@
-% essentially will add some links with p->cond = q;   for instruction p
-% with opcode a == ABxx where q->pc == c where c is the branch offset value.
+%dup: resolving/issue/virtualpc
+As explained before, 
+the goal of [[patch()]] is to set the [[Instr.cond]] field
+\l introduced in \ref{sec:instr-cond}
+of branching instructions to point to the right target instruction.
+\n so later in asmout can get real pc with p->cond->pc (also useful for follow)
+%
+Essentially, [[patch()]] will iterate over all the code instructions
+[[p]] and for branch instructions it will look for 
+the target instruction [[q]] with the virtual program counter 
+[[q->pc]] equal to the absolute jump value [[c]] in [[p]]:
 
 <<function patch(arm)>>=
 /// main -> <>
 void
 patch(void)
 {
+    Prog *p;
+    Prog *q;
+    long c; // not ulong?
     <<[[patch()]] locals>>
 
     DBG("%5.2f patch\n", cputime());
@@ -6013,55 +6087,58 @@ patch(void)
         <<[[patch()]] resolve branch instructions using symbols>>
 
         if(p->to.type == D_BRANCH && p->cond != UP) {
-            c = p->to.offset;
+            c = p->to.offset; // target pc
             <<[[patch()]] find Prog reference q with pc == c>>
             p->cond = q;
         }
     }
-
     // pass 2
-    for(p = firstp; p != P; p = p->link) {
-        <<adjust curtext when iterate over instructions p>>
-
-        if(p->cond != P && p->cond != UP) {
-            p->cond = brloop(p->cond);
-            if(p->cond != P)
-             if(p->to.type == D_BRANCH)
-                p->to.offset = p->cond->pc;
-        }
-    }
+    <<[[patch()]] optimisation pass>>
 }
 @
-%note: has the p->cond == UP because can have such things
-% done for SUNDEF sections, and remember that cond set to P
-% in ldobj
 
-\t I dont understand pass 2 and brloop, when need that?
+The extra condition [[p->cond != UP]] above is not very
+important and can be ignored for now.
+It will be explained in Section~\ref{sec:UP}.
+\n because of SUNDEF
+Normally, before the call to [[patch()]], 
+[[Instr.cond]] should be a null pointer 
+(see the instruction [[p->cond = P;]] in [[ldobj()]] Section~\ref{sec:ldobj})
+which is different than [[UP]].
 
-% p->to.offset = p->cond->pc;
-% can have changed?? yes because of brloop()
-% s/brloop()/? follow_AB?
 
 
-<<global undefp>>=
-//@Scheck: not dead, used by UP
-Prog	undefp;
-@
-% for error recovery? and for dynamic loading stuff?
+[[patch()]] is a complex function. We splitted it in a few
+{chunks} to facilitate its comprehension.
+%
+To find [[q]], [[patch()]] needs to first initialize some
+data structures that makes the search more efficient.
+%
+It also needs to (partially) resolve branching instructions using
+symbols and convert them to absolute jumps.
+That way all branching instructions become uniforms.
+%toc:
+The following sections will explain those different steps.
 
-<<constant UP>>=
-#define	UP	(&undefp)
-@
-% who does = UP?
 
 \subsection{Resolving branch instructions using symbols}
 
-% easy, look property of symbol in symbol table Sym.value = pc of procedure.
+Converting the use of symbols in branching instruction
+(e.g. [[B foo(SB)]]) to absolute jumps (e.g. [[B 113]])
+is trivial thanks to the [[Sym.value]] of procedure symbols
+which contains the virtual program counter of the procedure:
+\l a bit too much explanations?
+
+<<[[patch()]] locals>>=
+Sym *s;
+// enum<Opcode>
+int a;
+@
 
 <<[[patch()]] resolve branch instructions using symbols>>=
 a = p->as;
-if((a == ABL || a == AB || a == ARET) &&
-   p->to.type != D_BRANCH && 
+if((a == ABL || a == AB) &&
+   p->to.type != D_BRANCH &&  // must be D_OREG then
    p->to.sym != S) {
     s = p->to.sym;
     switch(s->type) {
@@ -6073,29 +6150,119 @@ if((a == ABL || a == AB || a == ARET) &&
     }
 }
 @
-% not D_BRANCH? D_OREG? BL foo(SB)? from = ?
-\t ARET? but ARET has no args in Assembler.nw. Bug? because of SUNDEF?
+%old: had  || a == ARET   but I cant see how can have this and a p->to.sym
+%bug: ARET? ARET has no args in Assembler.nw. cos of SUNDEF? I don't think so.
+\n can do B foo(SB)? why not if have no arguments, could. Tail call!
+
+If the procedure can not be found, an error is reported:
 
 <<[[patch()]] switch section type for branch instruction, cases>>=
+// SNONE, SXREF, etc
 default:
     diag("undefined: %s\n%P", s->name, p);
     s->type = STEXT;
-    s->value = vexit;
+    s->value = 0;
     break;
 @
 \n see also SUNDEF case
+%old: s->value = vexit;
+
+To avoid reporting multiple times the same error,
+the symbol of the undefined procedure is modified so become a (fake)
+defined procedure.
+That way, if another instruction later calls the same procedure,
+[[5l]] will not report an error.
+%
+Note that there is no risk of generating a wrong executable though
+as the call to [[diag()]] will prevent such a thing 
+(see Appendix~\ref{chap:error}).
+\n also first intr just change s, not p, so
+\n does not change p->to.type so still D_OREG so will not generate  any code
+
+%old:
+%  s->value = vexit;
+%  ...
+%  <<[[patch()]] locals>>=
+%  long vexit;
+%  @
+%  <<[[patch()]] initialisations>>=
+%  s = lookup("exit", 0);
+%  vexit = s->value;
+%  @
+%% exit? part of C library? no, but will be pc = 0 if not.
+%but seems uselessly complicated. Anyway no executable will be generated
 
 
-<<[[patch()]] locals>>=
-long vexit;
-@
-<<[[patch()]] initialisations>>=
-s = lookup("exit", 0);
-vexit = s->value;
-@
-% exit??? part of C library?
 
 \subsection{Finding instruction at [[pc]]}
+\label{sec:find-q}
+\n better to present how use DS first I think, hence the order
+
+The naive way to find the instruction [[q]] with a certain [[pc]]
+is a linear search over all the instructions, by 
+following [[Instr.link]].
+%
+To optimize the search, [[patch()]] relies on another pointer, 
+[[Instr.forwd]] which will point not to the next instruction,
+but to a few more instructions forward (hence the name),
+as shown in Figure~\ref{fig:forward-pointer}.
+
+<<[[Prog]] other fields>>=
+Prog*	forwd;
+@
+%old: used to be part of an union with regused, but regused was actually
+% unused
+%alt: 
+% - an array instead of a list (but then noops() harder)
+% - a hashtbl on Prog.pc? to get a Prog from a specific pc
+
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+        +-------+
+        |PC = 0 |------------+
+        +---+---+ forwd      |
+            |link            |
+        +---v---+            |
++-------|PC = 1 |            |
+| forwd +---+---+            |
+|           |link            |
+|       +---v---+            |
+|       |PC = 2 |            |
+|       +---+---+            |
+|           |link            |
++------>+---v---+            |
++-------|PC = 3 |            |
+| forwd +---+---+            |
+|           |link            |
+|       +---v---+<-----------+
+|       |PC = 4 |------------+
+|       +---+---+ forwd      |
+|           |link            |
++------>+---v---+            |
++-------|PC = 5 |            |
+| forwd +---+---+            |
+|           |link            |
+|       +---v---+            |
+|       |PC = 6 |            |
+|       +---+---+            |
+|           |link            |
++------>+---v---+            |
++-------|PC = 7 |            |
+| forwd +---+---+            |
+|           |link            |
+|       +---v---+<-----------+
+|       |PC = 8 |
+|       +---+---+
+|           |link
++------>+---v---+
+        |PC = 9 |
+        +-------+
+\end{verbatim}
+\caption{Forward pointers}\label{fig:forward-pointer}
+\end{figure}
+
+That way one can make bigger jumps sometimes:
 
 <<[[patch()]] find Prog reference q with pc == c>>=
 for(q = firstp; q != P;) {
@@ -6113,26 +6280,21 @@ if(q == P) {
 }
 @
 
+By carefully setting [[Instr.forwd]], the search can become
+a {\em binary search}.
+% ex Figure X. find 6, start 0 then 3 then 5 then 6. 3 steps. not 6.
+
 \subsection{Indexing [[pc]], forward links overlay}
 
-<<[[Prog]] other fields>>=
-Prog*	forwd;
-@
-%old: used to be part of an union with regused, but regused was actually
-% unused
-
+The [[Instr.forwd]] fields are set by [[mkfwd()]]:
 
 <<[[patch()]] initialisations>>=
 mkfwd();
 @
 
-% Allows to do some big jmps forward in the list of instructions, 
-% to be faster than going just through ->link.
-% Interesting data structure overlay on top of a simple linked list
-% alternatives: 
-%  - a hashtbl on Prog.pc? to get a Prog from a specific pc
+Those fields form essentially a binary search tree on
+top of a linked list. 
 
-% FIGURE
 
 <<constant LOG>>=
 #define	LOG	5
@@ -6143,7 +6305,8 @@ mkfwd();
 void
 mkfwd(void)
 {
-    long dwn[LOG], cnt[LOG];
+    long cnt[LOG]; // constant
+    long dwn[LOG], 
     Prog *lst[LOG];
     Prog *p;
     int i;
@@ -6176,6 +6339,30 @@ mkfwd(void)
 @
 
 \subsection{Compacting chains of [[AB]], [[brloop()]]}
+\t mv in opti section?
+
+% when need that? because of 5c generate a big sloppy code
+% for loops?
+
+
+
+<<[[patch()]] optimisation pass>>=
+for(p = firstp; p != P; p = p->link) {
+    <<adjust curtext when iterate over instructions p>>
+
+    if(p->cond != P && p->cond != UP) {
+        p->cond = brloop(p->cond);
+        if(p->cond != P)
+         if(p->to.type == D_BRANCH)
+            p->to.offset = p->cond->pc;
+    }
+}
+@
+
+% p->to.offset = p->cond->pc;
+% can have changed?? yes because of brloop()
+% s/brloop()/? follow_AB?
+
 
 
 %  p->cond = brloop(p->cond);
@@ -6728,6 +6915,7 @@ dodata(void)
 % in pass2 for SDATA but not for BSS. I think more consistent not do it
 % anywhere, any redundant with check done in pass1.
 
+% Order of globals in executable = order in hash table = hard to predict.
 
 % now Sym.value for GLOBL is not the size anymore but the offset
 % (offset to INITDAT though) changed type!
@@ -6988,7 +7176,7 @@ xdefine(char *p, int t, long v)
     }
 }
 @
-
+\t should maybe diag if symbol already there no?
 
 % At this point we are in dodata() (or span()) in which case the 'value' field
 % is now really a location (relative to INITDAT though for SDATA and SBSS).
@@ -7049,17 +7237,24 @@ xdefine("end", SBSS, datsize+bsssize);
 xdefine("setR12", SDATA, 0L+BIG);
 @
 <<constant BIG>>=
-BIG		= (1<<12)-4,
+//BIG		= (1<<12)-4,
+BIG		= 0,
 @
+
+% having BIG set to a page is good because STR/LDR
+% accept immediate offset of 12 bits and a sign, so can encode
+% easily [-4096,+4096] range.
+% So good for hello(SB) but not so good for $hello(SB).
+% Indeed, resulting offset will be negatif because do  Sym.value of
+% hello which should be close to 0, minus BIG, which should
+% be a negatif number. But RECON matchs only when can immrot(instoffset)
+% and can do then ADD v, R12, Rwhatever, but when v is negatif
+% and big number, not so easy to satisfy immrot(). In that case
+% get a LCON.
 
 % why -4? otherwise could not reach the first data? offset
 % can be negative or positive so actually can cover 2 pages of
 % small data variables!
-
-% In practice the first page of the address space is always reserved
-% so it's better to store in R12 a bigger value. R12 will actually
-% be set to INITDAT+BIG.
-
 
 
 
@@ -7071,7 +7266,7 @@ BIG		= (1<<12)-4,
 %trans:
 The final step of the linking pipeline is to generate code.
 % have seen asmb(), in Section X, generate header, code
-% section, data section. can now see missing piece
+% section, data section. can now see missing piece, individual instr.
 %toc:
 % oplook, asmout, datblk.
 % First recall ARM instr format, and additional DS.
@@ -7082,13 +7277,22 @@ The final step of the linking pipeline is to generate code.
 \section{ARM instruction format}
 
 % ref to colorful guide again
+% mainly 4 categories, 6 formats: arith, arith with immediate,
+%  memory with offsets, branch immediate, branch
 
 
 % immediate value, 8+4 bits
 
 % memory address and offsets, register + 12 bits (1 page)
 
-\section{[[Optab]] and [[optab]]}
+% => constraints on size of things so need find tricks.
+% first Class will say if satisfy constraint.
+% If not then pool. 
+% Other?
+
+\section{Additional data structures}
+
+\subsection{[[Optab]] and [[optab]]}
 \label{sec:optab}
 \n could put in core DS but it's really specific to the code generation chapter
 
@@ -7165,11 +7369,31 @@ Optab	optab[] =
 %old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
 
 
+\subsection{[[Oprange]]}
 
-\section{[[Operand_class]]}
+% Optab range
+<<struct Oprange(arm)>>=
+struct	Oprange
+{
+    //index in sorted optab global
+    Optab*	start;
+    //index in sorted optab global
+    Optab*	stop;
+};
+@
+%old: was Oprang
+
+<<global oprange(arm)>>=
+Oprange	oprange[ALAST];
+@
+
+% will be the set of entries in the sorted optab
+% that talk about a certain opcode
+
+\subsection{[[Operand_class]]}
 % was in core DS, but I think better here with Optab.
 
-\subsection{Basic classes}
+\subsubsection{Basic classes}
 
 % seems called the class, see aclass(), a more precise operand_kind
 % closer to the machine constraint as we will see in next section
@@ -7209,7 +7433,7 @@ enum Operand_class {
 %code: order of entries matter! look at code of cmp() to see which
 % classes are subclasses and must be after.
 
-\subsection{[[aclass()]]}
+\subsubsection{[[aclass()]]}
 
 <<function aclass(arm)>>=
 int
@@ -7244,7 +7468,7 @@ aclass(Adr *a)
 % is close and so could be stored in a half-word, or if
 % it's far away.
 
-\subsection{Refined classes and [[instoffset]]}
+\subsubsection{Refined classes and [[instoffset]]}
 
 <<global instoffset(arm)>>=
 long	instoffset;
@@ -7252,8 +7476,16 @@ long	instoffset;
 % instruction offset?
 % really needs to be a global? can't be just a local to aclass()?
 
+% seems to be used both for immediate constant and offset
 
-\subsubsection{[[D_OREG]]}
+
+% other kind of range than OpRange, range of possible values
+% of operands. with inheritance notion! Quite subtle.
+
+
+
+\paragraph{[[D_OREG]]}
+% offsets constraints
 
 <<[[aclass()]] switch type cases>>=
 case D_OREG:
@@ -7366,7 +7598,8 @@ case D_NONE:
 
 
 
-\subsubsection{[[D_CONST]]}
+\paragraph{[[D_CONST]]}
+% immediate constants constraints
 
 <<[[aclass()]] switch type cases>>=
 case D_CONST:
@@ -7392,7 +7625,7 @@ C_LCON,
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_NONE:
     instoffset = a->offset;
-    if(a->reg != R_NONE)
+    if(a->reg != R_NONE) // when?
         goto aconsize;
 
     if(immrot(instoffset))
@@ -7403,10 +7636,12 @@ case D_NONE:
 @
 
 
+
+\paragraph{[[D_ADDR]]}
+
 %todo: D_ADDR?
 %\subsubsection{[[D_ADDR]]}
 % should not use D_CONST when really you use the address of a symbol
-
 
 
 % rotated External const
@@ -7439,19 +7674,18 @@ case N_INTERN:
     case SDATA: case SBSS: case SDATA1:
         if(!dlm) {
             instoffset = s->value + a->offset - BIG;
-            if(immrot(instoffset) && instoffset != 0)
+            if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
                 return C_RECON;
         }
+        // else
         instoffset = s->value + a->offset + INITDAT;
         return C_LCON;
     }
     diag("unknown section for %s", s->name);
     break;
 @
-% for LCON have to do the INITDAT!
-% really need RECON?
-
-%old: used to be but more messy I think, the +INITDAT is then confusing
+%pad: I added the final diag() because of the way I wrote the code
+%old: used to be but more messy because of return and break
 %    case SNONE: case SXREF:
 %        diag("undefined external: %s in %s", s->name, TNAME);
 %        s->type = SDATA;
@@ -7464,6 +7698,13 @@ case N_INTERN:
 %    }
 %    instoffset = s->value + a->offset + INITDAT;
 %    return C_LCON;
+
+% for LCON have to do the INITDAT!
+% really need RECON?
+% what about setR12? how bootstrap? can match C_RECON?
+% no cos of the special case != 0!! because setR12 is BIG, so
+% BIG-BIG = 0 so use LCON for that
+
 
 
 
@@ -7512,111 +7753,6 @@ aconsize:
 %            return C_LCON;
 %        }
 %        return C_GOK;
-
-
-
-\section{Half, Small, Large, Rot, Neg}
-\label{sec:clever-trick-numbers}
-
-% Those are some kinds of optimisations? a bit but also need that
-% because expressivity Asm5 greater than what ARM can actually do sometimes.
-
-% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
-
-
-% The load/store ARM instructions take 2 registers (src_val, dst_address)
-% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
-% do negative offset with a bit).
-% That means that if you do  'MOVW $1, myglobal', naively you'll have to
-% encode it as 3 instructions:
-%     MOV $1, R1
-%     MOV $myglobal, R2
-%     STR R1, R2.
-% But if myglobal is not that far from address 0 and you have a special
-% register reserved that always contain 0 (e.g. R12),
-% then you could use the 12bits offset instead of using a register
-% and just do
-%     MOV $1, R1
-%     STR R1, R12+$myglobal
-% If you have a special register which always contain the value 1, 
-% then you do even better with just do 
-%     STR R0, R12+$myglobal! 
-% which is 3 times faster (well if the global address is in a cache).
-%
-% In practice the first page of the address space is always reserved
-% so it's better to store in R12 a bigger value. R12 will actually
-% be set to INITDAT+BIG.
-
-
-
-\subsection{Immediate address}
-
-<<function immaddr(arm)>>=
-long
-immaddr(long v)
-{
-    if(v >= 0 && v <= 0xfff)
-        return (v & 0xfff) |
-            (1<<24) |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xfff && v < 0)
-        return (-v & 0xfff) |
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-% rename immsmall?
-% why 0xfff? = 4095 so a page.
-
-
-\subsection{Half immediate address}
-
-<<function immhalf(arm)>>=
-int
-immhalf(long v)
-{
-    if(v >= 0 && v <= 0xff)
-        return v |
-            (1<<24)  |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xff && v < 0)
-        return (-v & 0xff)|
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-% seems identical to immhalf no? no now it's 0xff! not 0xfff
-
-\subsection{Small (possibly rotated) immediate values}
-% small immediate (rotated) address
-
-% see Machine.nw and the ARM refcard to understand the code below.
-% RCON is for small immediate value, or rotated things of small 
-% immediate value.
-% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
-% hence the code below.
-
-<<function immrot(arm)>>=
-long
-immrot(ulong v)
-{
-    int i;
-
-    for(i=0; i<16; i++) {
-        if((v & ~0xff) == 0)
-            return (i<<8) | v | (1<<25);
-        v = (v<<2) | (v>>30);
-    }
-    return 0;
-}
-@
-% >> >>
-
-% there is code like
-%    o1 |= immrot(instoffset);
-% the 1<<25 means we are in the  i,r,r  case
 
 
 
@@ -7808,32 +7944,124 @@ addpool(Prog *p, Adr *a)
 @
 
 
+
+
+\section{Half, Small, Large, Rot, Neg}
+\label{sec:clever-trick-numbers}
+
+% Those are some kinds of optimisations? a bit but also need that
+% because expressivity Asm5 greater than what ARM can actually do sometimes.
+
+% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
+
+
+% The load/store ARM instructions take 2 registers (src_val, dst_address)
+% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
+% do negative offset with a bit).
+% That means that if you do  'MOVW $1, myglobal', naively you'll have to
+% encode it as 3 instructions:
+%     MOV $1, R1
+%     MOV $myglobal, R2
+%     STR R1, R2.
+% But if myglobal is not that far from address 0 and you have a special
+% register reserved that always contain 0 (e.g. R12),
+% then you could use the 12bits offset instead of using a register
+% and just do
+%     MOV $1, R1
+%     STR R1, R12+$myglobal
+% If you have a special register which always contain the value 1, 
+% then you do even better with just do 
+%     STR R0, R12+$myglobal! 
+% which is 3 times faster (well if the global address is in a cache).
+%
+% In practice the first page of the address space is always reserved
+% so it's better to store in R12 a bigger value. R12 will actually
+% be set to INITDAT+BIG.
+
+
+
+\subsection{Immediate address}
+
+<<function immaddr(arm)>>=
+long
+immaddr(long v)
+{
+    if(v >= 0 && v <= 0xfff)
+        return (v & 0xfff) |
+            (1<<24) |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+
+    if(v < 0 && v >= -0xfff)
+        return (-v & 0xfff) |
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+%old? why need v & 0xfff? redundant no?
+% >> >> >>
+% rename immsmall?
+% why 0xfff? = Because immediate offset range is 12 bits
+% (with sign)
+
+% bit P and big U?
+
+\subsection{Half immediate address}
+
+<<function immhalf(arm)>>=
+int
+immhalf(long v)
+{
+    if(v >= 0 && v <= 0xff)
+        return v |
+            (1<<24)  |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xff && v < 0)
+        return (-v & 0xff)|
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+% seems identical to immhalf no? no now it's 0xff! not 0xfff
+
+\subsection{Small (possibly rotated) immediate values}
+% small immediate (rotated) address
+
+% see Machine.nw and the ARM refcard to understand the code below.
+% RCON is for small immediate value, or rotated things of small 
+% immediate value.
+% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
+% hence the code below.
+
+% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
+
+<<function immrot(arm)>>=
+long
+immrot(ulong v)
+{
+    int i;
+
+    for(i=0; i<16; i++) {
+        if((v & ~0xff) == 0)
+            return (i<<8) | v | (1<<25);
+        v = (v<<2) | (v>>30);
+    }
+    return 0;
+}
+@
+% >> >>
+
+% there is code like
+%    o1 |= immrot(instoffset);
+% the 1<<25 means we are in the  i,r,r  case
+
+
+
 \section{[[buildop()]] and [[oplook()]]}
 
 <<[[main()]] initialize globals(arm)>>=
 buildop();
 @
-
-\subsection{[[Oprange]]}
-
-% Optab range
-<<struct Oprang(arm)>>=
-struct	Oprange
-{
-    //index in sorted optab global
-    Optab*	start;
-    //index in sorted optab global
-    Optab*	stop;
-};
-@
-%old: was Oprang
-
-<<global oprange(arm)>>=
-Oprang	oprange[ALAST];
-@
-
-% will be the set of entries in the sorted optab
-% that talk about a certain opcode
 
 \subsection{[[buildop()]]}
 
@@ -8336,6 +8564,8 @@ case 0:		/* pseudo ops */
 % nothing to be done! TEXT is a pseudo opcode, and noops()
 % has patched it with the initial mov to save REGLINK in stack, so we're good
 % to go.
+% We kept it instead of sometimes replacing it when we could so have
+% still curtext.
 
 \subsection{[[AWORD]]}
 
@@ -8351,6 +8581,8 @@ case AWORD:
 { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
 { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
 @
+% remember LCON inherits everything, so might be a RCON or NCON
+%  but does not matter, instoffset the same and equal to x->to.offset!
 %less: WORD foo;  what does it mean?
 % WORD $foo; ok, I get it, and it should be a C_LCON
 
@@ -8366,13 +8598,12 @@ case 11:	/* word */
 
 \subsection{Arithmetic and logic opcodes}
 
-\subsubsection{Logic, add/sub, comparisons, simple movs}
-
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AADD:
     oprange[AAND] = oprange[r];
     oprange[AEOR] = oprange[r];
     oprange[AORR] = oprange[r];
+
     oprange[ABIC] = oprange[r];
     oprange[ASUB] = oprange[r];
     oprange[ARSB] = oprange[r];
@@ -8407,6 +8638,15 @@ case AMOVHU:
 % just setting registers, as in MOV $1, R0
 
 
+
+%Logic, add/sub, comparisons, simple movs
+
+%toc:
+% divide by shape of operands more than kinds of operation,
+% so different sections than in Assembler.
+
+\subsubsection{Registers only}
+
 <<[[optab]] entries>>=
 { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
 { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
@@ -8430,6 +8670,18 @@ case 1:		/* op R,[R],R */
 @
 % >> >>
 % rf(from) -> rm, r -> rn, rt(to) -> rd(dest) ->  in refcard term.
+
+% the assembler allows some sugar e.g. ADD X1, X2 is really
+% ADD X1, X2, X2, so this code handles this sugar.
+<<[[asmout()]] adjust r and rt>>=
+if(p->to.type == D_NONE)
+    rt = 0;
+if(p->as == AMOVW || p->as == AMVN)
+    r = 0;
+else if(r == R_NONE)
+    r = rt;
+@
+
 
 <<function oprrr(arm)>>=
 long
@@ -8473,20 +8725,9 @@ oprrr(int a, int sc)
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 
-% the assembler allows some sugar e.g. ADD X1, X2 is really
-% ADD X1, X2, X2, so this code handles this sugar.
-<<[[asmout()]] adjust r and rt>>=
-if(p->to.type == D_NONE)
-    rt = 0;
-if(p->as == AMOVW || p->as == AMVN)
-    r = 0;
-else if(r == R_NONE)
-    r = rt;
-@
 
 
-
-
+\subsubsection{Simple immediate constant}
 
 <<[[optab]] entries>>=
 { AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
@@ -8511,52 +8752,27 @@ case 2:		/* op $I,[R],R */
 %$
 %pad: the comment was about movbu, but it was wrong I think
 
-<<[[optab]] entries>>=
-{ AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
-{ AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
 
-{ AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
-{ ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
+\subsubsection{Long immediate constant and pool}
+\label{sec:add-regtmp}
+
+
+<<[[optab]] entries>>=
+{ AMOVW,	C_NCON,	C_NONE,	C_REG,		12, 4, 0 },
+{ AMOVW,	C_LCON,	C_NONE,	C_REG,		12, 4, 0,	LFROM },
 @
+
+% used also for $setR12(SB)? 
+% this instr take 4 bytes, but it is using a Pool! but omvl does not
+% look it is using the Pool ... how it works?
 
 <<[[asmout()]] switch on type cases>>=
-case 3:		/* op R<<[IR],[R],R */
-mov:
-    aclass(&p->from);
-    o1 = oprrr(p->as, p->scond);
-    o1 |= p->from.offset;
-    rt = p->to.reg;
-    r = p->reg;
-    <<[[asmout()]] adjust r and rt>>
-    o1 |= (r<<16) | (rt<<12);
-    break;
-@
-% >> >> >>
-%pad: add -> op in the comment
-
-% the MOV opcodes with size 4 which are simple, simple load or store
-<<[[optab]] entries>>=
-{ AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
-{ AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 4:		/* add $I,[R],R */
-    aclass(&p->from);
-    o1 = oprrr(AADD, p->scond);
-    o1 |= immrot(instoffset);
-    r = p->from.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o1 |= (r << 16) | (p->to.reg << 12);
+case 12:	/* movw $lcon, reg */
+    o1 = omvl(p, &p->from, p->to.reg);
     break;
 @
 %$
-% add in comment?
 
-
-
-\label{sec:add-regtmp}
 <<[[optab]] entries>>=
 { AADD,		C_NCON,	C_REG,	C_REG,		13, 8, 0 },
 { AADD,		C_NCON,	C_NONE,	C_REG,		13, 8, 0 },
@@ -8569,6 +8785,13 @@ case 4:		/* add $I,[R],R */
 { ACMP,		C_LCON,	C_REG,	C_NONE,		13, 8, 0,	LFROM },
 @
 % the general case for big constants
+
+% have already some simple movs before
+% here are a few more
+
+
+
+
 
 
 <<[[asmout()]] switch on type cases>>=
@@ -8618,7 +8841,82 @@ omvl(Prog *p, Adr *a, int dr)
 % for BL ops?
 
 
-\subsubsection{Bit shift}
+\subsubsection{Registers-only subword MOVs}
+
+<<[[optab]] entries>>=
+{ AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+{ AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4, 0 },
+{ AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+{ AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 14:	/* movb/movbu/movh/movhu R,R */
+    o1 = oprrr(ASLL, p->scond);
+
+    if(p->as == AMOVBU || p->as == AMOVHU)
+        o2 = oprrr(ASRL, p->scond);
+    else
+        o2 = oprrr(ASRA, p->scond);
+
+    r = p->to.reg;
+    o1 |= (p->from.reg)|(r<<12);
+    o2 |= (r)|(r<<12);
+    if(p->as == AMOVB || p->as == AMOVBU) {
+        o1 |= (24<<7);
+        o2 |= (24<<7);
+    } else {
+        o1 |= (16<<7);
+        o2 |= (16<<7);
+    }
+    break;
+@
+% >> >> >> >> >> >> >>
+
+<<[[asmout()]] switch on type cases>>=
+case 58:	/* movbu R,R */
+    o1 = oprrr(AAND, p->scond);
+    o1 |= immrot(0xff);
+    rt = p->to.reg;
+    r = p->from.reg;
+    if(p->to.type == D_NONE)
+        rt = 0;
+    if(r == R_NONE)
+        r = rt;
+    o1 |= (r<<16) | (rt<<12);
+    break;
+@
+% >> >>
+
+
+
+\subsubsection{Bit-shifted register}
+
+<<[[optab]] entries>>=
+{ AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
+{ AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+
+{ AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
+{ ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 3:		/* op R<<[IR],[R],R */
+mov:
+    aclass(&p->from);
+    o1 = oprrr(p->as, p->scond);
+    o1 |= p->from.offset;
+    rt = p->to.reg;
+    r = p->reg;
+    <<[[asmout()]] adjust r and rt>>
+    o1 |= (r<<16) | (rt<<12);
+    break;
+@
+% >> >> >>
+%pad: add -> op in the comment
+
+
+\subsubsection{Bit-shift opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ASLL:
@@ -8757,70 +9055,6 @@ case AMULAL:	return o | (0x7<<21) | (0x9<<4);
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 
 
-\subsubsection{Simple movs}
-
-% have already some simple movs before
-% here are a few more
-
-<<[[optab]] entries>>=
-{ AMOVW,	C_NCON,	C_NONE,	C_REG,		12, 4, 0 },
-{ AMOVW,	C_LCON,	C_NONE,	C_REG,		12, 4, 0,	LFROM },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 12:	/* movw $lcon, reg */
-    o1 = omvl(p, &p->from, p->to.reg);
-    break;
-@
-%$
-
-
-
-<<[[optab]] entries>>=
-{ AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-{ AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4, 0 },
-{ AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-{ AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 14:	/* movb/movbu/movh/movhu R,R */
-    o1 = oprrr(ASLL, p->scond);
-
-    if(p->as == AMOVBU || p->as == AMOVHU)
-        o2 = oprrr(ASRL, p->scond);
-    else
-        o2 = oprrr(ASRA, p->scond);
-
-    r = p->to.reg;
-    o1 |= (p->from.reg)|(r<<12);
-    o2 |= (r)|(r<<12);
-    if(p->as == AMOVB || p->as == AMOVBU) {
-        o1 |= (24<<7);
-        o2 |= (24<<7);
-    } else {
-        o1 |= (16<<7);
-        o2 |= (16<<7);
-    }
-    break;
-@
-% >> >> >> >> >> >> >>
-
-<<[[asmout()]] switch on type cases>>=
-case 58:	/* movbu R,R */
-    o1 = oprrr(AAND, p->scond);
-    o1 |= immrot(0xff);
-    rt = p->to.reg;
-    r = p->from.reg;
-    if(p->to.type == D_NONE)
-        rt = 0;
-    if(r == R_NONE)
-        r = rt;
-    o1 |= (r<<16) | (rt<<12);
-    break;
-@
-% >> >>
-
 
 
 \subsection{Control flow opcodes}
@@ -8860,7 +9094,7 @@ case 5:		/* bra s */
       if(p->cond != P)
         v = (p->cond->pc - pc) - 8;
       else 
-        v = -8;
+        v = -8; // warning?
     o1 = opbra(p->as, p->scond);
     o1 |= (v >> 2) & 0xffffff;
     break;
@@ -8868,6 +9102,13 @@ case 5:		/* bra s */
 % p->cond->pc !! hence the need for patch()! and span()
 % and do -pc because it's relative, and do -8 because ARM
 % does implicitly a +8 (see Machine.nw)
+
+% can overflow? branch somewhere too far?
+
+% why - 8? because stupid jump to stay where you are,
+% and stupid go next as anyway it's next, (well would be a NOP at least)
+% so B 0 actually jump 2 instrs. To loop forever need B - 8 ARM.
+% This is why you need an assembler :)
 
 <<function opbra(arm)>>=
 long
@@ -8946,6 +9187,8 @@ case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
 
 \subsection{Memory opcodes}
 % more complicated ... can generate up to 6 ARM instructions
+
+\subsubsection{XXX}
 
 % have seen the simple MOV before, which don't involve
 % any dereference, but just a constant and a register
@@ -9366,6 +9609,30 @@ case 40:	/* swp oreg,reg,reg */
     break;
 @
 % >> >> >> >> >> >> >>
+
+\subsubsection{Symbol addresses}
+
+% the MOV opcodes with size 4 which are simple, simple load or store
+<<[[optab]] entries>>=
+{ AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
+{ AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 4:		/* add $I,[R],R */
+    aclass(&p->from);
+    o1 = oprrr(AADD, p->scond);
+    o1 |= immrot(instoffset);
+    r = p->from.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o1 |= (r << 16) | (p->to.reg << 12);
+    break;
+@
+%$
+% add in comment?
+
+% otherwise C_LCON path, which use pool and load pointer from pool.
 
 \subsection{Software interrupt opcodes}
 
@@ -11034,6 +11301,20 @@ SUNDEF,
 @
 % for ??
 
+
+<<global undefp>>=
+//@Scheck: not dead, used by UP
+Prog	undefp;
+@
+% for error recovery? and for dynamic loading stuff?
+
+\label{sec:UP}
+<<constant UP>>=
+#define	UP	(&undefp)
+@
+% who does = UP?
+
+
 <<[[patch()]] switch section type for branch instruction, cases>>=
 case SUNDEF:
     if(p->as != ABL)
@@ -12050,6 +12331,10 @@ nopout(Prog *p)
 
 \subsection{Elf, Linux}
 
+% ELF dissection:
+% - https://github.com/mewrev/dissection
+% - very nice diagram a la xkcd
+%   https://code.google.com/p/corkami/wiki/ELF101
 
 <<[[main()]] switch HEADTYPE cases(arm)>>=
 case H_ELF:	/* elf executable */
@@ -12117,6 +12402,8 @@ enum {
 @
 
 \subsection{OMach, MacOS X}
+
+%https://www.objc.io/issues/6-build-tools/mach-o-executables/
 
 \subsection{PE, Microsoft Windows}
 % windows format, see pe.h in golang/src/libmach/
@@ -14325,6 +14612,9 @@ diag(char *fmt, ...)
 }
 @
 % ARM does not have the && !debug['A'], but probablt error no?
+
+% note that call to diag increment nerror and so prevent
+% any executable generation (but allow error recovery and continue)
 
 \t percent r is error return code of last syscall I think, so common to have
 \t  it in fmt
