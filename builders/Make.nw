@@ -64,8 +64,6 @@
  \hypersetup{colorlinks=true}
 \usepackage[pageref]{backref}
  \def\backref{{\footnotesize cited page(s)}~}
-%\usepackage{cleveref} %\cref
-%\usepackage{multirow}
 \usepackage{booktabs} 
  \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
 \usepackage{graphicx}
@@ -243,6 +241,8 @@ most of this book: Andrew Hume and Bob Flandera.
 
 
 
+
+
 \chapter{Overview}
 
 \section{Build system principles}
@@ -399,9 +399,9 @@ badusage(void)
 <<struct Symtab>>=
 struct Symtab
 {
-    // the key
+    // the key: (name x space)
     char		*name;
-    // enum<sxxx>, the ``namespace''
+    // enum<Namespace>, the ``namespace''
     short		space;
 
     // the value (generic)
@@ -431,13 +431,13 @@ enum sxxx {
 %S_PID,		/* pid -> products */
 %S_MAKEFILE,	/* target -> node */
 
-<<constant NHASH>>=
-#define	NHASH	4099
-@
 
 <<global hash>>=
-// hash<(string * enum<sxxx>), 'a> (next = Symtab.next in bucket)
+// hash<(string * enum<Namespace>), 'a> (next = Symtab.next in bucket)
 static Symtab *hash[NHASH];
+@
+<<constant NHASH>>=
+#define	NHASH	4099
 @
 
 <<[[Symtab]] extra fields>>=
@@ -483,6 +483,7 @@ symlook(char *sym, int space, void *install)
     for(s = hash[h]; s; s = s->next)
         if((s->space == space) && (strcmp(s->name, sym) == 0))
             return s;
+    // else
 
     if(install == nil)
         return nil;
@@ -492,6 +493,7 @@ symlook(char *sym, int space, void *install)
     s->name = sym;
     s->u.ptr = install;
 
+    // add_list(s, hash)
     s->next = hash[h];
     hash[h] = s;
 
@@ -843,7 +845,8 @@ rcmp(Rule *r, char *target, Word *tail)
     return (w || tail);
 }
 @
-
+\t strcmp sucks, use string_equal, and return bool that makes sense
+\t  so less rcmp(...) == 0, instead rule_match(...)
 
 
 
@@ -902,6 +905,7 @@ newnode(char *name)
 
     node = (Node *)Malloc(sizeof(Node));
     symlook(name, S_NODE, (void *)node);
+
     node->name = name;
     node->time = timeof(name, false);
     node->flags = (node->time? PROBABLE : 0);
@@ -1406,8 +1410,10 @@ parse(char *f, fdt fd, bool varoverride)
     ipush();
     infile = strdup(f);
     mkinline = 1;
+
     Binit(&in, fd, OREAD);
     buf = newbuf();
+
     while(assline(&in, buf)){
         hline = mkinline;
         switch(rhead(buf->start, &head, &tail, &attr, &prog))
@@ -1987,6 +1993,10 @@ out:
 %TODO: put the ${xx:%.y=%.z} here?
 
 % see varsup() later.
+
+
+
+
 
 \chapter{Building the Dependency Graph}
 
@@ -3234,6 +3244,12 @@ killchildren(char *msg)
 }
 @
 
+
+
+
+
+
+
 \chapter{Shell interaction}
 % the recipe
 
@@ -3982,7 +3998,6 @@ addw(Word *w, char *s)
 bool explain = false;
 @
 % used to a char*
-
 <<[[main()]] -xxx switch cases>>=
 case 'e':
     explain = true;
@@ -3995,7 +4010,6 @@ case 'e':
 <<global nflag>>=
 bool nflag = false;
 @
-
 <<[[main()]] -xxx switch cases>>=
 case 'n':
     nflag = true;
@@ -4092,7 +4106,6 @@ timeinit(char *s)
 <<global uflag>>=
 bool uflag = false;
 @
-
 <<[[main()]] -xxx switch cases>>=
 case 'u':
     uflag = true;
@@ -4139,6 +4152,8 @@ prusage(void)
         fprint(1, "%d: %lud\n", i, tslot[i]);
 }
 @
+
+
 
 
 \chapter{Advanced Features}
@@ -4540,7 +4555,6 @@ if(strchr(arc->n->name, '(') && arc->n->time == 0)
 <<global iflag>>=
 bool iflag = false;
 @
-
 <<[[main()]] -xxx switch cases>>=
 case 'i':
     iflag = true;
@@ -4634,7 +4648,6 @@ node->flags &= ~(CANPRETEND|PRETENDING);
 <<global tflag>>=
 bool tflag = false;
 @
-
 <<[[main()]] -xxx switch cases>>=
 case 't':
     tflag = true;
@@ -4689,7 +4702,6 @@ chgtime(char *name)
 <<global aflag>>=
 bool aflag = false;
 @
-
 <<[[main()]] -xxx switch cases>>=
 case 'a':
     aflag = true;
@@ -4933,7 +4945,7 @@ enum dxxx {
     // for jobs
     D_EXEC  =		0x04,
     // tracing some calls
-    D_TRACE  =           0x08,
+    D_TRACE  =		0x08,
 };
 @
 % used to be a set of #define
@@ -5148,6 +5160,7 @@ dumpj(char *s, Job *j, int all)
 @
 
 
+
 \chapter{Profiling}
 
 <<global buf>>=
@@ -5186,6 +5199,7 @@ symstat(void)
 }
 @
 
+
 \chapter{Error Managment}
 
 % see also runerrs
@@ -5193,7 +5207,6 @@ symstat(void)
 <<global kflag>>=
 bool kflag = false;
 @
-
 % continue even if errors, not so useful in general, but
 % useful for killchildren when get a C-c
 <<[[main()]] -xxx switch cases>>=
