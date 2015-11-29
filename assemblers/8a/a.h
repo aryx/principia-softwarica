@@ -24,7 +24,6 @@ struct	Gen
 
     short	scale;
 
-    //??
     Sym*	sym;
 
     long	offset2;
@@ -40,6 +39,7 @@ struct	Gen2
 
 extern	char*	Dlist[30];
 extern	int	nDlist;
+
 extern	Gen	nullgen;
 extern	int	pass;
 extern	char*	pathname;
