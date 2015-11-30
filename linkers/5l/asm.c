@@ -627,8 +627,7 @@ datblk(long s, long n, bool sstring)
                 switch(v->type) {
                 case SUNDEF:
                     ckoff(v, d);
-                case STEXT: case SLEAF:
-                case SSTRING:
+                case STEXT: case SLEAF: case SSTRING:
                     d += p->to.sym->value;
                     break;
                 case SDATA:
@@ -749,7 +748,7 @@ asmout(Prog *p, Optab *o)
             rt = 0;
         if(p->as == AMOVW || p->as == AMVN)
             r = 0;
-        else if(r == R_NONE)
+        else if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO
             r = rt;
         /*e: [[asmout()]] adjust r and rt */
         o1 |= rf | (r<<16) | (rt<<12);
@@ -766,7 +765,7 @@ asmout(Prog *p, Optab *o)
             rt = 0;
         if(p->as == AMOVW || p->as == AMVN)
             r = 0;
-        else if(r == R_NONE)
+        else if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO
             r = rt;
         /*e: [[asmout()]] adjust r and rt */
         o1 |= (r<<16) | (rt<<12);
@@ -836,7 +835,7 @@ asmout(Prog *p, Optab *o)
             rt = 0;
         if(p->as == AMOVW || p->as == AMVN)
             r = 0;
-        else if(r == R_NONE)
+        else if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO
             r = rt;
         /*e: [[asmout()]] adjust r and rt */
         o1 |= (r<<16) | (rt<<12);

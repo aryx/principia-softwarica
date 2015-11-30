@@ -423,7 +423,7 @@ aclass(Adr *a)
         /*s: [[aclass()]] D_CONST case, switch symkind cases */
         case D_NONE:
             instoffset = a->offset;
-            if(a->reg != R_NONE)
+            if(a->reg != R_NONE) // when?
                 goto aconsize;
 
             if(immrot(instoffset))

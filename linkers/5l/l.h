@@ -100,8 +100,8 @@ struct	Prog
     // list<ref<Prog>> (from = firstp or datap)
     Prog*	link;
     /*x: [[Prog]] extra fields */
+    // option<ref<Prog>> for branch instructions
     // list<ref<Prog>> (from = textp for TEXT instructions)
-    // ref<Prog> for branch instructions
     Prog*	cond;
     /*e: [[Prog]] extra fields */
 };
@@ -205,7 +205,7 @@ struct	Oprange
 };
 /*e: struct Oprange(arm) */
 
-/*s: enum sxxx(arm) */
+/*s: enum Section(arm) */
 enum Section
 {
     SNONE = 0,
@@ -215,36 +215,36 @@ enum Section
     SBSS,
 
     SXREF,
-    /*s: enum sxxx cases */
+    /*s: [[Section]] cases */
     SLEAF, // arm
-    /*x: enum sxxx cases */
+    /*x: [[Section]] cases */
     SFILE,
-    /*x: enum sxxx cases */
+    /*x: [[Section]] cases */
     SIMPORT,
     SEXPORT,
-    /*x: enum sxxx cases */
+    /*x: [[Section]] cases */
     SUNDEF,
-    /*x: enum sxxx cases */
+    /*x: [[Section]] cases */
     SCONST,
-    /*x: enum sxxx cases */
+    /*x: [[Section]] cases */
     SDATA1,
-    /*x: enum sxxx cases */
+    /*x: [[Section]] cases */
     SSTRING, // arm
-    /*e: enum sxxx cases */
+    /*e: [[Section]] cases */
 };
-/*e: enum sxxx(arm) */
-/*s: enum optab_flag(arm) */
+/*e: enum Section(arm) */
+/*s: enum Optab_flag(arm) */
 enum Optab_flag {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
-    /*s: enum optab_flag cases */
+    /*s: [[Optab_flag]] cases */
     V4		= 1<<3,	/* arm v4 arch */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
-    /*e: enum optab_flag cases */
+    /*e: [[Optab_flag]] cases */
 };
-/*e: enum optab_flag(arm) */
-/*s: enum cxxx(arm) */
+/*e: enum Optab_flag(arm) */
+/*s: enum Operand_class(arm) */
 // order of entries matter! coupling with cmp() and ocmp()
 enum Operand_class {
     C_NONE		= 0,
@@ -256,63 +256,63 @@ enum Operand_class {
 
     C_BRANCH,
 
-    /*s: cxxx(arm) cases */
+    /*s: [[Operand_class]] cases */
     C_HEXT,
-    /*s: cxxx(arm) cases, in C_xEXT, float cases */
+    /*s: [[Operand_class]] cases, in C_xEXT, float cases */
     C_FEXT,
     C_HFEXT,
-    /*e: cxxx(arm) cases, in C_xEXT, float cases */
+    /*e: [[Operand_class]] cases, in C_xEXT, float cases */
     C_SEXT,
     C_LEXT,
-    /*x: cxxx(arm) cases */
+    /*x: [[Operand_class]] cases */
     C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-    /*s: cxxx(arm) cases, in C_xAUTO, float cases */
+    /*s: [[Operand_class]] cases, in C_xAUTO, float cases */
     C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
     C_HFAUTO,	/* both H and F */
-    /*e: cxxx(arm) cases, in C_xAUTO, float cases */
+    /*e: [[Operand_class]] cases, in C_xAUTO, float cases */
     C_SAUTO,	/* -0xfff to 0xfff */
     C_LAUTO,
-    /*x: cxxx(arm) cases */
+    /*x: [[Operand_class]] cases */
     C_HOREG,
-    /*s: cxxx(arm) cases, in C_xOREG, float cases */
+    /*s: [[Operand_class]] cases, in C_xOREG, float cases */
     C_FOREG,
     C_HFOREG,
-    /*e: cxxx(arm) cases, in C_xOREG, float cases */
+    /*e: [[Operand_class]] cases, in C_xOREG, float cases */
     C_SOREG,
     C_LOREG,
 
     C_ROREG,
     C_SROREG,	/* both S and R */
-    /*x: cxxx(arm) cases */
+    /*x: [[Operand_class]] cases */
     C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
     C_NCON,		/* ~RCON */
     C_LCON,
-    /*x: cxxx(arm) cases */
+    /*x: [[Operand_class]] cases */
     C_RECON,
-    /*x: cxxx(arm) cases */
+    /*x: [[Operand_class]] cases */
     C_RACON,
     C_LACON,
-    /*x: cxxx(arm) cases */
+    /*x: [[Operand_class]] cases */
     C_ADDR,		/* relocatable address */
-    /*x: cxxx(arm) cases */
+    /*x: [[Operand_class]] cases */
     C_FREG,
     C_FCON,
     C_FCR,
-    /*e: cxxx(arm) cases */
+    /*e: [[Operand_class]] cases */
 
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };
-/*e: enum cxxx(arm) */
-/*s: enum mark(arm) */
+/*e: enum Operand_class(arm) */
+/*s: enum Mark(arm) */
 /* mark flags */
 enum Mark {
-    /*s: enum mark cases */
+    /*s: [[Mark]] cases */
     LEAF		= 1<<2,
-    /*x: enum mark cases */
+    /*x: [[Mark]] cases */
     FOLL		= 1<<0,
-    /*e: enum mark cases */
+    /*e: [[Mark]] cases */
 };
-/*e: enum mark(arm) */
+/*e: enum Mark(arm) */
 
 /*s: enum misc_constant(arm) */
 enum misc_constants {

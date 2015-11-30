@@ -20,6 +20,7 @@ void
 noops(void)
 {
     Prog *p, *q, *q1;
+    // enum<Opcode>
     int o;
 
     /*
@@ -37,6 +38,7 @@ noops(void)
         if(p->as == ATEXT)
             curtext = p;
         /*e: adjust curtext when iterate over instructions p */
+
         switch(p->as) {
         /*s: [[noops()]] first pass switch opcode cases */
         case ATEXT:
@@ -97,6 +99,7 @@ noops(void)
         if(p->as == ATEXT)
             curtext = p;
         /*e: adjust curtext when iterate over instructions p */
+
         o = p->as;
         switch(o) {
         /*s: [[noops()]] second pass switch opcode cases */
@@ -125,7 +128,7 @@ noops(void)
             q1 = prg();
             q1->as = AMOVW;
             q1->scond |= C_WBIT;
-            q1->line = p->line;
+            q1->line = p->line; // origin tracking
             q1->from.type = D_REG;
             q1->from.reg = REGLINK;
             q1->to.type = D_OREG;
@@ -142,14 +145,14 @@ noops(void)
             nocache(p);
             /*e: [[noops()]] case ARET, call nocache */
             if((curtext->mark & LEAF) && !autosize) {
-                // B (R14)
+                // B 0(R14)
                 p->as = AB;
                 p->from = zprg.from;
                 p->to.type = D_OREG;
                 p->to.offset = 0;
                 p->to.reg = REGLINK;
             } else {
-                // MOVW autosize(SP), PC
+                // MOVW.P autosize(SP), PC
                 p->as = AMOVW;
                 p->scond |= C_PBIT;
                 p->from.type = D_OREG;

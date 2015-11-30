@@ -71,7 +71,7 @@ dodata(void)
             /*e: [[dodata()]] sanity check size of data v */
             v = rnd(v , 4); // align
             s->value = v;   // adjust
-            /*s: [[dodata()]] if small data size */
+            /*s: [[dodata()]] in pass 1, if small data size */
             /*
              *	assign 'small' variables to data segment
              *	(rational is that data segment is more easily
@@ -82,7 +82,7 @@ dodata(void)
                 orig += v;
                 s->type = SDATA1;
             }
-            /*e: [[dodata()]] if small data size */
+            /*e: [[dodata()]] in pass 1, if small data size */
         }
     }
 
@@ -100,10 +100,10 @@ dodata(void)
             s->value = orig;
             orig += v;
         } else {
-            /*s: [[dodata()]] pass2, retag small data */
+            /*s: [[dodata()]] in pass 2, retag small data */
             if(t == SDATA1)
                 s->type = SDATA;
-            /*e: [[dodata()]] pass2, retag small data */
+            /*e: [[dodata()]] in pass 2, retag small data */
         }
     }
     orig = rnd(orig, 8);
@@ -355,16 +355,11 @@ patch(void)
     Sym *s;
     // enum<Opcode>
     int a;
-    /*x: [[patch()]] locals */
-    long vexit;
     /*e: [[patch()]] locals */
 
     DBG("%5.2f patch\n", cputime());
 
     /*s: [[patch()]] initialisations */
-    s = lookup("exit", 0);
-    vexit = s->value;
-    /*x: [[patch()]] initialisations */
     mkfwd();
     /*e: [[patch()]] initialisations */
 
@@ -387,12 +382,11 @@ patch(void)
                 p->to.type = D_BRANCH;
                 break;
             /*s: [[patch()]] switch section type for branch instruction, cases */
+            // SNONE, SXREF, etc
             default:
                 diag("undefined: %s\n%P", s->name, p);
                 s->type = STEXT;
-                s->value = vexit;
-                p->to.offset = s->value;
-                p->to.type = D_BRANCH;
+                s->value = 0;
                 break;
             /*x: [[patch()]] switch section type for branch instruction, cases */
             case SUNDEF:
@@ -454,11 +448,13 @@ patch(void)
 void
 mkfwd(void)
 {
-    long dwn[LOG], cnt[LOG];
-    Prog *lst[LOG];
+    long cnt[LOG]; // length of arc at a certain level (constant)
+    long dwn[LOG]; // remaining elements to skip at a level (goes down)
+    Prog *lst[LOG]; // past instruction saved at a level
     Prog *p;
     int i;
 
+    /*s: [[mkfwd()]] initializes cnt, dwn, lst */
     for(i=0; i<LOG; i++) {
         if(i == 0)
             cnt[i] = 1; 
@@ -467,6 +463,7 @@ mkfwd(void)
         dwn[i] = 1;
         lst[i] = P;
     }
+    /*e: [[mkfwd()]] initializes cnt, dwn, lst */
 
     i = 0;
     for(p = firstp; p != P; p = p->link) {
@@ -474,17 +471,24 @@ mkfwd(void)
         if(p->as == ATEXT)
             curtext = p;
         /*e: adjust curtext when iterate over instructions p */
+        p->forwd = P;
+
+        /*s: [[mkfwd()]] nested loops, add forward links from past p in lst to p */
+        // first loop, the levels
         i--;
         if(i < 0)
             i = LOG-1;
-        p->forwd = P;
+
+        // second loop, the frequency at a certain level
         dwn[i]--;
         if(dwn[i] <= 0) {
             dwn[i] = cnt[i];
+
             if(lst[i] != P)
-                lst[i]->forwd = p;
+                lst[i]->forwd = p; // link from past p to p
             lst[i] = p;
         }
+        /*e: [[mkfwd()]] nested loops, add forward links from past p in lst to p */
     }
 }
 /*e: function mkfwd */
