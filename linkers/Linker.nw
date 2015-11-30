@@ -1847,7 +1847,7 @@ have been resolved.
 %
 This allows in turn to transform safely some {\em virtual instructions} (see
 the \book{Assembler}) such as [[RET]], [[DIV]], or [[NOP]] 
-in real instructions. 
+in machine instructions. 
 \l actually still not real real; for instance still MOVW, and big imm cst
 \l or do optimisations? e.g. ANOP
 Indeed, [[noops()]] can
@@ -1862,7 +1862,7 @@ deleting an instruction would have forced to assign a new
 virtual program counter to each instruction and to relocate 
 every branching instructions.
 
-Once [[5l]] has the graph of real code instructions and the set of globals
+Once [[5l]] has the graph of machine code instructions and the set of globals
 declarations, it can start to {\em layout} the code and data.
 [[dodata()]] assigns a memory address in [[Sym.value]] to each 
 globals in the symbol table
@@ -2205,7 +2205,7 @@ short	type;
 @
 \l rename section?
 
-<<enum sxxx(arm)>>=
+<<enum Section(arm)>>=
 enum Section
 {
     SNONE = 0,
@@ -2215,7 +2215,7 @@ enum Section
     SBSS,
 
     SXREF,
-    <<enum sxxx cases>>
+    <<[[Section]] cases>>
 };
 @
 \l see also asmsym()
@@ -2479,6 +2479,7 @@ the ARM uses fixed-length instructions of 4 bytes.
 
 \t Instr.cond here!
 
+\label{sec:mark}
 Finally, the field below is used by different algorithms to
 temporarily {\em mark} instructions in the graph of instructions:
 
@@ -2492,17 +2493,18 @@ short	mark;
 The different kinds of marks will be described gradually in
 this document:
 
-<<enum mark(arm)>>=
+<<enum Mark(arm)>>=
 /* mark flags */
 enum Mark {
-    <<enum mark cases>>
+    <<[[Mark]] cases>>
 };
 @
 %dead: LABEL
 %not-so-useful opti: FOLL
 %useful opti: LEAF
 
-
+\n present ex of mark such as LEAF early? there are a few case STEXT:case SLEAF:
+\n but I think it is ok
 
 
 %dead:
@@ -5667,9 +5669,9 @@ addlib(char *obj)
 
 %trans:
 Once the object files and libraries have been loaded, 
+the next step in the linking pipeline is to
 %
-the next step in the linking pipeline is
-to {resolve} the symbol references in the instructions of those object files.
+{resolve} the symbol references in the instructions of those object files.
 Here is the responsible code:
 
 <<[[main()]] resolving phase>>=
@@ -5700,7 +5702,7 @@ dotext();
 
 %toc: %dup: overview/soft-archi
 [[patch()]] builds a graph of code instructions,
-[[noops()]] rewrites virtual instructions in real instructions,
+[[noops()]] rewrites virtual instructions in machine instructions,
 \n well still not completely real though
 [[dodata()]] {layout} data by assigning a memory address to each
 \n actually offset
@@ -5759,7 +5761,7 @@ Resolving and converting the remaining branching instructions
 (e.g. [[BL foo(SB)]])
 to absolute jumps is very easy thanks to the symbol table and
 the [[Sym.value]] field of procedure symbols.
-%toc:
+%trans:
 There are still some remaining issues though that makes
 the resolving step non-trivial as we will see in the following
 sections.
@@ -5770,7 +5772,12 @@ sections.
 The first issue is that
 %
 the value in the absolute jump instructions we mentioned before refers to a 
-{\em virtual program counter} which is not a {\em real code address}.
+{\em virtual program counter} which is not a {\em real code address}\footnote{
+Note that a {\em real} code address under \plan is actually a {\em virtual}
+memory address. But, the use of virtual in this context would be confusing,
+which is why we will keep to use the term ``real code address''.
+}.
+
 %dup: overview/soft-archi core-ds/instr loading/pc-ipc loading/axxx
 Indeed, the virtual program counter starts at 0
 and is incremented by 1 in [[ldobj()]] after each
@@ -5913,7 +5920,7 @@ by simply looking at [[p->cond->pc]].
 
 Thanks to the graph of code instructions, it is also easy
 after [[patch()]] to call [[noops()]] to rewrite virtual
-instructions in real instructions.
+instructions in machine instructions.
 \n and actually still not completely real, TEXT gets converted in MOVW
 \n but could be part of oplook() and could be done in asmout() instead
 %dup: overview/soft-archi
@@ -6083,8 +6090,9 @@ starting with [[patch()]].
 
 \section{Building the code instructions graph, [[patch()]]}
 
-%dup: resolving/issue/virtualpc
+%trans:
 As explained before, 
+%dup: resolving/issue/virtualpc
 the goal of [[patch()]] is to set the [[Instr.cond]] field
 \l introduced in \ref{sec:instr-cond}
 of branching instructions to point to the right target instruction.
@@ -6348,7 +6356,7 @@ void
 mkfwd(void)
 {
     long cnt[LOG]; // length of arc at a certain level (constant)
-    long dwn[LOG], // remaining elements to skip at a level (goes down)
+    long dwn[LOG]; // remaining elements to skip at a level (goes down)
     Prog *lst[LOG]; // past instruction saved at a level
     Prog *p;
     int i;
@@ -6465,12 +6473,22 @@ of lengths 3125 ($5 * 625 = 5^5$),
 
 
 \section{Virtual opcodes rewriting, [[noops()]]}
-
 \n ARM only. there is a dostkoff() in x86 but it's related only to the become
 \n  stuff that I have now deleted for the ARM.
 
-%noops() is for ASM opcodes which have actually no
-%machine opcode (e.g. ADIV, ARET) so was using a fake/virtual opcode
+%trans:
+As explained before, 
+%dup: overview/soft-archi ... resolving/issue/virtualpc
+[[noops()]] rewrites pseudo and virtual instructions in machine instructions,
+%
+that is instructions which do not have a corresponding 
+ARM opcode ([[no]] [[op]]), e.g. [[ARET]],
+to instructions which have one.
+%
+It works in two passes over the list of code instructions.
+The first pass {\em marks} certain instructions in
+[[Instr.mark]] introduced in Section~\ref{sec:mark},
+and the second possibly uses the mark to generate different instructions:
 
 <<function noops(arm)>>=
 /// main -> <>
@@ -6677,22 +6695,24 @@ noops(void)
 %                break;
 %#endif
 
+
+%toc:? %trans:?
+
 \subsection{Leaf procedure optimisation}
 \label{sec:leaf}
 \n could be in Opti section? but talked in Assembler and have many implications
 
-% if leaf procedure, no need to save current SP, noone
-% will RET back to this procedure. Also
-% we can use a special ABL that use a register instead
-% of the stack to save the current PC so RET is also
-% faster from this leaf.
+An important concept related to the ARM architecture is 
+whether a procedure is a leaf (see the \book{Assembler}). 
+Such procedures will be marked in the first pass of [[noops()]]:
 
-<<enum mark cases>>=
+<<[[Mark]] cases>>=
 LEAF		= 1<<2,
 @
 % >>
-% example of mark. useful to see early? (as there are a few
-% case STEXT: case SLEAF: below)
+
+A {\em leaf} is a procedure which does not call other procedures.
+It is a leaf in the {\em call tree}:
 
 <<[[noops()]] first pass switch opcode cases>>=
 case ATEXT:
@@ -6706,14 +6726,28 @@ case ABL:
 <<[[noops()]] first pass switch opcode ABL fallthrough>>
 @
 
+Depending on whether a procedure is a leaf, 
+the code for [[ATEXT]] and [[ARET]] can be optimized
+to not use memory at all and just use the 
+{\em link register} [[R14]], 
+%toc:
+as we will see in the following sections.
+
+
 % special section, will be used later as a mark mostly.
 
-<<enum sxxx cases>>=
+<<[[Section]] cases>>=
 SLEAF, // arm
 @
+\n used only for symbol table mark, so could present later, but ok here too.
+\n but maybe could remove, why not use the mark instead?
+
+% kinda of STEXT. Why need?
 % SLEAF? the special opti ARM has for leaf functions?
 %  but need a section for that? there is core doing different thing
 %  if SLEAF? just for putsymb? but could use mark too?
+
+% which is why have code like STEXT: case SLEAF:
 
 
 \subsection{[[ATEXT]] patching}
@@ -6721,6 +6755,14 @@ SLEAF, // arm
 
 % if leaf procedure, no need to save REGLINK in the stack!
 % hence the autosize = 0 I think
+
+% if leaf procedure, no need to save current SP, noone
+% will RET back to this procedure. Also
+% we can use a special ABL that use a register instead
+% of the stack to save the current PC so RET is also
+% faster from this leaf.
+
+
 
 <<[[noops()]] second pass switch opcode cases>>=
 case ATEXT:
@@ -6793,6 +6835,9 @@ case ARET:
 
 \subsection{[[ANOP]] stripping}
 
+%trans:
+% another virtual instr rewritten is ANOP.
+
 % generated by 5c?
 % generated also for DUPOK stuff, where all the instr of a procedures
 % are now NOP
@@ -6849,6 +6894,8 @@ case ABCASE:
 %   p->cond = q1;
 
 
+%bigskip
+%other in adv topic, e.g. ADIV
 
 
 \section{Laying out data, [[dodata()]]}
@@ -7470,7 +7517,7 @@ Oprange	oprange[ALAST];
 
 % seems called the class, see aclass(), a more precise operand_kind
 % closer to the machine constraint as we will see in next section
-<<enum cxxx(arm)>>=
+<<enum Operand_class(arm)>>=
 // order of entries matter! coupling with cmp() and ocmp()
 enum Operand_class {
     C_NONE		= 0,
@@ -7482,7 +7529,7 @@ enum Operand_class {
 
     C_BRANCH,
 
-    <<cxxx(arm) cases>>
+    <<[[Operand_class]] cases>>
 
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };
@@ -7573,9 +7620,9 @@ case D_OREG:
 % (which is then really an implicit offet to SB)
 
 % H S L ? half, small, large?
-<<cxxx(arm) cases>>=
+<<[[Operand_class]] cases>>=
 C_HEXT,
-<<cxxx(arm) cases, in C_xEXT, float cases>>
+<<[[Operand_class]] cases, in C_xEXT, float cases>>
 C_SEXT,
 C_LEXT,
 @
@@ -7607,9 +7654,9 @@ case N_INTERN:
 @
 
 
-<<cxxx(arm) cases>>=
+<<[[Operand_class]] cases>>=
 C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-<<cxxx(arm) cases, in C_xAUTO, float cases>>
+<<[[Operand_class]] cases, in C_xAUTO, float cases>>
 C_SAUTO,	/* -0xfff to 0xfff */
 C_LAUTO,
 @
@@ -7640,9 +7687,9 @@ case N_PARAM:
 % +4??
 
 % RO? rotated?
-<<cxxx(arm) cases>>=
+<<[[Operand_class]] cases>>=
 C_HOREG,
-<<cxxx(arm) cases, in C_xOREG, float cases>>
+<<[[Operand_class]] cases, in C_xOREG, float cases>>
 C_SOREG,
 C_LOREG,
 
@@ -7686,7 +7733,7 @@ case D_CONST:
 
 
 % Rotated, Negative, Large?
-<<cxxx(arm) cases>>=
+<<[[Operand_class]] cases>>=
 C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
 C_NCON,		/* ~RCON */
 C_LCON,
@@ -7720,7 +7767,7 @@ case D_NONE:
 
 
 % rotated External const
-<<cxxx(arm) cases>>=
+<<[[Operand_class]] cases>>=
 C_RECON,
 @
 %dead: C_LECON
@@ -7785,7 +7832,7 @@ case N_INTERN:
 
 %todo: need that? when do we get the address of a local or parameter?
 % for which code we have those classes used??
-<<cxxx(arm) cases>>=
+<<[[Operand_class]] cases>>=
 C_RACON,
 C_LACON,
 @
@@ -7865,12 +7912,12 @@ short	flag;
 %old: was char, but ugly
 % order is important, see optab[] global
 
-<<enum optab_flag(arm)>>=
+<<enum Optab_flag(arm)>>=
 enum Optab_flag {
     LFROM	= 1<<0,
     LTO		= 1<<1,
     LPOOL	= 1<<2,
-    <<enum optab_flag cases>>
+    <<[[Optab_flag]] cases>>
 };
 @
 % >> >> >> >> >>
@@ -9858,8 +9905,7 @@ case D_CONST:
         switch(v->type) {
         case SUNDEF:
             ckoff(v, d);
-        case STEXT: case SLEAF:
-        case SSTRING:
+        case STEXT: case SLEAF: case SSTRING:
             d += p->to.sym->value;
             break;
         case SDATA:
@@ -10447,7 +10493,7 @@ histtoauto();
 
 
 
-<<enum sxxx cases>>=
+<<[[Section]] cases>>=
 SFILE,
 @
 
@@ -11282,7 +11328,7 @@ newdata(Sym *s, int o, int w, int t)
 bool dlm;
 @
 
-<<enum sxxx cases>>=
+<<[[Section]] cases>>=
 SIMPORT,
 SEXPORT,
 @
@@ -11371,7 +11417,7 @@ enum rxxx {
 };
 @
 
-<<enum sxxx cases>>=
+<<[[Section]] cases>>=
 SUNDEF,
 @
 % for ??
@@ -11676,7 +11722,7 @@ grow(Reloc *r)
 Sym *di = S;
 @
 
-<<enum sxxx cases>>=
+<<[[Section]] cases>>=
 SCONST,
 @
 % SCONST ... hmm confusing with D_SCONST IMHO
@@ -11739,7 +11785,7 @@ case AINIT:
 
 \subsection{Relocatable address, [[C_ADDR]]}
 
-<<cxxx(arm) cases>>=
+<<[[Operand_class]] cases>>=
 C_ADDR,		/* relocatable address */
 @
 
@@ -11931,7 +11977,7 @@ case AADD:
 \subsection{Small data first}
 % improve data cache miss?
 
-<<enum sxxx cases>>=
+<<[[Section]] cases>>=
 SDATA1,
 @
 
@@ -12063,7 +12109,7 @@ follow(void)
 }
 @
 
-<<enum mark cases>>=
+<<[[Mark]] cases>>=
 FOLL		= 1<<0,
 @
 % >>
@@ -12640,7 +12686,7 @@ ieeedtod(Ieee *ieeep)
 
 \subsubsection{Class}
 
-<<cxxx(arm) cases>>=
+<<[[Operand_class]] cases>>=
 C_FREG,
 C_FCON,
 C_FCR,
@@ -12665,7 +12711,7 @@ immfloat(long v)
 }
 @
 
-<<cxxx(arm) cases, in C_xEXT, float cases>>=
+<<[[Operand_class]] cases, in C_xEXT, float cases>>=
 C_FEXT,
 C_HFEXT,
 @
@@ -12676,7 +12722,7 @@ if(immfloat(t))
     return immhalf(instoffset)? C_HFEXT : C_FEXT;
 @
 
-<<cxxx(arm) cases, in C_xAUTO, float cases>>=
+<<[[Operand_class]] cases, in C_xAUTO, float cases>>=
 C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
 C_HFAUTO,	/* both H and F */
 @
@@ -12688,7 +12734,7 @@ if(immfloat(t))
     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
 @
 
-<<cxxx(arm) cases, in C_xOREG, float cases>>=
+<<[[Operand_class]] cases, in C_xOREG, float cases>>=
 C_FOREG,
 C_HFOREG,
 @
@@ -12710,7 +12756,7 @@ if(immfloat(t))
 
 
 
-<<enum optab_flag cases>>=
+<<[[Optab_flag]] cases>>=
 V4		= 1<<3,	/* arm v4 arch */
 VFP		= 1<<4,	/* arm vfpv3 floating point */
 @
@@ -13989,7 +14035,7 @@ if(*a >= '0' && *a <= '9')
 %  in Kernel.nw?
 % for constant strings? an optimisation?
 
-<<enum sxxx cases>>=
+<<[[Section]] cases>>=
 SSTRING, // arm
 @
 
