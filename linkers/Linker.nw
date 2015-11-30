@@ -2502,9 +2502,8 @@ enum Mark {
 %dead: LABEL
 %not-so-useful opti: FOLL
 %useful opti: LEAF
-
-\n present ex of mark such as LEAF early? there are a few case STEXT:case SLEAF:
-\n but I think it is ok
+\n present ex of mark such as LEAF early? 
+\n there were a few cases STEXT:case SLEAF: but I removed SLEAF so ok
 
 
 %dead:
@@ -3477,7 +3476,7 @@ entryvalue(void)
     switch(s->type) {
     case SNONE:
         return INITTEXT; // no _main, start at beginning of binary then
-    case STEXT: case SLEAF:
+    case STEXT:
         return s->value;
     <<[[entryvalue()]] if dynamic module case>>
     default:
@@ -3486,9 +3485,9 @@ entryvalue(void)
     }
 }
 @
+%old: case SLEAF:
 \t rename a and s bad names; s -> sym. a -> ? str?
 %ocaml: could at least take initentry as a parameter instead of using a global
-\l SLEAF see later
 
 \subsection{Text section}
 \label{sec:asmb-text-section-overview}
@@ -6733,21 +6732,11 @@ to not use memory at all and just use the
 %toc:
 as we will see in the following sections.
 
-
-% special section, will be used later as a mark mostly.
-
-<<[[Section]] cases>>=
-SLEAF, // arm
-@
-\n used only for symbol table mark, so could present later, but ok here too.
-\n but maybe could remove, why not use the mark instead?
-
-% kinda of STEXT. Why need?
-% SLEAF? the special opti ARM has for leaf functions?
-%  but need a section for that? there is core doing different thing
-%  if SLEAF? just for putsymb? but could use mark too?
-
-% which is why have code like STEXT: case SLEAF:
+%old:
+% <<[[Section]] cases>>=
+% SLEAF, // arm
+% @
+% but used only for symbol table, so I removed and use mark instead.
 
 
 \subsection{[[ATEXT]] patching}
@@ -6779,8 +6768,6 @@ case ATEXT:
     }
 
     if(curtext->mark & LEAF) {
-        if(curtext->from.sym)
-            curtext->from.sym->type = SLEAF;
         if(!autosize)
             break;
     }
@@ -6804,6 +6791,10 @@ case ATEXT:
 @
 % wbit??
 % forgot Instr.pc ???? does not matter anymore, graph already built
+%old:
+%        if(curtext->from.sym)
+%            curtext->from.sym->type = SLEAF;
+
 
 \subsection{[[ARET]] rewriting}
 \label{sec:ARET-rewrite}
@@ -7784,7 +7775,7 @@ case N_INTERN:
     if(s == S) // no warning?
         break;
     switch(s->type) {
-    case STEXT: case SLEAF: case SSTRING:
+    case STEXT: case SSTRING:
     case SCONST:
     case SUNDEF:
         instoffset = s->value + a->offset;
@@ -7820,6 +7811,7 @@ case N_INTERN:
 %    }
 %    instoffset = s->value + a->offset + INITDAT;
 %    return C_LCON;
+%old: case SLEAF: 
 
 % for LCON have to do the INITDAT!
 % really need RECON?
@@ -9905,7 +9897,7 @@ case D_CONST:
         switch(v->type) {
         case SUNDEF:
             ckoff(v, d);
-        case STEXT: case SLEAF: case SSTRING:
+        case STEXT: case SSTRING:
             d += p->to.sym->value;
             break;
         case SDATA:
@@ -9942,7 +9934,7 @@ case D_CONST:
     }
     break;
 @
-
+%old: case SLEAF: 
 
 
 
@@ -10170,14 +10162,14 @@ asmsym(void)
 
     for(p=textp; p!=P; p=p->cond) {
         s = p->from.sym;
-        if(s->type == STEXT || s->type == SLEAF) {
+        if(s->type == STEXT) {
             /* filenames first */
             <<[[asmsym()]] call putsymb for filenames>>
             
-            if(s->type == STEXT)
-                putsymb(s->name, 'T', s->value, s->version);
-            else // SLEAF
+            if(p->mark & LEAF)
                 putsymb(s->name, 'L', s->value, s->version);
+            else
+                putsymb(s->name, 'T', s->value, s->version);
 
             <<[[asmsym()]] frame symbols>>
         }
@@ -10188,7 +10180,12 @@ asmsym(void)
     }
 }
 @
-
+%old: 
+% || s->type == SLEAF
+%            if(s->type == STEXT)
+%                putsymb(s->name, 'T', s->value, s->version);
+%            else // SLEAF
+%                putsymb(s->name, 'L', s->value, s->version);
 
 
 
@@ -11793,7 +11790,7 @@ C_ADDR,		/* relocatable address */
 if(dlm) {
     switch(t) {
     case SUNDEF:
-    case STEXT: case SLEAF: case SSTRING:
+    case STEXT: case SSTRING:
     case SCONST: 
         instoffset = s->value + a->offset;
         break;
@@ -11805,7 +11802,8 @@ if(dlm) {
     return C_ADDR;
 }
 @
-% I added the case SDATA: case SBSS:
+%old: case SLEAF: 
+%pad: I added the case SDATA: case SBSS:
 % in default should return exn if not SDATA or SBSS no?
 
 <<[[optab]] entries>>=
@@ -12283,7 +12281,7 @@ copy:
         r->cond = p->link;
         r->link = p->cond;
 
-        if(!(r->link->mark&FOLL))
+        if(!(r->link->mark & FOLL))
             // recursive call
             xfol(r->link);
 
@@ -12304,13 +12302,13 @@ copy:
 
 \ifallcode
 <<[[xfol()]] sanity check one, r should be marked>>=
-if(!(r->mark&FOLL))
+if(!(r->mark & FOLL))
     print("cant happen 1\n");
 r->mark |= FOLL;
 @
 
 <<[[xfol()]] sanity check two, [[r->cond]] should be marked>>=
-if(!(r->cond->mark&FOLL))
+if(!(r->cond->mark & FOLL))
     print("cant happen 2\n");
 @
 \fi

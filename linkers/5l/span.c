@@ -346,7 +346,7 @@ aclass(Adr *a)
             if(dlm) {
                 switch(t) {
                 case SUNDEF:
-                case STEXT: case SLEAF: case SSTRING:
+                case STEXT: case SSTRING:
                 case SCONST: 
                     instoffset = s->value + a->offset;
                     break;
@@ -438,7 +438,7 @@ aclass(Adr *a)
             if(s == S) // no warning?
                 break;
             switch(s->type) {
-            case STEXT: case SLEAF: case SSTRING:
+            case STEXT: case SSTRING:
             case SCONST:
             case SUNDEF:
                 instoffset = s->value + a->offset;

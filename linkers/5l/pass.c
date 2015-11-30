@@ -256,7 +256,7 @@ loop:
                 *r = *p;
 
                 /*s: [[xfol()]] sanity check one, r should be marked */
-                if(!(r->mark&FOLL))
+                if(!(r->mark & FOLL))
                     print("cant happen 1\n");
                 r->mark |= FOLL;
                 /*e: [[xfol()]] sanity check one, r should be marked */
@@ -281,12 +281,12 @@ loop:
                 r->cond = p->link;
                 r->link = p->cond;
 
-                if(!(r->link->mark&FOLL))
+                if(!(r->link->mark & FOLL))
                     // recursive call
                     xfol(r->link);
 
                 /*s: [[xfol()]] sanity check two, [[r->cond]] should be marked */
-                if(!(r->cond->mark&FOLL))
+                if(!(r->cond->mark & FOLL))
                     print("cant happen 2\n");
                 /*e: [[xfol()]] sanity check two, [[r->cond]] should be marked */
 

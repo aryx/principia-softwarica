@@ -117,8 +117,6 @@ noops(void)
             }
 
             if(curtext->mark & LEAF) {
-                if(curtext->from.sym)
-                    curtext->from.sym->type = SLEAF;
                 if(!autosize)
                     break;
             }

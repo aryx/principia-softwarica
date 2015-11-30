@@ -216,8 +216,6 @@ enum Section
 
     SXREF,
     /*s: [[Section]] cases */
-    SLEAF, // arm
-    /*x: [[Section]] cases */
     SFILE,
     /*x: [[Section]] cases */
     SIMPORT,

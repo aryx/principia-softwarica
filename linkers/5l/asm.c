@@ -27,7 +27,7 @@ entryvalue(void)
     switch(s->type) {
     case SNONE:
         return INITTEXT; // no _main, start at beginning of binary then
-    case STEXT: case SLEAF:
+    case STEXT:
         return s->value;
     /*s: [[entryvalue()]] if dynamic module case */
     case SDATA:
@@ -382,7 +382,7 @@ asmsym(void)
 
     for(p=textp; p!=P; p=p->cond) {
         s = p->from.sym;
-        if(s->type == STEXT || s->type == SLEAF) {
+        if(s->type == STEXT) {
             /* filenames first */
             /*s: [[asmsym()]] call putsymb for filenames */
             for(a=p->to.autom; a; a=a->link)
@@ -393,10 +393,10 @@ asmsym(void)
                     putsymb(a->asym->name, 'Z', a->aoffset, 0);
             /*e: [[asmsym()]] call putsymb for filenames */
             
-            if(s->type == STEXT)
-                putsymb(s->name, 'T', s->value, s->version);
-            else // SLEAF
+            if(p->mark & LEAF)
                 putsymb(s->name, 'L', s->value, s->version);
+            else
+                putsymb(s->name, 'T', s->value, s->version);
 
             /*s: [[asmsym()]] frame symbols */
             /* frame, auto and param after */
@@ -627,7 +627,7 @@ datblk(long s, long n, bool sstring)
                 switch(v->type) {
                 case SUNDEF:
                     ckoff(v, d);
-                case STEXT: case SLEAF: case SSTRING:
+                case STEXT: case SSTRING:
                     d += p->to.sym->value;
                     break;
                 case SDATA:
