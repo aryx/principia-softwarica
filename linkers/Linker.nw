@@ -730,7 +730,10 @@ header which uses 32 bytes.
 % - special case for setR12
 % - works for etext???
 
-% but role of linker? other linkers also do pooling?
+% on x86 have small jump and far jump, and one faster than other
+% but can work only if dest is not far.
+
+% other linkers do pooling? role of linker? who else can do that anyway?
 
 %\subsection{Mutual dependency, fixpoint}
 % generic term used in Levine book for that?
@@ -2142,7 +2145,7 @@ lookup(char *symb, int v)
     Sym *sym;
     long h;
     int len;
-    <<[[lookup()]] locals>>
+    <<[[lookup()]] other locals>>
 
     <<[[lookup()]] compute hash value [[h]] of [[(symb, v)]] and [[len]]>>
     
@@ -2161,7 +2164,7 @@ lookup(char *symb, int v)
 %ocaml: use stdlib Hashtbl.find, sad duplicate from 5a/
 %assembler: very similar, diff is use of (symb, v) instead of just (symb)
 
-<<[[lookup()]] locals>>=
+<<[[lookup()]] other locals>>=
 char *p;
 int c;
 @
@@ -3426,6 +3429,7 @@ long OFFSET;
 \t toc? or put before when see high-level view of code/
 
 \subsection{Header}
+\label{sec:gen-header}
 
 The header generation assumes the set of globals
 containing the size of sections ([[textsize]], [[datsize]], etc) 
@@ -3975,7 +3979,7 @@ inopd(byte *p, Adr *a, Sym *h[])
 {
     int size; // returned
     int symidx;
-    <<[[inopd()]] locals>>
+    <<[[inopd()]] other locals>>
 
     a->type = p[0];
     a->reg = p[1];
@@ -5906,7 +5910,7 @@ of ARM instructions which are needed for this
 instruction (via [[oplook()]]), 
 set [[Instr.pc]] to [[pc]] which both represent now
 {\em real program counters}, 
-and increment [[pc]] accordingly (e.g. by 4 is only one ARM instruction
+and increment [[pc]] accordingly (e.g. by 4 if only one ARM instruction
 was necessary).
 
 \item the code generator [[asmout()]] when involved with a branching
@@ -6005,6 +6009,7 @@ Using fake addresses during the first layout would be imprecise.
 The solution adopted by [[5l]] to solve the mutual dependency
 problem operates in four steps: 
 
+\label{sec:dodata-big-picture}
 \begin{enumerate}
 \item the layout of data is done first, via [[dodata()]],
 by iterating over all the globals.
@@ -6054,10 +6059,10 @@ This is why one of its first instruction is:
 [[MOVW $setR12(SB), R12]].%$
 %
 
-\item the instruction [[MOVW $setR12(SB), R12]]%$
+\item the instruction [[MOVW $setR12(SB), R12]] %$
 itself uses an address which could be
 small or large depending on the program. This brings us back
-to the original problem. To {bootstrap},
+to the original problem. To {\em bootstrap},
 this address is recognized in a special way in the code
 generator in [[asmout()]] and leads to the generation of a fixed number
 of instructions, whatever the value of the address.
@@ -6104,7 +6109,7 @@ the goal of [[patch()]] is to set the [[Instr.cond]] field
 of branching instructions to point to the right target instruction.
 \n so later in asmout can get real pc with p->cond->pc (also useful for follow)
 %
-Essentially, [[patch()]] will iterate over all the code instructions
+Essentially [[patch()]] will iterate over all the code instructions
 [[p]] and for branch instructions it will {look for}
 the target instruction [[q]] with the virtual program counter 
 [[q->pc]] equal to the absolute jump value [[c]] in [[p]]:
@@ -6117,7 +6122,7 @@ patch(void)
     Prog *p;
     Prog *q;
     long c; // not ulong?
-    <<[[patch()]] locals>>
+    <<[[patch()]] other locals>>
 
     DBG("%5.2f patch\n", cputime());
 
@@ -6145,8 +6150,9 @@ important and can be ignored for now.
 It will be explained in Section~\ref{sec:UP}.
 \n because of SUNDEF
 Normally, before the call to [[patch()]], 
-[[Instr.cond]] should be a null pointer 
-(see the instruction [[p->cond = P;]] in [[ldobj()]] Section~\ref{sec:ldobj})
+[[Instr.cond]] should be a null pointer\footnote{
+See the instruction [[p->cond = P;]] in [[ldobj()]] Section~\ref{sec:ldobj}.
+}
 which is different than [[UP]].
 
 
@@ -6172,7 +6178,7 @@ is trivial thanks to the [[Sym.value]] of procedure symbols
 which contains the virtual program counter of the procedure:
 \l a bit too much explanations?
 
-<<[[patch()]] locals>>=
+<<[[patch()]] other locals>>=
 Sym *s;
 // enum<Opcode>
 int a;
@@ -6225,7 +6231,7 @@ as the call to [[diag()]] will prevent such a thing
 %old:
 %  s->value = vexit;
 %  ...
-%  <<[[patch()]] locals>>=
+%  <<[[patch()]] other locals>>=
 %  long vexit;
 %  @
 %  <<[[patch()]] initialisations>>=
@@ -6485,11 +6491,10 @@ of lengths 3125 ($5 * 625 = 5^5$),
 %trans:
 As explained before, 
 %dup: overview/soft-archi ... resolving/issue/virtualpc
-[[noops()]] rewrites pseudo and virtual instructions in machine instructions,
-%
-that is instructions which do not have a corresponding 
+[[noops()]] rewrites pseudo and virtual instructions 
+which do not have a corresponding 
 ARM opcode ([[no]] [[op]]), e.g. [[ARET]],
-to instructions which have one.
+to machine instructions which have one.
 %
 It works in two passes over the list of code instructions.
 The first pass mostly {\em marks} certain instructions in
@@ -6518,9 +6523,9 @@ noops(void)
 
     DBG("%5.2f noops\n", cputime());
 
-    // pass 1, mark
+    // pass 1, mark or delete
     curtext = P;
-	q = P;
+    q = P;
     for(p = firstp; p != P; p = p->link) {
         <<adjust curtext when iterate over instructions p>>
 
@@ -6710,7 +6715,8 @@ noops(void)
 %#endif
 
 
-%toc:? %trans:?
+%toc:
+The following sections will detail those passes.
 
 \subsection{Leaf procedure optimisation}
 \label{sec:leaf}
@@ -6776,6 +6782,7 @@ case ATEXT:
       if(curtext->mark & LEAF) {
         // to compensate further + 4 to get autosize == 0.
         p->to.offset = -4;
+      }
     }
     autosize = p->to.offset + 4;
 
@@ -7025,29 +7032,26 @@ case ABCASE:
 There are other virtual instructions rewritten by [[noops()]]
 beside [[TEXT]], [[RET]], and [[NOP]]. Those are the most
 important one though.
-Chapter~\ref{chap:advanced} will present the remaining
-virtual instructions: [[DIV]], [[MOD]], and [[MOVWD]].
+Chapter~\ref{chap:advanced} will present the transformation of
+the remaining virtual instructions: [[DIV]], [[MOD]], and [[MOVWD]].
 \l other?
 \l other virtual instr transformed but later in asmout()?
 
 
 \section{Laying out data, [[dodata()]]}
-% computing datasize (and bsssize)
-% != generating DATA which is done in asmb. Here just layout.
 
-% can be done before actually? independent? what matters
-% is that done before dotext() though! because
-% oplook! instoffset, etc.
-
-% The programmer specifies sizes for GLOBL, and their content via DATA,
-% but he does not want to care about the precise layout. Here we layout,
-% we put all the globals (spreaded in different instructions and different
-% object files) next to each other, assigning concrete locations 
-% (actually offset to INITDAT) to each GLOBL.
-% Note that Sym.value changes "type" going from a size to now a location.
-% size first so can add each time when iterate.
-
-% used in a.out header
+%trans:
+As explained before,
+%dup: overview/soft-archi main/asmb/data-sect resolving/issue
+the goal of [[dodata()]] is to {layout} globals by
+essentially modifying the [[Sym.value]] field of those globals.
+%
+This field was originally storing the size of the global
+and will contain, after [[dodata()]], 
+an offset to the start of the data section.
+%
+[[dodata()]] also computes two important globals storing
+the size of the data and BSS sections:
 
 <<global datsize>>=
 long	datsize;
@@ -7057,6 +7061,33 @@ long	datsize;
 long	bsssize;
 @
 
+Those globals are then used to generate the [[a.out]] header
+in [[asmout()]], as shown in Section~\ref{sec:gen-header}.
+
+
+The programmer {declares} globals and
+specifies their {\em size} with [[GLOBL]],
+e.g. [[GLOBL foo(SB), $4]]. %$
+%
+He can also specify their {\em content} with [[DATA]],
+e.g. [[DATA foo(SB)/4, "hey\n"]], in which case the global
+will be part of the data section ([[SDATA]]) 
+instead of the BSS section ([[SBSS]]).
+%
+But, he does not care about the precise layout of those globals
+in their respective sections.
+%
+[[dodata()]] gathers all the global declarations, spread in different
+object files, and places them next to each other in memory.
+\l layout = placing
+It also {\em aligns} those globals at word boundaries
+to satisfy architecture constraints on memory addressing.
+\t constraint = ? for optimize too? or would also not work?
+\l will also have alignment then in executable for data section globals.
+
+The code is pretty straightforward once all the motivations
+and the big picture have been presented 
+(see Section~\ref{sec:dodata-big-picture}):
 
 <<function dodata(arm)>>=
 /// main -> <>
@@ -7097,11 +7128,11 @@ dodata(void)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t == SDATA || t == SBSS) {
-            v = s->value;
-            <<[[dodata()]] sanity check size of data v>>
+            v = s->value; // size of global for now
+            <<[[dodata()]] sanity check GLOBL instructions, size of data v>>
             v = rnd(v , 4); // align
             s->value = v;   // adjust
-            <<[[dodata()]] in pass 1, if small data size>>
+            <<[[dodata()]] in pass 1, if small data size, adjust orig>>
         }
     }
 
@@ -7145,6 +7176,7 @@ dodata(void)
     <<[[dodata()]] define special symbols>>
 }
 @
+\n first iteration is on datap instructions, the other are on the symbol table.
 %old:
 %            while(v & 3) // align
 %                v++;
@@ -7157,21 +7189,23 @@ dodata(void)
 % in pass2 for SDATA but not for BSS. I think more consistent not do it
 % anywhere, any redundant with check done in pass1.
 
-% Order of globals in executable = order in hash table = hard to predict.
+Note that we are just laying out globals here. We use mostly
+the [[GLOBL]] declarations which are stored in the symbol table
+[[hash]].
+%
+The use of the [[DATA]] instructions and [[datap]]
+to generate the data section in the executable is done in [[datblk()]]
+(see Section~\ref{sec:datblk}), not in [[dodata()]].
 
-% now Sym.value for GLOBL is not the size anymore but the offset
-% (offset to INITDAT though) changed type!
-% note that first iteration is on datap instructions, the other
-% loops are on the symbol table.
+\t what matters is do before dotext() though! because oplook! instoffset, etc.
 
-% could do orig = INITDAT? no, we can't because we don't know yet the size
-% of the text ... this is computed in dotext(). 
-% But does it have to be mutually recursive? If we there was not the
-% SSTRING thing, could we do just dotext() before dodata()?
-% NO! depending on address, cant refer directly in instruction. Need pool.
+\l could do orig = INITDAT? no, we can't because we don't know yet the size
+\l   of the text ... this is computed in dotext().
+
+\n Order of globals in executable = order in hash table = hard to predict.
 
 
-<<[[dodata()]] sanity check size of data v>>=
+<<[[dodata()]] sanity check GLOBL instructions, size of data v>>=
 if(v == 0) { // check
     diag("%s: no size", s->name);
     v = 1;
@@ -7182,18 +7216,25 @@ if(v == 0) { // check
 if(s->type != SDATA)
     diag("initialize non-data (%d): %s\n%P",
         s->type, s->name, p);
+
 v = p->from.offset + p->reg;
 if(v > s->value)
     diag("initialize bounds (%ld): %s\n%P",
         s->value, s->name, p);
 @
-% p->reg for boundaries ('DATA name / con, ximm')
+
+Remember that [[Instr.reg]] is (ab)used to store
+the size of the [[DATA]] {slice}, e.g. 4
+in [[DATA foo+8(SB)/4, "hey!"]].
 
 
 
 \section{Laying out code, [[dotext()]]}
-% computing textsize
-% != generating TEXT
+
+%trans:
+% last piece of resolving!
+% rely on all previous phases by patch, noops, and dodata.
+
 
 % Adjusting pc and code addresses to concrete values, 
 % not virtual pc! so then when generating the code for AB in
@@ -7202,6 +7243,8 @@ if(v > s->value)
 % where the size of the instructions now matter (hence use of oplook()).
 
 % set global for a.out header, and also for INITDAT as see end of dotext()
+
+% computing textsize
 
 <<global textsize>>=
 long	textsize;
@@ -7288,6 +7331,8 @@ dotext(void)
 % but here it's really a concrete location whereas for dodata()
 % it's relative to INITDAT that we actually compute here.
 
+
+% again != generating TEXT, this is done in asmb and asmout
 
 
 %\subsection{Large procedures}
@@ -9961,7 +10006,7 @@ datblk(long s, long n, bool sstring)
     Prog *p;
     long a, l;
     int i, c;
-    <<[[datblk()]] locals>>
+    <<[[datblk()]] other locals>>
 
     memset(buf.dbuf, 0, n+Dbufslop);
 
@@ -10000,7 +10045,7 @@ datblk(long s, long n, bool sstring)
 }
 @
 
-<<[[datblk()]] locals>>=
+<<[[datblk()]] other locals>>=
 long j;
 @
 
@@ -10025,7 +10070,7 @@ case D_SCONST:
 @
 
 
-<<[[datblk()]] locals>>=
+<<[[datblk()]] other locals>>=
 Sym *v;
 char *cast;
 long d;
@@ -10447,7 +10492,7 @@ Auto*	curauto;
 % put example of instruction.
 % put example of multiple instruction with same parameter.
 
-<<[[inopd()]] locals>>=
+<<[[inopd()]] other locals>>=
 int t, l;
 Sym *s;
 Auto *u;
@@ -12126,7 +12171,7 @@ MINSIZ		= 64,
 @
 
 
-<<[[dodata()]] in pass 1, if small data size>>=
+<<[[dodata()]] in pass 1, if small data size, adjust orig>>=
 /*
  *	assign 'small' variables to data segment
  *	(rational is that data segment is more easily
@@ -13079,7 +13124,7 @@ case AMOVWD:
 
 
 
-<<[[datblk()]] locals>>=
+<<[[datblk()]] other locals>>=
 long fl;
 @
 
