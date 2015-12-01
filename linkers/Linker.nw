@@ -724,6 +724,12 @@ header which uses 32 bytes.
 % but then change size of code section, so shift data, so 
 % need reresolve!
 
+% works for 5l because: 
+% - offset for jmps is really big, so stable size of instr
+% - address for globals are offsets to R12 and so stable
+% - special case for setR12
+% - works for etext???
+
 % but role of linker? other linkers also do pooling?
 
 %\subsection{Mutual dependency, fixpoint}
@@ -1368,7 +1374,8 @@ plays a complex role in [[5l]]. This symbol is notably
 used by [[_main]] as indicated by the output of [[5l -W]]
 and [[5l -a]] we saw in the previous sections.
 Its role and its relationship with the {pseudo-register}
-[[SB]] will be explained later in Section~\ref{sec:sb-r12}.
+[[SB]] will be explained later in Chapter~\ref{chap:resolving}.
+%~\ref{sec:sb-r12}.
 
 \l _existstr 
 \l small d means private symbol B means unitialized (BSS)
@@ -6485,9 +6492,14 @@ ARM opcode ([[no]] [[op]]), e.g. [[ARET]],
 to instructions which have one.
 %
 It works in two passes over the list of code instructions.
-The first pass {\em marks} certain instructions in
-[[Instr.mark]] introduced in Section~\ref{sec:mark},
-and the second possibly uses the mark to generate different instructions:
+The first pass mostly {\em marks} certain instructions in
+[[Instr.mark]] (see Section~\ref{sec:mark}). 
+%
+This pass can also rely on [[q]] which stores the previous instruction to [[p]].
+%
+The second pass possibly uses the mark to transform
+virtual instructions:
+\l actually ANOP stripping done in first pass
 
 <<function noops(arm)>>=
 /// main -> <>
@@ -6506,17 +6518,19 @@ noops(void)
 
     DBG("%5.2f noops\n", cputime());
 
-    // pass 1
+    // pass 1, mark
     curtext = P;
+	q = P;
     for(p = firstp; p != P; p = p->link) {
         <<adjust curtext when iterate over instructions p>>
 
         switch(p->as) {
         <<[[noops()]] first pass switch opcode cases>>
         }
+        q = p;
     }
 
-    // pass 2
+    // pass 2, transform
     curtext = P;
     for(p = firstp; p != P; p = p->link) {
         <<adjust curtext when iterate over instructions p>>
@@ -6528,6 +6542,7 @@ noops(void)
     }
 }
 @
+%bugfix: I forgot the 'q = p;' after some refactoring, but need it!
 %old: there was lots of stuff about BECOME which I think was
 % a feature necessary for the alef compiler, but it
 % has been removed from plan9 edition 4 so this code
@@ -6711,7 +6726,7 @@ LEAF		= 1<<2,
 % >>
 
 A {\em leaf} is a procedure which does not call other procedures.
-It is a leaf in the {\em call tree}:
+Such a procedure is thus a leaf in the {\em call tree}:
 
 <<[[noops()]] first pass switch opcode cases>>=
 case ATEXT:
@@ -6742,38 +6757,35 @@ as we will see in the following sections.
 \subsection{[[ATEXT]] patching}
 \label{sec:atext-patching}
 
-% if leaf procedure, no need to save REGLINK in the stack!
-% hence the autosize = 0 I think
+If a procedure is a leaf, there is no need to save [[R14]]
+in the stack. Indeed, such a procedure will 
+not contain any [[BL]] instruction, and so will
+not overwrite [[R14]].
+%
+[[5l]] does this optimisation though only if the procedure
+does not declare also any locals (e.g. [[ATEXT foo(SB), $0]]).%$
+\t why?
 
-% if leaf procedure, no need to save current SP, noone
-% will RET back to this procedure. Also
-% we can use a special ABL that use a register instead
-% of the stack to save the current PC so RET is also
-% faster from this leaf.
-
-
+Otherwise, if the procedure is not a leaf, or use some locals,
+then an extra word ([[+4]] bytes) is reserved in the stack
+to store the return address to the caller stored in [[R14]].
 
 <<[[noops()]] second pass switch opcode cases>>=
 case ATEXT:
-    autosize = p->to.offset + 4;
-    if(autosize <= 4)
+    if(p->to.offset <= 0) {
       if(curtext->mark & LEAF) {
+        // to compensate further + 4 to get autosize == 0.
         p->to.offset = -4;
-        autosize = 0;
     }
+    autosize = p->to.offset + 4;
 
-    if(!autosize && !(curtext->mark & LEAF)) {
-        DBG("save suppressed in: %s\n", curtext->from.sym->name);
-        curtext->mark |= LEAF;
-    }
+    <<[[noops()]] in second pass, if size local was -4 and not a leaf>>
 
-    if(curtext->mark & LEAF) {
-        if(!autosize)
-            break;
-    }
+    if((curtext->mark & LEAF) && (autosize == 0))
+      break;
     // else
 
-    // MOVW.W R14, -autosize(SP)
+    // MOVW.W R14, -autosize(R13)
     q1 = prg();
     q1->as = AMOVW;
     q1->scond |= C_WBIT;
@@ -6789,20 +6801,69 @@ case ATEXT:
     p->link = q1;
     break;
 @
-% wbit??
-% forgot Instr.pc ???? does not matter anymore, graph already built
+\n forgot Instr.pc ? does not matter anymore, graph already built.
 %old:
+%    autosize = p->to.offset + 4;
+%    if(autosize <= 4)
+%      if(curtext->mark & LEAF) {
+%        p->to.offset = -4;
+%        autosize = 0;
+%    }
+%
+%    if(!autosize && !(curtext->mark & LEAF)) {
+%        DBG("save suppressed in: %s\n", curtext->from.sym->name);
+%        curtext->mark |= LEAF;
+%    }
+%
+%    if(curtext->mark & LEAF) {
 %        if(curtext->from.sym)
 %            curtext->from.sym->type = SLEAF;
+%        if(!autosize)
+%            break;
+%    }
+% - removed the code about SLEAF
+% - use autosize == 0, more readable than !autosize, anyway it's not a bool!
+% - reorg order of assignments, simpler I think
 
+The single instruction [[MOVW.W R14, -autosize(R13)]],
+which uses the {\em special bit} [[.W]] (see the \book{Assembler}),
+is equivalent to the sequence:
+\begin{verbatim}
+MOVW R14, -autosize(R13)
+SUB autosize, R13, R13
+\end{verbatim}
+\l really?
+
+Note that the [[ATEXT]] instruction in [[p]] is kept.
+It is not replaced by a new instruction [[q1]] but instead
+[[q1]] is added after [[p]].
+That way, further iterations over the list of instructions
+can still rely on [[curtext]].
+
+
+In some situation, even if the procedure is not a leaf, 
+one would like to not save [[R14]] in the stack.
+\t why? getcallerpc is a leaf.
+In that case, the programmer needs to declare his procedure with
+[[-4]] for the size of its locals (e.g. [[TEXT foo(SB), $-4]]). %$
+
+<<[[noops()]] in second pass, if size local was -4 and not a leaf>>=
+if((autosize == 0) && !(curtext->mark & LEAF)) {
+    DBG("save suppressed in: %s\n", curtext->from.sym->name);
+    curtext->mark |= LEAF;
+}
+@
 
 \subsection{[[ARET]] rewriting}
 \label{sec:ARET-rewrite}
 
+[[ARET]] is complementary to [[ATEXT]].
+Its transformation is pretty straightforward:
+
 <<[[noops()]] second pass switch opcode cases>>=
 case ARET:
     <<[[noops()]] case ARET, call nocache>>
-    if((curtext->mark & LEAF) && !autosize) {
+    if((curtext->mark & LEAF) && (autosize == 0)) {
         // B 0(R14)
         p->as = AB;
         p->from = zprg.from;
@@ -6810,7 +6871,7 @@ case ARET:
         p->to.offset = 0;
         p->to.reg = REGLINK;
     } else {
-        // MOVW.P autosize(SP), PC
+        // MOVW.P autosize(R13), R15
         p->as = AMOVW;
         p->scond |= C_PBIT;
         p->from.type = D_OREG;
@@ -6821,31 +6882,111 @@ case ARET:
     }
     break;
 @
-% pbit??
+
+The single instruction [[MOVW.P autosize(R13), R15]],
+which uses the {special bit} [[.P]] (see the \book{Assembler}),
+is equivalent to the sequence:
+\begin{verbatim}
+ADD autosize, R13, R13
+MOVW -autosize(R13), R15
+\end{verbatim}
+\l really?
+
+Note that this time the instruction [[p]] is overwritten;
+[[RET]] really disappears.
+
+
+Figure~\ref{fig:text-ret} summarizes the possible
+translations for [[ATEXT]] and [[ARET]] on a simple
+program with 3 procedures [[foo]], [[bar]], and
+[[leaf]] where [[leaf]] is a leaf procedure.
+%
+The numbers in the middle column, e.g. [[5000]],
+represent the code addresses of the generated code in
+the executable.
+%
+Figure~\ref{fig:text-ret-stack} shows
+the stack after [[foo]] has called [[bar]] which
+has called [[leaf]].
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+TEXT foo(SB), $4      5000: MOVW R14, $-4(R13)  
+...                   5004: SUB $4, R13, R13
+                            ...
+BL bar(SB)            5020: BL 6000
+...                         ...
+RET                   5040: ADD $4, R13, R13                       
+                      5044: MOVW $-4(R13), R15
+
+
+TEXT bar(SB), $8      6000: MOVW R14, $-8(R13)
+...                   6004: SUB $8, R13, R13
+                            ...
+BL leaf(SB)       ==> 6052: BL 7000
+...                         ...
+RET                   6080: ADD $8, R13, R13
+                      6084: MOVW $-8(R13), R15
+
+
+TEXT leaf(SB), $0     7000: /* nothing */
+...                         ...
+RET                   7028: B (R14)
+\end{verbatim}
+\caption{[[TEXT]] and [[RET]] translations}\label{fig:text-ret}
+\end{figure}
+\l actually not BL 6000, BL use relative number, but what is saved
+\l  in the stack is an absolute address!
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+             |       |
+-------  +20 +-------+ <-----+ old value of R13
+ foo         | foo1  | foo local
+         +16 +-------+
+ frame       | 4054  | return address of foo (in main)
+-------  +12 +-------+ <-----+ old value of R13
+             | bar1  | bar first local
+ bar      +8 +-------+
+             | bar2  | bar second local
+ frame    +4 +-------+ 
+             | 5024  | return address of bar (in foo)
+-------    0 +-------+ <-----+ R13
+
+R14 = 6056  = return address of leaf (in bar)
+\end{verbatim}
+\caption{Stack before [[B (R14)]] in [[leaf()]]}\label{fig:text-ret-stack}
+\end{figure}
+
 
 
 \subsection{[[ANOP]] stripping}
 
 %trans:
-% another virtual instr rewritten is ANOP.
+Another virtual instruction rewritten by [[noops()]] is [[ANOP]].
+%
+The semantic of [[ANOP]] is to do nothing (nope),
+which is why it can be removed from the graph of instructions:
+\l there is a NOP in the ARM?
 
-% generated by 5c?
-% generated also for DUPOK stuff, where all the instr of a procedures
-% are now NOP
-
-<<[[noops()]] first pass swith opcode cases>>=
+<<[[noops()]] first pass switch opcode cases>>=
 case ANOP:
     q1 = p->link;
     q->link = q1;		/* q is non-nop */
     q1->mark |= p->mark;
-    continue;
+    continue; // no  q = p;
 @
-\l what about jump to ANOP if there was some? well
-\l need to adjust their cond field, see below
+%bug? q could be null, or assume never generate ANOP without anything before?
+\l rely on q = p; done in for loop in noops, see code before
 
-% now that have also the ->cond for branches, we need
-% to take care and update those links as we removed
-% some ANOP.
+The compiler [[5c]] occasionally generates code using [[ANOP]]
+(see the \book{Compiler}).
+\t what for? USED, SET, other? need wait for Compiler.nw
+[[5l]] does too as we will see in Section~\ref{sec:dupok-nop}.
+
+Note that some instructions could have this deleted [[ANOP]] instruction
+[[p]] as their branching target in [[Instr.cond]].
+In that case their [[Instr.cond]] field must be updated:
 
 % so also case ABL: before
 <<[[noops()]] first pass switch opcode ABL fallthrough>>=
@@ -6872,21 +7013,28 @@ case ABCASE:
     if(q1 != P) {
         while(q1->as == ANOP) {
             q1 = q1->link;
-            p->cond = q1;
         }
+        p->cond = q1;
     }
     break;
 @
-% bug? q1 could be null in the loop?
-% todo: write test case showing the bug?
+%old: p->cond = q1;  was inside while but better outside
+%bug? q1 could be null in the loop?
+%todo: write test case showing the bug?
 % I would rewrite the code as
 %   while(q1 != P && q1->as == ANOP) 
 %       q1 = q1->link;
 %   p->cond = q1;
 
 
-%bigskip
-%other in adv topic, e.g. ADIV
+\bigskip
+There are other virtual instructions rewritten by [[noops()]]
+beside [[TEXT]], [[RET]], and [[NOP]]. Those are the most
+important one though.
+Chapter~\ref{chap:advanced} will present the remaining
+virtual instructions: [[DIV]], [[MOD]], and [[MOVWD]].
+\l other?
+\l other virtual instr transformed but later in asmout()?
 
 
 \section{Laying out data, [[dodata()]]}
@@ -12316,6 +12464,7 @@ if(!(r->cond->mark & FOLL))
 
 
 \section{Overriding symbols attribute, [[DUPOK]]}
+\label{sec:dupok-nop}
 
 % case in kernel where override a previous symbol,
 % e.g. sysfatal, werrstr
@@ -13891,7 +14040,7 @@ case AMODU:
         initdiv();
     if(curtext != P)
         curtext->mark &= ~LEAF;
-    continue;
+    continue; // no q = p;
 @
 % a bit ugly to do the initdiv here? at the same it's related to
 % this notion of NOOP.
