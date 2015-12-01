@@ -6914,7 +6914,7 @@ has called [[leaf]].
 TEXT foo(SB), $4      5000: MOVW R14, $-4(R13)  
 ...                   5004: SUB $4, R13, R13
                             ...
-BL bar(SB)            5020: BL 6000
+BL bar(SB)        ==> 5020: BL 6000
 ...                         ...
 RET                   5040: ADD $4, R13, R13                       
                       5044: MOVW $-4(R13), R15
@@ -6930,7 +6930,7 @@ RET                   6080: ADD $8, R13, R13
 
 
 TEXT leaf(SB), $0     7000: /* nothing */
-...                         ...
+...               ==>       ...
 RET                   7028: B (R14)
 \end{verbatim}
 \caption{[[TEXT]] and [[RET]] translations}\label{fig:text-ret}
@@ -6940,18 +6940,18 @@ RET                   7028: B (R14)
 
 \begin{figure}[!]\centering
 \begin{verbatim}
-             |       |
--------  +20 +-------+ <-----+ old value of R13
- foo         | foo1  | foo local
-         +16 +-------+
- frame       | 4054  | return address of foo (in main)
--------  +12 +-------+ <-----+ old value of R13
-             | bar1  | bar first local
- bar      +8 +-------+
-             | bar2  | bar second local
- frame    +4 +-------+ 
-             | 5024  | return address of bar (in foo)
--------    0 +-------+ <-----+ R13
+                |       |
+----------- +20 +-------+ <----------------+ old value of R13
+ foo            | ???   |  foo local
+            +16 +-------+  
+ frame          | 4054  |  return address of foo (in main)
+----------- +12 +-------+ <----------------+ old value of R13
+                | ???   |  bar first local
+ bar         +8 +-------+  
+                | ???   |  bar second local
+ frame       +4 +-------+  
+                | 5024  |  return address of bar (in foo)
+-----------   0 +-------+ <----------------+ R13
 
 R14 = 6056  = return address of leaf (in bar)
 \end{verbatim}
@@ -6972,10 +6972,11 @@ which is why it can be removed from the graph of instructions:
 <<[[noops()]] first pass switch opcode cases>>=
 case ANOP:
     q1 = p->link;
-    q->link = q1;		/* q is non-nop */
+    q->link = q1;		// q is a non-ANOP before p
     q1->mark |= p->mark;
-    continue; // no  q = p;
+    continue;           // no  q = p; so q remains a non-ANOP
 @
+%old: /* q is non-nop */
 %bug? q could be null, or assume never generate ANOP without anything before?
 \l rely on q = p; done in for loop in noops, see code before
 
@@ -6992,20 +6993,13 @@ In that case their [[Instr.cond]] field must be updated:
 <<[[noops()]] first pass switch opcode ABL fallthrough>>=
 case AB:
 
-case ABEQ:
-case ABNE:
-case ABHS:
-case ABLO:
-case ABMI:
-case ABPL:
-case ABVS:
-case ABVC:
-case ABHI:
-case ABLS:
-case ABGE:
-case ABLT:
-case ABGT:
-case ABLE:
+case ABEQ: case ABNE:
+case ABHS: case ABLO:
+case ABMI: case ABPL:
+case ABVS: case ABVC:
+case ABHI: case ABLS:
+case ABGE: case ABLT:
+case ABGT: case ABLE:
 
 case ABCASE:
 
