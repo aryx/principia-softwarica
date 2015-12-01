@@ -31,6 +31,7 @@ dodata(void)
         if(s->type != SDATA)
             diag("initialize non-data (%d): %s\n%P",
                 s->type, s->name, p);
+
         v = p->from.offset + p->reg;
         if(v > s->value)
             diag("initialize bounds (%ld): %s\n%P",
@@ -62,16 +63,16 @@ dodata(void)
      for(s = hash[i]; s != S; s = s->link) {
         t = s->type;
         if(t == SDATA || t == SBSS) {
-            v = s->value;
-            /*s: [[dodata()]] sanity check size of data v */
+            v = s->value; // size of global for now
+            /*s: [[dodata()]] sanity check GLOBL instructions, size of data v */
             if(v == 0) { // check
                 diag("%s: no size", s->name);
                 v = 1;
             }
-            /*e: [[dodata()]] sanity check size of data v */
+            /*e: [[dodata()]] sanity check GLOBL instructions, size of data v */
             v = rnd(v , 4); // align
             s->value = v;   // adjust
-            /*s: [[dodata()]] in pass 1, if small data size */
+            /*s: [[dodata()]] in pass 1, if small data size, adjust orig */
             /*
              *	assign 'small' variables to data segment
              *	(rational is that data segment is more easily
@@ -82,7 +83,7 @@ dodata(void)
                 orig += v;
                 s->type = SDATA1;
             }
-            /*e: [[dodata()]] in pass 1, if small data size */
+            /*e: [[dodata()]] in pass 1, if small data size, adjust orig */
         }
     }
 
@@ -351,11 +352,11 @@ patch(void)
     Prog *p;
     Prog *q;
     long c; // not ulong?
-    /*s: [[patch()]] locals */
+    /*s: [[patch()]] other locals */
     Sym *s;
     // enum<Opcode>
     int a;
-    /*e: [[patch()]] locals */
+    /*e: [[patch()]] other locals */
 
     DBG("%5.2f patch\n", cputime());
 

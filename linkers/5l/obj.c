@@ -563,11 +563,11 @@ inopd(byte *p, Adr *a, Sym *h[])
 {
     int size; // returned
     int symidx;
-    /*s: [[inopd()]] locals */
+    /*s: [[inopd()]] other locals */
     int t, l;
     Sym *s;
     Auto *u;
-    /*e: [[inopd()]] locals */
+    /*e: [[inopd()]] other locals */
 
     a->type = p[0];
     a->reg = p[1];

@@ -31,8 +31,9 @@ noops(void)
 
     DBG("%5.2f noops\n", cputime());
 
-    // pass 1
+    // pass 1, mark or delete
     curtext = P;
+    q = P;
     for(p = firstp; p != P; p = p->link) {
         /*s: adjust curtext when iterate over instructions p */
         if(p->as == ATEXT)
@@ -52,20 +53,13 @@ noops(void)
         /*s: [[noops()]] first pass switch opcode ABL fallthrough */
         case AB:
 
-        case ABEQ:
-        case ABNE:
-        case ABHS:
-        case ABLO:
-        case ABMI:
-        case ABPL:
-        case ABVS:
-        case ABVC:
-        case ABHI:
-        case ABLS:
-        case ABGE:
-        case ABLT:
-        case ABGT:
-        case ABLE:
+        case ABEQ: case ABNE:
+        case ABHS: case ABLO:
+        case ABMI: case ABPL:
+        case ABVS: case ABVC:
+        case ABHI: case ABLS:
+        case ABGE: case ABLT:
+        case ABGT: case ABLE:
 
         case ABCASE:
 
@@ -73,11 +67,17 @@ noops(void)
             if(q1 != P) {
                 while(q1->as == ANOP) {
                     q1 = q1->link;
-                    p->cond = q1;
                 }
+                p->cond = q1;
             }
             break;
         /*e: [[noops()]] first pass switch opcode ABL fallthrough */
+        /*x: [[noops()]] first pass switch opcode cases */
+        case ANOP:
+            q1 = p->link;
+            q->link = q1;		// q is a non-ANOP before p
+            q1->mark |= p->mark;
+            continue;           // no  q = p; so q remains a non-ANOP
         /*x: [[noops()]] first pass switch opcode cases */
         case ADIV:
         case ADIVU:
@@ -87,12 +87,13 @@ noops(void)
                 initdiv();
             if(curtext != P)
                 curtext->mark &= ~LEAF;
-            continue;
+            continue; // no q = p;
         /*e: [[noops()]] first pass switch opcode cases */
         }
+        q = p;
     }
 
-    // pass 2
+    // pass 2, transform
     curtext = P;
     for(p = firstp; p != P; p = p->link) {
         /*s: adjust curtext when iterate over instructions p */
@@ -104,25 +105,26 @@ noops(void)
         switch(o) {
         /*s: [[noops()]] second pass switch opcode cases */
         case ATEXT:
-            autosize = p->to.offset + 4;
-            if(autosize <= 4)
+            if(p->to.offset <= 0) {
               if(curtext->mark & LEAF) {
+                // to compensate further + 4 to get autosize == 0.
                 p->to.offset = -4;
-                autosize = 0;
+              }
             }
+            autosize = p->to.offset + 4;
 
-            if(!autosize && !(curtext->mark & LEAF)) {
+            /*s: [[noops()]] in second pass, if size local was -4 and not a leaf */
+            if((autosize == 0) && !(curtext->mark & LEAF)) {
                 DBG("save suppressed in: %s\n", curtext->from.sym->name);
                 curtext->mark |= LEAF;
             }
+            /*e: [[noops()]] in second pass, if size local was -4 and not a leaf */
 
-            if(curtext->mark & LEAF) {
-                if(!autosize)
-                    break;
-            }
+            if((curtext->mark & LEAF) && (autosize == 0))
+              break;
             // else
 
-            // MOVW.W R14, -autosize(SP)
+            // MOVW.W R14, -autosize(R13)
             q1 = prg();
             q1->as = AMOVW;
             q1->scond |= C_WBIT;
@@ -142,7 +144,7 @@ noops(void)
             /*s: [[noops()]] case ARET, call nocache */
             nocache(p);
             /*e: [[noops()]] case ARET, call nocache */
-            if((curtext->mark & LEAF) && !autosize) {
+            if((curtext->mark & LEAF) && (autosize == 0)) {
                 // B 0(R14)
                 p->as = AB;
                 p->from = zprg.from;
@@ -150,7 +152,7 @@ noops(void)
                 p->to.offset = 0;
                 p->to.reg = REGLINK;
             } else {
-                // MOVW.P autosize(SP), PC
+                // MOVW.P autosize(R13), R15
                 p->as = AMOVW;
                 p->scond |= C_PBIT;
                 p->from.type = D_OREG;

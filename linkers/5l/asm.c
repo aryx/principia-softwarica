@@ -566,15 +566,15 @@ datblk(long s, long n, bool sstring)
     Prog *p;
     long a, l;
     int i, c;
-    /*s: [[datblk()]] locals */
+    /*s: [[datblk()]] other locals */
     long j;
-    /*x: [[datblk()]] locals */
+    /*x: [[datblk()]] other locals */
     Sym *v;
     char *cast;
     long d;
-    /*x: [[datblk()]] locals */
+    /*x: [[datblk()]] other locals */
     long fl;
-    /*e: [[datblk()]] locals */
+    /*e: [[datblk()]] other locals */
 
     memset(buf.dbuf, 0, n+Dbufslop);
 

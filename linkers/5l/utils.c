@@ -58,10 +58,10 @@ lookup(char *symb, int v)
     Sym *sym;
     long h;
     int len;
-    /*s: [[lookup()]] locals */
+    /*s: [[lookup()]] other locals */
     char *p;
     int c;
-    /*e: [[lookup()]] locals */
+    /*e: [[lookup()]] other locals */
 
     /*s: [[lookup()]] compute hash value [[h]] of [[(symb, v)]] and [[len]] */
     // h = hashcode(symb, v); 
