@@ -224,6 +224,7 @@ to a specific binary instruction?
 % - forward overlay link indexation (and associated faster search)
 % - pattern matching array dispatch table (with subtype notions)
 %   and associated indexation (range and cmp and caching)
+% - reflection via special symbols
 
 %algorithms (beyond search/sort):
 % - unserialization/unmarshalling with shared enum and tags so simple dispatch
@@ -231,8 +232,9 @@ to a specific binary instruction?
 % - signature checking (header I_MAGIC, archive ARMAG, names ASIGNAME)
 % - binary search (with overlay)
 % - DFS? (follow?)
+
+%other?
 % - program instrumentation for profiling
-% - reflection via special symbols
 % - smaller:
 %   * versioning for disambiguation (but gensym would be better term)
 %   * def/use link again via symbol table and special marks (SXREF)
@@ -1307,11 +1309,12 @@ For more information on [[5l -a]] see
 Appendix~\ref{sec:debugging-generated-code}.
 
 \subsection{Inspecting executables with [[nm]]}
+\label{sec:nm-executable}
 
 [[nm]] can also be used on executables. In that case [[nm]] not only displays
 the list of symbols, it also displays their addresses (in hexadecimal)
-when loaded
-in memory. Here it is used with the [[-n]] option to sort by addresses:
+when loaded in memory. 
+Here it is used with the [[-n]] option to sort by addresses:
 
 \begin{verbatim}
 1 $ nm -n 5.out
@@ -1368,7 +1371,7 @@ The linker defines a set of special symbols:
 [[edata]] (end data) Line 19, and finally
 [[end]] Line 21.
 Those symbols are used only for their addresses and
-allows a form of {\em reflection} on the structure
+allow a form of {\em reflection} on the structure
 of the executable and its sections as explained
 in Section~\ref{sec:special-symbols}.
 
@@ -1392,31 +1395,41 @@ Its role and its relationship with the {pseudo-register}
 \section{ARM architecture}
 % constraints
 
+\t maybe can do this section after understand better code generation
+
 % Object instruction do not match exactly ARM instruction.
 % Virtual, pseudo, etc but also:
 % constraints on immediate constants, offsets
 
-\subsection{Immediate constants range}
+\subsection{Immediate constant range}
 
 % ADD I, R1, R2
 
-% clever trick, but still limited.
+% 12 bits. Clever trick for encoding, but still limited.
 
-% pooling
-% load numbers from memory. DATA. 
+% so how do? 
+% can use DATA. (but then can have issue as we will see next section)
 % REGTMP
+%alt: can also use WORD in text, not far. called pooling, but talk below
+%alt: could use MUL :) 
 
-% but then address of DATA? see next section,
 
-\subsection{Offsets range}
+\subsection{Offset range}
 
 % different addressing mode in Assembler, indirect, ...
 % but in the end can be reduced to indirect with offset.
-
 % xxx(R1)
 
-% special case SB, hello+whatever(SB), $hello+whatever(SB)
+% 12 bits (a page), and sign.
+% But again if big offset how do?
+% - reduce offset, and add base, but if big number base :) 
+%   in fact for ADD before, use DATA, but $bigcst(SB) can be far away too.
+% => WORD!
+% called pooling.
 
+
+% special case SB, hello+whatever(SB), $hello+whatever(SB).
+% here? or mv later?
 % show actual code of 
 %  MOVW $hello(SB), R2    ==>   ADD offset1, R12, R2    or LDR offset2(R15),R2
 %   (and ADD itself can use REGTMP)
@@ -1432,9 +1445,9 @@ Its role and its relationship with the {pseudo-register}
 % because useless loop over yourself and useless jump next (+4)
 % so B_arm 0  = jmp + 8
 
-\subsection{Code pooling}
-% big number bootstrap?
 
+%\subsection{Code pooling}
+% big number bootstrap?
 % so if address of DATA too far too? :) can boostrap
 % with PC and WORD!
 % (could also use ADD, MUL, whatever to produce big number)
@@ -1444,12 +1457,12 @@ Its role and its relationship with the {pseudo-register}
 The object file is now the input, as opposed
 to the \book{Assembler} where it was the output.
 %
-The format of ARM object files is fully described
+The format of ARM object files is actually fully described
 in the \book{Assembler} so we will not repeat
 those explanations here.
 %
 Section~\ref{sec:object-format} contains a figure
-summarizing the ARM object file format though, which will be useful
+summarizing this format though, which will be useful
 to understand the code of Chapter~\ref{chap:loading-objects}
 which loads object files.
 
@@ -1508,7 +1521,7 @@ An [[a.out]] header is made of 8 [[long]]s (32 bytes) used
 as follows:
 \begin{itemize}
 \item The first four bytes in [[Exec.magic]] contains a 
-magic number identifying the file
+{\em magic number} identifying the file
 as an [[a.out]] executable as well as an ARM executable.
 This magic number is recognized
 by tools such as [[file]] and by the kernel loader
@@ -1542,7 +1555,7 @@ of the [[_main]] procedure of the C library (unless
 the [[-E]] option is used). 
 %
 So, for the [[hello]] executable of the previous section,
-the value of the entry point would be [[0x103c]].
+the value of the entry point is [[0x103c]].
 %
 The entry point can also be the
 address of the [[_mainp]] procedure if profiling
@@ -2052,7 +2065,7 @@ See the \book{Assembler} for more information about private symbols.
 A version is a unique integer representing an object file,
 e.g. 1 for [[foo.5]] and 2 for [[bar.5]], so the two previous
 symbols can be designated respectively by [[tmp.1]] and [[tmp.2]].
-Global symbols have their version set to 0.
+Public symbols have their version set to 0.
 
 \t #define VGLOBAL 0
 
@@ -2163,6 +2176,7 @@ lookup(char *symb, int v)
 \l typedef int version;? and VERSION0 = 0 so clearer to read? a GLOBAL = 0?
 %ocaml: use stdlib Hashtbl.find, sad duplicate from 5a/
 %assembler: very similar, diff is use of (symb, v) instead of just (symb)
+% could do the opti of fast-path/slow-path which avoids some memcmp? meh
 
 <<[[lookup()]] other locals>>=
 char *p;
@@ -2362,6 +2376,7 @@ Sym*	sym;
 
 Symbols references in the assembly language of [[5a]], as well as in
 object files, are all represented as ``offsets'' to {\em pseudo-registers}:
+\l well for SB and globals it is kinda true
 
 \begin{itemize}
 \item procedures and globals use the [[SB]] ({\em static base}) 
@@ -2379,17 +2394,17 @@ e.g. [[v-8(SP)]]. Their symbol kind is [[N_LOCAL]].
 \end{itemize}
 
 The symbol name for parameters and locals is actually optional.
-What matters is the offset number for code generation. 
+What matters is the additional offset number for code generation. 
 The symbol name is mostly a comment.
 But, those symbols are still saved in the 
 {executable symbol table} as we will see in Chapter~\ref{chap:debugging},
-and so can be leveraged by tools such as debuggers.
+so they can be leveraged by tools such as debuggers.
 
 
 \section{[[Instr]]uction}
 
 The type below connects an opcode with its operands to form
-a full instruction:
+a full {\em instruction}:
 
 <<struct Prog(arm)>>=
 struct	Prog
@@ -2792,7 +2807,7 @@ fdt	cout = -1;
 %trans: %dup: (and adapted) from Assembler
 We can now present the code of [[main()]], the entry point of [[5l]].
 %
-The most important thing is the chunk below the [[-- main functions --]]
+The most important part is the chunk below the [[-- main functions --]]
 comment which contains the main flow of [[5l]]. It will be
 described soon in Section~\ref{sec:main-flow}:
 
@@ -2910,7 +2925,7 @@ The [[atolwhex()]] function, described in Appendix~\ref{sec:atolwhex},
 converts a string representing a number into an integer. 
 [[atolwhex()]] also handles numbers written in hexadecimal, hence the name.
 This is not very useful for the [[-H]] option, but it will
-be useful for other options such as [[-T]] we will see later.
+be useful for other options such as [[-T]] as we will see later.
 
 By default [[5l]] uses the [[a.out]] format
 which is the executable format used by \plan:
@@ -3088,7 +3103,7 @@ if(INITENTRY == nil) {
     INITENTRY = "_main";
     <<[[main()]] adjust INITENTRY if profiling>>
 }
-<<[[main()]] if rare condition do nothing, else>>
+<<[[main()]] if rare condition do not set SXREF for INITENTRY, else>>
   lookup(INITENTRY, 0)->type = SXREF;
 @
 %old: this was done originally after setting firstp below, but
@@ -3585,6 +3600,8 @@ but the address resolution of code instructions
 (in [[Instr.pc]])
 has already been done in [[dotext()]]. This is repeated
 here just for sanity checking:
+\t hmm but maybe also used for code generation? need that in global? 
+\t  as jumps are relative in the ARM!
 
 <<[[asmb()]] in Text section generation, sanity check pc>>=
 if(p->pc != pc) {
@@ -4966,7 +4983,7 @@ is actually not the md5sum. See the \book{Compiler}
 to learn more about how signatures are generated.
 \l by default 5c generates ANAME instead of ASIGNAME
 
-\subsection{Error managment}
+\subsection{Error management}
 
 To give good error messages like:
 
@@ -5434,7 +5451,7 @@ if(!debug['l'])
     loadlib();
 @
 
-<<[[main()]] if rare condition do nothing, else>>=
+<<[[main()]] if rare condition do not set SXREF for INITENTRY, else>>=
 if(debug['l']) {}
 else
 @
@@ -5890,6 +5907,7 @@ to a real code address.
 %
 The solution adopted by [[5l]] operates in three steps:
 
+\label{sec:dotext-big-picture}
 \begin{enumerate}
 \item the function [[patch()]] builds
 a {\em graph of code instructions} by transforming the use
@@ -6061,8 +6079,10 @@ This is why one of its first instruction is:
 
 \item the instruction [[MOVW $setR12(SB), R12]] %$
 itself uses an address which could be
-small or large depending on the program. This brings us back
-to the original problem. To {\em bootstrap},
+small or large depending on the program. So, this instruction
+may have different size depending on the address
+which brings us back to the original problem. 
+To {\em bootstrap},
 this address is recognized in a special way in the code
 generator in [[asmout()]] and leads to the generation of a fixed number
 of instructions, whatever the value of the address.
@@ -6906,7 +6926,7 @@ Note that this time the instruction [[p]] is overwritten;
 Figure~\ref{fig:text-ret} summarizes the possible
 translations for [[ATEXT]] and [[ARET]] on a simple
 program with 3 procedures [[foo]], [[bar]], and
-[[leaf]] where [[leaf]] is a leaf procedure.
+[[leaf]] where [[leaf]] is the only leaf procedure.
 %
 The numbers in the middle column, e.g. [[5000]],
 represent the code addresses of the generated code in
@@ -7130,7 +7150,7 @@ dodata(void)
         if(t == SDATA || t == SBSS) {
             v = s->value; // size of global for now
             <<[[dodata()]] sanity check GLOBL instructions, size of data v>>
-            v = rnd(v , 4); // align
+            v = rnd(v, 4); // align
             s->value = v;   // adjust
             <<[[dodata()]] in pass 1, if small data size, adjust orig>>
         }
@@ -7232,54 +7252,48 @@ in [[DATA foo+8(SB)/4, "hey!"]].
 \section{Laying out code, [[dotext()]]}
 
 %trans:
-% last piece of resolving!
-% rely on all previous phases by patch, noops, and dodata.
-
-
-% Adjusting pc and code addresses to concrete values, 
-% not virtual pc! so then when generating the code for AB in
-% the next chapter we can do p->cond->pc to know where to concretely jump.
-% Start of use of INITTEXT! switch from a symbolic pc to a real pc
-% where the size of the instructions now matter (hence use of oplook()).
-
-% set global for a.out header, and also for INITDAT as see end of dotext()
-
-% computing textsize
+We are now ready to see the last function of the 
+resolving phase: [[dotext()]].
+%dup: (and adapted) from resolving/dodata
+As explained before,
+%dup: overview/soft-archi main/asmb/text resolving/issue/pc
+the goal of [[dotext()]] is to {layout} code by
+essentially modifying the [[Instr.pc]] of all code instructions.
+%
+This field was originally storing a virtual program counter
+and will contain, after [[dotext()]], a real program counter.
+%
+[[dotext()]] also computes the important global below which stores
+the size of the text section:
 
 <<global textsize>>=
 long	textsize;
 @
 
+This global is also used to generate the [[a.out]] header
+in [[asmout()]], as shown in Section~\ref{sec:gen-header}.
+%
+[[dotext()]] also computes [[INITDAT]] which will be used
+to initialize [[R12]] at run-time.
+\t and in code generation when computing absolute address sometimes!
 
-<<[[dotext()]] locals>>=
-Prog *p;
-Optab *o;
-Sym *s;
-// code address
-long c;
-long v;
-int m, i;
-@
-
-
-% if assembly was simple, then simple to know the size
-% of instructions, 4, but some ASM instructions are virtual,
-% they expand in multiple instructions, so have oplook()!
-% this is subtle but explained later in next chapter.
-% for now imagine oplook as returning something with size 4.
-
-%Is there a mutual recursive problem? oplook call
-% aclass() which needs to know offset size, but we don't know
-% yet INITDAT and how far it will be from R12 or other stuff.
-% so bug? No because R12 will be INITDAT+BIG! this will not change.
-% subtle.
+%dup: (and adapted) resolving/dodata
+The code of [[dotext()]] is pretty straightforward once all the motivations
+and the big picture have been presented 
+(see Section~\ref{sec:dotext-big-picture}):
 
 <<function span(arm)>>=
 /// main -> <>
 void
 dotext(void)
 {
-    <<[[dotext()]] locals>>
+    Prog *p;
+    Optab *o;
+    // real code address
+    long c; // ulong?
+    // size of instruction
+    int m;
+    <<[[dotext()]] other locals>>
 
     DBG("%5.2f span\n", cputime());
 
@@ -7315,7 +7329,7 @@ dotext(void)
     c = rnd(c, 8);
 
     textsize = c - INITTEXT;
-    <<[[dotext()]] define special symbols>>
+    <<[[dotext()]] refine special symbols>>
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);
@@ -7325,24 +7339,48 @@ dotext(void)
 %  - was called span()
 %  - the c+=m was in second else branch, but I put before
 %  - the autosize adjustment was done later but actually bug?
-%    anyway if was ATEXT then no aclass call anyway
+%    anyway if was ATEXT then no aclass() call anyway
 %  - the curtext adjustment was done later too
 \t use orig instead of 'c' so match more dodata()?
 % but here it's really a concrete location whereas for dodata()
 % it's relative to INITDAT that we actually compute here.
+\t need to modify Sym.value? used later?
+\l oplook call aclass() which needs to know offset size, 
 
 
-% again != generating TEXT, this is done in asmb and asmout
+[[dotext()]] relies on modifications done by the previous functions
+of the resolving phase:
+\begin{itemize}
+\item [[noops()]], so [[oplook()]] does not have to deal
+with virtual instructions (except [[MOVW]])
+
+\item [[patch()]], which is needed for [[noops()]] to work
+\l also later for p->cond->pc but for asmout, not dotext
+
+\item [[dodata()]], so all globals have an assigned address
+(as an offset to [[R12]]) and so [[oplook()]] can predict
+the size of instructions involving globals
+\n aclass()
+
+\end{itemize}
+
+%dup: (and adapted) resolving/dodata
+Note again that we are just laying out code. We do not
+generate code. The generation of the code section of
+the executable is done in [[asmb()]] 
+and [[asmout()]] (see Section~\ref{sec:asmout}),
+not in [[dotext()]].
 
 
 %\subsection{Large procedures}
 
-<<[[dotext()]] locals>>=
+<<[[dotext()]] other locals>>=
 long    otxt;
 @
 <<[[dotext()]] initialisation>>=
 otxt = c;
 @
+\l could do just long otxt = INITTEXT;
 
 <<[[dotext()]] detect if large procedure>>=
 if(c - otxt >= 1L<<17) {
@@ -7368,8 +7406,6 @@ otxt = c;
 %if(c - otxt >= 1L<<17)
 %    bflag = true;
 %@
-%% >>
-%
 %
 %<<[[dotext()]] if large procedure>>=
 %/*
@@ -7432,29 +7468,58 @@ otxt = c;
 \section{Defining special symbols [[etext]], [[edata]], [[end]]}
 \label{sec:special-symbols}
 
-% reflection on executable structure and its sections.
-% the kernel uses etext! edata! those are important special symbols.
-% some form of introspection capability. Allow mv itself in memory.
+%dup: overview/hello-world/nm-exec
+The linker defines a few {\em special symbols}
+which allow a form of {\em reflection} on the executable structure
+and its sections.
+%
+Those symbols and their meanings
+are listed in Figure~\ref{fig:special-symbols}
+which describes the memory layout of the [[hello]] executable
+we saw in Section~\ref{sec:hello-world}.
 
-<<[[dotext()]] define special symbols>>=
-xdefine("etext", STEXT, INITTEXT+textsize);
+\begin{figure}[!]\centering
+\begin{verbatim}
+                       |              |
+                       |    HEAP      |
+                       |              |
+              ^ 0x7c50 +--------------+<----- end
+              |        |     BSS      |
+      bsssize |        |              |
+              v 0x7940 +--------------+<----- edata (end data)
+              ^        |              |
+      datsize |        |     Data     |
+              |        |              |
+INITDAT ----> v 0x7000 +--------------+<----- bdata (begin data)
+                       |  (padding)   |
+                0x6b58 +--------------+<----- etext (end text)
+                       |              |
+                       |     Code     |
+                       |    (Text)    |
+                       |              |
+                       |              |
+                0x1020 +--------------+
+                       |    header    |
+                0x1000 +--------------+
+                       | (first page  |
+                       |  unmapped)   |
+                       |              |
+                     0 +--------------+
+                    Memory layout of hello     special symbols
+                          executable
+\end{verbatim}
+\caption{Memory layout of [[hello]] and special symbols}
+\label{fig:special-symbols}
+\end{figure}
+\n also some padding before and after BSS, but very small, just 8
+
+Those symbols are introduced by [[5l]] with [[xdefine()]]:
+
+<<[[dodata()]] define special symbols>>=
+xdefine("bdata", SDATA, 0L);
+xdefine("edata", SDATA, datsize);
+xdefine("end",   SBSS, datsize+bsssize);
 @
-%old: 
-%<<[[dodata()]] define special symbols>>=
-%xdefine("etext", STEXT, 0L);
-%@
-\t need that? maybe ... if want refer etext value in some DATA?
-\t  but anyway was done at the end of dodata()
-
-
-%and in span():
-%setext = lookup("etext", 0);
-%if(setext != S) {
-%    setext->value = c;
-%    textsize = c - INITTEXT;
-
-% so generated code which was using etext will now have good value
-% but fixpoint issue?
 
 <<function xdefine(arm)>>=
 void
@@ -7471,27 +7536,62 @@ xdefine(char *p, int t, long v)
 @
 \t should maybe diag if symbol already there no?
 
-% At this point we are in dodata() (or span()) in which case the 'value' field
-% is now really a location (relative to INITDAT though for SDATA and SBSS).
-% This means the xdefine below now have a different meaning: the 3rd
-% argument is a location, not a size anymore!
+Note that the [[Sym.value]] for the [[bdata]] symbol
+is [[0]], not [[INITDAT]]. Indeed, just like for 
+globals, special data symbols have their addresses
+represented as an offset to the start of the data section.
+%
+Moreover, [[INITDAT]] has not yet been computed in [[dodata()]].
+But, it is important to layout those special symbols in [[dodata()]],
+before [[dotext()]], just like globals, as they may also be
+referenced in instructions.
+\l There are many code later then do the final s->value _plus_ INITDAT.
+
+Special symbols are similar to globals
+but they do not take any space in the data or BSS section.
+In fact, the first global of the data section will have the same
+address than [[bdata]].
+%
+They are used only for their addresses, e.g. [[MOVW $etext(SB), R1]]. %$
+The \plan kernel uses the addresses of those symbols
+to move itself in memory during the boot procedure (see the \book{Kernel}).
+\l show code?
+The [[sbrk()]] system call, which is used by [[malloc()]], uses [[end]]
+to know where the heap starts (see the \book{Core library}).
+\l If do &end in C (or dollar end in asm) then you'll get pointer to end of BSS
+
+\l (part of symbol table (for debugging))
+
+[[etext]] is also initialized in [[dodata()]] so it can be referenced
+in instructions:
 
 <<[[dodata()]] define special symbols>>=
-xdefine("bdata", SDATA, 0L);
-xdefine("edata", SDATA, datsize);
-xdefine("end", SBSS, datsize+bsssize);
+xdefine("etext", STEXT, 0L);
 @
-% 0L because SDATA/SBSS are relative to INITDAT. There are many code
-% later then do the final s->value+INITDAT.
 
-% how 'end' can be in SBSS section? we actually want it initialized ...
-% because here it's actually about the layout! 'end' will have a location
-% at the end of the SBSS! If do &end in C (or $end in asm) then you'll get
-% a pointer to the end of the BSS! reflection power! 'end' has no value
-% because it's in the BSS, but its location is its interesting value!
+% I wrote that, but it's buggy if keep previous xdefine as xdefine
+%  set only if symbol was undefined
+%<<[[dotext()]] define special symbols>>=
+%xdefine("etext", STEXT, INITTEXT+textsize);
+%@
 
+But its final value can be set only in [[dotext()]]:
 
+<<[[dotext()]] refine special symbols>>=
+lookup("etext", 0)->value = INITTEXT+textsize;
+@
+%old: in span():
+% setext = lookup("etext", 0);
+% if(setext != S) {
+%    setext->value = c;
+%    textsize = c - INITTEXT;
 
+Note that for code symbols, [[Sym.value]] contains a real
+code address, not an offset.
+
+\t fixpoint issue? not for dollar etext because anyway will be LCON
+\t  but for etext(SB) then yes could have pb if final address
+\t  become a LCON
 
 
 
@@ -7499,55 +7599,44 @@ xdefine("end", SBSS, datsize+bsssize);
 \section{Mutual recursivity in layout and [[SB/R12]]}
 \label{sec:sb-r12}
 
-% maybe can start with just 
-%  xdefine("setR12", SDATA, 0L);
-%  =~ bdata
-% the value here is a location for DATA, so there is
-% an implicit +INITDAT. Has to be, otherwise would have a mutually
-% recursive issue between dodata and dotext because dotext
-% need the layout of data, but this layout must start after the
-% text ...
+The last special symbol [[5l]] defines is [[setR12]]
+which we mentioned before:
 
+<<[[dodata()]] define special symbols setR12 IF unoptimized>>=
+xdefine("setR12", SDATA, 0L);
+@
 
-% and  see R12 assigned to INITDAT and so further access to work.
+It is the last piece of the process we outlined in
+Section~\ref{sec:dodata-big-picture} to solve the
+mutual dependency issue between the layout of code and data.
+%
+Note that the [[Sym.value]] of [[setR12]], just like for [[bdata]],
+is [[0]], not [[INITDAT]].
+But, 
+The address of [[setR12]] when used in an instruction,
+e.g. [[MOVW $setR12(SB), R12]], %$
+is recognized in a special way by the code generator
+and will be converted in an instruction which loads
+its {\em absolute address}, which will be [[INITDAT]].
+\t ref to section that explains full thing?
+%
+Just like for [[etext]] and [[edata]], the use of
+the special symbol [[setR12]] allows a form of reflection
+which is needed to communicate the value of [[INITDAT]]
+to the program.
+%alt: could generate instr after _main? simpler?
 
 % >>
 % lib_core/libc/arm/main9.s will do 
 %	MOVW	$setR12(SB), R(sb)
 % before anything.
 
-% Note again that we cannot override setR12 address with our own data
-% because of the use of lots of symbols. It's the same for btext,
-% bdata, etc. Here we care actually only about the address, not the
-% content at that address.
+Section~\ref{sec:BIG} will present an optimisation around [[setR12]]
+which will actually change its value.
 
 
 
-% then introduce BIG optimisation below, or put in
-% adv topic chapter with small data segment?
 
-<<[[dodata()]] define special symbols>>=
-xdefine("setR12", SDATA, 0L+BIG);
-@
-<<constant BIG>>=
-//BIG		= (1<<12)-4,
-BIG		= 0,
-@
-
-% having BIG set to a page is good because STR/LDR
-% accept immediate offset of 12 bits and a sign, so can encode
-% easily [-4096,+4096] range.
-% So good for hello(SB) but not so good for $hello(SB).
-% Indeed, resulting offset will be negatif because do  Sym.value of
-% hello which should be close to 0, minus BIG, which should
-% be a negatif number. But RECON matchs only when can immrot(instoffset)
-% and can do then ADD v, R12, Rwhatever, but when v is negatif
-% and big number, not so easy to satisfy immrot(). In that case
-% get a LCON.
-
-% why -4? otherwise could not reach the first data? offset
-% can be negative or positive so actually can cover 2 pages of
-% small data variables!
 
 
 
@@ -7562,10 +7651,11 @@ BIG		= 0,
 %trans:
 The final step of the linking pipeline is to generate code.
 % have seen asmb(), in Section X, generate header, code
-% section, data section. can now see missing piece, individual instr.
+% section, data section. But was using oplook, asmout,
+% so can now see missing pieces, individual instr generation.
 %toc:
-% oplook, asmout, datblk.
-% First recall ARM instr format, and additional DS.
+% oplook, asmout
+%But First recall ARM instr format, and additional DS.
 
 %dup: The code generation is done by 5l, not 5a, surprisingly!
 %real-world:?
@@ -7608,7 +7698,7 @@ struct	Optab
     // idx for the code generator, see the giant switch in asmout()
     short	type; 
 
-    // size of the corresponding machine code, should be a multiple of 4
+    // size of the corresponding machine code (should be a multiple of 4)
     short	size; 
 
     <<[[Optab]] other fields>>
@@ -7625,8 +7715,6 @@ struct	Optab
 %ex of entries:
 % Optab	optab[] =
 % {
-%    { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
-%    { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
 %    ...
 %    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
 %    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
@@ -7635,7 +7723,6 @@ struct	Optab
 % ARM has fixed-length instructions, 4, but 5a/ support
 % some fake/virtual opcodes that actually expands to 
 % multiple instructions, hence the size field above.
-%
 % Also because of 12 bits immediate need special tricks, pool(),
 % RCON vs LCON, etc. So there are many cases where we generate
 % for one Asm5 instruction multiple ARM instructions. 
@@ -7786,6 +7873,8 @@ long	instoffset;
 
 \paragraph{[[D_OREG]]}
 % offsets constraints
+% ex of instr: MOVW OFF(R13), R2
+
 
 <<[[aclass()]] switch type cases>>=
 case D_OREG:
@@ -7900,6 +7989,7 @@ case D_NONE:
 
 \paragraph{[[D_CONST]]}
 % immediate constants constraints
+% ex of instr: ADD I, R1, R2
 
 <<[[aclass()]] switch type cases>>=
 case D_CONST:
@@ -7966,7 +8056,7 @@ case N_INTERN:
     case SCONST:
     case SUNDEF:
         instoffset = s->value + a->offset;
-        return C_LCON;
+        return C_LCON; // etext is stable
     case SNONE: case SXREF:
         diag("undefined external: %s in %s", s->name, TNAME);
         s->type = SDATA;
@@ -8281,7 +8371,7 @@ addpool(Prog *p, Adr *a)
 
 
 
-\subsection{Immediate address}
+\subsection{Immediate address, [[immaddr()]]}
 
 <<function immaddr(arm)>>=
 long
@@ -8306,7 +8396,7 @@ immaddr(long v)
 
 % bit P and big U?
 
-\subsection{Half immediate address}
+\subsection{Half immediate address, [[immhalf()]]}
 
 <<function immhalf(arm)>>=
 int
@@ -8325,8 +8415,8 @@ immhalf(long v)
 % >> >> >>
 % seems identical to immhalf no? no now it's 0xff! not 0xfff
 
-\subsection{Small (possibly rotated) immediate values}
-% small immediate (rotated) address
+\subsection{immediate values (possibly rotated), [[immrot()]]}
+% immediate (rotated) address
 
 % see Machine.nw and the ARM refcard to understand the code below.
 % RCON is for small immediate value, or rotated things of small 
@@ -8760,6 +8850,7 @@ nocache(Prog *p)
 %@
 
 \section{Text section, [[asmout()]]}
+\label{sec:asmout}
 
 <<function asmout(arm)>>=
 /// main -> asmb -> <> (in a for loop over all instructions)
@@ -10298,7 +10389,8 @@ else {
 
 \section{Executable symbol table, [[asmsym()]]}
 
-% have seen object file symbol table, now executable symbol table.
+% have seen object file symbol table, and also symbol table of 5l in memory,
+% now executable symbol table.
 % but here really just for debugging (or for dyn linking too?)
 
 <<global symsize>>=
@@ -10743,8 +10835,9 @@ out:
 
 
 
+\section{File and line information in executables}
 
-\section{Filename symbols}
+\subsection{Filename symbols}
 
 % why they are shoved in to.autom with locals and params? a bit ugly
 <<[[asmsym()]] call putsymb for filenames>>=
@@ -10770,7 +10863,7 @@ if(t == 'z' || t == 'Z') {
 @
 
 
-\section{Line table, [[asmlc()]]}
+\subsection{Line table, [[asmlc()]]}
 
 % lc? line count?
 <<global lcsize>>=
@@ -10897,7 +10990,7 @@ if(debug['p'])
         doprof2();
 @
 
-\section{[[__mcount[]]]}
+\subsection{[[__mcount[]]]}
 
 % the idea o the code below is to add __mcount array, one index per function,
 % and when call it increments the array at the right place.
@@ -11006,7 +11099,7 @@ doprof1(void)
 @
 \l could use textp
 
-\section{[[_profin()]]}
+\subsection{[[_profin()]]}
 
 % _profin() is defined by lib_core/libc/port/profile.c
 % (_tracin() is defined by you)
@@ -11208,8 +11301,15 @@ if(p->reg & NOPROF) {
 
 
 
+
 \chapter{Advanced Topics}
 \label{chap:advanced}
+
+%dup: (and adapted) from Assembler
+% seen major stuff, major code.
+
+%toc:
+
 
 \section{Dynamic linking}
 \label{sec:dynamic-linking}
@@ -11556,14 +11656,6 @@ if(dlm){
 
 
 
-<<global dtype(arm)>>=
-int	dtype = 4;
-@
-
-<<[[dodata()]] if ADYNT or AINIT>>=
-if(p->as == ADYNT || p->as == AINIT)
-    s->value = dtype;
-@
 
 
 
@@ -11600,6 +11692,9 @@ enum rxxx {
     Rindex	= 10,		/* no. bits for index in relocation address */
 };
 @
+
+
+\subsection{[[SUNDEF]]}
 
 <<[[Section]] cases>>=
 SUNDEF,
@@ -11660,6 +11755,7 @@ undefsym(Sym *s)
 @
 %>> >>
 
+\subsection{XXX}
 
 
 % port to arm?
@@ -11893,79 +11989,6 @@ grow(Reloc *r)
 @
 
 
-\subsection{[[ADYNT]]}
-% asm.pdf says it was for alef, so maybe can remove?
-%  useful also for dynamic loading?
-%  seems more related to dynamic typing
-
-% mv with dlm?
-% seems never produced by 5a/5c
-
-
-<<[[ldobj()]] locals(arm)>>=
-Sym *di = S;
-@
-
-<<[[Section]] cases>>=
-SCONST,
-@
-% SCONST ... hmm confusing with D_SCONST IMHO
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case ADYNT:
-    if(p->to.sym == S) {
-        diag("DYNT without a sym\n%P", p);
-        break;
-    }
-    di = p->to.sym;
-    p->reg = 4;
-    if(di->type == SXREF) {
-        if(debug['z'])
-            Bprint(&bso, "%P set to %d\n", p, dtype);
-        di->type = SCONST;
-        di->value = dtype;
-        dtype += 4;
-    }
-    if(p->from.sym == S)
-        break;
-
-    p->from.offset = di->value;
-    p->from.sym->type = SDATA;
-    if(curtext == P) {
-        diag("DYNT not in text: %P", p);
-        break;
-    }
-    p->to.sym = curtext->from.sym;
-    p->to.type = D_CONST;
-    p->link = datap;
-    datap = p;
-    break;
-@
-
-
-
-\subsection{[[AINIT]]}
-% seems never produced by 5a/5c, like ADYNT, so move?
-% seems to be just after a ADYNT, see the error message below
-
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AINIT:
-    if(p->from.sym == S) {
-        diag("INIT without a sym\n%P", p);
-        break;
-    }
-    if(di == S) {
-        diag("INIT without previous DYNT\n%P", p);
-        break;
-    }
-    p->from.offset = di->value;
-    p->from.sym->type = SDATA;
-    p->link = datap;
-    datap = p;
-    break;
-
-@
 
 \subsection{Relocatable address, [[C_ADDR]]}
 
@@ -11976,8 +11999,8 @@ C_ADDR,		/* relocatable address */
 <<[[aclass()]] when D_OREG and external symbol and dlm>>=
 if(dlm) {
     switch(t) {
-    case SUNDEF:
     case STEXT: case SSTRING:
+    case SUNDEF:
     case SCONST: 
         instoffset = s->value + a->offset;
         break;
@@ -12106,7 +12129,92 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
 % >> >> >> >> >> >> >> >>
 
 
+\section{Dynamic typing}
 
+\subsection{[[ADYNT]]}
+% asm.pdf says it was for alef, so maybe can remove?
+%  useful also for dynamic loading?
+%  seems more related to dynamic typing
+
+% mv with dlm?
+% seems never produced by 5a/5c
+
+
+<<global dtype(arm)>>=
+int	dtype = 4;
+@
+<<[[dodata()]] if ADYNT or AINIT>>=
+if(p->as == ADYNT || p->as == AINIT)
+    s->value = dtype;
+@
+
+
+
+
+<<[[ldobj()]] locals(arm)>>=
+Sym *di = S;
+@
+
+<<[[Section]] cases>>=
+SCONST,
+@
+% SCONST ... hmm confusing with D_SCONST IMHO
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case ADYNT:
+    if(p->to.sym == S) {
+        diag("DYNT without a sym\n%P", p);
+        break;
+    }
+    di = p->to.sym;
+    p->reg = 4;
+    if(di->type == SXREF) {
+        if(debug['z'])
+            Bprint(&bso, "%P set to %d\n", p, dtype);
+        di->type = SCONST;
+        di->value = dtype;
+        dtype += 4;
+    }
+    if(p->from.sym == S)
+        break;
+
+    p->from.offset = di->value;
+    p->from.sym->type = SDATA;
+    if(curtext == P) {
+        diag("DYNT not in text: %P", p);
+        break;
+    }
+    p->to.sym = curtext->from.sym;
+    p->to.type = D_CONST;
+    p->link = datap;
+    datap = p;
+    break;
+@
+
+
+
+\subsection{[[AINIT]]}
+% seems never produced by 5a/5c, like ADYNT, so move?
+% seems to be just after a ADYNT, see the error message below
+
+
+<<[[ldobj()]] switch opcode cases(arm)>>=
+case AINIT:
+    if(p->from.sym == S) {
+        diag("INIT without a sym\n%P", p);
+        break;
+    }
+    if(di == S) {
+        diag("INIT without previous DYNT\n%P", p);
+        break;
+    }
+    p->from.offset = di->value;
+    p->from.sym->type = SDATA;
+    p->link = datap;
+    datap = p;
+    break;
+
+@
 
 \section{Position independent code (PIC)}
 
@@ -12158,6 +12266,37 @@ case AADD:
 % can be encoded as a single instruction.
 
 % otherwise have to decompose.
+
+
+
+% then introduce BIG optimisation below, or put in
+% adv topic chapter with small data segment?
+
+\label{sec:BIG}
+<<[[dodata()]] define special symbols>>=
+xdefine("setR12", SDATA, 0L+BIG);
+@
+
+<<constant BIG>>=
+//BIG		= (1<<12)-4,
+BIG		= 0,
+@
+
+% having BIG set to a page is good because STR/LDR
+% accept immediate offset of 12 bits and a sign, so can encode
+% easily [-4096,+4096] range.
+% So good for hello(SB) but not so good for $hello(SB).
+% Indeed, resulting offset will be negatif because do  Sym.value of
+% hello which should be close to 0, minus BIG, which should
+% be a negatif number. But RECON matchs only when can immrot(instoffset)
+% and can do then ADD v, R12, Rwhatever, but when v is negatif
+% and big number, not so easy to satisfy immrot(). In that case
+% get a LCON.
+
+% why -4? otherwise could not reach the first data? offset
+% can be negative or positive so actually can cover 2 pages of
+% small data variables!
+
 
 \subsection{Small data first}
 % improve data cache miss?
@@ -12502,7 +12641,7 @@ if(!(r->cond->mark & FOLL))
 
 
 
-\section{Overriding symbols attribute, [[DUPOK]]}
+\section{Overriding symbol attribute, [[DUPOK]]}
 \label{sec:dupok-nop}
 
 % case in kernel where override a previous symbol,
@@ -12870,7 +13009,7 @@ ieeedtod(Ieee *ieeep)
 
 
 
-\subsubsection{Class}
+\subsubsection{Operand class}
 
 <<[[Operand_class]] cases>>=
 C_FREG,
@@ -12934,10 +13073,6 @@ if(immfloat(t))
 
 
 \subsubsection{XXX}
-
-
-
-
 
 
 
@@ -13831,6 +13966,7 @@ case AMODU:
         break;
     if(p->to.type != D_REG)
         break;
+    // else
     q1 = p;
 
     q = prg();
@@ -14119,7 +14255,7 @@ case 16:	/* div r,[r,]r */
 @
 % 0xf? SWI? o2 = 0 ?? illegal instruction? so kernel trap?
 % >>
-
+% anyway will not use o2 ... since size is 4
 
 \subsection{Multiple registers instructions}
 
@@ -14204,7 +14340,7 @@ case 63:	/* bcase */
 \section{[[5l -E digits]]}
 \l remove? used by who? useful feature? for -E0x7c00 ?
 
-<<[[main()]] if rare condition do nothing, else>>=
+<<[[main()]] if rare condition do not set SXREF for INITENTRY, else>>=
 if(*INITENTRY >= '0' && *INITENTRY <= '9') {}
 else
 @
@@ -14219,11 +14355,15 @@ if(*a >= '0' && *a <= '9')
 
 % what for? so cannot be modified? text is marked as writable
 %  in Kernel.nw?
-% for constant strings? an optimisation?
+% for constant strings? 
+% an optimisation?
+
+% Section
 
 <<[[Section]] cases>>=
 SSTRING, // arm
 @
+
 
 <<[[dodata()]] if string in text segment>>=
 if(debug['t']) {
@@ -14238,6 +14378,14 @@ if(debug['t']) {
 }
 @
 
+% Layout
+
+
+<<[[dotext()]] other locals>>=
+Sym *s;
+long v;
+int i;
+@
 
 % after has layout all the TEXT instrs, can put behind the strings.
 <<[[dotext()]] if string in text segment>>=
@@ -14250,15 +14398,17 @@ if(debug['t']) {
      for(s = hash[i]; s != S; s = s->link)
       if(s->type == SSTRING) {
           v = s->value;
-          while(v & 3)
-              v++;
+          v = rnd(v, 4)
           s->value = c;
           c += v;
       }
 }
 @
+%old:
+%          while(v & 3)
+%              v++;
 
-
+% Code generation
 
 <<[[asmb()]] locals>>=
 long etext;
@@ -14274,6 +14424,9 @@ for(t = pc; t < etext; t += sizeof(buf)-100) {
     else
         datblk(t, etext-t, true);
 @
+
+
+
 
 \chapter{Conclusion}
 
@@ -15484,8 +15637,16 @@ main(int argc, char *argv[])
 }
 @
 
+\section{[[strip]]}
+\label{sec:strip-code}
+
+% see also 5a -s and relevant code in chapter Debugger.
+
+
 \section{[[nm]]}
 \label{sec:nm-code}
+
+% rely on no-strip!
 
 % see nm(1)
 % use libmach!
@@ -15499,14 +15660,6 @@ main(int argc, char *argv[])
 % see ar(5) and ar(1)
 
 % ar use libmach/ library itself :) bootstrapping.
-
-\section{[[strip]]}
-\label{sec:strip-code}
-
-% see also 5a -s and relevant code in chapter Debugger.
-
-
-
 
 \chapter{[[5l]] in OCaml}
 \label{chap:5l-ocaml}
