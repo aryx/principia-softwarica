@@ -184,7 +184,7 @@ struct	Optab
     // idx for the code generator, see the giant switch in asmout()
     short	type; 
 
-    // size of the corresponding machine code, should be a multiple of 4
+    // size of the corresponding machine code (should be a multiple of 4)
     short	size; 
 
     /*s: [[Optab]] other fields */
@@ -351,9 +351,9 @@ enum rxxx {
 
 /*s: enum headtype(arm) */
 /*
- *	-H0						no header
- *	-H2 -T4128 -R4096		is plan9 format
- *	-H7						is elf
+ *  -H0                     no header
+ *  -H2 -T4128 -R4096       is plan9 format
+ *  -H7                     is elf
  */
 enum Headtype {
      H_NOTHING = 0,

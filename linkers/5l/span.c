@@ -18,17 +18,19 @@ typedef struct Reloc Reloc;
 void
 dotext(void)
 {
-    /*s: [[dotext()]] locals */
     Prog *p;
     Optab *o;
-    Sym *s;
-    // code address
-    long c;
-    long v;
-    int m, i;
-    /*x: [[dotext()]] locals */
+    // real code address
+    long c; // ulong?
+    // size of instruction
+    int m;
+    /*s: [[dotext()]] other locals */
     long    otxt;
-    /*e: [[dotext()]] locals */
+    /*x: [[dotext()]] other locals */
+    Sym *s;
+    long v;
+    int i;
+    /*e: [[dotext()]] other locals */
 
     DBG("%5.2f span\n", cputime());
 
@@ -105,8 +107,7 @@ dotext(void)
          for(s = hash[i]; s != S; s = s->link)
           if(s->type == SSTRING) {
               v = s->value;
-              while(v & 3)
-                  v++;
+              v = rnd(v, 4);
               s->value = c;
               c += v;
           }
@@ -116,9 +117,9 @@ dotext(void)
     c = rnd(c, 8);
 
     textsize = c - INITTEXT;
-    /*s: [[dotext()]] define special symbols */
-    xdefine("etext", STEXT, INITTEXT+textsize);
-    /*e: [[dotext()]] define special symbols */
+    /*s: [[dotext()]] refine special symbols */
+    lookup("etext", 0)->value = INITTEXT+textsize;
+    /*e: [[dotext()]] refine special symbols */
     if(INITRND)
         INITDAT = rnd(c, INITRND);
     DBG("tsize = %lux\n", textsize);
@@ -345,8 +346,8 @@ aclass(Adr *a)
             /*s: [[aclass()]] when D_OREG and external symbol and dlm */
             if(dlm) {
                 switch(t) {
-                case SUNDEF:
                 case STEXT: case SSTRING:
+                case SUNDEF:
                 case SCONST: 
                     instoffset = s->value + a->offset;
                     break;
@@ -442,7 +443,7 @@ aclass(Adr *a)
             case SCONST:
             case SUNDEF:
                 instoffset = s->value + a->offset;
-                return C_LCON;
+                return C_LCON; // etext is stable
             case SNONE: case SXREF:
                 diag("undefined external: %s in %s", s->name, TNAME);
                 s->type = SDATA;

@@ -70,7 +70,7 @@ dodata(void)
                 v = 1;
             }
             /*e: [[dodata()]] sanity check GLOBL instructions, size of data v */
-            v = rnd(v , 4); // align
+            v = rnd(v, 4); // align
             s->value = v;   // adjust
             /*s: [[dodata()]] in pass 1, if small data size, adjust orig */
             /*
@@ -130,7 +130,9 @@ dodata(void)
     /*s: [[dodata()]] define special symbols */
     xdefine("bdata", SDATA, 0L);
     xdefine("edata", SDATA, datsize);
-    xdefine("end", SBSS, datsize+bsssize);
+    xdefine("end",   SBSS, datsize+bsssize);
+    /*x: [[dodata()]] define special symbols */
+    xdefine("etext", STEXT, 0L);
     /*x: [[dodata()]] define special symbols */
     xdefine("setR12", SDATA, 0L+BIG);
     /*e: [[dodata()]] define special symbols */

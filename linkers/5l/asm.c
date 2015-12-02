@@ -86,7 +86,7 @@ asmb(void)
         /*e: [[asmb()]] in Text section generation, sanity check pc */
 
         o = oplook(p);
-        // generate instruction(s)!
+        // generate ARM instruction(s)!
         asmout(p, o);
 
         pc += o->size;
@@ -115,11 +115,12 @@ asmb(void)
     /*s: [[asmb()]] Data section */
     curtext = P;
     switch(HEADTYPE) {
+    /*s: [[asmb()]] switch HEADTYPE (to position after text) cases(arm) */
     case H_PLAN9:
         OFFSET = HEADR+textsize;
         seek(cout, OFFSET, SEEK__START);
         break;
-    /*s: [[asmb()]] switch HEADTYPE (to position after text) cases(arm) */
+    /*x: [[asmb()]] switch HEADTYPE (to position after text) cases(arm) */
     case H_ELF:
         OFFSET = HEADR+textsize;
         seek(cout, OFFSET, 0);
@@ -195,6 +196,7 @@ asmb(void)
     seek(cout, OFFSET, SEEK__START);
 
     switch(HEADTYPE) {
+    /*s: [[asmb()]] switch HEADTYPE (for header generation) cases(arm) */
     // see Exec in a.out.h
     case H_PLAN9:
         /*s: [[asmb()]] if dynamic module magic header adjustment(arm) */
@@ -213,7 +215,7 @@ asmb(void)
         lput(0L);
         lput(lcsize);
         break;
-    /*s: [[asmb()]] switch HEADTYPE (for header generation) cases(arm) */
+    /*x: [[asmb()]] switch HEADTYPE (for header generation) cases(arm) */
     case H_ELF:
         debug['S'] = 1;			/* symbol table */
         elf32(ARM, ELFDATA2LSB, 0, nil);

@@ -2,11 +2,6 @@
 #include	"l.h"
 #include	<ar.h>
 
-#ifndef	DEFAULT
-/*s: constant DEFAULT */
-#define	H_DEFAULT	H_PLAN9
-/*e: constant DEFAULT */
-#endif
 
 /*s: global noname linker */
 char	*noname		= "<none>";
@@ -177,15 +172,14 @@ main(int argc, char *argv[])
     addlibpath(name);
     /*e: [[main()]] addlibpath("/{thestring}/lib") or ccroot */
     /*s: [[main()]] set HEADTYPE, INITTEXT, INITDAT, etc */
-    if(HEADTYPE == -1) {
-        HEADTYPE = H_DEFAULT;
-    }
+    if(HEADTYPE == -1)
+        HEADTYPE = H_PLAN9;
     switch(HEADTYPE) {
     /*s: [[main()]] switch HEADTYPE cases(arm) */
     case H_PLAN9:
         HEADR = 32L;
         if(INITTEXT == -1)
-            INITTEXT = 4096+32; // 1 page + a.out header, 4128
+            INITTEXT = 4096+32; // 1 page + a.out header = 4128
         if(INITDAT == -1)
             INITDAT = 0;
         if(INITRND == -1)
@@ -222,13 +216,13 @@ main(int argc, char *argv[])
             INITENTRY = "_mainp";
         /*e: [[main()]] adjust INITENTRY if profiling */
     }
-    /*s: [[main()]] if rare condition do nothing, else */
+    /*s: [[main()]] if rare condition do not set SXREF for INITENTRY, else */
     if(debug['l']) {}
     else
-    /*x: [[main()]] if rare condition do nothing, else */
+    /*x: [[main()]] if rare condition do not set SXREF for INITENTRY, else */
     if(*INITENTRY >= '0' && *INITENTRY <= '9') {}
     else
-    /*e: [[main()]] if rare condition do nothing, else */
+    /*e: [[main()]] if rare condition do not set SXREF for INITENTRY, else */
       lookup(INITENTRY, 0)->type = SXREF;
     /*e: [[main()]] set INITENTRY */
     /*x: [[main()]] initialize globals(arm) */
@@ -881,9 +875,9 @@ ldobj(fdt f, long c, char *pn)
     /*s: [[ldobj()]] locals(arm) */
     long ipc;
     /*x: [[ldobj()]] locals(arm) */
+    Prog *p;
     // enum<Opcode>
     short o;
-    Prog *p;
     /*x: [[ldobj()]] locals(arm) */
     // array<byte> (slice of buf.ibuf)
     byte *bloc;
@@ -1013,6 +1007,7 @@ loop:
             v = version;
         /*e: [[ldobj()]] when ANAME opcode, if private symbol adjust version */
 
+        // this will possibly create new symbols
         s = lookup((char*)bloc, v);
 
         c -= &stop[1] - bloc;

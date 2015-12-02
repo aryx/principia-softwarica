@@ -199,6 +199,7 @@ noops(void)
                 break;
             if(p->to.type != D_REG)
                 break;
+            // else
             q1 = p;
 
             q = prg();
