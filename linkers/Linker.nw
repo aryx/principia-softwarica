@@ -4280,6 +4280,8 @@ Its entries define symbols which are then referenced in operands
 of some following instructions via a {\em symbol index},
 as shown in the right of Figure~\ref{fig:object-format-complete}.
 
+% subsubsection{ANAME format}
+
 An important chunk of [[ldobj()]] deals with those [[ANAME]] entries.
 %
 The format of each {entry} starts with 
@@ -4287,7 +4289,7 @@ the pseudo-opcode [[ANAME]]
 followed by the kind, 
 symbol index, and 
 the name of the symbol as a possible long string terminated with [['\0']].
-\t FIGURE?
+\t small FIGURE for ANAME format?
 \t need kind? well to the SXREF below done only for global symbols.
 \t  but could be done in inopd instead?
 \t  yes but need for N_INTERN! so bump version and allocate different symbols!
@@ -4295,6 +4297,8 @@ the name of the symbol as a possible long string terminated with [['\0']].
 \t need index? fault-tolerance?
 %
 See the \book{Assembler} if you need more explanations.
+
+% subsubsection{h}
 
 %dup: (and adapted) from Assembler
 The local [[h]] below mimics in memory this circular table:
@@ -4373,6 +4377,8 @@ in Figure~\ref{fig:object-h-hash}.
 \label{fig:object-h-hash}
 \end{figure}
 
+% subsubsection{ldobj and ANAME}
+
 We can now see the local variables
 and the code of [[ldobj()]] dealing with [[ANAME]]
 (and also partially with [[ASIGNAME]] which will be explained 
@@ -4438,11 +4444,14 @@ unless this symbol is a global symbol ([[v == 0]]) which was defined
 in another object file loaded before, or if the same symbol
 was introduced before in the same object file due to the circular
 nature of the object file symbol table.
-%
 [[ldobj()]] then updates [[h]] so further references
 of the symbol index in operands of instructions coming after
 will be transformed in pointers (in [[Operand.sym]]) to the right
-symbol entry in [[hash]]. Indeed, see the instruction
+symbol entry in [[hash]]. 
+%
+% subsubsection{inopd and symbol index}
+%
+Indeed, see the instruction
 [[a->sym = h[symidx]]] of [[inopd()]] in Section~\ref{sec:inopd}.
 %
 We can now also understand the sanity check of the symbol 
@@ -4457,6 +4466,8 @@ if(symidx < 0 || symidx > NSYM){
 @
 \t use errorexit, not this ALAST trick and return 0
 
+% subsubsection{XXX}
+
 Note also that [[ldobj()]] sets the symbol section to [[SXREF]]
 for symbols refering to procedures or globals (e.g. [[foo(SB)]]
 but also [[tmp<>(SB)]]) if the symbol was just created.
@@ -4464,6 +4475,9 @@ This symbol is now marked as ``wanted''.
 \l for objfile() and loadlib() to correctly work! checked by undef
 \t explain partially also why need redundant symkind in ANAME, because
 \t  job done here (but could be done instead in inopd() I think)
+
+
+% subsubsection{buffered input for ANAME}
 
 The reading of an [[ANAME]] entry requires to have the full
 string (ending with [['\0']]) in the input buffer:
@@ -6117,7 +6131,8 @@ To {\em bootstrap},
 this address is recognized in a special way in the code
 generator in [[asmout()]] and leads to the generation
 of an instruction which uses the absolute address of [[setR12]],
-e.g. [[MOV 0x7014, R12]].
+e.g. [[MOV $0x7000, R12]]. %$
+\t it is a MOV not MOVW, it's the MOV of the ARM this time
 %of a fixed number
 %of instructions, whatever the value of the address.
 \t  special case to use LCON not RECON!! subtle, ref to code in aclass?
@@ -6449,7 +6464,7 @@ adds a forward link from a past instruction saved in [[lst[i]]]
 to the current instruction [[p]]. 
 It does so for different {\em levels} [[i]].
 %
-The frequency divided by [[LOG]]
+The frequency (divided by [[LOG]])
 for a certain level [[i]] is stored in [[cnt[i]]]
 initialized by the following code:
 
@@ -6467,7 +6482,7 @@ for(i=0; i<LOG; i++) {
 Here are the initial values of [[cnt]] for different [[LOG]]:
 \begin{verbatim}
 // LOG = 2
-cnt[] = {1, 2}; // so frequency level0 = 2 (LOG * 1), level1 = 4 (LOG * 2)
+cnt[] = {1, 2};
 // LOG = 3
 cnt[] = {1, 3, 9};
 // LOG = 4
@@ -6475,6 +6490,7 @@ cnt[] = {1, 4, 16, 64};
 // LOG = 5
 cnt[] = {1, 5, 25, 125, 625};
 \end{verbatim}
+% // so frequency level0 = 2 (LOG * 1), level1 = 4 (LOG * 2)
 
 We can finally see the body of the loop of [[mkfwd()]]:
 
@@ -6499,8 +6515,8 @@ The idea is to first loop over the different levels [[i]],
 and then loop over the frequency at a certain level [[i]].
 %
 So, for [[LOG=2]], [[mkfwd()]] will add forward links
-of length 4 (every $2 * 2$ instructions), and 
-of length 2 (every $2 * 1$ instructions), as illustrated 
+of length 4 (every $LOG * 2$ instructions), and 
+of length 2 (every $LOG * 1$ instructions), as illustrated 
 in Figure~\ref{fig:forward-pointer}.
 
 Here is a simple trace of [[mkfwd()]] for [[LOG=2]]
@@ -10740,8 +10756,9 @@ for(a=p->to.autom; a; a=a->link)
 \subsection{File and line information in objects, [[AHISTORY]]}
 \label{sec:lineno}
 
-% say chapter in \book{Assembler}. global line number after
-% preprocessing.
+% see chapter in \book{Assembler}. with complex AHISTORY format
+% and complex figure about #include #line and lineno!
+% global line number after preprocessing.
 
 % tracing origin??
 
@@ -10918,6 +10935,11 @@ out:
 
 \subsection{File and line information in executables}
 
+% lc? line count?
+<<global lcsize>>=
+long	lcsize;
+@
+
 \subsubsection{Filename symbols}
 
 % why they are shoved in to.autom with locals and params? a bit ugly
@@ -10943,14 +10965,11 @@ if(t == 'z' || t == 'Z') {
 }
 @
 
+\subsubsection{Line table format}
+
+\l FIGURE!
 
 \subsubsection{Line table, [[asmlc()]]}
-
-% lc? line count?
-<<global lcsize>>=
-long	lcsize;
-@
-
 
 <<constant MINLC(arm)>>=
 #define	MINLC	4
