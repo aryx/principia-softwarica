@@ -1429,7 +1429,8 @@ Its role and its relationship with the {pseudo-register}
 
 
 % special case SB, hello+whatever(SB), $hello+whatever(SB).
-% here? or mv later?
+% here? or mv later? at least need give idea on how translate $xxx(SB)
+%  and xxx(SB)
 % show actual code of 
 %  MOVW $hello(SB), R2    ==>   ADD offset1, R12, R2    or LDR offset2(R15),R2
 %   (and ADD itself can use REGTMP)
@@ -3579,6 +3580,8 @@ cflush();
 <<[[asmb()]] Text section, output strings in text segment>>
 }
 @
+\t need to be pc? need use the global? I understand for ldobj, but for asmb?
+\t  could maybe use local like  realpc ?
 %old: o = oplook(p);	/* could probably avoid this call */
 % because could just use p->optab cache?
 % but ok cos oplook actually uses optab. oplook() memoize things.
@@ -4727,8 +4730,8 @@ autosize += 4;
 % p->to.offset = autosize;
 
 The reason for the 4 increment is to allocate space in the stack
-to save the {\em return address} stored in the
-{\em link register} [[R12]] (aliased as [[REGLINK]]).
+to {save} the {\em return address} stored in the
+{\em link register} [[R14]] (aliased as [[REGLINK]]).
 See the \book{Assembler} to refresh your memory
 about the {branch and link} instruction and the \plan{}
 {calling conventions}.
@@ -5799,6 +5802,8 @@ in an ARM instruction with, as an operand, a concrete address in
 the {code section}, e.g. [[BL 0x1020]]
 \l actually ARM use relative jumps
 \l can jump to a data?
+\n there is also code ref in memory instructions
+\n   [[MOVW $foo(SB), R1]] %$
 
 \item {\em data references} in memory instructions, 
 e.g. [[MOVW hello(SB), R1]], which ultimately should
@@ -5815,6 +5820,7 @@ separate ARM instructions [[LDR]] (load register) and [[STR]] (store register).
 
 Note that some branching instructions have been
 {partially resolved} at this point.
+\l D_BRANCH
 %
 Indeed, 
 branching to a {label} (e.g. [[B loop]]), or 
@@ -5830,6 +5836,7 @@ origin in Section~\ref{sec:relocating} (e.g. [[B 113]]).
 
 Resolving and converting the remaining branching instructions 
 (e.g. [[BL foo(SB)]])
+\l D_OREG
 to absolute jumps is very easy thanks to the symbol table and
 the [[Sym.value]] field of procedure symbols.
 %trans:
@@ -5881,7 +5888,7 @@ for a few reasons explained below:
 \item {\em virtual instructions} such as 
 %dup: main/asmb/text-sec 
 [[DIV]] have no counterpart in the ARM. 
-[[ADIV]] and [[AMOD]] are converted by [[5l]]
+[[DIV]] and [[MOD]] are converted by [[5l]]
 in a serie of ARM 
 instructions which ends with the call to
 respectively [[_div()]] and [[_mod()]] of the core C library
@@ -5970,10 +5977,12 @@ iterates over all the code instructions.
 For each instruction, [[dotext()]] computes the actual number
 of ARM instructions which are needed for this
 instruction (via [[oplook()]]), 
-set [[Instr.pc]] to [[pc]] which both represent now
+sets [[Instr.pc]] to [[pc]] which both represent now
 {\em real program counters}, 
 and increment [[pc]] accordingly (e.g. by 4 if only one ARM instruction
 was necessary).
+\t need use same global pc for that? could not use local? need pc as global?
+\t  actually it is using the local c, but could be instead realpc?
 
 \item the code generator [[asmout()]] when involved with a branching
 instruction [[p]] can find the target code address
@@ -6084,25 +6093,28 @@ not an absolute address.
 Note that the old value in [[Sym.value]] contained the size
 of the global which is used to layout globals one after the other.
 
-\item [[dotext()]] layouts code by iterating over all the instructions.
+\item [[dotext()]] then layouts code by iterating over all the instructions.
 But, it assumes the {\em reserved register} [[R12]] will, at {\em run-time},
 when the executable is executed,
 contain [[INITDAT]], the address of the start of the data section.
 \n actually not exactly that because BIG opti
-It also assumes every operands involving a global, 
-e.g. [[MOVW hello(SB), R1]],
-will be transformed later (in [[asmout()]])
+It also assumes that operands involving globals such as
+[[MOVW hello(SB), R1]] can be transformed later (in [[asmout()]])
 as an {\em indirect with offset} operand
 (see the \book{Assembler}).
+This operand can then use [[R12]] as the {\em base} and 
+the [[Sym.value]] of the global (computed previously)
+as the {\em offset}, e.g.  [[LDR 14(R12), R1]].
 \t actually not all are like that, can use also Pool if LCON
 %
-This operand will use [[R12]] as the {base} and 
-the [[Sym.value]] of the global (computed previously)
-as the offset, e.g.  [[LDR 14(R12), R1]].
-That way, [[dotext()]] can compute accurately the size of the
-instruction.
+In the same way instructions involving global addresses such as
+[[MOVW $hello(SB), R1]] %$ 
+can be transformed as [[ADD $14, R12, R1]]. %$
 \t but what if offset too large? and so can not express address
 \t  as offset, then will use absolute address and Pool, 
+%
+That way, [[dotext()]] can compute accurately the size of the
+instruction.
 \t but anyway, it's not gonna change, still not fake address! 
 \t second layout would be the same
 
@@ -6111,25 +6123,32 @@ initialize [[R12]] with the value of [[INITDAT]].
 %
 \l could stop here? and explain later subtelity of bootstrap need.
 This value is recorded in the executable as a special symbol,
-[[setR12]], as a form of reflection explained in Section~\ref{sec:sb-r12}.
+[[setR12]], using a form of reflection explained in Section~\ref{sec:sb-r12}.
 \n actually opti so not that
 %
-In practice, the function [[_main()]], from the core
-C library, is the first function executed by
+In practice, the function [[_main()]] from the core
+C library is the first function executed by
 the program (see Section~\ref{sec:choice-entry-point}).
 This is why one of its first instruction is:
 [[MOVW $setR12(SB), R12]].%$
 %
 
 \item the instruction [[MOVW $setR12(SB), R12]] %$
-itself uses an address which could be
-small or large depending on the program. So, this instruction
-may have different size depending on the address
-which brings us back to the original problem. 
+itself uses the address of a global but it must not be transformed
+as [[ADD 0, R12, R12]] like other similar instructions.
+Indeed, the whole point of the instruction is to initialize [[R12]],
+and so it can not rely on [[R12]].
+%which could be
+%small or large depending on the program. So, this instruction
+%may have different size depending on the address
+%which brings us back to the original problem. 
 To {\em bootstrap},
 this address is recognized in a special way in the code
-generator in [[asmout()]] and leads to the generation of a fixed number
-of instructions, whatever the value of the address.
+generator in [[asmout()]] and leads to the generation
+of an instruction which uses the absolute address of [[setR12]],
+e.g. [[MOV 0x7014, R12]].
+%of a fixed number
+%of instructions, whatever the value of the address.
 \t  special case to use LCON not RECON!! subtle, ref to code in aclass?
 \l see also section X where see code of _main?
 
@@ -6176,7 +6195,7 @@ of branching instructions to point to the right target instruction.
 Essentially [[patch()]] will iterate over all the code instructions
 [[p]] and for branch instructions it will {look for}
 the target instruction [[q]] with the virtual program counter 
-[[q->pc]] equal to the absolute jump value [[c]] in [[p]]:
+[[q->pc]] equal to the absolute jump value [[p->to.offset]]:
 
 <<function patch(arm)>>=
 /// main -> <>
@@ -6200,7 +6219,7 @@ patch(void)
 
         if(p->to.type == D_BRANCH && p->cond != UP) {
             c = p->to.offset; // target pc
-            <<[[patch()]] find Prog reference q with pc == c>>
+            <<[[patch()]] find Prog reference [[q]] with [[q->pc == c]]>>
             p->cond = q;
         }
     }
@@ -6208,6 +6227,7 @@ patch(void)
     <<[[patch()]] optimisation pass>>
 }
 @
+\t use pc instead of c? can be a local
 
 The extra condition [[p->cond != UP]] above is not very
 important and can be ignored for now.
@@ -6378,7 +6398,7 @@ Prog*	forwd;
 
 That way one can make bigger jumps sometimes:
 
-<<[[patch()]] find Prog reference q with pc == c>>=
+<<[[patch()]] find Prog reference [[q]] with [[q->pc == c]]>>=
 for(q = firstp; q != P;) {
     if((q->forwd != P) && (c >= q->forwd->pc)) {
         q = q->forwd; // big jump
@@ -6431,11 +6451,11 @@ when [[mkfwd()]] is applied to a list of 10 instructions.
 void
 mkfwd(void)
 {
-    long cnt[LOG]; // length of arc at a certain level (constant)
+    long cnt[LOG]; // (length of arc)/LOG at a certain level (constant)
     long dwn[LOG]; // remaining elements to skip at a level (goes down)
     Prog *lst[LOG]; // past instruction saved at a level
     Prog *p;
-    int i;
+    int i; // level
 
     <<[[mkfwd()]] initializes cnt, dwn, lst>>
 
@@ -6444,7 +6464,7 @@ mkfwd(void)
         <<adjust curtext when iterate over instructions p>>
         p->forwd = P;
 
-        <<[[mkfwd()]] nested loops, add forward links from past p in lst to p>>
+        <<[[mkfwd()]] in for loop, add forward links from past p in lst to p>>
     }
 }
 @
@@ -6455,10 +6475,11 @@ in multiple chunks.
 %
 It iterates over all the instructions [[p]] and at certain {\em frequencies}
 adds a forward link from a past instruction saved in [[lst[i]]]
-to the current instruction. It does so for
-different {\em levels} [[i]].
+to the current instruction [[p]]. 
+It does so for different {\em levels} [[i]].
 %
-The frequency for a certain level [[i]] is stored in [[cnt[i]]]
+The frequency divided by [[LOG]]
+for a certain level [[i]] is stored in [[cnt[i]]]
 initialized by the following code:
 
 <<[[mkfwd()]] initializes cnt, dwn, lst>>=
@@ -6475,7 +6496,7 @@ for(i=0; i<LOG; i++) {
 Here are the initial values of [[cnt]] for different [[LOG]]:
 \begin{verbatim}
 // LOG = 2
-cnt[] = {1, 2};
+cnt[] = {1, 2}; // so frequency level0 = 2 (LOG * 1), level1 = 4 (LOG * 2)
 // LOG = 3
 cnt[] = {1, 3, 9};
 // LOG = 4
@@ -6484,9 +6505,9 @@ cnt[] = {1, 4, 16, 64};
 cnt[] = {1, 5, 25, 125, 625};
 \end{verbatim}
 
-We can finally see the main code of [[mkfwd()]]:
+We can finally see the body of the loop of [[mkfwd()]]:
 
-<<[[mkfwd()]] nested loops, add forward links from past p in lst to p>>=
+<<[[mkfwd()]] in for loop, add forward links from past p in lst to p>>=
 // first loop, the levels
 i--;
 if(i < 0)
@@ -6611,6 +6632,7 @@ noops(void)
     }
 }
 @
+\l could be more symetric and use o = p->as;  also in first pass?
 %bugfix: I forgot the 'q = p;' after some refactoring, but need it!
 %old: there was lots of stuff about BECOME which I think was
 % a feature necessary for the alef compiler, but it
@@ -6838,7 +6860,7 @@ does not declare also any locals (e.g. [[ATEXT foo(SB), $0]]).%$
 
 Otherwise, if the procedure is not a leaf, or use some locals,
 then an extra word ([[+4]] bytes) is reserved in the stack
-to store the return address to the caller stored in [[R14]].
+to save the return address to the caller stored in [[R14]].
 
 <<[[noops()]] second pass switch opcode cases>>=
 case ATEXT:
@@ -6912,7 +6934,7 @@ That way, further iterations over the list of instructions
 can still rely on [[curtext]].
 
 
-In some situation, even if the procedure is not a leaf, 
+In some situations, even if the procedure is not a leaf, 
 one would like to not save [[R14]] in the stack.
 \t why? getcallerpc is a leaf.
 In that case, the programmer needs to declare his procedure with
@@ -6982,22 +7004,22 @@ has called [[leaf]].
 
 \begin{figure}[!]\centering
 \begin{verbatim}
-TEXT foo(SB), $4      5000: MOVW R14, $-4(R13)  
-...                   5004: SUB $4, R13, R13
+TEXT foo(SB), $4      5000: MOVW R14, $-8(R13)  
+...                   5004: SUB $8, R13, R13
                             ...
 BL bar(SB)        ==> 5020: BL 6000
 ...                         ...
-RET                   5040: ADD $4, R13, R13                       
-                      5044: MOVW $-4(R13), R15
+RET                   5040: ADD $8, R13, R13                       
+                      5044: MOVW $-8(R13), R15
 
 
-TEXT bar(SB), $8      6000: MOVW R14, $-8(R13)
-...                   6004: SUB $8, R13, R13
+TEXT bar(SB), $8      6000: MOVW R14, $-12(R13)
+...                   6004: SUB $12, R13, R13
                             ...
 BL leaf(SB)       ==> 6052: BL 7000
 ...                         ...
-RET                   6080: ADD $8, R13, R13
-                      6084: MOVW $-8(R13), R15
+RET                   6080: ADD $12, R13, R13
+                      6084: MOVW $-12(R13), R15
 
 
 TEXT leaf(SB), $0     7000: /* nothing */
@@ -7006,7 +7028,7 @@ RET                   7028: B (R14)
 \end{verbatim}
 \caption{[[TEXT]] and [[RET]] translations}\label{fig:text-ret}
 \end{figure}
-\l actually not BL 6000, BL use relative number, but what is saved
+\l actually not BL 6000, BL uses relative number, but what is saved
 \l  in the stack is an absolute address!
 
 \begin{figure}[!]\centering
@@ -7063,7 +7085,6 @@ In that case their [[Instr.cond]] field must be updated:
 % so also case ABL: before
 <<[[noops()]] first pass switch opcode ABL fallthrough>>=
 case AB:
-
 case ABEQ: case ABNE:
 case ABHS: case ABLO:
 case ABMI: case ABPL:
@@ -7071,9 +7092,7 @@ case ABVS: case ABVC:
 case ABHI: case ABLS:
 case ABGE: case ABLT:
 case ABGT: case ABLE:
-
 case ABCASE:
-
     q1 = p->cond;
     if(q1 != P) {
         while(q1->as == ANOP) {
@@ -7240,6 +7259,8 @@ dodata(void)
     <<[[dodata()]] define special symbols>>
 }
 @
+\l do not use v? was used for version previously
+\t why not use offset instead of orig?
 \n first iteration is on datap instructions, the other are on the symbol table.
 %old:
 %            while(v & 3) // align
@@ -7379,17 +7400,17 @@ dotext(void)
     DBG("tsize = %lux\n", textsize);
 }
 @
+\t use orig instead of 'c' so match more dodata()? or better, use realpc!
+\t need to modify Sym.value? used later?
+\l oplook call aclass() which needs to know offset size, 
 %old:
 %  - was called span()
 %  - the c+=m was in second else branch, but I put before
 %  - the autosize adjustment was done later but actually bug?
 %    anyway if was ATEXT then no aclass() call anyway
 %  - the curtext adjustment was done later too
-\t use orig instead of 'c' so match more dodata()?
 % but here it's really a concrete location whereas for dodata()
 % it's relative to INITDAT that we actually compute here.
-\t need to modify Sym.value? used later?
-\l oplook call aclass() which needs to know offset size, 
 
 
 [[dotext()]] relies on modifications done by the previous functions
@@ -7409,7 +7430,7 @@ the size of instructions involving globals
 \end{itemize}
 
 %dup: (and adapted) resolving/dodata
-Note again that we are just laying out code. We do not
+Note again that we are just laying out code here. We do not
 generate code. The generation of the code section of
 the executable is done in [[asmb()]] 
 and [[asmout()]] (see Section~\ref{sec:asmout}),
@@ -7524,33 +7545,33 @@ we saw in Section~\ref{sec:hello-world}.
 
 \begin{figure}[!]\centering
 \begin{verbatim}
-                       |              |
-                       |    HEAP      |
-                       |              |
-              ^ 0x7c50 +--------------+<----- end
-              |        |     BSS      |
-      bsssize |        |              |
-              v 0x7940 +--------------+<----- edata (end data)
-              ^        |              |
-      datsize |        |     Data     |
-              |        |              |
-INITDAT ----> v 0x7000 +--------------+<----- bdata (begin data)
-                       |  (padding)   |
-                0x6b58 +--------------+<----- etext (end text)
-                       |              |
-                       |     Code     |
-                       |    (Text)    |
-                       |              |
-                       |              |
-                0x1020 +--------------+
-                       |    header    |
-                0x1000 +--------------+
-                       | (first page  |
-                       |  unmapped)   |
-                       |              |
-                     0 +--------------+
-                    Memory layout of hello     special symbols
-                          executable
+                     |              |
+                     |    HEAP      |
+                     |              |
+            ^ 0x7c50 +--------------+<---- end
+            |        |     BSS      |
+    bsssize |        |              |
+            v 0x7940 +--------------+<---- edata (end data)
+            ^        |              |
+    datsize |        |     Data     |
+            |        |              |
+INITDAT --> v 0x7000 +--------------+<---- bdata (begin data)
+                     |  (padding)   |
+              0x6b58 +--------------+<---- etext (end text)
+                     |              |
+                     |     Code     |
+                     |    (Text)    |
+                     |              |
+                     |              |
+              0x1020 +--------------+
+                     |    header    |
+              0x1000 +--------------+
+                     | (first page  |
+                     |  unmapped)   |
+                     |              |
+                   0 +--------------+
+                  Memory layout of hello     special symbols
+                        executable
 \end{verbatim}
 \caption{Memory layout of [[hello]] and special symbols}
 \label{fig:special-symbols}
@@ -7596,7 +7617,8 @@ but they do not take any space in the data or BSS section.
 In fact, the first global of the data section will have the same
 address than [[bdata]].
 %
-They are used only for their addresses, e.g. [[MOVW $etext(SB), R1]]. %$
+They are used only for their addresses in instructions
+such as [[MOVW $etext(SB), R1]]. %$
 The \plan kernel uses the addresses of those symbols
 to move itself in memory during the boot procedure (see the \book{Kernel}).
 \l show code?
