@@ -406,7 +406,7 @@ patch(void)
 
         if(p->to.type == D_BRANCH && p->cond != UP) {
             c = p->to.offset; // target pc
-            /*s: [[patch()]] find Prog reference q with pc == c */
+            /*s: [[patch()]] find Prog reference [[q]] with [[q->pc == c]] */
             for(q = firstp; q != P;) {
                 if((q->forwd != P) && (c >= q->forwd->pc)) {
                     q = q->forwd; // big jump
@@ -420,7 +420,7 @@ patch(void)
                 diag("branch out of range %ld\n%P", c, p);
                 p->to.type = D_NONE;
             }
-            /*e: [[patch()]] find Prog reference q with pc == c */
+            /*e: [[patch()]] find Prog reference [[q]] with [[q->pc == c]] */
             p->cond = q;
         }
     }
@@ -451,11 +451,11 @@ patch(void)
 void
 mkfwd(void)
 {
-    long cnt[LOG]; // length of arc at a certain level (constant)
+    long cnt[LOG]; // (length of arc)/LOG at a certain level (constant)
     long dwn[LOG]; // remaining elements to skip at a level (goes down)
     Prog *lst[LOG]; // past instruction saved at a level
     Prog *p;
-    int i;
+    int i; // level
 
     /*s: [[mkfwd()]] initializes cnt, dwn, lst */
     for(i=0; i<LOG; i++) {
@@ -476,7 +476,7 @@ mkfwd(void)
         /*e: adjust curtext when iterate over instructions p */
         p->forwd = P;
 
-        /*s: [[mkfwd()]] nested loops, add forward links from past p in lst to p */
+        /*s: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
         // first loop, the levels
         i--;
         if(i < 0)
@@ -491,7 +491,7 @@ mkfwd(void)
                 lst[i]->forwd = p; // link from past p to p
             lst[i] = p;
         }
-        /*e: [[mkfwd()]] nested loops, add forward links from past p in lst to p */
+        /*e: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
     }
 }
 /*e: function mkfwd */

@@ -52,7 +52,6 @@ noops(void)
             // fallthrough
         /*s: [[noops()]] first pass switch opcode ABL fallthrough */
         case AB:
-
         case ABEQ: case ABNE:
         case ABHS: case ABLO:
         case ABMI: case ABPL:
@@ -60,9 +59,7 @@ noops(void)
         case ABHI: case ABLS:
         case ABGE: case ABLT:
         case ABGT: case ABLE:
-
         case ABCASE:
-
             q1 = p->cond;
             if(q1 != P) {
                 while(q1->as == ANOP) {
