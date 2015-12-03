@@ -1,6 +1,6 @@
 /*s: assemblers/5a/a.h */
 #include "../aa/aa.h"
-#include <arm/5.out.h>
+#include <5.out.h>
 
 typedef	struct	Gen	Gen;
 
@@ -22,16 +22,16 @@ struct	Gen
     union {
         long	offset; // offset or lval or ...
         double	dval;
-        char	sval[8];
+        char	sval[NSNAME];
     };
-    // option<enum<Register>>, None = R_NONE
+    // option<enum<Register>> (None = R_NONE)
     short	reg; // abused also to store a size for DATA
 
     /*s: [[Gen]] other fields */
-    // option<ref<Sym>>, ref owned by hash
+    // option<ref<Sym>> (owner = hash)
     Sym*	sym;
     /*x: [[Gen]] other fields */
-    // option<enum<Sym_kind>>, None = N_NONE
+    // option<enum<Sym_kind>> (None = N_NONE)
     short	symkind;
     /*e: [[Gen]] other fields */
 };

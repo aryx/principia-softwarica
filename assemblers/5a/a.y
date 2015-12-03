@@ -11,7 +11,7 @@
  // and ...
  long   lval;    // for LCONST/LARITH/LREG/LCOND/...
  double dval;    // for LFCONST
- char   sval[8]; // for LSCONST
+ char   sval[NSNAME]; // for LSCONST
 
  /*s: union declaration other fields(arm) */
  Sym    *sym;    // for LNAME/LLAB/LVAR
@@ -280,11 +280,11 @@ gen:
   ximm
 | shift
 | reg
-/*x: gen rule */
+/*s: more gen rule */
 | ioreg
-/*x: gen rule */
+/*x: more gen rule */
 | name
-/*x: gen rule */
+/*x: more gen rule */
 | con '(' pointer ')'
  {
   $$ = nullgen;
@@ -293,22 +293,23 @@ gen:
   $$.symkind = $3;
   $$.offset = $1;
  }
-/*x: gen rule */
+/*x: more gen rule */
 | freg
-/*x: gen rule */
+/*x: more gen rule */
 | LFCR
  {
   $$ = nullgen;
   $$.type = D_FPCR;
   $$.reg = $1;
  }
-/*x: gen rule */
+/*x: more gen rule */
 | LPSR
  {
   $$ = nullgen;
   $$.type = D_PSR;
   $$.reg = $1;
  }
+/*e: more gen rule */
 /*e: gen rule */
 /*s: regi rule(arm) */
 regi:

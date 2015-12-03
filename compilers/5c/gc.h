@@ -2,7 +2,7 @@
 #include	"../cc/cc.h"
 
 #include	<common.out.h>
-#include	"arm/5.out.h"
+#include	<5.out.h>
 
 /*
  * 5c/arm

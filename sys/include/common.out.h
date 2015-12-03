@@ -1,1 +1,1 @@
-../../include/devel/output/common.out.h
+../../include/obj/common.out.h

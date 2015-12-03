@@ -1722,7 +1722,7 @@ Total & & & & 7900 \\
 \n same for include/exec/elf.h
 
 Another important file not included in Table~\ref{tab:code-orga}
-is [[include/arch/arm/5.out.h]]. It contains the
+is [[include/obj/5.out.h]]. It contains the
 definition of the ARM assembly opcodes used by [[5l]]. 
 \l also operand kind, and object file related DS.
 It is not included here
@@ -2287,7 +2287,7 @@ an {\em opcode} with possibly 1, 2, or 3 {\em operands}.
 %
 The [[Opcode]] type, [[Operand_kind]] type, and a few register
 aliases such as [[REGPC]], all used by [[5l]], are all defined in
-[[include/arch/arm/5.out.h]]. 
+[[include/obj/5.out.h]]. 
 Those types are fully described in the \book{Assembler}. 
 %
 {Dumpers} for those types are described in Appendix~\ref{sec:dumpers}
@@ -2310,7 +2310,7 @@ as opcodes for {\em virtual instructions} such as [[ARET]] and [[AMOVW]].
 \n and also D_REG? done a bit below.
 \l and also N_INTERN?
 
-[[include/arch/arm/5.out.h]] does not define an [[Operand]] type though
+[[include/obj/5.out.h]] does not define an [[Operand]] type though
 as the assembler and linker have slightly different needs for
 this data structure. Here is the [[Operand]] type used by [[5l]]:
 
@@ -2367,7 +2367,7 @@ We will see later though additional fields specific to the linker.
 Operands involving symbols use an [[Operand.sym]] field and
 the {\em symbol kind} is also stored in a [[Operand.symkind]] field,
 e.g. [[N_EXTERN]], [[N_PARAM]], [[N_LOCAL]] (which are
-enumerations defined also in [[include/arch/arm/5.out.h]]):
+enumerations defined also in [[include/obj/5.out.h]]):
 
 <<[[Adr]] other fields>>=
 // enum<Sym_kind>
@@ -3265,7 +3265,7 @@ zprg.to = zprg.from;
 %bug? and optab? should be null no? there is code using p->optab like oplook()
 
 All of the constants above, e.g. [[R_NONE]], are defined
-in [[include/arch/arm/5.out.h]].
+in [[include/obj/5.out.h]].
 %
 The [[AGOK]] (God Only Knows) opcode
 \l sure it means god Only Knows? 
@@ -4052,7 +4052,7 @@ See the \book{Assembler} if you need more explanations.
 |              | \      +-------------+      \|Operand kind |
 +--------------+  \--\  |  Condition  |       v-------------+
 | Files/lines  |      \ +-------------+
-|   history    |       \| AXXX Opcode |
+|   history    |       \| Axxx Opcode |
 |  (AHISTORY)  |        v-------------+
 +--------------+
 
@@ -8046,7 +8046,7 @@ Optab	optab[] =
     { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
 };
 @
-% AXXX at the end? why not ALAST instead?
+\l AXXX at the end? why not ALAST instead? and size 4??
 %old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
 
 % AXXX = sentinel, end marker, used in buildop().
@@ -8122,6 +8122,7 @@ struct	Oprange
 %old: was Oprang
 
 <<global oprange(arm)>>=
+// map<enum<Opcode>, Oprange>
 Oprange	oprange[ALAST];
 @
 
@@ -8232,6 +8233,46 @@ long	instoffset;
 
 
 
+\paragraph{[[D_CONST]]}
+% immediate constants constraints
+% ex of instr: ADD I, R1, R2
+
+<<[[aclass()]] switch type cases>>=
+case D_CONST:
+    switch(a->symkind) {
+    <<[[aclass()]] D_CONST case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+
+
+% Rotated, Negative, Large?
+<<[[Operand_class]] cases>>=
+C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
+C_NCON,		/* ~RCON */
+C_LCON,
+@
+%TODO: must impose order with other xCON?
+%dead: C_SCON,		/* 0xffff */
+%in the end NCON is not different from LCON when you look at optab,
+% so perhaps it could be removed.
+%note that LCON is more "general" than the other, see cmp() later.
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_NONE:
+    instoffset = a->offset;
+    if(a->reg != R_NONE) // when?
+        goto aconsize;
+
+    if(immrot(instoffset))
+        return C_RCON;
+    if(immrot(~instoffset))
+        return C_NCON;
+    return C_LCON;
+@
+
+
+
 \paragraph{[[D_OREG]]}
 % offsets constraints
 % ex of instr: MOVW OFF(R13), R2
@@ -8261,17 +8302,10 @@ C_LEXT,
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
 case N_EXTERN:
 case N_INTERN:
-    if(a->sym == nil || a->sym->name == nil) {
-        print("null sym external\n");
-        print("%D\n", a);
-        return C_GOK;
-    }
+    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>
     s = a->sym;
     t = s->type;
-    if(t == SNONE || t == SXREF) {
-        diag("undefined external: %s in %s", s->name, TNAME);
-        s->type = SDATA;
-    }
+    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>
     <<[[aclass()]] when D_OREG and external symbol and dlm>>
     instoffset = s->value + a->offset - BIG;
     t = immaddr(instoffset);
@@ -8280,6 +8314,22 @@ case N_INTERN:
         return immhalf(instoffset)? C_HEXT : C_SEXT;
     }
     return C_LEXT;
+@
+
+
+<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>=
+if(a->sym == nil || a->sym->name == nil) {
+    print("null sym external\n");
+    print("%D\n", a);
+    return C_GOK;
+}
+@
+
+<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>=
+if(t == SNONE || t == SXREF) {
+    diag("undefined external: %s in %s", s->name, TNAME);
+    s->type = SDATA;
+}
 @
 
 
@@ -8349,46 +8399,6 @@ case D_NONE:
 
 
 
-\paragraph{[[D_CONST]]}
-% immediate constants constraints
-% ex of instr: ADD I, R1, R2
-
-<<[[aclass()]] switch type cases>>=
-case D_CONST:
-    switch(a->symkind) {
-    <<[[aclass()]] D_CONST case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-
-
-% Rotated, Negative, Large?
-<<[[Operand_class]] cases>>=
-C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
-C_NCON,		/* ~RCON */
-C_LCON,
-@
-%TODO: must impose order with other xCON?
-%dead: C_SCON,		/* 0xffff */
-%in the end NCON is not different from LCON when you look at optab,
-% so perhaps it could be removed.
-%note that LCON is more "general" than the other, see cmp() later.
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_NONE:
-    instoffset = a->offset;
-    if(a->reg != R_NONE) // when?
-        goto aconsize;
-
-    if(immrot(instoffset))
-        return C_RCON;
-    if(immrot(~instoffset))
-        return C_NCON;
-    return C_LCON;
-@
-
-
-
 \paragraph{[[D_ADDR]]}
 %todo: D_ADDR?
 
@@ -8410,8 +8420,7 @@ C_RECON,
 case N_EXTERN:
 case N_INTERN:
     s = a->sym;
-    if(s == S) // no warning?
-        break;
+    <<[[aclass()]] D_CONST case, N_EXTERN case, sanity check s>>
     switch(s->type) {
     case STEXT: case SSTRING:
     case SUNDEF:
@@ -8458,7 +8467,10 @@ case N_INTERN:
 % BIG-BIG = 0 so use LCON for that
 
 
-
+<<[[aclass()]] D_CONST case, N_EXTERN case, sanity check s>>=
+if(s == S) // no warning?
+    break;
+@
 
 %todo: need that? when do we get the address of a local or parameter?
 % for which code we have those classes used??
@@ -8747,12 +8759,14 @@ immrot(ulong v)
     for(i=0; i<16; i++) {
         if((v & ~0xff) == 0)
             return (i<<8) | v | (1<<25);
-        v = (v<<2) | (v>>30);
+        v = (v<<2) | 
+            (v>>30);
     }
     return 0;
 }
 @
 % >> >>
+%old: last instruction put on separate lines otherwise noweb issue
 
 % there is code like
 %    o1 |= immrot(instoffset);
@@ -10484,6 +10498,7 @@ if(!debug['s']) {
     asmsym();
     DBG("%5.2f pc\n", cputime());
     asmlc();
+
     <<[[asmb()]] if dynamic module, call asmdyn()>>
     cflush();
 }
@@ -12180,6 +12195,7 @@ grow(Reloc *r)
 
 
 \subsection{Relocatable address, [[C_ADDR]]}
+% rename? C_RELOC ? so can have D_ADDR and C_ADDR used for addresses?
 
 <<[[Operand_class]] cases>>=
 C_ADDR,		/* relocatable address */

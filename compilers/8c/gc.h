@@ -2,7 +2,7 @@
 #include	"../cc/cc.h"
 
 #include	<common.out.h>
-#include	<386/8.out.h>
+#include	<8.out.h>
 
 /*
  * 8c/386

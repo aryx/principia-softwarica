@@ -145,7 +145,7 @@ enum Opcode
     /*x: [[Opcode]] cases, branching opcodes */
     ABL, // =~ CALL, Branch and Link
     /*x: [[Opcode]] cases, branching opcodes */
-    ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(SP), R15
+    ARET, // VIRTUAL, transformed in B (R14) or MOV xxx(R13), R15
     /*e: [[Opcode]] cases, branching opcodes */
     // ---------------------------------------------------------
     // System opcodes
@@ -205,9 +205,6 @@ enum Opcode
     ASIGNAME,
     /*x: [[Opcode]] cases, pseudo opcodes */
     AGOK,
-    /*x: [[Opcode]] cases, pseudo opcodes */
-    ADYNT,
-    AINIT,
     /*e: [[Opcode]] cases, pseudo opcodes */
 
     ALAST,
@@ -248,7 +245,7 @@ enum Sym_kind {
     N_LOCAL,  // stack values (from SP)
     N_PARAM,  // parameter (from FP)
     /*s: [[Sym_kind]] cases */
-    N_INTERN, // local/static entities (from SB)
+    N_INTERN, // private (aka static) entities (from SB)
     /*x: [[Sym_kind]] cases */
     D_FILE,
     /*x: [[Sym_kind]] cases */

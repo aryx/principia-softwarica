@@ -173,7 +173,7 @@ assemble(char *infile)
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
     /*e: [[assemble()]] init Dlist after pinit */
-    yyparse(); // calls outcode() but does nothing when pass == 1
+    yyparse(); // calls outcode() but does almost nothing when pass == 1
 
     if(nerrors) {
         cclean();

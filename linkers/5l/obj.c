@@ -236,9 +236,9 @@ main(int argc, char *argv[])
     zprg.to = zprg.from;
     /*e: [[main()]] set zprg(arm) */
     /*x: [[main()]] initialize globals(arm) */
-    buildop();
-    /*x: [[main()]] initialize globals(arm) */
     nuxiinit(); // ???
+    /*x: [[main()]] initialize globals(arm) */
+    buildop();
     /*x: [[main()]] initialize globals(arm) */
     cbp = buf.obuf;
     cbc = sizeof(buf.obuf);
@@ -325,6 +325,7 @@ out:
         Bprint(&bso, "%5.2f cpu time\n", cputime());
         Bprint(&bso, "%ld symbols\n", nsymbol);
         Bprint(&bso, "%ld memory used\n", thunk);
+
         Bprint(&bso, "%d sizeof adr\n", sizeof(Adr));
         Bprint(&bso, "%d sizeof prog\n", sizeof(Prog));
         Bflush(&bso);
@@ -1151,6 +1152,7 @@ loop:
         p->pc = pc;
         pc++;
 
+        /*s: [[ldobj()]] in switch opcode ATEXT case, populate textp */
         //add_queue(textp, etextp, p)
         if(textp == P) {
             textp = p;
@@ -1159,6 +1161,7 @@ loop:
             etextp->cond = p;
             etextp = p;
         }
+        /*e: [[ldobj()]] in switch opcode ATEXT case, populate textp */
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AGLOBL:
@@ -1591,18 +1594,19 @@ nuxiinit(void)
         if(i < 1)
             inuxi1[i] = c;
         inuxi4[i] = c;
+        /*s: [[nuxiinit()]] in loop i, fnuxi initialisation */
         fnuxi4[i] = c;
-
         if(debug['d'] == 0){
             fnuxi8[i] = c;
             fnuxi8[i+4] = c+4;
         }
         else{
-            fnuxi8[i] = c+4;		/* ms word first, then ls, even in little endian mode */
+            fnuxi8[i] = c+4; /* ms word first, then ls, even in little endian mode */
             fnuxi8[i+4] = c;
         }
+        /*e: [[nuxiinit()]] in loop i, fnuxi initialisation */
     }
-
+    /*s: [[nuxiinit()]] debug */
     if(debug['v']) {
         Bprint(&bso, "inuxi = ");
         for(i=0; i<1; i++)
@@ -1621,6 +1625,7 @@ nuxiinit(void)
             Bprint(&bso, "%d", fnuxi8[i]);
         Bprint(&bso, "\n");
     }
+    /*e: [[nuxiinit()]] debug */
     Bflush(&bso);
 }
 /*e: function nuxiinit(arm) */

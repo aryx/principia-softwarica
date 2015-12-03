@@ -4,7 +4,7 @@
 #include	<bio.h>
 
 #include	<common.out.h>
-#include	<arm/5.out.h>
+#include	<5.out.h>
 
 #include	"../8l/elf.h"
 
@@ -97,12 +97,12 @@ struct	Prog
 
     // Extra
     /*s: [[Prog]] extra fields */
+    // option<ref<Prog>> for branch instructions
+    // (abused too for list<ref<Prog>> (from = textp for TEXT instructions))
+    Prog*	cond;
+    /*x: [[Prog]] extra fields */
     // list<ref<Prog>> (from = firstp or datap)
     Prog*	link;
-    /*x: [[Prog]] extra fields */
-    // option<ref<Prog>> for branch instructions
-    // list<ref<Prog>> (from = textp for TEXT instructions)
-    Prog*	cond;
     /*e: [[Prog]] extra fields */
 };
 /*e: struct Prog(arm) */
@@ -171,14 +171,14 @@ struct	Auto
 /*s: struct Optab(arm) */
 struct	Optab
 {
-    // enum<Opcode> from 5.out.h, (the opcode is the representant of a range)
+    // enum<Opcode> (the opcode is the representant of a range)
     byte	as;
 
-    // enum<Cxxx>, possible operand_kind/class for first operand
+    // enum<Operand_class>, possible operand class for first operand
     short	a1;
-    // enum<Cxxx>, possible operand_kind/class for second operand
+    // enum<Operand_class>, possible operand class for second operand
     short	a2;
-    // enum<Cxxx>, possible operand_kind/class for third operand
+    // enum<Operand_class>, possible operand class for third operand
     short	a3;
 
     // idx for the code generator, see the giant switch in asmout()
@@ -198,9 +198,9 @@ struct	Optab
 /*s: struct Oprange(arm) */
 struct	Oprange
 {
-    //index in sorted optab global
+    //index in (sorted) optab
     Optab*	start;
-    //index in sorted optab global
+    //index in (sorted) optab
     Optab*	stop;
 };
 /*e: struct Oprange(arm) */
@@ -253,6 +253,10 @@ enum Operand_class {
     C_BRANCH,
 
     /*s: [[Operand_class]] cases */
+    C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
+    C_NCON,		/* ~RCON */
+    C_LCON,
+    /*x: [[Operand_class]] cases */
     C_HEXT,
     /*s: [[Operand_class]] cases, in C_xEXT, float cases */
     C_FEXT,
@@ -279,10 +283,6 @@ enum Operand_class {
 
     C_ROREG,
     C_SROREG,	/* both S and R */
-    /*x: [[Operand_class]] cases */
-    C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
-    C_NCON,		/* ~RCON */
-    C_LCON,
     /*x: [[Operand_class]] cases */
     C_RECON,
     /*x: [[Operand_class]] cases */

@@ -24,8 +24,8 @@ SRC_VIEWS= \
   aa/lexbody.c\
   aa/macbody.c\
   \
-  ../include/devel/output/common.out.h\
-  ../include/arch/arm/5.out.h\
+  ../include/obj/common.out.h\
+  ../include/obj/5.out.h\
   \
   5a/a.h\
   5a/globals.c\
@@ -39,7 +39,7 @@ SRC_VIEWS= \
 
 # temporarily split from SRC_VIEWS for 'make loc'
 XX=\
-  ../include/arch/386/8.out.h\
+  ../include/obj/8.out.h\
   misc/data2s.c\
   8a/a.h\
   8a/globals.c\

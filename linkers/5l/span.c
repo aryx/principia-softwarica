@@ -258,7 +258,8 @@ immrot(ulong v)
     for(i=0; i<16; i++) {
         if((v & ~0xff) == 0)
             return (i<<8) | v | (1<<25);
-        v = (v<<2) | (v>>30);
+        v = (v<<2) | 
+            (v>>30);
     }
     return 0;
 }
@@ -327,22 +328,83 @@ aclass(Adr *a)
         return C_BRANCH;
 
     /*s: [[aclass()]] switch type cases */
+    case D_CONST:
+        switch(a->symkind) {
+        /*s: [[aclass()]] D_CONST case, switch symkind cases */
+        case D_NONE:
+            instoffset = a->offset;
+            if(a->reg != R_NONE) // when?
+                goto aconsize;
+
+            if(immrot(instoffset))
+                return C_RCON;
+            if(immrot(~instoffset))
+                return C_NCON;
+            return C_LCON;
+        /*x: [[aclass()]] D_CONST case, switch symkind cases */
+        case N_EXTERN:
+        case N_INTERN:
+            s = a->sym;
+            /*s: [[aclass()]] D_CONST case, N_EXTERN case, sanity check s */
+            if(s == S) // no warning?
+                break;
+            /*e: [[aclass()]] D_CONST case, N_EXTERN case, sanity check s */
+            switch(s->type) {
+            case STEXT: case SSTRING:
+            case SUNDEF:
+                instoffset = s->value + a->offset;
+                return C_LCON; // etext is stable
+            case SNONE: case SXREF:
+                diag("undefined external: %s in %s", s->name, TNAME);
+                s->type = SDATA;
+                // Fall through
+            case SDATA: case SBSS: case SDATA1:
+                if(!dlm) {
+                    instoffset = s->value + a->offset - BIG;
+                    if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
+                        return C_RECON;
+                }
+                // else
+                instoffset = s->value + a->offset + INITDAT;
+                return C_LCON;
+            }
+            diag("unknown section for %s", s->name);
+            break;
+        /*x: [[aclass()]] D_CONST case, switch symkind cases */
+        case N_LOCAL:
+            instoffset = autosize + a->offset;
+            goto aconsize;
+        /*x: [[aclass()]] D_CONST case, switch symkind cases */
+        case N_PARAM:
+            instoffset = autosize + a->offset + 4L;
+            goto aconsize;
+        /*x: [[aclass()]] D_CONST case, switch symkind cases */
+        aconsize:
+            return immrot(instoffset)? C_RACON : C_LACON;
+        /*e: [[aclass()]] D_CONST case, switch symkind cases */
+        }
+        return C_GOK;
+    /*x: [[aclass()]] switch type cases */
     case D_OREG:
         switch(a->symkind) {
         /*s: [[aclass()]] D_OREG case, switch symkind cases */
         case N_EXTERN:
         case N_INTERN:
+            /*s: [[aclass()]] D_OREG case, N_EXTERN case, sanity check a */
             if(a->sym == nil || a->sym->name == nil) {
                 print("null sym external\n");
                 print("%D\n", a);
                 return C_GOK;
             }
+            /*e: [[aclass()]] D_OREG case, N_EXTERN case, sanity check a */
             s = a->sym;
             t = s->type;
+            /*s: [[aclass()]] D_OREG case, N_EXTERN case, sanity check t */
             if(t == SNONE || t == SXREF) {
                 diag("undefined external: %s in %s", s->name, TNAME);
                 s->type = SDATA;
             }
+            /*e: [[aclass()]] D_OREG case, N_EXTERN case, sanity check t */
             /*s: [[aclass()]] when D_OREG and external symbol and dlm */
             if(dlm) {
                 switch(t) {
@@ -415,61 +477,6 @@ aclass(Adr *a)
                 return C_ROREG;
             return C_LOREG;
         /*e: [[aclass()]] D_OREG case, switch symkind cases */
-        }
-        return C_GOK;
-    /*x: [[aclass()]] switch type cases */
-    case D_CONST:
-        switch(a->symkind) {
-        /*s: [[aclass()]] D_CONST case, switch symkind cases */
-        case D_NONE:
-            instoffset = a->offset;
-            if(a->reg != R_NONE) // when?
-                goto aconsize;
-
-            if(immrot(instoffset))
-                return C_RCON;
-            if(immrot(~instoffset))
-                return C_NCON;
-            return C_LCON;
-        /*x: [[aclass()]] D_CONST case, switch symkind cases */
-        case N_EXTERN:
-        case N_INTERN:
-            s = a->sym;
-            if(s == S) // no warning?
-                break;
-            switch(s->type) {
-            case STEXT: case SSTRING:
-            case SUNDEF:
-                instoffset = s->value + a->offset;
-                return C_LCON; // etext is stable
-            case SNONE: case SXREF:
-                diag("undefined external: %s in %s", s->name, TNAME);
-                s->type = SDATA;
-                // Fall through
-            case SDATA: case SBSS: case SDATA1:
-                if(!dlm) {
-                    instoffset = s->value + a->offset - BIG;
-                    if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
-                        return C_RECON;
-                }
-                // else
-                instoffset = s->value + a->offset + INITDAT;
-                return C_LCON;
-            }
-            diag("unknown section for %s", s->name);
-            break;
-        /*x: [[aclass()]] D_CONST case, switch symkind cases */
-        case N_LOCAL:
-            instoffset = autosize + a->offset;
-            goto aconsize;
-        /*x: [[aclass()]] D_CONST case, switch symkind cases */
-        case N_PARAM:
-            instoffset = autosize + a->offset + 4L;
-            goto aconsize;
-        /*x: [[aclass()]] D_CONST case, switch symkind cases */
-        aconsize:
-            return immrot(instoffset)? C_RACON : C_LACON;
-        /*e: [[aclass()]] D_CONST case, switch symkind cases */
         }
         return C_GOK;
     /*x: [[aclass()]] switch type cases */

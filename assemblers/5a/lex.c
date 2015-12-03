@@ -305,9 +305,9 @@ yylex(void)
     /*s: [[yylex()]] locals */
     int c1;
     /*x: [[yylex()]] locals */
-    // ref<char>, pointer in symb
+    // ref<char> (target = symb)
     char *cp;
-    // ref<Symbol>, owned by hash
+    // ref<Symbol> (owner = hash)
     Sym *s;
     /*e: [[yylex()]] locals */
 
@@ -323,7 +323,7 @@ l0:
 l1:
     if(c == EOF) {
         peekc = EOF; // needed?
-        return -1;
+        return EOF;
     }
 
     if(isspace(c)) {

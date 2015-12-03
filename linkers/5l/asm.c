@@ -154,19 +154,18 @@ asmb(void)
 
     if(!debug['s']) {
         switch(HEADTYPE) {
+        /*s: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         case H_PLAN9:
             OFFSET = HEADR+textsize+datsize;
             seek(cout, OFFSET, SEEK__START);
             break;
-        /*s: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
+        /*x: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         case H_ELF:
             break;
         /*e: [[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm) */
         }
-
         DBG("%5.2f sym\n", cputime());
         asmsym();
-
         DBG("%5.2f pc\n", cputime());
         asmlc();
 
@@ -174,7 +173,6 @@ asmb(void)
         if(dlm)
             asmdyn();
         /*e: [[asmb()]] if dynamic module, call asmdyn() */
-
         cflush();
     }
     else {
@@ -351,10 +349,12 @@ cflush(void)
 void
 asmsym(void)
 {
-    Prog *p;
-    Auto *a;
     Sym *s;
     int h;
+    Prog *p;
+    /*s: [[asmsym()]] other locals */
+    Auto *a;
+    /*e: [[asmsym()]] other locals */
 
     s = lookup("etext", 0);
     if(s->type == STEXT)
@@ -369,14 +369,15 @@ asmsym(void)
             case SBSS:
                 putsymb(s->name, 'B', s->value+INITDAT, s->version);
                 continue;
-
-            case SSTRING:
-                putsymb(s->name, 'T', s->value, s->version);
-                continue;
-
+            /*s: [[asmsym()]] in symbol table iteration, switch section cases */
             case SFILE:
                 putsymb(s->name, 'f', s->value, s->version);
                 continue;
+            /*x: [[asmsym()]] in symbol table iteration, switch section cases */
+            case SSTRING:
+                putsymb(s->name, 'T', s->value, s->version);
+                continue;
+            /*e: [[asmsym()]] in symbol table iteration, switch section cases */
             }
 
     for(p=textp; p!=P; p=p->cond) {
@@ -562,15 +563,22 @@ asmlc(void)
 void
 datblk(long s, long n, bool sstring)
 {
-    Prog *p;
-    long a, l;
-    int i, c;
+    Prog *p; 
+    // absolute address of a DATA
+    long a; // ulong?
+    // size of a DATA
+    int c; 
+    // index in output buffer for a DATA
+    long l;
+    // index in value of a DATA
+    int i;
     /*s: [[datblk()]] other locals */
     long j;
     /*x: [[datblk()]] other locals */
-    Sym *v;
     char *cast;
     long d;
+    /*x: [[datblk()]] other locals */
+    Sym *v;
     /*x: [[datblk()]] other locals */
     long fl;
     /*e: [[datblk()]] other locals */
@@ -578,15 +586,17 @@ datblk(long s, long n, bool sstring)
     memset(buf.dbuf, 0, n+Dbufslop);
 
     for(p = datap; p != P; p = p->link) {
-
+        /*s: [[datblk()]] if sstring might continue */
         if(sstring != (p->from.sym->type == SSTRING))
             continue;
-
+        /*e: [[datblk()]] if sstring might continue */
+        // else
         curp = p;
 
         a = p->from.sym->value + p->from.offset;
         l = a - s;
         c = p->reg;
+
         i = 0;
         if(l < 0) {
             if(l+c <= 0)
@@ -598,14 +608,15 @@ datblk(long s, long n, bool sstring)
         }
         if(l >= n)
             continue;
+        // else
 
         /*s: [[datblk()]] sanity check multiple initialization */
-            for(j=l+(c-i)-1; j>=l; j--)
-                if(buf.dbuf[j]) {
-                    print("%P\n", p);
-                    diag("multiple initialization");
-                    break;
-                }
+        for(j=l+(c-i)-1; j>=l; j--)
+            if(buf.dbuf[j]) {
+                print("%P\n", p);
+                diag("multiple initialization");
+                break;
+            }
         /*e: [[datblk()]] sanity check multiple initialization */
 
         switch(p->to.type) {
@@ -619,23 +630,30 @@ datblk(long s, long n, bool sstring)
         /*x: [[datblk()]] switch type of destination cases */
         case D_CONST:
             d = p->to.offset;
+            /*s: [[datblk()]] in D_CONST case, if symbol address */
             v = p->to.sym;
             if(v) {
                 switch(v->type) {
-                case SUNDEF:
-                    ckoff(v, d);
+                /*s: [[datblk()]] in D_CONST case, switch symbol type cases */
                 case STEXT: case SSTRING:
                     d += p->to.sym->value;
                     break;
-                case SDATA:
-                case SBSS:
+                case SDATA: case SBSS:
                     d += p->to.sym->value + INITDAT;
+                    break;
+                /*x: [[datblk()]] in D_CONST case, switch symbol type cases */
+                case SUNDEF:
+                    ckoff(v, d);
+                    d += p->to.sym->value;
+                    break;
+                /*e: [[datblk()]] in D_CONST case, switch symbol type cases */
                 }
                 /*s: [[datblk()]] if dynamic module(arm) */
                 if(dlm)
                     dynreloc(v, a+INITDAT, 1);
                 /*e: [[datblk()]] if dynamic module(arm) */
             }
+            /*e: [[datblk()]] in D_CONST case, if symbol address */
             cast = (char*)&d;
 
             switch(c) {

@@ -157,6 +157,7 @@ long	nsymbol;
 long	instoffset;
 /*e: global instoffset(arm) */
 /*s: global oprange(arm) */
+// map<enum<Opcode>, Oprange>
 Oprange	oprange[ALAST];
 /*e: global oprange(arm) */
 /*s: global outfile */

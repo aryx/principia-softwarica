@@ -2,7 +2,7 @@
 #include "aa.h"
 
 /*s: global hash */
-// hash<string, ref_own<Sym>>, (next in bucket = Sym.link)
+// hash<string, ref_own<Sym>> (next = Sym.link in bucket)
 Sym*	hash[NHASH];
 /*e: global hash */
 /*s: global pc */
@@ -34,11 +34,11 @@ char*	thestring;
 Io*	iostack = I;
 /*e: global iostack */
 /*s: global iofree */
-// list<IO>, next = IO.link
+// list<ref<Io>> (next = Io.link)
 Io*	iofree = I;
 /*e: global iofree */
 /*s: global ionext */
-// option<ref<IO>>
+// option<ref<Io>>
 Io*	ionext;
 /*e: global ionext */
 /*s: global fi */
@@ -49,7 +49,7 @@ struct Fi fi;
 char	symb[NSYMB];
 /*e: global symb */
 /*s: global peekc */
-// option<Rune>, None = IGN
+// option<Rune> (None = IGN)
 int	peekc = IGN;
 /*e: global peekc */
 
@@ -67,7 +67,7 @@ int	nDlist;
 /*e: global nDlist */
 
 /*s: global h */
-// array<ref<Sym> * enum<Sym_kind>>
+// array<Htab>
 struct Htab h[NSYM];
 /*e: global h */
 /*s: global symcounter */
@@ -78,11 +78,11 @@ int	symcounter;
 long	lineno;
 /*e: global lineno */
 /*s: global hist */
-// list<ref_own<Hist>>, next = Hist.link
+// list<ref_own<Hist>> (next = Hist.link)
 Hist*	hist;
 /*e: global hist */
 /*s: global ehist */
-// ref<Hist>, end of list of hist
+// ref<Hist> (end from = hist)
 Hist*	ehist;
 /*e: global ehist */
 

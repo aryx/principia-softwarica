@@ -21,7 +21,7 @@ SRC_ORIG=Linker.nw Linker_extra.nw Linker_x86.nw
 SRC_VIEWS= \
   ../include/exec/a.out.h\
   ../include/exec/elf.h\
-  ../include/devel/output/ar.h\
+  ../include/obj/ar.h\
   5l/l.h\
   5l/globals.c\
   5l/optab.c\

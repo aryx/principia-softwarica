@@ -78,7 +78,7 @@ struct	Sym
     int	symidx;
     /*e: [[Sym]] identifier fields */
     /*s: [[Sym]] macro fields */
-    //option<string>, for '#define FOO xxx' expansion
+    //option<string>  for '#define FOO xxx' expansion
     char*	macro;
     /*e: [[Sym]] macro fields */
     /*s: [[Sym]] token fields */
@@ -90,7 +90,7 @@ struct	Sym
     // Extra
     // ---------------------------------------------------------
     /*s: [[Sym]] extra fields */
-    // list<ref<Sym>> (next = Sym.link) bucket of hashtbl 'hash'
+    // list<ref<Sym>> (from = hash)
     Sym*	link;
     /*e: [[Sym]] extra fields */
 };
@@ -102,10 +102,10 @@ struct	Sym
 /*s: struct Fi */
 struct Fi
 {
-    // ref<char>, pointer in Io.b
+    // ref<char> (target = Io.b)
     char*	p;
     // remaining characters in Io.b to read
-    int	c;
+    int		c;
 };
 /*e: struct Fi */
 extern struct Fi fi;
@@ -113,18 +113,18 @@ extern struct Fi fi;
 /*s: struct Io */
 struct	Io
 {
-    // option<fdt>, None = FD_NONE
+    // option<fdt> (None = FD_NONE)
     fdt	f;
     /*s: [[Io]] buffer fields */
     char	b[BUFSIZ];
     /*x: [[Io]] buffer fields */
-    // like Fi, saved pointers in IO.b
+    // like Fi, saved pointers in Io.b
     char*	p;
     short	c;
     /*e: [[Io]] buffer fields */
     // Extra
     /*s: [[Io]] extra fields */
-    // list<ref_own<Io>>, head = iostack (or iofree)
+    // list<ref_own<Io>> (from = iostack or iofree)
     Io*	link;
     /*e: [[Io]] extra fields */
 };
@@ -140,7 +140,7 @@ struct	Io
 /*s: struct Htab */
 struct Htab
 {
-    // ref<Sym>>
+    // option<ref<Sym>>>
     Sym*	sym;
     //enum<Sym_kind>
     short	symkind;
@@ -162,7 +162,7 @@ struct	Hist
 
     // Extra
     /*s: [[Hist]] extra fields */
-    // list<ref<Hist>> from hist
+    // list<ref<Hist>> (from = hist)
     Hist*	link;
     /*e: [[Hist]] extra fields */
 };

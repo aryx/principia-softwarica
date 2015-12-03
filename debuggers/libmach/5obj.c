@@ -7,7 +7,7 @@
 #include <bio.h>
 #include <mach.h>
 
-#include "arm/5.out.h"
+#include <5.out.h>
 #include "obj.h"
 
 typedef struct Addr	Addr;
