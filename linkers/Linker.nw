@@ -1815,7 +1815,7 @@ its object code in memory, which is mostly a {\em list of instructions}.
 %
 Doing so, [[ldobj()]] modifies also the globals [[firstp]] and [[datap]] 
 containing respectively 
-\t rename firstp to codep
+\t rename firstp to codep, or even codei
 the list of {code instructions} and {data instructions}.
 \n also [[textp]] and the list of {procedures}, but less important now.
 Thus, all the code and data in the
@@ -2432,7 +2432,7 @@ struct	Prog
 %assembler: similar to the arguments of outcode():
 %  - as (opcode), from (g1), to (g2), reg, scond, and
 %    line field was a lineno global
-%  - but some new fields: pc, mark
+%  - but some new fields: pc, mark, cond, forwd
 \l could rename cond to pcond and AB to AJMP and could factorize
 \l  more code with x86
 \n pseudo-opcode like ATEXT have operands too; from abused to store proc names
@@ -2505,7 +2505,19 @@ a {\em real program counter} which will be a multiple of 4 as
 %dup: overview/5l-a
 the ARM uses fixed-length instructions of 4 bytes.
 
-\t Instr.cond here!
+
+Later in the linking process, another field, [[Instr.cond]],
+will be used to build a {\em graph of instruction}. 
+Branching instructions will have their [[Instr.cond]] field points to the
+target instruction.
+
+<<[[Prog]] extra fields>>=
+// option<ref<Prog>> for branch instructions
+// (abused too for list<ref<Prog>> (from = textp for TEXT instructions))
+Prog*	cond;
+@
+\l called pcond I think in x86, could choose same name
+
 
 \label{sec:mark}
 Finally, the field below is used by different algorithms to
@@ -2621,45 +2633,6 @@ in the symbol table.
 Thanks to [[firstp]] and [[datap]] all the code and
 data instructions are separated in different {\em sections}.
 
-\subsection{Procedure declarations, [[textp/etextp]]}
-\l used by follow and asmsym, so maybe could be put later?
-\l  would be better cos could also introduce Instr.cond differently
-
-Another pair of globals keeps track of the 
-list of procedures (the [[TEXT]] pseudo-instructions):
-\l what for? asmsym, follow()
-
-<<global textp>>=
-// list<ref<Prog>> (next = Prog.cond)
-Prog*	textp = P;
-@
-<<global etextp>>=
-// ref<Prog> (end from = textp)
-Prog*	etextp = P;
-@
-\n seems dead but not, used to link textp in right order
-
-The procedure instructions are chained together with
-another field of [[Instr]]:
-
-<<[[Prog]] extra fields>>=
-// option<ref<Prog>> for branch instructions
-// list<ref<Prog>> (from = textp for TEXT instructions)
-Prog*	cond;
-@
-\l called pcond I think in x86, could choose same name
-\t mv before!!
-
-Later during the linking process, this field will be used
-to build a {\em graph of instruction}. Branching instructions
-will have their [[Instr.cond]] field points to the
-target instruction.
-
-
-
-Note that the instructions in the list [[textp/etextp]]
-are a subset of the list of instructions in [[firstp/lastp]].
-
 
 \section{Current instructions, [[curtext/curp]]}
 
@@ -2727,6 +2700,9 @@ char	*noname		= "<none>";
 
 %\section{[[Buf]] and [[buf]]}?
 %hmm maybe better in appendix or later
+
+%\section{[[textp/etextp]]}
+% used only by asmsym so later
 
 %\section{[[pc]]}?
 
@@ -3374,7 +3350,7 @@ to [[ldboj()]] which loads in memory one (opened) object file.
 Chapter~\ref{chap:loading-objects} will describe [[ldobj()]].
 
 \l essentially modify which globals?
-\l  - should modify firstp! and textp, datap, lastp, etc
+\l  - should modify firstp! and datap, lastp, textp, etc
 \l  - will modify libraryp probably, the cool pragma "autolib"
 \l    which is why objfile() must be called before loadlib()
 
@@ -4651,14 +4627,7 @@ case ATEXT:
     p->pc = pc;
     pc++;
 
-    //add_queue(textp, etextp, p)
-    if(textp == P) {
-        textp = p;
-        etextp = p;
-    } else {
-        etextp->cond = p;
-        etextp = p;
-    }
+    <<[[ldobj()]] in switch opcode ATEXT case, populate textp>>
     break;
 @
 %$
@@ -4666,8 +4635,9 @@ case ATEXT:
 
 The code is similar to the default case we have seen in 
 the previous section.
-In addition, the list of procedures in [[textp]] is updated
-and the section and value {properties} of the procedure symbol
+In addition, 
+%the list of procedures in [[textp]] is updated and
+the section and value {properties} of the procedure symbol
 are modified. In particular, 
 %dup: overview/soft-archi core-ds/symbol
 [[Sym.value]] contains now
@@ -10409,7 +10379,7 @@ find1(long l, int c)
 
 % cooperation of 5a, 5c, and now last piece: 5l.
 
-% But then db has awesome information!
+% Then db has awesome information!
 % in db doing $C  dumps the stacktrace with parameters values! and locals!
 %  ex:
 %  caml_main(argv=...) /home/pad/../main.c called from main+f (/home/pad/...)
@@ -10442,7 +10412,6 @@ if(!debug['s']) {
     asmlc();
 
     <<[[asmb()]] if dynamic module, call asmdyn()>>
-
     cflush();
 }
 else {
@@ -10453,7 +10422,7 @@ else {
 
 
 
-\section{Executable symbol table, [[asmsym()]]}
+\section{Executable symbol table}
 
 % have seen object file symbol table, and also symbol table of 5l in memory,
 % now executable symbol table.
@@ -10464,10 +10433,11 @@ long	symsize;
 @
 % for the a.out.h header
 
-
+\subsection{Symbol table format}
 
 % FIGURE? with format?
 
+\subsection{[[asmsym()]]}
 
 <<function asmsym(arm)>>=
 /// main -> asmb -> <>
@@ -10522,6 +10492,7 @@ asmsym(void)
     }
 }
 @
+\l aspectize SSTRING, SFILE
 %old: 
 % || s->type == SLEAF
 %            if(s->type == STEXT)
@@ -10534,6 +10505,7 @@ asmsym(void)
 %                continue;
 
 
+\subsection{[[putsymb()]]}
 
 <<function putsymb>>=
 void
@@ -10562,8 +10534,48 @@ putsymb(char *s, int t, long v, int ver)
 @
 %>>
 
-\section{Stack variables symbols}
+
+
+\subsection{Procedure declarations, [[textp/etextp]]}
+\l used by follow too ( and asmsym above)
+
+A pair of globals keeps track of the 
+list of procedures (the [[TEXT]] pseudo-instructions):
+\l what for? asmsym, follow()
+
+<<global textp>>=
+// list<ref<Prog>> (next = Prog.cond)
+Prog*	textp = P;
+@
+<<global etextp>>=
+// ref<Prog> (end from = textp)
+Prog*	etextp = P;
+@
+\n seems dead but not, used to link textp in right order
+
+The procedure instructions are chained together 
+by (ab)using [[Instr.cond]]:
+
+<<[[ldobj()]] in switch opcode ATEXT case, populate textp>>=
+//add_queue(textp, etextp, p)
+if(textp == P) {
+    textp = p;
+    etextp = p;
+} else {
+    etextp->cond = p;
+    etextp = p;
+}
+@
+
+Note that the instructions in the list [[textp/etextp]]
+are a subset of the list of instructions in [[firstp/lastp]].
+
+
+
+
+\subsection{Stack variables symbols}
 \l frame?
+\l put as subsection of previous section?
 
 %trans:
 % few other things done by ldobj(), regarding stack variables,
@@ -10579,7 +10591,7 @@ putsymb(char *s, int t, long v, int ver)
 %a 00000004 i
 %p 00000000 f
 
-\subsection{[[Auto]]}
+\subsubsection{[[Auto]]}
 
 Operands involving parameters and local variables, 
 which are really variables both stored in the {\em stack},
@@ -10635,7 +10647,7 @@ Auto*	link;
 @
 
 
-\subsection{[[curauto]]}
+\subsubsection{[[curauto]]}
 
 % another global for set of stack variables
 
@@ -10709,7 +10721,7 @@ if(curtext != P) {
 @
 
 
-\subsection{Frame symbols}
+\subsubsection{Frame symbols}
 
 <<[[asmsym()]] frame symbols>>=
 /* frame, auto and param after */
@@ -10723,7 +10735,9 @@ for(a=p->to.autom; a; a=a->link)
 @
 
 
-\section{File and line information in objects, [[AHISTORY]]}
+\section{File and line information}
+
+\subsection{File and line information in objects, [[AHISTORY]]}
 \label{sec:lineno}
 
 % say chapter in \book{Assembler}. global line number after
@@ -10902,9 +10916,9 @@ out:
 
 
 
-\section{File and line information in executables}
+\subsection{File and line information in executables}
 
-\subsection{Filename symbols}
+\subsubsection{Filename symbols}
 
 % why they are shoved in to.autom with locals and params? a bit ugly
 <<[[asmsym()]] call putsymb for filenames>>=
@@ -10930,7 +10944,7 @@ if(t == 'z' || t == 'Z') {
 @
 
 
-\subsection{Line table, [[asmlc()]]}
+\subsubsection{Line table, [[asmlc()]]}
 
 % lc? line count?
 <<global lcsize>>=
