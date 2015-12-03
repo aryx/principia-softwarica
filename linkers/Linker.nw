@@ -214,6 +214,7 @@ to a specific binary instruction?
  %ocaml: to give a hint on how rewriting C in OCaml could improve things
  %alt: alternative techniques
  %old: for original code I changed/removed to be clearer
+ %dead: dead code removed
  %toc: %trans: %dup: %example:
 
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
@@ -862,6 +863,9 @@ For more information on the principles of linkers and loaders
 \l and dynamic linking?
 we recommend to read {\em Linkers and Loaders}~\cite{ll} which
 is entired dedicated to the topic.
+
+
+
 \l many post on linkers or executables, show it is a missing part of curriculum:
 % - http://eli.thegreenplace.net/2012/08/13/how-statically-linked-programs-run-on-linux/
 % - http://dbp-consulting.com/tutorials/debugging/linuxProgramStartup.html
@@ -1512,7 +1516,7 @@ struct	Exec
     long	pcsz;		/* size of pc/line number table */
 };
 @
-%old: _unused was actually:
+%dead: _unused was actually:
 %  // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
 %  long	spsz;		/* size of pc/sp offset table */
 
@@ -1567,7 +1571,6 @@ is enabled as explained in Chapter~\ref{chap:profiling}.
 Chapter~\ref{chap:debugging}.
 
 \end{itemize}
-
 
 
 \begin{figure}[!]\centering
@@ -3670,7 +3673,9 @@ for(t = 0; t < datsize; t += sizeof(buf)-100) {
 }
 @
 \l what the fuss about those 100?? and what is sizeof(buf)?
-\t factorize code for those sizeof(buf)-100
+\l  why not move this logic in datblk itself? cleaner!
+\l  anyway leaky abstraction as do n plus Dbufslop behind
+\t factorize code for those sizeof(buf)-100? and use Dbufslop?
 \t no use of datap?
 
 <<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>=
@@ -3686,7 +3691,269 @@ may not be a page boundary. This is fine
 since offsets in the executable file are not memory addresses
 as explained in Section~\ref{sec:disk-image-vs-memory-image}.
 
-[[datblk()]] will be explained in Section~\ref{sec:datblk}.
+%[[datblk()]] will be explained in Section~\ref{sec:datblk}.
+
+\subsubsection{[[datblk()]]}
+\label{sec:datblk}
+
+% use buf.dbuf, from union Buf. See appendix.
+
+<<constant Dbufslop>>=
+#define	Dbufslop	100
+@
+% ? slop?
+% why not use that before? instead of hardcoded 100?
+
+\l FIGURE! like for input buffer
+
+
+%sstring is bool used when call datblk for generating strings in text segment
+% s is offset in data section
+<<function datblk(arm)>>=
+void
+datblk(long s, long n, bool sstring)
+{
+    Prog *p; 
+    // absolute address of a DATA
+    long a; // ulong?
+    // size of a DATA
+    int c; 
+    // index in output buffer for a DATA
+    long l;
+    // index in value of a DATA
+    int i;
+    <<[[datblk()]] other locals>>
+
+    memset(buf.dbuf, 0, n+Dbufslop);
+
+    for(p = datap; p != P; p = p->link) {
+        <<[[datblk()]] if sstring might continue>>
+        // else
+        curp = p;
+
+        a = p->from.sym->value + p->from.offset;
+        l = a - s;
+        c = p->reg;
+
+        i = 0;
+        if(l < 0) {
+            if(l+c <= 0)
+                continue;
+            while(l < 0) {
+                l++;
+                i++;
+            }
+        }
+        if(l >= n)
+            continue;
+        // else
+
+        <<[[datblk()]] sanity check multiple initialization>>
+
+        switch(p->to.type) {
+        <<[[datblk()]] switch type of destination cases>>
+        default:
+            diag("unknown mode in initialization%P", p);
+            break;
+        }
+    }
+    write(cout, buf.dbuf, n);
+}
+@
+\l not very optimal, do many passes on data
+%  but GLOBL independent of DATA
+%alt: sort datap! by address! (and still can check for overlap!)
+
+
+<<[[datblk()]] other locals>>=
+long j;
+@
+<<[[datblk()]] sanity check multiple initialization>>=
+for(j=l+(c-i)-1; j>=l; j--)
+    if(buf.dbuf[j]) {
+        print("%P\n", p);
+        diag("multiple initialization");
+        break;
+    }
+@
+%old: if(p->as != AINIT && p->as != ADYNT) {
+
+
+
+\subsubsection{[[D_SCONST]]}
+
+%ex: DATA hello+0(SB)/8, "12345678"
+
+<<[[datblk()]] switch type of destination cases>>=
+case D_SCONST:
+    for(; i<c; i++) {
+        buf.dbuf[l] = p->to.sval[i];
+        l++;
+    }
+    break;
+@
+
+\subsubsection{[[D_CONST]] and endianess}
+
+%ex: DATA hello+0(SB)/4, 12345678
+
+<<[[datblk()]] other locals>>=
+char *cast;
+long d;
+@
+\l use byte instead of char*?
+
+
+<<[[datblk()]] switch type of destination cases>>=
+case D_CONST:
+    d = p->to.offset;
+    <<[[datblk()]] in D_CONST case, if symbol address>>
+    cast = (char*)&d;
+
+    switch(c) {
+    case 1:
+        for(; i<c; i++) {
+            buf.dbuf[l] = cast[inuxi1[i]];
+            l++;
+        }
+        break;
+    case 2:
+        for(; i<c; i++) {
+            buf.dbuf[l] = cast[inuxi2[i]];
+            l++;
+        }
+        break;
+    case 4:
+        for(; i<c; i++) {
+            buf.dbuf[l] = cast[inuxi4[i]];
+            l++;
+        }
+        break;
+
+    default:
+        diag("bad nuxi %d %d%P", c, i, curp);
+        break;
+    }
+    break;
+@
+%old: case SLEAF: 
+
+%\subsubsection{Endianess, [[nuxiinit()]]}
+
+%"unix" in some systems is represented as "nuxi" because of endianess
+
+<<global inuxi1>>=
+char	inuxi1[1];
+@
+<<global inuxi2>>=
+char	inuxi2[2];
+@
+<<global inuxi4>>=
+char	inuxi4[4];
+@
+
+
+<<[[main()]] initialize globals(arm)>>=
+nuxiinit(); // ???
+@
+
+<<function nuxiinit(arm)>>=
+void
+nuxiinit(void)
+{
+
+    int i, c;
+
+    for(i=0; i<4; i++) {
+        c = find1(0x04030201L, i+1);
+        if(i < 2)
+            inuxi2[i] = c;
+        if(i < 1)
+            inuxi1[i] = c;
+        inuxi4[i] = c;
+        <<[[nuxiinit()]] in loop i, fnuxi initialisation>>
+    }
+    <<[[nuxiinit()]] debug>>
+    Bflush(&bso);
+}
+@
+
+<<function find1>>=
+int
+find1(long l, int c)
+{
+    char *p;
+    int i;
+
+    p = (char*)&l;
+    for(i=0; i<4; i++)
+        if(*p++ == c)
+            return i;
+    return 0;
+}
+@
+
+
+
+<<[[nuxiinit()]] debug>>=
+if(debug['v']) {
+    Bprint(&bso, "inuxi = ");
+    for(i=0; i<1; i++)
+        Bprint(&bso, "%d", inuxi1[i]);
+    Bprint(&bso, " ");
+    for(i=0; i<2; i++)
+        Bprint(&bso, "%d", inuxi2[i]);
+    Bprint(&bso, " ");
+    for(i=0; i<4; i++)
+        Bprint(&bso, "%d", inuxi4[i]);
+    Bprint(&bso, "\nfnuxi = ");
+    for(i=0; i<4; i++)
+        Bprint(&bso, "%d", fnuxi4[i]);
+    Bprint(&bso, " ");
+    for(i=0; i<8; i++)
+        Bprint(&bso, "%d", fnuxi8[i]);
+    Bprint(&bso, "\n");
+}
+@
+
+\subsubsection{[[D_ADDR]]}
+
+%ex: DATA hello+0(SB)/4, $hello(SB)
+% but why want that?
+
+<<[[datblk()]] other locals>>=
+Sym *v;
+@
+<<[[datblk()]] in D_CONST case, if symbol address>>=
+v = p->to.sym;
+if(v) {
+    switch(v->type) {
+    <<[[datblk()]] in D_CONST case, switch symbol type cases>>
+    }
+    <<[[datblk()]] if dynamic module(arm)>>
+}
+@
+
+<<[[datblk()]] in D_CONST case, switch symbol type cases>>=
+case STEXT: case SSTRING:
+    d += p->to.sym->value;
+    break;
+case SDATA: case SBSS:
+    d += p->to.sym->value + INITDAT;
+    break;
+@
+%old: did not have break for SDATA SBSS but cleaner
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -6621,7 +6888,7 @@ noops(void)
 @
 \l could be more symetric and use o = p->as;  also in first pass?
 %bugfix: I forgot the 'q = p;' after some refactoring, but need it!
-%old: there was lots of stuff about BECOME which I think was
+%dead: there was lots of stuff about BECOME which I think was
 % a feature necessary for the alef compiler, but it
 % has been removed from plan9 edition 4 so this code
 % was probably dead.
@@ -6726,8 +6993,8 @@ noops(void)
 %            p->to.reg = REGLINK;
 %
 %            break;
-
-%old: this was under some ifdef, probably experimental stuff
+%
+%dead: this was under some ifdef, probably experimental stuff
 %#ifdef optimise_time
 %                if(autosize) {
 %                    q = prg();
@@ -7275,6 +7542,8 @@ to generate the data section in the executable is done in [[datblk()]]
 \l   of the text ... this is computed in dotext().
 
 \n Order of globals in executable = order in hash table = hard to predict.
+\l  which is why does this weird datblk() multi pass strategy.
+%alt: base it on the DATA decl instead of GLOBL?
 
 
 <<[[dodata()]] sanity check GLOBL instructions, size of data v>>=
@@ -7702,20 +7971,28 @@ which will actually change its value.
 \label{chap:arm-codegen}
 
 %trans:
-The final step of the linking pipeline is to generate code.
-% have seen asmb(), in Section X, generate header, code
-% section, data section. But was using oplook, asmout,
-% so can now see missing pieces, individual instr generation.
+The final step in the linking pipeline is the machine code generation.
+We have seen already [[asmb()]], in Section~\ref{sec:gen-executable},
+which generates the executable header and contains some of the
+code to generate the code and data sections.
 %toc:
-% oplook, asmout
-%But First recall ARM instr format, and additional DS.
+The only missing pieces were the functions 
+[[oplook()]] and 
+[[asmout()]], 
+used to generate individual ARM instructions, which we will now
+see in this chapter.
+But before, we will give a summary of the format of
+ARM instructions and present additional data structures
+used by [[oplook()]] and [[asmout()]].
 
 %dup: The code generation is done by 5l, not 5a, surprisingly!
 %real-world:?
 
 \section{ARM instruction format}
 
+% as said in X, great guide.
 % ref to colorful guide again
+
 % mainly 4 categories, 6 formats: arith, arith with immediate,
 %  memory with offsets, branch immediate, branch
 
@@ -7738,14 +8015,14 @@ The final step of the linking pipeline is to generate code.
 <<struct Optab(arm)>>=
 struct	Optab
 {
-    // enum<Opcode> from 5.out.h, (the opcode is the representant of a range)
+    // enum<Opcode> (the opcode is the representant of a range)
     byte	as;
 
-    // enum<Cxxx>, possible operand_kind/class for first operand
+    // enum<Operand_class>, possible operand class for first operand
     short	a1;
-    // enum<Cxxx>, possible operand_kind/class for second operand
+    // enum<Operand_class>, possible operand class for second operand
     short	a2;
-    // enum<Cxxx>, possible operand_kind/class for third operand
+    // enum<Operand_class>, possible operand class for third operand
     short	a3;
 
     // idx for the code generator, see the giant switch in asmout()
@@ -7757,42 +8034,10 @@ struct	Optab
     <<[[Optab]] other fields>>
 };
 @
-% The order of entries is important!!, see optab[] global, see ocmp()!
-% It does not matter for cmp() but it matters for ocmp().
-% The order for the operand class is also important!
-% For instance C_HFAUTO must be before C_LAUTO otherwise
-% the careful order of entries in optab will not be taken
-% into account.
 %ocaml: use a single pattern match so far easier.
 
-%ex of entries:
-% Optab	optab[] =
-% {
-%    ...
-%    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
-%    { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
-
-
-% ARM has fixed-length instructions, 4, but 5a/ support
-% some fake/virtual opcodes that actually expands to 
-% multiple instructions, hence the size field above.
-% Also because of 12 bits immediate need special tricks, pool(),
-% RCON vs LCON, etc. So there are many cases where we generate
-% for one Asm5 instruction multiple ARM instructions. 
-
-%\section{[[optab]]}
-
-% This table contains the different valid combinations 
-% of operands for the different opcodes. Actually not all opcodes are put,
-% only some representative (see also oprange that describes
-% the equivalence classes).
-% There is a strong coupling with the grammar 5a/a.y to see
-% what operands are allowed, e.g. AMOV has gen operand which
-% allow many things, but AADD has more restricted operands
-% (immediate, shift, or plain register).
-
-% not sure it needs this complexity, things could probably
-% be factorized more.
+% complex. Sort of pattern rule. 
+% Important global with all pattern rules.
 
 <<global optab (linkers/5l/optab.c)(arm)>>=
 Optab	optab[] =
@@ -7804,18 +8049,73 @@ Optab	optab[] =
 % AXXX at the end? why not ALAST instead?
 %old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
 
+% AXXX = sentinel, end marker, used in buildop().
+
+
+%ex of entries:
+% Optab	optab[] =
+% {
+%    ...
+%    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4,    0 },
+%    { AADD,		C_RCON,	C_REG,	C_REG,		 2, 4,    0 },
+
+% say if find instruction p, where opcode is AADD,
+%  and 3 operands are register, then 4 bytes are necessary
+%  (1 instruction), and the first entry in the dispatch code
+%  of asmout should be used.
+
+% oplook(p) -> optab!  o->size !
+
+
+% This table contains the different valid combinations 
+% of operands for the different opcodes. Actually not all opcodes are put,
+% only some representative (see also oprange that describes
+% the equivalence classes).
+% There is a strong coupling with the grammar 5a/a.y to see
+% what operands are allowed, e.g. AMOV has gen operand which
+% allow many things, but AADD has more restricted operands
+% (immediate, shift, or plain register).
+
+
+% this will be eventually sorted by buildop() later,
+% so will have all AADD together if there were not originally.
+% and sorted order is very important.
+
+
+
+
+
+% The order of entries is important!!, see optab[] global, see ocmp()!
+% It does not matter for cmp() but it matters for ocmp().
+% The order for the operand class is also important!
+% For instance C_HFAUTO must be before C_LAUTO otherwise
+% the careful order of entries in optab will not be taken
+% into account.
+
+% ARM has fixed-length instructions, 4, but 5a/ support
+% some fake/virtual opcodes that actually expands to 
+% multiple instructions, hence the size field above.
+% Also because of 12 bits immediate need special tricks, pool(),
+% RCON vs LCON, etc. So there are many cases where we generate
+% for one Asm5 instruction multiple ARM instructions. 
+
+
+
+
+
 
 \subsection{[[Oprange]]}
 
 % one form of general pattern, for instr.
 
 % Optab range
+
 <<struct Oprange(arm)>>=
 struct	Oprange
 {
-    //index in sorted optab global
+    //index in (sorted) optab
     Optab*	start;
-    //index in sorted optab global
+    //index in (sorted) optab
     Optab*	stop;
 };
 @
@@ -7825,16 +8125,23 @@ struct	Oprange
 Oprange	oprange[ALAST];
 @
 
+% ex of use !! otherwise too abstract.
+% also used in oplook
+
+
 % will be the set of entries in the sorted optab
 % that talk about a certain opcode
 
 \subsection{[[Operand_class]]}
-% was in core DS, but I think better here with Optab.
+\n was in core DS, but I think better here with Optab.
+
+% kind of more precise operand kind as we will see.
 
 \subsubsection{Basic classes}
 
 % seems called the class, see aclass(), a more precise operand_kind
 % closer to the machine constraint as we will see in next section
+
 <<enum Operand_class(arm)>>=
 // order of entries matter! coupling with cmp() and ocmp()
 enum Operand_class {
@@ -7852,14 +8159,13 @@ enum Operand_class {
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };
 @
-%old: I renamed Operand_class, consistent with Operand_kind. C vs D.
-%diffs with operand_kind:
+\l do big categories, xxCON, xxAUTO, xxEXT, xxREG?
+%assembler: diffs with operand_kind
 % - OREG splitted in many xxxOREG and xxxEXT (SB), xxAUTO (FP, SP)
 % - D_CONST splitted in many xxxCON
 % - S_CONST?
 % - a new C_GOK, but could be called C_LAST I think
-%
-%less: do big categories, xxCON, xxAUTO, xxEXT, xxREG?
+%old: I renamed Operand_class, consistent with Operand_kind. C vs D.
 %old: there was C_SBRA, C_LBRA but LBRA was unused so I s/C_LBRA/C_BRANCH/
 % there was also this in cmp()
 %    case C_LBRA:
@@ -7909,6 +8215,11 @@ aclass(Adr *a)
 \subsubsection{Refined classes and [[instoffset]]}
 
 % another form of pattern, for operand this time.
+% other kind of range than OpRange, range of possible values
+% of operands. with inheritance notion! Quite subtle.
+
+
+
 
 <<global instoffset(arm)>>=
 long	instoffset;
@@ -7918,9 +8229,6 @@ long	instoffset;
 
 % seems to be used both for immediate constant and offset
 
-
-% other kind of range than OpRange, range of possible values
-% of operands. with inheritance notion! Quite subtle.
 
 
 
@@ -7947,6 +8255,7 @@ C_SEXT,
 C_LEXT,
 @
 % EXT for? external symbol?
+% see Section X later expose constraint to satisfy for address
 
 %xxx+y(SB)
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
@@ -8081,9 +8390,8 @@ case D_NONE:
 
 
 \paragraph{[[D_ADDR]]}
-
 %todo: D_ADDR?
-%\subsubsection{[[D_ADDR]]}
+
 % should not use D_CONST when really you use the address of a symbol
 
 
@@ -8092,8 +8400,8 @@ case D_NONE:
 C_RECON,
 @
 %dead: C_LECON
-%optab:    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
-%cmp:    case C_LECON:
+% optab:    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
+% cmp:    case C_LECON:
 %        if(b == C_RECON)
 %            return 1;
 %        break;
@@ -8178,8 +8486,7 @@ aconsize:
 @
 
 
-
-%old: dead: this advanced addressing mode of 5a is not that useful
+%dead: this advanced addressing mode of 5a is not that useful
 %    case D_OCONST:
 %        switch(a->name) {
 %        case N_EXTERN:
@@ -8202,7 +8509,6 @@ aconsize:
 
 \subsection{Pool}
 \label{sec:pool-and-reg-tmp}
-
 
 % was in Resolving/issue/virtual-pc
 %where the first instruction would load the big number from 
@@ -8396,9 +8702,6 @@ addpool(Prog *p, Adr *a)
 % Those are some kinds of optimisations? a bit but also need that
 % because expressivity Asm5 greater than what ARM can actually do sometimes.
 
-% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
-
-
 % The load/store ARM instructions take 2 registers (src_val, dst_address)
 % and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
 % do negative offset with a bit).
@@ -8421,6 +8724,39 @@ addpool(Prog *p, Adr *a)
 % In practice the first page of the address space is always reserved
 % so it's better to store in R12 a bigger value. R12 will actually
 % be set to INITDAT+BIG.
+
+
+
+\subsection{immediate values (possibly rotated), [[immrot()]]}
+% immediate (rotated) address
+
+% see Machine.nw and the ARM refcard to understand the code below.
+% RCON is for small immediate value, or rotated things of small 
+% immediate value.
+% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
+% hence the code below.
+
+% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
+
+<<function immrot(arm)>>=
+long
+immrot(ulong v)
+{
+    int i;
+
+    for(i=0; i<16; i++) {
+        if((v & ~0xff) == 0)
+            return (i<<8) | v | (1<<25);
+        v = (v<<2) | (v>>30);
+    }
+    return 0;
+}
+@
+% >> >>
+
+% there is code like
+%    o1 |= immrot(instoffset);
+% the 1<<25 means we are in the  i,r,r  case
 
 
 
@@ -8468,38 +8804,6 @@ immhalf(long v)
 % >> >> >>
 % seems identical to immhalf no? no now it's 0xff! not 0xfff
 
-\subsection{immediate values (possibly rotated), [[immrot()]]}
-% immediate (rotated) address
-
-% see Machine.nw and the ARM refcard to understand the code below.
-% RCON is for small immediate value, or rotated things of small 
-% immediate value.
-% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
-% hence the code below.
-
-% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
-
-<<function immrot(arm)>>=
-long
-immrot(ulong v)
-{
-    int i;
-
-    for(i=0; i<16; i++) {
-        if((v & ~0xff) == 0)
-            return (i<<8) | v | (1<<25);
-        v = (v<<2) | (v>>30);
-    }
-    return 0;
-}
-@
-% >> >>
-
-% there is code like
-%    o1 |= immrot(instoffset);
-% the 1<<25 means we are in the  i,r,r  case
-
-
 
 \section{[[buildop()]] and [[oplook()]]}
 
@@ -8546,8 +8850,8 @@ buildop(void)
     }
 }
 @
-%old:		case ABX:
-%old:		case ABXRET:
+%dead:		case ABX:
+%dead:		case ABXRET:
 % coupling with order of opcode in 5.out.h? no, this just
 % describe the equivalence classes for optab, that
 % is an entry in optab about AADD is also valid for AAND, etc.
@@ -8902,7 +9206,7 @@ nocache(Prog *p)
 %Opcross	opcross[8];
 %@
 
-\section{Text section, [[asmout()]]}
+\section{[[asmout()]]}
 \label{sec:asmout}
 
 <<function asmout(arm)>>=
@@ -8987,7 +9291,7 @@ default:
     break;
 @
 
-
+\section{Pseudo opcodes}
 
 \subsection{[[ATEXT]]}
 
@@ -9041,7 +9345,7 @@ case 11:	/* word */
 @
 
 
-\subsection{Arithmetic and logic opcodes}
+\section{Arithmetic and logic opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AADD:
@@ -9090,7 +9394,7 @@ case AMOVHU:
 % divide by shape of operands more than kinds of operation,
 % so different sections than in Assembler.
 
-\subsubsection{Registers only}
+\subsection{Register-only operands}
 
 <<[[optab]] entries>>=
 { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
@@ -9172,7 +9476,8 @@ oprrr(int a, int sc)
 
 
 
-\subsubsection{Simple immediate constant}
+\subsection{Small immediate constant operand}
+% actually not small, immrot able
 
 <<[[optab]] entries>>=
 { AADD,		C_RCON,	C_REG,	C_REG,		 2, 4, 0 },
@@ -9198,7 +9503,7 @@ case 2:		/* op $I,[R],R */
 %pad: the comment was about movbu, but it was wrong I think
 
 
-\subsubsection{Long immediate constant and pool}
+\subsection{Large immediate constant operand and pool}
 \label{sec:add-regtmp}
 
 
@@ -9286,7 +9591,7 @@ omvl(Prog *p, Adr *a, int dr)
 % for BL ops?
 
 
-\subsubsection{Registers-only subword MOVs}
+\subsection{Byte and half word operations}
 
 <<[[optab]] entries>>=
 { AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8, 0 },
@@ -9335,7 +9640,7 @@ case 58:	/* movbu R,R */
 
 
 
-\subsubsection{Bit-shifted register}
+\subsection{Bitshifted register}
 
 <<[[optab]] entries>>=
 { AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
@@ -9361,7 +9666,7 @@ mov:
 %pad: add -> op in the comment
 
 
-\subsubsection{Bit-shift opcodes}
+\subsection{Bitshift opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ASLL:
@@ -9416,7 +9721,7 @@ case 9:		/* sll R,[R],R -> mov (R<<R),R */
 % >> >> >> >> 
 
 
-\subsubsection{Multiplication}
+\subsection{Multiplication opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMUL:
@@ -9460,7 +9765,7 @@ case AMUL:	return o | (0x0<<21) | (0x9<<4);
 % >> >>
 
 
-\subsubsection{Long mulitplication}
+\subsection{Long mulitplication opcodes}
 % could be in advanced topic, like I did in Assembler.nw
 
 
@@ -9502,7 +9807,7 @@ case AMULAL:	return o | (0x7<<21) | (0x9<<4);
 
 
 
-\subsection{Control flow opcodes}
+\section{Control flow opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AB:
@@ -9524,6 +9829,8 @@ case ABEQ:
     oprange[ABLE] = oprange[r];
     break;
 @
+
+\subsection{Direct jumps}
 
 <<[[optab]] entries>>=
 { AB,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0,	LPOOL },
@@ -9597,6 +9904,7 @@ opbra(int a, int sc)
 
 
 
+\subsection{Indirect jumps}
 
 
 <<[[optab]] entries>>=
@@ -9630,10 +9938,10 @@ case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
 % could use AMOVW instead of AADD no?
 
 
-\subsection{Memory opcodes}
+\section{Memory opcodes}
 % more complicated ... can generate up to 6 ARM instructions
 
-\subsubsection{XXX}
+\subsection{XXX}
 
 % have seen the simple MOV before, which don't involve
 % any dereference, but just a constant and a register
@@ -10055,7 +10363,7 @@ case 40:	/* swp oreg,reg,reg */
 @
 % >> >> >> >> >> >> >>
 
-\subsubsection{Symbol addresses}
+\subsection{Symbol addresses}
 
 % the MOV opcodes with size 4 which are simple, simple load or store
 <<[[optab]] entries>>=
@@ -10079,7 +10387,7 @@ case 4:		/* add $I,[R],R */
 
 % otherwise C_LCON path, which use pool and load pointer from pool.
 
-\subsection{Software interrupt opcodes}
+\section{Software interrupt opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ASWI:
@@ -10132,252 +10440,6 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
 % r13 = REGSP
 
 
-\section{Data section, [[datblk()]]}
-\label{sec:datblk}
-
-<<constant Dbufslop>>=
-#define	Dbufslop	100
-@
-% ? slop?
-
-% use buf.dbuf, from union Buf. See appendix.
-
-%sstring is bool used when call datblk for generating strings in text segment
-<<function datblk(arm)>>=
-void
-datblk(long s, long n, bool sstring)
-{
-    Prog *p;
-    long a, l;
-    int i, c;
-    <<[[datblk()]] other locals>>
-
-    memset(buf.dbuf, 0, n+Dbufslop);
-
-    for(p = datap; p != P; p = p->link) {
-
-        if(sstring != (p->from.sym->type == SSTRING))
-            continue;
-
-        curp = p;
-
-        a = p->from.sym->value + p->from.offset;
-        l = a - s;
-        c = p->reg;
-        i = 0;
-        if(l < 0) {
-            if(l+c <= 0)
-                continue;
-            while(l < 0) {
-                l++;
-                i++;
-            }
-        }
-        if(l >= n)
-            continue;
-
-        <<[[datblk()]] sanity check multiple initialization>>
-
-        switch(p->to.type) {
-        <<[[datblk()]] switch type of destination cases>>
-        default:
-            diag("unknown mode in initialization%P", p);
-            break;
-        }
-    }
-    write(cout, buf.dbuf, n);
-}
-@
-
-<<[[datblk()]] other locals>>=
-long j;
-@
-
-<<[[datblk()]] sanity check multiple initialization>>=
-    for(j=l+(c-i)-1; j>=l; j--)
-        if(buf.dbuf[j]) {
-            print("%P\n", p);
-            diag("multiple initialization");
-            break;
-        }
-@
-%old: if(p->as != AINIT && p->as != ADYNT) {
-
-<<[[datblk()]] switch type of destination cases>>=
-case D_SCONST:
-    for(; i<c; i++) {
-        buf.dbuf[l] = p->to.sval[i];
-        l++;
-    }
-    break;
-@
-
-
-<<[[datblk()]] other locals>>=
-Sym *v;
-char *cast;
-long d;
-@
-
-<<[[datblk()]] switch type of destination cases>>=
-case D_CONST:
-    d = p->to.offset;
-    v = p->to.sym;
-    if(v) {
-        switch(v->type) {
-        case SUNDEF:
-            ckoff(v, d);
-        case STEXT: case SSTRING:
-            d += p->to.sym->value;
-            break;
-        case SDATA:
-        case SBSS:
-            d += p->to.sym->value + INITDAT;
-        }
-        <<[[datblk()]] if dynamic module(arm)>>
-    }
-    cast = (char*)&d;
-
-    switch(c) {
-    case 1:
-        for(; i<c; i++) {
-            buf.dbuf[l] = cast[inuxi1[i]];
-            l++;
-        }
-        break;
-    case 2:
-        for(; i<c; i++) {
-            buf.dbuf[l] = cast[inuxi2[i]];
-            l++;
-        }
-        break;
-    case 4:
-        for(; i<c; i++) {
-            buf.dbuf[l] = cast[inuxi4[i]];
-            l++;
-        }
-        break;
-
-    default:
-        diag("bad nuxi %d %d%P", c, i, curp);
-        break;
-    }
-    break;
-@
-%old: case SLEAF: 
-
-
-
-<<function ckoff>>=
-void
-ckoff(Sym *s, long v)
-{
-    if(v < 0 || v >= 1<<Roffset)
-        diag("relocation offset %ld for %s out of range", v, s->name);
-}
-@
-
-% >>
-
-
-\subsection{Endianess, [[nuxiinit()]]}
-
-%"unix" in some systems is represented as "nuxi" because of endianess
-
-<<global inuxi1>>=
-char	inuxi1[1];
-@
-
-<<global inuxi2>>=
-char	inuxi2[2];
-@
-
-<<global inuxi4>>=
-char	inuxi4[4];
-@
-
-
-<<global fnuxi4>>=
-char	fnuxi4[4];
-@
-
-<<global fnuxi8>>=
-char	fnuxi8[8];
-@
-
-
-<<[[main()]] initialize globals(arm)>>=
-nuxiinit(); // ???
-@
-
-<<function nuxiinit(arm)>>=
-void
-nuxiinit(void)
-{
-
-    int i, c;
-
-    for(i=0; i<4; i++) {
-        c = find1(0x04030201L, i+1);
-        if(i < 2)
-            inuxi2[i] = c;
-        if(i < 1)
-            inuxi1[i] = c;
-        inuxi4[i] = c;
-        fnuxi4[i] = c;
-
-        if(debug['d'] == 0){
-            fnuxi8[i] = c;
-            fnuxi8[i+4] = c+4;
-        }
-        else{
-            fnuxi8[i] = c+4;		/* ms word first, then ls, even in little endian mode */
-            fnuxi8[i+4] = c;
-        }
-    }
-
-    if(debug['v']) {
-        Bprint(&bso, "inuxi = ");
-        for(i=0; i<1; i++)
-            Bprint(&bso, "%d", inuxi1[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<2; i++)
-            Bprint(&bso, "%d", inuxi2[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", inuxi4[i]);
-        Bprint(&bso, "\nfnuxi = ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", fnuxi4[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<8; i++)
-            Bprint(&bso, "%d", fnuxi8[i]);
-        Bprint(&bso, "\n");
-    }
-    Bflush(&bso);
-}
-@
-
-
-
-
-<<function find1>>=
-int
-find1(long l, int c)
-{
-    char *p;
-    int i;
-
-    p = (char*)&l;
-    for(i=0; i<4; i++)
-        if(*p++ == c)
-            return i;
-    return 0;
-}
-@
-
-
-
 
 
 
@@ -10405,6 +10467,7 @@ find1(long l, int c)
 %    ...
 %  main(argv=...) /home/pad/.../main.c called from _main+26 (.../main9.s:12)
 
+%section{Stripping, [[5c -s]]}
 
 <<[[asmb()]] symbol and line table sections>>=
 // modified by asmsym()
@@ -10414,19 +10477,12 @@ lcsize = 0;
 
 if(!debug['s']) {
     switch(HEADTYPE) {
-    case H_PLAN9:
-        OFFSET = HEADR+textsize+datsize;
-        seek(cout, OFFSET, SEEK__START);
-        break;
     <<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>
     }
-
     DBG("%5.2f sym\n", cputime());
     asmsym();
-
     DBG("%5.2f pc\n", cputime());
     asmlc();
-
     <<[[asmb()]] if dynamic module, call asmdyn()>>
     cflush();
 }
@@ -10437,6 +10493,12 @@ else {
 % say -s = strip? say see strip in appendix?
 
 
+<<[[asmb()]] switch HEADTYPE (for symbol table generation) cases(arm)>>=
+case H_PLAN9:
+    OFFSET = HEADR+textsize+datsize;
+    seek(cout, OFFSET, SEEK__START);
+    break;
+@
 
 \section{Executable symbol table}
 
@@ -11855,6 +11917,27 @@ undefsym(Sym *s)
 @
 %>> >>
 
+
+<<[[datblk()]] in D_CONST case, switch symbol type cases>>=
+case SUNDEF:
+    ckoff(v, d);
+    d += p->to.sym->value;
+    break;
+@
+%old: was fallthrough on STEXT case, but I prefered to copy paste
+
+<<function ckoff>>=
+void
+ckoff(Sym *s, long v)
+{
+    if(v < 0 || v >= 1<<Roffset)
+        diag("relocation offset %ld for %s out of range", v, s->name);
+}
+@
+
+% >>
+
+
 \subsection{XXX}
 
 
@@ -12233,7 +12316,7 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
 
 %\subsection{[[ADYNT]]}
 
-%old: asm.pdf says it was for alef for dynamic typing, so I think safe to remove
+%dead: asm.pdf says it was for alef for dynamic typing, so safe to remove
 % it is never produced by 5a/5c
 
 
@@ -13375,6 +13458,26 @@ case D_FCONST:
         break;
     }
     break;
+@
+
+<<global fnuxi4>>=
+char	fnuxi4[4];
+@
+
+<<global fnuxi8>>=
+char	fnuxi8[8];
+@
+
+<<[[nuxiinit()]] in loop i, fnuxi initialisation>>=
+fnuxi4[i] = c;
+if(debug['d'] == 0){
+    fnuxi8[i] = c;
+    fnuxi8[i+4] = c+4;
+}
+else{
+    fnuxi8[i] = c+4; /* ms word first, then ls, even in little endian mode */
+    fnuxi8[i+4] = c;
+}
 @
 
 \subsubsection{Common float instructions}
@@ -14519,6 +14622,12 @@ for(t = pc; t < etext; t += sizeof(buf)-100) {
 
 
 
+<<[[datblk()]] if sstring might continue>>=
+if(sstring != (p->from.sym->type == SSTRING))
+    continue;
+@
+
+
 \chapter{Conclusion}
 
 %dup: (and adapted) from Assembler.nw
@@ -14531,8 +14640,8 @@ linkers works.
 
 
 
-
-
+%\section{Limitations/Bugs}
+% - large procedure not handled for now (not sure why the constraint)
 
 
 
