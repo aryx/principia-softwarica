@@ -2267,8 +2267,8 @@ symbols with [[SXREF]]. This is in fact checked by the
 [[undef()]] function we will see in Section~\ref{sec:undef}.
 \t lead to famous error message: undefined ref ...
 
-\l those are mostly sections, or subsections (e.g. SDATA1 of SDATA,
-\l  and SLEAF/SCONST/STRING of STEXT)
+\l those are mostly sections, or subsections 
+% e.g. SDATA1 of SDATA, and STRING of STEXT (was SLEAF/SCONST before too)
 
 \n need STEXT vs SDATA? firstp and datap not enough?
 \n functions like datblk iterate over symbol table, not datap
@@ -7192,7 +7192,6 @@ dodata(void)
     // DATA instructions loop
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
-        <<[[dodata()]] if ADYNT or AINIT>>
         if(s->type == SBSS)
             s->type = SDATA;
         <<[[dodata()]] sanity check DATA instructions>>
@@ -7262,6 +7261,7 @@ dodata(void)
 \l do not use v? was used for version previously
 \t why not use offset instead of orig?
 \n first iteration is on datap instructions, the other are on the symbol table.
+%old:         <<[[dodata()]] if ADYNT or AINIT>>
 %old:
 %            while(v & 3) // align
 %                v++;
@@ -8119,7 +8119,6 @@ case N_INTERN:
         break;
     switch(s->type) {
     case STEXT: case SSTRING:
-    case SCONST:
     case SUNDEF:
         instoffset = s->value + a->offset;
         return C_LCON; // etext is stable
@@ -8155,6 +8154,7 @@ case N_INTERN:
 %    instoffset = s->value + a->offset + INITDAT;
 %    return C_LCON;
 %old: case SLEAF: 
+%old: case SCONST:
 
 % for LCON have to do the INITDAT!
 % really need RECON?
@@ -10207,15 +10207,14 @@ long j;
 @
 
 <<[[datblk()]] sanity check multiple initialization>>=
-if(p->as != AINIT && p->as != ADYNT) {
     for(j=l+(c-i)-1; j>=l; j--)
         if(buf.dbuf[j]) {
             print("%P\n", p);
             diag("multiple initialization");
             break;
         }
-}
 @
+%old: if(p->as != AINIT && p->as != ADYNT) {
 
 <<[[datblk()]] switch type of destination cases>>=
 case D_SCONST:
@@ -10493,9 +10492,6 @@ asmsym(void)
                 putsymb(s->name, 'B', s->value+INITDAT, s->version);
                 continue;
 
-            case SCONST:
-                putsymb(s->name, 'D', s->value, s->version);
-                continue;
             case SSTRING:
                 putsymb(s->name, 'T', s->value, s->version);
                 continue;
@@ -10531,6 +10527,10 @@ asmsym(void)
 %                putsymb(s->name, 'T', s->value, s->version);
 %            else // SLEAF
 %                putsymb(s->name, 'L', s->value, s->version);
+%old:
+%            case SCONST:
+%                putsymb(s->name, 'D', s->value, s->version);
+%                continue;
 
 
 
@@ -12067,7 +12067,6 @@ if(dlm) {
     switch(t) {
     case STEXT: case SSTRING:
     case SUNDEF:
-    case SCONST: 
         instoffset = s->value + a->offset;
         break;
     case SDATA: case SBSS:
@@ -12078,7 +12077,7 @@ if(dlm) {
     return C_ADDR;
 }
 @
-%old: case SLEAF: 
+%old: case SLEAF: case SCONST:
 %pad: I added the case SDATA: case SBSS:
 % in default should return exn if not SDATA or SBSS no?
 
@@ -12195,92 +12194,84 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
 % >> >> >> >> >> >> >> >>
 
 
-\section{Dynamic typing}
 
-\subsection{[[ADYNT]]}
-% asm.pdf says it was for alef, so maybe can remove?
-%  useful also for dynamic loading?
-%  seems more related to dynamic typing
+%\section{Dynamic typing}
 
-% mv with dlm?
-% seems never produced by 5a/5c
+%\subsection{[[ADYNT]]}
+
+%old: asm.pdf says it was for alef for dynamic typing, so I think safe to remove
+% it is never produced by 5a/5c
 
 
-<<global dtype(arm)>>=
-int	dtype = 4;
-@
-<<[[dodata()]] if ADYNT or AINIT>>=
-if(p->as == ADYNT || p->as == AINIT)
-    s->value = dtype;
-@
+%<<global dtype(arm)>>=
+%int	dtype = 4;
+%@
+%<<[[dodata()]] if ADYNT or AINIT>>=
+%if(p->as == ADYNT || p->as == AINIT)
+%    s->value = dtype;
+%@
 
-
-
-
-<<[[ldobj()]] locals(arm)>>=
-Sym *di = S;
-@
-
-<<[[Section]] cases>>=
-SCONST,
-@
+%<<[[ldobj()]] locals(arm)>>=
+%Sym *di = S;
+%@
+%
+%<<[[Section]] cases>>=
+%SCONST,
+%@
 % SCONST ... hmm confusing with D_SCONST IMHO
 
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case ADYNT:
-    if(p->to.sym == S) {
-        diag("DYNT without a sym\n%P", p);
-        break;
-    }
-    di = p->to.sym;
-    p->reg = 4;
-    if(di->type == SXREF) {
-        if(debug['z'])
-            Bprint(&bso, "%P set to %d\n", p, dtype);
-        di->type = SCONST;
-        di->value = dtype;
-        dtype += 4;
-    }
-    if(p->from.sym == S)
-        break;
+%<<[[ldobj()]] switch opcode cases(arm)>>=
+%case ADYNT:
+%    if(p->to.sym == S) {
+%        diag("DYNT without a sym\n%P", p);
+%        break;
+%    }
+%    di = p->to.sym;
+%    p->reg = 4;
+%    if(di->type == SXREF) {
+%        if(debug['z'])
+%            Bprint(&bso, "%P set to %d\n", p, dtype);
+%        di->type = SCONST;
+%        di->value = dtype;
+%        dtype += 4;
+%    }
+%    if(p->from.sym == S)
+%        break;
+%
+%    p->from.offset = di->value;
+%    p->from.sym->type = SDATA;
+%    if(curtext == P) {
+%        diag("DYNT not in text: %P", p);
+%        break;
+%    }
+%    p->to.sym = curtext->from.sym;
+%    p->to.type = D_CONST;
+%    p->link = datap;
+%    datap = p;
+%    break;
+%@
 
-    p->from.offset = di->value;
-    p->from.sym->type = SDATA;
-    if(curtext == P) {
-        diag("DYNT not in text: %P", p);
-        break;
-    }
-    p->to.sym = curtext->from.sym;
-    p->to.type = D_CONST;
-    p->link = datap;
-    datap = p;
-    break;
-@
-
-
-
-\subsection{[[AINIT]]}
-% seems never produced by 5a/5c, like ADYNT, so move?
+% \subsection{[[AINIT]]}
+% seems never produced by 5a/5c, like ADYNT,
 % seems to be just after a ADYNT, see the error message below
 
-
-<<[[ldobj()]] switch opcode cases(arm)>>=
-case AINIT:
-    if(p->from.sym == S) {
-        diag("INIT without a sym\n%P", p);
-        break;
-    }
-    if(di == S) {
-        diag("INIT without previous DYNT\n%P", p);
-        break;
-    }
-    p->from.offset = di->value;
-    p->from.sym->type = SDATA;
-    p->link = datap;
-    datap = p;
-    break;
-
-@
+%<<[[ldobj()]] switch opcode cases(arm)>>=
+%case AINIT:
+%    if(p->from.sym == S) {
+%        diag("INIT without a sym\n%P", p);
+%        break;
+%    }
+%    if(di == S) {
+%        diag("INIT without previous DYNT\n%P", p);
+%        break;
+%    }
+%    p->from.offset = di->value;
+%    p->from.sym->type = SDATA;
+%    p->link = datap;
+%    datap = p;
+%    break;
+%
+%@
 
 \section{Position independent code (PIC)}
 
@@ -14613,12 +14604,6 @@ Pconv(Fmt *fp)
 
     case ADATA:
 
-    case AINIT:
-    case ADYNT:
-        sprint(str, "(%ld)	%A%C	%D/%d,%D",
-            p->line, a, p->scond, &p->from, p->reg, &p->to);
-        break;
-
     default:
         s = str;
         s += sprint(s, "(%ld)", p->line);
@@ -14638,6 +14623,12 @@ Pconv(Fmt *fp)
     return fmtstrcpy(fp, str);
 }
 @
+%    case AINIT:
+%    case ADYNT:
+%        sprint(str, "(%ld)	%A%C	%D/%d,%D",
+%            p->line, a, p->scond, &p->from, p->reg, &p->to);
+%        break;
+
 
 
 \subsection{Opcode dumper, [[Aconv()]]}

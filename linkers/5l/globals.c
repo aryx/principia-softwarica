@@ -187,9 +187,6 @@ char	xcmp[C_GOK+1][C_GOK+1];
 /*s: global zprg */
 Prog	zprg;
 /*e: global zprg */
-/*s: global dtype(arm) */
-int	dtype = 4;
-/*e: global dtype(arm) */
 /*s: global armv4(arm) */
 bool	armv4;
 /*e: global armv4(arm) */

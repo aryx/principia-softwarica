@@ -21,10 +21,6 @@ dodata(void)
     // DATA instructions loop
     for(p = datap; p != P; p = p->link) {
         s = p->from.sym;
-        /*s: [[dodata()]] if ADYNT or AINIT */
-        if(p->as == ADYNT || p->as == AINIT)
-            s->value = dtype;
-        /*e: [[dodata()]] if ADYNT or AINIT */
         if(s->type == SBSS)
             s->type = SDATA;
         /*s: [[dodata()]] sanity check DATA instructions */

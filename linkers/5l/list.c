@@ -45,12 +45,6 @@ Pconv(Fmt *fp)
 
     case ADATA:
 
-    case AINIT:
-    case ADYNT:
-        sprint(str, "(%ld)	%A%C	%D/%d,%D",
-            p->line, a, p->scond, &p->from, p->reg, &p->to);
-        break;
-
     default:
         s = str;
         s += sprint(s, "(%ld)", p->line);

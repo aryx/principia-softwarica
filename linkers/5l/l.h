@@ -223,8 +223,6 @@ enum Section
     /*x: [[Section]] cases */
     SUNDEF,
     /*x: [[Section]] cases */
-    SCONST,
-    /*x: [[Section]] cases */
     SDATA1,
     /*x: [[Section]] cases */
     SSTRING, // arm

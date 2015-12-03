@@ -348,7 +348,6 @@ aclass(Adr *a)
                 switch(t) {
                 case STEXT: case SSTRING:
                 case SUNDEF:
-                case SCONST: 
                     instoffset = s->value + a->offset;
                     break;
                 case SDATA: case SBSS:
@@ -440,7 +439,6 @@ aclass(Adr *a)
                 break;
             switch(s->type) {
             case STEXT: case SSTRING:
-            case SCONST:
             case SUNDEF:
                 instoffset = s->value + a->offset;
                 return C_LCON; // etext is stable

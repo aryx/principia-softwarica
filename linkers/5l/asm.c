@@ -370,9 +370,6 @@ asmsym(void)
                 putsymb(s->name, 'B', s->value+INITDAT, s->version);
                 continue;
 
-            case SCONST:
-                putsymb(s->name, 'D', s->value, s->version);
-                continue;
             case SSTRING:
                 putsymb(s->name, 'T', s->value, s->version);
                 continue;
@@ -603,14 +600,12 @@ datblk(long s, long n, bool sstring)
             continue;
 
         /*s: [[datblk()]] sanity check multiple initialization */
-        if(p->as != AINIT && p->as != ADYNT) {
             for(j=l+(c-i)-1; j>=l; j--)
                 if(buf.dbuf[j]) {
                     print("%P\n", p);
                     diag("multiple initialization");
                     break;
                 }
-        }
         /*e: [[datblk()]] sanity check multiple initialization */
 
         switch(p->to.type) {

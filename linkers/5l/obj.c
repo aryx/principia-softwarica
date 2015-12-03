@@ -907,8 +907,6 @@ ldobj(fdt f, long c, char *pn)
     /*x: [[ldobj()]] locals(arm) */
     char **nfilen; // new filen
     /*x: [[ldobj()]] locals(arm) */
-    Sym *di = S;
-    /*x: [[ldobj()]] locals(arm) */
     bool skip;
     /*x: [[ldobj()]] locals(arm) */
     Prog *t;
@@ -1224,51 +1222,6 @@ loop:
             addhist(p->to.offset, D_FILE1);	/* 'Z' */
         histfrogp = 0;
         goto loop;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
-    case ADYNT:
-        if(p->to.sym == S) {
-            diag("DYNT without a sym\n%P", p);
-            break;
-        }
-        di = p->to.sym;
-        p->reg = 4;
-        if(di->type == SXREF) {
-            if(debug['z'])
-                Bprint(&bso, "%P set to %d\n", p, dtype);
-            di->type = SCONST;
-            di->value = dtype;
-            dtype += 4;
-        }
-        if(p->from.sym == S)
-            break;
-
-        p->from.offset = di->value;
-        p->from.sym->type = SDATA;
-        if(curtext == P) {
-            diag("DYNT not in text: %P", p);
-            break;
-        }
-        p->to.sym = curtext->from.sym;
-        p->to.type = D_CONST;
-        p->link = datap;
-        datap = p;
-        break;
-    /*x: [[ldobj()]] switch opcode cases(arm) */
-    case AINIT:
-        if(p->from.sym == S) {
-            diag("INIT without a sym\n%P", p);
-            break;
-        }
-        if(di == S) {
-            diag("INIT without previous DYNT\n%P", p);
-            break;
-        }
-        p->from.offset = di->value;
-        p->from.sym->type = SDATA;
-        p->link = datap;
-        datap = p;
-        break;
-
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ASUB:
         if(p->from.type == D_CONST)
