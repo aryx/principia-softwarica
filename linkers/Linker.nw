@@ -219,7 +219,7 @@ to a specific binary instruction?
  %toc: %trans: %dup: %example:
 
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
-%data-structures (beyond list/hashtbl):
+%data-structures (beyond list/hashtbl): (use list, queue, hashtbl)
 % - AST again with enums, tag/union structure
 % - Buffer with reading sliding window
 % - growing array
@@ -228,8 +228,9 @@ to a specific binary instruction?
 % - pattern matching array dispatch table (with subtype notions)
 %   and associated indexation (range and cmp and caching)
 % - reflection via special symbols
+% - bitsets, lots of bit manipulations
 
-%algorithms (beyond search/sort):
+%algorithms (beyond search/sort): (use binary search and use qsort)
 % - unserialization/unmarshalling with shared enum and tags so simple dispatch
 %   or with header specifying sizes, and sliding input buffer window
 % - signature checking (header I_MAGIC, archive ARMAG, names ASIGNAME)
@@ -241,7 +242,6 @@ to a specific binary instruction?
 % - smaller:
 %   * versioning for disambiguation (but gensym would be better term)
 %   * def/use link again via symbol table and special marks (SXREF)
-%   * lots of bit manipulations
 %   * AST rewriting and optimisations
 %   * dumpers
 % - =~ concatenation, resolution, relocation
@@ -2280,6 +2280,7 @@ symbols with [[SXREF]]. This is in fact checked by the
 
 
 \section{[[Opcode]] and [[Operand]]}
+\label{sec:opcode-operand}
 
 %trans:
 An object file contains essentially a list of {instructions} where
@@ -7973,18 +7974,24 @@ which will actually change its value.
 
 %trans:
 The final step in the linking pipeline is the machine code generation.
+%trans:
 We have seen already [[asmb()]], in Section~\ref{sec:gen-executable},
-which generates the executable header and contains some of the
+which generates the [[a.out]] header and contains some of the
 code to generate the code and data sections.
-%toc:
 The only missing pieces were the functions 
-[[oplook()]] and 
-[[asmout()]], 
-used to generate individual ARM instructions, which we will now
-see in this chapter.
-But before, we will give a summary of the format of
-ARM instructions and present additional data structures
-used by [[oplook()]] and [[asmout()]].
+[[oplook()]] and [[asmout()]]:
+
+<<[[asmb()]] Text section, in iteration over instruction [[p]](repeated code)>>=
+    Optab* o = oplook(p);
+    asmout(p, o);
+@
+
+%toc:
+Those two functions work together 
+to generate the ARM instructions and will be covered in this chapter.
+But before, we will give a summary of the 
+ARM instructions format and present additional data structures
+used by [[oplook()]] and [[asmout()]], especially [[Optab]].
 
 %dup: The code generation is done by 5l, not 5a, surprisingly!
 %real-world:?
@@ -7994,9 +8001,12 @@ used by [[oplook()]] and [[asmout()]].
 % as said in X, great guide.
 % ref to colorful guide again
 
+% general shape:  cond, class, rest.
+% FIGURE
+
 % mainly 4 categories, 6 formats: arith, arith with immediate,
 %  memory with offsets, branch immediate, branch
-
+% FIGURE FIGURE FIGURE FIGURE
 
 % immediate value, 8+4 bits
 
@@ -8009,14 +8019,36 @@ used by [[oplook()]] and [[asmout()]].
 
 \section{Additional data structures}
 
+Most of the data structures presented in this section work together
+to provide a way to express {\em rules} of the ARM code generator.
+\l burg?
+A {rule} is made of a {\em pattern} over the shape of an instruction,
+and an {\em action} to be taken if the pattern {\em matches} an instruction.
+%
+A single {pattern} can match a {\em set} of opcodes
+\n I was using range, but then possible confusing with Oprange
+and certain {\em classes} of operands.
+%
+An {action} in a rule consists mostly of an {\em action identifier}
+which is then used in [[asmout()]] to choose the appropriate instruction
+generator.
+\l and there is also Pool, which is different
+%ocaml: use pattern directly, no need special data structure
+
 \subsection{[[Optab]] and [[optab]]}
 \label{sec:optab}
 \n could put in core DS but it's really specific to the code generation chapter
 
+The structure below represents a {rule}:
+
 <<struct Optab(arm)>>=
 struct	Optab
 {
-    // enum<Opcode> (the opcode is the representant of a range)
+    // ---------------------------
+    // The pattern (if)
+    // ---------------------------
+
+    // enum<Opcode> (the opcode is the representant of a set of opcodes)
     byte	as;
 
     // enum<Operand_class>, possible operand class for first operand
@@ -8026,79 +8058,118 @@ struct	Optab
     // enum<Operand_class>, possible operand class for third operand
     short	a3;
 
-    // idx for the code generator, see the giant switch in asmout()
-    short	type; 
+    // ---------------------------
+    // The action (then)
+    // ---------------------------
 
+    // action id for the code generator, see the giant switch in asmout()
+    short	type; 
     // size of the corresponding machine code (should be a multiple of 4)
     short	size; 
 
     <<[[Optab]] other fields>>
 };
 @
+\l rename Rule?
 %ocaml: use a single pattern match so far easier.
 
-% complex. Sort of pattern rule. 
-% Important global with all pattern rules.
+A very important global is [[optab]] which contains
+all the rules of the ARM code generator:
 
 <<global optab (linkers/5l/optab.c)(arm)>>=
 Optab	optab[] =
 {
     <<[[optab]] entries>>
-    { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
+    { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4 },
 };
 @
 \l AXXX at the end? why not ALAST instead? and size 4??
-%old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
+\n order of entries not important, anyway sorted by ocmp()
+%old: I removed the last 0 after the 4, to be closer to the structure def above
 
-% AXXX = sentinel, end marker, used in buildop().
+We will present elements of this array gradually in this chapter.
+%
+The last entry uses the [[AXXX]] opcode which is used as an {\em end-of-array}
+marker\footnote{[[NULL]] is often used for this purpose.}.
+It is recognized by [[buildop()]] which we will cover 
+in Section~\ref{sec:buildop}.
+%ocaml: why not simply use Array.iter?
+\l why not ARRAY_LEN macro which use sizeof? cant?
 
+Here are examples of entries in [[optab]], that is rules:
 
-%ex of entries:
-% Optab	optab[] =
-% {
-%    ...
-%    { AADD,		C_REG,	C_REG,	C_REG,		 1, 4,    0 },
-%    { AADD,		C_RCON,	C_REG,	C_REG,		 2, 4,    0 },
+<<[[optab]] example of entries (repeated)>>=
+//           Pattern                Action
+{ AADD,  C_REG,  C_REG, C_REG,       1, 4 },
+{ AADD,  C_RCON, C_REG, C_REG,       2, 4 },
+{ AADD,  C_LCON, C_REG, C_REG,      13, 8 },
+@
+\n actually there is  LFROM for last entry
 
-% say if find instruction p, where opcode is AADD,
-%  and 3 operands are register, then 4 bytes are necessary
-%  (1 instruction), and the first entry in the dispatch code
-%  of asmout should be used.
+The first entry says that
+{\em if} an instruction has for opcode [[AADD]] and 
+has 3 registers ([[C_REG]]) for operands,
+{\em then} the first entry (the action id [[1]]) in the dispatch
+code of [[asmout()]] should be used to generate
+the code, and 4 bytes should be necessary for this code
+(one ARM instruction).
+\l oplook(p) -> optab!  o->size !
+%
+In fact, this first rule will also match instructions
+using [[ASUB]], [[AAND]], [[AORR]], etc. Indeed, 
+as we will see in Section~\ref{sec:oprange}, [[Optab.as]]
+contains the {\em representant} (here [[AADD]])
+of a set of opcodes.
 
-% oplook(p) -> optab!  o->size !
+Up until now, the {\em class} of an operand ([[C_REG]] above),
+which will be described fully in Section~\ref{sec:operand-class},
+looks similar to the {\em kind} of an operand, which we presented
+quickly in Section~\ref{sec:opcode-operand} and
+fully in the \book{Assembler}.
+%
+Indeed, [[C_REG]] above is very similar to the operand
+kind for registers [[D_REG]].
+%
+For constants though we will start to see a deviation.
+Indeed, the operand kind [[D_CONST]] is actually divided in
+multiple operand classes: [[C_RCON]], [[C_LCON]],
+and a few more we will describe in Section~\ref{sec:operand-class-DCONST}.
+%
+The reason for the division is that depending on the value of the constant,
+one might need to use different kinds of instructions.
+For instance, the third entry of [[optab]] above says that if the first
+operand is a large constant ([[C_LCON]]), then 2 instructions
+will be necessary (8 bytes). 
+\l one extra which loads REGTMP
+%
+If the number is small
+or can be rotated in a certain way ([[C_RCON]]), then 1 instruction
+will be enough, as indicated by the second entry above.
+Indeed, this small or rototable number can be encoded directly 
+in the instruction.
 
-
-% This table contains the different valid combinations 
-% of operands for the different opcodes. Actually not all opcodes are put,
-% only some representative (see also oprange that describes
-% the equivalence classes).
+%assembler:
 % There is a strong coupling with the grammar 5a/a.y to see
 % what operands are allowed, e.g. AMOV has gen operand which
 % allow many things, but AADD has more restricted operands
 % (immediate, shift, or plain register).
 
+\t optab must contain many rules to cover whole spectrum. in fact
+\t  coupling with 5a/a.y and also reason for late messages
+\t  e.g. MOVW (R1), (R1)
 
-% this will be eventually sorted by buildop() later,
-% so will have all AADD together if there were not originally.
-% and sorted order is very important.
-
-
-
-
-
-% The order of entries is important!!, see optab[] global, see ocmp()!
-% It does not matter for cmp() but it matters for ocmp().
-% The order for the operand class is also important!
-% For instance C_HFAUTO must be before C_LAUTO otherwise
+The [[optab]] global will be eventually sorted in [[buildop()]
+with the {ordering function} [[ocmp()]] which we will 
+see in Section~\ref{sec:ocmp}.
+All the rules about [[AADD]] will then
+be put next to each other in the array (if they were originally spread).
+In fact, [[ocmp()]] orders first by opcode, but also then by operand
+classes. The order for those classes is actually important as we
+will see later.
+\l For instance C_HFAUTO must be before C_LAUTO otherwise
 % the careful order of entries in optab will not be taken
 % into account.
 
-% ARM has fixed-length instructions, 4, but 5a/ support
-% some fake/virtual opcodes that actually expands to 
-% multiple instructions, hence the size field above.
-% Also because of 12 bits immediate need special tricks, pool(),
-% RCON vs LCON, etc. So there are many cases where we generate
-% for one Asm5 instruction multiple ARM instructions. 
 
 
 
@@ -8106,37 +8177,71 @@ Optab	optab[] =
 
 
 \subsection{[[Oprange]]}
+\label{sec:oprange}
 
-% one form of general pattern, for instr.
-
-% Optab range
+The structure below represents a {\em range} of entries
+in the sorted global [[optab]]:
 
 <<struct Oprange(arm)>>=
 struct	Oprange
 {
-    //index in (sorted) optab
+    //starting index in (sorted) optab
     Optab*	start;
-    //index in (sorted) optab
+    //ending index in (sorted) optab
     Optab*	stop;
 };
 @
 %old: was Oprang
+
+The global below associates a range to every opcode:
 
 <<global oprange(arm)>>=
 // map<enum<Opcode>, Oprange>
 Oprange	oprange[ALAST];
 @
 
-% ex of use !! otherwise too abstract.
-% also used in oplook
+[[oprange]] is also set by [[buildop()]] and contains
+originally the ranges for the opcodes mentioned in the array.
+For instance, the range for [[AADD]], given the [[optab]] entries
+of the previous section, would be:
+\begin{verbatim}
+// range for AADD, optab[0..3[ <=> optab[0..2]
+{ .start = &optab[0];
+  .stop  = &optab[3];
+}
+\end{verbatim}
 
+This range will be the starting point for the algorithm in [[oplook()]]
+to find the rule matching an instruction (see Section~\ref{sec:oplook}).
+%
+Indeed, given an instruction [[p]], [[oplook()]] can look first in 
+[[oprange[p->as]]] to get a range of entries.
+[[oplook()]] can then iterate over all those entries, which are rules,
+%ocaml: compiled big match is efficient? will sort by opcode?
+and check if the classes of the operands 
+[[p->from]], [[p->reg]], and [[p->to]] match the one specified
+in the rule. The operand matching function is actually not just
+equality but a subtle function, [[cmp()]],
+which we will see in Section~\ref{sec:cmp}.
+%
+The first rule matching the instruction will be returned
+by [[oplook()]].
 
-% will be the set of entries in the sorted optab
-% that talk about a certain opcode
+% in addition to algorithm oplook part, also useful to enrich optab
+% to set of opcodes. Indeed by doing oprange[ASUB] = oprange[AADD];
+% all the rules for AADD in optab will be tried when instruction
+% with ASUB. So in effect AADD become a represent for the set
+% AADD ASUB. 
+% we will see gradually in this chapter those sets and their different
+% represents.
+
+\t one form of general pattern, for instr.
 
 \subsection{[[Operand_class]]}
+\label{sec:operand-class}
 \n was in core DS, but I think better here with Optab.
 
+% mentioned before.
 % kind of more precise operand kind as we will see.
 
 \subsubsection{Basic classes}
@@ -8235,6 +8340,8 @@ long	instoffset;
 
 
 \paragraph{[[D_CONST]]}
+\label{sec:operand-class-DCONST}
+
 % immediate constants constraints
 % ex of instr: ADD I, R1, R2
 
@@ -8820,110 +8927,10 @@ immhalf(long v)
 % seems identical to immhalf no? no now it's 0xff! not 0xfff
 
 
-\section{[[buildop()]] and [[oplook()]]}
-
-<<[[main()]] initialize globals(arm)>>=
-buildop();
-@
-
-\subsection{[[buildop()]]}
-
-<<function buildop(arm)>>=
-/// main (init) -> <>
-void
-buildop(void)
-{
-    int i, n;
-    // enum<Opcode> representing a range
-    int r;
-
-    <<[[buildop()]] initialize xcmp cache>>
-    <<[[buildop()]] initializer floating flags>>
-
-    for(n=0; optab[n].as != AXXX; n++) {
-        <<[[buildop()]] adjust optab if floating flags>>
-    }
-
-    qsort(optab, n, sizeof(optab[0]), ocmp);
-
-    for(i=0; i<n; i++) {
-        r = optab[i].as;
-
-        oprange[r].start = optab+i;
-        while(optab[i].as == r)
-            i++;
-        oprange[r].stop = optab+i;
-        i--;
-
-        switch(r)
-        {
-        <<[[buildop()]] switch opcode r for ranges cases>>
-        default:
-            diag("unknown op in build: %A", r);
-            errorexit();
-        }
-    }
-}
-@
-%dead:		case ABX:
-%dead:		case ABXRET:
-% coupling with order of opcode in 5.out.h? no, this just
-% describe the equivalence classes for optab, that
-% is an entry in optab about AADD is also valid for AAND, etc.
-% invariant: the case in the switch must be the entries in optab, not
-% more, not less
-
-
-
-<<[[buildop()]] switch opcode r for ranges cases>>=
-case AXXX:
-    break;
-@
-% no ARET? no because noops should have rewrote it.
-% no ADATA/AGLOBL because buildop is used for code (TEXT) generation,
-% not for data (DATA) generation.
-
-
-
-<<function ocmp(arm)>>=
-/// main -> buildop -> qsort(..., <>)
-int
-ocmp(const void *a1, const void *a2)
-{
-    Optab *p1, *p2;
-    int n;
-
-    p1 = (Optab*)a1;
-    p2 = (Optab*)a2;
-
-    n = p1->as - p2->as;
-    if(n)
-        return n;
-    <<[[ocmp()]] if floating point flag on p1 or p2>>
-    n = p1->a1 - p2->a1;
-    if(n)
-        return n;
-    n = p1->a2 - p2->a2;
-    if(n)
-        return n;
-    n = p1->a3 - p2->a3;
-
-    if(n)
-        return n;
-    return 0;
-}
-@
-%sort first by opcode, then class of first operand, then second, then thrd.
-%note: Is it needed since in oplook() we just
-% iterate over all the range for a certain opcode?
-% Yes it is needed! The order of the entries in optab matter, because have
-% some specific entries first and then a general one
-
-%TODO: which is why perhaps doing some += in the chunk for xxx
-% is not good?  
-%update: ??
+\section{[[oplook()]] and [[buildop()]]}
 
 \subsection{[[oplook()]]}
+\label{sec:oplook}
 
 <<[[oplook()]] locals>>=
 Optab *o, *e;
@@ -8975,7 +8982,7 @@ oplook(Prog *p)
 
 
 
-
+\label{sec:cmp}
 % cmp for compatible (not compare).
 % 'b' is the actual class of the operand, 'a' is the one mentionned
 % in optab which is actually compatible with a few concrete class.
@@ -9058,6 +9065,114 @@ if(o == nil)
 return o;
 @
 
+
+\subsection{[[buildop()]]}
+\label{sec:buildop}
+
+<<[[main()]] initialize globals(arm)>>=
+buildop();
+@
+
+<<function buildop(arm)>>=
+/// main (init) -> <>
+void
+buildop(void)
+{
+    int i, n;
+    // enum<Opcode> representing a range
+    int r;
+
+    <<[[buildop()]] initialize xcmp cache>>
+    <<[[buildop()]] initializer floating flags>>
+
+    for(n=0; optab[n].as != AXXX; n++) {
+        <<[[buildop()]] adjust optab if floating flags>>
+    }
+    // n contains now the size of optab
+
+    qsort(optab, n, sizeof(optab[0]), ocmp);
+
+    for(i=0; i<n; i++) {
+        r = optab[i].as;
+
+        oprange[r].start = optab+i;
+        while(optab[i].as == r)
+            i++;
+        oprange[r].stop = optab+i;
+        i--; // compensate the i++ of the for
+
+        switch(r)
+        {
+        <<[[buildop()]] switch opcode r for ranges cases>>
+        default:
+            diag("unknown op in build: %A", r);
+            errorexit();
+        }
+    }
+}
+@
+%dead:		case ABX:
+%dead:		case ABXRET:
+% coupling with order of opcode in 5.out.h? no, this just
+% describe the equivalence classes for optab, that
+% is an entry in optab about AADD is also valid for AAND, etc.
+% invariant: the case in the switch must be the entries in optab, not
+% more, not less
+
+
+
+<<[[buildop()]] switch opcode r for ranges cases>>=
+case AXXX:
+    break;
+@
+% no ARET? no because noops should have rewrote it.
+% no ADATA/AGLOBL because buildop is used for code (TEXT) generation,
+% not for data (DATA) generation.
+
+
+\label{sec:ocmp}
+<<function ocmp(arm)>>=
+/// main -> buildop -> qsort(..., <>)
+int
+ocmp(const void *a1, const void *a2)
+{
+    Optab *p1, *p2;
+    int n;
+
+    p1 = (Optab*)a1;
+    p2 = (Optab*)a2;
+
+    n = p1->as - p2->as;
+    if(n)
+        return n;
+    <<[[ocmp()]] if floating point flag on p1 or p2>>
+    n = p1->a1 - p2->a1;
+    if(n)
+        return n;
+    n = p1->a2 - p2->a2;
+    if(n)
+        return n;
+    n = p1->a3 - p2->a3;
+
+    if(n)
+        return n;
+    return 0;
+}
+@
+%sort first by opcode, then class of first operand, then second, then thrd.
+%note: Is it needed since in oplook() we just
+% iterate over all the range for a certain opcode?
+% Yes it is needed! The order of the entries in optab matter, because have
+% some specific entries first and then a general one
+
+% important is because of cmp, and ocmp a1 - a2, 
+% order of enums is actually important! indeed
+% if LCON before RCON, then sorted entry first, and LCON match everytging
+% so too bad if later has a more specialized rule with RCON!
+
+%TODO: which is why perhaps doing some += in the chunk for xxx
+% is not good?  
+%update: ??
 
 \subsection{Caching}
 % Memoizing
@@ -9257,7 +9372,7 @@ asmout(Prog *p, Optab *o)
 }
 @
 %$
-
+\t long -> ulong for instr? typedef?
 
 
 
@@ -9305,6 +9420,8 @@ default:
     <<[[asmout()]] when other size, debug>>
     break;
 @
+
+\t flush? lputl? cout?
 
 \section{Pseudo opcodes}
 
@@ -10416,6 +10533,7 @@ case ARFE:
 { ASWI,		C_NONE,	C_NONE,	C_LCON,		10, 4, 0 },
 { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
 @
+%old: { ASWI,		C_NONE,	C_NONE,	C_LOREG,	10, 4, 0 },
 %pad: I added the entry for LCON to allow SWI $0 which make more sense to me
 % than SWI 0 which was used in 9syscall/mkfile originally
 %old: I used to comment the LOREG entry because SWI was not having
