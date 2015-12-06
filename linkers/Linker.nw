@@ -22,6 +22,7 @@
 %    * commented lots of code that was in dead ifdefs or was related to
 %      dead alef features like BECOME
 % - reorganized code
+%    * split big enum in separate types: Section, Operand_class, misc
 %    * around INITENTRY, -l, -E digit, make default path
 %    * renames many local variables, more consistent (v = version, etc)
 %    * mv Autom out of union, remove union, was confusing
@@ -717,32 +718,36 @@ header which uses 32 bytes.
 
 \subsection{Architecture constraints}
 
+% There are general principles in linker, as we have seen,
+% but also a lot specific to an architecture!
+% Input and output first, object files, executable. specific. 
+% Also constraints have implication on symbol resolution!
+
 % resolving and relocating changes things! change addresses!
 % this in turns change other things on some archi.
 
 % CALL 100 whatif very far away? (well have 24 bits for offsets in
 % ARM jmp, so not issue really)
 
-% some archi have constraints on size of immediate, offsets, etc.
+% on x86 have small jump and far jump, and one faster than other
+% but can work only if dest is not far.
+
+% ARM has constraints on size of immediate, offsets, etc.
 % when resolve and find out address of things, maybe can not use
 % regular instr. Have to adapt! find tricks! intermediate instrs.
 % but then change size of code section, so shift data, so 
 % need reresolve!
+\t generic term used in Levine book for that?
 
 % works for 5l because: 
-% - offset for jmps is really big, so stable size of instr
+% - offset for jmps is really big, so stable size of instr, and can use
+%   that for pooling
 % - address for globals are offsets to R12 and so stable
-% - special case for setR12
-% - works for etext???
+% - special case for setR12 where use absolute, possibly via pooling
 
-% on x86 have small jump and far jump, and one faster than other
-% but can work only if dest is not far.
-
-% other linkers do pooling? role of linker? who else can do that anyway?
+\l other linkers do pooling? role of linker? who else can do that anyway?
 
 %\subsection{Mutual dependency, fixpoint}
-% generic term used in Levine book for that?
-\t talk now about issue with mutual dependency reference of SB?
 
 
 \subsection{Disk image versus memory image}
@@ -7974,10 +7979,12 @@ which will actually change its value.
 
 %trans:
 The final step in the linking pipeline is the machine code generation.
+%dup: The code generation is done by 5l, not 5a, surprisingly!
+%real-world:?
 %trans:
 We have seen already [[asmb()]], in Section~\ref{sec:gen-executable},
 which generates the [[a.out]] header and contains some of the
-code to generate the code and data sections.
+logic to generate the code and data sections.
 The only missing pieces were the functions 
 [[oplook()]] and [[asmout()]]:
 
@@ -7989,12 +7996,9 @@ The only missing pieces were the functions
 %toc:
 Those two functions work together 
 to generate the ARM instructions and will be covered in this chapter.
-But before, we will give a summary of the 
-ARM instructions format and present additional data structures
+But before, we will describe the binary format of the
+ARM instructions and present additional data structures
 used by [[oplook()]] and [[asmout()]], especially [[Optab]].
-
-%dup: The code generation is done by 5l, not 5a, surprisingly!
-%real-world:?
 
 \section{ARM instruction format}
 
@@ -8018,9 +8022,10 @@ used by [[oplook()]] and [[asmout()]], especially [[Optab]].
 % Other?
 
 \section{Additional data structures}
+\l rules, patterns, ranges, classes
 
 Most of the data structures presented in this section work together
-to provide a way to express {\em rules} of the ARM code generator.
+to provide a concise way to express the {\em rules} of the ARM code generator.
 \l burg?
 A {rule} is made of a {\em pattern} over the shape of an instruction,
 and an {\em action} to be taken if the pattern {\em matches} an instruction.
@@ -8032,8 +8037,13 @@ and certain {\em classes} of operands.
 An {action} in a rule consists mostly of an {\em action identifier}
 which is then used in [[asmout()]] to choose the appropriate instruction
 generator.
-\l and there is also Pool, which is different
 %ocaml: use pattern directly, no need special data structure
+
+%toc: 
+The following sections introduce the data structures and
+a few concrete examples for
+the rules, patterns, and operand classes we just mentioned.
+\n and there is also Pool, which is different, and will have own section
 
 \subsection{[[Optab]] and [[optab]]}
 \label{sec:optab}
@@ -8071,6 +8081,7 @@ struct	Optab
 };
 @
 \l rename Rule?
+\t rename Optab.type -> Optab.action_id ?
 %ocaml: use a single pattern match so far easier.
 
 A very important global is [[optab]] which contains
@@ -8086,6 +8097,7 @@ Optab	optab[] =
 \l AXXX at the end? why not ALAST instead? and size 4??
 \n order of entries not important, anyway sorted by ocmp()
 %old: I removed the last 0 after the 4, to be closer to the structure def above
+% and I did that for many entries
 
 We will present elements of this array gradually in this chapter.
 %
@@ -8121,13 +8133,13 @@ as we will see in Section~\ref{sec:oprange}, [[Optab.as]]
 contains the {\em representant} (here [[AADD]])
 of a set of opcodes.
 
-Up until now, the {\em class} of an operand ([[C_REG]] above),
+Up until now, the {\em class} of an operand (e.g. [[C_REG]] above),
 which will be described fully in Section~\ref{sec:operand-class},
 looks similar to the {\em kind} of an operand, which we presented
 quickly in Section~\ref{sec:opcode-operand} and
 fully in the \book{Assembler}.
 %
-Indeed, [[C_REG]] above is very similar to the operand
+Indeed, [[C_REG]] is very similar to the operand
 kind for registers [[D_REG]].
 %
 For constants though we will start to see a deviation.
@@ -8158,21 +8170,17 @@ in the instruction.
 \t  coupling with 5a/a.y and also reason for late messages
 \t  e.g. MOVW (R1), (R1)
 
-The [[optab]] global will be eventually sorted in [[buildop()]
+The [[optab]] global will be eventually sorted in [[buildop()]]
 with the {ordering function} [[ocmp()]] which we will 
 see in Section~\ref{sec:ocmp}.
 All the rules about [[AADD]] will then
 be put next to each other in the array (if they were originally spread).
-In fact, [[ocmp()]] orders first by opcode, but also then by operand
+In fact, [[ocmp()]] orders first by opcodes, but also then by operand
 classes. The order for those classes is actually important as we
 will see later.
 \l For instance C_HFAUTO must be before C_LAUTO otherwise
 % the careful order of entries in optab will not be taken
 % into account.
-
-
-
-
 
 
 
@@ -8201,7 +8209,7 @@ Oprange	oprange[ALAST];
 @
 
 [[oprange]] is also set by [[buildop()]] and contains
-originally the ranges for the opcodes mentioned in the array.
+originally the ranges for the opcodes mentioned in the [[optab]] array.
 For instance, the range for [[AADD]], given the [[optab]] entries
 of the previous section, would be:
 \begin{verbatim}
@@ -8214,7 +8222,7 @@ of the previous section, would be:
 This range will be the starting point for the algorithm in [[oplook()]]
 to find the rule matching an instruction (see Section~\ref{sec:oplook}).
 %
-Indeed, given an instruction [[p]], [[oplook()]] can look first in 
+Indeed, given an instruction [[p]], [[oplook()]] looks first in 
 [[oprange[p->as]]] to get a range of entries.
 [[oplook()]] can then iterate over all those entries, which are rules,
 %ocaml: compiled big match is efficient? will sort by opcode?
@@ -8227,433 +8235,157 @@ which we will see in Section~\ref{sec:cmp}.
 The first rule matching the instruction will be returned
 by [[oplook()]].
 
-% in addition to algorithm oplook part, also useful to enrich optab
-% to set of opcodes. Indeed by doing oprange[ASUB] = oprange[AADD];
-% all the rules for AADD in optab will be tried when instruction
-% with ASUB. So in effect AADD become a represent for the set
-% AADD ASUB. 
-% we will see gradually in this chapter those sets and their different
-% represents.
+
+In addition to its role as an {\em indexing structure} for [[oplook()]],
+[[oprange]] can also be used to {\em factorize} rules.
+Indeed, by doing for instance 
+[[oprange[ASUB] = oprange[AADD];]] in 
+[[buildop()]],
+all the rules with [[AADD]] in [[optab]] will be tried for instructions
+with the opcode [[ASUB]]. So, in effect [[AADD]] becomes the
+{\em representant} of the set of opcodes [[{AADD, ASUB}]].
+%
+Then, one just needs to write rules with [[AADD]] instead of
+having to repeat them also for [[ASUB]].
+%
+We will gradually see in this chapter the different opcodes sets
+and their representants.
 
 \t one form of general pattern, for instr.
+
 
 \subsection{[[Operand_class]]}
 \label{sec:operand-class}
 \n was in core DS, but I think better here with Optab.
 
-% mentioned before.
-% kind of more precise operand kind as we will see.
+%trans:
+We have seen already a few elements of the
+[[Operand_class]] type: [[C_REG]], [[C_RCON]], and [[C_LCON]].
+%
+As mentioned before, the operand classes are similar
+to the operand kinds. In fact, many are almost
+identical, e.g. [[C_REG]] versus [[D_REG]]:
 
-\subsubsection{Basic classes}
-
-% seems called the class, see aclass(), a more precise operand_kind
-% closer to the machine constraint as we will see in next section
+%\subsubsection{Basic classes}
 
 <<enum Operand_class(arm)>>=
-// order of entries matter! coupling with cmp() and ocmp()
+// order of entries for one kind matters! coupling with cmp() and ocmp()
 enum Operand_class {
     C_NONE		= 0,
+    C_REG,     // D_REG
+    C_BRANCH,  // D_BRANCH
 
-    C_REG,
-    C_REGREG,
-    C_SHIFT,
-    C_PSR,
+    // D_CONST
+    <<[[Operand_class]] C_xCON cases>>
 
-    C_BRANCH,
+    // D_OREG
+    <<[[Operand_class]] C_xOREG cases>>
+    // D_OREG with symbol N_EXTERN (or N_INTERN)
+    <<[[Operand_class]] C_xEXT cases>>
+    // D_OREG with symbol N_PARAM or N_LOCAL
+    <<[[Operand_class]] C_xAUTO cases>>
+
+    // D_ADDR
+    <<[[Operand_class]] C_xxCON cases>>
 
     <<[[Operand_class]] cases>>
-
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };
 @
-\l do big categories, xxCON, xxAUTO, xxEXT, xxREG?
 %assembler: diffs with operand_kind
 % - OREG splitted in many xxxOREG and xxxEXT (SB), xxAUTO (FP, SP)
 % - D_CONST splitted in many xxxCON
 % - S_CONST?
 % - a new C_GOK, but could be called C_LAST I think
-%old: I renamed Operand_class, consistent with Operand_kind. C vs D.
-%old: there was C_SBRA, C_LBRA but LBRA was unused so I s/C_LBRA/C_BRANCH/
+%old: was originally in the same enum than STEXT, SBSS, etc, so I splitted
+% and named it Operand_class, consistent with Operand_kind. C vs D.
+% and also because there was a function called aclass()
+%dead: there was C_SBRA, C_LBRA but LBRA was unused so I s/C_LBRA/C_BRANCH/
 % there was also this in cmp()
 %    case C_LBRA:
 %        if(b == C_SBRA)
 %            return 1;
 %        break;
-%
 
-%code: order of entries matter! look at code of cmp() to see which
-% classes are subclasses and must be after.
+Some kinds are also divided in {\em subclasses}, e.g.
+[[D_CONST]] in [[C_RCON]], [[C_LCON]], and a few more.
+We will present those subclasses gradually in this chapter.
+\l order of entries matter! look at code of cmp() to see which
+\l  classes are subclasses and must be after.
 
-\subsubsection{[[aclass()]]}
+%\subsubsection{[[aclass()]]}
+
+The function below converts an operand kind to an operand class.
+It is used notably by [[oplook()]]:
 
 <<function aclass(arm)>>=
+// oplook | ... -> <>
 int
 aclass(Adr *a)
 {
-    Sym *s;
-    int t;
+    <<[[aclass()]] locals>>
 
     switch(a->type) {
-    case D_NONE:
-        return C_NONE;
-
-    case D_REG:
-        return C_REG;
-    case D_REGREG:
-        return C_REGREG;
-    case D_SHIFT:
-        return C_SHIFT;
-    case D_PSR:
-        return C_PSR;
-
-    case D_BRANCH:
-        return C_BRANCH;
-
     <<[[aclass()]] switch type cases>>
     }
     return C_GOK;
 }
 @
-% I think aclass() assumes the size of the sections
-% has been computed so it can know if a symbol reference
-% is close and so could be stored in a half-word, or if
-% it's far away.
-
-\subsubsection{Refined classes and [[instoffset]]}
-
-% another form of pattern, for operand this time.
-% other kind of range than OpRange, range of possible values
-% of operands. with inheritance notion! Quite subtle.
-
-
-
-
-<<global instoffset(arm)>>=
-long	instoffset;
-@
-% instruction offset?
-% really needs to be a global? can't be just a local to aclass()?
-
-% seems to be used both for immediate constant and offset
-
-
-
-
-\paragraph{[[D_CONST]]}
-\label{sec:operand-class-DCONST}
-
-% immediate constants constraints
-% ex of instr: ADD I, R1, R2
+\l C_GOK, defensive programming, should never happen
 
 <<[[aclass()]] switch type cases>>=
-case D_CONST:
-    switch(a->symkind) {
-    <<[[aclass()]] D_CONST case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-
-
-% Rotated, Negative, Large?
-<<[[Operand_class]] cases>>=
-C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
-C_NCON,		/* ~RCON */
-C_LCON,
-@
-%TODO: must impose order with other xCON?
-%dead: C_SCON,		/* 0xffff */
-%in the end NCON is not different from LCON when you look at optab,
-% so perhaps it could be removed.
-%note that LCON is more "general" than the other, see cmp() later.
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_NONE:
-    instoffset = a->offset;
-    if(a->reg != R_NONE) // when?
-        goto aconsize;
-
-    if(immrot(instoffset))
-        return C_RCON;
-    if(immrot(~instoffset))
-        return C_NCON;
-    return C_LCON;
+    return C_NONE;
+case D_REG:
+    return C_REG;
+case D_BRANCH:
+    return C_BRANCH;
 @
 
-
-
-\paragraph{[[D_OREG]]}
-% offsets constraints
-% ex of instr: MOVW OFF(R13), R2
-
-
-<<[[aclass()]] switch type cases>>=
-case D_OREG:
-    switch(a->symkind) {
-    <<[[aclass()]] D_OREG case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-% OREG usually is a dereference of a register or a symbol reference
-% (which is then really an implicit offet to SB)
-
-% H S L ? half, small, large?
-<<[[Operand_class]] cases>>=
-C_HEXT,
-<<[[Operand_class]] cases, in C_xEXT, float cases>>
-C_SEXT,
-C_LEXT,
-@
-% EXT for? external symbol?
-% see Section X later expose constraint to satisfy for address
-
-%xxx+y(SB)
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case N_EXTERN:
-case N_INTERN:
-    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>
-    s = a->sym;
-    t = s->type;
-    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>
-    <<[[aclass()]] when D_OREG and external symbol and dlm>>
-    instoffset = s->value + a->offset - BIG;
-    t = immaddr(instoffset);
-    if(t) {
-        <<[[aclass()]] if immfloat for N_EXTERN symbol>>
-        return immhalf(instoffset)? C_HEXT : C_SEXT;
-    }
-    return C_LEXT;
-@
-
-
-<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>=
-if(a->sym == nil || a->sym->name == nil) {
-    print("null sym external\n");
-    print("%D\n", a);
-    return C_GOK;
-}
-@
-
-<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>=
-if(t == SNONE || t == SXREF) {
-    diag("undefined external: %s in %s", s->name, TNAME);
-    s->type = SDATA;
-}
-@
-
-
-<<[[Operand_class]] cases>>=
-C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-<<[[Operand_class]] cases, in C_xAUTO, float cases>>
-C_SAUTO,	/* -0xfff to 0xfff */
-C_LAUTO,
-@
-% the order matters! because of ocmp() and the order of entries in optab
-% hence the chynk for float here
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case N_LOCAL:
-    instoffset = autosize + a->offset;
-    t = immaddr(instoffset);
-    if(t){
-        <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
-        return immhalf(instoffset)? C_HAUTO : C_SAUTO;
-    }
-    return C_LAUTO;
-@
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case N_PARAM:
-    instoffset = autosize + a->offset + 4L;
-    t = immaddr(instoffset);
-    if(t){
-        <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
-        return immhalf(instoffset)? C_HAUTO : C_SAUTO;
-    }
-    return C_LAUTO;
-@
-% +4??
-
-% RO? rotated?
-<<[[Operand_class]] cases>>=
-C_HOREG,
-<<[[Operand_class]] cases, in C_xOREG, float cases>>
-C_SOREG,
-C_LOREG,
-
-C_ROREG,
-C_SROREG,	/* both S and R */
-@
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case D_NONE:
-    instoffset = a->offset;
-    t = immaddr(instoffset);
-    if(t) {
-        <<[[aclass()]] if immfloat for D_NONE symbol>>
-
-         /* n.b. that immhalf() will also satisfy immrot */
-        if(immhalf(instoffset))	
-            return C_HOREG;
-
-        if(immrot(instoffset))
-            return C_SROREG;
-        return immhalf(instoffset)? C_HOREG : C_SOREG;
-    }
-    if(immrot(instoffset))
-        return C_ROREG;
-    return C_LOREG;
-@
-
-
-
-
-\paragraph{[[D_ADDR]]}
-%todo: D_ADDR?
-
-% should not use D_CONST when really you use the address of a symbol
-
-
-% rotated External const
-<<[[Operand_class]] cases>>=
-C_RECON,
-@
-%dead: C_LECON
-% optab:    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
-% cmp:    case C_LECON:
-%        if(b == C_RECON)
-%            return 1;
-%        break;
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case N_EXTERN:
-case N_INTERN:
-    s = a->sym;
-    <<[[aclass()]] D_CONST case, N_EXTERN case, sanity check s>>
-    switch(s->type) {
-    case STEXT: case SSTRING:
-    case SUNDEF:
-        instoffset = s->value + a->offset;
-        return C_LCON; // etext is stable
-    case SNONE: case SXREF:
-        diag("undefined external: %s in %s", s->name, TNAME);
-        s->type = SDATA;
-        // Fall through
-    case SDATA: case SBSS: case SDATA1:
-        if(!dlm) {
-            instoffset = s->value + a->offset - BIG;
-            if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
-                return C_RECON;
-        }
-        // else
-        instoffset = s->value + a->offset + INITDAT;
-        return C_LCON;
-    }
-    diag("unknown section for %s", s->name);
-    break;
-@
-%pad: I added the final diag() because of the way I wrote the code
-%old: used to be but more messy because of return and break
-%    case SNONE: case SXREF:
-%        diag("undefined external: %s in %s", s->name, TNAME);
-%        s->type = SDATA;
-%        break;
-%    }
-%    if(!dlm) {
-%        instoffset = s->value + a->offset - BIG;
-%        if(immrot(instoffset) && instoffset != 0)
-%            return C_RECON;
-%    }
-%    instoffset = s->value + a->offset + INITDAT;
-%    return C_LCON;
-%old: case SLEAF: 
-%old: case SCONST:
-
-% for LCON have to do the INITDAT!
-% really need RECON?
-% what about setR12? how bootstrap? can match C_RECON?
-% no cos of the special case != 0!! because setR12 is BIG, so
-% BIG-BIG = 0 so use LCON for that
-
-
-<<[[aclass()]] D_CONST case, N_EXTERN case, sanity check s>>=
-if(s == S) // no warning?
-    break;
-@
-
-%todo: need that? when do we get the address of a local or parameter?
-% for which code we have those classes used??
-<<[[Operand_class]] cases>>=
-C_RACON,
-C_LACON,
-@
-%RA Rotate Address? and Long Address?
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case N_LOCAL:
-    instoffset = autosize + a->offset;
-    goto aconsize;
-@
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case N_PARAM:
-    instoffset = autosize + a->offset + 4L;
-    goto aconsize;
-@
-
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-aconsize:
-    return immrot(instoffset)? C_RACON : C_LACON;
-@
-
-
-%dead: this advanced addressing mode of 5a is not that useful
-%    case D_OCONST:
-%        switch(a->name) {
-%        case N_EXTERN:
-%        case N_INTERN:
-%            s = a->sym;
-%            t = s->type;
-%            if(t == 0 || t == SXREF) {
-%                diag("undefined external: %s in %s",
-%                    s->name, TNAME);
-%                s->type = SDATA;
-%            }
-%            instoffset = s->value + a->offset + INITDAT;
-%            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
-%                instoffset = s->value + a->offset;
-%            return C_LCON;
-%        }
-%        return C_GOK;
-
-
-
-\subsection{Pool}
-\label{sec:pool-and-reg-tmp}
-
-% was in Resolving/issue/virtual-pc
-%where the first instruction would load the big number from 
+Up until now the code of [[aclass()]] is pretty simple.
+Later, for operands involving constants ([[D_CONST]]),
+offsets ([[D_OREG]]), or addresses ([[D_ADDR]]), 
+the code will be more complicated as one operand kind
+may lead to different subclasses.
 %
-%% LDR $pool1, RTMP
-%% ADD RTMP, R1, R2
-%% DATA pool1+0/4 $10256
-%
-%somewhere in
-%a reserved register 
-%\l REGTMP
-%and where the second instruction would then 
-%substitutes the big number
-%
-% from the original
-%instruction in the following instruction.
-%\l actually two code and one data?
+In fact, [[aclass()]] assumes the layout of globals
+has been done (via [[dodata()]]).
+That way [[aclass()]] can know for instance the section and 
+concrete offset of a global.
+This is necessary to know the subclass of this operand, to know
+for instance whether the offset is small in which case 
+it can be encoded efficiently directly in the instruction.
+\l See section X for all refined classes.
+
+<<[[aclass()]] locals>>=
+Sym *s;
+// enum<Section>
+int t;
+@
+\l add i, because abuse t for different things
+
+\t well called from dotext, where INITDAT not set yet, but offset set
+\t so enough to know if can do RECON. If not then do LCON so fine,
+\t no need to know INITDAT. Also for code address STEXT then always
+\t use LCON too so safe. just that instoffset value during dotext
+\t is incorrect.
 
 
-% see 5l -v -a, see WORD generated at the end for constants
-% that could not be encoded in one ARM instruction. Asm5 != ARMv6
+\subsection{[[Optab.param]] and [[Optab.flag]]}
 
 <<[[Optab]] other fields>>=
 // 0 | REGSB | REGSP
 short	param;
+@
+
+%optional (which is why didn't put in example above).
+% pass additional information to asmout() in addition to
+% action id.
+
+%ex:
+
+
+<<[[Optab]] other fields>>=
 // bitset<enum<Optab_flag>>
 short	flag;
 @
@@ -8670,325 +8402,106 @@ enum Optab_flag {
 @
 % >> >> >> >> >>
 
+% very subtle. Complicated.
 
+%ex:
 
-<<[[dotext()]] pool handling for optab o>>=
-switch(o->flag & (LFROM|LTO|LPOOL)) {
-case LFROM:
-    addpool(p, &p->from);
-    break;
-case LTO:
-    addpool(p, &p->to);
-    break;
-
-case LPOOL:
-    if ((p->scond&C_SCOND) == COND_ALWAYS)
-        flushpool(p, 0);
-    break;
-}
-
-if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
-   (p->scond&C_SCOND) == COND_ALWAYS)
-    flushpool(p, 0);
-
-if(blitrl)
-    checkpool(p);
-@
-% c += m; used to be before if(blitrl)
-
-
-% arm specific
-<<global pool(arm)>>=
-static struct {
-    ulong	start;
-    ulong	size;
-} pool;
-@
-
-
-<<function checkpool(arm)>>=
-/*
- * when the first reference to the literal pool threatens
- * to go out of range of a 12-bit PC-relative offset,
- * drop the pool now, and branch round it.
- * this happens only in extended basic blocks that exceed 4k.
- */
-void
-checkpool(Prog *p)
-{
-    if(pool.size >= 0xffc || immaddr((p->pc+4)+4+pool.size - pool.start+8) == 0)
-        flushpool(p, 1);
-    else if(p->link == P)
-        flushpool(p, 2);
-}
-@
-
-<<global blitrl(arm)>>=
-Prog*	blitrl;
-@
-
-<<global elitrl(arm)>>=
-Prog*	elitrl;
-@
-
-
-<<function flushpool(arm)>>=
-void
-flushpool(Prog *p, bool skip)
-{
-    Prog *q;
-
-    if(blitrl) {
-        if(skip){
-            if(debug['v'] && skip)
-                print("note: flush literal pool at %lux: len=%lud ref=%lux\n", p->pc+4, pool.size, pool.start);
-            q = prg();
-            q->as = AB;
-            q->to.type = D_BRANCH;
-            q->cond = p->link;
-            q->link = blitrl;
-            blitrl = q;
-        }
-        else if(p->pc+pool.size-pool.start < 2048)
-            return;
-        elitrl->link = p->link;
-        p->link = blitrl;
-        blitrl = nil;	/* BUG: should refer back to values until out-of-range */
-        elitrl = nil;
-        pool.size = 0;
-        pool.start = 0;
-    }
-}
-@
-
-<<function addpool(arm)>>=
-void
-addpool(Prog *p, Adr *a)
-{
-    Prog *q, t;
-    int c;
-
-    c = aclass(a);
-
-    t = zprg;
-    t.as = AWORD;
-
-    switch(c) {
-    case C_SROREG:
-    case C_LOREG:
-    case C_ROREG:
-    case C_FOREG:
-    case C_SOREG:
-    case C_FAUTO:
-    case C_SAUTO:
-    case C_LAUTO:
-    case C_LACON:
-        t.to.type = D_CONST;
-        t.to.offset = instoffset;
-        break;
-    default:
-        t.to = *a;
-        break;
-    }
-
-    for(q = blitrl; q != P; q = q->link)	/* could hash on t.t0.offset */
-        if(memcmp(&q->to, &t.to, sizeof(t.to)) == 0) {
-            p->cond = q;
-            return;
-        }
-
-    q = prg();
-    *q = t;
-    q->pc = pool.size;
-
-    if(blitrl == P) {
-        blitrl = q;
-        pool.start = p->pc;
-    } else
-        elitrl->link = q;
-    elitrl = q;
-    pool.size += 4;
-
-    p->cond = q;
-}
-@
-
-
-
-
-\section{Half, Small, Large, Rot, Neg}
-\label{sec:clever-trick-numbers}
-
-% Those are some kinds of optimisations? a bit but also need that
-% because expressivity Asm5 greater than what ARM can actually do sometimes.
-
-% The load/store ARM instructions take 2 registers (src_val, dst_address)
-% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
-% do negative offset with a bit).
-% That means that if you do  'MOVW $1, myglobal', naively you'll have to
-% encode it as 3 instructions:
-%     MOV $1, R1
-%     MOV $myglobal, R2
-%     STR R1, R2.
-% But if myglobal is not that far from address 0 and you have a special
-% register reserved that always contain 0 (e.g. R12),
-% then you could use the 12bits offset instead of using a register
-% and just do
-%     MOV $1, R1
-%     STR R1, R12+$myglobal
-% If you have a special register which always contain the value 1, 
-% then you do even better with just do 
-%     STR R0, R12+$myglobal! 
-% which is 3 times faster (well if the global address is in a cache).
-%
-% In practice the first page of the address space is always reserved
-% so it's better to store in R12 a bigger value. R12 will actually
-% be set to INITDAT+BIG.
-
-
-
-\subsection{immediate values (possibly rotated), [[immrot()]]}
-% immediate (rotated) address
-
-% see Machine.nw and the ARM refcard to understand the code below.
-% RCON is for small immediate value, or rotated things of small 
-% immediate value.
-% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
-% hence the code below.
-
-% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
-
-<<function immrot(arm)>>=
-long
-immrot(ulong v)
-{
-    int i;
-
-    for(i=0; i<16; i++) {
-        if((v & ~0xff) == 0)
-            return (i<<8) | v | (1<<25);
-        v = (v<<2) | 
-            (v>>30);
-    }
-    return 0;
-}
-@
-% >> >>
-%old: last instruction put on separate lines otherwise noweb issue
-
-% there is code like
-%    o1 |= immrot(instoffset);
-% the 1<<25 means we are in the  i,r,r  case
-
-
-
-\subsection{Immediate address, [[immaddr()]]}
-
-<<function immaddr(arm)>>=
-long
-immaddr(long v)
-{
-    if(v >= 0 && v <= 0xfff)
-        return (v & 0xfff) |
-            (1<<24) |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-
-    if(v < 0 && v >= -0xfff)
-        return (-v & 0xfff) |
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-%old? why need v & 0xfff? redundant no?
-% >> >> >>
-% rename immsmall?
-% why 0xfff? = Because immediate offset range is 12 bits
-% (with sign)
-
-% bit P and big U?
-
-\subsection{Half immediate address, [[immhalf()]]}
-
-<<function immhalf(arm)>>=
-int
-immhalf(long v)
-{
-    if(v >= 0 && v <= 0xff)
-        return v |
-            (1<<24)  |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xff && v < 0)
-        return (-v & 0xff)|
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-% seems identical to immhalf no? no now it's 0xff! not 0xfff
-
+% more in Section X.
 
 \section{[[oplook()]] and [[buildop()]]}
 
-\subsection{[[oplook()]]}
+%trans:
+We are now ready to understand the code of [[oplook()]].
+%toc:
+[[oplook()]] assumes the global [[optab]] has been
+sorted and [[oprange]] has been set. Those two operations
+are performed by [[buildop()]] which we will present
+after [[oplook()]].
+
+\subsection{[[oplook()]] and [[cmp()]]}
 \label{sec:oplook}
 
-<<[[oplook()]] locals>>=
-Optab *o, *e;
-// enum<Opcode>, to index oprange[]
-int r;
-// enum<Class>
-int a1, a2, a3;
-@
+[[oplook]] takes an instruction as a parameter and returns
+a rule ([[Optab*]]) {matching} the opcode and operands
+of the instruction.
+%
+Its code
+is pretty simple once the different data structures it is using
+have been explained and its optimization hidden (for now):
 
-
-% leverage the sorted data structure computed by buildop()
 <<function oplook(arm)>>=
 /// main -> (dotext | asmb) -> <>
 Optab*
 oplook(Prog *p)
 {
-    <<[[oplook()]] locals>>
+    // enum<Opcode> (to index oprange[])
+    int r;
+    // enum<Operand_class>
+    int a1, a2, a3;
+    // ref<Optab> (from = optab)
+    Optab *o, *e;
+    <<[[oplook()]] other locals>>
  
-    <<[[oplook()]] if use cache, part1>>
+    <<[[oplook()]] if use opti, part1>>
     else {
         a1 = aclass(&p->from);
         a3 = aclass(&p->to);
     }
     a2 = (p->reg != R_NONE)? C_REG : C_NONE;
     r = p->as;
+
+    // find the range of relevant optab entries
     o = oprange[r].start;
     e = oprange[r].stop;
     <<[[oplook()]] sanity check o>>
 
     <<[[oplook()]] debug>>
 
-    <<[[oplook()]] if use cache, part2>>
+    <<[[oplook()]] if use opti, part2>>
     else {
+        // iterate over the range
         for(; o<e; o++)
+            // compare the operands
             if(o->a2 == a2)
              if(cmp(o->a1, a1))
               if(cmp(o->a3, a3)) {
+                // found a matching rule!
                 return o;
             }
     }
     <<[[oplook()]] illegal combination error>>
 }
 @
-%pad: I rewrote this code to aspectize optimisations and have
-% a simpler version available
-% the order to cmp is right? I think so, see the comment about cmp().
-% So middle operand must be equal! (but anyway usually a register)
-% and rest must be compatible.
+%pad: I rewrote a lot this code to aspectize optimisations and to have
+% a simpler version. It's far clearer.
 
+If no rule is found a linking error is reported:
 
+<<[[oplook()]] sanity check o>>=
+if(o == nil) {
+    o = oprange[r].stop; /* just generate an error */
+}
+@
+<<[[oplook()]] illegal combination error>>=
+diag("illegal combination %A %d %d %d",  p->as, a1, a2, a3);
+prasm(p);
+if(o == nil)
+    o = optab;
+return o;
+@
+
+\t important, happens often. e.g. MOVW (R1), (R2)
+\t have to use intermediate MOVW (R1), R10;  MOVW R10, (R2)
+\n ugly a bit, late error.
 
 \label{sec:cmp}
-% cmp for compatible (not compare).
-% 'b' is the actual class of the operand, 'a' is the one mentionned
-% in optab which is actually compatible with a few concrete class.
-% e.g. an optab entry for C_LCON will also accomodate concrete operand
-% with class C_RCON or C_NCON, but if it's mentionned C_RCON in
-% the optab, then it will accept only C_RCON concrete operands.
+The {matching} of operand classes in [[oplook()]] is using simply
+[[==]] for the middle operand ([[a2]]), as this operand class
+is always either a register ([[C_REG]]) or nothing ([[C_NONE]]).
+But, for the other operands the function [[cmp()]] (for compatible)
+\l not compare
+below is used:
+
 <<function cmp(arm)>>=
 bool
 cmp(int a, int b)
@@ -8998,75 +8511,61 @@ cmp(int a, int b)
         return true;
 
     switch(a) {
-    case C_LCON:
-        if(b == C_RCON || b == C_NCON)
-            return true;
-        break;
-    case C_LACON:
-        if(b == C_RACON)
-            return true;
-        break;
-
-    case C_HFEXT:
-        return b == C_HEXT || b == C_FEXT;
-    case C_FEXT:
-    case C_HEXT:
-        return b == C_HFEXT;
-    case C_SEXT:
-        return cmp(C_HFEXT, b);
-    case C_LEXT:
-        return cmp(C_SEXT, b);
-
-    case C_HFAUTO:
-        return b == C_HAUTO || b == C_FAUTO;
-    case C_FAUTO:
-    case C_HAUTO:
-        return b == C_HFAUTO;
-    case C_SAUTO:
-        return cmp(C_HFAUTO, b);
-    case C_LAUTO:
-        return cmp(C_SAUTO, b);
-
-    case C_HFOREG:
-        return b == C_HOREG || b == C_FOREG;
-    case C_FOREG:
-    case C_HOREG:
-        return b == C_HFOREG;
-    case C_SROREG:
-        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
-    case C_SOREG:
-    case C_ROREG:
-        return b == C_SROREG || cmp(C_HFOREG, b);
-    case C_LOREG:
-        return cmp(C_SROREG, b);
-
+    <<[[cmp()]] switch on a, the operand class in optab rule, cases>>
     }
     return false;
 }
 @
-% diff with ocmp? subtle. this is compatibility but it does not
-% car about the order of the operand classes. ocmp care about
-% the order! because it does not return a boolean but a cmp_result.
+\l rename compatible_operand?
+\n diff with ocmp? 
+\n  - this is only for one operand, ocmp is sorting the whole p
+\n  - it does not care about the order of the classes. ocmp care
+\n  - it does return a boolean, not a cmp_result
 
+[[cmp()]] is used as [[cmp(o->a1, a1)]] in [[oplook()]],
+so the parameter [[a]] corresponds to the class
+of the operand in one of the rule of [[optab]] ([[o->a1]]),
+and the parameter [[b]] the actual class of the
+operand of the instruction ([[a1]]).
+%
+Up until now [[cmp()]] is similar to [[==]]. But, for certain
+classes, [[cmp()]] can also express {inclusion} between classes and
+a notion of {subclasses}.
+%
+For instance, if the operand class of a rule is [[C_LCON]],
+then it will also match the actual operand classes [[C_RCON]]
+and [[C_NCON]] of the instruction thanks to this code:
 
-
-
-<<[[oplook()]] sanity check o>>=
-if(o == nil) {
-    o = oprange[r].stop; /* just generate an error */
-}
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_LCON:
+    if(b == C_RCON || b == C_NCON)
+        return true;
+    break;
 @
 
-<<[[oplook()]] illegal combination error>>=
-diag("illegal combination %A %d %d %d",  p->as, a1, a2, a3);
-prasm(p);
-if(o == nil)
-    o = optab;
-return o;
-@
+Indeed, a large constant ([[C_LCON]]) is more {general} than
+a rotatable constant ([[C_RCON]]) or a negative rotatable constant
+([[C_NCON]]).
+\l FIGURE VENN diagram
+% But if rule C_RCON, match only C_RCON!
+Thanks to this encoding of inclusion via cases of [[cmp()]],
+a single rule can match many different kinds of instructions.
+Just like [[oprange]] we saw in Section~\ref{sec:oprange}
+allows with one opcode to actually
+match a set of opcodes, [[cmp()]] allows with one
+{\em general} operand class (e.g. [[C_LCON]])
+to actually match also more {\em specialized} 
+operand classes (e.g. [[C_RCON]] and [[C_NCON]]).
+%
+We will present those general and specialized
+classes, and their encoding in [[cmp()]],
+gradually in this chapter.
+
+\t BUT order is important!! see next section
 
 
-\subsection{[[buildop()]]}
+
+\subsection{[[buildop()]] and [[ocmp()]]}
 \label{sec:buildop}
 
 <<[[main()]] initialize globals(arm)>>=
@@ -9134,13 +8633,13 @@ case AXXX:
 <<function ocmp(arm)>>=
 /// main -> buildop -> qsort(..., <>)
 int
-ocmp(const void *a1, const void *a2)
+ocmp(const void *a, const void *b)
 {
     Optab *p1, *p2;
     int n;
 
-    p1 = (Optab*)a1;
-    p2 = (Optab*)a2;
+    p1 = (Optab*)a;
+    p2 = (Optab*)b;
 
     n = p1->as - p2->as;
     if(n)
@@ -9159,11 +8658,16 @@ ocmp(const void *a1, const void *a2)
     return 0;
 }
 @
+%old: (const void *a1, const void *a2) but confusing with fields of optab
+
 %sort first by opcode, then class of first operand, then second, then thrd.
 %note: Is it needed since in oplook() we just
 % iterate over all the range for a certain opcode?
 % Yes it is needed! The order of the entries in optab matter, because have
 % some specific entries first and then a general one
+
+% C_LCON, C_RCON, C_NCON  then pb
+% C_RCON, C_NCON, C_LCON then fine.
 
 % important is because of cmp, and ocmp a1 - a2, 
 % order of enums is actually important! indeed
@@ -9174,8 +8678,15 @@ ocmp(const void *a1, const void *a2)
 % is not good?  
 %update: ??
 
-\subsection{Caching}
-% Memoizing
+\subsection{Optimisations}
+
+<<[[oplook()]] other locals>>=
+bool useopti = true;
+@
+%pad: I introduced that
+
+\subsubsection{Caching}
+\l memeize
 
 <<[[Prog]] other fields>>=
 // option<index-1-based in optab[]>, 0 means None, i means index optab[i-1]
@@ -9184,7 +8695,7 @@ byte	optab;
 % cache so second call to oplook() in asmb() is faster I think
 
 <<[[Adr]] other fields>>=
-// option<enum<Classx>>, 0 means None, i means i-1 is the class you want
+// option<enum<Operand_class>>, 0 means None, i means i-1 is the class you want
 short	class;
 @
 %a more precise Adr.type
@@ -9193,16 +8704,17 @@ short	class;
 % in the optab complex structure. 
 % Not sure why it needs to be stored here in Adr too.
 
-<<[[oplook()]] locals>>=
-bool usecache = true;
-char *c1, *c3;
-@
 
-<<[[oplook()]] if use cache, part1>>=
-if(usecache) {
-    a1 = p->optab;
-    if(a1)
-        return optab+(a1-1);
+<<[[oplook()]] other locals>>=
+int i;
+@
+%old: was abusing a1, but I prefer use different variable name
+
+<<[[oplook()]] if use opti, part1>>=
+if(useopti) {
+    i = p->optab;
+    if(i)
+        return optab+(i-1);
     
     a1 = p->from.class;
     if(a1 == C_NONE) {
@@ -9219,9 +8731,17 @@ if(usecache) {
     a3--;
 }
 @
+%old: was abusing a1 for opcode
 
-<<[[oplook()]] if use cache, part2>>=
-if(usecache) {
+\subsubsection{Precomputing}
+
+<<[[oplook()]] other locals>>=
+char *c1, *c3;
+@
+% char? bool no? or bool_byte
+
+<<[[oplook()]] if use opti, part2>>=
+if(useopti) {
     c1 = xcmp[a1];
     c3 = xcmp[a3];
     for(; o<e; o++)
@@ -9238,7 +8758,9 @@ if(usecache) {
 <<global xcmp(arm)>>=
 char	xcmp[C_GOK+1][C_GOK+1];
 @
+% bool_char
 
+% pre computation
 <<[[buildop()]] initialize xcmp cache>>=
 for(i=0; i<C_GOK; i++)
     for(n=0; n<C_GOK; n++)
@@ -9247,7 +8769,7 @@ for(i=0; i<C_GOK; i++)
 % subtle the order to cmp here, cmp(n,i) not cmp(i,n)
 
 
-
+%dead??
 <<[[noops()]] case ARET, call nocache>>=
 nocache(p);
 @
@@ -9339,6 +8861,14 @@ nocache(Prog *p)
 \section{[[asmout()]]}
 \label{sec:asmout}
 
+[[asmout()]] is the heart of the ARM code generator.
+%Given an instruction p and a rule o, 
+% will dispatch action id in o->type
+% which generate code.
+%
+% one instruction p can lead up to 6 ARM instr (x bytes),
+% hence the local [[o6]] above.
+
 <<function asmout(arm)>>=
 /// main -> asmb -> <> (in a for loop over all instructions)
 void
@@ -9346,11 +8876,7 @@ asmout(Prog *p, Optab *o)
 {
     // ARM 32 bits instructions
     long o1, o2, o3, o4, o5, o6;
-    // pc
-    long v;
-    // misc
-    int r, rf, rt, rt2;
-    Sym *s;
+    <<[[asmout()]] other locals>>
 
     <<[[asmout()]] initialisation>>
     o1 = o2 = o3 = o4 = o5 = o6 = 0;
@@ -9365,7 +8891,6 @@ asmout(Prog *p, Optab *o)
 
     <<[[asmout()]] debug>>
 
-    v = p->pc;
     switch(o->size) {
     <<[[asmout()]] switch on size cases>>
     }
@@ -9373,7 +8898,7 @@ asmout(Prog *p, Optab *o)
 @
 %$
 \t long -> ulong for instr? typedef?
-
+\t long for pc? also typedef? realpc?
 
 
 <<[[asmout()]] switch on size cases>>=
@@ -9423,21 +8948,33 @@ default:
 
 \t flush? lputl? cout?
 
+
+% dispatcher will rely on temporary to store register from, to,
+% and symbol.
+<<[[asmout()]] other locals>>=
+int r, rf, rt, rt2;
+Sym *s;
+@
+\t XXX?
+
+%toc:
+% next sections entries in optab, range opcodes in buildop(),
+% and dispatcher action id of asmout()
+% work together to rules and its code generation.
+
+
 \section{Pseudo opcodes}
 
 \subsection{[[ATEXT]]}
-
-<<[[buildop()]] switch opcode r for ranges cases>>=
-case ATEXT:
-    break;
-@
-
 
 <<[[optab]] entries>>=
 { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
 { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
 @
-
+<<[[buildop()]] switch opcode r for ranges cases>>=
+case ATEXT:
+    break;
+@
 <<[[asmout()]] switch on type cases>>=
 case 0:		/* pseudo ops */
     break;
@@ -9476,21 +9013,504 @@ case 11:	/* word */
     break;
 @
 
+%trans:
+% instoffset, aclass(), perfect transition to next section.
+
+
+
+\section{Operand subclasses and [[instoffset]]}
+
+% another form of pattern, for operand this time.
+% other kind of range than OpRange, range of possible values
+% of operands. with inheritance notion! Quite subtle.
+
+<<global instoffset(arm)>>=
+long	instoffset;
+@
+% instruction offset?
+% really needs to be a global? can't be just a local to aclass()?
+% seems to be used both for immediate constant and offset
+
+
+
+% Those are some kinds of optimisations? Can not just take always LCON?
+% a bit but also need that
+% because expressivity Asm5 greater than what ARM can actually do sometimes.
+
+\subsection{[[D_CONST]], [[C_xCON]], and [[immrot()]]}
+\label{sec:operand-class-DCONST}
+
+% immediate constants constraints
+% ex of instr: ADD I, R1, R2
+
+<<[[aclass()]] switch type cases>>=
+case D_CONST:
+    switch(a->symkind) {
+    <<[[aclass()]] D_CONST case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+
+
+% Rotated, Negative, Large?
+<<[[Operand_class]] C_xCON cases>>=
+C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
+C_NCON,		/* ~RCON */
+C_LCON,
+@
+%TODO: must impose order with other xCON?
+%dead: C_SCON,		/* 0xffff */
+%in the end NCON is not different from LCON when you look at optab,
+% so perhaps it could be removed.
+%note that LCON is more "general" than the other, see cmp() later.
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case D_NONE:
+    instoffset = a->offset;
+    if(a->reg != R_NONE) // when?
+        goto aconsize;
+
+    if(immrot(instoffset))
+        return C_RCON;
+    if(immrot(~instoffset))
+        return C_NCON;
+    return C_LCON;
+@
+
+
+
+
+
+%\subsection{immediate values (possibly rotated), [[immrot()]]}
+% immediate (rotated) address
+
+% see Machine.nw and the ARM refcard to understand the code below.
+% RCON is for small immediate value, or rotated things of small 
+% immediate value.
+% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
+% hence the code below.
+
+% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
+
+\label{sec:clever-trick-numbers}
+<<function immrot(arm)>>=
+long
+immrot(ulong v)
+{
+    int i;
+
+    for(i=0; i<16; i++) {
+        if((v & ~0xff) == 0)
+            return (i<<8) | v | (1<<25);
+        v = (v<<2) | 
+            (v>>30);
+    }
+    return 0;
+}
+@
+% >> >>
+%old: last instruction put on separate lines otherwise noweb issue
+
+% there is code like
+%    o1 |= immrot(instoffset);
+% the 1<<25 means we are in the  i,r,r  case
+
+
+
+
+
+\subsection{[[D_OREG]], [[C_xOREG]], [[immaddr()]], and [[immhalf()]]}
+
+% offsets constraints
+% ex of instr: MOVW OFF(R13), R2
+
+
+<<[[aclass()]] switch type cases>>=
+case D_OREG:
+    switch(a->symkind) {
+    <<[[aclass()]] D_OREG case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+% OREG usually is a dereference of a register or a symbol reference
+% (which is then really an implicit offet to SB)
+
+
+
+<<[[Operand_class]] C_xOREG cases>>=
+C_HOREG,
+<<[[Operand_class]] cases, in C_xOREG, float cases>>
+C_SOREG,
+C_LOREG,
+
+C_ROREG,
+C_SROREG,	/* both S and R */
+@
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_HFOREG:
+    return b == C_HOREG || b == C_FOREG;
+case C_FOREG:
+case C_HOREG:
+    return b == C_HFOREG;
+case C_SROREG:
+    return cmp(C_SOREG, b) || cmp(C_ROREG, b);
+case C_SOREG:
+case C_ROREG:
+    return b == C_SROREG || cmp(C_HFOREG, b);
+case C_LOREG:
+    return cmp(C_SROREG, b);
+@
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case D_NONE:
+    instoffset = a->offset;
+    t = immaddr(instoffset);
+    if(t) {
+        <<[[aclass()]] if immfloat for D_NONE symbol>>
+
+         /* n.b. that immhalf() will also satisfy immrot */
+        if(immhalf(instoffset))	
+            return C_HOREG;
+
+        if(immrot(instoffset))
+            return C_SROREG;
+        return immhalf(instoffset)? C_HOREG : C_SOREG;
+    }
+    if(immrot(instoffset))
+        return C_ROREG;
+    return C_LOREG;
+@
+
+
+
+
+%\subsection{Immediate address, [[immaddr()]]}
+
+
+% The load/store ARM instructions take 2 registers (src_val, dst_address)
+% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
+% do negative offset with a bit).
+% That means that if you do  'MOVW $1, myglobal', naively you'll have to
+% encode it as 3 instructions:
+%     MOV $1, R1
+%     MOV $myglobal, R2
+%     STR R1, R2.
+% But if myglobal is not that far from address 0 and you have a special
+% register reserved that always contain 0 (e.g. R12),
+% then you could use the 12bits offset instead of using a register
+% and just do
+%     MOV $1, R1
+%     STR R1, R12+$myglobal
+% If you have a special register which always contain the value 1, 
+% then you do even better with just do 
+%     STR R0, R12+$myglobal! 
+% which is 3 times faster (well if the global address is in a cache).
+%
+% In practice the first page of the address space is always reserved
+% so it's better to store in R12 a bigger value. R12 will actually
+% be set to INITDAT+BIG.
+
+
+
+
+<<function immaddr(arm)>>=
+long
+immaddr(long v)
+{
+    if(v >= 0 && v <= 0xfff)
+        return (v & 0xfff) |
+            (1<<24) |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+
+    if(v < 0 && v >= -0xfff)
+        return (-v & 0xfff) |
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+%old? why need v & 0xfff? redundant no?
+% >> >> >>
+% rename immsmall?
+% why 0xfff? = Because immediate offset range is 12 bits
+% (with sign)
+
+% bit P and big U?
+
+
+%\subsection{Half immediate address, [[immhalf()]]}
+
+<<function immhalf(arm)>>=
+int
+immhalf(long v)
+{
+    if(v >= 0 && v <= 0xff)
+        return v |
+            (1<<24)  |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xff && v < 0)
+        return (-v & 0xff)|
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+% seems identical to immhalf no? no now it's 0xff! not 0xfff
+
+
+\subsection{[[D_OREG]] with global symbols and [[C_xEXT]]}
+
+% H S L ? half, small, large?
+<<[[Operand_class]] C_xEXT cases>>=
+C_HEXT,
+<<[[Operand_class]] cases, in C_xEXT, float cases>>
+C_SEXT,
+C_LEXT,
+@
+% EXT for? external symbol?
+% see Section X later expose constraint to satisfy for address
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_HFEXT:
+    return b == C_HEXT || b == C_FEXT;
+case C_FEXT:
+case C_HEXT:
+    return b == C_HFEXT;
+case C_SEXT:
+    return cmp(C_HFEXT, b);
+case C_LEXT:
+    return cmp(C_SEXT, b);
+@
+
+
+%xxx+y(SB)
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case N_EXTERN:
+case N_INTERN:
+    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>
+    s = a->sym;
+    t = s->type;
+    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>
+    <<[[aclass()]] when D_OREG and external symbol and dlm>>
+    instoffset = s->value + a->offset - BIG;
+    t = immaddr(instoffset);
+    if(t) {
+        <<[[aclass()]] if immfloat for N_EXTERN symbol>>
+        return immhalf(instoffset)? C_HEXT : C_SEXT;
+    }
+    return C_LEXT;
+@
+
+
+<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>=
+if(a->sym == nil || a->sym->name == nil) {
+    print("null sym external\n");
+    print("%D\n", a);
+    return C_GOK;
+}
+@
+
+<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>=
+if(t == SNONE || t == SXREF) {
+    diag("undefined external: %s in %s", s->name, TNAME);
+    s->type = SDATA;
+}
+@
+
+\subsection{[[D_OREG]] with automatics and [[C_xAUTO]]}
+
+<<[[Operand_class]] C_xAUTO cases>>=
+C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+<<[[Operand_class]] cases, in C_xAUTO, float cases>>
+C_SAUTO,	/* -0xfff to 0xfff */
+C_LAUTO,
+@
+% the order matters! because of ocmp() and the order of entries in optab
+% hence the chynk for float here
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_HFAUTO:
+    return b == C_HAUTO || b == C_FAUTO;
+case C_FAUTO:
+case C_HAUTO:
+    return b == C_HFAUTO;
+case C_SAUTO:
+    return cmp(C_HFAUTO, b);
+case C_LAUTO:
+    return cmp(C_SAUTO, b);
+@
+
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case N_LOCAL:
+    instoffset = autosize + a->offset;
+    t = immaddr(instoffset);
+    if(t){
+        <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
+        return immhalf(instoffset)? C_HAUTO : C_SAUTO;
+    }
+    return C_LAUTO;
+@
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case N_PARAM:
+    instoffset = autosize + a->offset + 4L;
+    t = immaddr(instoffset);
+    if(t){
+        <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
+        return immhalf(instoffset)? C_HAUTO : C_SAUTO;
+    }
+    return C_LAUTO;
+@
+% +4??
+
+\subsection{[[D_ADDR]] and [[C_xxCON]]}
+%todo: D_ADDR?
+
+% should not use D_CONST when really you use the address of a symbol
+
+
+% rotated External const
+<<[[Operand_class]] C_xxCON cases>>=
+C_RECON,
+@
+%dead: C_LECON
+% optab:    { AMOVW,	C_LECON,C_NONE,	C_REG,		34, 8, REGSB,	LFROM },
+% cmp:    case C_LECON:
+%        if(b == C_RECON)
+%            return 1;
+%        break;
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case N_EXTERN:
+case N_INTERN:
+    s = a->sym;
+    <<[[aclass()]] D_CONST case, N_EXTERN case, sanity check s>>
+    switch(s->type) {
+    case STEXT: case SSTRING:
+    case SUNDEF:
+        instoffset = s->value + a->offset;
+        return C_LCON; // etext is stable
+    case SNONE: case SXREF:
+        diag("undefined external: %s in %s", s->name, TNAME);
+        s->type = SDATA;
+        // Fall through
+    case SDATA: case SBSS: case SDATA1:
+        if(!dlm) {
+            instoffset = s->value + a->offset - BIG;
+            if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
+                return C_RECON;
+        }
+        // else
+        instoffset = s->value + a->offset + INITDAT;
+        return C_LCON;
+    }
+    diag("unknown section for %s", s->name);
+    break;
+@
+%pad: I added the final diag() because of the way I wrote the code
+%old: used to be but more messy because of return and break
+%    case SNONE: case SXREF:
+%        diag("undefined external: %s in %s", s->name, TNAME);
+%        s->type = SDATA;
+%        break;
+%    }
+%    if(!dlm) {
+%        instoffset = s->value + a->offset - BIG;
+%        if(immrot(instoffset) && instoffset != 0)
+%            return C_RECON;
+%    }
+%    instoffset = s->value + a->offset + INITDAT;
+%    return C_LCON;
+%old: case SLEAF: 
+%old: case SCONST:
+
+% for LCON have to do the INITDAT!
+% really need RECON?
+% what about setR12? how bootstrap? can match C_RECON?
+% no cos of the special case != 0!! because setR12 is BIG, so
+% BIG-BIG = 0 so use LCON for that
+
+
+<<[[aclass()]] D_CONST case, N_EXTERN case, sanity check s>>=
+if(s == S) // no warning?
+    break;
+@
+
+
+
+%\subsection{[[D_ADDR]] with automatics and [[C_xxCON]]}
+
+%todo: need that? when do we get the address of a local or parameter?
+% for which code we have those classes used??
+<<[[Operand_class]] C_xxCON cases>>=
+C_RACON,
+C_LACON,
+@
+%RA Rotate Address? and Long Address?
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_LACON:
+    if(b == C_RACON)
+        return true;
+    break;
+@
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case N_LOCAL:
+    instoffset = autosize + a->offset;
+    goto aconsize;
+@
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+case N_PARAM:
+    instoffset = autosize + a->offset + 4L;
+    goto aconsize;
+@
+
+
+<<[[aclass()]] D_CONST case, switch symkind cases>>=
+aconsize:
+    return immrot(instoffset)? C_RACON : C_LACON;
+@
+
+
+%dead: this advanced addressing mode of 5a is not that useful
+%    case D_OCONST:
+%        switch(a->name) {
+%        case N_EXTERN:
+%        case N_INTERN:
+%            s = a->sym;
+%            t = s->type;
+%            if(t == 0 || t == SXREF) {
+%                diag("undefined external: %s in %s",
+%                    s->name, TNAME);
+%                s->type = SDATA;
+%            }
+%            instoffset = s->value + a->offset + INITDAT;
+%            if(s->type == STEXT || s->type == SLEAF || s->type == SUNDEF)
+%                instoffset = s->value + a->offset;
+%            return C_LCON;
+%        }
+%        return C_GOK;
+
+
+
 
 \section{Arithmetic and logic opcodes}
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AADD:
+    oprange[ASUB] = oprange[r];
+
     oprange[AAND] = oprange[r];
     oprange[AEOR] = oprange[r];
     oprange[AORR] = oprange[r];
 
-    oprange[ABIC] = oprange[r];
-    oprange[ASUB] = oprange[r];
-    oprange[ARSB] = oprange[r];
     oprange[AADC] = oprange[r];
     oprange[ASBC] = oprange[r];
     oprange[ARSC] = oprange[r];
+    oprange[ARSB] = oprange[r];
+    oprange[ABIC] = oprange[r];
     break;
 @
 
@@ -9774,12 +9794,21 @@ case 58:	/* movbu R,R */
 
 \subsection{Bitshifted register}
 
+
 <<[[optab]] entries>>=
 { AADD,		C_SHIFT,C_REG,	C_REG,		 3, 4, 0 },
 { AADD,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
 
 { AMVN,		C_SHIFT,C_NONE,	C_REG,		 3, 4, 0 },
 { ACMP,		C_SHIFT,C_REG,	C_NONE,		 3, 4, 0 },
+@
+
+<<[[Operand_class]] cases>>=
+C_SHIFT,   // D_SHIFT
+@
+<<[[aclass()]] switch type cases>>=
+case D_SHIFT:
+    return C_SHIFT;
 @
 
 <<[[asmout()]] switch on type cases>>=
@@ -9914,6 +9943,16 @@ case AMULL:
 { AMULL,	C_REG,	C_REG,	C_REGREG,	17, 4, 0 },
 @
 
+<<[[Operand_class]] cases>>=
+C_REGREG,  // D_REGREG
+@
+<<[[aclass()]] switch type cases>>=
+case D_REGREG:
+    return C_REGREG;
+@
+
+
+
 <<[[asmout()]] switch on type cases>>=
 case 17:
     o1 = oprrr(p->as, p->scond);
@@ -9969,7 +10008,7 @@ case ABEQ:
 { ABL,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0 },
 { ABEQ,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0 },
 @
-
+% LPOOL!!
 
 <<[[asmout()]] switch on type cases>>=
 case 5:		/* bra s */
@@ -10378,6 +10417,14 @@ case 34:	/* mov $lacon,R */
 { AMOVW,	C_RCON,	C_NONE,	C_PSR,		37, 4, 0 },
 @
 
+<<[[Operand_class]] cases>>=
+C_PSR,     // D_PSR
+@
+<<[[aclass()]] switch type cases>>=
+case D_PSR:
+    return C_PSR;
+@
+
 <<[[asmout()]] switch on type cases>>=
 case 35:	/* mov PSR,R */
     o1 = (2<<23) | (0xf<<16) | (0<<0);
@@ -10577,6 +10624,177 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
 
 
 
+
+
+\section{Pool}
+\label{sec:pool-and-reg-tmp}
+
+% was in Resolving/issue/virtual-pc
+%where the first instruction would load the big number from 
+%
+%% LDR $pool1, RTMP
+%% ADD RTMP, R1, R2
+%% DATA pool1+0/4 $10256
+%
+%somewhere in
+%a reserved register 
+%\l REGTMP
+%and where the second instruction would then 
+%substitutes the big number
+%
+% from the original
+%instruction in the following instruction.
+%\l actually two code and one data?
+
+
+% see 5l -v -a, see WORD generated at the end for constants
+% that could not be encoded in one ARM instruction. Asm5 != ARMv6
+
+
+
+<<[[dotext()]] pool handling for optab o>>=
+switch(o->flag & (LFROM|LTO|LPOOL)) {
+case LFROM:
+    addpool(p, &p->from);
+    break;
+case LTO:
+    addpool(p, &p->to);
+    break;
+
+case LPOOL:
+    if ((p->scond&C_SCOND) == COND_ALWAYS)
+        flushpool(p, 0);
+    break;
+}
+
+// MOVW ..., R15  => flush
+if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
+   (p->scond&C_SCOND) == COND_ALWAYS)
+    flushpool(p, 0);
+
+if(blitrl)
+    checkpool(p);
+@
+%old: c += m; used to be before if(blitrl)
+
+
+% arm specific
+<<global pool(arm)>>=
+static struct {
+    ulong	start;
+    ulong	size;
+} pool;
+@
+
+
+<<function checkpool(arm)>>=
+/*
+ * when the first reference to the literal pool threatens
+ * to go out of range of a 12-bit PC-relative offset,
+ * drop the pool now, and branch round it.
+ * this happens only in extended basic blocks that exceed 4k.
+ */
+void
+checkpool(Prog *p)
+{
+    if(pool.size >= 0xffc || immaddr((p->pc+4)+4+pool.size - pool.start+8) == 0)
+        flushpool(p, 1);
+    else if(p->link == P)
+        flushpool(p, 2);
+}
+@
+
+<<global blitrl(arm)>>=
+Prog*	blitrl;
+@
+
+<<global elitrl(arm)>>=
+Prog*	elitrl;
+@
+
+
+<<function flushpool(arm)>>=
+void
+flushpool(Prog *p, bool skip)
+{
+    Prog *q;
+
+    if(blitrl) {
+        if(skip){
+            DBG("note: flush literal pool at %lux: len=%lud ref=%lux\n", 
+                p->pc+4, pool.size, pool.start);
+            q = prg();
+            q->as = AB;
+            q->to.type = D_BRANCH;
+            q->cond = p->link;
+            q->link = blitrl;
+            blitrl = q;
+        }
+        else if(p->pc+pool.size-pool.start < 2048)
+            return;
+        elitrl->link = p->link;
+        p->link = blitrl;
+        blitrl = nil;	/* BUG: should refer back to values until out-of-range */
+        elitrl = nil;
+        pool.size = 0;
+        pool.start = 0;
+    }
+}
+@
+%old: if(debug['v'] && skip)  but skip always true because upper if
+% so I simplified
+
+<<function addpool(arm)>>=
+void
+addpool(Prog *p, Adr *a)
+{
+    Prog *q, t;
+    int c;
+
+    c = aclass(a);
+
+    t = zprg;
+    t.as = AWORD;
+
+    switch(c) {
+    case C_SROREG:
+    case C_LOREG:
+    case C_ROREG:
+    case C_FOREG:
+    case C_SOREG:
+    case C_FAUTO:
+    case C_SAUTO:
+    case C_LAUTO:
+    case C_LACON:
+        t.to.type = D_CONST;
+        t.to.offset = instoffset;
+        break;
+    default:
+        t.to = *a;
+        break;
+    }
+
+    for(q = blitrl; q != P; q = q->link)	/* could hash on t.t0.offset */
+        if(memcmp(&q->to, &t.to, sizeof(t.to)) == 0) {
+            p->cond = q;
+            return;
+        }
+
+    q = prg();
+    *q = t;
+    q->pc = pool.size;
+
+    if(blitrl == P) {
+        blitrl = q;
+        pool.start = p->pc;
+    } else
+        elitrl->link = q;
+    elitrl = q;
+    pool.size += 4;
+
+    p->cond = q;
+}
+@
 
 
 
@@ -15345,6 +15563,18 @@ if(debug['t']) {
 % which case was triggered which is also very useful (remember MOVD
 % generation pb with addpool())
 
+<<[[asmout()]] other locals>>=
+// pc (real)
+long v;
+@
+
+<<[[asmout()]] debug>>=
+if(debug['a'] > 1)
+    Bprint(&bso, "%2d ", o->type);
+v = p->pc; // for debugging later
+@
+% when -a -a
+
 
 <<[[asmout()]] when 1 generated instruction, debug>>=
 if(debug['a'])
@@ -15379,11 +15609,6 @@ if(debug['a'])
 @
 
 
-<<[[asmout()]] debug>>=
-if(debug['a'] > 1)
-    Bprint(&bso, "%2d ", o->type);
-@
-% when -a -a
 
 <<[[asmb()]] before cflush, debug>>=
 if(debug['a']) {
