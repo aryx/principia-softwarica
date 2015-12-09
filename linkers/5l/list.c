@@ -150,6 +150,13 @@ Dconv(Fmt *fp)
             sprint(str, "$%N(R%d)", a, a->reg);
         break;
 
+    case D_ADDR:
+        if(a->reg == R_NONE)
+            sprint(str, "$%N", a);
+        else
+            sprint(str, "$%N(R%d)", a, a->reg);
+        break;
+
     case D_SHIFT:
         v = a->offset;
         op = "<<>>->@>" + (((v>>5) & 3) << 1);

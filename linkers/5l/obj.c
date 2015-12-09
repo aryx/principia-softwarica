@@ -583,6 +583,13 @@ inopd(byte *p, Adr *a, Sym *h[])
     /*e: [[inopd()]] sanity check symbol range */
     a->sym = h[symidx];
     a->symkind = p[3];
+    /*s: [[inopd()]] sanity check D_CONST */
+    if(a->type == D_CONST && a->symkind != D_NONE) {
+        print("missing D_CONST -> D_ADDR\n");
+        p[0] = ALAST+1;
+        return 0;	/*  force real diagnostic */
+    }
+    /*e: [[inopd()]] sanity check D_CONST */
 
     size = 4;
 
@@ -602,6 +609,7 @@ inopd(byte *p, Adr *a, Sym *h[])
 
     // 4 bytes
     case D_CONST:
+    case D_ADDR:
     case D_SHIFT:
     case D_OREG:
     case D_BRANCH:
@@ -1228,7 +1236,6 @@ loop:
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ASUB:
         if(p->from.type == D_CONST)
-         if(p->from.symkind == D_NONE)
           if(p->from.offset < 0) {
             p->from.offset = -p->from.offset;
             p->as = AADD;
@@ -1237,7 +1244,6 @@ loop:
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AADD:
         if(p->from.type == D_CONST)
-         if(p->from.symkind == D_NONE)
           if(p->from.offset < 0) {
             p->from.offset = -p->from.offset;
             p->as = ASUB;
@@ -1345,7 +1351,7 @@ doprof1(void)
             q->from.sym = s;
             q->reg = 4; // size of this DATA slice
             q->to = p->from;
-            q->to.type = D_CONST;
+            q->to.type = D_ADDR;
 
             q = prg();
             q->line = p->line;
@@ -1403,6 +1409,7 @@ doprof1(void)
     q->link = datap;
     datap = q;
 
+    // DATA s(SB)/4, $n 
     q->as = ADATA;
     q->from.type = D_OREG;
     q->from.symkind = N_EXTERN;

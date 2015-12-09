@@ -628,32 +628,32 @@ datblk(long s, long n, bool sstring)
             }
             break;
         /*x: [[datblk()]] switch type of destination cases */
-        case D_CONST:
+        case D_CONST: case D_ADDR:
             d = p->to.offset;
-            /*s: [[datblk()]] in D_CONST case, if symbol address */
+            /*s: [[datblk()]] if D_ADDR case */
             v = p->to.sym;
             if(v) {
                 switch(v->type) {
-                /*s: [[datblk()]] in D_CONST case, switch symbol type cases */
+                /*s: [[datblk()]] in D_ADDR case, switch symbol type cases */
                 case STEXT: case SSTRING:
                     d += p->to.sym->value;
                     break;
                 case SDATA: case SBSS:
                     d += p->to.sym->value + INITDAT;
                     break;
-                /*x: [[datblk()]] in D_CONST case, switch symbol type cases */
+                /*x: [[datblk()]] in D_ADDR case, switch symbol type cases */
                 case SUNDEF:
                     ckoff(v, d);
                     d += p->to.sym->value;
                     break;
-                /*e: [[datblk()]] in D_CONST case, switch symbol type cases */
+                /*e: [[datblk()]] in D_ADDR case, switch symbol type cases */
                 }
                 /*s: [[datblk()]] if dynamic module(arm) */
                 if(dlm)
                     dynreloc(v, a+INITDAT, 1);
                 /*e: [[datblk()]] if dynamic module(arm) */
             }
-            /*e: [[datblk()]] in D_CONST case, if symbol address */
+            /*e: [[datblk()]] if D_ADDR case */
             cast = (char*)&d;
 
             switch(c) {

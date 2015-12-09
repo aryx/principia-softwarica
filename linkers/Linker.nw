@@ -27,7 +27,7 @@
 %    * renames many local variables, more consistent (v = version, etc)
 %    * mv Autom out of union, remove union, was confusing
 %    * far cleaner oplook(), where optimizations have been aspectized
-%    * TODO introduced D_ADDR in Assembler so can have cleaner code in Linker
+%    * introduced D_ADDR in Assembler so can have cleaner code in Linker
 % - TODO reorganized the code to better match the chapters
 %    by introducing more files: main.c, lib.c, error.c, m.h
 
@@ -3823,9 +3823,9 @@ long d;
 
 
 <<[[datblk()]] switch type of destination cases>>=
-case D_CONST:
+case D_CONST: case D_ADDR:
     d = p->to.offset;
-    <<[[datblk()]] in D_CONST case, if symbol address>>
+    <<[[datblk()]] if D_ADDR case>>
     cast = (char*)&d;
 
     switch(c) {
@@ -3855,6 +3855,7 @@ case D_CONST:
     break;
 @
 %old: case SLEAF: 
+%pad: I added the case D_ADDR
 
 %\subsubsection{Endianess, [[nuxiinit()]]}
 
@@ -3942,17 +3943,17 @@ if(debug['v']) {
 <<[[datblk()]] other locals>>=
 Sym *v;
 @
-<<[[datblk()]] in D_CONST case, if symbol address>>=
+<<[[datblk()]] if D_ADDR case>>=
 v = p->to.sym;
 if(v) {
     switch(v->type) {
-    <<[[datblk()]] in D_CONST case, switch symbol type cases>>
+    <<[[datblk()]] in D_ADDR case, switch symbol type cases>>
     }
     <<[[datblk()]] if dynamic module(arm)>>
 }
 @
 
-<<[[datblk()]] in D_CONST case, switch symbol type cases>>=
+<<[[datblk()]] in D_ADDR case, switch symbol type cases>>=
 case STEXT: case SSTRING:
     d += p->to.sym->value;
     break;
@@ -4305,6 +4306,7 @@ inopd(byte *p, Adr *a, Sym *h[])
     <<[[inopd()]] sanity check symbol range>>
     a->sym = h[symidx];
     a->symkind = p[3];
+    <<[[inopd()]] sanity check D_CONST>>
 
     size = 4;
 
@@ -4356,6 +4358,7 @@ case D_REGREG:
 
 // 4 bytes
 case D_CONST:
+case D_ADDR:
 case D_SHIFT:
 case D_OREG:
 case D_BRANCH:
@@ -4372,7 +4375,7 @@ case D_SCONST:
 @
 %//case D_OCONST: was with D_SHIFT
 % >> >> >> >>
-
+%pad: added D_ADDR case
 
 
 <<[[inopd()]] sanity check register range>>=
@@ -4383,6 +4386,16 @@ if(a->reg < 0 || a->reg > NREG) {
 }
 @
 
+
+<<[[inopd()]] sanity check D_CONST>>=
+if(a->type == D_CONST && a->symkind != D_NONE) {
+    print("missing D_CONST -> D_ADDR\n");
+    p[0] = ALAST+1;
+    return 0;	/*  force real diagnostic */
+}
+@
+%pad: this is only when migrate D_CONST to D_ADDR,
+% to catch code which didn't migrate yet
 
 \subsection{Buffered input, [[buf]]}
 \label{sec:ldobj-input-buffer}
@@ -9298,14 +9311,6 @@ All those classes derive from the operand kind [[D_CONST]]:
 
 <<[[aclass()]] switch type cases>>=
 case D_CONST:
-    switch(a->symkind) {
-    <<[[aclass()]] D_CONST case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
-case D_NONE:
     instoffset = a->offset;
     if(a->reg != R_NONE) // when??????
         goto aconsize;
@@ -9316,6 +9321,13 @@ case D_NONE:
         return C_NCON;
     return C_LCON;
 @
+%old: but now use D_ADDR
+%    switch(a->symkind) {
+%    <<[[aclass()]] D_CONST case, switch symkind cases>>
+%    }
+%    return C_GOK;
+%
+%  case D_NONE:
 \t when get not R_NONE??
 
 %\subsection{immediate values (possibly rotated), [[immrot()]]}
@@ -9650,10 +9662,7 @@ case N_PARAM:
 % +4??
 
 \subsection{[[D_ADDR]] and [[C_xxCON]]}
-%todo: D_ADDR?
-
-% should not use D_CONST when really you use the address of a symbol
-
+%pad: I introduced D_ADDR in 5.out.h, so cleaner code
 
 % rotated External const
 <<[[Operand_class]] C_xxCON cases>>=
@@ -9666,11 +9675,19 @@ C_RECON,
 %            return 1;
 %        break;
 
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
+<<[[aclass()]] switch type cases>>=
+case D_ADDR:
+    switch(a->symkind) {
+    <<[[aclass()]] D_ADDR case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+
+<<[[aclass()]] D_ADDR case, switch symkind cases>>=
 case N_EXTERN:
 case N_INTERN:
     s = a->sym;
-    <<[[aclass()]] D_CONST case, N_EXTERN case, sanity check s>>
+    <<[[aclass()]] D_ADDR case, N_EXTERN case, sanity check s>>
     switch(s->type) {
     case STEXT: case SSTRING:
     case SUNDEF:
@@ -9717,7 +9734,7 @@ case N_INTERN:
 % BIG-BIG = 0 so use LCON for that
 
 
-<<[[aclass()]] D_CONST case, N_EXTERN case, sanity check s>>=
+<<[[aclass()]] D_ADDR case, N_EXTERN case, sanity check s>>=
 if(s == S) // no warning?
     break;
 @
@@ -9741,19 +9758,19 @@ case C_LACON:
     break;
 @
 
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
+<<[[aclass()]] D_ADDR case, switch symkind cases>>=
 case N_LOCAL:
     instoffset = autosize + a->offset;
     goto aconsize;
 @
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
+<<[[aclass()]] D_ADDR case, switch symkind cases>>=
 case N_PARAM:
     instoffset = autosize + a->offset + 4L;
     goto aconsize;
 @
 
 
-<<[[aclass()]] D_CONST case, switch symkind cases>>=
+<<[[aclass()]] D_ADDR case, switch symkind cases>>=
 aconsize:
     return immrot(instoffset)? C_RACON : C_LACON;
 @
@@ -11830,7 +11847,7 @@ doprof1(void)
             q->from.sym = s;
             q->reg = 4; // size of this DATA slice
             q->to = p->from;
-            q->to.type = D_CONST;
+            q->to.type = D_ADDR;
 
             q = prg();
             q->line = p->line;
@@ -11888,6 +11905,7 @@ doprof1(void)
     q->link = datap;
     datap = q;
 
+    // DATA s(SB)/4, $n 
     q->as = ADATA;
     q->from.type = D_OREG;
     q->from.symkind = N_EXTERN;
@@ -11900,7 +11918,9 @@ doprof1(void)
     s->value = n*4;
 }
 @
+%$
 \l could use textp
+%pad: was D_CONST above but I put D_ADDR now
 
 \subsection{[[_profin()]]}
 
@@ -12561,7 +12581,7 @@ undefsym(Sym *s)
 %>> >>
 
 
-<<[[datblk()]] in D_CONST case, switch symbol type cases>>=
+<<[[datblk()]] in D_ADDR case, switch symbol type cases>>=
 case SUNDEF:
     ckoff(v, d);
     d += p->to.sym->value;
@@ -12818,6 +12838,7 @@ grow(Reloc *r)
 
 \subsection{Relocatable address, [[C_ADDR]]}
 % rename? C_RELOC ? so can have D_ADDR and C_ADDR used for addresses?
+%  and no confusion?
 
 <<[[Operand_class]] cases>>=
 C_ADDR,		/* relocatable address */
@@ -13055,23 +13076,24 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case ASUB:
     if(p->from.type == D_CONST)
-     if(p->from.symkind == D_NONE)
       if(p->from.offset < 0) {
         p->from.offset = -p->from.offset;
         p->as = AADD;
     }
     goto casedef;
 @
+%pad: not needed with D_ADDR     if(p->from.symkind == D_NONE)
+
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AADD:
     if(p->from.type == D_CONST)
-     if(p->from.symkind == D_NONE)
       if(p->from.offset < 0) {
         p->from.offset = -p->from.offset;
         p->as = ASUB;
     }
     goto casedef;
 @
+%pad: same     if(p->from.symkind == D_NONE)
 
 % see also before in previous section the Leaf procedure opti,
 % a form of opcode rewriting where some TEXT and RET can
@@ -15497,6 +15519,13 @@ Dconv(Fmt *fp)
             sprint(str, "$%N(R%d)", a, a->reg);
         break;
 
+    case D_ADDR:
+        if(a->reg == R_NONE)
+            sprint(str, "$%N", a);
+        else
+            sprint(str, "$%N(R%d)", a, a->reg);
+        break;
+
     case D_SHIFT:
         v = a->offset;
         op = "<<>>->@>" + (((v>>5) & 3) << 1);
@@ -15597,6 +15626,7 @@ Dconv(Fmt *fp)
 }
 @
 %pad: I put braces around symbol name to better indicate they are comments now
+%pad: I added case for D_ADDR
 
 %old:
 %    case D_OCONST:
