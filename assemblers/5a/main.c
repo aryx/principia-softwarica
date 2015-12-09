@@ -405,7 +405,7 @@ out:
 /*e: function outcode(arm) */
 
 /*s: function outhist(arm) */
-/// main -> assemble -> <> (at begining of pass 2)
+/// main -> assemble -> <> (at beginning of pass 2)
 void
 outhist(void)
 {

@@ -531,21 +531,21 @@ pinit(char *f)
     newio(); // set ionext
     newfile(f, FD_NONE); // use ionext, set iostack, set fi
 
-    /*s: [[pinit()]] initialisations */
+    /*s: [[pinit()]] initializations */
     peekc = IGN;
-    /*x: [[pinit()]] initialisations */
+    /*x: [[pinit()]] initializations */
     for(i=0; i<NHASH; i++)
         for(s = hash[i]; s != S; s = s->link)
             s->macro = nil;
-    /*x: [[pinit()]] initialisations */
+    /*x: [[pinit()]] initializations */
     pc = 0;
-    /*x: [[pinit()]] initialisations */
+    /*x: [[pinit()]] initializations */
     symcounter = 1;
     for(i=0; i<NSYM; i++) {
         h[i].symkind = 0; // N_NONE
         h[i].sym = S;
     }
-    /*e: [[pinit()]] initialisations */
+    /*e: [[pinit()]] initializations */
 }
 /*e: function pinit */
 

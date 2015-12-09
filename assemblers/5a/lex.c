@@ -248,19 +248,19 @@ cinit(void)
     Sym *s;
     int i;
 
-    /*s: [[cinit()]] nullgen initialisation */
+    /*s: [[cinit()]] nullgen initialization */
     nullgen.type    = D_NONE; // no type set yet
     nullgen.reg     = R_NONE;
     nullgen.symkind = N_NONE;
     nullgen.sym = S;
     nullgen.offset = 0; // part of a union
-    /*x: [[cinit()]] nullgen initialisation */
+    /*x: [[cinit()]] nullgen initialization */
     if(FPCHIP)
         nullgen.dval = 0;
     for(i=0; i<sizeof(nullgen.sval); i++)
         nullgen.sval[i] = 0;
-    /*e: [[cinit()]] nullgen initialisation */
-    /*s: [[cinit()]] hash initialisation from itab */
+    /*e: [[cinit()]] nullgen initialization */
+    /*s: [[cinit()]] hash initialization from itab */
     for(i=0; i<NHASH; i++)
         hash[i] = S;
     for(i=0; itab[i].name; i++) {
@@ -268,15 +268,15 @@ cinit(void)
         s->value = itab[i].value;
         s->type = itab[i].type;
     }
-    /*e: [[cinit()]] hash initialisation from itab */
-    /*s: [[cinit()]] pathname initialisation from cwd */
+    /*e: [[cinit()]] hash initialization from itab */
+    /*s: [[cinit()]] pathname initialization from cwd */
     pathname = allocn(pathname, 0, 100);
     if(getwd(pathname, 99) == 0) {
         pathname = allocn(pathname, 100, 900);
         if(getwd(pathname, 999) == 0)
             strcpy(pathname, "/???");
     }
-    /*e: [[cinit()]] pathname initialisation from cwd */
+    /*e: [[cinit()]] pathname initialization from cwd */
 }
 /*e: function cinit(arm) */
 
