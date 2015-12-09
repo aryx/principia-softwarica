@@ -26,6 +26,8 @@
 %    * around INITENTRY, -l, -E digit, make default path
 %    * renames many local variables, more consistent (v = version, etc)
 %    * mv Autom out of union, remove union, was confusing
+%    * far cleaner oplook(), where optimizations have been aspectized
+%    * TODO introduced D_ADDR in Assembler so can have cleaner code in Linker
 % - TODO reorganized the code to better match the chapters
 %    by introducing more files: main.c, lib.c, error.c, m.h
 
@@ -204,7 +206,7 @@ to a specific binary instruction?
 \l what is position independent code? 
 \l how dynamic linking works? 
 \l how shared libraries works? 
-\l endianess? see the inuxi stuff?
+\l endianess? see the inuxi stuff? also lput vs lputl
 \l how handle arcitecture constraints
 
 %tags used in this file for different recurring themes:
@@ -247,9 +249,9 @@ to a specific binary instruction?
 %   * AST rewriting and optimisations
 %   * caching/memoizing and precomputation for optimisations
 %   * dumpers
+%   * endianess via inuxi or lput/lputl
 % - =~ concatenation, resolution, relocation
 % - poolization?
-% - endianess?
 % - special algos for dynamic linking?
 
 \section{The \plan ARM linker, [[5l]]}
@@ -1408,6 +1410,8 @@ Its role and its relationship with the {pseudo-register}
 \section{ARM architecture}
 % constraints
 
+% low-endian
+
 \t maybe can do this section after understand better code generation
 
 % Object instruction do not match exactly ARM instruction.
@@ -1624,6 +1628,7 @@ we will see in Section~\ref{sec:gen-executable}, outputs
 directly the bytes of the header with a serie
 of calls to the [[lput()]] (for out[[put]] [[long]])
 utility function.
+\t actually portable format because lput is long put big-endian
 %
 The [[Exec]] structure is used though in programs which are {\em reading}
 the header of executables.
@@ -3499,6 +3504,8 @@ case H_PLAN9:
 If you do not understand the order
 of the [[lput()]] above, see Section~\ref{sec:exec-format} 
 which describes the format of the [[a.out]] header used by \plan.
+\t actually lput is long put big-endian
+
 
 The address of the entry point is looked up in the symbol table
 in the [[Sym.value]] field of the [[INITENTRY]] symbol:
@@ -7985,7 +7992,6 @@ which will actually change its value.
 %trans:
 The final step in the linking pipeline is the machine code generation.
 %dup: The code generation is done by 5l, not 5a, surprisingly!
-%real-world:?
 %trans:
 We have seen already [[asmb()]], in Section~\ref{sec:gen-executable},
 which generates the [[a.out]] header and contains some of the
@@ -8004,6 +8010,8 @@ to generate the ARM instructions and will be covered in this chapter.
 But before, we will describe the binary format of the
 ARM instructions and present additional data structures
 used by [[oplook()]] and [[asmout()]], especially [[Optab]].
+
+%real-world: what do they do at this stage in ld? just patching?
 
 \section{ARM instruction format}
 
@@ -8042,8 +8050,8 @@ A single {pattern} can match a {\em set} of opcodes
 and certain {\em classes} of operands.
 %
 An {action} in a rule consists mostly of an {\em action identifier}
-which is then used in [[asmout()]] to choose the appropriate instruction
-generator.
+which is then used in [[asmout()]] to choose the appropriate 
+{instruction generator}.
 %ocaml: use pattern directly, no need special data structure
 
 %toc: 
@@ -8089,7 +8097,8 @@ struct	Optab
 @
 \l rename Rule?
 \t rename Optab.type -> Optab.action_id ?
-%ocaml: use a single pattern match so far easier.
+%ocaml: use a single pattern match so far easier. no need extra DS.
+% no need split between pattern and action code in asmout switch.
 
 A very important global is [[optab]] which contains
 all the rules of the ARM code generator:
@@ -8220,7 +8229,7 @@ Oprange	oprange[ALAST];
 [[oprange]] is also set by [[buildop()]] and contains
 originally the ranges for the opcodes mentioned in the [[optab]] array.
 For instance, the range for [[AADD]], given the [[optab]] entries
-of the previous section, would be:
+of the previous section, could be:
 \begin{verbatim}
 // range for AADD, optab[0..3[ <=> optab[0..2]
 { .start = &optab[0];
@@ -8506,10 +8515,9 @@ return o;
 
 \label{sec:cmp}
 The {matching} of operand classes in [[oplook()]] is using simply
-[[==]] for the middle operand ([[a2]]), as this operand class
+[[==]] for the middle operand ([[a2]]). Indeed, this operand class
 is always either a register ([[C_REG]]) or nothing ([[C_NONE]]).
 But, for the other operands the function [[cmp()]] (for compatible)
-\l not compare
 below is used:
 
 <<function cmp(arm)>>=
@@ -8557,15 +8565,15 @@ Indeed, a large constant ([[C_LCON]]) is more {general} than
 a rotatable constant ([[C_RCON]]) or a negative rotatable constant
 ([[C_NCON]]).
 \l FIGURE VENN diagram
-% But if rule C_RCON, match only C_RCON!
+\l But if rule C_RCON, match only C_RCON!
 Thanks to this encoding of inclusion via cases of [[cmp()]],
 a single rule can match many different kinds of instructions.
+%
 Just like [[oprange]] we saw in Section~\ref{sec:oprange}
-allows with one opcode to actually
-match a set of opcodes, [[cmp()]] allows with one
-{\em general} operand class (e.g. [[C_LCON]])
-to actually match also more {\em specialized} 
-operand classes (e.g. [[C_RCON]] and [[C_NCON]]).
+allows with one opcode to actually match a set of opcodes, 
+[[cmp()]] allows with one {\em general} operand class (e.g. [[C_LCON]])
+to actually match also more {\em specialized} operand classes 
+(e.g. [[C_RCON]] and [[C_NCON]]).
 %chunks:
 We will present those general and specialized
 classes, and their encoding in [[cmp()]],
@@ -8629,14 +8637,9 @@ buildop(void)
 }
 @
 %dead:
-%  <<[[buildop()]] switch opcode r for ranges cases>>=
-%  case AXXX:
-%    break;
 %  case ABX:
 %  case ABXRET:
 %  ...
-%  @
-% AXXX should be dead as it's after n
 \n the cases in the switch must be the entries in optab, not more, not less,
 \n no ARET in switch? no because noops should have rewrite it.
 \n no ADATA/AGLOBL? buildop is used for code generation, not data
@@ -8644,6 +8647,13 @@ buildop(void)
 %chunks:
 The cases of the [[switch]] above, which we will present gradually
 in this chapter, specify the opcodes sets of the representants.
+
+<<[[buildop()]] switch opcode r for ranges cases>>=
+case AXXX:
+  break;
+@
+\t AXXX should be dead as it's after n ... but get ``unknown op in build''
+
 
 The {ordering} of rules in the sorted [[optab]] is governed by 
 the function below:
@@ -8728,7 +8738,8 @@ enum Operand_class {
 };
 \end{verbatim}
 
-General operand classes should be after their subclasses.
+The enumerations of general operand classes must be after the
+enumerations of their subclasses.
 
 \subsection{Optimizations}
 \l could be in Adv Topics? maybe easier to understand now, and pretty simple
@@ -8934,6 +8945,7 @@ if(useopti) {
 
 \section{[[asmout()]]}
 \label{sec:asmout}
+\l and endianess
 
 [[asmout()]] is the heart of the ARM code generator.
 %
@@ -8954,7 +8966,7 @@ asmout(Prog *p, Optab *o)
     o1 = o2 = o3 = o4 = o5 = o6 = 0;
     <<[[asmout()]] other initialisations>>
 
-    // first switch, action dispatch
+    // first switch, action id dispatch, set o1, o2, ...
     switch(o->type) {
     <<[[asmout()]] switch on type cases>>
     default:
@@ -8965,7 +8977,7 @@ asmout(Prog *p, Optab *o)
 
     <<[[asmout()]] debug>>
 
-    // second switch, output ox
+    // second switch, output o1, o2, ...
     switch(o->size) {
     <<[[asmout()]] switch on size cases>>
     }
@@ -8977,12 +8989,13 @@ asmout(Prog *p, Optab *o)
 
 Note that one instruction [[p]] in the object file
 may lead to the generation of up to 6 ARM instructions
-(24 bytes), hence the use of local variables up to [[o6]] above.
+(24 bytes) in the executable, hence the use of local variables 
+up to [[o6]] above.
 Those local variables are set in the cases of the first [[switch]]
 %chunks:
 (cases we will see gradually in this chapter)
 %
-and passed to [[lputl()]]:
+and passed later to [[lputl()]]:
 
 <<[[asmout()]] switch on size cases>>=
 case 4:
@@ -9028,6 +9041,7 @@ default:
     <<[[asmout()]] when other size, debug>>
     break;
 @
+\n could put case 0 accepted only for ATEXT, but done too in caller in asmb
 
 %dup: and adapted from loading/ldobj/buffered-input
 [[lputl()]] is one of the function from the 
@@ -9053,18 +9067,20 @@ cbp = buf.obuf;
 cbc = sizeof(buf.obuf);
 @
 
-Then this buffer gets {\em flushed} once in a while in [[cflush()]],
-which finally outputs the data in the global [[cout]]:
+Then, this buffer gets {\em flushed} once in a while in [[cflush()]],
+which finally outputs the data in the executable
+via the global [[cout]]:
 
-<<function lput(arm)>>=
+
+<<function lputl(arm)>>=
 void
-lput(long l)
+lputl(long l)
 {
 
-    cbp[0] = l>>24;
-    cbp[1] = l>>16;
-    cbp[2] = l>>8;
-    cbp[3] = l;
+    cbp[3] = l>>24;
+    cbp[2] = l>>16;
+    cbp[1] = l>>8;
+    cbp[0] = l;
     cbp += 4;
     cbc -= 4;
     if(cbc <= 0)
@@ -9072,6 +9088,8 @@ lput(long l)
 }
 @
 \t how know had enough space for 4 bytes?? bug?
+%bug! if have intermediate calls to cput then yes can have bugs!
+% otherwise lucky that MAXIO is multiple of 4
 
 <<function cflush>>=
 void
@@ -9089,6 +9107,34 @@ cflush(void)
 @
 \l simpler than input buffer
 
+Note that [[lputl()]] means ``long put low-endian''.
+The lower bits of a number have the lower address.
+There is another function [[lput()]], which does a similar
+thing but for {big-endian} architecture, where
+the lower bits of a number have the higher address:
+
+<<function lput(arm)>>=
+void
+lput(long l)
+{
+
+    cbp[0] = l>>24;
+    cbp[1] = l>>16;
+    cbp[2] = l>>8;
+    cbp[3] = l;
+    cbp += 4;
+    cbc -= 4;
+    if(cbc <= 0)
+        cflush();
+}
+@
+
+In fact, this function is actually used for the [[a.out]] generation
+in Section~\ref{sec:gen-header}. Indeed the [[a.out]] format
+imposes a big-endian order for the numbers in the header.
+
+
+\bigskip
 The cases of the first [[switch]] in [[asmout()]] will rely
 on a set of temporary variables to store registers
 and symbols:
@@ -9098,17 +9144,24 @@ int r, rf, rt, rt2;
 Sym *s;
 @
 
+
+
+
 \bigskip
 %trans: %chunks:
 The rest of this chapter will present gradually the different cases
 of the first [[switch]] of [[asmout()]].
-In fact, each case is associated with a set of entries in [[optab]] which
-mention the action identifier representing the case. This is why
-we will present also gradually those entries. In the same way
-the set of opcodes in [[oprange]], the class and subclasses
-in [[Operand_class]], and their order in [[cmp()]] will
-be gradually explained in the following sections next to the
+%
+In fact, each of those cases is associated with a set of entries 
+in [[optab]] which
+mention the action identifier representing the case.
+This is why we will present also gradually those entries.
+%
+In the same way the set of opcodes in [[oprange]]
+%the class and subclasses in [[Operand_class]], and their order in [[cmp()]] 
+will be gradually explained in the following sections next to the
 entries of optab and the cases of [[asmout()]].
+%
 All those elements work together to express the ARM code generation rules
 of [[5l]].
 %ocaml: pattern and final action would be together, no need split
@@ -9116,12 +9169,22 @@ of [[5l]].
 
 \section{Pseudo opcodes}
 
+%toc:
+The first code generation rules we will see concern pseudo-opcodes.
+
 \subsection{[[ATEXT]]}
+
+[[ATEXT]] is kept in the list of code instructions only
+for [[curtext]], so that error messages can mention in which
+procedure the problematic instruction is.
+%
+No code is generated for [[ATEXT]]:
 
 <<[[optab]] entries>>=
 { ATEXT,	C_LEXT,	C_NONE,	C_LCON, 	 0, 0, 0 },
 { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
 @
+\l could explain now C_LEXT, C_REG in middle, and C_LCON
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ATEXT:
     break;
@@ -9130,30 +9193,36 @@ case ATEXT:
 case 0:		/* pseudo ops */
     break;
 @
-% nothing to be done! TEXT is a pseudo opcode, and noops()
-% has patched it with the initial mov to save REGLINK in stack, so we're good
-% to go.
-% We kept it instead of sometimes replacing it when we could so have
-% still curtext.
+\l noops() has patched it with the initial mov to save REGLINK in stack
 
 \subsection{[[AWORD]]}
 
-% used for limitations of 5a, but also for addpool!
-% to deal with the ARM constraints on range of immediate values, addresses.
+[[WORD]] is a directive which provides an adhoc way
+to write a word (hence the name) in the code section.
+%
+It is often used to overcome some limitations of [[5a]]
+which does not handle every possible opcodes, e.g.
+opcodes to call a coprocessor.
+
+\t also for addpool! to deal with the ARM constraints on range of immediate
+\t  values, addresses.
+
+<<[[optab]] entries>>=
+{ AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
+@
+%dead: { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
+% WORD foo;  what does it mean?
+% WORD dollar foo; ok, I get it, and it should be a C_LCON
+
+%dup: codegen/ds/optab codegen/ds/operand-class codegen/oplook codegen/buildop
+Remember than [[C_LCON]] is a general operand class
+and so the single rule above will also match instructions
+with operands having (sub)classes such as [[C_RCON]] or [[C_NCON]].
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AWORD:
     break;
 @
-
-<<[[optab]] entries>>=
-{ AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
-{ AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
-@
-% remember LCON inherits everything, so might be a RCON or NCON
-%  but does not matter, instoffset the same and equal to x->to.offset!
-%less: WORD foo;  what does it mean?
-% WORD $foo; ok, I get it, and it should be a C_LCON
 
 <<[[asmout()]] switch on type cases>>=
 case 11:	/* word */
@@ -9164,35 +9233,68 @@ case 11:	/* word */
     break;
 @
 
+In addition to returning the class of an operand, [[aclass()]] has
+also for side effect to modify the global [[instoffset]],
 %trans:
-% instoffset, aclass(), perfect transition to next section.
+as we will see in the next section. %clever ref{sec:operand-subclasses}
+%
+This global contains the immediate constant or offset in the operand.
+So, [[o1]] above will contain [[p->to.offset]].
+Remember that the second [[switch]] of [[asmout()]] will eventually
+output the content of the local variable [[o1]] in the executable.
 
 
 
 \section{Operand subclasses and [[instoffset]]}
+\label{sec:operand-subclasses}
 
-% another form of pattern, for operand this time.
-% other kind of range than OpRange, range of possible values
-% of operands. with inheritance notion! Quite subtle.
+%trans:
+Before seeing the ARM code generation rules for arithmetic
+instructions, memory instructions, and more,
+%toc:
+we will present in this section the remaining operand classes
+and subclasses used in [[5l]]. Those classes 
+are referenced in many of the code generation rules.
+We will also finish to present the code of [[aclass()]].
+%dup:
+As said before, [[aclass()]] also modifies the following global,
+which is then used extensively in [[asmout()]]:
 
 <<global instoffset(arm)>>=
 long	instoffset;
 @
-% instruction offset?
-% really needs to be a global? can't be just a local to aclass()?
-% seems to be used both for immediate constant and offset
-
-
-
-% Those are some kinds of optimisations? Can not just take always LCON?
-% a bit but also need that
-% because expressivity Asm5 greater than what ARM can actually do sometimes.
+\l instruction offset? but it's actually more operand offset.
+\n really needs to be a global? yes! used outside aclass()?
+\t seems to be used both for immediate constant and offset
 
 \subsection{[[D_CONST]], [[C_xCON]], and [[immrot()]]}
 \label{sec:operand-class-DCONST}
 
-% immediate constants constraints
-% ex of instr: ADD I, R1, R2
+%dup: codegen/ds/optab codegen/ds/operand-class codegen/oplook codegen/buildop
+We mentioned before the general class 
+[[C_LCON]] (large constant) and its subclasses 
+[[C_RCON]] (rotatable small constant) and 
+[[C_NCON]] (rotatable small negative constant):
+
+<<[[Operand_class]] C_xCON cases>>=
+C_RCON,		/* 0xff rotated */ // [0..0xff] range, possibly rotated
+C_NCON,		/* ~RCON */
+C_LCON,
+@
+%dead: C_SCON,		/* 0xffff */
+\t NCON similar to LCON when you look at optab? maybe but does not use LFROM
+\t  so probably different!
+\l Those are some kinds of optimisations? Can not just take always LCON? maybe.
+\l but those are important optimisations. linker is supposed to leverage every
+\l speed opportunities offered by the machine.
+
+%dup: codegen/buildop/ocmp
+Remember from Section~\ref{sec:order-operand-class-matters}
+that the order of those enumeration matters, and that
+the general class [[C_LCON]] must be after its subclasses
+[[C_RCON]] and [[C_NCON]].
+
+All those classes derive from the operand kind [[D_CONST]]:
 
 <<[[aclass()]] switch type cases>>=
 case D_CONST:
@@ -9202,25 +9304,10 @@ case D_CONST:
     return C_GOK;
 @
 
-
-% Rotated, Negative, Large?
-<<[[Operand_class]] C_xCON cases>>=
-C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
-C_NCON,		/* ~RCON */
-C_LCON,
-@
-% see sec:order-operand-class-matters! C_RCON before!
-
-%TODO: must impose order with other xCON?
-%dead: C_SCON,		/* 0xffff */
-%in the end NCON is not different from LCON when you look at optab,
-% so perhaps it could be removed.
-%note that LCON is more "general" than the other, see cmp() later.
-
 <<[[aclass()]] D_CONST case, switch symkind cases>>=
 case D_NONE:
     instoffset = a->offset;
-    if(a->reg != R_NONE) // when?
+    if(a->reg != R_NONE) // when??????
         goto aconsize;
 
     if(immrot(instoffset))
@@ -9229,32 +9316,59 @@ case D_NONE:
         return C_NCON;
     return C_LCON;
 @
-
-
-
-
+\t when get not R_NONE??
 
 %\subsection{immediate values (possibly rotated), [[immrot()]]}
-% immediate (rotated) address
 
-% see Machine.nw and the ARM refcard to understand the code below.
-% RCON is for small immediate value, or rotated things of small 
-% immediate value.
-% You have 8 bits for the number (0xff) and 4 bits for the rotate (16)
-% hence the code below.
-
-% http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/
-
+%trans:
+We can now define what is a rotatable small number 
+and see the code of [[immrot()]].
+%dup: from Assembler,  TODO overview/arm/immediate-range?
 \label{sec:clever-trick-numbers}
+The ARM use 12 bits to encode immediate constants in arithmetic
+instructions but it is using a clever trick
+to be able to represent numbers larger than 4096.
+%
+Indeed, the 12 bits are divided in two parts: 8 bits for
+a number from [[0]] to [[0xff]], and 4 bits
+for a rotation of this number. The 16 possible rotations
+are not simply a bitshift to the left from 0 to 15.
+Indeed, this would not be enough to represent large numbers
+such as $2^31$. Instead, each rotation is a double bit rotation to
+the right.
+Here are a few examples of numbers and their ARM encoding:
+\begin{verbatim}
+0    => rotation = 0b0000; number = 0b00000000
+255  => rotation = 0b0000; number = 0b11111111
+256  => rotation = 0b1100; number = 0b00000001
+512  => rotation = 0b1100; number = 0b00000010
+2^31 => rotation = 0b0001; number = 0b00000010
+\end{verbatim}
+
+%dup: (and adapted slightly) Assembler
+Not all 32 bits integers can be represented
+using that scheme but many important numbers like all
+the powers of 2 between 0 and 31 can be expressed
+which is very useful in operations involving bitsets or bitmasks.
+See \url{http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/}
+for an excellent tutorial on the topic which contains also
+an interactive application where one can enter any number and
+get its encoding (when the number is rotatable).
+
+We can now see the code of [[immrot()]]:
+
 <<function immrot(arm)>>=
 long
 immrot(ulong v)
 {
+    // the rotation
     int i;
 
     for(i=0; i<16; i++) {
         if((v & ~0xff) == 0)
-            return (i<<8) | v | (1<<25);
+            //      i,r,r opcodes       rotation     number        
+            return  (1<<25)         |    (i<<8)   |   v     ;
+        // inverse of 2 bits rotation to the right
         v = (v<<2) | 
             (v>>30);
     }
@@ -9264,9 +9378,29 @@ immrot(ulong v)
 % >> >>
 %old: last instruction put on separate lines otherwise noweb issue
 
-% there is code like
-%    o1 |= immrot(instoffset);
-% the 1<<25 means we are in the  i,r,r  case
+%examples:
+[[immrot(255)]] will return when [[i == 0]] since
+[[255 & ~255 == 0]].
+%
+For $2^31$, the first iteration will not return as this number 
+is not between 0 and [[0xff]]. 
+So, [[v]] will be rotated to the left 2 times, and the
+2 upper bits will be put back to the beginning by bitshiting
+the number to the right by 30. Now [[i==1]] and [[v==2]]
+and [[immrot()]] will return since [[v]] is now
+between 0 and [[0xff]].
+
+In addition to returning the ARM encoding of the rotatable constant,
+[[immrot()]] also sets the special bit 25 in the return value.
+This bit is set for all instructions involving an immediate
+constant. See the \book{Machine} or the 
+excellent ARM guide \url{http://re-eject.gbadev.org/files/armref.pdf}.
+This will allow later code such as:
+\begin{verbatim}
+o1 |= immrot(instoffset);
+\end{verbatim}
+\l the 1<<25 means we are in the  i,r,r  case
+
 
 
 
@@ -9276,19 +9410,6 @@ immrot(ulong v)
 
 % offsets constraints
 % ex of instr: MOVW OFF(R13), R2
-
-
-<<[[aclass()]] switch type cases>>=
-case D_OREG:
-    switch(a->symkind) {
-    <<[[aclass()]] D_OREG case, switch symkind cases>>
-    }
-    return C_GOK;
-@
-% OREG usually is a dereference of a register or a symbol reference
-% (which is then really an implicit offet to SB)
-
-
 
 <<[[Operand_class]] C_xOREG cases>>=
 C_HOREG,
@@ -9315,6 +9436,18 @@ case C_LOREG:
     return cmp(C_SROREG, b);
 @
 
+
+
+<<[[aclass()]] switch type cases>>=
+case D_OREG:
+    switch(a->symkind) {
+    <<[[aclass()]] D_OREG case, switch symkind cases>>
+    }
+    return C_GOK;
+@
+% OREG usually is a dereference of a register or a symbol reference
+% (which is then really an implicit offet to SB)
+
 <<[[aclass()]] D_OREG case, switch symkind cases>>=
 case D_NONE:
     instoffset = a->offset;
@@ -9325,7 +9458,6 @@ case D_NONE:
          /* n.b. that immhalf() will also satisfy immrot */
         if(immhalf(instoffset))	
             return C_HOREG;
-
         if(immrot(instoffset))
             return C_SROREG;
         return immhalf(instoffset)? C_HOREG : C_SOREG;
@@ -9334,7 +9466,7 @@ case D_NONE:
         return C_ROREG;
     return C_LOREG;
 @
-
+%bug? why repeat immhalf test???
 
 
 
@@ -16033,8 +16165,6 @@ union Buf buf;
 \subsection{Output buffer}
 
 
-
-
 % cflush in chapter X
 
 
@@ -16050,8 +16180,6 @@ cput(int c)
 }
 @
 % mostly similar to x86, x86 is using a macro though
-
-
 
 
 
@@ -16088,26 +16216,12 @@ wput(long l)
 }
 @
 
-% lput in Chapter X
+% lputl and lput in Chapter X
 
 
 
 
-<<function lputl(arm)>>=
-void
-lputl(long l)
-{
 
-    cbp[3] = l>>24;
-    cbp[2] = l>>16;
-    cbp[1] = l>>8;
-    cbp[0] = l;
-    cbp += 4;
-    cbc -= 4;
-    if(cbc <= 0)
-        cflush();
-}
-@
 
 
 <<function llput>>=
