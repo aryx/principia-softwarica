@@ -739,6 +739,9 @@ buildop(void)
         switch(r)
         {
         /*s: [[buildop()]] switch opcode r for ranges cases */
+        case AXXX:
+          break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ATEXT:
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
