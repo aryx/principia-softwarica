@@ -8036,7 +8036,8 @@ used by [[oplook()]] and [[asmout()]], especially [[Optab]].
 \section{ARM instruction format}
 
 % as said in X, great guide.
-% ref to colorful guide again
+% ref to colorful guide again.
+% Also Machine.nw
 
 % general shape:  cond, class, rest.
 % FIGURE
@@ -9286,6 +9287,8 @@ long	instoffset;
 \l instruction offset? but it's actually more operand offset.
 \n really needs to be a global? yes! used outside aclass()?
 \t seems to be used both for immediate constant and offset
+\t  also for locals it is actually autosize + offset, so it is many
+\t  things at the same time
 
 \subsection{[[D_CONST]], [[C_xCON]], and [[immrot()]]}
 \label{sec:operand-class-DCONST}
@@ -9328,14 +9331,17 @@ case D_CONST:
         return C_NCON;
     return C_LCON;
 @
-%old: but now use D_ADDR
+%old: now use D_ADDR instead
 %    switch(a->symkind) {
 %    <<[[aclass()]] D_CONST case, switch symkind cases>>
 %    }
 %    return C_GOK;
-%
+%  ...
+%  <<[[aclass()]] D_CONST case, switch symkind cases>>=
 %  case N_NONE:
-\t when get not R_NONE??
+%  ...
+\t when get not R_NONE?? for D_ADDR on automatic variables? when have no sym?
+\t  but then should still have a symkind, so dead code??
 
 %\subsection{immediate values (possibly rotated), [[immrot()]]}
 
@@ -9418,7 +9424,7 @@ This will allow later code such as:
 \begin{verbatim}
 o1 |= immrot(instoffset);
 \end{verbatim}
-\l the 1<<25 means we are in the  i,r,r  case
+\l the 1 < < 25 means we are in the  i,r,r  case
 
 
 
@@ -9439,22 +9445,6 @@ C_LOREG,
 C_ROREG,
 C_SROREG,	/* both S and R */
 @
-
-<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
-case C_HFOREG:
-    return b == C_HOREG || b == C_FOREG;
-case C_FOREG:
-case C_HOREG:
-    return b == C_HFOREG;
-case C_SROREG:
-    return cmp(C_SOREG, b) || cmp(C_ROREG, b);
-case C_SOREG:
-case C_ROREG:
-    return b == C_SROREG || cmp(C_HFOREG, b);
-case C_LOREG:
-    return cmp(C_SROREG, b);
-@
-
 
 
 <<[[aclass()]] switch type cases>>=
@@ -9479,7 +9469,7 @@ case N_NONE:
             return C_HOREG;
         if(immrot(instoffset))
             return C_SROREG;
-        return immhalf(instoffset)? C_HOREG : C_SOREG;
+        return C_SOREG;
     }
     if(immrot(instoffset))
         return C_ROREG;
@@ -9487,6 +9477,21 @@ case N_NONE:
 @
 %bug? why repeat immhalf test???
 
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_HFOREG:
+    return b == C_HOREG || b == C_FOREG;
+case C_FOREG:
+case C_HOREG:
+    return b == C_HFOREG;
+case C_SROREG:
+    return cmp(C_SOREG, b) || cmp(C_ROREG, b);
+case C_SOREG:
+case C_ROREG:
+    return b == C_SROREG || cmp(C_HFOREG, b);
+case C_LOREG:
+    return cmp(C_SROREG, b);
+@
 
 
 %\subsection{Immediate address, [[immaddr()]]}
@@ -13917,9 +13922,9 @@ C_HFOREG,
 <<[[aclass()]] if immfloat for N_NONE symbol>>=
 if(immfloat(t))
     return immhalf(instoffset)? C_HFOREG : C_FOREG;
-    /* n.b. that it will also satisfy immrot */
+    /* n.b. that [C_FOREG] will also satisfy immrot */
 @
-
+%pad: I rewritten the code to aspectize the floating aspect
 
 \subsubsection{XXX}
 
