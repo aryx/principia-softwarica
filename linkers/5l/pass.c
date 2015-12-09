@@ -620,7 +620,7 @@ newdata(Sym *s, int o, int w, int t)
     p->from.sym = s;
     p->from.offset = o;
     p->to.type = D_CONST;
-    p->to.symkind = D_NONE;
+    p->to.symkind = N_NONE;
 
     return p;
 }

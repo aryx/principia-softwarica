@@ -139,7 +139,7 @@ Dconv(Fmt *fp)
 
     case D_NONE:
         str[0] = '\0';
-        if(a->symkind != D_NONE || a->reg != R_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->reg != R_NONE || a->sym != S)
             sprint(str, "%N(R%d)(NONE)", a, a->reg);
         break;
 
@@ -177,19 +177,19 @@ Dconv(Fmt *fp)
 
     case D_REG:
         sprint(str, "R%d", a->reg);
-        if(a->symkind != D_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->sym != S)
             sprint(str, "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_REGREG:
         sprint(str, "(R%d,R%d)", a->reg, (int)a->offset);
-        if(a->symkind != D_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->sym != S)
             sprint(str, "%N(R%d)(REG)", a, a->reg);
         break;
 
     case D_FREG:
         sprint(str, "F%d", a->reg);
-        if(a->symkind != D_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->sym != S)
             sprint(str, "%N(R%d)(REG)", a, a->reg);
         break;
 
@@ -205,7 +205,7 @@ Dconv(Fmt *fp)
             sprint(str, "PSR%d", a->reg);
             break;
         }
-        if(a->symkind != D_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->sym != S)
             sprint(str, "%N(PSR%d)(REG)", a, a->reg);
         break;
 
@@ -221,7 +221,7 @@ Dconv(Fmt *fp)
             sprint(str, "FCR%d", a->reg);
             break;
         }
-        if(a->symkind != D_NONE || a->sym != S)
+        if(a->symkind != N_NONE || a->sym != S)
             sprint(str, "%N(FCR%d)(REG)", a, a->reg);
 
         break;

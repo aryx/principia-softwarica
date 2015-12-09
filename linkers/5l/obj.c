@@ -584,7 +584,7 @@ inopd(byte *p, Adr *a, Sym *h[])
     a->sym = h[symidx];
     a->symkind = p[3];
     /*s: [[inopd()]] sanity check D_CONST */
-    if(a->type == D_CONST && a->symkind != D_NONE) {
+    if(a->type == D_CONST && a->symkind != N_NONE) {
         print("missing D_CONST -> D_ADDR\n");
         p[0] = ALAST+1;
         return 0;	/*  force real diagnostic */

@@ -586,7 +586,7 @@ naddr(Node *n, Adr *a)
     case OADDR:
         naddr(n->left, a);
         if(a->type == D_OREG) {
-            a->type = D_CONST;
+            a->type = D_CONST; /// D_ADDR?
             break;
         }
         goto bad;

@@ -342,15 +342,15 @@ aclass(Adr *a)
     case D_OREG:
         switch(a->symkind) {
         /*s: [[aclass()]] D_OREG case, switch symkind cases */
-        case D_NONE:
+        case N_NONE:
             instoffset = a->offset;
             t = immaddr(instoffset);
             if(t) {
-                /*s: [[aclass()]] if immfloat for D_NONE symbol */
+                /*s: [[aclass()]] if immfloat for N_NONE symbol */
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFOREG : C_FOREG;
                     /* n.b. that it will also satisfy immrot */
-                /*e: [[aclass()]] if immfloat for D_NONE symbol */
+                /*e: [[aclass()]] if immfloat for N_NONE symbol */
 
                  /* n.b. that immhalf() will also satisfy immrot */
                 if(immhalf(instoffset))	

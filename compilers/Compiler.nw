@@ -8383,7 +8383,7 @@ gextern(Sym *s, Node *a, long o, long w)
         p->from.offset += o;
         p->reg = w; // attributes
         if(p->to.type == D_OREG)
-            p->to.type = D_CONST;
+            p->to.type = D_CONST; // D_ADDR?
     }
 }
 @
@@ -8544,7 +8544,7 @@ case OIND:
 case OADDR:
     naddr(n->left, a);
     if(a->type == D_OREG) {
-        a->type = D_CONST;
+        a->type = D_CONST; /// D_ADDR?
         break;
     }
     goto bad;
@@ -13351,11 +13351,12 @@ struct Htab {
     short type; 
 };
 @
-
 <<[[Sym]] identifier value, code generation fields>>=
 // index in h when the Sym is really a symbol, 0 when not a symbol
 char	symidx;
 @
+
+
 
 % main -> compile -> yyparse; gclean -> <>
 %less: do LP split like I did in Assembler.nw
@@ -13470,10 +13471,12 @@ zaddr(char *bp, Adr *a, int s)
     bp[2] = s;
     bp[3] = a->symkind;
     bp += 4;
-    switch(a->type) {
-    default:
-        diag(Z, "unknown type %d in zaddr", a->type);
 
+    if(a->type == D_CONST && a->symkind != N_NONE) {
+        diag(Z, "missing D_CONST -> D_ADDR migration");
+    }
+
+    switch(a->type) {
     case D_NONE:
     case D_REG:
     case D_FREG:
@@ -13482,6 +13485,7 @@ zaddr(char *bp, Adr *a, int s)
 
     case D_OREG:
     case D_CONST:
+    case D_ADDR:
     case D_BRANCH:
     case D_SHIFT:
         l = a->offset;
@@ -13512,11 +13516,14 @@ zaddr(char *bp, Adr *a, int s)
         bp[3] = l>>24;
         bp += 4;
         break;
+    default:
+        diag(Z, "unknown type %d in zaddr", a->type);
+
     }
     return bp;
 }
 @
-
+%pad: I added D_ADDR and sanity check D_CONST
 
 
 
@@ -21825,8 +21832,8 @@ predicable(Prog *p)
         || p->as == ASIGNAME
         || p->as == ATEXT
         || p->as == AWORD
-        || p->as == ADYNT
-        || p->as == AINIT
+//        || p->as == ADYNT
+//        || p->as == AINIT
         || p->as == ABCASE
         || p->as == ACASE)
         return 0; 
