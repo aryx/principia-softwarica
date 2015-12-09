@@ -40,9 +40,11 @@ long	bsssize;
 /*e: global bsssize */
 
 /*s: global cbc */
+// remaining bytes in buf.obuf
 int	cbc;
 /*e: global cbc */
 /*s: global cbp */
+// array<byte> (slice of buf.obuf) 
 char*	cbp;
 /*e: global cbp */
 
@@ -183,7 +185,7 @@ long	thunk;
 int	version = 0;
 /*e: global version */
 /*s: global xcmp(arm) */
-char	xcmp[C_GOK+1][C_GOK+1];
+bool	xcmp[C_GOK+1][C_GOK+1];
 /*e: global xcmp(arm) */
 /*s: global zprg */
 Prog	zprg;

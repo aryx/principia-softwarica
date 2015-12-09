@@ -713,23 +713,26 @@ datblk(long s, long n, bool sstring)
 /*e: function datblk(arm) */
 
 /*s: function asmout(arm) */
-/// main -> asmb -> <> (in a for loop over all instructions)
+/// main -> asmb -> for p { <> }
 void
 asmout(Prog *p, Optab *o)
 {
-    // ARM 32 bits instructions
+    // ARM 32 bits instructions, set in the switch
     long o1, o2, o3, o4, o5, o6;
-    // pc
-    long v;
-    // misc
+    /*s: [[asmout()]] other locals */
     int r, rf, rt, rt2;
     Sym *s;
+    /*x: [[asmout()]] other locals */
+    // pc (real)
+    long v;
+    /*e: [[asmout()]] other locals */
 
-    /*s: [[asmout()]] initialisation */
-    PP = p;
-    /*e: [[asmout()]] initialisation */
     o1 = o2 = o3 = o4 = o5 = o6 = 0;
+    /*s: [[asmout()]] other initialisations */
+    PP = p;
+    /*e: [[asmout()]] other initialisations */
 
+    // first switch, action id dispatch, set o1, o2, ...
     switch(o->type) {
     /*s: [[asmout()]] switch on type cases */
     case 0:		/* pseudo ops */
@@ -1469,9 +1472,10 @@ asmout(Prog *p, Optab *o)
     /*s: [[asmout()]] debug */
     if(debug['a'] > 1)
         Bprint(&bso, "%2d ", o->type);
+    v = p->pc; // for debugging later
     /*e: [[asmout()]] debug */
 
-    v = p->pc;
+    // second switch, output o1, o2, ...
     switch(o->size) {
     /*s: [[asmout()]] switch on size cases */
     case 4:

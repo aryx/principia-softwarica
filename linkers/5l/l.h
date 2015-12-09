@@ -56,7 +56,7 @@ struct	Adr
     // option<ref<Sym>> (owner = hash)
     Sym*	sym;
     /*x: [[Adr]] other fields */
-    // option<enum<Classx>>, 0 means None, i means i-1 is the class you want
+    // option<enum<Operand_class>>, 0 means None, i means i-1 is the class you want
     short	class;
     /*x: [[Adr]] other fields */
     // list<ref_own<Auto> (next = Auto.link), only used by TEXT instruction
@@ -91,7 +91,7 @@ struct	Prog
     /*x: [[Prog]] other fields */
     Prog*	forwd;
     /*x: [[Prog]] other fields */
-    // option<index-1-based in optab[]>, 0 means None, i means index optab[i-1]
+    // option<index in optab[] (1-based)>, 0 means None, i means optab[i-1]
     byte	optab;
     /*e: [[Prog]] other fields */
 
@@ -171,7 +171,11 @@ struct	Auto
 /*s: struct Optab(arm) */
 struct	Optab
 {
-    // enum<Opcode> (the opcode is the representant of a range)
+    // ---------------------------
+    // The pattern (if)
+    // ---------------------------
+
+    // enum<Opcode> (the opcode is the representant of a set of opcodes)
     byte	as;
 
     // enum<Operand_class>, possible operand class for first operand
@@ -181,15 +185,19 @@ struct	Optab
     // enum<Operand_class>, possible operand class for third operand
     short	a3;
 
-    // idx for the code generator, see the giant switch in asmout()
-    short	type; 
+    // ---------------------------
+    // The action (then)
+    // ---------------------------
 
+    // action id for the code generator (see the giant switch in asmout())
+    short	type; 
     // size of the corresponding machine code (should be a multiple of 4)
     short	size; 
 
     /*s: [[Optab]] other fields */
     // 0 | REGSB | REGSP
     short	param;
+    /*x: [[Optab]] other fields */
     // bitset<enum<Optab_flag>>
     short	flag;
     /*e: [[Optab]] other fields */
@@ -198,9 +206,9 @@ struct	Optab
 /*s: struct Oprange(arm) */
 struct	Oprange
 {
-    //index in (sorted) optab
+    //starting index in (sorted) optab
     Optab*	start;
-    //index in (sorted) optab
+    //ending index in (sorted) optab
     Optab*	stop;
 };
 /*e: struct Oprange(arm) */
@@ -241,38 +249,21 @@ enum Optab_flag {
 };
 /*e: enum Optab_flag(arm) */
 /*s: enum Operand_class(arm) */
-// order of entries matter! coupling with cmp() and ocmp()
+// order of entries for one kind matters! coupling with cmp() and ocmp()
 enum Operand_class {
     C_NONE		= 0,
+    C_REG,     // D_REG
+    C_BRANCH,  // D_BRANCH
 
-    C_REG,
-    C_REGREG,
-    C_SHIFT,
-    C_PSR,
-
-    C_BRANCH,
-
-    /*s: [[Operand_class]] cases */
-    C_RCON,		/* 0xff rotated */ // 0xff range, possibly rotated
+    // D_CONST
+    /*s: [[Operand_class]] C_xCON cases */
+    C_RCON,		/* 0xff rotated */ // [0..0xff] range, possibly rotated
     C_NCON,		/* ~RCON */
     C_LCON,
-    /*x: [[Operand_class]] cases */
-    C_HEXT,
-    /*s: [[Operand_class]] cases, in C_xEXT, float cases */
-    C_FEXT,
-    C_HFEXT,
-    /*e: [[Operand_class]] cases, in C_xEXT, float cases */
-    C_SEXT,
-    C_LEXT,
-    /*x: [[Operand_class]] cases */
-    C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
-    /*s: [[Operand_class]] cases, in C_xAUTO, float cases */
-    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
-    C_HFAUTO,	/* both H and F */
-    /*e: [[Operand_class]] cases, in C_xAUTO, float cases */
-    C_SAUTO,	/* -0xfff to 0xfff */
-    C_LAUTO,
-    /*x: [[Operand_class]] cases */
+    /*e: [[Operand_class]] C_xCON cases */
+
+    // D_OREG
+    /*s: [[Operand_class]] C_xOREG cases */
     C_HOREG,
     /*s: [[Operand_class]] cases, in C_xOREG, float cases */
     C_FOREG,
@@ -283,11 +274,42 @@ enum Operand_class {
 
     C_ROREG,
     C_SROREG,	/* both S and R */
-    /*x: [[Operand_class]] cases */
+    /*e: [[Operand_class]] C_xOREG cases */
+    // D_OREG with symbol N_EXTERN (or N_INTERN)
+    /*s: [[Operand_class]] C_xEXT cases */
+    C_HEXT,
+    /*s: [[Operand_class]] cases, in C_xEXT, float cases */
+    C_FEXT,
+    C_HFEXT,
+    /*e: [[Operand_class]] cases, in C_xEXT, float cases */
+    C_SEXT,
+    C_LEXT,
+    /*e: [[Operand_class]] C_xEXT cases */
+    // D_OREG with symbol N_PARAM or N_LOCAL
+    /*s: [[Operand_class]] C_xAUTO cases */
+    C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+    /*s: [[Operand_class]] cases, in C_xAUTO, float cases */
+    C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
+    C_HFAUTO,	/* both H and F */
+    /*e: [[Operand_class]] cases, in C_xAUTO, float cases */
+    C_SAUTO,	/* -0xfff to 0xfff */
+    C_LAUTO,
+    /*e: [[Operand_class]] C_xAUTO cases */
+
+    // D_ADDR
+    /*s: [[Operand_class]] C_xxCON cases */
     C_RECON,
-    /*x: [[Operand_class]] cases */
+    /*x: [[Operand_class]] C_xxCON cases */
     C_RACON,
     C_LACON,
+    /*e: [[Operand_class]] C_xxCON cases */
+
+    /*s: [[Operand_class]] cases */
+    C_SHIFT,   // D_SHIFT
+    /*x: [[Operand_class]] cases */
+    C_REGREG,  // D_REGREG
+    /*x: [[Operand_class]] cases */
+    C_PSR,     // D_PSR
     /*x: [[Operand_class]] cases */
     C_ADDR,		/* relocatable address */
     /*x: [[Operand_class]] cases */
@@ -295,7 +317,6 @@ enum Operand_class {
     C_FCON,
     C_FCR,
     /*e: [[Operand_class]] cases */
-
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };
 /*e: enum Operand_class(arm) */
@@ -330,7 +351,6 @@ enum misc_constants {
     /*s: constant MINSIZ */
     MINSIZ		= 64,
     /*e: constant MINSIZ */
-    NENT		= 100,
     /*s: constant MAXIO */
     MAXIO		= 8192,
     /*e: constant MAXIO */
@@ -425,7 +445,7 @@ extern	Prog*	textp;
 extern	long	textsize;
 extern	long	thunk;
 extern	int	version;
-extern	char	xcmp[C_GOK+1][C_GOK+1];
+extern	bool	xcmp[C_GOK+1][C_GOK+1];
 extern	Prog	zprg;
 extern	int	dtype;
 extern	int	armv4;
@@ -454,6 +474,7 @@ extern	Prog*	prog_divu;
 extern	Prog*	prog_mod;
 extern	Prog*	prog_modu;
 
+/*s: pragmas varargck type */
 #pragma	varargck	type	"A"	int
 #pragma	varargck	type	"A"	uint
 #pragma	varargck	type	"C"	int
@@ -461,8 +482,11 @@ extern	Prog*	prog_modu;
 #pragma	varargck	type	"N"	Adr*
 #pragma	varargck	type	"P"	Prog*
 #pragma	varargck	type	"S"	char*
-
+/*e: pragmas varargck type */
+/*s: pragmas varargck argpos */
 #pragma	varargck	argpos	diag 1
+/*e: pragmas varargck argpos */
+
 
 int	Aconv(Fmt*);
 int	Cconv(Fmt*);

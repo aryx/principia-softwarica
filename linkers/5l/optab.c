@@ -9,7 +9,6 @@ Optab	optab[] =
     { ATEXT,	C_LEXT,	C_REG,	C_LCON, 	 0, 0, 0 },
     /*x: [[optab]] entries */
     { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4, 0 },
-    { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
     /*x: [[optab]] entries */
     { AADD,		C_REG,	C_REG,	C_REG,		 1, 4, 0 },
     { AADD,		C_REG,	C_NONE,	C_REG,		 1, 4, 0 },
@@ -265,7 +264,7 @@ Optab	optab[] =
     { ACASE,	C_REG,	C_NONE,	C_NONE,		62, 4, 0 },
     { ABCASE,	C_NONE, C_NONE, C_BRANCH,   63, 4, 0 },
     /*e: [[optab]] entries */
-    { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4, 0 },
+    { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4 },
 };
 /*e: global optab (linkers/5l/optab.c)(arm) */
 /*e: linkers/5l/optab.c */

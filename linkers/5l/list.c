@@ -9,9 +9,9 @@ listinit(void)
     fmtinstall('A', Aconv);
     fmtinstall('C', Cconv);
     fmtinstall('D', Dconv);
+    fmtinstall('N', Nconv);
     fmtinstall('P', Pconv);
     fmtinstall('S', Sconv);
-    fmtinstall('N', Nconv);
 }
 /*e: function listinit(arm) */
 
