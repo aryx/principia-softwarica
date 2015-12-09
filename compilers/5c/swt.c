@@ -308,7 +308,7 @@ gextern(Sym *s, Node *a, long o, long w)
         p->from.offset += o;
         p->reg = w; // attributes
         if(p->to.type == D_OREG)
-            p->to.type = D_CONST; // D_ADDR?
+            p->to.type = D_ADDR;
     }
 }
 /*e: function gextern(arm) */
