@@ -341,7 +341,7 @@ ximm:
 | '$' name
  {
   $$ = $2;
-  $$.type = D_CONST;
+  $$.type = D_ADDR;
  }
 /*x: ximm rule */
 | fcon

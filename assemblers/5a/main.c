@@ -251,6 +251,7 @@ outopd(Gen *a, int symidx)
         break;
 
     case D_CONST:
+    case D_ADDR:
     case D_OREG:
     case D_BRANCH:
     case D_SHIFT:

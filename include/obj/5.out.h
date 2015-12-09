@@ -223,6 +223,8 @@ enum Operand_kind {
     /*s: [[Operand_kind]] cases */
     D_OREG,
     /*x: [[Operand_kind]] cases */
+    D_ADDR,
+    /*x: [[Operand_kind]] cases */
     D_SHIFT,
     /*x: [[Operand_kind]] cases */
     D_BRANCH,
