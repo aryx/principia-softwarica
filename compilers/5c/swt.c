@@ -308,7 +308,7 @@ gextern(Sym *s, Node *a, long o, long w)
         p->from.offset += o;
         p->reg = w; // attributes
         if(p->to.type == D_OREG)
-            p->to.type = D_ADDR;
+            p->to.type = D_CONST; // D_ADDR?
     }
 }
 /*e: function gextern(arm) */
@@ -540,9 +540,12 @@ zaddr(char *bp, Adr *a, int s)
     bp[3] = a->symkind;
     bp += 4;
 
-    if(a->type == D_CONST && a->symkind != N_NONE) {
-        diag(Z, "missing D_CONST -> D_ADDR migration");
-    }
+    //if(a->type == D_CONST && a->symkind != N_NONE) {
+    //    diag(Z, "missing D_CONST -> D_ADDR migration");
+    //}
+    //if(a->type == D_ADDR && a->symkind == N_NONE) {
+    //    diag(Z, "wrong D_CONST -> D_ADDR migration");
+    //}
 
     switch(a->type) {
     case D_NONE:

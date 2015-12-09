@@ -577,7 +577,7 @@ naddr(Node *n, Adr *a)
     /*x: [[naddr()]] switch node kind cases */
     case OIND:
         naddr(n->left, a);
-        if(a->type == D_REG || a->type == D_ADDR) {
+        if(a->type == D_REG || a->type == D_CONST) { // D_ADDR?
             a->type = D_OREG;
             break;
         }
@@ -586,7 +586,7 @@ naddr(Node *n, Adr *a)
     case OADDR:
         naddr(n->left, a);
         if(a->type == D_OREG) {
-            a->type = D_ADDR; 
+            a->type = D_CONST;  // D_ADDR?
             break;
         }
         goto bad;

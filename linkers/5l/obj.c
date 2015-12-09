@@ -585,10 +585,16 @@ inopd(byte *p, Adr *a, Sym *h[])
     a->symkind = p[3];
     /*s: [[inopd()]] sanity check D_CONST */
     if(a->type == D_CONST && a->symkind != N_NONE) {
-        print("missing D_CONST -> D_ADDR\n");
-        p[0] = ALAST+1;
-        return 0;	/*  force real diagnostic */
+        a->type = D_ADDR;
+        //print("missing D_CONST -> D_ADDR\n");
+        //p[0] = ALAST+1;
+        //return 0;	/*  force real diagnostic */
     }
+    //if(a->type == D_ADDR && a->symkind == N_NONE) {
+    //    print("wrong D_CONST -> D_ADDR\n");
+    //    p[0] = ALAST+1;
+    //    return 0;	/*  force real diagnostic */
+    //}
     /*e: [[inopd()]] sanity check D_CONST */
 
     size = 4;

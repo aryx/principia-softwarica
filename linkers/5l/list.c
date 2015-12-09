@@ -144,10 +144,7 @@ Dconv(Fmt *fp)
         break;
 
     case D_CONST:
-        if(a->reg == R_NONE)
-            sprint(str, "$%N", a);
-        else
-            sprint(str, "$%N(R%d)", a, a->reg);
+        sprint(str, "$%N", a);
         break;
 
     case D_ADDR:
