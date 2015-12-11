@@ -40,7 +40,7 @@ SRC_VIEWS= \
 sync::
 	$(MAKE) sync_ml
 
-CAML=/home/pad/github/fork-ocaml
+CAML=/home/pad/github/plan9-ml/generators
 
 SRC_VIEWS_ML=\
   $(CAML)/lex/ast.ml \
