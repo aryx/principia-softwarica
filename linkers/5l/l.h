@@ -99,6 +99,7 @@ struct	Prog
     /*s: [[Prog]] extra fields */
     // option<ref<Prog>> for branch instructions
     // (abused too for list<ref<Prog>> (from = textp for TEXT instructions))
+    // (abused for pools for instructions using large constants)
     Prog*	cond;
     /*x: [[Prog]] extra fields */
     // list<ref<Prog>> (from = firstp or datap)
@@ -178,11 +179,11 @@ struct	Optab
     // enum<Opcode> (the opcode is the representant of a set of opcodes)
     byte	as;
 
-    // enum<Operand_class>, possible operand class for first operand
+    // enum<Operand_class>, possible operand class for first operand (from)
     short	a1;
-    // enum<Operand_class>, possible operand class for second operand
+    // enum<Operand_class>, possible operand class for middle operand
     short	a2;
-    // enum<Operand_class>, possible operand class for third operand
+    // enum<Operand_class>, possible operand class for third operand (to)
     short	a3;
 
     // ---------------------------
@@ -307,15 +308,15 @@ enum Operand_class {
     /*s: [[Operand_class]] cases */
     C_SHIFT,   // D_SHIFT
     /*x: [[Operand_class]] cases */
-    C_REGREG,  // D_REGREG
-    /*x: [[Operand_class]] cases */
-    C_PSR,     // D_PSR
-    /*x: [[Operand_class]] cases */
     C_ADDR,		/* relocatable address */
     /*x: [[Operand_class]] cases */
     C_FREG,
     C_FCON,
     C_FCR,
+    /*x: [[Operand_class]] cases */
+    C_REGREG,  // D_REGREG
+    /*x: [[Operand_class]] cases */
+    C_PSR,     // D_PSR
     /*e: [[Operand_class]] cases */
     C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
 };

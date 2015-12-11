@@ -74,26 +74,30 @@ dotext(void)
         } else {
             /*s: [[dotext()]] pool handling for optab o */
             switch(o->flag & (LFROM|LTO|LPOOL)) {
+            /*s: [[dotext()]] pool handling, switch flag cases */
             case LFROM:
                 addpool(p, &p->from);
                 break;
             case LTO:
                 addpool(p, &p->to);
                 break;
-
+            /*x: [[dotext()]] pool handling, switch flag cases */
             case LPOOL:
                 if ((p->scond&C_SCOND) == COND_ALWAYS)
                     flushpool(p, 0);
                 break;
+            /*e: [[dotext()]] pool handling, switch flag cases */
             }
-
+            /*s: [[dotext()]] pool handling, flush if MOVW REGPC */
             // MOVW ..., R15  => flush
             if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
                (p->scond&C_SCOND) == COND_ALWAYS)
                 flushpool(p, 0);
-
+            /*e: [[dotext()]] pool handling, flush if MOVW REGPC */
+            /*s: [[dotext()]] pool handling, checkpool */
             if(blitrl)
                 checkpool(p);
+            /*e: [[dotext()]] pool handling, checkpool */
             /*e: [[dotext()]] pool handling for optab o */
         }
     }
@@ -177,7 +181,8 @@ flushpool(Prog *p, bool skip)
 void
 addpool(Prog *p, Adr *a)
 {
-    Prog *q, t;
+    Prog *q;
+    Prog t;
     int c;
 
     c = aclass(a);
@@ -198,27 +203,32 @@ addpool(Prog *p, Adr *a)
         t.to.type = D_CONST;
         t.to.offset = instoffset;
         break;
+    // C_LCON, TODO warning if other case?
     default:
         t.to = *a;
         break;
     }
 
+    // find_list(t.to, blitrl)
     for(q = blitrl; q != P; q = q->link)	/* could hash on t.t0.offset */
         if(memcmp(&q->to, &t.to, sizeof(t.to)) == 0) {
             p->cond = q;
             return;
         }
+    // else
 
     q = prg();
     *q = t;
     q->pc = pool.size;
 
+    // add_queue(q, blitrl, elitrl) and set pool.start
     if(blitrl == P) {
         blitrl = q;
         pool.start = p->pc;
     } else
         elitrl->link = q;
     elitrl = q;
+
     pool.size += 4;
 
     p->cond = q;
@@ -342,27 +352,6 @@ aclass(Adr *a)
     case D_OREG:
         switch(a->symkind) {
         /*s: [[aclass()]] D_OREG case, switch symkind cases */
-        case N_NONE:
-            instoffset = a->offset;
-            t = immaddr(instoffset);
-            if(t) {
-                /*s: [[aclass()]] if immfloat for N_NONE symbol */
-                if(immfloat(t))
-                    return immhalf(instoffset)? C_HFOREG : C_FOREG;
-                    /* n.b. that it will also satisfy immrot */
-                /*e: [[aclass()]] if immfloat for N_NONE symbol */
-
-                 /* n.b. that immhalf() will also satisfy immrot */
-                if(immhalf(instoffset))	
-                    return C_HOREG;
-                if(immrot(instoffset))
-                    return C_SROREG;
-                return immhalf(instoffset)? C_HOREG : C_SOREG;
-            }
-            if(immrot(instoffset))
-                return C_ROREG;
-            return C_LOREG;
-        /*x: [[aclass()]] D_OREG case, switch symkind cases */
         case N_EXTERN:
         case N_INTERN:
             /*s: [[aclass()]] D_OREG case, N_EXTERN case, sanity check a */
@@ -429,6 +418,27 @@ aclass(Adr *a)
                 return immhalf(instoffset)? C_HAUTO : C_SAUTO;
             }
             return C_LAUTO;
+        /*x: [[aclass()]] D_OREG case, switch symkind cases */
+        case N_NONE:
+            instoffset = a->offset;
+            t = immaddr(instoffset);
+            if(t) {
+                /*s: [[aclass()]] if immfloat for N_NONE symbol */
+                if(immfloat(t))
+                    return immhalf(instoffset)? C_HFOREG : C_FOREG;
+                    /* n.b. that [C_FOREG] will also satisfy immrot */
+                /*e: [[aclass()]] if immfloat for N_NONE symbol */
+
+                 /* n.b. that immhalf() will also satisfy immrot */
+                if(immhalf(instoffset))	
+                    return C_HOREG;
+                if(immrot(instoffset))
+                    return C_SROREG;
+                return C_SOREG;
+            }
+            if(immrot(instoffset))
+                return C_ROREG;
+            return C_LOREG;
         /*e: [[aclass()]] D_OREG case, switch symkind cases */
         }
         return C_GOK;
@@ -482,18 +492,18 @@ aclass(Adr *a)
     case D_SHIFT:
         return C_SHIFT;
     /*x: [[aclass()]] switch type cases */
-    case D_REGREG:
-        return C_REGREG;
-    /*x: [[aclass()]] switch type cases */
-    case D_PSR:
-        return C_PSR;
-    /*x: [[aclass()]] switch type cases */
     case D_FREG:
         return C_FREG;
     case D_FCONST:
         return C_FCON;
     case D_FPCR:
         return C_FCR;
+    /*x: [[aclass()]] switch type cases */
+    case D_REGREG:
+        return C_REGREG;
+    /*x: [[aclass()]] switch type cases */
+    case D_PSR:
+        return C_PSR;
     /*e: [[aclass()]] switch type cases */
     }
     return C_GOK;
@@ -613,19 +623,6 @@ cmp(int a, int b)
             return true;
         break;
     /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_HFOREG:
-        return b == C_HOREG || b == C_FOREG;
-    case C_FOREG:
-    case C_HOREG:
-        return b == C_HFOREG;
-    case C_SROREG:
-        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
-    case C_SOREG:
-    case C_ROREG:
-        return b == C_SROREG || cmp(C_HFOREG, b);
-    case C_LOREG:
-        return cmp(C_SROREG, b);
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
     case C_HFEXT:
         return b == C_HEXT || b == C_FEXT;
     case C_FEXT:
@@ -645,6 +642,19 @@ cmp(int a, int b)
         return cmp(C_HFAUTO, b);
     case C_LAUTO:
         return cmp(C_SAUTO, b);
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_HFOREG:
+        return b == C_HOREG || b == C_FOREG;
+    case C_FOREG:
+    case C_HOREG:
+        return b == C_HFOREG;
+    case C_SROREG:
+        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
+    case C_SOREG:
+    case C_ROREG:
+        return b == C_SROREG || cmp(C_HFOREG, b);
+    case C_LOREG:
+        return cmp(C_SROREG, b);
     /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
     case C_LACON:
         if(b == C_RACON)
@@ -771,13 +781,6 @@ buildop(void)
         case AMVN:
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AMOVW:
-        case AMOVB:
-        case AMOVBU:
-        case AMOVH:
-        case AMOVHU:
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ASLL:
             oprange[ASRL] = oprange[r];
             oprange[ASRA] = oprange[r];
@@ -787,16 +790,10 @@ buildop(void)
             oprange[AMULU] = oprange[r];
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AMULL:
-            oprange[AMULA] = oprange[r];
-            oprange[AMULAL] = oprange[r];
-            oprange[AMULLU] = oprange[r];
-            oprange[AMULALU] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
         case AB:
         case ABL:
             break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
         case ABEQ:
             oprange[ABNE] = oprange[r];
             oprange[ABHS] = oprange[r];
@@ -811,6 +808,13 @@ buildop(void)
             oprange[ABLT] = oprange[r];
             oprange[ABGT] = oprange[r];
             oprange[ABLE] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AMOVW:
+        case AMOVB:
+        case AMOVBU:
+        case AMOVH:
+        case AMOVHU:
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
         case ASWPW:
@@ -851,6 +855,13 @@ buildop(void)
             oprange[AMOD] = oprange[r];
             oprange[AMODU] = oprange[r];
             oprange[ADIVU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AMULL:
+            oprange[AMULA] = oprange[r];
+            oprange[AMULAL] = oprange[r];
+            oprange[AMULLU] = oprange[r];
+            oprange[AMULALU] = oprange[r];
             break;
         /*x: [[buildop()]] switch opcode r for ranges cases */
         case AMOVM:
