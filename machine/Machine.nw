@@ -1789,12 +1789,9 @@ Idp0(instruction inst)
     rm = inst & 0xf;
 
     o1 = reg.r[rn];
-    if(rn == REGPC)
-        o1 += 8;
-
+    <<[[adjust o1 if rn is REGPC>>
     o2 = reg.r[rm];
-    if(rm == REGPC)
-        o2 += 8;
+    <<[[adjust o2 if rm is REGPC>>
 
     dpex(inst, o1, o2, rd);
 
@@ -1803,6 +1800,15 @@ Idp0(instruction inst)
 }
 @
 % -4 because will be incremented back in run()
+
+<<[[adjust o1 if rn is REGPC>>=
+if(rn == REGPC)
+    o1 += 8;
+@
+<<[[adjust o2 if rm is REGPC>>=
+if(rm == REGPC)
+    o2 += 8;
+@
 
 <<[[Idpx()]] compensate REGPC>>=
 if(rd == REGPC)
@@ -1853,6 +1859,10 @@ case OEOR:
     reg.r[rd] = o1 ^ o2;
     cbit = true;
     break;
+@
+
+
+<<[[dpex()]] switch arith/logic opcode cases>>=
 case OBIC:
     reg.r[rd] = o1 & ~o2;
     cbit = true;
@@ -1967,15 +1977,11 @@ Idp1(instruction inst)
     sc = (inst>>7) & 0x1f;
 
     o1 = reg.r[rn];
-    if(rn == REGPC)
-        o1 += 8;
-
+    <<[[adjust o1 if rn is REGPC>>
     o2 = reg.r[rm];
-    if(rm == REGPC)
-        o2 += 8;
+    <<[[adjust o2 if rm is REGPC>>
 
     o2 = shift(o2, st, sc, false);
-
     dpex(inst, o1, o2, rd);
 
     <<[[Idp1()]] trace>>
@@ -2029,24 +2035,23 @@ Idp2(instruction inst)
     rs = (inst>>8) & 0xf;
 
     o1 = reg.r[rn];
-    if(rn == REGPC)
-        o1 += 8;
-
+    <<[[adjust o1 if rn is REGPC>>
     o2 = reg.r[rm];
-    if(rm == REGPC)
-        o2 += 8;
-
+    <<[[adjust o2 if rm is REGPC>>
     o3 = reg.r[rs];
-    if(rs == REGPC)
-        o3 += 8;
+    <<[[adjust o3 if rs is REGPC>>
 
     o2 = shift(o2, st, o3, true);
-
     dpex(inst, o1, o2, rd);
 
     <<[[Idp2()]] trace>>
     <<[[Idpx()]] compensate REGPC>>
 }
+@
+
+<<[[adjust o3 if rs is REGPC>>=
+if(rs == REGPC)
+    o3 += 8;
 @
 
 \ifallcode
@@ -2176,8 +2181,7 @@ Idp3(instruction inst)
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
     o1 = reg.r[rn];
-    if(rn == REGPC)
-        o1 += 8;
+    <<[[adjust o1 if rn is REGPC>>
 
     o2 = inst & 0xff;
     sc = (inst>>7) & 0x1e;
@@ -2204,6 +2208,7 @@ if(trace)
 %todo: do an enum SH_LEFT | SH_RIGHT
 
 
+% so ADD $0, PC, LINK;  will save in REGLINK PC + 8!
 
 \subsubsection{64 bits (signed/unsigned) multiplication}
 % not really 64 bits multiplication,
@@ -2842,13 +2847,12 @@ Ib(instruction inst)
     long v;
 
     v = inst & 0xffffff; // 24 bits
-    v = reg.r[REGPC] + 8 + 
-        ((v << 8) 
-          >> 6);
+    v = reg.r[REGPC] + (v << 2) + 8;
     <<[[Ib()]] trace>>
     reg.r[REGPC] = v - 4;
 }
 @
+%old: v << 8 >> 6
 % why +8? because when jmp usually it's not the current instruction,
 % nor the next instruction, so make sense to by default jump to +8
 % why -4? to compensate back for +=4 in run()
@@ -2882,15 +2886,15 @@ Ibl(instruction inst)
     Symbol s;
 
     v = inst & 0xffffff;
-    v = reg.r[REGPC] + 8 + 
-           ((v << 8) 
-               >> 6);
+    v = reg.r[REGPC] + (v << 2) + 8;
     <<[[Ibl()]] trace>>
     <<[[Ibl()]] if calltree>>
     reg.r[REGLINK] = reg.r[REGPC] + 4;
     reg.r[REGPC] = v - 4;
 }
 @
+% >>
+%old: v << 8 >> 6
 % Branch and Link, so kinda call. The callee needs to save.
 % REGLINK then in the stack if one wants to have multiple BL.
 % For leaves, no need stack, if want RET, just have to mov reglink, regpc.
