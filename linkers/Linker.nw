@@ -104,7 +104,7 @@
 \allcodefalse
 % ifallcode is used for:
 %  - forward decl, func decl, extern decl, #ifdef, pragmas (stuff in Extra.nw)
-%  - STILL? boilerplate error management ?? sanity check?
+%  - some local variables
 
 %\setcounter{tocdepth}{1}
 
@@ -219,7 +219,8 @@ to a specific binary instruction?
  %real-world: to relate to other linkers
  %ocaml: to give a hint on how rewriting C in OCaml could improve things
  %alt: alternative techniques
- %old: for original code I changed/removed to be clearer
+ %old: for original code I changed to be clearer
+ %pad: for code I introduced to be clearer
  %dead: dead code removed
  %toc: %trans: %dup: %example: %chunks:
 
@@ -1414,7 +1415,7 @@ Its role and its relationship with the {pseudo-register}
 \section{ARM architecture}
 % constraints
 
-% low-endian
+% little endian
 
 \t maybe can do this section after understand better code generation
 
@@ -1533,6 +1534,7 @@ struct	Exec
     long	pcsz;		/* size of pc/line number table */
 };
 @
+\t big-endian encoding!? check in Debugger?
 %dead: _unused was actually:
 %  // used only by 68020, spsize set to 0 for 8l TODO remove at some point!
 %  long	spsz;		/* size of pc/sp offset table */
@@ -2475,7 +2477,7 @@ short	reg;
 \l This is used also to store TEXT attributes, e.g. DUPOK, NOPROF. 
 
 All ARM instructions have a {\em conditional execution}
-(see the \book{Assembler}):
+(see the \book{Assembler} or \book{Emulator}):
 
 <<[[Prog]] other fields>>=
 // enum<Instr_cond>
@@ -2527,7 +2529,7 @@ a {\em real program counter} which will be a multiple of 4 as
 %dup: overview/5l-a
 the ARM uses fixed-length instructions of 4 bytes.
 
-
+%dup: overview/soft-archi
 Later in the linking process, another field, [[Instr.cond]],
 will be used to build a {\em graph of instruction}. 
 Branching instructions will have their [[Instr.cond]] field points to the
@@ -6221,7 +6223,7 @@ The same is true for [[RET]].
 \label{sec:constraints-immediate-and-offset}
 \item {\em constraints} on immediate constants and offsets
 imposed by the ARM are relaxed by [[5a]] and the object file.
-%dup: overview/5l-a core-ds/instr main/asmb/text-sec resolve/issue/
+%dup: overview/5l-a core-ds/instr main/asmb/text-sec resolve/issue/vpc
 As said before, the ARM uses fixed-length instructions of 4 bytes,
 %
 so for instructions involving immediate constants 
@@ -6263,7 +6265,7 @@ a {\em graph of code instructions} by transforming the use
 of a virtual program counter {reference} 
 %in a branching instruction 
 to a real {pointer} ([[Instr*]]).
-%
+%dup: overview/soft-archi coreds/instr
 This pointer will be stored in the [[Instr.cond]] field
 of the branching instruction
 and will point to the target instruction
@@ -6482,6 +6484,7 @@ starting with [[patch()]].
 
 
 \section{Building the code instructions graph, [[patch()]]}
+\label{sec:patch}
 
 %trans:
 As explained before, 
@@ -8048,7 +8051,7 @@ used by [[oplook()]] and [[asmout()]], especially [[Optab]].
 % colorful. Great to understand bit manip in code starting from Section X.
 \n note about intel syntax and naming conventions explained later
 
-% Also \book{Machine} to fully understand semantics.
+% Also \book{Emulator} to fully understand semantics.
 
 % general shape:  cond, class, rest.
 % FIGURE
@@ -8289,8 +8292,7 @@ by [[oplook()]].
 In addition to its role as an {\em indexing structure} for [[oplook()]],
 [[oprange]] can also be used to {\em factorize} rules.
 Indeed, by doing for instance 
-[[oprange[ASUB] = oprange[AADD];]] at the end of 
-[[buildop()]],
+[[oprange[ASUB] = oprange[AADD];]] at the end of [[buildop()]],
 all the rules with [[AADD]] in [[optab]] will be tried for instructions
 with the opcode [[ASUB]]. So, in effect [[AADD]] becomes the
 {\em representant} of the set of opcodes [[{AADD, ASUB}]].
@@ -8345,9 +8347,8 @@ enum Operand_class {
 %assembler: diffs with operand_kind
 % - OREG splitted in many xxxOREG and xxxEXT (SB), xxAUTO (FP, SP)
 % - D_CONST splitted in many xxxCON
-% - S_CONST?
 % - a new C_GOK, but could be called C_LAST I think
-%old: was originally in the same enum than STEXT, SBSS, etc, so I splitted
+%pad: was originally in the same enum than STEXT, SBSS, etc, so I splitted
 % and named it Operand_class, consistent with Operand_kind. C vs D.
 % and also because there was a function called aclass()
 %dead: there was C_SBRA, C_LBRA but LBRA was unused so I s/C_LBRA/C_BRANCH/
@@ -8615,7 +8616,6 @@ to actually match also more {\em specialized} operand classes
 We will present those general and specialized
 classes, and their encoding in [[cmp()]],
 gradually in this chapter.
-
 \t BUT order is important!! see next section
 
 
@@ -8818,8 +8818,9 @@ Those caching fields are used and set in [[oplook()]]:
 bool useopti = true;
 int i;
 @
+%pad: I introduced useopti, to aspectize optimisations
+% and to introduce non-optimized code that I wrote myself
 %old: was abusing a1, but I prefer use different variable name, so I added i
-%pad: I introduced also useopti
 
 <<[[oplook()]] if use opti, part1>>=
 if(useopti) {
@@ -9032,7 +9033,7 @@ Those local variables are set in the cases of the first [[switch]]
 %chunks:
 (cases we will see gradually in this chapter)
 %
-and passed later to [[lputl()]]:
+and passed later to [[lputl()]] in cases of the second [[switch]]:
 
 <<[[asmout()]] switch on size cases>>=
 case 4:
@@ -9144,11 +9145,13 @@ cflush(void)
 @
 \l simpler than input buffer
 
-Note that [[lputl()]] means ``long put low-endian''.
+Note that [[lputl()]] means ``long put little-endian''.
 The lower bits of a number have the lower address.
+Indeed the ARM uses a low-endian architecture.
+\l actually bi?
 There is another function [[lput()]], which does a similar
 thing but for {big-endian} architecture, where
-the lower bits of a number have the higher address:
+the lower bits of a number have the higher address (as in the x86):
 
 <<function lput(arm)>>=
 void
@@ -9177,7 +9180,9 @@ on a set of temporary variables to store registers
 and symbols:
 
 <<[[asmout()]] other locals>>=
-int r, rf, rt, rt2;
+int rf; // register ``from''
+int rt; // register ``to''
+int r;  // middle register
 Sym *s;
 @
 
@@ -9240,9 +9245,10 @@ to write a word (hence the name) in the code section.
 It is often used to overcome some limitations of [[5a]]
 which does not handle every possible opcodes, e.g.
 opcodes to call a coprocessor.
-
-\t also for addpool! to deal with the ARM constraints on range of immediate
-\t  values, addresses.
+%
+It is also used to represent large literal constants in the 
+code section, which is very useful to support the encoding of certain
+instructions as we will see in Section~\ref{sec:pool}.
 
 <<[[optab]] entries>>=
 { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4 },
@@ -9261,14 +9267,20 @@ case AWORD:
     break;
 @
 
+\ifallcode
+<<[[asmout()]] other locals>>=
+int c;
+@
+\fi
+
 <<[[asmout()]] switch on type cases>>=
 case 11:	/* word */
-    switch(aclass(&p->to)) {
-    <<[[asmout()]] on WORD case, switch class cases>>
-    }
+    c = aclass(&p->to);
+    <<[[asmout()]] in WORD case, when dlm>>
     o1 = instoffset;
     break;
 @
+%pad: I rewrote to aspectize more the switch by introducing extra local c
 
 In addition to returning the class of an operand, [[aclass()]] has
 also for side effect to modify the global [[instoffset]],
@@ -9393,7 +9405,7 @@ using that scheme but many important numbers like all
 the powers of 2 between 0 and 31 can be expressed
 which is very useful in operations involving bitsets or bitmasks.
 See \url{http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/}
-for an excellent tutorial on the topic which contains also
+for an excellent tutorial on the topic. This page contains also
 an interactive application where one can enter any number and
 get its encoding (when the number is rotatable).
 
@@ -9440,13 +9452,13 @@ In addition to returning the ARM encoding of the rotatable constant,
 This bit is set for all instructions involving an immediate
 constant, as shown in the ARM reference card.
 %\url{http://re-eject.gbadev.org/files/armref.pdf}.
-%See the \book{Machine} or the 
+%See the \book{Emulator} or the 
 This will allow later code such as:
 \begin{verbatim}
 o1 |= immrot(instoffset);
 \end{verbatim}
 \l the 1 < < 25 means we are in the  i,r,r  case
-
+\t actually important also to differentiate error from immrot of 0
 
 
 
@@ -9901,12 +9913,6 @@ case ACMP:
     break;
 @
 
-<<[[buildop()]] switch opcode r for ranges cases>>=
-case AMVN:
-    break;
-@
-\t talk MVN and MOV? the ARM one and possible confusing with Asm5 one?
-
 Even if this section is about arithmetic and logic opcodes,
 we will also see rules about opcodes associated more traditionally with memory
 instructions, e.g. [[AMOVW]]. The reason is that [[AMOVW]]
@@ -9915,6 +9921,12 @@ set registers as in [[MOVW $1, R1]]. %$
 This instruction does not involve any memory and is actually
 converted in an ARM instruction using an arithmetic opcode
 as we will see soon.
+\t talk MVN and MOV? the ARM one and possible confusing with Asm5 one?
+
+<<[[buildop()]] switch opcode r for ranges cases>>=
+case AMVN:
+    break;
+@
 
 \n Logic, add/sub, comparisons, simple movs
 
@@ -9922,7 +9934,7 @@ as we will see soon.
 The following subsections are organized according to the shape
 of the operands (the operand classes), more than by
 the kind of the operation.
-This is a different organization that the one we choose in 
+This is a different organization that the one we chose in 
 the \book{Assembler}, but it better matches how instructions 
 are organized in the ARM.
 
@@ -9954,15 +9966,14 @@ case 1:		/* op R,[R],R */
     rt = p->to.reg;
     r = p->reg;
     <<[[asmout()]] adjust [[r]] and [[rt]]>>
-    o1 |= rf | (r<<16) | (rt<<12);
+    o1 |= (r<<16) | (rt<<12) | rf;
     break;
 @
 % >> >>
-% rf(from) -> rm, r -> rn, rt(to) -> rd(dest) ->  in refcard term.
 
 We will see [[oprrr()]] below, but it essentially sets
 the {\em conditional execution}\footnote{
-See the \book{Assembler} or \book{Machine}.
+See the \book{Assembler} or \book{Emulator}.
 } bits (bits 28 to 32)
 and the bits for the arithmetic opcode (bits 21 to 24) 
 of a {partial ARM instruction} returned and
@@ -9993,6 +10004,7 @@ The only differences with the conventions used in this chapter is that
 \l m for? 
 [[rt]] is called [[Rd]] (for destination), and
 [[r]] is called  [[Rn]]. 
+\n actually Emulator take same convention than refcard
 \l n for?
 Moreover the instructions in the card use the Intel syntax
 with a {\em right-to-left} assignement syntax.
@@ -10029,8 +10041,8 @@ else
 
 
 As mentioned above, [[oprrr()]] returns a partial
-instruction, to be completed later, with the conditional
-excecution bits and opcode bits set according to
+instruction, to be completed later, with the 
+conditional excecution bits and opcode bits set according to
 its two parameters:
 
 <<function oprrr(arm)>>=
@@ -10082,7 +10094,7 @@ oprrr(int a, int sc)
 [[oprrr()]] occasionally sets bit 20, the {\em sign bit},
 if the programmer requested it by using the {\em special bit}
 [[S]] as in [[ADD.S R1, R2, R3]].
-See the \book{Assembler} and \book{Machine}
+See the \book{Assembler} and \book{Emulator}
 for more information on special bits and the semantic of the sign bit.
 
 <<[[oprrr()]] sign bit handling>>=
@@ -10243,7 +10255,7 @@ case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
     rt = p->to.reg;
     r = p->reg;
     <<[[asmout()]] adjust [[r]]>>
-    o1 |= r | ((instoffset&31) << 7) | (rt << 12);
+    o1 |= (rt << 12) | ((instoffset&31) << 7) | r;
     break;
 @
 %$
@@ -10282,7 +10294,7 @@ case 9:		/* sll R,[R],R -> mov (R<<R),R */
     rt = p->to.reg;
     r = p->reg;
     <<[[asmout()]] adjust [[r]]>>
-    o1 |= r | ((p->from.reg << 8) | (1<<4)) | (rt << 12);
+    o1 |= (rt << 12) | (p->from.reg << 8) | (1<<4) | r ;
     break;
 @
 % >> >> >> >> 
@@ -10314,7 +10326,7 @@ case 15:	/* mul r,[r,]r */
     r = p->reg;
     <<[[asmout()]] adjust [[r]]>>
     <<[[asmout()]] adjust registers when mul>>
-    o1 |= (rf<<8) | r | (rt<<16);
+    o1 |= (rt<<16) | (rf<<8) | r;
     break;
 @
 % >> >> 
@@ -10342,14 +10354,14 @@ if(rt == r) {
 \t ??? Machine?
 
 Note that the operands of [[AMUL]], and in particular
-its result, are 32 bits registers. 
+its result, are stored in 32 bits registers. 
 Because the multiplication of two 32 bits numbers can easily overflow,
 Section~\ref{sec:mull} presents other ARM multiplication opcodes
 where the result is contained in 2 registers, thus supporting
 a 64 bits target.
 \l long long? or vlong? multiplication
 
-There is no [[DIV]] opcode in the ARM so [[ADIV]] is a virtual
+Note also that there is no [[DIV]] opcode in the ARM so [[ADIV]] is a virtual
 instruction transformed in a series of instructions implementing
 the division in software, as explained in Section~\ref{sec:div-mod}.
 
@@ -10367,11 +10379,13 @@ and store the result in another register:
 
 \t sign vs unsigned version because keep sign bit or not.
 
-[[MOVB R1, R2]] is transformed in two instructions:
+[[MOVB R1, R2]] is a virtual instruction transformed in two 
+instructions:
 \begin{verbatim}
 SLL $24, R1, R2 // o1
 SRA $24, R2, R2 // o2
 \end{verbatim}
+\l actually SLL SRA also virtual
 
 This is why the rule size in the rules above is [[8]]
 and the code below uses the variables [[o1]] and [[o2]] for
@@ -10390,8 +10404,8 @@ case 14:	/* movb/movbu/movh/movhu R,R */
 
     rf = p->from.reg;
     rt = p->to.reg;
-    o1 |= rf|(rt<<12);
-    o2 |= (rt)|(rt<<12);
+    o1 |= (rt<<12) | rf;
+    o2 |= (rt<<12) | rt;
     if(p->as == AMOVB || p->as == AMOVBU) {
         o1 |= (24<<7);
         o2 |= (24<<7);
@@ -10405,8 +10419,8 @@ case 14:	/* movb/movbu/movh/movhu R,R */
 %old: was using r = p->to.reg but inconsistent with the rest so I put rt.
 
 [[MOVBU R1, R2]] can be optimized and encoded using only 1 ARM instruction
-as [[0xff]] is a rotatable constant (but [[0xffff]] is not, hence
-the need for two instructions above for [[MOVHU]]):
+as [[0xff]] is a rotatable constant. Note that [[0xffff]] is not
+a rototable constant hence the need for two instructions above for [[MOVHU]].
 
 <<[[asmout()]] switch on type cases>>=
 case 58:	/* movbu R,R -> AND $0xff, R, R */
@@ -10484,7 +10498,7 @@ case 13:	/* op $lcon, [R], R */
         r = 0;
     else 
       <<[[asmout()]] adjust [[r]]>>
-    o2 |= rf | (r<<16);
+    o2 |= (r<<16) | rf;
     if(p->to.type != D_NONE)
         o2 |= rt << 12;
     break;
@@ -10511,7 +10525,7 @@ omvl(Prog *p, Adr *a, int dr)
         v = immrot(~instoffset);
         <<[[omvl()]] sanity check v>>
         o1 = oprrr(AMVN, p->scond&C_SCOND);
-        o1 |= v | (dr << 12);
+        o1 |= (dr << 12) | v;
     }
     return o1;
 }
@@ -10537,8 +10551,8 @@ We can now see the arithmetic rules using [[C_LCON]] and their translations.
 %
 Those rules use the same action identifier than before, [[13]],
 as they share lots of the code to deal with [[C_NCON]],
-but they have the special {\em rule flag} [[LFROM]] which
-we will explain soon:
+but they have the special {\em rule flag} [[LFROM]]:
+% which we will explain soon
 
 <<[[optab]] entries>>=
 { AADD,		C_LCON,	C_REG,	C_REG,		13, 8, 0,	LFROM },
@@ -10550,12 +10564,12 @@ we will explain soon:
 As it will be explained fully later in Section~\ref{sec:pool},
 large constants in operands are transformed as data
 in the code section using the [[WORD]] pseudo-opcode.
-The instruction [[ADD $0xffff, R1, R2]] %$
+The instruction [[ADD $0xffff, R2, R3]] %$
 is thus transformed in the following instructions:
 
 \begin{verbatim}
 2000: LDR 1000(R15), R11
-2004: ADD R11, R1, R2
+2004: ADD R11, R2, R3
 ...
 ...
 3000: WORD $0xffff
@@ -10573,7 +10587,7 @@ a new [[WORD]] instruction at the end of the program
 with this constant as an operand.
 %
 This new instruction is part of what is called a {\em literal pool},
-meaning a set of pseudo-instructions containing literals.
+meaning a set of pseudo-instructions containing {literals}.
 [[addpool()]] also modifies the passed instruction [[p]] and
 sets its [[Instr.cond]] field to point to this newly added
 instruction. 
@@ -10587,12 +10601,12 @@ if(p->cond) {
     v = p->cond->pc - p->pc - 8;
     // =~ LDR v(R15), R11
     o1 = olr(v, REGPC, dr, p->scond&C_SCOND);
-} 
+}
 @
 
 We will see [[olr()]] later in Section~\ref{sec:load}
 when we cover the memory instructions which {loads}
-data in a register.
+data from memory in a register.
 %
 The reason for the [[-8]] above will be explained
 when we cover the branching instructions in
@@ -10620,8 +10634,7 @@ case 12:	/* movw $lcon, reg */
 %trans:
 The next big category of ARM instructions are
 %
-branching instructions, which alter the control flow of the program.
-
+branching instructions. They alter the control flow of the program.
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AB:
@@ -10629,8 +10642,11 @@ case ABL:
     break;
 @
 
-% virtual instr, provide traditional way,
-% but converted to use general conditional execution mechanism.
+[[ABEQ]] is the representant of a set of virtual opcodes
+to express {\em conditional jumps}. Those virtual instructions are converted
+in {\em unconditional jumps} ([[AB]]) but using the general
+mechanism of {\em conditional execution} provided by the ARM, as we will
+see soon.
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ABEQ:
@@ -10651,6 +10667,8 @@ case ABEQ:
 @
 
 \subsection{Direct jumps}
+\label{sec:direct-jumps}
+\l static, direct, relative
 
 <<[[optab]] entries>>=
 { AB,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0,	LPOOL },
@@ -10658,48 +10676,72 @@ case ABEQ:
 { ABEQ,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4 },
 @
 
-% LPOOL!! so flush something?? See Section X.
+The rule flag [[LPOOL]] will be explained later in Section~\ref{sec:lpool}.
+%
+We can see the important use of [[Instr.cond]] set by [[patch()]]
+(see Section~\ref{sec:patch}) in the code below to find
+the code address of the target instruction:
 
 <<[[asmout()]] switch on type cases>>=
 case 5:		/* bra s */
     <<[[asmout()]] BRA case, if undefined target>>
     else 
       if(p->cond != P)
-        v = (p->cond->pc - pc) - 8;
+        v = (p->cond->pc - p->pc) - 8;
       else 
         v = -8; // warning?
     o1 = opbra(p->as, p->scond);
     o1 |= (v >> 2) & 0xffffff;
     break;
 @
-% why not p->pc?? cleaner than using global no? I do that in omvl
+%old: was -pc but I prefer -p->pc. Cleaner than global and consistent with omvl.
+\t can overflow? branch somewhere too far?
 
-% p->cond->pc !! hence the need for patch()! and span()
-% and do -pc because it's relative, and do -8 because ARM
-% does implicitly a +8 (see Machine.nw)
+There are many interesting elements in the code above which 
+require a small comment:
+\begin{itemize}
+\item [[p->cond->pc - p->pc]]: 
+Jumps are {\em relative} in the ARM, but [[Instr.pc]] contains
+an {\em absolute} code address, hence the substraction.
 
-% can overflow? branch somewhere too far?
+\item [[0xffffff]]: Jump offsets are encoded in 24 bits in the ARM.
 
-% why - 8? because stupid jump to stay where you are,
-% and stupid go next as anyway it's next, (well would be a NOP at least)
-% so B 0 actually jump 2 instrs. To loop forever need B - 8 ARM.
-% This is why you need an assembler :) too tricky, need layer on top of ARM.
+\item [[v >> 2]]: Jumps are in terms of instructions in the ARM, not
+bytes, hence the division by 4 since
+%dup: overview/5l-a core-ds/instr main/asmb/text-sec resolve/issue/
+the ARM uses fixed-length instruction of 4 bytes.
+
+\item [[-8]]: The ARM implicitely does a [[+8]]
+(see the \book{Emulator}) on the jump offset (after it multiplied
+it by 4). So, a jump offset of 0 in an ARM jump instruction actually jumps
+2 instructions forward.
+%
+The reason is probably that it
+seems {incorrect} to jump on the same instruction (hence an
+implicit [[+4]]), and it seems {useless} to jump on the
+next instruction (hence another implicit [[+4]]) as one
+could do the same by not using any jump instruction.
+\l To loop forever need B - 8 ARM.
+\l This is why you need an assembler :) too tricky, need layer on top of ARM.
+
+\end{itemize}
+
+\l opbra similar to oprrr, but can manually set condition also
 
 <<function opbra(arm)>>=
 long
 opbra(int a, int sc)
 {
 
-    if(sc & (C_SBIT|C_PBIT|C_WBIT))
-        diag(".S/.P/.W on bra instruction");
+    <<[[opbra()]] sanity check sc>>
     sc &= C_SCOND;
     if(a == ABL)
         return (sc<<28)|(0x5<<25)|(0x1<<24);
-
-    if(sc != 0xe)
-        diag(".COND on bcond instruction");
+    <<[[opbra()]] sanity check sc if not ABL>>
 
     switch(a) {
+    // manual setting of the conditional execution
+    // bits 28 to 32
     case ABEQ:	return (0x0<<28)|(0x5<<25);
     case ABNE:	return (0x1<<28)|(0x5<<25);
     case ABHS:	return (0x2<<28)|(0x5<<25);
@@ -10725,43 +10767,106 @@ opbra(int a, int sc)
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 % >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >> >>
 
+<<[[opbra()]] sanity check sc>>=
+if(sc & (C_SBIT|C_PBIT|C_WBIT))
+    diag(".S/.P/.W on bra instruction");
+@
+\l U bit?
 
+<<[[opbra()]] sanity check sc if not ABL>>=
+if(sc != 0xe)
+    diag("redundant .EQ/.NE/... on B/BEQ/BNE/...  instruction");
+@
+%old: .COND on bcond instruction
 
 \subsection{Indirect jumps}
+\l dynamic, indirect, absolute
 
+Most jumps in a program should be {\em static}, e.g. jumping to
+a procedure or a label.
+%
+Even the assembly instruction [[B 2(PC)]], which uses
+the pseudo-register [[PC]] (to perform a relative jump),
+is actually converted in a static jump.
+%dup: resolving/issue
+Indeed, the instruction is 
+(1) converted by the assembler in an absolute jump,
+% (using a virtual program counter), 
+(2) relocated in [[ldobj()]] in Section~\ref{sec:relocation},
+(3) patched to find the actual target instruction in Section~\ref{sec:patch},
+and finally (4) converted back to a static relative jump ARM instruction
+in the previous section. %clever \ref{sec:direct-jumps}
+% using real program counters.
+\l in the middle haved handled virtual instr expansion, etc.
+
+The assembly language of [[5a]] supports also {\em dynamic} 
+jumps where the content
+of a regular register and an offset can specify an absolute
+code address to jump to, e.g. [[B 10(R4)]].
+%
+Such instructions are useful to encode for instance in C
+calls through a function pointer as in [[(*f)(1,2);]]
+which are dynamic.
+%The address of [[f]] is put in a register and 
+\l see 5c -S and functpointer.c
+%
+The ARM branching instructions support only 24 bits static offsets though,
+but one can manipulate directly the {program counter register} ([[R15]])
+and {link register} ([[R14]]) to encode dynamic jumps using simple
+arithmetic instructions:
 
 <<[[optab]] entries>>=
 { AB,		C_NONE,	C_NONE,	C_ROREG,	 6, 4, 0,	LPOOL },
 { ABL,		C_NONE,	C_NONE,	C_ROREG,	 7, 8 },
 @
-% branch to indirect code!
-% if it's a really big offset that is not immrot(), no code generation?
+\l if it's a really big offset that is not immrot(), no code generation?
 
 <<[[asmout()]] switch on type cases>>=
-case 6:		/* b ,O(R) -> add $O,R,PC */
+case 6:		/* b O(R) -> add $O,R,PC */
     aclass(&p->to);
     o1 = oprrr(AADD, p->scond);
     o1 |= immrot(instoffset);
-    o1 |= (p->to.reg << 16) | (REGPC << 12);
+    r = p->to.reg;
+    rt = REGPC; 
+    o1 |= (r << 16) | (rt << 12);
     break;
 @
 %$
-\t if do manually add x, R, PC,  then get the LPOOL?
+\n note that ADD x, R, PC set the final result of PC, so it's not relative jump
+\t if do manually add x, R, R15,  then get the LPOOL?
+\t if do B 8(R15)?? actually want B 0(R15) because of exposed semantic
+
+The translation of indirect calls ([[BL]]) requires two ARM instructions:
 
 <<[[asmout()]] switch on type cases>>=
-case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
+case 7:		/* bl Offset(R) -> ADD $0,PC,LINK; add $Offset,R,PC */
     aclass(&p->to);
     o1 = oprrr(AADD, p->scond);
-    o1 |= immrot(0) | (REGPC << 16) | (REGLINK << 12);
+    rt = REGLINK;
+    r = REGPC;
+    o1 |= (r << 16) | (rt << 12) | immrot(0);
 
     o2 = oprrr(AADD, p->scond);
-    o2 |= immrot(instoffset) | (p->to.reg << 16) | (REGPC << 12);
+    r = p->to.reg;
+    rt = REGPC;
+    o2 |= (r << 16) | (rt << 12) | immrot(instoffset);
     break;
 @
-%$
-% could use AMOVW instead of AADD no?
+% >> >> >> >>
+%old: /* bl O(R) -> mov PC,link; add $O,R,PC */
+\l could use AMOVW instead of AADD no?
 \l subtle but immrot(0) != 0, it sets bit 25
 
+Note that the first generated instruction above which adds zero to [[R15]] and
+saves the result in [[R14]] seems incorrect. 
+Indeed, the return address saved in [[R14]] should not be the current 
+instruction but the next instruction, which in our case should be
+at [[R15+8]] since the linker generated two ARM instructions for [[BL]].
+But, again the ARM does implicitely a [[+8]] when one of the 
+{\em source} operand of an arithmetic instruction is [[R15]]
+(see the \book{Emulator}). Note that there is no implicit [[+8]]
+though when [[R15]] is the {\em destination} operand as in the second
+generated ARM instruction above.
 
 
 
@@ -11465,7 +11570,10 @@ flushpool(Prog *p, bool skip)
 % so I simplified
 
 % ex: AB instruction, etc.
+% { AB,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0,	LPOOL },
 
+
+\label{sec:lpool}
 <<[[dotext()]] pool handling, switch flag cases>>=
 case LPOOL:
     if ((p->scond&C_SCOND) == COND_ALWAYS)
@@ -12162,6 +12270,8 @@ asmlc(void)
 
 
 
+%\section{Tracing}?
+% in profiling section right now
 
 \chapter{Profiling Support}
 \label{chap:profiling}
@@ -12219,10 +12329,6 @@ doprof1(void)
             q = prg();
             q->line = p->line;
 
-            // add_list(q, datap)
-            q->link = datap;
-            datap = q;
-
             // DATA __mcount +n*4(SB), 4,  $p->syn //$
             q->as = ADATA;
             q->from.type = D_OREG;
@@ -12233,12 +12339,19 @@ doprof1(void)
             q->to = p->from;
             q->to.type = D_ADDR;
 
+            // add_list(q, datap)
+            q->link = datap;
+            datap = q;
+
+
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
-            
+
+            // add_after(q, p)            
             q->link = p->link;
             p->link = q;
+
             p = q;
 
             // MOVW p->s + n*4+4(SB), R11
@@ -12253,8 +12366,11 @@ doprof1(void)
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+
+            // add_after(q, p)            
             q->link = p->link;
             p->link = q;
+
             p = q;
 
             // ADD, $1, R11 //$
@@ -12267,8 +12383,11 @@ doprof1(void)
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+
+            // add_after(q, p)            
             q->link = p->link;
             p->link = q;
+
             p = q;
 
             // MOVW R11, 
@@ -12286,6 +12405,8 @@ doprof1(void)
     }
     q = prg();
     q->line = 0;
+
+    // add_list(q, datap)
     q->link = datap;
     datap = q;
 
@@ -13257,7 +13378,8 @@ if(dlm) {
 { AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4 },
 @
 
-<<[[asmout()]] on WORD case, switch class cases>>=
+<<[[asmout()]] in WORD case, when dlm>>=
+switch(c) {
 case C_LCON:
     if(!dlm)
         break;
@@ -13268,6 +13390,7 @@ case C_ADDR:
     if(p->to.sym->type == SUNDEF)
         ckoff(p->to.sym, p->to.offset);
     dynreloc(p->to.sym, p->pc, 1);
+}
 @
 
 % Store
@@ -15504,6 +15627,9 @@ case D_REGREG:
 @
 
 
+<<[[asmout()]] other locals>>=
+int rt2;
+@
 
 <<[[asmout()]] switch on type cases>>=
 case 17:
