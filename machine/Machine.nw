@@ -1121,6 +1121,7 @@ inithdr(fdt fd)
 
 
 % need that below?
+\t adv topics? after all useful only when use as debugger?
 
 <<global symmap>>=
 Map *symmap;		
@@ -1133,8 +1134,6 @@ if (syminit(fd, &fhdr) < 0)
 
 symmap = loadmap(symmap, fd, &fhdr);
 @
-
-
 
 <<[[inithdr()]] locals>>=
 Symbol s;
@@ -1269,6 +1268,7 @@ s->table = emalloc(((s->end - s->base)/BY2PG) * sizeof(byte*));
 @
 % this can be extended by brk()!
 %less: d+b-d ??
+
 
 <<[[initmemory()]] Stack segment initilisation>>=
 s = &memory.seg[Stack];
@@ -1567,16 +1567,16 @@ arm_class(instruction w)
 
 
 
-\section{Instructions simulation}
+%\section{Instructions simulation}
+
+\section{Arithmetic and logic}
 
 % always same pattern: extract components from opcode (e.g.
 % special opcode for special register in instruction), shift, and,
 % and then perform operation on registers, memory, or internal registers.
 
-\subsection{Arithmetic and logic}
 
-
-\subsubsection{Opcode extraction}
+\subsection{Opcode extraction}
 % at least for the first time we see that we can have a named
 % section about it, to repeat what was done in the arm_class section
 
@@ -1666,15 +1666,17 @@ else
 // else op += CARITH0
 @
 % >> >> >>
-
+% 31<<7 means any shift#, and second part is op right
+\t  but matters op right? if shift# is 0, then shiftop has no effect no?
 
 <<arith/logic opcodes>>=
 CARITH0 = 0,  // r,r,r
-CARITH1 = 16, // r<>r, r, r
-CARITH2 = 32, // r<>#, r, r
+CARITH1 = 16, // r<>#, r, r
+CARITH2 = 32, // r<>r, r, r
 @
+\t what about I, R, R ??? CARITH3!! class 1
 
-\subsubsection{Multiplication}
+\subsection{Multiplication}
 \l how fast multiplication in hardware?
 
 <<[[itab]] elements>>=
@@ -1750,7 +1752,7 @@ if(trace)
 \fi
 
 
-\subsubsection{[[Idp()]] and [[dpex()]]}
+\subsection{[[Idp()]] and [[dpex()]]}
 
 <<[[itab]] elements>>=
 //r,r,r
@@ -1844,7 +1846,7 @@ dpex(instruction inst, long o1, long o2, int rd)
 % >>
 % mov in arith? seems redundant with load/store no?
 
-\subsubsection{Boolean logic}
+\subsection{Boolean logic}
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
 case  OAND:
@@ -1870,7 +1872,7 @@ case OBIC:
 @
 % cheat a bit :) use & to explain OAND
 
-\subsubsection{XXX Sbit}
+\subsection{[[S]] bit}
 
 <<constant Sbit>>=
 Sbit		= 1<<20,
@@ -1898,7 +1900,7 @@ int	cout;
 % cout is set by shift
 
 
-\subsubsection{Addition and overflow}
+\subsection{Addition and overflow}
 % carry? overflow?
 
 % concepts: carry, overflow, signed/unsigned, complement 2 notations
@@ -1927,6 +1929,11 @@ case OADD:
     return;
 @
 % >> >>
+%old:
+%        if((XCAST(o1) + XCAST(o2)) & (1LL << 32))
+%            reg.cbit = true;
+%        else
+%            reg.cbit = false;
 
 
 <<macro XCAST>>=
@@ -1938,10 +1945,10 @@ case OADD:
 
 
 
-\subsubsection{[[shift()]]}
+\subsection{[[shift()]]}
 
 <<[[itab]] elements>>=
-// r<>r, r, r
+// r<>#, r, r
 [OAND +CARITH1] =  { Idp1,		"AND",	Iarith },	
 [OEOR +CARITH1] =  { Idp1,		"EOR",	Iarith },	
 [OSUB +CARITH1] =  { Idp1,		"SUB",	Iarith },	
@@ -1999,7 +2006,7 @@ if(trace)
 \fi
 
 <<[[itab]] elements>>=
-// r<>#, r, r
+// r<>r, r, r
 [OAND +CARITH2] =  { Idp2,		"AND",	Iarith },	
 [OEOR +CARITH2] =  { Idp2,		"EOR",	Iarith },	
 [OSUB +CARITH2] =  { Idp2,		"SUB",	Iarith },	
@@ -2069,27 +2076,7 @@ if(trace)
 long
 shift(long v, int st, int sc, bool isreg)
 {
-    if(sc == 0) {
-        switch(st) {
-        case 0:	/* logical left */
-            reg.cout = reg.cbit;
-            break;
-        case 1:	/* logical right */
-            reg.cout = (v >> 31) & 1;
-            break;
-        case 2:	/* arith right */
-            reg.cout = reg.cbit;
-            break;
-        case 3:	/* rotate right */
-            if(isreg) {
-                reg.cout = reg.cbit;
-            }
-            else {
-                reg.cout = v & 1;
-                v = ((ulong)v >> 1) | (reg.cbit << 31);
-            }
-        }
-    }
+    <<[[shift()]] if sc is 0>>
     else {
         switch(st) {
         case 0:	/* logical left */
@@ -2127,7 +2114,32 @@ shift(long v, int st, int sc, bool isreg)
 
 
 
-\subsubsection{Immediate values}
+<<[[shift()]] if sc is 0>>=
+if(sc == 0) {
+    switch(st) {
+    case 0:	/* logical left */
+        reg.cout = reg.cbit;
+        break;
+    case 1:	/* logical right */
+        reg.cout = (v >> 31) & 1;
+        break;
+    case 2:	/* arith right */
+        reg.cout = reg.cbit;
+        break;
+    case 3:	/* rotate right */
+        if(isreg) {
+            reg.cout = reg.cbit;
+        }
+        else {
+            reg.cout = v & 1;
+            v = ((ulong)v >> 1) | (reg.cbit << 31);
+        }
+    }
+}
+@
+% >>
+
+\subsection{Immediate values}
 % Small immediate values?
 % Useful opti. Without it for things like x = x + 1
 % would require more ? STORE?
@@ -2185,7 +2197,7 @@ Idp3(instruction inst)
 
     o2 = inst & 0xff;
     sc = (inst>>7) & 0x1e;
-    o2 = (o2 >> sc) | (o2 << (32 - sc));
+    o2 = (o2 >> sc) | (o2 << (32 - sc)); // rotate
 
     dpex(inst, o1, o2, rd);
 
@@ -2194,6 +2206,8 @@ Idp3(instruction inst)
 }
 @
 % >>
+% normally it's inst >> 8, but then by doing >> 7 you multiply by 2
+% which is perfect. then 0x1e is 30.
 
 \ifallcode
 <<[[Idp3()]] trace>>=
@@ -2210,7 +2224,8 @@ if(trace)
 
 % so ADD $0, PC, LINK;  will save in REGLINK PC + 8!
 
-\subsubsection{64 bits (signed/unsigned) multiplication}
+\subsection{64 bits target (signed/unsigned) multiplication}
+\l adv topics?
 % not really 64 bits multiplication,
 % more 32 bits multiply but can store 64 bit result!
 
@@ -2287,7 +2302,7 @@ if(trace)
 
 
 
-\subsubsection{Misc instructions}
+\subsection{Misc instructions}
 
 % ifallcode?
 
@@ -2318,6 +2333,7 @@ case  OSBC:
 case  ORSC:
     undef(inst);
 @
+% not used in 5l/5c anyway
 
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
@@ -2330,14 +2346,14 @@ case OMVN:
     cbit = true;
     break;
 @
+\t useful to set register. actually used in 5l.
 
 
-
-\subsection{Memory}
+\section{Memory}
 
 % conventions: B, BU, W, H
 
-\subsubsection{Opcode extraction}
+\subsection{Opcode extraction}
 
 <<memory opcodes>>=
 OLDW    = 70,
@@ -2348,6 +2364,7 @@ OSTB    = 73,
 
 <<[[arm_class()]] class cases>>=
 case 2:	/* load/store byte/word i(r) */
+ //                            OxxB?              OSTx?
  op = CMEM_BASIS + CMEM0 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
  break;
 @
@@ -2355,6 +2372,7 @@ case 2:	/* load/store byte/word i(r) */
 
 <<[[arm_class()]] class cases>>=
 case 3:	/* load/store byte/word (r)(r) */
+ //                            OxxB?              OSTx?
  op = CMEM_BASIS + CMEM1 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
  break;
 @
@@ -2377,6 +2395,7 @@ OSTBU   = 81,
 
 <<[[arm_class()]] class 0, if x has 0x9 bits>>=
 if((x & 0x9) == 0x9) {		/* ld/st byte/half s/u */
+     //                          OxxBU?               OSTx?
      op = CMEM_BASIS + CMEM2 + ((w >> 22) & 0x1) + ((w >> 19) & 0x2);
      break;
 }
@@ -2401,11 +2420,12 @@ if(w & (1<<24)) {
 % >> >>
 
 
-\subsubsection{Memory swap}
+\subsection{Memory swap}
 
 % not that useful, but ensured to be atomic so used to implement _tas!!
 % indeed when multi processor need to sync, they share something, memory
 % but each have independent register, so way to sync is via swap.
+% Here single processor, so emulation not very interesting.
 
 <<[[itab]] elements>>=
 [OSWPW] =   { Iswap,		"SWPW",	Imem },
@@ -2417,9 +2437,10 @@ void
 Iswap(instruction inst)
 {
     int rn, rd, rm;
-    ulong address, value, bbit;
+    ulong address, value;
+    bool bbit;
 
-    bbit = inst & (1<<22);
+    bbit = inst & (1<<22); // BU?
 
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
@@ -2446,9 +2467,7 @@ Iswap(instruction inst)
 if(trace) {
     char *bw, *dotc;
 
-    bw = "";
-    if(bbit)
-        bw = "B";
+    bw = bbib? "B" : "";
     dotc = cond[reg.instr_cond];
 
     itrace("SWP%s%s\t#%x(R%d),R%d #%lux=#%x",
@@ -2458,11 +2477,15 @@ if(trace) {
 }
 @
 \fi
+%old:
+%    bw = "";
+%    if(bbit)
+%        bw = "B";
 
 
 
 
-\subsubsection{Load/store}
+\subsection{Load/store}
 
 <<[[itab]] elements>>=
 // load/store w/ub i,r
@@ -2488,14 +2511,15 @@ void
 Imem1(instruction inst)
 {
     int rn, rd, off, rm, sc, st;
-    ulong address, value, pbit, ubit, bbit, wbit, lbit, bit25;
+    ulong address, value;
+    bool pbit, ubit, bbit, wbit, lbit, bit25;
 
-    bit25 = inst & (1<<25);
-    pbit = inst & (1<<24);
-    ubit = inst & (1<<23);
-    bbit = inst & (1<<22);
-    wbit = inst & (1<<21);
-    lbit = inst & (1<<20);
+    bit25 = inst & (1<<25); // Rm or I?
+    pbit = inst & (1<<24); // 0 when set via .P, on by default
+    ubit = inst & (1<<23); // Positive offset? Up?
+    bbit = inst & (1<<22); // B or W?
+    wbit = inst & (1<<21); // 
+    lbit = inst & (1<<20); // LDR or STR?
 
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
@@ -2503,7 +2527,9 @@ Imem1(instruction inst)
     SET(st);
     SET(sc);
     SET(rm);
+
     if(bit25) {
+        // rm<>I(...)
         rm = inst & 0xf;
         st = (inst>>5) & 0x3;
         sc = (inst>>7) & 0x1f;
@@ -2512,8 +2538,10 @@ Imem1(instruction inst)
             off += 8;
         off = shift(off, st, sc, false);
     } else {
+        // I(...)
         off = inst & 0xfff;
     }
+
     if(!ubit)
         off = -off;
     if(rn == REGPC)
@@ -2524,6 +2552,7 @@ Imem1(instruction inst)
         address += off;
 
     if(lbit) {
+        // LDR
         if(bbit)
             value = getmem_b(address);
         else
@@ -2532,6 +2561,7 @@ Imem1(instruction inst)
             value -= 4;
         reg.r[rd] = value;
     } else {
+        // STR
         value = reg.r[rd];
         if(rd == REGPC)
             value -= 4;
@@ -2547,21 +2577,26 @@ Imem1(instruction inst)
 }
 @
 % >> >> >>
+%old: I introduced bool for the xbit
+\t pbit wbit double negation is hard to read
+
+% see Assembler. 
+% MOVW.P #4(R13), R15, for RET
+% TEXT foo, $8 ->  MOVW.W	R14,-12(R13)
+
+% useful to have push/pop in one instruction in hardware!
 
 \ifallcode
 <<[[Imem1()]] trace>>=
 if(trace) {
     char *bw, *dotp, *dotc;
 
-    bw = "W";
-    if(bbit)
-        bw = "BU";
-    dotp = "";
-    if(!pbit)
-        dotp = ".P";
+    bw = bbit ? "BU" : "W";
+    dotp = pbit? "" : ".P";
     dotc = cond[reg.instr_cond];
 
     if(lbit) {
+        // LDR
         if(!bit25)
             itrace("MOV%s%s%s\t#%x(R%d),R%d #%lux=#%x",
                 bw, dotp, dotc,
@@ -2573,6 +2608,7 @@ if(trace) {
                 rm, shtype[st], sc, rn, rd,
                 address, value);
     } else {
+        // STR
         if(!bit25)
             itrace("MOV%s%s%s\tR%d,#%x(R%d) #%lux=#%x",
                 bw, dotp, dotc,
@@ -2587,11 +2623,19 @@ if(trace) {
 }
 @
 \fi
+%old: 
+%    bw = "W";
+%    if(bbit)
+%        bw = "BU";
+%    dotp = "";
+%    if(!pbit)
+%        dotp = ".P";
+
+% pbit on by default?
 
 
 
-
-
+\t adv topics? after all it is an ARMv4 only stuff according to 5l
 <<[[itab]] elements>>=
 // load/store h/sb
 [OLDH]  =  { Imem2,		"MOV",	Imem },
@@ -2608,23 +2652,27 @@ void
 Imem2(instruction inst)
 {
     int rn, rd, off, rm;
-    ulong address, value, pbit, ubit, hbit, sbit, wbit, lbit, bit22;
+    ulong address, value;
+    bool pbit, ubit, hbit, sbit, wbit, lbit, bit22;
 
-    pbit = inst & (1<<24);
-    ubit = inst & (1<<23);
+    pbit = inst & (1<<24); // 0 when set via .P, on by default
+    ubit = inst & (1<<23); // Positive offset? Up?
     bit22 = inst & (1<<22);
     wbit = inst & (1<<21);
-    lbit = inst & (1<<20);
+    lbit = inst & (1<<20); // LDR or STR?
+
     sbit = inst & (1<<6);
-    hbit = inst & (1<<5);
+    hbit = inst & (1<<5); // H or BU?
 
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
 
     SET(rm);
     if(bit22) {
+        // I(...)
         off = ((inst>>4) & 0xf0) | (inst & 0xf);
     } else {
+        // rm(...)
         rm = inst & 0xf;
         off = reg.r[rm];
         if(rm == REGPC)
@@ -2640,6 +2688,7 @@ Imem2(instruction inst)
         address += off;
 
     if(lbit) {
+        // LDR
         if(hbit) {
             value = getmem_h(address);
             if(sbit && (value & 0x8000))
@@ -2653,6 +2702,7 @@ Imem2(instruction inst)
             value -= 4;
         reg.r[rd] = value;
     } else {
+        // STR
         value = reg.r[rd];
         if(rd == REGPC)
             value -= 4;
@@ -2669,18 +2719,16 @@ Imem2(instruction inst)
 }
 @
 % >> >> >> >>
+%old: I introduced bool for the xbit
+
 
 \ifallcode
 <<[[Imem2()]] trace>>=
 if(trace) {
     char *hb, *dotp, *dotc;
 
-    hb = "B";
-    if(hbit)
-        hb = "H";
-    dotp = "";
-    if(!pbit)
-        dotp = ".P";
+    hb = hbit? "H" : "B";
+    dotp = pbit? "" : ".P";
     dotc = cond[reg.instr_cond];
 
     if(lbit) {
@@ -2709,11 +2757,18 @@ if(trace) {
 }
 @
 \fi
+%old:
+%    hb = "B";
+%    if(hbit)
+%        hb = "H";
+%    dotp = "";
+%    if(!pbit)
+%        dotp = ".P";
 
 
 
 
-\subsubsection{Multi registers load/store}
+\subsection{Multi registers load/store}
 % advanced topic? like I did in Assembler.nw?
 
 <<memory opcodes>>=
@@ -2811,10 +2866,9 @@ if(trace) {
 @
 \fi
 
-\subsection{Control flow}
+\section{Control flow}
 
-
-\subsubsection{Opcode extraction}
+\subsection{Opcode extraction}
 
 <<branching opcodes>>=
 OB = 86,
@@ -2832,7 +2886,7 @@ case 5:	/* branch / branch link */
 CBRANCH = 86,
 @
 
-\subsubsection{Simple branching}
+\subsection{Simple branching}
 
 <<[[itab]] elements>>=
 // branch
@@ -2872,7 +2926,7 @@ if(trace)
 \fi
 
 
-\subsubsection{Branch and link}
+\subsection{Branch and link}
 
 <<[[itab]] elements>>=
 [OBL] =  { Ibl,	"BL",	Ibranch },
@@ -2910,7 +2964,7 @@ if(trace)
 \fi
 
 
-\subsubsection{Comparisons}
+\subsection{Comparisons}
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
 case OSUB:
@@ -2924,6 +2978,8 @@ case OCMP:
     }
     return;
 @
+% Sbit always set for comparison stuff, so inst & Sbit
+%  useful only for the OSUB fallthrough above.
 
 <<[[dpex()]] switch arith/logic opcode cases>>=
 case  OTST:
@@ -2944,7 +3000,7 @@ case  OTEQ:
 
 
 
-\subsubsection{ARM Conditional execution}
+\subsection{ARM Conditional execution}
 % see later?? when talk about Branch? hmm but need also for CMP
 
 % see ARM wikipedia page.
@@ -3087,7 +3143,7 @@ runtst(void)
 }
 @
 
-\subsection{Software interrupt}
+\section{Software interrupt}
 % software interrupt aka syscall
 % see chapter
 
@@ -3223,6 +3279,7 @@ case Stack:
     return *p;
 @
 
+% zeroed!! cos emalloc does memset(, 0, )
 
 \section{[[Tlb]]}
 
@@ -6003,7 +6060,7 @@ emalloc(ulong size)
     if(a == nil)
         fatal(false, "no memory");
 
-    memset(a, 0, size);
+    memset(a, 0, size); //!!
     return a;
 }
 @
