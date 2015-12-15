@@ -1569,6 +1569,8 @@ depending on the declaration style of a variable:
 int global = 1; // Data section
 int another;    // BSS section
 \end{verbatim}
+\t but in \plan BSS is zeroed!! more deterministic programs. See Kernel
+\t  or Emulator
 
 \item [[Exec.syms]] and the {executable symbol table} will be discussed in 
 Chapter~\ref{chap:debugging}.
@@ -9466,167 +9468,7 @@ o1 |= immrot(instoffset);
 
 
 
-\subsection{[[D_OREG]] with globals, [[C_xEXT]], and [[immaddr()]]}
-\n before the general D_OREG, cos simpler, just half, small, and long
-\l  but there is BIG
-
-% H S L ? half, small, large?
-<<[[Operand_class]] C_xEXT cases>>=
-<<[[Operand_class]] cases, in C_xEXT, half case>>
-<<[[Operand_class]] cases, in C_xEXT, float cases>>
-C_SEXT,
-C_LEXT,
-@
-% EXT for? external symbol?
-% see Section X later expose constraint to satisfy for address
-
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case N_EXTERN:
-case N_INTERN:
-    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>
-    s = a->sym;
-    t = s->type;
-    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>
-    <<[[aclass()]] when D_OREG and external symbol and dlm>>
-    instoffset = s->value + a->offset - BIG;
-    t = immaddr(instoffset);
-    if(t) {
-        <<[[aclass()]] if immfloat for N_EXTERN symbol>>
-        <<[[aclass()]] if immhalf for N_EXTERN symbol>>
-        return C_SEXT;
-    }
-    return C_LEXT;
-@
-% offset_to_r12, factorize BIG
-
-<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
-case C_SEXT:
-    return cmp(C_HFEXT, b);
-case C_LEXT:
-    return cmp(C_SEXT, b);
-@
-
-% xFy is for float (why mixed?)
-
-<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>=
-if(a->sym == nil || a->sym->name == nil) {
-    print("null sym external\n");
-    print("%D\n", a);
-    return C_GOK;
-}
-@
-
-<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>=
-if(t == SNONE || t == SXREF) {
-    diag("undefined external: %s in %s", s->name, TNAME);
-    s->type = SDATA;
-}
-@
-
-
-
-
-%\subsection{Immediate address, [[immaddr()]]}
-
-% The load/store ARM instructions take 2 registers (src_val, dst_address)
-% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
-% do negative offset with a bit).
-% That means that if you do  'MOVW $1, myglobal', naively you'll have to
-% encode it as 3 instructions:
-%     MOV $1, R1
-%     MOV $myglobal, R2
-%     STR R1, R2.
-% But if myglobal is not that far from address 0 and you have a special
-% register reserved that always contain 0 (e.g. R12),
-% then you could use the 12bits offset instead of using a register
-% and just do
-%     MOV $1, R1
-%     STR R1, R12+$myglobal
-% If you have a special register which always contain the value 1, 
-% then you do even better with just do 
-%     STR R0, R12+$myglobal! 
-% which is 3 times faster (well if the global address is in a cache).
-%
-% In practice the first page of the address space is always reserved
-% so it's better to store in R12 a bigger value. R12 will actually
-% be set to INITDAT+BIG.
-
-
-
-
-<<function immaddr(arm)>>=
-long
-immaddr(long v)
-{
-    if(v >= 0 && v <= 0xfff)
-        return (v & 0xfff) |
-            (1<<24) |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-
-    if(v < 0 && v >= -0xfff)
-        return (-v & 0xfff) |
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-%old? why need v & 0xfff? redundant no?
-% >> >> >>
-% rename immsmall?
-% why 0xfff? = Because immediate offset range is 12 bits
-% (with sign)
-
-% bit P and big U?
-
-
-
-\subsection{[[D_OREG]] with automatics, [[C_xAUTO]]}
-
-<<[[Operand_class]] C_xAUTO cases>>=
-<<[[Operand_class]] cases, in C_xAUTO, half case>>
-<<[[Operand_class]] cases, in C_xAUTO, float cases>>
-C_SAUTO,	/* -0xfff to 0xfff */
-C_LAUTO,
-@
-% the order matters! because of ocmp() and the order of entries in optab
-% hence the chynk for float here
-
-<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
-case C_SAUTO:
-    return cmp(C_HFAUTO, b);
-case C_LAUTO:
-    return cmp(C_SAUTO, b);
-@
-
-% SP, usually offset negatif
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case N_LOCAL:
-    instoffset = autosize + a->offset;
-    t = immaddr(instoffset);
-    if(t){
-        <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
-        <<[[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol>>
-        return C_SAUTO;
-    }
-    return C_LAUTO;
-@
-
-% FP
-
-<<[[aclass()]] D_OREG case, switch symkind cases>>=
-case N_PARAM:
-    instoffset = autosize + a->offset + 4L;
-    t = immaddr(instoffset);
-    if(t){
-        <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
-        <<[[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol>>
-        return C_SAUTO;
-    }
-    return C_LAUTO;
-@
-% +4 for save REGLINK
-
-\subsection{[[D_OREG]], [[C_xOREG]]}
+\subsection{[[D_OREG]], [[C_xOREG]], and [[immaddr()]]}
 
 % offsets constraints
 % ex of instr: MOVW OFF(R13), R2
@@ -9701,6 +9543,174 @@ case C_ROREG:
 case C_LOREG:
     return cmp(C_SROREG, b);
 @
+
+
+
+%\subsection{Immediate address, [[immaddr()]]}
+
+% The load/store ARM instructions take 2 registers (src_val, dst_address)
+% and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
+% do negative offset with a bit).
+% That means that if you do  'MOVW $1, myglobal', naively you'll have to
+% encode it as 3 instructions:
+%     MOV $1, R1
+%     MOV $myglobal, R2
+%     STR R1, R2.
+% But if myglobal is not that far from address 0 and you have a special
+% register reserved that always contain 0 (e.g. R12),
+% then you could use the 12bits offset instead of using a register
+% and just do
+%     MOV $1, R1
+%     STR R1, R12+$myglobal
+% If you have a special register which always contain the value 1, 
+% then you do even better with just do 
+%     STR R0, R12+$myglobal! 
+% which is 3 times faster (well if the global address is in a cache).
+%
+% In practice the first page of the address space is always reserved
+% so it's better to store in R12 a bigger value. R12 will actually
+% be set to INITDAT+BIG.
+
+
+
+
+<<function immaddr(arm)>>=
+long
+immaddr(long v)
+{
+    if(v >= 0 && v <= 0xfff)
+        return (v & 0xfff) |
+            (1<<24) |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+
+    if(v < 0 && v >= -0xfff)
+        return (-v & 0xfff) |
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+%old? why need v & 0xfff? redundant no?
+% >> >> >>
+% rename immsmall?
+% why 0xfff? = Because immediate offset range is 12 bits
+% (with sign)
+
+% bit P and big U?
+
+
+
+
+
+\subsection{[[D_OREG]] with globals, [[C_xEXT]]}
+\n before the general D_OREG, cos simpler, just half, small, and long
+\l  but there is BIG
+
+% H S L ? half, small, large?
+<<[[Operand_class]] C_xEXT cases>>=
+<<[[Operand_class]] cases, in C_xEXT, half case>>
+<<[[Operand_class]] cases, in C_xEXT, float cases>>
+C_SEXT,
+C_LEXT,
+@
+% EXT for? external symbol?
+% see Section X later expose constraint to satisfy for address
+
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case N_EXTERN:
+case N_INTERN:
+    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>
+    s = a->sym;
+    t = s->type;
+    <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>
+    <<[[aclass()]] when D_OREG and external symbol and dlm>>
+    instoffset = s->value + a->offset - BIG;
+    t = immaddr(instoffset);
+    if(t) {
+        <<[[aclass()]] if immfloat for N_EXTERN symbol>>
+        <<[[aclass()]] if immhalf for N_EXTERN symbol>>
+        return C_SEXT;
+    }
+    return C_LEXT;
+@
+% offset_to_r12, factorize BIG
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_SEXT:
+    return cmp(C_HFEXT, b);
+case C_LEXT:
+    return cmp(C_SEXT, b);
+@
+
+% xFy is for float (why mixed?)
+
+<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>=
+if(a->sym == nil || a->sym->name == nil) {
+    print("null sym external\n");
+    print("%D\n", a);
+    return C_GOK;
+}
+@
+
+<<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>=
+if(t == SNONE || t == SXREF) {
+    diag("undefined external: %s in %s", s->name, TNAME);
+    s->type = SDATA;
+}
+@
+
+
+
+
+
+\subsection{[[D_OREG]] with automatics, [[C_xAUTO]]}
+
+<<[[Operand_class]] C_xAUTO cases>>=
+<<[[Operand_class]] cases, in C_xAUTO, half case>>
+<<[[Operand_class]] cases, in C_xAUTO, float cases>>
+C_SAUTO,	/* -0xfff to 0xfff */
+C_LAUTO,
+@
+% the order matters! because of ocmp() and the order of entries in optab
+% hence the chynk for float here
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_SAUTO:
+    return cmp(C_HFAUTO, b);
+case C_LAUTO:
+    return cmp(C_SAUTO, b);
+@
+
+% SP, usually offset negatif
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case N_LOCAL:
+    instoffset = autosize + a->offset;
+    t = immaddr(instoffset);
+    if(t){
+        <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
+        <<[[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol>>
+        return C_SAUTO;
+    }
+    return C_LAUTO;
+@
+% ex  TEXT foo(SB), $8,    then layout in memory? value of R13?
+%  autosize so go to the top, and then negatif offset so go down
+
+% FP
+
+<<[[aclass()]] D_OREG case, switch symkind cases>>=
+case N_PARAM:
+    instoffset = autosize + 4L + a->offset;
+    t = immaddr(instoffset);
+    if(t){
+        <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
+        <<[[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol>>
+        return C_SAUTO;
+    }
+    return C_LAUTO;
+@
+%old: autosize + a->offset + 4L;
+% autosize so go to top, then +4 for save REGLINK then positive offset
 
 
 
@@ -9939,6 +9949,7 @@ case 1:		/* op R,[R],R */
     break;
 @
 % >> >>
+\n actually in ARM op R, [R], R  and op R, [R], R <> 0 are the same
 
 We will see [[oprrr()]] below, but it essentially sets
 the {\em conditional execution}\footnote{
@@ -10115,6 +10126,7 @@ case 2:		/* op $I,[R],R */
 @
 %$
 %old: the comment was about movbu, but it was wrong I think, so I put 'op'
+\n remember also that immrot set bit 25! 
 
 %dup: codegen/pseudo/word codegen/operand-subclasses
 Remember from Section~\ref{sec:operand-subclasses}
@@ -10179,6 +10191,7 @@ A bitshifted register combines
 a register (a [[D_REG]]) and
 an immediate constant (a [[D_CONST]]) % or another register (another [[D_REG]]),
 in a single operand.
+%dup: (and adapted) from Assembler
 As explained in the \book{Assembler},
 the [[Operand.offset]] field for bitshifted registers
 directly encodes the operand in the ARM instruction format:
@@ -10191,6 +10204,11 @@ or another register.
 This is why the code above just does [[o1 |= p->from.offset]]
 as part of the ARM instruction encoding has already been done
 by [[5a]].
+
+\t but diff in binary format with op R, R, R  then?
+\t  it is just that shift is zero and use  op R < < 0, R, R is equivalent
+% >> 
+\t   to op R, R, R
 
 \subsection{Bitshift opcodes}
 
@@ -10850,6 +10868,7 @@ We will see in this section the many ARM code generation rules
 for [[AMOVW]] and its variants when one of its operands
 references a memory area:
 \l but only one? if two then linking error
+\t in adv topics also movw for float, status register, etc
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMOVW:
@@ -10863,19 +10882,19 @@ case AMOVHU:
 %trans:
 We have seen already a few rules concerning [[AMOVW]]
 in Section~\ref{sec:arith-logic-gen}
-when its operands were simple registers or constants.
+when the operands of [[AMOVW]] were simple registers or constants.
 %
 Indeed, [[AMOVW]] is a very general virtual instruction
 which unifies with one virtual opcode many ARM opcodes: [[MOV]], [[MVN]],
 but more importantly for this section [[LDR]], [[STR]],
 and even more as some [[AMOVW]] can also be translated in [ADD]].
+\l also MSR, MRS, etc
 %
 In fact, one [[AMOVW]] can lead to the generation of up
 to 6 ARM instructions (24 bytes) as we will see soon.
 \l Or use for LCON with Pool. 
 
-%toc:? load/store/swap/address
-
+%toc:? load/store/swap/address/half-byte
 
 \subsection{Load}
 \label{sec:load}
@@ -10905,18 +10924,20 @@ as in [[MOVW 0(R1), R2]]:
 % then no need Param at all?
 
 <<[[asmout()]] switch on type cases>>=
-case 21:	/* mov/movbu O(R),R -> lr */
+case 21:	/* mov/movbu O(R),R */
     aclass(&p->from);
+    rt = p->to.reg;
     r = p->from.reg;
     if(r == R_NONE)
         r = o->param;
-    o1 = olr(instoffset, r, p->to.reg, p->scond);
+    o1 = olr(instoffset, r, rt, p->scond);
     if(p->as == AMOVBU)
         o1 |= 1<<22;
     break;
 @
 % >> >> >>
 %old:    if(p->as != AMOVW) -> positive form
+%old: was '-> lr' in comment, but clearer nothing
 
 % b = base = rn,  r = rd
 <<function olr(arm)>>=
@@ -10954,7 +10975,9 @@ if(sc & C_WBIT)
 @
 % >> >> >> >>
 % so default = 
+% - Up indexing.
 
+% see Emulator
 
 <<[[olr()]] sanity check sc>>=
 if(sc & C_SBIT)
@@ -10962,18 +10985,19 @@ if(sc & C_SBIT)
 @
 <<[[olr()]] sanity check offset [[v]]>>=
 if(v >= (1<<12))
-    diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
+    diag("literal span too large: %ld (R%d)\n%P", v, b, curp);
 @
 % >>
-
-<<global PP(arm)>>=
-static Prog *PP;
-@
-% to communicate info to olr for better diagnostic
-
-<<[[asmout()]] other initialisations>>=
-PP = p;
-@
+%old: use curp instead of PP above, and remove dead code then:
+%
+%   <<global PP(arm)>>=
+%   static Prog *PP;
+%   @
+%   % to communicate info to olr for better diagnostic
+%   
+%   <<[[asmout()]] other initialisations>>=
+%   PP = p;
+%   @
 
 
 
@@ -10982,6 +11006,7 @@ PP = p;
 
 
 % long, more bytes
+% similar to section X, omvl, REGTMP, load from pool.
 
 <<[[optab]] entries>>=
 { AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
@@ -10994,7 +11019,7 @@ PP = p;
 @
 
 <<[[asmout()]] switch on type cases>>=
-case 31:	/* mov/movbu L(R),R -> lr[b] */
+case 31:	/* mov/movbu L(R),R */
     o1 = omvl(p, &p->from, REGTMP);
     <<[[asmout()]] sanity check o1>>
 
@@ -11012,6 +11037,7 @@ case 31:	/* mov/movbu L(R),R -> lr[b] */
 %    if(o->type == 31)
 %        break;
 % and    if(p->as == AMOVBU || p->as == AMOVB)
+%old: was  '-> lr[b]' in comment but unclear
 
 <<function olrr(arm)>>=
 long
@@ -11029,9 +11055,180 @@ olrr(int i, int b, int r, int sc)
 
 
 
+\subsection{Store}
+\label{sec:store}
+
+%trans:
+% dual = store
+
+<<[[optab]] entries>>=
+{ AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+{ AMOVW,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+{ AMOVW,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+
+{ AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+{ AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+{ AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+
+{ AMOVBU,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+{ AMOVBU,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+{ AMOVBU,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+@
+\l maybe could have been factorized with same representant in the end?
+\l  lots of duplication
+\t also movb here!, why not symetric with load?
+
+<<[[asmout()]] switch on type cases>>=
+case 20:	/* mov/movb/movbu R,O(R) */
+    aclass(&p->to);
+    rf = p->from.reg;
+    r = p->to.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o1 = osr(p->as, rf, instoffset, r, p->scond);
+    break;
+@
+
+
+<<function osr(arm)>>=
+long
+osr(int a, int r, long v, int b, int sc)
+{
+    long o;
+
+    o = olr(v, b, r, sc) ^ (1<<20); // STR, unset (via xor) bit 20
+    if(a != AMOVW)
+        o |= 1<<22;
+    return o;
+}
+@
+% >> >> >> >>
+
+
+% long
+
+<<[[optab]] entries>>=
+{ AMOVW,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+{ AMOVW,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+{ AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+
+{ AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+{ AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+{ AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+
+{ AMOVBU,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+{ AMOVBU,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+{ AMOVBU,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 30:	/* mov/movb/movbu R,L(R) */
+    o1 = omvl(p, &p->to, REGTMP);
+    <<[[asmout()]] sanity check o1>>
+    rf = p->from.reg;
+    r = p->to.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o2 = osrr(rf, REGTMP, r, p->scond);
+    if(p->as != AMOVW)
+        o2 |= 1<<22;
+    break;
+@
+
+<<function osrr(arm)>>=
+long
+osrr(int r, int i, int b, int sc)
+{
+
+    return olr(i, b, r, sc) ^ ((1<<25) | (1<<20));
+}
+@
+% >> >>
 
 
 
+
+\subsection{Swaps}
+
+<<[[buildop()]] switch opcode r for ranges cases>>=
+case ASWPW:
+    oprange[ASWPBU] = oprange[r];
+    break;
+@
+
+<<[[optab]] entries>>=
+{ ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4 },
+@
+
+
+<<[[asmout()]] switch on type cases>>=
+case 40:	/* swp oreg,reg,reg */
+    aclass(&p->from);
+    if(instoffset != 0)
+        diag("offset must be zero in SWP");
+    o1 = (0x2<<23) | (0x9<<4);
+    if(p->as != ASWPW)
+        o1 |= 1 << 22;
+    o1 |= p->from.reg << 16;
+    o1 |= p->reg << 0;
+    o1 |= p->to.reg << 12;
+    o1 |= (p->scond & C_SCOND) << 28;
+    break;
+@
+% >> >> >> >> >> >> >>
+
+\subsection{Symbol addresses}
+
+<<[[optab]] entries>>=
+{ AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 34:	/* mov $lacon,R */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+
+    o2 = oprrr(AADD, p->scond);
+    o2 |= REGTMP;
+    r = p->from.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o2 |= r << 16;
+    if(p->to.type != D_NONE)
+        o2 |= p->to.reg << 12;
+    break;
+@
+%$
+
+
+
+
+% the MOV opcodes with size 4 which are simple, simple load or store
+<<[[optab]] entries>>=
+{ AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
+{ AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 4:		/* add $I,[R],R */
+    aclass(&p->from);
+    o1 = oprrr(AADD, p->scond);
+    o1 |= immrot(instoffset);
+    r = p->from.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o1 |= (r << 16) | (p->to.reg << 12);
+    break;
+@
+%$
+% add in comment?
+
+% otherwise C_LCON path, which use pool and load pointer from pool.
+
+\subsection{Half words and signed bytes}
+
+\subsubsection{Load}
 
 <<[[optab]] entries>>=
 { AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
@@ -11122,103 +11319,7 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
 % >> >> >> >> >> >>  >> >>
 \t factorize shift
 
-
-
-\subsection{Store}
-\label{sec:store}
-
-%trans:
-% dual = store
-
-<<[[optab]] entries>>=
-{ AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-{ AMOVW,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-{ AMOVW,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-
-{ AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-{ AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-{ AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-
-{ AMOVBU,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-{ AMOVBU,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-{ AMOVBU,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-@
-\l maybe could have been factorized with same representant in the end?
-\l  lots of duplication
-\t also movb here!, why not symetric with load?
-
-<<[[asmout()]] switch on type cases>>=
-case 20:	/* mov/movb/movbu R,O(R) */
-    aclass(&p->to);
-    rf = p->from.reg;
-    r = p->to.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o1 = osr(p->as, rf, instoffset, r, p->scond);
-    break;
-@
-
-
-<<function osr(arm)>>=
-long
-osr(int a, int r, long v, int b, int sc)
-{
-    long o;
-
-    o = olr(v, b, r, sc) ^ (1<<20); // STR
-    if(a != AMOVW)
-        o |= 1<<22;
-    return o;
-}
-@
-% >> >> >> >>
-
-
-
-<<[[optab]] entries>>=
-{ AMOVW,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-{ AMOVW,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-{ AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-
-{ AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-{ AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-{ AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-
-{ AMOVBU,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-{ AMOVBU,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-{ AMOVBU,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 30:	/* mov/movb/movbu R,L(R) */
-    o1 = omvl(p, &p->to, REGTMP);
-    <<[[asmout()]] sanity check o1>>
-    rf = p->from.reg;
-    r = p->to.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o2 = osrr(rf, REGTMP, r, p->scond);
-    if(p->as != AMOVW)
-        o2 |= 1<<22;
-    break;
-@
-
-<<function osrr(arm)>>=
-long
-osrr(int r, int i, int b, int sc)
-{
-
-    return olr(i, b, r, sc) ^ ((1<<25) | (1<<20));
-}
-@
-% >> >>
-
-
-
-
-
-
-
+\subsubsection{Store}
 
 <<[[optab]] entries>>=
 { AMOVH,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
@@ -11291,88 +11392,6 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
     break;
 @
 
-
-
-
-\subsection{Swaps}
-
-<<[[buildop()]] switch opcode r for ranges cases>>=
-case ASWPW:
-    oprange[ASWPBU] = oprange[r];
-    break;
-@
-
-<<[[optab]] entries>>=
-{ ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4 },
-@
-
-
-<<[[asmout()]] switch on type cases>>=
-case 40:	/* swp oreg,reg,reg */
-    aclass(&p->from);
-    if(instoffset != 0)
-        diag("offset must be zero in SWP");
-    o1 = (0x2<<23) | (0x9<<4);
-    if(p->as != ASWPW)
-        o1 |= 1 << 22;
-    o1 |= p->from.reg << 16;
-    o1 |= p->reg << 0;
-    o1 |= p->to.reg << 12;
-    o1 |= (p->scond & C_SCOND) << 28;
-    break;
-@
-% >> >> >> >> >> >> >>
-
-\subsection{Symbol addresses}
-
-<<[[optab]] entries>>=
-{ AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 34:	/* mov $lacon,R */
-    o1 = omvl(p, &p->from, REGTMP);
-    if(!o1)
-        break;
-
-    o2 = oprrr(AADD, p->scond);
-    o2 |= REGTMP;
-    r = p->from.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o2 |= r << 16;
-    if(p->to.type != D_NONE)
-        o2 |= p->to.reg << 12;
-    break;
-@
-%$
-
-
-
-
-% the MOV opcodes with size 4 which are simple, simple load or store
-<<[[optab]] entries>>=
-{ AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
-{ AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 4:		/* add $I,[R],R */
-    aclass(&p->from);
-    o1 = oprrr(AADD, p->scond);
-    o1 |= immrot(instoffset);
-    r = p->from.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o1 |= (r << 16) | (p->to.reg << 12);
-    break;
-@
-%$
-% add in comment?
-
-% otherwise C_LCON path, which use pool and load pointer from pool.
-
-\subsection{Half words}
 
 
 
@@ -15877,7 +15896,7 @@ olhr(long v, int b, int r, int sc)
         o ^= 1 << 23;
     }
     if(v >= (1<<8))
-        diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
+        diag("literal span too large: %ld (R%d)\n%P", v, b, curp);
     o |= (v&0xf)|((v>>4)<<8)|(1<<22);
     o |= b << 16;
     o |= r << 12;
@@ -15885,7 +15904,7 @@ olhr(long v, int b, int r, int sc)
 }
 @
 % >> >> >> >> >> >> >> >> >> >> >> >>
-
+%old: was using PP
 
 <<function oshr(arm)>>=
 long
