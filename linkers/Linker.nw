@@ -2483,7 +2483,8 @@ All ARM instructions have a {\em conditional execution}
 // enum<Instr_cond>
 byte	scond;
 @
-\l also special bits
+\t also special bits
+\t scond? special bits and conditional exec bits?
 
 For debugging purpose, each instruction has also a 
 {\em global line number}:
@@ -5090,7 +5091,7 @@ if(s == S) {
 if(!(s->type == SNONE || s->type == SXREF))
     diag("redefinition: %s\n%P", s->name, p);
 @
-%pad: the second check used to be written differently, but I prefer
+%old: the second check used to be written differently, but I prefer
 % it this way to mimic more what we do for ATEXT
 %old:
 %		if(s->type == 0 || s->type == SXREF) {
@@ -6058,8 +6059,7 @@ noops();
 dodata();
 dotext();
 @
-%pad: I modified the original code, to simplify, to look more symetric
-%old:
+%old: I modified the original code, to simplify, to look more symetric
 %   patch();
 %   <<[[main()]] call doprofxxx() if profiling>>
 %   dodata();
@@ -8643,10 +8643,10 @@ buildop(void)
     int r;
 
     <<[[buildop()]] initialize xcmp cache>>
-    <<[[buildop()]] initialize floating flags>>
+    <<[[buildop()]] initialize flags>>
 
     for(n=0; optab[n].as != AXXX; n++) {
-        <<[[buildop()]] adjust optab if floating flags>>
+        <<[[buildop()]] adjust optab if flags, remove certain rules>>
     }
     // n contains now the size of optab
 
@@ -8690,6 +8690,7 @@ case AXXX:
   break;
 @
 \t AXXX should be dead as it's after n ... but get ``unknown op in build''
+\t  it is because of V4 and VFP which generates new AXXX entries
 
 
 The {ordering} of rules in the sorted [[optab]] is governed by 
@@ -8710,6 +8711,7 @@ ocmp(const void *a, const void *b)
     n = p1->as - p2->as;
     if(n)
         return n;
+    <<[[ocmp()]] if v4 flag on p1 or p2>>
     <<[[ocmp()]] if floating point flag on p1 or p2>>
     n = p1->a1 - p2->a1;
     if(n)
@@ -8803,7 +8805,7 @@ byte	optab;
 In the same way, [[aclass()]] is called from [[oplook()]] but
 also from [[asmout()]], so one can also cache the result
 of [[aclass()]] in the operand itself:
-\l aclass call immrot, immhalf, etc, so nice to cache.
+\l aclass call immrot, immaddr, etc, so nice to cache.
 
 <<[[Adr]] other fields>>=
 // option<enum<Operand_class>>, 0 means None, i means i-1 is the class you want
@@ -9146,8 +9148,8 @@ cflush(void)
 \l simpler than input buffer
 
 Note that [[lputl()]] means ``long put little-endian''.
-The lower bits of a number have the lower address.
-Indeed the ARM uses a low-endian architecture.
+The lowest byte of a number have the lowest memory address.
+Indeed the ARM uses a little-endian architecture.
 \l actually bi?
 There is another function [[lput()]], which does a similar
 thing but for {big-endian} architecture, where
@@ -9464,13 +9466,13 @@ o1 |= immrot(instoffset);
 
 
 
-\subsection{[[D_OREG]] with globals, [[C_xEXT]], [[immaddr()]], and [[immhalf()]]}
+\subsection{[[D_OREG]] with globals, [[C_xEXT]], and [[immaddr()]]}
 \n before the general D_OREG, cos simpler, just half, small, and long
 \l  but there is BIG
 
 % H S L ? half, small, large?
 <<[[Operand_class]] C_xEXT cases>>=
-C_HEXT,
+<<[[Operand_class]] cases, in C_xEXT, half case>>
 <<[[Operand_class]] cases, in C_xEXT, float cases>>
 C_SEXT,
 C_LEXT,
@@ -9491,24 +9493,21 @@ case N_INTERN:
     t = immaddr(instoffset);
     if(t) {
         <<[[aclass()]] if immfloat for N_EXTERN symbol>>
-        return immhalf(instoffset)? C_HEXT : C_SEXT;
+        <<[[aclass()]] if immhalf for N_EXTERN symbol>>
+        return C_SEXT;
     }
     return C_LEXT;
 @
 % offset_to_r12, factorize BIG
 
 <<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
-case C_HFEXT:
-    return b == C_HEXT || b == C_FEXT;
-case C_FEXT:
-case C_HEXT:
-    return b == C_HFEXT;
 case C_SEXT:
     return cmp(C_HFEXT, b);
 case C_LEXT:
     return cmp(C_SEXT, b);
 @
 
+% xFy is for float (why mixed?)
 
 <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check a>>=
 if(a->sym == nil || a->sym->name == nil) {
@@ -9529,7 +9528,6 @@ if(t == SNONE || t == SXREF) {
 
 
 %\subsection{Immediate address, [[immaddr()]]}
-
 
 % The load/store ARM instructions take 2 registers (src_val, dst_address)
 % and a 12 bits offset (for a range of 4096, so really a page, maybe 2 if can
@@ -9581,30 +9579,11 @@ immaddr(long v)
 % bit P and big U?
 
 
-%\subsection{Half immediate address, [[immhalf()]]}
-
-<<function immhalf(arm)>>=
-int
-immhalf(long v)
-{
-    if(v >= 0 && v <= 0xff)
-        return v |
-            (1<<24)  |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
-    if(v >= -0xff && v < 0)
-        return (-v & 0xff)|
-            (1<<24);	/* pre indexing */
-    return 0;
-}
-@
-% >> >> >>
-% seems identical to immhalf no? no now it's 0xff! not 0xfff
-
 
 \subsection{[[D_OREG]] with automatics, [[C_xAUTO]]}
 
 <<[[Operand_class]] C_xAUTO cases>>=
-C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+<<[[Operand_class]] cases, in C_xAUTO, half case>>
 <<[[Operand_class]] cases, in C_xAUTO, float cases>>
 C_SAUTO,	/* -0xfff to 0xfff */
 C_LAUTO,
@@ -9613,11 +9592,6 @@ C_LAUTO,
 % hence the chynk for float here
 
 <<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
-case C_HFAUTO:
-    return b == C_HAUTO || b == C_FAUTO;
-case C_FAUTO:
-case C_HAUTO:
-    return b == C_HFAUTO;
 case C_SAUTO:
     return cmp(C_HFAUTO, b);
 case C_LAUTO:
@@ -9631,7 +9605,8 @@ case N_LOCAL:
     t = immaddr(instoffset);
     if(t){
         <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
-        return immhalf(instoffset)? C_HAUTO : C_SAUTO;
+        <<[[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol>>
+        return C_SAUTO;
     }
     return C_LAUTO;
 @
@@ -9644,7 +9619,8 @@ case N_PARAM:
     t = immaddr(instoffset);
     if(t){
         <<[[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol>>
-        return immhalf(instoffset)? C_HAUTO : C_SAUTO;
+        <<[[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol>>
+        return C_SAUTO;
     }
     return C_LAUTO;
 @
@@ -9656,7 +9632,7 @@ case N_PARAM:
 % ex of instr: MOVW OFF(R13), R2
 
 <<[[Operand_class]] C_xOREG cases>>=
-C_HOREG,
+<<[[Operand_class]] cases, in C_xOREG, half case>>
 <<[[Operand_class]] cases, in C_xOREG, float cases>>
 C_SOREG,
 C_LOREG,
@@ -9684,10 +9660,7 @@ case N_NONE:
     t = immaddr(instoffset);
     if(t) {
         <<[[aclass()]] if immfloat for N_NONE symbol>>
-
-         /* n.b. that immhalf() will also satisfy immrot */
-        if(immhalf(instoffset))	
-            return C_HOREG;
+        <<[[aclass()]] if immhalf for N_NONE symbol>>
         if(immrot(instoffset))
             return C_SROREG;
         return C_SOREG;
@@ -9720,11 +9693,6 @@ case N_NONE:
 
 
 <<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
-case C_HFOREG:
-    return b == C_HOREG || b == C_FOREG;
-case C_FOREG:
-case C_HOREG:
-    return b == C_HFOREG;
 case C_SROREG:
     return cmp(C_SOREG, b) || cmp(C_ROREG, b);
 case C_SOREG:
@@ -9874,12 +9842,13 @@ aconsize:
 
 
 \section{Arithmetic and logic opcodes}
+\label{sec:arith-logic-gen}
 
 %trans:
 Now that we have seen all the operand classes, we can focus on the opcodes, 
 %toc:
 starting in this section with the 
-ARM code generation rules for the arithmetic and logic opcodes,
+code generation rules for the arithmetic and logic opcodes,
 e.g. [[AADD]], [[ASUB]], [[ACMP]], etc.
 %
 As explained in Section~\ref{sec:oprange}, [[AADD]] is made
@@ -10052,7 +10021,7 @@ oprrr(int a, int sc)
     long o;
 
     // bits 28 to 32
-    o = (sc & C_SCOND) << 28;
+    o = (sc&C_SCOND) << 28;
     <<[[oprrr()]] sign bit handling>>
     <<[[oprrr()]] sanity check sc>>
 
@@ -10072,9 +10041,9 @@ oprrr(int a, int sc)
     case ACMP:	return o | (0xa<<21) | (1<<20);
     case ACMN:	return o | (0xb<<21) | (1<<20);
     case AORR:	return o | (0xc<<21);
-    case AMOVW:	return o | (0xd<<21);
+    case AMOVW:	return o | (0xd<<21); // MOV
     case ABIC:	return o | (0xe<<21);
-    case AMVN:	return o | (0xf<<21);
+    case AMVN:	return o | (0xf<<21); // MVN
 
     // bits 20 to 27
     <<[[oprrr()]] switch cases>>
@@ -10145,7 +10114,7 @@ case 2:		/* op $I,[R],R */
     break;
 @
 %$
-%pad: the comment was about movbu, but it was wrong I think, so I put 'op'
+%old: the comment was about movbu, but it was wrong I think, so I put 'op'
 
 %dup: codegen/pseudo/word codegen/operand-subclasses
 Remember from Section~\ref{sec:operand-subclasses}
@@ -10203,7 +10172,7 @@ mov:
     break;
 @
 % >> >> >> >> >> >> >> >> >> >> >>
-%pad: add -> op in the comment
+%old: add -> op in the comment
 
 %dup: (and adapted) from Assembler
 A bitshifted register combines 
@@ -10255,7 +10224,7 @@ case 8:		/* sll $c,[R],R -> mov (R<<$c),R */
     rt = p->to.reg;
     r = p->reg;
     <<[[asmout()]] adjust [[r]]>>
-    o1 |= (rt << 12) | ((instoffset&31) << 7) | r;
+    o1 |= (rt<<12) | ((instoffset&31) << 7) | r;
     break;
 @
 %$
@@ -10291,10 +10260,11 @@ case ASRA:	return o | (0xd<<21) | (2<<5);
 <<[[asmout()]] switch on type cases>>=
 case 9:		/* sll R,[R],R -> mov (R<<R),R */
     o1 = oprrr(p->as, p->scond);
+    rf = p->from.reg;
     rt = p->to.reg;
     r = p->reg;
     <<[[asmout()]] adjust [[r]]>>
-    o1 |= (rt << 12) | (p->from.reg << 8) | (1<<4) | r ;
+    o1 |= (rt<<12) | (rf<<8) | (1<<4) | r ;
     break;
 @
 % >> >> >> >> 
@@ -10438,7 +10408,7 @@ case 58:	/* movbu R,R -> AND $0xff, R, R */
 %$
 \t what is this D_NONE thing???
 \t why not using rf for register from?
-%pad: I added the -> in the comment above to explain the translation
+%old: I added the -> in the comment above to explain the translation
 
 
 \subsection{Large constant operand, [[REGTMP]] and pools}
@@ -10504,7 +10474,7 @@ case 13:	/* op $lcon, [R], R */
     break;
 @
 %$
-%pad: used to do o2 |= REGTMP and prefer to use rf to be more consistent
+%old: used to do o2 |= REGTMP and prefer to use rf to be more consistent
 \t what is this D_NONE again?? when can this happen?
 \t and what is special case for AMOVW?
 
@@ -10525,13 +10495,13 @@ omvl(Prog *p, Adr *a, int dr)
         v = immrot(~instoffset);
         <<[[omvl()]] sanity check v>>
         o1 = oprrr(AMVN, p->scond&C_SCOND);
-        o1 |= (dr << 12) | v;
+        o1 |= (dr<<12) | v;
     }
     return o1;
 }
 @
 % >> >> >>
-%pad: I inverse the condition, it was !p->cond, so can better aspectize
+%old: I inverse the condition, it was !p->cond, so can better aspectize
 % things
 
 <<[[omvl()]] sanity check v>>=
@@ -10828,7 +10798,7 @@ case 6:		/* b O(R) -> add $O,R,PC */
     o1 |= immrot(instoffset);
     r = p->to.reg;
     rt = REGPC; 
-    o1 |= (r << 16) | (rt << 12);
+    o1 |= (r<<16) | (rt<<12);
     break;
 @
 %$
@@ -10844,12 +10814,12 @@ case 7:		/* bl Offset(R) -> ADD $0,PC,LINK; add $Offset,R,PC */
     o1 = oprrr(AADD, p->scond);
     rt = REGLINK;
     r = REGPC;
-    o1 |= (r << 16) | (rt << 12) | immrot(0);
+    o1 |= (r<<16) | (rt<<12) | immrot(0);
 
     o2 = oprrr(AADD, p->scond);
     r = p->to.reg;
     rt = REGPC;
-    o2 |= (r << 16) | (rt << 12) | immrot(instoffset);
+    o2 |= (r<<16) | (rt<<12) | immrot(instoffset);
     break;
 @
 % >> >> >> >>
@@ -10875,10 +10845,11 @@ generated ARM instruction above.
 
 \section{Memory opcodes}
 
-%trans:
-% complex category. Used before already, but only when
-% simple operands, no memory. Or use for LCON with Pool. 
-% more complicated ... can generate up to 6 ARM instructions
+%toc:
+We will see in this section the many ARM code generation rules
+for [[AMOVW]] and its variants when one of its operands
+references a memory area:
+\l but only one? if two then linking error
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMOVW:
@@ -10889,22 +10860,49 @@ case AMOVHU:
     break;
 @
 
+%trans:
+We have seen already a few rules concerning [[AMOVW]]
+in Section~\ref{sec:arith-logic-gen}
+when its operands were simple registers or constants.
+%
+Indeed, [[AMOVW]] is a very general virtual instruction
+which unifies with one virtual opcode many ARM opcodes: [[MOV]], [[MVN]],
+but more importantly for this section [[LDR]], [[STR]],
+and even more as some [[AMOVW]] can also be translated in [ADD]].
+%
+In fact, one [[AMOVW]] can lead to the generation of up
+to 6 ARM instructions (24 bytes) as we will see soon.
+\l Or use for LCON with Pool. 
+
+%toc:? load/store/swap/address
+
+
 \subsection{Load}
 \label{sec:load}
 
-% have seen the simple MOV before, which don't involve
-% any dereference, but just a constant and a register
-% or even sometimes just two registers.
+Beyond the setting of a register from another register or a constant, 
+\l via MOV, MVN
+another important use of [[MOVW]]
+is to {\em load} data from memory in a register
+as in [[MOVW 0(R1), R2]]:
+\l via LDR
+% first set of rules concerning small offsets:
+% C_Sxxx is small, offset, see section X.
+% encoded directly
 
 <<[[optab]] entries>>=
 { AMOVW,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
 { AMOVW,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
-{ AMOVW,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
+{ AMOVW,	C_SOREG,C_NONE,	C_REG,		21, 4 },
 
 { AMOVBU,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
 { AMOVBU,	C_SAUTO,C_NONE,	C_REG,		21, 4, REGSP },
-{ AMOVBU,	C_SOREG,C_NONE,	C_REG,		21, 4, 0 },
+{ AMOVBU,	C_SOREG,C_NONE,	C_REG,		21, 4 },
 @
+
+% use Param here!
+%todo? could modify p->from.reg to record pseudo-register instead?
+% then no need Param at all?
 
 <<[[asmout()]] switch on type cases>>=
 case 21:	/* mov/movbu O(R),R -> lr */
@@ -10913,41 +10911,60 @@ case 21:	/* mov/movbu O(R),R -> lr */
     if(r == R_NONE)
         r = o->param;
     o1 = olr(instoffset, r, p->to.reg, p->scond);
-    if(p->as != AMOVW)
+    if(p->as == AMOVBU)
         o1 |= 1<<22;
     break;
 @
 % >> >> >>
+%old:    if(p->as != AMOVW) -> positive form
 
+% b = base = rn,  r = rd
 <<function olr(arm)>>=
 long
-olr(long v, int b, int r, int sc)
+olr(long v, int b, int rt, int sc)
 {
     long o;
 
-    o = (sc & C_SCOND) << 28;
-    if(sc & C_SBIT)
-        diag(".S on LDR/STR instruction");
-    if(!(sc & C_PBIT))
-        o |= 1 << 24;
-    if(!(sc & C_UBIT))
-        o |= 1 << 23;
-    if(sc & C_WBIT)
-        o |= 1 << 21;
-    o |= (0x1<<26) | (1<<20);
+    o = (sc&C_SCOND) << 28;
+    <<[[olr()]] sanity check sc>>
+
+    <<[[olr()]] set special bits>>
+    o |= (0x1<<26) | (1<<20); // LDR
     if(v < 0) {
         v = -v;
         o ^= 1 << 23;
     }
-    if(v >= (1<<12))
-        diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
-    o |= v;
-    o |= b << 16;
-    o |= r << 12;
+    <<[[olr()]] sanity check offset [[v]]>>
+    o |= (b<<16) | (rt<<12) | v;
     return o;
 }
 @
 % >> >> >> >> >> >> >> >> >> >>
+%old: use rt, not r, more consistent
+\n actually also used for STR
+
+
+<<[[olr()]] set special bits>>=
+if(!(sc & C_PBIT))
+    o |= 1 << 24;
+if(!(sc & C_UBIT))
+    o |= 1 << 23; // reset back if negatif offset
+if(sc & C_WBIT)
+    o |= 1 << 21;
+@
+% >> >> >> >>
+% so default = 
+
+
+<<[[olr()]] sanity check sc>>=
+if(sc & C_SBIT)
+    diag(".S on LDR/STR instruction");
+@
+<<[[olr()]] sanity check offset [[v]]>>=
+if(v >= (1<<12))
+    diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
+@
+% >>
 
 <<global PP(arm)>>=
 static Prog *PP;
@@ -10957,6 +10974,62 @@ static Prog *PP;
 <<[[asmout()]] other initialisations>>=
 PP = p;
 @
+
+
+
+
+
+
+
+% long, more bytes
+
+<<[[optab]] entries>>=
+{ AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
+{ AMOVW,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
+{ AMOVW,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
+
+{ AMOVBU,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
+{ AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
+{ AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 31:	/* mov/movbu L(R),R -> lr[b] */
+    o1 = omvl(p, &p->from, REGTMP);
+    <<[[asmout()]] sanity check o1>>
+
+    rt = p->to.reg;
+    r = p->from.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o2 = olrr(REGTMP, r, rt, p->scond);
+    if(p->as == AMOVBU)
+        o2 |= 1<<22;
+    break;
+@
+% >>
+%old: the code used to be factorized with case 32 with
+%    if(o->type == 31)
+%        break;
+% and    if(p->as == AMOVBU || p->as == AMOVB)
+
+<<function olrr(arm)>>=
+long
+olrr(int i, int b, int r, int sc)
+{
+
+    return olr(i, b, r, sc) ^ (1<<25);
+}
+@
+% >>
+%todo? need a xor?  it's not a | instead??
+
+
+
+
+
+
+
 
 
 
@@ -10975,44 +11048,31 @@ PP = p;
 @
 
 
-
 <<[[asmout()]] switch on type cases>>=
 case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
     aclass(&p->from);
+    rt = p->to.reg;
     r = p->from.reg;
     if(r == R_NONE)
         r = o->param;
-    o1 = olr(instoffset, r, p->to.reg, p->scond);
+    o1 = olr(instoffset, r, rt, p->scond);
 
     o2 = oprrr(ASLL, p->scond);
     o3 = oprrr(ASRA, p->scond);
-    r = p->to.reg;
     if(p->as == AMOVB) {
-        o2 |= (24<<7)|(r)|(r<<12);
-        o3 |= (24<<7)|(r)|(r<<12);
+        o2 |= (rt<<12) | (24<<7) | rt;
+        o3 |= (rt<<12) | (24<<7) | rt;
     } else {
-        o2 |= (16<<7)|(r)|(r<<12);
+        o2 |= (rt<<12) | (16<<7) | rt;
         if(p->as == AMOVHU)
             o3 = oprrr(ASRL, p->scond);
-        o3 |= (16<<7)|(r)|(r<<12);
+        o3 |= (rt<<12) | (16<<7) | rt;
     }
     break;
 @
 % >> >> >> >> >> >> >> >>
-
-
-
-
-<<[[optab]] entries>>=
-{ AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
-{ AMOVW,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
-{ AMOVW,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
-
-{ AMOVBU,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
-{ AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
-{ AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
-@
-
+\t why SRA vs SRL only for right? why no SLA?
+\t could be made more symetric with case 32
 
 <<[[optab]] entries>>=
 { AMOVB,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
@@ -11029,31 +11089,28 @@ case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
 @
 
 <<[[asmout()]] switch on type cases>>=
-case 31:	/* mov/movbu L(R),R -> lr[b] */
 case 32:	/* movh/movb L(R),R -> lr[b] */
     o1 = omvl(p, &p->from, REGTMP);
-    if(!o1)
-        break;
+    <<[[asmout()]] sanity check o1>>
+
+    rt = p->to.reg;
     r = p->from.reg;
     if(r == R_NONE)
         r = o->param;
-    o2 = olrr(REGTMP,r, p->to.reg, p->scond);
-    if(p->as == AMOVBU || p->as == AMOVB)
+
+    o2 = olrr(REGTMP,r, rt, p->scond);
+    if(p->as == AMOVB)
         o2 |= 1<<22;
-    if(o->type == 31)
-        break;
 
     o3 = oprrr(ASLL, p->scond);
-
-    if(p->as == AMOVBU || p->as == AMOVHU)
+    if(p->as == AMOVHU)
         o4 = oprrr(ASRL, p->scond);
     else
         o4 = oprrr(ASRA, p->scond);
 
-    r = p->to.reg;
-    o3 |= (r)|(r<<12);
-    o4 |= (r)|(r<<12);
-    if(p->as == AMOVB || p->as == AMOVBU) {
+    o3 |= (rt<<12) | rt;
+    o4 |= (rt<<12) | rt;
+    if(p->as == AMOVB) {
         o3 |= (24<<7);
         o4 |= (24<<7);
     } else {
@@ -11063,22 +11120,15 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
     break;
 @
 % >> >> >> >> >> >>  >> >>
-
-<<function olrr(arm)>>=
-long
-olrr(int i, int b, int r, int sc)
-{
-
-    return olr(i, b, r, sc) ^ (1<<25);
-}
-@
-% >>
-
+\t factorize shift
 
 
 
 \subsection{Store}
 \label{sec:store}
+
+%trans:
+% dual = store
 
 <<[[optab]] entries>>=
 { AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
@@ -11095,14 +11145,16 @@ olrr(int i, int b, int r, int sc)
 @
 \l maybe could have been factorized with same representant in the end?
 \l  lots of duplication
+\t also movb here!, why not symetric with load?
 
 <<[[asmout()]] switch on type cases>>=
 case 20:	/* mov/movb/movbu R,O(R) */
     aclass(&p->to);
+    rf = p->from.reg;
     r = p->to.reg;
     if(r == R_NONE)
         r = o->param;
-    o1 = osr(p->as, p->from.reg, instoffset, r, p->scond);
+    o1 = osr(p->as, rf, instoffset, r, p->scond);
     break;
 @
 
@@ -11113,42 +11165,13 @@ osr(int a, int r, long v, int b, int sc)
 {
     long o;
 
-    o = olr(v, b, r, sc) ^ (1<<20);
+    o = olr(v, b, r, sc) ^ (1<<20); // STR
     if(a != AMOVW)
         o |= 1<<22;
     return o;
 }
 @
 % >> >> >> >>
-
-
-<<[[optab]] entries>>=
-{ AMOVH,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
-{ AMOVH,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
-{ AMOVH,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
-
-{ AMOVHU,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
-{ AMOVHU,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
-{ AMOVHU,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 23:	/* movh/movhu R,O(R) -> sb,sb */
-    aclass(&p->to);
-    r = p->to.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o1 = osr(AMOVH, p->from.reg, instoffset, r, p->scond);
-
-    o2 = oprrr(ASRL, p->scond);
-    o2 |= (8<<7)|(p->from.reg)|(REGTMP<<12);
-
-    o3 = osr(AMOVH, REGTMP, instoffset+1, r, p->scond);
-    break;
-@
-% >> >>
-
-
 
 
 
@@ -11169,12 +11192,12 @@ case 23:	/* movh/movhu R,O(R) -> sb,sb */
 <<[[asmout()]] switch on type cases>>=
 case 30:	/* mov/movb/movbu R,L(R) */
     o1 = omvl(p, &p->to, REGTMP);
-    if(!o1)
-        break;
+    <<[[asmout()]] sanity check o1>>
+    rf = p->from.reg;
     r = p->to.reg;
     if(r == R_NONE)
         r = o->param;
-    o2 = osrr(p->from.reg, REGTMP,r, p->scond);
+    o2 = osrr(rf, REGTMP, r, p->scond);
     if(p->as != AMOVW)
         o2 |= 1<<22;
     break;
@@ -11193,6 +11216,41 @@ osrr(int r, int i, int b, int sc)
 
 
 
+
+
+
+
+<<[[optab]] entries>>=
+{ AMOVH,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
+{ AMOVH,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
+{ AMOVH,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
+
+{ AMOVHU,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
+{ AMOVHU,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
+{ AMOVHU,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 23:	/* movh/movhu R,O(R) -> sb,sb */
+    aclass(&p->to);
+    rf = p->from.reg;
+    r = p->to.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o1 = osr(AMOVH, rf, instoffset, r, p->scond);
+
+    o2 = oprrr(ASRL, p->scond);
+    o2 |= (REGTMP<<12) | (8<<7) | rf;
+
+    o3 = osr(AMOVH, REGTMP, instoffset+1, r, p->scond);
+    break;
+@
+% >> >>
+% plus 1? not plus 2?
+
+
+
+
 % 24 size ...
 <<[[optab]] entries>>=
 { AMOVH,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
@@ -11207,32 +11265,31 @@ osrr(int r, int i, int b, int sc)
 <<[[asmout()]] switch on type cases>>=
 case 33:	/* movh/movhu R,L(R) -> sb, sb */
     o1 = omvl(p, &p->to, REGTMP);
-    if(!o1)
-        break;
+    <<[[asmout()]] sanity check o1>>
+    rf = p->from.reg;
     r = p->to.reg;
     if(r == R_NONE)
         r = o->param;
-    o2 = osrr(p->from.reg, REGTMP, r, p->scond);
+    o2 = osrr(rf, REGTMP, r, p->scond);
     o2 |= (1<<22) ;
 
     o3 = oprrr(ASRL, p->scond);
-    o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
+    o3 |= (rf<<12) | (8<<7) | rf;
     o3 |= (1<<6);	/* ROR 8 */
 
     o4 = oprrr(AADD, p->scond);
-    o4 |= (REGTMP << 12) | (REGTMP << 16);
+    o4 |= (REGTMP<<16) | (REGTMP<<12);
     o4 |= immrot(1);
 
-    o5 = osrr(p->from.reg, REGTMP,r,p->scond);
+    o5 = osrr(rf, REGTMP,r,p->scond);
     o5 |= (1<<22);
 
     o6 = oprrr(ASRL, p->scond);
-    o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
+    o6 |= (rf<<12) | (24<<7) | rf;
     o6 |= (1<<6);	/* ROL 8 */
 
     break;
 @
-
 
 
 
@@ -11314,6 +11371,10 @@ case 4:		/* add $I,[R],R */
 % add in comment?
 
 % otherwise C_LCON path, which use pool and load pointer from pool.
+
+\subsection{Half words}
+
+
 
 \section{Software interrupt opcodes}
 
@@ -14291,7 +14352,7 @@ case D_FCONST:
     size += 8;
     break;
 @
-% >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
 % bugfix: there was a bug where it was using NSNAME instead of sizeof(Ieee)
 %  but factorizing code with malloc fixed the issue too.
 
@@ -14326,6 +14387,7 @@ ieeedtof(Ieee *e)
     return v;
 }
 @
+% >> >> >> >>
 
 <<function ieeedtod>>=
 /// Dconv -> <>
@@ -14354,7 +14416,7 @@ ieeedtod(Ieee *ieeep)
     return ldexp(fr, exp);
 }
 @
-
+% >> >> >> >> >> >> >> >> >>
 
 
 
@@ -14421,13 +14483,10 @@ if(immfloat(t))
 @
 %pad: I rewritten the code to aspectize the floating aspect
 
-\subsubsection{XXX}
-
-
+\subsubsection{VFP}
 
 
 <<[[Optab_flag]] cases>>=
-V4		= 1<<3,	/* arm v4 arch */
 VFP		= 1<<4,	/* arm vfpv3 floating point */
 @
 % >> >>
@@ -14437,9 +14496,6 @@ VFP		= 1<<4,	/* arm vfpv3 floating point */
 % instructions which are emulated in the kernel."
 
 <<[[ocmp()]] if floating point flag on p1 or p2>>=
-n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
-if(n)
-    return n;
 n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
 if(n)
     return n;
@@ -14449,24 +14505,17 @@ if(n)
 bool vfp;
 @
 
-% remove? and remove the relevant opcode also in optab? at least aspectize!
-<<global armv4(arm)>>=
-bool	armv4;
-@
 
-<<[[buildop()]] initialize floating flags>>=
-armv4 = !debug['h'];
+
+<<[[buildop()]] initialize flags>>=
 vfp = debug['f'];
 @
 
-<<[[buildop()]] adjust optab if floating flags>>=
+<<[[buildop()]] adjust optab if flags, remove certain rules>>=
 if((optab[n].flag & VFP) && !vfp)
     optab[n].as = AXXX;
-if((optab[n].flag & V4) && !armv4) {
-    optab[n].as = AXXX;
-    break;
-}
 @
+
 
 
 
@@ -14936,6 +14985,14 @@ case 69:	/* floating point load <- ADDR */
 
 \subsubsection{VFP hardware instructions, [[5l -f]]}
 
+%from bcm/arm.h
+%#define CpOFPA		1			/* ancient 7500 FPA */
+% => use coprocessor 1
+
+% "without -f 5l generates arm7500 floating-point
+% instructions which are emulated in the kernel."
+
+% see bcm/fpiarm.c
 
 
 <<function ovfpmem(arm)>>=
@@ -15114,174 +15171,6 @@ case 57:	/* move from FP[CS]R */
     break;
 @
 % >> >> >> >> >> >> >> >
-
-\subsubsection{XXX V4}
-
-
-%from bcm/arm.h
-%#define CpOFPA		1			/* ancient 7500 FPA */
-% => use coprocessor 1
-
-% "without -f 5l generates arm7500 floating-point
-% instructions which are emulated in the kernel."
-
-% see bcm/fpiarm.c
-
-<<[[optab]] entries>>=
-{ AMOVH,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
-{ AMOVH,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
-{ AMOVH,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,		V4 },
-{ AMOVHU,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
-{ AMOVHU,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
-{ AMOVHU,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,		V4 },
-
-{ AMOVB,	C_HEXT,	C_NONE, C_REG,		71, 4, REGSB,	V4 },
-{ AMOVB,	C_HAUTO,C_NONE,	C_REG,		71, 4, REGSP,	V4 },
-{ AMOVB,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
-{ AMOVH,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
-{ AMOVH,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
-{ AMOVH,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
-{ AMOVHU,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
-{ AMOVHU,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
-{ AMOVHU,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
-
-{ AMOVH,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
-{ AMOVH,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
-{ AMOVH,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,		LTO|V4 },
-{ AMOVHU,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
-{ AMOVHU,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
-{ AMOVHU,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,		LTO|V4 },
-
-{ AMOVB,	C_LEXT,	C_NONE, C_REG,		73, 8, REGSB,	LFROM|V4 },
-{ AMOVB,	C_LAUTO,C_NONE,	C_REG,		73, 8, REGSP,	LFROM|V4 },
-{ AMOVB,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
-{ AMOVH,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
-{ AMOVH,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
-{ AMOVH,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
-{ AMOVHU,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
-{ AMOVHU,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
-{ AMOVHU,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
-@
-
-<<[[asmout()]] switch on type cases>>=
-/* ArmV4 ops: */
-case 70:	/* movh/movhu R,O(R) -> strh */
-    aclass(&p->to);
-    r = p->to.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o1 = oshr(p->from.reg, instoffset, r, p->scond);
-    break;	
-@
-<<[[asmout()]] switch on type cases>>=
-case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
-    aclass(&p->from);
-    r = p->from.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o1 = olhr(instoffset, r, p->to.reg, p->scond);
-    if(p->as == AMOVB)
-        o1 ^= (1<<5)|(1<<6);
-    else if(p->as == AMOVH)
-        o1 ^= (1<<6);
-    break;
-@
-% >> >>  >>
-
-<<[[asmout()]] switch on type cases>>=
-case 72:	/* movh/movhu R,L(R) -> strh */
-    o1 = omvl(p, &p->to, REGTMP);
-    if(!o1)
-        break;
-    r = p->to.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
-    break;	
-@
-
-<<[[asmout()]] switch on type cases>>=
-case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
-    o1 = omvl(p, &p->from, REGTMP);
-    if(!o1)
-        break;
-    r = p->from.reg;
-    if(r == R_NONE)
-        r = o->param;
-    o2 = olhrr(REGTMP, r, p->to.reg, p->scond);
-    if(p->as == AMOVB)
-        o2 ^= (1<<5)|(1<<6);
-    else if(p->as == AMOVH)
-        o2 ^= (1<<6);
-    break;
-@
-% >> >> >>
-
-
-<<function olhr(arm)>>=
-long
-olhr(long v, int b, int r, int sc)
-{
-    long o;
-
-    o = (sc & C_SCOND) << 28;
-    if(sc & C_SBIT)
-        diag(".S on LDRH/STRH instruction");
-
-    if(!(sc & C_PBIT))
-        o |= 1 << 24;
-    if(sc & C_WBIT)
-        o |= 1 << 21;
-    o |= (1<<23) | (1<<20)|(0xb<<4);
-    if(v < 0) {
-        v = -v;
-        o ^= 1 << 23;
-    }
-    if(v >= (1<<8))
-        diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
-    o |= (v&0xf)|((v>>4)<<8)|(1<<22);
-    o |= b << 16;
-    o |= r << 12;
-    return o;
-}
-@
-% >> >> >> >> >> >> >> >> >> >> >> >>
-
-
-<<function oshr(arm)>>=
-long
-oshr(int r, long v, int b, int sc)
-{
-    long o;
-
-    o = olhr(v, b, r, sc) ^ (1<<20);
-    return o;
-}
-@
-% >>
-
-
-
-<<function oshrr(arm)>>=
-long
-oshrr(int r, int i, int b, int sc)
-{
-    return olhr(i, b, r, sc) ^ ((1<<22) | (1<<20));
-}
-@
-% >> >>
-
-
-<<function olhrr(arm)>>=
-long
-olhrr(int i, int b, int r, int sc)
-{
-    return olhr(i, b, r, sc) ^ (1<<22);
-}
-@
-% >>
-
-
 
 \subsection{Division}
 \label{sec:div-mod}
@@ -15600,7 +15489,7 @@ case 16:	/* div r,[r,]r */
 % anyway will not use o2 ... since size is 4
 
 
-\subsection{Long mulitplication}
+\subsection{Long multiplication}
 \label{sec:mull}
 % in advanced topic, like I did in Assembler.nw
 
@@ -15751,6 +15640,287 @@ case 37:	/* mov $con,PSR */
     break;
 @
 %$
+
+\subsection{Half and byte moves since ARMv4}
+\label{sec:armv4}
+
+<<global armv4(arm)>>=
+bool	armv4;
+@
+<<[[buildop()]] initialize flags>>=
+armv4 = !debug['h'];
+@
+% on by default
+
+<<[[Optab_flag]] cases>>=
+V4		= 1<<3,	/* arm v4 arch */
+@
+% >>
+
+<<[[buildop()]] adjust optab if flags, remove certain rules>>=
+if((optab[n].flag & V4) && !armv4) {
+    optab[n].as = AXXX;
+    break;
+}
+@
+
+<<[[ocmp()]] if v4 flag on p1 or p2>>=
+n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
+if(n)
+    return n;
+@
+% so V4 rules first, so C_LEXT of v4 has prio over C_LEXT of non v4
+
+
+
+
+
+<<[[Operand_class]] cases, in C_xEXT, half case>>=
+C_HEXT,
+@
+
+<<[[aclass()]] if immhalf for N_EXTERN symbol>>=
+if(immhalf(instoffset))
+    return C_HEXT;
+@
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_HFEXT:
+    return b == C_HEXT || b == C_FEXT;
+case C_FEXT:
+case C_HEXT:
+    return b == C_HFEXT;
+@
+
+
+<<[[Operand_class]] cases, in C_xAUTO, half case>>=
+C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+@
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_HFAUTO:
+    return b == C_HAUTO || b == C_FAUTO;
+case C_FAUTO:
+case C_HAUTO:
+    return b == C_HFAUTO;
+@
+
+<<[[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol>>=
+if(immhalf(instoffset))
+    return C_HAUTO;
+@
+
+
+
+
+<<[[Operand_class]] cases, in C_xOREG, half case>>=
+C_HOREG,
+@
+
+<<[[aclass()]] if immhalf for N_NONE symbol>>=
+ /* n.b. that immhalf() will also satisfy immrot */
+if(immhalf(instoffset))	
+    return C_HOREG;
+@
+
+
+<<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
+case C_HFOREG:
+    return b == C_HOREG || b == C_FOREG;
+case C_FOREG:
+case C_HOREG:
+    return b == C_HFOREG;
+@
+
+%\subsection{Half immediate address, [[immhalf()]]}
+
+<<function immhalf(arm)>>=
+int
+immhalf(long v)
+{
+    if(v >= 0 && v <= 0xff)
+        return v |
+            (1<<24)  |	/* pre indexing */
+            (1<<23);	/* pre indexing, up */
+    if(v >= -0xff && v < 0)
+        return (-v & 0xff)|
+            (1<<24);	/* pre indexing */
+    return 0;
+}
+@
+% >> >> >>
+% seems identical to immhalf no? no now it's 0xff! not 0xfff
+
+
+
+
+
+
+
+<<[[optab]] entries>>=
+{ AMOVH,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
+{ AMOVH,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
+{ AMOVH,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,		V4 },
+
+{ AMOVHU,	C_REG,	C_NONE,	C_HEXT,		70, 4, REGSB,	V4 },
+{ AMOVHU,	C_REG,	C_NONE, C_HAUTO,	70, 4, REGSP,	V4 },
+{ AMOVHU,	C_REG,	C_NONE,	C_HOREG,	70, 4, 0,		V4 },
+
+
+{ AMOVB,	C_HEXT,	C_NONE, C_REG,		71, 4, REGSB,	V4 },
+{ AMOVB,	C_HAUTO,C_NONE,	C_REG,		71, 4, REGSP,	V4 },
+{ AMOVB,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
+
+{ AMOVH,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
+{ AMOVH,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
+{ AMOVH,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
+
+{ AMOVHU,	C_HEXT,	C_NONE,	C_REG,		71, 4, REGSB,	V4 },
+{ AMOVHU,	C_HAUTO,C_NONE, C_REG,		71, 4, REGSP,	V4 },
+{ AMOVHU,	C_HOREG,C_NONE,	C_REG,		71, 4, 0,		V4 },
+
+
+{ AMOVH,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
+{ AMOVH,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
+{ AMOVH,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,		LTO|V4 },
+
+{ AMOVHU,	C_REG,	C_NONE,	C_LEXT,		72, 8, REGSB,	LTO|V4 },
+{ AMOVHU,	C_REG,	C_NONE, C_LAUTO,	72, 8, REGSP,	LTO|V4 },
+{ AMOVHU,	C_REG,	C_NONE,	C_LOREG,	72, 8, 0,		LTO|V4 },
+
+
+{ AMOVB,	C_LEXT,	C_NONE, C_REG,		73, 8, REGSB,	LFROM|V4 },
+{ AMOVB,	C_LAUTO,C_NONE,	C_REG,		73, 8, REGSP,	LFROM|V4 },
+{ AMOVB,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
+
+{ AMOVH,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
+{ AMOVH,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
+{ AMOVH,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
+
+{ AMOVHU,	C_LEXT,	C_NONE,	C_REG,		73, 8, REGSB,	LFROM|V4 },
+{ AMOVHU,	C_LAUTO,C_NONE, C_REG,		73, 8, REGSP,	LFROM|V4 },
+{ AMOVHU,	C_LOREG,C_NONE,	C_REG,		73, 8, 0,		LFROM|V4 },
+@
+
+<<[[asmout()]] switch on type cases>>=
+/* ArmV4 ops: */
+case 70:	/* movh/movhu R,O(R) -> strh */
+    aclass(&p->to);
+    r = p->to.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o1 = oshr(p->from.reg, instoffset, r, p->scond);
+    break;	
+@
+<<[[asmout()]] switch on type cases>>=
+case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
+    aclass(&p->from);
+    r = p->from.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o1 = olhr(instoffset, r, p->to.reg, p->scond);
+    if(p->as == AMOVB)
+        o1 ^= (1<<5)|(1<<6);
+    else if(p->as == AMOVH)
+        o1 ^= (1<<6);
+    break;
+@
+% >> >>  >>
+
+<<[[asmout()]] switch on type cases>>=
+case 72:	/* movh/movhu R,L(R) -> strh */
+    o1 = omvl(p, &p->to, REGTMP);
+    if(!o1)
+        break;
+    r = p->to.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
+    break;	
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
+    o1 = omvl(p, &p->from, REGTMP);
+    if(!o1)
+        break;
+    r = p->from.reg;
+    if(r == R_NONE)
+        r = o->param;
+    o2 = olhrr(REGTMP, r, p->to.reg, p->scond);
+    if(p->as == AMOVB)
+        o2 ^= (1<<5)|(1<<6);
+    else if(p->as == AMOVH)
+        o2 ^= (1<<6);
+    break;
+@
+% >> >> >>
+
+
+<<function olhr(arm)>>=
+long
+olhr(long v, int b, int r, int sc)
+{
+    long o;
+
+    o = (sc & C_SCOND) << 28;
+    if(sc & C_SBIT)
+        diag(".S on LDRH/STRH instruction");
+
+    if(!(sc & C_PBIT))
+        o |= 1 << 24;
+    if(sc & C_WBIT)
+        o |= 1 << 21;
+    o |= (1<<23) | (1<<20) | (0xb<<4);
+    if(v < 0) {
+        v = -v;
+        o ^= 1 << 23;
+    }
+    if(v >= (1<<8))
+        diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
+    o |= (v&0xf)|((v>>4)<<8)|(1<<22);
+    o |= b << 16;
+    o |= r << 12;
+    return o;
+}
+@
+% >> >> >> >> >> >> >> >> >> >> >> >>
+
+
+<<function oshr(arm)>>=
+long
+oshr(int r, long v, int b, int sc)
+{
+    long o;
+
+    o = olhr(v, b, r, sc) ^ (1<<20);
+    return o;
+}
+@
+% >>
+
+
+
+<<function oshrr(arm)>>=
+long
+oshrr(int r, int i, int b, int sc)
+{
+    return olhr(i, b, r, sc) ^ ((1<<22) | (1<<20));
+}
+@
+% >> >>
+
+
+<<function olhrr(arm)>>=
+long
+olhrr(int i, int b, int r, int sc)
+{
+    return olhr(i, b, r, sc) ^ (1<<22);
+}
+@
+% >>
+
+
 
 \subsection{Shifted moves}
 

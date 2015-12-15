@@ -1345,10 +1345,6 @@ doprof1(void)
             q = prg();
             q->line = p->line;
 
-            // add_list(q, datap)
-            q->link = datap;
-            datap = q;
-
             // DATA __mcount +n*4(SB), 4,  $p->syn //$
             q->as = ADATA;
             q->from.type = D_OREG;
@@ -1359,12 +1355,19 @@ doprof1(void)
             q->to = p->from;
             q->to.type = D_ADDR;
 
+            // add_list(q, datap)
+            q->link = datap;
+            datap = q;
+
+
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
-            
+
+            // add_after(q, p)            
             q->link = p->link;
             p->link = q;
+
             p = q;
 
             // MOVW p->s + n*4+4(SB), R11
@@ -1379,8 +1382,11 @@ doprof1(void)
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+
+            // add_after(q, p)            
             q->link = p->link;
             p->link = q;
+
             p = q;
 
             // ADD, $1, R11 //$
@@ -1393,8 +1399,11 @@ doprof1(void)
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+
+            // add_after(q, p)            
             q->link = p->link;
             p->link = q;
+
             p = q;
 
             // MOVW R11, 
@@ -1412,6 +1421,8 @@ doprof1(void)
     }
     q = prg();
     q->line = 0;
+
+    // add_list(q, datap)
     q->link = datap;
     datap = q;
 

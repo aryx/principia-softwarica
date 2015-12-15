@@ -244,8 +244,9 @@ enum Optab_flag {
     LTO		= 1<<1,
     LPOOL	= 1<<2,
     /*s: [[Optab_flag]] cases */
-    V4		= 1<<3,	/* arm v4 arch */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
+    /*x: [[Optab_flag]] cases */
+    V4		= 1<<3,	/* arm v4 arch */
     /*e: [[Optab_flag]] cases */
 };
 /*e: enum Optab_flag(arm) */
@@ -265,7 +266,9 @@ enum Operand_class {
 
     // D_OREG
     /*s: [[Operand_class]] C_xOREG cases */
+    /*s: [[Operand_class]] cases, in C_xOREG, half case */
     C_HOREG,
+    /*e: [[Operand_class]] cases, in C_xOREG, half case */
     /*s: [[Operand_class]] cases, in C_xOREG, float cases */
     C_FOREG,
     C_HFOREG,
@@ -278,7 +281,9 @@ enum Operand_class {
     /*e: [[Operand_class]] C_xOREG cases */
     // D_OREG with symbol N_EXTERN (or N_INTERN)
     /*s: [[Operand_class]] C_xEXT cases */
+    /*s: [[Operand_class]] cases, in C_xEXT, half case */
     C_HEXT,
+    /*e: [[Operand_class]] cases, in C_xEXT, half case */
     /*s: [[Operand_class]] cases, in C_xEXT, float cases */
     C_FEXT,
     C_HFEXT,
@@ -288,7 +293,9 @@ enum Operand_class {
     /*e: [[Operand_class]] C_xEXT cases */
     // D_OREG with symbol N_PARAM or N_LOCAL
     /*s: [[Operand_class]] C_xAUTO cases */
+    /*s: [[Operand_class]] cases, in C_xAUTO, half case */
     C_HAUTO,	/* halfword insn offset (-0xff to 0xff) */
+    /*e: [[Operand_class]] cases, in C_xAUTO, half case */
     /*s: [[Operand_class]] cases, in C_xAUTO, float cases */
     C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
     C_HFAUTO,	/* both H and F */

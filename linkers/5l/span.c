@@ -391,7 +391,11 @@ aclass(Adr *a)
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFEXT : C_FEXT;
                 /*e: [[aclass()]] if immfloat for N_EXTERN symbol */
-                return immhalf(instoffset)? C_HEXT : C_SEXT;
+                /*s: [[aclass()]] if immhalf for N_EXTERN symbol */
+                if(immhalf(instoffset))
+                    return C_HEXT;
+                /*e: [[aclass()]] if immhalf for N_EXTERN symbol */
+                return C_SEXT;
             }
             return C_LEXT;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
@@ -403,7 +407,11 @@ aclass(Adr *a)
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
                 /*e: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
-                return immhalf(instoffset)? C_HAUTO : C_SAUTO;
+                /*s: [[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol */
+                if(immhalf(instoffset))
+                    return C_HAUTO;
+                /*e: [[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol */
+                return C_SAUTO;
             }
             return C_LAUTO;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
@@ -415,7 +423,11 @@ aclass(Adr *a)
                 if(immfloat(t))
                     return immhalf(instoffset)? C_HFAUTO : C_FAUTO;
                 /*e: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
-                return immhalf(instoffset)? C_HAUTO : C_SAUTO;
+                /*s: [[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol */
+                if(immhalf(instoffset))
+                    return C_HAUTO;
+                /*e: [[aclass()]] if immhalf for N_LOCAL or N_PARAM symbol */
+                return C_SAUTO;
             }
             return C_LAUTO;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
@@ -428,10 +440,11 @@ aclass(Adr *a)
                     return immhalf(instoffset)? C_HFOREG : C_FOREG;
                     /* n.b. that [C_FOREG] will also satisfy immrot */
                 /*e: [[aclass()]] if immfloat for N_NONE symbol */
-
+                /*s: [[aclass()]] if immhalf for N_NONE symbol */
                  /* n.b. that immhalf() will also satisfy immrot */
                 if(immhalf(instoffset))	
                     return C_HOREG;
+                /*e: [[aclass()]] if immhalf for N_NONE symbol */
                 if(immrot(instoffset))
                     return C_SROREG;
                 return C_SOREG;
@@ -623,31 +636,16 @@ cmp(int a, int b)
             return true;
         break;
     /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_HFEXT:
-        return b == C_HEXT || b == C_FEXT;
-    case C_FEXT:
-    case C_HEXT:
-        return b == C_HFEXT;
     case C_SEXT:
         return cmp(C_HFEXT, b);
     case C_LEXT:
         return cmp(C_SEXT, b);
     /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_HFAUTO:
-        return b == C_HAUTO || b == C_FAUTO;
-    case C_FAUTO:
-    case C_HAUTO:
-        return b == C_HFAUTO;
     case C_SAUTO:
         return cmp(C_HFAUTO, b);
     case C_LAUTO:
         return cmp(C_SAUTO, b);
     /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_HFOREG:
-        return b == C_HOREG || b == C_FOREG;
-    case C_FOREG:
-    case C_HOREG:
-        return b == C_HFOREG;
     case C_SROREG:
         return cmp(C_SOREG, b) || cmp(C_ROREG, b);
     case C_SOREG:
@@ -660,6 +658,24 @@ cmp(int a, int b)
         if(b == C_RACON)
             return true;
         break;
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_HFEXT:
+        return b == C_HEXT || b == C_FEXT;
+    case C_FEXT:
+    case C_HEXT:
+        return b == C_HFEXT;
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_HFAUTO:
+        return b == C_HAUTO || b == C_FAUTO;
+    case C_FAUTO:
+    case C_HAUTO:
+        return b == C_HFAUTO;
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_HFOREG:
+        return b == C_HOREG || b == C_FOREG;
+    case C_FOREG:
+    case C_HOREG:
+        return b == C_HFOREG;
     /*e: [[cmp()]] switch on a, the operand class in optab rule, cases */
     }
     return false;
@@ -680,10 +696,12 @@ ocmp(const void *a, const void *b)
     n = p1->as - p2->as;
     if(n)
         return n;
-    /*s: [[ocmp()]] if floating point flag on p1 or p2 */
+    /*s: [[ocmp()]] if v4 flag on p1 or p2 */
     n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
     if(n)
         return n;
+    /*e: [[ocmp()]] if v4 flag on p1 or p2 */
+    /*s: [[ocmp()]] if floating point flag on p1 or p2 */
     n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
     if(n)
         return n;
@@ -716,20 +734,22 @@ buildop(void)
         for(n=0; n<C_GOK; n++)
             xcmp[i][n] = cmp(n, i);
     /*e: [[buildop()]] initialize xcmp cache */
-    /*s: [[buildop()]] initialize floating flags */
-    armv4 = !debug['h'];
+    /*s: [[buildop()]] initialize flags */
     vfp = debug['f'];
-    /*e: [[buildop()]] initialize floating flags */
+    /*x: [[buildop()]] initialize flags */
+    armv4 = !debug['h'];
+    /*e: [[buildop()]] initialize flags */
 
     for(n=0; optab[n].as != AXXX; n++) {
-        /*s: [[buildop()]] adjust optab if floating flags */
+        /*s: [[buildop()]] adjust optab if flags, remove certain rules */
         if((optab[n].flag & VFP) && !vfp)
             optab[n].as = AXXX;
+        /*x: [[buildop()]] adjust optab if flags, remove certain rules */
         if((optab[n].flag & V4) && !armv4) {
             optab[n].as = AXXX;
             break;
         }
-        /*e: [[buildop()]] adjust optab if floating flags */
+        /*e: [[buildop()]] adjust optab if flags, remove certain rules */
     }
     // n contains now the size of optab
 

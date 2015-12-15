@@ -720,8 +720,14 @@ asmout(Prog *p, Optab *o)
     // ARM 32 bits instructions, set in the switch
     long o1, o2, o3, o4, o5, o6;
     /*s: [[asmout()]] other locals */
-    int r, rf, rt, rt2;
+    int rf; // register ``from''
+    int rt; // register ``to''
+    int r;  // middle register
     Sym *s;
+    /*x: [[asmout()]] other locals */
+    int c;
+    /*x: [[asmout()]] other locals */
+    int rt2;
     /*x: [[asmout()]] other locals */
     // pc (real)
     long v;
@@ -739,8 +745,9 @@ asmout(Prog *p, Optab *o)
         break;
     /*x: [[asmout()]] switch on type cases */
     case 11:	/* word */
-        switch(aclass(&p->to)) {
-        /*s: [[asmout()]] on WORD case, switch class cases */
+        c = aclass(&p->to);
+        /*s: [[asmout()]] in WORD case, when dlm */
+        switch(c) {
         case C_LCON:
             if(!dlm)
                 break;
@@ -751,8 +758,8 @@ asmout(Prog *p, Optab *o)
             if(p->to.sym->type == SUNDEF)
                 ckoff(p->to.sym, p->to.offset);
             dynreloc(p->to.sym, p->pc, 1);
-        /*e: [[asmout()]] on WORD case, switch class cases */
         }
+        /*e: [[asmout()]] in WORD case, when dlm */
         o1 = instoffset;
         break;
     /*x: [[asmout()]] switch on type cases */
@@ -772,7 +779,7 @@ asmout(Prog *p, Optab *o)
               r = rt;
           /*e: [[asmout()]] adjust [[r]] */
         /*e: [[asmout()]] adjust [[r]] and [[rt]] */
-        o1 |= rf | (r<<16) | (rt<<12);
+        o1 |= (r<<16) | (rt<<12) | rf;
         break;
     /*x: [[asmout()]] switch on type cases */
     case 2:		/* op $I,[R],R */
@@ -825,18 +832,19 @@ asmout(Prog *p, Optab *o)
         if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO
             r = rt;
         /*e: [[asmout()]] adjust [[r]] */
-        o1 |= r | ((instoffset&31) << 7) | (rt << 12);
+        o1 |= (rt<<12) | ((instoffset&31) << 7) | r;
         break;
     /*x: [[asmout()]] switch on type cases */
     case 9:		/* sll R,[R],R -> mov (R<<R),R */
         o1 = oprrr(p->as, p->scond);
+        rf = p->from.reg;
         rt = p->to.reg;
         r = p->reg;
         /*s: [[asmout()]] adjust [[r]] */
         if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO
             r = rt;
         /*e: [[asmout()]] adjust [[r]] */
-        o1 |= r | ((p->from.reg << 8) | (1<<4)) | (rt << 12);
+        o1 |= (rt<<12) | (rf<<8) | (1<<4) | r ;
         break;
     /*x: [[asmout()]] switch on type cases */
     case 15:	/* mul r,[r,]r */
@@ -854,7 +862,7 @@ asmout(Prog *p, Optab *o)
             rf = rt;
         }
         /*e: [[asmout()]] adjust registers when mul */
-        o1 |= (rf<<8) | r | (rt<<16);
+        o1 |= (rt<<16) | (rf<<8) | r;
         break;
     /*x: [[asmout()]] switch on type cases */
     case 14:	/* movb/movbu/movh/movhu R,R */
@@ -867,8 +875,8 @@ asmout(Prog *p, Optab *o)
 
         rf = p->from.reg;
         rt = p->to.reg;
-        o1 |= rf|(rt<<12);
-        o2 |= (rt)|(rt<<12);
+        o1 |= (rt<<12) | rf;
+        o2 |= (rt<<12) | rt;
         if(p->as == AMOVB || p->as == AMOVBU) {
             o1 |= (24<<7);
             o2 |= (24<<7);
@@ -910,7 +918,7 @@ asmout(Prog *p, Optab *o)
           if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO
               r = rt;
           /*e: [[asmout()]] adjust [[r]] */
-        o2 |= rf | (r<<16);
+        o2 |= (r<<16) | rf;
         if(p->to.type != D_NONE)
             o2 |= rt << 12;
         break;
@@ -931,27 +939,33 @@ asmout(Prog *p, Optab *o)
         /*e: [[asmout()]] BRA case, if undefined target */
         else 
           if(p->cond != P)
-            v = (p->cond->pc - pc) - 8;
+            v = (p->cond->pc - p->pc) - 8;
           else 
             v = -8; // warning?
         o1 = opbra(p->as, p->scond);
         o1 |= (v >> 2) & 0xffffff;
         break;
     /*x: [[asmout()]] switch on type cases */
-    case 6:		/* b ,O(R) -> add $O,R,PC */
+    case 6:		/* b O(R) -> add $O,R,PC */
         aclass(&p->to);
         o1 = oprrr(AADD, p->scond);
         o1 |= immrot(instoffset);
-        o1 |= (p->to.reg << 16) | (REGPC << 12);
+        r = p->to.reg;
+        rt = REGPC; 
+        o1 |= (r<<16) | (rt<<12);
         break;
     /*x: [[asmout()]] switch on type cases */
-    case 7:		/* bl ,O(R) -> mov PC,link; add $O,R,PC */
+    case 7:		/* bl Offset(R) -> ADD $0,PC,LINK; add $Offset,R,PC */
         aclass(&p->to);
         o1 = oprrr(AADD, p->scond);
-        o1 |= immrot(0) | (REGPC << 16) | (REGLINK << 12);
+        rt = REGLINK;
+        r = REGPC;
+        o1 |= (r<<16) | (rt<<12) | immrot(0);
 
         o2 = oprrr(AADD, p->scond);
-        o2 |= immrot(instoffset) | (p->to.reg << 16) | (REGPC << 12);
+        r = p->to.reg;
+        rt = REGPC;
+        o2 |= (r<<16) | (rt<<12) | immrot(instoffset);
         break;
     /*x: [[asmout()]] switch on type cases */
     case 21:	/* mov/movbu O(R),R -> lr */
@@ -960,56 +974,72 @@ asmout(Prog *p, Optab *o)
         if(r == R_NONE)
             r = o->param;
         o1 = olr(instoffset, r, p->to.reg, p->scond);
-        if(p->as != AMOVW)
+        if(p->as == AMOVBU)
             o1 |= 1<<22;
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 31:	/* mov/movbu L(R),R -> lr[b] */
+        o1 = omvl(p, &p->from, REGTMP);
+        /*s: [[asmout()]] sanity check o1 */
+        if(!o1)
+            break;
+        /*e: [[asmout()]] sanity check o1 */
+
+        rt = p->to.reg;
+        r = p->from.reg;
+        if(r == R_NONE)
+            r = o->param;
+        o2 = olrr(REGTMP, r, rt, p->scond);
+        if(p->as == AMOVBU)
+            o2 |= 1<<22;
         break;
     /*x: [[asmout()]] switch on type cases */
     case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
         aclass(&p->from);
+        rt = p->to.reg;
         r = p->from.reg;
         if(r == R_NONE)
             r = o->param;
-        o1 = olr(instoffset, r, p->to.reg, p->scond);
+        o1 = olr(instoffset, r, rt, p->scond);
 
         o2 = oprrr(ASLL, p->scond);
         o3 = oprrr(ASRA, p->scond);
-        r = p->to.reg;
         if(p->as == AMOVB) {
-            o2 |= (24<<7)|(r)|(r<<12);
-            o3 |= (24<<7)|(r)|(r<<12);
+            o2 |= (rt<<12) | (24<<7) | rt;
+            o3 |= (rt<<12) | (24<<7) | rt;
         } else {
-            o2 |= (16<<7)|(r)|(r<<12);
+            o2 |= (rt<<12) | (16<<7) | rt;
             if(p->as == AMOVHU)
                 o3 = oprrr(ASRL, p->scond);
-            o3 |= (16<<7)|(r)|(r<<12);
+            o3 |= (rt<<12) | (16<<7) | rt;
         }
         break;
     /*x: [[asmout()]] switch on type cases */
-    case 31:	/* mov/movbu L(R),R -> lr[b] */
     case 32:	/* movh/movb L(R),R -> lr[b] */
         o1 = omvl(p, &p->from, REGTMP);
+        /*s: [[asmout()]] sanity check o1 */
         if(!o1)
             break;
+        /*e: [[asmout()]] sanity check o1 */
+
+        rt = p->to.reg;
         r = p->from.reg;
         if(r == R_NONE)
             r = o->param;
-        o2 = olrr(REGTMP,r, p->to.reg, p->scond);
-        if(p->as == AMOVBU || p->as == AMOVB)
+
+        o2 = olrr(REGTMP,r, rt, p->scond);
+        if(p->as == AMOVB)
             o2 |= 1<<22;
-        if(o->type == 31)
-            break;
 
         o3 = oprrr(ASLL, p->scond);
-
-        if(p->as == AMOVBU || p->as == AMOVHU)
+        if(p->as == AMOVHU)
             o4 = oprrr(ASRL, p->scond);
         else
             o4 = oprrr(ASRA, p->scond);
 
-        r = p->to.reg;
-        o3 |= (r)|(r<<12);
-        o4 |= (r)|(r<<12);
-        if(p->as == AMOVB || p->as == AMOVBU) {
+        o3 |= (rt<<12) | rt;
+        o4 |= (rt<<12) | rt;
+        if(p->as == AMOVB) {
             o3 |= (24<<7);
             o4 |= (24<<7);
         } else {
@@ -1020,60 +1050,68 @@ asmout(Prog *p, Optab *o)
     /*x: [[asmout()]] switch on type cases */
     case 20:	/* mov/movb/movbu R,O(R) */
         aclass(&p->to);
+        rf = p->from.reg;
         r = p->to.reg;
         if(r == R_NONE)
             r = o->param;
-        o1 = osr(p->as, p->from.reg, instoffset, r, p->scond);
-        break;
-    /*x: [[asmout()]] switch on type cases */
-    case 23:	/* movh/movhu R,O(R) -> sb,sb */
-        aclass(&p->to);
-        r = p->to.reg;
-        if(r == R_NONE)
-            r = o->param;
-        o1 = osr(AMOVH, p->from.reg, instoffset, r, p->scond);
-
-        o2 = oprrr(ASRL, p->scond);
-        o2 |= (8<<7)|(p->from.reg)|(REGTMP<<12);
-
-        o3 = osr(AMOVH, REGTMP, instoffset+1, r, p->scond);
+        o1 = osr(p->as, rf, instoffset, r, p->scond);
         break;
     /*x: [[asmout()]] switch on type cases */
     case 30:	/* mov/movb/movbu R,L(R) */
         o1 = omvl(p, &p->to, REGTMP);
+        /*s: [[asmout()]] sanity check o1 */
         if(!o1)
             break;
+        /*e: [[asmout()]] sanity check o1 */
+        rf = p->from.reg;
         r = p->to.reg;
         if(r == R_NONE)
             r = o->param;
-        o2 = osrr(p->from.reg, REGTMP,r, p->scond);
+        o2 = osrr(rf, REGTMP, r, p->scond);
         if(p->as != AMOVW)
             o2 |= 1<<22;
         break;
     /*x: [[asmout()]] switch on type cases */
-    case 33:	/* movh/movhu R,L(R) -> sb, sb */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
+    case 23:	/* movh/movhu R,O(R) -> sb,sb */
+        aclass(&p->to);
+        rf = p->from.reg;
         r = p->to.reg;
         if(r == R_NONE)
             r = o->param;
-        o2 = osrr(p->from.reg, REGTMP, r, p->scond);
+        o1 = osr(AMOVH, rf, instoffset, r, p->scond);
+
+        o2 = oprrr(ASRL, p->scond);
+        o2 |= (REGTMP<<12) | (8<<7) | rf;
+
+        o3 = osr(AMOVH, REGTMP, instoffset+1, r, p->scond);
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 33:	/* movh/movhu R,L(R) -> sb, sb */
+        o1 = omvl(p, &p->to, REGTMP);
+        /*s: [[asmout()]] sanity check o1 */
+        if(!o1)
+            break;
+        /*e: [[asmout()]] sanity check o1 */
+        rf = p->from.reg;
+        r = p->to.reg;
+        if(r == R_NONE)
+            r = o->param;
+        o2 = osrr(rf, REGTMP, r, p->scond);
         o2 |= (1<<22) ;
 
         o3 = oprrr(ASRL, p->scond);
-        o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
+        o3 |= (rf<<12) | (8<<7) | rf;
         o3 |= (1<<6);	/* ROR 8 */
 
         o4 = oprrr(AADD, p->scond);
-        o4 |= (REGTMP << 12) | (REGTMP << 16);
+        o4 |= (REGTMP<<16) | (REGTMP<<12);
         o4 |= immrot(1);
 
-        o5 = osrr(p->from.reg, REGTMP,r,p->scond);
+        o5 = osrr(rf, REGTMP,r,p->scond);
         o5 |= (1<<22);
 
         o6 = oprrr(ASRL, p->scond);
-        o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
+        o6 |= (rf<<12) | (24<<7) | rf;
         o6 |= (1<<6);	/* ROL 8 */
 
         break;
@@ -1340,51 +1378,6 @@ asmout(Prog *p, Optab *o)
         o1 |= ((p->from.reg+1)<<21) | (p->to.reg<<12) | (1<<20);
         break;
     /*x: [[asmout()]] switch on type cases */
-    /* ArmV4 ops: */
-    case 70:	/* movh/movhu R,O(R) -> strh */
-        aclass(&p->to);
-        r = p->to.reg;
-        if(r == R_NONE)
-            r = o->param;
-        o1 = oshr(p->from.reg, instoffset, r, p->scond);
-        break;	
-    /*x: [[asmout()]] switch on type cases */
-    case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
-        aclass(&p->from);
-        r = p->from.reg;
-        if(r == R_NONE)
-            r = o->param;
-        o1 = olhr(instoffset, r, p->to.reg, p->scond);
-        if(p->as == AMOVB)
-            o1 ^= (1<<5)|(1<<6);
-        else if(p->as == AMOVH)
-            o1 ^= (1<<6);
-        break;
-    /*x: [[asmout()]] switch on type cases */
-    case 72:	/* movh/movhu R,L(R) -> strh */
-        o1 = omvl(p, &p->to, REGTMP);
-        if(!o1)
-            break;
-        r = p->to.reg;
-        if(r == R_NONE)
-            r = o->param;
-        o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
-        break;	
-    /*x: [[asmout()]] switch on type cases */
-    case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
-        o1 = omvl(p, &p->from, REGTMP);
-        if(!o1)
-            break;
-        r = p->from.reg;
-        if(r == R_NONE)
-            r = o->param;
-        o2 = olhrr(REGTMP, r, p->to.reg, p->scond);
-        if(p->as == AMOVB)
-            o2 ^= (1<<5)|(1<<6);
-        else if(p->as == AMOVH)
-            o2 ^= (1<<6);
-        break;
-    /*x: [[asmout()]] switch on type cases */
     case 16:	/* div r,[r,]r */
         o1 = 0xf << 28;
         o2 = 0;
@@ -1450,6 +1443,51 @@ asmout(Prog *p, Optab *o)
         o1 |= immrot(instoffset);
         o1 |= (p->to.reg & 1) << 22;
         o1 |= p->from.reg << 0;
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    /* ArmV4 ops: */
+    case 70:	/* movh/movhu R,O(R) -> strh */
+        aclass(&p->to);
+        r = p->to.reg;
+        if(r == R_NONE)
+            r = o->param;
+        o1 = oshr(p->from.reg, instoffset, r, p->scond);
+        break;	
+    /*x: [[asmout()]] switch on type cases */
+    case 71:	/* movb/movh/movhu O(R),R -> ldrsb/ldrsh/ldrh */
+        aclass(&p->from);
+        r = p->from.reg;
+        if(r == R_NONE)
+            r = o->param;
+        o1 = olhr(instoffset, r, p->to.reg, p->scond);
+        if(p->as == AMOVB)
+            o1 ^= (1<<5)|(1<<6);
+        else if(p->as == AMOVH)
+            o1 ^= (1<<6);
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 72:	/* movh/movhu R,L(R) -> strh */
+        o1 = omvl(p, &p->to, REGTMP);
+        if(!o1)
+            break;
+        r = p->to.reg;
+        if(r == R_NONE)
+            r = o->param;
+        o2 = oshrr(p->from.reg, REGTMP,r, p->scond);
+        break;	
+    /*x: [[asmout()]] switch on type cases */
+    case 73:	/* movb/movh/movhu L(R),R -> ldrsb/ldrsh/ldrh */
+        o1 = omvl(p, &p->from, REGTMP);
+        if(!o1)
+            break;
+        r = p->from.reg;
+        if(r == R_NONE)
+            r = o->param;
+        o2 = olhrr(REGTMP, r, p->to.reg, p->scond);
+        if(p->as == AMOVB)
+            o2 ^= (1<<5)|(1<<6);
+        else if(p->as == AMOVH)
+            o2 ^= (1<<6);
         break;
     /*x: [[asmout()]] switch on type cases */
     case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
@@ -1590,7 +1628,7 @@ oprrr(int a, int sc)
     long o;
 
     // bits 28 to 32
-    o = (sc & C_SCOND) << 28;
+    o = (sc&C_SCOND) << 28;
     /*s: [[oprrr()]] sign bit handling */
     if(sc & C_SBIT)
         o |= 1 << 20;
@@ -1616,9 +1654,9 @@ oprrr(int a, int sc)
     case ACMP:	return o | (0xa<<21) | (1<<20);
     case ACMN:	return o | (0xb<<21) | (1<<20);
     case AORR:	return o | (0xc<<21);
-    case AMOVW:	return o | (0xd<<21);
+    case AMOVW:	return o | (0xd<<21); // MOV
     case ABIC:	return o | (0xe<<21);
-    case AMVN:	return o | (0xf<<21);
+    case AMVN:	return o | (0xf<<21); // MVN
 
     // bits 20 to 27
     /*s: [[oprrr()]] switch cases */
@@ -1709,16 +1747,21 @@ long
 opbra(int a, int sc)
 {
 
+    /*s: [[opbra()]] sanity check sc */
     if(sc & (C_SBIT|C_PBIT|C_WBIT))
         diag(".S/.P/.W on bra instruction");
+    /*e: [[opbra()]] sanity check sc */
     sc &= C_SCOND;
     if(a == ABL)
         return (sc<<28)|(0x5<<25)|(0x1<<24);
-
+    /*s: [[opbra()]] sanity check sc if not ABL */
     if(sc != 0xe)
-        diag(".COND on bcond instruction");
+        diag("redundant .EQ/.NE/... on B/BEQ/BNE/...  instruction");
+    /*e: [[opbra()]] sanity check sc if not ABL */
 
     switch(a) {
+    // manual setting of the conditional execution
+    // bits 28 to 32
     case ABEQ:	return (0x0<<28)|(0x5<<25);
     case ABNE:	return (0x1<<28)|(0x5<<25);
     case ABHS:	return (0x2<<28)|(0x5<<25);
@@ -1743,29 +1786,34 @@ opbra(int a, int sc)
 
 /*s: function olr(arm) */
 long
-olr(long v, int b, int r, int sc)
+olr(long v, int b, int rt, int sc)
 {
     long o;
 
-    o = (sc & C_SCOND) << 28;
+    o = (sc&C_SCOND) << 28;
+    /*s: [[olr()]] sanity check sc */
     if(sc & C_SBIT)
         diag(".S on LDR/STR instruction");
+    /*e: [[olr()]] sanity check sc */
+
+    /*s: [[olr()]] set special bits */
     if(!(sc & C_PBIT))
         o |= 1 << 24;
     if(!(sc & C_UBIT))
-        o |= 1 << 23;
+        o |= 1 << 23; // reset back if negatif offset
     if(sc & C_WBIT)
         o |= 1 << 21;
-    o |= (0x1<<26) | (1<<20);
+    /*e: [[olr()]] set special bits */
+    o |= (0x1<<26) | (1<<20); // LDR
     if(v < 0) {
         v = -v;
         o ^= 1 << 23;
     }
+    /*s: [[olr()]] sanity check offset [[v]] */
     if(v >= (1<<12))
         diag("literal span too large: %ld (R%d)\n%P", v, b, PP);
-    o |= v;
-    o |= b << 16;
-    o |= r << 12;
+    /*e: [[olr()]] sanity check offset [[v]] */
+    o |= (b<<16) | (rt<<12) | v;
     return o;
 }
 /*e: function olr(arm) */
@@ -1784,7 +1832,7 @@ olhr(long v, int b, int r, int sc)
         o |= 1 << 24;
     if(sc & C_WBIT)
         o |= 1 << 21;
-    o |= (1<<23) | (1<<20)|(0xb<<4);
+    o |= (1<<23) | (1<<20) | (0xb<<4);
     if(v < 0) {
         v = -v;
         o ^= 1 << 23;
@@ -1804,7 +1852,7 @@ osr(int a, int r, long v, int b, int sc)
 {
     long o;
 
-    o = olr(v, b, r, sc) ^ (1<<20);
+    o = olr(v, b, r, sc) ^ (1<<20); // STR
     if(a != AMOVW)
         o |= 1<<22;
     return o;
@@ -1946,7 +1994,7 @@ omvl(Prog *p, Adr *a, int dr)
         v = p->cond->pc - p->pc - 8;
         // =~ LDR v(R15), R11
         o1 = olr(v, REGPC, dr, p->scond&C_SCOND);
-    } 
+    }
     /*e: [[omvl()]] when C_LCON case */
     else {
         // C_NCON case
@@ -1960,7 +2008,7 @@ omvl(Prog *p, Adr *a, int dr)
         }
         /*e: [[omvl()]] sanity check v */
         o1 = oprrr(AMVN, p->scond&C_SCOND);
-        o1 |= v | (dr << 12);
+        o1 |= (dr<<12) | v;
     }
     return o1;
 }
