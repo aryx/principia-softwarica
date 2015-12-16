@@ -558,7 +558,9 @@ Von newmann
 
  in hardware also because in soft could be too slow
  and generic enough that in hardware make sense, e.g. floating point.
- but actually also 32bits arithmetics.
+ but actually also 32bits arithmetics. Also .P .W and MOVM
+ cos used respectively by compiler (stack operation) and kernel
+ (save all registers in stack)
 
  from http://danluu.com/new-cpu-features/
  "... boxes that do arithmetic, logic, bit twiddling and shifting, and loading
@@ -871,7 +873,7 @@ enum opcode_category
 % big categories (for profiler)
 % I for Instruction?
 % vi/ has Iload Istore instead of Imem, and also Ireg and Ifloat
-% pad: I've added Imisc for undef.
+%pad: I've added Imisc for undef.
 
 \section{[[Inst]] and [[itab]]}
 
@@ -1880,6 +1882,7 @@ case OBIC:
 Sbit		= 1<<20,
 @
 % >>
+% Set condition code, set flags. (How read flags?)
 
 % only for code that break, so can factorize a few things,
 %less: but maybe with LP could just copy paste, so flow
@@ -1901,6 +1904,7 @@ int	cout;
 @
 % cout is set by shift
 
+\t but forgot implement instructions reading the flags? MRS?, MSR?
 
 \subsection{Addition and overflow}
 % carry? overflow?
@@ -1931,11 +1935,7 @@ case OADD:
     return;
 @
 % >> >>
-%old:
-%        if((XCAST(o1) + XCAST(o2)) & (1LL << 32))
-%            reg.cbit = true;
-%        else
-%            reg.cbit = false;
+\n could factorize with reg.cbit = bool(XCAST(...))
 
 \t how detect overflow? what is the operation to test overflow?
 \t  ADD R1, R2, R3   and then?? B??? or need ADD.S ?
@@ -2517,13 +2517,13 @@ Imem1(instruction inst)
 {
     int rn, rd, off, rm, sc, st;
     ulong address, value;
-    bool pbit, ubit, bbit, wbit, lbit, bit25;
+    bool prebit, ubit, bbit, wbit, lbit, bit25;
 
-    bit25 = inst & (1<<25); // Rm or I?
-    pbit = inst & (1<<24); // 0 when set via .P, on by default
-    ubit = inst & (1<<23); // Positive offset? Up?
-    bbit = inst & (1<<22); // B or W?
-    wbit = inst & (1<<21); // 
+    bit25 = inst & (1<<25); // rm or I?
+    prebit = inst & (1<<24); // Pre indexing?
+    ubit = inst & (1<<23); // Up offset?
+    bbit = inst & (1<<22); // Byte or Word?
+    wbit = inst & (1<<21); // Write back address in rn?
     lbit = inst & (1<<20); // LDR or STR?
 
     rn = (inst>>16) & 0xf;
@@ -2553,7 +2553,7 @@ Imem1(instruction inst)
         off += 8;
 
     address = reg.r[rn];
-    if(pbit)
+    if(prebit)
         address += off;
 
     if(lbit) {
@@ -2575,18 +2575,21 @@ Imem1(instruction inst)
         else
             putmem_w(address, value);
     }
-    if(!(pbit && !wbit))
+    if(!prebit || wbit)
         reg.r[rn] += off;
 
     <<[[Imem1()]] trace>>
 }
 @
 % >> >> >>
-%old: I introduced bool for the xbit
-\t pbit wbit double negation is hard to read
+%old: I introduced bool for the xxbit
+% I renamed pbit to prebit as just p is ambiguous (pre or post?)
+% and changed the double negation 
+%    if(!(prebit && !wbit))
+%        reg.r[rn] += off;
 
 % see Assembler. 
-% MOVW.P #4(R13), R15, for RET
+% MOVW.P #4(R13), R15, for RET  .P = post indexing (and implicit write)
 % TEXT foo, $8 ->  MOVW.W	R14,-12(R13)
 
 % useful to have push/pop in one instruction in hardware!
@@ -2597,7 +2600,7 @@ if(trace) {
     char *bw, *dotp, *dotc;
 
     bw = bbit ? "BU" : "W";
-    dotp = pbit? "" : ".P";
+    dotp = prebit? "" : ".P";
     dotc = cond[reg.instr_cond];
 
     if(lbit) {
@@ -2636,8 +2639,6 @@ if(trace) {
 %    if(!pbit)
 %        dotp = ".P";
 
-% pbit on by default?
-
 
 
 \t adv topics? after all it is an ARMv4 only stuff according to 5l
@@ -2658,16 +2659,16 @@ Imem2(instruction inst)
 {
     int rn, rd, off, rm;
     ulong address, value;
-    bool pbit, ubit, hbit, sbit, wbit, lbit, bit22;
+    bool prebit, ubit, hbit, sbit, wbit, lbit, bit22;
 
-    pbit = inst & (1<<24); // 0 when set via .P, on by default
-    ubit = inst & (1<<23); // Positive offset? Up?
+    prebit = inst & (1<<24); // Pre indexing?
+    ubit = inst & (1<<23); // Up offset?
     bit22 = inst & (1<<22);
-    wbit = inst & (1<<21);
+    wbit = inst & (1<<21); // Write back address in rn
     lbit = inst & (1<<20); // LDR or STR?
 
-    sbit = inst & (1<<6);
-    hbit = inst & (1<<5); // H or BU?
+    sbit = inst & (1<<6); // Signed?
+    hbit = inst & (1<<5); // Half word or byte?
 
     rn = (inst>>16) & 0xf;
     rd = (inst>>12) & 0xf;
@@ -2689,7 +2690,7 @@ Imem2(instruction inst)
         off += 8;
 
     address = reg.r[rn];
-    if(pbit)
+    if(prebit)
         address += off;
 
     if(lbit) {
@@ -2717,14 +2718,14 @@ Imem2(instruction inst)
             putmem_b(address, value);
         }
     }
-    if(!(pbit && !wbit))
+    if(!prebit || wbit))
         reg.r[rn] += off;
 
     <<[[Imem2()]] trace>>
 }
 @
 % >> >> >> >>
-%old: I introduced bool for the xbit
+%old: same stuff that for Imem1, bool, prebit, and removed double negation
 
 
 \ifallcode
@@ -2733,7 +2734,7 @@ if(trace) {
     char *hb, *dotp, *dotc;
 
     hb = hbit? "H" : "B";
-    dotp = pbit? "" : ".P";
+    dotp = prebit? "" : ".P";
     dotc = cond[reg.instr_cond];
 
     if(lbit) {
@@ -2803,11 +2804,11 @@ CBLOC   = 84,
 void
 Ilsm(instruction inst)
 {
-    char pbit, ubit, sbit, wbit, lbit;
+    bool pbit, ubit, sbit, wbit, lbit;
     int i, rn, reglist;
     ulong address, predelta, postdelta;
 
-    pbit = (inst>>24) & 0x1;
+    prebit = (inst>>24) & 0x1;
     ubit = (inst>>23) & 0x1;
     sbit = (inst>>22) & 0x1;
     wbit = (inst>>21) & 0x1;
@@ -2822,7 +2823,7 @@ Ilsm(instruction inst)
 
     address = reg.r[rn];
 
-    if(pbit) {
+    if(prebit) {
         predelta = 4;
         postdelta = 0;
     } else {
@@ -2860,12 +2861,13 @@ Ilsm(instruction inst)
 }
 @
 % >> >> 
+%old: char -> bool
 
 \ifallcode
 <<[[Ilsm()]] trace>>=
 if(trace) {
     itrace("%s.%c%c\tR%d=%lux%s, <%lux>",
-        (lbit ? "LDM" : "STM"), (ubit ? 'I' : 'D'), (pbit ? 'B' : 'A'),
+        (lbit ? "LDM" : "STM"), (ubit ? 'I' : 'D'), (prebit ? 'B' : 'A'),
         rn, reg.r[rn], (wbit ? "!" : ""), reglist);
 }
 @

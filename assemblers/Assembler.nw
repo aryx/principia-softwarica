@@ -1359,7 +1359,7 @@ TEXT foo(SB), $0   MOVW R14, -4(R13)
 \label{fig:virtual-text-ret}
 \end{figure}
 \t need to have dollar0 ? but then already means does not call anything no?
-\n actually it is a single MOVW.W R14, #-4(R13), ref to later section? .W?
+\n actually it is a single MOVW.W R14, #-4(R13), ref to later section? 
 \n  and for RET it is MOVW.P #4(R13), R15
 \l and actually it's ADD 0, R14, R15 instead of B (R14) (5l opti?)
 \l not also that leaf opti is applied only if no locals (autosize = 0)
@@ -6406,6 +6406,7 @@ performs, by just counting lines.
 % or for record can just base + offset for var + fld_offset.
 
 \t also .P, .W  for stack-like operation! see Section X on special bits.
+\t also .U when use register MOVW.U R1(R2), R3
 
 \subsubsection{Swaps}
 \l mv in advanced topics? what I did for Machine.nw?
@@ -8159,9 +8160,11 @@ execution also stores special ARM instruction bits
 \n used to be in adv topics, but important cos of RET, TEXT which expands
 \n  to MOVW.P or MOVW.W
 
-% sign? long? p bit, w bit, ???
+%Machine.nw and Linker.nw helped for the semantic, but ultimately I used
+% also http://www.peter-cockerell.net/aalp/html/app-c.html
+% to know the meaning of those letters.
 
-\subsection{[[.S]]}
+\subsection{Arithmetics and [[.S]]}
 
 <<cond rule(arm)>>=
 | cond LS    { $$ = $1 | $2; }
@@ -8170,31 +8173,33 @@ execution also stores special ARM instruction bits
 <<[[itab]] elements>>=
 ".S",		LS,	C_SBIT,
 @
-@
-% .S can be used for arithmetic operations, to set condition code
-%   it means interpreter numbers as a signed number?
+% Set condition codes.
 
 <<constant C_SBIT(arm)>>=
 #define	C_SBIT	(1<<4)
 @
 % >>
-\l after cond which use 4 bits (16 possibilities)
+% after cond which use 4 bits (16 possibilities)
+
+\t how read condition codes then?
 
 
-\subsection{[[.P]], [[.U]]}
+\subsection{Moves and [[.U]], [[.P]], [[.W]]}
 
 <<[[itab]] elements>>=
-".P",		LS,	C_PBIT,
 ".U",		LS,	C_UBIT,
+".P",		LS,	C_PBIT,
+".W",		LS,	C_WBIT,
 @
 % for MOV
-
-<<constant C_PBIT(arm)>>=
-#define	C_PBIT	(1<<5)
-@
-% >>
-% MOVW.P #4(R13), R15, for RET
-
+% U = Up = 1. Nothing = Down = 0. 
+%  But when use constant it's automatically handled
+%  by 5a/5l. But for register it is still useful as in MOVW.U R1(R2), R3
+% P = Post = 0, offset added after transfer. Nothing = Pre = 1, 
+%  offset added before.
+%  For Post it is automatic write, otherwise putting offset would
+%  have no effect
+% W = Write = 1, write address into base, Nothing = No write back = 0.
 
 <<constant C_UBIT(arm)>>=
 #define	C_UBIT	(1<<7)	/* up bit */
@@ -8202,24 +8207,12 @@ execution also stores special ARM instruction bits
 % >>
 
 
-
-<<[[itab]] elements>>=
-".IB",		LS,	C_PBIT|C_UBIT,
-".IA",		LS,	C_UBIT,
-".DB",		LS,	C_PBIT,
-".DA",		LS,	0,
+<<constant C_PBIT(arm)>>=
+#define	C_PBIT	(1<<5)
 @
-% easier to read.
-% see asm.ps ARM section: "addressing modes are supported by suffixes
-% of the instruction, IA = increment after, IB = increment before, ..."
-% DA = decrement after, DB = decrement before
-% it can be used only with the MOV instruction
+% >>
+% MOVW.P #4(R13), R15, for RET
 
-\subsection{[[.W]]}
-
-<<[[itab]] elements>>=
-".W",		LS,	C_WBIT,
-@
 
 <<constant C_WBIT(arm)>>=
 #define	C_WBIT	(1<<6)
@@ -8229,22 +8222,33 @@ execution also stores special ARM instruction bits
 % TEXT foo, $8 ->  MOVW.W	R14,-12(R13)
 
 
-
-% composite
-<<[[itab]] elements>>=
-".PW",		LS,	C_WBIT|C_PBIT,
-".WP",		LS,	C_WBIT|C_PBIT,
-@
-\l meh
-
-% composite or alternate form
-<<[[itab]] elements>>=
-".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
-".IAW",		LS,	C_WBIT|C_UBIT,
-".DBW",		LS,	C_WBIT|C_PBIT,
-".DAW",		LS,	C_WBIT,
-@
-
+%old: confusing aliases I think
+%  <<[[itab]] elements>>=
+%  ".IB",		LS,	C_PBIT|C_UBIT,
+%  ".IA",		LS,	C_UBIT,
+%  ".DB",		LS,	C_PBIT,
+%  ".DA",		LS,	0,
+%  @
+%  % easier to read.
+%  % see asm.ps ARM section: "addressing modes are supported by suffixes
+%  % of the instruction, IA = increment after, IB = increment before, ..."
+%  % DA = decrement after, DB = decrement before
+%  % it can be used only with the MOV instruction
+%  
+%  % composite
+%  <<[[itab]] elements>>=
+%  ".PW",		LS,	C_WBIT|C_PBIT,
+%  ".WP",		LS,	C_WBIT|C_PBIT,
+%  @
+%  \l meh does not make any sense actually this combination
+%  
+%  % composite or alternate form
+%  <<[[itab]] elements>>=
+%  ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
+%  ".IAW",		LS,	C_WBIT|C_UBIT,
+%  ".DBW",		LS,	C_WBIT|C_PBIT,
+%  ".DAW",		LS,	C_WBIT,
+%  @
 
 % also F_BIT but in adv topics
 
