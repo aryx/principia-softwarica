@@ -81,37 +81,9 @@ Optab	optab[] =
     { AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
     { AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
     /*x: [[optab]] entries */
-    { AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-
-    { AMOVH,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVH,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVH,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-
-    { AMOVHU,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
-    { AMOVHU,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
-    { AMOVHU,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-    /*x: [[optab]] entries */
-    { AMOVB,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVB,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVB,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-
-    { AMOVH,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVH,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVH,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-
-    { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
-    { AMOVHU,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
-    { AMOVHU,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
-    /*x: [[optab]] entries */
     { AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
     { AMOVW,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
     { AMOVW,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
-
-    { AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
-    { AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
-    { AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
 
     { AMOVBU,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
     { AMOVBU,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
@@ -121,13 +93,48 @@ Optab	optab[] =
     { AMOVW,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
     { AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
 
-    { AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
-    { AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-
     { AMOVBU,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
     { AMOVBU,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
     { AMOVBU,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+    /*x: [[optab]] entries */
+    { AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
+    { AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
+    { AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
+    /*x: [[optab]] entries */
+    { AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
+    { AMOVB,	C_REG,	C_NONE,	C_LAUTO,	30, 8, REGSP,	LTO },
+    { AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+    /*x: [[optab]] entries */
+    { ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4 },
+    /*x: [[optab]] entries */
+    { AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
+    /*x: [[optab]] entries */
+    { AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
+    { AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
+    /*x: [[optab]] entries */
+    { AMOVH,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+    { AMOVH,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+    { AMOVH,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+
+    { AMOVHU,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+    { AMOVHU,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+    { AMOVHU,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+    /*x: [[optab]] entries */
+    { AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
+    { AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
+    { AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
+    /*x: [[optab]] entries */
+    { AMOVH,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+    { AMOVH,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+    { AMOVH,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
+
+    { AMOVHU,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+    { AMOVHU,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+    { AMOVHU,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
+
+    { AMOVB,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
+    { AMOVB,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
+    { AMOVB,	C_LOREG,C_NONE,	C_REG,		32, 16, 0,	LFROM },
     /*x: [[optab]] entries */
     { AMOVH,	C_REG,	C_NONE,	C_SEXT,		23, 12, REGSB },
     { AMOVH,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
@@ -144,13 +151,6 @@ Optab	optab[] =
     { AMOVHU,	C_REG,	C_NONE,	C_LEXT,		33, 24, REGSB,	LTO },
     { AMOVHU,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
     { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
-    /*x: [[optab]] entries */
-    { ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4 },
-    /*x: [[optab]] entries */
-    { AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
-    /*x: [[optab]] entries */
-    { AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
-    { AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
     /*x: [[optab]] entries */
     { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4 },
     { ASWI,		C_NONE,	C_NONE,	C_LCON,		10, 4 },

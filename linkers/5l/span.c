@@ -286,7 +286,7 @@ immaddr(long v)
     if(v >= 0 && v <= 0xfff)
         return (v & 0xfff) |
             (1<<24) |	/* pre indexing */
-            (1<<23);	/* pre indexing, up */
+            (1<<23);	/* up */
 
     if(v < 0 && v >= -0xfff)
         return (-v & 0xfff) |
@@ -352,6 +352,28 @@ aclass(Adr *a)
     case D_OREG:
         switch(a->symkind) {
         /*s: [[aclass()]] D_OREG case, switch symkind cases */
+        case N_NONE:
+            instoffset = a->offset;
+            t = immaddr(instoffset);
+            if(t) {
+                /*s: [[aclass()]] if immfloat for N_NONE symbol */
+                if(immfloat(t))
+                    return immhalf(instoffset)? C_HFOREG : C_FOREG;
+                    /* n.b. that [C_FOREG] will also satisfy immrot */
+                /*e: [[aclass()]] if immfloat for N_NONE symbol */
+                /*s: [[aclass()]] if immhalf for N_NONE symbol */
+                 /* n.b. that immhalf() will also satisfy immrot */
+                if(immhalf(instoffset))	
+                    return C_HOREG;
+                /*e: [[aclass()]] if immhalf for N_NONE symbol */
+                if(immrot(instoffset))
+                    return C_SROREG;
+                return C_SOREG;
+            }
+            if(immrot(instoffset))
+                return C_ROREG;
+            return C_LOREG;
+        /*x: [[aclass()]] D_OREG case, switch symkind cases */
         case N_EXTERN:
         case N_INTERN:
             /*s: [[aclass()]] D_OREG case, N_EXTERN case, sanity check a */
@@ -416,7 +438,7 @@ aclass(Adr *a)
             return C_LAUTO;
         /*x: [[aclass()]] D_OREG case, switch symkind cases */
         case N_PARAM:
-            instoffset = autosize + a->offset + 4L;
+            instoffset = autosize + 4L + a->offset;
             t = immaddr(instoffset);
             if(t){
                 /*s: [[aclass()]] if immfloat for N_LOCAL or N_PARAM symbol */
@@ -430,28 +452,6 @@ aclass(Adr *a)
                 return C_SAUTO;
             }
             return C_LAUTO;
-        /*x: [[aclass()]] D_OREG case, switch symkind cases */
-        case N_NONE:
-            instoffset = a->offset;
-            t = immaddr(instoffset);
-            if(t) {
-                /*s: [[aclass()]] if immfloat for N_NONE symbol */
-                if(immfloat(t))
-                    return immhalf(instoffset)? C_HFOREG : C_FOREG;
-                    /* n.b. that [C_FOREG] will also satisfy immrot */
-                /*e: [[aclass()]] if immfloat for N_NONE symbol */
-                /*s: [[aclass()]] if immhalf for N_NONE symbol */
-                 /* n.b. that immhalf() will also satisfy immrot */
-                if(immhalf(instoffset))	
-                    return C_HOREG;
-                /*e: [[aclass()]] if immhalf for N_NONE symbol */
-                if(immrot(instoffset))
-                    return C_SROREG;
-                return C_SOREG;
-            }
-            if(immrot(instoffset))
-                return C_ROREG;
-            return C_LOREG;
         /*e: [[aclass()]] D_OREG case, switch symkind cases */
         }
         return C_GOK;
@@ -636,6 +636,14 @@ cmp(int a, int b)
             return true;
         break;
     /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_SROREG:
+        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
+    case C_SOREG:
+    case C_ROREG:
+        return b == C_SROREG || cmp(C_HFOREG, b);
+    case C_LOREG:
+        return cmp(C_SROREG, b);
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
     case C_SEXT:
         return cmp(C_HFEXT, b);
     case C_LEXT:
@@ -645,14 +653,6 @@ cmp(int a, int b)
         return cmp(C_HFAUTO, b);
     case C_LAUTO:
         return cmp(C_SAUTO, b);
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_SROREG:
-        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
-    case C_SOREG:
-    case C_ROREG:
-        return b == C_SROREG || cmp(C_HFOREG, b);
-    case C_LOREG:
-        return cmp(C_SROREG, b);
     /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
     case C_LACON:
         if(b == C_RACON)
