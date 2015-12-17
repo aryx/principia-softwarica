@@ -575,13 +575,13 @@ oexpr:
 rcon:
   regi
  {
-  if($$ < 0 || $$ >= NREG)
+  if($1 < 0 || $1 >= NREG)
       print("register value out of range\n");
   $$ = (($1&15) << 8) | (1 << 4);
  }
 | con
  {
-  if($$ < 0 || $$ >= 32)
+  if($1 < 0 || $1 >= 32)
       print("shift value out of range\n");
   $$ = ($1&31) << 7;
  }

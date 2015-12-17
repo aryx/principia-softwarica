@@ -7,6 +7,7 @@
 /*s: enum regxxx(arm) */
 enum Register {
     /*s: [[Register]] compiler conventions cases */
+    // reserved by compiler, calling conventions
     REGRET =	0,
     REGARG =	0,
     /*x: [[Register]] compiler conventions cases */
@@ -14,13 +15,19 @@ enum Register {
     /* compiler allocates register variables R2 up */
     REGMIN =	2,
     REGMAX =	8,
-    REGEXT =	10, // R9/R10 possible 'extern register xxx;'
     /* compiler allocates external registers R10 down */
-    REGTMP =	11,
+    REGEXT =	10, // R9/R10 possible 'extern register xxx;'
     /*e: [[Register]] compiler conventions cases */
-    REGSB =		12, // static base
+    /*s: [[Register]] linker conventions cases */
+    // reserved by linker, long address/offset loading
+    REGTMP =	11,
+    /*e: [[Register]] linker conventions cases */
 
-    REGSP =		13,
+    // reserved by linker
+    REGSB =		12, // static base
+    REGSP =		13, // stack pointer
+
+    // reserved by ARM
     REGLINK =		14,
     REGPC =		15,
 

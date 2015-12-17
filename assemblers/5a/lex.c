@@ -138,6 +138,11 @@ struct Itab itab[] =
     ".LE",		LCOND,	13,
     ".AL",		LCOND,	Always,
     /*x: [[itab]] elements */
+    ".S",		LS,	C_SBIT,
+    /*x: [[itab]] elements */
+    ".P",		LS,	C_PBIT,
+    ".W",		LS,	C_WBIT,
+    /*x: [[itab]] elements */
     "MOVD",		LMOV, AMOVD,
     "MOVDF",	LMOV, AMOVDF,
     "MOVDW",	LMOV, AMOVDW,
@@ -191,8 +196,25 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     "MOVM",		LMOVM, AMOVM,
     /*x: [[itab]] elements */
+    ".U",		LS,	C_UBIT,
+    /*x: [[itab]] elements */
+    ".IB",		LS,	C_PBIT|C_UBIT,
+    ".IA",		LS,	C_UBIT,
+    ".DB",		LS,	C_PBIT,
+    ".DA",		LS,	0,
+    /*x: [[itab]] elements */
+    ".PW",		LS,	C_WBIT|C_PBIT,
+    ".WP",		LS,	C_WBIT|C_PBIT,
+    /*x: [[itab]] elements */
+    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
+    ".IAW",		LS,	C_WBIT|C_UBIT,
+    ".DBW",		LS,	C_WBIT|C_PBIT,
+    ".DAW",		LS,	C_WBIT,
+    /*x: [[itab]] elements */
     "CPSR",		LPSR,	0,
     "SPSR",		LPSR,	1,
+    /*x: [[itab]] elements */
+    ".F",		LS,	C_FBIT,
     /*x: [[itab]] elements */
     "MCR",		LSYSTEM, 0,
     "MRC",		LSYSTEM, 1,
@@ -215,26 +237,6 @@ struct Itab itab[] =
     "C13",		LCREG,	13,
     "C14",		LCREG,	14,
     "C15",		LCREG,	15,
-    /*x: [[itab]] elements */
-    ".S",		LS,	C_SBIT,
-    ".U",		LS,	C_UBIT,
-    ".W",		LS,	C_WBIT,
-    ".P",		LS,	C_PBIT,
-    /*x: [[itab]] elements */
-    ".PW",		LS,	C_WBIT|C_PBIT,
-    ".WP",		LS,	C_WBIT|C_PBIT,
-    /*x: [[itab]] elements */
-    ".IBW",		LS,	C_WBIT|C_PBIT|C_UBIT,
-    ".IAW",		LS,	C_WBIT|C_UBIT,
-    ".DBW",		LS,	C_WBIT|C_PBIT,
-    ".DAW",		LS,	C_WBIT,
-
-    ".IB",		LS,	C_PBIT|C_UBIT,
-    ".IA",		LS,	C_UBIT,
-    ".DB",		LS,	C_PBIT,
-    ".DA",		LS,	0,
-    /*x: [[itab]] elements */
-    ".F",		LS,	C_FBIT,
     /*e: [[itab]] elements */
     0
 };
