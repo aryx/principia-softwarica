@@ -166,11 +166,10 @@ Because we think you are a better programmer if
 you fully understand how things work under the hood, and
 the linker is the final piece of any {development toolchain},
 the one generating finally the {executable}.
-\l often get errors from linker. never explained, maybe boring but important!
 
 There are very few books about linkers,
-\n the linker/loader book is mentioned later
 as opposed to a myriad of books on compilers or kernels.
+\n the linker/loader book is mentioned later
 Linkers are usually not even studied during the computer science curriculum. 
 This is a pity because they are pretty central.
 Indeed, they make the link (no pun intended) between the compiler
@@ -179,6 +178,7 @@ that the kernel will {load}. Without a linker there is no program to execute.
 \l linker/loader relation
 \l Many blog posts, show interest from people
 \l compiler rely a lot on linker, to link together modules!
+\l often get errors from linker. never explained, maybe boring but important!
 \n even to understand ocamlc, ocamlrun, -custom, important understand linker
 
 Here are a few questions we hope this book will answer:
@@ -469,7 +469,8 @@ in the \book{Assembler}.
 
 It is not necessary to know the ARM architecture to understand 
 most of this book. 
-\t maybe need know computer archi. sign, 2-complement.
+\t maybe need know computer archi. sign, 2-complement, bitshift, arith shift
+\t  byte/half-word and signs
 For the machine code generation part though, in Chapter~\ref{chap:arm-codegen},
 %dup: (and adapted) from Machine.nw
 we highly recommend to print the excellent colorful ARM reference card
@@ -8053,6 +8054,9 @@ used by [[oplook()]] and [[asmout()]], especially [[Optab]].
 
 %real-world: what do they do at this stage in ld? just patching?
 
+\l principles: try leverage to the maximum the archi! => NCON because of MVN
+\l  ROREG because of ADD, 0xff and MOVB opti. Specialize when can!
+
 \section{ARM instruction format}
 
 %dup: intro/requirements
@@ -8434,6 +8438,8 @@ int t;
 
 
 \subsection{[[Optab.param]] and [[Optab.flag]]}
+\label{sec:optab-param}
+\label{sec:optab-flag}
 \l mv later? next to Memory opcodes?
 
 % {rule parameter}
@@ -9476,6 +9482,7 @@ o1 |= immrot(instoffset);
 
 
 \subsection{[[D_OREG]], [[C_xOREG]], and [[immaddr()]]}
+\label{sec:immaddr}
 
 % offsets constraints
 % ex of instr: MOVW OFF(R13), R2
@@ -9599,6 +9606,9 @@ immaddr(long v)
 @
 % >> >> >>
 \l rename immsmall?
+\t return bool instead? clearer? anyway set special bits in olr?
+\t  or because its result is passed to immfloat? but could rewrite immfloat?
+\t  just pass abs(instoffset) & 0xfff
 %old? why need v & 0xfff? redundant no?
 
 
@@ -9904,6 +9914,7 @@ This instruction does not involve any memory and is actually
 converted in an ARM instruction using an arithmetic opcode
 as we will see soon.
 \t talk MVN and MOV? the ARM one and possible confusing with Asm5 one?
+\t  Asm5 generalize the MOV to be MOV and LDR/STR/.... but also MVN
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMVN:
@@ -10078,7 +10089,7 @@ oprrr(int a, int sc)
 if the programmer requested it by using the {\em special bit}
 [[S]] as in [[ADD.S R1, R2, R3]].
 See the \book{Assembler} and \book{Emulator}
-for more information on special bits and the semantic of the sign bit.
+for more information on {special bits} and the semantic of the sign bit.
 
 <<[[oprrr()]] sign bit handling>>=
 if(sc & C_SBIT)
@@ -10296,6 +10307,84 @@ case 9:		/* sll R,[R],R -> mov (R<<R),R */
 % >> >> >> >> 
 
 
+\subsection{Byte and half word extractions}
+
+The following instructions allow to extract parts of a register
+and store the result in another register:
+\t recall B bs BU vs H vs HU? dup Assembler.nw?
+
+<<[[optab]] entries>>=
+{ AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8 },
+{ AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4 },
+{ AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8 },
+{ AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8 },
+@
+
+\t sign vs unsigned version because keep sign bit or not.
+
+[[MOVB R1, R2]] is a virtual instruction transformed in two 
+instructions:
+\begin{verbatim}
+SLL $24, R1, R2 // o1
+SRA $24, R2, R2 // o2
+\end{verbatim}
+\l actually SLL SRA also virtual
+
+This is why the rule size in the rules above is [[8]]
+and the code below uses the variables [[o1]] and [[o2]] for
+the first time:
+
+\t difference signed unsigned? Machine? SRL vs SRA? one fills with 1 the right!
+\t  if was negative number.
+
+<<[[asmout()]] switch on type cases>>=
+case 14:	/* movb/movbu/movh/movhu R,R */
+    o1 = oprrr(ASLL, p->scond);
+
+    if(p->as == AMOVBU || p->as == AMOVHU)
+        o2 = oprrr(ASRL, p->scond);
+    else
+        o2 = oprrr(ASRA, p->scond);
+
+    rf = p->from.reg;
+    rt = p->to.reg;
+    o1 |= (rt<<12) | rf;
+    o2 |= (rt<<12) | rt;
+    if(p->as == AMOVB || p->as == AMOVBU) {
+        o1 |= (24<<7);
+        o2 |= (24<<7);
+    } else {
+        o1 |= (16<<7);
+        o2 |= (16<<7);
+    }
+    break;
+@
+% >> >> >> >> >> >> >>
+%old: was using r = p->to.reg but inconsistent with the rest so I put rt.
+
+[[MOVBU R1, R2]] can be optimized and encoded using only 1 ARM instruction
+as [[0xff]] is a rotatable constant. Note that [[0xffff]] is not
+a rototable constant hence the need for two instructions above for [[MOVHU]].
+
+<<[[asmout()]] switch on type cases>>=
+case 58:	/* movbu R,R -> AND $0xff, R, R */
+    o1 = oprrr(AAND, p->scond);
+    o1 |= immrot(0xff);
+    rt = p->to.reg;
+    r = p->from.reg;
+    if(p->to.type == D_NONE)
+        rt = 0;
+    <<[[asmout()]] adjust [[r]]>>
+    o1 |= (r<<16) | (rt<<12);
+    break;
+@
+% >> >>
+%$
+\t what is this D_NONE thing??? how to can be D_NONE? it has to be D_REG!!
+\n why not using rf for register from? but then adjust r will be wrong!
+%old: I added the -> in the comment above to explain the translation
+
+
 \subsection{Multiplication opcodes}
 
 Multiplication in the ARM uses a different format
@@ -10360,82 +10449,6 @@ a 64 bits target.
 Note also that there is no [[DIV]] opcode in the ARM so [[ADIV]] is a virtual
 instruction transformed in a series of instructions implementing
 the division in software, as explained in Section~\ref{sec:div-mod}.
-
-\subsection{Byte and half word extractions}
-
-The following instructions allow to extract parts of a register
-and store the result in another register:
-
-<<[[optab]] entries>>=
-{ AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8 },
-{ AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4 },
-{ AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8 },
-{ AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8 },
-@
-
-\t sign vs unsigned version because keep sign bit or not.
-
-[[MOVB R1, R2]] is a virtual instruction transformed in two 
-instructions:
-\begin{verbatim}
-SLL $24, R1, R2 // o1
-SRA $24, R2, R2 // o2
-\end{verbatim}
-\l actually SLL SRA also virtual
-
-This is why the rule size in the rules above is [[8]]
-and the code below uses the variables [[o1]] and [[o2]] for
-the first time:
-
-\t difference signed unsigned? Machine? SRL vs SRA?
-
-<<[[asmout()]] switch on type cases>>=
-case 14:	/* movb/movbu/movh/movhu R,R */
-    o1 = oprrr(ASLL, p->scond);
-
-    if(p->as == AMOVBU || p->as == AMOVHU)
-        o2 = oprrr(ASRL, p->scond);
-    else
-        o2 = oprrr(ASRA, p->scond);
-
-    rf = p->from.reg;
-    rt = p->to.reg;
-    o1 |= (rt<<12) | rf;
-    o2 |= (rt<<12) | rt;
-    if(p->as == AMOVB || p->as == AMOVBU) {
-        o1 |= (24<<7);
-        o2 |= (24<<7);
-    } else {
-        o1 |= (16<<7);
-        o2 |= (16<<7);
-    }
-    break;
-@
-% >> >> >> >> >> >> >>
-%old: was using r = p->to.reg but inconsistent with the rest so I put rt.
-
-[[MOVBU R1, R2]] can be optimized and encoded using only 1 ARM instruction
-as [[0xff]] is a rotatable constant. Note that [[0xffff]] is not
-a rototable constant hence the need for two instructions above for [[MOVHU]].
-
-<<[[asmout()]] switch on type cases>>=
-case 58:	/* movbu R,R -> AND $0xff, R, R */
-    o1 = oprrr(AAND, p->scond);
-    o1 |= immrot(0xff);
-    rt = p->to.reg;
-    r = p->from.reg;
-    if(p->to.type == D_NONE)
-        rt = 0;
-    <<[[asmout()]] adjust [[r]]>>
-    o1 |= (r<<16) | (rt<<12);
-    break;
-@
-% >> >>
-%$
-\t what is this D_NONE thing??? how to can be D_NONE? it has to be D_REG!!
-\n why not using rf for register from? but then adjust r will be wrong!
-%old: I added the -> in the comment above to explain the translation
-
 
 \subsection{Large constant operand, [[REGTMP]] and pools}
 \label{sec:pool-and-reg-tmp}
@@ -10878,6 +10891,7 @@ for [[AMOVW]] and its variants when one of its operands
 references a memory area.
 \l but at most one? if two then linking error?
 
+\l here are the variants (but seen before in arith section)
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case AMOVW:
 case AMOVB:
@@ -10907,16 +10921,20 @@ to 6 ARM instructions (24 bytes) as we will see soon.
 \subsection{Load}
 \label{sec:load}
 
-Beyond the setting of a register from another register or a constant, 
-\l via MOV, MVN
-another important use of [[MOVW]]
-is to {\em load} data from memory in a register
-as in [[MOVW 10(R1), R2]]:
-\l via LDR
+%trans:
+Another important use of [[MOVW]],
+beyond the setting of a register from another register or a constant
+(via the ARM instructions [[MOV]] and [[MVN]]),
 %
-% first set of rules concerning small offsets:
-% C_Sxxx is small, offset, see section X.
-% encoded directly hence rule size 4 blow
+is to {\em load} data from memory in a register, e.g. [[MOVW 10(R1), R2]]. 
+This will result in the use of the ARM instruction [[LDR]].
+%toc:
+We will first see the set of rules when the offset is small,
+%
+that is when the operand class has the form [[C_S]]$xxx$,
+e.g. [[C_SEXT]] (see Section~\ref{sec:immaddr} and [[immaddr()]]).
+This means the offset can be encoded directly in the ARM instruction,
+hence the rule size [[4]] below:
 
 <<[[optab]] entries>>=
 { AMOVW,	C_SEXT,	C_NONE,	C_REG,		21, 4, REGSB },
@@ -10928,9 +10946,6 @@ as in [[MOVW 10(R1), R2]]:
 { AMOVBU,	C_SOREG,C_NONE,	C_REG,		21, 4 },
 @
 \l maybe could have factorized with same representant in the end? lots of dupes
-
-%todo? could modify p->from.reg to record pseudo-register instead?
-% then no need Param at all?
 
 <<[[asmout()]] switch on type cases>>=
 case 21:	/* mov/movbu O(R),R */
@@ -10947,11 +10962,25 @@ case 21:	/* mov/movbu O(R),R */
 %old:    if(p->as != AMOVW) -> positive form
 %old: was '-> lr' in comment, but clearer nothing
 
-% use Param here! Section X.
+Note the use for the first time of [[Optab.param]] 
+(see Section~\ref{sec:optab-param}) in the rules
+above, e.g. [[REGSB]] when the rule concerns an external
+symbol ([[C_SEXT]]).
+This extra parameter can then be accessed from [[asmout()]] to
+adjust the instruction:
+
 <<[[asmout()]] adjust maybe r to rule param>>=
 if(r == R_NONE)
     r = o->param;
 @
+%todo? could modify p->from.reg to record pseudo-register instead?
+% then no need Param at all?
+
+The code for [[case 21:]] above relies on [[olr()]]
+which factorizes most of the code related to the instruction 
+format of memory operations. It is actually also used for
+the generation of [[STR]] instructions as we will see soon.
+
 
 % b = base = rn,  r = rd
 <<function olr(arm)>>=
@@ -10964,7 +10993,7 @@ olr(long v, int b, int rt, int sc)
     <<[[olr()]] sanity check sc>>
 
     <<[[olr()]] set special bits>>
-    o |= (0x1<<26) | // memory class
+    o |= (0x1<<26) | // memory instructions class
          (1<<20);    // LDR
     if(v < 0) {
         v = -v;
@@ -10979,18 +11008,33 @@ olr(long v, int b, int rt, int sc)
 %old: use rt, not r, more consistent
 \n actually also used for STR
 
+Remember from the \book{Assembler} that memory instructions
+can use the [[.P]] or [[.W]] suffixes to offer additional
+addressing modes. Those suffixes are converted by [[5a]]
+in {special bits} in [[Instr.cond]] which then leads
+to the setting of special bits in the ARM instruction itself:
 
 <<[[olr()]] set special bits>>=
 if(!(sc & C_PBIT))
     o |= 1 << 24; // pre
-if(!(sc & C_UBIT))
-    o |= 1 << 23; // up?? bug?
 if(sc & C_WBIT)
     o |= 1 << 21; // write back
 @
 % >> >> >> >>
-% .P means Post, default is Pre.
-% see Emulator
+
+% as in [[MOVW.W R14, -4(R13)]], 
+% as in [[MOVW.P -4(R13), R15]], 
+
+% ARM memory instruction has also U bit, U = up when set.
+% 0 means down. but actually automatic. But can be used when
+% use register for offset?
+
+<<[[olr()]] set special bits>>=
+if(!(sc & C_UBIT))
+    o |= 1 << 23; // up?? bug?
+@
+%bug??? anyway can not express Rm(R1) in 5a. Or used only for multi reg MOV?
+% >>
 
 <<[[olr()]] sanity check sc>>=
 if(sc & C_SBIT)
@@ -11015,10 +11059,8 @@ if(v >= (1<<12))
 %   @
 
 
-
-
-% long, more bytes
-% similar to section X, omvl, REGTMP, load from pool.
+The use of large offsets requires an additional instruction
+to first load the offset in [[REGTMP]]:
 
 <<[[optab]] entries>>=
 { AMOVW,	C_LEXT,	C_NONE,	C_REG,		31, 8, REGSB,	LFROM },
@@ -11029,6 +11071,8 @@ if(v >= (1<<12))
 { AMOVBU,	C_LAUTO,C_NONE,	C_REG,		31, 8, REGSP,	LFROM },
 { AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
 @
+
+% similar to section X, omvl(), load from literal pool.
 
 <<[[asmout()]] switch on type cases>>=
 case 31:	/* mov/movbu L(R),R */
@@ -11050,6 +11094,7 @@ case 31:	/* mov/movbu L(R),R */
 % and    if(p->as == AMOVBU || p->as == AMOVB)
 %old: was  '-> lr[b]' in comment but unclear
 
+
 <<function olrr(arm)>>=
 long
 olrr(int i, int b, int r, int sc)
@@ -11062,7 +11107,7 @@ olrr(int i, int b, int r, int sc)
 % >>
 %todo? need a xor?  it's not a | instead??
 
-
+\t note that actually 5a does not allow this syntax! R1(R2)
 
 
 
@@ -14499,6 +14544,7 @@ C_HFEXT,
 if(immfloat(t))
     return immhalf(instoffset)? C_HFEXT : C_FEXT;
 @
+\t why pass t? why not pass instoffset
 
 <<[[Operand_class]] cases, in C_xAUTO, float cases>>=
 C_FAUTO,	/* float insn offset (0 to 0x3fc, word aligned) */
