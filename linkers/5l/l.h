@@ -5,7 +5,6 @@
 
 #include	<common.out.h>
 #include	<5.out.h>
-
 #include	"../8l/elf.h"
 
 /*s: macro DBG */
@@ -22,7 +21,6 @@ typedef	struct	Auto	Auto;
 typedef	struct	Prog	Prog;
 typedef	struct	Optab	Optab;
 typedef	struct	Oprange	Oprange;
-typedef	struct	Count	Count;
 
 /*s: constant P */
 #define	P		((Prog*)nil)
@@ -136,8 +134,10 @@ struct	Sym
     // enum<Section> too?
     short	subtype;
     /*x: [[Sym]] other fields */
+    // x86 only, dead? can remove though?
     short	become;
     /*x: [[Sym]] other fields */
+    // x86 only
     short	frame;
     /*e: [[Sym]] other fields */
     // Extra
@@ -399,15 +399,20 @@ union Buf
     char	dbuf[1]; // variable size
 };
 /*e: struct Buf */
+
+// globals.c
+
+extern	short	HEADTYPE;		/* type of header */
+extern	long	HEADR;			/* length of header */
+extern	long	INITTEXT;		/* text location */
+extern	long	INITRND;		/* data round above text location */
+extern	long	INITDAT;		/* data location */
+extern	char*	INITENTRY;		/* entry point */
+
+extern	long	INITTEXTP;		/* text location (physical) */ // ELF
+
 extern union Buf buf;
 
-extern	long	HEADR;			/* length of header */
-extern	short	HEADTYPE;		/* type of header */
-extern	long	INITDAT;		/* data location */
-extern	long	INITRND;		/* data round above text location */
-extern	long	INITTEXT;		/* text location */
-extern	long	INITTEXTP;		/* text location (physical) */
-extern	char*	INITENTRY;		/* entry point */
 extern	long	autosize;
 extern	Biobuf	bso;
 extern	long	bsssize;
