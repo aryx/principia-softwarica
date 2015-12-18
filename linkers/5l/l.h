@@ -570,18 +570,26 @@ void	objfile(char*);
 int	ocmp(const void*, const void*);
 long	opirr(int);
 Optab*	oplook(Prog*);
+
 long	oprrr(int, int);
-long	opvfprrr(int, int);
-long	olr(long, int, int, int);
-long	olhr(long, int, int, int);
-long	olrr(int, int, int, int);
-long	olhrr(int, int, int, int);
-long	osr(int, int, long, int, int);
-long	oshr(int, long, int, int);
-long	ofsr(int, int, long, int, int, Prog*);
-long	osrr(int, int, int, int);
-long	oshrr(int, int, int, int);
+
 long	omvl(Prog*, Adr*, int);
+
+long	olr(int, int, long, int, int);
+long	olrr(int, int, int, int, int);
+
+long	osr(int, int, int, long, int);
+long	osrr(int, int, int, int, int);
+
+long	olhr(long, int, int, int);
+long	olhrr(int, int, int, int);
+long	oshr(int, long, int, int);
+long	oshrr(int, int, int, int);
+
+long	opvfprrr(int, int);
+long	ofsr(int, int, long, int, int, Prog*);
+
+
 void	patch(void);
 void	prasm(Prog*);
 void	prepend(Prog*, Prog*);

@@ -23,6 +23,7 @@
 %    * commented lots of code that was in dead ifdefs or was related to
 %      dead alef features like BECOME
 %    * forward decl typedef Count
+%    * code to deal with UBIT where does not make sense (MOVW)
 % - reorganized code
 %    * split big enum in separate types: Section, Operand_class, misc
 %    * around INITENTRY, -l, -E digit, make default path
@@ -30,6 +31,8 @@
 %    * mv Autom out of union, remove union, was confusing
 %    * far cleaner oplook(), where optimizations have been aspectized
 %    * introduced D_ADDR in Assembler so can have cleaner code in Linker
+%    * more consistent olr/osr/olrr/... pass opcode and sc as first params
+%      so can also factorize code regarding bit 22 and have simpler wrappers
 % - TODO reorganized the code to better match the chapters
 %    by introducing more files: main.c, lib.c, error.c, m.h
 
@@ -750,6 +753,9 @@ header which uses 32 bytes.
 % but then change size of code section, so shift data, so 
 % need reresolve!
 \t generic term used in Levine book for that?
+
+% which is why better do codegen in linker anyway no? linker need
+% knowledge of architecture constraints!
 
 % works for 5l because: 
 % - offset for jmps is really big, so stable size of instr, and can use
@@ -10625,7 +10631,7 @@ if(p->cond) {
     // C_LCON case with Pool
     v = p->cond->pc - p->pc - 8;
     // =~ LDR v(R15), R11
-    o1 = olr(v, REGPC, dr, p->scond&C_SCOND);
+    o1 = olr(AMOVW, p->scond&C_SCOND, v, REGPC, dr);
 }
 @
 
@@ -10969,13 +10975,11 @@ case 21:	/* mov/movbu O(R),R */
     rt = p->to.reg;
     r = p->from.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o1 = olr(instoffset, r, rt, p->scond);
-    if(p->as == AMOVBU)
-        o1 |= 1<<22;
+    o1 = olr(p->as, p->scond, instoffset, r, rt);
     break;
 @
 % >> >> >>
-%old:    if(p->as != AMOVW) -> positive form
+%old: if(p->as != AMOVW) -> positive form for bit 22, and factorized in olr now
 %old: was '-> lr' in comment, but clearer nothing
 
 %dup:
@@ -10992,8 +10996,7 @@ see Section~\ref{sec:c-xoreg}).
 %
 Each kind of offset corresponds to a different {\em base register},
 which is actually specified in the rule itself.
-%todo? could modify p->from.reg to record pseudo-register instead?
-% then no need Param at all?
+\l could modify p->from.reg to record pseudo-register instead? no need Param?
 Indeed, note the use for the first time of [[Optab.param]] 
 (see Section~\ref{sec:optab-param}) in the rules
 above, e.g. [[REGSB]] when the rule concerns an external
@@ -11014,7 +11017,7 @@ the generation of [[STR]] instructions as we will see soon.
 
 <<function olr(arm)>>=
 long
-olr(long v, int b, int rt, int sc)
+olr(int a, int sc, long v, int b, int rt)
 {
     long o;
 
@@ -11031,15 +11034,26 @@ olr(long v, int b, int rt, int sc)
         v = -v;
     }
     <<[[olr()]] sanity check offset [[v]]>>
+    switch(a) {
+    case AMOVB:
+    case AMOVBU: 
+        o |= 1<<22; 
+        break;
+    case AMOVW: 
+        break;
+    default:
+        <<[[olr()]] sanity check [[a]]>>
+    }        
     o |= (b<<16) | (rt<<12) | v;
     return o;
 }
 @
 % >> >> >> >> >> >> >> >> >> >>
-\t could put sc first param? would be more consistent with what we do usually?
+\t AMOVH and AMOVHU ???
 \n note that order mimic order of instr,  MOVW v(b), rt
 %old: 
 % - use rt, not r, more consistent
+%dead:
 % - was doing tricky stuff with U bit but I simplified
 %    if(!(sc & C_UBIT))
 %        o |= 1 << 23; // up?? bug?
@@ -11048,7 +11062,10 @@ olr(long v, int b, int rt, int sc)
 %        v = -v;
 %        o ^= 1 << 23; // down
 %    }
-% b = base = rn
+%pad:
+% - added int a, and put sc first. More consistent with oprrr, opbra, etc.
+%   and also more consistent with osr which was taking opcode 'a'
+% - factorized code about bit 22, and added diag() in switch
 \t v can be offset (pos/neg) or register number (rm)
 
 Remember from the \book{Assembler} that memory instructions
@@ -11090,10 +11107,14 @@ if(v >= (1<<12))
 %   static Prog *PP;
 %   @
 %   % to communicate info to olr for better diagnostic
-%   
 %   <<[[asmout()]] other initialisations>>=
 %   PP = p;
 %   @
+
+<<[[olr()]] sanity check [[a]]>>=
+diag("expect move operation, not: %P", curp);
+@
+%pad: I added that
 
 
 The use of large offsets ([[C_L]]$xxx$) requires an additional instruction
@@ -11122,17 +11143,15 @@ case 31:	/* mov/movbu L(R),R */
     rt = p->to.reg;
     r = p->from.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o2 = olrr(REGTMP, r, rt, p->scond);
-    if(p->as == AMOVBU)
-        o2 |= 1<<22;
+    o2 = olrr(p->as, p->scond, REGTMP, r, rt);
     break;
 @
 % >>
 %old: the code used to be factorized with case 32 with
 %    if(o->type == 31)
 %        break;
-% and    if(p->as == AMOVBU || p->as == AMOVB)
-%old: was  '-> lr[b]' in comment but unclear
+% and    if(p->as == AMOVBU || p->as == AMOVB), but now factorized in olr
+% and was  '-> lr[b]' in comment but unclear
 
 Note that [[i]] below represents a register number ([[REGTMP]])
 which is passed to [[olr()]] instead of [[instoffset]] in previous calls.
@@ -11142,15 +11161,15 @@ the offset are both encoded at the beginning of the ARM instruction
 
 <<function olrr(arm)>>=
 long
-olrr(int i, int b, int r, int sc)
+olrr(int a, int sc, int i, int b, int r)
 {
 
-    return olr(i, b, r, sc) 
-           | (1<<25); // Rm not immediate offset
+    return olr(a, sc, i, b, r) | (1<<25); // Rm not immediate offset
 }
 @
 % >>
 %old: was ^ xor but more logic | I think
+%pad: added int a and moved int sc earlier, like for olr
 
 \n actually 5a does not allow this syntax! R1(R2), but 5l can generate it
 
@@ -11184,28 +11203,28 @@ case 20:	/* mov/movb/movbu R,O(R) */
     rf = p->from.reg;
     r = p->to.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o1 = osr(p->as, rf, instoffset, r, p->scond);
+    o1 = osr(p->as, p->scond, rf, instoffset, r);
     break;
 @
-\t set bit 22 here? factorize in chunk?
 
 
 <<function osr(arm)>>=
 long
-osr(int a, int r, long v, int b, int sc)
+osr(int a, int sc, int r, long v, int b)
 {
-    long o;
 
-    o = olr(v, b, r, sc) 
-        ^ (1<<20); // STR, unset (via xor) bit 20
-    if(a != AMOVW)
-        o |= 1<<22;
-    return o;
+    return olr(a, sc, v, b, r) ^ (1<<20); // STR, unset (via xor) bit 20
 }
 @
 % >> >> >> >>
 \n inconsistent param order with olr? no, mimic MOVW r, v(b)
-\t  and should set bit 22 also in olr ?? so more consistent?
+%old: now set 22 in olr, so can factorize code, pass 'a' to olr
+%    long o;
+%
+%    o = olr(v, b, r, sc) ^ (1<<20);
+%    if(a != AMOVW)
+%        o |= 1<<22;
+%    return o;
 
 Note the use of [[olr()]] above as the instruction format
 for [[LDR]] and [[STR]] are very similar except for the bit 20.
@@ -11225,28 +11244,27 @@ for [[LDR]] and [[STR]] are very similar except for the bit 20.
 case 30:	/* mov/movb/movbu R,L(R) */
     o1 = omvl(p, &p->to, REGTMP);
     <<[[asmout()]] sanity check o1>>
+
     rf = p->from.reg;
     r = p->to.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o2 = osrr(rf, REGTMP, r, p->scond);
-    if(p->as != AMOVW)
-        o2 |= 1<<22;
+    o2 = osrr(p->as, p->scond, rf, REGTMP, r);
     break;
 @
-% >>
+%old: now done in olr
+%    if(p->as != AMOVW)
+%        o2 |= 1<<22;
 
 <<function osrr(arm)>>=
 long
-osrr(int r, int i, int b, int sc)
+osrr(int a, int sc, int r, int i, int b)
 {
 
-    return olr(i, b, r, sc) 
-    ^ ((1<<25) | // Rm not immediate offset
-       (1<<20)); // STR
+    return olrr(a, sc, i, b, r) ^ (1<<20); // STR
 }
 @
 % >> >>
-\t why not call olrr? why ^?
+%old:    return olr(i, b, r, sc) ^ ((1<<25) | (1<<20));
 
 
 <<[[optab]] entries>>=
@@ -11376,7 +11394,7 @@ case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
     rt = p->to.reg;
     r = p->from.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o1 = olr(instoffset, r, rt, p->scond);
+    o1 = olr(AMOVW, p->scond, instoffset, r, rt);
 
     o2 = oprrr(ASLL, p->scond);
     o3 = oprrr(ASRA, p->scond);
@@ -11418,9 +11436,7 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
     r = p->from.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
 
-    o2 = olrr(REGTMP,r, rt, p->scond);
-    if(p->as == AMOVB)
-        o2 |= 1<<22;
+    o2 = olrr(p->as, p->scond, REGTMP,r, rt);
 
     o3 = oprrr(ASLL, p->scond);
     if(p->as == AMOVHU)
@@ -11441,6 +11457,9 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
 @
 % >> >> >> >> >> >>  >> >>
 \t factorize shift
+%old: factorized in olrr now
+%    if(p->as == AMOVB)
+%        o2 |= 1<<22;
 
 \subsubsection{Store}
 
@@ -11460,12 +11479,12 @@ case 23:	/* movh/movhu R,O(R) -> sb,sb */
     rf = p->from.reg;
     r = p->to.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o1 = osr(AMOVH, rf, instoffset, r, p->scond);
+    o1 = osr(AMOVH, p->scond, rf, instoffset, r);
 
     o2 = oprrr(ASRL, p->scond);
     o2 |= (REGTMP<<12) | (8<<7) | rf;
 
-    o3 = osr(AMOVH, REGTMP, instoffset+1, r, p->scond);
+    o3 = osr(AMOVH, p->scond, REGTMP, instoffset+1, r);
     break;
 @
 % >> >>
@@ -11492,8 +11511,7 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
     rf = p->from.reg;
     r = p->to.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o2 = osrr(rf, REGTMP, r, p->scond);
-    o2 |= (1<<22);
+    o2 = osrr(AMOVW, p->scond, rf, REGTMP, r);
 
     o3 = oprrr(ASRL, p->scond);
     o3 |= (rf<<12) | (8<<7) | rf;
@@ -11503,8 +11521,7 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
     o4 |= (REGTMP<<16) | (REGTMP<<12);
     o4 |= immrot(1);
 
-    o5 = osrr(rf, REGTMP,r,p->scond);
-    o5 |= (1<<22);
+    o5 = osrr(AMOVW, p->scond, rf, REGTMP,r);
 
     o6 = oprrr(ASRL, p->scond);
     o6 |= (rf<<12) | (24<<7) | rf;
@@ -11512,6 +11529,9 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
 
     break;
 @
+%old: now factorized in osrr
+%    o2 |= (1<<22);
+%    o5 |= (1<<22);
 
 
 
@@ -13609,7 +13629,7 @@ case 64:	/* mov/movb/movbu R,addr */
     o1 = omvl(p, &p->to, REGTMP);
     if(!o1)
         break;
-    o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+    o2 = osr(p->as, p->scond, p->from.reg, 0, REGTMP);
     break;
 @
 
@@ -13629,9 +13649,7 @@ case 66:	/* movh/movhu/movb addr,R */
     o1 = omvl(p, &p->from, REGTMP);
     if(!o1)
         break;
-    o2 = olr(0, REGTMP, p->to.reg, p->scond);
-    if(p->as == AMOVBU || p->as == AMOVB)
-        o2 |= 1<<22;
+    o2 = olr(p->as, p->scond, 0, REGTMP, p->to.reg);
     if(o->type == 65)
         break;
 
@@ -13655,6 +13673,9 @@ case 66:	/* movh/movhu/movb addr,R */
     break;
 @
 % >> >> >> >> >> >> >>
+%old: factorized in olr now
+%    if(p->as == AMOVBU || p->as == AMOVB)
+%        o2 |= 1<<22;
 
 <<[[optab]] entries>>=
 { AMOVH,	C_REG,	C_NONE,	C_ADDR,		67, 24, 0,	LTO },
@@ -13666,7 +13687,7 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
     o1 = omvl(p, &p->to, REGTMP);
     if(!o1)
         break;
-    o2 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+    o2 = osr(p->as, p->scond, p->from.reg, 0, REGTMP);
 
     o3 = oprrr(ASRL, p->scond);
     o3 |= (8<<7)|(p->from.reg)|(p->from.reg<<12);
@@ -13676,7 +13697,7 @@ case 67:	/* movh/movhu R,addr -> sb, sb */
     o4 |= (REGTMP << 12) | (REGTMP << 16);
     o4 |= immrot(1);
 
-    o5 = osr(p->as, p->from.reg, 0, REGTMP, p->scond);
+    o5 = osr(p->as, p->scond, p->from.reg, 0, REGTMP);
 
     o6 = oprrr(ASRL, p->scond);
     o6 |= (24<<7)|(p->from.reg)|(p->from.reg<<12);
@@ -16080,12 +16101,13 @@ case 59:	/* movw/bu R<<I(R),R -> ldr indexed */
     }
     if(p->from.offset&(1<<4))
         diag("bad shift in LDR");
-    o1 = olrr(p->from.offset, p->from.reg, p->to.reg, p->scond);
-    if(p->as == AMOVBU)
-        o1 |= 1<<22;
+    o1 = olrr(p->as, p->scond, p->from.offset, p->from.reg, p->to.reg);
     break;
 @
 % >> >> >>
+%old: factorized in olrr now
+%    if(p->as == AMOVBU)
+%        o1 |= 1<<22;
 
 
 <<[[asmout()]] switch on type cases>>=
@@ -16106,12 +16128,13 @@ case 60:	/* movb R(R),R -> ldrsb indexed */
 case 61:	/* movw/b/bu R,R<<[IR](R) -> str indexed */
     if(p->to.reg == R_NONE)
         diag("MOV to shifter operand");
-    o1 = osrr(p->from.reg, p->to.offset, p->to.reg, p->scond);
-    if(p->as == AMOVB || p->as == AMOVBU)
-        o1 |= 1<<22;
+    o1 = osrr(p->as, p->scond, p->from.reg, p->to.offset, p->to.reg);
     break;
 @
 % >> >>
+%old: factorized in osrr
+%    if(p->as == AMOVB || p->as == AMOVBU)
+%        o1 |= 1<<22;
 
 
 \section{Compiler-only pseudo opcodes}
@@ -16130,7 +16153,7 @@ case ABCASE:
 
 <<[[asmout()]] switch on type cases>>=
 case 62:	/* case R -> movw	R<<2(PC),PC */
-    o1 = olrr(p->from.reg, REGPC, REGPC, p->scond);
+    o1 = olrr(AMOVW, p->scond, p->from.reg, REGPC, REGPC);
     o1 |= 2<<7;
     break;
 @
