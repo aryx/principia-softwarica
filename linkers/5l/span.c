@@ -261,6 +261,7 @@ regoff(Adr *a)
 /*e: function regoff(arm) */
 
 /*s: function immrot(arm) */
+// ulong -> option<long> (None = 0)
 long
 immrot(ulong v)
 {
@@ -280,6 +281,7 @@ immrot(ulong v)
 /*e: function immrot(arm) */
 
 /*s: function immaddr(arm) */
+// ulong -> option<long> (None = 0)
 long
 immaddr(long v)
 {

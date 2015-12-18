@@ -840,24 +840,6 @@ asmout(Prog *p, Optab *o)
         o1 |= (rt<<12) | (rf<<8) | (1<<4) | r ;
         break;
     /*x: [[asmout()]] switch on type cases */
-    case 15:	/* mul r,[r,]r */
-        o1 = oprrr(p->as, p->scond);
-        rf = p->from.reg;
-        rt = p->to.reg;
-        r = p->reg;
-        /*s: [[asmout()]] adjust [[r]] */
-        if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO
-            r = rt;
-        /*e: [[asmout()]] adjust [[r]] */
-        /*s: [[asmout()]] adjust registers when mul */
-        if(rt == r) {
-            r = rf;
-            rf = rt;
-        }
-        /*e: [[asmout()]] adjust registers when mul */
-        o1 |= (rt<<16) | (rf<<8) | r;
-        break;
-    /*x: [[asmout()]] switch on type cases */
     case 14:	/* movb/movbu/movh/movhu R,R */
         o1 = oprrr(ASLL, p->scond);
 
@@ -891,6 +873,24 @@ asmout(Prog *p, Optab *o)
             r = rt;
         /*e: [[asmout()]] adjust [[r]] */
         o1 |= (r<<16) | (rt<<12);
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 15:	/* mul r,[r,]r */
+        o1 = oprrr(p->as, p->scond);
+        rf = p->from.reg;
+        rt = p->to.reg;
+        r = p->reg;
+        /*s: [[asmout()]] adjust [[r]] */
+        if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO
+            r = rt;
+        /*e: [[asmout()]] adjust [[r]] */
+        /*s: [[asmout()]] adjust registers when mul */
+        if(rt == r) {
+            r = rf;
+            rf = rt;
+        }
+        /*e: [[asmout()]] adjust registers when mul */
+        o1 |= (rt<<16) | (rf<<8) | r;
         break;
     /*x: [[asmout()]] switch on type cases */
     case 13:	/* op $lcon, [R], R */
@@ -1829,21 +1829,23 @@ olr(long v, int b, int rt, int sc)
     /*s: [[olr()]] sanity check sc */
     if(sc & C_SBIT)
         diag(".S on LDR/STR instruction");
+    if(sc & C_UBIT)
+        diag(".U on LDR/STR instruction");
     /*e: [[olr()]] sanity check sc */
 
     /*s: [[olr()]] set special bits */
     if(!(sc & C_PBIT))
-        o |= 1 << 24; // pre
-    if(!(sc & C_UBIT))
-        o |= 1 << 23; // up?? bug?
+        o |= 1 << 24; // pre (not post)
     if(sc & C_WBIT)
         o |= 1 << 21; // write back
     /*e: [[olr()]] set special bits */
-    o |= (0x1<<26) | // memory class
+    o |= (0x1<<26) | // memory instructions class
          (1<<20);    // LDR
-    if(v < 0) {
+    if(v >= 0) {
+        o |= 1 << 23; // Up bit, positive offset
+    } else {
+        // bit 23 unset, Down, negative offset
         v = -v;
-        o ^= 1 << 23; // down
     }
     /*s: [[olr()]] sanity check offset [[v]] */
     if(v >= (1<<12))
@@ -1933,7 +1935,7 @@ olrr(int i, int b, int r, int sc)
 {
 
     return olr(i, b, r, sc) 
-           ^ (1<<25); // Rm not immediate offset
+           | (1<<25); // Rm not immediate offset
 }
 /*e: function olrr(arm) */
 

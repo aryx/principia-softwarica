@@ -8059,6 +8059,9 @@ used by [[oplook()]] and [[asmout()]], especially [[Optab]].
 
 \section{ARM instruction format}
 
+% 4 bytes:
+\t typedef long instr; ?  so clearer oprrr, olr, immrot or partialinstr?
+
 %dup: intro/requirements
 % as said in X, great .
 % excellent ARM reference card\url{http://re-eject.gbadev.org/files/armref.pdf}.
@@ -8073,6 +8076,7 @@ used by [[oplook()]] and [[asmout()]], especially [[Optab]].
 % mainly 4 categories, 6 formats: arith, arith with immediate,
 %  memory with offsets, branch immediate, branch
 % FIGURE FIGURE FIGURE FIGURE
+% arith have its own set of sub-opcodes (4 bits)
 
 % register 0 to 15 so 4 bits enough. rf, rt, r.
 
@@ -8084,6 +8088,8 @@ used by [[oplook()]] and [[asmout()]], especially [[Optab]].
 % first Class will say if satisfy constraint.
 % If not then pool. 
 % Other?
+
+% 1 bit of LDR vs STR, 1 bit for Sign, 1 bit for U, 1 bit for B vs Word, etc
 
 \section{Additional data structures}
 \l rules, patterns, ranges, classes
@@ -8217,12 +8223,12 @@ and a few more we will describe in Section~\ref{sec:operand-class-DCONST}.
 The reason for the division is that depending on the value of the constant,
 one might need to use different kinds of instructions.
 For instance, the third entry of [[optab]] above says that if the first
-operand is a large constant ([[C_LCON]]), then 2 instructions
+operand is a large constant ([[C_LCON]]), then 2 ARM instructions
 will be necessary (8 bytes). 
 \l one extra which loads REGTMP
 %
 If the number is small
-or can be rotated in a certain way ([[C_RCON]]), then 1 instruction
+or can be rotated in a certain way ([[C_RCON]]), then 1 ARM instruction
 will be enough, as indicated by the second entry above.
 Indeed, this small or rototable number can be encoded directly 
 in the instruction.
@@ -8313,11 +8319,10 @@ with the opcode [[ASUB]]. So, in effect [[AADD]] becomes the
 %
 Then, one just needs to write rules with [[AADD]] instead of
 having to repeat them also for [[ASUB]].
+\n one form of general pattern, for instr, will see another one soon
 %chunks:
 We will gradually see in this chapter the different opcodes sets
 and their representants.
-
-\t one form of general pattern, for instr.
 
 
 \subsection{[[Operand_class]]}
@@ -8565,6 +8570,7 @@ return o;
 
 \t important, happens often. e.g. MOVW (R1), (R2)
 \t have to use intermediate MOVW (R1), R10;  MOVW R10, (R2)
+\t this is why need very complete optab.
 \n ugly a bit, late error.
 
 \label{sec:cmp}
@@ -8632,7 +8638,7 @@ to actually match also more {\em specialized} operand classes
 We will present those general and specialized
 classes, and their encoding in [[cmp()]],
 gradually in this chapter.
-\t BUT order is important!! see next section
+\n will see also soon that order is important! see next section
 
 
 
@@ -8705,7 +8711,7 @@ in this chapter, specify the opcodes sets of the representants.
 case AXXX:
   break;
 @
-\t AXXX should be dead as it's after n ... but get ``unknown op in build''
+\t AXXX should be dead as it's after n ... ? but get ``unknown op in build''!
 \t  it is because of V4 and VFP which generates new AXXX entries
 
 
@@ -8828,7 +8834,8 @@ of [[aclass()]] in the operand itself:
 short	class;
 @
 %old: was char, but ugly
-\t initialized correctly in zprg? I don't think so. bug?
+\t initialized correctly in zprg? I don't think so. bug? no cos zeroed page
+\t when use brk
 
 Those caching fields are used and set in [[oplook()]]:
 
@@ -9429,6 +9436,7 @@ get its encoding (when the number is rotatable).
 We can now see the code of [[immrot()]]:
 
 <<function immrot(arm)>>=
+// ulong -> option<long> (None = 0)
 long
 immrot(ulong v)
 {
@@ -9482,6 +9490,7 @@ o1 |= immrot(instoffset);
 
 
 \subsection{[[D_OREG]], [[C_xOREG]], and [[immaddr()]]}
+\label{sec:c-xoreg}
 \label{sec:immaddr}
 
 % offsets constraints
@@ -9590,6 +9599,7 @@ case C_LOREG:
 
 
 <<function immaddr(arm)>>=
+// ulong -> option<long> (None = 0)
 long
 immaddr(long v)
 {
@@ -9606,17 +9616,17 @@ immaddr(long v)
 @
 % >> >> >>
 \l rename immsmall?
-\t return bool instead? clearer? anyway set special bits in olr?
-\t  or because its result is passed to immfloat? but could rewrite immfloat?
-\t  just pass abs(instoffset) & 0xfff
-%old? why need v & 0xfff? redundant no?
+\t could return bool instead. Clearer. Anyway set special bits in olr already.
+\t It is true its result is passed to immfloat but could rewrite immfloat too
+\t (or just pass abs(instoffset) & 0xfff to immfloat).
+\t It is maybe more symetric with immrot to keep it like that.
+\t why need v & 0xfff? redundant no?
 
 
 
 
 \subsection{[[D_OREG]] with globals, [[C_xEXT]]}
-\n before the general D_OREG, cos simpler, just half, small, and long
-\l  but there is BIG
+\label{sec:c-xext}
 
 % H S L ? half, small, large?
 <<[[Operand_class]] C_xEXT cases>>=
@@ -9677,6 +9687,7 @@ if(t == SNONE || t == SXREF) {
 
 
 \subsection{[[D_OREG]] with automatics, [[C_xAUTO]]}
+\label{sec:c-xauto}
 
 <<[[Operand_class]] C_xAUTO cases>>=
 <<[[Operand_class]] cases, in C_xAUTO, half case>>
@@ -10038,6 +10049,7 @@ As mentioned above, [[oprrr()]] returns a partial
 instruction, to be completed later, with the 
 conditional excecution bits and opcode bits set according to
 its two parameters:
+\t typedef instr?
 
 <<function oprrr(arm)>>=
 long
@@ -10085,11 +10097,15 @@ oprrr(int a, int sc)
 \l why oprrr? rename?
 \t AMOVW above is really more AMOV
 
-[[oprrr()]] occasionally sets bit 20, the {\em sign bit},
+[[oprrr()]] occasionally sets bit 20, the {\em S bit},
 if the programmer requested it by using the {\em special bit}
 [[S]] as in [[ADD.S R1, R2, R3]].
 See the \book{Assembler} and \book{Emulator}
-for more information on {special bits} and the semantic of the sign bit.
+for more information on {special bits} and the semantic of the S bit.
+\t it does not mean sign  but  set-flags
+\t why not have it on always? faster without? and by having 
+\t  with ADD means can do in one instr multiple things? then faster too
+\t  than one ADD and one CMP?
 
 <<[[oprrr()]] sign bit handling>>=
 if(sc & C_SBIT)
@@ -10099,7 +10115,7 @@ if(sc & C_SBIT)
 
 This bit is always set for the comparison opcodes, as shown
 in the case for [[ATST]] and so on in the [[switch]] above.
-\l because not used
+\t indeed makes sense, those instructions set flags
 \l and when 0 it is used for other instructions, MSR, MRS, even BX
 
 <<[[oprrr()]] sanity check sc>>=
@@ -10904,7 +10920,7 @@ case AMOVHU:
 %trans:
 We have seen already a few rules concerning [[AMOVW]]
 in Section~\ref{sec:arith-logic-gen}
-when the operands of [[AMOVW]] were simple registers or constants.
+when the operands of [[AMOVW]] were simple registers and constants.
 %
 Indeed, [[AMOVW]] is a very general virtual instruction
 which unifies with one virtual opcode many ARM opcodes: [[MOV]], [[MVN]],
@@ -10922,18 +10938,18 @@ to 6 ARM instructions (24 bytes) as we will see soon.
 \label{sec:load}
 
 %trans:
-Another important use of [[MOVW]],
+An important use of [[MOVW]],
 beyond the setting of a register from another register or a constant
 (via the ARM instructions [[MOV]] and [[MVN]]),
 %
 is to {\em load} data from memory in a register, e.g. [[MOVW 10(R1), R2]]. 
 This will result in the use of the ARM instruction [[LDR]].
 %toc:
-We will first see the set of rules when the offset is small,
+We will first see rules when the offset is small,
 %
 that is when the operand class has the form [[C_S]]$xxx$,
 e.g. [[C_SEXT]] (see Section~\ref{sec:immaddr} and [[immaddr()]]).
-This means the offset can be encoded directly in the ARM instruction,
+In those cases the offset can be encoded directly in the ARM instruction,
 hence the rule size [[4]] below:
 
 <<[[optab]] entries>>=
@@ -10962,27 +10978,40 @@ case 21:	/* mov/movbu O(R),R */
 %old:    if(p->as != AMOVW) -> positive form
 %old: was '-> lr' in comment, but clearer nothing
 
-Note the use for the first time of [[Optab.param]] 
+%dup:
+Remember that [[aclass()]] above modifies the global [[instoffset]]
+whose value depends on the operand class parameter.
+%
+[[instoffset]] can contain
+a {computed offset} to [[R12]] for external symbols ([[EXT]],
+see Section~\ref{sec:c-xext}),
+an {adjusted offset} to [[R13]] for stack access ([[AUTO]],
+see Section~\ref{sec:c-xauto}),
+or {the given offset} for the other cases ([[OREG]],
+see Section~\ref{sec:c-xoreg}).
+%
+Each kind of offset corresponds to a different {\em base register},
+which is actually specified in the rule itself.
+%todo? could modify p->from.reg to record pseudo-register instead?
+% then no need Param at all?
+Indeed, note the use for the first time of [[Optab.param]] 
 (see Section~\ref{sec:optab-param}) in the rules
 above, e.g. [[REGSB]] when the rule concerns an external
 symbol ([[C_SEXT]]).
 This extra parameter can then be accessed from [[asmout()]] to
-adjust the instruction:
+adjust the {base register}:
 
 <<[[asmout()]] adjust maybe r to rule param>>=
 if(r == R_NONE)
     r = o->param;
 @
-%todo? could modify p->from.reg to record pseudo-register instead?
-% then no need Param at all?
 
 The code for [[case 21:]] above relies on [[olr()]]
 which factorizes most of the code related to the instruction 
-format of memory operations. It is actually also used for
+format of memory instructions. It is actually also used for
 the generation of [[STR]] instructions as we will see soon.
 
 
-% b = base = rn,  r = rd
 <<function olr(arm)>>=
 long
 olr(long v, int b, int rt, int sc)
@@ -10995,9 +11024,11 @@ olr(long v, int b, int rt, int sc)
     <<[[olr()]] set special bits>>
     o |= (0x1<<26) | // memory instructions class
          (1<<20);    // LDR
-    if(v < 0) {
+    if(v >= 0) {
+        o |= 1 << 23; // Up bit, positive offset
+    } else {
+        // bit 23 unset, Down, negative offset
         v = -v;
-        o ^= 1 << 23; // down
     }
     <<[[olr()]] sanity check offset [[v]]>>
     o |= (b<<16) | (rt<<12) | v;
@@ -11005,8 +11036,20 @@ olr(long v, int b, int rt, int sc)
 }
 @
 % >> >> >> >> >> >> >> >> >> >>
-%old: use rt, not r, more consistent
-\n actually also used for STR
+\t could put sc first param? would be more consistent with what we do usually?
+\n note that order mimic order of instr,  MOVW v(b), rt
+%old: 
+% - use rt, not r, more consistent
+% - was doing tricky stuff with U bit but I simplified
+%    if(!(sc & C_UBIT))
+%        o |= 1 << 23; // up?? bug?
+%    ...
+%    if(v < 0) {
+%        v = -v;
+%        o ^= 1 << 23; // down
+%    }
+% b = base = rn
+\t v can be offset (pos/neg) or register number (rm)
 
 Remember from the \book{Assembler} that memory instructions
 can use the [[.P]] or [[.W]] suffixes to offer additional
@@ -11016,31 +11059,26 @@ to the setting of special bits in the ARM instruction itself:
 
 <<[[olr()]] set special bits>>=
 if(!(sc & C_PBIT))
-    o |= 1 << 24; // pre
+    o |= 1 << 24; // pre (not post)
 if(sc & C_WBIT)
     o |= 1 << 21; // write back
 @
 % >> >> >> >>
 
-% as in [[MOVW.W R14, -4(R13)]], 
-% as in [[MOVW.P -4(R13), R15]], 
+\l as in [[MOVW.W R14, -4(R13)]], 
+\l as in [[MOVW.P -4(R13), R15]], 
 
-% ARM memory instruction has also U bit, U = up when set.
-% 0 means down. but actually automatic. But can be used when
-% use register for offset?
-
-<<[[olr()]] set special bits>>=
-if(!(sc & C_UBIT))
-    o |= 1 << 23; // up?? bug?
-@
-%bug??? anyway can not express Rm(R1) in 5a. Or used only for multi reg MOV?
-% >>
 
 <<[[olr()]] sanity check sc>>=
 if(sc & C_SBIT)
     diag(".S on LDR/STR instruction");
+if(sc & C_UBIT)
+    diag(".U on LDR/STR instruction");
 @
 \n dual, .P.W forbidden on arith
+%pad: I added the code to forbid UBIT cos make no sense for MOVW
+% cos we handle the direction automatically based on the offset.
+
 
 <<[[olr()]] sanity check offset [[v]]>>=
 if(v >= (1<<12))
@@ -11048,7 +11086,6 @@ if(v >= (1<<12))
 @
 % >>
 %old: use curp instead of PP above, and remove dead code then:
-%
 %   <<global PP(arm)>>=
 %   static Prog *PP;
 %   @
@@ -11059,7 +11096,7 @@ if(v >= (1<<12))
 %   @
 
 
-The use of large offsets requires an additional instruction
+The use of large offsets ([[C_L]]$xxx$) requires an additional instruction
 to first load the offset in [[REGTMP]]:
 
 <<[[optab]] entries>>=
@@ -11072,7 +11109,10 @@ to first load the offset in [[REGTMP]]:
 { AMOVBU,	C_LOREG,C_NONE,	C_REG,		31, 8, 0,	LFROM },
 @
 
-% similar to section X, omvl(), load from literal pool.
+The code below uses also [[omvl()]] which we saw
+in Section~\ref{sec:pool-and-reg-tmp} for arithmetic instructions.
+Indeed, we also need here to load from a literal pool
+a large number, here an offset:
 
 <<[[asmout()]] switch on type cases>>=
 case 31:	/* mov/movbu L(R),R */
@@ -11094,6 +11134,11 @@ case 31:	/* mov/movbu L(R),R */
 % and    if(p->as == AMOVBU || p->as == AMOVB)
 %old: was  '-> lr[b]' in comment but unclear
 
+Note that [[i]] below represents a register number ([[REGTMP]])
+which is passed to [[olr()]] instead of [[instoffset]] in previous calls.
+Indeed, the immediate offset or the register containing
+the offset are both encoded at the beginning of the ARM instruction
+(the low bits).
 
 <<function olrr(arm)>>=
 long
@@ -11101,13 +11146,13 @@ olrr(int i, int b, int r, int sc)
 {
 
     return olr(i, b, r, sc) 
-           ^ (1<<25); // Rm not immediate offset
+           | (1<<25); // Rm not immediate offset
 }
 @
 % >>
-%todo? need a xor?  it's not a | instead??
+%old: was ^ xor but more logic | I think
 
-\t note that actually 5a does not allow this syntax! R1(R2)
+\n actually 5a does not allow this syntax! R1(R2), but 5l can generate it
 
 
 
@@ -11115,8 +11160,12 @@ olrr(int i, int b, int r, int sc)
 \subsection{Store}
 \label{sec:store}
 
-%trans:
-% dual = store
+%dup: dual with previous section
+[[MOVW]] can also be used to {\em store} data
+from a register in memory, e.g. [[MOVW R2, 10(R1)]].
+%dup: dual with previous section
+This will result in the use of the ARM instruction [[STR]].
+
 
 <<[[optab]] entries>>=
 { AMOVW,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
@@ -11138,6 +11187,7 @@ case 20:	/* mov/movb/movbu R,O(R) */
     o1 = osr(p->as, rf, instoffset, r, p->scond);
     break;
 @
+\t set bit 22 here? factorize in chunk?
 
 
 <<function osr(arm)>>=
@@ -11154,9 +11204,12 @@ osr(int a, int r, long v, int b, int sc)
 }
 @
 % >> >> >> >>
+\n inconsistent param order with olr? no, mimic MOVW r, v(b)
+\t  and should set bit 22 also in olr ?? so more consistent?
 
+Note the use of [[olr()]] above as the instruction format
+for [[LDR]] and [[STR]] are very similar except for the bit 20.
 
-% long
 
 <<[[optab]] entries>>=
 { AMOVW,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
@@ -11193,7 +11246,7 @@ osrr(int r, int i, int b, int sc)
 }
 @
 % >> >>
-
+\t why not call olrr? why ^?
 
 
 <<[[optab]] entries>>=
@@ -11268,6 +11321,8 @@ case 34:	/* mov $lacon,R */
 \t how can be D_NONE? has to be D_REG ... then can simplify the code
 
 
+% when offset is small to base, then can optimize, just use one instr
+% if offset rototable:
 
 % the MOV opcodes with size 4 which are simple, simple load or store
 <<[[optab]] entries>>=

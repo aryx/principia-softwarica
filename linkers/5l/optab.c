@@ -37,13 +37,13 @@ Optab	optab[] =
     { ASLL,		C_REG,	C_NONE,	C_REG,		 9, 4 },
     { ASLL,		C_REG,	C_REG,	C_REG,		 9, 4 },
     /*x: [[optab]] entries */
-    { AMUL,		C_REG,	C_REG,	C_REG,		15, 4 },
-    { AMUL,		C_REG,	C_NONE,	C_REG,		15, 4 },
-    /*x: [[optab]] entries */
     { AMOVB,	C_REG,	C_NONE,	C_REG,		14, 8 },
     { AMOVBU,	C_REG,	C_NONE,	C_REG,		58, 4 },
     { AMOVH,	C_REG,	C_NONE,	C_REG,		14, 8 },
     { AMOVHU,	C_REG,	C_NONE,	C_REG,		14, 8 },
+    /*x: [[optab]] entries */
+    { AMUL,		C_REG,	C_REG,	C_REG,		15, 4 },
+    { AMUL,		C_REG,	C_NONE,	C_REG,		15, 4 },
     /*x: [[optab]] entries */
     { AADD,		C_NCON,	C_REG,	C_REG,		13, 8 },
     { AADD,		C_NCON,	C_NONE,	C_REG,		13, 8 },
