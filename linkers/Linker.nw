@@ -207,6 +207,7 @@ the original source code?
 \item What debugging information contains executables? How
 source-level debuggers can find which C source code corresponds 
 to a specific binary instruction?
+\l actually 5l does also some profiling, but more unexpected
 
 \end{itemize}
 \l what is position independent code? 
@@ -728,6 +729,7 @@ the relocated instruction [[JMP 62]] in
 Figure~\ref{fig:linker-process} as [[C1]] is after the executable
 header which uses 32 bytes.
 \n will see below that actually not 62 but
+\t if jmp relatif then no need, kinda PIC, but still actually need
 \l again can have fixpoint issue, and relaxation hints (cf wikipedia linker)
 
 
@@ -1032,6 +1034,7 @@ DATA    hello+8(SB)/4, $"rld\n"
 
 If you do not understand the code, or the calling
 conventions, read the \book{Assembler}.
+\l plus 8 cos 4 for saved R14, then 4 for first arg but R0, so 8 for 2nd arg
 %
 Symbol definitions and uses are now spread over different files:
 the [[hello]] global is defined in [[world.s]] but used in [[hello2.s]].
@@ -4123,7 +4126,7 @@ as we will see in Section~\ref{sec:opcode-dispatch}.
 Note that [[pc]] is a {\em global} and so
 persists between different calls to [[ldobj()]]. Thus,
 all the instructions in the different object files will
-have a unique program counter value in [[Instr.pc]].
+have a unique program counter value in their [[Instr.pc]] field.
 \l that is the spirit of global concatenation
 %
 [[ldobj()]] is also using the {\em local} below
@@ -4164,7 +4167,7 @@ short o;
 @
 \t actually byte would be enough
 
-An important local is [[bloc]] which is a {\em cursor} in an
+An important local of [[ldobj()]] is [[bloc]] which is a {\em cursor} in an
 {\em input buffer} derived from [[f]] as explained soon in 
 Section~\ref{sec:ldobj-input-buffer}.
 %
@@ -8171,6 +8174,7 @@ Optab	optab[] =
     { AXXX,		C_NONE,	C_NONE,	C_NONE,		 0, 4 },
 };
 @
+\l rename rules?
 \l AXXX at the end? why not ALAST instead? and size 4??
 \n order of entries not important, anyway sorted by ocmp()
 %old: I removed the last 0 after the 4, to be closer to the structure def above
@@ -8808,6 +8812,8 @@ enum Operand_class {
 The enumerations of general operand classes must be after the
 enumerations of their subclasses.
 
+
+
 \subsection{Optimizations}
 \l could be in Adv Topics? maybe easier to understand now, and pretty simple
 
@@ -9413,9 +9419,9 @@ The ARM use 12 bits to encode immediate constants in arithmetic
 instructions but it is using a clever trick
 to be able to represent numbers larger than 4096.
 %
-Indeed, the 12 bits are divided in two parts: 8 bits for
-a number from [[0]] to [[0xff]], and 4 bits
-for a rotation of this number. The 16 possible rotations
+Indeed, the 12 bits are divided in two parts: 8 bits to represent
+a number from [[0]] to [[0xff]], and 4 bits to represent
+a rotation of this number. The 16 possible rotations
 are not simply a bitshift to the left from 0 to 15.
 Indeed, this would not be enough to represent large numbers
 such as $2^31$. Instead, each rotation is a double bit rotation to
@@ -9433,7 +9439,8 @@ Here are a few examples of numbers and their ARM encoding:
 Not all 32 bits integers can be represented
 using that scheme but many important numbers like all
 the powers of 2 between 0 and 31 can be expressed
-which is very useful in operations involving bitsets or bitmasks.
+which is very useful in operations involving bitsets.
+\n but not bitmasks
 See \url{http://alisdair.mcdiarmid.org/arm-immediate-value-encoding/}
 for an excellent tutorial on the topic. This page contains also
 an interactive application where one can enter any number and
@@ -9781,14 +9788,14 @@ case N_INTERN:
         s->type = SDATA;
         // Fall through
     case SDATA: case SBSS: case SDATA1:
-        if(!dlm) {
-            instoffset = s->value + a->offset - BIG;
-            if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
-                return C_RECON;
+        <<[[aclass()]] in D_ADDR case, SDATA case, if dlm>>
+        instoffset = s->value + a->offset - BIG;
+        if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
+             return C_RECON;
+        } else {
+            instoffset = s->value + a->offset + INITDAT;
+            return C_LCON;
         }
-        // else
-        instoffset = s->value + a->offset + INITDAT;
-        return C_LCON;
     }
     diag("unknown section for %s", s->name);
     break;
@@ -10815,7 +10822,7 @@ if(sc != 0xe)
 \subsection{Indirect jumps}
 \l dynamic, indirect, absolute
 
-Most jumps in a program should be {\em static}, e.g. jumping to
+Most jumps in a program are {\em static}, e.g. jumping to
 a procedure or a label.
 %
 Even the assembly instruction [[B 2(PC)]], which uses
@@ -10996,7 +11003,7 @@ or {the given offset} for the other cases ([[OREG]],
 see Section~\ref{sec:c-xoreg}).
 %
 Each kind of offset corresponds to a different {\em base register},
-which is actually specified in the rule itself.
+which can actually be specified in the rule itself.
 \l could modify p->from.reg to record pseudo-register instead? no need Param?
 Indeed, note the use for the first time of [[Optab.param]] 
 (see Section~\ref{sec:optab-param}) in the rules
@@ -11135,7 +11142,8 @@ The code below uses also [[omvl()]] which we saw
 in Section~\ref{sec:pool-and-reg-tmp} for arithmetic instructions.
 Remember than [[omvl()]] internally calls [[olr()]].
 Indeed, we also need here to load from a literal pool
-a large number, here an offset:
+a large number, here an offset. So loading
+certain data from memory requires actually two [[LDR]] instructions.
 
 <<[[asmout()]] switch on type cases>>=
 case 31:	/* mov/movbu L(R),R */
@@ -11258,6 +11266,8 @@ case 30:	/* mov/movb/movbu R,L(R) */
 %    if(p->as != AMOVW)
 %        o2 |= 1<<22;
 
+\l so here 1 store requires actually a LDR and a STR
+
 <<function osrr(arm)>>=
 long
 osrr(int a, int sc, int r, int i, int b)
@@ -11289,7 +11299,7 @@ involves the same ARM instruction.
 This is not the case though for {loading}.
 Indeed, loading a signed byte from memory in a register may require
 to fill with 1s the 24 upper bits of the register if the
-number in memory was negative. We will the rules for
+number in memory was negative. We will see the rules for
 loading and [[AMOVB]] later in Section~\ref{sec:amovb-load}.
 
 
@@ -11333,9 +11343,9 @@ if(instoffset != 0)
 
 \subsection{Symbol addresses}
 
-The loading of an address, e.g. [[MOVW $hello(SB), R1]], %$
-which happens, after resolution, to be a small rototable offset
-to a base register, e.g. [[SB]],
+The loading of an address (e.g. [[MOVW $hello(SB), R1]]) %$
+which happens after resolution to be a small rototable offset
+to a base register (e.g. [[SB]])
 can be encoded efficiently using simply [[ADD]]:
 
 <<[[optab]] entries>>=
@@ -11347,11 +11357,10 @@ can be encoded efficiently using simply [[ADD]]:
 case 4:		/* add $I,[R],R */
     aclass(&p->from);
     o1 = oprrr(AADD, p->scond);
-    o1 |= immrot(instoffset);
     rt = p->to.reg;
     r = p->from.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o1 |= (r<<16) | (rt<<12);
+    o1 |= (r<<16) | (rt<<12) | immrot(instoffset);
     break;
 @
 %$
@@ -11368,19 +11377,20 @@ must be loaded from a literal pool with [[omvl()]]:
 @
 
 <<[[asmout()]] switch on type cases>>=
-case 34:	/* mov $lacon,R */
+case 34:	/* mov $lacon,R -> LDR x(R15), R11; ADD R11, R13, R */
     o1 = omvl(p, &p->from, REGTMP);
     <<[[asmout()]] sanity check o1>>
 
     o2 = oprrr(AADD, p->scond);
-    o2 |= REGTMP;
+    rf = REGTMP;
+    rt = p->to.reg;
     r = p->from.reg; 
     <<[[asmout()]] adjust maybe r to rule param>>
-    rt = p->to.reg;
-    o2 |= (r<<16) | (rt<<12);
+    o2 |= (r<<16) | (rt<<12) | rf;
     break;
 @
 %$
+%pad: I added the -> in the comment, and the rf = REGTMP;
 %old:
 %    if(p->to.type != D_NONE)
 %        o2 |= p->to.reg << 12;
@@ -11390,7 +11400,25 @@ case 34:	/* mov $lacon,R */
 
 \subsection{Half words and signed bytes}
 
-% see also section X with special hardware support since ARMv4
+%trans:
+The last rules for memory instructions we will see in this chapter
+%toc:
+concern the loading and storing of 
+signed and unsigned {half words} (2 bytes) as well as
+signed {bytes} (1 byte).
+%
+Many ARM processors have special support for those instructions.
+In this section though we will see the simpler ARM code generation
+rules for old ARM processors. 
+\l helps understand more signed/unsigned differences
+In those cases, [[MOVH]], [[MOVHU]]
+and [[MOVB]] are virtual instructions transformed
+by [[5l]] in multiple ARM instructions using [[LDR/STR]]
+and bitshift instructions.
+\n could have done in noops but then need if ARMv4 in noops
+%
+The rules for more recent ARM processors are described
+in Section~\ref{sec:armv4}.
 
 \subsubsection{Load}
 \label{sec:amovb-load}
@@ -11408,9 +11436,14 @@ case 34:	/* mov $lacon,R */
 { AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
 { AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
 @
-\t disymetry, AMOVB is here where it was not for store
-\t  and with the AMOVW and AMOVBU
-\t because more complex load MOVB. Need fill with 1s if signed.
+
+[[MOVHU 10(R1), R2]] is transformed in 3 instructions:
+\begin{verbatim}
+LDR 10(R1), R2 // load more than needed
+SLL $16, R2 // reset the 16
+SRL $16, R2 // upper bits
+\end{verbatim}
+\n can not do AND 0xffff ? :(
 
 <<[[asmout()]] switch on type cases>>=
 case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
@@ -11421,22 +11454,46 @@ case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
     o1 = olr(AMOVW, p->scond, instoffset, r, rt);
 
     o2 = oprrr(ASLL, p->scond);
-    o3 = oprrr(ASRA, p->scond);
+    if(p->as == AMOVHU)
+        o3 = oprrr(ASRL, p->scond);
+    else
+        o3 = oprrr(ASRA, p->scond);
+
     if(p->as == AMOVB) {
         o2 |= (rt<<12) | (24<<7) | rt;
         o3 |= (rt<<12) | (24<<7) | rt;
     } else {
         o2 |= (rt<<12) | (16<<7) | rt;
-        if(p->as == AMOVHU)
-            o3 = oprrr(ASRL, p->scond);
         o3 |= (rt<<12) | (16<<7) | rt;
     }
     break;
 @
 % >> >> >> >> >> >> >> >>
-\t why SRA vs SRL only for right? why no SLA?
-\t could be made more symetric with case 32
+%old: I made more symetric with case 32
+%    o3 = oprrr(ASRA, p->scond);
+%    ...
+%        if(p->as == AMOVHU)
+%            o3 = oprrr(ASRL, p->scond);
 
+Note that the rules for [[AMOVB]] and loading are in this section
+while the rules for [[AMOVB]] and storing were presented
+before and equivalent to the rules for [[AMOVBU]].
+%
+This dissymetry is due to how signed integers are represented in the machine:
+in {\em two's complement} form.
+%dup: codegen/memory/store
+Loading a signed byte from memory in a 32 bits register may require
+to fill with 1s the 24 upper bits of the register if the
+number in memory was negative.
+%
+For instance the signed byte [[-128]] is represented in binary
+as [[0b1000_0000]]. The signed word [[-128]] is represented
+in binary as [[0b11....1000_0000]] though.
+So one needs first to {logical shift} to
+the left ([[SLL]]) [[0b1000_0000]] 24 times, and then
+do an {\em arithmetic} shift to the right ([[SRA]]) 24 times back
+so the possible presence of a [[1]] in bit 8 will be repeated
+in all the upper bits.
 
 
 
@@ -11455,7 +11512,7 @@ case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
 @
 
 <<[[asmout()]] switch on type cases>>=
-case 32:	/* movh/movb L(R),R -> lr[b] */
+case 32:	/* movh/movb L(R),R */
     o1 = omvl(p, &p->from, REGTMP);
     <<[[asmout()]] sanity check o1>>
 
@@ -11470,22 +11527,25 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
     else
         o4 = oprrr(ASRA, p->scond);
 
-    o3 |= (rt<<12) | rt;
-    o4 |= (rt<<12) | rt;
     if(p->as == AMOVB) {
-        o3 |= (24<<7);
-        o4 |= (24<<7);
+        o3 |= (rt<<12) | (24<<7) | rt;
+        o4 |= (rt<<12) | (24<<7) | rt;
     } else {
-        o3 |= (16<<7);
-        o4 |= (16<<7);
+        o3 |= (rt<<12) | (16<<7) | rt;
+        o4 |= (rt<<12) | (16<<7) | rt;
     }
     break;
 @
 % >> >> >> >> >> >>  >> >>
 \l could factorize shift
+\n can not factorize with case 22 because here we use o3/o4, not o2/o3
 %old: factorized in olrr now
 %    if(p->as == AMOVB)
 %        o2 |= 1<<22;
+%old: made more symetric with case 31
+%    o3 |= (rt<<12) | rt;
+%    o4 |= (rt<<12) | rt;
+%old: -> lr[b]  in comment but not helpful
 
 \subsubsection{Store}
 
@@ -11500,6 +11560,13 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
 @
 \l remember no AMOVB for store, similar code than for AMOVBU
 
+[[MOVHU R2, 10(R1)]] is transformed in 3 instructions:
+\begin{verbatim}
+LDRB R2, 10(R1) // load first byte
+SRL $8, R2, R11 // extract second byte
+LDRB R11, 11(R1) // load second byte
+\end{verbatim}
+
 <<[[asmout()]] switch on type cases>>=
 case 23:	/* movh/movhu R,O(R) -> sb,sb */
     aclass(&p->to);
@@ -11508,8 +11575,8 @@ case 23:	/* movh/movhu R,O(R) -> sb,sb */
     <<[[asmout()]] adjust maybe r to rule param>>
     o1 = osr(AMOVBU, p->scond, rf, instoffset, r);
 
-    rt = REGTMP;
     o2 = oprrr(ASRL, p->scond);
+    rt = REGTMP;
     o2 |= (rt<<12) | (8<<7) | rf;
 
     o3 = osr(AMOVBU, p->scond, REGTMP, instoffset+1, r);
@@ -11521,7 +11588,8 @@ case 23:	/* movh/movhu R,O(R) -> sb,sb */
 %   it is converted in a MOVBU
 % - use rt for REGTMP, more consistent, an clearer
 
-
+Note the rule size of [[24]] below for the translation
+of [[AMOVH]] using a large offset:
 
 % 24 size ...
 <<[[optab]] entries>>=
@@ -11533,6 +11601,16 @@ case 23:	/* movh/movhu R,O(R) -> sb,sb */
 { AMOVHU,	C_REG,	C_NONE,	C_LAUTO,	33, 24, REGSP,	LTO },
 { AMOVHU,	C_REG,	C_NONE,	C_LOREG,	33, 24, 0,	LTO },
 @
+
+[[MOVHU R2, 0xffff(R1)]] is transformed in 6 ARM instructions:
+\begin{verbatim}
+LDR xxx(R15), R11 // load offset
+STR.B R2, R11(R1) // store first byte
+ROR $8, R2, R2    // MOV R2@>8, R2
+ADD $1, R11, R11
+STR.B R2, R11(R1) // store second byte
+ROR $24, R2, R2   // MOV R2@>24, R2
+\end{verbatim}
 
 <<[[asmout()]] switch on type cases>>=
 case 33:	/* movh/movhu R,L(R) -> sb, sb */
@@ -13363,6 +13441,13 @@ ckoff(Sym *s, long v)
 
 \subsection{XXX}
 
+<<[[aclass()]] in D_ADDR case, SDATA case, if dlm>>=
+if(dlm) {
+    instoffset = s->value + a->offset + INITDAT;
+    return C_LCON;
+}
+@
+%old: used to be in negative form in aclass but I rewrote it
 
 % port to arm?
 %<<[[asmb()]] if dynamic module, when iterate from firstp(xxx)>>=
@@ -17118,7 +17203,13 @@ gethunk(void)
 }
 @
 
-
+% note that because malloc always return a newly allocated area,
+% and never reuse a previously allocated space (one that
+% would have been free'ed to  be made available again),
+% the data returned is always reset to 0. Indeed sbrk()
+% allocates zero-filled data (see Kernel.nw).
+% Replacing malloc but the libc malloc may result in bug
+% as at a few place we don't initialize some fields to 0.
 
 <<function malloc>>=
 /*
