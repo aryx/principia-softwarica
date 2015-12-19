@@ -107,10 +107,10 @@ Optab	optab[] =
     /*x: [[optab]] entries */
     { ASWPW,	C_SOREG,C_REG,	C_REG,		40, 4 },
     /*x: [[optab]] entries */
-    { AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
-    /*x: [[optab]] entries */
     { AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
     { AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
+    /*x: [[optab]] entries */
+    { AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
     /*x: [[optab]] entries */
     { AMOVH,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
     { AMOVH,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
@@ -119,7 +119,7 @@ Optab	optab[] =
     { AMOVHU,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
     { AMOVHU,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
     { AMOVHU,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-    /*x: [[optab]] entries */
+
     { AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
     { AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
     { AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },

@@ -1021,32 +1021,13 @@ asmout(Prog *p, Optab *o)
         if(instoffset != 0)
             diag("offset must be zero in SWP");
         /*e: [[asmout()]] sanity check instoffset for SWP */
-        o1 = (0x2<<23) | (0x9<<4);
+        o1 = (0x2<<23) | (0x9<<4); // SWP
         if(p->as == ASWPBU)
             o1 |= 1 << 22;
         rf = p->from.reg;
         rt = p->to.reg;
         r = p->reg;
         o1 |= ((p->scond & C_SCOND) << 28) | (rf<<16) | (rt<<12) | r;
-        break;
-    /*x: [[asmout()]] switch on type cases */
-    case 34:	/* mov $lacon,R */
-        o1 = omvl(p, &p->from, REGTMP);
-        /*s: [[asmout()]] sanity check o1 */
-        if(!o1)
-            break;
-        /*e: [[asmout()]] sanity check o1 */
-
-        o2 = oprrr(AADD, p->scond);
-        o2 |= REGTMP;
-        r = p->from.reg; // ?? should be always R_NONE no?
-        /*s: [[asmout()]] adjust maybe r to rule param */
-        if(r == R_NONE)
-            r = o->param;
-        /*e: [[asmout()]] adjust maybe r to rule param */
-        o2 |= r << 16;
-        if(p->to.type != D_NONE)
-            o2 |= p->to.reg << 12;
         break;
     /*x: [[asmout()]] switch on type cases */
     case 4:		/* add $I,[R],R */
@@ -1060,6 +1041,24 @@ asmout(Prog *p, Optab *o)
             r = o->param;
         /*e: [[asmout()]] adjust maybe r to rule param */
         o1 |= (r<<16) | (rt<<12);
+        break;
+    /*x: [[asmout()]] switch on type cases */
+    case 34:	/* mov $lacon,R */
+        o1 = omvl(p, &p->from, REGTMP);
+        /*s: [[asmout()]] sanity check o1 */
+        if(!o1)
+            break;
+        /*e: [[asmout()]] sanity check o1 */
+
+        o2 = oprrr(AADD, p->scond);
+        o2 |= REGTMP;
+        r = p->from.reg; 
+        /*s: [[asmout()]] adjust maybe r to rule param */
+        if(r == R_NONE)
+            r = o->param;
+        /*e: [[asmout()]] adjust maybe r to rule param */
+        rt = p->to.reg;
+        o2 |= (r<<16) | (rt<<12);
         break;
     /*x: [[asmout()]] switch on type cases */
     case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
@@ -1098,7 +1097,6 @@ asmout(Prog *p, Optab *o)
         if(r == R_NONE)
             r = o->param;
         /*e: [[asmout()]] adjust maybe r to rule param */
-
         o2 = olrr(p->as, p->scond, REGTMP,r, rt);
 
         o3 = oprrr(ASLL, p->scond);
@@ -1126,12 +1124,13 @@ asmout(Prog *p, Optab *o)
         if(r == R_NONE)
             r = o->param;
         /*e: [[asmout()]] adjust maybe r to rule param */
-        o1 = osr(AMOVH, p->scond, rf, instoffset, r); // AMOVB?
+        o1 = osr(AMOVBU, p->scond, rf, instoffset, r);
 
+        rt = REGTMP;
         o2 = oprrr(ASRL, p->scond);
-        o2 |= (REGTMP<<12) | (8<<7) | rf;
+        o2 |= (rt<<12) | (8<<7) | rf;
 
-        o3 = osr(AMOVH, p->scond, REGTMP, instoffset+1, r); // AMOVB?
+        o3 = osr(AMOVBU, p->scond, REGTMP, instoffset+1, r);
         break;
     /*x: [[asmout()]] switch on type cases */
     case 33:	/* movh/movhu R,L(R) -> sb, sb */
@@ -1140,6 +1139,7 @@ asmout(Prog *p, Optab *o)
         if(!o1)
             break;
         /*e: [[asmout()]] sanity check o1 */
+
         rf = p->from.reg;
         r = p->to.reg;
         /*s: [[asmout()]] adjust maybe r to rule param */
@@ -1158,6 +1158,7 @@ asmout(Prog *p, Optab *o)
 
         o5 = osrr(AMOVBU, p->scond, rf, REGTMP,r);
 
+        // restore rf
         o6 = oprrr(ASRL, p->scond);
         o6 |= (rf<<12) | (24<<7) | rf;
         o6 |= (1<<6);	/* ROL 8 */

@@ -10634,6 +10634,7 @@ if(p->cond) {
     o1 = olr(AMOVW, p->scond&C_SCOND, v, REGPC, dr);
 }
 @
+%pad: added AMOVW parameter since refactored olr
 
 We will see [[olr()]] later in Section~\ref{sec:load}
 when we cover the memory instructions which {loads}
@@ -11049,7 +11050,7 @@ olr(int a, int sc, long v, int b, int rt)
 }
 @
 % >> >> >> >> >> >> >> >> >> >>
-\t AMOVH and AMOVHU ???
+\n AMOVH and AMOVHU? should adjust in caller! clearer then.
 \n note that order mimic order of instr,  MOVW v(b), rt
 %old: 
 % - use rt, not r, more consistent
@@ -11132,6 +11133,7 @@ to first load the offset in [[REGTMP]]:
 
 The code below uses also [[omvl()]] which we saw
 in Section~\ref{sec:pool-and-reg-tmp} for arithmetic instructions.
+Remember than [[omvl()]] internally calls [[olr()]].
 Indeed, we also need here to load from a literal pool
 a large number, here an offset:
 
@@ -11226,7 +11228,8 @@ osr(int a, int sc, int r, long v, int b)
 %        o |= 1<<22;
 %    return o;
 
-Note the use of [[olr()]] above as the instruction format
+Note that [[osr()]] is a small wrapper around 
+[[olr()]] as the instruction format
 for [[LDR]] and [[STR]] are very similar except for the bit 20.
 
 
@@ -11266,14 +11269,13 @@ osrr(int a, int sc, int r, int i, int b)
 % >> >>
 %old:    return olr(i, b, r, sc) ^ ((1<<25) | (1<<20));
 
+The previous cases work also for [[AMOVB]]:
 
 <<[[optab]] entries>>=
 { AMOVB,	C_REG,	C_NONE,	C_SEXT,		20, 4, REGSB },
 { AMOVB,	C_REG,	C_NONE,	C_SAUTO,	20, 4, REGSP },
 { AMOVB,	C_REG,	C_NONE,	C_SOREG,	20, 4, 0 },
 @
-\t also movb here!, why not symetric with load? because identical
-\t  to store B or BU.
 
 <<[[optab]] entries>>=
 { AMOVB,	C_REG,	C_NONE,	C_LEXT,		30, 8, REGSB,	LTO },
@@ -11281,7 +11283,21 @@ osrr(int a, int sc, int r, int i, int b)
 { AMOVB,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
 @
 
+Indeed, {storing} a signed byte or an unsigned byte from a register
+involves the same ARM instruction.
+%
+This is not the case though for {loading}.
+Indeed, loading a signed byte from memory in a register may require
+to fill with 1s the 24 upper bits of the register if the
+number in memory was negative. We will the rules for
+loading and [[AMOVB]] later in Section~\ref{sec:amovb-load}.
+
+
 \subsection{Swaps}
+
+[[SWP]] and [[SWPBU]] have a format more strict
+than other memory operations.
+\l Emulator? say use of swap?
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ASWPW:
@@ -11298,7 +11314,7 @@ case ASWPW:
 case 40:	/* swp oreg,reg,reg */
     aclass(&p->from);
     <<[[asmout()]] sanity check instoffset for SWP>>
-    o1 = (0x2<<23) | (0x9<<4);
+    o1 = (0x2<<23) | (0x9<<4); // SWP
     if(p->as == ASWPBU)
         o1 |= 1 << 22;
     rf = p->from.reg;
@@ -11317,32 +11333,11 @@ if(instoffset != 0)
 
 \subsection{Symbol addresses}
 
-<<[[optab]] entries>>=
-{ AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
-@
+The loading of an address, e.g. [[MOVW $hello(SB), R1]], %$
+which happens, after resolution, to be a small rototable offset
+to a base register, e.g. [[SB]],
+can be encoded efficiently using simply [[ADD]]:
 
-<<[[asmout()]] switch on type cases>>=
-case 34:	/* mov $lacon,R */
-    o1 = omvl(p, &p->from, REGTMP);
-    <<[[asmout()]] sanity check o1>>
-
-    o2 = oprrr(AADD, p->scond);
-    o2 |= REGTMP;
-    r = p->from.reg; // ?? should be always R_NONE no?
-    <<[[asmout()]] adjust maybe r to rule param>>
-    o2 |= r << 16;
-    if(p->to.type != D_NONE)
-        o2 |= p->to.reg << 12;
-    break;
-@
-%$
-\t how can be D_NONE? has to be D_REG ... then can simplify the code
-
-
-% when offset is small to base, then can optimize, just use one instr
-% if offset rototable:
-
-% the MOV opcodes with size 4 which are simple, simple load or store
 <<[[optab]] entries>>=
 { AMOVW,	C_RECON,C_NONE,	C_REG,		 4, 4, REGSB },
 { AMOVW,	C_RACON,C_NONE,	C_REG,		 4, 4, REGSP },
@@ -11360,15 +11355,45 @@ case 4:		/* add $I,[R],R */
     break;
 @
 %$
-% add in comment?
+\n again from should always be R_NONE
 
-% otherwise C_LCON path, which use pool and load pointer from pool.
+The address of an entity which is not a rototable offset
+must be loaded from a literal pool with [[omvl()]]:
+\t address loaded from memory, meta
+\t how load literal itself?? via PC! and guaranteed small offset
+\t so no need ovml itself :)
+
+<<[[optab]] entries>>=
+{ AMOVW,	C_LACON,C_NONE,	C_REG,		34, 8, REGSP,	LFROM },
+@
+
+<<[[asmout()]] switch on type cases>>=
+case 34:	/* mov $lacon,R */
+    o1 = omvl(p, &p->from, REGTMP);
+    <<[[asmout()]] sanity check o1>>
+
+    o2 = oprrr(AADD, p->scond);
+    o2 |= REGTMP;
+    r = p->from.reg; 
+    <<[[asmout()]] adjust maybe r to rule param>>
+    rt = p->to.reg;
+    o2 |= (r<<16) | (rt<<12);
+    break;
+@
+%$
+%old:
+%    if(p->to.type != D_NONE)
+%        o2 |= p->to.reg << 12;
+% but how can be D_NONE? has to be D_REG
+\n p->from.reg should be always R_NONE, but code consistent with other
+\n  rules which have a C_LOREG case
 
 \subsection{Half words and signed bytes}
 
 % see also section X with special hardware support since ARMv4
 
 \subsubsection{Load}
+\label{sec:amovb-load}
 
 <<[[optab]] entries>>=
 { AMOVH,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
@@ -11378,15 +11403,14 @@ case 4:		/* add $I,[R],R */
 { AMOVHU,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
 { AMOVHU,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
 { AMOVHU,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
-@
 
-<<[[optab]] entries>>=
 { AMOVB,	C_SEXT,	C_NONE,	C_REG,		22, 12, REGSB },
 { AMOVB,	C_SAUTO,C_NONE,	C_REG,		22, 12, REGSP },
 { AMOVB,	C_SOREG,C_NONE,	C_REG,		22, 12, 0 },
 @
 \t disymetry, AMOVB is here where it was not for store
 \t  and with the AMOVW and AMOVBU
+\t because more complex load MOVB. Need fill with 1s if signed.
 
 <<[[asmout()]] switch on type cases>>=
 case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
@@ -11413,6 +11437,9 @@ case 22:	/* movb/movh/movhu O(R),R -> lr,shl,shr */
 \t why SRA vs SRL only for right? why no SLA?
 \t could be made more symetric with case 32
 
+
+
+
 <<[[optab]] entries>>=
 { AMOVH,	C_LEXT,	C_NONE,	C_REG,		32, 16, REGSB,	LFROM },
 { AMOVH,	C_LAUTO,C_NONE,	C_REG,		32, 16, REGSP,	LFROM },
@@ -11435,7 +11462,6 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
     rt = p->to.reg;
     r = p->from.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-
     o2 = olrr(p->as, p->scond, REGTMP,r, rt);
 
     o3 = oprrr(ASLL, p->scond);
@@ -11456,7 +11482,7 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
     break;
 @
 % >> >> >> >> >> >>  >> >>
-\t factorize shift
+\l could factorize shift
 %old: factorized in olrr now
 %    if(p->as == AMOVB)
 %        o2 |= 1<<22;
@@ -11472,6 +11498,7 @@ case 32:	/* movh/movb L(R),R -> lr[b] */
 { AMOVHU,	C_REG,	C_NONE,	C_SAUTO,	23, 12, REGSP },
 { AMOVHU,	C_REG,	C_NONE,	C_SOREG,	23, 12, 0 },
 @
+\l remember no AMOVB for store, similar code than for AMOVBU
 
 <<[[asmout()]] switch on type cases>>=
 case 23:	/* movh/movhu R,O(R) -> sb,sb */
@@ -11479,17 +11506,20 @@ case 23:	/* movh/movhu R,O(R) -> sb,sb */
     rf = p->from.reg;
     r = p->to.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o1 = osr(AMOVH, p->scond, rf, instoffset, r);
+    o1 = osr(AMOVBU, p->scond, rf, instoffset, r);
 
+    rt = REGTMP;
     o2 = oprrr(ASRL, p->scond);
-    o2 |= (REGTMP<<12) | (8<<7) | rf;
+    o2 |= (rt<<12) | (8<<7) | rf;
 
-    o3 = osr(AMOVH, p->scond, REGTMP, instoffset+1, r);
+    o3 = osr(AMOVBU, p->scond, REGTMP, instoffset+1, r);
     break;
 @
 % >> >>
-% plus 1? not plus 2?
-
+%old: 
+% - was osr(AMOVH, ...) but more consistent to use AMOVB as indeed
+%   it is converted in a MOVBU
+% - use rt for REGTMP, more consistent, an clearer
 
 
 
@@ -11508,10 +11538,11 @@ case 23:	/* movh/movhu R,O(R) -> sb,sb */
 case 33:	/* movh/movhu R,L(R) -> sb, sb */
     o1 = omvl(p, &p->to, REGTMP);
     <<[[asmout()]] sanity check o1>>
+
     rf = p->from.reg;
     r = p->to.reg;
     <<[[asmout()]] adjust maybe r to rule param>>
-    o2 = osrr(AMOVW, p->scond, rf, REGTMP, r);
+    o2 = osrr(AMOVBU, p->scond, rf, REGTMP, r);
 
     o3 = oprrr(ASRL, p->scond);
     o3 |= (rf<<12) | (8<<7) | rf;
@@ -11521,8 +11552,9 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
     o4 |= (REGTMP<<16) | (REGTMP<<12);
     o4 |= immrot(1);
 
-    o5 = osrr(AMOVW, p->scond, rf, REGTMP,r);
+    o5 = osrr(AMOVBU, p->scond, rf, REGTMP,r);
 
+    // restore rf
     o6 = oprrr(ASRL, p->scond);
     o6 |= (rf<<12) | (24<<7) | rf;
     o6 |= (1<<6);	/* ROL 8 */
@@ -14487,7 +14519,7 @@ enum {
 % exe and dll (.so)
 
 %\subsection{COFF}
-% ?
+% common object code file format
 
 
 \section{Other instructions}
@@ -15804,6 +15836,8 @@ case 37:	/* mov $con,PSR */
 \subsection{Half and byte moves since ARMv4}
 \label{sec:armv4}
 
+% saw section X virtual instr.
+
 <<global armv4(arm)>>=
 bool	armv4;
 @
@@ -15838,6 +15872,8 @@ if(n)
 <<[[Operand_class]] cases, in C_xEXT, half case>>=
 C_HEXT,
 @
+% why that? because since ARMv4 other instr, and use 8 bits
+% to encode offset
 
 <<[[aclass()]] if immhalf for N_EXTERN symbol>>=
 if(immhalf(instoffset))
@@ -16158,6 +16194,7 @@ case 62:	/* case R -> movw	R<<2(PC),PC */
     break;
 @
 % >>  >>
+%old: passed AMOVW since rewrote olrr, actually clearer!
 
 <<[[asmout()]] switch on type cases>>=
 case 63:	/* bcase */
