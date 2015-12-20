@@ -364,8 +364,8 @@ It is smaller than [[ld]] and Gold but still fairly large: 71K LOC.
 \n cplusplus
 
 %dup: (and adapted) from Assembler.nw
-\item LD86, an x86 16-bit and 32-bit linker, part of
-Bruce Evans' C compiler (BCC), is an historical linker
+\item LD86 is an x86 16-bit and 32-bit linker, part of
+Bruce Evans' C compiler (BCC). It is an historical linker
 used to compile old versions of Minix and Linux.
 \l sure?
 %
@@ -373,7 +373,9 @@ It is fairly small: 6100 LOC, which is smaller than [[5l]].
 But, to be fair, [[5l]] does also machine code generation
 which is done instead by AS86 for LD86. [[5a]]+[[5l]] is 12 000 LOC
 which is smaller than AS86+LD86 at 18 600 LOC.
-\l also ARM simpler than x86 (even for linker-related issues?)
+Moreover the instruction format in the ARM is far simpler to
+understand than the one in the x86.
+\l (even for linker-related issues?)
 
 \end{itemize}
 \l add furl
@@ -2530,11 +2532,13 @@ It initially stores the {\em virtual program counter} of the instruction
 (if the instruction is a code instruction, e.g. [[ADD]]):
 
 <<[[Prog]] other fields>>=
+// virtual program counter, and then real program counter
 long	pc;
 @
 \l The absolute pc of this instruction! 
 \l needed for some check pc == p->pc somewhere.
 \t type is  long | addr ?
+\n abused to store offset to start of pool
 
 %dup: overview/soft-archi 
 The virtual program counter is incremented after each code instruction
@@ -2553,8 +2557,8 @@ target instruction.
 
 <<[[Prog]] extra fields>>=
 // option<ref<Prog>> for branch instructions
-// (abused too for list<ref<Prog>> (from = textp for TEXT instructions))
-// (abused for pools for instructions using large constants)
+// (abused to list<ref<Prog>> (from = textp for TEXT instructions))
+// (abused also for instructions using large constants)
 Prog*	cond;
 @
 \l called pcond I think in x86, could choose same name
@@ -2646,7 +2650,7 @@ One can quickly access the end of the list by using the
 following global:
 
 <<global lastp>>=
-// ref<Prog>, last elt of firstp list
+// ref<Prog> (end from = firstp)
 Prog*	lastp;
 @
 %ocaml: use a queue data structure, or returns simply a list and List.flatten
@@ -7640,6 +7644,7 @@ in [[DATA foo+8(SB)/4, "hey!"]].
 
 
 \section{Laying out code, [[dotext()]]}
+\label{sec:dotext}
 
 %trans:
 We are now ready to see the last function of the 
@@ -8156,7 +8161,8 @@ struct	Optab
     // size of the corresponding machine code (should be a multiple of 4)
     short	size; 
 
-    <<[[Optab]] other fields>>
+    <<[[Optab]] param field>>
+    <<[[Optab]] flag field>>
 };
 @
 \l rename Rule?
@@ -8264,6 +8270,13 @@ will see later.
 \l For instance C_HFAUTO must be before C_LAUTO otherwise
 % the careful order of entries in optab will not be taken
 % into account.
+
+[[Optab]] has two optional fields, [[Optab.param]] and [[Optab.flag]]
+which will be presented later in this chapter.
+\l this is why some rules have extra elements
+%\subsection{[[Optab.param]] and [[Optab.flag]]}
+% {rule parameter}
+% {rule flag}
 
 
 
@@ -8452,49 +8465,8 @@ int t;
 \t is incorrect.
 
 
-\subsection{[[Optab.param]] and [[Optab.flag]]}
-\label{sec:optab-param}
-\label{sec:optab-flag}
-\l mv later? next to Memory opcodes?
-
-% {rule parameter}
-
-<<[[Optab]] other fields>>=
-// 0 | REGSB | REGSP
-short	param;
-@
-
-%optional (which is why didn't put in example above).
-% pass additional information to asmout() in addition to
-% action id.
-
-%ex:
 
 
-% {rule flag}
-
-<<[[Optab]] other fields>>=
-// bitset<enum<Optab_flag>>
-short	flag;
-@
-%old: was char, but ugly
-% order is important, see optab[] global
-
-<<enum Optab_flag(arm)>>=
-enum Optab_flag {
-    LFROM	= 1<<0,
-    LTO		= 1<<1,
-    LPOOL	= 1<<2,
-    <<[[Optab_flag]] cases>>
-};
-@
-% >> >> >> >> >>
-
-% very subtle. Complicated.
-
-%ex:
-
-% more in Section X.
 
 \section{[[oplook()]] and [[buildop()]]}
 
@@ -9280,7 +9252,7 @@ to write a word (hence the name) in the code section.
 %
 It is often used to overcome some limitations of [[5a]]
 which does not handle every possible opcodes, e.g.
-opcodes to call a coprocessor.
+opcodes to call a coprocessor (see the \book{Assembler}).
 %
 It is also used to represent large literal constants in the 
 code section, which is very useful to support the encoding of certain
@@ -9289,9 +9261,12 @@ instructions as we will see in Section~\ref{sec:pool}.
 <<[[optab]] entries>>=
 { AWORD,	C_NONE,	C_NONE,	C_LCON,		11, 4 },
 @
-%dead: { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
-% WORD foo;  what does it mean?
-% WORD dollar foo; ok, I get it, and it should be a C_LCON
+%pad: I originally thought the following was a dead rule:
+% { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
+% Indeed what means WORD foo; ?
+% WORD $foo; ok, I get it, but then it should be a C_LACON, not an C_LEXT
+% BUT, because of the literal pools, one can have some generated
+% AWORD instruction with for operand an C_LEXT!
 
 %dup: codegen/ds/optab codegen/ds/operand-class codegen/oplook codegen/buildop
 Remember than [[C_LCON]] is a general operand class
@@ -9312,7 +9287,7 @@ int c;
 <<[[asmout()]] switch on type cases>>=
 case 11:	/* word */
     c = aclass(&p->to);
-    <<[[asmout()]] in WORD case, when dlm>>
+    <<[[asmout()]] in AWORD case, when dlm>>
     o1 = instoffset;
     break;
 @
@@ -9325,6 +9300,7 @@ as we will see in the next section. %clever ref{sec:operand-subclasses}
 %
 This global contains the immediate constant or offset in the operand.
 So, [[o1]] above will contain [[p->to.offset]].
+%
 Remember that the second [[switch]] of [[asmout()]] will eventually
 output the content of the local variable [[o1]] in the executable.
 
@@ -9349,6 +9325,7 @@ which is then used extensively in [[asmout()]]:
 long	instoffset;
 @
 \l instruction offset? but it's actually more operand offset.
+\l  but it is true than there is usually only 1 offset in a full instr
 \n really needs to be a global? yes! used outside aclass()?
 \t seems to be used both for immediate constant and offset
 \t  also for locals it is actually autosize plus offset, so it is many
@@ -9628,7 +9605,7 @@ immaddr(long v)
 }
 @
 % >> >> >>
-\l rename immsmall?
+\l rename immoffset()?
 \t could return bool instead. Clearer. Anyway set special bits in olr already.
 \t It is true its result is passed to immfloat but could rewrite immfloat too
 \t (or just pass abs(instoffset) & 0xfff to immfloat).
@@ -9956,6 +9933,7 @@ the \book{Assembler}, but it better matches how instructions
 are organized in the ARM.
 
 \subsection{Register-only operands}
+\n and oprrr, used many times later
 
 %trans:
 The simplest instructions are probably the one involving
@@ -10377,19 +10355,18 @@ case 14:	/* movb/movbu/movh/movhu R,R */
 
     rf = p->from.reg;
     rt = p->to.reg;
-    o1 |= (rt<<12) | rf;
-    o2 |= (rt<<12) | rt;
     if(p->as == AMOVB || p->as == AMOVBU) {
-        o1 |= (24<<7);
-        o2 |= (24<<7);
+        o1 |= (rt<<12) | (24<<7) | rf;
+        o2 |= (rt<<12) | (24<<7) | rt;
     } else {
-        o1 |= (16<<7);
-        o2 |= (16<<7);
+        o1 |= (rt<<12) | (16<<7) | rf;
+        o2 |= (rt<<12) | (16<<7) | rt;
     }
     break;
 @
-% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >>
 %old: was using r = p->to.reg but inconsistent with the rest so I put rt.
+%old: distribute rf and rt, more consistent with case 31
 
 [[MOVBU R1, R2]] can be optimized and encoded using only 1 ARM instruction
 as [[0xff]] is a rotatable constant. Note that [[0xffff]] is not
@@ -10479,8 +10456,10 @@ Note also that there is no [[DIV]] opcode in the ARM so [[ADIV]] is a virtual
 instruction transformed in a series of instructions implementing
 the division in software, as explained in Section~\ref{sec:div-mod}.
 
-\subsection{Large constant operand, [[REGTMP]] and pools}
+\subsection{Large constant operand, [[REGTMP]] and literal pools}
 \label{sec:pool-and-reg-tmp}
+\n and Optab.flag
+
 
 %trans:
 We can finally see the translation of arithmetic instructions using
@@ -10583,13 +10562,19 @@ if(v == 0) {
 if(!o1)
     break;
 @
+\t warning instead?
+
+
+
+
+
 
 %trans:
 We can now see the arithmetic rules using [[C_LCON]] and their translations.
 %
 Those rules use the same action identifier than before, [[13]],
 as they share lots of the code to deal with [[C_NCON]],
-but they have the special {\em rule flag} [[LFROM]]:
+but they have the special {\em rule flag} [[LFROM]].
 % which we will explain soon
 
 <<[[optab]] entries>>=
@@ -10598,6 +10583,16 @@ but they have the special {\em rule flag} [[LFROM]]:
 { AMVN,		C_LCON,	C_NONE,	C_REG,		13, 8, 0,	LFROM },
 { ACMP,		C_LCON,	C_REG,	C_NONE,		13, 8, 0,	LFROM },
 @
+
+This flag is stored in an extra field of [[Optab]]:
+
+<<[[Optab]] flag field>>=
+// bitset<enum<Optab_flag>>
+short	flag;
+@
+%old: was char, but ugly
+% order is important, see optab[] global
+
 
 As it will be explained fully later in Section~\ref{sec:pool},
 large constants in operands are transformed as data
@@ -10950,6 +10945,7 @@ to 6 ARM instructions (24 bytes) as we will see soon.
 
 \subsection{Load}
 \label{sec:load}
+\n and Optab.param
 
 %trans:
 An important use of [[MOVW]],
@@ -10959,7 +10955,7 @@ beyond the setting of a register from another register or a constant
 is to {\em load} data from memory in a register, e.g. [[MOVW 10(R1), R2]]. 
 This will result in the use of the ARM instruction [[LDR]].
 %toc:
-We will first see rules when the offset is small,
+We will first see the rules when the offset is small,
 %
 that is when the operand class has the form [[C_S]]$xxx$,
 e.g. [[C_SEXT]] (see Section~\ref{sec:immaddr} and [[immaddr()]]).
@@ -11005,12 +11001,26 @@ see Section~\ref{sec:c-xoreg}).
 Each kind of offset corresponds to a different {\em base register},
 which can actually be specified in the rule itself.
 \l could modify p->from.reg to record pseudo-register instead? no need Param?
-Indeed, note the use for the first time of [[Optab.param]] 
-(see Section~\ref{sec:optab-param}) in the rules
-above, e.g. [[REGSB]] when the rule concerns an external
+Indeed, an extra field of [[Optab]] can be used to contain
+extra parameters:
+%note the use for the first time of [[Optab.param]] 
+%in the rules above:
+%(see Section~\ref{sec:optab-param}) 
+
+<<[[Optab]] param field>>=
+// 0 | REGSB | REGSP
+short	param;
+@
+
+For instance [[REGSB]] is used in when the rule concerns an external
 symbol ([[C_SEXT]]).
 This extra parameter can then be accessed from [[asmout()]] to
 adjust the {base register}:
+
+%optional (which is why didn't put in example above).
+% pass additional information to asmout() in addition to
+% action id.
+
 
 <<[[asmout()]] adjust maybe r to rule param>>=
 if(r == R_NONE)
@@ -11141,7 +11151,7 @@ to first load the offset in [[REGTMP]]:
 The code below uses also [[omvl()]] which we saw
 in Section~\ref{sec:pool-and-reg-tmp} for arithmetic instructions.
 Remember than [[omvl()]] internally calls [[olr()]].
-Indeed, we also need here to load from a literal pool
+Indeed, we also need here to load from a {literal pool}
 a large number, here an offset. So loading
 certain data from memory requires actually two [[LDR]] instructions.
 
@@ -11639,6 +11649,7 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
 
     break;
 @
+% >> >> >> >> >> >> >> >>
 %old: now factorized in osrr
 %    o2 |= (1<<22);
 %    o5 |= (1<<22);
@@ -11649,8 +11660,16 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
 \section{Software interrupt opcodes}
 
 %trans:
-% finally opcodes dealing with software interrupts.
-%% coprocessors?
+The final ARM code generation rules concern software interrupts.
+\l actually last instr of ARM, class 7, and bit 24 set
+%
+[[SWI]] creates a software interrupt 
+and performs a {\em system call} to a kernel function.
+[[RFE]] returns from an {\em interrupt handler} in the kernel. 
+[[RFE]] stands for ``Return From Exception''
+as certain interrupts are due to hardware exceptions (e.g.
+division by zero).
+\l coprocessors
 
 <<[[buildop()]] switch opcode r for ranges cases>>=
 case ASWI:
@@ -11658,6 +11677,13 @@ case ARFE:
     break;
 @
 
+
+%dup: Assembler
+Normally the argument to [[SWI]] in the ARM specifies an entry in an
+{interrupt table}
+\t really?
+but under \plan this argument is actually not
+used. Instead, [[R0]] is used to store the system call code.
 
 <<[[optab]] entries>>=
 { ASWI,		C_NONE,	C_NONE,	C_NONE,		10, 4 },
@@ -11687,6 +11713,10 @@ case ASWI:	return o | (0xf<<24);
 @
 % >> 
 
+[[RFE]] is actually a virtual instruction which is
+transformed by [[5l]] in an instruction
+using [[MOVM]], the multiple
+register move opcode (see Section~\ref{sec:movm}):
 
 <<[[optab]] entries>>=
 { ARFE,		C_NONE,	C_NONE,	C_NONE,		41, 4 },
@@ -11700,6 +11730,7 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
     o1 = 0xe8fd8000;
     break;
 @
+\t meaning??
 % .s has a special meaning when MOVM. see arm.pdf
 %  w? useful offset is 0 anyway.
 %  u? useful? offset is 0 anyway
@@ -11711,30 +11742,104 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
 
 
 
-
 \section{Pool}
 \label{sec:pool}
 
-% was in Resolving/issue/virtual-pc
-%where the first instruction would load the big number from 
+%trans:
+We will now fully explain the final piece of the ARM code generation:
+the management of {\em literal pools}.
 %
-%% LDR $pool1, RTMP
-%% ADD RTMP, R1, R2
-%% DATA pool1+0/4 $10256
+Those pools are used for the traduction of instructions using 
+large constants, e.g. [[ADD $0xffff, R2, R3]], %$
+or 
+large offsets, e.g. [[MOVW 0xffce(R1), R2]]).
+%dup: codegen/arith/large-constant
+As explained in Section~\label{sec:pool-and-reg-tmp},
+large constants in operands are transformed as data
+in the code section using the [[WORD]] pseudo-opcode.
 %
-%somewhere in
-%a reserved register 
-%\l REGTMP
-%and where the second instruction would then 
-%substitutes the big number
-%
-% from the original
-%instruction in the following instruction.
-%\l actually two code and one data?
+The two previous instructions are thus transformed,
+thanks to the help of data structures and functions presented
+in this section, in the following ARM instructions:
+
+\begin{verbatim}
+// ADD 0xffff, R2, R3
+2000: LDR 1000(R15), R11
+2004: ADD R11, R2, R3
+// MOVW 0xffce(R1), R2
+2008: LDR 996(R15), R11
+2012: LDR R11(R1), R2
+...
+// literal pool at the end of the code section
+3000: WORD $0xffff
+3004: WORD 0xffce
+\end{verbatim}
+
+\l see 5l -v -a, see WORD generated at the end for constants
+
+%toc: ? will explain how represented pool, how add new literal to pool,
+% link to instr, and gen pool end of prog.
+% finally bootstrap issue, if offset R15 too large?? check pool
+% out of reach.
+
+%real-world: ARM specific? x86 does not need that? probably not, can have
+%  big constant just after. Not fixed-length instruction
+
+\subsection{[[blitrl/elitrl]]}
+
+The literal pool, which is a list of [[WORD]] instructions, 
+is represented by the globals [[blitrl]] and [[elitrl]]
+which respectively stores the beginning and end of this list:
+
+% [[b]]egin/[[e]]nd [[lit]]e[[r]]a[[l]] (confusing blit ...)
+<<global blitrl(arm)>>=
+// list<ref_own<prog>> (next = Prog.link)
+Prog*	blitrl;
+@
+<<global elitrl(arm)>>=
+// ref<Prog> (end from = blitrl)
+Prog*	elitrl;
+@
 
 
-% see 5l -v -a, see WORD generated at the end for constants
-% that could not be encoded in one ARM instruction. Asm5 != ARMv6
+\subsection{[[addpool()]]}
+
+As mentioned in Section~\ref{sec:pool-and-reg-tmp}, 
+the addition of large constants in the literal pool is done
+through the function [[addpool()]]. This function is called 
+from [[dotext()]], as we will see soon,
+thanks to a {\em rule flag} indicating which operand
+in the instruction contains the large constant. 
+Here are past examples of rules with a rule flag:
+
+<<[[optab]] example of entries with rule flags (repeated)>>=
+{ AADD,		C_LCON,	C_REG,	C_REG,		13, 8, 0,	LFROM },
+{ AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
+@
+
+The set of rule flags is defined by the type below:
+
+<<enum Optab_flag(arm)>>=
+enum Optab_flag {
+    // Flags related to literal pools
+    LFROM	= 1<<0,
+    LTO		= 1<<1,
+
+    LPOOL	= 1<<2,
+    // Flags related architecture restrictions
+    <<[[Optab_flag]] cases>>
+};
+@
+% >> >> >> >> >>
+
+[[LPOOL]] will be described in Section~\ref{sec:lpool}.
+The remaining flags are described in Chapter~\ref{chap:advanced}.
+
+Remember from Section~\ref{sec:dotext} that [[dotext()]]
+layouts code and calls [[oplook()]] to find
+which rule [[o]] matches an instruction [[p]].
+The presence of a rule flag in the rule [[o]]
+determines the possible call to [[addpool()]]:
 
 <<[[dotext()]] pool handling for optab o>>=
 switch(o->flag & (LFROM|LTO|LPOOL)) {
@@ -11745,34 +11850,6 @@ switch(o->flag & (LFROM|LTO|LPOOL)) {
 @
 %old: c += m; used to be before if(blitrl)
 
-%real-world: ARM specific? x86 does not need that? probably not, can have
-%  big constant just after. Not fixed-length instruction
-
-\subsection{[[blitrl/elitrl]] and [[pool]]}
-
-% [[b]]egin/[[e]]nd [[lit]]e[[r]]a[[l]] (confusing blit ...)
-<<global blitrl(arm)>>=
-Prog*	blitrl;
-@
-<<global elitrl(arm)>>=
-Prog*	elitrl;
-@
-
-<<global pool(arm)>>=
-static struct {
-    ulong	start;
-    ulong	size;
-} pool;
-@
-
-\subsection{[[addpool()]]}
-
-% past exemple:
-%{ AADD,		C_LCON,	C_REG,	C_REG,		13, 8, 0,	LFROM },
-%
-%{ AMOVW,	C_REG,	C_NONE,	C_LOREG,	30, 8, 0,	LTO },
-
-
 <<[[dotext()]] pool handling, switch flag cases>>=
 case LFROM:
     addpool(p, &p->from);
@@ -11782,6 +11859,13 @@ case LTO:
     break;
 @
 
+[[addpool()]] essentially adds a new [[WORD]] instruction
+in the list [[blitrl]] with as an operand (in [[Instr.to]]),
+the large constant or large offset in the operand parameter [[a]].
+%
+It also modifies the parameter [[p]]
+so that its [[Instr.cond]] field links to the newly
+added [[WORD]] instruction:
 
 <<function addpool(arm)>>=
 void
@@ -11789,88 +11873,126 @@ addpool(Prog *p, Adr *a)
 {
     Prog *q;
     Prog t;
+    //enum<Operand_class>
     int c;
 
     c = aclass(a);
 
     t = zprg;
     t.as = AWORD;
+    <<[[addpool()]] set t.to using a>>
 
-    switch(c) {
-    case C_SROREG:
-    case C_LOREG:
-    case C_ROREG:
-    case C_FOREG:
-    case C_SOREG:
-    case C_FAUTO:
-    case C_SAUTO:
-    case C_LAUTO:
-    case C_LACON:
-        t.to.type = D_CONST;
-        t.to.offset = instoffset;
-        break;
-    // C_LCON, TODO warning if other case?
-    default:
-        t.to = *a;
-        break;
-    }
-
-    // find_list(t.to, blitrl)
-    for(q = blitrl; q != P; q = q->link)	/* could hash on t.t0.offset */
-        if(memcmp(&q->to, &t.to, sizeof(t.to)) == 0) {
-            p->cond = q;
-            return;
-        }
+    <<[[addpool()]] if literal already present in pool>>
     // else
 
     q = prg();
     *q = t;
-    q->pc = pool.size;
 
-    // add_queue(q, blitrl, elitrl) and set pool.start
+    <<[[addpool()]] set pool.start and pool.size>>
+
+    // add_queue(q, blitrl, elitrl)
     if(blitrl == P) {
         blitrl = q;
-        pool.start = p->pc;
     } else
         elitrl->link = q;
     elitrl = q;
 
-    pool.size += 4;
-
+    // for omvl()!
     p->cond = q;
 }
 @
-%bug? where initialized pool.size to 0?
+%bug? where initialized pool.size to 0? because BSS zeroe'd
+%old: the modification of pool.start and pool.size used
+% to be more spead but I aspected it and grouped
+
+Thanks to the instruction [[p->cond = q]] above,
+[[omvl()]] in Section~\ref{sec:pool-and-reg-tmp},
+will be able to know the offset to [[R15]] it needs to generate,
+e.g. [[LDR 1000(R15), ...]],
+to load this new literal.
+%
+Note that once the literal pool will be added at the end of the list
+of code instructions (via [[flushpool()]] which we will
+see in the next section), the [[WORD]] instructions
+in the pool will be also processed by [[dotext()]] to
+get their [[Instr.pc]] field set.
+\l which is why when omvl, in asmout, everything is resolved and setup
 
 
-\subsection{[[checkpool()]]}
+[[addpool()]] is used with operands representing
+large constants ([[C_LCON]]), but also
+large offsets ([[C_LOREG]], [[C_LAUTO]]), and also with
+symbols which when resolved are large offsets to [[R12]] 
+([[C_LEXT]], [[C_LACON]]).
+%
+% code generation rule for AWORD in section X
+% is aclass(). o1 = instoffset.
+% default case below, just copy operand.
+% so if operand D_CONST, so fine with WORD.
+\t simplify code? add rules for WORD! and create test file showing issue
+\t  if have no rule with C_LEXT
 
-<<[[dotext()]] pool handling, checkpool>>=
-if(blitrl)
-    checkpool(p);
-@
+% { AWORD,	C_NONE,	C_NONE,	C_LEXT,		11, 4, 0 },
 
-<<function checkpool(arm)>>=
-/*
- * when the first reference to the literal pool threatens
- * to go out of range of a 12-bit PC-relative offset,
- * drop the pool now, and branch round it.
- * this happens only in extended basic blocks that exceed 4k.
- */
-void
-checkpool(Prog *p)
-{
-    if(pool.size >= 0xffc || immaddr((p->pc+4)+4+pool.size - pool.start+8) == 0)
-        flushpool(p, 1);
-    else if(p->link == P)
-        flushpool(p, 2);
+<<[[addpool()]] set t.to using a>>=
+switch(c) {
+<<[[addpool()]] switch operand class [[c]] cases>>
 }
 @
+
+<<[[addpool()]] switch operand class [[c]] cases>>=
+// C_LCON|C_xCON, C_LEXT|C_xEXT? TODO warning if other case?
+default:
+    t.to = *a;
+    break;
+@
+
+% but need to rewrite the operand of WORD for other?
+
+<<[[addpool()]] switch operand class [[c]] cases>>=
+case C_SROREG:
+case C_LOREG:
+case C_ROREG:
+case C_FOREG:
+case C_SOREG:
+case C_FAUTO:
+case C_SAUTO:
+case C_LAUTO:
+case C_LACON:
+    t.to.type = D_CONST;
+    t.to.offset = instoffset;
+    break;
+@
+\t just so avoid having too many rules? meh? add rules, better!!
+\t  ugly repeat here subclasses.
+\t  Also bug, forgot C_LEXT? or because adhoc WORD rules for C_LEXT
+\t  then maybe simpler to generalize and add more rules for WORD!
+\t how can have C_SAUTO and addpool? because does not have specialized
+\t  rule with C_SAUTO for certain opcodes? so got to C_LCON?
+
+
+There is no need to generate a new [[WORD]] instruction
+if the pool contains already the literal we want to add:
+
+<<[[addpool()]] if literal already present in pool>>=
+// find_list(t.to, blitrl)
+for(q = blitrl; q != P; q = q->link)
+    if(memcmp(&q->to, &t.to, sizeof(Adr)) == 0) {
+        // for omvl()
+        p->cond = q;
+        return;
+    }
+@
+%old:	/* could hash on t.t0.offset */
 
 
 \subsection{[[flushpool()]]}
 
+% see soon how flushpool is called, but
+% in simplest case with last code instructio p,
+% so p->link = P.
 
+%/// (dotext -> checkpool) | dotext -> <>
 <<function flushpool(arm)>>=
 void
 flushpool(Prog *p, bool skip)
@@ -11878,21 +12000,13 @@ flushpool(Prog *p, bool skip)
     Prog *q;
 
     if(blitrl) {
-        if(skip){
-            DBG("note: flush literal pool at %lux: len=%lud ref=%lux\n", 
-                p->pc+4, pool.size, pool.start);
-            q = prg();
-            q->as = AB;
-            q->to.type = D_BRANCH;
-            q->cond = p->link;
-            q->link = blitrl;
-            blitrl = q;
-        }
-        else if(p->pc+pool.size-pool.start < 2048)
-            return;
+        <<[[flushpool()]] if skip or corner case>>
+
+        //insert_list_after_elt(blitlr, elitrl, p)
         elitrl->link = p->link;
         p->link = blitrl;
-        blitrl = nil;	/* BUG: should refer back to values until out-of-range */
+
+        blitrl = nil;/* BUG: should refer back to values until out-of-range */
         elitrl = nil;
         pool.size = 0;
         pool.start = 0;
@@ -11902,24 +12016,130 @@ flushpool(Prog *p, bool skip)
 %old: if(debug['v'] && skip)  but skip always true because upper if
 % so I simplified
 
+% FIGURE? with insertion of list?
+
+
+\subsection{[[checkpool()]]}
+
+% simple case. flushpool called from checkpool from dotext
+% when last instruction:
+
+<<[[dotext()]] pool handling, checkpool>>=
+if(blitrl)
+    checkpool(p);
+@
+
+<<function checkpool(arm)>>=
+void
+checkpool(Prog *p)
+{
+    if(p->link == P)
+        flushpool(p, true);
+    else
+    <<[[checkpool()]] if special condition>>
+}
+@
+%old:
+%    if(pool.size >= 0xffc || immaddr((p->pc+4)+4+pool.size - pool.start+8) == 0)
+%        flushpool(p, 1);
+%    else if(p->link == P)
+%        flushpool(p, 2);
+% but no diff between 1 and 2 since it's a bool
+
+\t but issue! if too far?
+\t bootstrapping,  LDR(1000)R15, R1,  small offset!
+\t which is why use code section, othwewise could have done
+\t with DATA pool1 0xffff, but then maybe too far and blocked!
+
+
+Another global, [[pool]], is used to store additional
+information about the pool:
+
+<<global pool(arm)>>=
+static struct {
+    // PC of first instruction referencing the pool
+    ulong	start;
+    // a multiple of 4
+    ulong	size;
+} pool;
+@
+
+
+<<[[addpool()]] set pool.start and pool.size>>=
+// will be overwritten when dotext() layout the pool later
+q->pc = pool.size;
+
+if(blitrl == P) {
+    pool.start = p->pc;
+}
+pool.size += 4;
+@
+
+
+
+
+<<[[checkpool()]] if special condition>>=
+/*
+ * When the first reference to the literal pool threatens
+ * to go out of range of a 12-bit PC-relative offset,
+ * drop the pool now, and branch round it.
+ * This happens only in extended basic blocks that exceed 4k.
+ */
+if(pool.size >= 0xffc || 
+   immaddr((p->pc+4) + 4 + pool.size - pool.start + 8) == 0)
+    flushpool(p, true);
+@
+\t 12 bits because offset
+%old: I moved the comment here, it used to be before
+% checkpool, and I capitalized sentences.
+
+<<[[flushpool()]] if skip or corner case>>=
+if(skip){
+    DBG("note: flush literal pool at %lux: len=%lud ref=%lux\n", 
+        p->pc+4, pool.size, pool.start);
+    q = prg();
+    q->as = AB;
+    q->to.type = D_BRANCH;
+    q->cond = p->link;
+    
+    insert_list(q, blitrl)
+    q->link = blitrl;
+    blitrl = q;
+}
+<<[[flushpool()]] else if not skip and corner case>>
+@
+\l when easy case of last instruction, still need to call with skip = true
+\l otherwise might go in the else
+
+
+\subsection{[[LPOOL]]}
+\label{sec:lpool}
+
 % ex: AB instruction, etc.
 % { AB,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0,	LPOOL },
 
-
-\label{sec:lpool}
 <<[[dotext()]] pool handling, switch flag cases>>=
 case LPOOL:
     if ((p->scond&C_SCOND) == COND_ALWAYS)
-        flushpool(p, 0);
+        flushpool(p, false);
     break;
 @
+
+% what for? improve locality??
 
 <<[[dotext()]] pool handling, flush if MOVW REGPC>>=
 // MOVW ..., R15  => flush
 if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
    (p->scond&C_SCOND) == COND_ALWAYS)
-    flushpool(p, 0);
+    flushpool(p, false);
 @
+
+<<[[flushpool()]] else if not skip and corner case>>=
+else if((p->pc + pool.size - pool.start) < 2048)
+    return;
+@
+
+
 
 
 
@@ -13718,7 +13938,7 @@ if(dlm) {
 { AWORD,	C_NONE,	C_NONE,	C_ADDR,		11, 4 },
 @
 
-<<[[asmout()]] in WORD case, when dlm>>=
+<<[[asmout()]] in AWORD case, when dlm>>=
 switch(c) {
 case C_LCON:
     if(!dlm)
@@ -14599,7 +14819,7 @@ enum {
 %https://www.objc.io/issues/6-build-tools/mach-o-executables/
 %http://lowlevelbits.org/parse-mach-o-files/
 
-\subsection{PE, Microsoft Windows}
+\subsection{PE, Windows}
 % windows format, see pe.h in golang/src/libmach/
 % exe and dll (.so)
 
@@ -15823,6 +16043,7 @@ case AMULAL:	return o | (0x7<<21) | (0x9<<4);
 
 
 \subsection{Multiple registers move}
+\label{sec:movm}
 
 % used by RFE
 
