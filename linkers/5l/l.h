@@ -82,6 +82,7 @@ struct	Prog
     /*x: [[Prog]] other fields */
     long	line;
     /*x: [[Prog]] other fields */
+    // virtual program counter, and then real program counter
     long	pc;
     /*x: [[Prog]] other fields */
     //bitset<enum<Mark>>
@@ -96,8 +97,8 @@ struct	Prog
     // Extra
     /*s: [[Prog]] extra fields */
     // option<ref<Prog>> for branch instructions
-    // (abused too for list<ref<Prog>> (from = textp for TEXT instructions))
-    // (abused for pools for instructions using large constants)
+    // (abused to list<ref<Prog>> (from = textp for TEXT instructions))
+    // (abused also for instructions using large constants)
     Prog*	cond;
     /*x: [[Prog]] extra fields */
     // list<ref<Prog>> (from = firstp or datap)
@@ -195,13 +196,14 @@ struct	Optab
     // size of the corresponding machine code (should be a multiple of 4)
     short	size; 
 
-    /*s: [[Optab]] other fields */
+    /*s: [[Optab]] param field */
     // 0 | REGSB | REGSP
     short	param;
-    /*x: [[Optab]] other fields */
+    /*e: [[Optab]] param field */
+    /*s: [[Optab]] flag field */
     // bitset<enum<Optab_flag>>
     short	flag;
-    /*e: [[Optab]] other fields */
+    /*e: [[Optab]] flag field */
 };
 /*e: struct Optab(arm) */
 /*s: struct Oprange(arm) */
@@ -240,9 +242,12 @@ enum Section
 /*e: enum Section(arm) */
 /*s: enum Optab_flag(arm) */
 enum Optab_flag {
+    // Flags related to literal pools
     LFROM	= 1<<0,
     LTO		= 1<<1,
+
     LPOOL	= 1<<2,
+    // Flags related architecture restrictions
     /*s: [[Optab_flag]] cases */
     VFP		= 1<<4,	/* arm vfpv3 floating point */
     /*x: [[Optab_flag]] cases */

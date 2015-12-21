@@ -137,7 +137,7 @@ char	inuxi4[4];
 /*e: global inuxi4 */
 
 /*s: global lastp */
-// ref<Prog>, last elt of firstp list
+// ref<Prog> (end from = firstp)
 Prog*	lastp;
 /*e: global lastp */
 /*s: global lcsize */
@@ -226,9 +226,11 @@ Prog	undefp;
 /*e: global undefp */
 
 /*s: global blitrl(arm) */
+// list<ref_own<prog>> (next = Prog.link)
 Prog*	blitrl;
 /*e: global blitrl(arm) */
 /*s: global elitrl(arm) */
+// ref<Prog> (end from = blitrl)
 Prog*	elitrl;
 /*e: global elitrl(arm) */
 

@@ -3,7 +3,9 @@
 
 /*s: global pool(arm) */
 static struct {
+    // PC of first instruction referencing the pool
     ulong	start;
+    // a multiple of 4
     ulong	size;
 } pool;
 /*e: global pool(arm) */
@@ -84,7 +86,7 @@ dotext(void)
             /*x: [[dotext()]] pool handling, switch flag cases */
             case LPOOL:
                 if ((p->scond&C_SCOND) == COND_ALWAYS)
-                    flushpool(p, 0);
+                    flushpool(p, false);
                 break;
             /*e: [[dotext()]] pool handling, switch flag cases */
             }
@@ -92,7 +94,7 @@ dotext(void)
             // MOVW ..., R15  => flush
             if(p->as==AMOVW && p->to.type==D_REG && p->to.reg==REGPC && 
                (p->scond&C_SCOND) == COND_ALWAYS)
-                flushpool(p, 0);
+                flushpool(p, false);
             /*e: [[dotext()]] pool handling, flush if MOVW REGPC */
             /*s: [[dotext()]] pool handling, checkpool */
             if(blitrl)
@@ -132,19 +134,23 @@ dotext(void)
 /*e: function span(arm) */
 
 /*s: function checkpool(arm) */
-/*
- * when the first reference to the literal pool threatens
- * to go out of range of a 12-bit PC-relative offset,
- * drop the pool now, and branch round it.
- * this happens only in extended basic blocks that exceed 4k.
- */
 void
 checkpool(Prog *p)
 {
-    if(pool.size >= 0xffc || immaddr((p->pc+4)+4+pool.size - pool.start+8) == 0)
-        flushpool(p, 1);
-    else if(p->link == P)
-        flushpool(p, 2);
+    if(p->link == P)
+        flushpool(p, true);
+    else
+    /*s: [[checkpool()]] if special condition */
+    /*
+     * When the first reference to the literal pool threatens
+     * to go out of range of a 12-bit PC-relative offset,
+     * drop the pool now, and branch round it.
+     * This happens only in extended basic blocks that exceed 4k.
+     */
+    if(pool.size >= 0xffc || 
+       immaddr((p->pc+4) + 4 + pool.size - pool.start + 8) == 0)
+        flushpool(p, true);
+    /*e: [[checkpool()]] if special condition */
 }
 /*e: function checkpool(arm) */
 
@@ -155,6 +161,7 @@ flushpool(Prog *p, bool skip)
     Prog *q;
 
     if(blitrl) {
+        /*s: [[flushpool()]] if skip or corner case */
         if(skip){
             DBG("note: flush literal pool at %lux: len=%lud ref=%lux\n", 
                 p->pc+4, pool.size, pool.start);
@@ -162,14 +169,22 @@ flushpool(Prog *p, bool skip)
             q->as = AB;
             q->to.type = D_BRANCH;
             q->cond = p->link;
+    
+            //insert_list(q, blitrl)
             q->link = blitrl;
             blitrl = q;
         }
-        else if(p->pc+pool.size-pool.start < 2048)
+        /*s: [[flushpool()]] else if not skip and corner case */
+        else if((p->pc + pool.size - pool.start) < 2048)
             return;
+        /*e: [[flushpool()]] else if not skip and corner case */
+        /*e: [[flushpool()]] if skip or corner case */
+
+        //insert_list_after_elt(blitlr, elitrl, p)
         elitrl->link = p->link;
         p->link = blitrl;
-        blitrl = nil;	/* BUG: should refer back to values until out-of-range */
+
+        blitrl = nil;/* BUG: should refer back to values until out-of-range */
         elitrl = nil;
         pool.size = 0;
         pool.start = 0;
@@ -183,14 +198,21 @@ addpool(Prog *p, Adr *a)
 {
     Prog *q;
     Prog t;
+    //enum<Operand_class>
     int c;
 
     c = aclass(a);
 
     t = zprg;
     t.as = AWORD;
-
+    /*s: [[addpool()]] set t.to using a */
     switch(c) {
+    /*s: [[addpool()]] switch operand class [[c]] cases */
+    // C_LCON|C_xCON, C_LEXT|C_xEXT? TODO warning if other case?
+    default:
+        t.to = *a;
+        break;
+    /*x: [[addpool()]] switch operand class [[c]] cases */
     case C_SROREG:
     case C_LOREG:
     case C_ROREG:
@@ -203,34 +225,42 @@ addpool(Prog *p, Adr *a)
         t.to.type = D_CONST;
         t.to.offset = instoffset;
         break;
-    // C_LCON, TODO warning if other case?
-    default:
-        t.to = *a;
-        break;
+    /*e: [[addpool()]] switch operand class [[c]] cases */
     }
+    /*e: [[addpool()]] set t.to using a */
 
+    /*s: [[addpool()]] if literal already present in pool */
     // find_list(t.to, blitrl)
-    for(q = blitrl; q != P; q = q->link)	/* could hash on t.t0.offset */
-        if(memcmp(&q->to, &t.to, sizeof(t.to)) == 0) {
+    for(q = blitrl; q != P; q = q->link)
+        if(memcmp(&q->to, &t.to, sizeof(Adr)) == 0) {
+            // for omvl()
             p->cond = q;
             return;
         }
+    /*e: [[addpool()]] if literal already present in pool */
     // else
 
     q = prg();
     *q = t;
+
+    /*s: [[addpool()]] set pool.start and pool.size */
+    // will be overwritten when dotext() layout the pool later
     q->pc = pool.size;
 
-    // add_queue(q, blitrl, elitrl) and set pool.start
+    if(blitrl == P) {
+        pool.start = p->pc;
+    }
+    pool.size += 4;
+    /*e: [[addpool()]] set pool.start and pool.size */
+
+    // add_queue(q, blitrl, elitrl)
     if(blitrl == P) {
         blitrl = q;
-        pool.start = p->pc;
     } else
         elitrl->link = q;
     elitrl = q;
 
-    pool.size += 4;
-
+    // for omvl()!
     p->cond = q;
 }
 /*e: function addpool(arm) */
@@ -478,14 +508,19 @@ aclass(Adr *a)
                 s->type = SDATA;
                 // Fall through
             case SDATA: case SBSS: case SDATA1:
-                if(!dlm) {
-                    instoffset = s->value + a->offset - BIG;
-                    if(immrot(instoffset) && instoffset != 0) // VERY IMPORTANT != 0
-                        return C_RECON;
+                /*s: [[aclass()]] in D_ADDR case, SDATA case, if dlm */
+                if(dlm) {
+                    instoffset = s->value + a->offset + INITDAT;
+                    return C_LCON;
                 }
-                // else
-                instoffset = s->value + a->offset + INITDAT;
-                return C_LCON;
+                /*e: [[aclass()]] in D_ADDR case, SDATA case, if dlm */
+                instoffset = s->value + a->offset - BIG;
+                if(immrot(instoffset) && instoffset != 0) {// VERY IMPORTANT != 0
+                     return C_RECON;
+                } else {
+                    instoffset = s->value + a->offset + INITDAT;
+                    return C_LCON;
+                }
             }
             diag("unknown section for %s", s->name);
             break;
