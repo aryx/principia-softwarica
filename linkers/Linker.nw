@@ -1738,7 +1738,7 @@ Elf generation   & \ref{chap:advanced} & [[elf.c]]  & [[elf32()]] & \\
 \midrule
 
 Dumpers            & \ref{chap:debugging-appendix} & [[list.c]] & [[prasm()]], [[Pconv()]], [[Dconv()]],  & \\
-                   &                               & [[enam.c]] & [[anames[]]] & \\
+                   &                               & [[enam.c]] & [[anames]] & \\
 %5l/enam.c: which is a symlink in 5c/
 
 Utilities          & \ref{chap:libc}        & [[utils.c]] & [[lookup()]], [[errorexit()]] & \\
@@ -5798,6 +5798,14 @@ findlib(char *file)
 \section{Loading libraries automagically, [[#pragma lib "libxxx.a"]]}
 \label{sec:loading-libraries-magically}
 
+% another nice and original thing of plan9 linker, with safe linking,
+% is automatic library linking. Just include header and its library
+% will be linked automatically! Avoid long linking command,
+% remember set of libs
+% (hmm but still need in theory to put them in mkfile for dependency
+% tracking? maybe not)
+
+
 %old:
 % <<[[main()]] locals(arm)>>=
 % bool load_libs;
@@ -6208,7 +6216,7 @@ for a few reasons explained below:
 %dup: main/asmb/text-sec 
 [[DIV]] have no counterpart in the ARM. 
 [[DIV]] and [[MOD]] are converted by [[5l]]
-in a serie of ARM 
+in a series of ARM 
 instructions which ends with the call to
 respectively [[_div()]] and [[_mod()]] of the core C library
 (see Section~\ref{sec:div-mod}) which implement
@@ -6328,8 +6336,8 @@ Indeed, [[noops()]] can replace a virtual instruction by
 multiple machine instructions chained together
 or even delete the instruction without
 any consequence on the other branching instructions (as long
-at it maintains carefully the [[Instr.cond]] pointers pointing
-to the original instruction).
+at it maintains carefully the [[Instr.cond]] pointers in
+instructions pointing to the original instruction).
 %dup: overview/soft-archi
 Before the graph of instructions, inserting or
 deleting an instruction would have forced to assign a new 
@@ -6426,7 +6434,7 @@ the [[Sym.value]] of the global (computed previously)
 as the {\em offset}, e.g.  [[LDR 14(R12), R1]].
 \t actually not all are like that, can use also Pool if LCON
 %
-In the same way instructions involving global addresses such as
+In the same way, instructions involving global addresses such as
 [[MOVW $hello(SB), R1]] %$ 
 can be transformed as [[ADD $14, R12, R1]]. %$
 \t but what if offset too large? and so can not express address
@@ -6892,6 +6900,8 @@ of lengths 3125 ($5 * 625 = 5^5$),
 
 
 \section{Virtual opcodes rewriting, [[noops()]]}
+\label{sec:noops}
+
 \n ARM only. there is a dostkoff() in x86 but it's related only to the become
 \n  stuff that I have now deleted for the ARM.
 
@@ -11742,7 +11752,7 @@ case 41:	/* rfe -> movm.s.w.u 0(r13),[r15] */
 
 
 
-\section{Pool}
+\section{Literal Pools}
 \label{sec:pool}
 
 %trans:
@@ -11784,6 +11794,9 @@ in this section, in the following ARM instructions:
 
 %real-world: ARM specific? x86 does not need that? probably not, can have
 %  big constant just after. Not fixed-length instruction
+% wikipedia says it's a bit ARM specfic.
+% https://en.wikipedia.org/wiki/Literal_pool
+% also Java uses pools too (for strings and class constants)
 
 \subsection{[[blitrl/elitrl]]}
 
@@ -12090,6 +12103,7 @@ if(pool.size >= 0xffc ||
     flushpool(p, true);
 @
 \t 12 bits because offset
+\t  aspectize other weird condition
 %old: I moved the comment here, it used to be before
 % checkpool, and I capitalized sentences.
 
@@ -12114,6 +12128,7 @@ if(skip){
 
 \subsection{[[LPOOL]]}
 \label{sec:lpool}
+\t adv topics
 
 % ex: AB instruction, etc.
 % { AB,		C_NONE,	C_NONE,	C_BRANCH,		 5, 4, 0,	LPOOL },
@@ -12146,6 +12161,8 @@ else if((p->pc + pool.size - pool.start) < 2048)
 
 \chapter{Debugging Support}
 \label{chap:debugging}
+
+\l intro what is debugging? 
 
 % Symbol Tables.
 % related to import/export table? I don't think so.
@@ -12306,40 +12323,6 @@ putsymb(char *s, int t, long v, int ver)
 
 
 
-\subsection{Procedure declarations, [[textp/etextp]]}
-\l used by follow too ( and asmsym above)
-
-A pair of globals keeps track of the 
-list of procedures (the [[TEXT]] pseudo-instructions):
-\l what for? asmsym, follow()
-
-<<global textp>>=
-// list<ref<Prog>> (next = Prog.cond)
-Prog*	textp = P;
-@
-<<global etextp>>=
-// ref<Prog> (end from = textp)
-Prog*	etextp = P;
-@
-\n seems dead but not, used to link textp in right order
-
-The procedure instructions are chained together 
-by (ab)using [[Instr.cond]]:
-
-<<[[ldobj()]] in switch opcode ATEXT case, populate textp>>=
-//add_queue(textp, etextp, p)
-if(textp == P) {
-    textp = p;
-    etextp = p;
-} else {
-    etextp->cond = p;
-    etextp = p;
-}
-@
-
-Note that the instructions in the list [[textp/etextp]]
-are a subset of the list of instructions in [[firstp/lastp]].
-
 
 
 
@@ -12489,6 +12472,42 @@ if(curtext != P) {
     curauto = nil;
 }
 @
+
+
+
+\subsubsection{Procedure declarations, [[textp/etextp]]}
+\l used by follow too ( and asmsym above)
+
+A pair of globals keeps track of the 
+list of procedures (the [[TEXT]] pseudo-instructions):
+\l what for? asmsym, follow()
+
+<<global textp>>=
+// list<ref<Prog>> (next = Prog.cond)
+Prog*	textp = P;
+@
+<<global etextp>>=
+// ref<Prog> (end from = textp)
+Prog*	etextp = P;
+@
+\n seems dead but not, used to link textp in right order
+
+The procedure instructions are chained together 
+by (ab)using [[Instr.cond]]:
+
+<<[[ldobj()]] in switch opcode ATEXT case, populate textp>>=
+//add_queue(textp, etextp, p)
+if(textp == P) {
+    textp = p;
+    etextp = p;
+} else {
+    etextp->cond = p;
+    etextp = p;
+}
+@
+
+Note that the instructions in the list [[textp/etextp]]
+are a subset of the list of instructions in [[firstp/lastp]].
 
 
 \subsubsection{Frame symbols}
@@ -12824,31 +12843,55 @@ asmlc(void)
 
 
 %\section{Tracing}?
-% in profiling section right now
+% in profiling section right now, and buggy anyway
+
+
+
+
 
 \chapter{Profiling Support}
 \label{chap:profiling}
 
-% surprising again that it's ld's job to add profiling in plan9.
-% Thx to TEXT and RET virtual, super easy!
+In many operating systems profiling is
+enabled by a flag of the compiler, e.g. [[gcc -p]].
+%real-world: gcc -p
+\n in ocaml need to use ocamlcp and then ocamlprof, or ocamlopt -p and gprof
+\l actually now people use oprofile or perf where maybe need less flag
+Surprisingly, in \plan 
+%toc:
+profiling support is enabled instead by a flag of the linker: [[5l -p]].
+By {\em instrumenting} the instructions [[TEXT]] and [[RET]]
+in different ways, [[5l]] can provide easily different sorts of profiling
+which we will see in this chapter.
 
-% The code below is interesting because it inserts extra object code using
-% directly "AST" constructs, so it helps to understand the data structure!!
+\n The code below was interesting because it inserted extra object code using
+\n  directly "AST" constructs, so it helped to understand the data structure!!
 
-% see NOPROF of 8.out.h in Assembler_extra.nw
+\l intro profiling before? 
+\n mechanism to get statistic about a program runtime behavior?
 
 \section{[[5l -p]] and [[_mainp]]}
 
+The effect of the use of the [[-p]] flag is twofold.
+First, it changes the entry point of the program from
+[[_main]] to [[_mainp]]:
 
-% where is defined _mainp? lib_core/libc/386/main9p.s
 <<[[main()]] adjust INITENTRY if profiling>>=
 if(debug['p'])
     INITENTRY = "_mainp";
 @
 
-% 5l -p -1
-% before dotext() (it matters since doprof generates code)
-% before noops()?
+[[_mainp]] is a procedure written in assembly
+in [[lib_core/libc/arm/main9p.s]]. The main
+difference with [[_main]] is the call to [[_profmain()]]
+defined in [[lib_core/libc/port/profile.c]] which
+initializes profiling data.
+See the \book{Profiler} for more information.
+
+The second effect of [[-p]] is the execution of [[doprof1()]]
+or [[doprof2()]] which perform different kinds 
+of profiling:
+
 <<[[main()]] call doprofxxx() if profiling>>=
 if(debug['p'])
     if(debug['1'])
@@ -12857,21 +12900,82 @@ if(debug['p'])
         doprof2();
 @
 
-\subsection{[[__mcount[]]]}
+Those functions are called after [[patch()]] and before [[noops()]]
+(see Chapter~\ref{chap:resolving}).
+Thanks to [[patch()]] and the graph of code instructions 
+(see Section~\ref{sec:patch}), we can easily instrument
+a program in a similar way to [[noops()]] (see Section~\ref{sec:noops}).
+The idea is to insert 
+new profiling instructions  {\em after} the pseudo instruction [[TEXT]], and
+new profiling instructions {\em before} the virtual instruction [[RET]].
 
-% the idea o the code below is to add __mcount array, one index per function,
-% and when call it increments the array at the right place.
+\section{[[5l -p -1]] and [[__mcount]]}
 
-% todo: who is using this information then? profreport of what?
-% git grep __mcount does not seem to return stuff, maybe obsolete code?
+The first {profiling strategy} we will see counts 
+{\em the number of times a function is called}. 
+It is enabled by [[5l -p -1]]. 
+\t good to see first, didactic. dead but didactic. profin/profout more fuzzy.
+\n ocamlcp and ocamlprof are doing that; they count also branches
+%
+Note that it does not count the {\em time spent}
+in those functions, which is another strategy we will see 
+in the next section. %clever \ref{sec:_profin}
+%
+Nevertheless, even if the function calls count is a rudimentary information,
+it can be already useful for improving the performance of a program. 
+%dup: (and adapted) Principia.nw
+In fact, it can be also very useful to find bugs in a program.
+Indeed, unexpected statistics can be good leads for fixing code.
+\t Bentley!
+
+The main idea of [[doprof1()]] below is to use a global
+array [[__mcount]] in which each entry corresponds
+to a function. Each entry uses 8 bytes: the first 4 bytes
+contain the address of the function, which is a simple way to
+identify a function,
+\t one can find name then thx to symbol table?
+and the last 4 bytes the function calls count.
+Each call to a function will then increment an element in [[__mcount]]
+at runtime.
+
+%examples:
+Here is an example of how the code is instrumented by [[5l -p -1]] for
+a program with 2 procedures [[foo]] and [[bar]]:
+
+\begin{verbatim}
+TEXT foo(SB), $0 -> TEXT foo(SB), $0
+                    MOVW __mcount+8(SB), R11
+...                 ADD $1, R11
+                    MOVW R11, __mcount+8(SB)
+                    ...
+
+RET              -> RET
+                     
+TEXT bar(SB), $0 -> TEXT bar(SB), $0
+                    MOVW __mcount+16(SB), R11
+...                 ADD $1, R11
+                    MOVW R11, __mcount+16(SB)
+                    ...
+RET              -> RET
+                     
+
+DATA __mcount+0(SB)/4, $5 // number of words used by mcount
+// start of info about foo
+DATA __mcount+4(SB)/4,  $foo(SB)
+// start of info about bar
+DATA __mcount+12(SB)/4, $bar(SB)
+\end{verbatim}
+\t how know initialized to zero in between? datblk??
+
+The code of [[doprof1()]] is pretty straightforward:
 
 <<function doprof1(arm)>>=
 void
 doprof1(void)
 {
     Sym *s;
-    long n;
     Prog *p, *q;
+    long n;
 
     DBG("%5.2f profile 1\n", cputime());
 
@@ -12879,10 +12983,10 @@ doprof1(void)
     n = 1;
     for(p = firstp->link; p != P; p = p->link) {
         if(p->as == ATEXT) {
+
+            // DATA __mcount+n*4(SB)/4,  $foo(SB) //$
             q = prg();
             q->line = p->line;
-
-            // DATA __mcount +n*4(SB), 4,  $p->syn //$
             q->as = ADATA;
             q->from.type = D_OREG;
             q->from.symkind = N_EXTERN;
@@ -12896,29 +13000,17 @@ doprof1(void)
             q->link = datap;
             datap = q;
 
-
+            // MOVW __mcount+ n*4+4(SB), R11
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
-
-            // add_after(q, p)            
-            q->link = p->link;
-            p->link = q;
-
-            p = q;
-
-            // MOVW p->s + n*4+4(SB), R11
-            p->as = AMOVW;
-            p->from.type = D_OREG;
-            p->from.symkind = N_EXTERN;
-            p->from.sym = s;
-            p->from.offset = n*4 + 4;
-            p->to.type = D_REG;
-            p->to.reg = REGTMP;
-
-            q = prg();
-            q->line = p->line;
-            q->pc = p->pc;
+            q->as = AMOVW;
+            q->from.type = D_OREG;
+            q->from.symkind = N_EXTERN;
+            q->from.sym = s;
+            q->from.offset = n*4 + 4;
+            q->to.type = D_REG;
+            q->to.reg = REGTMP;
 
             // add_after(q, p)            
             q->link = p->link;
@@ -12927,15 +13019,14 @@ doprof1(void)
             p = q;
 
             // ADD, $1, R11 //$
-            p->as = AADD;
-            p->from.type = D_CONST;
-            p->from.offset = 1;
-            p->to.type = D_REG;
-            p->to.reg = REGTMP;
-
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+            q->as = AADD;
+            q->from.type = D_CONST;
+            q->from.offset = 1;
+            q->to.type = D_REG;
+            q->to.reg = REGTMP;
 
             // add_after(q, p)            
             q->link = p->link;
@@ -12943,27 +13034,32 @@ doprof1(void)
 
             p = q;
 
-            // MOVW R11, 
-            p->as = AMOVW;
-            p->from.type = D_REG;
-            p->from.reg = REGTMP;
-            p->to.type = D_OREG;
-            p->to.symkind = N_EXTERN;
-            p->to.sym = s;
-            p->to.offset = n*4 + 4;
+            // MOVW R11, __mcount+ n*4+4(SB)
+            q = prg();
+            q->line = p->line;
+            q->pc = p->pc;
+            q->as = AMOVW;
+            q->from.type = D_REG;
+            q->from.reg = REGTMP;
+            q->to.type = D_OREG;
+            q->to.symkind = N_EXTERN;
+            q->to.sym = s;
+            q->to.offset = n*4 + 4;
+
+            // add_after(q, p)            
+            q->link = p->link;
+            p->link = q;
+
+            p = q;
 
             n += 2;
             continue;
         }
     }
+
+    // DATA __mcount+0(SB)/4, $n 
     q = prg();
     q->line = 0;
-
-    // add_list(q, datap)
-    q->link = datap;
-    datap = q;
-
-    // DATA s(SB)/4, $n 
     q->as = ADATA;
     q->from.type = D_OREG;
     q->from.symkind = N_EXTERN;
@@ -12972,194 +13068,363 @@ doprof1(void)
     q->to.type = D_CONST;
     q->to.offset = n;
 
+    // add_list(q, datap)
+    q->link = datap;
+    datap = q;
+
     s->type = SBSS;
     s->value = n*4;
 }
 @
 %$
-\l could use textp
 %pad: was D_CONST above but I put D_ADDR now
+%old: was mixing setting of new instr via p and q, better do everything with q
+\l could use textp to go faster
+\t bug because of q->pc = p->pc? and then mkfwd and find target?
+\t  could find wrong target? NO cos patch has already been done!
+\t  but then need propagate pc? anyway unused after patch() no?
 
-\subsection{[[_profin()]]}
+Note the use of [[SBSS]] instead of [[SDATA]] 
+above since the profiling instrumentation
+is done before [[dodata()]]. The layout of data has not been done yet.
 
-% _profin() is defined by lib_core/libc/port/profile.c
-% (_tracin() is defined by you)
+Given the instrumentation done by [[doprof1()]], one can then
+easily modify the [[main()]]
+of the profiled program to print data from [[__mcount]].
+One can then display all the function calls counts or a subset of
+those counts.
+\l just need declare extern __mcount!
+\n git grep __mcount does not seem to return stuff, probably obsolete code
 
-% todo: why s2 and s4? why not sin, sout? and pin, pout?
 
+\section{[[5l -p]] and [[_profin()/_profout()]]}
+\label{sec:_profin}
 
-<<global brcond(arm)>>=
-static int brcond[] = {ABEQ, ABNE, ABHS, ABLO, ABMI, ABPL, ABVS, ABVC, ABHI, ABLS, ABGE, ABLT, ABGT, ABLE};
-@
+%trans:
+The second and default profiling strategy,
+implemented by [[doprof2()]], 
+%
+is to count {\em the time spent in each function}.
+%
+Most of the logic for this strategy is actually implemented in
+[[lib_core/libc/port/profile.c]] in two functions:
+[[_profin()]] and [[_profout()]].
+\n moreover _mainp call _profmain
+We refer to the \book{Profiler} for more information on those functions.
+In this section we will just explain how [[5l]] instruments
+the code to call those functions.
+
+%examples:
+Here is an example of how the code is instrumented by [[5l -p]] for
+a program with 2 procedures [[foo]] and [[bar]]:
+
+\begin{verbatim}
+TEXT foo(SB), $0 -> TEXT foo(SB), $0
+                    BL _profin(SB)
+...                 ...
+
+RET              -> BL _profout(SB)
+                    RET
+                     
+TEXT bar(SB), $0 -> TEXT bar(SB), $0
+                    BL _profin(SB)
+...                 ...
+
+RET              -> BL _profout(SB)
+                    RET
+\end{verbatim}
+\t how magic works? getcallerpc? _tos? and then how report?
+
+Again, the code of [[doprof2()]] is pretty straightforward:
 
 <<function doprof2(arm)>>=
 void
 doprof2(void)
 {
     Sym *s2, *s4;
-    Prog *p, *q, *q2;
-    Prog *ps2, *ps4;
+    Prog *p, *q;
+    <<[[doprof2()]] other locals>>
 
     DBG("%5.2f profile 2\n", cputime());
 
-    <<[[doprof2()]] if embedded tracing>>
-    else{
-        s2 = lookup("_profin", 0);
-        s4 = lookup("_profout", 0);
-    }
-    if(s2->type != STEXT || s4->type != STEXT) {
-       <<[[doprof2()]] if embedded tracing diag()>>
-        else
-            diag("_profin/_profout not defined");
-        return;
-    }
+    // in lib_core/libc/port/profile.c
+    s2 = lookup("_profin", 0);
+    s4 = lookup("_profout", 0);
+    <<[[doprof2()]] sanity check s2 and s4>>
 
-    // finding ps2, ps4 = instruction (Prog) of s2 and s4
-    ps2 = P;
-    ps4 = P;
+    <<[[doprof2()]] find ps2, ps4, the Instr of s2 and s4>>
+
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
-            if(p->from.sym == s2) {
-                ps2 = p;
-                p->reg = 1;
-            }
-            if(p->from.sym == s4) {
-                ps4 = p;
-                p->reg = 1;
-            }
-        }
-    }
-    for(p = firstp; p != P; p = p->link) {
-        if(p->as == ATEXT) {
-
             <<[[doprof2()]] if NOPROF p(arm)>>
-
-            /*
-             * BL	profin
-             */
-            q = prg();
-            q->line = p->line;
-            q->pc = p->pc;
-            q->link = p->link;
-
-            <<[[doprof2()]] if embedded tracing ATEXT instrumentation(arm)>>
-            else
-                p->link = q;
-            p = q;
-            p->as = ABL;
-            p->to.type = D_BRANCH;
-            p->cond = ps2;
-            p->to.sym = s2;
-
+            <<[[doprof2()]] ATEXT instrumentation>>
             continue;
         }
         if(p->as == ARET) {
-            <<[[doprof2()]] if embedded tracing ARET instrumentation>>
-            /*
-             * RET
-             */
-            q = prg();
-            q->as = ARET;
-            q->from = p->from;
-            q->to = p->to;
-            q->cond = p->cond;
-            q->link = p->link;
-            q->reg = p->reg;
-            p->link = q;
-
-            if(p->scond != COND_ALWAYS) {
-                q = prg();
-                q->as = ABL;
-                q->from = zprg.from;
-                q->to = zprg.to;
-                q->to.type = D_BRANCH;
-                q->cond = ps4;
-                q->to.sym = s4;
-                q->link = p->link;
-                p->link = q;
-
-                p->as = brcond[p->scond^1];	/* complement */
-                p->scond = COND_ALWAYS;
-                p->from = zprg.from;
-                p->to = zprg.to;
-                p->to.type = D_BRANCH;
-                p->cond = q->link->link;	/* successor of RET */
-                p->to.offset = q->link->link->pc;
-
-                p = q->link->link;
-            } else {
-
-                /*
-                 * BL	profout
-                 */
-                p->as = ABL;
-                p->from = zprg.from;
-                p->to = zprg.to;
-                p->to.type = D_BRANCH;
-                p->cond = ps4;
-                p->to.sym = s4;
-                p->scond = COND_ALWAYS;
-
-                p = q;
-            }
+            <<[[doprof2()]] ARET instrumentation>>
             continue;
         }
     }
 }
 @
+\l why s2 and s4? why not sin, sout? and pin, pout?
+\l could be a switch, so less need continue
+\l could use textp again so faster
+%old:
+%    <<[[doprof2()]] if embedded tracing>>
+%    else{
+%
+%       <<[[doprof2()]] if embedded tracing diag()>>
+%        else
+%
+%            <<[[doprof2()]] if embedded tracing ARET instrumentation>>
 
 
+%trans:
+Before instrumenting [[ATEXT]] and [[ARET]], we need first
+%
+to find the instructions containing the [[ATEXT]] of [[_profin()]]
+and [[_profout()]]. Indeed, later we will 
+generate instructions which call those functions, and so we
+will need to set their [[Instr.cond]] fields to point to the
+right instruction. We need to maintain what [[patch()]] did 
+for the other branching instructions.
 
-\section{[[5l -e]], [[_tracin()]]}
+<<[[doprof2()]] other locals>>=
+Prog *ps2 = P;
+Prog *ps4 = P;
+@
 
-% -p -e, -e for embedded tracing
-
-<<[[doprof2()]] if embedded tracing>>=
-if(debug['e']){
-    s2 = lookup("_tracein", 0);
-    s4 = lookup("_traceout", 0);
+<<[[doprof2()]] find ps2, ps4, the Instr of s2 and s4>>=
+for(p = firstp; p != P; p = p->link) {
+    if(p->as == ATEXT) {
+        if(p->from.sym == s2) {
+            ps2 = p;
+            <<[[doprof2()]] set TEXT attribute of _profin or _profout>>
+        }
+        if(p->from.sym == s4) {
+            ps4 = p;
+            <<[[doprof2()]] set TEXT attribute of _profin or _profout>>
+        }
+    }
 }
 @
+%old: 
+% ps2 = P;
+% ps4 = P;
+% better done at decl time
 
-<<[[doprof2()]] if embedded tracing diag()>>=
-if(debug['e'])
-    diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
-@
 
+The [[ATEXT]] instrumentation is trivial:
 
-<<[[doprof2()]] if embedded tracing ATEXT instrumentation(arm)>>=
-if(debug['e']){		/* embedded tracing */
-    q2 = prg();
-    p->link = q2;
-    q2->link = q;
-
-    q2->line = p->line;
-    q2->pc = p->pc;
-
-    q2->as = AB;
-    q2->to.type = D_BRANCH;
-    q2->to.sym = p->to.sym;
-    q2->cond = q->link;
-}
-@
-
-<<[[doprof2()]] if embedded tracing ARET instrumentation>>=
+<<[[doprof2()]] ATEXT instrumentation>>=
 /*
- * RET (default)
+ * BL	profin
  */
-if(debug['e']){		/* embedded tracing */
+q = prg();
+q->line = p->line;
+q->pc = p->pc;
+q->as = ABL;
+q->to.type = D_BRANCH;
+q->cond = ps2; // _profin
+q->to.sym = s2;
+
+//insert_after(q, p)
+q->link = p->link;
+p->link = q;
+
+p = q;
+@
+%old: was mixing setting of new instr via p and q, better do everything with q
+%old:
+% <<[[doprof2()]] if embedded tracing ATEXT instrumentation(arm)>>
+% else
+
+The [[ARET]] instrumentation is more subtle.
+%
+First, we need to take care of
+the possible branching instructions which were originally branching
+to the [[RET]] instruction. We want those instructions to
+now branch to the instrumented [[BL _profout]]. 
+Indeed, we don't want to return before
+calling [[_profout()]]. This is why in the code below,
+[[p]], to which branching instructions may point to via
+their [[Instr.cond]] fields, is first copied
+in [[q]] and then overwritten:
+
+
+<<[[doprof2()]] ARET instrumentation>>=
+/*
+ * RET
+ */
+q = prg();
+// *q = *p;
+q->as = ARET;
+q->from = p->from;
+q->to = p->to;
+q->cond = p->cond;
+q->link = p->link;
+q->reg = p->reg;
+
+// insert_after(q, p)
+p->link = q;
+
+<<[[doprof2()]] in ARET case, if conditinal execution>>
+else {
+   /*
+    * BL	profout
+    */
+   // overwrite original RET instruction
+   p->as = ABL;
+   p->from = zprg.from;
+   p->to = zprg.to;
+   p->to.type = D_BRANCH;
+   p->cond = ps4; // _profout
+   p->to.sym = s4;
+   p->scond = COND_ALWAYS;
+
+   p = q;
+}
+@
+%old: was mixing setting of new instr via p and q, better do everything with q
+\t why not *q = *p ???
+
+The second subtelity is due to the possible setting of
+a conditional execution on [[RET]], e.g. [[RET.EQ]].
+In that case we want to also conditionally execute
+[[_profout()]] hence the code below which may
+jump over the call to [[_profout()]].
+%examples:
+Here is an example of instrumentation:
+\begin{verbatim}
+...       
+RET.EQ        -> 1000: B.NE 1012
+                 1004: BL _profout
+                 1008: RET      
+ADD R1, R2    -> 1012: ADD R1, R2
+
+\end{verbatim}
+
+<<[[doprof2()]] in ARET case, if conditinal execution>>=
+if(p->scond != COND_ALWAYS) {
+    // BL _profout
     q = prg();
-    q->line = p->line;
-    q->pc = p->pc;
+    q->as = ABL;
+    q->from = zprg.from;
+    q->to = zprg.to;
+    q->to.type = D_BRANCH;
+    q->cond = ps4; // _profout
+    q->to.sym = s4;
+
+    // insert_after(q, p)
     q->link = p->link;
     p->link = q;
-    p = q;
+
+    // overwrite original RET instruction with  B.XXX 
+    p->as = brcond[p->scond^1];	/* complement */
+    p->scond = COND_ALWAYS;
+    p->from = zprg.from;
+    p->to = zprg.to;
+    p->to.type = D_BRANCH;
+    p->cond = q->link->link;	/* successor of RET */
+    p->to.offset = q->link->link->pc; // useful??
+        
+    p = q->link->link;
 }
 @
+
+The expression [[p->scond^1]] will reverse the last bit
+of the conditional execution which when used to index 
+[[brcond]] below will return the complement condition:
+
+<<global brcond(arm)>>=
+static int brcond[] = 
+ {ABEQ, ABNE, 
+  ABHS, ABLO, 
+  ABMI, ABPL, 
+  ABVS, ABVC, 
+  ABHI, ABLS, 
+  ABGE, ABLT, 
+  ABGT, ABLE};
+@
+
+
+<<[[doprof2()]] sanity check s2 and s4>>=
+if(s2->type != STEXT || s4->type != STEXT) {
+    diag("_profin/_profout not defined");
+    return;
+}
+@
+
+%\section{[[5l -p -e]] and [[_tracein()/_traceout()]]}
+\n not in kencc, maybe dead, because code does not make sense honestly
+
+% _profin() is defined by 
+% (_tracin() is defined by you)
+% -p -e, -e for embedded tracing
+
+%dead: code does not make sense, or should just keep the first 2 chunks below
+%
+%   <<[[doprof2()]] if embedded tracing>>=
+%   if(debug['e']){
+%       s2 = lookup("_tracein", 0);
+%       s4 = lookup("_traceout", 0);
+%   }
+%   @
+%   
+%   <<[[doprof2()]] if embedded tracing diag()>>=
+%   if(debug['e'])
+%       diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
+%   @
+%   
+%   
+%   <<[[doprof2()]] other locals>>=
+%   Prog *q2;
+%   @
+%   <<[[doprof2()]] if embedded tracing ATEXT instrumentation(arm)>>=
+%   if(debug['e']){		/* embedded tracing */
+%       // B 
+%       q2 = prg();
+%       q2->line = p->line;
+%       q2->pc = p->pc;
+%   
+%       q2->as = AB;
+%       q2->to.type = D_BRANCH;
+%       q2->to.sym = p->to.sym;
+%       q2->cond = q->link;
+%   
+%       //insert_between(q2, p, q)
+%       p->link = q2;
+%       q2->link = q;
+%   }
+%   @
+%   % ??? jump over yourself??
+%   
+%   
+%   <<[[doprof2()]] if embedded tracing ARET instrumentation>>=
+%   /*
+%    * RET (default)
+%    */
+%   if(debug['e']){		/* embedded tracing */
+%       q = prg();
+%       q->line = p->line;
+%       q->pc = p->pc;
+%   
+%       q->link = p->link;
+%       p->link = q;
+%       p = q;
+%   }
+%   @
+%   % ??? set q->as ???
+
 
 \section{Disabling profiling attribute, [[NOPROF]]}
 
-% NOPROF is in 5.out.h (in Assembler_extra.nw)
+One can disable profiling for certain functions
+by setting the [[NOPROF]] {\em attribute} ([[1<<0]]),
+e.g. with [[TEXT foo(SB), 1, $0]]. %$
+This attribute is declared in [[5.out.h]]. See the \book{Assembler}
+for more information on text attributes.
 
 <<[[doprof2()]] if NOPROF p(arm)>>=
 if(p->reg & NOPROF) {
@@ -13172,10 +13437,20 @@ if(p->reg & NOPROF) {
     continue;
 }
 @
-%grrr continue, break, grrr
+\l grrr continue, break, grrr
+The code above will skip the instrumentation of the current
+procedure. It will actually skip all the instructions
+of the procedure, including its [[RET]],
+until the next procedure.
 
+Of course we do not want to instrument the [[_profin()]]
+and [[_profout()]] functions, otherwise we would generate
+infinite loops, hence the defensive code below:
 
-% useful for the tracing instructions themselves ... hmmm
+<<[[doprof2()]] set TEXT attribute of _profin or _profout>>=
+p->reg = NOPROF;
+@
+%old: was using 1 but better use NOPROF
 
 
 
