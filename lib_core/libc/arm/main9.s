@@ -18,12 +18,15 @@ TEXT	_main(SB), NOPROF, $(16 + NPRIVATES*4)
 	MOVW	R(arg), 8(R(sp))
 	MOVW	inargc-4(FP), R(arg)
 	MOVW	R(arg), 4(R(sp))
+
+    // user main()
 	BL	main(SB)
+
 loop:
 	MOVW	$_exitstr<>(SB), R(arg)
 	MOVW	R(arg), 4(R(sp))
 	BL	exits(SB)
-	BL	_div(SB)
+	BL	_div(SB) // force loading of div??
 	B	loop
 
 DATA	_exitstr<>+0(SB)/4, $"main"

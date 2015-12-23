@@ -22,6 +22,7 @@ struct	Plink
 
 #pragma profile off
 
+// Called at every procedure entry when use 5l -p, see Linker.nw
 ulong
 _profin(void)
 {
@@ -78,6 +79,7 @@ out:
 	return arg;		/* disgusting linkage */
 }
 
+// Called at every procedure return when use 5l -p, see Linker.nw
 ulong
 _profout(void)
 {
@@ -109,6 +111,7 @@ _profout(void)
 	return arg;
 }
 
+// called by??
 void
 _profdump(void)
 {
@@ -226,6 +229,7 @@ _profinit(int entries, int what)
 	_tos->clock = 1;
 }
 
+// called by _mainp in _main9p.s when 5l -p, see Linker
 void
 _profmain(void)
 {
