@@ -1333,8 +1333,8 @@ void
 doprof1(void)
 {
     Sym *s;
-    long n;
     Prog *p, *q;
+    long n;
 
     DBG("%5.2f profile 1\n", cputime());
 
@@ -1342,10 +1342,10 @@ doprof1(void)
     n = 1;
     for(p = firstp->link; p != P; p = p->link) {
         if(p->as == ATEXT) {
+
+            // DATA __mcount+n*4(SB)/4,  $foo(SB) //$
             q = prg();
             q->line = p->line;
-
-            // DATA __mcount +n*4(SB), 4,  $p->syn //$
             q->as = ADATA;
             q->from.type = D_OREG;
             q->from.symkind = N_EXTERN;
@@ -1359,29 +1359,17 @@ doprof1(void)
             q->link = datap;
             datap = q;
 
-
+            // MOVW __mcount+ n*4+4(SB), R11
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
-
-            // add_after(q, p)            
-            q->link = p->link;
-            p->link = q;
-
-            p = q;
-
-            // MOVW p->s + n*4+4(SB), R11
-            p->as = AMOVW;
-            p->from.type = D_OREG;
-            p->from.symkind = N_EXTERN;
-            p->from.sym = s;
-            p->from.offset = n*4 + 4;
-            p->to.type = D_REG;
-            p->to.reg = REGTMP;
-
-            q = prg();
-            q->line = p->line;
-            q->pc = p->pc;
+            q->as = AMOVW;
+            q->from.type = D_OREG;
+            q->from.symkind = N_EXTERN;
+            q->from.sym = s;
+            q->from.offset = n*4 + 4;
+            q->to.type = D_REG;
+            q->to.reg = REGTMP;
 
             // add_after(q, p)            
             q->link = p->link;
@@ -1390,15 +1378,14 @@ doprof1(void)
             p = q;
 
             // ADD, $1, R11 //$
-            p->as = AADD;
-            p->from.type = D_CONST;
-            p->from.offset = 1;
-            p->to.type = D_REG;
-            p->to.reg = REGTMP;
-
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+            q->as = AADD;
+            q->from.type = D_CONST;
+            q->from.offset = 1;
+            q->to.type = D_REG;
+            q->to.reg = REGTMP;
 
             // add_after(q, p)            
             q->link = p->link;
@@ -1406,27 +1393,32 @@ doprof1(void)
 
             p = q;
 
-            // MOVW R11, 
-            p->as = AMOVW;
-            p->from.type = D_REG;
-            p->from.reg = REGTMP;
-            p->to.type = D_OREG;
-            p->to.symkind = N_EXTERN;
-            p->to.sym = s;
-            p->to.offset = n*4 + 4;
+            // MOVW R11, __mcount+ n*4+4(SB)
+            q = prg();
+            q->line = p->line;
+            q->pc = p->pc;
+            q->as = AMOVW;
+            q->from.type = D_REG;
+            q->from.reg = REGTMP;
+            q->to.type = D_OREG;
+            q->to.symkind = N_EXTERN;
+            q->to.sym = s;
+            q->to.offset = n*4 + 4;
+
+            // add_after(q, p)            
+            q->link = p->link;
+            p->link = q;
+
+            p = q;
 
             n += 2;
             continue;
         }
     }
+
+    // DATA __mcount+0(SB)/4, $n 
     q = prg();
     q->line = 0;
-
-    // add_list(q, datap)
-    q->link = datap;
-    datap = q;
-
-    // DATA s(SB)/4, $n 
     q->as = ADATA;
     q->from.type = D_OREG;
     q->from.symkind = N_EXTERN;
@@ -1435,13 +1427,24 @@ doprof1(void)
     q->to.type = D_CONST;
     q->to.offset = n;
 
+    // add_list(q, datap)
+    q->link = datap;
+    datap = q;
+
     s->type = SBSS;
     s->value = n*4;
 }
 /*e: function doprof1(arm) */
 
 /*s: global brcond(arm) */
-static int brcond[] = {ABEQ, ABNE, ABHS, ABLO, ABMI, ABPL, ABVS, ABVC, ABHI, ABLS, ABGE, ABLT, ABGT, ABLE};
+static int brcond[] = 
+ {ABEQ, ABNE, 
+  ABHS, ABLO, 
+  ABMI, ABPL, 
+  ABVS, ABVC, 
+  ABHI, ABLS, 
+  ABGE, ABLT, 
+  ABGT, ABLE};
 /*e: global brcond(arm) */
 
 /*s: function doprof2(arm) */
@@ -1449,49 +1452,45 @@ void
 doprof2(void)
 {
     Sym *s2, *s4;
-    Prog *p, *q, *q2;
-    Prog *ps2, *ps4;
+    Prog *p, *q;
+    /*s: [[doprof2()]] other locals */
+    Prog *ps2 = P;
+    Prog *ps4 = P;
+    /*e: [[doprof2()]] other locals */
 
     DBG("%5.2f profile 2\n", cputime());
 
-    /*s: [[doprof2()]] if embedded tracing */
-    if(debug['e']){
-        s2 = lookup("_tracein", 0);
-        s4 = lookup("_traceout", 0);
-    }
-    /*e: [[doprof2()]] if embedded tracing */
-    else{
-        s2 = lookup("_profin", 0);
-        s4 = lookup("_profout", 0);
-    }
+    // in lib_core/libc/port/profile.c
+    s2 = lookup("_profin", 0);
+    s4 = lookup("_profout", 0);
+    /*s: [[doprof2()]] sanity check s2 and s4 */
     if(s2->type != STEXT || s4->type != STEXT) {
-       /*s: [[doprof2()]] if embedded tracing diag() */
-       if(debug['e'])
-           diag("_tracein/_traceout not defined %d %d", s2->type, s4->type);
-       /*e: [[doprof2()]] if embedded tracing diag() */
-        else
-            diag("_profin/_profout not defined");
+        diag("_profin/_profout not defined");
         return;
     }
+    /*e: [[doprof2()]] sanity check s2 and s4 */
 
-    // finding ps2, ps4 = instruction (Prog) of s2 and s4
-    ps2 = P;
-    ps4 = P;
+    /*s: [[doprof2()]] find ps2, ps4, the Instr of s2 and s4 */
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
             if(p->from.sym == s2) {
                 ps2 = p;
-                p->reg = 1;
+                /*s: [[doprof2()]] set TEXT attribute of _profin or _profout */
+                p->reg = NOPROF;
+                /*e: [[doprof2()]] set TEXT attribute of _profin or _profout */
             }
             if(p->from.sym == s4) {
                 ps4 = p;
-                p->reg = 1;
+                /*s: [[doprof2()]] set TEXT attribute of _profin or _profout */
+                p->reg = NOPROF;
+                /*e: [[doprof2()]] set TEXT attribute of _profin or _profout */
             }
         }
     }
+    /*e: [[doprof2()]] find ps2, ps4, the Instr of s2 and s4 */
+
     for(p = firstp; p != P; p = p->link) {
         if(p->as == ATEXT) {
-
             /*s: [[doprof2()]] if NOPROF p(arm) */
             if(p->reg & NOPROF) {
                 for(;;) {
@@ -1503,101 +1502,86 @@ doprof2(void)
                 continue;
             }
             /*e: [[doprof2()]] if NOPROF p(arm) */
-
+            /*s: [[doprof2()]] ATEXT instrumentation */
             /*
              * BL	profin
              */
             q = prg();
             q->line = p->line;
             q->pc = p->pc;
+            q->as = ABL;
+            q->to.type = D_BRANCH;
+            q->cond = ps2; // _profin
+            q->to.sym = s2;
+
+            //insert_after(q, p)
             q->link = p->link;
+            p->link = q;
 
-            /*s: [[doprof2()]] if embedded tracing ATEXT instrumentation(arm) */
-            if(debug['e']){		/* embedded tracing */
-                q2 = prg();
-                p->link = q2;
-                q2->link = q;
-
-                q2->line = p->line;
-                q2->pc = p->pc;
-
-                q2->as = AB;
-                q2->to.type = D_BRANCH;
-                q2->to.sym = p->to.sym;
-                q2->cond = q->link;
-            }
-            /*e: [[doprof2()]] if embedded tracing ATEXT instrumentation(arm) */
-            else
-                p->link = q;
             p = q;
-            p->as = ABL;
-            p->to.type = D_BRANCH;
-            p->cond = ps2;
-            p->to.sym = s2;
-
+            /*e: [[doprof2()]] ATEXT instrumentation */
             continue;
         }
         if(p->as == ARET) {
-            /*s: [[doprof2()]] if embedded tracing ARET instrumentation */
-            /*
-             * RET (default)
-             */
-            if(debug['e']){		/* embedded tracing */
-                q = prg();
-                q->line = p->line;
-                q->pc = p->pc;
-                q->link = p->link;
-                p->link = q;
-                p = q;
-            }
-            /*e: [[doprof2()]] if embedded tracing ARET instrumentation */
+            /*s: [[doprof2()]] ARET instrumentation */
             /*
              * RET
              */
             q = prg();
+            // *q = *p;
             q->as = ARET;
             q->from = p->from;
             q->to = p->to;
             q->cond = p->cond;
             q->link = p->link;
             q->reg = p->reg;
+
+            // insert_after(q, p)
             p->link = q;
 
+            /*s: [[doprof2()]] in ARET case, if conditinal execution */
             if(p->scond != COND_ALWAYS) {
+                // BL _profout
                 q = prg();
                 q->as = ABL;
                 q->from = zprg.from;
                 q->to = zprg.to;
                 q->to.type = D_BRANCH;
-                q->cond = ps4;
+                q->cond = ps4; // _profout
                 q->to.sym = s4;
+
+                // insert_after(q, p)
                 q->link = p->link;
                 p->link = q;
 
+                // overwrite original RET instruction with  B.XXX 
                 p->as = brcond[p->scond^1];	/* complement */
                 p->scond = COND_ALWAYS;
                 p->from = zprg.from;
                 p->to = zprg.to;
                 p->to.type = D_BRANCH;
                 p->cond = q->link->link;	/* successor of RET */
-                p->to.offset = q->link->link->pc;
-
+                p->to.offset = q->link->link->pc; // useful??
+        
                 p = q->link->link;
-            } else {
-
-                /*
-                 * BL	profout
-                 */
-                p->as = ABL;
-                p->from = zprg.from;
-                p->to = zprg.to;
-                p->to.type = D_BRANCH;
-                p->cond = ps4;
-                p->to.sym = s4;
-                p->scond = COND_ALWAYS;
-
-                p = q;
             }
+            /*e: [[doprof2()]] in ARET case, if conditinal execution */
+            else {
+               /*
+                * BL	profout
+                */
+               // overwrite original RET instruction
+               p->as = ABL;
+               p->from = zprg.from;
+               p->to = zprg.to;
+               p->to.type = D_BRANCH;
+               p->cond = ps4; // _profout
+               p->to.sym = s4;
+               p->scond = COND_ALWAYS;
+
+               p = q;
+            }
+            /*e: [[doprof2()]] ARET instrumentation */
             continue;
         }
     }
