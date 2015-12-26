@@ -352,10 +352,13 @@ asmsym(void)
     Auto *a;
     /*e: [[asmsym()]] other locals */
 
+    /*s: [[asmsym()]] generate symbol for etext */
     s = lookup("etext", 0);
     if(s->type == STEXT)
         putsymb(s->name, 'T', s->value, s->version);
+    /*e: [[asmsym()]] generate symbol for etext */
 
+    // data symbols
     for(h=0; h<NHASH; h++)
         for(s=hash[h]; s!=S; s=s->link)
             switch(s->type) {
@@ -376,6 +379,7 @@ asmsym(void)
             /*e: [[asmsym()]] in symbol table iteration, switch section cases */
             }
 
+    // procedure symbols
     for(p=textp; p!=P; p=p->cond) {
         s = p->from.sym;
         if(s->type == STEXT) {
@@ -394,6 +398,7 @@ asmsym(void)
             else
                 putsymb(s->name, 'T', s->value, s->version);
 
+            // local symbols
             /*s: [[asmsym()]] frame symbols */
             /* frame, auto and param after */
             putsymb(".frame", 'm', p->to.offset+4, 0);
@@ -419,12 +424,16 @@ putsymb(char *s, int t, long v, int ver)
 {
     int i, f;
 
+    /*s: [[putsymb()]] adjust string [[s]] if file symbol */
     if(t == 'f')
         s++;
+    /*e: [[putsymb()]] adjust string [[s]] if file symbol */
 
+    // value
     lput(v);
+    // type
     if(ver)
-        t += 'a' - 'A';
+        t += 'a' - 'A'; // lowercase(t)
     cput(t+0x80);			/* 0x80 is variable length */
 
     /*s: [[putsymb()]] if z or Z */
@@ -440,8 +449,10 @@ putsymb(char *s, int t, long v, int ver)
     }
     /*e: [[putsymb()]] if z or Z */
     else {
+        // name
         for(i=0; s[i]; i++)
             cput(s[i]);
+        // end marker
         cput('\0');
     }
     symsize += 4 + 1 + i + 1;
@@ -488,8 +499,7 @@ asmlc(void)
                 curtext = p;
             /*e: adjust curtext when iterate over instructions p */
             if(debug['V'])
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
+                Bprint(&bso, "%6lux %P\n", p->pc, p);
             continue;
         }
         if(debug['V'])

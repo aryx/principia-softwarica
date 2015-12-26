@@ -559,8 +559,10 @@ inopd(byte *p, Adr *a, Sym *h[])
     int size; // returned
     int symidx;
     /*s: [[inopd()]] other locals */
-    int t, l;
     Sym *s;
+    // <enum<Sym_kind>>
+    int t;
+    int l;
     Auto *u;
     /*e: [[inopd()]] other locals */
 
@@ -655,14 +657,16 @@ inopd(byte *p, Adr *a, Sym *h[])
 
     // a parameter or local with a symbol, e.g. p+0(FP)
     if(s != S && (t == N_LOCAL || t == N_PARAM)) {
-
-        for(u=curauto; u; u=u->link)
-            if(u->asym == s)
-             if(u->type == t) {
-                if(u->aoffset > l)
-                    u->aoffset = l; // diag()? inconcistent offset?
-                return size;
-            }
+  
+       /*s: [[inopd()]] return if stack variable already present in curauto */
+       for(u=curauto; u; u=u->link)
+           if(u->asym == s)
+            if(u->type == t) {
+               if(u->aoffset > l)
+                   u->aoffset = l; // diag()? inconcistent offset?
+               return size;
+           }
+       /*e: [[inopd()]] return if stack variable already present in curauto */
         // else
     
         u = malloc(sizeof(Auto));

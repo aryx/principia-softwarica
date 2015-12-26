@@ -165,7 +165,7 @@ struct	Auto
 
     // Extra
     /*s: [[Auto]] extra fields */
-    // list<ref_own<Auto> (head = curauto = Instr.to.autom of TEXT instruction)
+    // list<ref<Auto> (head = curauto or Instr.to.autom of TEXT instruction)
     Auto*	link;
     /*e: [[Auto]] extra fields */
 };
