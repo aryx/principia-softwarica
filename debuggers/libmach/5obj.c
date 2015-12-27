@@ -28,7 +28,7 @@ int
 _is5(char *s)
 {
     return  s[0] == ANAME				/* ANAME */
-        && s[1] == D_FILE			/* type */
+        && s[1] == N_FILE			/* type */
         && s[2] == 1				/* sym */
         && s[3] == '<';				/* name of file */
 }

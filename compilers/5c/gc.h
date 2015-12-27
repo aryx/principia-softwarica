@@ -98,6 +98,7 @@ struct	Prog
     // option<enum<registr>>, None = R_NONE, see 5.out.h
     // abused also to represent TEXT or DATA attributes (e.g. NOPROF)
     char	reg;
+    /*x: [[Prog]] other fields(arm) */
     // bitset<?>
     byte	scond;
     /*e: [[Prog]] other fields(arm) */

@@ -67,9 +67,13 @@ printtrace(int modif)
 
     switch (modif) {
     /*s: [[printtrace()]] switch modif cases */
-    case 'w':
-        maxpos=(adrflg?adrval:MAXPOS);
-        break;
+    case 0:
+    case '?':
+        if (pid)
+            dprint("pid = %d\n",pid);
+        else
+            prints("no process\n");
+        flushbuf();
     /*x: [[printtrace()]] switch modif cases */
     case 'm':
         printmap("? map", symmap);
@@ -87,14 +91,6 @@ printtrace(int modif)
                 dprint("%s/%12t%#lux\n", s.name, w);
         }
         break;
-    /*x: [[printtrace()]] switch modif cases */
-    case 0:
-    case '?':
-        if (pid)
-            dprint("pid = %d\n",pid);
-        else
-            prints("no process\n");
-        flushbuf();
     /*x: [[printtrace()]] switch modif cases */
     case 'c':
     case 'C':
@@ -148,6 +144,10 @@ printtrace(int modif)
         fname = getfname();
         if (machbyname(fname) == 0)
             dprint("unknown name\n");;
+        break;
+    /*x: [[printtrace()]] switch modif cases */
+    case 'w':
+        maxpos=(adrflg?adrval:MAXPOS);
         break;
     /*x: [[printtrace()]] switch modif cases */
     /*print breakpoints*/
@@ -232,7 +232,7 @@ printfp(Map *map, int modif)
 
     for (i = 0, rp = mach->reglist; rp->rname; rp += ret) {
         ret = 1;
-        if (!(rp->rflags&RFLT))
+        if (!(rp->rflags & RFLT))
             continue;
         ret = fpformat(map, rp, buf, sizeof(buf), modif);
         if (ret < 0) {

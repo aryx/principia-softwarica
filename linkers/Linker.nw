@@ -4761,7 +4761,7 @@ if(o == ANAME || o == ASIGNAME) {
     if((k == N_EXTERN || k == N_INTERN) && s->type == SNONE)
         s->type = SXREF;
 
-    <<[[ldobj()]] when ANAME opcode, if D_FILE>>
+    <<[[ldobj()]] when ANAME opcode, if N_FILE>>
     goto loop;
 }
 @
@@ -12297,11 +12297,13 @@ Both tables were used for resolving symbols.
 %
 The format of the executable symbole table is very simple instead.
 It is just a list of {\em symbol descriptions} separated by [['\0']].
-The format of symbol description as well as an example is shown in 
+The format of a symbol description as well as an example is shown in 
 Figure~\ref{fig:exec-symbol-table}. The purpose of the
 executable symbol table is mostly
 to help debuggers to display names to the programmer
 instead of memory addresses.
+\l idea is that if arrive at 1022, can show that actually a _main+2 
+\l (ref to previous example)
 \n not resolving symbols, because done already :)
 \l for dyn linking too?
 \n labels in executable symbol table? no, was just for debugging 5l itself.
@@ -12661,7 +12663,7 @@ for(a=p->to.autom; a; a=a->link)
     if(a->type == N_PARAM)
         putsymb(a->asym->name, 'p', a->aoffset, 0);
 @
-\l use a final_autosize() instead of magic +4?
+\l use a final_autosize() instead of magic  plus 4?
 
 We refer to the \book{Debugger} to see how those symbols
 are used to improve the debugging experience.
@@ -12692,6 +12694,7 @@ in the call stack.
 \section{File and line information, [[asmlc()]]}
 
 %trans: before asmlc, reading file/line info from object file.
+% Hist
 
 \subsection{File and line information in objects, [[AHISTORY]]}
 \label{sec:lineno}
@@ -12708,6 +12711,7 @@ in the call stack.
 <<global histfrog>>=
 Sym*	histfrog[MAXHIST];
 @
+% frog??
 
 <<constant MAXHIST>>=
 MAXHIST		= 20,	/* limit of path elements for history symbols */
@@ -12730,7 +12734,7 @@ histfrogp = 0;
 @
 
 
-% pn? filename of object file, but addlib() really abuse histgrog global
+% pn? filename of object file, but addlib() really abuse histfrog global
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AHISTORY:
     if(p->to.offset == -1) {
@@ -12739,9 +12743,9 @@ case AHISTORY:
         goto loop;
     }
 
-    addhist(p->line, D_FILE);		/* 'z' */
+    addhist(p->line, N_FILE);		/* 'z' */
     if(p->to.offset)
-        addhist(p->to.offset, D_FILE1);	/* 'Z' */
+        addhist(p->to.offset, N_FILE1);	/* 'Z' */
     histfrogp = 0;
     goto loop;
 @
@@ -12762,6 +12766,7 @@ addhist(long line, int type)
     u->type = type;
     u->aoffset = line;
 
+    //add_list(u, curhist)
     u->link = curhist;
     curhist = u;
 
@@ -12817,8 +12822,8 @@ SFILE,
 int	histgen = 0;
 @
 
-<<[[ldobj()]] when ANAME opcode, if D_FILE>>=
-if(v == D_FILE) {
+<<[[ldobj()]] when ANAME opcode, if N_FILE>>=
+if(v == N_FILE) {
     if(s->type != SFILE) {
         histgen++;
         s->type = SFILE;
@@ -12889,21 +12894,23 @@ case SFILE:
     putsymb(s->name, 'f', s->value, s->version);
     continue;
 @
-% need that???
+% need that??? version?
 
 
 <<[[putsymb()]] adjust string [[s]] if file symbol>>=
 if(t == 'f')
     s++;
 @
+% because stored as <xxx in object file? see Assembler
+% not it's not a path elt, it's a full path here.
 
 % why they are shoved in to.autom with locals and params? a bit ugly
 <<[[asmsym()]] call putsymb for filenames>>=
 for(a=p->to.autom; a; a=a->link)
-    if(a->type == D_FILE)
+    if(a->type == N_FILE)
         putsymb(a->asym->name, 'z', a->aoffset, 0);
     else
-    if(a->type == D_FILE1)
+    if(a->type == N_FILE1)
         putsymb(a->asym->name, 'Z', a->aoffset, 0);
 @
 % D_FILE1?? can remove?
@@ -12911,15 +12918,16 @@ for(a=p->to.autom; a; a=a->link)
 <<[[putsymb()]] if z or Z>>=
 if(t == 'z' || t == 'Z') {
     cput(s[0]);
-    for(i=1; s[i] != 0 || s[i+1] != 0; i += 2) {
+    for(i=1; s[i] != '\0' || s[i+1] != '\0'; i += 2) {
         cput(s[i]);
         cput(s[i+1]);
     }
-    cput(0);
-    cput(0);
+    cput('\0');
+    cput('\0');
     i++;
 }
 @
+\t why by 2?
 
 \subsubsection{Line table format}
 
@@ -12968,7 +12976,7 @@ asmlc(void)
         oldlc = p->line;
         oldpc = p->pc + MINLC;
         if(s > 64 || s < -64) {
-            cput(0);	/* 0 vv +lc */
+            cput('\0');	/* 0 vv +lc */
             cput(s>>24);
             cput(s>>16);
             cput(s>>8);

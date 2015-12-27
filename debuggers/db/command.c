@@ -37,9 +37,10 @@ command(char *buf, int defcom)
     /*s: [[command()]] locals (db) */
     static char lastcom = '=';
     /*x: [[command()]] locals (db) */
+    static char savecom = '=';
+    /*x: [[command()]] locals (db) */
     char	*reg;
     char	savc;
-    static char savecom = '=';
     /*x: [[command()]] locals (db) */
     Rune*   savlp = lp;
     char	savlc = lastc;
@@ -90,16 +91,16 @@ command(char *buf, int defcom)
 
         switch(lastcom) {
         /*s: [[command()]] switch lastcom cases */
+        case '$':
+            lastcom=savecom;
+            printtrace(nextchar()); 
+            break;
+        /*x: [[command()]] switch lastcom cases */
         case '?':
         case '/':
         case '=':
             savecom = lastcom;
             acommand(lastcom);
-            break;
-        /*x: [[command()]] switch lastcom cases */
-        case '$':
-            lastcom=savecom;
-            printtrace(nextchar()); 
             break;
         /*x: [[command()]] switch lastcom cases */
         case ':':
@@ -120,13 +121,13 @@ command(char *buf, int defcom)
                 error("bad variable");
             break;
         /*x: [[command()]] switch lastcom cases */
+        case '\0':
+            prints(DBNAME);
+            break;
+        /*x: [[command()]] switch lastcom cases */
         case '!':
             lastcom=savecom;
             shell(); 
-            break;
-        /*x: [[command()]] switch lastcom cases */
-        case '\0':
-            prints(DBNAME);
             break;
         /*e: [[command()]] switch lastcom cases */
         default: 

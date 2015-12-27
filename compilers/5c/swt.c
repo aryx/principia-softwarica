@@ -467,11 +467,11 @@ outhist(Biobuf *b)
             }
             if(n) {
                 Bputc(b, ANAME);
-                Bputc(b, D_FILE);
+                Bputc(b, N_FILE);
                 Bputc(b, 1);
                 Bputc(b, '<');
                 Bwrite(b, p, n);
-                Bputc(b, 0);
+                Bputc(b, '\0');
             }
             p = q;
             if(p == 0 && op) {

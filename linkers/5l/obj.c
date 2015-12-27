@@ -789,6 +789,7 @@ addhist(long line, int type)
     u->type = type;
     u->aoffset = line;
 
+    //add_list(u, curhist)
     u->link = curhist;
     curhist = u;
 
@@ -1055,8 +1056,8 @@ loop:
         if((k == N_EXTERN || k == N_INTERN) && s->type == SNONE)
             s->type = SXREF;
 
-        /*s: [[ldobj()]] when ANAME opcode, if D_FILE */
-        if(v == D_FILE) {
+        /*s: [[ldobj()]] when ANAME opcode, if N_FILE */
+        if(v == N_FILE) {
             if(s->type != SFILE) {
                 histgen++;
                 s->type = SFILE;
@@ -1068,7 +1069,7 @@ loop:
             } else
                 collapsefrog(s);
         }
-        /*e: [[ldobj()]] when ANAME opcode, if D_FILE */
+        /*e: [[ldobj()]] when ANAME opcode, if N_FILE */
         goto loop;
     }
     /*e: [[ldobj()]] if ANAME or ASIGNAME(arm) */
@@ -1238,9 +1239,9 @@ loop:
             goto loop;
         }
 
-        addhist(p->line, D_FILE);		/* 'z' */
+        addhist(p->line, N_FILE);		/* 'z' */
         if(p->to.offset)
-            addhist(p->to.offset, D_FILE1);	/* 'Z' */
+            addhist(p->to.offset, N_FILE1);	/* 'Z' */
         histfrogp = 0;
         goto loop;
     /*x: [[ldobj()]] switch opcode cases(arm) */

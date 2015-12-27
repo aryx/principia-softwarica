@@ -1299,8 +1299,8 @@ fillsym(Sym *sp, Symbol *s)
     switch(sp->type) {
     case 'b':
     case 'B':
-    case 'D':
     case 'd':
+    case 'D':
         s->class = CDATA;
         break;
     case 't':

@@ -386,10 +386,10 @@ asmsym(void)
             /* filenames first */
             /*s: [[asmsym()]] call putsymb for filenames */
             for(a=p->to.autom; a; a=a->link)
-                if(a->type == D_FILE)
+                if(a->type == N_FILE)
                     putsymb(a->asym->name, 'z', a->aoffset, 0);
                 else
-                if(a->type == D_FILE1)
+                if(a->type == N_FILE1)
                     putsymb(a->asym->name, 'Z', a->aoffset, 0);
             /*e: [[asmsym()]] call putsymb for filenames */
             
@@ -439,12 +439,12 @@ putsymb(char *s, int t, long v, int ver)
     /*s: [[putsymb()]] if z or Z */
     if(t == 'z' || t == 'Z') {
         cput(s[0]);
-        for(i=1; s[i] != 0 || s[i+1] != 0; i += 2) {
+        for(i=1; s[i] != '\0' || s[i+1] != '\0'; i += 2) {
             cput(s[i]);
             cput(s[i+1]);
         }
-        cput(0);
-        cput(0);
+        cput('\0');
+        cput('\0');
         i++;
     }
     /*e: [[putsymb()]] if z or Z */
@@ -519,7 +519,7 @@ asmlc(void)
         oldlc = p->line;
         oldpc = p->pc + MINLC;
         if(s > 64 || s < -64) {
-            cput(0);	/* 0 vv +lc */
+            cput('\0');	/* 0 vv +lc */
             cput(s>>24);
             cput(s>>16);
             cput(s>>8);

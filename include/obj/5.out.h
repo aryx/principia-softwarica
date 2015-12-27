@@ -256,9 +256,9 @@ enum Sym_kind {
     /*s: [[Sym_kind]] cases */
     N_INTERN, // private (aka static) entities (from SB)
     /*x: [[Sym_kind]] cases */
-    D_FILE,
+    N_FILE,
     /*x: [[Sym_kind]] cases */
-    D_FILE1, // used by linker only?
+    N_FILE1, // used by linker only?
     /*e: [[Sym_kind]] cases */
 };
 /*e: enum sym_kind(arm) */

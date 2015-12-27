@@ -60,11 +60,13 @@ enum object_file_type
 enum symbol_type
 {
     CNONE  = 0,	
+
     CAUTO,
     CPARAM,
     CSTAB,
     CTEXT,
     CDATA,
+
     CANY,			/* to look for any class */
 };
 /*e: enum symbol_type */
@@ -118,20 +120,24 @@ struct Symbol {
  *	machine register description
  */
 struct Reglist {
-    char	*rname;			/* register name */
-    short	roffs;			/* offset in u-block */
-    char	rflags;			/* INTEGER/FLOAT, WRITABLE */
-    char	rformat;		/* print format: 'x', 'X', 'f', '8', '3', 'Y', 'W' */
+    char	*rname;		/* register name */
+
+    short	roffs;		/* offset in u-block */
+
+    // bitset<enum<register_flag>>
+    char	rflags;		/* INTEGER/FLOAT, WRITABLE */
+    char	rformat;	/* print format: 'x', 'X', 'f', '8', '3', 'Y', 'W' */
 };
 /*e: struct Reglist */
 
-/*s: enum _anon_ (include/mach.h)2 */
+/*s: enum register_flag */
 enum {					/* bits in rflags field */
     RINT	= (0<<0),
     RFLT	= (1<<0),
+
     RRDONLY	= (1<<1),
 };
-/*e: enum _anon_ (include/mach.h)2 */
+/*e: enum register_flag */
 
 /*s: struct Mach */
 /*

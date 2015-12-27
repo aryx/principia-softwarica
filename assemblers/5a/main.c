@@ -450,7 +450,7 @@ outhist(void)
 
             if(n) {
                 Bputc(&obuf, ANAME);
-                Bputc(&obuf, D_FILE);	/* type */ // symkind
+                Bputc(&obuf, N_FILE);	/* type */ // symkind
                 Bputc(&obuf, 1);	    /* sym */  // symidx
                 Bputc(&obuf, '<');
                 Bwrite(&obuf, p, n);
@@ -465,7 +465,6 @@ outhist(void)
             /*e: [[outhist()]] adjust p and op if p was a relative filename */
         }
         /*e: [[outhist()]] output each path component as an ANAME */
-        g.offset = h->local_line;
 
         Bputc(&obuf, AHISTORY);
         Bputc(&obuf, Always);
@@ -475,6 +474,7 @@ outhist(void)
         Bputc(&obuf, h->global_line>>16);
         Bputc(&obuf, h->global_line>>24);
         outopd(&nullgen, 0);
+        g.offset = h->local_line;
         outopd(&g, 0);
     }
 }
