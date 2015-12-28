@@ -5807,6 +5807,16 @@ findlib(char *file)
 % tracking? maybe not)
 
 
+% pn? filename of object file, but addlib() really abuse histfrog global
+<<[[ldobj()]] in AHISTORY case, if pragma lib>>=
+if(p->to.offset == -1) {
+    addlib(pn);
+    histfrogp = 0;
+    goto loop;
+}
+@
+% ugly special value -1 for AHISTORY, see Assembler
+
 %old:
 % <<[[main()]] locals(arm)>>=
 % bool load_libs;
@@ -12484,7 +12494,7 @@ and locals accessed by a procedure:
 <<struct Auto(arm)>>=
 struct	Auto
 {
-    // enum<Sym_kind> (N_LOCAL or N_PARAM only)
+    // enum<Sym_kind> (N_LOCAL, N_PARAM, N_FILE, or N_FILE1)
     short	type;
 
     // <ref<Sym>
@@ -12526,6 +12536,7 @@ Auto*	autom;
 
 
 \subsubsection{[[curauto]]}
+\label{sec:curauto}
 
 The set of stack variables for the current procedure ([[curtext]])
 is stored in [[curauto]] and updated at loading
@@ -12704,51 +12715,42 @@ in the call stack.
 % and complex figure about #include #line and lineno!
 % global line number after preprocessing.
 % Assembler discuss format and writing. Here reading.
+%
+% remember, lots of ANAME, with path components and then 
+% one AHISTORY. And so on, for all Hist.
+% FIGURE
 
-% tracing origin??
+% AHISTORY in Auto, so textp, so firstp
+% ANAME in symbol table (classic)
 
+% Already abuse instruction format, AHISTORY opcode, to store
+% line information. here abuse Auto.
+% directives about file/line not stored in beginning of executable,
+% but attached to first procedure of obj,
+% after symbol of the procedure,
+% before params/locals. So for each object can see a mapping
+% to source code (hmm but for pop?)
 
-<<global histfrog>>=
-Sym*	histfrog[MAXHIST];
-@
-% frog??
+\subsubsection{[[AHISTORY]] and [[addhist]]}
 
-<<constant MAXHIST>>=
-MAXHIST		= 20,	/* limit of path elements for history symbols */
-@
-
-<<global histfrogp>>=
-int	histfrogp;
-@
-
-
-
-
-
-% used by what? for debugging? when signature conflict! to print
-% current filenames in conflict
-
-
-<<[[ldobj()]] after newloop when new object file, more initializations>>=
-histfrogp = 0;
-@
-
-
-% pn? filename of object file, but addlib() really abuse histfrog global
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AHISTORY:
-    if(p->to.offset == -1) {
-        addlib(pn);
-        histfrogp = 0;
-        goto loop;
-    }
+    <<[[ldobj()]] in AHISTORY case, if pragma lib>>
+    // else
 
+    // the global line
     addhist(p->line, N_FILE);		/* 'z' */
+    // the local line (if needed for #line)
     if(p->to.offset)
         addhist(p->to.offset, N_FILE1);	/* 'Z' */
-    histfrogp = 0;
+    <<[[ldobj()]] in AHISTORY case, reset histfrogp>>
     goto loop;
 @
+%ocaml: such a mess, just marshall ...
+% see outhist() in 5a
+
+% why 'z'? because it's compressed! why 'Z' because related, and
+% do often than when related, e.g. T and t when private.
 
 <<function addhist>>=
 void
@@ -12759,7 +12761,6 @@ addhist(long line, int type)
     int i, j, k;
 
     s = malloc(sizeof(Sym));
-    s->name = malloc(2*(histfrogp+1) + 1);
 
     u = malloc(sizeof(Auto));
     u->asym = s;
@@ -12770,17 +12771,11 @@ addhist(long line, int type)
     u->link = curhist;
     curhist = u;
 
-    j = 1;
-    for(i=0; i<histfrogp; i++) {
-        k = histfrog[i]->value;
-        s->name[j+0] = k>>8;
-        s->name[j+1] = k;
-        j += 2;
-    }
+    <<[[addhist()]] set symbol name to filename>>
 }
 @
 
-
+\subsubsection{[[curhist]] and [[curauto]]}
 
 <<global curhist>>=
 Auto*	curhist;
@@ -12813,14 +12808,10 @@ histtoauto();
 
 
 
+\subsubsection{Filenames and [[ANAME]]}
 
-<<[[Section]] cases>>=
-SFILE,
-@
-
-<<global histgen>>=
-int	histgen = 0;
-@
+% <xxx
+% abuse symbol table for filename component. Abuse value with histgen
 
 <<[[ldobj()]] when ANAME opcode, if N_FILE>>=
 if(v == N_FILE) {
@@ -12832,11 +12823,81 @@ if(v == N_FILE) {
     if(histfrogp < MAXHIST) {
         histfrog[histfrogp] = s;
         histfrogp++;
-    } else
-        collapsefrog(s);
+    } 
+    <<[[ldobj()]] when ANAME opcode, if N_FILE, if no more space in histfrog>>
 }
 @
+%ocaml: why so complicated ... why not just marshall
 
+% then reuse same symbol!
+
+<<[[Section]] cases>>=
+SFILE,
+@
+
+<<global histgen>>=
+int	histgen = 0;
+@
+% actually should be a short! 16 bits limit.
+% reference to component! This is an index!
+
+
+
+<<global histfrog>>=
+Sym*	histfrog[MAXHIST];
+@
+% frog??
+
+<<constant MAXHIST>>=
+MAXHIST		= 20,	/* limit of path elements for history symbols */
+@
+
+<<global histfrogp>>=
+int	histfrogp;
+@
+
+
+% used by what? for debugging? when signature conflict! to print
+% current filenames in conflict
+<<[[ldobj()]] after newloop when new object file, more initializations>>=
+histfrogp = 0;
+@
+<<[[ldobj()]] in AHISTORY case, reset histfrogp>>=
+histfrogp = 0;
+@
+
+
+% called for AHISTORY, what is the full name!
+
+<<[[addhist()]] set symbol name to filename>>=
+s->name = malloc(2*(histfrogp+1) + 1);
+j = 1;
+for(i=0; i<histfrogp; i++) {
+    k = histfrog[i]->value;
+    s->name[j+0] = k>>8;
+    s->name[j+1] = k;
+    j += 2;
+}
+@
+% s[0] = ????
+% compression scheme??? then limit 16 bits histgen!
+\t could be nil? if it's a pop? then not set??
+
+% example!!
+
+% FIGURE? where see how things fit together, index which reference
+% component.
+
+\subsubsection{[[collapsefrog()]]}
+
+
+<<[[ldobj()]] when ANAME opcode, if N_FILE, if no more space in histfrog>>=
+else
+        collapsefrog(s);
+@
+% useful opti? just diag() !
+
+% remember '<' first char so do +1 below
 
 <<function collapsefrog>>=
 void
@@ -12877,7 +12938,7 @@ out:
     histfrog[histfrogp-1] = s;
 }
 @
-
+% at least resistant to abuse
 
 
 \subsection{File and line information in executables}
@@ -12894,15 +12955,20 @@ case SFILE:
     putsymb(s->name, 'f', s->value, s->version);
     continue;
 @
-% need that??? version?
+% this is for path components! 'z' is full file, but it's compressed!
+% value is histgen! index for this component, which is then referenced
+% in 'z' name!
 
 
 <<[[putsymb()]] adjust string [[s]] if file symbol>>=
 if(t == 'f')
     s++;
 @
-% because stored as <xxx in object file? see Assembler
-% not it's not a path elt, it's a full path here.
+% because stored as <xxx in object file. see Assembler.
+% value here is complex, it's a histgen, and it can
+% then be referenced
+
+
 
 % why they are shoved in to.autom with locals and params? a bit ugly
 <<[[asmsym()]] call putsymb for filenames>>=
@@ -12914,6 +12980,7 @@ for(a=p->to.autom; a; a=a->link)
         putsymb(a->asym->name, 'Z', a->aoffset, 0);
 @
 % D_FILE1?? can remove?
+% compressed! 16 bits index
 
 <<[[putsymb()]] if z or Z>>=
 if(t == 'z' || t == 'Z') {
@@ -12927,7 +12994,7 @@ if(t == 'z' || t == 'Z') {
     i++;
 }
 @
-\t why by 2?
+% double 0, just be consistent with thing coming in double
 
 \subsubsection{Line table format}
 
@@ -20213,7 +20280,7 @@ armalloc(int n)
 
 % yeah!!
 
-% design decisions: 
+% design decisions (dup partially with Assembler): 
 % - no optimisations, space or speed, which guides many of the
 %   other decisions below.
 % - object file is marshalled form of ocaml AST. Far simpler!
