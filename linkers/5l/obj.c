@@ -782,7 +782,6 @@ addhist(long line, int type)
     int i, j, k;
 
     s = malloc(sizeof(Sym));
-    s->name = malloc(2*(histfrogp+1) + 1);
 
     u = malloc(sizeof(Auto));
     u->asym = s;
@@ -793,6 +792,8 @@ addhist(long line, int type)
     u->link = curhist;
     curhist = u;
 
+    /*s: [[addhist()]] set symbol name to filename */
+    s->name = malloc(2*(histfrogp+1) + 1);
     j = 1;
     for(i=0; i<histfrogp; i++) {
         k = histfrog[i]->value;
@@ -800,6 +801,7 @@ addhist(long line, int type)
         s->name[j+1] = k;
         j += 2;
     }
+    /*e: [[addhist()]] set symbol name to filename */
 }
 /*e: function addhist */
 
@@ -1066,8 +1068,11 @@ loop:
             if(histfrogp < MAXHIST) {
                 histfrog[histfrogp] = s;
                 histfrogp++;
-            } else
-                collapsefrog(s);
+            } 
+            /*s: [[ldobj()]] when ANAME opcode, if N_FILE, if no more space in histfrog */
+            else
+                    collapsefrog(s);
+            /*e: [[ldobj()]] when ANAME opcode, if N_FILE, if no more space in histfrog */
         }
         /*e: [[ldobj()]] when ANAME opcode, if N_FILE */
         goto loop;
@@ -1233,16 +1238,23 @@ loop:
         break;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case AHISTORY:
+        /*s: [[ldobj()]] in AHISTORY case, if pragma lib */
         if(p->to.offset == -1) {
             addlib(pn);
             histfrogp = 0;
             goto loop;
         }
+        /*e: [[ldobj()]] in AHISTORY case, if pragma lib */
+        // else
 
+        // the global line
         addhist(p->line, N_FILE);		/* 'z' */
+        // the local line (if needed for #line)
         if(p->to.offset)
             addhist(p->to.offset, N_FILE1);	/* 'Z' */
+        /*s: [[ldobj()]] in AHISTORY case, reset histfrogp */
         histfrogp = 0;
+        /*e: [[ldobj()]] in AHISTORY case, reset histfrogp */
         goto loop;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ASUB:

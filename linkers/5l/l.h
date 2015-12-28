@@ -156,7 +156,7 @@ struct	Sym
 /*s: struct Auto(arm) */
 struct	Auto
 {
-    // enum<Sym_kind> (N_LOCAL or N_PARAM only)
+    // enum<Sym_kind> (N_LOCAL, N_PARAM, N_FILE, or N_FILE1)
     short	type;
 
     // <ref<Sym>
