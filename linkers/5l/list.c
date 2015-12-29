@@ -307,7 +307,7 @@ Nconv(Fmt *fp)
 /*e: function Nconv(arm) */
 
 /*s: function Sconv(arm) */
-// ?? -> string
+// string -> string
 int
 Sconv(Fmt *fp)
 {
@@ -327,7 +327,7 @@ Sconv(Fmt *fp)
         }
         *p++ = '\\';
         switch(c) {
-        case 0:
+        case '\0':
             *p++ = 'z';
             continue;
         case '\\':
@@ -341,11 +341,12 @@ Sconv(Fmt *fp)
             *p++ = 't';
             continue;
         }
+        // else
         *p++ = (c>>6) + '0';
         *p++ = ((c>>3) & 7) + '0';
         *p++ = (c & 7) + '0';
     }
-    *p = 0;
+    *p = '\0';
     return fmtstrcpy(fp, str);
 }
 /*e: function Sconv(arm) */

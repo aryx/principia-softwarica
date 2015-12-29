@@ -814,6 +814,7 @@ histtoauto(void)
 
     while(l = curhist) {
         curhist = l->link;
+
         l->link = curauto;
         curauto = l;
     }

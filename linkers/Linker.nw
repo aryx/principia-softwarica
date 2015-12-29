@@ -239,20 +239,24 @@ to a specific binary instruction?
 % - pattern matching array dispatch table (with subtype notions)
 %   and associated indexation (range and cmp and caching), quite nice
 %   way to overcome limitations of C; get close to ocaml in the end.
+% - compression filenames with path components indexing, and list of integers
+%   with delta
 % - reflection via special symbols
 % - bitsets, lots of bit manipulations
+
 
 %algorithms (beyond search/sort): (use binary search and use qsort)
 % - unserialization/unmarshalling with shared enum and tags so simple dispatch
 %   or with header specifying sizes, and sliding input buffer window
 % - signature checking (header I_MAGIC, archive ARMAG, names ASIGNAME)
 % - binary search (with overlay)
+% - compression for list of filenames and list of integers
+% - versioning for disambiguation (but gensym would be better term)
 % - DFS? (follow?)
 
 %other?
 % - program instrumentation for profiling
 % - smaller:
-%   * versioning for disambiguation (but gensym would be better term)
 %   * def/use link again via symbol table and special marks (SXREF)
 %   * AST rewriting and optimisations
 %   * caching/memoizing and precomputation for optimisations
@@ -2447,6 +2451,8 @@ so they can be leveraged by tools such as debuggers.
 
 
 \section{[[Instr]]uction}
+\label{sec:instr}
+
 
 The type below connects an opcode with its operands to form
 a full {\em instruction}:
@@ -3744,6 +3750,9 @@ as explained in Section~\ref{sec:disk-image-vs-memory-image}.
 \label{sec:datblk}
 
 % use buf.dbuf, from union Buf. See appendix.
+
+% general idea? in bulk?
+%alt: ? can not do it in a faster way?
 
 <<constant Dbufslop>>=
 #define	Dbufslop	100
@@ -12197,7 +12206,7 @@ code comes from. It also knows
 the name of the {\em function} containing this piece of code, 
 the {\em parameters} of this function (names and values), as well as 
 the name of the {\em caller} to this function. 
-Finally it knows the file and line of this caller function.
+Finally it knows also the file and line of this caller function.
 \t also stack trace!
 % in db doing $C  dumps the stacktrace with parameters values! and locals!
 %  ex:
@@ -12220,12 +12229,14 @@ Each entry of this table uses the special opcode [[ANAME]].
 %
 In the same way, the object file contains also a {\em file/line table}
 which uses the special opcode [[AHISTORY]] (see the \book{Assembler}).
-\l but actually explained in this chapter.
+\l but actually explained in this chapter. actually also use ANAME for filename
+\l also each instr has global line number
 %toc:
 In this chapter we will see how two corresponding tables
 are also stored in the executable: 
 the {\em executable symbol table} and 
-the {\em file and line table}.
+the {\em program counter and line table}.
+\n not really file and line in exec, really just line table
 \l cooperation of 5a, 5c, and now last piece: 5l.
 \t also how stacktrace? caller? need special layout convention?
 
@@ -12282,7 +12293,7 @@ case H_PLAN9:
 The next two sections will describe the generation
 of the executable symbol table, via [[asmsym()]],
 \l (related to import/export table? I don't think so)
-and the file and line table, via [[asmlc()]].
+and the program counter and line table, via [[asmlc()]].
 
 
 \section{Executable symbol table, [[asmsym()]]}
@@ -12297,6 +12308,7 @@ long	symsize;
 @
 
 \subsection{Symbol table format, [[putsymb()]]}
+\label{sec:exec-symbol-table}
 
 %trans:
 In Section~\ref{sec:h} we saw the rather subtle format
@@ -12366,11 +12378,11 @@ putsymb(char *s, int t, long v, int ver)
 }
 @
 %>>
-\t int t? char t no?
+\l int t? char t no?
+\t why 0x80??
 
 
-
-\subsection{[[asmsym()]]}
+\subsection{Globals and procedures symbols, [[asmsym()]]}
 
 %trans:
 We can now see [[asmsym()]] which 
@@ -12424,6 +12436,7 @@ asmsym(void)
     }
 }
 @
+\t bad name, has nothing to do with assembly really
 %old: 
 % || s->type == SLEAF
 %            if(s->type == STEXT)
@@ -12506,6 +12519,7 @@ struct	Auto
 };
 @
 \t rename Var?
+\l will see later also abused for Hist
 
 Those stack variables are chained together:
 
@@ -12614,7 +12628,8 @@ if(curtext != P)
     curtext->to.autom = curauto;
 curauto = nil;
 @
-
+\l so if no procedure in object, no file info ... because file/line use curauto
+\l  diag at least no?
 
 
 \subsubsection{Procedure declarations, [[textp/etextp]]}
@@ -12676,6 +12691,7 @@ for(a=p->to.autom; a; a=a->link)
 @
 \l use a final_autosize() instead of magic  plus 4?
 
+
 We refer to the \book{Debugger} to see how those symbols
 are used to improve the debugging experience.
 %
@@ -12702,36 +12718,171 @@ in the call stack.
 %p 00000000 f
 
 % nm -??
-\section{File and line information, [[asmlc()]]}
 
-%trans: before asmlc, reading file/line info from object file.
-% Hist
 
-\subsection{File and line information in objects, [[AHISTORY]]}
+\subsection{Filename and line origin symbols}
+
+The executable symbol table contains also information
+about the filename sources of the object files using
+a compact encoding we will describe in Section~\ref{sec:file-line-symbols}.
+%It stores the different parts
+%of absolute filenames, e.g. [[usr]] in [[/usr/pad/main.c]],
+%which we call {\em path components}.
+%
+It also stores information about the [[#include]] and [[#line]] directives
+used in source files and which are kept in the object files.
+Those directives help to keep track of the file and line origin 
+of any piece of machine code.
+
+% For path component value is histgen (and no conflict with
+%  procedure or global because starts with '<')
+% For directive, it's splitted in two symbols,
+% filename referencing file component (and no conflict because
+% starts with 0), and value is global line
+%  and possibly local line in another symbol.
+
+
+\section{File and line information}
+
+%trans: 
+Before seeing the code of [[asmlc()]] we need first to
+%toc:
+recall how file and line information are stored in object files,
+and to explain the code of [[ldobj()]] which loads this information
+in memory.
+
+\subsection{Locations in objects, [[AHISTORY]]}
 \label{sec:lineno}
 
-%trans:
-% see chapter in \book{Assembler}. with complex AHISTORY format
-% and complex figure about #include #line and lineno!
-% global line number after preprocessing.
-% Assembler discuss format and writing. Here reading.
+%\subsubsection{[[Hist]]}
+
+In the \book{Assembler} we saw that some file and line information
+are stored in the memory of [[5a]] in a list of [[Hist]] structures. 
+\n important remind Hist because later have AHISTORY and funcs like addhist()
+Each element of this list represents either the original source filename
+or an [[#include]] or [[#line]] directive and contains 3 information:
+
+\begin{itemize}
+\item a filename (or nil to indicate the end of a [[#include]]),
+
+\item a {\em global line number}, which represents a line number
+after preprocessing,
+\n not so global now since we have many object files
+
+\item a {\em local line number}, which is either 
+[[0]] for the original source and [[#include]] directives, or
+a positive integer for [[#line]] directives
+(or [[-1]] for [[#pragma lib]] directives,
+see Section~\ref{sec:loading-libraries-magically}).
+
+\end{itemize}
+%ocaml: really should be a tree, so no need this nil, or just a list of #line
+% as I did in 5a-in-ocaml
+
+Thanks to this list,
+one can then easily convert the global line number 
+assigned to each instruction in the object file
+in [[Instr.line]] (see Section~\ref{sec:instr})
+to a pair of source filename and (local) line information.
+\l Note that #line very important, for 5c generated objs!
+\n (actually obj generated directly by 5c, so no need #line in 5a)
 %
-% remember, lots of ANAME, with path components and then 
-% one AHISTORY. And so on, for all Hist.
-% FIGURE
+%dup: (and adapted) from Assembler
+Figure~\ref{fig:hist} illustrates the evolution of
+the global line number on the content of [[/tests/cpp/foo.s]]
+(which includes other files) as well as the list of [[Hist]]
+after having pre-processed the entire file.
 
-% AHISTORY in Auto, so textp, so firstp
-% ANAME in symbol table (classic)
+%dup: (and adapted) from Assembler
+\begin{figure}[!]\centering
+\begin{verbatim}
+                                              
+                                        +--------------------+
+     foo.s---------------------------+  |"foo.s", G1, L0     |
+ 1   |L1                             |  +--------------------+
+ 2   |L2                             |
+ 3   |L3 #include "foo.h"            |  +--------------------+
+     |   foo.h-------------------+   |  |"foo.h", G4, L0     |
+ 4   |   |L1 #include "foo1.h"   |   |  +--------------------+
+     |   |   foo1.h-----------+  |   |  |"foo1.h", G5, L0    |
+ 5   |   |   |L1              |  |   |  +--------------------+
+     |   |   +----------------+  |   |  |nil, G6, L0         |
+ 6   |   |L2                     |   |  +--------------------+
+ 7   |   |L3 #include "foo2.h"   |   |  +--------------------+
+     |   |   foo2.h-----------+  |   |  |"foo2.h", G8, L0    |
+ 8   |   |   |L1              |  |   |  +--------------------+
+     |   |   +----------------+  |   |  |nil, G9, L0         |
+ 9   |   |L4                     |   |  +--------------------+
+ 10  |   |L5                     |   |  +--------------------+
+     |   +-----------------------+   |  |nil, G11, L0        |
+ 11  |L4                             |  +--------------------+
+ 12  |L5 #include "bar.s"            |  +--------------------+
+     |   bar.s-------------------+   |  |"bar.s", G13, L0    |
+ 13  |   |L1                     |   |  +--------------------+
+ 14  |   |L2                     |   |  +--------------------+
+     |   +-----------------------+   |  |nil, G15, L0        |
+ 15  | L6                            |  +--------------------+
+ 16  | L7                            |  +--------------------+
+ 17  | L8#line 10 "foobar.c"         |  |"foobar.c", G18, L10|
+ 18  | L9                            |  +--------------------+
+ 19  |L10                            |  +--------------------+
+     +-------------------------------+  |nil, G20, L0        |
+                                        +--------------------+
+global       foo.s and                        list of
+line         included files                Hist structures
+number
+\end{verbatim}
+\caption{File and line information for [[/tests/cpp/foo.s]]}
+\label{fig:hist}
+\end{figure}
 
-% Already abuse instruction format, AHISTORY opcode, to store
-% line information. here abuse Auto.
-% directives about file/line not stored in beginning of executable,
-% but attached to first procedure of obj,
-% after symbol of the procedure,
-% before params/locals. So for each object can see a mapping
-% to source code (hmm but for pop?)
+%\subsubsection{[[AHISTORY]]}
+
+We also saw in the \book{Assembler} how the list of [[Hist]]
+structures is stored at the beginning of the object file 
+in instructions using the special opcode [[AHISTORY]].
+\n abuse instr format
+%
+In fact, each [[AHISTORY]] instruction records just the
+global line number ((ab)using [[Instr.line]]) and 
+local line number ((ab)using [[Operand.offset]] of the [[Instr.to]]
+operand) of an [[Hist]].
+%
+The filename of the [[Hist]] is encoded in a series
+of [[ANAME]] preceding the [[AHISTORY]] instruction.
+Each [[ANAME]] encodes a {\em path component} of the
+filename.
+\l absolute filename always?
+%involved in the [[#include]] or [[#line]] directive,
+%for instance [[usr]] in [[/usr/pad/foo.c]].
+%
+Here is the series of instructions in the object file which encode
+the directive [[#line 10 "/usr/foobar.c"]] of Figure~\ref{fig:hist}:
+\begin{verbatim}
+ANAME <usr
+ANAME <foo.c
+AHISTORY 17 10
+\end{verbatim}
+\l can see that with 5l -W?
+
+We will see later why each path component is prefixed by a [[<]].
+\l and also why split in multiple components? to help linker to compress later?
+
+\subsection{Locations in [[5l]] memory}
+
+%trans: %assembler: outhist
+[[5a]] uses the function [[outhist()]] to
+write the [[Hist]]s in the object file by using [[AHISTORY]] and [[ANAME]]
+instructions.
+%toc:
+We will now see the code of [[5l]] which reads back the [[Hist]]s
+of the different object files via [[ldboj()]].
+%and [[addhist()]].
 
 \subsubsection{[[AHISTORY]] and [[addhist]]}
+
+Reading an [[AHISTORY]] in [[ldobj()]] is pretty simple since 
+it is using the same format than regular instructions:
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AHISTORY:
@@ -12746,11 +12897,25 @@ case AHISTORY:
     <<[[ldobj()]] in AHISTORY case, reset histfrogp>>
     goto loop;
 @
-%ocaml: such a mess, just marshall ...
-% see outhist() in 5a
+%ocaml: such a mess, just marshall in, marshall out, no need spread
+% info in AHISTORY and ANAME and then abuse symbol table
+%assembler: see outhist() in 5a
 
-% why 'z'? because it's compressed! why 'Z' because related, and
-% do often than when related, e.g. T and t when private.
+As we will see in the rest of this chapter,
+one [[AHISTORY]] instruction in the object file will become eventually
+two symbols in the executable symbol table (if the local line 
+number is non zero), hence the two
+calls to [[addhist()]] above (and the [['z']] and [['Z']] comments).
+\n why 'z' comment? cos compressed! why 'Z' because related (like 'T' and 't')
+%
+Indeed, [[addhist()]] below creates a new symbol and a new [[Auto]] 
+which is then stored in the global [[curhist]].
+%
+As we will see soon,
+[[curhist]] is then copied in [[curauto]] which is then assigned
+to one of the field of the first [[TEXT]] instruction of an object file.
+Ultimately, this new symbol is then stored in the executable
+symbol table.
 
 <<function addhist>>=
 void
@@ -12758,7 +12923,7 @@ addhist(long line, int type)
 {
     Auto *u;
     Sym *s;
-    int i, j, k;
+    <<[[addhist()]] other locals>>
 
     s = malloc(sizeof(Sym));
 
@@ -12775,12 +12940,44 @@ addhist(long line, int type)
 }
 @
 
+The second parameter of [[addhist()]] above can be either [[N_FILE]]
+or [[N_FILE1]] which are two new {symbol kinds}
+(see Section~\ref{sec:opcode-operand}) used respectively
+to represent a global line number and a local line number (if there
+is one).
+%
+The reason for using two symbols for one [[AHISTORY]] is because
+a symbol description in the executable symbol table can contain
+only one integer value (see Section~\ref{sec:exec-symbol-table}),
+but an [[AHISTORY]] carry two line numbers.
+\n have room in one Auto to store two numbers, but not in exec symbol table
+
+% see symbol name part later, tricky.
+
+% see curhist now, ultimately store in curauto and X.
+
+
+\n AHISTORY in Auto, so textp, so firstp
+\n ANAME in symbol table (classic)
+
+% Already abuse instruction format, AHISTORY opcode, to store
+% line information. here abuse Auto.
+% directives about file/line not stored in beginning of executable,
+% but attached to first procedure of obj,
+% after symbol of the procedure,
+% before params/locals. So for each object can see a mapping
+% to source code (hmm but for pop?)
+
 \subsubsection{[[curhist]] and [[curauto]]}
 
 <<global curhist>>=
 Auto*	curhist;
 @
 % like curauto
+
+%assembler: Hists are stored in a global, but here have many object files
+% so many global line number which are no more globals ...
+% so here stored in first TEXT of object file
 
 <<function histtoauto>>=
 /// ldobj (case AEND | ATEXT | ??) -> <>
@@ -12791,6 +12988,7 @@ histtoauto(void)
 
     while(l = curhist) {
         curhist = l->link;
+
         l->link = curauto;
         curauto = l;
     }
@@ -12810,8 +13008,12 @@ histtoauto();
 
 \subsubsection{Filenames and [[ANAME]]}
 
-% <xxx
-% abuse symbol table for filename component. Abuse value with histgen
+%trans:
+% AHISTORY preceded by ANAME, with N_FILE kind. See Assembler.
+
+% ldobj does lookup in ANAME, see Section X.
+% abuse symbol table for filename component. 
+% Abuse value with histgen.
 
 <<[[ldobj()]] when ANAME opcode, if N_FILE>>=
 if(v == N_FILE) {
@@ -12820,17 +13022,15 @@ if(v == N_FILE) {
         s->type = SFILE;
         s->value = histgen;
     }
-    if(histfrogp < MAXHIST) {
-        histfrog[histfrogp] = s;
-        histfrogp++;
-    } 
+    <<[[ldobj()]] when ANAME opcode, if N_FILE, update histfrogp>>
     <<[[ldobj()]] when ANAME opcode, if N_FILE, if no more space in histfrog>>
 }
 @
 %ocaml: why so complicated ... why not just marshall
 
-% then reuse same symbol!
-
+% special section, differentiate symbol (but anyway < prefix)
+% then reuse same symbol! so same histgen if multiple AHISTORY, Hist
+%  with same path component.
 <<[[Section]] cases>>=
 SFILE,
 @
@@ -12838,10 +13038,17 @@ SFILE,
 <<global histgen>>=
 int	histgen = 0;
 @
-% actually should be a short! 16 bits limit.
 % reference to component! This is an index!
+\l actually should be a short! 16 bits limit. No overflow checking, bad.
 
+% accumulate series of ANAME in array:
 
+<<[[ldobj()]] when ANAME opcode, if N_FILE, update histfrogp>>=
+if(histfrogp < MAXHIST) {
+    histfrog[histfrogp] = s;
+    histfrogp++;
+} 
+@
 
 <<global histfrog>>=
 Sym*	histfrog[MAXHIST];
@@ -12866,9 +13073,14 @@ histfrogp = 0;
 histfrogp = 0;
 @
 
+%trans:
+% now finally see AHISTORY missing piece:
+%
+% what is the full name! of Hist, in curhist->asym->name!
 
-% called for AHISTORY, what is the full name!
-
+<<[[addhist()]] other locals>>=
+int i, j, k;
+@
 <<[[addhist()]] set symbol name to filename>>=
 s->name = malloc(2*(histfrogp+1) + 1);
 j = 1;
@@ -12879,7 +13091,8 @@ for(i=0; i<histfrogp; i++) {
     j += 2;
 }
 @
-% s[0] = ????
+\t s[0] = ???? 0   I think,  use dumper to check!!
+\t bug? 2*(histfrog plus 1)?? why need plus 1?
 % compression scheme??? then limit 16 bits histgen!
 \t could be nil? if it's a pop? then not set??
 
@@ -12941,14 +13154,20 @@ out:
 % at least resistant to abuse
 
 
-\subsection{File and line information in executables}
+\subsection{Locations in executables}
 
-% lc? line count?
-<<global lcsize>>=
-long	lcsize;
-@
+%trans:
+% now that loaded in memory, symbol table and Auto
+% we will see how stored in executable file.
+%toc:
+% actually split again, part info in executable symbol table! cooperation!
+% and part in program counter line table.
+% (similar to object file, ANAME and AHISTORY)
 
-\subsubsection{Filename symbols}
+\subsubsection{Path components and directives symbols}
+\label{sec:file-line-symbols}
+
+% mentioned section X.
 
 <<[[asmsym()]] in symbol table iteration, switch section cases>>=
 case SFILE:
@@ -12979,7 +13198,9 @@ for(a=p->to.autom; a; a=a->link)
     if(a->type == N_FILE1)
         putsymb(a->asym->name, 'Z', a->aoffset, 0);
 @
-% D_FILE1?? can remove?
+% N_FILE1 in Assembler. Cant remove cos symbol table format
+%  has space only for 1 value and in Hist we may have 2 (global and local line)
+%  (a bit ugly though)
 % compressed! 16 bits index
 
 <<[[putsymb()]] if z or Z>>=
@@ -12994,20 +13215,60 @@ if(t == 'z' || t == 'Z') {
     i++;
 }
 @
-% double 0, just be consistent with thing coming in double
+\t bug? just a single increment of i? should have 2 no?
+\t  used by putsymb to adjust size of symbol table.
+\t but actually not bug because does implicity i plus 1 because
+\t assume ending 0, so here really we just add another 0
+
+% double 0, just be consistent with thing coming in double?
+% NO because otherwise can not make difference with a histgen
+% which happens to be a multiple of 256! :)
 
 \subsubsection{Line table format}
 
+% Idea is Instr.line, global line number of each instr (which is not
+% so global anymore, cos multiple object files).
+% Naive would be pair of 32 bits integer.
+% pc -> global line. for each instr.
+% But means 2 words for each word of instruction in executable :(
+% triple size of executable.
+
+% but pc usually always +4, so could just global line for each instr.
+% and global line increment small usually, so one byte! from 8 to 1 byte.
+% then need deal with exceptions:
+%  - line can go down back to 0 when code from another object
+%  - not always +4 when instr generated multiple
+
 \l FIGURE!
+% tricky encoding, save space, store increment so can use byte
+% instead of 32 bytes each time
+
+% Refer to Debugger to code reading this format.
+% Note that then need semi-global line number -> file x line not that easy.
 
 % read man page? or format description a.out? there is the procedure
 % to understand line table format
+
+
+%dup: (and adapted) debugging/symbol-table
+One side effect of [[asmlc()]] is to modify
+the global [[lcsize]] below, which contains the size of the line table.
+The value in this global will then be stored in the [[a.out]] header
+(see Section~\ref{sec:gen-header}).
+
+% lc? line count?
+<<global lcsize>>=
+long	lcsize;
+@
+\l bad name again
+
 
 \subsubsection{Line table, [[asmlc()]]}
 
 <<constant MINLC(arm)>>=
 #define	MINLC	4
 @
+% size of instr
 
 <<function asmlc>>=
 void
@@ -13015,69 +13276,51 @@ asmlc(void)
 {
     long oldpc, oldlc;
     Prog *p;
-    long v, s;
+    long v;
+    long s;
 
     oldpc = INITTEXT;
     oldlc = 0;
     for(p = firstp; p != P; p = p->link) {
         if(p->line == oldlc || p->as == ATEXT || p->as == ANOP) {
             <<adjust curtext when iterate over instructions p>>
-            if(debug['V'])
-                Bprint(&bso, "%6lux %P\n", p->pc, p);
+            <<[[asmlc()]] dump instruction p, debug>>
             continue;
         }
-        if(debug['V'])
-            Bprint(&bso, "\t\t%6ld", lcsize);
+        // else
+        <<[[asmlc()]] dump lcsize, debug>>
         v = (p->pc - oldpc) / MINLC;
         while(v) {
-            s = 127;
-            if(v < 127)
-                s = v;
+            s = (v < 127)? v : 127; // min(), but impossible more than 6 (o6)
             cput(s+128);	/* 129-255 +pc */
-            if(debug['V'])
-                Bprint(&bso, " pc+%ld*%d(%ld)", s, MINLC, s+128);
+            <<[[asmlc()]] dump s, debug>>
             v -= s;
             lcsize++;
         }
         s = p->line - oldlc;
         oldlc = p->line;
         oldpc = p->pc + MINLC;
+
         if(s > 64 || s < -64) {
-            cput('\0');	/* 0 vv +lc */
+            cput(0);	/* 0 vv +lc */
             cput(s>>24);
             cput(s>>16);
             cput(s>>8);
             cput(s);
-            if(debug['V']) {
-                if(s > 0)
-                    Bprint(&bso, " lc+%ld(%d,%ld)\n",
-                        s, 0, s);
-                else
-                    Bprint(&bso, " lc%ld(%d,%ld)\n",
-                        s, 0, s);
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
-            }
+            <<[[asmlc()]] dump big line change, debug>>
             lcsize += 5;
-            continue;
-        }
-        if(s > 0) {
-            cput(0+s);	/* 1-64 +lc */
-            if(debug['V']) {
-                Bprint(&bso, " lc+%ld(%ld)\n", s, 0+s);
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
-            }
         } else {
-            cput(64-s);	/* 65-128 -lc */
-            if(debug['V']) {
-                Bprint(&bso, " lc%ld(%ld)\n", s, 64-s);
-                Bprint(&bso, "%6lux %P\n",
-                    p->pc, p);
+            if(s > 0) {
+                cput(0+s);	/* 1-64 +lc */
+                <<[[asmlc()]] dump small line increment, debug>>
+            } else {
+                cput(64-s);	/* 65-128 -lc */
+                <<[[asmlc()]] dump negative line increment, debug>>
             }
+            lcsize++;
         }
-        lcsize++;
     }
+    // padding
     while(lcsize & 1) {
         s = 129;
         cput(s);
@@ -13088,6 +13331,19 @@ asmlc(void)
     Bflush(&bso);
 }
 @
+\l bad name again
+\l can have ANOP at this point??
+%old:
+%            s = 127;
+%            if(v < 127)
+%                s = v;
+%old:
+%  continue;   in if big line jump -> else if
+\t change while() in diag() if more than 6?
+\l why need final padding?
+
+\t use 129 only when not pc+4, but when one instr generated multiple
+\t  opti again! have to use special range otherwise ambiguity!
 
 
 
@@ -13342,6 +13598,7 @@ easily modify the [[main()]]
 of the profiled program to print data from [[__mcount]].
 One can then display all the function calls counts or a subset of
 those counts.
+\t not shown, because dead option, but interesting for didactic
 \l just need declare extern __mcount!
 \n git grep __mcount does not seem to return stuff, probably obsolete code
 
@@ -13604,6 +13861,12 @@ if(s2->type != STEXT || s4->type != STEXT) {
     return;
 }
 @
+
+
+\t once done, when exec calls _profin/_profout in profile.c
+\t  which generate data which can then be analyzed by [[prof]].
+\t  [[prof]] use executable symbol table? to find addr->mem? what
+\t  is in generated data by _profin? See Profiler.
 
 %\section{[[5l -p -e]] and [[_tracein()/_traceout()]]}
 \n not in kencc, maybe dead, because code does not make sense honestly
@@ -15265,6 +15528,8 @@ nopout(Prog *p)
 % >> 
 
 \subsection{Elf, Linux}
+
+%real-world: real world indeed. why a.out dead? no good support for dyn libs?
 
 % ELF dissection:
 % - https://github.com/mewrev/dissection
@@ -17142,6 +17407,10 @@ case SSTRING:
 
 % and more chunks we didn't put such as case STEXT: STRING: ...
 
+
+
+
+
 \chapter{Conclusion}
 
 %dup: (and adapted) from Assembler.nw
@@ -17484,8 +17753,8 @@ Dconv(Fmt *fp)
 \subsection{Symbol kind dumper, [[Nconv()]]}
 
 % Nxxx so Nconv
-%old: was actually some D_xxx but I renamed them N_xxx
-
+%old: was actually some D_xxx but I split from other D_XXX and renamed N_xxx
+% (which proves I was right to split and rename)
 
 <<function Nconv(arm)>>=
 int
@@ -17591,10 +17860,15 @@ Cconv(Fmt *fp)
 @
 
 
-\subsection{???, [[Sconv()]]}
+\subsection{String dumper, [[Sconv()]]}
+
+% for D_DSCONST, for sval
+
+% why need Fmt? cant just use %s ? sanity check?
+% used to also print 0 to \z
 
 <<function Sconv(arm)>>=
-// ?? -> string
+// string -> string
 int
 Sconv(Fmt *fp)
 {
@@ -17614,7 +17888,7 @@ Sconv(Fmt *fp)
         }
         *p++ = '\\';
         switch(c) {
-        case 0:
+        case '\0':
             *p++ = 'z';
             continue;
         case '\\':
@@ -17628,15 +17902,16 @@ Sconv(Fmt *fp)
             *p++ = 't';
             continue;
         }
+        // else
         *p++ = (c>>6) + '0';
         *p++ = ((c>>3) & 7) + '0';
         *p++ = (c & 7) + '0';
     }
-    *p = 0;
+    *p = '\0';
     return fmtstrcpy(fp, str);
 }
 @
-
+% why not make default instead of // else, and use break instead of continue?
 
 \section{Verbose mode, [[5l -v]]}
 \l and [[DBG()]]
@@ -17693,7 +17968,6 @@ if(debug['W'])
 
 
 \section{Opcode table debugging, [[5l -t]]}
-%pad: I added that
 
 <<[[oplook()]] debug>>=
 if(debug['t']) {
@@ -17701,8 +17975,9 @@ if(debug['t']) {
         p, (int)p->as, a1, a2, a3);
 }
 @
+%pad: I added that
 %old: used to be under a if 0 but pretty useful when debugging issues
-%old:    print("		%d %d\n", p->from.type, p->to.type);
+%      print("		%d %d\n", p->from.type, p->to.type);
 
 
 \section{Machine code generation debugging, [[5l -a]]}
@@ -17801,8 +18076,57 @@ if(t == 'z' || t == 'Z') {
 }
 @
 % >> >> >>
+% could use symbol table and their histgen to find the final meaning
+% (but would be slow to iterate over all symbol table each time,
+%  would need some indexing of histgen maybe)
 
 \section{Line table debugging, [[5l -V]]}
+
+<<[[asmlc()]] dump instruction p, debug>>=
+if(debug['V'])
+    Bprint(&bso, "%6lux %P\n", p->pc, p);
+@
+
+<<[[asmlc()]] dump lcsize, debug>>=
+if(debug['V'])
+    Bprint(&bso, "\t\t%6ld", lcsize);
+@
+
+<<[[asmlc()]] dump s, debug>>=
+if(debug['V'])
+    Bprint(&bso, " pc+%ld*%d(%ld)", s, MINLC, s+128);
+@
+
+
+<<[[asmlc()]] dump big line change, debug>>=
+if(debug['V']) {
+    if(s > 0)
+        Bprint(&bso, " lc+%ld(%d,%ld)\n",
+            s, 0, s);
+    else
+        Bprint(&bso, " lc%ld(%d,%ld)\n",
+            s, 0, s);
+    Bprint(&bso, "%6lux %P\n",
+        p->pc, p);
+}
+@
+
+<<[[asmlc()]] dump small line increment, debug>>=
+if(debug['V']) {
+    Bprint(&bso, " lc+%ld(%ld)\n", s, 0+s);
+    Bprint(&bso, "%6lux %P\n",
+        p->pc, p);
+}
+@
+
+<<[[asmlc()]] dump negative line increment, debug>>=
+if(debug['V']) {
+    Bprint(&bso, " lc%ld(%ld)\n", s, 64-s);
+    Bprint(&bso, "%6lux %P\n",
+        p->pc, p);
+}
+@
+
 
 
 \chapter{Error Management}
@@ -20285,7 +20609,8 @@ armalloc(int n)
 %   other decisions below.
 % - object file is marshalled form of ocaml AST. Far simpler!
 %   (but less open to other languages; could use JSON but no ADT in JSON)
-% - ??
+% - TODO symbol table and file/line table in executable are also
+%   marshalled data? not efficient enough? bench speed/size?
 % This decrements size of code, but also size of needed explanations!
 
 
