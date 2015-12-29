@@ -15,7 +15,8 @@
 % - introduced Headtype enum instead of hardcoded integers
 % - introduced mylog() and DBG() to factorize the tracing code
 % - removed many portable myxxx() wrappers
-% - collateral evolutions of changes in 5a, e.g. NREG -> R_NONE
+% - collateral evolutions of changes in 5a, e.g. NREG -> R_NONE, 
+%   D_FILE1 -> N_LINE, etc
 % - removed some deadcode 
 %    * C_LBRA, C_LECON, C_SCON, D_OCONST, regused
 %    * ADYNT, AINIT
@@ -12387,7 +12388,7 @@ putsymb(char *s, int t, long v, int ver)
 %trans:
 We can now see [[asmsym()]] which 
 %
-first calls [[putsymb()]] for the data symbols in [[hash]]:
+first calls [[putsymb()]] for all the data symbols in [[hash]]:
 
 <<function asmsym(arm)>>=
 /// main -> asmb -> <>
@@ -12437,6 +12438,7 @@ asmsym(void)
 }
 @
 \t bad name, has nothing to do with assembly really
+\n the plus INITDAT for data symbols
 %old: 
 % || s->type == SLEAF
 %            if(s->type == STEXT)
@@ -12486,7 +12488,8 @@ of a procedure and its parameters, that is stack variables.
 \l also known as {\em automatic variables}.
 This is really useful for displaying {\em stack traces} in a debugger.
 %dup: from Assembler
-This is also why programmers write code like [[MOVW  count+4(FP), R1]]
+This is also why assembly programmers write code like 
+[[MOVW  count+4(FP), R1]] (or why [[5c]] generates such assembly code)
 even though [[count]] is not used to generate any machine code;
 [[count]] will be present in the executable symbol table and used
 by the debugger to better display stack variables.
@@ -12507,10 +12510,10 @@ and locals accessed by a procedure:
 <<struct Auto(arm)>>=
 struct	Auto
 {
-    // enum<Sym_kind> (N_LOCAL, N_PARAM, N_FILE, or N_FILE1)
+    // enum<Sym_kind> (N_LOCAL, N_PARAM, or N_FILE/N_LINE)
     short	type;
 
-    // <ref<Sym>
+    // <ref<Sym>>
     Sym*	asym;
     long	aoffset;
 
@@ -12599,6 +12602,9 @@ if(s != S && (t == N_LOCAL || t == N_PARAM)) {
 % if(s == S || (t != N_LOCAL && t != N_PARAM))
 %    return size;
 % but anyway has return size after
+\l conflict with global entity with same name? maybe, so actually
+\l  shared Sym? anyway, will use this Sym only for its name
+\l  the actual value of the local is stored outside in aoffset
 
 <<[[inopd()]] return if stack variable already present in curauto>>=
 for(u=curauto; u; u=u->link)
@@ -12639,7 +12645,7 @@ curauto = nil;
 %trans:
 We can now see the pair of globals which keeps track of the 
 list of procedures (the [[TEXT]] pseudo-instructions):
-\n what for? asmsym, follow()
+\n what for? for asmsym and follow()
 
 <<global textp>>=
 // list<ref<Prog>> (next = Prog.cond)
@@ -12667,7 +12673,7 @@ if(textp == P) {
 
 Note that the instructions in the list [[textp/etextp]]
 are a subset of the list of instructions in [[firstp/lastp]].
-
+\l also use cond because anyway unused for TEXT, not a jump instr.
 
 \subsubsection{Frame symbols}
 
@@ -12753,6 +12759,7 @@ in memory.
 
 \subsection{Locations in objects, [[AHISTORY]]}
 \label{sec:lineno}
+\l and ANAME and Instr.line
 
 %\subsubsection{[[Hist]]}
 
@@ -12783,7 +12790,7 @@ Thanks to this list,
 one can then easily convert the global line number 
 assigned to each instruction in the object file
 in [[Instr.line]] (see Section~\ref{sec:instr})
-to a pair of source filename and (local) line information.
+to a pair of (source) filename and (local) line information.
 \l Note that #line very important, for 5c generated objs!
 \n (actually obj generated directly by 5c, so no need #line in 5a)
 %
@@ -12860,13 +12867,14 @@ Here is the series of instructions in the object file which encode
 the directive [[#line 10 "/usr/foobar.c"]] of Figure~\ref{fig:hist}:
 \begin{verbatim}
 ANAME <usr
-ANAME <foo.c
+ANAME <foobar.c
 AHISTORY 17 10
 \end{verbatim}
 \l can see that with 5l -W?
 
-We will see later why each path component is prefixed by a [[<]].
-\l and also why split in multiple components? to help linker to compress later?
+We will see later why each path component is prefixed by a [[<]]
+and why a filename is split in multiple path components.
+\l to help linker to compress later?
 
 \subsection{Locations in [[5l]] memory}
 
@@ -12877,12 +12885,15 @@ instructions.
 %toc:
 We will now see the code of [[5l]] which reads back the [[Hist]]s
 of the different object files via [[ldboj()]].
-%and [[addhist()]].
+%and [[addhist()]].   and inopd()
+\l quite complicated
 
 \subsubsection{[[AHISTORY]] and [[addhist]]}
 
 Reading an [[AHISTORY]] in [[ldobj()]] is pretty simple since 
-it is using the same format than regular instructions:
+it is using the same format than regular instructions.
+One can just write a new [[case]] in the opcode [[switch]] of [[ldobj()]]
+and access information from the current instruction [[p]]:
 
 <<[[ldobj()]] switch opcode cases(arm)>>=
 case AHISTORY:
@@ -12893,7 +12904,7 @@ case AHISTORY:
     addhist(p->line, N_FILE);		/* 'z' */
     // the local line (if needed for #line)
     if(p->to.offset)
-        addhist(p->to.offset, N_FILE1);	/* 'Z' */
+        addhist(p->to.offset, N_LINE);	/* 'Z' */
     <<[[ldobj()]] in AHISTORY case, reset histfrogp>>
     goto loop;
 @
@@ -12902,8 +12913,8 @@ case AHISTORY:
 %assembler: see outhist() in 5a
 
 As we will see in the rest of this chapter,
-one [[AHISTORY]] instruction in the object file will become eventually
-two symbols in the executable symbol table (if the local line 
+{one} [[AHISTORY]] instruction in the object file will become eventually
+{two} symbols in the executable symbol table (if the local line 
 number is non zero), hence the two
 calls to [[addhist()]] above (and the [['z']] and [['Z']] comments).
 \n why 'z' comment? cos compressed! why 'Z' because related (like 'T' and 't')
@@ -12914,8 +12925,8 @@ which is then stored in the global [[curhist]].
 As we will see soon,
 [[curhist]] is then copied in [[curauto]] which is then assigned
 to one of the field of the first [[TEXT]] instruction of an object file.
-Ultimately, this new symbol is then stored in the executable
-symbol table.
+Ultimately, the symbols created by [[addhist()]] are then stored
+in the executable symbol table.
 
 <<function addhist>>=
 void
@@ -12936,12 +12947,12 @@ addhist(long line, int type)
     u->link = curhist;
     curhist = u;
 
-    <<[[addhist()]] set symbol name to filename>>
+    <<[[addhist()]] set symbol name to filename using compact encoding>>
 }
 @
 
 The second parameter of [[addhist()]] above can be either [[N_FILE]]
-or [[N_FILE1]] which are two new {symbol kinds}
+or [[N_LINE]] which are two new {symbol kinds}
 (see Section~\ref{sec:opcode-operand}) used respectively
 to represent a global line number and a local line number (if there
 is one).
@@ -12952,10 +12963,9 @@ only one integer value (see Section~\ref{sec:exec-symbol-table}),
 but an [[AHISTORY]] carry two line numbers.
 \n have room in one Auto to store two numbers, but not in exec symbol table
 
-% see symbol name part later, tricky.
-
-% see curhist now, ultimately store in curauto and X.
-
+The setting of the name of the symbol newly created by [[addhist()]] will
+be described soon; it is using a subtle compact encoding.
+The next section will describe [[curhist]].
 
 \n AHISTORY in Auto, so textp, so firstp
 \n ANAME in symbol table (classic)
@@ -12970,14 +12980,12 @@ but an [[AHISTORY]] carry two line numbers.
 
 \subsubsection{[[curhist]] and [[curauto]]}
 
+% accumulate list of Auto deriving from AHISTORY.
+
 <<global curhist>>=
 Auto*	curhist;
 @
 % like curauto
-
-%assembler: Hists are stored in a global, but here have many object files
-% so many global line number which are no more globals ...
-% so here stored in first TEXT of object file
 
 <<function histtoauto>>=
 /// ldobj (case AEND | ATEXT | ??) -> <>
@@ -12995,7 +13003,6 @@ histtoauto(void)
 }
 @
 
-
 <<[[ldobj()]] case ATEXT, curauto adjustments with curhist>>=
 histtoauto();
 @
@@ -13004,9 +13011,13 @@ histtoauto();
 histtoauto();
 @
 
+%assembler: Hists are stored in a global, but here have many object files
+% so many global line number which are no more globals ...
+% so here stored in first TEXT of object file
 
 
-\subsubsection{Filenames and [[ANAME]]}
+
+\subsubsection{[[ANAME]] and path components}
 
 %trans:
 % AHISTORY preceded by ANAME, with N_FILE kind. See Assembler.
@@ -13030,7 +13041,7 @@ if(v == N_FILE) {
 
 % special section, differentiate symbol (but anyway < prefix)
 % then reuse same symbol! so same histgen if multiple AHISTORY, Hist
-%  with same path component.
+%  with same path component. we will see soon why sharing useful.
 <<[[Section]] cases>>=
 SFILE,
 @
@@ -13040,6 +13051,9 @@ int	histgen = 0;
 @
 % reference to component! This is an index!
 \l actually should be a short! 16 bits limit. No overflow checking, bad.
+
+\subsubsection{Full filenames and [[histfrog]]}
+
 
 % accumulate series of ANAME in array:
 
@@ -13081,7 +13095,7 @@ histfrogp = 0;
 <<[[addhist()]] other locals>>=
 int i, j, k;
 @
-<<[[addhist()]] set symbol name to filename>>=
+<<[[addhist()]] set symbol name to filename using compact encoding>>=
 s->name = malloc(2*(histfrogp+1) + 1);
 j = 1;
 for(i=0; i<histfrogp; i++) {
@@ -13164,7 +13178,7 @@ out:
 % and part in program counter line table.
 % (similar to object file, ANAME and AHISTORY)
 
-\subsubsection{Path components and directives symbols}
+\subsubsection{Path components, full filenames, and directives symbols}
 \label{sec:file-line-symbols}
 
 % mentioned section X.
@@ -13174,10 +13188,7 @@ case SFILE:
     putsymb(s->name, 'f', s->value, s->version);
     continue;
 @
-% this is for path components! 'z' is full file, but it's compressed!
-% value is histgen! index for this component, which is then referenced
-% in 'z' name!
-
+% this is for path components! 
 
 <<[[putsymb()]] adjust string [[s]] if file symbol>>=
 if(t == 'f')
@@ -13187,7 +13198,10 @@ if(t == 'f')
 % value here is complex, it's a histgen, and it can
 % then be referenced
 
-
+% now full filenames!
+% 'z' is full file, but it's compressed!
+% value is histgen! index for this component, which is then referenced
+% in 'z' name!
 
 % why they are shoved in to.autom with locals and params? a bit ugly
 <<[[asmsym()]] call putsymb for filenames>>=
@@ -13195,10 +13209,10 @@ for(a=p->to.autom; a; a=a->link)
     if(a->type == N_FILE)
         putsymb(a->asym->name, 'z', a->aoffset, 0);
     else
-    if(a->type == N_FILE1)
+    if(a->type == N_LINE)
         putsymb(a->asym->name, 'Z', a->aoffset, 0);
 @
-% N_FILE1 in Assembler. Cant remove cos symbol table format
+% N_LINE in Assembler. Cant remove cos symbol table format
 %  has space only for 1 value and in Hist we may have 2 (global and local line)
 %  (a bit ugly though)
 % compressed! 16 bits index
@@ -13224,7 +13238,12 @@ if(t == 'z' || t == 'Z') {
 % NO because otherwise can not make difference with a histgen
 % which happens to be a multiple of 256! :)
 
-\subsubsection{Line table format}
+\subsubsection{Program counter line table format}
+
+%trans: Now that info in Hists are encoded in a way in exec
+% via multiple symbols, time for global line numbers of Instruction.
+% When machine code, line info disappear. 
+% Need program counter -> global line. The program counter line table!
 
 % Idea is Instr.line, global line number of each instr (which is not
 % so global anymore, cos multiple object files).
@@ -13263,7 +13282,7 @@ long	lcsize;
 \l bad name again
 
 
-\subsubsection{Line table, [[asmlc()]]}
+\subsubsection{[[asmlc()]]}
 
 <<constant MINLC(arm)>>=
 #define	MINLC	4

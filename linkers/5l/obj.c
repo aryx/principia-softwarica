@@ -779,7 +779,9 @@ addhist(long line, int type)
 {
     Auto *u;
     Sym *s;
+    /*s: [[addhist()]] other locals */
     int i, j, k;
+    /*e: [[addhist()]] other locals */
 
     s = malloc(sizeof(Sym));
 
@@ -1066,10 +1068,12 @@ loop:
                 s->type = SFILE;
                 s->value = histgen;
             }
+            /*s: [[ldobj()]] when ANAME opcode, if N_FILE, update histfrogp */
             if(histfrogp < MAXHIST) {
                 histfrog[histfrogp] = s;
                 histfrogp++;
             } 
+            /*e: [[ldobj()]] when ANAME opcode, if N_FILE, update histfrogp */
             /*s: [[ldobj()]] when ANAME opcode, if N_FILE, if no more space in histfrog */
             else
                     collapsefrog(s);
@@ -1252,7 +1256,7 @@ loop:
         addhist(p->line, N_FILE);		/* 'z' */
         // the local line (if needed for #line)
         if(p->to.offset)
-            addhist(p->to.offset, N_FILE1);	/* 'Z' */
+            addhist(p->to.offset, N_LINE);	/* 'Z' */
         /*s: [[ldobj()]] in AHISTORY case, reset histfrogp */
         histfrogp = 0;
         /*e: [[ldobj()]] in AHISTORY case, reset histfrogp */

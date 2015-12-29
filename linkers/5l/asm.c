@@ -389,7 +389,7 @@ asmsym(void)
                 if(a->type == N_FILE)
                     putsymb(a->asym->name, 'z', a->aoffset, 0);
                 else
-                if(a->type == N_FILE1)
+                if(a->type == N_LINE)
                     putsymb(a->asym->name, 'Z', a->aoffset, 0);
             /*e: [[asmsym()]] call putsymb for filenames */
             
