@@ -799,7 +799,7 @@ macprag(void)
         h = alloc(sizeof(Hist));
         h->filename = hp;
         h->global_line = lineno;
-        h->local_line = -1; // special mark, ugly
+        h->local_line = -1; // ugly, special mark for #pragma lib in Hist
 
         h->link = H;
         if(ehist == H) {

@@ -258,7 +258,7 @@ enum Sym_kind {
     /*x: [[Sym_kind]] cases */
     N_FILE,
     /*x: [[Sym_kind]] cases */
-    N_FILE1, // used by linker only?
+    N_LINE, // used by linker only
     /*e: [[Sym_kind]] cases */
 };
 /*e: enum sym_kind(arm) */
