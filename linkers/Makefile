@@ -23,6 +23,7 @@ SRC_VIEWS= \
   ../include/exec/elf.h\
   ../include/obj/ar.h\
   5l/l.h\
+  5l/m.h\
   5l/globals.c\
   5l/optab.c\
   5l/utils.c\
@@ -33,6 +34,7 @@ SRC_VIEWS= \
   5l/span.c\
   5l/obj.c\
   5l/noop.c\
+  5l/main.c\
   \
   8l/elf.h\
   8l/elf.c\
