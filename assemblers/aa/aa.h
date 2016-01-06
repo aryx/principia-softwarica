@@ -108,7 +108,6 @@ struct Fi
     int     c;
 };
 /*e: struct Fi */
-extern struct Fi fi;
 
 /*s: struct Io */
 struct  Io
@@ -146,7 +145,6 @@ struct Htab
     short   symkind;
 };
 /*e: struct Htab */
-extern struct Htab h[NSYM];
 
 /*s: struct Hist */
 struct  Hist
@@ -173,10 +171,15 @@ struct  Hist
 extern  Sym*  hash[NHASH];
 extern  int   pass;
 extern  long  pc;
-extern  Biobuf obuf;
-extern  char* outfile;
+
 extern  char* pathname;
+extern  char* outfile;
+extern struct Fi fi;
+extern  Biobuf obuf;
+
+extern struct Htab h[NSYM];
 extern  int   symcounter;
+
 extern  int   thechar;
 extern  char* thestring;
 

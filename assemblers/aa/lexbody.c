@@ -630,6 +630,7 @@ prfile(long l)
 }
 /*e: function prfile */
 
+// mv in float.c
 /*s: function ieeedtod */
 void
 ieeedtod(Ieee *ieee, double native)
