@@ -655,7 +655,7 @@ inopd(byte *p, Adr *a, Sym *h[])
     t = a->symkind;
     l = a->offset;
 
-    // a parameter or local with a symbol, e.g. p+0(FP)
+    // a parameter or local with a symbol, e.g. p+4(FP)
     if(s != S && (t == N_LOCAL || t == N_PARAM)) {
   
        /*s: [[inopd()]] return if stack variable already present in curauto */
@@ -794,7 +794,7 @@ addhist(long line, int type)
     u->link = curhist;
     curhist = u;
 
-    /*s: [[addhist()]] set symbol name to filename */
+    /*s: [[addhist()]] set symbol name to filename using compact encoding */
     s->name = malloc(2*(histfrogp+1) + 1);
     j = 1;
     for(i=0; i<histfrogp; i++) {
@@ -803,17 +803,18 @@ addhist(long line, int type)
         s->name[j+1] = k;
         j += 2;
     }
-    /*e: [[addhist()]] set symbol name to filename */
+    /*e: [[addhist()]] set symbol name to filename using compact encoding */
 }
 /*e: function addhist */
 
 /*s: function histtoauto */
-/// ldobj (case AEND | ATEXT | ??) -> <>
+/// ldobj (case AEND | ATEXT) -> <>
 void
 histtoauto(void)
 {
     Auto *l;
 
+    // append_list(curhist, curauto); curhist = nil;
     while(l = curhist) {
         curhist = l->link;
 
@@ -1062,10 +1063,10 @@ loop:
             s->type = SXREF;
 
         /*s: [[ldobj()]] when ANAME opcode, if N_FILE */
-        if(v == N_FILE) {
+        if(k == N_FILE) {
             if(s->type != SFILE) {
-                histgen++;
                 s->type = SFILE;
+                histgen++;
                 s->value = histgen;
             }
             /*s: [[ldobj()]] when ANAME opcode, if N_FILE, update histfrogp */
@@ -1257,9 +1258,9 @@ loop:
         // the local line (if needed for #line)
         if(p->to.offset)
             addhist(p->to.offset, N_LINE);	/* 'Z' */
-        /*s: [[ldobj()]] in AHISTORY case, reset histfrogp */
+        /*s: [[ldobj()]] in AHISTORY case, end of case, reset histfrogp */
         histfrogp = 0;
-        /*e: [[ldobj()]] in AHISTORY case, reset histfrogp */
+        /*e: [[ldobj()]] in AHISTORY case, end of case, reset histfrogp */
         goto loop;
     /*x: [[ldobj()]] switch opcode cases(arm) */
     case ASUB:

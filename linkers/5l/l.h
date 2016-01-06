@@ -159,7 +159,7 @@ struct	Auto
     // enum<Sym_kind> (N_LOCAL, N_PARAM, or N_FILE/N_LINE)
     short	type;
 
-    // <ref<Sym>
+    // <ref<Sym>>
     Sym*	asym;
     long	aoffset;
 
