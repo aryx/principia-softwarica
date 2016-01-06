@@ -2572,6 +2572,7 @@ of an instruction. Here is the signature of [[outcode()]]:
 <<signature outcode(arm)>>=
 void	outcode(int opcode, int cond, Gen* opd1, int reg, Gen* opd3);
 @
+%ocaml: better have type instr
 
 Here is an example of use of [[outcode()]] to output
 the serialized form of the instruction [[SUB $14, R2, R3]]:
@@ -2719,7 +2720,7 @@ a token can hold:
 @
 %old: there was hardcoded 8 for sval, but bad cos not consistent
 % with Gen.sval and some memcpy done later could fail (jarod, me)
-%ocaml: no need, included in token directives
+%ocaml: no need, type information specified in token directive
 
 Again this directive is a bit complicated but things will be clearer
 later. The name of those fields, e.g. [[lval]], are actually
@@ -3141,6 +3142,7 @@ enum Sym_kind {
     <<[[Sym_kind]] cases>>
 };
 @
+%ocaml: better included in ADT directly, Param vs Local vs Entity of bool
 %old: this used to be with operand_kind, but they are really disjoint
 % and used only for the ANAME pseudo opcode. In 5l/ there is
 % actually a separate Dconv and Nconv (but in 8l/ they are together).
@@ -3665,7 +3667,7 @@ long	lineno;
 \t Is it after #include expansion? global line number, subtle
 \l rename glineno?
 %ocaml: could be embedded in the token, so no need global, no need getc
-% vs GETC, unget, etc. Less mess.
+% vs GETC, unget, etc. Less mess. But in the end simple to be in global.
 
 %toc:
 The calls to [[newio()]] and [[newfile()]] will be explained below.
@@ -6518,6 +6520,9 @@ the last two cases by [[nireg]] (name or indirect register).
 @
 \l could MOV, modify R15 also?
 \t inline nireg here? not used elsewhere
+\n could forbid to use cond when AB, because anyway it is normalized after
+\n  by outcode, but there B/BL are using the same token so can't
+%ocaml: I use two different rules for B and BL so I can be stricted
 
 %compiler:
 It is easy to implement loops using [[B]].
@@ -6581,12 +6586,12 @@ and jump accordingly:
 // VIRTUAL, AB derivatives with condition code, see 5i/
 ABEQ, // ==
 ABNE, // !=
-ABHS, // >= unsigned
-ABLO, // <  unsigned
-ABMI, // ??
-ABPL, // ??
-ABVS, // ??
-ABVC, // ??
+ABHS, // >= unsigned (higher or same)
+ABLO, // <  unsigned (lower)
+ABMI, // minus/negative
+ABPL, // plus/positive
+ABVS, // overvlow set
+ABVC, // overflow clear
 ABHI, // >  unsigned
 ABLS, // <= unsigned
 ABGE, // >=
@@ -6599,6 +6604,7 @@ ABLE, // <=
 \t what are the ???? look ARM book online? See linker, see Machine.
 \t explain the unsigned!
 \n match closely things in Machine.nw
+%ocaml: can factorize things a bit with Signed vs Unsigned
 %old: got rid of ABCS and ABCC, seems redundant
 % and does not match the ARM convention
 % ABCS,//not in 5i/cond, seems equivalent to ABHS
@@ -6909,6 +6915,7 @@ long	pc;
 <<[[pinit()]] initializations>>=
 pc = 0;
 @
+%ocaml: can be a local in resolve_labels.ml
 
 Once a label has been defined, the code of its
 token in the symbol table is changed to [[LLAB]]
@@ -7292,7 +7299,8 @@ shift:
  }
 @
 % >> >> >> >> >>
-%ocaml: ugly to encode so much stuff in offset
+%ocaml: ugly to encode so much stuff in offset, better do that in linker
+% do that because does not have powerful ADT so need encode info in 1 integer
 \l argh, offset really abused, should use shift here
 %self-ref:
 \l use bitshift op in the code to handle bitshift, also use bitwise |, 
@@ -7343,6 +7351,7 @@ rcon:
  }
 @
 %old: was using $$ in if but better use $1 (jarod)
+\l no yyerror instead of print?
 \n range test for regi a bit redundant since do already tests there (jarod) 
 \t put line number? better diagnostic
 \l really does too much work here and close to ARM concrete bits
@@ -7401,8 +7410,6 @@ This is where we start to deviate from [[imsr]] in [[gen]]
 %oreg:
 %  ioreg
 %@
-
-
 %<<operand_kind cases>>=
 %D_OREG,
 %@
@@ -7634,6 +7641,7 @@ in a file by suffixing the name with angles:
  }
 @
 %$
+%ocaml: can be bool in Entity of bool instead of split N_EXTERN vs N_INTERN
 
 <<[[Sym_kind]] cases>>=
 N_INTERN, // private (aka static) entities (from SB)
@@ -8529,7 +8537,7 @@ static int bcode[] =
     ANOP,
 };
 @
-
+%ocaml: just forbid it at parsing time
 \t why not keep B.EQ ? to normalize helps 5l? but ironic that normalize
 \t in inverse direction of what ARM actually has.
 
@@ -8654,6 +8662,8 @@ struct Htab h[NSYM];
 \n need to be < 256 as currently use Bputc to marshall indexes in zaddr()
 \n need to be the same in 5l if dont use defensive programming
 \t but why not 255 then????
+%ocaml: no need for this, just marshall with strings in operands,
+% use more space but who cares, and Marshall may actually use shared strings
 
 <<struct Htab>>=
 struct Htab
@@ -9043,6 +9053,8 @@ struct	Hist
     <<[[Hist]] extra fields>>
 };
 @
+%ocaml: just do for #line, so simpler, and return with AST, no need
+% abuse instr format, just use another constructor in ADT
 %old: renamed offset to local_line, clearer; avoid confusion with Gen.offset
 % also renamed line to global_line, more consistent.
 \t abused for #pragma lib "xxx.a" where local_line is then -1. ugly.
@@ -9451,7 +9463,7 @@ while(p) {
     <<[[outhist()]] adjust p and op if p was a relative filename>>
 }
 @
-%ocaml: Just use Str.split |> ... or simply Marshall
+%ocaml: Just use Str.split |> ... or simply Marshall, useless opti
 
 \t why put leading '<'? lose space, defensive programming?
 \t  no cos no no conflit with other symbols, useful in linker
@@ -9639,6 +9651,7 @@ comma:
 | ',' comma
 @
 \fi
+%ocaml: can be stricter
 
 \section{Other instructions and registers}
 
@@ -10428,7 +10441,7 @@ AGOK,
 % but I think it's used only for zprg, and in ldobj it's an error
 %less: maybe we could delete it, and just use AXXX or ALAST or ANOP instead.
 %old: there was a D_GOK, but it was unused in 5a/5c/5l
-
+%ocaml: meh, not needed I think
 
 
 % related to linker again, in addition to N_FILE there is:
@@ -10438,7 +10451,7 @@ N_LINE, // used by linker only
 %old: was D_FILE1, but more consistent N_xxx and LINE more accurate
 % for #line, to make difference with regular file
 % or #include which is using a D_FILE
-
+%ocaml: because ugly abuse of executable symbol table, use Marshal instead
 
 
 
@@ -10602,6 +10615,7 @@ if(argc > 1) {
     }
 }
 @
+%ocaml: no need that, do that kinds of things via xargs -P32 instead
 
 %\section{Thumb code}
 % arg processing: (but then no more generic across 5a/ and 8a/)
@@ -10669,6 +10683,7 @@ that you can understand the assembly code generated by the compiler [[5c]].
 <<global debug>>=
 bool	debug[256];
 @
+%ocaml: via Arg.options instead
 
 <<[[main()]] debug initialization>>=
 memset(debug, false, sizeof(debug));
@@ -10737,6 +10752,8 @@ errorexit(void)
     exits("error");
 }
 @
+%ocaml: because do more things in memory, need create file only
+% when marshall out, so no need special recovery code
 
 <<global nerrors>>=
 int	nerrors = 0;
@@ -11032,6 +11049,7 @@ m1:
 % This decrements size of code, but also size of needed explanations!
 % mk loc = 780 (without advanced topics and extensions, e.g. float)
 
+% below I mimic the order of chapters (core DS then main then lexer ...)
 
 \section{[[ast_asm5.ml]]}
 
@@ -11062,11 +11080,10 @@ m1:
 \fi
 
 %\chapter{Changelog}
-%\label{sec:changelog}
 % code via make loc = 4100 LOC
 % orig Assembler.nw = 6000 LOC, just lpized and comments in sections
 % now: =~ 11000 LOC so added 5000 LOE (Lines of explanations)
-% add 5a in ocaml: ?? LOC?
+% 5a in ocaml: 780 LOC
 
 \chapter*{Glossary}
 \addcontentsline{toc}{chapter}{Glossary}
