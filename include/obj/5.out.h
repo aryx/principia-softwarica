@@ -135,12 +135,12 @@ enum Opcode
     // VIRTUAL, AB derivatives with condition code, see 5i/
     ABEQ, // ==
     ABNE, // !=
-    ABHS, // >= unsigned
-    ABLO, // <  unsigned
-    ABMI, // ??
-    ABPL, // ??
-    ABVS, // ??
-    ABVC, // ??
+    ABHS, // >= unsigned (higher or same)
+    ABLO, // <  unsigned (lower)
+    ABMI, // minus/negative
+    ABPL, // plus/positive
+    ABVS, // overvlow set
+    ABVC, // overflow clear
     ABHI, // >  unsigned
     ABLS, // <= unsigned
     ABGE, // >=

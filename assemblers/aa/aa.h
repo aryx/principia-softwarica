@@ -4,7 +4,7 @@
 #include <bio.h>
 #include <ctype.h>
 
-// aa.h  is the generic part, the specific #include XXX/Y.out.h is done
+// aa.h  is the generic part, for the specific do #include XXX/Y.out.h
 // in Ya/a.h, e.g.:
 //#include "386/8.out.h"
 //#include "arm/5.out.h"
