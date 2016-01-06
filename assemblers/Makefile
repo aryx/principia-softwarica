@@ -21,6 +21,7 @@ SRC_VIEWS= \
   aa/globals.c\
   aa/compat.c\
   aa/utils.c\
+  aa/lookup.c\
   aa/lexbody.c\
   aa/macbody.c\
   \

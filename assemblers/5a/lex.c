@@ -291,7 +291,6 @@ syminit(Sym *sym)
 }
 /*e: function syminit */
 
-
 // now use aa.a8
 //#include "../cc/lexbody"
 //#include "../cc/compat"

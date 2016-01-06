@@ -4,16 +4,16 @@
 #include <bio.h>
 #include <ctype.h>
 
-// aa.h  is the generic part, for the specific do #include XXX/Y.out.h
+// The content of this file was originally copy pasted in 8a/a.h, 5a/a.h, etc.
+// It was almost always the same in all archi so I factorized things in aa.h.
+// aa.h  is the generic part, for the specific part do #include XXX/Y.out.h
 // in Ya/a.h, e.g.:
 //#include "386/8.out.h"
 //#include "arm/5.out.h"
+
 #include <common.out.h>
 
 #pragma	lib	"../aa/aa.a$O"
-
-// was originally in a XXX/Y.out.h (but was always the same in all archi)
-// most of the content below was originally copy pasted in 8a/a.h, 5a/a.h, etc
 
 typedef	struct	Sym	Sym;
 typedef struct  Io Io;
@@ -148,8 +148,6 @@ struct Htab
 /*e: struct Htab */
 extern struct Htab h[NSYM];
 
-// Gen
-
 /*s: struct Hist */
 struct	Hist
 {
@@ -171,67 +169,104 @@ struct	Hist
 #define	H	((Hist*)nil)
 /*e: constant H */
 
-
-// was in a.h
-
+// core algorithm
 extern	Sym*	hash[NHASH];
+extern	int	pass;
+extern	Biobuf	obuf;
 extern	char*	outfile;
+extern	char*	pathname;
 extern	long	pc;
+extern	int	symcounter;
+extern	int	thechar;
+extern	char*	thestring;
 
+// input files (used by Ya/lex.c)
 extern	Io*	iostack;
 extern	Io*	iofree;
 extern	Io*	ionext;
+
+// cpp
 extern	char*	include[NINCLUDE];
 extern	int	ninclude;
+extern	char*	Dlist[30];
+extern	int	nDlist;
 
+// lexer
 extern	char	symb[NSYMB];
 extern	int	peekc;
 
-extern	int	symcounter;
-
+// debugging support
 extern	Hist*	hist;
+extern	Hist*	ehist;
 extern	long	lineno;
 
+// debugging
+extern	bool	debug[256];
+
+// error managments
 extern	int	nerrors;
 
+// utils (used by mac.c)
 extern	char*	hunk;
 extern	long	nhunk;
-
-extern	int	thechar;
-
-// for macbody, was in a.h
-extern	bool	debug[256];
-extern	Hist*	ehist;
-extern	int	newflag;
 extern	long	thunk;
 
-// for lexbody, was in a.h
-int	getnsc(void);
+// compact.c
+int	systemtype(int);
+int	pathchar(void);
+int	mywait(int*);
+int	mycreat(char*, int);
+
+// utils.c
+void* alloc(long n);
+void* allocn(void *p, long on, long n);
 void	gethunk(void);
+
+// lookup.c
+Sym*	slookup(char*);
+Sym*	lookup(void);
+// this actually must be defined in Ya/lex.c, depends on LNAME
+void	syminit(Sym*);
+
+// lexbody.c (used by Ya/lex.c)
+int	escchar(int);
+
+
+
+// for lexbody
+void	setinclude(char*);
+void	pinit(char*);
+void	dodefine(char*);
+void	domacro(void);
+void	macund(void);
+void	macdef(void);
+void	macexpand(Sym*, char*);
+void	macinc(void);
+void	maclin(void);
+void	macprag(void);
+void	macif(int);
+void	macend(void);
+int	getnsc(void);
 void	yyerror(char*, ...);
 void	linehist(char*, int);
-Sym*	lookup(void);
-void	syminit(Sym*);
 int	filbuf(void);
-void	domacro(void);
-void	macexpand(Sym*, char*);
 
-// for macbody, was in a.h
+// for macbody
 int	getc(void);
 void	unget(int);
-Sym*	slookup(char*);
 
 // for macbody, was in lexbody
 void pragpack(void);
 void pragfpround(void);
 void pragprofile(void);
 void pragvararg(void);
-void* alloc(long n);
 void pragincomplete(void);
-void* allocn(void *p, long on, long n);
+
+
 void	pushio(void);
 void	newio(void);
 void	newfile(char*, int);
+
 void	errorexit(void);
 
 // from lexbody.c
