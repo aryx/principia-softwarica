@@ -31,6 +31,7 @@ SRC_VIEWS= \
   5a/globals.c\
   5a/lex.c\
   5a/a.y\
+  5a/obj.c\
   5a/main.c\
   \
   ../lib_core/libc/arm/div.s

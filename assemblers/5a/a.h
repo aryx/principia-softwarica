@@ -37,22 +37,21 @@ struct	Gen
 };
 /*e: struct Gen(arm) */
 
-extern	char*	Dlist[30];
-extern	int	nDlist;
 extern	Gen	nullgen;
 extern	int	pass;
 extern	char*	pathname;
 extern	char*	thestring;
 extern	Biobuf	obuf;
 
+extern	char*	Dlist[30];
+extern	int	nDlist;
+
+
 // for a.y
 /*s: signature yylex */
 // unit -> (enum<token_code> | -1 (EOF) | Rune)
 long	yylex(void);
 /*e: signature yylex */
-/*s: signature outcode(arm) */
-void	outcode(int opcode, int cond, Gen* opd1, int reg, Gen* opd3);
-/*e: signature outcode(arm) */
 
 int	escchar(int);
 //Sym*	getsym(void);
@@ -88,8 +87,6 @@ void	syminit(Sym*);
 int	getnsc(void);
 void	cinit(void);
 void	cclean(void);
-void	zname(char*, int, int);
-void	zaddr(Gen*, int);
 int	filbuf(void);
 
 void	domacro(void);
@@ -102,10 +99,17 @@ void	macprag(void);
 void	macif(int);
 void	macend(void);
 
+// obj.c
+/*s: signature outcode(arm) */
+void	outcode(int opcode, int cond, Gen* opd1, int reg, Gen* opd3);
+/*e: signature outcode(arm) */
 void	outhist(void);
+void	zname(char*, int, int);
+void	zaddr(Gen*, int);
+
+// main
 void	prfile(long);
 void	linehist(char*, int);
 void	gethunk(void);
-int	assemble(char*);
 
 /*e: assemblers/5a/a.h */
