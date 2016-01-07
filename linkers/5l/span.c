@@ -1,5 +1,6 @@
 /*s: linkers/5l/span.c */
 #include	"l.h"
+#include	"m.h"
 
 /*s: global pool(arm) */
 static struct {

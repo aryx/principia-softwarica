@@ -22,6 +22,35 @@ int	nlibdir	= 0;
 static	int	maxlibdir = 0;
 /*e: global maxlibdir */
 
+/*s: global literal(arm) */
+char	literal[32];
+/*e: global literal(arm) */
+
+/*s: function isobjfile */
+int
+isobjfile(char *f)
+{
+    int n, v;
+    Biobuf *b;
+    char buf1[5], buf2[SARMAG];
+
+    b = Bopen(f, OREAD);
+    if(b == nil)
+        return 0;
+    n = Bread(b, buf1, 5);
+    if(n == 5 && (buf1[2] == 1 && buf1[3] == '<' || buf1[3] == 1 && buf1[4] == '<'))
+        v = 1;	/* good enough for our purposes */
+    else{
+        Bseek(b, 0, 0);
+        n = Bread(b, buf2, SARMAG);
+        v = n == SARMAG && strncmp(buf2, ARMAG, SARMAG) == 0;
+    }
+    Bterm(b);
+    return v;
+}
+/*e: function isobjfile */
+
+
 /*s: function addlibpath */
 void
 addlibpath(char *arg)

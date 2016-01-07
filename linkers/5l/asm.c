@@ -1,5 +1,6 @@
 /*s: linkers/5l/asm.c */
 #include	"l.h"
+#include	"m.h"
 
 /*s: constant Dbufslop */
 #define	Dbufslop	100

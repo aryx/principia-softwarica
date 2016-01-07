@@ -1,5 +1,6 @@
 /*s: linkers/5l/globals.c */
 #include	"l.h"
+#include	"m.h"
 
 /*s: global buf */
 union Buf buf;
@@ -143,9 +144,6 @@ Prog*	lastp;
 /*s: global lcsize */
 long	lcsize;
 /*e: global lcsize */
-/*s: global literal(arm) */
-char	literal[32];
-/*e: global literal(arm) */
 /*s: global nerrors */
 int	nerrors = 0;
 /*e: global nerrors */

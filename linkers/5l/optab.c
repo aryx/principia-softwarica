@@ -1,5 +1,6 @@
 /*s: linkers/5l/optab.c */
 #include	"l.h"
+#include	"m.h"
 
 /*s: global optab (linkers/5l/optab.c)(arm) */
 Optab	optab[] =

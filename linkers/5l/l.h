@@ -292,18 +292,6 @@ struct  Auto
 };
 /*e: struct Auto(arm) */
 
-/*s: struct Buf */
-union Buf
-{
-    struct
-    {
-        char    obuf[MAXIO];            /* output buffer */
-        byte    ibuf[MAXIO];            /* input buffer */
-    };
-    char    dbuf[1]; // variable size
-};
-/*e: struct Buf */
-
 /*s: enum rxxx */
 enum rxxx {
     Roffset = 22,       /* no. bits for offset in relocation address */
@@ -342,7 +330,23 @@ enum misc_constants {
 };
 /*e: enum misc_constant(arm) */
 
+/*s: struct Buf */
+union Buf
+{
+    struct
+    {
+        char    obuf[MAXIO];            /* output buffer */
+        byte    ibuf[MAXIO];            /* input buffer */
+    };
+    char    dbuf[1]; // variable size
+};
+/*e: struct Buf */
+
 // globals.c
+
+extern char	 thechar;
+extern char* thestring;
+
 
 extern  short   HEADTYPE;       /* type of header */
 extern  long    HEADR;          /* length of header */
@@ -400,16 +404,6 @@ extern  char*   libraryobj[50];
 extern  int libraryp;
 extern  int xrefresolv;
 
-
-extern  long    instoffset;
-extern  char    literal[32];
-extern  Optab   optab[];
-extern  Oprange oprange[ALAST];
-extern  bool    xcmp[C_GOK+1][C_GOK+1];
-extern  Prog*   blitrl;
-extern  Prog*   elitrl;
-
-
 extern  int dtype;
 extern  int armv4;
 extern  int vfp;
@@ -455,6 +449,11 @@ extern  int version;
 #pragma varargck    argpos  diag 1
 /*e: pragmas varargck argpos */
 
+
+// obj.c
+int isobjfile(char *f);
+
+
 int Aconv(Fmt*);
 int Cconv(Fmt*);
 int Dconv(Fmt*);
@@ -475,7 +474,9 @@ void    append(Prog*, Prog*);
 void    asmb(void);
 void    asmdyn(void);
 void    asmlc(void);
-void    asmout(Prog*, Optab*);
+
+
+
 void    asmsym(void);
 long    atolwhex(char*);
 Prog*   brloop(Prog*);
@@ -525,25 +526,6 @@ void    nuxiinit(void);
 void    objfile(char*);
 int ocmp(const void*, const void*);
 long    opirr(int);
-Optab*  oplook(Prog*);
-
-long    oprrr(int, int);
-
-long    omvl(Prog*, Adr*, int);
-
-long    olr(int, int, long, int, int);
-long    olrr(int, int, int, int, int);
-
-long    osr(int, int, int, long, int);
-long    osrr(int, int, int, int, int);
-
-long    olhr(long, int, int, int);
-long    olhrr(int, int, int, int);
-long    oshr(int, long, int, int);
-long    oshrr(int, int, int, int);
-
-long    opvfprrr(int, int);
-long    ofsr(int, int, long, int, int, Prog*);
 
 
 void    patch(void);
