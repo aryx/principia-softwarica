@@ -37,7 +37,19 @@
 % - TODO reorganized the code to better match the chapters
 %    by introducing more files: main.c, lib.c, error.c, m.h
 
-%thx to codemap/codegraph:
+%thx to 5l in ocaml: 
+%  - see again that code could be so much simpler, no need so many globals,
+%    can be far more functional
+%  - introduced more files, obj.c, main.c, lookup.c
+%  - ANAME simplifies things actually in 5l; it factorizes code. We have
+%    to write visitor boilerplate in ocaml.
+%  - naming phase done thx also to ANAME. There is symbol table transformation!
+%    Symbol now has a global version, instead of being just N_EXTERN vs
+%    N_INTERN and a unique pointer.
+%  - found bug with BL foo+4(SB) silently converted by 5l
+%  - realize every RET is converted in a indirect jump!
+
+%thx to codemap/codegraph/scheck:
 % - see subtle dependency to 8c/enam.c through anames
 
 %thx to this manual, better understand linking:
@@ -57,9 +69,9 @@
 % - SEMI what if have multiple object defining the same global?
 %   int x; int x; in different files? what if one also define value?
 %   what if both define value? DUPOK?
+% - sign vs unsigned operation, need to keep sign bit part, same with bitshift
 % - TODO dynamic linking? export table? import table?
 % - TODO fpic? 
-% - sign vs unsigned operation, need to keep sign bit part, same with bitshift
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -74,8 +86,8 @@
 % - LP split the structures, use datalog for flow to field info
 % - SEMI nullify, boolify, typeify,    scheckify
 % - aspectify advanced features!
-% - SEMI add figures
-% - SEMI add explanations
+% - add figures
+% - add explanations
 
 %------------------------------------------------------------------------------
 % Packages
@@ -216,7 +228,7 @@ to a specific binary instruction?
 \l how dynamic linking works? 
 \l how shared libraries works? 
 \l endianess? see the inuxi stuff? also lput vs lputl
-\l how handle arcitecture constraints
+\l how handle architecture constraints
 
 %tags used in this file for different recurring themes:
  %assembler: relates code in the linker to similar (or absent) code in 5a
@@ -235,7 +247,7 @@ to a specific binary instruction?
 %data-structures (beyond list/hashtbl): (use list, queue, hashtbl)
 % - AST again with enums, tag/union structure
 % - Buffer with reading sliding window
-% - growing array
+% - growing array (for filename and incompatible signature report)
 % - graph and pointers (from implicit graph in array with ref via pc integer)
 % - forward overlay link indexation (and associated faster search)
 % - pattern matching array dispatch table (with subtype notions)
@@ -1845,7 +1857,6 @@ object file-/                \- data list  -/
 \caption{Data flow diagram of [[5l]]}\label{fig:dataflow}
 \end{figure}
 %ocaml: this is what I hope I will get, a transformation pipeline
-% not sure I need the graph though
 
 
 After some basic command line processing and initialisations,
@@ -2093,7 +2104,8 @@ struct  Sym
     <<[[Sym]] extra fields>>
 };
 @
-%ocaml: no need special type, just use hashtbl for symbol table
+%ocaml: no need special type, just use hashtbl for symbol table,
+% and can define special 'scope' type instead of abuse int for version
 \l rename Symbol?
 \l transform value to a union?
 \n conflict with include/a.out.h
@@ -2176,7 +2188,7 @@ Sym*	hash[NHASH];
 NHASH       = 10007,
 @
 %assembler: same except NHASH which was 503 in 5a
-%ocaml: just use stdlib hashtbl
+%ocaml: just use stdlib hashtbl, and does not have to be a global
 
 %dup: from Assembler
 One way to implement a list of something in C is to embed in
@@ -2267,6 +2279,7 @@ return sym;
 @
 \t could have a syminit like in 5a
 \l why plus 1 again ??
+%ocaml: not sure need SNONE
 
 % sym->sig will be described in Safe linking section
 
@@ -2295,6 +2308,10 @@ enum Section
 };
 @
 \l see also asmsym()
+%ocaml: I think SNONE could be merged with SXREF, 
+% also with ADT can give different argument to STEXT and SDATA (virtpc vs size)
+% instead of abusing Sym.value. Also can have SText and SText2 to
+% differentiate the kind of value they carry.
 
 We can see enumerations above corresponding to the usual
 text, data, and BSS sections of a program.
@@ -2392,9 +2409,9 @@ struct  Adr
 % - have autom for TEXT  to keep track of N_PARAM and N_LOCAL for frame symbols
 % - new 'class' field (but seems local to oplook())
 % - the pointed Sym structure is a bit different
-%ocaml: could factorize with Operand of 5a
 %ocaml: would be better if had ADT so can have better Instruction type instead
 % of those opcode, operand, Adr, and unions and all those comments
+% also could factorize with Operand of 5a
 
 %assembler:
 [[Operand]] is until now almost identical to the [[Operand]] type 
@@ -2520,6 +2537,8 @@ For debugging purpose, each instruction has also a
 <<[[Prog]] other fields>>=
 long    line;
 @
+\t but now still valid? because local to an object file, but now
+\t  we need to think globally, so meaning?
 
 \l When object is the result of the assembly generated by 5c the line 
 \l is the line in the .c so many ASM instructions have actually the 
@@ -2550,6 +2569,7 @@ long    pc;
 \l needed for some check pc == p->pc somewhere.
 \t type is  long | addr ?
 \n abused to store offset to start of pool
+%ocaml: put outside structure, and differentiate depending on phase
 
 %dup: overview/soft-archi 
 The virtual program counter is incremented after each code instruction
@@ -2573,6 +2593,7 @@ target instruction.
 Prog*   cond;
 @
 \l called pcond I think in x86, could choose same name
+%ocaml: put in separate node type computed later
 
 
 \label{sec:mark}
@@ -2584,7 +2605,7 @@ temporarily {\em mark} instructions in the graph of instructions:
 short   mark;
 @
 %old: was byte
-% some generic tags to help some algoritms (e.g. for LEAF)
+%ocaml: can be a local hash variable of an algorithm instead of global field
 
 %chunks:
 The different kinds of marks will be described gradually in
@@ -2641,6 +2662,7 @@ Prog*	firstp;
 @
 \l good name? first_instr better? rename instrp?
 \t rename codei and lastp -> ecodei
+%ocaml: return a list instead of having a global (actually can return array!)
 
 %dup: symbol table link
 The instructions are linked together with the following field:
@@ -2664,8 +2686,7 @@ following global:
 // ref<Prog> (end from = firstp)
 Prog*	lastp;
 @
-%ocaml: use a queue data structure, or returns simply a list and List.flatten
-%  in ldobj()
+%ocaml: use a queue data structure, or use List.rev
 \l strong coupling between firstp and lastp that should be encapsulated
 \l   in a specific structure (like for datap/edatap)
 % option<Prog>? usually there is a sentinel so there is always a lastp
@@ -2680,6 +2701,7 @@ Prog*	lastp;
 Prog*	datap = P;
 @
 \n no need for edatap in arm
+%ocaml: return list again instead of using global
 
 [[datap]] points to the last data instruction. 
 \l how access first? need first? no need because no order needed for data
@@ -2707,6 +2729,9 @@ Prog*	curtext = P;
 @
 \n there will be different curxxx, a bit ugly use of globals
 \n curauto, curhist
+%ocaml: not sure needs this as a global, error report should be file x line
+%  first, then curtext. Some algorithm such as rewrite could have also
+%  a curtext as a local.
 
 <<global curp>>=
 // option<ref<Prog>>
@@ -2948,6 +2973,7 @@ recording the format of the executable:
 short	HEADTYPE = -1; /* type of header */
 @
 %old: was int in ARM and long in x86, but I don't think it matters
+%ocaml: use string directly instead of integer
 
 <<[[main()]] command line processing(arm)>>=
 case 'H':
@@ -3033,6 +3059,7 @@ long	HEADR; /* length of header */
 @
 \n 32 for a.out (0x20)
 \l long? really?
+%ocaml: use a record to put all config parameters instead of global
 
 <<global INITTEXT>>=
 long	INITTEXT = -1; /* text location */
@@ -3166,6 +3193,7 @@ if(INITENTRY == nil) {
 @
 %old: this was done originally after setting firstp below, but
 % better put that earlier I think
+%ocaml: I actually do that after loading the objects, once I have a symbol table
 %old: the code before was more complex IMHO
 % <<[[main()]] set INITENTRY>>=
 % if(INITENTRY == nil) {
@@ -3259,6 +3287,8 @@ undef();
 %ocaml: all those functions that take no args are ugly, they use too
 % many globals, e.g. firstp, lastp, I should really rewrite the code
 % to be more functional.
+% Also return lists so no need sentinel.
+\l check needs to be at the end? could be done earlier I think.
 
 The code steps are:
 \begin{enumerate}
@@ -3296,6 +3326,7 @@ prg(void)
 }
 @
 \l rename! new_instr?
+%ocaml: no need, initialize directly
 
 <<global zprg>>=
 Prog	zprg;
@@ -3318,6 +3349,7 @@ zprg.to = zprg.from;
 \t BUGS not defined other fields?
 %bug: what about .class? should be set to C_NONE no?
 %bug? and optab? should be null no? there is code using p->optab like oplook()
+%ocaml: no need, use marshall so initialized correctly
 
 All of the constants above, e.g. [[R_NONE]], are defined
 in [[include/obj/5.out.h]].
@@ -3399,6 +3431,7 @@ objfile(char *file)
 \l  as it can actually load a slice of an object, just a procedure
 \n portable function! (ldobj is not though)
 \l explain DBG? used a bit for profiling here.
+%ocaml: Marshall, and use filename extension to differentiate instead of magic?
 
 [[SARMAG]] above stands for [[S]]ize of [[AR]]chive [[MAG]]ic string.
 %
@@ -3539,6 +3572,7 @@ case H_PLAN9:
     break;
 @
 \t s/0x647/E_MAGIC?
+%ocaml: could use intermediate type or use Exec, cleaner.
 
 If you do not understand the order
 of the [[lput()]] above, see Section~\ref{sec:exec-format} 
@@ -3734,6 +3768,7 @@ for(t = 0; t < datsize; t += sizeof(buf)-100) {
 \l  anyway leaky abstraction as do n plus Dbufslop behind
 \t factorize code for those sizeof(buf)-100? and use Dbufslop?
 \t no use of datap?
+%ocaml: do loop instead in datblk directly and return list of words
 
 <<[[asmb()]] switch HEADTYPE (to position after text) cases(arm)>>=
 case H_PLAN9:
@@ -3741,6 +3776,7 @@ case H_PLAN9:
     seek(cout, OFFSET, SEEK__START);
     break;
 @
+%ocaml: use list of words and do lput after lput for text, so no need seek
 
 Note again that the code seeks to [[HEADR+textsize]], which
 may not be a page boundary. This is fine
@@ -3763,6 +3799,8 @@ as explained in Section~\ref{sec:disk-image-vs-memory-image}.
 @
 % ? slop?
 % why not use that before? instead of hardcoded 100?
+% enough so don't overflow? but I think 8 is enough no (strings
+% are the longest DATA)
 
 \l FIGURE! like for input buffer
 
@@ -4046,7 +4084,7 @@ undef(void)
 @
 \l rename check_if_still_undefined_symbols()?
 \l famous not defined error msg!
-
+\n could be done after loading I think, but maybe defensive to do it later
 
 
 %trans: ok seen asmb so at least know where we should go, what
@@ -4071,8 +4109,11 @@ linking pipeline.
 We start in this chapter with the {loading} of object files in memory
 performed mostly by [[ldobj()]].
 \n 'mostly' because also objfile()
+\l actualy load, name, partially resolve, populate symbol table, and split
+\l  lots of stuff to setup many things in memory.
 
-%ocaml: use Marshall and List.flatten (but less friendly to other languages) 
+%ocaml: use Marshall (but less friendly to other languages) and visit/split
+% in list of code and data (and return symbol table)
 
 \section{Object file format, [[.5]]}
 \label{sec:object-format}
@@ -4136,6 +4177,7 @@ the {\em virtual program counter}:
 <<global pc>>=
 long	pc = 0;
 @
+%ocaml: does not have to be a global, can be local to loading code
 
 %dup: overview/soft-archi, core-ds/instr
 [[ldobj()]] will increment [[pc]] after each code instruction read
@@ -4311,6 +4353,7 @@ if(o <= AXXX || o >= ALAST) {
 @
 \l it is not really a line, it is an estimation of line number
 \l  but why not use bloc[3] and so on?
+%ocaml: use constructor so no need this check
 
 <<[[ldobj()]] sanity check p>>=
 if(p->reg > NREG)
@@ -4418,7 +4461,7 @@ case D_SCONST:
 %//case D_OCONST: was with D_SHIFT
 % >> >> >> >>
 %pad: added D_ADDR case
-
+%ocaml: use ADT
 
 <<[[inopd()]] sanity check register range>>=
 if(a->reg < 0 || a->reg > NREG) {
@@ -4461,7 +4504,7 @@ of {\em input/output buffer management} library.
 This code is quite generic and independent of [[5l]] and so
 most of it is described in Appendix~\ref{sec:buffer-management}.
 \l they could use libbio?
-%ocaml: use stdlib
+%ocaml: use stdlib, or load everything at once in memory when marshall
 %
 The most important thing for this chapter is that [[Buf.ibuf]]
 contains an array of bytes, the {\em input buffer}, 
@@ -4778,7 +4821,11 @@ if(o == ANAME || o == ASIGNAME) {
     goto loop;
 }
 @
-%ocaml: Marshall, oh my god we save so much code by using marshall
+%ocaml: Marshall, oh my god we save so much code by using marshall.
+% BUT at least by using intermediate ANAME it can optimize things
+% by factorizing for instance signature checking (but maybe can memoize things).
+% Also it factorizes code a bit because no need to write instruction visitor
+%  for instance to find all the entities. All entity are references are there.
 %old: was abusing o to store symidx, r to store version, v to store name
 % I introduced instead symidx, v, n;
 \n it's not part of the switch, it's done before!
@@ -4918,6 +4965,8 @@ casedef:
 % in objfile it seems we seek to the TEXT procedure we want but
 % this procedure may not be the beginning of the object, and
 % the D_BRANCH offsets are based on the beginning of the object file no?
+%ocaml: easier in C to relocate, in ocaml has to write a visitor
+% since we have a more precise (but then irregular) AST.
 
 The code above modifies many of the globals we mentioned before
 and illustrates many of the concepts we introduced before:
@@ -5031,6 +5080,8 @@ if(!(s->type == SNONE || s->type == SXREF)) {
 }
 @
 %old: s->type != SNONE && s->type != SXREF
+%ocaml: s == S impossible by construction, stricter ast_asm5.ml
+% and I think SNONE could be merged with SXREF
 
 %\subsection{adjusting [[autosize]]}
 
@@ -5043,6 +5094,9 @@ long	autosize;
 \t rename stacksize? curstacksize?
 % arm specific? not in x86?
 % used a lot by aclass(), for what?
+%ocaml: could be a local in a few algorithms instead (e.g. RET rewrite).
+% Has to be a global in general? For codegen?
+
 
 Local variables, also known as {\em automatic variables},
 are hold in the {\em stack} of the process.
@@ -5059,9 +5113,12 @@ p->to.offset = rnd(p->to.offset, 4);
 autosize = p->to.offset;
 autosize += 4;
 @
+\l could do a diag if not multiple of 4, bug in program IMHO
 %old:
 % autosize = (p->to.offset+3L) & ~3L;
 % p->to.offset = autosize;
+%ocaml: has to be a global at this point? can be stricter and diag when not 
+% multiple of 4
 
 The reason for the 4 increment is to allocate space in the stack
 to {save} the {\em return address} stored in the
@@ -5106,6 +5163,8 @@ case AGLOBL:
 %        s->value = p->to.offset;
 \l sanity check people entering negative size for the globals? can happen?
 \l could be even more succint?
+\t offset? has a meaning?
+%ocaml: forbid offset by construction
 
 No list of instructions is modified. The only effect of a [[GLOBL]]
 {declaration} is the modification of a symbol in the symbol table. 
@@ -5124,6 +5183,7 @@ if(s == S) {
 if(!(s->type == SNONE || s->type == SXREF))
     diag("redefinition: %s\n%P", s->name, p);
 @
+%ocaml: s == S impossible by construction
 %old: the second check used to be written differently, but I prefer
 % it this way to mimic more what we do for ATEXT
 %old:
@@ -5168,6 +5228,7 @@ if(p->from.sym == S) {
     break;
 }
 @
+%ocaml: impossible by construction, stricter AST ftw
 
 \subsection{[[AEND]]}
 \label{sec:aend}
@@ -5191,6 +5252,7 @@ case AEND:
         goto newloop;
     return;
 @
+%ocaml: no need that if use Marshall, end of list is recognized
 
 The important instruction above is [[return]] which
 allows to exit from [[ldobj()]] without any error.
@@ -6639,6 +6701,7 @@ if((a == ABL || a == AB) &&
 %old: had  || a == ARET   but I cant see how can have this and a p->to.sym
 %bug: ARET? ARET has no args in Assembler.nw. cos of SUNDEF? I don't think so.
 \n can do B foo(SB)? why not if have no arguments, could. Tail call!
+%bug: overwrite offset silently? so BL foo+4(SB) is not handled?
 
 If the procedure can not be found, an error is reported:
 
@@ -6687,6 +6750,7 @@ as the call to [[diag()]] will prevent such a thing
 The naive way to find the instruction [[q]] with a certain [[pc]]
 is a linear search over all the instructions, by 
 following [[Instr.link]].
+%ocaml: or use an array, so then really trivial!
 %
 To optimize the search, [[patch()]] relies on another pointer, 
 [[Instr.forwd]] which will point not to the next instruction,
@@ -6700,7 +6764,8 @@ Prog*   forwd;
 %old: used to be part of an union with regused, but regused was actually
 % unused
 %alt: 
-% - an array instead of a list (but then noops() harder)
+% - an array instead of a list (but then noops() harder? no cos
+%   can still return a graph with pointers after)
 % - a hashtbl on Prog.pc? to get a Prog from a specific pc
 
 
@@ -6766,6 +6831,7 @@ if(q == P) {
     p->to.type = D_NONE;
 }
 @
+\l one can not jump outside code area!
 
 By carefully setting [[Instr.forwd]], the search can become
 a {\em binary search}.
@@ -7172,6 +7238,8 @@ Such procedures will be marked in the first pass of [[noops()]]:
 LEAF        = 1<<2,
 @
 % >>
+%ocaml: could be a local variable (a set) in the rewrite function
+% but in the end my visiting code is longer than the C code, sniff
 
 A {\em leaf} is a procedure which does not call other procedures.
 Such a procedure is thus a leaf in the {\em call tree}:
@@ -7433,6 +7501,7 @@ case ANOP:
 %old: /* q is non-nop */
 %bug? q could be null, or assume never generate ANOP without anything before?
 \l rely on q = p; done in for loop in noops, see code before
+\t need propagate mark? not sure useful.
 
 The compiler [[5c]] occasionally generates code using [[ANOP]]
 (see the \book{Compiler}).
@@ -7463,6 +7532,7 @@ case ABCASE:
     }
     break;
 @
+\n no ABL since always branch to a TEXT so we know not a NOP
 %old: p->cond = q1;  was inside while but better outside
 %bug? q1 could be null in the loop?
 %todo: write test case showing the bug?
@@ -7478,8 +7548,7 @@ beside [[TEXT]], [[RET]], and [[NOP]]. Those are the most
 important one though.
 Chapter~\ref{chap:advanced} will present the transformation of
 the remaining virtual instructions: [[DIV]], [[MOD]], and [[MOVWD]].
-\l other?
-\l other virtual instr transformed but later in asmout()?
+\l Also some virtual instr transformed in asmout() ... like MOVW!
 
 
 \section{Laying out data, [[dodata()]]}
@@ -7659,6 +7728,7 @@ if(v == 0) { // check
     v = 1;
 }
 @
+\t if less than 0?
 
 <<[[dodata()]] sanity check DATA instructions>>=
 if(s->type != SDATA)
@@ -8330,6 +8400,9 @@ struct  Oprange
 };
 @
 %old: was Oprang
+%ocaml: no need as factorized opcodes in big categories already (Arith, Mov)
+% and for the optimisation aspect of oprange we can hope for fast
+% compiled pattern matching
 
 The global below associates a range to every opcode:
 
@@ -8433,6 +8506,8 @@ enum Operand_class {
 %        if(b == C_SBRA)
 %            return 1;
 %        break;
+%ocaml: no need C_GOK, and can have subclasses via general constructor
+% and subconstructors
 
 Some kinds are also divided in {\em subclasses}, e.g.
 [[D_CONST]] in [[C_RCON]], [[C_LCON]], and a few more.
@@ -8568,6 +8643,7 @@ oplook(Prog *p)
 @
 %pad: I rewrote a lot this code to aspectize optimisations and to have
 % a simpler version. It's far clearer.
+%ocaml: just use pattern matching
 
 If no rule is found a linking error is reported:
 
@@ -8583,6 +8659,7 @@ if(o == nil)
     o = optab;
 return o;
 @
+%ocaml: checked by construction thx to precise ast_asm.ml
 
 \t important, happens often. e.g. MOVW (R1), (R2)
 \t have to use intermediate MOVW (R1), R10;  MOVW R10, (R2)
@@ -9186,6 +9263,8 @@ cflush(void)
 }
 @
 \l simpler than input buffer
+%ocaml: no need, just return list of words and then let ocaml do the flushing
+% when write in executable
 
 Note that [[lputl()]] means ``long put little-endian''.
 The lowest byte of a number have the lowest memory address.
@@ -9278,6 +9357,7 @@ case 0:		/* pseudo ops */
     break;
 @
 \l noops() has patched it with the initial mov to save REGLINK in stack
+%ocaml: no need repeat operand classes, by construction ast_asm ensures that
 
 \subsection{[[AWORD]]}
 
@@ -9301,6 +9381,7 @@ instructions as we will see in Section~\ref{sec:pool}.
 % WORD $foo; ok, I get it, but then it should be a C_LACON, not an C_LEXT
 % BUT, because of the literal pools, one can have some generated
 % AWORD instruction with for operand an C_LEXT!
+\t more rules with AWORD actually!
 
 %dup: codegen/ds/optab codegen/ds/operand-class codegen/oplook codegen/buildop
 Remember than [[C_LCON]] is a general operand class
@@ -9364,6 +9445,7 @@ long	instoffset;
 \t seems to be used both for immediate constant and offset
 \t  also for locals it is actually autosize plus offset, so it is many
 \t  things at the same time
+%ocaml: aclass() should return a pair!
 
 \subsection{[[D_CONST]], [[C_xCON]], and [[immrot()]]}
 \label{sec:operand-class-DCONST}
@@ -9681,6 +9763,7 @@ case N_INTERN:
     return C_LEXT;
 @
 % offset_to_r12, factorize BIG
+\t MOVW foo(SB), R1 ??? meaning? symbol here is always a data symbol?
 
 <<[[cmp()]] switch on a, the operand class in optab rule, cases>>=
 case C_SEXT:
@@ -9698,6 +9781,7 @@ if(a->sym == nil || a->sym->name == nil) {
     return C_GOK;
 }
 @
+%ocaml: impossible by construction
 
 <<[[aclass()]] D_OREG case, N_EXTERN case, sanity check t>>=
 if(t == SNONE || t == SXREF) {
@@ -9705,6 +9789,7 @@ if(t == SNONE || t == SXREF) {
     s->type = SDATA;
 }
 @
+%ocaml: should not happen when do check earlier
 
 
 
@@ -9760,6 +9845,7 @@ case N_PARAM:
 @
 %old: autosize + a->offset + 4L;
 % autosize so go to top, then +4 for save REGLINK then positive offset
+\t remember that autosize compensated back to -4 when leaf
 
 
 
@@ -9929,6 +10015,8 @@ case AADD:
     oprange[ABIC] = oprange[r];
     break;
 @
+%ocaml: just use general constructor Arith which gather all that
+% and let pattern matching with _ do the rest
 
 The same is true for [[ACMP]] which represents also
 [[ATST]], [[ATEQ]], and [[ACMN]]:
@@ -9984,6 +10072,9 @@ only registers, e.g. [[ADD R1, R2, R3]]:
 { ACMP,     C_REG,  C_REG,  C_NONE,      1, 4 },
 @
 \l talk action id 1 above correspond to case 1 below?
+%ocaml: shorter rule thanks to flexible constructor, also no need
+% mention middle operand at all or ugly C_NONE sometimes in middle,
+% sometimes in last.
 
 They can be encoded in a single ARM instruction, hence
 the rule size [[4]] in the rules above, 
@@ -10877,6 +10968,7 @@ code address to jump to, e.g. [[B 10(R4)]].
 Such instructions are useful to encode for instance in C
 calls through a function pointer as in [[(*f)(1,2);]]
 which are dynamic.
+\t also every return of procedure is using dynamic jump!!
 %The address of [[f]] is put in a register and 
 \l see 5c -S and functpointer.c
 %
@@ -14159,7 +14251,7 @@ case 'x':	/* produce export table */
 %        else
 
 <<function isobjfile>>=
-static int
+int
 isobjfile(char *f)
 {
     int n, v;
