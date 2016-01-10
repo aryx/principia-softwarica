@@ -134,10 +134,10 @@ menuscan(Menu *menu, int but, Mouse *m, Rectangle textr, int off, int lasti, Ima
     int i;
 
     paintitem(menu, textr, off, lasti, 1, save, nil);
-    flushimage(display, 1);	/* in case display->locking is set */
+    flushimage(display, true);	/* in case display->locking is set */
     *m = emouse();
     while(m->buttons & (1<<(but-1))){
-        flushimage(display, 1);	/* in case display->locking is set */
+        flushimage(display, true);	/* in case display->locking is set */
         *m = emouse();
         i = menusel(textr, m->xy);
         if(i != -1 && i == lasti)
@@ -283,7 +283,7 @@ emenuhit(int but, Mouse *m, Menu *menu)
                     menuscrollpaint(scrollr, off, nitem, nitemdrawn);
                 }
             }
-            flushimage(display, 1);	/* in case display->locking is set */
+            flushimage(display, true);	/* in case display->locking is set */
             *m = emouse();
         }
     }

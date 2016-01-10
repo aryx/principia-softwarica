@@ -239,19 +239,23 @@ struct Display
     /*x: [[Display]] devdraw connection fields */
     fdt		reffd; // /dev/draw/x/refresh
     /*e: [[Display]] devdraw connection fields */
-    /*s: [[Display]] buf fields */
+    /*s: [[Display]] buffer related fields */
     // drawing operatings to write in /dev/draw/x/data until flush
     // array<byte>
     byte	*buf;
     int		bufsize;
     // index in Display.buf array
     byte	*bufp;
-    /*e: [[Display]] buf fields */
+    /*e: [[Display]] buffer related fields */
     /*s: [[Display]] basic images fields */
+    // ref_own<Image>
     Image	*white;
+    // ref_own<Image>
     Image	*black;
 
+    // ref_own<Image>
     Image	*opaque;
+    // ref_own<Image>
     Image	*transparent;
     /*e: [[Display]] basic images fields */
 

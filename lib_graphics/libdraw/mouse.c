@@ -40,7 +40,7 @@ int
 readmouse(Mousectl *mc)
 {
     if(mc->image)
-        flushimage(mc->image->display, 1);
+        flushimage(mc->image->display, true);
     if(recv(mc->c, &mc->Mouse) < 0){
         fprint(2, "readmouse: %r\n");
         return -1;

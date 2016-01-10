@@ -40,7 +40,7 @@ allocscreen(Image *image, Image *fill, int public)
         BPLONG(a+5, image->id);
         BPLONG(a+9, fill->id);
         a[13] = public;
-        if(flushimage(d, 0) != -1)
+        if(flushimage(d, false) != -1)
             break;
     }
     s->display = d;
@@ -72,7 +72,7 @@ publicscreen(Display *d, int id, ulong chan)
     a[0] = 'S';
     BPLONG(a+1, id);
     BPLONG(a+5, chan);
-    if(flushimage(d, 0) < 0)
+    if(flushimage(d, false) < 0)
         goto Error;
 
     s->display = d;
@@ -102,7 +102,7 @@ freescreen(Screen *s)
      * flush(1) because screen is likely holding last reference to
      * window, and want it to disappear visually.
      */
-    if(flushimage(d, 1) < 0)
+    if(flushimage(d, true) < 0)
         return -1;
     free(s);
     return 1;
@@ -219,7 +219,7 @@ originwindow(Image *w, Point log, Point scr)
     uchar *b;
     Point delta;
 
-    flushimage(w->display, 0);
+    flushimage(w->display, false);
     b = bufimage(w->display, 1+4+2*4+2*4);
     if(b == nil)
         return 0;
@@ -229,7 +229,7 @@ originwindow(Image *w, Point log, Point scr)
     BPLONG(b+9, log.y);
     BPLONG(b+13, scr.x);
     BPLONG(b+17, scr.y);
-    if(flushimage(w->display, 1) < 0)
+    if(flushimage(w->display, true) < 0)
         return -1;
     delta = subpt(log, w->r.min);
     w->r = rectaddpt(w->r, delta);

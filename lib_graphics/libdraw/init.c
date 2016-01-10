@@ -4,12 +4,14 @@
 #include <draw.h>
 
 /*s: global display */
+// option<Display>
 Display	*display;
 /*e: global display */
 /*s: global font */
 Font	*font;
 /*e: global font */
 /*s: global screen */
+// option<Image>
 Image	*view;
 /*e: global screen */
 /*s: global _drawdebug */

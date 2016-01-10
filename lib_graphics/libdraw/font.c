@@ -308,7 +308,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     c->left = fi->left;
     if(f->display == nil)
         return 1;
-    flushimage(f->display, 0);	/* flush any pending errors */
+    flushimage(f->display, false);	/* flush any pending errors */
     b = bufimage(f->display, 37);
     if(b == 0)
         return 0;
@@ -383,7 +383,7 @@ fontresize(Font *f, int wid, int ncache, int depth)
         abort();
         goto Return;
     }
-    flushimage(d, 0);	/* flush any pending errors */
+    flushimage(d, false);	/* flush any pending errors */
     b = bufimage(d, 1+4+4+1);
     if(b == 0){
         freeimage(new);
@@ -393,7 +393,7 @@ fontresize(Font *f, int wid, int ncache, int depth)
     BPLONG(b+1, new->id);
     BPLONG(b+5, ncache);
     b[9] = f->ascent;
-    if(flushimage(d, 0) < 0){
+    if(flushimage(d, false) < 0){
         fprint(2, "resize: init failed: %r\n");
         freeimage(new);
         goto Return;

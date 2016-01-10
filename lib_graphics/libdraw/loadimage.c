@@ -50,7 +50,7 @@ loadimage(Image *i, Rectangle r, uchar *data, int ndata)
         data += n;
         r.min.y += dy;
     }
-    if(flushimage(i->display, 0) < 0)
+    if(flushimage(i->display, false) < 0)
         return -1;
     return ndata;
 }

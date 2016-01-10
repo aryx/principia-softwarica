@@ -330,12 +330,12 @@ extract(void)
         /* if locking is being done by program, this means it can't depend on automatic flush in emouse() etc. */
         if(canqlock(&display->qlock)){
             if(display->bufp > display->buf)
-                flushimage(display, 1);
+                flushimage(display, true);
             unlockdisplay(display);
         }
     }else
         if(display->bufp > display->buf)
-            flushimage(display, 1);
+            flushimage(display, true);
 loop:
     if((n=read(epipe[0], ebuf, EMAXMSG+1)) < 0
     || ebuf[0] >= MAXSLAVE)

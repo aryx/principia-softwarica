@@ -48,7 +48,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     }
 
     /* flush pending data so we don't get error allocating the image */
-    flushimage(d, 0);
+    flushimage(d, false);
 
     a = bufimage(d, 1+4+4+1+4+1+4*4+4*4+4);
     if(a == nil)
@@ -77,7 +77,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     BPLONG(a+43, clipr.max.y);
     BPLONG(a+47, val);
 
-    if(flushimage(d, 0) < 0)
+    if(flushimage(d, false) < 0)
         goto Error;
 
     if(ai)
@@ -89,7 +89,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
             if(a){
                 a[0] = 'f';
                 BPLONG(a+1, id);
-                flushimage(d, 0);
+                flushimage(d, false);
             }
             goto Error;
         }
@@ -134,7 +134,7 @@ namedimage(Display *d, char *name)
         return nil;
     }
     /* flush pending data so we don't get error allocating the image */
-    flushimage(d, 0);
+    flushimage(d, false);
     a = bufimage(d, 1+4+1+n);
     if(a == 0)
         goto Error;
@@ -146,7 +146,7 @@ namedimage(Display *d, char *name)
     a[5] = n;
     memmove(a+6, name, n);
 
-    if(flushimage(d, 0) < 0)
+    if(flushimage(d, false) < 0)
         goto Error;
 
     if(pread(d->ctlfd, buf, sizeof buf, 0) < 12*12)
@@ -160,7 +160,7 @@ namedimage(Display *d, char *name)
         if(a){
             a[0] = 'f';
             BPLONG(a+1, id);
-            flushimage(d, 0);
+            flushimage(d, false);
         }
         goto Error;
     }
@@ -203,7 +203,7 @@ nameimage(Image *i, char *name, int in)
     a[5] = in;
     a[6] = n;
     memmove(a+7, name, n);
-    if(flushimage(i->display, 0) < 0)
+    if(flushimage(i->display, false) < 0)
         return 0;
     return 1;
 }
@@ -223,7 +223,7 @@ _freeimage1(Image *i)
     /* make sure no refresh events occur on this if we block in the write */
     d = i->display;
     /* flush pending data so we don't get error deleting the image */
-    flushimage(d, 0);
+    flushimage(d, false);
 
     a = bufimage(d, 1+4);
     if(a == nil)

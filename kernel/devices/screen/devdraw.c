@@ -95,6 +95,7 @@ struct Client
 {
     int     clientid; // dirno?
 
+    // ??? map<?, ref_own?<Dimage>> ?
     DImage*     dimage[NHASH];
     // enum<drawop>?
     int     op;

@@ -298,7 +298,7 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     }
     freeimage(save);
     replclipr(view, 0, sc);
-    flushimage(display, 1);
+    flushimage(display, true);
     if(lasti >= 0){
         menu->lasthit = lasti+off;
         return menu->lasthit;

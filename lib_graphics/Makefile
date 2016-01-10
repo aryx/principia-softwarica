@@ -118,9 +118,9 @@ SRC_VIEWS= \
    libmemlayer/ltofront.c\
    libmemlayer/ltorear.c\
    libmemlayer/unload.c\
-   ../windows/apps/clock.c\
-   ../windows/apps/colors.c\
-   ../windows/apps/screenlock.c\
+   ../applications/clock.c\
+   ../applications/colors.c\
+   ../applications/screenlock.c\
    ../kernel/devices/screen/devdraw.c\
    ../kernel/devices/screen/screen.h\
    ../kernel/devices/screen/screen.c\

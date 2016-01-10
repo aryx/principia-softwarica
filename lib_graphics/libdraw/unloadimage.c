@@ -22,7 +22,7 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
     }
 
     d = i->display;
-    flushimage(d, 0);	/* make sure subsequent flush is for us only */
+    flushimage(d, false);	/* make sure subsequent flush is for us only */
     ntot = 0;
     while(r.min.y < r.max.y){
         a = bufimage(d, 1+4+4*4);
@@ -43,7 +43,7 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
         BPLONG(a+9, r.min.y);
         BPLONG(a+13, r.max.x);
         BPLONG(a+17, r.min.y+dy);
-        if(flushimage(d, 0) < 0)
+        if(flushimage(d, false) < 0)
             return -1;
         n = read(d->fd, data+ntot, ndata-ntot);
         if(n < 0)
