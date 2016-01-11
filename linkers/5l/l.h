@@ -54,6 +54,7 @@ struct  Adr
 // order of entries for one kind matters! coupling with cmp() and ocmp()
 enum Operand_class {
     C_NONE      = 0,
+
     C_REG,     // D_REG
     C_BRANCH,  // D_BRANCH
 
@@ -347,7 +348,7 @@ union Buf
 extern char	 thechar;
 extern char* thestring;
 
-
+// configuration
 extern  short   HEADTYPE;       /* type of header */
 extern  long    HEADR;          /* length of header */
 extern  long    INITTEXT;       /* text location */
@@ -357,13 +358,26 @@ extern  char*   INITENTRY;      /* entry point */
 
 extern  long    INITTEXTP;      /* text location (physical) */ // ELF
 
+// input
 extern union Buf buf;
 extern  int cbc;
 extern  char*   cbp;
 
+// output
+extern  char*   outfile;
+extern  fdt cout;
+extern  Biobuf  bso;
+
+// core algorithm
 extern  Sym*    hash[NHASH];
 extern  long    pc;
 extern  Prog    zprg;
+
+extern  Prog*   firstp;
+extern  Prog*   lastp;
+extern  Prog*   datap;
+extern  Prog*   textp;
+extern  Prog*   etextp;
 
 extern  Prog*   curtext;
 extern  Auto*   curauto;
@@ -371,21 +385,13 @@ extern  Auto*   curhist;
 extern  Prog*   curp;
 extern  long    autosize;
 
+// sections size
 extern  long    textsize;
 extern  long    datsize;
 extern  long    bsssize;
 extern  long    symsize;
 extern  long    lcsize;
 
-extern  char*   outfile;
-extern  fdt cout;
-extern  Biobuf  bso;
-
-extern  Prog*   firstp;
-extern  Prog*   lastp;
-extern  Prog*   datap;
-extern  Prog*   textp;
-extern  Prog*   etextp;
 
 extern  char    inuxi1[1];
 extern  char    inuxi2[2];
@@ -395,15 +401,18 @@ extern  char    fnuxi8[8];
 
 extern  char*   noname;
 
+// debugging support
 extern  Sym*    histfrog[MAXHIST];
 extern  int histfrogp;
 extern  int histgen;
 
+// library
 extern  char*   library[50];
 extern  char*   libraryobj[50];
 extern  int libraryp;
 extern  int xrefresolv;
 
+// advanced topics
 extern  int dtype;
 extern  int armv4;
 extern  int vfp;
@@ -418,11 +427,14 @@ extern  Prog*   prog_divu;
 extern  Prog*   prog_mod;
 extern  Prog*   prog_modu;
 
+// debugging
 extern  bool    debug[128];
 extern  char*   anames[];
 
+// error managment
 extern  int nerrors;
 
+// utils
 extern  char*   hunk;
 extern  long    nhunk;
 extern  long    thunk;
@@ -449,11 +461,100 @@ extern  int version;
 #pragma varargck    argpos  diag 1
 /*e: pragmas varargck argpos */
 
-
 // obj.c
-int isobjfile(char *f);
+int     isobjfile(char *f);
+void    ldobj(int, long, char*);
+void    loadlib(void);
+void    addlibpath(char*);
+void    objfile(char*);
+
+void    nuxiinit(void);
+void    readundefs(char*, int);
+void    undefsym(Sym*);
+void    zerosig(char*);
+
+// TODO float.c (was in obj.c)
+double  ieeedtod(Ieee*);
+long    ieeedtof(Ieee*);
+
+// TODO? hist.c (was in obj.c)
+void    addhist(long, int);
+void    histtoauto(void);
+
+// TODO profile.c (was in obj.c)
+void    doprof1(void);
+void    doprof2(void);
 
 
+// noops.c
+void    noops(void);
+void    divsig(void);
+void    initdiv(void);
+void    nocache(Prog*);
+
+// pass.c
+void    undef(void);
+void    patch(void);
+void    dodata(void);
+void    follow(void);
+
+void    import(void);
+void    export(void);
+void    ckoff(Sym*, long);
+
+// span.c
+void    buildop(void);
+void    dotext(void);
+void    xdefine(char*, int, long);
+int aclass(Adr*);
+long    immrot(ulong);
+long    immaddr(long);
+long    regoff(Adr*); // for float
+// oplook in m.h
+
+void    dynreloc(Sym*, long, int);
+void    asmdyn(void);
+
+// asm.c
+void    asmb(void);
+long    entryvalue(void);
+void    cflush(void);
+void    asmsym(void);
+void    putsymb(char*, int, long, int);
+void    asmlc(void);
+void    datblk(long, long, int);
+// asmout in m.h
+
+void    strnput(char*, int);
+void    cput(int);
+void    llput(vlong);
+void    llputl(vlong);
+void    lput(long);
+void    lputl(long);
+void    wput(long);
+void    wputl(long);
+
+int chipfloat(Ieee*);
+
+// utils.c
+Sym*  lookup(char*, int);
+Prog* prg(void);
+void  mylog(char*, ...);
+void  errorexit(void);
+void  gethunk(void);
+
+// TODO utils.c (was in pass.c)
+long    atolwhex(char*);
+long    rnd(long, long);
+
+// compat.c
+int     fileexists(char*);
+// and malloc/free/setmalloctag overwrite
+
+// list.c (dumpers)
+void listinit(void);
+void    diag(char*, ...);
+void    prasm(Prog*);
 int Aconv(Fmt*);
 int Cconv(Fmt*);
 int Dconv(Fmt*);
@@ -461,97 +562,5 @@ int Nconv(Fmt*);
 int Pconv(Fmt*);
 int Sconv(Fmt*);
 
-void    addpool(Prog*, Adr*);
-void    initdiv(void);
-void    addlibpath(char*);
-int     fileexists(char*);
-char*   findlib(char*);
-
-int aclass(Adr*);
-void    addhist(long, int);
-void    addlibpath(char*);
-void    append(Prog*, Prog*);
-void    asmb(void);
-void    asmdyn(void);
-void    asmlc(void);
-
-
-
-void    asmsym(void);
-long    atolwhex(char*);
-Prog*   brloop(Prog*);
-void    buildop(void);
-void    buildrep(int, int);
-void    cflush(void);
-void    ckoff(Sym*, long);
-int chipfloat(Ieee*);
-int cmp(int, int);
-int compound(Prog*);
-double  cputime(void);
-void    datblk(long, long, int);
-void    diag(char*, ...);
-void    divsig(void);
-void    dodata(void);
-void    doprof1(void);
-void    doprof2(void);
-void    dynreloc(Sym*, long, int);
-long    entryvalue(void);
-void    errorexit(void);
-void    exchange(Prog*);
-void    export(void);
-int fileexists(char*);
-int find1(long, int);
-char*   findlib(char*);
-void    follow(void);
-void    gethunk(void);
-void    histtoauto(void);
-double  ieeedtod(Ieee*);
-long    ieeedtof(Ieee*);
-void    import(void);
-int isnop(Prog*);
-void    ldobj(int, long, char*);
-void    loadlib(void);
-void    listinit(void);
-Sym*    lookup(char*, int);
-void    cput(int);
-void    llput(vlong);
-void    llputl(vlong);
-void    lput(long);
-void    lputl(long);
-void    mkfwd(void);
-void*   mysbrk(ulong);
-void    names(void);
-void    nocache(Prog*);
-void    nuxiinit(void);
-void    objfile(char*);
-int ocmp(const void*, const void*);
-long    opirr(int);
-
-
-void    patch(void);
-void    prasm(Prog*);
-void    prepend(Prog*, Prog*);
-Prog*   prg(void);
-int pseudo(Prog*);
-void    putsymb(char*, int, long, int);
-void    readundefs(char*, int);
-long    regoff(Adr*);
-int relinv(int);
-long    rnd(long, long);
-void    dotext(void);
-void    strnput(char*, int);
-void    undef(void);
-void    undefsym(Sym*);
-void    wput(long);
-void    wputl(long);
-void    xdefine(char*, int, long);
-void    xfol(Prog*);
-void    zerosig(char*);
-void    noops(void);
-long    immrot(ulong);
-long    immaddr(long);
-long    opbra(int, int);
-
-void mylog(char*, ...);
 
 /*e: linkers/5l/l.h */

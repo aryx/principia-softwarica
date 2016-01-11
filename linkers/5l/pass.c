@@ -1,6 +1,13 @@
 /*s: linkers/5l/pass.c */
 #include	"l.h"
 
+// forward decls
+int     relinv(int);
+void    xfol(Prog*);
+void    mkfwd(void);
+Prog*   brloop(Prog*);
+
+
 /*s: function dodata(arm) */
 /// main -> <>
 void
@@ -151,7 +158,7 @@ undef(void)
 /*e: function undef */
 
 /*s: function brchain(arm) */
-Prog*
+static Prog*
 brchain(Prog *p)
 {
     int i;

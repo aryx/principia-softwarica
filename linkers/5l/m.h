@@ -76,27 +76,10 @@ extern  Prog*   elitrl;
 extern  char    literal[32];
 extern  bool    xcmp[C_GOK+1][C_GOK+1];
 
-
+// asm.c
 void    asmout(Prog*, Optab*);
+
+// span.c
 Optab*  oplook(Prog*);
-
-long    oprrr(int, int);
-
-long    omvl(Prog*, Adr*, int);
-
-long    olr(int, int, long, int, int);
-long    olrr(int, int, int, int, int);
-
-long    osr(int, int, int, long, int);
-long    osrr(int, int, int, int, int);
-
-long    olhr(long, int, int, int);
-long    olhrr(int, int, int, int);
-long    oshr(int, long, int, int);
-long    oshrr(int, int, int, int);
-
-long    opvfprrr(int, int);
-long    ofsr(int, int, long, int, int, Prog*);
-
 
 /*e: linkers/5l/m.h */

@@ -117,16 +117,4 @@ prg(void)
 }
 /*e: constructor prg */
 
-/*s: function copyp */
-Prog*
-copyp(Prog *q)
-{
-    Prog *p;
-
-    p = prg();
-    *p = *q;
-    return p;
-}
-/*e: function copyp */
-
 /*e: linkers/5l/utils.c */

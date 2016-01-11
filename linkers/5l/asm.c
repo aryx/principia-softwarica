@@ -2,6 +2,28 @@
 #include	"l.h"
 #include	"m.h"
 
+// forward decls
+long    oprrr(int, int);
+
+long    omvl(Prog*, Adr*, int);
+
+long    olr(int, int, long, int, int);
+long    olrr(int, int, int, int, int);
+
+long    osr(int, int, int, long, int);
+long    osrr(int, int, int, int, int);
+
+long    olhr(long, int, int, int);
+long    olhrr(int, int, int, int);
+long    oshr(int, long, int, int);
+long    oshrr(int, int, int, int);
+
+long    opvfprrr(int, int);
+long    ofsr(int, int, long, int, int, Prog*);
+
+long    opbra(int, int);
+
+
 /*s: constant Dbufslop */
 #define	Dbufslop	100
 /*e: constant Dbufslop */
@@ -1692,10 +1714,12 @@ oprrr(int a, int sc)
     case AADC:	return o | (0x5<<21);
     case ASBC:	return o | (0x6<<21);
     case ARSC:	return o | (0x7<<21);
+
     case ATST:	return o | (0x8<<21) | (1<<20);
     case ATEQ:	return o | (0x9<<21) | (1<<20);
     case ACMP:	return o | (0xa<<21) | (1<<20);
     case ACMN:	return o | (0xb<<21) | (1<<20);
+
     case AORR:	return o | (0xc<<21);
     case AMOVW:	return o | (0xd<<21); // MOV
     case ABIC:	return o | (0xe<<21);

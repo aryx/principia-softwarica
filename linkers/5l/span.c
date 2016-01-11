@@ -11,10 +11,13 @@ static struct {
 } pool;
 /*e: global pool(arm) */
 
+// forward decls
 void	checkpool(Prog*);
 void 	flushpool(Prog*, int);
+void    addpool(Prog*, Adr*);
 typedef struct Reloc Reloc;
-
+int cmp(int, int);
+int     ocmp(const void*, const void*);
 
 /*s: function span(arm) */
 /// main -> <>
@@ -329,7 +332,7 @@ immaddr(long v)
 /*e: function immaddr(arm) */
 
 /*s: function immfloat(arm) */
-int
+static int
 immfloat(long v)
 {
     return (v & 0xC03) == 0;/* offset will fit in floating-point load/store */
@@ -337,7 +340,7 @@ immfloat(long v)
 /*e: function immfloat(arm) */
 
 /*s: function immhalf(arm) */
-int
+static int
 immhalf(long v)
 {
     if(v >= 0 && v <= 0xff)

@@ -2,6 +2,9 @@
 #include	"l.h"
 #include	<ar.h>
 
+// forward decls
+int     find1(long, int);
+
 /*s: global noname linker */
 char	*noname		= "<none>";
 /*e: global noname linker */
@@ -80,7 +83,7 @@ addlibpath(char *arg)
 /*e: function addlibpath */
 
 /*s: function findlib */
-char*
+static char*
 findlib(char *file)
 {
     int i;
@@ -269,7 +272,7 @@ objfile(char *file)
 
 /*s: function inopd(arm) */
 /// main -> objfile -> ldobj -> <>
-int
+static int
 inopd(byte *p, Adr *a, Sym *h[])
 {
     int size; // returned
@@ -402,7 +405,7 @@ inopd(byte *p, Adr *a, Sym *h[])
 
 /*s: function addlib */
 /// ldobj(case AHISTORY and local_line == -1 special mark) -> <>
-void
+static void
 addlib(char *obj)
 {
     char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN];
@@ -541,7 +544,7 @@ histtoauto(void)
 /*e: function histtoauto */
 
 /*s: function collapsefrog */
-void
+static void
 collapsefrog(Sym *s)
 {
     int i;
@@ -581,7 +584,7 @@ out:
 /*e: function collapsefrog */
 
 /*s: function nopout */
-void
+static void
 nopout(Prog *p)
 {
     p->as = ANOP;
@@ -591,7 +594,7 @@ nopout(Prog *p)
 /*e: function nopout */
 
 /*s: function readsome */
-byte*
+static byte*
 readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
 {
     int n;
