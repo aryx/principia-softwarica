@@ -1,7 +1,8 @@
 /*s: assemblers/aa/lookup.c */
 #include "aa.h"
 
-// syminit() depends on LNAME token defined in a.y so it can't be here
+// syminit() in lookup() depends on LNAME token defined in a.y 
+// so it can't be defined here.
 
 /*s: function slookup */
 Sym*

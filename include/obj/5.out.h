@@ -8,28 +8,28 @@
 enum Register {
     /*s: [[Register]] compiler conventions cases */
     // reserved by compiler, calling conventions
-    REGRET =	0,
-    REGARG =	0,
+    REGRET =    0,
+    REGARG =    0,
     /*x: [[Register]] compiler conventions cases */
     /* compiler allocates R1 up as temps */
     /* compiler allocates register variables R2 up */
-    REGMIN =	2,
-    REGMAX =	8,
+    REGMIN =    2,
+    REGMAX =    8,
     /* compiler allocates external registers R10 down */
-    REGEXT =	10, // R9/R10 possible 'extern register xxx;'
+    REGEXT =    10, // R9/R10 possible 'extern register xxx;'
     /*e: [[Register]] compiler conventions cases */
     /*s: [[Register]] linker conventions cases */
     // reserved by linker, long address/offset loading
-    REGTMP =	11,
+    REGTMP =    11,
     /*e: [[Register]] linker conventions cases */
 
     // reserved by linker
-    REGSB =		12, // static base
-    REGSP =		13, // stack pointer
+    REGSB =     12, // static base
+    REGSP =     13, // stack pointer
 
     // reserved by ARM
-    REGLINK =		14,
-    REGPC =		15,
+    REGLINK =   14,
+    REGPC =     15,
 
     NREG = 16,
 };
@@ -264,35 +264,35 @@ enum Sym_kind {
 /*e: enum sym_kind(arm) */
 
 /*s: constant NSNAME */
-#define	NSNAME		8
+#define NSNAME      8
 /*e: constant NSNAME */
 
 // Attributes
 /*s: constant NOPROF(arm) */
-#define NOPROF		(1<<0)
+#define NOPROF      (1<<0)
 /*e: constant NOPROF(arm) */
 /*s: constant DUPOK(arm) */
-#define DUPOK		(1<<1)
+#define DUPOK       (1<<1)
 /*e: constant DUPOK(arm) */
 
 /*s: constant C_SCOND(arm) */
 /* scond byte */
-#define	C_SCOND	((1<<4)-1)
+#define C_SCOND ((1<<4)-1)
 /*e: constant C_SCOND(arm) */
 /*s: constant C_SBIT(arm) */
-#define	C_SBIT	(1<<4)
+#define C_SBIT  (1<<4)
 /*e: constant C_SBIT(arm) */
 /*s: constant C_PBIT(arm) */
-#define	C_PBIT	(1<<5)
+#define C_PBIT  (1<<5)
 /*e: constant C_PBIT(arm) */
 /*s: constant C_WBIT(arm) */
-#define	C_WBIT	(1<<6)
+#define C_WBIT  (1<<6)
 /*e: constant C_WBIT(arm) */
 /*s: constant C_FBIT(arm) */
-#define	C_FBIT	(1<<7)	/* psr flags-only */
+#define C_FBIT  (1<<7)  /* psr flags-only */
 /*e: constant C_FBIT(arm) */
 /*s: constant C_UBIT(arm) */
-#define	C_UBIT	(1<<7)	/* up bit */
+#define C_UBIT  (1<<7)  /* up bit */
 /*e: constant C_UBIT(arm) */
 
 #define COND_ALWAYS 14
@@ -301,6 +301,6 @@ enum Sym_kind {
 /*
  * this is the ranlib header
  */
-#define	SYMDEF	"__.SYMDEF"
+#define SYMDEF  "__.SYMDEF"
 /*e: constant SYMDEF(arm) */
 /*e: include/arm/5.out.h */

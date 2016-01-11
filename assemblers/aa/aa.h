@@ -6,10 +6,10 @@
 
 // The content of this file was originally copy pasted in 8a/a.h, 5a/a.h, etc.
 // It was almost always the same in all archi so I factorized things in aa.h.
-// aa.h  is the generic part, for the specific part do #include XXX/Y.out.h
-// in Ya/a.h, e.g.:
-//#include "386/8.out.h"
-//#include "arm/5.out.h"
+// aa.h is the generic part; for the specifics do #include Y.out.h in Ya/a.h,
+// e.g.:
+//#include "8.out.h" in 8a/a.h
+//#include "5.out.h" in 5a/a.h
 
 #include <common.out.h>
 
@@ -60,7 +60,7 @@ struct  Sym
 {
     // Sym is (ab)used to represent many things in the assembler:
     //   actual symbols, labels, but also macros,
-    //   tokens for opcodes and registers, etc
+    //   tokens for opcodes and registers, etc.
 
     // ---------------------------------------------------------
     // The "key"
@@ -149,7 +149,8 @@ struct Htab
 /*s: struct Hist */
 struct  Hist
 {
-    char*   filename; // nil for a ``pop''
+    // option<ref_own<string> (None = nil = a ``pop'')
+    char*   filename; 
 
     // global line of this Hist
     long    global_line;       
@@ -172,10 +173,10 @@ extern  Sym*  hash[NHASH];
 extern  int   pass;
 extern  long  pc;
 
-extern  char* pathname;
 extern  char* outfile;
-extern struct Fi fi;
 extern  Biobuf obuf;
+extern  char* pathname;
+extern struct Fi fi;
 
 extern struct Htab h[NSYM];
 extern  int   symcounter;
@@ -217,7 +218,7 @@ extern  long    thunk;
 // lookup.c
 Sym*    slookup(char*);
 Sym*    lookup(void);
-// this actually must be defined in lex.c, depends on LNAME
+// this actually must be defined in lex.c; it depends on LNAME
 void    syminit(Sym*);
 
 // lexbody.c (used by lex.c and macbody.c)
@@ -242,7 +243,7 @@ void linehist(char*, int);
 // float.c
 void ieeedtod(Ieee *ieee, double native);
 
-// compact.c
+// compat.c
 int systemtype(int);
 int pathchar(void);
 int mywait(int*);

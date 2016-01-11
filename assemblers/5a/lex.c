@@ -122,9 +122,7 @@ struct Itab itab[] =
     /*x: [[itab]] elements */
     ".EQ",		LCOND,	0,
     ".NE",		LCOND,	1,
-    ".CS",		LCOND,	2,
     ".HS",		LCOND,	2,
-    ".CC",		LCOND,	3,
     ".LO",		LCOND,	3,
     ".MI",		LCOND,	4,
     ".PL",		LCOND,	5,
