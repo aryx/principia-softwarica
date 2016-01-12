@@ -2972,7 +2972,7 @@ syminit(Sym *sym)
     sym->value = 0;
 }
 @
-\t not set symidx to 0??
+\t not set symidx to 0?? because alloc = sbrk = zalloc
 
 
 
@@ -3307,7 +3307,7 @@ main(int argc, char *argv[])
 
     if(assemble(argv[0]))
         errorexit();
-    exits(0);
+    exits(nil);
 }
 @
 %ocaml: no need cinit, and include stuff can be done by outside cpp
@@ -8373,13 +8373,14 @@ a better understanding of Asm5.
 \end{figure}
 
 The format of an object file is pretty regular, essentially a list
-of instructions where each instruction is encoded as:
+of instructions where each instruction is encoded as follows:
 \l do I repeat too much the code? too verbose? maybe
 \begin{itemize}
 \item an opcode (1 byte), e.g. the value of [[ASUB]]
 \n 1 byte enough for 256 opcodes, as explained in sec:object-format-part1
 
 \item a conditional execution (1 byte), e.g. the value of [[Always]]
+\l also special bits
 
 \item a register number (1 byte), e.g. 4 for [[R4]], 
 when an instruction has 3 operands or the value of [[R_NONE]]
@@ -8461,8 +8462,9 @@ which will be explained in Section~\ref{sec:object-file-history}.
 
 %trans:
 The job of [[outcode()]], introduced in Section~\ref{sec:outcode-signature},
-and used many times in the grammar, is 
-mostly to serialize one instruction (machine, pseudo, or virtual)
+and used many times in the grammar, is mostly to 
+%
+serialize one instruction (machine, pseudo, or virtual)
 according to the format described 
 in the middle of Figure~\ref{fig:object-format-complete}:
 \n mostly because actually also serialize symbol table, and increment also pc
@@ -8596,7 +8598,7 @@ outopd(Gen *a, int symidx)
 }
 @
 %old: was zaddr, but no idea why, z for output, addr because kinda
-% Adr used in Linker.nw. But clearer use outopd
+% Adr used in Linker.nw. But clearer use outopd.
 %ocaml: just use Marshall again in caller
 
 \ifallcode
@@ -8639,7 +8641,7 @@ case D_SCONST:
     break;
 @
 %pad: I added case for D_ADDR
-\t endianess! portable format.
+\t endianess for D_CONST/... ! portable format.
 
 
 \section{Object file symbol table, [[h]] and [[ANAME]]}
@@ -8686,7 +8688,7 @@ struct Htab h[NSYM];
 <<struct Htab>>=
 struct Htab
 {
-    // option<ref<Sym>>>
+    // option<ref<Sym>>
     Sym*    sym;
     //enum<Sym_kind>
     short   symkind;
@@ -8728,6 +8730,7 @@ for(i=0; i<NSYM; i++) {
 @
 \t still initialize h[0] because used later in symidx_of_symopt()
 \n cant use N_NONE because factorized with x86
+\t maybe could move that in aa.h?
 \l needed only for pass 2
 
 As we will output instructions in [[outcode()]], new symbols
@@ -8752,7 +8755,7 @@ zname(char *n, int symkind, int symidx)
 }
 @
 \l rename? out_symbol_table_elt
-\t symkind redundant? 
+\t symkind redundant? best here (with ANAME) or in the operand?
 \t used a bit in 5l to set to SXREF the section
 \t  of a symbol we know will be referred as a global symbol
 \t  but could be done in inopd instead and so done differently
@@ -8815,7 +8818,7 @@ int symidx;
 % char enough??
 %old: was char, but in many places they use int for symcounter so I use int
 % there too now
-\t set to 0 in syminit? apparently not
+\t set to 0 in syminit? apparently not, because alloc = sbrk = zalloc
 
 The code below to compute [[sf]] and [[st]] is rather subtle:
 
@@ -8886,8 +8889,22 @@ hence the [[goto]].
 The extra condition about [[oldsymcounter]] is to avoid
 an infinite loop in [[outcode()]] with code such 
 as [[MOVW bar(SB), bar(SB)]].
+\l even though invalid instructions anway rejected by the linker
 
 \l Figure? tricky to understand loop and ref.
+
+\t summary? copy paste figure of Linker? solidify with Jarod's comment:
+% Si j'ai bien compris, quand tu lis le fichier code objet, comme tu
+% reconstruis petit à petit ce tableau des symboles (h) à partir du
+% début du fichier, et que tu mets à jour cette table avant de
+% recontrer une instruction utilisant ce symbole, quand tu vois une
+% référence à un numéro de symbole dans une instruction, celui
+% actuellement dans la table à cet index sera le bon.
+%
+% D'ailleurs dans la figure 9.1, Symbol1 a été utilisé pour la
+% première fois dans Instruction3 et Symbol2 et Symbol3 dans
+% l'instruction 4, c bien ça ?
+
 
 %old:
 %<<[[outcode()]] st and sf computation, and possible calls to zname>>=
@@ -10616,7 +10633,7 @@ if(argc > 1) {
                 print("%s:\n", *argv);
                 if(assemble(*argv))
                     errorexit();
-                exits(0);
+                exits(nil);
             }
             nout++;
             argc--;
@@ -10626,7 +10643,7 @@ if(argc > 1) {
         if(i < 0) {
             if(c)
                 errorexit();
-            exits(0);
+            exits(nil);
         }
         if(status)
             c++;
