@@ -39,7 +39,8 @@
 
 %thx to 5l in ocaml: 
 %  - see again that code could be so much simpler, no need so many globals,
-%    can be far more functional
+%    can be far more functional, more explicit on which information is
+%    needed by a function.
 %  - introduced more files, obj.c, main.c, lookup.c
 %  - ANAME simplifies things actually in 5l; it factorizes code. We have
 %    to write visitor boilerplate in ocaml.
@@ -48,6 +49,10 @@
 %    N_INTERN and a unique pointer.
 %  - found bug with BL foo+4(SB) silently converted by 5l
 %  - realize every RET is converted in a indirect jump!
+%  - discover more invariants, e.g. SLL cant have C_SHIFT operands,
+%    Bxx supports only static jumps, offset in IndirectJump always 0, ...
+%  - understand the +4 for N_PARAM even though autosize has already had a +4
+
 
 %thx to codemap/codegraph/scheck:
 % - see subtle dependency to 8c/enam.c through anames
@@ -7341,6 +7346,9 @@ case ATEXT:
 % - removed the code about SLEAF
 % - use autosize == 0, more readable than !autosize, anyway it's not a bool!
 % - reorg order of assignments, simpler I think
+%ocaml: I store directly final autosize so no need to compensate with -4
+% for further +4 as there will be no further +4, we store the final autosize
+% directly.
 
 The single instruction [[MOVW.W R14, -autosize(R13)]],
 which uses the {\em special bit} [[.W]] (see the \book{Assembler}),
@@ -9200,6 +9208,7 @@ default:
     break;
 @
 \n could put case 0 accepted only for ATEXT, but done too in caller in asmb
+%ocaml: could return a list instead of hardcoded o1, o2, ...
 
 %dup: and adapted from loading/ldobj/buffered-input
 [[lputl()]] is one of the function from the 
@@ -9565,6 +9574,7 @@ immrot(ulong v)
 %old: last instruction put on separate lines otherwise noweb issue
 \t so immrot(0) == 0? no cos bit will be set, which is
 \t  why it sets bit 25, because 0 already used for NONE, ugly! subtle!
+%ocaml: maybe easier in C, sometimes nice to have int as a bool
 
 %example:
 [[immrot(255)]] will return when [[i == 0]] since
@@ -9725,8 +9735,8 @@ immaddr(long v)
 \l rename immoffset()?
 \t could return bool instead. Clearer. Anyway set special bits in olr already.
 \t It is true its result is passed to immfloat but could rewrite immfloat too
-\t (or just pass abs(instoffset) & 0xfff to immfloat).
-\t It is maybe more symetric with immrot to keep it like that.
+\t  (or just pass abs(instoffset) & 0xfff to immfloat).
+\t  It is maybe more symetric with immrot to keep it like that.
 \t why need v & 0xfff? redundant no?
 
 
@@ -9846,8 +9856,14 @@ case N_PARAM:
 @
 %old: autosize + a->offset + 4L;
 % autosize so go to top, then +4 for save REGLINK then positive offset
-\t remember that autosize compensated back to -4 when leaf
-
+\t remember that autosize compensated back to -4 when leaf?
+\t  NO offset is compensated back, not autosize, autosize here will be
+\t  zero if was a leaf function.
+\t but then actually autosize already adjusted to plus 4, so why another
+\t  plus 4 here? SEE ARET rewrting section!, +4 because we are in 
+\t  frame of the caller
+\t  and if caller for sure this caller is not a leaf and so before
+\t  its locals he will have his own return address saved! hence the +4
 
 
 \subsection{[[D_ADDR]], [[C_xxCON]]}
@@ -9878,8 +9894,7 @@ case N_INTERN:
     s = a->sym;
     <<[[aclass()]] D_ADDR case, N_EXTERN case, sanity check s>>
     switch(s->type) {
-    case STEXT: case SSTRING:
-    case SUNDEF:
+    case STEXT: case SSTRING: case SUNDEF:
         instoffset = s->value + a->offset;
         return C_LCON; // etext is stable
     case SNONE: case SXREF:
@@ -9915,6 +9930,7 @@ case N_INTERN:
 %    return C_LCON;
 %old: case SLEAF: 
 %old: case SCONST:
+%ocaml: can have an offset with D_ADDR?
 
 % for LCON have to do the INITDAT!
 % really need RECON?
@@ -10431,6 +10447,8 @@ case ASRA:	return o | (0xd<<21) | (2<<5);
 { ASLL,		C_REG,	C_NONE,	C_REG,		 9, 4 },
 { ASLL,		C_REG,	C_REG,	C_REG,		 9, 4 },
 @
+\t note that no SLL and C_SHIFT. normal, already converted in
+\t  bitshift so cant do 2 bitshift
 
 <<[[asmout()]] switch on type cases>>=
 case 9:		/* sll R,[R],R -> mov (R<<R),R */
@@ -10519,6 +10537,7 @@ case 58:	/* movbu R,R -> AND $0xff, R, R */
 %$
 \t what is this D_NONE thing??? how to can be D_NONE? it has to be D_REG!!
 \n why not using rf for register from? but then adjust r will be wrong!
+\t  r has to be 0, so the adjust r is really a set r
 %old: I added the -> in the comment above to explain the translation
 
 
@@ -10533,6 +10552,7 @@ case AMUL:
     oprange[AMULU] = oprange[r];
     break;
 @
+\t anyway why need AMULU? diff with AMUL?
 
 <<[[optab]] entries>>=
 { AMUL,		C_REG,	C_REG,	C_REG,		15, 4 },
@@ -10565,7 +10585,7 @@ case AMULU:
 case AMUL:	return o | (0x0<<21) | (0x9<<4);
 @
 % >> >>
-\l no diff MUL and MULU
+\l no diff MUL and MULU??
 
 <<[[asmout()]] adjust registers when mul>>=
 if(rt == r) {
@@ -10643,7 +10663,7 @@ case 13:	/* op $lcon, [R], R */
     rt = p->to.reg;
     r = p->reg;
     if(p->as == AMOVW || p->as == AMVN) // can be AMOVW??
-        r = 0; // R0
+        r = 0;
     else 
       <<[[asmout()]] adjust [[r]]>>
     o2 |= (r<<16) | rf;
@@ -10938,6 +10958,7 @@ if(sc & (C_SBIT|C_PBIT|C_WBIT))
     diag(".S/.P/.W on bra instruction");
 @
 \l U bit?
+%ocaml: impossible by construction
 
 <<[[opbra()]] sanity check sc if not ABL>>=
 if(sc != 0xe)
@@ -10986,7 +11007,9 @@ arithmetic instructions:
 { AB,		C_NONE,	C_NONE,	C_ROREG,	 6, 4, 0,	LPOOL },
 { ABL,		C_NONE,	C_NONE,	C_ROREG,	 7, 8 },
 @
-\l if it's a really big offset that is not immrot(), no code generation?
+\t if it's a really big offset that is not immrot(), no code generation?
+\t  offset is always 0 according to the grammar so of course it's ok.
+\l note that no indirect jump with conditional jumps
 
 <<[[asmout()]] switch on type cases>>=
 case 6:		/* b O(R) -> add $O,R,PC */
@@ -11322,6 +11345,8 @@ olrr(int a, int sc, int i, int b, int r)
 % >>
 %old: was ^ xor but more logic | I think
 %pad: added int a and moved int sc earlier, like for olr
+%ocaml: take mem_op as a parameter (LDR vs STR) and either type for
+% offset or register, so cleaner
 
 \n actually 5a does not allow this syntax! R1(R2), but 5l can generate it
 
@@ -11792,6 +11817,7 @@ case 33:	/* movh/movhu R,L(R) -> sb, sb */
 \section{Software interrupt opcodes}
 
 %trans:
+
 The final ARM code generation rules concern software interrupts.
 \l actually last instr of ARM, class 7, and bit 24 set
 %
