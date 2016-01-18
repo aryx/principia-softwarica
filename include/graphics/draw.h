@@ -287,9 +287,10 @@ struct Display
 /*s: struct Image */
 struct Image
 {
+    int			id;		/* id of system-held Image */
+
     // ref<Display>
     Display		*display;	/* display holding data */
-    int			id;		/* id of system-held Image */
 
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;	/* clipping region */
