@@ -116,8 +116,10 @@ struct	Memsubfont
 enum {
     Simplesrc=1<<0,
     Simplemask=1<<1,
+
     Replsrc=1<<2,
     Replmask=1<<3,
+
     Fullmask=1<<4,
 };
 /*e: enum _anon_ (include/memdraw.h)2 */
@@ -126,11 +128,14 @@ struct	Memdrawparam
 {
     Memimage *dst;
     Rectangle	r;
+
     Memimage *src;
     Rectangle sr;
+
     Memimage *mask;
     Rectangle mr;
 
+    // enum<Drawop>
     int op;
 
     ulong state;

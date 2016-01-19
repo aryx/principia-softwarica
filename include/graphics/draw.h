@@ -113,7 +113,7 @@ enum drawop
     DoutS	= 1,
 
     S		= SinD|SoutD,
-    SoverD	= SinD|SoutD|DoutS,
+    SoverD	= SinD|SoutD|DoutS, // classic Source over Destination
     SatopD	= SinD|DoutS,
     SxorD	= SoutD|DoutS,
 
@@ -185,6 +185,7 @@ enum {
 
     RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
     ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
+
     ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
 
     XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
@@ -240,7 +241,7 @@ struct Display
     fdt		reffd; // /dev/draw/x/refresh
     /*e: [[Display]] devdraw connection fields */
     /*s: [[Display]] buffer related fields */
-    // drawing operatings to write in /dev/draw/x/data until flush
+    // drawing operations to write in /dev/draw/x/data until flush
     // array<byte>
     byte	*buf;
     int		bufsize;
@@ -258,29 +259,35 @@ struct Display
     // ref_own<Image>
     Image	*transparent;
     /*e: [[Display]] basic images fields */
+    /*s: [[Display]] font fields */
+    Font	*defaultfont;
+    /*x: [[Display]] font fields */
+    Subfont	*defaultsubfont;
+    /*e: [[Display]] font fields */
 
     /*s: [[Display]] other fields */
-    QLock	qlock;
-    int		locking;	/*program is using lockdisplay */
-    /*x: [[Display]] other fields */
-    int		local;
-    char	oldlabel[64];
-    ulong	dataqid;
-    /*x: [[Display]] other fields */
-    bool	_isnewdisplay;
-    /*x: [[Display]] other fields */
     int		imageid;
-    /*x: [[Display]] other fields */
-    Font	*defaultfont;
-    Subfont	*defaultsubfont;
     /*x: [[Display]] other fields */
     // list<ref<Window>> (next = Image.next)
     Image	*windows;
     /*x: [[Display]] other fields */
     Image	*screenimage; // ???
     /*x: [[Display]] other fields */
+    bool	local;
+    ulong	dataqid;
+    bool	_isnewdisplay;
+    /*x: [[Display]] other fields */
+    char	oldlabel[64];
+    /*x: [[Display]] other fields */
     void	(*error)(Display*, char*);
     /*e: [[Display]] other fields */
+
+    // extra
+    /*s: [[Display]] concurrency fields */
+    QLock	qlock;
+    /*x: [[Display]] concurrency fields */
+    bool		locking;	/*program is using lockdisplay */
+    /*e: [[Display]] concurrency fields */
 };
 /*e: struct Display */
 
@@ -335,9 +342,9 @@ struct	Fontchar
  * Subfonts
  *
  * given char c, Subfont *f, Fontchar *i, and Point p, one says
- *	i = f->info+c;
- *	draw(b, Rect(p.x+i->left, p.y+i->top,
- *		p.x+i->left+((i+1)->x-i->x), p.y+i->bottom),
+ *	i = f->info + c;
+ *	draw(b, Rect(p.x + i->left, p.y + i->top,
+ *		p.x + i->left + ((i+1)->x - i->x), p.y + i->bottom),
  *		color, f->bits, Pt(i->x, i->top));
  *	p.x += i->width;
  * to draw characters in the specified color (itself an Image) in Image b.
@@ -351,6 +358,7 @@ struct	Subfont
 
     Fontchar 	*info;		/* n+1 character descriptors */
     Image		*bits;		/* of font */
+
     int		ref;
 };
 /*e: struct Subfont */

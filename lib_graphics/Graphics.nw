@@ -150,7 +150,7 @@ of things happening under the hood to be understood.
 
 Here are a few questions we hope this book will answer:
 \begin{itemize}
-\item How certain graphical elements, rectangles, ellipses, fonts, are
+\item How certain graphical elements, rectangles, ellipses, arcs, are
 rendered on the screen? How the graphics card helps? How
 the kernel helps? 
 
@@ -273,10 +273,12 @@ but which were ultimately discarded:
 
 
 \section{Getting started}
+% x86
 
 % install driver command? #vga?
+% install devdraw #i
 
-% toy graphical app /tests/draw/
+% toy graphical app /tests/draw/ ?
 
 \section{Requirements}
 
@@ -285,7 +287,8 @@ but which were ultimately discarded:
 % most books focused on 3d anyway.
 
 %itemize docs/man/6/...
-% graphics(2), draw(2), 
+% graphics(2)!! great (a few changes though, like screen -> view)
+% draw(2) !!
 % draw(6?) 
 % font(?) image(?)
 
@@ -313,23 +316,25 @@ from Bell Labs.
 
 
 
+
+
 \chapter{Overview}
 
 \section{Graphics system principles}
 
 %https://en.wikipedia.org/wiki/Computer_graphics
 
+% graphics system =~ screen drawing API
+
 % screen made of pixels. Lots of them. Resolution. Depth/encoding.
 % software/hardware interface can be as simple as a framebuffer (e.g. bcm/).
 % pixels, so not continuous! so if draw diagonal, then no that easy actually :)
 % => bresenham algorithm
 
-% graphics system =~ screen drawing API
-
 % horiz/vert lines, rectangle, arbitrary line, polyline, ellipse, arc, bezier,
 % and also text (fonts) which are special kind of pictures
 % colors, alpha, channels, color map
-% composition (porter-duff), clipping
+% "images", composition (porter-duff), clipping
 
 % Vector graphics, rasterization
 
@@ -363,8 +368,13 @@ from Bell Labs.
 %of things (including GUIs, IPC and so on).
 
 \section{A toy graphical application}
+
+% maybe code which initialize kernel? #v and #i
+
 % HelloGraphicalWorld.c ?
 % e.g. colors? clock.c?
+
+% maybe show also can do under rio! magic! (and link to other book)
 
 % see display, image, and draw() generic ops.
 % see that colors that are actually images! very general (maybe too much).
@@ -372,7 +382,6 @@ from Bell Labs.
 
 % maybe can zoom on line to see it's tricky to get diagonals
 % with certain angles.
-
 
 % a bit annoying that have to transform your xy into the final
 % xy ourself by adding view->r.min. Not really "abstraction"
@@ -423,6 +432,7 @@ from Bell Labs.
 %poly.c: draw polylines
 %ellipse.c: draw ellipse, and arcs
 %bezier.c: draw spline
+
 %string.c: draw text
  %stringbg.c
 
@@ -433,7 +443,8 @@ from Bell Labs.
 
 %chan.c: channel functions
 %rgb.c: rgb
-%readcolmap.c:
+
+%readcolmap.c: dead? used in apps?
 %writecolmap.c:
 
 %readimage.c: parse from file
@@ -449,20 +460,22 @@ from Bell Labs.
 
 %mouse.c:
 %keyboard.c:
-%event.c:
-%menuhit.c:
 %getrect.c:
+%menuhit.c:
+
+%event.c:
 %emenuhit.c:
 %egetrect.c:
+
 %scroll.c:
 
 %defont.c: lucm/latin1.9, in uncompressed form
 
 %font.c:
 %buildfont.c:
-%mkfont.c:
-%getdefont.c:
 %openfont.c:
+%mkfont.c: dead?? used in apps?
+%getdefont.c:
 
 %subfont.c:
 %getsubfont.c:
@@ -516,7 +529,8 @@ from Bell Labs.
 %fillpoly.c
 %ellipse.c
 %arc.c
-%string.c
+
+%string.c: seems used only for graphical text mode
 
 %alloc.c: memimage?
 
@@ -667,17 +681,290 @@ from Bell Labs.
 
 \section{Book structure}
 
+
+
+
+
+
 %###############################################################################
 
 \chapter{Core Data Structures}
 
-% below are draw.h big DS and also their pending DS in the kernel.
+% below are the most important DS of draw.h.
+% Also their pending DS in the kernel!
 % many important globals are in libdraw/init.c
 
 % lots of DS to present.
 
+
+\section{[[Point]] and [[Rectangle]]}
+\n put early cos many API mention Point and Rectangle, so core DS
+
+% screen is growing right and down
+% FIGURE! with screen, point and rectangle
+
+
+\subsection{[[Point]]}
+
+<<struct Point>>=
+struct	Point
+{
+    int	x;
+    int	y;
+};
+@
+% int! they are pixels!
+
+
+%ctor
+<<function Pt>>=
+Point
+Pt(int x, int y)
+{
+    Point p;
+
+    p.x = x;
+    p.y = y;
+    return p;
+}
+@
+
+
+<<function eqpt>>=
+bool
+eqpt(Point p, Point q)
+{
+    return p.x==q.x && p.y==q.y;
+}
+@
+
+
+<<global ZP>>=
+Point	ZP;
+@
+
+% arithmetic on points
+
+<<function addpt>>=
+Point
+addpt(Point a, Point b)
+{
+    a.x += b.x;
+    a.y += b.y;
+    return a;
+}
+@
+
+<<function subpt>>=
+Point
+subpt(Point a, Point b)
+{
+    a.x -= b.x;
+    a.y -= b.y;
+    return a;
+}
+@
+
+<<function mulpt>>=
+Point
+mulpt(Point a, int b)
+{
+    a.x *= b;
+    a.y *= b;
+    return a;
+}
+@
+
+<<function divpt>>=
+Point
+divpt(Point a, int b)
+{
+    a.x /= b;
+    a.y /= b;
+    return a;
+}
+@
+
+
+\subsection{[[Rectangle]]}
+
+<<struct Rectangle>>=
+struct Rectangle
+{
+    Point	min;
+    Point	max;
+};
+@
+
+% max is first point outside
+
+%% seen already operations with rectangle in Drawing
+
+%ctor
+<<function Rect>>=
+Rectangle
+Rect(int x, int y, int bx, int by)
+{
+    Rectangle r;
+
+    r.min.x = x;
+    r.min.y = y;
+    r.max.x = bx;
+    r.max.y = by;
+    return r;
+}
+@
+
+%ctor
+<<function Rpt>>=
+Rectangle
+Rpt(Point min, Point max)
+{
+    Rectangle r;
+
+    r.min = min;
+    r.max = max;
+    return r;
+}
+@
+
+
+
+
+<<function eqrect>>=
+bool
+eqrect(Rectangle r, Rectangle s)
+{
+    return r.min.x==s.min.x && r.max.x==s.max.x &&
+           r.min.y==s.min.y && r.max.y==s.max.y;
+}
+@
+
+
+<<global ZR>>=
+Rectangle ZR;
+@
+
+
+
+<<function Dx>>=
+#define	Dx(r)	((r).max.x-(r).min.x)
+@
+
+<<function Dy>>=
+#define	Dy(r)	((r).max.y-(r).min.y)
+@
+
+% arith too
+
+<<function rectaddpt>>=
+Rectangle
+rectaddpt(Rectangle r, Point p)
+{
+    r.min.x += p.x;
+    r.min.y += p.y;
+    r.max.x += p.x;
+    r.max.y += p.y;
+    return r;
+}
+@
+
+<<function rectsubpt>>=
+Rectangle
+rectsubpt(Rectangle r, Point p)
+{
+    r.min.x -= p.x;
+    r.min.y -= p.y;
+    r.max.x -= p.x;
+    r.max.y -= p.y;
+    return r;
+}
+@
+
+
+
+<<function insetrect>>=
+Rectangle
+insetrect(Rectangle r, int n)
+{
+    r.min.x += n;
+    r.min.y += n;
+    r.max.x -= n;
+    r.max.y -= n;
+    return r;
+}
+@
+
+
+<<function rectXrect>>=
+bool
+rectXrect(Rectangle r, Rectangle s)
+{
+    return r.min.x<s.max.x && s.min.x<r.max.x &&
+           r.min.y<s.max.y && s.min.y<r.max.y;
+}
+@
+
+<<function rectinrect>>=
+bool
+rectinrect(Rectangle r, Rectangle s)
+{
+    return s.min.x<=r.min.x && r.max.x<=s.max.x && s.min.y<=r.min.y && r.max.y<=s.max.y;
+}
+@
+
+<<function ptinrect>>=
+bool
+ptinrect(Point p, Rectangle r)
+{
+    return p.x>=r.min.x && p.x<r.max.x &&
+           p.y>=r.min.y && p.y<r.max.y;
+}
+@
+
+
+<<function canonrect>>=
+Rectangle
+canonrect(Rectangle r)
+{
+    int t;
+    if (r.max.x < r.min.x) {
+        t = r.min.x;
+        r.min.x = r.max.x;
+        r.max.x = t;
+    }
+    if (r.max.y < r.min.y) {
+        t = r.min.y;
+        r.min.y = r.max.y;
+        r.max.y = t;
+    }
+    return r;
+}
+@
+
+<<function combinerect>>=
+void
+combinerect(Rectangle *r1, Rectangle r2)
+{
+    if(r1->min.x > r2.min.x)
+        r1->min.x = r2.min.x;
+    if(r1->min.y > r2.min.y)
+        r1->min.y = r2.min.y;
+    if(r1->max.x < r2.max.x)
+        r1->max.x = r2.max.x;
+    if(r1->max.y < r2.max.y)
+        r1->max.y = r2.max.y;
+}
+@
+
+
+
 \section{[[Display]] and [[Client]]}
 % and [[display]]
+
+% connection to device, and client handler!
+
+\subsection{[[Display]]}
 
 % user side, can see it as essentially a connection handler
 <<struct Display>>=
@@ -689,11 +976,18 @@ struct Display
     <<[[Display]] devdraw connection fields>>
     <<[[Display]] buffer related fields>>
     <<[[Display]] basic images fields>>
+    <<[[Display]] font fields>>
 
     <<[[Display]] other fields>>
+
+    // extra
+    <<[[Display]] concurrency fields>>
 };
 @
 % rename image field to screen/view? is it the same than global screen/view?
+
+% why not just a fd to device file? because complex device, device
+% directory actually. and buffer. and other stuff.
 
 % mostly Image and buffer with command to be flushed to device.
 
@@ -740,23 +1034,11 @@ Image	*transparent;
 
 
 
-%XXXXXXXXXX
-<<[[Display]] other fields>>=
-QLock	qlock;
-int		locking;	/*program is using lockdisplay */
-@
-<<[[Display]] other fields>>=
-int		local;
-char	oldlabel[64];
-ulong	dataqid;
-@
-<<[[Display]] other fields>>=
-bool	_isnewdisplay;
-@
 
 
 
 
+\subsection{[[Client]]}
 
 
 % rename KClient! 
@@ -770,39 +1052,27 @@ struct Client
     // enum<drawop>?
     int     op;
 
+    <<[[Client]] screen fields>>
     <<[[Client]] other fields>>
+
     // Extra
+    <<[[Client]] concurrency fields>>
     Ref     r;
 };
 @
 % ref? can share client? if create proc? if attach to another display?
 
-
-%XXXXXXXXXX
-<<[[Client]] other fields>>=
-CScreen*    cscreen;
-
-Refresh*    refresh;
-Rendez      refrend;
-int     refreshme;
-
-byte*   readdata;
-int     nreaddata;
-
-int     busy;
-int     slot;
-int     infoid;
-@
+% manage set of images! draw op state!
 
 
-% put DImage at least? why D?
-% CScreen? DScreen? ...
 
 \section{[[Image]] and [[Memimage]]}
 % and [[screen/view]],  and DImage?
 
 % see technicolor.ps! images in plan9 draw are
 % specials.
+
+\subsection{[[Image]]}
 
 <<struct Image>>=
 struct Image
@@ -825,10 +1095,17 @@ struct Image
     <<[[Image]] extra fields>>
 };
 @
+% display + id => can communicate to kernel what we are talking about.
+
 % read from /dev/draw/new initially when open the connection
 %  see initdisplay() 
 % system-held id! usually 0 for the first image of /dev/draw/new
 % incremented then at each allocimage, thx to Display.imageid field
+
+% clipping notion!!
+% repl notion!!
+% chan notion!!
+
 
 % Image.display is of Display->image? not necessaraly I think, only
 % the main image (screen) is.
@@ -847,8 +1124,8 @@ Image	*view;
 % could maybe also call it image, or window.
 % At the same time with the virtual screen principle, every app thinks it has
 % the whole screen for himself, so maybe it made sense to call this
-% variable screen. But view is good too, less confusing
-% Actually rio use a 'view' global assigned to screen.
+% variable screen. But view is good too, less confusing.
+% Actually rio uses a 'view' global assigned to screen.
 
 
 
@@ -869,6 +1146,7 @@ int		imageid;
 
 %less: hmm actually this is in memdraw.h so maybe
 % it can't be the repl flag in Image.
+
 <<enum fxxx>>=
 enum {
     Frepl	= 1<<0,	/* is replicated */
@@ -880,11 +1158,43 @@ enum {
 };
 @
 % >> >> >> >> >> >>
+% all important notions!
 
 
 
+\subsection{[[DImage]]}
+
+% why D?
+
+<<struct DImage>>=
+/*
+ * Reference counts in DImages:
+ *  one per open by original client
+ *  one per screen image or fill
+ *  one per image derived from this one by name
+ */
+struct DImage
+{
+    int     id;
+
+    int     ref;
+    char    *name;
+    int     vers;
+
+    Memimage*   image;
+
+    int     ascent;
+    int     nfchar;
+    FChar*      fchar;
+
+    DScreen*    dscreen;    /* 0 if not a window */
+    DImage*     fromname;   /* image this one is derived from, by name */
+    DImage*     next;
+};
+@
 
 
+\subsection{[[Memimage]]}
 
 
 <<struct Memimage>>=
@@ -909,6 +1219,33 @@ struct Memimage
 %less: no repl here? yes, it's flags. rename repl?
 % depth is sum of bits per pixel for r/g/b, so for RGB16 it's ... 16
 
+
+% libmemdraw/draw.c
+
+% setup in memimageinit
+<<global memones>>=
+static Memimage*	memones;
+@
+<<global memzeros>>=
+static Memimage*	memzeros;
+@
+
+% pending of Display->white, Display->opaque, etc
+<<global memwhite>>=
+Memimage *memwhite;
+@
+<<global memblack>>=
+Memimage *memblack;
+@
+<<global memtransparent>>=
+Memimage *memtransparent;
+@
+<<global memopaque>>=
+Memimage *memopaque;
+@
+
+
+\subsection{[[Memdata]]}
 
 <<struct Memdata>>=
 /*
@@ -1009,6 +1346,7 @@ wordaddr(Memimage *i, Point p)
 % interface of the raspberry.
 
 % screen.c, relation to Display->image? to screen/view? g? global screen?
+%  rename gview? more consistent with our new naming?
 <<global gscreen>>=
 Memimage *gscreen;
 @
@@ -1053,29 +1391,6 @@ int		allocd;	/* is this malloc'd? */
 @
 
 
-% libmemdraw/draw.c
-
-% setup in memimageinit
-<<global memones>>=
-static Memimage*	memones;
-@
-<<global memzeros>>=
-static Memimage*	memzeros;
-@
-
-% pending of Display->white, Display->opaque, etc
-<<global memwhite>>=
-Memimage *memwhite;
-@
-<<global memblack>>=
-Memimage *memblack;
-@
-<<global memtransparent>>=
-Memimage *memtransparent;
-@
-<<global memopaque>>=
-Memimage *memopaque;
-@
 
 
 
@@ -1087,6 +1402,8 @@ Memimage *memopaque;
 
 % take technicolor.ps example with nice racket like
 % slides where images are arguments of draw(), like slide 9
+
+\subsection{[[Drawop]]}
 
 <<enum drawop>>=
 enum drawop
@@ -1100,7 +1417,7 @@ enum drawop
     DoutS	= 1,
 
     S		= SinD|SoutD,
-    SoverD	= SinD|SoutD|DoutS,
+    SoverD	= SinD|SoutD|DoutS, // classic Source over Destination
     SatopD	= SinD|DoutS,
     SxorD	= SoutD|DoutS,
 
@@ -1114,7 +1431,7 @@ enum drawop
 @
 
 
-
+%XXX
 <<enum _anon_ (include/memdraw.h)2>>=
 /*
  * Encapsulated parameters and information for sub-draw routines.
@@ -1122,12 +1439,16 @@ enum drawop
 enum {
     Simplesrc=1<<0,
     Simplemask=1<<1,
+
     Replsrc=1<<2,
     Replmask=1<<3,
+
     Fullmask=1<<4,
 };
 @
 % >> >> >> >> >>
+
+\subsection{[[Memdrawparam]]}
 
 % technicolor.ps! see draw()
 <<struct Memdrawparam>>=
@@ -1135,11 +1456,14 @@ struct	Memdrawparam
 {
     Memimage *dst;
     Rectangle	r;
+
     Memimage *src;
     Rectangle sr;
+
     Memimage *mask;
     Rectangle mr;
 
+    // enum<Drawop>
     int op;
 
     ulong state;
@@ -1192,6 +1516,7 @@ enum {
 
     RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
     ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
+
     ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
 
     XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
@@ -1207,10 +1532,26 @@ enum {
 
 % argument of what? allocimage?
 
+%  4      4
+% -------------
+% type | nbits
+% -------------
 
 <<function __DC>>=
 #define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
 @
+% >>
+<<function NBITS>>=
+#define NBITS(c) ((c)&15)
+@
+
+
+<<function TYPE>>=
+#define TYPE(c) (((c)>>4)&15)
+@
+% >> >> >>
+
+
 
 <<function CHAN1>>=
 #define CHAN1(a,b)	__DC(a,b)
@@ -1227,15 +1568,8 @@ enum {
 <<function CHAN4>>=
 #define CHAN4(a,b,c,d,e,f,g,h)	(CHAN3((a),(b),(c),(d),(e),(f))<<8|__DC((g),(h)))
 @
-
-<<function NBITS>>=
-#define NBITS(c) ((c)&15)
-@
-
-<<function TYPE>>=
-#define TYPE(c) (((c)>>4)&15)
-@
 % >> >> >>
+
 
 <<function chantodepth>>=
 int
@@ -1245,11 +1579,11 @@ chantodepth(ulong c)
 
     for(n=0; c; c>>=8){
         if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
-            return 0;
+            return 0; // warning?
         n += NBITS(c);
     }
     if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
-        return 0;
+        return 0; // warning?
     return n;
 }
 @
@@ -1259,6 +1593,8 @@ chantodepth(ulong c)
 
 
 \section{Colors}
+
+% typedef ulong color;!
 
 %old school graphics:
 %https://www.youtube.com/watch?v=Tfh0ytz8S0k&feature=youtu.be
@@ -1310,24 +1646,6 @@ enum
 @
 %less: typedef unsigned int rbga; ?
 
-\section{Color map}
-% need color map if use RGBA32? hmm but VGA seems to be limited to depth 8
-% maybe could move in advanced topics?
-
-% CMAP vs RGB????
-
-<<[[MemImage]] other fields>>=
-Memcmap	*cmap;
-@
-
-<<struct Memcmap>>=
-struct Memcmap
-{
-    uchar	cmap2rgb[3*256];
-    uchar	rgb2cmap[16*16*16];
-};
-@
-
 
 % dead? seems not very used, was in arith.c
 <<function setalpha>>=
@@ -1348,6 +1666,25 @@ setalpha(ulong color, uchar alpha)
 @
 % >> >> >> >>
 % that simple? :) to set alpha you just dillute each rgb components?
+
+
+\section{Color map}
+% need color map if use RGBA32? hmm but VGA seems to be limited to depth 8
+% maybe could move in advanced topics?
+
+% CMAP vs RGB????
+
+<<[[MemImage]] other fields>>=
+Memcmap	*cmap;
+@
+
+<<struct Memcmap>>=
+struct Memcmap
+{
+    uchar	cmap2rgb[3*256];
+    uchar	rgb2cmap[16*16*16];
+};
+@
 
 
 % there is an optimized but less appealing version in comment below
@@ -1416,6 +1753,10 @@ cmap2rgba(int c)
 
 \section{[[Font]] and [[Subfont]]}
 % and [[font]]
+% present later? already lots of DS to understand ...
+
+
+\subsection{[[Font]]}
 
 <<struct Font>>=
 struct Font
@@ -1446,8 +1787,13 @@ Font	*font;
 @
 
 
-<<[[Display]] other fields>>=
+<<[[Display]] font fields>>=
 Font	*defaultfont;
+@
+
+\subsection{[[Subfont]]}
+
+<<[[Display]] font fields>>=
 Subfont	*defaultsubfont;
 @
 
@@ -1456,9 +1802,9 @@ Subfont	*defaultsubfont;
  * Subfonts
  *
  * given char c, Subfont *f, Fontchar *i, and Point p, one says
- *	i = f->info+c;
- *	draw(b, Rect(p.x+i->left, p.y+i->top,
- *		p.x+i->left+((i+1)->x-i->x), p.y+i->bottom),
+ *	i = f->info + c;
+ *	draw(b, Rect(p.x + i->left, p.y + i->top,
+ *		p.x + i->left + ((i+1)->x - i->x), p.y + i->bottom),
  *		color, f->bits, Pt(i->x, i->top));
  *	p.x += i->width;
  * to draw characters in the specified color (itself an Image) in Image b.
@@ -1472,6 +1818,7 @@ struct	Subfont
 
     Fontchar 	*info;		/* n+1 character descriptors */
     Image		*bits;		/* of font */
+
     int		ref;
 };
 @
@@ -1488,6 +1835,7 @@ struct	Fontchar
 @
 
 
+\subsection{[[Memsubfont]]}
 
 
 <<struct Memsubfont>>=
@@ -1514,9 +1862,10 @@ struct	Memsubfont
     Memimage	*bits;		/* of font */
 };
 @
-
+% the Memimage!!
 
 \section{Windows and layers}
+% delay to later?
 
 % What we have seen was already very complicated, lots of architecture layers,
 % wrapper data structures. A real onion.
@@ -1532,12 +1881,11 @@ Image		*next;	/* next in list of windows */
 @
 
 
+%XXX
 <<[[Display]] other fields>>=
 Image	*screenimage; // ???
 @
 % ???? different from Display.image?
-
-
 
 
 <<[[Image]] other fields>>=
@@ -1556,20 +1904,24 @@ Memlayer	*layer;	/* nil if not a layer*/
 
 
 
+
+
+
+
 \chapter{Initialization}
 
 \section{Kernel side}
-% also kinda "Server side"
-% hmm maybe better to see first user side?
+% also kinda "Server side". Better to see first user side?
 
 \subsection{Mounting the draw device}
 
 % see kernel init
 % bind #i /dev
 %  bind_safe("#i", "/dev", MAFTER); // devdraw
+% after vga device has been installed (so attachscreen can work)
 
 
-% ??sysbind?? -> <> (drawdevtab.attach <- toplevel)
+% ??sysbind?? -> <> (drawdevtab.attach = <> <- toplevel)
 <<function drawattach>>=
 static Chan*
 drawattach(char *spec)
@@ -1583,6 +1935,40 @@ drawattach(char *spec)
     return devattach('i', spec);
 }
 @
+% dlock/dunlock?
+
+
+<<global drawlock>>=
+QLock   drawlock;
+@
+
+<<function dlock>>=
+static void
+dlock(void)
+{
+    qlock(&drawlock);
+}
+@
+
+<<function candlock>>=
+static int
+candlock(void)
+{
+    return canqlock(&drawlock);
+}
+@
+
+<<function dunlock>>=
+static void
+dunlock(void)
+{
+    qunlock(&drawlock);
+}
+@
+% this is kernel side. because shared DS.
+% client side you may have to use lockdisplay() to protect user DS
+%  if multi process.
+
 
 % drawattach -> <>
 <<function initscreenimage>>=
@@ -1603,6 +1989,7 @@ initscreenimage(void)
 @
 
 % put in core DS chapter? merge with screen.h gscreen no?
+% the frame buffer!! (at least call like that in error msg when nil)
 <<global screenimage>>=
 static  Memimage    *screenimage;
 @
@@ -1616,7 +2003,7 @@ static  DImage* screendimage;
 
 
 
-% initscreenimage -> <>
+% sysbind -> drawattach -> initscreenimage -> <>
 % less: rename makescreendimage? it returns a DImage here
 <<function makescreenimage>>=
 static DImage*
@@ -1632,6 +2019,7 @@ makescreenimage(void)
     md = malloc(sizeof(Memdata));
     if(md == nil)
         return nil;
+
     md->allocd = 1;
     md->base = nil;
     md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
@@ -1700,6 +2088,8 @@ Lock vgascreenlock;
 static void *softscreen;
 @
 %gscreendata.bdata?
+
+%  run("/bin/vga", "-l", "1024x768x8", nil); // can add -V to debug vga
 
 
 % ???aux/vga -> <>
@@ -1779,10 +2169,7 @@ screensize(int x, int y, int z, ulong chan)
 void
 memimageinit(void)
 {
-    static bool didinit = false;
-    if(didinit)
-        return;
-    didinit = true;
+    <<[[memimageinit()]] only once guard>>
 
     if(  strcmp(imagmem->name, "Image") == 0 
       || strcmp(imagmem->name, "image") == 0
@@ -1792,8 +2179,7 @@ memimageinit(void)
     mktables();
     _memmkcmap();
 
-    fmtinstall('R', Rfmt); 
-    fmtinstall('P', Pfmt);
+    <<[[memimageinit()]] install dumpers>>
     fmtinstall('b', _ifmt);
 
     memzeros = allocmemimage(Rect(0,0,1,1), GREY1);
@@ -1815,9 +2201,18 @@ memimageinit(void)
     memtransparent = memzeros;
 }
 @
+% 0x3FFFFFF? means infinite?
+
+<<[[memimageinit()]] only once guard>>=
+static bool didinit = false;
+if(didinit)
+    return;
+didinit = true;
+@
+
 
 % kernel interface?
-% memimageinit -> imag->move = <>
+% ??? -> <> (imag->move = <> <- memimageinit)
 <<function memimagemove>>=
 void
 memimagemove(void *from, void *to)
@@ -1858,7 +2253,12 @@ static uchar conv48[256][2];
 @
 
 
+<<global tablesbuilt>>=
+static bool	tablesbuilt;
+@
+% could be static in mktables
 
+% ?? -> screensize -> memimageinit -> <>
 <<function mktables>>=
 static void
 mktables(void)
@@ -1867,10 +2267,10 @@ mktables(void)
         
     if(tablesbuilt)
         return;
+    tablesbuilt = true;
 
     fmtinstall('R', Rfmt);
     fmtinstall('P', Pfmt);
-    tablesbuilt = 1;
 
     /* bit replication up to 8 bits */
     for(i=0; i<256; i++){
@@ -1899,6 +2299,9 @@ mktables(void)
 
 \subsection{[[initdraw()]]}
 
+% see code of toy graphical app, initdraw(); which should set
+% global [[display]] and [[view]].
+
 <<function initdraw>>=
 errorneg1
 initdraw(void(*error)(Display*, char*), char *fontname , char *label)
@@ -1918,9 +2321,7 @@ initdraw(void(*error)(Display*, char*), char *fontname , char *label)
 errorneg1
 geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *label, char *windir, int ref)
 {
-    int fd, n;
-    Subfont *df;
-    char buf[128];
+    <<[[geninitdraw()]] locals>>
 
     display = initdisplay(devdir, windir, error);
     if(display == nil)
@@ -1935,22 +2336,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
     return OK_1;
 }
 @
-
-<<function drawshutdown>>=
-/* note handler */
-static void
-drawshutdown(void)
-{
-    Display *d;
-
-    d = display;
-    if(d){
-        display = nil;
-        _closedisplay(d, 1);
-    }
-}
-@
-
+% modify the global!
 
 \subsection{[[initdisplay()]]}
 
@@ -2037,6 +2423,7 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
         goto Error2;
     }
 
+    // our display!
     disp = mallocz(sizeof(Display), 1);
 
     if(disp == nil){
@@ -2108,17 +2495,25 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 
     dir = dirfstat(ctlfd);
     if(dir!=nil && dir->type=='i'){
-        disp->local = 1;
+        disp->local = true;
         disp->dataqid = dir->qid.path;
     }
     if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
-        disp->_isnewdisplay = 1;
+        disp->_isnewdisplay = true;
     free(dir);
 
     return disp;
 }
 @
+% refresh is important?
 
+%dead dataqid?
+%dead local?
+<<[[Display]] other fields>>=
+bool	local;
+ulong	dataqid;
+bool	_isnewdisplay;
+@
 
 
 <<[[initdisplay()]] check arguments validity>>=
@@ -2150,13 +2545,29 @@ if(t == nil)
 void
 closedisplay(Display *disp)
 {
-    _closedisplay(disp, 0);
+    _closedisplay(disp, false);
 }
 @
 
+<<function drawshutdown>>=
+/* note handler */
+static void
+drawshutdown(void)
+{
+    Display *d;
+
+    d = display;
+    if(d){
+        display = nil;
+        _closedisplay(d, true);
+    }
+}
+@
+
+
 <<function _closedisplay>>=
 static void
-_closedisplay(Display *disp, int isshutdown)
+_closedisplay(Display *disp, bool isshutdown)
 {
     int fd;
     char buf[128];
@@ -2165,14 +2576,8 @@ _closedisplay(Display *disp, int isshutdown)
         return;
     if(disp == display)
         display = nil;
-    if(disp->oldlabel[0]){
-        snprint(buf, sizeof buf, "%s/label", disp->windir);
-        fd = open(buf, OWRITE);
-        if(fd >= 0){
-            write(fd, disp->oldlabel, strlen(disp->oldlabel));
-            close(fd);
-        }
-    }
+
+    <<[[_closedisplay()]] if oldlabel>>
 
     /*
      * if we're shutting down, don't free all the resources.
@@ -2196,21 +2601,34 @@ _closedisplay(Display *disp, int isshutdown)
 }
 @
 
+
 \section{Fonts}
+
+
+<<[[geninitdraw()]] locals>>=
+int fd, n;
+Subfont *df;
+char buf[128];
+@
 
 <<[[geninitdraw()]] set up font>>=
 /*
  * Set up default font
  */
+
+// Set up default subfont
 df = getdefont(display);
 display->defaultsubfont = df;
+
 if(df == nil){
     fprint(2, "imageinit: can't open default subfont: %r\n");
 Error:
     closedisplay(display);
     display = nil;
-    return -1;
+    return ERROR_NEG1;
 }
+
+// Set up default font
 if(fontname == nil){
     fd = open("/env/font", OREAD);
     if(fd >= 0){
@@ -2245,7 +2663,219 @@ if(fontname == nil){
 display->defaultfont = font;
 @
 
+<<global deffontname>>=
+static char deffontname[] = "*default*";
+@
+
+
+% when /env/font empty
+<<function buildfont>>=
+Font*
+buildfont(Display *d, char *buf, char *name)
+{
+    Font *fnt;
+    Cachefont *c;
+    char *s, *t;
+    ulong min, max;
+    int offset;
+    char badform[] = "bad font format: number expected (char position %d)";
+
+    s = buf;
+    fnt = malloc(sizeof(Font));
+    if(fnt == 0)
+        return 0;
+    memset(fnt, 0, sizeof(Font));
+    fnt->display = d;
+    fnt->name = strdup(name);
+    fnt->ncache = NFCACHE+NFLOOK;
+    fnt->nsubf = NFSUBF;
+    fnt->cache = malloc(fnt->ncache * sizeof(fnt->cache[0]));
+    fnt->subf = malloc(fnt->nsubf * sizeof(fnt->subf[0]));
+    if(fnt->name==0 || fnt->cache==0 || fnt->subf==0){
+    Err2:
+        free(fnt->name);
+        free(fnt->cache);
+        free(fnt->subf);
+        free(fnt->sub);
+        free(fnt);
+        return 0;
+    }
+    fnt->height = strtol(s, &s, 0);
+    s = skip(s);
+    fnt->ascent = strtol(s, &s, 0);
+    s = skip(s);
+    if(fnt->height<=0 || fnt->ascent<=0){
+        werrstr("bad height or ascent in font file");
+        goto Err2;
+    }
+    fnt->width = 0;
+    fnt->nsub = 0;
+    fnt->sub = 0;
+
+    memset(fnt->subf, 0, fnt->nsubf * sizeof(fnt->subf[0]));
+    memset(fnt->cache, 0, fnt->ncache*sizeof(fnt->cache[0]));
+    fnt->age = 1;
+    do{
+        /* must be looking at a number now */
+        if(*s<'0' || '9'<*s){
+            werrstr(badform, s-buf);
+            goto Err3;
+        }
+        min = strtol(s, &s, 0);
+        s = skip(s);
+        /* must be looking at a number now */
+        if(*s<'0' || '9'<*s){
+            werrstr(badform, s-buf);
+            goto Err3;
+        }
+        max = strtol(s, &s, 0);
+        s = skip(s);
+        if(*s==0 || min>=Runemax || max>=Runemax || min>max){
+            werrstr("illegal subfont range");
+    Err3:
+            freefont(fnt);
+            return 0;
+        }
+        t = s;
+        offset = strtol(s, &t, 0);
+        if(t>s && (*t==' ' || *t=='\t' || *t=='\n'))
+            s = skip(t);
+        else
+            offset = 0;
+        fnt->sub = realloc(fnt->sub, (fnt->nsub+1)*sizeof(Cachefont*));
+        if(fnt->sub == 0){
+            /* realloc manual says fnt->sub may have been destroyed */
+            fnt->nsub = 0;
+            goto Err3;
+        }
+        c = malloc(sizeof(Cachefont));
+        if(c == 0)
+            goto Err3;
+        fnt->sub[fnt->nsub] = c;
+        c->min = min;
+        c->max = max;
+        c->offset = offset;
+        t = s;
+        while(*s && *s!=' ' && *s!='\n' && *s!='\t')
+            s++;
+        *s++ = 0;
+        c->subfontname = 0;
+        c->name = strdup(t);
+        if(c->name == 0){
+            free(c);
+            goto Err3;
+        }
+        s = skip(s);
+        fnt->nsub++;
+    }while(*s);
+    return fnt;
+}
+@
+
+
+<<function skip>>=
+static char*
+skip(char *s)
+{
+    while(*s==' ' || *s=='\n' || *s=='\t')
+        s++;
+    return s;
+}
+@
+
+
+<<function freefont>>=
+void
+freefont(Font *f)
+{
+    int i;
+    Cachefont *c;
+    Subfont *s;
+
+    if(f == 0)
+        return;
+
+    for(i=0; i<f->nsub; i++){
+        c = f->sub[i];
+        free(c->subfontname);
+        free(c->name);
+        free(c);
+    }
+    for(i=0; i<f->nsubf; i++){
+        s = f->subf[i].f;
+        if(s && display && s!=display->defaultsubfont)
+            freesubfont(s);
+    }
+    freeimage(f->cacheimage);
+    free(f->name);
+    free(f->cache);
+    free(f->subf);
+    free(f->sub);
+    free(f);
+}
+@
+
+<<function freesubfont>>=
+void
+freesubfont(Subfont *f)
+{
+    if(f == 0)
+        return;
+    f->ref--;
+    if(f->ref > 0)
+        return;
+    uninstallsubfont(f);
+    free(f->info);	/* note: f->info must have been malloc'ed! */
+    freeimage(f->bits);
+    free(f);
+}
+@
+
+% when /env/font non empty I think
+% less important, like buildfont but read from file
+<<function openfont>>=
+Font*
+openfont(Display *d, char *name)
+{
+    Font *fnt;
+    int fd, i, n;
+    char *buf;
+    Dir *dir;
+
+    fd = open(name, OREAD);
+    if(fd < 0)
+        return 0;
+
+    dir = dirfstat(fd);
+    if(dir == nil){
+    Err0:
+        close(fd);
+        return 0;
+    }
+    n = dir->length;
+    free(dir);
+    buf = malloc(n+1);
+    if(buf == 0)
+        goto Err0;
+    buf[n] = 0;
+    i = read(fd, buf, n);
+    close(fd);
+    if(i != n){
+        free(buf);
+        return 0;
+    }
+    fnt = buildfont(d, buf, name);
+    free(buf);
+    return fnt;
+}
+@
+
+
+
 \section{Label}
+% put in Window chapter?
+
+% so can identify the window when hidden
 
 <<[[geninitdraw()]] write label>>=
 /*
@@ -2262,6 +2892,21 @@ if(label){
             write(fd, label, strlen(label));
             close(fd);
         }
+    }
+}
+@
+
+<<[[Display]] other fields>>=
+char	oldlabel[64];
+@
+
+<<[[_closedisplay()]] if oldlabel>>=
+if(disp->oldlabel[0]){
+    snprint(buf, sizeof buf, "%s/label", disp->windir);
+    fd = open(buf, OWRITE);
+    if(fd >= 0){
+        write(fd, disp->oldlabel, strlen(disp->oldlabel));
+        close(fd);
     }
 }
 @
@@ -2354,6 +2999,11 @@ getwindow(Display *d, int ref)
 }
 @
 
+
+
+
+
+
 \chapter{User/Kernel Bridge}
 
 % some kind of RPC and protocol
@@ -2394,12 +3044,619 @@ Dev drawdevtab = {
 % Seen drawattach() in previous section already.
 % Need understand part of Kernel.nw.
 
+
+<<enum _anon_ (kernel/devices/screen/devdraw.c)>>=
+enum
+{
+    Qtopdir     = 0,
+
+    Qnew,
+
+    Qwinname,
+    Q3rd,
+    Q2nd,
+    Qcolormap,
+
+    Qctl,
+    Qdata, // all the operations, drawmesg()
+
+    Qrefresh,
+};
+@
+
+
+<<constant QSHIFT>>=
+/*
+ * Qid path is:
+ *   4 bits of file type (qids above)
+ *  24 bits of mux slot number +1; 0 means not attached to client
+ */
+#define QSHIFT  4   /* location in qid of client # */
+@
+
+<<function QID bis>>=
+#define QID(q)      ((((ulong)(q).path)&0x0000000F)>>0)
+@
+
+<<function CLIENTPATH>>=
+#define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
+@
+%//#define CLIENT(q)   CLIENTPATH((q).path)
+
+
+
+
+\subsection{[[KDraw]] and [[sdraw]]}
+
+<<struct KDraw>>=
+struct KDraw
+{
+    int     clientid;
+
+    int     nclient;
+    Client**    client;
+
+    int     nname;
+
+    DName*  name;
+
+    int     vers;
+    int     softscreen;
+
+    ulong   savemap[3*256];
+
+    <<[[KDraw]] other fields>>
+};
+@
+
+<<global sdraw>>=
+static  KDraw        sdraw;
+@
+% why sdraw? why not kdraw?
+
+\subsection{[[drawwalk()]]}
+
+<<function drawwalk>>=
+static Walkqid*
+drawwalk(Chan *c, Chan *nc, char **name, int nname)
+{
+    if(screenimage == nil)
+        error("no frame buffer");
+    return devwalk(c, nc, name, nname, 0, 0, drawgen);
+}
+@
+
+% -> <>
+<<function drawgen>>=
+static int
+drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
+{
+    int t;
+    Qid q;
+    ulong path;
+    Client *cl;
+
+    q.vers = 0;
+
+    if(s == DEVDOTDOT){
+        switch(QID(c->qid)){
+        case Qtopdir:
+        case Q2nd:
+            mkqid(&q, Qtopdir, 0, QTDIR);
+            devdir(c, q, "#i", 0, eve, 0500, dp);
+            break;
+        case Q3rd:
+            cl = drawclientofpath(c->qid.path);
+            if(cl == nil)
+                strncpy(up->genbuf, "??", sizeof up->genbuf);
+            else
+                snprint(up->genbuf, sizeof up->genbuf,
+                    "%d", cl->clientid);
+            mkqid(&q, Q2nd, 0, QTDIR);
+            devdir(c, q, up->genbuf, 0, eve, 0500, dp);
+            break;
+        default:
+            panic("drawwalk %llux", c->qid.path);
+        }
+        return 1;
+    }
+
+    /*
+     * Top level directory contains the name of the device.
+     */
+    t = QID(c->qid);
+    if(t == Qtopdir){
+        switch(s){
+        case 0:
+            mkqid(&q, Q2nd, 0, QTDIR);
+            devdir(c, q, "draw", 0, eve, 0555, dp);
+            break;
+        case 1:
+            mkqid(&q, Qwinname, 0, QTFILE);
+            devdir(c, q, "winname", 0, eve, 0444, dp);
+            break;
+        default:
+            return -1;
+        }
+        return 1;
+    }
+
+    if(t == Qwinname){
+        mkqid(&q, Qwinname, 0, QTFILE);
+        devdir(c, q, "winname", 0, eve, 0444, dp);
+        return 1;
+    }
+
+    /*
+     * Second level contains "new" plus all the clients.
+     */
+    if(t == Q2nd || t == Qnew){
+        if(s == 0){
+            mkqid(&q, Qnew, 0, QTFILE);
+            devdir(c, q, "new", 0, eve, 0666, dp);
+        }
+        else if(s <= sdraw.nclient){
+            cl = sdraw.client[s-1];
+            if(cl == 0)
+                return 0;
+            snprint(up->genbuf, sizeof up->genbuf, "%d",
+                cl->clientid);
+            mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
+            devdir(c, q, up->genbuf, 0, eve, 0555, dp);
+            return 1;
+        }
+        else
+            return -1;
+        return 1;
+    }
+
+    /*
+     * Third level.
+     */
+    path = c->qid.path&~((1<<QSHIFT)-1);    /* slot component */
+    q.vers = c->qid.vers;
+    q.type = QTFILE;
+    switch(s){
+    case 0:
+        q.path = path|Qcolormap;
+        devdir(c, q, "colormap", 0, eve, 0600, dp);
+        break;
+    case 1:
+        q.path = path|Qctl;
+        devdir(c, q, "ctl", 0, eve, 0600, dp);
+        break;
+    case 2:
+        q.path = path|Qdata;
+        devdir(c, q, "data", 0, eve, 0600, dp);
+        break;
+    case 3:
+        q.path = path|Qrefresh;
+        devdir(c, q, "refresh", 0, eve, 0400, dp);
+        break;
+    default:
+        return -1;
+    }
+    return 1;
+}
+@
+% >> >>
+
+
+
+
+\subsection{[[drawopen()]]}
+
+<<function drawopen>>=
+static Chan*
+drawopen(Chan *c, int omode)
+{
+    Client *cl;
+    DName *dn;
+    DImage *di;
+
+    if(c->qid.type & QTDIR){
+        c = devopen(c, omode, 0, 0, drawgen);
+        c->iounit = IOUNIT;
+    }
+
+    dlock();
+    if(waserror()){
+        dunlock();
+        nexterror();
+    }
+
+    if(QID(c->qid) == Qnew){
+        cl = drawnewclient();
+        if(cl == 0)
+            error(Enodev);
+        c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
+    }
+
+    switch(QID(c->qid)){
+    case Qwinname:
+        break;
+
+    case Qnew:
+        break;
+
+    case Qctl:
+        cl = drawclient(c);
+
+        if(cl->busy)
+            error(Einuse);
+        cl->busy = true;
+
+        flushrect = Rect(10000, 10000, -10000, -10000);
+        dn = drawlookupname(strlen(screenname), screenname);
+        if(dn == 0)
+            error("draw: cannot happen 2");
+
+        if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
+            error(Edrawmem);
+
+        di = drawlookup(cl, 0, 0);
+        if(di == 0)
+            error("draw: cannot happen 1");
+
+        di->vers = dn->vers;
+        di->name = smalloc(strlen(screenname)+1);
+        strcpy(di->name, screenname);
+        di->fromname = dn->dimage;
+        di->fromname->ref++;
+        incref(&cl->r);
+        break;
+
+    case Qcolormap:
+    case Qdata:
+    case Qrefresh:
+        cl = drawclient(c);
+        incref(&cl->r);
+        break;
+    }
+
+    dunlock();
+    poperror();
+
+    c->mode = openmode(omode);
+    c->flag |= COPEN;
+    c->offset = 0;
+    c->iounit = IOUNIT;
+
+    return c;
+}
+@
+% >> 
+
+\subsection{[[drawclose()]]}
+
+<<function drawclose>>=
+static void
+drawclose(Chan *c)
+{
+    int i;
+    DImage *d, **dp;
+    Client *cl;
+    Refresh *r;
+
+    if(QID(c->qid) < Qcolormap) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
+        return;
+    dlock();
+    if(waserror()){
+        dunlock();
+        nexterror();
+    }
+
+    cl = drawclient(c);
+    if(QID(c->qid) == Qctl)
+        cl->busy = false;
+    if((c->flag&COPEN) && (decref(&cl->r)==0)){
+        while(r = cl->refresh){ /* assign = */
+            cl->refresh = r->next;
+            free(r);
+        }
+        /* free names */
+        for(i=0; i<sdraw.nname; )
+            if(sdraw.name[i].client == cl)
+                drawdelname(sdraw.name+i);
+            else
+                i++;
+        while(cl->cscreen)
+            drawuninstallscreen(cl, cl->cscreen);
+        /* all screens are freed, so now we can free images */
+        dp = cl->dimage;
+        for(i=0; i<NHASH; i++){
+            while((d = *dp) != nil){
+                *dp = d->next;
+                drawfreedimage(d);
+            }
+            dp++;
+        }
+        sdraw.client[cl->slot] = 0;
+        drawflush();    /* to erase visible, now dead windows */
+        free(cl);
+    }
+    dunlock();
+    poperror();
+}
+@
+
+\subsection{[[drawread()]]}
+
+<<function drawread>>=
+long
+drawread(Chan *c, void *a, long n, vlong off)
+{
+    int index, m;
+    ulong red, green, blue;
+    Client *cl;
+    uchar *p;
+    Refresh *r;
+    DImage *di;
+    Memimage *i;
+    ulong offset = off;
+    char buf[16];
+
+    if(c->qid.type & QTDIR)
+        return devdirread(c, a, n, 0, 0, drawgen);
+    if(QID(c->qid) == Qwinname)
+        return readstr(off, a, n, screenname);
+
+    cl = drawclient(c);
+    dlock();
+    if(waserror()){
+        dunlock();
+        nexterror();
+    }
+    switch(QID(c->qid)){
+    case Qctl:
+        if(n < 12*12)
+            error(Eshortread);
+        if(cl->infoid < 0)
+            error(Enodrawimage);
+        if(cl->infoid == 0){
+            i = screenimage;
+            if(i == nil)
+                error(Enodrawimage);
+        }else{
+            di = drawlookup(cl, cl->infoid, 1);
+            if(di == nil)
+                error(Enodrawimage);
+            i = di->image;
+        }
+        n = snprint(a, n,
+            "%11d %11d %11s %11d %11d %11d %11d %11d %11d %11d %11d %11d ",
+            cl->clientid, cl->infoid, chantostr(buf, i->chan),
+            (i->flags&Frepl)==Frepl,
+            i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y,
+            i->clipr.min.x, i->clipr.min.y, i->clipr.max.x,
+            i->clipr.max.y);
+        cl->infoid = -1;
+        break;
+
+    case Qcolormap:
+        drawactive(true);  /* to restore map from backup */
+        p = malloc(4*12*256+1);
+        if(p == 0)
+            error(Enomem);
+        m = 0;
+        for(index = 0; index < 256; index++){
+            getcolor(index, &red, &green, &blue);
+            m += snprint((char*)p+m, 4*12*256+1 - m,
+                "%11d %11lud %11lud %11lud\n", index,
+                red>>24, green>>24, blue>>24);
+        }
+        n = readstr(offset, a, n, (char*)p);
+        free(p);
+        break;
+
+    case Qdata:
+        if(cl->readdata == nil)
+            error("no draw data");
+        if(n < cl->nreaddata)
+            error(Eshortread);
+        n = cl->nreaddata;
+        memmove(a, cl->readdata, cl->nreaddata);
+        free(cl->readdata);
+        cl->readdata = nil;
+        break;
+
+    case Qrefresh:
+        if(n < 5*4)
+            error(Ebadarg);
+        for(;;){
+            if(cl->refreshme || cl->refresh)
+                break;
+            dunlock();
+            if(waserror()){
+                dlock();    /* restore lock for waserror() above */
+                nexterror();
+            }
+            sleep(&cl->refrend, drawrefactive, cl);
+            poperror();
+            dlock();
+        }
+        p = a;
+        while(cl->refresh && n>=5*4){
+            r = cl->refresh;
+            BPLONG(p+0*4, r->dimage->id);
+            BPLONG(p+1*4, r->r.min.x);
+            BPLONG(p+2*4, r->r.min.y);
+            BPLONG(p+3*4, r->r.max.x);
+            BPLONG(p+4*4, r->r.max.y);
+            cl->refresh = r->next;
+            free(r);
+            p += 5*4;
+            n -= 5*4;
+        }
+        cl->refreshme = 0;
+        n = p-(uchar*)a;
+        break;
+    }
+    dunlock();
+    poperror();
+    return n;
+}
+@
+
+<<function drawwakeall>>=
+void
+drawwakeall(void)
+{
+    Client *cl;
+    int i;
+
+    for(i=0; i<sdraw.nclient; i++){
+        cl = sdraw.client[i];
+        if(cl && (cl->refreshme || cl->refresh))
+            wakeup(&cl->refrend);
+    }
+}
+@
+
+\subsection{[[drawwrite()]]}
+
+<<function drawwrite>>=
+static long
+drawwrite(Chan *c, void *a, long n, vlong)
+{
+    char buf[128], *fields[4], *q;
+    Client *cl;
+    int i, m, red, green, blue, x;
+
+    if(c->qid.type & QTDIR)
+        error(Eisdir);
+    cl = drawclient(c);
+    dlock();
+    if(waserror()){
+        drawwakeall();
+        dunlock();
+        nexterror();
+    }
+    switch(QID(c->qid)){
+    case Qctl:
+        if(n != 4)
+            error("unknown draw control request");
+        cl->infoid = BGLONG((uchar*)a);
+        break;
+
+    case Qcolormap:
+        drawactive(true);  /* to restore map from backup */
+        m = n;
+        n = 0;
+        while(m > 0){
+            x = m;
+            if(x > sizeof(buf)-1)
+                x = sizeof(buf)-1;
+            q = memccpy(buf, a, '\n', x);
+            if(q == 0)
+                break;
+            i = q-buf;
+            n += i;
+            a = (char*)a + i;
+            m -= i;
+            *q = 0;
+            if(tokenize(buf, fields, nelem(fields)) != 4)
+                error(Ebadarg);
+            i = strtoul(fields[0], 0, 0);
+            red = strtoul(fields[1], 0, 0);
+            green = strtoul(fields[2], 0, 0);
+            blue = strtoul(fields[3], &q, 0);
+            if(fields[3] == q)
+                error(Ebadarg);
+            if(red>255 || green>255 || blue>255 || i<0 || i>255)
+                error(Ebadarg);
+            red |= red<<8;
+            red |= red<<16;
+            green |= green<<8;
+            green |= green<<16;
+            blue |= blue<<8;
+            blue |= blue<<16;
+            setcolor(i, red, green, blue);
+        }
+        break;
+
+    case Qdata:
+        drawmesg(cl, a, n);
+        drawwakeall();
+        break;
+
+    default:
+        error(Ebadusefd);
+    }
+    dunlock();
+    poperror();
+    return n;
+}
+@
+
+\section{Draw device files}
+
 \subsection{[[/dev/draw/new]]}
 % and Client?
+
+% sysopen -> ... <>
+<<function drawnewclient>>=
+Client*
+drawnewclient(void)
+{
+    Client *cl, **cp;
+    int i;
+
+    for(i=0; i<sdraw.nclient; i++){
+        cl = sdraw.client[i];
+        if(cl == 0)
+            break;
+    }
+    if(i == sdraw.nclient){
+        cp = malloc((sdraw.nclient+1)*sizeof(Client*));
+        if(cp == 0)
+            return 0;
+        memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
+        free(sdraw.client);
+        sdraw.client = cp;
+        sdraw.nclient++;
+        cp[i] = 0;
+    }
+    cl = malloc(sizeof(Client));
+    if(cl == 0)
+        return 0;
+    memset(cl, 0, sizeof(Client));
+    cl->slot = i;
+    cl->clientid = ++sdraw.clientid;
+    cl->op = SoverD;
+    sdraw.client[i] = cl;
+    return cl;
+}
+@
+
+<<[[Client]] other fields>>=
+int     slot;
+@
+
+
+\subsection{[[/dev/draw/x/ctl]]}
+
+<<[[Client]] concurrency fields>>=
+bool     busy;
+@
+
+<<[[Client]] other fields>>=
+int     infoid;
+@
+% related to named image too
 
 
 \subsection{[[/dev/draw/x/data]]}
 % and DImage?
+
+<<[[Client]] other fields>>=
+byte*   readdata;
+int     nreaddata;
+@
+
+
+\subsection{[[/dev/draw/x/refresh]]}
+% adv topics
 
 \section{Draw message protocol}
 % pipeline?
@@ -2407,6 +3664,8 @@ Dev drawdevtab = {
 \subsection{API}
 
 \subsection{Marshalling}
+
+% BG? BP?
 
 <<function BGSHORT>>=
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
@@ -2425,7 +3684,7 @@ Dev drawdevtab = {
 
 
 <<[[Display]] buffer related fields>>=
-// drawing operatings to write in /dev/draw/x/data until flush
+// drawing operations to write in /dev/draw/x/data until flush
 // array<byte>
 byte	*buf;
 int		bufsize;
@@ -2445,7 +3704,7 @@ bufimage(Display *d, int n)
         werrstr("bad count in bufimage");
         return nil;
     }
-    if(d->bufp+n >  d->buf + d->bufsize)
+    if(d->bufp + n  >  d->buf + d->bufsize)
         if(doflush(d) < 0)
             return nil;
     p = d->bufp;
@@ -2464,6 +3723,7 @@ char *fmt = nil;
 % m is for storing how much bytes were read for this message,
 % so the loop on the buffer can go on and process the next message
 
+%XXX
 <<[[drawmesg()]] locals>>=
 int c, repl, y, dstid, scrnid, ni, ci, j, nw, e0, e1, op, ox, oy, oesize, esize, doflush;
 byte *u, refresh;
@@ -2484,7 +3744,7 @@ Refreshfn reffn;
 
 
 % the big one!! this is in kernel!!
-% ??? -> <>
+% syswrite -> drawwrite? -> <>
 <<function drawmesg>>=
 void
 drawmesg(Client *client, void *av, int n)
@@ -2537,6 +3797,13 @@ drawmesg(Client *client, void *av, int n)
 % Graphic VGA card?
 % there is also the VGA interface, which is something different
 
+
+
+
+
+
+
+
 \chapter{Image}
 
 % fundamental piece! image, rectangle, mask.
@@ -2554,7 +3821,7 @@ drawmesg(Client *client, void *av, int n)
 
 \subsection{API}
 
-% for a color r is usually R(0,0,1,1), chan is view->chan, repl = 1,
+% for a color r is usually R(0,0,1,1), chan is view->chan, repl = true,
 % and val is the color
 <<function allocimage>>=
 Image*
@@ -2582,6 +3849,7 @@ freeimage(Image *i)
 @
 %todo: why not _freeimage? be consistent at least
 
+% ??? -> <>
 <<function allocimagemix>>=
 Image*
 allocimagemix(Display *d, ulong color1, ulong color3)
@@ -2979,6 +4247,10 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
 @
 % memimaged? d?
 
+<<global memdefcmap>>=
+Memcmap *memdefcmap = &def;
+@
+% def is big array in libmemdraw/cmap.c
 
 <<function freememimage>>=
 void
@@ -3409,646 +4681,11 @@ memsetchan(Memimage *i, ulong chan)
 
 
 
-%\subsection{Algorithm}
-
-<<function alphadraw>>=
-/*
- * For each scan line, we expand the pixels from source, mask, and destination
- * into byte-aligned red, green, blue, alpha, and grey channels.  If buffering is not
- * needed and the channels were already byte-aligned (grey8, rgb24, rgba32, rgb32),
- * the readers need not copy the data: they can simply return pointers to the data.
- * If the destination image is grey and the source is not, it is converted using the NTSC
- * formula.
- *
- * Once we have all the channels, we call either rgbcalc or greycalc, depending on 
- * whether the destination image is color.  This is allowed to overwrite the dst buffer (perhaps
- * the actual data, perhaps a copy) with its result.  It should only overwrite the dst buffer
- * with the same format (i.e. red bytes with red bytes, etc.)  A new buffer is returned from
- * the calculator, and that buffer is passed to a function to write it to the destination.
- * If the buffer is already pointing at the destination, the writing function is a no-op.
- */
-static int
-alphadraw(Memdrawparam *par)
-{
-    int isgrey, starty, endy, op;
-    int needbuf, dsty, srcy, masky;
-    int y, dir, dx, dy, ndrawbuf;
-    uchar *drawbuf;
-    Buffer bsrc, bdst, bmask;
-    Readfn *rdsrc, *rdmask, *rddst;
-    Calcfn *calc;
-    Writefn *wrdst;
-    Memimage *src, *mask, *dst;
-    Rectangle r, sr, mr;
-    Dbuf *z;
-
-    r = par->r;
-    dx = Dx(r);
-    dy = Dy(r);
-
-    z = allocdbuf();
-    if(z == nil)
-        return 0;
-
-    src = par->src;
-    mask = par->mask;	
-    dst = par->dst;
-    sr = par->sr;
-    mr = par->mr;
-    op = par->op;
-
-    isgrey = dst->flags&Fgrey;
-
-    /*
-     * Buffering when src and dst are the same bitmap is sufficient but not 
-     * necessary.  There are stronger conditions we could use.  We could
-     * check to see if the rectangles intersect, and if simply moving in the
-     * correct y direction can avoid the need to buffer.
-     */
-    needbuf = (src->data == dst->data);
-
-    ndrawbuf = 0;
-    getparam(&z->spar, src, sr, isgrey, needbuf, &ndrawbuf);
-    getparam(&z->dpar, dst, r, isgrey, needbuf, &ndrawbuf);
-    getparam(&z->mpar, mask, mr, 0, needbuf, &ndrawbuf);
-
-    dir = (needbuf && byteaddr(dst, r.min) > byteaddr(src, sr.min)) ? -1 : 1;
-    z->spar.dir = z->mpar.dir = z->dpar.dir = dir;
-
-    /*
-     * If the mask is purely boolean, we can convert from src to dst format
-     * when we read src, and then just copy it to dst where the mask tells us to.
-     * This requires a boolean (1-bit grey) mask and lack of a source alpha channel.
-     *
-     * The computation is accomplished by assigning the function pointers as follows:
-     *	rdsrc - read and convert source into dst format in a buffer
-     * 	rdmask - convert mask to bytes, set pointer to it
-     * 	rddst - fill with pointer to real dst data, but do no reads
-     *	calc - copy src onto dst when mask says to.
-     *	wrdst - do nothing
-     * This is slightly sleazy, since things aren't doing exactly what their names say,
-     * but it avoids a fair amount of code duplication to make this a case here
-     * rather than have a separate booldraw.
-     */
-//if(drawdebug) iprint("flag %lud mchan %lux=?%x dd %d\n", src->flags&Falpha, mask->chan, GREY1, dst->depth);
-    if(!(src->flags&Falpha) && mask->chan == GREY1 && dst->depth >= 8 && op == SoverD){
-//if(drawdebug) iprint("boolcopy...");
-        rdsrc = convfn(dst, &z->dpar, src, &z->spar, &ndrawbuf);
-        rddst = readptr;
-        rdmask = readfn(mask);
-        calc = boolcopyfn(dst, mask);
-        wrdst = nullwrite;
-    }else{
-        /* usual alphadraw parameter fetching */
-        rdsrc = readfn(src);
-        rddst = readfn(dst);
-        wrdst = writefn(dst);
-        calc = alphacalc[op];
-
-        /*
-         * If there is no alpha channel, we'll ask for a grey channel
-         * and pretend it is the alpha.
-         */
-        if(mask->flags&Falpha){
-            rdmask = readalphafn(mask);
-            z->mpar.alphaonly = 1;
-        }else{
-            z->mpar.greymaskcall = readfn(mask);
-            z->mpar.convgrey = 1;
-            rdmask = greymaskread;
-
-            /*
-             * Should really be above, but then boolcopyfns would have
-             * to deal with bit alignment, and I haven't written that.
-             *
-             * This is a common case for things like ellipse drawing.
-             * When there's no alpha involved and the mask is boolean,
-             * we can avoid all the division and multiplication.
-             */
-            if(mask->chan == GREY1 && !(src->flags&Falpha))
-                calc = boolcalc[op];
-            else if(op == SoverD && !(src->flags&Falpha))
-                calc = alphacalcS;
-        }
-    }
-
-    /*
-     * If the image has a small enough repl rectangle,
-     * we can just read each line once and cache them.
-     */
-    if(z->spar.replcache){
-        z->spar.replcall = rdsrc;
-        rdsrc = replread;
-    }
-    if(z->mpar.replcache){
-        z->mpar.replcall = rdmask;
-        rdmask = replread;
-    }
-
-    if(z->n < ndrawbuf){
-        free(z->p);
-        if((z->p = mallocz(ndrawbuf, 0)) == nil){
-            z->inuse = 0;
-            return 0;
-        }
-        z->n = ndrawbuf;
-    }
-    drawbuf = z->p;
-
-    /*
-     * Before we were saving only offsets from drawbuf in the parameter
-     * structures; now that drawbuf has been grown to accomodate us,
-     * we can fill in the pointers.
-     */
-    z->spar.bufbase = drawbuf+z->spar.bufoff;
-    z->mpar.bufbase = drawbuf+z->mpar.bufoff;
-    z->dpar.bufbase = drawbuf+z->dpar.bufoff;
-    z->spar.convbuf = drawbuf+z->spar.convbufoff;
-
-    if(dir == 1){
-        starty = 0;
-        endy = dy;
-    }else{
-        starty = dy-1;
-        endy = -1;
-    }
-
-    /*
-     * srcy, masky, and dsty are offsets from the top of their
-     * respective Rectangles.  they need to be contained within
-     * the rectangles, so clipy can keep them there without division.
-   */
-    srcy = (starty + sr.min.y - src->r.min.y)%Dy(src->r);
-    masky = (starty + mr.min.y - mask->r.min.y)%Dy(mask->r);
-    dsty = starty + r.min.y - dst->r.min.y;
-
-    assert(0 <= srcy && srcy < Dy(src->r));
-    assert(0 <= masky && masky < Dy(mask->r));
-    assert(0 <= dsty && dsty < Dy(dst->r));
-
-    for(y=starty; y!=endy; y+=dir, srcy+=dir, masky+=dir, dsty+=dir){
-        clipy(src, &srcy);
-        clipy(dst, &dsty);
-        clipy(mask, &masky);
-
-        bsrc = rdsrc(&z->spar, z->spar.bufbase, srcy);
-        //DBG print("[");
-        bmask = rdmask(&z->mpar, z->mpar.bufbase, masky);
-        //DBG print("]\n");
-        bdst = rddst(&z->dpar, z->dpar.bufbase, dsty);
-        //DBG		dumpbuf("src", bsrc, dx);
-        //DBG		dumpbuf("mask", bmask, dx);
-        //DBG		dumpbuf("dst", bdst, dx);
-        bdst = calc(bdst, bsrc, bmask, dx, isgrey, op);
-        wrdst(&z->dpar, z->dpar.bytermin+dsty*z->dpar.bwidth, bdst);
-    }
-
-    z->inuse = 0;
-    return 1;
-}
-@
-
-\section{Drawing}
-
-% rectangle is fundamental ops. area. copy/move/blend pixels from one
-% aera to another.
-% no need complex algo, horiz and vert lines map well to pixels.
-% draw()! no need complex shape algorithm, just
-% move all the words covering a rectangle
-
-% draw is fundamenta op!
-% very flexibly.
-% put technicolor.ps nice slides with draw(of actual images like in racket)
-
-\subsection{API}
-
-%TODO: show toy program and screenshot of the rectangle!
-
-
-% see plan9-in-technicolor.ps! bitblt and porter-diff compositing algebra
-<<function draw>>=
-void
-draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
-{
-    draw1(dst, &r, src, &p1, mask, &p1, SoverD);
-}
-@
-
-% images are colors! e.g. Display->black
-% see toy app
-
-<<function border>>=
-void
-border(Image *im, Rectangle r, int i, Image *color, Point sp)
-{
-    if(i < 0){
-        r = insetrect(r, i);
-        sp = addpt(sp, Pt(i,i));
-        i = -i;
-    }
-    draw(im, Rect(r.min.x, r.min.y, r.max.x, r.min.y+i),
-        color, nil, sp);
-    draw(im, Rect(r.min.x, r.max.y-i, r.max.x, r.max.y),
-        color, nil, Pt(sp.x, sp.y+Dy(r)-i));
-    draw(im, Rect(r.min.x, r.min.y+i, r.min.x+i, r.max.y-i),
-        color, nil, Pt(sp.x, sp.y+i));
-    draw(im, Rect(r.max.x-i, r.min.y+i, r.max.x, r.max.y-i),
-        color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
-}
-@
-
-
-<<function drawop>>=
-void
-drawop(Image *dst, Rectangle r, Image *src, Image *mask, Point p1, Drawop op)
-{
-    draw1(dst, &r, src, &p1, mask, &p1, op);
-}
-@
-
-% actually this is the one mentionned in the technicolor.ps slides
-<<function gendraw>>=
-void
-gendraw(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1)
-{
-    draw1(dst, &r, src, &p0, mask, &p1, SoverD);
-}
-@
-
-<<function gendrawop>>=
-void
-gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, Drawop op)
-{
-    draw1(dst, &r, src, &p0, mask, &p1, op);
-}
-@
-
-
-
-\subsection{Marshalling}
-
-% why not _draw? be more consistent
-<<function draw1>>=
-static void
-draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
-{
-    byte *a;
-
-    _setdrawop(dst->display, op);
-
-    a = bufimage(dst->display, 1+4+4+4+4*4+2*4+2*4);
-    if(a == nil)
-        return;
-    if(src == nil)
-        src = dst->display->black;
-    if(mask == nil)
-        mask = dst->display->opaque;
-
-    a[0] = 'd';
-    BPLONG(a+1, dst->id);
-    BPLONG(a+5, src->id);
-    BPLONG(a+9, mask->id);
-    BPLONG(a+13, r->min.x);
-    BPLONG(a+17, r->min.y);
-    BPLONG(a+21, r->max.x);
-    BPLONG(a+25, r->max.y);
-    BPLONG(a+29, p0->x);
-    BPLONG(a+33, p0->y);
-    BPLONG(a+37, p1->x);
-    BPLONG(a+41, p1->y);
-}
-@
-
-
-<<function _setdrawop>>=
-void
-_setdrawop(Display *d, Drawop op)
-{
-    uchar *a;
-
-    if(op != SoverD){
-        a = bufimage(d, 1+1);
-        if(a == 0)
-            return;
-        a[0] = 'O';
-        a[1] = op;
-    }
-}
-@
-
-
-\subsection{Unmarshalling}
-
-
-<<[[drawmesg()]] cases>>=
-/* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
-case 'd':
-    printmesg(fmt="LLLRPP", a, 0);
-    m = 1+4+4+4+4*4+2*4+2*4;
-    if(n < m)
-        error(Eshortdraw);
-    dst = drawimage(client, a+1);
-    dstid = BGLONG(a+1);
-    src = drawimage(client, a+5);
-    mask = drawimage(client, a+9);
-    drawrectangle(&r, a+13);
-    drawpoint(&p, a+29);
-    drawpoint(&q, a+37);
-
-    op = drawclientop(client);
-    memdraw(dst, r, src, p, mask, q, op); // the call!
-
-    dstflush(dstid, dst, r);
-    continue;
-
-@
-
-
-<<function drawclientop>>=
-static int
-drawclientop(Client *cl)
-{
-    int op;
-
-    op = cl->op;
-    cl->op = SoverD;
-    return op;
-}
-@
-
-
-<<[[drawmesg()]] cases>>=
-/* set compositing operator for next draw operation: 'O' op */
-case 'O':
-    printmesg(fmt="b", a, 0);
-    m = 1+1;
-    if(n < m)
-        error(Eshortdraw);
-    client->op = a[1];
-    continue;
-@
-
-
-
-
-
-% dead? not even mentionned in the draw(5)
-% and nothing generate such a message
-%<<[[drawmesg()]] cases>>=
-%/* create image mask: 'm' newid[4] id[4] */
-%case 'm':
-%    printmesg("LL", a, 0);
-%    m = 4+4;
-%    if(n < m)
-%        error(Eshortdraw);
-%    break;
-%@
-
-
-\subsection{Algorithm}
-
-<<struct Draw>>=
-struct Draw
-{
-    Point	deltas;
-    Point	deltam;
-
-    Memimage	*src;
-    Memimage	*mask;
-
-    int	op;
-
-    <<[[Draw]] other fields>>
-};
-@
-
-% actually in memlayer/
-<<function memdraw>>=
-void
-memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
-{
-    struct Draw d;
-    Rectangle srcr, tr, mr;
-    Memlayer *dl, *sl;
-
-    if(drawdebug)
-        iprint("memdraw %p %R %p %P %p %P\n", dst, r, src, p0, mask, p1);
-
-    if(mask == nil)
-        mask = memopaque;
-
-    <<[[memdraw()]] if mask has layer>>
-
-    Top:
-    if(dst->layer==nil && src->layer==nil){
-        memimagedraw(dst, r, src, p0, mask, p1, op); // back to memdraw
-        return;
-    }
-    <<[[memdraw()]] when have layers>>
-}
-@
-
-
-% back to memdraw/
-% TODO cleanup the comments, use better debug macro
-<<function memimagedraw>>=
-void
-memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
-{
-    static int n = 0;
-    Memdrawparam par;
-
-    if(mask == nil)
-        mask = memopaque;
-
-    //DBG	print("memimagedraw %p/%luX %R @ %p %p/%luX %P %p/%luX %P... ", dst, dst->chan, r, dst->data->bdata, src, src->chan, p0, mask, mask->chan, p1);
-
-    if(drawclip(dst, &r, src, &p0, mask, &p1, &par.sr, &par.mr) == 0){
-//		if(drawdebug)
-//			iprint("empty clipped rectangle\n");
-        return;
-    }
-
-    if(op < Clear || op > SoverD){
-//		if(drawdebug)
-//			iprint("op out of range: %d\n", op);
-        return;
-    }
-
-    par.op = op;
-    par.dst = dst;
-    par.r = r;
-    par.src = src;
-    /* par.sr set by drawclip */
-    par.mask = mask;
-    /* par.mr set by drawclip */
-
-    par.state = 0;
-    if(src->flags&Frepl){
-        par.state |= Replsrc;
-        if(Dx(src->r)==1 && Dy(src->r)==1){
-            par.sval = pixelbits(src, src->r.min);
-            par.state |= Simplesrc;
-            par.srgba = imgtorgba(src, par.sval);
-            par.sdval = rgbatoimg(dst, par.srgba);
-            if((par.srgba&0xFF) == 0 && (op&DoutS)){
-//				if (drawdebug) iprint("fill with transparent source\n");
-                return;	/* no-op successfully handled */
-            }
-        }
-    }
-
-    if(mask->flags & Frepl){
-        par.state |= Replmask;
-        if(Dx(mask->r)==1 && Dy(mask->r)==1){
-            par.mval = pixelbits(mask, mask->r.min);
-            if(par.mval == 0 && (op&DoutS)){
-//				if(drawdebug) iprint("fill with zero mask\n");
-                return;	/* no-op successfully handled */
-            }
-            par.state |= Simplemask;
-            if(par.mval == ~0)
-                par.state |= Fullmask;
-            par.mrgba = imgtorgba(mask, par.mval);
-        }
-    }
-
-//	if(drawdebug)
-//		iprint("dr %R sr %R mr %R...", r, par.sr, par.mr);
-    //DBG print("draw dr %R sr %R mr %R %lux\n", r, par.sr, par.mr, par.state);
-
-    /*
-     * Now that we've clipped the parameters down to be consistent, we 
-     * simply try sub-drawing routines in order until we find one that was able
-     * to handle us.  If the sub-drawing routine returns zero, it means it was
-     * unable to satisfy the request, so we do not return.
-     */
-
-    /*
-     * Hardware support.  Each video driver provides this function,
-     * which checks to see if there is anything it can help with.
-     * There could be an if around this checking to see if dst is in video memory.
-     */
-    //DBG print("test hwdraw\n");
-    if(hwdraw(&par)){
-//if(drawdebug) iprint("hw handled\n");
-      //DBG print("hwdraw handled\n");
-        return;
-    }
-    /*
-     * Optimizations using memmove and memset.
-     */
-    //DBG print("test memoptdraw\n");
-    if(memoptdraw(&par)){
-//if(drawdebug) iprint("memopt handled\n");
-      //DBG print("memopt handled\n");
-        return;
-    }
-
-    /*
-     * Character drawing.
-     * Solid source color being painted through a boolean mask onto a high res image.
-     */
-    //DBG print("test chardraw\n");
-    if(chardraw(&par)){
-//if(drawdebug) iprint("chardraw handled\n");
-      //DBG print("chardraw handled\n");
-        return;
-    }
-
-    /*
-     * General calculation-laden case that does alpha for each pixel.
-     */
-    //DBG print("do alphadraw\n");
-    alphadraw(&par);
-//if(drawdebug) iprint("alphadraw handled\n");
-    //DBG print("alphadraw handled\n");
-}
-@
-
-
-
-\subsection{Hardware support hook}
-% but really optional, bcm/screen.c does nothing except
-% calling the software cursor save/restore.
-
-% vgascreen.c
-<<global hwaccel(x86)>>=
-int hwaccel = true;
-@
-
-
-% * Hardware support.  Each video driver provides this function,
-% * which checks to see if there is anything it can help with.
-% * There could be an if around this checking to see if dst is in video memo
-r
-% vgascreen.c
-<<function hwdraw(x86)>>=
-//@Scheck: not dead, actually this is overriding some def in libmemdraw!! ugly
-bool hwdraw(Memdrawparam *par)
-{
-    VGAscr *scr;
-    Memimage *dst, *src, *mask;
-    int m;
-
-    if(hwaccel == false)
-        return false;
-
-    scr = &vgascreen;
-
-    if((dst=par->dst) == nil || dst->data == nil)
-        return false;
-    if((src=par->src) == nil || src->data == nil)
-        return false;
-    if((mask=par->mask) == nil || mask->data == nil)
-        return false;
-
-    <<[[hwdraw()]] if software cursor(x86)>>
-    
-    if(dst->data->bdata != gscreendata.bdata)
-        return false;
-
-
-
-
-    if(scr->fill==nil && scr->scroll==nil)
-        return false;
-    /*
-     * If we have an opaque mask and source is one opaque
-     * pixel we can convert to the destination format and just
-     * replicate with memset.
-     */
-    m = Simplesrc|Simplemask|Fullmask;
-    if(scr->fill
-    && (par->state&m)==m
-    && ((par->srgba&0xFF) == 0xFF)
-    && (par->op&S) == S)
-        return scr->fill(scr, par->r, par->sdval);
-
-    /*
-     * If no source alpha, an opaque mask, we can just copy the
-     * source onto the destination.  If the channels are the same and
-     * the source is not replicated, memmove suffices.
-     */
-    m = Simplemask|Fullmask;
-    if(scr->scroll
-    && src->data->bdata==dst->data->bdata
-    && !(src->flags&Falpha)
-    && (par->state&m)==m
-    && (par->op&S) == S)
-        return scr->scroll(scr, par->r, par->sr);
-
-    return false;   
-}
-@
-
-% TODO: maybe assume simple screen device, like for raspberry,
-% and where it's actually a framebuffer where hwdraw does nothing
-% except the software cursor stuff.
-
-% TODO put scroll or fill method here?
 
 \section{Flush}
+
+% annoying? why need that? leaky abstraction?
+% cos cant hide remote feature of /dev/draw a la X11?
 
 \subsection{API}
 
@@ -4127,6 +4764,7 @@ drawflush(void)
     flushrect = Rect(10000, 10000, -10000, -10000);
 }
 @
+% that's a big screen :)
 
 \subsection{Hardware support hook}
 
@@ -4225,6 +4863,7 @@ flushmemscreen(Rectangle r)
 
 
 \section{Naming}
+% adv topic? seems used by rio according to graphics(2)
 
 \subsection{API}
 
@@ -4464,257 +5103,661 @@ drawdelname(DName *name)
 
 
 
-\chapter{Geometry}
+\chapter{Drawing}
 
-\section{[[Point]]}
-
-<<struct Point>>=
-struct	Point
-{
-    int	x;
-    int	y;
-};
-@
-% int! they are pixels!
-
-%ctor
-<<function Pt>>=
-Point
-Pt(int x, int y)
-{
-    Point p;
-
-    p.x = x;
-    p.y = y;
-    return p;
-}
-@
+% \section{[[Point]] and [[Rectangle]]}
+% and Draw rectangle before.
 
 
-<<function eqpt>>=
-int
-eqpt(Point p, Point q)
-{
-    return p.x==q.x && p.y==q.y;
-}
-@
+\section{Rectangle}
+
+% rectangle is fundamental ops. area. copy/move/blend pixels from one
+% aera to another.
+% no need complex algo, horiz and vert lines map well to pixels.
+% draw()! no need complex shape algorithm, just
+% move all the words covering a rectangle
+
+% draw is fundamenta op!
+% very flexibly.
+% put technicolor.ps nice slides with draw(of actual images like in racket)
+
+\subsection{API}
+
+%TODO: show toy program and screenshot of the rectangle!
 
 
-<<global ZP>>=
-Point	ZP;
-@
-
-
-
-<<function addpt>>=
-Point
-addpt(Point a, Point b)
-{
-    a.x += b.x;
-    a.y += b.y;
-    return a;
-}
-@
-
-<<function subpt>>=
-Point
-subpt(Point a, Point b)
-{
-    a.x -= b.x;
-    a.y -= b.y;
-    return a;
-}
-@
-
-<<function mulpt>>=
-Point
-mulpt(Point a, int b)
-{
-    a.x *= b;
-    a.y *= b;
-    return a;
-}
-@
-
-<<function divpt>>=
-Point
-divpt(Point a, int b)
-{
-    a.x /= b;
-    a.y /= b;
-    return a;
-}
-@
-
-
-\section{[[Rectangle]]}
-
-<<struct Rectangle>>=
-struct Rectangle
-{
-    Point	min;
-    Point	max;
-};
-@
-
-% seen already operations with rectangle in Drawing
-
-%ctor
-<<function Rect>>=
-Rectangle
-Rect(int x, int y, int bx, int by)
-{
-    Rectangle r;
-
-    r.min.x = x;
-    r.min.y = y;
-    r.max.x = bx;
-    r.max.y = by;
-    return r;
-}
-@
-
-%ctor
-<<function Rpt>>=
-Rectangle
-Rpt(Point min, Point max)
-{
-    Rectangle r;
-
-    r.min = min;
-    r.max = max;
-    return r;
-}
-@
-
-
-
-
-<<function eqrect>>=
-int
-eqrect(Rectangle r, Rectangle s)
-{
-    return r.min.x==s.min.x && r.max.x==s.max.x &&
-           r.min.y==s.min.y && r.max.y==s.max.y;
-}
-@
-
-
-<<global ZR>>=
-Rectangle ZR;
-@
-
-
-
-<<function Dx>>=
-#define	Dx(r)	((r).max.x-(r).min.x)
-@
-
-<<function Dy>>=
-#define	Dy(r)	((r).max.y-(r).min.y)
-@
-
-
-
-<<function rectaddpt>>=
-Rectangle
-rectaddpt(Rectangle r, Point p)
-{
-    r.min.x += p.x;
-    r.min.y += p.y;
-    r.max.x += p.x;
-    r.max.y += p.y;
-    return r;
-}
-@
-
-<<function rectsubpt>>=
-Rectangle
-rectsubpt(Rectangle r, Point p)
-{
-    r.min.x -= p.x;
-    r.min.y -= p.y;
-    r.max.x -= p.x;
-    r.max.y -= p.y;
-    return r;
-}
-@
-
-
-
-<<function insetrect>>=
-Rectangle
-insetrect(Rectangle r, int n)
-{
-    r.min.x += n;
-    r.min.y += n;
-    r.max.x -= n;
-    r.max.y -= n;
-    return r;
-}
-@
-
-
-<<function rectXrect>>=
-int
-rectXrect(Rectangle r, Rectangle s)
-{
-    return r.min.x<s.max.x && s.min.x<r.max.x &&
-           r.min.y<s.max.y && s.min.y<r.max.y;
-}
-@
-
-<<function rectinrect>>=
-int
-rectinrect(Rectangle r, Rectangle s)
-{
-    return s.min.x<=r.min.x && r.max.x<=s.max.x && s.min.y<=r.min.y && r.max.y<=s.max.y;
-}
-@
-
-<<function ptinrect>>=
-int
-ptinrect(Point p, Rectangle r)
-{
-    return p.x>=r.min.x && p.x<r.max.x &&
-           p.y>=r.min.y && p.y<r.max.y;
-}
-@
-
-
-<<function canonrect>>=
-Rectangle
-canonrect(Rectangle r)
-{
-    int t;
-    if (r.max.x < r.min.x) {
-        t = r.min.x;
-        r.min.x = r.max.x;
-        r.max.x = t;
-    }
-    if (r.max.y < r.min.y) {
-        t = r.min.y;
-        r.min.y = r.max.y;
-        r.max.y = t;
-    }
-    return r;
-}
-@
-
-<<function combinerect>>=
+% see plan9-in-technicolor.ps! bitblt and porter-diff compositing algebra
+<<function draw>>=
 void
-combinerect(Rectangle *r1, Rectangle r2)
+draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
 {
-    if(r1->min.x > r2.min.x)
-        r1->min.x = r2.min.x;
-    if(r1->min.y > r2.min.y)
-        r1->min.y = r2.min.y;
-    if(r1->max.x < r2.max.x)
-        r1->max.x = r2.max.x;
-    if(r1->max.y < r2.max.y)
-        r1->max.y = r2.max.y;
+    draw1(dst, &r, src, &p1, mask, &p1, SoverD);
 }
 @
+% SoverD Source Over Destination, simple
+
+% images are colors! e.g. Display->black
+% see toy app
+
+<<function border>>=
+void
+border(Image *im, Rectangle r, int i, Image *color, Point sp)
+{
+    if(i < 0){
+        r = insetrect(r, i);
+        sp = addpt(sp, Pt(i,i));
+        i = -i;
+    }
+    draw(im, Rect(r.min.x, r.min.y, r.max.x, r.min.y+i),
+        color, nil, sp);
+    draw(im, Rect(r.min.x, r.max.y-i, r.max.x, r.max.y),
+        color, nil, Pt(sp.x, sp.y+Dy(r)-i));
+    draw(im, Rect(r.min.x, r.min.y+i, r.min.x+i, r.max.y-i),
+        color, nil, Pt(sp.x, sp.y+i));
+    draw(im, Rect(r.max.x-i, r.min.y+i, r.max.x, r.max.y-i),
+        color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
+}
+@
+
+
+<<function drawop>>=
+void
+drawop(Image *dst, Rectangle r, Image *src, Image *mask, Point p1, Drawop op)
+{
+    draw1(dst, &r, src, &p1, mask, &p1, op);
+}
+@
+
+% actually this is the one mentionned in the technicolor.ps slides
+<<function gendraw>>=
+void
+gendraw(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1)
+{
+    draw1(dst, &r, src, &p0, mask, &p1, SoverD);
+}
+@
+
+<<function gendrawop>>=
+void
+gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, Drawop op)
+{
+    draw1(dst, &r, src, &p0, mask, &p1, op);
+}
+@
+
+
+
+\subsection{Marshalling}
+
+% why not _draw? be more consistent
+<<function draw1>>=
+static void
+draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
+{
+    byte *a;
+
+    _setdrawop(dst->display, op);
+
+    a = bufimage(dst->display, 1+4+4+4+4*4+2*4+2*4);
+    if(a == nil)
+        return;
+    if(src == nil)
+        src = dst->display->black;
+    if(mask == nil)
+        mask = dst->display->opaque;
+
+    a[0] = 'd';
+    BPLONG(a+1, dst->id);
+    BPLONG(a+5, src->id);
+    BPLONG(a+9, mask->id);
+    BPLONG(a+13, r->min.x);
+    BPLONG(a+17, r->min.y);
+    BPLONG(a+21, r->max.x);
+    BPLONG(a+25, r->max.y);
+    BPLONG(a+29, p0->x);
+    BPLONG(a+33, p0->y);
+    BPLONG(a+37, p1->x);
+    BPLONG(a+41, p1->y);
+}
+@
+
+
+<<function _setdrawop>>=
+void
+_setdrawop(Display *d, Drawop op)
+{
+    uchar *a;
+
+    if(op != SoverD){
+        a = bufimage(d, 1+1);
+        if(a == 0)
+            return;
+        a[0] = 'O';
+        a[1] = op;
+    }
+}
+@
+
+
+\subsection{Unmarshalling}
+
+
+<<[[drawmesg()]] cases>>=
+/* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
+case 'd':
+    printmesg(fmt="LLLRPP", a, 0);
+    m = 1+4+4+4+4*4+2*4+2*4;
+    if(n < m)
+        error(Eshortdraw);
+    dst = drawimage(client, a+1);
+    dstid = BGLONG(a+1);
+    src = drawimage(client, a+5);
+    mask = drawimage(client, a+9);
+    drawrectangle(&r, a+13);
+    drawpoint(&p, a+29);
+    drawpoint(&q, a+37);
+
+    op = drawclientop(client);
+    memdraw(dst, r, src, p, mask, q, op); // the call!
+
+    dstflush(dstid, dst, r);
+    continue;
+
+@
+
+
+<<function drawclientop>>=
+static int
+drawclientop(Client *cl)
+{
+    int op;
+
+    op = cl->op;
+    cl->op = SoverD;
+    return op;
+}
+@
+
+
+<<[[drawmesg()]] cases>>=
+/* set compositing operator for next draw operation: 'O' op */
+case 'O':
+    printmesg(fmt="b", a, 0);
+    m = 1+1;
+    if(n < m)
+        error(Eshortdraw);
+    client->op = a[1];
+    continue;
+@
+
+
+
+
+
+% dead? not even mentionned in the draw(5)
+% and nothing generate such a message
+%<<[[drawmesg()]] cases>>=
+%/* create image mask: 'm' newid[4] id[4] */
+%case 'm':
+%    printmesg("LL", a, 0);
+%    m = 4+4;
+%    if(n < m)
+%        error(Eshortdraw);
+%    break;
+%@
+
+
+\subsection{Algorithm}
+
+<<struct Draw>>=
+struct Draw
+{
+    Point	deltas;
+    Point	deltam;
+
+    Memimage	*src;
+    Memimage	*mask;
+
+    // enum<Drawop>
+    int	op;
+
+    <<[[Draw]] other fields>>
+};
+@
+
+<<[[memdraw()]] locals>>=
+struct Draw d;
+Rectangle srcr, tr, mr;
+Memlayer *dl, *sl;
+@
+
+
+
+
+% actually in memlayer/
+<<function memdraw>>=
+void
+memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
+{
+    <<[[memdraw()]] locals>>
+
+    if(drawdebug)
+        iprint("memdraw %p %R %p %P %p %P\n", dst, r, src, p0, mask, p1);
+
+    if(mask == nil)
+        mask = memopaque;
+
+    <<[[memdraw()]] if mask has layer>>
+
+    Top:
+    if(dst->layer==nil && src->layer==nil){
+        memimagedraw(dst, r, src, p0, mask, p1, op); // back to memdraw
+        return;
+    }
+    <<[[memdraw()]] when have layers>>
+}
+@
+
+
+% back to memdraw/
+% TODO cleanup the comments, use better debug macro
+<<function memimagedraw>>=
+void
+memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
+{
+    static int n = 0;
+    Memdrawparam par;
+
+    if(mask == nil)
+        mask = memopaque;
+
+    //DBG	print("memimagedraw %p/%luX %R @ %p %p/%luX %P %p/%luX %P... ", dst, dst->chan, r, dst->data->bdata, src, src->chan, p0, mask, mask->chan, p1);
+
+    if(drawclip(dst, &r, src, &p0, mask, &p1, &par.sr, &par.mr) == 0){
+//		if(drawdebug)
+//			iprint("empty clipped rectangle\n");
+        return;
+    }
+
+    if(op < Clear || op > SoverD){
+//		if(drawdebug)
+//			iprint("op out of range: %d\n", op);
+        return;
+    }
+
+    par.op = op;
+    par.dst = dst;
+    par.r = r;
+    par.src = src;
+    /* par.sr set by drawclip */
+    par.mask = mask;
+    /* par.mr set by drawclip */
+
+    par.state = 0;
+    if(src->flags&Frepl){
+        par.state |= Replsrc;
+        if(Dx(src->r)==1 && Dy(src->r)==1){
+            par.sval = pixelbits(src, src->r.min);
+            par.state |= Simplesrc;
+            par.srgba = imgtorgba(src, par.sval);
+            par.sdval = rgbatoimg(dst, par.srgba);
+            if((par.srgba&0xFF) == 0 && (op&DoutS)){
+//				if (drawdebug) iprint("fill with transparent source\n");
+                return;	/* no-op successfully handled */
+            }
+        }
+    }
+
+    if(mask->flags & Frepl){
+        par.state |= Replmask;
+        if(Dx(mask->r)==1 && Dy(mask->r)==1){
+            par.mval = pixelbits(mask, mask->r.min);
+            if(par.mval == 0 && (op&DoutS)){
+//				if(drawdebug) iprint("fill with zero mask\n");
+                return;	/* no-op successfully handled */
+            }
+            par.state |= Simplemask;
+            if(par.mval == ~0)
+                par.state |= Fullmask;
+            par.mrgba = imgtorgba(mask, par.mval);
+        }
+    }
+
+//	if(drawdebug)
+//		iprint("dr %R sr %R mr %R...", r, par.sr, par.mr);
+    //DBG print("draw dr %R sr %R mr %R %lux\n", r, par.sr, par.mr, par.state);
+
+    /*
+     * Now that we've clipped the parameters down to be consistent, we 
+     * simply try sub-drawing routines in order until we find one that was able
+     * to handle us.  If the sub-drawing routine returns zero, it means it was
+     * unable to satisfy the request, so we do not return.
+     */
+
+    /*
+     * Hardware support.  Each video driver provides this function,
+     * which checks to see if there is anything it can help with.
+     * There could be an if around this checking to see if dst is in video memory.
+     */
+    //DBG print("test hwdraw\n");
+    if(hwdraw(&par)){
+//if(drawdebug) iprint("hw handled\n");
+      //DBG print("hwdraw handled\n");
+        return;
+    }
+    /*
+     * Optimizations using memmove and memset.
+     */
+    //DBG print("test memoptdraw\n");
+    if(memoptdraw(&par)){
+//if(drawdebug) iprint("memopt handled\n");
+      //DBG print("memopt handled\n");
+        return;
+    }
+
+    /*
+     * Character drawing.
+     * Solid source color being painted through a boolean mask onto a high res image.
+     */
+    //DBG print("test chardraw\n");
+    if(chardraw(&par)){
+//if(drawdebug) iprint("chardraw handled\n");
+      //DBG print("chardraw handled\n");
+        return;
+    }
+
+    /*
+     * General calculation-laden case that does alpha for each pixel.
+     */
+    //DBG print("do alphadraw\n");
+    alphadraw(&par);
+//if(drawdebug) iprint("alphadraw handled\n");
+    //DBG print("alphadraw handled\n");
+}
+@
+% argh, was ugly debugging code
+
+
+
+<<function alphadraw>>=
+/*
+ * For each scan line, we expand the pixels from source, mask, and destination
+ * into byte-aligned red, green, blue, alpha, and grey channels.  If buffering is not
+ * needed and the channels were already byte-aligned (grey8, rgb24, rgba32, rgb32),
+ * the readers need not copy the data: they can simply return pointers to the data.
+ * If the destination image is grey and the source is not, it is converted using the NTSC
+ * formula.
+ *
+ * Once we have all the channels, we call either rgbcalc or greycalc, depending on 
+ * whether the destination image is color.  This is allowed to overwrite the dst buffer (perhaps
+ * the actual data, perhaps a copy) with its result.  It should only overwrite the dst buffer
+ * with the same format (i.e. red bytes with red bytes, etc.)  A new buffer is returned from
+ * the calculator, and that buffer is passed to a function to write it to the destination.
+ * If the buffer is already pointing at the destination, the writing function is a no-op.
+ */
+static int
+alphadraw(Memdrawparam *par)
+{
+    int isgrey, starty, endy, op;
+    int needbuf, dsty, srcy, masky;
+    int y, dir, dx, dy, ndrawbuf;
+    uchar *drawbuf;
+    Buffer bsrc, bdst, bmask;
+    Readfn *rdsrc, *rdmask, *rddst;
+    Calcfn *calc;
+    Writefn *wrdst;
+    Memimage *src, *mask, *dst;
+    Rectangle r, sr, mr;
+    Dbuf *z;
+
+    r = par->r;
+    dx = Dx(r);
+    dy = Dy(r);
+
+    z = allocdbuf();
+    if(z == nil)
+        return 0;
+
+    src = par->src;
+    mask = par->mask;	
+    dst = par->dst;
+    sr = par->sr;
+    mr = par->mr;
+    op = par->op;
+
+    isgrey = dst->flags&Fgrey;
+
+    /*
+     * Buffering when src and dst are the same bitmap is sufficient but not 
+     * necessary.  There are stronger conditions we could use.  We could
+     * check to see if the rectangles intersect, and if simply moving in the
+     * correct y direction can avoid the need to buffer.
+     */
+    needbuf = (src->data == dst->data);
+
+    ndrawbuf = 0;
+    getparam(&z->spar, src, sr, isgrey, needbuf, &ndrawbuf);
+    getparam(&z->dpar, dst, r, isgrey, needbuf, &ndrawbuf);
+    getparam(&z->mpar, mask, mr, 0, needbuf, &ndrawbuf);
+
+    dir = (needbuf && byteaddr(dst, r.min) > byteaddr(src, sr.min)) ? -1 : 1;
+    z->spar.dir = z->mpar.dir = z->dpar.dir = dir;
+
+    /*
+     * If the mask is purely boolean, we can convert from src to dst format
+     * when we read src, and then just copy it to dst where the mask tells us to.
+     * This requires a boolean (1-bit grey) mask and lack of a source alpha channel.
+     *
+     * The computation is accomplished by assigning the function pointers as follows:
+     *	rdsrc - read and convert source into dst format in a buffer
+     * 	rdmask - convert mask to bytes, set pointer to it
+     * 	rddst - fill with pointer to real dst data, but do no reads
+     *	calc - copy src onto dst when mask says to.
+     *	wrdst - do nothing
+     * This is slightly sleazy, since things aren't doing exactly what their names say,
+     * but it avoids a fair amount of code duplication to make this a case here
+     * rather than have a separate booldraw.
+     */
+//if(drawdebug) iprint("flag %lud mchan %lux=?%x dd %d\n", src->flags&Falpha, mask->chan, GREY1, dst->depth);
+    if(!(src->flags&Falpha) && mask->chan == GREY1 && dst->depth >= 8 && op == SoverD){
+//if(drawdebug) iprint("boolcopy...");
+        rdsrc = convfn(dst, &z->dpar, src, &z->spar, &ndrawbuf);
+        rddst = readptr;
+        rdmask = readfn(mask);
+        calc = boolcopyfn(dst, mask);
+        wrdst = nullwrite;
+    }else{
+        /* usual alphadraw parameter fetching */
+        rdsrc = readfn(src);
+        rddst = readfn(dst);
+        wrdst = writefn(dst);
+        calc = alphacalc[op];
+
+        /*
+         * If there is no alpha channel, we'll ask for a grey channel
+         * and pretend it is the alpha.
+         */
+        if(mask->flags&Falpha){
+            rdmask = readalphafn(mask);
+            z->mpar.alphaonly = 1;
+        }else{
+            z->mpar.greymaskcall = readfn(mask);
+            z->mpar.convgrey = 1;
+            rdmask = greymaskread;
+
+            /*
+             * Should really be above, but then boolcopyfns would have
+             * to deal with bit alignment, and I haven't written that.
+             *
+             * This is a common case for things like ellipse drawing.
+             * When there's no alpha involved and the mask is boolean,
+             * we can avoid all the division and multiplication.
+             */
+            if(mask->chan == GREY1 && !(src->flags&Falpha))
+                calc = boolcalc[op];
+            else if(op == SoverD && !(src->flags&Falpha))
+                calc = alphacalcS;
+        }
+    }
+
+    /*
+     * If the image has a small enough repl rectangle,
+     * we can just read each line once and cache them.
+     */
+    if(z->spar.replcache){
+        z->spar.replcall = rdsrc;
+        rdsrc = replread;
+    }
+    if(z->mpar.replcache){
+        z->mpar.replcall = rdmask;
+        rdmask = replread;
+    }
+
+    if(z->n < ndrawbuf){
+        free(z->p);
+        if((z->p = mallocz(ndrawbuf, 0)) == nil){
+            z->inuse = 0;
+            return 0;
+        }
+        z->n = ndrawbuf;
+    }
+    drawbuf = z->p;
+
+    /*
+     * Before we were saving only offsets from drawbuf in the parameter
+     * structures; now that drawbuf has been grown to accomodate us,
+     * we can fill in the pointers.
+     */
+    z->spar.bufbase = drawbuf+z->spar.bufoff;
+    z->mpar.bufbase = drawbuf+z->mpar.bufoff;
+    z->dpar.bufbase = drawbuf+z->dpar.bufoff;
+    z->spar.convbuf = drawbuf+z->spar.convbufoff;
+
+    if(dir == 1){
+        starty = 0;
+        endy = dy;
+    }else{
+        starty = dy-1;
+        endy = -1;
+    }
+
+    /*
+     * srcy, masky, and dsty are offsets from the top of their
+     * respective Rectangles.  they need to be contained within
+     * the rectangles, so clipy can keep them there without division.
+   */
+    srcy = (starty + sr.min.y - src->r.min.y)%Dy(src->r);
+    masky = (starty + mr.min.y - mask->r.min.y)%Dy(mask->r);
+    dsty = starty + r.min.y - dst->r.min.y;
+
+    assert(0 <= srcy && srcy < Dy(src->r));
+    assert(0 <= masky && masky < Dy(mask->r));
+    assert(0 <= dsty && dsty < Dy(dst->r));
+
+    for(y=starty; y!=endy; y+=dir, srcy+=dir, masky+=dir, dsty+=dir){
+        clipy(src, &srcy);
+        clipy(dst, &dsty);
+        clipy(mask, &masky);
+
+        bsrc = rdsrc(&z->spar, z->spar.bufbase, srcy);
+        //DBG print("[");
+        bmask = rdmask(&z->mpar, z->mpar.bufbase, masky);
+        //DBG print("]\n");
+        bdst = rddst(&z->dpar, z->dpar.bufbase, dsty);
+        //DBG		dumpbuf("src", bsrc, dx);
+        //DBG		dumpbuf("mask", bmask, dx);
+        //DBG		dumpbuf("dst", bdst, dx);
+        bdst = calc(bdst, bsrc, bmask, dx, isgrey, op);
+        wrdst(&z->dpar, z->dpar.bytermin+dsty*z->dpar.bwidth, bdst);
+    }
+
+    z->inuse = 0;
+    return 1;
+}
+@
+
+
+
+
+\subsection{Hardware support hook}
+% but really optional, bcm/screen.c does nothing except
+% calling the software cursor save/restore.
+
+% vgascreen.c
+<<global hwaccel(x86)>>=
+int hwaccel = true;
+@
+
+
+% * Hardware support.  Each video driver provides this function,
+% * which checks to see if there is anything it can help with.
+% * There could be an if around this checking to see if dst is in video memo
+r
+% vgascreen.c
+<<function hwdraw(x86)>>=
+//@Scheck: not dead, actually this is overriding some def in libmemdraw!! ugly
+bool hwdraw(Memdrawparam *par)
+{
+    VGAscr *scr;
+    Memimage *dst, *src, *mask;
+    int m;
+
+    if(hwaccel == false)
+        return false;
+
+    scr = &vgascreen;
+
+    if((dst=par->dst) == nil || dst->data == nil)
+        return false;
+    if((src=par->src) == nil || src->data == nil)
+        return false;
+    if((mask=par->mask) == nil || mask->data == nil)
+        return false;
+
+    <<[[hwdraw()]] if software cursor(x86)>>
+    
+    if(dst->data->bdata != gscreendata.bdata)
+        return false;
+
+
+
+
+    if(scr->fill==nil && scr->scroll==nil)
+        return false;
+    /*
+     * If we have an opaque mask and source is one opaque
+     * pixel we can convert to the destination format and just
+     * replicate with memset.
+     */
+    m = Simplesrc|Simplemask|Fullmask;
+    if(scr->fill
+    && (par->state&m)==m
+    && ((par->srgba&0xFF) == 0xFF)
+    && (par->op&S) == S)
+        return scr->fill(scr, par->r, par->sdval);
+
+    /*
+     * If no source alpha, an opaque mask, we can just copy the
+     * source onto the destination.  If the channels are the same and
+     * the source is not replicated, memmove suffices.
+     */
+    m = Simplemask|Fullmask;
+    if(scr->scroll
+    && src->data->bdata==dst->data->bdata
+    && !(src->flags&Falpha)
+    && (par->state&m)==m
+    && (par->op&S) == S)
+        return scr->scroll(scr, par->r, par->sr);
+
+    return false;   
+}
+@
+
+% TODO: maybe assume simple screen device, like for raspberry,
+% and where it's actually a framebuffer where hwdraw does nothing
+% except the software cursor stuff.
+
+% TODO put scroll or fill method here?
 
 
 
@@ -5775,6 +6818,10 @@ fillpoint(Memimage *dst, int x, int y, Memimage *src, Point p, int op)
 }
 @
 
+
+
+
+
 <<function mod>>=
 static long
 mod(long x, long y)
@@ -6482,6 +7529,15 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 
 %\section{Text} see font section
 
+
+
+
+
+
+
+
+
+
 \chapter{Colors}
 % test code showing use of colors?
 
@@ -6497,8 +7553,101 @@ struct RGB
 @
 
 \section{Color map}
+% adv topics? for old graphics card? useful with RGBA32?
 
 \subsection{API}
+
+<<function readcolmap>>=
+void
+readcolmap(Display *d, RGB *colmap)
+{
+    int i;
+    char *p, *q;
+    Biobuf *b;
+    char buf[128];
+
+    //USED(screen);
+
+    sprint(buf, "/dev/draw/%d/colormap", d->dirno);
+    b = Bopen(buf, OREAD);
+    if(b == 0)
+        drawerror(d, "rdcolmap: can't open colormap device");
+
+    for(;;) {
+        p = Brdline(b, '\n');
+        if(p == 0)
+            break;
+        i = strtoul(p, &q, 0);
+        if(i < 0 || i > 255) {
+            fprint(2, "rdcolmap: bad index\n");
+            exits("bad");
+        }
+        p = q;
+        colmap[255-i].red = getval(&p);
+        colmap[255-i].green = getval(&p);
+        colmap[255-i].blue = getval(&p);
+    }
+    Bterm(b);
+}
+@
+
+<<function getval>>=
+static ulong
+getval(char **p)
+{
+    ulong v;
+    char *q;
+
+    v = strtoul(*p, &q, 0);
+    v |= v<<8;
+    v |= v<<16;
+    *p = q;
+    return v;
+}
+@
+% >> >>
+
+
+
+<<function writecolmap>>=
+/*
+ * This code (and the devdraw interface) will have to change
+ * if we ever get bitmaps with ldepth > 3, because the
+ * colormap will have to be written in chunks
+ */
+
+void
+writecolmap(Display *d, RGB *m)
+{
+    int i, n, fd;
+    char buf[64], *t;
+    ulong r, g, b;
+
+    sprint(buf, "/dev/draw/%d/colormap", d->dirno);
+    fd = open(buf, OWRITE);
+    if(fd < 0)
+        drawerror(d, "writecolmap: open colormap failed");
+    t = malloc(8192);
+    if (t == nil)
+        drawerror(d, "writecolmap: no memory");
+    n = 0;
+    for(i = 0; i < 256; i++) {
+        r = m[i].red>>24;
+        g = m[i].green>>24;
+        b = m[i].blue>>24;
+        n += sprint(t+n, "%d %lud %lud %lud\n", 255-i, r, g, b);
+    }
+    i = write(fd, t, n);
+    free(t);
+    close(fd);
+    if(i != n)
+        drawerror(d, "writecolmap: bad write");
+}
+@
+
+
+
+
 
 \subsection{Hardware support hook}
 
@@ -6598,6 +7747,12 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 
 \section{Alpha}
 
+
+
+
+
+
+
 \chapter{Fonts}
 % test code showing use of font? display the core font?
 
@@ -6608,8 +7763,11 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 %  - more??
 
 
+% defont in defont.c, big
+
 \section{Text}
 % and rune
+% mv in Drawing chapter?
 
 %https://engineering.eventbrite.com/its-2015-and-drawing-text-is-still-hard-webgl-threejs/
 
@@ -6841,6 +7999,8 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
 @
 
 
+
+
 \subsection{Unmarshalling}
 
 <<[[drawmesg()]] cases>>=
@@ -6915,11 +8075,190 @@ case 'x':
 
 \subsection{Algorithm}
 
+\section{Text width}
+
+\subsection{API}
+
+<<function stringnwidth>>=
+int
+stringnwidth(Font *f, char *s, int len)
+{
+    return _stringnwidth(f, s, nil, len);
+}
+@
+
+<<function stringwidth>>=
+int
+stringwidth(Font *f, char *s)
+{
+    return _stringnwidth(f, s, nil, 1<<24);
+}
+@
+
+<<function stringsize>>=
+Point
+stringsize(Font *f, char *s)
+{
+    return Pt(_stringnwidth(f, s, nil, 1<<24), f->height);
+}
+@
+
+<<function runestringnwidth>>=
+int
+runestringnwidth(Font *f, Rune *r, int len)
+{
+    return _stringnwidth(f, nil, r, len);
+}
+@
+
+<<function runestringwidth>>=
+int
+runestringwidth(Font *f, Rune *r)
+{
+    return _stringnwidth(f, nil, r, 1<<24);
+}
+@
+
+<<function runestringsize>>=
+Point
+runestringsize(Font *f, Rune *r)
+{
+    return Pt(_stringnwidth(f, nil, r, 1<<24), f->height);
+}
+@
+
+
+
+\subsection{Algorithm}
+% actually no marshalling/unmarshalling
+
+<<enum _anon_ (lib_graphics/libdraw/stringwidth.c)>>=
+enum { Max = 64 };
+@
+
+<<function _stringnwidth>>=
+int
+_stringnwidth(Font *f, char *s, Rune *r, int len)
+{
+    int wid, twid, n, max, l;
+    char *name;
+    ushort cbuf[Max];
+    Rune rune, **rptr;
+    char *subfontname, **sptr;
+    Font *def;
+
+    if(s == nil){
+        s = "";
+        sptr = nil;
+    }else
+        sptr = &s;
+    if(r == nil){
+          r = L"";
+        rptr = nil;
+    }else
+        rptr = &r;
+    twid = 0;
+    while(len>0 && (*s || *r)){
+        max = Max;
+        if(len < max)
+            max = len;
+        n = 0;
+        while((l = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname)) <= 0){
+            if(++n > 10){
+                if(*r)
+                    rune = *r;
+                else
+                    chartorune(&rune, s);
+                if(f->name != nil)
+                    name = f->name;
+                else
+                    name = "unnamed font";
+                fprint(2, "stringwidth: bad character set for rune 0x%.4ux in %s\n", rune, name);
+                return twid;
+            }
+            if(subfontname){
+                if(_getsubfont(f->display, subfontname) == 0){
+                    def = f->display->defaultfont;
+                    if(def && f!=def)
+                        f = def;
+                    else
+                        break;
+                }
+            }
+        }
+        agefont(f);
+        twid += wid;
+        len -= l;
+    }
+    return twid;
+}
+@
+
+
+
 
 
 \section{Fonts}
 
 \subsection{API}
+
+%dead?
+<<function mkfont>>=
+/*
+ * Cobble fake font using existing subfont
+ */
+Font*
+mkfont(Subfont *subfont, Rune min)
+{
+    Font *font;
+    Cachefont *c;
+
+    font = malloc(sizeof(Font));
+    if(font == 0)
+        return 0;
+    memset(font, 0, sizeof(Font));
+    font->display = subfont->bits->display;
+    font->name = strdup("<synthetic>");
+    font->ncache = NFCACHE+NFLOOK;
+    font->nsubf = NFSUBF;
+    font->cache = malloc(font->ncache * sizeof(font->cache[0]));
+    font->subf = malloc(font->nsubf * sizeof(font->subf[0]));
+    if(font->name==0 || font->cache==0 || font->subf==0){
+    Err:
+        free(font->name);
+        free(font->cache);
+        free(font->subf);
+        free(font->sub);
+        free(font);
+        return 0;
+    }
+    memset(font->cache, 0, font->ncache*sizeof(font->cache[0]));
+    memset(font->subf, 0, font->nsubf*sizeof(font->subf[0]));
+    font->height = subfont->height;
+    font->ascent = subfont->ascent;
+    font->age = 1;
+    font->sub = malloc(sizeof(Cachefont*));
+    if(font->sub == 0)
+        goto Err;
+    c = malloc(sizeof(Cachefont));
+    if(c == 0)
+        goto Err;
+    font->nsub = 1;
+    font->sub[0] = c;
+    c->min = min;
+    c->max = min+subfont->n-1;
+    c->offset = 0;
+    c->name = 0;	/* noticed by freeup() and agefont() */
+    c->subfontname = 0;
+    font->subf[0].age = 0;
+    font->subf[0].cf = c;
+    font->subf[0].f = subfont;
+    return font;
+}
+@
+
+
+
 
 <<function fontresize>>=
 /* return whether resize succeeded && f->cache is unchanged */
@@ -7136,6 +8475,10 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
 }
 @
 
+<<constant PJW>>=
+#define	PJW	0	/* use NUL==pjw for invisible characters */
+@
+
 
 \subsection{Marshalling}
 
@@ -7204,9 +8547,584 @@ case 'l':
 \subsection{Algorithm}
 
 
+
+\section{Default font}
+
+% initdraw -> geninitdraw -> <>
+<<function getdefont>>=
+Subfont*
+getdefont(Display *d)
+{
+    char *hdr, *p;
+    int n;
+    Fontchar *fc;
+    Subfont *f;
+    int ld;
+    Rectangle r;
+    Image *i;
+
+    /*
+     * make sure data is word-aligned.  this is true with Plan 9 compilers
+     * but not in general.  the byte order is right because the data is
+     * declared as char*, not ulong*.
+     */
+    p = (char*)defontdata;
+    n = (int)(uvlong)p & 3;				/* stupid ape */
+    if(n != 0){
+        memmove(p+(4-n), p, sizeofdefont-n);
+        p += 4-n;
+    }
+    ld = atoi(p+0*12);
+    r.min.x = atoi(p+1*12);
+    r.min.y = atoi(p+2*12);
+    r.max.x = atoi(p+3*12);
+    r.max.y = atoi(p+4*12);
+
+    i = allocimage(d, r, drawld2chan[ld], 0, 0);
+    if(i == 0)
+        return 0;
+
+    p += 5*12;
+    n = loadimage(i, r, (uchar*)p, (defontdata+sizeofdefont)-(uchar*)p);
+    if(n < 0){
+        freeimage(i);
+        return 0;
+    }
+
+    hdr = p+n;
+    n = atoi(hdr);
+    p = hdr+3*12;
+    fc = malloc(sizeof(Fontchar)*(n+1));
+    if(fc == 0){
+        freeimage(i);
+        return 0;
+    }
+    _unpackinfo(fc, (uchar*)p, n);
+    f = allocsubfont("*default*", n, atoi(hdr+12), atoi(hdr+24), fc, i);
+    if(f == 0){
+        freeimage(i);
+        free(fc);
+        return 0;
+    }
+    return f;
+}
+@
+
+<<global sizeofdefont>>=
+int	sizeofdefont = sizeof defontdata;
+@
+
+
+
+<<function _unpackinfo>>=
+void
+_unpackinfo(Fontchar *fc, uchar *p, int n)
+{
+    int j;
+
+    for(j=0;  j<=n;  j++){
+        fc->x = p[0]|(p[1]<<8);
+        fc->top = p[2];
+        fc->bottom = p[3];
+        fc->left = p[4];
+        fc->width = p[5];
+        fc++;
+        p += 6;
+    }
+}
+@
+% >> >>  >> 
+
+
+<<function getmemdefont>>=
+Memsubfont*
+getmemdefont(void)
+{
+    char *hdr, *p;
+    int n;
+    Fontchar *fc;
+    Memsubfont *f;
+    int ld;
+    Rectangle r;
+    Memdata *md;
+    Memimage *i;
+
+    /*
+     * make sure data is word-aligned.  this is true with Plan 9 compilers
+     * but not in general.  the byte order is right because the data is
+     * declared as char*, not ulong*.
+     */
+    p = (char*)defontdata;
+    n = (uintptr)p & 3;
+    if(n != 0){
+        memmove(p+(4-n), p, sizeofdefont-n);
+        p += 4-n;
+    }
+    ld = atoi(p+0*12);
+    r.min.x = atoi(p+1*12);
+    r.min.y = atoi(p+2*12);
+    r.max.x = atoi(p+3*12);
+    r.max.y = atoi(p+4*12);
+
+    md = mallocz(sizeof(Memdata), 1);
+    if(md == nil)
+        return nil;
+    
+    p += 5*12;
+
+    md->base = nil;		/* so freememimage doesn't free p */
+    md->bdata = (uchar*)p;	/* ick */
+    md->ref = 1;
+    md->allocd = 1;		/* so freememimage does free md */
+
+    i = allocmemimaged(r, drawld2chan[ld], md);
+    if(i == nil){
+        free(md);
+        return nil;
+    }
+
+    hdr = p+Dy(r)*i->width*sizeof(ulong);
+    n = atoi(hdr);
+    p = hdr+3*12;
+    fc = malloc(sizeof(Fontchar)*(n+1));
+    if(fc == 0){
+        freememimage(i);
+        return 0;
+    }
+    _unpackinfo(fc, (uchar*)p, n);
+    f = allocmemsubfont("*default*", n, atoi(hdr+12), atoi(hdr+24), fc, i);
+    if(f == 0){
+        freememimage(i);
+        free(fc);
+        return 0;
+    }
+    return f;
+}
+@
+
+
+
+\section{Subfont}
+
+<<function allocsubfont>>=
+Subfont*
+allocsubfont(char *name, int n, int height, int ascent, Fontchar *info, Image *i)
+{
+    Subfont *f;
+
+    assert(height != 0 /* allocsubfont */);
+
+    f = malloc(sizeof(Subfont));
+    if(f == 0)
+        return 0;
+    f->n = n;
+    f->height = height;
+    f->ascent = ascent;
+    f->info = info;
+    f->bits = i;
+    f->ref = 1;
+    if(name){
+        f->name = strdup(name);
+        if(lookupsubfont(i->display, name) == 0)
+            installsubfont(name, f);
+    }else
+        f->name = 0;
+    return f;
+}
+@
+
+
+<<function _getsubfont>>=
+/*
+ * Default version: treat as file name
+ */
+
+Subfont*
+_getsubfont(Display *d, char *name)
+{
+    int fd;
+    Subfont *f;
+
+    fd = open(name, OREAD);
+        
+    if(fd < 0){
+        fprint(2, "getsubfont: can't open %s: %r\n", name);
+        return 0;
+    }
+    /*
+     * unlock display so i/o happens with display released, unless
+     * user is doing his own locking, in which case this could break things.
+     * _getsubfont is called only from string.c and stringwidth.c,
+     * which are known to be safe to have this done.
+     */
+    if(d && d->locking == false)
+        unlockdisplay(d);
+    f = readsubfont(d, name, fd, d && d->locking==false);
+    if(d && d->locking == false)
+        lockdisplay(d);
+    if(f == 0)
+        fprint(2, "getsubfont: can't read %s: %r\n", name);
+    close(fd);
+    setmalloctag(f, getcallerpc(&d));
+    return f;
+}
+@
+
+
+
+
+<<function cf2subfont>>=
+static Subfont*
+cf2subfont(Cachefont *cf, Font *f)
+{
+    int depth;
+    char *name;
+    Subfont *sf;
+
+    name = cf->subfontname;
+    if(name == nil){
+        if(f->display && f->display->screenimage)
+            depth = f->display->screenimage->depth;
+        else
+            depth = 8;
+        name = subfontname(cf->name, f->name, depth);
+        if(name == nil)
+            return nil;
+        cf->subfontname = name;
+    }
+    sf = lookupsubfont(f->display, name);
+    return sf;
+}
+@
+
+<<function subfontname>>=
+/*
+ * Default version: convert to file name
+ */
+
+char*
+subfontname(char *cfname, char *fname, int maxdepth)
+{
+    char *t, *u, *tmp1, *tmp2;
+    int i;
+
+    t = strdup(cfname);  /* t is the return string */
+    if(strcmp(cfname, "*default*") == 0)
+        return t;
+    if(t[0] != '/'){
+        tmp2 = strdup(fname);
+        u = utfrrune(tmp2, '/');
+        if(u)
+            u[0] = 0;
+        else
+            strcpy(tmp2, ".");
+        tmp1 = smprint("%s/%s", tmp2, t);
+        free(tmp2);
+        free(t);
+        t = tmp1;
+    }
+
+    if(maxdepth > 8)
+        maxdepth = 8;
+
+    for(i=3; i>=0; i--){
+        if((1<<i) > maxdepth)
+            continue;
+        /* try i-bit grey */
+        tmp2 = smprint("%s.%d", t, i);
+        if(access(tmp2, AREAD) == 0) {
+            free(t);
+            return tmp2;
+        }
+        free(tmp2);
+    }
+
+    /* try default */
+    if(access(t, AREAD) == 0)
+        return t;
+
+    free(t);
+    return nil;
+}
+@
+% >>
+
+
+
+<<function readsubfonti>>=
+Subfont*
+readsubfonti(Display*d, char *name, int fd, Image *ai, int dolock)
+{
+    char hdr[3*12+4+1];
+    int n;
+    uchar *p;
+    Fontchar *fc;
+    Subfont *f;
+    Image *i;
+
+    i = ai;
+    if(i == nil){
+        i = readimage(d, fd, dolock);
+        if(i == nil)
+            return nil;
+    }
+    if(read(fd, hdr, 3*12) != 3*12){
+        if(ai == nil)
+            freeimage(i);
+        werrstr("rdsubfonfile: header read error: %r");
+        return nil;
+    }
+    n = atoi(hdr);
+    p = malloc(6*(n+1));
+    if(p == nil)
+        goto Err;
+    if(read(fd, p, 6*(n+1)) != 6*(n+1)){
+        werrstr("rdsubfonfile: fontchar read error: %r");
+    Err:
+        if(ai == nil)
+            freeimage(i);
+        free(p);
+        return nil;
+    }
+    fc = malloc(sizeof(Fontchar)*(n+1));
+    if(fc == nil)
+        goto Err;
+    _unpackinfo(fc, p, n);
+    if(dolock)
+        lockdisplay(d);
+    f = allocsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
+    if(dolock)
+        unlockdisplay(d);
+    if(f == nil){
+        free(fc);
+        goto Err;
+    }
+    free(p);
+    return f;
+}
+@
+
+<<function readsubfont>>=
+Subfont*
+readsubfont(Display *d, char *name, int fd, int dolock)
+{
+    return readsubfonti(d, name, fd, nil, dolock);
+}
+@
+
+
+
+<<function stringsubfont>>=
+Point
+stringsubfont(Image *b, Point p, Image *color, Subfont *f, char *cs)
+{
+    int w, width;
+    uchar *s;
+    Rune c;
+    Fontchar *i;
+
+    s = (uchar*)cs;
+    for(; c=*s; p.x+=width){
+        width = 0;
+        if(c < Runeself)
+            s++;
+        else{
+            w = chartorune(&c, (char*)s);
+            if(w == 0){
+                s++;
+                continue;
+            }
+            s += w;
+        }
+        if(c >= f->n)
+            continue;
+        i = f->info+c;
+        width = i->width;
+        draw(b, Rect(p.x+i->left, p.y+i->top, p.x+i->left+(i[1].x-i[0].x), p.y+i->bottom),
+            color, f->bits, Pt(i->x, i->top));
+    }
+    return p;
+}
+@
+
+<<function strsubfontwidth>>=
+Point
+strsubfontwidth(Subfont *f, char *cs)
+{
+    Rune c;
+    Point p;
+    uchar *s;
+    Fontchar *i;
+    int w, width;
+
+    p = Pt(0, f->height);
+    s = (uchar*)cs;
+    for(; c=*s; p.x+=width){
+        width = 0;
+        if(c < Runeself)
+            s++;
+        else{
+            w = chartorune(&c, (char*)s);
+            if(w == 0){
+                s++;
+                continue;
+            }
+            s += w;
+        }
+        if(c >= f->n)
+            continue;
+        i = f->info+c;
+        width = i->width;
+    }
+    return p;
+}
+@
+
+
+
+
+<<function packinfo>>=
+static
+void
+packinfo(Fontchar *fc, uchar *p, int n)
+{
+    int j;
+
+    for(j=0;  j<=n;  j++){
+        p[0] = fc->x;
+        p[1] = fc->x>>8;
+        p[2] = fc->top;
+        p[3] = fc->bottom;
+        p[4] = fc->left;
+        p[5] = fc->width;
+        fc++;
+        p += 6;
+    }
+}
+@
+
+<<function writesubfont>>=
+int
+writesubfont(int fd, Subfont *f)
+{
+    char hdr[3*12+1];
+    uchar *data;
+    int nb;
+
+    sprint(hdr, "%11d %11d %11d ", f->n, f->height, f->ascent);
+    if(write(fd, hdr, 3*12) != 3*12){
+   Err:
+        werrstr("writesubfont: bad write: %r");
+        return -1;
+    }
+    nb = 6*(f->n+1);
+    data = malloc(nb);
+    if(data == nil)
+        return -1;
+    packinfo(f->info, data, f->n);
+    if(write(fd, data, nb) != nb)
+        goto Err;
+    free(data);
+    return 0;
+}
+@
+
+
+\subsection{Algorithm}
+
+<<function openmemsubfont>>=
+Memsubfont*
+openmemsubfont(char *name)
+{
+    Memsubfont *sf;
+    Memimage *i;
+    Fontchar *fc;
+    int fd, n;
+    char hdr[3*12+4+1];
+    uchar *p;
+
+    fd = open(name, OREAD);
+    if(fd < 0)
+        return nil;
+    p = nil;
+    i = readmemimage(fd);
+    if(i == nil)
+        goto Err;
+    if(read(fd, hdr, 3*12) != 3*12){
+        werrstr("openmemsubfont: header read error: %r");
+        goto Err;
+    }
+    n = atoi(hdr);
+    p = malloc(6*(n+1));
+    if(p == nil)
+        goto Err;
+    if(read(fd, p, 6*(n+1)) != 6*(n+1)){
+        werrstr("openmemsubfont: fontchar read error: %r");
+        goto Err;
+    }
+    fc = malloc(sizeof(Fontchar)*(n+1));
+    if(fc == nil)
+        goto Err;
+    _unpackinfo(fc, p, n);
+    sf = allocmemsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
+    if(sf == nil){
+        free(fc);
+        goto Err;
+    }
+    free(p);
+    return sf;
+Err:
+    close(fd);
+    if (i != nil)
+        freememimage(i);
+    if (p != nil)
+        free(p);
+    return nil;
+}
+@
+
+
+<<function allocmemsubfont>>=
+Memsubfont*
+allocmemsubfont(char *name, int n, int height, int ascent, Fontchar *info, Memimage *i)
+{
+    Memsubfont *f;
+
+    f = malloc(sizeof(Memsubfont));
+    if(f == 0)
+        return 0;
+    f->n = n;
+    f->height = height;
+    f->ascent = ascent;
+    f->info = info;
+    f->bits = i;
+    if(name)
+        f->name = strdup(name);
+    else
+        f->name = 0;
+    return f;
+}
+@
+
+<<function freememsubfont>>=
+void
+freememsubfont(Memsubfont *f)
+{
+    if(f == 0)
+        return;
+    free(f->info);	/* note: f->info must have been malloc'ed! */
+    freememimage(f->bits);
+    free(f);
+}
+@
+
+
+
+
 \section{Compressed form}
 
 \section{Font cache}
+% Adv topics or too important?
 
 <<enum _anon_ (include/draw.h)6>>=
 enum
@@ -7226,7 +9144,7 @@ enum
     CACHEAGE =	10000
 };
 @
-
+% >> >>
 
 <<struct Cachefont>>=
 struct Cachefont
@@ -7259,8 +9177,207 @@ struct Cachesubf
 };
 @
 
+
+
+
+
+<<function cachechars>>=
+int
+cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **subfontname)
+{
+    int i, th, sh, h, ld, w, rw, wid, nc;
+    char *sp;
+    Rune r, *rp, vr;
+    ulong a;
+    Cacheinfo *c, *tc, *ec;
+
+    if(ss){
+        sp = *ss;
+        rp = L"";
+    }else{
+        sp = "";
+        rp = *rr;
+    }
+    wid = 0;
+    *subfontname = 0;
+    for(i=0; i<max && (*sp || *rp); sp+=w, rp+=rw){
+        if(ss){
+            r = *(uchar*)sp;
+            if(r < Runeself)
+                w = 1;
+            else{
+                w = chartorune(&vr, sp);
+                r = vr;
+            }
+            rw = 0;
+        }else{
+            r = *rp;
+            w = 0;
+            rw = 1;
+        }
+
+        sh = (17 * (uint)r) & (f->ncache-NFLOOK-1);
+        c = &f->cache[sh];
+        ec = c+NFLOOK;
+        h = sh;
+        while(c < ec){
+            if(c->value==r && c->age)
+                goto Found;
+            c++;
+            h++;
+        }
+    
+        /*
+         * Not found; toss out oldest entry
+         */
+        a = ~0;
+        th = sh;
+        tc = &f->cache[th];
+        while(tc < ec){
+            if(tc->age < a){
+                a = tc->age;
+                h = th;
+                c = tc;
+            }
+            tc++;
+            th++;
+        }
+
+        if(a && (f->age-a)<500){	/* kicking out too recent; resize */
+            nc = 2*(f->ncache-NFLOOK) + NFLOOK;
+            if(nc <= MAXFCACHE){
+                if(i == 0)
+                    fontresize(f, f->width, nc, f->maxdepth);
+                /* else flush first; retry will resize */
+                break;
+            }
+        }
+
+        if(c->age == f->age)	/* flush pending string output */
+            break;
+
+        ld = loadchar(f, r, c, h, i, subfontname);
+        if(ld <= 0){
+            if(ld == 0)
+                continue;
+            break;
+        }
+        c = &f->cache[h];	/* may have reallocated f->cache */
+    
+        Found:
+        wid += c->width;
+        c->age = f->age;
+        cp[i] = h;
+        i++;
+    }
+    if(ss)
+        *ss = sp;
+    else
+        *rr = rp;
+    *wp = wid;
+    return i;
+}
+@
+
+<<function agefont>>=
+void
+agefont(Font *f)
+{
+    Cacheinfo *c, *ec;
+    Cachesubf *s, *es;
+
+    f->age++;
+    if(f->age == 65536){
+        /*
+         * Renormalize ages
+         */
+        c = f->cache;
+        ec = c+f->ncache;
+        while(c < ec){
+            if(c->age){
+                c->age >>= 2;
+                c->age++;
+            }
+            c++;
+        }
+        s = f->subf;
+        es = s+f->nsubf;
+        while(s < es){
+            if(s->age){
+                if(s->age<SUBFAGE && s->cf->name != nil){
+                    /* clean up */
+                    if(display &&
+                        s->f != display->defaultsubfont)
+                        freesubfont(s->f);
+                    s->cf = nil;
+                    s->f = nil;
+                    s->age = 0;
+                }else{
+                    s->age >>= 2;
+                    s->age++;
+                }
+            }
+            s++;
+        }
+        f->age = (65536>>2) + 1;
+    }
+}
+@
+
+
+
+<<global lastname>>=
+/*
+ * Easy versions of the cache routines; may be substituted by fancier ones for other purposes
+ */
+
+static char	*lastname;
+@
+
+<<global lastsubfont>>=
+Subfont	*lastsubfont;
+@
+
+<<function lookupsubfont>>=
+Subfont*
+lookupsubfont(Display *d, char *name)
+{
+    if(d && strcmp(name, "*default*") == 0)
+        return d->defaultsubfont;
+    if(lastname && strcmp(name, lastname)==0)
+    if(d==lastsubfont->bits->display){
+        lastsubfont->ref++;
+        return lastsubfont;
+    }
+    return 0;
+}
+@
+
+<<function installsubfont>>=
+void
+installsubfont(char *name, Subfont *subfont)
+{
+    free(lastname);
+    lastname = strdup(name);
+    lastsubfont = subfont;	/* notice we don't free the old one; that's your business */
+}
+@
+
+<<function uninstallsubfont>>=
+void
+uninstallsubfont(Subfont *subfont)
+{
+    if(subfont == lastsubfont){
+        lastname = 0;
+        lastsubfont = 0;
+    }
+}
+@
+
+
 \chapter{Image IO}
 % advanced topics? not that important no?
+% or needed for Fonts?
 
 
 <<constant NMEM>>=
@@ -7282,6 +9399,11 @@ struct Cachesubf
 % also loading fonts, etc, are about reading images,
 % and those fonts have to be in the kernel like all the
 % other images.
+
+
+
+
+
 
 
 \section{Reading images}
@@ -7593,6 +9715,124 @@ unloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
 }
 @
 
+
+
+
+
+% called only by font stuff?
+<<function readmemimage>>=
+Memimage*
+readmemimage(int fd)
+{
+    char hdr[5*12+1];
+    int dy;
+    ulong chan;
+    uint l, n;
+    int m, j;
+    int new, miny, maxy;
+    Rectangle r;
+    uchar *tmp;
+    int ldepth, chunk;
+    Memimage *i;
+
+    if(readn(fd, hdr, 11) != 11){
+        werrstr("readimage: short header");
+        return nil;
+    }
+    if(memcmp(hdr, "compressed\n", 11) == 0)
+        return creadmemimage(fd);
+
+    if(readn(fd, hdr+11, 5*12-11) != 5*12-11){
+        werrstr("readimage: short header (2)");
+        return nil;
+    }
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("readimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("readimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("readimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+
+    r.min.x = atoi(hdr+1*12);
+    r.min.y = atoi(hdr+2*12);
+    r.max.x = atoi(hdr+3*12);
+    r.max.y = atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("readimage: bad rectangle");
+        return nil;
+    }
+
+    miny = r.min.y;
+    maxy = r.max.y;
+
+    l = bytesperline(r, chantodepth(chan));
+    i = allocmemimage(r, chan);
+    if(i == nil)
+        return nil;
+    chunk = 32*1024;
+    if(chunk < l)
+        chunk = l;
+    tmp = malloc(chunk);
+    if(tmp == nil)
+        goto Err;
+    while(maxy > miny){
+        dy = maxy - miny;
+        if(dy*l > chunk)
+            dy = chunk/l;
+        if(dy <= 0){
+            werrstr("readmemimage: image too wide for buffer");
+            goto Err;
+        }
+        n = dy*l;
+        m = readn(fd, tmp, n);
+        if(m != n){
+            werrstr("readmemimage: read count %d not %d: %r", m, n);
+   Err:
+    freememimage(i);
+            free(tmp);
+            return nil;
+        }
+        if(!new)	/* an old image: must flip all the bits */
+            for(j=0; j<chunk; j++)
+                tmp[j] ^= 0xFF;
+
+        if(loadmemimage(i, Rect(r.min.x, miny, r.max.x, miny+dy), tmp, chunk) <= 0)
+            goto Err;
+        miny += dy;
+    }
+    free(tmp);
+    return i;
+}
+@
+
+
+
+
 \section{Writing images}
 
 %topng </dev/screen >screen.png :) = Grab
@@ -7890,7 +10130,7 @@ case 'Y':
 
 <<function memload>>=
 int
-memload(Memimage *dst, Rectangle r, uchar *data, int n, int iscompressed)
+memload(Memimage *dst, Rectangle r, uchar *data, int n, bool iscompressed)
 {
     int (*loadfn)(Memimage*, Rectangle, uchar*, int);
     Memimage *tmp;
@@ -8411,6 +10651,8 @@ creadmemimage(int fd)
 
 
 
+
+
 \chapter{Windows}
 % Layers
 
@@ -8440,7 +10682,9 @@ newwindow(char *str)
 }
 @
 
-\section{Screen creation, [[Screen]] and [[Memscreen]]}
+\section{Additional data structures}
+
+\subsection{[[Screen]]}
 % and [[_screen]]
 
 <<struct Screen>>=
@@ -8465,6 +10709,44 @@ Screen	*screen;
 static int	screenid;
 @
 
+\subsection{[[CScreen]]}
+
+<<[[Client]] screen fields>>=
+CScreen*    cscreen;
+@
+
+<<struct CScreen>>=
+struct CScreen
+{
+    DScreen*    dscreen;
+    CScreen*    next;
+};
+@
+
+
+\subsection{[[DScreen]]}
+
+<<struct DScreen>>=
+struct DScreen
+{
+    int     id;
+
+    int     public;
+    int     ref;
+
+    DImage      *dimage;
+    DImage      *dfill;
+
+    Memscreen*  screen;
+
+    Client*     owner;
+    DScreen*    next;
+};
+@
+
+
+\subsection{[[Memscreen]]}
+
 
 <<struct Memscreen>>=
 struct Memscreen
@@ -8475,6 +10757,8 @@ struct Memscreen
     Memimage	*fill;			/* if non-zero, picture to use when repainting */
 };
 @
+
+\subsection{[[Memlayer]]}
 
 <<struct Memlayer>>=
 struct Memlayer
@@ -8491,6 +10775,7 @@ struct Memlayer
 };
 @
 
+\section{Screen creation}
 
 \subsection{API}
 
@@ -9934,9 +12219,14 @@ _memltorear(Memimage *i, Memimage *rear)
 
 
 
+
+
+
 \chapter{Input}
 
 % related: big-bang function in racket/htdp
+
+% process model? ioproc? why need that?
 
 \section{Keyboard}
 
@@ -10114,6 +12404,14 @@ struct	Mouse
     int	buttons;	/* bit array: LMR=124 */
     Point	xy;
     ulong	msec;
+};
+@
+
+<<enum Click>>=
+enum click {
+    CLICK_LEFT = 1,
+    CLICK_MIDDLE = 2,
+    CLICK_RIGHT = 4,
 };
 @
 
@@ -10467,6 +12765,8 @@ struct	Cursor
     byte	set[2*16];
 };
 @
+% graphics(2) says clr/set are bad names and should be called
+% instead white and black.
 
 % screen.h interface
 % vgascreen.c (seems general enough, could be put in a generic screen.c)
@@ -11540,44 +13840,58 @@ eatomouse(Mouse *m, char *buf, int n)
 
 
 
-\chapter{Widgets}
+%\chapter{Widgets}
+%
+%\section{Libpanel}
+%% different alloc, different event loop, 
+%% and the Panel main data structure
+%
+%
+%
+%\section{Frame}
+%% have libframe/ but also a frame widge in libpanel
+%
+%\section{Scrolling}
+%% have also a menu in libpanel, scrollbar
+%
+%\section{Menu}
+%% have also a menu in libpanel, popup, pulldown
+%
+%\section{Button}
+%
+%\section{Label}
+%
+%\section{Text entry}
+%
+%\section{Completion}
+%
+%\section{Slider}
+%
+%\section{List}
+%
+%\section{Pack}
+%
+%\section{Canvas}
+%
+%\section{Text view}
+%
+%\section{Rich text}
 
-\section{Libpanel}
-% different alloc, different event loop, 
-% and the Panel main data structure
 
 
 
-\section{Frame}
-% have libframe/ but also a frame widge in libpanel
 
-\section{Scrolling}
-% have also a menu in libpanel, scrollbar
-
-\section{Menu}
-% have also a menu in libpanel, popup, pulldown
-
-\section{Button}
-
-\section{Label}
-
-\section{Text entry}
-
-\section{Completion}
-
-\section{Slider}
-
-\section{List}
-
-\section{Pack}
-
-\section{Canvas}
-
-\section{Text view}
-
-\section{Rich text}
 
 \chapter{Advanced Topics}
+
+%\section{Image naming?}
+
+%\section{Image compression?}
+
+%\section{Other alphacalc?}
+
+%\section{JPG}
+% libimg/
 
 \section{Bezier}
 % spline
@@ -12638,6 +14952,10 @@ emenuhit(int but, Mouse *m, Menu *menu)
 @
 % >> >>
 
+
+
+
+
 \section{Graphics text mode}
 % when do aux/vga it switches to graphic mode, but we still want a console!
 % the kernel still needs a working (*screenputs)(...).
@@ -12813,6 +15131,77 @@ vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
 //  drawdebug = 0;
 }
 @
+
+
+<<function memsubfontwidth>>=
+Point
+memsubfontwidth(Memsubfont *f, char *cs)
+{
+    Rune c;
+    Point p;
+    uchar *s;
+    Fontchar *i;
+    int w, width;
+
+    p = Pt(0, f->height);
+    s = (uchar*)cs;
+    for(; c=*s; p.x+=width){
+        width = 0;
+        if(c < Runeself)
+            s++;
+        else{
+            w = chartorune(&c, (char*)s);
+            if(w == 0){
+                s++;
+                continue;
+            }
+            s += w;
+        }
+        if(c >= f->n)
+            continue;
+        i = f->info+c;
+        width = i->width;
+    }
+    return p;
+}
+@
+
+
+
+<<function memimagestring>>=
+Point
+memimagestring(Memimage *b, Point p, Memimage *color, Point cp, Memsubfont *f, char *cs)
+{
+    int w, width;
+    uchar *s;
+    Rune c;
+    Fontchar *i;
+
+    s = (uchar*)cs;
+    for(; c=*s; p.x+=width, cp.x+=width){
+        width = 0;
+        if(c < Runeself)
+            s++;
+        else{
+            w = chartorune(&c, (char*)s);
+            if(w == 0){
+                s++;
+                continue;
+            }
+            s += w;
+        }
+        if(c >= f->n)
+            continue;
+        i = f->info+c;
+        width = i->width;
+        memdraw(b, Rect(p.x+i->left, p.y+i->top, p.x+i->left+(i[1].x-i[0].x), p.y+i->bottom),
+            color, cp, f->bits, Pt(i->x, i->top), SoverD);
+    }
+    return p;
+}
+@
+
+
 
 
 % vgascreenputs -> vgascreenputc -> <>
@@ -13058,8 +15447,72 @@ vgablank(VGAscr*, int blank)
 fdt		reffd; // /dev/draw/x/refresh
 @
 
+<<[[Client]] other fields>>=
+Refresh*    refresh;
+Rendez      refrend;
+int     refreshme;
+@
+
+
+
+
+\section{Concurrency}
+
+\subsection{[[lockdisplay()]]}
+
+% seems related to IO. graphics(2) mentions it when
+%  use multi-thread program! then need lock Display around
+%  each API call
+
+<<function lockdisplay>>=
+void
+lockdisplay(Display *disp)
+{
+    <<[[lockdisplay()]] if debuglockdisplay>>
+    else
+        qlock(&disp->qlock);
+}
+@
+
+<<function unlockdisplay>>=
+void
+unlockdisplay(Display *disp)
+{
+    qunlock(&disp->qlock);
+}
+@
+
+<<[[Display]] concurrency fields>>=
+QLock	qlock;
+@
+
+% also need notify the library to use a locking protocol also
+% for its own accesses (seems used mostly when do internal IO)
+<<[[Display]] concurrency fields>>=
+bool		locking;	/*program is using lockdisplay */
+@
+
+
 
 \chapter{Conclusion}
+
+% That's it! you know now!
+
+% next book = Windowing system.
+% also Editor is a graphical app.
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 \appendix
 
@@ -13140,6 +15593,15 @@ bool drawdebug;
 bool		debuglockdisplay = false;
 @
 
+<<[[lockdisplay()]] if debuglockdisplay>>=
+if(debuglockdisplay){
+    /* avoid busy looping; it's rare we collide anyway */
+    while(!canqlock(&disp->qlock)){
+        fprint(1, "proc %d waiting for display lock...\n", getpid());
+        sleep(1000);
+    }
+}
+@
 
 <<function drawsetdebug>>=
 void
@@ -13175,6 +15637,11 @@ case 'D':
 <<[[initdisplay()]] install dumpers>>=
 fmtinstall('P', Pfmt);
 fmtinstall('R', Rfmt);
+@
+
+<<[[memimageinit()]] install dumpers>>=
+fmtinstall('P', Pfmt);
+fmtinstall('R', Rfmt); 
 @
 
 %dumper
@@ -13280,6 +15747,9 @@ strtochan(char *s)
 % >> 
 
 
+
+
+
 \chapter{Error Managment}
 
 % initdraw take an error parameter?
@@ -13303,6 +15773,8 @@ drawerror(Display *d, char *s)
     }
 }
 @
+
+
 
 
 \chapter{VGA driver}
@@ -14250,6 +16722,97 @@ vgalinearaddr(VGAscr *scr, ulong paddr, int size)
 }
 @
 
+\section{VESA}
+
+<<global vgavesadev(x86)>>=
+VGAdev vgavesadev = {
+    "vesa",
+    0,
+    0,
+    0,
+    vesalinear,
+    0,
+    0,
+    0,
+    0,
+    vesaflush,
+};
+@
+
+
+<<function vesalinear(x86)>>=
+static void
+vesalinear(VGAscr *scr, int, int)
+{
+    int i, mode, size, havesize;
+    uchar *p;
+    ulong paddr;
+    Pcidev *pci;
+
+    if(hardscreen) {
+        scr->vaddr = 0;
+        scr->paddr = scr->apsize = 0;
+        return;
+    }
+
+    vbecheck();
+    mode = vbegetmode();
+    /*
+     * bochs loses the top bits - cannot use this
+    if((mode&(1<<14)) == 0)
+        error("not in linear graphics mode");
+     */
+    mode &= 0x3FFF;
+    p = vbemodeinfo(mode);
+    if(!(WORD(p+0) & (1<<4)))
+        error("not in VESA graphics mode");
+    if(!(WORD(p+0) & (1<<7)))
+        error("not in linear graphics mode");
+
+    paddr = LONG(p+40);
+    size = WORD(p+20)*WORD(p+16);
+    size = PGROUND(size);
+
+    /*
+     * figure out max size of memory so that we have
+     * enough if the screen is resized.
+     */
+    pci = nil;
+    havesize = 0;
+    while(!havesize && (pci = pcimatch(pci, 0, 0)) != nil){
+        if(pci->ccrb != Pcibcdisp)
+            continue;
+        for(i=0; i<nelem(pci->mem); i++)
+            if(paddr == (pci->mem[i].bar&~0x0F)){
+                if(pci->mem[i].size > size)
+                    size = pci->mem[i].size;
+                havesize = 1;
+                break;
+            }
+    }
+
+    /* no pci - heuristic guess */
+    if (!havesize)
+        if(size < 4*1024*1024)
+            size = 4*1024*1024;
+        else
+            size = ROUND(size, 1024*1024);
+    if(size > 16*1024*1024)     /* arbitrary */
+        size = 16*1024*1024;
+
+    vgalinearaddr(scr, paddr, size);
+    if(scr->apsize)
+        addvgaseg("vesascreen", scr->paddr, scr->apsize);
+
+    if(Usesoftscreen){
+        hardscreen = scr->vaddr;
+        scr->vaddr = 0;
+        scr->paddr = scr->apsize = 0;
+    }
+}
+@
+% >> >> >>
+
 
 \section{Cirrus logic 5446}
 
@@ -14556,6 +17119,9 @@ clgd542xload(VGAscr* scr, Cursor* curs)
     vgaxo(Seqx, 0x12, sr12|0x05);
 }
 @
+
+
+
 
 
 
@@ -14971,12 +17537,17 @@ icossin2(int x, int y, int *cosp, int *sinp)
 @
 
 
-\chapter{Utilities}
+
+
+
+\chapter{Examples of Graphical Applications}
 
 % lens? illustrate well features?
 % faces.c? 
 
 % both are mentioned in Unix Readers as very early graphic programs.
+
+
 
 \chapter{Extra Code}
 
@@ -14988,6 +17559,7 @@ icossin2(int x, int y, int *cosp, int *sinp)
 %\label{sec:changelog}
 % code via make loc = 21 690 LOC (but memdrawtest.c, and drivers code)
 % orig nw = ???, just lpized and few comments, ??? pages pdf
+%  but no tests, no apps, just one alphacalc
 % now: ? LOC ? pages, so added ?? LOE (Lines of explanations)
 
 

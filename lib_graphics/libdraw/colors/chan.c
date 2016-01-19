@@ -82,11 +82,11 @@ chantodepth(ulong c)
 
     for(n=0; c; c>>=8){
         if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
-            return 0;
+            return 0; // warning?
         n += NBITS(c);
     }
     if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
-        return 0;
+        return 0; // warning?
     return n;
 }
 /*e: function chantodepth */

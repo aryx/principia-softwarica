@@ -7,7 +7,7 @@
 
 /*s: function memload */
 int
-memload(Memimage *dst, Rectangle r, uchar *data, int n, int iscompressed)
+memload(Memimage *dst, Rectangle r, uchar *data, int n, bool iscompressed)
 {
     int (*loadfn)(Memimage*, Rectangle, uchar*, int);
     Memimage *tmp;

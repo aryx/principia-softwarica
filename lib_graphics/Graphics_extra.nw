@@ -22,8 +22,8 @@ enum
     <<constant Borderwidth>>
 };
 @
-% dead?    Displaybufsize	= 8000,
-% dead: #define	NOREFRESH	((void*)-1)
+%dead:    Displaybufsize	= 8000,
+%dead: #define	NOREFRESH	((void*)-1)
 
 %typedef void	(*Reffn)(Image*, Rectangle, void*);
 
@@ -641,11 +641,7 @@ typedef struct	Cursor Cursor;
 typedef struct	Menu Menu;
 typedef struct 	Mousectl Mousectl;
 
-enum click {
-    CLICK_LEFT = 1,
-    CLICK_MIDDLE = 2,
-    CLICK_RIGHT = 4,
-};
+<<enum Click>>
 
 <<struct Mouse (include/mouse.h)>>
 
@@ -668,6 +664,9 @@ extern Rectangle	getrect(int, Mousectl*);
 
 extern int	 		menuhit(int, Mousectl*, Menu*, Screen*);
 @
+
+
+
 
 
 \section{[[lib_graphics/libdraw/]]}
@@ -722,7 +721,7 @@ extern int	 		menuhit(int, Mousectl*, Menu*, Screen*);
 
 \subsection*{[[lib_graphics/libdraw/arith.c]]}
 
-%dead
+%dead:
 %/*
 % * was used by libmemlayer/line.c; made static, instead of deleting it,
 % * to avoid updating many binaries on sources.
@@ -840,150 +839,6 @@ typedef struct Plist Plist;
 
 
 \subsection*{[[lib_graphics/libdraw/buildfont.c]]}
-
-<<function skip>>=
-static char*
-skip(char *s)
-{
-    while(*s==' ' || *s=='\n' || *s=='\t')
-        s++;
-    return s;
-}
-@
-
-<<function buildfont>>=
-Font*
-buildfont(Display *d, char *buf, char *name)
-{
-    Font *fnt;
-    Cachefont *c;
-    char *s, *t;
-    ulong min, max;
-    int offset;
-    char badform[] = "bad font format: number expected (char position %d)";
-
-    s = buf;
-    fnt = malloc(sizeof(Font));
-    if(fnt == 0)
-        return 0;
-    memset(fnt, 0, sizeof(Font));
-    fnt->display = d;
-    fnt->name = strdup(name);
-    fnt->ncache = NFCACHE+NFLOOK;
-    fnt->nsubf = NFSUBF;
-    fnt->cache = malloc(fnt->ncache * sizeof(fnt->cache[0]));
-    fnt->subf = malloc(fnt->nsubf * sizeof(fnt->subf[0]));
-    if(fnt->name==0 || fnt->cache==0 || fnt->subf==0){
-    Err2:
-        free(fnt->name);
-        free(fnt->cache);
-        free(fnt->subf);
-        free(fnt->sub);
-        free(fnt);
-        return 0;
-    }
-    fnt->height = strtol(s, &s, 0);
-    s = skip(s);
-    fnt->ascent = strtol(s, &s, 0);
-    s = skip(s);
-    if(fnt->height<=0 || fnt->ascent<=0){
-        werrstr("bad height or ascent in font file");
-        goto Err2;
-    }
-    fnt->width = 0;
-    fnt->nsub = 0;
-    fnt->sub = 0;
-
-    memset(fnt->subf, 0, fnt->nsubf * sizeof(fnt->subf[0]));
-    memset(fnt->cache, 0, fnt->ncache*sizeof(fnt->cache[0]));
-    fnt->age = 1;
-    do{
-        /* must be looking at a number now */
-        if(*s<'0' || '9'<*s){
-            werrstr(badform, s-buf);
-            goto Err3;
-        }
-        min = strtol(s, &s, 0);
-        s = skip(s);
-        /* must be looking at a number now */
-        if(*s<'0' || '9'<*s){
-            werrstr(badform, s-buf);
-            goto Err3;
-        }
-        max = strtol(s, &s, 0);
-        s = skip(s);
-        if(*s==0 || min>=Runemax || max>=Runemax || min>max){
-            werrstr("illegal subfont range");
-    Err3:
-            freefont(fnt);
-            return 0;
-        }
-        t = s;
-        offset = strtol(s, &t, 0);
-        if(t>s && (*t==' ' || *t=='\t' || *t=='\n'))
-            s = skip(t);
-        else
-            offset = 0;
-        fnt->sub = realloc(fnt->sub, (fnt->nsub+1)*sizeof(Cachefont*));
-        if(fnt->sub == 0){
-            /* realloc manual says fnt->sub may have been destroyed */
-            fnt->nsub = 0;
-            goto Err3;
-        }
-        c = malloc(sizeof(Cachefont));
-        if(c == 0)
-            goto Err3;
-        fnt->sub[fnt->nsub] = c;
-        c->min = min;
-        c->max = max;
-        c->offset = offset;
-        t = s;
-        while(*s && *s!=' ' && *s!='\n' && *s!='\t')
-            s++;
-        *s++ = 0;
-        c->subfontname = 0;
-        c->name = strdup(t);
-        if(c->name == 0){
-            free(c);
-            goto Err3;
-        }
-        s = skip(s);
-        fnt->nsub++;
-    }while(*s);
-    return fnt;
-}
-@
-
-<<function freefont>>=
-void
-freefont(Font *f)
-{
-    int i;
-    Cachefont *c;
-    Subfont *s;
-
-    if(f == 0)
-        return;
-
-    for(i=0; i<f->nsub; i++){
-        c = f->sub[i];
-        free(c->subfontname);
-        free(c->name);
-        free(c);
-    }
-    for(i=0; i<f->nsubf; i++){
-        s = f->subf[i].f;
-        if(s && display && s!=display->defaultsubfont)
-            freesubfont(s);
-    }
-    freeimage(f->cacheimage);
-    free(f->name);
-    free(f->cache);
-    free(f->subf);
-    free(f->sub);
-    free(f);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1483,27 +1338,6 @@ defontdata[] =
 };
 @
 
-<<global sizeofdefont>>=
-int	sizeofdefont = sizeof defontdata;
-@
-
-<<function _unpackinfo>>=
-void
-_unpackinfo(Fontchar *fc, uchar *p, int n)
-{
-    int j;
-
-    for(j=0;  j<=n;  j++){
-        fc->x = p[0]|(p[1]<<8);
-        fc->top = p[2];
-        fc->bottom = p[3];
-        fc->left = p[4];
-        fc->width = p[5];
-        fc++;
-        p += 6;
-    }
-}
-@
 
 
 %-------------------------------------------------------------
@@ -1758,205 +1592,35 @@ static	int	enote(void *, char *);
 
 \subsection*{[[lib_graphics/libdraw/font.c]]}
 
-<<constant PJW>>=
-#define	PJW	0	/* use NUL==pjw for invisible characters */
-@
 
-<<function cachechars>>=
-int
-cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **subfontname)
-{
-    int i, th, sh, h, ld, w, rw, wid, nc;
-    char *sp;
-    Rune r, *rp, vr;
-    ulong a;
-    Cacheinfo *c, *tc, *ec;
-
-    if(ss){
-        sp = *ss;
-        rp = L"";
-    }else{
-        sp = "";
-        rp = *rr;
-    }
-    wid = 0;
-    *subfontname = 0;
-    for(i=0; i<max && (*sp || *rp); sp+=w, rp+=rw){
-        if(ss){
-            r = *(uchar*)sp;
-            if(r < Runeself)
-                w = 1;
-            else{
-                w = chartorune(&vr, sp);
-                r = vr;
-            }
-            rw = 0;
-        }else{
-            r = *rp;
-            w = 0;
-            rw = 1;
-        }
-
-        sh = (17 * (uint)r) & (f->ncache-NFLOOK-1);
-        c = &f->cache[sh];
-        ec = c+NFLOOK;
-        h = sh;
-        while(c < ec){
-            if(c->value==r && c->age)
-                goto Found;
-            c++;
-            h++;
-        }
-    
-        /*
-         * Not found; toss out oldest entry
-         */
-        a = ~0;
-        th = sh;
-        tc = &f->cache[th];
-        while(tc < ec){
-            if(tc->age < a){
-                a = tc->age;
-                h = th;
-                c = tc;
-            }
-            tc++;
-            th++;
-        }
-
-        if(a && (f->age-a)<500){	/* kicking out too recent; resize */
-            nc = 2*(f->ncache-NFLOOK) + NFLOOK;
-            if(nc <= MAXFCACHE){
-                if(i == 0)
-                    fontresize(f, f->width, nc, f->maxdepth);
-                /* else flush first; retry will resize */
-                break;
-            }
-        }
-
-        if(c->age == f->age)	/* flush pending string output */
-            break;
-
-        ld = loadchar(f, r, c, h, i, subfontname);
-        if(ld <= 0){
-            if(ld == 0)
-                continue;
-            break;
-        }
-        c = &f->cache[h];	/* may have reallocated f->cache */
-    
-        Found:
-        wid += c->width;
-        c->age = f->age;
-        cp[i] = h;
-        i++;
-    }
-    if(ss)
-        *ss = sp;
-    else
-        *rr = rp;
-    *wp = wid;
-    return i;
-}
-@
-
-<<function agefont>>=
-void
-agefont(Font *f)
-{
-    Cacheinfo *c, *ec;
-    Cachesubf *s, *es;
-
-    f->age++;
-    if(f->age == 65536){
-        /*
-         * Renormalize ages
-         */
-        c = f->cache;
-        ec = c+f->ncache;
-        while(c < ec){
-            if(c->age){
-                c->age >>= 2;
-                c->age++;
-            }
-            c++;
-        }
-        s = f->subf;
-        es = s+f->nsubf;
-        while(s < es){
-            if(s->age){
-                if(s->age<SUBFAGE && s->cf->name != nil){
-                    /* clean up */
-                    if(display &&
-                        s->f != display->defaultsubfont)
-                        freesubfont(s->f);
-                    s->cf = nil;
-                    s->f = nil;
-                    s->age = 0;
-                }else{
-                    s->age >>= 2;
-                    s->age++;
-                }
-            }
-            s++;
-        }
-        f->age = (65536>>2) + 1;
-    }
-}
-@
-
-<<function cf2subfont>>=
-static Subfont*
-cf2subfont(Cachefont *cf, Font *f)
-{
-    int depth;
-    char *name;
-    Subfont *sf;
-
-    name = cf->subfontname;
-    if(name == nil){
-        if(f->display && f->display->screenimage)
-            depth = f->display->screenimage->depth;
-        else
-            depth = 8;
-        name = subfontname(cf->name, f->name, depth);
-        if(name == nil)
-            return nil;
-        cf->subfontname = name;
-    }
-    sf = lookupsubfont(f->display, name);
-    return sf;
-}
-@
-
-
-<<function freeup>>=
-/* release all subfonts, return number freed */
-static
-int
-freeup(Font *f)
-{
-    Cachesubf *s, *es;
-    int nf;
-
-    if(f->sub[0]->name == nil)	/* font from mkfont; don't free */
-        return 0;
-    s = f->subf;
-    es = s+f->nsubf;
-    nf = 0;
-    while(s < es){
-        if(s->age){
-            freesubfont(s->f);
-            s->cf = nil;
-            s->f = nil;
-            s->age = 0;
-            nf++;
-        }
-        s++;
-    }
-    return nf;
-}
-@
+%dead:
+%<<function freeup>>=
+%/* release all subfonts, return number freed */
+%static
+%int
+%freeup(Font *f)
+%{
+%    Cachesubf *s, *es;
+%    int nf;
+%
+%    if(f->sub[0]->name == nil)	/* font from mkfont; don't free */
+%        return 0;
+%    s = f->subf;
+%    es = s+f->nsubf;
+%    nf = 0;
+%    while(s < es){
+%        if(s->age){
+%            freesubfont(s->f);
+%            s->cf = nil;
+%            s->f = nil;
+%            s->age = 0;
+%            nf++;
+%        }
+%        s++;
+%    }
+%    return nf;
+%}
+%@
 
 
 
@@ -1968,7 +1632,6 @@ freeup(Font *f)
 #include <draw.h>
 
 static int	fontresize(Font*, int, int, int);
-static int	freeup(Font*);
 
 <<constant PJW>>
 
@@ -1980,29 +1643,11 @@ static int	freeup(Font*);
 
 <<function loadchar>>
 
-<<function freeup>>
-
 <<function fontresize>>
 @
 
 
 \subsection*{[[lib_graphics/libdraw/freesubfont.c]]}
-
-<<function freesubfont>>=
-void
-freesubfont(Subfont *f)
-{
-    if(f == 0)
-        return;
-    f->ref--;
-    if(f->ref > 0)
-        return;
-    uninstallsubfont(f);
-    free(f->info);	/* note: f->info must have been malloc'ed! */
-    freeimage(f->bits);
-    free(f);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2018,64 +1663,6 @@ freesubfont(Subfont *f)
 
 \subsection*{[[lib_graphics/libdraw/getdefont.c]]}
 
-<<function getdefont>>=
-Subfont*
-getdefont(Display *d)
-{
-    char *hdr, *p;
-    int n;
-    Fontchar *fc;
-    Subfont *f;
-    int ld;
-    Rectangle r;
-    Image *i;
-
-    /*
-     * make sure data is word-aligned.  this is true with Plan 9 compilers
-     * but not in general.  the byte order is right because the data is
-     * declared as char*, not ulong*.
-     */
-    p = (char*)defontdata;
-    n = (int)(uvlong)p & 3;				/* stupid ape */
-    if(n != 0){
-        memmove(p+(4-n), p, sizeofdefont-n);
-        p += 4-n;
-    }
-    ld = atoi(p+0*12);
-    r.min.x = atoi(p+1*12);
-    r.min.y = atoi(p+2*12);
-    r.max.x = atoi(p+3*12);
-    r.max.y = atoi(p+4*12);
-
-    i = allocimage(d, r, drawld2chan[ld], 0, 0);
-    if(i == 0)
-        return 0;
-
-    p += 5*12;
-    n = loadimage(i, r, (uchar*)p, (defontdata+sizeofdefont)-(uchar*)p);
-    if(n < 0){
-        freeimage(i);
-        return 0;
-    }
-
-    hdr = p+n;
-    n = atoi(hdr);
-    p = hdr+3*12;
-    fc = malloc(sizeof(Fontchar)*(n+1));
-    if(fc == 0){
-        freeimage(i);
-        return 0;
-    }
-    _unpackinfo(fc, (uchar*)p, n);
-    f = allocsubfont("*default*", n, atoi(hdr+12), atoi(hdr+24), fc, i);
-    if(f == 0){
-        freeimage(i);
-        free(fc);
-        return 0;
-    }
-    return f;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2122,42 +1709,6 @@ getdefont(Display *d)
 
 
 \subsection*{[[lib_graphics/libdraw/getsubfont.c]]}
-
-<<function _getsubfont>>=
-/*
- * Default version: treat as file name
- */
-
-Subfont*
-_getsubfont(Display *d, char *name)
-{
-    int fd;
-    Subfont *f;
-
-    fd = open(name, OREAD);
-        
-    if(fd < 0){
-        fprint(2, "getsubfont: can't open %s: %r\n", name);
-        return 0;
-    }
-    /*
-     * unlock display so i/o happens with display released, unless
-     * user is doing his own locking, in which case this could break things.
-     * _getsubfont is called only from string.c and stringwidth.c,
-     * which are known to be safe to have this done.
-     */
-    if(d && d->locking == 0)
-        unlockdisplay(d);
-    f = readsubfont(d, name, fd, d && d->locking==0);
-    if(d && d->locking == 0)
-        lockdisplay(d);
-    if(f == 0)
-        fprint(2, "getsubfont: can't read %s: %r\n", name);
-    close(fd);
-    setmalloctag(f, getcallerpc(&d));
-    return f;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2207,35 +1758,6 @@ _getsubfont(Display *d, char *name)
 
 \subsection*{[[lib_graphics/libdraw/init.c]]}
 
-
-<<global deffontname>>=
-static char deffontname[] = "*default*";
-@
-
-
-% seems related to fonts
-<<function lockdisplay>>=
-void
-lockdisplay(Display *disp)
-{
-    if(debuglockdisplay){
-        /* avoid busy looping; it's rare we collide anyway */
-        while(!canqlock(&disp->qlock)){
-            fprint(1, "proc %d waiting for display lock...\n", getpid());
-            sleep(1000);
-        }
-    }else
-        qlock(&disp->qlock);
-}
-@
-
-<<function unlockdisplay>>=
-void
-unlockdisplay(Display *disp)
-{
-    qunlock(&disp->qlock);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2383,59 +1905,6 @@ static void _closedisplay(Display*, int);
 
 \subsection*{[[lib_graphics/libdraw/mkfont.c]]}
 
-<<function mkfont>>=
-/*
- * Cobble fake font using existing subfont
- */
-Font*
-mkfont(Subfont *subfont, Rune min)
-{
-    Font *font;
-    Cachefont *c;
-
-    font = malloc(sizeof(Font));
-    if(font == 0)
-        return 0;
-    memset(font, 0, sizeof(Font));
-    font->display = subfont->bits->display;
-    font->name = strdup("<synthetic>");
-    font->ncache = NFCACHE+NFLOOK;
-    font->nsubf = NFSUBF;
-    font->cache = malloc(font->ncache * sizeof(font->cache[0]));
-    font->subf = malloc(font->nsubf * sizeof(font->subf[0]));
-    if(font->name==0 || font->cache==0 || font->subf==0){
-    Err:
-        free(font->name);
-        free(font->cache);
-        free(font->subf);
-        free(font->sub);
-        free(font);
-        return 0;
-    }
-    memset(font->cache, 0, font->ncache*sizeof(font->cache[0]));
-    memset(font->subf, 0, font->nsubf*sizeof(font->subf[0]));
-    font->height = subfont->height;
-    font->ascent = subfont->ascent;
-    font->age = 1;
-    font->sub = malloc(sizeof(Cachefont*));
-    if(font->sub == 0)
-        goto Err;
-    c = malloc(sizeof(Cachefont));
-    if(c == 0)
-        goto Err;
-    font->nsub = 1;
-    font->sub[0] = c;
-    c->min = min;
-    c->max = min+subfont->n-1;
-    c->offset = 0;
-    c->name = 0;	/* noticed by freeup() and agefont() */
-    c->subfontname = 0;
-    font->subf[0].age = 0;
-    font->subf[0].cf = c;
-    font->subf[0].f = subfont;
-    return font;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2492,42 +1961,6 @@ mkfont(Subfont *subfont, Rune min)
 
 \subsection*{[[lib_graphics/libdraw/openfont.c]]}
 
-<<function openfont>>=
-Font*
-openfont(Display *d, char *name)
-{
-    Font *fnt;
-    int fd, i, n;
-    char *buf;
-    Dir *dir;
-
-    fd = open(name, OREAD);
-    if(fd < 0)
-        return 0;
-
-    dir = dirfstat(fd);
-    if(dir == nil){
-    Err0:
-        close(fd);
-        return 0;
-    }
-    n = dir->length;
-    free(dir);
-    buf = malloc(n+1);
-    if(buf == 0)
-        goto Err0;
-    buf[n] = 0;
-    i = read(fd, buf, n);
-    close(fd);
-    if(i != n){
-        free(buf);
-        return 0;
-    }
-    fnt = buildfont(d, buf, name);
-    free(buf);
-    return fnt;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2566,57 +1999,6 @@ openfont(Display *d, char *name)
 
 \subsection*{[[lib_graphics/libdraw/readcolmap.c]]}
 
-<<function getval>>=
-static ulong
-getval(char **p)
-{
-    ulong v;
-    char *q;
-
-    v = strtoul(*p, &q, 0);
-    v |= v<<8;
-    v |= v<<16;
-    *p = q;
-    return v;
-}
-@
-% >> >>
-
-
-
-<<function readcolmap>>=
-void
-readcolmap(Display *d, RGB *colmap)
-{
-    int i;
-    char *p, *q;
-    Biobuf *b;
-    char buf[128];
-
-    //USED(screen);
-
-    sprint(buf, "/dev/draw/%d/colormap", d->dirno);
-    b = Bopen(buf, OREAD);
-    if(b == 0)
-        drawerror(d, "rdcolmap: can't open colormap device");
-
-    for(;;) {
-        p = Brdline(b, '\n');
-        if(p == 0)
-            break;
-        i = strtoul(p, &q, 0);
-        if(i < 0 || i > 255) {
-            fprint(2, "rdcolmap: bad index\n");
-            exits("bad");
-        }
-        p = q;
-        colmap[255-i].red = getval(&p);
-        colmap[255-i].green = getval(&p);
-        colmap[255-i].blue = getval(&p);
-    }
-    Bterm(b);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2648,67 +2030,6 @@ readcolmap(Display *d, RGB *colmap)
 
 
 \subsection*{[[lib_graphics/libdraw/readsubfont.c]]}
-
-<<function readsubfonti>>=
-Subfont*
-readsubfonti(Display*d, char *name, int fd, Image *ai, int dolock)
-{
-    char hdr[3*12+4+1];
-    int n;
-    uchar *p;
-    Fontchar *fc;
-    Subfont *f;
-    Image *i;
-
-    i = ai;
-    if(i == nil){
-        i = readimage(d, fd, dolock);
-        if(i == nil)
-            return nil;
-    }
-    if(read(fd, hdr, 3*12) != 3*12){
-        if(ai == nil)
-            freeimage(i);
-        werrstr("rdsubfonfile: header read error: %r");
-        return nil;
-    }
-    n = atoi(hdr);
-    p = malloc(6*(n+1));
-    if(p == nil)
-        goto Err;
-    if(read(fd, p, 6*(n+1)) != 6*(n+1)){
-        werrstr("rdsubfonfile: fontchar read error: %r");
-    Err:
-        if(ai == nil)
-            freeimage(i);
-        free(p);
-        return nil;
-    }
-    fc = malloc(sizeof(Fontchar)*(n+1));
-    if(fc == nil)
-        goto Err;
-    _unpackinfo(fc, p, n);
-    if(dolock)
-        lockdisplay(d);
-    f = allocsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
-    if(dolock)
-        unlockdisplay(d);
-    if(f == nil){
-        free(fc);
-        goto Err;
-    }
-    free(p);
-    return f;
-}
-@
-
-<<function readsubfont>>=
-Subfont*
-readsubfont(Display *d, char *name, int fd, int dolock)
-{
-    return readsubfonti(d, name, fd, nil, dolock);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -2772,7 +2093,7 @@ readsubfont(Display *d, char *name, int fd, int dolock)
 <<function cmap2rgba>>
 @
 
-
+%dead:
 %/*
 % * This original version, although fast and a true inverse of
 % * cmap2rgb, in the sense that rgb2cmap(cmap2rgb(c))
@@ -2902,73 +2223,6 @@ enum
 
 \subsection*{[[lib_graphics/libdraw/stringsubfont.c]]}
 
-<<function stringsubfont>>=
-Point
-stringsubfont(Image *b, Point p, Image *color, Subfont *f, char *cs)
-{
-    int w, width;
-    uchar *s;
-    Rune c;
-    Fontchar *i;
-
-    s = (uchar*)cs;
-    for(; c=*s; p.x+=width){
-        width = 0;
-        if(c < Runeself)
-            s++;
-        else{
-            w = chartorune(&c, (char*)s);
-            if(w == 0){
-                s++;
-                continue;
-            }
-            s += w;
-        }
-        if(c >= f->n)
-            continue;
-        i = f->info+c;
-        width = i->width;
-        draw(b, Rect(p.x+i->left, p.y+i->top, p.x+i->left+(i[1].x-i[0].x), p.y+i->bottom),
-            color, f->bits, Pt(i->x, i->top));
-    }
-    return p;
-}
-@
-
-<<function strsubfontwidth>>=
-Point
-strsubfontwidth(Subfont *f, char *cs)
-{
-    Rune c;
-    Point p;
-    uchar *s;
-    Fontchar *i;
-    int w, width;
-
-    p = Pt(0, f->height);
-    s = (uchar*)cs;
-    for(; c=*s; p.x+=width){
-        width = 0;
-        if(c < Runeself)
-            s++;
-        else{
-            w = chartorune(&c, (char*)s);
-            if(w == 0){
-                s++;
-                continue;
-            }
-            s += w;
-        }
-        if(c >= f->n)
-            continue;
-        i = f->info+c;
-        width = i->width;
-    }
-    return p;
-}
-@
-
-
 %-------------------------------------------------------------
 
 <<lib_graphics/libdraw/stringsubfont.c>>=
@@ -2983,116 +2237,6 @@ strsubfontwidth(Subfont *f, char *cs)
 
 
 \subsection*{[[lib_graphics/libdraw/stringwidth.c]]}
-
-<<enum _anon_ (lib_graphics/libdraw/stringwidth.c)>>=
-enum { Max = 64 };
-@
-
-<<function _stringnwidth>>=
-int
-_stringnwidth(Font *f, char *s, Rune *r, int len)
-{
-    int wid, twid, n, max, l;
-    char *name;
-    ushort cbuf[Max];
-    Rune rune, **rptr;
-    char *subfontname, **sptr;
-    Font *def;
-
-    if(s == nil){
-        s = "";
-        sptr = nil;
-    }else
-        sptr = &s;
-    if(r == nil){
-          r = L"";
-        rptr = nil;
-    }else
-        rptr = &r;
-    twid = 0;
-    while(len>0 && (*s || *r)){
-        max = Max;
-        if(len < max)
-            max = len;
-        n = 0;
-        while((l = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname)) <= 0){
-            if(++n > 10){
-                if(*r)
-                    rune = *r;
-                else
-                    chartorune(&rune, s);
-                if(f->name != nil)
-                    name = f->name;
-                else
-                    name = "unnamed font";
-                fprint(2, "stringwidth: bad character set for rune 0x%.4ux in %s\n", rune, name);
-                return twid;
-            }
-            if(subfontname){
-                if(_getsubfont(f->display, subfontname) == 0){
-                    def = f->display->defaultfont;
-                    if(def && f!=def)
-                        f = def;
-                    else
-                        break;
-                }
-            }
-        }
-        agefont(f);
-        twid += wid;
-        len -= l;
-    }
-    return twid;
-}
-@
-
-<<function stringnwidth>>=
-int
-stringnwidth(Font *f, char *s, int len)
-{
-    return _stringnwidth(f, s, nil, len);
-}
-@
-
-<<function stringwidth>>=
-int
-stringwidth(Font *f, char *s)
-{
-    return _stringnwidth(f, s, nil, 1<<24);
-}
-@
-
-<<function stringsize>>=
-Point
-stringsize(Font *f, char *s)
-{
-    return Pt(_stringnwidth(f, s, nil, 1<<24), f->height);
-}
-@
-
-<<function runestringnwidth>>=
-int
-runestringnwidth(Font *f, Rune *r, int len)
-{
-    return _stringnwidth(f, nil, r, len);
-}
-@
-
-<<function runestringwidth>>=
-int
-runestringwidth(Font *f, Rune *r)
-{
-    return _stringnwidth(f, nil, r, 1<<24);
-}
-@
-
-<<function runestringsize>>=
-Point
-runestringsize(Font *f, Rune *r)
-{
-    return Pt(_stringnwidth(f, nil, r, 1<<24), f->height);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -3122,33 +2266,6 @@ runestringsize(Font *f, Rune *r)
 
 \subsection*{[[lib_graphics/libdraw/subfont.c]]}
 
-<<function allocsubfont>>=
-Subfont*
-allocsubfont(char *name, int n, int height, int ascent, Fontchar *info, Image *i)
-{
-    Subfont *f;
-
-    assert(height != 0 /* allocsubfont */);
-
-    f = malloc(sizeof(Subfont));
-    if(f == 0)
-        return 0;
-    f->n = n;
-    f->height = height;
-    f->ascent = ascent;
-    f->info = info;
-    f->bits = i;
-    f->ref = 1;
-    if(name){
-        f->name = strdup(name);
-        if(lookupsubfont(i->display, name) == 0)
-            installsubfont(name, f);
-    }else
-        f->name = 0;
-    return f;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -3162,54 +2279,6 @@ allocsubfont(char *name, int n, int height, int ascent, Fontchar *info, Image *i
 
 
 \subsection*{[[lib_graphics/libdraw/subfontcache.c]]}
-
-<<global lastname>>=
-/*
- * Easy versions of the cache routines; may be substituted by fancier ones for other purposes
- */
-
-static char	*lastname;
-@
-
-<<global lastsubfont>>=
-Subfont	*lastsubfont;
-@
-
-<<function lookupsubfont>>=
-Subfont*
-lookupsubfont(Display *d, char *name)
-{
-    if(d && strcmp(name, "*default*") == 0)
-        return d->defaultsubfont;
-    if(lastname && strcmp(name, lastname)==0)
-    if(d==lastsubfont->bits->display){
-        lastsubfont->ref++;
-        return lastsubfont;
-    }
-    return 0;
-}
-@
-
-<<function installsubfont>>=
-void
-installsubfont(char *name, Subfont *subfont)
-{
-    free(lastname);
-    lastname = strdup(name);
-    lastsubfont = subfont;	/* notice we don't free the old one; that's your business */
-}
-@
-
-<<function uninstallsubfont>>=
-void
-uninstallsubfont(Subfont *subfont)
-{
-    if(subfont == lastsubfont){
-        lastname = 0;
-        lastsubfont = 0;
-    }
-}
-@
 
 
 %-------------------------------------------------------------
@@ -3231,58 +2300,6 @@ uninstallsubfont(Subfont *subfont)
 
 
 \subsection*{[[lib_graphics/libdraw/subfontname.c]]}
-
-<<function subfontname>>=
-/*
- * Default version: convert to file name
- */
-
-char*
-subfontname(char *cfname, char *fname, int maxdepth)
-{
-    char *t, *u, *tmp1, *tmp2;
-    int i;
-
-    t = strdup(cfname);  /* t is the return string */
-    if(strcmp(cfname, "*default*") == 0)
-        return t;
-    if(t[0] != '/'){
-        tmp2 = strdup(fname);
-        u = utfrrune(tmp2, '/');
-        if(u)
-            u[0] = 0;
-        else
-            strcpy(tmp2, ".");
-        tmp1 = smprint("%s/%s", tmp2, t);
-        free(tmp2);
-        free(t);
-        t = tmp1;
-    }
-
-    if(maxdepth > 8)
-        maxdepth = 8;
-
-    for(i=3; i>=0; i--){
-        if((1<<i) > maxdepth)
-            continue;
-        /* try i-bit grey */
-        tmp2 = smprint("%s.%d", t, i);
-        if(access(tmp2, AREAD) == 0) {
-            free(t);
-            return tmp2;
-        }
-        free(tmp2);
-    }
-
-    /* try default */
-    if(access(t, AREAD) == 0)
-        return t;
-
-    free(t);
-    return nil;
-}
-@
-% >>
 
 
 %-------------------------------------------------------------
@@ -3350,42 +2367,6 @@ typedef struct Memimage Memimage;
 
 \subsection*{[[lib_graphics/libdraw/writecolmap.c]]}
 
-<<function writecolmap>>=
-/*
- * This code (and the devdraw interface) will have to change
- * if we ever get bitmaps with ldepth > 3, because the
- * colormap will have to be written in chunks
- */
-
-void
-writecolmap(Display *d, RGB *m)
-{
-    int i, n, fd;
-    char buf[64], *t;
-    ulong r, g, b;
-
-    sprint(buf, "/dev/draw/%d/colormap", d->dirno);
-    fd = open(buf, OWRITE);
-    if(fd < 0)
-        drawerror(d, "writecolmap: open colormap failed");
-    t = malloc(8192);
-    if (t == nil)
-        drawerror(d, "writecolmap: no memory");
-    n = 0;
-    for(i = 0; i < 256; i++) {
-        r = m[i].red>>24;
-        g = m[i].green>>24;
-        b = m[i].blue>>24;
-        n += sprint(t+n, "%d %lud %lud %lud\n", 255-i, r, g, b);
-    }
-    i = write(fd, t, n);
-    free(t);
-    close(fd);
-    if(i != n)
-        drawerror(d, "writecolmap: bad write");
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -3419,52 +2400,6 @@ typedef struct Hlist Hlist;
 
 
 \subsection*{[[lib_graphics/libdraw/writesubfont.c]]}
-
-<<function packinfo>>=
-static
-void
-packinfo(Fontchar *fc, uchar *p, int n)
-{
-    int j;
-
-    for(j=0;  j<=n;  j++){
-        p[0] = fc->x;
-        p[1] = fc->x>>8;
-        p[2] = fc->top;
-        p[3] = fc->bottom;
-        p[4] = fc->left;
-        p[5] = fc->width;
-        fc++;
-        p += 6;
-    }
-}
-@
-
-<<function writesubfont>>=
-int
-writesubfont(int fd, Subfont *f)
-{
-    char hdr[3*12+1];
-    uchar *data;
-    int nb;
-
-    sprint(hdr, "%11d %11d %11d ", f->n, f->height, f->ascent);
-    if(write(fd, hdr, 3*12) != 3*12){
-   Err:
-        werrstr("writesubfont: bad write: %r");
-        return -1;
-    }
-    nb = 6*(f->n+1);
-    data = malloc(nb);
-    if(data == nil)
-        return -1;
-    packinfo(f->info, data, f->n);
-    if(write(fd, data, nb) != nb)
-        goto Err;
-    free(data);
-    return 0;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -3884,9 +2819,6 @@ static Memcmap def = {
 };
 @
 
-<<global memdefcmap>>=
-Memcmap *memdefcmap = &def;
-@
 
 <<function _memmkcmap>>=
 void _memmkcmap(void){}
@@ -3927,72 +2859,6 @@ void _memmkcmap(void){}
 
 \subsection*{[[lib_graphics/libmemdraw/defont.c]]}
 
-<<function getmemdefont>>=
-Memsubfont*
-getmemdefont(void)
-{
-    char *hdr, *p;
-    int n;
-    Fontchar *fc;
-    Memsubfont *f;
-    int ld;
-    Rectangle r;
-    Memdata *md;
-    Memimage *i;
-
-    /*
-     * make sure data is word-aligned.  this is true with Plan 9 compilers
-     * but not in general.  the byte order is right because the data is
-     * declared as char*, not ulong*.
-     */
-    p = (char*)defontdata;
-    n = (uintptr)p & 3;
-    if(n != 0){
-        memmove(p+(4-n), p, sizeofdefont-n);
-        p += 4-n;
-    }
-    ld = atoi(p+0*12);
-    r.min.x = atoi(p+1*12);
-    r.min.y = atoi(p+2*12);
-    r.max.x = atoi(p+3*12);
-    r.max.y = atoi(p+4*12);
-
-    md = mallocz(sizeof(Memdata), 1);
-    if(md == nil)
-        return nil;
-    
-    p += 5*12;
-
-    md->base = nil;		/* so freememimage doesn't free p */
-    md->bdata = (uchar*)p;	/* ick */
-    md->ref = 1;
-    md->allocd = 1;		/* so freememimage does free md */
-
-    i = allocmemimaged(r, drawld2chan[ld], md);
-    if(i == nil){
-        free(md);
-        return nil;
-    }
-
-    hdr = p+Dy(r)*i->width*sizeof(ulong);
-    n = atoi(hdr);
-    p = hdr+3*12;
-    fc = malloc(sizeof(Fontchar)*(n+1));
-    if(fc == 0){
-        freememimage(i);
-        return 0;
-    }
-    _unpackinfo(fc, (uchar*)p, n);
-    f = allocmemsubfont("*default*", n, atoi(hdr+12), atoi(hdr+24), fc, i);
-    if(f == 0){
-        freememimage(i);
-        free(fc);
-        return 0;
-    }
-    return f;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -4008,10 +2874,6 @@ getmemdefont(void)
 
 \subsection*{[[lib_graphics/libmemdraw/draw.c]]}
 
-
-<<global tablesbuilt>>=
-static int	tablesbuilt;
-@
 
 <<function RGB2K>>=
 /* perfect approximation to NTSC = .299r+.587g+.114b when 0 ≤ r,g,b < 256 */
@@ -4295,12 +3157,11 @@ dumpbuf(char *s, Buffer b, int n)
     }
     print("\n");
 }
+//#undef DBG
 @
 
 
 <<function alphacalc0>>=
-//#undef DBG
-
 static Buffer
 alphacalc0(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
 {
@@ -4913,13 +3774,11 @@ writenbit(Param *p, uchar *w, Buffer src)
     //DBG print("\n");
     return;
 }
+//#undef DBG
 @
 % >> >>
 
 <<function readcmap>>=
-//#undef DBG
-
-
 static Buffer
 readcmap(Param *p, uchar *buf, int y)
 {
@@ -6759,57 +5618,6 @@ int		(*iprint)(char*, ...) = &memdraw_iprint;
 
 \subsection*{[[lib_graphics/libmemdraw/openmemsubfont.c]]}
 
-<<function openmemsubfont>>=
-Memsubfont*
-openmemsubfont(char *name)
-{
-    Memsubfont *sf;
-    Memimage *i;
-    Fontchar *fc;
-    int fd, n;
-    char hdr[3*12+4+1];
-    uchar *p;
-
-    fd = open(name, OREAD);
-    if(fd < 0)
-        return nil;
-    p = nil;
-    i = readmemimage(fd);
-    if(i == nil)
-        goto Err;
-    if(read(fd, hdr, 3*12) != 3*12){
-        werrstr("openmemsubfont: header read error: %r");
-        goto Err;
-    }
-    n = atoi(hdr);
-    p = malloc(6*(n+1));
-    if(p == nil)
-        goto Err;
-    if(read(fd, p, 6*(n+1)) != 6*(n+1)){
-        werrstr("openmemsubfont: fontchar read error: %r");
-        goto Err;
-    }
-    fc = malloc(sizeof(Fontchar)*(n+1));
-    if(fc == nil)
-        goto Err;
-    _unpackinfo(fc, p, n);
-    sf = allocmemsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
-    if(sf == nil){
-        free(fc);
-        goto Err;
-    }
-    free(p);
-    return sf;
-Err:
-    close(fd);
-    if (i != nil)
-        freememimage(i);
-    if (p != nil)
-        free(p);
-    return nil;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -6842,117 +5650,6 @@ Err:
 
 \subsection*{[[lib_graphics/libmemdraw/read.c]]}
 
-% called only by font stuff?
-<<function readmemimage>>=
-Memimage*
-readmemimage(int fd)
-{
-    char hdr[5*12+1];
-    int dy;
-    ulong chan;
-    uint l, n;
-    int m, j;
-    int new, miny, maxy;
-    Rectangle r;
-    uchar *tmp;
-    int ldepth, chunk;
-    Memimage *i;
-
-    if(readn(fd, hdr, 11) != 11){
-        werrstr("readimage: short header");
-        return nil;
-    }
-    if(memcmp(hdr, "compressed\n", 11) == 0)
-        return creadmemimage(fd);
-
-    if(readn(fd, hdr+11, 5*12-11) != 5*12-11){
-        werrstr("readimage: short header (2)");
-        return nil;
-    }
-
-    /*
-     * distinguish new channel descriptor from old ldepth.
-     * channel descriptors have letters as well as numbers,
-     * while ldepths are a single digit formatted as %-11d.
-     */
-    new = 0;
-    for(m=0; m<10; m++){
-        if(hdr[m] != ' '){
-            new = 1;
-            break;
-        }
-    }
-    if(hdr[11] != ' '){
-        werrstr("readimage: bad format");
-        return nil;
-    }
-    if(new){
-        hdr[11] = '\0';
-        if((chan = strtochan(hdr)) == 0){
-            werrstr("readimage: bad channel string %s", hdr);
-            return nil;
-        }
-    }else{
-        ldepth = ((int)hdr[10])-'0';
-        if(ldepth<0 || ldepth>3){
-            werrstr("readimage: bad ldepth %d", ldepth);
-            return nil;
-        }
-        chan = drawld2chan[ldepth];
-    }
-
-    r.min.x = atoi(hdr+1*12);
-    r.min.y = atoi(hdr+2*12);
-    r.max.x = atoi(hdr+3*12);
-    r.max.y = atoi(hdr+4*12);
-    if(r.min.x>r.max.x || r.min.y>r.max.y){
-        werrstr("readimage: bad rectangle");
-        return nil;
-    }
-
-    miny = r.min.y;
-    maxy = r.max.y;
-
-    l = bytesperline(r, chantodepth(chan));
-    i = allocmemimage(r, chan);
-    if(i == nil)
-        return nil;
-    chunk = 32*1024;
-    if(chunk < l)
-        chunk = l;
-    tmp = malloc(chunk);
-    if(tmp == nil)
-        goto Err;
-    while(maxy > miny){
-        dy = maxy - miny;
-        if(dy*l > chunk)
-            dy = chunk/l;
-        if(dy <= 0){
-            werrstr("readmemimage: image too wide for buffer");
-            goto Err;
-        }
-        n = dy*l;
-        m = readn(fd, tmp, n);
-        if(m != n){
-            werrstr("readmemimage: read count %d not %d: %r", m, n);
-   Err:
-    freememimage(i);
-            free(tmp);
-            return nil;
-        }
-        if(!new)	/* an old image: must flip all the bits */
-            for(j=0; j<chunk; j++)
-                tmp[j] ^= 0xFF;
-
-        if(loadmemimage(i, Rect(r.min.x, miny, r.max.x, miny+dy), tmp, chunk) <= 0)
-            goto Err;
-        miny += dy;
-    }
-    free(tmp);
-    return i;
-}
-@
-
 
 %-------------------------------------------------------------
 
@@ -6968,71 +5665,6 @@ readmemimage(int fd)
 
 \subsection*{[[lib_graphics/libmemdraw/string.c]]}
 
-<<function memimagestring>>=
-Point
-memimagestring(Memimage *b, Point p, Memimage *color, Point cp, Memsubfont *f, char *cs)
-{
-    int w, width;
-    uchar *s;
-    Rune c;
-    Fontchar *i;
-
-    s = (uchar*)cs;
-    for(; c=*s; p.x+=width, cp.x+=width){
-        width = 0;
-        if(c < Runeself)
-            s++;
-        else{
-            w = chartorune(&c, (char*)s);
-            if(w == 0){
-                s++;
-                continue;
-            }
-            s += w;
-        }
-        if(c >= f->n)
-            continue;
-        i = f->info+c;
-        width = i->width;
-        memdraw(b, Rect(p.x+i->left, p.y+i->top, p.x+i->left+(i[1].x-i[0].x), p.y+i->bottom),
-            color, cp, f->bits, Pt(i->x, i->top), SoverD);
-    }
-    return p;
-}
-@
-
-<<function memsubfontwidth>>=
-Point
-memsubfontwidth(Memsubfont *f, char *cs)
-{
-    Rune c;
-    Point p;
-    uchar *s;
-    Fontchar *i;
-    int w, width;
-
-    p = Pt(0, f->height);
-    s = (uchar*)cs;
-    for(; c=*s; p.x+=width){
-        width = 0;
-        if(c < Runeself)
-            s++;
-        else{
-            w = chartorune(&c, (char*)s);
-            if(w == 0){
-                s++;
-                continue;
-            }
-            s += w;
-        }
-        if(c >= f->n)
-            continue;
-        i = f->info+c;
-        width = i->width;
-    }
-    return p;
-}
-@
 
 
 %-------------------------------------------------------------
@@ -7051,40 +5683,6 @@ memsubfontwidth(Memsubfont *f, char *cs)
 
 
 \subsection*{[[lib_graphics/libmemdraw/subfont.c]]}
-
-<<function allocmemsubfont>>=
-Memsubfont*
-allocmemsubfont(char *name, int n, int height, int ascent, Fontchar *info, Memimage *i)
-{
-    Memsubfont *f;
-
-    f = malloc(sizeof(Memsubfont));
-    if(f == 0)
-        return 0;
-    f->n = n;
-    f->height = height;
-    f->ascent = ascent;
-    f->info = info;
-    f->bits = i;
-    if(name)
-        f->name = strdup(name);
-    else
-        f->name = 0;
-    return f;
-}
-@
-
-<<function freememsubfont>>=
-void
-freememsubfont(Memsubfont *f)
-{
-    if(f == 0)
-        return;
-    free(f->info);	/* note: f->info must have been malloc'ed! */
-    freememimage(f->bits);
-    free(f);
-}
-@
 
 
 %-------------------------------------------------------------
@@ -9747,42 +8345,6 @@ extern void 	cursoroff(int);
 
 \subsection*{[[kernel/devices/screen/devdraw.c]]}
 
-<<enum _anon_ (kernel/devices/screen/devdraw.c)>>=
-enum
-{
-    Qtopdir     = 0,
-
-    Qnew,
-
-    Qwinname,
-    Q3rd,
-    Q2nd,
-    Qcolormap,
-
-    Qctl,
-    Qdata, // all the operations, drawmesg()
-    Qrefresh,
-};
-@
-
-<<constant QSHIFT>>=
-/*
- * Qid path is:
- *   4 bits of file type (qids above)
- *  24 bits of mux slot number +1; 0 means not attached to client
- */
-#define QSHIFT  4   /* location in qid of client # */
-@
-
-<<function QID bis>>=
-#define QID(q)      ((((ulong)(q).path)&0x0000000F)>>0)
-@
-
-<<function CLIENTPATH>>=
-#define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
-@
-%//#define CLIENT(q)   CLIENTPATH((q).path)
-
 <<constant NHASH bis>>=
 #define NHASH       (1<<5)
 @
@@ -9796,21 +8358,6 @@ enum
 @
 
 
-<<struct KDraw>>=
-struct KDraw
-{
-    int     clientid;
-    int     nclient;
-    Client**    client;
-    int     nname;
-    DName*  name;
-    int     vers;
-    int     softscreen;
-    ulong   savemap[3*256];
-
-    <<[[KDraw]] other fields>>
-};
-@
 
 
 
@@ -9853,60 +8400,9 @@ struct FChar
 };
 @
 
-<<struct DImage>>=
-/*
- * Reference counts in DImages:
- *  one per open by original client
- *  one per screen image or fill
- *  one per image derived from this one by name
- */
-struct DImage
-{
-    int     id;
-    int     ref;
-    char        *name;
-    int     vers;
-    Memimage*   image;
-    int     ascent;
-    int     nfchar;
-    FChar*      fchar;
-    DScreen*    dscreen;    /* 0 if not a window */
-    DImage*     fromname;   /* image this one is derived from, by name */
-    DImage*     next;
-};
-@
-
-<<struct CScreen>>=
-struct CScreen
-{
-    DScreen*    dscreen;
-    CScreen*    next;
-};
-@
-
-<<struct DScreen>>=
-struct DScreen
-{
-    int     id;
-    int     public;
-    int     ref;
-    DImage      *dimage;
-    DImage      *dfill;
-    Memscreen*  screen;
-    Client*     owner;
-    DScreen*    next;
-};
-@
 
 
 
-
-
-
-
-<<global sdraw>>=
-static  KDraw        sdraw;
-@
 
 
 
@@ -10005,148 +8501,9 @@ static  char Ewrongname[] =     "wrong name for image";
 
 
 
-<<global drawlock>>=
-QLock   drawlock;
-@
-
-<<function dlock>>=
-static void
-dlock(void)
-{
-    qlock(&drawlock);
-}
-@
-
-<<function candlock>>=
-static int
-candlock(void)
-{
-    return canqlock(&drawlock);
-}
-@
-
-<<function dunlock>>=
-static void
-dunlock(void)
-{
-    qunlock(&drawlock);
-}
-@
 
 
 
-<<function drawgen>>=
-static int
-drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
-{
-    int t;
-    Qid q;
-    ulong path;
-    Client *cl;
-
-    q.vers = 0;
-
-    if(s == DEVDOTDOT){
-        switch(QID(c->qid)){
-        case Qtopdir:
-        case Q2nd:
-            mkqid(&q, Qtopdir, 0, QTDIR);
-            devdir(c, q, "#i", 0, eve, 0500, dp);
-            break;
-        case Q3rd:
-            cl = drawclientofpath(c->qid.path);
-            if(cl == nil)
-                strncpy(up->genbuf, "??", sizeof up->genbuf);
-            else
-                snprint(up->genbuf, sizeof up->genbuf,
-                    "%d", cl->clientid);
-            mkqid(&q, Q2nd, 0, QTDIR);
-            devdir(c, q, up->genbuf, 0, eve, 0500, dp);
-            break;
-        default:
-            panic("drawwalk %llux", c->qid.path);
-        }
-        return 1;
-    }
-
-    /*
-     * Top level directory contains the name of the device.
-     */
-    t = QID(c->qid);
-    if(t == Qtopdir){
-        switch(s){
-        case 0:
-            mkqid(&q, Q2nd, 0, QTDIR);
-            devdir(c, q, "draw", 0, eve, 0555, dp);
-            break;
-        case 1:
-            mkqid(&q, Qwinname, 0, QTFILE);
-            devdir(c, q, "winname", 0, eve, 0444, dp);
-            break;
-        default:
-            return -1;
-        }
-        return 1;
-    }
-
-    if(t == Qwinname){
-        mkqid(&q, Qwinname, 0, QTFILE);
-        devdir(c, q, "winname", 0, eve, 0444, dp);
-        return 1;
-    }
-
-    /*
-     * Second level contains "new" plus all the clients.
-     */
-    if(t == Q2nd || t == Qnew){
-        if(s == 0){
-            mkqid(&q, Qnew, 0, QTFILE);
-            devdir(c, q, "new", 0, eve, 0666, dp);
-        }
-        else if(s <= sdraw.nclient){
-            cl = sdraw.client[s-1];
-            if(cl == 0)
-                return 0;
-            snprint(up->genbuf, sizeof up->genbuf, "%d",
-                cl->clientid);
-            mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
-            devdir(c, q, up->genbuf, 0, eve, 0555, dp);
-            return 1;
-        }
-        else
-            return -1;
-        return 1;
-    }
-
-    /*
-     * Third level.
-     */
-    path = c->qid.path&~((1<<QSHIFT)-1);    /* slot component */
-    q.vers = c->qid.vers;
-    q.type = QTFILE;
-    switch(s){
-    case 0:
-        q.path = path|Qcolormap;
-        devdir(c, q, "colormap", 0, eve, 0600, dp);
-        break;
-    case 1:
-        q.path = path|Qctl;
-        devdir(c, q, "ctl", 0, eve, 0600, dp);
-        break;
-    case 2:
-        q.path = path|Qdata;
-        devdir(c, q, "data", 0, eve, 0600, dp);
-        break;
-    case 3:
-        q.path = path|Qrefresh;
-        devdir(c, q, "refresh", 0, eve, 0400, dp);
-        break;
-    default:
-        return -1;
-    }
-    return 1;
-}
-@
 
 <<function drawrefactive>>=
 static
@@ -10407,39 +8764,6 @@ drawfreedscreen(DScreen *this)
 
 
 
-<<function drawnewclient>>=
-Client*
-drawnewclient(void)
-{
-    Client *cl, **cp;
-    int i;
-
-    for(i=0; i<sdraw.nclient; i++){
-        cl = sdraw.client[i];
-        if(cl == 0)
-            break;
-    }
-    if(i == sdraw.nclient){
-        cp = malloc((sdraw.nclient+1)*sizeof(Client*));
-        if(cp == 0)
-            return 0;
-        memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
-        free(sdraw.client);
-        sdraw.client = cp;
-        sdraw.nclient++;
-        cp[i] = 0;
-    }
-    cl = malloc(sizeof(Client));
-    if(cl == 0)
-        return 0;
-    memset(cl, 0, sizeof(Client));
-    cl->slot = i;
-    cl->clientid = ++sdraw.clientid;
-    cl->op = SoverD;
-    sdraw.client[i] = cl;
-    return cl;
-}
-@
 
 
 <<function drawclientofpath>>=
@@ -10603,15 +8927,6 @@ resetscreenimage(void)
 
 
 
-<<function drawwalk>>=
-static Walkqid*
-drawwalk(Chan *c, Chan *nc, char **name, int nname)
-{
-    if(screenimage == nil)
-        error("no frame buffer");
-    return devwalk(c, nc, name, nname, 0, 0, drawgen);
-}
-@
 
 <<function drawstat>>=
 static int
@@ -10621,335 +8936,6 @@ drawstat(Chan *c, uchar *db, int n)
 }
 @
 
-<<function drawopen>>=
-static Chan*
-drawopen(Chan *c, int omode)
-{
-    Client *cl;
-    DName *dn;
-    DImage *di;
-
-    if(c->qid.type & QTDIR){
-        c = devopen(c, omode, 0, 0, drawgen);
-        c->iounit = IOUNIT;
-    }
-
-    dlock();
-    if(waserror()){
-        dunlock();
-        nexterror();
-    }
-
-    if(QID(c->qid) == Qnew){
-        cl = drawnewclient();
-        if(cl == 0)
-            error(Enodev);
-        c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
-    }
-
-    switch(QID(c->qid)){
-    case Qwinname:
-        break;
-
-    case Qnew:
-        break;
-
-    case Qctl:
-        cl = drawclient(c);
-        if(cl->busy)
-            error(Einuse);
-        cl->busy = 1;
-        flushrect = Rect(10000, 10000, -10000, -10000);
-        dn = drawlookupname(strlen(screenname), screenname);
-        if(dn == 0)
-            error("draw: cannot happen 2");
-        if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
-            error(Edrawmem);
-        di = drawlookup(cl, 0, 0);
-        if(di == 0)
-            error("draw: cannot happen 1");
-        di->vers = dn->vers;
-        di->name = smalloc(strlen(screenname)+1);
-        strcpy(di->name, screenname);
-        di->fromname = dn->dimage;
-        di->fromname->ref++;
-        incref(&cl->r);
-        break;
-
-    case Qcolormap:
-    case Qdata:
-    case Qrefresh:
-        cl = drawclient(c);
-        incref(&cl->r);
-        break;
-    }
-
-    dunlock();
-    poperror();
-    c->mode = openmode(omode);
-    c->flag |= COPEN;
-    c->offset = 0;
-    c->iounit = IOUNIT;
-    return c;
-}
-@
-% >> 
-
-<<function drawclose>>=
-static void
-drawclose(Chan *c)
-{
-    int i;
-    DImage *d, **dp;
-    Client *cl;
-    Refresh *r;
-
-    if(QID(c->qid) < Qcolormap) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
-        return;
-    dlock();
-    if(waserror()){
-        dunlock();
-        nexterror();
-    }
-
-    cl = drawclient(c);
-    if(QID(c->qid) == Qctl)
-        cl->busy = 0;
-    if((c->flag&COPEN) && (decref(&cl->r)==0)){
-        while(r = cl->refresh){ /* assign = */
-            cl->refresh = r->next;
-            free(r);
-        }
-        /* free names */
-        for(i=0; i<sdraw.nname; )
-            if(sdraw.name[i].client == cl)
-                drawdelname(sdraw.name+i);
-            else
-                i++;
-        while(cl->cscreen)
-            drawuninstallscreen(cl, cl->cscreen);
-        /* all screens are freed, so now we can free images */
-        dp = cl->dimage;
-        for(i=0; i<NHASH; i++){
-            while((d = *dp) != nil){
-                *dp = d->next;
-                drawfreedimage(d);
-            }
-            dp++;
-        }
-        sdraw.client[cl->slot] = 0;
-        drawflush();    /* to erase visible, now dead windows */
-        free(cl);
-    }
-    dunlock();
-    poperror();
-}
-@
-
-<<function drawread>>=
-long
-drawread(Chan *c, void *a, long n, vlong off)
-{
-    int index, m;
-    ulong red, green, blue;
-    Client *cl;
-    uchar *p;
-    Refresh *r;
-    DImage *di;
-    Memimage *i;
-    ulong offset = off;
-    char buf[16];
-
-    if(c->qid.type & QTDIR)
-        return devdirread(c, a, n, 0, 0, drawgen);
-    if(QID(c->qid) == Qwinname)
-        return readstr(off, a, n, screenname);
-
-    cl = drawclient(c);
-    dlock();
-    if(waserror()){
-        dunlock();
-        nexterror();
-    }
-    switch(QID(c->qid)){
-    case Qctl:
-        if(n < 12*12)
-            error(Eshortread);
-        if(cl->infoid < 0)
-            error(Enodrawimage);
-        if(cl->infoid == 0){
-            i = screenimage;
-            if(i == nil)
-                error(Enodrawimage);
-        }else{
-            di = drawlookup(cl, cl->infoid, 1);
-            if(di == nil)
-                error(Enodrawimage);
-            i = di->image;
-        }
-        n = snprint(a, n,
-            "%11d %11d %11s %11d %11d %11d %11d %11d %11d %11d %11d %11d ",
-            cl->clientid, cl->infoid, chantostr(buf, i->chan),
-            (i->flags&Frepl)==Frepl,
-            i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y,
-            i->clipr.min.x, i->clipr.min.y, i->clipr.max.x,
-            i->clipr.max.y);
-        cl->infoid = -1;
-        break;
-
-    case Qcolormap:
-        drawactive(true);  /* to restore map from backup */
-        p = malloc(4*12*256+1);
-        if(p == 0)
-            error(Enomem);
-        m = 0;
-        for(index = 0; index < 256; index++){
-            getcolor(index, &red, &green, &blue);
-            m += snprint((char*)p+m, 4*12*256+1 - m,
-                "%11d %11lud %11lud %11lud\n", index,
-                red>>24, green>>24, blue>>24);
-        }
-        n = readstr(offset, a, n, (char*)p);
-        free(p);
-        break;
-
-    case Qdata:
-        if(cl->readdata == nil)
-            error("no draw data");
-        if(n < cl->nreaddata)
-            error(Eshortread);
-        n = cl->nreaddata;
-        memmove(a, cl->readdata, cl->nreaddata);
-        free(cl->readdata);
-        cl->readdata = nil;
-        break;
-
-    case Qrefresh:
-        if(n < 5*4)
-            error(Ebadarg);
-        for(;;){
-            if(cl->refreshme || cl->refresh)
-                break;
-            dunlock();
-            if(waserror()){
-                dlock();    /* restore lock for waserror() above */
-                nexterror();
-            }
-            sleep(&cl->refrend, drawrefactive, cl);
-            poperror();
-            dlock();
-        }
-        p = a;
-        while(cl->refresh && n>=5*4){
-            r = cl->refresh;
-            BPLONG(p+0*4, r->dimage->id);
-            BPLONG(p+1*4, r->r.min.x);
-            BPLONG(p+2*4, r->r.min.y);
-            BPLONG(p+3*4, r->r.max.x);
-            BPLONG(p+4*4, r->r.max.y);
-            cl->refresh = r->next;
-            free(r);
-            p += 5*4;
-            n -= 5*4;
-        }
-        cl->refreshme = 0;
-        n = p-(uchar*)a;
-        break;
-    }
-    dunlock();
-    poperror();
-    return n;
-}
-@
-
-<<function drawwakeall>>=
-void
-drawwakeall(void)
-{
-    Client *cl;
-    int i;
-
-    for(i=0; i<sdraw.nclient; i++){
-        cl = sdraw.client[i];
-        if(cl && (cl->refreshme || cl->refresh))
-            wakeup(&cl->refrend);
-    }
-}
-@
-
-<<function drawwrite>>=
-static long
-drawwrite(Chan *c, void *a, long n, vlong)
-{
-    char buf[128], *fields[4], *q;
-    Client *cl;
-    int i, m, red, green, blue, x;
-
-    if(c->qid.type & QTDIR)
-        error(Eisdir);
-    cl = drawclient(c);
-    dlock();
-    if(waserror()){
-        drawwakeall();
-        dunlock();
-        nexterror();
-    }
-    switch(QID(c->qid)){
-    case Qctl:
-        if(n != 4)
-            error("unknown draw control request");
-        cl->infoid = BGLONG((uchar*)a);
-        break;
-
-    case Qcolormap:
-        drawactive(true);  /* to restore map from backup */
-        m = n;
-        n = 0;
-        while(m > 0){
-            x = m;
-            if(x > sizeof(buf)-1)
-                x = sizeof(buf)-1;
-            q = memccpy(buf, a, '\n', x);
-            if(q == 0)
-                break;
-            i = q-buf;
-            n += i;
-            a = (char*)a + i;
-            m -= i;
-            *q = 0;
-            if(tokenize(buf, fields, nelem(fields)) != 4)
-                error(Ebadarg);
-            i = strtoul(fields[0], 0, 0);
-            red = strtoul(fields[1], 0, 0);
-            green = strtoul(fields[2], 0, 0);
-            blue = strtoul(fields[3], &q, 0);
-            if(fields[3] == q)
-                error(Ebadarg);
-            if(red>255 || green>255 || blue>255 || i<0 || i>255)
-                error(Ebadarg);
-            red |= red<<8;
-            red |= red<<16;
-            green |= green<<8;
-            green |= green<<16;
-            blue |= blue<<8;
-            blue |= blue<<16;
-            setcolor(i, red, green, blue);
-        }
-        break;
-
-    case Qdata:
-        drawmesg(cl, a, n);
-        drawwakeall();
-        break;
-
-    default:
-        error(Ebadusefd);
-    }
-    dunlock();
-    poperror();
-    return n;
-}
-@
 
 <<function drawcoord>>=
 uchar*
@@ -11734,78 +9720,6 @@ vbemodeinfo(int mode)
 }
 @
 
-<<function vesalinear(x86)>>=
-static void
-vesalinear(VGAscr *scr, int, int)
-{
-    int i, mode, size, havesize;
-    uchar *p;
-    ulong paddr;
-    Pcidev *pci;
-
-    if(hardscreen) {
-        scr->vaddr = 0;
-        scr->paddr = scr->apsize = 0;
-        return;
-    }
-
-    vbecheck();
-    mode = vbegetmode();
-    /*
-     * bochs loses the top bits - cannot use this
-    if((mode&(1<<14)) == 0)
-        error("not in linear graphics mode");
-     */
-    mode &= 0x3FFF;
-    p = vbemodeinfo(mode);
-    if(!(WORD(p+0) & (1<<4)))
-        error("not in VESA graphics mode");
-    if(!(WORD(p+0) & (1<<7)))
-        error("not in linear graphics mode");
-
-    paddr = LONG(p+40);
-    size = WORD(p+20)*WORD(p+16);
-    size = PGROUND(size);
-
-    /*
-     * figure out max size of memory so that we have
-     * enough if the screen is resized.
-     */
-    pci = nil;
-    havesize = 0;
-    while(!havesize && (pci = pcimatch(pci, 0, 0)) != nil){
-        if(pci->ccrb != Pcibcdisp)
-            continue;
-        for(i=0; i<nelem(pci->mem); i++)
-            if(paddr == (pci->mem[i].bar&~0x0F)){
-                if(pci->mem[i].size > size)
-                    size = pci->mem[i].size;
-                havesize = 1;
-                break;
-            }
-    }
-
-    /* no pci - heuristic guess */
-    if (!havesize)
-        if(size < 4*1024*1024)
-            size = 4*1024*1024;
-        else
-            size = ROUND(size, 1024*1024);
-    if(size > 16*1024*1024)     /* arbitrary */
-        size = 16*1024*1024;
-
-    vgalinearaddr(scr, paddr, size);
-    if(scr->apsize)
-        addvgaseg("vesascreen", scr->paddr, scr->apsize);
-
-    if(Usesoftscreen){
-        hardscreen = scr->vaddr;
-        scr->vaddr = 0;
-        scr->paddr = scr->apsize = 0;
-    }
-}
-@
-% >> >> >>
 
 % vesalinear -> <>
 % framebuffer for real? can do video games with that?
@@ -11857,20 +9771,6 @@ vesaflush(VGAscr *scr, Rectangle r)
 }
 @
 
-<<global vgavesadev(x86)>>=
-VGAdev vgavesadev = {
-    "vesa",
-    0,
-    0,
-    0,
-    vesalinear,
-    0,
-    0,
-    0,
-    0,
-    vesaflush,
-};
-@
 
 
 %-------------------------------------------------------------

@@ -6,11 +6,13 @@ typedef struct	Cursor Cursor;
 typedef struct	Menu Menu;
 typedef struct 	Mousectl Mousectl;
 
+/*s: enum Click */
 enum click {
     CLICK_LEFT = 1,
     CLICK_MIDDLE = 2,
     CLICK_RIGHT = 4,
 };
+/*e: enum Click */
 
 /*s: struct Mouse (include/mouse.h) */
 struct	Mouse

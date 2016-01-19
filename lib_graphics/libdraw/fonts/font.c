@@ -4,7 +4,6 @@
 #include <draw.h>
 
 static int	fontresize(Font*, int, int, int);
-static int	freeup(Font*);
 
 /*s: constant PJW */
 #define	PJW	0	/* use NUL==pjw for invisible characters */
@@ -327,34 +326,6 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     return 1;
 }
 /*e: function loadchar */
-
-/*s: function freeup */
-/* release all subfonts, return number freed */
-static
-int
-freeup(Font *f)
-{
-    Cachesubf *s, *es;
-    int nf;
-
-    if(f->sub[0]->name == nil)	/* font from mkfont; don't free */
-        return 0;
-    s = f->subf;
-    es = s+f->nsubf;
-    nf = 0;
-    while(s < es){
-        if(s->age){
-            freesubfont(s->f);
-            s->cf = nil;
-            s->f = nil;
-            s->age = 0;
-            nf++;
-        }
-        s++;
-    }
-    return nf;
-}
-/*e: function freeup */
 
 /*s: function fontresize */
 /* return whether resize succeeded && f->cache is unchanged */

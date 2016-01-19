@@ -27,6 +27,7 @@ enum
 
     Qctl,
     Qdata, // all the operations, drawmesg()
+
     Qrefresh,
 };
 /*e: enum _anon_ (kernel/devices/screen/devdraw.c) */
@@ -74,12 +75,17 @@ ulong blanktime = 30;   /* in minutes; a half hour */
 struct KDraw
 {
     int     clientid;
+
     int     nclient;
     Client**    client;
+
     int     nname;
+
     DName*  name;
+
     int     vers;
     int     softscreen;
+
     ulong   savemap[3*256];
 
     /*s: [[KDraw]] other fields */
@@ -100,21 +106,26 @@ struct Client
     // enum<drawop>?
     int     op;
 
-    /*s: [[Client]] other fields */
+    /*s: [[Client]] screen fields */
     CScreen*    cscreen;
-
+    /*e: [[Client]] screen fields */
+    /*s: [[Client]] other fields */
+    int     slot;
+    /*x: [[Client]] other fields */
+    int     infoid;
+    /*x: [[Client]] other fields */
+    byte*   readdata;
+    int     nreaddata;
+    /*x: [[Client]] other fields */
     Refresh*    refresh;
     Rendez      refrend;
     int     refreshme;
-
-    byte*   readdata;
-    int     nreaddata;
-
-    int     busy;
-    int     slot;
-    int     infoid;
     /*e: [[Client]] other fields */
+
     // Extra
+    /*s: [[Client]] concurrency fields */
+    bool     busy;
+    /*e: [[Client]] concurrency fields */
     Ref     r;
 };
 /*e: struct Client */
@@ -168,13 +179,17 @@ struct FChar
 struct DImage
 {
     int     id;
+
     int     ref;
-    char        *name;
+    char    *name;
     int     vers;
+
     Memimage*   image;
+
     int     ascent;
     int     nfchar;
     FChar*      fchar;
+
     DScreen*    dscreen;    /* 0 if not a window */
     DImage*     fromname;   /* image this one is derived from, by name */
     DImage*     next;
@@ -193,11 +208,15 @@ struct CScreen
 struct DScreen
 {
     int     id;
+
     int     public;
     int     ref;
+
     DImage      *dimage;
     DImage      *dfill;
+
     Memscreen*  screen;
+
     Client*     owner;
     DScreen*    next;
 };
@@ -1099,6 +1118,7 @@ makescreenimage(void)
     md = malloc(sizeof(Memdata));
     if(md == nil)
         return nil;
+
     md->allocd = 1;
     md->base = nil;
     md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
@@ -1241,18 +1261,23 @@ drawopen(Chan *c, int omode)
 
     case Qctl:
         cl = drawclient(c);
+
         if(cl->busy)
             error(Einuse);
-        cl->busy = 1;
+        cl->busy = true;
+
         flushrect = Rect(10000, 10000, -10000, -10000);
         dn = drawlookupname(strlen(screenname), screenname);
         if(dn == 0)
             error("draw: cannot happen 2");
+
         if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
             error(Edrawmem);
+
         di = drawlookup(cl, 0, 0);
         if(di == 0)
             error("draw: cannot happen 1");
+
         di->vers = dn->vers;
         di->name = smalloc(strlen(screenname)+1);
         strcpy(di->name, screenname);
@@ -1271,10 +1296,12 @@ drawopen(Chan *c, int omode)
 
     dunlock();
     poperror();
+
     c->mode = openmode(omode);
     c->flag |= COPEN;
     c->offset = 0;
     c->iounit = IOUNIT;
+
     return c;
 }
 /*e: function drawopen */
@@ -1298,7 +1325,7 @@ drawclose(Chan *c)
 
     cl = drawclient(c);
     if(QID(c->qid) == Qctl)
-        cl->busy = 0;
+        cl->busy = false;
     if((c->flag&COPEN) && (decref(&cl->r)==0)){
         while(r = cl->refresh){ /* assign = */
             cl->refresh = r->next;

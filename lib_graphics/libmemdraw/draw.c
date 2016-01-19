@@ -78,10 +78,12 @@ int	_ifmt(Fmt*);
 void
 memimageinit(void)
 {
+    /*s: [[memimageinit()]] only once guard */
     static bool didinit = false;
     if(didinit)
         return;
     didinit = true;
+    /*e: [[memimageinit()]] only once guard */
 
     if(  strcmp(imagmem->name, "Image") == 0 
       || strcmp(imagmem->name, "image") == 0
@@ -91,8 +93,10 @@ memimageinit(void)
     mktables();
     _memmkcmap();
 
-    fmtinstall('R', Rfmt); 
+    /*s: [[memimageinit()]] install dumpers */
     fmtinstall('P', Pfmt);
+    fmtinstall('R', Rfmt); 
+    /*e: [[memimageinit()]] install dumpers */
     fmtinstall('b', _ifmt);
 
     memzeros = allocmemimage(Rect(0,0,1,1), GREY1);

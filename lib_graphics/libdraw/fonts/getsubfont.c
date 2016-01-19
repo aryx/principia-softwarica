@@ -26,10 +26,10 @@ _getsubfont(Display *d, char *name)
      * _getsubfont is called only from string.c and stringwidth.c,
      * which are known to be safe to have this done.
      */
-    if(d && d->locking == 0)
+    if(d && d->locking == false)
         unlockdisplay(d);
-    f = readsubfont(d, name, fd, d && d->locking==0);
-    if(d && d->locking == 0)
+    f = readsubfont(d, name, fd, d && d->locking==false);
+    if(d && d->locking == false)
         lockdisplay(d);
     if(f == 0)
         fprint(2, "getsubfont: can't read %s: %r\n", name);

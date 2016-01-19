@@ -41,7 +41,7 @@ drawshutdown(void)
     d = display;
     if(d){
         display = nil;
-        _closedisplay(d, 1);
+        _closedisplay(d, true);
     }
 }
 /*e: function drawshutdown */
@@ -50,9 +50,11 @@ drawshutdown(void)
 errorneg1
 geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *label, char *windir, int ref)
 {
+    /*s: [[geninitdraw()]] locals */
     int fd, n;
     Subfont *df;
     char buf[128];
+    /*e: [[geninitdraw()]] locals */
 
     display = initdisplay(devdir, windir, error);
     if(display == nil)
@@ -62,15 +64,20 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
     /*
      * Set up default font
      */
+
+    // Set up default subfont
     df = getdefont(display);
     display->defaultsubfont = df;
+
     if(df == nil){
         fprint(2, "imageinit: can't open default subfont: %r\n");
     Error:
         closedisplay(display);
         display = nil;
-        return -1;
+        return ERROR_NEG1;
     }
+
+    // Set up default font
     if(fontname == nil){
         fd = open("/env/font", OREAD);
         if(fd >= 0){
@@ -315,6 +322,7 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
         goto Error2;
     }
 
+    // our display!
     disp = mallocz(sizeof(Display), 1);
 
     if(disp == nil){
@@ -386,11 +394,11 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 
     dir = dirfstat(ctlfd);
     if(dir!=nil && dir->type=='i'){
-        disp->local = 1;
+        disp->local = true;
         disp->dataqid = dir->qid.path;
     }
     if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
-        disp->_isnewdisplay = 1;
+        disp->_isnewdisplay = true;
     free(dir);
 
     return disp;
@@ -405,13 +413,13 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 void
 closedisplay(Display *disp)
 {
-    _closedisplay(disp, 0);
+    _closedisplay(disp, false);
 }
 /*e: function closedisplay */
 
 /*s: function _closedisplay */
 static void
-_closedisplay(Display *disp, int isshutdown)
+_closedisplay(Display *disp, bool isshutdown)
 {
     int fd;
     char buf[128];
@@ -420,6 +428,8 @@ _closedisplay(Display *disp, int isshutdown)
         return;
     if(disp == display)
         display = nil;
+
+    /*s: [[_closedisplay()]] if oldlabel */
     if(disp->oldlabel[0]){
         snprint(buf, sizeof buf, "%s/label", disp->windir);
         fd = open(buf, OWRITE);
@@ -428,6 +438,7 @@ _closedisplay(Display *disp, int isshutdown)
             close(fd);
         }
     }
+    /*e: [[_closedisplay()]] if oldlabel */
 
     /*
      * if we're shutting down, don't free all the resources.
@@ -455,13 +466,16 @@ _closedisplay(Display *disp, int isshutdown)
 void
 lockdisplay(Display *disp)
 {
+    /*s: [[lockdisplay()]] if debuglockdisplay */
     if(debuglockdisplay){
         /* avoid busy looping; it's rare we collide anyway */
         while(!canqlock(&disp->qlock)){
             fprint(1, "proc %d waiting for display lock...\n", getpid());
             sleep(1000);
         }
-    }else
+    }
+    /*e: [[lockdisplay()]] if debuglockdisplay */
+    else
         qlock(&disp->qlock);
 }
 /*e: function lockdisplay */
@@ -540,7 +554,7 @@ bufimage(Display *d, int n)
         werrstr("bad count in bufimage");
         return nil;
     }
-    if(d->bufp+n >  d->buf + d->bufsize)
+    if(d->bufp + n  >  d->buf + d->bufsize)
         if(doflush(d) < 0)
             return nil;
     p = d->bufp;

@@ -118,7 +118,7 @@ rectaddpt(Rectangle r, Point p)
 /*e: function rectaddpt */
 
 /*s: function eqpt */
-int
+bool
 eqpt(Point p, Point q)
 {
     return p.x==q.x && p.y==q.y;
@@ -126,7 +126,7 @@ eqpt(Point p, Point q)
 /*e: function eqpt */
 
 /*s: function eqrect */
-int
+bool
 eqrect(Rectangle r, Rectangle s)
 {
     return r.min.x==s.min.x && r.max.x==s.max.x &&
@@ -135,7 +135,7 @@ eqrect(Rectangle r, Rectangle s)
 /*e: function eqrect */
 
 /*s: function rectXrect */
-int
+bool
 rectXrect(Rectangle r, Rectangle s)
 {
     return r.min.x<s.max.x && s.min.x<r.max.x &&
@@ -144,7 +144,7 @@ rectXrect(Rectangle r, Rectangle s)
 /*e: function rectXrect */
 
 /*s: function rectinrect */
-int
+bool
 rectinrect(Rectangle r, Rectangle s)
 {
     return s.min.x<=r.min.x && r.max.x<=s.max.x && s.min.y<=r.min.y && r.max.y<=s.max.y;
@@ -152,7 +152,7 @@ rectinrect(Rectangle r, Rectangle s)
 /*e: function rectinrect */
 
 /*s: function ptinrect */
-int
+bool
 ptinrect(Point p, Rectangle r)
 {
     return p.x>=r.min.x && p.x<r.max.x &&
