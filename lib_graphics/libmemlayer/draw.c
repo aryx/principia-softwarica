@@ -5,6 +5,9 @@
 #include <memdraw.h>
 #include <memlayer.h>
 
+#define DBG1 if(0) print
+#define DBG if(0) print
+
 /*s: struct Draw */
 struct Draw
 {
