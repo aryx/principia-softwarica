@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <draw.h>
 
+// dup from memdraw.h
 typedef struct Memimage Memimage;
 
 /*s: global screenid */

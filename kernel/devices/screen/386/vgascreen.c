@@ -583,9 +583,11 @@ flushmemscreen(Rectangle r)
     incs = gscreen->width * BY2WD;
 
     switch(gscreen->depth){
+    /*s: [[flushmemscreen()]] switch depth cases */
     case 8:
         len = Dx(r);
         break;
+    /*e: [[flushmemscreen()]] switch depth cases */
     default:
         len = 0;
         panic("flushmemscreen: depth\n");
@@ -655,9 +657,11 @@ getcolor(ulong p, ulong* pr, ulong* pg, ulong* pb)
     default:
         x = 0x0F;
         break;
+    /*s: [[getcolor()]] switch depth cases */
     case 8:
         x = 0xFF;
         break;
+    /*e: [[getcolor()]] switch depth cases */
     }
     p &= x;
 
@@ -710,14 +714,17 @@ setcolor(ulong p, ulong r, ulong g, ulong b)
         return 0;
 
     switch(gscreen->depth){
+    /*s: [[setcolor()]] switch depth cases */
     case 1:
     case 2:
     case 4:
         x = 0x0F;
         break;
+    /*x: [[setcolor()]] switch depth cases */
     case 8:
         x = 0xFF;
         break;
+    /*e: [[setcolor()]] switch depth cases */
     default:
         return 0;
     }

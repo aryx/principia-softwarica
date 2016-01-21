@@ -517,8 +517,10 @@ doflush(Display *d)
 
     nn=write(d->fd, d->buf, n);
     if(nn != n){
+        /*s: [[doflush()]] if _drawdebug */
         if(_drawdebug)
             fprint(2, "flushimage fail: d=%p: n=%d nn=%d %r\n", d, n, nn); /**/
+        /*e: [[doflush()]] if _drawdebug */
         d->bufp = d->buf;	/* might as well; chance of continuing */
         return ERROR_NEG1;
     }

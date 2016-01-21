@@ -37,7 +37,6 @@ struct Memdata
 /*s: enum fxxx */
 enum {
     Frepl	= 1<<0,	/* is replicated */
-    Fsimple	= 1<<1,	/* is 1x1 */
     Fgrey	= 1<<2,	/* is grey */
     Falpha	= 1<<3,	/* has explicit alpha */
     Fcmap	= 1<<4,	/* has cmap channel */
@@ -69,9 +68,9 @@ struct Memimage
     int		mask[NChan];
     int		nbits[NChan];
     /*x: [[MemImage]] other fields */
-    Memcmap	*cmap;
-    /*x: [[MemImage]] other fields */
     Memlayer	*layer;	/* nil if not a layer*/
+    /*x: [[MemImage]] other fields */
+    Memcmap	*cmap;
     /*e: [[MemImage]] other fields */
 };
 /*e: struct Memimage */

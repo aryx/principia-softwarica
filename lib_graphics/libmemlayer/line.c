@@ -15,6 +15,7 @@ struct Lline
     int			end1;
     int			radius;
     Point			sp;
+
     Memlayer		*dstlayer;
     Memimage	*src;
     int			op;

@@ -6,7 +6,6 @@
 #include <memdraw.h>
 
 /*s: function RGB2K (lib_graphics/libmemdraw/tests/memdrawtest.c) */
-//#define DBG if(0)
 #define RGB2K(r,g,b)	((299*((ulong)(r))+587*((ulong)(g))+114*((ulong)(b)))/1000)
 /*e: function RGB2K (lib_graphics/libmemdraw/tests/memdrawtest.c) */
 
@@ -942,8 +941,6 @@ getmask(Memimage *img, Point pt)
         return getgrey(img, pt);
 }
 /*e: function getmask */
-//#undef DBG
-//#define DBG if(0)
 
 /*s: function putpixel */
 /*
@@ -1039,10 +1036,8 @@ putpixel(Memimage *img, Point pt, ulong nv)
     p[3] = v>>24;	
 }
 /*e: function putpixel */
-//#undef DBG
-/*s: function drawonepixel */
-//#define DBG if(0)
 
+/*s: function drawonepixel */
 void
 drawonepixel(Memimage *dst, Point dp, Memimage *src, Point sp, Memimage *mask, Point mp)
 {

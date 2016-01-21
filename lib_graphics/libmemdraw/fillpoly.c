@@ -188,6 +188,8 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
     void	(*fill)(Memimage*, int, int, int, Memimage*, Point, int);
 
     fill = fillline;
+
+
 /*
  * This can only work on 8-bit destinations, since fillcolor is
  * just using memset on sp.x.

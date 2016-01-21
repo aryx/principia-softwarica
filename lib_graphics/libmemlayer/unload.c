@@ -18,9 +18,10 @@ memunload(Memimage *src, Rectangle r, uchar *data, int n)
     dl = src->layer;
     if(dl == nil)
         return unloadmemimage(src, r, data, n);
-
+    // else
+    /*s: [[memunload()]] if src has layer */
     /*
-   * Convert to screen coordinates.
+     Convert to screen coordinates.
      */
     lr = r;
     r.min.x += dl->delta.x;
@@ -51,6 +52,7 @@ memunload(Memimage *src, Rectangle r, uchar *data, int n)
     n = unloadmemimage(tmp, lr, data, n);
     freememimage(tmp);
     return n;
+    /*e: [[memunload()]] if src has layer */
 }
 /*e: function memunload */
 /*e: lib_graphics/libmemlayer/unload.c */

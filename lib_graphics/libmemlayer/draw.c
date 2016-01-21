@@ -14,11 +14,11 @@ struct Draw
     Memimage	*src;
     Memimage	*mask;
 
+    // enum<Drawop>
     int	op;
 
-    /*s: [[Draw]] other fields */
-    Memlayer		*dstlayer;
-    /*e: [[Draw]] other fields */
+    Memlayer    *dstlayer;
+
 };
 /*e: struct Draw */
 
@@ -64,23 +64,23 @@ ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
 void
 memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
 {
+    /*s: [[memdraw()]] locals */
     struct Draw d;
     Rectangle srcr, tr, mr;
     Memlayer *dl, *sl;
+    /*e: [[memdraw()]] locals */
 
-    if(drawdebug)
-        iprint("memdraw %p %R %p %P %p %P\n", dst, r, src, p0, mask, p1);
+    DBG("memdraw %p %R %p %P %p %P\n", dst, r, src, p0, mask, p1);
 
     if(mask == nil)
         mask = memopaque;
 
     /*s: [[memdraw()]] if mask has layer */
     if(mask->layer){
-      if(drawdebug)	iprint("mask->layer != nil\n");
+        DBG1("mask->layer != nil\n");
         return;	/* too hard, at least for now */
     }
     /*e: [[memdraw()]] if mask has layer */
-
     Top:
     if(dst->layer==nil && src->layer==nil){
         memimagedraw(dst, r, src, p0, mask, p1, op); // back to memdraw
@@ -88,7 +88,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     }
     /*s: [[memdraw()]] when have layers */
     if(drawclip(dst, &r, src, &p0, mask, &p1, &srcr, &mr) == 0){
-       if(drawdebug)	iprint("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->clipr, mask->clipr);
+       DBG1("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->clipr, mask->clipr);
         return;
     }
 

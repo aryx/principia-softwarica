@@ -845,12 +845,12 @@ drawfreedimage(DImage *dimage)
             drawdelname(sdraw.name+i);
         else
             i++;
+
     if(dimage->fromname){   /* acquired by name; owned by someone else*/
         drawfreedimage(dimage->fromname);
         goto Return;
     }
-//  if(dimage->image == screenimage)    /* don't free the display */
-//      goto Return;
+    /*s: [[drawfreedimage()]] if dscreen */
     ds = dimage->dscreen;
     if(ds){
         l = dimage->image;
@@ -864,7 +864,9 @@ drawfreedimage(DImage *dimage)
         else
             memlfree(l);
         drawfreedscreen(ds);
-    }else
+    }
+    /*e: [[drawfreedimage()]] if dscreen */
+    else
         freememimage(dimage->image);
     Return:
     free(dimage->fchar);
@@ -957,13 +959,13 @@ drawnewclient(void)
 
     for(i=0; i<sdraw.nclient; i++){
         cl = sdraw.client[i];
-        if(cl == 0)
+        if(cl == nil)
             break;
     }
     if(i == sdraw.nclient){
         cp = malloc((sdraw.nclient+1)*sizeof(Client*));
-        if(cp == 0)
-            return 0;
+        if(cp == nil)
+            return nil;
         memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
         free(sdraw.client);
         sdraw.client = cp;
@@ -971,12 +973,12 @@ drawnewclient(void)
         cp[i] = 0;
     }
     cl = malloc(sizeof(Client));
-    if(cl == 0)
-        return 0;
+    if(cl == nil)
+        return nil;
     memset(cl, 0, sizeof(Client));
     cl->slot = i;
     cl->clientid = ++sdraw.clientid;
-    cl->op = SoverD;
+    cl->op = SoverD; // The classic
     sdraw.client[i] = cl;
     return cl;
 }
@@ -1247,7 +1249,7 @@ drawopen(Chan *c, int omode)
 
     if(QID(c->qid) == Qnew){
         cl = drawnewclient();
-        if(cl == 0)
+        if(cl == nil)
             error(Enodev);
         c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
     }
@@ -1268,14 +1270,14 @@ drawopen(Chan *c, int omode)
 
         flushrect = Rect(10000, 10000, -10000, -10000);
         dn = drawlookupname(strlen(screenname), screenname);
-        if(dn == 0)
+        if(dn == nil)
             error("draw: cannot happen 2");
 
         if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
             error(Edrawmem);
 
         di = drawlookup(cl, 0, 0);
-        if(di == 0)
+        if(di == nil)
             error("draw: cannot happen 1");
 
         di->vers = dn->vers;
@@ -1317,6 +1319,7 @@ drawclose(Chan *c)
 
     if(QID(c->qid) < Qcolormap) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
         return;
+
     dlock();
     if(waserror()){
         dunlock();
@@ -1326,6 +1329,7 @@ drawclose(Chan *c)
     cl = drawclient(c);
     if(QID(c->qid) == Qctl)
         cl->busy = false;
+
     if((c->flag&COPEN) && (decref(&cl->r)==0)){
         while(r = cl->refresh){ /* assign = */
             cl->refresh = r->next;
@@ -1382,10 +1386,12 @@ drawread(Chan *c, void *a, long n, vlong off)
         dunlock();
         nexterror();
     }
+
     switch(QID(c->qid)){
     case Qctl:
         if(n < 12*12)
             error(Eshortread);
+
         if(cl->infoid < 0)
             error(Enodrawimage);
         if(cl->infoid == 0){
@@ -1398,6 +1404,7 @@ drawread(Chan *c, void *a, long n, vlong off)
                 error(Enodrawimage);
             i = di->image;
         }
+
         n = snprint(a, n,
             "%11d %11d %11s %11d %11d %11d %11d %11d %11d %11d %11d %11d ",
             cl->clientid, cl->infoid, chantostr(buf, i->chan),
@@ -1499,12 +1506,14 @@ drawwrite(Chan *c, void *a, long n, vlong)
     if(c->qid.type & QTDIR)
         error(Eisdir);
     cl = drawclient(c);
+
     dlock();
     if(waserror()){
         drawwakeall();
         dunlock();
         nexterror();
     }
+
     switch(QID(c->qid)){
     case Qctl:
         if(n != 4)
@@ -1549,7 +1558,9 @@ drawwrite(Chan *c, void *a, long n, vlong)
         break;
 
     case Qdata:
+        // The big dispatch!!
         drawmesg(cl, a, n);
+
         drawwakeall();
         break;
 
@@ -1665,9 +1676,9 @@ drawmesg(Client *client, void *av, int n)
     DName *dn;
     DScreen *dscrn;
     FChar *fc;
-    Refx *refx;
     CScreen *cs;
     Refreshfn reffn;
+    Refx *refx;
     /*e: [[drawmesg()]] locals */
 
     a = av;
@@ -1703,8 +1714,9 @@ drawmesg(Client *client, void *av, int n)
             if(scrnid){
                 dscrn = drawlookupscreen(client, scrnid, &cs);
                 scrn = dscrn->screen;
-                if(repl || chan!=scrn->image->chan)
+                if(repl || chan != scrn->image->chan)
                     error("image parameters incompatible with screen");
+
                 reffn = nil;
                 switch(refresh){
                 case Refbackup:
@@ -1721,6 +1733,7 @@ drawmesg(Client *client, void *av, int n)
                 l = memlalloc(scrn, r, reffn, 0, value);
                 if(l == 0)
                     error(Edrawmem);
+
                 addflush(l->layer->screenr);
                 l->clipr = clipr;
                 rectclip(&l->clipr, r);
@@ -1798,36 +1811,6 @@ drawmesg(Client *client, void *av, int n)
             continue;
 
         /*x: [[drawmesg()]] cases */
-        /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
-        case 'd':
-            printmesg(fmt="LLLRPP", a, 0);
-            m = 1+4+4+4+4*4+2*4+2*4;
-            if(n < m)
-                error(Eshortdraw);
-            dst = drawimage(client, a+1);
-            dstid = BGLONG(a+1);
-            src = drawimage(client, a+5);
-            mask = drawimage(client, a+9);
-            drawrectangle(&r, a+13);
-            drawpoint(&p, a+29);
-            drawpoint(&q, a+37);
-
-            op = drawclientop(client);
-            memdraw(dst, r, src, p, mask, q, op); // the call!
-
-            dstflush(dstid, dst, r);
-            continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* set compositing operator for next draw operation: 'O' op */
-        case 'O':
-            printmesg(fmt="b", a, 0);
-            m = 1+1;
-            if(n < m)
-                error(Eshortdraw);
-            client->op = a[1];
-            continue;
-        /*x: [[drawmesg()]] cases */
         /* visible: 'v' */
         case 'v':
             printmesg(fmt="", a, 0);
@@ -1903,6 +1886,36 @@ drawmesg(Client *client, void *av, int n)
             client->infoid = dstid;
             continue;
 
+        /*x: [[drawmesg()]] cases */
+        /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
+        case 'd':
+            printmesg(fmt="LLLRPP", a, 0);
+            m = 1+4+4+4+4*4+2*4+2*4;
+            if(n < m)
+                error(Eshortdraw);
+            dst = drawimage(client, a+1);
+            dstid = BGLONG(a+1);
+            src = drawimage(client, a+5);
+            mask = drawimage(client, a+9);
+            drawrectangle(&r, a+13);
+            drawpoint(&p, a+29);
+            drawpoint(&q, a+37);
+
+            op = drawclientop(client);
+            memdraw(dst, r, src, p, mask, q, op); // the call!
+
+            dstflush(dstid, dst, r);
+            continue;
+
+        /*x: [[drawmesg()]] cases */
+        /* set compositing operator for next draw operation: 'O' op */
+        case 'O':
+            printmesg(fmt="b", a, 0);
+            m = 1+1;
+            if(n < m)
+                error(Eshortdraw);
+            client->op = a[1];
+            continue;
         /*x: [[drawmesg()]] cases */
         /* draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4] */
         case 'L':
@@ -2283,6 +2296,7 @@ drawmesg(Client *client, void *av, int n)
             if(n < m)
                 error(Eshortdraw);
             dst = drawimage(client, a+1);
+
             if(dst->layer){
                 drawpoint(&p, a+5);
                 drawpoint(&q, a+13);
@@ -2369,20 +2383,22 @@ Dev drawdevtab = {
 
     .attach   =    drawattach,
     .walk     =    drawwalk,
+
     .open     =    drawopen,
     .close    =    drawclose,
     .read     =    drawread,
     .write    =    drawwrite,
     .stat     =    drawstat,
     .wstat    =    devwstat,
-               
+
+    // generic               
     .reset    =    devreset,
     .init     =    devinit,
     .shutdown =    devshutdown,
     .create   =    devcreate,
+    .remove   =    devremove,
     .bread    =    devbread,
     .bwrite   =    devbwrite,
-    .remove   =    devremove,
 };
 /*e: global drawdevtab */
 

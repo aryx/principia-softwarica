@@ -15,6 +15,7 @@
 /*s: function hupdate */
 #define	hupdate(h, c)	((((h)<<HSHIFT)^(c))&HMASK)
 /*e: function hupdate */
+
 typedef struct Hlist Hlist;
 /*s: struct Hlist */
 struct Hlist{

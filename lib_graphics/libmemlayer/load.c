@@ -23,9 +23,10 @@ memload(Memimage *dst, Rectangle r, uchar *data, int n, bool iscompressed)
     dl = dst->layer;
     if(dl == nil)
         return (*loadfn)(dst, r, data, n);
-
+    // else
+    /*s: [[memload()]] if dst has layer */
     /*
-   * Convert to screen coordinates.
+     * Convert to screen coordinates.
      */
     lr = r;
     r.min.x += dl->delta.x;
@@ -54,6 +55,7 @@ memload(Memimage *dst, Rectangle r, uchar *data, int n, bool iscompressed)
     memdraw(dst, lr, tmp, lr.min, nil, lr.min, S);
     freememimage(tmp);
     return n;
+    /*e: [[memload()]] if dst has layer */
 }
 /*e: function memload */
 /*e: lib_graphics/libmemlayer/load.c */

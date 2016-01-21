@@ -171,7 +171,8 @@ enum {
 
 /*s: enum _anon_ (include/draw.h)5 */
 enum {
-    GREY1	= CHAN1(CGrey, 1),
+    GREY1	= CHAN1(CGrey, 1), // used for bitmask
+
     GREY2	= CHAN1(CGrey, 2),
     GREY4	= CHAN1(CGrey, 4),
     GREY8	= CHAN1(CGrey, 8),

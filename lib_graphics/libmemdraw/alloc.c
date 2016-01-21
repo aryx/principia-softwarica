@@ -59,6 +59,7 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     i->clipr = r;
     i->flags = 0;
     i->layer = nil;
+
     i->cmap = memdefcmap;
 
     if(memsetchan(i, chan) < 0){
@@ -180,7 +181,7 @@ memsetchan(Memimage *i, ulong chan)
     int d;
     int t, j, k;
     ulong cc;
-    int bytes;
+    bool bytes;
 
     if((d = chantodepth(chan)) == 0) {
         werrstr("bad channel descriptor");
@@ -190,7 +191,8 @@ memsetchan(Memimage *i, ulong chan)
     i->depth = d;
     i->chan = chan;
     i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
-    bytes = 1;
+    bytes = true;
+
     for(cc=chan, j=0, k=0; cc; j+=NBITS(cc), cc>>=8, k++){
         t=TYPE(cc);
         if(t < 0 || t >= NChan){
@@ -210,7 +212,7 @@ memsetchan(Memimage *i, ulong chan)
         i->mask[t] = (1<<NBITS(cc))-1;
         i->nbits[t] = NBITS(cc);
         if(NBITS(cc) != 8)
-            bytes = 0;
+            bytes = false;
     }
     i->nchan = k;
     if(bytes)
