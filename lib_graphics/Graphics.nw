@@ -12,7 +12,7 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - removed deadcode (Displaybufsize, drawbuf/ndrawbuf ...)
+% - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, ...)
 % - screen.h cleaner interface, TODO merge globals (screenimage and gscreen)
 % - renamed some globals (screen -> view, _screen -> screen)
 
@@ -31,7 +31,8 @@
 %  - TODO better understand alpha
 %  - TODO better understand bezier (could be useful for edge bunding visual)
 %    that they are essence of vectoriel fonts?
-%  - TODO understand freshrate, double buffer, vertical sync, flickering
+%  - TODO understand freshrate, double buffer, vertical sync, flickering,
+%    refresh sync
 
 
 %history LP-ization:
@@ -40,14 +41,14 @@
 %   which also now split in chunks!
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
-%    * TODO [[xxx]] other fields, [[xxx]] extra fields
+%    * SEMI [[xxx]] other fields, [[xxx]] extra fields
 % - read Extra section, identify concepts, first TOC
 % - distribute parts of the Extra section in the main file
 % - understand main(), LP split main, improve TOC
 % - understand main functions, LP split, cluster, improve TOC
 % - SEMI LP split the structures, use datalog for flow to field info
 % - SEMI nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
-% - TODO aspecify advanced features! remove useless features
+% - sEMI aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
 
@@ -280,6 +281,9 @@ but which were ultimately discarded:
 
 % toy graphical app /tests/draw/ ?
 
+
+\n no rio yet, really getting started so minimal!
+
 \section{Requirements}
 
 % C as usual.
@@ -287,9 +291,11 @@ but which were ultimately discarded:
 % most books focused on 3d anyway.
 
 %itemize docs/man/6/...
-% graphics(2)!! great (a few changes though, like screen -> view)
-% draw(2) !!
-% draw(6?) 
+% graphics(2)!! for big picture
+%  great (a few changes though, like screen -> view)
+% draw(2) for API
+% draw(3) for protocol
+% draw(6?) for image format
 % font(?) image(?)
 
 %advanced: more for rio
@@ -326,7 +332,7 @@ from Bell Labs.
 
 % graphics system =~ screen drawing API
 
-% screen made of pixels. Lots of them. Resolution. Depth/encoding.
+% screen made of pixels. Lots of them. Resolution. Depth/encoding. Image(s)!!
 % software/hardware interface can be as simple as a framebuffer (e.g. bcm/).
 % pixels, so not continuous! so if draw diagonal, then no that easy actually :)
 % => bresenham algorithm
@@ -356,7 +362,7 @@ from Bell Labs.
 % note that can run 'colors' in console outside rio! it just
 % use /dev/draw, /dev/mouse, etc!
 
-% see draw(5?)
+% see draw(3)
 
 %from https://news.ycombinator.com/item?id=9829662
 %> Why is reading plain text out of /dev/mouse and writing plain text
@@ -374,8 +380,6 @@ from Bell Labs.
 % HelloGraphicalWorld.c ?
 % e.g. colors? clock.c?
 
-% maybe show also can do under rio! magic! (and link to other book)
-
 % see display, image, and draw() generic ops.
 % see that colors that are actually images! very general (maybe too much).
 % different model than the Context of X11, or cairo, or canvas.
@@ -386,6 +390,14 @@ from Bell Labs.
 % a bit annoying that have to transform your xy into the final
 % xy ourself by adding view->r.min. Not really "abstraction"
 % power. I'd rather have my 0x0 to be the top left on _my_ window.
+
+
+% delay for later rio and /dev/winname?
+% maybe show also can do under rio! magic! (and link to other book)
+% /dev/winname! from noborder.xxx to window.xxx and then
+% thanks to naming image, can find back image you need to write to!
+% (instead of writing directly to the screen)
+
 
 \section{Code organization}
 
@@ -439,7 +451,7 @@ from Bell Labs.
 %alloc.c: alloc images
  %bytesperline.c: resolution -> malloc size 
   %(actually used in memdraw/alloc.c, but also here by readimage.c/...)
- %allocimagemix.c: ??
+ %allocimagemix.c: used by menuhits
 
 %chan.c: channel functions
 %rgb.c: rgb
@@ -473,7 +485,7 @@ from Bell Labs.
 
 %font.c:
 %buildfont.c:
-%openfont.c:
+%openfont.c: dead or redundant with buildfont I think
 %mkfont.c: dead?? used in apps?
 %getdefont.c:
 
@@ -694,7 +706,7 @@ from Bell Labs.
 % Also their pending DS in the kernel!
 % many important globals are in libdraw/init.c
 
-% lots of DS to present.
+% hmm, lots of DS to present.
 
 
 \section{[[Point]] and [[Rectangle]]}
@@ -883,6 +895,9 @@ rectsubpt(Rectangle r, Point p)
 
 
 
+
+
+
 <<function insetrect>>=
 Rectangle
 insetrect(Rectangle r, int n)
@@ -964,13 +979,13 @@ combinerect(Rectangle *r1, Rectangle r2)
 
 % connection to device, and client handler!
 
-\subsection{[[Display]]}
+\subsection{[[Display]] and [[display]]}
 
 % user side, can see it as essentially a connection handler
 <<struct Display>>=
 struct Display
 {
-    // ref_own<Image>
+    // ref_own<Image>, current Image? screen?
     Image	*image;
 
     <<[[Display]] devdraw connection fields>>
@@ -984,6 +999,8 @@ struct Display
     <<[[Display]] concurrency fields>>
 };
 @
+% ctor = initdisplay <- initdraw, shown later
+
 % rename image field to screen/view? is it the same than global screen/view?
 
 % why not just a fd to device file? because complex device, device
@@ -1045,14 +1062,13 @@ Image	*transparent;
 <<struct Client>>=
 struct Client
 {
-    int     clientid; // dirno?
+    int     clientid; // dirno
 
-    // ??? map<?, ref_own?<Dimage>> ?
+    // hash<Image.id, ref_own<Dimage>> (next = Dimage.next in bucket)
     DImage*     dimage[NHASH];
-    // enum<drawop>?
-    int     op;
 
-    <<[[Client]] screen fields>>
+    <<[[Client]] drawing state fields>>
+    <<[[Client]] layer fields>>
     <<[[Client]] other fields>>
 
     // Extra
@@ -1060,7 +1076,11 @@ struct Client
     Ref     r;
 };
 @
-% ref? can share client? if create proc? if attach to another display?
+% ctor = drawnewclient() <- drawopen(Qnew)    (see below for drawnewclient)
+
+% ref! once every file has been close in /dev/draw/x/ then
+% resource free.
+% can share client? if create proc? if attach to another display?
 
 % manage set of images! draw op state!
 
@@ -1068,6 +1088,121 @@ struct Client
 #define NHASH       (1<<5)
 @
 % >>
+<<[[Dimage]] extra fields>>=
+DImage*     next;
+@
+
+
+<<function drawlookup>>=
+DImage*
+drawlookup(Client *client, int id, bool checkname)
+{
+    DImage *d;
+
+    d = client->dimage[id&HASHMASK];
+    while(d){
+        if(d->id == id){
+            <<[[drawlookup()]] if checkname>>
+            return d;
+        }
+        d = d->next;
+    }
+    return nil;
+}
+@
+
+\subsection{[[KDraw]] and [[sdraw]]}
+\n hard to not expose now, cos relation between DImage, DName, Client subtle
+
+<<struct KDraw>>=
+struct KDraw
+{
+    // growing_array<option<Client>>, size in KDraw.nclient
+    Client**    client;
+    int     nclient;
+
+    // gensym
+    int     clientid;
+    
+    <<[[KDraw]] other fields>>
+};
+@
+% entries in KDraw.client are called "slots"
+
+%no ctor needed, singleton
+<<global sdraw>>=
+static  KDraw        sdraw;
+@
+% why sdraw? static draw? why not kdraw?
+
+
+<<[[Client]] other fields>>=
+// index in KDraw.clients[]
+int     slot;
+@
+
+
+
+% sysopen -> ... -> drawopen -> <>
+%ctor
+<<function drawnewclient>>=
+Client*
+drawnewclient(void)
+{
+    Client *cl, **cp;
+    int i;
+
+    // find free slot
+    for(i=0; i<sdraw.nclient; i++){
+        cl = sdraw.client[i];
+        if(cl == nil)
+            break;
+    }
+
+    // growing array
+    if(i == sdraw.nclient){
+        cp = malloc((sdraw.nclient+1)*sizeof(Client*));
+        if(cp == nil)
+            return nil;
+        memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
+        free(sdraw.client);
+        sdraw.client = cp;
+        sdraw.nclient++;
+        cp[i] = nil;
+    }
+
+    cl = malloc(sizeof(Client));
+    if(cl == nil)
+        return nil;
+    memset(cl, 0, sizeof(Client));
+    cl->slot = i;
+    cl->clientid = ++sdraw.clientid;
+    cl->op = SoverD; // The classic
+    sdraw.client[i] = cl;
+    return cl;
+}
+@
+
+
+
+
+
+
+
+
+%XXX
+<<[[KDraw]] other fields>>=
+int     softscreen;
+@
+
+%XXX
+<<[[KDraw]] other fields>>=
+int     vers;
+
+ulong   savemap[3*256];
+@
+
+
 
 
 \section{[[Image]] (and [[Memimage]])}
@@ -1076,7 +1211,7 @@ struct Client
 % see technicolor.ps! images in plan9 draw are
 % specials.
 
-\subsection{[[Image]]}
+\subsection{[[Image]] and [[view]]}
 
 <<struct Image>>=
 struct Image
@@ -1088,18 +1223,22 @@ struct Image
 
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;	/* clipping region */
+
     // bitset<enum<fxxx>>    
     int			repl;		/* flag: data replicates to tile clipr */
 
     ulong		chan;
     int			depth;		/* number of bits per pixel */
 
+    <<[[Image]] layer fields>>
     <<[[Image]] other fields>>
+
     // Extra
     <<[[Image]] extra fields>>
 };
 @
 % display + id => can communicate to kernel what we are talking about.
+% ctor = allocimage (doing some RPC)
 
 % read from /dev/draw/new initially when open the connection
 %  see initdisplay() 
@@ -1124,7 +1263,8 @@ struct Image
 // option<Image>
 Image	*view;
 @
-%less: can be modified? Is it the same than Display->image?
+%todo: can be modified? Is it the same than Display->image? or Display->screenimage?
+% why need to be a global? who set/modifies it?
 %old: was called screen, but unfortunate because there was
 % also a Screen type and then a _screen global.
 % could maybe also call it image, or window.
@@ -1140,6 +1280,7 @@ Image	*view;
 % so this imageid typedef will be really internal
 
 <<[[Display]] other fields>>=
+// gensym
 int		imageid;
 @
 % counter, incremented each allocimage(), rename imageidcnt;
@@ -1162,57 +1303,18 @@ enum {
     Fbytes	= 1<<5,	/* has only 8-bit channels */
 };
 @
-% >> >> >> >> >> >>
-% all important notions!
 %dead:    Fsimple	= 1<<1,	/* is 1x1 */
+% >> >> >> >> >> >>
+
+%Fbytes does not mean CMAP8, it means 8 bits depth but possibly multiple
+% channels
+
+% all important notions!
 
 
 
-\subsection{[[DImage]]}
-
-% why D?
-
-<<struct DImage>>=
-/*
- * Reference counts in DImages:
- *  one per open by original client
- *  one per screen image or fill
- *  one per image derived from this one by name
- */
-struct DImage
-{
-    int     id;
-
-    int     ref;
-    char    *name;
-    int     vers;
-
-    Memimage*   image;
-
-    int     ascent;
-    int     nfchar;
-    FChar*      fchar;
-
-    DScreen*    dscreen;    /* 0 if not a window */
-    DImage*     fromname;   /* image this one is derived from, by name */
-    DImage*     next;
-};
-@
-
-<<struct FChar>>=
-struct FChar
-{
-    int     minx;   /* left edge of bits */
-    int     maxx;   /* right edge of bits */
-    uchar       miny;   /* first non-zero scan-line */
-    uchar       maxy;   /* last non-zero scan-line + 1 */
-    schar       left;   /* offset of baseline */
-    uchar       width;  /* width of baseline */
-};
-@
-
-
-\subsection{[[Memimage]]}
+\subsection{[[Memimage]] and [[gscreen]]}
+% and screenimage!! (draw_screen, screen_screen, vga_screen)
 
 
 <<struct Memimage>>=
@@ -1220,22 +1322,30 @@ struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle	clipr;		/* clipping region */
-    //bitset<enum<fxxx>
-    ulong	flags;
 
     ulong	chan;	/* channel descriptions */
-    int		nchan;	/* number of channels */
+
+    // derives from Memimage.chan
     int		depth;	/* number of bits of storage per pixel */
+    int		nchan;	/* number of channels */
+
+    //bitset<enum<fxxx>, 
+    ulong	flags; 
 
     // finally, the raw pixels
     // ref_own<Memdata>
     Memdata	*data;	/* pointer to data; shared by windows in this image */
 
+    <<[[MemImage]] layer fields>>
     <<[[MemImage]] other fields>>
 };
 @
 %less: no repl here? yes, it's flags. rename repl?
 % depth is sum of bits per pixel for r/g/b, so for RGB16 it's ... 16
+%no int id; here! it's in parent DImage, so can share same MemImage
+% with different id in different clients
+%ctor = allocmemimaged <- makescreenimage | allocmemimage
+% shown later cos complicated, memsetchan, etc
 
 
 % libmemdraw/draw.c
@@ -1247,6 +1357,8 @@ static Memimage*	memones;
 <<global memzeros>>=
 static Memimage*	memzeros;
 @
+% 1x1 images, Grey1
+% Shared? by all clients?
 
 % pending of Display->white, Display->opaque, etc
 <<global memwhite>>=
@@ -1263,7 +1375,45 @@ Memimage *memopaque;
 @
 
 
-\subsection{[[Memdata]]}
+
+% rename gview? No cos here it's really the screen!
+% unfortunate that use term "Screen" already used for other stuff.
+% just like have [[screen/view]], client side,
+% have also gscreendimage and gscreen kernel side
+%[[screen.h]] interface
+% This used to be called the [[VGAscr]] section.
+% But what matters is not so much VGA but the screen.h interface.
+% We actually moved more stuff to a generic screen.c, to be closer
+% to the simplicity of bcm/screen.c. We don't want to expose ugly
+% VGA details when nowadays things are simpler like the framebuffer
+% interface of the raspberry.
+
+% there will be lots of Memimage, but an important one is
+% the screen!
+
+% screen.c, relation to Display->image? to screen/view? g? global screen?
+%  rename gview? more consistent with our new naming? No, here it's
+%  really the screen.
+<<global gscreen>>=
+Memimage *gscreen;
+@
+\t rename screen_screen?
+% this used to be in vgascreen.c, but every archi was defining
+% such a gscreen, so makes sense to factorize in a screen.c.
+% there also used to be a vgascreen[0].gscreen (see screensize()), but
+% this was redundant then with gscreen.
+%todo: put global kernel gscreen for chunkname? or global gscreen(kernel)
+% like I did for (arm) and (386)
+%this is set in screensize() by VGA driver
+
+
+
+
+% could put a generic ishwimage here! that just check if 
+% i->data->bdata == gscreen->data->bdata!
+
+\subsection{[[Memdata]] and [[gscreendata]]}
+
 
 <<struct Memdata>>=
 /*
@@ -1280,8 +1430,15 @@ struct Memdata
     byte	*bdata;	/* pointer to first byte of actual data; word-aligned */
 
     <<[[Memdata]] other fields>>
+    // Extra
+    int		ref;		/* number of Memimages using this data */
 };
 @
+% ctor = makescreenimage | allocmemimage
+
+% another intermediate, wrapperd in Memimage for compaction
+%  need mentioned in comment (see imagemove callback)
+
 % the raw pixel data! but to know where to modify you need
 % to understand the format of the image, the #channels, depths
 % of channels, etc.
@@ -1303,7 +1460,7 @@ byteaddr(Memimage *i, Point p)
 {
     byte *a;
 
-    a = i->data->bdata + i->zero + sizeof(ulong) * p.y * i->width;
+    a = (i->data->bdata + i->zero) + (sizeof(ulong) * p.y * i->width);
 
     <<[[byteaddr()]] if depth less than 8>>
     else
@@ -1335,67 +1492,309 @@ wordaddr(Memimage *i, Point p)
 
 
 
-
-
-
-%\section{[[gscreen]]}
-% just like have [[screen/view]], client side,
-% have also gscreendimage and gscreen kernel side
-%[[screen.h]] interface
-% This used to be called the [[VGAscr]] section.
-% But what matters is not so much VGA but the screen.h interface.
-% We actually moved more stuff to a generic screen.c, to be closer
-% to the simplicity of bcm/screen.c. We don't want to expose ugly
-% VGA details when nowadays things are simpler like the framebuffer
-% interface of the raspberry.
-
-% screen.c, relation to Display->image? to screen/view? g? global screen?
-%  rename gview? more consistent with our new naming?
-<<global gscreen>>=
-Memimage *gscreen;
-@
-% this used to be in vgascreen.c, but every archi was defining
-% such a gscreen, so makes sense to factorize in a screen.c.
-% there also used to be a vgascreen[0].gscreen (see screensize()), but
-% this was redundant then with gscreen.
-%todo: put global kernel gscreen for chunkname? or global gscreen(kernel)
-% like I did for (arm) and (386)
-
 <<global gscreendata>>=
 Memdata gscreendata;
 @
 % not a pointer, gscreen->data = &gscreendata.
 
-<<global physgscreenr>>=
-Rectangle physgscreenr;
+
+
+
+
+
+
+\subsection{[[DImage]]}
+% and screendimage
+
+% why D?
+
+<<struct DImage>>=
+/*
+ * Reference counts in DImages:
+ *  one per open by original client
+ *  one per screen image or fill
+ *  one per image derived from this one by name
+ */
+struct DImage
+{
+    int     id; // same than Image.id?
+    Memimage*   image;
+
+    <<[[Dimage]] layer fields>>
+    <<[[Dimage]] other fields>>
+
+    // Extra
+    <<[[Dimage]] extra fields>>
+    int     ref;
+};
 @
-% gscreen->r, could remove again then? too much globals
+% why not merged with Memimage? Why wrapper? cos of id!
+% so can share Memimage but each client has own DImage "view"
+% of those shared Memimage (including the screen!!).
+% intermediate so can share underlying Memimage.
+% Also why id is here, cos id could be different for same Memimage
+
+%ctor
+<<function allocdimage>>=
+/// makescreenimage | drawinstall -> <>
+DImage*
+allocdimage(Memimage *i)
+{
+    DImage *d;
+
+    d = malloc(sizeof(DImage));
+    if(d == nil)
+        return nil;
+    d->image = i;
+    d->ref = 1;
+
+    d->name = nil;
+    d->fromname = nil;
+    d->vers = 0;
+    d->nfchar = 0;
+    d->fchar = 0;
+
+    return d;
+}
+@
+% no id? done by drawinstall (for instance when open Qctl in
+% which case it should be 0!)
 
 
-% could put a generic ishwimage here! that just check if 
-% i->data->bdata == gscreen->data->bdata!
+%XXX
+<<[[Dimage]] other fields>>=
+int     vers;
 
+int     ascent;
+int     nfchar;
+FChar*      fchar;
 
-
-
-
-%XXXXXXXXXXXXXXXXXXXXX
-<<[[MemImage]] other fields>>=
-int		shift[NChan];
-int		mask[NChan];
-int		nbits[NChan];
 @
 
-%XXXXXXXXXX
-<<[[Memdata]] other fields>>=
-int		ref;		/* number of Memimages using this data */
+%XXX
+% mv in Font?
+<<struct FChar>>=
+struct FChar
+{
+    int     minx;   /* left edge of bits */
+    int     maxx;   /* right edge of bits */
+    uchar       miny;   /* first non-zero scan-line */
+    uchar       maxy;   /* last non-zero scan-line + 1 */
+    schar       left;   /* offset of baseline */
+    uchar       width;  /* width of baseline */
+};
+@
 
-void*	imref;
-int		allocd;	/* is this malloc'd? */
+%\subsection{[[DName]]}
+% related to windowing system so moved later
+
+
+\section{Image channels}
+
+% typedef ulong chan;!
+
+
+% not thread channel, image channel here!
+% ulong in previous struct, but more complex format
+% actually
+
+<<enum _anon_ (include/draw.h)4>>=
+/*
+ * image channel descriptors 
+ */
+// coupling: chantostr and channames
+enum {
+    CRed = 0,
+    CGreen,
+    CBlue,
+
+    CGrey,
+    CAlpha,
+
+    CMap,
+    CIgnore,
+
+    NChan,
+};
+@
+
+<<enum _anon_ (include/draw.h)5>>=
+enum {
+    GREY1	= CHAN1(CGrey, 1), // used for bitmask
+
+    GREY2	= CHAN1(CGrey, 2),
+    GREY4	= CHAN1(CGrey, 4),
+    GREY8	= CHAN1(CGrey, 8),
+
+    CMAP8	= CHAN1(CMap, 8),
+
+    RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
+    RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
+    RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
+    BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
+
+    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
+    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
+
+    ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
+
+    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
+    XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
+};
+@
+% todo: need all of that? could maybe simplfy and support less
+% image format. That should remove quite some code, e.g. all those
+% alphacalcxxx.
+% cairo has what? RGBA32 no?
+
+% vga is CMAP8 (cat /dev/draw/new -->  m8 for cmap 8 bit)
+
+% what is True Color? mentionned in technicolor.ps. It's RGBA32?
+
+% argument of what? allocimage?
+
+%  4      4
+% -------------
+% type | nbits
+% -------------
+
+<<function __DC>>=
+#define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
+@
+% >>
+<<function NBITS>>=
+#define NBITS(c) ((c)&15)
 @
 
 
+<<function TYPE>>=
+#define TYPE(c) (((c)>>4)&15)
+@
+% >> >> >>
 
+
+
+<<function CHAN1>>=
+#define CHAN1(a,b)	__DC(a,b)
+@
+
+<<function CHAN2>>=
+#define CHAN2(a,b,c,d)	(CHAN1((a),(b))<<8|__DC((c),(d)))
+@
+
+<<function CHAN3>>=
+#define CHAN3(a,b,c,d,e,f)	(CHAN2((a),(b),(c),(d))<<8|__DC((e),(f)))
+@
+
+<<function CHAN4>>=
+#define CHAN4(a,b,c,d,e,f,g,h)	(CHAN3((a),(b),(c),(d),(e),(f))<<8|__DC((g),(h)))
+@
+% >> >> >>
+
+
+<<function chantodepth>>=
+int
+chantodepth(ulong c)
+{
+    int n;
+
+    for(n=0; c; c>>=8){
+        if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
+            return 0; // warning?
+        n += NBITS(c);
+    }
+    if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
+        return 0; // warning?
+    return n;
+}
+@
+
+% see also chantostr in debug, which is also used to give
+% readable info in /dev/draw/new/
+
+
+
+\section{Colors}
+
+%todo:
+% typedef ulong color;!
+
+%old school graphics:
+%https://www.youtube.com/watch?v=Tfh0ytz8S0k&feature=youtu.be
+
+% actually Color are Image* in plan9 draw!
+% a Rect(0,0,1,1), with clipr = infinity and repl = true
+% very general so less need draw_mask, or draw_color, instead
+% just have a generic draw function where you can pass
+% black as the src!
+
+% 32 bits! RGBA 8 bits for each channel, which is
+% why has FF as the last bit for almost all the elements below
+<<enum _anon_>>=
+enum
+{
+    DOpaque			= 0xFFFFFFFF,
+    DTransparent	= 0x00000000,/* only useful for allocimage, memfillcolor */
+
+    DBlack		= 0x000000FF,
+    DWhite		= 0xFFFFFFFF,
+    DRed		= 0xFF0000FF,
+    DGreen		= 0x00FF00FF,
+    DBlue		= 0x0000FFFF,
+    DCyan		= 0x00FFFFFF,
+    DMagenta	= 0xFF00FFFF,
+    DYellow		= 0xFFFF00FF,
+
+    DPaleyellow	= 0xFFFFAAFF,
+    DDarkyellow	= 0xEEEE9EFF,
+    DDarkgreen	= 0x448844FF,
+    DPalegreen	= 0xAAFFAAFF,
+    DMedgreen	= 0x88CC88FF,
+    DDarkblue	= 0x000055FF,
+    DPalebluegreen= 0xAAFFFFFF,
+    DPaleblue	= 0x0000BBFF,
+    DBluegreen	= 0x008888FF,
+    DGreygreen	= 0x55AAAAFF,
+    DPalegreygreen	= 0x9EEEEEFF,
+    DYellowgreen	= 0x99994CFF,
+    DMedblue		= 0x000099FF,
+    DGreyblue		= 0x005DBBFF,
+    DPalegreyblue	= 0x4993DDFF,
+    DPurpleblue		= 0x8888CCFF,
+
+    DNotacolor	= 0xFFFFFF00, // Alpha = 0
+    DNofill	= DNotacolor,
+    
+};
+@
+%less: typedef unsigned int rbga; ?
+
+%todo: how works with VGA where have cmap? try to find closest color?
+
+% dead: seems not used but a bit interesting to understand alpha?, 
+% was in arith.c
+<<function setalpha>>=
+ulong
+setalpha(ulong color, uchar alpha)
+{
+    int red, green, blue;
+
+    red = (color >> 3*8) & 0xFF;
+    green = (color >> 2*8) & 0xFF;
+    blue = (color >> 1*8) & 0xFF;
+    /* ignore incoming alpha */
+    red = (red * alpha)/255;
+    green = (green * alpha)/255;
+    blue = (blue * alpha)/255;
+    return (red<<3*8) | (green<<2*8) | (blue<<1*8) | (alpha<<0*8);
+}
+@
+% >> >> >> >>
+% that simple? :) to set alpha you just dillute each rgb components?
+
+
+% \section{Color map}
+% now in Adv topics
 
 
 
@@ -1411,8 +1810,13 @@ int		allocd;	/* is this malloc'd? */
 
 \subsection{[[Drawop]]}
 
+<<[[Client]] drawing state fields>>=
+// enum<Drawop>
+int     op;
+@
+
 <<enum drawop>>=
-enum drawop
+enum Drawop
 {
     /* Porter-Duff compositing operators */
     Clear	= 0,
@@ -1481,213 +1885,12 @@ struct	Memdrawparam
 };
 @
 
-\section{Image channels}
-
-% not thread channel, image channel here!
-% ulong in previous struct, but more complex format
-% actually
-
-<<enum _anon_ (include/draw.h)4>>=
-/*
- * image channel descriptors 
- */
-enum {
-    CRed = 0,
-    CGreen,
-    CBlue,
-
-    CGrey,
-    CAlpha,
-
-    CMap,
-    CIgnore,
-
-    NChan,
-};
-@
-
-<<enum _anon_ (include/draw.h)5>>=
-enum {
-    GREY1	= CHAN1(CGrey, 1), // used for bitmask
-
-    GREY2	= CHAN1(CGrey, 2),
-    GREY4	= CHAN1(CGrey, 4),
-    GREY8	= CHAN1(CGrey, 8),
-
-    CMAP8	= CHAN1(CMap, 8),
-
-    RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
-    RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
-    RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
-    BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
-
-    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
-    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
-
-    ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
-
-    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
-    XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
-};
-@
-% todo: need all of that? could maybe simplfy and support less
-% image format. That should remove quite some code, e.g. all those
-% alphacalcxxx.
-% cairo has what? RGBA32 no?
-
-% what is True Color? mentionned in technicolor.ps. It's RGBA32?
-
-% argument of what? allocimage?
-
-%  4      4
-% -------------
-% type | nbits
-% -------------
-
-<<function __DC>>=
-#define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
-@
-% >>
-<<function NBITS>>=
-#define NBITS(c) ((c)&15)
-@
-
-
-<<function TYPE>>=
-#define TYPE(c) (((c)>>4)&15)
-@
-% >> >> >>
-
-
-
-<<function CHAN1>>=
-#define CHAN1(a,b)	__DC(a,b)
-@
-
-<<function CHAN2>>=
-#define CHAN2(a,b,c,d)	(CHAN1((a),(b))<<8|__DC((c),(d)))
-@
-
-<<function CHAN3>>=
-#define CHAN3(a,b,c,d,e,f)	(CHAN2((a),(b),(c),(d))<<8|__DC((e),(f)))
-@
-
-<<function CHAN4>>=
-#define CHAN4(a,b,c,d,e,f,g,h)	(CHAN3((a),(b),(c),(d),(e),(f))<<8|__DC((g),(h)))
-@
-% >> >> >>
-
-
-<<function chantodepth>>=
-int
-chantodepth(ulong c)
-{
-    int n;
-
-    for(n=0; c; c>>=8){
-        if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
-            return 0; // warning?
-        n += NBITS(c);
-    }
-    if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
-        return 0; // warning?
-    return n;
-}
-@
-
-
-
-
-
-\section{Colors}
-
-% typedef ulong color;!
-
-%old school graphics:
-%https://www.youtube.com/watch?v=Tfh0ytz8S0k&feature=youtu.be
-
-% actually Color are Image* in plan9 draw!
-% a Rect(0,0,1,1), with clipr = infinity and repl = true
-% very general so less need draw_mask, or draw_color, instead
-% just have a generic draw function where you can pass
-% black as the src!
-
-% 32 bits! RGBA 8 bits for each channel, which is
-% why has FF as the last bit for almost all the elements below
-<<enum _anon_>>=
-enum
-{
-    DOpaque			= 0xFFFFFFFF,
-    DTransparent	= 0x00000000,/* only useful for allocimage, memfillcolor */
-
-    DBlack		= 0x000000FF,
-    DWhite		= 0xFFFFFFFF,
-    DRed		= 0xFF0000FF,
-    DGreen		= 0x00FF00FF,
-    DBlue		= 0x0000FFFF,
-    DCyan		= 0x00FFFFFF,
-    DMagenta	= 0xFF00FFFF,
-    DYellow		= 0xFFFF00FF,
-
-    DPaleyellow	= 0xFFFFAAFF,
-    DDarkyellow	= 0xEEEE9EFF,
-    DDarkgreen	= 0x448844FF,
-    DPalegreen	= 0xAAFFAAFF,
-    DMedgreen	= 0x88CC88FF,
-    DDarkblue	= 0x000055FF,
-    DPalebluegreen= 0xAAFFFFFF,
-    DPaleblue	= 0x0000BBFF,
-    DBluegreen	= 0x008888FF,
-    DGreygreen	= 0x55AAAAFF,
-    DPalegreygreen	= 0x9EEEEEFF,
-    DYellowgreen	= 0x99994CFF,
-    DMedblue		= 0x000099FF,
-    DGreyblue		= 0x005DBBFF,
-    DPalegreyblue	= 0x4993DDFF,
-    DPurpleblue		= 0x8888CCFF,
-
-    DNotacolor	= 0xFFFFFF00, // Alpha = 0
-    DNofill	= DNotacolor,
-    
-};
-@
-%less: typedef unsigned int rbga; ?
-
-
-% dead: seems not used but a bit interesting to understand alpha?, 
-% was in arith.c
-<<function setalpha>>=
-ulong
-setalpha(ulong color, uchar alpha)
-{
-    int red, green, blue;
-
-    red = (color >> 3*8) & 0xFF;
-    green = (color >> 2*8) & 0xFF;
-    blue = (color >> 1*8) & 0xFF;
-    /* ignore incoming alpha */
-    red = (red * alpha)/255;
-    green = (green * alpha)/255;
-    blue = (blue * alpha)/255;
-    return (red<<3*8) | (green<<2*8) | (blue<<1*8) | (alpha<<0*8);
-}
-@
-% >> >> >> >>
-% that simple? :) to set alpha you just dillute each rgb components?
-
-
-% \section{Color map}
-% now in Adv topics
-
-
-
-
 \section{[[Font]] and [[Subfont]]}
 % and [[font]]
 % present later? already lots of DS to understand ...
 
 
-\subsection{[[Font]]}
+\subsection{[[Font]] and [[font]]}
 
 <<struct Font>>=
 struct Font
@@ -1697,21 +1900,10 @@ struct Font
 
     short		height;	/* max height of image, interline spacing */
     short		ascent;	/* top of image to baseline */
-    short		width;	/* widest so far; used in caching only */	
-
-    short		nsub;	/* number of subfonts */
-    ulong		age;	/* increasing counter; used for LRU */
-    int		maxdepth;	/* maximum depth of all loaded subfonts */
-    int		ncache;	/* size of cache */
-    int		nsubf;	/* size of subfont list */
-
-    Cacheinfo	*cache;
-    Cachesubf	*subf;
-    Cachefont	**sub;	/* as read from file */
-    Image		*cacheimage;
+    <<[[Font]] other fields>>
 };
 @
-
+% ctor = ?
 
 <<global font>>=
 Font	*font;
@@ -1720,6 +1912,21 @@ Font	*font;
 
 <<[[Display]] font fields>>=
 Font	*defaultfont;
+@
+
+%XXX
+<<[[Font]] other fields>>=
+short		width;	/* widest so far; used in caching only */	
+short		nsub;	/* number of subfonts */
+ulong		age;	/* increasing counter; used for LRU */
+int		maxdepth;	/* maximum depth of all loaded subfonts */
+int		ncache;	/* size of cache */
+int		nsubf;	/* size of subfont list */
+
+Cacheinfo	*cache;
+Cachesubf	*subf;
+Cachefont	**sub;	/* as read from file */
+Image		*cacheimage;
 @
 
 \subsection{[[Subfont]]}
@@ -1750,9 +1957,11 @@ struct	Subfont
     Fontchar 	*info;		/* n+1 character descriptors */
     Image		*bits;		/* of font */
 
+    // Extra
     int		ref;
 };
 @
+% ctor = ?
 
 <<struct Fontchar>>=
 struct	Fontchar
@@ -1767,7 +1976,6 @@ struct	Fontchar
 
 
 \subsection{[[Memsubfont]]}
-
 
 <<struct Memsubfont>>=
 /*
@@ -1789,60 +1997,33 @@ struct	Memsubfont
     char	ascent;		/* top of bitmap to baseline */
 
     Fontchar *info;		/* n+1 character descriptors */
-
     Memimage	*bits;		/* of font */
 };
 @
-% the Memimage!!
+% actually identical at Subfont, could factorize?
+% ctor = ?
+
 
 \section{Windows and layers}
-% delay to later?
-
-% What we have seen was already very complicated, lots of architecture layers,
-% wrapper data structures. A real onion.
-% Here is another one :) Windows/Layers.
-
-<<[[Display]] other fields>>=
-// list<ref<Window>> (next = Image.next)
-Image	*windows;
-@
-
-<<[[Image]] extra fields>>=
-Image		*next;	/* next in list of windows */
-@
-
-
-%XXX
-<<[[Display]] other fields>>=
-Image	*screenimage; // ???
-@
-% ???? different from Display.image?
-
-
-<<[[Image]] other fields>>=
-Screen		*screen;	/* nil if not a window */
-@
-
-% Screen type described later, but really should
-% rename it Layer or something, so more consistent
-% with Memlayer
-
-
-<<[[MemImage]] other fields>>=
-Memlayer	*layer;	/* nil if not a layer*/
-@
-% Memlayer described later in Windows chapter
+% delay to later!
 
 
 
 
+\chapter{Initializations}
+% =~ Main
 
-
-
-\chapter{Initialization}
 
 \section{Kernel side}
 % also kinda "Server side". Better to see first user side?
+
+\subsection{Mounting the VGA device}
+%x86
+
+% mounting and then call aux/vga ! which ends up calling
+% screensize?
+
+% important is that setup gscreen we will see soon.
 
 \subsection{Mounting the draw device}
 
@@ -1863,15 +2044,17 @@ drawattach(char *spec)
         error("no frame buffer");
     }
     dunlock();
+
     return devattach('i', spec);
 }
 @
 % dlock/dunlock?
-
+% will see other device draw ops later
 
 <<global drawlock>>=
 QLock   drawlock;
 @
+% protect? sdraw? screenimage?
 
 <<function dlock>>=
 static void
@@ -1880,7 +2063,6 @@ dlock(void)
     qlock(&drawlock);
 }
 @
-
 <<function candlock>>=
 static int
 candlock(void)
@@ -1888,7 +2070,6 @@ candlock(void)
     return canqlock(&drawlock);
 }
 @
-
 <<function dunlock>>=
 static void
 dunlock(void)
@@ -1899,6 +2080,17 @@ dunlock(void)
 % this is kernel side. because shared DS.
 % client side you may have to use lockdisplay() to protect user DS
 %  if multi process.
+
+\subsection{[[initscreenimage()]] and [[screenimage]]}
+
+% put in core DS chapter? merge with screen.h gscreen no?
+% the frame buffer!! (at least call like that in error msg when nil)
+<<global screenimage>>=
+static  Memimage    *screenimage;
+@
+\t rename draw_screen!
+% screendimage->image (less: so could remove this semi global)
+%TODO: vs gscreen????? rename vga_screen?
 
 
 % drawattach -> <>
@@ -1913,25 +2105,20 @@ initscreenimage(void)
     if(screendimage == nil)
         return ERROR_0;
     screenimage = screendimage->image;
-    // iprint("initscreenimage %p %p\n", screendimage, screenimage);
+
+    DBG1("initscreenimage %p %p\n", screendimage, screenimage);
     mouseresize();
     return OK_1;
 }
 @
-
-% put in core DS chapter? merge with screen.h gscreen no?
-% the frame buffer!! (at least call like that in error msg when nil)
-<<global screenimage>>=
-static  Memimage    *screenimage;
-@
-% screendimage->image (less: so could remove this semi global)
-% vs gscreen?????
+% mouseresize??
 
 % fuck, another set of globals ... rename gscreendimage?
 <<global screendimage>>=
 static  DImage* screendimage;
 @
-
+\l rename draw_screen_dimage
+% why need this one?
 
 
 % sysbind -> drawattach -> initscreenimage -> <>
@@ -1940,62 +2127,274 @@ static  DImage* screendimage;
 static DImage*
 makescreenimage(void)
 {
-    int width, depth;
-    ulong chan;
-    DImage *di;
-    Memdata *md;
-    Memimage *i;
-    Rectangle r;
+    <<[[makescreenimage()]] locals>>
 
-    md = malloc(sizeof(Memdata));
-    if(md == nil)
-        return nil;
+    <<[[makescreenimage()]] allocate Memdata md>>
+    <<[[makescreenimage()]] allocate Memimage i>>
+    <<[[makescreenimage()]] allocate DImage di>>
 
-    md->allocd = 1;
-    md->base = nil;
-    md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
-    if(md->bdata == nil){
-        free(md);
-        return nil;
-    }
-    md->ref = 1;
-    i = allocmemimaged(r, chan, md);
-    if(i == nil){
-        free(md);
-        return nil;
-    }
-    i->width = width;
-    i->clipr = r;
+    <<[[makescreenimage()]] drawaddname>>
 
-    di = allocdimage(i);
-    if(di == nil){
-        freememimage(i);    /* frees md */
-        return nil;
-    }
-    if(!waserror()){
-        snprint(screenname, sizeof screenname, "noborder.screen.%d", ++screennameid);
-        drawaddname(nil, di, strlen(screenname), screenname);
-        poperror();
-    }
     return di;
 }
 @
 % hmm waserror, refer to kernel book! or maybe put appendix again
 % with summary of equivalences with modern exn constructs
 
-<<global screenname>>=
-static  char    screenname[40];
+
+%toc:
+<<[[makescreenimage()]] locals>>=
+Memdata *md;
+Memimage *i;
+DImage *di;
 @
 
-<<global screennameid>>=
-static  int screennameid;
+\subsubsection{[[Memdata]]}
+
+<<[[makescreenimage()]] allocate Memdata md>>=
+// allocate Memdata
+md = malloc(sizeof(Memdata));
+if(md == nil)
+    return nil;
+md->allocd = true;
+
+md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
+if(md->bdata == nil){
+    free(md);
+    return nil;
+}
+md->base = nil; // not allocated by poolalloc
+md->ref = 1;
+@
+% does not set base?
+
+
+<<[[Memdata]] other fields>>=
+bool	allocd;	/* is this malloc'd? */
+@
+% how it could be false? for gscreendata!! but then why
+%  we have code that call freexxx on gscreendata?
+% but here it looks like it is using the bdata returned by attachscreen
+%  and this one is really poolalloc?
+% it is neither (or really xalloc for softscreen) it is physical framebuffer
+% but for that Memdata.base is used to possibly
+% free and indeed above it is not set!
+
+<<[[makescreenimage()]] locals>>=
+int width, depth;
+ulong chan;
+Rectangle r;
+@
+% attachscreen soon
+
+\subsubsection{[[Memimage]]}
+
+% md set, pass it to allocmemimaged encapsulate in Memimage
+
+<<[[makescreenimage()]] allocate Memimage i>>=
+// allocate Memimage
+i = allocmemimaged(r, chan, md);
+if(i == nil){
+    free(md);
+    return nil;
+}
+@
+%old: why overwrite width and clipr already set in allocmemimaged?
+% i->width = width;
+% i->clipr = r;
+\t assert if i->width != width?
+
+% makescreenimage | allocmemimage -> <>
+%Memimage ctor (smaller malloc, just a wrapper over Memdata)
+<<function allocmemimaged>>=
+Memimage*
+allocmemimaged(Rectangle r, ulong chan, Memdata *md)
+{
+    int d;
+    ulong l;
+    Memimage *i;
+
+    if(Dx(r) <= 0 || Dy(r) <= 0){
+        werrstr("bad rectangle %R", r);
+        return nil;
+    }
+    if((d = chantodepth(chan)) == 0) {
+        werrstr("bad channel descriptor %.8lux", chan);
+        return nil;
+    }
+    l = wordsperline(r, d);
+
+    i = mallocz(sizeof(Memimage), 1);
+    if(i == nil)
+        return nil;
+
+    i->data = md;
+
+    i->zero = sizeof(ulong) * l * r.min.y;
+    if(r.min.x >= 0)
+        i->zero += (r.min.x*d)/8;
+    else
+        i->zero -= (-r.min.x*d+7)/8;
+    i->zero = -i->zero; // ???
+
+    i->width = l;
+    i->r = r;
+    i->clipr = r;
+    i->flags = 0;
+
+    i->layer = nil;
+    i->cmap = memdefcmap;
+
+    if(memsetchan(i, chan) < 0){
+        free(i);
+        return nil;
+    }
+    return i;
+}
+@
+% memimaged? d?
+
+
+<<function wordsperline>>=
+int
+wordsperline(Rectangle r, int d)
+{
+    return unitsperline(r, d, 8*sizeof(ulong));
+}
+@
+
+<<function bytesperline>>=
+int
+bytesperline(Rectangle r, int d)
+{
+    return unitsperline(r, d, 8);
+}
+@
+
+<<function unitsperline>>=
+static
+int
+unitsperline(Rectangle r, int d, int bitsperunit)
+{
+    ulong l, t;
+
+    if(d <= 0 || d > 32)	/* being called wrong.  d is image depth. */
+        abort();
+
+    if(r.min.x >= 0){
+        l = (r.max.x*d+bitsperunit-1)/bitsperunit;
+        l -= (r.min.x*d)/bitsperunit;
+    }else{			/* make positive before divide */
+        t = (-r.min.x*d+bitsperunit-1)/bitsperunit;
+        l = t+(r.max.x*d+bitsperunit-1)/bitsperunit;
+    }
+    return l;
+}
 @
 
 
+%\section{Channels and alpha}
+% allocmemimage -> allocmemimaged -> <>
+%less: mv in Alloc section?
+<<function memsetchan>>=
+errorneg1
+memsetchan(Memimage *i, ulong chan)
+{
+    int d;
+    int t, j, k;
+    ulong cc;
+    bool bytes;
 
+    if((d = chantodepth(chan)) == 0) {
+        werrstr("bad channel descriptor");
+        return ERROR_NEG1;
+    }
+
+    i->chan = chan;
+    i->depth = d;
+    i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
+    bytes = true;
+
+    for(cc=chan, j=0, k=0; cc; j+=NBITS(cc), cc>>=8, k++){
+        t=TYPE(cc);
+        if(t < 0 || t >= NChan){
+            werrstr("bad channel string");
+            return -1;
+        }
+        if(t == CGrey)
+            i->flags |= Fgrey;
+        if(t == CAlpha)
+            i->flags |= Falpha;
+        if(t == CMap && i->cmap == nil){
+            i->cmap = memdefcmap;
+            i->flags |= Fcmap;
+        }
+
+        i->shift[t] = j;
+        i->mask[t] = (1<<NBITS(cc))-1;
+        i->nbits[t] = NBITS(cc);
+
+        if(NBITS(cc) != 8)
+            bytes = false;
+    }
+    i->nchan = k;
+    if(bytes)
+        i->flags |= Fbytes;
+    return 0;
+}
+@
+% >>
+
+<<[[MemImage]] other fields>>=
+int		shift[NChan];
+int		mask[NChan];
+int		nbits[NChan];
+@
+
+
+%dtor
+<<function freememimage>>=
+void
+freememimage(Memimage *i)
+{
+    if(i == nil)
+        return;
+    // free the Memdata
+    if(i->data->ref-- == 1 && i->data->allocd){
+        if(i->data->base)
+            poolfree(imagmem, i->data->base);
+        free(i->data);
+    }
+    free(i);
+}
+@
+% remember allocd vs base, two different allocators
+
+\subsubsection{[[DImage]]}
+
+<<[[makescreenimage()]] allocate DImage di>>=
+// allocate DImage
+di = allocdimage(i);
+if(di == nil){
+    freememimage(i);    /* frees md */
+    return nil;
+}
+@
+
+\subsubsection{Screen name}
+% drawaddname(), later!
+
+% put later with Windows! assume screen_image
+% and screen_dimage are the way for client to get
+% their screen image!
+
+
+
+
+\subsection{VGA [[attachscreen()]]}
 %\subsubsection{Hardware support hook}
 
-% makescreenimage -> <>
+% /// makescreenimage -> <>
 % vgascreen.c
 <<function attachscreen(x86)>>=
 byte*
@@ -2007,10 +2406,10 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
     if(gscreen == nil || gscreendata.bdata == nil)
         return nil;
 
-    *r = gscreen->clipr;
-    *chan = gscreen->chan;
-    *d = gscreen->depth;
-    *width = gscreen->width;
+    *r          = gscreen->clipr;
+    *chan       = gscreen->chan;
+    *d          = gscreen->depth;
+    *width      = gscreen->width;
     *softscreen = scr->useflush;
 
     return gscreendata.bdata;
@@ -2018,7 +2417,7 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
 @
 % who setup vgascreen? 
 
-\subsection{[[screensize()]]}
+\subsection{VGA [[screensize()]]}
 % aux/vgactl ??
 
 <<global vgascreenlock(x86)>>=
@@ -2057,10 +2456,13 @@ screensize(int x, int y, int z, ulong chan)
         int width = (x*z)/BI2WD;
         void *p;
 
+        // !!the alloc!!
         p = xalloc(width*BY2WD*y);
         if(p == nil)
             error("no memory for vga soft screen");
+
         gscreendata.bdata = softscreen = p;
+
         if(scr->dev && scr->dev->page){
             scr->vaddr = KADDR(VGAMEM());
             scr->apsize = 1<<16; // >>
@@ -2072,6 +2474,7 @@ screensize(int x, int y, int z, ulong chan)
         scr->useflush = scr->dev && scr->dev->flush;
     }
 
+    // Setting gscreen!!
     if(gscreen)
         freememimage(gscreen);
     gscreen = allocmemimaged(Rect(0,0,x,y), chan, &gscreendata);
@@ -2090,16 +2493,26 @@ screensize(int x, int y, int z, ulong chan)
     if(oldsoft)
         xfree(oldsoft);
 
+    // initial draw
     memimagedraw(gscreen, gscreen->r, memblack, ZP, nil, ZP, S);
     flushmemscreen(gscreen->r);
 
     if(didswcursorinit)
         swcursorinit();
+
     drawcmap();
-    return 0;
+    return OK_0;
 }
 @
 % >>
+
+% xalloc! for physical screen! for other images, it's poolalloc
+
+<<global physgscreenr>>=
+Rectangle physgscreenr;
+@
+% gscreen->r at init time, later can be different
+
 
 
 <<function drawcmap>>=
@@ -2109,7 +2522,8 @@ screensize(int x, int y, int z, ulong chan)
 void
 drawcmap(void)
 {
-    int r, g, b, cr, cg, cb, v;
+    int r, g, b;
+    int cr, cg, cb, v;
     int num, den;
     int i, j;
 
@@ -2181,6 +2595,8 @@ memimageinit(void)
 @
 % 0x3FFFFFF? means infinite?
 
+% memimageinit seems quite general, not sure why called from screensize
+% why need width/height or chan?
 
 
 <<[[memimageinit()]] only once guard>>=
@@ -2190,7 +2606,7 @@ if(didinit)
 didinit = true;
 @
 
-
+% mv earlier? closer to Memdata?
 % kernel interface?
 % ??? -> <> (imag->move = <> <- memimageinit)
 <<function memimagemove>>=
@@ -2210,7 +2626,9 @@ memimagemove(void *from, void *to)
     md->bdata = (uchar*)md->base+sizeof(Memdata*)+sizeof(ulong);
 }
 @
-
+% if compress images pool, then pointer can move, so need
+% way to find back stuff pointings to those images. Fortunately
+% have back pointer in the array itself.
 
 
 <<global replbit>>=
@@ -2275,6 +2693,14 @@ mktables(void)
 @
 
 
+
+%\subsection{[[drawopen()]]}
+% further initialisation when client actually connects to device
+% when open Qnew and call drawnewclient
+% and later when access Qctl dans get drawlookup and new dimage allocated
+
+
+
 \section{Client side}
 
 \subsection{[[initdraw()]]}
@@ -2327,6 +2753,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
 @
 % /dev/draw/new content, 12 strings each 11 chars + newline
 
+%XXX
 <<[[initdisplay()]] locals>>=
 Display *disp;
 Image *image;
@@ -2346,6 +2773,7 @@ Dir *dir;
 %less: could reorganize error managment like in Linux instead
 % have the errorx: followed, so less need 'goto previousone';
 
+%XXX LP split and reorder error managment
 % hmm it's actually a public function! but not much app tweaking
 % with it
 <<function initdisplay>>=
@@ -2487,6 +2915,9 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 @
 % refresh is important?
 
+% TODO clipped if run under a window? how enforced?
+
+%XXX
 %dead dataqid?
 %dead local?
 <<[[Display]] other fields>>=
@@ -2586,8 +3017,9 @@ _closedisplay(Display *disp, bool isshutdown)
 
 
 <<[[geninitdraw()]] locals>>=
-int fd, n;
 Subfont *df;
+fdt fd;
+int n;
 char buf[128];
 @
 
@@ -2891,7 +3323,14 @@ if(disp->oldlabel[0]){
 }
 @
 
-\section{Screen}
+\section{Window}
+%TODO: later? just say  view point to 
+% Display->image? with id 0?
+
+
+% so for now we have access to the full screen!
+% (possibly clipped?)
+
 
 <<[[geninitdraw()]] get window>>=
 snprint(buf, sizeof buf, "%s/winname", display->windir);
@@ -2899,6 +3338,7 @@ if(gengetwindow(display, buf, &view, &screen, ref) < 0)
     goto Error;
 @
 % ???
+%old: was &screen, &_screen?
 
 <<function gengetwindow>>=
 /*
@@ -2932,7 +3372,7 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
             *scrp = nil;
         }
         image = namedimage(d, buf);
-        if(image == 0){
+        if(image == nil){
             fprint(2, "namedimage %s failed: %r\n", buf);
             *winp = nil;
             d->screenimage = nil;
@@ -2987,15 +3427,10 @@ getwindow(Display *d, int ref)
 \chapter{User/Kernel Bridge}
 
 % some kind of RPC and protocol
-% todo: lots of boilerplate code, would be better to use thrift in the end
-% lots of marshalling/unmarshalling boilerplate with BPLONG and so on.
-% file interface is nice but limited in the end. Or maybe can just
-% write a thrift like tool on top of the file interface that generates
-% most of the boilerplate at least.
 
 \section{Draw device}
 
-% so bind #i
+% 'i' below so bind #i
 
 <<global drawdevtab>>=
 Dev drawdevtab = {
@@ -3004,22 +3439,22 @@ Dev drawdevtab = {
 
     .attach   =    drawattach,
     .walk     =    drawwalk,
+    .stat     =    drawstat,
 
     .open     =    drawopen,
     .close    =    drawclose,
     .read     =    drawread,
     .write    =    drawwrite,
-    .stat     =    drawstat,
-    .wstat    =    devwstat,
 
     // generic               
-    .reset    =    devreset,
-    .init     =    devinit,
-    .shutdown =    devshutdown,
     .create   =    devcreate,
     .remove   =    devremove,
     .bread    =    devbread,
     .bwrite   =    devbwrite,
+    .wstat    =    devwstat,
+    .reset    =    devreset,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
 };
 @
 
@@ -3030,22 +3465,26 @@ Dev drawdevtab = {
 <<enum _anon_ (kernel/devices/screen/devdraw.c)>>=
 enum
 {
-    Qtopdir     = 0,
+    // Directories
+
+    Qtopdir     = 0, // /dev
+    Q2nd,            // /dev/draw/
+    Q3rd,            // /dev/draw/x/
+
+    // Files
 
     Qnew,
-
     Qwinname,
-    Q3rd,
-    Q2nd,
-    Qcolormap,
 
-    Qctl,
+    // /dev/draw/x/y, third level device files associated to a client
+    Qctl, // used in x < Qctl so must be the first!
     Qdata, // all the operations, drawmesg()
 
+    Qcolormap, 
     Qrefresh,
 };
 @
-
+%pad: I reordered qids, grouped in QTDIR vs QTFILE
 
 <<constant QSHIFT>>=
 /*
@@ -3063,70 +3502,9 @@ enum
 <<function CLIENTPATH>>=
 #define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
 @
-%//#define CLIENT(q)   CLIENTPATH((q).path)
+%old: //#define CLIENT(q)   CLIENTPATH((q).path)
 
 
-
-
-\subsection{[[KDraw]] and [[sdraw]]}
-
-<<struct KDraw>>=
-struct KDraw
-{
-    int     clientid;
-
-    int     nclient;
-    Client**    client;
-
-    int     nname;
-
-    DName*  name;
-
-    int     vers;
-    int     softscreen;
-
-    ulong   savemap[3*256];
-
-    <<[[KDraw]] other fields>>
-};
-@
-
-<<struct DName>>=
-struct DName
-{
-    char        *name;
-    Client      *client;
-    DImage*     dimage;
-    int     vers;
-};
-@
-
-
-<<function drawlookup>>=
-DImage*
-drawlookup(Client *client, int id, int checkname)
-{
-    DImage *d;
-
-    d = client->dimage[id&HASHMASK];
-    while(d){
-        if(d->id == id){
-            if(checkname && !drawgoodname(d))
-                error(Eoldname);
-            return d;
-        }
-        d = d->next;
-    }
-    return 0;
-}
-@
-
-
-
-<<global sdraw>>=
-static  KDraw        sdraw;
-@
-% why sdraw? why not kdraw?
 
 \subsection{[[drawwalk()]]}
 
@@ -3134,10 +3512,14 @@ static  KDraw        sdraw;
 static Walkqid*
 drawwalk(Chan *c, Chan *nc, char **name, int nname)
 {
-    if(screenimage == nil)
-        error("no frame buffer");
+    <<[[drawwalk()]] sanity check>>
     return devwalk(c, nc, name, nname, 0, 0, drawgen);
 }
+@
+
+<<[[drawwalk()]] sanity check>>=
+if(screenimage == nil)
+    error("no frame buffer");
 @
 
 <<function drawstat>>=
@@ -3183,6 +3565,7 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         }
         return 1;
     }
+    // else
 
     /*
      * Top level directory contains the name of the device.
@@ -3203,6 +3586,7 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         }
         return 1;
     }
+    // else
 
     if(t == Qwinname){
         mkqid(&q, Qwinname, 0, QTFILE);
@@ -3220,8 +3604,8 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         }
         else if(s <= sdraw.nclient){
             cl = sdraw.client[s-1];
-            if(cl == 0)
-                return 0;
+            if(cl == nil)
+                return nil;
             snprint(up->genbuf, sizeof up->genbuf, "%d",
                 cl->clientid);
             mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
@@ -3263,19 +3647,19 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 }
 @
 % >> >>
-
-
+% sorted alphabetically?
+\l could use a switch and indent code in default: case
 
 
 \subsection{[[drawopen()]]}
+
+% quite generic, specifics detailed later
 
 <<function drawopen>>=
 static Chan*
 drawopen(Chan *c, int omode)
 {
-    Client *cl;
-    DName *dn;
-    DImage *di;
+    <<[[drawopen()]] locals>>
 
     if(c->qid.type & QTDIR){
         c = devopen(c, omode, 0, 0, drawgen);
@@ -3288,53 +3672,9 @@ drawopen(Chan *c, int omode)
         nexterror();
     }
 
-    if(QID(c->qid) == Qnew){
-        cl = drawnewclient();
-        if(cl == nil)
-            error(Enodev);
-        c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
-    }
-
+    <<[[drawopen()]] if Qnew>>
     switch(QID(c->qid)){
-    case Qwinname:
-        break;
-
-    case Qnew:
-        break;
-
-    case Qctl:
-        cl = drawclient(c);
-
-        if(cl->busy)
-            error(Einuse);
-        cl->busy = true;
-
-        flushrect = Rect(10000, 10000, -10000, -10000);
-        dn = drawlookupname(strlen(screenname), screenname);
-        if(dn == nil)
-            error("draw: cannot happen 2");
-
-        if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
-            error(Edrawmem);
-
-        di = drawlookup(cl, 0, 0);
-        if(di == nil)
-            error("draw: cannot happen 1");
-
-        di->vers = dn->vers;
-        di->name = smalloc(strlen(screenname)+1);
-        strcpy(di->name, screenname);
-        di->fromname = dn->dimage;
-        di->fromname->ref++;
-        incref(&cl->r);
-        break;
-
-    case Qcolormap:
-    case Qdata:
-    case Qrefresh:
-        cl = drawclient(c);
-        incref(&cl->r);
-        break;
+    <<[[drawopen()]] switch qid cases>>
     }
 
     dunlock();
@@ -3350,10 +3690,12 @@ drawopen(Chan *c, int omode)
 @
 % >> 
 
-
 <<constant IOUNIT>>=
 #define IOUNIT      (64*1024)
 @
+
+
+
 
 
 \subsection{[[drawclose()]]}
@@ -3362,12 +3704,10 @@ drawopen(Chan *c, int omode)
 static void
 drawclose(Chan *c)
 {
-    int i;
-    DImage *d, **dp;
     Client *cl;
-    Refresh *r;
+    <<[[drawclose()]] other locals>>
 
-    if(QID(c->qid) < Qcolormap) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
+    if(QID(c->qid) < Qctl) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
         return;
 
     dlock();
@@ -3377,32 +3717,16 @@ drawclose(Chan *c)
     }
 
     cl = drawclient(c);
-    if(QID(c->qid) == Qctl)
-        cl->busy = false;
+    <<[[drawclose()]] if Qctl>>
 
     if((c->flag&COPEN) && (decref(&cl->r)==0)){
-        while(r = cl->refresh){ /* assign = */
-            cl->refresh = r->next;
-            free(r);
-        }
-        /* free names */
-        for(i=0; i<sdraw.nname; )
-            if(sdraw.name[i].client == cl)
-                drawdelname(sdraw.name+i);
-            else
-                i++;
-        while(cl->cscreen)
-            drawuninstallscreen(cl, cl->cscreen);
-        /* all screens are freed, so now we can free images */
-        dp = cl->dimage;
-        for(i=0; i<NHASH; i++){
-            while((d = *dp) != nil){
-                *dp = d->next;
-                drawfreedimage(d);
-            }
-            dp++;
-        }
-        sdraw.client[cl->slot] = 0;
+        <<[[drawclose()]] free refresh>>
+        <<[[drawclose()]] free names>>
+        <<[[drawclose()]] free screens>>
+        <<[[drawclose()]] free dimages>>
+
+        sdraw.client[cl->slot] = nil;
+
         drawflush();    /* to erase visible, now dead windows */
         free(cl);
     }
@@ -3410,6 +3734,49 @@ drawclose(Chan *c)
     poperror();
 }
 @
+%old: if(QID(c->qid) < Qcolormap) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
+
+
+<<[[drawclose()]] other locals>>=
+DImage *d, **dp;
+int i;
+@
+
+<<[[drawclose()]] free dimages>>=
+/* all screens are freed, so now we can free images */
+dp = cl->dimage;
+for(i=0; i<NHASH; i++){
+    while((d = *dp) != nil){
+        *dp = d->next;
+        drawfreedimage(d);
+    }
+    dp++;
+}
+@
+
+%XXX ? mv later
+<<[[drawclose()]] free names>>=
+/* free names */
+for(i=0; i<sdraw.nname; )
+    if(sdraw.name[i].client == cl)
+        drawdelname(sdraw.name+i);
+    else
+        i++;
+@
+
+%dtor
+<<function drawdelname>>=
+void
+drawdelname(DName *name)
+{
+    int i;
+
+    i =  name - sdraw.name;
+    memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
+    sdraw.nname--;
+}
+@
+
 
 \subsection{[[drawread()]]}
 
@@ -3417,20 +3784,13 @@ drawclose(Chan *c)
 long
 drawread(Chan *c, void *a, long n, vlong off)
 {
-    int index, m;
-    ulong red, green, blue;
     Client *cl;
-    uchar *p;
-    Refresh *r;
-    DImage *di;
-    Memimage *i;
-    ulong offset = off;
-    char buf[16];
+    <<[[drawread()]] other locals>>
 
     if(c->qid.type & QTDIR)
         return devdirread(c, a, n, 0, 0, drawgen);
-    if(QID(c->qid) == Qwinname)
-        return readstr(off, a, n, screenname);
+    <<[[drawread()]] if Qwinname>>
+    // else
 
     cl = drawclient(c);
     dlock();
@@ -3440,91 +3800,7 @@ drawread(Chan *c, void *a, long n, vlong off)
     }
 
     switch(QID(c->qid)){
-    case Qctl:
-        if(n < 12*12)
-            error(Eshortread);
-
-        if(cl->infoid < 0)
-            error(Enodrawimage);
-        if(cl->infoid == 0){
-            i = screenimage;
-            if(i == nil)
-                error(Enodrawimage);
-        }else{
-            di = drawlookup(cl, cl->infoid, 1);
-            if(di == nil)
-                error(Enodrawimage);
-            i = di->image;
-        }
-
-        n = snprint(a, n,
-            "%11d %11d %11s %11d %11d %11d %11d %11d %11d %11d %11d %11d ",
-            cl->clientid, cl->infoid, chantostr(buf, i->chan),
-            (i->flags&Frepl)==Frepl,
-            i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y,
-            i->clipr.min.x, i->clipr.min.y, i->clipr.max.x,
-            i->clipr.max.y);
-        cl->infoid = -1;
-        break;
-
-    case Qcolormap:
-        drawactive(true);  /* to restore map from backup */
-        p = malloc(4*12*256+1);
-        if(p == 0)
-            error(Enomem);
-        m = 0;
-        for(index = 0; index < 256; index++){
-            getcolor(index, &red, &green, &blue);
-            m += snprint((char*)p+m, 4*12*256+1 - m,
-                "%11d %11lud %11lud %11lud\n", index,
-                red>>24, green>>24, blue>>24);
-        }
-        n = readstr(offset, a, n, (char*)p);
-        free(p);
-        break;
-
-    case Qdata:
-        if(cl->readdata == nil)
-            error("no draw data");
-        if(n < cl->nreaddata)
-            error(Eshortread);
-        n = cl->nreaddata;
-        memmove(a, cl->readdata, cl->nreaddata);
-        free(cl->readdata);
-        cl->readdata = nil;
-        break;
-
-    case Qrefresh:
-        if(n < 5*4)
-            error(Ebadarg);
-        for(;;){
-            if(cl->refreshme || cl->refresh)
-                break;
-            dunlock();
-            if(waserror()){
-                dlock();    /* restore lock for waserror() above */
-                nexterror();
-            }
-            sleep(&cl->refrend, drawrefactive, cl);
-            poperror();
-            dlock();
-        }
-        p = a;
-        while(cl->refresh && n>=5*4){
-            r = cl->refresh;
-            BPLONG(p+0*4, r->dimage->id);
-            BPLONG(p+1*4, r->r.min.x);
-            BPLONG(p+2*4, r->r.min.y);
-            BPLONG(p+3*4, r->r.max.x);
-            BPLONG(p+4*4, r->r.max.y);
-            cl->refresh = r->next;
-            free(r);
-            p += 5*4;
-            n -= 5*4;
-        }
-        cl->refreshme = 0;
-        n = p-(uchar*)a;
-        break;
+    <<[[drawread()]] switch qid cases>>
     }
     dunlock();
     poperror();
@@ -3533,77 +3809,33 @@ drawread(Chan *c, void *a, long n, vlong off)
 @
 
 
+
 \subsection{[[drawwrite()]]}
+
 
 <<function drawwrite>>=
 static long
 drawwrite(Chan *c, void *a, long n, vlong)
 {
-    char buf[128], *fields[4], *q;
     Client *cl;
-    int i, m, red, green, blue, x;
+    <<[[drawwrite()]] other locals>>
 
     if(c->qid.type & QTDIR)
         error(Eisdir);
+
     cl = drawclient(c);
 
     dlock();
     if(waserror()){
+
         drawwakeall();
+
         dunlock();
         nexterror();
     }
 
     switch(QID(c->qid)){
-    case Qctl:
-        if(n != 4)
-            error("unknown draw control request");
-        cl->infoid = BGLONG((uchar*)a);
-        break;
-
-    case Qcolormap:
-        drawactive(true);  /* to restore map from backup */
-        m = n;
-        n = 0;
-        while(m > 0){
-            x = m;
-            if(x > sizeof(buf)-1)
-                x = sizeof(buf)-1;
-            q = memccpy(buf, a, '\n', x);
-            if(q == 0)
-                break;
-            i = q-buf;
-            n += i;
-            a = (char*)a + i;
-            m -= i;
-            *q = 0;
-            if(tokenize(buf, fields, nelem(fields)) != 4)
-                error(Ebadarg);
-            i = strtoul(fields[0], 0, 0);
-            red = strtoul(fields[1], 0, 0);
-            green = strtoul(fields[2], 0, 0);
-            blue = strtoul(fields[3], &q, 0);
-            if(fields[3] == q)
-                error(Ebadarg);
-            if(red>255 || green>255 || blue>255 || i<0 || i>255)
-                error(Ebadarg);
-            red |= red<<8;
-            red |= red<<16;
-            green |= green<<8;
-            green |= green<<16;
-            blue |= blue<<8;
-            blue |= blue<<16;
-            setcolor(i, red, green, blue);
-        }
-        break;
-
-    case Qdata:
-        // The big dispatch!!
-        drawmesg(cl, a, n);
-
-        drawwakeall();
-        break;
-
+    <<[[drawwrite()]] switch qid cases>>
     default:
         error(Ebadusefd);
     }
@@ -3618,47 +3850,71 @@ drawwrite(Chan *c, void *a, long n, vlong)
 \subsection{[[/dev/draw/new]]}
 % and Client?
 
-% sysopen -> ... <>
-<<function drawnewclient>>=
-Client*
-drawnewclient(void)
-{
-    Client *cl, **cp;
-    int i;
+<<[[drawopen()]] locals>>=
+Client *cl;
+@
 
-    for(i=0; i<sdraw.nclient; i++){
-        cl = sdraw.client[i];
-        if(cl == nil)
-            break;
-    }
-    if(i == sdraw.nclient){
-        cp = malloc((sdraw.nclient+1)*sizeof(Client*));
-        if(cp == nil)
-            return nil;
-        memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
-        free(sdraw.client);
-        sdraw.client = cp;
-        sdraw.nclient++;
-        cp[i] = 0;
-    }
-    cl = malloc(sizeof(Client));
+<<[[drawopen()]] if Qnew>>=
+if(QID(c->qid) == Qnew){
+    cl = drawnewclient();
     if(cl == nil)
-        return nil;
-    memset(cl, 0, sizeof(Client));
-    cl->slot = i;
-    cl->clientid = ++sdraw.clientid;
-    cl->op = SoverD; // The classic
-    sdraw.client[i] = cl;
-    return cl;
+        error(Enodev);
+    c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
 }
 @
+% why not put in switch instead?
 
-<<[[Client]] other fields>>=
-int     slot;
+<<[[drawopen()]] switch qid cases>>=
+case Qnew:
+    break;
 @
+
+% seen drawnewclient before
+
+
+
+
 
 
 \subsection{[[/dev/draw/x/ctl]]}
+
+<<[[drawopen()]] locals>>=
+DImage *di;
+DName *dn;
+@
+
+<<[[drawopen()]] switch qid cases>>=
+case Qctl:
+    cl = drawclient(c);
+
+    <<[[drawopen()]] switch qid cases, when Qctl>>
+
+    flushrect = Rect(10000, 10000, -10000, -10000);
+    dn = drawlookupname(strlen(screenname), screenname);
+    if(dn == nil)
+        error("draw: cannot happen 2");
+
+    if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
+        error(Edrawmem);
+
+    di = drawlookup(cl, 0, false);
+    if(di == nil)
+        error("draw: cannot happen 1");
+
+
+    di->vers = dn->vers;
+    di->name = smalloc(strlen(screenname)+1);
+    strcpy(di->name, screenname);
+    di->fromname = dn->dimage;
+    di->fromname->ref++;
+
+    incref(&cl->r);
+    break;
+@
+%TODO: rect? clipped? or full access? protection?? can draw on
+% other windows? when write on /dev/draw/x/ctl ?
+
+%TODO: drawlookupname should be screen_dimage!! assert! 
 
 <<function drawclient>>=
 Client*
@@ -3684,7 +3940,7 @@ drawclientofpath(ulong path)
     if(slot == 0)
         return nil;
     cl = sdraw.client[slot-1];
-    if(cl==0 || cl->clientid==0)
+    if(cl==nil || cl->clientid==0)
         return nil;
     return cl;
 }
@@ -3692,23 +3948,121 @@ drawclientofpath(ulong path)
 
 
 
+<<[[drawopen()]] switch qid cases, when Qctl>>=
+if(cl->busy)
+    error(Einuse);
+cl->busy = true;
+@
+
+<<[[drawclose()]] if Qctl>>=
+if(QID(c->qid) == Qctl)
+    cl->busy = false;
+@
 
 <<[[Client]] concurrency fields>>=
 bool     busy;
 @
+% only one client of /dev/draw/x/ctl
 
+
+
+
+<<[[drawread()]] other locals>>=
+DImage *di;
+Memimage *i;
+char buf[16];
+@
+
+<<[[drawread()]] switch qid cases>>=
+case Qctl:
+    if(n < 12*12)
+        error(Eshortread);
+
+    if(cl->infoid < 0)
+        error(Enodrawimage);
+    if(cl->infoid == 0){
+        i = screenimage;
+        if(i == nil)
+            error(Enodrawimage);
+    }else{
+        di = drawlookup(cl, cl->infoid, true);
+        if(di == nil)
+            error(Enodrawimage);
+        i = di->image;
+    }
+
+    // for initdisplay!
+    n = snprint(a, n,
+        "%11d %11d %11s %11d %11d %11d %11d %11d %11d %11d %11d %11d ",
+        cl->clientid, cl->infoid, chantostr(buf, i->chan),
+        (i->flags&Frepl)==Frepl,
+        i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y,
+        i->clipr.min.x, i->clipr.min.y, i->clipr.max.x,
+        i->clipr.max.y);
+    cl->infoid = -1;
+    break;
+@
+% when cl->infoid == 0? because of malloc of new client?
+% when different 0 ?
+
+<<[[drawwrite()]] switch qid cases>>=
+case Qctl:
+    if(n != 4)
+        error("unknown draw control request");
+    cl->infoid = BGLONG((uchar*)a);
+    break;
+@
+
+% rename current_image?
 <<[[Client]] other fields>>=
 int     infoid;
 @
 % related to named image too
 
 
+
+
+
 \subsection{[[/dev/draw/x/data]]}
 % and DImage?
+
+
+<<[[drawopen()]] switch qid cases>>=
+case Qdata:
+case Qcolormap:
+case Qrefresh:
+    cl = drawclient(c);
+    incref(&cl->r);
+    break;
+@
+
 
 <<[[Client]] other fields>>=
 byte*   readdata;
 int     nreaddata;
+@
+
+
+<<[[drawread()]] switch qid cases>>=
+case Qdata:
+    if(cl->readdata == nil)
+        error("no draw data");
+    if(n < cl->nreaddata)
+        error(Eshortread);
+    n = cl->nreaddata;
+    memmove(a, cl->readdata, cl->nreaddata);
+    free(cl->readdata);
+    cl->readdata = nil;
+    break;
+@
+
+<<[[drawwrite()]] switch qid cases>>=
+case Qdata:
+    // The big dispatch!!
+    drawmesg(cl, a, n);
+
+    drawwakeall();
+    break;
 @
 
 
@@ -3721,11 +4075,21 @@ int     nreaddata;
 \section{Draw message protocol}
 % pipeline?
 
+
 \subsection{API}
+
+%real-world: =~ Xlib layer
 
 \subsection{Marshalling}
 
-% BG? BP?
+% Lots of boilerplate code, would be better to use thrift in the end?
+% Lots of marshalling/unmarshalling boilerplate with BPLONG and so on.
+% File interface is nice but limited in the end. Or maybe can just
+% write a thrift like tool on top of the file interface that generates
+% most of the boilerplate at least.
+
+% G = Get, P = Put
+% B = Binary?
 
 <<function BGSHORT>>=
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
@@ -3774,6 +4138,8 @@ bufimage(Display *d, int n)
 @
 
 \subsection{Unmarshalling and [[drawmesg()]]}
+
+%real-world: =~ Xserver
 
 <<[[drawmesg()]] locals>>=
 byte *a;
@@ -3838,8 +4204,12 @@ drawmesg(Client *client, void *av, int n)
 \subsection{Algorithm}
 % Memory Algorithm?
 
+%real-world: libpixman?
+
 \subsection{Optional hardware support}
 % hook?
+
+%real-world: libdrm and Linux kernel comm?
 
 % via screen and then VGAscr and then VGAdev interfaces
 % (and also VGAcur interface)
@@ -3868,7 +4238,7 @@ drawmesg(Client *client, void *av, int n)
 
 
 
-\chapter{Image}
+\chapter{Images}
 
 % fundamental piece! image, rectangle, mask.
 % screen is an image, colors are images!! point are images,
@@ -3883,10 +4253,14 @@ drawmesg(Client *client, void *av, int n)
 
 \section{Allocation}
 
+% already one allocated for you! the screen, image id 0.
+% view!
+
 \subsection{API}
 
 % for a color r is usually R(0,0,1,1), chan is view->chan, repl = true,
 % and val is the color
+%ctor
 <<function allocimage>>=
 Image*
 allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
@@ -3918,6 +4292,7 @@ freeimage(Image *i)
 \subsection{Marshalling}
 
 % ai usually nil
+%ctor
 <<function _allocimage>>=
 Image*
 _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val, int screenid, int refresh)
@@ -4004,8 +4379,10 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     i->r = r;
     i->clipr = clipr;
     i->repl = repl;
+
     i->screen = nil;
     i->next = nil;
+
     return i;
 }
 @
@@ -4048,6 +4425,7 @@ _freeimage1(Image *i)
                 w = w->next;
             }
     }
+
     if(flushimage(d, i->screen!=0) < 0)
         return -1;
 
@@ -4083,7 +4461,7 @@ case 'b':
     drawrectangle(&r, a+15);
     drawrectangle(&clipr, a+31);
     value = BGLONG(a+47);
-    if(drawlookup(client, dstid, 0))
+    if(drawlookup(client, dstid, false))
         error(Eimageexists);
 
     <<[[drawmesg()]] allocate image case, if screen id>>
@@ -4126,7 +4504,7 @@ case 'f':
     m = 1+4;
     if(n < m)
         error(Eshortdraw);
-    ll = drawlookup(client, BGLONG(a+1), 0);
+    ll = drawlookup(client, BGLONG(a+1), false);
 
     if(ll && ll->dscreen && ll->dscreen->owner != client)
         ll->dscreen->owner->refreshme = 1;
@@ -4161,10 +4539,10 @@ allocmemimage(Rectangle r, ulong chan)
 
     l = wordsperline(r, d);
     nw = l*Dy(r);
+
     md = malloc(sizeof(Memdata));
     if(md == nil)
         return nil;
-
     md->ref = 1;
     // the big alloc!
     md->base = poolalloc(imagmem, sizeof(Memdata*)+(1+nw)*sizeof(ulong));
@@ -4182,7 +4560,7 @@ allocmemimage(Rectangle r, ulong chan)
 
     /* if this changes, memimagemove must change too */
     md->bdata = p;
-    md->allocd = 1;
+    md->allocd = true;
 
     i = allocmemimaged(r, chan, md);
     if(i == nil){
@@ -4195,112 +4573,19 @@ allocmemimage(Rectangle r, ulong chan)
 }
 @
 
-<<function wordsperline>>=
-int
-wordsperline(Rectangle r, int d)
-{
-    return unitsperline(r, d, 8*sizeof(ulong));
-}
+%dead?
+<<[[Memdata]] other fields>>=
+// ref<Memimage>, reverse of Memimage.bdata
+void*	imref;
 @
 
-<<function bytesperline>>=
-int
-bytesperline(Rectangle r, int d)
-{
-    return unitsperline(r, d, 8);
-}
-@
 
-<<function unitsperline>>=
-static
-int
-unitsperline(Rectangle r, int d, int bitsperunit)
-{
-    ulong l, t;
-
-    if(d <= 0 || d > 32)	/* being called wrong.  d is image depth. */
-        abort();
-
-    if(r.min.x >= 0){
-        l = (r.max.x*d+bitsperunit-1)/bitsperunit;
-        l -= (r.min.x*d)/bitsperunit;
-    }else{			/* make positive before divide */
-        t = (-r.min.x*d+bitsperunit-1)/bitsperunit;
-        l = t+(r.max.x*d+bitsperunit-1)/bitsperunit;
-    }
-    return l;
-}
-@
-
-% allocmemimage -> <>
-%Memimage ctor (smaller malloc, just a wrapper over Memdata)
-<<function allocmemimaged>>=
-Memimage*
-allocmemimaged(Rectangle r, ulong chan, Memdata *md)
-{
-    int d;
-    ulong l;
-    Memimage *i;
-
-    if(Dx(r) <= 0 || Dy(r) <= 0){
-        werrstr("bad rectangle %R", r);
-        return nil;
-    }
-    if((d = chantodepth(chan)) == 0) {
-        werrstr("bad channel descriptor %.8lux", chan);
-        return nil;
-    }
-
-    l = wordsperline(r, d);
-
-    i = mallocz(sizeof(Memimage), 1);
-    if(i == nil)
-        return nil;
-
-    i->data = md;
-    i->zero = sizeof(ulong)*l*r.min.y;
-    
-    if(r.min.x >= 0)
-        i->zero += (r.min.x*d)/8;
-    else
-        i->zero -= (-r.min.x*d+7)/8;
-    i->zero = -i->zero;
-    i->width = l;
-    i->r = r;
-    i->clipr = r;
-    i->flags = 0;
-    i->layer = nil;
-
-    i->cmap = memdefcmap;
-
-    if(memsetchan(i, chan) < 0){
-        free(i);
-        return nil;
-    }
-    return i;
-}
-@
-% memimaged? d?
 
 <<global memdefcmap>>=
 Memcmap *memdefcmap = &def;
 @
 % def is big array in libmemdraw/cmap.c
 
-<<function freememimage>>=
-void
-freememimage(Memimage *i)
-{
-    if(i == nil)
-        return;
-    if(i->data->ref-- == 1 && i->data->allocd){
-        if(i->data->base)
-            poolfree(imagmem, i->data->base);
-        free(i->data);
-    }
-    free(i);
-}
-@
 
 
 <<function memfillcolor>>=
@@ -4326,6 +4611,8 @@ memfillcolor(Memimage *i, ulong val)
 @
 % >>
 
+%memsetl later
+
 \subsection{Client and Memimage connection}
 
 <<function drawinstall>>=
@@ -4338,9 +4625,13 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
     if(d == nil)
         return nil;
     d->id = id;
+
     d->dscreen = dscreen;
+
+    // insert_hash(d, client->dimage)
     d->next = client->dimage[id&HASHMASK];
     client->dimage[id&HASHMASK] = d;
+
     return i;
 }
 @
@@ -4350,25 +4641,6 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
 @
 
 
-<<function allocdimage>>=
-DImage*
-allocdimage(Memimage *i)
-{
-    DImage *d;
-
-    d = malloc(sizeof(DImage));
-    if(d == 0)
-        return 0;
-    d->ref = 1;
-    d->name = 0;
-    d->vers = 0;
-    d->image = i;
-    d->nfchar = 0;
-    d->fchar = 0;
-    d->fromname = 0;
-    return d;
-}
-@
 
 
 <<function drawuninstall>>=
@@ -4378,7 +4650,7 @@ drawuninstall(Client *client, int id)
     DImage *d, *next;
 
     d = client->dimage[id&HASHMASK];
-    if(d == 0)
+    if(d == nil)
         error(Enodrawimage);
     if(d->id == id){
         client->dimage[id&HASHMASK] = d->next;
@@ -4397,7 +4669,7 @@ drawuninstall(Client *client, int id)
 }
 @
 
-
+% /// drawclose | ??  -> <>
 <<function drawfreedimage>>=
 void
 drawfreedimage(DImage *dimage)
@@ -4501,7 +4773,7 @@ case 'c':
     m = 1+4+1+4*4;
     if(n < m)
         error(Eshortdraw);
-    ddst = drawlookup(client, BGLONG(a+1), 1);
+    ddst = drawlookup(client, BGLONG(a+1), true);
     if(ddst == nil)
         error(Enodrawimage);
     if(ddst->name)
@@ -4653,63 +4925,11 @@ drawrepl(Rectangle r, Point p)
 @
 
 
-\section{Channels and alpha}
-
-
-% allocmemimage -> allocmemimaged -> <>
-%less: mv in Alloc section?
-<<function memsetchan>>=
-int
-memsetchan(Memimage *i, ulong chan)
-{
-    int d;
-    int t, j, k;
-    ulong cc;
-    bool bytes;
-
-    if((d = chantodepth(chan)) == 0) {
-        werrstr("bad channel descriptor");
-        return -1;
-    }
-
-    i->depth = d;
-    i->chan = chan;
-    i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
-    bytes = true;
-
-    for(cc=chan, j=0, k=0; cc; j+=NBITS(cc), cc>>=8, k++){
-        t=TYPE(cc);
-        if(t < 0 || t >= NChan){
-            werrstr("bad channel string");
-            return -1;
-        }
-        if(t == CGrey)
-            i->flags |= Fgrey;
-        if(t == CAlpha)
-            i->flags |= Falpha;
-        if(t == CMap && i->cmap == nil){
-            i->cmap = memdefcmap;
-            i->flags |= Fcmap;
-        }
-
-        i->shift[t] = j;
-        i->mask[t] = (1<<NBITS(cc))-1;
-        i->nbits[t] = NBITS(cc);
-        if(NBITS(cc) != 8)
-            bytes = false;
-    }
-    i->nchan = k;
-    if(bytes)
-        i->flags |= Fbytes;
-    return 0;
-}
-@
-% >>
 
 
 
 
-\section{Flush}
+\section{Flushing}
 
 % annoying? why need that? leaky abstraction?
 % cos cant hide remote feature of /dev/draw a la X11?
@@ -4781,6 +5001,7 @@ case 'v':
 static  Rectangle   flushrect;
 @
 
+% drawclose | ... -> <>
 <<function drawflush>>=
 void
 drawflush(void)
@@ -4886,8 +5107,10 @@ flushmemscreen(Rectangle r)
 % TODO put flush or page here?
 
 
-\section{Naming}
+\section{Naming (and windows)}
 % adv topic? seems used by rio according to graphics(2)
+
+% DName here? 
 
 \subsection{API}
 
@@ -5011,7 +5234,7 @@ case 'N':
     m += j;
     if(n < m)
         error(Eshortdraw);
-    di = drawlookup(client, BGLONG(a+1), 0);
+    di = drawlookup(client, BGLONG(a+1), false);
     if(di == nil)
         error(Enodrawimage);
     if(di->name)
@@ -5047,7 +5270,7 @@ case 'n':
     if(n < m)
         error(Eshortdraw);
     dstid = BGLONG(a+1);
-    if(drawlookup(client, dstid, 0))
+    if(drawlookup(client, dstid, false))
         error(Eimageexists);
 
     dn = drawlookupname(j, (char*)a+6); // The call?
@@ -5057,7 +5280,7 @@ case 'n':
     if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
         error(Edrawmem);
 
-    di = drawlookup(client, dstid, 0);
+    di = drawlookup(client, dstid, false);
     if(di == nil)
         error("draw: cannot happen");
     di->vers = dn->vers;
@@ -5073,71 +5296,7 @@ case 'n':
 
 \subsection{Algorithm}
 
-<<function drawaddname>>=
-void
-drawaddname(Client *client, DImage *di, int n, char *str)
-{
-    DName *name, *ename, *new, *t;
-
-    name = sdraw.name;
-    ename = &name[sdraw.nname];
-    for(; name<ename; name++)
-        if(drawcmp(name->name, str, n) == 0)
-            error(Enameused);
-    t = smalloc((sdraw.nname+1)*sizeof(DName));
-    memmove(t, sdraw.name, sdraw.nname*sizeof(DName));
-    free(sdraw.name);
-    sdraw.name = t;
-    new = &sdraw.name[sdraw.nname++];
-    new->name = smalloc(n+1);
-    memmove(new->name, str, n);
-    new->name[n] = 0;
-    new->dimage = di;
-    new->client = client;
-    new->vers = ++sdraw.vers;
-}
-@
-
-
-<<function drawcmp>>=
-static
-int
-drawcmp(char *a, char *b, int n)
-{
-    if(strlen(a) != n)
-        return 1;
-    return memcmp(a, b, n);
-}
-@
-
-<<function drawlookupname>>=
-DName*
-drawlookupname(int n, char *str)
-{
-    DName *name, *ename;
-
-    name = sdraw.name;
-    ename = &name[sdraw.nname];
-    for(; name<ename; name++)
-        if(drawcmp(name->name, str, n) == 0)
-            return name;
-    return 0;
-}
-@
-
-<<function drawdelname>>=
-void
-drawdelname(DName *name)
-{
-    int i;
-
-    i =  name - sdraw.name;
-    memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
-    sdraw.nname--;
-}
-@
-
-
+% drawaddname, put here now that I delayed explanations of windows
 
 \chapter{Drawing}
 
@@ -5316,7 +5475,7 @@ drawimage(Client *client, uchar *a)
 {
     DImage *d;
 
-    d = drawlookup(client, BGLONG(a), 1);
+    d = drawlookup(client, BGLONG(a), true);
     if(d == nil)
         error(Enodrawimage);
     return d->image;
@@ -8757,6 +8916,7 @@ struct RGB
 @
 
 \section{Color map}
+% adv topics?
 
 \section{Pixel depth}
 
@@ -9030,7 +9190,7 @@ case 'x':
     dst = drawimage(client, a+1);
     dstid = BGLONG(a+1);
     src = drawimage(client, a+5);
-    font = drawlookup(client, BGLONG(a+9), 1);
+    font = drawlookup(client, BGLONG(a+9), true);
     if(font == 0)
         error(Enodrawimage);
     if(font->nfchar == 0)
@@ -9138,6 +9298,10 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
 
 
 \subsection{Algorithm}
+
+
+% chardraw?
+
 
 \section{Text width}
 
@@ -9558,7 +9722,7 @@ case 'i':
     dstid = BGLONG(a+1);
     if(dstid == 0)
         error("cannot use display as font");
-    font = drawlookup(client, dstid, 1);
+    font = drawlookup(client, dstid, true);
     if(font == 0)
         error(Enodrawimage);
     if(font->image->layer)
@@ -9585,7 +9749,7 @@ case 'l':
     m = 1+4+4+2+4*4+2*4+1+1;
     if(n < m)
         error(Eshortdraw);
-    font = drawlookup(client, BGLONG(a+1), 1);
+    font = drawlookup(client, BGLONG(a+1), true);
     if(font == 0)
         error(Enodrawimage);
     if(font->nfchar == 0)
@@ -9739,7 +9903,7 @@ getmemdefont(void)
     md->base = nil;		/* so freememimage doesn't free p */
     md->bdata = (uchar*)p;	/* ick */
     md->ref = 1;
-    md->allocd = 1;		/* so freememimage does free md */
+    md->allocd = true;		/* so freememimage does free md */
 
     i = allocmemimaged(r, drawld2chan[ld], md);
     if(i == nil){
@@ -10480,6 +10644,7 @@ ulong drawld2chan[] = {
     GREY1,
     GREY2,
     GREY4,
+
     CMAP8,
 };
 @
@@ -11658,7 +11823,7 @@ creadmemimage(int fd)
 
 
 \chapter{Windows}
-% Layers
+% and Layers?
 
 % ??? 
 <<function newwindow>>=
@@ -11688,6 +11853,171 @@ newwindow(char *str)
 
 \section{Additional data structures}
 
+\subsection{[[Display.windows]], [[Image.screen]], [[Memimage.layer]] }
+
+% moved all of that later and aspectize everything related
+% to windowing system (basic stuff already quite complicated
+% so let's not complicate it even more)
+
+% What we have seen was already very complicated, lots of architecture layers,
+% wrapper data structures. A real onion.
+% Here is another one :) Windows/Layers.
+
+<<[[Display]] other fields>>=
+// list<ref<Window>> (next = Image.next)
+Image	*windows;
+@
+
+<<[[Image]] extra fields>>=
+Image		*next;	/* next in list of windows */
+@
+
+
+%XXX
+<<[[Display]] other fields>>=
+Image	*screenimage; // ???
+@
+% ???? different from Display.image?
+
+
+<<[[Image]] layer fields>>=
+Screen		*screen;	/* nil if not a window */
+@
+%todo: use term Layer instead? less confusing?
+
+% Screen type described later, but really should
+% rename it Layer or something, so more consistent
+% with Memlayer
+
+<<[[MemImage]] layer fields>>=
+Memlayer	*layer;	/* nil if not a layer*/
+@
+% Memlayer described later in Windows chapter
+
+
+
+
+\subsection{[[DName]] and [[screename]]}
+
+% in adv topic? normally should have enough with screenimage (draw_screen)!
+% but under windowing system need intermediate step to actually
+% get subscreen! Enter DName and /dev/winname to communicate that
+% info to client.
+
+% not enough? another DS, argh.
+
+<<[[KDraw]] other fields>>=
+DName*  name;
+int     nname;
+@
+
+
+
+%XXX
+<<[[Dimage]] other fields>>=
+char    *name;
+DImage*     fromname;   /* image this one is derived from, by name */
+@
+
+%XXX
+<<struct DName>>=
+struct DName
+{
+    char        *name;
+    Client      *client;
+    DImage*     dimage;
+    int     vers;
+};
+@
+% ctor = ???
+
+
+
+
+%\subsubsection{Screen name}
+% delay? 
+
+% need this indirection over DImage? draw_screen not enough?
+
+<<[[makescreenimage()]] drawaddname>>=
+if(!waserror()){
+    snprint(screenname, sizeof screenname, "noborder.screen.%d", ++screennameid);
+    drawaddname(nil, di, strlen(screenname), screenname);
+    poperror();
+}
+@
+% to bootstrap mechanism for /tmp/winname!
+
+%XXX seems associated with /dev/winname so move later?
+<<global screenname>>=
+static  char    screenname[40];
+@
+
+<<global screennameid>>=
+// gensym
+static  int screennameid;
+@
+
+% drawlookupname for screename should always return screen_dimage!
+
+
+
+<<function drawaddname>>=
+void
+drawaddname(Client *client, DImage *di, int n, char *str)
+{
+    DName *name, *ename, *new, *t;
+
+    name = sdraw.name;
+    ename = &name[sdraw.nname];
+    for(; name<ename; name++)
+        if(drawcmp(name->name, str, n) == 0)
+            error(Enameused);
+
+    t = smalloc((sdraw.nname+1)*sizeof(DName));
+    memmove(t, sdraw.name, sdraw.nname*sizeof(DName));
+    free(sdraw.name);
+    sdraw.name = t;
+    new = &sdraw.name[sdraw.nname++];
+    new->name = smalloc(n+1);
+    memmove(new->name, str, n);
+    new->name[n] = '\0';
+    new->dimage = di;
+    new->client = client;
+    new->vers = ++sdraw.vers;
+}
+@
+
+
+<<function drawcmp>>=
+static
+int
+drawcmp(char *a, char *b, int n)
+{
+    if(strlen(a) != n)
+        return 1;
+    return memcmp(a, b, n);
+}
+@
+
+<<function drawlookupname>>=
+DName*
+drawlookupname(int n, char *str)
+{
+    DName *name, *ename;
+
+    name = sdraw.name;
+    ename = &name[sdraw.nname];
+    for(; name<ename; name++)
+        if(drawcmp(name->name, str, n) == 0)
+            return name;
+    return nil;
+}
+@
+
+
+
+
 \subsection{[[Screen]]}
 % and [[_screen]]
 
@@ -11701,13 +12031,14 @@ struct Screen
 };
 @
 %less: delete image field?
+%todo: rename? Layer? Confusing with Vga screen, screeimage, etc.
 
 <<global _screen>>=
 Screen	*screen;
 @
 %old: was called _screen because screen was already use 
 % (to actually an Image, hmm), but I s/screen/view so now screen is free.
-
+%TODO? rename layer?
 
 <<global screenid>>=
 static int	screenid;
@@ -11715,7 +12046,7 @@ static int	screenid;
 
 \subsection{[[CScreen]]}
 
-<<[[Client]] screen fields>>=
+<<[[Client]] layer fields>>=
 CScreen*    cscreen;
 @
 
@@ -11729,6 +12060,10 @@ struct CScreen
 
 
 \subsection{[[DScreen]]}
+
+<<[[Dimage]] layer fields>>=
+DScreen*    dscreen;    /* 0 if not a window */
+@
 
 <<struct DScreen>>=
 struct DScreen
@@ -11778,6 +12113,23 @@ struct Memlayer
     void		*refreshptr;	/* argument to refreshfn */
 };
 @
+
+\section{[[/dev/winname]]}
+
+<<[[drawopen()]] switch qid cases>>=
+case Qwinname:
+    break;
+@
+
+<<[[drawread()]] if Qwinname>>=
+if(QID(c->qid) == Qwinname)
+    return readstr(off, a, n, screenname);
+@
+
+% indirection to get image! go through a name! not
+% direct access to screenimage (draw_screen)!
+% a bit like stdin/stdout = 0, 1, but behind the scene
+% connected to different things.
 
 \section{Screen creation}
 
@@ -11901,8 +12253,8 @@ case 'A':
         error(Ebadarg);
     if(drawlookupdscreen(dstid))
         error(Escreenexists);
-    ddst = drawlookup(client, BGLONG(a+5), 1);
-    dsrc = drawlookup(client, BGLONG(a+9), 1);
+    ddst = drawlookup(client, BGLONG(a+5), true);
+    dsrc = drawlookup(client, BGLONG(a+9), true);
     if(ddst==0 || dsrc==0)
         error(Enodrawimage);
 
@@ -12114,6 +12466,11 @@ drawfreedscreen(DScreen *this)
 
 
 
+<<[[drawclose()]] free screens>>=
+while(cl->cscreen)
+    drawuninstallscreen(cl, cl->cscreen);
+@
+
 \section{Hooks}
 
 \subsection{Image allocation}
@@ -12136,23 +12493,28 @@ if(ds){
 @
 
 <<function drawgoodname>>=
-int
+bool
 drawgoodname(DImage *d)
 {
     DName *n;
 
     /* if window, validate the screen's own images */
     if(d->dscreen)
-        if(drawgoodname(d->dscreen->dimage) == 0
-        || drawgoodname(d->dscreen->dfill) == 0)
-            return 0;
+        if(drawgoodname(d->dscreen->dimage) == false
+        || drawgoodname(d->dscreen->dfill) == false)
+            return false;
     if(d->name == nil)
-        return 1;
+        return true;
     n = drawlookupname(strlen(d->name), d->name);
     if(n==nil || n->vers!=d->vers)
-        return 0;
-    return 1;
+        return false;
+    return true;
 }
+@
+
+<<[[drawlookup()]] if checkname>>=
+if(checkname && !drawgoodname(d))
+    error(Eoldname);
 @
 
 
@@ -12283,7 +12645,7 @@ if(scrnid){
                 error(Edrawmem);
             }
             refx->client = client;
-            refx->dimage = drawlookup(client, dstid, 1);
+            refx->dimage = drawlookup(client, dstid, true);
         }
         memlsetrefresh(l, reffn, refx);
     }
@@ -12961,7 +13323,7 @@ case 'o':
         if(ni > 0){
             addflush(r);
             addflush(dst->layer->screenr);
-            ll = drawlookup(client, BGLONG(a+1), 1);
+            ll = drawlookup(client, BGLONG(a+1), true);
             drawrefreshscreen(ll, client);
         }
     }
@@ -13372,7 +13734,7 @@ case 't':
     if(lp[0]->layer->screen->image->data == screenimage->data)
         for(j=0; j<nw; j++)
             addflush(lp[j]->layer->screenr);
-    ll = drawlookup(client, BGLONG(a+1+1+2), 1);
+    ll = drawlookup(client, BGLONG(a+1+1+2), true);
     drawrefreshscreen(ll, client);
     poperror();
     free(lp);
@@ -13541,7 +13903,6 @@ _memltorear(Memimage *i, Memimage *rear)
     }
 }
 @
-
 
 
 
@@ -15209,7 +15570,7 @@ eatomouse(Mouse *m, char *buf, int n)
 
 
 \chapter{Non-32 bits Images}
-% and optimisations
+% and optimisations?
 
 \section{1-Bit images}
 % or bitmasks
@@ -15974,6 +16335,7 @@ case 24:
 
 \section{Grey images}
 
+\subsection{Grey conversion}
 
 <<function RGB2K>>=
 /* perfect approximation to NTSC = .299r+.587g+.114b when 0 ≤ r,g,b < 256 */
@@ -15981,7 +16343,7 @@ case 24:
 @
 
 
-\section{Grey vs alpha}
+\subsection{Grey vs alpha}
 
 <<[[alphadraw()]] when not alpha mask>>=
 else{
@@ -16011,14 +16373,9 @@ greymaskread(Param *p, uchar *buf, int y)
 
 
 \section{Color maps images}
+% remember that CMap is enum in core DS.
 
-% CMap in core DS
-
-% need color map if use RGBA32? hmm but VGA seems to be limited to depth 8
-% maybe could move in advanced topics?
-
-% CMAP vs RGB????
-
+% need color map if use RGBA32? no but VGA seems to be limited to depth 8!
 
 <<[[MemImage]] other fields>>=
 Memcmap	*cmap;
@@ -16216,8 +16573,6 @@ readcolmap(Display *d, RGB *colmap)
     Biobuf *b;
     char buf[128];
 
-    //USED(screen);
-
     sprint(buf, "/dev/draw/%d/colormap", d->dirno);
     b = Bopen(buf, OREAD);
     if(b == 0)
@@ -16240,6 +16595,7 @@ readcolmap(Display *d, RGB *colmap)
     Bterm(b);
 }
 @
+%old:    //USED(screen);
 
 <<function getval>>=
 static ulong
@@ -16297,6 +16653,80 @@ writecolmap(Display *d, RGB *m)
 
 
 
+
+\subsection{[[/dev/draw/x/colormap]]}
+
+<<[[drawread()]] other locals>>=
+uchar *p;
+int index, m;
+ulong red, green, blue;
+ulong offset = off;
+@
+
+<<[[drawread()]] switch qid cases>>=
+case Qcolormap:
+    drawactive(true);  /* to restore map from backup */
+    p = malloc(4*12*256+1);
+    if(p == nil)
+        error(Enomem);
+    m = 0;
+    for(index = 0; index < 256; index++){
+        getcolor(index, &red, &green, &blue);
+        m += snprint((char*)p+m, 4*12*256+1 - m,
+            "%11d %11lud %11lud %11lud\n", index,
+            red>>24, green>>24, blue>>24);
+    }
+    n = readstr(offset, a, n, (char*)p);
+    free(p);
+    break;
+@
+
+
+
+<<[[drawwrite()]] other locals>>=
+char buf[128], *fields[4], *q;
+int i, m, red, green, blue, x;
+@
+
+
+<<[[drawwrite()]] switch qid cases>>=
+case Qcolormap:
+    drawactive(true);  /* to restore map from backup */
+    m = n;
+    n = 0;
+    while(m > 0){
+        x = m;
+        if(x > sizeof(buf)-1)
+            x = sizeof(buf)-1;
+        q = memccpy(buf, a, '\n', x);
+        if(q == 0)
+            break;
+        i = q-buf;
+        n += i;
+        a = (char*)a + i;
+        m -= i;
+        *q = 0;
+        if(tokenize(buf, fields, nelem(fields)) != 4)
+            error(Ebadarg);
+        i = strtoul(fields[0], 0, 0);
+        red = strtoul(fields[1], 0, 0);
+        green = strtoul(fields[2], 0, 0);
+        blue = strtoul(fields[3], &q, 0);
+        if(fields[3] == q)
+            error(Ebadarg);
+        if(red>255 || green>255 || blue>255 || i<0 || i>255)
+            error(Ebadarg);
+        red |= red<<8;
+        red |= red<<16;
+        green |= green<<8;
+        green |= green<<16;
+        blue |= blue<<8;
+        blue |= blue<<16;
+        setcolor(i, red, green, blue);
+    }
+    break;
+@
+% >> >> >> >> >> >> >>
 
 
 \subsection{Hardware support hook}
@@ -18042,6 +18472,7 @@ bool	blanked;    /* screen turned off */
 @
 
 
+% in draw!
 <<function drawblankscreen>>=
 void
 drawblankscreen(bool blank)
@@ -18219,7 +18650,7 @@ drawrefactive(void *a)
     Client *c;
 
     c = a;
-    return c->refreshme || c->refresh!=0;
+    return c->refreshme || c->refresh != nil;
 }
 @
 
@@ -18250,13 +18681,64 @@ drawwakeall(void)
 }
 @
 
+<<[[drawclose()]] other locals>>=
+Refresh *r;
+@
 
+<<[[drawclose()]] free refresh>>=
+while(r = cl->refresh){ /* assign = */
+    cl->refresh = r->next;
+    free(r);
+}
+@
 
 \subsection{[[/dev/draw/x/refresh]]}
 
 <<[[Display]] devdraw connection fields>>=
 fdt		reffd; // /dev/draw/x/refresh
 @
+
+<<[[drawread()]] other locals>>=
+Refresh *r;
+@
+
+<<[[drawread()]] switch qid cases>>=
+case Qrefresh:
+    if(n < 5*4)
+        error(Ebadarg);
+    for(;;){
+        if(cl->refreshme || cl->refresh)
+            break;
+
+        dunlock();
+        if(waserror()){
+            dlock();    /* restore lock for waserror() above */
+            nexterror();
+        }
+
+        sleep(&cl->refrend, drawrefactive, cl);
+
+        poperror();
+        dlock();
+    }
+    p = a;
+    while(cl->refresh && n>=5*4){
+        r = cl->refresh;
+        BPLONG(p+0*4, r->dimage->id);
+        BPLONG(p+1*4, r->r.min.x);
+        BPLONG(p+2*4, r->r.min.y);
+        BPLONG(p+3*4, r->r.max.x);
+        BPLONG(p+4*4, r->r.max.y);
+        cl->refresh = r->next;
+        free(r);
+        p += 5*4;
+        n -= 5*4;
+    }
+    cl->refreshme = 0;
+    n = p-(uchar*)a;
+    break;
+@
+
 
 
 
@@ -18383,7 +18865,7 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
 
 % libdraw
 <<global _drawdebug>>=
-bool	_drawdebug = 0;
+bool	_drawdebug = false;
 @
 <<[[doflush()]] if _drawdebug>>=
 if(_drawdebug)
@@ -18666,6 +19148,7 @@ struct VGAscr {
 
   ulong paddr;    /* frame buffer */
   void* vaddr;
+
   int   apsize;
 
   Memsubfont* memdefont;
@@ -18748,6 +19231,7 @@ ishwimage(Memimage* i)
 
 <<enum vgamisc(x86)>>=
   Pcolours  = 256,    /* Palette */
+
   Pred    = 0,
   Pgreen  = 1,
   Pblue   = 2,
@@ -18769,23 +19253,25 @@ Dev vgadevtab = {
     .dc       =    'v',
     .name     =    "vga",
                
-    .reset    =    vgareset,
-
     .attach   =    vgaattach,
     .walk     =    vgawalk,
+
     .open     =    vgaopen,
     .close    =    vgaclose,
     .read     =    vgaread,
     .write    =    vgawrite,
     .stat     =    vgastat,
-    .wstat    =    devwstat,
 
-    .init     =    devinit,
-    .shutdown =    devshutdown,
+    .reset    =    vgareset,
+
+    // generic
     .create   =    devcreate,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
     .bread    =    devbread,
     .bwrite   =    devbwrite,
-    .remove   =    devremove,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
 };
 @
 % put the devtab? where have the cirrus logic there?
