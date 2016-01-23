@@ -26,6 +26,7 @@ enum {
 
 /*s: enum vgamisc(x86) */
   Pcolours  = 256,    /* Palette */
+
   Pred    = 0,
   Pgreen  = 1,
   Pblue   = 2,
@@ -90,6 +91,7 @@ struct VGAscr {
 
   ulong paddr;    /* frame buffer */
   void* vaddr;
+
   int   apsize;
 
   Memsubfont* memdefont;

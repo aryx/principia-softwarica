@@ -15,7 +15,7 @@ Font	*font;
 Image	*view;
 /*e: global screen */
 /*s: global _drawdebug */
-bool	_drawdebug = 0;
+bool	_drawdebug = false;
 /*e: global _drawdebug */
 
 /*s: global deffontname */
@@ -51,8 +51,9 @@ errorneg1
 geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *label, char *windir, int ref)
 {
     /*s: [[geninitdraw()]] locals */
-    int fd, n;
     Subfont *df;
+    fdt fd;
+    int n;
     char buf[128];
     /*e: [[geninitdraw()]] locals */
 
@@ -187,7 +188,7 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
             *scrp = nil;
         }
         image = namedimage(d, buf);
-        if(image == 0){
+        if(image == nil){
             fprint(2, "namedimage %s failed: %r\n", buf);
             *winp = nil;
             d->screenimage = nil;

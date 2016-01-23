@@ -102,7 +102,7 @@ enum
 /*e: function ARROW */
 
 /*s: enum drawop */
-enum drawop
+enum Drawop
 {
     /* Porter-Duff compositing operators */
     Clear	= 0,
@@ -131,6 +131,7 @@ typedef enum drawop Drawop;
 /*
  * image channel descriptors 
  */
+// coupling: chantostr and channames
 enum {
     CRed = 0,
     CGreen,
@@ -228,12 +229,12 @@ struct Screen
 /*s: struct Display */
 struct Display
 {
-    // ref_own<Image>
+    // ref_own<Image>, current Image? screen?
     Image	*image;
 
     /*s: [[Display]] devdraw connection fields */
     int		dirno; // /dev/draw/x
-    fdt		ctlfd; // /dev/draw/new
+    fdt		ctlfd; // /dev/draw/x/ctl (opened via /dev/draw/new)
     fdt		fd;    // /dev/draw/x/data
     /*x: [[Display]] devdraw connection fields */
     char	*devdir; // /dev in general
@@ -267,18 +268,19 @@ struct Display
     /*e: [[Display]] font fields */
 
     /*s: [[Display]] other fields */
+    // gensym
     int		imageid;
-    /*x: [[Display]] other fields */
-    // list<ref<Window>> (next = Image.next)
-    Image	*windows;
-    /*x: [[Display]] other fields */
-    Image	*screenimage; // ???
     /*x: [[Display]] other fields */
     bool	local;
     ulong	dataqid;
     bool	_isnewdisplay;
     /*x: [[Display]] other fields */
     char	oldlabel[64];
+    /*x: [[Display]] other fields */
+    // list<ref<Window>> (next = Image.next)
+    Image	*windows;
+    /*x: [[Display]] other fields */
+    Image	*screenimage; // ???
     /*x: [[Display]] other fields */
     void	(*error)(Display*, char*);
     /*e: [[Display]] other fields */
@@ -302,15 +304,19 @@ struct Image
 
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;	/* clipping region */
+
     // bitset<enum<fxxx>>    
     int			repl;		/* flag: data replicates to tile clipr */
 
     ulong		chan;
+
+    // derives from Image.chan
     int			depth;		/* number of bits per pixel */
 
-    /*s: [[Image]] other fields */
+    /*s: [[Image]] layer fields */
     Screen		*screen;	/* nil if not a window */
-    /*e: [[Image]] other fields */
+    /*e: [[Image]] layer fields */
+
     // Extra
     /*s: [[Image]] extra fields */
     Image		*next;	/* next in list of windows */
@@ -360,6 +366,7 @@ struct	Subfont
     Fontchar 	*info;		/* n+1 character descriptors */
     Image		*bits;		/* of font */
 
+    // Extra
     int		ref;
 };
 /*e: struct Subfont */
@@ -422,8 +429,8 @@ struct Font
 
     short		height;	/* max height of image, interline spacing */
     short		ascent;	/* top of image to baseline */
+    /*s: [[Font]] other fields */
     short		width;	/* widest so far; used in caching only */	
-
     short		nsub;	/* number of subfonts */
     ulong		age;	/* increasing counter; used for LRU */
     int		maxdepth;	/* maximum depth of all loaded subfonts */
@@ -434,6 +441,7 @@ struct Font
     Cachesubf	*subf;
     Cachefont	**sub;	/* as read from file */
     Image		*cacheimage;
+    /*e: [[Font]] other fields */
 };
 /*e: struct Font */
 

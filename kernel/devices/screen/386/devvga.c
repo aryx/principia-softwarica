@@ -495,23 +495,25 @@ Dev vgadevtab = {
     .dc       =    'v',
     .name     =    "vga",
                
-    .reset    =    vgareset,
-
     .attach   =    vgaattach,
     .walk     =    vgawalk,
+
     .open     =    vgaopen,
     .close    =    vgaclose,
     .read     =    vgaread,
     .write    =    vgawrite,
     .stat     =    vgastat,
-    .wstat    =    devwstat,
 
-    .init     =    devinit,
-    .shutdown =    devshutdown,
+    .reset    =    vgareset,
+
+    // generic
     .create   =    devcreate,
+    .remove   =    devremove,
+    .wstat    =    devwstat,
     .bread    =    devbread,
     .bwrite   =    devbwrite,
-    .remove   =    devremove,
+    .init     =    devinit,
+    .shutdown =    devshutdown,
 };
 /*e: global vgadevtab(x86) */
 /*e: kernel/devices/screen/386/devvga.c */

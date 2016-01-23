@@ -102,8 +102,10 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     i->r = r;
     i->clipr = clipr;
     i->repl = repl;
+
     i->screen = nil;
     i->next = nil;
+
     return i;
 }
 /*e: function _allocimage */
@@ -181,8 +183,8 @@ namedimage(Display *d, char *name)
     i->clipr.min.y = atoi(buf+9*12);
     i->clipr.max.x = atoi(buf+10*12);
     i->clipr.max.y = atoi(buf+11*12);
-    i->screen = 0;
-    i->next = 0;
+    i->screen = nil;
+    i->next = nil;
     return i;
 }
 /*e: function namedimage */
@@ -232,6 +234,7 @@ _freeimage1(Image *i)
     a[0] = 'f';
     BPLONG(a+1, i->id);
 
+    /*s: [[_freeimage1()]] if screen */
     if(i->screen){
         // remove_list(i, d->windows)
         w = d->windows;
@@ -246,7 +249,9 @@ _freeimage1(Image *i)
                 w = w->next;
             }
     }
-    if(flushimage(d, i->screen!=0) < 0)
+    /*e: [[_freeimage1()]] if screen */
+
+    if(flushimage(d, i->screen != nil) < 0)
         return -1;
 
     return 0;

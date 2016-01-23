@@ -8,6 +8,7 @@ ulong drawld2chan[] = {
     GREY1,
     GREY2,
     GREY4,
+
     CMAP8,
 };
 /*e: global drawld2chan */

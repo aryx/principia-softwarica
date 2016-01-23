@@ -26,11 +26,13 @@ struct Memdata
     byte	*bdata;	/* pointer to first byte of actual data; word-aligned */
 
     /*s: [[Memdata]] other fields */
-    int		ref;		/* number of Memimages using this data */
-
+    bool	allocd;	/* is this malloc'd? */
+    /*x: [[Memdata]] other fields */
+    // ref<Memimage>, reverse of Memimage.bdata
     void*	imref;
-    int		allocd;	/* is this malloc'd? */
     /*e: [[Memdata]] other fields */
+    // Extra
+    int		ref;		/* number of Memimages using this data */
 };
 /*e: struct Memdata */
 
@@ -49,17 +51,23 @@ struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle	clipr;		/* clipping region */
-    //bitset<enum<fxxx>
-    ulong	flags;
 
     ulong	chan;	/* channel descriptions */
-    int		nchan;	/* number of channels */
+
+    // derives from Memimage.chan
     int		depth;	/* number of bits of storage per pixel */
+    int		nchan;	/* number of channels */
+
+    //bitset<enum<fxxx>, 
+    ulong	flags; 
 
     // finally, the raw pixels
     // ref_own<Memdata>
     Memdata	*data;	/* pointer to data; shared by windows in this image */
 
+    /*s: [[MemImage]] layer fields */
+    Memlayer	*layer;	/* nil if not a layer*/
+    /*e: [[MemImage]] layer fields */
     /*s: [[MemImage]] other fields */
     int		zero;		/* data->bdata+zero==&byte containing (0,0) */
     ulong	width;	/* width in words of a single scan line */
@@ -67,8 +75,6 @@ struct Memimage
     int		shift[NChan];
     int		mask[NChan];
     int		nbits[NChan];
-    /*x: [[MemImage]] other fields */
-    Memlayer	*layer;	/* nil if not a layer*/
     /*x: [[MemImage]] other fields */
     Memcmap	*cmap;
     /*e: [[MemImage]] other fields */
@@ -103,7 +109,6 @@ struct	Memsubfont
     char	ascent;		/* top of bitmap to baseline */
 
     Fontchar *info;		/* n+1 character descriptors */
-
     Memimage	*bits;		/* of font */
 };
 /*e: struct Memsubfont */

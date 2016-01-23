@@ -13,8 +13,10 @@
 
 %thx to LP, changed for the better a few things:
 % - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, ...)
-% - screen.h cleaner interface, TODO merge globals (screenimage and gscreen)
+% - screen.h cleaner interface
 % - renamed some globals (screen -> view, _screen -> screen)
+%   TODO gscreen, screenimage, vgascr, so easier to see associated part
+%   TODO or merge globals (screenimage and gscreen, can?)
 
 %thx to codemap/codegraph/scheck:
 % - SEMI use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -48,7 +50,7 @@
 % - understand main functions, LP split, cluster, improve TOC
 % - SEMI LP split the structures, use datalog for flow to field info
 % - SEMI nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
-% - sEMI aspecify advanced features! remove useless features
+% - SEMI aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
 
@@ -192,14 +194,14 @@ and also partially through the [[/dev/mouse]] and [[/dev/cons]] {device files}.
 
 % It actually provides some forms of windows managment, with backing
 % store, and even menus (but rio is more complete).
-% It can also be remote like X11! can draw through the network, and
+% It can also be remote like X11! for free! can draw through the network, and
 % so have graphical application running on one machine but displaying
 % result on your (powerful! like browser! and web app!)
 
 % screenshot?
 
 % bad stuff of draw though: most of the code is in the kernel :(
-% lots of stuff can be in library and can be tested outside
+% but lots of stuff can be in library and can be tested outside
 % (see memdrawtest), but still a bit ugly. The images, fonts,
 % all of that reside in special kernel memory (imagmem)
 
@@ -227,12 +229,14 @@ but which were ultimately discarded:
 %  transformed by any affine transformation (scale, rotation, shear,
 %  etc.).
 % 350 K with tests
+% rely on libpixman for pixel stuff, channels, move, etc.
 
 \item skia
 % used in android and chrome
 
 \item X11
-%remote so cool, bug very very big
+% remote so cool, bug very very big
+% rely also on libpixman now, they factorized code with cairo
 
 \item OpenGL
 % mostly 3d! can do also 2d. gouraud, shading, textures, 3d rasterizer, etc.
@@ -290,13 +294,12 @@ but which were ultimately discarded:
 % but assume more? assume principle of graphics book? no.
 % most books focused on 3d anyway.
 
-%itemize docs/man/6/...
 % graphics(2)!! for big picture
 %  great (a few changes though, like screen -> view)
 % draw(2) for API
 % draw(3) for protocol
-% draw(6?) for image format
-% font(?) image(?)
+% image(6) for image format
+% font(6)
 
 %advanced: more for rio
 % window(2) 
@@ -352,17 +355,21 @@ from Bell Labs.
 %http://blog.mecheye.net/2012/06/the-linux-graphics-stack/
 %http://blogs.igalia.com/itoral/2014/07/29/a-brief-introduction-to-the-linux-graphics-stack/
 
-% 3d. Not in this book.
+% 3d. Not in this book. based on triangles usually.
 
 \section{[[/dev/draw/]] files interface}
 
-%maybe show code of toy app also?
-% show the different devices?
+% maybe code which initialize kernel? #v and #i
+
+
+% /dev/draw/new, then ctl, then data protocol.
+% can do stuff without API, just by writing in files.
 
 % note that can run 'colors' in console outside rio! it just
 % use /dev/draw, /dev/mouse, etc!
 
 % see draw(3)
+
 
 %from https://news.ycombinator.com/item?id=9829662
 %> Why is reading plain text out of /dev/mouse and writing plain text
@@ -375,7 +382,7 @@ from Bell Labs.
 
 \section{A toy graphical application}
 
-% maybe code which initialize kernel? #v and #i
+% API more convenient that direct IO and protocol.
 
 % HelloGraphicalWorld.c ?
 % e.g. colors? clock.c?
@@ -391,8 +398,10 @@ from Bell Labs.
 % xy ourself by adding view->r.min. Not really "abstraction"
 % power. I'd rather have my 0x0 to be the top left on _my_ window.
 
+%\section{A toy window application}
+% has nothing to do! abstraction power!
 
-% delay for later rio and /dev/winname?
+% delay for later rio and /dev/winname? I think so. already quite complicated.
 % maybe show also can do under rio! magic! (and link to other book)
 % /dev/winname! from noborder.xxx to window.xxx and then
 % thanks to naming image, can find back image you need to write to!
@@ -681,6 +690,8 @@ from Bell Labs.
 
 
 \section{Initialization overview}
+
+% more in Chapter X.
 
 \section{Trace of a simple drawing operation}
 % when do draw(), then where does it go? go in kernel? yes ... :(
@@ -978,6 +989,7 @@ combinerect(Rectangle *r1, Rectangle r2)
 % and [[display]]
 
 % connection to device, and client handler!
+% initdraw()
 
 \subsection{[[Display]] and [[display]]}
 
@@ -1004,7 +1016,8 @@ struct Display
 % rename image field to screen/view? is it the same than global screen/view?
 
 % why not just a fd to device file? because complex device, device
-% directory actually. and buffer. and other stuff.
+% directory actually. and buffer. and protocol! and other stuff we
+% want to hide.
 
 % mostly Image and buffer with command to be flushed to device.
 
@@ -1023,7 +1036,7 @@ Display	*display;
 
 <<[[Display]] devdraw connection fields>>=
 int		dirno; // /dev/draw/x
-fdt		ctlfd; // /dev/draw/new
+fdt		ctlfd; // /dev/draw/x/ctl (opened via /dev/draw/new)
 fdt		fd;    // /dev/draw/x/data
 @
 
@@ -1047,6 +1060,9 @@ Image	*transparent;
 @
 % colors are images! uniform
 
+% why here? convenient for program?
+% allocated and set in initdisplay() (and redirect to shared
+% memimage in kernel)
 
 
 
@@ -1062,7 +1078,7 @@ Image	*transparent;
 <<struct Client>>=
 struct Client
 {
-    int     clientid; // dirno
+    int     clientid; // /dev/draw/x/
 
     // hash<Image.id, ref_own<Dimage>> (next = Dimage.next in bucket)
     DImage*     dimage[NHASH];
@@ -1127,7 +1143,10 @@ struct KDraw
     <<[[KDraw]] other fields>>
 };
 @
+%dead:
 % entries in KDraw.client are called "slots"
+\l rename clientid? more obvious that a counter?
+
 
 %no ctor needed, singleton
 <<global sdraw>>=
@@ -1140,10 +1159,12 @@ static  KDraw        sdraw;
 // index in KDraw.clients[]
 int     slot;
 @
+% different than Client.clientid as can reuse a free slot
+% but clientid always increment. can have /dev/draw/1233322
+% after 6 months :)
 
 
-
-% sysopen -> ... -> drawopen -> <>
+% sysopen -> ... -> drawopen(Qnew) -> <>
 %ctor
 <<function drawnewclient>>=
 Client*
@@ -1159,17 +1180,7 @@ drawnewclient(void)
             break;
     }
 
-    // growing array
-    if(i == sdraw.nclient){
-        cp = malloc((sdraw.nclient+1)*sizeof(Client*));
-        if(cp == nil)
-            return nil;
-        memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
-        free(sdraw.client);
-        sdraw.client = cp;
-        sdraw.nclient++;
-        cp[i] = nil;
-    }
+    <<[[drawnewclient()]] grow array if necessary>>
 
     cl = malloc(sizeof(Client));
     if(cl == nil)
@@ -1184,23 +1195,21 @@ drawnewclient(void)
 @
 
 
-
-
-
-
-
-
-%XXX
-<<[[KDraw]] other fields>>=
-int     softscreen;
+<<[[drawnewclient()]] grow array if necessary>>=
+// growing array
+if(i == sdraw.nclient){
+    cp = malloc((sdraw.nclient+1)*sizeof(Client*));
+    if(cp == nil)
+        return nil;
+    memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
+    free(sdraw.client);
+    sdraw.client = cp;
+    sdraw.nclient++;
+    cp[i] = nil;
+}
 @
 
-%XXX
-<<[[KDraw]] other fields>>=
-int     vers;
 
-ulong   savemap[3*256];
-@
 
 
 
@@ -1208,8 +1217,9 @@ ulong   savemap[3*256];
 \section{[[Image]] (and [[Memimage]])}
 % and [[screen/view]],  and DImage?
 
-% see technicolor.ps! images in plan9 draw are
-% specials.
+% images in plan9 draw are specials! (see technicolor.ps!)
+% used for many things. Images, colors, fonts, masks, etc.
+% even windows!
 
 \subsection{[[Image]] and [[view]]}
 
@@ -1228,36 +1238,42 @@ struct Image
     int			repl;		/* flag: data replicates to tile clipr */
 
     ulong		chan;
+
+    // derives from Image.chan
     int			depth;		/* number of bits per pixel */
 
     <<[[Image]] layer fields>>
-    <<[[Image]] other fields>>
 
     // Extra
     <<[[Image]] extra fields>>
 };
 @
-% display + id => can communicate to kernel what we are talking about.
 % ctor = allocimage (doing some RPC)
+
+% display + id => can communicate to kernel what we are talking about.
+%  need Display pointer because when do draw operation we need
+%  to write in img->display.buf! and then flushimage(img->display)!
+%  we need the connection handler!
 
 % read from /dev/draw/new initially when open the connection
 %  see initdisplay() 
 % system-held id! usually 0 for the first image of /dev/draw/new
 % incremented then at each allocimage, thx to Display.imageid field
 
-% clipping notion!!
+% clipping notion!! diff between .r and .clipr?
 % repl notion!!
 % chan notion!!
 %  alpha notion!!
 %  depth notion!
 
+% for r, clipr, repl, see technicolor.ps!
+%/* huge but not infinite, so various offsets will leave it huge, not overflow*/
+% clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
+
 
 % Image.display is of Display->image? not necessaraly I think, only
 % the main image (screen) is.
 
-% need display pointer because when do draw operation we need
-% to write in img->display.buf! and then flushimage(img->display)!
-% we need the connection handler!
 
 <<global screen>>=
 // option<Image>
@@ -1277,17 +1293,13 @@ Image	*view;
 
 %less: typedef int imageid;? screenid? windowid?
 % hmm but for imageid actually on user side we return Image* not imageid
-% so this imageid typedef will be really internal
+% so this imageid typedef will be really internal to libdraw
 
 <<[[Display]] other fields>>=
 // gensym
 int		imageid;
 @
-% counter, incremented each allocimage(), rename imageidcnt;
-
-% for r, clipr, repl, see technicolor.ps!
-%/* huge but not infinite, so various offsets will leave it huge, not overflow*/
-% clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
+% counter, incremented each allocimage(), rename imageidcnt?
 
 
 
@@ -1340,12 +1352,15 @@ struct Memimage
     <<[[MemImage]] other fields>>
 };
 @
-%less: no repl here? yes, it's flags. rename repl?
-% depth is sum of bits per pixel for r/g/b, so for RGB16 it's ... 16
-%no int id; here! it's in parent DImage, so can share same MemImage
-% with different id in different clients
 %ctor = allocmemimaged <- makescreenimage | allocmemimage
 % shown later cos complicated, memsetchan, etc
+%less: no repl here? yes, it's flags. rename repl?
+% depth is sum of bits per pixel for r/g/b, so for RGB16 it's ... 16
+
+%no int id; here! it's in parent DImage, so can share same MemImage
+% with different id in different clients
+% (e.g. the screen, but also imagewhite, etc (even though all of
+% those should have same id in client too)
 
 
 % libmemdraw/draw.c
@@ -1358,7 +1373,7 @@ static Memimage*	memones;
 static Memimage*	memzeros;
 @
 % 1x1 images, Grey1
-% Shared? by all clients?
+% Shared by all clients?
 
 % pending of Display->white, Display->opaque, etc
 <<global memwhite>>=
@@ -1375,18 +1390,7 @@ Memimage *memopaque;
 @
 
 
-
-% rename gview? No cos here it's really the screen!
-% unfortunate that use term "Screen" already used for other stuff.
-% just like have [[screen/view]], client side,
-% have also gscreendimage and gscreen kernel side
 %[[screen.h]] interface
-% This used to be called the [[VGAscr]] section.
-% But what matters is not so much VGA but the screen.h interface.
-% We actually moved more stuff to a generic screen.c, to be closer
-% to the simplicity of bcm/screen.c. We don't want to expose ugly
-% VGA details when nowadays things are simpler like the framebuffer
-% interface of the raspberry.
 
 % there will be lots of Memimage, but an important one is
 % the screen!
@@ -1394,26 +1398,37 @@ Memimage *memopaque;
 % screen.c, relation to Display->image? to screen/view? g? global screen?
 %  rename gview? more consistent with our new naming? No, here it's
 %  really the screen.
+
+% kinda pending of view when run app on whole screen.
+% (but in fact it's not when run under rio)
+
 <<global gscreen>>=
 Memimage *gscreen;
 @
-\t rename screen_screen?
-% this used to be in vgascreen.c, but every archi was defining
-% such a gscreen, so makes sense to factorize in a screen.c.
-% there also used to be a vgascreen[0].gscreen (see screensize()), but
-% this was redundant then with gscreen.
+\t rename screen_screen? not gview I think, here it's really the screen
+
 %todo: put global kernel gscreen for chunkname? or global gscreen(kernel)
 % like I did for (arm) and (386)
 %this is set in screensize() by VGA driver
 
+% unfortunate that use term "Screen" already used for other stuff.
+% just like have [[screen/view]], client side,
+% have also gscreendimage and gscreen kernel side
 
+% This used to be called the [[VGAscr]] section.
+% But what matters is not so much VGA but the screen.h interface.
+% We actually moved more stuff to a generic screen.c, to be closer
+% to the simplicity of bcm/screen.c. We don't want to expose ugly
+% VGA details when nowadays things are simpler like the framebuffer
+% interface of the raspberry.
 
+% this used to be in vgascreen.c, but every archi was defining
+% such a gscreen, so makes sense to factorize in a screen.c.
+% there also used to be a vgascreen[0].gscreen (see screensize()), but
+% this was redundant then with gscreen.
 
-% could put a generic ishwimage here! that just check if 
-% i->data->bdata == gscreen->data->bdata!
 
 \subsection{[[Memdata]] and [[gscreendata]]}
-
 
 <<struct Memdata>>=
 /*
@@ -1436,7 +1451,7 @@ struct Memdata
 @
 % ctor = makescreenimage | allocmemimage
 
-% another intermediate, wrapperd in Memimage for compaction
+% another intermediate, wrapper in Memimage for compaction
 %  need mentioned in comment (see imagemove callback)
 
 % the raw pixel data! but to know where to modify you need
@@ -1451,8 +1466,9 @@ struct Memdata
 % be any images the user works on.
 % see also ishwimage()
 
+% could put a generic ishwimage here! that just check if 
+% i->data->bdata == gscreen->data->bdata!
 
-% put DImage here and screendimage? and even gscreen?
 
 <<function byteaddr>>=
 byte*
@@ -1467,7 +1483,7 @@ byteaddr(Memimage *i, Point p)
         return a + p.x*(i->depth/8);
 }
 @
-% will see Point later
+
 
 <<[[MemImage]] other fields>>=
 int		zero;		/* data->bdata+zero==&byte containing (0,0) */
@@ -1496,7 +1512,7 @@ wordaddr(Memimage *i, Point p)
 Memdata gscreendata;
 @
 % not a pointer, gscreen->data = &gscreendata.
-
+% gscreendata.data will point to virtual address of framebuffer!
 
 
 
@@ -1505,6 +1521,12 @@ Memdata gscreendata;
 
 \subsection{[[DImage]]}
 % and screendimage
+
+% Saw memimage but in fact as we saw before client instead have
+% DImage cache. 
+
+% Why yet another intermediate? because here id might be different
+% in different client but same shared image!
 
 % why D?
 
@@ -1558,13 +1580,12 @@ allocdimage(Memimage *i)
 }
 @
 % no id? done by drawinstall (for instance when open Qctl in
-% which case it should be 0!)
+% which case it is set to 0!)
 
 
 %XXX
-<<[[Dimage]] other fields>>=
-int     vers;
 
+<<[[Dimage]] other fields>>=
 int     ascent;
 int     nfchar;
 FChar*      fchar;
@@ -2398,7 +2419,7 @@ if(di == nil){
 % vgascreen.c
 <<function attachscreen(x86)>>=
 byte*
-attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
+attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 {
     VGAscr *scr;
 
@@ -3324,101 +3345,7 @@ if(disp->oldlabel[0]){
 @
 
 \section{Window}
-%TODO: later? just say  view point to 
-% Display->image? with id 0?
-
-
-% so for now we have access to the full screen!
-% (possibly clipped?)
-
-
-<<[[geninitdraw()]] get window>>=
-snprint(buf, sizeof buf, "%s/winname", display->windir);
-if(gengetwindow(display, buf, &view, &screen, ref) < 0)
-    goto Error;
-@
-% ???
-%old: was &screen, &_screen?
-
-<<function gengetwindow>>=
-/*
- * Attach, or possibly reattach, to window.
- * If reattaching, maintain value of screen pointer.
- */
-int
-gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
-{
-    int n, fd;
-    char buf[64+1];
-    Image *image;
-    Rectangle r;
-
-    fd = open(winname, OREAD);
-    if(fd<0 || (n=read(fd, buf, sizeof buf-1))<=0){
-        if((image=d->image) == nil){
-            fprint(2, "gengetwindow: %r\n");
-            *winp = nil;
-            d->screenimage = nil;
-            return -1;
-        }
-        strcpy(buf, "noborder");
-    }else{
-        close(fd);
-        buf[n] = '\0';
-        if(*winp != nil){
-            _freeimage1(*winp);
-            freeimage((*scrp)->image);
-            freescreen(*scrp);
-            *scrp = nil;
-        }
-        image = namedimage(d, buf);
-        if(image == nil){
-            fprint(2, "namedimage %s failed: %r\n", buf);
-            *winp = nil;
-            d->screenimage = nil;
-            return -1;
-        }
-        assert(image->chan != 0);
-    }
-
-    d->screenimage = image;
-    *scrp = allocscreen(image, d->white, 0);
-    if(*scrp == nil){
-        freeimage(d->screenimage);
-        *winp = nil;
-        d->screenimage = nil;
-        return -1;
-    }
-
-    r = image->r;
-    if(strncmp(buf, "noborder", 8) != 0)
-        r = insetrect(image->r, Borderwidth);
-    *winp = _allocwindow(*winp, *scrp, r, ref, DWhite);
-    if(*winp == nil){
-        freescreen(*scrp);
-        *scrp = nil;
-        freeimage(image);
-        d->screenimage = nil;
-        return -1;
-    }
-    d->screenimage = *winp;
-    assert((*winp)->chan != 0);
-    return 1;
-}
-@
-
-
-<<function getwindow>>=
-int
-getwindow(Display *d, int ref)
-{
-    char winname[128];
-
-    snprint(winname, sizeof winname, "%s/winname", d->windir);
-    return gengetwindow(d, winname, &view, &screen, ref);
-}
-@
-
+% later, just say  view point to Display->image? with id 0?
 
 
 
@@ -3754,29 +3681,6 @@ for(i=0; i<NHASH; i++){
 }
 @
 
-%XXX ? mv later
-<<[[drawclose()]] free names>>=
-/* free names */
-for(i=0; i<sdraw.nname; )
-    if(sdraw.name[i].client == cl)
-        drawdelname(sdraw.name+i);
-    else
-        i++;
-@
-
-%dtor
-<<function drawdelname>>=
-void
-drawdelname(DName *name)
-{
-    int i;
-
-    i =  name - sdraw.name;
-    memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
-    sdraw.nname--;
-}
-@
-
 
 \subsection{[[drawread()]]}
 
@@ -3887,7 +3791,7 @@ DName *dn;
 case Qctl:
     cl = drawclient(c);
 
-    <<[[drawopen()]] switch qid cases, when Qctl>>
+    <<[[drawopen()]] switch qid cases, when Qctl, set busy>>
 
     flushrect = Rect(10000, 10000, -10000, -10000);
     dn = drawlookupname(strlen(screenname), screenname);
@@ -3901,18 +3805,16 @@ case Qctl:
     if(di == nil)
         error("draw: cannot happen 1");
 
-
-    di->vers = dn->vers;
-    di->name = smalloc(strlen(screenname)+1);
-    strcpy(di->name, screenname);
-    di->fromname = dn->dimage;
-    di->fromname->ref++;
+    <<[[drawopen()]] switch qid cases, when Qctl, set name>>
 
     incref(&cl->r);
     break;
 @
 %TODO: rect? clipped? or full access? protection?? can draw on
 % other windows? when write on /dev/draw/x/ctl ?
+
+
+% flushrect is a global shown later.
 
 %TODO: drawlookupname should be screen_dimage!! assert! 
 
@@ -3948,7 +3850,7 @@ drawclientofpath(ulong path)
 
 
 
-<<[[drawopen()]] switch qid cases, when Qctl>>=
+<<[[drawopen()]] switch qid cases, when Qctl, set busy>>=
 if(cl->busy)
     error(Einuse);
 cl->busy = true;
@@ -4411,22 +4313,9 @@ _freeimage1(Image *i)
     a[0] = 'f';
     BPLONG(a+1, i->id);
 
-    if(i->screen){
-        // remove_list(i, d->windows)
-        w = d->windows;
-        if(w == i)
-            d->windows = i->next;
-        else
-            while(w){
-                if(w->next == i){
-                    w->next = i->next;
-                    break;
-                }
-                w = w->next;
-            }
-    }
+    <<[[_freeimage1()]] if screen>>
 
-    if(flushimage(d, i->screen!=0) < 0)
+    if(flushimage(d, i->screen != nil) < 0)
         return -1;
 
     return 0;
@@ -4505,9 +4394,8 @@ case 'f':
     if(n < m)
         error(Eshortdraw);
     ll = drawlookup(client, BGLONG(a+1), false);
-
-    if(ll && ll->dscreen && ll->dscreen->owner != client)
-        ll->dscreen->owner->refreshme = 1;
+    
+    <<[[drawmesg()]] free image case, if dscreen>>
 
     drawuninstall(client, BGLONG(a+1)); // The call
 
@@ -4626,7 +4514,7 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
         return nil;
     d->id = id;
 
-    d->dscreen = dscreen;
+    <<[[drawinstall()]] install dscreen>>
 
     // insert_hash(d, client->dimage)
     d->next = client->dimage[id&HASHMASK];
@@ -4684,17 +4572,8 @@ drawfreedimage(DImage *dimage)
     if(dimage->ref > 0)
         return;
 
-    /* any names? */
-    for(i=0; i<sdraw.nname; )
-        if(sdraw.name[i].dimage == dimage)
-            drawdelname(sdraw.name+i);
-        else
-            i++;
+    <<[[drawfreedimage()]] free names>>
 
-    if(dimage->fromname){   /* acquired by name; owned by someone else*/
-        drawfreedimage(dimage->fromname);
-        goto Return;
-    }
     <<[[drawfreedimage()]] if dscreen>>
     else
         freememimage(dimage->image);
@@ -5209,8 +5088,8 @@ namedimage(Display *d, char *name)
     i->clipr.min.y = atoi(buf+9*12);
     i->clipr.max.x = atoi(buf+10*12);
     i->clipr.max.y = atoi(buf+11*12);
-    i->screen = 0;
-    i->next = 0;
+    i->screen = nil;
+    i->next = nil;
     return i;
 }
 @
@@ -5496,19 +5375,13 @@ dstflush(int dstid, Memimage *dst, Rectangle r)
         return;
     }
     /* how can this happen? -rsc, dec 12 2002 */
-    if(dst == 0){
+    if(dst == nil){
         print("nil dstflush\n");
         return;
     }
-    l = dst->layer;
-    if(l == nil)
-        return;
-    do{
-        if(l->screen->image->data != screenimage->data)
-            return;
-        r = rectaddpt(r, l->delta);
-        l = l->screen->image->layer;
-    }while(l);
+
+    <<[[dstflush()]] if layer>>
+
     addflush(r);
 }
 @
@@ -6120,6 +5993,61 @@ bool hwdraw(Memdrawparam *par)
 % except the software cursor stuff.
 
 % TODO put scroll or fill method here?
+
+
+<<[[KDraw]] other fields>>=
+bool     softscreen;
+@
+
+<<function addflush>>=
+static void
+addflush(Rectangle r)
+{
+    int abb, ar, anbb;
+    Rectangle nbb;
+
+    if(sdraw.softscreen==false || !rectclip(&r, screenimage->r))
+        return;
+
+    if(flushrect.min.x >= flushrect.max.x){
+        flushrect = r;
+        waste = 0;
+        return;
+    }
+    nbb = flushrect;
+    combinerect(&nbb, r);
+    ar = Dx(r)*Dy(r);
+    abb = Dx(flushrect)*Dy(flushrect);
+    anbb = Dx(nbb)*Dy(nbb);
+    /*
+     * Area of new waste is area of new bb minus area of old bb,
+     * less the area of the new segment, which we assume is not waste.
+     * This could be negative, but that's OK.
+     */
+    waste += anbb-abb - ar;
+    if(waste < 0)
+        waste = 0;
+    /*
+     * absorb if:
+     *  total area is small
+     *  waste is less than half total area
+     *  rectangles touch
+     */
+    if(anbb<=1024 || waste*2<anbb || rectXrect(flushrect, r)){
+        flushrect = nbb;
+        return;
+    }
+    /* emit current state */
+    if(flushrect.min.x < flushrect.max.x)
+        flushmemscreen(flushrect);
+    flushrect = r;
+    waste = 0;
+}
+@
+<<global waste>>=
+static  int     waste;
+@
+
 
 
 \section{Alpha channel and compositing}
@@ -7673,6 +7601,7 @@ case 'P':
     if(pp == nil)
         error(Enomem);
     doflush = false;
+
     if(dstid==0 || (dst->layer && dst->layer->screen->image->data == screenimage->data))
         doflush = true;    /* simplify test in loop */
     ox = oy = 0;
@@ -10636,6 +10565,8 @@ uninstallsubfont(Subfont *subfont)
 
 \section{Reading images}
 
+% image(6) format
+
 \subsection{API}
 
 
@@ -11851,6 +11782,100 @@ newwindow(char *str)
 }
 @
 
+\section{Additional initializations}
+
+% so for now we have access to the full screen!
+% (possibly clipped?)
+
+<<[[geninitdraw()]] get window>>=
+snprint(buf, sizeof buf, "%s/winname", display->windir);
+if(gengetwindow(display, buf, &view, &screen, ref) < 0)
+    goto Error;
+@
+% ???
+%old: was &screen, &_screen?
+
+<<function gengetwindow>>=
+/*
+ * Attach, or possibly reattach, to window.
+ * If reattaching, maintain value of screen pointer.
+ */
+int
+gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
+{
+    int n, fd;
+    char buf[64+1];
+    Image *image;
+    Rectangle r;
+
+    fd = open(winname, OREAD);
+    if(fd<0 || (n=read(fd, buf, sizeof buf-1))<=0){
+        if((image=d->image) == nil){
+            fprint(2, "gengetwindow: %r\n");
+            *winp = nil;
+            d->screenimage = nil;
+            return -1;
+        }
+        strcpy(buf, "noborder");
+    }else{
+        close(fd);
+        buf[n] = '\0';
+        if(*winp != nil){
+            _freeimage1(*winp);
+            freeimage((*scrp)->image);
+            freescreen(*scrp);
+            *scrp = nil;
+        }
+        image = namedimage(d, buf);
+        if(image == nil){
+            fprint(2, "namedimage %s failed: %r\n", buf);
+            *winp = nil;
+            d->screenimage = nil;
+            return -1;
+        }
+        assert(image->chan != 0);
+    }
+
+    d->screenimage = image;
+    *scrp = allocscreen(image, d->white, 0);
+    if(*scrp == nil){
+        freeimage(d->screenimage);
+        *winp = nil;
+        d->screenimage = nil;
+        return -1;
+    }
+
+    r = image->r;
+    if(strncmp(buf, "noborder", 8) != 0)
+        r = insetrect(image->r, Borderwidth);
+    *winp = _allocwindow(*winp, *scrp, r, ref, DWhite);
+    if(*winp == nil){
+        freescreen(*scrp);
+        *scrp = nil;
+        freeimage(image);
+        d->screenimage = nil;
+        return -1;
+    }
+    d->screenimage = *winp;
+    assert((*winp)->chan != 0);
+    return 1;
+}
+@
+
+
+<<function getwindow>>=
+int
+getwindow(Display *d, int ref)
+{
+    char winname[128];
+
+    snprint(winname, sizeof winname, "%s/winname", d->windir);
+    return gengetwindow(d, winname, &view, &screen, ref);
+}
+@
+
+
+
 \section{Additional data structures}
 
 \subsection{[[Display.windows]], [[Image.screen]], [[Memimage.layer]] }
@@ -11873,7 +11898,6 @@ Image		*next;	/* next in list of windows */
 @
 
 
-%XXX
 <<[[Display]] other fields>>=
 Image	*screenimage; // ???
 @
@@ -11913,20 +11937,19 @@ int     nname;
 
 
 
-%XXX
 <<[[Dimage]] other fields>>=
 char    *name;
 DImage*     fromname;   /* image this one is derived from, by name */
 @
 
-%XXX
+
 <<struct DName>>=
 struct DName
 {
     char        *name;
     Client      *client;
     DImage*     dimage;
-    int     vers;
+    <<[[DName]] other fields>>
 };
 @
 % ctor = ???
@@ -11948,7 +11971,7 @@ if(!waserror()){
 @
 % to bootstrap mechanism for /tmp/winname!
 
-%XXX seems associated with /dev/winname so move later?
+% seems associated with /dev/winname so move later?
 <<global screenname>>=
 static  char    screenname[40];
 @
@@ -11988,6 +12011,25 @@ drawaddname(Client *client, DImage *di, int n, char *str)
 }
 @
 
+<<[[KDraw]] other fields>>=
+int     vers;
+@
+<<[[Dimage]] other fields>>=
+int     vers;
+@
+<<[[DName]] other fields>>=
+int     vers;
+@
+
+<<[[drawopen()]] switch qid cases, when Qctl, set name>>=
+di->vers = dn->vers;
+di->name = smalloc(strlen(screenname)+1);
+strcpy(di->name, screenname);
+di->fromname = dn->dimage;
+di->fromname->ref++;
+@
+
+
 
 <<function drawcmp>>=
 static
@@ -12015,7 +12057,41 @@ drawlookupname(int n, char *str)
 }
 @
 
+<<[[drawclose()]] free names>>=
+/* free names */
+for(i=0; i<sdraw.nname; )
+    if(sdraw.name[i].client == cl)
+        drawdelname(sdraw.name+i);
+    else
+        i++;
+@
 
+%dtor
+<<function drawdelname>>=
+void
+drawdelname(DName *name)
+{
+    int i;
+
+    i =  name - sdraw.name;
+    memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
+    sdraw.nname--;
+}
+@
+
+<<[[drawfreedimage()]] free names>>=
+/* any names? */
+for(i=0; i<sdraw.nname; )
+    if(sdraw.name[i].dimage == dimage)
+        drawdelname(sdraw.name+i);
+    else
+        i++;
+
+if(dimage->fromname){   /* acquired by name; owned by someone else*/
+    drawfreedimage(dimage->fromname);
+    goto Return;
+}
+@
 
 
 \subsection{[[Screen]]}
@@ -12063,6 +12139,10 @@ struct CScreen
 
 <<[[Dimage]] layer fields>>=
 DScreen*    dscreen;    /* 0 if not a window */
+@
+
+<<[[drawinstall()]] install dscreen>>=
+d->dscreen = dscreen;
 @
 
 <<struct DScreen>>=
@@ -12475,6 +12555,24 @@ while(cl->cscreen)
 
 \subsection{Image allocation}
 
+
+<<[[_freeimage1()]] if screen>>=
+if(i->screen){
+    // remove_list(i, d->windows)
+    w = d->windows;
+    if(w == i)
+        d->windows = i->next;
+    else
+        while(w){
+            if(w->next == i){
+                w->next = i->next;
+                break;
+            }
+            w = w->next;
+        }
+}
+@
+
 <<[[drawfreedimage()]] if dscreen>>=
 ds = dimage->dscreen;
 if(ds){
@@ -12519,55 +12617,6 @@ if(checkname && !drawgoodname(d))
 
 
 
-<<function addflush>>=
-static void
-addflush(Rectangle r)
-{
-    int abb, ar, anbb;
-    Rectangle nbb;
-
-    if(sdraw.softscreen==0 || !rectclip(&r, screenimage->r))
-        return;
-
-    if(flushrect.min.x >= flushrect.max.x){
-        flushrect = r;
-        waste = 0;
-        return;
-    }
-    nbb = flushrect;
-    combinerect(&nbb, r);
-    ar = Dx(r)*Dy(r);
-    abb = Dx(flushrect)*Dy(flushrect);
-    anbb = Dx(nbb)*Dy(nbb);
-    /*
-     * Area of new waste is area of new bb minus area of old bb,
-     * less the area of the new segment, which we assume is not waste.
-     * This could be negative, but that's OK.
-     */
-    waste += anbb-abb - ar;
-    if(waste < 0)
-        waste = 0;
-    /*
-     * absorb if:
-     *  total area is small
-     *  waste is less than half total area
-     *  rectangles touch
-     */
-    if(anbb<=1024 || waste*2<anbb || rectXrect(flushrect, r)){
-        flushrect = nbb;
-        return;
-    }
-    /* emit current state */
-    if(flushrect.min.x < flushrect.max.x)
-        flushmemscreen(flushrect);
-    flushrect = r;
-    waste = 0;
-}
-@
-<<global waste>>=
-static  int     waste;
-@
-
 
 
 
@@ -12600,6 +12649,11 @@ drawrefresh(Memimage*, Rectangle r, void *v)
         c->refresh = ref;
     }
 }
+@
+
+<<[[drawmesg()]] free image case, if dscreen>>=
+if(ll && ll->dscreen && ll->dscreen->owner != client)
+    ll->dscreen->owner->refreshme = 1;
 @
 
 
@@ -12975,8 +13029,19 @@ ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
 @
 
 
+\subsection{Image flush}
 
-
+<<[[dstflush()]] if layer>>=
+l = dst->layer;
+if(l == nil)
+    return;
+do{
+    if(l->screen->image->data != screenimage->data)
+        return;
+    r = rectaddpt(r, l->delta);
+    l = l->screen->image->layer;
+}while(l);
+@
 
 
 
@@ -16377,6 +16442,8 @@ greymaskread(Param *p, uchar *buf, int y)
 
 % need color map if use RGBA32? no but VGA seems to be limited to depth 8!
 
+% color(2), color(6)
+
 <<[[MemImage]] other fields>>=
 Memcmap	*cmap;
 @
@@ -18512,6 +18579,10 @@ drawblankscreen(bool blank)
 }
 @
 % >>
+
+<<[[KDraw]] other fields>>=
+ulong   savemap[3*256];
+@
 
 
 

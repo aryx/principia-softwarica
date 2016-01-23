@@ -453,10 +453,13 @@ screensize(int x, int y, int z, ulong chan)
         int width = (x*z)/BI2WD;
         void *p;
 
+        // !!the alloc!!
         p = xalloc(width*BY2WD*y);
         if(p == nil)
             error("no memory for vga soft screen");
+
         gscreendata.bdata = softscreen = p;
+
         if(scr->dev && scr->dev->page){
             scr->vaddr = KADDR(VGAMEM());
             scr->apsize = 1<<16; // >>
@@ -468,6 +471,7 @@ screensize(int x, int y, int z, ulong chan)
         scr->useflush = scr->dev && scr->dev->flush;
     }
 
+    // Setting gscreen!!
     if(gscreen)
         freememimage(gscreen);
     gscreen = allocmemimaged(Rect(0,0,x,y), chan, &gscreendata);
@@ -488,13 +492,15 @@ screensize(int x, int y, int z, ulong chan)
     if(oldsoft)
         xfree(oldsoft);
 
+    // initial draw
     memimagedraw(gscreen, gscreen->r, memblack, ZP, nil, ZP, S);
     flushmemscreen(gscreen->r);
 
     if(didswcursorinit)
         swcursorinit();
+
     drawcmap();
-    return 0;
+    return OK_0;
 }
 /*e: function screensize(x86) */
 
@@ -536,7 +542,7 @@ screenaperture(int size, int align)
 
 /*s: function attachscreen(x86) */
 byte*
-attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
+attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 {
     VGAscr *scr;
 
@@ -544,10 +550,10 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, int *softscreen)
     if(gscreen == nil || gscreendata.bdata == nil)
         return nil;
 
-    *r = gscreen->clipr;
-    *chan = gscreen->chan;
-    *d = gscreen->depth;
-    *width = gscreen->width;
+    *r          = gscreen->clipr;
+    *chan       = gscreen->chan;
+    *d          = gscreen->depth;
+    *width      = gscreen->width;
     *softscreen = scr->useflush;
 
     return gscreendata.bdata;

@@ -39,7 +39,6 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
         werrstr("bad channel descriptor %.8lux", chan);
         return nil;
     }
-
     l = wordsperline(r, d);
 
     i = mallocz(sizeof(Memimage), 1);
@@ -47,19 +46,20 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
         return nil;
 
     i->data = md;
-    i->zero = sizeof(ulong)*l*r.min.y;
-    
+
+    i->zero = sizeof(ulong) * l * r.min.y;
     if(r.min.x >= 0)
         i->zero += (r.min.x*d)/8;
     else
         i->zero -= (-r.min.x*d+7)/8;
-    i->zero = -i->zero;
+    i->zero = -i->zero; // ???
+
     i->width = l;
     i->r = r;
     i->clipr = r;
     i->flags = 0;
-    i->layer = nil;
 
+    i->layer = nil;
     i->cmap = memdefcmap;
 
     if(memsetchan(i, chan) < 0){
@@ -87,10 +87,10 @@ allocmemimage(Rectangle r, ulong chan)
 
     l = wordsperline(r, d);
     nw = l*Dy(r);
+
     md = malloc(sizeof(Memdata));
     if(md == nil)
         return nil;
-
     md->ref = 1;
     // the big alloc!
     md->base = poolalloc(imagmem, sizeof(Memdata*)+(1+nw)*sizeof(ulong));
@@ -108,7 +108,7 @@ allocmemimage(Rectangle r, ulong chan)
 
     /* if this changes, memimagemove must change too */
     md->bdata = p;
-    md->allocd = 1;
+    md->allocd = true;
 
     i = allocmemimaged(r, chan, md);
     if(i == nil){
@@ -127,6 +127,7 @@ freememimage(Memimage *i)
 {
     if(i == nil)
         return;
+    // free the Memdata
     if(i->data->ref-- == 1 && i->data->allocd){
         if(i->data->base)
             poolfree(imagmem, i->data->base);
@@ -153,7 +154,7 @@ byteaddr(Memimage *i, Point p)
 {
     byte *a;
 
-    a = i->data->bdata + i->zero + sizeof(ulong) * p.y * i->width;
+    a = (i->data->bdata + i->zero) + (sizeof(ulong) * p.y * i->width);
 
     /*s: [[byteaddr()]] if depth less than 8 */
     if(i->depth < 8){
@@ -175,7 +176,7 @@ byteaddr(Memimage *i, Point p)
 /*e: function byteaddr */
 
 /*s: function memsetchan */
-int
+errorneg1
 memsetchan(Memimage *i, ulong chan)
 {
     int d;
@@ -185,11 +186,11 @@ memsetchan(Memimage *i, ulong chan)
 
     if((d = chantodepth(chan)) == 0) {
         werrstr("bad channel descriptor");
-        return -1;
+        return ERROR_NEG1;
     }
 
-    i->depth = d;
     i->chan = chan;
+    i->depth = d;
     i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
     bytes = true;
 
@@ -211,6 +212,7 @@ memsetchan(Memimage *i, ulong chan)
         i->shift[t] = j;
         i->mask[t] = (1<<NBITS(cc))-1;
         i->nbits[t] = NBITS(cc);
+
         if(NBITS(cc) != 8)
             bytes = false;
     }
