@@ -429,7 +429,7 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         else if(s <= sdraw.nclient){
             cl = sdraw.client[s-1];
             if(cl == nil)
-                return nil;
+                return 0;
             snprint(up->genbuf, sizeof up->genbuf, "%d",
                 cl->clientid);
             mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
@@ -1223,7 +1223,7 @@ initscreenimage(void)
         return ERROR_0;
     screenimage = screendimage->image;
 
-    DBG1("initscreenimage %p %p\n", screendimage, screenimage);
+    //DBG1("initscreenimage %p %p\n", screendimage, screenimage);
     mouseresize();
     return OK_1;
 }
