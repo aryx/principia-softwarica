@@ -117,7 +117,7 @@ struct	Memsubfont
 /*
  * Encapsulated parameters and information for sub-draw routines.
  */
-enum {
+enum Drawparams {
     Simplesrc=1<<0,
     Simplemask=1<<1,
 
@@ -142,12 +142,15 @@ struct	Memdrawparam
     // enum<Drawop>
     int op;
 
+    /*s: [[Memdrawparam]] other fields */
+    // enum<Subdraw>
     ulong state;
     ulong mval;		/* if Simplemask, the mask pixel in mask format */
     ulong mrgba;	/* mval in rgba */
     ulong sval;		/* if Simplesrc, the source pixel in src format */
     ulong srgba;	/* sval in rgba */
     ulong sdval;	/* sval in dst format */
+    /*e: [[Memdrawparam]] other fields */
 };
 /*e: struct Memdrawparam */
 

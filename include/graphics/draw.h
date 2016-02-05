@@ -271,8 +271,6 @@ struct Display
     // gensym
     int		imageid;
     /*x: [[Display]] other fields */
-    bool	local;
-    ulong	dataqid;
     bool	_isnewdisplay;
     /*x: [[Display]] other fields */
     char	oldlabel[64];

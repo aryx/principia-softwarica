@@ -199,7 +199,6 @@ struct DImage
     int     ascent;
     int     nfchar;
     FChar*      fchar;
-
     /*x: [[Dimage]] other fields */
     char    *name;
     DImage*     fromname;   /* image this one is derived from, by name */

@@ -243,26 +243,30 @@ Display*
 initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 {
     /*s: [[initdisplay()]] locals */
-    Display *disp;
-    Image *image;
-
     fdt ctlfd;
-    char info[NINFO+1];
     fdt datafd;
     fdt reffd;
 
+    char info[NINFO+1];
     char buf[128];
-    char *t;
-    bool isnew;
+
+    Display *disp;
+    Image *image;
+
     int n;
+    /*x: [[initdisplay()]] locals */
     Dir *dir;
+    /*x: [[initdisplay()]] locals */
+    bool isnew;
+    /*x: [[initdisplay()]] locals */
+    char *t;
     /*e: [[initdisplay()]] locals */
 
     /*s: [[initdisplay()]] install dumpers */
     fmtinstall('P', Pfmt);
     fmtinstall('R', Rfmt);
     /*e: [[initdisplay()]] install dumpers */
-    /*s: [[initdisplay()]] check arguments validity */
+    /*s: [[initdisplay()]] sanity check arguments */
     if(dev == nil)
         dev = "/dev";
     if(win == nil)
@@ -275,11 +279,11 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     t = strdup(win);
     if(t == nil)
         return nil;
-    /*e: [[initdisplay()]] check arguments validity */
+    /*e: [[initdisplay()]] sanity check arguments */
 
     sprint(buf, "%s/draw/new", dev);
     ctlfd = open(buf, ORDWR|OCEXEC);
-
+    /*s: [[initdisplay()]] sanity check ctlfd */
     if(ctlfd < 0){
         if(bind("#i", dev, MAFTER) < 0){
     Error1:
@@ -292,9 +296,10 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     }
     if(ctlfd < 0)
         goto Error1;
+    /*e: [[initdisplay()]] sanity check ctlfd */
 
     n=read(ctlfd, info, sizeof info);
-
+    /*s: [[initdisplay()]] sanity check read ctlfd */
     if(n < 12){
     Error2:
         close(ctlfd);
@@ -302,47 +307,58 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     }
     if(n==NINFO+1)
         n = NINFO;
+    /*e: [[initdisplay()]] sanity check read ctlfd */
     info[n] = '\0';
 
+    /*s: [[initdisplay()]] set isnew */
     isnew = false;
     if(n < NINFO)	/* this will do for now, we need something better here */
         isnew = true;
+    /*e: [[initdisplay()]] set isnew */
 
     sprint(buf, "%s/draw/%d/data", dev, atoi(info+0*12));
     datafd = open(buf, ORDWR|OCEXEC);
-
+    /*s: [[initdisplay()]] sanity check datafd */
     if(datafd < 0)
         goto Error2;
+    /*e: [[initdisplay()]] sanity check datafd */
 
     sprint(buf, "%s/draw/%d/refresh", dev, atoi(info+0*12));
     reffd = open(buf, OREAD|OCEXEC);
-
+    /*s: [[initdisplay()]] sanity check reffd */
     if(reffd < 0){
     Error3:
         close(datafd);
         goto Error2;
     }
+    /*e: [[initdisplay()]] sanity check reffd */
 
     // our display!
     disp = mallocz(sizeof(Display), 1);
 
+    /*s: [[initdisplay()]] sanity check disp */
     if(disp == nil){
     Error4:
         close(reffd);
         goto Error3;
     }
+    /*e: [[initdisplay()]] sanity check disp */
 
     image = nil;
+    /*s: [[initdisplay()]] sanity check image part1 */
     if(0){
     Error5:
         free(image);
         free(disp);
         goto Error4;
     }
+    /*e: [[initdisplay()]] sanity check image part1 */
     if(n >= NINFO){
         image = mallocz(sizeof(Image), 1);
+        /*s: [[initdisplay()]] sanity check image part2 */
         if(image == nil)
             goto Error5;
+        /*e: [[initdisplay()]] sanity check image part2 */
         image->display = disp;
         image->id = 0; // info+1*12 but should always be 0
         image->chan = strtochan(info+2*12);
@@ -357,21 +373,29 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
         image->clipr.max.x = atoi(info+10*12);
         image->clipr.max.y = atoi(info+11*12);
     }
+    disp->image = image;
 
+    /*s: [[initdisplay()]] set display _isnewdisplay */
     disp->_isnewdisplay = isnew;
+    /*e: [[initdisplay()]] set display _isnewdisplay */
 
+    /*s: [[initdisplay()]] set display bufsize */
     disp->bufsize = iounit(datafd);
     if(disp->bufsize <= 0)
         disp->bufsize = 8000;
+    /*s: [[initdisplay()]] sanity check bufsize */
     if(disp->bufsize < 512){
         werrstr("iounit %d too small", disp->bufsize);
         goto Error5;
     }
+    /*e: [[initdisplay()]] sanity check bufsize */
+    /*e: [[initdisplay()]] set display bufsize */
     disp->buf = malloc(disp->bufsize+5);	/* +5 for flush message */
+    /*s: [[initdisplay()]] sanity check buf */
     if(disp->buf == nil)
         goto Error5;
+    /*e: [[initdisplay()]] sanity check buf */
 
-    disp->image = image;
     disp->dirno = atoi(info+0*12);
     disp->fd    = datafd;
     disp->ctlfd = ctlfd;
@@ -381,26 +405,27 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     disp->windir = t;
     disp->devdir = strdup(dev);
 
-    qlock(&disp->qlock);
+    qlock(&disp->qlock); // released in closedisplay (why not earlier? first API call?)
+
     disp->white = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DWhite);
     disp->black = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DBlack);
+    /*s: [[initdisplay()]] sanity check white and black */
     if(disp->white == nil || disp->black == nil){
         free(disp->devdir);
         free(disp->white);
         free(disp->black);
         goto Error5;
     }
+    /*e: [[initdisplay()]] sanity check white and black */
     disp->opaque = disp->white;
     disp->transparent = disp->black;
 
+    /*s: [[initdisplay()]] extra setting */
     dir = dirfstat(ctlfd);
-    if(dir!=nil && dir->type=='i'){
-        disp->local = true;
-        disp->dataqid = dir->qid.path;
-    }
     if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
         disp->_isnewdisplay = true;
     free(dir);
+    /*e: [[initdisplay()]] extra setting */
 
     return disp;
 }
