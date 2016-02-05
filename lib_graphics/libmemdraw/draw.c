@@ -13,9 +13,6 @@ extern Pool* imagmem;
 /*s: global drawdebug */
 bool drawdebug;
 /*e: global drawdebug */
-/*s: global tablesbuilt */
-static bool	tablesbuilt;
-/*e: global tablesbuilt */
 
 /*s: function RGB2K */
 /* perfect approximation to NTSC = .299r+.587g+.114b when 0 ≤ r,g,b < 256 */
@@ -83,14 +80,17 @@ memimageinit(void)
       )
         imagmem->move = memimagemove;
 
+    /*s: [[memimageinit()]] initializations */
     mktables();
+    /*x: [[memimageinit()]] initializations */
     _memmkcmap();
-
+    /*e: [[memimageinit()]] initializations */
     /*s: [[memimageinit()]] install dumpers */
     fmtinstall('P', Pfmt);
     fmtinstall('R', Rfmt); 
-    /*e: [[memimageinit()]] install dumpers */
+    /*x: [[memimageinit()]] install dumpers */
     fmtinstall('b', _ifmt);
+    /*e: [[memimageinit()]] install dumpers */
 
     memzeros = allocmemimage(Rect(0,0,1,1), GREY1);
     memzeros->flags |= Frepl;
@@ -326,15 +326,6 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
  */
 static uchar replbit[1+8][256];		/* replbit[x][y] is the replication of the x-bit quantity y to 8-bit depth */
 /*e: global replbit */
-/*s: global conv18 */
-static uchar conv18[256][8];		/* conv18[x][y] is the yth pixel in the depth-1 pixel x */
-/*e: global conv18 */
-/*s: global conv28 */
-static uchar conv28[256][4];		/* ... */
-/*e: global conv28 */
-/*s: global conv48 */
-static uchar conv48[256][2];
-/*e: global conv48 */
 
 extern int replmul[];
 
@@ -343,13 +334,12 @@ static void
 mktables(void)
 {
     int i, j, mask, sh, small;
-        
+    /*s: [[mktables()]] only once guard */
+    static bool	tablesbuilt = false;
     if(tablesbuilt)
         return;
     tablesbuilt = true;
-
-    fmtinstall('R', Rfmt);
-    fmtinstall('P', Pfmt);
+    /*e: [[mktables()]] only once guard */
 
     /* bit replication up to 8 bits */
     for(i=0; i<256; i++){
@@ -359,17 +349,6 @@ mktables(void)
         }
     }
 
-    /* bit unpacking up to 8 bits, only powers of 2 */
-    for(i=0; i<256; i++){
-        for(j=0, sh=7, mask=1; j<8; j++, sh--)
-            conv18[i][j] = replbit[1][(i>>sh)&mask];
-
-        for(j=0, sh=6, mask=3; j<4; j++, sh-=2)
-            conv28[i][j] = replbit[2][(i>>sh)&mask];
-
-        for(j=0, sh=4, mask=15; j<2; j++, sh-=4)
-            conv48[i][j] = replbit[4][(i>>sh)&mask];
-    }
 }
 /*e: function mktables */
 

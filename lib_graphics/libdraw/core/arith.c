@@ -17,12 +17,12 @@ Pt(int x, int y)
 
 /*s: function Rect */
 Rectangle
-Rect(int x, int y, int bx, int by)
+Rect(int ax, int ay, int bx, int by)
 {
     Rectangle r;
 
-    r.min.x = x;
-    r.min.y = y;
+    r.min.x = ax;
+    r.min.y = ay;
     r.max.x = bx;
     r.max.y = by;
     return r;

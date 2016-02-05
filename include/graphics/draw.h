@@ -172,7 +172,7 @@ enum {
 
 /*s: enum _anon_ (include/draw.h)5 */
 enum {
-    GREY1	= CHAN1(CGrey, 1), // used for bitmask
+    GREY1	= CHAN1(CGrey, 1), // used for bitmask, black and white
 
     GREY2	= CHAN1(CGrey, 2),
     GREY4	= CHAN1(CGrey, 4),
@@ -229,7 +229,7 @@ struct Screen
 /*s: struct Display */
 struct Display
 {
-    // ref_own<Image>, current Image? screen?
+    // ref_own<Image>, the framebuffer
     Image	*image;
 
     /*s: [[Display]] devdraw connection fields */
@@ -242,14 +242,14 @@ struct Display
     /*x: [[Display]] devdraw connection fields */
     fdt		reffd; // /dev/draw/x/refresh
     /*e: [[Display]] devdraw connection fields */
-    /*s: [[Display]] buffer related fields */
+    /*s: [[Display]] buffer fields */
     // drawing operations to write in /dev/draw/x/data until flush
     // array<byte>
     byte	*buf;
     int		bufsize;
     // index in Display.buf array
     byte	*bufp;
-    /*e: [[Display]] buffer related fields */
+    /*e: [[Display]] buffer fields */
     /*s: [[Display]] basic images fields */
     // ref_own<Image>
     Image	*white;
@@ -266,7 +266,6 @@ struct Display
     /*x: [[Display]] font fields */
     Subfont	*defaultsubfont;
     /*e: [[Display]] font fields */
-
     /*s: [[Display]] other fields */
     // gensym
     int		imageid;
@@ -283,7 +282,7 @@ struct Display
     void	(*error)(Display*, char*);
     /*e: [[Display]] other fields */
 
-    // extra
+    // Extra
     /*s: [[Display]] concurrency fields */
     QLock	qlock;
     /*x: [[Display]] concurrency fields */
@@ -303,13 +302,12 @@ struct Image
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;	/* clipping region */
 
-    // bitset<enum<fxxx>>    
-    int			repl;		/* flag: data replicates to tile clipr */
-
     ulong		chan;
 
     // derives from Image.chan
     int			depth;		/* number of bits per pixel */
+    // bitset<enum<fxxx>>    
+    int			repl;		/* flag: data replicates to tile clipr */
 
     /*s: [[Image]] layer fields */
     Screen		*screen;	/* nil if not a window */
@@ -358,6 +356,7 @@ struct	Subfont
 {
     char		*name;
     short		n;		/* number of chars in font */
+
     byte		height;		/* height of image */
     char		ascent;		/* top of image to baseline */
 

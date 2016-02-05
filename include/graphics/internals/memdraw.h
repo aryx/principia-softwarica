@@ -57,7 +57,6 @@ struct Memimage
     // derives from Memimage.chan
     int		depth;	/* number of bits of storage per pixel */
     int		nchan;	/* number of channels */
-
     //bitset<enum<fxxx>, 
     ulong	flags; 
 
@@ -105,6 +104,7 @@ struct	Memsubfont
 {
     char	*name;
     short	n;		/* number of chars in font */
+
     uchar	height;		/* height of bitmap */
     char	ascent;		/* top of bitmap to baseline */
 

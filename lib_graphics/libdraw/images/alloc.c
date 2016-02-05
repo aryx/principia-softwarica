@@ -10,8 +10,10 @@ allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
     Image*	i;
 
     i =  _allocimage(nil, d, r, chan, repl, val, 0, 0);
+    /*s: [[allocimage()]] set malloc tag for debug */
     if (i)
         setmalloctag(i, getcallerpc(&d));
+    /*e: [[allocimage()]] set malloc tag for debug */
     return i;
 }
 /*e: function allocimage */
@@ -27,15 +29,16 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     int id;
     int depth;
 
-    err = 0;
-    i = 0;
-
+    err = nil;
+    i = nil;
+    /*s: [[_allocimage()]] sanity check chan */
     if(chan == 0){
         werrstr("bad channel descriptor");
         return nil;
     }
-
+    /*e: [[_allocimage()]] sanity check chan */
     depth = chantodepth(chan);
+    /*s: [[_allocimage()]] sanity check depth */
     if(depth == 0){
         err = "bad channel descriptor";
     Error:
@@ -44,8 +47,9 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
         else
             werrstr("allocimage: %r");
         free(i);
-        return 0;
+        return nil;
     }
+    /*e: [[_allocimage()]] sanity check depth */
 
     /* flush pending data so we don't get error allocating the image */
     flushimage(d, false);
@@ -80,10 +84,13 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     if(flushimage(d, false) < 0)
         goto Error;
 
+    /*s: [[_allocimage()]] if passed image */
     if(ai)
         i = ai;
+    /*e: [[_allocimage()]] if passed image */
     else{
         i = malloc(sizeof(Image));
+        /*s: [[_allocimage()]] sanity check i */
         if(i == nil){
             a = bufimage(d, 1+4);
             if(a){
@@ -93,6 +100,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
             }
             goto Error;
         }
+        /*e: [[_allocimage()]] sanity check i */
     }
 
     i->display = d;
@@ -212,7 +220,7 @@ nameimage(Image *i, char *name, int in)
 /*e: function nameimage */
 
 /*s: function _freeimage1 */
-int
+errorneg1
 _freeimage1(Image *i)
 {
     byte *a;
@@ -220,7 +228,7 @@ _freeimage1(Image *i)
     Image *w;
 
     if(i == nil || i->display == nil)
-        return 0;
+        return OK_0;
 
     /* make sure no refresh events occur on this if we block in the write */
     d = i->display;
@@ -228,8 +236,10 @@ _freeimage1(Image *i)
     flushimage(d, false);
 
     a = bufimage(d, 1+4);
+    /*s: [[_freeimage1()]] sanity check a */
     if(a == nil)
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[_freeimage1()]] sanity check a */
 
     a[0] = 'f';
     BPLONG(a+1, i->id);
@@ -252,17 +262,17 @@ _freeimage1(Image *i)
     /*e: [[_freeimage1()]] if screen */
 
     if(flushimage(d, i->screen != nil) < 0)
-        return -1;
+        return ERROR_NEG1;
 
-    return 0;
+    return OK_0;
 }
 /*e: function _freeimage1 */
 
 /*s: function freeimage */
-int
+errorneg1
 freeimage(Image *i)
 {
-    int ret;
+    errorneg1 ret;
 
     ret = _freeimage1(i);
     free(i);

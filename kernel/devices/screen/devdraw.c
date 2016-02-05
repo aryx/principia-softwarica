@@ -1003,7 +1003,6 @@ drawnewclient(void)
         if(cl == nil)
             break;
     }
-
     /*s: [[drawnewclient()]] grow array if necessary */
     // growing array
     if(i == sdraw.nclient){
@@ -1214,16 +1213,21 @@ makescreenimage(void)
 static error0
 initscreenimage(void)
 {
+
+    /*s: [[initscreenimage()]] only once guard */
     if(screenimage != nil)
         return OK_1;
-
+    /*e: [[initscreenimage()]] only once guard */
     screendimage = makescreenimage();
+    /*s: [[initscreenimage()]] sanity check screendimage */
     if(screendimage == nil)
         return ERROR_0;
+    /*e: [[initscreenimage()]] sanity check screendimage */
     screenimage = screendimage->image;
 
-    //DBG1("initscreenimage %p %p\n", screendimage, screenimage);
+    /*s: [[initscreenimage()]] other initializations */
     mouseresize();
+    /*e: [[initscreenimage()]] other initializations */
     return OK_1;
 }
 /*e: function initscreenimage */
@@ -1815,9 +1819,11 @@ drawmesg(Client *client, void *av, int n)
             drawrectangle(&r, a+15);
             drawrectangle(&clipr, a+31);
             value = BGLONG(a+47);
+
+            /*s: [[drawmesg()]] allocate image case, sanity check dstid */
             if(drawlookup(client, dstid, false))
                 error(Eimageexists);
-
+            /*e: [[drawmesg()]] allocate image case, sanity check dstid */
             /*s: [[drawmesg()]] allocate image case, if screen id */
             if(scrnid){
                 dscrn = drawlookupscreen(client, scrnid, &cs);
@@ -1866,7 +1872,6 @@ drawmesg(Client *client, void *av, int n)
                 continue;
             }
             /*e: [[drawmesg()]] allocate image case, if screen id */
-
             i = allocmemimage(r, chan); // The call
 
             if(i == nil)

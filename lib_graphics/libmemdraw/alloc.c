@@ -19,7 +19,7 @@ memimagemove(void *from, void *to)
     md->base = to;
 
     /* if allocmemimage changes this must change too */
-    md->bdata = (uchar*)md->base+sizeof(Memdata*)+sizeof(ulong);
+    md->bdata = (byte*)md->base+sizeof(Memdata*)+sizeof(ulong);
 }
 /*e: function memimagemove */
 
@@ -75,34 +75,40 @@ Memimage*
 allocmemimage(Rectangle r, ulong chan)
 {
     int d;
-    uchar *p;
+    byte *p;
     ulong l, nw;
     Memdata *md;
     Memimage *i;
 
-    if((d = chantodepth(chan)) == 0) {
+    d = chantodepth(chan);
+    /*s: [[allocmemimage()]] sanity check d */
+    if(d == 0) {
         werrstr("bad channel descriptor %.8lux", chan);
         return nil;
     }
+    /*e: [[allocmemimage()]] sanity check d */
 
     l = wordsperline(r, d);
     nw = l*Dy(r);
 
     md = malloc(sizeof(Memdata));
+    /*s: [[allocmemimage()]] sanity check md */
     if(md == nil)
         return nil;
+    /*e: [[allocmemimage()]] sanity check md */
     md->ref = 1;
     // the big alloc!
     md->base = poolalloc(imagmem, sizeof(Memdata*)+(1+nw)*sizeof(ulong));
+    /*s: [[allocmemimage()]] sanity check md base */
     if(md->base == nil){
         free(md);
         return nil;
     }
+    /*e: [[allocmemimage()]] sanity check md base */
 
-    p = (uchar*)md->base;
+    p = (byte*)md->base;
     *(Memdata**)p = md;
     p += sizeof(Memdata*);
-
     *(ulong*)p = getcallerpc(&r);
     p += sizeof(ulong);
 
@@ -111,12 +117,15 @@ allocmemimage(Rectangle r, ulong chan)
     md->allocd = true;
 
     i = allocmemimaged(r, chan, md);
+    /*s: [[allocmemimage()]] sanity check i */
     if(i == nil){
         poolfree(imagmem, md->base);
         free(md);
         return nil;
     }
+    /*e: [[allocmemimage()]] sanity check i */
     md->imref = i;
+
     return i;
 }
 /*e: function allocmemimage */

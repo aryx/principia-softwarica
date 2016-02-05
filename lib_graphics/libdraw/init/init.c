@@ -255,9 +255,9 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 
     int n;
     /*x: [[initdisplay()]] locals */
-    Dir *dir;
-    /*x: [[initdisplay()]] locals */
     bool isnew;
+    /*x: [[initdisplay()]] locals */
+    Dir *dir;
     /*x: [[initdisplay()]] locals */
     char *t;
     /*e: [[initdisplay()]] locals */
@@ -364,10 +364,12 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
         image->chan = strtochan(info+2*12);
         image->depth = chantodepth(image->chan);
         image->repl = atoi(info+3*12);
+
         image->r.min.x = atoi(info+4*12);
         image->r.min.y = atoi(info+5*12);
         image->r.max.x = atoi(info+6*12);
         image->r.max.y = atoi(info+7*12);
+
         image->clipr.min.x = atoi(info+8*12);
         image->clipr.min.y = atoi(info+9*12);
         image->clipr.max.x = atoi(info+10*12);
@@ -375,9 +377,9 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     }
     disp->image = image;
 
-    /*s: [[initdisplay()]] set display _isnewdisplay */
+    /*s: [[initdisplay()]] set display _isnewdisplay part1 */
     disp->_isnewdisplay = isnew;
-    /*e: [[initdisplay()]] set display _isnewdisplay */
+    /*e: [[initdisplay()]] set display _isnewdisplay part1 */
 
     /*s: [[initdisplay()]] set display bufsize */
     disp->bufsize = iounit(datafd);
@@ -420,12 +422,12 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     disp->opaque = disp->white;
     disp->transparent = disp->black;
 
-    /*s: [[initdisplay()]] extra setting */
+    /*s: [[initdisplay()]] set display _isnewdisplay part2 */
     dir = dirfstat(ctlfd);
     if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
         disp->_isnewdisplay = true;
     free(dir);
-    /*e: [[initdisplay()]] extra setting */
+    /*e: [[initdisplay()]] set display _isnewdisplay part2 */
 
     return disp;
 }
