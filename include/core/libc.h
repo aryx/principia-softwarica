@@ -464,7 +464,7 @@ extern	char*	cleanname(char*);
 extern	int		encodefmt(Fmt*);
 extern	int		getfields(char*, char**, int, int, char*);
 extern	int		gettokens(char *, char **, int, char *);
-extern	int		iounit(int);
+extern	int		iounit(fdt);
 // ugly redefined by user code? see statusbar.c
 extern	void	qsort(void*, long, long, int (*)(void*, void*));
 

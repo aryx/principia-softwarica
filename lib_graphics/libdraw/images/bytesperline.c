@@ -10,8 +10,10 @@ unitsperline(Rectangle r, int d, int bitsperunit)
 {
     ulong l, t;
 
+    /*s: [[unitsperline()]] sanity check d */
     if(d <= 0 || d > 32)	/* being called wrong.  d is image depth. */
         abort();
+    /*e: [[unitsperline()]] sanity check d */
 
     if(r.min.x >= 0){
         l = (r.max.x*d+bitsperunit-1)/bitsperunit;

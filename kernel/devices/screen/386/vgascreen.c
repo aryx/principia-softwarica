@@ -476,7 +476,7 @@ screensize(int x, int y, int z, ulong chan)
     }
     else{
         gscreendata.bdata = scr->vaddr;
-        scr->useflush = scr->dev && scr->dev->flush;
+        scr->useflush = (scr->dev && scr->dev->flush);
     }
 
     /*s: [[screensize()]] free previous gscreen */

@@ -13,10 +13,12 @@
 
 %thx to LP, changed for the better a few things:
 % - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, Display.dataqid, ...)
+%   TODO isnew?
 % - screen.h cleaner interface
 % - renamed some globals (screen -> view, _screen -> screen)
 %   TODO gscreen, screenimage, vgascr, so easier to see associated part
 %   TODO or merge globals (screenimage and gscreen, can?)
+% - TODO transformed globals in locals (softscreen)
 
 %thx to codemap/codegraph/scheck:
 % - SEMI use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -32,7 +34,7 @@
 %  - SEMI better understand channels, and the many image formats
 %  - TODO better understand alpha
 %  - TODO better understand bezier (could be useful for edge bunding visual)
-%    that they are essence of vectoriel fonts?
+%    that they are the essence of vectoriel fonts?
 %  - TODO understand freshrate, double buffer, vertical sync, flickering,
 %    refresh sync
 
@@ -283,14 +285,13 @@ but which were ultimately discarded:
 
 \section{Getting started}
 % x86
+\n no rio yet, really getting started so minimal!
 
 % install driver command? #vga?
 % install devdraw #i
 
 % toy graphical app /tests/draw/ ?
 
-
-\n no rio yet, really getting started so minimal!
 
 \section{Requirements}
 
@@ -361,7 +362,9 @@ from Bell Labs.
 %http://blog.mecheye.net/2012/06/the-linux-graphics-stack/
 %http://blogs.igalia.com/itoral/2014/07/29/a-brief-introduction-to-the-linux-graphics-stack/
 
-% 3d. lighting. Not in this book. based on triangles usually.
+%other topics:
+% - 3d. lighting. Not in this book. based on triangles usually.
+% - Animation (Core Animation) not in this book either.
 
 \section{[[/dev/draw/]] files interface}
 
@@ -721,14 +724,14 @@ from Bell Labs.
 
 \chapter{Core Data Structures}
 
-Below are the most important data structure of [[draw.h]].
+Below are the most important data structures of [[draw.h]].
 % Also their pending DS in the kernel!
 % many important globals are in libdraw/init.c
 
 % hmm, lots of DS to present.
 
 
-\section{[[Point]] and [[Rectangle]]}
+\section{Geometry}
 \n put early cos many API mention Point and Rectangle, so core DS
 
 % screen is growing right and down
@@ -976,6 +979,8 @@ canonrect(Rectangle r)
 }
 @
 
+% this? useful for?
+
 <<function combinerect>>=
 void
 combinerect(Rectangle *r1, Rectangle r2)
@@ -991,6 +996,7 @@ combinerect(Rectangle *r1, Rectangle r2)
 }
 @
 
+% this? useful for?
 
 
 \section{[[Display]] (and [[Client]])}
@@ -1001,7 +1007,8 @@ combinerect(Rectangle *r1, Rectangle r2)
 
 \subsection{[[Display]] and [[display]]}
 
-% user side, can see it as essentially a connection handler
+% user side, can see it as essentially a connection handler,
+% most things in plan9 done via files! including drawing!
 <<struct Display>>=
 struct Display
 {
@@ -1077,7 +1084,8 @@ Image	*transparent;
 % memimage in kernel)
 
 
-
+% can have multiple displays? probably so one program
+% can draw to multiple screens :)
 
 
 
@@ -1199,8 +1207,7 @@ drawnewclient(void)
     <<[[drawnewclient()]] grow array if necessary>>
 
     cl = malloc(sizeof(Client));
-    if(cl == nil)
-        return nil;
+    <<[[drawnewclient()]] sanity check cl>>
     memset(cl, 0, sizeof(Client));
     cl->slot = i;
     cl->clientid = ++sdraw.clientid;
@@ -1210,13 +1217,13 @@ drawnewclient(void)
 }
 @
 % ++ so starts at 1 (because static kdraw.clientid is 0)
+% could do cl->infoid = 0;  clearer. implicit in malloc.
 
 <<[[drawnewclient()]] grow array if necessary>>=
 // growing array
 if(i == sdraw.nclient){
     cp = malloc((sdraw.nclient+1)*sizeof(Client*));
-    if(cp == nil)
-        return nil;
+    <<[[drawnewclient()]] sanity check cp>>
     memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
     free(sdraw.client);
     sdraw.client = cp;
@@ -1228,8 +1235,15 @@ if(i == sdraw.nclient){
 
 
 
+<<[[drawnewclient()]] sanity check cl>>=
+if(cl == nil)
+    return nil;
+@
 
-
+<<[[drawnewclient()]] sanity check cp>>=
+if(cp == nil)
+    return nil;
+@
 \section{[[Image]] (and [[Memimage]])}
 % and [[screen/view]],  and DImage?
 
@@ -1316,7 +1330,8 @@ int		imageid;
 @
 % counter, incremented each allocimage(), rename imageidcnt?
 % why need that client side? id allocation is handled in kernel no?
-
+% apparently not, kernel actually just check that passed id is indeed
+% unused (in Client DImage hash).
 
 
 %less: hmm actually this is in memdraw.h so maybe
@@ -1394,7 +1409,9 @@ static Memimage*	memzeros;
 % 1x1 images, Grey1
 % Shared by all clients?
 
-% pending of Display->white, Display->opaque, etc
+% pending of Display->white, Display->opaque, etc? I dont think so
+%  more for stuff used internally by kernel. Display->white and Display->back
+%  seems to be allocimage each time in each initdisplay()
 <<global memwhite>>=
 Memimage *memwhite;
 @
@@ -1483,6 +1500,8 @@ struct Memdata
 };
 @
 % ctor = makescreenimage | allocmemimage
+\l why not a Ref?
+\t base must be first field?
 
 % another intermediate, wrapper in Memimage for compaction
 %  need mentioned in comment (see imagemove callback)
@@ -1510,6 +1529,7 @@ struct Memdata
 int		zero;		/* data->bdata+zero==&byte containing (0,0) */
 ulong	width;	/* width in words of a single scan line */
 @
+\t zero is complicated
 
 <<function byteaddr>>=
 byte*
@@ -1604,8 +1624,7 @@ allocdimage(Memimage *i)
     DImage *d;
 
     d = malloc(sizeof(DImage));
-    if(d == nil)
-        return nil;
+    <<[[allocdimage()]] sanity check d>>
     d->image = i;
     d->ref = 1;
 
@@ -1622,11 +1641,16 @@ allocdimage(Memimage *i)
 % which case it is set to 0!)
 
 
+<<[[allocdimage()]] sanity check d>>=
+if(d == nil)
+    return nil;
+@
+
 %\subsection{[[DName]]}
 % related to windowing system so moved later
 
 
-\section{Image channels}
+\section{Channels}
 
 % typedef ulong chan;!
 
@@ -1640,7 +1664,7 @@ allocdimage(Memimage *i)
  * image channel descriptors 
  */
 // coupling: chantostr and channames
-enum {
+enum Chan {
     CRed = 0,
     CGreen,
     CBlue,
@@ -1654,7 +1678,7 @@ enum {
     NChan,
 };
 @
-
+\n use Chan not Channel to avoid confusing with thread.h struct Channel.
 
 %  4      4
 % -------------
@@ -1742,12 +1766,10 @@ chantodepth(ulong c)
     int n;
 
     for(n=0; c; c>>=8){
-        if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
-            return 0; // warning?
+        <<[[chantodepth()]] sanity check c>>
         n += NBITS(c);
     }
-    if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
-        return 0; // warning?
+    <<[[chantodepth()]] sanity check n>>
     return n;
 }
 @
@@ -1756,6 +1778,15 @@ chantodepth(ulong c)
 % readable info in /dev/draw/new/
 
 
+<<[[chantodepth()]] sanity check c>>=
+if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
+    return 0; // warning?
+@
+
+<<[[chantodepth()]] sanity check n>>=
+if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
+    return 0; // warning?
+@
 
 \section{Colors}
 
@@ -1910,7 +1941,7 @@ struct	Memdrawparam
 @
 
 
-\section{[[Font]] and [[Subfont]]}
+\section{Fonts}
 % and [[font]]
 % present later? already lots of DS to understand ...
 
@@ -2042,11 +2073,12 @@ struct	Memsubfont
 
 
 \section{Kernel side}
+% part1
 % also kinda "Server side". 
 % Better to see first user side?
 
 \subsection{Mounting the VGA device}
-% [[vgascreen]], vga_screen
+% [[vgascreen]], (-> vga_screen)
 %x86
 
 % complex, arch specific, so in appendix, but important part
@@ -2055,7 +2087,7 @@ struct	Memsubfont
 \subsection{Setting the screen size, VGA [[screensize()]]}
 \n put before draw mount as anyway it depends on many globals being set
 \n for VGA attachscreen
-% [[gscreendata]] and [[gscreen]], screen, screendata
+% [[gscreendata]] and [[gscreen]], ( -> screen, screendata)
 
 % mounting and then call aux/vga ! which ends up calling screensize?
 %  run("/bin/vga", "-l", "1024x768x8", nil); // can add -V to debug vga
@@ -2085,7 +2117,7 @@ screensize(int x, int y, int z, ulong chan)
     }
     else{
         gscreendata.bdata = scr->vaddr;
-        scr->useflush = scr->dev && scr->dev->flush;
+        scr->useflush = (scr->dev && scr->dev->flush);
     }
 
     <<[[screensize()]] free previous gscreen>>
@@ -2108,7 +2140,8 @@ screensize(int x, int y, int z, ulong chan)
 % >>
 %old:
 %        int width = (x*z)/BI2WD; // width in words
-%
+
+
 %In Kernel_extra.nw
 %#define BI2BY   8     /* bits per byte */
 %#define BI2WD   32      /* bits per word */
@@ -2121,6 +2154,8 @@ screensize(int x, int y, int z, ulong chan)
 % will see memimagedraw later, and flushmem too
 
 % memblack first memimagedraw! so black screen!
+
+
 
 % locking
 
@@ -2178,16 +2213,16 @@ if(oldsoft)
 
 % error handling
 
+<<[[screensize()]] sanity check p>>=
+if(p == nil)
+    error("no memory for vga soft screen");
+@
 
 <<[[screensize()]] sanity check gscreen>>=
 if(gscreen == nil)
     error("no memory for vga memimage");
 @
 
-<<[[screensize()]] sanity check p>>=
-if(p == nil)
-    error("no memory for vga soft screen");
-@
 
 
 
@@ -2209,11 +2244,7 @@ memimageinit(void)
 {
     <<[[memimageinit()]] only once guard>>
 
-    if(  strcmp(imagmem->name, "Image") == 0 
-      || strcmp(imagmem->name, "image") == 0
-      )
-        imagmem->move = memimagemove;
-
+    <<[[memimageinit()]] set image pool allocator move>>
     <<[[memimageinit()]] initializations>>
     <<[[memimageinit()]] install dumpers>>
 
@@ -2241,6 +2272,7 @@ memimageinit(void)
 % memimageinit seems quite general, not sure why called from screensize
 % why need width/height or chan?
 
+% allocmemimage later
 
 <<[[memimageinit()]] only once guard>>=
 static bool didinit = false;
@@ -2253,6 +2285,14 @@ didinit = true;
 
 % need understand pool allocator in Libcore.nw
 
+<<[[memimageinit()]] set image pool allocator move>>=
+if(  strcmp(imagmem->name, "Image") == 0 
+  || strcmp(imagmem->name, "image") == 0
+  )
+    imagmem->move = memimagemove;
+@
+
+
 % mv earlier? closer to Memdata?
 % kernel interface?
 % ??? -> <> (imag->move = <> <- memimageinit)
@@ -2263,23 +2303,29 @@ memimagemove(void *from, void *to)
     Memdata *md;
 
     md = *(Memdata**)to;
-    if(md->base != from){
-        print("compacted data not right: #%p\n", md->base);
-        abort();
-    }
+    <<[[memimagemove()]] sanity check md base>>
     md->base = to;
 
     /* if allocmemimage changes this must change too */
-    md->bdata = (byte*)md->base+sizeof(Memdata*)+sizeof(ulong);
+    md->bdata = (byte*)md->base + sizeof(Memdata*) + sizeof(ulong);
 }
 @
 % if compress images pool, then pointer can move, so need
 % way to find back stuff pointings to those images. Fortunately
 % have back pointer in the array itself.
 
+\t FIGURE hard to understand layout
+
+<<[[memimagemove()]] sanity check md base>>=
+if(md->base != from){
+    print("compacted data not right: #%p\n", md->base);
+    abort();
+}
+@
 
 
 \subsection{Mounting the draw device}
+% screenimage (-> draw_screen)
 
 % see kernel init
 % bind #i /dev
@@ -2344,6 +2390,7 @@ initscreenimage(void)
 {
 
     <<[[initscreenimage()]] only once guard>>
+
     screendimage = makescreenimage();
     <<[[initscreenimage()]] sanity check screendimage>>
     screenimage = screendimage->image;
@@ -2410,15 +2457,11 @@ if(screendimage == nil)
 <<[[makescreenimage()]] allocate Memdata md>>=
 // allocate Memdata
 md = malloc(sizeof(Memdata));
-if(md == nil)
-    return nil;
+<<[[makescreenimage()]] sanity check md>>
 md->allocd = true;
 
 md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
-if(md->bdata == nil){
-    free(md);
-    return nil;
-}
+<<[[makescreenimage()]] sanity check md bdata>>
 md->base = nil; // not allocated by poolalloc
 md->ref = 1;
 @
@@ -2430,8 +2473,9 @@ md->ref = 1;
 bool	allocd;	/* is this malloc'd? */
 @
 % how it could be false? for gscreendata!! but then why
-%  we have code that call freexxx on gscreendata?
-% but here it looks like it is using the bdata returned by attachscreen
+\l  we have code that call freexxx on gscreendata?
+
+% here it looks like it is using the bdata returned by attachscreen
 %  and this one is really poolalloc?
 % it is neither (or really xalloc for softscreen) it is physical framebuffer
 % but for that Memdata.base is used to possibly
@@ -2439,10 +2483,23 @@ bool	allocd;	/* is this malloc'd? */
 
 <<[[makescreenimage()]] locals>>=
 int width, depth;
-ulong chan;
 Rectangle r;
+ulong chan;
 @
-% attachscreen soon
+% we will see attachscreen() soon
+
+
+<<[[makescreenimage()]] sanity check md>>=
+if(md == nil)
+    return nil;
+@
+
+<<[[makescreenimage()]] sanity check md bdata>>=
+if(md->bdata == nil){
+    free(md);
+    return nil;
+}
+@
 
 \paragraph{[[Memimage]]}
 
@@ -2451,15 +2508,22 @@ Rectangle r;
 <<[[makescreenimage()]] allocate Memimage i>>=
 // allocate Memimage
 i = allocmemimaged(r, chan, md);
-if(i == nil){
-    free(md);
-    return nil;
-}
+<<[[makescreenimage()]] sanity check i>>
 @
 %old: why overwrite width and clipr already set in allocmemimaged?
 % i->width = width;
 % i->clipr = r;
 \t assert if i->width != width?
+
+
+<<[[makescreenimage()]] sanity check i>>=
+if(i == nil){
+    free(md);
+    return nil;
+}
+@
+
+
 
 % makescreenimage | allocmemimage -> <>
 %Memimage ctor (smaller malloc, just a wrapper over Memdata)
@@ -2471,29 +2535,16 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     ulong l;
     Memimage *i;
 
-    if(Dx(r) <= 0 || Dy(r) <= 0){
-        werrstr("bad rectangle %R", r);
-        return nil;
-    }
-    if((d = chantodepth(chan)) == 0) {
-        werrstr("bad channel descriptor %.8lux", chan);
-        return nil;
-    }
+    <<[[allocmemimaged()]] sanity check r>>
+    d = chantodepth(chan);
+    <<[[allocmemimaged()]] sanity check d>>
     l = wordsperline(r, d);
 
-    i = mallocz(sizeof(Memimage), 1);
-    if(i == nil)
-        return nil;
+    i = mallocz(sizeof(Memimage), true);
+    <<[[allocmemimaged()]] sanity check i>>
 
     i->data = md;
-
-    i->zero = sizeof(ulong) * l * r.min.y;
-    if(r.min.x >= 0)
-        i->zero += (r.min.x*d)/8;
-    else
-        i->zero -= (-r.min.x*d+7)/8;
-    i->zero = -i->zero; // ???
-
+    <<[[allocmemimaged()]] set zero field>>
     i->width = l;
     i->r = r;
     i->clipr = r;
@@ -2510,6 +2561,42 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
 }
 @
 % memimaged? d?
+
+
+% remember Memimage.zero is &byte containing(0,0) (which could
+% be outside Memdata if Rectangle starts at Pt(10, 10).
+
+<<[[allocmemimaged()]] set zero field>>=
+i->zero = sizeof(ulong) * l * r.min.y;
+if(r.min.x >= 0)
+    i->zero += (r.min.x*d)/8;
+else
+    i->zero -= (-r.min.x*d+7)/8;
+i->zero = -i->zero;
+@
+% for screenimage Rectangle.min should be Pt(0, 0).
+% If rect starts at Pt(10,10) then zero must be negatif!
+
+
+
+<<[[allocmemimaged()]] sanity check r>>=
+if(Dx(r) <= 0 || Dy(r) <= 0){
+    werrstr("bad rectangle %R", r);
+    return nil;
+}
+@
+<<[[allocmemimaged()]] sanity check d>>=
+if(d == 0) {
+    werrstr("bad channel descriptor %.8lux", chan);
+    return nil;
+}
+@
+<<[[allocmemimaged()]] sanity check i>>=
+if(i == nil)
+    return nil;
+@
+
+
 
 
 <<function wordsperline>>=
@@ -2535,8 +2622,7 @@ unitsperline(Rectangle r, int d, int bitsperunit)
 {
     ulong l, t;
 
-    if(d <= 0 || d > 32)	/* being called wrong.  d is image depth. */
-        abort();
+    <<[[unitsperline()]] sanity check d>>
 
     if(r.min.x >= 0){
         l = (r.max.x*d+bitsperunit-1)/bitsperunit;
@@ -2548,6 +2634,13 @@ unitsperline(Rectangle r, int d, int bitsperunit)
     return l;
 }
 @
+
+
+<<[[unitsperline()]] sanity check d>>=
+if(d <= 0 || d > 32)	/* being called wrong.  d is image depth. */
+    abort();
+@
+
 
 
 %\section{Channels and alpha}
@@ -2562,11 +2655,8 @@ memsetchan(Memimage *i, ulong chan)
     ulong cc;
     bool bytes;
 
-    if((d = chantodepth(chan)) == 0) {
-        werrstr("bad channel descriptor");
-        return ERROR_NEG1;
-    }
-
+    d = chantodepth(chan);
+    <<[[memsetchan()]] sanity check d>>
     i->chan = chan;
     i->depth = d;
     i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
@@ -2574,10 +2664,7 @@ memsetchan(Memimage *i, ulong chan)
 
     for(cc=chan, j=0, k=0; cc; j+=NBITS(cc), cc>>=8, k++){
         t=TYPE(cc);
-        if(t < 0 || t >= NChan){
-            werrstr("bad channel string");
-            return -1;
-        }
+        <<[[memsetchan()]] sanity check t>>
         if(t == CGrey)
             i->flags |= Fgrey;
         if(t == CAlpha)
@@ -2597,14 +2684,31 @@ memsetchan(Memimage *i, ulong chan)
     i->nchan = k;
     if(bytes)
         i->flags |= Fbytes;
-    return 0;
+    return OK_0;
 }
 @
 % >>
 
+<<[[memsetchan()]] sanity check d>>=
+if(d == 0) {
+    werrstr("bad channel descriptor");
+    return ERROR_NEG1;
+}
+@
+
+<<[[memsetchan()]] sanity check t>>=
+if(t < 0 || t >= NChan){
+    werrstr("bad channel string");
+    return -1;
+}
+@
+
 <<[[MemImage]] other fields>>=
+// map<enum<Chan>, int>
 int		shift[NChan];
+// map<enum<Chan>, int>
 int		mask[NChan];
+// map<enum<Chan>, int>
 int		nbits[NChan];
 @
 
@@ -2627,16 +2731,27 @@ freememimage(Memimage *i)
 @
 % remember allocd vs base, two different allocators
 
+
+
+
+
+
 \paragraph{[[DImage]]}
 
 <<[[makescreenimage()]] allocate DImage di>>=
 // allocate DImage
 di = allocdimage(i);
+<<[[makescreenimage()]] sanity check di>>
+@
+% we have seen allocdimage before in core DS chapter
+
+<<[[makescreenimage()]] sanity check di>>=
 if(di == nil){
     freememimage(i);    /* frees md */
     return nil;
 }
 @
+
 
 \paragraph{Screen name}
 % drawaddname() have stuff related to screename, but we will see later!
@@ -2680,7 +2795,7 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 % VGA has a soft screen?
 
 
-
+\subsection{Next steps}
 
 %\subsection{[[drawopen()]]}
 % further initialisation when client actually connects to device
@@ -2698,7 +2813,7 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 
 <<function initdraw>>=
 errorneg1
-initdraw(void(*error)(Display*, char*), char *fontname , char *label)
+initdraw(Errorfn error, char *fontname , char *label)
 {
     char *dev = "/dev";
 
@@ -2713,13 +2828,12 @@ initdraw(void(*error)(Display*, char*), char *fontname , char *label)
 % devdir and windir often equals and = /dev
 <<function geninitdraw>>=
 errorneg1
-geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *label, char *windir, int ref)
+geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *windir, int ref)
 {
     <<[[geninitdraw()]] locals>>
 
     display = initdisplay(devdir, windir, error);
-    if(display == nil)
-        return ERROR_NEG1;
+    <<[[geninitdraw()]] sanity check display>>
 
     <<[[geninitdraw()]] set up font>>
     <<[[geninitdraw()]] write label>>
@@ -2732,14 +2846,21 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
 @
 % modify the global!
 
+
+
+<<[[geninitdraw()]] sanity check display>>=
+if(display == nil)
+    return ERROR_NEG1;
+@
+
+<<type Errorfn>>=
+typedef void Errorfn(Display*, char*);
+@
+%pad: I added that
+
 \subsection{[[initdisplay()]]}
 
 % get connection and first automatically allocated image in d->image
-
-<<constant NINFO>>=
-#define	NINFO	12*12
-@
-% /dev/draw/new content, 12 strings each 11 chars + newline
 
 <<[[initdisplay()]] locals>>=
 fdt ctlfd;
@@ -2755,13 +2876,18 @@ Image *image;
 int n;
 @
 
+<<constant NINFO>>=
+#define	NINFO	12*12
+@
+% /dev/draw/new content, 12 strings each 11 chars + newline
 
 
-% hmm it's actually a public function! but not much app tweaking
-% with it
+
+% hmm it's actually a public function! but not much app tweaking with it
+% initdraw -> geninitdraw -> <>
 <<function initdisplay>>=
 Display*
-initdisplay(char *dev, char *win, void(*error)(Display*, char*))
+initdisplay(char *dev, char *win, Errorfn error)
 {
     <<[[initdisplay()]] locals>>
 
@@ -2787,14 +2913,13 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     <<[[initdisplay()]] sanity check reffd>>
 
     // our display!
-    disp = mallocz(sizeof(Display), 1);
-
+    disp = mallocz(sizeof(Display), true);
     <<[[initdisplay()]] sanity check disp>>
 
     image = nil;
     <<[[initdisplay()]] sanity check image part1>>
     if(n >= NINFO){
-        image = mallocz(sizeof(Image), 1);
+        image = mallocz(sizeof(Image), true);
         <<[[initdisplay()]] sanity check image part2>>
         image->display = disp;
         image->id = 0; // info+1*12 but should always be 0
@@ -2819,8 +2944,8 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     <<[[initdisplay()]] set display bufsize>>
     disp->buf = malloc(disp->bufsize+5);	/* +5 for flush message */
     <<[[initdisplay()]] sanity check buf>>
-
     disp->dirno = atoi(info+0*12);
+
     disp->fd    = datafd;
     disp->ctlfd = ctlfd;
     disp->reffd = reffd;
@@ -2844,7 +2969,7 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 @
 % refresh is important?
 
-% TODO clipped if run under a window? how enforced?
+\t clipped if run under a window? how enforced?
 
 
 
@@ -2855,41 +2980,8 @@ if(disp->bufsize <= 0)
     disp->bufsize = 8000;
 <<[[initdisplay()]] sanity check bufsize>>
 @
+% iounit? libc.h
 
-
-
-
-
-%XXX ??
-<<[[Display]] other fields>>=
-bool	_isnewdisplay;
-@
-<<[[initdisplay()]] locals>>=
-bool isnew;
-@
-<<[[initdisplay()]] set isnew>>=
-isnew = false;
-if(n < NINFO)	/* this will do for now, we need something better here */
-    isnew = true;
-@
-<<[[initdisplay()]] set display _isnewdisplay part1>>=
-disp->_isnewdisplay = isnew;
-@
-
-<<[[initdisplay()]] locals>>=
-Dir *dir;
-@
-<<[[initdisplay()]] set display _isnewdisplay part2>>=
-dir = dirfstat(ctlfd);
-if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
-    disp->_isnewdisplay = true;
-free(dir);
-@
-%dead:
-%if(dir!=nil && dir->type=='i'){
-%    disp->local = true;
-%    disp->dataqid = dir->qid.path;
-%}
 
 
 
@@ -3014,7 +3106,10 @@ closedisplay(Display *disp)
     _closedisplay(disp, false);
 }
 @
+% can have multiple display? apparently.
 
+
+% exit -> <> (atexit(<>) <- geninitdraw <- initdraw)
 <<function drawshutdown>>=
 /* note handler */
 static void
@@ -3067,57 +3162,23 @@ _closedisplay(Display *disp, bool isshutdown)
 }
 @
 
+\subsection{Next steps}
 
-\section{Fonts}
+%\section{Client side part 2}
+% but need user/kernel bridge
+
+\section{Font}
 
 % see later
 
 
-
 \section{Label}
-% put in Window chapter?
 
-% so can identify the window when hidden
-
-<<[[geninitdraw()]] write label>>=
-/*
- * Write label; ignore errors (we might not be running under rio)
- */
-if(label){
-    snprint(buf, sizeof buf, "%s/label", display->windir);
-    fd = open(buf, OREAD);
-    if(fd >= 0){
-        read(fd, display->oldlabel, (sizeof display->oldlabel)-1);
-        close(fd);
-        fd = create(buf, OWRITE, 0666);
-        if(fd >= 0){
-            write(fd, label, strlen(label));
-            close(fd);
-        }
-    }
-}
-@
-
-<<[[Display]] other fields>>=
-char	oldlabel[64];
-@
-
-<<[[_closedisplay()]] if oldlabel>>=
-if(disp->oldlabel[0]){
-    snprint(buf, sizeof buf, "%s/label", disp->windir);
-    fd = open(buf, OWRITE);
-    if(fd >= 0){
-        write(fd, disp->oldlabel, strlen(disp->oldlabel));
-        close(fd);
-    }
-}
-@
+% see later
 
 \section{Window}
-% later, just say  view point to Display->image? with id 0?
 
-
-
+% see later, just say  view point to Display->image? with id 0?
 
 
 \chapter{User/Kernel Bridge}
@@ -3153,10 +3214,15 @@ Dev drawdevtab = {
     .shutdown =    devshutdown,
 };
 @
+%dc = device char (actually Rune)
 
-% Seen drawattach() in previous section already.
+% Seen drawattach() in Initialisation/mounting-draw section already.
+%  setup screenimage (via attachscreen), from data setup by vga device.
 % Need understand part of Kernel.nw.
+% does    return devattach('i', spec);
+%  spec = extra paramaters (usually nil)
 
+% next most important = drawwalk! and notion of Qids.
 
 <<enum _anon_ (kernel/devices/screen/devdraw.c)>>=
 enum
@@ -3173,7 +3239,7 @@ enum
     Qwinname,
 
     // /dev/draw/x/y, third level device files associated to a client
-    Qctl, // used in x < Qctl so must be the first!
+    Qctl,  // used in 'x < Qctl' code so must be the first!
     Qdata, // all the operations, drawmesg()
 
     Qcolormap, 
@@ -3181,6 +3247,8 @@ enum
 };
 @
 %pad: I reordered qids, grouped in QTDIR vs QTFILE
+
+% remember plan9 has union dir, so Qtopdir is /dev
 
 <<constant QSHIFT>>=
 /*
@@ -3199,10 +3267,12 @@ enum
 #define CLIENTPATH(q)   ((((ulong)q)&0x7FFFFFF0)>>QSHIFT)
 @
 %old: //#define CLIENT(q)   CLIENTPATH((q).path)
-
+% why 7FFFFFFF0? why not FFFFFFFF0? Qid is not unsigned?
 
 
 \subsection{[[drawwalk()]]}
+
+% when do ls (see Kernel.nw)
 
 <<function drawwalk>>=
 static Walkqid*
@@ -3226,8 +3296,13 @@ drawstat(Chan *c, uchar *db, int n)
 }
 @
 
+% Again see Kernel but idea of xxxgen is that from
+% directory in channel c with Qid t, get entry number s and
+% populate Dir (actually devdir take care of that).
+% return -1 when no more entries. return 1 when possibly more entries. 
+% return 0 if error?
 
-% sys?? -> devwalk -> <> (devwalk(..., <>) <- drawalk)
+% sys?? -> devwalk -> <> (devwalk(..., <>) <- drawwalk)
 <<function drawgen>>=
 static int
 drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
@@ -3239,113 +3314,154 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 
     q.vers = 0;
 
-    if(s == DEVDOTDOT){
-        switch(QID(c->qid)){
-        case Qtopdir:
-        case Q2nd:
-            mkqid(&q, Qtopdir, 0, QTDIR);
-            devdir(c, q, "#i", 0, eve, 0500, dp);
-            break;
-        case Q3rd:
-            cl = drawclientofpath(c->qid.path);
-            if(cl == nil)
-                strncpy(up->genbuf, "??", sizeof up->genbuf);
-            else
-                snprint(up->genbuf, sizeof up->genbuf,
-                    "%d", cl->clientid);
-            mkqid(&q, Q2nd, 0, QTDIR);
-            devdir(c, q, up->genbuf, 0, eve, 0500, dp);
-            break;
-        default:
-            panic("drawwalk %llux", c->qid.path);
-        }
-        return 1;
-    }
+    <<[[drawgen()]] if dotdot>>
     // else
+    t = QID(c->qid);
 
     /*
      * Top level directory contains the name of the device.
      */
-    t = QID(c->qid);
-    if(t == Qtopdir){
-        switch(s){
-        case 0:
-            mkqid(&q, Q2nd, 0, QTDIR);
-            devdir(c, q, "draw", 0, eve, 0555, dp);
-            break;
-        case 1:
-            mkqid(&q, Qwinname, 0, QTFILE);
-            devdir(c, q, "winname", 0, eve, 0444, dp);
-            break;
-        default:
-            return -1;
-        }
-        return 1;
-    }
+    <<[[drawgen()]] toplevel directory listing>>
     // else
-
-    if(t == Qwinname){
-        mkqid(&q, Qwinname, 0, QTFILE);
-        devdir(c, q, "winname", 0, eve, 0444, dp);
-        return 1;
-    }
-
     /*
      * Second level contains "new" plus all the clients.
      */
-    if(t == Q2nd || t == Qnew){
-        if(s == 0){
-            mkqid(&q, Qnew, 0, QTFILE);
-            devdir(c, q, "new", 0, eve, 0666, dp);
-        }
-        else if(s <= sdraw.nclient){
-            cl = sdraw.client[s-1];
-            if(cl == nil)
-                return 0;
-            snprint(up->genbuf, sizeof up->genbuf, "%d",
-                cl->clientid);
-            mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
-            devdir(c, q, up->genbuf, 0, eve, 0555, dp);
-            return 1;
-        }
-        else
-            return -1;
-        return 1;
-    }
-
+    <<[[drawgen()]] second level directory listing>>
+    // else
     /*
      * Third level.
      */
-    path = c->qid.path&~((1<<QSHIFT)-1);    /* slot component */
-    q.vers = c->qid.vers;
-    q.type = QTFILE;
+    <<[[drawgen()]] third level directory listing>>
+}
+@
+% >> >>
+\l could use a switch and indent code in default: case
+
+
+<<[[drawgen()]] toplevel directory listing>>=
+if(t == Qtopdir){
     switch(s){
     case 0:
-        q.path = path|Qcolormap;
-        devdir(c, q, "colormap", 0, eve, 0600, dp);
+        mkqid(&q, Q2nd, 0, QTDIR);
+        devdir(c, q, "draw", 0, eve, 0555, dp);
         break;
     case 1:
-        q.path = path|Qctl;
-        devdir(c, q, "ctl", 0, eve, 0600, dp);
-        break;
-    case 2:
-        q.path = path|Qdata;
-        devdir(c, q, "data", 0, eve, 0600, dp);
-        break;
-    case 3:
-        q.path = path|Qrefresh;
-        devdir(c, q, "refresh", 0, eve, 0400, dp);
+        mkqid(&q, Qwinname, 0, QTFILE);
+        devdir(c, q, "winname", 0, eve, 0444, dp);
         break;
     default:
         return -1;
     }
     return 1;
 }
+// else
+
+if(t == Qwinname){
+    mkqid(&q, Qwinname, 0, QTFILE);
+    devdir(c, q, "winname", 0, eve, 0444, dp);
+    return 1;
+}
+@
+% fill dp
+
+<<[[drawgen()]] second level directory listing>>=
+if(t == Q2nd || t == Qnew){
+    if(s == 0){
+        mkqid(&q, Qnew, 0, QTFILE);
+        devdir(c, q, "new", 0, eve, 0666, dp);
+    }
+    else if(s <= sdraw.nclient){
+        cl = sdraw.client[s-1];
+        if(cl == nil)
+            return 0;
+        snprint(up->genbuf, sizeof up->genbuf, "%d",
+            cl->clientid);
+        mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
+        devdir(c, q, up->genbuf, 0, eve, 0555, dp);
+        return 1;
+    }
+    else
+        return -1;
+    return 1;
+}
+@
+% >>
+% use of clientid here! so will be listed as /dev/draw/x/... where
+%  x is clientid that always increment
+
+<<[[drawgen()]] third level directory listing>>=
+path = c->qid.path & ~((1<<QSHIFT)-1);    /* slot component */
+q.vers = c->qid.vers;
+q.type = QTFILE;
+switch(s){
+case 0:
+    q.path = path|Qcolormap;
+    devdir(c, q, "colormap", 0, eve, 0600, dp);
+    break;
+case 1:
+    q.path = path|Qctl;
+    devdir(c, q, "ctl", 0, eve, 0600, dp);
+    break;
+case 2:
+    q.path = path|Qdata;
+    devdir(c, q, "data", 0, eve, 0600, dp);
+    break;
+case 3:
+    q.path = path|Qrefresh;
+    devdir(c, q, "refresh", 0, eve, 0400, dp);
+    break;
+default:
+    return -1;
+}
+return 1;
 @
 % >> >>
-% sorted alphabetically?
-\l could use a switch and indent code in default: case
+\l sorted alphabetically? important? kernel requirment?
 
+
+% DEVDOTDOT is -1
+<<[[drawgen()]] if dotdot>>=
+if(s == DEVDOTDOT){
+    switch(QID(c->qid)){
+    case Qtopdir:
+    case Q2nd:
+        mkqid(&q, Qtopdir, 0, QTDIR);
+        devdir(c, q, "#i", 0, eve, 0500, dp);
+        break;
+    case Q3rd:
+        cl = drawclientofpath(c->qid.path);
+        if(cl == nil)
+            strncpy(up->genbuf, "??", sizeof up->genbuf);
+        else
+            snprint(up->genbuf, sizeof up->genbuf,
+                "%d", cl->clientid);
+        mkqid(&q, Q2nd, 0, QTDIR);
+        devdir(c, q, up->genbuf, 0, eve, 0500, dp);
+        break;
+    default:
+        panic("drawwalk %llux", c->qid.path);
+    }
+    return 1;
+}
+@
+
+% might return nil
+<<function drawclientofpath>>=
+Client*
+drawclientofpath(ulong path)
+{
+    Client *cl;
+    int slot;
+
+    slot = CLIENTPATH(path);
+    if(slot == 0)
+        return nil;
+    cl = sdraw.client[slot-1];
+    if(cl==nil || cl->clientid==0)
+        return nil;
+    return cl;
+}
+@
 
 \subsection{[[drawopen()]]}
 
@@ -3362,19 +3478,12 @@ drawopen(Chan *c, int omode)
         c->iounit = IOUNIT;
     }
 
-    dlock();
-    if(waserror()){
-        dunlock();
-        nexterror();
-    }
-
+    <<[[drawxxx()]] lock>>
     <<[[drawopen()]] if Qnew>>
     switch(QID(c->qid)){
     <<[[drawopen()]] switch qid cases>>
     }
-
-    dunlock();
-    poperror();
+    <<[[drawxxx()]] unlock>>
 
     c->mode = openmode(omode);
     c->flag |= COPEN;
@@ -3392,6 +3501,18 @@ drawopen(Chan *c, int omode)
 
 
 
+<<[[drawxxx()]] lock>>=
+dlock();
+if(waserror()){
+    dunlock();
+    nexterror();
+}
+@
+
+<<[[drawxxx()]] unlock>>=
+dunlock();
+poperror();
+@
 
 
 \subsection{[[drawclose()]]}
@@ -3406,11 +3527,7 @@ drawclose(Chan *c)
     if(QID(c->qid) < Qctl) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
         return;
 
-    dlock();
-    if(waserror()){
-        dunlock();
-        nexterror();
-    }
+    <<[[drawxxx()]] lock>>
 
     cl = drawclient(c);
     <<[[drawclose()]] if Qctl>>
@@ -3426,11 +3543,25 @@ drawclose(Chan *c)
         drawflush();    /* to erase visible, now dead windows */
         free(cl);
     }
-    dunlock();
-    poperror();
+    <<[[drawxxx()]] unlock>>
 }
 @
 %old: if(QID(c->qid) < Qcolormap) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
+
+% small wrapper with error checking, will never return nil, may raise exn!
+<<function drawclient>>=
+Client*
+drawclient(Chan *c)
+{
+    Client *client;
+
+    client = drawclientofpath(c->qid.path);
+    if(client == nil)
+        error(Enoclient);
+    return client;
+}
+@
+
 
 
 <<[[drawclose()]] other locals>>=
@@ -3450,6 +3581,8 @@ for(i=0; i<NHASH; i++){
 }
 @
 
+% drawfreedimage() later
+
 
 \subsection{[[drawread()]]}
 
@@ -3466,17 +3599,13 @@ drawread(Chan *c, void *a, long n, vlong off)
     // else
 
     cl = drawclient(c);
-    dlock();
-    if(waserror()){
-        dunlock();
-        nexterror();
-    }
 
+    <<[[drawxxx()]] lock>>
     switch(QID(c->qid)){
     <<[[drawread()]] switch qid cases>>
     }
-    dunlock();
-    poperror();
+    <<[[drawxxx()]] unlock>>
+
     return n;
 }
 @
@@ -3492,9 +3621,7 @@ drawwrite(Chan *c, void *a, long n, vlong)
 {
     Client *cl;
     <<[[drawwrite()]] other locals>>
-
-    if(c->qid.type & QTDIR)
-        error(Eisdir);
+    <<[[drawwrite()]] sanity check c>>
 
     cl = drawclient(c);
 
@@ -3512,16 +3639,20 @@ drawwrite(Chan *c, void *a, long n, vlong)
     default:
         error(Ebadusefd);
     }
-    dunlock();
-    poperror();
+    <<[[drawxxx()]] unlock>>
+
     return n;
 }
 @
 
+<<[[drawwrite()]] sanity check c>>=
+if(c->qid.type & QTDIR)
+    error(Eisdir);
+@
+
 \section{Draw device files}
 
-\subsection{[[/dev/draw/new]]}
-% and Client?
+\subsection{Opening [[/dev/draw/new]]}
 
 <<[[drawopen()]] locals>>=
 Client *cl;
@@ -3530,151 +3661,68 @@ Client *cl;
 <<[[drawopen()]] if Qnew>>=
 if(QID(c->qid) == Qnew){
     cl = drawnewclient();
-    if(cl == nil)
-        error(Enodev);
+    <<[[drawopen()]] when Qnew, sanity check cl>>
     c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
 }
 @
-% why not put in switch instead?
-
+\l why not put in switch instead?
+% saw drawnewclient in core DS chapter.
 <<[[drawopen()]] switch qid cases>>=
 case Qnew:
     break;
 @
 
-% seen drawnewclient before
 
+% opening qnew redirect to a /dev/draw/x/ctl!
+% (x is not slot, slot is reused, x is clientid, see drawgen
 
-
-
-
-
-\subsection{[[/dev/draw/x/ctl]]}
-
-<<[[drawopen()]] locals>>=
-DImage *di;
-DName *dn;
+<<[[drawopen()]] when Qnew, sanity check cl>>=
+if(cl == nil)
+    error(Enodev);
 @
 
-<<[[drawopen()]] switch qid cases>>=
-case Qctl:
-    cl = drawclient(c);
+\subsection{Reading [[/dev/draw/x/ctl]]}
+% read! (and write a bit)
 
-    <<[[drawopen()]] switch qid cases, when Qctl, set busy>>
-
-    flushrect = Rect(10000, 10000, -10000, -10000);
-    dn = drawlookupname(strlen(screenname), screenname);
-    if(dn == nil)
-        error("draw: cannot happen 2");
-
-    if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
-        error(Edrawmem);
-
-    di = drawlookup(cl, 0, false);
-    if(di == nil)
-        error("draw: cannot happen 1");
-
-    <<[[drawopen()]] switch qid cases, when Qctl, set name>>
-
-    incref(&cl->r);
-    break;
-@
-%TODO: rect? clipped? or full access? protection?? can draw on
-% other windows? when write on /dev/draw/x/ctl ?
-
-
-% flushrect is a global shown later.
-
-%TODO: drawlookupname should be screen_dimage!! assert! 
-
-<<function drawclient>>=
-Client*
-drawclient(Chan *c)
-{
-    Client *client;
-
-    client = drawclientofpath(c->qid.path);
-    if(client == nil)
-        error(Enoclient);
-    return client;
-}
-@
-
-<<function drawclientofpath>>=
-Client*
-drawclientofpath(ulong path)
-{
-    Client *cl;
-    int slot;
-
-    slot = CLIENTPATH(path);
-    if(slot == 0)
-        return nil;
-    cl = sdraw.client[slot-1];
-    if(cl==nil || cl->clientid==0)
-        return nil;
-    return cl;
-}
-@
-
-
-
-<<[[drawopen()]] switch qid cases, when Qctl, set busy>>=
-if(cl->busy)
-    error(Einuse);
-cl->busy = true;
-@
-
-<<[[drawclose()]] if Qctl>>=
-if(QID(c->qid) == Qctl)
-    cl->busy = false;
-@
-
-<<[[Client]] concurrency fields>>=
-bool     busy;
-@
-% only one client of /dev/draw/x/ctl
-
-
-
+\l I put the code of drawopen and Qctl in adv topics because normally
+\l  you should not do that and the code looked subtle.
 
 <<[[drawread()]] other locals>>=
-DImage *di;
 Memimage *i;
 char buf[16];
 @
 
 <<[[drawread()]] switch qid cases>>=
 case Qctl:
-    if(n < 12*12)
+    if(n < 12*12) // NINFO
         error(Eshortread);
 
-    if(cl->infoid < 0)
-        error(Enodrawimage);
-    if(cl->infoid == 0){
-        i = screenimage;
-        if(i == nil)
-            error(Enodrawimage);
-    }else{
-        di = drawlookup(cl, cl->infoid, true);
-        if(di == nil)
-            error(Enodrawimage);
-        i = di->image;
-    }
+    <<[[drawread()]] switch qid cases, when Qctl, set i>>
 
-    // for initdisplay!
+    // mostly for initdisplay!
     n = snprint(a, n,
         "%11d %11d %11s %11d %11d %11d %11d %11d %11d %11d %11d %11d ",
         cl->clientid, cl->infoid, chantostr(buf, i->chan),
         (i->flags&Frepl)==Frepl,
         i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y,
-        i->clipr.min.x, i->clipr.min.y, i->clipr.max.x,
-        i->clipr.max.y);
+        i->clipr.min.x, i->clipr.min.y, i->clipr.max.x, i->clipr.max.y
+        );
     cl->infoid = -1;
     break;
 @
-% when cl->infoid == 0? because of malloc of new client?
-% when different 0 ?
+% not just for initdisplay though. enter infoid below.
+% 12 integers with %11d + 1 space = 12 * 12
+
+<<[[Client]] other fields>>=
+int     infoid;
+@
+% rename current_image? hmm it's more actually just for
+%  get information about image with specific id, so maybe good field name.
+\l related to named image too?
+
+% set to 0 in drawnewclient because of malloc.
+% can be changed:
+
 
 <<[[drawwrite()]] switch qid cases>>=
 case Qctl:
@@ -3684,18 +3732,50 @@ case Qctl:
     break;
 @
 
-% rename current_image?
-<<[[Client]] other fields>>=
-int     infoid;
+
+
+<<[[drawread()]] other locals>>=
+DImage *di;
 @
-% related to named image too
+
+<<[[drawread()]] switch qid cases, when Qctl, set i>>=
+<<[[drawread()]] switch qid cases, when Qctl, sanity check infoid>>
+if(cl->infoid == 0){
+    i = screenimage;
+    <<[[drawread()]] switch qid cases, when Qctl, sanity check i>>
+}else{
+    di = drawlookup(cl, cl->infoid, true);
+    <<[[drawread()]] switch qid cases, when Qctl, sanity check di>>
+    i = di->image;
+}
+@
+
+% when cl->infoid == 0? because of malloc of new client?
+% when <0?  just after first read, so further read
+%  of Qctl will return an error?
+% when positive? when write to ctl to get info about another image!
+
+<<[[drawread()]] switch qid cases, when Qctl, sanity check infoid>>=
+if(cl->infoid < 0)
+    error(Enodrawimage);
+@
+
+<<[[drawread()]] switch qid cases, when Qctl, sanity check i>>=
+if(i == nil)
+    error(Enodrawimage);
+@
+<<[[drawread()]] switch qid cases, when Qctl, sanity check di>>=
+if(di == nil)
+    error(Enodrawimage);
+@
 
 
 
 
 
-\subsection{[[/dev/draw/x/data]]}
+\subsection{Writing [[/dev/draw/x/data]]}
 % and DImage?
+% open! and write!
 
 
 <<[[drawopen()]] switch qid cases>>=
@@ -3708,25 +3788,6 @@ case Qrefresh:
 @
 
 
-<<[[Client]] other fields>>=
-byte*   readdata;
-int     nreaddata;
-@
-
-
-<<[[drawread()]] switch qid cases>>=
-case Qdata:
-    if(cl->readdata == nil)
-        error("no draw data");
-    if(n < cl->nreaddata)
-        error(Eshortread);
-    n = cl->nreaddata;
-    memmove(a, cl->readdata, cl->nreaddata);
-    free(cl->readdata);
-    cl->readdata = nil;
-    break;
-@
-
 <<[[drawwrite()]] switch qid cases>>=
 case Qdata:
     // The big dispatch!!
@@ -3735,23 +3796,35 @@ case Qdata:
     drawwakeall();
     break;
 @
+% drawwakeall ?
 
+% it is possible to read from Qdata to read images as explained
+% later in Section X
 
-\subsection{[[/dev/draw/x/refresh]]}
+% seems a bit useless to have 3 different device files.
+% maybe we could use only 1 and have the open/read/write on it.
+% But as we will see one can also write on /ctl and read on /data
+% so at least need two files and then can have multiple clients
+% hence the difference between /new and /ctl.
+
+%\subsection{[[/dev/draw/x/refresh]]}
 % adv topics
 
 
 
-
 \section{Draw message protocol}
-% pipeline?
 
 
 \subsection{API}
 
+% ex line() ...
+
 %real-world: =~ Xlib layer
 
 \subsection{Marshalling}
+
+% ex line code to marshall with use of BGSHORT, bufimage, etc.
+
 
 % Lots of boilerplate code, would be better to use thrift in the end?
 % Lots of marshalling/unmarshalling boilerplate with BPLONG and so on.
@@ -3760,7 +3833,7 @@ case Qdata:
 % most of the boilerplate at least.
 
 % G = Get, P = Put
-% B = Binary?
+% B = Binary? Bytes?
 
 <<function BGSHORT>>=
 #define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
@@ -3780,12 +3853,13 @@ case Qdata:
 
 <<[[Display]] buffer fields>>=
 // drawing operations to write in /dev/draw/x/data until flush
-// array<byte>
+// array<byte>, length = Display.bufsize
 byte	*buf;
 int		bufsize;
 // index in Display.buf array
 byte	*bufp;
 @
+% who sets bufsize? initdisplay, usually set to iounit(datafd)
 
 % when want to write a "message" of size n, get a pointer to the
 % next free byte in the buffer
@@ -3793,12 +3867,9 @@ byte	*bufp;
 byte*
 bufimage(Display *d, int n)
 {
-    uchar *p;
+    byte *p;
 
-    if(n < 0 || n > d->bufsize){
-        werrstr("bad count in bufimage");
-        return nil;
-    }
+    <<[[bufimage()]] sanity check n>>
     if(d->bufp + n  >  d->buf + d->bufsize)
         if(doflush(d) < 0)
             return nil;
@@ -3807,6 +3878,45 @@ bufimage(Display *d, int n)
     return p;
 }
 @
+
+<<[[bufimage()]] sanity check n>>=
+if(n < 0 || n > d->bufsize){
+    werrstr("bad count in bufimage");
+    return nil;
+}
+@
+% werrstr ? Libcore?
+
+
+
+% why not _flushimage? because this one we actually write stuff!
+% we not just modify buffer. we send it to the device!
+<<function doflush>>=
+static
+errorneg1
+doflush(Display *d)
+{
+    int n, nn;
+
+    n = d->bufp - d->buf;
+    if(n <= 0)
+        return OK_1; // warning?
+
+    nn=write(d->fd, d->buf, n);
+    <<[[doflush()]] sanity check nn>>
+    d->bufp = d->buf;
+    return OK_1;
+}
+@
+
+<<[[doflush()]] sanity check nn>>=
+if(nn != n){
+    <<[[doflush()]] if _drawdebug>>
+    d->bufp = d->buf;	/* might as well; chance of continuing */
+    return ERROR_NEG1;
+}
+@
+
 
 \subsection{Unmarshalling and [[drawmesg()]]}
 
@@ -3820,28 +3930,8 @@ char *fmt = nil;
 % m is for storing how much bytes were read for this message,
 % so the loop on the buffer can go on and process the next message
 
-%XXX
-<<[[drawmesg()]] locals>>=
-int c, repl, y, dstid, scrnid, ni, ci, j, nw, e0, e1, op, ox, oy, oesize, esize, doflush;
-byte *u, refresh;
-ulong value, chan;
-Rectangle r, clipr;
-Point p, q, *pp, sp;
-Memimage *i, *bg, *dst, *src, *mask;
-Memimage *l, **lp;
-Memscreen *scrn;
-DImage *font, *ll, *di, *ddst, *dsrc;
-DName *dn;
-DScreen *dscrn;
-FChar *fc;
-CScreen *cs;
-Refreshfn reffn;
-Refx *refx;
-@
-
-
 % the big one!! this is in kernel!!
-% syswrite -> drawwrite? -> <>
+% syswrite -> drawwrite(Qdata) -> <>
 <<function drawmesg>>=
 void
 drawmesg(Client *client, void *av, int n)
@@ -3852,7 +3942,6 @@ drawmesg(Client *client, void *av, int n)
     if(waserror()){
         if(fmt) 
             printmesg(fmt, a, 1);
-    /*  iprint("error: %s\n", up->errstr);  */
         nexterror();
     }
     while((n-=m) > 0){
@@ -3867,10 +3956,15 @@ drawmesg(Client *client, void *av, int n)
     poperror();
 }
 @
+%old:    /*  iprint("error: %s\n", up->errstr);  */
 
+% split in different messages chunks hence the while.
+% the switch will adjust m which contains the size for one message
+% (which vary dependong on the message command).
 
 % unmarshallers helpers:
 % drawrectangle(), etc
+
 
 \subsection{Algorithm}
 % Memory Algorithm?
@@ -3891,17 +3985,16 @@ drawmesg(Client *client, void *av, int n)
 \section{Screen interface}
 % screen.h
 
-%\section{VGA interface}
-% or VGA screen? meh maybe, simpler to just have a
-% framebuffer
-% vga.h
-
 
 
 \section{Graphics card}
 % Graphic VGA card?
 % there is also the VGA interface, which is something different
 
+%\section{VGA interface}
+% or VGA screen? meh maybe, simpler to just have a
+% framebuffer
+% vga.h
 
 
 
@@ -4118,6 +4211,15 @@ if(a == nil)
 
 \subsection{Unmarshalling}
 
+<<[[drawmesg()]] locals>>=
+int dstid, scrnid;
+byte refresh;
+ulong chan;
+int repl;
+Rectangle r, clipr;
+ulong value; // ??
+Memimage *i;
+@
 
 <<[[drawmesg()]] cases>>=
 /* new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4] */
@@ -4183,6 +4285,10 @@ enum
 @
 
 
+<<[[drawmesg()]] locals>>=
+DImage *ll;
+@
+\l could reuse di instead
 
 <<[[drawmesg()]] cases>>=
 /* free: 'f' id[4] */
@@ -4318,7 +4424,7 @@ memfillcolor(Memimage *i, ulong val)
 
 %memsetl later
 
-\subsection{Client and Memimage connection}
+\subsection{[[Client]] and [[Memimage]] connection}
 
 <<function drawinstall>>=
 Memimage*
@@ -4458,6 +4564,11 @@ replclipr(Image *i, int repl, Rectangle clipr)
 \subsection{Marshalling}
 
 \subsection{Unmarshalling}
+
+<<[[drawmesg()]] locals>>=
+DImage *ddst;
+Memimage *dst;
+@
 
 <<[[drawmesg()]] cases>>=
 /* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
@@ -4632,47 +4743,73 @@ drawrepl(Rectangle r, Point p)
 % visible argument??
 % seems errorneg because called do if(flushimage() < 0)
 <<function flushimage>>=
-int
+errorneg1
 flushimage(Display *d, bool visible)
 {
-    if(d == nil)
-        return 0;
+    <<[[flushimage()]] sanity check d>>
     if(visible){
         *d->bufp++ = 'v';	/* five bytes always reserved for this */
-        if(d->_isnewdisplay){
-            BPLONG(d->bufp, d->screenimage->id);
-            d->bufp += 4;
-        }
+        <<[[flushimage()]] if isnew>>
     }
     return doflush(d);
 }
 @
+\l why not use global display instead? can have multiple one?
+
+<<[[flushimage()]] sanity check d>>=
+if(d == nil)
+    return OK_0;
+@
+% meh OK
+
+
+%XXX ?? seems useless because unmarshalling code does not
+% use extra passed info
+
+<<[[Display]] other fields>>=
+bool	_isnewdisplay;
+@
+<<[[initdisplay()]] locals>>=
+bool isnew = false;
+@
+<<[[initdisplay()]] set isnew>>=
+if(n < NINFO)	/* this will do for now, we need something better here */
+    isnew = true;
+@
+<<[[initdisplay()]] set display _isnewdisplay part1>>=
+disp->_isnewdisplay = isnew;
+@
+
+<<[[initdisplay()]] locals>>=
+Dir *dir;
+@
+<<[[initdisplay()]] set display _isnewdisplay part2>>=
+dir = dirfstat(ctlfd);
+if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
+    disp->_isnewdisplay = true;
+free(dir);
+@
+%dead:
+%if(dir!=nil && dir->type=='i'){
+%    disp->local = true;
+%    disp->dataqid = dir->qid.path;
+%}
+
+<<[[flushimage()]] if isnew>>=
+if(d->_isnewdisplay){
+    BPLONG(d->bufp, d->screenimage->id);
+    d->bufp += 4;
+}
+@
+% after v, but according to drawmesg protocol and unmarshalling
+% code the code does not use this id.
+
+
+
 
 \subsection{Marshalling}
 
-% why not _flushimage? because this one we actually write stuff!
-% we not just modify buffer. we send it to the device!
-<<function doflush>>=
-static
-errorneg1
-doflush(Display *d)
-{
-    int n, nn;
-
-    n = d->bufp-d->buf;
-    if(n <= 0)
-        return OK_1;
-
-    nn=write(d->fd, d->buf, n);
-    if(nn != n){
-        <<[[doflush()]] if _drawdebug>>
-        d->bufp = d->buf;	/* might as well; chance of continuing */
-        return ERROR_NEG1;
-    }
-    d->bufp = d->buf;
-    return OK_1;
-}
-@
+% see doflush in chapter Kernel/User bridge
 
 \subsection{Unmarshalling}
 
@@ -4923,6 +5060,12 @@ namedimage(Display *d, char *name)
 
 \subsection{Unmarshalling}
 
+<<[[drawmesg()]] locals>>=
+int c, j;
+DImage *di;
+DName *dn;
+@
+
 <<[[drawmesg()]] cases>>=
 /* name an image: 'N' dstid[4] in[1] j[1] name[j] */
 case 'N':
@@ -5138,6 +5281,12 @@ _setdrawop(Display *d, Drawop op)
 
 \subsection{Unmarshalling}
 
+<<[[drawmesg()]] locals>>=
+Memimage *src, *mask;
+Point p, q;
+// enum<Drawop>
+int op;
+@
 
 <<[[drawmesg()]] cases>>=
 /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
@@ -7009,6 +7158,11 @@ lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *sr
 
 \subsection{Unmarshalling}
 
+<<[[drawmesg()]] locals>>=
+int e0, e1;
+Point sp;
+@
+
 <<[[drawmesg()]] cases>>=
 /* draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4] */
 case 'L':
@@ -7494,6 +7648,15 @@ addcoord(uchar *p, int oldx, int newx)
 
 \subsection{Unmarshalling}
 
+<<[[drawmesg()]] locals>>=
+int ni;
+Point *pp;
+bool doflush;
+int ox, oy;
+int esize, oesize;
+byte *u;
+int y;
+@
 
 <<[[drawmesg()]] cases>>=
 /* filled polygon: 'P' dstid[4] n[2] wind[4] ignore[2*4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n] */
@@ -9338,6 +9501,12 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
 
 \subsection{Unmarshalling}
 
+<<[[drawmesg()]] locals>>=
+DImage *font;
+Memimage  *bg;
+int ci;
+@
+
 <<[[drawmesg()]] cases>>=
 /* string: 's' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] ni*(index[2]) */
 /* stringbg: 'x' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] bgid[4] bgpt[2*4] ni*(index[2]) */
@@ -9904,6 +10073,10 @@ case 'i':
 
 @
 
+
+<<[[drawmesg()]] locals>>=
+FChar *fc;
+@
 
 <<[[drawmesg()]] cases>>=
 /* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
@@ -11034,6 +11207,32 @@ case 'r':
     continue;
 
 @
+
+
+<<[[Client]] other fields>>=
+byte*   readdata;
+int     nreaddata;
+@
+
+% put in buffer a
+<<[[drawread()]] switch qid cases>>=
+case Qdata:
+    <<[[drawread()]] switch qid cases, when Qdata, sanity checks>>
+    n = cl->nreaddata;
+    memmove(a, cl->readdata, cl->nreaddata);
+    free(cl->readdata);
+    cl->readdata = nil;
+    break;
+@
+% who fills readdata in the first place?
+
+<<[[drawread()]] switch qid cases, when Qdata, sanity checks>>=
+if(cl->readdata == nil)
+    error("no draw data");
+if(n < cl->nreaddata)
+    error(Eshortread);
+@
+
 
 \subsection{Algorithm}
 
@@ -12447,7 +12646,48 @@ getwindow(Display *d, int ref)
 }
 @
 
+\section{[[/dev/label]]}
 
+
+% so can identify the window when hidden
+
+<<[[geninitdraw()]] write label>>=
+/*
+ * Write label; ignore errors (we might not be running under rio)
+ */
+if(label){
+    snprint(buf, sizeof buf, "%s/label", display->windir);
+    fd = open(buf, OREAD);
+    if(fd >= 0){
+        read(fd, display->oldlabel, (sizeof display->oldlabel)-1);
+        close(fd);
+        fd = create(buf, OWRITE, 0666);
+        if(fd >= 0){
+            write(fd, label, strlen(label));
+            close(fd);
+        }
+    }
+}
+@
+% else? no error managment here?
+
+<<[[Display]] other fields>>=
+char	oldlabel[64];
+@
+
+<<[[_closedisplay()]] if oldlabel>>=
+if(disp->oldlabel[0]){
+    snprint(buf, sizeof buf, "%s/label", disp->windir);
+    fd = open(buf, OWRITE);
+    if(fd >= 0){
+        write(fd, disp->oldlabel, strlen(disp->oldlabel));
+        close(fd);
+    }
+}
+@
+% write back old label, so when app run from terminal,
+% we restore back the label so the window manager
+% can display better titles
 
 \section{[[/dev/winname]]}
 
@@ -12617,6 +12857,9 @@ drawlookupdscreen(int id)
 }
 @
 
+<<[[drawmesg()]] locals>>=
+CScreen *cs;
+@
 
 <<[[drawmesg()]] cases>>=
 /* free screen: 'F' id[4] */
@@ -12652,6 +12895,9 @@ drawlookupscreen(Client *client, int id, CScreen **cs)
 
 
 
+<<[[drawmesg()]] locals>>=
+DScreen *dscrn;
+@
 
 
 <<[[drawmesg()]] cases>>=
@@ -12911,6 +13157,13 @@ if(ll && ll->dscreen && ll->dscreen->owner != client)
     ll->dscreen->owner->refreshme = 1;
 @
 
+
+<<[[drawmesg()]] locals>>=
+Refreshfn reffn;
+Memscreen *scrn;
+Memimage *l;
+Refx *refx;
+@
 
 %TODO mv in Windows section?
 <<[[drawmesg()]] allocate image case, if screen id>>=
@@ -14015,6 +14268,10 @@ topbottom(Image **w, int n, int top)
 
 \subsection{Unmarshalling}
 
+<<[[drawmesg()]] locals>>=
+int nw;
+Memimage **lp;
+@
 
 <<[[drawmesg()]] cases>>=
 /* top or bottom windows: 't' top[1] nw[2] n*id[4] */
@@ -19179,6 +19436,74 @@ QLock	qlock;
 <<[[Display]] concurrency fields>>=
 bool		locking;	/*program is using lockdisplay */
 @
+
+\subsection{[[/dev/draw/x/ctl]] concurrent access}
+
+<<[[drawopen()]] locals>>=
+DImage *di;
+DName *dn;
+@
+
+<<[[drawopen()]] switch qid cases>>=
+case Qctl:
+    cl = drawclient(c);
+
+    <<[[drawopen()]] switch qid cases, when Qctl, set busy>>
+
+    flushrect = Rect(10000, 10000, -10000, -10000);
+    dn = drawlookupname(strlen(screenname), screenname);
+    if(dn == nil)
+        error("draw: cannot happen 2");
+
+    if(drawinstall(cl, 0, dn->dimage->image, 0) == 0)
+        error(Edrawmem);
+
+    di = drawlookup(cl, 0, false);
+    if(di == nil)
+        error("draw: cannot happen 1");
+
+    <<[[drawopen()]] switch qid cases, when Qctl, set name>>
+
+    incref(&cl->r);
+    break;
+@
+% this is used when someone else access Qctl? normally
+%  should have been accessed via Qnew above
+
+\t rect? clipped? or full access? protection?? can draw on
+% other windows? when write on /dev/draw/x/ctl ?
+
+
+
+% flushrect is a global shown later.
+
+%TODO: drawlookupname should be screen_dimage!! assert! 
+
+
+
+
+
+<<[[drawopen()]] switch qid cases, when Qctl, set busy>>=
+if(cl->busy)
+    error(Einuse);
+cl->busy = true;
+@
+
+<<[[drawclose()]] if Qctl>>=
+if(QID(c->qid) == Qctl)
+    cl->busy = false;
+@
+
+<<[[Client]] concurrency fields>>=
+bool     busy;
+@
+% only one client of /dev/draw/x/ctl
+
+
+
+
+
+
 
 
 \chapter{Conclusion}

@@ -75,11 +75,12 @@ memimageinit(void)
     didinit = true;
     /*e: [[memimageinit()]] only once guard */
 
+    /*s: [[memimageinit()]] set image pool allocator move */
     if(  strcmp(imagmem->name, "Image") == 0 
       || strcmp(imagmem->name, "image") == 0
       )
         imagmem->move = memimagemove;
-
+    /*e: [[memimageinit()]] set image pool allocator move */
     /*s: [[memimageinit()]] initializations */
     mktables();
     /*x: [[memimageinit()]] initializations */

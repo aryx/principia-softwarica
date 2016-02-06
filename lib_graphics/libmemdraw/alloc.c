@@ -12,14 +12,16 @@ memimagemove(void *from, void *to)
     Memdata *md;
 
     md = *(Memdata**)to;
+    /*s: [[memimagemove()]] sanity check md base */
     if(md->base != from){
         print("compacted data not right: #%p\n", md->base);
         abort();
     }
+    /*e: [[memimagemove()]] sanity check md base */
     md->base = to;
 
     /* if allocmemimage changes this must change too */
-    md->bdata = (byte*)md->base+sizeof(Memdata*)+sizeof(ulong);
+    md->bdata = (byte*)md->base + sizeof(Memdata*) + sizeof(ulong);
 }
 /*e: function memimagemove */
 
@@ -31,29 +33,36 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
     ulong l;
     Memimage *i;
 
+    /*s: [[allocmemimaged()]] sanity check r */
     if(Dx(r) <= 0 || Dy(r) <= 0){
         werrstr("bad rectangle %R", r);
         return nil;
     }
-    if((d = chantodepth(chan)) == 0) {
+    /*e: [[allocmemimaged()]] sanity check r */
+    d = chantodepth(chan);
+    /*s: [[allocmemimaged()]] sanity check d */
+    if(d == 0) {
         werrstr("bad channel descriptor %.8lux", chan);
         return nil;
     }
+    /*e: [[allocmemimaged()]] sanity check d */
     l = wordsperline(r, d);
 
-    i = mallocz(sizeof(Memimage), 1);
+    i = mallocz(sizeof(Memimage), true);
+    /*s: [[allocmemimaged()]] sanity check i */
     if(i == nil)
         return nil;
+    /*e: [[allocmemimaged()]] sanity check i */
 
     i->data = md;
-
+    /*s: [[allocmemimaged()]] set zero field */
     i->zero = sizeof(ulong) * l * r.min.y;
     if(r.min.x >= 0)
         i->zero += (r.min.x*d)/8;
     else
         i->zero -= (-r.min.x*d+7)/8;
-    i->zero = -i->zero; // ???
-
+    i->zero = -i->zero;
+    /*e: [[allocmemimaged()]] set zero field */
     i->width = l;
     i->r = r;
     i->clipr = r;
@@ -193,11 +202,13 @@ memsetchan(Memimage *i, ulong chan)
     ulong cc;
     bool bytes;
 
-    if((d = chantodepth(chan)) == 0) {
+    d = chantodepth(chan);
+    /*s: [[memsetchan()]] sanity check d */
+    if(d == 0) {
         werrstr("bad channel descriptor");
         return ERROR_NEG1;
     }
-
+    /*e: [[memsetchan()]] sanity check d */
     i->chan = chan;
     i->depth = d;
     i->flags &= ~(Fgrey|Falpha|Fcmap|Fbytes);
@@ -205,10 +216,12 @@ memsetchan(Memimage *i, ulong chan)
 
     for(cc=chan, j=0, k=0; cc; j+=NBITS(cc), cc>>=8, k++){
         t=TYPE(cc);
+        /*s: [[memsetchan()]] sanity check t */
         if(t < 0 || t >= NChan){
             werrstr("bad channel string");
             return -1;
         }
+        /*e: [[memsetchan()]] sanity check t */
         if(t == CGrey)
             i->flags |= Fgrey;
         if(t == CAlpha)
@@ -228,7 +241,7 @@ memsetchan(Memimage *i, ulong chan)
     i->nchan = k;
     if(bytes)
         i->flags |= Fbytes;
-    return 0;
+    return OK_0;
 }
 /*e: function memsetchan */
 /*e: lib_graphics/libmemdraw/alloc.c */

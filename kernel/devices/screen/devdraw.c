@@ -28,7 +28,7 @@ enum
     Qwinname,
 
     // /dev/draw/x/y, third level device files associated to a client
-    Qctl, // used in x < Qctl so must be the first!
+    Qctl,  // used in 'x < Qctl' code so must be the first!
     Qdata, // all the operations, drawmesg()
 
     Qcolormap, 
@@ -366,6 +366,7 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
 
     q.vers = 0;
 
+    /*s: [[drawgen()]] if dotdot */
     if(s == DEVDOTDOT){
         switch(QID(c->qid)){
         case Qtopdir:
@@ -388,12 +389,14 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         }
         return 1;
     }
+    /*e: [[drawgen()]] if dotdot */
     // else
+    t = QID(c->qid);
 
     /*
      * Top level directory contains the name of the device.
      */
-    t = QID(c->qid);
+    /*s: [[drawgen()]] toplevel directory listing */
     if(t == Qtopdir){
         switch(s){
         case 0:
@@ -416,10 +419,12 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         devdir(c, q, "winname", 0, eve, 0444, dp);
         return 1;
     }
-
+    /*e: [[drawgen()]] toplevel directory listing */
+    // else
     /*
      * Second level contains "new" plus all the clients.
      */
+    /*s: [[drawgen()]] second level directory listing */
     if(t == Q2nd || t == Qnew){
         if(s == 0){
             mkqid(&q, Qnew, 0, QTFILE);
@@ -439,11 +444,13 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
             return -1;
         return 1;
     }
-
+    /*e: [[drawgen()]] second level directory listing */
+    // else
     /*
      * Third level.
      */
-    path = c->qid.path&~((1<<QSHIFT)-1);    /* slot component */
+    /*s: [[drawgen()]] third level directory listing */
+    path = c->qid.path & ~((1<<QSHIFT)-1);    /* slot component */
     q.vers = c->qid.vers;
     q.type = QTFILE;
     switch(s){
@@ -467,6 +474,7 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         return -1;
     }
     return 1;
+    /*e: [[drawgen()]] third level directory listing */
 }
 /*e: function drawgen */
 
@@ -723,8 +731,10 @@ allocdimage(Memimage *i)
     DImage *d;
 
     d = malloc(sizeof(DImage));
+    /*s: [[allocdimage()]] sanity check d */
     if(d == nil)
         return nil;
+    /*e: [[allocdimage()]] sanity check d */
     d->image = i;
     d->ref = 1;
 
@@ -1007,8 +1017,10 @@ drawnewclient(void)
     // growing array
     if(i == sdraw.nclient){
         cp = malloc((sdraw.nclient+1)*sizeof(Client*));
+        /*s: [[drawnewclient()]] sanity check cp */
         if(cp == nil)
             return nil;
+        /*e: [[drawnewclient()]] sanity check cp */
         memmove(cp, sdraw.client, sdraw.nclient*sizeof(Client*));
         free(sdraw.client);
         sdraw.client = cp;
@@ -1018,8 +1030,10 @@ drawnewclient(void)
     /*e: [[drawnewclient()]] grow array if necessary */
 
     cl = malloc(sizeof(Client));
+    /*s: [[drawnewclient()]] sanity check cl */
     if(cl == nil)
         return nil;
+    /*e: [[drawnewclient()]] sanity check cl */
     memset(cl, 0, sizeof(Client));
     cl->slot = i;
     cl->clientid = ++sdraw.clientid;
@@ -1161,40 +1175,48 @@ makescreenimage(void)
     DImage *di;
     /*x: [[makescreenimage()]] locals */
     int width, depth;
-    ulong chan;
     Rectangle r;
+    ulong chan;
     /*e: [[makescreenimage()]] locals */
 
     /*s: [[makescreenimage()]] allocate Memdata md */
     // allocate Memdata
     md = malloc(sizeof(Memdata));
+    /*s: [[makescreenimage()]] sanity check md */
     if(md == nil)
         return nil;
+    /*e: [[makescreenimage()]] sanity check md */
     md->allocd = true;
 
     md->bdata = attachscreen(&r, &chan, &depth, &width, &sdraw.softscreen);
+    /*s: [[makescreenimage()]] sanity check md bdata */
     if(md->bdata == nil){
         free(md);
         return nil;
     }
+    /*e: [[makescreenimage()]] sanity check md bdata */
     md->base = nil; // not allocated by poolalloc
     md->ref = 1;
     /*e: [[makescreenimage()]] allocate Memdata md */
     /*s: [[makescreenimage()]] allocate Memimage i */
     // allocate Memimage
     i = allocmemimaged(r, chan, md);
+    /*s: [[makescreenimage()]] sanity check i */
     if(i == nil){
         free(md);
         return nil;
     }
+    /*e: [[makescreenimage()]] sanity check i */
     /*e: [[makescreenimage()]] allocate Memimage i */
     /*s: [[makescreenimage()]] allocate DImage di */
     // allocate DImage
     di = allocdimage(i);
+    /*s: [[makescreenimage()]] sanity check di */
     if(di == nil){
         freememimage(i);    /* frees md */
         return nil;
     }
+    /*e: [[makescreenimage()]] sanity check di */
     /*e: [[makescreenimage()]] allocate DImage di */
 
     /*s: [[makescreenimage()]] drawaddname */
@@ -1218,6 +1240,7 @@ initscreenimage(void)
     if(screenimage != nil)
         return OK_1;
     /*e: [[initscreenimage()]] only once guard */
+
     screendimage = makescreenimage();
     /*s: [[initscreenimage()]] sanity check screendimage */
     if(screendimage == nil)
@@ -1311,23 +1334,36 @@ drawopen(Chan *c, int omode)
         c->iounit = IOUNIT;
     }
 
+    /*s: [[drawxxx()]] lock */
     dlock();
     if(waserror()){
         dunlock();
         nexterror();
     }
-
+    /*e: [[drawxxx()]] lock */
     /*s: [[drawopen()]] if Qnew */
     if(QID(c->qid) == Qnew){
         cl = drawnewclient();
+        /*s: [[drawopen()]] when Qnew, sanity check cl */
         if(cl == nil)
             error(Enodev);
+        /*e: [[drawopen()]] when Qnew, sanity check cl */
         c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
     }
     /*e: [[drawopen()]] if Qnew */
     switch(QID(c->qid)){
     /*s: [[drawopen()]] switch qid cases */
     case Qnew:
+        break;
+    /*x: [[drawopen()]] switch qid cases */
+    case Qdata:
+    case Qcolormap:
+    case Qrefresh:
+        cl = drawclient(c);
+        incref(&cl->r);
+        break;
+    /*x: [[drawopen()]] switch qid cases */
+    case Qwinname:
         break;
     /*x: [[drawopen()]] switch qid cases */
     case Qctl:
@@ -1361,21 +1397,12 @@ drawopen(Chan *c, int omode)
 
         incref(&cl->r);
         break;
-    /*x: [[drawopen()]] switch qid cases */
-    case Qdata:
-    case Qcolormap:
-    case Qrefresh:
-        cl = drawclient(c);
-        incref(&cl->r);
-        break;
-    /*x: [[drawopen()]] switch qid cases */
-    case Qwinname:
-        break;
     /*e: [[drawopen()]] switch qid cases */
     }
-
+    /*s: [[drawxxx()]] unlock */
     dunlock();
     poperror();
+    /*e: [[drawxxx()]] unlock */
 
     c->mode = openmode(omode);
     c->flag |= COPEN;
@@ -1401,11 +1428,13 @@ drawclose(Chan *c)
     if(QID(c->qid) < Qctl) /* Qtopdir, Qnew, Q3rd, Q2nd have no client */
         return;
 
+    /*s: [[drawxxx()]] lock */
     dlock();
     if(waserror()){
         dunlock();
         nexterror();
     }
+    /*e: [[drawxxx()]] lock */
 
     cl = drawclient(c);
     /*s: [[drawclose()]] if Qctl */
@@ -1449,8 +1478,10 @@ drawclose(Chan *c)
         drawflush();    /* to erase visible, now dead windows */
         free(cl);
     }
+    /*s: [[drawxxx()]] unlock */
     dunlock();
     poperror();
+    /*e: [[drawxxx()]] unlock */
 }
 /*e: function drawclose */
 
@@ -1460,9 +1491,10 @@ drawread(Chan *c, void *a, long n, vlong off)
 {
     Client *cl;
     /*s: [[drawread()]] other locals */
-    DImage *di;
     Memimage *i;
     char buf[16];
+    /*x: [[drawread()]] other locals */
+    DImage *di;
     /*x: [[drawread()]] other locals */
     uchar *p;
     int index, m;
@@ -1481,47 +1513,59 @@ drawread(Chan *c, void *a, long n, vlong off)
     // else
 
     cl = drawclient(c);
+
+    /*s: [[drawxxx()]] lock */
     dlock();
     if(waserror()){
         dunlock();
         nexterror();
     }
-
+    /*e: [[drawxxx()]] lock */
     switch(QID(c->qid)){
     /*s: [[drawread()]] switch qid cases */
     case Qctl:
-        if(n < 12*12)
+        if(n < 12*12) // NINFO
             error(Eshortread);
 
+        /*s: [[drawread()]] switch qid cases, when Qctl, set i */
+        /*s: [[drawread()]] switch qid cases, when Qctl, sanity check infoid */
         if(cl->infoid < 0)
             error(Enodrawimage);
+        /*e: [[drawread()]] switch qid cases, when Qctl, sanity check infoid */
         if(cl->infoid == 0){
             i = screenimage;
+            /*s: [[drawread()]] switch qid cases, when Qctl, sanity check i */
             if(i == nil)
                 error(Enodrawimage);
+            /*e: [[drawread()]] switch qid cases, when Qctl, sanity check i */
         }else{
             di = drawlookup(cl, cl->infoid, true);
+            /*s: [[drawread()]] switch qid cases, when Qctl, sanity check di */
             if(di == nil)
                 error(Enodrawimage);
+            /*e: [[drawread()]] switch qid cases, when Qctl, sanity check di */
             i = di->image;
         }
+        /*e: [[drawread()]] switch qid cases, when Qctl, set i */
 
-        // for initdisplay!
+        // mostly for initdisplay!
         n = snprint(a, n,
             "%11d %11d %11s %11d %11d %11d %11d %11d %11d %11d %11d %11d ",
             cl->clientid, cl->infoid, chantostr(buf, i->chan),
             (i->flags&Frepl)==Frepl,
             i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y,
-            i->clipr.min.x, i->clipr.min.y, i->clipr.max.x,
-            i->clipr.max.y);
+            i->clipr.min.x, i->clipr.min.y, i->clipr.max.x, i->clipr.max.y
+            );
         cl->infoid = -1;
         break;
     /*x: [[drawread()]] switch qid cases */
     case Qdata:
+        /*s: [[drawread()]] switch qid cases, when Qdata, sanity checks */
         if(cl->readdata == nil)
             error("no draw data");
         if(n < cl->nreaddata)
             error(Eshortread);
+        /*e: [[drawread()]] switch qid cases, when Qdata, sanity checks */
         n = cl->nreaddata;
         memmove(a, cl->readdata, cl->nreaddata);
         free(cl->readdata);
@@ -1580,8 +1624,11 @@ drawread(Chan *c, void *a, long n, vlong off)
         break;
     /*e: [[drawread()]] switch qid cases */
     }
+    /*s: [[drawxxx()]] unlock */
     dunlock();
     poperror();
+    /*e: [[drawxxx()]] unlock */
+
     return n;
 }
 /*e: function drawread */
@@ -1610,9 +1657,10 @@ drawwrite(Chan *c, void *a, long n, vlong)
     char buf[128], *fields[4], *q;
     int i, m, red, green, blue, x;
     /*e: [[drawwrite()]] other locals */
-
+    /*s: [[drawwrite()]] sanity check c */
     if(c->qid.type & QTDIR)
         error(Eisdir);
+    /*e: [[drawwrite()]] sanity check c */
 
     cl = drawclient(c);
 
@@ -1679,8 +1727,11 @@ drawwrite(Chan *c, void *a, long n, vlong)
     default:
         error(Ebadusefd);
     }
+    /*s: [[drawxxx()]] unlock */
     dunlock();
     poperror();
+    /*e: [[drawxxx()]] unlock */
+
     return n;
 }
 /*e: function drawwrite */
@@ -1776,28 +1827,62 @@ drawmesg(Client *client, void *av, int n)
     int m = 0;
     char *fmt = nil;
     /*x: [[drawmesg()]] locals */
-    int c, repl, y, dstid, scrnid, ni, ci, j, nw, e0, e1, op, ox, oy, oesize, esize, doflush;
-    byte *u, refresh;
-    ulong value, chan;
+    int dstid, scrnid;
+    byte refresh;
+    ulong chan;
+    int repl;
     Rectangle r, clipr;
-    Point p, q, *pp, sp;
-    Memimage *i, *bg, *dst, *src, *mask;
-    Memimage *l, **lp;
-    Memscreen *scrn;
-    DImage *font, *ll, *di, *ddst, *dsrc;
+    ulong value; // ??
+    Memimage *i;
+    /*x: [[drawmesg()]] locals */
+    DImage *ll;
+    /*x: [[drawmesg()]] locals */
+    DImage *ddst;
+    Memimage *dst;
+    /*x: [[drawmesg()]] locals */
+    int c, j;
+    DImage *di;
     DName *dn;
-    DScreen *dscrn;
+    /*x: [[drawmesg()]] locals */
+    Memimage *src, *mask;
+    Point p, q;
+    // enum<Drawop>
+    int op;
+    /*x: [[drawmesg()]] locals */
+    int e0, e1;
+    Point sp;
+    /*x: [[drawmesg()]] locals */
+    int ni;
+    Point *pp;
+    bool doflush;
+    int ox, oy;
+    int esize, oesize;
+    byte *u;
+    int y;
+    /*x: [[drawmesg()]] locals */
+    DImage *font;
+    Memimage  *bg;
+    int ci;
+    /*x: [[drawmesg()]] locals */
     FChar *fc;
+    /*x: [[drawmesg()]] locals */
     CScreen *cs;
+    /*x: [[drawmesg()]] locals */
+    DScreen *dscrn;
+    /*x: [[drawmesg()]] locals */
     Refreshfn reffn;
+    Memscreen *scrn;
+    Memimage *l;
     Refx *refx;
+    /*x: [[drawmesg()]] locals */
+    int nw;
+    Memimage **lp;
     /*e: [[drawmesg()]] locals */
 
     a = av;
     if(waserror()){
         if(fmt) 
             printmesg(fmt, a, 1);
-    /*  iprint("error: %s\n", up->errstr);  */
         nexterror();
     }
     while((n-=m) > 0){

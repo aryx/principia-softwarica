@@ -48,7 +48,7 @@ drawshutdown(void)
 
 /*s: function geninitdraw */
 errorneg1
-geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *label, char *windir, int ref)
+geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *windir, int ref)
 {
     /*s: [[geninitdraw()]] locals */
     Subfont *df;
@@ -58,8 +58,10 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
     /*e: [[geninitdraw()]] locals */
 
     display = initdisplay(devdir, windir, error);
+    /*s: [[geninitdraw()]] sanity check display */
     if(display == nil)
         return ERROR_NEG1;
+    /*e: [[geninitdraw()]] sanity check display */
 
     /*s: [[geninitdraw()]] set up font */
     /*
@@ -144,7 +146,7 @@ geninitdraw(char *devdir, void(*error)(Display*, char*), char *fontname, char *l
 
 /*s: function initdraw */
 errorneg1
-initdraw(void(*error)(Display*, char*), char *fontname , char *label)
+initdraw(Errorfn error, char *fontname , char *label)
 {
     char *dev = "/dev";
 
@@ -240,7 +242,7 @@ getwindow(Display *d, int ref)
 
 /*s: function initdisplay */
 Display*
-initdisplay(char *dev, char *win, void(*error)(Display*, char*))
+initdisplay(char *dev, char *win, Errorfn error)
 {
     /*s: [[initdisplay()]] locals */
     fdt ctlfd;
@@ -255,11 +257,11 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
 
     int n;
     /*x: [[initdisplay()]] locals */
-    bool isnew;
+    char *t;
+    /*x: [[initdisplay()]] locals */
+    bool isnew = false;
     /*x: [[initdisplay()]] locals */
     Dir *dir;
-    /*x: [[initdisplay()]] locals */
-    char *t;
     /*e: [[initdisplay()]] locals */
 
     /*s: [[initdisplay()]] install dumpers */
@@ -311,7 +313,6 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     info[n] = '\0';
 
     /*s: [[initdisplay()]] set isnew */
-    isnew = false;
     if(n < NINFO)	/* this will do for now, we need something better here */
         isnew = true;
     /*e: [[initdisplay()]] set isnew */
@@ -334,8 +335,7 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     /*e: [[initdisplay()]] sanity check reffd */
 
     // our display!
-    disp = mallocz(sizeof(Display), 1);
-
+    disp = mallocz(sizeof(Display), true);
     /*s: [[initdisplay()]] sanity check disp */
     if(disp == nil){
     Error4:
@@ -354,7 +354,7 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     }
     /*e: [[initdisplay()]] sanity check image part1 */
     if(n >= NINFO){
-        image = mallocz(sizeof(Image), 1);
+        image = mallocz(sizeof(Image), true);
         /*s: [[initdisplay()]] sanity check image part2 */
         if(image == nil)
             goto Error5;
@@ -397,8 +397,8 @@ initdisplay(char *dev, char *win, void(*error)(Display*, char*))
     if(disp->buf == nil)
         goto Error5;
     /*e: [[initdisplay()]] sanity check buf */
-
     disp->dirno = atoi(info+0*12);
+
     disp->fd    = datafd;
     disp->ctlfd = ctlfd;
     disp->reffd = reffd;
@@ -539,11 +539,12 @@ doflush(Display *d)
 {
     int n, nn;
 
-    n = d->bufp-d->buf;
+    n = d->bufp - d->buf;
     if(n <= 0)
-        return OK_1;
+        return OK_1; // warning?
 
     nn=write(d->fd, d->buf, n);
+    /*s: [[doflush()]] sanity check nn */
     if(nn != n){
         /*s: [[doflush()]] if _drawdebug */
         if(_drawdebug)
@@ -552,23 +553,28 @@ doflush(Display *d)
         d->bufp = d->buf;	/* might as well; chance of continuing */
         return ERROR_NEG1;
     }
+    /*e: [[doflush()]] sanity check nn */
     d->bufp = d->buf;
     return OK_1;
 }
 /*e: function doflush */
 
 /*s: function flushimage */
-int
+errorneg1
 flushimage(Display *d, bool visible)
 {
+    /*s: [[flushimage()]] sanity check d */
     if(d == nil)
-        return 0;
+        return OK_0;
+    /*e: [[flushimage()]] sanity check d */
     if(visible){
         *d->bufp++ = 'v';	/* five bytes always reserved for this */
+        /*s: [[flushimage()]] if isnew */
         if(d->_isnewdisplay){
             BPLONG(d->bufp, d->screenimage->id);
             d->bufp += 4;
         }
+        /*e: [[flushimage()]] if isnew */
     }
     return doflush(d);
 }
@@ -578,12 +584,14 @@ flushimage(Display *d, bool visible)
 byte*
 bufimage(Display *d, int n)
 {
-    uchar *p;
+    byte *p;
 
+    /*s: [[bufimage()]] sanity check n */
     if(n < 0 || n > d->bufsize){
         werrstr("bad count in bufimage");
         return nil;
     }
+    /*e: [[bufimage()]] sanity check n */
     if(d->bufp + n  >  d->buf + d->bufsize)
         if(doflush(d) < 0)
             return nil;

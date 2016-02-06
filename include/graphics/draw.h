@@ -132,7 +132,7 @@ typedef enum drawop Drawop;
  * image channel descriptors 
  */
 // coupling: chantostr and channames
-enum {
+enum Chan {
     CRed = 0,
     CGreen,
     CBlue,
@@ -244,7 +244,7 @@ struct Display
     /*e: [[Display]] devdraw connection fields */
     /*s: [[Display]] buffer fields */
     // drawing operations to write in /dev/draw/x/data until flush
-    // array<byte>
+    // array<byte>, length = Display.bufsize
     byte	*buf;
     int		bufsize;
     // index in Display.buf array
@@ -272,12 +272,12 @@ struct Display
     /*x: [[Display]] other fields */
     bool	_isnewdisplay;
     /*x: [[Display]] other fields */
-    char	oldlabel[64];
-    /*x: [[Display]] other fields */
     // list<ref<Window>> (next = Image.next)
     Image	*windows;
     /*x: [[Display]] other fields */
     Image	*screenimage; // ???
+    /*x: [[Display]] other fields */
+    char	oldlabel[64];
     /*x: [[Display]] other fields */
     void	(*error)(Display*, char*);
     /*e: [[Display]] other fields */
@@ -449,13 +449,17 @@ struct Font
 #define	Dy(r)	((r).max.y-(r).min.y)
 /*e: function Dy */
 
+/*s: type Errorfn */
+typedef void Errorfn(Display*, char*);
+/*e: type Errorfn */
+
 /*
  * Image management
  */
 // set globals at the end of this file: display, view, font, screen
-extern int	initdraw(void(*)(Display*, char*), char*, char*);
-extern int	geninitdraw(char*, void(*)(Display*, char*), char*, char*, char*, int);
-extern Display*	initdisplay(char*, char*, void(*)(Display*, char*));
+extern int	initdraw(Errorfn, char*, char*);
+extern int	geninitdraw(char*, Errorfn, char*, char*, char*, int);
+extern Display*	initdisplay(char*, char*, Errorfn);
 extern void		closedisplay(Display*);
 
 extern int		flushimage(Display*, bool);

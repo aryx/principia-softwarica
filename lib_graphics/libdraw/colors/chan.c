@@ -81,12 +81,16 @@ chantodepth(ulong c)
     int n;
 
     for(n=0; c; c>>=8){
+        /*s: [[chantodepth()]] sanity check c */
         if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
             return 0; // warning?
+        /*e: [[chantodepth()]] sanity check c */
         n += NBITS(c);
     }
+    /*s: [[chantodepth()]] sanity check n */
     if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
         return 0; // warning?
+    /*e: [[chantodepth()]] sanity check n */
     return n;
 }
 /*e: function chantodepth */
