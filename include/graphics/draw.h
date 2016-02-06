@@ -132,7 +132,7 @@ typedef enum drawop Drawop;
  * image channel descriptors 
  */
 // coupling: chantostr and channames
-enum Chan {
+enum ImageChan {
     CRed = 0,
     CGreen,
     CBlue,

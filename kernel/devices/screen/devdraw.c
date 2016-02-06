@@ -1866,6 +1866,8 @@ drawmesg(Client *client, void *av, int n)
     /*x: [[drawmesg()]] locals */
     FChar *fc;
     /*x: [[drawmesg()]] locals */
+    DImage *dsrc;
+    /*x: [[drawmesg()]] locals */
     CScreen *cs;
     /*x: [[drawmesg()]] locals */
     DScreen *dscrn;

@@ -71,11 +71,11 @@ struct Memimage
     int		zero;		/* data->bdata+zero==&byte containing (0,0) */
     ulong	width;	/* width in words of a single scan line */
     /*x: [[MemImage]] other fields */
-    // map<enum<Chan>, int>
+    // map<enum<ImageChan>, int>
     int		shift[NChan];
-    // map<enum<Chan>, int>
+    // map<enum<ImageChan>, int>
     int		mask[NChan];
-    // map<enum<Chan>, int>
+    // map<enum<ImageChan>, int>
     int		nbits[NChan];
     /*x: [[MemImage]] other fields */
     Memcmap	*cmap;
