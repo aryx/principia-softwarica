@@ -258,10 +258,6 @@ initdisplay(char *dev, char *win, Errorfn error)
     int n;
     /*x: [[initdisplay()]] locals */
     char *t;
-    /*x: [[initdisplay()]] locals */
-    bool isnew = false;
-    /*x: [[initdisplay()]] locals */
-    Dir *dir;
     /*e: [[initdisplay()]] locals */
 
     /*s: [[initdisplay()]] install dumpers */
@@ -311,11 +307,6 @@ initdisplay(char *dev, char *win, Errorfn error)
         n = NINFO;
     /*e: [[initdisplay()]] sanity check read ctlfd */
     info[n] = '\0';
-
-    /*s: [[initdisplay()]] set isnew */
-    if(n < NINFO)	/* this will do for now, we need something better here */
-        isnew = true;
-    /*e: [[initdisplay()]] set isnew */
 
     sprint(buf, "%s/draw/%d/data", dev, atoi(info+0*12));
     datafd = open(buf, ORDWR|OCEXEC);
@@ -377,10 +368,6 @@ initdisplay(char *dev, char *win, Errorfn error)
     }
     disp->image = image;
 
-    /*s: [[initdisplay()]] set display _isnewdisplay part1 */
-    disp->_isnewdisplay = isnew;
-    /*e: [[initdisplay()]] set display _isnewdisplay part1 */
-
     /*s: [[initdisplay()]] set display bufsize */
     disp->bufsize = iounit(datafd);
     if(disp->bufsize <= 0)
@@ -421,13 +408,6 @@ initdisplay(char *dev, char *win, Errorfn error)
     /*e: [[initdisplay()]] sanity check white and black */
     disp->opaque = disp->white;
     disp->transparent = disp->black;
-
-    /*s: [[initdisplay()]] set display _isnewdisplay part2 */
-    dir = dirfstat(ctlfd);
-    if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
-        disp->_isnewdisplay = true;
-    free(dir);
-    /*e: [[initdisplay()]] set display _isnewdisplay part2 */
 
     return disp;
 }
@@ -569,12 +549,6 @@ flushimage(Display *d, bool visible)
     /*e: [[flushimage()]] sanity check d */
     if(visible){
         *d->bufp++ = 'v';	/* five bytes always reserved for this */
-        /*s: [[flushimage()]] if isnew */
-        if(d->_isnewdisplay){
-            BPLONG(d->bufp, d->screenimage->id);
-            d->bufp += 4;
-        }
-        /*e: [[flushimage()]] if isnew */
     }
     return doflush(d);
 }

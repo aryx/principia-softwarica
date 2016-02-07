@@ -755,10 +755,11 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
     DImage *d;
 
     d = allocdimage(i);
+    /*s: [[drawinstall()]] sanity check d */
     if(d == nil)
         return nil;
+    /*e: [[drawinstall()]] sanity check d */
     d->id = id;
-
     /*s: [[drawinstall()]] install dscreen */
     d->dscreen = dscreen;
     /*e: [[drawinstall()]] install dscreen */
@@ -880,8 +881,10 @@ drawfreedimage(DImage *dimage)
     DScreen *ds;
 
     dimage->ref--;
+    /*s: [[drawfreedimage()]] sanity check dimage ref */
     if(dimage->ref < 0)
         print("negative ref in drawfreedimage\n");
+    /*e: [[drawfreedimage()]] sanity check dimage ref */
     if(dimage->ref > 0)
         return;
 
@@ -898,7 +901,6 @@ drawfreedimage(DImage *dimage)
         goto Return;
     }
     /*e: [[drawfreedimage()]] free names */
-
     /*s: [[drawfreedimage()]] if dscreen */
     ds = dimage->dscreen;
     if(ds){
@@ -955,8 +957,12 @@ drawuninstall(Client *client, int id)
     DImage *d, *next;
 
     d = client->dimage[id&HASHMASK];
+    /*s: [[drawuninstall()]] sanity check d */
     if(d == nil)
         error(Enodrawimage);
+    /*e: [[drawuninstall()]] sanity check d */
+
+    // hash_remove(client->dimage, id)
     if(d->id == id){
         client->dimage[id&HASHMASK] = d->next;
         drawfreedimage(d);
@@ -970,6 +976,7 @@ drawuninstall(Client *client, int id)
         }
         d = next;
     }
+
     error(Enodrawimage);
 }
 /*e: function drawuninstall */
@@ -1832,7 +1839,7 @@ drawmesg(Client *client, void *av, int n)
     ulong chan;
     int repl;
     Rectangle r, clipr;
-    ulong value; // ??
+    ulong value;
     Memimage *i;
     /*x: [[drawmesg()]] locals */
     DImage *ll;
@@ -1896,8 +1903,10 @@ drawmesg(Client *client, void *av, int n)
         case 'b':
             printmesg(fmt="LLbLbRRL", a, 0);
             m = 1+4+4+1+4+1+4*4+4*4+4;
-            if(n < m)
-                error(Eshortdraw);
+             /*s: [[drawmesg()]] sanity check n with m */
+             if(n < m)
+                 error(Eshortdraw);
+             /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
             scrnid = BGSHORT(a+5);
             refresh = a[9];
@@ -1959,36 +1968,40 @@ drawmesg(Client *client, void *av, int n)
                 continue;
             }
             /*e: [[drawmesg()]] allocate image case, if screen id */
-            i = allocmemimage(r, chan); // The call
 
+            i = allocmemimage(r, chan); // server side allocation
+            /*s: [[drawmesg()]] allocate image case, sanity check i */
             if(i == nil)
                 error(Edrawmem);
+            /*e: [[drawmesg()]] allocate image case, sanity check i */
             if(repl)
                 i->flags |= Frepl;
             i->clipr = clipr;
+            /*s: [[drawmesg()]] allocate image case, clip clipr */
             if(!repl)
                 rectclip(&i->clipr, r);
+            /*e: [[drawmesg()]] allocate image case, clip clipr */
 
-            if(drawinstall(client, dstid, i, 0) == 0){
+            if(drawinstall(client, dstid, i, nil) == nil){
                 freememimage(i);
                 error(Edrawmem);
             }
-            memfillcolor(i, value); // The call
+            memfillcolor(i, value);
             continue;
         /*x: [[drawmesg()]] cases */
         /* free: 'f' id[4] */
         case 'f':
             printmesg(fmt="L", a, 1);
             m = 1+4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             ll = drawlookup(client, BGLONG(a+1), false);
-    
             /*s: [[drawmesg()]] free image case, if dscreen */
             if(ll && ll->dscreen && ll->dscreen->owner != client)
                 ll->dscreen->owner->refreshme = 1;
             /*e: [[drawmesg()]] free image case, if dscreen */
-
             drawuninstall(client, BGLONG(a+1)); // The call
 
             continue;
@@ -1997,17 +2010,22 @@ drawmesg(Client *client, void *av, int n)
         case 'c':
             printmesg(fmt="LbR", a, 0);
             m = 1+4+1+4*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             ddst = drawlookup(client, BGLONG(a+1), true);
+            /*s: [[drawmesg()]] clipping case, sanity check ddst */
             if(ddst == nil)
                 error(Enodrawimage);
+            /*x: [[drawmesg()]] clipping case, sanity check ddst */
             if(ddst->name)
                 error("cannot change repl/clipr of shared image");
+            /*e: [[drawmesg()]] clipping case, sanity check ddst */
             dst = ddst->image;
+
             if(a[5])
                 dst->flags |= Frepl;
-
             drawrectangle(&dst->clipr, a+6); // The call
 
             continue;
@@ -2025,15 +2043,19 @@ drawmesg(Client *client, void *av, int n)
         case 'N':
             printmesg(fmt="Lbz", a, 0);
             m = 1+4+1+1;
-            if(n < m)
-                error(Eshortdraw);
+             /*s: [[drawmesg()]] sanity check n with m */
+             if(n < m)
+                 error(Eshortdraw);
+             /*e: [[drawmesg()]] sanity check n with m */
             c = a[5];
             j = a[6];
             if(j == 0)  /* give me a non-empty name please */
                 error(Eshortdraw);
             m += j;
-            if(n < m)
-                error(Eshortdraw);
+             /*s: [[drawmesg()]] sanity check n with m */
+             if(n < m)
+                 error(Eshortdraw);
+             /*e: [[drawmesg()]] sanity check n with m */
             di = drawlookup(client, BGLONG(a+1), false);
             if(di == nil)
                 error(Enodrawimage);
@@ -2057,14 +2079,18 @@ drawmesg(Client *client, void *av, int n)
         case 'n':
             printmesg(fmt="Lz", a, 0);
             m = 1+4+1;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             j = a[5];
             if(j == 0)  /* give me a non-empty name please */
                 error(Eshortdraw);
             m += j;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
             if(drawlookup(client, dstid, false))
                 error(Eimageexists);
@@ -2093,8 +2119,10 @@ drawmesg(Client *client, void *av, int n)
         case 'd':
             printmesg(fmt="LLLRPP", a, 0);
             m = 1+4+4+4+4*4+2*4+2*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dst = drawimage(client, a+1);
             dstid = BGLONG(a+1);
             src = drawimage(client, a+5);
@@ -2114,8 +2142,10 @@ drawmesg(Client *client, void *av, int n)
         case 'O':
             printmesg(fmt="b", a, 0);
             m = 1+1;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             client->op = a[1];
             continue;
         /*x: [[drawmesg()]] cases */
@@ -2123,8 +2153,10 @@ drawmesg(Client *client, void *av, int n)
         case 'L':
             printmesg(fmt="LPPlllLP", a, 0);
             m = 1+4+2*4+2*4+4+4+4+4+2*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dst = drawimage(client, a+1);
             dstid = BGLONG(a+1);
             drawpoint(&p, a+5);
@@ -2154,8 +2186,10 @@ drawmesg(Client *client, void *av, int n)
         case 'P':
             printmesg(fmt="LslllLPP", a, 0);
             m = 1+4+2+4+4+4+4+2*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
             dst = drawimage(client, a+1);
             ni = BGSHORT(a+5);
@@ -2233,8 +2267,10 @@ drawmesg(Client *client, void *av, int n)
         case 'E':
             printmesg(fmt="LLPlllPll", a, 0);
             m = 1+4+4+2*4+4+4+4+2*4+2*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dst = drawimage(client, a+1);
             dstid = BGLONG(a+1);
             src = drawimage(client, a+5);
@@ -2274,9 +2310,10 @@ drawmesg(Client *client, void *av, int n)
             m = 1+4+4+4+2*4+4*4+2*4+2;
             if(*a == 'x')
                 m += 4+2*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
-
+            /*e: [[drawmesg()]] sanity check n with m */
             dst = drawimage(client, a+1);
             dstid = BGLONG(a+1);
             src = drawimage(client, a+5);
@@ -2291,8 +2328,10 @@ drawmesg(Client *client, void *av, int n)
             ni = BGSHORT(a+45);
             u = a+m;
             m += ni*2;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             clipr = dst->clipr;
             dst->clipr = r;
             op = drawclientop(client);
@@ -2338,8 +2377,10 @@ drawmesg(Client *client, void *av, int n)
         case 'i':
             printmesg(fmt="Llb", a, 1);
             m = 1+4+4+1;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
             if(dstid == 0)
                 error("cannot use display as font");
@@ -2365,8 +2406,10 @@ drawmesg(Client *client, void *av, int n)
         case 'l':
             printmesg(fmt="LLSRPbb", a, 0);
             m = 1+4+4+2+4*4+2*4+1+1;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             font = drawlookup(client, BGLONG(a+1), true);
             if(font == 0)
                 error(Enodrawimage);
@@ -2393,8 +2436,10 @@ drawmesg(Client *client, void *av, int n)
         case 'r':
             printmesg(fmt="LR", a, 0);
             m = 1+4+4*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             i = drawimage(client, a+1);
             drawrectangle(&r, a+5);
             if(!rectinrect(r, i->r))
@@ -2424,8 +2469,10 @@ drawmesg(Client *client, void *av, int n)
             printmesg(fmt="LR", a, 0);
         //  iprint("load %c\n", *a);
             m = 1+4+4*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
             dst = drawimage(client, a+1);
             drawrectangle(&r, a+5);
@@ -2444,8 +2491,10 @@ drawmesg(Client *client, void *av, int n)
         case 'A':
             printmesg(fmt="LLLb", a, 1);
             m = 1+4+4+4+1;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
             if(dstid == 0)
                 error(Ebadarg);
@@ -2465,8 +2514,10 @@ drawmesg(Client *client, void *av, int n)
         case 'F':
             printmesg(fmt="L", a, 1);
             m = 1+4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             drawlookupscreen(client, BGLONG(a+1), &cs);
             drawuninstallscreen(client, cs); // The call
             continue;
@@ -2476,8 +2527,10 @@ drawmesg(Client *client, void *av, int n)
         case 'S':
             printmesg(fmt="Ll", a, 0);
             m = 1+4+4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
             if(dstid == 0)
                 error(Ebadarg);
@@ -2496,8 +2549,10 @@ drawmesg(Client *client, void *av, int n)
         case 'o':
             printmesg(fmt="LPP", a, 0);
             m = 1+4+2*4+2*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             dst = drawimage(client, a+1);
 
             if(dst->layer){
@@ -2522,16 +2577,20 @@ drawmesg(Client *client, void *av, int n)
         case 't':
             printmesg(fmt="bsL", a, 0);
             m = 1+1+2;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             nw = BGSHORT(a+2);
             if(nw < 0)
                 error(Ebadarg);
             if(nw == 0)
                 continue;
             m += nw*4;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             lp = malloc(nw*sizeof(Memimage*));
             if(lp == 0)
                 error(Enomem);
@@ -2566,8 +2625,10 @@ drawmesg(Client *client, void *av, int n)
         case 'D':
             printmesg(fmt="b", a, 0);
             m = 1+1;
+            /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
             drawdebug = a[1];
             continue;
         /*e: [[drawmesg()]] cases */

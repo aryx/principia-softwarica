@@ -233,45 +233,52 @@ int
 drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, Point *p1, Rectangle *sr, Rectangle *mr)
 {
     Point rmin, delta;
-    int splitcoords;
+    bool splitcoords;
     Rectangle omr;
 
-    if(r->min.x>=r->max.x || r->min.y>=r->max.y)
+    if(r->min.x >= r->max.x || r->min.y >= r->max.y)
         return 0;
-    splitcoords = (p0->x!=p1->x) || (p0->y!=p1->y);
+    splitcoords = (p0->x != p1->x) || (p0->y != p1->y);
+
     /* clip to destination */
     rmin = r->min;
     if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
         return 0;
+
     /* move mask point */
-    p1->x += r->min.x-rmin.x;
-    p1->y += r->min.y-rmin.y;
+    p1->x += r->min.x - rmin.x;
+    p1->y += r->min.y - rmin.y;
     /* move source point */
-    p0->x += r->min.x-rmin.x;
-    p0->y += r->min.y-rmin.y;
+    p0->x += r->min.x - rmin.x;
+    p0->y += r->min.y - rmin.y;
+
     /* map destination rectangle into source */
     sr->min = *p0;
     sr->max.x = p0->x+Dx(*r);
     sr->max.y = p0->y+Dy(*r);
+
     /* sr is r in source coordinates; clip to source */
     if(!(src->flags&Frepl) && !rectclip(sr, src->r))
         return 0;
     if(!rectclip(sr, src->clipr))
         return 0;
+
     /* compute and clip rectangle in mask */
     if(splitcoords){
         /* move mask point with source */
-        p1->x += sr->min.x-p0->x;
-        p1->y += sr->min.y-p0->y;
+        p1->x += sr->min.x - p0->x;
+        p1->y += sr->min.y - p0->y;
         mr->min = *p1;
         mr->max.x = p1->x+Dx(*sr);
         mr->max.y = p1->y+Dy(*sr);
         omr = *mr;
+
         /* mr is now rectangle in mask; clip it */
         if(!(mask->flags&Frepl) && !rectclip(mr, mask->r))
             return 0;
         if(!rectclip(mr, mask->clipr))
             return 0;
+
         /* reflect any clips back to source */
         sr->min.x += mr->min.x-omr.min.x;
         sr->min.y += mr->min.y-omr.min.y;

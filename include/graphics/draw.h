@@ -270,8 +270,6 @@ struct Display
     // gensym
     int		imageid;
     /*x: [[Display]] other fields */
-    bool	_isnewdisplay;
-    /*x: [[Display]] other fields */
     // list<ref<Window>> (next = Image.next)
     Image	*windows;
     /*x: [[Display]] other fields */

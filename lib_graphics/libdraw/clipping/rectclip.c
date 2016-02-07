@@ -5,7 +5,7 @@
 
 /*s: function rectclip */
 bool
-rectclip(Rectangle *rp, Rectangle b)		/* first by reference, second by value */
+rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */
 {
     Rectangle *bp = &b;
     /*

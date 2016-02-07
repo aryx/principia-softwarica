@@ -2902,8 +2902,6 @@ initdisplay(char *dev, char *win, Errorfn error)
     <<[[initdisplay()]] sanity check read ctlfd>>
     info[n] = '\0';
 
-    <<[[initdisplay()]] set isnew>>
-
     sprint(buf, "%s/draw/%d/data", dev, atoi(info+0*12));
     datafd = open(buf, ORDWR|OCEXEC);
     <<[[initdisplay()]] sanity check datafd>>
@@ -2939,8 +2937,6 @@ initdisplay(char *dev, char *win, Errorfn error)
     }
     disp->image = image;
 
-    <<[[initdisplay()]] set display _isnewdisplay part1>>
-
     <<[[initdisplay()]] set display bufsize>>
     disp->buf = malloc(disp->bufsize+5);	/* +5 for flush message */
     <<[[initdisplay()]] sanity check buf>>
@@ -2962,12 +2958,16 @@ initdisplay(char *dev, char *win, Errorfn error)
     disp->opaque = disp->white;
     disp->transparent = disp->black;
 
-    <<[[initdisplay()]] set display _isnewdisplay part2>>
-
     return disp;
 }
 @
 % refresh is important?
+%dead:
+%    <<[[initdisplay()]] set isnew>>
+%    <<[[initdisplay()]] set display _isnewdisplay part1>>
+%    <<[[initdisplay()]] set display _isnewdisplay part2>>
+
+
 
 \t clipped if run under a window? how enforced?
 
@@ -4004,17 +4004,16 @@ drawmesg(Client *client, void *av, int n)
 
 \chapter{Images}
 
-% fundamental piece!
+% Fundamental piece!
 % The screen is an image. Colors are images!! Mask are images.
 % Tiles are images. Background are special images.
 % Fonts are images (even Windows are images).
 
-
-% can have multiple images, draw there, and at some point
-% quickly copy on main image (display->image)
-% the initial display->image is actually allocated for you
+% Can have multiple images, draw there, and at some point
+% quickly copy on main image (display->image).
+% The initial display->image is actually allocated for you
 % (got a first image allocated for you when open draw device, 'screen/view')
-% but how allocate new one? temporary canvas to draw on.
+% But how allocate new one? temporary canvas to draw on.
 
 \section{Allocation}
 
@@ -4023,8 +4022,6 @@ drawmesg(Client *client, void *av, int n)
 
 \subsection{API}
 
-% for a color r is usually R(0,0,1,1), chan is view->chan, repl = true,
-% and val is the color
 %ctor
 <<function allocimage>>=
 Image*
@@ -4037,7 +4034,13 @@ allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
     return i;
 }
 @
+\l use Refbackup instead of 0?
+\t when want to have a Rectangle that does not start at Pt(0, 0) ?
 
+% for a color r is usually R(0,0,1,1), chan is view->chan, repl = true,
+% and val is the color
+
+%dtor
 <<function freeimage>>=
 errorneg1
 freeimage(Image *i)
@@ -4049,8 +4052,18 @@ freeimage(Image *i)
     return ret;
 }
 @
-%todo: why not _freeimage? be consistent at least
+\l why not _freeimage? be consistent at least, and why extra function?
 
+
+<<enum _anon_ (include/draw.h)2>>=
+enum
+{
+    /* refresh methods */
+    Refbackup	= 0,
+    Refnone		= 1,
+    Refmesg		= 2 // incomplete apparently
+};
+@
 
 
 \subsection{Marshalling}
@@ -4061,15 +4074,13 @@ freeimage(Image *i)
 Image*
 _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val, int screenid, int refresh)
 {
+    Image *i = nil;
+    char *err = nil;
     byte *a;
-    char *err;
-    Image *i;
     Rectangle clipr;
     int id;
     int depth;
 
-    err = nil;
-    i = nil;
     <<[[_allocimage()]] sanity check chan>>
     depth = chantodepth(chan);
     <<[[_allocimage()]] sanity check depth>>
@@ -4077,9 +4088,10 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     /* flush pending data so we don't get error allocating the image */
     flushimage(d, false);
 
+    // new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4]
     a = bufimage(d, 1+4+4+1+4+1+4*4+4*4+4);
-    if(a == nil)
-        goto Error;
+    <<[[_allocimage()]] sanity check a>>
+
     d->imageid++;
     id = d->imageid;
 
@@ -4093,11 +4105,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     BPLONG(a+19, r.min.y);
     BPLONG(a+23, r.max.x);
     BPLONG(a+27, r.max.y);
-    if(repl)
-        /* huge but not infinite, so various offsets will leave it huge, not overflow */
-        clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
-    else
-        clipr = r;
+    <<[[_allocimage()]] set clipr>>
     BPLONG(a+31, clipr.min.x);
     BPLONG(a+35, clipr.min.y);
     BPLONG(a+39, clipr.max.x);
@@ -4109,7 +4117,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
 
     <<[[_allocimage()]] if passed image>>
     else{
-        i = malloc(sizeof(Image));
+        i = malloc(sizeof(Image)); // client side allocation
         <<[[_allocimage()]] sanity check i>>
     }
 
@@ -4134,6 +4142,48 @@ if(ai)
     i = ai;
 @
 % when?
+
+
+
+
+
+<<[[_allocimage()]] sanity check chan>>=
+if(chan == 0){
+    werrstr("bad channel descriptor");
+    return nil;
+}
+@
+
+<<[[_allocimage()]] sanity check depth>>=
+if(depth == 0){
+    err = "bad channel descriptor";
+Error:
+    if(err)
+        werrstr("allocimage: %s", err);
+    else
+        werrstr("allocimage: %r");
+    free(i);
+    return nil;
+}
+@
+
+<<[[_allocimage()]] sanity check a>>=
+if(a == nil)
+    goto Error;
+@
+
+<<[[_allocimage()]] sanity check i>>=
+if(i == nil){
+    a = bufimage(d, 1+4);
+    if(a){
+        a[0] = 'f';
+        BPLONG(a+1, id);
+        flushimage(d, false);
+    }
+    goto Error;
+}
+@
+
 
 
 
@@ -4168,39 +4218,8 @@ _freeimage1(Image *i)
     return OK_0;
 }
 @
+% free done in caller (a bit ugly)
 
-
-<<[[_allocimage()]] sanity check chan>>=
-if(chan == 0){
-    werrstr("bad channel descriptor");
-    return nil;
-}
-@
-
-<<[[_allocimage()]] sanity check depth>>=
-if(depth == 0){
-    err = "bad channel descriptor";
-Error:
-    if(err)
-        werrstr("allocimage: %s", err);
-    else
-        werrstr("allocimage: %r");
-    free(i);
-    return nil;
-}
-@
-
-<<[[_allocimage()]] sanity check i>>=
-if(i == nil){
-    a = bufimage(d, 1+4);
-    if(a){
-        a[0] = 'f';
-        BPLONG(a+1, id);
-        flushimage(d, false);
-    }
-    goto Error;
-}
-@
 
 
 <<[[_freeimage1()]] sanity check a>>=
@@ -4218,7 +4237,7 @@ byte refresh;
 ulong chan;
 int repl;
 Rectangle r, clipr;
-ulong value; // ??
+ulong value;
 Memimage *i;
 @
 
@@ -4227,8 +4246,7 @@ Memimage *i;
 case 'b':
     printmesg(fmt="LLbLbRRL", a, 0);
     m = 1+4+4+1+4+1+4*4+4*4+4;
-    if(n < m)
-        error(Eshortdraw);
+     <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
     scrnid = BGSHORT(a+5);
     refresh = a[9];
@@ -4240,23 +4258,39 @@ case 'b':
 
     <<[[drawmesg()]] allocate image case, sanity check dstid>>
     <<[[drawmesg()]] allocate image case, if screen id>>
-    i = allocmemimage(r, chan); // The call
 
-    if(i == nil)
-        error(Edrawmem);
+    i = allocmemimage(r, chan); // server side allocation
+    <<[[drawmesg()]] allocate image case, sanity check i>>
     if(repl)
         i->flags |= Frepl;
     i->clipr = clipr;
-    if(!repl)
-        rectclip(&i->clipr, r);
+    <<[[drawmesg()]] allocate image case, clip clipr>>
 
-    if(drawinstall(client, dstid, i, 0) == 0){
+    if(drawinstall(client, dstid, i, nil) == nil){
         freememimage(i);
         error(Edrawmem);
     }
-    memfillcolor(i, value); // The call
+    memfillcolor(i, value);
     continue;
 @
+
+
+<<[[drawmesg()]] sanity check n with m>>=
+if(n < m)
+    error(Eshortdraw);
+@
+
+<<[[drawmesg()]] allocate image case, sanity check i>>=
+if(i == nil)
+    error(Edrawmem);
+@
+<<[[drawmesg()]] allocate image case, sanity check dstid>>=
+if(drawlookup(client, dstid, false))
+    error(Eimageexists);
+@
+
+
+
 
 
 <<function drawrectangle>>=
@@ -4270,20 +4304,8 @@ drawrectangle(Rectangle *r, uchar *a)
 }
 @
 
-<<[[drawmesg()]] allocate image case, sanity check dstid>>=
-if(drawlookup(client, dstid, false))
-    error(Eimageexists);
-@
 
-<<enum _anon_ (include/draw.h)2>>=
-enum
-{
-    /* refresh methods */
-    Refbackup	= 0,
-    Refnone		= 1,
-    Refmesg		= 2 // incomplete apparently
-};
-@
+
 
 
 <<[[drawmesg()]] locals>>=
@@ -4296,12 +4318,9 @@ DImage *ll;
 case 'f':
     printmesg(fmt="L", a, 1);
     m = 1+4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     ll = drawlookup(client, BGLONG(a+1), false);
-    
     <<[[drawmesg()]] free image case, if dscreen>>
-
     drawuninstall(client, BGLONG(a+1)); // The call
 
     continue;
@@ -4312,7 +4331,7 @@ case 'f':
 
 \subsection{Algorithm}
 
-% allocimage -> _allocimage -> drawmesg -> <>
+% allocimage -> _allocimage -> ... -> drawmesg -> <>
 %Memdata and then Memimage ctor
 % should be called once automatically when one creates a new connection no?
 <<function allocmemimage>>=
@@ -4350,11 +4369,19 @@ allocmemimage(Rectangle r, ulong chan)
 
     i = allocmemimaged(r, chan, md);
     <<[[allocmemimage()]] sanity check i>>
-    md->imref = i;
 
     return i;
 }
 @
+% we have seen allocmemimaged before
+
+%dead:
+%    md->imref = i;
+% <<[[Memdata]] other fields>>=
+% // ref<Memimage>, reverse of Memimage.bdata
+% void*	imref;
+% @
+
 
 
 
@@ -4387,46 +4414,10 @@ if(i == nil){
 }
 @
 
-%dead?
-<<[[Memdata]] other fields>>=
-// ref<Memimage>, reverse of Memimage.bdata
-void*	imref;
-@
 
-<<global memdefcmap>>=
-Memcmap *memdefcmap = &def;
-@
-% def is big array in libmemdraw/cmap.c
+\subsection{[[Client]] and [[Memimage]] connection, [[DImage]]}
 
-
-
-<<function memfillcolor>>=
-void
-memfillcolor(Memimage *i, ulong val)
-{
-    ulong bits;
-    int d, y;
-
-    if(val == DNofill)
-        return;
-
-    bits = rgbatoimg(i, val);
-    switch(i->depth){
-    <<[[memfillcolor()]] switch depth cases>>
-    default:	/* 1, 2, 4, 8, 16, 32 */
-        for(d=i->depth; d<32; d*=2)
-            bits = (bits << d) | bits;
-        memsetl(wordaddr(i, i->r.min), bits, i->width*Dy(i->r));
-        break;
-    }
-}
-@
-% >>
-
-%memsetl later
-
-\subsection{[[Client]] and [[Memimage]] connection}
-
+% drawmesg(allocate) -> <>
 <<function drawinstall>>=
 Memimage*
 drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
@@ -4434,10 +4425,8 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
     DImage *d;
 
     d = allocdimage(i);
-    if(d == nil)
-        return nil;
+    <<[[drawinstall()]] sanity check d>>
     d->id = id;
-
     <<[[drawinstall()]] install dscreen>>
 
     // insert_hash(d, client->dimage)
@@ -4447,9 +4436,12 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
     return i;
 }
 @
+% allocdimage we have seen before too
 
-
-
+<<[[drawinstall()]] sanity check d>>=
+if(d == nil)
+    return nil;
+@
 
 
 <<function drawuninstall>>=
@@ -4459,8 +4451,9 @@ drawuninstall(Client *client, int id)
     DImage *d, *next;
 
     d = client->dimage[id&HASHMASK];
-    if(d == nil)
-        error(Enodrawimage);
+    <<[[drawuninstall()]] sanity check d>>
+
+    // hash_remove(client->dimage, id)
     if(d->id == id){
         client->dimage[id&HASHMASK] = d->next;
         drawfreedimage(d);
@@ -4474,11 +4467,17 @@ drawuninstall(Client *client, int id)
         }
         d = next;
     }
+
     error(Enodrawimage);
 }
 @
 
-% /// drawclose | ??  -> <>
+<<[[drawuninstall()]] sanity check d>>=
+if(d == nil)
+    error(Enodrawimage);
+@
+
+% /// drawclose | drawuninstall | ??  -> <>
 <<function drawfreedimage>>=
 void
 drawfreedimage(DImage *dimage)
@@ -4488,13 +4487,11 @@ drawfreedimage(DImage *dimage)
     DScreen *ds;
 
     dimage->ref--;
-    if(dimage->ref < 0)
-        print("negative ref in drawfreedimage\n");
+    <<[[drawfreedimage()]] sanity check dimage ref>>
     if(dimage->ref > 0)
         return;
 
     <<[[drawfreedimage()]] free names>>
-
     <<[[drawfreedimage()]] if dscreen>>
     else
         freememimage(dimage->image);
@@ -4506,18 +4503,34 @@ drawfreedimage(DImage *dimage)
 %//  if(dimage->image == screenimage)    /* don't free the display */
 %//      goto Return;
 
+% freeimage before for screen.
+
+<<[[drawfreedimage()]] sanity check dimage ref>>=
+if(dimage->ref < 0)
+    print("negative ref in drawfreedimage\n");
+@
+
+
+
 \section{Clipping}
 
-% clipping is fundamental graphics operation. Very useful
+% Clipping is fundamental graphics operation. Very useful
 % generic functionality. Like narrow mode in emacs :)
 
-% called by many, to optimize things, e.g. no need to flush some modif
+% Called by many, to optimize things, e.g. no need to flush some modif
 % if rectangle outside the clipping area.
-% modify the first parameter when they overlap to match the intersection
-% flushmemscreen -> <>
+% Modify the first parameter when they overlap to match the intersection.
+
+
+<<[[drawmesg()]] allocate image case, clip clipr>>=
+if(!repl)
+    rectclip(&i->clipr, r);
+@
+
+% flushmemscreen | drawmesg(allocate) | -> <>
 <<function rectclip>>=
 bool
-rectclip(Rectangle *rp, Rectangle b)		/* first by reference, second by value */
+rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */
 {
     Rectangle *bp = &b;
     /*
@@ -4539,30 +4552,46 @@ rectclip(Rectangle *rp, Rectangle b)		/* first by reference, second by value */
     return true;
 }
 @
+% FIGURE with intersection
+
+<<[[_allocimage()]] set clipr>>=
+if(repl)
+    /* huge but not infinite, so various offsets will leave it huge, not overflow */
+    clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
+else
+    clipr = r;
+@
 
 \subsection{API}
 
 <<function replclipr>>=
 void
-replclipr(Image *i, int repl, Rectangle clipr)
+replclipr(Image *i, bool repl, Rectangle clipr)
 {
-    uchar *b;
-
-    b = bufimage(i->display, 22);
-    b[0] = 'c';
-    BPLONG(b+1, i->id);
-    repl = repl!=0;
-    b[5] = repl;
-    BPLONG(b+6, clipr.min.x);
-    BPLONG(b+10, clipr.min.y);
-    BPLONG(b+14, clipr.max.x);
-    BPLONG(b+18, clipr.max.y);
-    i->repl = repl;
-    i->clipr = clipr;
+    <<[[replclipr()]] body>>
 }
 @
+% can you enlarge?
 
 \subsection{Marshalling}
+
+<<[[replclipr()]] body>>=
+byte *b;
+
+// set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
+b = bufimage(i->display, 1+4+1+4*4);
+b[0] = 'c';
+BPLONG(b+1, i->id);
+repl = (repl != 0);
+b[5] = repl;
+BPLONG(b+6, clipr.min.x);
+BPLONG(b+10, clipr.min.y);
+BPLONG(b+14, clipr.max.x);
+BPLONG(b+18, clipr.max.y);
+i->repl = repl;
+i->clipr = clipr;
+@
+%old: was 22 but more consistent to put the serie of plus as before
 
 \subsection{Unmarshalling}
 
@@ -4576,30 +4605,36 @@ Memimage *dst;
 case 'c':
     printmesg(fmt="LbR", a, 0);
     m = 1+4+1+4*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     ddst = drawlookup(client, BGLONG(a+1), true);
-    if(ddst == nil)
-        error(Enodrawimage);
-    if(ddst->name)
-        error("cannot change repl/clipr of shared image");
+    <<[[drawmesg()]] clipping case, sanity check ddst>>
     dst = ddst->image;
+
     if(a[5])
         dst->flags |= Frepl;
-
     drawrectangle(&dst->clipr, a+6); // The call
 
     continue;
 
 @
 
+<<[[drawmesg()]] clipping case, sanity check ddst>>=
+if(ddst == nil)
+    error(Enodrawimage);
+@
+
+
 \subsection{Algorithm}
 
-% the call is actually drawrectangle which really just parse
-% a rectangle, so the call is actually to modify dst->clipr
+% The call is actually drawrectangle which really just parse
+% a rectangle, so the call is actually to modify dst->clipr.
 
+% But later we will see memimagedraw which use clipping when
+% draw a src on dst.
 
-% ?? -> <>?
+%XXX complicated function, mv later I think when see better context of use
+%  and need
+% memimagedraw | ?? -> <>
 <<function drawclip>>=
 /*
  * Clip the destination rectangle further based on the properties of the 
@@ -4614,45 +4649,52 @@ int
 drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, Point *p1, Rectangle *sr, Rectangle *mr)
 {
     Point rmin, delta;
-    int splitcoords;
+    bool splitcoords;
     Rectangle omr;
 
-    if(r->min.x>=r->max.x || r->min.y>=r->max.y)
+    if(r->min.x >= r->max.x || r->min.y >= r->max.y)
         return 0;
-    splitcoords = (p0->x!=p1->x) || (p0->y!=p1->y);
+    splitcoords = (p0->x != p1->x) || (p0->y != p1->y);
+
     /* clip to destination */
     rmin = r->min;
     if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
         return 0;
+
     /* move mask point */
-    p1->x += r->min.x-rmin.x;
-    p1->y += r->min.y-rmin.y;
+    p1->x += r->min.x - rmin.x;
+    p1->y += r->min.y - rmin.y;
     /* move source point */
-    p0->x += r->min.x-rmin.x;
-    p0->y += r->min.y-rmin.y;
+    p0->x += r->min.x - rmin.x;
+    p0->y += r->min.y - rmin.y;
+
     /* map destination rectangle into source */
     sr->min = *p0;
     sr->max.x = p0->x+Dx(*r);
     sr->max.y = p0->y+Dy(*r);
+
     /* sr is r in source coordinates; clip to source */
     if(!(src->flags&Frepl) && !rectclip(sr, src->r))
         return 0;
     if(!rectclip(sr, src->clipr))
         return 0;
+
     /* compute and clip rectangle in mask */
     if(splitcoords){
         /* move mask point with source */
-        p1->x += sr->min.x-p0->x;
-        p1->y += sr->min.y-p0->y;
+        p1->x += sr->min.x - p0->x;
+        p1->y += sr->min.y - p0->y;
         mr->min = *p1;
         mr->max.x = p1->x+Dx(*sr);
         mr->max.y = p1->y+Dy(*sr);
         omr = *mr;
+
         /* mr is now rectangle in mask; clip it */
         if(!(mask->flags&Frepl) && !rectclip(mr, mask->r))
             return 0;
         if(!rectclip(mr, mask->clipr))
             return 0;
+
         /* reflect any clips back to source */
         sr->min.x += mr->min.x-omr.min.x;
         sr->min.y += mr->min.y-omr.min.y;
@@ -4741,8 +4783,7 @@ drawrepl(Rectangle r, Point p)
 
 \subsection{API}
 
-% visible argument??
-% seems errorneg because called do if(flushimage() < 0)
+% visible argument?
 <<function flushimage>>=
 errorneg1
 flushimage(Display *d, bool visible)
@@ -4750,12 +4791,13 @@ flushimage(Display *d, bool visible)
     <<[[flushimage()]] sanity check d>>
     if(visible){
         *d->bufp++ = 'v';	/* five bytes always reserved for this */
-        <<[[flushimage()]] if isnew>>
     }
     return doflush(d);
 }
 @
 \l why not use global display instead? can have multiple one?
+%dead:
+%        <<[[flushimage()]] if isnew>>
 
 <<[[flushimage()]] sanity check d>>=
 if(d == nil)
@@ -4764,44 +4806,42 @@ if(d == nil)
 % meh OK
 
 
-%XXX ?? seems useless because unmarshalling code does not
-% use extra passed info
-
-<<[[Display]] other fields>>=
-bool	_isnewdisplay;
-@
-<<[[initdisplay()]] locals>>=
-bool isnew = false;
-@
-<<[[initdisplay()]] set isnew>>=
-if(n < NINFO)	/* this will do for now, we need something better here */
-    isnew = true;
-@
-<<[[initdisplay()]] set display _isnewdisplay part1>>=
-disp->_isnewdisplay = isnew;
-@
-
-<<[[initdisplay()]] locals>>=
-Dir *dir;
-@
-<<[[initdisplay()]] set display _isnewdisplay part2>>=
-dir = dirfstat(ctlfd);
-if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
-    disp->_isnewdisplay = true;
-free(dir);
-@
+%dead: seems useless because unmarshalling code does not use extra passed info
+%   <<[[Display]] other fields>>=
+%   bool	_isnewdisplay;
+%   @
+%   <<[[initdisplay()]] locals>>=
+%   bool isnew = false;
+%   @
+%   <<[[initdisplay()]] set isnew>>=
+%   if(n < NINFO)	/* this will do for now, we need something better here */
+%       isnew = true;
+%   @
+%   <<[[initdisplay()]] set display _isnewdisplay part1>>=
+%   disp->_isnewdisplay = isnew;
+%   @
+%   
+%   <<[[initdisplay()]] locals>>=
+%   Dir *dir;
+%   @
+%   <<[[initdisplay()]] set display _isnewdisplay part2>>=
+%   dir = dirfstat(ctlfd);
+%   if(dir!=nil && dir->qid.vers==1)	/* other way to tell */
+%       disp->_isnewdisplay = true;
+%   free(dir);
+%   @
 %dead:
 %if(dir!=nil && dir->type=='i'){
 %    disp->local = true;
 %    disp->dataqid = dir->qid.path;
 %}
-
-<<[[flushimage()]] if isnew>>=
-if(d->_isnewdisplay){
-    BPLONG(d->bufp, d->screenimage->id);
-    d->bufp += 4;
-}
-@
+%    
+%    <<[[flushimage()]] if isnew>>=
+%    if(d->_isnewdisplay){
+%        BPLONG(d->bufp, d->screenimage->id);
+%        d->bufp += 4;
+%    }
+%    @
 % after v, but according to drawmesg protocol and unmarshalling
 % code the code does not use this id.
 
@@ -4810,7 +4850,8 @@ if(d->_isnewdisplay){
 
 \subsection{Marshalling}
 
-% see doflush in chapter Kernel/User bridge
+% see doflush in chapter Kernel/User bridge which finally writes
+% on /dev/draw/x/data
 
 \subsection{Unmarshalling}
 
@@ -4827,10 +4868,13 @@ case 'v':
 
 \subsection{Algorithm}
 
-% who sets that?
 <<global flushrect>>=
 static  Rectangle   flushrect;
 @
+% who sets it except drawflush? 
+% - dstflush called by memimagedraw
+% - addflush
+% - drawopen(Qctl)
 
 % drawclose | ... -> <>
 <<function drawflush>>=
@@ -4848,15 +4892,8 @@ drawflush(void)
 
 % on bcm/ this is a noop as write in the framebuffer are already
 % flushed ... it's a direct connection.
+\t but how sync and avoir flickering?
 
-
-<<[[screensize()]] when use softscreen, other settings>>=
-if(scr->dev && scr->dev->page){
-    scr->vaddr = KADDR(VGAMEM());
-    scr->apsize = 1<<16;
-}
-@
-% >>
 
 
 % 386/vgascreen.c!
@@ -4869,7 +4906,7 @@ void
 flushmemscreen(Rectangle r)
 {
     VGAscr *scr;
-    uchar *sp, *disp, *sdisp, *edisp;
+    byte *sp, *disp, *sdisp, *edisp;
     int y, len, incs, off, page;
 
     scr = &vgascreen;
@@ -4946,6 +4983,14 @@ flushmemscreen(Rectangle r)
 @
 
 % TODO put flush or page here?
+
+<<[[screensize()]] when use softscreen, other settings>>=
+if(scr->dev && scr->dev->page){
+    scr->vaddr = KADDR(VGAMEM());
+    scr->apsize = 1<<16;
+}
+@
+% >>
 
 
 \section{Naming (and windows)}
@@ -5072,15 +5117,13 @@ DName *dn;
 case 'N':
     printmesg(fmt="Lbz", a, 0);
     m = 1+4+1+1;
-    if(n < m)
-        error(Eshortdraw);
+     <<[[drawmesg()]] sanity check n with m>>
     c = a[5];
     j = a[6];
     if(j == 0)  /* give me a non-empty name please */
         error(Eshortdraw);
     m += j;
-    if(n < m)
-        error(Eshortdraw);
+     <<[[drawmesg()]] sanity check n with m>>
     di = drawlookup(client, BGLONG(a+1), false);
     if(di == nil)
         error(Enodrawimage);
@@ -5108,14 +5151,12 @@ case 'N':
 case 'n':
     printmesg(fmt="Lz", a, 0);
     m = 1+4+1;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     j = a[5];
     if(j == 0)  /* give me a non-empty name please */
         error(Eshortdraw);
     m += j;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
     if(drawlookup(client, dstid, false))
         error(Eimageexists);
@@ -5294,8 +5335,7 @@ int op;
 case 'd':
     printmesg(fmt="LLLRPP", a, 0);
     m = 1+4+4+4+4*4+2*4+2*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dst = drawimage(client, a+1);
     dstid = BGLONG(a+1);
     src = drawimage(client, a+5);
@@ -5380,8 +5420,7 @@ drawclientop(Client *cl)
 case 'O':
     printmesg(fmt="b", a, 0);
     m = 1+1;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     client->op = a[1];
     continue;
 @
@@ -7169,8 +7208,7 @@ Point sp;
 case 'L':
     printmesg(fmt="LPPlllLP", a, 0);
     m = 1+4+2*4+2*4+4+4+4+4+2*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dst = drawimage(client, a+1);
     dstid = BGLONG(a+1);
     drawpoint(&p, a+5);
@@ -7666,8 +7704,7 @@ case 'p':
 case 'P':
     printmesg(fmt="LslllLPP", a, 0);
     m = 1+4+2+4+4+4+4+2*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
     dst = drawimage(client, a+1);
     ni = BGSHORT(a+5);
@@ -8436,8 +8473,7 @@ case 'e':
 case 'E':
     printmesg(fmt="LLPlllPll", a, 0);
     m = 1+4+4+2*4+4+4+4+2*4+2*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dst = drawimage(client, a+1);
     dstid = BGLONG(a+1);
     src = drawimage(client, a+5);
@@ -8920,6 +8956,34 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 
 \chapter{Colors}
 % test code showing use of colors?
+
+
+% drawmesg(allocate) | membrush | bellipse | memarc | memlalloc | ... -> <>
+<<function memfillcolor>>=
+void
+memfillcolor(Memimage *i, ulong val)
+{
+    ulong bits;
+    int d, y;
+
+    if(val == DNofill)
+        return;
+
+    bits = rgbatoimg(i, val);
+    switch(i->depth){
+    <<[[memfillcolor()]] switch depth cases>>
+    default:	/* 1, 2, 4, 8, 16, 32 */
+        for(d=i->depth; d<32; d*=2)
+            bits = (bits << d) | bits;
+        memsetl(wordaddr(i, i->r.min), bits, i->width*Dy(i->r));
+        break;
+    }
+}
+@
+% >>
+
+%memsetl later
+
 
 \section{[[RGB]]}
 
@@ -9517,9 +9581,7 @@ case 'x':
     m = 1+4+4+4+2*4+4*4+2*4+2;
     if(*a == 'x')
         m += 4+2*4;
-    if(n < m)
-        error(Eshortdraw);
-
+    <<[[drawmesg()]] sanity check n with m>>
     dst = drawimage(client, a+1);
     dstid = BGLONG(a+1);
     src = drawimage(client, a+5);
@@ -9534,8 +9596,7 @@ case 'x':
     ni = BGSHORT(a+45);
     u = a+m;
     m += ni*2;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     clipr = dst->clipr;
     dst->clipr = r;
     op = drawclientop(client);
@@ -10050,8 +10111,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
 case 'i':
     printmesg(fmt="Llb", a, 1);
     m = 1+4+4+1;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
     if(dstid == 0)
         error("cannot use display as font");
@@ -10084,8 +10144,7 @@ FChar *fc;
 case 'l':
     printmesg(fmt="LLSRPbb", a, 0);
     m = 1+4+4+2+4*4+2*4+1+1;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     font = drawlookup(client, BGLONG(a+1), true);
     if(font == 0)
         error(Enodrawimage);
@@ -11184,8 +11243,7 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
 case 'r':
     printmesg(fmt="LR", a, 0);
     m = 1+4+4*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     i = drawimage(client, a+1);
     drawrectangle(&r, a+5);
     if(!rectinrect(r, i->r))
@@ -11672,8 +11730,7 @@ case 'Y':
     printmesg(fmt="LR", a, 0);
 //  iprint("load %c\n", *a);
     m = 1+4+4*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
     dst = drawimage(client, a+1);
     drawrectangle(&r, a+5);
@@ -12304,6 +12361,12 @@ DImage*     fromname;   /* image this one is derived from, by name */
 @
 
 
+<<[[drawmesg()]] clipping case, sanity check ddst>>=
+if(ddst->name)
+    error("cannot change repl/clipr of shared image");
+@
+
+
 <<struct DName>>=
 struct DName
 {
@@ -12825,8 +12888,7 @@ DImage *dsrc;
 case 'A':
     printmesg(fmt="LLLb", a, 1);
     m = 1+4+4+4+1;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
     if(dstid == 0)
         error(Ebadarg);
@@ -12870,8 +12932,7 @@ CScreen *cs;
 case 'F':
     printmesg(fmt="L", a, 1);
     m = 1+4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     drawlookupscreen(client, BGLONG(a+1), &cs);
     drawuninstallscreen(client, cs); // The call
     continue;
@@ -12909,8 +12970,7 @@ DScreen *dscrn;
 case 'S':
     printmesg(fmt="Ll", a, 0);
     m = 1+4+4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
     if(dstid == 0)
         error(Ebadarg);
@@ -13884,8 +13944,7 @@ originwindow(Image *w, Point log, Point scr)
 case 'o':
     printmesg(fmt="LPP", a, 0);
     m = 1+4+2*4+2*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     dst = drawimage(client, a+1);
 
     if(dst->layer){
@@ -14282,16 +14341,14 @@ Memimage **lp;
 case 't':
     printmesg(fmt="bsL", a, 0);
     m = 1+1+2;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     nw = BGSHORT(a+2);
     if(nw < 0)
         error(Ebadarg);
     if(nw == 0)
         continue;
     m += nw*4;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     lp = malloc(nw*sizeof(Memimage*));
     if(lp == 0)
         error(Enomem);
@@ -16973,6 +17030,12 @@ greymaskread(Param *p, uchar *buf, int y)
 
 % color(2), color(6)
 
+<<global memdefcmap>>=
+Memcmap *memdefcmap = &def;
+@
+% def is big array in libmemdraw/cmap.c
+
+
 <<[[MemImage]] other fields>>=
 Memcmap	*cmap;
 @
@@ -19477,10 +19540,6 @@ case Qctl:
 \t rect? clipped? or full access? protection?? can draw on
 % other windows? when write on /dev/draw/x/ctl ?
 
-
-
-% flushrect is a global shown later.
-
 %TODO: drawlookupname should be screen_dimage!! assert! 
 
 
@@ -19643,8 +19702,7 @@ drawsetdebug(bool v)
 case 'D':
     printmesg(fmt="b", a, 0);
     m = 1+1;
-    if(n < m)
-        error(Eshortdraw);
+    <<[[drawmesg()]] sanity check n with m>>
     drawdebug = a[1];
     continue;
 @

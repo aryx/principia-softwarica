@@ -22,15 +22,13 @@ allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
 Image*
 _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val, int screenid, int refresh)
 {
+    Image *i = nil;
+    char *err = nil;
     byte *a;
-    char *err;
-    Image *i;
     Rectangle clipr;
     int id;
     int depth;
 
-    err = nil;
-    i = nil;
     /*s: [[_allocimage()]] sanity check chan */
     if(chan == 0){
         werrstr("bad channel descriptor");
@@ -54,9 +52,13 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     /* flush pending data so we don't get error allocating the image */
     flushimage(d, false);
 
+    // new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4]
     a = bufimage(d, 1+4+4+1+4+1+4*4+4*4+4);
+    /*s: [[_allocimage()]] sanity check a */
     if(a == nil)
         goto Error;
+    /*e: [[_allocimage()]] sanity check a */
+
     d->imageid++;
     id = d->imageid;
 
@@ -70,11 +72,13 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
     BPLONG(a+19, r.min.y);
     BPLONG(a+23, r.max.x);
     BPLONG(a+27, r.max.y);
+    /*s: [[_allocimage()]] set clipr */
     if(repl)
         /* huge but not infinite, so various offsets will leave it huge, not overflow */
         clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
     else
         clipr = r;
+    /*e: [[_allocimage()]] set clipr */
     BPLONG(a+31, clipr.min.x);
     BPLONG(a+35, clipr.min.y);
     BPLONG(a+39, clipr.max.x);
@@ -89,7 +93,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
         i = ai;
     /*e: [[_allocimage()]] if passed image */
     else{
-        i = malloc(sizeof(Image));
+        i = malloc(sizeof(Image)); // client side allocation
         /*s: [[_allocimage()]] sanity check i */
         if(i == nil){
             a = bufimage(d, 1+4);

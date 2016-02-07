@@ -27,9 +27,6 @@ struct Memdata
 
     /*s: [[Memdata]] other fields */
     bool	allocd;	/* is this malloc'd? */
-    /*x: [[Memdata]] other fields */
-    // ref<Memimage>, reverse of Memimage.bdata
-    void*	imref;
     /*e: [[Memdata]] other fields */
     // Extra
     int		ref;		/* number of Memimages using this data */

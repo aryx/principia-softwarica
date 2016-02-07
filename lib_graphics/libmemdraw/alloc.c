@@ -133,7 +133,6 @@ allocmemimage(Rectangle r, ulong chan)
         return nil;
     }
     /*e: [[allocmemimage()]] sanity check i */
-    md->imref = i;
 
     return i;
 }
