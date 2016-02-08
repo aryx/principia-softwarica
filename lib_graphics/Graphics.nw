@@ -832,7 +832,30 @@ struct Rectangle
 
 % max is first point outside
 
-%% seen already operations with rectangle in Drawing
+% enforced max > min? canonrect!
+% kind of ctor (law)
+<<function canonrect>>=
+Rectangle
+canonrect(Rectangle r)
+{
+    int t;
+    if (r.max.x < r.min.x) {
+        t = r.min.x;
+        r.min.x = r.max.x;
+        r.max.x = t;
+    }
+    if (r.max.y < r.min.y) {
+        t = r.min.y;
+        r.min.y = r.max.y;
+        r.max.y = t;
+    }
+    return r;
+}
+@
+% how can have one but not the other?
+% FIGURE where at center point p1, and then p1 can be 4 different places
+%  (higher/before, higher/after, lower/before, lower/after)
+
 
 %ctor
 <<function Rect>>=
@@ -884,10 +907,12 @@ Rectangle ZR;
 <<function Dx>>=
 #define	Dx(r)	((r).max.x-(r).min.x)
 @
+% width
 
 <<function Dy>>=
 #define	Dy(r)	((r).max.y-(r).min.y)
 @
+% height
 
 % arith too
 
@@ -920,84 +945,42 @@ rectsubpt(Rectangle r, Point p)
 
 
 
-<<function insetrect>>=
-Rectangle
-insetrect(Rectangle r, int n)
-{
-    r.min.x += n;
-    r.min.y += n;
-    r.max.x -= n;
-    r.max.y -= n;
-    return r;
-}
-@
-
 
 <<function rectXrect>>=
 bool
 rectXrect(Rectangle r, Rectangle s)
 {
-    return r.min.x<s.max.x && s.min.x<r.max.x &&
-           r.min.y<s.max.y && s.min.y<r.max.y;
+    return r.min.x < s.max.x && s.min.x < r.max.x &&
+           r.min.y < s.max.y && s.min.y < r.max.y;
 }
 @
+% FIGURE (check if intersection non empty)
 
 <<function rectinrect>>=
 bool
 rectinrect(Rectangle r, Rectangle s)
 {
-    return s.min.x<=r.min.x && r.max.x<=s.max.x && s.min.y<=r.min.y && r.max.y<=s.max.y;
+    return s.min.x <= r.min.x && r.max.x <= s.max.x && 
+           s.min.y <= r.min.y && r.max.y <= s.max.y;
 }
 @
+% r is in s
 
 <<function ptinrect>>=
 bool
 ptinrect(Point p, Rectangle r)
 {
-    return p.x>=r.min.x && p.x<r.max.x &&
-           p.y>=r.min.y && p.y<r.max.y;
+    return p.x >= r.min.x && p.x < r.max.x &&
+           p.y >= r.min.y && p.y < r.max.y;
 }
 @
+% use strict < for max because max is not part of rectangle! 
+% first point outside
 
 
-<<function canonrect>>=
-Rectangle
-canonrect(Rectangle r)
-{
-    int t;
-    if (r.max.x < r.min.x) {
-        t = r.min.x;
-        r.min.x = r.max.x;
-        r.max.x = t;
-    }
-    if (r.max.y < r.min.y) {
-        t = r.min.y;
-        r.min.y = r.max.y;
-        r.max.y = t;
-    }
-    return r;
-}
-@
 
-% this? useful for?
-
-<<function combinerect>>=
-void
-combinerect(Rectangle *r1, Rectangle r2)
-{
-    if(r1->min.x > r2.min.x)
-        r1->min.x = r2.min.x;
-    if(r1->min.y > r2.min.y)
-        r1->min.y = r2.min.y;
-    if(r1->max.x < r2.max.x)
-        r1->max.x = r2.max.x;
-    if(r1->max.y < r2.max.y)
-        r1->max.y = r2.max.y;
-}
-@
-
-% this? useful for?
-
+\n insetrect() later with border()
+\n combinerect() later with flush
 
 \section{[[Display]] (and [[Client]])}
 % and [[display]]
@@ -1012,7 +995,7 @@ combinerect(Rectangle *r1, Rectangle r2)
 <<struct Display>>=
 struct Display
 {
-    // ref_own<Image>, the framebuffer
+    // ref_own<Image>, the full screen
     Image	*image;
 
     <<[[Display]] devdraw connection fields>>
@@ -1218,6 +1201,8 @@ drawnewclient(void)
 @
 % ++ so starts at 1 (because static kdraw.clientid is 0)
 % could do cl->infoid = 0;  clearer. implicit in malloc.
+% note that Client.r set to 0. It is marked as used only when
+%  the /dev/draw/x/data (or another file) is opened.
 
 <<[[drawnewclient()]] grow array if necessary>>=
 // growing array
@@ -1425,6 +1410,10 @@ Memimage *memtransparent;
 Memimage *memopaque;
 @
 
+
+
+
+
 % [[devdraw]] interface
 
 % put in core DS chapter? merge with screen.h gscreen no?
@@ -1511,6 +1500,10 @@ struct Memdata
 % of channels, etc.
 
 \t FIGURE to explain diff between .base and .bdata (and .zero)
+% base is poolalloc raw pointer, then at this address 
+% - first word is backpointer to Memdata structure, 
+% - second word is callerpc for debugging
+% - then the actual pixels
 
 % this is kinda a framebuffer. But actually needs one
 % operation to transfer from this memory to the actual screen?
@@ -1529,7 +1522,8 @@ struct Memdata
 int		zero;		/* data->bdata+zero==&byte containing (0,0) */
 ulong	width;	/* width in words of a single scan line */
 @
-\t zero is complicated
+\t zero is complicated because some Memdata correspond to
+\t  rectangle which do not start at 0,0
 
 <<function byteaddr>>=
 byte*
@@ -1544,7 +1538,7 @@ byteaddr(Memimage *i, Point p)
         return a + p.x*(i->depth/8);
 }
 @
-
+% should sanity check still valid pointer?? that in valid range?
 
 
 
@@ -2062,7 +2056,7 @@ struct	Memsubfont
 
 
 \section{Windows and layers}
-% and screen.
+% and screen. and view.
 % delay to later!
 
 
@@ -2104,21 +2098,7 @@ screensize(int x, int y, int z, ulong chan)
     <<[[screensize()]] lock>>
     <<[[screensize()]] initializations part1>>
 
-    if(scr->paddr == 0){
-        int width = (x*z)/BI2BY; // width in bytes
-        void *p;
-
-        // !!the alloc!!
-        p = xalloc(width*y);
-        <<[[screensize()]] sanity check p>>
-        gscreendata.bdata = p;
-        scr->useflush = true;
-        <<[[screensize()]] when use softscreen, other settings>>
-    }
-    else{
-        gscreendata.bdata = scr->vaddr;
-        scr->useflush = (scr->dev && scr->dev->flush);
-    }
+    <<[[screensize()]] set [[gscreendata.bdata]]>>
 
     <<[[screensize()]] free previous gscreen>>
     // Setting gscreen!!
@@ -2126,7 +2106,6 @@ screensize(int x, int y, int z, ulong chan)
     <<[[screensize()]] sanity check gscreen>>
 
     <<[[screensize()]] vga settings>>
-
     <<[[screensize()]] unlock>>
 
     // initial draw
@@ -2138,23 +2117,9 @@ screensize(int x, int y, int z, ulong chan)
 }
 @
 % >>
-%old:
-%        int width = (x*z)/BI2WD; // width in words
-
-
-%In Kernel_extra.nw
-%#define BI2BY   8     /* bits per byte */
-%#define BI2WD   32      /* bits per word */
-%
-%#define BY2WD   4     /* bytes per word */
-%#define BY2V    8     /* bytes per double word */
-
-% useflush and soft screen or direct framebuffer
 
 % will see memimagedraw later, and flushmem too
-
 % memblack first memimagedraw! so black screen!
-
 
 
 % locking
@@ -2174,15 +2139,60 @@ unlock(&vgascreenlock);
 poperror();
 @
 
-% memory handling
 
-% xalloc! for physical screen! for other images, it's poolalloc
+% memory
 
 <<[[screensize()]] free previous gscreen>>=
 if(gscreen)
     freememimage(gscreen);
 @
 
+% error managment
+
+<<[[screensize()]] sanity check gscreen>>=
+if(gscreen == nil)
+    error("no memory for vga memimage");
+@
+
+\subsubsection{Soft screen vs framebuffer}
+
+<<[[screensize()]] set [[gscreendata.bdata]]>>=
+if(scr->paddr == 0){
+    int width = (x*z)/BI2BY; // width in bytes
+    void *p;
+
+    // !!the alloc!!
+    p = xalloc(width*y);
+    <<[[screensize()]] sanity check p>>
+    gscreendata.bdata = p;
+    scr->useflush = true;
+    <<[[screensize()]] when use softscreen, other settings>>
+}
+else{
+    // direct framebuffer
+    gscreendata.bdata = scr->vaddr;
+    scr->useflush = (scr->dev && scr->dev->flush);
+}
+@
+
+%old:
+%        int width = (x*z)/BI2WD; // width in words
+
+
+%In Kernel_extra.nw
+%#define BI2BY   8     /* bits per byte */
+%#define BI2WD   32      /* bits per word */
+%
+%#define BY2WD   4     /* bytes per word */
+%#define BY2V    8     /* bytes per double word */
+
+
+% memory handling
+
+% xalloc! for physical screen! for other images, it's poolalloc
+
+
+% useflush and soft screen or direct framebuffer
 
 <<global softscreen(x86)>>=
 static void *softscreen;
@@ -2210,20 +2220,12 @@ if(oldsoft)
 
 
 
-
 % error handling
 
 <<[[screensize()]] sanity check p>>=
 if(p == nil)
     error("no memory for vga soft screen");
 @
-
-<<[[screensize()]] sanity check gscreen>>=
-if(gscreen == nil)
-    error("no memory for vga memimage");
-@
-
-
 
 
 \subsubsection{[[memimageinit()]]}
@@ -2314,7 +2316,7 @@ memimagemove(void *from, void *to)
 % way to find back stuff pointings to those images. Fortunately
 % have back pointer in the array itself.
 
-\t FIGURE hard to understand layout
+\t FIGURE hard to understand layout, see also code of allocmemimage
 
 <<[[memimagemove()]] sanity check md base>>=
 if(md->base != from){
@@ -2467,6 +2469,13 @@ md->ref = 1;
 @
 % does not set base?
 % screen either allocated by xalloc or direct framebuffer
+
+% this md (of devdraw) is a duplicate of gscreendata (of screen.h)
+
+<<[[KDraw]] other fields>>=
+bool     softscreen;
+@
+% important info for draw to know if need to flush
 
 
 <<[[Memdata]] other fields>>=
@@ -2766,6 +2775,11 @@ if(di == nil){
 \subsubsection{VGA [[attachscreen()]]}
 %\subsubsection{Hardware support hook}
 
+% The connection between the two preceding section!
+
+% the interface between screen.h and devdraw, between
+% screenimage  and gscreen (and gscreendata).
+
 % /// makescreenimage -> <>
 % vgascreen.c
 <<function attachscreen(x86)>>=
@@ -2773,8 +2787,7 @@ byte*
 attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 {
 
-    if(gscreen == nil || gscreendata.bdata == nil)
-        return nil;
+    <<[[attachscreen()]] sanity check gscreen>>
 
     *r          = gscreen->clipr;
     *chan       = gscreen->chan;
@@ -2795,6 +2808,11 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 % VGA has a soft screen?
 
 
+<<[[attachscreen()]] sanity check gscreen>>=
+if(gscreen == nil || gscreendata.bdata == nil)
+    return nil;
+@
+
 \subsection{Next steps}
 
 %\subsection{[[drawopen()]]}
@@ -2809,23 +2827,23 @@ attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 \subsection{[[initdraw()]]}
 
 % see code of toy graphical app, initdraw(); which should set
-% global [[display]] and [[view]].
+% global [[display]] (and [[view]]).
 
 <<function initdraw>>=
 errorneg1
 initdraw(Errorfn error, char *fontname , char *label)
 {
-    char *dev = "/dev";
 
     if(access("/dev/draw/new", AEXIST)<0 && bind("#i", "/dev", MAFTER)<0){
         fprint(2, "imageinit: can't bind /dev/draw: %r\n");
         return ERROR_NEG1;
     }
-    return geninitdraw(dev, error, fontname, label, dev, Refnone);
+    return geninitdraw("/dev", error, fontname, label, "/dev", Refnone);
 }
 @
+%old:    char *dev = "/dev";  but was not even used for bind so ...
 
-% devdir and windir often equals and = /dev
+% devdir and windir often equals and equal to "/dev"
 <<function geninitdraw>>=
 errorneg1
 geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *windir, int ref)
@@ -2838,7 +2856,6 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
     <<[[geninitdraw()]] set up font>>
     <<[[geninitdraw()]] write label>>
     <<[[geninitdraw()]] get window>>
-
     atexit(drawshutdown);
 
     return OK_1;
@@ -2875,6 +2892,7 @@ Image *image;
 
 int n;
 @
+% why NINFO+1? because add a trailing \0 below
 
 <<constant NINFO>>=
 #define	NINFO	12*12
@@ -2913,12 +2931,14 @@ initdisplay(char *dev, char *win, Errorfn error)
     // our display!
     disp = mallocz(sizeof(Display), true);
     <<[[initdisplay()]] sanity check disp>>
+    disp->dirno = atoi(info+0*12);
 
     image = nil;
     <<[[initdisplay()]] sanity check image part1>>
     if(n >= NINFO){
         image = mallocz(sizeof(Image), true);
         <<[[initdisplay()]] sanity check image part2>>
+
         image->display = disp;
         image->id = 0; // info+1*12 but should always be 0
         image->chan = strtochan(info+2*12);
@@ -2936,22 +2956,22 @@ initdisplay(char *dev, char *win, Errorfn error)
         image->clipr.max.y = atoi(info+11*12);
     }
     disp->image = image;
+    disp->fd    = datafd;
+    disp->ctlfd = ctlfd;
+    disp->reffd = reffd;
 
     <<[[initdisplay()]] set display bufsize>>
     disp->buf = malloc(disp->bufsize+5);	/* +5 for flush message */
     <<[[initdisplay()]] sanity check buf>>
-    disp->dirno = atoi(info+0*12);
-
-    disp->fd    = datafd;
-    disp->ctlfd = ctlfd;
-    disp->reffd = reffd;
     disp->bufp = disp->buf;
+
     disp->error = error;
     disp->windir = t;
     disp->devdir = strdup(dev);
 
     qlock(&disp->qlock); // released in closedisplay (why not earlier? first API call?)
-
+  
+    // first API calls!
     disp->white = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DWhite);
     disp->black = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DBlack);
     <<[[initdisplay()]] sanity check white and black>>
@@ -2966,11 +2986,9 @@ initdisplay(char *dev, char *win, Errorfn error)
 %    <<[[initdisplay()]] set isnew>>
 %    <<[[initdisplay()]] set display _isnewdisplay part1>>
 %    <<[[initdisplay()]] set display _isnewdisplay part2>>
-
-
+\l plus 5 for flush message? but flush is using only 1 byte now.
 
 \t clipped if run under a window? how enforced?
-
 
 
 
@@ -2980,7 +2998,7 @@ if(disp->bufsize <= 0)
     disp->bufsize = 8000;
 <<[[initdisplay()]] sanity check bufsize>>
 @
-% iounit? libc.h
+% iounit in libc.h
 
 
 
@@ -3009,7 +3027,7 @@ if(t == nil)
 
 %less: could reorganize error managment like in Linux instead
 % have the errorx: followed, so less need 'goto previousone';
-%anyway it's aspectized so less important
+%anyway it's aspectized so less important now
 
 <<[[initdisplay()]] sanity check ctlfd>>=
 if(ctlfd < 0){
@@ -3107,6 +3125,7 @@ closedisplay(Display *disp)
 }
 @
 % can have multiple display? apparently.
+\l call with d unlocked? initdisplay comment says the opposite
 
 
 % exit -> <> (atexit(<>) <- geninitdraw <- initdraw)
@@ -3130,7 +3149,7 @@ drawshutdown(void)
 static void
 _closedisplay(Display *disp, bool isshutdown)
 {
-    int fd;
+    fdt fd;
     char buf[128];
 
     if(disp == nil)
@@ -3157,35 +3176,40 @@ _closedisplay(Display *disp, bool isshutdown)
     close(disp->ctlfd);
     /* should cause refresh slave to shut down */
     close(disp->reffd);
+
     qunlock(&disp->qlock);
     free(disp);
 }
 @
+% unlock!
 
 \subsection{Next steps}
 
+% actually after setup disp->buf we saw first calls to draw API
+% with allocimage which will write in /dev/draw/x/data! User/Kernel
+% bridge which we will see now.
+
 %\section{Client side part 2}
-% but need user/kernel bridge
+% but need User/Kernel bridge first.
 
-\section{Font}
+\section{Fonts, labels, and windows}
 
-% see later
-
-
-\section{Label}
-
-% see later
-
-\section{Window}
-
-% see later, just say  view point to Display->image? with id 0?
+% See later.
+% For windows just say  view point to Display->image? with id 0?
 
 
 \chapter{User/Kernel Bridge}
+% kernel side part 2
 
 % some kind of RPC and protocol
 
+% in initdisplay, open /dev/draw/new and then
+% read from it. All of that served by draw device (kinda of a server) 
+% which we will see now.
+
+
 \section{Draw device}
+
 
 % 'i' below so bind #i
 
@@ -3218,6 +3242,7 @@ Dev drawdevtab = {
 
 % Seen drawattach() in Initialisation/mounting-draw section already.
 %  setup screenimage (via attachscreen), from data setup by vga device.
+
 % Need understand part of Kernel.nw.
 % does    return devattach('i', spec);
 %  spec = extra paramaters (usually nil)
@@ -3248,7 +3273,7 @@ enum
 @
 %pad: I reordered qids, grouped in QTDIR vs QTFILE
 
-% remember plan9 has union dir, so Qtopdir is /dev
+% remember plan9 has union dir, so Qtopdir is actually /dev
 
 <<constant QSHIFT>>=
 /*
@@ -3364,6 +3389,11 @@ if(t == Qwinname){
 @
 % fill dp
 
+% will see important of winname later
+
+% (how make sure not devgen not call drawgen indefinitely for Qwinname?
+%  because it returns a QTFILE?)
+
 <<[[drawgen()]] second level directory listing>>=
 if(t == Q2nd || t == Qnew){
     if(s == 0){
@@ -3388,6 +3418,8 @@ if(t == Q2nd || t == Qnew){
 % >>
 % use of clientid here! so will be listed as /dev/draw/x/... where
 %  x is clientid that always increment
+\l why t == Qnew here? could remove no? or do extra code like for Qwinname
+\l  separated
 
 <<[[drawgen()]] third level directory listing>>=
 path = c->qid.path & ~((1<<QSHIFT)-1);    /* slot component */
@@ -3621,19 +3653,11 @@ drawwrite(Chan *c, void *a, long n, vlong)
 {
     Client *cl;
     <<[[drawwrite()]] other locals>>
-    <<[[drawwrite()]] sanity check c>>
 
+    <<[[drawwrite()]] sanity check c>>
     cl = drawclient(c);
 
-    dlock();
-    if(waserror()){
-
-        drawwakeall();
-
-        dunlock();
-        nexterror();
-    }
-
+    <<[[drawwrite()]] lock>>
     switch(QID(c->qid)){
     <<[[drawwrite()]] switch qid cases>>
     default:
@@ -3650,6 +3674,19 @@ if(c->qid.type & QTDIR)
     error(Eisdir);
 @
 
+
+% locking a bit different, why? drawwakeall?
+<<[[drawwrite()]] lock>>=
+dlock();
+if(waserror()){
+
+    drawwakeall();
+
+    dunlock();
+    nexterror();
+}
+@
+
 \section{Draw device files}
 
 \subsection{Opening [[/dev/draw/new]]}
@@ -3662,17 +3699,18 @@ Client *cl;
 if(QID(c->qid) == Qnew){
     cl = drawnewclient();
     <<[[drawopen()]] when Qnew, sanity check cl>>
-    c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
+    c->qid.path = Qctl|((cl->slot+1)<<QSHIFT);
 }
 @
+% >>
 \l why not put in switch instead?
-% saw drawnewclient in core DS chapter.
+% saw drawnewclient() in core DS chapter.
 <<[[drawopen()]] switch qid cases>>=
 case Qnew:
     break;
 @
 
-
+% generate a Qctl qid!
 % opening qnew redirect to a /dev/draw/x/ctl!
 % (x is not slot, slot is reused, x is clientid, see drawgen
 
@@ -3682,7 +3720,7 @@ if(cl == nil)
 @
 
 \subsection{Reading [[/dev/draw/x/ctl]]}
-% read! (and write a bit)
+% (and write a bit)
 
 \l I put the code of drawopen and Qctl in adv topics because normally
 \l  you should not do that and the code looked subtle.
@@ -3710,8 +3748,10 @@ case Qctl:
     cl->infoid = -1;
     break;
 @
-% not just for initdisplay though. enter infoid below.
 % 12 integers with %11d + 1 space = 12 * 12
+% (note extra space after last number too)
+
+% not just for initdisplay though. enter infoid below.
 
 <<[[Client]] other fields>>=
 int     infoid;
@@ -3720,7 +3760,7 @@ int     infoid;
 %  get information about image with specific id, so maybe good field name.
 \l related to named image too?
 
-% set to 0 in drawnewclient because of malloc.
+% infoid is set to 0 in drawnewclient because of malloc.
 % can be changed:
 % (also used for namedimage and 'n' message)
 
@@ -3731,7 +3771,7 @@ case Qctl:
     cl->infoid = BGLONG((uchar*)a);
     break;
 @
-
+% set infoid for further reading operation
 
 
 <<[[drawread()]] other locals>>=
@@ -3750,9 +3790,9 @@ if(cl->infoid == 0){
 }
 @
 
-% when cl->infoid == 0? because of malloc of new client?
+% when cl->infoid == 0? because of malloc of new client.
 % when <0?  just after first read, so further read
-%  of Qctl will return an error?
+%  of Qctl will return an error.
 % when positive? when write to ctl to get info about another image!
 
 <<[[drawread()]] switch qid cases, when Qctl, sanity check infoid>>=
@@ -3774,8 +3814,8 @@ if(di == nil)
 
 
 \subsection{Writing [[/dev/draw/x/data]]}
+% (and open)
 % and DImage?
-% open! and write!
 
 
 <<[[drawopen()]] switch qid cases>>=
@@ -3796,10 +3836,14 @@ case Qdata:
     drawwakeall();
     break;
 @
-% drawwakeall ?
+
+% The big dispatch, see next section.
+
+% drawwakeall? again.
 
 % it is possible to read from Qdata to read images as explained
-% later in Section X
+% later in Section X.
+
 
 % seems a bit useless to have 3 different device files.
 % maybe we could use only 1 and have the open/read/write on it.
@@ -3814,8 +3858,13 @@ case Qdata:
 
 \section{Draw message protocol}
 
+% we will see later in the book repetitive structure
+% which correspond to what we call the Draw message protocol.
+% Each section below present a step in this protocol.
 
 \subsection{API}
+
+% first API.
 
 % ex line() ...
 
@@ -3859,7 +3908,7 @@ int		bufsize;
 // index in Display.buf array
 byte	*bufp;
 @
-% who sets bufsize? initdisplay, usually set to iounit(datafd)
+% who sets bufsize? initdisplay, usually set to iounit(datafd).
 
 % when want to write a "message" of size n, get a pointer to the
 % next free byte in the buffer
@@ -3908,6 +3957,7 @@ doflush(Display *d)
     return OK_1;
 }
 @
+% white!!
 
 <<[[doflush()]] sanity check nn>>=
 if(nn != n){
@@ -3979,19 +4029,16 @@ drawmesg(Client *client, void *av, int n)
 % via screen and then VGAscr and then VGAdev interfaces
 % (and also VGAcur interface)
 
+%\subsubsection{Screen interface}
+% Kernel/Hardware bridge
 
-
-
-\section{Screen interface}
 % screen.h
 
-
-
-\section{Graphics card}
+%\subsubsection{Graphics card}
 % Graphic VGA card?
 % there is also the VGA interface, which is something different
 
-%\section{VGA interface}
+%\subsubsection{VGA interface}
 % or VGA screen? meh maybe, simpler to just have a
 % framebuffer
 % vga.h
@@ -4023,7 +4070,7 @@ drawmesg(Client *client, void *av, int n)
 
 \subsection{API}
 
-% remember in initdisplay
+% remember in initdisplay first API calls!
 %    disp->white = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DWhite);
 %    disp->black = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DBlack);
 
@@ -4040,8 +4087,8 @@ allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
     return i;
 }
 @
-\l use Refbackup instead of 0?
-\t when want to have a Rectangle that does not start at Pt(0, 0) ?
+\l 0,0 is screenid and refresh. Could use Refbackup but anyway adv concept.
+\t can have a Rectangle that does not start at Pt(0, 0) ?
 
 % for a color r is usually R(0,0,1,1), chan is view->chan, repl = true,
 % and val is the color
@@ -4060,16 +4107,6 @@ freeimage(Image *i)
 @
 \l why not _freeimage? be consistent at least, and why extra function?
 
-\t mv later?
-<<enum _anon_ (include/draw.h)2>>=
-enum
-{
-    /* refresh methods */
-    Refbackup	= 0,
-    Refnone		= 1,
-    Refmesg		= 2 // incomplete apparently
-};
-@
 
 
 \subsection{Marshalling}
@@ -4103,8 +4140,10 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
 
     a[0] = 'b';
     BPLONG(a+1, id);
+
     BPLONG(a+5, screenid);
     a[9] = refresh;
+
     BPLONG(a+10, chan);
     a[14] = repl;
     BPLONG(a+15, r.min.x);
@@ -4244,6 +4283,7 @@ ulong chan;
 int repl;
 Rectangle r, clipr;
 ulong value;
+
 Memimage *i;
 @
 
@@ -4254,8 +4294,10 @@ case 'b':
     m = 1+4+4+1+4+1+4*4+4*4+4;
      <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
+
     scrnid = BGSHORT(a+5);
     refresh = a[9];
+
     chan = BGLONG(a+10);
     repl = a[14];
     drawrectangle(&r, a+15);
@@ -4520,7 +4562,7 @@ if(dimage->ref < 0)
 
 
 
-\section{Clipping}
+\section{Clipping and replication}
 
 % Clipping is fundamental graphics operation. Very useful
 % generic functionality. Like narrow mode in emacs :)
@@ -4530,12 +4572,15 @@ if(dimage->ref < 0)
 % Modify the first parameter when they overlap to match the intersection.
 
 
+% either repl or clip? cant have both?
+
 <<[[drawmesg()]] allocate image case, clip clipr>>=
 if(!repl)
     rectclip(&i->clipr, r);
 @
+% kinda sanity check that clipr is inside r
 
-% flushmemscreen | drawmesg(allocate) | -> <>
+% flushmemscreen | drawmesg(allocate) | ... -> <>
 <<function rectclip>>=
 bool
 rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */
@@ -4561,6 +4606,10 @@ rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */
 }
 @
 % FIGURE with intersection
+
+% return false if no overlap. will be used as rectclip(x, screenimage->r)
+%  to see if rectangle is outside screen in which case flush is not needed.
+
 
 <<[[_allocimage()]] set clipr>>=
 if(repl)
@@ -4625,6 +4674,7 @@ case 'c':
     continue;
 
 @
+% forgot call rectclip()? to make sure valid clipr?
 
 <<[[drawmesg()]] clipping case, sanity check ddst>>=
 if(ddst == nil)
@@ -4638,149 +4688,8 @@ if(ddst == nil)
 % a rectangle, so the call is actually to modify dst->clipr.
 
 % But later we will see memimagedraw which use clipping when
-% draw a src on dst.
-
-%XXX complicated function, mv later I think when see better context of use
-%  and need
-% memimagedraw | ?? -> <>
-<<function drawclip>>=
-/*
- * Clip the destination rectangle further based on the properties of the 
- * source and mask rectangles.  Once the destination rectangle is properly
- * clipped, adjust the source and mask rectangles to be the same size.
- * Then if source or mask is replicated, move its clipped rectangle
- * so that its minimum point falls within the repl rectangle.
- *
- * Return zero if the final rectangle is null.
- */
-int
-drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, Point *p1, Rectangle *sr, Rectangle *mr)
-{
-    Point rmin, delta;
-    bool splitcoords;
-    Rectangle omr;
-
-    if(r->min.x >= r->max.x || r->min.y >= r->max.y)
-        return 0;
-    splitcoords = (p0->x != p1->x) || (p0->y != p1->y);
-
-    /* clip to destination */
-    rmin = r->min;
-    if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
-        return 0;
-
-    /* move mask point */
-    p1->x += r->min.x - rmin.x;
-    p1->y += r->min.y - rmin.y;
-    /* move source point */
-    p0->x += r->min.x - rmin.x;
-    p0->y += r->min.y - rmin.y;
-
-    /* map destination rectangle into source */
-    sr->min = *p0;
-    sr->max.x = p0->x+Dx(*r);
-    sr->max.y = p0->y+Dy(*r);
-
-    /* sr is r in source coordinates; clip to source */
-    if(!(src->flags&Frepl) && !rectclip(sr, src->r))
-        return 0;
-    if(!rectclip(sr, src->clipr))
-        return 0;
-
-    /* compute and clip rectangle in mask */
-    if(splitcoords){
-        /* move mask point with source */
-        p1->x += sr->min.x - p0->x;
-        p1->y += sr->min.y - p0->y;
-        mr->min = *p1;
-        mr->max.x = p1->x+Dx(*sr);
-        mr->max.y = p1->y+Dy(*sr);
-        omr = *mr;
-
-        /* mr is now rectangle in mask; clip it */
-        if(!(mask->flags&Frepl) && !rectclip(mr, mask->r))
-            return 0;
-        if(!rectclip(mr, mask->clipr))
-            return 0;
-
-        /* reflect any clips back to source */
-        sr->min.x += mr->min.x-omr.min.x;
-        sr->min.y += mr->min.y-omr.min.y;
-        sr->max.x += mr->max.x-omr.max.x;
-        sr->max.y += mr->max.y-omr.max.y;
-        *p1 = mr->min;
-    }else{
-        if(!(mask->flags&Frepl) && !rectclip(sr, mask->r))
-            return 0;
-        if(!rectclip(sr, mask->clipr))
-            return 0;
-        *p1 = sr->min;
-    }
-
-    /* move source clipping back to destination */
-    delta.x = r->min.x - p0->x;
-    delta.y = r->min.y - p0->y;
-    r->min.x = sr->min.x + delta.x;
-    r->min.y = sr->min.y + delta.y;
-    r->max.x = sr->max.x + delta.x;
-    r->max.y = sr->max.y + delta.y;
-
-    /* move source rectangle so sr->min is in src->r */
-    if(src->flags&Frepl) {
-        delta.x = drawreplxy(src->r.min.x, src->r.max.x, sr->min.x) - sr->min.x;
-        delta.y = drawreplxy(src->r.min.y, src->r.max.y, sr->min.y) - sr->min.y;
-        sr->min.x += delta.x;
-        sr->min.y += delta.y;
-        sr->max.x += delta.x;
-        sr->max.y += delta.y;
-    }
-    *p0 = sr->min;
-
-    /* move mask point so it is in mask->r */
-    *p1 = drawrepl(mask->r, *p1);
-    mr->min = *p1;
-    mr->max.x = p1->x+Dx(*sr);
-    mr->max.y = p1->y+Dy(*sr);
-
-    assert(Dx(*sr) == Dx(*mr) && Dx(*mr) == Dx(*r));
-    assert(Dy(*sr) == Dy(*mr) && Dy(*mr) == Dy(*r));
-    assert(ptinrect(*p0, src->r));
-    assert(ptinrect(*p1, mask->r));
-    assert(ptinrect(r->min, dst->r));
-
-    return 1;
-}
-@
-
-
-
-% drawrepl | drawclip -> <>
-<<function drawreplxy>>=
-int
-drawreplxy(int min, int max, int x)
-{
-    int sx;
-
-    sx = (x-min)%(max-min);
-    if(sx < 0)
-        sx += max-min;
-    return sx+min;
-}
-@
-
-% drawclip | drawmask -> <>
-<<function drawrepl>>=
-Point
-drawrepl(Rectangle r, Point p)
-{
-    p.x = drawreplxy(r.min.x, r.max.x, p.x);
-    p.y = drawreplxy(r.min.y, r.max.y, p.y);
-    return p;
-}
-@
-
-
-
+% draw a src on dst. But code of drawclip() is very complicated
+% so see section X later.
 
 
 
@@ -4791,7 +4700,9 @@ drawrepl(Rectangle r, Point p)
 
 \subsection{API}
 
-% visible argument?
+% visible argument? called many times with false internally
+%  to avoid wrong error messages
+
 <<function flushimage>>=
 errorneg1
 flushimage(Display *d, bool visible)
@@ -4862,6 +4773,7 @@ if(visible){
     *d->bufp++ = 'v';	/* five bytes always reserved for this */
 }
 @
+% but now I dont use five, so still valid comment?
 
 % see doflush in chapter Kernel/User bridge which finally writes
 % on /dev/draw/x/data
@@ -4900,7 +4812,58 @@ drawflush(void)
     flushrect = Rect(10000, 10000, -10000, -10000);
 }
 @
-% that's a big screen :)
+% it's actually an empty rectangle! min is more than max!
+% see combinerect below.
+\l why not use Rect(0,0, 0,0) instead? because can have Rect outside screen?
+
+% some code can limit the flushrect so can optimize things.
+
+
+% drawmesg(draw) | ??? -> <>
+<<function dstflush>>=
+static
+void
+dstflush(int dstid, Memimage *dst, Rectangle r)
+{
+    <<[[dstflush()]] locals>>
+
+    if(dstid == 0){ // the screen
+        combinerect(&flushrect, r);
+        return;
+    }
+    // else
+    <<[[dstflush()]] sanity check dst>>
+    <<[[dstflush()]] if layer>>
+}
+@
+\t but flushrect is huge originally so combine is useless.
+
+<<[[dstflush()]] sanity check dst>>=
+/* how can this happen? -rsc, dec 12 2002 */
+if(dst == nil){
+    print("nil dstflush\n");
+    return;
+}
+@
+
+<<function combinerect>>=
+void
+combinerect(Rectangle *r1, Rectangle r2)
+{
+    if(r1->min.x > r2.min.x)
+        r1->min.x = r2.min.x;
+    if(r1->min.y > r2.min.y)
+        r1->min.y = r2.min.y;
+    if(r1->max.x < r2.max.x)
+        r1->max.x = r2.max.x;
+    if(r1->max.y < r2.max.y)
+        r1->max.y = r2.max.y;
+}
+@
+% bounding box, useless to optimize further.
+
+
+
 
 \subsection{Hardware support hook}
 
@@ -5008,7 +4971,7 @@ if(a == nil)
 <<[[namedimage()]] body>>=
 byte *a;
 char *err = nil;
-char buf[12*12+1];
+char buf[12*12+1]; // NINFO+1
 Image *i = nil;
 int id, n;
 ulong chan;
@@ -5323,6 +5286,7 @@ DImage*     fromname;   /* image this one is derived from, by name */
 if(ddst->name)
     error("cannot change repl/clipr of shared image");
 @
+% first level of security?
 
 
 <<[[drawclose()]] free names>>=
@@ -5406,6 +5370,20 @@ border(Image *im, Rectangle r, int i, Image *color, Point sp)
         color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
 }
 @
+
+<<function insetrect>>=
+Rectangle
+insetrect(Rectangle r, int n)
+{
+    r.min.x += n;
+    r.min.y += n;
+    r.max.x -= n;
+    r.max.y -= n;
+    return r;
+}
+@
+% reduce rectangle
+
 
 
 <<function drawop>>=
@@ -5543,28 +5521,10 @@ drawimage(Client *client, uchar *a)
 
 
 
-<<function dstflush>>=
-static
-void
-dstflush(int dstid, Memimage *dst, Rectangle r)
-{
-    Memlayer *l;
 
-    if(dstid == 0){
-        combinerect(&flushrect, r);
-        return;
-    }
-    /* how can this happen? -rsc, dec 12 2002 */
-    if(dst == nil){
-        print("nil dstflush\n");
-        return;
-    }
 
-    <<[[dstflush()]] if layer>>
 
-    addflush(r);
-}
-@
+
 
 
 
@@ -6204,58 +6164,151 @@ bool hwdraw(Memdrawparam *par)
 % TODO put scroll or fill method here?
 
 
-<<[[KDraw]] other fields>>=
-bool     softscreen;
-@
 
-<<function addflush>>=
-static void
-addflush(Rectangle r)
+
+\section{Clipping}
+
+%XXX complicated function, mv later I think when see better context of use
+%  and need
+% memimagedraw | ?? -> <>
+<<function drawclip>>=
+/*
+ * Clip the destination rectangle further based on the properties of the 
+ * source and mask rectangles.  Once the destination rectangle is properly
+ * clipped, adjust the source and mask rectangles to be the same size.
+ * Then if source or mask is replicated, move its clipped rectangle
+ * so that its minimum point falls within the repl rectangle.
+ *
+ * Return zero if the final rectangle is null.
+ */
+int
+drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, Point *p1, Rectangle *sr, Rectangle *mr)
 {
-    int abb, ar, anbb;
-    Rectangle nbb;
+    Point rmin, delta;
+    bool splitcoords;
+    Rectangle omr;
 
-    if(sdraw.softscreen==false || !rectclip(&r, screenimage->r))
-        return;
+    if(r->min.x >= r->max.x || r->min.y >= r->max.y)
+        return 0;
+    splitcoords = (p0->x != p1->x) || (p0->y != p1->y);
 
-    if(flushrect.min.x >= flushrect.max.x){
-        flushrect = r;
-        waste = 0;
-        return;
+    /* clip to destination */
+    rmin = r->min;
+    if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
+        return 0;
+
+    /* move mask point */
+    p1->x += r->min.x - rmin.x;
+    p1->y += r->min.y - rmin.y;
+    /* move source point */
+    p0->x += r->min.x - rmin.x;
+    p0->y += r->min.y - rmin.y;
+
+    /* map destination rectangle into source */
+    sr->min = *p0;
+    sr->max.x = p0->x+Dx(*r);
+    sr->max.y = p0->y+Dy(*r);
+
+    /* sr is r in source coordinates; clip to source */
+    if(!(src->flags&Frepl) && !rectclip(sr, src->r))
+        return 0;
+    if(!rectclip(sr, src->clipr))
+        return 0;
+
+    /* compute and clip rectangle in mask */
+    if(splitcoords){
+        /* move mask point with source */
+        p1->x += sr->min.x - p0->x;
+        p1->y += sr->min.y - p0->y;
+        mr->min = *p1;
+        mr->max.x = p1->x+Dx(*sr);
+        mr->max.y = p1->y+Dy(*sr);
+        omr = *mr;
+
+        /* mr is now rectangle in mask; clip it */
+        if(!(mask->flags&Frepl) && !rectclip(mr, mask->r))
+            return 0;
+        if(!rectclip(mr, mask->clipr))
+            return 0;
+
+        /* reflect any clips back to source */
+        sr->min.x += mr->min.x-omr.min.x;
+        sr->min.y += mr->min.y-omr.min.y;
+        sr->max.x += mr->max.x-omr.max.x;
+        sr->max.y += mr->max.y-omr.max.y;
+        *p1 = mr->min;
+    }else{
+        if(!(mask->flags&Frepl) && !rectclip(sr, mask->r))
+            return 0;
+        if(!rectclip(sr, mask->clipr))
+            return 0;
+        *p1 = sr->min;
     }
-    nbb = flushrect;
-    combinerect(&nbb, r);
-    ar = Dx(r)*Dy(r);
-    abb = Dx(flushrect)*Dy(flushrect);
-    anbb = Dx(nbb)*Dy(nbb);
-    /*
-     * Area of new waste is area of new bb minus area of old bb,
-     * less the area of the new segment, which we assume is not waste.
-     * This could be negative, but that's OK.
-     */
-    waste += anbb-abb - ar;
-    if(waste < 0)
-        waste = 0;
-    /*
-     * absorb if:
-     *  total area is small
-     *  waste is less than half total area
-     *  rectangles touch
-     */
-    if(anbb<=1024 || waste*2<anbb || rectXrect(flushrect, r)){
-        flushrect = nbb;
-        return;
+
+    /* move source clipping back to destination */
+    delta.x = r->min.x - p0->x;
+    delta.y = r->min.y - p0->y;
+    r->min.x = sr->min.x + delta.x;
+    r->min.y = sr->min.y + delta.y;
+    r->max.x = sr->max.x + delta.x;
+    r->max.y = sr->max.y + delta.y;
+
+    /* move source rectangle so sr->min is in src->r */
+    if(src->flags&Frepl) {
+        delta.x = drawreplxy(src->r.min.x, src->r.max.x, sr->min.x) - sr->min.x;
+        delta.y = drawreplxy(src->r.min.y, src->r.max.y, sr->min.y) - sr->min.y;
+        sr->min.x += delta.x;
+        sr->min.y += delta.y;
+        sr->max.x += delta.x;
+        sr->max.y += delta.y;
     }
-    /* emit current state */
-    if(flushrect.min.x < flushrect.max.x)
-        flushmemscreen(flushrect);
-    flushrect = r;
-    waste = 0;
+    *p0 = sr->min;
+
+    /* move mask point so it is in mask->r */
+    *p1 = drawrepl(mask->r, *p1);
+    mr->min = *p1;
+    mr->max.x = p1->x+Dx(*sr);
+    mr->max.y = p1->y+Dy(*sr);
+
+    assert(Dx(*sr) == Dx(*mr) && Dx(*mr) == Dx(*r));
+    assert(Dy(*sr) == Dy(*mr) && Dy(*mr) == Dy(*r));
+    assert(ptinrect(*p0, src->r));
+    assert(ptinrect(*p1, mask->r));
+    assert(ptinrect(r->min, dst->r));
+
+    return 1;
 }
 @
-<<global waste>>=
-static  int     waste;
+
+
+
+% drawrepl | drawclip -> <>
+<<function drawreplxy>>=
+int
+drawreplxy(int min, int max, int x)
+{
+    int sx;
+
+    sx = (x-min)%(max-min);
+    if(sx < 0)
+        sx += max-min;
+    return sx+min;
+}
 @
+
+% drawclip | drawmask -> <>
+<<function drawrepl>>=
+Point
+drawrepl(Rectangle r, Point p)
+{
+    p.x = drawreplxy(r.min.x, r.max.x, p.x);
+    p.y = drawreplxy(r.min.y, r.max.y, p.y);
+    return p;
+}
+@
+
+
+
 
 
 
@@ -12507,10 +12560,10 @@ Memlayer	*layer;	/* nil if not a layer*/
 
 
 
-\subsection{[[DName]] and [[screename]]}
+\subsection{[[screename]]}
 % not enough, another DS, argh.
 
-% now in Image/Naming section
+% DName now in Image/Naming section
 
 % in adv topic? normally should have enough with screenimage (draw_screen)!
 % but under windowing system need intermediate step to actually
@@ -13266,6 +13319,17 @@ Memimage *l;
 Refx *refx;
 @
 
+<<enum _anon_ (include/draw.h)2>>=
+enum
+{
+    /* refresh methods */
+    Refbackup	= 0,
+    Refnone		= 1,
+    Refmesg		= 2 // incomplete apparently
+};
+@
+
+
 %TODO mv in Windows section?
 <<[[drawmesg()]] allocate image case, if screen id>>=
 if(scrnid){
@@ -13640,17 +13704,82 @@ ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
 
 \subsection{Image flush}
 
+<<[[dstflush()]] locals>>=
+Memlayer *l;
+@
+
 <<[[dstflush()]] if layer>>=
 l = dst->layer;
 if(l == nil)
     return;
+
+// else
 do{
     if(l->screen->image->data != screenimage->data)
         return;
     r = rectaddpt(r, l->delta);
     l = l->screen->image->layer;
 }while(l);
+
+addflush(r);
+
 @
+
+
+
+% drawmsg(draw) -> dstflush -> <>
+<<function addflush>>=
+static void
+addflush(Rectangle r)
+{
+    int abb, ar, anbb;
+    Rectangle nbb;
+
+    if(!sdraw.softscreen || !rectclip(&r, screenimage->r))
+        return;
+    if(flushrect.min.x >= flushrect.max.x){
+        flushrect = r;
+        waste = 0;
+        return;
+    }
+    // else
+
+    nbb = flushrect;
+    combinerect(&nbb, r);
+    ar = Dx(r)*Dy(r);
+    abb = Dx(flushrect)*Dy(flushrect);
+    anbb = Dx(nbb)*Dy(nbb);
+    /*
+     * Area of new waste is area of new bb minus area of old bb,
+     * less the area of the new segment, which we assume is not waste.
+     * This could be negative, but that's OK.
+     */
+    waste += anbb-abb - ar;
+    if(waste < 0)
+        waste = 0;
+    /*
+     * absorb if:
+     *  total area is small
+     *  waste is less than half total area
+     *  rectangles touch
+     */
+    if(anbb<=1024 || waste*2<anbb || rectXrect(flushrect, r)){
+        flushrect = nbb;
+        return;
+    }
+
+    /* emit current state */
+    if(flushrect.min.x < flushrect.max.x)
+        flushmemscreen(flushrect);
+    flushrect = r;
+
+    waste = 0;
+}
+@
+<<global waste>>=
+static  int     waste;
+@
+
 
 
 
@@ -17797,7 +17926,7 @@ boolcalc1011(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
 %\section{JPG}
 % libimg/
 
-\section{Bezier}
+\section{Bezier curves}
 % spline
 
 % no kernel support I think, it just use the previous building blocks
@@ -21148,6 +21277,17 @@ VGAdev vgaclgd542xdev = {
 
 
 
+\subsection{Linear mode}
+
+<<function clgd542xlinear(x86)>>=
+static void
+clgd542xlinear(VGAscr* scr, int, int)
+{
+    vgalinearpciid(scr, 0x1013, 0);
+}
+@
+
+
 \subsection{Page}
 
 <<function clgd542xpage(x86)>>=
@@ -21183,17 +21323,6 @@ clgd542xpageset(VGAscr*, int page)
 }
 @
 
-
-
-\subsection{Linear mode}
-
-<<function clgd542xlinear(x86)>>=
-static void
-clgd542xlinear(VGAscr* scr, int, int)
-{
-    vgalinearpciid(scr, 0x1013, 0);
-}
-@
 
 
 \subsection{Cursor}
