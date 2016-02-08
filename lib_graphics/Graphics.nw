@@ -12,8 +12,8 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, changed for the better a few things:
-% - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, Display.dataqid, ...)
-%   TODO isnew?
+% - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, Display.dataqid,
+%    Display.isnew, Memdata.imref, ...)
 % - screen.h cleaner interface
 % - renamed some globals (screen -> view, _screen -> screen)
 %   TODO gscreen, screenimage, vgascr, so easier to see associated part
@@ -3722,7 +3722,7 @@ int     infoid;
 
 % set to 0 in drawnewclient because of malloc.
 % can be changed:
-
+% (also used for namedimage and 'n' message)
 
 <<[[drawwrite()]] switch qid cases>>=
 case Qctl:
@@ -4011,6 +4011,7 @@ drawmesg(Client *client, void *av, int n)
 
 % Can have multiple images, draw there, and at some point
 % quickly copy on main image (display->image).
+
 % The initial display->image is actually allocated for you
 % (got a first image allocated for you when open draw device, 'screen/view')
 % But how allocate new one? temporary canvas to draw on.
@@ -4021,6 +4022,11 @@ drawmesg(Client *client, void *av, int n)
 % view! (was screen)
 
 \subsection{API}
+
+% remember in initdisplay
+%    disp->white = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DWhite);
+%    disp->black = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DBlack);
+
 
 %ctor
 <<function allocimage>>=
@@ -4054,7 +4060,7 @@ freeimage(Image *i)
 @
 \l why not _freeimage? be consistent at least, and why extra function?
 
-
+\t mv later?
 <<enum _anon_ (include/draw.h)2>>=
 enum
 {
@@ -4141,7 +4147,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
 if(ai)
     i = ai;
 @
-% when?
+% when pass an already allocated image to allocimage?
 
 
 
@@ -4174,6 +4180,7 @@ if(a == nil)
 
 <<[[_allocimage()]] sanity check i>>=
 if(i == nil){
+    // free: 'f' id[4]
     a = bufimage(d, 1+4);
     if(a){
         a[0] = 'f';
@@ -4204,12 +4211,11 @@ _freeimage1(Image *i)
     /* flush pending data so we don't get error deleting the image */
     flushimage(d, false);
 
+    // free: 'f' id[4]
     a = bufimage(d, 1+4);
     <<[[_freeimage1()]] sanity check a>>
-
     a[0] = 'f';
     BPLONG(a+1, i->id);
-
     <<[[_freeimage1()]] if screen>>
 
     if(flushimage(d, i->screen != nil) < 0)
@@ -4438,10 +4444,12 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
 @
 % allocdimage we have seen before too
 
+% why not return void? because of this sanity check
 <<[[drawinstall()]] sanity check d>>=
 if(d == nil)
     return nil;
 @
+
 
 
 <<function drawuninstall>>=
@@ -4490,7 +4498,7 @@ drawfreedimage(DImage *dimage)
     <<[[drawfreedimage()]] sanity check dimage ref>>
     if(dimage->ref > 0)
         return;
-
+    // else
     <<[[drawfreedimage()]] free names>>
     <<[[drawfreedimage()]] if dscreen>>
     else
@@ -4578,7 +4586,7 @@ replclipr(Image *i, bool repl, Rectangle clipr)
 <<[[replclipr()]] body>>=
 byte *b;
 
-// set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
+// set repl and clip: 'c' dstid[4] repl[1] clipR[4*4]
 b = bufimage(i->display, 1+4+1+4*4);
 b[0] = 'c';
 BPLONG(b+1, i->id);
@@ -4789,9 +4797,7 @@ errorneg1
 flushimage(Display *d, bool visible)
 {
     <<[[flushimage()]] sanity check d>>
-    if(visible){
-        *d->bufp++ = 'v';	/* five bytes always reserved for this */
-    }
+    <<[[flushimage()]] if visible>>
     return doflush(d);
 }
 @
@@ -4850,6 +4856,13 @@ if(d == nil)
 
 \subsection{Marshalling}
 
+<<[[flushimage()]] if visible>>=
+// visible: 'v'
+if(visible){
+    *d->bufp++ = 'v';	/* five bytes always reserved for this */
+}
+@
+
 % see doflush in chapter Kernel/User bridge which finally writes
 % on /dev/draw/x/data
 
@@ -4867,6 +4880,7 @@ case 'v':
 
 
 \subsection{Algorithm}
+
 
 <<global flushrect>>=
 static  Rectangle   flushrect;
@@ -4892,8 +4906,7 @@ drawflush(void)
 
 % on bcm/ this is a noop as write in the framebuffer are already
 % flushed ... it's a direct connection.
-\t but how sync and avoir flickering?
-
+\t but how sync with monitor and avoid flickering?
 
 
 % 386/vgascreen.c!
@@ -4906,8 +4919,7 @@ void
 flushmemscreen(Rectangle r)
 {
     VGAscr *scr;
-    byte *sp, *disp, *sdisp, *edisp;
-    int y, len, incs, off, page;
+    <<[[flushmemscreen()]] other locals>>
 
     scr = &vgascreen;
 
@@ -4916,7 +4928,7 @@ flushmemscreen(Rectangle r)
         scr->dev->flush(scr, r);
         return;
     }
-
+    // else
     if(gscreen == nil || scr->useflush == false)
         return;
     if(scr->dev == nil || scr->dev->page == nil)
@@ -4924,185 +4936,172 @@ flushmemscreen(Rectangle r)
     if(rectclip(&r, gscreen->r) == 0)
         return;
 
-    incs = gscreen->width * BY2WD;
-
-    switch(gscreen->depth){
-    <<[[flushmemscreen()]] switch depth cases>>
-    default:
-        len = 0;
-        panic("flushmemscreen: depth\n");
-        break;
-    }
-    if(len < 1)
-        return;
-
-    off = r.min.y * gscreen->width * BY2WD 
-           + (r.min.x * gscreen->depth)/8;
-    page = off/scr->apsize;
-    off %= scr->apsize;
-    disp = scr->vaddr;
-    sdisp = disp+off;
-    edisp = disp+scr->apsize;
-
-    off = r.min.y * gscreen->width * BY2WD
-           + (r.min.x * gscreen->depth)/8;
-
-    sp = gscreendata.bdata + off;
-
-    // call device driver again, for subpart
-    scr->dev->page(scr, page);
-
-    for(y = r.min.y; y < r.max.y; y++) {
-        if(sdisp + incs < edisp) {
-            memmove(sdisp, sp, len);
-            sp += incs;
-            sdisp += incs;
-        }
-        else {
-            off = edisp - sdisp;
-            page++;
-            if(off <= len){
-                if(off > 0)
-                    memmove(sdisp, sp, off);
-
-                // call device driver again, for subpart
-                scr->dev->page(scr, page);
-                if(len - off > 0)
-                    memmove(disp, sp+off, len - off);
-            }
-            else {
-                memmove(sdisp, sp, len);
-                // call device driver again, for subpart
-                scr->dev->page(scr, page);
-            }
-            sp += incs;
-            sdisp += incs - scr->apsize;
-        }
-    }
+    <<[[flushmemscreen()]] use VGA page>>
 }
 @
+% See apparendix for dev->flush and dev->page implementation
 
-% TODO put flush or page here?
-
-<<[[screensize()]] when use softscreen, other settings>>=
-if(scr->dev && scr->dev->page){
-    scr->vaddr = KADDR(VGAMEM());
-    scr->apsize = 1<<16;
-}
-@
-% >>
+\section{Naming and sharing (and windows)}
+\n mv in adv topics? at the same time windows is so complicated
+\n  that good to divide and see a first chunk earlier.
 
 
-\section{Naming (and windows)}
-% adv topic? seems used by rio according to graphics(2)
+% A form of IPC. Like named pipe, here named images.
+%alt: ?? could not use FS for that?
 
-% DName here? 
+
+% used also by rio! (see graphics(2)). 
+% from allocimage(2):
+%  These routines permit unrelated applications sharing a display to share 
+%  an image; for example they provide the mechanism behind getwindow
 
 \subsection{API}
 
 <<function nameimage>>=
-int
-nameimage(Image *i, char *name, int in)
+error0
+nameimage(Image *i, char *name, bool in)
 {
-    uchar *a;
-    int n;
-
-    n = strlen(name);
-    a = bufimage(i->display, 1+4+1+1+n);
-    if(a == 0)
-        return 0;
-    a[0] = 'N';
-    BPLONG(a+1, i->id);
-    a[5] = in;
-    a[6] = n;
-    memmove(a+7, name, n);
-    if(flushimage(i->display, false) < 0)
-        return 0;
-    return 1;
+    <<[[nameimage()]] body>>
 }
 @
+% if [[in]] is true then image published, otherwise name removed (out)
 
 <<function namedimage>>=
 Image*
 namedimage(Display *d, char *name)
 {
-    uchar *a;
-    char *err, buf[12*12+1];
-    Image *i;
-    int id, n;
-    ulong chan;
-
-    err = 0;
-    i = 0;
-
-    n = strlen(name);
-    if(n >= 256){
-        err = "name too long";
-    Error:
-        if(err)
-            werrstr("namedimage: %s", err);
-        else
-            werrstr("namedimage: %r");
-        if(i)
-            free(i);
-        return nil;
-    }
-    /* flush pending data so we don't get error allocating the image */
-    flushimage(d, false);
-    a = bufimage(d, 1+4+1+n);
-    if(a == 0)
-        goto Error;
-    d->imageid++;
-    id = d->imageid;
-
-    a[0] = 'n';
-    BPLONG(a+1, id);
-    a[5] = n;
-    memmove(a+6, name, n);
-
-    if(flushimage(d, false) < 0)
-        goto Error;
-
-    if(pread(d->ctlfd, buf, sizeof buf, 0) < 12*12)
-        goto Error;
-    buf[12*12] = '\0';
-
-    i = malloc(sizeof(Image));
-    if(i == nil){
-    Error1:
-        a = bufimage(d, 1+4);
-        if(a){
-            a[0] = 'f';
-            BPLONG(a+1, id);
-            flushimage(d, false);
-        }
-        goto Error;
-    }
-    i->display = d;
-    i->id = id;
-    if((chan=strtochan(buf+2*12))==0){
-        werrstr("bad channel '%.12s' from devdraw", buf+2*12);
-        goto Error1;
-    }
-    i->chan = chan;
-    i->depth = chantodepth(chan);
-    i->repl = atoi(buf+3*12);
-    i->r.min.x = atoi(buf+4*12);
-    i->r.min.y = atoi(buf+5*12);
-    i->r.max.x = atoi(buf+6*12);
-    i->r.max.y = atoi(buf+7*12);
-    i->clipr.min.x = atoi(buf+8*12);
-    i->clipr.min.y = atoi(buf+9*12);
-    i->clipr.max.x = atoi(buf+10*12);
-    i->clipr.max.y = atoi(buf+11*12);
-    i->screen = nil;
-    i->next = nil;
-    return i;
+    <<[[namedimage()]] body>>
 }
 @
 
 
+
 \subsection{Marshalling}
+
+<<[[nameimage()]] body>>=
+byte *a;
+int n;
+
+n = strlen(name);
+// name an image: 'N' dstid[4] in[1] j[1] name[j]
+a = bufimage(i->display, 1+4+1+1+n);
+<<[[nameimage()]] sanity check a>>
+a[0] = 'N';
+BPLONG(a+1, i->id);
+a[5] = in;
+a[6] = n;
+memmove(a+7, name, n);
+
+if(flushimage(i->display, false) < 0)
+    return ERROR_0;
+return OK_1;
+@
+
+<<[[nameimage()]] sanity check a>>=
+if(a == nil)
+    return 0;
+@
+
+
+
+
+<<[[namedimage()]] body>>=
+byte *a;
+char *err = nil;
+char buf[12*12+1];
+Image *i = nil;
+int id, n;
+ulong chan;
+
+n = strlen(name);
+<<[[namedimage()]] sanity check n>>
+/* flush pending data so we don't get error allocating the image */
+flushimage(d, false);
+
+// attach to a named image: 'n' dstid[4] j[1] name[j]
+a = bufimage(d, 1+4+1+n);
+<<[[namedimage()]] sanity check a>>
+
+d->imageid++;
+id = d->imageid;
+
+a[0] = 'n';
+BPLONG(a+1, id);
+a[5] = n;
+memmove(a+6, name, n);
+
+if(flushimage(d, false) < 0)
+    goto Error;
+
+if(pread(d->ctlfd, buf, sizeof buf, 0) < 12*12)
+    goto Error;
+buf[12*12] = '\0';
+
+i = malloc(sizeof(Image));
+<<[[namedimage()]] sanity check i>>
+
+i->display = d;
+i->id = id;
+chan=strtochan(buf+2*12);
+<<[[namedimage()]] sanity check chan>>
+i->chan = chan;
+i->depth = chantodepth(chan);
+i->repl = atoi(buf+3*12);
+i->r.min.x = atoi(buf+4*12);
+i->r.min.y = atoi(buf+5*12);
+i->r.max.x = atoi(buf+6*12);
+i->r.max.y = atoi(buf+7*12);
+i->clipr.min.x = atoi(buf+8*12);
+i->clipr.min.y = atoi(buf+9*12);
+i->clipr.max.x = atoi(buf+10*12);
+i->clipr.max.y = atoi(buf+11*12);
+
+i->screen = nil;
+i->next = nil;
+
+return i;
+@
+
+% similar to initdisplay, read /dev/draw/x/ctl again to get all info
+
+<<[[namedimage()]] sanity check n>>=
+if(n >= 256){
+    err = "name too long";
+Error:
+    if(err)
+        werrstr("namedimage: %s", err);
+    else
+        werrstr("namedimage: %r");
+    if(i)
+        free(i);
+    return nil;
+}
+@
+
+<<[[namedimage()]] sanity check a>>=
+if(a == nil)
+    goto Error;
+@
+
+<<[[namedimage()]] sanity check i>>=
+if(i == nil){
+Error1:
+    a = bufimage(d, 1+4);
+    if(a){
+        a[0] = 'f';
+        BPLONG(a+1, id);
+        flushimage(d, false);
+    }
+    goto Error;
+}
+@
+
+<<[[namedimage()]] sanity check chan>>=
+if(chan == 0){
+    werrstr("bad channel '%.12s' from devdraw", buf+2*12);
+    goto Error1;
+}
+@
 
 \subsection{Unmarshalling}
 
@@ -5124,14 +5123,14 @@ case 'N':
         error(Eshortdraw);
     m += j;
      <<[[drawmesg()]] sanity check n with m>>
+
     di = drawlookup(client, BGLONG(a+1), false);
-    if(di == nil)
-        error(Enodrawimage);
+     <<[[drawmesg()]] name an image case, sanity check di>>
     if(di->name)
         error(Enamed);
 
     if(c)
-        drawaddname(client, di, j, (char*)a+7); // The call?
+        drawaddname(client, di, j, (char*)a+7); // The call
     else{
         dn = drawlookupname(j, (char*)a+7);
         if(dn == nil)
@@ -5141,9 +5140,12 @@ case 'N':
         drawdelname(dn);
     }
     continue;
-
 @
 
+<<[[drawmesg()]] name an image case, sanity check di>>=
+if(di == nil)
+    error(Enodrawimage);
+@
 
 
 <<[[drawmesg()]] cases>>=
@@ -5158,33 +5160,197 @@ case 'n':
     m += j;
     <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
+
     if(drawlookup(client, dstid, false))
         error(Eimageexists);
 
-    dn = drawlookupname(j, (char*)a+6); // The call?
-
-    if(dn == nil)
-        error(Enoname);
+    dn = drawlookupname(j, (char*)a+6); // The call
+     <<[[drawmesg()]] attach to an image case, sanity check dn>>
     if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
         error(Edrawmem);
-
     di = drawlookup(client, dstid, false);
-    if(di == nil)
-        error("draw: cannot happen");
-    di->vers = dn->vers;
-    di->name = smalloc(j+1);
-    di->fromname = dn->dimage;
-    di->fromname->ref++;
-    memmove(di->name, a+6, j);
-    di->name[j] = 0;
+    <<[[drawmesg()]] attach to an image case, sanity check di>>
+    <<[[drawmesg()]] attach to an image case, set di name fields using dn>>
+
+    // for further read on /dev/draw/x/ctl
     client->infoid = dstid;
     continue;
+@
+% infoid! so further read of /dev/draw/x/ctl will get info about namedimage
 
+<<[[drawmesg()]] attach to an image case, sanity check dn>>=
+if(dn == nil)
+    error(Enoname);
+@
+
+<<[[drawmesg()]] attach to an image case, sanity check di>>=
+if(di == nil)
+    error("draw: cannot happen");
 @
 
 \subsection{Algorithm}
 
-% drawaddname, put here now that I delayed explanations of windows
+% drawlookup seen before
+
+<<[[KDraw]] other fields>>=
+// growing_array<DName>, size = KDraw.nname
+DName*  name;
+int     nname;
+@
+\l a hash from name to (Client x Dimage) would be better maybe? scales better.
+
+<<struct DName>>=
+struct DName
+{
+    // key
+    char        *name;
+    // value
+    Client      *client; // the owner
+    DImage*     dimage;
+    <<[[DName]] other fields>>
+};
+@
+% ctor = ???
+
+
+<<function drawlookupname>>=
+DName*
+drawlookupname(int n, char *str)
+{
+    DName *name, *ename;
+
+    name = sdraw.name;
+    ename = &name[sdraw.nname];
+    for(; name<ename; name++)
+        if(drawcmp(name->name, str, n) == 0)
+            return name;
+    return nil;
+}
+@
+
+<<function drawcmp>>=
+static
+int
+drawcmp(char *a, char *b, int n)
+{
+    if(strlen(a) != n)
+        return 1;
+    return memcmp(a, b, n);
+}
+@
+
+
+
+
+
+<<function drawaddname>>=
+void
+drawaddname(Client *client, DImage *di, int n, char *str)
+{
+    DName *name, *ename, *new, *t;
+
+    name = sdraw.name;
+    ename = &name[sdraw.nname];
+    for(; name<ename; name++)
+        if(drawcmp(name->name, str, n) == 0)
+            error(Enameused);
+
+    // grow array
+    t = smalloc((sdraw.nname+1)*sizeof(DName));
+    memmove(t, sdraw.name, sdraw.nname*sizeof(DName));
+    free(sdraw.name);
+    sdraw.name = t;
+
+    new = &sdraw.name[sdraw.nname++];
+    new->name = smalloc(n+1);
+    memmove(new->name, str, n);
+    new->name[n] = '\0';
+
+    new->dimage = di;
+    new->client = client;
+
+    new->vers = ++sdraw.vers;
+}
+@
+
+%dtor
+<<function drawdelname>>=
+void
+drawdelname(DName *name)
+{
+    int i;
+
+    i =  name - sdraw.name;
+    memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
+    sdraw.nname--;
+}
+@
+
+
+
+
+% we gonna share images between clients so need owner, need
+% versioning, etc to keep things in sync.
+
+<<[[KDraw]] other fields>>=
+int     vers;
+@
+<<[[DName]] other fields>>=
+int     vers;
+@
+<<[[Dimage]] other fields>>=
+int     vers;
+@
+% used by drawgoodname() (used itself by??)
+
+<<[[drawmesg()]] attach to an image case, set di name fields using dn>>=
+di->vers = dn->vers;
+di->name = smalloc(j+1);
+di->fromname = dn->dimage;
+di->fromname->ref++;
+memmove(di->name, a+6, j);
+di->name[j] = '\0';
+@
+
+<<[[Dimage]] other fields>>=
+char    *name;
+// ref<DImage>
+DImage*     fromname;   /* image this one is derived from, by name */
+@
+
+
+<<[[drawmesg()]] clipping case, sanity check ddst>>=
+if(ddst->name)
+    error("cannot change repl/clipr of shared image");
+@
+
+
+<<[[drawclose()]] free names>>=
+/* free names */
+for(i=0; i<sdraw.nname; )
+    if(sdraw.name[i].client == cl)
+        drawdelname(sdraw.name+i);
+    else
+        i++;
+@
+
+
+<<[[drawfreedimage()]] free names>>=
+/* any names? */
+for(i=0; i<sdraw.nname; )
+    if(sdraw.name[i].dimage == dimage)
+        drawdelname(sdraw.name+i);
+    else
+        i++;
+
+if(dimage->fromname){   /* acquired by name; owned by someone else*/
+    drawfreedimage(dimage->fromname);
+    goto Return;
+}
+@
+% what about other clients of dimage? no, ref is 0 when we are here.
+
+
 
 \chapter{Drawing}
 
@@ -5467,7 +5633,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
 }
 @
 
-\subsection{[[memimagedraw()]]}
+\subsubsection{[[memimagedraw()]]}
 
 
 <<enum _anon_ (include/memdraw.h)2>>=
@@ -5754,7 +5920,7 @@ rgbatoimg(Memimage *img, ulong rgba)
 
 
 
-\subsection{[[memoptdraw()]]}
+\subsubsection{[[memoptdraw()]]}
 
 <<function memoptdraw>>=
 static int
@@ -5857,7 +6023,7 @@ memsetl(void *vp, ulong val, int n)
 }
 @
 
-\subsection{[[chardraw()]]}
+\subsubsection{[[chardraw()]]}
 
 <<function chardraw>>=
 /*
@@ -7126,6 +7292,8 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
     return obdst;
 }
 @
+
+
 
 
 
@@ -12340,45 +12508,14 @@ Memlayer	*layer;	/* nil if not a layer*/
 
 
 \subsection{[[DName]] and [[screename]]}
+% not enough, another DS, argh.
+
+% now in Image/Naming section
 
 % in adv topic? normally should have enough with screenimage (draw_screen)!
 % but under windowing system need intermediate step to actually
 % get subscreen! Enter DName and /dev/winname to communicate that
 % info to client.
-
-% not enough? another DS, argh.
-
-<<[[KDraw]] other fields>>=
-DName*  name;
-int     nname;
-@
-
-
-
-<<[[Dimage]] other fields>>=
-char    *name;
-DImage*     fromname;   /* image this one is derived from, by name */
-@
-
-
-<<[[drawmesg()]] clipping case, sanity check ddst>>=
-if(ddst->name)
-    error("cannot change repl/clipr of shared image");
-@
-
-
-<<struct DName>>=
-struct DName
-{
-    char        *name;
-    Client      *client;
-    DImage*     dimage;
-    <<[[DName]] other fields>>
-};
-@
-% ctor = ???
-
-
 
 
 %\subsubsection{Screen name}
@@ -12408,113 +12545,12 @@ static  int screennameid;
 % drawlookupname for screename should always return screen_dimage!
 
 
-
-<<function drawaddname>>=
-void
-drawaddname(Client *client, DImage *di, int n, char *str)
-{
-    DName *name, *ename, *new, *t;
-
-    name = sdraw.name;
-    ename = &name[sdraw.nname];
-    for(; name<ename; name++)
-        if(drawcmp(name->name, str, n) == 0)
-            error(Enameused);
-
-    t = smalloc((sdraw.nname+1)*sizeof(DName));
-    memmove(t, sdraw.name, sdraw.nname*sizeof(DName));
-    free(sdraw.name);
-    sdraw.name = t;
-    new = &sdraw.name[sdraw.nname++];
-    new->name = smalloc(n+1);
-    memmove(new->name, str, n);
-    new->name[n] = '\0';
-    new->dimage = di;
-    new->client = client;
-    new->vers = ++sdraw.vers;
-}
-@
-
-<<[[KDraw]] other fields>>=
-int     vers;
-@
-<<[[Dimage]] other fields>>=
-int     vers;
-@
-<<[[DName]] other fields>>=
-int     vers;
-@
-
 <<[[drawopen()]] switch qid cases, when Qctl, set name>>=
 di->vers = dn->vers;
 di->name = smalloc(strlen(screenname)+1);
 strcpy(di->name, screenname);
 di->fromname = dn->dimage;
 di->fromname->ref++;
-@
-
-
-
-<<function drawcmp>>=
-static
-int
-drawcmp(char *a, char *b, int n)
-{
-    if(strlen(a) != n)
-        return 1;
-    return memcmp(a, b, n);
-}
-@
-
-<<function drawlookupname>>=
-DName*
-drawlookupname(int n, char *str)
-{
-    DName *name, *ename;
-
-    name = sdraw.name;
-    ename = &name[sdraw.nname];
-    for(; name<ename; name++)
-        if(drawcmp(name->name, str, n) == 0)
-            return name;
-    return nil;
-}
-@
-
-<<[[drawclose()]] free names>>=
-/* free names */
-for(i=0; i<sdraw.nname; )
-    if(sdraw.name[i].client == cl)
-        drawdelname(sdraw.name+i);
-    else
-        i++;
-@
-
-%dtor
-<<function drawdelname>>=
-void
-drawdelname(DName *name)
-{
-    int i;
-
-    i =  name - sdraw.name;
-    memmove(name, name+1, (sdraw.nname-(i+1))*sizeof(DName));
-    sdraw.nname--;
-}
-@
-
-<<[[drawfreedimage()]] free names>>=
-/* any names? */
-for(i=0; i<sdraw.nname; )
-    if(sdraw.name[i].dimage == dimage)
-        drawdelname(sdraw.name+i);
-    else
-        i++;
-
-if(dimage->fromname){   /* acquired by name; owned by someone else*/
-    drawfreedimage(dimage->fromname);
-    goto Return;
-}
 @
 
 
@@ -13169,11 +13205,12 @@ drawgoodname(DImage *d)
     if(d->name == nil)
         return true;
     n = drawlookupname(strlen(d->name), d->name);
-    if(n==nil || n->vers!=d->vers)
+    if(n==nil || n->vers != d->vers)
         return false;
     return true;
 }
 @
+% but who increments vers? nobody.
 
 <<[[drawlookup()]] if checkname>>=
 if(checkname && !drawgoodname(d))
@@ -16841,13 +16878,6 @@ writenbit(Param *p, uchar *w, Buffer src)
 
 
 \section{8-bit images}
-
-<<[[flushmemscreen()]] switch depth cases>>=
-case 8:
-    len = Dx(r);
-    break;
-@
-
 
 <<[[memoptdraw()]] switch depth cases>>=
 case 8:
@@ -20928,6 +20958,81 @@ vgalinearaddr(VGAscr *scr, ulong paddr, int size)
         //mtrr(npaddr, nsize, "wc"); disabled mtrr
                 error("mtrr disabled");
         poperror();
+    }
+}
+@
+
+\section{VGA page}
+
+<<[[screensize()]] when use softscreen, other settings>>=
+if(scr->dev && scr->dev->page){
+    scr->vaddr = KADDR(VGAMEM());
+    scr->apsize = 1<<16;
+}
+@
+% >>
+
+<<[[flushmemscreen()]] other locals>>=
+byte *sp, *disp, *sdisp, *edisp;
+int y, len, incs, off, page;
+@
+
+<<[[flushmemscreen()]] use VGA page>>=
+incs = gscreen->width * BY2WD;
+
+switch(gscreen->depth){
+case 8:
+    len = Dx(r);
+    break;
+default:
+    len = 0;
+    panic("flushmemscreen: depth\n");
+    break;
+}
+if(len < 1)
+    return;
+
+off = r.min.y * gscreen->width * BY2WD 
+       + (r.min.x * gscreen->depth)/8;
+page = off/scr->apsize;
+off %= scr->apsize;
+disp = scr->vaddr;
+sdisp = disp+off;
+edisp = disp+scr->apsize;
+
+off = r.min.y * gscreen->width * BY2WD
+       + (r.min.x * gscreen->depth)/8;
+
+sp = gscreendata.bdata + off;
+
+// call device driver again, for subpart
+scr->dev->page(scr, page);
+
+for(y = r.min.y; y < r.max.y; y++) {
+    if(sdisp + incs < edisp) {
+        memmove(sdisp, sp, len);
+        sp += incs;
+        sdisp += incs;
+    }
+    else {
+        off = edisp - sdisp;
+        page++;
+        if(off <= len){
+            if(off > 0)
+                memmove(sdisp, sp, off);
+
+            // call device driver again, for subpart
+            scr->dev->page(scr, page);
+            if(len - off > 0)
+                memmove(disp, sp+off, len - off);
+        }
+        else {
+            memmove(sdisp, sp, len);
+            // call device driver again, for subpart
+            scr->dev->page(scr, page);
+        }
+        sp += incs;
+        sdisp += incs - scr->apsize;
     }
 }
 @
