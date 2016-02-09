@@ -31,8 +31,8 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand svgalib? tronscroll:) mode X? cairo?:
-%  - SEMI better understand channels, and the many image formats
-%  - TODO better understand alpha
+%  - better understand channels, and the many image formats
+%  - better understand alpha
 %  - TODO better understand bezier (could be useful for edge bunding visual)
 %    that they are the essence of vectoriel fonts?
 %  - TODO understand freshrate, double buffer, vertical sync, flickering,
@@ -236,6 +236,9 @@ but which were ultimately discarded:
 %  etc.).
 % 350 K with tests
 % rely on libpixman for pixel stuff, channels, move, etc.
+
+% maybe API simpler than the one of plan9. I get confused with the 
+% complex parameters of draw(), the rectangles and point and clipping.
 
 \item skia
 % used in android and chrome
@@ -736,6 +739,8 @@ Below are the most important data structures of [[draw.h]].
 
 % screen is growing right and down
 % FIGURE! with screen, point and rectangle
+
+% see addpt(2)
 
 
 \subsection{[[Point]]}
@@ -1291,7 +1296,9 @@ struct Image
 \l and clipr? maybe could delay its introduction
 
 % clipping notion!! 
-% repl notion!!
+% repl notion!! from draw(2):
+%  "A boolean value specifying whether the image is tiled to cover
+%  the plane when used as a source for a drawing operation."
 % chan notion!!
 %  alpha notion!!
 %  depth notion!
@@ -1716,27 +1723,12 @@ enum ImageChan {
 
 
 <<enum _anon_ (include/draw.h)5>>=
-enum {
+enum ImageType {
     GREY1	= CHAN1(CGrey, 1), // used for bitmask, black and white
-
-    GREY2	= CHAN1(CGrey, 2),
-    GREY4	= CHAN1(CGrey, 4),
-    GREY8	= CHAN1(CGrey, 8),
-
     CMAP8	= CHAN1(CMap, 8),
-
-    RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
-    RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
-    RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
-    BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
-
     RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
     ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
-
-    ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
-
-    XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
-    XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
+    <<[[ImageType] cases>>
 };
 @
 % todo: need all of that? could maybe simplify and support less
@@ -1786,6 +1778,7 @@ if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
 
 %todo:
 % typedef ulong color;!
+% typedef color rgba;!
 
 %old school graphics:
 %https://www.youtube.com/watch?v=Tfh0ytz8S0k&feature=youtu.be
@@ -1861,13 +1854,161 @@ setalpha(ulong color, uchar alpha)
 % that simple? :) to set alpha you just dillute each rgb components?
 
 
+
+
+
+% memimagedraw -> <>
+<<function pixelbits>>=
+static ulong
+pixelbits(Memimage *i, Point pt)
+{
+    byte *p;
+    ulong val;
+    int off, bpp, npack;
+
+    val = 0;
+    p = byteaddr(i, pt);
+    bpp=i->depth;
+    switch(bpp){
+    case 1:
+    case 2:
+    case 4:
+        npack = 8/bpp;
+        off = pt.x%npack;
+        val = p[0] >> bpp*(npack-1-off);
+        val &= (1<<bpp)-1;
+        break;
+    case 8:
+        val = p[0];
+        break;
+    case 16:
+        val = p[0]|(p[1]<<8);
+        break;
+    case 24:
+        val = p[0]|(p[1]<<8)|(p[2]<<16);
+        break;
+    case 32:
+        val = p[0]|(p[1]<<8)|(p[2]<<16)|(p[3]<<24);
+        break;
+    }
+    while(bpp<32){
+        val |= val<<bpp;
+        bpp *= 2;
+    }
+    return val;
+}
+@
+% >> >> >> >> >> >> >> >>
+
+%typedef ulong rgba; ?
+
+
+<<function imgtorgba>>=
+static ulong
+imgtorgba(Memimage *img, ulong val)
+{
+    uchar r, g, b, a;
+    int nb, ov, v;
+    ulong chan;
+    uchar *p;
+
+    a = 0xFF;
+    r = g = b = 0xAA;	/* garbage */
+    for(chan=img->chan; chan; chan>>=8){
+        nb = NBITS(chan);
+        ov = v = val&((1<<nb)-1);
+        val >>= nb;
+
+        while(nb < 8){
+            v |= v<<nb;
+            nb *= 2;
+        }
+        v >>= (nb-8);
+
+        switch(TYPE(chan)){
+        case CRed:
+            r = v;
+            break;
+        case CGreen:
+            g = v;
+            break;
+        case CBlue:
+            b = v;
+            break;
+        case CAlpha:
+            a = v;
+            break;
+
+        case CGrey:
+            r = g = b = v;
+            break;
+        case CMap:
+            p = img->cmap->cmap2rgb+3*ov;
+            r = *p++;
+            g = *p++;	
+            b = *p;
+            break;
+        }
+    }
+    return (r<<24)|(g<<16)|(b<<8)|a;	
+}
+@
+% >> >> >> >>
+
+<<function rgbatoimg>>=
+static ulong
+rgbatoimg(Memimage *img, ulong rgba)
+{
+    ulong chan;
+    int d, nb;
+    ulong v;
+    uchar *p, r, g, b, a, m;
+
+    v = 0;
+    r = rgba>>24;
+    g = rgba>>16;
+    b = rgba>>8;
+    a = rgba;
+    d = 0;
+    for(chan=img->chan; chan; chan>>=8){
+        nb = NBITS(chan);
+        switch(TYPE(chan)){
+        case CRed:
+            v |= (r>>(8-nb))<<d;
+            break;
+        case CGreen:
+            v |= (g>>(8-nb))<<d;
+            break;
+        case CBlue:
+            v |= (b>>(8-nb))<<d;
+            break;
+        case CAlpha:
+            v |= (a>>(8-nb))<<d;
+            break;
+        case CMap:
+            p = img->cmap->rgb2cmap;
+            m = p[(r>>4)*256+(g>>4)*16+(b>>4)];
+            v |= (m>>(8-nb))<<d;
+            break;
+
+        case CGrey:
+            m = RGB2K(r,g,b);
+            v |= (m>>(8-nb))<<d;
+            break;
+        }
+        d += nb;
+    }
+ DBG1("rgba2img %.8lux = %.*lux\n", rgba, 2*d/8, v);
+    return v;
+}
+@
+% >>
+
 % \section{Color map}
 % now in Adv topics
 
 
-
-
-\section{[[Drawop]] (and [[Memdrawparam]])}
+\section{[[Drawop]]}
 % Composition
 % hmm put now? delay to later?
 
@@ -1877,7 +2018,7 @@ setalpha(ulong color, uchar alpha)
 % take technicolor.ps example with nice racket like
 % slides where images are arguments of draw(), like slide 9
 
-\subsection{[[Drawop]]}
+%\subsection{[[Drawop]]}
 
 <<[[Client]] drawing state fields>>=
 // enum<Drawop>
@@ -1912,27 +2053,7 @@ enum Drawop
 \l FIGUREs ? or delay to later?
 
 
-\subsection{[[Memdrawparam]]}
-
-% technicolor.ps! see draw()
-<<struct Memdrawparam>>=
-struct	Memdrawparam
-{
-    Memimage *dst;
-    Rectangle	r;
-
-    Memimage *src;
-    Rectangle sr;
-
-    Memimage *mask;
-    Rectangle mr;
-
-    // enum<Drawop>
-    int op;
-
-    <<[[Memdrawparam]] other fields>>
-};
-@
+%\subsection{[[Memdrawparam]]}
 
 
 \section{Fonts}
@@ -4837,6 +4958,7 @@ dstflush(int dstid, Memimage *dst, Rectangle r)
 }
 @
 \t but flushrect is huge originally so combine is useless.
+% pass dstid cos id not in Memimage and we want to check if it is the screen.
 
 <<[[dstflush()]] sanity check dst>>=
 /* how can this happen? -rsc, dec 12 2002 */
@@ -5318,24 +5440,26 @@ if(dimage->fromname){   /* acquired by name; owned by someone else*/
 
 \chapter{Drawing}
 
-% \section{[[Point]] and [[Rectangle]]} types in core DS.
-
+%\section{[[Point]] and [[Rectangle]]} types in core DS.
 
 \section{Rectangle}
 
-% rectangle is fundamental ops. area. copy/move/blend pixels from one
-% aera to another.
-% no need complex algo, horiz and vert lines map well to pixels.
-% draw()! no need complex shape algorithm, just
-% move all the words covering a rectangle
+% Drawing a "rectangle" is actually a fundamental op. 
+% rectangle is an area. copy/move/blend pixels from one area of one
+%  image to another image.
+% No need complex algo, horiz and vert lines map well to pixels.
+% no need complex shape algorithm, just move all the bytes covering a rectangle
 
-% draw is fundamenta op!
+% draw() is fundamenta op!
 % very flexible.
 % put technicolor.ps nice slides with draw (of actual images like in racket)
-
-\subsection{API}
+% (meh, technicolors.ps not that good actually)
+% normally should be simple but made complicated because of possible
+%  translation, optimisation, etc.
 
 %TODO: show toy program and screenshot of the rectangle!
+
+\subsection{API}
 
 
 % see plan9-in-technicolor.ps! bitblt and porter-diff compositing algebra
@@ -5348,42 +5472,14 @@ draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
 @
 % SoverD Source Over Destination, classic
 
-% images are colors! e.g. Display->black
-% see toy app
+% FIGURE with meaning of p1, r, vs src, mask, and dst.
+% r is rectangle in dst (if not it's clipped anyway).
+% p1 is point in src (or mask), which where things will start.
+% it will correspond to r.min.
+% See draw(2) to understand the complex semantic with repl and clipr.
 
-<<function border>>=
-void
-border(Image *im, Rectangle r, int i, Image *color, Point sp)
-{
-    if(i < 0){
-        r = insetrect(r, i);
-        sp = addpt(sp, Pt(i,i));
-        i = -i;
-    }
-    draw(im, Rect(r.min.x, r.min.y, r.max.x, r.min.y+i),
-        color, nil, sp);
-    draw(im, Rect(r.min.x, r.max.y-i, r.max.x, r.max.y),
-        color, nil, Pt(sp.x, sp.y+Dy(r)-i));
-    draw(im, Rect(r.min.x, r.min.y+i, r.min.x+i, r.max.y-i),
-        color, nil, Pt(sp.x, sp.y+i));
-    draw(im, Rect(r.max.x-i, r.min.y+i, r.max.x, r.max.y-i),
-        color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
-}
-@
-
-<<function insetrect>>=
-Rectangle
-insetrect(Rectangle r, int n)
-{
-    r.min.x += n;
-    r.min.y += n;
-    r.max.x -= n;
-    r.max.y -= n;
-    return r;
-}
-@
-% reduce rectangle
-
+% Maybe can do simple case where dst and src starts at 0,0
+% and then can alter a bit r and p1.
 
 
 <<function drawop>>=
@@ -5413,9 +5509,62 @@ gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, 
 
 
 
+
+
+% images are colors! with repl set to true and rect to just 1.
+% e.g. Display->black. See toy app.
+
+<<function border>>=
+void
+border(Image *im, Rectangle r, int i, Image *color, Point sp)
+{
+    <<[[border()]] if negative i, border goes outside>>
+    // horizontal bars
+    draw(im, Rect(r.min.x, r.min.y,   r.max.x, r.min.y+i),
+        color, nil, sp);
+    draw(im, Rect(r.min.x, r.max.y-i,   r.max.x, r.max.y),
+        color, nil, Pt(sp.x, sp.y+Dy(r)-i));
+    // vertical bars
+    draw(im, Rect(r.min.x, r.min.y+i,   r.min.x+i, r.max.y-i),
+        color, nil, Pt(sp.x, sp.y+i));
+    draw(im, Rect(r.max.x-i, r.min.y+i,   r.max.x, r.max.y-i),
+        color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
+}
+@
+% outline of a rectangle. if i positive the border goes inside, if
+% negative outside.
+
+% FIGURE with each stripe.
+% subtle is the sp translation. For now ignore.
+
+<<[[border()]] if negative i, border goes outside>>=
+if(i < 0){
+    r = insetrect(r, i);
+    sp = addpt(sp, Pt(i,i));
+    i = -i;
+}
+@
+
+<<function insetrect>>=
+Rectangle
+insetrect(Rectangle r, int n)
+{
+    r.min.x += n;
+    r.min.y += n;
+    r.max.x -= n;
+    r.max.y -= n;
+    return r;
+}
+@
+% enlarge rectangle when n is negative. reduce if positive.
+
+
+
+
+
+
 \subsection{Marshalling}
 
-% why not _draw? be more consistent
 <<function draw1>>=
 static void
 draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, Drawop op)
@@ -5424,14 +5573,10 @@ draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, D
 
     _setdrawop(dst->display, op);
 
+    // draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4]
     a = bufimage(dst->display, 1+4+4+4+4*4+2*4+2*4);
-    if(a == nil)
-        return;
-    if(src == nil)
-        src = dst->display->black;
-    if(mask == nil)
-        mask = dst->display->opaque;
-
+    <<[[draw1()]] sanity check a>>
+    <<[[draw1()]] sanity check src and mask>>
     a[0] = 'd';
     BPLONG(a+1, dst->id);
     BPLONG(a+5, src->id);
@@ -5446,7 +5591,11 @@ draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, D
     BPLONG(a+41, p1->y);
 }
 @
+\l why not _draw? be more consistent
 
+% communicate juste id! efficient network wise!
+% if want color then need different image each time! (or have
+% image with all colors and pass the right sp?)
 
 <<function _setdrawop>>=
 void
@@ -5456,14 +5605,34 @@ _setdrawop(Display *d, Drawop op)
 
     if(op != SoverD){
         a = bufimage(d, 1+1);
-        if(a == 0)
-            return;
+        <<[[_setdrawop()]] sanity check a>>
         a[0] = 'O';
         a[1] = op;
     }
 }
 @
+% most op are SoverD hence this opti and the default
+%  setting back to SoverD server side in drawclientop().
 
+
+
+
+<<[[draw1()]] sanity check a>>=
+if(a == nil)
+    return; // warning?
+@
+
+<<[[_setdrawop()]] sanity check a>>=
+if(a == nil)
+    return; // warning?
+@
+
+<<[[draw1()]] sanity check src and mask>>=
+if(src == nil)
+    src = dst->display->black;
+if(mask == nil)
+    mask = dst->display->opaque;
+@
 
 \subsection{Unmarshalling}
 
@@ -5480,8 +5649,8 @@ case 'd':
     printmesg(fmt="LLLRPP", a, 0);
     m = 1+4+4+4+4*4+2*4+2*4;
     <<[[drawmesg()]] sanity check n with m>>
-    dst = drawimage(client, a+1);
     dstid = BGLONG(a+1);
+    dst = drawimage(client, a+1);
     src = drawimage(client, a+5);
     mask = drawimage(client, a+9);
     drawrectangle(&r, a+13);
@@ -5513,14 +5682,16 @@ drawimage(Client *client, uchar *a)
     DImage *d;
 
     d = drawlookup(client, BGLONG(a), true);
-    if(d == nil)
-        error(Enodrawimage);
+    <<[[drawimage()]] sanity check d>>
     return d->image;
 }
 @
 
 
-
+<<[[drawimage()]] sanity check d>>=
+if(d == nil)
+    error(Enodrawimage);
+@
 
 
 
@@ -5555,21 +5726,25 @@ case 'O':
 
 
 
-% dead? not even mentionned in the draw(5)
-% and nothing generate such a message
-%<<[[drawmesg()]] cases>>=
-%/* create image mask: 'm' newid[4] id[4] */
-%case 'm':
-%    printmesg("LL", a, 0);
-%    m = 4+4;
-%    if(n < m)
-%        error(Eshortdraw);
-%    break;
-%@
+%dead: not even mentionned in the draw(5) and nothing generate such a message
+% <<[[drawmesg()]] cases>>=
+% /* create image mask: 'm' newid[4] id[4] */
+% case 'm':
+%     printmesg("LL", a, 0);
+%     m = 4+4;
+%     if(n < m)
+%         error(Eshortdraw);
+%     break;
+% @
 
 
 \subsection{Algorithm}
 
+% quite complicated, many wrappers, many layers, many formats, many optis.
+% draw() is very flexible and so it is quite complicated to implement.
+% So we will simplify and show simple and general path first.
+
+\subsubsection{[[memdraw()]]}
 
 % actually in memlayer/
 <<function memdraw>>=
@@ -5579,9 +5754,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     <<[[memdraw()]] locals>>
 
     DBG("memdraw %p %R %p %P %p %P\n", dst, r, src, p0, mask, p1);
-
-    if(mask == nil)
-        mask = memopaque;
+    <<[[memdraw()]] sanity check mask>>
 
     <<[[memdraw()]] if mask has layer>>
     Top:
@@ -5593,8 +5766,388 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
 }
 @
 
+% wrapper, more complex when have layers/windows, see chapter X.
+
+<<[[memdraw()]] sanity check mask>>=
+if(mask == nil)
+    mask = memopaque;
+@
+% already done client side though, and drawimage make sure
+%  maskid is valid, so this should never happen when called from
+%  drawmesg().
+
+\subsubsection{[[Memdrawparam]]}
+
+% technicolor.ps! see draw()
+<<struct Memdrawparam>>=
+struct	Memdrawparam
+{
+    Memimage *dst;
+    Rectangle	r;
+
+    Memimage *src;
+    Rectangle sr;
+
+    Memimage *mask;
+    Rectangle mr;
+
+    // enum<Drawop>
+    int op;
+
+    <<[[Memdrawparam]] other fields>>
+};
+@
+% all rectangles should have same size.
+
 \subsubsection{[[memimagedraw()]]}
 
+% back to memdraw/
+<<function memimagedraw>>=
+void
+memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
+{
+    Memdrawparam par;
+    <<[[memimagedraw()]] other locals>>
+
+    DBG1("memimagedraw %p/%luX %R @ %p %p/%luX %P %p/%luX %P... ", dst, dst->chan, r, dst->data->bdata, src, src->chan, p0, mask, mask->chan, p1);
+    <<[[memdraw()]] sanity check mask>>
+    <<[[memdraw()]] sanity check op>>
+
+    // Clipping
+    <<[[memdraw()]] call drawclip, if empty rectangle return>>
+
+    par.op = op;
+    par.dst = dst;
+    par.r = r;
+    par.src = src;
+    par.mask = mask;
+    /* par.sr set by drawclip */
+    /* par.mr set by drawclip */
+
+    // Replicating (and adjust par.state)
+    par.state = 0;
+    <<[[memimagedraw()]] if src is repl>>
+    <<[[memimagedraw()]] if mask is repl>>
+
+    DBG1("dr %R sr %R mr %R...", r, par.sr, par.mr);
+    DBG1("draw dr %R sr %R mr %R %lux\n", r, par.sr, par.mr, par.state);
+
+    // Optimizing
+    /*
+     * Now that we've clipped the parameters down to be consistent, we 
+     * simply try sub-drawing routines in order until we find one that was able
+     * to handle us.  If the sub-drawing routine returns zero, it means it was
+     * unable to satisfy the request, so we do not return.
+     */
+    <<[[memimagedraw()]] try hwdraw>>
+    <<[[memimagedraw()]] try memoptdraw>>
+    <<[[memimagedraw()]] try chardraw>>
+    // else
+
+    // Compositing
+    /*
+     * General calculation-laden case that does alpha for each pixel.
+     */
+    alphadraw(&par);
+    DBG("alphadraw handled\n");
+}
+@
+%dead:
+% static int n = 0;
+%old: argh, was ugly debugging code, I improved a bit by using DBG1 macro
+%    DBG1("test hwdraw\n");
+%    DBG1("test memoptdraw\n");
+%    DBG1("test chardraw\n");
+%    DBG1("do alphadraw\n");
+
+
+<<[[memdraw()]] sanity check op>>=
+if(op < Clear || op > SoverD){
+    DBG1("op out of range: %d\n", op);
+    return;
+}
+@
+
+
+
+
+\subsection{Hardware support hook}
+
+% but really optional, bcm/screen.c does nothing except
+% calling the software cursor save/restore.
+
+% maybe assume simple screen device, like for raspberry,
+% and where it's actually a framebuffer where hwdraw does nothing
+% except the software cursor stuff.
+
+
+<<[[memimagedraw()]] try hwdraw>>=
+/*
+ * Hardware support.  Each video driver provides this function,
+ * which checks to see if there is anything it can help with.
+ * There could be an if around this checking to see if dst is in video memory.
+ */
+if(hwdraw(&par)){
+    DBG1("hwdraw handled\n");
+    return;
+}
+@
+
+% vgascreen.c
+<<global hwaccel(x86)>>=
+int hwaccel = true;
+@
+
+% vgascreen.c
+<<function hwdraw(x86)>>=
+//@Scheck: not dead, actually this is overriding some def in libmemdraw!! ugly
+bool hwdraw(Memdrawparam *par)
+{
+    VGAscr *scr;
+    Memimage *dst, *src, *mask;
+    int m;
+
+    if(hwaccel == false)
+        return false;
+
+    scr = &vgascreen;
+
+    dst=par->dst;
+    src=par->src;
+    mask=par->mask;
+    <<[[hwdraw()]] sanity check parameters>>
+
+    <<[[hwdraw()]] if software cursor(x86)>>
+    
+    if(dst->data->bdata != gscreendata.bdata)
+        return false;
+    // else, dst is the screen
+
+    <<[[hwdraw()]] when dst is the screen>>
+    // else
+    return false;   
+}
+@
+
+% when dst is screen see Optimisations section in Advanced topics chapter.
+
+
+<<[[hwdraw()]] sanity check parameters>>=
+if(dst == nil || dst->data == nil)
+    return false;
+if(src == nil || src->data == nil)
+    return false;
+if(mask == nil || mask->data == nil)
+    return false;
+@
+
+
+\section{Clipping}
+
+% saw rectclip() before which will be used heavily below in drawclip().
+
+<<[[memdraw()]] call drawclip, if empty rectangle return>>=
+if(!drawclip(dst, &r, src, &p0, mask, &p1,   &par.sr, &par.mr)){
+    DBG1("empty clipped rectangle\n");
+    return;
+}
+@
+
+% see draw(2) and explanation of draw() to understand
+% what clipping is done.
+
+% FIGURE! where see different coordinate system
+
+\subsection{Simple case}
+% which is already not that simple
+
+% memimagedraw | ?? -> <>
+<<function drawclip>>=
+/*
+ * Clip the destination rectangle further based on the properties of the 
+ * source and mask rectangles.  Once the destination rectangle is properly
+ * clipped, adjust the source and mask rectangles to be the same size.
+ * Then if source or mask is replicated, move its clipped rectangle
+ * so that its minimum point falls within the repl rectangle.
+ *
+ * Return zero if the final rectangle is null.
+ */
+bool
+drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, Point *p1,   Rectangle *sr, Rectangle *mr)
+{
+    Point rmin = r->min; // save old min
+    <<[[drawclip()]] other locals>>
+
+    // empty rectangle? nothing to do then.
+    if(r->min.x >= r->max.x || r->min.y >= r->max.y)
+        return false;
+
+    /* clip to destination */ // can modify r
+    if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
+        return false;
+    <<[[drawclip()]] adjust p0 and p1 if r changed>>
+
+    /* map destination rectangle into source */
+    sr->min = *p0;
+    sr->max.x = p0->x+Dx(*r);
+    sr->max.y = p0->y+Dy(*r);
+
+    /* sr is r in source coordinates; clip to source */ // can modify sr
+    if(!(src->flags&Frepl) && !rectclip(sr, src->r))
+        return false;
+    if(!rectclip(sr, src->clipr))
+        return false;
+
+    /* compute and clip rectangle in mask */
+    <<[[drawclip()]] if splitcoords>>
+    else{
+        if(!(mask->flags&Frepl) && !rectclip(sr, mask->r)) // can modify sr
+            return false;
+        if(!rectclip(sr, mask->clipr))
+            return false;
+        *p1 = sr->min;
+    }
+
+    /* move source clipping back to destination */
+    <<[[drawclip()]] adjust r if sr or mr changed>>
+
+    <<[[drawclip()]] special cases>>
+
+    mr->min = *p1;
+    mr->max.x = p1->x+Dx(*sr);
+    mr->max.y = p1->y+Dy(*sr);
+
+    assert(Dx(*sr) == Dx(*mr) && Dx(*mr) == Dx(*r));
+    assert(Dy(*sr) == Dy(*mr) && Dy(*mr) == Dy(*r));
+    assert(ptinrect(*p0, src->r));
+    assert(ptinrect(*p1, mask->r));
+    assert(ptinrect(r->min, dst->r));
+
+    return true;
+}
+@
+
+% when rectangle r got actually reduced because of dst->clipr or dsr->r
+<<[[drawclip()]] adjust p0 and p1 if r changed>>=
+/* move source point */
+p0->x += r->min.x - rmin.x;
+p0->y += r->min.y - rmin.y;
+/* move mask point */
+p1->x += r->min.x - rmin.x;
+p1->y += r->min.y - rmin.y;
+@
+
+
+
+<<[[drawclip()]] other locals>>=
+Point delta;
+@
+
+% when source or mask actually reduces even more rectangle
+<<[[drawclip()]] adjust r if sr or mr changed>>=
+delta.x = r->min.x - p0->x;
+delta.y = r->min.y - p0->y;
+r->min.x = sr->min.x + delta.x;
+r->min.y = sr->min.y + delta.y;
+r->max.x = sr->max.x + delta.x;
+r->max.y = sr->max.y + delta.y;
+@
+
+\subsection{Special cases}
+
+%XXX
+
+<<[[drawclip()]] special cases>>=
+/* move source rectangle so sr->min is in src->r */
+<<[[drawclip()]] if src is repl>>
+/* move mask point so it is in mask->r */
+*p1 = drawrepl(mask->r, *p1);
+@
+
+<<[[drawclip()]] other locals>>=
+bool splitcoords = (p0->x != p1->x) || (p0->y != p1->y);
+@
+
+
+\subsubsection{Split coords}
+
+<<[[drawclip()]] other locals>>=
+Rectangle omr;
+@
+
+<<[[drawclip()]] if splitcoords>>=
+if(splitcoords){
+    /* move mask point with source */
+    p1->x += sr->min.x - p0->x;
+    p1->y += sr->min.y - p0->y;
+    mr->min = *p1;
+    mr->max.x = p1->x+Dx(*sr);
+    mr->max.y = p1->y+Dy(*sr);
+    omr = *mr;
+
+    /* mr is now rectangle in mask; clip it */
+    if(!(mask->flags&Frepl) && !rectclip(mr, mask->r))
+        return false;
+    if(!rectclip(mr, mask->clipr))
+        return false;
+
+    /* reflect any clips back to source */
+    sr->min.x += mr->min.x-omr.min.x;
+    sr->min.y += mr->min.y-omr.min.y;
+    sr->max.x += mr->max.x-omr.max.x;
+    sr->max.y += mr->max.y-omr.max.y;
+    *p1 = mr->min;
+}
+@
+
+
+\subsubsection{Src is replicate}
+
+<<[[drawclip()]] if src is repl>>=
+if(src->flags&Frepl) {
+    delta.x = drawreplxy(src->r.min.x, src->r.max.x, sr->min.x) - sr->min.x;
+    delta.y = drawreplxy(src->r.min.y, src->r.max.y, sr->min.y) - sr->min.y;
+    sr->min.x += delta.x;
+    sr->min.y += delta.y;
+    sr->max.x += delta.x;
+    sr->max.y += delta.y;
+}
+*p0 = sr->min;
+@
+
+% drawrepl | drawclip -> <>
+<<function drawreplxy>>=
+int
+drawreplxy(int min, int max, int x)
+{
+    int sx;
+
+    sx = (x-min)%(max-min);
+    if(sx < 0)
+        sx += max-min;
+    return sx+min;
+}
+@
+
+
+\subsubsection{Mask is replicate}
+
+% drawclip | drawmask -> <>
+<<function drawrepl>>=
+Point
+drawrepl(Rectangle r, Point p)
+{
+    p.x = drawreplxy(r.min.x, r.max.x, p.x);
+    p.y = drawreplxy(r.min.y, r.max.y, p.y);
+    return p;
+}
+@
+
+
+
+\section{Replicating}
+
+%XXX
 
 <<enum _anon_ (include/memdraw.h)2>>=
 /*
@@ -5611,285 +6164,96 @@ enum Drawparams {
 };
 @
 % >> >> >> >> >>
+% info that can be used by further memimagedraw steps, to
+%  know if can run optimized version such as hwdraw/...
 
 <<[[Memdrawparam]] other fields>>=
-// enum<Subdraw>
+// enum<Drawparams>
 ulong state;
-ulong mval;		/* if Simplemask, the mask pixel in mask format */
-ulong mrgba;	/* mval in rgba */
+@
+
+<<[[Memdrawparam]] other fields>>=
 ulong sval;		/* if Simplesrc, the source pixel in src format */
 ulong srgba;	/* sval in rgba */
 ulong sdval;	/* sval in dst format */
 @
 
+<<[[memimagedraw()]] if src is repl>>=
+if(src->flags&Frepl){
+    par.state |= Replsrc;
+    if(Dx(src->r)==1 && Dy(src->r)==1){
+        par.state |= Simplesrc;
+        par.sval = pixelbits(src, src->r.min);
 
+        par.srgba = imgtorgba(src, par.sval);
+        par.sdval = rgbatoimg(dst, par.srgba);
 
-% back to memdraw/
-% TODO cleanup the comments, use better debug macro
-<<function memimagedraw>>=
-void
-memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
-{
-    static int n = 0;
-    Memdrawparam par;
-
-    if(mask == nil)
-        mask = memopaque;
-
-    DBG1("memimagedraw %p/%luX %R @ %p %p/%luX %P %p/%luX %P... ", dst, dst->chan, r, dst->data->bdata, src, src->chan, p0, mask, mask->chan, p1);
-
-    if(drawclip(dst, &r, src, &p0, mask, &p1, &par.sr, &par.mr) == 0){
-        DBG1("empty clipped rectangle\n");
-        return;
-    }
-    if(op < Clear || op > SoverD){
-        DBG1("op out of range: %d\n", op);
-        return;
-    }
-
-    par.op = op;
-    par.dst = dst;
-    par.r = r;
-    par.src = src;
-    /* par.sr set by drawclip */
-    par.mask = mask;
-    /* par.mr set by drawclip */
-
-    par.state = 0;
-    if(src->flags&Frepl){
-        par.state |= Replsrc;
-        if(Dx(src->r)==1 && Dy(src->r)==1){
-            par.sval = pixelbits(src, src->r.min);
-            par.state |= Simplesrc;
-            par.srgba = imgtorgba(src, par.sval);
-            par.sdval = rgbatoimg(dst, par.srgba);
-            if((par.srgba&0xFF) == 0 && (op&DoutS)){
-                DBG1("fill with transparent source\n");
-                return;	/* no-op successfully handled */
-            }
+        if((par.srgba&0xFF) == 0 && (op&DoutS)){
+            DBG1("fill with transparent source\n");
+            return;	/* no-op successfully handled */
         }
     }
-
-    if(mask->flags & Frepl){
-        par.state |= Replmask;
-        if(Dx(mask->r)==1 && Dy(mask->r)==1){
-            par.mval = pixelbits(mask, mask->r.min);
-            if(par.mval == 0 && (op&DoutS)){
-                DBG1("fill with zero mask\n");
-                return;	/* no-op successfully handled */
-            }
-            par.state |= Simplemask;
-            if(par.mval == ~0)
-                par.state |= Fullmask;
-            par.mrgba = imgtorgba(mask, par.mval);
-        }
-    }
-    DBG1("dr %R sr %R mr %R...", r, par.sr, par.mr);
-    DBG1("draw dr %R sr %R mr %R %lux\n", r, par.sr, par.mr, par.state);
-
-    /*
-     * Now that we've clipped the parameters down to be consistent, we 
-     * simply try sub-drawing routines in order until we find one that was able
-     * to handle us.  If the sub-drawing routine returns zero, it means it was
-     * unable to satisfy the request, so we do not return.
-     */
-
-    /*
-     * Hardware support.  Each video driver provides this function,
-     * which checks to see if there is anything it can help with.
-     * There could be an if around this checking to see if dst is in video memory.
-     */
-    if(hwdraw(&par)){
-        DBG1("hwdraw handled\n");
-        return;
-    }
-    /*
-     * Optimizations using memmove and memset.
-     */
-    if(memoptdraw(&par)){
-        DBG1("memopt handled\n");
-        return;
-    }
-
-    /*
-     * Character drawing.
-     * Solid source color being painted through a boolean mask onto a high res image.
-     */
-    if(chardraw(&par)){
-        DBG1("chardraw handled\n");
-        return;
-    }
-
-    /*
-     * General calculation-laden case that does alpha for each pixel.
-     */
-    alphadraw(&par);
-    DBG("alphadraw handled\n");
-}
-@
-%old: argh, was ugly debugging code, I improved a bit by using DBG1 macro
-%    DBG1("test hwdraw\n");
-%    DBG1("test memoptdraw\n");
-%    DBG1("test chardraw\n");
-%    DBG1("do alphadraw\n");
-
-
-
-<<function pixelbits>>=
-static ulong
-pixelbits(Memimage *i, Point pt)
-{
-    uchar *p;
-    ulong val;
-    int off, bpp, npack;
-
-    val = 0;
-    p = byteaddr(i, pt);
-    switch(bpp=i->depth){
-    case 1:
-    case 2:
-    case 4:
-        npack = 8/bpp;
-        off = pt.x%npack;
-        val = p[0] >> bpp*(npack-1-off);
-        val &= (1<<bpp)-1;
-        break;
-    case 8:
-        val = p[0];
-        break;
-    case 16:
-        val = p[0]|(p[1]<<8);
-        break;
-    case 24:
-        val = p[0]|(p[1]<<8)|(p[2]<<16);
-        break;
-    case 32:
-        val = p[0]|(p[1]<<8)|(p[2]<<16)|(p[3]<<24);
-        break;
-    }
-    while(bpp<32){
-        val |= val<<bpp;
-        bpp *= 2;
-    }
-    return val;
-}
-@
-% >> >> >> >> >> >> >> >>
-
-
-
-<<function imgtorgba>>=
-static ulong
-imgtorgba(Memimage *img, ulong val)
-{
-    uchar r, g, b, a;
-    int nb, ov, v;
-    ulong chan;
-    uchar *p;
-
-    a = 0xFF;
-    r = g = b = 0xAA;	/* garbage */
-    for(chan=img->chan; chan; chan>>=8){
-        nb = NBITS(chan);
-        ov = v = val&((1<<nb)-1);
-        val >>= nb;
-
-        while(nb < 8){
-            v |= v<<nb;
-            nb *= 2;
-        }
-        v >>= (nb-8);
-
-        switch(TYPE(chan)){
-        case CRed:
-            r = v;
-            break;
-        case CGreen:
-            g = v;
-            break;
-        case CBlue:
-            b = v;
-            break;
-        case CAlpha:
-            a = v;
-            break;
-
-        case CGrey:
-            r = g = b = v;
-            break;
-        case CMap:
-            p = img->cmap->cmap2rgb+3*ov;
-            r = *p++;
-            g = *p++;	
-            b = *p;
-            break;
-        }
-    }
-    return (r<<24)|(g<<16)|(b<<8)|a;	
 }
 @
 
-<<function rgbatoimg>>=
-static ulong
-rgbatoimg(Memimage *img, ulong rgba)
-{
-    ulong chan;
-    int d, nb;
-    ulong v;
-    uchar *p, r, g, b, a, m;
 
-    v = 0;
-    r = rgba>>24;
-    g = rgba>>16;
-    b = rgba>>8;
-    a = rgba;
-    d = 0;
-    for(chan=img->chan; chan; chan>>=8){
-        nb = NBITS(chan);
-        switch(TYPE(chan)){
-        case CRed:
-            v |= (r>>(8-nb))<<d;
-            break;
-        case CGreen:
-            v |= (g>>(8-nb))<<d;
-            break;
-        case CBlue:
-            v |= (b>>(8-nb))<<d;
-            break;
-        case CAlpha:
-            v |= (a>>(8-nb))<<d;
-            break;
-        case CMap:
-            p = img->cmap->rgb2cmap;
-            m = p[(r>>4)*256+(g>>4)*16+(b>>4)];
-            v |= (m>>(8-nb))<<d;
-            break;
 
-        case CGrey:
-            m = RGB2K(r,g,b);
-            v |= (m>>(8-nb))<<d;
-            break;
+<<[[Memdrawparam]] other fields>>=
+ulong mval;		/* if Simplemask, the mask pixel in mask format */
+ulong mrgba;	/* mval in rgba */
+@
+
+
+
+<<[[memimagedraw()]] if mask is repl>>=
+if(mask->flags & Frepl){
+    par.state |= Replmask;
+    if(Dx(mask->r)==1 && Dy(mask->r)==1){
+        par.state |= Simplemask;
+        par.mval = pixelbits(mask, mask->r.min);
+
+        if(par.mval == 0 && (op&DoutS)){
+            DBG1("fill with zero mask\n");
+            return;	/* no-op successfully handled */
         }
-        d += nb;
+
+        if(par.mval == ~0)
+            par.state |= Fullmask;
+        par.mrgba = imgtorgba(mask, par.mval);
     }
- DBG1("rgba2img %.8lux = %.*lux\n", rgba, 2*d/8, v);
-    return v;
 }
 @
-% >>
 
 
 
-\subsubsection{[[memoptdraw()]]}
+\section{Setting or moving pixels}
+% kinda opti, but helps to understand alphadraw
+
+\subsection{[[memoptdraw()]]}
+% maybe move earlier, can be good step towards alphadraw
+
+<<[[memimagedraw()]] try memoptdraw>>=
+/*
+ * Optimizations using memmove and memset.
+ */
+if(memoptdraw(&par)){
+    DBG1("memopt handled\n");
+    return;
+}
+@
+
 
 <<function memoptdraw>>=
-static int
+static bool
 memoptdraw(Memdrawparam *par)
 {
-    int m, y, dy, dx, op;
+    int dx, dy;
+    // enum<Drawop>
+    int op;
+    Memimage *src, *dst;
+
+    int m, y
     ulong v;
-    Memimage *src;
-    Memimage *dst;
 
     dx = Dx(par->r);
     dy = Dy(par->r);
@@ -5898,78 +6262,54 @@ memoptdraw(Memdrawparam *par)
     op = par->op;
 
     DBG1("state %lux mval %lux dd %d\n", par->state, par->mval, dst->depth);
-    /*
-     * If we have an opaque mask and source is one opaque pixel we can convert to the
-     * destination format and just replicate with memset.
-     */
-    m = Simplesrc|Simplemask|Fullmask;
-    if((par->state&m)==m && (par->srgba&0xFF) == 0xFF && (op ==S || op == SoverD)){
-        uchar *dp, p[4];
-        int d, dwid, ppb, np, nb;
-        uchar lm, rm;
 
-        DBG1("memopt, dst %p, dst->data->bdata %p\n", dst, dst->data->bdata);
-        dwid = dst->width*sizeof(ulong);
-        dp = byteaddr(dst, par->r.min);
-        v = par->sdval;
-        DBG1("sdval %lud, depth %d\n", v, dst->depth);
-        switch(dst->depth){
-        <<[[memoptdraw()]] switch depth cases>>
-        case 32:
-            p[0] = v;		/* make little endian */
-            p[1] = v>>8;
-            p[2] = v>>16;
-            p[3] = v>>24;
-            v = *(ulong*)p;
-            for(y=0; y<dy; y++, dp+=dwid)
-                memsetl(dp, v, dx);
-            return 1;
-        default:
-            assert(0 /* bad dest depth in memoptdraw */);
-        }
-    }
-
-
-    /*
-     * If no source alpha, an opaque mask, we can just copy the
-     * source onto the destination.  If the channels are the same and
-     * the source is not replicated, memmove suffices.
-     */
-    m = Simplemask|Fullmask;
-    if((par->state&(m|Replsrc))==m && src->depth >= 8 
-    && src->chan == dst->chan && !(src->flags&Falpha) && (op == S || op == SoverD)){
-        uchar *sp, *dp;
-        long swid, dwid, nb;
-        int dir;
-
-        if(src->data == dst->data && byteaddr(dst, par->r.min) > byteaddr(src, par->sr.min))
-            dir = -1;
-        else
-            dir = 1;
-
-        swid = src->width*sizeof(ulong);
-        dwid = dst->width*sizeof(ulong);
-        sp = byteaddr(src, par->sr.min);
-        dp = byteaddr(dst, par->r.min);
-        if(dir == -1){
-            sp += (dy-1)*swid;
-            dp += (dy-1)*dwid;
-            swid = -swid;
-            dwid = -dwid;
-        }
-        nb = (dx*src->depth)/8;
-        for(y=0; y<dy; y++, sp+=swid, dp+=dwid)
-            memmove(dp, sp, nb);
-        return 1;
-    }
-
+    <<[[memoptdraw()]] if condition for memset>>
+    <<[[memoptdraw()]] if condition for memmove>>
     <<[[memoptdraw()]] if 1 bit mask, src, and dest>>
-
-    return 0;	
+    return false;	
 }
 @
 % >>
 
+\subsection{Setting pixels}
+
+<<[[memoptdraw()]] if condition for memset>>=
+/*
+ * If we have an opaque mask and source is one opaque pixel we can
+ * convert to the destination format and just replicate with memset.
+ */
+m = Simplesrc|Simplemask|Fullmask;
+if((par->state&m)==m && 
+   (par->srgba&0xFF) == 0xFF && 
+   (op == S || op == SoverD)){
+    byte *dp;
+    byte p[4];
+    int dwid;
+    <<[[memoptdraw()]] locals for memset case>>
+
+    DBG1("memopt, dst %p, dst->data->bdata %p\n", dst, dst->data->bdata);
+    dwid = dst->width * sizeof(ulong);
+    dp = byteaddr(dst, par->r.min);
+    v = par->sdval;
+    DBG1("sdval %lud, depth %d\n", v, dst->depth);
+
+    switch(dst->depth){
+    <<[[memoptdraw()]] switch depth cases>>
+    case 32:
+        p[0] = v;		/* make little endian */
+        p[1] = v>>8;
+        p[2] = v>>16;
+        p[3] = v>>24;
+        v = *(ulong*)p;
+
+        for(y=0; y < dy; y++, dp += dwid)
+            memsetl(dp, v, dx);
+        return true;
+    }
+}
+@
+
+% l for little endian
 <<function memsetl>>=
 static void
 memsetl(void *vp, ulong val, int n)
@@ -5978,390 +6318,117 @@ memsetl(void *vp, ulong val, int n)
 
     p = vp;
     ep = p+n;
-    while(p<ep)
+    while(p < ep)
         *p++ = val;
 }
 @
 
-\subsubsection{[[chardraw()]]}
 
-<<function chardraw>>=
+\subsection{Moving pixels}
+
+<<[[memoptdraw()]] if condition for memmove>>=
 /*
- * Boolean character drawing.
- * Solid opaque color through a 1-bit greyscale mask.
+ * If no source alpha, an opaque mask, we can just copy the
+ * source onto the destination.  If the channels are the same and
+ * the source is not replicated, memmove suffices.
  */
-static int
-chardraw(Memdrawparam *par)
-{
-    ulong bits;
-    int i, ddepth, dy, dx, x, bx, ex, y, npack, bsh, depth, op;
-    ulong v, maskwid, dstwid;
-    uchar *wp, *rp, *q, *wc;
-    ushort *ws;
-    ulong *wl;
-    uchar sp[4];
-    Rectangle r, mr;
-    Memimage *mask, *src, *dst;
+m = Simplemask|Fullmask;
+if((par->state&(m|Replsrc))==m && 
+    src->depth >= 8 && 
+    src->chan == dst->chan && 
+    !(src->flags&Falpha) && 
+    (op == S || op == SoverD)){
 
-    DBG1("chardraw? mf %lux md %d sf %lux dxs %d dys %d dd %d ddat %p sdat %p\n",
-        par->mask->flags, par->mask->depth, par->src->flags, 
-        Dx(par->src->r), Dy(par->src->r), par->dst->depth, par->dst->data, par->src->data);
+    byte *sp, *dp;
+    long swid, dwid, nb;
+    int dir;
 
-    mask = par->mask;
-    src = par->src;
-    dst = par->dst;
-    r = par->r;
-    mr = par->mr;
-    op = par->op;
+    if(src->data == dst->data && 
+       byteaddr(dst, par->r.min) > byteaddr(src, par->sr.min))
+        dir = -1;
+    else
+        dir = 1;
 
-    if((par->state&(Replsrc|Simplesrc|Replmask)) != (Replsrc|Simplesrc)
-    || mask->depth != 1 || src->flags&Falpha || dst->depth<8 || dst->data==src->data
-    || op != SoverD)
-        return 0;
-
-    DBG1("chardraw...");
-
-    depth = mask->depth;
-    maskwid = mask->width*sizeof(ulong);
-    rp = byteaddr(mask, mr.min);
-    npack = 8/depth;
-    bsh = (mr.min.x % npack) * depth;
-
-    wp = byteaddr(dst, r.min);
-    dstwid = dst->width*sizeof(ulong);
-    DBG1("bsh %d\n", bsh);
-    dy = Dy(r);
-    dx = Dx(r);
-
-    ddepth = dst->depth;
-
-    /*
-     * for loop counts from bsh to bsh+dx
-     *
-     * we want the bottom bits to be the amount
-     * to shift the pixels down, so for n≡0 (mod 8) we want 
-     * bottom bits 7.  for n≡1, 6, etc.
-     * the bits come from -n-1.
-     */
-
-    bx = -bsh-1;
-    ex = -bsh-1-dx;
-    SET(bits);
-    v = par->sdval;
-
-    /* make little endian */
-    sp[0] = v;
-    sp[1] = v>>8;
-    sp[2] = v>>16;
-    sp[3] = v>>24;
-
-    DBG1("sp %x %x %x %x\n", sp[0], sp[1], sp[2], sp[3]);
-    for(y=0; y<dy; y++, rp+=maskwid, wp+=dstwid){
-        q = rp;
-        if(bsh)
-            bits = *q++;
-        switch(ddepth){
-        <<[[chardraw()]] switch depth cases>>
-        case 32:
-            wl = (ulong*)wp;
-            v = *(ulong*)sp;
-            for(x=bx; x>ex; x--, wl++){
-                i = x&7;
-                if(i == 8-1)
-                    bits = *q++;
-                DBG1("bits %lux sh %d...", bits, i);
-                if((bits>>i)&1)
-                    *wl = v;
-            }
-            break;
-        }
+    swid = src->width*sizeof(ulong);
+    dwid = dst->width*sizeof(ulong);
+    sp = byteaddr(src, par->sr.min);
+    dp = byteaddr(dst, par->r.min);
+    if(dir == -1){
+        sp += (dy-1)*swid;
+        dp += (dy-1)*dwid;
+        swid = -swid;
+        dwid = -dwid;
     }
-
-    DBG1("\n");	
-    return 1;	
+    nb = (dx*src->depth)/8;
+    for(y=0; y<dy; y++, sp+=swid, dp+=dwid)
+        memmove(dp, sp, nb);
+    return true;
 }
 @
 
-
-\subsection{Hardware support hook}
-% but really optional, bcm/screen.c does nothing except
-% calling the software cursor save/restore.
-
-% vgascreen.c
-<<global hwaccel(x86)>>=
-int hwaccel = true;
-@
-
-
-% * Hardware support.  Each video driver provides this function,
-% * which checks to see if there is anything it can help with.
-% * There could be an if around this checking to see if dst is in video memo
-r
-% vgascreen.c
-<<function hwdraw(x86)>>=
-//@Scheck: not dead, actually this is overriding some def in libmemdraw!! ugly
-bool hwdraw(Memdrawparam *par)
-{
-    VGAscr *scr;
-    Memimage *dst, *src, *mask;
-    int m;
-
-    if(hwaccel == false)
-        return false;
-
-    scr = &vgascreen;
-
-    if((dst=par->dst) == nil || dst->data == nil)
-        return false;
-    if((src=par->src) == nil || src->data == nil)
-        return false;
-    if((mask=par->mask) == nil || mask->data == nil)
-        return false;
-
-    <<[[hwdraw()]] if software cursor(x86)>>
-    
-    if(dst->data->bdata != gscreendata.bdata)
-        return false;
-
-
-
-
-    if(scr->fill==nil && scr->scroll==nil)
-        return false;
-    /*
-     * If we have an opaque mask and source is one opaque
-     * pixel we can convert to the destination format and just
-     * replicate with memset.
-     */
-    m = Simplesrc|Simplemask|Fullmask;
-    if(scr->fill
-    && (par->state&m)==m
-    && ((par->srgba&0xFF) == 0xFF)
-    && (par->op&S) == S)
-        return scr->fill(scr, par->r, par->sdval);
-
-    /*
-     * If no source alpha, an opaque mask, we can just copy the
-     * source onto the destination.  If the channels are the same and
-     * the source is not replicated, memmove suffices.
-     */
-    m = Simplemask|Fullmask;
-    if(scr->scroll
-    && src->data->bdata==dst->data->bdata
-    && !(src->flags&Falpha)
-    && (par->state&m)==m
-    && (par->op&S) == S)
-        return scr->scroll(scr, par->r, par->sr);
-
-    return false;   
-}
-@
-
-% TODO: maybe assume simple screen device, like for raspberry,
-% and where it's actually a framebuffer where hwdraw does nothing
-% except the software cursor stuff.
-
-% TODO put scroll or fill method here?
-
-
-
-
-\section{Clipping}
-
-%XXX complicated function, mv later I think when see better context of use
-%  and need
-% memimagedraw | ?? -> <>
-<<function drawclip>>=
-/*
- * Clip the destination rectangle further based on the properties of the 
- * source and mask rectangles.  Once the destination rectangle is properly
- * clipped, adjust the source and mask rectangles to be the same size.
- * Then if source or mask is replicated, move its clipped rectangle
- * so that its minimum point falls within the repl rectangle.
- *
- * Return zero if the final rectangle is null.
- */
-int
-drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, Point *p1, Rectangle *sr, Rectangle *mr)
-{
-    Point rmin, delta;
-    bool splitcoords;
-    Rectangle omr;
-
-    if(r->min.x >= r->max.x || r->min.y >= r->max.y)
-        return 0;
-    splitcoords = (p0->x != p1->x) || (p0->y != p1->y);
-
-    /* clip to destination */
-    rmin = r->min;
-    if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
-        return 0;
-
-    /* move mask point */
-    p1->x += r->min.x - rmin.x;
-    p1->y += r->min.y - rmin.y;
-    /* move source point */
-    p0->x += r->min.x - rmin.x;
-    p0->y += r->min.y - rmin.y;
-
-    /* map destination rectangle into source */
-    sr->min = *p0;
-    sr->max.x = p0->x+Dx(*r);
-    sr->max.y = p0->y+Dy(*r);
-
-    /* sr is r in source coordinates; clip to source */
-    if(!(src->flags&Frepl) && !rectclip(sr, src->r))
-        return 0;
-    if(!rectclip(sr, src->clipr))
-        return 0;
-
-    /* compute and clip rectangle in mask */
-    if(splitcoords){
-        /* move mask point with source */
-        p1->x += sr->min.x - p0->x;
-        p1->y += sr->min.y - p0->y;
-        mr->min = *p1;
-        mr->max.x = p1->x+Dx(*sr);
-        mr->max.y = p1->y+Dy(*sr);
-        omr = *mr;
-
-        /* mr is now rectangle in mask; clip it */
-        if(!(mask->flags&Frepl) && !rectclip(mr, mask->r))
-            return 0;
-        if(!rectclip(mr, mask->clipr))
-            return 0;
-
-        /* reflect any clips back to source */
-        sr->min.x += mr->min.x-omr.min.x;
-        sr->min.y += mr->min.y-omr.min.y;
-        sr->max.x += mr->max.x-omr.max.x;
-        sr->max.y += mr->max.y-omr.max.y;
-        *p1 = mr->min;
-    }else{
-        if(!(mask->flags&Frepl) && !rectclip(sr, mask->r))
-            return 0;
-        if(!rectclip(sr, mask->clipr))
-            return 0;
-        *p1 = sr->min;
-    }
-
-    /* move source clipping back to destination */
-    delta.x = r->min.x - p0->x;
-    delta.y = r->min.y - p0->y;
-    r->min.x = sr->min.x + delta.x;
-    r->min.y = sr->min.y + delta.y;
-    r->max.x = sr->max.x + delta.x;
-    r->max.y = sr->max.y + delta.y;
-
-    /* move source rectangle so sr->min is in src->r */
-    if(src->flags&Frepl) {
-        delta.x = drawreplxy(src->r.min.x, src->r.max.x, sr->min.x) - sr->min.x;
-        delta.y = drawreplxy(src->r.min.y, src->r.max.y, sr->min.y) - sr->min.y;
-        sr->min.x += delta.x;
-        sr->min.y += delta.y;
-        sr->max.x += delta.x;
-        sr->max.y += delta.y;
-    }
-    *p0 = sr->min;
-
-    /* move mask point so it is in mask->r */
-    *p1 = drawrepl(mask->r, *p1);
-    mr->min = *p1;
-    mr->max.x = p1->x+Dx(*sr);
-    mr->max.y = p1->y+Dy(*sr);
-
-    assert(Dx(*sr) == Dx(*mr) && Dx(*mr) == Dx(*r));
-    assert(Dy(*sr) == Dy(*mr) && Dy(*mr) == Dy(*r));
-    assert(ptinrect(*p0, src->r));
-    assert(ptinrect(*p1, mask->r));
-    assert(ptinrect(r->min, dst->r));
-
-    return 1;
-}
-@
-
-
-
-% drawrepl | drawclip -> <>
-<<function drawreplxy>>=
-int
-drawreplxy(int min, int max, int x)
-{
-    int sx;
-
-    sx = (x-min)%(max-min);
-    if(sx < 0)
-        sx += max-min;
-    return sx+min;
-}
-@
-
-% drawclip | drawmask -> <>
-<<function drawrepl>>=
-Point
-drawrepl(Rectangle r, Point p)
-{
-    p.x = drawreplxy(r.min.x, r.max.x, p.x);
-    p.y = drawreplxy(r.min.y, r.max.y, p.y);
-    return p;
-}
-@
-
-
-
-
-
-
-\section{Alpha channel and compositing}
+\section{Compositing}
 
 \subsection{[[alphadraw()]]}
+
+\t can write simple version when dst and src have simple and
+\t  same chan format? like RGBA32?
 
 <<function alphadraw>>=
 /*
  * For each scan line, we expand the pixels from source, mask, and destination
- * into byte-aligned red, green, blue, alpha, and grey channels.  If buffering is not
- * needed and the channels were already byte-aligned (grey8, rgb24, rgba32, rgb32),
- * the readers need not copy the data: they can simply return pointers to the data.
- * If the destination image is grey and the source is not, it is converted using the NTSC
- * formula.
+ * into byte-aligned red, green, blue, alpha, and grey channels.  If buffering
+ * is not needed and the channels were already byte-aligned 
+ * (grey8, rgb24, rgba32, rgb32),
+ * the readers need not copy the data: they can simply return pointers to the
+ * data.
+ * If the destination image is grey and the source is not, it is converted
+ * using the NTSC formula.
  *
- * Once we have all the channels, we call either rgbcalc or greycalc, depending on 
- * whether the destination image is color.  This is allowed to overwrite the dst buffer (perhaps
- * the actual data, perhaps a copy) with its result.  It should only overwrite the dst buffer
- * with the same format (i.e. red bytes with red bytes, etc.)  A new buffer is returned from
- * the calculator, and that buffer is passed to a function to write it to the destination.
- * If the buffer is already pointing at the destination, the writing function is a no-op.
+ * Once we have all the channels, we call either rgbcalc or greycalc, 
+ * depending on whether the destination image is color.  This is allowed to
+ * overwrite the dst buffer (perhaps the actual data, perhaps a copy) with 
+ * its result.  It should only overwrite the dst buffer
+ * with the same format (i.e. red bytes with red bytes, etc.)  A new buffer
+ * is returned from the calculator, and that buffer is passed to a function 
+ * to write it to the destination.
+ * If the buffer is already pointing at the destination, the writing function 
+ * is a no-op.
  */
 static int
 alphadraw(Memdrawparam *par)
 {
+    Memimage *src, *mask, *dst;
+    Rectangle r, sr, mr;
+    // enum<Drawop>
+    int op;
+    int dx, dy;
+
     bool isgrey;
-    int starty, endy, op;
-    int needbuf, dsty, srcy, masky;
-    int y, dir, dx, dy, ndrawbuf;
+    bool needbuf;
+
+    int starty, endy;
+    int dsty, srcy, masky;
+    int y, dir, ndrawbuf;
     uchar *drawbuf;
     Buffer bsrc, bdst, bmask;
     Readfn *rdsrc, *rdmask, *rddst;
     Calcfn *calc;
     Writefn *wrdst;
-    Memimage *src, *mask, *dst;
-    Rectangle r, sr, mr;
     Dbuf *z;
 
     r = par->r;
     dx = Dx(r);
     dy = Dy(r);
-
-    z = allocdbuf();
-    if(z == nil)
-        return 0;
-
     src = par->src;
     mask = par->mask;	
     dst = par->dst;
     sr = par->sr;
     mr = par->mr;
     op = par->op;
+
+    z = allocdbuf();
+    if(z == nil)
+        return 0;
 
     isgrey = dst->flags&Fgrey;
 
@@ -6374,9 +6441,9 @@ alphadraw(Memdrawparam *par)
     needbuf = (src->data == dst->data);
 
     ndrawbuf = 0;
-    getparam(&z->spar, src, sr, isgrey, needbuf, &ndrawbuf);
-    getparam(&z->dpar, dst, r, isgrey, needbuf, &ndrawbuf);
-    getparam(&z->mpar, mask, mr, 0, needbuf, &ndrawbuf);
+    getparam(&z->spar, src, sr,  isgrey, needbuf, &ndrawbuf);
+    getparam(&z->dpar, dst, r,   isgrey, needbuf, &ndrawbuf);
+    getparam(&z->mpar, mask, mr, false,  needbuf, &ndrawbuf);
 
     dir = (needbuf && byteaddr(dst, r.min) > byteaddr(src, sr.min)) ? -1 : 1;
     z->spar.dir = z->mpar.dir = z->dpar.dir = dir;
@@ -6390,14 +6457,9 @@ alphadraw(Memdrawparam *par)
 
         calc = alphacalc[op];
 
-        /*
-         * If there is no alpha channel, we'll ask for a grey channel
-         * and pretend it is the alpha.
-         */
         if(mask->flags&Falpha){
             rdmask = readalphafn(mask);
             z->mpar.alphaonly = 1;
-
         }
         <<[[alphadraw()]] when not alpha mask>>
     }
@@ -6443,11 +6505,11 @@ alphadraw(Memdrawparam *par)
         endy = -1;
     }
 
-    /*
-     * srcy, masky, and dsty are offsets from the top of their
-     * respective Rectangles.  they need to be contained within
-     * the rectangles, so clipy can keep them there without division.
-   */
+   /*
+    * srcy, masky, and dsty are offsets from the top of their
+    * respective Rectangles.  they need to be contained within
+    * the rectangles, so clipy can keep them there without division.
+    */
     srcy = (starty + sr.min.y - src->r.min.y)%Dy(src->r);
     masky = (starty + mr.min.y - mask->r.min.y)%Dy(mask->r);
     dsty = starty + r.min.y - dst->r.min.y;
@@ -6456,30 +6518,32 @@ alphadraw(Memdrawparam *par)
     assert(0 <= masky && masky < Dy(mask->r));
     assert(0 <= dsty && dsty < Dy(dst->r));
 
+    // the big loop!
     for(y=starty; y!=endy; y+=dir, srcy+=dir, masky+=dir, dsty+=dir){
         clipy(src, &srcy);
         clipy(dst, &dsty);
         clipy(mask, &masky);
 
         bsrc = rdsrc(&z->spar, z->spar.bufbase, srcy);
-        DBG1("[");
         bmask = rdmask(&z->mpar, z->mpar.bufbase, masky);
-        DBG1("]\n");
         bdst = rddst(&z->dpar, z->dpar.bufbase, dsty);
-        //DBG		dumpbuf("src", bsrc, dx);
-        //DBG		dumpbuf("mask", bmask, dx);
-        //DBG		dumpbuf("dst", bdst, dx);
 
         // !!The calc dispatch!!
         bdst = calc(bdst, bsrc, bmask, dx, isgrey, op);
-        wrdst(&z->dpar, z->dpar.bytermin+dsty*z->dpar.bwidth, bdst);
+        wrdst(&z->dpar, z->dpar.bytermin + dsty * z->dpar.bwidth, bdst);
     }
 
     z->inuse = 0;
     return 1;
 }
 @
-
+\l return value seems unused so void instead?
+%old:
+%        DBG1("[");
+%        DBG1("]\n");
+%        //DBG		dumpbuf("src", bsrc, dx);
+%        //DBG		dumpbuf("mask", bmask, dx);
+%        //DBG		dumpbuf("dst", bdst, dx);
 
 
 
@@ -16389,6 +16453,23 @@ eatomouse(Mouse *m, char *buf, int n)
 \chapter{Non 32 Bits Images}
 % and optimisations?
 
+<<[[ImageType] cases>>=
+GREY2	= CHAN1(CGrey, 2),
+GREY4	= CHAN1(CGrey, 4),
+GREY8	= CHAN1(CGrey, 8),
+
+RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
+RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
+RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
+BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
+
+
+ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
+
+XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
+XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
+@
+
 \section{1-Bit images}
 % or bitmasks
 
@@ -16783,6 +16864,11 @@ if(d->screenimage->depth <= 8){	/* create a 2x2 texture */
 @
 
 
+<<[[memoptdraw()]] locals for memset case>>=
+int ppb, np, nb;
+uchar lm, rm;
+int d;
+@
 
 <<[[memoptdraw()]] switch depth cases>>=
 case 1:
@@ -16840,9 +16926,14 @@ case 4:
             *dp ^= (v ^ *dp) & rm;
         }
     }
-    return 1;
+    return true;
 @
 % >> >> >> >>
+
+<<[[memoptdraw()]] switch depth cases>>=
+default:
+    assert(0 /* bad dest depth in memoptdraw */);
+@
 
 
 <<[[setcolor()]] switch depth cases>>=
@@ -17010,9 +17101,9 @@ writenbit(Param *p, uchar *w, Buffer src)
 
 <<[[memoptdraw()]] switch depth cases>>=
 case 8:
-    for(y=0; y<dy; y++, dp+=dwid)
+    for(y=0; y < dy; y++, dp += dwid)
         memset(dp, v, dx);
-    return 1;
+    return true;
 @
 
 <<[[chardraw()]] switch depth cases>>=
@@ -17111,6 +17202,7 @@ memset24(void *vp, ulong val, int n)
 
     p = vp;
     ep = p+3*n;
+
     a = val;
     b = val>>8;
     c = val>>16;
@@ -17156,6 +17248,10 @@ case 24:
 \subsection{Grey vs alpha}
 
 <<[[alphadraw()]] when not alpha mask>>=
+/*
+ * If there is no alpha channel, we'll ask for a grey channel
+ * and pretend it is the alpha.
+ */
 else{
     z->mpar.greymaskcall = readfn(mask);
     z->mpar.convgrey = 1;
@@ -19725,6 +19821,161 @@ bool     busy;
 
 
 
+
+\section{[[memimagedraw()]] optimisations}
+
+\subsection{[[hwdraw()]]}
+
+<<[[hwdraw()]] when dst is the screen>>=
+if(scr->fill==nil && scr->scroll==nil)
+    return false;
+/*
+ * If we have an opaque mask and source is one opaque
+ * pixel we can convert to the destination format and just
+ * replicate with memset.
+ */
+m = Simplesrc|Simplemask|Fullmask;
+if(scr->fill
+&& (par->state&m)==m
+&& ((par->srgba&0xFF) == 0xFF)
+&& (par->op&S) == S)
+    return scr->fill(scr, par->r, par->sdval);
+
+/*
+ * If no source alpha, an opaque mask, we can just copy the
+ * source onto the destination.  If the channels are the same and
+ * the source is not replicated, memmove suffices.
+ */
+m = Simplemask|Fullmask;
+if(scr->scroll
+&& src->data->bdata==dst->data->bdata
+&& !(src->flags&Falpha)
+&& (par->state&m)==m
+&& (par->op&S) == S)
+    return scr->scroll(scr, par->r, par->sr);
+@
+
+
+
+\subsection{[[chardraw()]]}
+
+<<[[memimagedraw()]] try chardraw>>=
+/*
+ * Character drawing.
+ * Solid source color being painted through a boolean mask onto a 
+ * high res image.
+ */
+if(chardraw(&par)){
+    DBG1("chardraw handled\n");
+    return;
+}
+@
+
+
+<<function chardraw>>=
+/*
+ * Boolean character drawing.
+ * Solid opaque color through a 1-bit greyscale mask.
+ */
+static bool
+chardraw(Memdrawparam *par)
+{
+    Rectangle r, mr;
+    Memimage *mask, *src, *dst;
+    int op;
+    int dx, dy;
+
+    ulong bits;
+    int i, ddepth, x, bx, ex, y, npack, bsh, depth;
+    ulong v, maskwid, dstwid;
+    uchar *wp, *rp, *q, *wc;
+    ushort *ws;
+    ulong *wl;
+    uchar sp[4];
+
+    DBG1("chardraw? mf %lux md %d sf %lux dxs %d dys %d dd %d ddat %p sdat %p\n",
+        par->mask->flags, par->mask->depth, par->src->flags, 
+        Dx(par->src->r), Dy(par->src->r), par->dst->depth, par->dst->data, par->src->data);
+
+    mask = par->mask;
+    src = par->src;
+    dst = par->dst;
+    r = par->r;
+    mr = par->mr;
+    op = par->op;
+
+    if((par->state&(Replsrc|Simplesrc|Replmask)) != (Replsrc|Simplesrc)
+    || mask->depth != 1 
+    || src->flags&Falpha 
+    || dst->depth<8 
+    || dst->data==src->data
+    || op != SoverD)
+        return false;
+
+    // else
+
+    DBG1("chardraw...");
+
+    depth = mask->depth;
+    maskwid = mask->width * sizeof(ulong);
+    rp = byteaddr(mask, mr.min);
+    npack = 8/depth;
+    bsh = (mr.min.x % npack) * depth;
+
+    wp = byteaddr(dst, r.min);
+    dstwid = dst->width*sizeof(ulong);
+    DBG1("bsh %d\n", bsh);
+    dy = Dy(r);
+    dx = Dx(r);
+
+    ddepth = dst->depth;
+
+    /*
+     * for loop counts from bsh to bsh+dx
+     *
+     * we want the bottom bits to be the amount
+     * to shift the pixels down, so for n≡0 (mod 8) we want 
+     * bottom bits 7.  for n≡1, 6, etc.
+     * the bits come from -n-1.
+     */
+
+    bx = -bsh-1;
+    ex = -bsh-1-dx;
+    SET(bits);
+    v = par->sdval;
+
+    /* make little endian */
+    sp[0] = v;
+    sp[1] = v>>8;
+    sp[2] = v>>16;
+    sp[3] = v>>24;
+
+    DBG1("sp %x %x %x %x\n", sp[0], sp[1], sp[2], sp[3]);
+    for(y=0; y<dy; y++, rp+=maskwid, wp+=dstwid){
+        q = rp;
+        if(bsh)
+            bits = *q++;
+        switch(ddepth){
+        <<[[chardraw()]] switch depth cases>>
+        case 32:
+            wl = (ulong*)wp;
+            v = *(ulong*)sp;
+            for(x=bx; x>ex; x--, wl++){
+                i = x&7;
+                if(i == 8-1)
+                    bits = *q++;
+                DBG1("bits %lux sh %d...", bits, i);
+                if((bits>>i)&1)
+                    *wl = v;
+            }
+            break;
+        }
+    }
+
+    DBG1("\n");	
+    return 1;	
+}
+@
 
 
 
