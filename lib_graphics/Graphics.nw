@@ -223,8 +223,7 @@ but which were ultimately discarded:
 
 \item Cairo
 % 2d graphics libs with support for many output "devices",
-% xwindow, quartz, win32, image buffer, pdf, postscript, svg
-% opengl, directFB.
+% xwindow, quartz, win32, image buffer, pdf, postscript, svg, opengl, directFB.
 % used in firefox
 % can leverage hardware acceleration.
 % operations similar to drawing operators of postscript and pdf
@@ -239,6 +238,9 @@ but which were ultimately discarded:
 
 % maybe API simpler than the one of plan9. I get confused with the 
 % complex parameters of draw(), the rectangles and point and clipping.
+
+% cairo also handle affine transformation, scaling, rotate, etc a la OpenGL.
+% /dev/draw does not I think.
 
 \item skia
 % used in android and chrome
@@ -299,7 +301,9 @@ but which were ultimately discarded:
 \section{Requirements}
 
 % C as usual.
-% but assume more? assume principle of graphics book? no.
+
+% assume more? assume Principle of Graphics book by Foley? maybe
+%  for drawing shapes chapter.
 % most books focused on 3d anyway.
 
 % graphics(2)!! for big picture
@@ -351,7 +355,8 @@ from Bell Labs.
 % horiz/vert lines, rectangle, arbitrary line, polyline, ellipse, arc, bezier,
 % and also text (fonts) which are special kind of pictures (bezier? or raster?)
 % colors, alpha, channels, color map
-% "images", composition (porter-duff), clipping
+% "images", composition (porter-duff) so can have transluscent effect, 
+% clipping, rotate/scale/transform (lacking in plan9).
 
 % Vector graphics, rasterization
 
@@ -366,12 +371,13 @@ from Bell Labs.
 %http://blogs.igalia.com/itoral/2014/07/29/a-brief-introduction-to-the-linux-graphics-stack/
 
 %other topics:
+% - scale/rotate/transform not in this book.
 % - 3d. lighting. Not in this book. based on triangles usually.
 % - Animation (Core Animation) not in this book either.
 
 \section{[[/dev/draw/]] files interface}
 
-% maybe code which initialize kernel? #v and #i
+% maybe code which initializes kernel? #v and #i
 
 
 % /dev/draw/new, then ctl, then data protocol.
@@ -737,7 +743,10 @@ Below are the most important data structures of [[draw.h]].
 \section{Geometry}
 \n put early cos many API mention Point and Rectangle, so core DS
 
-% screen is growing right and down
+% screen is growing right and down. (0,0), (640,480).
+% (see already that lack of matrix is annoying; in codemap I can map
+%  this to a virtual (0,0), (1,1) in float!)
+
 % FIGURE! with screen, point and rectangle
 
 % see addpt(2)
@@ -752,8 +761,8 @@ struct	Point
     int	y;
 };
 @
-% int! they are pixels!
-
+% int! they are pixels! (good and bad, cairo uses floats)
+%alt: %real-world: floats as in cairo
 
 %ctor
 <<function Pt>>=
@@ -987,6 +996,9 @@ ptinrect(Point p, Rectangle r)
 \n insetrect() later with border()
 \n combinerect() later with flush
 
+% will see later Line, Polyline, Ellipse, Arcs, but use Pt and Rectangle
+% for their parameters.
+
 \section{[[Display]] (and [[Client]])}
 % and [[display]]
 
@@ -1018,6 +1030,7 @@ struct Display
 % bool	local;
 % ulong	dataqid;
 
+% we will see Image later.
 
 % rename image field to screen/view? is it the same than global screen/view?
 % NO! it's not the same. it's the whole screen here.
@@ -1245,7 +1258,7 @@ if(cp == nil)
 % and [[view]]
 
 % Display.image! here is Image.
-% The screen is an image.
+% The screen is an image (id = 0).
 
 <<struct Image>>=
 struct Image
@@ -1258,7 +1271,7 @@ struct Image
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;	/* clipping region */
 
-    ulong		chan;
+    ulong		chan; // image format
 
     // derives from Image.chan
     int			depth;		/* number of bits per pixel */
@@ -1272,6 +1285,9 @@ struct Image
 };
 @
 % ctor = allocimage (doing some RPC)
+
+% will see chan, the image format later (basically how many bytes
+% per colors and in which order, e.g. rgba32)
 
 % display + id => can communicate to kernel what we are talking about.
 %  need Display pointer because when do draw operation we need
@@ -1287,6 +1303,16 @@ struct Image
 % system-held id! usually 0 for the first image of /dev/draw/new
 %  for the framebuffer.
 % incremented then at each allocimage, thx to Display.imageid field
+
+% Rectangle r. Most of the time starts at 0,0 but can have
+% other format. Why need that? not sure you need really.
+% When have windows, get actually a sub rectangle of the full image
+% and share internally the same data.
+% Or when to separate your drawing algo in different parts, you
+% can allocate different image for different parts with as a rectangle
+% the final destination. Then you can just copy those images on
+% the screen and use its rectangle as the dst. But could do without I think.
+
 
 % diff between .r and .clipr? use .r to do stuff like
 %  draw_line(10 + r.min.x, 20 + r.min.y, ...). A bit tedious.
@@ -1387,6 +1413,9 @@ struct Memimage
 
 % Note that share also Memdata! many Memimage can be different
 % views of the same Memdata (e.g. the screen). Efficient. No copy.
+% This is why also have Rectangle r. Windows will be sub rectangle
+% over shared screen Memdata.
+% Hmm API to get subrectangle of existing Image? allocimage??
 
 
 % libmemdraw/draw.c
@@ -1655,10 +1684,10 @@ if(d == nil)
 
 % typedef ulong chan;!
 
+% saw ulong chan; in Image and Memimage.
 
 % not thread channel, not kernel Chan, image channel here!
-% ulong in previous struct, but more complex format
-% actually
+% ulong in previous struct, but more complex format actually.
 
 <<enum _anon_ (include/draw.h)4>>=
 /*
@@ -1674,7 +1703,7 @@ enum ImageChan {
     CAlpha,
 
     CMap,
-    CIgnore,
+    <<[[ImageChan]] cases>>
 
     NChan,
 };
@@ -1721,12 +1750,14 @@ enum ImageChan {
 % >> >> >>
 
 
+% most common image formats:
 
 <<enum _anon_ (include/draw.h)5>>=
 enum ImageType {
     GREY1	= CHAN1(CGrey, 1), // used for bitmask, black and white
-    CMAP8	= CHAN1(CMap, 8),
-    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
+    CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default
+    RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5), // Raspberry mode by default
+    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // flexible
     ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
     <<[[ImageType] cases>>
 };
@@ -1737,12 +1768,11 @@ enum ImageType {
 % cairo has what? RGBA32 no?
 
 % vga is CMAP8 (cat /dev/draw/new -->  m8 for cmap 8 bit)
+% bcm is using RGB16 by default (but can be configured for ARGB32)
+
+%real-world: have more than total depth 32 nowaday for colors?
 
 % what is True Color? mentionned in technicolor.ps. It's RGBA32?
-
-% argument of what? allocimage?
-
-
 
 
 <<function chantodepth>>=
@@ -1763,7 +1793,6 @@ chantodepth(ulong c)
 % see also chantostr in debug, which is also used to give
 % readable info in /dev/draw/new/
 
-
 <<[[chantodepth()]] sanity check c>>=
 if(TYPE(c) >= NChan || NBITS(c) > 8 || NBITS(c) <= 0)
     return 0; // warning?
@@ -1781,7 +1810,7 @@ if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
 % typedef color rgba;!
 
 %old school graphics:
-%https://www.youtube.com/watch?v=Tfh0ytz8S0k&feature=youtu.be
+% https://www.youtube.com/watch?v=Tfh0ytz8S0k&feature=youtu.be
 
 % actually Color are Image* in plan9 draw!
 % a Rect(0,0,1,1), with clipr = infinity and repl = true
@@ -1828,102 +1857,31 @@ enum
     
 };
 @
-%less: typedef unsigned int rbga; ?
 
-%todo: how works with VGA where have cmap? try to find closest color?
+\subsection{[[imgtorgba()]]}
 
-% dead: seems not used but a bit interesting to understand alpha?, 
-% was in arith.c
-<<function setalpha>>=
-ulong
-setalpha(ulong color, uchar alpha)
-{
-    int red, green, blue;
-
-    red = (color >> 3*8) & 0xFF;
-    green = (color >> 2*8) & 0xFF;
-    blue = (color >> 1*8) & 0xFF;
-    /* ignore incoming alpha */
-    red = (red * alpha)/255;
-    green = (green * alpha)/255;
-    blue = (blue * alpha)/255;
-    return (red<<3*8) | (green<<2*8) | (blue<<1*8) | (alpha<<0*8);
-}
-@
-% >> >> >> >>
-% that simple? :) to set alpha you just dillute each rgb components?
-
-
-
-
+% we will see different format, copy from one image to another,
+% so may need convert. Usually convert to common base: rgba32.
 
 % memimagedraw -> <>
-<<function pixelbits>>=
-static ulong
-pixelbits(Memimage *i, Point pt)
-{
-    byte *p;
-    ulong val;
-    int off, bpp, npack;
-
-    val = 0;
-    p = byteaddr(i, pt);
-    bpp=i->depth;
-    switch(bpp){
-    case 1:
-    case 2:
-    case 4:
-        npack = 8/bpp;
-        off = pt.x%npack;
-        val = p[0] >> bpp*(npack-1-off);
-        val &= (1<<bpp)-1;
-        break;
-    case 8:
-        val = p[0];
-        break;
-    case 16:
-        val = p[0]|(p[1]<<8);
-        break;
-    case 24:
-        val = p[0]|(p[1]<<8)|(p[2]<<16);
-        break;
-    case 32:
-        val = p[0]|(p[1]<<8)|(p[2]<<16)|(p[3]<<24);
-        break;
-    }
-    while(bpp<32){
-        val |= val<<bpp;
-        bpp *= 2;
-    }
-    return val;
-}
-@
-% >> >> >> >> >> >> >> >>
-
-%typedef ulong rgba; ?
-
-
 <<function imgtorgba>>=
 static ulong
 imgtorgba(Memimage *img, ulong val)
 {
-    uchar r, g, b, a;
-    int nb, ov, v;
+    byte r, g, b, a;
     ulong chan;
-    uchar *p;
+    byte *p;
+    int nb, v, ov;
 
     a = 0xFF;
     r = g = b = 0xAA;	/* garbage */
+
     for(chan=img->chan; chan; chan>>=8){
         nb = NBITS(chan);
-        ov = v = val&((1<<nb)-1);
+        v = val&((1<<nb)-1);
         val >>= nb;
-
-        while(nb < 8){
-            v |= v<<nb;
-            nb *= 2;
-        }
-        v >>= (nb-8);
+        ov = v;
+        <<[[imgtorgba()]] duplicate bits if nb less than 8>>
 
         switch(TYPE(chan)){
         case CRed:
@@ -1938,16 +1896,7 @@ imgtorgba(Memimage *img, ulong val)
         case CAlpha:
             a = v;
             break;
-
-        case CGrey:
-            r = g = b = v;
-            break;
-        case CMap:
-            p = img->cmap->cmap2rgb+3*ov;
-            r = *p++;
-            g = *p++;	
-            b = *p;
-            break;
+        <<[[imgtorgba()]] switch chan type cases>>
         }
     }
     return (r<<24)|(g<<16)|(b<<8)|a;	
@@ -1955,14 +1904,24 @@ imgtorgba(Memimage *img, ulong val)
 @
 % >> >> >> >>
 
+% so ARGB32 to RGBA32 easy.
+
+% GREY1, CMAP8, RGB16 later in chapter X.
+
+
+\subsection{[[rgbatoimg()]]}
+
+% memimagedraw | memfillcolor -> <>
 <<function rgbatoimg>>=
 static ulong
 rgbatoimg(Memimage *img, ulong rgba)
 {
+    byte r, g, b, a
     ulong chan;
     int d, nb;
     ulong v;
-    uchar *p, r, g, b, a, m;
+    byte *p;
+    byte m;
 
     v = 0;
     r = rgba>>24;
@@ -1985,27 +1944,94 @@ rgbatoimg(Memimage *img, ulong rgba)
         case CAlpha:
             v |= (a>>(8-nb))<<d;
             break;
-        case CMap:
-            p = img->cmap->rgb2cmap;
-            m = p[(r>>4)*256+(g>>4)*16+(b>>4)];
-            v |= (m>>(8-nb))<<d;
-            break;
-
-        case CGrey:
-            m = RGB2K(r,g,b);
-            v |= (m>>(8-nb))<<d;
-            break;
+        <<[[rgbatoimg()]] switch chan type cases>>
         }
         d += nb;
     }
- DBG1("rgba2img %.8lux = %.*lux\n", rgba, 2*d/8, v);
+    DBG1("rgba2img %.8lux = %.*lux\n", rgba, 2*d/8, v);
     return v;
 }
 @
 % >>
 
+% Again, GREY1, CMAP8, RGB16 later in chapter X.
+
+
+
+%\subsection{[[setalpha()]]}
+
+% API function but not used in any graphical applications (just mahjongg)
+% a bit interesting to understand alpha
+%<<function setalpha>>=
+%ulong
+%setalpha(ulong color, uchar alpha)
+%{
+%    int red, green, blue;
+%
+%    red = (color >> 3*8) & 0xFF;
+%    green = (color >> 2*8) & 0xFF;
+%    blue = (color >> 1*8) & 0xFF;
+%    /* ignore incoming alpha */
+%    red = (red * alpha)/255;
+%    green = (green * alpha)/255;
+%    blue = (blue * alpha)/255;
+%    return (red<<3*8) | (green<<2*8) | (blue<<1*8) | (alpha<<0*8);
+%}
+%@
+% >> >> >> >>
+\n was in arith.c
+\t why need that? redundant no? maybe confusing actually
+
+% that simple? :) to set alpha you just dillute each rgb components?
+
+\subsection{[[memfillcolor()]]}
+
+% drawmesg(allocate) | membrush | bellipse | memarc | memlalloc | ... -> <>
+% val is rgba
+<<function memfillcolor>>=
+void
+memfillcolor(Memimage *i, ulong val)
+{
+    ulong bits;
+    int d, y;
+
+    if(val == DNofill)
+        return;
+
+    bits = rgbatoimg(i, val);
+    switch(i->depth){
+    <<[[memfillcolor()]] switch depth cases>>
+    default:	/* 1, 2, 4, 8, 16, 32 */
+        for(d=i->depth; d<32; d*=2)
+            // duplicate bits
+            bits = (bits << d) | bits;
+
+        memsetl(wordaddr(i, i->r.min), bits, i->width * Dy(i->r));
+        break;
+    }
+}
+@
+% >>
+
+% l for little endian
+<<function memsetl>>=
+static void
+memsetl(void *vp, ulong val, int n)
+{
+    ulong *p, *ep;
+
+    p = vp;
+    ep = p+n;
+    while(p < ep)
+        *p++ = val;
+}
+@
+
+
+
 % \section{Color map}
 % now in Adv topics
+
 
 
 \section{[[Drawop]]}
@@ -2049,11 +2075,14 @@ enum Drawop
     Ncomp = 12,
 };
 @
+% 12 porter duff operators.
 
 \l FIGUREs ? or delay to later?
+% http://www.svgopen.org/2005/papers/abstractsvgopen/ nice figure
 
 
 %\subsection{[[Memdrawparam]]}
+% later now
 
 
 \section{Fonts}
@@ -2390,7 +2419,8 @@ memimageinit(void)
     memtransparent = memzeros;
 }
 @
-% 0x3FFFFFF? means infinite? clipr far bigger than r?
+% 0x3FFFFFF? means infinite? clipr far bigger than r so replicate
+% indifinitely.
 
 % memimageinit seems quite general, not sure why called from screensize
 % why need width/height or chan?
@@ -4078,7 +4108,7 @@ doflush(Display *d)
     return OK_1;
 }
 @
-% white!!
+% write!! trigger kernel side!
 
 <<[[doflush()]] sanity check nn>>=
 if(nn != n){
@@ -4837,6 +4867,8 @@ flushimage(Display *d, bool visible)
 %dead:
 %        <<[[flushimage()]] if isnew>>
 
+% saw doflush before which triggers the write on /dev/draw/x/data fd.
+
 <<[[flushimage()]] sanity check d>>=
 if(d == nil)
     return OK_0;
@@ -4887,6 +4919,8 @@ if(d == nil)
 
 
 \subsection{Marshalling}
+
+% extra message for the kernel.
 
 <<[[flushimage()]] if visible>>=
 // visible: 'v'
@@ -5438,11 +5472,9 @@ if(dimage->fromname){   /* acquired by name; owned by someone else*/
 
 
 
-\chapter{Drawing}
+\chapter{Drawing Rectangles}
 
 %\section{[[Point]] and [[Rectangle]]} types in core DS.
-
-\section{Rectangle}
 
 % Drawing a "rectangle" is actually a fundamental op. 
 % rectangle is an area. copy/move/blend pixels from one area of one
@@ -5450,12 +5482,16 @@ if(dimage->fromname){   /* acquired by name; owned by someone else*/
 % No need complex algo, horiz and vert lines map well to pixels.
 % no need complex shape algorithm, just move all the bytes covering a rectangle
 
+\section{[[draw()]]}
+
 % draw() is fundamenta op!
 % very flexible.
 % put technicolor.ps nice slides with draw (of actual images like in racket)
 % (meh, technicolors.ps not that good actually)
 % normally should be simple but made complicated because of possible
 %  translation, optimisation, etc.
+
+% can have very fancy things done easily (e.g. gradient)?
 
 %TODO: show toy program and screenshot of the rectangle!
 
@@ -6092,10 +6128,10 @@ if(splitcoords){
         return false;
 
     /* reflect any clips back to source */
-    sr->min.x += mr->min.x-omr.min.x;
-    sr->min.y += mr->min.y-omr.min.y;
-    sr->max.x += mr->max.x-omr.max.x;
-    sr->max.y += mr->max.y-omr.max.y;
+    sr->min.x += mr->min.x - omr.min.x;
+    sr->min.y += mr->min.y - omr.min.y;
+    sr->max.x += mr->max.x - omr.max.x;
+    sr->max.y += mr->max.y - omr.max.y;
     *p1 = mr->min;
 }
 @
@@ -6147,17 +6183,15 @@ drawrepl(Rectangle r, Point p)
 
 \section{Replicating}
 
-%XXX
-
 <<enum _anon_ (include/memdraw.h)2>>=
 /*
  * Encapsulated parameters and information for sub-draw routines.
  */
 enum Drawparams {
-    Simplesrc=1<<0,
-    Simplemask=1<<1,
+    Simplesrc =1<<0, // 1x1 src
+    Simplemask=1<<1, // 1x1 mask
 
-    Replsrc=1<<2,
+    Replsrc =1<<2,
     Replmask=1<<3,
 
     Fullmask=1<<4,
@@ -6171,13 +6205,19 @@ enum Drawparams {
 // enum<Drawparams>
 ulong state;
 @
+% state is bad name. maybe props?
+
+\subsection{Source replication}
 
 <<[[Memdrawparam]] other fields>>=
 ulong sval;		/* if Simplesrc, the source pixel in src format */
 ulong srgba;	/* sval in rgba */
 ulong sdval;	/* sval in dst format */
 @
+% those fields will be used later in memoptdraw for some optimized draw
+\l rename sdval to dval
 
+% src is repl when simple color.
 <<[[memimagedraw()]] if src is repl>>=
 if(src->flags&Frepl){
     par.state |= Replsrc;
@@ -6188,23 +6228,66 @@ if(src->flags&Frepl){
         par.srgba = imgtorgba(src, par.sval);
         par.sdval = rgbatoimg(dst, par.srgba);
 
-        if((par.srgba&0xFF) == 0 && (op&DoutS)){
-            DBG1("fill with transparent source\n");
-            return;	/* no-op successfully handled */
-        }
+        <<[[memimagedraw()]] when src is repl, sanity check pixel value>>
     }
 }
 @
 
+% see imgtorgba and rgbatoimg in core DS chapter.
 
+<<[[memimagedraw()]] when src is repl, sanity check pixel value>>=
+if((par.srgba&0xFF) == 0 && (op&DoutS)){
+    DBG1("fill with transparent source\n");
+    return;	/* no-op successfully handled */
+}
+@
+% DoutS ?
+
+
+% memimagedraw -> <>
+<<function pixelbits>>=
+static ulong
+pixelbits(Memimage *i, Point pt)
+{
+    byte *p;
+    ulong val = 0;
+    int bpp = i->depth; // bits per pixel
+    <<[[pixelbits()]] other locals>>
+
+    p = byteaddr(i, pt);
+
+    switch(bpp){
+    <<[[pixelbits()]] switch bpp cases>>
+    case 8:
+        val = p[0];
+        break;
+    case 32:
+        val = p[0]|(p[1]<<8)|(p[2]<<16)|(p[3]<<24);
+        break;
+    }
+    // duplicate byte in the whole word
+    while(bpp<32){
+        val |= val<<bpp;
+        bpp *= 2;
+    }
+    return val;
+}
+@
+% >> >> >> >> >> >> >> >>
+
+% duplicate byte since anyway it's a repl and it will be used in a giant
+% memset
+
+\subsection{Mask replication}
+
+%XXX
 
 <<[[Memdrawparam]] other fields>>=
 ulong mval;		/* if Simplemask, the mask pixel in mask format */
 ulong mrgba;	/* mval in rgba */
 @
 
-
-
+% mask is repl when memopaque
 <<[[memimagedraw()]] if mask is repl>>=
 if(mask->flags & Frepl){
     par.state |= Replmask;
@@ -6226,8 +6309,9 @@ if(mask->flags & Frepl){
 
 
 
-\section{Setting or moving pixels}
-% kinda opti, but helps to understand alphadraw
+\section{Setting or copying pixels}
+
+% kinda opti, but helps to understand alphadraw(), stepping stone.
 
 \subsection{[[memoptdraw()]]}
 % maybe move earlier, can be good step towards alphadraw
@@ -6308,23 +6392,10 @@ if((par->state&m)==m &&
     }
 }
 @
-
-% l for little endian
-<<function memsetl>>=
-static void
-memsetl(void *vp, ulong val, int n)
-{
-    ulong *p, *ep;
-
-    p = vp;
-    ep = p+n;
-    while(p < ep)
-        *p++ = val;
-}
-@
+% why need this little endian dance?
 
 
-\subsection{Moving pixels}
+\subsection{Copying pixels}
 
 <<[[memoptdraw()]] if condition for memmove>>=
 /*
@@ -6366,12 +6437,16 @@ if((par->state&(m|Replsrc))==m &&
 }
 @
 
-\section{Compositing}
+\section{Compositing pixels}
+
+%https://en.wikipedia.org/wiki/Alpha_compositing
 
 \subsection{[[alphadraw()]]}
 
 \t can write simple version when dst and src have simple and
 \t  same chan format? like RGBA32?
+
+%XXX
 
 <<function alphadraw>>=
 /*
@@ -7417,14 +7492,18 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
 
 
 
+\chapter{Drawing Shapes}
+
+% Foley classic Computer graphics book?
+
+%http://members.chello.at/easyfilter/bresenham.html
+%http://www.redblobgames.com/grids/line-drawing.html
 
 \section{Line}
 
-%http://www.redblobgames.com/grids/line-drawing.html
 
 \subsection{API}
 
-%todo: typedef this!! typedef int endline; or use enu,?
 <<function line>>=
 void
 line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src, Point sp)
@@ -7432,24 +7511,25 @@ line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src,
     lineop(dst, p0, p1, end0, end1, radius, src, sp, SoverD);
 }
 @
+% radius = width/2 of line to draw.
+
+%todo: typedef int endline; or use enum?
 
 % maybe could be put in advanced topics?
 <<enum _anon_ (include/draw.h)3>>=
-enum
+enum EndLine
 {
     /* line ends */
-    Endsquare	= 0,
+    Endsquare	= 0, // default
     Enddisc		= 1,
     Endarrow	= 2,
 
     Endmask		= 0x1F
 };
 @
+% Endmask ??
+\l actually use more Endmask instead of hardcoding those 0x1F everywhere below
 
-<<function ARROW>>=
-#define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
-@
-% see draw(2) for explanations
 
 \subsection{Marshalling}
 
@@ -7461,6 +7541,7 @@ lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *sr
 
     _setdrawop(dst->display, op);
 
+    // draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4]
     a = bufimage(dst->display, 1+4+2*4+2*4+4+4+4+4+2*4);
     if(a == 0){
         fprint(2, "image line: %r\n");
@@ -7484,6 +7565,7 @@ lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *sr
 \subsection{Unmarshalling}
 
 <<[[drawmesg()]] locals>>=
+// enum<EndLine>
 int e0, e1;
 Point sp;
 @
@@ -7508,35 +7590,13 @@ case 'L':
     op = drawclientop(client);
 
     memline(dst, p, q, e0, e1, j, src, sp, op); // The call
-
-    /* avoid memlinebbox if possible */
-    if(dstid==0 || dst->layer!=nil){
-        /* BUG: this is terribly inefficient: update maximal containing rect*/
-        r = memlinebbox(p, q, e0, e1, j);
-        dstflush(dstid, dst, insetrect(r, -(1+1+j)));
-    }
+    <<[[drawmesg()]] when draw line, possible flush>>
     continue;
 @
 
 
+
 \subsection{Algorithm}
-
-<<struct Lline>>=
-struct Lline
-{
-    Point			p0;
-    Point			p1;
-    Point			delta;
-    int			end0;
-    int			end1;
-    int			radius;
-    Point			sp;
-
-    Memlayer		*dstlayer;
-    Memimage	*src;
-    int			op;
-};
-@
 
 % memlayer/
 <<function memline>>=
@@ -7552,17 +7612,11 @@ static
 void
 _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memimage *src, Point sp, Rectangle clipr, int op)
 {
-    Rectangle r;
-    struct Lline ll;
-    Point d;
-    int srcclipped;
     Memlayer *dl;
+    <<[[_memline()]] other locals>>
 
-    if(radius < 0)
-        return;
-    if(src->layer)	/* can't draw line with layered source */
-        return;
-    srcclipped = 0;
+    <<[[_memline()]] sanity check radius>>
+    <<[[_memline()]] sanity check no src layer>>
 
    Top:
     dl = dst->layer;
@@ -7574,6 +7628,14 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
     <<[[_memline()]] when have layers>>
 }
 @
+
+
+
+<<[[_memline()]] sanity check radius>>=
+if(radius < 0)
+    return;
+@
+% but already checked in drawmesg normally
 
 
 
@@ -7595,24 +7657,16 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
      * on rectangles.
      */
 
-    int hor;
+    bool hor;
     int sin, cos, dx, dy, t;
     Rectangle oclipr, r;
     Point q, pts[10], *pp, d;
 
-    if(radius < 0)
-        return;
-    if(rectclip(&clipr, dst->r) == 0)
-        return;
-    if(rectclip(&clipr, dst->clipr) == 0)
-        return;
-    d = subpt(sp, p0);
-    if(rectclip(&clipr, rectsubpt(src->clipr, d)) == 0)
-        return;
-    if((src->flags&Frepl)==0 && rectclip(&clipr, rectsubpt(src->r, d))==0)
-        return;
+    <<[[_memline()]] sanity check radius>>
+    <<[[_memline()]] clipping clipr>>
+
     /* this means that only verline() handles degenerate lines (p0==p1) */
-    hor = (abs(p1.x-p0.x) > abs(p1.y-p0.y));
+    hor = (abs(p1.x - p0.x) > abs(p1.y - p0.y));
     /*
      * Clipping is a little peculiar.  We can't use Sutherland-Cohen
      * clipping because lines are wide.  But this is probably just fine:
@@ -7621,16 +7675,20 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
      * using clipr to define the region being written, and get the same set
      * of pixels regardless of the dicing.
      */
-    if((hor && p0.x>p1.x) || (!hor && p0.y>p1.y)){
+    if((hor && p0.x > p1.x) || (!hor && p0.y > p1.y)){
+        // swap(p0, p1)
         q = p0;
         p0 = p1;
         p1 = q;
+        // swap(end0, end1)
         t = end0;
         end0 = end1;
         end1 = t;
     }
 
-    if((p0.x == p1.x || p0.y == p1.y) && (end0&0x1F) == Endsquare && (end1&0x1F) == Endsquare){
+    if((p0.x == p1.x || p0.y == p1.y) && 
+        (end0&0x1F) == Endsquare && 
+        (end1&0x1F) == Endsquare){
         r.min = p0;
         r.max = p1;
         if(p0.x == p1.x){
@@ -7642,24 +7700,34 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
             r.max.y += radius+1;
         }
         oclipr = dst->clipr;
-        sp = addpt(r.min, d);
         dst->clipr = clipr;
+        sp = addpt(r.min, d);
         memimagedraw(dst, r, src, sp, memopaque, sp, op);
         dst->clipr = oclipr;
         return;
     }
+    // else
 
 /*    Hard: */
     /* draw thick line using polygon fill */
-    icossin2(p1.x-p0.x, p1.y-p0.y, &cos, &sin);
+    icossin2(p1.x - p0.x, p1.y - p0.y, &cos, &sin);
     dx = (sin*(2*radius+1))/2;
     dy = (cos*(2*radius+1))/2;
     pp = pts;
     oclipr = dst->clipr;
     dst->clipr = clipr;
-    q.x = ICOSSCALE*p0.x+ICOSSCALE/2-cos/2;
-    q.y = ICOSSCALE*p0.y+ICOSSCALE/2-sin/2;
+    q.x = ICOSSCALE*p0.x + ICOSSCALE/2- cos/2;
+    q.y = ICOSSCALE*p0.y + ICOSSCALE/2- sin/2;
+
     switch(end0 & 0x1F){
+    case Endarrow:
+        arrowend(q, pp, end0, -sin, -cos, radius);
+        _memfillpolysc(dst, pts, 5, ~0, src, 
+                       addpt(pts[0], mulpt(d, ICOSSCALE)), 
+                       true, 10, true, op);
+        pp[1] = pp[4];
+        pp += 2;
+        break;
     case Enddisc:
         discend(p0, radius, dst, src, d, op);
         /* fall through */
@@ -7672,15 +7740,20 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
         pp->y = q.y-dy;
         pp++;
         break;
-    case Endarrow:
-        arrowend(q, pp, end0, -sin, -cos, radius);
-        _memfillpolysc(dst, pts, 5, ~0, src, addpt(pts[0], mulpt(d, ICOSSCALE)), 1, 10, 1, op);
-        pp[1] = pp[4];
-        pp += 2;
     }
+
     q.x = ICOSSCALE*p1.x+ICOSSCALE/2+cos/2;
     q.y = ICOSSCALE*p1.y+ICOSSCALE/2+sin/2;
+
     switch(end1 & 0x1F){
+    case Endarrow:
+        arrowend(q, pp, end1, sin, cos, radius);
+        _memfillpolysc(dst, pp, 5, ~0, src, 
+                       addpt(pp[0], mulpt(d, ICOSSCALE)), 
+                       true, 10, true, op);
+        pp[1] = pp[4];
+        pp += 2;
+        break;
     case Enddisc:
         discend(p1, radius, dst, src, d, op);
         /* fall through */
@@ -7693,183 +7766,48 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
         pp->y = q.y+dy;
         pp++;
         break;
-    case Endarrow:
-        arrowend(q, pp, end1, sin, cos, radius);
-        _memfillpolysc(dst, pp, 5, ~0, src, addpt(pp[0], mulpt(d, ICOSSCALE)), 1, 10, 1, op);
-        pp[1] = pp[4];
-        pp += 2;
     }
-    _memfillpolysc(dst, pts, pp-pts, ~0, src, addpt(pts[0], mulpt(d, ICOSSCALE)), 0, 10, 1, op);
+
+    _memfillpolysc(dst, pts, pp-pts, ~0, src, 
+                   addpt(pts[0], mulpt(d, ICOSSCALE)), 
+                   false, 10, true, op);
     dst->clipr = oclipr;
     return;
 }
 @
 
 
-<<function discend>>=
-static
-void
-discend(Point p, int radius, Memimage *dst, Memimage *src, Point dsrc, int op)
-{
-    Memimage *disc;
-    Rectangle r;
-
-    disc = membrush(radius);
-    if(disc != nil){
-        r.min.x = p.x - radius;
-        r.min.y = p.y - radius;
-        r.max.x = p.x + radius+1;
-        r.max.y = p.y + radius+1;
-        memdraw(dst, r, src, addpt(r.min, dsrc), disc, Pt(0,0), op);
-    }
-}
-@
-
-<<function membrush>>=
-static Memimage*
-membrush(int radius)
-{
-    static Memimage *brush;
-    static int brushradius;
-
-    if(brush==nil || brushradius!=radius){
-        freememimage(brush);
-        brush = allocmemimage(Rect(0, 0, 2*radius+1, 2*radius+1), memopaque->chan);
-        if(brush != nil){
-            memfillcolor(brush, DTransparent);	/* zeros */
-            memellipse(brush, Pt(radius, radius), radius, radius, -1, memopaque, Pt(radius, radius), S);
-        }
-        brushradius = radius;
-    }
-    return brush;
-}
+<<[[_memline()]] clipping clipr>>=
+if(!rectclip(&clipr, dst->r))
+    return;
+if(!rectclip(&clipr, dst->clipr))
+    return;
+d = subpt(sp, p0);
+if(!rectclip(&clipr, rectsubpt(src->clipr, d)))
+    return;
+if((src->flags&Frepl)==0 && !rectclip(&clipr, rectsubpt(src->r, d)))
+    return;
 @
 
 
 
+\subsubsection{Simple case: vertical or horizontal lines}
 
-<<function addbbox>>=
-/*
- * Simple-minded conservative code to compute bounding box of line.
- * Result is probably a little larger than it needs to be.
- */
-static
-void
-addbbox(Rectangle *r, Point p)
-{
-    if(r->min.x > p.x)
-        r->min.x = p.x;
-    if(r->min.y > p.y)
-        r->min.y = p.y;
-    if(r->max.x < p.x+1)
-        r->max.x = p.x+1;
-    if(r->max.y < p.y+1)
-        r->max.y = p.y+1;
-}
-@
-
-<<function memlineendsize>>=
-int
-memlineendsize(int end)
-{
-    int x3;
-
-    if((end&0x3F) != Endarrow)
-        return 0;
-    if(end == Endarrow)
-        x3 = Arrow3;
-    else
-        x3 = (end>>23) & 0x1FF;
-    return x3;
-}
-@
-
-<<function memlinebbox>>=
-Rectangle
-memlinebbox(Point p0, Point p1, int end0, int end1, int radius)
-{
-    Rectangle r, r1;
-    int extra;
-
-    r.min.x = 10000000;
-    r.min.y = 10000000;
-    r.max.x = -10000000;
-    r.max.y = -10000000;
-    extra = lmax(memlineendsize(end0), memlineendsize(end1));
-    r1 = insetrect(canonrect(Rpt(p0, p1)), -(radius+extra));
-    addbbox(&r, r1.min);
-    addbbox(&r, r1.max);
-    return r;
-}
-@
-% need canonrect here?
-
-<<function lmax>>=
-static
-int
-lmax(int a, int b)
-{
-    if(a > b)
-        return a;
-    return b;
-}
-@
+\subsubsection{General case}
 
 
-\subsection{Arrows}
-
-% advanced topics?
-<<enum _anon_ (lib_graphics/libmemdraw/line.c)>>=
-enum
-{
-    Arrow1 = 8,
-    Arrow2 = 10,
-    Arrow3 = 3,
-};
-@
 
 
-<<function arrowend>>=
-static
-void
-arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
-{
-    int x1, x2, x3;
-
-    /* before rotation */
-    if(end == Endarrow){
-        x1 = Arrow1;
-        x2 = Arrow2;
-        x3 = Arrow3;
-    }else{
-        x1 = (end>>5) & 0x1FF;	/* distance along line from end of line to tip */
-        x2 = (end>>14) & 0x1FF;	/* distance along line from barb to tip */
-        x3 = (end>>23) & 0x1FF;	/* distance perpendicular from edge of line to barb */
-    }
-
-    /* comments follow track of right-facing arrowhead */
-    pp->x = tip.x+((2*radius+1)*sin/2-x1*cos);		/* upper side of shaft */
-    pp->y = tip.y-((2*radius+1)*cos/2+x1*sin);
-    pp++;
-    pp->x = tip.x+((2*radius+2*x3+1)*sin/2-x2*cos);		/* upper barb */
-    pp->y = tip.y-((2*radius+2*x3+1)*cos/2+x2*sin);
-    pp++;
-    pp->x = tip.x;
-    pp->y = tip.y;
-    pp++;
-    pp->x = tip.x+(-(2*radius+2*x3+1)*sin/2-x2*cos);	/* lower barb */
-    pp->y = tip.y-(-(2*radius+2*x3+1)*cos/2+x2*sin);
-    pp++;
-    pp->x = tip.x+(-(2*radius+1)*sin/2-x1*cos);		/* lower side of shaft */
-    pp->y = tip.y+((2*radius+1)*cos/2-x1*sin);
-}
-@
 
 
 \section{Polyline}
 
+% actually used as we have seen before for general case of line
+% drawing.
+
 \subsection{API}
 
+% array of points!
 <<function poly>>=
 void
 poly(Image *dst, Point *p, int np, int end0, int end1, int radius, Image *src, Point sp)
@@ -7929,6 +7867,7 @@ dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, I
 
     _setdrawop(dst->display, op);
 
+    /// polygon: 'p' dstid[4] n[2] end0[4] end1[4] radius[4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n]
     a = bufimage(dst->display, 1+4+2+4+4+4+4+2*4+(u-t));
     if(a == 0){
         free(t);
@@ -7948,12 +7887,14 @@ dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, I
     free(t);
 }
 @
+\l enforce enough space to pass all points?
+
 
 % dopoly -> <>
 <<function addcoord>>=
 static
 uchar*
-addcoord(uchar *p, int oldx, int newx)
+addcoord(byte *p, int oldx, int newx)
 {
     int dx;
 
@@ -8057,6 +7998,7 @@ case 'P':
         mempoly(dst, pp, ni, e0, e1, j, src, sp, op); // The call
     else
         memfillpoly(dst, pp, ni, e0, src, sp, op); // The call
+
     free(pp);
     m = u-a;
     continue;
@@ -8095,21 +8037,6 @@ drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
 
 \subsection{Algorithm}
 
-<<struct Seg>>=
-struct Seg
-{
-    Point	p0;
-    Point	p1;
-    long	num;
-    long	den;
-    long	dz;
-    long	dzrem;
-    long	z;
-    long	zerr;
-    long	d;
-};
-@
-
 <<function mempoly>>=
 void
 mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, Memimage *src, Point sp, int op)
@@ -8130,18 +8057,37 @@ mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, M
     }
 }
 @
+% actually call memline! :)
 
 <<function memfillpoly>>=
 void
 memfillpoly(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point sp, int op)
 {
-    _memfillpolysc(dst, vert, nvert, w, src, sp, 0, 0, 0, op);
+    _memfillpolysc(dst, vert, nvert, w, src, sp, false, 0, false, op);
 }
 @
 
+\subsubsection{[[Seg]]}
+
+<<struct Seg>>=
+struct Seg
+{
+    Point	p0;
+    Point	p1;
+    long	num;
+    long	den;
+    long	dz;
+    long	dzrem;
+    long	z;
+    long	zerr;
+    long	d;
+};
+@
+
+
 <<function _memfillpolysc>>=
 void
-_memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point sp, int detail, int fixshift, int clipped, int op)
+_memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point sp, bool detail, int fixshift, bool clipped, int op)
 {
     Seg **seg, *segtab;
     Point p0;
@@ -8189,9 +8135,11 @@ _memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Poin
 @
 % >> >> >> >>
 
+\subsubsection{[[xscan()]]}
+
 <<function xscan>>=
 static void
-xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, Point sp, int detail, int fixshift, int clipped, int op)
+xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, Point sp, bool detail, int fixshift, bool clipped, int op)
 {
     long y, maxy, x, x2, xerr, xden, onehalf;
     Seg **ep, **next, **p, **q, *s;
@@ -8210,7 +8158,11 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
  * code is too slow, someone will come up with a better improvement
  * than this sleazy hack.	-rsc
  *
-    if(clipped && (src->flags&Frepl) && src->depth==8 && Dx(src->r)==1 && Dy(src->r)==1) {
+    if(clipped 
+    && (src->flags&Frepl) 
+    && src->depth==8 
+    && Dx(src->r)==1 
+    && Dy(src->r)==1) {
         fill = fillcolor;
         sp.x = membyteval(src);
     }
@@ -8342,6 +8294,10 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
 }
 @
 % >>
+% wow, so complicated
+\l remove clipped parameter, unused anyway
+
+\subsubsection{[[yscan()]]}
 
 <<function yscan>>=
 static void
@@ -8475,6 +8431,10 @@ yscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
 @
 % >> >> >> >>
 
+
+\subsubsection{Helpers}
+
+%dead: used only in code that is now commented
 <<function fillcolor>>=
 static void
 fillcolor(Memimage *dst, int left, int right, int y, Memimage *src, Point p)
@@ -8725,10 +8685,11 @@ static
 void
 doellipse(int cmd, Image *dst, Point *c, int xr, int yr, int thick, Image *src, Point *sp, int alpha, int phi, Drawop op)
 {
-    uchar *a;
+    byte *a;
 
     _setdrawop(dst->display, op);
 
+    // ellipse: 'e' dstid[4] srcid[4] center[2*4] a[4] b[4] thick[4] sp[2*4] alpha[4] phi[4]
     a = bufimage(dst->display, 1+4+4+2*4+4+4+4+2*4+2*4);
     if(a == 0){
         fprint(2, "image ellipse: %r\n");
@@ -9071,6 +9032,7 @@ arc(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp, int alph
 }
 @
 % >>
+% special bit??
 
 <<function arcop>>=
 void
@@ -9231,62 +9193,6 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 
 %\section{Text} see font section
 
-
-
-
-
-
-
-
-
-\chapter{Colors}
-% test code showing use of colors?
-
-
-% drawmesg(allocate) | membrush | bellipse | memarc | memlalloc | ... -> <>
-<<function memfillcolor>>=
-void
-memfillcolor(Memimage *i, ulong val)
-{
-    ulong bits;
-    int d, y;
-
-    if(val == DNofill)
-        return;
-
-    bits = rgbatoimg(i, val);
-    switch(i->depth){
-    <<[[memfillcolor()]] switch depth cases>>
-    default:	/* 1, 2, 4, 8, 16, 32 */
-        for(d=i->depth; d<32; d*=2)
-            bits = (bits << d) | bits;
-        memsetl(wordaddr(i, i->r.min), bits, i->width*Dy(i->r));
-        break;
-    }
-}
-@
-% >>
-
-%memsetl later
-
-
-\section{[[RGB]]}
-
-<<struct RGB>>=
-struct RGB
-{
-    ulong	red;
-    ulong	green;
-    ulong	blue;
-};
-@
-
-\section{Color map}
-% adv topics?
-
-\section{Pixel depth}
-
-\section{Alpha}
 
 
 
@@ -9613,7 +9519,7 @@ openfont(Display *d, char *name)
 
 
 
-\section{Text}
+\section{Drawing text}
 % and rune
 % mv in Drawing chapter?
 
@@ -10105,7 +10011,7 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
 
 
 
-\section{Fonts}
+\section{Changing fonts}
 
 \subsection{API}
 
@@ -13273,7 +13179,6 @@ while(cl->cscreen)
 
 \subsection{Image allocation}
 
-
 <<[[_freeimage1()]] if screen>>=
 if(i->screen){
     // remove_list(i, d->windows)
@@ -13849,6 +13754,36 @@ static  int     waste;
 
 \subsection{Image line}
 
+<<[[_memline()]] sanity check no src layer>>=
+if(src->layer)	/* can't draw line with layered source */
+    return;
+@
+
+<<struct Lline>>=
+struct Lline
+{
+    Point			p0;
+    Point			p1;
+    Point			delta;
+    int			end0;
+    int			end1;
+    int			radius;
+    Point			sp;
+
+    Memlayer		*dstlayer;
+    Memimage	*src;
+    int			op;
+};
+@
+
+
+<<[[_memline()]] other locals>>=
+Rectangle r;
+struct Lline ll;
+Point d;
+bool srcclipped = false;
+@
+
 <<[[_memline()]] when have layers>>=
 if(!srcclipped){
     d = subpt(sp, p0);
@@ -13856,7 +13791,7 @@ if(!srcclipped){
         return;
     if((src->flags&Frepl)==0 && rectclip(&clipr, rectsubpt(src->r, d))==0)
         return;
-    srcclipped = 1;
+    srcclipped = true;
 }
 
 /* dst is known to be a layer */
@@ -16459,21 +16394,47 @@ GREY4	= CHAN1(CGrey, 4),
 GREY8	= CHAN1(CGrey, 8),
 
 RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
-RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
 RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
 BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
+@
+
+<<[[ImageChan]] cases>>=
+CIgnore,
+@
+% used to pad to get full words boundaries.
 
 
+% actually other format for 32 bits, but less useful.
+<<[[ImageType] cases>>=
 ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
 
 XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
 XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
 @
 
+
 \section{1-Bit images}
 % or bitmasks
 
 % GREY1, used for masks
+
+<<[[pixelbits()]] other locals>>=
+int off, npack;
+@
+<<[[pixelbits()]] switch bpp cases>>=
+case 1:
+case 2:
+case 4:
+    npack = 8/bpp;
+    off = pt.x % npack;
+    val = p[0] >> bpp*(npack-1-off);
+    val &= (1<<bpp)-1;
+    break;
+@
+% >>
+
+
+
 
 
 % some kind of optimisations
@@ -16484,8 +16445,11 @@ XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
  * when we're manipulating boolean masks, e.g. in the arc code.
  */
 if((par->state&(Simplemask|Simplesrc|Replmask|Replsrc))==0 
-&& dst->chan==GREY1 && src->chan==GREY1 && par->mask->chan==GREY1 
-&& (par->r.min.x&7)==(par->sr.min.x&7) && (par->r.min.x&7)==(par->mr.min.x&7)){
+&& dst->chan==GREY1 
+&& src->chan==GREY1 
+&& par->mask->chan==GREY1 
+&& (par->r.min.x&7)==(par->sr.min.x&7) 
+&& (par->r.min.x&7)==(par->mr.min.x&7)){
     uchar *sp, *dp, *mp;
     uchar lm, rm;
     long swid, dwid, mwid;
@@ -16498,7 +16462,8 @@ if((par->state&(Simplemask|Simplesrc|Replmask|Replsrc))==0
     dwid = dst->width*sizeof(ulong);
     mwid = par->mask->width*sizeof(ulong);
 
-    if(src->data == dst->data && byteaddr(dst, par->r.min) > byteaddr(src, par->sr.min)){
+    if(src->data == dst->data 
+    && byteaddr(dst, par->r.min) > byteaddr(src, par->sr.min)){
         dir = -1;
     }else
         dir = 1;
@@ -16830,6 +16795,19 @@ boolcopy32(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
 
 \section{Small depth images}
 
+<<[[imgtorgba()]] duplicate bits if nb less than 8>>=
+// duplicate bits
+while(nb < 8){
+    v |= v<<nb;
+    nb *= 2;
+}
+v >>= (nb-8);
+@
+% for GREY1? for RBG16? works?
+
+
+
+
 <<[[byteaddr()]] if depth less than 8>>=
 if(i->depth < 8){
     /*
@@ -17136,6 +17114,13 @@ case 8:
 
 \section{16-bit images}
 
+<<[[pixelbits()]] switch bpp cases>>=
+case 16:
+    val = p[0]|(p[1]<<8);
+    break;
+@
+% >>
+
 <<[[memoptdraw()]] switch depth cases>>=
 case 16:
     p[0] = v;		/* make little endian */
@@ -17179,12 +17164,12 @@ case 16:
 
 \section{24-bit images}
 
-<<[[memfillcolor()]] switch depth cases>>=
-case 24:	/* 24-bit images suck */
-    for(y=i->r.min.y; y<i->r.max.y; y++)
-        memset24(byteaddr(i, Pt(i->r.min.x, y)), bits, Dx(i->r));
+<<[[pixelbits()]] switch bpp cases>>=
+case 24:
+    val = p[0]|(p[1]<<8)|(p[2]<<16);
     break;
 @
+% >> >>
 
 <<[[memoptdraw()]] switch depth cases>>=
 case 24:
@@ -17214,6 +17199,12 @@ memset24(void *vp, ulong val, int n)
 }
 @
 
+<<[[memfillcolor()]] switch depth cases>>=
+case 24:	/* 24-bit images suck */
+    for(y=i->r.min.y; y<i->r.max.y; y++)
+        memset24(byteaddr(i, Pt(i->r.min.x, y)), bits, Dx(i->r));
+    break;
+@
 
 
 <<[[chardraw()]] switch depth cases>>=
@@ -17238,6 +17229,21 @@ case 24:
 \section{Grey images}
 
 \subsection{Grey conversion}
+
+<<[[imgtorgba()]] switch chan type cases>>=
+case CGrey:
+    r = g = b = v;
+    break;
+@
+
+<<[[rgbatoimg()]] switch chan type cases>>=
+case CGrey:
+    m = RGB2K(r,g,b);
+    v |= (m>>(8-nb))<<d;
+    break;
+@
+% >>
+
 
 <<function RGB2K>>=
 /* perfect approximation to NTSC = .299r+.587g+.114b when 0 ≤ r,g,b < 256 */
@@ -17281,15 +17287,22 @@ greymaskread(Param *p, uchar *buf, int y)
 \section{Color maps images}
 % remember that CMap is enum in core DS.
 
-% need color map if use RGBA32? no but VGA seems to be limited to depth 8!
+% need color map if use RGBA32? no but VGA seems to be limited to depth 8 :(
 
 % color(2), color(6)
 
-<<global memdefcmap>>=
-Memcmap *memdefcmap = &def;
-@
-% def is big array in libmemdraw/cmap.c
+\subsection{[[RGB]]}
 
+<<struct RGB>>=
+struct RGB
+{
+    ulong	red;
+    ulong	green;
+    ulong	blue;
+};
+@
+
+\subsection{[[Memcmap]]}
 
 <<[[MemImage]] other fields>>=
 Memcmap	*cmap;
@@ -17303,8 +17316,53 @@ struct Memcmap
 };
 @
 
+<<global memdefcmap>>=
+Memcmap *memdefcmap = &def;
+@
+% def is big array in libmemdraw/cmap.c
+% used in allocmemimaged
+
+
+%dead? bcm does something different?
+<<[[memimageinit()]] initializations>>=
+_memmkcmap();
+@
+<<function _memmkcmap>>=
+void _memmkcmap(void){}
+@
+
+\subsection{Conversions}
+
+<<[[imgtorgba()]] switch chan type cases>>=
+case CMap:
+    p = img->cmap->cmap2rgb + 3*ov;
+    r = *p++;
+    g = *p++;	
+    b = *p;
+    break;
+@
+% but only CMap is CMAP8 so ov should be equal to v.
+% more on this later
+
+<<[[rgbatoimg()]] switch chan type cases>>=
+case CMap:
+    p = img->cmap->rgb2cmap;
+    m = p[(r>>4)*256+(g>>4)*16+(b>>4)];
+    v |= (m>>(8-nb))<<d;
+    break;
+@
+% >>
+
+
+
+%\subsection{XXX}
+
+% seems dead now that use memdefcmap or maybe was used to generate
+%  memdefcmap
 
 % there is an optimized but less appealing version in comment below
+
+%dead?
 <<function rgb2cmap>>=
 int
 rgb2cmap(int cr, int cg, int cb)
@@ -17331,6 +17389,7 @@ rgb2cmap(int cr, int cg, int cb)
 }
 @
 
+%dead?
 <<function cmap2rgb>>=
 int
 cmap2rgb(int c)
@@ -17359,6 +17418,9 @@ cmap2rgb(int c)
 }
 @
 % >> >> >> >>
+
+
+%dead?
 <<function cmap2rgba>>=
 int
 cmap2rgba(int c)
@@ -17368,13 +17430,12 @@ cmap2rgba(int c)
 @
 % >> 
 
-<<[[memimageinit()]] initializations>>=
-_memmkcmap();
-@
 
-<<function _memmkcmap>>=
-void _memmkcmap(void){}
-@
+
+
+
+
+
 
 <<[[readfn()]] if cmap>>=
 if(img->nbits[CMap] == 8)
@@ -17786,241 +17847,112 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 
 
 
-\section{Other [[alphacalc()]]}
+\chapter{Advanced Topics}
+%\section{Image naming?}
+%\section{Image compression?}
+%\section{JPG}
+% libimg/
 
-<<[[alphadraw()]] when not alpha mask, adapt calc>>=
-/*
- * Should really be above, but then boolcopyfns would have
- * to deal with bit alignment, and I haven't written that.
- *
- * This is a common case for things like ellipse drawing.
- * When there's no alpha involved and the mask is boolean,
- * we can avoid all the division and multiplication.
- */
-if(mask->chan == GREY1 && !(src->flags&Falpha))
-    calc = boolcalc[op];
-else if(op == SoverD && !(src->flags&Falpha))
-    calc = alphacalcS;
-@
+\section{Special line ends}
 
+\subsection{Disc}
 
-
-
-<<function alphacalcS>>=
-/* source alpha 1 */
-static Buffer
-alphacalcS(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+<<function discend>>=
+static
+void
+discend(Point p, int radius, Memimage *dst, Memimage *src, Point dsrc, int op)
 {
-    Buffer obdst;
-    int fd;
-    int i, ma;
-    ulong s, t;
+    Memimage *disc;
+    Rectangle r;
 
-    USED(op);
-    obdst = bdst;
-
-    for(i=0; i<dx; i++){
-        ma = *bmask.alpha;
-        fd = 255-ma;
-
-        if(grey){
-            *bdst.grey = MUL(ma, *bsrc.grey, s)+MUL(fd, *bdst.grey, t);
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            *bdst.red = MUL(ma, *bsrc.red, s)+MUL(fd, *bdst.red, t);
-            *bdst.grn = MUL(ma, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
-            *bdst.blu = MUL(ma, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
-            bsrc.red += bsrc.delta;
-            bsrc.blu += bsrc.delta;
-            bsrc.grn += bsrc.delta;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        if(bdst.alpha != &ones){
-            *bdst.alpha = ma+MUL(fd, *bdst.alpha, t);
-            bdst.alpha += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
+    disc = membrush(radius);
+    if(disc != nil){
+        r.min.x = p.x - radius;
+        r.min.y = p.y - radius;
+        r.max.x = p.x + radius+1;
+        r.max.y = p.y + radius+1;
+        memdraw(dst, r, src, addpt(r.min, dsrc), disc, Pt(0,0), op);
     }
-    return obdst;
 }
 @
 
-<<global boolcalc>>=
-static Calcfn *boolcalc[Ncomp] =
+<<function membrush>>=
+static Memimage*
+membrush(int radius)
 {
-    alphacalc0,		/* Clear */
-    boolcalc14,		/* DoutS */
-    boolcalc236789,		/* SoutD */
-    boolcalc236789,		/* DxorS */
-    boolcalc14,		/* DinS */
-    alphacalc5,		/* D */
-    boolcalc236789,		/* DatopS */
-    boolcalc236789,		/* DoverS */
-    boolcalc236789,		/* SinD */
-    boolcalc236789,		/* SatopD */
-    boolcalc1011,		/* S */
-    boolcalc1011,		/* SoverD */
+    static Memimage *brush;
+    static int brushradius;
+
+    if(brush==nil || brushradius!=radius){
+        freememimage(brush);
+        brush = allocmemimage(Rect(0, 0, 2*radius+1, 2*radius+1), memopaque->chan);
+        if(brush != nil){
+            memfillcolor(brush, DTransparent);	/* zeros */
+            memellipse(brush, Pt(radius, radius), radius, radius, -1, memopaque, Pt(radius, radius), S);
+        }
+        brushradius = radius;
+    }
+    return brush;
+}
+@
+
+
+
+\subsection{Arrows}
+
+<<function ARROW>>=
+#define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
+@
+% see draw(2) for explanations
+% >> >> >> >> >>
+
+% advanced topics?
+<<enum _anon_ (lib_graphics/libmemdraw/line.c)>>=
+enum
+{
+    Arrow1 = 8,
+    Arrow2 = 10,
+    Arrow3 = 3,
 };
 @
 
 
-<<function boolcalc14>>=
-static Buffer
-boolcalc14(Buffer bdst, Buffer b1, Buffer bmask, int dx, int grey, int op)
+<<function arrowend>>=
+static
+void
+arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
 {
-    Buffer obdst;
-    int i, ma, zero;
+    int x1, x2, x3;
 
-    USED(b1);
-
-    obdst = bdst;
-
-    for(i=0; i<dx; i++){
-        ma = *bmask.alpha;
-        zero = ma ? op == DoutS : op == DinS;
-
-        if(grey){
-            if(zero)
-                *bdst.grey = 0;
-            bdst.grey += bdst.delta;
-        }else{
-            if(zero)
-                *bdst.red = *bdst.grn = *bdst.blu = 0;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
-        if(bdst.alpha != &ones){
-            if(zero)
-                *bdst.alpha = 0;
-            bdst.alpha += bdst.delta;
-        }
+    /* before rotation */
+    if(end == Endarrow){
+        x1 = Arrow1;
+        x2 = Arrow2;
+        x3 = Arrow3;
+    }else{
+        x1 = (end>>5) & 0x1FF;	/* distance along line from end of line to tip */
+        x2 = (end>>14) & 0x1FF;	/* distance along line from barb to tip */
+        x3 = (end>>23) & 0x1FF;	/* distance perpendicular from edge of line to barb */
     }
-    return obdst;
+
+    /* comments follow track of right-facing arrowhead */
+    pp->x = tip.x+((2*radius+1)*sin/2-x1*cos);		/* upper side of shaft */
+    pp->y = tip.y-((2*radius+1)*cos/2+x1*sin);
+    pp++;
+    pp->x = tip.x+((2*radius+2*x3+1)*sin/2-x2*cos);		/* upper barb */
+    pp->y = tip.y-((2*radius+2*x3+1)*cos/2+x2*sin);
+    pp++;
+    pp->x = tip.x;
+    pp->y = tip.y;
+    pp++;
+    pp->x = tip.x+(-(2*radius+2*x3+1)*sin/2-x2*cos);	/* lower barb */
+    pp->y = tip.y-(-(2*radius+2*x3+1)*cos/2+x2*sin);
+    pp++;
+    pp->x = tip.x+(-(2*radius+1)*sin/2-x1*cos);		/* lower side of shaft */
+    pp->y = tip.y+((2*radius+1)*cos/2-x1*sin);
 }
 @
 
-<<function boolcalc236789>>=
-static Buffer
-boolcalc236789(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
-{
-    Buffer obdst;
-    int fs, fd;
-    int i, ma, da, zero;
-    ulong s, t;
-
-    obdst = bdst;
-    zero = !(op&1);
-
-    for(i=0; i<dx; i++){
-        ma = *bmask.alpha;
-        da = *bdst.alpha;
-        fs = da;
-        if(op&2)
-            fs = 255-da;
-        fd = 0;
-        if(op&4)
-            fd = 255;
-
-        if(grey){
-            if(ma)
-                *bdst.grey = MUL(fs, *bsrc.grey, s)+MUL(fd, *bdst.grey, t);
-            else if(zero)
-                *bdst.grey = 0;
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            if(ma){
-                *bdst.red = MUL(fs, *bsrc.red, s)+MUL(fd, *bdst.red, t);
-                *bdst.grn = MUL(fs, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
-                *bdst.blu = MUL(fs, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
-            }
-            else if(zero)
-                *bdst.red = *bdst.grn = *bdst.blu = 0;
-            bsrc.red += bsrc.delta;
-            bsrc.blu += bsrc.delta;
-            bsrc.grn += bsrc.delta;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
-        if(bdst.alpha != &ones){
-            if(ma)
-                *bdst.alpha = fs+MUL(fd, da, t);
-            else if(zero)
-                *bdst.alpha = 0;
-            bdst.alpha += bdst.delta;
-        }
-    }
-    return obdst;
-}
-@
-
-<<function boolcalc1011>>=
-static Buffer
-boolcalc1011(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
-{
-    Buffer obdst;
-    int i, ma, zero;
-
-    obdst = bdst;
-    zero = !(op&1);
-
-    for(i=0; i<dx; i++){
-        ma = *bmask.alpha;
-
-        if(grey){
-            if(ma)
-                *bdst.grey = *bsrc.grey;
-            else if(zero)
-                *bdst.grey = 0;
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            if(ma){
-                *bdst.red = *bsrc.red;
-                *bdst.grn = *bsrc.grn;
-                *bdst.blu = *bsrc.blu;
-            }
-            else if(zero)
-                *bdst.red = *bdst.grn = *bdst.blu = 0;
-            bsrc.red += bsrc.delta;
-            bsrc.blu += bsrc.delta;
-            bsrc.grn += bsrc.delta;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
-        if(bdst.alpha != &ones){
-            if(ma)
-                *bdst.alpha = 255;
-            else if(zero)
-                *bdst.alpha = 0;
-            bdst.alpha += bdst.delta;
-        }
-    }
-    return obdst;
-}
-@
-
-
-
-
-
-\chapter{Advanced Topics}
-
-%\section{Image naming?}
-
-%\section{Image compression?}
-
-%\section{JPG}
-% libimg/
 
 \section{Bezier curves}
 % spline
@@ -19821,10 +19753,11 @@ bool     busy;
 
 
 
+\section{Optimisations}
 
-\section{[[memimagedraw()]] optimisations}
+\subsection{[[memimagedraw()]] optimisations}
 
-\subsection{[[hwdraw()]]}
+\subsubsection{[[hwdraw()]]}
 
 <<[[hwdraw()]] when dst is the screen>>=
 if(scr->fill==nil && scr->scroll==nil)
@@ -19857,7 +19790,7 @@ if(scr->scroll
 
 
 
-\subsection{[[chardraw()]]}
+\subsubsection{[[chardraw()]]}
 
 <<[[memimagedraw()]] try chardraw>>=
 /*
@@ -19976,6 +19909,320 @@ chardraw(Memdrawparam *par)
     return 1;	
 }
 @
+
+\subsection{Flushing boxes}
+
+\subsubsection{Flushing lines}
+
+% advanced topics? useful optimisation?
+
+
+<<[[drawmesg()]] when draw line, possible flush>>=
+/* avoid memlinebbox if possible */
+if(dstid==0 || dst->layer!=nil){
+    /* BUG: this is terribly inefficient: update maximal containing rect*/
+    r = memlinebbox(p, q, e0, e1, j);
+    dstflush(dstid, dst, insetrect(r, -(1+1+j)));
+}
+@
+
+<<function memlinebbox>>=
+Rectangle
+memlinebbox(Point p0, Point p1, int end0, int end1, int radius)
+{
+    Rectangle r, r1;
+    int extra;
+
+    r.min.x = 10000000;
+    r.min.y = 10000000;
+    r.max.x = -10000000;
+    r.max.y = -10000000;
+    extra = lmax(memlineendsize(end0), memlineendsize(end1));
+    r1 = insetrect(canonrect(Rpt(p0, p1)), -(radius+extra));
+    addbbox(&r, r1.min);
+    addbbox(&r, r1.max);
+    return r;
+}
+@
+% need canonrect here?
+
+<<function memlineendsize>>=
+int
+memlineendsize(int end)
+{
+    int x3;
+
+    if((end&0x3F) != Endarrow)
+        return 0;
+    if(end == Endarrow)
+        x3 = Arrow3;
+    else
+        x3 = (end>>23) & 0x1FF;
+    return x3;
+}
+@
+
+
+<<function lmax>>=
+static
+int
+lmax(int a, int b)
+{
+    if(a > b)
+        return a;
+    return b;
+}
+@
+
+
+<<function addbbox>>=
+/*
+ * Simple-minded conservative code to compute bounding box of line.
+ * Result is probably a little larger than it needs to be.
+ */
+static
+void
+addbbox(Rectangle *r, Point p)
+{
+    if(r->min.x > p.x)
+        r->min.x = p.x;
+    if(r->min.y > p.y)
+        r->min.y = p.y;
+    if(r->max.x < p.x+1)
+        r->max.x = p.x+1;
+    if(r->max.y < p.y+1)
+        r->max.y = p.y+1;
+}
+@
+
+
+
+\subsection{Other [[alphacalc()]]}
+
+<<[[alphadraw()]] when not alpha mask, adapt calc>>=
+/*
+ * Should really be above, but then boolcopyfns would have
+ * to deal with bit alignment, and I haven't written that.
+ *
+ * This is a common case for things like ellipse drawing.
+ * When there's no alpha involved and the mask is boolean,
+ * we can avoid all the division and multiplication.
+ */
+if(mask->chan == GREY1 && !(src->flags&Falpha))
+    calc = boolcalc[op];
+else if(op == SoverD && !(src->flags&Falpha))
+    calc = alphacalcS;
+@
+
+
+
+
+<<function alphacalcS>>=
+/* source alpha 1 */
+static Buffer
+alphacalcS(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+{
+    Buffer obdst;
+    int fd;
+    int i, ma;
+    ulong s, t;
+
+    USED(op);
+    obdst = bdst;
+
+    for(i=0; i<dx; i++){
+        ma = *bmask.alpha;
+        fd = 255-ma;
+
+        if(grey){
+            *bdst.grey = MUL(ma, *bsrc.grey, s)+MUL(fd, *bdst.grey, t);
+            bsrc.grey += bsrc.delta;
+            bdst.grey += bdst.delta;
+        }else{
+            *bdst.red = MUL(ma, *bsrc.red, s)+MUL(fd, *bdst.red, t);
+            *bdst.grn = MUL(ma, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
+            *bdst.blu = MUL(ma, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
+            bsrc.red += bsrc.delta;
+            bsrc.blu += bsrc.delta;
+            bsrc.grn += bsrc.delta;
+            bdst.red += bdst.delta;
+            bdst.blu += bdst.delta;
+            bdst.grn += bdst.delta;
+        }
+        if(bdst.alpha != &ones){
+            *bdst.alpha = ma+MUL(fd, *bdst.alpha, t);
+            bdst.alpha += bdst.delta;
+        }
+        bmask.alpha += bmask.delta;
+    }
+    return obdst;
+}
+@
+
+<<global boolcalc>>=
+static Calcfn *boolcalc[Ncomp] =
+{
+    alphacalc0,		/* Clear */
+    boolcalc14,		/* DoutS */
+    boolcalc236789,		/* SoutD */
+    boolcalc236789,		/* DxorS */
+    boolcalc14,		/* DinS */
+    alphacalc5,		/* D */
+    boolcalc236789,		/* DatopS */
+    boolcalc236789,		/* DoverS */
+    boolcalc236789,		/* SinD */
+    boolcalc236789,		/* SatopD */
+    boolcalc1011,		/* S */
+    boolcalc1011,		/* SoverD */
+};
+@
+
+
+<<function boolcalc14>>=
+static Buffer
+boolcalc14(Buffer bdst, Buffer b1, Buffer bmask, int dx, int grey, int op)
+{
+    Buffer obdst;
+    int i, ma, zero;
+
+    USED(b1);
+
+    obdst = bdst;
+
+    for(i=0; i<dx; i++){
+        ma = *bmask.alpha;
+        zero = ma ? op == DoutS : op == DinS;
+
+        if(grey){
+            if(zero)
+                *bdst.grey = 0;
+            bdst.grey += bdst.delta;
+        }else{
+            if(zero)
+                *bdst.red = *bdst.grn = *bdst.blu = 0;
+            bdst.red += bdst.delta;
+            bdst.blu += bdst.delta;
+            bdst.grn += bdst.delta;
+        }
+        bmask.alpha += bmask.delta;
+        if(bdst.alpha != &ones){
+            if(zero)
+                *bdst.alpha = 0;
+            bdst.alpha += bdst.delta;
+        }
+    }
+    return obdst;
+}
+@
+
+<<function boolcalc236789>>=
+static Buffer
+boolcalc236789(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+{
+    Buffer obdst;
+    int fs, fd;
+    int i, ma, da, zero;
+    ulong s, t;
+
+    obdst = bdst;
+    zero = !(op&1);
+
+    for(i=0; i<dx; i++){
+        ma = *bmask.alpha;
+        da = *bdst.alpha;
+        fs = da;
+        if(op&2)
+            fs = 255-da;
+        fd = 0;
+        if(op&4)
+            fd = 255;
+
+        if(grey){
+            if(ma)
+                *bdst.grey = MUL(fs, *bsrc.grey, s)+MUL(fd, *bdst.grey, t);
+            else if(zero)
+                *bdst.grey = 0;
+            bsrc.grey += bsrc.delta;
+            bdst.grey += bdst.delta;
+        }else{
+            if(ma){
+                *bdst.red = MUL(fs, *bsrc.red, s)+MUL(fd, *bdst.red, t);
+                *bdst.grn = MUL(fs, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
+                *bdst.blu = MUL(fs, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
+            }
+            else if(zero)
+                *bdst.red = *bdst.grn = *bdst.blu = 0;
+            bsrc.red += bsrc.delta;
+            bsrc.blu += bsrc.delta;
+            bsrc.grn += bsrc.delta;
+            bdst.red += bdst.delta;
+            bdst.blu += bdst.delta;
+            bdst.grn += bdst.delta;
+        }
+        bmask.alpha += bmask.delta;
+        if(bdst.alpha != &ones){
+            if(ma)
+                *bdst.alpha = fs+MUL(fd, da, t);
+            else if(zero)
+                *bdst.alpha = 0;
+            bdst.alpha += bdst.delta;
+        }
+    }
+    return obdst;
+}
+@
+
+<<function boolcalc1011>>=
+static Buffer
+boolcalc1011(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+{
+    Buffer obdst;
+    int i, ma, zero;
+
+    obdst = bdst;
+    zero = !(op&1);
+
+    for(i=0; i<dx; i++){
+        ma = *bmask.alpha;
+
+        if(grey){
+            if(ma)
+                *bdst.grey = *bsrc.grey;
+            else if(zero)
+                *bdst.grey = 0;
+            bsrc.grey += bsrc.delta;
+            bdst.grey += bdst.delta;
+        }else{
+            if(ma){
+                *bdst.red = *bsrc.red;
+                *bdst.grn = *bsrc.grn;
+                *bdst.blu = *bsrc.blu;
+            }
+            else if(zero)
+                *bdst.red = *bdst.grn = *bdst.blu = 0;
+            bsrc.red += bsrc.delta;
+            bsrc.blu += bsrc.delta;
+            bsrc.grn += bsrc.delta;
+            bdst.red += bdst.delta;
+            bdst.blu += bdst.delta;
+            bdst.grn += bdst.delta;
+        }
+        bmask.alpha += bmask.delta;
+        if(bdst.alpha != &ones){
+            if(ma)
+                *bdst.alpha = 255;
+            else if(zero)
+                *bdst.alpha = 0;
+            bdst.alpha += bdst.delta;
+        }
+    }
+    return obdst;
+}
+@
+
+
+
+
 
 
 
