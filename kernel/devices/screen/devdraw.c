@@ -78,7 +78,7 @@ ulong blanktime = 30;   /* in minutes; a half hour */
 /*s: struct KDraw */
 struct KDraw
 {
-    // growing_array<option<Client>>, size in KDraw.nclient
+    // growing_array<option<Client>> (size = KDraw.nclient)
     Client**    client;
     int     nclient;
 
@@ -88,6 +88,7 @@ struct KDraw
     /*s: [[KDraw]] other fields */
     bool     softscreen;
     /*x: [[KDraw]] other fields */
+    // growing_array<DName>, size = KDraw.nname
     DName*  name;
     int     nname;
     /*x: [[KDraw]] other fields */
@@ -159,8 +160,10 @@ struct Refx
 /*s: struct DName */
 struct DName
 {
+    // key
     char        *name;
-    Client      *client;
+    // value
+    Client      *client; // the owner
     DImage*     dimage;
     /*s: [[DName]] other fields */
     int     vers;
@@ -189,27 +192,28 @@ struct FChar
  */
 struct DImage
 {
-    int     id; // same than Image.id?
+    int     id;
     Memimage*   image;
 
-    /*s: [[Dimage]] layer fields */
+    /*s: [[DImage]] layer fields */
     DScreen*    dscreen;    /* 0 if not a window */
-    /*e: [[Dimage]] layer fields */
-    /*s: [[Dimage]] other fields */
+    /*e: [[DImage]] layer fields */
+    /*s: [[DImage]] other fields */
+    int     vers;
+    /*x: [[DImage]] other fields */
+    char    *name;
+    // ref<DImage>
+    DImage*     fromname;   /* image this one is derived from, by name */
+    /*x: [[DImage]] other fields */
     int     ascent;
     int     nfchar;
     FChar*      fchar;
-    /*x: [[Dimage]] other fields */
-    char    *name;
-    DImage*     fromname;   /* image this one is derived from, by name */
-    /*x: [[Dimage]] other fields */
-    int     vers;
-    /*e: [[Dimage]] other fields */
+    /*e: [[DImage]] other fields */
 
     // Extra
-    /*s: [[Dimage]] extra fields */
+    /*s: [[DImage]] extra fields */
     DImage*     next;
-    /*e: [[Dimage]] extra fields */
+    /*e: [[DImage]] extra fields */
     int     ref;
 };
 /*e: struct DImage */
@@ -376,7 +380,7 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
             break;
         case Q3rd:
             cl = drawclientofpath(c->qid.path);
-            if(cl == nil)
+            if(cl == nil) // when can this happen?
                 strncpy(up->genbuf, "??", sizeof up->genbuf);
             else
                 snprint(up->genbuf, sizeof up->genbuf,
@@ -539,14 +543,15 @@ addflush(Rectangle r)
     int abb, ar, anbb;
     Rectangle nbb;
 
-    if(sdraw.softscreen==false || !rectclip(&r, screenimage->r))
+    if(!sdraw.softscreen || !rectclip(&r, screenimage->r))
         return;
-
     if(flushrect.min.x >= flushrect.max.x){
         flushrect = r;
         waste = 0;
         return;
     }
+    // else
+
     nbb = flushrect;
     combinerect(&nbb, r);
     ar = Dx(r)*Dy(r);
@@ -570,10 +575,12 @@ addflush(Rectangle r)
         flushrect = nbb;
         return;
     }
+
     /* emit current state */
     if(flushrect.min.x < flushrect.max.x)
         flushmemscreen(flushrect);
     flushrect = r;
+
     waste = 0;
 }
 /*e: function addflush */
@@ -583,31 +590,38 @@ static
 void
 dstflush(int dstid, Memimage *dst, Rectangle r)
 {
+    /*s: [[dstflush()]] locals */
     Memlayer *l;
+    /*e: [[dstflush()]] locals */
 
-    if(dstid == 0){
+    if(dstid == 0){ // the screen
         combinerect(&flushrect, r);
         return;
     }
+    // else
+    /*s: [[dstflush()]] sanity check dst */
     /* how can this happen? -rsc, dec 12 2002 */
     if(dst == nil){
         print("nil dstflush\n");
         return;
     }
-
+    /*e: [[dstflush()]] sanity check dst */
     /*s: [[dstflush()]] if layer */
     l = dst->layer;
     if(l == nil)
         return;
+
+    // else
     do{
         if(l->screen->image->data != screenimage->data)
             return;
         r = rectaddpt(r, l->delta);
         l = l->screen->image->layer;
     }while(l);
-    /*e: [[dstflush()]] if layer */
 
     addflush(r);
+
+    /*e: [[dstflush()]] if layer */
 }
 /*e: function dstflush */
 
@@ -661,7 +675,7 @@ drawgoodname(DImage *d)
     if(d->name == nil)
         return true;
     n = drawlookupname(strlen(d->name), d->name);
-    if(n==nil || n->vers!=d->vers)
+    if(n == nil || n->vers != d->vers)
         return false;
     return true;
 }
@@ -887,7 +901,7 @@ drawfreedimage(DImage *dimage)
     /*e: [[drawfreedimage()]] sanity check dimage ref */
     if(dimage->ref > 0)
         return;
-
+    // else
     /*s: [[drawfreedimage()]] free names */
     /* any names? */
     for(i=0; i<sdraw.nname; )
@@ -993,16 +1007,20 @@ drawaddname(Client *client, DImage *di, int n, char *str)
         if(drawcmp(name->name, str, n) == 0)
             error(Enameused);
 
+    // grow array
     t = smalloc((sdraw.nname+1)*sizeof(DName));
     memmove(t, sdraw.name, sdraw.nname*sizeof(DName));
     free(sdraw.name);
     sdraw.name = t;
+
     new = &sdraw.name[sdraw.nname++];
     new->name = smalloc(n+1);
     memmove(new->name, str, n);
     new->name[n] = '\0';
+
     new->dimage = di;
     new->client = client;
+
     new->vers = ++sdraw.vers;
 }
 /*e: function drawaddname */
@@ -1017,6 +1035,7 @@ drawnewclient(void)
     // find free slot
     for(i=0; i<sdraw.nclient; i++){
         cl = sdraw.client[i];
+        // found one
         if(cl == nil)
             break;
     }
@@ -1073,7 +1092,7 @@ drawclientofpath(ulong path)
     if(slot == 0)
         return nil;
     cl = sdraw.client[slot-1];
-    if(cl==nil || cl->clientid==0)
+    if(cl == nil || cl->clientid == 0)
         return nil;
     return cl;
 }
@@ -1099,8 +1118,10 @@ drawimage(Client *client, uchar *a)
     DImage *d;
 
     d = drawlookup(client, BGLONG(a), true);
+    /*s: [[drawimage()]] sanity check d */
     if(d == nil)
         error(Enodrawimage);
+    /*e: [[drawimage()]] sanity check d */
     return d->image;
 }
 /*e: function drawimage */
@@ -1355,7 +1376,7 @@ drawopen(Chan *c, int omode)
         if(cl == nil)
             error(Enodev);
         /*e: [[drawopen()]] when Qnew, sanity check cl */
-        c->qid.path = Qctl|((cl->slot+1)<<QSHIFT); // >>
+        c->qid.path = Qctl|((cl->slot+1)<<QSHIFT);
     }
     /*e: [[drawopen()]] if Qnew */
     switch(QID(c->qid)){
@@ -1664,13 +1685,14 @@ drawwrite(Chan *c, void *a, long n, vlong)
     char buf[128], *fields[4], *q;
     int i, m, red, green, blue, x;
     /*e: [[drawwrite()]] other locals */
+
     /*s: [[drawwrite()]] sanity check c */
     if(c->qid.type & QTDIR)
         error(Eisdir);
     /*e: [[drawwrite()]] sanity check c */
-
     cl = drawclient(c);
 
+    /*s: [[drawwrite()]] lock */
     dlock();
     if(waserror()){
 
@@ -1679,7 +1701,7 @@ drawwrite(Chan *c, void *a, long n, vlong)
         dunlock();
         nexterror();
     }
-
+    /*e: [[drawwrite()]] lock */
     switch(QID(c->qid)){
     /*s: [[drawwrite()]] switch qid cases */
     case Qctl:
@@ -1840,6 +1862,7 @@ drawmesg(Client *client, void *av, int n)
     int repl;
     Rectangle r, clipr;
     ulong value;
+
     Memimage *i;
     /*x: [[drawmesg()]] locals */
     DImage *ll;
@@ -1856,8 +1879,9 @@ drawmesg(Client *client, void *av, int n)
     // enum<Drawop>
     int op;
     /*x: [[drawmesg()]] locals */
-    int e0, e1;
     Point sp;
+    // enum<EndLine>
+    int e0, e1;
     /*x: [[drawmesg()]] locals */
     int ni;
     Point *pp;
@@ -1908,8 +1932,10 @@ drawmesg(Client *client, void *av, int n)
                  error(Eshortdraw);
              /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
+
             scrnid = BGSHORT(a+5);
             refresh = a[9];
+
             chan = BGLONG(a+10);
             repl = a[14];
             drawrectangle(&r, a+15);
@@ -2049,21 +2075,26 @@ drawmesg(Client *client, void *av, int n)
              /*e: [[drawmesg()]] sanity check n with m */
             c = a[5];
             j = a[6];
-            if(j == 0)  /* give me a non-empty name please */
-                error(Eshortdraw);
+             /*s: [[drawmesg()]] name an image case, sanity check j */
+             if(j == 0)  /* give me a non-empty name please */
+                 error(Eshortdraw);
+             /*e: [[drawmesg()]] name an image case, sanity check j */
             m += j;
              /*s: [[drawmesg()]] sanity check n with m */
              if(n < m)
                  error(Eshortdraw);
              /*e: [[drawmesg()]] sanity check n with m */
+
             di = drawlookup(client, BGLONG(a+1), false);
-            if(di == nil)
-                error(Enodrawimage);
+             /*s: [[drawmesg()]] name an image case, sanity check di */
+             if(di == nil)
+                 error(Enodrawimage);
+             /*e: [[drawmesg()]] name an image case, sanity check di */
             if(di->name)
                 error(Enamed);
 
             if(c)
-                drawaddname(client, di, j, (char*)a+7); // The call?
+                drawaddname(client, di, j, (char*)a+7); // The call
             else{
                 dn = drawlookupname(j, (char*)a+7);
                 if(dn == nil)
@@ -2073,7 +2104,6 @@ drawmesg(Client *client, void *av, int n)
                 drawdelname(dn);
             }
             continue;
-
         /*x: [[drawmesg()]] cases */
         /* attach to a named image: 'n' dstid[4] j[1] name[j] */
         case 'n':
@@ -2084,36 +2114,44 @@ drawmesg(Client *client, void *av, int n)
                 error(Eshortdraw);
             /*e: [[drawmesg()]] sanity check n with m */
             j = a[5];
+            /*s: [[drawmesg()]] name an image case, sanity check j */
             if(j == 0)  /* give me a non-empty name please */
                 error(Eshortdraw);
+            /*e: [[drawmesg()]] name an image case, sanity check j */
             m += j;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
             /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
+
             if(drawlookup(client, dstid, false))
                 error(Eimageexists);
 
-            dn = drawlookupname(j, (char*)a+6); // The call?
-
-            if(dn == nil)
-                error(Enoname);
+            dn = drawlookupname(j, (char*)a+6); // The call
+             /*s: [[drawmesg()]] attach to an image case, sanity check dn */
+             if(dn == nil)
+                 error(Enoname);
+             /*e: [[drawmesg()]] attach to an image case, sanity check dn */
             if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
                 error(Edrawmem);
-
             di = drawlookup(client, dstid, false);
+            /*s: [[drawmesg()]] attach to an image case, sanity check di */
             if(di == nil)
                 error("draw: cannot happen");
+            /*e: [[drawmesg()]] attach to an image case, sanity check di */
+            /*s: [[drawmesg()]] attach to an image case, set di name fields using dn */
             di->vers = dn->vers;
             di->name = smalloc(j+1);
             di->fromname = dn->dimage;
             di->fromname->ref++;
             memmove(di->name, a+6, j);
-            di->name[j] = 0;
+            di->name[j] = '\0';
+            /*e: [[drawmesg()]] attach to an image case, set di name fields using dn */
+
+            // for further read on /dev/draw/x/ctl
             client->infoid = dstid;
             continue;
-
         /*x: [[drawmesg()]] cases */
         /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
         case 'd':
@@ -2123,8 +2161,8 @@ drawmesg(Client *client, void *av, int n)
             if(n < m)
                 error(Eshortdraw);
             /*e: [[drawmesg()]] sanity check n with m */
-            dst = drawimage(client, a+1);
             dstid = BGLONG(a+1);
+            dst = drawimage(client, a+1);
             src = drawimage(client, a+5);
             mask = drawimage(client, a+9);
             drawrectangle(&r, a+13);
@@ -2136,7 +2174,6 @@ drawmesg(Client *client, void *av, int n)
 
             dstflush(dstid, dst, r);
             continue;
-
         /*x: [[drawmesg()]] cases */
         /* set compositing operator for next draw operation: 'O' op */
         case 'O':
@@ -2164,20 +2201,23 @@ drawmesg(Client *client, void *av, int n)
             e0 = BGLONG(a+21);
             e1 = BGLONG(a+25);
             j = BGLONG(a+29);
+            /*s: [[drawmesg()]] when draw line, sanity check j */
             if(j < 0)
                 error("negative line width");
+            /*e: [[drawmesg()]] when draw line, sanity check j */
             src = drawimage(client, a+33);
             drawpoint(&sp, a+37);
             op = drawclientop(client);
 
             memline(dst, p, q, e0, e1, j, src, sp, op); // The call
-
+            /*s: [[drawmesg()]] when draw line, possible flush */
             /* avoid memlinebbox if possible */
             if(dstid==0 || dst->layer!=nil){
                 /* BUG: this is terribly inefficient: update maximal containing rect*/
                 r = memlinebbox(p, q, e0, e1, j);
                 dstflush(dstid, dst, insetrect(r, -(1+1+j)));
             }
+            /*e: [[drawmesg()]] when draw line, possible flush */
             continue;
         /*x: [[drawmesg()]] cases */
         /* filled polygon: 'P' dstid[4] n[2] wind[4] ignore[2*4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n] */
@@ -2193,27 +2233,36 @@ drawmesg(Client *client, void *av, int n)
             dstid = BGLONG(a+1);
             dst = drawimage(client, a+1);
             ni = BGSHORT(a+5);
+            /*s: [[drawmesg()]] when draw polygon, sanity check ni */
             if(ni < 0)
                 error("negative count in polygon");
+            /*e: [[drawmesg()]] when draw polygon, sanity check ni */
             e0 = BGLONG(a+7);
             e1 = BGLONG(a+11);
             j = 0;
             if(*a == 'p'){
                 j = BGLONG(a+15);
+                /*s: [[drawmesg()]] when draw polygon, sanity check j */
                 if(j < 0)
                     error("negative polygon line width");
+                /*e: [[drawmesg()]] when draw polygon, sanity check j */
             }
             src = drawimage(client, a+19);
             drawpoint(&sp, a+23);
             drawpoint(&p, a+31);
             ni++;
             pp = malloc(ni*sizeof(Point));
+            /*s: [[drawmesg()]] when draw polygon, sanity check pp */
             if(pp == nil)
                 error(Enomem);
-            doflush = false;
+            /*e: [[drawmesg()]] when draw polygon, sanity check pp */
 
+            /*s: [[drawmesg()]] when draw polygon, set doflush */
+            doflush = false;
             if(dstid==0 || (dst->layer && dst->layer->screen->image->data == screenimage->data))
                 doflush = true;    /* simplify test in loop */
+            /*e: [[drawmesg()]] when draw polygon, set doflush */
+
             ox = oy = 0;
             esize = 0;
             u = a+m;
@@ -2224,6 +2273,8 @@ drawmesg(Client *client, void *av, int n)
                 u = drawcoord(u, a+n, oy, &p.y);
                 ox = p.x;
                 oy = p.y;
+
+                /*s: [[drawmesg()]] when draw polygon, if doflush */
                 if(doflush){
                     esize = j;
                     if(*a == 'p'){
@@ -2247,16 +2298,20 @@ drawmesg(Client *client, void *av, int n)
                     if(rectclip(&r, dst->clipr))        /* should perhaps be an arg to dstflush */
                         dstflush(dstid, dst, r);
                 }
+                /*e: [[drawmesg()]] when draw polygon, if doflush */
                 pp[y] = p;
             }
+            /*s: [[drawmesg()]] when draw polygon, special flush if y is 1 */
             if(y == 1)
                 dstflush(dstid, dst, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
+            /*e: [[drawmesg()]] when draw polygon, special flush if y is 1 */
             op = drawclientop(client);
 
             if(*a == 'p')
                 mempoly(dst, pp, ni, e0, e1, j, src, sp, op); // The call
             else
                 memfillpoly(dst, pp, ni, e0, src, sp, op); // The call
+
             free(pp);
             m = u-a;
             continue;

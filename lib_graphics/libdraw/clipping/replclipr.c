@@ -10,7 +10,7 @@ replclipr(Image *i, bool repl, Rectangle clipr)
     /*s: [[replclipr()]] body */
     byte *b;
 
-    // set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
+    // set repl and clip: 'c' dstid[4] repl[1] clipR[4*4]
     b = bufimage(i->display, 1+4+1+4*4);
     b[0] = 'c';
     BPLONG(b+1, i->id);

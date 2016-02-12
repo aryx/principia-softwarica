@@ -46,7 +46,7 @@ menucolors(void)
     back = allocimagemix(display, DPalegreen, DWhite);
     high = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkgreen);	/* dark green */
     bord = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedgreen);	/* not as dark green */
-    if(back==nil || high==nil || bord==nil)
+    if(back == nil || high == nil || bord == nil)
         goto Error;
     text = display->black;
     htext = back;

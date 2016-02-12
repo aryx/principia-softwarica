@@ -36,7 +36,7 @@ ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
     int ok;
 
     d = etc;
-    if(insave && d->dstlayer->save==nil)
+    if(insave && d->dstlayer->save == nil)
         return;
 
     p0 = addpt(screenr.min, d->deltas);
@@ -74,9 +74,10 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     /*e: [[memdraw()]] locals */
 
     DBG("memdraw %p %R %p %P %p %P\n", dst, r, src, p0, mask, p1);
-
+    /*s: [[memdraw()]] sanity check mask */
     if(mask == nil)
         mask = memopaque;
+    /*e: [[memdraw()]] sanity check mask */
 
     /*s: [[memdraw()]] if mask has layer */
     if(mask->layer){
@@ -85,7 +86,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     }
     /*e: [[memdraw()]] if mask has layer */
     Top:
-    if(dst->layer==nil && src->layer==nil){
+    if(dst->layer == nil && src->layer == nil){
         memimagedraw(dst, r, src, p0, mask, p1, op); // back to memdraw
         return;
     }
@@ -190,7 +191,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     /*
      * src is now an image.  dst may be an image or a clear layer
      */
-    if(dst->layer==nil)
+    if(dst->layer == nil)
         goto Top;
     if(dst->layer->clear)
         goto Clearlayer;

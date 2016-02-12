@@ -22,11 +22,13 @@ appendpt(Plist *l, Point p)
 {
     if(l->np == -1)
         return;
+
     if(l->np == 0)
         l->p = malloc(PINC*sizeof(Point));
-    else if(l->np%PINC == 0)
+    else if(l->np % PINC == 0)
         l->p = realloc(l->p, (l->np+PINC)*sizeof(Point));
-    if(l->p == 0){
+
+    if(l->p == nil){
         l->np = -1;
         return;
     }
@@ -177,7 +179,7 @@ bezsplinepts(Point *pt, int npt, Point **pp)
 /*e: function bezsplinepts */
 
 /*s: function bezier */
-int
+error0
 bezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp)
 {
     return bezierop(dst, p0, p1, p2, p3, end0, end1, radius, src, sp, SoverD);
@@ -185,7 +187,7 @@ bezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, i
 /*e: function bezier */
 
 /*s: function bezierop */
-int
+error0
 bezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
     Plist l;
@@ -193,17 +195,17 @@ bezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1,
     l.np = 0;
     bezierpts(&l, p0, p1, p2, p3);
     if(l.np == -1)
-        return 0;
+        return ERROR_0;
     if(l.np != 0){
         polyop(dst, l.p, l.np, end0, end1, radius, src, addpt(subpt(sp, p0), l.p[0]), op);
         free(l.p);
     }
-    return 1;
+    return OK_1;
 }
 /*e: function bezierop */
 
 /*s: function bezspline */
-int
+error0
 bezspline(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp)
 {
     return bezsplineop(dst, pt, npt, end0, end1, radius, src, sp, SoverD);
@@ -211,7 +213,7 @@ bezspline(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image 
 /*e: function bezspline */
 
 /*s: function bezsplineop */
-int
+error0
 bezsplineop(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
     Plist l;
@@ -219,17 +221,17 @@ bezsplineop(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Imag
     l.np = 0;
     _bezsplinepts(&l, pt, npt);
     if(l.np==-1)
-        return 0;
+        return ERROR_0;
     if(l.np != 0){
         polyop(dst, l.p, l.np, end0, end1, radius, src, addpt(subpt(sp, pt[0]), l.p[0]), op);
         free(l.p);
     }
-    return 1;
+    return OK_1;
 }
 /*e: function bezsplineop */
 
 /*s: function fillbezier */
-int
+error0
 fillbezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp)
 {
     return fillbezierop(dst, p0, p1, p2, p3, w, src, sp, SoverD);
@@ -237,7 +239,7 @@ fillbezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src
 /*e: function fillbezier */
 
 /*s: function fillbezierop */
-int
+error0
 fillbezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp, Drawop op)
 {
     Plist l;
@@ -245,17 +247,17 @@ fillbezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *s
     l.np = 0;
     bezierpts(&l, p0, p1, p2, p3);
     if(l.np == -1)
-        return 0;
+        return ERROR_0;
     if(l.np != 0){
         fillpolyop(dst, l.p, l.np, w, src, addpt(subpt(sp, p0), l.p[0]), op);
         free(l.p);
     }
-    return 1;
+    return OK_1;
 }
 /*e: function fillbezierop */
 
 /*s: function fillbezspline */
-int
+error0
 fillbezspline(Image *dst, Point *pt, int npt, int w, Image *src, Point sp)
 {
     return fillbezsplineop(dst, pt, npt, w, src, sp, SoverD);
@@ -263,7 +265,7 @@ fillbezspline(Image *dst, Point *pt, int npt, int w, Image *src, Point sp)
 /*e: function fillbezspline */
 
 /*s: function fillbezsplineop */
-int
+error0
 fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Drawop op)
 {
     Plist l;
@@ -271,12 +273,12 @@ fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Dra
     l.np = 0;
     _bezsplinepts(&l, pt, npt);
     if(l.np == -1)
-        return 0;
+        return ERROR_0;
     if(l.np > 0){
         fillpolyop(dst, l.p, l.np, w, src, addpt(subpt(sp, pt[0]), l.p[0]), op);
         free(l.p);
     }
-    return 1;
+    return OK_1;
 }
 /*e: function fillbezsplineop */
 /*e: lib_graphics/libdraw/bezier.c */

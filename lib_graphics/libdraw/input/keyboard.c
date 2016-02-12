@@ -69,7 +69,7 @@ initkeyboard(char *file)
     kc->file = strdup(file);
     kc->consfd = open(file, ORDWR|OCEXEC);
     t = malloc(strlen(file)+16);
-    if(kc->consfd<0 || t==nil){
+    if(kc->consfd<0 || t == nil){
 Error1:
         free(kc);
         return nil;

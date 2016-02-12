@@ -13,7 +13,7 @@
 
 %thx to LP, changed for the better a few things:
 % - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, Display.dataqid,
-%    Display.isnew, Memdata.imref, ...)
+%    Display.isnew, Memdata.imref, convxx[], ...)
 % - screen.h cleaner interface
 % - renamed some globals (screen -> view, _screen -> screen)
 %   TODO gscreen, screenimage, vgascr, so easier to see associated part
@@ -845,6 +845,8 @@ struct Rectangle
 @
 
 % max is first point outside
+% so Rect(0,0, 100, 100) is from 0,0 to 99,99 and so is of length 100.
+% A bit like 0-indexed array, max express the size.
 
 % enforced max > min? canonrect!
 % kind of ctor (law)
@@ -1078,7 +1080,7 @@ Image	*opaque;
 // ref_own<Image>
 Image	*transparent;
 @
-% colors are images! uniform
+% colors are images! masks are images! uniform
 
 % why here? convenient for program?
 % allocated and set in initdisplay() (and redirect to shared
@@ -1128,9 +1130,10 @@ struct Client
 <<constant HASHMASK>>=
 #define HASHMASK    (NHASH-1)
 @
-<<[[Dimage]] extra fields>>=
+<<[[DImage]] extra fields>>=
 DImage*     next;
 @
+% we will see soon Dimage
 
 % big array ... big hash. no collision for a long time
 % for first 2^5 images.
@@ -1160,7 +1163,7 @@ drawlookup(Client *client, int id, bool checkname)
 <<struct KDraw>>=
 struct KDraw
 {
-    // growing_array<option<Client>>, size in KDraw.nclient
+    // growing_array<option<Client>> (size = KDraw.nclient)
     Client**    client;
     int     nclient;
 
@@ -1202,6 +1205,7 @@ drawnewclient(void)
     // find free slot
     for(i=0; i<sdraw.nclient; i++){
         cl = sdraw.client[i];
+        // found one
         if(cl == nil)
             break;
     }
@@ -1251,7 +1255,7 @@ if(cp == nil)
 % and [[screen/view]],  and DImage?
 
 % Images in plan9 draw are specials! (see technicolor.ps!)
-% used for many things. Images, colors, fonts, masks, etc.
+% used for many things. Screen, temp images, colors, fonts, masks, etc.
 % even windows!
 
 \subsection{[[Image]]}
@@ -1369,6 +1373,8 @@ enum {
 
 %Fbytes does not mean CMAP8, it means 8 bits depth but possibly multiple
 % channels
+
+% start of pbs, many different image formats ...
 
 % all important notions!
 
@@ -1560,6 +1566,7 @@ ulong	width;	/* width in words of a single scan line */
 @
 \t zero is complicated because some Memdata correspond to
 \t  rectangle which do not start at 0,0
+\l rename wwidth? vs bwidth?
 
 <<function byteaddr>>=
 byte*
@@ -1571,25 +1578,11 @@ byteaddr(Memimage *i, Point p)
 
     <<[[byteaddr()]] if depth less than 8>>
     else
-        return a + p.x*(i->depth/8);
+        return a + p.x * (i->depth/8);
 }
 @
 % should sanity check still valid pointer?? that in valid range?
 
-
-
-
-% memfillcolor -> <>
-<<function wordaddr>>=
-/*
- * Wordaddr is deprecated.
- */
-ulong*
-wordaddr(Memimage *i, Point p)
-{
-    return (ulong*) ((uintptr)byteaddr(i, p) & ~(sizeof(ulong)-1));
-}
-@
 
 
 
@@ -1626,14 +1619,14 @@ Memdata gscreendata;
  */
 struct DImage
 {
-    int     id; // same than Image.id?
+    int     id;
     Memimage*   image;
 
-    <<[[Dimage]] layer fields>>
-    <<[[Dimage]] other fields>>
+    <<[[DImage]] layer fields>>
+    <<[[DImage]] other fields>>
 
     // Extra
-    <<[[Dimage]] extra fields>>
+    <<[[DImage]] extra fields>>
     int     ref;
 };
 @
@@ -1689,7 +1682,7 @@ if(d == nil)
 % not thread channel, not kernel Chan, image channel here!
 % ulong in previous struct, but more complex format actually.
 
-<<enum _anon_ (include/draw.h)4>>=
+<<enum ImageChan>>=
 /*
  * image channel descriptors 
  */
@@ -1709,6 +1702,8 @@ enum ImageChan {
 };
 @
 \n use Chan not Channel to avoid confusing with thread.h struct Channel.
+\l I would like to move CAlpha after Blue, but maybe font files
+\l  rely on this order
 
 %  4      4
 % -------------
@@ -1754,7 +1749,7 @@ enum ImageChan {
 
 <<enum _anon_ (include/draw.h)5>>=
 enum ImageType {
-    GREY1	= CHAN1(CGrey, 1), // used for bitmask, black and white
+    GREY1	= CHAN1(CGrey, 1), // used for masks, black and white
     CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default
     RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5), // Raspberry mode by default
     RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // flexible
@@ -1820,7 +1815,7 @@ if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
 
 % 32 bits! RGBA 8 bits for each channel, which is
 % why has FF as the last bit for almost all the elements below
-<<enum _anon_>>=
+<<enum Colors>>=
 enum
 {
     DOpaque			= 0xFFFFFFFF,
@@ -1916,7 +1911,7 @@ imgtorgba(Memimage *img, ulong val)
 static ulong
 rgbatoimg(Memimage *img, ulong rgba)
 {
-    byte r, g, b, a
+    byte r, g, b, a;
     ulong chan;
     int d, nb;
     ulong v;
@@ -1960,8 +1955,11 @@ rgbatoimg(Memimage *img, ulong rgba)
 
 %\subsection{[[setalpha()]]}
 
-% API function but not used in any graphical applications (just mahjongg)
-% a bit interesting to understand alpha
+%dead:
+% API function but not used in any graphical applications (just mahjongg).
+% Was maybe a bit interesting to understand alpha but in the end I find
+% it confusing. Maybe related to notion of pre-alpha (see wikipedia page
+% on alpha compositing)
 %<<function setalpha>>=
 %ulong
 %setalpha(ulong color, uchar alpha)
@@ -1980,8 +1978,6 @@ rgbatoimg(Memimage *img, ulong rgba)
 %@
 % >> >> >> >>
 \n was in arith.c
-\t why need that? redundant no? maybe confusing actually
-
 % that simple? :) to set alpha you just dillute each rgb components?
 
 \subsection{[[memfillcolor()]]}
@@ -2012,6 +2008,20 @@ memfillcolor(Memimage *i, ulong val)
 }
 @
 % >>
+%old: param as val but confusing, rgba better if don't use typedef.
+
+% memfillcolor (only) -> <>
+<<function wordaddr>>=
+/*
+ * Wordaddr is deprecated.
+ */
+ulong*
+wordaddr(Memimage *i, Point p)
+{
+    return (ulong*) ((uintptr)byteaddr(i, p) & ~(sizeof(ulong)-1));
+}
+@
+
 
 % l for little endian
 <<function memsetl>>=
@@ -2410,8 +2420,7 @@ memimageinit(void)
     memones->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
     *byteaddr(memones, ZP) = ~0;
 
-    if(memones == nil || memzeros == nil)
-        assert(0 /*cannot initialize memimage library */);	/* RSC BUG */
+    <<[[memimageinit()]] sanity check memxxx>>
 
     memwhite = memones;
     memblack = memzeros;
@@ -2426,6 +2435,12 @@ memimageinit(void)
 % why need width/height or chan?
 
 % allocmemimage later
+
+
+<<[[memimageinit()]] sanity check memxxx>>=
+if(memones == nil || memzeros == nil)
+    assert(0 /*cannot initialize memimage library */);	/* RSC BUG */
+@
 
 <<[[memimageinit()]] only once guard>>=
 static bool didinit = false;
@@ -2878,8 +2893,7 @@ int		nbits[NChan];
 void
 freememimage(Memimage *i)
 {
-    if(i == nil)
-        return;
+    <<[[freememimage()]] sanity check i>>
     // free the Memdata
     if(i->data->ref-- == 1 && i->data->allocd){
         if(i->data->base)
@@ -2892,8 +2906,11 @@ freememimage(Memimage *i)
 % remember allocd vs base, two different allocators
 
 
-
-
+<<[[freememimage()]] sanity check i>>=
+if(i == nil)
+    return;
+@
+% it should throw a warning. Not good to abuse free to free null pointers.
 
 
 \paragraph{[[DImage]]}
@@ -3303,8 +3320,7 @@ _closedisplay(Display *disp, bool isshutdown)
     fdt fd;
     char buf[128];
 
-    if(disp == nil)
-        return;
+    <<[[_closedisplay()]] sanity check disp>>
     if(disp == display)
         display = nil;
 
@@ -3333,6 +3349,12 @@ _closedisplay(Display *disp, bool isshutdown)
 }
 @
 % unlock!
+
+<<[[_closedisplay()]] sanity check disp>>=
+if(disp == nil)
+    return;
+@
+% again, should issue a warning
 
 \subsection{Next steps}
 
@@ -3613,7 +3635,7 @@ if(s == DEVDOTDOT){
         break;
     case Q3rd:
         cl = drawclientofpath(c->qid.path);
-        if(cl == nil)
+        if(cl == nil) // when can this happen?
             strncpy(up->genbuf, "??", sizeof up->genbuf);
         else
             snprint(up->genbuf, sizeof up->genbuf,
@@ -3640,7 +3662,7 @@ drawclientofpath(ulong path)
     if(slot == 0)
         return nil;
     cl = sdraw.client[slot-1];
-    if(cl==nil || cl->clientid==0)
+    if(cl == nil || cl->clientid == 0)
         return nil;
     return cl;
 }
@@ -4393,8 +4415,7 @@ _freeimage1(Image *i)
     Display *d;
     Image *w;
 
-    if(i == nil || i->display == nil)
-        return OK_0;
+    <<[[_freeimage1()]] sanity check i>>
 
     /* make sure no refresh events occur on this if we block in the write */
     d = i->display;
@@ -4417,6 +4438,11 @@ _freeimage1(Image *i)
 % free done in caller (a bit ugly)
 
 
+<<[[_freeimage1()]] sanity check i>>=
+if(i == nil || i->display == nil)
+    return OK_0;
+@
+% should issue a warning
 
 <<[[_freeimage1()]] sanity check a>>=
 if(a == nil)
@@ -4718,6 +4744,9 @@ if(dimage->ref < 0)
 % Clipping is fundamental graphics operation. Very useful
 % generic functionality. Like narrow mode in emacs :)
 
+% Replication is useful to save space in memory, for color, while
+% still being general, and also for tiling.
+
 % Called by many, to optimize things, e.g. no need to flush some modif
 % if rectangle outside the clipping area.
 % Modify the first parameter when they overlap to match the intersection.
@@ -4866,6 +4895,8 @@ flushimage(Display *d, bool visible)
 \l why not use global display instead? can have multiple one?
 %dead:
 %        <<[[flushimage()]] if isnew>>
+
+% should be called flushdisplay more than flushimage.
 
 % saw doflush before which triggers the write on /dev/draw/x/data fd.
 
@@ -5238,8 +5269,7 @@ case 'N':
      <<[[drawmesg()]] sanity check n with m>>
     c = a[5];
     j = a[6];
-    if(j == 0)  /* give me a non-empty name please */
-        error(Eshortdraw);
+     <<[[drawmesg()]] name an image case, sanity check j>>
     m += j;
      <<[[drawmesg()]] sanity check n with m>>
 
@@ -5261,6 +5291,11 @@ case 'N':
     continue;
 @
 
+<<[[drawmesg()]] name an image case, sanity check j>>=
+if(j == 0)  /* give me a non-empty name please */
+    error(Eshortdraw);
+@
+
 <<[[drawmesg()]] name an image case, sanity check di>>=
 if(di == nil)
     error(Enodrawimage);
@@ -5274,8 +5309,7 @@ case 'n':
     m = 1+4+1;
     <<[[drawmesg()]] sanity check n with m>>
     j = a[5];
-    if(j == 0)  /* give me a non-empty name please */
-        error(Eshortdraw);
+    <<[[drawmesg()]] name an image case, sanity check j>>
     m += j;
     <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
@@ -5417,7 +5451,7 @@ int     vers;
 <<[[DName]] other fields>>=
 int     vers;
 @
-<<[[Dimage]] other fields>>=
+<<[[DImage]] other fields>>=
 int     vers;
 @
 % used by drawgoodname() (used itself by??)
@@ -5431,7 +5465,7 @@ memmove(di->name, a+6, j);
 di->name[j] = '\0';
 @
 
-<<[[Dimage]] other fields>>=
+<<[[DImage]] other fields>>=
 char    *name;
 // ref<DImage>
 DImage*     fromname;   /* image this one is derived from, by name */
@@ -5477,28 +5511,34 @@ if(dimage->fromname){   /* acquired by name; owned by someone else*/
 %\section{[[Point]] and [[Rectangle]]} types in core DS.
 
 % Drawing a "rectangle" is actually a fundamental op. 
-% rectangle is an area. copy/move/blend pixels from one area of one
-%  image to another image.
+% Rectangle can represent an area. Can set/unset/copy/blend 
+%  pixels from one area of one  image to another image.
 % No need complex algo, horiz and vert lines map well to pixels.
-% no need complex shape algorithm, just move all the bytes covering a rectangle
+% No need complex shape algorithm, just move all the bytes covering a rectangle.
+% In fact it is the basis used by other shape algorithms.
+
+% But operations is actually quite complicated still.
 
 \section{[[draw()]]}
 
-% draw() is fundamenta op!
+% draw() is fundamental op!
 % very flexible.
-% put technicolor.ps nice slides with draw (of actual images like in racket)
-% (meh, technicolors.ps not that good actually)
 % normally should be simple but made complicated because of possible
-%  translation, optimisation, etc.
+%  complex source, mask, replication, translation, optimisations, 
+%  image formats, etc.
 
-% can have very fancy things done easily (e.g. gradient)?
+% Can have very fancy things done easily (e.g. gradient, tiling, transluscent)
+%  but very simple things like drawing a rectangle with one color are
+%  forced to use an API a bit more complicated than what it should.
 
-%TODO: show toy program and screenshot of the rectangle!
+%show toy program and screenshot of the rectangle!
+% maybe with very simple draw(dst, Rect(10,10, 20,20), Black, nil, ZR);
+
+%less: put technicolor.ps slides with draw (of actual images like in racket)?
+% (meh, technicolors.ps not that good actually)
 
 \subsection{API}
 
-
-% see plan9-in-technicolor.ps! bitblt and porter-diff compositing algebra
 <<function draw>>=
 void
 draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
@@ -5507,6 +5547,7 @@ draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
 }
 @
 % SoverD Source Over Destination, classic
+% see plan9-in-technicolor.ps! bitblt and porter-diff compositing algebra
 
 % FIGURE with meaning of p1, r, vs src, mask, and dst.
 % r is rectangle in dst (if not it's clipped anyway).
@@ -5514,8 +5555,11 @@ draw(Image *dst, Rectangle r, Image *src, Image *mask, Point p1)
 % it will correspond to r.min.
 % See draw(2) to understand the complex semantic with repl and clipr.
 
-% Maybe can do simple case where dst and src starts at 0,0
-% and then can alter a bit r and p1.
+% For very simple cases src is just a color (and so replicated) 
+%  and p1 does not really matter.
+% Then can do simple case where dst and src starts at 0,0
+%  and then can alter a bit r and p1.
+% src can also be a tile in which case p1 matters too.
 
 
 <<function drawop>>=
@@ -5698,8 +5742,8 @@ case 'd':
 
     dstflush(dstid, dst, r);
     continue;
-
 @
+% dstflush!
 
 <<function drawpoint>>=
 void
@@ -5776,7 +5820,8 @@ case 'O':
 
 \subsection{Algorithm}
 
-% quite complicated, many wrappers, many layers, many formats, many optis.
+% quite complicated, many usecases, many wrappers, many layers, many formats,
+%  many optis.
 % draw() is very flexible and so it is quite complicated to implement.
 % So we will simplify and show simple and general path first.
 
@@ -5794,7 +5839,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
 
     <<[[memdraw()]] if mask has layer>>
     Top:
-    if(dst->layer==nil && src->layer==nil){
+    if(dst->layer == nil && src->layer == nil){
         memimagedraw(dst, r, src, p0, mask, p1, op); // back to memdraw
         return;
     }
@@ -5843,7 +5888,6 @@ void
 memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
 {
     Memdrawparam par;
-    <<[[memimagedraw()]] other locals>>
 
     DBG1("memimagedraw %p/%luX %R @ %p %p/%luX %P %p/%luX %P... ", dst, dst->chan, r, dst->data->bdata, src, src->chan, p0, mask, mask->chan, p1);
     <<[[memdraw()]] sanity check mask>>
@@ -5904,7 +5948,7 @@ if(op < Clear || op > SoverD){
 }
 @
 
-
+% will see clipping, replicating, and memoptdraw and alphadraw in next sections
 
 
 \subsection{Hardware support hook}
@@ -5957,11 +6001,8 @@ bool hwdraw(Memdrawparam *par)
     
     if(dst->data->bdata != gscreendata.bdata)
         return false;
-    // else, dst is the screen
-
-    <<[[hwdraw()]] when dst is the screen>>
     // else
-    return false;   
+    <<[[hwdraw()]] when dst is the screen>>
 }
 @
 
@@ -6137,7 +6178,7 @@ if(splitcoords){
 @
 
 
-\subsubsection{Src is replicate}
+\subsubsection{Clipping with replicated source}
 
 <<[[drawclip()]] if src is repl>>=
 if(src->flags&Frepl) {
@@ -6166,7 +6207,7 @@ drawreplxy(int min, int max, int x)
 @
 
 
-\subsubsection{Mask is replicate}
+\subsubsection{Clipping with replicated mask}
 
 % drawclip | drawmask -> <>
 <<function drawrepl>>=
@@ -6182,6 +6223,8 @@ drawrepl(Rectangle r, Point p)
 
 
 \section{Replicating}
+% part1, actually later in alphadraw there is another replication
+% done via some module and [[% Dy(src->r)]] and also for the mask.
 
 <<enum _anon_ (include/memdraw.h)2>>=
 /*
@@ -6232,6 +6275,8 @@ if(src->flags&Frepl){
     }
 }
 @
+
+% src can also be repl when tiling
 
 % see imgtorgba and rgbatoimg in core DS chapter.
 
@@ -6314,7 +6359,7 @@ if(mask->flags & Frepl){
 % kinda opti, but helps to understand alphadraw(), stepping stone.
 
 \subsection{[[memoptdraw()]]}
-% maybe move earlier, can be good step towards alphadraw
+
 
 <<[[memimagedraw()]] try memoptdraw>>=
 /*
@@ -6336,7 +6381,7 @@ memoptdraw(Memdrawparam *par)
     int op;
     Memimage *src, *dst;
 
-    int m, y
+    int m, y;
     ulong v;
 
     dx = Dx(par->r);
@@ -6378,7 +6423,7 @@ if((par->state&m)==m &&
     DBG1("sdval %lud, depth %d\n", v, dst->depth);
 
     switch(dst->depth){
-    <<[[memoptdraw()]] switch depth cases>>
+    <<[[memoptdraw()]] switch depth of dst cases>>
     case 32:
         p[0] = v;		/* make little endian */
         p[1] = v>>8;
@@ -6396,6 +6441,9 @@ if((par->state&m)==m &&
 
 
 \subsection{Copying pixels}
+
+% ok no SimpleSrc, but maybe source with no alpha so no need
+% compositing.
 
 <<[[memoptdraw()]] if condition for memmove>>=
 /*
@@ -6439,6 +6487,9 @@ if((par->state&(m|Replsrc))==m &&
 
 \section{Compositing pixels}
 
+% The general case.
+% Advanced effects: transluscent, advanced shape clipping, etc.
+
 %https://en.wikipedia.org/wiki/Alpha_compositing
 
 \subsection{[[alphadraw()]]}
@@ -6446,7 +6497,40 @@ if((par->state&(m|Replsrc))==m &&
 \t can write simple version when dst and src have simple and
 \t  same chan format? like RGBA32?
 
-%XXX
+
+<<[[alphadraw()]] locals>>=
+Memimage *src, *mask, *dst;
+Rectangle r, sr, mr;
+int dx, dy;
+// enum<Drawop>
+int op;
+@
+
+<<[[alphadraw()]] locals>>=
+bool isgrey;
+@
+
+<<[[alphadraw()]] locals>>=
+Readfn *rdsrc, *rdmask, *rddst;
+Calcfn *calc;
+Writefn *wrdst;
+@
+% we will see soon the type of those functions.
+
+<<[[alphadraw()]] locals>>=
+Buffer bsrc, bdst, bmask;
+@
+% a full line, will see soon Buffer.
+
+
+<<[[alphadraw()]] locals>>=
+int starty, endy;
+int dsty, srcy, masky;
+int dir;
+int y; // iteration variable, we iterate over lines
+@
+
+
 
 <<function alphadraw>>=
 /*
@@ -6472,24 +6556,7 @@ if((par->state&(m|Replsrc))==m &&
 static int
 alphadraw(Memdrawparam *par)
 {
-    Memimage *src, *mask, *dst;
-    Rectangle r, sr, mr;
-    // enum<Drawop>
-    int op;
-    int dx, dy;
-
-    bool isgrey;
-    bool needbuf;
-
-    int starty, endy;
-    int dsty, srcy, masky;
-    int y, dir, ndrawbuf;
-    uchar *drawbuf;
-    Buffer bsrc, bdst, bmask;
-    Readfn *rdsrc, *rdmask, *rddst;
-    Calcfn *calc;
-    Writefn *wrdst;
-    Dbuf *z;
+    <<[[alphadraw()]] locals>>
 
     r = par->r;
     dx = Dx(r);
@@ -6501,126 +6568,98 @@ alphadraw(Memdrawparam *par)
     mr = par->mr;
     op = par->op;
 
-    z = allocdbuf();
-    if(z == nil)
-        return 0;
+    starty = 0;
+    endy = dy;
+    dir = 1;
 
     isgrey = dst->flags&Fgrey;
+    <<[[alphadraw()]] set needbuf and possibly adjust starty and endy>>
 
-    /*
-     * Buffering when src and dst are the same bitmap is sufficient but not 
-     * necessary.  There are stronger conditions we could use.  We could
-     * check to see if the rectangles intersect, and if simply moving in the
-     * correct y direction can avoid the need to buffer.
-     */
-    needbuf = (src->data == dst->data);
+    <<[[alphadraw()]] set Dbuf z part1>>
 
-    ndrawbuf = 0;
-    getparam(&z->spar, src, sr,  isgrey, needbuf, &ndrawbuf);
-    getparam(&z->dpar, dst, r,   isgrey, needbuf, &ndrawbuf);
-    getparam(&z->mpar, mask, mr, false,  needbuf, &ndrawbuf);
-
-    dir = (needbuf && byteaddr(dst, r.min) > byteaddr(src, sr.min)) ? -1 : 1;
-    z->spar.dir = z->mpar.dir = z->dpar.dir = dir;
-
-    <<[[alphadraw()]] if not source alpha and bit mask>>
+    <<[[alphadraw()]] if source has no alpha and simple bit mask>>
     else{
         /* usual alphadraw parameter fetching */
         rdsrc = readfn(src);
         rddst = readfn(dst);
         wrdst = writefn(dst);
-
         calc = alphacalc[op];
-
-        if(mask->flags&Falpha){
-            rdmask = readalphafn(mask);
-            z->mpar.alphaonly = 1;
-        }
-        <<[[alphadraw()]] when not alpha mask>>
+        <<[[alphadraw()]] set rdmask>>
     }
 
-    /*
-     * If the image has a small enough repl rectangle,
-     * we can just read each line once and cache them.
-     */
-    if(z->spar.replcache){
-        z->spar.replcall = rdsrc;
-        rdsrc = replread;
-    }
-    if(z->mpar.replcache){
-        z->mpar.replcall = rdmask;
-        rdmask = replread;
-    }
-
-    if(z->n < ndrawbuf){
-        free(z->p);
-        if((z->p = mallocz(ndrawbuf, 0)) == nil){
-            z->inuse = 0;
-            return 0;
-        }
-        z->n = ndrawbuf;
-    }
-    drawbuf = z->p;
-
-    /*
-     * Before we were saving only offsets from drawbuf in the parameter
-     * structures; now that drawbuf has been grown to accomodate us,
-     * we can fill in the pointers.
-     */
-    z->spar.bufbase = drawbuf+z->spar.bufoff;
-    z->mpar.bufbase = drawbuf+z->mpar.bufoff;
-    z->dpar.bufbase = drawbuf+z->dpar.bufoff;
-    z->spar.convbuf = drawbuf+z->spar.convbufoff;
-
-    if(dir == 1){
-        starty = 0;
-        endy = dy;
-    }else{
-        starty = dy-1;
-        endy = -1;
-    }
+    <<[[alphadraw()]] when small repl rectangle optimization>>
+    <<[[alphadraw()]] set Dbuf z part2>>
 
    /*
     * srcy, masky, and dsty are offsets from the top of their
     * respective Rectangles.  they need to be contained within
     * the rectangles, so clipy can keep them there without division.
     */
-    srcy = (starty + sr.min.y - src->r.min.y)%Dy(src->r);
-    masky = (starty + mr.min.y - mask->r.min.y)%Dy(mask->r);
-    dsty = starty + r.min.y - dst->r.min.y;
+    srcy  = (starty + sr.min.y - src->r.min.y)  % Dy(src->r);
+    masky = (starty + mr.min.y - mask->r.min.y) % Dy(mask->r);
+    dsty  =  starty + r.min.y  - dst->r.min.y;
 
-    assert(0 <= srcy && srcy < Dy(src->r));
+    assert(0 <= srcy  && srcy  < Dy(src->r));
     assert(0 <= masky && masky < Dy(mask->r));
-    assert(0 <= dsty && dsty < Dy(dst->r));
+    assert(0 <= dsty  && dsty  < Dy(dst->r));
 
     // the big loop!
     for(y=starty; y!=endy; y+=dir, srcy+=dir, masky+=dir, dsty+=dir){
-        clipy(src, &srcy);
-        clipy(dst, &dsty);
-        clipy(mask, &masky);
+        <<[[alphadraw()]] clipping>>
 
-        bsrc = rdsrc(&z->spar, z->spar.bufbase, srcy);
+        bsrc  = rdsrc (&z->spar, z->spar.bufbase, srcy);
         bmask = rdmask(&z->mpar, z->mpar.bufbase, masky);
-        bdst = rddst(&z->dpar, z->dpar.bufbase, dsty);
+        bdst  = rddst (&z->dpar, z->dpar.bufbase, dsty);
 
         // !!The calc dispatch!!
         bdst = calc(bdst, bsrc, bmask, dx, isgrey, op);
         wrdst(&z->dpar, z->dpar.bytermin + dsty * z->dpar.bwidth, bdst);
     }
-
-    z->inuse = 0;
+    <<[[alphadraw()]] free z>>
     return 1;
 }
 @
 \l return value seems unused so void instead?
-%old:
-%        DBG1("[");
-%        DBG1("]\n");
-%        //DBG		dumpbuf("src", bsrc, dx);
-%        //DBG		dumpbuf("mask", bmask, dx);
-%        //DBG		dumpbuf("dst", bdst, dx);
+%pad: I reordered some statements, put them closer to each other sometimes
 
+% % Dy cos of the tiling and replication!
 
+\subsection{Buffering}
+
+<<[[alphadraw()]] locals>>=
+bool needbuf;
+@
+
+<<[[alphadraw()]] set needbuf and possibly adjust starty and endy>>=
+/*
+ * Buffering when src and dst are the same bitmap is sufficient but not 
+ * necessary.  There are stronger conditions we could use.  We could
+ * check to see if the rectangles intersect, and if simply moving in the
+ * correct y direction can avoid the need to buffer.
+ */
+needbuf = (src->data == dst->data);
+
+if (needbuf && byteaddr(dst, r.min) > byteaddr(src, sr.min)) {
+    dir = -1;
+    starty = dy-1;
+    endy = -1;
+}
+@
+
+% later will need to take care and use memmove
+
+\subsection{Additionnal clipping}
+
+%see comment above?
+%    * srcy, masky, and dsty are offsets from the top of their
+%    * respective Rectangles.  they need to be contained within
+%    * the rectangles, so clipy can keep them there without division.
+
+<<[[alphadraw()]] clipping>>=
+clipy(src, &srcy);
+clipy(dst, &dsty);
+clipy(mask, &masky);
+@
 
 <<function clipy>>=
 static void
@@ -6636,69 +6675,8 @@ clipy(Memimage *img, int *y)
     assert(0 <= *y && *y < dy);
 }
 @
+% ???
 
-<<function dumpbuf>>=
-static void
-dumpbuf(char *s, Buffer b, int n)
-{
-    int i;
-    uchar *p;
-    
-    print("%s", s);
-    for(i=0; i<n; i++){
-        print(" ");
-        if(p=b.grey){
-            print(" k%.2uX", *p);
-            b.grey += b.delta;
-        }else{	
-            if(p=b.red){
-                print(" r%.2uX", *p);
-                b.red += b.delta;
-            }
-            if(p=b.grn){
-                print(" g%.2uX", *p);
-                b.grn += b.delta;
-            }
-            if(p=b.blu){
-                print(" b%.2uX", *p);
-                b.blu += b.delta;
-            }
-        }
-        if((p=b.alpha) != &ones){
-            print(" α%.2uX", *p);
-            b.alpha += b.delta;
-        }
-    }
-    print("\n");
-}
-@
-
-<<global ones>>=
-static uchar ones = 0xff;
-@
-% used later too, not only in debug code
-
-
-<<function replread>>=
-/*
- * Replicated cached scan line read.  Call the function listed in the Param,
- * but cache the result so that for replicated images we only do the work once.
- */
-static Buffer
-replread(Param *p, uchar *s, int y)
-{
-    Buffer *b;
-
-    USED(s);
-    b = &p->bcache[y];
-    if((p->bfilled & (1<<y)) == 0){
-        p->bfilled |= 1<<y;
-        *b = p->replcall(p, p->bufbase+y*p->bufdelta, y);
-    }
-    return *b;
-}
-@
-% >> >>
 
 
 
@@ -6709,12 +6687,30 @@ replread(Param *p, uchar *s, int y)
 <<struct Dbuf>>=
 struct Dbuf
 {
-    uchar *p;
-    int n;
     Param spar, mpar, dpar;
-    int inuse;
+    // array<byte> (length = Dbuf.n)
+    byte *p;
+    int n;
+    <<[[Dbuf]] other fields>>
 };
 @
+% will see Param below
+
+% allocation
+
+<<[[alphadraw()]] locals>>=
+Dbuf *z;
+@
+
+<<[[alphadraw()]] set Dbuf z part1>>=
+z = allocdbuf();
+<<[[alphadraw()]] sanity check z>>
+<<[[alphadraw()]] set z params part1>>
+@
+
+
+
+
 
 <<global dbuf>>=
 static Dbuf dbuf[10];
@@ -6735,6 +6731,58 @@ allocdbuf(void)
     return nil;
 }
 @
+% _tas! mutual exclusion, will set it to true.
+
+<<[[Dbuf]] other fields>>=
+bool inuse;
+@
+
+<<[[alphadraw()]] free z>>=
+z->inuse = false;
+@
+
+
+
+
+
+% buffer allocation
+
+
+<<[[alphadraw()]] locals>>=
+byte *drawbuf;
+int ndrawbuf;
+@
+% ndrawbuf modified later
+
+<<[[alphadraw()]] set Dbuf z part2>>=
+<<[[alphadraw()]] grow drawbuf if needed>>
+drawbuf = z->p;
+<<[[alphadraw()]] set z params part2>>
+@
+
+<<[[alphadraw()]] grow drawbuf if needed>>=
+if(z->n < ndrawbuf){
+    free(z->p);
+    z->p = mallocz(ndrawbuf, 0);
+    <<[[alphadraw()]] sanity check [[z->p]]>>
+    z->n = ndrawbuf;
+}
+@
+
+
+
+<<[[alphadraw()]] sanity check z>>=
+if(z == nil)
+    return 0;
+@
+% just return? no warning? hmm
+
+<<[[alphadraw()]] sanity check [[z->p]]>>=
+if(z->p == nil){
+    z->inuse = false;
+    return 0;
+}
+@
 
 \subsubsection{[[ParamDraw]]}
 
@@ -6742,53 +6790,50 @@ allocdbuf(void)
 /* giant rathole to customize functions with */
 struct ParamDraw {
 
-    Readfn	*replcall;
-    Readfn	*greymaskcall;	
-    Readfn	*convreadcall;
-    Writefn	*convwritecall;
-
     Memimage *img;
     Rectangle	r;
-    int	dx;	/* of r */
-    int	needbuf;
-    int	convgrey;
-    int	alphaonly;
+    int	dx;	/* of r */ // size of a line of a rectangle in pixels
+    int		bwidth; // image width in bytes
 
-    uchar	*bytey0s;		/* byteaddr(Pt(img->r.min.x, img->r.min.y)) */
-    uchar	*bytermin;	/* byteaddr(Pt(r.min.x, img->r.min.y)) */
-    uchar	*bytey0e;		/* byteaddr(Pt(img->r.max.x, img->r.min.y)) */
-    int		bwidth;
+    // source bytes
+    byte	*bytey0s;	/* byteaddr(Pt(img->r.min.x, img->r.min.y)) */
+    byte	*bytermin;	/* byteaddr(Pt(r.min.x, img->r.min.y)) */
+    byte	*bytey0e;	/* byteaddr(Pt(img->r.max.x, img->r.min.y)) */
 
-    int	replcache;	/* if set, cache buffers */
-    Buffer	bcache[MAXBCACHE];
-    ulong	bfilled;
-    uchar	*bufbase;
+    bool	needbuf;
+    // destination bytes
     int	bufoff;
     int	bufdelta;
+    // array<byte>, (address = Dbuf.p + bufoff, length = bufdelta)
+    byte	*bufbase;
 
-    int	dir;
+    int	dir; // -1 or 1
 
-    int	convbufoff;
-    uchar	*convbuf;
-    Param	*convdpar;
-    int	convdx;
+    <<[[ParamDraw]] mask fields>>
+    <<[[ParamDraw]] conversion fields>>
+    <<[[ParamDraw]] replication fields>>
+    <<[[ParamDraw]] other fields>>
 };
 @
 
-<<enum _anon_ (lib_graphics/libmemdraw/draw.c)>>=
-enum {
-    MAXBCACHE = 16
-};
+
+<<[[alphadraw()]] set z params part1>>=
+ndrawbuf = 0;
+getparam(&z->spar, src, sr,  isgrey, needbuf, &ndrawbuf);
+getparam(&z->dpar, dst, r,   isgrey, needbuf, &ndrawbuf);
+getparam(&z->mpar, mask, mr, false,  needbuf, &ndrawbuf);
+z->spar.dir = z->mpar.dir = z->dpar.dir = dir;
 @
+% note that size of sr, r, and mr should be equal.
 
 
 <<function getparam>>=
 static void
-getparam(Param *p, Memimage *img, Rectangle r, int convgrey, int needbuf, int *ndrawbuf)
+getparam(Param *p, Memimage *img, Rectangle r, bool convgrey, bool needbuf, int *ndrawbuf)
 {
     int nbuf;
 
-    memset(p, 0, sizeof *p);
+    memset(p, 0, sizeof(Param));
 
     p->img = img;
     p->r = r;
@@ -6798,55 +6843,114 @@ getparam(Param *p, Memimage *img, Rectangle r, int convgrey, int needbuf, int *n
 
     assert(img->r.min.x <= r.min.x && r.min.x < img->r.max.x);
 
-    p->bytey0s = byteaddr(img, Pt(img->r.min.x, img->r.min.y));
+    p->bytey0s  = byteaddr(img, Pt(img->r.min.x, img->r.min.y));
     p->bytermin = byteaddr(img, Pt(r.min.x, img->r.min.y));
-    p->bytey0e = byteaddr(img, Pt(img->r.max.x, img->r.min.y));
-    p->bwidth = sizeof(ulong)*img->width;
+    p->bytey0e  = byteaddr(img, Pt(img->r.max.x, img->r.min.y));
+
+    p->bwidth   = sizeof(ulong)*img->width;
 
     assert(p->bytey0s <= p->bytermin && p->bytermin <= p->bytey0e);
-
     if(p->r.min.x == p->img->r.min.x)
         assert(p->bytermin == p->bytey0s);
 
     nbuf = 1;
-    if((img->flags&Frepl) && Dy(img->r) <= MAXBCACHE && Dy(img->r) < Dy(r)){
-        p->replcache = 1;
-        nbuf = Dy(img->r);
-    }
-    p->bufdelta = 4*p->dx;
+    <<[[getparam()]] if small replicated rectangle>>
+
+    p->bufdelta = 4 * p->dx;
     p->bufoff = *ndrawbuf;
-    *ndrawbuf += p->bufdelta*nbuf;
+    *ndrawbuf += p->bufdelta * nbuf;
 }
 @
+
+<<[[alphadraw()]] set z params part2>>=
+/*
+ * Before we were saving only offsets from drawbuf in the parameter
+ * structures; now that drawbuf has been grown to accomodate us,
+ * we can fill in the pointers.
+ */
+z->spar.bufbase = drawbuf + z->spar.bufoff;
+z->mpar.bufbase = drawbuf + z->mpar.bufoff;
+z->dpar.bufbase = drawbuf + z->dpar.bufoff;
+@
+
+% remember code in alphadraw then:
+%        bsrc  = rdsrc (&z->spar, z->spar.bufbase, srcy);
+%        bmask = rdmask(&z->mpar, z->mpar.bufbase, masky);
+%        bdst  = rddst (&z->dpar, z->dpar.bufbase, dsty);
 
 
 \subsubsection{[[Buffer]]}
 
+% pointer to channel corresponding byte
+
 <<struct Buffer>>=
 struct Buffer {
     /* used by most routines */
-    uchar	*red;
-    uchar	*grn;
-    uchar	*blu;
+    byte	*red;
+    byte	*grn;
+    byte	*blu;
 
-    uchar	*alpha;
+    byte	*alpha; // can be &ones
 
-    uchar	*grey;
-    ulong	*rgba;
+    byte	*grey;
+
+    ulong	*rgba; // bad name, just start of pixel
 
     int	delta;	/* number of bytes to add to pointer to get next pixel to the right */
 
-    /* used by boolcalc* for mask data */
-    uchar	*m;		/* ptr to mask data r.min byte; like p->bytermin */
-    int		mskip;	/* no. of left bits to skip in *m */
-    uchar	*bm;		/* ptr to mask data img->r.min byte; like p->bytey0s */
-    int		bmskip;	/* no. of left bits to skip in *bm */
-    uchar	*em;		/* ptr to mask data img->r.max.x byte; like p->bytey0e */
-    int		emskip;	/* no. of right bits to skip in *em */
+    <<[[Buffer]] boolcalc fields>>
 };
 @
+% delta is int so assume each pixel size is a multiple of bytes. (8, 16, ...)
 
-\subsubsection{[[readfn()]]}
+%old: in alphadraw
+%        DBG1("[");
+%        DBG1("]\n");
+%        //DBG		dumpbuf("src", bsrc, dx);
+%        //DBG		dumpbuf("mask", bmask, dx);
+%        //DBG		dumpbuf("dst", bdst, dx);
+
+%dead: just used for debugging
+%  <<function dumpbuf>>=
+%  static void
+%  dumpbuf(char *s, Buffer b, int n)
+%  {
+%      int i;
+%      uchar *p;
+%      
+%      print("%s", s);
+%      for(i=0; i<n; i++){
+%          print(" ");
+%          if(p=b.grey){
+%              print(" k%.2uX", *p);
+%              b.grey += b.delta;
+%          }else{	
+%              if(p=b.red){
+%                  print(" r%.2uX", *p);
+%                  b.red += b.delta;
+%              }
+%              if(p=b.grn){
+%                  print(" g%.2uX", *p);
+%                  b.grn += b.delta;
+%              }
+%              if(p=b.blu){
+%                  print(" b%.2uX", *p);
+%                  b.blu += b.delta;
+%              }
+%          }
+%          if((p=b.alpha) != &ones){
+%              print(" α%.2uX", *p);
+%              b.alpha += b.delta;
+%          }
+%      }
+%      print("\n");
+%  }
+%  @
+
+
+
+\subsection{Reading pixels, [[readfn()]]}
+% pixels lines
 
 <<function readfn>>=
 static Readfn*
@@ -6858,16 +6962,21 @@ readfn(Memimage *img)
 }
 @
 
+% depth more than 8 and must be a multiple of 8!
+
 <<function readbyte>>=
 static Buffer
-readbyte(Param *p, uchar *buf, int y)
+readbyte(Param *p, byte *buf, int y)
 {
-    Buffer b;
     Memimage *img;
-    int dx, isgrey, convgrey, alphaonly, copyalpha, i, nb;
-    uchar *begin, *end, *r, *w, *rrepl, *grepl, *brepl, *arepl, *krepl;
-    uchar ured, ugrn, ublu;
-    ulong u;
+    Buffer b;
+    byte *begin, *end, *r;
+    byte *w;
+    int dx, nb;
+
+    bool isgrey, convgrey;
+    bool alphaonly, copyalpha;
+    <<[[readbyte]] other locals>>
 
     img = p->img;
     begin = p->bytey0s + y*p->bwidth;
@@ -6879,166 +6988,61 @@ readbyte(Param *p, uchar *buf, int y)
     nb = img->depth/8;
 
     convgrey = p->convgrey;	/* convert rgb to grey */
-    isgrey = img->flags&Fgrey;
+    isgrey   = img->flags&Fgrey;
+    copyalpha = img->flags&Falpha;
     alphaonly = p->alphaonly;
-    copyalpha = (img->flags&Falpha) ? 1 : 0;
 
     DBG1("copyalpha %d alphaonly %d convgrey %d isgrey %d\n", copyalpha, alphaonly, convgrey, isgrey);
 
-    /* if we can, avoid processing everything */
-    if(!(img->flags&Frepl) && !convgrey && (img->flags&Fbytes)){
-        memset(&b, 0, sizeof b);
-        if(p->needbuf){
-            memmove(buf, r, dx*nb);
-            r = buf;
-        }
-        b.rgba = (ulong*)r;
-        if(copyalpha)
-            b.alpha = r+img->shift[CAlpha]/8;
-        else
-            b.alpha = &ones;
-        if(isgrey){
-            b.grey = r+img->shift[CGrey]/8;
-            b.red = b.grn = b.blu = b.grey;
-        }else{
-            b.red = r+img->shift[CRed]/8;
-            b.grn = r+img->shift[CGreen]/8;
-            b.blu = r+img->shift[CBlue]/8;
-        }
-        b.delta = nb;
-        return b;
+    <<[[readbyte()]] simple case when no repl, no grey, depth 8>>
+    // else
+    <<[[readbyte()]] more complex cases, possible repl, grey, and small depth>>
+}
+@
+%old:    copyalpha = (img->flags&Falpha) ? 1 : 0;
+
+
+
+
+
+<<[[readbyte()]] simple case when no repl, no grey, depth 8>>=
+/* if we can, avoid processing everything */
+if(!(img->flags&Frepl) && !convgrey && (img->flags&Fbytes)){
+    memset(&b, 0, sizeof(Buffer));
+    if(p->needbuf){
+        memmove(buf, r, dx*nb);
+        r = buf;
     }
+    b.rgba = (ulong*)r;
 
-    DBG1("2\n");
-    rrepl = replbit[img->nbits[CRed]];
-    grepl = replbit[img->nbits[CGreen]];
-    brepl = replbit[img->nbits[CBlue]];
-    arepl = replbit[img->nbits[CAlpha]];
-
-    krepl = replbit[img->nbits[CGrey]];
-
-    for(i=0; i<dx; i++){
-        u = r[0] | (r[1]<<8) | (r[2]<<16) | (r[3]<<24);
-        if(copyalpha) {
-            *w++ = arepl[(u>>img->shift[CAlpha]) & img->mask[CAlpha]];
-            //DBG print("a %x\n", w[-1]);
-        }
-
-        if(isgrey)
-            *w++ = krepl[(u >> img->shift[CGrey]) & img->mask[CGrey]];
-        else if(!alphaonly){
-            ured = rrepl[(u >> img->shift[CRed]) & img->mask[CRed]];
-            ugrn = grepl[(u >> img->shift[CGreen]) & img->mask[CGreen]];
-            ublu = brepl[(u >> img->shift[CBlue]) & img->mask[CBlue]];
-            if(convgrey){
-                DBG1("g %x %x %x\n", ured, ugrn, ublu);
-                *w++ = RGB2K(ured, ugrn, ublu);
-                DBG1("%x\n", w[-1]);
-            }else{
-                *w++ = brepl[(u >> img->shift[CBlue]) & img->mask[CBlue]];
-                *w++ = grepl[(u >> img->shift[CGreen]) & img->mask[CGreen]];
-                *w++ = rrepl[(u >> img->shift[CRed]) & img->mask[CRed]];
-            }
-        }
-        r += nb;
-        if(r == end)
-            r = begin;
-    }
-    
-    b.alpha = copyalpha ? buf : &ones;
-    b.rgba = (ulong*)buf;
-    if(alphaonly){
-        b.red = b.grn = b.blu = b.grey = nil;
-        if(!copyalpha)
-            b.rgba = nil;
-        b.delta = 1;
-    }else if(isgrey || convgrey){
-        b.grey = buf+copyalpha;
-        b.red = b.grn = b.blu = buf+copyalpha;
-        b.delta = copyalpha+1;
-        DBG1("alpha %x grey %x\n", b.alpha ? *b.alpha : 0xFF, *b.grey);
+    if(copyalpha)
+        b.alpha = r + img->shift[CAlpha]/8;
+    else
+        b.alpha = &ones;
+    <<[[readbyte()]] in simple case, if isgrey>>
     }else{
-        b.blu = buf+copyalpha;
-        b.grn = buf+copyalpha+1;
-        b.grey = nil;
-        b.red = buf+copyalpha+2;
-        b.delta = copyalpha+3;
+        b.red = r + img->shift[CRed]/8;
+        b.grn = r + img->shift[CGreen]/8;
+        b.blu = r + img->shift[CBlue]/8;
     }
+    b.delta = nb;
     return b;
 }
 @
 
-\subsubsection{[[mktables]]}
+% Lots of stuff going on. r can point in original image directly
+%  if no needbuf.
+% See shift[] in Section X.
 
-<<[[memimageinit()]] initializations>>=
-mktables();
+<<global ones>>=
+static uchar ones = 0xff;
 @
-
-% later?
-<<global replbit>>=
-/*
- * Conversion tables.
- */
-static uchar replbit[1+8][256];		/* replbit[x][y] is the replication of the x-bit quantity y to 8-bit depth */
-@
+% used later too, not only in debug code
 
 
-% ?? -> screensize -> memimageinit -> <>
-<<function mktables>>=
-static void
-mktables(void)
-{
-    int i, j, mask, sh, small;
-    <<[[mktables()]] only once guard>>
-
-    /* bit replication up to 8 bits */
-    for(i=0; i<256; i++){
-        for(j=0; j<=8; j++){	/* j <= 8 [sic] */
-            small = i & ((1<<j)-1);
-            replbit[j][i] = (small*replmul[j])>>8;
-        }
-    }
-
-}
-@
-%dead: done in caller anyway
-%    fmtinstall('R', Rfmt);
-%    fmtinstall('P', Pfmt);
-%dead:
-%    /* bit unpacking up to 8 bits, only powers of 2 */
-%    for(i=0; i<256; i++){
-%        for(j=0, sh=7, mask=1; j<8; j++, sh--)
-%            conv18[i][j] = replbit[1][(i>>sh)&mask];
-%
-%        for(j=0, sh=6, mask=3; j<4; j++, sh-=2)
-%            conv28[i][j] = replbit[2][(i>>sh)&mask];
-%
-%        for(j=0, sh=4, mask=15; j<2; j++, sh-=4)
-%            conv48[i][j] = replbit[4][(i>>sh)&mask];
-%    }
-% <<global conv18>>=
-% static uchar conv18[256][8];		/* conv18[x][y] is the yth pixel in the depth-1 pixel x */
-% @
-% 
-% <<global conv28>>=
-% static uchar conv28[256][4];		/* ... */
-% @
-% 
-% <<global conv48>>=
-% static uchar conv48[256][2];
-% @
 
 
-<<[[mktables()]] only once guard>>=
-static bool	tablesbuilt = false;
-if(tablesbuilt)
-    return;
-tablesbuilt = true;
-@
-% used to be a global, but can be a static, better.
-
-
-\subsubsection{[[writefn()]]}
+\subsection{Writing pixels, [[writefn()]]}
 
 <<function writefn>>=
 static Writefn*
@@ -7050,14 +7054,26 @@ writefn(Memimage *img)
 }
 @
 
+% depth more than 8 and a multiple of 8!
+% precond is that have Fbytes? or at least pixel
+% size is a multiple of bytes.
+
+% process word by word but actually left some unchanged.
+% move pixels by pixels though (nb bytes).
 
 <<function writebyte>>=
 static void
-writebyte(Param *p, uchar *w, Buffer src)
+writebyte(Param *p, byte *w, Buffer src)
 {
     Memimage *img;
-    int i, isalpha, isgrey, nb, delta, dx, adelta;
-    uchar ff, *red, *grn, *blu, *grey, *alpha;
+    int dx, nb;
+    byte *red, *grn, *blu, *grey, *alpha;
+    int i;
+
+    bool isalpha, isgrey;
+    int delta;
+    byte ff;
+    int adelta;
     ulong u, mask;
 
     img = p->img;
@@ -7071,43 +7087,26 @@ writebyte(Param *p, uchar *w, Buffer src)
     dx = p->dx;
 
     nb = img->depth/8;
-    mask = (nb==4) ? 0 : ~((1<<img->depth)-1);
+    mask = (nb==4) ? 0 : ~((1<<img->depth)-1); // >>
 
     isalpha = img->flags&Falpha;
     isgrey = img->flags&Fgrey;
 
-    adelta = src.delta;
-
-    if(isalpha && (alpha == nil || alpha == &ones)){
-        ff = 0xFF;
-        alpha = &ff;
-        adelta = 0;
-    }
+    <<[[writebyte()]] alpha handling part1>>
 
     for(i=0; i<dx; i++){
         u = w[0] | (w[1]<<8) | (w[2]<<16) | (w[3]<<24);
-        DBG1("u %.8lux...", u);
         u &= mask;
-        DBG1("&mask %.8lux...", u);
-        if(isgrey){
-            u |= ((*grey >> (8-img->nbits[CGrey])) & img->mask[CGrey]) << img->shift[CGrey];
-            DBG1("|grey %.8lux...", u);
-            grey += delta;
-        }else{
+        <<[[writebyte()]] if isgrey>>
+        else{
             u |= ((*red >> (8-img->nbits[CRed])) & img->mask[CRed]) << img->shift[CRed];
             u |= ((*grn >> (8-img->nbits[CGreen])) & img->mask[CGreen]) << img->shift[CGreen];
             u |= ((*blu >> (8-img->nbits[CBlue])) & img->mask[CBlue]) << img->shift[CBlue];
             red += delta;
             grn += delta;
             blu += delta;
-            DBG1("|rgb %.8lux...", u);
         }
-
-        if(isalpha){
-            u |= ((*alpha >> (8-img->nbits[CAlpha])) & img->mask[CAlpha]) << img->shift[CAlpha];
-            alpha += adelta;
-            DBG1("|alpha %.8lux...", u);
-        }
+        <<[[writebyte()]] alpha handling part2>>
 
         w[0] = u;
         w[1] = u>>8;
@@ -7118,22 +7117,41 @@ writebyte(Param *p, uchar *w, Buffer src)
 }
 @
 % >> >> >> >> >> >> >> >>
+%old:
+%        DBG1("u %.8lux...", u);
+%        DBG1("&mask %.8lux...", u);
+%            DBG1("|grey %.8lux...", u);
+%            DBG1("|rgb %.8lux...", u);
+%            DBG1("|alpha %.8lux...", u);
+
+% what if less than 4 channels?
+%  it works thanks to umask
+% we process word by word but we will always left unchanged
+%  the extra byte.
+% what if less than 8 bits per channel?
+%  it works too thanks to nbits[]
 
 
-\subsubsection{[[readalphafn()]]}
-
-<<function readalphafn>>=
-static Readfn*
-readalphafn(Memimage *m)
-{
-    USED(m);
-    return readbyte;
+<<[[writebyte()]] alpha handling part1>>=
+adelta = src.delta;
+if(isalpha && (alpha == nil || alpha == &ones)){
+    ff = 0xFF;
+    alpha = &ff;
+    adelta = 0;
 }
 @
+% why use local? because can be overwritten? could use ones too no?
 
+<<[[writebyte()]] alpha handling part2>>=
+if(isalpha){
+    u |= ((*alpha >> (8-img->nbits[CAlpha])) & img->mask[CAlpha]) << img->shift[CAlpha];
+    alpha += adelta;
+}
+@
+%>>
 
+\subsection{Composing pixels, [[alphacalcxx()]]}
 
-\subsection{The [[alphacalcxx()]]}
 % put in appendix or adv topics everything except SoverD alphacalc11?
 
 <<global alphacalc>>=
@@ -7153,72 +7171,51 @@ static Calcfn *alphacalc[Ncomp] =
     alphacalc11,        /* SoverD */
 };
 @
+% numbers suffixes are here to indicate which porter-duff numbers they cover,
+% e.g. alphacalc3679 covers operation 3, 6, 7, and 9.
 
-\subsubsection{[[Clear]]}
-%    alphacalc0,		/* Clear */
-
-<<function alphacalc0>>=
+<<function alphacalc11>>=
 static Buffer
-alphacalc0(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
-{
-    USED(grey);
-    USED(op);
-    USED(b1);
-    USED(b2);
-
-    memset(bdst.rgba, 0, dx*bdst.delta);
-    return bdst;
-}
-@
-
-\subsubsection{[[DoutS]]}
-%    alphacalc14,		/* DoutS */
-
-<<function alphacalc14>>=
-static Buffer
-alphacalc14(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
 {
     Buffer obdst;
     int fd, sadelta;
-    int i, sa, ma, q;
-    ulong s, t;
+    int sa, ma;
+    int i; // iterate over pixels of the line
+    bool q;
+    ulong s, t, u, v;
 
+    USED(op);
     obdst = bdst;
-    sadelta = bsrc.alpha == &ones ? 0 : bsrc.delta;
-    q = bsrc.delta == 4 && bdst.delta == 4;
+    sadelta = (bsrc.alpha == &ones) ? 0 : bsrc.delta;
+    q = (bsrc.delta == 4) && (bdst.delta == 4);
 
+    // pixel iteration of the line
     for(i=0; i<dx; i++){
         sa = *bsrc.alpha;
         ma = *bmask.alpha;
-        fd = MUL(sa, ma, t);
-        if(op == DoutS)
-            fd = 255-fd;
+        fd = 255 - MUL(sa, ma, t);
 
-        if(grey){
-            *bdst.grey = MUL(fd, *bdst.grey, t);
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            if(q){
-                *bdst.rgba = MUL0123(fd, *bdst.rgba, s, t);
-                bsrc.rgba++;
-                bdst.rgba++;
-                bsrc.alpha += sadelta;
-                bmask.alpha += bmask.delta;
-                continue;
-            }
-            *bdst.red = MUL(fd, *bdst.red, t);
-            *bdst.grn = MUL(fd, *bdst.grn, t);
-            *bdst.blu = MUL(fd, *bdst.blu, t);
+        <<[[alphacalc11()]] if isgrey>>
+        else{
+            <<[[alphacalc11()]] special case for 32bits source and dest>>
+            // else
+
+            *bdst.red = MUL(ma, *bsrc.red, s)+MUL(fd, *bdst.red, t);
+            *bdst.grn = MUL(ma, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
+            *bdst.blu = MUL(ma, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
+
             bsrc.red += bsrc.delta;
             bsrc.blu += bsrc.delta;
             bsrc.grn += bsrc.delta;
+
             bdst.red += bdst.delta;
             bdst.blu += bdst.delta;
             bdst.grn += bdst.delta;
         }
+
         if(bdst.alpha != &ones){
-            *bdst.alpha = MUL(fd, *bdst.alpha, t);
+            *bdst.alpha = MUL(ma, sa, s) + MUL(fd, *bdst.alpha, t);
             bdst.alpha += bdst.delta;
         }
         bmask.alpha += bmask.delta;
@@ -7227,263 +7224,15 @@ alphacalc14(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
     return obdst;
 }
 @
-
+% why return old bdst?
 
 <<function MUL>>=
 #define MUL(x, y, t)	(t = (x)*(y)+128, (t+(t>>8))>>8)
 @
 % >> >>
-
-<<function MUL13>>=
-#define MUL13(a, x, t)		(t = (a)*(((x)&MASK13)>>8)+128, ((t+((t>>8)&MASK02))>>8)&MASK02)
-@
-
-<<constant MASK13>>=
-#define MASK13	0xFF00FF00
-@
+% ?????
 
 
-<<function MUL02>>=
-#define MUL02(a, x, t)		(t = (a)*(((x)&MASK02)>>0)+128, ((t+((t>>8)&MASK02))>>8)&MASK02)
-@
-<<constant MASK02>>=
-#define MASK02	0x00FF00FF
-@
-
-<<function MUL0123>>=
-#define MUL0123(a, x, s, t)	((MUL13(a, x, s)<<8)|MUL02(a, x, t))
-@
-
-
-\subsubsection{[[SoutD]]}
-%    alphacalc2810,		/* SoutD */
-
-<<function alphacalc2810>>=
-static Buffer
-alphacalc2810(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
-{
-    Buffer obdst;
-    int fs, sadelta;
-    int i, ma, da, q;
-    ulong s, t;
-
-    obdst = bdst;
-    sadelta = bsrc.alpha == &ones ? 0 : bsrc.delta;
-    q = bsrc.delta == 4 && bdst.delta == 4;
-
-    for(i=0; i<dx; i++){
-        ma = *bmask.alpha;
-        da = *bdst.alpha;
-        if(op == SoutD)
-            da = 255-da;
-        fs = ma;
-        if(op != S)
-            fs = MUL(fs, da, t);
-
-        if(grey){
-            *bdst.grey = MUL(fs, *bsrc.grey, t);
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            if(q){
-                *bdst.rgba = MUL0123(fs, *bsrc.rgba, s, t);
-                bsrc.rgba++;
-                bdst.rgba++;
-                bmask.alpha += bmask.delta;
-                bdst.alpha += bdst.delta;
-                continue;
-            }
-            *bdst.red = MUL(fs, *bsrc.red, t);
-            *bdst.grn = MUL(fs, *bsrc.grn, t);
-            *bdst.blu = MUL(fs, *bsrc.blu, t);
-            bsrc.red += bsrc.delta;
-            bsrc.blu += bsrc.delta;
-            bsrc.grn += bsrc.delta;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        if(bdst.alpha != &ones){
-            *bdst.alpha = MUL(fs, *bsrc.alpha, t);
-            bdst.alpha += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
-        bsrc.alpha += sadelta;
-    }
-    return obdst;
-}
-@
-
-
-\subsubsection{[[DxorS]]}
-%    alphacalc3679,		/* DxorS */
-
-
-<<function alphacalc3679>>=
-static Buffer
-alphacalc3679(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
-{
-    Buffer obdst;
-    int fs, fd, sadelta;
-    int i, sa, ma, da, q;
-    ulong s, t, u, v;
-
-    obdst = bdst;
-    sadelta = bsrc.alpha == &ones ? 0 : bsrc.delta;
-    q = bsrc.delta == 4 && bdst.delta == 4;
-
-    for(i=0; i<dx; i++){
-        sa = *bsrc.alpha;
-        ma = *bmask.alpha;
-        da = *bdst.alpha;
-        if(op == SatopD)
-            fs = MUL(ma, da, t);
-        else
-            fs = MUL(ma, 255-da, t);
-        if(op == DoverS)
-            fd = 255;
-        else{
-            fd = MUL(sa, ma, t);
-            if(op != DatopS)
-                fd = 255-fd;
-        }
-
-        if(grey){
-            *bdst.grey = MUL(fs, *bsrc.grey, s)+MUL(fd, *bdst.grey, t);
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            if(q){
-                *bdst.rgba = MUL0123(fs, *bsrc.rgba, s, t)+MUL0123(fd, *bdst.rgba, u, v);
-                bsrc.rgba++;
-                bdst.rgba++;
-                bsrc.alpha += sadelta;
-                bmask.alpha += bmask.delta;
-                bdst.alpha += bdst.delta;
-                continue;
-            }
-            *bdst.red = MUL(fs, *bsrc.red, s)+MUL(fd, *bdst.red, t);
-            *bdst.grn = MUL(fs, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
-            *bdst.blu = MUL(fs, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
-            bsrc.red += bsrc.delta;
-            bsrc.blu += bsrc.delta;
-            bsrc.grn += bsrc.delta;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        if(bdst.alpha != &ones){
-            *bdst.alpha = MUL(fs, sa, s)+MUL(fd, da, t);
-            bdst.alpha += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
-        bsrc.alpha += sadelta;
-    }
-    return obdst;
-}
-@
-
-\subsubsection{[[DinS]]}
-%    alphacalc14,		/* DinS */
-
-
-\subsubsection{[[D]]}
-%    alphacalc5,		/* D */
-
-
-<<function alphacalc5>>=
-static Buffer
-alphacalc5(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
-{
-    USED(dx);
-    USED(grey);
-    USED(op);
-    USED(b1);
-    USED(b2);
-
-    return bdst;
-}
-@
-
-
-\subsubsection{[[DatopS]]}
-%    alphacalc3679,		/* DatopS */
-
-
-\subsubsection{[[DoverS]]}
-%    alphacalc3679,		/* DoverS */
-
-
-\subsubsection{[[SinD]]}
-%    alphacalc2810,		/* SinD */
-
-
-\subsubsection{[[SatopD]]}
-%    alphacalc3679,		/* SatopD */
-
-
-\subsubsection{[[S]]}
-%    alphacalc2810,		/* S */
-
-
-\subsubsection{[[SoverD]]}
-%    alphacalc11,		/* SoverD */
-% the classic!
-
-
-
-<<function alphacalc11>>=
-static Buffer
-alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
-{
-    Buffer obdst;
-    int fd, sadelta;
-    int i, sa, ma, q;
-    ulong s, t, u, v;
-
-    USED(op);
-    obdst = bdst;
-    sadelta = bsrc.alpha == &ones ? 0 : bsrc.delta;
-    q = bsrc.delta == 4 && bdst.delta == 4;
-
-    for(i=0; i<dx; i++){
-        sa = *bsrc.alpha;
-        ma = *bmask.alpha;
-        fd = 255-MUL(sa, ma, t);
-
-        if(grey){
-            *bdst.grey = MUL(ma, *bsrc.grey, s)+MUL(fd, *bdst.grey, t);
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            if(q){
-                *bdst.rgba = MUL0123(ma, *bsrc.rgba, s, t)+MUL0123(fd, *bdst.rgba, u, v);
-                bsrc.rgba++;
-                bdst.rgba++;
-                bsrc.alpha += sadelta;
-                bmask.alpha += bmask.delta;
-                continue;
-            }
-            *bdst.red = MUL(ma, *bsrc.red, s)+MUL(fd, *bdst.red, t);
-            *bdst.grn = MUL(ma, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
-            *bdst.blu = MUL(ma, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
-            bsrc.red += bsrc.delta;
-            bsrc.blu += bsrc.delta;
-            bsrc.grn += bsrc.delta;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        if(bdst.alpha != &ones){
-            *bdst.alpha = MUL(ma, sa, s)+MUL(fd, *bdst.alpha, t);
-            bdst.alpha += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
-        bsrc.alpha += sadelta;
-    }
-    return obdst;
-}
-@
 
 
 
@@ -7494,13 +7243,18 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
 
 \chapter{Drawing Shapes}
 
-% Foley classic Computer graphics book?
+%trans:
+% seen draw rectangle, now basic block to draw any shape.
+% Indeed in the end any figure is made of a set of rectangle!
+%FIGURE where big zoom and see circle made of all those rectangles.
+
+% See classic Computer Graphics book from Foley et al.?
 
 %http://members.chello.at/easyfilter/bresenham.html
+% but actually not used, use more general algorithm to fill polygons.
 %http://www.redblobgames.com/grids/line-drawing.html
 
 \section{Line}
-
 
 \subsection{API}
 
@@ -7511,11 +7265,8 @@ line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src,
     lineop(dst, p0, p1, end0, end1, radius, src, sp, SoverD);
 }
 @
-% radius = width/2 of line to draw.
+% width will be 1+radius*2 (see draw(2)).
 
-%todo: typedef int endline; or use enum?
-
-% maybe could be put in advanced topics?
 <<enum _anon_ (include/draw.h)3>>=
 enum EndLine
 {
@@ -7527,9 +7278,11 @@ enum EndLine
     Endmask		= 0x1F
 };
 @
+%less typedef int endline; or use enum?
+% see advanced topics actually for code using that
 % Endmask ??
 \l actually use more Endmask instead of hardcoding those 0x1F everywhere below
-
+\l why 0x1F ??? because of Arrow() macro?
 
 \subsection{Marshalling}
 
@@ -7537,16 +7290,13 @@ enum EndLine
 void
 lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
-    uchar *a;
+    byte *a;
 
     _setdrawop(dst->display, op);
 
     // draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4]
     a = bufimage(dst->display, 1+4+2*4+2*4+4+4+4+4+2*4);
-    if(a == 0){
-        fprint(2, "image line: %r\n");
-        return;
-    }
+    <<[[lineop()]] sanity check a>>
     a[0] = 'L';
     BPLONG(a+1, dst->id);
     BPLONG(a+5, p0.x);
@@ -7562,12 +7312,19 @@ lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *sr
 }
 @
 
+<<[[lineop()]] sanity check a>>=
+if(a == nil){
+    fprint(2, "image line: %r\n");
+    return;
+}
+@
+
 \subsection{Unmarshalling}
 
 <<[[drawmesg()]] locals>>=
+Point sp;
 // enum<EndLine>
 int e0, e1;
-Point sp;
 @
 
 <<[[drawmesg()]] cases>>=
@@ -7583,8 +7340,7 @@ case 'L':
     e0 = BGLONG(a+21);
     e1 = BGLONG(a+25);
     j = BGLONG(a+29);
-    if(j < 0)
-        error("negative line width");
+    <<[[drawmesg()]] when draw line, sanity check j>>
     src = drawimage(client, a+33);
     drawpoint(&sp, a+37);
     op = drawclientop(client);
@@ -7595,6 +7351,10 @@ case 'L':
 @
 
 
+<<[[drawmesg()]] when draw line, sanity check j>>=
+if(j < 0)
+    error("negative line width");
+@
 
 \subsection{Algorithm}
 
@@ -7636,37 +7396,27 @@ if(radius < 0)
     return;
 @
 % but already checked in drawmesg normally
+% note that it can be zero.
 
 
 
 
-
-% was in draw.h, but probably could be moved in drawimpl.h
-<<constant ICOSSCALE>>=
-ICOSSCALE	= 1024,
-@
 
 % back to memdraw/
 <<function _memimageline>>=
 void
 _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memimage *src, Point sp, Rectangle clipr, int op)
 {
-    /*
-     * BUG: We should really really pick off purely horizontal and purely
-     * vertical lines and handle them separately with calls to memimagedraw
-     * on rectangles.
-     */
 
     bool hor;
-    int sin, cos, dx, dy, t;
-    Rectangle oclipr, r;
-    Point q, pts[10], *pp, d;
+    <<[[_memimageline()]] other locals>>
 
     <<[[_memline()]] sanity check radius>>
-    <<[[_memline()]] clipping clipr>>
+    <<[[_memimageline()]] clipping clipr>>
 
     /* this means that only verline() handles degenerate lines (p0==p1) */
     hor = (abs(p1.x - p0.x) > abs(p1.y - p0.y));
+
     /*
      * Clipping is a little peculiar.  We can't use Sutherland-Cohen
      * clipping because lines are wide.  But this is probably just fine:
@@ -7675,135 +7425,181 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
      * using clipr to define the region being written, and get the same set
      * of pixels regardless of the dicing.
      */
-    if((hor && p0.x > p1.x) || (!hor && p0.y > p1.y)){
-        // swap(p0, p1)
-        q = p0;
-        p0 = p1;
-        p1 = q;
-        // swap(end0, end1)
-        t = end0;
-        end0 = end1;
-        end1 = t;
-    }
+     // ????
 
-    if((p0.x == p1.x || p0.y == p1.y) && 
-        (end0&0x1F) == Endsquare && 
-        (end1&0x1F) == Endsquare){
-        r.min = p0;
-        r.max = p1;
-        if(p0.x == p1.x){
-            r.min.x -= radius;
-            r.max.x += radius+1;
-        }
-        else{
-            r.min.y -= radius;
-            r.max.y += radius+1;
-        }
-        oclipr = dst->clipr;
-        dst->clipr = clipr;
-        sp = addpt(r.min, d);
-        memimagedraw(dst, r, src, sp, memopaque, sp, op);
-        dst->clipr = oclipr;
-        return;
-    }
+    <<[[_memimageline()]] swap p0 and p1 to have p0 before p1>>
+
+    // easy case
+    <<[[_memimageline()]] when vertical or horizontal lines>>
     // else
-
-/*    Hard: */
-    /* draw thick line using polygon fill */
-    icossin2(p1.x - p0.x, p1.y - p0.y, &cos, &sin);
-    dx = (sin*(2*radius+1))/2;
-    dy = (cos*(2*radius+1))/2;
-    pp = pts;
-    oclipr = dst->clipr;
-    dst->clipr = clipr;
-    q.x = ICOSSCALE*p0.x + ICOSSCALE/2- cos/2;
-    q.y = ICOSSCALE*p0.y + ICOSSCALE/2- sin/2;
-
-    switch(end0 & 0x1F){
-    case Endarrow:
-        arrowend(q, pp, end0, -sin, -cos, radius);
-        _memfillpolysc(dst, pts, 5, ~0, src, 
-                       addpt(pts[0], mulpt(d, ICOSSCALE)), 
-                       true, 10, true, op);
-        pp[1] = pp[4];
-        pp += 2;
-        break;
-    case Enddisc:
-        discend(p0, radius, dst, src, d, op);
-        /* fall through */
-    case Endsquare:
-    default:
-        pp->x = q.x-dx;
-        pp->y = q.y+dy;
-        pp++;
-        pp->x = q.x+dx;
-        pp->y = q.y-dy;
-        pp++;
-        break;
-    }
-
-    q.x = ICOSSCALE*p1.x+ICOSSCALE/2+cos/2;
-    q.y = ICOSSCALE*p1.y+ICOSSCALE/2+sin/2;
-
-    switch(end1 & 0x1F){
-    case Endarrow:
-        arrowend(q, pp, end1, sin, cos, radius);
-        _memfillpolysc(dst, pp, 5, ~0, src, 
-                       addpt(pp[0], mulpt(d, ICOSSCALE)), 
-                       true, 10, true, op);
-        pp[1] = pp[4];
-        pp += 2;
-        break;
-    case Enddisc:
-        discend(p1, radius, dst, src, d, op);
-        /* fall through */
-    case Endsquare:
-    default:
-        pp->x = q.x+dx;
-        pp->y = q.y-dy;
-        pp++;
-        pp->x = q.x-dx;
-        pp->y = q.y+dy;
-        pp++;
-        break;
-    }
-
-    _memfillpolysc(dst, pts, pp-pts, ~0, src, 
-                   addpt(pts[0], mulpt(d, ICOSSCALE)), 
-                   false, 10, true, op);
-    dst->clipr = oclipr;
-    return;
+    /*    Hard: */
+    <<[[_memimageline()]] when arbitrary lines>>
 }
 @
 
 
-<<[[_memline()]] clipping clipr>>=
+<<[[_memimageline()]] clipping clipr>>=
 if(!rectclip(&clipr, dst->r))
     return;
 if(!rectclip(&clipr, dst->clipr))
     return;
+
 d = subpt(sp, p0);
 if(!rectclip(&clipr, rectsubpt(src->clipr, d)))
     return;
 if((src->flags&Frepl)==0 && !rectclip(&clipr, rectsubpt(src->r, d)))
     return;
 @
+% call _memline with dst-clipr so first part should be a NOP.
+%old: d = subpt(sp, p0); was there but before before I think
 
-
+<<[[_memimageline()]] swap p0 and p1 to have p0 before p1>>=
+if((hor && p0.x > p1.x) || (!hor && p0.y > p1.y)){
+    // swap(p0, p1)
+    q = p0;
+    p0 = p1;
+    p1 = q;
+    // swap(end0, end1)
+    t = end0;
+    end0 = end1;
+    end1 = t;
+}
+@
+% important as we will see
 
 \subsubsection{Simple case: vertical or horizontal lines}
 
+%dead: was in comment, but they actually do that so was old comment probably
+%    /*
+%     * BUG: We should really really pick off purely horizontal and purely
+%     * vertical lines and handle them separately with calls to memimagedraw
+%     * on rectangles.
+%     */
+
+% remember than p0 is "before" p1
+
+<<[[_memimageline()]] when vertical or horizontal lines>>=
+if((p0.x == p1.x || p0.y == p1.y) && 
+    (end0&0x1F) == Endsquare && 
+    (end1&0x1F) == Endsquare){
+    r.min = p0;
+    r.max = p1;
+    // vertical line
+    if(p0.x == p1.x){
+        r.min.x -= radius;
+        r.max.x += radius+1;
+    }
+    // horizontal line
+    else{
+        r.min.y -= radius;
+        r.max.y += radius+1;
+    }
+    <<[[_memimageline()]] change dst clipr>>
+    sp = addpt(r.min, d);
+    memimagedraw(dst, r, src, sp, memopaque, sp, op);
+    <<[[_memimageline()]] restore dst clipr>>
+    return;
+}
+@
+
+
+
+<<[[_memimageline()]] other locals>>=
+Rectangle oclipr;
+@
+<<[[_memimageline()]] change dst clipr>>=
+oclipr = dst->clipr;
+dst->clipr = clipr;
+@
+<<[[_memimageline()]] restore dst clipr>>=
+dst->clipr = oclipr;
+@
+% not sure why does that, to optimize a bit more,
+% and because this clipping information we have to pass to memdraw
+% so there is no much choice, we have to put it in dst.
+
 \subsubsection{General case}
 
+<<[[_memimageline()]] other locals>>=
+int sin, cos, dx, dy, t;
+Rectangle r;
+Point q;
+Point pts[10], *pp;
+Point d;
+@
 
 
+% was in draw.h, but probably could be moved in drawimpl.h
+<<constant ICOSSCALE>>=
+ICOSSCALE	= 1024,
+@
+% float with integers!
+% (Big) Integer Cosinus Scale?
 
 
+<<[[_memimageline()]] when arbitrary lines>>=
+/* draw thick line using polygon fill */
+icossin2(p1.x - p0.x, p1.y - p0.y, &cos, &sin);
+dx = (sin*(2*radius+1))/2;
+dy = (cos*(2*radius+1))/2;
+pp = pts;
+<<[[_memimageline()]] change dst clipr>>
+
+q.x = ICOSSCALE*p0.x + ICOSSCALE/2- cos/2;
+q.y = ICOSSCALE*p0.y + ICOSSCALE/2- sin/2;
+switch(end0 & 0x1F){
+<<[[_memimageline()]] switch end0 cases>>
+<<[[_memimageline()]] switch end0 cases, fallthrough to Endsquare>>
+case Endsquare:
+default:
+    pp->x = q.x - dx;
+    pp->y = q.y + dy;
+    pp++;
+    pp->x = q.x + dx;
+    pp->y = q.y - dy;
+    pp++;
+    break;
+}
+// 2 points
+
+q.x = ICOSSCALE*p1.x+ICOSSCALE/2+cos/2;
+q.y = ICOSSCALE*p1.y+ICOSSCALE/2+sin/2;
+switch(end1 & 0x1F){
+<<[[_memimageline()]] switch end1 cases>>
+<<[[_memimageline()]] switch end1 cases, fallthrough to Endsquare>>
+case Endsquare:
+default:
+    pp->x = q.x + dx;
+    pp->y = q.y - dy;
+    pp++;
+    pp->x = q.x - dx;
+    pp->y = q.y + dy;
+    pp++;
+    break;
+}
+// 2 more points
+
+_memfillpolysc(dst, pts, pp-pts, ~0, src, 
+               addpt(pts[0], mulpt(d, ICOSSCALE)), 
+               false, 10, true, op);
+<<[[_memimageline()]] restore dst clipr>>
+return;
+@
+%fixshift 10? = 2^10 = 1024
+
+%~0 = w parameter to _memfillpolysc = ??
+
+% FIGURE where see the 4 points, I think it's the rectangle!
+
+% no bresenham actually. Instead use more general algorithm that
+% fills a polygone. More complex too, but more general.
+
+\l could do bresenham when thickness of line is 1? for education purpose?
+\l  a good stepping stone to the more complex algo in xscan?
 
 \section{Polyline}
 
-% actually used as we have seen before for general case of line
-% drawing.
+% actually used as we have seen before for general case of (thick) line drawing.
 
 \subsection{API}
 
@@ -7851,11 +7647,9 @@ dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, I
     uchar *a, *t, *u;
     int i, ox, oy;
 
-    if(np == 0)
-        return;
+    <<[[dopoly()]] sanity check n>>
     t = malloc(np*2*3);
-    if(t == nil)
-        return;
+    <<[[dopoly()]] sanity check t>>
     u = t;
     ox = oy = 0;
     for(i=0; i<np; i++){
@@ -7869,11 +7663,7 @@ dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, I
 
     /// polygon: 'p' dstid[4] n[2] end0[4] end1[4] radius[4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n]
     a = bufimage(dst->display, 1+4+2+4+4+4+4+2*4+(u-t));
-    if(a == 0){
-        free(t);
-        fprint(2, "image poly: %r\n");
-        return;
-    }
+    <<[[dopoly()]] sanity check a>>
     a[0] = cmd;
     BPLONG(a+1, dst->id);
     BPSHORT(a+5, np-1);
@@ -7889,6 +7679,22 @@ dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, I
 @
 \l enforce enough space to pass all points?
 
+
+<<[[dopoly()]] sanity check n>>=
+if(np == 0)
+    return;
+@
+<<[[dopoly()]] sanity check t>>=
+if(t == nil)
+    return;
+@
+<<[[dopoly()]] sanity check a>>=
+if(a == nil){
+    free(t);
+    fprint(2, "image poly: %r\n");
+    return;
+}
+@
 
 % dopoly -> <>
 <<function addcoord>>=
@@ -7934,27 +7740,23 @@ case 'P':
     dstid = BGLONG(a+1);
     dst = drawimage(client, a+1);
     ni = BGSHORT(a+5);
-    if(ni < 0)
-        error("negative count in polygon");
+    <<[[drawmesg()]] when draw polygon, sanity check ni>>
     e0 = BGLONG(a+7);
     e1 = BGLONG(a+11);
     j = 0;
     if(*a == 'p'){
         j = BGLONG(a+15);
-        if(j < 0)
-            error("negative polygon line width");
+        <<[[drawmesg()]] when draw polygon, sanity check j>>
     }
     src = drawimage(client, a+19);
     drawpoint(&sp, a+23);
     drawpoint(&p, a+31);
     ni++;
     pp = malloc(ni*sizeof(Point));
-    if(pp == nil)
-        error(Enomem);
-    doflush = false;
+    <<[[drawmesg()]] when draw polygon, sanity check pp>>
 
-    if(dstid==0 || (dst->layer && dst->layer->screen->image->data == screenimage->data))
-        doflush = true;    /* simplify test in loop */
+    <<[[drawmesg()]] when draw polygon, set doflush>>
+
     ox = oy = 0;
     esize = 0;
     u = a+m;
@@ -7965,33 +7767,11 @@ case 'P':
         u = drawcoord(u, a+n, oy, &p.y);
         ox = p.x;
         oy = p.y;
-        if(doflush){
-            esize = j;
-            if(*a == 'p'){
-                if(y == 0){
-                    c = memlineendsize(e0);
-                    if(c > esize)
-                        esize = c;
-                }
-                if(y == ni-1){
-                    c = memlineendsize(e1);
-                    if(c > esize)
-                        esize = c;
-                }
-            }
-            if(*a=='P' && e0!=1 && e0 !=~0)
-                r = dst->clipr;
-            else if(y > 0){
-                r = Rect(q.x-oesize, q.y-oesize, q.x+oesize+1, q.y+oesize+1);
-                combinerect(&r, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
-            }
-            if(rectclip(&r, dst->clipr))        /* should perhaps be an arg to dstflush */
-                dstflush(dstid, dst, r);
-        }
+
+        <<[[drawmesg()]] when draw polygon, if doflush>>
         pp[y] = p;
     }
-    if(y == 1)
-        dstflush(dstid, dst, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
+    <<[[drawmesg()]] when draw polygon, special flush if y is 1>>
     op = drawclientop(client);
 
     if(*a == 'p')
@@ -8003,6 +7783,20 @@ case 'P':
     m = u-a;
     continue;
 
+@
+
+<<[[drawmesg()]] when draw polygon, sanity check ni>>=
+if(ni < 0)
+    error("negative count in polygon");
+@
+
+<<[[drawmesg()]] when draw polygon, sanity check j>>=
+if(j < 0)
+    error("negative polygon line width");
+@
+<<[[drawmesg()]] when draw polygon, sanity check pp>>=
+if(pp == nil)
+    error(Enomem);
 @
 
 
@@ -8041,23 +7835,35 @@ drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
 void
 mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, Memimage *src, Point sp, int op)
 {
-    int i, e0, e1;
+    int i;
+    //enum<EndLine>>
+    int e0, e1;
     Point d;
 
-    if(nvert < 2)
-        return;
-    d = subpt(sp, vert[0]);
+    <<[[mempoly() sanity check nvert>>
+    d = subpt(sp, vert[0]); // to compensate for addpt below
     for(i=1; i<nvert; i++){
-        e0 = e1 = Enddisc;
-        if(i == 1)
-            e0 = end0;
-        if(i == nvert-1)
-            e1 = end1;
+        <<[[mempoly()]] set endlines e0 and e1>>
         memline(dst, vert[i-1], vert[i], e0, e1, radius, src, addpt(d, vert[i-1]), op);
     }
 }
 @
-% actually call memline! :)
+% actually call memline! :) (and not _memimageline, so handle layers and so on)
+
+% vert for vertexes (points)
+
+<<[[mempoly()]] set endlines e0 and e1>>=
+e0 = e1 = Enddisc; // for smooth junctions
+if(i == 1)
+    e0 = end0;
+if(i == nvert-1)
+    e1 = end1;
+@
+
+<<[[mempoly() sanity check nvert>>=
+if(nvert < 2)
+    return;
+@
 
 <<function memfillpoly>>=
 void
@@ -8066,6 +7872,7 @@ memfillpoly(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point s
     _memfillpolysc(dst, vert, nvert, w, src, sp, false, 0, false, op);
 }
 @
+% another story! cant call memline because will be infinite recursion
 
 \subsubsection{[[Seg]]}
 
@@ -8074,60 +7881,50 @@ struct Seg
 {
     Point	p0;
     Point	p1;
-    long	num;
-    long	den;
-    long	dz;
-    long	dzrem;
-    long	z;
-    long	zerr;
-    long	d;
+
+    <<[[Seg]] other fields>>
 };
 @
 
+% note that can be any points, we will have to sort them and
+% to know on which size of the line to fill.
+
+\subsubsection{[[_memfillpolysc()]]}
 
 <<function _memfillpolysc>>=
 void
 _memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point sp, bool detail, int fixshift, bool clipped, int op)
 {
-    Seg **seg, *segtab;
+    // array<Seg> (length = nvert+1)
+    Seg *segtab;
+    // array<Seg*> (length = nvert+2)
+    Seg **seg;
     Point p0;
     int i;
 
-    if(nvert == 0)
-        return;
+    <<[[_memfillpolysc()]] sanity check nvert>>
 
-    seg = malloc((nvert+2)*sizeof(Seg*));
-    if(seg == nil)
-        return;
     segtab = malloc((nvert+1)*sizeof(Seg));
-    if(segtab == nil) {
-        free(seg);
-        return;
-    }
+    <<[[_memfillpolysc()]] sanity check segtab>>
+    seg = malloc((nvert+2)*sizeof(Seg*));
+    <<[[_memfillpolysc()]] sanity check seg>>
 
     sp.x = (sp.x - vert[0].x) >> fixshift;
     sp.y = (sp.y - vert[0].y) >> fixshift;
-    p0 = vert[nvert-1];
-    if(!fixshift) {
-        p0.x <<= 1;
-        p0.y <<= 1;
-    }
+
+    p0 = vert[nvert-1]; // start from the end
+    <<[[_memfillpolysc()]] adjust p0 if no fixshift>>
     for(i = 0; i < nvert; i++) {
         segtab[i].p0 = p0;
         p0 = vert[i];
-        if(!fixshift) {
-            p0.x <<= 1;
-            p0.y <<= 1;
-        }
+        <<[[_memfillpolysc()]] adjust p0 if no fixshift>>
         segtab[i].p1 = p0;
         segtab[i].d = 1;
     }
-    if(!fixshift)
-        fixshift = 1;
+    <<[[_memfillpolysc()]] adjust fixshift if no fixshift>>
 
     xscan(dst, seg, segtab, nvert, w, src, sp, detail, fixshift, clipped, op);
-    if(detail)
-        yscan(dst, seg, segtab, nvert, w, src, sp, fixshift, op);
+    <<[[_memfillpolysc()]] if detail>>
 
     free(seg);
     free(segtab);
@@ -8135,7 +7932,54 @@ _memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Poin
 @
 % >> >> >> >>
 
+% it closes the polygone if it was not?
+
+<<[[_memfillpolysc()]] sanity check nvert>>=
+if(nvert == 0)
+    return;
+@
+<<[[_memfillpolysc()]] sanity check seg>>=
+if(seg == nil)
+    return;
+@
+<<[[_memfillpolysc()]] sanity check segtab>>=
+if(segtab == nil) {
+    free(seg);
+    return;
+}
+@
+
+
+\subsubsection{Fix shift arithmetics}
+
+% seen passing 10 before, and ICOSSCALE = 1024.
+
+% if not fixshift, at least improve a bit precision by shifting by 1.
+<<[[_memfillpolysc()]] adjust p0 if no fixshift>>=
+if(!fixshift) {
+    p0.x <<= 1;
+    p0.y <<= 1;
+}
+@
+% >> >>
+
+<<[[_memfillpolysc()]] adjust fixshift if no fixshift>>=
+if(!fixshift)
+    fixshift = 1;
+@
+
+
 \subsubsection{[[xscan()]]}
+
+<<[[Seg]] other fields>>=
+long	num;
+long	den;
+long	dz;
+long	dzrem;
+long	z;
+long	zerr;
+long	d;
+@
 
 <<function xscan>>=
 static void
@@ -8293,146 +8137,11 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
     }
 }
 @
-% >>
+% >> >> >> >> >>
 % wow, so complicated
 \l remove clipped parameter, unused anyway
 
-\subsubsection{[[yscan()]]}
-
-<<function yscan>>=
-static void
-yscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, Point sp, int fixshift, int op)
-{
-    long x, maxx, y, y2, yerr, yden, onehalf;
-    Seg **ep, **next, **p, **q, *s;
-    int n, i, ix, cnt, iy, iy2, miny, maxy;
-    Point pt;
-
-    for(i=0, s=segtab, p=seg; i<nseg; i++, s++) {
-        *p = s;
-        if(s->p0.x == s->p1.x)
-            continue;
-        if(s->p0.x > s->p1.x) {
-            pt = s->p0;
-            s->p0 = s->p1;
-            s->p1 = pt;
-            s->d = -s->d;
-        }
-        s->num = s->p1.y - s->p0.y;
-        s->den = s->p1.x - s->p0.x;
-        s->dz = sdiv(s->num, s->den) << fixshift;
-        s->dzrem = mod(s->num, s->den) << fixshift;
-        s->dz += sdiv(s->dzrem, s->den);
-        s->dzrem = mod(s->dzrem, s->den);
-        p++;
-    }
-    n = p-seg;
-    if(n == 0)
-        return;
-    *p = 0;
-    qsort(seg, n , sizeof(Seg*), xcompare);
-
-    onehalf = 0;
-    if(fixshift)
-        onehalf = 1 << (fixshift-1);
-
-    miny = dst->clipr.min.y;
-    maxy = dst->clipr.max.y;
-
-    x = seg[0]->p0.x;
-    if(x < (dst->clipr.min.x << fixshift))
-        x = dst->clipr.min.x << fixshift;
-    ix = (x + onehalf) >> fixshift;
-    x = (ix << fixshift) + onehalf;
-    maxx = dst->clipr.max.x << fixshift;
-
-    ep = next = seg;
-
-    while(x<maxx) {
-        for(q = p = seg; p < ep; p++) {
-            s = *p;
-            if(s->p1.x < x)
-                continue;
-            s->z += s->dz;
-            s->zerr += s->dzrem;
-            if(s->zerr >= s->den) {
-                s->z++;
-                s->zerr -= s->den;
-                if(s->zerr < 0 || s->zerr >= s->den)
-                    print("bad ratzerr1: %ld den %ld ratdzrem %ld\n", s->zerr, s->den, s->dzrem);
-            }
-            *q++ = s;
-        }
-
-        for(p = next; *p; p++) {
-            s = *p;
-            if(s->p0.x >= x)
-                break;
-            if(s->p1.x < x)
-                continue;
-            s->z = s->p0.y;
-            s->z += smuldivmod(x - s->p0.x, s->num, s->den, &s->zerr);
-            if(s->zerr < 0 || s->zerr >= s->den)
-                print("bad ratzerr2: %ld den %ld ratdzrem %ld\n", s->zerr, s->den, s->dzrem);
-            *q++ = s;
-        }
-        ep = q;
-        next = p;
-
-        if(ep == seg) {
-            if(*next == 0)
-                break;
-            ix = (next[0]->p0.x + onehalf) >> fixshift;
-            x = (ix << fixshift) + onehalf;
-            continue;
-        }
-
-        zsort(seg, ep);
-
-        for(p = seg; p < ep; p++) {
-            cnt = 0;
-            y = p[0]->z;
-            yerr = p[0]->zerr;
-            yden = p[0]->den;
-            iy = (y + onehalf) >> fixshift;
-            if(iy >= maxy)
-                break;
-            if(iy < miny)
-                iy = miny;
-            cnt += p[0]->d;
-            p++;
-            for(;;) {
-                if(p == ep) {
-                    print("yscan: fill to infinity");
-                    return;
-                }
-                cnt += p[0]->d;
-                if((cnt&wind) == 0)
-                    break;
-                p++;
-            }
-            y2 = p[0]->z;
-            iy2 = (y2 + onehalf) >> fixshift;
-            if(iy2 <= miny)
-                continue;
-            if(iy2 > maxy)
-                iy2 = maxy;
-            if(iy == iy2) {
-                if(yerr*p[0]->den + p[0]->zerr*yden > p[0]->den*yden)
-                    y++;
-                iy = (y + y2) >> (fixshift+1);
-                fillpoint(dst, ix, iy, src, sp, op);
-            }
-        }
-        x += (1<<fixshift);
-        ix++;
-    }
-}
-@
-% >> >> >> >>
-
-
-\subsubsection{Helpers}
+\subsubsection{[[fillxxx()]]}
 
 %dead: used only in code that is now commented
 <<function fillcolor>>=
@@ -8483,7 +8192,7 @@ fillpoint(Memimage *dst, int x, int y, Memimage *src, Point p, int op)
 
 
 
-
+\subsubsection{Arithmetics}
 
 <<function mod>>=
 static long
@@ -8529,6 +8238,8 @@ smuldivmod(long x, long y, long z, long *mod)
     return -((-vx)/z);
 }
 @
+
+\subsubsection{Sorting}
 
 
 <<function zsort>>=
@@ -9197,6 +8908,9 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 
 
 
+
+
+
 \chapter{Fonts}
 % test code showing use of font? display the core font?
 
@@ -9211,7 +8925,7 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 
 \section{Additional data structures}
 
-<<[[Dimage]] other fields>>=
+<<[[DImage]] other fields>>=
 int     ascent;
 int     nfchar;
 FChar*      fchar;
@@ -9232,8 +8946,6 @@ struct FChar
 @
 
 
-\section{Additional initializations}
-
 %XXX
 <<[[Font]] other fields>>=
 short		width;	/* widest so far; used in caching only */	
@@ -9249,6 +8961,8 @@ Cachefont	**sub;	/* as read from file */
 Image		*cacheimage;
 @
 
+
+\section{Additional initializations}
 
 
 <<[[geninitdraw()]] locals>>=
@@ -9527,6 +9241,8 @@ openfont(Display *d, char *name)
 
 \subsection{API}
 
+% variants = string vs rune, maxlen vs n, SoverD vs op, nobg vs bg
+
 <<function string>>=
 Point
 string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s)
@@ -9534,6 +9250,7 @@ string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s)
     return _string(dst, pt, src, sp, f, s, nil, 1<<24, dst->clipr, nil, ZP, SoverD);
 }
 @
+% 1 << 24 = length
 
 <<function stringop>>=
 Point
@@ -9550,6 +9267,7 @@ stringn(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len)
     return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, SoverD);
 }
 @
+% xxxn, limit length
 
 <<function stringnop>>=
 Point
@@ -9558,6 +9276,9 @@ stringnop(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, int len,
     return _string(dst, pt, src, sp, f, s, nil, len, dst->clipr, nil, ZP, op);
 }
 @
+
+
+
 
 <<function runestring>>=
 Point
@@ -9686,6 +9407,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
     }else
         rptr = &r;
     sf = nil;
+
     while((*s || *r) && len){
         max = Max;
         if(len < max)
@@ -12620,7 +12342,7 @@ struct CScreen
 
 \subsection{[[DScreen]]}
 
-<<[[Dimage]] layer fields>>=
+<<[[DImage]] layer fields>>=
 DScreen*    dscreen;    /* 0 if not a window */
 @
 
@@ -13227,7 +12949,7 @@ drawgoodname(DImage *d)
     if(d->name == nil)
         return true;
     n = drawlookupname(strlen(d->name), d->name);
-    if(n==nil || n->vers != d->vers)
+    if(n == nil || n->vers != d->vers)
         return false;
     return true;
 }
@@ -13495,7 +13217,7 @@ if(sl){
 /*
  * src is now an image.  dst may be an image or a clear layer
  */
-if(dst->layer==nil)
+if(dst->layer == nil)
     goto Top;
 if(dst->layer->clear)
     goto Clearlayer;
@@ -13643,7 +13365,7 @@ ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
     int ok;
 
     d = etc;
-    if(insave && d->dstlayer->save==nil)
+    if(insave && d->dstlayer->save == nil)
         return;
 
     p0 = addpt(screenr.min, d->deltas);
@@ -13844,7 +13566,7 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
 
     USED(screenr.min.x);
     ll = etc;
-    if(insave && ll->dstlayer->save==nil)
+    if(insave && ll->dstlayer->save == nil)
         return;
     if(!rectclip(&clipr, screenr))
         return;
@@ -14718,6 +14440,11 @@ _memltorear(Memimage *i, Memimage *rear)
 % process model? ioproc? why need that?
 
 \section{Keyboard}
+\n maybe better put mouse first, mouse is more related to graphical app
+\n  also because of cursor
+
+% graphical app can use keyboard in which case don't want
+% buffered thing. Can not use scanf.
 
 <<enum _anon_ (include/keyboard.h)>>=
 enum {
@@ -14788,7 +14515,7 @@ initkeyboard(char *file)
     kc->file = strdup(file);
     kc->consfd = open(file, ORDWR|OCEXEC);
     t = malloc(strlen(file)+16);
-    if(kc->consfd<0 || t==nil){
+    if(kc->consfd<0 || t == nil){
 Error1:
         free(kc);
         return nil;
@@ -15624,7 +15351,7 @@ swcursorinit(void)
     }
     scr = &vgascreen;
 
-    if(scr==nil || gscreen==nil)
+    if(scr == nil || gscreen == nil)
         return;
     if(scr->dev == nil || scr->dev->linear == nil){
         if(!warned){
@@ -15647,7 +15374,7 @@ swcursorinit(void)
     swmask1 = allocmemimage(Rect(0,0,16,16), GREY1);
     swimg = allocmemimage(Rect(0,0,16,16), GREY8);
     swimg1 = allocmemimage(Rect(0,0,16,16), GREY1);
-    if(swback==nil || swmask==nil || swmask1==nil || swimg==nil || swimg1 == nil){
+    if(swback == nil || swmask == nil || swmask1 == nil || swimg == nil || swimg1 == nil){
         print("software cursor: allocmemimage fails");
         return;
     }
@@ -16435,8 +16162,6 @@ case 4:
 
 
 
-
-
 % some kind of optimisations
 <<[[memoptdraw()]] if 1 bit mask, src, and dest>>=
 /*
@@ -16539,261 +16264,16 @@ if((par->state&(Simplemask|Simplesrc|Replmask|Replsrc))==0
     return 1;
 }
 @
-
-<<[[alphadraw()]] if not source alpha and bit mask>>=
-/*
- * If the mask is purely boolean, we can convert from src to dst format
- * when we read src, and then just copy it to dst where the mask tells us to.
- * This requires a boolean (1-bit grey) mask and lack of a source alpha channel.
- *
- * The computation is accomplished by assigning the function pointers as follows:
- *	rdsrc - read and convert source into dst format in a buffer
- * 	rdmask - convert mask to bytes, set pointer to it
- * 	rddst - fill with pointer to real dst data, but do no reads
- *	calc - copy src onto dst when mask says to.
- *	wrdst - do nothing
- * This is slightly sleazy, since things aren't doing exactly what their names say,
- * but it avoids a fair amount of code duplication to make this a case here
- * rather than have a separate booldraw.
- */
- DBG1("flag %lud mchan %lux=?%x dd %d\n", src->flags&Falpha, mask->chan, GREY1, dst->depth);
-if(!(src->flags&Falpha) && mask->chan == GREY1 && dst->depth >= 8 && op == SoverD){
-    DBG1("boolcopy...");
-    rdsrc = convfn(dst, &z->dpar, src, &z->spar, &ndrawbuf);
-    rddst = readptr;
-    rdmask = readfn(mask);
-    calc = boolcopyfn(dst, mask);
-    wrdst = nullwrite;
-}
-@
-
-
-<<function convfn>>=
-static Readfn*
-convfn(Memimage *dst, Param *dpar, Memimage *src, Param *spar, int *ndrawbuf)
-{
-    if(dst->chan == src->chan && !(src->flags&Frepl)){
-        DBG1("readptr...");
-        return readptr;
-    }
-
-    if(dst->chan==CMAP8 && (src->chan==GREY1||src->chan==GREY2||src->chan==GREY4)){
-        /* cheat because we know the replicated value is exactly the color map entry. */
-        DBG1("Readnbit...");
-        return readnbit;
-    }
-
-    spar->convreadcall = readfn(src);
-    spar->convwritecall = writefn(dst);
-    spar->convdpar = dpar;
-
-    /* allocate a conversion buffer */
-    spar->convbufoff = *ndrawbuf;
-    *ndrawbuf += spar->dx*4;
-
-    if(spar->dx > Dx(spar->img->r)){
-        spar->convdx = spar->dx;
-        spar->dx = Dx(spar->img->r);
-    }
-
-    DBG1("genconv...");
-    return genconv;
-}
-@
-
-
-<<function genconv>>=
-static Buffer
-genconv(Param *p, uchar *buf, int y)
-{
-    Buffer b;
-    int nb;
-    uchar *r, *w, *ew;
-
-    /* read from source into RGB format in convbuf */
-    b = p->convreadcall(p, p->convbuf, y);
-
-    /* write RGB format into dst format in buf */
-    p->convwritecall(p->convdpar, buf, b);
-
-    if(p->convdx){
-        nb = p->convdpar->img->depth/8;
-        r = buf;
-        w = buf+nb*p->dx;
-        ew = buf+nb*p->convdx;
-        while(w<ew)
-            *w++ = *r++;
-    }
-
-    b.red = buf;
-    b.blu = b.grn = b.grey = b.alpha = nil;
-    b.rgba = (ulong*)buf;
-    b.delta = 0;
-    
-    return b;
-}
-@
-
-
-
-
-
-
-<<global nullwrite>>=
-static Writefn	nullwrite;
-@
-<<function nullwrite>>=
-static void
-nullwrite(Param *p, uchar *s, Buffer b)
-{
-    USED(p);
-    USED(s);
-    USED(b);
-}
-@
-
-<<function readptr>>=
-static Buffer
-readptr(Param *p, uchar *s, int y)
-{
-    Buffer b;
-    uchar *q;
-
-    USED(s);
-    q = p->bytermin + y*p->bwidth;
-    b.red = q;	/* ptr to data */
-    b.grn = b.blu = b.grey = b.alpha = nil;
-    b.rgba = (ulong*)q;
-    b.delta = p->img->depth/8;
-    return b;
-}
-@
-
-<<function boolcopyfn>>=
-static Calcfn*
-boolcopyfn(Memimage *img, Memimage *mask)
-{
-    if(mask->flags&Frepl && Dx(mask->r)==1 && Dy(mask->r)==1 && pixelbits(mask, mask->r.min)==~0)
-        return boolmemmove;
-
-    switch(img->depth){
-    case 8:
-        return boolcopy8;
-    case 16:
-        return boolcopy16;
-    case 24:
-        return boolcopy24;
-    case 32:
-        return boolcopy32;
-    default:
-        assert(0 /* boolcopyfn */);
-    }
-    return nil;
-}
-@
-
-<<function boolmemmove>>=
-static Buffer
-boolmemmove(Buffer bdst, Buffer bsrc, Buffer b1, int dx, int i, int o)
-{
-    USED(i);
-    USED(o);
-    USED(b1);
-    USED(bsrc);
-    memmove(bdst.red, bsrc.red, dx*bdst.delta);
-    return bdst;
-}
-@
-
-<<function boolcopy8>>=
-static Buffer
-boolcopy8(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
-{
-    uchar *m, *r, *w, *ew;
-
-    USED(i);
-    USED(o);
-    m = bmask.grey;
-    w = bdst.red;
-    r = bsrc.red;
-    ew = w+dx;
-    for(; w < ew; w++,r++)
-        if(*m++)
-            *w = *r;
-    return bdst;	/* not used */
-}
-@
-
-<<function boolcopy16>>=
-static Buffer
-boolcopy16(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
-{
-    uchar *m;
-    ushort *r, *w, *ew;
-
-    USED(i);
-    USED(o);
-    m = bmask.grey;
-    w = (ushort*)bdst.red;
-    r = (ushort*)bsrc.red;
-    ew = w+dx;
-    for(; w < ew; w++,r++)
-        if(*m++)
-            *w = *r;
-    return bdst;	/* not used */
-}
-@
-
-<<function boolcopy24>>=
-static Buffer
-boolcopy24(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
-{
-    uchar *m;
-    uchar *r, *w, *ew;
-
-    USED(i);
-    USED(o);
-    m = bmask.grey;
-    w = bdst.red;
-    r = bsrc.red;
-    ew = w+dx*3;
-    while(w < ew){
-        if(*m++){
-            *w++ = *r++;
-            *w++ = *r++;
-            *w++ = *r++;
-        }else{
-            w += 3;
-            r += 3;
-        }
-    }
-    return bdst;	/* not used */
-}
-@
-
-<<function boolcopy32>>=
-static Buffer
-boolcopy32(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
-{
-    uchar *m;
-    ulong *r, *w, *ew;
-
-    USED(i);
-    USED(o);
-    m = bmask.grey;
-    w = (ulong*)bdst.red;
-    r = (ulong*)bsrc.red;
-    ew = w+dx;
-    for(; w < ew; w++,r++)
-        if(*m++)
-            *w = *r;
-    return bdst;	/* not used */
-}
-@
-
+% >> >> >> >>
 
 
 \section{Small depth images}
+
+% each time nbits[] is used in code before, it is handling
+%  small depth images (e.g. in writebyte() for alphadraw())
+%  so there are more code than in this section related to
+%  small depth images.
+
 
 <<[[imgtorgba()]] duplicate bits if nb less than 8>>=
 // duplicate bits
@@ -16848,7 +16328,7 @@ uchar lm, rm;
 int d;
 @
 
-<<[[memoptdraw()]] switch depth cases>>=
+<<[[memoptdraw()]] switch depth of dst cases>>=
 case 1:
 case 2:
 case 4:
@@ -16908,7 +16388,7 @@ case 4:
 @
 % >> >> >> >>
 
-<<[[memoptdraw()]] switch depth cases>>=
+<<[[memoptdraw()]] switch depth of dst cases>>=
 default:
     assert(0 /* bad dest depth in memoptdraw */);
 @
@@ -17077,7 +16557,7 @@ writenbit(Param *p, uchar *w, Buffer src)
 
 \section{8-bit images}
 
-<<[[memoptdraw()]] switch depth cases>>=
+<<[[memoptdraw()]] switch depth of dst cases>>=
 case 8:
     for(y=0; y < dy; y++, dp += dwid)
         memset(dp, v, dx);
@@ -17121,7 +16601,7 @@ case 16:
 @
 % >>
 
-<<[[memoptdraw()]] switch depth cases>>=
+<<[[memoptdraw()]] switch depth of dst cases>>=
 case 16:
     p[0] = v;		/* make little endian */
     p[1] = v>>8;
@@ -17171,7 +16651,7 @@ case 24:
 @
 % >> >>
 
-<<[[memoptdraw()]] switch depth cases>>=
+<<[[memoptdraw()]] switch depth of dst cases>>=
 case 24:
     for(y=0; y<dy; y++, dp+=dwid)
         memset24(dp, v, dx);
@@ -17228,8 +16708,6 @@ case 24:
 
 \section{Grey images}
 
-\subsection{Grey conversion}
-
 <<[[imgtorgba()]] switch chan type cases>>=
 case CGrey:
     r = g = b = v;
@@ -17251,37 +16729,31 @@ case CGrey:
 @
 
 
-\subsection{Grey vs alpha}
+% lots of isgrey fields and parameters. could aspectize more.
 
-<<[[alphadraw()]] when not alpha mask>>=
-/*
- * If there is no alpha channel, we'll ask for a grey channel
- * and pretend it is the alpha.
- */
-else{
-    z->mpar.greymaskcall = readfn(mask);
-    z->mpar.convgrey = 1;
-    rdmask = greymaskread;
-
-    <<[[alphadraw()]] when not alpha mask, adapt calc>>
-}
+<<[[readbyte()]] in simple case, if isgrey>>=
+if(isgrey){
+    b.grey = r + img->shift[CGrey]/8;
+    b.red = b.grn = b.blu = b.grey;
 @
 
-<<function greymaskread>>=
-/*
- * Alpha reading function that simply relabels the grey pointer.
- */
-static Buffer
-greymaskread(Param *p, uchar *buf, int y)
-{
-    Buffer b;
 
-    b = p->greymaskcall(p, buf, y);
-    b.alpha = b.grey;
-    return b;
+<<[[writebyte()]] if isgrey>>=
+if(isgrey){
+    u |= ((*grey >> (8-img->nbits[CGrey])) & img->mask[CGrey]) << img->shift[CGrey];
+    grey += delta;
 }
 @
+% >> >>
 
+
+<<[[alphacalc11()]] if isgrey>>=
+if(grey){
+    *bdst.grey = MUL(ma, *bsrc.grey, s) + MUL(fd, *bdst.grey, t);
+    bsrc.grey += bsrc.delta;
+    bdst.grey += bdst.delta;
+}
+@
 
 
 \section{Color maps images}
@@ -17311,10 +16783,15 @@ Memcmap	*cmap;
 <<struct Memcmap>>=
 struct Memcmap
 {
-    uchar	cmap2rgb[3*256];
-    uchar	rgb2cmap[16*16*16];
+    // map<colorcmap8, (reg8, green8, blue8)>
+    byte	cmap2rgb[3*256];
+    // map<(red4,green4,blue4), colorcmap8)
+    byte	rgb2cmap[16*16*16];
 };
 @
+% 3*256 so extract rgb from color of cmap.
+% use 4 bytes only of r,g, or b  so 16 red variant x 16 green x 16 blue.
+
 
 <<global memdefcmap>>=
 Memcmap *memdefcmap = &def;
@@ -17459,6 +16936,7 @@ readcmap(Param *p, uchar *buf, int y)
     begin = p->bytey0s + y*p->bwidth;
     r = p->bytermin + y*p->bwidth;
     end = p->bytey0e + y*p->bwidth;
+
     cmap = p->img->cmap->cmap2rgb;
     convgrey = p->convgrey;
     copyalpha = (p->img->flags&Falpha) ? 1 : 0;
@@ -17527,7 +17005,7 @@ writecmap(Param *p, uchar *w, Buffer src)
     cmap = p->img->cmap->rgb2cmap;
     
     delta = src.delta;
-    red= src.red;
+    red = src.red;
     grn = src.grn;
     blu = src.blu;
 
@@ -17536,7 +17014,7 @@ writecmap(Param *p, uchar *w, Buffer src)
         *w++ = cmap[(*red>>4)*256+(*grn>>4)*16+(*blu>>4)];
 }
 @
-
+% shift right 4 so remains 4 bytes, 16 possible values
 
 
 % adv topics? for old graphics card? useful with RGBA32?
@@ -17857,6 +17335,17 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 
 \subsection{Disc}
 
+<<[[_memimageline()]] switch end0 cases, fallthrough to Endsquare>>=
+case Enddisc:
+    discend(p0, radius, dst, src, d, op);
+    /* fall through */
+@
+<<[[_memimageline()]] switch end1 cases, fallthrough to Endsquare>>=
+case Enddisc:
+    discend(p1, radius, dst, src, d, op);
+    /* fall through */
+@
+
 <<function discend>>=
 static
 void
@@ -17883,7 +17372,7 @@ membrush(int radius)
     static Memimage *brush;
     static int brushradius;
 
-    if(brush==nil || brushradius!=radius){
+    if(brush == nil || brushradius != radius){
         freememimage(brush);
         brush = allocmemimage(Rect(0, 0, 2*radius+1, 2*radius+1), memopaque->chan);
         if(brush != nil){
@@ -17892,6 +17381,7 @@ membrush(int radius)
         }
         brushradius = radius;
     }
+
     return brush;
 }
 @
@@ -17899,6 +17389,8 @@ membrush(int radius)
 
 
 \subsection{Arrows}
+
+\subsubsection{[[ARROW()]]}
 
 <<function ARROW>>=
 #define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
@@ -17915,6 +17407,34 @@ enum
     Arrow3 = 3,
 };
 @
+
+\subsubsection{[[_memimageline()]] and arrows}
+
+
+<<[[_memimageline()]] switch end0 cases>>=
+case Endarrow:
+    arrowend(q, pp, end0, -sin, -cos, radius);
+    _memfillpolysc(dst, pts, 5, ~0, src, 
+                   addpt(pts[0], mulpt(d, ICOSSCALE)), 
+                   true, 10, true, op);
+    pp[1] = pp[4];
+    pp += 2;
+    break;
+@
+% detail on
+
+<<[[_memimageline()]] switch end1 cases>>=
+case Endarrow:
+    arrowend(q, pp, end1, sin, cos, radius);
+    _memfillpolysc(dst, pp, 5, ~0, src, 
+                   addpt(pp[0], mulpt(d, ICOSSCALE)), 
+                   true, 10, true, op);
+    pp[1] = pp[4];
+    pp += 2;
+    break;
+@
+
+% detail on
 
 
 <<function arrowend>>=
@@ -17953,11 +17473,155 @@ arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
 }
 @
 
+\subsubsection{[[yscan()]]}
+
+<<[[_memfillpolysc()]] if detail>>=
+if(detail)
+    yscan(dst, seg, segtab, nvert, w, src, sp, fixshift, op);
+@
+
+<<function yscan>>=
+static void
+yscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, Point sp, int fixshift, int op)
+{
+    long x, maxx, y, y2, yerr, yden, onehalf;
+    Seg **ep, **next, **p, **q, *s;
+    int n, i, ix, cnt, iy, iy2, miny, maxy;
+    Point pt;
+
+    for(i=0, s=segtab, p=seg; i<nseg; i++, s++) {
+        *p = s;
+        if(s->p0.x == s->p1.x)
+            continue;
+        if(s->p0.x > s->p1.x) {
+            pt = s->p0;
+            s->p0 = s->p1;
+            s->p1 = pt;
+            s->d = -s->d;
+        }
+        s->num = s->p1.y - s->p0.y;
+        s->den = s->p1.x - s->p0.x;
+        s->dz = sdiv(s->num, s->den) << fixshift;
+        s->dzrem = mod(s->num, s->den) << fixshift;
+        s->dz += sdiv(s->dzrem, s->den);
+        s->dzrem = mod(s->dzrem, s->den);
+        p++;
+    }
+    n = p-seg;
+    if(n == 0)
+        return;
+    *p = 0;
+    qsort(seg, n , sizeof(Seg*), xcompare);
+
+    onehalf = 0;
+    if(fixshift)
+        onehalf = 1 << (fixshift-1);
+
+    miny = dst->clipr.min.y;
+    maxy = dst->clipr.max.y;
+
+    x = seg[0]->p0.x;
+    if(x < (dst->clipr.min.x << fixshift))
+        x = dst->clipr.min.x << fixshift;
+    ix = (x + onehalf) >> fixshift;
+    x = (ix << fixshift) + onehalf;
+    maxx = dst->clipr.max.x << fixshift;
+
+    ep = next = seg;
+
+    while(x<maxx) {
+        for(q = p = seg; p < ep; p++) {
+            s = *p;
+            if(s->p1.x < x)
+                continue;
+            s->z += s->dz;
+            s->zerr += s->dzrem;
+            if(s->zerr >= s->den) {
+                s->z++;
+                s->zerr -= s->den;
+                if(s->zerr < 0 || s->zerr >= s->den)
+                    print("bad ratzerr1: %ld den %ld ratdzrem %ld\n", s->zerr, s->den, s->dzrem);
+            }
+            *q++ = s;
+        }
+
+        for(p = next; *p; p++) {
+            s = *p;
+            if(s->p0.x >= x)
+                break;
+            if(s->p1.x < x)
+                continue;
+            s->z = s->p0.y;
+            s->z += smuldivmod(x - s->p0.x, s->num, s->den, &s->zerr);
+            if(s->zerr < 0 || s->zerr >= s->den)
+                print("bad ratzerr2: %ld den %ld ratdzrem %ld\n", s->zerr, s->den, s->dzrem);
+            *q++ = s;
+        }
+        ep = q;
+        next = p;
+
+        if(ep == seg) {
+            if(*next == 0)
+                break;
+            ix = (next[0]->p0.x + onehalf) >> fixshift;
+            x = (ix << fixshift) + onehalf;
+            continue;
+        }
+
+        zsort(seg, ep);
+
+        for(p = seg; p < ep; p++) {
+            cnt = 0;
+            y = p[0]->z;
+            yerr = p[0]->zerr;
+            yden = p[0]->den;
+            iy = (y + onehalf) >> fixshift;
+            if(iy >= maxy)
+                break;
+            if(iy < miny)
+                iy = miny;
+            cnt += p[0]->d;
+            p++;
+            for(;;) {
+                if(p == ep) {
+                    print("yscan: fill to infinity");
+                    return;
+                }
+                cnt += p[0]->d;
+                if((cnt&wind) == 0)
+                    break;
+                p++;
+            }
+            y2 = p[0]->z;
+            iy2 = (y2 + onehalf) >> fixshift;
+            if(iy2 <= miny)
+                continue;
+            if(iy2 > maxy)
+                iy2 = maxy;
+            if(iy == iy2) {
+                if(yerr*p[0]->den + p[0]->zerr*yden > p[0]->den*yden)
+                    y++;
+                iy = (y + y2) >> (fixshift+1);
+                fillpoint(dst, ix, iy, src, sp, op);
+            }
+        }
+        x += (1<<fixshift);
+        ix++;
+    }
+}
+@
+% >> >> >> >>
+
+
+
 
 \section{Bezier curves}
 % spline
 
 % no kernel support I think, it just use the previous building blocks
+
+\subsection{[[Plist]]}
+
 
 <<constant PINC>>=
 #define	PINC	32		/* realloc granularity */
@@ -17977,11 +17641,13 @@ appendpt(Plist *l, Point p)
 {
     if(l->np == -1)
         return;
+
     if(l->np == 0)
         l->p = malloc(PINC*sizeof(Point));
-    else if(l->np%PINC == 0)
+    else if(l->np % PINC == 0)
         l->p = realloc(l->p, (l->np+PINC)*sizeof(Point));
-    if(l->p == 0){
+
+    if(l->p == nil){
         l->np = -1;
         return;
     }
@@ -17989,29 +17655,145 @@ appendpt(Plist *l, Point p)
 }
 @
 
-<<function normsq>>=
-static int
-normsq(Point p)
+\subsection{API}
+
+<<function bezier>>=
+error0
+bezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp)
 {
-    return p.x*p.x+p.y*p.y;
+    return bezierop(dst, p0, p1, p2, p3, end0, end1, radius, src, sp, SoverD);
 }
 @
 
-<<function psdist>>=
-static int
-psdist(Point p, Point a, Point b)
+<<function bezierop>>=
+error0
+bezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
-    int num, den;
+    Plist l;
 
-    p = subpt(p, a);
-    b = subpt(b, a);
-    num = p.x*b.x + p.y*b.y;
-    if(num <= 0)
-        return normsq(p);
-    den = normsq(b);
-    if(num >= den)
-        return normsq(subpt(b, p));
-    return normsq(subpt(divpt(mulpt(b, num), den), p));
+    l.np = 0;
+    bezierpts(&l, p0, p1, p2, p3);
+    if(l.np == -1)
+        return ERROR_0;
+    if(l.np != 0){
+        polyop(dst, l.p, l.np, end0, end1, radius, src, addpt(subpt(sp, p0), l.p[0]), op);
+        free(l.p);
+    }
+    return OK_1;
+}
+@
+
+<<function bezspline>>=
+error0
+bezspline(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp)
+{
+    return bezsplineop(dst, pt, npt, end0, end1, radius, src, sp, SoverD);
+}
+@
+
+<<function bezsplineop>>=
+error0
+bezsplineop(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
+{
+    Plist l;
+
+    l.np = 0;
+    _bezsplinepts(&l, pt, npt);
+    if(l.np==-1)
+        return ERROR_0;
+    if(l.np != 0){
+        polyop(dst, l.p, l.np, end0, end1, radius, src, addpt(subpt(sp, pt[0]), l.p[0]), op);
+        free(l.p);
+    }
+    return OK_1;
+}
+@
+
+<<function fillbezier>>=
+error0
+fillbezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp)
+{
+    return fillbezierop(dst, p0, p1, p2, p3, w, src, sp, SoverD);
+}
+@
+
+<<function fillbezierop>>=
+error0
+fillbezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp, Drawop op)
+{
+    Plist l;
+
+    l.np = 0;
+    bezierpts(&l, p0, p1, p2, p3);
+    if(l.np == -1)
+        return ERROR_0;
+    if(l.np != 0){
+        fillpolyop(dst, l.p, l.np, w, src, addpt(subpt(sp, p0), l.p[0]), op);
+        free(l.p);
+    }
+    return OK_1;
+}
+@
+
+<<function fillbezspline>>=
+error0
+fillbezspline(Image *dst, Point *pt, int npt, int w, Image *src, Point sp)
+{
+    return fillbezsplineop(dst, pt, npt, w, src, sp, SoverD);
+}
+@
+
+<<function fillbezsplineop>>=
+error0
+fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Drawop op)
+{
+    Plist l;
+
+    l.np = 0;
+    _bezsplinepts(&l, pt, npt);
+    if(l.np == -1)
+        return ERROR_0;
+    if(l.np > 0){
+        fillpolyop(dst, l.p, l.np, w, src, addpt(subpt(sp, pt[0]), l.p[0]), op);
+        free(l.p);
+    }
+    return OK_1;
+}
+@
+
+
+% part of API for people who want to inspect what is computed maybe
+<<function bezsplinepts>>=
+int
+bezsplinepts(Point *pt, int npt, Point **pp)
+{
+    Plist l;
+    l.np = 0;
+    l.p = nil;
+    _bezsplinepts(&l, pt, npt);
+    *pp  = l.p;
+    return l.np;
+}
+@
+
+
+\subsection{Algorithm}
+
+\subsubsection{[[bezierpts()]]}
+<<function bezierpts>>=
+static void
+bezierpts(Plist *l, Point p0, Point p1, Point p2, Point p3)
+{
+    bpts(l, p0, p1, p2, p3);
+    appendpt(l, p3);
+}
+@
+
+<<function bpts>>=
+static void
+bpts(Plist *l, Point p0, Point p1, Point p2, Point p3)
+{
+    bpts1(l, p0, p1, p2, p3, 1);
 }
 @
 
@@ -18058,23 +17840,37 @@ bpts1(Plist *l, Point p0, Point p1, Point p2, Point p3, int scale)
     }
 }
 @
+% >> >> >> >> >> >>
 
-<<function bpts>>=
-static void
-bpts(Plist *l, Point p0, Point p1, Point p2, Point p3)
+<<function normsq>>=
+static int
+normsq(Point p)
 {
-    bpts1(l, p0, p1, p2, p3, 1);
+    return p.x*p.x+p.y*p.y;
 }
 @
 
-<<function bezierpts>>=
-static void
-bezierpts(Plist *l, Point p0, Point p1, Point p2, Point p3)
+<<function psdist>>=
+static int
+psdist(Point p, Point a, Point b)
 {
-    bpts(l, p0, p1, p2, p3);
-    appendpt(l, p3);
+    int num, den;
+
+    p = subpt(p, a);
+    b = subpt(b, a);
+    num = p.x*b.x + p.y*b.y;
+    if(num <= 0)
+        return normsq(p);
+    den = normsq(b);
+    if(num >= den)
+        return normsq(subpt(b, p));
+    return normsq(subpt(divpt(mulpt(b, num), den), p));
 }
 @
+
+
+\subsubsection{[[_bezsplinepts()]]}
+
 
 <<function _bezsplinepts>>=
 static void
@@ -18118,122 +17914,477 @@ _bezsplinepts(Plist *l, Point *pt, int npt)
 }
 @
 
-<<function bezsplinepts>>=
-int
-bezsplinepts(Point *pt, int npt, Point **pp)
-{
-    Plist l;
-    l.np = 0;
-    l.p = nil;
-    _bezsplinepts(&l, pt, npt);
-    *pp  = l.p;
-    return l.np;
-}
+
+
+\section{Advanced compositing}
+
+\subsection{Reading replicated pixels}
+% tiling?
+
+<<[[readbyte]] other locals>>=
+int i;
+byte *rrepl, *grepl, *brepl, *arepl, *krepl;
+byte ured, ugrn, ublu;
+ulong u;
 @
 
-<<function bezier>>=
-int
-bezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp)
-{
-    return bezierop(dst, p0, p1, p2, p3, end0, end1, radius, src, sp, SoverD);
-}
-@
+<<[[readbyte()]] more complex cases, possible repl, grey, and small depth>>=
+DBG1("2\n");
+rrepl = replbit[img->nbits[CRed]];
+grepl = replbit[img->nbits[CGreen]];
+brepl = replbit[img->nbits[CBlue]];
+arepl = replbit[img->nbits[CAlpha]];
 
-<<function bezierop>>=
-int
-bezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
-{
-    Plist l;
+krepl = replbit[img->nbits[CGrey]];
 
-    l.np = 0;
-    bezierpts(&l, p0, p1, p2, p3);
-    if(l.np == -1)
-        return 0;
-    if(l.np != 0){
-        polyop(dst, l.p, l.np, end0, end1, radius, src, addpt(subpt(sp, p0), l.p[0]), op);
-        free(l.p);
+for(i=0; i<dx; i++){
+    u = r[0] | (r[1]<<8) | (r[2]<<16) | (r[3]<<24);
+    if(copyalpha) {
+        *w++ = arepl[(u>>img->shift[CAlpha]) & img->mask[CAlpha]];
+        //DBG print("a %x\n", w[-1]);
     }
-    return 1;
-}
-@
 
-<<function bezspline>>=
-int
-bezspline(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp)
-{
-    return bezsplineop(dst, pt, npt, end0, end1, radius, src, sp, SoverD);
-}
-@
-
-<<function bezsplineop>>=
-int
-bezsplineop(Image *dst, Point *pt, int npt, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
-{
-    Plist l;
-
-    l.np = 0;
-    _bezsplinepts(&l, pt, npt);
-    if(l.np==-1)
-        return 0;
-    if(l.np != 0){
-        polyop(dst, l.p, l.np, end0, end1, radius, src, addpt(subpt(sp, pt[0]), l.p[0]), op);
-        free(l.p);
+    if(isgrey)
+        *w++ = krepl[(u >> img->shift[CGrey]) & img->mask[CGrey]];
+    else if(!alphaonly){
+        ured = rrepl[(u >> img->shift[CRed]) & img->mask[CRed]];
+        ugrn = grepl[(u >> img->shift[CGreen]) & img->mask[CGreen]];
+        ublu = brepl[(u >> img->shift[CBlue]) & img->mask[CBlue]];
+        if(convgrey){
+            DBG1("g %x %x %x\n", ured, ugrn, ublu);
+            *w++ = RGB2K(ured, ugrn, ublu);
+            DBG1("%x\n", w[-1]);
+        }else{
+            *w++ = brepl[(u >> img->shift[CBlue]) & img->mask[CBlue]];
+            *w++ = grepl[(u >> img->shift[CGreen]) & img->mask[CGreen]];
+            *w++ = rrepl[(u >> img->shift[CRed]) & img->mask[CRed]];
+        }
     }
-    return 1;
+    r += nb;
+    if(r == end)
+        r = begin;
 }
+
+b.alpha = copyalpha ? buf : &ones;
+b.rgba = (ulong*)buf;
+if(alphaonly){
+    b.red = b.grn = b.blu = b.grey = nil;
+    if(!copyalpha)
+        b.rgba = nil;
+    b.delta = 1;
+}else if(isgrey || convgrey){
+    b.grey = buf+copyalpha;
+    b.red = b.grn = b.blu = buf+copyalpha;
+    b.delta = copyalpha+1;
+    DBG1("alpha %x grey %x\n", b.alpha ? *b.alpha : 0xFF, *b.grey);
+}else{
+    b.blu = buf+copyalpha;
+    b.grn = buf+copyalpha+1;
+    b.grey = nil;
+    b.red = buf+copyalpha+2;
+    b.delta = copyalpha+3;
+}
+return b;
 @
 
-<<function fillbezier>>=
-int
-fillbezier(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp)
-{
-    return fillbezierop(dst, p0, p1, p2, p3, w, src, sp, SoverD);
-}
+
+
+\subsubsection{[[mktables]]}
+
+<<[[memimageinit()]] initializations>>=
+mktables();
 @
 
-<<function fillbezierop>>=
-int
-fillbezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *src, Point sp, Drawop op)
-{
-    Plist l;
+% later?
+<<global replbit>>=
+/*
+ * Conversion tables.
+ */
+static uchar replbit[1+8][256];		/* replbit[x][y] is the replication of the x-bit quantity y to 8-bit depth */
+@
 
-    l.np = 0;
-    bezierpts(&l, p0, p1, p2, p3);
-    if(l.np == -1)
-        return 0;
-    if(l.np != 0){
-        fillpolyop(dst, l.p, l.np, w, src, addpt(subpt(sp, p0), l.p[0]), op);
-        free(l.p);
+
+% ?? -> screensize -> memimageinit -> <>
+<<function mktables>>=
+static void
+mktables(void)
+{
+    int i, j, small;
+    <<[[mktables()]] only once guard>>
+
+    /* bit replication up to 8 bits */
+    for(i=0; i<256; i++){
+        for(j=0; j<=8; j++){	/* j <= 8 [sic] */
+            small = i & ((1<<j)-1);
+            replbit[j][i] = (small*replmul[j])>>8;
+        }
     }
-    return 1;
+
+}
+@
+%dead: done in caller anyway
+%    fmtinstall('R', Rfmt);
+%    fmtinstall('P', Pfmt);
+%dead:
+%    int mask, sh, 
+%    /* bit unpacking up to 8 bits, only powers of 2 */
+%    for(i=0; i<256; i++){
+%        for(j=0, sh=7, mask=1; j<8; j++, sh--)
+%            conv18[i][j] = replbit[1][(i>>sh)&mask];
+%
+%        for(j=0, sh=6, mask=3; j<4; j++, sh-=2)
+%            conv28[i][j] = replbit[2][(i>>sh)&mask];
+%
+%        for(j=0, sh=4, mask=15; j<2; j++, sh-=4)
+%            conv48[i][j] = replbit[4][(i>>sh)&mask];
+%    }
+% <<global conv18>>=
+% static uchar conv18[256][8];		/* conv18[x][y] is the yth pixel in the depth-1 pixel x */
+% @
+% 
+% <<global conv28>>=
+% static uchar conv28[256][4];		/* ... */
+% @
+% 
+% <<global conv48>>=
+% static uchar conv48[256][2];
+% @
+
+
+<<[[mktables()]] only once guard>>=
+static bool	tablesbuilt = false;
+if(tablesbuilt)
+    return;
+tablesbuilt = true;
+@
+% used to be a global, but can be a static, better.
+
+
+
+\subsection{Mask}
+
+%remember that memopaque which is the default mask used when drawing
+% is memones which is just a GREY1
+
+<<[[ParamDraw]] mask fields>>=
+bool	alphaonly;
+Readfn	*greymaskcall;	
+@
+
+<<[[ParamDraw]] other fields>>=
+bool	convgrey;
+@
+
+
+<<[[alphadraw()]] set rdmask>>=
+if(mask->flags&Falpha){
+    rdmask = readalphafn(mask);
+    z->mpar.alphaonly = true;
+}
+/*
+ * If there is no alpha channel, we'll ask for a grey channel
+ * and pretend it is the alpha.
+ */
+else{
+    z->mpar.greymaskcall = readfn(mask);
+    z->mpar.convgrey = true;
+    rdmask = greymaskread;
+
+    <<[[alphadraw()]] when mask and source have no alpha, possibly adapt calc>>
 }
 @
 
-<<function fillbezspline>>=
-int
-fillbezspline(Image *dst, Point *pt, int npt, int w, Image *src, Point sp)
+<<function readalphafn>>=
+static Readfn*
+readalphafn(Memimage *m)
 {
-    return fillbezsplineop(dst, pt, npt, w, src, sp, SoverD);
+    USED(m);
+    return readbyte;
 }
 @
 
-<<function fillbezsplineop>>=
-int
-fillbezsplineop(Image *dst, Point *pt, int npt, int w, Image *src, Point sp, Drawop op)
-{
-    Plist l;
 
-    l.np = 0;
-    _bezsplinepts(&l, pt, npt);
-    if(l.np == -1)
-        return 0;
-    if(l.np > 0){
-        fillpolyop(dst, l.p, l.np, w, src, addpt(subpt(sp, pt[0]), l.p[0]), op);
-        free(l.p);
+\subsubsection{Simple mask}
+
+
+<<function greymaskread>>=
+/*
+ * Alpha reading function that simply relabels the grey pointer.
+ */
+static Buffer
+greymaskread(Param *p, uchar *buf, int y)
+{
+    Buffer b;
+
+    b = p->greymaskcall(p, buf, y);
+    b.alpha = b.grey;
+    return b;
+}
+@
+
+\subsubsection{Mask with alpha}
+
+
+\subsection{Other compositing operators}
+
+\subsubsection{[[Clear]]}
+%    alphacalc0,		/* Clear */
+
+<<function alphacalc0>>=
+static Buffer
+alphacalc0(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
+{
+    USED(grey);
+    USED(op);
+    USED(b1);
+    USED(b2);
+
+    memset(bdst.rgba, 0, dx * bdst.delta);
+    return bdst;
+}
+@
+
+\subsubsection{[[DoutS]]}
+%    alphacalc14,		/* DoutS */
+
+<<function alphacalc14>>=
+static Buffer
+alphacalc14(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+{
+    Buffer obdst;
+    int fd, sadelta;
+    int i, sa, ma, q;
+    ulong s, t;
+
+    obdst = bdst;
+    sadelta = bsrc.alpha == &ones ? 0 : bsrc.delta;
+    q = bsrc.delta == 4 && bdst.delta == 4;
+
+    for(i=0; i<dx; i++){
+        sa = *bsrc.alpha;
+        ma = *bmask.alpha;
+        fd = MUL(sa, ma, t);
+        if(op == DoutS)
+            fd = 255-fd;
+
+        if(grey){
+            *bdst.grey = MUL(fd, *bdst.grey, t);
+            bsrc.grey += bsrc.delta;
+            bdst.grey += bdst.delta;
+        }else{
+            if(q){
+                *bdst.rgba = MUL0123(fd, *bdst.rgba, s, t);
+                bsrc.rgba++;
+                bdst.rgba++;
+                bsrc.alpha += sadelta;
+                bmask.alpha += bmask.delta;
+                continue;
+            }
+            *bdst.red = MUL(fd, *bdst.red, t);
+            *bdst.grn = MUL(fd, *bdst.grn, t);
+            *bdst.blu = MUL(fd, *bdst.blu, t);
+            bsrc.red += bsrc.delta;
+            bsrc.blu += bsrc.delta;
+            bsrc.grn += bsrc.delta;
+            bdst.red += bdst.delta;
+            bdst.blu += bdst.delta;
+            bdst.grn += bdst.delta;
+        }
+        if(bdst.alpha != &ones){
+            *bdst.alpha = MUL(fd, *bdst.alpha, t);
+            bdst.alpha += bdst.delta;
+        }
+        bmask.alpha += bmask.delta;
+        bsrc.alpha += sadelta;
     }
-    return 1;
+    return obdst;
 }
 @
+
+
+
+
+
+\subsubsection{[[SoutD]]}
+%    alphacalc2810,		/* SoutD */
+
+<<function alphacalc2810>>=
+static Buffer
+alphacalc2810(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+{
+    Buffer obdst;
+    int fs, sadelta;
+    int i, ma, da, q;
+    ulong s, t;
+
+    obdst = bdst;
+    sadelta = bsrc.alpha == &ones ? 0 : bsrc.delta;
+    q = bsrc.delta == 4 && bdst.delta == 4;
+
+    for(i=0; i<dx; i++){
+        ma = *bmask.alpha;
+        da = *bdst.alpha;
+        if(op == SoutD)
+            da = 255-da;
+        fs = ma;
+        if(op != S)
+            fs = MUL(fs, da, t);
+
+        if(grey){
+            *bdst.grey = MUL(fs, *bsrc.grey, t);
+            bsrc.grey += bsrc.delta;
+            bdst.grey += bdst.delta;
+        }else{
+            if(q){
+                *bdst.rgba = MUL0123(fs, *bsrc.rgba, s, t);
+                bsrc.rgba++;
+                bdst.rgba++;
+                bmask.alpha += bmask.delta;
+                bdst.alpha += bdst.delta;
+                continue;
+            }
+            *bdst.red = MUL(fs, *bsrc.red, t);
+            *bdst.grn = MUL(fs, *bsrc.grn, t);
+            *bdst.blu = MUL(fs, *bsrc.blu, t);
+            bsrc.red += bsrc.delta;
+            bsrc.blu += bsrc.delta;
+            bsrc.grn += bsrc.delta;
+            bdst.red += bdst.delta;
+            bdst.blu += bdst.delta;
+            bdst.grn += bdst.delta;
+        }
+        if(bdst.alpha != &ones){
+            *bdst.alpha = MUL(fs, *bsrc.alpha, t);
+            bdst.alpha += bdst.delta;
+        }
+        bmask.alpha += bmask.delta;
+        bsrc.alpha += sadelta;
+    }
+    return obdst;
+}
+@
+
+
+\subsubsection{[[DxorS]]}
+%    alphacalc3679,		/* DxorS */
+
+
+
+<<function alphacalc3679>>=
+static Buffer
+alphacalc3679(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
+{
+    Buffer obdst;
+    int fs, fd, sadelta;
+    int i, sa, ma, da, q;
+    ulong s, t, u, v;
+
+    obdst = bdst;
+    sadelta = (bsrc.alpha == &ones) ? 0 : bsrc.delta;
+    q = (bsrc.delta == 4) && (bdst.delta == 4);
+
+    for(i=0; i<dx; i++){
+        sa = *bsrc.alpha;
+        ma = *bmask.alpha;
+        da = *bdst.alpha;
+        if(op == SatopD)
+            fs = MUL(ma, da, t);
+        else
+            fs = MUL(ma, 255-da, t);
+        if(op == DoverS)
+            fd = 255;
+        else{
+            fd = MUL(sa, ma, t);
+            if(op != DatopS)
+                fd = 255-fd;
+        }
+
+        if(grey){
+            *bdst.grey = MUL(fs, *bsrc.grey, s) + MUL(fd, *bdst.grey, t);
+            bsrc.grey += bsrc.delta;
+            bdst.grey += bdst.delta;
+        }else{
+            if(q){
+                *bdst.rgba = MUL0123(fs, *bsrc.rgba, s, t)+MUL0123(fd, *bdst.rgba, u, v);
+                bsrc.rgba++;
+                bdst.rgba++;
+                bsrc.alpha += sadelta;
+                bmask.alpha += bmask.delta;
+                bdst.alpha += bdst.delta;
+                continue;
+            }
+            *bdst.red = MUL(fs, *bsrc.red, s)+MUL(fd, *bdst.red, t);
+            *bdst.grn = MUL(fs, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
+            *bdst.blu = MUL(fs, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
+            bsrc.red += bsrc.delta;
+            bsrc.blu += bsrc.delta;
+            bsrc.grn += bsrc.delta;
+            bdst.red += bdst.delta;
+            bdst.blu += bdst.delta;
+            bdst.grn += bdst.delta;
+        }
+        if(bdst.alpha != &ones){
+            *bdst.alpha = MUL(fs, sa, s)+MUL(fd, da, t);
+            bdst.alpha += bdst.delta;
+        }
+        bmask.alpha += bmask.delta;
+        bsrc.alpha += sadelta;
+    }
+    return obdst;
+}
+@
+
+
+
+\subsubsection{[[DinS]]}
+%    alphacalc14,		/* DinS */
+
+
+\subsubsection{[[D]]}
+%    alphacalc5,		/* D */
+
+
+<<function alphacalc5>>=
+static Buffer
+alphacalc5(Buffer bdst, Buffer b1, Buffer b2, int dx, int grey, int op)
+{
+    USED(dx);
+    USED(grey);
+    USED(op);
+    USED(b1);
+    USED(b2);
+
+    return bdst;
+}
+@
+
+
+\subsubsection{[[DatopS]]}
+%    alphacalc3679,		/* DatopS */
+
+
+\subsubsection{[[DoverS]]}
+%    alphacalc3679,		/* DoverS */
+
+
+\subsubsection{[[SinD]]}
+%    alphacalc2810,		/* SinD */
+
+
+\subsubsection{[[SatopD]]}
+%    alphacalc3679,		/* SatopD */
+
+
+\subsubsection{[[S]]}
+%    alphacalc2810,		/* S */
+
+
+\subsubsection{[[SoverD]]}
+%    alphacalc11,		/* SoverD */
+% the classic! see section X
+
+
+
 
 
 
@@ -18309,7 +18460,7 @@ menucolors(void)
     back = allocimagemix(display, DPalegreen, DWhite);
     high = allocimage(display, Rect(0,0,1,1), view->chan, 1, DDarkgreen);	/* dark green */
     bord = allocimage(display, Rect(0,0,1,1), view->chan, 1, DMedgreen);	/* not as dark green */
-    if(back==nil || high==nil || bord==nil)
+    if(back == nil || high == nil || bord == nil)
         goto Error;
     text = display->black;
     htext = back;
@@ -18788,7 +18939,7 @@ menucolors(void)
     back = allocimagemix(display, DPalegreen, DWhite);
     high = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkgreen);	/* dark green */
     bord = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedgreen);	/* not as dark green */
-    if(back==nil || high==nil || bord==nil)
+    if(back == nil || high == nil || bord == nil)
         goto Error;
     text = display->black;
     htext = back;
@@ -19760,7 +19911,7 @@ bool     busy;
 \subsubsection{[[hwdraw()]]}
 
 <<[[hwdraw()]] when dst is the screen>>=
-if(scr->fill==nil && scr->scroll==nil)
+if(scr->fill == nil && scr->scroll == nil)
     return false;
 /*
  * If we have an opaque mask and source is one opaque
@@ -19786,8 +19937,11 @@ if(scr->scroll
 && (par->state&m)==m
 && (par->op&S) == S)
     return scr->scroll(scr, par->r, par->sr);
+
+return false;   
 @
 
+% see fill and scroll in appendix
 
 
 \subsubsection{[[chardraw()]]}
@@ -19910,96 +20064,110 @@ chardraw(Memdrawparam *par)
 }
 @
 
-\subsection{Flushing boxes}
+\subsection{[[alphadraw()]] optimisations}
 
-\subsubsection{Flushing lines}
+\subsubsection{Small replicated rectangle}
 
-% advanced topics? useful optimisation?
-
-
-<<[[drawmesg()]] when draw line, possible flush>>=
-/* avoid memlinebbox if possible */
-if(dstid==0 || dst->layer!=nil){
-    /* BUG: this is terribly inefficient: update maximal containing rect*/
-    r = memlinebbox(p, q, e0, e1, j);
-    dstflush(dstid, dst, insetrect(r, -(1+1+j)));
-}
-@
-
-<<function memlinebbox>>=
-Rectangle
-memlinebbox(Point p0, Point p1, int end0, int end1, int radius)
-{
-    Rectangle r, r1;
-    int extra;
-
-    r.min.x = 10000000;
-    r.min.y = 10000000;
-    r.max.x = -10000000;
-    r.max.y = -10000000;
-    extra = lmax(memlineendsize(end0), memlineendsize(end1));
-    r1 = insetrect(canonrect(Rpt(p0, p1)), -(radius+extra));
-    addbbox(&r, r1.min);
-    addbbox(&r, r1.max);
-    return r;
-}
-@
-% need canonrect here?
-
-<<function memlineendsize>>=
-int
-memlineendsize(int end)
-{
-    int x3;
-
-    if((end&0x3F) != Endarrow)
-        return 0;
-    if(end == Endarrow)
-        x3 = Arrow3;
-    else
-        x3 = (end>>23) & 0x1FF;
-    return x3;
-}
+<<[[ParamDraw]] replication fields>>=
+bool	replcache;	/* if set, cache buffers */
 @
 
 
-<<function lmax>>=
-static
-int
-lmax(int a, int b)
-{
-    if(a > b)
-        return a;
-    return b;
+
+<<[[getparam()]] if small replicated rectangle>>=
+if((img->flags&Frepl) && Dy(img->r) <= MAXBCACHE && Dy(img->r) < Dy(r)){
+    p->replcache = true;
+    nbuf = Dy(img->r);
 }
 @
 
+<<[[ParamDraw]] replication fields>>=
+Readfn	*replcall;
+@
 
-<<function addbbox>>=
+<<[[alphadraw()]] when small repl rectangle optimization>>=
 /*
- * Simple-minded conservative code to compute bounding box of line.
- * Result is probably a little larger than it needs to be.
+ * If the image has a small enough repl rectangle,
+ * we can just read each line once and cache them.
  */
-static
-void
-addbbox(Rectangle *r, Point p)
-{
-    if(r->min.x > p.x)
-        r->min.x = p.x;
-    if(r->min.y > p.y)
-        r->min.y = p.y;
-    if(r->max.x < p.x+1)
-        r->max.x = p.x+1;
-    if(r->max.y < p.y+1)
-        r->max.y = p.y+1;
+if(z->spar.replcache){
+    z->spar.replcall = rdsrc;
+    rdsrc = replread;
+}
+if(z->mpar.replcache){
+    z->mpar.replcall = rdmask;
+    rdmask = replread;
 }
 @
 
+<<[[ParamDraw]] replication fields>>=
+Buffer	bcache[MAXBCACHE];
+ulong	bfilled;
+@
+
+<<enum _anon_ (lib_graphics/libmemdraw/draw.c)>>=
+enum {
+    MAXBCACHE = 16
+};
+@
 
 
-\subsection{Other [[alphacalc()]]}
+<<function replread>>=
+/*
+ * Replicated cached scan line read.  Call the function listed in the Param,
+ * but cache the result so that for replicated images we only do the work once.
+ */
+static Buffer
+replread(Param *p, uchar *s, int y)
+{
+    Buffer *b;
 
-<<[[alphadraw()]] when not alpha mask, adapt calc>>=
+    USED(s);
+    b = &p->bcache[y];
+    if((p->bfilled & (1<<y)) == 0){
+        p->bfilled |= 1<<y;
+        *b = p->replcall(p, p->bufbase+y*p->bufdelta, y);
+    }
+    return *b;
+}
+@
+% >> >>
+
+\subsubsection{No alpha source}
+
+<<[[alphadraw()]] if source has no alpha and simple bit mask>>=
+/*
+ * If the mask is purely boolean, we can convert from src to dst format
+ * when we read src, and then just copy it to dst where the mask tells us to.
+ * This requires a boolean (1-bit grey) mask and lack of a source alpha channel.
+ *
+ * The computation is accomplished by assigning the function pointers as follows:
+ *	rdsrc - read and convert source into dst format in a buffer
+ * 	rdmask - convert mask to bytes, set pointer to it
+ * 	rddst - fill with pointer to real dst data, but do no reads
+ *	calc - copy src onto dst when mask says to.
+ *	wrdst - do nothing
+ * This is slightly sleazy, since things aren't doing exactly what their names say,
+ * but it avoids a fair amount of code duplication to make this a case here
+ * rather than have a separate booldraw.
+ */
+if(!(src->flags&Falpha) 
+&& mask->chan == GREY1 
+&& dst->depth >= 8 
+&& op == SoverD){
+    rdsrc = convfn(dst, &z->dpar, src, &z->spar, &ndrawbuf);
+    rddst = readptr;
+    rdmask = readfn(mask);
+    calc = boolcopyfn(dst, mask);
+    wrdst = nullwrite;
+}
+@
+%old:
+% DBG1("flag %lud mchan %lux=?%x dd %d\n", src->flags&Falpha, mask->chan, GREY1, dst->depth);
+%    DBG1("boolcopy...");
+
+
+<<[[alphadraw()]] when mask and source have no alpha, possibly adapt calc>>=
 /*
  * Should really be above, but then boolcopyfns would have
  * to deal with bit alignment, and I haven't written that.
@@ -20013,51 +20181,251 @@ if(mask->chan == GREY1 && !(src->flags&Falpha))
 else if(op == SoverD && !(src->flags&Falpha))
     calc = alphacalcS;
 @
+% here means depth < 8
 
 
+\subsubsection{Simple bit mask and big dest, [[boolcopyxxx()]]}
 
+<<[[ParamDraw]] conversion fields>>=
+Readfn	*convreadcall;
+Writefn	*convwritecall;
+int	convbufoff;
+Param	*convdpar;
+int	convdx;
+@
 
-<<function alphacalcS>>=
-/* source alpha 1 */
-static Buffer
-alphacalcS(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+<<function convfn>>=
+static Readfn*
+convfn(Memimage *dst, Param *dpar, Memimage *src, Param *spar, int *ndrawbuf)
 {
-    Buffer obdst;
-    int fd;
-    int i, ma;
-    ulong s, t;
-
-    USED(op);
-    obdst = bdst;
-
-    for(i=0; i<dx; i++){
-        ma = *bmask.alpha;
-        fd = 255-ma;
-
-        if(grey){
-            *bdst.grey = MUL(ma, *bsrc.grey, s)+MUL(fd, *bdst.grey, t);
-            bsrc.grey += bsrc.delta;
-            bdst.grey += bdst.delta;
-        }else{
-            *bdst.red = MUL(ma, *bsrc.red, s)+MUL(fd, *bdst.red, t);
-            *bdst.grn = MUL(ma, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
-            *bdst.blu = MUL(ma, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
-            bsrc.red += bsrc.delta;
-            bsrc.blu += bsrc.delta;
-            bsrc.grn += bsrc.delta;
-            bdst.red += bdst.delta;
-            bdst.blu += bdst.delta;
-            bdst.grn += bdst.delta;
-        }
-        if(bdst.alpha != &ones){
-            *bdst.alpha = ma+MUL(fd, *bdst.alpha, t);
-            bdst.alpha += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
+    if(dst->chan == src->chan && !(src->flags&Frepl)){
+        DBG1("readptr...");
+        return readptr;
     }
-    return obdst;
+
+    if(dst->chan==CMAP8 && (src->chan==GREY1||src->chan==GREY2||src->chan==GREY4)){
+        /* cheat because we know the replicated value is exactly the color map entry. */
+        DBG1("Readnbit...");
+        return readnbit;
+    }
+
+    spar->convreadcall = readfn(src);
+    spar->convwritecall = writefn(dst);
+    spar->convdpar = dpar;
+
+    /* allocate a conversion buffer */
+    spar->convbufoff = *ndrawbuf;
+    *ndrawbuf += spar->dx*4;
+
+    if(spar->dx > Dx(spar->img->r)){
+        spar->convdx = spar->dx;
+        spar->dx = Dx(spar->img->r);
+    }
+
+    DBG1("genconv...");
+    return genconv;
 }
 @
+
+
+<<[[ParamDraw]] conversion fields>>=
+uchar	*convbuf;
+@
+
+<<[[alphadraw()]] set z params part2>>=
+z->spar.convbuf = drawbuf + z->spar.convbufoff;
+@
+
+<<function genconv>>=
+static Buffer
+genconv(Param *p, uchar *buf, int y)
+{
+    Buffer b;
+    int nb;
+    uchar *r, *w, *ew;
+
+    /* read from source into RGB format in convbuf */
+    b = p->convreadcall(p, p->convbuf, y);
+
+    /* write RGB format into dst format in buf */
+    p->convwritecall(p->convdpar, buf, b);
+
+    if(p->convdx){
+        nb = p->convdpar->img->depth/8;
+        r = buf;
+        w = buf+nb*p->dx;
+        ew = buf+nb*p->convdx;
+        while(w<ew)
+            *w++ = *r++;
+    }
+
+    b.red = buf;
+    b.blu = b.grn = b.grey = b.alpha = nil;
+    b.rgba = (ulong*)buf;
+    b.delta = 0;
+    
+    return b;
+}
+@
+
+
+
+
+
+
+<<global nullwrite>>=
+static Writefn	nullwrite;
+@
+<<function nullwrite>>=
+static void
+nullwrite(Param *p, uchar *s, Buffer b)
+{
+    USED(p);
+    USED(s);
+    USED(b);
+}
+@
+
+<<function readptr>>=
+static Buffer
+readptr(Param *p, uchar *s, int y)
+{
+    Buffer b;
+    uchar *q;
+
+    USED(s);
+    q = p->bytermin + y*p->bwidth;
+    b.red = q;	/* ptr to data */
+    b.grn = b.blu = b.grey = b.alpha = nil;
+    b.rgba = (ulong*)q;
+    b.delta = p->img->depth/8;
+    return b;
+}
+@
+
+<<function boolcopyfn>>=
+static Calcfn*
+boolcopyfn(Memimage *img, Memimage *mask)
+{
+    if(mask->flags&Frepl && Dx(mask->r)==1 && Dy(mask->r)==1 && pixelbits(mask, mask->r.min)==~0)
+        return boolmemmove;
+
+    switch(img->depth){
+    case 8:
+        return boolcopy8;
+    case 16:
+        return boolcopy16;
+    case 24:
+        return boolcopy24;
+    case 32:
+        return boolcopy32;
+    default:
+        assert(0 /* boolcopyfn */);
+    }
+    return nil;
+}
+@
+
+<<function boolmemmove>>=
+static Buffer
+boolmemmove(Buffer bdst, Buffer bsrc, Buffer b1, int dx, int i, int o)
+{
+    USED(i);
+    USED(o);
+    USED(b1);
+    USED(bsrc);
+    memmove(bdst.red, bsrc.red, dx*bdst.delta);
+    return bdst;
+}
+@
+
+<<function boolcopy8>>=
+static Buffer
+boolcopy8(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
+{
+    uchar *m, *r, *w, *ew;
+
+    USED(i);
+    USED(o);
+    m = bmask.grey;
+    w = bdst.red;
+    r = bsrc.red;
+    ew = w+dx;
+    for(; w < ew; w++,r++)
+        if(*m++)
+            *w = *r;
+    return bdst;	/* not used */
+}
+@
+
+<<function boolcopy16>>=
+static Buffer
+boolcopy16(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
+{
+    uchar *m;
+    ushort *r, *w, *ew;
+
+    USED(i);
+    USED(o);
+    m = bmask.grey;
+    w = (ushort*)bdst.red;
+    r = (ushort*)bsrc.red;
+    ew = w+dx;
+    for(; w < ew; w++,r++)
+        if(*m++)
+            *w = *r;
+    return bdst;	/* not used */
+}
+@
+
+<<function boolcopy24>>=
+static Buffer
+boolcopy24(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
+{
+    uchar *m;
+    uchar *r, *w, *ew;
+
+    USED(i);
+    USED(o);
+    m = bmask.grey;
+    w = bdst.red;
+    r = bsrc.red;
+    ew = w+dx*3;
+    while(w < ew){
+        if(*m++){
+            *w++ = *r++;
+            *w++ = *r++;
+            *w++ = *r++;
+        }else{
+            w += 3;
+            r += 3;
+        }
+    }
+    return bdst;	/* not used */
+}
+@
+
+<<function boolcopy32>>=
+static Buffer
+boolcopy32(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int i, int o)
+{
+    uchar *m;
+    ulong *r, *w, *ew;
+
+    USED(i);
+    USED(o);
+    m = bmask.grey;
+    w = (ulong*)bdst.red;
+    r = (ulong*)bsrc.red;
+    ew = w+dx;
+    for(; w < ew; w++,r++)
+        if(*m++)
+            *w = *r;
+    return bdst;	/* not used */
+}
+@
+
+\subsubsection{Simple bit mask, [[boolcalcxxx()]]}
 
 <<global boolcalc>>=
 static Calcfn *boolcalc[Ncomp] =
@@ -20075,6 +20443,17 @@ static Calcfn *boolcalc[Ncomp] =
     boolcalc1011,		/* S */
     boolcalc1011,		/* SoverD */
 };
+@
+
+%dead?
+<<[[Buffer]] boolcalc fields>>=
+/* used by boolcalc* for mask data */
+uchar	*m;		/* ptr to mask data r.min byte; like p->bytermin */
+int		mskip;	/* no. of left bits to skip in *m */
+uchar	*bm;		/* ptr to mask data img->r.min byte; like p->bytey0s */
+int		bmskip;	/* no. of left bits to skip in *bm */
+uchar	*em;		/* ptr to mask data img->r.max.x byte; like p->bytey0e */
+int		emskip;	/* no. of right bits to skip in *em */
 @
 
 
@@ -20225,6 +20604,212 @@ boolcalc1011(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
 
 
 
+\subsubsection{No alpha source, [[alphacalcS()]]}
+
+<<function alphacalcS>>=
+/* source alpha 1 */
+static Buffer
+alphacalcS(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, int grey, int op)
+{
+    Buffer obdst;
+    int fd;
+    int i, ma;
+    ulong s, t;
+
+    USED(op);
+    obdst = bdst;
+
+    for(i=0; i<dx; i++){
+        ma = *bmask.alpha;
+        fd = 255-ma;
+
+        if(grey){
+            *bdst.grey = MUL(ma, *bsrc.grey, s)+MUL(fd, *bdst.grey, t);
+            bsrc.grey += bsrc.delta;
+            bdst.grey += bdst.delta;
+        }else{
+            *bdst.red = MUL(ma, *bsrc.red, s)+MUL(fd, *bdst.red, t);
+            *bdst.grn = MUL(ma, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
+            *bdst.blu = MUL(ma, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
+            bsrc.red += bsrc.delta;
+            bsrc.blu += bsrc.delta;
+            bsrc.grn += bsrc.delta;
+            bdst.red += bdst.delta;
+            bdst.blu += bdst.delta;
+            bdst.grn += bdst.delta;
+        }
+        if(bdst.alpha != &ones){
+            *bdst.alpha = ma+MUL(fd, *bdst.alpha, t);
+            bdst.alpha += bdst.delta;
+        }
+        bmask.alpha += bmask.delta;
+    }
+    return obdst;
+}
+@
+
+\subsubsection{32 bits SoverD [[alphacalc()]]}
+
+<<[[alphacalc11()]] special case for 32bits source and dest>>=
+if(q){
+    *bdst.rgba = MUL0123(ma, *bsrc.rgba, s, t)+MUL0123(fd, *bdst.rgba, u, v);
+    bsrc.rgba++;
+    bdst.rgba++;
+    bsrc.alpha += sadelta;
+    bmask.alpha += bmask.delta;
+    continue;
+}
+@
+
+
+<<function MUL0123>>=
+#define MUL0123(a, x, s, t)	((MUL13(a, x, s)<<8)|MUL02(a, x, t))
+@
+
+
+<<function MUL13>>=
+#define MUL13(a, x, t)		(t = (a)*(((x)&MASK13)>>8)+128, ((t+((t>>8)&MASK02))>>8)&MASK02)
+@
+
+<<constant MASK13>>=
+#define MASK13	0xFF00FF00
+@
+
+
+<<function MUL02>>=
+#define MUL02(a, x, t)		(t = (a)*(((x)&MASK02)>>0)+128, ((t+((t>>8)&MASK02))>>8)&MASK02)
+@
+<<constant MASK02>>=
+#define MASK02	0x00FF00FF
+@
+
+
+\subsection{Flushing bounding boxes}
+
+\subsubsection{Flushing lines}
+
+% advanced topics? useful optimisation?
+
+
+<<[[drawmesg()]] when draw line, possible flush>>=
+/* avoid memlinebbox if possible */
+if(dstid==0 || dst->layer!=nil){
+    /* BUG: this is terribly inefficient: update maximal containing rect*/
+    r = memlinebbox(p, q, e0, e1, j);
+    dstflush(dstid, dst, insetrect(r, -(1+1+j)));
+}
+@
+
+<<function memlinebbox>>=
+Rectangle
+memlinebbox(Point p0, Point p1, int end0, int end1, int radius)
+{
+    Rectangle r, r1;
+    int extra;
+
+    r.min.x = 10000000;
+    r.min.y = 10000000;
+    r.max.x = -10000000;
+    r.max.y = -10000000;
+    extra = lmax(memlineendsize(end0), memlineendsize(end1));
+    r1 = insetrect(canonrect(Rpt(p0, p1)), -(radius+extra));
+    addbbox(&r, r1.min);
+    addbbox(&r, r1.max);
+    return r;
+}
+@
+% need canonrect here?
+
+<<function memlineendsize>>=
+int
+memlineendsize(int end)
+{
+    int x3;
+
+    if((end&0x3F) != Endarrow)
+        return 0;
+    if(end == Endarrow)
+        x3 = Arrow3;
+    else
+        x3 = (end>>23) & 0x1FF;
+    return x3;
+}
+@
+
+
+<<function lmax>>=
+static
+int
+lmax(int a, int b)
+{
+    if(a > b)
+        return a;
+    return b;
+}
+@
+
+
+<<function addbbox>>=
+/*
+ * Simple-minded conservative code to compute bounding box of line.
+ * Result is probably a little larger than it needs to be.
+ */
+static
+void
+addbbox(Rectangle *r, Point p)
+{
+    if(r->min.x > p.x)
+        r->min.x = p.x;
+    if(r->min.y > p.y)
+        r->min.y = p.y;
+    if(r->max.x < p.x+1)
+        r->max.x = p.x+1;
+    if(r->max.y < p.y+1)
+        r->max.y = p.y+1;
+}
+@
+
+
+
+\subsubsection{Flushing polygons}
+
+<<[[drawmesg()]] when draw polygon, set doflush>>=
+doflush = false;
+if(dstid==0 || (dst->layer && dst->layer->screen->image->data == screenimage->data))
+    doflush = true;    /* simplify test in loop */
+@
+
+
+<<[[drawmesg()]] when draw polygon, if doflush>>=
+if(doflush){
+    esize = j;
+    if(*a == 'p'){
+        if(y == 0){
+            c = memlineendsize(e0);
+            if(c > esize)
+                esize = c;
+        }
+        if(y == ni-1){
+            c = memlineendsize(e1);
+            if(c > esize)
+                esize = c;
+        }
+    }
+    if(*a=='P' && e0!=1 && e0 !=~0)
+        r = dst->clipr;
+    else if(y > 0){
+        r = Rect(q.x-oesize, q.y-oesize, q.x+oesize+1, q.y+oesize+1);
+        combinerect(&r, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
+    }
+    if(rectclip(&r, dst->clipr))        /* should perhaps be an arg to dstflush */
+        dstflush(dstid, dst, r);
+}
+@
+
+<<[[drawmesg()]] when draw polygon, special flush if y is 1>>=
+if(y == 1)
+    dstflush(dstid, dst, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
+@
 
 \chapter{Conclusion}
 

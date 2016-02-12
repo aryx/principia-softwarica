@@ -64,8 +64,10 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
 
     a[0] = 'b';
     BPLONG(a+1, id);
+
     BPLONG(a+5, screenid);
     a[9] = refresh;
+
     BPLONG(a+10, chan);
     a[14] = repl;
     BPLONG(a+15, r.min.x);
@@ -96,6 +98,7 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
         i = malloc(sizeof(Image)); // client side allocation
         /*s: [[_allocimage()]] sanity check i */
         if(i == nil){
+            // free: 'f' id[4]
             a = bufimage(d, 1+4);
             if(a){
                 a[0] = 'f';
@@ -126,16 +129,16 @@ _allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val
 Image*
 namedimage(Display *d, char *name)
 {
-    uchar *a;
-    char *err, buf[12*12+1];
-    Image *i;
+    /*s: [[namedimage()]] body */
+    byte *a;
+    char *err = nil;
+    char buf[12*12+1]; // NINFO+1
+    Image *i = nil;
     int id, n;
     ulong chan;
 
-    err = 0;
-    i = 0;
-
     n = strlen(name);
+    /*s: [[namedimage()]] sanity check n */
     if(n >= 256){
         err = "name too long";
     Error:
@@ -147,11 +150,17 @@ namedimage(Display *d, char *name)
             free(i);
         return nil;
     }
+    /*e: [[namedimage()]] sanity check n */
     /* flush pending data so we don't get error allocating the image */
     flushimage(d, false);
+
+    // attach to a named image: 'n' dstid[4] j[1] name[j]
     a = bufimage(d, 1+4+1+n);
-    if(a == 0)
+    /*s: [[namedimage()]] sanity check a */
+    if(a == nil)
         goto Error;
+    /*e: [[namedimage()]] sanity check a */
+
     d->imageid++;
     id = d->imageid;
 
@@ -168,6 +177,7 @@ namedimage(Display *d, char *name)
     buf[12*12] = '\0';
 
     i = malloc(sizeof(Image));
+    /*s: [[namedimage()]] sanity check i */
     if(i == nil){
     Error1:
         a = bufimage(d, 1+4);
@@ -178,12 +188,17 @@ namedimage(Display *d, char *name)
         }
         goto Error;
     }
+    /*e: [[namedimage()]] sanity check i */
+
     i->display = d;
     i->id = id;
-    if((chan=strtochan(buf+2*12))==0){
+    chan=strtochan(buf+2*12);
+    /*s: [[namedimage()]] sanity check chan */
+    if(chan == 0){
         werrstr("bad channel '%.12s' from devdraw", buf+2*12);
         goto Error1;
     }
+    /*e: [[namedimage()]] sanity check chan */
     i->chan = chan;
     i->depth = chantodepth(chan);
     i->repl = atoi(buf+3*12);
@@ -195,31 +210,40 @@ namedimage(Display *d, char *name)
     i->clipr.min.y = atoi(buf+9*12);
     i->clipr.max.x = atoi(buf+10*12);
     i->clipr.max.y = atoi(buf+11*12);
+
     i->screen = nil;
     i->next = nil;
+
     return i;
+    /*e: [[namedimage()]] body */
 }
 /*e: function namedimage */
 
 /*s: function nameimage */
-int
-nameimage(Image *i, char *name, int in)
+error0
+nameimage(Image *i, char *name, bool in)
 {
-    uchar *a;
+    /*s: [[nameimage()]] body */
+    byte *a;
     int n;
 
     n = strlen(name);
+    // name an image: 'N' dstid[4] in[1] j[1] name[j]
     a = bufimage(i->display, 1+4+1+1+n);
-    if(a == 0)
+    /*s: [[nameimage()]] sanity check a */
+    if(a == nil)
         return 0;
+    /*e: [[nameimage()]] sanity check a */
     a[0] = 'N';
     BPLONG(a+1, i->id);
     a[5] = in;
     a[6] = n;
     memmove(a+7, name, n);
+
     if(flushimage(i->display, false) < 0)
-        return 0;
-    return 1;
+        return ERROR_0;
+    return OK_1;
+    /*e: [[nameimage()]] body */
 }
 /*e: function nameimage */
 
@@ -231,23 +255,24 @@ _freeimage1(Image *i)
     Display *d;
     Image *w;
 
+    /*s: [[_freeimage1()]] sanity check i */
     if(i == nil || i->display == nil)
         return OK_0;
+    /*e: [[_freeimage1()]] sanity check i */
 
     /* make sure no refresh events occur on this if we block in the write */
     d = i->display;
     /* flush pending data so we don't get error deleting the image */
     flushimage(d, false);
 
+    // free: 'f' id[4]
     a = bufimage(d, 1+4);
     /*s: [[_freeimage1()]] sanity check a */
     if(a == nil)
         return ERROR_NEG1;
     /*e: [[_freeimage1()]] sanity check a */
-
     a[0] = 'f';
     BPLONG(a+1, i->id);
-
     /*s: [[_freeimage1()]] if screen */
     if(i->screen){
         // remove_list(i, d->windows)

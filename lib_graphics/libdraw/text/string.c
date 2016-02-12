@@ -100,6 +100,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
     }else
         rptr = &r;
     sf = nil;
+
     while((*s || *r) && len){
         max = Max;
         if(len < max)

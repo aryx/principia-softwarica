@@ -453,6 +453,7 @@ screensize(int x, int y, int z, ulong chan)
     memimageinit();
     /*e: [[screensize()]] initializations part1 */
 
+    /*s: [[screensize()]] set [[gscreendata.bdata]] */
     if(scr->paddr == 0){
         int width = (x*z)/BI2BY; // width in bytes
         void *p;
@@ -475,9 +476,11 @@ screensize(int x, int y, int z, ulong chan)
         /*e: [[screensize()]] when use softscreen, other settings */
     }
     else{
+        // direct framebuffer
         gscreendata.bdata = scr->vaddr;
         scr->useflush = (scr->dev && scr->dev->flush);
     }
+    /*e: [[screensize()]] set [[gscreendata.bdata]] */
 
     /*s: [[screensize()]] free previous gscreen */
     if(gscreen)
@@ -497,7 +500,6 @@ screensize(int x, int y, int z, ulong chan)
     /*x: [[screensize()]] vga settings */
     vgaimageinit(chan);
     /*e: [[screensize()]] vga settings */
-
     /*s: [[screensize()]] unlock */
     unlock(&vgascreenlock);
     poperror();
@@ -563,8 +565,10 @@ byte*
 attachscreen(Rectangle* r, ulong* chan, int* d, int* width, bool *softscreen)
 {
 
+    /*s: [[attachscreen()]] sanity check gscreen */
     if(gscreen == nil || gscreendata.bdata == nil)
         return nil;
+    /*e: [[attachscreen()]] sanity check gscreen */
 
     *r          = gscreen->clipr;
     *chan       = gscreen->chan;
@@ -585,8 +589,10 @@ void
 flushmemscreen(Rectangle r)
 {
     VGAscr *scr;
-    uchar *sp, *disp, *sdisp, *edisp;
+    /*s: [[flushmemscreen()]] other locals */
+    byte *sp, *disp, *sdisp, *edisp;
     int y, len, incs, off, page;
+    /*e: [[flushmemscreen()]] other locals */
 
     scr = &vgascreen;
 
@@ -595,7 +601,7 @@ flushmemscreen(Rectangle r)
         scr->dev->flush(scr, r);
         return;
     }
-
+    // else
     if(gscreen == nil || scr->useflush == false)
         return;
     if(scr->dev == nil || scr->dev->page == nil)
@@ -603,14 +609,13 @@ flushmemscreen(Rectangle r)
     if(rectclip(&r, gscreen->r) == 0)
         return;
 
+    /*s: [[flushmemscreen()]] use VGA page */
     incs = gscreen->width * BY2WD;
 
     switch(gscreen->depth){
-    /*s: [[flushmemscreen()]] switch depth cases */
     case 8:
         len = Dx(r);
         break;
-    /*e: [[flushmemscreen()]] switch depth cases */
     default:
         len = 0;
         panic("flushmemscreen: depth\n");
@@ -662,6 +667,7 @@ flushmemscreen(Rectangle r)
             sdisp += incs - scr->apsize;
         }
     }
+    /*e: [[flushmemscreen()]] use VGA page */
 }
 /*e: function flushmemscreen(x86) */
 
@@ -824,12 +830,17 @@ bool hwdraw(Memdrawparam *par)
 
     scr = &vgascreen;
 
-    if((dst=par->dst) == nil || dst->data == nil)
+    dst=par->dst;
+    src=par->src;
+    mask=par->mask;
+    /*s: [[hwdraw()]] sanity check parameters */
+    if(dst == nil || dst->data == nil)
         return false;
-    if((src=par->src) == nil || src->data == nil)
+    if(src == nil || src->data == nil)
         return false;
-    if((mask=par->mask) == nil || mask->data == nil)
+    if(mask == nil || mask->data == nil)
         return false;
+    /*e: [[hwdraw()]] sanity check parameters */
 
     /*s: [[hwdraw()]] if software cursor(x86) */
     if(scr->cur == &swcursor){
@@ -849,11 +860,9 @@ bool hwdraw(Memdrawparam *par)
     
     if(dst->data->bdata != gscreendata.bdata)
         return false;
-
-
-
-
-    if(scr->fill==nil && scr->scroll==nil)
+    // else
+    /*s: [[hwdraw()]] when dst is the screen */
+    if(scr->fill == nil && scr->scroll == nil)
         return false;
     /*
      * If we have an opaque mask and source is one opaque
@@ -881,6 +890,7 @@ bool hwdraw(Memdrawparam *par)
         return scr->scroll(scr, par->r, par->sr);
 
     return false;   
+    /*e: [[hwdraw()]] when dst is the screen */
 }
 /*e: function hwdraw(x86) */
 
@@ -1226,7 +1236,7 @@ swcursorinit(void)
     }
     scr = &vgascreen;
 
-    if(scr==nil || gscreen==nil)
+    if(scr == nil || gscreen == nil)
         return;
     if(scr->dev == nil || scr->dev->linear == nil){
         if(!warned){
@@ -1249,7 +1259,7 @@ swcursorinit(void)
     swmask1 = allocmemimage(Rect(0,0,16,16), GREY1);
     swimg = allocmemimage(Rect(0,0,16,16), GREY8);
     swimg1 = allocmemimage(Rect(0,0,16,16), GREY1);
-    if(swback==nil || swmask==nil || swmask1==nil || swimg==nil || swimg1 == nil){
+    if(swback == nil || swmask == nil || swmask1 == nil || swimg == nil || swimg1 == nil){
         print("software cursor: allocmemimage fails");
         return;
     }

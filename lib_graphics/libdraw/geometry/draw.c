@@ -11,8 +11,10 @@ _setdrawop(Display *d, Drawop op)
 
     if(op != SoverD){
         a = bufimage(d, 1+1);
-        if(a == 0)
-            return;
+        /*s: [[_setdrawop()]] sanity check a */
+        if(a == nil)
+            return; // warning?
+        /*e: [[_setdrawop()]] sanity check a */
         a[0] = 'O';
         a[1] = op;
     }
@@ -27,14 +29,18 @@ draw1(Image *dst, Rectangle *r, Image *src, Point *p0, Image *mask, Point *p1, D
 
     _setdrawop(dst->display, op);
 
+    // draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4]
     a = bufimage(dst->display, 1+4+4+4+4*4+2*4+2*4);
+    /*s: [[draw1()]] sanity check a */
     if(a == nil)
-        return;
+        return; // warning?
+    /*e: [[draw1()]] sanity check a */
+    /*s: [[draw1()]] sanity check src and mask */
     if(src == nil)
         src = dst->display->black;
     if(mask == nil)
         mask = dst->display->opaque;
-
+    /*e: [[draw1()]] sanity check src and mask */
     a[0] = 'd';
     BPLONG(a+1, dst->id);
     BPLONG(a+5, src->id);

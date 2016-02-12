@@ -15,15 +15,18 @@ line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src,
 void
 lineop(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src, Point sp, Drawop op)
 {
-    uchar *a;
+    byte *a;
 
     _setdrawop(dst->display, op);
 
+    // draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4]
     a = bufimage(dst->display, 1+4+2*4+2*4+4+4+4+4+2*4);
-    if(a == 0){
+    /*s: [[lineop()]] sanity check a */
+    if(a == nil){
         fprint(2, "image line: %r\n");
         return;
     }
+    /*e: [[lineop()]] sanity check a */
     a[0] = 'L';
     BPLONG(a+1, dst->id);
     BPLONG(a+5, p0.x);

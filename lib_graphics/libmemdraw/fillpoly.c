@@ -12,6 +12,8 @@ struct Seg
 {
     Point	p0;
     Point	p1;
+
+    /*s: [[Seg]] other fields */
     long	num;
     long	den;
     long	dz;
@@ -19,6 +21,7 @@ struct Seg
     long	z;
     long	zerr;
     long	d;
+    /*e: [[Seg]] other fields */
 };
 /*e: struct Seg */
 
@@ -79,53 +82,71 @@ fillpoint(Memimage *dst, int x, int y, Memimage *src, Point p, int op)
 void
 memfillpoly(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point sp, int op)
 {
-    _memfillpolysc(dst, vert, nvert, w, src, sp, 0, 0, 0, op);
+    _memfillpolysc(dst, vert, nvert, w, src, sp, false, 0, false, op);
 }
 /*e: function memfillpoly */
 
 /*s: function _memfillpolysc */
 void
-_memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point sp, int detail, int fixshift, int clipped, int op)
+_memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Point sp, bool detail, int fixshift, bool clipped, int op)
 {
-    Seg **seg, *segtab;
+    // array<Seg> (length = nvert+1)
+    Seg *segtab;
+    // array<Seg*> (length = nvert+2)
+    Seg **seg;
     Point p0;
     int i;
 
+    /*s: [[_memfillpolysc()]] sanity check nvert */
     if(nvert == 0)
         return;
+    /*e: [[_memfillpolysc()]] sanity check nvert */
 
-    seg = malloc((nvert+2)*sizeof(Seg*));
-    if(seg == nil)
-        return;
     segtab = malloc((nvert+1)*sizeof(Seg));
+    /*s: [[_memfillpolysc()]] sanity check segtab */
     if(segtab == nil) {
         free(seg);
         return;
     }
+    /*e: [[_memfillpolysc()]] sanity check segtab */
+    seg = malloc((nvert+2)*sizeof(Seg*));
+    /*s: [[_memfillpolysc()]] sanity check seg */
+    if(seg == nil)
+        return;
+    /*e: [[_memfillpolysc()]] sanity check seg */
 
     sp.x = (sp.x - vert[0].x) >> fixshift;
     sp.y = (sp.y - vert[0].y) >> fixshift;
-    p0 = vert[nvert-1];
+
+    p0 = vert[nvert-1]; // start from the end
+    /*s: [[_memfillpolysc()]] adjust p0 if no fixshift */
     if(!fixshift) {
         p0.x <<= 1;
         p0.y <<= 1;
     }
+    /*e: [[_memfillpolysc()]] adjust p0 if no fixshift */
     for(i = 0; i < nvert; i++) {
         segtab[i].p0 = p0;
         p0 = vert[i];
+        /*s: [[_memfillpolysc()]] adjust p0 if no fixshift */
         if(!fixshift) {
             p0.x <<= 1;
             p0.y <<= 1;
         }
+        /*e: [[_memfillpolysc()]] adjust p0 if no fixshift */
         segtab[i].p1 = p0;
         segtab[i].d = 1;
     }
+    /*s: [[_memfillpolysc()]] adjust fixshift if no fixshift */
     if(!fixshift)
         fixshift = 1;
+    /*e: [[_memfillpolysc()]] adjust fixshift if no fixshift */
 
     xscan(dst, seg, segtab, nvert, w, src, sp, detail, fixshift, clipped, op);
+    /*s: [[_memfillpolysc()]] if detail */
     if(detail)
         yscan(dst, seg, segtab, nvert, w, src, sp, fixshift, op);
+    /*e: [[_memfillpolysc()]] if detail */
 
     free(seg);
     free(segtab);
@@ -179,7 +200,7 @@ smuldivmod(long x, long y, long z, long *mod)
 
 /*s: function xscan */
 static void
-xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, Point sp, int detail, int fixshift, int clipped, int op)
+xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, Point sp, bool detail, int fixshift, bool clipped, int op)
 {
     long y, maxy, x, x2, xerr, xden, onehalf;
     Seg **ep, **next, **p, **q, *s;
@@ -198,7 +219,11 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
  * code is too slow, someone will come up with a better improvement
  * than this sleazy hack.	-rsc
  *
-    if(clipped && (src->flags&Frepl) && src->depth==8 && Dx(src->r)==1 && Dy(src->r)==1) {
+    if(clipped 
+    && (src->flags&Frepl) 
+    && src->depth==8 
+    && Dx(src->r)==1 
+    && Dy(src->r)==1) {
         fill = fillcolor;
         sp.x = membyteval(src);
     }

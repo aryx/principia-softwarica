@@ -83,8 +83,10 @@ struct Memimage
 /*s: struct Memcmap */
 struct Memcmap
 {
-    uchar	cmap2rgb[3*256];
-    uchar	rgb2cmap[16*16*16];
+    // map<colorcmap8, (reg8, green8, blue8)>
+    byte	cmap2rgb[3*256];
+    // map<(red4,green4,blue4), colorcmap8)
+    byte	rgb2cmap[16*16*16];
 };
 /*e: struct Memcmap */
 
@@ -118,10 +120,10 @@ struct	Memsubfont
  * Encapsulated parameters and information for sub-draw routines.
  */
 enum Drawparams {
-    Simplesrc=1<<0,
-    Simplemask=1<<1,
+    Simplesrc =1<<0, // 1x1 src
+    Simplemask=1<<1, // 1x1 mask
 
-    Replsrc=1<<2,
+    Replsrc =1<<2,
     Replmask=1<<3,
 
     Fullmask=1<<4,
@@ -143,13 +145,15 @@ struct	Memdrawparam
     int op;
 
     /*s: [[Memdrawparam]] other fields */
-    // enum<Subdraw>
+    // enum<Drawparams>
     ulong state;
-    ulong mval;		/* if Simplemask, the mask pixel in mask format */
-    ulong mrgba;	/* mval in rgba */
+    /*x: [[Memdrawparam]] other fields */
     ulong sval;		/* if Simplesrc, the source pixel in src format */
     ulong srgba;	/* sval in rgba */
     ulong sdval;	/* sval in dst format */
+    /*x: [[Memdrawparam]] other fields */
+    ulong mval;		/* if Simplemask, the mask pixel in mask format */
+    ulong mrgba;	/* mval in rgba */
     /*e: [[Memdrawparam]] other fields */
 };
 /*e: struct Memdrawparam */

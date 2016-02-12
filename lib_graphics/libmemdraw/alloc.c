@@ -142,8 +142,10 @@ allocmemimage(Rectangle r, ulong chan)
 void
 freememimage(Memimage *i)
 {
+    /*s: [[freememimage()]] sanity check i */
     if(i == nil)
         return;
+    /*e: [[freememimage()]] sanity check i */
     // free the Memdata
     if(i->data->ref-- == 1 && i->data->allocd){
         if(i->data->base)
@@ -188,7 +190,7 @@ byteaddr(Memimage *i, Point p)
     }
     /*e: [[byteaddr()]] if depth less than 8 */
     else
-        return a + p.x*(i->depth/8);
+        return a + p.x * (i->depth/8);
 }
 /*e: function byteaddr */
 

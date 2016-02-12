@@ -29,17 +29,22 @@ static
 void
 _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memimage *src, Point sp, Rectangle clipr, int op)
 {
+    Memlayer *dl;
+    /*s: [[_memline()]] other locals */
     Rectangle r;
     struct Lline ll;
     Point d;
-    int srcclipped;
-    Memlayer *dl;
+    bool srcclipped = false;
+    /*e: [[_memline()]] other locals */
 
+    /*s: [[_memline()]] sanity check radius */
     if(radius < 0)
         return;
+    /*e: [[_memline()]] sanity check radius */
+    /*s: [[_memline()]] sanity check no src layer */
     if(src->layer)	/* can't draw line with layered source */
         return;
-    srcclipped = 0;
+    /*e: [[_memline()]] sanity check no src layer */
 
    Top:
     dl = dst->layer;
@@ -55,7 +60,7 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
             return;
         if((src->flags&Frepl)==0 && rectclip(&clipr, rectsubpt(src->r, d))==0)
             return;
-        srcclipped = 1;
+        srcclipped = true;
     }
 
     /* dst is known to be a layer */
@@ -110,7 +115,7 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
 
     USED(screenr.min.x);
     ll = etc;
-    if(insave && ll->dstlayer->save==nil)
+    if(insave && ll->dstlayer->save == nil)
         return;
     if(!rectclip(&clipr, screenr))
         return;

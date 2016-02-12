@@ -137,7 +137,6 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
     if(gengetwindow(display, buf, &view, &screen, ref) < 0)
         goto Error;
     /*e: [[geninitdraw()]] get window */
-
     atexit(drawshutdown);
 
     return OK_1;
@@ -148,13 +147,12 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
 errorneg1
 initdraw(Errorfn error, char *fontname , char *label)
 {
-    char *dev = "/dev";
 
     if(access("/dev/draw/new", AEXIST)<0 && bind("#i", "/dev", MAFTER)<0){
         fprint(2, "imageinit: can't bind /dev/draw: %r\n");
         return ERROR_NEG1;
     }
-    return geninitdraw(dev, error, fontname, label, dev, Refnone);
+    return geninitdraw("/dev", error, fontname, label, "/dev", Refnone);
 }
 /*e: function initdraw */
 
@@ -334,6 +332,7 @@ initdisplay(char *dev, char *win, Errorfn error)
         goto Error3;
     }
     /*e: [[initdisplay()]] sanity check disp */
+    disp->dirno = atoi(info+0*12);
 
     image = nil;
     /*s: [[initdisplay()]] sanity check image part1 */
@@ -350,6 +349,7 @@ initdisplay(char *dev, char *win, Errorfn error)
         if(image == nil)
             goto Error5;
         /*e: [[initdisplay()]] sanity check image part2 */
+
         image->display = disp;
         image->id = 0; // info+1*12 but should always be 0
         image->chan = strtochan(info+2*12);
@@ -367,6 +367,9 @@ initdisplay(char *dev, char *win, Errorfn error)
         image->clipr.max.y = atoi(info+11*12);
     }
     disp->image = image;
+    disp->fd    = datafd;
+    disp->ctlfd = ctlfd;
+    disp->reffd = reffd;
 
     /*s: [[initdisplay()]] set display bufsize */
     disp->bufsize = iounit(datafd);
@@ -384,18 +387,15 @@ initdisplay(char *dev, char *win, Errorfn error)
     if(disp->buf == nil)
         goto Error5;
     /*e: [[initdisplay()]] sanity check buf */
-    disp->dirno = atoi(info+0*12);
-
-    disp->fd    = datafd;
-    disp->ctlfd = ctlfd;
-    disp->reffd = reffd;
     disp->bufp = disp->buf;
+
     disp->error = error;
     disp->windir = t;
     disp->devdir = strdup(dev);
 
     qlock(&disp->qlock); // released in closedisplay (why not earlier? first API call?)
-
+  
+    // first API calls!
     disp->white = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DWhite);
     disp->black = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DBlack);
     /*s: [[initdisplay()]] sanity check white and black */
@@ -429,11 +429,13 @@ closedisplay(Display *disp)
 static void
 _closedisplay(Display *disp, bool isshutdown)
 {
-    int fd;
+    fdt fd;
     char buf[128];
 
+    /*s: [[_closedisplay()]] sanity check disp */
     if(disp == nil)
         return;
+    /*e: [[_closedisplay()]] sanity check disp */
     if(disp == display)
         display = nil;
 
@@ -465,6 +467,7 @@ _closedisplay(Display *disp, bool isshutdown)
     close(disp->ctlfd);
     /* should cause refresh slave to shut down */
     close(disp->reffd);
+
     qunlock(&disp->qlock);
     free(disp);
 }
@@ -547,9 +550,12 @@ flushimage(Display *d, bool visible)
     if(d == nil)
         return OK_0;
     /*e: [[flushimage()]] sanity check d */
+    /*s: [[flushimage()]] if visible */
+    // visible: 'v'
     if(visible){
         *d->bufp++ = 'v';	/* five bytes always reserved for this */
     }
+    /*e: [[flushimage()]] if visible */
     return doflush(d);
 }
 /*e: function flushimage */

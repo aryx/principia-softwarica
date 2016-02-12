@@ -25,7 +25,7 @@ typedef struct	Subfont Subfont;
 extern	int	Rfmt(Fmt*);
 extern	int	Pfmt(Fmt*);
 
-/*s: enum _anon_ */
+/*s: enum Colors */
 enum
 {
     DOpaque			= 0xFFFFFFFF,
@@ -61,7 +61,7 @@ enum
     DNofill	= DNotacolor,
     
 };
-/*e: enum _anon_ */
+/*e: enum Colors */
 
 /*s: enum _anon_ (include/draw.h) */
 enum
@@ -86,10 +86,10 @@ enum
 /*e: enum _anon_ (include/draw.h)2 */
 
 /*s: enum _anon_ (include/draw.h)3 */
-enum
+enum EndLine
 {
     /* line ends */
-    Endsquare	= 0,
+    Endsquare	= 0, // default
     Enddisc		= 1,
     Endarrow	= 2,
 
@@ -127,7 +127,7 @@ enum Drawop
 /*e: enum drawop */
 typedef enum drawop Drawop;
 
-/*s: enum _anon_ (include/draw.h)4 */
+/*s: enum ImageChan */
 /*
  * image channel descriptors 
  */
@@ -141,11 +141,13 @@ enum ImageChan {
     CAlpha,
 
     CMap,
+    /*s: [[ImageChan]] cases */
     CIgnore,
+    /*e: [[ImageChan]] cases */
 
     NChan,
 };
-/*e: enum _anon_ (include/draw.h)4 */
+/*e: enum ImageChan */
 
 /*s: function __DC */
 #define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
@@ -171,27 +173,26 @@ enum ImageChan {
 /*e: function TYPE */
 
 /*s: enum _anon_ (include/draw.h)5 */
-enum {
-    GREY1	= CHAN1(CGrey, 1), // used for bitmask, black and white
-
+enum ImageType {
+    GREY1	= CHAN1(CGrey, 1), // used for masks, black and white
+    CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default
+    RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5), // Raspberry mode by default
+    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // flexible
+    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
+    /*s: [[ImageType] cases */
     GREY2	= CHAN1(CGrey, 2),
     GREY4	= CHAN1(CGrey, 4),
     GREY8	= CHAN1(CGrey, 8),
 
-    CMAP8	= CHAN1(CMap, 8),
-
     RGB15	= CHAN4(CIgnore, 1, CRed, 5, CGreen, 5, CBlue, 5),
-    RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5),
     RGB24	= CHAN3(CRed, 8, CGreen, 8, CBlue, 8),
     BGR24	= CHAN3(CBlue, 8, CGreen, 8, CRed, 8),
-
-    RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // classic one?
-    ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
-
+    /*x: [[ImageType] cases */
     ABGR32	= CHAN4(CAlpha, 8, CBlue, 8, CGreen, 8, CRed, 8),
 
     XRGB32	= CHAN4(CIgnore, 8, CRed, 8, CGreen, 8, CBlue, 8),
     XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
+    /*e: [[ImageType] cases */
 };
 /*e: enum _anon_ (include/draw.h)5 */
 
@@ -229,7 +230,7 @@ struct Screen
 /*s: struct Display */
 struct Display
 {
-    // ref_own<Image>, the framebuffer
+    // ref_own<Image>, the full screen
     Image	*image;
 
     /*s: [[Display]] devdraw connection fields */
@@ -300,7 +301,7 @@ struct Image
     Rectangle	r;		/* rectangle in data area, local coords */
     Rectangle 	clipr;	/* clipping region */
 
-    ulong		chan;
+    ulong		chan; // image format
 
     // derives from Image.chan
     int			depth;		/* number of bits per pixel */
@@ -487,7 +488,6 @@ extern int	wordsperline(Rectangle, int);
  */
 extern	void	readcolmap(Display*, RGB*);
 extern	void	writecolmap(Display*, RGB*);
-extern	ulong	setalpha(ulong, byte);
 
 /*
  * Windows
@@ -576,11 +576,12 @@ extern int	bezier(Image*, Point, Point, Point, Point, int, int, int, Image*, Poi
 extern int	bezierop(Image*, Point, Point, Point, Point, int, int, int, Image*, Point, Drawop);
 extern int	bezspline(Image*, Point*, int, int, int, int, Image*, Point);
 extern int	bezsplineop(Image*, Point*, int, int, int, int, Image*, Point, Drawop);
-extern int	bezsplinepts(Point*, int, Point**);
 extern int	fillbezier(Image*, Point, Point, Point, Point, int, Image*, Point);
 extern int	fillbezierop(Image*, Point, Point, Point, Point, int, Image*, Point, Drawop);
 extern int	fillbezspline(Image*, Point*, int, int, Image*, Point);
 extern int	fillbezsplineop(Image*, Point*, int, int, Image*, Point, Drawop);
+
+extern int	bezsplinepts(Point*, int, Point**);
 
 
 extern Point	string(Image*, Point, Image*, Point, Font*, char*);

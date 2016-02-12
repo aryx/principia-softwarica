@@ -6,7 +6,7 @@
 /*s: function addcoord */
 static
 uchar*
-addcoord(uchar *p, int oldx, int newx)
+addcoord(byte *p, int oldx, int newx)
 {
     int dx;
 
@@ -31,11 +31,15 @@ dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, I
     uchar *a, *t, *u;
     int i, ox, oy;
 
+    /*s: [[dopoly()]] sanity check n */
     if(np == 0)
         return;
+    /*e: [[dopoly()]] sanity check n */
     t = malloc(np*2*3);
+    /*s: [[dopoly()]] sanity check t */
     if(t == nil)
         return;
+    /*e: [[dopoly()]] sanity check t */
     u = t;
     ox = oy = 0;
     for(i=0; i<np; i++){
@@ -47,12 +51,15 @@ dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, I
 
     _setdrawop(dst->display, op);
 
+    /// polygon: 'p' dstid[4] n[2] end0[4] end1[4] radius[4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n]
     a = bufimage(dst->display, 1+4+2+4+4+4+4+2*4+(u-t));
-    if(a == 0){
+    /*s: [[dopoly()]] sanity check a */
+    if(a == nil){
         free(t);
         fprint(2, "image poly: %r\n");
         return;
     }
+    /*e: [[dopoly()]] sanity check a */
     a[0] = cmd;
     BPLONG(a+1, dst->id);
     BPSHORT(a+5, np-1);

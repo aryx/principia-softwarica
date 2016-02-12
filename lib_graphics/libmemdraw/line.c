@@ -21,7 +21,7 @@ membrush(int radius)
     static Memimage *brush;
     static int brushradius;
 
-    if(brush==nil || brushradius!=radius){
+    if(brush == nil || brushradius != radius){
         freememimage(brush);
         brush = allocmemimage(Rect(0, 0, 2*radius+1, 2*radius+1), memopaque->chan);
         if(brush != nil){
@@ -30,6 +30,7 @@ membrush(int radius)
         }
         brushradius = radius;
     }
+
     return brush;
 }
 /*e: function membrush */
@@ -93,30 +94,38 @@ arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
 void
 _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memimage *src, Point sp, Rectangle clipr, int op)
 {
-    /*
-     * BUG: We should really really pick off purely horizontal and purely
-     * vertical lines and handle them separately with calls to memimagedraw
-     * on rectangles.
-     */
 
-    int hor;
+    bool hor;
+    /*s: [[_memimageline()]] other locals */
+    Rectangle oclipr;
+    /*x: [[_memimageline()]] other locals */
     int sin, cos, dx, dy, t;
-    Rectangle oclipr, r;
-    Point q, pts[10], *pp, d;
+    Rectangle r;
+    Point q;
+    Point pts[10], *pp;
+    Point d;
+    /*e: [[_memimageline()]] other locals */
 
+    /*s: [[_memline()]] sanity check radius */
     if(radius < 0)
         return;
-    if(rectclip(&clipr, dst->r) == 0)
+    /*e: [[_memline()]] sanity check radius */
+    /*s: [[_memimageline()]] clipping clipr */
+    if(!rectclip(&clipr, dst->r))
         return;
-    if(rectclip(&clipr, dst->clipr) == 0)
+    if(!rectclip(&clipr, dst->clipr))
         return;
+
     d = subpt(sp, p0);
-    if(rectclip(&clipr, rectsubpt(src->clipr, d)) == 0)
+    if(!rectclip(&clipr, rectsubpt(src->clipr, d)))
         return;
-    if((src->flags&Frepl)==0 && rectclip(&clipr, rectsubpt(src->r, d))==0)
+    if((src->flags&Frepl)==0 && !rectclip(&clipr, rectsubpt(src->r, d)))
         return;
+    /*e: [[_memimageline()]] clipping clipr */
+
     /* this means that only verline() handles degenerate lines (p0==p1) */
-    hor = (abs(p1.x-p0.x) > abs(p1.y-p0.y));
+    hor = (abs(p1.x - p0.x) > abs(p1.y - p0.y));
+
     /*
      * Clipping is a little peculiar.  We can't use Sutherland-Cohen
      * clipping because lines are wide.  But this is probably just fine:
@@ -125,87 +134,131 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
      * using clipr to define the region being written, and get the same set
      * of pixels regardless of the dicing.
      */
-    if((hor && p0.x>p1.x) || (!hor && p0.y>p1.y)){
+     // ????
+
+    /*s: [[_memimageline()]] swap p0 and p1 to have p0 before p1 */
+    if((hor && p0.x > p1.x) || (!hor && p0.y > p1.y)){
+        // swap(p0, p1)
         q = p0;
         p0 = p1;
         p1 = q;
+        // swap(end0, end1)
         t = end0;
         end0 = end1;
         end1 = t;
     }
+    /*e: [[_memimageline()]] swap p0 and p1 to have p0 before p1 */
 
-    if((p0.x == p1.x || p0.y == p1.y) && (end0&0x1F) == Endsquare && (end1&0x1F) == Endsquare){
+    // easy case
+    /*s: [[_memimageline()]] when vertical or horizontal lines */
+    if((p0.x == p1.x || p0.y == p1.y) && 
+        (end0&0x1F) == Endsquare && 
+        (end1&0x1F) == Endsquare){
         r.min = p0;
         r.max = p1;
+        // vertical line
         if(p0.x == p1.x){
             r.min.x -= radius;
             r.max.x += radius+1;
         }
+        // horizontal line
         else{
             r.min.y -= radius;
             r.max.y += radius+1;
         }
+        /*s: [[_memimageline()]] change dst clipr */
         oclipr = dst->clipr;
-        sp = addpt(r.min, d);
         dst->clipr = clipr;
+        /*e: [[_memimageline()]] change dst clipr */
+        sp = addpt(r.min, d);
         memimagedraw(dst, r, src, sp, memopaque, sp, op);
+        /*s: [[_memimageline()]] restore dst clipr */
         dst->clipr = oclipr;
+        /*e: [[_memimageline()]] restore dst clipr */
         return;
     }
-
-/*    Hard: */
+    /*e: [[_memimageline()]] when vertical or horizontal lines */
+    // else
+    /*    Hard: */
+    /*s: [[_memimageline()]] when arbitrary lines */
     /* draw thick line using polygon fill */
-    icossin2(p1.x-p0.x, p1.y-p0.y, &cos, &sin);
+    icossin2(p1.x - p0.x, p1.y - p0.y, &cos, &sin);
     dx = (sin*(2*radius+1))/2;
     dy = (cos*(2*radius+1))/2;
     pp = pts;
+    /*s: [[_memimageline()]] change dst clipr */
     oclipr = dst->clipr;
     dst->clipr = clipr;
-    q.x = ICOSSCALE*p0.x+ICOSSCALE/2-cos/2;
-    q.y = ICOSSCALE*p0.y+ICOSSCALE/2-sin/2;
+    /*e: [[_memimageline()]] change dst clipr */
+
+    q.x = ICOSSCALE*p0.x + ICOSSCALE/2- cos/2;
+    q.y = ICOSSCALE*p0.y + ICOSSCALE/2- sin/2;
     switch(end0 & 0x1F){
+    /*s: [[_memimageline()]] switch end0 cases */
+    case Endarrow:
+        arrowend(q, pp, end0, -sin, -cos, radius);
+        _memfillpolysc(dst, pts, 5, ~0, src, 
+                       addpt(pts[0], mulpt(d, ICOSSCALE)), 
+                       true, 10, true, op);
+        pp[1] = pp[4];
+        pp += 2;
+        break;
+    /*e: [[_memimageline()]] switch end0 cases */
+    /*s: [[_memimageline()]] switch end0 cases, fallthrough to Endsquare */
     case Enddisc:
         discend(p0, radius, dst, src, d, op);
         /* fall through */
+    /*e: [[_memimageline()]] switch end0 cases, fallthrough to Endsquare */
     case Endsquare:
     default:
-        pp->x = q.x-dx;
-        pp->y = q.y+dy;
+        pp->x = q.x - dx;
+        pp->y = q.y + dy;
         pp++;
-        pp->x = q.x+dx;
-        pp->y = q.y-dy;
+        pp->x = q.x + dx;
+        pp->y = q.y - dy;
         pp++;
         break;
-    case Endarrow:
-        arrowend(q, pp, end0, -sin, -cos, radius);
-        _memfillpolysc(dst, pts, 5, ~0, src, addpt(pts[0], mulpt(d, ICOSSCALE)), 1, 10, 1, op);
-        pp[1] = pp[4];
-        pp += 2;
     }
+    // 2 points
+
     q.x = ICOSSCALE*p1.x+ICOSSCALE/2+cos/2;
     q.y = ICOSSCALE*p1.y+ICOSSCALE/2+sin/2;
     switch(end1 & 0x1F){
+    /*s: [[_memimageline()]] switch end1 cases */
+    case Endarrow:
+        arrowend(q, pp, end1, sin, cos, radius);
+        _memfillpolysc(dst, pp, 5, ~0, src, 
+                       addpt(pp[0], mulpt(d, ICOSSCALE)), 
+                       true, 10, true, op);
+        pp[1] = pp[4];
+        pp += 2;
+        break;
+    /*e: [[_memimageline()]] switch end1 cases */
+    /*s: [[_memimageline()]] switch end1 cases, fallthrough to Endsquare */
     case Enddisc:
         discend(p1, radius, dst, src, d, op);
         /* fall through */
+    /*e: [[_memimageline()]] switch end1 cases, fallthrough to Endsquare */
     case Endsquare:
     default:
-        pp->x = q.x+dx;
-        pp->y = q.y-dy;
+        pp->x = q.x + dx;
+        pp->y = q.y - dy;
         pp++;
-        pp->x = q.x-dx;
-        pp->y = q.y+dy;
+        pp->x = q.x - dx;
+        pp->y = q.y + dy;
         pp++;
         break;
-    case Endarrow:
-        arrowend(q, pp, end1, sin, cos, radius);
-        _memfillpolysc(dst, pp, 5, ~0, src, addpt(pp[0], mulpt(d, ICOSSCALE)), 1, 10, 1, op);
-        pp[1] = pp[4];
-        pp += 2;
     }
-    _memfillpolysc(dst, pts, pp-pts, ~0, src, addpt(pts[0], mulpt(d, ICOSSCALE)), 0, 10, 1, op);
+    // 2 more points
+
+    _memfillpolysc(dst, pts, pp-pts, ~0, src, 
+                   addpt(pts[0], mulpt(d, ICOSSCALE)), 
+                   false, 10, true, op);
+    /*s: [[_memimageline()]] restore dst clipr */
     dst->clipr = oclipr;
+    /*e: [[_memimageline()]] restore dst clipr */
     return;
+    /*e: [[_memimageline()]] when arbitrary lines */
 }
 /*e: function _memimageline */
 

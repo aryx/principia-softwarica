@@ -8,10 +8,11 @@ static
 void
 doellipse(int cmd, Image *dst, Point *c, int xr, int yr, int thick, Image *src, Point *sp, int alpha, int phi, Drawop op)
 {
-    uchar *a;
+    byte *a;
 
     _setdrawop(dst->display, op);
 
+    // ellipse: 'e' dstid[4] srcid[4] center[2*4] a[4] b[4] thick[4] sp[2*4] alpha[4] phi[4]
     a = bufimage(dst->display, 1+4+4+2*4+4+4+4+2*4+2*4);
     if(a == 0){
         fprint(2, "image ellipse: %r\n");
