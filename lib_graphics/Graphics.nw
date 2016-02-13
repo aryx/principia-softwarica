@@ -13,7 +13,7 @@
 
 %thx to LP, changed for the better a few things:
 % - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, Display.dataqid,
-%    Display.isnew, Memdata.imref, convxx[], ...)
+%    Display.isnew, Memdata.imref, convxx[], fillxxx() ...)
 % - screen.h cleaner interface
 % - renamed some globals (screen -> view, _screen -> screen)
 %   TODO gscreen, screenimage, vgascr, so easier to see associated part
@@ -33,6 +33,8 @@
 %thx to this manual, better understand svgalib? tronscroll:) mode X? cairo?:
 %  - better understand channels, and the many image formats
 %  - better understand alpha
+%  - SEMI better understand clipping and tiling (replicating)
+%  - TODO learn scanline algorithm for polygons (subtle)
 %  - TODO better understand bezier (could be useful for edge bunding visual)
 %    that they are the essence of vectoriel fonts?
 %  - TODO understand freshrate, double buffer, vertical sync, flickering,
@@ -186,6 +188,14 @@ How fonts are managed? What are truetype fonts?
 \end{itemize}
 \l how cooperate with windowing system?
 
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures:
+% - growing array
+% - moveable shared area with backward pointer
+
+%algorithms:
+% - fill polygon, quite complex
+
 \section{\plan{} [[/dev/draw/]]}
 
 We will explain in this book the code of the \plan graphics
@@ -217,6 +227,15 @@ but which were ultimately discarded:
 \item gks
 % the seminal one? but present in any real system?
 % or was it bitblt and the blit machine?
+
+\item SRGP (Simple Raster Graphics Package)
+% used in second edition of CGPP book. But actual reference implementation?
+%  or implemented by calling Xlib, Quickdraw, etc?
+% (SGP discussed in the first edition of cgpp book
+%  and based on siggraph core 1979 standard)
+% SPHIGS was for 3d (Simple PHIGS, where PHIGS was a precursor of openGL)
+% 3rd edition use WPF, argh, and apparently does not discuss old style
+%  scanline algorithms.
 
 \item Postscript
 % maybe everything API after took Postscript as a model?
@@ -262,8 +281,8 @@ but which were ultimately discarded:
 \end{itemize}
 
 %#industry:
-% - WPF (Windows Presentation Framework?)
-% - CoreGraphics
+% - WPF (Windows Presentation Framework?), used by CGPP book.
+% - CoreGraphics (and before QuickDraw)
 % - Quartz, relate to macos expose? advanced graphics there
 % - Flash
 %mini:
@@ -302,9 +321,10 @@ but which were ultimately discarded:
 
 % C as usual.
 
-% assume more? assume Principle of Graphics book by Foley? maybe
-%  for drawing shapes chapter.
-% most books focused on 3d anyway.
+% assume Computer Graphics, principles and practice (CGPP)
+%  Foley et al. at least for drawing shapes chapter. Too long
+%  otherwise to explain algorithm.
+% other books? no, most books focused on 3d anyway.
 
 % graphics(2)!! for big picture
 %  great (a few changes though, like screen -> view)
@@ -316,8 +336,9 @@ but which were ultimately discarded:
 %advanced: more for rio
 % window(2) 
 % mouse(3)
+%note that CGPP talks also about windowing system I think.
 
-% see plan9-in-technicolor.ps
+% see plan9-in-technicolor.ps? meh.
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -350,13 +371,14 @@ from Bell Labs.
 % screen made of pixels. Lots of them. Resolution. Depth/encoding. Image(s)!!
 % software/hardware interface can be as simple as a framebuffer (e.g. bcm/).
 % pixels, so not continuous! so if draw diagonal, then no that easy actually :)
-% => bresenham algorithm
+% => bresenham algorithm, scanline algorithm.
 
 % horiz/vert lines, rectangle, arbitrary line, polyline, ellipse, arc, bezier,
 % and also text (fonts) which are special kind of pictures (bezier? or raster?)
 % colors, alpha, channels, color map
 % "images", composition (porter-duff) so can have transluscent effect, 
 % clipping, rotate/scale/transform (lacking in plan9).
+% tiling (replicating) when used as a source.
 
 % Vector graphics, rasterization
 
@@ -371,9 +393,13 @@ from Bell Labs.
 %http://blogs.igalia.com/itoral/2014/07/29/a-brief-introduction-to-the-linux-graphics-stack/
 
 %other topics:
-% - scale/rotate/transform not in this book.
-% - 3d. lighting. Not in this book. based on triangles usually.
+% - scale/rotate/transform not in this book. But can be library wrapper
+%    over library presented here.
+% - antialiasing?
 % - Animation (Core Animation) not in this book either.
+% - 3d. lighting. Not in this book. based on triangles usually.
+% - physical rendering
+% - GPU
 
 \section{[[/dev/draw/]] files interface}
 
@@ -1205,7 +1231,7 @@ drawnewclient(void)
     // find free slot
     for(i=0; i<sdraw.nclient; i++){
         cl = sdraw.client[i];
-        // found one
+        // found one, i contains the free slot
         if(cl == nil)
             break;
     }
@@ -1269,18 +1295,17 @@ struct Image
 {
     int			id;		/* id of system-held Image */
 
-    // ref<Display>
-    Display		*display;	/* display holding data */
-
     Rectangle	r;		/* rectangle in data area, local coords */
-    Rectangle 	clipr;	/* clipping region */
 
     ulong		chan; // image format
-
     // derives from Image.chan
     int			depth;		/* number of bits per pixel */
-    // bitset<enum<fxxx>>    
-    int			repl;		/* flag: data replicates to tile clipr */
+
+    Rectangle 	clipr;	/* clipping region */
+    bool		repl;	/* flag: data replicates to tile clipr */
+
+    // ref<Display>
+    Display		*display;	/* display holding data */
 
     <<[[Image]] layer fields>>
 
@@ -1356,30 +1381,6 @@ int		imageid;
 % unused (in Client DImage hash).
 
 
-%less: hmm actually this is in memdraw.h so maybe
-% it can't be the repl flag in Image.
-
-<<enum fxxx>>=
-enum {
-    Frepl	= 1<<0,	/* is replicated */
-    Fgrey	= 1<<2,	/* is grey */
-    Falpha	= 1<<3,	/* has explicit alpha */
-    Fcmap	= 1<<4,	/* has cmap channel */
-    Fbytes	= 1<<5,	/* has only 8-bit channels */
-};
-@
-%dead:    Fsimple	= 1<<1,	/* is 1x1 */
-% >> >> >> >> >> >>
-
-%Fbytes does not mean CMAP8, it means 8 bits depth but possibly multiple
-% channels
-
-% start of pbs, many different image formats ...
-
-% all important notions!
-
-
-
 \subsection{[[Memimage]], [[screenimage]] and [[gscreen]]}
 % rename draw_screen, screen_screen, vga_screen
 
@@ -1388,14 +1389,14 @@ enum {
 struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
-    Rectangle	clipr;		/* clipping region */
 
     ulong	chan;	/* channel descriptions */
-
     // derives from Memimage.chan
     int		depth;	/* number of bits of storage per pixel */
     int		nchan;	/* number of channels */
-    //bitset<enum<fxxx>, 
+
+    Rectangle	clipr;		/* clipping region */
+    //bitset<enum<fxxx>, // includes if replicate via Frepl
     ulong	flags; 
 
     // finally, the raw pixels
@@ -1422,6 +1423,31 @@ struct Memimage
 % This is why also have Rectangle r. Windows will be sub rectangle
 % over shared screen Memdata.
 % Hmm API to get subrectangle of existing Image? allocimage??
+
+% flags is more general than Image.repl; contains info derived
+%  from channel too
+% this is not in draw.h! this is in memdraw.h so internal to Memimage
+<<enum fxxx>>=
+enum {
+    Frepl	= 1<<0,	/* is replicated */
+    // derives from Memimage.chan
+    Fgrey	= 1<<2,	/* is grey */
+    Falpha	= 1<<3,	/* has explicit alpha */
+    Fcmap	= 1<<4,	/* has cmap channel */
+    Fbytes	= 1<<5,	/* has only 8-bit channels */
+};
+@
+%dead:    Fsimple	= 1<<1,	/* is 1x1 */
+% >> >> >> >> >> >>
+
+%Fbytes does not mean CMAP8, it means 8 bits depth but possibly multiple
+% channels
+
+% start of pbs, many different image formats ...
+
+% all important notions!
+
+
 
 
 % libmemdraw/draw.c
@@ -1675,11 +1701,11 @@ if(d == nil)
 
 \section{Channels}
 
-% typedef ulong chan;!
+% typedef ulong channels;!
 
 % saw ulong chan; in Image and Memimage.
 
-% not thread channel, not kernel Chan, image channel here!
+% not thread channel, not kernel Chan, image channels here!
 % ulong in previous struct, but more complex format actually.
 
 <<enum ImageChan>>=
@@ -1800,9 +1826,10 @@ if(n==0 || (n>8 && n%8) || (n<8 && 8%n))
 
 \section{Colors}
 
-%todo:
-% typedef ulong color;!
-% typedef color rgba;!
+<<type rgba>>=
+typedef ulong rgba;
+@
+%pad: I introduced this type, less confusing
 
 %old school graphics:
 % https://www.youtube.com/watch?v=Tfh0ytz8S0k&feature=youtu.be
@@ -1856,11 +1883,11 @@ enum
 \subsection{[[imgtorgba()]]}
 
 % we will see different format, copy from one image to another,
-% so may need convert. Usually convert to common base: rgba32.
+% so may need convert. Usually convert to common base: rgba(32).
 
 % memimagedraw -> <>
 <<function imgtorgba>>=
-static ulong
+static rgba
 imgtorgba(Memimage *img, ulong val)
 {
     byte r, g, b, a;
@@ -1909,7 +1936,7 @@ imgtorgba(Memimage *img, ulong val)
 % memimagedraw | memfillcolor -> <>
 <<function rgbatoimg>>=
 static ulong
-rgbatoimg(Memimage *img, ulong rgba)
+rgbatoimg(Memimage *img, rgba rgba)
 {
     byte r, g, b, a;
     ulong chan;
@@ -1960,33 +1987,32 @@ rgbatoimg(Memimage *img, ulong rgba)
 % Was maybe a bit interesting to understand alpha but in the end I find
 % it confusing. Maybe related to notion of pre-alpha (see wikipedia page
 % on alpha compositing)
-%<<function setalpha>>=
-%ulong
-%setalpha(ulong color, uchar alpha)
-%{
-%    int red, green, blue;
-%
-%    red = (color >> 3*8) & 0xFF;
-%    green = (color >> 2*8) & 0xFF;
-%    blue = (color >> 1*8) & 0xFF;
-%    /* ignore incoming alpha */
-%    red = (red * alpha)/255;
-%    green = (green * alpha)/255;
-%    blue = (blue * alpha)/255;
-%    return (red<<3*8) | (green<<2*8) | (blue<<1*8) | (alpha<<0*8);
-%}
-%@
-% >> >> >> >>
+%   <<function setalpha>>=
+%   ulong
+%   setalpha(ulong color, uchar alpha)
+%   {
+%       int red, green, blue;
+%   
+%       red = (color >> 3*8) & 0xFF;
+%       green = (color >> 2*8) & 0xFF;
+%       blue = (color >> 1*8) & 0xFF;
+%       /* ignore incoming alpha */
+%       red = (red * alpha)/255;
+%       green = (green * alpha)/255;
+%       blue = (blue * alpha)/255;
+%       return (red<<3*8) | (green<<2*8) | (blue<<1*8) | (alpha<<0*8);
+%   }
+%   @
+%    >> >> >> >>
 \n was in arith.c
 % that simple? :) to set alpha you just dillute each rgb components?
 
 \subsection{[[memfillcolor()]]}
 
 % drawmesg(allocate) | membrush | bellipse | memarc | memlalloc | ... -> <>
-% val is rgba
 <<function memfillcolor>>=
 void
-memfillcolor(Memimage *i, ulong val)
+memfillcolor(Memimage *i, rgba val)
 {
     ulong bits;
     int d, y;
@@ -1995,13 +2021,11 @@ memfillcolor(Memimage *i, ulong val)
         return;
 
     bits = rgbatoimg(i, val);
-    switch(i->depth){
+ 
+   switch(i->depth){
     <<[[memfillcolor()]] switch depth cases>>
     default:	/* 1, 2, 4, 8, 16, 32 */
-        for(d=i->depth; d<32; d*=2)
-            // duplicate bits
-            bits = (bits << d) | bits;
-
+        <<[[memfillcolor()]] duplicate bits if depth less than 32>>
         memsetl(wordaddr(i, i->r.min), bits, i->width * Dy(i->r));
         break;
     }
@@ -2038,6 +2062,12 @@ memsetl(void *vp, ulong val, int n)
 @
 
 
+% could be in non-32 bit section
+<<[[memfillcolor()]] duplicate bits if depth less than 32>>=
+for(d=i->depth; d<32; d*=2)
+    // duplicate bits
+    bits = (bits << d) | bits;
+@
 
 % \section{Color map}
 % now in Adv topics
@@ -2428,8 +2458,9 @@ memimageinit(void)
     memtransparent = memzeros;
 }
 @
-% 0x3FFFFFF? means infinite? clipr far bigger than r so replicate
-% indifinitely.
+% 0x3FFFFFF? means huges but not infinite. clipr far bigger than r so replicate
+% indifinitely. and not infinite for overflow issue. See clipping section
+% later.
 
 % memimageinit seems quite general, not sure why called from screensize
 % why need width/height or chan?
@@ -2886,6 +2917,8 @@ int		mask[NChan];
 // map<enum<ImageChan>, int>
 int		nbits[NChan];
 @
+% will be useful later when reading the bytes of a pixel, to know
+%  where the rgba components are located in the word.
 
 
 %dtor
@@ -3371,6 +3404,11 @@ if(disp == nil)
 % For windows just say  view point to Display->image? with id 0?
 
 
+
+
+
+
+
 \chapter{User/Kernel Bridge}
 % kernel side part 2
 
@@ -3575,8 +3613,7 @@ if(t == Q2nd || t == Qnew){
     }
     else if(s <= sdraw.nclient){
         cl = sdraw.client[s-1];
-        if(cl == nil)
-            return 0;
+        <<[[drawgen()]] in second level directory listing, sanity check cl>>
         snprint(up->genbuf, sizeof up->genbuf, "%d",
             cl->clientid);
         mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
@@ -3593,6 +3630,13 @@ if(t == Q2nd || t == Qnew){
 %  x is clientid that always increment
 \l why t == Qnew here? could remove no? or do extra code like for Qwinname
 \l  separated
+
+<<[[drawgen()]] in second level directory listing, sanity check cl>>=
+if(cl == nil)
+    return 0;
+@
+% this happens when an entry got freed. drawgen will be called repeatitdely.
+
 
 <<[[drawgen()]] third level directory listing>>=
 path = c->qid.path & ~((1<<QSHIFT)-1);    /* slot component */
@@ -3922,7 +3966,8 @@ case Qctl:
     break;
 @
 % 12 integers with %11d + 1 space = 12 * 12
-% (note extra space after last number too)
+%  (note extra space after last number too)
+% see that export just the bool for Image.repl, not the whole flag!
 
 % not just for initdisplay though. enter infoid below.
 
@@ -4251,7 +4296,7 @@ drawmesg(Client *client, void *av, int n)
 %ctor
 <<function allocimage>>=
 Image*
-allocimage(Display *d, Rectangle r, ulong chan, bool repl, ulong val)
+allocimage(Display *d, Rectangle r, ulong chan, bool repl, rgba val)
 {
     Image*	i;
 
@@ -4288,7 +4333,7 @@ freeimage(Image *i)
 %ctor
 <<function _allocimage>>=
 Image*
-_allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, ulong val, int screenid, int refresh)
+_allocimage(Image *ai, Display *d, Rectangle r, ulong chan, bool repl, rgba val, int screenid, int refresh)
 {
     Image *i = nil;
     char *err = nil;
@@ -4459,6 +4504,7 @@ byte refresh;
 ulong chan;
 int repl;
 Rectangle r, clipr;
+// rgba
 ulong value;
 
 Memimage *i;
@@ -4745,20 +4791,39 @@ if(dimage->ref < 0)
 % generic functionality. Like narrow mode in emacs :)
 
 % Replication is useful to save space in memory, for color, while
-% still being general, and also for tiling.
+% still being general. Also useful for adv effect such as tiling
+% (repeating a background pattern for instance).
 
-% Called by many, to optimize things, e.g. no need to flush some modif
+% Clipping called by many, to optimize things, e.g. no need to flush some modif
 % if rectangle outside the clipping area.
 % Modify the first parameter when they overlap to match the intersection.
 
 
-% either repl or clip? cant have both?
+% Can have either repl or clip? Can have both! Usually have
+% repl set to true and infinite (actually huge) clipping. This is why in code
+% later there is code that first do  rectclip(r, img->clipr)
+%  and then if(!(img->flags&Frepl)) rectclip(r, img->r)
+
+% Note that the repl bit is used only when the image is used as a source.
+% This is why the clipping code for dst and src is a bit different.
+
+
+<<[[_allocimage()]] set clipr>>=
+if(repl)
+    /* huge but not infinite, so various offsets will leave it huge, not overflow */
+    clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
+else
+    clipr = r;
+@
+% hacky a bit this huge but not infinite
+
+
 
 <<[[drawmesg()]] allocate image case, clip clipr>>=
 if(!repl)
     rectclip(&i->clipr, r);
 @
-% kinda sanity check that clipr is inside r
+% kinda optimize a bit more and restrict clipr even more (to be inside r)
 
 % flushmemscreen | drawmesg(allocate) | ... -> <>
 <<function rectclip>>=
@@ -4791,13 +4856,6 @@ rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */
 %  to see if rectangle is outside screen in which case flush is not needed.
 
 
-<<[[_allocimage()]] set clipr>>=
-if(repl)
-    /* huge but not infinite, so various offsets will leave it huge, not overflow */
-    clipr = Rect(-0x3FFFFFFF, -0x3FFFFFFF, 0x3FFFFFFF, 0x3FFFFFFF);
-else
-    clipr = r;
-@
 
 \subsection{API}
 
@@ -4971,7 +5029,9 @@ if(visible){
 case 'v':
     printmesg(fmt="", a, 0);
     m = 1;
-    drawflush();
+
+    drawflush(); // The call
+
     continue;
 
 @
@@ -5083,7 +5143,7 @@ flushmemscreen(Rectangle r)
         return;
     if(scr->dev == nil || scr->dev->page == nil)
         return;
-    if(rectclip(&r, gscreen->r) == 0)
+    if(!rectclip(&r, gscreen->r))
         return;
 
     <<[[flushmemscreen()]] use VGA page>>
@@ -5503,6 +5563,8 @@ if(dimage->fromname){   /* acquired by name; owned by someone else*/
 }
 @
 % what about other clients of dimage? no, ref is 0 when we are here.
+
+
 
 
 
@@ -5975,7 +6037,7 @@ if(hwdraw(&par)){
 
 % vgascreen.c
 <<global hwaccel(x86)>>=
-int hwaccel = true;
+bool hwaccel = true;
 @
 
 % vgascreen.c
@@ -5987,7 +6049,7 @@ bool hwdraw(Memdrawparam *par)
     Memimage *dst, *src, *mask;
     int m;
 
-    if(hwaccel == false)
+    if(!hwaccel)
         return false;
 
     scr = &vgascreen;
@@ -6020,8 +6082,14 @@ if(mask == nil || mask->data == nil)
 
 
 \section{Clipping}
+% part1, because alphadraw does another final clipping.
 
 % saw rectclip() before which will be used heavily below in drawclip().
+
+% see draw(2) and explanation of draw() to understand
+%  what clipping is done. Quite long description actually.
+
+\subsection{[[drawclip()]]}
 
 <<[[memdraw()]] call drawclip, if empty rectangle return>>=
 if(!drawclip(dst, &r, src, &p0, mask, &p1,   &par.sr, &par.mr)){
@@ -6029,14 +6097,13 @@ if(!drawclip(dst, &r, src, &p0, mask, &p1,   &par.sr, &par.mr)){
     return;
 }
 @
+% will adjust source and mask rectangle sr and mr.
+% they will all have the same size but start at the right place,
+%  see the assert below.
 
-% see draw(2) and explanation of draw() to understand
-% what clipping is done.
 
 % FIGURE! where see different coordinate system
 
-\subsection{Simple case}
-% which is already not that simple
 
 % memimagedraw | ?? -> <>
 <<function drawclip>>=
@@ -6059,40 +6126,14 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
     if(r->min.x >= r->max.x || r->min.y >= r->max.y)
         return false;
 
-    /* clip to destination */ // can modify r
-    if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
-        return false;
-    <<[[drawclip()]] adjust p0 and p1 if r changed>>
-
-    /* map destination rectangle into source */
-    sr->min = *p0;
-    sr->max.x = p0->x+Dx(*r);
-    sr->max.y = p0->y+Dy(*r);
-
-    /* sr is r in source coordinates; clip to source */ // can modify sr
-    if(!(src->flags&Frepl) && !rectclip(sr, src->r))
-        return false;
-    if(!rectclip(sr, src->clipr))
-        return false;
-
-    /* compute and clip rectangle in mask */
-    <<[[drawclip()]] if splitcoords>>
-    else{
-        if(!(mask->flags&Frepl) && !rectclip(sr, mask->r)) // can modify sr
-            return false;
-        if(!rectclip(sr, mask->clipr))
-            return false;
-        *p1 = sr->min;
-    }
+    <<[[drawclip()]] clipping to destination>>
+    <<[[drawclip()]] clipping to source>>
+    <<[[drawclip()]] clipping to mask>>
 
     /* move source clipping back to destination */
     <<[[drawclip()]] adjust r if sr or mr changed>>
 
-    <<[[drawclip()]] special cases>>
-
-    mr->min = *p1;
-    mr->max.x = p1->x+Dx(*sr);
-    mr->max.y = p1->y+Dy(*sr);
+    <<[[drawclip()]] clipping and replication handling>>
 
     assert(Dx(*sr) == Dx(*mr) && Dx(*mr) == Dx(*r));
     assert(Dy(*sr) == Dy(*mr) && Dy(*mr) == Dy(*r));
@@ -6104,7 +6145,27 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
 }
 @
 
-% when rectangle r got actually reduced because of dst->clipr or dsr->r
+% note that now r, sr, mr have the same size and translated to right place.
+% but actually sr and mr might be too big because src and mask could
+% be replicated and smaller than that. This is why there will be
+% further code later about replicating and clipping.
+
+
+
+\subsection{Clipping to destination}
+
+<<[[drawclip()]] clipping to destination>>=
+/* clip to destination */ // can modify r
+if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
+    return false;
+<<[[drawclip()]] adjust p0 and p1 if r changed>>
+@
+% note that no repl to handle here. repl has a meaning only when
+%  the image is used as a source, to tile and replicate.
+
+
+% when rectangle r got actually reduced because of dst->clipr or dst->r
+%  then p0 and p1 must be adjusted
 <<[[drawclip()]] adjust p0 and p1 if r changed>>=
 /* move source point */
 p0->x += r->min.x - rmin.x;
@@ -6115,10 +6176,26 @@ p1->y += r->min.y - rmin.y;
 @
 
 
+\subsection{Clipping to source}
+
+<<[[drawclip()]] clipping to source>>=
+/* map destination rectangle into source */
+sr->min = *p0;
+sr->max.x = p0->x+Dx(*r);
+sr->max.y = p0->y+Dy(*r);
+
+/* sr is r in source coordinates; clip to source */ // can modify sr
+if(!(src->flags&Frepl) && !rectclip(sr, src->r))
+    return false;
+if(!rectclip(sr, src->clipr))
+    return false;
+@
+% sr is r translated to p0.
 
 <<[[drawclip()]] other locals>>=
 Point delta;
 @
+% r = sr translated back from p0
 
 % when source or mask actually reduces even more rectangle
 <<[[drawclip()]] adjust r if sr or mr changed>>=
@@ -6129,37 +6206,43 @@ r->min.y = sr->min.y + delta.y;
 r->max.x = sr->max.x + delta.x;
 r->max.y = sr->max.y + delta.y;
 @
+% can not use addpt?
 
-\subsection{Special cases}
+\subsection{Clipping to mask}
 
-%XXX
 
-<<[[drawclip()]] special cases>>=
-/* move source rectangle so sr->min is in src->r */
-<<[[drawclip()]] if src is repl>>
-/* move mask point so it is in mask->r */
-*p1 = drawrepl(mask->r, *p1);
+<<[[drawclip()]] clipping to mask>>=
+/* compute and clip rectangle in mask */
+<<[[drawclip()]] if splitcoords>>
+else{
+    if(!(mask->flags&Frepl) && !rectclip(sr, mask->r)) // can modify sr
+        return false;
+    if(!rectclip(sr, mask->clipr))
+        return false;
+    *p1 = sr->min;
+}
 @
+% new p1
+
 
 <<[[drawclip()]] other locals>>=
 bool splitcoords = (p0->x != p1->x) || (p0->y != p1->y);
 @
 
-
-\subsubsection{Split coords}
-
 <<[[drawclip()]] other locals>>=
 Rectangle omr;
 @
+% could use delta instead
 
 <<[[drawclip()]] if splitcoords>>=
 if(splitcoords){
     /* move mask point with source */
     p1->x += sr->min.x - p0->x;
     p1->y += sr->min.y - p0->y;
+
     mr->min = *p1;
-    mr->max.x = p1->x+Dx(*sr);
-    mr->max.y = p1->y+Dy(*sr);
+    mr->max.x = p1->x + Dx(*sr);
+    mr->max.y = p1->y + Dy(*sr);
     omr = *mr;
 
     /* mr is now rectangle in mask; clip it */
@@ -6173,10 +6256,20 @@ if(splitcoords){
     sr->min.y += mr->min.y - omr.min.y;
     sr->max.x += mr->max.x - omr.max.x;
     sr->max.y += mr->max.y - omr.max.y;
+
     *p1 = mr->min;
 }
 @
+% new p1
 
+\subsection{Clipping and replication}
+
+<<[[drawclip()]] clipping and replication handling>>=
+/* move source rectangle so sr->min is in src->r */
+<<[[drawclip()]] if src is repl>>
+/* move mask point so it is in mask->r */
+<<[[drawclip()]] mask move>>
+@
 
 \subsubsection{Clipping with replicated source}
 
@@ -6184,6 +6277,7 @@ if(splitcoords){
 if(src->flags&Frepl) {
     delta.x = drawreplxy(src->r.min.x, src->r.max.x, sr->min.x) - sr->min.x;
     delta.y = drawreplxy(src->r.min.y, src->r.max.y, sr->min.y) - sr->min.y;
+
     sr->min.x += delta.x;
     sr->min.y += delta.y;
     sr->max.x += delta.x;
@@ -6191,6 +6285,8 @@ if(src->flags&Frepl) {
 }
 *p0 = sr->min;
 @
+% can not use addpt again?
+
 
 % drawrepl | drawclip -> <>
 <<function drawreplxy>>=
@@ -6199,15 +6295,25 @@ drawreplxy(int min, int max, int x)
 {
     int sx;
 
-    sx = (x-min)%(max-min);
+    sx = (x-min) % (max-min);
     if(sx < 0)
-        sx += max-min;
-    return sx+min;
+        sx += max - min;
+    return sx + min;
 }
 @
 
 
 \subsubsection{Clipping with replicated mask}
+
+% actually no if for the mask. Why?
+
+<<[[drawclip()]] mask move>>
+*p1 = drawrepl(mask->r, *p1);
+
+mr->min = *p1;
+mr->max.x = p1->x+Dx(*sr);
+mr->max.y = p1->y+Dy(*sr);
+@
 
 % drawclip | drawmask -> <>
 <<function drawrepl>>=
@@ -6223,8 +6329,11 @@ drawrepl(Rectangle r, Point p)
 
 
 \section{Replicating}
-% part1, actually later in alphadraw there is another replication
-% done via some module and [[% Dy(src->r)]] and also for the mask.
+% part1 because later in alphadraw there is another replication
+%  done via some module and [[% Dy(src->r)]] and also for the mask.
+
+% most of the code below is preparing data when have simple
+% 1x1 replicated rectangles (e.g. colors).
 
 <<enum _anon_ (include/memdraw.h)2>>=
 /*
@@ -6237,7 +6346,7 @@ enum Drawparams {
     Replsrc =1<<2,
     Replmask=1<<3,
 
-    Fullmask=1<<4,
+    Fullmask=1<<4, // fully opaque mask
 };
 @
 % >> >> >> >> >>
@@ -6254,13 +6363,13 @@ ulong state;
 
 <<[[Memdrawparam]] other fields>>=
 ulong sval;		/* if Simplesrc, the source pixel in src format */
-ulong srgba;	/* sval in rgba */
+rgba  srgba;	/* sval in rgba */
 ulong sdval;	/* sval in dst format */
 @
 % those fields will be used later in memoptdraw for some optimized draw
 \l rename sdval to dval
 
-% src is repl when simple color.
+% remember that src is repl when Image is a simple color.
 <<[[memimagedraw()]] if src is repl>>=
 if(src->flags&Frepl){
     par.state |= Replsrc;
@@ -6276,7 +6385,7 @@ if(src->flags&Frepl){
 }
 @
 
-% src can also be repl when tiling
+% src can also be repl when tiling.
 
 % see imgtorgba and rgbatoimg in core DS chapter.
 
@@ -6286,7 +6395,7 @@ if((par.srgba&0xFF) == 0 && (op&DoutS)){
     return;	/* no-op successfully handled */
 }
 @
-% DoutS ?
+% DoutS ? note that SoverD will satisfy this.
 
 
 % memimagedraw -> <>
@@ -6310,11 +6419,7 @@ pixelbits(Memimage *i, Point pt)
         val = p[0]|(p[1]<<8)|(p[2]<<16)|(p[3]<<24);
         break;
     }
-    // duplicate byte in the whole word
-    while(bpp<32){
-        val |= val<<bpp;
-        bpp *= 2;
-    }
+    <<[[pixelbits()]] duplicate byte if depth less than 32>>
     return val;
 }
 @
@@ -6323,14 +6428,22 @@ pixelbits(Memimage *i, Point pt)
 % duplicate byte since anyway it's a repl and it will be used in a giant
 % memset
 
-\subsection{Mask replication}
+<<[[pixelbits()]] duplicate byte if depth less than 32>>=
+// duplicate byte in the whole word
+while(bpp<32){
+    val |= val<<bpp;
+    bpp *= 2;
+}
+@
+% >>
 
-%XXX
+\subsection{Mask replication}
 
 <<[[Memdrawparam]] other fields>>=
 ulong mval;		/* if Simplemask, the mask pixel in mask format */
-ulong mrgba;	/* mval in rgba */
+rgba  mrgba;	/* mval in rgba */
 @
+% no need mdval?
 
 % mask is repl when memopaque
 <<[[memimagedraw()]] if mask is repl>>=
@@ -6359,7 +6472,6 @@ if(mask->flags & Frepl){
 % kinda opti, but helps to understand alphadraw(), stepping stone.
 
 \subsection{[[memoptdraw()]]}
-
 
 <<[[memimagedraw()]] try memoptdraw>>=
 /*
@@ -6411,16 +6523,14 @@ m = Simplesrc|Simplemask|Fullmask;
 if((par->state&m)==m && 
    (par->srgba&0xFF) == 0xFF && 
    (op == S || op == SoverD)){
-    byte *dp;
-    byte p[4];
+    byte p[4]; // source
+    byte *dp;  // destination
     int dwid;
     <<[[memoptdraw()]] locals for memset case>>
 
-    DBG1("memopt, dst %p, dst->data->bdata %p\n", dst, dst->data->bdata);
     dwid = dst->width * sizeof(ulong);
     dp = byteaddr(dst, par->r.min);
     v = par->sdval;
-    DBG1("sdval %lud, depth %d\n", v, dst->depth);
 
     switch(dst->depth){
     <<[[memoptdraw()]] switch depth of dst cases>>
@@ -6437,8 +6547,14 @@ if((par->state&m)==m &&
     }
 }
 @
+%old:
+%    DBG1("memopt, dst %p, dst->data->bdata %p\n", dst, dst->data->bdata);
+%    DBG1("sdval %lud, depth %d\n", v, dst->depth);
+
 % why need this little endian dance?
 
+% so when alpha in source is 1 and have SoverD, then dst does not matter!
+% indeed see the general formula later in alphacalc11
 
 \subsection{Copying pixels}
 
@@ -6459,36 +6575,49 @@ if((par->state&(m|Replsrc))==m &&
     (op == S || op == SoverD)){
 
     byte *sp, *dp;
-    long swid, dwid, nb;
-    int dir;
+    long swid, dwid
+    long nb;
+    int dir = 1;
 
-    if(src->data == dst->data && 
-       byteaddr(dst, par->r.min) > byteaddr(src, par->sr.min))
-        dir = -1;
-    else
-        dir = 1;
+    <<[[memoptdraw()]] when condition for memmove, change possibly dir>>
 
-    swid = src->width*sizeof(ulong);
-    dwid = dst->width*sizeof(ulong);
+    swid = src->width * sizeof(ulong);
+    dwid = dst->width * sizeof(ulong);
     sp = byteaddr(src, par->sr.min);
     dp = byteaddr(dst, par->r.min);
-    if(dir == -1){
-        sp += (dy-1)*swid;
-        dp += (dy-1)*dwid;
-        swid = -swid;
-        dwid = -dwid;
-    }
-    nb = (dx*src->depth)/8;
+    <<[[memoptdraw()]] when condition for memmove, if negative dir>>
+    nb = (dx * src->depth)/8;
     for(y=0; y<dy; y++, sp+=swid, dp+=dwid)
         memmove(dp, sp, nb);
     return true;
 }
 @
 
+% remember than memmove handle some overlap. But it will not
+%  handle all overlap hence dir adjustment below.
+
+<<[[memoptdraw()]] when condition for memmove, change possibly dir>>=
+if(src->data == dst->data && 
+   byteaddr(dst, par->r.min) > byteaddr(src, par->sr.min))
+    dir = -1;
+@
+
+<<[[memoptdraw()]] when condition for memmove, if negative dir>>=
+if(dir == -1){
+    sp += (dy-1)*swid;
+    dp += (dy-1)*dwid;
+    swid = -swid;
+    dwid = -dwid;
+}
+@
+% start from the end
+
+
+
 \section{Compositing pixels}
 
-% The general case.
-% Advanced effects: transluscent, advanced shape clipping, etc.
+% The general case. Compositing! advanced effects such as transluscent.
+% But also advanced shape clipping, tiling, etc.
 
 %https://en.wikipedia.org/wiki/Alpha_compositing
 
@@ -6522,7 +6651,7 @@ Buffer bsrc, bdst, bmask;
 @
 % a full line, will see soon Buffer.
 
-
+% iterate over lines, each time get a line of the rectangle.
 <<[[alphadraw()]] locals>>=
 int starty, endy;
 int dsty, srcy, masky;
@@ -6590,22 +6719,14 @@ alphadraw(Memdrawparam *par)
     <<[[alphadraw()]] when small repl rectangle optimization>>
     <<[[alphadraw()]] set Dbuf z part2>>
 
-   /*
-    * srcy, masky, and dsty are offsets from the top of their
-    * respective Rectangles.  they need to be contained within
-    * the rectangles, so clipy can keep them there without division.
-    */
-    srcy  = (starty + sr.min.y - src->r.min.y)  % Dy(src->r);
-    masky = (starty + mr.min.y - mask->r.min.y) % Dy(mask->r);
-    dsty  =  starty + r.min.y  - dst->r.min.y;
-
+    <<[[alphadraw()]] setting srcy, masky, and dsty, and clipping part1>>
     assert(0 <= srcy  && srcy  < Dy(src->r));
     assert(0 <= masky && masky < Dy(mask->r));
     assert(0 <= dsty  && dsty  < Dy(dst->r));
 
     // the big loop!
     for(y=starty; y!=endy; y+=dir, srcy+=dir, masky+=dir, dsty+=dir){
-        <<[[alphadraw()]] clipping>>
+        <<[[alphadraw()]] clipping part2>>
 
         bsrc  = rdsrc (&z->spar, z->spar.bufbase, srcy);
         bmask = rdmask(&z->mpar, z->mpar.bufbase, masky);
@@ -6645,27 +6766,44 @@ if (needbuf && byteaddr(dst, r.min) > byteaddr(src, sr.min)) {
     endy = -1;
 }
 @
+%old: code was a bit different, I added the dir = 1; before
+% to be able to aspectize this code.
 
 % later will need to take care and use memmove
 
-\subsection{Additionnal clipping}
+\subsection{Clipping and replicating}
+% part2
 
-%see comment above?
-%    * srcy, masky, and dsty are offsets from the top of their
-%    * respective Rectangles.  they need to be contained within
-%    * the rectangles, so clipy can keep them there without division.
+<<[[alphadraw()]] setting srcy, masky, and dsty, and clipping part1>>=
+*
+* srcy, masky, and dsty are offsets from the top of their
+* respective Rectangles.  they need to be contained within
+* the rectangles, so clipy can keep them there without division.
+*/
+srcy  = (starty + sr.min.y - src->r.min.y)  % Dy(src->r);
+masky = (starty + mr.min.y - mask->r.min.y) % Dy(mask->r);
+dsty  =  starty + r.min.y  - dst->r.min.y;
+@
+% use modulo, a bit slow, but does not matter cos outside the loop.
 
-<<[[alphadraw()]] clipping>>=
+% need modulo because sr mr are the same size than r, even if
+%  src and mask are actually smaller and replicated.
+
+
+<<[[alphadraw()]] clipping part2>>=
 clipy(src, &srcy);
 clipy(dst, &dsty);
 clipy(mask, &masky);
 @
 
+% modulo without division or modulo.
 <<function clipy>>=
 static void
 clipy(Memimage *img, int *y)
 {
     int dy;
+
+    // *y = *y % Dy(img->r)
 
     dy = Dy(img->r);
     if(*y == dy)
@@ -6675,7 +6813,8 @@ clipy(Memimage *img, int *y)
     assert(0 <= *y && *y < dy);
 }
 @
-% ???
+% when have small tile for source or mask, need to keep it in range,
+% do a modulo, which is what is done here
 
 
 
@@ -6701,6 +6840,7 @@ struct Dbuf
 <<[[alphadraw()]] locals>>=
 Dbuf *z;
 @
+% will hold buffers containing one line, which might be needed.
 
 <<[[alphadraw()]] set Dbuf z part1>>=
 z = allocdbuf();
@@ -6795,9 +6935,9 @@ struct ParamDraw {
     int	dx;	/* of r */ // size of a line of a rectangle in pixels
     int		bwidth; // image width in bytes
 
-    // source bytes
+    // source bytes, always same y but x varies
     byte	*bytey0s;	/* byteaddr(Pt(img->r.min.x, img->r.min.y)) */
-    byte	*bytermin;	/* byteaddr(Pt(r.min.x, img->r.min.y)) */
+    byte	*bytermin;	/* byteaddr(Pt(r.min.x,      img->r.min.y)) */
     byte	*bytey0e;	/* byteaddr(Pt(img->r.max.x, img->r.min.y)) */
 
     bool	needbuf;
@@ -6844,14 +6984,14 @@ getparam(Param *p, Memimage *img, Rectangle r, bool convgrey, bool needbuf, int 
     assert(img->r.min.x <= r.min.x && r.min.x < img->r.max.x);
 
     p->bytey0s  = byteaddr(img, Pt(img->r.min.x, img->r.min.y));
-    p->bytermin = byteaddr(img, Pt(r.min.x, img->r.min.y));
+    p->bytermin = byteaddr(img, Pt(r.min.x,      img->r.min.y));
     p->bytey0e  = byteaddr(img, Pt(img->r.max.x, img->r.min.y));
-
-    p->bwidth   = sizeof(ulong)*img->width;
 
     assert(p->bytey0s <= p->bytermin && p->bytermin <= p->bytey0e);
     if(p->r.min.x == p->img->r.min.x)
         assert(p->bytermin == p->bytey0s);
+
+    p->bwidth   = sizeof(ulong) * img->width;
 
     nbuf = 1;
     <<[[getparam()]] if small replicated rectangle>>
@@ -6861,6 +7001,7 @@ getparam(Param *p, Memimage *img, Rectangle r, bool convgrey, bool needbuf, int 
     *ndrawbuf += p->bufdelta * nbuf;
 }
 @
+% why augment ndrawbuf if actually no needbuf?
 
 <<[[alphadraw()]] set z params part2>>=
 /*
@@ -6889,14 +7030,12 @@ struct Buffer {
     byte	*red;
     byte	*grn;
     byte	*blu;
-
     byte	*alpha; // can be &ones
 
-    byte	*grey;
-
     ulong	*rgba; // bad name, just start of pixel
-
     int	delta;	/* number of bytes to add to pointer to get next pixel to the right */
+
+    byte	*grey;
 
     <<[[Buffer]] boolcalc fields>>
 };
@@ -6952,6 +7091,8 @@ struct Buffer {
 \subsection{Reading pixels, [[readfn()]]}
 % pixels lines
 
+% reading for src and dst (will see reading for mask later).
+
 <<function readfn>>=
 static Readfn*
 readfn(Memimage *img)
@@ -6962,15 +7103,15 @@ readfn(Memimage *img)
 }
 @
 
-% depth more than 8 and must be a multiple of 8!
+% depth >=8  but actually must be also a multiple of 8!
 
 <<function readbyte>>=
 static Buffer
 readbyte(Param *p, byte *buf, int y)
 {
     Memimage *img;
-    Buffer b;
     byte *begin, *end, *r;
+    Buffer b;
     byte *w;
     int dx, nb;
 
@@ -6979,9 +7120,9 @@ readbyte(Param *p, byte *buf, int y)
     <<[[readbyte]] other locals>>
 
     img = p->img;
-    begin = p->bytey0s + y*p->bwidth;
-    r = p->bytermin + y*p->bwidth;
-    end = p->bytey0e + y*p->bwidth;
+    begin = p->bytey0s  + y*p->bwidth;
+    r     = p->bytermin + y*p->bwidth;
+    end   = p->bytey0e  + y*p->bwidth;
 
     w = buf;
     dx = p->dx;
@@ -6992,16 +7133,13 @@ readbyte(Param *p, byte *buf, int y)
     copyalpha = img->flags&Falpha;
     alphaonly = p->alphaonly;
 
-    DBG1("copyalpha %d alphaonly %d convgrey %d isgrey %d\n", copyalpha, alphaonly, convgrey, isgrey);
-
     <<[[readbyte()]] simple case when no repl, no grey, depth 8>>
     // else
     <<[[readbyte()]] more complex cases, possible repl, grey, and small depth>>
 }
 @
 %old:    copyalpha = (img->flags&Falpha) ? 1 : 0;
-
-
+%    DBG1("copyalpha %d alphaonly %d convgrey %d isgrey %d\n", copyalpha, alphaonly, convgrey, isgrey);
 
 
 
@@ -7044,6 +7182,9 @@ static uchar ones = 0xff;
 
 \subsection{Writing pixels, [[writefn()]]}
 
+% Will call that only for dst, so code is simpler. No need handle repl
+% for instance.
+
 <<function writefn>>=
 static Writefn*
 writefn(Memimage *img)
@@ -7068,10 +7209,11 @@ writebyte(Param *p, byte *w, Buffer src)
     Memimage *img;
     int dx, nb;
     byte *red, *grn, *blu, *grey, *alpha;
+    int delta;
+    // will iterate over all the pixels in one line in src
     int i;
 
     bool isalpha, isgrey;
-    int delta;
     byte ff;
     int adelta;
     ulong u, mask;
@@ -7131,6 +7273,9 @@ writebyte(Param *p, byte *w, Buffer src)
 % what if less than 8 bits per channel?
 %  it works too thanks to nbits[]
 
+% many situation where we need to write in dst an alpha but there 
+% was no alpha channel in the src Buffer
+% in which case we need to generate a default one.
 
 <<[[writebyte()]] alpha handling part1>>=
 adelta = src.delta;
@@ -7141,6 +7286,7 @@ if(isalpha && (alpha == nil || alpha == &ones)){
 }
 @
 % why use local? because can be overwritten? could use ones too no?
+% could have a src.adelta then instead of repeating the detection here.
 
 <<[[writebyte()]] alpha handling part2>>=
 if(isalpha){
@@ -7150,9 +7296,73 @@ if(isalpha){
 @
 %>>
 
+\subsection{Reading the mask}
+
+%remember that memopaque which is the default mask used when drawing
+% is memones which is just a GREY1
+
+<<[[alphadraw()]] set rdmask>>=
+if(mask->flags&Falpha){
+    rdmask = readalphafn(mask);
+    z->mpar.alphaonly = true;
+}
+/*
+ * If there is no alpha channel, we'll ask for a grey channel
+ * and pretend it is the alpha.
+ */
+else{
+    z->mpar.greymaskcall = readfn(mask);
+    z->mpar.convgrey = true;
+    rdmask = greymaskread;
+
+    <<[[alphadraw()]] when mask and source have no alpha, possibly adapt calc>>
+}
+@
+
+
+
+<<[[ParamDraw]] mask fields>>=
+bool	alphaonly;
+bool	convgrey;
+Readfn	*greymaskcall;	
+@
+
+
+<<function readalphafn>>=
+static Readfn*
+readalphafn(Memimage *m)
+{
+    USED(m);
+    return readbyte;
+}
+@
+% will maybe replicate bytes in buffer!
+% the setting of alphaonly will adjust the behavior of readbyte
+
+
+<<function greymaskread>>=
+/*
+ * Alpha reading function that simply relabels the grey pointer.
+ */
+static Buffer
+greymaskread(Param *p, uchar *buf, int y)
+{
+    Buffer b;
+
+    b = p->greymaskcall(p, buf, y);
+    b.alpha = b.grey;
+    return b;
+}
+@
+
+% See {Reading replicated pixels} section in adv topics.
+
+%\subsection{Duplicating pixels}
+
+
 \subsection{Composing pixels, [[alphacalcxx()]]}
 
-% put in appendix or adv topics everything except SoverD alphacalc11?
+% I put in appendix or adv topics everything except SoverD alphacalc11?
 
 <<global alphacalc>>=
 static Calcfn *alphacalc[Ncomp] = 
@@ -7168,7 +7378,7 @@ static Calcfn *alphacalc[Ncomp] =
     alphacalc2810,      /* SinD */
     alphacalc3679,      /* SatopD */
     alphacalc2810,      /* S */
-    alphacalc11,        /* SoverD */
+    alphacalc11,        /* SoverD */ // the classic
 };
 @
 % numbers suffixes are here to indicate which porter-duff numbers they cover,
@@ -7178,16 +7388,19 @@ static Calcfn *alphacalc[Ncomp] =
 static Buffer
 alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
 {
-    Buffer obdst;
-    int fd, sadelta;
     int sa, ma;
+    int fd;
+    int sadelta;
     int i; // iterate over pixels of the line
     bool q;
+    // temporaries for MUL
     ulong s, t, u, v;
+    // ??
+    Buffer obdst;
 
     USED(op);
     obdst = bdst;
-    sadelta = (bsrc.alpha == &ones) ? 0 : bsrc.delta;
+    <<[[alphacalc11()]] alpha handling part1>>
     q = (bsrc.delta == 4) && (bdst.delta == 4);
 
     // pixel iteration of the line
@@ -7201,9 +7414,9 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
             <<[[alphacalc11()]] special case for 32bits source and dest>>
             // else
 
-            *bdst.red = MUL(ma, *bsrc.red, s)+MUL(fd, *bdst.red, t);
-            *bdst.grn = MUL(ma, *bsrc.grn, s)+MUL(fd, *bdst.grn, t);
-            *bdst.blu = MUL(ma, *bsrc.blu, s)+MUL(fd, *bdst.blu, t);
+            *bdst.red = MUL(ma, *bsrc.red, s) + MUL(fd, *bdst.red, t);
+            *bdst.grn = MUL(ma, *bsrc.grn, s) + MUL(fd, *bdst.grn, t);
+            *bdst.blu = MUL(ma, *bsrc.blu, s) + MUL(fd, *bdst.blu, t);
 
             bsrc.red += bsrc.delta;
             bsrc.blu += bsrc.delta;
@@ -7214,12 +7427,7 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
             bdst.grn += bdst.delta;
         }
 
-        if(bdst.alpha != &ones){
-            *bdst.alpha = MUL(ma, sa, s) + MUL(fd, *bdst.alpha, t);
-            bdst.alpha += bdst.delta;
-        }
-        bmask.alpha += bmask.delta;
-        bsrc.alpha += sadelta;
+        <<[[alphacalc11()]] alpha handling part2>>
     }
     return obdst;
 }
@@ -7233,6 +7441,27 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
 % ?????
 
 
+%        fd = 255 - MUL(sa, ma, t);
+% so if opaque mask and opaque sa, then fd should be 0
+% in which case it does not participate in the final value 
+% which is why we saw the memove opti before.
+
+
+<<[[alphacalc11()]] alpha handling part1>>=
+sadelta = (bsrc.alpha == &ones) ? 0 : bsrc.delta;
+@
+
+<<[[alphacalc11()]] alpha handling part2>>=
+if(bdst.alpha != &ones){
+    *bdst.alpha = MUL(ma, sa, s) + MUL(fd, *bdst.alpha, t);
+    bdst.alpha += bdst.delta;
+}
+bmask.alpha += bmask.delta;
+bsrc.alpha += sadelta;
+@
+
+\t no special handling for the alpha of a mask?? no madelta?
+
 
 
 
@@ -7244,11 +7473,11 @@ alphacalc11(Buffer bdst, Buffer bsrc, Buffer bmask, int dx, bool grey, int op)
 \chapter{Drawing Shapes}
 
 %trans:
-% seen draw rectangle, now basic block to draw any shape.
+% seen draw rectangle which is actually basic block to draw any shape!
 % Indeed in the end any figure is made of a set of rectangle!
 %FIGURE where big zoom and see circle made of all those rectangles.
 
-% See classic Computer Graphics book from Foley et al.?
+% See classic CGPP book from Foley et al.
 
 %http://members.chello.at/easyfilter/bresenham.html
 % but actually not used, use more general algorithm to fill polygons.
@@ -7267,6 +7496,11 @@ line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src,
 @
 % width will be 1+radius*2 (see draw(2)).
 
+% src often simple again, just a Color, and sp is ZP,
+
+% if src is complex picture, can do very fancy effect! like getting
+% a slice of the face of someone drawn as a line!
+
 <<enum _anon_ (include/draw.h)3>>=
 enum EndLine
 {
@@ -7283,6 +7517,10 @@ enum EndLine
 % Endmask ??
 \l actually use more Endmask instead of hardcoding those 0x1F everywhere below
 \l why 0x1F ??? because of Arrow() macro?
+
+
+% No dashing parameter as in SRGP. Simple API.
+% But actually can by playing with the mask! or src!
 
 \subsection{Marshalling}
 
@@ -7366,6 +7604,8 @@ memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memim
     _memline(dst, p0, p1, end0, end1, radius, src, sp, dst->clipr, op);
 }
 @
+% only diff is passing dst->clipr. What for? can not just do that in
+%  _memline or _memimageline itself? other callers to _memline?
 
 <<function _memline>>=
 static
@@ -7437,21 +7677,31 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
 }
 @
 
+% Explain previous comment about clipping?
 
 <<[[_memimageline()]] clipping clipr>>=
+// clip to dst
 if(!rectclip(&clipr, dst->r))
     return;
 if(!rectclip(&clipr, dst->clipr))
     return;
 
+// clip to src
 d = subpt(sp, p0);
 if(!rectclip(&clipr, rectsubpt(src->clipr, d)))
     return;
-if((src->flags&Frepl)==0 && !rectclip(&clipr, rectsubpt(src->r, d)))
+if(!(src->flags&Frepl) && !rectclip(&clipr, rectsubpt(src->r, d)))
     return;
 @
+%old: d = subpt(sp, p0); was there but before I think
+
+% remember that sp will match p0, but sp could be 10,10 and
+% p0 5,5 so have to adjust src->clipr
+% FIGURE?
+
 % call _memline with dst-clipr so first part should be a NOP.
-%old: d = subpt(sp, p0); was there but before before I think
+% Why do those manip? anyway we will call memdraw which will do that for us no?
+% to save time? 
 
 <<[[_memimageline()]] swap p0 and p1 to have p0 before p1>>=
 if((hor && p0.x > p1.x) || (!hor && p0.y > p1.y)){
@@ -7465,7 +7715,9 @@ if((hor && p0.x > p1.x) || (!hor && p0.y > p1.y)){
     end1 = t;
 }
 @
-% important as we will see
+% important as we will see. In what case we will draw
+%  horizontal lines which will be part of the final line,
+%  in the other vertical lines.
 
 \subsubsection{Simple case: vertical or horizontal lines}
 
@@ -7479,9 +7731,9 @@ if((hor && p0.x > p1.x) || (!hor && p0.y > p1.y)){
 % remember than p0 is "before" p1
 
 <<[[_memimageline()]] when vertical or horizontal lines>>=
-if((p0.x == p1.x || p0.y == p1.y) && 
-    (end0&0x1F) == Endsquare && 
-    (end1&0x1F) == Endsquare){
+if((p0.x == p1.x || p0.y == p1.y) 
+&& (end0&0x1F) == Endsquare 
+&& (end1&0x1F) == Endsquare){
     r.min = p0;
     r.max = p1;
     // vertical line
@@ -7514,9 +7766,12 @@ dst->clipr = clipr;
 <<[[_memimageline()]] restore dst clipr>>=
 dst->clipr = oclipr;
 @
-% not sure why does that, to optimize a bit more,
-% and because this clipping information we have to pass to memdraw
-% so there is no much choice, we have to put it in dst.
+% not sure why does that, to optimize a bit more?
+%  and because this clipping information we have to pass to memdraw
+%  so there is no much choice, we have to put it in dst.
+% but anyway, it is mostly dst-clipr from the start so no big win ...
+%  I think all this clipping code could be removed.
+
 
 \subsubsection{General case}
 
@@ -7587,7 +7842,9 @@ return;
 @
 %fixshift 10? = 2^10 = 1024
 
-%~0 = w parameter to _memfillpolysc = ??
+%~0 = w parameter to _memfillpolysc = winding rule for
+% what to do when intersect resulting polygon
+% can be 0, 1, ~0, ~1 (see draw(2))
 
 % FIGURE where see the 4 points, I think it's the rectangle!
 
@@ -7596,6 +7853,7 @@ return;
 
 \l could do bresenham when thickness of line is 1? for education purpose?
 \l  a good stepping stone to the more complex algo in xscan?
+
 
 \section{Polyline}
 
@@ -7636,6 +7894,11 @@ fillpolyop(Image *dst, Point *p, int np, int wind, Image *src, Point sp, Drawop 
 }
 @
 
+% way to fill poly is simple. No complex pattern, etc. But again
+% can play with src to do that! Instead of hardcoded set of style,
+% just use very general API with flexible mask and src.
+
+
 \subsection{Marshalling}
 
 % why not _poly? more consistent
@@ -7644,7 +7907,7 @@ static
 void
 dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, Image *src, Point *sp, Drawop op)
 {
-    uchar *a, *t, *u;
+    byte *a, *t, *u;
     int i, ox, oy;
 
     <<[[dopoly()]] sanity check n>>
@@ -7831,6 +8094,10 @@ drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
 
 \subsection{Algorithm}
 
+%helps?
+%https://www.cs.uic.edu/~jbell/CourseNotes/ComputerGraphics/PolygonFilling.html
+
+
 <<function mempoly>>=
 void
 mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, Memimage *src, Point sp, int op)
@@ -7849,6 +8116,7 @@ mempoly(Memimage *dst, Point *vert, int nvert, int end0, int end1, int radius, M
 }
 @
 % actually call memline! :) (and not _memimageline, so handle layers and so on)
+%  which will call back fillpoly.
 
 % vert for vertexes (points)
 
@@ -7881,6 +8149,8 @@ struct Seg
 {
     Point	p0;
     Point	p1;
+
+    long	d; // direction? 1 or -1?
 
     <<[[Seg]] other fields>>
 };
@@ -7931,6 +8201,8 @@ _memfillpolysc(Memimage *dst, Point *vert, int nvert, int w, Memimage *src, Poin
 }
 @
 % >> >> >> >>
+\l remove clipped parameter, unused anyway since the code was commented
+\l  later
 
 % it closes the polygone if it was not?
 
@@ -7976,57 +8248,45 @@ long	num;
 long	den;
 long	dz;
 long	dzrem;
+@
+
+<<[[Seg]] other fields>>=
 long	z;
 long	zerr;
-long	d;
 @
+
+% this is a very complex algorithm ... made more complex
+% with the fixshift, with sp, with wind, etc.
+% Rely on CGPP? too long to explain otherwise?
 
 <<function xscan>>=
 static void
 xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, Point sp, bool detail, int fixshift, bool clipped, int op)
 {
-    long y, maxy, x, x2, xerr, xden, onehalf;
     Seg **ep, **next, **p, **q, *s;
+    long y, maxy, x, x2, xerr, xden, onehalf;
     long n, i, iy, cnt, ix, ix2, minx, maxx;
     Point pt;
     void	(*fill)(Memimage*, int, int, int, Memimage*, Point, int);
 
     fill = fillline;
-
-
-/*
- * This can only work on 8-bit destinations, since fillcolor is
- * just using memset on sp.x.
- *
- * I'd rather not even enable it then, since then if the general
- * code is too slow, someone will come up with a better improvement
- * than this sleazy hack.	-rsc
- *
-    if(clipped 
-    && (src->flags&Frepl) 
-    && src->depth==8 
-    && Dx(src->r)==1 
-    && Dy(src->r)==1) {
-        fill = fillcolor;
-        sp.x = membyteval(src);
-    }
- *
- */
     USED(clipped);
-
 
     for(i=0, s=segtab, p=seg; i<nseg; i++, s++) {
         *p = s;
         if(s->p0.y == s->p1.y)
             continue;
         if(s->p0.y > s->p1.y) {
+            // swap(s->p0, s->p1)
             pt = s->p0;
             s->p0 = s->p1;
             s->p1 = pt;
+
             s->d = -s->d;
         }
         s->num = s->p1.x - s->p0.x;
         s->den = s->p1.y - s->p0.y;
+
         s->dz = sdiv(s->num, s->den) << fixshift;
         s->dzrem = mod(s->num, s->den) << fixshift;
         s->dz += sdiv(s->dzrem, s->den);
@@ -8036,8 +8296,8 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
     n = p-seg;
     if(n == 0)
         return;
-    *p = 0;
-    qsort(seg, p-seg , sizeof(Seg*), ycompare);
+    *p = nil;
+    qsort(seg, n , sizeof(Seg*), ycompare);
 
     onehalf = 0;
     if(fixshift)
@@ -8098,14 +8358,17 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
 
         for(p = seg; p < ep; p++) {
             cnt = 0;
+
             x = p[0]->z;
             xerr = p[0]->zerr;
             xden = p[0]->den;
+
             ix = (x + onehalf) >> fixshift;
             if(ix >= maxx)
                 break;
             if(ix < minx)
                 ix = minx;
+
             cnt += p[0]->d;
             p++;
             for(;;) {
@@ -8114,22 +8377,21 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
                     return;
                 }
                 cnt += p[0]->d;
-                if((cnt&wind) == 0)
+                if((cnt & wind) == 0)
                     break;
                 p++;
             }
+
             x2 = p[0]->z;
             ix2 = (x2 + onehalf) >> fixshift;
             if(ix2 <= minx)
                 continue;
             if(ix2 > maxx)
                 ix2 = maxx;
-            if(ix == ix2 && detail) {
-                if(xerr*p[0]->den + p[0]->zerr*xden > p[0]->den*xden)
-                    x++;
-                ix = (x + x2) >> (fixshift+1);
-                ix2 = ix+1;
-            }
+
+            <<[[xscan()]] if detail>>
+
+            // the call
             (*fill)(dst, ix, ix2, iy, src, sp, op);
         }
         y += (1<<fixshift);
@@ -8139,56 +8401,81 @@ xscan(Memimage *dst, Seg **seg, Seg *segtab, int nseg, int wind, Memimage *src, 
 @
 % >> >> >> >> >>
 % wow, so complicated
-\l remove clipped parameter, unused anyway
+\t remove clipped parameter, unused anyway
+%old: can use n in code below, clearer
+%    qsort(seg, p-seg , sizeof(Seg*), ycompare);
+%old: was commented already in the orginal code
+%  /*
+%   * This can only work on 8-bit destinations, since fillcolor is
+%   * just using memset on sp.x.
+%   *
+%   * I'd rather not even enable it then, since then if the general
+%   * code is too slow, someone will come up with a better improvement
+%   * than this sleazy hack.	-rsc
+%   *
+%      if(clipped 
+%      && (src->flags&Frepl) 
+%      && src->depth==8 
+%      && Dx(src->r)==1 
+%      && Dy(src->r)==1) {
+%          fill = fillcolor;
+%          sp.x = membyteval(src);
+%      }
+%   *
+%   */
 
 \subsubsection{[[fillxxx()]]}
 
-%dead: used only in code that is now commented
-<<function fillcolor>>=
-static void
-fillcolor(Memimage *dst, int left, int right, int y, Memimage *src, Point p)
-{
-    int srcval;
-
-    USED(src);
-    srcval = p.x;
-    p.x = left;
-    p.y = y;
-    memset(byteaddr(dst, p), srcval, right-left);
-}
-@
-
 <<function fillline>>=
 static void
-fillline(Memimage *dst, int left, int right, int y, Memimage *src, Point p, int op)
+fillline(Memimage *dst, int xleft, int xright, int y, Memimage *src, Point p, int op)
 {
     Rectangle r;
 
-    r.min.x = left;
+    r.min.x = xleft;
     r.min.y = y;
-    r.max.x = right;
+    r.max.x = xright;
     r.max.y = y+1;
+
     p.x += left;
     p.y += y;
+
     memdraw(dst, r, src, p, memopaque, p, op);
 }
 @
 
-<<function fillpoint>>=
-static void
-fillpoint(Memimage *dst, int x, int y, Memimage *src, Point p, int op)
-{
-    Rectangle r;
 
-    r.min.x = x;
-    r.min.y = y;
-    r.max.x = x+1;
-    r.max.y = y+1;
-    p.x += x;
-    p.y += y;
-    memdraw(dst, r, src, p, memopaque, p, op);
-}
-@
+%dead: used only in code that is now commented
+% <<function fillcolor>>=
+% static void
+% fillcolor(Memimage *dst, int left, int right, int y, Memimage *src, Point p)
+% {
+%     int srcval;
+% 
+%     USED(src);
+%     srcval = p.x;
+%     p.x = left;
+%     p.y = y;
+%     memset(byteaddr(dst, p), srcval, right-left);
+% }
+% @
+
+%dead too:
+%  <<function fillpoint>>=
+%  static void
+%  fillpoint(Memimage *dst, int x, int y, Memimage *src, Point p, int op)
+%  {
+%      Rectangle r;
+%  
+%      r.min.x = x;
+%      r.min.y = y;
+%      r.max.x = x+1;
+%      r.max.y = y+1;
+%      p.x += x;
+%      p.y += y;
+%      memdraw(dst, r, src, p, memopaque, p, op);
+%  }
+%  @
 
 
 
@@ -8280,11 +8567,9 @@ zsort(Seg **seg, Seg **ep)
 static int
 ycompare(void *a, void *b)
 {
-    Seg **s0, **s1;
+    Seg **s0 = a, **s1 = b;
     long y0, y1;
 
-    s0 = a;
-    s1 = b;
     y0 = (*s0)->p0.y;
     y1 = (*s1)->p0.y;
 
@@ -8296,35 +8581,14 @@ ycompare(void *a, void *b)
 }
 @
 
-<<function xcompare>>=
-static int
-xcompare(void *a, void *b)
-{
-    Seg **s0, **s1;
-    long x0, x1;
-
-    s0 = a;
-    s1 = b;
-    x0 = (*s0)->p0.x;
-    x1 = (*s1)->p0.x;
-
-    if(x0 < x1)
-        return -1;
-    if(x0 == x1)
-        return 0;
-    return 1;
-}
-@
 
 <<function zcompare>>=
 static int
 zcompare(void *a, void *b)
 {
-    Seg **s0, **s1;
+    Seg **s0 = a, **s1 = b;
     long z0, z1;
 
-    s0 = a;
-    s1 = b;
     z0 = (*s0)->z;
     z1 = (*s1)->z;
 
@@ -8335,6 +8599,7 @@ zcompare(void *a, void *b)
     return 1;
 }
 @
+
 
 
 
@@ -8362,6 +8627,9 @@ ellipse(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp)
     doellipse('e', dst, &c, a, b, thick, src, &sp, 0, 0, SoverD);
 }
 @
+% used also for arc, hence the 0 0 for alpha and phi.
+% here thick must be >=0. The comment above is for memdraw,
+% not for the API.
 
 <<function ellipseop>>=
 void
@@ -8402,10 +8670,7 @@ doellipse(int cmd, Image *dst, Point *c, int xr, int yr, int thick, Image *src, 
 
     // ellipse: 'e' dstid[4] srcid[4] center[2*4] a[4] b[4] thick[4] sp[2*4] alpha[4] phi[4]
     a = bufimage(dst->display, 1+4+4+2*4+4+4+4+2*4+2*4);
-    if(a == 0){
-        fprint(2, "image ellipse: %r\n");
-        return;
-    }
+    <<[[doellipse()]] sanity check a>>
     a[0] = cmd;
     BPLONG(a+1, dst->id);
     BPLONG(a+5, src->id);
@@ -8418,6 +8683,13 @@ doellipse(int cmd, Image *dst, Point *c, int xr, int yr, int thick, Image *src, 
     BPLONG(a+33, sp->y);
     BPLONG(a+37, alpha);
     BPLONG(a+41, phi);
+}
+@
+
+<<[[doellipse()]] sanity check a>>=
+if(a == nil){
+    fprint(2, "image ellipse: %r\n");
+    return;
 }
 @
 
@@ -8437,11 +8709,9 @@ case 'E':
     drawpoint(&p, a+9);
     e0 = BGLONG(a+17);
     e1 = BGLONG(a+21);
-    if(e0<0 || e1<0)
-        error("invalid ellipse semidiameter");
+    <<[[drawmesg()]] when draw ellipse, sanity check widths>>
     j = BGLONG(a+25);
-    if(j < 0)
-        error("negative ellipse thickness");
+    <<[[drawmesg()]] when draw ellipse, sanity check j>>
     drawpoint(&sp, a+29);
     c = j;
     if(*a == 'E')
@@ -8449,21 +8719,27 @@ case 'E':
     ox = BGLONG(a+37);
     oy = BGLONG(a+41);
     op = drawclientop(client);
-    /* high bit indicates arc angles are present */
-
-    if(ox & (1<<31)){
-        if((ox & (1<<30)) == 0)
-            ox &= ~(1<<31);
-        memarc(dst, p, e0, e1, c, src, sp, ox, oy, op); // The call
-    }else
+ 
+   <<[[drawmesg()]] when draw ellipse, if ox>>
+    else
         memellipse(dst, p, e0, e1, c, src, sp, op); // The call
 
-    dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
+   <<[[drawmesg()]] when draw ellipse, dstflush>>
 
     continue;
 @
 % >> >> >>
 
+
+<<[[drawmesg()]] when draw ellipse, sanity check widths>>=
+if(e0<0 || e1<0)
+    error("invalid ellipse semidiameter");
+@
+
+<<[[drawmesg()]] when draw ellipse, sanity check j>>=
+if(j < 0)
+    error("negative ellipse thickness");
+@
 
 \subsection{Algorithm}
 
@@ -8743,7 +9019,7 @@ arc(Image *dst, Point c, int a, int b, int thick, Image *src, Point sp, int alph
 }
 @
 % >>
-% special bit??
+% special bit, used because want to allow also alpha at 0.
 
 <<function arcop>>=
 void
@@ -8775,6 +9051,19 @@ fillarcop(Image *dst, Point c, int a, int b, Image *src, Point sp, int alpha, in
 @
 % >>
 
+\subsection{Unmarshalling}
+
+<<[[drawmesg()]] when draw ellipse, if ox>>=
+/* high bit indicates arc angles are present */
+
+if(ox & (1<<31)){
+    if((ox & (1<<30)) == 0)
+        ox &= ~(1<<31);
+    memarc(dst, p, e0, e1, c, src, sp, ox, oy, op); // The call
+}
+@
+% >> >> >> >>
+
 \subsection{Algoritm}
 
 <<enum _anon_ (lib_graphics/libmemdraw/arc.c)>>=
@@ -8784,7 +9073,6 @@ fillarcop(Image *dst, Point c, int a, int b, Image *src, Point sp, int alpha, in
  *   measured counterclockwise from the positive x axis. other
  *   arguments are as for ellipse(dst,c,a,b,t,src,sp)
  */
-
 enum
 {
     R, T, L, B	/* right, top, left, bottom */
@@ -11116,7 +11404,7 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
     ntot = 0;
     while(r.min.y < r.max.y){
         a = bufimage(d, 1+4+4*4);
-        if(a == 0){
+        if(a == nil){
             werrstr("unloadimage: %r");
             return -1;
         }
@@ -12576,7 +12864,7 @@ allocscreen(Image *image, Image *fill, int public)
     for(try=0; try<25; try++){
         /* loop until find a free id */
         a = bufimage(d, 1+4+4+4+1);
-        if(a == 0){
+        if(a == nil){
             free(s);
             return 0;
         }
@@ -12610,7 +12898,7 @@ freescreen(Screen *s)
         return 0;
     d = s->display;
     a = bufimage(d, 1+4);
-    if(a == 0)
+    if(a == nil)
         return -1;
     a[0] = 'F';
     BPLONG(a+1, s->id);
@@ -12636,7 +12924,7 @@ publicscreen(Display *d, int id, ulong chan)
     if(s == 0)
         return 0;
     a = bufimage(d, 1+4+4);
-    if(a == 0){
+    if(a == nil){
     Error:
         free(s);
         return 0;
@@ -17421,7 +17709,7 @@ case Endarrow:
     pp += 2;
     break;
 @
-% detail on
+% detail parameter on!
 
 <<[[_memimageline()]] switch end1 cases>>=
 case Endarrow:
@@ -17473,12 +17761,42 @@ arrowend(Point tip, Point *pp, int end, int sin, int cos, int radius)
 }
 @
 
-\subsubsection{[[yscan()]]}
+\subsubsection{detail and [[yscan()]]}
+
+<<[[xscan()]] if detail>>=
+if(ix == ix2 && detail) {
+    if(xerr*p[0]->den + p[0]->zerr*xden > p[0]->den*xden)
+        x++;
+    ix = (x + x2) >> (fixshift+1);
+    ix2 = ix+1;
+}
+@
 
 <<[[_memfillpolysc()]] if detail>>=
 if(detail)
     yscan(dst, seg, segtab, nvert, w, src, sp, fixshift, op);
 @
+
+<<function xcompare>>=
+static int
+xcompare(void *a, void *b)
+{
+    Seg **s0, **s1;
+    long x0, x1;
+
+    s0 = a;
+    s1 = b;
+    x0 = (*s0)->p0.x;
+    x1 = (*s1)->p0.x;
+
+    if(x0 < x1)
+        return -1;
+    if(x0 == x1)
+        return 0;
+    return 1;
+}
+@
+
 
 <<function yscan>>=
 static void
@@ -18060,69 +18378,6 @@ tablesbuilt = true;
 % used to be a global, but can be a static, better.
 
 
-
-\subsection{Mask}
-
-%remember that memopaque which is the default mask used when drawing
-% is memones which is just a GREY1
-
-<<[[ParamDraw]] mask fields>>=
-bool	alphaonly;
-Readfn	*greymaskcall;	
-@
-
-<<[[ParamDraw]] other fields>>=
-bool	convgrey;
-@
-
-
-<<[[alphadraw()]] set rdmask>>=
-if(mask->flags&Falpha){
-    rdmask = readalphafn(mask);
-    z->mpar.alphaonly = true;
-}
-/*
- * If there is no alpha channel, we'll ask for a grey channel
- * and pretend it is the alpha.
- */
-else{
-    z->mpar.greymaskcall = readfn(mask);
-    z->mpar.convgrey = true;
-    rdmask = greymaskread;
-
-    <<[[alphadraw()]] when mask and source have no alpha, possibly adapt calc>>
-}
-@
-
-<<function readalphafn>>=
-static Readfn*
-readalphafn(Memimage *m)
-{
-    USED(m);
-    return readbyte;
-}
-@
-
-
-\subsubsection{Simple mask}
-
-
-<<function greymaskread>>=
-/*
- * Alpha reading function that simply relabels the grey pointer.
- */
-static Buffer
-greymaskread(Param *p, uchar *buf, int y)
-{
-    Buffer b;
-
-    b = p->greymaskcall(p, buf, y);
-    b.alpha = b.grey;
-    return b;
-}
-@
-
-\subsubsection{Mask with alpha}
 
 
 \subsection{Other compositing operators}
@@ -20811,6 +21066,13 @@ if(y == 1)
     dstflush(dstid, dst, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
 @
 
+
+\subsubsection{Flushing ellipses}
+
+<<[[drawmesg()]] when draw ellipse, dstflush>>=
+dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
+@
+
 \chapter{Conclusion}
 
 % That's it! you know now!
@@ -20930,7 +21192,7 @@ drawsetdebug(bool v)
 {
     uchar *a;
     a = bufimage(display, 1+1);
-    if(a == 0){
+    if(a == nil){
         fprint(2, "drawsetdebug: %r\n");
         return;
     }

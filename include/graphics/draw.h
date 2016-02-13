@@ -19,12 +19,6 @@ typedef struct	Subfont Subfont;
 
 #pragma incomplete Mouse
 
-// dumpers
-#pragma varargck	type	"R"	Rectangle
-#pragma varargck	type	"P"	Point
-extern	int	Rfmt(Fmt*);
-extern	int	Pfmt(Fmt*);
-
 /*s: enum Colors */
 enum
 {
@@ -62,6 +56,7 @@ enum
     
 };
 /*e: enum Colors */
+typedef ulong rgba;
 
 /*s: enum _anon_ (include/draw.h) */
 enum
@@ -720,4 +715,12 @@ extern	int	_compblocksize(Rectangle, int);
 /* XXX backwards helps; should go */
 extern	ulong	drawld2chan[];
 extern	void	drawsetdebug(bool);
+
+// dumpers
+#pragma varargck	type	"R"	Rectangle
+#pragma varargck	type	"P"	Point
+extern	int	Rfmt(Fmt*);
+extern	int	Pfmt(Fmt*);
+
+
 /*e: include/draw.h */
