@@ -4,7 +4,7 @@
 // --------------------------------------------
 // pad stuff
 // --------------------------------------------
-// could also be in u.h, more types!
+// Could also be in u.h. More types! Types are good!
 typedef int bool;
 enum _bool {
   false = 0,
@@ -23,7 +23,7 @@ typedef int fdt; // file descriptor type
 #define ERROR_0 0
 #define ERROR_1 1
 #define ERROR_NEG1 (-1)
-// later: unify all of that, be more consistent!
+// later: unify all of that to be more consistent!
 typedef int error0; // 0 is the error value
 typedef int error1; // 1 is the error value
 typedef int errorneg1; // -1 is the error value
@@ -765,7 +765,7 @@ extern	int		wstat(char*, uchar*, int);
 extern	void*	rendezvous(void*, void*);
 
 extern	Dir*	dirstat(char*);
-extern	Dir*	dirfstat(int);
+extern	Dir*	dirfstat(fdt);
 extern	int		dirwstat(char*, Dir*);
 extern	int		dirfwstat(int, Dir*);
 extern	long	dirread(int, Dir**);
