@@ -52,6 +52,7 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
 {
     /*s: [[geninitdraw()]] locals */
     Subfont *df;
+    /*x: [[geninitdraw()]] locals */
     fdt fd;
     int n;
     char buf[128];
@@ -71,7 +72,7 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
     // Set up default subfont
     df = getdefont(display);
     display->defaultsubfont = df;
-
+    /*s: [[geninitdraw()]] sanity check df */
     if(df == nil){
         fprint(2, "imageinit: can't open default subfont: %r\n");
     Error:
@@ -79,38 +80,49 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
         display = nil;
         return ERROR_NEG1;
     }
+    /*e: [[geninitdraw()]] sanity check df */
 
     // Set up default font
+    /*s: [[geninitdraw()]] read fontname if fontname was nil */
     if(fontname == nil){
         fd = open("/env/font", OREAD);
         if(fd >= 0){
             n = read(fd, buf, sizeof(buf));
-            if(n>0 && n<sizeof buf-1){
-                buf[n] = 0;
+            if(n>0 && n < sizeof buf-1){
+                buf[n] = '\0';
                 fontname = buf;
             }
             close(fd);
         }
     }
+    /*e: [[geninitdraw()]] read fontname if fontname was nil */
+    /*s: [[geninitdraw()]] if fontname still nil */
     /*
      * Build fonts with caches==depth of screen, for speed.
      * If conversion were faster, we'd use 0 and save memory.
      */
     if(fontname == nil){
-        snprint(buf, sizeof buf, "%d %d\n0 %d\t%s\n", df->height, df->ascent,
+        snprint(buf, sizeof buf, "%d %d\n0 %d\t%s\n", 
+            df->height, df->ascent,
             df->n-1, deffontname);
-     //BUG: Need something better for this	installsubfont("*default*", df);
+        //BUG: Need something better for this	installsubfont("*default*", df);
         font = buildfont(display, buf, deffontname);
+        /*s: [[geninitdraw()]] sanity check font part2 */
         if(font == nil){
             fprint(2, "imageinit: can't open default font: %r\n");
             goto Error;
         }
-    }else{
+        /*e: [[geninitdraw()]] sanity check font part2 */
+    }
+    /*e: [[geninitdraw()]] if fontname still nil */
+    else{
         font = openfont(display, fontname);	/* BUG: grey fonts */
+        /*s: [[geninitdraw()]] sanity check font */
         if(font == nil){
             fprint(2, "imageinit: can't open font %s: %r\n", fontname);
             goto Error;
         }
+        /*e: [[geninitdraw()]] sanity check font */
     }
     display->defaultfont = font;
     /*e: [[geninitdraw()]] set up font */

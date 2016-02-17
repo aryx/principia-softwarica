@@ -28,7 +28,7 @@ static
 void
 dopoly(int cmd, Image *dst, Point *pp, int np, int end0, int end1, int radius, Image *src, Point *sp, Drawop op)
 {
-    uchar *a, *t, *u;
+    byte *a, *t, *u;
     int i, ox, oy;
 
     /*s: [[dopoly()]] sanity check n */

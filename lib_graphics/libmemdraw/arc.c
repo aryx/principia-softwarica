@@ -12,7 +12,6 @@
  *   measured counterclockwise from the positive x axis. other
  *   arguments are as for ellipse(dst,c,a,b,t,src,sp)
  */
-
 enum
 {
     R, T, L, B	/* right, top, left, bottom */

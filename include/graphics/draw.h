@@ -27,9 +27,11 @@ enum
 
     DBlack		= 0x000000FF,
     DWhite		= 0xFFFFFFFF,
+
     DRed		= 0xFF0000FF,
     DGreen		= 0x00FF00FF,
     DBlue		= 0x0000FFFF,
+
     DCyan		= 0x00FFFFFF,
     DMagenta	= 0xFF00FFFF,
     DYellow		= 0xFFFF00FF,
@@ -51,12 +53,14 @@ enum
     DPalegreyblue	= 0x4993DDFF,
     DPurpleblue		= 0x8888CCFF,
 
-    DNotacolor	= 0xFFFFFF00, // Alpha = 0
+    DNotacolor	= 0xFFFFFF00, // Alpha = 0, transparent white
     DNofill	= DNotacolor,
     
 };
 /*e: enum Colors */
+/*s: type rgba */
 typedef ulong rgba;
+/*e: type rgba */
 
 /*s: enum _anon_ (include/draw.h) */
 enum
@@ -170,7 +174,7 @@ enum ImageChan {
 /*s: enum _anon_ (include/draw.h)5 */
 enum ImageType {
     GREY1	= CHAN1(CGrey, 1), // used for masks, black and white
-    CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default
+    CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default, 1 byte per pixel
     RGB16	= CHAN3(CRed, 5, CGreen, 6, CBlue, 5), // Raspberry mode by default
     RGBA32	= CHAN4(CRed, 8, CGreen, 8, CBlue, 8, CAlpha, 8), // flexible
     ARGB32	= CHAN4(CAlpha, 8, CRed, 8, CGreen, 8, CBlue, 8),/* stupid VGAs */
@@ -290,18 +294,17 @@ struct Image
 {
     int			id;		/* id of system-held Image */
 
-    // ref<Display>
-    Display		*display;	/* display holding data */
-
     Rectangle	r;		/* rectangle in data area, local coords */
-    Rectangle 	clipr;	/* clipping region */
 
     ulong		chan; // image format
-
     // derives from Image.chan
     int			depth;		/* number of bits per pixel */
-    // bitset<enum<fxxx>>    
-    int			repl;		/* flag: data replicates to tile clipr */
+
+    Rectangle 	clipr;	/* clipping region */
+    bool		repl;	/* flag: data replicates to tile clipr */
+
+    // ref<Display>
+    Display		*display;	/* display holding data */
 
     /*s: [[Image]] layer fields */
     Screen		*screen;	/* nil if not a window */
@@ -326,11 +329,14 @@ struct RGB
 /*s: struct Fontchar */
 struct	Fontchar
 {
+    // character coordinates in Subfont.bits
     int		x;		/* left edge of bits */
-    byte	top;		/* first non-zero scan-line */
-    byte	bottom;		/* last non-zero scan-line + 1 */
-    char	left;		/* offset of baseline */
-    byte	width;		/* width of baseline */
+    uchar	top;		/* first non-zero scan-line */
+    uchar	bottom;		/* last non-zero scan-line + 1 */
+
+    // adjustments to make on drawing point coordinates in destination
+    schar	left;		/* offset of baseline */
+    uchar	width;		/* width of baseline */
 };
 /*e: struct Fontchar */
 
@@ -348,14 +354,17 @@ struct	Fontchar
  */
 struct	Subfont
 {
+    // ref_own<string>
     char		*name;
+    Image		*bits;	/* of font */
+
     short		n;		/* number of chars in font */
+    Fontchar 	*info;	/* n+1 character descriptors */
 
-    byte		height;		/* height of image */
+    /*s: [[Subfont]] other fields */
+    uchar		height;		/* height of image */
     char		ascent;		/* top of image to baseline */
-
-    Fontchar 	*info;		/* n+1 character descriptors */
-    Image		*bits;		/* of font */
+    /*e: [[Subfont]] other fields */
 
     // Extra
     int		ref;
@@ -366,15 +375,30 @@ struct	Subfont
 enum
 {
     /* starting values */
+    /*s: constant NFCACHE */
     LOG2NFCACHE =	6,
     NFCACHE =	(1<<LOG2NFCACHE),	/* #chars cached */
+    /*e: constant NFCACHE */
+    /*s: constant NFLOOK */
     NFLOOK =	5,			/* #chars to scan in cache */
+    /*e: constant NFLOOK */
+    /*s: constant NFSUBF */
     NFSUBF =	2,			/* #subfonts to cache */
+    /*e: constant NFSUBF */
+
     /* max value */
+    /*s: constant MAXFCACHE */
     MAXFCACHE =	1024+NFLOOK,		/* upper limit */
+    /*e: constant MAXFCACHE */
+    /*s: constant MAXSUBF */
     MAXSUBF =	50,			/* generous upper limit */
+    /*e: constant MAXSUBF */
+
     /* deltas */
+    /*s: constant DSUBF */
     DSUBF = 	4,
+    /*e: constant DSUBF */
+
     /* expiry ages */
     SUBFAGE	=	10000,
     CACHEAGE =	10000
@@ -386,19 +410,29 @@ struct Cachefont
 {
     Rune		min;	/* lowest rune value to be taken from subfont */
     Rune		max;	/* highest rune value+1 to be taken from subfont */
+    // option<int>, None = 0
     int		offset;	/* position in subfont of character at min */
+
+    // ref_own<string>, subfont filename
     char		*name;			/* stored in font */
+    /*s: [[Cachefont]] other fields */
+    // ref_own<string> // ??
     char		*subfontname;		/* to access subfont */
+    /*e: [[Cachefont]] other fields */
 };
 /*e: struct Cachefont */
 
 /*s: struct Cacheinfo */
 struct Cacheinfo
 {
+    // the key
+    Rune		value;	/* value of character at this slot in cache */
+
+    // the values
     ushort		x;		/* left edge of bits */
     byte		width;		/* width of baseline */
     schar		left;		/* offset of baseline */
-    Rune		value;	/* value of character at this slot in cache */
+
     ushort		age;
 };
 /*e: struct Cacheinfo */
@@ -406,32 +440,49 @@ struct Cacheinfo
 /*s: struct Cachesubf */
 struct Cachesubf
 {
-    ulong		age;	/* for replacement */
+    // ref<Cachefont>, the key
     Cachefont	*cf;	/* font info that owns us */
+    // ref_own<Subfont>, the value
     Subfont		*f;	/* attached subfont */
+
+    ulong		age;	/* for replacement */
 };
 /*e: struct Cachesubf */
 
 /*s: struct Font */
 struct Font
 {
+    // ref_own<string>, //filename? e.g. /lib/font/bit/lucm/latin1.9.font
     char		*name;
+    // ref<Display>
     Display		*display;
 
     short		height;	/* max height of image, interline spacing */
     short		ascent;	/* top of image to baseline */
+
+    /*s: [[Font]] subfont spec fields */
+    // array<ref_own<Cachefont>> (length = Font.nsub)
+    Cachefont	**sub;	/* as read from file */
+    short		nsub;	/* number of subfonts */
+    /*e: [[Font]] subfont spec fields */
+    /*s: [[Font]] subfont cache fields */
+    // growing_array<Cachesubf> (size = Font.nsubf, init = NFSUBF, max = MAXSUBF)
+    Cachesubf	*subf;
+    int		nsubf;	/* size of subfont list */
+    /*x: [[Font]] subfont cache fields */
+    // growing_hash<Rune, int * Cacheinfo> (size = Font.ncache, bucketsize = NFLOOK)
+    Cacheinfo	*cache;
+    int		ncache;	/* size of cache */
+    /*e: [[Font]] subfont cache fields */
+    /*s: [[Font]] cache fields */
+    // growing image
+    Image		*cacheimage;
+    /*x: [[Font]] cache fields */
+    ulong		age;	/* increasing counter; used for LRU */
+    /*e: [[Font]] cache fields */
     /*s: [[Font]] other fields */
     short		width;	/* widest so far; used in caching only */	
-    short		nsub;	/* number of subfonts */
-    ulong		age;	/* increasing counter; used for LRU */
     int		maxdepth;	/* maximum depth of all loaded subfonts */
-    int		ncache;	/* size of cache */
-    int		nsubf;	/* size of subfont list */
-
-    Cacheinfo	*cache;
-    Cachesubf	*subf;
-    Cachefont	**sub;	/* as read from file */
-    Image		*cacheimage;
     /*e: [[Font]] other fields */
 };
 /*e: struct Font */
@@ -453,6 +504,7 @@ typedef void Errorfn(Display*, char*);
 // set globals at the end of this file: display, view, font, screen
 extern int	initdraw(Errorfn, char*, char*);
 extern int	geninitdraw(char*, Errorfn, char*, char*, char*, int);
+
 extern Display*	initdisplay(char*, char*, Errorfn);
 extern void		closedisplay(Display*);
 
@@ -607,8 +659,8 @@ extern Font*	openfont(Display*, char*);
 extern void		freefont(Font*);
 
 extern Font*	buildfont(Display*, char*, char*);
-extern Font*	mkfont(Subfont*, Rune);
 
+// public? or internal to font code?
 extern Subfont*	allocsubfont(char*, int, int, int, Fontchar*, Image*);
 extern Subfont*	lookupsubfont(Display*, char*);
 extern void	installsubfont(char*, Subfont*);
@@ -623,6 +675,7 @@ extern Subfont*	_getsubfont(Display*, char*);
 extern Point	stringsize(Font*, char*);
 extern int		stringwidth(Font*, char*);
 extern int		stringnwidth(Font*, char*, int);
+
 extern Point	runestringsize(Font*, Rune*);
 extern int		runestringwidth(Font*, Rune*);
 extern int		runestringnwidth(Font*, Rune*, int);

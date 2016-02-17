@@ -31,7 +31,7 @@ allocscreen(Image *image, Image *fill, int public)
     for(try=0; try<25; try++){
         /* loop until find a free id */
         a = bufimage(d, 1+4+4+4+1);
-        if(a == 0){
+        if(a == nil){
             free(s);
             return 0;
         }
@@ -65,7 +65,7 @@ publicscreen(Display *d, int id, ulong chan)
     if(s == 0)
         return 0;
     a = bufimage(d, 1+4+4);
-    if(a == 0){
+    if(a == nil){
     Error:
         free(s);
         return 0;
@@ -95,7 +95,7 @@ freescreen(Screen *s)
         return 0;
     d = s->display;
     a = bufimage(d, 1+4);
-    if(a == 0)
+    if(a == nil)
         return -1;
     a[0] = 'F';
     BPLONG(a+1, s->id);

@@ -55,13 +55,13 @@ getmemdefont(void)
     n = atoi(hdr);
     p = hdr+3*12;
     fc = malloc(sizeof(Fontchar)*(n+1));
-    if(fc == 0){
+    if(fc == nil){
         freememimage(i);
         return 0;
     }
     _unpackinfo(fc, (uchar*)p, n);
     f = allocmemsubfont("*default*", n, atoi(hdr+12), atoi(hdr+24), fc, i);
-    if(f == 0){
+    if(f == nil){
         freememimage(i);
         free(fc);
         return 0;

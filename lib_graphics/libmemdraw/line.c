@@ -111,15 +111,17 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
         return;
     /*e: [[_memline()]] sanity check radius */
     /*s: [[_memimageline()]] clipping clipr */
+    // clip to dst
     if(!rectclip(&clipr, dst->r))
         return;
     if(!rectclip(&clipr, dst->clipr))
         return;
 
+    // clip to src
     d = subpt(sp, p0);
     if(!rectclip(&clipr, rectsubpt(src->clipr, d)))
         return;
-    if((src->flags&Frepl)==0 && !rectclip(&clipr, rectsubpt(src->r, d)))
+    if(!(src->flags&Frepl) && !rectclip(&clipr, rectsubpt(src->r, d)))
         return;
     /*e: [[_memimageline()]] clipping clipr */
 
@@ -151,9 +153,9 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
 
     // easy case
     /*s: [[_memimageline()]] when vertical or horizontal lines */
-    if((p0.x == p1.x || p0.y == p1.y) && 
-        (end0&0x1F) == Endsquare && 
-        (end1&0x1F) == Endsquare){
+    if((p0.x == p1.x || p0.y == p1.y) 
+    && (end0&0x1F) == Endsquare 
+    && (end1&0x1F) == Endsquare){
         r.min = p0;
         r.max = p1;
         // vertical line

@@ -3,11 +3,11 @@
 #include <libc.h>
 #include <draw.h>
 
-/*s: global lastname */
 /*
  * Easy versions of the cache routines; may be substituted by fancier ones for other purposes
  */
 
+/*s: global lastname */
 static char	*lastname;
 /*e: global lastname */
 /*s: global lastsubfont */
@@ -19,13 +19,13 @@ Subfont*
 lookupsubfont(Display *d, char *name)
 {
     if(d && strcmp(name, "*default*") == 0)
-        return d->defaultsubfont;
+        return d->defaultsubfont; 
     if(lastname && strcmp(name, lastname)==0)
-    if(d==lastsubfont->bits->display){
+      if(d == lastsubfont->bits->display){
         lastsubfont->ref++;
         return lastsubfont;
     }
-    return 0;
+    return nil;
 }
 /*e: function lookupsubfont */
 
@@ -44,8 +44,8 @@ void
 uninstallsubfont(Subfont *subfont)
 {
     if(subfont == lastsubfont){
-        lastname = 0;
-        lastsubfont = 0;
+        lastname = nil;
+        lastsubfont = nil;
     }
 }
 /*e: function uninstallsubfont */

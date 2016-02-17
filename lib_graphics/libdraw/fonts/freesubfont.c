@@ -7,12 +7,16 @@
 void
 freesubfont(Subfont *f)
 {
-    if(f == 0)
+    /*s: [[freesubfont()]] sanity check f */
+    if(f == nil)
         return;
+    /*e: [[freesubfont()]] sanity check f */
     f->ref--;
     if(f->ref > 0)
         return;
+
     uninstallsubfont(f);
+
     free(f->info);	/* note: f->info must have been malloc'ed! */
     freeimage(f->bits);
     free(f);

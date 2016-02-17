@@ -174,12 +174,14 @@ struct DName
 /*s: struct FChar */
 struct FChar
 {
+    // Rectangle
     int     minx;   /* left edge of bits */
     int     maxx;   /* right edge of bits */
-    uchar       miny;   /* first non-zero scan-line */
-    uchar       maxy;   /* last non-zero scan-line + 1 */
-    schar       left;   /* offset of baseline */
-    uchar       width;  /* width of baseline */
+    uchar   miny;   /* first non-zero scan-line */
+    uchar   maxy;   /* last non-zero scan-line + 1 */
+
+    schar   left;   /* offset of baseline */
+    uchar   width;  /* width of baseline */
 };
 /*e: struct FChar */
 
@@ -198,6 +200,11 @@ struct DImage
     /*s: [[DImage]] layer fields */
     DScreen*    dscreen;    /* 0 if not a window */
     /*e: [[DImage]] layer fields */
+    /*s: [[DImage]] font fields */
+    // growing_array<option<Fchar>> (size = DImage.nfchar)
+    FChar*      fchar;
+    int     nfchar;
+    /*e: [[DImage]] font fields */
     /*s: [[DImage]] other fields */
     int     vers;
     /*x: [[DImage]] other fields */
@@ -206,8 +213,7 @@ struct DImage
     DImage*     fromname;   /* image this one is derived from, by name */
     /*x: [[DImage]] other fields */
     int     ascent;
-    int     nfchar;
-    FChar*      fchar;
+
     /*e: [[DImage]] other fields */
 
     // Extra
@@ -436,8 +442,10 @@ drawgen(Chan *c, char*, Dirtab*, int, int s, Dir *dp)
         }
         else if(s <= sdraw.nclient){
             cl = sdraw.client[s-1];
+            /*s: [[drawgen()]] in second level directory listing, sanity check cl */
             if(cl == nil)
                 return 0;
+            /*e: [[drawgen()]] in second level directory listing, sanity check cl */
             snprint(up->genbuf, sizeof up->genbuf, "%d",
                 cl->clientid);
             mkqid(&q, (s<<QSHIFT)|Q3rd, 0, QTDIR);
@@ -1035,7 +1043,7 @@ drawnewclient(void)
     // find free slot
     for(i=0; i<sdraw.nclient; i++){
         cl = sdraw.client[i];
-        // found one
+        // found one, i contains the free slot
         if(cl == nil)
             break;
     }
@@ -1153,16 +1161,21 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
     FChar *fc;
     Rectangle r;
     Point sp1;
+    /*s: [[drawchar()]] other locals */
     static Memimage *tmp;
+    /*e: [[drawchar()]] other locals */
 
     fc = &font->fchar[index];
-    r.min.x = p.x+fc->left;
-    r.min.y = p.y-(font->ascent-fc->miny);
-    r.max.x = r.min.x+(fc->maxx-fc->minx);
-    r.max.y = r.min.y+(fc->maxy-fc->miny);
-    sp1.x = sp->x+fc->left;
-    sp1.y = sp->y+fc->miny;
 
+    r.min.x = p.x + fc->left;
+    r.min.y = p.y - (font->ascent - fc->miny);
+    r.max.x = r.min.x + (fc->maxx - fc->minx);
+    r.max.y = r.min.y + (fc->maxy - fc->miny);
+
+    sp1.x = sp->x + fc->left;
+    sp1.y = sp->y + fc->miny;
+
+    /*s: [[drawchar()]] optimization when possible */
     /*
      * If we're drawing greyscale fonts onto a VGA screen,
      * it's very costly to read the screen memory to do the
@@ -1180,14 +1193,17 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
                 goto fallback;
         }
         memdraw(tmp, Rect(0,0,Dx(r),Dy(r)), rdst, r.min, memopaque, ZP, S);
-        memdraw(tmp, Rect(0,0,Dx(r),Dy(r)), src, sp1, font->image, Pt(fc->minx, fc->miny), op);
+        memdraw(tmp, Rect(0,0,Dx(r),Dy(r)), src, sp1, font->image, 
+          Pt(fc->minx, fc->miny), op);
         memdraw(dst, r, tmp, ZP, memopaque, ZP, S);
-    }else{
+    }
+    /*e: [[drawchar()]] optimization when possible */
+    else{
     fallback:
         memdraw(dst, r, src, sp1, font->image, Pt(fc->minx, fc->miny), op);
     }
 
-    p.x += fc->width;
+    p.x   += fc->width;
     sp->x += fc->width;
     return p;
 }
@@ -1861,6 +1877,7 @@ drawmesg(Client *client, void *av, int n)
     ulong chan;
     int repl;
     Rectangle r, clipr;
+    // rgba
     ulong value;
 
     Memimage *i;
@@ -2061,7 +2078,9 @@ drawmesg(Client *client, void *av, int n)
         case 'v':
             printmesg(fmt="", a, 0);
             m = 1;
-            drawflush();
+
+            drawflush(); // The call
+
             continue;
 
         /*x: [[drawmesg()]] cases */
@@ -2332,11 +2351,15 @@ drawmesg(Client *client, void *av, int n)
             drawpoint(&p, a+9);
             e0 = BGLONG(a+17);
             e1 = BGLONG(a+21);
+            /*s: [[drawmesg()]] when draw ellipse, sanity check widths */
             if(e0<0 || e1<0)
                 error("invalid ellipse semidiameter");
+            /*e: [[drawmesg()]] when draw ellipse, sanity check widths */
             j = BGLONG(a+25);
+            /*s: [[drawmesg()]] when draw ellipse, sanity check j */
             if(j < 0)
                 error("negative ellipse thickness");
+            /*e: [[drawmesg()]] when draw ellipse, sanity check j */
             drawpoint(&sp, a+29);
             c = j;
             if(*a == 'E')
@@ -2344,16 +2367,22 @@ drawmesg(Client *client, void *av, int n)
             ox = BGLONG(a+37);
             oy = BGLONG(a+41);
             op = drawclientop(client);
-            /* high bit indicates arc angles are present */
+ 
+           /*s: [[drawmesg()]] when draw ellipse, if ox */
+           /* high bit indicates arc angles are present */
 
-            if(ox & (1<<31)){
-                if((ox & (1<<30)) == 0)
-                    ox &= ~(1<<31);
-                memarc(dst, p, e0, e1, c, src, sp, ox, oy, op); // The call
-            }else
+           if(ox & (1<<31)){
+               if((ox & (1<<30)) == 0)
+                   ox &= ~(1<<31);
+               memarc(dst, p, e0, e1, c, src, sp, ox, oy, op); // The call
+           }
+           /*e: [[drawmesg()]] when draw ellipse, if ox */
+            else
                 memellipse(dst, p, e0, e1, c, src, sp, op); // The call
 
-            dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
+           /*s: [[drawmesg()]] when draw ellipse, dstflush */
+           dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
+           /*e: [[drawmesg()]] when draw ellipse, dstflush */
 
             continue;
         /*x: [[drawmesg()]] cases */
@@ -2363,8 +2392,10 @@ drawmesg(Client *client, void *av, int n)
         case 'x':
             printmesg(fmt="LLLPRPs", a, 0);
             m = 1+4+4+4+2*4+4*4+2*4+2;
+            /*s: [[drawmesg()]] when draw string, if bg part1 */
             if(*a == 'x')
                 m += 4+2*4;
+            /*e: [[drawmesg()]] when draw string, if bg part1 */
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
                 error(Eshortdraw);
@@ -2373,10 +2404,12 @@ drawmesg(Client *client, void *av, int n)
             dstid = BGLONG(a+1);
             src = drawimage(client, a+5);
             font = drawlookup(client, BGLONG(a+9), true);
-            if(font == 0)
+            /*s: [[drawmesg()]] when draw string, sanity check font */
+            if(font == nil)
                 error(Enodrawimage);
             if(font->nfchar == 0)
                 error(Enotfont);
+            /*e: [[drawmesg()]] when draw string, sanity check font */
             drawpoint(&p, a+13);
             drawrectangle(&r, a+21);
             drawpoint(&sp, a+37);
@@ -2387,75 +2420,57 @@ drawmesg(Client *client, void *av, int n)
             if(n < m)
                 error(Eshortdraw);
             /*e: [[drawmesg()]] sanity check n with m */
+            /*s: [[drawmesg()]] change dst clipr */
             clipr = dst->clipr;
             dst->clipr = r;
+            /*e: [[drawmesg()]] change dst clipr */
             op = drawclientop(client);
             bg = dst;
+            /*s: [[drawmesg()]] when draw string, if paint background */
             if(*a == 'x'){
                 /* paint background */
                 bg = drawimage(client, a+47);
                 drawpoint(&q, a+51);
                 r.min.x = p.x;
-                r.min.y = p.y-font->ascent;
+                r.min.y = p.y - font->ascent;
                 r.max.x = p.x;
                 r.max.y = r.min.y+Dy(font->image->r);
                 j = ni;
                 while(--j >= 0){
                     ci = BGSHORT(u);
+                    /*s: [[drawmesg()]] when draw string, sanity check ci */
                     if(ci<0 || ci>=font->nfchar){
                         dst->clipr = clipr;
                         error(Eindex);
                     }
+                    /*e: [[drawmesg()]] when draw string, sanity check ci */
                     r.max.x += font->fchar[ci].width;
                     u += 2;
                 }
-                memdraw(dst, r, bg, q, memopaque, ZP, op);
+                memdraw(dst, r, bg, q, memopaque, ZP, op); // The call
                 u -= 2*ni;
             }
+            /*e: [[drawmesg()]] when draw string, if paint background */
             q = p;
             while(--ni >= 0){
                 ci = BGSHORT(u);
+                /*s: [[drawmesg()]] when draw string, sanity check ci */
                 if(ci<0 || ci>=font->nfchar){
                     dst->clipr = clipr;
                     error(Eindex);
                 }
-                q = drawchar(dst, bg, q, src, &sp, font, ci, op);
+                /*e: [[drawmesg()]] when draw string, sanity check ci */
+                q = drawchar(dst, bg, q, src, &sp, font, ci, op); // The call
                 u += 2;
             }
+            /*s: [[drawmesg()]] restore dst clipr */
             dst->clipr = clipr;
+            /*e: [[drawmesg()]] restore dst clipr */
+            /*s: [[drawmesg()]] when draw text, dstflush */
             p.y -= font->ascent;
             dstflush(dstid, dst, Rect(p.x, p.y, q.x, p.y+Dy(font->image->r)));
+            /*e: [[drawmesg()]] when draw text, dstflush */
             continue;
-
-        /*x: [[drawmesg()]] cases */
-        /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
-        case 'i':
-            printmesg(fmt="Llb", a, 1);
-            m = 1+4+4+1;
-            /*s: [[drawmesg()]] sanity check n with m */
-            if(n < m)
-                error(Eshortdraw);
-            /*e: [[drawmesg()]] sanity check n with m */
-            dstid = BGLONG(a+1);
-            if(dstid == 0)
-                error("cannot use display as font");
-            font = drawlookup(client, dstid, true);
-            if(font == 0)
-                error(Enodrawimage);
-            if(font->image->layer)
-                error("cannot use window as font");
-            ni = BGLONG(a+5);
-            if(ni<=0 || ni>4096)
-                error("bad font size (4096 chars max)");
-            free(font->fchar);  /* should we complain if non-zero? */
-            font->fchar = malloc(ni*sizeof(FChar));
-            if(font->fchar == 0)
-                error("no memory for font");
-            memset(font->fchar, 0, ni*sizeof(FChar));
-            font->nfchar = ni;
-            font->ascent = a[9];
-            continue;
-
         /*x: [[drawmesg()]] cases */
         /* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
         case 'l':
@@ -2466,26 +2481,95 @@ drawmesg(Client *client, void *av, int n)
                 error(Eshortdraw);
             /*e: [[drawmesg()]] sanity check n with m */
             font = drawlookup(client, BGLONG(a+1), true);
-            if(font == 0)
+            /*s: [[drawmesg()]] when load character, sanity check font */
+            if(font == nil)
                 error(Enodrawimage);
             if(font->nfchar == 0)
                 error(Enotfont);
+            /*e: [[drawmesg()]] when load character, sanity check font */
             src = drawimage(client, a+5);
             ci = BGSHORT(a+9);
+            /*s: [[drawmesg()]] when load character, sanity check ci */
             if(ci >= font->nfchar)
                 error(Eindex);
+            /*e: [[drawmesg()]] when load character, sanity check ci */
             drawrectangle(&r, a+11);
             drawpoint(&p, a+27);
             memdraw(font->image, r, src, p, memopaque, p, S);
+
             fc = &font->fchar[ci];
+
             fc->minx = r.min.x;
             fc->maxx = r.max.x;
             fc->miny = r.min.y;
             fc->maxy = r.max.y;
+
             fc->left = a[35];
             fc->width = a[36];
+
+            continue;
+        /*x: [[drawmesg()]] cases */
+        /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
+        case 'i':
+            printmesg(fmt="Llb", a, 1);
+            m = 1+4+4+1;
+            /*s: [[drawmesg()]] sanity check n with m */
+            if(n < m)
+                error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
+            dstid = BGLONG(a+1);
+            /*s: [[drawmesg()]] when initialize font image and cache, sanity check dstid */
+            if(dstid == 0)
+                error("cannot use display as font");
+            /*e: [[drawmesg()]] when initialize font image and cache, sanity check dstid */
+            font = drawlookup(client, dstid, true);
+            /*s: [[drawmesg()]] when initialize font image and cache, sanity check font */
+            if(font == nil)
+                error(Enodrawimage);
+            if(font->image->layer)
+                error("cannot use window as font");
+            /*e: [[drawmesg()]] when initialize font image and cache, sanity check font */
+            ni = BGLONG(a+5);
+            /*s: [[drawmesg()]] when initialize font image and cache, sanity check ni */
+            if(ni<=0 || ni>4096)
+                error("bad font size (4096 chars max)");
+            /*e: [[drawmesg()]] when initialize font image and cache, sanity check ni */
+            free(font->fchar);  /* should we complain if non-zero? */
+            font->fchar = malloc(ni*sizeof(FChar));
+            /*s: [[drawmesg()]] when initialize font image and cache, sanity check fchar */
+            if(font->fchar == nil)
+                error("no memory for font");
+            /*e: [[drawmesg()]] when initialize font image and cache, sanity check fchar */
+            memset(font->fchar, 0, ni*sizeof(FChar));
+            font->nfchar = ni;
+            font->ascent = a[9];
             continue;
 
+        /*x: [[drawmesg()]] cases */
+        /* write: 'y' id[4] R[4*4] data[x*1] */
+        /* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
+        case 'y':
+        case 'Y':
+            printmesg(fmt="LR", a, 0);
+        //  iprint("load %c\n", *a);
+            m = 1+4+4*4;
+            /*s: [[drawmesg()]] sanity check n with m */
+            if(n < m)
+                error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
+            dstid = BGLONG(a+1);
+            dst = drawimage(client, a+1);
+            drawrectangle(&r, a+5);
+            if(!rectinrect(r, dst->r))
+                error(Ewriteoutside);
+
+            y = memload(dst, r, a+m, n-m, *a=='Y'); // The call
+
+            if(y < 0)
+                error("bad writeimage call");
+            dstflush(dstid, dst, r);
+            m += y;
+            continue;
         /*x: [[drawmesg()]] cases */
         /* read: 'r' id[4] R[4*4] */
         case 'r':
@@ -2516,31 +2600,6 @@ drawmesg(Client *client, void *av, int n)
             }
             continue;
 
-        /*x: [[drawmesg()]] cases */
-        /* write: 'y' id[4] R[4*4] data[x*1] */
-        /* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
-        case 'y':
-        case 'Y':
-            printmesg(fmt="LR", a, 0);
-        //  iprint("load %c\n", *a);
-            m = 1+4+4*4;
-            /*s: [[drawmesg()]] sanity check n with m */
-            if(n < m)
-                error(Eshortdraw);
-            /*e: [[drawmesg()]] sanity check n with m */
-            dstid = BGLONG(a+1);
-            dst = drawimage(client, a+1);
-            drawrectangle(&r, a+5);
-            if(!rectinrect(r, dst->r))
-                error(Ewriteoutside);
-
-            y = memload(dst, r, a+m, n-m, *a=='Y'); // The call
-
-            if(y < 0)
-                error("bad writeimage call");
-            dstflush(dstid, dst, r);
-            m += y;
-            continue;
         /*x: [[drawmesg()]] cases */
         /* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
         case 'A':

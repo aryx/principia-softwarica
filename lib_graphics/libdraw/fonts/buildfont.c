@@ -18,24 +18,37 @@ Font*
 buildfont(Display *d, char *buf, char *name)
 {
     Font *fnt;
-    Cachefont *c;
     char *s, *t;
     ulong min, max;
+    Cachefont *c;
     int offset;
+    /*s: [[buildfont()]] other locals */
     char badform[] = "bad font format: number expected (char position %d)";
+    /*e: [[buildfont()]] other locals */
 
     s = buf;
+
     fnt = malloc(sizeof(Font));
-    if(fnt == 0)
-        return 0;
+    /*s: [[buildfont()]] sanity check fnt */
+    if(fnt == nil)
+        return nil;
+    /*e: [[buildfont()]] sanity check fnt */
     memset(fnt, 0, sizeof(Font));
+
     fnt->display = d;
     fnt->name = strdup(name);
-    fnt->ncache = NFCACHE+NFLOOK;
+
+    /*s: [[buildfont()]] allocate cache */
+    fnt->age = 1;
+    /*x: [[buildfont()]] allocate cache */
     fnt->nsubf = NFSUBF;
-    fnt->cache = malloc(fnt->ncache * sizeof(fnt->cache[0]));
     fnt->subf = malloc(fnt->nsubf * sizeof(fnt->subf[0]));
-    if(fnt->name==0 || fnt->cache==0 || fnt->subf==0){
+    /*x: [[buildfont()]] allocate cache */
+    fnt->ncache = NFCACHE+NFLOOK;
+    fnt->cache = malloc(fnt->ncache * sizeof(fnt->cache[0]));
+    /*x: [[buildfont()]] allocate cache */
+    /*s: [[buildfont()]] sanity check fnt fields part1 */
+    if(fnt->name==nil || fnt->cache==nil || fnt->subf==nil){
     Err2:
         free(fnt->name);
         free(fnt->cache);
@@ -44,74 +57,99 @@ buildfont(Display *d, char *buf, char *name)
         free(fnt);
         return 0;
     }
+    /*e: [[buildfont()]] sanity check fnt fields part1 */
+    memset(fnt->subf, 0, fnt->nsubf * sizeof(fnt->subf[0]));
+    memset(fnt->cache, 0, fnt->ncache * sizeof(fnt->cache[0]));
+    /*e: [[buildfont()]] allocate cache */
+
     fnt->height = strtol(s, &s, 0);
     s = skip(s);
     fnt->ascent = strtol(s, &s, 0);
     s = skip(s);
-    if(fnt->height<=0 || fnt->ascent<=0){
+    /*s: [[buildfont()]] sanity check fnt fields part2 */
+    if(fnt->height <= 0 || fnt->ascent <= 0){
         werrstr("bad height or ascent in font file");
         goto Err2;
     }
-    fnt->width = 0;
-    fnt->nsub = 0;
-    fnt->sub = 0;
+    /*e: [[buildfont()]] sanity check fnt fields part2 */
 
-    memset(fnt->subf, 0, fnt->nsubf * sizeof(fnt->subf[0]));
-    memset(fnt->cache, 0, fnt->ncache*sizeof(fnt->cache[0]));
-    fnt->age = 1;
+    fnt->width = 0;
+    fnt->sub = nil;
+    fnt->nsub = 0;
+
     do{
         /* must be looking at a number now */
+        /*s: [[buildfont()]] sanity check s content */
         if(*s<'0' || '9'<*s){
             werrstr(badform, s-buf);
             goto Err3;
         }
+        /*e: [[buildfont()]] sanity check s content */
         min = strtol(s, &s, 0);
         s = skip(s);
         /* must be looking at a number now */
+        /*s: [[buildfont()]] sanity check s content */
         if(*s<'0' || '9'<*s){
             werrstr(badform, s-buf);
             goto Err3;
         }
+        /*e: [[buildfont()]] sanity check s content */
         max = strtol(s, &s, 0);
         s = skip(s);
-        if(*s==0 || min>=Runemax || max>=Runemax || min>max){
+        /*s: [[buildfont()]] sanity check min and max */
+        if(*s=='\0' || min>=Runemax || max>=Runemax || min>max){
             werrstr("illegal subfont range");
-    Err3:
+        Err3:
             freefont(fnt);
-            return 0;
+            return nil;
         }
+        /*e: [[buildfont()]] sanity check min and max */
+
+        /*s: [[buildfont()]] set optional offset */
         t = s;
         offset = strtol(s, &t, 0);
         if(t>s && (*t==' ' || *t=='\t' || *t=='\n'))
             s = skip(t);
         else
             offset = 0;
+        /*e: [[buildfont()]] set optional offset */
+
         fnt->sub = realloc(fnt->sub, (fnt->nsub+1)*sizeof(Cachefont*));
-        if(fnt->sub == 0){
+        /*s: [[buildfont()]] sanity check fnt fields part3 */
+        if(fnt->sub == nil){
             /* realloc manual says fnt->sub may have been destroyed */
             fnt->nsub = 0;
             goto Err3;
         }
+        /*e: [[buildfont()]] sanity check fnt fields part3 */
+
         c = malloc(sizeof(Cachefont));
-        if(c == 0)
+        /*s: [[buildfont()]] sanity check c */
+        if(c == nil)
             goto Err3;
+        /*e: [[buildfont()]] sanity check c */
         fnt->sub[fnt->nsub] = c;
+        fnt->nsub++;
+
         c->min = min;
         c->max = max;
         c->offset = offset;
+
         t = s;
         while(*s && *s!=' ' && *s!='\n' && *s!='\t')
             s++;
-        *s++ = 0;
-        c->subfontname = 0;
+        *s++ = '\0';
+
         c->name = strdup(t);
-        if(c->name == 0){
+        c->subfontname = nil;
+        /*s: [[buildfont()]] sanity check c name field */
+        if(c->name == nil){
             free(c);
             goto Err3;
         }
+        /*e: [[buildfont()]] sanity check c name field */
         s = skip(s);
-        fnt->nsub++;
-    }while(*s);
+    } while(*s);
     return fnt;
 }
 /*e: function buildfont */
@@ -124,8 +162,10 @@ freefont(Font *f)
     Cachefont *c;
     Subfont *s;
 
-    if(f == 0)
+    /*s: [[freefont()]] sanity check f */
+    if(f == nil)
         return;
+    /*e: [[freefont()]] sanity check f */
 
     for(i=0; i<f->nsub; i++){
         c = f->sub[i];
@@ -133,16 +173,22 @@ freefont(Font *f)
         free(c->name);
         free(c);
     }
+    free(f->sub);
+
+    /*s: [[freefont()]] free cache */
+    freeimage(f->cacheimage);
+    /*x: [[freefont()]] free cache */
     for(i=0; i<f->nsubf; i++){
         s = f->subf[i].f;
-        if(s && display && s!=display->defaultsubfont)
+        if(s && display && s != display->defaultsubfont)
             freesubfont(s);
     }
-    freeimage(f->cacheimage);
-    free(f->name);
-    free(f->cache);
     free(f->subf);
-    free(f->sub);
+    /*x: [[freefont()]] free cache */
+    free(f->cache);
+    /*e: [[freefont()]] free cache */
+
+    free(f->name);
     free(f);
 }
 /*e: function freefont */

@@ -23,11 +23,13 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
         sptr = nil;
     }else
         sptr = &s;
+
     if(r == nil){
           r = L"";
         rptr = nil;
     }else
         rptr = &r;
+
     twid = 0;
     while(len>0 && (*s || *r)){
         max = Max;
@@ -47,6 +49,7 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
                 fprint(2, "stringwidth: bad character set for rune 0x%.4ux in %s\n", rune, name);
                 return twid;
             }
+
             if(subfontname){
                 if(_getsubfont(f->display, subfontname) == 0){
                     def = f->display->defaultfont;

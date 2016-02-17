@@ -14,10 +14,12 @@ doellipse(int cmd, Image *dst, Point *c, int xr, int yr, int thick, Image *src, 
 
     // ellipse: 'e' dstid[4] srcid[4] center[2*4] a[4] b[4] thick[4] sp[2*4] alpha[4] phi[4]
     a = bufimage(dst->display, 1+4+4+2*4+4+4+4+2*4+2*4);
-    if(a == 0){
+    /*s: [[doellipse()]] sanity check a */
+    if(a == nil){
         fprint(2, "image ellipse: %r\n");
         return;
     }
+    /*e: [[doellipse()]] sanity check a */
     a[0] = cmd;
     BPLONG(a+1, dst->id);
     BPLONG(a+5, src->id);

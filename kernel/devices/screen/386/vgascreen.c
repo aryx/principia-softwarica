@@ -606,7 +606,7 @@ flushmemscreen(Rectangle r)
         return;
     if(scr->dev == nil || scr->dev->page == nil)
         return;
-    if(rectclip(&r, gscreen->r) == 0)
+    if(!rectclip(&r, gscreen->r))
         return;
 
     /*s: [[flushmemscreen()]] use VGA page */
@@ -808,7 +808,7 @@ ksetcursor(Cursor* curs)
 /*e: function ksetcursor(x86) */
 
 /*s: global hwaccel(x86) */
-int hwaccel = true;
+bool hwaccel = true;
 /*e: global hwaccel(x86) */
 /*s: global hwblank(x86) */
 bool hwblank = false;    /* turned on by drivers that are known good */
@@ -825,7 +825,7 @@ bool hwdraw(Memdrawparam *par)
     Memimage *dst, *src, *mask;
     int m;
 
-    if(hwaccel == false)
+    if(!hwaccel)
         return false;
 
     scr = &vgascreen;

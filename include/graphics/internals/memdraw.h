@@ -36,6 +36,7 @@ struct Memdata
 /*s: enum fxxx */
 enum {
     Frepl	= 1<<0,	/* is replicated */
+    // derives from Memimage.chan
     Fgrey	= 1<<2,	/* is grey */
     Falpha	= 1<<3,	/* has explicit alpha */
     Fcmap	= 1<<4,	/* has cmap channel */
@@ -47,14 +48,14 @@ enum {
 struct Memimage
 {
     Rectangle	r;		/* rectangle in data area, local coords */
-    Rectangle	clipr;		/* clipping region */
 
     ulong	chan;	/* channel descriptions */
-
     // derives from Memimage.chan
     int		depth;	/* number of bits of storage per pixel */
     int		nchan;	/* number of channels */
-    //bitset<enum<fxxx>, 
+
+    Rectangle	clipr;		/* clipping region */
+    //bitset<enum<fxxx>, // includes if replicate via Frepl
     ulong	flags; 
 
     // finally, the raw pixels
@@ -105,13 +106,14 @@ struct Memcmap
 struct	Memsubfont
 {
     char	*name;
+
+    Memimage	*bits;		/* of font */
+
     short	n;		/* number of chars in font */
+    Fontchar *info;		/* n+1 character descriptors */
 
     uchar	height;		/* height of bitmap */
     char	ascent;		/* top of bitmap to baseline */
-
-    Fontchar *info;		/* n+1 character descriptors */
-    Memimage	*bits;		/* of font */
 };
 /*e: struct Memsubfont */
 
@@ -126,7 +128,7 @@ enum Drawparams {
     Replsrc =1<<2,
     Replmask=1<<3,
 
-    Fullmask=1<<4,
+    Fullmask=1<<4, // fully opaque mask
 };
 /*e: enum _anon_ (include/memdraw.h)2 */
 /*s: struct Memdrawparam */
@@ -149,11 +151,11 @@ struct	Memdrawparam
     ulong state;
     /*x: [[Memdrawparam]] other fields */
     ulong sval;		/* if Simplesrc, the source pixel in src format */
-    ulong srgba;	/* sval in rgba */
+    rgba  srgba;	/* sval in rgba */
     ulong sdval;	/* sval in dst format */
     /*x: [[Memdrawparam]] other fields */
     ulong mval;		/* if Simplemask, the mask pixel in mask format */
-    ulong mrgba;	/* mval in rgba */
+    rgba  mrgba;	/* mval in rgba */
     /*e: [[Memdrawparam]] other fields */
 };
 /*e: struct Memdrawparam */

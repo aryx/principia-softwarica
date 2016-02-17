@@ -26,7 +26,7 @@ unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
     ntot = 0;
     while(r.min.y < r.max.y){
         a = bufimage(d, 1+4+4*4);
-        if(a == 0){
+        if(a == nil){
             werrstr("unloadimage: %r");
             return -1;
         }

@@ -7,7 +7,6 @@
 /*
  * Default version: treat as file name
  */
-
 Subfont*
 _getsubfont(Display *d, char *name)
 {

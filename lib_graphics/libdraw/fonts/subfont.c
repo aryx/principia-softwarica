@@ -9,23 +9,30 @@ allocsubfont(char *name, int n, int height, int ascent, Fontchar *info, Image *i
 {
     Subfont *f;
 
+    /*s: [[allocsubfont()]] sanity check height */
     assert(height != 0 /* allocsubfont */);
+    /*e: [[allocsubfont()]] sanity check height */
 
     f = malloc(sizeof(Subfont));
-    if(f == 0)
-        return 0;
+    /*s: [[allocsubfont()]] sanity check f */
+    if(f == nil)
+        return nil;
+    /*e: [[allocsubfont()]] sanity check f */
     f->n = n;
     f->height = height;
     f->ascent = ascent;
     f->info = info;
     f->bits = i;
     f->ref = 1;
+    /*s: [[allocsubfont()]] lookup subfont if name */
     if(name){
         f->name = strdup(name);
-        if(lookupsubfont(i->display, name) == 0)
+        if(lookupsubfont(i->display, name) == nil)
             installsubfont(name, f);
-    }else
-        f->name = 0;
+    }
+    /*e: [[allocsubfont()]] lookup subfont if name */
+    else
+        f->name = nil;
     return f;
 }
 /*e: function allocsubfont */
