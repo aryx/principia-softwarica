@@ -215,11 +215,9 @@ extern void			_memmkcmap(void);
 /*
  * Subfont management
  */
-extern Memsubfont*	allocmemsubfont(char*, int, int, int, Fontchar*, Memimage*);
-extern void			freememsubfont(Memsubfont*);
-extern Memsubfont*	openmemsubfont(char*);
 extern Point		memsubfontwidth(Memsubfont*, char*);
 extern Memsubfont*	getmemdefont(void);
+extern Memsubfont*	allocmemsubfont(char*, int, int, int, Fontchar*, Memimage*);
 
 /*
  * Predefined 

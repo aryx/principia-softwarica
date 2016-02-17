@@ -9,7 +9,7 @@ Memsubfont*
 allocmemsubfont(char *name, int n, int height, int ascent, Fontchar *info, Memimage *i)
 {
     Memsubfont *f;
-
+ 
     f = malloc(sizeof(Memsubfont));
     if(f == 0)
         return 0;
@@ -26,15 +26,4 @@ allocmemsubfont(char *name, int n, int height, int ascent, Fontchar *info, Memim
 }
 /*e: function allocmemsubfont */
 
-/*s: function freememsubfont */
-void
-freememsubfont(Memsubfont *f)
-{
-    if(f == 0)
-        return;
-    free(f->info);	/* note: f->info must have been malloc'ed! */
-    freememimage(f->bits);
-    free(f);
-}
-/*e: function freememsubfont */
 /*e: lib_graphics/libmemdraw/subfont.c */

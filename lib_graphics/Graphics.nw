@@ -13,7 +13,8 @@
 
 %thx to LP, changed for the better a few things:
 % - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, Display.dataqid,
-%    Display.isnew, Memdata.imref, convxx[], fillxxx(), mkfont() ...)
+%    Display.isnew, Memdata.imref, convxx[], fillxxx(), mkfont(),
+%    openmemsubfont, 
 % - screen.h cleaner interface
 % - renamed some globals (screen -> view, _screen -> screen)
 %   TODO gscreen, screenimage, vgascr, so easier to see associated part
@@ -619,8 +620,8 @@ from Bell Labs.
 %cread.c: compressed read
 
 
-%subfont.c
-%openmemsubfont.c
+%subfont.c: dead
+%openmemsubfont.c: dead
 %defont.c
 
 
@@ -11620,7 +11621,7 @@ runestringsize(Font *f, Rune *r)
     return Pt(_stringnwidth(f, nil, r, 1<<24), f->height);
 }
 @
-
+% >> >> >> >> >> >> >> >>
 
 
 \subsection{Algorithm}
@@ -11694,132 +11695,6 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
 % lots of code in common with _string
 
 
-\section{[[Memsubfont]]}
-
-\subsection{[[Memsubfont]]}
-% not sure you need that actually. Might be dead code.
-% or just used in test code?
-
-<<struct Memsubfont>>=
-/*
- * Subfonts
- *
- * given char c, Subfont *f, Fontchar *i, and Point p, one says
- *	i = f->info+c;
- *	draw(b, Rect(p.x+i->left, p.y+i->top,
- *		p.x+i->left+((i+1)->x-i->x), p.y+i->bottom),
- *		color, f->bits, Pt(i->x, i->top));
- *	p.x += i->width;
- * to draw characters in the specified color (itself a Memimage) in Memimage b.
- */
-struct	Memsubfont
-{
-    char	*name;
-
-    Memimage	*bits;		/* of font */
-
-    short	n;		/* number of chars in font */
-    Fontchar *info;		/* n+1 character descriptors */
-
-    uchar	height;		/* height of bitmap */
-    char	ascent;		/* top of bitmap to baseline */
-};
-@
-% ctor = ?
-\l actually identical at Subfont, except Image vs Memimage.
-\l and it's an important difference, cos the bits are really there
-
-
-
-
-\subsection{Algorithm}
-
-% -> <>
-<<function openmemsubfont>>=
-Memsubfont*
-openmemsubfont(char *name)
-{
-    Memsubfont *sf;
-    Memimage *i;
-    Fontchar *fc;
-    int fd, n;
-    char hdr[3*12+4+1];
-    uchar *p;
-
-    fd = open(name, OREAD);
-    if(fd < 0)
-        return nil;
-    p = nil;
-    i = readmemimage(fd);
-    if(i == nil)
-        goto Err;
-    if(read(fd, hdr, 3*12) != 3*12){
-        werrstr("openmemsubfont: header read error: %r");
-        goto Err;
-    }
-    n = atoi(hdr);
-    p = malloc(6*(n+1));
-    if(p == nil)
-        goto Err;
-    if(read(fd, p, 6*(n+1)) != 6*(n+1)){
-        werrstr("openmemsubfont: fontchar read error: %r");
-        goto Err;
-    }
-    fc = malloc(sizeof(Fontchar)*(n+1));
-    if(fc == nil)
-        goto Err;
-    _unpackinfo(fc, p, n);
-    sf = allocmemsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
-    if(sf == nil){
-        free(fc);
-        goto Err;
-    }
-    free(p);
-    return sf;
-Err:
-    close(fd);
-    if (i != nil)
-        freememimage(i);
-    if (p != nil)
-        free(p);
-    return nil;
-}
-@
-
-%openmemsubfont -> <>
-<<function allocmemsubfont>>=
-Memsubfont*
-allocmemsubfont(char *name, int n, int height, int ascent, Fontchar *info, Memimage *i)
-{
-    Memsubfont *f;
-
-    f = malloc(sizeof(Memsubfont));
-    if(f == 0)
-        return 0;
-    f->n = n;
-    f->height = height;
-    f->ascent = ascent;
-    f->info = info;
-    f->bits = i;
-    if(name)
-        f->name = strdup(name);
-    else
-        f->name = 0;
-    return f;
-}
-@
-
-<<function freememsubfont>>=
-void
-freememsubfont(Memsubfont *f)
-{
-    if(f == 0)
-        return;
-    free(f->info);	/* note: f->info must have been malloc'ed! */
-    freememimage(f->bits);
-    free(f);
-}
-@
 
 
 
@@ -20197,6 +20072,132 @@ getmemdefont(void)
     return f;
 }
 @
+
+%\subsection{[[Memsubfont]]}
+% not sure you need that actually. Might be dead code.
+% or just used in test code?
+
+<<struct Memsubfont>>=
+/*
+ * Subfonts
+ *
+ * given char c, Subfont *f, Fontchar *i, and Point p, one says
+ *	i = f->info+c;
+ *	draw(b, Rect(p.x+i->left, p.y+i->top,
+ *		p.x+i->left+((i+1)->x-i->x), p.y+i->bottom),
+ *		color, f->bits, Pt(i->x, i->top));
+ *	p.x += i->width;
+ * to draw characters in the specified color (itself a Memimage) in Memimage b.
+ */
+struct	Memsubfont
+{
+    char	*name;
+
+    Memimage	*bits;		/* of font */
+
+    short	n;		/* number of chars in font */
+    Fontchar *info;		/* n+1 character descriptors */
+
+    uchar	height;		/* height of bitmap */
+    char	ascent;		/* top of bitmap to baseline */
+};
+@
+% ctor = ?
+\l actually identical at Subfont, except Image vs Memimage.
+\l and it's an important difference, cos the bits are really there
+
+
+
+
+%dead:
+%  <<function openmemsubfont>>=
+%  Memsubfont*
+%  openmemsubfont(char *name)
+%  {
+%      Memsubfont *sf;
+%      Memimage *i;
+%      Fontchar *fc;
+%      int fd, n;
+%      char hdr[3*12+4+1];
+%      uchar *p;
+%  
+%      fd = open(name, OREAD);
+%      if(fd < 0)
+%          return nil;
+%      p = nil;
+%      i = readmemimage(fd);
+%      if(i == nil)
+%          goto Err;
+%      if(read(fd, hdr, 3*12) != 3*12){
+%          werrstr("openmemsubfont: header read error: %r");
+%          goto Err;
+%      }
+%      n = atoi(hdr);
+%      p = malloc(6*(n+1));
+%      if(p == nil)
+%          goto Err;
+%      if(read(fd, p, 6*(n+1)) != 6*(n+1)){
+%          werrstr("openmemsubfont: fontchar read error: %r");
+%          goto Err;
+%      }
+%      fc = malloc(sizeof(Fontchar)*(n+1));
+%      if(fc == nil)
+%          goto Err;
+%      _unpackinfo(fc, p, n);
+%      sf = allocmemsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
+%      if(sf == nil){
+%          free(fc);
+%          goto Err;
+%      }
+%      free(p);
+%      return sf;
+%  Err:
+%      close(fd);
+%      if (i != nil)
+%          freememimage(i);
+%      if (p != nil)
+%          free(p);
+%      return nil;
+%  }
+%  @
+
+%openmemsubfont | getmemdefont -> <>
+
+<<function allocmemsubfont>>=
+Memsubfont*
+allocmemsubfont(char *name, int n, int height, int ascent, Fontchar *info, Memimage *i)
+{
+    Memsubfont *f;
+ 
+    f = malloc(sizeof(Memsubfont));
+    if(f == 0)
+        return 0;
+    f->n = n;
+    f->height = height;
+    f->ascent = ascent;
+    f->info = info;
+    f->bits = i;
+    if(name)
+        f->name = strdup(name);
+    else
+        f->name = 0;
+    return f;
+}
+@
+
+%dead:
+%   <<function freememsubfont>>=
+%   void
+%   freememsubfont(Memsubfont *f)
+%   {
+%       if(f == 0)
+%           return;
+%       free(f->info);	/* note: f->info must have been malloc'ed! */
+%       freememimage(f->bits);
+%       free(f);
+%   }
+%   @
+
 
 
 
