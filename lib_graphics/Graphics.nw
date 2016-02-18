@@ -35,7 +35,8 @@
 %  - better understand channels, and the many image formats
 %  - better understand alpha
 %  - SEMI better understand clipping and tiling (replicating)
-%  - SEMI better understand antialiasing
+%  - SEMI better understand antialiasing 
+%     (the lightness of a pixel is function of its distance to the ideal point)
 %  - TODO learn scanline algorithm for polygons (subtle)
 %  - TODO better understand bezier (could be useful for edge bunding visual)
 %    that they are the essence of vectoriel fonts?
@@ -194,7 +195,7 @@ How fonts are managed? What are truetype fonts?
 %data-structures:
 % - growing array (Kdraw.clients, Font.subf, ...)
 % - growing hashtable with buckets inline in array (Font.cache)
-% - moveable shared area with backward pointer
+% - moveable shared area with backward pointer to intermediate wrapper
 
 %algorithms:
 % - fill polygon, quite complex
@@ -598,15 +599,13 @@ from Bell Labs.
 
 %draw.c: draw rectangle, actual memory code
 
-%replmul.c: utilities?
+%replmul.c: replmul global used in mktables to duplicate bits
 
 %line.c:
 %poly.c
 %fillpoly.c
 %ellipse.c
 %arc.c
-
-%string.c: seems used only for graphical text mode
 
 %alloc.c: memimage?
 
@@ -619,10 +618,11 @@ from Bell Labs.
 %cload.c: compressed load
 %cread.c: compressed read
 
+%string.c: seems used only for graphical text mode, simple code at least
+%defont.c: getmemdefont, used only for graphical text mode
 
 %subfont.c: dead
 %openmemsubfont.c: dead
-%defont.c
 
 
 %todo: could remove files below? who links with libmemdraw except 
@@ -641,6 +641,7 @@ from Bell Labs.
 % libmemlayer is mostly to have "layers", layers of images
 % so one can more easily implement a windowing system with 
 % overlapping pictures (windows) that actually can get exposed back
+
 
 %draw.c: again, memdraw(), but should be in libmemdraw/
 %line.c: again! memline(), but should be only for horizontal/vert here no?
@@ -2084,7 +2085,7 @@ for(d=i->depth; d<32; d*=2)
     // duplicate bits
     bits = (bits << d) | bits;
 @
-
+% >>
 % \section{Color map}
 % now in Adv topics
 
@@ -5051,6 +5052,7 @@ flushmemscreen(Rectangle r)
 @
 % See apparendix for dev->flush and dev->page implementation
 
+
 \section{Naming and sharing (and windows)}
 \n mv in adv topics? at the same time windows is so complicated
 \n  that good to divide and see a first chunk earlier.
@@ -5302,6 +5304,7 @@ if(di == nil)
 @
 
 \subsection{Algorithm}
+% and [[DName]]
 
 % drawlookup seen before
 
@@ -9084,16 +9087,18 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 
 \chapter{Fonts}
 
-% test code showing use of font.
-% maybe just 2 calls to different openfont() and 2 calls to string().
-% Also start from last string thx to the point returned by string.
+% Show simple test code showing use of font.
+% Maybe just 2 calls to 2 different openfont() and 2 calls to string().
+% Also start from last string thanks to the point returned by string.
+% Also can call freefont().
 
 % font(6), image(6),
 % subfont(2), cachechars(2), 
 
 % related:
-%  - toy text API in Cairo (does aliasing, also does scaling)
-%  - Pango library with GTK (same but less buggy)
+%  - toy text API in Cairo 
+%    but does aliasing! also does scaling!
+%  - Pango library with GTK (same than cairo but less buggy)
 %  - freetype? fontconfig?
 %  - openGL? actually one of the missing stuff in openGL is text API I think
 
@@ -9102,22 +9107,26 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 % can have font with any size? can scale? like in Cairo (and Pango)?
 % can do codemap easily? I don't think so.
 
-\section{Font files format}
+\t EASY rename f in sf when it involves a subfont, in fields, in locals
+\t EASY rename cf to sfrange
+
+\section{Font files formats}
 
 % show content of unicode.font where see list of subfonts specs.
-%  split cos save space? cos unicode really large so would be big images
-%  with lots of space wasted.
+%  A subfont is a picture containing many chars! where spec of chars
+%   stored after in fontchars.
+%  one font split in many subfonts cos save space cos unicode really 
+%   large so would be big images with lots of space wasted.
+%   (65000 chars? 8x8 => total size = ?)
 % maybe show one subfont file? where see compressed at the top?
 
 % font format: see unicode.font
-% - a string/file with a list of subfont ranges
+% - a file (or string) with a list of subfont ranges
 % - %d %d\n%d %d\t%s\n...  first 2 numbers are height, ascent, 
 %   and then a list of lines with each time
 %     min/max (rune range), offset(optional), subfont name
 % for offset see latin1.9 font or unicode.font and last unicode chars.
 
-% A subfont is a picture containing many chars! where spec of chars
-% stored after in fontchars.
 
 % subfont format (see getdefont): when uncompressed:
 %  - ld = format for chan
@@ -9135,7 +9144,7 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 <<struct Font>>=
 struct Font
 {
-    // ref_own<string>, //filename? e.g. /lib/font/bit/lucm/latin1.9.font
+    // ref_own<filename>, // e.g. /lib/font/bit/lucm/latin1.9.font
     char		*name;
     // ref<Display>
     Display		*display;
@@ -9145,18 +9154,18 @@ struct Font
 
     <<[[Font]] subfont spec fields>>
     <<[[Font]] subfont cache fields>>
-    <<[[Font]] cache fields>>
+    <<[[Font]] character cache fields>>
     <<[[Font]] other fields>>
 };
 @
-% ctor = buildfont
+% ctor = buildfont <- openfont
 
 \t FIGURE showing relation with height, ascent, etc.
 
 <<global font>>=
 Font	*font;
 @
-% used for?
+% used for? convenient shortcut?
 
 
 <<[[Display]] font fields>>=
@@ -9179,6 +9188,7 @@ Font	*defaultfont;
 Cachefont	**sub;	/* as read from file */
 short		nsub;	/* number of subfonts */
 @
+\t rename sub to subspec or sf_spec
 
 % spec of set of subfonts, but not the actual loaded subfont.
 <<struct Cachefont>>=
@@ -9198,8 +9208,9 @@ struct Cachefont
 % but still no Subfont.
 \t rename cos it is actually not a cache ... rename SubfontInfo?
 
-% all of that is set in buildfont.
+\l name vs subfontname?
 
+% all of that is set in buildfont.
 
 
 \t How transit from Font to subfont? other fields are Cachexxx
@@ -9236,8 +9247,9 @@ struct	Subfont
     char		*name;
     Image		*bits;	/* of font */
 
-    short		n;		/* number of chars in font */
+    // array<Fontchar> (size = Subfont.n + 1)
     Fontchar 	*info;	/* n+1 character descriptors */
+    short		n;		/* number of chars in font */
 
     <<[[Subfont]] other fields>>
 
@@ -9272,6 +9284,13 @@ struct	Fontchar
 % rectangle (i->x, i->top, (i+1)->x, i->bottom) where i is
 % &subfont->info[c]. "
 
+% in libmemdraw/string.c, code used only by vgascreenputc, that is simpler
+%  cos subfont already loaded:
+%        memdraw(b, Rect(p.x + i->left, p.y + i->top, 
+%                        p.x + i->left + (i[1].x -i[0].x), p.y+i->bottom),
+%                  color, cp, f->bits, Pt(i->x, i->top), SoverD);
+
+
 \l not always same top and bottom? no cos chars have different
 \l  height and width and interspacing rules, so need adjustments?
 
@@ -9290,10 +9309,10 @@ char		ascent;		/* top of image to baseline */
 \l why different size than the one in Font? why not short here too?
 
 
-\subsection{Font cache}
+\subsection{Font image cache}
 
 
-<<[[Font]] cache fields>>=
+<<[[Font]] character cache fields>>=
 // growing image
 Image		*cacheimage;
 @
@@ -9302,19 +9321,22 @@ Image		*cacheimage;
 
 % kernel side! finally. additional info regarding Font.cacheimage->id
 <<[[DImage]] font fields>>=
-// growing_array<option<Fchar>> (size = DImage.nfchar)
+// growing_hash<Rune, ref_own<Fchar>> (size = DImage.nfchar)
 FChar*      fchar;
 int     nfchar;
 @
-% map Rune hashcode to FChar
+% map Rune hashcode to FChar via big array. Hashing done user side actually.
+% populated by loadchar().
+%// growing_array<option<ref_own<Fchar>>> (size = DImage.nfchar)
 
 % can contain glyphs of different subfonts!
 
-% merge with Fontchar?
+% merge with Fontchar? no, this is different cos contain full info,
+%  no need to do the x+1 gymnatstic.
 <<struct FChar>>=
 struct FChar
 {
-    // Rectangle
+    // Rectangle in Font.cacheimage
     int     minx;   /* left edge of bits */
     int     maxx;   /* right edge of bits */
     uchar   miny;   /* first non-zero scan-line */
@@ -9327,6 +9349,9 @@ struct FChar
 \l could use a rectangle
 
 % More later.
+
+% FIGURE where see big soft archi picture? where see glyphs
+%  from loaded subfonts copies into cacheimage?
 
 \subsection{XXX}
 
@@ -9343,10 +9368,12 @@ short		width;	/* widest so far; used in caching only */
 int		maxdepth;	/* maximum depth of all loaded subfonts */
 @
 
+%XXX
 <<[[Cachefont]] other fields>>=
 // ref_own<string> // ??
 char		*subfontname;		/* to access subfont */
 @
+% vs name?
 
 \section{Additional initializations}
 % client side only
@@ -9358,6 +9385,7 @@ char		*subfontname;		/* to access subfont */
 <<[[geninitdraw()]] locals>>=
 Subfont *df;
 @
+\t rename sf
 
 <<[[geninitdraw()]] set up font>>=
 /*
@@ -9413,12 +9441,12 @@ int	sizeofdefont = sizeof defontdata;
 
 
 % initdraw -> geninitdraw -> <>
-% ctor Subfont
+% ctor Subfont (other = ?)
 <<function getdefont>>=
 Subfont*
 getdefont(Display *d)
 {
-    Subfont *f;
+    Subfont *f; // TODO sf
     Image *i;
     Rectangle r;
     int ld;
@@ -9458,6 +9486,7 @@ getdefont(Display *d)
 % n+1 for fake last entry so can compute width of last char.
 % 12 bytes each time for integer as a string.
 % last two numbers are height and ascent I think.
+% related = getmemdefont, almost copy paste but with Memimage instead of Image
 
 % note that loadimage load the image in the kernel!
 % this means also that every graphic app actually loads the
@@ -9540,7 +9569,7 @@ if(f == nil){
 Subfont*
 allocsubfont(char *name, int n, int height, int ascent, Fontchar *info, Image *i)
 {
-    Subfont *f;
+    Subfont *f; // TODO sf
 
     <<[[allocsubfont()]] sanity check height>>
 
@@ -9552,7 +9581,7 @@ allocsubfont(char *name, int n, int height, int ascent, Fontchar *info, Image *i
     f->info = info;
     f->bits = i;
     f->ref = 1;
-    <<[[allocsubfont()]] lookup subfont if name>>
+    <<[[allocsubfont()]] install subfont if name>>
     else
         f->name = nil;
     return f;
@@ -9575,8 +9604,11 @@ if(f == nil)
 @
 
 
-% lookupsubfont!!
-% installsubfont!!
+
+
+
+
+
 
 \subsection{Default font}
 
@@ -9712,9 +9744,14 @@ if(font == nil){
 }
 @
 
+\section{Font allocation}
+
 \subsection{[[buildfont()]]}
 
-% this is code still in userspace
+% This is code still in userspace.
+% Actually font allocation involves no call to the kernel.
+% Just load spec info about font and subfonts.
+% Loading of subfonts is done on demand when drawing text.
 
 % buf specify information about font, format with spacing and newline
 %  so code below does some limited parsing.
@@ -9740,6 +9777,7 @@ buildfont(Display *d, char *buf, char *name)
     fnt->name = strdup(name);
 
     <<[[buildfont()]] allocate cache>>
+    <<[[buildfont()]] initialize cache>>
 
     fnt->height = strtol(s, &s, 0);
     s = skip(s);
@@ -9789,7 +9827,7 @@ buildfont(Display *d, char *buf, char *name)
     return fnt;
 }
 @
-
+%ocaml: use regexps
 
 
 
@@ -9893,8 +9931,8 @@ freefont(Font *f)
 
     for(i=0; i<f->nsub; i++){
         c = f->sub[i];
-        free(c->subfontname);
         free(c->name);
+        free(c->subfontname);
         free(c);
     }
     free(f->sub);
@@ -9925,13 +9963,18 @@ freesubfont(Subfont *f)
     if(f->ref > 0)
         return;
 
+    // else
     uninstallsubfont(f);
-
     free(f->info);	/* note: f->info must have been malloc'ed! */
     freeimage(f->bits);
     free(f);
 }
 @
+% how can have multiple refs? in c2fsubfont, in lookupfont
+% subfonts can be shared in different fonts (indeed some foo.font
+% mention the same ranges and subfonts)
+
+% uninstallsubfont? 
 
 <<[[freesubfont()]] sanity check f>>=
 if(f == nil)
@@ -10125,19 +10168,16 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
     ushort cbuf[Max], *c, *ec;
     byte *b;
     int wid;
-    char *subfontname;
-    Subfont *sf;
     <<[[_string()]] other locals>>
 
     <<[[_string()]] non unicode string handling, set sptr and rptr>>
     else
       rptr = &r;
 
-    sf = nil;
-
     while((*s || *r) && len){
         <<[[_string()]] set max>>
 
+        // will trigger many calls to loadchar() for the same subfont
         n = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname);
 
         if(n > 0){
@@ -10166,7 +10206,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
             BPSHORT(b+45, n);
             b += 47;
             <<[[_string()]] if bg part3>>
-            // index of the set of characters to draw
+            // index of the set of characters to draw (hashcode of Rune)
             ec = &cbuf[n];
             for(c=cbuf; c<ec; c++, b+=2)
                 BPSHORT(b, *c);
@@ -10176,7 +10216,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
 
             agefont(f);
 
-            len -= n;
+            len -= n; // progress
         }
         <<[[_string()]] if subfontname>>
     }
@@ -10184,6 +10224,9 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
 }
 @
 % return pt!
+
+% cachechars may return 0 when did a fontresize. moreover in that case
+% subfontname should have been set.
 
 
 % can be either string or rune. but in the rest we will focus
@@ -10245,38 +10288,6 @@ if(b == nil){
 
 
 
-
-%XXX
-<<[[_string()]] if subfontname>>=
-if(subfontname){
-    <<[[_string()]] free previous sf>>
-    sf=_getsubfont(f->display, subfontname);
-    <<[[_string()]] sanity check sf and possibly adjust f>>
-    /* 
-     * must not free sf until cachechars has found it in the cache
-     * and picked up its own reference.
-     */
-}
-@
-% comment is enigmatic
-
-<<[[_string()]] free previous sf>>=
-freesubfont(sf);
-@
-% free it once used and got a new one
-
-<<[[_string()]] other locals>>=
-Font *def;
-@
-<<[[_string()]] sanity check sf and possibly adjust f>>=
-if(sf == nil){
-    def = f->display ? f->display->defaultfont : nil;
-    if(def && f != def)
-        f = def;
-    else
-        break;
-}
-@
 
 
 % cachechars
@@ -10429,9 +10440,145 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
 
 % see also chardraw which is an optimisation?
 
+\section{Text width}
+
+\subsection{API}
+
+<<function stringwidth>>=
+int
+stringwidth(Font *f, char *s)
+{
+    return _stringnwidth(f, s, nil, 1<<24);
+}
+@
+% >>
+
+<<function stringnwidth>>=
+int
+stringnwidth(Font *f, char *s, int len)
+{
+    return _stringnwidth(f, s, nil, len);
+}
+@
 
 
-\section{Font cache}
+<<function stringsize>>=
+Point
+stringsize(Font *f, char *s)
+{
+    return Pt(_stringnwidth(f, s, nil, 1<<24), f->height);
+}
+@
+% >>
+
+
+<<function runestringnwidth>>=
+int
+runestringnwidth(Font *f, Rune *r, int len)
+{
+    return _stringnwidth(f, nil, r, len);
+}
+@
+
+<<function runestringwidth>>=
+int
+runestringwidth(Font *f, Rune *r)
+{
+    return _stringnwidth(f, nil, r, 1<<24);
+}
+@
+% >>
+
+<<function runestringsize>>=
+Point
+runestringsize(Font *f, Rune *r)
+{
+    return Pt(_stringnwidth(f, nil, r, 1<<24), f->height);
+}
+@
+% >> >> >> >> >> >> >> >>
+
+
+\subsection{Algorithm}
+% actually no marshalling/unmarshalling
+
+<<enum _anon_ (lib_graphics/libdraw/stringwidth.c)>>=
+enum { Max = 64 };
+@
+% not sure why dont reuse the Max used in string.c
+
+<<function _stringnwidth>>=
+int
+_stringnwidth(Font *f, char *s, Rune *r, int len)
+{
+    int wid, twid, n, max, l;
+    char *name;
+    ushort cbuf[Max];
+    Rune rune, **rptr;
+    char *subfontname, **sptr;
+    Font *def;
+
+    if(s == nil){
+        s = "";
+        sptr = nil;
+    }else
+        sptr = &s;
+
+    if(r == nil){
+          r = L"";
+        rptr = nil;
+    }else
+        rptr = &r;
+
+    twid = 0;
+    while(len>0 && (*s || *r)){
+        max = Max;
+        if(len < max)
+            max = len;
+        n = 0;
+        while((l = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname)) <= 0){
+            if(++n > 10){
+                if(*r)
+                    rune = *r;
+                else
+                    chartorune(&rune, s);
+                if(f->name != nil)
+                    name = f->name;
+                else
+                    name = "unnamed font";
+                fprint(2, "stringwidth: bad character set for rune 0x%.4ux in %s\n", rune, name);
+                return twid;
+            }
+
+            if(subfontname){
+                if(_getsubfont(f->display, subfontname) == 0){
+                    def = f->display->defaultfont;
+                    if(def && f!=def)
+                        f = def;
+                    else
+                        break;
+                }
+            }
+        }
+        agefont(f);
+        twid += wid;
+        len -= l;
+    }
+    return twid;
+}
+@
+% lots of code in common with _string
+
+
+
+
+
+
+
+
+
+
+\section{Character cache}
 \n too important to be put in adv topics
 
 % cachechars(2)
@@ -10459,10 +10606,10 @@ enum
 % >> >>
 
 
-<<[[Font]] cache fields>>=
+<<[[Font]] character cache fields>>=
 ulong		age;	/* increasing counter; used for LRU */
 @
-<<[[buildfont()]] allocate cache>>=
+<<[[buildfont()]] initialize cache>>=
 fnt->age = 1;
 @
 % ok so when filled with first entry? cachechars?
@@ -10472,62 +10619,19 @@ freeimage(f->cacheimage);
 @
 
 
-\subsection{[[Cachesubf]]}
-% seen before
 
-<<[[Font]] subfont cache fields>>=
-// growing_array<Cachesubf> (size = Font.nsubf, init = NFSUBF, max = MAXSUBF)
-Cachesubf	*subf;
-int		nsubf;	/* size of subfont list */
-@
+\subsection{Character cache, [[Cacheinfo]]}
 
-<<struct Cachesubf>>=
-struct Cachesubf
-{
-    // ref<Cachefont>, the key
-    Cachefont	*cf;	/* font info that owns us */
-    // ref_own<Subfont>, the value
-    Subfont		*f;	/* attached subfont */
-
-    ulong		age;	/* for replacement */
-};
-@
-% link between Font and subfont!
-
-
-<<[[buildfont()]] allocate cache>>=
-fnt->nsubf = NFSUBF;
-fnt->subf = malloc(fnt->nsubf * sizeof(fnt->subf[0]));
-@
-
-<<constant NFSUBF>>=
-NFSUBF =	2,			/* #subfonts to cache */
-@
-<<constant MAXSUBF>>=
-MAXSUBF =	50,			/* generous upper limit */
-@
-<<constant DSUBF>>=
-DSUBF = 	4,
-@
-
-<<[[freefont()]] free cache>>=
-for(i=0; i<f->nsubf; i++){
-    s = f->subf[i].f;
-    if(s && display && s != display->defaultsubfont)
-        freesubfont(s);
-}
-free(f->subf);
-@
-
-
-\subsection{[[Cacheinfo]]}
-
-<<[[Font]] subfont cache fields>>=
-// growing_hash<Rune, int * Cacheinfo> (size = Font.ncache, bucketsize = NFLOOK)
+<<[[Font]] character cache fields>>=
+// growing_hash<Rune, Cacheinfo> (size = Font.ncache, bucketsize = NFLOOK)
 Cacheinfo	*cache;
 int		ncache;	/* size of cache */
 @
 % actually hash and bucket = subarray of size NFLOOK
+\t rename fchar? after all it mimics fchar in the kernel
+
+% this is user side. There is a corresponding one kernel side!
+% saw it before, fchar.
 
 % int cos return index in cache big array which should match the one
 % in DImage.fchar
@@ -10546,6 +10650,7 @@ struct Cacheinfo
     ushort		age;
 };
 @
+\l rename Runeinfo? or Charinfo? 
 
 
 <<[[buildfont()]] allocate cache>>=
@@ -10565,7 +10670,7 @@ NFLOOK =	5,			/* #chars to scan in cache */
 MAXFCACHE =	1024+NFLOOK,		/* upper limit */
 @
 
-<<[[buildfont()]] allocate cache>>=
+<<[[buildfont()]] initialize cache>>=
 <<[[buildfont()]] sanity check fnt fields part1>>
 memset(fnt->subf, 0, fnt->nsubf * sizeof(fnt->subf[0]));
 memset(fnt->cache, 0, fnt->ncache * sizeof(fnt->cache[0]));
@@ -10579,7 +10684,8 @@ free(f->cache);
 
 \subsection{[[cachechars()]]}
 
-% fill cp with index to char in subfont
+% fill cp with index to char in subfont.
+% return number of characters processed (or 0)
 % _string | _stringwidth -> <>
 <<function cachechars>>=
 int
@@ -10614,7 +10720,7 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
         // sh = hash_code(r)
         sh = (17 * (uint)r) & (f->ncache-NFLOOK-1);
 
-        // c = lookup(r, sh, f->cache)
+        // c,h = lookup(r, sh, f->cache)
         c = &f->cache[sh];
         ec = c+NFLOOK;
         h = sh;
@@ -10675,6 +10781,10 @@ if(ss)
 
 
 
+\subsection{Loading a new character, [[loadchar()]]}
+
+\subsubsection{Loading a new character part1}
+
 <<[[cachechars()]] other locals>>=
 int ld;
 @
@@ -10682,6 +10792,7 @@ int ld;
 
 <<[[cachechars()]] when rune not in cache, loads it>>=
 <<[[cachechars()]] find oldest entry [[c]] with age a in cache>>
+
 <<[[cachechars()]] if age too recent then resize cache>>
 <<[[cachechars()]] if same age>>
 // else
@@ -10690,13 +10801,29 @@ ld = loadchar(f, r, c, h, i, subfontname);
 <<[[cachechars()]] sanity check ld>>
 c = &f->cache[h];	/* may have reallocated f->cache */
 @
+% pass i, character number cos 0 has a special role
+% load in font f, rune r, cacheinfo c, index h, character #i, 
+%  and return error code and subfontname loaded if any.
+
+
+<<[[cachechars()]] sanity check ld>>=
+if(ld <= 0){
+    if(ld == 0) // failed
+        continue;
+    break; // retry
+}
+@
+% break so will work for next.
+% loadchar will return -1 when are outside range of current subfont
+%  and so neeed to load a new subfont.
+%  In that case subfontname will be set.
 
 
 
 <<[[cachechars()]] other locals>>=
 int th;
-ulong a;
 Cacheinfo *tc;
+ulong a;
 @
 
 <<[[cachechars()]] find oldest entry [[c]] with age a in cache>>=
@@ -10716,40 +10843,14 @@ while(tc < ec){
     th++;
 }
 @
-
-<<[[cachechars()]] other locals>>=
-int nc;
-@
-
-<<[[cachechars()]] if age too recent then resize cache>>=
-if(a && (f->age - a) < 500){	/* kicking out too recent; resize */
-    nc = 2*(f->ncache-NFLOOK) + NFLOOK;
-    if(nc <= MAXFCACHE){
-        if(i == 0)
-            fontresize(f, f->width, nc, f->maxdepth);
-        /* else flush first; retry will resize */
-        break;
-    }
-}
-@
-% break so we re done for now for this set of chars?
-
-<<[[cachechars()]] if same age>>=
-if(c->age == f->age)	/* flush pending string output */
-    break;
-@
-% ???
+% again set c and h. quite simple.
 
 
-<<[[cachechars()]] sanity check ld>>=
-if(ld <= 0){
-    if(ld == 0) // failed
-        continue;
-    break; // retry
-}
-@
 
-\subsection{[[loadchar()]]}
+
+
+
+% passed subfontmame ref
 
 % cachechars -> <>
 <<function loadchar>>=
@@ -10777,7 +10878,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     <<[[loadchar()]] if rune not handled by the font>>
 
     Found:
-    // Find loaded subfont subf with spec cf 
+    // Now let's find the loaded subfont subf with spec cf 
     /*
      * Choose exact or oldest
      */
@@ -10852,93 +10953,6 @@ if(f->display == nil)
 @
 
 
-
-
-
-
-<<[[loadchar()]] other locals>>=
-Cachesubf *of;
-@
-
-
-<<[[loadchar()]] when the corresponding subfont is not loaded yet>>=
-subf = &f->subf[oi];
-
-if(subf->f){
-    if(f->age-subf->age>SUBFAGE || f->nsubf > MAXSUBF){
-Toss:
-        /* ancient data; toss */
-        freesubfont(subf->f);
-        subf->cf = nil;
-        subf->f = nil;
-        subf->age = 0;
-    }else{				/* too recent; grow instead */
-        of = f->subf;
-        f->subf = malloc((f->nsubf+DSUBF)*sizeof *subf);
-        if(f->subf == nil){
-            f->subf = of;
-            goto Toss;
-        }
-        memmove(f->subf, of, (f->nsubf+DSUBF)*sizeof *subf);
-        memset(f->subf+f->nsubf, 0, DSUBF*sizeof *subf);
-        subf = &f->subf[f->nsubf];
-        f->nsubf += DSUBF;
-        free(of);
-    }
-}
-subf->age = 0;
-subf->cf = nil;
-subf->f = cf2subfont(cf, f);
-if(subf->f == nil){
-    if(cf->subfontname == nil)
-        goto TryPJW;
-    *subfontname = cf->subfontname;
-    return -1;
-}
-
-subf->cf = cf;
-if(subf->f->ascent > f->ascent && f->display){
-    /* should print something? this is a mistake in the font file */
-    /* must prevent c->top from going negative when loading cache */
-    Image *b;
-    int d, t;
-    d = subf->f->ascent - f->ascent;
-    b = subf->f->bits;
-    draw(b, b->r, b, nil, addpt(b->r.min, Pt(0, d)));
-    draw(b, Rect(b->r.min.x, b->r.max.y-d, b->r.max.x, b->r.max.y), f->display->black, nil, b->r.min);
-    for(i=0; i<subf->f->n; i++){
-        t = subf->f->info[i].top-d;
-        if(t < 0)
-            t = 0;
-        subf->f->info[i].top = t;
-        t = subf->f->info[i].bottom-d;
-        if(t < 0)
-            t = 0;
-        subf->f->info[i].bottom = t;
-    }
-    subf->f->ascent = f->ascent;
-}
-@
-
-
-
-<<[[loadchar()]] resize cache if width too big>>=
-if(f->width < wid || f->width == 0 || f->maxdepth < subf->f->bits->depth){
-    /*
-     * Flush, free, reload (easier than reformatting f->b)
-     */
-    if(noflush)
-        return -1;
-    if(f->width < wid)
-        f->width = wid;
-    if(f->maxdepth < subf->f->bits->depth)
-        f->maxdepth = subf->f->bits->depth;
-    i = fontresize(f, f->width, f->ncache, f->maxdepth);
-    if(i <= 0)
-        return i;
-    /* c is still valid as didn't reallocate f->cache */
-}
-@
 
 \subsubsection{Marshalling}
 
@@ -11024,7 +11038,186 @@ if(ci >= font->nfchar)
     error(Eindex);
 @
 
-\subsection{[[fontresize()]]}
+\subsubsection{Loading a new subfont}
+%XXX
+
+<<[[loadchar()]] other locals>>=
+Cachesubf *of;
+@
+
+%XXX
+<<[[loadchar()]] when the corresponding subfont is not loaded yet>>=
+subf = &f->subf[oi];
+
+if(subf->f){
+    if(f->age - subf->age > SUBFAGE || f->nsubf > MAXSUBF){
+Toss:
+        /* ancient data; toss */
+        freesubfont(subf->f);
+        subf->cf = nil;
+        subf->f = nil;
+        subf->age = 0;
+    }else{				/* too recent; grow instead */
+        of = f->subf;
+        f->subf = malloc((f->nsubf+DSUBF)*sizeof *subf);
+        if(f->subf == nil){
+            f->subf = of;
+            goto Toss;
+        }
+        memmove(f->subf, of, (f->nsubf+DSUBF)*sizeof *subf);
+        memset(f->subf+f->nsubf, 0, DSUBF*sizeof *subf);
+        subf = &f->subf[f->nsubf];
+        f->nsubf += DSUBF;
+        free(of);
+    }
+}
+
+subf->age = 0;
+subf->cf = nil;
+subf->f = cf2subfont(cf, f);
+if(subf->f == nil){
+    if(cf->subfontname == nil)
+        goto TryPJW;
+    *subfontname = cf->subfontname;
+    return -1;
+}
+
+subf->cf = cf;
+if(subf->f->ascent > f->ascent && f->display){
+    /* should print something? this is a mistake in the font file */
+    /* must prevent c->top from going negative when loading cache */
+    Image *b;
+    int d, t;
+    d = subf->f->ascent - f->ascent;
+    b = subf->f->bits;
+    draw(b, b->r, b, nil, addpt(b->r.min, Pt(0, d)));
+    draw(b, Rect(b->r.min.x, b->r.max.y-d, b->r.max.x, b->r.max.y), f->display->black, nil, b->r.min);
+    for(i=0; i<subf->f->n; i++){
+        t = subf->f->info[i].top-d;
+        if(t < 0)
+            t = 0;
+        subf->f->info[i].top = t;
+        t = subf->f->info[i].bottom-d;
+        if(t < 0)
+            t = 0;
+        subf->f->info[i].bottom = t;
+    }
+    subf->f->ascent = f->ascent;
+}
+@
+
+
+
+
+
+
+
+% mv later?
+% n = cachechars(..., &subfontname);
+% sometimes n can be 0 because new subfont in which case
+%  subfontname should have been set? Or can have n > 0 and
+%  subfontname?
+%  do some assert? rewrite code to use a else if and a final else
+%   which raise an error?
+
+<<[[_string()]] other locals>>=
+char *subfontname;
+Subfont *sf = nil;
+@
+% a new subfont may have been loaded.
+<<[[_string()]] if subfontname>>=
+if(subfontname){
+    <<[[_string()]] free previous sf>>
+    sf=_getsubfont(f->display, subfontname);
+    <<[[_string()]] sanity check sf and possibly adjust f>>
+    /* 
+     * must not free sf until cachechars has found it in the cache
+     * and picked up its own reference.
+     */
+}
+@
+% comment? very enigmatic
+
+<<[[_string()]] free previous sf>>=
+freesubfont(sf);
+@
+% free it once used and got a new one
+
+<<[[_string()]] other locals>>=
+Font *def;
+@
+<<[[_string()]] sanity check sf and possibly adjust f>>=
+if(sf == nil){
+    def = f->display ? f->display->defaultfont : nil;
+    if(def && f != def)
+        f = def;
+    else
+        break;
+}
+@
+\l this code can be simplified
+
+
+
+\subsection{Resizing the character cache, [[fontresize()]]}
+
+% 2 reasons: 
+% - too small, too many recent entries in NFLOOK
+% - width different
+
+<<[[cachechars()]] other locals>>=
+int nc;
+@
+
+<<[[cachechars()]] if age too recent then resize cache>>=
+if(a && (f->age - a) < 500){	/* kicking out too recent; resize */
+    nc = 2*(f->ncache-NFLOOK) + NFLOOK;
+    if(nc <= MAXFCACHE){
+        if(i == 0)
+            fontresize(f, f->width, nc, f->maxdepth);
+        /* else flush first; retry will resize */
+        break;
+    }
+    // else??
+}
+@
+% break so we re done for now for this set of chars.
+% special test i == 0 because we need to return something
+% so we cant just return when we have at least done something
+
+% if a because at the beginning every entry has age 0 (memset(,0)
+
+<<[[cachechars()]] if same age>>=
+if(c->age == f->age)	/* flush pending string output */
+    break;
+@
+% ???
+
+
+
+<<[[loadchar()]] resize cache if width too big>>=
+if(f->width < wid || f->width == 0 || f->maxdepth < subf->f->bits->depth){
+    /*
+     * Flush, free, reload (easier than reformatting f->b)
+     */
+    if(noflush)
+        return -1;
+
+    if(f->width < wid)
+        f->width = wid;
+    if(f->maxdepth < subf->f->bits->depth)
+        f->maxdepth = subf->f->bits->depth;
+    i = fontresize(f, f->width, f->ncache, f->maxdepth);
+    if(i <= 0)
+        return i;
+    /* c is still valid as didn't reallocate f->cache */
+}
+@
+
+
+
+
+
 
 % cachechars | loadchar -> <>
 <<function fontresize>>=
@@ -11116,7 +11309,7 @@ if(b == nil){
 
 \subsubsection{Unmarshalling}
 
-
+% fontresize!
 <<[[drawmesg()]] cases>>=
 /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
 case 'i':
@@ -11130,7 +11323,7 @@ case 'i':
     ni = BGLONG(a+5);
     <<[[drawmesg()]] when initialize font image and cache, sanity check ni>>
     free(font->fchar);  /* should we complain if non-zero? */
-    font->fchar = malloc(ni*sizeof(FChar));
+    font->fchar = malloc(ni * sizeof(FChar));
     <<[[drawmesg()]] when initialize font image and cache, sanity check fchar>>
     memset(font->fchar, 0, ni*sizeof(FChar));
     font->nfchar = ni;
@@ -11138,6 +11331,7 @@ case 'i':
     continue;
 
 @
+% so erase all previous chars
 
 <<[[drawmesg()]] when initialize font image and cache, sanity check dstid>>=
 if(dstid == 0)
@@ -11171,48 +11365,103 @@ agefont(Font *f)
     Cachesubf *s, *es;
 
     f->age++;
-
-    if(f->age == 65536){
-        /*
-         * Renormalize ages
-         */
-        c = f->cache;
-        ec = c+f->ncache;
-        while(c < ec){
-            if(c->age){
-                c->age >>= 2;
-                c->age++;
-            }
-            c++;
-        }
-
-        s = f->subf;
-        es = s+f->nsubf;
-        while(s < es){
-            if(s->age){
-                if(s->age<SUBFAGE && s->cf->name != nil){
-                    /* clean up */
-                    if(display &&
-                        s->f != display->defaultsubfont)
-                        freesubfont(s->f);
-                    s->cf = nil;
-                    s->f = nil;
-                    s->age = 0;
-                }else{
-                    s->age >>= 2;
-                    s->age++;
-                }
-            }
-            s++;
-        }
-        f->age = (65536>>2) + 1;
-    }
+    <<[[agefont()]] if age overflow>>
 }
 @
 
-\section{Subfonts IO}
 
-<<[[allocsubfont()]] lookup subfont if name>>=
+<<[[agefont()]] if age overflow>>=
+if(f->age == 65536){
+    /*
+     * Renormalize ages
+     */
+    c = f->cache;
+    ec = c+f->ncache;
+    while(c < ec){
+        if(c->age){
+            c->age >>= 2;
+            c->age++;
+        }
+        c++;
+    }
+
+    s = f->subf;
+    es = s + f->nsubf;
+    while(s < es){
+        if(s->age){
+            if(s->age < SUBFAGE && s->cf->name != nil){
+                /* clean up */
+                if(display &&
+                    s->f != display->defaultsubfont)
+                    freesubfont(s->f);
+                s->cf = nil;
+                s->f = nil;
+                s->age = 0;
+            }else{
+                s->age >>= 2;
+                s->age++;
+            }
+        }
+        s++;
+    }
+    f->age = (65536>>2) + 1;
+}
+@
+
+\section{Subfonts}
+
+\subsection{Subfont cache, [[Cachesubf]]}
+
+<<[[Font]] subfont cache fields>>=
+// growing_array<Cachesubf> (size = Font.nsubf, init = NFSUBF, max = MAXSUBF)
+Cachesubf	*subf;
+int		nsubf;	/* size of subfont list */
+@
+
+<<struct Cachesubf>>=
+struct Cachesubf
+{
+    // ref<Cachefont>, the key
+    Cachefont	*cf;	/* font info that owns us */
+    // ref_own<Subfont>, the value
+    Subfont		*f;	/* attached subfont */
+
+    ulong		age;	/* for replacement */
+};
+@
+% link between Font and subfont!
+\t rename f to sf here! confusing when have f->sub->f 
+
+
+<<[[buildfont()]] allocate cache>>=
+fnt->nsubf = NFSUBF;
+fnt->subf = malloc(fnt->nsubf * sizeof(fnt->subf[0]));
+@
+
+<<constant NFSUBF>>=
+NFSUBF =	2,			/* #subfonts to cache */
+@
+<<constant MAXSUBF>>=
+MAXSUBF =	50,			/* generous upper limit */
+@
+<<constant DSUBF>>=
+DSUBF = 	4,
+@
+
+<<[[freefont()]] free cache>>=
+for(i=0; i<f->nsubf; i++){
+    s = f->subf[i].f;
+    if(s && display && s != display->defaultsubfont)
+        freesubfont(s);
+}
+free(f->subf);
+@
+
+
+
+\subsection{Subfont sharing}
+
+<<[[allocsubfont()]] install subfont if name>>=
 if(name){
     f->name = strdup(name);
     if(lookupsubfont(i->display, name) == nil)
@@ -11227,7 +11476,9 @@ static char	*lastname;
 <<global lastsubfont>>=
 Subfont	*lastsubfont;
 @
+%ocaml: could do a hash instead?
 
+% (getdefont -> allocsubfont) | (loadchar -> cf2subfont) -> <>
 <<function lookupsubfont>>=
 Subfont*
 lookupsubfont(Display *d, char *name)
@@ -11243,6 +11494,7 @@ lookupsubfont(Display *d, char *name)
 }
 @
 \l use defontname here again! instead of hardcoded?
+% ref++ here! so can share?
 % which is why no need installsubfont for default subfont.
 
 <<function installsubfont>>=
@@ -11269,7 +11521,7 @@ uninstallsubfont(Subfont *subfont)
 
 
 
-
+\subsection{Subfont loading}
 
 % _string | _stringwidth -> <>
 <<function _getsubfont>>=
@@ -11309,7 +11561,7 @@ _getsubfont(Display *d, char *name)
 
 
 
-
+% loadchar -> <>
 <<function cf2subfont>>=
 static Subfont*
 cf2subfont(Cachefont *cf, Font *f)
@@ -11338,7 +11590,6 @@ cf2subfont(Cachefont *cf, Font *f)
 /*
  * Default version: convert to file name
  */
-
 char*
 subfontname(char *cfname, char *fname, int maxdepth)
 {
@@ -11387,6 +11638,7 @@ subfontname(char *cfname, char *fname, int maxdepth)
 % >>
 
 
+\subsection{Subfont IO}
 
 <<function readsubfonti>>=
 Subfont*
@@ -11565,140 +11817,6 @@ writesubfont(int fd, Subfont *f)
     return 0;
 }
 @
-
-
-\section{Text width}
-
-\subsection{API}
-
-<<function stringwidth>>=
-int
-stringwidth(Font *f, char *s)
-{
-    return _stringnwidth(f, s, nil, 1<<24);
-}
-@
-
-
-<<function stringnwidth>>=
-int
-stringnwidth(Font *f, char *s, int len)
-{
-    return _stringnwidth(f, s, nil, len);
-}
-@
-
-
-<<function stringsize>>=
-Point
-stringsize(Font *f, char *s)
-{
-    return Pt(_stringnwidth(f, s, nil, 1<<24), f->height);
-}
-@
-
-
-<<function runestringnwidth>>=
-int
-runestringnwidth(Font *f, Rune *r, int len)
-{
-    return _stringnwidth(f, nil, r, len);
-}
-@
-
-<<function runestringwidth>>=
-int
-runestringwidth(Font *f, Rune *r)
-{
-    return _stringnwidth(f, nil, r, 1<<24);
-}
-@
-
-<<function runestringsize>>=
-Point
-runestringsize(Font *f, Rune *r)
-{
-    return Pt(_stringnwidth(f, nil, r, 1<<24), f->height);
-}
-@
-% >> >> >> >> >> >> >> >>
-
-
-\subsection{Algorithm}
-% actually no marshalling/unmarshalling
-
-<<enum _anon_ (lib_graphics/libdraw/stringwidth.c)>>=
-enum { Max = 64 };
-@
-% not sure why dont reuse the Max used in string.c
-
-<<function _stringnwidth>>=
-int
-_stringnwidth(Font *f, char *s, Rune *r, int len)
-{
-    int wid, twid, n, max, l;
-    char *name;
-    ushort cbuf[Max];
-    Rune rune, **rptr;
-    char *subfontname, **sptr;
-    Font *def;
-
-    if(s == nil){
-        s = "";
-        sptr = nil;
-    }else
-        sptr = &s;
-
-    if(r == nil){
-          r = L"";
-        rptr = nil;
-    }else
-        rptr = &r;
-
-    twid = 0;
-    while(len>0 && (*s || *r)){
-        max = Max;
-        if(len < max)
-            max = len;
-        n = 0;
-        while((l = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname)) <= 0){
-            if(++n > 10){
-                if(*r)
-                    rune = *r;
-                else
-                    chartorune(&rune, s);
-                if(f->name != nil)
-                    name = f->name;
-                else
-                    name = "unnamed font";
-                fprint(2, "stringwidth: bad character set for rune 0x%.4ux in %s\n", rune, name);
-                return twid;
-            }
-
-            if(subfontname){
-                if(_getsubfont(f->display, subfontname) == 0){
-                    def = f->display->defaultfont;
-                    if(def && f!=def)
-                        f = def;
-                    else
-                        break;
-                }
-            }
-        }
-        agefont(f);
-        twid += wid;
-        len -= l;
-    }
-    return twid;
-}
-@
-% lots of code in common with _string
-
-
-
-
-
-
 
 
 \chapter{Image IO}
@@ -20396,7 +20514,7 @@ memsubfontwidth(Memsubfont *f, char *cs)
 @
 
 
-
+% vgascreenputc -> <>
 <<function memimagestring>>=
 Point
 memimagestring(Memimage *b, Point p, Memimage *color, Point cp, Memsubfont *f, char *cs)

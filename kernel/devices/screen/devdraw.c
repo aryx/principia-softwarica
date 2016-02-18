@@ -174,7 +174,7 @@ struct DName
 /*s: struct FChar */
 struct FChar
 {
-    // Rectangle
+    // Rectangle in Font.cacheimage
     int     minx;   /* left edge of bits */
     int     maxx;   /* right edge of bits */
     uchar   miny;   /* first non-zero scan-line */
@@ -201,7 +201,7 @@ struct DImage
     DScreen*    dscreen;    /* 0 if not a window */
     /*e: [[DImage]] layer fields */
     /*s: [[DImage]] font fields */
-    // growing_array<option<Fchar>> (size = DImage.nfchar)
+    // growing_hash<Rune, ref_own<Fchar>> (size = DImage.nfchar)
     FChar*      fchar;
     int     nfchar;
     /*e: [[DImage]] font fields */
@@ -2535,7 +2535,7 @@ drawmesg(Client *client, void *av, int n)
                 error("bad font size (4096 chars max)");
             /*e: [[drawmesg()]] when initialize font image and cache, sanity check ni */
             free(font->fchar);  /* should we complain if non-zero? */
-            font->fchar = malloc(ni*sizeof(FChar));
+            font->fchar = malloc(ni * sizeof(FChar));
             /*s: [[drawmesg()]] when initialize font image and cache, sanity check fchar */
             if(font->fchar == nil)
                 error("no memory for font");

@@ -28,8 +28,8 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
     int ld;
     /*x: [[cachechars()]] other locals */
     int th;
-    ulong a;
     Cacheinfo *tc;
+    ulong a;
     /*x: [[cachechars()]] other locals */
     int nc;
     /*e: [[cachechars()]] other locals */
@@ -68,7 +68,7 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
         // sh = hash_code(r)
         sh = (17 * (uint)r) & (f->ncache-NFLOOK-1);
 
-        // c = lookup(r, sh, f->cache)
+        // c,h = lookup(r, sh, f->cache)
         c = &f->cache[sh];
         ec = c+NFLOOK;
         h = sh;
@@ -96,6 +96,7 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
             th++;
         }
         /*e: [[cachechars()]] find oldest entry [[c]] with age a in cache */
+
         /*s: [[cachechars()]] if age too recent then resize cache */
         if(a && (f->age - a) < 500){	/* kicking out too recent; resize */
             nc = 2*(f->ncache-NFLOOK) + NFLOOK;
@@ -105,6 +106,7 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
                 /* else flush first; retry will resize */
                 break;
             }
+            // else??
         }
         /*e: [[cachechars()]] if age too recent then resize cache */
         /*s: [[cachechars()]] if same age */
@@ -150,7 +152,7 @@ agefont(Font *f)
     Cachesubf *s, *es;
 
     f->age++;
-
+    /*s: [[agefont()]] if age overflow */
     if(f->age == 65536){
         /*
          * Renormalize ages
@@ -166,10 +168,10 @@ agefont(Font *f)
         }
 
         s = f->subf;
-        es = s+f->nsubf;
+        es = s + f->nsubf;
         while(s < es){
             if(s->age){
-                if(s->age<SUBFAGE && s->cf->name != nil){
+                if(s->age < SUBFAGE && s->cf->name != nil){
                     /* clean up */
                     if(display &&
                         s->f != display->defaultsubfont)
@@ -186,6 +188,7 @@ agefont(Font *f)
         }
         f->age = (65536>>2) + 1;
     }
+    /*e: [[agefont()]] if age overflow */
 }
 /*e: function agefont */
 
@@ -225,9 +228,9 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     Fontchar *fi;
     Cachesubf *subf;
     /*s: [[loadchar()]] other locals */
-    Cachesubf *of;
-    /*x: [[loadchar()]] other locals */
     byte *b;
+    /*x: [[loadchar()]] other locals */
+    Cachesubf *of;
     /*e: [[loadchar()]] other locals */
 
     pic = r;
@@ -249,7 +252,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     /*e: [[loadchar()]] if rune not handled by the font */
 
     Found:
-    // Find loaded subfont subf with spec cf 
+    // Now let's find the loaded subfont subf with spec cf 
     /*
      * Choose exact or oldest
      */
@@ -266,7 +269,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     subf = &f->subf[oi];
 
     if(subf->f){
-        if(f->age-subf->age>SUBFAGE || f->nsubf > MAXSUBF){
+        if(f->age - subf->age > SUBFAGE || f->nsubf > MAXSUBF){
     Toss:
             /* ancient data; toss */
             freesubfont(subf->f);
@@ -287,6 +290,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
             free(of);
         }
     }
+
     subf->age = 0;
     subf->cf = nil;
     subf->f = cf2subfont(cf, f);
@@ -344,6 +348,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
          */
         if(noflush)
             return -1;
+
         if(f->width < wid)
             f->width = wid;
         if(f->maxdepth < subf->f->bits->depth)

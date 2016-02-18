@@ -7,7 +7,7 @@
 Subfont*
 getdefont(Display *d)
 {
-    Subfont *f;
+    Subfont *f; // TODO sf
     Image *i;
     Rectangle r;
     int ld;

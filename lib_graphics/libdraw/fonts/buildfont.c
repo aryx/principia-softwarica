@@ -39,14 +39,15 @@ buildfont(Display *d, char *buf, char *name)
     fnt->name = strdup(name);
 
     /*s: [[buildfont()]] allocate cache */
-    fnt->age = 1;
-    /*x: [[buildfont()]] allocate cache */
-    fnt->nsubf = NFSUBF;
-    fnt->subf = malloc(fnt->nsubf * sizeof(fnt->subf[0]));
-    /*x: [[buildfont()]] allocate cache */
     fnt->ncache = NFCACHE+NFLOOK;
     fnt->cache = malloc(fnt->ncache * sizeof(fnt->cache[0]));
     /*x: [[buildfont()]] allocate cache */
+    fnt->nsubf = NFSUBF;
+    fnt->subf = malloc(fnt->nsubf * sizeof(fnt->subf[0]));
+    /*e: [[buildfont()]] allocate cache */
+    /*s: [[buildfont()]] initialize cache */
+    fnt->age = 1;
+    /*x: [[buildfont()]] initialize cache */
     /*s: [[buildfont()]] sanity check fnt fields part1 */
     if(fnt->name==nil || fnt->cache==nil || fnt->subf==nil){
     Err2:
@@ -60,7 +61,7 @@ buildfont(Display *d, char *buf, char *name)
     /*e: [[buildfont()]] sanity check fnt fields part1 */
     memset(fnt->subf, 0, fnt->nsubf * sizeof(fnt->subf[0]));
     memset(fnt->cache, 0, fnt->ncache * sizeof(fnt->cache[0]));
-    /*e: [[buildfont()]] allocate cache */
+    /*e: [[buildfont()]] initialize cache */
 
     fnt->height = strtol(s, &s, 0);
     s = skip(s);
@@ -169,8 +170,8 @@ freefont(Font *f)
 
     for(i=0; i<f->nsub; i++){
         c = f->sub[i];
-        free(c->subfontname);
         free(c->name);
+        free(c->subfontname);
         free(c);
     }
     free(f->sub);
@@ -178,14 +179,14 @@ freefont(Font *f)
     /*s: [[freefont()]] free cache */
     freeimage(f->cacheimage);
     /*x: [[freefont()]] free cache */
+    free(f->cache);
+    /*x: [[freefont()]] free cache */
     for(i=0; i<f->nsubf; i++){
         s = f->subf[i].f;
         if(s && display && s != display->defaultsubfont)
             freesubfont(s);
     }
     free(f->subf);
-    /*x: [[freefont()]] free cache */
-    free(f->cache);
     /*e: [[freefont()]] free cache */
 
     free(f->name);

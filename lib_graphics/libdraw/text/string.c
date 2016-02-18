@@ -86,9 +86,10 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
     ushort cbuf[Max], *c, *ec;
     byte *b;
     int wid;
-    char *subfontname;
-    Subfont *sf;
     /*s: [[_string()]] other locals */
+    char *subfontname;
+    Subfont *sf = nil;
+    /*x: [[_string()]] other locals */
     Font *def;
     /*e: [[_string()]] other locals */
 
@@ -107,8 +108,6 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
     else
       rptr = &r;
 
-    sf = nil;
-
     while((*s || *r) && len){
         /*s: [[_string()]] set max */
         max = Max;
@@ -116,6 +115,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
             max = len;
         /*e: [[_string()]] set max */
 
+        // will trigger many calls to loadchar() for the same subfont
         n = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname);
 
         if(n > 0){
@@ -163,7 +163,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
                 b += 12;
             }
             /*e: [[_string()]] if bg part3 */
-            // index of the set of characters to draw
+            // index of the set of characters to draw (hashcode of Rune)
             ec = &cbuf[n];
             for(c=cbuf; c<ec; c++, b+=2)
                 BPSHORT(b, *c);
@@ -173,7 +173,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
 
             agefont(f);
 
-            len -= n;
+            len -= n; // progress
         }
         /*s: [[_string()]] if subfontname */
         if(subfontname){

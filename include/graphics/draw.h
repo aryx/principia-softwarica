@@ -358,8 +358,9 @@ struct	Subfont
     char		*name;
     Image		*bits;	/* of font */
 
-    short		n;		/* number of chars in font */
+    // array<Fontchar> (size = Subfont.n + 1)
     Fontchar 	*info;	/* n+1 character descriptors */
+    short		n;		/* number of chars in font */
 
     /*s: [[Subfont]] other fields */
     uchar		height;		/* height of image */
@@ -452,7 +453,7 @@ struct Cachesubf
 /*s: struct Font */
 struct Font
 {
-    // ref_own<string>, //filename? e.g. /lib/font/bit/lucm/latin1.9.font
+    // ref_own<filename>, // e.g. /lib/font/bit/lucm/latin1.9.font
     char		*name;
     // ref<Display>
     Display		*display;
@@ -469,17 +470,17 @@ struct Font
     // growing_array<Cachesubf> (size = Font.nsubf, init = NFSUBF, max = MAXSUBF)
     Cachesubf	*subf;
     int		nsubf;	/* size of subfont list */
-    /*x: [[Font]] subfont cache fields */
-    // growing_hash<Rune, int * Cacheinfo> (size = Font.ncache, bucketsize = NFLOOK)
-    Cacheinfo	*cache;
-    int		ncache;	/* size of cache */
     /*e: [[Font]] subfont cache fields */
-    /*s: [[Font]] cache fields */
+    /*s: [[Font]] character cache fields */
     // growing image
     Image		*cacheimage;
-    /*x: [[Font]] cache fields */
+    /*x: [[Font]] character cache fields */
     ulong		age;	/* increasing counter; used for LRU */
-    /*e: [[Font]] cache fields */
+    /*x: [[Font]] character cache fields */
+    // growing_hash<Rune, Cacheinfo> (size = Font.ncache, bucketsize = NFLOOK)
+    Cacheinfo	*cache;
+    int		ncache;	/* size of cache */
+    /*e: [[Font]] character cache fields */
     /*s: [[Font]] other fields */
     short		width;	/* widest so far; used in caching only */	
     int		maxdepth;	/* maximum depth of all loaded subfonts */
@@ -510,7 +511,7 @@ extern void		closedisplay(Display*);
 
 extern int		flushimage(Display*, bool);
 
-extern Image*	allocimage(Display*, Rectangle, ulong, int, ulong);
+extern Image*	allocimage(Display*, Rectangle, ulong, bool, rgba);
 extern int		freeimage(Image*);
 extern Image* 	allocimagemix(Display*, ulong, ulong);
 
@@ -523,7 +524,7 @@ extern int		cloadimage(Image*, Rectangle, byte*, int);
 extern Image* 	creadimage(Display*, int, int);
 
 extern Image*	namedimage(Display*, char*);
-extern int		nameimage(Image*, char*, int);
+extern int		nameimage(Image*, char*, bool);
 
 extern void	drawerror(Display*, char*);
 
@@ -651,6 +652,14 @@ extern Point	runestringnbgop(Image*, Point, Image*, Point, Font*, Rune*, int, Im
 
 extern Point	stringsubfont(Image*, Point, Image*, Subfont*, char*);
 
+extern Point	stringsize(Font*, char*);
+extern int		stringwidth(Font*, char*);
+extern int		stringnwidth(Font*, char*, int);
+
+extern Point	runestringsize(Font*, Rune*);
+extern int		runestringwidth(Font*, Rune*);
+extern int		runestringnwidth(Font*, Rune*, int);
+
 
 /*
  * Font management
@@ -662,23 +671,17 @@ extern Font*	buildfont(Display*, char*, char*);
 
 // public? or internal to font code?
 extern Subfont*	allocsubfont(char*, int, int, int, Fontchar*, Image*);
+extern void	freesubfont(Subfont*);
 extern Subfont*	lookupsubfont(Display*, char*);
 extern void	installsubfont(char*, Subfont*);
-extern void	freesubfont(Subfont*);
+extern void	uninstallsubfont(Subfont*);
+
 extern Subfont*	readsubfont(Display*, char*, int, int);
 extern Subfont*	readsubfonti(Display*, char*, int, Image*, int);
 extern int	writesubfont(int, Subfont*);
-extern void	uninstallsubfont(Subfont*);
 extern char*	subfontname(char*, char*, int);
 extern Subfont*	_getsubfont(Display*, char*);
 
-extern Point	stringsize(Font*, char*);
-extern int		stringwidth(Font*, char*);
-extern int		stringnwidth(Font*, char*, int);
-
-extern Point	runestringsize(Font*, Rune*);
-extern int		runestringwidth(Font*, Rune*);
-extern int		runestringnwidth(Font*, Rune*, int);
 
 extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
 extern void		agefont(Font*);
@@ -686,6 +689,7 @@ extern void		_unpackinfo(Fontchar*, byte*, int);
 extern Point	strsubfontwidth(Subfont*, char*);
 extern int		loadchar(Font*, Rune, Cacheinfo*, int, int, char**);
 extern Subfont*	getdefont(Display*);
+
 extern int		drawlsetrefresh(ulong, int, void*, void*);
 
 // seems related to font

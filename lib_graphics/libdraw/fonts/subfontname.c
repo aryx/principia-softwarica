@@ -7,7 +7,6 @@
 /*
  * Default version: convert to file name
  */
-
 char*
 subfontname(char *cfname, char *fname, int maxdepth)
 {
