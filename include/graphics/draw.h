@@ -672,16 +672,13 @@ extern void	freesubfont(Subfont*);
 extern Subfont*	lookupsubfont(Display*, char*);
 extern void	installsubfont(char*, Subfont*);
 extern void	uninstallsubfont(Subfont*);
-
 extern Subfont*	readsubfont(Display*, char*, int, int);
-extern Subfont*	readsubfonti(Display*, char*, int, Image*, int);
 extern char*	subfontname(char*, char*, int);
 extern Subfont*	_getsubfont(Display*, char*);
-
 // for subfont designers
 extern int	writesubfont(int, Subfont*);
 
-
+// internal again
 extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
 extern void		agefont(Font*);
 extern void		_unpackinfo(Fontchar*, byte*, int);

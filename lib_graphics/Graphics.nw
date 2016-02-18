@@ -11766,103 +11766,126 @@ uninstallsubfont(Subfont *subfont)
 Subfont*
 readsubfont(Display *d, char *name, fdt fd, bool dolock)
 {
-    return readsubfonti(d, name, fd, nil, dolock);
-}
-@
-
-\l when call via explicit ai? so remove useless parameter?
-<<function readsubfonti>>=
-Subfont*
-readsubfonti(Display*d, char *name, fdt fd, Image *ai, bool dolock)
-{
-    char hdr[3*12+4+1];
-    int n;
-    uchar *p;
-    Fontchar *fc;
-    Subfont *f;
     Image *i;
+    Fontchar *fc;
+    char hdr[3*12 + 4+1];
+    int n;
+    byte *p;
+    Subfont *f;
 
-    // image
+    // reading the image
 
-    i = ai;
-    if(i == nil){
-        i = readimage(d, fd, dolock); // the call!
-        if(i == nil)
-            return nil;
-    }
+    i = readimage(d, fd, dolock); // the call!
+    <<[[readsubfont()]] sanity check i>>
 
-    // fontchars
+    // reading the fontchars
 
     if(read(fd, hdr, 3*12) != 3*12){
-        if(ai == nil)
-            freeimage(i);
+        freeimage(i);
         werrstr("rdsubfonfile: header read error: %r");
         return nil;
     }
     n = atoi(hdr);
-    p = malloc(6*(n+1));
-    if(p == nil)
-        goto Err;
-    if(read(fd, p, 6*(n+1)) != 6*(n+1)){
+    p = malloc(6 * (n+1));
+    <<[[readsubfont()]] sanity check p>>
+    if(read(fd, p, 6 * (n+1)) != 6 * (n+1)){
         werrstr("rdsubfonfile: fontchar read error: %r");
     Err:
-        if(ai == nil)
-            freeimage(i);
+        freeimage(i);
         free(p);
         return nil;
     }
-    fc = malloc(sizeof(Fontchar)*(n+1));
-    if(fc == nil)
-        goto Err;
+    fc = malloc(sizeof(Fontchar) * (n+1));
+    <<[[readsubfont()]] sanity check fc>>
     _unpackinfo(fc, p, n);
-    if(dolock)
-        lockdisplay(d);
-
+    <<[[readsubfont()]] if lock part1>>
     f = allocsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
-    if(dolock)
-        unlockdisplay(d);
-    if(f == nil){
-        free(fc);
-        goto Err;
-    }
+    <<[[readsubfont()]] if lock part2>>
+    <<[[readsubfont()]] sanity check f>>
     free(p);
     return f;
 }
 @
+%dead:
+% Subfont*
+%  readsubfonti(Display*d, char *name, fdt fd, Image *ai, bool dolock) {
+%    i = ai;
+%    if(i == nil){
+% ...
+%        if(ai == nil)
+
+% seen _unpackinfo in getdefont already
 
 
+<<[[readsubfont()]] sanity check i>>=
+if(i == nil)
+    return nil;
+@
+<<[[readsubfont()]] sanity check p>>=
+if(p == nil)
+    goto Err;
+@
+<<[[readsubfont()]] sanity check fc>>=
+if(fc == nil)
+    goto Err;
+@
+
+<<[[readsubfont()]] sanity check f>>=
+if(f == nil){
+    free(fc);
+    goto Err;
+}
+@
 
 
+% why need lock before allocsubfont? because shared access
+%  to lastname?
+<<[[readsubfont()]] if lock part1>>=
+if(dolock)
+    lockdisplay(d);
+@
+
+<<[[readsubfont()]] if lock part2>>=
+if(dolock)
+    unlockdisplay(d);
+@
 
 \subsubsection{Writing a subfont}
 
 % ?? -> <>, for people who wants to write new fonts?
 <<function writesubfont>>=
-int
-writesubfont(int fd, Subfont *f)
+errorneg1
+writesubfont(fdt fd, Subfont *f)
 {
     char hdr[3*12+1];
-    uchar *data;
+    byte *data;
     int nb;
 
     sprint(hdr, "%11d %11d %11d ", f->n, f->height, f->ascent);
     if(write(fd, hdr, 3*12) != 3*12){
-   Err:
+    Err:
         werrstr("writesubfont: bad write: %r");
         return -1;
     }
     nb = 6*(f->n+1);
     data = malloc(nb);
-    if(data == nil)
-        return -1;
+    <<[[writesubfont()]] sanity check data>>
     packinfo(f->info, data, f->n);
     if(write(fd, data, nb) != nb)
         goto Err;
     free(data);
-    return 0;
+    return OK_0;
 }
 @
+\t rename f to sf
 
+
+<<[[writesubfont()]] sanity check data>>=
+if(data == nil)
+    return ERROR_NEG1;
+@
+
+% opposite of _unpackinfo
 <<function packinfo>>=
 static
 void

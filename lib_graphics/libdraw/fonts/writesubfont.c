@@ -24,28 +24,30 @@ packinfo(Fontchar *fc, uchar *p, int n)
 /*e: function packinfo */
 
 /*s: function writesubfont */
-int
-writesubfont(int fd, Subfont *f)
+errorneg1
+writesubfont(fdt fd, Subfont *f)
 {
     char hdr[3*12+1];
-    uchar *data;
+    byte *data;
     int nb;
 
     sprint(hdr, "%11d %11d %11d ", f->n, f->height, f->ascent);
     if(write(fd, hdr, 3*12) != 3*12){
-   Err:
+    Err:
         werrstr("writesubfont: bad write: %r");
         return -1;
     }
     nb = 6*(f->n+1);
     data = malloc(nb);
+    /*s: [[writesubfont()]] sanity check data */
     if(data == nil)
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[writesubfont()]] sanity check data */
     packinfo(f->info, data, f->n);
     if(write(fd, data, nb) != nb)
         goto Err;
     free(data);
-    return 0;
+    return OK_0;
 }
 /*e: function writesubfont */
 /*e: lib_graphics/libdraw/writesubfont.c */
