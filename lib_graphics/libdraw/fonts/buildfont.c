@@ -75,9 +75,9 @@ buildfont(Display *d, char *buf, char *name)
     /*e: [[buildfont()]] sanity check fnt fields part2 */
 
     fnt->width = 0;
+
     fnt->sub = nil;
     fnt->nsub = 0;
-
     do{
         /* must be looking at a number now */
         /*s: [[buildfont()]] sanity check s content */
@@ -142,7 +142,7 @@ buildfont(Display *d, char *buf, char *name)
         *s++ = '\0';
 
         c->name = strdup(t);
-        c->subfontname = nil;
+        c->subfontname = nil; // full filename computed lazily later
         /*s: [[buildfont()]] sanity check c name field */
         if(c->name == nil){
             free(c);

@@ -10,15 +10,18 @@
 Subfont*
 _getsubfont(Display *d, char *name)
 {
-    int fd;
+    fdt fd;
     Subfont *f;
 
     fd = open(name, OREAD);
-        
+    /*s: [[_getsubfont()]] sanity check fd */
     if(fd < 0){
         fprint(2, "getsubfont: can't open %s: %r\n", name);
-        return 0;
+        return nil;
     }
+    /*e: [[_getsubfont()]] sanity check fd */
+
+    /*s: [[_getsubfont()]] locking part1 */
     /*
      * unlock display so i/o happens with display released, unless
      * user is doing his own locking, in which case this could break things.
@@ -27,13 +30,19 @@ _getsubfont(Display *d, char *name)
      */
     if(d && d->locking == false)
         unlockdisplay(d);
+    /*e: [[_getsubfont()]] locking part1 */
     f = readsubfont(d, name, fd, d && d->locking==false);
+    /*s: [[_getsubfont()]] locking part2 */
     if(d && d->locking == false)
         lockdisplay(d);
-    if(f == 0)
+    /*e: [[_getsubfont()]] locking part2 */
+    /*s: [[_getsubfont()]] sanity check f */
+    if(f == nil)
         fprint(2, "getsubfont: can't read %s: %r\n", name);
+    /*e: [[_getsubfont()]] sanity check f */
     close(fd);
     setmalloctag(f, getcallerpc(&d));
+
     return f;
 }
 /*e: function _getsubfont */

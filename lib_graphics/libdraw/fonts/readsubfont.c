@@ -5,7 +5,7 @@
 
 /*s: function readsubfonti */
 Subfont*
-readsubfonti(Display*d, char *name, int fd, Image *ai, int dolock)
+readsubfonti(Display*d, char *name, fdt fd, Image *ai, bool dolock)
 {
     char hdr[3*12+4+1];
     int n;
@@ -14,12 +14,17 @@ readsubfonti(Display*d, char *name, int fd, Image *ai, int dolock)
     Subfont *f;
     Image *i;
 
+    // image
+
     i = ai;
     if(i == nil){
-        i = readimage(d, fd, dolock);
+        i = readimage(d, fd, dolock); // the call!
         if(i == nil)
             return nil;
     }
+
+    // fontchars
+
     if(read(fd, hdr, 3*12) != 3*12){
         if(ai == nil)
             freeimage(i);
@@ -44,6 +49,7 @@ readsubfonti(Display*d, char *name, int fd, Image *ai, int dolock)
     _unpackinfo(fc, p, n);
     if(dolock)
         lockdisplay(d);
+
     f = allocsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
     if(dolock)
         unlockdisplay(d);
@@ -58,7 +64,7 @@ readsubfonti(Display*d, char *name, int fd, Image *ai, int dolock)
 
 /*s: function readsubfont */
 Subfont*
-readsubfont(Display *d, char *name, int fd, int dolock)
+readsubfont(Display *d, char *name, fdt fd, bool dolock)
 {
     return readsubfonti(d, name, fd, nil, dolock);
 }

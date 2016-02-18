@@ -204,6 +204,8 @@ struct DImage
     // growing_hash<Rune, ref_own<Fchar>> (size = DImage.nfchar)
     FChar*      fchar;
     int     nfchar;
+    /*x: [[DImage]] font fields */
+    int     ascent;
     /*e: [[DImage]] font fields */
     /*s: [[DImage]] other fields */
     int     vers;
@@ -211,9 +213,6 @@ struct DImage
     char    *name;
     // ref<DImage>
     DImage*     fromname;   /* image this one is derived from, by name */
-    /*x: [[DImage]] other fields */
-    int     ascent;
-
     /*e: [[DImage]] other fields */
 
     // Extra

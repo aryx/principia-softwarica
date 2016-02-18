@@ -78,6 +78,7 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
             c++;
             h++;
         }
+        // this can break out of the loop
         /*s: [[cachechars()]] when rune not in cache, loads it */
         /*s: [[cachechars()]] find oldest entry [[c]] with age a in cache */
         /*
@@ -96,7 +97,6 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
             th++;
         }
         /*e: [[cachechars()]] find oldest entry [[c]] with age a in cache */
-
         /*s: [[cachechars()]] if age too recent then resize cache */
         if(a && (f->age - a) < 500){	/* kicking out too recent; resize */
             nc = 2*(f->ncache-NFLOOK) + NFLOOK;
@@ -106,7 +106,7 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
                 /* else flush first; retry will resize */
                 break;
             }
-            // else??
+            // else, no resize
         }
         /*e: [[cachechars()]] if age too recent then resize cache */
         /*s: [[cachechars()]] if same age */
@@ -116,13 +116,16 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
         // else
 
         ld = loadchar(f, r, c, h, i, subfontname);
-        /*s: [[cachechars()]] sanity check ld */
+        /*s: [[cachechars()]] if could not load char */
         if(ld <= 0){
-            if(ld == 0) // failed
+            /*s: [[cachechars()]] if loadchar failed */
+            if(ld == 0) // when failed, but why can fail?
                 continue;
-            break; // retry
+            /*e: [[cachechars()]] if loadchar failed */
+            break;
         }
-        /*e: [[cachechars()]] sanity check ld */
+        /*e: [[cachechars()]] if could not load char */
+        // else
         c = &f->cache[h];	/* may have reallocated f->cache */
         /*e: [[cachechars()]] when rune not in cache, loads it */
     
@@ -148,8 +151,10 @@ cachechars(Font *f, char **ss, Rune **rr, ushort *cp, int max, int *wp, char **s
 void
 agefont(Font *f)
 {
+    /*s: [[agefont()]] locals */
     Cacheinfo *c, *ec;
     Cachesubf *s, *es;
+    /*e: [[agefont()]] locals */
 
     f->age++;
     /*s: [[agefont()]] if age overflow */
@@ -198,21 +203,23 @@ cf2subfont(Cachefont *cf, Font *f)
 {
     int depth;
     char *name;
-    Subfont *sf;
 
     name = cf->subfontname;
     if(name == nil){
+        /*s: [[cf2subfont()]] set depth */
         if(f->display && f->display->screenimage)
             depth = f->display->screenimage->depth;
         else
             depth = 8;
+        /*e: [[cf2subfont()]] set depth */
         name = subfontname(cf->name, f->name, depth);
+        /*s: [[cf2subfont()]] sanity check name */
         if(name == nil)
             return nil;
+        /*e: [[cf2subfont()]] sanity check name */
         cf->subfontname = name;
     }
-    sf = lookupsubfont(f->display, name);
-    return sf;
+    return lookupsubfont(f->display, name);
 }
 /*e: function cf2subfont */
 
@@ -265,9 +272,10 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
             oi = i;
         subf++;
     }
+    // may load and find the right subf
     /*s: [[loadchar()]] when the corresponding subfont is not loaded yet */
     subf = &f->subf[oi];
-
+    /*s: [[loadchar()]] if old subfont entry valid, free it or expand subfont cache */
     if(subf->f){
         if(f->age - subf->age > SUBFAGE || f->nsubf > MAXSUBF){
     Toss:
@@ -278,30 +286,34 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
             subf->age = 0;
         }else{				/* too recent; grow instead */
             of = f->subf;
-            f->subf = malloc((f->nsubf+DSUBF)*sizeof *subf);
+            f->subf = malloc((f->nsubf+DSUBF) * sizeof(Subfont));
+            /*s: [[loadchar()]] sanity check new malloced subf */
             if(f->subf == nil){
                 f->subf = of;
                 goto Toss;
             }
-            memmove(f->subf, of, (f->nsubf+DSUBF)*sizeof *subf);
+            /*e: [[loadchar()]] sanity check new malloced subf */
+            memmove(f->subf, of, (f->nsubf+DSUBF) * sizeof(Subfont));
             memset(f->subf+f->nsubf, 0, DSUBF*sizeof *subf);
             subf = &f->subf[f->nsubf];
             f->nsubf += DSUBF;
             free(of);
         }
     }
-
+    /*e: [[loadchar()]] if old subfont entry valid, free it or expand subfont cache */
     subf->age = 0;
     subf->cf = nil;
     subf->f = cf2subfont(cf, f);
+    /*s: [[loadchar()]] sanity check subfont f */
     if(subf->f == nil){
         if(cf->subfontname == nil)
             goto TryPJW;
         *subfontname = cf->subfontname;
-        return -1;
+        return -1; // caller must retry
     }
-
+    /*e: [[loadchar()]] sanity check subfont f */
     subf->cf = cf;
+    /*s: [[loadchar()]] sanity check ascents */
     if(subf->f->ascent > f->ascent && f->display){
         /* should print something? this is a mistake in the font file */
         /* must prevent c->top from going negative when loading cache */
@@ -323,6 +335,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
         }
         subf->f->ascent = f->ascent;
     }
+    /*e: [[loadchar()]] sanity check ascents */
     /*e: [[loadchar()]] when the corresponding subfont is not loaded yet */
 
     Found2:
@@ -348,6 +361,7 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
          */
         if(noflush)
             return -1;
+        // else
 
         if(f->width < wid)
             f->width = wid;

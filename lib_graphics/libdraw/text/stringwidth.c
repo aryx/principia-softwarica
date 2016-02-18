@@ -11,13 +11,20 @@ enum { Max = 64 };
 int
 _stringnwidth(Font *f, char *s, Rune *r, int len)
 {
-    int wid, twid, n, max, l;
-    char *name;
+    Rune **rptr;
+    char **sptr;
+    int wid, twid;
+    int n, max, l;
     ushort cbuf[Max];
-    Rune rune, **rptr;
-    char *subfontname, **sptr;
+    char *subfontname;
+    /*s: [[_stringnwidth()]] other locals */
+    char *name;
+    Rune rune;
+    /*x: [[_stringnwidth()]] other locals */
     Font *def;
+    /*e: [[_stringnwidth()]] other locals */
 
+    /*s: [[_string()]] non unicode string handling, set sptr and rptr */
     if(s == nil){
         s = "";
         sptr = nil;
@@ -25,18 +32,23 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
         sptr = &s;
 
     if(r == nil){
-          r = L"";
+        r = (Rune*) L"";
         rptr = nil;
-    }else
+    }
+    /*e: [[_string()]] non unicode string handling, set sptr and rptr */
+    else
         rptr = &r;
 
     twid = 0;
-    while(len>0 && (*s || *r)){
+    while(len > 0 && (*s || *r)){
+        /*s: [[_string()]] set max */
         max = Max;
         if(len < max)
             max = len;
+        /*e: [[_string()]] set max */
         n = 0;
         while((l = cachechars(f, sptr, rptr, cbuf, max, &wid, &subfontname)) <= 0){
+            /*s: [[_stringnwidth()]] if cachechars failed too much */
             if(++n > 10){
                 if(*r)
                     rune = *r;
@@ -49,7 +61,8 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
                 fprint(2, "stringwidth: bad character set for rune 0x%.4ux in %s\n", rune, name);
                 return twid;
             }
-
+            /*e: [[_stringnwidth()]] if cachechars failed too much */
+            /*s: [[_stringnwidth()]] if subfontname */
             if(subfontname){
                 if(_getsubfont(f->display, subfontname) == 0){
                     def = f->display->defaultfont;
@@ -59,10 +72,12 @@ _stringnwidth(Font *f, char *s, Rune *r, int len)
                         break;
                 }
             }
+            /*e: [[_stringnwidth()]] if subfontname */
         }
         agefont(f);
+
         twid += wid;
-        len -= l;
+        len -= l; // progress
     }
     return twid;
 }

@@ -180,6 +180,7 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
             /*s: [[_string()]] free previous sf */
             freesubfont(sf);
             /*e: [[_string()]] free previous sf */
+            // populate Font.subf global so next loadchar will find the subfont
             sf=_getsubfont(f->display, subfontname);
             /*s: [[_string()]] sanity check sf and possibly adjust f */
             if(sf == nil){

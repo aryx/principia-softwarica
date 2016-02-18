@@ -414,12 +414,11 @@ struct Cachefont
     // option<int>, None = 0
     int		offset;	/* position in subfont of character at min */
 
-    // ref_own<string>, subfont filename
+    // ref_own<string>, relative filename
     char		*name;			/* stored in font */
-    /*s: [[Cachefont]] other fields */
-    // ref_own<string> // ??
+    // option<ref_own<filename>>, absolute filename, computed by subfontname()
     char		*subfontname;		/* to access subfont */
-    /*e: [[Cachefont]] other fields */
+
 };
 /*e: struct Cachefont */
 
@@ -472,7 +471,7 @@ struct Font
     int		nsubf;	/* size of subfont list */
     /*e: [[Font]] subfont cache fields */
     /*s: [[Font]] character cache fields */
-    // growing image
+    // ref_own<Image>, growing image
     Image		*cacheimage;
     /*x: [[Font]] character cache fields */
     ulong		age;	/* increasing counter; used for LRU */
@@ -650,8 +649,6 @@ extern Point	runestringnbg(Image*, Point, Image*, Point, Font*, Rune*, int, Imag
 extern Point	runestringnbgop(Image*, Point, Image*, Point, Font*, Rune*, int, Image*, Point, Drawop);
 
 
-extern Point	stringsubfont(Image*, Point, Image*, Subfont*, char*);
-
 extern Point	stringsize(Font*, char*);
 extern int		stringwidth(Font*, char*);
 extern int		stringnwidth(Font*, char*, int);
@@ -678,9 +675,11 @@ extern void	uninstallsubfont(Subfont*);
 
 extern Subfont*	readsubfont(Display*, char*, int, int);
 extern Subfont*	readsubfonti(Display*, char*, int, Image*, int);
-extern int	writesubfont(int, Subfont*);
 extern char*	subfontname(char*, char*, int);
 extern Subfont*	_getsubfont(Display*, char*);
+
+// for subfont designers
+extern int	writesubfont(int, Subfont*);
 
 
 extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);

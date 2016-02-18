@@ -253,8 +253,6 @@ extern Point	runestringnbg(Image*, Point, Image*, Point, Font*, Rune*, int, Imag
 extern Point	runestringnbgop(Image*, Point, Image*, Point, Font*, Rune*, int, Image*, Point, Drawop);
 
 
-extern Point	stringsubfont(Image*, Point, Image*, Subfont*, char*);
-
 extern Point	stringsize(Font*, char*);
 extern int		stringwidth(Font*, char*);
 extern int		stringnwidth(Font*, char*, int);
@@ -281,9 +279,11 @@ extern void	uninstallsubfont(Subfont*);
 
 extern Subfont*	readsubfont(Display*, char*, int, int);
 extern Subfont*	readsubfonti(Display*, char*, int, Image*, int);
-extern int	writesubfont(int, Subfont*);
 extern char*	subfontname(char*, char*, int);
 extern Subfont*	_getsubfont(Display*, char*);
+
+// for subfont designers
+extern int	writesubfont(int, Subfont*);
 
 
 extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
@@ -367,6 +367,8 @@ extern	int	Pfmt(Fmt*);
 
 %dead: (used only in mahjongg)
 %extern	ulong	setalpha(ulong, byte);
+
+%dead: extern Point	stringsubfont(Image*, Point, Image*, Subfont*, char*);
 
 \subsection*{[[include/cursor.h]]}
 
@@ -459,7 +461,7 @@ extern	void			closekeyboard(Keyboardctl*);
 
 \subsection*{[[include/memdraw.h]]}
 
-%dead:
+%dead: maybe was used in test code
 % extern void			freememsubfont(Memsubfont*);
 % extern Memsubfont*	openmemsubfont(char*);
 
@@ -1921,9 +1923,7 @@ static void _closedisplay(Display*, int);
 
 \subsection*{[[lib_graphics/libdraw/mkfont.c]]}
 
-% seems dead, with code quite similar to buildfont
-
-%dead:
+%dead: seems dead, with code quite similar to buildfont
 % <<function mkfont>>=
 % /*
 %  * Cobble fake font using existing subfont
@@ -2299,10 +2299,79 @@ enum
 #include <libc.h>
 #include <draw.h>
 
-<<function stringsubfont>>
-
-<<function strsubfontwidth>>
 @
+
+%dead: <<function stringsubfont>>
+
+%dead: <<function strsubfontwidth>>
+
+%dead:
+%   <<function stringsubfont>>=
+%   Point
+%   stringsubfont(Image *b, Point p, Image *color, Subfont *f, char *cs)
+%   {
+%       int w, width;
+%       uchar *s;
+%       Rune c;
+%       Fontchar *i;
+%   
+%       s = (uchar*)cs;
+%       for(; c=*s; p.x+=width){
+%           width = 0;
+%           if(c < Runeself)
+%               s++;
+%           else{
+%               w = chartorune(&c, (char*)s);
+%               if(w == 0){
+%                   s++;
+%                   continue;
+%               }
+%               s += w;
+%           }
+%           if(c >= f->n)
+%               continue;
+%           i = f->info+c;
+%           width = i->width;
+%           draw(b, Rect(p.x+i->left, p.y+i->top, p.x+i->left+(i[1].x-i[0].x), p.y+i->bottom),
+%               color, f->bits, Pt(i->x, i->top));
+%       }
+%       return p;
+%   }
+%   @
+%   
+%   <<function strsubfontwidth>>=
+%   Point
+%   strsubfontwidth(Subfont *f, char *cs)
+%   {
+%       Rune c;
+%       Point p;
+%       uchar *s;
+%       Fontchar *i;
+%       int w, width;
+%   
+%       p = Pt(0, f->height);
+%       s = (uchar*)cs;
+%       for(; c=*s; p.x+=width){
+%           width = 0;
+%           if(c < Runeself)
+%               s++;
+%           else{
+%               w = chartorune(&c, (char*)s);
+%               if(w == 0){
+%                   s++;
+%                   continue;
+%               }
+%               s += w;
+%           }
+%           if(c >= f->n)
+%               continue;
+%           i = f->info+c;
+%           width = i->width;
+%       }
+%       return p;
+%   }
+%   @
+
 
 
 \subsection*{[[lib_graphics/libdraw/stringwidth.c]]}
@@ -3718,7 +3787,60 @@ int		(*iprint)(char*, ...) = &memdraw_iprint;
 #include <memdraw.h>
 
 @
-%<<function openmemsubfont>>
+%dead: <<function openmemsubfont>>
+
+%dead:
+%  <<function openmemsubfont>>=
+%  Memsubfont*
+%  openmemsubfont(char *name)
+%  {
+%      Memsubfont *sf;
+%      Memimage *i;
+%      Fontchar *fc;
+%      int fd, n;
+%      char hdr[3*12+4+1];
+%      uchar *p;
+%  
+%      fd = open(name, OREAD);
+%      if(fd < 0)
+%          return nil;
+%      p = nil;
+%      i = readmemimage(fd);
+%      if(i == nil)
+%          goto Err;
+%      if(read(fd, hdr, 3*12) != 3*12){
+%          werrstr("openmemsubfont: header read error: %r");
+%          goto Err;
+%      }
+%      n = atoi(hdr);
+%      p = malloc(6*(n+1));
+%      if(p == nil)
+%          goto Err;
+%      if(read(fd, p, 6*(n+1)) != 6*(n+1)){
+%          werrstr("openmemsubfont: fontchar read error: %r");
+%          goto Err;
+%      }
+%      fc = malloc(sizeof(Fontchar)*(n+1));
+%      if(fc == nil)
+%          goto Err;
+%      _unpackinfo(fc, p, n);
+%      sf = allocmemsubfont(name, n, atoi(hdr+12), atoi(hdr+24), fc, i);
+%      if(sf == nil){
+%          free(fc);
+%          goto Err;
+%      }
+%      free(p);
+%      return sf;
+%  Err:
+%      close(fd);
+%      if (i != nil)
+%          freememimage(i);
+%      if (p != nil)
+%          free(p);
+%      return nil;
+%  }
+%  @
+
 
 
 \subsection*{[[lib_graphics/libmemdraw/poly.c]]}
@@ -3788,6 +3910,19 @@ int		(*iprint)(char*, ...) = &memdraw_iprint;
 @
 %dead:
 %<<function freememsubfont>>
+
+%dead:
+%   <<function freememsubfont>>=
+%   void
+%   freememsubfont(Memsubfont *f)
+%   {
+%       if(f == 0)
+%           return;
+%       free(f->info);	/* note: f->info must have been malloc'ed! */
+%       freememimage(f->bits);
+%       free(f);
+%   }
+%   @
 
 \subsection*{[[lib_graphics/libmemdraw/unload.c]]}
 
