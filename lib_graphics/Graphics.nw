@@ -667,6 +667,13 @@ from Bell Labs.
 
 \section{Software architecture}
 
+% it's not a software, it's a library, so archi is first
+% a set of functions and DS in draw.h! entry points!
+% Then complicated archi because part done in kernel, part
+% in user side, so need bridge, and marshalling and protocol.
+% Moreover in kernel side also complicated because many different
+% graphics card so split in different components.
+
 % complicated archi. Even just user side is complicated. So when
 % add kernel side, it can get tricky. Maybe easier to first
 % show archi on user side, the relation between the important
@@ -4023,7 +4030,7 @@ case Qdata:
 
 <<[[Display]] buffer fields>>=
 // drawing operations to write in /dev/draw/x/data until flush
-// array<byte>, length = Display.bufsize
+// array<byte> (length = Display.bufsize)
 byte	*buf;
 int		bufsize;
 // index in Display.buf array
@@ -4689,6 +4696,7 @@ if(dimage->ref < 0)
 
 
 \section{Clipping and replication}
+% (tiling)
 
 % Clipping is fundamental graphics operation. Very useful
 % generic functionality. Like narrow mode in emacs :)
@@ -11911,85 +11919,122 @@ packinfo(Fontchar *fc, uchar *p, int n)
 
 \chapter{Image IO}
 
+%trans:
+% seen before API calls to image IO function:
+%  - loadimage() in getdefont()
+%  - readimage() in readsubfont()
+
 % remember that loading image mean loading in the kernel! in the
 % graphic server!
 
 
 
-
 % why this has to be in the kernel?
 % because in the end if load in user space, then
-% have to transfer info to kernel ... how? 
-% don't want lose bandwifth.
+% have to transfer info to kernel ... how? don't want lose bandwifth.
 % also loading fonts, etc, are about reading images,
 % and those fonts have to be in the kernel like all the
 % other images.
 
 
-
-
-
-
-
 \section{Loading images}
-% = readimage but from memory instead of file
+% =~ readimage but from memory instead of file
 
 \subsection{API}
 
+% assume already allocimage
+
+% getdefont | ...  -> <>
 <<function loadimage>>=
-int
-loadimage(Image *i, Rectangle r, uchar *data, int ndata)
+errorneg1
+loadimage(Image *i, Rectangle r, byte *data, int ndata)
 {
     long dy;
     int n, bpl;
-    uchar *a;
     int chunk;
+    <<[[loadimage()]] other locals>>
 
     chunk = i->display->bufsize - 64;
 
-    if(!rectinrect(r, i->r)){
-        werrstr("loadimage: bad rectangle");
-        return -1;
-    }
+    <<[[loadimage()]] sanity check r>>
     bpl = bytesperline(r, i->depth);
     n = bpl*Dy(r);
-    if(n > ndata){
-        werrstr("loadimage: insufficient data");
-        return -1;
-    }
+    <<[[loadimage()]] sanity check ndata>>
     ndata = 0;
     while(r.max.y > r.min.y){
         dy = r.max.y - r.min.y;
         if(dy*bpl > chunk)
             dy = chunk/bpl;
-        if(dy <= 0){
-            werrstr("loadimage: image too wide for buffer");
-            return -1;
-        }
-        n = dy*bpl;
-        a = bufimage(i->display, 21+n);
-        if(a == nil){
-            werrstr("bufimage failed");
-            return -1;
-        }
-        a[0] = 'y';
-        BPLONG(a+1, i->id);
-        BPLONG(a+5, r.min.x);
-        BPLONG(a+9, r.min.y);
-        BPLONG(a+13, r.max.x);
-        BPLONG(a+17, r.min.y+dy);
-        memmove(a+21, data, n);
+        <<[[loadimage()]] sanity check dy>>
+        n = dy * bpl;
+
+        <<[[loadimage()]] marshall one chunk of size n with height dy>>
+
         ndata += n;
         data += n;
-        r.min.y += dy;
+        r.min.y += dy; // progress
     }
-    if(flushimage(i->display, false) < 0)
-        return -1;
+    <<[[loadimage()]] flush and sanity check no error>>
     return ndata;
 }
 @
 
+% why - 64? room for header of y message.
+
+
+<<[[loadimage()]] sanity check r>>=
+if(!rectinrect(r, i->r)){
+    werrstr("loadimage: bad rectangle");
+    return -1;
+}
+@
+
+<<[[loadimage()]] sanity check ndata>>=
+if(n > ndata){
+    werrstr("loadimage: insufficient data");
+    return -1;
+}
+@
+
+<<[[loadimage()]] sanity check dy>>=
+if(dy <= 0){
+    werrstr("loadimage: image too wide for buffer");
+    return -1;
+}
+@
+
+<<[[loadimage()]] sanity check a>>=
+if(a == nil){
+    werrstr("bufimage failed");
+    return -1;
+}
+@
+
+<<[[loadimage()]] flush and sanity check no error>>=
+if(flushimage(i->display, false) < 0)
+    return ERROR_NEG1;
+@
+
 \subsection{marshalling}
+
+<<[[loadimage()]] other locals>>=
+byte *a;
+@
+
+<<[[loadimage()]] marshall one chunk of size n with height dy>>=
+// write: 'y' id[4] R[4*4] data[x*1]
+a = bufimage(i->display, 21+n);
+<<[[loadimage()]] sanity check a>>
+a[0] = 'y';
+BPLONG(a+1, i->id);
+BPLONG(a+5, r.min.x);
+BPLONG(a+9, r.min.y);
+BPLONG(a+13, r.max.x);
+BPLONG(a+17, r.min.y + dy);
+memmove(a+21, data, n);
+@
+
+% called write, cos write image in the graphics server
 
 \subsection{Unmarshalling}
 
@@ -11999,39 +12044,43 @@ loadimage(Image *i, Rectangle r, uchar *data, int ndata)
 case 'y':
 case 'Y':
     printmesg(fmt="LR", a, 0);
-//  iprint("load %c\n", *a);
     m = 1+4+4*4;
     <<[[drawmesg()]] sanity check n with m>>
     dstid = BGLONG(a+1);
     dst = drawimage(client, a+1);
     drawrectangle(&r, a+5);
-    if(!rectinrect(r, dst->r))
-        error(Ewriteoutside);
-
+    <<[[drawmesg()]] when load an image, sanity check r>>
     y = memload(dst, r, a+m, n-m, *a=='Y'); // The call
-
-    if(y < 0)
-        error("bad writeimage call");
+    <<[[drawmesg()]] when load an image, sanity check y>>
     dstflush(dstid, dst, r);
     m += y;
     continue;
+@
+%old:
+%//  iprint("load %c\n", *a);
+
+<<[[drawmesg()]] when load an image, sanity check r>>=
+if(!rectinrect(r, dst->r))
+    error(Ewriteoutside);
+@
+
+<<[[drawmesg()]] when load an image, sanity check y>>=
+if(y < 0)
+    error("bad writeimage call");
 @
 
 \subsection{Algorithm}
 
 <<function memload>>=
-int
+errorneg1
 memload(Memimage *dst, Rectangle r, uchar *data, int n, bool iscompressed)
 {
-    int (*loadfn)(Memimage*, Rectangle, uchar*, int);
-    Memimage *tmp;
+    errorneg1 (*loadfn)(Memimage*, Rectangle, uchar*, int);
     Memlayer *dl;
-    Rectangle lr;
-    int dx;
+    <<[[memload()]] other locals>>
 
     loadfn = loadmemimage;
-    if(iscompressed)
-        loadfn = cloadmemimage;
+    <<[[memload()]] if iscompressed>>
 
     Top:
     dl = dst->layer;
@@ -12043,9 +12092,10 @@ memload(Memimage *dst, Rectangle r, uchar *data, int n, bool iscompressed)
 @
 
 
+% memload -> <> (as loadfn = <>; in memload)
 <<function loadmemimage>>=
-int
-loadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
+errorneg1
+loadmemimage(Memimage *i, Rectangle r, byte *data, int ndata)
 {
     int y, l, lpart, rpart, mx, m, mr;
     uchar *q;
@@ -12113,15 +12163,175 @@ loadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
 }
 @
 
+% a bit sad that redo some of the sanity checking done client side
+
+\section{Unloading images}
+
+\subsection{API}
+
+<<function unloadimage>>=
+int
+unloadimage(Image *i, Rectangle r, byte *data, int ndata)
+{
+    int bpl, n, ntot, dy;
+    uchar *a;
+    Display *d;
+
+    if(!rectinrect(r, i->r)){
+        werrstr("unloadimage: bad rectangle");
+        return -1;
+    }
+    bpl = bytesperline(r, i->depth);
+    if(ndata < bpl*Dy(r)){
+        werrstr("unloadimage: buffer too small");
+        return -1;
+    }
+
+    d = i->display;
+    flushimage(d, false);	/* make sure subsequent flush is for us only */
+    ntot = 0;
+    while(r.min.y < r.max.y){
+        a = bufimage(d, 1+4+4*4);
+        if(a == nil){
+            werrstr("unloadimage: %r");
+            return -1;
+        }
+        dy = 8000/bpl;
+        if(dy <= 0){
+            werrstr("unloadimage: image too wide");
+            return -1;
+        }
+        if(dy > Dy(r))
+            dy = Dy(r);
+        a[0] = 'r';
+        BPLONG(a+1, i->id);
+        BPLONG(a+5, r.min.x);
+        BPLONG(a+9, r.min.y);
+        BPLONG(a+13, r.max.x);
+        BPLONG(a+17, r.min.y+dy);
+
+        if(flushimage(d, false) < 0)
+            return -1;
+        n = read(d->fd, data+ntot, ndata-ntot);
+        if(n < 0)
+            return n;
+        ntot += n;
+        r.min.y += dy;
+    }
+    return ntot;
+}
+@
+
+
+\subsection{Marshalling}
+
+\subsection{Unmarshalling}
+
+<<[[drawmesg()]] cases>>=
+/* read: 'r' id[4] R[4*4] */
+case 'r':
+    printmesg(fmt="LR", a, 0);
+    m = 1+4+4*4;
+    <<[[drawmesg()]] sanity check n with m>>
+    i = drawimage(client, a+1);
+    drawrectangle(&r, a+5);
+    if(!rectinrect(r, i->r))
+        error(Ereadoutside);
+    c = bytesperline(r, i->depth);
+    c *= Dy(r);
+
+    free(client->readdata);
+    client->readdata = mallocz(c, 0);
+    if(client->readdata == nil)
+        error("readimage malloc failed");
+
+    client->nreaddata = memunload(i, r, client->readdata, c); // The call
+
+    if(client->nreaddata < 0){
+        free(client->readdata);
+        client->readdata = nil;
+        error("bad readimage call");
+    }
+    continue;
+
+@
+
+
+<<[[Client]] other fields>>=
+byte*   readdata;
+int     nreaddata;
+@
+
+% put in buffer a
+<<[[drawread()]] switch qid cases>>=
+case Qdata:
+    <<[[drawread()]] switch qid cases, when Qdata, sanity checks>>
+    n = cl->nreaddata;
+    memmove(a, cl->readdata, cl->nreaddata);
+    free(cl->readdata);
+    cl->readdata = nil;
+    break;
+@
+% who fills readdata in the first place?
+
+<<[[drawread()]] switch qid cases, when Qdata, sanity checks>>=
+if(cl->readdata == nil)
+    error("no draw data");
+if(n < cl->nreaddata)
+    error(Eshortread);
+@
+
+
+\subsection{Algorithm}
+
+<<function memunload>>=
+int
+memunload(Memimage *src, Rectangle r, uchar *data, int n)
+{
+    Memimage *tmp;
+    Memlayer *dl;
+    Rectangle lr;
+    int dx;
+
+    Top:
+    dl = src->layer;
+    if(dl == nil)
+        return unloadmemimage(src, r, data, n);
+    // else
+    <<[[memunload()]] if src has layer>>
+}
+@
+
+<<function unloadmemimage>>=
+int
+unloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
+{
+    int y, l;
+    uchar *q;
+
+    if(!rectinrect(r, i->r))
+        return -1;
+    l = bytesperline(r, i->depth);
+    if(ndata < l*Dy(r))
+        return -1;
+    ndata = l*Dy(r);
+    q = byteaddr(i, r.min);
+    for(y=r.min.y; y<r.max.y; y++){
+        memmove(data, q, l);
+        q += i->width*sizeof(ulong);
+        data += l;
+    }
+    return ndata;
+}
+@
+
+
 
 
 
 \section{Reading images}
 
 % image(6) format
-
-\subsection{API}
-
 
 <<global drawld2chan>>=
 ulong drawld2chan[] = {
@@ -12252,6 +12462,7 @@ readimage(Display *d, fdt fd, bool dolock)
         if(d){
             if(dolock)
                 lockdisplay(d);
+
             if(loadimage(i, Rect(r.min.x, miny, r.max.x, miny+dy), tmp, chunk) <= 0)
                 goto Err1;
             if(dolock)
@@ -12261,164 +12472,6 @@ readimage(Display *d, fdt fd, bool dolock)
     }
     free(tmp);
     return i;
-}
-@
-
-
-
-<<function unloadimage>>=
-int
-unloadimage(Image *i, Rectangle r, uchar *data, int ndata)
-{
-    int bpl, n, ntot, dy;
-    uchar *a;
-    Display *d;
-
-    if(!rectinrect(r, i->r)){
-        werrstr("unloadimage: bad rectangle");
-        return -1;
-    }
-    bpl = bytesperline(r, i->depth);
-    if(ndata < bpl*Dy(r)){
-        werrstr("unloadimage: buffer too small");
-        return -1;
-    }
-
-    d = i->display;
-    flushimage(d, false);	/* make sure subsequent flush is for us only */
-    ntot = 0;
-    while(r.min.y < r.max.y){
-        a = bufimage(d, 1+4+4*4);
-        if(a == nil){
-            werrstr("unloadimage: %r");
-            return -1;
-        }
-        dy = 8000/bpl;
-        if(dy <= 0){
-            werrstr("unloadimage: image too wide");
-            return -1;
-        }
-        if(dy > Dy(r))
-            dy = Dy(r);
-        a[0] = 'r';
-        BPLONG(a+1, i->id);
-        BPLONG(a+5, r.min.x);
-        BPLONG(a+9, r.min.y);
-        BPLONG(a+13, r.max.x);
-        BPLONG(a+17, r.min.y+dy);
-        if(flushimage(d, false) < 0)
-            return -1;
-        n = read(d->fd, data+ntot, ndata-ntot);
-        if(n < 0)
-            return n;
-        ntot += n;
-        r.min.y += dy;
-    }
-    return ntot;
-}
-@
-
-
-
-\subsection{Marshalling}
-
-\subsection{Unmarshalling}
-
-<<[[drawmesg()]] cases>>=
-/* read: 'r' id[4] R[4*4] */
-case 'r':
-    printmesg(fmt="LR", a, 0);
-    m = 1+4+4*4;
-    <<[[drawmesg()]] sanity check n with m>>
-    i = drawimage(client, a+1);
-    drawrectangle(&r, a+5);
-    if(!rectinrect(r, i->r))
-        error(Ereadoutside);
-    c = bytesperline(r, i->depth);
-    c *= Dy(r);
-
-    free(client->readdata);
-    client->readdata = mallocz(c, 0);
-    if(client->readdata == nil)
-        error("readimage malloc failed");
-
-    client->nreaddata = memunload(i, r, client->readdata, c); // The call
-
-    if(client->nreaddata < 0){
-        free(client->readdata);
-        client->readdata = nil;
-        error("bad readimage call");
-    }
-    continue;
-
-@
-
-
-<<[[Client]] other fields>>=
-byte*   readdata;
-int     nreaddata;
-@
-
-% put in buffer a
-<<[[drawread()]] switch qid cases>>=
-case Qdata:
-    <<[[drawread()]] switch qid cases, when Qdata, sanity checks>>
-    n = cl->nreaddata;
-    memmove(a, cl->readdata, cl->nreaddata);
-    free(cl->readdata);
-    cl->readdata = nil;
-    break;
-@
-% who fills readdata in the first place?
-
-<<[[drawread()]] switch qid cases, when Qdata, sanity checks>>=
-if(cl->readdata == nil)
-    error("no draw data");
-if(n < cl->nreaddata)
-    error(Eshortread);
-@
-
-
-\subsection{Algorithm}
-
-<<function memunload>>=
-int
-memunload(Memimage *src, Rectangle r, uchar *data, int n)
-{
-    Memimage *tmp;
-    Memlayer *dl;
-    Rectangle lr;
-    int dx;
-
-    Top:
-    dl = src->layer;
-    if(dl == nil)
-        return unloadmemimage(src, r, data, n);
-    // else
-    <<[[memunload()]] if src has layer>>
-}
-@
-
-<<function unloadmemimage>>=
-int
-unloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
-{
-    int y, l;
-    uchar *q;
-
-    if(!rectinrect(r, i->r))
-        return -1;
-    l = bytesperline(r, i->depth);
-    if(ndata < l*Dy(r))
-        return -1;
-    ndata = l*Dy(r);
-    q = byteaddr(i, r.min);
-    for(y=r.min.y; y<r.max.y; y++){
-        memmove(data, q, l);
-        q += i->width*sizeof(ulong);
-        data += l;
-    }
-    return ndata;
 }
 @
 
@@ -12758,398 +12811,9 @@ writeimage(fdt fd, Image *i, bool dolock)
 }
 @
 
-\section{Compressed images}
-
-\subsection{API}
-
-<<constant NMATCH>>=
-/*
- * Compressed image file parameters and helper routines
- */
-#define	NMATCH	3		/* shortest match possible */
-@
-
-<<constant NRUN>>=
-#define	NRUN	(NMATCH+31)	/* longest match possible */
-@
-
-% called???
-<<function cloadimage>>=
-int
-cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
-{
-    int m, nb, miny, maxy, ncblock;
-    uchar *a;
-
-    if(!rectinrect(r, i->r)){
-        werrstr("cloadimage: bad rectangle");
-        return -1;
-    }
-
-    miny = r.min.y;
-    m = 0;
-    ncblock = _compblocksize(r, i->depth);
-    while(miny != r.max.y){
-        maxy = atoi((char*)data+0*12);
-        nb = atoi((char*)data+1*12);
-        if(maxy<=miny || r.max.y<maxy){
-            werrstr("creadimage: bad maxy %d", maxy);
-            return -1;
-        }
-        data += 2*12;
-        ndata -= 2*12;
-        m += 2*12;
-        if(nb<=0 || ncblock<nb || nb>ndata){
-            werrstr("creadimage: bad count %d", nb);
-            return -1;
-        }
-        a = bufimage(i->display, 21+nb);
-        if(a == nil)
-            return -1;
-        a[0] = 'Y';
-        BPLONG(a+1, i->id);
-        BPLONG(a+5, r.min.x);
-        BPLONG(a+9, miny);
-        BPLONG(a+13, r.max.x);
-        BPLONG(a+17, maxy);
-        memmove(a+21, data, nb);
-        miny = maxy;
-        data += nb;
-        ndata += nb;
-        m += nb;
-    }
-    return m;
-}
-@
-
-% readimage -> <>
-<<function creadimage>>=
-Image *
-creadimage(Display *d, int fd, int dolock)
-{
-    char hdr[5*12+1];
-    Rectangle r;
-    int m, nb, miny, maxy, new, ldepth, ncblock;
-    uchar *buf, *a;
-    Image *i;
-    ulong chan;
-
-    if(readn(fd, hdr, 5*12) != 5*12)
-        return nil;
-
-    /*
-     * distinguish new channel descriptor from old ldepth.
-     * channel descriptors have letters as well as numbers,
-     * while ldepths are a single digit formatted as %-11d.
-     */
-    new = 0;
-    for(m=0; m<10; m++){
-        if(hdr[m] != ' '){
-            new = 1;
-            break;
-        }
-    }
-    if(hdr[11] != ' '){
-        werrstr("creadimage: bad format");
-        return nil;
-    }
-    if(new){
-        hdr[11] = '\0';
-        if((chan = strtochan(hdr)) == 0){
-            werrstr("creadimage: bad channel string %s", hdr);
-            return nil;
-        }
-    }else{
-        ldepth = ((int)hdr[10])-'0';
-        if(ldepth<0 || ldepth>3){
-            werrstr("creadimage: bad ldepth %d", ldepth);
-            return nil;
-        }
-        chan = drawld2chan[ldepth];
-    }
-    r.min.x=atoi(hdr+1*12);
-    r.min.y=atoi(hdr+2*12);
-    r.max.x=atoi(hdr+3*12);
-    r.max.y=atoi(hdr+4*12);
-    if(r.min.x>r.max.x || r.min.y>r.max.y){
-        werrstr("creadimage: bad rectangle");
-        return nil;
-    }
-
-    if(d){
-        if(dolock)
-            lockdisplay(d);
-        i = allocimage(d, r, chan, 0, 0);
-        setmalloctag(i, getcallerpc(&d));
-        if(dolock)
-            unlockdisplay(d);
-        if(i == nil)
-            return nil;
-    }else{
-        i = mallocz(sizeof(Image), 1);
-        if(i == nil)
-            return nil;
-    }
-    ncblock = _compblocksize(r, chantodepth(chan));
-    buf = malloc(ncblock);
-    if(buf == nil)
-        goto Errout;
-    miny = r.min.y;
-    while(miny != r.max.y){
-        if(readn(fd, hdr, 2*12) != 2*12){
-        Errout:
-            if(dolock)
-                lockdisplay(d);
-        Erroutlock:
-            freeimage(i);
-            if(dolock)
-                unlockdisplay(d);
-            free(buf);
-            return nil;
-        }
-        maxy = atoi(hdr+0*12);
-        nb = atoi(hdr+1*12);
-        if(maxy<=miny || r.max.y<maxy){
-            werrstr("creadimage: bad maxy %d", maxy);
-            goto Errout;
-        }
-        if(nb<=0 || ncblock<nb){
-            werrstr("creadimage: bad count %d", nb);
-            goto Errout;
-        }
-        if(readn(fd, buf, nb)!=nb)
-            goto Errout;
-        if(d){
-            if(dolock)
-                lockdisplay(d);
-            a = bufimage(i->display, 21+nb);
-            if(a == nil)
-                goto Erroutlock;
-            a[0] = 'Y';
-            BPLONG(a+1, i->id);
-            BPLONG(a+5, r.min.x);
-            BPLONG(a+9, miny);
-            BPLONG(a+13, r.max.x);
-            BPLONG(a+17, maxy);
-            if(!new)	/* old image: flip the data bits */
-                _twiddlecompressed(buf, nb);
-            memmove(a+21, buf, nb);
-            if(dolock)
-                unlockdisplay(d);
-        }
-        miny = maxy;
-    }
-    free(buf);
-    return i;
-}
-@
-
-
-<<function _twiddlecompressed>>=
-/*
- * compressed data are seuences of byte codes.  
- * if the first byte b has the 0x80 bit set, the next (b^0x80)+1 bytes
- * are data.  otherwise, it's two bytes specifying a previous string to repeat.
- */
-void
-_twiddlecompressed(uchar *buf, int n)
-{
-    uchar *ebuf;
-    int j, k, c;
-
-    ebuf = buf+n;
-    while(buf < ebuf){
-        c = *buf++;
-        if(c >= 128){
-            k = c-128+1;
-            for(j=0; j<k; j++, buf++)
-                *buf ^= 0xFF;
-        }else
-            buf++;
-    }
-}
-@
-
-<<function _compblocksize>>=
-int
-_compblocksize(Rectangle r, int depth)
-{
-    int bpl;
-
-    bpl = bytesperline(r, depth);
-    bpl = 2*bpl;	/* add plenty extra for blocking, etc. */
-    if(bpl < NCBLOCK)
-        return NCBLOCK;
-    return bpl;
-}
-@
 
 
 
-\subsection{Algorithm}
-
-<<function cloadmemimage>>=
-int
-cloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
-{
-    int y, bpl, c, cnt, offs;
-    uchar mem[NMEM], *memp, *omemp, *emem, *linep, *elinep, *u, *eu;
-
-    if(!rectinrect(r, i->r))
-        return -1;
-    bpl = bytesperline(r, i->depth);
-    u = data;
-    eu = data+ndata;
-    memp = mem;
-    emem = mem+NMEM;
-    y = r.min.y;
-    linep = byteaddr(i, Pt(r.min.x, y));
-    elinep = linep+bpl;
-    for(;;){
-        if(linep == elinep){
-            if(++y == r.max.y)
-                break;
-            linep = byteaddr(i, Pt(r.min.x, y));
-            elinep = linep+bpl;
-        }
-        if(u == eu){	/* buffer too small */
-            return -1;
-        }
-        c = *u++;
-        if(c >= 128){
-            for(cnt=c-128+1; cnt!=0 ;--cnt){
-                if(u == eu){		/* buffer too small */
-                    return -1;
-                }
-                if(linep == elinep){	/* phase error */
-                    return -1;
-                }
-                *linep++ = *u;
-                *memp++ = *u++;
-                if(memp == emem)
-                    memp = mem;
-            }
-        }
-        else{
-            if(u == eu)	/* short buffer */
-                return -1;
-            offs = *u++ + ((c&3)<<8)+1;
-            if(memp-mem < offs)
-                omemp = memp+(NMEM-offs);
-            else
-                omemp = memp-offs;
-            for(cnt=(c>>2)+NMATCH; cnt!=0; --cnt){
-                if(linep == elinep)	/* phase error */
-                    return -1;
-                *linep++ = *omemp;
-                *memp++ = *omemp++;
-                if(omemp == emem)
-                    omemp = mem;
-                if(memp == emem)
-                    memp = mem;
-            }
-        }
-    }
-    return u-data;
-}
-@
-
-
-
-
-<<function creadmemimage>>=
-Memimage*
-creadmemimage(int fd)
-{
-    char hdr[5*12+1];
-    Rectangle r;
-    int m, nb, miny, maxy, new, ldepth, ncblock;
-    uchar *buf;
-    Memimage *i;
-    ulong chan;
-
-    if(readn(fd, hdr, 5*12) != 5*12){
-        werrstr("readmemimage: short header (2)");
-        return nil;
-    }
-
-    /*
-     * distinguish new channel descriptor from old ldepth.
-     * channel descriptors have letters as well as numbers,
-     * while ldepths are a single digit formatted as %-11d.
-     */
-    new = 0;
-    for(m=0; m<10; m++){
-        if(hdr[m] != ' '){
-            new = 1;
-            break;
-        }
-    }
-    if(hdr[11] != ' '){
-        werrstr("creadimage: bad format");
-        return nil;
-    }
-    if(new){
-        hdr[11] = '\0';
-        if((chan = strtochan(hdr)) == 0){
-            werrstr("creadimage: bad channel string %s", hdr);
-            return nil;
-        }
-    }else{
-        ldepth = ((int)hdr[10])-'0';
-        if(ldepth<0 || ldepth>3){
-            werrstr("creadimage: bad ldepth %d", ldepth);
-            return nil;
-        }
-        chan = drawld2chan[ldepth];
-    }
-    r.min.x=atoi(hdr+1*12);
-    r.min.y=atoi(hdr+2*12);
-    r.max.x=atoi(hdr+3*12);
-    r.max.y=atoi(hdr+4*12);
-    if(r.min.x>r.max.x || r.min.y>r.max.y){
-        werrstr("creadimage: bad rectangle");
-        return nil;
-    }
-
-    i = allocmemimage(r, chan);
-    if(i == nil)
-        return nil;
-    ncblock = _compblocksize(r, i->depth);
-    buf = malloc(ncblock);
-    if(buf == nil)
-        goto Errout;
-    miny = r.min.y;
-    while(miny != r.max.y){
-        if(readn(fd, hdr, 2*12) != 2*12){
-        Shortread:
-            werrstr("readmemimage: short read");
-        Errout:
-            freememimage(i);
-            free(buf);
-            return nil;
-        }
-        maxy = atoi(hdr+0*12);
-        nb = atoi(hdr+1*12);
-        if(maxy<=miny || r.max.y<maxy){
-            werrstr("readimage: bad maxy %d", maxy);
-            goto Errout;
-        }
-        if(nb<=0 || ncblock<nb){
-            werrstr("readimage: bad count %d", nb);
-            goto Errout;
-        }
-        if(readn(fd, buf, nb)!=nb)
-            goto Shortread;
-        if(!new)	/* old image: flip the data bits */
-            _twiddlecompressed(buf, nb);
-        cloadmemimage(i, Rect(r.min.x, miny, r.max.x, maxy), buf, nb);
-        miny = maxy;
-    }
-    free(buf);
-    return i;
-}
-@
 
 
 
@@ -14588,6 +14252,12 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
 
 
 \subsection{Image load}
+
+<<[[memload()]] other locals>>=
+Memimage *tmp;
+Rectangle lr;
+int dx;
+@
 
 <<[[memload()]] if dst has layer>>=
 /*
@@ -21982,6 +21652,404 @@ p.y -= font->ascent;
 dstflush(dstid, dst, Rect(p.x, p.y, q.x, p.y+Dy(font->image->r)));
 @
 
+\subsection{Image compression}
+
+
+<<[[memload()]] if iscompressed>>=
+if(iscompressed)
+    loadfn = cloadmemimage;
+@
+
+
+
+<<constant NMATCH>>=
+/*
+ * Compressed image file parameters and helper routines
+ */
+#define	NMATCH	3		/* shortest match possible */
+@
+
+<<constant NRUN>>=
+#define	NRUN	(NMATCH+31)	/* longest match possible */
+@
+
+% called???
+<<function cloadimage>>=
+int
+cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
+{
+    int m, nb, miny, maxy, ncblock;
+    uchar *a;
+
+    if(!rectinrect(r, i->r)){
+        werrstr("cloadimage: bad rectangle");
+        return -1;
+    }
+
+    miny = r.min.y;
+    m = 0;
+    ncblock = _compblocksize(r, i->depth);
+    while(miny != r.max.y){
+        maxy = atoi((char*)data+0*12);
+        nb = atoi((char*)data+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("creadimage: bad maxy %d", maxy);
+            return -1;
+        }
+        data += 2*12;
+        ndata -= 2*12;
+        m += 2*12;
+        if(nb<=0 || ncblock<nb || nb>ndata){
+            werrstr("creadimage: bad count %d", nb);
+            return -1;
+        }
+        a = bufimage(i->display, 21+nb);
+        if(a == nil)
+            return -1;
+        a[0] = 'Y';
+        BPLONG(a+1, i->id);
+        BPLONG(a+5, r.min.x);
+        BPLONG(a+9, miny);
+        BPLONG(a+13, r.max.x);
+        BPLONG(a+17, maxy);
+        memmove(a+21, data, nb);
+        miny = maxy;
+        data += nb;
+        ndata += nb;
+        m += nb;
+    }
+    return m;
+}
+@
+
+% readimage -> <>
+<<function creadimage>>=
+Image *
+creadimage(Display *d, int fd, int dolock)
+{
+    char hdr[5*12+1];
+    Rectangle r;
+    int m, nb, miny, maxy, new, ldepth, ncblock;
+    uchar *buf, *a;
+    Image *i;
+    ulong chan;
+
+    if(readn(fd, hdr, 5*12) != 5*12)
+        return nil;
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("creadimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("creadimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("creadimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+    r.min.x=atoi(hdr+1*12);
+    r.min.y=atoi(hdr+2*12);
+    r.max.x=atoi(hdr+3*12);
+    r.max.y=atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("creadimage: bad rectangle");
+        return nil;
+    }
+
+    if(d){
+        if(dolock)
+            lockdisplay(d);
+        i = allocimage(d, r, chan, 0, 0);
+        setmalloctag(i, getcallerpc(&d));
+        if(dolock)
+            unlockdisplay(d);
+        if(i == nil)
+            return nil;
+    }else{
+        i = mallocz(sizeof(Image), 1);
+        if(i == nil)
+            return nil;
+    }
+    ncblock = _compblocksize(r, chantodepth(chan));
+    buf = malloc(ncblock);
+    if(buf == nil)
+        goto Errout;
+    miny = r.min.y;
+    while(miny != r.max.y){
+        if(readn(fd, hdr, 2*12) != 2*12){
+        Errout:
+            if(dolock)
+                lockdisplay(d);
+        Erroutlock:
+            freeimage(i);
+            if(dolock)
+                unlockdisplay(d);
+            free(buf);
+            return nil;
+        }
+        maxy = atoi(hdr+0*12);
+        nb = atoi(hdr+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("creadimage: bad maxy %d", maxy);
+            goto Errout;
+        }
+        if(nb<=0 || ncblock<nb){
+            werrstr("creadimage: bad count %d", nb);
+            goto Errout;
+        }
+        if(readn(fd, buf, nb)!=nb)
+            goto Errout;
+        if(d){
+            if(dolock)
+                lockdisplay(d);
+            a = bufimage(i->display, 21+nb);
+            if(a == nil)
+                goto Erroutlock;
+            a[0] = 'Y';
+            BPLONG(a+1, i->id);
+            BPLONG(a+5, r.min.x);
+            BPLONG(a+9, miny);
+            BPLONG(a+13, r.max.x);
+            BPLONG(a+17, maxy);
+            if(!new)	/* old image: flip the data bits */
+                _twiddlecompressed(buf, nb);
+            memmove(a+21, buf, nb);
+            if(dolock)
+                unlockdisplay(d);
+        }
+        miny = maxy;
+    }
+    free(buf);
+    return i;
+}
+@
+
+
+<<function _twiddlecompressed>>=
+/*
+ * compressed data are seuences of byte codes.  
+ * if the first byte b has the 0x80 bit set, the next (b^0x80)+1 bytes
+ * are data.  otherwise, it's two bytes specifying a previous string to repeat.
+ */
+void
+_twiddlecompressed(uchar *buf, int n)
+{
+    uchar *ebuf;
+    int j, k, c;
+
+    ebuf = buf+n;
+    while(buf < ebuf){
+        c = *buf++;
+        if(c >= 128){
+            k = c-128+1;
+            for(j=0; j<k; j++, buf++)
+                *buf ^= 0xFF;
+        }else
+            buf++;
+    }
+}
+@
+
+<<function _compblocksize>>=
+int
+_compblocksize(Rectangle r, int depth)
+{
+    int bpl;
+
+    bpl = bytesperline(r, depth);
+    bpl = 2*bpl;	/* add plenty extra for blocking, etc. */
+    if(bpl < NCBLOCK)
+        return NCBLOCK;
+    return bpl;
+}
+@
+
+
+
+
+
+<<function cloadmemimage>>=
+int
+cloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
+{
+    int y, bpl, c, cnt, offs;
+    uchar mem[NMEM], *memp, *omemp, *emem, *linep, *elinep, *u, *eu;
+
+    if(!rectinrect(r, i->r))
+        return -1;
+    bpl = bytesperline(r, i->depth);
+    u = data;
+    eu = data+ndata;
+    memp = mem;
+    emem = mem+NMEM;
+    y = r.min.y;
+    linep = byteaddr(i, Pt(r.min.x, y));
+    elinep = linep+bpl;
+    for(;;){
+        if(linep == elinep){
+            if(++y == r.max.y)
+                break;
+            linep = byteaddr(i, Pt(r.min.x, y));
+            elinep = linep+bpl;
+        }
+        if(u == eu){	/* buffer too small */
+            return -1;
+        }
+        c = *u++;
+        if(c >= 128){
+            for(cnt=c-128+1; cnt!=0 ;--cnt){
+                if(u == eu){		/* buffer too small */
+                    return -1;
+                }
+                if(linep == elinep){	/* phase error */
+                    return -1;
+                }
+                *linep++ = *u;
+                *memp++ = *u++;
+                if(memp == emem)
+                    memp = mem;
+            }
+        }
+        else{
+            if(u == eu)	/* short buffer */
+                return -1;
+            offs = *u++ + ((c&3)<<8)+1;
+            if(memp-mem < offs)
+                omemp = memp+(NMEM-offs);
+            else
+                omemp = memp-offs;
+            for(cnt=(c>>2)+NMATCH; cnt!=0; --cnt){
+                if(linep == elinep)	/* phase error */
+                    return -1;
+                *linep++ = *omemp;
+                *memp++ = *omemp++;
+                if(omemp == emem)
+                    omemp = mem;
+                if(memp == emem)
+                    memp = mem;
+            }
+        }
+    }
+    return u-data;
+}
+@
+
+
+
+
+<<function creadmemimage>>=
+Memimage*
+creadmemimage(int fd)
+{
+    char hdr[5*12+1];
+    Rectangle r;
+    int m, nb, miny, maxy, new, ldepth, ncblock;
+    uchar *buf;
+    Memimage *i;
+    ulong chan;
+
+    if(readn(fd, hdr, 5*12) != 5*12){
+        werrstr("readmemimage: short header (2)");
+        return nil;
+    }
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("creadimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("creadimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("creadimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+    r.min.x=atoi(hdr+1*12);
+    r.min.y=atoi(hdr+2*12);
+    r.max.x=atoi(hdr+3*12);
+    r.max.y=atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("creadimage: bad rectangle");
+        return nil;
+    }
+
+    i = allocmemimage(r, chan);
+    if(i == nil)
+        return nil;
+    ncblock = _compblocksize(r, i->depth);
+    buf = malloc(ncblock);
+    if(buf == nil)
+        goto Errout;
+    miny = r.min.y;
+    while(miny != r.max.y){
+        if(readn(fd, hdr, 2*12) != 2*12){
+        Shortread:
+            werrstr("readmemimage: short read");
+        Errout:
+            freememimage(i);
+            free(buf);
+            return nil;
+        }
+        maxy = atoi(hdr+0*12);
+        nb = atoi(hdr+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("readimage: bad maxy %d", maxy);
+            goto Errout;
+        }
+        if(nb<=0 || ncblock<nb){
+            werrstr("readimage: bad count %d", nb);
+            goto Errout;
+        }
+        if(readn(fd, buf, nb)!=nb)
+            goto Shortread;
+        if(!new)	/* old image: flip the data bits */
+            _twiddlecompressed(buf, nb);
+        cloadmemimage(i, Rect(r.min.x, miny, r.max.x, maxy), buf, nb);
+        miny = maxy;
+    }
+    free(buf);
+    return i;
+}
+@
 
 
 \chapter{Conclusion}
