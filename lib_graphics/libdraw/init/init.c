@@ -173,7 +173,7 @@ initdraw(Errorfn error, char *fontname , char *label)
  * Attach, or possibly reattach, to window.
  * If reattaching, maintain value of screen pointer.
  */
-int
+errorneg1
 gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
 {
     int n, fd;
@@ -183,11 +183,12 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
 
     fd = open(winname, OREAD);
     if(fd<0 || (n=read(fd, buf, sizeof buf-1))<=0){
-        if((image=d->image) == nil){
+        image = d->image;
+        if(image == nil){
             fprint(2, "gengetwindow: %r\n");
             *winp = nil;
             d->screenimage = nil;
-            return -1;
+            return ERROR_NEG1;
         }
         strcpy(buf, "noborder");
     }else{
@@ -236,7 +237,7 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
 /*e: function gengetwindow */
 
 /*s: function getwindow */
-int
+errorneg1
 getwindow(Display *d, int ref)
 {
     char winname[128];

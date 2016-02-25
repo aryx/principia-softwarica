@@ -221,6 +221,7 @@ struct Screen
 {
     Display	*display;	/* display holding data */
     int		id;			/* id of system-held Screen */
+
     Image	*image;		/* unused; for reference only */
     Image	*fill;		/* color to paint behind windows */
 };
@@ -244,7 +245,7 @@ struct Display
     /*e: [[Display]] devdraw connection fields */
     /*s: [[Display]] buffer fields */
     // drawing operations to write in /dev/draw/x/data until flush
-    // array<byte>, length = Display.bufsize
+    // array<byte> (length = Display.bufsize)
     byte	*buf;
     int		bufsize;
     // index in Display.buf array

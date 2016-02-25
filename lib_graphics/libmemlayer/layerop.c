@@ -85,6 +85,7 @@ _memlayerop(
      */
     if(rectclip(&screenr, scr))
         _layerop(fn, i, screenr, clipr, etc, l->screen->frontmost);
+
     if(rectinrect(r, scr))
         return;
 
@@ -96,6 +97,7 @@ _memlayerop(
         fn(l->save, r, clipr, etc, 1);
         return;
     }
+
     if(r.min.y < scr.min.y){
         /* above screen */
         fn(l->save, Rect(r.min.x, r.min.y, r.max.x, scr.min.y), clipr, etc, 1);

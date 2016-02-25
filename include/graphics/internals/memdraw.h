@@ -167,7 +167,7 @@ extern Memimage*	allocmemimage(Rectangle, ulong);
 extern Memimage*	allocmemimaged(Rectangle, ulong, Memdata*);
 extern void			freememimage(Memimage*);
 
-extern Memimage*	readmemimage(int);
+extern Memimage*	readmemimage(fdt);
 extern int			writememimage(int, Memimage*);
 extern int			loadmemimage(Memimage*, Rectangle, uchar*, int);
 extern int			unloadmemimage(Memimage*, Rectangle, uchar*, int);

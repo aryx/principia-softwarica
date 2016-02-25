@@ -6,13 +6,15 @@
 #include <memlayer.h>
 
 /*s: function memunload */
-int
-memunload(Memimage *src, Rectangle r, uchar *data, int n)
+errorneg1
+memunload(Memimage *src, Rectangle r, byte *data, int n)
 {
-    Memimage *tmp;
     Memlayer *dl;
+    /*s: [[memunload()]] other locals */
+    Memimage *tmp;
     Rectangle lr;
     int dx;
+    /*e: [[memunload()]] other locals */
 
     Top:
     dl = src->layer;

@@ -116,6 +116,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
         dst = dl->screen->image;
         goto Top;
     }
+    // else
 
     sl = src->layer;
     if(sl != nil){
@@ -158,7 +159,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
             memlhide(dst, srcr);
         }
         memdraw(dl->save, rectsubpt(r, dl->delta), dl->save,
-            subpt(srcr.min, src->layer->delta), mask, p1, op);
+                subpt(srcr.min, src->layer->delta), mask, p1, op);
         memlexpose(dst, r);
         return;
     }

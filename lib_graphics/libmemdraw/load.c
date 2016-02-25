@@ -5,42 +5,59 @@
 #include <memdraw.h>
 
 /*s: function loadmemimage */
-int
-loadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
+errorneg1
+loadmemimage(Memimage *i, Rectangle r, byte *data, int ndata)
 {
-    int y, l, lpart, rpart, mx, m, mr;
-    uchar *q;
+    int l;
+    int y;
+    byte *q;
+    int lpart = 0, rpart = 0;
+    /*s: [[loadmemimage()]] other locals */
+    int mx, m, mr;
+    /*e: [[loadmemimage()]] other locals */
 
+    /*s: [[loadmemimage()]] sanity check r */
     if(!rectinrect(r, i->r))
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[loadmemimage()]] sanity check r */
     l = bytesperline(r, i->depth);
+    /*s: [[loadmemimage()]] sanity check ndata */
     if(ndata < l*Dy(r))
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[loadmemimage()]] sanity check ndata */
     ndata = l*Dy(r);
+
     q = byteaddr(i, r.min);
-    mx = 7/i->depth;
+
+    /*s: [[loadmemimage()]] set mx, lpart, rpart, m for small depth images */
+    mx = 7 / i->depth;
     lpart = (r.min.x & mx) * i->depth;
     rpart = (r.max.x & mx) * i->depth;
     m = 0xFF >> lpart;
+    /*e: [[loadmemimage()]] set mx, lpart, rpart, m for small depth images */
+    /*s: [[loadmemimage()]] if 1 byte per line */
     /* may need to do bit insertion on edges */
     if(l == 1){	/* all in one byte */
         if(rpart)
             m ^= 0xFF >> rpart;
-        for(y=r.min.y; y<r.max.y; y++){
-            *q ^= (*data^*q) & m;
+        for(y = r.min.y; y < r.max.y; y++){
+            *q ^= (*data ^ *q) & m;
             q += i->width*sizeof(ulong);
             data++;
         }
         return ndata;
     }
+    /*e: [[loadmemimage()]] if 1 byte per line */
+
     if(lpart==0 && rpart==0){	/* easy case */
-        for(y=r.min.y; y<r.max.y; y++){
+        for(y = r.min.y; y < r.max.y; y++){
             memmove(q, data, l);
-            q += i->width*sizeof(ulong);
+            q += i->width * sizeof(ulong);
             data += l;
         }
         return ndata;
     }
+    /*s: [[loadmemimage()]] when small depth images */
     mr = 0xFF ^ (0xFF >> rpart);
     if(lpart!=0 && rpart==0){
         for(y=r.min.y; y<r.max.y; y++){
@@ -71,6 +88,7 @@ loadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
         data += l;
     }
     return ndata;
+    /*e: [[loadmemimage()]] when small depth images */
 }
 /*e: function loadmemimage */
 /*e: lib_graphics/libmemdraw/load.c */

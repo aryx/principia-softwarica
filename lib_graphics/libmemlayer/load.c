@@ -6,18 +6,22 @@
 #include <memlayer.h>
 
 /*s: function memload */
-int
-memload(Memimage *dst, Rectangle r, uchar *data, int n, bool iscompressed)
+errorneg1
+memload(Memimage *dst, Rectangle r, byte *data, int n, bool iscompressed)
 {
-    int (*loadfn)(Memimage*, Rectangle, uchar*, int);
-    Memimage *tmp;
+    errorneg1 (*loadfn)(Memimage*, Rectangle, uchar*, int);
     Memlayer *dl;
+    /*s: [[memload()]] other locals */
+    Memimage *tmp;
     Rectangle lr;
     int dx;
+    /*e: [[memload()]] other locals */
 
     loadfn = loadmemimage;
+    /*s: [[memload()]] if iscompressed */
     if(iscompressed)
         loadfn = cloadmemimage;
+    /*e: [[memload()]] if iscompressed */
 
     Top:
     dl = dst->layer;

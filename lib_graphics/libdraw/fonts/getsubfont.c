@@ -28,12 +28,12 @@ _getsubfont(Display *d, char *name)
      * _getsubfont is called only from string.c and stringwidth.c,
      * which are known to be safe to have this done.
      */
-    if(d && d->locking == false)
+    if(d && !d->locking)
         unlockdisplay(d);
     /*e: [[_getsubfont()]] locking part1 */
     f = readsubfont(d, name, fd, d && d->locking==false);
     /*s: [[_getsubfont()]] locking part2 */
-    if(d && d->locking == false)
+    if(d && !d->locking)
         lockdisplay(d);
     /*e: [[_getsubfont()]] locking part2 */
     /*s: [[_getsubfont()]] sanity check f */

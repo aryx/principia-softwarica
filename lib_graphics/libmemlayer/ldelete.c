@@ -13,6 +13,7 @@ memldelete(Memimage *i)
     Memlayer *l;
 
     l = i->layer;
+
     /* free backing store and disconnect refresh, to make pushback fast */
     freememimage(l->save);
     l->save = nil;
@@ -32,6 +33,7 @@ memldelete(Memimage *i)
         s->frontmost = nil;
         s->rearmost = nil;
     }
+
     free(l);
     freememimage(i);
 }
@@ -60,13 +62,13 @@ _memlsetclear(Memscreen *s)
     Memimage *i, *j;
     Memlayer *l;
 
-    for(i=s->rearmost; i; i=i->layer->front){
+    for(i = s->rearmost; i; i = i->layer->front){
         l = i->layer;
         l->clear = rectinrect(l->screenr, l->screen->image->clipr);
         if(l->clear)
-            for(j=l->front; j; j=j->layer->front)
+            for(j = l->front; j; j = j->layer->front)
                 if(rectXrect(l->screenr, j->layer->screenr)){
-                    l->clear = 0;
+                    l->clear = false;
                     break;
                 }
     }

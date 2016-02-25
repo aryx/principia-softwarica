@@ -8,10 +8,15 @@ typedef void (*Refreshfn)(Memimage*, Rectangle, void*);
 /*s: struct Memscreen */
 struct Memscreen
 {
-    Memimage	*frontmost;	/* frontmost layer on screen */
-    Memimage	*rearmost;	/* rearmost layer on screen */
     Memimage	*image;		/* upon which all layers are drawn */
-    Memimage	*fill;			/* if non-zero, picture to use when repainting */
+    Memimage	*fill;		/* if non-zero, picture to use when repainting */
+
+    /*s: [[Memscreen]] stack windows fields */
+    // list<ref<Memimage>> (next = Memimage.layer->rear)
+    Memimage	*frontmost;	/* frontmost layer on screen */
+    // list<ref<Memimage>> (next = Memimage.layer->front)
+    Memimage	*rearmost;	/* rearmost layer on screen */
+    /*e: [[Memscreen]] stack windows fields */
 };
 /*e: struct Memscreen */
 
@@ -19,14 +24,21 @@ struct Memscreen
 struct Memlayer
 {
     Rectangle		screenr;	/* true position of layer on screen */
-    Point			delta;	/* add delta to go from image coords to screen */
     Memscreen	*screen;	/* screen this layer belongs to */
+
+    Point			delta;	/* add delta to go from image coords to screen */
+
+    bool		clear;	/* layer is fully visible */
+    Memimage	*save;	/* save area for obscured parts */
+
+    /*s: [[Memlayer]] stack windows fields */
     Memimage	*front;	/* window in front of this one */
     Memimage	*rear;	/* window behind this one*/
-    int		clear;	/* layer is fully visible */
-    Memimage	*save;	/* save area for obscured parts */
+    /*e: [[Memlayer]] stack windows fields */
+    /*s: [[Memlayer]] refresh fields */
     Refreshfn	refreshfn;		/* function to call to refresh obscured parts if save==nil */
     void		*refreshptr;	/* argument to refreshfn */
+    /*e: [[Memlayer]] refresh fields */
 };
 /*e: struct Memlayer */
 

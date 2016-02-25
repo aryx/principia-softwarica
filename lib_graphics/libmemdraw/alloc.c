@@ -98,7 +98,7 @@ allocmemimage(Rectangle r, ulong chan)
     /*e: [[allocmemimage()]] sanity check d */
 
     l = wordsperline(r, d);
-    nw = l*Dy(r);
+    nw = l * Dy(r);
 
     md = malloc(sizeof(Memdata));
     /*s: [[allocmemimage()]] sanity check md */

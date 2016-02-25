@@ -5,22 +5,26 @@
 #include <memdraw.h>
 
 /*s: function unloadmemimage */
-int
-unloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
+errorneg1
+unloadmemimage(Memimage *i, Rectangle r, byte *data, int ndata)
 {
     int y, l;
-    uchar *q;
+    byte *q;
 
+    /*s: [[unloadmemimage()]] sanity check r */
     if(!rectinrect(r, i->r))
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[unloadmemimage()]] sanity check r */
     l = bytesperline(r, i->depth);
+    /*s: [[unloadmemimage()]] sanity check ndata */
     if(ndata < l*Dy(r))
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[unloadmemimage()]] sanity check ndata */
     ndata = l*Dy(r);
     q = byteaddr(i, r.min);
-    for(y=r.min.y; y<r.max.y; y++){
+    for(y = r.min.y; y < r.max.y; y++){
         memmove(data, q, l);
-        q += i->width*sizeof(ulong);
+        q += i->width * sizeof(ulong);
         data += l;
     }
     return ndata;

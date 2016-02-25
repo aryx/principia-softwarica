@@ -11,39 +11,50 @@
 */
 static
 void
-_memltofront(Memimage *i, Memimage *front, int fill)
+_memltofront(Memimage *i, Memimage *front, bool fill)
 {
     Memlayer *l;
     Memscreen *s;
-    Memimage *f, *ff, *rr;
+    Memimage *f;
     Rectangle x;
-    int overlap;
+    bool overlap;
+    /*s: [[_memltofront()]] other locals */
+    Memimage *ff, *rr;
+    /*e: [[_memltofront()]] other locals */
 
     l = i->layer;
     s = l->screen;
+
     while(l->front != front){
         f = l->front;
         x = l->screenr;
+
+        // i will now pass in front of f, so hide f
         overlap = rectclip(&x, f->layer->screenr);
         if(overlap){
             memlhide(f, x);
-            f->layer->clear = 0;
+            f->layer->clear = false;
         }
+        /*s: [[_memltofront()]] put f behind i */
         /* swap l and f in screen's list */
         ff = f->layer->front;
         rr = l->rear;
+
         if(ff == nil)
             s->frontmost = i;
         else
             ff->layer->rear = i;
+
         if(rr == nil)
             s->rearmost = f;
         else
             rr->layer->front = f;
+
         l->front = ff;
-        l->rear = f;
+        l->rear = f; // f is now behind i
         f->layer->front = i;
         f->layer->rear = rr;
+        /*e: [[_memltofront()]] put f behind i */
         if(overlap && fill)
             memlexpose(i, x);
     }
@@ -52,7 +63,7 @@ _memltofront(Memimage *i, Memimage *front, int fill)
 
 /*s: function _memltofrontfill */
 void
-_memltofrontfill(Memimage *i, int fill)
+_memltofrontfill(Memimage *i, bool fill)
 {
     _memltofront(i, nil, fill);
     _memlsetclear(i->layer->screen);
@@ -63,7 +74,7 @@ _memltofrontfill(Memimage *i, int fill)
 void
 memltofront(Memimage *i)
 {
-    _memltofront(i, nil, 1);
+    _memltofront(i, nil, true);
     _memlsetclear(i->layer->screen);
 }
 /*e: function memltofront */
@@ -73,18 +84,18 @@ void
 memltofrontn(Memimage **ip, int n)
 {
     Memimage *i, *front;
-    Memscreen *s;
 
+    /*s: [[memltofrontn()]] sanity check n */
     if(n == 0)
         return;
+    /*e: [[memltofrontn()]] sanity check n */
     front = nil;
     while(--n >= 0){
         i = *ip++;
-        _memltofront(i, front, 1);
+        _memltofront(i, front, true);
         front = i;
     }
-    s = front->layer->screen;
-    _memlsetclear(s);
+    _memlsetclear(front->layer->screen);
 }
 /*e: function memltofrontn */
 /*e: lib_graphics/libmemlayer/ltofront.c */

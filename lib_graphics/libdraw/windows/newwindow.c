@@ -5,20 +5,20 @@
 
 /*s: function newwindow */
 /* Connect us to new window, if possible */
-int
+errorneg1
 newwindow(char *str)
 {
-    int fd;
+    fdt fd;
     char *wsys;
     char buf[256];
 
     wsys = getenv("wsys");
     if(wsys == nil)
-        return -1;
+        return ERROR_NEG1;
     fd = open(wsys, ORDWR);
     free(wsys);
     if(fd < 0)
-        return -1;
+        return ERROR_NEG1;
     rfork(RFNAMEG);
     if(str)
         snprint(buf, sizeof buf, "new %s", str);

@@ -602,7 +602,7 @@ flushmemscreen(Rectangle r)
         return;
     }
     // else
-    if(gscreen == nil || scr->useflush == false)
+    if(gscreen == nil || !scr->useflush)
         return;
     if(scr->dev == nil || scr->dev->page == nil)
         return;
@@ -1084,7 +1084,7 @@ int swvisvers;  /* the version on the screen */
 void
 swcursorhide(void)
 {
-    if(swvisible == false)
+    if(!swvisible)
         return;
     if(swback == nil)
         return;
@@ -1111,7 +1111,7 @@ swcursordraw(void)
 {
     if(swvisible)
         return;
-    if(swenabled == false)
+    if(!swenabled)
         return;
     if(swback == nil || swimg1 == nil || swmask1 == nil)
         return;

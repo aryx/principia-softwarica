@@ -12,29 +12,37 @@ static int	screenid;
 
 /*s: function allocscreen */
 Screen*
-allocscreen(Image *image, Image *fill, int public)
+allocscreen(Image *image, Image *fill, bool public)
 {
-    uchar *a;
+    byte *a;
     Screen *s;
     int id, try;
     Display *d;
 
     d = image->display;
+    /*s: [[allocscreen()]] sanity check images have same display */
     if(d != fill->display){
         werrstr("allocscreen: image and fill on different displays");
-        return 0;
+        return nil;
     }
+    /*e: [[allocscreen()]] sanity check images have same display */
     s = malloc(sizeof(Screen));
-    if(s == 0)
-        return 0;
+    /*s: [[allocscreen()]] sanity check s */
+    if(s == nil)
+        return nil;
+    /*e: [[allocscreen()]] sanity check s */
     SET(id);
     for(try=0; try<25; try++){
         /* loop until find a free id */
+        /*s: [[allocscreen()]] marshall allocate screen message */
+        // allocate screen: 'A' id[4] imageid[4] fillid[4] public[1]
         a = bufimage(d, 1+4+4+4+1);
+        /*s: [[allocscreen()]] sanity check a */
         if(a == nil){
             free(s);
-            return 0;
+            return nil;
         }
+        /*e: [[allocscreen()]] sanity check a */
         id = ++screenid;
         a[0] = 'A';
         BPLONG(a+1, id);
@@ -43,13 +51,15 @@ allocscreen(Image *image, Image *fill, int public)
         a[13] = public;
         if(flushimage(d, false) != -1)
             break;
+        /*e: [[allocscreen()]] marshall allocate screen message */
     }
     s->display = d;
     s->id = id;
     s->image = image;
-    assert(s->image && s->image->chan != 0);
-
     s->fill = fill;
+    /*s: [[allocscreen()]] sanity check screen image */
+    assert(s->image && s->image->chan != 0);
+    /*e: [[allocscreen()]] sanity check screen image */
     return s;
 }
 /*e: function allocscreen */
@@ -58,45 +68,60 @@ allocscreen(Image *image, Image *fill, int public)
 Screen*
 publicscreen(Display *d, int id, ulong chan)
 {
-    uchar *a;
+    byte *a;
     Screen *s;
 
     s = malloc(sizeof(Screen));
-    if(s == 0)
-        return 0;
+    /*s: [[publicscreen()]] sanity check s */
+    if(s == nil)
+        return nil;
+    /*e: [[publicscreen()]] sanity check s */
+
+    /*s: [[publicscreen()]] marshall use public screen message */
+    // use public screen: 'S' id[4] chan[4]
     a = bufimage(d, 1+4+4);
+    /*s: [[publicscreen()]] sanity check a */
     if(a == nil){
     Error:
         free(s);
-        return 0;
+        return nil;
     }
+    /*e: [[publicscreen()]] sanity check a */
     a[0] = 'S';
     BPLONG(a+1, id);
     BPLONG(a+5, chan);
     if(flushimage(d, false) < 0)
         goto Error;
+    /*e: [[publicscreen()]] marshall use public screen message */
 
     s->display = d;
     s->id = id;
-    s->image = 0;
-    s->fill = 0;
+    s->image = nil;
+    s->fill = nil;
+
     return s;
 }
 /*e: function publicscreen */
 
 /*s: function freescreen */
-int
+errorneg1
 freescreen(Screen *s)
 {
-    uchar *a;
+    byte *a;
     Display *d;
 
-    if(s == 0)
+    /*s: [[freescreen()]] sanity check s */
+    if(s == nil)
         return 0;
+    /*e: [[freescreen()]] sanity check s */
     d = s->display;
+    /*s: [[freescreen()]] marshall free screen message */
+    // free screen: 'F' id[4]
     a = bufimage(d, 1+4);
+    /*s: [[freescreen()]] sanity check a */
     if(a == nil)
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[freescreen()]] sanity check a */
     a[0] = 'F';
     BPLONG(a+1, s->id);
     /*
@@ -104,15 +129,16 @@ freescreen(Screen *s)
      * window, and want it to disappear visually.
      */
     if(flushimage(d, true) < 0)
-        return -1;
+        return ERROR_NEG1;
+    /*e: [[freescreen()]] marshall free screen message */
     free(s);
-    return 1;
+    return OK_1;
 }
 /*e: function freescreen */
 
 /*s: function allocwindow */
 Image*
-allocwindow(Screen *s, Rectangle r, int ref, ulong val)
+allocwindow(Screen *s, Rectangle r, int ref, rgba val)
 {
     return _allocwindow(nil, s, r, ref, val);
 }
@@ -120,17 +146,22 @@ allocwindow(Screen *s, Rectangle r, int ref, ulong val)
 
 /*s: function _allocwindow */
 Image*
-_allocwindow(Image *i, Screen *s, Rectangle r, int ref, ulong val)
+_allocwindow(Image *i, Screen *s, Rectangle r, int ref, rgba val)
 {
     Display *d;
 
     d = s->display;
-    i = _allocimage(i, d, r, d->screenimage->chan, 0, val, s->id, ref);
-    if(i == 0)
-        return 0;
+    i = _allocimage(i, d, r, d->screenimage->chan, false, val, s->id, ref);
+    /*s: [[_allocwindow()]] sanity check i */
+    if(i == nil)
+        return nil;
+    /*e: [[_allocwindow()]] sanity check i */
     i->screen = s;
+
+    // add_list(i, display->windows)
     i->next = s->display->windows;
     s->display->windows = i;
+
     return i;
 }
 /*e: function _allocwindow */
@@ -138,12 +169,13 @@ _allocwindow(Image *i, Screen *s, Rectangle r, int ref, ulong val)
 /*s: function topbottom */
 static
 void
-topbottom(Image **w, int n, int top)
+topbottom(Image **w, int n, bool top)
 {
     int i;
-    uchar *b;
+    byte *b;
     Display *d;
 
+    /*s: [[topbottom()]] sanity check n */
     if(n < 0){
     Ridiculous:
         fprint(2, "top/bottom: ridiculous number of windows\n");
@@ -151,8 +183,10 @@ topbottom(Image **w, int n, int top)
     }
     if(n == 0)
         return;
-    if(n > (w[0]->display->bufsize-100)/4)
+    if(n > (w[0]->display->bufsize - 100)/4)
         goto Ridiculous;
+    /*e: [[topbottom()]] sanity check n */
+    /*s: [[topbottom()]] sanity check images have same display */
     /*
      * this used to check that all images were on the same screen.
      * we don't know the screen associated with images we acquired
@@ -165,9 +199,9 @@ topbottom(Image **w, int n, int top)
             fprint(2, "top/bottom: windows not on same screen\n");
             return;
         }
+    /*e: [[topbottom()]] sanity check images have same display */
 
-    if(n==0)
-        return;
+    // top or bottom windows: 't' top[1] nw[2] n*id[4]
     b = bufimage(d, 1+1+2+4*n);
     b[0] = 't';
     b[1] = top;
@@ -181,9 +215,12 @@ topbottom(Image **w, int n, int top)
 void
 bottomwindow(Image *w)
 {
+
+    /*s: [[xxxmwindow()]] sanity check window w */
     if(w->screen == 0)
         return;
-    topbottom(&w, 1, 0);
+    /*e: [[xxxmwindow()]] sanity check window w */
+    topbottom(&w, 1, false);
 }
 /*e: function bottomwindow */
 
@@ -191,9 +228,11 @@ bottomwindow(Image *w)
 void
 topwindow(Image *w)
 {
+    /*s: [[xxxmwindow()]] sanity check window w */
     if(w->screen == 0)
         return;
-    topbottom(&w, 1, 1);
+    /*e: [[xxxmwindow()]] sanity check window w */
+    topbottom(&w, 1, true);
 }
 /*e: function topwindow */
 
@@ -201,7 +240,7 @@ topwindow(Image *w)
 void
 bottomnwindows(Image **w, int n)
 {
-    topbottom(w, n, 0);
+    topbottom(w, n, false);
 }
 /*e: function bottomnwindows */
 
@@ -209,21 +248,26 @@ bottomnwindows(Image **w, int n)
 void
 topnwindows(Image **w, int n)
 {
-    topbottom(w, n, 1);
+    topbottom(w, n, true);
 }
 /*e: function topnwindows */
 
 /*s: function originwindow */
-int
+errorneg1
 originwindow(Image *w, Point log, Point scr)
 {
-    uchar *b;
+    byte *b;
     Point delta;
 
     flushimage(w->display, false);
+
+    /*s: [[originwindow()]] marshall position window message */
+    // position window: 'o' id[4] r.min [2*4] screenr.min [2*4]
     b = bufimage(w->display, 1+4+2*4+2*4);
+    /*s: [[originwindow()]] sanity check b */
     if(b == nil)
-        return 0;
+        return 0; // really? not -1?
+    /*e: [[originwindow()]] sanity check b */
     b[0] = 'o';
     BPLONG(b+1, w->id);
     BPLONG(b+5, log.x);
@@ -232,8 +276,10 @@ originwindow(Image *w, Point log, Point scr)
     BPLONG(b+17, scr.y);
     if(flushimage(w->display, true) < 0)
         return -1;
+    /*e: [[originwindow()]] marshall position window message */
+
     delta = subpt(log, w->r.min);
-    w->r = rectaddpt(w->r, delta);
+    w->r     = rectaddpt(w->r, delta);
     w->clipr = rectaddpt(w->clipr, delta);
     return 1;
 }

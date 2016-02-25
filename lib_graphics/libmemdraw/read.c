@@ -6,7 +6,7 @@
 
 /*s: function readmemimage */
 Memimage*
-readmemimage(int fd)
+readmemimage(fdt fd)
 {
     char hdr[5*12+1];
     int dy;

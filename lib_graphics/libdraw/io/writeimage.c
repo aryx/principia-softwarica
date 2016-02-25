@@ -54,6 +54,7 @@ writeimage(fdt fd, Image *i, bool dolock)
     bpl = bytesperline(r, i->depth);
     n = Dy(r)*bpl;
     data = malloc(n);
+
     ncblock = _compblocksize(r, i->depth);
     outbuf = malloc(ncblock);
     hash = malloc(NHASH*sizeof(Hlist));
@@ -66,16 +67,21 @@ writeimage(fdt fd, Image *i, bool dolock)
         free(chain);
         return -1;
     }
+
     for(miny = r.min.y; miny != r.max.y; miny += dy){
         dy = r.max.y-miny;
         if(dy*bpl > chunk)
             dy = chunk/bpl;
+
         if(dolock)
             lockdisplay(i->display);
+
         nb = unloadimage(i, Rect(r.min.x, miny, r.max.x, miny+dy),
             data+(miny-r.min.y)*bpl, dy*bpl);
+
         if(dolock)
             unlockdisplay(i->display);
+
         if(nb != dy*bpl)
             goto ErrOut;
     }

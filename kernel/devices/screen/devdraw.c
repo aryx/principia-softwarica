@@ -116,6 +116,7 @@ struct Client
     int     op;
     /*e: [[Client]] drawing state fields */
     /*s: [[Client]] layer fields */
+    // list<ref_own<DScreen>> (next = CScreen.next)
     CScreen*    cscreen;
     /*e: [[Client]] layer fields */
     /*s: [[Client]] other fields */
@@ -124,6 +125,7 @@ struct Client
     /*x: [[Client]] other fields */
     int     infoid;
     /*x: [[Client]] other fields */
+    // array<byte> (size >= Client.nreaddata)
     byte*   readdata;
     int     nreaddata;
     /*x: [[Client]] other fields */
@@ -198,7 +200,7 @@ struct DImage
     Memimage*   image;
 
     /*s: [[DImage]] layer fields */
-    DScreen*    dscreen;    /* 0 if not a window */
+    DScreen*    dscreen;    /* nil if not a window */
     /*e: [[DImage]] layer fields */
     /*s: [[DImage]] font fields */
     // growing_hash<Rune, ref_own<Fchar>> (size = DImage.nfchar)
@@ -226,7 +228,9 @@ struct DImage
 /*s: struct CScreen */
 struct CScreen
 {
+    // ref_own<DScreen>
     DScreen*    dscreen;
+
     CScreen*    next;
 };
 /*e: struct CScreen */
@@ -236,16 +240,24 @@ struct DScreen
 {
     int     id;
 
-    int     public;
-    int     ref;
-
     DImage      *dimage;
     DImage      *dfill;
 
-    Memscreen*  screen;
-
+    /*s: [[DScreen]] other fields */
+    bool     public;
+    /*x: [[DScreen]] other fields */
     Client*     owner;
+    /*x: [[DScreen]] other fields */
+    // ref_own<Memscreen>
+    Memscreen*  screen;
+    /*e: [[DScreen]] other fields */
+
+    // Extra
+    int     ref;
+    /*s: [[DScreen]] extra fields */
+    // list<ref<DScreen>> (head = dscreen)
     DScreen*    next;
+    /*e: [[DScreen]] extra fields */
 };
 /*e: struct DScreen */
 
@@ -277,6 +289,7 @@ static  Rectangle   flushrect;
 static  int     waste;
 /*e: global waste */
 /*s: global dscreen */
+// list<ref<DScreen>> (next = DScreen.next)
 static  DScreen*    dscreen;
 /*e: global dscreen */
 
@@ -676,8 +689,8 @@ drawgoodname(DImage *d)
 
     /* if window, validate the screen's own images */
     if(d->dscreen)
-        if(drawgoodname(d->dscreen->dimage) == false
-        || drawgoodname(d->dscreen->dfill) == false)
+        if(!drawgoodname(d->dscreen->dimage)
+        || !drawgoodname(d->dscreen->dfill))
             return false;
     if(d->name == nil)
         return true;
@@ -721,7 +734,7 @@ drawlookupdscreen(int id)
             return s;
         s = s->next;
     }
-    return 0;
+    return nil;
 }
 /*e: function drawlookupdscreen */
 
@@ -740,7 +753,7 @@ drawlookupscreen(Client *client, int id, CScreen **cs)
         s = s->next;
     }
     error(Enodrawscreen);
-    return 0;
+    return nil;
 }
 /*e: function drawlookupscreen */
 
@@ -795,53 +808,70 @@ drawinstall(Client *client, int id, Memimage *i, DScreen *dscreen)
 
 /*s: function drawinstallscreen */
 Memscreen*
-drawinstallscreen(Client *client, DScreen *d, int id, DImage *dimage, DImage *dfill, int public)
+drawinstallscreen(Client *client, DScreen *d, int id, DImage *dimage, DImage *dfill, bool public)
 {
     Memscreen *s;
     CScreen *c;
 
     c = malloc(sizeof(CScreen));
+    /*s: [[drawinstallscreen()]] sanity check dimage */
     if(dimage && dimage->image && dimage->image->chan == 0)
         panic("bad image %p in drawinstallscreen", dimage->image);
+    /*e: [[drawinstallscreen()]] sanity check dimage */
+    /*s: [[drawinstallscreen()]] sanity check c */
+    if(c == nil)
+        return nil;
+    /*e: [[drawinstallscreen()]] sanity check c */
 
-    if(c == 0)
-        return 0;
-    if(d == 0){
+    if(d == nil){
         d = malloc(sizeof(DScreen));
-        if(d == 0){
+        /*s: [[drawinstallscreen()]] sanity check d */
+        if(d == nil){
             free(c);
-            return 0;
+            return nil;
         }
+        /*e: [[drawinstallscreen()]] sanity check d */
         s = malloc(sizeof(Memscreen));
-        if(s == 0){
+        /*s: [[drawinstallscreen()]] sanity check s */
+        if(s == nil){
             free(c);
             free(d);
-            return 0;
+            return nil;
         }
-        s->frontmost = 0;
-        s->rearmost = 0;
+        /*e: [[drawinstallscreen()]] sanity check s */
+
+        d->id = id;
         d->dimage = dimage;
+        d->dfill = dfill;
+
+        d->screen = s;
         if(dimage){
             s->image = dimage->image;
             dimage->ref++;
         }
-        d->dfill = dfill;
         if(dfill){
             s->fill = dfill->image;
             dfill->ref++;
         }
-        d->ref = 0;
-        d->id = id;
-        d->screen = s;
+        s->frontmost = nil;
+        s->rearmost = nil;
+
         d->public = public;
-        d->next = dscreen;
         d->owner = client;
+        d->ref = 0;
+
+        // add_list(d, dscreen)
+        d->next = dscreen;
         dscreen = d;
     }
+
     c->dscreen = d;
     d->ref++;
+
+    // add_list(c, client->cscreen)
     c->next = client->cscreen;
     client->cscreen = c;
+
     return d->screen;
 }
 /*e: function drawinstallscreen */
@@ -865,10 +895,15 @@ drawfreedscreen(DScreen *this)
     DScreen *ds, *next;
 
     this->ref--;
+    /*s: [[drawfreedscreen()]] sanity check reference count */
     if(this->ref < 0)
         print("negative ref in drawfreedscreen\n");
+    /*e: [[drawfreedscreen()]] sanity check reference count */
     if(this->ref > 0)
         return;
+    // else
+
+    // remove_list(this, dscreen)
     ds = dscreen;
     if(ds == this){
         dscreen = this->next;
@@ -931,10 +966,12 @@ drawfreedimage(DImage *dimage)
         if(l->layer->refreshfn == drawrefresh)  /* else true owner will clean up */
             free(l->layer->refreshptr);
         l->layer->refreshptr = nil;
+
         if(drawgoodname(dimage))
             memldelete(l);
         else
             memlfree(l);
+
         drawfreedscreen(ds);
     }
     /*e: [[drawfreedimage()]] if dscreen */
@@ -952,9 +989,11 @@ drawuninstallscreen(Client *client, CScreen *this)
 {
     CScreen *cs, *next;
 
+    // remove_list(this, client->cscreen)
     cs = client->cscreen;
     if(cs == this){
         client->cscreen = this->next;
+
         drawfreedscreen(this->dscreen);
         free(this);
         return;
@@ -962,6 +1001,7 @@ drawuninstallscreen(Client *client, CScreen *this)
     while(next = cs->next){ /* assign = */
         if(next == this){
             cs->next = this->next;
+     
             drawfreedscreen(this->dscreen);
             free(this);
             return;
@@ -1919,13 +1959,14 @@ drawmesg(Client *client, void *av, int n)
     /*x: [[drawmesg()]] locals */
     DScreen *dscrn;
     /*x: [[drawmesg()]] locals */
-    Refreshfn reffn;
     Memscreen *scrn;
     Memimage *l;
-    Refx *refx;
     /*x: [[drawmesg()]] locals */
     int nw;
     Memimage **lp;
+    /*x: [[drawmesg()]] locals */
+    Refreshfn reffn;
+    Refx *refx;
     /*e: [[drawmesg()]] locals */
 
     a = av;
@@ -1966,9 +2007,11 @@ drawmesg(Client *client, void *av, int n)
             if(scrnid){
                 dscrn = drawlookupscreen(client, scrnid, &cs);
                 scrn = dscrn->screen;
+                /*s: [[drawmesg()]] when allocate window, sanity check repl and chan */
                 if(repl || chan != scrn->image->chan)
                     error("image parameters incompatible with screen");
-
+                /*e: [[drawmesg()]] when allocate window, sanity check repl and chan */
+                /*s: [[drawmesg()]] when allocate window, set reffn */
                 reffn = nil;
                 switch(refresh){
                 case Refbackup:
@@ -1982,18 +2025,25 @@ drawmesg(Client *client, void *av, int n)
                 default:
                     error("unknown refresh method");
                 }
-                l = memlalloc(scrn, r, reffn, 0, value);
-                if(l == 0)
+                /*e: [[drawmesg()]] when allocate window, set reffn */
+                l = memlalloc(scrn, r, reffn, nil, value); // The call
+                /*s: [[drawmesg()]] when allocate window, sanity check l */
+                if(l == nil)
                     error(Edrawmem);
-
+                /*e: [[drawmesg()]] when allocate window, sanity check l */
+                /*s: [[drawmesg()]] when allocate window, addflush */
                 addflush(l->layer->screenr);
+                /*e: [[drawmesg()]] when allocate window, addflush */
                 l->clipr = clipr;
                 rectclip(&l->clipr, r);
+
                 if(drawinstall(client, dstid, l, dscrn) == 0){
                     memldelete(l);
                     error(Edrawmem);
                 }
                 dscrn->ref++;
+
+                /*s: [[drawmesg()]] when allocate window, if reffn */
                 if(reffn){
                     refx = nil;
                     if(reffn == drawrefresh){
@@ -2007,9 +2057,11 @@ drawmesg(Client *client, void *av, int n)
                     }
                     memlsetrefresh(l, reffn, refx);
                 }
+                /*e: [[drawmesg()]] when allocate window, if reffn */
                 continue;
             }
             /*e: [[drawmesg()]] allocate image case, if screen id */
+            // else
 
             i = allocmemimage(r, chan); // server side allocation
             /*s: [[drawmesg()]] allocate image case, sanity check i */
@@ -2550,7 +2602,6 @@ drawmesg(Client *client, void *av, int n)
         case 'y':
         case 'Y':
             printmesg(fmt="LR", a, 0);
-        //  iprint("load %c\n", *a);
             m = 1+4+4*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2559,13 +2610,15 @@ drawmesg(Client *client, void *av, int n)
             dstid = BGLONG(a+1);
             dst = drawimage(client, a+1);
             drawrectangle(&r, a+5);
+            /*s: [[drawmesg()]] when load an image, sanity check r */
             if(!rectinrect(r, dst->r))
                 error(Ewriteoutside);
-
+            /*e: [[drawmesg()]] when load an image, sanity check r */
             y = memload(dst, r, a+m, n-m, *a=='Y'); // The call
-
+            /*s: [[drawmesg()]] when load an image, sanity check y */
             if(y < 0)
                 error("bad writeimage call");
+            /*e: [[drawmesg()]] when load an image, sanity check y */
             dstflush(dstid, dst, r);
             m += y;
             continue;
@@ -2580,25 +2633,28 @@ drawmesg(Client *client, void *av, int n)
             /*e: [[drawmesg()]] sanity check n with m */
             i = drawimage(client, a+1);
             drawrectangle(&r, a+5);
+            /*s: [[drawmesg()]] when read an image, sanity check r */
             if(!rectinrect(r, i->r))
                 error(Ereadoutside);
+            /*e: [[drawmesg()]] when read an image, sanity check r */
             c = bytesperline(r, i->depth);
             c *= Dy(r);
 
             free(client->readdata);
             client->readdata = mallocz(c, 0);
+            /*s: [[drawmesg()]] when read an image, sanity check readdata */
             if(client->readdata == nil)
                 error("readimage malloc failed");
-
+            /*e: [[drawmesg()]] when read an image, sanity check readdata */
             client->nreaddata = memunload(i, r, client->readdata, c); // The call
-
+            /*s: [[drawmesg()]] when read an image, sanity check nreaddata */
             if(client->nreaddata < 0){
                 free(client->readdata);
                 client->readdata = nil;
                 error("bad readimage call");
             }
+            /*e: [[drawmesg()]] when read an image, sanity check nreaddata */
             continue;
-
         /*x: [[drawmesg()]] cases */
         /* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
         case 'A':
@@ -2609,16 +2665,20 @@ drawmesg(Client *client, void *av, int n)
                 error(Eshortdraw);
             /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
+            /*s: [[drawmesg()]] when allocate screen, sanity check dstid */
             if(dstid == 0)
                 error(Ebadarg);
             if(drawlookupdscreen(dstid))
                 error(Escreenexists);
+            /*e: [[drawmesg()]] when allocate screen, sanity check dstid */
             ddst = drawlookup(client, BGLONG(a+5), true);
             dsrc = drawlookup(client, BGLONG(a+9), true);
-            if(ddst==0 || dsrc==0)
+            /*s: [[drawmesg()]] when allocate screen, sanity check ddst and dsrc */
+            if(ddst==nil || dsrc==nil)
                 error(Enodrawimage);
+            /*e: [[drawmesg()]] when allocate screen, sanity check ddst and dsrc */
 
-            if(drawinstallscreen(client, 0, dstid, ddst, dsrc, a[13]) == 0) // The call
+            if(drawinstallscreen(client, nil, dstid, ddst, dsrc, a[13]) == 0)// The call
                 error(Edrawmem);
             continue;
 
@@ -2645,16 +2705,77 @@ drawmesg(Client *client, void *av, int n)
                 error(Eshortdraw);
             /*e: [[drawmesg()]] sanity check n with m */
             dstid = BGLONG(a+1);
+            /*s: [[drawmesg()]] when use public screen, sanity check dstid */
             if(dstid == 0)
                 error(Ebadarg);
+            /*e: [[drawmesg()]] when use public screen, sanity check dstid */
             dscrn = drawlookupdscreen(dstid);
-            if(dscrn==0 || (dscrn->public==0 && dscrn->owner!=client))
+            /*s: [[drawmesg()]] when use public screen, sanity check dscrn */
+            if(dscrn == nil || (!dscrn->public && dscrn->owner != client))
                 error(Enodrawscreen);
             if(dscrn->screen->image->chan != BGLONG(a+5))
                 error("inconsistent chan");
-
-            if(drawinstallscreen(client, dscrn, 0, 0, 0, 0) == 0) // The call
+            /*e: [[drawmesg()]] when use public screen, sanity check dscrn */
+            if(drawinstallscreen(client, dscrn, 0, nil, nil, 0) == 0) // The call
                 error(Edrawmem);
+            continue;
+        /*x: [[drawmesg()]] cases */
+        /* top or bottom windows: 't' top[1] nw[2] n*id[4] */
+        case 't':
+            printmesg(fmt="bsL", a, 0);
+            m = 1+1+2;
+            /*s: [[drawmesg()]] sanity check n with m */
+            if(n < m)
+                error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
+            nw = BGSHORT(a+2);
+            /*s: [[drawmesg()]] when top or bottom windows, sanity check nw */
+            if(nw < 0)
+                error(Ebadarg);
+            if(nw == 0)
+                continue;
+            /*e: [[drawmesg()]] when top or bottom windows, sanity check nw */
+            m += nw*4;
+            /*s: [[drawmesg()]] sanity check n with m */
+            if(n < m)
+                error(Eshortdraw);
+            /*e: [[drawmesg()]] sanity check n with m */
+            lp = malloc(nw * sizeof(Memimage*));
+            /*s: [[drawmesg()]] when top or bottom windows, sanity check lp */
+            if(lp == nil)
+                error(Enomem);
+            if(waserror()){
+                free(lp);
+                nexterror();
+            }
+            /*e: [[drawmesg()]] when top or bottom windows, sanity check lp */
+            for(j=0; j<nw; j++)
+                lp[j] = drawimage(client, a+1+1+2+j*4);
+            /*s: [[drawmesg()]] when top or bottom windows, sanity check windows */
+            if(lp[0]->layer == nil)
+                error("images are not windows");
+            for(j=1; j<nw; j++)
+                if(lp[j]->layer->screen != lp[0]->layer->screen)
+                    error("images not on same screen");
+            /*e: [[drawmesg()]] when top or bottom windows, sanity check windows */
+
+            if(a[1])
+                memltofrontn(lp, nw); // The call
+            else
+                memltorearn(lp, nw); // The call
+
+            /*s: [[drawmesg()]] when top or bottom windows, addflush */
+            if(lp[0]->layer->screen->image->data == screenimage->data)
+                for(j=0; j<nw; j++)
+                    addflush(lp[j]->layer->screenr);
+            /*e: [[drawmesg()]] when top or bottom windows, addflush */
+            /*s: [[drawmesg()]] when top or bottom windows, refresh */
+            ll = drawlookup(client, BGLONG(a+1+1+2), true);
+            drawrefreshscreen(ll, client);
+            /*e: [[drawmesg()]] when top or bottom windows, refresh */
+
+            poperror();
+            free(lp);
             continue;
 
         /*x: [[drawmesg()]] cases */
@@ -2667,7 +2788,6 @@ drawmesg(Client *client, void *av, int n)
                 error(Eshortdraw);
             /*e: [[drawmesg()]] sanity check n with m */
             dst = drawimage(client, a+1);
-
             if(dst->layer){
                 drawpoint(&p, a+5);
                 drawpoint(&q, a+13);
@@ -2675,64 +2795,22 @@ drawmesg(Client *client, void *av, int n)
 
                 ni = memlorigin(dst, p, q); // The call
 
+                /*s: [[drawmesg()]] when position window, sanity check ni */
                 if(ni < 0)
                     error("image origin failed");
+                /*e: [[drawmesg()]] when position window, sanity check ni */
                 if(ni > 0){
+                    /*s: [[drawmesg()]] when position window, addflush */
                     addflush(r);
                     addflush(dst->layer->screenr);
+                    /*e: [[drawmesg()]] when position window, addflush */
+                    /*s: [[drawmesg()]] when position window, refresh */
                     ll = drawlookup(client, BGLONG(a+1), true);
                     drawrefreshscreen(ll, client);
+                    /*e: [[drawmesg()]] when position window, refresh */
                 }
             }
             continue;
-        /*x: [[drawmesg()]] cases */
-        /* top or bottom windows: 't' top[1] nw[2] n*id[4] */
-        case 't':
-            printmesg(fmt="bsL", a, 0);
-            m = 1+1+2;
-            /*s: [[drawmesg()]] sanity check n with m */
-            if(n < m)
-                error(Eshortdraw);
-            /*e: [[drawmesg()]] sanity check n with m */
-            nw = BGSHORT(a+2);
-            if(nw < 0)
-                error(Ebadarg);
-            if(nw == 0)
-                continue;
-            m += nw*4;
-            /*s: [[drawmesg()]] sanity check n with m */
-            if(n < m)
-                error(Eshortdraw);
-            /*e: [[drawmesg()]] sanity check n with m */
-            lp = malloc(nw*sizeof(Memimage*));
-            if(lp == 0)
-                error(Enomem);
-            if(waserror()){
-                free(lp);
-                nexterror();
-            }
-            for(j=0; j<nw; j++)
-                lp[j] = drawimage(client, a+1+1+2+j*4);
-            if(lp[0]->layer == 0)
-                error("images are not windows");
-            for(j=1; j<nw; j++)
-                if(lp[j]->layer->screen != lp[0]->layer->screen)
-                    error("images not on same screen");
-
-            if(a[1])
-                memltofrontn(lp, nw); // The call
-            else
-                memltorearn(lp, nw); // The call
-
-            if(lp[0]->layer->screen->image->data == screenimage->data)
-                for(j=0; j<nw; j++)
-                    addflush(lp[j]->layer->screenr);
-            ll = drawlookup(client, BGLONG(a+1+1+2), true);
-            drawrefreshscreen(ll, client);
-            poperror();
-            free(lp);
-            continue;
-
         /*x: [[drawmesg()]] cases */
         /* toggle debugging: 'D' val[1] */
         case 'D':
@@ -2839,7 +2917,7 @@ drawblankscreen(bool blank)
      * when possible.  to help in cases when it is not possible,
      * we set the color map to be all black.
      */
-    if(blank == false){ /* turn screen on */
+    if(!blank){ /* turn screen on */
         for(i=0; i<nc; i++, p+=3)
             setcolor(i, p[0], p[1], p[2]);
         blankscreen(false);

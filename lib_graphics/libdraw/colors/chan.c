@@ -48,29 +48,35 @@ ulong
 strtochan(char *s)
 {
     char *p, *q;
-    ulong c;
-    int t, n, d;
+    int t, n;
+    int depth = 0;
+    ulong chan = 0;
 
-    c = 0;
-    d = 0;
-    p=s;
+    p = s;
     while(*p && isspace(*p))
         p++;
 
     while(*p && !isspace(*p)){
-        if((q = strchr(channames, p[0])) == nil) 
+        q = strchr(channames, p[0]);
+        /*s: [[strtochan()]] sanity check q */
+        if(q == nil) 
             return 0;
+        /*e: [[strtochan()]] sanity check q */
         t = q-channames;
+        /*s: [[strtochan()]] sanity check number after channel type */
         if(p[1] < '0' || p[1] > '9')
             return 0;
+        /*e: [[strtochan()]] sanity check number after channel type */
         n = p[1]-'0';
-        d += n;
-        c = (c<<8) | __DC(t, n);
+        depth += n;
+        chan = (chan << 8) | __DC(t, n);
         p += 2;
     }
-    if(d==0 || (d>8 && d%8) || (d<8 && 8%d))
+    /*s: [[strtochan()]] sanity check depth */
+    if(depth == 0 || (depth > 8 && depth % 8) || (depth < 8 && 8 % depth))
         return 0;
-    return c;
+    /*e: [[strtochan()]] sanity check depth */
+    return chan;
 }
 /*e: function strtochan */
 
