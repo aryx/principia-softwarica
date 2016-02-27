@@ -14,16 +14,22 @@ memlorigin(Memimage *i, Point log, Point scr)
 {
     Memlayer *l;
     Memscreen *s;
-    Memimage *t, *shad, *nsave;
-    Rectangle x, newr, oldr;
+    Rectangle newr, oldr;
     Point delta;
-    bool overlap, eqlog, eqscr, wasclear;
+    bool eqlog, eqscr, wasclear;
+    /*s: [[memlorigin()]] other locals */
+    Memimage *nsave;
+    /*x: [[memlorigin()]] other locals */
+    Memimage *shad, *t;
+    bool overlap;
+    Rectangle x;
+    /*e: [[memlorigin()]] other locals */
 
     l = i->layer;
     s = l->screen;
 
     oldr = l->screenr;
-    newr = Rect(scr.x, scr.y, scr.x+Dx(oldr), scr.y+Dy(oldr));
+    newr = Rect(scr.x, scr.y, scr.x + Dx(oldr), scr.y + Dy(oldr));
 
     eqscr = eqpt(scr, oldr.min);
     eqlog = eqpt(log, i->r.min);
@@ -31,6 +37,7 @@ memlorigin(Memimage *i, Point log, Point scr)
     if(eqscr && eqlog)
         return 0;
 
+    /*s: [[memlorigin()]] allocate new save image if log changed */
     nsave = nil;
     if(!eqlog && l->save != nil){
         nsave = allocmemimage(Rect(log.x, log.y, log.x+Dx(oldr), log.y+Dy(oldr)), i->chan);
@@ -39,22 +46,24 @@ memlorigin(Memimage *i, Point log, Point scr)
             return ERROR_NEG1;
         /*e: [[memlorigin()]] sanity check nsave */
     }
-
+    /*e: [[memlorigin()]] allocate new save image if log changed */
     /*
      * Bring it to front and move logical coordinate system.
      */
     memltofront(i);
-
     wasclear = l->clear;
+    /*s: [[memlorigin()]] set new save image if log changed */
     if(nsave){
         if(!wasclear)
-            memimagedraw(nsave, nsave->r, l->save, l->save->r.min, nil, Pt(0,0), S);
+            memimagedraw(nsave, nsave->r, l->save, l->save->r.min, nil, ZP, S);
         freememimage(l->save);
         l->save = nsave;
     }
+    /*e: [[memlorigin()]] set new save image if log changed */
 
     delta = subpt(log, i->r.min);
 
+    // new image coords
     i->r     = rectaddpt(i->r, delta);
     i->clipr = rectaddpt(i->clipr, delta);
 
@@ -62,7 +71,9 @@ memlorigin(Memimage *i, Point log, Point scr)
 
     if(eqscr)
         return 0;
+    // else
 
+    /*s: [[memlorigin()]] move window */
     /*
      * To clean up old position, make a shadow window there, don't paint it,
      * push it behind this one, and (later) delete it.  Because the refresh
@@ -71,10 +82,13 @@ memlorigin(Memimage *i, Point log, Point scr)
      * previously hidden.
      */
     shad = memlalloc(s, oldr, memlnorefresh, nil, DNofill);
+    /*s: [[memlorigin()]] sanity check shad */
     if(shad == nil)
         return ERROR_NEG1;
-
-    s->frontmost = i;
+    /*e: [[memlorigin()]] sanity check shad */
+    /*s: [[memlorigin()]] manage stack of windows, put shad after front */
+    // add_after_double_list(shad, i, s->frontmost, s->rearmost)
+    s->frontmost = i; // useless since memltofront(i) above
     if(s->rearmost == i)
         s->rearmost = shad;
     else
@@ -83,14 +97,14 @@ memlorigin(Memimage *i, Point log, Point scr)
     shad->layer->rear = l->rear;
     l->rear = shad;
     l->front = nil;
-
+    /*e: [[memlorigin()]] manage stack of windows, put shad after front */
     shad->layer->clear = false;
 
     /*
      * Shadow is now holding down the fort at the old position.
      * Move the window and hide things obscured by new position.
      */
-    for(t =l ->rear->layer->rear; t != nil; t = t->layer->rear){
+    for(t = l->rear->layer->rear; t != nil; t = t->layer->rear){
         x = newr;
         overlap = rectclip(&x, t->layer->screenr);
         if(overlap){
@@ -106,13 +120,14 @@ memlorigin(Memimage *i, Point log, Point scr)
      * Everything's covered.  Copy to new position and delete shadow window.
      */
     if(wasclear)
-        memdraw(s->image, newr, s->image, oldr.min, nil, Pt(0,0), S);
+        memdraw(s->image, newr, s->image, oldr.min, nil, ZP, S);
     else
         memlexpose(i, newr);
 
     memldelete(shad);
 
     return 1;
+    /*e: [[memlorigin()]] move window */
 }
 /*e: function memlorigin */
 

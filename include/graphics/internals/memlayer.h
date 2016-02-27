@@ -24,12 +24,14 @@ struct Memscreen
 struct Memlayer
 {
     Rectangle		screenr;	/* true position of layer on screen */
-    Memscreen	*screen;	/* screen this layer belongs to */
-
     Point			delta;	/* add delta to go from image coords to screen */
 
-    bool		clear;	/* layer is fully visible */
+    // ref<Memscreen>
+    Memscreen	*screen;	/* screen this layer belongs to */
+
+    // ref_own<Memimage> (in image coords)
     Memimage	*save;	/* save area for obscured parts */
+
 
     /*s: [[Memlayer]] stack windows fields */
     Memimage	*front;	/* window in front of this one */
@@ -39,6 +41,9 @@ struct Memlayer
     Refreshfn	refreshfn;		/* function to call to refresh obscured parts if save==nil */
     void		*refreshptr;	/* argument to refreshfn */
     /*e: [[Memlayer]] refresh fields */
+    /*s: [[Memlayer]] other fields */
+    bool		clear;	/* layer is fully visible */
+    /*e: [[Memlayer]] other fields */
 };
 /*e: struct Memlayer */
 

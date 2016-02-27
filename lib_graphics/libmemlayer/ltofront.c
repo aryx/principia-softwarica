@@ -37,6 +37,7 @@ _memltofront(Memimage *i, Memimage *front, bool fill)
         }
         /*s: [[_memltofront()]] put f behind i */
         /* swap l and f in screen's list */
+        // swap_double_list(l, f, s->frontmost, s->rearmost)
         ff = f->layer->front;
         rr = l->rear;
 

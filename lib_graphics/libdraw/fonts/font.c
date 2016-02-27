@@ -399,8 +399,10 @@ loadchar(Font *f, Rune r, Cacheinfo *c, int h, int noflush, char **subfontname)
     BPLONG(b+1, f->cacheimage->id);
     BPLONG(b+5, subf->f->bits->id);
 
+    // index
+    BPSHORT(b+9, c - f->cache); 
+
     // destination coordinates in f->cacheimage
-    BPSHORT(b+9, c - f->cache); // index
     BPLONG(b+11, c->x);
     BPLONG(b+15, top);
     BPLONG(b+19, c->x + ((fi+1)->x - fi->x));

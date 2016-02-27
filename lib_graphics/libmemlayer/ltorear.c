@@ -29,6 +29,7 @@ _memltorear(Memimage *i, Memimage *rear)
         }
         /*s: [[_memltorear()]] put i behind r */
         /* swap l and r in screen's list */
+        // swap_end_double_list(i, r, s->frontmost, s->rearmost)
         rr = r->layer->rear;
         f = l->front;
 

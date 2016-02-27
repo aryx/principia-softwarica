@@ -63,6 +63,7 @@ struct Memimage
     Memdata	*data;	/* pointer to data; shared by windows in this image */
 
     /*s: [[MemImage]] layer fields */
+    // ref_own<Memlayer>
     Memlayer	*layer;	/* nil if not a layer*/
     /*e: [[MemImage]] layer fields */
     /*s: [[MemImage]] other fields */

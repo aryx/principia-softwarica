@@ -304,7 +304,6 @@ struct Image
     Rectangle 	clipr;	/* clipping region */
     bool		repl;	/* flag: data replicates to tile clipr */
 
-    // ref<Display>
     Display		*display;	/* display holding data */
 
     /*s: [[Image]] layer fields */
@@ -357,6 +356,7 @@ struct	Subfont
 {
     // ref_own<string>
     char		*name;
+    // ref_own<Image> ?
     Image		*bits;	/* of font */
 
     // array<Fontchar> (size = Subfont.n + 1)

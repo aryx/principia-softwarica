@@ -46,7 +46,7 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
         return;
     /*e: [[_memline()]] sanity check no src layer */
 
-   Top:
+    Top:
     dl = dst->layer;
     if(dl == nil){
         // back to memdraw/
@@ -100,6 +100,7 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
     ll.radius = radius;
     ll.delta = dl->delta;
     ll.op = op;
+
     _memlayerop(llineop, dst, r, r, &ll);
     /*e: [[_memline()]] when have layers */
 }

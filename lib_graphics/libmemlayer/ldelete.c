@@ -9,10 +9,11 @@
 void
 memldelete(Memimage *i)
 {
-    Memscreen *s;
     Memlayer *l;
+    Memscreen *s;
 
     l = i->layer;
+    s = i->layer->screen;
 
     /* free backing store and disconnect refresh, to make pushback fast */
     freememimage(l->save);
@@ -21,11 +22,13 @@ memldelete(Memimage *i)
     memltorear(i);
 
     /* window is now the rearmost;  clean up screen structures and deallocate */
-    s = i->layer->screen;
+
     if(s->fill){
         i->clipr = i->r;
         memdraw(i, i->r, s->fill, i->r.min, nil, i->r.min, S);
     }
+    /*s: [[memldelete()]] manage stack of windows */
+    // remove_double_list(l, s->frontmost, s->rearmost)
     if(l->front){
         l->front->layer->rear = nil;
         s->rearmost = l->front;
@@ -33,6 +36,7 @@ memldelete(Memimage *i)
         s->frontmost = nil;
         s->rearmost = nil;
     }
+    /*e: [[memldelete()]] manage stack of windows */
 
     free(l);
     freememimage(i);

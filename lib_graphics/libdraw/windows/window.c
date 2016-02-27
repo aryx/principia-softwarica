@@ -14,10 +14,10 @@ static int	screenid;
 Screen*
 allocscreen(Image *image, Image *fill, bool public)
 {
-    byte *a;
+    Display *d;
     Screen *s;
     int id, try;
-    Display *d;
+    byte *a;
 
     d = image->display;
     /*s: [[allocscreen()]] sanity check images have same display */
@@ -68,8 +68,8 @@ allocscreen(Image *image, Image *fill, bool public)
 Screen*
 publicscreen(Display *d, int id, ulong chan)
 {
-    byte *a;
     Screen *s;
+    byte *a;
 
     s = malloc(sizeof(Screen));
     /*s: [[publicscreen()]] sanity check s */
@@ -96,6 +96,7 @@ publicscreen(Display *d, int id, ulong chan)
 
     s->display = d;
     s->id = id;
+
     s->image = nil;
     s->fill = nil;
 
@@ -107,8 +108,8 @@ publicscreen(Display *d, int id, ulong chan)
 errorneg1
 freescreen(Screen *s)
 {
-    byte *a;
     Display *d;
+    byte *a;
 
     /*s: [[freescreen()]] sanity check s */
     if(s == nil)
@@ -125,7 +126,7 @@ freescreen(Screen *s)
     a[0] = 'F';
     BPLONG(a+1, s->id);
     /*
-     * flush(1) because screen is likely holding last reference to
+     * flush(true) because screen is likely holding last reference to
      * window, and want it to disappear visually.
      */
     if(flushimage(d, true) < 0)
@@ -215,9 +216,8 @@ topbottom(Image **w, int n, bool top)
 void
 bottomwindow(Image *w)
 {
-
     /*s: [[xxxmwindow()]] sanity check window w */
-    if(w->screen == 0)
+    if(w->screen == nil)
         return;
     /*e: [[xxxmwindow()]] sanity check window w */
     topbottom(&w, 1, false);
@@ -229,7 +229,7 @@ void
 topwindow(Image *w)
 {
     /*s: [[xxxmwindow()]] sanity check window w */
-    if(w->screen == 0)
+    if(w->screen == nil)
         return;
     /*e: [[xxxmwindow()]] sanity check window w */
     topbottom(&w, 1, true);
@@ -275,13 +275,13 @@ originwindow(Image *w, Point log, Point scr)
     BPLONG(b+13, scr.x);
     BPLONG(b+17, scr.y);
     if(flushimage(w->display, true) < 0)
-        return -1;
+        return ERROR_NEG1;
     /*e: [[originwindow()]] marshall position window message */
 
     delta = subpt(log, w->r.min);
     w->r     = rectaddpt(w->r, delta);
     w->clipr = rectaddpt(w->clipr, delta);
-    return 1;
+    return OK_1;
 }
 /*e: function originwindow */
 /*e: lib_graphics/libdraw/window.c */

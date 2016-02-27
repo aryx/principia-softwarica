@@ -33,6 +33,11 @@ memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr
     if(n == nil)
         return nil;
     /*e: [[memlalloc()]] sanity check n */
+    // overwrite zero and width derived from screenr in allocmemimaged
+    // because the rectangle here does not match the data, it's a
+    // subrectangle. Zero and width should remain the same.
+    n->zero = s->image->zero;
+    n->width = s->image->width;
 
     l = malloc(sizeof(Memlayer));
     /*s: [[memlalloc()]] sanity check l */
@@ -44,7 +49,8 @@ memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr
 
     l->screen = s;
     l->screenr = screenr;
-    l->delta = Pt(0,0);
+    l->delta = Pt(0,0); // can be changed later by originwindow()
+    l->clear = false;
     /*s: [[memlalloc()]] allocate save image */
     /*s: [[memlalloc()]] if refreshfn */
     if(refreshfn)
@@ -66,9 +72,8 @@ memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr
     /*e: [[memlalloc()]] allocate save image */
 
     n->layer = l;
+    // ok no more sanity check, we can make the connection
     n->data->ref++;
-    n->zero = s->image->zero;
-    n->width = s->image->width;
 
     /*s: [[memlalloc()]] set refresh fields part1 */
     l->refreshfn = refreshfn;
@@ -77,7 +82,7 @@ memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr
     /*s: [[memlalloc()]] manage stack of windows */
     /* start with new window behind all existing ones */
 
-    // add_list(n, s->rearmost)
+    // add_end_double_list(l, s->frontmost, s->rearmost)
     l->front = s->rearmost;
     l->rear = nil;
     if(s->rearmost)
@@ -85,8 +90,6 @@ memlalloc(Memscreen *s, Rectangle screenr, Refreshfn refreshfn, void *refreshptr
     s->rearmost = n;
     if(s->frontmost == nil)
         s->frontmost = n;
-
-    l->clear = false;
 
     /* now pull new window to front */
     _memltofrontfill(n, val != DNofill);

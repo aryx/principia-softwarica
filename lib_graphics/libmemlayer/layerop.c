@@ -64,7 +64,7 @@ _memlayerop(
     void (*fn)(Memimage*, Rectangle, Rectangle, void*, int),
     Memimage *i,
     Rectangle screenr,	/* clipped to window boundaries */
-    Rectangle clipr,		/* clipped also to clipping rectangles of hierarchy */
+    Rectangle clipr,	/* clipped also to clipping rectangles of hierarchy */
     void *etc)
 {
     Memlayer *l;

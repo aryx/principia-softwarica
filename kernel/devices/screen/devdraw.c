@@ -164,6 +164,7 @@ struct DName
 {
     // key
     char        *name;
+
     // value
     Client      *client; // the owner
     DImage*     dimage;
@@ -210,11 +211,12 @@ struct DImage
     int     ascent;
     /*e: [[DImage]] font fields */
     /*s: [[DImage]] other fields */
-    int     vers;
-    /*x: [[DImage]] other fields */
+    // option<string>, Some when DImage derives from a named image
     char    *name;
-    // ref<DImage>
+    // option<ref<DImage>>
     DImage*     fromname;   /* image this one is derived from, by name */
+    /*x: [[DImage]] other fields */
+    int     vers;
     /*e: [[DImage]] other fields */
 
     // Extra
@@ -228,7 +230,7 @@ struct DImage
 /*s: struct CScreen */
 struct CScreen
 {
-    // ref_own<DScreen>
+    // ref_shared<DScreen>
     DScreen*    dscreen;
 
     CScreen*    next;
@@ -687,11 +689,14 @@ drawgoodname(DImage *d)
 {
     DName *n;
 
+    /*s: [[drawgoodname()]] if DImage [[d]] is a window */
     /* if window, validate the screen's own images */
     if(d->dscreen)
         if(!drawgoodname(d->dscreen->dimage)
         || !drawgoodname(d->dscreen->dfill))
             return false;
+    /*e: [[drawgoodname()]] if DImage [[d]] is a window */
+
     if(d->name == nil)
         return true;
     n = drawlookupname(strlen(d->name), d->name);
@@ -853,6 +858,7 @@ drawinstallscreen(Client *client, DScreen *d, int id, DImage *dimage, DImage *df
             s->fill = dfill->image;
             dfill->ref++;
         }
+        // no windows yet
         s->frontmost = nil;
         s->rearmost = nil;
 
@@ -944,6 +950,7 @@ drawfreedimage(DImage *dimage)
     if(dimage->ref > 0)
         return;
     // else
+
     /*s: [[drawfreedimage()]] free names */
     /* any names? */
     for(i=0; i<sdraw.nname; )
@@ -961,18 +968,22 @@ drawfreedimage(DImage *dimage)
     ds = dimage->dscreen;
     if(ds){
         l = dimage->image;
+        /*s: [[drawfreedimage()]] addflush */
         if(l->data == screenimage->data)
             addflush(l->layer->screenr);
+        /*e: [[drawfreedimage()]] addflush */
+        /*s: [[drawfreedimage()]] free refreshptr */
         if(l->layer->refreshfn == drawrefresh)  /* else true owner will clean up */
             free(l->layer->refreshptr);
         l->layer->refreshptr = nil;
+        /*e: [[drawfreedimage()]] free refreshptr */
 
         if(drawgoodname(dimage))
             memldelete(l);
         else
             memlfree(l);
 
-        drawfreedscreen(ds);
+        drawfreedscreen(ds); // one less reference
     }
     /*e: [[drawfreedimage()]] if dscreen */
     else
@@ -1026,12 +1037,14 @@ drawuninstall(Client *client, int id)
     // hash_remove(client->dimage, id)
     if(d->id == id){
         client->dimage[id&HASHMASK] = d->next;
+
         drawfreedimage(d);
         return;
     }
     while(next = d->next){  /* assign = */
         if(next->id == id){
             d->next = next->next;
+
             drawfreedimage(next);
             return;
         }
@@ -1055,10 +1068,12 @@ drawaddname(Client *client, DImage *di, int n, char *str)
             error(Enameused);
 
     // grow array
+    /*s: [[drawaddname()]] grow array by 1 element */
     t = smalloc((sdraw.nname+1)*sizeof(DName));
     memmove(t, sdraw.name, sdraw.nname*sizeof(DName));
     free(sdraw.name);
     sdraw.name = t;
+    /*e: [[drawaddname()]] grow array by 1 element */
 
     new = &sdraw.name[sdraw.nname++];
     new->name = smalloc(n+1);
@@ -1160,7 +1175,7 @@ drawclient(Chan *c)
 
 /*s: function drawimage */
 Memimage*
-drawimage(Client *client, uchar *a)
+drawimage(Client *client, byte *a)
 {
     DImage *d;
 
@@ -1544,8 +1559,8 @@ drawclose(Chan *c)
         while(cl->cscreen)
             drawuninstallscreen(cl, cl->cscreen);
         /*e: [[drawclose()]] free screens */
-        /*s: [[drawclose()]] free dimages */
         /* all screens are freed, so now we can free images */
+        /*s: [[drawclose()]] free dimages */
         dp = cl->dimage;
         for(i=0; i<NHASH; i++){
             while((d = *dp) != nil){
@@ -2034,6 +2049,8 @@ drawmesg(Client *client, void *av, int n)
                 /*s: [[drawmesg()]] when allocate window, addflush */
                 addflush(l->layer->screenr);
                 /*e: [[drawmesg()]] when allocate window, addflush */
+
+                // similar to regular allocate image case
                 l->clipr = clipr;
                 rectclip(&l->clipr, r);
 
@@ -2156,21 +2173,23 @@ drawmesg(Client *client, void *av, int n)
              /*e: [[drawmesg()]] sanity check n with m */
 
             di = drawlookup(client, BGLONG(a+1), false);
-             /*s: [[drawmesg()]] name an image case, sanity check di */
-             if(di == nil)
-                 error(Enodrawimage);
-             /*e: [[drawmesg()]] name an image case, sanity check di */
+            /*s: [[drawmesg()]] name an image case, sanity check di */
+            if(di == nil)
+                error(Enodrawimage);
             if(di->name)
                 error(Enamed);
+            /*e: [[drawmesg()]] name an image case, sanity check di */
 
             if(c)
                 drawaddname(client, di, j, (char*)a+7); // The call
             else{
                 dn = drawlookupname(j, (char*)a+7);
+                /*s: [[drawmesg()]] name an image case, sanity check dn */
                 if(dn == nil)
                     error(Enoname);
                 if(dn->dimage != di)
                     error(Ewrongname);
+                /*e: [[drawmesg()]] name an image case, sanity check dn */
                 drawdelname(dn);
             }
             continue;
@@ -2203,20 +2222,22 @@ drawmesg(Client *client, void *av, int n)
              if(dn == nil)
                  error(Enoname);
              /*e: [[drawmesg()]] attach to an image case, sanity check dn */
-            if(drawinstall(client, dstid, dn->dimage->image, 0) == 0)
+            // create new DImage with shared underlying Memimage of dn
+            if(drawinstall(client, dstid, dn->dimage->image, nil) == 0)
                 error(Edrawmem);
             di = drawlookup(client, dstid, false);
             /*s: [[drawmesg()]] attach to an image case, sanity check di */
             if(di == nil)
                 error("draw: cannot happen");
             /*e: [[drawmesg()]] attach to an image case, sanity check di */
+
             /*s: [[drawmesg()]] attach to an image case, set di name fields using dn */
-            di->vers = dn->vers;
             di->name = smalloc(j+1);
-            di->fromname = dn->dimage;
-            di->fromname->ref++;
             memmove(di->name, a+6, j);
             di->name[j] = '\0';
+            di->fromname = dn->dimage;
+            di->fromname->ref++;
+            di->vers = dn->vers;
             /*e: [[drawmesg()]] attach to an image case, set di name fields using dn */
 
             // for further read on /dev/draw/x/ctl
@@ -2716,7 +2737,7 @@ drawmesg(Client *client, void *av, int n)
             if(dscrn->screen->image->chan != BGLONG(a+5))
                 error("inconsistent chan");
             /*e: [[drawmesg()]] when use public screen, sanity check dscrn */
-            if(drawinstallscreen(client, dscrn, 0, nil, nil, 0) == 0) // The call
+            if(drawinstallscreen(client, dscrn, 0, nil, nil, false) == 0) // The call
                 error(Edrawmem);
             continue;
         /*x: [[drawmesg()]] cases */
@@ -2810,6 +2831,7 @@ drawmesg(Client *client, void *av, int n)
                     /*e: [[drawmesg()]] when position window, refresh */
                 }
             }
+            // else, could display error
             continue;
         /*x: [[drawmesg()]] cases */
         /* toggle debugging: 'D' val[1] */

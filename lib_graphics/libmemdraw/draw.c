@@ -130,20 +130,20 @@ memimagedraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask
     if(mask == nil)
         mask = memopaque;
     /*e: [[memdraw()]] sanity check mask */
-    /*s: [[memdraw()]] sanity check op */
+    /*s: [[memimagedraw()]] sanity check op */
     if(op < Clear || op > SoverD){
         DBG1("op out of range: %d\n", op);
         return;
     }
-    /*e: [[memdraw()]] sanity check op */
+    /*e: [[memimagedraw()]] sanity check op */
 
     // Clipping
-    /*s: [[memdraw()]] call drawclip, if empty rectangle return */
+    /*s: [[memimagedraw()]] call drawclip, if empty rectangle return */
     if(!drawclip(dst, &r, src, &p0, mask, &p1,   &par.sr, &par.mr)){
         DBG1("empty clipped rectangle\n");
         return;
     }
-    /*e: [[memdraw()]] call drawclip, if empty rectangle return */
+    /*e: [[memimagedraw()]] call drawclip, if empty rectangle return */
 
     par.op = op;
     par.dst = dst;
@@ -337,6 +337,7 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
     /*s: [[drawclip()]] adjust r if sr or mr changed */
     delta.x = r->min.x - p0->x;
     delta.y = r->min.y - p0->y;
+    // r = rectaddpt(sr, delta)
     r->min.x = sr->min.x + delta.x;
     r->min.y = sr->min.y + delta.y;
     r->max.x = sr->max.x + delta.x;
@@ -349,7 +350,7 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
     if(src->flags&Frepl) {
         delta.x = drawreplxy(src->r.min.x, src->r.max.x, sr->min.x) - sr->min.x;
         delta.y = drawreplxy(src->r.min.y, src->r.max.y, sr->min.y) - sr->min.y;
-
+        // sr = rectaddpt(sr, delta)
         sr->min.x += delta.x;
         sr->min.y += delta.y;
         sr->max.x += delta.x;

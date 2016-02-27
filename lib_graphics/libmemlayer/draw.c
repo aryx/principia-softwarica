@@ -11,17 +11,16 @@
 /*s: struct Draw */
 struct Draw
 {
-    Point	deltas;
-    Point	deltam;
+    Memlayer    *dstlayer;
 
     Memimage	*src;
+    Point	deltas;
+
     Memimage	*mask;
+    Point	deltam;
 
     // enum<Drawop>
     int	op;
-
-    Memlayer    *dstlayer;
-
 };
 /*e: struct Draw */
 
@@ -68,9 +67,13 @@ void
 memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Point p1, int op)
 {
     /*s: [[memdraw()]] locals */
-    struct Draw d;
-    Rectangle srcr, tr, mr;
     Memlayer *dl, *sl;
+    /*x: [[memdraw()]] locals */
+    Rectangle srcr, mr; // set by drawclip
+    /*x: [[memdraw()]] locals */
+    Rectangle tr;
+    /*x: [[memdraw()]] locals */
+    struct Draw d;
     /*e: [[memdraw()]] locals */
 
     DBG("memdraw %p %R %p %P %p %P\n", dst, r, src, p0, mask, p1);
@@ -91,55 +94,70 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
         return;
     }
     /*s: [[memdraw()]] when have layers */
+    /*s: [[memdraw()]] call drawclip, if empty rectangle return */
     if(drawclip(dst, &r, src, &p0, mask, &p1, &srcr, &mr) == 0){
-       DBG1("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->clipr, mask->clipr);
         return;
     }
-
+    /*e: [[memdraw()]] call drawclip, if empty rectangle return */
     /*
      Convert to screen coordinates.
      */
     dl = dst->layer;
+    /*s: [[memdraw()]] convert [[r]] if dst is a window */
     if(dl != nil){
+        // r = rectaddpt(r, dl->delta)
         r.min.x += dl->delta.x;
         r.min.y += dl->delta.y;
         r.max.x += dl->delta.x;
         r.max.y += dl->delta.y;
     }
+    /*e: [[memdraw()]] convert [[r]] if dst is a window */
+
+    /*s: [[memdraw()]] if dst is fully visible can optimize */
     Clearlayer:
     if(dl!=nil && dl->clear){
         if(src == dst){
+            // p0 = addpt(p0, dl->delta)
             p0.x += dl->delta.x;
             p0.y += dl->delta.y;
-            src = dl->screen->image;
+            src = dl->screen->image; // progress
         }
-        dst = dl->screen->image;
+        dst = dl->screen->image; // progress
         goto Top;
     }
+    /*e: [[memdraw()]] if dst is fully visible can optimize */
     // else
 
     sl = src->layer;
+    /*s: [[memdraw()]] convert [[p0]] and [[srcr]] if src is a window */
     if(sl != nil){
+        // p0 = addpt(p0, sl->delta)
         p0.x += sl->delta.x;
         p0.y += sl->delta.y;
+        // srcr = rectaddpt(srcr, sl->delta)
         srcr.min.x += sl->delta.x;
         srcr.min.y += sl->delta.y;
         srcr.max.x += sl->delta.x;
         srcr.max.y += sl->delta.y;
     }
+    /*e: [[memdraw()]] convert [[p0]] and [[srcr]] if src is a window */
 
     /*
      * Now everything is in screen coordinates.
      * mask is an image.  dst and src are images or obscured layers.
      */
 
+    /*s: [[memdraw()]] if dst and src are the same layer */
     /*
      * if dst and src are the same layer, just draw in save area and expose.
      */
-    if(dl!=nil && dst==src){
+    if(dl != nil && dst == src){
+        /*s: [[memdraw()]] if refresh function for dst */
         if(dl->save == nil)
             return;	/* refresh function makes this case unworkable */
+        /*e: [[memdraw()]] if refresh function for dst */
         if(rectXrect(r, srcr)){
+            /*s: [[memdraw()]] set tr to union of r and srcr and adapt p1 */
             tr = r;
             if(srcr.min.x < tr.min.x){
                 p1.x += tr.min.x - srcr.min.x;
@@ -153,21 +171,28 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
                 tr.max.x = srcr.max.x;
             if(srcr.max.y > tr.max.y)
                 tr.max.y = srcr.max.y;
+            /*e: [[memdraw()]] set tr to union of r and srcr and adapt p1 */
             memlhide(dst, tr);
         }else{
             memlhide(dst, r);
             memlhide(dst, srcr);
         }
-        memdraw(dl->save, rectsubpt(r, dl->delta), dl->save,
-                subpt(srcr.min, src->layer->delta), mask, p1, op);
+        memdraw(dl->save, rectsubpt(r, dl->delta), 
+                dl->save, subpt(srcr.min, dl->delta),  
+                mask, p1, op);
         memlexpose(dst, r);
         return;
     }
+    /*e: [[memdraw()]] if dst and src are the same layer */
+    // else
 
+    /*s: [[memdraw()]] make src an image */
     if(sl){
+        /*s: [[memdraw()]] if src is fully visible can optimize */
         if(sl->clear){
             src = sl->screen->image;
             if(dl != nil){
+                // r = rectsubpt(r, dl->delta)
                 r.min.x -= dl->delta.x;
                 r.min.y -= dl->delta.y;
                 r.max.x -= dl->delta.x;
@@ -175,28 +200,40 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
             }
             goto Top;
         }
+        /*e: [[memdraw()]] if src is fully visible can optimize */
+
         /* relatively rare case; use save area */
+        /*s: [[memdraw()]] if refresh function for src */
         if(sl->save == nil)
             return;	/* refresh function makes this case unworkable */
-        memlhide(src, srcr);
+        /*e: [[memdraw()]] if refresh function for src */
+        memlhide(src, srcr); // draw the needed pixels in sl->save
+
         /* convert back to logical coordinates */
+        // p0 = subpt(p0, sl->delta)
         p0.x -= sl->delta.x;
         p0.y -= sl->delta.y;
+        // srcr = rectsubpt(srcr, sl->delta)
         srcr.min.x -= sl->delta.x;
         srcr.min.y -= sl->delta.y;
         srcr.max.x -= sl->delta.x;
         srcr.max.y -= sl->delta.y;
-        src = src->layer->save;
+
+        src = src->layer->save; // progress
     }
+    /*e: [[memdraw()]] make src an image */
 
     /*
      * src is now an image.  dst may be an image or a clear layer
      */
-    if(dst->layer == nil)
+    if(dl == nil)
         goto Top;
-    if(dst->layer->clear)
+    /*s: [[memdraw()]] after src is an image, if dst is fully visible can optimize */
+    if(dl->clear)
         goto Clearlayer;
+    /*e: [[memdraw()]] after src is an image, if dst is fully visible can optimize */
 
+    /*s: [[memdraw()]] general case where dst is an obscured layer */
     /*
      * dst is an obscured layer
      */
@@ -206,7 +243,9 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     d.src = src;
     d.op = op;
     d.mask = mask;
+
     _memlayerop(ldrawop, dst, r, r, &d);
+    /*e: [[memdraw()]] general case where dst is an obscured layer */
     /*e: [[memdraw()]] when have layers */
 }
 /*e: function memdraw */
