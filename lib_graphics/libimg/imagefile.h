@@ -50,30 +50,37 @@ typedef struct ImageInfo {
 
 
 Rawimage**	readjpg(int, int);
-Rawimage**	Breadjpg(Biobuf *b, int);
 Rawimage**	readpng(int, int);
-Rawimage**	Breadpng(Biobuf *b, int);
 Rawimage**	readgif(int, int);
 Rawimage**	readpixmap(int, int);
+
+Rawimage**	Breadjpg(Biobuf *b, int);
+Rawimage**	Breadpng(Biobuf *b, int);
+
 Rawimage*	torgbv(Rawimage*, int);
 Rawimage*	totruecolor(Rawimage*, int);
+
 int		writerawimage(int, Rawimage*);
 void*		_remaperror(char*, ...);
 
 typedef struct Memimage Memimage;	/* avoid necessity to include memdraw.h */
 
-char*		startgif(Biobuf*, Image*, int);
 char*		writegif(Biobuf*, Image*, char*, int, int);
-void		endgif(Biobuf*);
-char*		memstartgif(Biobuf*, Memimage*, int);
-char*		memwritegif(Biobuf*, Memimage*, char*, int, int);
-void		memendgif(Biobuf*);
-Image*		onechan(Image*);
-Memimage*	memonechan(Memimage*);
-
 char*		writeppm(Biobuf*, Image*, char*);
-char*		memwriteppm(Biobuf*, Memimage*, char*);
-Image*		multichan(Image*);
-Memimage*	memmultichan(Memimage*);
 
+char*		startgif(Biobuf*, Image*, int);
+void		endgif(Biobuf*);
+
+Image*		onechan(Image*);
+Image*		multichan(Image*);
+
+// memimage variants
+char*		memwritegif(Biobuf*, Memimage*, char*, int, int);
+char*		memwriteppm(Biobuf*, Memimage*, char*);
 char*		memwritepng(Biobuf*, Memimage*, ImageInfo*);
+
+char*		memstartgif(Biobuf*, Memimage*, int);
+void		memendgif(Biobuf*);
+
+Memimage*	memonechan(Memimage*);
+Memimage*	memmultichan(Memimage*);
