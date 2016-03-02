@@ -326,7 +326,7 @@ screeninit(void)
 	int set;
 	ulong chan;
 
-	set = screensize() == 0;
+	set = (screensize() == 0);
 	fb = fbinit(set, &xgscreen.r.max.x, &xgscreen.r.max.y, &xgscreen.depth);
 	if(fb == nil){
 		print("can't initialise %dx%dx%d framebuffer \n",
