@@ -7,7 +7,7 @@ typedef struct	Menu Menu;
 typedef struct 	Mousectl Mousectl;
 
 /*s: enum Click */
-enum click {
+enum Click {
     CLICK_LEFT = 1,
     CLICK_MIDDLE = 2,
     CLICK_RIGHT = 4,
@@ -17,7 +17,7 @@ enum click {
 /*s: struct Mouse (include/mouse.h) */
 struct	Mouse
 {
-    // bitset<enum<click>>
+    // bitset<enum<Click>>
     int	buttons;	/* bit array: LMR=124 */
     Point	xy;
     ulong	msec;
@@ -39,6 +39,7 @@ struct Mousectl
     fdt		cfd;		/* to cursor file */
 
     int		pid;	/* of slave proc */
+
     Image*	image;	/* of associated window/display */
 };
 /*e: struct Mousectl */

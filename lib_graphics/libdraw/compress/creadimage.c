@@ -60,7 +60,9 @@ creadimage(Display *d, int fd, int dolock)
         if(dolock)
             lockdisplay(d);
         i = allocimage(d, r, chan, 0, 0);
+        /*s: [[creadimage()]] set malloc tag for debug */
         setmalloctag(i, getcallerpc(&d));
+        /*e: [[creadimage()]] set malloc tag for debug */
         if(dolock)
             unlockdisplay(d);
         if(i == nil)

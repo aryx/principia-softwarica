@@ -523,7 +523,7 @@ drawerror(Display *d, char *s)
     else{
         errstr(err, sizeof err);
         fprint(STDERR, "draw: %s: %s\n", s, err);
-        exits(s);
+        exits(s); // extreme!
     }
 }
 /*e: function drawerror */

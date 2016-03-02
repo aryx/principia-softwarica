@@ -99,6 +99,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
         return;
     }
     /*e: [[memdraw()]] call drawclip, if empty rectangle return */
+
     /*
      Convert to screen coordinates.
      */
@@ -120,6 +121,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
             // p0 = addpt(p0, dl->delta)
             p0.x += dl->delta.x;
             p0.y += dl->delta.y;
+
             src = dl->screen->image; // progress
         }
         dst = dl->screen->image; // progress
@@ -146,8 +148,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
      * Now everything is in screen coordinates.
      * mask is an image.  dst and src are images or obscured layers.
      */
-
-    /*s: [[memdraw()]] if dst and src are the same layer */
+    /*s: [[memdraw()]] if dst and src are the same window */
     /*
      * if dst and src are the same layer, just draw in save area and expose.
      */
@@ -183,7 +184,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
         memlexpose(dst, r);
         return;
     }
-    /*e: [[memdraw()]] if dst and src are the same layer */
+    /*e: [[memdraw()]] if dst and src are the same window */
     // else
 
     /*s: [[memdraw()]] make src an image */
@@ -233,7 +234,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
         goto Clearlayer;
     /*e: [[memdraw()]] after src is an image, if dst is fully visible can optimize */
 
-    /*s: [[memdraw()]] general case where dst is an obscured layer */
+    /*s: [[memdraw()]] general case where dst is an obscured window */
     /*
      * dst is an obscured layer
      */
@@ -245,7 +246,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     d.mask = mask;
 
     _memlayerop(ldrawop, dst, r, r, &d);
-    /*e: [[memdraw()]] general case where dst is an obscured layer */
+    /*e: [[memdraw()]] general case where dst is an obscured window */
     /*e: [[memdraw()]] when have layers */
 }
 /*e: function memdraw */

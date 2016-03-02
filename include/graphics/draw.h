@@ -216,6 +216,11 @@ struct Rectangle
 };
 /*e: struct Rectangle */
 
+/*s: type Errorfn */
+typedef void (*Errorfn)(Display*, char*);
+/*e: type Errorfn */
+
+
 /*s: struct Screen */
 struct Screen
 {
@@ -278,7 +283,7 @@ struct Display
     /*x: [[Display]] other fields */
     char	oldlabel[64];
     /*x: [[Display]] other fields */
-    void	(*error)(Display*, char*);
+    Errorfn error;
     /*e: [[Display]] other fields */
 
     // Extra
@@ -494,10 +499,6 @@ struct Font
 /*s: function Dy */
 #define	Dy(r)	((r).max.y-(r).min.y)
 /*e: function Dy */
-
-/*s: type Errorfn */
-typedef void Errorfn(Display*, char*);
-/*e: type Errorfn */
 
 /*
  * Image management

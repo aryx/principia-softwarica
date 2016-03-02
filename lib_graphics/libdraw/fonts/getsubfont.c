@@ -31,7 +31,7 @@ _getsubfont(Display *d, char *name)
     if(d && !d->locking)
         unlockdisplay(d);
     /*e: [[_getsubfont()]] locking part1 */
-    f = readsubfont(d, name, fd, d && d->locking==false);
+    f = readsubfont(d, name, fd, d && !d->locking);
     /*s: [[_getsubfont()]] locking part2 */
     if(d && !d->locking)
         lockdisplay(d);
@@ -41,7 +41,9 @@ _getsubfont(Display *d, char *name)
         fprint(2, "getsubfont: can't read %s: %r\n", name);
     /*e: [[_getsubfont()]] sanity check f */
     close(fd);
+    /*s: [[_getsubfont()]] set malloc tag for debug */
     setmalloctag(f, getcallerpc(&d));
+    /*e: [[_getsubfont()]] set malloc tag for debug */
 
     return f;
 }

@@ -339,7 +339,6 @@ static  char Eindex[] =     "character index out of range";
 static  char Enoclient[] =  "no such draw client";
 /*e: global Enoclient */
 /*s: global Enameused */
-//static    char Edepth[] =     "image has bad depth";
 static  char Enameused[] =  "image name in use";
 /*e: global Enameused */
 /*s: global Enoname */
@@ -1912,7 +1911,7 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
         }
     }
     *q++ = '\n';
-    *q = 0;
+    *q = '\0';
     iprint("%.*s", (int)(q-buf), buf);
 }
 /*e: function printmesg */
@@ -1987,7 +1986,7 @@ drawmesg(Client *client, void *av, int n)
     a = av;
     if(waserror()){
         if(fmt) 
-            printmesg(fmt, a, 1);
+            printmesg(fmt, a, true);
         nexterror();
     }
     while((n-=m) > 0){
@@ -1997,7 +1996,7 @@ drawmesg(Client *client, void *av, int n)
         /*s: [[drawmesg()]] cases */
         /* new allocate: 'b' id[4] screenid[4] refresh[1] chan[4] repl[1] R[4*4] clipR[4*4] rrggbbaa[4] */
         case 'b':
-            printmesg(fmt="LLbLbRRL", a, 0);
+            printmesg(fmt="LLbLbRRL", a, false);
             m = 1+4+4+1+4+1+4*4+4*4+4;
              /*s: [[drawmesg()]] sanity check n with m */
              if(n < m)
@@ -2102,7 +2101,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* free: 'f' id[4] */
         case 'f':
-            printmesg(fmt="L", a, 1);
+            printmesg(fmt="L", a, true);
             m = 1+4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2119,7 +2118,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* set repl and clip: 'c' dstid[4] repl[1] clipR[4*4] */
         case 'c':
-            printmesg(fmt="LbR", a, 0);
+            printmesg(fmt="LbR", a, false);
             m = 1+4+1+4*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2144,7 +2143,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* visible: 'v' */
         case 'v':
-            printmesg(fmt="", a, 0);
+            printmesg(fmt="", a, false);
             m = 1;
 
             drawflush(); // The call
@@ -2154,7 +2153,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* name an image: 'N' dstid[4] in[1] j[1] name[j] */
         case 'N':
-            printmesg(fmt="Lbz", a, 0);
+            printmesg(fmt="Lbz", a, false);
             m = 1+4+1+1;
              /*s: [[drawmesg()]] sanity check n with m */
              if(n < m)
@@ -2196,7 +2195,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* attach to a named image: 'n' dstid[4] j[1] name[j] */
         case 'n':
-            printmesg(fmt="Lz", a, 0);
+            printmesg(fmt="Lz", a, false);
             m = 1+4+1;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2246,7 +2245,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* draw: 'd' dstid[4] srcid[4] maskid[4] R[4*4] P[2*4] P[2*4] */
         case 'd':
-            printmesg(fmt="LLLRPP", a, 0);
+            printmesg(fmt="LLLRPP", a, false);
             m = 1+4+4+4+4*4+2*4+2*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2268,7 +2267,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* set compositing operator for next draw operation: 'O' op */
         case 'O':
-            printmesg(fmt="b", a, 0);
+            printmesg(fmt="b", a, false);
             m = 1+1;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2279,7 +2278,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* draw line: 'L' dstid[4] p0[2*4] p1[2*4] end0[4] end1[4] radius[4] srcid[4] sp[2*4] */
         case 'L':
-            printmesg(fmt="LPPlllLP", a, 0);
+            printmesg(fmt="LPPlllLP", a, false);
             m = 1+4+2*4+2*4+4+4+4+4+2*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2315,7 +2314,7 @@ drawmesg(Client *client, void *av, int n)
         /* polygon: 'p' dstid[4] n[2] end0[4] end1[4] radius[4] srcid[4] sp[2*4] p0[2*4] dp[2*2*n] */
         case 'p':
         case 'P':
-            printmesg(fmt="LslllLPP", a, 0);
+            printmesg(fmt="LslllLPP", a, false);
             m = 1+4+2+4+4+4+4+2*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2386,7 +2385,7 @@ drawmesg(Client *client, void *av, int n)
                         r = Rect(q.x-oesize, q.y-oesize, q.x+oesize+1, q.y+oesize+1);
                         combinerect(&r, Rect(p.x-esize, p.y-esize, p.x+esize+1, p.y+esize+1));
                     }
-                    if(rectclip(&r, dst->clipr))        /* should perhaps be an arg to dstflush */
+                    if(rectclip(&r, dst->clipr))  /* should perhaps be an arg to dstflush */
                         dstflush(dstid, dst, r);
                 }
                 /*e: [[drawmesg()]] when draw polygon, if doflush */
@@ -2411,7 +2410,7 @@ drawmesg(Client *client, void *av, int n)
         /* ellipse: 'e' dstid[4] srcid[4] center[2*4] a[4] b[4] thick[4] sp[2*4] alpha[4] phi[4]*/
         case 'e':
         case 'E':
-            printmesg(fmt="LLPlllPll", a, 0);
+            printmesg(fmt="LLPlllPll", a, false);
             m = 1+4+4+2*4+4+4+4+2*4+2*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2462,7 +2461,7 @@ drawmesg(Client *client, void *av, int n)
         /* stringbg: 'x' dstid[4] srcid[4] fontid[4] P[2*4] clipr[4*4] sp[2*4] ni[2] bgid[4] bgpt[2*4] ni*(index[2]) */
         case 's':
         case 'x':
-            printmesg(fmt="LLLPRPs", a, 0);
+            printmesg(fmt="LLLPRPs", a, false);
             m = 1+4+4+4+2*4+4*4+2*4+2;
             /*s: [[drawmesg()]] when draw string, if bg part1 */
             if(*a == 'x')
@@ -2546,7 +2545,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* load character: 'l' fontid[4] srcid[4] index[2] R[4*4] P[2*4] left[1] width[1] */
         case 'l':
-            printmesg(fmt="LLSRPbb", a, 0);
+            printmesg(fmt="LLSRPbb", a, false);
             m = 1+4+4+2+4*4+2*4+1+1;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2583,7 +2582,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* initialize font: 'i' fontid[4] nchars[4] ascent[1] */
         case 'i':
-            printmesg(fmt="Llb", a, 1);
+            printmesg(fmt="Llb", a, true);
             m = 1+4+4+1;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2622,7 +2621,7 @@ drawmesg(Client *client, void *av, int n)
         /* write from compressed data: 'Y' id[4] R[4*4] data[x*1] */
         case 'y':
         case 'Y':
-            printmesg(fmt="LR", a, 0);
+            printmesg(fmt="LR", a, false);
             m = 1+4+4*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2646,7 +2645,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* read: 'r' id[4] R[4*4] */
         case 'r':
-            printmesg(fmt="LR", a, 0);
+            printmesg(fmt="LR", a, false);
             m = 1+4+4*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2679,7 +2678,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* allocate screen: 'A' id[4] imageid[4] fillid[4] public[1] */
         case 'A':
-            printmesg(fmt="LLLb", a, 1);
+            printmesg(fmt="LLLb", a, true);
             m = 1+4+4+4+1;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2706,7 +2705,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* free screen: 'F' id[4] */
         case 'F':
-            printmesg(fmt="L", a, 1);
+            printmesg(fmt="L", a, true);
             m = 1+4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2719,7 +2718,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* use public screen: 'S' id[4] chan[4] */
         case 'S':
-            printmesg(fmt="Ll", a, 0);
+            printmesg(fmt="Ll", a, false);
             m = 1+4+4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2743,7 +2742,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* top or bottom windows: 't' top[1] nw[2] n*id[4] */
         case 't':
-            printmesg(fmt="bsL", a, 0);
+            printmesg(fmt="bsL", a, false);
             m = 1+1+2;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)
@@ -2802,7 +2801,7 @@ drawmesg(Client *client, void *av, int n)
         /*x: [[drawmesg()]] cases */
         /* position window: 'o' id[4] r.min [2*4] screenr.min [2*4] */
         case 'o':
-            printmesg(fmt="LPP", a, 0);
+            printmesg(fmt="LPP", a, false);
             m = 1+4+2*4+2*4;
             /*s: [[drawmesg()]] sanity check n with m */
             if(n < m)

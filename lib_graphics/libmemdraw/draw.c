@@ -2316,7 +2316,7 @@ memoptdraw(Memdrawparam *par)
         v = par->sdval;
 
         switch(dst->depth){
-        /*s: [[memoptdraw()]] switch depth of dst cases */
+        /*s: [[memoptdraw()]] when condition for memset, switch depth of dst cases */
         case 1:
         case 2:
         case 4:
@@ -2373,15 +2373,15 @@ memoptdraw(Memdrawparam *par)
                 }
             }
             return true;
-        /*x: [[memoptdraw()]] switch depth of dst cases */
+        /*x: [[memoptdraw()]] when condition for memset, switch depth of dst cases */
         default:
             assert(0 /* bad dest depth in memoptdraw */);
-        /*x: [[memoptdraw()]] switch depth of dst cases */
+        /*x: [[memoptdraw()]] when condition for memset, switch depth of dst cases */
         case 8:
             for(y=0; y < dy; y++, dp += dwid)
                 memset(dp, v, dx);
             return true;
-        /*x: [[memoptdraw()]] switch depth of dst cases */
+        /*x: [[memoptdraw()]] when condition for memset, switch depth of dst cases */
         case 16:
             p[0] = v;		/* make little endian */
             p[1] = v>>8;
@@ -2390,12 +2390,12 @@ memoptdraw(Memdrawparam *par)
             for(y=0; y<dy; y++, dp+=dwid)
                 memsets(dp, v, dx);
             return 1;
-        /*x: [[memoptdraw()]] switch depth of dst cases */
+        /*x: [[memoptdraw()]] when condition for memset, switch depth of dst cases */
         case 24:
             for(y=0; y<dy; y++, dp+=dwid)
                 memset24(dp, v, dx);
             return 1;
-        /*e: [[memoptdraw()]] switch depth of dst cases */
+        /*e: [[memoptdraw()]] when condition for memset, switch depth of dst cases */
         case 32:
             p[0] = v;		/* make little endian */
             p[1] = v>>8;

@@ -61,8 +61,8 @@ memlorigin(Memimage *i, Point log, Point scr)
     }
     /*e: [[memlorigin()]] set new save image if log changed */
 
+    // like in user side
     delta = subpt(log, i->r.min);
-
     // new image coords
     i->r     = rectaddpt(i->r, delta);
     i->clipr = rectaddpt(i->clipr, delta);

@@ -11,8 +11,8 @@ rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */
     /*
      * Expand rectXrect() in line for speed
      */
-    if((rp->min.x < bp->max.x && bp->min.x < rp->max.x &&
-        rp->min.y < bp->max.y && bp->min.y < rp->max.y)==false)
+    if(!(rp->min.x < bp->max.x && bp->min.x < rp->max.x &&
+        rp->min.y < bp->max.y && bp->min.y < rp->max.y))
         return false;
 
     /* They must overlap */

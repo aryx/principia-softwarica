@@ -279,6 +279,7 @@ originwindow(Image *w, Point log, Point scr)
     /*e: [[originwindow()]] marshall position window message */
 
     delta = subpt(log, w->r.min);
+    // new image coords
     w->r     = rectaddpt(w->r, delta);
     w->clipr = rectaddpt(w->clipr, delta);
     return OK_1;
