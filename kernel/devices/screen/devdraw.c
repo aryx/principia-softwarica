@@ -1869,7 +1869,7 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
     char *p, *q;
     int s, left;
 
-    if(1|| plsprnt==false){
+    if(true || !plsprnt){ //old: 1 || !plsprnt
         SET(s,q,p);
         USED(fmt, a, buf, p, q, s);
         return;

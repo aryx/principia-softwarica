@@ -195,7 +195,6 @@ vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
     int h, w, pos;
     Rectangle r;
 
-//  drawdebug = 1;
     if(xp < xbuf || xp >= &xbuf[sizeof(xbuf)])
         xp = xbuf;
 
@@ -257,7 +256,6 @@ vgascreenputc(VGAscr* scr, char* buf, Rectangle *flushr)
         combinerect(flushr, r);
         curpos.x += w;
     }
-//  drawdebug = 0;
 }
 /*e: function vgascreenputc(x86) */
 
