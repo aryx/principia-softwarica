@@ -20,13 +20,16 @@ void main(void) {
     exits("done");
   }
 
-  color = allocimage(display, Rect(0,0,1,1), view->chan, 1, DMagenta);
+  color = allocimage(display, Rect(0,0,1,1), view->chan, true, DMagenta);
   draw(view, view->r, color, nil, ZP);
 
   line(view, Pt(10, 10), Pt(100, 100), Endarrow, Endarrow, 10, display->black, ZP);
   string(view, Pt(200, 200), display->black, ZP, font, "this is a test");
 
-  flushimage(display, 1);
+  // oops ... can overflow on desktop and other windows when run under rio
+  line(display->image, Pt(100, 100), Pt(700, 700), 0, 0, 3, display->black, ZP);
+
+  flushimage(display, true);
 
   //sleep(5000); // msec
   einit(Ekeyboard);
@@ -35,7 +38,7 @@ void main(void) {
     res = ekbd();
     print("key =%d\n", res);
 
-    if(res == 9) {
+    if(res == 9 || res == 10) {
       //_exits("done");
       exits("done");
     }
