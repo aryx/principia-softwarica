@@ -279,7 +279,8 @@ struct Display
     // list<ref<Window>> (next = Image.next)
     Image	*windows;
     /*x: [[Display]] other fields */
-    Image	*screenimage; // ???
+    // option<Image>, same than view, the window (or desktop image)
+    Image	*screenimage;
     /*x: [[Display]] other fields */
     char	oldlabel[64];
     /*x: [[Display]] other fields */
@@ -706,8 +707,6 @@ extern int		mousescrollsize(int);
 extern	Point		ZP;
 extern	Rectangle	ZR;
 
-extern	byte	defontdata[];
-extern	int		sizeofdefont;
 
 /*
  * Set up by initdraw()
@@ -716,6 +715,15 @@ extern	Display	*display;
 extern	Image	*view; // was called screen before
 extern	Font	*font;
 extern	Screen	*screen; // was called _screen before
+
+
+
+// PRIVATE ???? drawimpl.h ??
+
+
+extern	byte	defontdata[];
+extern	int		sizeofdefont;
+
 
 // dead?
 extern	int		_cursorfd;
