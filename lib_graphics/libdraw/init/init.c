@@ -11,7 +11,7 @@ Display	*display;
 Font	*font;
 /*e: global font */
 /*s: global screen */
-// option<Image>
+// ref<Image>, a window
 Image	*view;
 /*e: global screen */
 /*s: global _drawdebug */
@@ -126,7 +126,7 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
     }
     display->defaultfont = font;
     /*e: [[geninitdraw()]] set up font */
-    /*s: [[geninitdraw()]] write label */
+    /*s: [[geninitdraw()]] write new label */
     /*
      * Write label; ignore errors (we might not be running under rio)
      */
@@ -143,7 +143,7 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
             }
         }
     }
-    /*e: [[geninitdraw()]] write label */
+    /*e: [[geninitdraw()]] write new label */
     /*s: [[geninitdraw()]] get window */
     snprint(buf, sizeof buf, "%s/winname", display->windir);
     if(gengetwindow(display, buf, &view, &screen, ref) < 0)
@@ -176,63 +176,84 @@ initdraw(Errorfn error, char *fontname , char *label)
 errorneg1
 gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
 {
-    int n, fd;
-    char buf[64+1];
+    int n;
+    fdt fd;
+    char buf[64+1]; // /dev/winname content
     Image *image;
     Rectangle r;
 
     fd = open(winname, OREAD);
     if(fd<0 || (n=read(fd, buf, sizeof buf-1))<=0){
+        // no /dev/winname, image is then the full screen
         image = d->image;
+        /*s: [[gengetwindow()]] sanity check image from display */
         if(image == nil){
             fprint(2, "gengetwindow: %r\n");
+            /*s: [[gengetwindow()]] return error */
             *winp = nil;
             d->screenimage = nil;
             return ERROR_NEG1;
+            /*e: [[gengetwindow()]] return error */
         }
+        /*e: [[gengetwindow()]] sanity check image from display */
         strcpy(buf, "noborder");
     }else{
         close(fd);
         buf[n] = '\0';
+        /*s: [[gengetwindow()]] if already had a view, free it */
         if(*winp != nil){
             _freeimage1(*winp);
             freeimage((*scrp)->image);
             freescreen(*scrp);
             *scrp = nil;
         }
+        /*e: [[gengetwindow()]] if already had a view, free it */
         image = namedimage(d, buf);
+        /*s: [[gengetwindow()]] sanity check image from namedimage */
         if(image == nil){
             fprint(2, "namedimage %s failed: %r\n", buf);
+            /*s: [[gengetwindow()]] return error */
             *winp = nil;
             d->screenimage = nil;
-            return -1;
+            return ERROR_NEG1;
+            /*e: [[gengetwindow()]] return error */
         }
         assert(image->chan != 0);
+        /*e: [[gengetwindow()]] sanity check image from namedimage */
     }
 
     d->screenimage = image;
-    *scrp = allocscreen(image, d->white, 0);
+    *scrp = allocscreen(image, d->white, false);
+    /*s: [[gengetwindow()]] sanity check srcp */
     if(*scrp == nil){
         freeimage(d->screenimage);
+        /*s: [[gengetwindow()]] return error */
         *winp = nil;
         d->screenimage = nil;
-        return -1;
+        return ERROR_NEG1;
+        /*e: [[gengetwindow()]] return error */
     }
+    /*e: [[gengetwindow()]] sanity check srcp */
 
     r = image->r;
     if(strncmp(buf, "noborder", 8) != 0)
         r = insetrect(image->r, Borderwidth);
     *winp = _allocwindow(*winp, *scrp, r, ref, DWhite);
+    /*s: [[gengetwindow()]] sanity check winp */
     if(*winp == nil){
         freescreen(*scrp);
         *scrp = nil;
         freeimage(image);
+        /*s: [[gengetwindow()]] return error */
+        *winp = nil;
         d->screenimage = nil;
-        return -1;
+        return ERROR_NEG1;
+        /*e: [[gengetwindow()]] return error */
     }
+    /*e: [[gengetwindow()]] sanity check winp */
     d->screenimage = *winp;
     assert((*winp)->chan != 0);
-    return 1;
+    return OK_1;
 }
 /*e: function gengetwindow */
 
@@ -452,7 +473,7 @@ _closedisplay(Display *disp, bool isshutdown)
     if(disp == display)
         display = nil;
 
-    /*s: [[_closedisplay()]] if oldlabel */
+    /*s: [[_closedisplay()]] restore oldlabel */
     if(disp->oldlabel[0]){
         snprint(buf, sizeof buf, "%s/label", disp->windir);
         fd = open(buf, OWRITE);
@@ -461,7 +482,7 @@ _closedisplay(Display *disp, bool isshutdown)
             close(fd);
         }
     }
-    /*e: [[_closedisplay()]] if oldlabel */
+    /*e: [[_closedisplay()]] restore oldlabel */
 
     /*
      * if we're shutting down, don't free all the resources.

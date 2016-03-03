@@ -176,13 +176,14 @@ What is a framebuffer?
 \item What are the algorithms to draw arbitrary lines
 (e.g. non-vertical and non-horizontal lines)
 on a rectangular aligned set of pixels (the screen)?
+% or polygons
 
 \item How pictures are represented in memory? How they
-are stored on disk? What is the format of a JPG file?
+are stored on the disk? What is the format of a JPG file?
 
 \item What is the alpha channel?
 
-\item What is a rasterization? What are vector graphics?
+\item What is rasterization? What are vector graphics?
 
 \item How characters are drawn on the screen? 
 How fonts are managed? What are truetype fonts? 
@@ -197,28 +198,31 @@ How fonts are managed? What are truetype fonts?
 
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
 %data-structures:
-% - double linked lists (windows)
+% - double linked lists (windows in Screen.frontmost)
 % - growing array (Kdraw.clients, Font.subf, ...)
 % - growing hashtable with buckets inline in array (Font.cache)
 %   and lookup small window when hash conflict (jordan/julien did that
 %   for hh_server no?)
+% - glyphs pictures and glyphs cache (a bit like sprite cache?)
 % - moveable shared area with backward pointer to intermediate wrapper
 
 %algorithms:
 % - fill polygon, quite complex
+% - ellipses, arcs, bezier
 % - overlapping windows with save and interception and RECURS
 
 \section{\plan{} [[/dev/draw/]]}
 
 We will explain in this book the code of the \plan graphics
-system, visible to the programmer primarily through 
+system, visible to the user primarily through 
 its [[/dev/draw/]] {device directory}, 
 and also partially through the [[/dev/mouse]] and [[/dev/cons]] {device files}.
 % LOC?
 % 2d Graphics library.
+% visible to programmer mostly through include/draw.h
 
-% It actually provides some forms of windows managment, with backing
-% store, and even menus (but rio is more complete).
+% It actually provides some forms of windows managment (overlapping windows
+% with backing store), and even menus (but rio is more complete).
 % It can also be remote like X11! for free! can draw through the network, and
 % so have graphical application running on one machine but displaying
 % result on your (powerful! like browser! and web app!)
@@ -228,7 +232,7 @@ and also partially through the [[/dev/mouse]] and [[/dev/cons]] {device files}.
 % bad stuff of draw though: most of the code is in the kernel :(
 % but lots of stuff can be in library and can be tested outside
 % (see memdrawtest), but still a bit ugly. The images, fonts,
-% all of that reside in special kernel memory (imagmem)
+% reside in special kernel memory (imagmem).
 
 \section{Other graphics systems}
 
@@ -250,21 +254,23 @@ but which were ultimately discarded:
 %  scanline algorithms.
 
 \item Postscript
-% maybe everything API after took Postscript as a model?
+% maybe every drawing APIs after took Postscript as a model?
 % with idea of Context?
 
 \item X11/Xlib
-% remote so cool, bug very very big
+% remote, so cool, bug very very big
 % rely also on libpixman now, they factorized code with cairo
+% "why X11 is so big" by Ken Thompson, partly the motivation for plan9
 
 \item OpenGL
 % mostly 3d! can do also 2d. gouraud, shading, textures, 3d rasterizer, etc.
 %not much key/mouse/menu thing, like here actually
 % tinyGL of bellard (openGL in software).
 % Mesa? (openGL also in software no?)
+%recent: vulkan, just got out, but looks far more low-level
 
 \item Cairo
-% 2d graphics libs with support for many output "devices",
+% 2d graphics lib with support for many output "devices",
 % xwindow, quartz, win32, image buffer, pdf, postscript, svg, opengl, directFB.
 % used in firefox
 % can leverage hardware acceleration.
@@ -328,16 +334,18 @@ but which were ultimately discarded:
 % install driver command? #vga?
 % install devdraw #i
 
-% toy graphical app /tests/draw/ ?
+% compile and test toy graphical app /tests/draw/ ?
+
+% FIGURE screenshot
 
 
 \section{Requirements}
 
 % C as usual.
 
-% assume Computer Graphics, principles and practice (CGPP)
-%  Foley et al. at least for drawing shapes chapter. Too long
-%  otherwise to explain algorithm.
+% Basic geometry.
+% assume Computer Graphics, Principles and Practice (CGPP) by Foley et al.?
+%  Maybe for drawing shapes chapter? Too long otherwise to explain algorithm?
 % other books? no, most books focused on 3d anyway.
 
 % graphics(2)!! for big picture
@@ -345,7 +353,6 @@ but which were ultimately discarded:
 % draw(2) for API
 % draw(3) for protocol
 % image(6) for image format
-% font(6)
 
 % http://blog.golang.org/go-imagedraw-package
 % http.golang.org/go-image-package
@@ -353,12 +360,13 @@ but which were ultimately discarded:
 % memdraw(2) API of libmemdraw, should not be used by user directly,
 %  internal code
 
-%advanced: more for latests chapters
+%advanced: more for later chapters
+% font(6)
 % window(2) 
 % mouse(3)
 %note that CGPP talks also about windowing system I think.
 
-% see plan9-in-technicolor.ps? meh.
+% plan9-in-technicolor.ps? meh.
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -393,6 +401,8 @@ from Bell Labs.
 % pixels, so not continuous! so if draw diagonal, then no that easy actually :)
 % => bresenham algorithm, scanline algorithm.
 
+% FIGURE, scale
+
 % horiz/vert lines, rectangle, arbitrary line, polyline, polygon (fill),
 % ellipse, arc, bezier,
 % and also text (fonts) which are special kind of pictures (bezier? or raster?)
@@ -407,6 +417,8 @@ from Bell Labs.
 % see cairo intro? 
 
 % notion of soft screen, flush, direct framebuffer are important.
+
+
 
 % advanced: windows, menus, mouse/keyboard
 
@@ -456,7 +468,7 @@ from Bell Labs.
 
 % see display, image, and draw() generic ops.
 % see that colors that are actually images! very general (maybe too much).
-% different model than the Context of X11, or cairo, or canvas or opengl.
+%alt: different model is Context of X11, or cairo, or canvas or opengl
 
 % maybe can zoom on line to see it's tricky to get diagonals
 % with certain angles.
@@ -465,13 +477,13 @@ from Bell Labs.
 % xy ourself by adding view->r.min. Not really "abstraction"
 % power. I'd rather have my 0x0 to be the top left on _my_ window.
 %update: actually you can, but you have to make your image a window
-% which means you have to create a Screen too first.
+% which means you also have to create a Screen first.
 
 %\section{A toy window application}
 % has nothing to do! abstraction power!
 
 % delay for later rio and /dev/winname? I think so. already quite complicated.
-% maybe show also can do under rio! magic! (and link to other book)
+% but maybe can show that can under rio! magic! (and link to other book)
 % /dev/winname! from noborder.xxx to window.xxx and then
 % thanks to naming image, can find back image you need to write to!
 % (instead of writing directly to the screen)
@@ -494,11 +506,13 @@ from Bell Labs.
 % libdraw is mostly for user DS and API that then just
 % marshalled and delegate the actual work to /dev/draw
 % normally apps must link just with libdraw.a (and not libmemdraw.a
-% or libmemlayer.a!) (there are some apps that use memlayer too though).
+% or libmemlayer.a!) (there are some apps that use memlayer too though
+%  to implement a windowing like system inside the app, e.g. acme)
 % can actually divide libdraw in two, have a libcoredraw (or libgeometry)
 % so the kernel would not even depend on libdraw
 
 %arith.c: Point and Rectangle ctor and arithmetic (+-/*)
+% (libgeometry)
 
 %icossin.c: math
 %icossin2.c: math
@@ -526,7 +540,7 @@ from Bell Labs.
 %bezier.c: draw spline
 
 %string.c: draw text
- %stringbg.c
+ %stringbg.c: text with background
 
 %alloc.c: alloc images
  %bytesperline.c: resolution -> malloc size 
@@ -542,7 +556,7 @@ from Bell Labs.
 %loadimage.c: copy in kernel from user memory
 %unloadimage.c: copy from kernel in user memory
 %readimage.c: parse from file
-%writeimage.c: write to file
+%writeimage.c: write to file (in compressed format by default)
 
 %cloadimage.c: compressed load image
 %creadimage.c: compressed read image
@@ -600,7 +614,7 @@ from Bell Labs.
 % devdraw.c: /dev/draw
 % screen.c: factorize stuff, gscreen, soft cursor, cursor, graphic text mode
 %  (I created it as a model of the one in bcm/)
-% vgascreen.c: implem of screen.h hardware specific ops needed by devdraw
+% vgascreen.c: implem of screen.h hardware specific hooks needed by devdraw
 %  and memdraw
 
 % devvga.c: /dev/vga ctl files for vgascreen global parameters?
@@ -627,7 +641,7 @@ from Bell Labs.
 %ellipse.c
 %arc.c
 
-%alloc.c: memimage?
+%alloc.c: memimage
 
 %cmap.c (generated by scripts/mkcmap.c)
 
@@ -660,25 +674,28 @@ from Bell Labs.
 %-------------------
 % libmemlayer/
 %-------------------
-% libmemlayer is mostly to have "layers", layers of images
-% so one can more easily implement a windowing system with 
+% libmemlayer is really about overlapping windows. It's not really
+%  layer in the cairo sese.
+% Then one can easily implement a windowing system with 
 % overlapping pictures (windows) that actually can get exposed back.
-% Not sure why it's called layers though.
+% Not sure why it's called layers. It's an additional layer before
+% the actual image.
 
 %adapter:
 % draw.c: again, memdraw(), but should be in libmemdraw/
 % line.c: again! memline(), but should be only for horizontal/vert here no?
-% load.c: ??
-% unload.c: ??
+% load.c:
+% unload.c:
+
 %layerop.c
 
-%lalloc.c: layer alloc
-%ldelete.c: layer free
+%lalloc.c: memlayer alloc
+%ldelete.c: memlayer free
 
 %lsetrefresh.c
 
 %window operations:
-%lorigin.c: mv window
+%lorigin.c: mv window (or its origin)
 %lhide.c: expose/hide window
 %ltofront.c: back to top
 %ltorear.c: put to rear
@@ -689,7 +706,8 @@ from Bell Labs.
 
 % Memdraw is core algo. Used by kernel. Wrapped by kernel
 % in some Dxxx (e.g. DImage). Memlayer is overlay on memdraw
-% to handle windows. Kernel use memdraw. User uses libdraw
+% to handle overlapping windows and backstore. Kernel use memdraw. 
+% User uses libdraw
 % which just marshall and have id references mimicking
 % stuff in memdraw hold in the kernel.
 
@@ -700,6 +718,7 @@ from Bell Labs.
 % a set of functions and DS in draw.h! entry points!
 % Then complicated archi because part done in kernel, part
 % in user side, so need bridge, and marshalling and protocol.
+% (but this could be skipped if reader interested only in core ideas).
 % Moreover in kernel side also complicated because many different
 % graphics card so split in different components.
 
@@ -817,8 +836,8 @@ Below are the most important data structures of [[draw.h]].
 \n put early cos many API mention Point and Rectangle, so core DS
 
 % screen is growing right and down. (0,0), (640,480).
-% (see already that lack of matrix is annoying; in codemap I can map
-%  this to a virtual (0,0), (1,1) in float!)
+%alt: see already that lack of matrix is annoying; in codemap I can map
+%  this to a virtual (0,0), (1,1) in float!
 
 % FIGURE! with screen, point and rectangle
 
@@ -834,8 +853,11 @@ struct	Point
     int	y;
 };
 @
-% int! they are pixels! (good and bad, cairo uses floats)
+% int! they are pixels! (good and bad, anyway can be building block for more)
 %alt: %real-world: floats as in cairo
+
+% can be interpreted as a vector too sometimes.
+\l typedef Point Vector; ?
 
 %ctor
 <<function Pt>>=
@@ -974,7 +996,7 @@ Rpt(Point min, Point max)
 }
 @
 % no alloc. By value. They prefer to pay the cost of copy so simpler API.
-
+%update: but actually in many places they inline the code :(
 
 
 <<function eqrect>>=
@@ -1078,6 +1100,9 @@ ptinrect(Point p, Rectangle r)
 \section{[[Display]] (and [[Client]])}
 % and [[display]]
 
+%trans: saw in overview chapter, /dev/draw files, so
+% need client and server DS.
+
 % connection to device, and client handler!
 % initdraw()
 
@@ -1110,6 +1135,7 @@ struct Display
 
 % rename image field to screen/view? is it the same than global screen/view?
 % NO! it's not the same. it's the whole screen here.
+% actually even when run under rio you can draw on the rest :( ugly.
 
 % why not just a fd to device file? because complex device, device
 % directory actually. and buffer. and protocol! and other stuff we
@@ -1117,17 +1143,25 @@ struct Display
 
 % mostly Image and buffer with command to be flushed to device.
 
-% usually have draw(dstimg, rectangle, srcimg, maskimg)
-% and srcimg can be just black, and maskimg can be just opaque
-% the abuse image for many things, because it's more general!
-% Black is an image! (1x1 pixels)
 
 %!!!!
 <<global display>>=
 // option<Display>
 Display	*display;
 @
-% set by initdraw() (meh, could be returned instead no?)
+% <> = ... <- initdraw
+% Could be returned instead? So API would be opendisplay()?
+% Easier that way? no need to pass it everywhere?
+% But anyway it's true that when use Image there is anyway a ref
+% to Display so maybe it could be returned; after all closedisplay()
+% takes it as a parameter.
+% But global because initdraw actually sets more than one global, so
+% if was opendisplay it would need to return a 4-uple
+% (display, screen, view, font)
+
+% can have multiple displays? probably so one program
+% can draw to multiple screens :)
+
 
 
 <<[[Display]] devdraw connection fields>>=
@@ -1142,6 +1176,12 @@ char	*devdir; // /dev in general
 char	*windir; // /dev in general
 @
 
+
+
+% usually have draw(dstimg, rectangle, srcimg, maskimg)
+% and srcimg can be just black, and maskimg can be just opaque
+% the abuse image for many things, because it's more general!
+% Black is an image! (1x1 pixels)
 
 <<[[Display]] basic images fields>>=
 // ref_own<Image>
@@ -1161,17 +1201,19 @@ Image	*transparent;
 % memimage in kernel)
 
 
-% can have multiple displays? probably so one program
-% can draw to multiple screens :)
 
 
-
+% could use Display->image directly, but as we will see later,
+% windowing system so advice use another image(actually window) instead
+% (view).
 
 
 \subsection{[[Client]]}
 
+% kernel side. Graphics server have a set of clients. 
+% need to represent those clients.
 
-% rename KClient! 
+\l rename KClient! 
 <<struct Client>>=
 struct Client
 {
@@ -1191,6 +1233,8 @@ struct Client
 @
 % ctor = drawnewclient() <- drawopen(Qnew)    (see below for drawnewclient)
 
+% manage set of images! draw op state too!
+
 % Image will have id! need id for bridge user/kernel, to avoid
 % passing around big DS.
 
@@ -1198,7 +1242,6 @@ struct Client
 % resource free.
 % can share client? if create proc? if attach to another display?
 
-% manage set of images! draw op state!
 
 <<constant NHASH bis>>=
 #define NHASH       (1<<5)
@@ -1235,6 +1278,8 @@ drawlookup(Client *client, int id, bool checkname)
 @
 % drawimage() returns instead directly the Memimage
 
+\t checkname??
+
 \subsection{[[KDraw]] and [[sdraw]]}
 \n hard to not expose now, cos relation between DImage, DName, Client subtle
 
@@ -1252,8 +1297,8 @@ struct KDraw
 };
 @
 % entries in KDraw.client are called "slots"
-\l rename clientid? more obvious that a counter?
-\l should rename to clients too
+\l rename clientid? make it more obvious that it is a counter.
+\l should rename to Clients too?
 
 
 %no ctor needed, singleton
@@ -1284,7 +1329,7 @@ drawnewclient(void)
     // find free slot
     for(i=0; i<sdraw.nclient; i++){
         cl = sdraw.client[i];
-        // found one, i contains the free slot
+        // found one? then i contains the free slot number.
         if(cl == nil)
             break;
     }
@@ -1301,7 +1346,7 @@ drawnewclient(void)
 }
 @
 % ++ so starts at 1 (because static kdraw.clientid is 0)
-% could do cl->infoid = 0;  clearer. implicit in malloc.
+% could do too cl->infoid = 0; here.  Clearer. Implicit in malloc.
 % note that Client.r set to 0. It is marked as used only when
 %  the /dev/draw/x/data (or another file) is opened.
 
@@ -1325,7 +1370,6 @@ if(i == sdraw.nclient){
 if(cl == nil)
     return nil;
 @
-
 <<[[drawnewclient()]] sanity check cp>>=
 if(cp == nil)
     return nil;
@@ -1375,10 +1419,10 @@ struct Image
 % display + id => can communicate to kernel what we are talking about.
 %  need Display pointer because when do draw operation we need
 %  to write in img->display.buf! and then flushimage(img->display)!
-%  we need the connection handler!
+%  we need the connection handler! (but could use global ...)
 
 % Just need to pass id to kernel! no need to pass all pixels, and info.
-% In fact most of the fields above are duplicate of inkernel DS.
+% In fact most of the fields above are duplicate of in kernel DS.
 
 %alt: here no data! just id. alternative models?
 %real-world: cairo? no client/server for most images, just pointer
@@ -1400,6 +1444,8 @@ struct Image
 % can allocate different image for different parts with as a rectangle
 % the final destination. Then you can just copy those images on
 % the screen and use its rectangle as the dst. But could do without I think.
+% Can have multiple rectangles over same shared big image.
+% (but could use clipr)
 
 
 % diff between .r and .clipr? use .r to do stuff like
@@ -2986,6 +3032,8 @@ if(gscreen == nil || gscreendata.bdata == nil)
 
 \subsection{Next steps}
 
+% what do you have now? draw_screen is set!
+
 %\subsection{[[drawopen()]]}
 % further initialisation when client actually connects to device
 % when open Qnew and call drawnewclient
@@ -3014,6 +3062,9 @@ initdraw(Errorfn error, char *fontname , char *label)
 @
 %old:    char *dev = "/dev";  but was not even used for bind so ...
 
+% so even when run colors under terminal, it will not reuse /dev/draw/n,
+% it will open a new draw!
+
 % devdir and windir often equals and equal to "/dev"
 <<function geninitdraw>>=
 errorneg1
@@ -3025,7 +3076,7 @@ geninitdraw(char *devdir, Errorfn error, char *fontname, char *label, char *wind
     <<[[geninitdraw()]] sanity check display>>
 
     <<[[geninitdraw()]] set up font>>
-    <<[[geninitdraw()]] write label>>
+    <<[[geninitdraw()]] write new label>>
     <<[[geninitdraw()]] get window>>
     atexit(drawshutdown);
 
@@ -3157,7 +3208,7 @@ initdisplay(char *dev, char *win, Errorfn error)
 %    <<[[initdisplay()]] set display _isnewdisplay part2>>
 \l plus 5 for flush message? but flush is using only 1 byte now.
 
-\t clipped if run under a window? how enforced?
+% clipped if run under a window? how enforced? not enforced ...
 
 % strtochan later in Image IO chapter.
 % atoi = string to number. =~ scanf.
@@ -3327,7 +3378,7 @@ _closedisplay(Display *disp, bool isshutdown)
     if(disp == display)
         display = nil;
 
-    <<[[_closedisplay()]] if oldlabel>>
+    <<[[_closedisplay()]] restore oldlabel>>
 
     /*
      * if we're shutting down, don't free all the resources.
@@ -5971,6 +6022,8 @@ struct	Memdrawparam
 };
 @
 % all rectangles should have same size.
+% put in special struct cos gonna pass it down a lot, to many
+% functions.
 
 \subsubsection{[[memimagedraw()]]}
 
@@ -6198,9 +6251,11 @@ if(!rectclip(r, dst->r) || !rectclip(r, dst->clipr))
 %  then p0 and p1 must be adjusted
 <<[[drawclip()]] adjust p0 and p1 if r changed>>=
 /* move source point */
+// p0 = addpt(p0, subpb(r->min, rmin))
 p0->x += r->min.x - rmin.x;
 p0->y += r->min.y - rmin.y;
 /* move mask point */
+// p1 = addpt(p1, subpb(r->min, rmin))
 p1->x += r->min.x - rmin.x;
 p1->y += r->min.y - rmin.y;
 @
@@ -6268,6 +6323,7 @@ Rectangle omr;
 <<[[drawclip()]] if splitcoords>>=
 if(splitcoords){
     /* move mask point with source */
+    // p1 = addpt(p1, subpt(sr->min, p0))
     p1->x += sr->min.x - p0->x;
     p1->y += sr->min.y - p0->y;
 
@@ -6283,6 +6339,7 @@ if(splitcoords){
         return false;
 
     /* reflect any clips back to source */
+    // sr = rectsub(mr, omr)
     sr->min.x += mr->min.x - omr.min.x;
     sr->min.y += mr->min.y - omr.min.y;
     sr->max.x += mr->max.x - omr.max.x;
@@ -9293,6 +9350,7 @@ struct Font
 Font	*font;
 @
 % used for? convenient shortcut?
+% one of the global set by initdraw.
 
 
 <<[[Display]] font fields>>=
@@ -10679,7 +10737,8 @@ if(++n > 10){
 }
 @
 
-
+% no calls to draw? actually yes, because of cachechars can have
+% some loadchar or fontresize.
 
 
 
@@ -12230,7 +12289,7 @@ if(y < 0)
 errorneg1
 memload(Memimage *dst, Rectangle r, byte *data, int n, bool iscompressed)
 {
-    errorneg1 (*loadfn)(Memimage*, Rectangle, uchar*, int);
+    errorneg1 (*loadfn)(Memimage*, Rectangle, byte*, int);
     Memlayer *dl;
     <<[[memload()]] other locals>>
 
@@ -12242,7 +12301,7 @@ memload(Memimage *dst, Rectangle r, byte *data, int n, bool iscompressed)
     if(dl == nil)
         return (*loadfn)(dst, r, data, n);
     // else
-    <<[[memload()]] if dst has layer>>
+    <<[[memload()]] if dst has a layer>>
 }
 @
 
@@ -13100,6 +13159,9 @@ struct Memlayer
 % Need clipping though, and because of arbitrary overlap, can not just
 % have one rectangle, but could have a list of rectangles, or simply
 % each time redraw as a painter.
+
+%alt: could use screen coord for save too, would save conversion
+% issues back and forth in memlayerop and memdraw
 
 % Memlayer.screenr different from Memimage.r?
 
@@ -14449,7 +14511,12 @@ memlhide(Memimage *i, Rectangle screenr)
     _memlayerop(lhideop, i, screenr, screenr, i->layer);
 }
 @
-% will see _memlayerop later.
+
+% will see _memlayerop later. Will call lhideop for each sub rectangles
+% in screenr. 
+
+% FIGURE with visible rectangle and invisible one?
+
 
 
 % memlhide -> _memlayerop -> <> (as ?? <- _memlayerop(<>, ...) <- memlhide)
@@ -14480,10 +14547,15 @@ lhideop(Memimage *src, Rectangle screenr, Rectangle clipr, void *etc, bool insav
     }
 }
 @
-% delete clipr and insave?
+% delete clipr?
+\l mv insave closer to first parameter?
+%ocaml: use variant instead of pair src x insave
 
-% why rectsubpt? screenr is in logical coordinate? no, but save
-% is.
+% why rectsubpt? because screenr is in screen coordinate but
+% when src is actually the save Memimage, then we need to translate
+% back to logical coordinate.
+%alt: simpler system? 
+%ocaml: Logical of Pt | Screen of Pt
 
 \subsection{[[memlexpose()]]}
 
@@ -14515,6 +14587,7 @@ lexposeop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool ins
 }
 @
 
+% insave?
 
 \section{Window origin}
 
@@ -14773,21 +14846,20 @@ if(shad == nil)
 \section{Drawing and windows}
 
 %trans:
-% Most drawing code we presented for images handle basic images but not windows.
-% A window is mostly an image, but not exactly an image:
-% we need to adapt coordinates and then draw on
-% underlying screen image or draw on save depending if area visible or not.
+% Most drawing code we presented before for images handle basic images 
+% but not windows. A window is mostly an image, but not exactly an image:
+% We need first to adapt coordinates and then draw on
+% underlying screen image or draw on save depending if area is visible or not.
 % So need many adaptations to drawing algo we saw before. Cant just
 % draw with coord on full underlying screen (shared) image.
 
-%\subsection{Image allocation}
-% see window creation section now, with [[if(scrnid)]]  code.
+%alt: just draw on save and use painter algorithm, far simpler.
 
 \subsection{Drawing rectangles}
 
 %trans:
 % seen memdraw() in chapter X. But for simple case where src and
-% dst are simple image, not windows, in which case call
+% dst are simple images, not windows, in which case call
 % the simple memimagedraw().
 % Here adaptations when one of the image is actually a window in which case we 
 % need to translate image coords to actual screen coord and possibly draw in 
@@ -14802,12 +14874,12 @@ if(mask->layer){
     return;	/* too hard, at least for now */
 }
 @
+\l no warning??
 % ok, so now still src and dst to transform in regular images.
 
 <<[[memdraw()]] locals>>=
 Memlayer *dl, *sl;
 @
-
 
 % starts like memimagedraw with drawclip
 <<[[memdraw()]] when have layers>>=
@@ -14840,6 +14912,7 @@ sl = src->layer;
 if(dl == nil)
     goto Top;
 <<[[memdraw()]] after src is an image, if dst is fully visible can optimize>>
+// else
 
 <<[[memdraw()]] general case where dst is an obscured window>>
 @
@@ -14853,14 +14926,14 @@ Rectangle srcr, mr; // set by drawclip
 
 % similar to memimagedraw
 <<[[memdraw()]] call drawclip, if empty rectangle return>>=
-if(drawclip(dst, &r, src, &p0, mask, &p1, &srcr, &mr) == 0){
+if(!drawclip(dst, &r, src, &p0, mask, &p1,   &srcr, &mr)){
     return;
 }
 @
 %old:   DBG1("drawclip dstcr %R srccr %R maskcr %R\n", dst->clipr, src->clipr, mask->clipr);
 
-% What if different coordinate system? if dst is regular image but
-% src a window. Does not matter. Logically the coord of the window
+% What if different coordinate system? If dst is regular image but
+% src a window? Does not matter. Logically the coord of the window
 % are the coord we mean for the data. It's not the real one because
 % we share an image, but the user does not have to care about that.
 
@@ -14960,7 +15033,7 @@ if(dl != nil && dst == src){
         memlhide(dst, r);
         memlhide(dst, srcr);
     }
-    memdraw(dl->save, rectsubpt(r, dl->delta), 
+    memdraw(dl->save, rectsubpt(r,    dl->delta), 
             dl->save, subpt(srcr.min, dl->delta),  
             mask, p1, op);
     memlexpose(dst, r);
@@ -15008,7 +15081,6 @@ if(sl->clear){
 \l why this rectsubpt because goto Top so need to put back invariant?
 
 
-
 <<[[memdraw()]] after src is an image, if dst is fully visible can optimize>>=
 if(dl->clear)
     goto Clearlayer;
@@ -15020,7 +15092,15 @@ if(dl->clear)
 
 \subsubsection{[[_ldrawop()]]}
 
-% XXX
+%trans: back to general case when dst is obscured window.
+% src is a simple image, coords have been converted (r is a screenr)
+% but now need to draw on window.
+
+%DS to present first:
+
+<<[[memdraw()]] locals>>=
+struct Draw d;
+@
 
 <<struct Draw>>=
 struct Draw
@@ -15037,72 +15117,99 @@ struct Draw
     int	op;
 };
 @
-% Similar to Memdrawparam
+% Similar to Memdrawparam. Needed because _memlayerop is generic
+%  higher order function but can pass only one parameter to callback.
 
-<<[[memdraw()]] locals>>=
-struct Draw d;
-@
+\l could have Draw.p0 and Draw.p1 instead of those deltas I think.
+\l Would be simpler than those subpt and addpt.
 
 
 <<[[memdraw()]] general case where dst is an obscured window>>=
 /*
  * dst is an obscured layer
  */
-d.deltas = subpt(p0, r.min);
-d.deltam = subpt(p1, r.min);
 d.dstlayer = dl;
 d.src = src;
-d.op = op;
 d.mask = mask;
+d.op = op;
+d.deltas = subpt(p0, r.min);
+d.deltam = subpt(p1, r.min);
 
 _memlayerop(ldrawop, dst, r, r, &d);
 @
 
+% see _memlayerop soon.
+% what will happen is that we call callback for every rectangles
+% to draw, in save, in visible, because of overlapping windows.
 
+% FIGURE where see all those little rectangles, visible,
+% and also the invisible one in save.
+
+% Note that dst below is not the same than in Draw.dstlayer!
+% dst here can be the Memimage of the save! or the Memimage of the full screen
+% image. The case is actually defined by insave parameter.
 
 <<function ldrawop>>=
 static
 void
-ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave)
+ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insave)
 {
-    struct Draw *d;
+    struct Draw *d = etc;
     Point p0, p1;
-    Rectangle oclipr, srcr, r, mr;
-    int ok;
+    Rectangle r;
+    <<[[ldrawop()]] other locals>>
 
-    d = etc;
-    if(insave && d->dstlayer->save == nil)
-        return;
+    <<[[ldrawop()]] return if no save in dst>>
 
     p0 = addpt(screenr.min, d->deltas);
     p1 = addpt(screenr.min, d->deltam);
 
     if(insave){
-        r = rectsubpt(screenr, d->dstlayer->delta);
-        clipr = rectsubpt(clipr, d->dstlayer->delta);
+        r     = rectsubpt(screenr, d->dstlayer->delta);
+        clipr = rectsubpt(clipr,   d->dstlayer->delta);
     }else
         r = screenr;
 
     /* now in logical coordinates */
 
-    /* clipr may have narrowed what we should draw on, so clip if necessary */
-    if(!rectinrect(r, clipr)){
-        oclipr = dst->clipr;
-        dst->clipr = clipr;
-        ok = drawclip(dst, &r, d->src, &p0, d->mask, &p1, &srcr, &mr);
-        dst->clipr = oclipr;
-        if(!ok)
-            return;
-    }
-    memdraw(dst, r, d->src, p0, d->mask, p1, d->op);
+    <<[[ldrawop()]] if r not in clipr>>
+    memdraw(dst, r, d->src, p0, d->mask, p1, d->op); // will call memimagedraw
+}
+@
+% need adjust clipr because of the if r not in clipr test after.
+% need same coordinate system.
+
+% ???
+<<[[ldrawop()]] other locals>>=
+Rectangle oclipr, srcr, mr;
+bool ok;
+@
+<<[[ldrawop()]] if r not in clipr>>=
+/* clipr may have narrowed what we should draw on, so clip if necessary */
+if(!rectinrect(r, clipr)){
+    <<[[ldrawop()]] change dst clipr>>
+    ok = drawclip(dst, &r, d->src, &p0, d->mask, &p1, &srcr, &mr);
+    <<[[ldrawop()]] restore dst clipr>>
+    if(!ok)
+        return;
 }
 @
 
-
+<<[[ldrawop()]] change dst clipr>>=
+oclipr = dst->clipr;
+dst->clipr = clipr;
+@
+<<[[ldrawop()]] restore dst clipr>>=
+dst->clipr = oclipr;
+@
 
 \subsubsection{[[_memlayerop()]]}
 
-% -> <>
+% Memimage i below is a window.
+
+% not just for ldawop! for expose, window (and line later)
+
+% memlhide | memlexpose | memdraw -> <>
 <<function _memlayerop>>=
 /*
  * Assumes incoming rectangle has already been clipped to i's logical r and clipr
@@ -15121,11 +15228,13 @@ _memlayerop(
     l = i->layer;
     if(!rectclip(&screenr, l->screenr))
         return;
+
     if(l->clear){
-        fn(l->screen->image, screenr, clipr, etc, 0);
+        fn(l->screen->image, screenr, clipr, etc, false);
         return;
     }
-    r = screenr;
+
+    r = screenr; // original value before rectclip below
     scr = l->screen->image->clipr;
 
     /*
@@ -15142,38 +15251,41 @@ _memlayerop(
     */
     if(!rectXrect(r, scr)){
         /* completely offscreen; easy */
-        fn(l->save, r, clipr, etc, 1);
+        fn(l->save, r, clipr, etc, true);
         return;
     }
+    // else
 
     if(r.min.y < scr.min.y){
         /* above screen */
-        fn(l->save, Rect(r.min.x, r.min.y, r.max.x, scr.min.y), clipr, etc, 1);
+        fn(l->save, Rect(r.min.x, r.min.y, r.max.x, scr.min.y), clipr, etc, true);
         r.min.y = scr.min.y;
     }
     if(r.max.y > scr.max.y){
         /* below screen */
-        fn(l->save, Rect(r.min.x, scr.max.y, r.max.x, r.max.y), clipr, etc, 1);
+        fn(l->save, Rect(r.min.x, scr.max.y, r.max.x, r.max.y), clipr, etc, true);
         r.max.y = scr.max.y;
     }
     if(r.min.x < scr.min.x){
         /* left of screen */
-        fn(l->save, Rect(r.min.x, r.min.y, scr.min.x, r.max.y), clipr, etc, 1);
+        fn(l->save, Rect(r.min.x, r.min.y, scr.min.x, r.max.y), clipr, etc, true);
         r.min.x = scr.min.x;
     }
     if(r.max.x > scr.max.x){
         /* right of screen */
-        fn(l->save, Rect(scr.max.x, r.min.y, r.max.x, r.max.y), clipr, etc, 1);
+        fn(l->save, Rect(scr.max.x, r.min.y, r.max.x, r.max.y), clipr, etc, true);
     }
 }
 @
 
+% FIGURE with stuff outside screen
 
-%\subsubsection{[[_layerop()]]}
+\subsubsection{[[_layerop()]]}
 
-<<function RECUR>>=
-#define	RECUR(a,b,c,d)	_layerop(fn, i, Rect(a.x, b.y, c.x, d.y), clipr, etc, front->layer->rear);
-@
+% finally. last step.
+
+% draw on screen when can because on top for this part,
+% or on save when obscured.
 
 <<function _layerop>>=
 static void
@@ -15190,39 +15302,54 @@ _layerop(
     Top:
     if(front == i){
         /* no one is in front of this part of window; use the screen */
-        fn(i->layer->screen->image, r, clipr, etc, 0);
+        fn(i->layer->screen->image, r, clipr, etc, false);
         return;
     }
+    // else
+
     fr = front->layer->screenr;
-    if(rectXrect(r, fr) == 0){
+    if(!rectXrect(r, fr)){
         /* r doesn't touch this window; continue on next rearmost */
-        // assert(front && front->layer && front->layer->screen && front->layer->rear);
         front = front->layer->rear;
         goto Top;
     }
+    // else, r touches this window somewhere
+
     if(fr.max.y < r.max.y){
-        RECUR(r.min, fr.max, r.max, r.max);
+        // rectangle below front
+        RECUR(r.min.x, fr.max.y, r.max.x, r.max.y);
         r.max.y = fr.max.y;
     }
     if(r.min.y < fr.min.y){
-        RECUR(r.min, r.min, r.max, fr.min);
+        // rectangle above front
+        RECUR(r.min.x, r.min.y, r.max.x, fr.min.y);
         r.min.y = fr.min.y;
     }
     if(fr.max.x < r.max.x){
-        RECUR(fr.max, r.min, r.max, r.max);
+        // rectangle right of front
+        RECUR(fr.max.x, r.min.y, r.max.x, r.max.y);
         r.max.x = fr.max.x;
     }
     if(r.min.x < fr.min.x){
-        RECUR(r.min, r.min, fr.min, r.max);
+        // rectangle left of front
+        RECUR(r.min.x, r.min.y, fr.min.x, r.max.y);
         r.min.x = fr.min.x;
     }
     /* r is covered by front, so put in save area */
-    (*fn)(i->layer->save, r, clipr, etc, 1);
+    (*fn)(i->layer->save, r, clipr, etc, true);
 }
 @
+%old: when !rectXrect
+%        // assert(front && front->layer && front->layer->screen && front->layer->rear);
 
+<<function RECUR>>=
+#define	RECUR(a,b,c,d)	_layerop(fn, i, Rect(a, b, c, d), clipr, etc, front->layer->rear);
+@
+%old:#define	RECUR(a,b,c,d)	_layerop(fn, i, Rect(a.x, b.y, c.x, d.y), clipr, etc, front->layer->rear);
 
+% r.max.y = fr.max.y to avoid redundant work! and for the save part
 
+% FIGURE with mini rectangles, maybe do 4 mini figures for each cases
 
 
 
@@ -15233,6 +15360,87 @@ _layerop(
 <<[[_memline()]] sanity check no src layer>>=
 if(src->layer)	/* can't draw line with layered source */
     return;
+@
+% no mask with _memline, just dst and src.
+
+
+<<[[_memline()]] when have layers>>=
+<<[[_memline()]] clip source>>
+
+// Convert to screen coordinates
+<<[[_memline()]] convert p0, p1, clipr coordinates >>
+
+<<[[_memline()]] if dst is fully visible can optimize>>
+
+<<[[_memline()]] set r bounding box and clip it>>
+
+<<[[_memline()]] general case, call _memlayerop>>
+@
+
+
+<<[[_memline()]] other locals>>=
+bool srcclipped = false;
+Point d;
+@
+
+<<[[_memline()]] clip source>>=
+if(!srcclipped){
+    d = subpt(sp, p0);
+    if(!rectclip(&clipr, rectsubpt(src->clipr, d)))
+        return;
+    if(!(src->flags&Frepl) && !rectclip(&clipr, rectsubpt(src->r, d)))
+        return;
+    srcclipped = true;
+}
+@
+% why need srcclipped once guard? because of goto Top?
+
+<<[[_memline()]] convert p0, p1, clipr coordinates >>=
+/* dst is known to be a layer */
+// p0 = addpt(p0, dl->delta)
+p0.x += dl->delta.x;
+p0.y += dl->delta.y;
+// p1 = addpt(p1, dl->delta)
+p1.x += dl->delta.x;
+p1.y += dl->delta.y;
+// clipr = rectaddpt(clipr, dl->elta)
+clipr.min.x += dl->delta.x;
+clipr.min.y += dl->delta.y;
+clipr.max.x += dl->delta.x;
+clipr.max.y += dl->delta.y;
+@
+
+<<[[_memline()]] if dst is fully visible can optimize>>=
+if(dl->clear){
+    dst = dst->layer->screen->image;
+    goto Top;
+}
+@
+
+
+<<[[_memline()]] other locals>>=
+Rectangle r;
+@
+
+<<[[_memline()]] set r bounding box and clip it>>=
+/* can't use sutherland-cohen clipping because lines are wide */
+r = memlinebbox(p0, p1, end0, end1, radius);
+/*
+ * r is now a bounding box for the line;
+ * use it as a clipping rectangle for subdivision
+ */
+if(!rectclip(&r, clipr))
+    return;
+@
+%old:
+% /* XXx */
+% /* this is not the correct set of tests */
+% //	if(log2[dst->depth] != log2[src->depth] || log2[dst->depth]!=3)
+% //		return;
+
+
+<<[[_memline()]] other locals>>=
+struct Lline ll;
 @
 
 <<struct Lline>>=
@@ -15251,52 +15459,10 @@ struct Lline
     int			op;
 };
 @
+% all the params of _memline mostly
 
 
-<<[[_memline()]] other locals>>=
-Rectangle r;
-struct Lline ll;
-Point d;
-bool srcclipped = false;
-@
-
-<<[[_memline()]] when have layers>>=
-if(!srcclipped){
-    d = subpt(sp, p0);
-    if(rectclip(&clipr, rectsubpt(src->clipr, d)) == 0)
-        return;
-    if((src->flags&Frepl)==0 && rectclip(&clipr, rectsubpt(src->r, d))==0)
-        return;
-    srcclipped = true;
-}
-
-/* dst is known to be a layer */
-p0.x += dl->delta.x;
-p0.y += dl->delta.y;
-p1.x += dl->delta.x;
-p1.y += dl->delta.y;
-clipr.min.x += dl->delta.x;
-clipr.min.y += dl->delta.y;
-clipr.max.x += dl->delta.x;
-clipr.max.y += dl->delta.y;
-if(dl->clear){
-    dst = dst->layer->screen->image;
-    goto Top;
-}
-
-/* XXX */
-/* this is not the correct set of tests */
-//	if(log2[dst->depth] != log2[src->depth] || log2[dst->depth]!=3)
-//		return;
-
-/* can't use sutherland-cohen clipping because lines are wide */
-r = memlinebbox(p0, p1, end0, end1, radius);
-/*
- * r is now a bounding box for the line;
- * use it as a clipping rectangle for subdivision
- */
-if(rectclip(&r, clipr) == 0)
-    return;
+<<[[_memline()]] general case, call _memlayerop>>=
 ll.p0 = p0;
 ll.p1 = p1;
 ll.end0 = end0;
@@ -15311,20 +15477,23 @@ ll.op = op;
 _memlayerop(llineop, dst, r, r, &ll);
 @
 
+
+% each time called with a small screenr
 <<function llineop>>=
 static
 void
-llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave)
+llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insave)
 {
-    struct Lline *ll;
+    struct Lline *ll = etc;
     Point p0, p1;
 
     USED(screenr.min.x);
-    ll = etc;
+
     if(insave && ll->dstlayer->save == nil)
         return;
     if(!rectclip(&clipr, screenr))
         return;
+
     if(insave){
         p0 = subpt(ll->p0, ll->delta);
         p1 = subpt(ll->p1, ll->delta);
@@ -15333,7 +15502,7 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
         p0 = ll->p0;
         p1 = ll->p1;
     }
-    // recurse
+
     _memline(dst, p0, p1, ll->end0, ll->end1, ll->radius, ll->src, ll->sp, clipr, ll->op);
 }
 @
@@ -15344,39 +15513,36 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
 
 \subsection{Loading an image}
 
+\subsubsection{[[memload()]]}
+
 <<[[memload()]] other locals>>=
-Memimage *tmp;
-Rectangle lr;
+Rectangle lr; // saved logical r
 int dx;
+Memimage *tmp;
 @
 
-<<[[memload()]] if dst has layer>>=
+<<[[memload()]] if dst has a layer>>=
 /*
  * Convert to screen coordinates.
  */
 lr = r;
+// r = rectaddpt(r, dl->delta)
 r.min.x += dl->delta.x;
 r.min.y += dl->delta.y;
 r.max.x += dl->delta.x;
 r.max.y += dl->delta.y;
-dx = dl->delta.x&(7/dst->depth);
-if(dl->clear && dx==0){
-    dst = dl->screen->image;
-    goto Top;
-}
+
+dx = dl->delta.x & (7 / dst->depth);
+
+<<[[memload()]] if dst is fully visible can optimize>>
 
 /*
  * dst is an obscured layer or data is unaligned
  */
-if(dl->save && dx==0){
-    n = loadfn(dl->save, lr, data, n);
-    if(n > 0)
-        memlexpose(dst, r);
-    return n;
-}
+<<[[memload()]] if data is aligned, load on save and expose>>
+// else
 tmp = allocmemimage(lr, dst->chan);
-if(tmp == nil)
-    return -1;
+<<[[memload()]] sanity check tmp>>
 n = loadfn(tmp, lr, data, n);
 memdraw(dst, lr, tmp, lr.min, nil, lr.min, S);
 freememimage(tmp);
@@ -15384,10 +15550,40 @@ return n;
 @
 
 
+<<[[memload()]] if dst is fully visible can optimize>>=
+if(dl->clear && dx==0){
+    dst = dl->screen->image;
+    goto Top;
+}
+@
+
+<<[[memload()]] if data is aligned, load on save and expose>>=
+if(dl->save && dx==0){
+    n = loadfn(dl->save, lr, data, n);
+    if(n > 0)
+        memlexpose(dst, r);
+    return n;
+}
+@
+
+
+
+
+<<[[memload()]] sanity check tmp>>=
+if(tmp == nil)
+    return ERROR_NEG1;
+@
+
+
+
+\subsubsection{[[memunload()]]}
+
+% very similar
+
 <<[[memunload()]] other locals>>=
-Memimage *tmp;
 Rectangle lr;
 int dx;
+Memimage *tmp;
 @
 
 <<[[memunload()]] if src has layer>>=
@@ -15395,10 +15591,12 @@ int dx;
  Convert to screen coordinates.
  */
 lr = r;
+// r = rectaddpt(r, dl->delta)
 r.min.x += dl->delta.x;
 r.min.y += dl->delta.y;
 r.max.x += dl->delta.x;
 r.max.y += dl->delta.y;
+
 dx = dl->delta.x&(7/src->depth);
 if(dl->clear && dx==0){
     src = dl->screen->image;
@@ -15410,15 +15608,16 @@ if(dl->clear && dx==0){
  */
 if(dl->save && dx==0){
     if(dl->refreshfn != nil)
-        return -1;	/* can't unload window if it's not Refbackup */
+        return ERROR_NEG1;	/* can't unload window if it's not Refbackup */
     if(n > 0)
         memlhide(src, r);
     n = unloadmemimage(dl->save, lr, data, n);
     return n;
 }
+
 tmp = allocmemimage(lr, src->chan);
 if(tmp == nil)
-    return -1;
+    return ERROR_NEG1;
 memdraw(tmp, lr, src, lr.min, nil, lr.min, S);
 n = unloadmemimage(tmp, lr, data, n);
 freememimage(tmp);
@@ -15427,233 +15626,91 @@ return n;
 
 
 
-\subsection{Flushing}
-
-<<[[drawfreedimage()]] addflush>>=
-if(l->data == screenimage->data)
-    addflush(l->layer->screenr);
-@
-
-<<[[dstflush()]] locals>>=
-Memlayer *l;
-@
-
-<<[[dstflush()]] if layer>>=
-l = dst->layer;
-if(l == nil)
-    return;
-
-// else
-do{
-    if(l->screen->image->data != screenimage->data)
-        return;
-    r = rectaddpt(r, l->delta);
-    l = l->screen->image->layer;
-}while(l);
-
-addflush(r);
-
-@
-
-
-<<[[drawmesg()]] when allocate window, addflush>>=
-addflush(l->layer->screenr);
-@
-
-<<[[drawmesg()]] when top or bottom windows, addflush>>=
-if(lp[0]->layer->screen->image->data == screenimage->data)
-    for(j=0; j<nw; j++)
-        addflush(lp[j]->layer->screenr);
-@
-
-
-<<[[drawmesg()]] when position window, addflush>>=
-addflush(r);
-addflush(dst->layer->screenr);
-@
-
-
-% drawmsg(draw) -> dstflush -> <>
-<<function addflush>>=
-static void
-addflush(Rectangle r)
-{
-    int abb, ar, anbb;
-    Rectangle nbb;
-
-    if(!sdraw.softscreen || !rectclip(&r, screenimage->r))
-        return;
-    if(flushrect.min.x >= flushrect.max.x){
-        flushrect = r;
-        waste = 0;
-        return;
-    }
-    // else
-
-    nbb = flushrect;
-    combinerect(&nbb, r);
-    ar = Dx(r)*Dy(r);
-    abb = Dx(flushrect)*Dy(flushrect);
-    anbb = Dx(nbb)*Dy(nbb);
-    /*
-     * Area of new waste is area of new bb minus area of old bb,
-     * less the area of the new segment, which we assume is not waste.
-     * This could be negative, but that's OK.
-     */
-    waste += anbb-abb - ar;
-    if(waste < 0)
-        waste = 0;
-    /*
-     * absorb if:
-     *  total area is small
-     *  waste is less than half total area
-     *  rectangles touch
-     */
-    if(anbb<=1024 || waste*2<anbb || rectXrect(flushrect, r)){
-        flushrect = nbb;
-        return;
-    }
-
-    /* emit current state */
-    if(flushrect.min.x < flushrect.max.x)
-        flushmemscreen(flushrect);
-    flushrect = r;
-
-    waste = 0;
-}
-@
-<<global waste>>=
-static  int     waste;
-@
+%\subsection{Flushing}
+% see adv topics
 
 
 
 
 \chapter{Windowing System Support}
 
-% See windows chapter before.
-% See Naming windows section before.
-% A few more pieces and enough building blocks for rio.
+%trans:
+% Saw windows chapter before. Can be used for regular app. Will be
+% used by rio. Actually used by every app by default too as we will see.
+% Saw Naming images section before. Can be used for interprocess sharing.
+% A few more pieces (/dev/winname) and enough building blocks for rio.
 
-% Can have public screen. Can have public image.
-% Allow faster windowing system.
+% rio overview: when run, access to full screen, direct access to
+% /dev/draw (actually even rio go through initdraw and so have screen
+% and view, but when noborder screenname, a bit special).
+% Then with screen create subwindows when special command with mouse,
+% then associate process with this screen and emulate /dev/winname
+%  for this process.
+% (and also public screen but actually less important)
+% every app use initdraw(), so can put stuff there to setup things.
+
+
+% Also fast windowing system because even if window, draw directly 
+% on framebuffer! (actually can mess up with Display->image)
 %alt: 8 1/2 was virtualizing the window too, cleaner, and more
 % elegant, but slower apparently. Maybe could not have games in a window
-% then.
+% then. Also would be safer! any app can draw on desktop ! maybe can
+% do tricky stuff to fool the user?
 
-
-%extern int	newwindow(char*);
-% but actually it returns an int that is probably similar to a fd
-% and rio itself match this id to a Window structure
-
-
-% XXX
-<<function newwindow>>=
-/* Connect us to new window, if possible */
-errorneg1
-newwindow(char *str)
-{
-    fdt fd;
-    char *wsys;
-    char buf[256];
-
-    wsys = getenv("wsys");
-    if(wsys == nil)
-        return ERROR_NEG1;
-    fd = open(wsys, ORDWR);
-    free(wsys);
-    if(fd < 0)
-        return ERROR_NEG1;
-    rfork(RFNAMEG);
-    if(str)
-        snprint(buf, sizeof buf, "new %s", str);
-    else
-        strcpy(buf, "new");
-    return mount(fd, -1, "/dev", MBEFORE, buf);
-}
-@
-
+% see window(2) discussion at the end about rio and initdraw.
+% rio creates a public screen, with public windows (images).
+% then builds a screen for each window, then a border (a window?)
+% and then a subwindow for the client.
 
 \section{Additional data structures}
 
-%XXX
-<<global _screen>>=
-Screen	*screen;
-@
-%old: was called _screen because screen was already use 
-% (to actually an Image, hmm), but I s/screen/view so now screen is free.
-%TODO? rename layer? or desktop?
-% set by?
+% every window run will have view and screen set accordingly.
 
+\subsection{[[view]]}
 
 <<global screen>>=
-// option<Image>
+// ref<Image>, a window
 Image	*view;
 @
-%todo: can be modified? Is it the same than Display->image? or Display->screenimage?
-% it comes from gengetwindown so it is really the window image!
-% it should be smaller than Display->image.
-% Why need to be a global? who set/modifies it?
+% gengetwindow(..., &view) <- geninitdraw <- initdraw
 %old: was called screen, but unfortunate because there was
 % also a Screen type and then a _screen global.
-% could maybe also call it image, or window.
+% I could maybe also call it image, or window.
 % At the same time with the virtual screen principle, every app thinks it has
-% the whole screen for himself, so maybe it made sense to call this
+% the whole screen for itself, so maybe it made sense to call this
 % variable screen. But view is good too, less confusing.
 % Actually rio uses a 'view' global assigned to screen.
 
+% it is not the same than Display->image! (or Display->screenimage?)
+% it comes from gengetwindown so it is really the window image!
+% it should be smaller than Display->image (unless not run under rio).
+
+% It has a backing store too?
 
 
-\subsection{[[screename]]}
-% not enough, another DS, argh.
+% Why need to be a global? convenient, just call initdraw and everything
+% is set for you.
 
-% DName now in Image/Naming section
 
-% in adv topic? normally should have enough with screenimage (draw_screen)!
-% but under windowing system need intermediate step to actually
-% get subscreen! Enter DName and /dev/winname to communicate that
-% info to client.
+\subsection{[[screen]]}
 
-%\subsubsection{Screen name}
-% delay? 
-
-% need this indirection over DImage? draw_screen not enough?
-
-<<[[makescreenimage()]] drawaddname>>=
-if(!waserror()){
-    snprint(screenname, sizeof screenname, "noborder.screen.%d", ++screennameid);
-    drawaddname(nil, di, strlen(screenname), screenname);
-    poperror();
-}
+<<global _screen>>=
+Screen	*screen;
 @
-% to bootstrap mechanism for /tmp/winname!
+% gengetwindow(..., &screen) <- geninitdraw <- initdraw
+%old: was called _screen because screen was already use 
+%  (to actually an Image, hmm), but I s/screen/view so now screen is free.
+\t rename desktop (even if actually it's a subdesktop)
 
-% seems associated with /dev/winname so move later?
-<<global screenname>>=
-static  char    screenname[40];
-@
-
-<<global screennameid>>=
-// gensym
-static  int screennameid;
-@
-
-% drawlookupname for screename should always return screen_dimage!
-
-
-<<[[drawopen()]] switch qid cases, when Qctl, set name>>=
-di->vers = dn->vers;
-di->name = smalloc(strlen(screenname)+1);
-strcpy(di->name, screenname);
-di->fromname = dn->dimage;
-di->fromname->ref++;
-@
-
+% screen is not screen of rio! it's actually a subscreen
+% where client can create window in. Need subscreen because
+% otherwise client could move around its own window? and need
+% screen because only way for client to create its own window in it.
+%(note that can still mess with Display->image, ugly)
 
 \section{Additional initializations}
 
-% so for now we have access to the full screen!
-% (possibly clipped?)
+\subsection{[[geninitdraw()]]}
 
 % initdraw -> geninitdraw -> initdisplay; <>
 <<[[geninitdraw()]] get window>>=
@@ -15662,85 +15719,16 @@ if(gengetwindow(display, buf, &view, &screen, ref) < 0)
     goto Error;
 @
 %old: was &screen, &_screen
+\l could call getwindow as it does this winname gymnastic
+
+% ref is ?
+
+% set the globals!
+
+% so uses /dev/winname!
 
 
-
-<<[[Display]] other fields>>=
-Image	*screenimage; // ???
-@
-% ???? different from Display.image?
-
-
-% ref below is refresh
-<<function gengetwindow>>=
-/*
- * Attach, or possibly reattach, to window.
- * If reattaching, maintain value of screen pointer.
- */
-errorneg1
-gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
-{
-    int n, fd;
-    char buf[64+1];
-    Image *image;
-    Rectangle r;
-
-    fd = open(winname, OREAD);
-    if(fd<0 || (n=read(fd, buf, sizeof buf-1))<=0){
-        image = d->image;
-        if(image == nil){
-            fprint(2, "gengetwindow: %r\n");
-            *winp = nil;
-            d->screenimage = nil;
-            return ERROR_NEG1;
-        }
-        strcpy(buf, "noborder");
-    }else{
-        close(fd);
-        buf[n] = '\0';
-        if(*winp != nil){
-            _freeimage1(*winp);
-            freeimage((*scrp)->image);
-            freescreen(*scrp);
-            *scrp = nil;
-        }
-        image = namedimage(d, buf);
-        if(image == nil){
-            fprint(2, "namedimage %s failed: %r\n", buf);
-            *winp = nil;
-            d->screenimage = nil;
-            return -1;
-        }
-        assert(image->chan != 0);
-    }
-
-    d->screenimage = image;
-    *scrp = allocscreen(image, d->white, 0);
-    if(*scrp == nil){
-        freeimage(d->screenimage);
-        *winp = nil;
-        d->screenimage = nil;
-        return -1;
-    }
-
-    r = image->r;
-    if(strncmp(buf, "noborder", 8) != 0)
-        r = insetrect(image->r, Borderwidth);
-    *winp = _allocwindow(*winp, *scrp, r, ref, DWhite);
-    if(*winp == nil){
-        freescreen(*scrp);
-        *scrp = nil;
-        freeimage(image);
-        d->screenimage = nil;
-        return -1;
-    }
-    d->screenimage = *winp;
-    assert((*winp)->chan != 0);
-    return 1;
-}
-@
-
-
+%\subsection{[[getwindow()]]}
 <<function getwindow>>=
 errorneg1
 getwindow(Display *d, int ref)
@@ -15751,9 +15739,132 @@ getwindow(Display *d, int ref)
     return gengetwindow(d, winname, &view, &screen, ref);
 }
 @
+% not sure why need that, every app should go through
+% initdraw and so should not call gengetwindow manually anyway.
+% or maybe rio uses that? but then could move that in rio's code!
+
+\subsection{[[gengetwindow()]]}
+
+% use /dev/winname and named image! way to know from rio
+% which window I'm associated with (but could cheat?)
+
+% ref below is refresh
+<<function gengetwindow>>=
+/*
+ * Attach, or possibly reattach, to window.
+ * If reattaching, maintain value of screen pointer.
+ */
+errorneg1
+gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
+{
+    int n;
+    fdt fd;
+    char buf[64+1]; // /dev/winname content
+    Image *image;
+    Rectangle r;
+
+    fd = open(winname, OREAD);
+    if(fd<0 || (n=read(fd, buf, sizeof buf-1))<=0){
+        // no /dev/winname, image is then the full screen
+        image = d->image;
+        <<[[gengetwindow()]] sanity check image from display>>
+        strcpy(buf, "noborder");
+    }else{
+        close(fd);
+        buf[n] = '\0';
+        <<[[gengetwindow()]] if already had a view, free it>>
+        image = namedimage(d, buf);
+        <<[[gengetwindow()]] sanity check image from namedimage>>
+    }
+
+    d->screenimage = image;
+    *scrp = allocscreen(image, d->white, false);
+    <<[[gengetwindow()]] sanity check srcp>>
+
+    r = image->r;
+    if(strncmp(buf, "noborder", 8) != 0)
+        r = insetrect(image->r, Borderwidth);
+    *winp = _allocwindow(*winp, *scrp, r, ref, DWhite);
+    <<[[gengetwindow()]] sanity check winp>>
+    d->screenimage = *winp;
+    assert((*winp)->chan != 0);
+    return OK_1;
+}
+@
+% noborder trick a bit ugly.
+
+% Note that works when run under rio and when not! in both cases
+% view (via *winp) is set (and is always a window).
+
+<<[[Display]] other fields>>=
+// option<Image>, same than view, the window (or desktop image)
+Image	*screenimage;
+@
+\t not sure why need that in Display.
 
 
-\section{[[/dev/winname]]}
+
+
+
+<<[[gengetwindow()]] sanity check image from display>>=
+if(image == nil){
+    fprint(2, "gengetwindow: %r\n");
+    <<[[gengetwindow()]] return error>>
+}
+@
+<<[[gengetwindow()]] return error>>=
+*winp = nil;
+d->screenimage = nil;
+return ERROR_NEG1;
+@
+
+<<[[gengetwindow()]] sanity check image from namedimage>>=
+if(image == nil){
+    fprint(2, "namedimage %s failed: %r\n", buf);
+    <<[[gengetwindow()]] return error>>
+}
+assert(image->chan != 0);
+@
+
+<<[[gengetwindow()]] sanity check srcp>>=
+if(*scrp == nil){
+    freeimage(d->screenimage);
+    <<[[gengetwindow()]] return error>>
+}
+@
+
+<<[[gengetwindow()]] sanity check winp>>=
+if(*winp == nil){
+    freescreen(*scrp);
+    *scrp = nil;
+    freeimage(image);
+    <<[[gengetwindow()]] return error>>
+}
+@
+% winp = nil is redundant in return error but ok.
+
+
+
+
+
+<<[[gengetwindow()]] if already had a view, free it>>=
+if(*winp != nil){
+    _freeimage1(*winp);
+    freeimage((*scrp)->image);
+    freescreen(*scrp);
+    *scrp = nil;
+}
+@
+% not *winp = nil?
+
+
+
+
+\section{[[/dev/winname]] and [[screenname]]}
+
+% kernel side now.
+
+% default /dev/winname, so gengetwindow works also for bootstrap.
 
 <<[[drawopen()]] switch qid cases>>=
 case Qwinname:
@@ -15765,18 +15876,56 @@ if(QID(c->qid) == Qwinname)
     return readstr(off, a, n, screenname);
 @
 
-% indirection to get image! go through a name! not
-% direct access to screenimage (draw_screen)!
+%\subsection{[[screename]]}
+\n DName now in Image/Naming section
+
+<<global screenname>>=
+static  char    screenname[40];
+@
+
+
+<<[[makescreenimage()]] drawaddname>>=
+if(!waserror()){
+    snprint(screenname, sizeof screenname, "noborder.screen.%d", ++screennameid);
+    drawaddname(nil, di, strlen(screenname), screenname);
+    poperror();
+}
+@
+% to bootstrap mechanism for /dev/winname!
+% note that screen here is really screen, not Screen (desktop).
+% noborder trick.
+% drawaddname to draw_screen (screenimage) so made public so found
+%  via initdraw for app running outside rio (and for rio itself)
+
+<<global screennameid>>=
+// gensym
+static  int screennameid;
+@
+
+% drawlookupname for screename should always return screen_dimage!
+
+
+% indirection to get image! go through a name!
 % a bit like stdin/stdout = 0, 1, but behind the scene
 % connected to different things.
 
-% Rio will intercept this file.
+
+% Rio will intercept this file as we will see in Windows.nw.
+% It will create public images, and then make sure client can find them
+% and "connect" to them.
+
+%alt: why not pass down information via wsys instead like in newwindow?
+
 
 \section{[[/dev/label]]}
 
+%trans:
+% /dev/winname is rio communicating info to client
+% /dev/label is client communicating back info to rio
+
 % so can identify the window when hidden
 
-<<[[geninitdraw()]] write label>>=
+<<[[geninitdraw()]] write new label>>=
 /*
  * Write label; ignore errors (we might not be running under rio)
  */
@@ -15796,11 +15945,17 @@ if(label){
 @
 % else? no error managment here?
 
+% read old label, because when app take over previous app
+% e.g. when run colors inside terminal, then want to switch back
+% to terminal label when color exits.
+
+
 <<[[Display]] other fields>>=
 char	oldlabel[64];
 @
 
-<<[[_closedisplay()]] if oldlabel>>=
+% restore old label
+<<[[_closedisplay()]] restore oldlabel>>=
 if(disp->oldlabel[0]){
     snprint(buf, sizeof buf, "%s/label", disp->windir);
     fd = open(buf, OWRITE);
@@ -15810,9 +15965,60 @@ if(disp->oldlabel[0]){
     }
 }
 @
+
 % write back old label, so when app run from terminal,
 % we restore back the label so the window manager
 % can display better titles
+
+
+
+\section{[[newwindow()]]}
+
+% see graphics(2)
+% must be called before initdraw, to not take over existing window
+% but create a new one. Communicate with rio!
+
+% ex newwindow("-dy 100 -hide")  will run in newly created window
+%  of 100 pixels high hidden at first.
+
+% /env/wsys is location of rio listening server (its fd to connect to)
+
+<<function newwindow>>=
+/* Connect us to new window, if possible */
+errorneg1
+newwindow(char *str)
+{
+    fdt fd;
+    char *wsys;
+    char buf[256];
+
+    wsys = getenv("wsys");
+    <<[[newwindow()]] sanity check wsys>>
+    fd = open(wsys, ORDWR);
+    free(wsys);
+    <<[[newwindow()]] sanity check fd>>
+    rfork(RFNAMEG);
+
+    if(str)
+        snprint(buf, sizeof buf, "new %s", str);
+    else
+        strcpy(buf, "new");
+
+    return mount(fd, -1, "/dev", MBEFORE, buf);
+}
+@
+% mount! need see Windows.nw
+
+
+<<[[newwindow()]] sanity check wsys>>=
+if(wsys == nil)
+    return ERROR_NEG1;
+@
+
+<<[[newwindow()]] sanity check fd>>=
+if(fd < 0)
+    return ERROR_NEG1;
+@
 
 
 
@@ -15823,6 +16029,8 @@ if(disp->oldlabel[0]){
 
 
 \chapter{Input}
+
+% XXX
 
 %related: big-bang function in racket/htdp
 
@@ -21203,6 +21411,11 @@ case Qrefresh:
 
 \subsection{Window refresh}
 
+<<[[ldrawop()]] return if no save in dst>>=
+if(insave && d->dstlayer->save == nil)
+    return;
+@
+
 <<[[memdraw()]] if refresh function for src>>=
 if(sl->save == nil)
     return;	/* refresh function makes this case unworkable */
@@ -21487,6 +21700,16 @@ case Qctl:
 % other windows? when write on /dev/draw/x/ctl ?
 
 %TODO: drawlookupname should be screen_dimage!! assert! 
+
+<<[[drawopen()]] switch qid cases, when Qctl, set name>>=
+di->vers = dn->vers;
+di->name = smalloc(strlen(screenname)+1);
+strcpy(di->name, screenname);
+di->fromname = dn->dimage;
+di->fromname->ref++;
+@
+
+
 
 
 
@@ -22467,6 +22690,108 @@ dstflush(dstid, dst, Rect(p.x-e0-j, p.y-e1-j, p.x+e0+j+1, p.y+e1+j+1));
 p.y -= font->ascent;
 dstflush(dstid, dst, Rect(p.x, p.y, q.x, p.y+Dy(font->image->r)));
 @
+
+\subsubsection{Flushing and windows}
+
+
+<<[[drawfreedimage()]] addflush>>=
+if(l->data == screenimage->data)
+    addflush(l->layer->screenr);
+@
+
+<<[[dstflush()]] locals>>=
+Memlayer *l;
+@
+
+<<[[dstflush()]] if layer>>=
+l = dst->layer;
+if(l == nil)
+    return;
+
+// else
+do{
+    if(l->screen->image->data != screenimage->data)
+        return;
+    r = rectaddpt(r, l->delta);
+    l = l->screen->image->layer;
+}while(l);
+
+addflush(r);
+
+@
+
+
+<<[[drawmesg()]] when allocate window, addflush>>=
+addflush(l->layer->screenr);
+@
+
+<<[[drawmesg()]] when top or bottom windows, addflush>>=
+if(lp[0]->layer->screen->image->data == screenimage->data)
+    for(j=0; j<nw; j++)
+        addflush(lp[j]->layer->screenr);
+@
+
+
+<<[[drawmesg()]] when position window, addflush>>=
+addflush(r);
+addflush(dst->layer->screenr);
+@
+
+
+% drawmsg(draw) -> dstflush -> <>
+<<function addflush>>=
+static void
+addflush(Rectangle r)
+{
+    int abb, ar, anbb;
+    Rectangle nbb;
+
+    if(!sdraw.softscreen || !rectclip(&r, screenimage->r))
+        return;
+    if(flushrect.min.x >= flushrect.max.x){
+        flushrect = r;
+        waste = 0;
+        return;
+    }
+    // else
+
+    nbb = flushrect;
+    combinerect(&nbb, r);
+    ar = Dx(r)*Dy(r);
+    abb = Dx(flushrect)*Dy(flushrect);
+    anbb = Dx(nbb)*Dy(nbb);
+    /*
+     * Area of new waste is area of new bb minus area of old bb,
+     * less the area of the new segment, which we assume is not waste.
+     * This could be negative, but that's OK.
+     */
+    waste += anbb-abb - ar;
+    if(waste < 0)
+        waste = 0;
+    /*
+     * absorb if:
+     *  total area is small
+     *  waste is less than half total area
+     *  rectangles touch
+     */
+    if(anbb<=1024 || waste*2<anbb || rectXrect(flushrect, r)){
+        flushrect = nbb;
+        return;
+    }
+
+    /* emit current state */
+    if(flushrect.min.x < flushrect.max.x)
+        flushmemscreen(flushrect);
+    flushrect = r;
+
+    waste = 0;
+}
+@
+<<global waste>>=
+static  int     waste;
+@
+
+
 
 \subsection{Image compression}
 
@@ -23865,7 +24190,7 @@ printmesg(char *fmt, uchar *a, bool plsprnt)
     char *p, *q;
     int s, left;
 
-    if(!plsprnt){ //old: 1 || !plsprnt
+    if(true || !plsprnt){ //old: 1 || !plsprnt
         SET(s,q,p);
         USED(fmt, a, buf, p, q, s);
         return;

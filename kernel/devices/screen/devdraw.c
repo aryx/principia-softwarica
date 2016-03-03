@@ -1096,7 +1096,7 @@ drawnewclient(void)
     // find free slot
     for(i=0; i<sdraw.nclient; i++){
         cl = sdraw.client[i];
-        // found one, i contains the free slot
+        // found one? then i contains the free slot number.
         if(cl == nil)
             break;
     }

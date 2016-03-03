@@ -27,38 +27,48 @@ struct Draw
 /*s: function ldrawop */
 static
 void
-ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave)
+ldrawop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insave)
 {
-    struct Draw *d;
+    struct Draw *d = etc;
     Point p0, p1;
-    Rectangle oclipr, srcr, r, mr;
-    int ok;
+    Rectangle r;
+    /*s: [[ldrawop()]] other locals */
+    Rectangle oclipr, srcr, mr;
+    bool ok;
+    /*e: [[ldrawop()]] other locals */
 
-    d = etc;
+    /*s: [[ldrawop()]] return if no save in dst */
     if(insave && d->dstlayer->save == nil)
         return;
+    /*e: [[ldrawop()]] return if no save in dst */
 
     p0 = addpt(screenr.min, d->deltas);
     p1 = addpt(screenr.min, d->deltam);
 
     if(insave){
-        r = rectsubpt(screenr, d->dstlayer->delta);
-        clipr = rectsubpt(clipr, d->dstlayer->delta);
+        r     = rectsubpt(screenr, d->dstlayer->delta);
+        clipr = rectsubpt(clipr,   d->dstlayer->delta);
     }else
         r = screenr;
 
     /* now in logical coordinates */
 
+    /*s: [[ldrawop()]] if r not in clipr */
     /* clipr may have narrowed what we should draw on, so clip if necessary */
     if(!rectinrect(r, clipr)){
+        /*s: [[ldrawop()]] change dst clipr */
         oclipr = dst->clipr;
         dst->clipr = clipr;
+        /*e: [[ldrawop()]] change dst clipr */
         ok = drawclip(dst, &r, d->src, &p0, d->mask, &p1, &srcr, &mr);
+        /*s: [[ldrawop()]] restore dst clipr */
         dst->clipr = oclipr;
+        /*e: [[ldrawop()]] restore dst clipr */
         if(!ok)
             return;
     }
-    memdraw(dst, r, d->src, p0, d->mask, p1, d->op);
+    /*e: [[ldrawop()]] if r not in clipr */
+    memdraw(dst, r, d->src, p0, d->mask, p1, d->op); // will call memimagedraw
 }
 /*e: function ldrawop */
 
@@ -95,7 +105,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     }
     /*s: [[memdraw()]] when have layers */
     /*s: [[memdraw()]] call drawclip, if empty rectangle return */
-    if(drawclip(dst, &r, src, &p0, mask, &p1, &srcr, &mr) == 0){
+    if(!drawclip(dst, &r, src, &p0, mask, &p1,   &srcr, &mr)){
         return;
     }
     /*e: [[memdraw()]] call drawclip, if empty rectangle return */
@@ -178,7 +188,7 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
             memlhide(dst, r);
             memlhide(dst, srcr);
         }
-        memdraw(dl->save, rectsubpt(r, dl->delta), 
+        memdraw(dl->save, rectsubpt(r,    dl->delta), 
                 dl->save, subpt(srcr.min, dl->delta),  
                 mask, p1, op);
         memlexpose(dst, r);
@@ -233,17 +243,18 @@ memdraw(Memimage *dst, Rectangle r, Memimage *src, Point p0, Memimage *mask, Poi
     if(dl->clear)
         goto Clearlayer;
     /*e: [[memdraw()]] after src is an image, if dst is fully visible can optimize */
+    // else
 
     /*s: [[memdraw()]] general case where dst is an obscured window */
     /*
      * dst is an obscured layer
      */
-    d.deltas = subpt(p0, r.min);
-    d.deltam = subpt(p1, r.min);
     d.dstlayer = dl;
     d.src = src;
-    d.op = op;
     d.mask = mask;
+    d.op = op;
+    d.deltas = subpt(p0, r.min);
+    d.deltam = subpt(p1, r.min);
 
     _memlayerop(ldrawop, dst, r, r, &d);
     /*e: [[memdraw()]] general case where dst is an obscured window */

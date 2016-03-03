@@ -31,10 +31,12 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
 {
     Memlayer *dl;
     /*s: [[_memline()]] other locals */
-    Rectangle r;
-    struct Lline ll;
-    Point d;
     bool srcclipped = false;
+    Point d;
+    /*x: [[_memline()]] other locals */
+    Rectangle r;
+    /*x: [[_memline()]] other locals */
+    struct Lline ll;
     /*e: [[_memline()]] other locals */
 
     /*s: [[_memline()]] sanity check radius */
@@ -54,42 +56,52 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
         return;
     }
     /*s: [[_memline()]] when have layers */
+    /*s: [[_memline()]] clip source */
     if(!srcclipped){
         d = subpt(sp, p0);
-        if(rectclip(&clipr, rectsubpt(src->clipr, d)) == 0)
+        if(!rectclip(&clipr, rectsubpt(src->clipr, d)))
             return;
-        if((src->flags&Frepl)==0 && rectclip(&clipr, rectsubpt(src->r, d))==0)
+        if(!(src->flags&Frepl) && !rectclip(&clipr, rectsubpt(src->r, d)))
             return;
         srcclipped = true;
     }
+    /*e: [[_memline()]] clip source */
 
+    // Convert to screen coordinates
+    /*s: [[_memline()]] convert p0, p1, clipr coordinates  */
     /* dst is known to be a layer */
+    // p0 = addpt(p0, dl->delta)
     p0.x += dl->delta.x;
     p0.y += dl->delta.y;
+    // p1 = addpt(p1, dl->delta)
     p1.x += dl->delta.x;
     p1.y += dl->delta.y;
+    // clipr = rectaddpt(clipr, dl->elta)
     clipr.min.x += dl->delta.x;
     clipr.min.y += dl->delta.y;
     clipr.max.x += dl->delta.x;
     clipr.max.y += dl->delta.y;
+    /*e: [[_memline()]] convert p0, p1, clipr coordinates  */
+
+    /*s: [[_memline()]] if dst is fully visible can optimize */
     if(dl->clear){
         dst = dst->layer->screen->image;
         goto Top;
     }
+    /*e: [[_memline()]] if dst is fully visible can optimize */
 
-    /* XXX */
-    /* this is not the correct set of tests */
-    //	if(log2[dst->depth] != log2[src->depth] || log2[dst->depth]!=3)
-    //		return;
-
+    /*s: [[_memline()]] set r bounding box and clip it */
     /* can't use sutherland-cohen clipping because lines are wide */
     r = memlinebbox(p0, p1, end0, end1, radius);
     /*
      * r is now a bounding box for the line;
      * use it as a clipping rectangle for subdivision
      */
-    if(rectclip(&r, clipr) == 0)
+    if(!rectclip(&r, clipr))
         return;
+    /*e: [[_memline()]] set r bounding box and clip it */
+
+    /*s: [[_memline()]] general case, call _memlayerop */
     ll.p0 = p0;
     ll.p1 = p1;
     ll.end0 = end0;
@@ -102,6 +114,7 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
     ll.op = op;
 
     _memlayerop(llineop, dst, r, r, &ll);
+    /*e: [[_memline()]] general case, call _memlayerop */
     /*e: [[_memline()]] when have layers */
 }
 /*e: function _memline */
@@ -109,17 +122,18 @@ _memline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius, Memi
 /*s: function llineop */
 static
 void
-llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave)
+llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, bool insave)
 {
-    struct Lline *ll;
+    struct Lline *ll = etc;
     Point p0, p1;
 
     USED(screenr.min.x);
-    ll = etc;
+
     if(insave && ll->dstlayer->save == nil)
         return;
     if(!rectclip(&clipr, screenr))
         return;
+
     if(insave){
         p0 = subpt(ll->p0, ll->delta);
         p1 = subpt(ll->p1, ll->delta);
@@ -128,7 +142,7 @@ llineop(Memimage *dst, Rectangle screenr, Rectangle clipr, void *etc, int insave
         p0 = ll->p0;
         p1 = ll->p1;
     }
-    // recurse
+
     _memline(dst, p0, p1, ll->end0, ll->end1, ll->radius, ll->src, ll->sp, clipr, ll->op);
 }
 /*e: function llineop */

@@ -11,9 +11,9 @@ memunload(Memimage *src, Rectangle r, byte *data, int n)
 {
     Memlayer *dl;
     /*s: [[memunload()]] other locals */
-    Memimage *tmp;
     Rectangle lr;
     int dx;
+    Memimage *tmp;
     /*e: [[memunload()]] other locals */
 
     Top:
@@ -26,10 +26,12 @@ memunload(Memimage *src, Rectangle r, byte *data, int n)
      Convert to screen coordinates.
      */
     lr = r;
+    // r = rectaddpt(r, dl->delta)
     r.min.x += dl->delta.x;
     r.min.y += dl->delta.y;
     r.max.x += dl->delta.x;
     r.max.y += dl->delta.y;
+
     dx = dl->delta.x&(7/src->depth);
     if(dl->clear && dx==0){
         src = dl->screen->image;
@@ -41,15 +43,16 @@ memunload(Memimage *src, Rectangle r, byte *data, int n)
      */
     if(dl->save && dx==0){
         if(dl->refreshfn != nil)
-            return -1;	/* can't unload window if it's not Refbackup */
+            return ERROR_NEG1;	/* can't unload window if it's not Refbackup */
         if(n > 0)
             memlhide(src, r);
         n = unloadmemimage(dl->save, lr, data, n);
         return n;
     }
+
     tmp = allocmemimage(lr, src->chan);
     if(tmp == nil)
-        return -1;
+        return ERROR_NEG1;
     memdraw(tmp, lr, src, lr.min, nil, lr.min, S);
     n = unloadmemimage(tmp, lr, data, n);
     freememimage(tmp);

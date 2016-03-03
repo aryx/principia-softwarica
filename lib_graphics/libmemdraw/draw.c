@@ -277,9 +277,11 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
         return false;
     /*s: [[drawclip()]] adjust p0 and p1 if r changed */
     /* move source point */
+    // p0 = addpt(p0, subpb(r->min, rmin))
     p0->x += r->min.x - rmin.x;
     p0->y += r->min.y - rmin.y;
     /* move mask point */
+    // p1 = addpt(p1, subpb(r->min, rmin))
     p1->x += r->min.x - rmin.x;
     p1->y += r->min.y - rmin.y;
     /*e: [[drawclip()]] adjust p0 and p1 if r changed */
@@ -301,6 +303,7 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
     /*s: [[drawclip()]] if splitcoords */
     if(splitcoords){
         /* move mask point with source */
+        // p1 = addpt(p1, subpt(sr->min, p0))
         p1->x += sr->min.x - p0->x;
         p1->y += sr->min.y - p0->y;
 
@@ -316,6 +319,7 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
             return false;
 
         /* reflect any clips back to source */
+        // sr = rectsub(mr, omr)
         sr->min.x += mr->min.x - omr.min.x;
         sr->min.y += mr->min.y - omr.min.y;
         sr->max.x += mr->max.x - omr.max.x;

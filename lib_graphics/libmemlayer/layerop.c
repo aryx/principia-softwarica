@@ -6,7 +6,7 @@
 #include <memlayer.h>
 
 /*s: function RECUR */
-#define	RECUR(a,b,c,d)	_layerop(fn, i, Rect(a.x, b.y, c.x, d.y), clipr, etc, front->layer->rear);
+#define	RECUR(a,b,c,d)	_layerop(fn, i, Rect(a, b, c, d), clipr, etc, front->layer->rear);
 /*e: function RECUR */
 
 /*s: function _layerop */
@@ -24,34 +24,41 @@ _layerop(
     Top:
     if(front == i){
         /* no one is in front of this part of window; use the screen */
-        fn(i->layer->screen->image, r, clipr, etc, 0);
+        fn(i->layer->screen->image, r, clipr, etc, false);
         return;
     }
+    // else
+
     fr = front->layer->screenr;
-    if(rectXrect(r, fr) == 0){
+    if(!rectXrect(r, fr)){
         /* r doesn't touch this window; continue on next rearmost */
-        // assert(front && front->layer && front->layer->screen && front->layer->rear);
         front = front->layer->rear;
         goto Top;
     }
+    // else, r touches this window somewhere
+
     if(fr.max.y < r.max.y){
-        RECUR(r.min, fr.max, r.max, r.max);
+        // rectangle below front
+        RECUR(r.min.x, fr.max.y, r.max.x, r.max.y);
         r.max.y = fr.max.y;
     }
     if(r.min.y < fr.min.y){
-        RECUR(r.min, r.min, r.max, fr.min);
+        // rectangle above front
+        RECUR(r.min.x, r.min.y, r.max.x, fr.min.y);
         r.min.y = fr.min.y;
     }
     if(fr.max.x < r.max.x){
-        RECUR(fr.max, r.min, r.max, r.max);
+        // rectangle right of front
+        RECUR(fr.max.x, r.min.y, r.max.x, r.max.y);
         r.max.x = fr.max.x;
     }
     if(r.min.x < fr.min.x){
-        RECUR(r.min, r.min, fr.min, r.max);
+        // rectangle left of front
+        RECUR(r.min.x, r.min.y, fr.min.x, r.max.y);
         r.min.x = fr.min.x;
     }
     /* r is covered by front, so put in save area */
-    (*fn)(i->layer->save, r, clipr, etc, 1);
+    (*fn)(i->layer->save, r, clipr, etc, true);
 }
 /*e: function _layerop */
 
@@ -73,11 +80,13 @@ _memlayerop(
     l = i->layer;
     if(!rectclip(&screenr, l->screenr))
         return;
+
     if(l->clear){
-        fn(l->screen->image, screenr, clipr, etc, 0);
+        fn(l->screen->image, screenr, clipr, etc, false);
         return;
     }
-    r = screenr;
+
+    r = screenr; // original value before rectclip below
     scr = l->screen->image->clipr;
 
     /*
@@ -94,28 +103,29 @@ _memlayerop(
     */
     if(!rectXrect(r, scr)){
         /* completely offscreen; easy */
-        fn(l->save, r, clipr, etc, 1);
+        fn(l->save, r, clipr, etc, true);
         return;
     }
+    // else
 
     if(r.min.y < scr.min.y){
         /* above screen */
-        fn(l->save, Rect(r.min.x, r.min.y, r.max.x, scr.min.y), clipr, etc, 1);
+        fn(l->save, Rect(r.min.x, r.min.y, r.max.x, scr.min.y), clipr, etc, true);
         r.min.y = scr.min.y;
     }
     if(r.max.y > scr.max.y){
         /* below screen */
-        fn(l->save, Rect(r.min.x, scr.max.y, r.max.x, r.max.y), clipr, etc, 1);
+        fn(l->save, Rect(r.min.x, scr.max.y, r.max.x, r.max.y), clipr, etc, true);
         r.max.y = scr.max.y;
     }
     if(r.min.x < scr.min.x){
         /* left of screen */
-        fn(l->save, Rect(r.min.x, r.min.y, scr.min.x, r.max.y), clipr, etc, 1);
+        fn(l->save, Rect(r.min.x, r.min.y, scr.min.x, r.max.y), clipr, etc, true);
         r.min.x = scr.min.x;
     }
     if(r.max.x > scr.max.x){
         /* right of screen */
-        fn(l->save, Rect(scr.max.x, r.min.y, r.max.x, r.max.y), clipr, etc, 1);
+        fn(l->save, Rect(scr.max.x, r.min.y, r.max.x, r.max.y), clipr, etc, true);
     }
 }
 /*e: function _memlayerop */
