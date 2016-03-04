@@ -19,8 +19,10 @@ moveto(Mousectl *m, Point pt)
 void
 closemouse(Mousectl *mc)
 {
+    /*s: [[closemouse()]] sanity check mc */
     if(mc == nil)
         return;
+    /*e: [[closemouse()]] sanity check mc */
 
     postnote(PNPROC, mc->pid, "kill");
 
@@ -36,16 +38,16 @@ closemouse(Mousectl *mc)
 /*e: function closemouse */
 
 /*s: function readmouse */
-int
+errorneg1
 readmouse(Mousectl *mc)
 {
     if(mc->image)
         flushimage(mc->image->display, true);
     if(recv(mc->c, &mc->Mouse) < 0){
         fprint(2, "readmouse: %r\n");
-        return -1;
+        return ERROR_NEG1;
     }
-    return 0;
+    return OK_0;
 }
 /*e: function readmouse */
 
@@ -54,19 +56,23 @@ static
 void
 _ioproc(void *arg)
 {
-    int n, nerr, one;
-    char buf[1+5*12];
+    int n, nerr;
+    char buf[1+5*12]; // /dev/mouse first code char and 5 numbers
     Mouse m;
-    Mousectl *mc;
-
-    mc = arg;
+    Mousectl *mc = arg;
+    /*s: [[_ioproc()]] other locals (mouse.c) */
+    int one = 1;
+    /*e: [[_ioproc()]] other locals (mouse.c) */
+ 
     threadsetname("mouseproc");
-    one = 1;
     memset(&m, 0, sizeof m);
     mc->pid = getpid();
+
     nerr = 0;
     for(;;){
+        // blocking call
         n = read(mc->mfd, buf, sizeof buf);
+        /*s: [[_ioproc()]] sanity check n from read (mouse.c) */
         if(n != 1+4*12){
             yield();	/* if error is due to exiting, we'll exit here */
             fprint(2, "mouse: bad count %d not 49: %r\n", n);
@@ -74,21 +80,29 @@ _ioproc(void *arg)
                 threadexits("read error");
             continue;
         }
+        /*e: [[_ioproc()]] sanity check n from read (mouse.c) */
         nerr = 0;
         switch(buf[0]){
+        /*s: [[_ioproc()]] switch buf, resize case, fallthrough m case (mouse.c) */
         case 'r':
             send(mc->resizec, &one);
             /* fall through */
+        /*e: [[_ioproc()]] switch buf, resize case, fallthrough m case (mouse.c) */
         case 'm':
-            m.xy.x = atoi(buf+1+0*12);
-            m.xy.y = atoi(buf+1+1*12);
+
+            m.xy.x    = atoi(buf+1+0*12);
+            m.xy.y    = atoi(buf+1+1*12);
             m.buttons = atoi(buf+1+2*12);
-            m.msec = atoi(buf+1+3*12);
+            m.msec    = atoi(buf+1+3*12);
+
+            // send it!
             send(mc->c, &m);
+
             /*
-             * mc->Mouse is updated after send so it doesn't have wrong value if we block during send.
-             * This means that programs should receive into mc->Mouse (see readmouse() above) if
-             * they want full synchrony.
+             * mc->Mouse is updated after send so it doesn't have wrong value
+             * if we block during send.
+             * This means that programs should receive into mc->Mouse 
+             * (see readmouse() above) if they want full synchrony.
              */
             mc->Mouse = m;
             break;
@@ -104,12 +118,13 @@ initmouse(char *file, Image *i)
     Mousectl *mc;
     char *t, *sl;
 
-    mc = mallocz(sizeof(Mousectl), 1);
+    mc = mallocz(sizeof(Mousectl), true);
+
     if(file == nil)
         file = "/dev/mouse";
-    mc->file = strdup(file);
     mc->mfd = open(file, ORDWR|OCEXEC);
-    if(mc->mfd<0 && strcmp(file, "/dev/mouse")==0){
+    /*s: [[initmouse()]] sanity check mfd */
+    if(mc->mfd < 0 && strcmp(file, "/dev/mouse")==0){
         bind("#m", "/dev", MAFTER);
         mc->mfd = open(file, ORDWR|OCEXEC);
     }
@@ -117,24 +132,40 @@ initmouse(char *file, Image *i)
         free(mc);
         return nil;
     }
+    /*e: [[initmouse()]] sanity check mfd */
+    mc->file = strdup(file);
+
+    /*s: [[initmouse()]] set cursor field */
+    /*s: [[initmouse()]] set t to /dev/cursor */
+    // t = "{basename(file)}/cursor"
     t = malloc(strlen(file)+16);
+    /*s: [[initmouse()]] sanity check t */
     if (t == nil) {
         close(mc->mfd);
         free(mc);
         return nil;
     }
+    /*e: [[initmouse()]] sanity check t */
     strcpy(t, file);
     sl = utfrrune(t, '/');
     if(sl)
         strcpy(sl, "/cursor");
     else
         strcpy(t, "/dev/cursor");
+    /*e: [[initmouse()]] set t to /dev/cursor */
     mc->cfd = open(t, ORDWR|OCEXEC);
     free(t);
+    /*e: [[initmouse()]] set cursor field */
     mc->image = i;
-    mc->c = chancreate(sizeof(Mouse), 0);
+    /*s: [[initmouse()]] set channels */
+    mc->c       = chancreate(sizeof(Mouse), 0);
+    /*x: [[initmouse()]] set channels */
     mc->resizec = chancreate(sizeof(int), 2);
+    /*e: [[initmouse()]] set channels */
+    /*s: [[initmouse()]] create process */
     proccreate(_ioproc, mc, 4096);
+    /*e: [[initmouse()]] create process */
+
     return mc;
 }
 /*e: function initmouse */
@@ -143,7 +174,7 @@ initmouse(char *file, Image *i)
 void
 setcursor(Mousectl *mc, Cursor *c)
 {
-    char curs[2*4+2*2*16]; // sizeof Cursor
+    char curs[2*4 + 2*2*16]; // sizeof Cursor
 
     if(c == nil)
         write(mc->cfd, curs, 0);

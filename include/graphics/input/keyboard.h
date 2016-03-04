@@ -8,13 +8,14 @@ typedef struct	Channel	Channel;
 /*s: struct Keyboardctl */
 struct	Keyboardctl
 {
-    Channel	*c;	/* chan(Rune)[20] */
-
+    // /dev/cons
+    fdt		consfd;		/* to cons file */
     char	*file;
 
-    fdt		consfd;		/* to cons file */
+    // dev/consctl
     fdt		ctlfd;		/* to ctl file */
 
+    Channel	*c;	/* chan(Rune)[20] */
     int		pid;		/* of slave proc */
 };
 /*e: struct Keyboardctl */

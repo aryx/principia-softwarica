@@ -17,9 +17,10 @@ enum Click {
 /*s: struct Mouse (include/mouse.h) */
 struct	Mouse
 {
+    Point	xy;
     // bitset<enum<Click>>
     int	buttons;	/* bit array: LMR=124 */
-    Point	xy;
+
     ulong	msec;
 };
 /*e: struct Mouse (include/mouse.h) */
@@ -29,18 +30,27 @@ struct Mousectl
 {
     Mouse;
 
+    // /dev/mouse
+    fdt		mfd;		/* to mouse file */ 
+    // ref_own<filename>
+    char	*file; // "/dev/mouse" usually
+
+    // ref<Image>
+    Image*	image;	/* of associated window/display */
+
+    /*s: [[Mousectl]] channel fields */
     Channel	*c;			/* chan(Mouse) */
+    /*x: [[Mousectl]] channel fields */
     Channel	*resizec;	/* chan(int)[2] */
     /* buffered in case client is waiting for a mouse action before handling resize */
-
-    char	*file;
-
-    fdt		mfd;		/* to mouse file */
-    fdt		cfd;		/* to cursor file */
-
+    /*e: [[Mousectl]] channel fields */
+    /*s: [[Mousectl]] IO process field */
     int		pid;	/* of slave proc */
-
-    Image*	image;	/* of associated window/display */
+    /*e: [[Mousectl]] IO process field */
+    /*s: [[Mousectl]] cursor field */
+    // /dev/cursor
+    fdt		cfd;		/* to cursor file */
+    /*e: [[Mousectl]] cursor field */
 };
 /*e: struct Mousectl */
 

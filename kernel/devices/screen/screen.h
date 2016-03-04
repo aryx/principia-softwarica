@@ -31,7 +31,9 @@ typedef struct Cursorinfo Cursorinfo;
 extern Point 	mousexy(void);
 extern void 	mouseaccelerate(int);
 extern void 	mousetrack(int, int, int, int);
+/*s: global signature cursor */
 extern Cursorinfo 	cursor;
+/*e: global signature cursor */
 /* xxxmouse.c */
 extern void kmousectl(Cmdbuf*);
 /* defined in xxxscreen.c, needed by devmouse.c */

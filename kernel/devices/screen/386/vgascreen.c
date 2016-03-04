@@ -1121,6 +1121,7 @@ swcursordraw(void)
     swrect = rectaddpt(Rect(0,0,16,16), swvispt);
     // save what is under the cursor
     memimagedraw(swback, swback->r, gscreen, swpt, memopaque, ZP, S);
+    // draw cursor
     memimagedraw(gscreen, swrect, swimg1, ZP, swmask1, ZP, SoverD);
     flushmemscreen(swrect);
     swvisible = true;
@@ -1158,7 +1159,7 @@ swdisable(VGAscr*)
 void
 swload(VGAscr*, Cursor *curs)
 {
-    uchar *ip, *mp;
+    byte *ip, *mp;
     int i, j, set, clr;
 
     if(!swimg || !swmask || !swimg1 || !swmask1)
@@ -1173,17 +1174,19 @@ swload(VGAscr*, Cursor *curs)
      */
     ip = byteaddr(swimg, ZP);
     mp = byteaddr(swmask, ZP);
+
     for(i=0; i<32; i++){
         set = curs->set[i];
         clr = curs->clr[i];
         for(j=0x80; j; j>>=1){
-            *ip++ = set&j ? 0x00 : 0xFF;
-            *mp++ = (clr|set)&j ? 0xFF : 0x00;
+            *ip++ = set & j ? 0x00 : 0xFF;
+            *mp++ = (clr|set) & j ? 0xFF : 0x00;
         }
     }
     swoffset = curs->offset;
     swvers++;
-    memimagedraw(swimg1, swimg1->r, swimg, ZP, memopaque, ZP, S);
+
+    memimagedraw(swimg1,  swimg1->r,  swimg,  ZP, memopaque, ZP, S);
     memimagedraw(swmask1, swmask1->r, swmask, ZP, memopaque, ZP, S);
 }
 /*e: function swload(x86) */
@@ -1209,11 +1212,14 @@ swcursorclock(void)
         return;
 
     x = splhi();
+    // check again, might have changed in between
     if(swenabled)
      if(!swvisible || !eqpt(swpt, swvispt) || swvers!=swvisvers)
       if(canqlock(&drawlock)){
+
         swcursorhide();
         swcursordraw();
+
         qunlock(&drawlock);
     }
     splx(x);
@@ -1224,8 +1230,11 @@ swcursorclock(void)
 void
 swcursorinit(void)
 {
-    static bool init, warned;
+    static bool init;
     VGAscr *scr;
+    /*s: [[swcursorinit()]] other locals */
+    static bool warned;
+    /*e: [[swcursorinit()]] other locals */
 
     didswcursorinit = true;
     if(!init){
@@ -1234,16 +1243,18 @@ swcursorinit(void)
     }
     scr = &vgascreen;
 
+    /*s: [[swcursorinit()]] sanity check scr regarding cursor */
     if(scr == nil || gscreen == nil)
         return;
     if(scr->dev == nil || scr->dev->linear == nil){
         if(!warned){
             print("cannot use software cursor on non-linear vga screen\n");
-            warned = 1;
+            warned = true;
         }
         return;
     }
-
+    /*e: [[swcursorinit()]] sanity check scr regarding cursor */
+    /*s: [[swcursorinit()]] free old versions of cursor images if any */
     if(swback){
         freememimage(swback);
         freememimage(swmask);
@@ -1251,21 +1262,26 @@ swcursorinit(void)
         freememimage(swimg);
         freememimage(swimg1);
     }
+    /*e: [[swcursorinit()]] free old versions of cursor images if any */
 
-    swback = allocmemimage(Rect(0,0,32,32), gscreen->chan);
-    swmask = allocmemimage(Rect(0,0,16,16), GREY8);
+    swback  = allocmemimage(Rect(0,0,32,32), gscreen->chan);
+
+    swmask  = allocmemimage(Rect(0,0,16,16), GREY8);
     swmask1 = allocmemimage(Rect(0,0,16,16), GREY1);
-    swimg = allocmemimage(Rect(0,0,16,16), GREY8);
-    swimg1 = allocmemimage(Rect(0,0,16,16), GREY1);
+    swimg   = allocmemimage(Rect(0,0,16,16), GREY8);
+    swimg1  = allocmemimage(Rect(0,0,16,16), GREY1);
+
+    /*s: [[swcursorinit()]] sanity check cursor images */
     if(swback == nil || swmask == nil || swmask1 == nil || swimg == nil || swimg1 == nil){
         print("software cursor: allocmemimage fails");
         return;
     }
+    /*e: [[swcursorinit()]] sanity check cursor images */
 
-    memfillcolor(swmask, DOpaque);
+    memfillcolor(swmask,  DOpaque);
     memfillcolor(swmask1, DOpaque);
-    memfillcolor(swimg, DBlack);
-    memfillcolor(swimg1, DBlack);
+    memfillcolor(swimg,   DBlack);
+    memfillcolor(swimg1,  DBlack);
 }
 /*e: function swcursorinit(x86) */
 
@@ -1274,8 +1290,9 @@ VGAcur swcursor =
 {
     .name = "soft",
 
-    .enable = swenable,
+    .enable  = swenable,
     .disable = swdisable,
+
     .load = swload,
     .move = swmove,
 };

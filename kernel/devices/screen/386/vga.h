@@ -78,8 +78,10 @@ struct VGAcur {
 
   void  (*enable)(VGAscr*);
   void  (*disable)(VGAscr*);
-  void  (*load)(VGAscr*, Cursor*);
+
   int   (*move)(VGAscr*, Point);
+
+  void  (*load)(VGAscr*, Cursor*);
 
   // optional
   int doespanning;
@@ -96,9 +98,12 @@ struct VGAscr {
 
   Memsubfont* memdefont;
 
+  /*s: [[VGAscr]] cursor fields */
   Cursor;
   // the cursor device methods (software cursor or hardware support)
   VGAcur* cur;
+  /*e: [[VGAscr]] cursor fields */
+
 
   ulong colormap[Pcolours][3];
   int palettedepth;
