@@ -12643,6 +12643,15 @@ strtochan(char *s)
 % >> 
 %old: d -> depth, c -> chan
 
+<<function isspace>>=
+/* avoid pulling in ctype when using with drawterm etc. */
+static int
+isspace(char c)
+{
+    return c==' ' || c== '\t' || c=='\r' || c=='\n';
+}
+@
+
 
 <<[[strtochan()]] sanity check q>>=
 if(q == nil) 
@@ -16425,22 +16434,10 @@ extern Cursorinfo 	cursor;
 % save image, and then draw/save appropriately!
 
 
-% Grey8 version
-
-<<global swimg(x86)>>=
-Memimage*   swimg;  /* cursor image */
-@
-<<global swmask(x86)>>=
-Memimage*   swmask; /* cursor mask */
-@
-% set by? loaded by?
-
 <<global swback(x86)>>=
 Memimage*   swback; /* screen under cursor */
 @
 % quite important!
-
-
 
 
 % Grey1 version
@@ -16596,6 +16593,19 @@ swcursorinit(void)
 % Maybe because use gscreen->chan here.
 
 
+% Grey8 version
+
+<<global swimg(x86)>>=
+Memimage*   swimg;  /* cursor image */
+@
+<<global swmask(x86)>>=
+Memimage*   swmask; /* cursor mask */
+@
+% initialized by swcursorinit, but set by by swload. used then
+% to draw in swimg1.
+
+
+
 
 <<[[swcursorinit()]] other locals>>=
 static bool warned;
@@ -16738,7 +16748,7 @@ swcursorhide(void)
 
 
 
-\subsection{Drawing and software cursor}
+\subsection{Drawing rectangles and software cursor}
 
 % swcursorclock modifies gscreen, but what if draw operation
 %  with screen as targer or source? then need restore 
@@ -17192,6 +17202,11 @@ closekeyboard(Keyboardctl *kc)
 
 
 \chapter{Non 32 Bits Images TODO}
+
+% Actually need Grey1 (many bitmasks), need CMAP (VGA), 
+% need Grey8 (Cursor), need RGB16 (Raspberry), ...
+% So need many of the logic that makes it possible to have
+% images with pixels of different depth and different color arrangments.
 
 <<[[ImageType] cases>>=
 GREY2	= CHAN1(CGrey, 2),
@@ -17995,7 +18010,6 @@ case CMap:
 
 
 
-%\subsection{XXX}
 
 % seems dead now that use memdefcmap or maybe was used to generate
 %  memdefcmap
@@ -18559,7 +18573,10 @@ membrush(int radius)
 <<function ARROW>>=
 #define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
 @
-% see draw(2) for explanations
+% see draw(2) for explanations and arrowend() below
+%  x1 = (end>>5) & 0x1FF;	/* distance along line from end of line to tip */
+%  x2 = (end>>14) & 0x1FF;	/* distance along line from barb to tip */
+%  x3 = (end>>23) & 0x1FF;	/* distance perpendicular from edge of line to b
 % >> >> >> >> >>
 
 % advanced topics?
@@ -18573,7 +18590,6 @@ enum
 @
 
 \paragraph{[[_memimageline()]] and arrows}
-
 
 <<[[_memimageline()]] switch end0 cases>>=
 case Endarrow:
@@ -18890,6 +18906,7 @@ bezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int end0, int end1,
     return OK_1;
 }
 @
+% so does not use arc? use polyop?
 
 <<function bezspline>>=
 error0
@@ -18942,6 +18959,7 @@ fillbezierop(Image *dst, Point p0, Point p1, Point p2, Point p3, int w, Image *s
     return OK_1;
 }
 @
+
 
 <<function fillbezspline>>=
 error0
@@ -19121,6 +19139,8 @@ _bezsplinepts(Plist *l, Point *pt, int npt)
     appendpt(l, d);
 }
 @
+
+
 
 
 
@@ -19818,6 +19838,8 @@ setcursor(Mousectl *mc, Cursor *c)
 % mv in advanced shapes?
 % related to mouse too.
 
+% Nice example of use of drawing API?
+
 % dupe in mouse.h
 <<struct Menu>>=
 struct Menu
@@ -20185,7 +20207,9 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
 %related: big-bang function in racket/htdp
 
 % seen before /dev/mouse synchrony issue, and the introduction
-% of ioproc and channel and alt(). Events are alternative API.
+% of ioproc and channel and alt(). 
+% Events are alternative API.
+%classic thread vs event slide?
 
 % have lots of dupes, menuhit.c vs emenuhit.c?
 
@@ -21502,7 +21526,8 @@ vgaimageinit(ulong chan)
 @
 
 \section{Blank screen}
-% /dev/???
+
+%echo blang > /dev/vgactl ??
 
 <<[[vgactl]] cases(x86)>>=
 case CMblank:
@@ -21717,7 +21742,7 @@ struct Refresh
 @
 
 
-
+% many -> <>
 <<function drawwakeall>>=
 void
 drawwakeall(void)
@@ -24442,6 +24467,7 @@ if(debuglockdisplay){
 
 \section{[[drawsetdebug()]]}
 
+% API and marshalling
 <<function drawsetdebug>>=
 void
 drawsetdebug(bool v)
@@ -24464,6 +24490,7 @@ bool drawdebug;
 % rename? memdrawdebug?
 
 
+% Unmarshalling
 <<[[drawmesg()]] cases>>=
 /* toggle debugging: 'D' val[1] */
 case 'D':
@@ -24480,11 +24507,13 @@ case 'D':
 
 \subsection{Point and Rectangle}
 
+% user side
 <<[[initdisplay()]] install dumpers>>=
 fmtinstall('P', Pfmt);
 fmtinstall('R', Rfmt);
 @
 
+% kernel side
 <<[[memimageinit()]] install dumpers>>=
 fmtinstall('P', Pfmt);
 fmtinstall('R', Rfmt); 
@@ -24515,15 +24544,12 @@ Rfmt(Fmt *f)
 @
 
 
-%XXX
+%???
 <<[[memimageinit()]] install dumpers>>=
 fmtinstall('b', _ifmt);
 @
 
 \subsection{Channel}
-
-% maybe could put in dumper section?
-
 
 <<function chantostr>>=
 char*
@@ -24553,17 +24579,9 @@ chantostr(char *buf, ulong cc)
 }
 @
 
-<<function isspace>>=
-/* avoid pulling in ctype when using with drawterm etc. */
-static int
-isspace(char c)
-{
-    return c==' ' || c== '\t' || c=='\r' || c=='\n';
-}
-@
 
 
-\subsection{Message}
+\subsection{Draw protocol message}
 
 % to debug drawmesg()
 <<function printmesg>>=
@@ -24778,12 +24796,8 @@ struct VGAscr {
 
   <<[[VGAscr]] cursor fields>>
 
-
   ulong colormap[Pcolours][3];
   int palettedepth;
-
-  // the vga device methods
-  VGAdev* dev;
 
   Pcidev* pci;
   ulong io;       /* device specific registers */
@@ -24793,6 +24807,9 @@ struct VGAscr {
   bool useflush;
 
   ulong id; /* internal identifier for driver use */
+
+  // the vga device methods
+  VGAdev* dev;
 
   // why here? why not in VGAdev?
   <<[[VGAscr]] optional methods(x86)>>
@@ -24808,16 +24825,6 @@ struct VGAscr {
 % so I removed those fields, which makes it also easier to move
 % more generic stuff in screen.c
 
-<<[[VGAscr]] other fields(x86)>>=
-int overlayinit;
-@
-
-%XXX move later
-<<[[VGAscr]] optional methods(x86)>>=
-int (*fill)(VGAscr*, Rectangle, ulong);
-int (*scroll)(VGAscr*, Rectangle, Rectangle);
-@
-
 
 <<global vgascreen(x86)>>=
 VGAscr vgascreen;
@@ -24829,10 +24836,28 @@ VGAscr vgascreen;
 % have the gscreen/gscreendata globals and vgascreen[0].gscreen
 % and vgascreen[0].gscreendata so I removed those fields.
 
+
 <<function VGAMEM(x86)>>=
 #define VGAMEM()  0xA0000
 @
 % vgascreen.paddr?
+
+
+
+
+
+<<[[VGAscr]] other fields(x86)>>=
+int overlayinit;
+@
+
+%XXX move later
+<<[[VGAscr]] optional methods(x86)>>=
+int (*fill)(VGAscr*, Rectangle, ulong);
+int (*scroll)(VGAscr*, Rectangle, Rectangle);
+@
+
+
+
 
 
 % !!!!!!!!!
@@ -25041,6 +25066,7 @@ struct VGAdev {
   // optional
   void  (*drawinit)(VGAscr*);
   int   (*fill)(VGAscr*, Rectangle, ulong);
+
   void  (*ovlctl)(VGAscr*, Chan*, void*, int);
   int   (*ovlwrite)(VGAscr*, void*, int, vlong);
 
@@ -26671,8 +26697,8 @@ icossin2(int x, int y, int *cosp, int *sinp)
 
 %\chapter{Changelog}
 %\label{sec:changelog}
-% code via make loc = 21 690 LOC (but code of tests, apps, drivers code, ...)
-% orig nw = 20503, just lpized and few comments, 199 pages pdf
+% code via make loc = 23 241 LOC (but code of tests, apps, drivers code, ...)
+% orig nw = 26700, just lpized and few comments, 231 pages pdf
 %  (but no tests, no apps)
 % now: ? LOC ? pages, so added ?? LOE (Lines of explanations)
 
