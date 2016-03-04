@@ -34,9 +34,9 @@ SRC_VIEWS= \
    rio/wctl.c\
    rio/wind.c\
    rio/xfid.c\
-   ../apps/lens.c\
-   ../apps/statusbar.c\
-   ../apps/winwatch.c\
+   ../applications/lens.c\
+   ../applications/statusbar.c\
+   ../applications/winwatch.c\
    libcomplete/complete.c\
    libframe/frbox.c\
    libframe/frdelete.c\

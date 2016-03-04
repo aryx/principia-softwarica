@@ -25,6 +25,7 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand X11?:
+% - I had no idea how X11 worked so for sure now I understand more
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -146,6 +147,7 @@ rendered on the screen?
 \item How drawing operations by applications are intercepted
 by the windowing system to make sure they can not
 draw in other windows?
+% it's not
 
 \item What happens when the user type [[ls]] in a terminal?
 What are the set of software involved in such a command? What
@@ -154,10 +156,12 @@ of the software stack, from the keyboard interrupt to
 the display of text glyphs on the screen in the appropriate window?
 
 \end{itemize}
+% how overlapping windows
+% how demultiplex mouse, keyboard, screen
 
 \section{[[rio]]}
 
-% gonna present rio, successor of 8-1/2 and umux all designed by Rob Pike,
+% gonna present rio, successor of 8-1/2 and mux all designed by Rob Pike,
 % for plan9. Small, elegant.
 % first window system actually for unix? before xerox alto?
 
@@ -187,11 +191,15 @@ but were ultimately discarded:
 
 \end{itemize}
 
+%history:
+% - NeWS?
 %other:
 % - Qnx photons, 1.44MB demo disk! even with web browser!
-% - efuns/gwml?
 % - berlin?
 % - http://ignorethecode.net/blog/2009/04/22/oberon/
+%window managers: (still rely on X11)
+% - xmonad
+% - efuns/gwml
 %research:
 % - 10/gui http://ignorethecode.net/blog/2009/10/13/10_gui/
 % - xmonad in Coq, hmmm
@@ -220,9 +228,11 @@ but were ultimately discarded:
 % rio.ps, 8.1/2.ps, lec5.pdf
 % rio(1) and rio(5)
 
-% draw(2?), draw(6?)
+% Graphics.pdf!
+
+% graphics(2), draw(2)
 % thread(2?) library! heavy use of channels and threads here
-% window(2) graphics(2)
+% window(2)
 % mouse(3)
 
 \section{About this document}
@@ -251,6 +261,9 @@ who wrote in some sense most of this book.
 \section{Windowing system principles}
 
 % windows, "virtual screens" that applications can draw into.
+% overlapping windows! can hide each other, and when resume
+% get back its state (like suspended process) (so need
+% save window content somewhere)
 
 % Rely on a graphic stack.
 
@@ -491,7 +504,7 @@ usage(void)
 %\section{[[view]], [[mousectl]], [[keyboardctl]], etc}
 
 <<global view>>=
-Image	*view;
+//Image	*view;
 @
 % = screen global, initialized in main()
 % (this made me change screen to view in Graphics.nw)
@@ -993,7 +1006,6 @@ void threadmain(int argc, char *argv[])
         exits("display open");
     }
 
-    view = screen;
     viewr = view->r;
 
     iconinit(); // allocate background and red images
@@ -1001,7 +1013,7 @@ void threadmain(int argc, char *argv[])
     <<[[main()]] mouse initialisation>>
     <<[[main()]] keyboard initialisation>>
 
-    wscreen = allocscreen(screen, background, false);
+    wscreen = allocscreen(view, background, 0);
     if(wscreen == nil)
         error("can't allocate screen");
     
@@ -1047,7 +1059,7 @@ iconinit(void)
 % It needs to call initmouse, initkeyboard. 
 
 <<[[main()]] mouse initialisation>>=
-mousectl = initmouse(nil, screen);
+mousectl = initmouse(nil, view);
 if(mousectl == nil)
     error("can't find mouse");
 mouse = mousectl;
@@ -3015,10 +3027,10 @@ sweep(void)
 Point
 onscreen(Point p)
 {
-    p.x = max(screen->clipr.min.x, p.x);
-    p.x = min(screen->clipr.max.x, p.x);
-    p.y = max(screen->clipr.min.y, p.y);
-    p.y = min(screen->clipr.max.y, p.y);
+    p.x = max(view->clipr.min.x, p.x);
+    p.x = min(view->clipr.max.x, p.x);
+    p.y = max(view->clipr.min.y, p.y);
+    p.y = min(view->clipr.max.y, p.y);
     return p;
 }
 @
@@ -4994,8 +5006,8 @@ scrtemps(void)
 
     if(scrtmp)
         return;
-    h = BIG*Dy(screen->r);
-    scrtmp = allocimage(display, Rect(0, 0, 32, h), screen->chan, 0, DWhite);
+    h = BIG*Dy(view->r);
+    scrtmp = allocimage(display, Rect(0, 0, 32, h), view->chan, 0, DWhite);
     if(scrtmp == nil)
         error("scrtemps");
 }
@@ -5956,7 +5968,7 @@ xfidattach(Xfid *x)
             err = Ebadrect;
         else{
             if(hideit)
-                i = allocimage(display, r, screen->chan, 0, DWhite);
+                i = allocimage(display, r, view->chan, 0, DWhite);
             else
                 i = allocwindow(wscreen, r, Refbackup, DWhite);
             if(i){
@@ -6575,7 +6587,7 @@ case Qscreen:
 caseImage:
     if(off < 5*12){
         n = sprint(buf, "%11s %11d %11d %11d %11d ",
-            chantostr(cbuf, screen->chan),
+            chantostr(cbuf, view->chan),
             i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y);
         t = estrdup(buf);
         goto Text;
@@ -6602,7 +6614,7 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
     int ww, y;
 
     offset -= 5*12;
-    ww = bytesperline(r, screen->depth);
+    ww = bytesperline(r, view->depth);
     r.min.y += offset/ww;
     if(r.min.y >= r.max.y)
         return 0;
@@ -7076,12 +7088,12 @@ goodrect(Rectangle r)
     if(Dx(r)<100 || Dy(r)<3*font->height)
         return 0;
     /* must have some screen and border visible so we can move it out of the way */
-    if(Dx(r) >= Dx(screen->r) && Dy(r) >= Dy(screen->r))
+    if(Dx(r) >= Dx(view->r) && Dy(r) >= Dy(view->r))
         return 0;
     /* reasonable sizes only please */
-    if(Dx(r) > BIG*Dx(screen->r))
+    if(Dx(r) > BIG*Dx(view->r))
         return 0;
-    if(Dy(r) > BIG*Dx(screen->r))
+    if(Dy(r) > BIG*Dx(view->r))
         return 0;
     return 1;
 }
@@ -7129,8 +7141,8 @@ newrect(void)
     static int i = 0;
     int minx, miny, dx, dy;
 
-    dx = min(600, Dx(screen->r) - 2*Borderwidth);
-    dy = min(400, Dy(screen->r) - 2*Borderwidth);
+    dx = min(600, Dx(view->r) - 2*Borderwidth);
+    dy = min(400, Dy(view->r) - 2*Borderwidth);
     minx = 32 + 16*i;
     miny = 32 + 16*i;
     i++;
@@ -7159,8 +7171,8 @@ shift(int *minp, int *maxp, int min, int max)
 Rectangle
 rectonscreen(Rectangle r)
 {
-    shift(&r.min.x, &r.max.x, screen->r.min.x, screen->r.max.x);
-    shift(&r.min.y, &r.max.y, screen->r.min.y, screen->r.max.y);
+    shift(&r.min.x, &r.max.x, view->r.min.x, view->r.max.x);
+    shift(&r.min.y, &r.max.y, view->r.min.y, view->r.max.y);
     return r;
 }
 @
@@ -7290,7 +7302,7 @@ parsewctl(char **argp, Rectangle r, Rectangle *rp, int *pidp, int *idp, int *hid
         }
     }
 
-    *rp = rectonscreen(rectaddpt(r, screen->r.min));
+    *rp = rectonscreen(rectaddpt(r, view->r.min));
 
     while(isspace(*s))
         s++;
@@ -7330,7 +7342,7 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
         argv[3] = nil;
     }
     if(hideit)
-        i = allocimage(display, rect, screen->chan, 0, DWhite);
+        i = allocimage(display, rect, view->chan, 0, DWhite);
     else
         i = allocwindow(wscreen, rect, Refbackup, DWhite);
     if(i == nil){
@@ -7361,7 +7373,7 @@ writewctl(Xfid *x, char *err)
     x->data[cnt] = '\0';
     id = 0;
 
-    rect = rectsubpt(w->screenr, screen->r.min);
+    rect = rectsubpt(w->screenr, view->r.min);
     cmd = parsewctl(&arg, rect, &rect, &pid, &id, &hideit, &scrollit, &dir, x->data, err);
     if(cmd < 0)
         return -1;
@@ -7763,9 +7775,8 @@ resized(void)
     if(getwindow(display, Refnone) < 0)
         error("failed to re-attach window");
     freescrtemps();
-    view = screen;
     freescreen(wscreen);
-    wscreen = allocscreen(screen, background, 0);
+    wscreen = allocscreen(view, background, 0);
     if(wscreen == nil)
         error("can't re-allocate screen");
     draw(view, view->r, background, nil, ZP);
@@ -7780,7 +7791,7 @@ resized(void)
         r.min.y = (r.min.y*n.y)/o.y;
         r.max.x = (r.max.x*n.x)/o.x;
         r.max.y = (r.max.y*n.y)/o.y;
-        r = rectaddpt(r, screen->clipr.min);
+        r = rectaddpt(r, view->clipr.min);
         ishidden = 0;
         for(j=0; j<nhidden; j++)
             if(w == hidden[j]){
@@ -7788,14 +7799,14 @@ resized(void)
                 break;
             }
         if(ishidden){
-            im = allocimage(display, r, screen->chan, 0, DWhite);
+            im = allocimage(display, r, view->chan, 0, DWhite);
             r = ZR;
         }else
             im = allocwindow(wscreen, r, Refbackup, DWhite);
         if(im)
             wsendctlmesg(w, Reshaped, r, im);
     }
-    viewr = screen->r;
+    viewr = view->r;
     flushimage(display, 1);
 }
 @
@@ -8429,7 +8440,7 @@ Rectangle r;
 <<[[main()]] if initstr or kdbin>>=
 if(kbdin){
     kbdargv[2] = kbdin;
-    r = screen->r;
+    r = view->r;
     r.max.x = r.min.x+300;
     r.max.y = r.min.y+80;
     i = allocwindow(wscreen, r, Refbackup, DWhite);
@@ -9013,8 +9024,11 @@ runetobyte(Rune *r, int n, int *ip)
 #include "Windows_extra.nw"
 \fi
 
-\chapter{Changelog}
-\label{sec:changelog}
+%\chapter{Changelog}
+%\label{sec:changelog}
+% code via make loc = 9500 LOC
+% orig nw = 9000, just lpized and few comments, ??? pages pdf
+% now: ? LOC ? pages, so added ?? LOE (Lines of explanations)
 
 \chapter*{Glossary}
 \label{sec:glossary}
