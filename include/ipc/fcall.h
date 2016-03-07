@@ -8,9 +8,12 @@
 typedef
 struct	Fcall
 {
+    // enum<Txxx>
 	uchar	type;
+
 	u32int	fid;
 	ushort	tag;
+
 	union {
 		struct {
 			u32int	msize;		/* Tversion, Rversion */

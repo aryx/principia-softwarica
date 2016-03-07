@@ -65,6 +65,7 @@ struct VGAdev {
   // optional
   void  (*drawinit)(VGAscr*);
   int   (*fill)(VGAscr*, Rectangle, ulong);
+
   void  (*ovlctl)(VGAscr*, Chan*, void*, int);
   int   (*ovlwrite)(VGAscr*, void*, int, vlong);
 
@@ -104,12 +105,8 @@ struct VGAscr {
   VGAcur* cur;
   /*e: [[VGAscr]] cursor fields */
 
-
   ulong colormap[Pcolours][3];
   int palettedepth;
-
-  // the vga device methods
-  VGAdev* dev;
 
   Pcidev* pci;
   ulong io;       /* device specific registers */
@@ -119,6 +116,9 @@ struct VGAscr {
   bool useflush;
 
   ulong id; /* internal identifier for driver use */
+
+  // the vga device methods
+  VGAdev* dev;
 
   // why here? why not in VGAdev?
   /*s: [[VGAscr]] optional methods(x86) */

@@ -208,6 +208,7 @@ gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
             *scrp = nil;
         }
         /*e: [[gengetwindow()]] if already had a view, free it */
+        // get our window!
         image = namedimage(d, buf);
         /*s: [[gengetwindow()]] sanity check image from namedimage */
         if(image == nil){

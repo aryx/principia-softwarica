@@ -15,7 +15,9 @@ struct	Keyboardctl
     // dev/consctl
     fdt		ctlfd;		/* to ctl file */
 
+    // chan<Rune, 20> (listener = user program, sender = _ioproc(keyboard.c))
     Channel	*c;	/* chan(Rune)[20] */
+
     int		pid;		/* of slave proc */
 };
 /*e: struct Keyboardctl */

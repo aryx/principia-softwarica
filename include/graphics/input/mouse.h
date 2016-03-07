@@ -39,6 +39,7 @@ struct Mousectl
     Image*	image;	/* of associated window/display */
 
     /*s: [[Mousectl]] channel fields */
+    // chan<Mouse> (listener = user program, sender = _ioproc(mouse.c))
     Channel	*c;			/* chan(Mouse) */
     /*x: [[Mousectl]] channel fields */
     Channel	*resizec;	/* chan(int)[2] */
