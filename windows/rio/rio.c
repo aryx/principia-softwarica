@@ -44,6 +44,7 @@ void 	deletethread(void*);
 void	initcmd(void*);
 
 /*s: global exitchan */
+// chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
 Channel	*exitchan;	/* chan(int) */
 /*e: global exitchan */
 /*s: global viewr */
@@ -60,10 +61,12 @@ int		mainpid;
 enum
 {
     New,
+
     Reshape,
     Move,
     Delete,
     Hide,
+
     Exit,
 
     Hidden,
@@ -114,10 +117,7 @@ char*		menu3str[100] = {
 /*e: global menu3str */
 
 /*s: global menu3 */
-Menu menu3 =
-{
-    menu3str
-};
+Menu menu3 = { menu3str };
 /*e: global menu3 */
 
 /*s: global rcargv */
@@ -147,12 +147,12 @@ usage(void)
 /*e: function usage */
 
 /*s: function threadmain */
-//@Scheck: not dead, called by lib_thread probably
 void threadmain(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
-    char *s;
     char buf[256];
+    /*x: [[main()]] locals */
+    char *s;
     /*x: [[main()]] locals */
     char *initstr = nil;
     /*x: [[main()]] locals */
@@ -191,12 +191,12 @@ void threadmain(int argc, char *argv[])
     }ARGEND
 
     /*s: [[main()]] set some globals */
-    mainpid = getpid();
-    /*x: [[main()]] set some globals */
     if(getwd(buf, sizeof buf) == nil)
         startdir = estrdup(".");
     else
         startdir = estrdup(buf);
+    /*x: [[main()]] set some globals */
+    mainpid = getpid();
     /*x: [[main()]] set some globals */
     s = getenv("tabstop");
     if(s != nil)
@@ -204,6 +204,8 @@ void threadmain(int argc, char *argv[])
     if(maxtab == 0)
         maxtab = 4;
     free(s);
+    /*x: [[main()]] set some globals */
+    snarffd = open("/dev/snarf", OREAD|OCEXEC);
     /*x: [[main()]] set some globals */
     if(fontname == nil)
         fontname = getenv("font");
@@ -215,19 +217,18 @@ void threadmain(int argc, char *argv[])
         fprint(STDERR, "rio: can't access %s: %r\n", fontname);
         exits("font open");
     }
+
     putenv("font", fontname);
     /*e: [[main()]] set some globals */
-    /*s: [[main()]] set snarffd */
-    snarffd = open("/dev/snarf", OREAD|OCEXEC);
-    /*e: [[main()]] set snarffd */
 
+    // Rio, a graphical app
+
+    /*s: [[main()]] graphics initializations */
     if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
         fprint(STDERR, "rio: can't open display: %r\n");
         exits("display open");
     }
-
     viewr = view->r;
-
     iconinit(); // allocate background and red images
 
     /*s: [[main()]] mouse initialisation */
@@ -242,32 +243,42 @@ void threadmain(int argc, char *argv[])
         error("can't find keyboard");
     /*e: [[main()]] keyboard initialisation */
 
-    wscreen = allocscreen(view, background, 0);
+    wscreen = allocscreen(view, background, false);
+    /*s: [[main()]] sanity check wscreen */
     if(wscreen == nil)
         error("can't allocate screen");
-    
+    /*e: [[main()]] sanity check wscreen */
     draw(view, viewr, background, nil, ZP);
     flushimage(display, true);
+    /*e: [[main()]] graphics initializations */
+
+    // Rio, a concurrent app
 
     /*s: [[main()]] communication channels creation */
     exitchan     = chancreate(sizeof(int), 0);
-    winclosechan = chancreate(sizeof(Window*), 0);
+    /*x: [[main()]] communication channels creation */
     deletechan   = chancreate(sizeof(char*), 0);
+    winclosechan = chancreate(sizeof(Window*), 0);
     /*e: [[main()]] communication channels creation */
     /*s: [[main()]] threads creation */
     timerinit();
+
     threadcreate(keyboardthread, nil, STACK);
     threadcreate(mousethread, nil, STACK);
-
-    threadcreate(winclosethread, nil, STACK);
+    /*x: [[main()]] threads creation */
     threadcreate(deletethread, nil, STACK);
+    threadcreate(winclosethread, nil, STACK);
     /*e: [[main()]] threads creation */
 
-    filsys = filsysinit(xfidinit());
+    // Rio, a filesystem server
 
+    filsys = filsysinit(xfidinit());
+    /*s: [[main()]] if filsys is nil */
     if(filsys == nil)
         fprint(STDERR, "rio: can't create file system server: %r\n");
+    /*e: [[main()]] if filsys is nil */
     else{
+        /*s: [[main()]] error management after everything setup */
         errorshouldabort = true;/* suicide if there's trouble after this */
         /*s: [[main()]] if initstr or kdbin */
         if(initstr)
@@ -284,8 +295,10 @@ void threadmain(int argc, char *argv[])
                 error("can't create keyboard window");
         }
         /*e: [[main()]] if initstr or kdbin */
-        threadnotify(shutdown, 1);
-        // blocks until get exit event on exitchan
+        threadnotify(shutdown, true);
+        /*e: [[main()]] error management after everything setup */
+
+        // blocks until get exit message on exitchan
         recv(exitchan, nil);
     }
     killprocs();
@@ -407,10 +420,12 @@ void
 keyboardthread(void*)
 {
     Rune buf[2][20];
+    // points to buf[0] or buf[1]
     Rune *rp;
     int n, i;
 
     threadsetname("keyboardthread");
+
     n = 0;
     for(;;){
         rp = buf[n];
@@ -456,11 +471,12 @@ portion(int x, int lo, int hi)
 {
     x -= lo;
     hi -= lo;
+
     if(x < 20)
-        return 0;
+        return 0; // top
     if(x > hi-20)
-        return 2;
-    return 1;
+        return 2; // below
+    return 1; // middle
 }
 /*e: function portion */
 
@@ -472,7 +488,7 @@ whichcorner(Window *w, Point p)
     
     i = portion(p.x, w->screenr.min.x, w->screenr.max.x);
     j = portion(p.y, w->screenr.min.y, w->screenr.max.y);
-    return 3*j+i;
+    return 3*j + i;
 }
 /*e: function whichcorner */
 
@@ -480,7 +496,7 @@ whichcorner(Window *w, Point p)
 void
 cornercursor(Window *w, Point p, bool force)
 {
-    if(w!=nil && winborder(w, p))
+    if(w != nil && winborder(w, p))
         riosetcursor(corners[whichcorner(w, p)], force);
     else
         wsetcursor(w, force);
@@ -495,6 +511,7 @@ winclosethread(void*)
     Window *w;
 
     threadsetname("winclosethread");
+
     for(;;){
         w = recvp(winclosechan);
         wclose(w);
@@ -511,6 +528,7 @@ deletethread(void*)
     Image *i;
 
     threadsetname("deletethread");
+
     for(;;){
         s = recvp(deletechan);
         i = namedimage(display, s);
@@ -528,9 +546,8 @@ deletethread(void*)
 void
 deletetimeoutproc(void *v)
 {
-    char *s;
+    char *s = v;
 
-    s = v;
     sleep(750);	/* remove window from screen after 3/4 of a second */
     sendp(deletechan, s);
 }
@@ -557,9 +574,9 @@ keyboardhide(void)
 /*s: enum Mxxx */
 enum {
     MMouse,
-    /*s: enum Mxxx cases */
+    /*s: [[Mxxx]] cases */
     MReshape,
-    /*e: enum Mxxx cases */
+    /*e: [[Mxxx]] cases */
     NALT
 };
 /*e: enum Mxxx */
@@ -569,16 +586,15 @@ void
 mousethread(void*)
 {
     /*s: [[mousethread()]] locals */
+    // map<enum<Mxxx>, Alt>
     static Alt alts[NALT+1];
     /*x: [[mousethread()]] locals */
     Window *winput;
-    Point xy;
+    Point xy; // logical coord
     /*x: [[mousethread()]] locals */
     bool sending = false;
     /*x: [[mousethread()]] locals */
     Mouse tmp;
-    /*x: [[mousethread()]] locals */
-    bool scrolling = false;
     /*x: [[mousethread()]] locals */
     Window *w;
     /*x: [[mousethread()]] locals */
@@ -588,11 +604,14 @@ mousethread(void*)
     Window *oin;
     Image *i;
     Rectangle r;
+    /*x: [[mousethread()]] locals */
+    bool scrolling = false;
     /*e: [[mousethread()]] locals */
 
     threadsetname("mousethread");
 
     /*s: [[mousethread()]] alts setup */
+    // listen
     alts[MMouse].c = mousectl->c;
     alts[MMouse].v = &mousectl->Mouse;
     alts[MMouse].op = CHANRCV;
@@ -604,7 +623,7 @@ mousethread(void*)
     alts[NALT].op = CHANEND;
 
     for(;;)
-        // event loop
+        // message loop
         switch(alt(alts)){
         /*s: [[mousethread()]] event loop cases */
         case MMouse:
@@ -625,10 +644,10 @@ mousethread(void*)
             }
             /*e: [[mousethread()]] if wkeyboard and ptinrect */
 
-            if(winput!=nil && winput->i!=nil){
+            if(winput != nil && winput->i != nil){
                 /* convert to logical coordinates */
-                xy.x = mouse->xy.x + (winput->i->r.min.x-winput->screenr.min.x);
-                xy.y = mouse->xy.y + (winput->i->r.min.y-winput->screenr.min.y);
+                xy.x = mouse->xy.x + (winput->i->r.min.x - winput->screenr.min.x);
+                xy.y = mouse->xy.y + (winput->i->r.min.y - winput->screenr.min.y);
 
                 /*s: [[mousethread()]] goto Sending if scroll buttons */
                 /* the up and down scroll buttons are not subject to the usual rules */
@@ -638,7 +657,7 @@ mousethread(void*)
 
                 inside = ptinrect(mouse->xy, insetrect(winput->screenr, Selborder));
 
-                /*s: [[mousethread()]] adjust scrolling */
+                /*s: [[mousethread()]] set scrolling */
                 if(winput->mouseopen)
                     scrolling = false;
                 else 
@@ -646,8 +665,7 @@ mousethread(void*)
                     scrolling = mouse->buttons;
                   else
                     scrolling = mouse->buttons && ptinrect(xy, winput->scrollr);
-                /*e: [[mousethread()]] adjust scrolling */
-
+                /*e: [[mousethread()]] set scrolling */
                 /*s: [[mousethread()]] set moving to true for some conditions */
                 /* topped will be zero or less if window has been bottomed */
                 if(sending == false && !scrolling 
@@ -658,7 +676,7 @@ mousethread(void*)
                 else 
                    /*s: [[mousethread()]] set sending to true for some conditions */
                    if(inside && 
-                      (scrolling || winput->mouseopen || (mouse->buttons&1)))
+                      ((mouse->buttons&1) || winput->mouseopen || scrolling))
                         sending = true;
                    /*e: [[mousethread()]] set sending to true for some conditions */
             }else
@@ -667,11 +685,14 @@ mousethread(void*)
             /*s: [[mousethread()]] if sending */
             if(sending){
             Sending:
+                /*s: [[mousethread()]] when sending mouse message to window, set the cursor */
                 if(mouse->buttons == 0){
-                    cornercursor(winput, mouse->xy, 0);
+                    // cornercursor will call wsetcursor if cursor not on the border
+                    cornercursor(winput, mouse->xy, false);
                     sending = false;
                 }else
                     wsetcursor(winput, false);
+                /*e: [[mousethread()]] when sending mouse message to window, set the cursor */
 
                 tmp = mousectl->Mouse;
                 tmp.xy = xy; // logical coordinates
@@ -686,27 +707,29 @@ mousethread(void*)
 
             /* change cursor if over anyone's border */
             if(w != nil)
-                cornercursor(w, mouse->xy, 0);
+                cornercursor(w, mouse->xy, false);
             else
-                riosetcursor(nil, 0);
+                riosetcursor(nil, false);
 
             /*s: [[mousethread()]] if moving and buttons */
             if(moving && (mouse->buttons&7)){
                 oin = winput;
                 band = mouse->buttons & 3;
+
                 sweeping = true;
                 if(band)
                     i = bandsize(winput);
                 else
                     i = drag(winput, &r);
                 sweeping = false;
+
                 if(i != nil){
                     if(winput == oin){
                         if(band)
                             wsendctlmesg(winput, Reshaped, i->r, i);
                         else
                             wsendctlmesg(winput, Moved, r, i);
-                        cornercursor(winput, mouse->xy, 1);
+                        cornercursor(winput, mouse->xy, true);
                     }else
                         freeimage(i);
                 }
@@ -714,13 +737,13 @@ mousethread(void*)
             /*e: [[mousethread()]] if moving and buttons */
 
             if(w != nil)
-                cornercursor(w, mouse->xy, 0);
+                cornercursor(w, mouse->xy, false);
 
             /*s: [[mousethread()]] if buttons and was not sending */
             /* we're not sending the event, but if button is down maybe we should */
             if(mouse->buttons){
                 /* w->topped will be zero or less if window has been bottomed */
-                if(w==nil || (w==winput && w->topped>0)){
+                if(w==nil || (w==winput && w->topped > 0)){
                     if(mouse->buttons & 1){
                         ;
                     }else if(mouse->buttons & 2){
@@ -738,7 +761,7 @@ mousethread(void*)
                     /*s: [[mousethread()]] click on unfocused window, set w */
                     w = wtop(mouse->xy);
                     /*e: [[mousethread()]] click on unfocused window, set w */
-                    if(w&& (mouse->buttons!=1 || winborder(w, mouse->xy)))
+                    if(w && (mouse->buttons!=1 || winborder(w, mouse->xy)))
                         // input changed
                         goto Again;
 
@@ -830,8 +853,6 @@ button3menu(void)
 
     sweeping = true;
     switch(i = menuhit(3, mousectl, &menu3, wscreen)){
-    case -1:
-        break;
     /*s: [[button3menu()]] cases */
     case Exit:
         send(exitchan, nil);
@@ -861,6 +882,8 @@ button3menu(void)
         unhide(i);
         break;
     /*e: [[button3menu()]] cases */
+    case -1:
+        break;
     }
     sweeping = false;
 }
@@ -954,22 +977,27 @@ sweep(void)
     Point p0, p;
 
     i = nil;
+
     menuing = true;
-    riosetcursor(&crosscursor, 1);
+    riosetcursor(&crosscursor, true);
     while(mouse->buttons == 0)
         readmouse(mousectl);
+
     p0 = onscreen(mouse->xy);
     p = p0;
     r.min = p;
     r.max = p;
     oi = nil;
+
     while(mouse->buttons == 4){
         readmouse(mousectl);
+
         if(mouse->buttons != 4 && mouse->buttons != 0)
             break;
         if(!eqpt(mouse->xy, p)){
             p = onscreen(mouse->xy);
             r = canonrect(Rpt(p0, p));
+
             if(Dx(r)>5 && Dy(r)>5){
                 i = allocwindow(wscreen, r, Refnone, 0xEEEEEEFF); /* grey */
                 freeimage(oi);
@@ -977,21 +1005,23 @@ sweep(void)
                     goto Rescue;
                 oi = i;
                 border(i, r, Selborder, red, ZP);
-                flushimage(display, 1);
+                flushimage(display, true);
             }
         }
     }
+
     if(mouse->buttons != 0)
         goto Rescue;
     if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
         goto Rescue;
+
     oi = i;
     i = allocwindow(wscreen, oi->r, Refbackup, DWhite);
     freeimage(oi);
     if(i == nil)
         goto Rescue;
     border(i, r, Selborder, red, ZP);
-    cornercursor(input, mouse->xy, 1);
+    cornercursor(input, mouse->xy, true);
     goto Return;
 
  Rescue:
@@ -1052,6 +1082,7 @@ drag(Window *w, Rectangle *rp)
     Rectangle r;
 
     i = w->i;
+
     menuing = true;
     om = mouse->xy;
     riosetcursor(&boxcursor, 1);
@@ -1060,6 +1091,7 @@ drag(Window *w, Rectangle *rp)
     op = subpt(mouse->xy, dm);
     drawborder(Rect(op.x, op.y, op.x+d.x, op.y+d.y), 1);
     flushimage(display, 1);
+
     while(mouse->buttons == 4){
         p = subpt(mouse->xy, dm);
         if(!eqpt(p, op)){
@@ -1069,11 +1101,13 @@ drag(Window *w, Rectangle *rp)
         }
         readmouse(mousectl);
     }
+
     r = Rect(op.x, op.y, op.x+d.x, op.y+d.y);
     drawborder(r, 0);
     cornercursor(w, mouse->xy, 1);
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
     menuing = false;
+
     flushimage(display, 1);
     if(mouse->buttons!=0 || (ni=allocwindow(wscreen, r, Refbackup, DWhite))==nil){
         moveto(mousectl, om);
@@ -1212,17 +1246,20 @@ pointto(bool wait)
     Window *w;
 
     menuing = true;
-    riosetcursor(&sightcursor, 1);
+    riosetcursor(&sightcursor, true);
+
     while(mouse->buttons == 0)
         readmouse(mousectl);
+
     if(mouse->buttons == 4)
         w = wpointto(mouse->xy);
     else
         w = nil;
+
     if(wait){
         while(mouse->buttons){
             if(mouse->buttons!=4 && w !=nil){	/* cancel */
-                cornercursor(input, mouse->xy, 0);
+                cornercursor(input, mouse->xy, false);
                 w = nil;
             }
             readmouse(mousectl);
@@ -1230,7 +1267,7 @@ pointto(bool wait)
         if(w != nil && wpointto(mouse->xy) != w)
             w = nil;
     }
-    cornercursor(input, mouse->xy, 0);
+    cornercursor(input, mouse->xy, false);
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
     menuing = false;
     return w;
@@ -1279,7 +1316,7 @@ move(void)
     i = drag(w, &r);
     if(i)
         wsendctlmesg(w, Moved, r, i);
-    cornercursor(input, mouse->xy, 1);
+    cornercursor(input, mouse->xy, true);
 }
 /*e: function move */
 
@@ -1353,9 +1390,9 @@ unhide(int h)
 Window*
 new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
 {
-    Window *w;
-    Mousectl *mc;
     Channel *cm, *ck, *cctl;
+    Mousectl *mc;
+    Window *w;
     Channel *cpid;
     void **arg;
 
@@ -1384,7 +1421,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     free(mc);	/* wmk copies *mc */
 
     // growing array
-    windows = erealloc(windows, ++nwindow*sizeof(Window*));
+    windows = erealloc(windows, ++nwindow * sizeof(Window*));
     windows[nwindow-1] = w;
     if(hideit){
         hidden[nhidden++] = w;
@@ -1399,9 +1436,9 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 
     flushimage(display, true);
 
-    /*s: [[new()]] if pid == 0 */
+    /*s: [[new()]] if pid == 0, create winshell process and set pid */
     if(pid == 0){
-        arg = emalloc(5*sizeof(void*));
+        arg = emalloc(5 * sizeof(void*));
         arg[0] = w;
         arg[1] = cpid;
         arg[2] = cmd;
@@ -1410,20 +1447,25 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
         else
             arg[3] = argv;
         arg[4] = dir;
+
         proccreate(winshell, arg, 8192);
+
         pid = recvul(cpid);
         free(arg);
     }
+    /*e: [[new()]] if pid == 0, create winshell process and set pid */
+    /*s: [[new()]] sanity check pid */
     if(pid == 0){
         /* window creation failed */
         wsendctlmesg(w, Deleted, ZR, nil);
         chanfree(cpid);
         return nil;
     }
-    /*e: [[new()]] if pid == 0 */
+    /*e: [[new()]] sanity check pid */
 
     wsetpid(w, pid, true);
     wsetname(w);
+
     if(dir)
         w->dir = estrdup(dir);
 

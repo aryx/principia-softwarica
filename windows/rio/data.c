@@ -196,9 +196,9 @@ Cursor l = {
 
 /*s: global corners (windows/rio/data.c) */
 Cursor *corners[9] = {
-    &tl,	&t,	&tr,
-    &l,	nil,	&r,
-    &bl,	&b,	&br,
+    &tl,    &t,   &tr,
+    &l,    nil,   &r,
+    &bl,    &b,   &br,
 };
 /*e: global corners (windows/rio/data.c) */
 

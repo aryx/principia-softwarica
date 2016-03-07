@@ -12,7 +12,7 @@ frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
 {
     f->font = ft;
     f->display = b->display;
-    f->maxtab = 8*stringwidth(ft, "0");
+    f->maxtab = 8 * stringwidth(ft, "0");
     f->nbox = 0;
     f->nalloc = 0;
     f->nchars = 0;

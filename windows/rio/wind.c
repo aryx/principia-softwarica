@@ -130,7 +130,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 
     frinit(w, r, font, i, cols);
 
-    w->maxtab = maxtab*stringwidth(font, "0");
+    w->maxtab = maxtab * stringwidth(font, "0");
     w->topped = ++topped;
     w->id = ++id;
     w->notefd = -1;
@@ -194,7 +194,7 @@ wresize(Window *w, Image *i, bool move)
         frclear(w, false);
         frinit(w, r, w->font, w->i, cols);
         wsetcols(w);
-        w->maxtab = maxtab*stringwidth(w->font, "0");
+        w->maxtab = maxtab * stringwidth(w->font, "0");
         r = insetrect(w->i->r, Selborder);
         draw(w->i, r, cols[BACK], nil, w->entire.min);
         wfill(w);
@@ -219,6 +219,8 @@ wrefresh(Window *w, Rectangle)
         wborder(w, Unselborder);
     if(w->mouseopen)
         return;
+    // else
+
     draw(w->i, insetrect(w->i->r, Borderwidth), w->cols[BACK], nil, w->i->r.min);
     w->ticked = 0;
     if(w->p0 > 0)
@@ -255,14 +257,15 @@ enum {
     WKey, 
     WMouse, 
     WCtl,
-    /*s: enum Wxxx cases */
+    /*s: [[Wxxx]] cases */
     WMouseread, // ??
 
     WCwrite,
     WCread, 
 
     WWread, // ??
-    /*e: enum Wxxx cases */
+    /*e: [[Wxxx]] cases */
+
     NWALT 
 };
 /*e: enum Wxxx */
@@ -273,9 +276,10 @@ winctl(void *arg)
 {
     /*s: [[winctl()]] locals */
     Window *w;
+    // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
     /*x: [[winctl()]] locals */
-    char buf[4*12+1];
+    char buf[4*12+1]; // /dev/mouse interface
     Rune *rp, *bp, *tp, *up;
     uint qh;
     int nr, nb, c, wid, i, initial;
@@ -286,6 +290,8 @@ winctl(void *arg)
     /*x: [[winctl()]] locals */
     Wctlmesg wcm;
     /*x: [[winctl()]] locals */
+    Mousestate *mp, m;
+    /*x: [[winctl()]] locals */
     Mousereadmesg mrm;
     /*x: [[winctl()]] locals */
     Conswritemesg cwm;
@@ -294,8 +300,6 @@ winctl(void *arg)
     Stringpair pair;
     /*x: [[winctl()]] locals */
     Consreadmesg cwrm;
-    /*x: [[winctl()]] locals */
-    Mousestate *mp, m;
     /*e: [[winctl()]] locals */
     
     w = arg;
@@ -1035,7 +1039,8 @@ wplumb(Window *w)
 int
 winborder(Window *w, Point xy)
 {
-    return ptinrect(xy, w->screenr) && !ptinrect(xy, insetrect(w->screenr, Selborder));
+    return ptinrect(xy, w->screenr) && 
+           !ptinrect(xy, insetrect(w->screenr, Selborder));
 }
 /*e: function winborder */
 
@@ -1265,6 +1270,7 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
     wcm.type = type;
     wcm.r = r;
     wcm.image = image;
+
     send(w->cctl, &wcm);
 }
 /*e: function wsendctlmesg */
@@ -1285,7 +1291,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
             break;
         if(!w->mouseopen)
             wrefresh(w, r);
-        flushimage(display, 1);
+        flushimage(display, true);
         break;
     /*x: [[wctlmesg()]] cases */
     case Movemouse:
@@ -1365,7 +1371,6 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         error("unknown control message");
         break;
     }
-
     return m;
 }
 /*e: function wctlmesg */
@@ -1422,7 +1427,7 @@ wpointto(Point pt)
         v = windows[i];
         if(ptinrect(pt, v->screenr))
          if(!v->deleted)
-          if(w==nil || v->topped>w->topped)
+          if(w==nil || v->topped > w->topped)
             w = v;
     }
     return w;
@@ -1466,7 +1471,7 @@ wsetcursor(Window *w, bool force)
 {
     Cursor *p;
 
-    if(w==nil || /*w!=input || */ w->i==nil || Dx(w->screenr)<=0)
+    if(w==nil || w->i==nil || Dx(w->screenr)<=0)
         p = nil;
     else if(wpointto(mouse->xy) == w){
         p = w->cursorp;
@@ -1476,14 +1481,15 @@ wsetcursor(Window *w, bool force)
         /*e: [[wsetcursor()]] if holding */
     }else
         p = nil;
+
     if(!menuing)
-        riosetcursor(p, force && !menuing);
+        riosetcursor(p, force);
 }
 /*e: function wsetcursor */
 
 /*s: function riosetcursor */
 void
-riosetcursor(Cursor *p, int force)
+riosetcursor(Cursor *p, bool force)
 {
     if(!force && p==lastcursor)
         return;
@@ -1658,7 +1664,6 @@ winshell(void *args)
             chdir(dir);
 
         procexec(pidc, cmd, argv);
-
         _exits("exec failed");
     }
 }

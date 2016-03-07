@@ -25,9 +25,6 @@ Mouse	*mouse;
 Keyboardctl	*keyboardctl;
 /*e: global keyboardctl */
 
-/*s: global view */
-//Image	*view;
-/*e: global view */
 /*s: global wscreen */
 Screen	*wscreen;
 /*e: global wscreen */
@@ -39,7 +36,7 @@ Image	*red;
 /*e: global red */
 
 /*s: global window */
-//array<ref_own<Window>>
+// growing_array<option<ref_own<Window>>> (size = nwindow+1)
 Window	**windows;
 /*e: global window */
 /*s: global wkeyboard */
@@ -81,6 +78,7 @@ bool		scrolling;
 int		maxtab = 0;
 /*e: global maxtab */
 /*s: global deletechan */
+// chan<char*> (listener = deletethread, sender = deletetimeoutproc)
 Channel* deletechan;
 /*e: global deletechan */
 /*s: global startdir */
@@ -102,6 +100,7 @@ int		snarfversion;	/* updated each time it is written */
 bool errorshouldabort = false;
 /*e: global errorshouldabort */
 /*s: global winclosechan */
+// chan<Window> (listener = winclosethread, sender = filsyswalk )
 Channel	*winclosechan; /* chan(Window*); */
 /*e: global winclosechan */
 /*s: global messagesize */

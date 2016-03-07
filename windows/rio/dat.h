@@ -3,39 +3,39 @@
 enum qid
 {
     Qdir,			/* /dev for this window */
-    /*s: enum qid cases */
+    /*s: [[qid]] cases */
     Qcons,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qconsctl,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qmouse,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qcursor,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qscreen,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qwindow,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qwinid,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qwinname,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qlabel,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qtext,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qwdir,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qwsys,		/* directory of window directories */
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qwsysdir,		/* window directory, child of wsys */
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qwctl,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qsnarf,
-    /*x: enum qid cases */
+    /*x: [[qid]] cases */
     Qkbdin,
-    /*e: enum qid cases */
+    /*e: [[qid]] cases */
     QMAX,
 };
 /*e: enum qid */
@@ -91,24 +91,25 @@ enum
 /*s: enum wctlmesgkind */
 enum	/* control messages */
 {
-    Wakeup,
-
-    Reshaped, // Resized, Hide/Unhind
+    Reshaped, // Resized, Hide/Expose
     Moved,
-
+    /*s: [[Wctlmesgkind]] cases */
+    Wakeup,
+    /*x: [[Wctlmesgkind]] cases */
     Refresh,
+    /*x: [[Wctlmesgkind]] cases */
     Movemouse,
-
-    /*s: enum wctlmesgkind cases */
+    /*x: [[Wctlmesgkind]] cases */
+    Deleted,
+    /*x: [[Wctlmesgkind]] cases */
+    Exited,
+    /*x: [[Wctlmesgkind]] cases */
     Rawon,
     Rawoff,
-    /*x: enum wctlmesgkind cases */
+    /*x: [[Wctlmesgkind]] cases */
     Holdon,
     Holdoff,
-    /*e: enum wctlmesgkind cases */
-
-    Deleted,
-    Exited,
+    /*e: [[Wctlmesgkind]] cases */
 };
 /*e: enum wctlmesgkind */
 
@@ -117,6 +118,7 @@ struct Wctlmesg
 {
     // enum<wctlmesgkind>
     int		type;
+
     Rectangle	r;
     Image	*image;
 };
@@ -180,25 +182,28 @@ struct Window
     // ID
     //--------------------------------------------------------------------
     /*s: [[Window]] id fields */
-    int	id;       // /dev/winid
-    char	name[32]; // /dev/winname
-    char	*label;   // /dev/label
+    int	    id;       // /dev/winid
+    char    name[32]; // /dev/winname
+    char    *label;   // /dev/label
     /*x: [[Window]] id fields */
     uint		namecount;
     /*e: [[Window]] id fields */
     
     //--------------------------------------------------------------------
-    // Screen
+    // Graphics
     //--------------------------------------------------------------------
-    /*s: [[Window]] screen fields */
+    /*s: [[Window]] graphics fields */
+    // ref_own<Image>, public image for the window (name in /dev/winname)
     Image	*i;
+    /*x: [[Window]] graphics fields */
     /*
      * Rio once used originwindow, so screenr could be different from i->r.
      * Now they're always the same but the code doesn't assume so.
     */
     Rectangle	screenr; /* screen coordinates of window */
+    /*x: [[Window]] graphics fields */
     Frame;
-    /*e: [[Window]] screen fields */
+    /*e: [[Window]] graphics fields */
     
     //--------------------------------------------------------------------
     // Mouse
@@ -211,11 +216,12 @@ struct Window
     /*x: [[Window]] mouse fields */
     Mouseinfo	mouse;
     /*e: [[Window]] mouse fields */
-    
+   
     //--------------------------------------------------------------------
     // Keyboard
     //--------------------------------------------------------------------
     /*s: [[Window]] keyboard fields */
+    // chan<Rune, 20> (listener = winctl, sender = keyboardthread)
     Channel	*ck;		/* chan(Rune[10]) */
     /*e: [[Window]] keyboard fields */
     
@@ -223,6 +229,7 @@ struct Window
     // Control
     //--------------------------------------------------------------------
     /*s: [[Window]] control fields */
+    // chan<Wctlmesg, 20> (listener = winctl, sender = mousethread | ...)
     Channel	*cctl;		/* chan(Wctlmesg)[20] */
     /*e: [[Window]] control fields */
     
@@ -230,21 +237,19 @@ struct Window
     // Config
     //--------------------------------------------------------------------
     /*s: [[Window]] config fields */
-    bool_byte	scrolling;
+    bool	scrolling;
     /*x: [[Window]] config fields */
-    bool_byte	deleted;
+    bool	deleted;
     /*x: [[Window]] config fields */
-    bool_byte	rawing;
+    bool	rawing;
     /*x: [[Window]] config fields */
-    bool_byte	holding;
+    bool	holding;
     /*e: [[Window]] config fields */
 
     //--------------------------------------------------------------------
     // Textual Window
     //--------------------------------------------------------------------
     /*s: [[Window]] textual window fields */
-    Rectangle	scrollr;
-    /*x: [[Window]] textual window fields */
     // array<Rune>
     Rune		*r;
     uint		nr;	/* number of runes in window */
@@ -257,13 +262,15 @@ struct Window
     uint		q1;
     /*x: [[Window]] textual window fields */
     uint		qh;
+    /*x: [[Window]] textual window fields */
+    Rectangle	scrollr;
     /*e: [[Window]] textual window fields */
 
     //--------------------------------------------------------------------
     // Graphical Window
     //--------------------------------------------------------------------
     /*s: [[Window]] graphical window fields */
-    bool_byte	mouseopen;
+    bool	mouseopen;
     /*x: [[Window]] graphical window fields */
     // array<Rune>
     Rune		*raw;
@@ -276,27 +283,27 @@ struct Window
     /*s: [[Window]] other fields */
     int	 	topped;
     /*x: [[Window]] other fields */
+    int		pid;
+    int	 	notefd;
+    /*x: [[Window]] other fields */
+    bool	 	resized;
+    /*x: [[Window]] other fields */
+    bool_byte	ctlopen;
+    /*x: [[Window]] other fields */
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     /*x: [[Window]] other fields */
     Channel		*consread;	/* chan(Consreadmesg) */
     /*x: [[Window]] other fields */
     Channel		*conswrite;	/* chan(Conswritemesg) */
     /*x: [[Window]] other fields */
-    Channel		*wctlread;	/* chan(Consreadmesg) */
-    /*x: [[Window]] other fields */
-    int		pid;
-    int	 	notefd;
-    /*x: [[Window]] other fields */
-    bool	 	resized;
-    /*x: [[Window]] other fields */
     Rectangle	lastsr;
     /*x: [[Window]] other fields */
-    bool_byte	ctlopen;
+    char		*dir; // /dev/wdir
     /*x: [[Window]] other fields */
-    char		*dir;
-    /*x: [[Window]] other fields */
-    bool_byte	wctlopen;
+    bool	wctlopen;
     int	 	wctlready;
+    /*x: [[Window]] other fields */
+    Channel		*wctlread;	/* chan(Consreadmesg) */
     /*e: [[Window]] other fields */
 
     //--------------------------------------------------------------------
@@ -323,9 +330,13 @@ struct Dirtab
 /*s: struct Fid */
 struct Fid
 {
+    // the key
     int		fid;
 
-    int		busy;
+    // the state
+
+    bool	busy;
+
     int		open;
     int		mode;
 
@@ -346,19 +357,23 @@ struct Fid
 /*s: struct Xfid */
 struct Xfid
 {
-        Ref;
-        Xfid	*next;
-        Xfid	*free;
         Fcall;
+        byte	*buf;
+ 
+        // chan<void(*)(Xfid*)> (listener = xfidctl, sender = filsysxxx?)
         Channel	*c;	/* chan(void(*)(Xfid*)) */
 
         Fid	*f;
-
-        uchar	*buf;
-
         Filsys	*fs;
 
+        // Extra
+        Ref;
+
+        Xfid	*next;
+        Xfid	*free;
+
         QLock	active;
+
         int	flushing;	/* another Xfid is trying to flush us */
         int	flushtag;	/* our tag, so flush can find us */
         Channel	*flushc;/* channel(int) to notify us we're being flushed */
@@ -373,16 +388,19 @@ struct Xfid
 /*s: struct Filsys */
 struct Filsys
 {
+    // client
     fdt		cfd;
+    // server
     fdt		sfd;
 
     int		pid;
-
+    // ref_own<string>
     char	*user;
 
+    // chan<Xfid*> (listener = filsysproc, sender = xfidallocthread)
     Channel	*cxfidalloc;	/* chan(Xfid*) */
 
-    // hash<fid, Fid> (next in bucket = Fid.next?)
+    // map<fid, Fid> (next in bucket = Fid.next?)
     Fid		*fids[Nhash];
 };
 /*e: struct Filsys */
@@ -407,7 +425,6 @@ extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 extern Keyboardctl	*keyboardctl;
 
-//extern Image	*view;
 extern Screen	*wscreen;
 extern Cursor	boxcursor;
 extern Cursor	crosscursor;

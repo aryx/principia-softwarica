@@ -87,6 +87,7 @@ static	int	ntsnarf;
 enum { 
     Alloc, 
     Free, 
+
     N 
 };
 /*e: enum Xxxx */
@@ -120,7 +121,8 @@ xfidallocthread(void*)
                 x->flushtag = -1;
                 x->next = xfid;
                 xfid = x;
-                // Xfid threads!
+
+                // new Xfid threads!
                 threadcreate(xfidctl, x, 16384);
             }
             if(x->ref != 0){
@@ -165,13 +167,14 @@ xfidinit(void)
 void
 xfidctl(void *arg)
 {
-    Xfid *x;
+    Xfid *x = arg;
     void (*f)(Xfid*);
     char buf[64];
 
-    x = arg;
     snprint(buf, sizeof buf, "xfid.%p", x);
+
     threadsetname(buf);
+
     for(;;){
         f = recvp(x->c);
         (*f)(x);

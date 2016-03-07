@@ -78,7 +78,7 @@ static Fid*		newfid(Filsys*, int);
 static int		dostat(Filsys*, int, Dirtab*, uchar*, int, uint);
 
 /*s: global clockfd */
-int	clockfd;
+fdt	clockfd;
 /*e: global clockfd */
 /*s: global firstmessage */
 bool	firstmessage = true;
@@ -109,35 +109,42 @@ static	Xfid*	filsyswstat(Filsys*, Xfid*, Fid*);
 /*s: global fcall */
 Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 {
-    [Tattach]	= filsysattach,
-    [Twalk]	= filsyswalk,
-    [Topen]	= filsysopen,
-    [Tcreate]	= filsyscreate,
-    [Tread]	= filsysread,
-    [Twrite]	= filsyswrite,
-    [Tclunk]	= filsysclunk,
-    [Tremove]   = filsysremove,
-    [Tstat]	= filsysstat,
-    [Twstat]	= filsyswstat,
-    [Tflush]	= filsysflush,
-    [Tversion]	= filsysversion,
-    [Tauth]	= filsysauth,
+    [Tattach]  = filsysattach,
+
+    [Twalk]    = filsyswalk,
+
+    [Topen]    = filsysopen,
+    [Tread]    = filsysread,
+    [Twrite]   = filsyswrite,
+
+    [Tcreate]  = filsyscreate,
+    [Tremove]  = filsysremove,
+    [Tclunk]   = filsysclunk,
+
+    [Tstat]    = filsysstat,
+    [Twstat]   = filsyswstat,
+
+    [Tflush]   = filsysflush,
+
+    [Tversion] = filsysversion,
+    [Tauth]    = filsysauth,
 };
 /*e: global fcall */
 
 /*s: function post */
 void
-post(char *name, char *envname, int srvfd)
+post(char *name, char *envname, fdt srvfd)
 {
-    int fd;
+    fdt fd;
     char buf[32];
 
     fd = create(name, OWRITE|ORCLOSE|OCEXEC, 0600);
     if(fd < 0)
         error(name);
-    sprint(buf, "%d",srvfd);
+    sprint(buf, "%d", srvfd);
     if(write(fd, buf, strlen(buf)) != strlen(buf))
         error("srv write");
+
     putenv(envname, name);
 }
 /*e: function post */
@@ -147,18 +154,18 @@ post(char *name, char *envname, int srvfd)
  * Build pipe with OCEXEC set on second fd.
  * Can't put it on both because we want to post one in /srv.
  */
-int
-cexecpipe(int *p0, int *p1)
+errorneg1
+cexecpipe(fdt *p0, fdt *p1)
 {
     /* pipe the hard way to get close on exec */
     if(bind("#|", "/mnt/temp", MREPL) < 0)
-        return -1;
+        return ERROR_NEG1;
     *p0 = open("/mnt/temp/data", ORDWR);
     *p1 = open("/mnt/temp/data1", ORDWR|OCEXEC);
     unmount(nil, "/mnt/temp");
     if(*p0<0 || *p1<0)
-        return -1;
-    return 0;
+        return ERROR_NEG1;
+    return OK_0;
 }
 /*e: function cexecpipe */
 
@@ -166,19 +173,33 @@ cexecpipe(int *p0, int *p1)
 Filsys*
 filsysinit(Channel *cxfidalloc)
 {
-    int n, fd, pid, p0;
+    int pid;
     Filsys *fs;
-    Channel *c;
+    /*s: [[filsysinit()]] other locals */
+    fdt fd;
     char buf[128];
+    int n;
+    /*x: [[filsysinit()]] other locals */
+    fdt p0;
+    // chan<??> (listener = ??, sender = ??)
+    Channel *c;
+    /*e: [[filsysinit()]] other locals */
+
+    /*s: [[filsysinit()]] install dumper */
+    fmtinstall('F', fcallfmt);
+    /*e: [[filsysinit()]] install dumper */
 
     fs = emalloc(sizeof(Filsys));
+
     if(cexecpipe(&fs->cfd, &fs->sfd) < 0)
         goto Rescue;
 
-    fmtinstall('F', fcallfmt);
-
+    /*s: [[filsysinit()]] set clockfd */
     clockfd = open("/dev/time", OREAD|OCEXEC);
+    /*e: [[filsysinit()]] set clockfd */
 
+    // to create "/srv/rio.{user}.{pid}"
+    /*s: [[filsysinit()]] set fs user */
     fd = open("/dev/user", OREAD);
     strcpy(buf, "Jean-Paul_Belmondo"); // lol
     if(fd >= 0){
@@ -188,34 +209,45 @@ filsysinit(Channel *cxfidalloc)
         close(fd);
     }
     fs->user = estrdup(buf);
-
-    fs->cxfidalloc = cxfidalloc;
+    /*e: [[filsysinit()]] set fs user */
     pid = getpid();
 
+    fs->cxfidalloc = cxfidalloc;
+
+    /*s: [[filsysinit()]] wctl pipe, process, and thread creation */
     /*
      * Create and post wctl pipe
      */
+    /*s: [[filsysinit()]] create wctl pipe */
     if(cexecpipe(&p0, &wctlfd) < 0)
         goto Rescue;
     sprint(srvwctl, "/srv/riowctl.%s.%d", fs->user, pid);
     post(srvwctl, "wctl", p0);
     close(p0);
+    /*e: [[filsysinit()]] create wctl pipe */
 
     /*
      * Start server processes
      */
+    /*s: [[filsysinit()]] create wctl process and thread */
     c = chancreate(sizeof(char*), 0);
     if(c == nil)
         error("wctl channel");
+
     proccreate(wctlproc, c, 4096);
     threadcreate(wctlthread, c, 4096);
+    /*e: [[filsysinit()]] create wctl process and thread */
+    /*e: [[filsysinit()]] wctl pipe, process, and thread creation */
+
     proccreate(filsysproc, fs, 10000);
 
+    /*s: [[filsysinit()]] srv pipe */
     /*
      * Post srv pipe
      */
     sprint(srvpipe, "/srv/rio.%s.%d", fs->user, pid);
     post(srvpipe, "wsys", fs->cfd);
+    /*e: [[filsysinit()]] srv pipe */
 
     return fs;
 
@@ -230,45 +262,58 @@ static
 void
 filsysproc(void *arg)
 {
+    Filsys *fs = arg;
     int n;
-    Xfid *x;
+    Xfid *x = nil;
     Fid *f;
     Fcall t;
-    uchar *buf;
-    Filsys *fs;
+    byte *buf;
 
     threadsetname("FILSYSPROC");
-    fs = arg;
+
     fs->pid = getpid();
-    x = nil;
 
     for(;;){
         buf = emalloc(messagesize+UTFmax);	/* UTFmax for appending partial rune in xfidwrite */
+
         n = read9pmsg(fs->sfd, buf, messagesize);
+        /*s: [[filsysproc()]] sanity check n */
         if(n <= 0){
             yield();	/* if threadexitsall'ing, will not return */
             fprint(STDERR, "rio: %d: read9pmsg: %d %r\n", getpid(), n);
             errorshouldabort = false;
             error("eof or i/o error on server channel");
         }
+        /*e: [[filsysproc()]] sanity check n */
         if(x == nil){
             send(fs->cxfidalloc, nil);
             recv(fs->cxfidalloc, &x);
             x->fs = fs;
         }
         x->buf = buf;
+
         if(convM2S(buf, n, x) != n)
             error("convert error in convM2S");
+        /*s: [[filsysproc()]] dump Fcall if debug */
         if(DEBUG)
             fprint(STDERR, "rio:<-%F\n", &x->Fcall);
+        /*e: [[filsysproc()]] dump Fcall if debug */
+
+        /*s: [[filsysproc()]] sanity check x type */
         if(fcall[x->type] == nil)
             x = filsysrespond(fs, x, &t, Ebadfcall);
+        /*e: [[filsysproc()]] sanity check x type */
         else{
+            /*s: [[filsysproc()]] if x type is Tversion or Tauth */
             if(x->type==Tversion || x->type==Tauth)
                 f = nil;
+            /*e: [[filsysproc()]] if x type is Tversion or Tauth */
             else
                 f = newfid(fs, x->fid);
+
             x->f = f;
+
+            // Dispatch!
             x  = (*fcall[x->type])(fs, x, f);
         }
         firstmessage = false;
@@ -310,6 +355,7 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
         t->ename = err;
     }else
         t->type = x->type+1;
+
     t->fid = x->fid;
     t->tag = x->tag;
     if(x->buf == nil)
@@ -388,6 +434,7 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
 
     if(strcmp(x->uname, x->fs->user) != 0)
         return filsysrespond(x->fs, x, &t, Eperm);
+
     f->busy = true;
     f->open = false;
     f->qid.path = Qdir;
@@ -395,6 +442,7 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     f->qid.vers = 0;
     f->dir = dirtab;
     f->nrpart = 0;
+
     sendp(x->c, xfidattach);
     return nil;
 }
@@ -744,20 +792,23 @@ newfid(Filsys *fs, int fid)
     ff = nil;
 
     fh = &fs->fids[fid&(Nhash-1)];
-    for(f=*fh; f; f=f->next)
+    for(f=*fh; f; f=f->next) {
         if(f->fid == fid)
             return f;
         else if(ff==nil && f->busy==false)
             ff = f;
+    }
     if(ff){
         ff->fid = fid;
         return ff;
     }
+    // else
 
     f = emalloc(sizeof *f);
     f->fid = fid;
     f->next = *fh;
     *fh = f;
+
     return f;
 }
 /*e: function newfid */

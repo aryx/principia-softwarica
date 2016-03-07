@@ -505,18 +505,17 @@ writewctl(Xfid *x, char *err)
 void
 wctlthread(void *v)
 {
+    Channel *c = v;
     char *buf, *arg, *dir;
     int cmd, id, pid, hideit, scrollit;
     Rectangle rect;
     char err[ERRMAX];
-    Channel *c;
-
-    c = v;
 
     threadsetname("WCTLTHREAD");
 
     for(;;){
         buf = recvp(c);
+
         cmd = parsewctl(&arg, ZR, &rect, &pid, &id, &hideit, &scrollit, &dir, buf, err);
 
         switch(cmd){
@@ -532,16 +531,16 @@ wctlthread(void *v)
 void
 wctlproc(void *v)
 {
+    Channel *c = v;
     char *buf;
     int n, eofs;
-    Channel *c;
 
     threadsetname("WCTLPROC");
-    c = v;
 
     eofs = 0;
     for(;;){
         buf = emalloc(messagesize);
+        // blocking call
         n = read(wctlfd, buf, messagesize-1);	/* room for \0 */
         if(n < 0)
             break;
