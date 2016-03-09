@@ -266,7 +266,7 @@ filsysproc(void *arg)
     Xfid *x = nil;
     Fid *f;
     /*s: [[filsysproc()]] other locals */
-    Fcall t;
+    Fcall fc;
     /*e: [[filsysproc()]] other locals */
 
     threadsetname("FILSYSPROC");
@@ -301,7 +301,7 @@ filsysproc(void *arg)
 
         /*s: [[filsysproc()]] sanity check x type */
         if(fcall[x->type] == nil)
-            x = filsysrespond(fs, x, &t, Ebadfcall);
+            x = filsysrespond(fs, x, &fc, Ebadfcall);
         /*e: [[filsysproc()]] sanity check x type */
         else{
             /*s: [[filsysproc()]] if x type is Tversion or Tauth */
@@ -353,22 +353,22 @@ filsysmount(Filsys *fs, int id)
 
 /*s: function filsysrespond */
 Xfid*
-filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
+filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
 {
     int n;
 
     if(err){
-        t->type = Rerror;
-        t->ename = err;
+        fc->type = Rerror;
+        fc->ename = err;
     }else
-        t->type = x->type+1; // Reply type just after Transmit type
+        fc->type = x->type+1; // Reply type just after Transmit type
 
-    t->fid = x->fid;
-    t->tag = x->tag;
+    fc->fid = x->fid;
+    fc->tag = x->tag;
 
     if(x->buf == nil)
         x->buf = malloc(messagesize);
-    n = convS2M(t, x->buf, messagesize);
+    n = convS2M(fc, x->buf, messagesize);
     /*s: [[filsysrespond()]] sanity check n */
     if(n <= 0)
         error("convert error in convS2M");
@@ -378,7 +378,7 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
         error("write error in respond");
     /*s: [[filsysrespond()]] dump Fcall t if debug */
     if(DEBUG)
-        fprint(STDERR, "rio:->%F\n", t);
+        fprint(STDERR, "rio:->%F\n", fc);
     /*e: [[filsysrespond()]] dump Fcall t if debug */
     free(x->buf);
     x->buf = nil;
@@ -402,20 +402,20 @@ static
 Xfid*
 filsysversion(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
     if(!firstmessage)
-        return filsysrespond(x->fs, x, &t, "version request not first message");
+        return filsysrespond(x->fs, x, &fc, "version request not first message");
     if(x->msize < 256)
-        return filsysrespond(x->fs, x, &t, "version: message size too small");
+        return filsysrespond(x->fs, x, &fc, "version: message size too small");
 
     messagesize = x->msize;
 
-    t.msize = messagesize;
+    fc.msize = messagesize;
     if(strncmp(x->version, "9P2000", 6) != 0)
-        return filsysrespond(x->fs, x, &t, "unrecognized 9P version");
-    t.version = "9P2000";
-    return filsysrespond(fs, x, &t, nil);
+        return filsysrespond(x->fs, x, &fc, "unrecognized 9P version");
+    fc.version = "9P2000";
+    return filsysrespond(fs, x, &fc, nil);
 }
 /*e: function filsysversion */
 
@@ -424,9 +424,9 @@ static
 Xfid*
 filsysauth(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
-    return filsysrespond(fs, x, &t, "rio: authentication not required");
+    return filsysrespond(fs, x, &fc, "rio: authentication not required");
 }
 /*e: function filsysauth */
 
@@ -446,12 +446,12 @@ Xfid*
 filsysattach(Filsys *, Xfid *x, Fid *f)
 {
     /*s: [[filsysattach()]] locals */
-    Fcall t;
+    Fcall fc;
     /*e: [[filsysattach()]] locals */
 
     /*s: [[filsysattach()]] sanity check same user */
     if(strcmp(x->uname, x->fs->user) != 0)
-        return filsysrespond(x->fs, x, &t, Eperm);
+        return filsysrespond(x->fs, x, &fc, Eperm);
     /*e: [[filsysattach()]] sanity check same user */
 
     f->busy = true;
@@ -486,7 +486,7 @@ static
 Xfid*
 filsyswalk(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
+    Fcall fc;
     Fid *nf;
     int i, id;
     uchar type;
@@ -497,13 +497,13 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
     Qid qid;
 
     if(f->open)
-        return filsysrespond(fs, x, &t, "walk of open file");
+        return filsysrespond(fs, x, &fc, "walk of open file");
     nf = nil;
     if(x->fid  != x->newfid){
         /* BUG: check exists */
         nf = newfid(fs, x->newfid);
         if(nf->busy)
-            return filsysrespond(fs, x, &t, "clone to busy fid");
+            return filsysrespond(fs, x, &fc, "clone to busy fid");
         nf->busy = true;
         nf->open = false;
         nf->dir = f->dir;
@@ -514,7 +514,7 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
         f = nf;	/* walk f */
     }
 
-    t.nwqid = 0;
+    fc.nwqid = 0;
     err = nil;
 
     /* update f->qid, f->dir only if walk completes */
@@ -542,7 +542,7 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
                 qid.type = type;
                 qid.vers = 0;
                 qid.path = QID(id, path);
-                t.wqid[t.nwqid++] = qid;
+                fc.wqid[fc.nwqid++] = qid;
                 continue;
             }
 
@@ -588,19 +588,19 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
             err = Eexist;
     }
 
-    if(err!=nil || t.nwqid<x->nwname){
+    if(err!=nil || fc.nwqid<x->nwname){
         if(nf){
             if(nf->w)
                 sendp(winclosechan, nf->w);
             nf->open = false;
             nf->busy = false;
         }
-    }else if(t.nwqid == x->nwname){
+    }else if(fc.nwqid == x->nwname){
         f->dir = dir;
         f->qid = qid;
     }
 
-    return filsysrespond(fs, x, &t, err);
+    return filsysrespond(fs, x, &fc, err);
 }
 /*e: function filsyswalk */
 
@@ -609,7 +609,7 @@ static
 Xfid*
 filsysopen(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
+    Fcall fc;
     int m;
 
     /*s: [[filsysopen()]] sanity check mode */
@@ -640,7 +640,7 @@ filsysopen(Filsys *fs, Xfid *x, Fid *f)
     return nil;
 
     Deny:
-    return filsysrespond(fs, x, &t, Eperm);
+    return filsysrespond(fs, x, &fc, Eperm);
 }
 /*e: function filsysopen */
 
@@ -649,9 +649,9 @@ static
 Xfid*
 filsyscreate(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
-    return filsysrespond(fs, x, &t, Eperm);
+    return filsysrespond(fs, x, &fc, Eperm);
 }
 /*e: function filsyscreate */
 
@@ -669,25 +669,30 @@ static
 Xfid*
 filsysread(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
-    byte *b;
-    int i, n, o, e, len, j, k, *ids;
-    Dirtab *d, dt;
+    Fcall fc;
+    int o, e;
     uint clock;
+    byte *b;
+    /*s: [[filsysread()]] other locals */
+    int i, n, len, j, k, *ids;
+    Dirtab *d, dt;
     char buf[16];
+    /*e: [[filsysread()]] other locals */
 
-    if((f->qid.type & QTDIR) == 0){
+    if(!(f->qid.type & QTDIR)){
         sendp(x->c, xfidread);
         return nil;
     }
-    // else
+    // else, a directory
 
     o = x->offset;
     e = x->offset + x->count;
     clock = getclock();
     b = malloc(messagesize-IOHDRSZ);	/* avoid memset of emalloc */
+    /*s: [[filsysread()]] sanity check b */
     if(b == nil)
-        return filsysrespond(fs, x, &t, "out of memory");
+        return filsysrespond(fs, x, &fc, "out of memory");
+    /*e: [[filsysread()]] sanity check b */
 
     n = 0;
     switch(FILE(f->qid)){
@@ -734,9 +739,9 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
     /*e: [[filsysread()]] cases */
     }
 
-    t.data = (char*)b;
-    t.count = n;
-    filsysrespond(fs, x, &t, nil);
+    fc.data = (char*)b;
+    fc.count = n;
+    filsysrespond(fs, x, &fc, nil);
     free(b);
     return x;
 }
@@ -757,7 +762,7 @@ static
 Xfid*
 filsysclunk(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
+    Fcall fc;
 
     if(f->open){
         f->busy = false;
@@ -765,11 +770,12 @@ filsysclunk(Filsys *fs, Xfid *x, Fid *f)
         sendp(x->c, xfidclose);
         return nil;
     }
+    // else
     if(f->w)
         sendp(winclosechan, f->w);
     f->busy = false;
     f->open = false;
-    return filsysrespond(fs, x, &t, nil);
+    return filsysrespond(fs, x, &fc, nil);
 }
 /*e: function filsysclunk */
 
@@ -778,9 +784,9 @@ static
 Xfid*
 filsysremove(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
-    return filsysrespond(fs, x, &t, Eperm);
+    return filsysrespond(fs, x, &fc, Eperm);
 }
 /*e: function filsysremove */
 
@@ -789,12 +795,12 @@ static
 Xfid*
 filsysstat(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
+    Fcall fc;
 
-    t.stat = emalloc(messagesize-IOHDRSZ);
-    t.nstat = dostat(fs, WIN(x->f->qid), f->dir, t.stat, messagesize-IOHDRSZ, getclock());
-    x = filsysrespond(fs, x, &t, nil);
-    free(t.stat);
+    fc.stat = emalloc(messagesize-IOHDRSZ);
+    fc.nstat = dostat(fs, WIN(x->f->qid), f->dir, fc.stat, messagesize-IOHDRSZ, getclock());
+    x = filsysrespond(fs, x, &fc, nil);
+    free(fc.stat);
     return x;
 }
 /*e: function filsysstat */
@@ -804,9 +810,9 @@ static
 Xfid*
 filsyswstat(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
-    return filsysrespond(fs, x, &t, Eperm);
+    return filsysrespond(fs, x, &fc, Eperm);
 }
 /*e: function filsyswstat */
 

@@ -100,7 +100,7 @@ int		snarfversion;	/* updated each time it is written */
 bool errorshouldabort = false;
 /*e: global errorshouldabort */
 /*s: global winclosechan */
-// chan<Window> (listener = winclosethread, sender = filsyswalk )
+// chan<ref<Window>> (listener = winclosethread, sender = filsyswalk | filsysclunk )
 Channel	*winclosechan; /* chan(Window*); */
 /*e: global winclosechan */
 /*s: global messagesize */

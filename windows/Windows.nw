@@ -2230,12 +2230,15 @@ if(x->type==Tversion || x->type==Tauth)
 
 
 <<[[filsysproc()]] other locals>>=
-Fcall t;
+Fcall fc;
 @
+%old: was called t, but sometimes called fc in some functions
+% and confusing that it's actually a Fcall Reply, not Transmit.
+% maybe should call it r?
 
 <<[[filsysproc()]] sanity check x type>>=
 if(fcall[x->type] == nil)
-    x = filsysrespond(fs, x, &t, Ebadfcall);
+    x = filsysrespond(fs, x, &fc, Ebadfcall);
 @
 
 
@@ -3772,7 +3775,6 @@ case Deleted:
 void
 wclosewin(Window *w)
 {
-    Rectangle r;
     int i;
 
     w->deleted = true;
@@ -3796,8 +3798,8 @@ wclosewin(Window *w)
     error("unknown window in closewin");
 }
 @
-
 %dead:
+%    Rectangle r;
 %             w->deleted = true; // again??
 %             r = w->i->r;
 %             /* move it off-screen to hide it, in case client is slow in letting it go */
@@ -3875,7 +3877,7 @@ deletethread(void*)
 
 \t who send to that?
 <<global winclosechan>>=
-// chan<Window> (listener = winclosethread, sender = filsyswalk )
+// chan<ref<Window>> (listener = winclosethread, sender = filsyswalk | filsysclunk )
 Channel	*winclosechan; /* chan(Window*); */
 @
 
@@ -4057,7 +4059,8 @@ move(void)
 Image*
 drag(Window *w, Rectangle *rp)
 {
-    Image *i, *ni;
+    Image *i;
+    Image *ni = nil;
     Point p, op, d, dm, om;
     Rectangle r;
 
@@ -4658,22 +4661,22 @@ Dirtab	*dir;
 % ... -> <>  called from many Xfid threads, and some filsysxxx too
 <<function filsysrespond>>=
 Xfid*
-filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
+filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
 {
     int n;
 
     if(err){
-        t->type = Rerror;
-        t->ename = err;
+        fc->type = Rerror;
+        fc->ename = err;
     }else
-        t->type = x->type+1; // Reply type just after Transmit type
+        fc->type = x->type+1; // Reply type just after Transmit type
 
-    t->fid = x->fid;
-    t->tag = x->tag;
+    fc->fid = x->fid;
+    fc->tag = x->tag;
 
     if(x->buf == nil)
         x->buf = malloc(messagesize);
-    n = convS2M(t, x->buf, messagesize);
+    n = convS2M(fc, x->buf, messagesize);
     <<[[filsysrespond()]] sanity check n>>
 
     if(write(fs->sfd, x->buf, n) != n)
@@ -4687,7 +4690,7 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
 % but write on sfd goes where?
 % and what if multiple things write on it at the same time?
 %  filsysproc and any xfidctl thread can potentially call filsysrespond
-
+\l could rename fc to r? for reply? but then confusing with rectangle
 
 <<[[filsysrespond()]] sanity check n>>=
 if(n <= 0)
@@ -4732,12 +4735,13 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
 
 
 <<[[filsysattach()]] locals>>=
-Fcall t;
+Fcall fc;
 @
+%old: was called t, we will see such a local often
 
 <<[[filsysattach()]] sanity check same user>>=
 if(strcmp(x->uname, x->fs->user) != 0)
-    return filsysrespond(x->fs, x, &t, Eperm);
+    return filsysrespond(x->fs, x, &fc, Eperm);
 @
 
 % see filsysrespond later, but write back on pipe an answer
@@ -4750,84 +4754,48 @@ if(strcmp(x->uname, x->fs->user) != 0)
 void
 xfidattach(Xfid *x)
 {
-    Fcall t;
+    Fcall fc;
     int id;
-    bool hideit, scrollit;
-    Window *w;
-    char *err, *n, *dir, errbuf[ERRMAX];
-    int pid;
-    bool newlymade;
-    Rectangle r;
-    Image *i;
+    Window *w = nil;
+    bool newlymade = false;
+    <<[[xfidattach()]] other locals>>
 
-    t.qid = x->f->qid;
+    fc.qid = x->f->qid;
     qlock(&all);
-    w = nil;
-    err = Eunkid;
-    newlymade = false;
-    hideit = false;
 
-    //TODO delete
-    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
-        n = x->aname+1;
-        pid = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.min.x = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.min.y = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.max.x = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.max.y = strtoul(n, &n, 0);
-  Allocate:
-        if(!goodrect(r))
-            err = Ebadrect;
-        else{
-            if(hideit)
-                i = allocimage(display, r, view->chan, 0, DWhite);
-            else
-                i = allocwindow(wscreen, r, Refbackup, DWhite);
-            if(i){
-                border(i, r, Selborder, display->black, ZP);
-                if(pid == 0)
-                    pid = -1;	/* make sure we don't pop a shell! - UGH */
-                w = new(i, hideit, scrolling, pid, nil, nil, nil);
-                flushimage(display, 1);
-                newlymade = true;
-            }else
-                err = Ewindow;
-        }
-    }else if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
-        pid = 0;
-        if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->aname, errbuf) < 0)
-            err = errbuf;
-        else
-            goto Allocate;
-
-
-    }else{
+    <<[[xfidattach()]] if mount "new ...">>
+    else{
+        // mount(fs->cfd, ..., "/mnt/wsys", ..., "2"), winid
         id = atoi(x->aname);
         w = wlookid(id);
     }
 
     x->f->w = w;
-    if(w == nil){
-        qunlock(&all);
-        x->f->busy = false;
-        filsysrespond(x->fs, x, &t, err);
-        return;
-    }
+    <<[[xfidattach()]] sanity check w>>
     if(!newlymade)	/* counteract dec() in winshell() */
         incref(w);
     qunlock(&all);
 
-    filsysrespond(x->fs, x, &t, nil);
+    filsysrespond(x->fs, x, &fc, nil);
 }
 @
+
+%dead: old syntax
+%    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
+%        n = x->aname+1;
+%        pid = strtoul(n, &n, 0);
+%        if(*n == ',')
+%            n++;
+%        r.min.x = strtoul(n, &n, 0);
+%        if(*n == ',')
+%            n++;
+%        r.min.y = strtoul(n, &n, 0);
+%        if(*n == ',')
+%            n++;
+%        r.max.x = strtoul(n, &n, 0);
+%        if(*n == ',')
+%            n++;
+%        r.max.y = strtoul(n, &n, 0);
 
 <<function wlookid>>=
 Window*
@@ -4849,6 +4817,15 @@ wlookid(int id)
 % to the right window
 
 
+<<[[xfidattach()]] sanity check w>>=
+if(w == nil){
+    qunlock(&all);
+    x->f->busy = false;
+    filsysrespond(x->fs, x, &fc, err);
+    return;
+}
+@
+
 \section{Open}
 
 \subsection{[[filsysopen()]]}
@@ -4858,7 +4835,7 @@ static
 Xfid*
 filsysopen(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
+    Fcall fc;
     int m;
 
     <<[[filsysopen()]] sanity check mode>>
@@ -4867,7 +4844,7 @@ filsysopen(Filsys *fs, Xfid *x, Fid *f)
     return nil;
 
     Deny:
-    return filsysrespond(fs, x, &t, Eperm);
+    return filsysrespond(fs, x, &fc, Eperm);
 }
 @
 
@@ -4900,33 +4877,34 @@ if(((f->dir->perm & ~(DMDIR|DMAPPEND)) & m) != m)
 
 \subsection{[[xfidopen()]]}
 
-
-% how sure that have a x->f->w?  because cant open
-%  if not attach?
+% how sure that have a x->f->w?  because cant open if not attach?
 <<function xfidopen>>=
 void
 xfidopen(Xfid *x)
 {
-    Fcall t;
+    Fcall fc;
     Window *w;
 
     w = x->f->w;
-    if(w->deleted){
-        filsysrespond(x->fs, x, &t, Edeleted);
-        return;
-    }
+    <<[[xfidxxx()]] respond error if window was deleted>>
     switch(FILE(x->f->qid)){
     <<[[xfidopen()]] cases>>
     }
 
-    t.qid = x->f->qid;
-    t.iounit = messagesize-IOHDRSZ;
+    fc.qid = x->f->qid;
+    fc.iounit = messagesize-IOHDRSZ;
     x->f->open = true;
     x->f->mode = x->mode;
-    filsysrespond(x->fs, x, &t, nil);
+    filsysrespond(x->fs, x, &fc, nil);
 }
 @
 
+<<[[xfidxxx()]] respond error if window was deleted>>=
+if(w->deleted){
+    filsysrespond(x->fs, x, &fc, Edeleted);
+    return;
+}
+@
 
 \section{Clunk/Close}
 
@@ -4937,7 +4915,7 @@ static
 Xfid*
 filsysclunk(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
+    Fcall fc;
 
     if(f->open){
         f->busy = false;
@@ -4945,30 +4923,40 @@ filsysclunk(Filsys *fs, Xfid *x, Fid *f)
         sendp(x->c, xfidclose);
         return nil;
     }
+    // else
     if(f->w)
         sendp(winclosechan, f->w);
     f->busy = false;
     f->open = false;
-    return filsysrespond(fs, x, &t, nil);
+    return filsysrespond(fs, x, &fc, nil);
 }
 @
 
+% winclosechan ultimately call wclose which removes a reference
+% to the window, so looks similar to xfidclose ...
+% why not call wclose directly? to not block?
+
 \subsection{[[xfidclose()]]}
+
+%XXX
+<<[[xfidclose()]] other locals>>=
+int nb, nulls;
+@
 
 <<function xfidclose>>=
 void
 xfidclose(Xfid *x)
 {
-    Fcall t;
+    Fcall fc;
     Window *w;
-    int nb, nulls;
+    <<[[xfidclose()]] other locals>>
 
     w = x->f->w;
     switch(FILE(x->f->qid)){
     <<[[xfidclose()]] cases>>
     }
     wclose(w);
-    filsysrespond(x->fs, x, &t, nil);
+    filsysrespond(x->fs, x, &fc, nil);
 }
 @
 % wclose(w)! remove one reference
@@ -4979,53 +4967,62 @@ xfidclose(Xfid *x)
 
 \subsection{[[filsysread()]]}
 
+%XXX
+<<[[filsysread()]] other locals>>=
+int i, n, len, j, k, *ids;
+Dirtab *d, dt;
+char buf[16];
+@
+
 <<function filsysread>>=
 static
 Xfid*
 filsysread(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
-    byte *b;
-    int i, n, o, e, len, j, k, *ids;
-    Dirtab *d, dt;
+    Fcall fc;
+    int o, e;
     uint clock;
-    char buf[16];
+    byte *b;
+    <<[[filsysread()]] other locals>>
 
-    if((f->qid.type & QTDIR) == 0){
+    if(!(f->qid.type & QTDIR)){
         sendp(x->c, xfidread);
         return nil;
     }
-    // else
+    // else, a directory
 
     o = x->offset;
     e = x->offset + x->count;
     clock = getclock();
     b = malloc(messagesize-IOHDRSZ);	/* avoid memset of emalloc */
-    if(b == nil)
-        return filsysrespond(fs, x, &t, "out of memory");
+    <<[[filsysread()]] sanity check b>>
 
     n = 0;
     switch(FILE(f->qid)){
     <<[[filsysread()]] cases>>
     }
 
-    t.data = (char*)b;
-    t.count = n;
-    filsysrespond(fs, x, &t, nil);
+    fc.data = (char*)b;
+    fc.count = n;
+    filsysrespond(fs, x, &fc, nil);
     free(b);
     return x;
 }
 @
 % can reuse x, request processed
 
+
+<<[[filsysread()]] sanity check b>>=
+if(b == nil)
+    return filsysrespond(fs, x, &fc, "out of memory");
+@
+
 \subsection{[[xfidread()]]}
 
 %XXX split
 <<[[xfidread()]] other locals>>=
 char buf[128];
-Fcall fc;
-int n, off, cnt, c;
-uint qid;
+int n, c;
 char *t;
 char cbuf[30];
 Mouse ms;
@@ -5044,14 +5041,14 @@ Alt alts[NCR+1];
 void
 xfidread(Xfid *x)
 {
+    Fcall fc;
     Window *w;
+    uint qid;
+    int off, cnt;
     <<[[xfidread()]] other locals>>
     
     w = x->f->w;
-    if(w->deleted){
-        filsysrespond(x->fs, x, &fc, Edeleted);
-        return;
-    }
+    <<[[xfidxxx()]] respond error if window was deleted>>
     qid = FILE(x->f->qid);
     off = x->offset;
     cnt = x->count;
@@ -5085,9 +5082,9 @@ filsyswrite(Filsys*, Xfid *x, Fid*)
 
 \subsection{[[xfidwrite()]]}
 
+%XXX
 <<[[xfidwrite()]] other locals>>=
-Fcall fc;
-int c, cnt, qid, nb, off, nr;
+int c, nb, nr;
 char buf[256], *p;
 Point pt;
 Rune *r;
@@ -5101,14 +5098,14 @@ Alt alts[NCW+1];
 void
 xfidwrite(Xfid *x)
 {
+    Fcall fc;
     Window *w;
+    uint qid;
+    int off, cnt;
     <<[[xfidwrite()]] other locals>>
     
     w = x->f->w;
-    if(w->deleted){
-        filsysrespond(x->fs, x, &fc, Edeleted);
-        return;
-    }
+    <<[[xfidxxx()]] respond error if window was deleted>>
     qid = FILE(x->f->qid);
     cnt = x->count;
     off = x->offset;
@@ -5140,12 +5137,12 @@ static
 Xfid*
 filsysstat(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
+    Fcall fc;
 
-    t.stat = emalloc(messagesize-IOHDRSZ);
-    t.nstat = dostat(fs, WIN(x->f->qid), f->dir, t.stat, messagesize-IOHDRSZ, getclock());
-    x = filsysrespond(fs, x, &t, nil);
-    free(t.stat);
+    fc.stat = emalloc(messagesize-IOHDRSZ);
+    fc.nstat = dostat(fs, WIN(x->f->qid), f->dir, fc.stat, messagesize-IOHDRSZ, getclock());
+    x = filsysrespond(fs, x, &fc, nil);
+    free(fc.stat);
     return x;
 }
 @
@@ -5205,7 +5202,7 @@ static
 Xfid*
 filsyswalk(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall t;
+    Fcall fc;
     Fid *nf;
     int i, id;
     uchar type;
@@ -5216,13 +5213,13 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
     Qid qid;
 
     if(f->open)
-        return filsysrespond(fs, x, &t, "walk of open file");
+        return filsysrespond(fs, x, &fc, "walk of open file");
     nf = nil;
     if(x->fid  != x->newfid){
         /* BUG: check exists */
         nf = newfid(fs, x->newfid);
         if(nf->busy)
-            return filsysrespond(fs, x, &t, "clone to busy fid");
+            return filsysrespond(fs, x, &fc, "clone to busy fid");
         nf->busy = true;
         nf->open = false;
         nf->dir = f->dir;
@@ -5233,7 +5230,7 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
         f = nf;	/* walk f */
     }
 
-    t.nwqid = 0;
+    fc.nwqid = 0;
     err = nil;
 
     /* update f->qid, f->dir only if walk completes */
@@ -5261,7 +5258,7 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
                 qid.type = type;
                 qid.vers = 0;
                 qid.path = QID(id, path);
-                t.wqid[t.nwqid++] = qid;
+                fc.wqid[fc.nwqid++] = qid;
                 continue;
             }
 
@@ -5307,19 +5304,19 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
             err = Eexist;
     }
 
-    if(err!=nil || t.nwqid<x->nwname){
+    if(err!=nil || fc.nwqid<x->nwname){
         if(nf){
             if(nf->w)
                 sendp(winclosechan, nf->w);
             nf->open = false;
             nf->busy = false;
         }
-    }else if(t.nwqid == x->nwname){
+    }else if(fc.nwqid == x->nwname){
         f->dir = dir;
         f->qid = qid;
     }
 
-    return filsysrespond(fs, x, &t, err);
+    return filsysrespond(fs, x, &fc, err);
 }
 @
 
@@ -5348,9 +5345,9 @@ static
 Xfid*
 filsyscreate(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
-    return filsysrespond(fs, x, &t, Eperm);
+    return filsysrespond(fs, x, &fc, Eperm);
 }
 @
 
@@ -5359,9 +5356,9 @@ static
 Xfid*
 filsysremove(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
-    return filsysrespond(fs, x, &t, Eperm);
+    return filsysrespond(fs, x, &fc, Eperm);
 }
 @
 
@@ -5370,9 +5367,9 @@ static
 Xfid*
 filsyswstat(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
-    return filsysrespond(fs, x, &t, Eperm);
+    return filsysrespond(fs, x, &fc, Eperm);
 }
 @
 
@@ -5387,20 +5384,20 @@ static
 Xfid*
 filsysversion(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
     if(!firstmessage)
-        return filsysrespond(x->fs, x, &t, "version request not first message");
+        return filsysrespond(x->fs, x, &fc, "version request not first message");
     if(x->msize < 256)
-        return filsysrespond(x->fs, x, &t, "version: message size too small");
+        return filsysrespond(x->fs, x, &fc, "version: message size too small");
 
     messagesize = x->msize;
 
-    t.msize = messagesize;
+    fc.msize = messagesize;
     if(strncmp(x->version, "9P2000", 6) != 0)
-        return filsysrespond(x->fs, x, &t, "unrecognized 9P version");
-    t.version = "9P2000";
-    return filsysrespond(fs, x, &t, nil);
+        return filsysrespond(x->fs, x, &fc, "unrecognized 9P version");
+    fc.version = "9P2000";
+    return filsysrespond(fs, x, &fc, nil);
 }
 @
 
@@ -5410,9 +5407,9 @@ static
 Xfid*
 filsysauth(Filsys *fs, Xfid *x, Fid*)
 {
-    Fcall t;
+    Fcall fc;
 
-    return filsysrespond(fs, x, &t, "rio: authentication not required");
+    return filsysrespond(fs, x, &fc, "rio: authentication not required");
 }
 @
 \chapter{[[/dev/...]] Demultiplexer}
@@ -5567,7 +5564,7 @@ Qconsctl,
 <<[[xfidopen()]] cases>>=
 case Qconsctl:
     if(w->ctlopen){
-        filsysrespond(x->fs, x, &t, Einuse);
+        filsysrespond(x->fs, x, &fc, Einuse);
         return;
     }
     w->ctlopen = true;
@@ -5603,7 +5600,7 @@ Qmouse,
 <<[[xfidopen()]] cases>>=
 case Qmouse:
     if(w->mouseopen){
-        filsysrespond(x->fs, x, &t, Einuse);
+        filsysrespond(x->fs, x, &fc, Einuse);
         return;
     }
     /*
@@ -7920,7 +7917,7 @@ case Qwctl:
          * open it.  Apologies.
          */
         if(w->wctlopen){
-            filsysrespond(x->fs, x, &t, Einuse);
+            filsysrespond(x->fs, x, &fc, Einuse);
             return;
         }
         w->wctlopen = true;
@@ -8489,6 +8486,43 @@ post(char *name, char *envname, fdt srvfd)
 % or is it working with #s special code?
 
 
+
+<<[[xfidattach()]] other locals>>=
+Rectangle r;
+int pid;
+bool hideit = false;
+bool scrollit;
+char *err = Eunkid;
+char *dir, errbuf[ERRMAX];
+Image *i;
+@
+
+<<[[xfidattach()]] if mount "new ...">>=
+if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
+    pid = 0;
+    if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->aname, errbuf) < 0)
+        err = errbuf;
+    else {
+        if(!goodrect(r))
+            err = Ebadrect;
+        else{
+            if(hideit)
+                i = allocimage(display, r, view->chan, 0, DWhite);
+            else
+                i = allocwindow(wscreen, r, Refbackup, DWhite);
+            if(i){
+                border(i, r, Selborder, display->black, ZP);
+                if(pid == 0)
+                    pid = -1;	/* make sure we don't pop a shell! - UGH */
+                w = new(i, hideit, scrolling, pid, nil, nil, nil);
+                flushimage(display, 1);
+                newlymade = true;
+            }else
+                err = Ewindow;
+        }
+   }
+}
+@
 
 \section{Command line control of [[rio]], [[/srv/riowctl.user.pid]]}
 
@@ -9766,7 +9800,7 @@ Qkbdin,
 <<[[xfidopen()]] cases>>=
 case Qkbdin:
     if(w !=  wkeyboard){
-        filsysrespond(x->fs, x, &t, Eperm);
+        filsysrespond(x->fs, x, &fc, Eperm);
         return;
     }
     break;
@@ -10003,7 +10037,7 @@ filsysflush(Filsys*, Xfid *x, Fid*)
 void
 xfidflush(Xfid *x)
 {
-    Fcall t;
+    Fcall fc;
     Xfid *xf;
 
     for(xf=xfid; xf; xf=xf->next)
@@ -10025,7 +10059,7 @@ xfidflush(Xfid *x)
                 sendp(cxfidfree, xf);
             break;
         }
-    filsysrespond(x->fs, x, &t, nil);
+    filsysrespond(x->fs, x, &fc, nil);
 }
 @
 
@@ -10060,6 +10094,7 @@ filsyscancel(Xfid *x)
 
 \chapter{Debugging}
 
+%\section{9P messages}
 
 <<constant DEBUG>>=
 #define DEBUG false
@@ -10076,7 +10111,7 @@ if(DEBUG)
 
 <<[[filsysrespond()]] dump Fcall t if debug>>=
 if(DEBUG)
-    fprint(STDERR, "rio:->%F\n", t);
+    fprint(STDERR, "rio:->%F\n", fc);
 @
 
 %\chapter{Profiling}

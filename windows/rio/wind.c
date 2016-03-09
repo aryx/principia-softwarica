@@ -1582,7 +1582,6 @@ wlookid(int id)
 void
 wclosewin(Window *w)
 {
-    Rectangle r;
     int i;
 
     w->deleted = true;

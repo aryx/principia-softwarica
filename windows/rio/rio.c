@@ -1084,7 +1084,8 @@ drawborder(Rectangle r, bool show)
 Image*
 drag(Window *w, Rectangle *rp)
 {
-    Image *i, *ni;
+    Image *i;
+    Image *ni = nil;
     Point p, op, d, dm, om;
     Rectangle r;
 

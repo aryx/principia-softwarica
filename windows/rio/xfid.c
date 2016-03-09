@@ -198,7 +198,7 @@ xfidctl(void *arg)
 void
 xfidflush(Xfid *x)
 {
-    Fcall t;
+    Fcall fc;
     Xfid *xf;
 
     for(xf=xfid; xf; xf=xf->next)
@@ -220,7 +220,7 @@ xfidflush(Xfid *x)
                 sendp(cxfidfree, xf);
             break;
         }
-    filsysrespond(x->fs, x, &t, nil);
+    filsysrespond(x->fs, x, &fc, nil);
 }
 /*e: function xfidflush */
 
@@ -228,82 +228,69 @@ xfidflush(Xfid *x)
 void
 xfidattach(Xfid *x)
 {
-    Fcall t;
+    Fcall fc;
     int id;
-    bool hideit, scrollit;
-    Window *w;
-    char *err, *n, *dir, errbuf[ERRMAX];
-    int pid;
-    bool newlymade;
+    Window *w = nil;
+    bool newlymade = false;
+    /*s: [[xfidattach()]] other locals */
     Rectangle r;
+    int pid;
+    bool hideit = false;
+    bool scrollit;
+    char *err = Eunkid;
+    char *dir, errbuf[ERRMAX];
     Image *i;
+    /*e: [[xfidattach()]] other locals */
 
-    t.qid = x->f->qid;
+    fc.qid = x->f->qid;
     qlock(&all);
-    w = nil;
-    err = Eunkid;
-    newlymade = false;
-    hideit = false;
 
-    //TODO delete
-    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
-        n = x->aname+1;
-        pid = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.min.x = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.min.y = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.max.x = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.max.y = strtoul(n, &n, 0);
-  Allocate:
-        if(!goodrect(r))
-            err = Ebadrect;
-        else{
-            if(hideit)
-                i = allocimage(display, r, view->chan, 0, DWhite);
-            else
-                i = allocwindow(wscreen, r, Refbackup, DWhite);
-            if(i){
-                border(i, r, Selborder, display->black, ZP);
-                if(pid == 0)
-                    pid = -1;	/* make sure we don't pop a shell! - UGH */
-                w = new(i, hideit, scrolling, pid, nil, nil, nil);
-                flushimage(display, 1);
-                newlymade = true;
-            }else
-                err = Ewindow;
-        }
-    }else if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
+    /*s: [[xfidattach()]] if mount "new ..." */
+    if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
         pid = 0;
         if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->aname, errbuf) < 0)
             err = errbuf;
-        else
-            goto Allocate;
-
-
-    }else{
+        else {
+            if(!goodrect(r))
+                err = Ebadrect;
+            else{
+                if(hideit)
+                    i = allocimage(display, r, view->chan, 0, DWhite);
+                else
+                    i = allocwindow(wscreen, r, Refbackup, DWhite);
+                if(i){
+                    border(i, r, Selborder, display->black, ZP);
+                    if(pid == 0)
+                        pid = -1;	/* make sure we don't pop a shell! - UGH */
+                    w = new(i, hideit, scrolling, pid, nil, nil, nil);
+                    flushimage(display, 1);
+                    newlymade = true;
+                }else
+                    err = Ewindow;
+            }
+       }
+    }
+    /*e: [[xfidattach()]] if mount "new ..." */
+    else{
+        // mount(fs->cfd, ..., "/mnt/wsys", ..., "2"), winid
         id = atoi(x->aname);
         w = wlookid(id);
     }
 
     x->f->w = w;
+    /*s: [[xfidattach()]] sanity check w */
     if(w == nil){
         qunlock(&all);
         x->f->busy = false;
-        filsysrespond(x->fs, x, &t, err);
+        filsysrespond(x->fs, x, &fc, err);
         return;
     }
+    /*e: [[xfidattach()]] sanity check w */
     if(!newlymade)	/* counteract dec() in winshell() */
         incref(w);
     qunlock(&all);
 
-    filsysrespond(x->fs, x, &t, nil);
+    filsysrespond(x->fs, x, &fc, nil);
 }
 /*e: function xfidattach */
 
@@ -311,19 +298,21 @@ xfidattach(Xfid *x)
 void
 xfidopen(Xfid *x)
 {
-    Fcall t;
+    Fcall fc;
     Window *w;
 
     w = x->f->w;
+    /*s: [[xfidxxx()]] respond error if window was deleted */
     if(w->deleted){
-        filsysrespond(x->fs, x, &t, Edeleted);
+        filsysrespond(x->fs, x, &fc, Edeleted);
         return;
     }
+    /*e: [[xfidxxx()]] respond error if window was deleted */
     switch(FILE(x->f->qid)){
     /*s: [[xfidopen()]] cases */
     case Qconsctl:
         if(w->ctlopen){
-            filsysrespond(x->fs, x, &t, Einuse);
+            filsysrespond(x->fs, x, &fc, Einuse);
             return;
         }
         w->ctlopen = true;
@@ -331,7 +320,7 @@ xfidopen(Xfid *x)
     /*x: [[xfidopen()]] cases */
     case Qmouse:
         if(w->mouseopen){
-            filsysrespond(x->fs, x, &t, Einuse);
+            filsysrespond(x->fs, x, &fc, Einuse);
             return;
         }
         /*
@@ -357,7 +346,7 @@ xfidopen(Xfid *x)
              * open it.  Apologies.
              */
             if(w->wctlopen){
-                filsysrespond(x->fs, x, &t, Einuse);
+                filsysrespond(x->fs, x, &fc, Einuse);
                 return;
             }
             w->wctlopen = true;
@@ -377,18 +366,18 @@ xfidopen(Xfid *x)
     /*x: [[xfidopen()]] cases */
     case Qkbdin:
         if(w !=  wkeyboard){
-            filsysrespond(x->fs, x, &t, Eperm);
+            filsysrespond(x->fs, x, &fc, Eperm);
             return;
         }
         break;
     /*e: [[xfidopen()]] cases */
     }
 
-    t.qid = x->f->qid;
-    t.iounit = messagesize-IOHDRSZ;
+    fc.qid = x->f->qid;
+    fc.iounit = messagesize-IOHDRSZ;
     x->f->open = true;
     x->f->mode = x->mode;
-    filsysrespond(x->fs, x, &t, nil);
+    filsysrespond(x->fs, x, &fc, nil);
 }
 /*e: function xfidopen */
 
@@ -396,9 +385,11 @@ xfidopen(Xfid *x)
 void
 xfidclose(Xfid *x)
 {
-    Fcall t;
+    Fcall fc;
     Window *w;
+    /*s: [[xfidclose()]] other locals */
     int nb, nulls;
+    /*e: [[xfidclose()]] other locals */
 
     w = x->f->w;
     switch(FILE(x->f->qid)){
@@ -449,7 +440,7 @@ xfidclose(Xfid *x)
     /*e: [[xfidclose()]] cases */
     }
     wclose(w);
-    filsysrespond(x->fs, x, &t, nil);
+    filsysrespond(x->fs, x, &fc, nil);
 }
 /*e: function xfidclose */
 
@@ -461,10 +452,12 @@ enum { CWdata, CWflush, NCW };
 void
 xfidwrite(Xfid *x)
 {
-    Window *w;
-    /*s: [[xfidwrite()]] other locals */
     Fcall fc;
-    int c, cnt, qid, nb, off, nr;
+    Window *w;
+    uint qid;
+    int off, cnt;
+    /*s: [[xfidwrite()]] other locals */
+    int c, nb, nr;
     char buf[256], *p;
     Point pt;
     Rune *r;
@@ -474,10 +467,12 @@ xfidwrite(Xfid *x)
     /*e: [[xfidwrite()]] other locals */
     
     w = x->f->w;
+    /*s: [[xfidxxx()]] respond error if window was deleted */
     if(w->deleted){
         filsysrespond(x->fs, x, &fc, Edeleted);
         return;
     }
+    /*e: [[xfidxxx()]] respond error if window was deleted */
     qid = FILE(x->f->qid);
     cnt = x->count;
     off = x->offset;
@@ -712,12 +707,13 @@ enum { WCRdata, WCRflush, NWCR };
 void
 xfidread(Xfid *x)
 {
+    Fcall fc;
     Window *w;
+    uint qid;
+    int off, cnt;
     /*s: [[xfidread()]] other locals */
     char buf[128];
-    Fcall fc;
-    int n, off, cnt, c;
-    uint qid;
+    int n, c;
     char *t;
     char cbuf[30];
     Mouse ms;
@@ -732,10 +728,12 @@ xfidread(Xfid *x)
     /*e: [[xfidread()]] other locals */
     
     w = x->f->w;
+    /*s: [[xfidxxx()]] respond error if window was deleted */
     if(w->deleted){
         filsysrespond(x->fs, x, &fc, Edeleted);
         return;
     }
+    /*e: [[xfidxxx()]] respond error if window was deleted */
     qid = FILE(x->f->qid);
     off = x->offset;
     cnt = x->count;
