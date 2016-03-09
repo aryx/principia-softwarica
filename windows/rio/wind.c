@@ -108,7 +108,10 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
 
     w->i = i;
     w->screenr = i->r;
-    r = insetrect(i->r, Selborder+1);
+    w->cursorp = nil;
+
+    w->id = ++id;
+    w->topped = ++topped;
 
     /*s: [[wmk()]] channels creation */
     w->mc = *mc;
@@ -121,8 +124,8 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
     /*e: [[wmk()]] channels creation */
 
-    w->cursorp = nil;
-
+    /*s: [[wmk()]] textual window settings */
+    r = insetrect(i->r, Selborder+1);
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
     w->lastsr = ZR;
@@ -131,15 +134,17 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     frinit(w, r, font, i, cols);
 
     w->maxtab = maxtab * stringwidth(font, "0");
-    w->topped = ++topped;
-    w->id = ++id;
-    w->notefd = -1;
+
     w->scrolling = scrolling;
+
+    r = insetrect(w->i->r, Selborder);
+    draw(w->i, r, cols[BACK], nil, w->entire.min);
+    /*e: [[wmk()]] textual window settings */
+
+    w->notefd = -1;
     w->dir = estrdup(startdir);
     w->label = estrdup("<unnamed>");
-    r = insetrect(w->i->r, Selborder);
 
-    draw(w->i, r, cols[BACK], nil, w->entire.min);
     wborder(w, Selborder);
     wscrdraw(w);
 
@@ -156,17 +161,24 @@ wsetname(Window *w)
     char err[ERRMAX];
     
     n = sprint(w->name, "window.%d.%d", w->id, w->namecount++);
+
+    if(nameimage(w->i, w->name, true) > 0)
+        return;
+    // else
+    /*s: [[wsetname()]] if image name already in use, try another name */
     for(i='A'; i<='Z'; i++){
-        if(nameimage(w->i, w->name, 1) > 0)
+        if(nameimage(w->i, w->name, true) > 0)
             return;
+
         errstr(err, sizeof err);
         if(strcmp(err, "image name in use") != 0)
             break;
         w->name[n] = i;
-        w->name[n+1] = 0;
+        w->name[n+1] = '\0';
     }
     w->name[0] = 0;
     fprint(STDERR, "rio: setname failed: %s\n", err);
+    /*e: [[wsetname()]] if image name already in use, try another name */
 }
 /*e: function wsetname */
 
@@ -181,8 +193,10 @@ wresize(Window *w, Image *i, bool move)
         draw(i, i->r, w->i, nil, w->i->r.min);
     freeimage(w->i);
     w->i = i;
-    wsetname(w);
+    wsetname(w); // publish new window name by incrementing namecount
     w->mc.image = i;
+
+    /*s: [[wresize()]] textual window updates */
     r = insetrect(i->r, Selborder+1);
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
@@ -201,6 +215,8 @@ wresize(Window *w, Image *i, bool move)
         wsetselect(w, w->q0, w->q1);
         wscrdraw(w);
     }
+    /*e: [[wresize()]] textual window updates */
+
     wborder(w, Selborder);
     w->topped = ++topped;
     w->resized = true;
@@ -234,21 +250,21 @@ wrefresh(Window *w, Rectangle)
 /*e: function wrefresh */
 
 /*s: function wclose */
-int
+bool
 wclose(Window *w)
 {
     int i;
 
     i = decref(w);
     if(i > 0)
-        return 0;
+        return false;
 
     if(i < 0)
         error("negative ref count");
     if(!w->deleted)
         wclosewin(w);
     wsendctlmesg(w, Exited, ZR, nil);
-    return 1;
+    return true;
 }
 /*e: function wclose */
 
@@ -274,11 +290,10 @@ enum {
 void
 winctl(void *arg)
 {
-    /*s: [[winctl()]] locals */
-    Window *w;
+    Window *w = arg;
     // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
-    /*x: [[winctl()]] locals */
+    /*s: [[winctl()]] locals */
     char buf[4*12+1]; // /dev/mouse interface
     Rune *rp, *bp, *tp, *up;
     uint qh;
@@ -302,7 +317,6 @@ winctl(void *arg)
     Consreadmesg cwrm;
     /*e: [[winctl()]] locals */
     
-    w = arg;
     snprint(buf, sizeof buf, "winctl-id%d", w->id);
     threadsetname(buf);
 
@@ -895,10 +909,14 @@ wsetcols(Window *w)
 void
 wrepaint(Window *w)
 {
-    wsetcols(w);
 
+    /*s: [[wrepaint()]] update cols */
+    wsetcols(w);
+    /*e: [[wrepaint()]] update cols */
+    /*s: [[wrepaint()]] if mouse not opened */
     if(!w->mouseopen)
         frredraw(w);
+    /*e: [[wrepaint()]] if mouse not opened */
 
     if(w == input){
         wborder(w, Selborder);
@@ -1036,7 +1054,7 @@ wplumb(Window *w)
 /*e: function wplumb */
 
 /*s: function winborder */
-int
+bool
 winborder(Window *w, Point xy)
 {
     return ptinrect(xy, w->screenr) && 
@@ -1294,12 +1312,6 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         flushimage(display, true);
         break;
     /*x: [[wctlmesg()]] cases */
-    case Movemouse:
-        if(sweeping || !ptinrect(r.min, w->i->r))
-            break;
-        wmovemouse(w, r.min);
-        break;
-    /*x: [[wctlmesg()]] cases */
     case Deleted:
         if(w->deleted)
             break;
@@ -1346,8 +1358,14 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         flushimage(display, true);
         break;
     /*x: [[wctlmesg()]] cases */
+    case Movemouse:
+        if(sweeping || !ptinrect(r.min, w->i->r))
+            break;
+        wmovemouse(w, r.min);
+        break;
+    /*x: [[wctlmesg()]] cases */
     case Rawon:
-        // already setup w->rawing somewhere else?
+        // already setup w->rawing in xfidwrite, nothing else todo
         break;
     case Rawoff:
         if(w->deleted)
@@ -1382,8 +1400,8 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
 void
 wmovemouse(Window *w, Point p)
 {
-    p.x += w->screenr.min.x-w->i->r.min.x;
-    p.y += w->screenr.min.y-w->i->r.min.y;
+    p.x += w->screenr.min.x - w->i->r.min.x;
+    p.y += w->screenr.min.y - w->i->r.min.y;
     moveto(mousectl, p);
 }
 /*e: function wmovemouse */
@@ -1394,8 +1412,10 @@ wborder(Window *w, int type)
 {
     Image *col;
 
+    /*s: [[wborder()]] sanity check w */
     if(w->i == nil)
         return;
+    /*e: [[wborder()]] sanity check w */
     /*s: [[wborder()]] if holding */
     if(w->holding){
         if(type == Selborder)
@@ -1445,13 +1465,16 @@ wcurrent(Window *w)
         return;
     /*e: [[wcurrent()]] if wkeyboard */
     oi = input;
+    // updated input!
     input = w;
-    if(oi!=w && oi!=nil)
+
+    if(oi && oi != w)
         wrepaint(oi);
-    if(w !=nil){
+    if(w){
         wrepaint(w);
         wsetcursor(w, false);
     }
+    /*s: [[wcurrent()]] wakeup w and oi */
     if(w != oi){
         if(oi){
             oi->wctlready = true;
@@ -1462,6 +1485,7 @@ wcurrent(Window *w)
             wsendctlmesg(w, Wakeup, ZR, nil);
         }
     }
+    /*e: [[wcurrent()]] wakeup w and oi */
 }
 /*e: function wcurrent */
 
@@ -1571,7 +1595,8 @@ wclosewin(Window *w)
     if(w == wkeyboard)
         wkeyboard = nil;
     /*e: [[wclosewin()]] if wkeyboard */
-
+    /*s: [[wclosewin()]] remove w from hidden */
+    // delete_list(w, hidden)
     for(i=0; i<nhidden; i++)
         if(hidden[i] == w){
             --nhidden;
@@ -1579,14 +1604,13 @@ wclosewin(Window *w)
             hidden[nhidden] = nil;
             break;
         }
+    /*e: [[wclosewin()]] remove w from hidden */
+
     for(i=0; i<nwindow; i++)
         if(windows[i] == w){
             --nwindow;
             memmove(windows+i, windows+i+1, (nwindow-i)*sizeof(Window*));
-            w->deleted = true; // again??
-            r = w->i->r;
-            /* move it off-screen to hide it, in case client is slow in letting it go */
-            //if(0) originwindow(w->i, r.min, view->r.max);
+
             freeimage(w->i);
             w->i = nil;
             return;
@@ -1625,6 +1649,7 @@ winshell(void *args)
     void **arg;
     char *cmd, *dir;
     char **argv;
+    errorneg1 err;
 
     arg = args;
 
@@ -1636,35 +1661,47 @@ winshell(void *args)
 
     rfork(RFNAMEG|RFFDG|RFENVG);
 
-    if(filsysmount(filsys, w->id) < 0){
+    /*s: [[winshell()]] adjust namespace */
+    err = filsysmount(filsys, w->id);
+    /*s: [[winshell()]] sanity check err filsysmount */
+    if(err < 0){
         fprint(STDERR, "mount failed: %r\n");
         sendul(pidc, 0);
         threadexits("mount failed");
     }
+    /*e: [[winshell()]] sanity check err filsysmount */
+    /*e: [[winshell()]] adjust namespace */
     /*s: [[winshell()]] reassign STDIN/STDOUT */
     // reassign stdin/stdout to virtualized /dev/cons from filsysmount
     close(STDIN);
-    if(open("/dev/cons", OREAD) < 0){
+    err = open("/dev/cons", OREAD);
+    /*s: [[winshell()]] sanity check err open cons stdin */
+    if(err < 0){
         fprint(STDERR, "can't open /dev/cons: %r\n");
         sendul(pidc, 0);
         threadexits("/dev/cons");
     }
+    /*e: [[winshell()]] sanity check err open cons stdin */
     close(STDOUT);
-    if(open("/dev/cons", OWRITE) < 0){
+    err = open("/dev/cons", OWRITE);
+    /*s: [[winshell()]] sanity check err open cons stdout */
+    if(err < 0){
         fprint(STDERR, "can't open /dev/cons: %r\n");
         sendul(pidc, 0);
         threadexits("open");	/* BUG? was terminate() */
     }
+    /*e: [[winshell()]] sanity check err open cons stdout */
     /*e: [[winshell()]] reassign STDIN/STDOUT */
 
-    if(wclose(w) == 0){	/* remove extra ref hanging from creation */
+    if(wclose(w) == false){	/* remove extra ref hanging from creation */
         notify(nil);
         dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)
             chdir(dir);
 
+        // Exec!!
         procexec(pidc, cmd, argv);
-        _exits("exec failed");
+        _exits("exec failed"); // should never be reached
     }
 }
 /*e: function winshell */

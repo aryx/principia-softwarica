@@ -78,7 +78,7 @@ bool		scrolling;
 int		maxtab = 0;
 /*e: global maxtab */
 /*s: global deletechan */
-// chan<char*> (listener = deletethread, sender = deletetimeoutproc)
+// chan<stirng> (listener = deletethread, sender = deletetimeoutproc)
 Channel* deletechan;
 /*e: global deletechan */
 /*s: global startdir */

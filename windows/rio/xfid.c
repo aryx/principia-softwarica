@@ -64,15 +64,19 @@ char Ebadoffset[] = 	"window read not on scan line boundary";
 extern char Eperm[];
 
 /*s: global xfidfree */
+// list<ref_own<Xfid>> (next = Xfid.free)
 static	Xfid	*xfidfree;
 /*e: global xfidfree */
 /*s: global xfid */
+// list<ref_own<Xfid>> (next = Xfid.next)
 static	Xfid	*xfid;
 /*e: global xfid */
 /*s: global cxfidalloc */
+// chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
 static	Channel	*cxfidalloc;	/* chan(Xfid*) */
 /*e: global cxfidalloc */
 /*s: global cxfidfree */
+// chan<ref<Xfid>> (listner = ??, sender = ??)
 static	Channel	*cxfidfree;	/* chan(Xfid*) */
 /*e: global cxfidfree */
 
@@ -119,29 +123,37 @@ xfidallocthread(void*)
                 x->c = chancreate(sizeof(void(*)(Xfid*)), 0);
                 x->flushc = chancreate(sizeof(int), 0);	/* notification only; no data */
                 x->flushtag = -1;
+
+                // insert_list(x, xfid)
                 x->next = xfid;
                 xfid = x;
 
                 // new Xfid threads!
                 threadcreate(xfidctl, x, 16384);
             }
+            /*s: [[xfidallocthread()]] sanity check x when Alloc */
             if(x->ref != 0){
                 fprint(STDERR, "%p incref %ld\n", x, x->ref);
                 error("incref");
             }
             if(x->flushtag != -1)
                 error("flushtag in allocate");
+            /*e: [[xfidallocthread()]] sanity check x when Alloc */
             incref(x);
+
             sendp(cxfidalloc, x);
             break;
 
         case Free:
+            /*s: [[xfidallocthread()]] sanity check x when Free */
             if(x->ref != 0){
                 fprint(STDERR, "%p decref %ld\n", x, x->ref);
                 error("decref");
             }
             if(x->flushtag != -1)
                 error("flushtag in free");
+            /*e: [[xfidallocthread()]] sanity check x when Free */
+            // insert_list(x, xfidfree)
             x->free = xfidfree;
             xfidfree = x;
             break;
@@ -154,10 +166,8 @@ xfidallocthread(void*)
 Channel*
 xfidinit(void)
 {
-    /*s: [[xfidinit()]] channels creation */
     cxfidalloc = chancreate(sizeof(Xfid*), 0);
     cxfidfree = chancreate(sizeof(Xfid*), 0);
-    /*e: [[xfidinit()]] channels creation */
     threadcreate(xfidallocthread, nil, STACK);
     return cxfidalloc;
 }
@@ -219,10 +229,12 @@ void
 xfidattach(Xfid *x)
 {
     Fcall t;
-    int id, hideit, scrollit;
+    int id;
+    bool hideit, scrollit;
     Window *w;
     char *err, *n, *dir, errbuf[ERRMAX];
-    int pid, newlymade;
+    int pid;
+    bool newlymade;
     Rectangle r;
     Image *i;
 
@@ -231,7 +243,7 @@ xfidattach(Xfid *x)
     w = nil;
     err = Eunkid;
     newlymade = false;
-    hideit = 0;
+    hideit = false;
 
     //TODO delete
     if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
@@ -273,10 +285,13 @@ xfidattach(Xfid *x)
             err = errbuf;
         else
             goto Allocate;
+
+
     }else{
         id = atoi(x->aname);
         w = wlookid(id);
     }
+
     x->f->w = w;
     if(w == nil){
         qunlock(&all);
@@ -287,6 +302,7 @@ xfidattach(Xfid *x)
     if(!newlymade)	/* counteract dec() in winshell() */
         incref(w);
     qunlock(&all);
+
     filsysrespond(x->fs, x, &t, nil);
 }
 /*e: function xfidattach */
@@ -367,6 +383,7 @@ xfidopen(Xfid *x)
         break;
     /*e: [[xfidopen()]] cases */
     }
+
     t.qid = x->f->qid;
     t.iounit = messagesize-IOHDRSZ;
     x->f->open = true;
@@ -444,17 +461,17 @@ enum { CWdata, CWflush, NCW };
 void
 xfidwrite(Xfid *x)
 {
-    /*s: [[xfidwrite()]] locals */
+    Window *w;
+    /*s: [[xfidwrite()]] other locals */
     Fcall fc;
     int c, cnt, qid, nb, off, nr;
     char buf[256], *p;
     Point pt;
-    Window *w;
     Rune *r;
     Conswritemesg cwm;
     Stringpair pair;
     Alt alts[NCW+1];
-    /*e: [[xfidwrite()]] locals */
+    /*e: [[xfidwrite()]] other locals */
     
     w = x->f->w;
     if(w->deleted){
@@ -597,7 +614,7 @@ xfidwrite(Xfid *x)
         free(w->label);
         w->label = emalloc(cnt+1);
         memmove(w->label, x->data, cnt);
-        w->label[cnt] = 0;
+        w->label[cnt] = '\0';
         break;
     /*x: [[xfidwrite()]] cases */
     case Qwdir:
@@ -695,14 +712,14 @@ enum { WCRdata, WCRflush, NWCR };
 void
 xfidread(Xfid *x)
 {
-    /*s: [[xfidread()]] locals */
+    Window *w;
+    /*s: [[xfidread()]] other locals */
     char buf[128];
     Fcall fc;
     int n, off, cnt, c;
     uint qid;
     char *t;
     char cbuf[30];
-    Window *w;
     Mouse ms;
     Rectangle r;
     Image *i;
@@ -712,7 +729,7 @@ xfidread(Xfid *x)
     Consreadmesg cwrm;
     Stringpair pair;
     Alt alts[NCR+1];
-    /*e: [[xfidread()]] locals */
+    /*e: [[xfidread()]] other locals */
     
     w = x->f->w;
     if(w->deleted){
@@ -734,7 +751,7 @@ xfidread(Xfid *x)
         alts[CRflush].c = x->flushc;
         alts[CRflush].v = nil;
         alts[CRflush].op = CHANRCV;
-        alts[NMR].op = CHANEND;
+        alts[NCR].op = CHANEND;
 
         switch(alt(alts)){
         case CRdata:
@@ -812,6 +829,32 @@ xfidread(Xfid *x)
         filsysrespond(x->fs, x, &fc, "cursor read not implemented");
         break;
     /*x: [[xfidread()]] cases */
+    case Qwinname:
+        n = strlen(w->name);
+        if(n == 0){
+            filsysrespond(x->fs, x, &fc, "window has no name");
+            break;
+        }
+        t = estrdup(w->name);
+        goto Text;
+    /*x: [[xfidread()]] cases */
+    case Qwinid:
+        n = sprint(buf, "%11d ", w->id);
+        t = estrdup(buf);
+        goto Text;
+    /*x: [[xfidread()]] cases */
+    case Qlabel:
+        n = strlen(w->label);
+        if(off > n)
+            off = n;
+        if(off+cnt > n)
+            cnt = n - off;
+
+        fc.data = w->label + off;
+        fc.count = cnt;
+        filsysrespond(x->fs, x, &fc, nil);
+        break;
+    /*x: [[xfidread()]] cases */
     case Qscreen:
         i = display->image;
         if(i == nil){
@@ -852,31 +895,6 @@ xfidread(Xfid *x)
         r = w->screenr;
         goto caseImage;
     /*x: [[xfidread()]] cases */
-    case Qwinid:
-        n = sprint(buf, "%11d ", w->id);
-        t = estrdup(buf);
-        goto Text;
-    /*x: [[xfidread()]] cases */
-    case Qwinname:
-        n = strlen(w->name);
-        if(n == 0){
-            filsysrespond(x->fs, x, &fc, "window has no name");
-            break;
-        }
-        t = estrdup(w->name);
-        goto Text;
-    /*x: [[xfidread()]] cases */
-    case Qlabel:
-        n = strlen(w->label);
-        if(off > n)
-            off = n;
-        if(off+cnt > n)
-            cnt = n-off;
-        fc.data = w->label+off;
-        fc.count = cnt;
-        filsysrespond(x->fs, x, &fc, nil);
-        break;
-    /*x: [[xfidread()]] cases */
     case Qtext:
         t = wcontents(w, &n);
         goto Text;
@@ -888,7 +906,8 @@ xfidread(Xfid *x)
         }
         if(off+cnt > n)
             cnt = n-off;
-        fc.data = t+off;
+
+        fc.data = t + off;
         fc.count = cnt;
         filsysrespond(x->fs, x, &fc, nil);
         free(t);

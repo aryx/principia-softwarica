@@ -132,11 +132,12 @@ uint	convM2D(uchar*, uint, Dir*, char*);
 uint	convD2M(Dir*, uchar*, uint);
 uint	sizeD2M(Dir*);
 
+// dumpers
 int	fcallfmt(Fmt*);
 int	dirfmt(Fmt*);
 int	dirmodefmt(Fmt*);
 
-int	read9pmsg(int, void*, uint);
+int	read9pmsg(fdt, void*, uint);
 
 #pragma	varargck	type	"F"	Fcall*
 #pragma	varargck	type	"M"	ulong

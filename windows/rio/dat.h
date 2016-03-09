@@ -1,6 +1,6 @@
 /*s: windows/rio/dat.h */
 /*s: enum qid */
-enum qid
+enum Qxxx
 {
     Qdir,			/* /dev for this window */
     /*s: [[qid]] cases */
@@ -12,15 +12,15 @@ enum qid
     /*x: [[qid]] cases */
     Qcursor,
     /*x: [[qid]] cases */
-    Qscreen,
-    /*x: [[qid]] cases */
-    Qwindow,
+    Qwinname,
     /*x: [[qid]] cases */
     Qwinid,
     /*x: [[qid]] cases */
-    Qwinname,
-    /*x: [[qid]] cases */
     Qlabel,
+    /*x: [[qid]] cases */
+    Qscreen,
+    /*x: [[qid]] cases */
+    Qwindow,
     /*x: [[qid]] cases */
     Qtext,
     /*x: [[qid]] cases */
@@ -36,6 +36,7 @@ enum qid
     /*x: [[qid]] cases */
     Qkbdin,
     /*e: [[qid]] cases */
+
     QMAX,
 };
 /*e: enum qid */
@@ -70,16 +71,24 @@ typedef	struct	Xfid Xfid;
 /*s: enum _anon_ (windows/rio/dat.h)3 */
 enum
 {
+    /*s: constant Selborder */
     Selborder		= 4,	/* border of selected window */
+    /*e: constant Selborder */
+    /*s: constant Unselborder */
     Unselborder		= 1,	/* border of unselected window */
+    /*e: constant Unselborder */
+    /*s: constants Scrollxxx */
     Scrollwid 		= 12,	/* width of scroll bar */
     Scrollgap 		= 4,	/* gap right of scroll bar */
+    /*e: constants Scrollxxx */
+    /*s: constant BIG */
     BIG			= 3,	/* factor by which window dimension can exceed screen */
+    /*e: constant BIG */
 };
 /*e: enum _anon_ (windows/rio/dat.h)3 */
 
 /*s: function QID */
-#define	QID(w,q)	((w<<8)|(q))
+#define	QID(winid,qxxx)	((winid<<8)|(qxxx))
 /*e: function QID */
 /*s: function WIN */
 #define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
@@ -98,11 +107,11 @@ enum	/* control messages */
     /*x: [[Wctlmesgkind]] cases */
     Refresh,
     /*x: [[Wctlmesgkind]] cases */
-    Movemouse,
-    /*x: [[Wctlmesgkind]] cases */
     Deleted,
     /*x: [[Wctlmesgkind]] cases */
     Exited,
+    /*x: [[Wctlmesgkind]] cases */
+    Movemouse,
     /*x: [[Wctlmesgkind]] cases */
     Rawon,
     Rawoff,
@@ -166,6 +175,7 @@ struct Mousestate
 struct Mouseinfo
 {
     Mousestate	queue[16];
+
     int	ri;	/* read index into queue */
     int	wi;	/* write index */
     ulong	counter;	/* serial no. of last mouse event we received */
@@ -182,9 +192,9 @@ struct Window
     // ID
     //--------------------------------------------------------------------
     /*s: [[Window]] id fields */
-    int	    id;       // /dev/winid
-    char    name[32]; // /dev/winname
-    char    *label;   // /dev/label
+    int	    id;       // visible through /mnt/wsys/winid
+    char    name[32]; // visible through /mnt/wsys/winname
+    char    *label;   // writable through /mnt/wsys/label
     /*x: [[Window]] id fields */
     uint		namecount;
     /*e: [[Window]] id fields */
@@ -209,7 +219,8 @@ struct Window
     // Mouse
     //--------------------------------------------------------------------
     /*s: [[Window]] mouse fields */
-    Mousectl	mc; // mc.c is the mouse event listening channel
+    // mc.c = chan<Mouse> (listener = winctl, sender = mousethread)
+    Mousectl	mc;
     /*x: [[Window]] mouse fields */
     Cursor		cursor;
     Cursor		*cursorp;
@@ -232,6 +243,14 @@ struct Window
     // chan<Wctlmesg, 20> (listener = winctl, sender = mousethread | ...)
     Channel	*cctl;		/* chan(Wctlmesg)[20] */
     /*e: [[Window]] control fields */
+
+    //--------------------------------------------------------------------
+    // Process
+    //--------------------------------------------------------------------
+    /*s: [[Window]] process fields */
+    int		pid;
+    fdt	 	notefd;
+    /*e: [[Window]] process fields */
     
     //--------------------------------------------------------------------
     // Config
@@ -283,12 +302,9 @@ struct Window
     /*s: [[Window]] other fields */
     int	 	topped;
     /*x: [[Window]] other fields */
-    int		pid;
-    int	 	notefd;
-    /*x: [[Window]] other fields */
     bool	 	resized;
     /*x: [[Window]] other fields */
-    bool_byte	ctlopen;
+    bool	ctlopen;
     /*x: [[Window]] other fields */
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     /*x: [[Window]] other fields */
@@ -301,7 +317,7 @@ struct Window
     char		*dir; // /dev/wdir
     /*x: [[Window]] other fields */
     bool	wctlopen;
-    int	 	wctlready;
+    bool 	wctlready;
     /*x: [[Window]] other fields */
     Channel		*wctlread;	/* chan(Consreadmesg) */
     /*e: [[Window]] other fields */
@@ -321,7 +337,9 @@ struct Window
 struct Dirtab
 {
     char	*name;
-    uchar	type;
+    // bitset<enum<QTxxx>>
+    byte	type;
+    // enum<Qxxx>
     uint	qid;
     uint	perm;
 };
@@ -334,49 +352,59 @@ struct Fid
     int		fid;
 
     // the state
-
-    bool	busy;
-
-    int		open;
+    bool	open;
     int		mode;
 
+    /*s: [[Fid]] other fields */
     Qid		qid;
-
+    /*x: [[Fid]] other fields */
     Window	*w;
-
-    Dirtab	*dir;
+    /*x: [[Fid]] other fields */
     int		nrpart;
     uchar	rpart[UTFmax];
+    /*x: [[Fid]] other fields */
+    Dirtab	*dir;
+    /*e: [[Fid]] other fields */
 
     // Extra
+    /*s: [[Fid]] extra fields */
     Fid		*next;
-
+    /*x: [[Fid]] extra fields */
+    bool	busy;
+    /*e: [[Fid]] extra fields */
 };
 /*e: struct Fid */
 
 /*s: struct Xfid */
 struct Xfid
 {
+        // incoming parsed request
         Fcall;
+        // answer buffer
         byte	*buf;
  
-        // chan<void(*)(Xfid*)> (listener = xfidctl, sender = filsysxxx?)
+        // handler to worker thread
+        // chan<void(*)(Xfid*)> (listener = xfidctl, senders = filsysxxx)
         Channel	*c;	/* chan(void(*)(Xfid*)) */
 
         Fid	*f;
         Filsys	*fs;
 
-        // Extra
-        Ref;
-
-        Xfid	*next;
-        Xfid	*free;
-
-        QLock	active;
-
+        /*s: [[Xfid]] flushing fields */
         int	flushing;	/* another Xfid is trying to flush us */
         int	flushtag;	/* our tag, so flush can find us */
         Channel	*flushc;/* channel(int) to notify us we're being flushed */
+        /*e: [[Xfid]] flushing fields */
+        /*s: [[Xfid]] other fields */
+        QLock	active;
+        /*e: [[Xfid]] other fields */
+
+        // Extra
+        Ref;
+        /*s: [[Xfid]] extra fields */
+        Xfid	*next;
+        Xfid	*free;
+        /*e: [[Xfid]] extra fields */
 };
 /*e: struct Xfid */
 
@@ -397,11 +425,11 @@ struct Filsys
     // ref_own<string>
     char	*user;
 
-    // chan<Xfid*> (listener = filsysproc, sender = xfidallocthread)
-    Channel	*cxfidalloc;	/* chan(Xfid*) */
-
-    // map<fid, Fid> (next in bucket = Fid.next?)
+    // map<fid, Fid> (next in bucket = Fid.next)
     Fid		*fids[Nhash];
+
+    // chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
+    Channel	*cxfidalloc;	/* chan(Xfid*) */
 };
 /*e: struct Filsys */
 

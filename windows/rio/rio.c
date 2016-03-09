@@ -258,6 +258,7 @@ void threadmain(int argc, char *argv[])
     exitchan     = chancreate(sizeof(int), 0);
     /*x: [[main()]] communication channels creation */
     deletechan   = chancreate(sizeof(char*), 0);
+    /*x: [[main()]] communication channels creation */
     winclosechan = chancreate(sizeof(Window*), 0);
     /*e: [[main()]] communication channels creation */
     /*s: [[main()]] threads creation */
@@ -267,6 +268,7 @@ void threadmain(int argc, char *argv[])
     threadcreate(mousethread, nil, STACK);
     /*x: [[main()]] threads creation */
     threadcreate(deletethread, nil, STACK);
+    /*x: [[main()]] threads creation */
     threadcreate(winclosethread, nil, STACK);
     /*e: [[main()]] threads creation */
 
@@ -531,6 +533,7 @@ deletethread(void*)
 
     for(;;){
         s = recvp(deletechan);
+
         i = namedimage(display, s);
         if(i != nil){
             /* move it off-screen to hide it, since client is slow in letting it go */
@@ -714,7 +717,7 @@ mousethread(void*)
             /*s: [[mousethread()]] if moving and buttons */
             if(moving && (mouse->buttons&7)){
                 oin = winput;
-                band = mouse->buttons & 3;
+                band = mouse->buttons & 3; // left or middle click
 
                 sweeping = true;
                 if(band)
@@ -985,11 +988,10 @@ sweep(void)
 
     p0 = onscreen(mouse->xy);
     p = p0;
-    r.min = p;
-    r.max = p;
+    r = Rpt(p0, p0);
     oi = nil;
 
-    while(mouse->buttons == 4){
+    while(mouse->buttons == 4){ // right click
         readmouse(mousectl);
 
         if(mouse->buttons != 4 && mouse->buttons != 0)
@@ -1001,35 +1003,40 @@ sweep(void)
             if(Dx(r)>5 && Dy(r)>5){
                 i = allocwindow(wscreen, r, Refnone, 0xEEEEEEFF); /* grey */
                 freeimage(oi);
+                /*s: [[sweep()]] sanity check i */
                 if(i == nil)
                     goto Rescue;
+                /*e: [[sweep()]] sanity check i */
                 oi = i;
                 border(i, r, Selborder, red, ZP);
                 flushimage(display, true);
             }
         }
     }
-
+    /*s: [[sweep()]] sanity check mouse buttons, i, and rectangle size */
     if(mouse->buttons != 0)
         goto Rescue;
     if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
         goto Rescue;
-
+    /*e: [[sweep()]] sanity check mouse buttons, i, and rectangle size */
     oi = i;
     i = allocwindow(wscreen, oi->r, Refbackup, DWhite);
     freeimage(oi);
+    /*s: [[sweep()]] sanity check i */
     if(i == nil)
         goto Rescue;
+    /*e: [[sweep()]] sanity check i */
     border(i, r, Selborder, red, ZP);
     cornercursor(input, mouse->xy, true);
     goto Return;
-
+/*s: [[sweep()]] Rescue handler */
  Rescue:
     freeimage(i);
     i = nil;
     cornercursor(input, mouse->xy, 1);
     while(mouse->buttons)
         readmouse(mousectl);
+/*e: [[sweep()]] Rescue handler */
 
  Return:
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
@@ -1054,11 +1061,11 @@ drawedge(Image **bp, Rectangle r)
 
 /*s: function drawborder */
 void
-drawborder(Rectangle r, int show)
+drawborder(Rectangle r, bool show)
 {
     static Image *b[4];
     int i;
-    if(show == 0){
+    if(!show){
         for(i = 0; i < 4; i++){
             freeimage(b[i]);
             b[i] = nil;
@@ -1085,37 +1092,45 @@ drag(Window *w, Rectangle *rp)
 
     menuing = true;
     om = mouse->xy;
-    riosetcursor(&boxcursor, 1);
+    riosetcursor(&boxcursor, true);
+
     dm = subpt(mouse->xy, w->screenr.min);
     d = subpt(i->r.max, i->r.min);
     op = subpt(mouse->xy, dm);
-    drawborder(Rect(op.x, op.y, op.x+d.x, op.y+d.y), 1);
-    flushimage(display, 1);
+
+    drawborder(Rect(op.x, op.y, op.x+d.x, op.y+d.y), true);
+    flushimage(display, true);
 
     while(mouse->buttons == 4){
         p = subpt(mouse->xy, dm);
         if(!eqpt(p, op)){
-            drawborder(Rect(p.x, p.y, p.x+d.x, p.y+d.y), 1);
-            flushimage(display, 1);
+            // will move previously drawn rectangle thx to originwindow
+            drawborder(Rect(p.x, p.y, p.x+d.x, p.y+d.y), true);
+            flushimage(display, true);
             op = p;
         }
         readmouse(mousectl);
     }
 
     r = Rect(op.x, op.y, op.x+d.x, op.y+d.y);
-    drawborder(r, 0);
-    cornercursor(w, mouse->xy, 1);
+    drawborder(r, false);
+
+    cornercursor(w, mouse->xy, true);
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
     menuing = false;
 
-    flushimage(display, 1);
-    if(mouse->buttons!=0 || (ni=allocwindow(wscreen, r, Refbackup, DWhite))==nil){
+    flushimage(display, true);
+    if(mouse->buttons == 0)
+        ni=allocwindow(wscreen, r, Refbackup, DWhite);
+    /*s: [[drag()]] sanity check mouse buttons and ni */
+    if(mouse->buttons!=0 || ni==nil){
         moveto(mousectl, om);
         while(mouse->buttons)
             readmouse(mousectl);
         *rp = Rect(0, 0, 0, 0);
         return nil;
     }
+    /*e: [[drag()]] sanity check mouse buttons and ni */
     draw(ni, ni->r, i, nil, i->r.min);
     *rp = r;
     return ni;
@@ -1204,9 +1219,11 @@ bandsize(Window *w)
     which = whichcorner(w, p);
     p = cornerpt(w->screenr, p, which);
     wmovemouse(w, p);
+
     readmouse(mousectl);
     r = whichrect(w->screenr, p, which);
-    drawborder(r, 1);
+    drawborder(r, true);
+
     or = r;
     startp = p;
     
@@ -1214,26 +1231,32 @@ bandsize(Window *w)
         p = onscreen(mouse->xy);
         r = whichrect(w->screenr, p, which);
         if(!eqrect(r, or) && goodrect(r)){
-            drawborder(r, 1);
-            flushimage(display, 1);
+            drawborder(r, true);
+            flushimage(display, true);
             or = r;
         }
         readmouse(mousectl);
     }
+
     p = mouse->xy;
-    drawborder(or, 0);
-    flushimage(display, 1);
+    drawborder(or, false);
+    flushimage(display, true);
+
     wsetcursor(w, true);
+    /*s: [[bandsize()]] sanity check mouse buttons, rectanglr [[or]], point [[p]] */
     if(mouse->buttons!=0 || Dx(or)<100 || Dy(or)<3*font->height){
         while(mouse->buttons)
             readmouse(mousectl);
         return nil;
     }
-    if(abs(p.x-startp.x)+abs(p.y-startp.y) <= 1)
+    if(abs(p.x - startp.x) + abs(p.y - startp.y) <= 1)
         return nil;
+    /*e: [[bandsize()]] sanity check mouse buttons, rectanglr [[or]], point [[p]] */
     i = allocwindow(wscreen, or, Refbackup, DWhite);
+    /*s: [[bandsize()]] sanity check i */
     if(i == nil)
         return nil;
+    /*e: [[bandsize()]] sanity check i */
     border(i, r, Selborder, red, ZP);
     return i;
 }
@@ -1258,7 +1281,7 @@ pointto(bool wait)
 
     if(wait){
         while(mouse->buttons){
-            if(mouse->buttons!=4 && w !=nil){	/* cancel */
+            if(mouse->buttons!=4 && w != nil){	/* cancel */
                 cornercursor(input, mouse->xy, false);
                 w = nil;
             }
@@ -1267,6 +1290,7 @@ pointto(bool wait)
         if(w != nil && wpointto(mouse->xy) != w)
             w = nil;
     }
+
     cornercursor(input, mouse->xy, false);
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
     menuing = false;
@@ -1330,7 +1354,8 @@ whide(Window *w)
     for(j=0; j<nhidden; j++)
         if(hidden[j] == w)	/* already hidden */
             return -1;
-    i = allocimage(display, w->screenr, w->i->chan, 0, DWhite);
+
+    i = allocimage(display, w->screenr, w->i->chan, false, DWhite);
     if(i){
         hidden[nhidden++] = w;
         wsendctlmesg(w, Reshaped, ZR, i);
@@ -1391,23 +1416,28 @@ Window*
 new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
 {
     Channel *cm, *ck, *cctl;
+    Channel *cpid;
     Mousectl *mc;
     Window *w;
-    Channel *cpid;
+    /*s: [[new()]] other locals */
     void **arg;
+    /*e: [[new()]] other locals */
 
+    /*s: [[new()]] sanity check i */
     if(i == nil)
         return nil;
+    /*e: [[new()]] sanity check i */
 
     /*s: [[new()]] channels creation */
     cm = chancreate(sizeof(Mouse), 0);
     ck = chancreate(sizeof(Rune*), 0);
     cctl = chancreate(sizeof(Wctlmesg), 4);
     /*e: [[new()]] channels creation */
-
     cpid = chancreate(sizeof(int), 0);
+    /*s: [[new()]] sanity check channels */
     if(cm==nil || ck==nil || cctl==nil)
         error("new: channel alloc failed");
+    /*e: [[new()]] sanity check channels */
 
     /*s: [[new()]] mc allocation */
     mc = emalloc(sizeof(Mousectl));
@@ -1423,10 +1453,12 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     // growing array
     windows = erealloc(windows, ++nwindow * sizeof(Window*));
     windows[nwindow-1] = w;
+    /*s: [[new()]] if hideit */
     if(hideit){
         hidden[nhidden++] = w;
         w->screenr = ZR;
     }
+    /*e: [[new()]] if hideit */
 
     // a new thread! for this new window!
     threadcreate(winctl, w, 8192);

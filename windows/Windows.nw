@@ -24,12 +24,15 @@
 %   relevant file (or even function), better cluster the code
 %   (harder to understand non functional code using lots of globals)
 
-%thx to this manual, better understand X11?:
-% - I had no idea how X11 worked so for sure now I understand more,
-%   that each window is represented by a DS and a thread! (like
+%thx to this manual, better understand X11, concurrent apps, fileserver:
+% - I had no idea how a windowing system worked so for sure now I understand
+%   more. For instance each window is represented by a DS and a thread! (like
 %   an active object)
-% - how to use threads and channels, a bit like Erlang
-% - xfid?
+% - how to use threads and channels, a bit like Erlang, rio architecture
+%   is very nice
+% - master/worker architecture with threads, passing around function 
+%   pointers in channels
+% - a filesystem server a la Fuse, multithreaded to handle multiple requests
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -38,14 +41,14 @@
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
 %    * SEMI [[xxx]] other fields, [[xxx]] extra fields
-%    * TODO thread function, process function? mouse action function
+%    * TODO thread function, process function, mouse action function
 % - read Extra section, identify concepts, first TOC
-% - SEMI distribute parts of the Extra section in the main file
+% - distribute parts of the Extra section in the main file
 % - understand main(), LP split main, improve TOC
 % - understand main functions, LP split, cluster, improve TOC
 % - SEMI LP split the structures, use datalog for flow to field info
 % - SEMI nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
-% - SEMI aspecify advanced features! remove useless features
+% - aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
 
@@ -145,9 +148,10 @@ a set of {windows}.
 
 Here are a few questions we hope this book will answer:
 \begin{itemize}
-% how manage and orchestrate a set of processes (rio is a graphical shell)
+% how manage and orchestrate a set of processes (rio is a graphical os/shell)
 % need create process, delete process, associate window, 
 % send resize/refresh, ...
+% kinda a scheduler
 
 % how demultiplex the screen, how receive drawing
 % commands from windows applications and display right place
@@ -157,12 +161,17 @@ Here are a few questions we hope this book will answer:
 %draw in other windows?
 % it's not
 
-% how overlapping windows
+% how overlapping windows, how save state and restore when exposed back?
+% (actually mostly handled by Graphics.nw)
+
+% how xterm?
+% How redirect stdin/stdout to the right place, to do the right
+% thing, so that console app also works?
 
 % how demultiplex the mouse and keyboard, how virtualize
-% /dev/mouse, /dev/cons
+% /dev/mouse, /dev/cons?
 
-% How terminal, scrolling, text selection, compatibilty, etc
+% How terminal scrolling, text selection, copy/paste, etc
 
 \item What happens when the user type [[ls]] in a terminal?
 What are the set of software involved in such a command? What
@@ -176,7 +185,7 @@ the display of text glyphs on the screen in the appropriate window?
 \section{[[rio]]}
 
 % gonna present rio, successor of 8-1/2 and mux all designed by Rob Pike,
-% for plan9. Small, elegant.
+% for plan9. Small, elegant, efficient.
 % first window system actually for unix? before xerox alto?
 
 % blit ancestor: https://www.youtube.com/watch?v=emh22gT5e9k in 1982
@@ -252,6 +261,10 @@ but were ultimately discarded:
 % thread(2?) library! heavy use of channels and threads here
 % window(2)
 % mouse(3)
+% man/5/intro and man/5/* for 9p
+
+% so many requirements ... rio is a complicated program using a lot
+% of features of plan9 (namespace, 9p, /dev/draw, threads, ...)
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -280,9 +293,11 @@ who wrote in some sense most of this book.
 
 % imagine how would you code a windowing system? not that easy.
 
-\subsection{Virtual screens (windows)}
+\subsection{Virtual screen (windows)}
 
-% {windows}, "virtual screens" that applications can draw into.
+% {windows}, obviously first principle :)
+% "virtual screens" that applications can draw into.
+
 % overlapping windows! can hide each other, and when resume
 % get back its state (like suspended process) (so need
 % save window content somewhere)
@@ -294,21 +309,30 @@ who wrote in some sense most of this book.
 \subsection{Process manager}
 
 % it's a kinda of scheduler, a bit like kernel. Need manage
-% set of processes/activities.
+% set of processes/activities. Need to keep track of them.
 
 % Graphical shell
 % can launch new processes
 
-\subsection{Mouse and keyboard demultiplexer}
+\subsection{Virtual mouse and keyboard}
+% demultiplexer!
 
-% also have virtual keyboard/mouse.
+% many processes, but one keyboard/mouse.
+% so need to virtualize/demultiplex keyboard/mouse.
+
+%alt: how kernel does that? it does not really, only one process
+% read the key at the same time (and mouse not really handled)
 
 % for keyboard, can even lead to need of terminal emulator.
 
-\subsection{Windows manager}
+\subsection{Window manager}
 
 % The other role of windowing system is a windows manager!
 % mv/resize/close/hide/etc menus.
+
+%alt: under X11 this is actually delegated to another program
+
+%\subsection{Terminal}
 
 
 \section{[[rio]] command line interface}
@@ -327,7 +351,8 @@ usage(void)
 % Well rio interface is first its graphical interface :)
 % once run, rio has full screen, with right menu to start things 
 % (e.g. button3menu)
-% TODO show figure, and annotate subtle things, like blue frame,
+
+% FIGURE and annotate subtle things, like blue frame,
 % or light grey text when unfocused xterm, and menus
 % winborder, scrollr, screenr
 
@@ -335,23 +360,24 @@ usage(void)
 
 % when create new window under rio,
 % also create new namespace, internal mount, so
-% child process see different files in /dev/ (and /mnt/wsys).
+% child process see different files in /dev/. In fact
+% first in /mnt/wsys and then bind so also in /dev/
 
-%/dev/cons, /dev/consctl, %kbdin
-%/dev/mouse, /dev/cursor
-%/dev/screen /dev/window (actually those are read-only
+%/mnt/wsys/cons, /mnt/wsys/consctl, %kbdin
+%/mnt/wsys/mouse, /mnt/wsys/cursor
 
 % graphical vs textual windows?
 % mouseopen or not? this has influence on many things.
-% need to explain that early
+% need to explain that early?
 
 
-%/dev/label, /dev/winid, /dev/winname  /dev/wdir
-%/dev/text
-%/dev/snarf
-
-%/dev/wctl 
-%/dev/wsys/1/
+%/mnt/wsys/winid, /mnt/wsys/winname, /mnt/wsys/label,
+%/mnt/wsys/screen /mnt/wsys/window (actually those are read-only)
+%/mnt/wsys/text
+%/mnt/wsys/snarf
+%/mnt/wsys/wdir
+%/mnt/wsys/wctl 
+%/mnt/wsys/wsys/1/
 
 
 
@@ -412,7 +438,7 @@ usage(void)
 %wind.c: windows manip
 %wctl.c: windows control
 %fsys.c: /dev/ server and dispatcher
-%xfid.c: /dev/xxx services
+%xfid.c: workers and /dev/xxx services
 %time.c: timer thread
 %scrl.c: scrolling
 
@@ -421,9 +447,16 @@ usage(void)
 
 \section{Software architecture}
 
-% depends also on libmemdraw? libmemlayer? nah, probably not.
+% use many kernel devices:
+% /dev/mouse, /dev/cons (the core one)
+% /dev/cursor
 
+% /dev/draw!
+
+% depends on libdraw
+% (depends also on libmemdraw? libmemlayer? no, just libdraw)
 % For the graphics system part see Graphics.nw
+
 % kernel driver vs graphic libs vs rio vs graphical apps
 % different levels! kernel, rio, window, client app
 
@@ -434,10 +467,9 @@ usage(void)
 % that can be passed in draw commands to /dev/draw and can be
 % retrieved by the kernel
 
-% /dev/draw (core one) vs /dev/draw (fake one to clients? not sure anymore)
-% /dev/mouse, /dev/cons
-% /dev/cursor
-% /dev/screen /dev/window
+
+% (actually rio will virtualize some of those, so those could be
+%  actually not the kernel devices but rio virtual files)
 
 % see 81/2.ps and rio.ps
 % see also panel.pdf
@@ -463,6 +495,8 @@ usage(void)
 % to the input window channel, and the thread corresponding to this window
 % who should wait for many channels should be awaken by the thread scheduler
 % to process the keyboard input and act on it.
+
+% each file accessed by process is a thread too!
 
 % switch(alt(alts)) { event loop in many threads (mouse, winctl, etc)
 
@@ -497,12 +531,13 @@ usage(void)
 
 % message! find right window, dispatch
 
-% click => hardware interrupt => kernel => ioproc(initmouse) =>
-%  mousethread => winctl => ???
+% click => hardware interrupt => kernel => ioproc(initmouse, read /dev/mouse) =>
+%  mousethread => winctl => ??? ... (read /mnt/wsys/mouse)
 
 % why ioproc? otherwise mousethread would block the whole process
 % why mousethread? because need dispatch to appropriate window
-% why winctl? 
+% why winctl? because depending on state of window, might
+%  dispatch to some xfid, or not.
 
 % write to /dev/mouse
 % rio process with many threads Await.
@@ -516,8 +551,8 @@ usage(void)
 
 \section{Trace of a key press}
 
-% key => hardware interrupt => kernel => ioproc(initkeyboard) =>
-%  keyboardthread => winctl => ???
+% key => hardware interrupt => kernel => ioproc(initkeyboard, read /dev/cons) =>
+%  keyboardthread => winctl => ??? (read /mnt/wsys/cons)
 
 % why ioproc? otherwise keyboardthread would block the whole process
 % why keyboardthread? because need dispatch to appropriate window
@@ -531,12 +566,19 @@ usage(void)
 \section{Trace of a drawing operation}
 
 % toy app does a draw operation, what happens?
-% it draws on /dev/draw/n/data? or there are some write on the
-% demultiplexed /dev/screen or /dev/window?
+% it writes on /dev/draw/n/data? 
+
+% there are no write on /dev/screen or /dev/window.
+% those are read-only device.
+% /dev/draw does its own demultiplexing. A client
+% open /dev/draw/new, get a handler, and then getwindow
+% give name of image for this client to use, stored then
+% in view.
 
 % a bit annoying that have to transform your xy into the final
 % xy ourself by adding view->r.min. Not really "abstraction"
 % power. I'd rather have my 0x0 to be the top left on _my_ window.
+%update: can use originwindow! then cleaner!
 
 \section{Book structure}
 
@@ -577,12 +619,12 @@ Rectangle	viewr;
 % want old value (but should be needed only when run rio under rio no?)
 
 
-% rio will provide actually to its client a view image too!
+% rio will provide actually to its client a view Image too!
 % but for subpart of screen (subpart of rio's view).
 
 \subsection{Input, [[mousectl]] and [[keyboardctl]]}
 
-% rio graphical app which use keyboard and mouse.
+% rio is a graphical app which uses the keyboard and mouse.
 
 % mouse.h
 <<global mousectl>>=
@@ -612,17 +654,14 @@ Keyboardctl	*keyboardctl;
 \section{Desktop, [[wscreen]]}
 
 % rio rely on big support in Graphics.nw to manage overlapping
-% images, which big building block for windowing systems (but still
+% images, which is big building block for windowing systems (but still
 % a lot remains)
 
 <<global wscreen>>=
 Screen	*wscreen;
 @
 % wscreen = allocscreen(screen, background)
-% will get code like
-%    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
-% so make sense? what is wscreen?
-%TODO: rename screen? or better desktop?
+%TODO: rename to screen? or better desktop!
 % but initdraw allocates by default a screen no? why not reuse
 %  this one? because screen by default has also border on it
 %  and window is actually subpart inside the border.
@@ -631,10 +670,12 @@ Screen	*wscreen;
 <<global background>>=
 Image	*background;
 @
+% used for desktop. It's actually a Color. in plan9 everything
+% are images, See Graphics.nw, colors, masks, windows, fonts, etc.
 % allocimage in main()
 
 
-
+% will see also another color:
 <<global red>>=
 Image	*red;
 @
@@ -684,6 +725,11 @@ struct Window
     // Control
     //--------------------------------------------------------------------
     <<[[Window]] control fields>>
+
+    //--------------------------------------------------------------------
+    // Process
+    //--------------------------------------------------------------------
+    <<[[Window]] process fields>>
     
     //--------------------------------------------------------------------
     // Config
@@ -712,13 +758,16 @@ struct Window
 };
 @
 
+% all categories are important above. Window is connected
+% to mouse, keyboard, can be controlled, has some id and graphics,
+% is connected to external process, and can be textual or graphical.
 
 
 
 <<[[Window]] id fields>>=
-int	    id;       // /dev/winid
-char    name[32]; // /dev/winname
-char    *label;   // /dev/label
+int	    id;       // visible through /mnt/wsys/winid
+char    name[32]; // visible through /mnt/wsys/winname
+char    *label;   // writable through /mnt/wsys/label
 @
 % name vs label? name is here for client to find back its window/image via
 %  namedimage, so rio sends info back to window. name is just readable.
@@ -739,7 +788,7 @@ static	int	id;
 Image	*i;
 @
 % will be used by Graphics, e.g. topwindow(w->i) in wtop()
-% includes its border?
+% this is whole image, including its border, see sweep() and wmk()
 
 <<[[Window]] graphics fields>>=
 /*
@@ -748,30 +797,16 @@ Image	*i;
 */
 Rectangle	screenr; /* screen coordinates of window */
 @
-% put back originwindow? cleaner no to have origin really at Pt(0,0),
+\l put back originwindow? cleaner no to have origin really at Pt(0,0),
 % window is more like an abstraction of the screen then.
+% but should do that in gengetwindow anyway, since here we have
+% a border, and gengetwindow will create another window inside
+% the border.
+
 % screenr is ZR when hidden
 
-% screenr is window without border?
-
-
-
-
-% each time a window get the focus, it becomes the topmost window
-% and topped is incremented
-<<global topped>>=
-static	int		topped;
-@
-
-<<[[Window]] other fields>>=
-int	 	topped;
-@
-% overlapping windows! see wpointto() to understand how determine focus.
-% can know when click which window it concerns by iterating over
-% all window and see if window screenr is there and if topmost one there.
-% (similar info is in kernel)
-\l need that since can compare w == input? maybe because sometimes
-\l  nothing has the focus but there is still a top window?
+% screenr is whole window, including border, see wmk.
+% hmm but then if do originWindow, should not include the border ...
 
 
 
@@ -804,11 +839,31 @@ Window	**windows;
 @
 %old: was window but better to be windows!!!
 % essence of windowing system right here!! manage many windows!!
+\l option above? seems like when delete there is a memmove
 
 % next free window
 <<global nwindow>>=
 int	nwindow;
 @
+% seems to be actually the size of windows
+
+
+
+% each time a window get the focus, it becomes the topmost window
+% and topped is incremented
+<<global topped>>=
+static	int		topped;
+@
+
+<<[[Window]] other fields>>=
+int	 	topped;
+@
+% overlapping windows! see wpointto() to understand how determine focus.
+% can know when click which window it concerns by iterating over
+% all window and see if window screenr is there and if topmost one there.
+% (similar info is in kernel)
+\l need that since can compare w == input? maybe because sometimes
+\l  nothing has the focus but there is still a top window?
 
 \subsection{[[input]]}
 
@@ -853,20 +908,22 @@ Frame;
 % this is only for textual windows?
 
 
-% scroll mode, also a textual window field
+% automatic scroll mode, also a textual window field
 <<[[Window]] config fields>>=
 bool	scrolling;
 @
-% scrollbar! in addition to frame!
 %old: was bool_byte
 
 
+%\subsection{[[Wctlmesg]]}
 
 
 \section{Filesystem server}
 
 \subsection{[[FilSys]], [[filsys]]}
+
 % rio is also a filesystem server! not just graphical app.
+% rio uses plan9 ability to have regular process act as filesystem (server).
 
 % essentialy a pipe! a server waiting for clients.
 
@@ -882,115 +939,43 @@ struct Filsys
     // ref_own<string>
     char	*user;
 
-    // chan<Xfid*> (listener = filsysproc, sender = xfidallocthread)
-    Channel	*cxfidalloc;	/* chan(Xfid*) */
-
-    // map<fid, Fid> (next in bucket = Fid.next?)
+    // map<fid, Fid> (next in bucket = Fid.next)
     Fid		*fids[Nhash];
+
+    // chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
+    Channel	*cxfidalloc;	/* chan(Xfid*) */
 };
 @
 % cfd will be published in /srv/rio.user.pid? but not that important
-% pid? what for? it's pid of proccreate(filsysproc), but not
-%  sure why you need it
-% user needed for security purpose, make sure people making request
+
+% [[user]] is needed for security purpose, make sure people making request
 %  to pipe are the same user
+
+\l pid? what for? it's pid of proccreate(filsysproc), but not
+\l  sure why you need it
 
 <<global filsys>>=
 Filsys	*filsys;
 @
 % handler to /src/rio.user.pid, the pipe to the rio server listening pipe
+\l not sure needs this to be a global since it's passed around and stored
+\l  in many structs
 
 <<constant Nhash>>=
 #define Nhash 16
 @
 
-
-
-\subsection{Workers, [[Xfid]]}
-
-% saw master, now slaves
-
-\l rename Xfid to Worker?
-
-% Fcall see fcall.h, unmarshalled p9 message received
-% from pipe
-%  Fcall.buf, Fcall.type
-%  Fcall.fid! =~ qid?
-
-% it's a DS which reprenset a filesystem request, Fcall,
-% but when it's allocated it's also associated with a worker
-% via a channel where can send some code to run! very nice!
-% and so Xfid contains also all params for this call
-
-<<struct Xfid>>=
-struct Xfid
-{
-        Fcall;
-        byte	*buf;
- 
-        // chan<void(*)(Xfid*)> (listener = xfidctl, sender = filsysxxx?)
-        Channel	*c;	/* chan(void(*)(Xfid*)) */
-
-        Fid	*f;
-        Filsys	*fs;
-
-        // Extra
-        Ref;
-
-        Xfid	*next;
-        Xfid	*free;
-
-        QLock	active;
-
-        int	flushing;	/* another Xfid is trying to flush us */
-        int	flushtag;	/* our tag, so flush can find us */
-        Channel	*flushc;/* channel(int) to notify us we're being flushed */
-};
+<<[[Fid]] extra fields>>=
+Fid		*next;
 @
-%Xfid.fs ? anyway can use the global filsys instead
 
-\subsection{Filesystem callbacks, [[fcall]]}
-
-% See Network.nw and plan9 RPC via 9p messages.
-% Any process can be a filesystem server for another process.
-% so can do mount /srv/rio.user.pid /mnt/wsys 43 
-% and now the namespace /mnt/wsys/ will be served by the process
-%  on the other side of the pipe in /src/rio.user.pid
-
-% if mount cfd /mnt/wsys, then access from process (or child/execed process
-%  which will inherit namespace) to files under /mnt/wsys/ will send
-%  messages on cfd which will be processed by other side of pipe
-%  and dispatched to right method.
-
-<<global fcall>>=
-Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
-{
-    [Tattach]  = filsysattach,
-
-    [Twalk]    = filsyswalk,
-
-    [Topen]    = filsysopen,
-    [Tread]    = filsysread,
-    [Twrite]   = filsyswrite,
-
-    [Tcreate]  = filsyscreate,
-    [Tremove]  = filsysremove,
-    [Tclunk]   = filsysclunk,
-
-    [Tstat]    = filsysstat,
-    [Twstat]   = filsyswstat,
-
-    [Tflush]   = filsysflush,
-
-    [Tversion] = filsysversion,
-    [Tauth]    = filsysauth,
-};
-@
 
 \subsection{File state, [[Fid]]}
 
 % server need to maintain state of requested files,
-%  just like kernel does.
+% just like kernel does with file descriptor state.
+
+% when userspace filesystem, have notion of fid, Fcall message.
 
 <<struct Fid>>=
 struct Fid
@@ -999,27 +984,37 @@ struct Fid
     int		fid;
 
     // the state
-
-    bool	busy;
-
-    int		open;
+    bool	open;
     int		mode;
 
-    Qid		qid;
-
-    Window	*w;
-
-    Dirtab	*dir;
-    int		nrpart;
-    uchar	rpart[UTFmax];
+    <<[[Fid]] other fields>>
 
     // Extra
-    Fid		*next;
-
+    <<[[Fid]] extra fields>>
 };
 @
 
+%see docs/man/5/intro
+%a 32-bit unsigned integer that the client uses to identify
+%a ``current file'' on the server.
 
+
+% fid is client's idea of a file on the server.
+% qid is server's idea of a file on the server.
+
+<<[[Fid]] other fields>>=
+Qid		qid;
+@
+% See libc.h, qid.path, vers, etc.
+% qid.path will be made of window id and kind of device file
+%  with qid enum we will see later
+
+
+<<[[Fid]] extra fields>>=
+bool	busy;
+@
+
+% looks more like lookupfid than always newfid
 % ctor
 <<function newfid>>=
 static
@@ -1029,8 +1024,8 @@ newfid(Filsys *fs, int fid)
     Fid *f, *ff, **fh;
 
     ff = nil;
-
     fh = &fs->fids[fid&(Nhash-1)];
+
     for(f=*fh; f; f=f->next) {
         if(f->fid == fid)
             return f;
@@ -1043,8 +1038,10 @@ newfid(Filsys *fs, int fid)
     }
     // else
 
-    f = emalloc(sizeof *f);
+    f = emalloc(sizeof(Fid));
     f->fid = fid;
+
+    // insert_hash(f, fs->fids)
     f->next = *fh;
     *fh = f;
 
@@ -1053,14 +1050,151 @@ newfid(Filsys *fs, int fid)
 @
 
 
+\l put Qid here?
+
+<<[[Fid]] other fields>>=
+Window	*w;
+@
+% at some point requested file will be associated with corresponding
+% because fid is given a qid (in attach/walk) which will encode
+% the windows id.
+% So full circle here! get back a Window!
+
+%XXX
+<<[[Fid]] other fields>>=
+int		nrpart;
+uchar	rpart[UTFmax];
+@
 
 
 
 
 
 
+\subsection{Workers, [[Xfid]]}
+
+% saw server will receive 9p request on pipe while reading filsys.sfd.
+% But potentially multiple windows, multiple processes
+% each using /dev/xxx served by rio and so need threads to handle
+% those requests.
+% Server filsysproc can be seen as a master.
+% Now see slaves workers.
 
 
+% Fcall see fcall.h, unmarshalled p9 message received
+% from pipe
+%  Fcall.buf, Fcall.type
+%  Fcall.fid! =~ qid?
+
+% it's a DS which reprenset a filesystem request, Fcall,
+% but when it's allocated it's also associated with a worker
+% via a channel where can send some code to run! very nice!
+% and so Xfid contains also all params for this call
+
+\l rename Xfid to WorkerRequest?
+<<struct Xfid>>=
+struct Xfid
+{
+        // incoming parsed request
+        Fcall;
+        // answer buffer
+        byte	*buf;
+ 
+        // handler to worker thread
+        // chan<void(*)(Xfid*)> (listener = xfidctl, senders = filsysxxx)
+        Channel	*c;	/* chan(void(*)(Xfid*)) */
+
+        Fid	*f;
+        Filsys	*fs;
+
+        <<[[Xfid]] flushing fields>>
+        <<[[Xfid]] other fields>>
+
+        // Extra
+        Ref;
+        <<[[Xfid]] extra fields>>
+};
+@
+\t Xfid.fs ? anyway can use the global filsys instead
+% The ref seems to be either 0 or 1, so used just to sanity check things
+% Ref because possibly concurrently access by xallocthread and xfidctl?
+
+% buf? for filsysrespond? to write back? use same buffer
+% after have parsed?
+
+
+
+%XXX
+<<[[Xfid]] other fields>>=
+QLock	active;
+@
+
+\subsection{Filesystem callbacks, [[fcall]]}
+
+% See Network.nw and plan9 RPC via 9p messages.
+% Any process can be a filesystem server for another process.
+% so can do mount /srv/rio.user.pid /mnt/wsys 43 
+% and now the namespace /mnt/wsys/ will be served by the process
+%  on the other side of the pipe in /src/rio.user.pid
+
+% see docs/man/5/* 
+
+% if mount cfd /mnt/wsys, then access from process (or child/execed process
+%  which will inherit namespace) to files under /mnt/wsys/ will send
+%  messages on cfd which will be processed by other side of pipe
+%  and dispatched to right method.
+
+\t could just pass Xfid no? anyway Fid and Filsys are inside Xfid.
+
+% so filsysproc server listening on pipe will interpret 9p 
+% incoming request and then dispatch to right function.
+% will pass fs, worker handler, and file and then
+% the method may or not call worker. It may return nil
+% when the worker was used because need async processing.
+% That was server know if can reuse or not the worker handler.
+
+%XXX
+<<global fcall>>=
+Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
+{
+    [Tattach]  = filsysattach,
+
+    [Twalk]    = filsyswalk,
+
+    [Topen]    = filsysopen,
+    [Tclunk]   = filsysclunk,
+    [Tread]    = filsysread,
+    [Twrite]   = filsyswrite,
+    [Tstat]    = filsysstat,
+
+    [Tcreate]  = filsyscreate,
+    [Tremove]  = filsysremove,
+
+    [Twstat]   = filsyswstat,
+
+    [Tflush]   = filsysflush,
+
+    [Tversion] = filsysversion,
+    [Tauth]    = filsysauth,
+};
+@
+% create/remove forbidden, other stuff could be aspectized too
+
+% T for client Transmit request, R for server reply.
+% will see R later in filsysrespond
+
+% close? it is clunk, but it's not called close because
+%  not all fid correspond to opened files. Clunk is there to
+%  say the client does not care anymore about this fid.
+
+% flush seems advanced feature of 9P not super needed.
+
+%docs/man/5/intro
+%Most programs do not see the 9P protocol directly; instead calls to library
+%routines that access files are
+%translated by the mount driver,
+%.IR mnt (3),
+%into 9P messages.
 
 
 \chapter{[[main()]]}
@@ -1256,8 +1390,6 @@ filsysinit(Channel *cxfidalloc)
         goto Rescue;
 
     <<[[filsysinit()]] set clockfd>>
-
-    // to create "/srv/rio.{user}.{pid}"
     <<[[filsysinit()]] set fs user>>
     pid = getpid();
 
@@ -1279,9 +1411,12 @@ Rescue:
 
 % filsysproc later
 
+% user and pid are for
+%    // to create "/srv/rio.{user}.{pid}"
+% but maybe also more
 
-% comm channel is a pipe this time, because it's between
-% processes.
+
+% comm channel is a pipe this time, because it's between processes.
 
 <<function cexecpipe>>=
 /*
@@ -1302,9 +1437,11 @@ cexecpipe(fdt *p0, fdt *p1)
     return OK_0;
 }
 @
+% comment about /srv??
 
 % close on exec for server? so keep only client fd?
 
+% See Kernel.nw for pipe and #| device.
 
 
 
@@ -1337,12 +1474,29 @@ fs->user = estrdup(buf);
 
 % workers factory
 
+<<global cxfidalloc>>=
+// chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
+static	Channel	*cxfidalloc;	/* chan(Xfid*) */
+@
+% could avoid using globals if pass it to xfidallocthread
+% as anyway it's stored in filsys
+
+<<global cxfidfree>>=
+// chan<ref<Xfid>> (listner = ??, sender = ??)
+static	Channel	*cxfidfree;	/* chan(Xfid*) */
+@
+
+% who owns the Xfid? xfidallocthread! and this allocator
+% has two channels for new/free.
+
+
 % threadmain -> <>
 <<function xfidinit>>=
 Channel*
 xfidinit(void)
 {
-    <<[[xfidinit()]] channels creation>>
+    cxfidalloc = chancreate(sizeof(Xfid*), 0);
+    cxfidfree = chancreate(sizeof(Xfid*), 0);
     threadcreate(xfidallocthread, nil, STACK);
     return cxfidalloc;
 }
@@ -1350,16 +1504,6 @@ xfidinit(void)
 
 % xfidallocthread later
 
-<<global cxfidalloc>>=
-static	Channel	*cxfidalloc;	/* chan(Xfid*) */
-@
-<<global cxfidfree>>=
-static	Channel	*cxfidfree;	/* chan(Xfid*) */
-@
-<<[[xfidinit()]] channels creation>>=
-cxfidalloc = chancreate(sizeof(Xfid*), 0);
-cxfidfree = chancreate(sizeof(Xfid*), 0);
-@
 
 
 
@@ -1394,6 +1538,8 @@ mainpid = getpid();
 @
 
 
+
+
 \chapter{Threads}
 % and processes
 
@@ -1413,6 +1559,11 @@ mainpid = getpid();
 % keyboard threads, and those threads then dispatch to the appropriate
 % window thread that will handle its own window.
 
+% in the end it's similar to what the kernel does. Process are waiting
+% reading on fd connected to some devices, and when interrupt, the
+% kernel await some process to go on. So can have independent
+% activities working.
+
 %alt: quite similar to a kernel? interrupt handlers?
 
 \section{Keyboard thread}
@@ -1425,7 +1576,6 @@ mainpid = getpid();
 % Channel* Keyboardctl.c; // Graphics.nw
 
 % listen/dispatch architecture.
-
 
 % main -> threadcreate -> <>  (as ?? in threadcreate(<>) <- main)
 <<function keyboardthread>>=
@@ -1768,11 +1918,6 @@ WWread, // ??
 @
 
 
-<<[[winctl()]] locals>>=
-Window *w;
-// map<enum<Wxxx>, Alt>
-Alt alts[NWALT+1];
-@
 
 % XXX LP split
 <<[[winctl()]] locals>>=
@@ -1792,9 +1937,11 @@ char *s, *t, part[3];
 void
 winctl(void *arg)
 {
+    Window *w = arg;
+    // map<enum<Wxxx>, Alt>
+    Alt alts[NWALT+1];
     <<[[winctl()]] locals>>
     
-    w = arg;
     snprint(buf, sizeof buf, "winctl-id%d", w->id);
     threadsetname(buf);
 
@@ -1907,17 +2054,15 @@ wkeyctl(Window *w, Rune r)
 \subsection{Mouse events listening}
 
 <<[[Window]] mouse fields>>=
-Mousectl	mc; // mc.c is the mouse event listening channel
+// mc.c = chan<Mouse> (listener = winctl, sender = mousethread)
+Mousectl	mc;
 @
 % note that not all mouse events arrive here, only the one
 % mousethread think they are destined for this window
 
-\l why need whole Mousectl? why not just channel?
-
-%// chan<Mouse> (listener = winctl, sender = mousethread)
-%Channel*	Mousectl.c;
 % same DS than in mousethread
 
+\l why need whole Mousectl? why not just channel?
 
 
 % kernel (interrupt) -> ioproc(read /dev/mouse) !-> mousethread !-> winctl
@@ -1988,14 +2133,16 @@ chanfree(cwrm.c2);
 % chans we will see later
 
 
-%\subsection{[[/dev/mouse]]  emitting}
-%\subsection{[[/dev/cons]] emitting}
-%\subsection{[[/dev/wctl]] emitting}
+%\subsection{[[/mnt/wsys/mouse]]  emitting}
+%\subsection{[[/mnt/wsys/cons]] emitting}
+%\subsection{[[/mnt/wsys/wctl]] emitting}
 
 
-\section{Filesystem server threads}
+\section{Filesystem server process}
 \n actually it's a process but it creates many threads
 
+% why a process? because block on fs->sfd! would block everything
+% else.
 
 <<global messagesize>>=
 int	messagesize = 8192+IOHDRSZ;	/* good start */
@@ -2010,10 +2157,10 @@ filsysproc(void *arg)
 {
     Filsys *fs = arg;
     int n;
+    byte *buf;
     Xfid *x = nil;
     Fid *f;
-    Fcall t;
-    byte *buf;
+    <<[[filsysproc()]] other locals>>
 
     threadsetname("FILSYSPROC");
 
@@ -2043,7 +2190,7 @@ filsysproc(void *arg)
 
             x->f = f;
 
-            // Dispatch!
+            // Dispatch
             x  = (*fcall[x->type])(fs, x, f);
         }
         firstmessage = false;
@@ -2054,10 +2201,12 @@ filsysproc(void *arg)
 % processed immediately, then can reuse, otherwise need
 % get a new thread.
 
+% read9pmsg, convM2S, see fcall.h
+
 <<global firstmessage>>=
 bool	firstmessage = true;
 @
-
+% needed to ensure filsysversion is first request sent
 
 
 <<[[filsysproc()]] sanity check n>>=
@@ -2068,16 +2217,27 @@ if(n <= 0){
     error("eof or i/o error on server channel");
 }
 @
+% yield??
+
+
+
+<<[[filsysproc()]] if x type is Tversion or Tauth>>=
+if(x->type==Tversion || x->type==Tauth)
+    f = nil;
+@
+
+
+
+
+<<[[filsysproc()]] other locals>>=
+Fcall t;
+@
 
 <<[[filsysproc()]] sanity check x type>>=
 if(fcall[x->type] == nil)
     x = filsysrespond(fs, x, &t, Ebadfcall);
 @
 
-<<[[filsysproc()]] if x type is Tversion or Tauth>>=
-if(x->type==Tversion || x->type==Tauth)
-    f = nil;
-@
 
 
 \section{Xfid allocator thread}
@@ -2090,14 +2250,22 @@ enum {
     N 
 };
 @
-%TODO rename XFAlloc, XFFree, XNALT like for the other threads
+\t rename XFAlloc, XFFree, XNALT like for the other threads
+
+<<global xfid>>=
+// list<ref_own<Xfid>> (next = Xfid.next)
+static	Xfid	*xfid;
+@
 
 <<global xfidfree>>=
+// list<ref_own<Xfid>> (next = Xfid.free)
 static	Xfid	*xfidfree;
 @
 
-<<global xfid>>=
-static	Xfid	*xfid;
+
+<<[[Xfid]] extra fields>>=
+Xfid	*next;
+Xfid	*free;
 @
 
 % main -> xfidinit -> threadcreate -> <> (as ?? <- threadcreate(<>) <- xfidinit)
@@ -2128,29 +2296,23 @@ xfidallocthread(void*)
                 x->c = chancreate(sizeof(void(*)(Xfid*)), 0);
                 x->flushc = chancreate(sizeof(int), 0);	/* notification only; no data */
                 x->flushtag = -1;
+
+                // insert_list(x, xfid)
                 x->next = xfid;
                 xfid = x;
 
                 // new Xfid threads!
                 threadcreate(xfidctl, x, 16384);
             }
-            if(x->ref != 0){
-                fprint(STDERR, "%p incref %ld\n", x, x->ref);
-                error("incref");
-            }
-            if(x->flushtag != -1)
-                error("flushtag in allocate");
+            <<[[xfidallocthread()]] sanity check x when Alloc>>
             incref(x);
+
             sendp(cxfidalloc, x);
             break;
 
         case Free:
-            if(x->ref != 0){
-                fprint(STDERR, "%p decref %ld\n", x, x->ref);
-                error("decref");
-            }
-            if(x->flushtag != -1)
-                error("flushtag in free");
+            <<[[xfidallocthread()]] sanity check x when Free>>
+            // insert_list(x, xfidfree)
             x->free = xfidfree;
             xfidfree = x;
             break;
@@ -2159,6 +2321,26 @@ xfidallocthread(void*)
 }
 @
 
+
+
+<<[[xfidallocthread()]] sanity check x when Alloc>>=
+if(x->ref != 0){
+    fprint(STDERR, "%p incref %ld\n", x, x->ref);
+    error("incref");
+}
+if(x->flushtag != -1)
+    error("flushtag in allocate");
+@
+
+
+<<[[xfidallocthread()]] sanity check x when Free>>=
+if(x->ref != 0){
+    fprint(STDERR, "%p decref %ld\n", x, x->ref);
+    error("decref");
+}
+if(x->flushtag != -1)
+    error("flushtag in free");
+@
 
 \section{Xfid threads}
 % =~ workers which will handle a file request
@@ -2185,83 +2367,11 @@ xfidctl(void *arg)
 }
 @
 
+% very nice, get code on channel (function pointer),
+% and start execute it!
 
+% how decref cannot be 0?
 
-\section{Closing and delete threads}
-% mv later? important threads?
-
-
-<<global deletechan>>=
-// chan<char*> (listener = deletethread, sender = deletetimeoutproc)
-Channel* deletechan;
-@
-% deletetimeoutproc (as ? in proccreate(<>) <- wctlmesg(Delete | Moved) <- 
-%  mousethread
-
-
-<<global winclosechan>>=
-// chan<Window> (listener = winclosethread, sender = filsyswalk )
-Channel	*winclosechan; /* chan(Window*); */
-@
-% ???
-
-
-<<[[main()]] communication channels creation>>=
-deletechan   = chancreate(sizeof(char*), 0);
-winclosechan = chancreate(sizeof(Window*), 0);
-@
-
-<<[[main()]] threads creation>>=
-threadcreate(deletethread, nil, STACK);
-threadcreate(winclosethread, nil, STACK);
-@
-
-
-% why need 2 different threads? diff between close and delete?
-
-
-<<function deletethread>>=
-/* thread to make Deleted windows that the client still holds disappear offscreen after an interval */
-void
-deletethread(void*)
-{
-    char *s;
-    Image *i;
-
-    threadsetname("deletethread");
-
-    for(;;){
-        s = recvp(deletechan);
-        i = namedimage(display, s);
-        if(i != nil){
-            /* move it off-screen to hide it, since client is slow in letting it go */
-            originwindow(i, i->r.min, view->r.max);
-        }
-        freeimage(i);
-        free(s);
-    }
-}
-@
-
-
-
-
-
-<<function winclosethread>>=
-/* thread to allow fsysproc to synchronize window closing with main proc */
-void
-winclosethread(void*)
-{
-    Window *w;
-
-    threadsetname("winclosethread");
-
-    for(;;){
-        w = recvp(winclosechan);
-        wclose(w);
-    }
-}
-@
 
 
 
@@ -2294,6 +2404,7 @@ Cursor crosscursor = {
      0x01, 0x80, 0x01, 0x80, 0x01, 0x80, 0x00, 0x00, }
 };
 @
+% when create new window (sweep())
 
 <<global boxcursor (windows/rio/data.c)>>=
 Cursor boxcursor = {
@@ -2308,6 +2419,7 @@ Cursor boxcursor = {
      0x7F, 0xFE, 0x7F, 0xFE, 0x7F, 0xFE, 0x00, 0x00, }
 };
 @
+% when move (drag())
 
 <<global sightcursor (windows/rio/data.c)>>=
 Cursor sightcursor = {
@@ -2498,7 +2610,7 @@ riosetcursor(Cursor *p, bool force)
 }
 @
 
-% setcursor? from cursor.h, write in /dev/cursor
+% setcursor() from mouse.h, will write in /dev/cursor
 
 \subsection{[[cornercursor()]]}
 
@@ -2517,7 +2629,7 @@ cornercursor(Window *w, Point p, bool force)
 
 
 <<function winborder>>=
-int
+bool
 winborder(Window *w, Point xy)
 {
     return ptinrect(xy, w->screenr) && 
@@ -2568,6 +2680,9 @@ Cursor		*cursorp;
 % so when mouse over different windows, need to
 % load the appropriate cursor
 
+% will see later how a window can change its cursor (via
+%  virtual /dev/cursor handler)
+
 <<function wsetcursor>>=
 void
 wsetcursor(Window *w, bool force)
@@ -2607,9 +2722,11 @@ wsetcursor(Window *w, bool force)
 \section{Overview}
 
 % Windows management operations can be trigged in different ways:
-% - right click menu (rio/system menu)
+% - right click menu (rio/system menu), can create new window
 % - mouse operations on border of window
-% - filsys
+% - dev/wctl
+% - filsys, listening pipe, mount can create new window
+% - /srv/riowctl.user.pid
 
 % They all trigger then messages send to the appropriate window thread 
 % via wsendctlmsg(w->cctl).
@@ -2650,10 +2767,13 @@ button3menu(void)
 % are currently! it's part of the drawing library! See Graphics.nw.
 % The menu is probably simply an overlapping window.
 
+% mousectl->Mouse.xy will contain location to put the menu
+
 <<global sweeping>>=
 bool	sweeping;
 @
 % seems used when menu is out, but used very little
+% or when in middle of big action started in mousethread
 
 
 
@@ -2704,7 +2824,7 @@ enum
 % Hidden is for the start of the hidden windows.
 % When a window is hidden it's accessible in the right menu! 
 % hence the 100 below
-
+% see Section X later.
 
 
 
@@ -2716,10 +2836,13 @@ case Exit:
 @
 % threadmain is listening on exitchan
 
+%toc:
+% we will see handlers for other actions later.
+
 
 \section{Window borders click}
-% mv later?
 
+%XXX
 <<[[mousethread()]] locals>>=
 bool moving = false;
 @
@@ -2735,8 +2858,6 @@ if(sending == false && !scrolling
 }
 @
 
-% could put winborder() here
-
 
 
 <<[[mousethread()]] locals>>=
@@ -2746,11 +2867,10 @@ Image *i;
 Rectangle r;
 @
 
-
 <<[[mousethread()]] if moving and buttons>>=
 if(moving && (mouse->buttons&7)){
     oin = winput;
-    band = mouse->buttons & 3;
+    band = mouse->buttons & 3; // left or middle click
 
     sweeping = true;
     if(band)
@@ -2772,6 +2892,7 @@ if(moving && (mouse->buttons&7)){
 }
 @
 % when winput can change in middle of operation?
+%  thread arrives which changed focused window?
 
 % bandsize and drag later
 
@@ -2901,17 +3022,6 @@ wrefresh(Window *w, Rectangle)
 }
 @
 
-%XXX
-<<[[Wctlmesgkind]] cases>>=
-Movemouse,
-@
-<<[[wctlmesg()]] cases>>=
-case Movemouse:
-    if(sweeping || !ptinrect(r.min, w->i->r))
-        break;
-    wmovemouse(w, r.min);
-    break;
-@
 
 
 
@@ -2919,7 +3029,7 @@ case Movemouse:
 
 
 \section{Window creation}
-% via menu, via filsys
+% via menu
 
 <<[[button3menu()]] cases>>=
 case New:
@@ -2943,19 +3053,16 @@ Window*
 new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **argv)
 {
     Channel *cm, *ck, *cctl;
+    Channel *cpid;
     Mousectl *mc;
     Window *w;
-    Channel *cpid;
-    void **arg;
+    <<[[new()]] other locals>>
 
-    if(i == nil)
-        return nil;
+    <<[[new()]] sanity check i>>
 
     <<[[new()]] channels creation>>
-
     cpid = chancreate(sizeof(int), 0);
-    if(cm==nil || ck==nil || cctl==nil)
-        error("new: channel alloc failed");
+    <<[[new()]] sanity check channels>>
 
     <<[[new()]] mc allocation>>
 
@@ -2966,10 +3073,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     // growing array
     windows = erealloc(windows, ++nwindow * sizeof(Window*));
     windows[nwindow-1] = w;
-    if(hideit){
-        hidden[nhidden++] = w;
-        w->screenr = ZR;
-    }
+    <<[[new()]] if hideit>>
 
     // a new thread! for this new window!
     threadcreate(winctl, w, 8192);
@@ -2994,6 +3098,13 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 @
 % always growing windows? never reuse when a window is closed?
 
+% cpid allow communicate pid of child process back to parent
+% and so winctl thread.
+%alt: need use channel? cant just get fork return integer value
+% simply? because use proccreate(winshell, and dont want to
+% block on fork? but proccreate could return pid no?
+% because anyway winshell is just a procexec
+
 
 % seen those channels properties before
 <<[[new()]] channels creation>>=
@@ -3001,6 +3112,7 @@ cm = chancreate(sizeof(Mouse), 0);
 ck = chancreate(sizeof(Rune*), 0);
 cctl = chancreate(sizeof(Wctlmesg), 4);
 @
+% passed to wmk and set in Window fields.
 
 <<[[new()]] mc allocation>>=
 mc = emalloc(sizeof(Mousectl));
@@ -3014,13 +3126,125 @@ mc->c = cm;
 
 
 
-\subsection{Window process creation, [[winshell()]]}
+<<[[new()]] sanity check i>>=
+if(i == nil)
+    return nil;
+@
+<<[[new()]] sanity check channels>>=
+if(cm==nil || ck==nil || cctl==nil)
+    error("new: channel alloc failed");
+@
 
+\subsection{Window allocation, [[wmk()]]}
+
+<<enum _anon_ (windows/rio/dat.h)3>>=
+enum
+{
+    <<constant Selborder>>
+    <<constant Unselborder>>
+    <<constants Scrollxxx>>
+    <<constant BIG>>
+};
+@
+
+<<constant Selborder>>=
+Selborder		= 4,	/* border of selected window */
+@
+%coupling with Borderwidth in draw.h? why not use same constant?
+
+%ctor 
+<<function wmk>>=
+Window*
+wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
+{
+    Window *w;
+    Rectangle r;
+
+    <<[[wmk()]] cols initialisation>>
+
+    w = emalloc(sizeof(Window));
+
+    w->i = i;
+    w->screenr = i->r;
+    w->cursorp = nil;
+
+    w->id = ++id;
+    w->topped = ++topped;
+
+    <<[[wmk()]] channels creation>>
+
+    <<[[wmk()]] textual window settings>>
+
+    w->notefd = -1;
+    w->dir = estrdup(startdir);
+    w->label = estrdup("<unnamed>");
+
+    wborder(w, Selborder);
+    wscrdraw(w);
+
+    incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
+    return w;
+}
+@
+%old: I changed the order of some initialisations, to group textual window
+% stuff together
+
+% about incref comment, see call to wclose in winshell after filsysmount
+
+<<[[wmk()]] channels creation>>=
+w->mc = *mc;
+w->ck = ck;
+w->cctl = cctl;
+@
+
+%XXX mv later
+<<[[wmk()]] channels creation>>=
+w->conswrite = chancreate(sizeof(Conswritemesg), 0);
+w->consread =  chancreate(sizeof(Consreadmesg), 0);
+w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
+w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
+@
+
+
+
+<<function wborder>>=
+void
+wborder(Window *w, int type)
+{
+    Image *col;
+
+    <<[[wborder()]] sanity check w>>
+    <<[[wborder()]] if holding>>
+    else{
+        if(type == Selborder)
+            col = titlecol;
+        else
+            col = lighttitlecol;
+    }
+
+    border(w->i, w->i->r, Selborder, col, ZP);
+}
+@
+% will see col later
+
+<<[[wborder()]] sanity check w>>=
+if(w->i == nil)
+    return;
+@
+
+
+%XXX
+\t wscrdraw??
+
+\subsection{Window process creation, [[winshell()]]}
 
 <<global rcargv>>=
 char *rcargv[] = { "rc", "-i", nil };
 @
 
+<<[[new()]] other locals>>=
+void **arg;
+@
 
 %when new from the system menu
 <<[[new()]] if pid == 0, create winshell process and set pid>>=
@@ -3041,12 +3265,14 @@ if(pid == 0){
     free(arg);
 }
 @
+% pass w so can communicate back with its winctl thread handler
+
+% wait for pid. pid will be passed to wsetpid, so know
+% which process we are connected to, and which one to kill if delete
+% window
 
 % independent process, this is where gonna exec stuff! but before
 % set right namespace.
-
-
-
 
 
 
@@ -3077,6 +3303,7 @@ winshell(void *args)
     void **arg;
     char *cmd, *dir;
     char **argv;
+    errorneg1 err;
 
     arg = args;
 
@@ -3088,172 +3315,34 @@ winshell(void *args)
 
     rfork(RFNAMEG|RFFDG|RFENVG);
 
-    if(filsysmount(filsys, w->id) < 0){
-        fprint(STDERR, "mount failed: %r\n");
-        sendul(pidc, 0);
-        threadexits("mount failed");
-    }
+    <<[[winshell()]] adjust namespace>>
     <<[[winshell()]] reassign STDIN/STDOUT>>
 
-    if(wclose(w) == 0){	/* remove extra ref hanging from creation */
+    if(wclose(w) == false){	/* remove extra ref hanging from creation */
         notify(nil);
         dup(STDOUT, STDERR); // STDERR = STDOUT
         if(dir)
             chdir(dir);
 
+        // Exec!!
         procexec(pidc, cmd, argv);
-        _exits("exec failed");
+        _exits("exec failed"); // should never be reached
     }
 }
 @
+% remove extra ref, see comment in wmk
 
-% procexec? take a channel?
-
-\subsection{Namespace adjustments, [[filsysmount()]]}
-
-
-<<function filsysmount>>=
-/*
- * Called only from a different FD group
- */
-errorneg1
-filsysmount(Filsys *fs, int id)
-{
-    char buf[32];
-
-    close(fs->sfd);	/* close server end so mount won't hang if exiting */
-    sprint(buf, "%d", id);
-    if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
-        fprint(STDERR, "mount failed: %r\n");
-        return ERROR_NEG1;
-    }
-    if(bind("/mnt/wsys", "/dev", MBEFORE) < 0){
-        fprint(STDERR, "bind failed: %r\n");
-        return ERROR_NEG1;
-    }
-    return OK_0;
-}
-@
+% procexec? take a channel? to write pid there?
 
 
 
-<<[[winshell()]] reassign STDIN/STDOUT>>=
-// reassign stdin/stdout to virtualized /dev/cons from filsysmount
-close(STDIN);
-if(open("/dev/cons", OREAD) < 0){
-    fprint(STDERR, "can't open /dev/cons: %r\n");
-    sendul(pidc, 0);
-    threadexits("/dev/cons");
-}
-close(STDOUT);
-if(open("/dev/cons", OWRITE) < 0){
-    fprint(STDERR, "can't open /dev/cons: %r\n");
-    sendul(pidc, 0);
-    threadexits("open");	/* BUG? was terminate() */
-}
-@
-
-\subsection{Window allocation, [[wmk()]]}
-
-<<enum _anon_ (windows/rio/dat.h)3>>=
-enum
-{
-    Selborder		= 4,	/* border of selected window */
-    Unselborder		= 1,	/* border of unselected window */
-    Scrollwid 		= 12,	/* width of scroll bar */
-    Scrollgap 		= 4,	/* gap right of scroll bar */
-    BIG			= 3,	/* factor by which window dimension can exceed screen */
-};
-@
-
-<<[[wmk()]] channels creation>>=
-w->mc = *mc;
-w->ck = ck;
-w->cctl = cctl;
-@
-
-<<[[wmk()]] channels creation>>=
-w->conswrite = chancreate(sizeof(Conswritemesg), 0);
-w->consread =  chancreate(sizeof(Consreadmesg), 0);
-w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
-w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
-@
-
-<<function wmk>>=
-Window*
-wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
-{
-    Window *w;
-    Rectangle r;
-
-    <<[[wmk()]] cols initialisation>>
-
-    w = emalloc(sizeof(Window));
-
-    w->i = i;
-    w->screenr = i->r;
-    r = insetrect(i->r, Selborder+1);
-
-    <<[[wmk()]] channels creation>>
-
-    w->cursorp = nil;
-
-    w->scrollr = r;
-    w->scrollr.max.x = r.min.x+Scrollwid;
-    w->lastsr = ZR;
-    r.min.x += Scrollwid+Scrollgap;
-
-    frinit(w, r, font, i, cols);
-
-    w->maxtab = maxtab * stringwidth(font, "0");
-    w->topped = ++topped;
-    w->id = ++id;
-    w->notefd = -1;
-    w->scrolling = scrolling;
-    w->dir = estrdup(startdir);
-    w->label = estrdup("<unnamed>");
-    r = insetrect(w->i->r, Selborder);
-
-    draw(w->i, r, cols[BACK], nil, w->entire.min);
-    wborder(w, Selborder);
-    wscrdraw(w);
-
-    incref(w);	/* ref will be removed after mounting; avoids delete before ready to be deleted */
-    return w;
-}
-@
-
-
-
-<<function wborder>>=
-void
-wborder(Window *w, int type)
-{
-    Image *col;
-
-    if(w->i == nil)
-        return;
-    <<[[wborder()]] if holding>>
-    else{
-        if(type == Selborder)
-            col = titlecol;
-        else
-            col = lighttitlecol;
-    }
-
-    border(w->i, w->i->r, Selborder, col, ZP);
-}
-@
-
-
-
-\subsection{[[wsetxxx()]]}
-
-<<[[Window]] other fields>>=
+<<[[Window]] process fields>>=
 int		pid;
-int	 	notefd;
+fdt	 	notefd;
 @
+% can communicate with process though signals!
 
+% new -> <>
 <<function wsetpid>>=
 void
 wsetpid(Window *w, int pid, bool dolabel)
@@ -3276,10 +3365,110 @@ wsetpid(Window *w, int pid, bool dolabel)
 @
 
 
+\subsection{Namespace adjustments, [[filsysmount()]]}
+
+<<[[winshell()]] adjust namespace>>=
+err = filsysmount(filsys, w->id);
+<<[[winshell()]] sanity check err filsysmount>>
+@
+%pad: I added err to aspectize sanity checking
+
+<<function filsysmount>>=
+/*
+ * Called only from a different FD group
+ */
+errorneg1
+filsysmount(Filsys *fs, int id)
+{
+    char buf[32];
+    errorneg1 err;
+
+    close(fs->sfd);	/* close server end so mount won't hang if exiting */
+    sprint(buf, "%d", id);
+    err = mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf);
+    <<[[filsysmount()]] sanity check err mount>>
+    err = bind("/mnt/wsys", "/dev", MBEFORE);
+    <<[[filsysmount()]] sanity check err bind>>
+    return OK_0;
+}
+@
+% pass window id to mount, for /mnt/wsys/x/ and to know
+%  later which window to send request to probably.
+%pad: I added err
+
+
+<<[[winshell()]] reassign STDIN/STDOUT>>=
+// reassign stdin/stdout to virtualized /dev/cons from filsysmount
+close(STDIN);
+err = open("/dev/cons", OREAD);
+<<[[winshell()]] sanity check err open cons stdin>>
+close(STDOUT);
+err = open("/dev/cons", OWRITE);
+<<[[winshell()]] sanity check err open cons stdout>>
+@
+
+
+
+
+
+<<[[winshell()]] sanity check err open cons stdin>>=
+if(err < 0){
+    fprint(STDERR, "can't open /dev/cons: %r\n");
+    sendul(pidc, 0);
+    threadexits("/dev/cons");
+}
+@
+
+<<[[winshell()]] sanity check err open cons stdout>>=
+if(err < 0){
+    fprint(STDERR, "can't open /dev/cons: %r\n");
+    sendul(pidc, 0);
+    threadexits("open");	/* BUG? was terminate() */
+}
+@
+
+<<[[winshell()]] sanity check err filsysmount>>=
+if(err < 0){
+    fprint(STDERR, "mount failed: %r\n");
+    sendul(pidc, 0);
+    threadexits("mount failed");
+}
+@
+
+
+
+<<[[filsysmount()]] sanity check err mount>>=
+if(err < 0){
+    fprint(STDERR, "mount failed: %r\n");
+    return ERROR_NEG1;
+}
+@
+<<[[filsysmount()]] sanity check err bind>>=
+if(err < 0){
+    fprint(STDERR, "bind failed: %r\n");
+    return ERROR_NEG1;
+}
+@
+
+\subsection{Public named image, [[wsetname()]]}
+
+%trans: adjusted namespace for client process to see
+% virtualized /dev/cons, /dev/mouse.
+% Miss /dev/draw. But actually use different mechanism.
+% Not virtualized. Would be too slow to have intermediate.
+
+%trans:
+% so /dev/winname will be good because adjusted namespace
+% but need to make image public! % so client can find it.
+%alt: could pass info via putenv? but anyway have already
+% a mechanism /dev/xxx so why not use it.
+
 <<[[Window]] id fields>>=
 uint		namecount;
 @
+% counter
 
+% new -> <>
 <<function wsetname>>=
 void
 wsetname(Window *w)
@@ -3288,24 +3477,36 @@ wsetname(Window *w)
     char err[ERRMAX];
     
     n = sprint(w->name, "window.%d.%d", w->id, w->namecount++);
-    for(i='A'; i<='Z'; i++){
-        if(nameimage(w->i, w->name, 1) > 0)
-            return;
-        errstr(err, sizeof err);
-        if(strcmp(err, "image name in use") != 0)
-            break;
-        w->name[n] = i;
-        w->name[n+1] = 0;
-    }
-    w->name[0] = 0;
-    fprint(STDERR, "rio: setname failed: %s\n", err);
+
+    if(nameimage(w->i, w->name, true) > 0)
+        return;
+    // else
+    <<[[wsetname()]] if image name already in use, try another name>>
 }
+@
+%pad: I copy pasted and duplicated the code which call nameimage,
+% but then can aspectize better the special error case
+
+% thx to that, geninitdraw will work!
+
+
+<<[[wsetname()]] if image name already in use, try another name>>=
+for(i='A'; i<='Z'; i++){
+    if(nameimage(w->i, w->name, true) > 0)
+        return;
+
+    errstr(err, sizeof err);
+    if(strcmp(err, "image name in use") != 0)
+        break;
+    w->name[n] = i;
+    w->name[n+1] = '\0';
+}
+w->name[0] = 0;
+fprint(STDERR, "rio: setname failed: %s\n", err);
 @
 
 
-
 \subsection{Mouse action [[sweep()]]}
-
 
 <<global menuing>>=
 bool menuing;/* menu action is pending; waiting for window to be indicated */
@@ -3331,11 +3532,10 @@ sweep(void)
 
     p0 = onscreen(mouse->xy);
     p = p0;
-    r.min = p;
-    r.max = p;
+    r = Rpt(p0, p0);
     oi = nil;
 
-    while(mouse->buttons == 4){
+    while(mouse->buttons == 4){ // right click
         readmouse(mousectl);
 
         if(mouse->buttons != 4 && mouse->buttons != 0)
@@ -3347,35 +3547,22 @@ sweep(void)
             if(Dx(r)>5 && Dy(r)>5){
                 i = allocwindow(wscreen, r, Refnone, 0xEEEEEEFF); /* grey */
                 freeimage(oi);
-                if(i == nil)
-                    goto Rescue;
+                <<[[sweep()]] sanity check i>>
                 oi = i;
                 border(i, r, Selborder, red, ZP);
                 flushimage(display, true);
             }
         }
     }
-
-    if(mouse->buttons != 0)
-        goto Rescue;
-    if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
-        goto Rescue;
-
+    <<[[sweep()]] sanity check mouse buttons, i, and rectangle size>>
     oi = i;
     i = allocwindow(wscreen, oi->r, Refbackup, DWhite);
     freeimage(oi);
-    if(i == nil)
-        goto Rescue;
+    <<[[sweep()]] sanity check i>>
     border(i, r, Selborder, red, ZP);
     cornercursor(input, mouse->xy, true);
     goto Return;
-
- Rescue:
-    freeimage(i);
-    i = nil;
-    cornercursor(input, mouse->xy, 1);
-    while(mouse->buttons)
-        readmouse(mousectl);
+<<[[sweep()]] Rescue handler>>
 
  Return:
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
@@ -3383,6 +3570,12 @@ sweep(void)
     return i;
 }
 @
+%old: use Rpt
+%    r.min = p0;
+%    r.max = p0;
+
+% Refnone first, so transparent!
+% Then Refbackup
 
 % readmouse(mousectl), but does not conflict with mousethread??
 % or thread/channel lib gives priority to last one waiting on channel?
@@ -3401,6 +3594,33 @@ onscreen(Point p)
     return p;
 }
 @
+
+
+
+<<[[sweep()]] sanity check i>>=
+if(i == nil)
+    goto Rescue;
+@
+
+<<[[sweep()]] sanity check mouse buttons, i, and rectangle size>>=
+if(mouse->buttons != 0)
+    goto Rescue;
+if(i==nil || Dx(i->r)<100 || Dy(i->r)<3*font->height)
+    goto Rescue;
+@
+
+
+<<[[sweep()]] Rescue handler>>=
+ Rescue:
+    freeimage(i);
+    i = nil;
+    cornercursor(input, mouse->xy, 1);
+    while(mouse->buttons)
+        readmouse(mousectl);
+@
+
+
+
 
 
 
@@ -3436,6 +3656,10 @@ wtop(Point pt)
     return w;
 }
 @
+% saw wpointto before, for mousethread to identify windows under cursor
+
+% topwindow not enough? no because border is actually drawn
+% by window manager
 
 
 % new | wtop | ... -> <>
@@ -3447,37 +3671,30 @@ wcurrent(Window *w)
 
     <<[[wcurrent()]] if wkeyboard>>
     oi = input;
+    // updated input!
     input = w;
-    if(oi!=w && oi!=nil)
+
+    if(oi && oi != w)
         wrepaint(oi);
-    if(w !=nil){
+    if(w){
         wrepaint(w);
         wsetcursor(w, false);
     }
-    if(w != oi){
-        if(oi){
-            oi->wctlready = true;
-            wsendctlmesg(oi, Wakeup, ZR, nil);
-        }
-        if(w){
-            w->wctlready = true;
-            wsendctlmesg(w, Wakeup, ZR, nil);
-        }
-    }
+    <<[[wcurrent()]] wakeup w and oi>>
 }
 @
-% But Wakeup does nothing actually
 
+
+\l rename wrepaintborders?
 
 % wcurrent | ... -> <>
 <<function wrepaint>>=
 void
 wrepaint(Window *w)
 {
-    wsetcols(w);
 
-    if(!w->mouseopen)
-        frredraw(w);
+    <<[[wrepaint()]] update cols>>
+    <<[[wrepaint()]] if mouse not opened>>
 
     if(w == input){
         wborder(w, Selborder);
@@ -3488,26 +3705,17 @@ wrepaint(Window *w)
 @
 % if ! mouseopen then have a frame with scrollbar, so redraw it
 
-% this is where see difference of color between selected and unselected
-
-% wrepaint | ... -> <>
-<<function wsetcols>>=
-void
-wsetcols(Window *w)
-{
-    <<[[wsetcols()]] if holding>>
-    else
-        if(w == input)
-            w->cols[TEXT] = w->cols[HTEXT] = display->black;
-        else
-            w->cols[TEXT] = w->cols[HTEXT] = darkgrey;
-}
+<<constant Unselborder>>=
+Unselborder		= 1,	/* border of unselected window */
 @
 
+% this is where see difference of color between selected and unselected
 
 
 
 \section{Window deletion}
+% via menu
+
 % 2 steps, Deleted, and then Exited
 
 <<[[button3menu()]] cases>>=
@@ -3529,7 +3737,12 @@ delete(void)
         wsendctlmesg(w, Deleted, ZR, nil);
 }
 @
-% pointto != wpointto
+% pointto != wpointto, = menu action we will see soon
+
+
+<<[[Wctlmesgkind]] cases>>=
+Deleted,
+@
 
 
 <<[[Window]] config fields>>=
@@ -3537,9 +3750,6 @@ bool	deleted;
 @
 %old: bool_byte
 
-<<[[Wctlmesgkind]] cases>>=
-Deleted,
-@
 
 <<[[wctlmesg()]] cases>>=
 case Deleted:
@@ -3554,19 +3764,6 @@ case Deleted:
 %  where want to do the minimum in an interrupt, hence
 %  the use of an auxilary process to take care of waiting for the
 %  hangup process and clean resources
-
-
-
-<<function deletetimeoutproc>>=
-void
-deletetimeoutproc(void *v)
-{
-    char *s = v;
-
-    sleep(750);	/* remove window from screen after 3/4 of a second */
-    sendp(deletechan, s);
-}
-@
 
 
 
@@ -3585,22 +3782,13 @@ wclosewin(Window *w)
         wsetcursor(w, false);
     }
     <<[[wclosewin()]] if wkeyboard>>
+    <<[[wclosewin()]] remove w from hidden>>
 
-    for(i=0; i<nhidden; i++)
-        if(hidden[i] == w){
-            --nhidden;
-            memmove(hidden+i, hidden+i+1, (nhidden-i)*sizeof(hidden[0]));
-            hidden[nhidden] = nil;
-            break;
-        }
     for(i=0; i<nwindow; i++)
         if(windows[i] == w){
             --nwindow;
             memmove(windows+i, windows+i+1, (nwindow-i)*sizeof(Window*));
-            w->deleted = true; // again??
-            r = w->i->r;
-            /* move it off-screen to hide it, in case client is slow in letting it go */
-            //if(0) originwindow(w->i, r.min, view->r.max);
+
             freeimage(w->i);
             w->i = nil;
             return;
@@ -3609,7 +3797,138 @@ wclosewin(Window *w)
 }
 @
 
+%dead:
+%             w->deleted = true; // again??
+%             r = w->i->r;
+%             /* move it off-screen to hide it, in case client is slow in letting it go */
+%             //if(0) originwindow(w->i, r.min, view->r.max);
+
+
+
+\subsection{[[deletetimeoutproc()]] and [[deletethread()]]}
+
+\t not sure we need that, does already freeimage in wclosewin
+
+% process
+<<function deletetimeoutproc>>=
+void
+deletetimeoutproc(void *v)
+{
+    char *s = v;
+
+    sleep(750);	/* remove window from screen after 3/4 of a second */
+    sendp(deletechan, s);
+}
+@
+% separate process cos sleep is blocking
+
+
+<<global deletechan>>=
+// chan<stirng> (listener = deletethread, sender = deletetimeoutproc)
+Channel* deletechan;
+@
+% deletetimeoutproc (as ? in proccreate(<>) <- wctlmesg(Delete | Moved) <- 
+%  mousethread
+
+<<[[main()]] communication channels creation>>=
+deletechan   = chancreate(sizeof(char*), 0);
+@
+
+<<[[main()]] threads creation>>=
+threadcreate(deletethread, nil, STACK);
+@
+
+% why not do that in deletetimeoutproc directly? why pass
+%  through extra thread?
+
+
+<<function deletethread>>=
+/* thread to make Deleted windows that the client still holds disappear offscreen after an interval */
+void
+deletethread(void*)
+{
+    char *s;
+    Image *i;
+
+    threadsetname("deletethread");
+
+    for(;;){
+        s = recvp(deletechan);
+
+        i = namedimage(display, s);
+        if(i != nil){
+            /* move it off-screen to hide it, since client is slow in letting it go */
+            originwindow(i, i->r.min, view->r.max);
+        }
+        freeimage(i);
+        free(s);
+    }
+}
+@
+% why freeimage here too? not enough in closewin?
+
+
+
+
 \subsection{[[Deleted]] and [[Exited]]}
+
+
+\t who send to that?
+<<global winclosechan>>=
+// chan<Window> (listener = winclosethread, sender = filsyswalk )
+Channel	*winclosechan; /* chan(Window*); */
+@
+
+
+<<[[main()]] communication channels creation>>=
+winclosechan = chancreate(sizeof(Window*), 0);
+@
+<<[[main()]] threads creation>>=
+threadcreate(winclosethread, nil, STACK);
+@
+
+
+<<function winclosethread>>=
+/* thread to allow fsysproc to synchronize window closing with main proc */
+void
+winclosethread(void*)
+{
+    Window *w;
+
+    threadsetname("winclosethread");
+
+    for(;;){
+        w = recvp(winclosechan);
+        wclose(w);
+    }
+}
+@
+
+
+
+
+% winclosethread -> <>
+<<function wclose>>=
+bool
+wclose(Window *w)
+{
+    int i;
+
+    i = decref(w);
+    if(i > 0)
+        return false;
+
+    if(i < 0)
+        error("negative ref count");
+    if(!w->deleted)
+        wclosewin(w);
+    wsendctlmesg(w, Exited, ZR, nil);
+    return true;
+}
+@
+% decref? but does one incref in new(), decref in winshell,
+%  via wclose, then incref in?? xfidattach??
+
 
 <<[[Wctlmesgkind]] cases>>=
 Exited,
@@ -3643,32 +3962,17 @@ case Exited:
 
 
 
-% dtor?
-% winclosethread -> <>
-<<function wclose>>=
-int
-wclose(Window *w)
-{
-    int i;
-
-    i = decref(w);
-    if(i > 0)
-        return 0;
-
-    if(i < 0)
-        error("negative ref count");
-    if(!w->deleted)
-        wclosewin(w);
-    wsendctlmesg(w, Exited, ZR, nil);
-    return 1;
-}
-@
 
 
 
 
 \subsection{Mouse action [[pointto()]]}
 
+% wait = wait for release. In case of delete we wait,
+%  but for move pointto() is only the first step so we don't
+%  want a release here.
+
+% delete(true) | move -> <>
 <<function pointto>>=
 Window*
 pointto(bool wait)
@@ -3688,7 +3992,7 @@ pointto(bool wait)
 
     if(wait){
         while(mouse->buttons){
-            if(mouse->buttons!=4 && w !=nil){	/* cancel */
+            if(mouse->buttons!=4 && w != nil){	/* cancel */
                 cornercursor(input, mouse->xy, false);
                 w = nil;
             }
@@ -3697,20 +4001,21 @@ pointto(bool wait)
         if(w != nil && wpointto(mouse->xy) != w)
             w = nil;
     }
+
     cornercursor(input, mouse->xy, false);
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
     menuing = false;
     return w;
 }
 @
+% dont understand this force cursor thing, nor the cancel
 
-
-
+% 
 
 
 
 \section{Window move}
-% via menu
+% via menu, see also via border click
 
 <<[[button3menu()]] cases>>=
 case Move:
@@ -3737,6 +4042,8 @@ move(void)
     cornercursor(input, mouse->xy, true);
 }
 @
+%pointto() changes the cursor
+% pass false here, so does not wait for end of click
 
 % see wctlmesg Moved|Reshaped case
 % because Moved is a special case of Reshaped where same size.
@@ -3744,6 +4051,7 @@ move(void)
 
 \subsection{Mouse action [[drag()]]}
 
+% assumes already has done a pointto
 % move | mousethread -> <>
 <<function drag>>=
 Image*
@@ -3757,53 +4065,64 @@ drag(Window *w, Rectangle *rp)
 
     menuing = true;
     om = mouse->xy;
-    riosetcursor(&boxcursor, 1);
+    riosetcursor(&boxcursor, true);
+
     dm = subpt(mouse->xy, w->screenr.min);
     d = subpt(i->r.max, i->r.min);
     op = subpt(mouse->xy, dm);
-    drawborder(Rect(op.x, op.y, op.x+d.x, op.y+d.y), 1);
-    flushimage(display, 1);
+
+    drawborder(Rect(op.x, op.y, op.x+d.x, op.y+d.y), true);
+    flushimage(display, true);
 
     while(mouse->buttons == 4){
         p = subpt(mouse->xy, dm);
         if(!eqpt(p, op)){
-            drawborder(Rect(p.x, p.y, p.x+d.x, p.y+d.y), 1);
-            flushimage(display, 1);
+            // will move previously drawn rectangle thx to originwindow
+            drawborder(Rect(p.x, p.y, p.x+d.x, p.y+d.y), true);
+            flushimage(display, true);
             op = p;
         }
         readmouse(mousectl);
     }
 
     r = Rect(op.x, op.y, op.x+d.x, op.y+d.y);
-    drawborder(r, 0);
-    cornercursor(w, mouse->xy, 1);
+    drawborder(r, false);
+
+    cornercursor(w, mouse->xy, true);
     moveto(mousectl, mouse->xy);	/* force cursor update; ugly */
     menuing = false;
 
-    flushimage(display, 1);
-    if(mouse->buttons!=0 || (ni=allocwindow(wscreen, r, Refbackup, DWhite))==nil){
-        moveto(mousectl, om);
-        while(mouse->buttons)
-            readmouse(mousectl);
-        *rp = Rect(0, 0, 0, 0);
-        return nil;
-    }
+    flushimage(display, true);
+    if(mouse->buttons == 0)
+        ni=allocwindow(wscreen, r, Refbackup, DWhite);
+    <<[[drag()]] sanity check mouse buttons and ni>>
     draw(ni, ni->r, i, nil, i->r.min);
     *rp = r;
     return ni;
 }
 @
+%old: I rewrote a bit and move ni= outside the if
 
+<<[[drag()]] sanity check mouse buttons and ni>>=
+if(mouse->buttons!=0 || ni==nil){
+    moveto(mousectl, om);
+    while(mouse->buttons)
+        readmouse(mousectl);
+    *rp = Rect(0, 0, 0, 0);
+    return nil;
+}
+@
 
+% drawborder does delete previous image if there was one
 
 % drag | bandsize -> <>
 <<function drawborder>>=
 void
-drawborder(Rectangle r, int show)
+drawborder(Rectangle r, bool show)
 {
     static Image *b[4];
     int i;
-    if(show == 0){
+    if(!show){
         for(i = 0; i < 4; i++){
             freeimage(b[i]);
             b[i] = nil;
@@ -3833,7 +4152,9 @@ drawedge(Image **bp, Rectangle r)
     }
 }
 @
-
+% can not use single rectangle, because then inside will not be
+% transparent
+% (hmm but do that a bit in sweep() no?)
 
 \section{Window resize}
 % via menu, or via mouse on border directly
@@ -3845,7 +4166,6 @@ case Reshape:
 @
 
 \subsection{[[resize()]]}
-
 
 <<function resize>>=
 void
@@ -3862,10 +4182,13 @@ resize(void)
         wsendctlmesg(w, Reshaped, i->r, i);
 }
 @
+% very similar to move()
 
+% use sweep() to define area.
 
 
 % seen Moved Reshaped in section X.
+% A Moved is actually a special case of Reshaped
 
 <<[[wctlmesg()]] cases>>=
 case Moved:
@@ -3898,6 +4221,9 @@ case Reshaped:
 <<[[Window]] other fields>>=
 bool	 	resized;
 @
+% why important to remember? for creating a resize
+% even to client listening to /mnt/wsys/mouse
+% a bit uglt
 
 <<function wresize>>=
 void
@@ -3910,38 +4236,22 @@ wresize(Window *w, Image *i, bool move)
         draw(i, i->r, w->i, nil, w->i->r.min);
     freeimage(w->i);
     w->i = i;
-    wsetname(w);
+    wsetname(w); // publish new window name by incrementing namecount
     w->mc.image = i;
-    r = insetrect(i->r, Selborder+1);
-    w->scrollr = r;
-    w->scrollr.max.x = r.min.x+Scrollwid;
-    w->lastsr = ZR;
-    r.min.x += Scrollwid+Scrollgap;
-    if(move)
-        frsetrects(w, r, w->i);
-    else{
-        frclear(w, false);
-        frinit(w, r, w->font, w->i, cols);
-        wsetcols(w);
-        w->maxtab = maxtab * stringwidth(w->font, "0");
-        r = insetrect(w->i->r, Selborder);
-        draw(w->i, r, cols[BACK], nil, w->entire.min);
-        wfill(w);
-        wsetselect(w, w->q0, w->q1);
-        wscrdraw(w);
-    }
+
+    <<[[wresize()]] textual window updates>>
+
     wborder(w, Selborder);
     w->topped = ++topped;
     w->resized = true;
     w->mouse.counter++;
 }
 @
-
-
-
+% mouse counter ??? comes with resize thing?
 
 \subsection{Mouse action [[bandsize()]]}
 
+% with left or middle click, other way to resize.
 
 % mousethread -> <>
 <<function bandsize>>=
@@ -3958,9 +4268,11 @@ bandsize(Window *w)
     which = whichcorner(w, p);
     p = cornerpt(w->screenr, p, which);
     wmovemouse(w, p);
+
     readmouse(mousectl);
     r = whichrect(w->screenr, p, which);
-    drawborder(r, 1);
+    drawborder(r, true);
+
     or = r;
     startp = p;
     
@@ -3968,30 +4280,44 @@ bandsize(Window *w)
         p = onscreen(mouse->xy);
         r = whichrect(w->screenr, p, which);
         if(!eqrect(r, or) && goodrect(r)){
-            drawborder(r, 1);
-            flushimage(display, 1);
+            drawborder(r, true);
+            flushimage(display, true);
             or = r;
         }
         readmouse(mousectl);
     }
+
     p = mouse->xy;
-    drawborder(or, 0);
-    flushimage(display, 1);
+    drawborder(or, false);
+    flushimage(display, true);
+
     wsetcursor(w, true);
-    if(mouse->buttons!=0 || Dx(or)<100 || Dy(or)<3*font->height){
-        while(mouse->buttons)
-            readmouse(mousectl);
-        return nil;
-    }
-    if(abs(p.x-startp.x)+abs(p.y-startp.y) <= 1)
-        return nil;
+    <<[[bandsize()]] sanity check mouse buttons, rectanglr [[or]], point [[p]]>>
     i = allocwindow(wscreen, or, Refbackup, DWhite);
-    if(i == nil)
-        return nil;
+    <<[[bandsize()]] sanity check i>>
     border(i, r, Selborder, red, ZP);
     return i;
 }
 @
+
+
+<<[[bandsize()]] sanity check mouse buttons, rectanglr [[or]], point [[p]]>>=
+if(mouse->buttons!=0 || Dx(or)<100 || Dy(or)<3*font->height){
+    while(mouse->buttons)
+        readmouse(mousectl);
+    return nil;
+}
+if(abs(p.x - startp.x) + abs(p.y - startp.y) <= 1)
+    return nil;
+@
+
+<<[[bandsize()]] sanity check i>>=
+if(i == nil)
+    return nil;
+@
+
+
+
 
 
 <<function wmovemouse>>=
@@ -4001,8 +4327,8 @@ bandsize(Window *w)
 void
 wmovemouse(Window *w, Point p)
 {
-    p.x += w->screenr.min.x-w->i->r.min.x;
-    p.y += w->screenr.min.y-w->i->r.min.y;
+    p.x += w->screenr.min.x - w->i->r.min.x;
+    p.y += w->screenr.min.y - w->i->r.min.y;
     moveto(mousectl, p);
 }
 @
@@ -4091,6 +4417,8 @@ case Hide:
 @
 
 
+\subsection{[[hide()]]}
+
 <<function hide>>=
 void
 hide(void)
@@ -4104,6 +4432,8 @@ hide(void)
 }
 @
 
+\subsection{[[hiddden]]}
+
 
 <<global hidden>>=
 Window	*hidden[100];
@@ -4116,6 +4446,7 @@ int		nhidden;
 
 
 
+% return -1, 0, 1, used in switch somewhere
 <<function whide>>=
 int
 whide(Window *w)
@@ -4126,7 +4457,8 @@ whide(Window *w)
     for(j=0; j<nhidden; j++)
         if(hidden[j] == w)	/* already hidden */
             return -1;
-    i = allocimage(display, w->screenr, w->i->chan, 0, DWhite);
+
+    i = allocimage(display, w->screenr, w->i->chan, false, DWhite);
     if(i){
         hidden[nhidden++] = w;
         wsendctlmesg(w, Reshaped, ZR, i);
@@ -4135,8 +4467,30 @@ whide(Window *w)
     return 0;
 }
 @
+% allocimage is not allocwindow, and so it's in-memory image
 
-%\section{Window unhiding}
+
+% related = command line hidden
+
+<<[[new()]] if hideit>>=
+if(hideit){
+    hidden[nhidden++] = w;
+    w->screenr = ZR;
+}
+@
+
+<<[[wclosewin()]] remove w from hidden>>=
+// delete_list(w, hidden)
+for(i=0; i<nhidden; i++)
+    if(hidden[i] == w){
+        --nhidden;
+        memmove(hidden+i, hidden+i+1, (nhidden-i)*sizeof(hidden[0]));
+        hidden[nhidden] = nil;
+        break;
+    }
+@
+
+\subsection{[[unhide()]]}
 
 
 <<[[button3menu()]] menu3str adjustments with hidden windows>>=
@@ -4183,6 +4537,9 @@ wunhide(int h)
     return 0;
 }
 @
+% back to allocwindow! Reshaped will make this image public again
+% via wsetname
+
 
 
 
@@ -4190,11 +4547,13 @@ wunhide(int h)
 
 \chapter{Filesystem Server}
 
-% winshell -> filsysmount
+%trans:
+% new -> ... -> winshell -> filsysmount
 %    if(mount(fs->cfd, -1, "/mnt/wsys", MREPL, buf) < 0){
+% big missing piece.
 
 % mount is in kernel and does the right thing when the argument
-% is a filedescriptor?
+% is a filedescriptor.
 
 % so then what happens?
 % filsysproc is reading on fs->sfd, server side of the pipe
@@ -4203,47 +4562,644 @@ wunhide(int h)
 % set its field with the current p9 message, and then fcall
 % for right type of message. Then each fcall may proceed,
 % or call the worker to do more job.
-% if job done, then can return nil meaning someone needs
+% if job requires some processing, then return nil meaning someone needs
 % to allocate a new worker because this file is currently
-% being processed and its state os open (state of fid
+% being processed and its state is open (state of fid
 % is in f parameter below).
 
+% Saw fcall in core DS and filsysproc dispatcher.
+% Saw also worker handler Xfid and Fid file state.
 
-\section{[[filsysxxx()]]}
 
-\subsection{Attach}
+\section{Additional data structures}
 
+\subsection{[[Qxxx]]}
+
+% Saw before
+%<<[[Fid]] other fields>>=
+%Qid		qid;
+%@
+
+% Qid is defined in libc.h. See also Kernel.pdf
+ 
+
+<<enum qid>>=
+enum Qxxx
+{
+    Qdir,			/* /dev for this window */
+    <<[[qid]] cases>>
+
+    QMAX,
+};
+@
+
+
+% window id + device enum id  -> final Qid
+<<function QID>>=
+#define	QID(winid,qxxx)	((winid<<8)|(qxxx))
+@
+% what about overflow? hope will not have too many windows then
+%old: was w,q, but then confusing with q below
+
+% Qid -> window id
+<<function WIN>>=
+#define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
+@
+
+% qid -> dev
+<<function FILE>>=
+#define	FILE(q)	(((ulong)(q).path) & 0xFF)
+@
+
+
+
+\subsection{[[dirtab]]}
+
+<<struct Dirtab>>=
+struct Dirtab
+{
+    char	*name;
+    // bitset<enum<QTxxx>>
+    byte	type;
+    // enum<Qxxx>
+    uint	qid;
+    uint	perm;
+};
+@
+% rename DirEntry (or DirEntryShort) like I want to do in kernel
+
+<<global dirtab>>=
+Dirtab dirtab[]=
+{
+    { ".",		QTDIR,	Qdir,		0500|DMDIR },
+    <<dirtab array elements>>
+    { nil, }
+};
+@
+
+
+<<[[Fid]] other fields>>=
+Dirtab	*dir;
+@
+\t it's a DirEntry!
+\t  rename field too? direntry
+
+% so for instance attach will set qid to Qdir
+% and dir to dirtable of root! 
+
+
+
+\section{[[filsysrespond()]]}
+
+%trans: before seeing attach/... client transmited request
+% (Txxx), see utility function to answer to client (Rxxx).
+% see docs/man/5/intro, +1 trick, Rerror, etc.
+
+% ... -> <>  called from many Xfid threads, and some filsysxxx too
+<<function filsysrespond>>=
+Xfid*
+filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
+{
+    int n;
+
+    if(err){
+        t->type = Rerror;
+        t->ename = err;
+    }else
+        t->type = x->type+1; // Reply type just after Transmit type
+
+    t->fid = x->fid;
+    t->tag = x->tag;
+
+    if(x->buf == nil)
+        x->buf = malloc(messagesize);
+    n = convS2M(t, x->buf, messagesize);
+    <<[[filsysrespond()]] sanity check n>>
+
+    if(write(fs->sfd, x->buf, n) != n)
+        error("write error in respond");
+    <<[[filsysrespond()]] dump Fcall t if debug>>
+    free(x->buf);
+    x->buf = nil;
+    return x;
+}
+@
+% but write on sfd goes where?
+% and what if multiple things write on it at the same time?
+%  filsysproc and any xfidctl thread can potentially call filsysrespond
+
+
+<<[[filsysrespond()]] sanity check n>>=
+if(n <= 0)
+    error("convert error in convS2M");
+@
+
+
+\section{Attach}
+
+\subsection{[[filsysattach()]]}
+
+\t does not use first argument, so remove it from fcall sig no?
+\t  anyway it's in the Xfid
 <<function filsysattach>>=
 static
 Xfid*
 filsysattach(Filsys *, Xfid *x, Fid *f)
 {
-    Fcall t;
+    <<[[filsysattach()]] locals>>
 
-    if(strcmp(x->uname, x->fs->user) != 0)
-        return filsysrespond(x->fs, x, &t, Eperm);
+    <<[[filsysattach()]] sanity check same user>>
 
     f->busy = true;
     f->open = false;
+
     f->qid.path = Qdir;
     f->qid.type = QTDIR;
     f->qid.vers = 0;
-    f->dir = dirtab;
+    f->dir = dirtab; // entry for "."
+
     f->nrpart = 0;
 
     sendp(x->c, xfidattach);
     return nil;
 }
 @
+\l nrpart?
+
+% return nil, because worker has a job to do asynchronously so filsysproc
+% need allocate a new worker for next request.
+% once finished this worker will go back in xfidfree.
 
 
-\subsection{Walk}
+<<[[filsysattach()]] locals>>=
+Fcall t;
+@
+
+<<[[filsysattach()]] sanity check same user>>=
+if(strcmp(x->uname, x->fs->user) != 0)
+    return filsysrespond(x->fs, x, &t, Eperm);
+@
+
+% see filsysrespond later, but write back on pipe an answer
+% to client using x->buf space.
+
+\subsection{[[xfidattach()]]}
+
+% filsysattach !-> <>
+<<function xfidattach>>=
+void
+xfidattach(Xfid *x)
+{
+    Fcall t;
+    int id;
+    bool hideit, scrollit;
+    Window *w;
+    char *err, *n, *dir, errbuf[ERRMAX];
+    int pid;
+    bool newlymade;
+    Rectangle r;
+    Image *i;
+
+    t.qid = x->f->qid;
+    qlock(&all);
+    w = nil;
+    err = Eunkid;
+    newlymade = false;
+    hideit = false;
+
+    //TODO delete
+    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
+        n = x->aname+1;
+        pid = strtoul(n, &n, 0);
+        if(*n == ',')
+            n++;
+        r.min.x = strtoul(n, &n, 0);
+        if(*n == ',')
+            n++;
+        r.min.y = strtoul(n, &n, 0);
+        if(*n == ',')
+            n++;
+        r.max.x = strtoul(n, &n, 0);
+        if(*n == ',')
+            n++;
+        r.max.y = strtoul(n, &n, 0);
+  Allocate:
+        if(!goodrect(r))
+            err = Ebadrect;
+        else{
+            if(hideit)
+                i = allocimage(display, r, view->chan, 0, DWhite);
+            else
+                i = allocwindow(wscreen, r, Refbackup, DWhite);
+            if(i){
+                border(i, r, Selborder, display->black, ZP);
+                if(pid == 0)
+                    pid = -1;	/* make sure we don't pop a shell! - UGH */
+                w = new(i, hideit, scrolling, pid, nil, nil, nil);
+                flushimage(display, 1);
+                newlymade = true;
+            }else
+                err = Ewindow;
+        }
+    }else if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
+        pid = 0;
+        if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->aname, errbuf) < 0)
+            err = errbuf;
+        else
+            goto Allocate;
+
+
+    }else{
+        id = atoi(x->aname);
+        w = wlookid(id);
+    }
+
+    x->f->w = w;
+    if(w == nil){
+        qunlock(&all);
+        x->f->busy = false;
+        filsysrespond(x->fs, x, &t, err);
+        return;
+    }
+    if(!newlymade)	/* counteract dec() in winshell() */
+        incref(w);
+    qunlock(&all);
+
+    filsysrespond(x->fs, x, &t, nil);
+}
+@
+
+<<function wlookid>>=
+Window*
+wlookid(int id)
+{
+    int i;
+
+    for(i=0; i<nwindow; i++)
+        if(windows[i]->id == id)
+            return windows[i];
+    return nil;
+}
+@
+% need to do that only for attach. Further fid creation
+% will come from walk and can copy Fid.w field
+
+% so get back here from mount()!
+% pass window id, and now this attach thing is connected
+% to the right window
+
+
+\section{Open}
+
+\subsection{[[filsysopen()]]}
+
+<<function filsysopen>>=
+static
+Xfid*
+filsysopen(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+    int m;
+
+    <<[[filsysopen()]] sanity check mode>>
+        
+    sendp(x->c, xfidopen);
+    return nil;
+
+    Deny:
+    return filsysrespond(fs, x, &t, Eperm);
+}
+@
+
+% remember that x->mode is really x->Fcall.mode of union
+
+<<[[filsysopen()]] sanity check mode>>=
+/* can't truncate anything, so just disregard */
+x->mode &= ~(OTRUNC|OCEXEC);
+/* can't execute or remove anything */
+if(x->mode==OEXEC || (x->mode&ORCLOSE))
+    goto Deny;
+
+switch(x->mode){
+case OREAD:
+    m = 0400;
+    break;
+case OWRITE:
+    m = 0200;
+    break;
+case ORDWR:
+    m = 0600;
+    break;
+default:
+    goto Deny;
+}
+if(((f->dir->perm & ~(DMDIR|DMAPPEND)) & m) != m)
+    goto Deny;
+@
+% look for 
+
+\subsection{[[xfidopen()]]}
+
+
+% how sure that have a x->f->w?  because cant open
+%  if not attach?
+<<function xfidopen>>=
+void
+xfidopen(Xfid *x)
+{
+    Fcall t;
+    Window *w;
+
+    w = x->f->w;
+    if(w->deleted){
+        filsysrespond(x->fs, x, &t, Edeleted);
+        return;
+    }
+    switch(FILE(x->f->qid)){
+    <<[[xfidopen()]] cases>>
+    }
+
+    t.qid = x->f->qid;
+    t.iounit = messagesize-IOHDRSZ;
+    x->f->open = true;
+    x->f->mode = x->mode;
+    filsysrespond(x->fs, x, &t, nil);
+}
+@
+
+
+\section{Clunk/Close}
+
+\subsection{[[filsysclunk()]]}
+
+<<function filsysclunk>>=
+static
+Xfid*
+filsysclunk(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+
+    if(f->open){
+        f->busy = false;
+        f->open = false;
+        sendp(x->c, xfidclose);
+        return nil;
+    }
+    if(f->w)
+        sendp(winclosechan, f->w);
+    f->busy = false;
+    f->open = false;
+    return filsysrespond(fs, x, &t, nil);
+}
+@
+
+\subsection{[[xfidclose()]]}
+
+<<function xfidclose>>=
+void
+xfidclose(Xfid *x)
+{
+    Fcall t;
+    Window *w;
+    int nb, nulls;
+
+    w = x->f->w;
+    switch(FILE(x->f->qid)){
+    <<[[xfidclose()]] cases>>
+    }
+    wclose(w);
+    filsysrespond(x->fs, x, &t, nil);
+}
+@
+% wclose(w)! remove one reference
+
+
+
+\section{Read}
+
+\subsection{[[filsysread()]]}
+
+<<function filsysread>>=
+static
+Xfid*
+filsysread(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+    byte *b;
+    int i, n, o, e, len, j, k, *ids;
+    Dirtab *d, dt;
+    uint clock;
+    char buf[16];
+
+    if((f->qid.type & QTDIR) == 0){
+        sendp(x->c, xfidread);
+        return nil;
+    }
+    // else
+
+    o = x->offset;
+    e = x->offset + x->count;
+    clock = getclock();
+    b = malloc(messagesize-IOHDRSZ);	/* avoid memset of emalloc */
+    if(b == nil)
+        return filsysrespond(fs, x, &t, "out of memory");
+
+    n = 0;
+    switch(FILE(f->qid)){
+    <<[[filsysread()]] cases>>
+    }
+
+    t.data = (char*)b;
+    t.count = n;
+    filsysrespond(fs, x, &t, nil);
+    free(b);
+    return x;
+}
+@
+% can reuse x, request processed
+
+\subsection{[[xfidread()]]}
+
+%XXX split
+<<[[xfidread()]] other locals>>=
+char buf[128];
+Fcall fc;
+int n, off, cnt, c;
+uint qid;
+char *t;
+char cbuf[30];
+Mouse ms;
+Rectangle r;
+Image *i;
+Channel *c1, *c2;	/* chan (tuple(char*, int)) */
+Consreadmesg crm;
+Mousereadmesg mrm;
+Consreadmesg cwrm;
+Stringpair pair;
+Alt alts[NCR+1];
+@
+
+
+<<function xfidread>>=
+void
+xfidread(Xfid *x)
+{
+    Window *w;
+    <<[[xfidread()]] other locals>>
+    
+    w = x->f->w;
+    if(w->deleted){
+        filsysrespond(x->fs, x, &fc, Edeleted);
+        return;
+    }
+    qid = FILE(x->f->qid);
+    off = x->offset;
+    cnt = x->count;
+
+    switch(qid){
+    <<[[xfidread()]] cases>>
+    default:
+        fprint(STDERR, "unknown qid %d in read\n", qid);
+        sprint(buf, "unknown qid in read");
+        filsysrespond(x->fs, x, &fc, buf);
+        break;
+        }
+}
+@
+
+
+
+\section{Write}
+
+\subsection{[[filsyswrite()]]}
+
+<<function filsyswrite>>=
+static
+Xfid*
+filsyswrite(Filsys*, Xfid *x, Fid*)
+{
+    sendp(x->c, xfidwrite);
+    return nil;
+}
+@
+
+\subsection{[[xfidwrite()]]}
+
+<<[[xfidwrite()]] other locals>>=
+Fcall fc;
+int c, cnt, qid, nb, off, nr;
+char buf[256], *p;
+Point pt;
+Rune *r;
+Conswritemesg cwm;
+Stringpair pair;
+Alt alts[NCW+1];
+@
+
+
+<<function xfidwrite>>=
+void
+xfidwrite(Xfid *x)
+{
+    Window *w;
+    <<[[xfidwrite()]] other locals>>
+    
+    w = x->f->w;
+    if(w->deleted){
+        filsysrespond(x->fs, x, &fc, Edeleted);
+        return;
+    }
+    qid = FILE(x->f->qid);
+    cnt = x->count;
+    off = x->offset;
+    x->data[cnt] = 0;
+
+    switch(qid){
+    <<[[xfidwrite()]] cases>>
+    default:
+        fprint(STDERR, buf, "unknown qid %d in write\n", qid);
+        sprint(buf, "unknown qid in write");
+        filsysrespond(x->fs, x, &fc, buf);
+        return;
+    }
+
+    fc.count = cnt;
+    filsysrespond(x->fs, x, &fc, nil);
+}
+@
+
+
+
+
+\section{Stats}
+
+\subsection{[[filsysstat()]]}
+
+<<function filsysstat>>=
+static
+Xfid*
+filsysstat(Filsys *fs, Xfid *x, Fid *f)
+{
+    Fcall t;
+
+    t.stat = emalloc(messagesize-IOHDRSZ);
+    t.nstat = dostat(fs, WIN(x->f->qid), f->dir, t.stat, messagesize-IOHDRSZ, getclock());
+    x = filsysrespond(fs, x, &t, nil);
+    free(t.stat);
+    return x;
+}
+@
+
+<<function dostat>>=
+static
+int
+dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
+{
+    Dir d;
+
+    d.qid.path = QID(id, dir->qid);
+    if(dir->qid == Qsnarf)
+        d.qid.vers = snarfversion;
+    else
+        d.qid.vers = 0;
+    d.qid.type = dir->type;
+    d.mode = dir->perm;
+    d.length = 0;	/* would be nice to do better */
+    d.name = dir->name;
+    d.uid = fs->user;
+    d.gid = fs->user;
+    d.muid = fs->user;
+    d.atime = clock;
+    d.mtime = clock;
+
+    return convD2M(&d, buf, nbuf);
+}
+@
+
+
+
+
+\section{Walk}
+
+\subsection{[[filsyswalk()]]}
+
+% docs/man/5/walk
+
+% One message for full path. So efficient network wise,
+% no need back and forth for each path elements.
+% But that means filsyswalk need to redo part of the job
+% of the kernel in namei().
+
+% complicated ...
 
 <<global all>>=
 QLock	all;			/* BUG */
 @
 % I think it's mainly for wsys/ shared access
+% it protects access to windows and nwindow
 
+%????
+%XXX
 <<function filsyswalk>>=
 static
 Xfid*
@@ -4380,175 +5336,10 @@ numeric(char *s)
 @
 
 
-\subsection{Open}
+\section{Forbidden operations}
 
-<<function filsysopen>>=
-static
-Xfid*
-filsysopen(Filsys *fs, Xfid *x, Fid *f)
-{
-    Fcall t;
-    int m;
-
-    /* can't truncate anything, so just disregard */
-    x->mode &= ~(OTRUNC|OCEXEC);
-    /* can't execute or remove anything */
-    if(x->mode==OEXEC || (x->mode&ORCLOSE))
-        goto Deny;
-    switch(x->mode){
-    default:
-        goto Deny;
-    case OREAD:
-        m = 0400;
-        break;
-    case OWRITE:
-        m = 0200;
-        break;
-    case ORDWR:
-        m = 0600;
-        break;
-    }
-    if(((f->dir->perm&~(DMDIR|DMAPPEND))&m) != m)
-        goto Deny;
-        
-    sendp(x->c, xfidopen);
-    return nil;
-
-    Deny:
-    return filsysrespond(fs, x, &t, Eperm);
-}
-@
-
-\subsection{Read}
-
-
-<<function filsysread>>=
-static
-Xfid*
-filsysread(Filsys *fs, Xfid *x, Fid *f)
-{
-    Fcall t;
-    uchar *b;
-    int i, n, o, e, len, j, k, *ids;
-    Dirtab *d, dt;
-    uint clock;
-    char buf[16];
-
-    if((f->qid.type & QTDIR) == 0){
-        sendp(x->c, xfidread);
-        return nil;
-    }
-    o = x->offset;
-    e = x->offset+x->count;
-    clock = getclock();
-    b = malloc(messagesize-IOHDRSZ);	/* avoid memset of emalloc */
-    if(b == nil)
-        return filsysrespond(fs, x, &t, "out of memory");
-    n = 0;
-    switch(FILE(f->qid)){
-    <<[[filsysread()]] cases>>
-    }
-    t.data = (char*)b;
-    t.count = n;
-    filsysrespond(fs, x, &t, nil);
-    free(b);
-    return x;
-}
-@
-% can reuse x, request processed
-
-\subsection{Write}
-
-<<function filsyswrite>>=
-static
-Xfid*
-filsyswrite(Filsys*, Xfid *x, Fid*)
-{
-    sendp(x->c, xfidwrite);
-    return nil;
-}
-@
-
-\subsection{Stats}
-
-<<function filsysstat>>=
-static
-Xfid*
-filsysstat(Filsys *fs, Xfid *x, Fid *f)
-{
-    Fcall t;
-
-    t.stat = emalloc(messagesize-IOHDRSZ);
-    t.nstat = dostat(fs, WIN(x->f->qid), f->dir, t.stat, messagesize-IOHDRSZ, getclock());
-    x = filsysrespond(fs, x, &t, nil);
-    free(t.stat);
-    return x;
-}
-@
-
-<<function dostat>>=
-static
-int
-dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
-{
-    Dir d;
-
-    d.qid.path = QID(id, dir->qid);
-    if(dir->qid == Qsnarf)
-        d.qid.vers = snarfversion;
-    else
-        d.qid.vers = 0;
-    d.qid.type = dir->type;
-    d.mode = dir->perm;
-    d.length = 0;	/* would be nice to do better */
-    d.name = dir->name;
-    d.uid = fs->user;
-    d.gid = fs->user;
-    d.muid = fs->user;
-    d.atime = clock;
-    d.mtime = clock;
-    return convD2M(&d, buf, nbuf);
-}
-@
-
-
-
-
-<<function filsyswstat>>=
-static
-Xfid*
-filsyswstat(Filsys *fs, Xfid *x, Fid*)
-{
-    Fcall t;
-
-    return filsysrespond(fs, x, &t, Eperm);
-}
-@
-
-\subsection{Misc}
-
-%\subsection{Clunk}
-
-<<function filsysclunk>>=
-static
-Xfid*
-filsysclunk(Filsys *fs, Xfid *x, Fid *f)
-{
-    Fcall t;
-
-    if(f->open){
-        f->busy = false;
-        f->open = false;
-        sendp(x->c, xfidclose);
-        return nil;
-    }
-    if(f->w)
-        sendp(winclosechan, f->w);
-    f->busy = false;
-    f->open = false;
-    return filsysrespond(fs, x, &t, nil);
-}
-@
+%\section{Flush}
+% adv topics
 
 %\subsection{Create, remove}
 
@@ -4574,21 +5365,22 @@ filsysremove(Filsys *fs, Xfid *x, Fid*)
 }
 @
 
-%\subsection{Flush}
-
-<<function filsysflush>>=
+<<function filsyswstat>>=
 static
 Xfid*
-filsysflush(Filsys*, Xfid *x, Fid*)
+filsyswstat(Filsys *fs, Xfid *x, Fid*)
 {
-    sendp(x->c, xfidflush);
-    return nil;
+    Fcall t;
+
+    return filsysrespond(fs, x, &t, Eperm);
 }
 @
 
 
-%\subsection{Misc}
 
+
+\section{Misc}
+% adv topics
 
 <<function filsysversion>>=
 static
@@ -4601,7 +5393,9 @@ filsysversion(Filsys *fs, Xfid *x, Fid*)
         return filsysrespond(x->fs, x, &t, "version request not first message");
     if(x->msize < 256)
         return filsysrespond(x->fs, x, &t, "version: message size too small");
+
     messagesize = x->msize;
+
     t.msize = messagesize;
     if(strncmp(x->version, "9P2000", 6) != 0)
         return filsysrespond(x->fs, x, &t, "unrecognized 9P version");
@@ -4618,380 +5412,18 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
 {
     Fcall t;
 
-        return filsysrespond(fs, x, &t, "rio: authentication not required");
+    return filsysrespond(fs, x, &t, "rio: authentication not required");
 }
 @
-
-
-\subsection{[[filsysrespond()]]}
-
-<<function filsysrespond>>=
-Xfid*
-filsysrespond(Filsys *fs, Xfid *x, Fcall *t, char *err)
-{
-    int n;
-
-    if(err){
-        t->type = Rerror;
-        t->ename = err;
-    }else
-        t->type = x->type+1;
-
-    t->fid = x->fid;
-    t->tag = x->tag;
-    if(x->buf == nil)
-        x->buf = malloc(messagesize);
-    n = convS2M(t, x->buf, messagesize);
-    if(n <= 0)
-        error("convert error in convS2M");
-    if(write(fs->sfd, x->buf, n) != n)
-        error("write error in respond");
-    if(DEBUG)
-        fprint(STDERR, "rio:->%F\n", t);
-    free(x->buf);
-    x->buf = nil;
-    return x;
-}
-@
-% but write on sfd goes where?
-
-<<function filsyscancel>>=
-void
-filsyscancel(Xfid *x)
-{
-    if(x->buf){
-        free(x->buf);
-        x->buf = nil;
-    }
-}
-@
-
-
-\section{[[xfidxxx()]]}
-
-\subsection{Attach}
-
-<<function xfidattach>>=
-void
-xfidattach(Xfid *x)
-{
-    Fcall t;
-    int id, hideit, scrollit;
-    Window *w;
-    char *err, *n, *dir, errbuf[ERRMAX];
-    int pid, newlymade;
-    Rectangle r;
-    Image *i;
-
-    t.qid = x->f->qid;
-    qlock(&all);
-    w = nil;
-    err = Eunkid;
-    newlymade = false;
-    hideit = 0;
-
-    //TODO delete
-    if(x->aname[0] == 'N'){	/* N 100,100, 200, 200 - old syntax */
-        n = x->aname+1;
-        pid = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.min.x = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.min.y = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.max.x = strtoul(n, &n, 0);
-        if(*n == ',')
-            n++;
-        r.max.y = strtoul(n, &n, 0);
-  Allocate:
-        if(!goodrect(r))
-            err = Ebadrect;
-        else{
-            if(hideit)
-                i = allocimage(display, r, view->chan, 0, DWhite);
-            else
-                i = allocwindow(wscreen, r, Refbackup, DWhite);
-            if(i){
-                border(i, r, Selborder, display->black, ZP);
-                if(pid == 0)
-                    pid = -1;	/* make sure we don't pop a shell! - UGH */
-                w = new(i, hideit, scrolling, pid, nil, nil, nil);
-                flushimage(display, 1);
-                newlymade = true;
-            }else
-                err = Ewindow;
-        }
-    }else if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
-        pid = 0;
-        if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->aname, errbuf) < 0)
-            err = errbuf;
-        else
-            goto Allocate;
-    }else{
-        id = atoi(x->aname);
-        w = wlookid(id);
-    }
-    x->f->w = w;
-    if(w == nil){
-        qunlock(&all);
-        x->f->busy = false;
-        filsysrespond(x->fs, x, &t, err);
-        return;
-    }
-    if(!newlymade)	/* counteract dec() in winshell() */
-        incref(w);
-    qunlock(&all);
-    filsysrespond(x->fs, x, &t, nil);
-}
-@
-
-<<function wlookid>>=
-Window*
-wlookid(int id)
-{
-    int i;
-
-    for(i=0; i<nwindow; i++)
-        if(windows[i]->id == id)
-            return windows[i];
-    return nil;
-}
-@
-
-\subsection{Open}
-
-<<function xfidopen>>=
-void
-xfidopen(Xfid *x)
-{
-    Fcall t;
-    Window *w;
-
-    w = x->f->w;
-    if(w->deleted){
-        filsysrespond(x->fs, x, &t, Edeleted);
-        return;
-    }
-    switch(FILE(x->f->qid)){
-    <<[[xfidopen()]] cases>>
-    }
-    t.qid = x->f->qid;
-    t.iounit = messagesize-IOHDRSZ;
-    x->f->open = true;
-    x->f->mode = x->mode;
-    filsysrespond(x->fs, x, &t, nil);
-}
-@
-
-\subsection{Close}
-
-<<function xfidclose>>=
-void
-xfidclose(Xfid *x)
-{
-    Fcall t;
-    Window *w;
-    int nb, nulls;
-
-    w = x->f->w;
-    switch(FILE(x->f->qid)){
-    <<[[xfidclose()]] cases>>
-    }
-    wclose(w);
-    filsysrespond(x->fs, x, &t, nil);
-}
-@
-
-\subsection{Read}
-
-<<[[xfidread()]] locals>>=
-char buf[128];
-Fcall fc;
-int n, off, cnt, c;
-uint qid;
-char *t;
-char cbuf[30];
-Window *w;
-Mouse ms;
-Rectangle r;
-Image *i;
-Channel *c1, *c2;	/* chan (tuple(char*, int)) */
-Consreadmesg crm;
-Mousereadmesg mrm;
-Consreadmesg cwrm;
-Stringpair pair;
-Alt alts[NCR+1];
-@
-
-
-<<function xfidread>>=
-void
-xfidread(Xfid *x)
-{
-    <<[[xfidread()]] locals>>
-    
-    w = x->f->w;
-    if(w->deleted){
-        filsysrespond(x->fs, x, &fc, Edeleted);
-        return;
-    }
-    qid = FILE(x->f->qid);
-    off = x->offset;
-    cnt = x->count;
-
-    switch(qid){
-    <<[[xfidread()]] cases>>
-    default:
-        fprint(STDERR, "unknown qid %d in read\n", qid);
-        sprint(buf, "unknown qid in read");
-        filsysrespond(x->fs, x, &fc, buf);
-        break;
-        }
-}
-@
-
-\subsection{Write}
-
-<<[[xfidwrite()]] locals>>=
-Fcall fc;
-int c, cnt, qid, nb, off, nr;
-char buf[256], *p;
-Point pt;
-Window *w;
-Rune *r;
-Conswritemesg cwm;
-Stringpair pair;
-Alt alts[NCW+1];
-@
-
-
-<<function xfidwrite>>=
-void
-xfidwrite(Xfid *x)
-{
-    <<[[xfidwrite()]] locals>>
-    
-    w = x->f->w;
-    if(w->deleted){
-        filsysrespond(x->fs, x, &fc, Edeleted);
-        return;
-    }
-    qid = FILE(x->f->qid);
-    cnt = x->count;
-    off = x->offset;
-    x->data[cnt] = 0;
-
-    switch(qid){
-    <<[[xfidwrite()]] cases>>
-    default:
-        fprint(STDERR, buf, "unknown qid %d in write\n", qid);
-        sprint(buf, "unknown qid in write");
-        filsysrespond(x->fs, x, &fc, buf);
-        return;
-    }
-
-    fc.count = cnt;
-    filsysrespond(x->fs, x, &fc, nil);
-}
-@
-
-\subsection{Flush}
-
-<<function xfidflush>>=
-void
-xfidflush(Xfid *x)
-{
-    Fcall t;
-    Xfid *xf;
-
-    for(xf=xfid; xf; xf=xf->next)
-        if(xf->flushtag == x->oldtag){
-            xf->flushtag = -1;
-            xf->flushing = true;
-            incref(xf);	/* to hold data structures up at tail of synchronization */
-            if(xf->ref == 1)
-                error("ref 1 in flush");
-            if(canqlock(&xf->active)){
-                qunlock(&xf->active);
-                sendul(xf->flushc, 0);
-            }else{
-                qlock(&xf->active);	/* wait for him to finish */
-                qunlock(&xf->active);
-            }
-            xf->flushing = false;
-            if(decref(xf) == 0)
-                sendp(cxfidfree, xf);
-            break;
-        }
-    filsysrespond(x->fs, x, &t, nil);
-}
-@
-
-
 \chapter{[[/dev/...]] Demultiplexer}
 
-\section{Overview}
+\section{[[/mnt/wsys/cons]]}
 
-% before running rio, when in graphic mode in console have already
-% lots of devices, /dev/cons, /dev/mouse, /dev/cursor,  /dev/draw,
-% and also /dev/screen and /dev/window
-
-<<enum qid>>=
-enum qid
-{
-    Qdir,			/* /dev for this window */
-    <<[[qid]] cases>>
-    QMAX,
-};
-@
-
-% window+dev -> qid
-<<function QID>>=
-#define	QID(w,q)	((w<<8)|(q))
-@
-% what about overflow? hop will not have too many windows then
-
-% qid -> window
-<<function WIN>>=
-#define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
-@
-
-% qid -> dev
-<<function FILE>>=
-#define	FILE(q)	(((ulong)(q).path) & 0xFF)
-@
-
-
-<<struct Dirtab>>=
-struct Dirtab
-{
-    char	*name;
-    uchar	type;
-    uint	qid;
-    uint	perm;
-};
-@
-
-<<global dirtab>>=
-Dirtab dirtab[]=
-{
-    { ".",		QTDIR,	Qdir,		0500|DMDIR },
-    <<dirtab array elements>>
-    { nil, }
-};
-@
-
-
-
-\section{[[/dev/cons]]}
+% quite complicated
 
 <<[[qid]] cases>>=
 Qcons,
 @
-
 <<dirtab array elements>>=
 { "cons",		QTFILE,	Qcons,		0600 },
 @
@@ -5000,6 +5432,7 @@ Qcons,
 enum { CRdata, CRflush, NCR };
 @
 
+%bug: was NMR below, but it should be NCR
 <<[[xfidread()]] cases>>=
 case Qcons:
     x->flushtag = x->tag;
@@ -5010,7 +5443,7 @@ case Qcons:
     alts[CRflush].c = x->flushc;
     alts[CRflush].v = nil;
     alts[CRflush].op = CHANRCV;
-    alts[NMR].op = CHANEND;
+    alts[NCR].op = CHANEND;
 
     switch(alt(alts)){
     case CRdata:
@@ -5115,18 +5548,18 @@ case Qcons:
 @
 
 
-\section{[[/dev/consctl]]}
+\section{[[/mnt/wsys/consctl]]}
 
 <<[[Window]] other fields>>=
-bool_byte	ctlopen;
+bool	ctlopen;
 @
 % exclusive access to /dev/consctl (why?)
+%old: bool_byte
 
 
 <<[[qid]] cases>>=
 Qconsctl,
 @
-
 <<dirtab array elements>>=
 { "consctl",	QTFILE,	Qconsctl,	0200 },
 @
@@ -5140,6 +5573,7 @@ case Qconsctl:
     w->ctlopen = true;
     break;
 @
+
 
 <<[[xfidclose()]] cases>>=
 case Qconsctl:
@@ -5156,7 +5590,7 @@ case Qconsctl:
     return;
 @
 
-\section{[[/dev/mouse]]}
+\section{[[/mnt/wsys/mouse]]}
 
 <<[[qid]] cases>>=
 Qmouse,
@@ -5165,6 +5599,7 @@ Qmouse,
 { "mouse",		QTFILE,	Qmouse,		0600 },
 @
 
+% seen mouseopen attribute in core DS
 <<[[xfidopen()]] cases>>=
 case Qmouse:
     if(w->mouseopen){
@@ -5193,6 +5628,7 @@ case Qmouse:
         wsendctlmesg(w, Refresh, w->i->r, nil);
     break;
 @
+% why Refresh ??
 
 
 <<enum _anon_ (windows/rio/xfid.c)4>>=
@@ -5242,6 +5678,8 @@ case Qmouse:
 @
 
 
+% can move the mouse programatically :)
+
 <<[[xfidwrite()]] cases>>=
 case Qmouse:
     if(w!=input || Dx(w->screenr)<=0)
@@ -5262,7 +5700,20 @@ case Qmouse:
     break;
 @
 
-\section{[[/dev/cursor]]}
+
+
+<<[[Wctlmesgkind]] cases>>=
+Movemouse,
+@
+<<[[wctlmesg()]] cases>>=
+case Movemouse:
+    if(sweeping || !ptinrect(r.min, w->i->r))
+        break;
+    wmovemouse(w, r.min);
+    break;
+@
+
+\section{[[/mnt/wsys/cursor]]}
 
 <<[[qid]] cases>>=
 Qcursor,
@@ -5298,112 +5749,52 @@ case Qcursor:
     break;
 @
 
-\section{[[/dev/draw/]]}
+
+\section{[[/dev/draw/]] and [[/mnt/wsys/winname]]}
+
 % actually this one in rio is not demultiplexed!
-% so more efficient
+% so more efficient.
+% Done by the namedimage thing and /dev/winname
 
 % security issue? can pass wrong screen id to draw operation?
 
 
-\section{[[/dev/screen]]}
-% actually this one is global too
-
-% but not /dev/draw!
-% this is not demultiplex, but instead
-% writing to /dev/screen write to /dev/draw at the right place
-
 <<[[qid]] cases>>=
-Qscreen,
+Qwinname,
 @
 <<dirtab array elements>>=
-{ "screen",		QTFILE,	Qscreen,	0400 },
+{ "winname",	QTFILE,	Qwinname,	0400 },
 @
 
 <<[[xfidread()]] cases>>=
-case Qscreen:
-    i = display->image;
-    if(i == nil){
-        filsysrespond(x->fs, x, &fc, "no top-level screen");
+case Qwinname:
+    n = strlen(w->name);
+    if(n == 0){
+        filsysrespond(x->fs, x, &fc, "window has no name");
         break;
     }
-    r = i->r;
-    /* fall through */
-
-caseImage:
-    if(off < 5*12){
-        n = sprint(buf, "%11s %11d %11d %11d %11d ",
-            chantostr(cbuf, view->chan),
-            i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y);
-        t = estrdup(buf);
-        goto Text;
-    }
-    t = malloc(cnt);
-    fc.data = t;
-    n = readwindow(i, t, r, off, cnt);	/* careful; fc.count is unsigned */
-    if(n < 0){
-        buf[0] = 0;
-        errstr(buf, sizeof buf);
-        filsysrespond(x->fs, x, &fc, buf);
-    }else{
-        fc.count = n;
-        filsysrespond(x->fs, x, &fc, nil);
-    }
-    free(t);
-    return;
+    t = estrdup(w->name);
+    goto Text;
 @
 
-<<function readwindow>>=
-int
-readwindow(Image *i, char *t, Rectangle r, int offset, int n)
-{
-    int ww, y;
+% very useful! basis for initdraw and gengetwindow!!
 
-    offset -= 5*12;
-    ww = bytesperline(r, view->depth);
-    r.min.y += offset/ww;
-    if(r.min.y >= r.max.y)
-        return 0;
-    y = r.min.y + n/ww;
-    if(y < r.max.y)
-        r.max.y = y;
-    if(r.max.y <= r.min.y)
-        return 0;
-    return unloadimage(i, r, (uchar*)t, n);
-}
-@
-
-
-\section{[[/dev/window]]}
-
-<<[[qid]] cases>>=
-Qwindow,
-@
-<<dirtab array elements>>=
-{ "window",		QTFILE,	Qwindow,	0400 },
-@
-
-<<[[xfidread()]] cases>>=
-case Qwindow:
-    i = w->i;
-    if(i == nil || Dx(w->screenr)<=0){
-        filsysrespond(x->fs, x, &fc, Enowindow);
-        return;
-    }
-    r = w->screenr;
-    goto caseImage;
-@
 
 
 \chapter{Graphical Windows}
 
-% does not care about /dev/cons, but care
-% about /dev/draw, /dev/mouse (and /dev/consctl for keyboard in raw mode)
+% does not care about writing in /mnt/wsys/cons, but care
+% about /dev/draw, /mnt/wsys/mouse 
+% (and /mnt/wsys/consctl for keyboard in raw mode)
 
-\section{Graphical window creation}
+\section{Graphical window setup}
+% not really creation, since most of the time create first
+% textual window and then setup things to become a graphical window
 
 % regular window that calls initdraw() => mouseopen set?
 
 \subsection{Mouse open mode}
+
 % direct access to mouse events, no interpretation like cut/copy/paste
 % menu
 
@@ -5413,6 +5804,9 @@ case Qwindow:
 % key, buffered input, etc (actually have navigation key if mouse not opened
 % even if raw mode)
 
+% not necessarily tied to graphical app, but strongly correlated.
+
+
 % could be also in Window graphical window section
 <<[[Window]] config fields>>=
 bool	rawing;
@@ -5420,19 +5814,6 @@ bool	rawing;
 %old: bool_byte
 % actually abused as an int in if(w->rawing++ == 0) as one can write
 % multiple rawon message on the consctl
-
-
-<<[[xfidclose()]] Qconsctl case, if rawing>>=
-if(w->rawing){
-    w->rawing = false;
-    wsendctlmesg(w, Rawoff, ZR, nil);
-}
-@
-
-<<[[Wctlmesgkind]] cases>>=
-Rawon,
-Rawoff,
-@
 
 
 <<[[xfidwrite()]] Qconsctl case>>=
@@ -5448,6 +5829,22 @@ if(strncmp(x->data, "rawoff", 6)==0 && w->rawing){
     break;
 }
 @
+
+
+<<[[xfidclose()]] Qconsctl case, if rawing>>=
+if(w->rawing){
+    w->rawing = false;
+    wsendctlmesg(w, Rawoff, ZR, nil);
+}
+@
+
+<<[[Wctlmesgkind]] cases>>=
+Rawon,
+Rawoff,
+@
+
+
+
 
 
 
@@ -5482,7 +5879,7 @@ waddraw(Window *w, Rune *r, int nr)
 
 <<[[wctlmesg()]] cases>>=
 case Rawon:
-    // already setup w->rawing somewhere else?
+    // already setup w->rawing in xfidwrite, nothing else todo
     break;
 case Rawoff:
     if(w->deleted)
@@ -5494,7 +5891,6 @@ case Rawoff:
     }
     break;
 @
-
 
 
 \section{Mouse events}
@@ -5516,6 +5912,7 @@ Mouseinfo	mouse;
 struct Mouseinfo
 {
     Mousestate	queue[16];
+
     int	ri;	/* read index into queue */
     int	wi;	/* write index */
     ulong	counter;	/* serial no. of last mouse event we received */
@@ -5537,7 +5934,7 @@ struct Mousestate
 Mousestate *mp, m;
 @
 
-
+% received a mouse even from mousethread
 <<[[winctl()]] WMouse case if mouseopen>>=
 if(w->mouseopen) {
     w->mouse.counter++;
@@ -5558,10 +5955,7 @@ if(w->mouseopen) {
 
 
 
-\subsection{[[/dev/mouse]]  emitting}
-% not sure it's actually /dev/mouse
-
-\t mv later? more advanced no? mv with Mouse events  in graphical window?
+\subsection{[[/mnt/wsys/mouse]]  emitting}
 
 <<[[Window]] other fields>>=
 Channel		*mouseread;	/* chan(Mousereadmesg) */
@@ -5625,9 +6019,8 @@ case WMouseread:
 
 % WCread in raw mode?
 
-
-
-\subsection{[[/dev/cons]] emitting}
+\subsection{[[/mnt/wsys/cons]] emitting}
+% relaying
 
 % when have key, it's send to app that listen on /dev/cons,
 % so we actually reemit here (what we have listened before on w->ck)
@@ -5663,6 +6056,7 @@ struct Stringpair	/* rune and nrune or byte and nbyte */
 
 % when app write on /dev/cons, how does it work???
 % it's gonna go to xfidwrite?
+% but this is more for textual window no?
 
 <<[[Window]] other fields>>=
 Channel		*conswrite;	/* chan(Conswritemesg) */
@@ -5822,24 +6216,60 @@ case WCread:
 
 
 
-
-
-
 \chapter{Textual Windows}
-% fake /dev/cons
-
-% it's relatively easy thx to the fake /dev/cons and frame lib
 
 % challenge is don't want to change all our command line apps
 % to do some drawtext() ... we want backward compatibility, some
 % kind of emulation! (and with more services!)
 
-%
+% it's relatively easy to have an xterm
+% thx to the fake /dev/cons and frame lib
+
 %https://www.destroyallsoftware.com/talks/a-whole-new-world
 
 \section{Textual window creation}
 
-% now in window creation chapter
+% Saw window creation section before. Some additional setup
+% for textual windows.
+
+<<[[wmk()]] textual window settings>>=
+r = insetrect(i->r, Selborder+1);
+w->scrollr = r;
+w->scrollr.max.x = r.min.x+Scrollwid;
+w->lastsr = ZR;
+r.min.x += Scrollwid+Scrollgap;
+
+frinit(w, r, font, i, cols);
+
+w->maxtab = maxtab * stringwidth(font, "0");
+
+w->scrolling = scrolling;
+
+r = insetrect(w->i->r, Selborder);
+draw(w->i, r, cols[BACK], nil, w->entire.min);
+@
+
+
+<<[[wresize()]] textual window updates>>=
+r = insetrect(i->r, Selborder+1);
+w->scrollr = r;
+w->scrollr.max.x = r.min.x+Scrollwid;
+w->lastsr = ZR;
+r.min.x += Scrollwid+Scrollgap;
+if(move)
+    frsetrects(w, r, w->i);
+else{
+    frclear(w, false);
+    frinit(w, r, w->font, w->i, cols);
+    wsetcols(w);
+    w->maxtab = maxtab * stringwidth(w->font, "0");
+    r = insetrect(w->i->r, Selborder);
+    draw(w->i, r, cols[BACK], nil, w->entire.min);
+    wfill(w);
+    wsetselect(w, w->q0, w->q1);
+    wscrdraw(w);
+}
+@
 
 \section{[[Frame]]}
 
@@ -5997,6 +6427,35 @@ free(s);
 
 \section{Content rendering}
 
+<<[[wrepaint()]] update cols>>=
+wsetcols(w);
+@
+
+% wrepaint | ... -> <>
+<<function wsetcols>>=
+void
+wsetcols(Window *w)
+{
+    <<[[wsetcols()]] if holding>>
+    else
+        if(w == input)
+            w->cols[TEXT] = w->cols[HTEXT] = display->black;
+        else
+            w->cols[TEXT] = w->cols[HTEXT] = darkgrey;
+}
+@
+% invert color, but who then redraw the content?
+
+% will see cols later
+
+
+
+<<[[wrepaint()]] if mouse not opened>>=
+if(!w->mouseopen)
+    frredraw(w);
+@
+
+
 
 <<[[Window]] textual window fields>>=
 // array<Rune>
@@ -6132,6 +6591,7 @@ wfill(Window *w)
 
 \subsection{Middle click menu}
 
+% certain condition = when !mouseopen
 <<[[mousethread()]] middle click under certain conditions>>=
 button2menu(winput);
 @
@@ -6232,6 +6692,7 @@ wmousectl(Window *w)
     wclose(w);
 }
 @
+% transform mouse even in key event :) for scrolling
 
 \section{Keyboard events}
 
@@ -6778,6 +7239,11 @@ wsetselect(Window *w, uint q0, uint q1)
 
 \section{Scrolling}
 
+<<constants Scrollxxx>>=
+Scrollwid 		= 12,	/* width of scroll bar */
+Scrollgap 		= 4,	/* gap right of scroll bar */
+@
+
 <<[[Window]] textual window fields>>=
 Rectangle	scrollr;
 @
@@ -6918,6 +7384,10 @@ scrtemps(void)
     if(scrtmp == nil)
         error("scrtemps");
 }
+@
+
+<<constant BIG>>=
+BIG			= 3,	/* factor by which window dimension can exceed screen */
 @
 
 <<function freescrtemps>>=
@@ -7109,14 +7579,13 @@ wbacknl(Window *w, uint p, uint n)
 
 
 
-\chapter{[[/dev/...]] Windows Files}
+\chapter{[[/mnt/wsys/...]] Windows Files}
 
-\section{[[/dev/winid]]}
+\section{[[/mnt/wsys/winid]]}
 
 <<[[qid]] cases>>=
 Qwinid,
 @
-
 <<dirtab array elements>>=
 { "winid",		QTFILE,	Qwinid,		0400 },
 @
@@ -7128,27 +7597,11 @@ case Qwinid:
     goto Text;
 @
 
-\section{[[/dev/winname]]}
+\section{[[/mnt/wsys/winname]]}
+% before
 
-<<[[qid]] cases>>=
-Qwinname,
-@
-<<dirtab array elements>>=
-{ "winname",	QTFILE,	Qwinname,	0400 },
-@
 
-<<[[xfidread()]] cases>>=
-case Qwinname:
-    n = strlen(w->name);
-    if(n == 0){
-        filsysrespond(x->fs, x, &fc, "window has no name");
-        break;
-    }
-    t = estrdup(w->name);
-    goto Text;
-@
-
-\section{[[/dev/label]]}
+\section{[[/mnt/wsys/label]]}
 
 <<[[qid]] cases>>=
 Qlabel,
@@ -7163,8 +7616,9 @@ case Qlabel:
     if(off > n)
         off = n;
     if(off+cnt > n)
-        cnt = n-off;
-    fc.data = w->label+off;
+        cnt = n - off;
+
+    fc.data = w->label + off;
     fc.count = cnt;
     filsysrespond(x->fs, x, &fc, nil);
     break;
@@ -7179,11 +7633,100 @@ case Qlabel:
     free(w->label);
     w->label = emalloc(cnt+1);
     memmove(w->label, x->data, cnt);
-    w->label[cnt] = 0;
+    w->label[cnt] = '\0';
     break;
 @
 
-\section{[[/dev/text]]}
+\section{[[/mnt/wsys/screen]]}
+% actually this one is global too
+
+% but not /dev/draw!
+% this is not demultiplex, but instead
+% writing to /dev/screen write to /dev/draw at the right place
+
+<<[[qid]] cases>>=
+Qscreen,
+@
+<<dirtab array elements>>=
+{ "screen",		QTFILE,	Qscreen,	0400 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qscreen:
+    i = display->image;
+    if(i == nil){
+        filsysrespond(x->fs, x, &fc, "no top-level screen");
+        break;
+    }
+    r = i->r;
+    /* fall through */
+
+caseImage:
+    if(off < 5*12){
+        n = sprint(buf, "%11s %11d %11d %11d %11d ",
+            chantostr(cbuf, view->chan),
+            i->r.min.x, i->r.min.y, i->r.max.x, i->r.max.y);
+        t = estrdup(buf);
+        goto Text;
+    }
+    t = malloc(cnt);
+    fc.data = t;
+    n = readwindow(i, t, r, off, cnt);	/* careful; fc.count is unsigned */
+    if(n < 0){
+        buf[0] = 0;
+        errstr(buf, sizeof buf);
+        filsysrespond(x->fs, x, &fc, buf);
+    }else{
+        fc.count = n;
+        filsysrespond(x->fs, x, &fc, nil);
+    }
+    free(t);
+    return;
+@
+
+<<function readwindow>>=
+int
+readwindow(Image *i, char *t, Rectangle r, int offset, int n)
+{
+    int ww, y;
+
+    offset -= 5*12;
+    ww = bytesperline(r, view->depth);
+    r.min.y += offset/ww;
+    if(r.min.y >= r.max.y)
+        return 0;
+    y = r.min.y + n/ww;
+    if(y < r.max.y)
+        r.max.y = y;
+    if(r.max.y <= r.min.y)
+        return 0;
+    return unloadimage(i, r, (uchar*)t, n);
+}
+@
+
+
+\section{[[/mnt/wsys/window]]}
+
+<<[[qid]] cases>>=
+Qwindow,
+@
+<<dirtab array elements>>=
+{ "window",		QTFILE,	Qwindow,	0400 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qwindow:
+    i = w->i;
+    if(i == nil || Dx(w->screenr)<=0){
+        filsysrespond(x->fs, x, &fc, Enowindow);
+        return;
+    }
+    r = w->screenr;
+    goto caseImage;
+@
+
+
+\section{[[/mnt/wsys/text]]}
 
 <<[[qid]] cases>>=
 Qtext,
@@ -7204,7 +7747,8 @@ Text:
     }
     if(off+cnt > n)
         cnt = n-off;
-    fc.data = t+off;
+
+    fc.data = t + off;
     fc.count = cnt;
     filsysrespond(x->fs, x, &fc, nil);
     free(t);
@@ -7220,12 +7764,12 @@ wcontents(Window *w, int *ip)
 @
 
 
-\section{[[/dev/wdir]]}
+\section{[[/mnt/wsys/wdir]]}
 
 <<[[Window]] other fields>>=
 char		*dir; // /dev/wdir
 @
-
+% window working dir
 
 
 <<[[qid]] cases>>=
@@ -7241,6 +7785,8 @@ case Qwdir:
     n = strlen(t);
     goto Text;
 @
+
+% so can write on /dev/wdir, but effect?
 
 <<[[xfidwrite()]] cases>>=
 case Qwdir:
@@ -7269,7 +7815,7 @@ case Qwdir:
     break;
 @
 
-\section{[[/dev/wsys/]]}
+\section{[[/mnt/wsys/wsys/]]}
 
 <<[[qid]] cases>>=
 Qwsys,		/* directory of window directories */
@@ -7277,7 +7823,7 @@ Qwsys,		/* directory of window directories */
 <<dirtab array elements>>=
 { "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
 @
-
+% QTDIR!
 
 
 <<function idcmp>>=
@@ -7293,7 +7839,7 @@ idcmp(void *a, void *b)
 case Qwsys:
 
     qlock(&all);
-    ids = emalloc(nwindow*sizeof(int));
+    ids = emalloc(nwindow * sizeof(int));
     for(j=0; j<nwindow; j++)
         ids[j] = windows[j]->id;
     qunlock(&all);
@@ -7319,7 +7865,7 @@ case Qwsys:
 
 
 
-
+% see filsyswalk
 <<[[qid]] cases>>=
 Qwsysdir,		/* window directory, child of wsys */
 @
@@ -7330,7 +7876,7 @@ case Qdir:
 case Qwsysdir:
     d = dirtab;
     d++;	/* first entry is '.' */
-    for(i=0; d->name!=nil && i<e; i+=len){
+    for(i=0; d->name != nil && i<e; i+=len){
         len = dostat(fs, WIN(x->f->qid), d, b+n, x->count-n, clock);
         if(len <= BIT16SZ)
             break;
@@ -7342,15 +7888,17 @@ case Qwsysdir:
 @
 
 
-\section{[[/dev/wctl]]}
+\section{[[/mnt/wsys/wctl]]}
 
 % allow to command an app? a la watir/selenium/... ?
 
 <<[[Window]] other fields>>=
 bool	wctlopen;
-int	 	wctlready;
+bool 	wctlready;
 @
-%old: was bool_byte
+%old: was bool_byte for wctlopen, and int for wctlready
+% exclusive access to wctlopen
+
 
 
 <<[[qid]] cases>>=
@@ -7388,6 +7936,22 @@ case Qwctl:
         w->wctlopen = false;
 break;
 @
+
+
+
+<<[[wcurrent()]] wakeup w and oi>>=
+if(w != oi){
+    if(oi){
+        oi->wctlready = true;
+        wsendctlmesg(oi, Wakeup, ZR, nil);
+    }
+    if(w){
+        w->wctlready = true;
+        wsendctlmesg(w, Wakeup, ZR, nil);
+    }
+}
+@
+% But Wakeup does nothing actually
 
 
 <<enum _anon_ (windows/rio/xfid.c)5>>=
@@ -7457,9 +8021,129 @@ case Qwctl:
 
 
 
+<<function writewctl>>=
+int
+writewctl(Xfid *x, char *err)
+{
+    int cnt, cmd, j, id, hideit, scrollit, pid;
+    Image *i;
+    char *arg, *dir;
+    Rectangle rect;
+    Window *w;
+
+    w = x->f->w;
+    cnt = x->count;
+    x->data[cnt] = '\0';
+    id = 0;
+
+    rect = rectsubpt(w->screenr, view->r.min);
+    cmd = parsewctl(&arg, rect, &rect, &pid, &id, &hideit, &scrollit, &dir, x->data, err);
+    if(cmd < 0)
+        return -1;
+
+    if(mouse->buttons!=0 && cmd>=Top){
+        strcpy(err, "action disallowed when mouse active");
+        return -1;
+    }
+
+    if(id != 0){
+        for(j=0; j<nwindow; j++)
+            if(windows[j]->id == id)
+                break;
+        if(j == nwindow){
+            strcpy(err, "no such window id");
+            return -1;
+        }
+        w = windows[j];
+        if(w->deleted || w->i==nil){
+            strcpy(err, "window deleted");
+            return -1;
+        }
+    }
+
+    switch(cmd){
+    case New:
+        return wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
+    case Set:
+        if(pid > 0)
+            wsetpid(w, pid, 0);
+        return 1;
+    case Move:
+        rect = Rect(rect.min.x, rect.min.y, rect.min.x+Dx(w->screenr), rect.min.y+Dy(w->screenr));
+        rect = rectonscreen(rect);
+        /* fall through */
+    case Resize:
+        if(!goodrect(rect)){
+            strcpy(err, Ebadwr);
+            return -1;
+        }
+        if(eqrect(rect, w->screenr))
+            return 1;
+        i = allocwindow(wscreen, rect, Refbackup, DWhite);
+        if(i == nil){
+            strcpy(err, Ewalloc);
+            return -1;
+        }
+        border(i, rect, Selborder, red, ZP);
+        wsendctlmesg(w, Reshaped, i->r, i);
+        return 1;
+    case Scroll:
+        w->scrolling = 1;
+        wshow(w, w->nr);
+        wsendctlmesg(w, Wakeup, ZR, nil);
+        return 1;
+    case Noscroll:
+        w->scrolling = 0;
+        wsendctlmesg(w, Wakeup, ZR, nil);
+        return 1;
+    case Top:
+        wtopme(w);
+        return 1;
+    case Bottom:
+        wbottomme(w);
+        return 1;
+    case Current:
+        wcurrent(w);
+        return 1;
+    case Hide:
+        switch(whide(w)){
+        case -1:
+            strcpy(err, "window already hidden");
+            return -1;
+        case 0:
+            strcpy(err, "hide failed");
+            return -1;
+        default:
+            break;
+        }
+        return 1;
+    case Unhide:
+        for(j=0; j<nhidden; j++)
+            if(hidden[j] == w)
+                break;
+        if(j == nhidden){
+            strcpy(err, "window not hidden");
+            return -1;
+        }
+        if(wunhide(j) == 0){
+            strcpy(err, "hide failed");
+            return -1;
+        }
+        return 1;
+    case Delete:
+        wsendctlmesg(w, Deleted, ZR, nil);
+        return 1;
+    }
+    strcpy(err, "invalid wctl message");
+    return -1;
+}
+@
 
 
-\subsection{[[/dev/wctl]] emitting}
+
+
+
+\subsection{[[/mnt/wsys/wctl]] emitting}
 
 % when read by app it's the current status of the window
 
@@ -7529,6 +8213,8 @@ fdt	clockfd;
 clockfd = open("/dev/time", OREAD|OCEXEC);
 @
 
+%  -> <>
+% used to give current date for files /dev/xxx
 <<function getclock>>=
 static
 uint
@@ -7548,8 +8234,8 @@ getclock(void)
 
 
 
-
-
+% who uses the timer and timerproc?
+% wscrscleep
 
 
 <<struct Timer>>=
@@ -7582,6 +8268,7 @@ timerproc(void*)
 
     rfork(RFFDG);
     threadsetname("TIMERPROC");
+
     t = nil;
     na = 0;
     nt = 0;
@@ -7701,6 +8388,9 @@ timerstart(int dt)
 \chapter{Signals, notes}
 % adv topics?
 
+% saw some hangup before note when delete a window
+% and want to kill associated process
+
 <<global oknotes>>=
 char *oknotes[] =
 {
@@ -7744,6 +8434,8 @@ killprocs(void)
         postnote(PNGROUP, windows[i]->pid, "hangup");
 }
 @
+
+
 
 
 \chapter{Advanced Topics}
@@ -8279,123 +8971,6 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
 }
 @
 
-<<function writewctl>>=
-int
-writewctl(Xfid *x, char *err)
-{
-    int cnt, cmd, j, id, hideit, scrollit, pid;
-    Image *i;
-    char *arg, *dir;
-    Rectangle rect;
-    Window *w;
-
-    w = x->f->w;
-    cnt = x->count;
-    x->data[cnt] = '\0';
-    id = 0;
-
-    rect = rectsubpt(w->screenr, view->r.min);
-    cmd = parsewctl(&arg, rect, &rect, &pid, &id, &hideit, &scrollit, &dir, x->data, err);
-    if(cmd < 0)
-        return -1;
-
-    if(mouse->buttons!=0 && cmd>=Top){
-        strcpy(err, "action disallowed when mouse active");
-        return -1;
-    }
-
-    if(id != 0){
-        for(j=0; j<nwindow; j++)
-            if(windows[j]->id == id)
-                break;
-        if(j == nwindow){
-            strcpy(err, "no such window id");
-            return -1;
-        }
-        w = windows[j];
-        if(w->deleted || w->i==nil){
-            strcpy(err, "window deleted");
-            return -1;
-        }
-    }
-
-    switch(cmd){
-    case New:
-        return wctlnew(rect, arg, pid, hideit, scrollit, dir, err);
-    case Set:
-        if(pid > 0)
-            wsetpid(w, pid, 0);
-        return 1;
-    case Move:
-        rect = Rect(rect.min.x, rect.min.y, rect.min.x+Dx(w->screenr), rect.min.y+Dy(w->screenr));
-        rect = rectonscreen(rect);
-        /* fall through */
-    case Resize:
-        if(!goodrect(rect)){
-            strcpy(err, Ebadwr);
-            return -1;
-        }
-        if(eqrect(rect, w->screenr))
-            return 1;
-        i = allocwindow(wscreen, rect, Refbackup, DWhite);
-        if(i == nil){
-            strcpy(err, Ewalloc);
-            return -1;
-        }
-        border(i, rect, Selborder, red, ZP);
-        wsendctlmesg(w, Reshaped, i->r, i);
-        return 1;
-    case Scroll:
-        w->scrolling = 1;
-        wshow(w, w->nr);
-        wsendctlmesg(w, Wakeup, ZR, nil);
-        return 1;
-    case Noscroll:
-        w->scrolling = 0;
-        wsendctlmesg(w, Wakeup, ZR, nil);
-        return 1;
-    case Top:
-        wtopme(w);
-        return 1;
-    case Bottom:
-        wbottomme(w);
-        return 1;
-    case Current:
-        wcurrent(w);
-        return 1;
-    case Hide:
-        switch(whide(w)){
-        case -1:
-            strcpy(err, "window already hidden");
-            return -1;
-        case 0:
-            strcpy(err, "hide failed");
-            return -1;
-        default:
-            break;
-        }
-        return 1;
-    case Unhide:
-        for(j=0; j<nhidden; j++)
-            if(hidden[j] == w)
-                break;
-        if(j == nhidden){
-            strcpy(err, "window not hidden");
-            return -1;
-        }
-        if(wunhide(j) == 0){
-            strcpy(err, "hide failed");
-            return -1;
-        }
-        return 1;
-    case Delete:
-        wsendctlmesg(w, Deleted, ZR, nil);
-        return 1;
-    }
-    strcpy(err, "invalid wctl message");
-    return -1;
-}
-@
 
 
 
@@ -8639,7 +9214,7 @@ wpaste(Window *w)
 
 
 
-\subsection{[[/dev/snarf]]}
+\subsection{[[/mnt/wsys/snarf]]}
 
 <<[[qid]] cases>>=
 Qsnarf,
@@ -9179,7 +9754,7 @@ if(w == wkeyboard)
     wkeyboard = nil;
 @
 
-\subsection{[[/dev/kdbin]]}
+\subsection{[[/mnt/wsys/kdbin]]}
 
 <<[[qid]] cases>>=
 Qkbdin,
@@ -9397,6 +9972,77 @@ case Holdoff:
     break;
 @
 
+\section{Flushing}
+
+%from docs/man/5/flush
+%"When the response to a request is no longer needed, such as when
+%a user interrupts a process doing a read (2), a Tflush
+%request is sent to the server to purge the pending response."
+
+% so looks like advanced fileserver feature not super needed.
+
+
+<<[[Xfid]] flushing fields>>=
+int	flushing;	/* another Xfid is trying to flush us */
+int	flushtag;	/* our tag, so flush can find us */
+Channel	*flushc;/* channel(int) to notify us we're being flushed */
+@
+
+<<function filsysflush>>=
+static
+Xfid*
+filsysflush(Filsys*, Xfid *x, Fid*)
+{
+    sendp(x->c, xfidflush);
+    return nil;
+}
+@
+
+
+<<function xfidflush>>=
+void
+xfidflush(Xfid *x)
+{
+    Fcall t;
+    Xfid *xf;
+
+    for(xf=xfid; xf; xf=xf->next)
+        if(xf->flushtag == x->oldtag){
+            xf->flushtag = -1;
+            xf->flushing = true;
+            incref(xf);	/* to hold data structures up at tail of synchronization */
+            if(xf->ref == 1)
+                error("ref 1 in flush");
+            if(canqlock(&xf->active)){
+                qunlock(&xf->active);
+                sendul(xf->flushc, 0);
+            }else{
+                qlock(&xf->active);	/* wait for him to finish */
+                qunlock(&xf->active);
+            }
+            xf->flushing = false;
+            if(decref(xf) == 0)
+                sendp(cxfidfree, xf);
+            break;
+        }
+    filsysrespond(x->fs, x, &t, nil);
+}
+@
+
+
+% -> <>
+<<function filsyscancel>>=
+void
+filsyscancel(Xfid *x)
+{
+    if(x->buf){
+        free(x->buf);
+        x->buf = nil;
+    }
+}
+@
+
+
 
 \chapter{Conclusion}
 
@@ -9426,6 +10072,11 @@ fmtinstall('F', fcallfmt);
 <<[[filsysproc()]] dump Fcall if debug>>=
 if(DEBUG)
     fprint(STDERR, "rio:<-%F\n", &x->Fcall);
+@
+
+<<[[filsysrespond()]] dump Fcall t if debug>>=
+if(DEBUG)
+    fprint(STDERR, "rio:->%F\n", t);
 @
 
 %\chapter{Profiling}
