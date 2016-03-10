@@ -121,8 +121,10 @@ xfidallocthread(void*)
             else{
                 x = emalloc(sizeof(Xfid));
                 x->c = chancreate(sizeof(void(*)(Xfid*)), 0);
-                x->flushc = chancreate(sizeof(int), 0);	/* notification only; no data */
+                /*s: [[xfidallocthread()]] create flushc channel */
+                x->flushc = chancreate(sizeof(int), 0);	/* notification only; nodata */
                 x->flushtag = -1;
+                /*e: [[xfidallocthread()]] create flushc channel */
 
                 // insert_list(x, xfid)
                 x->next = xfid;
@@ -187,7 +189,10 @@ xfidctl(void *arg)
 
     for(;;){
         f = recvp(x->c);
+
+        // Executing a xfidxxx()
         (*f)(x);
+
         if(decref(x) == 0)
             sendp(cxfidfree, x);
     }
@@ -216,6 +221,7 @@ xfidflush(Xfid *x)
                 qunlock(&xf->active);
             }
             xf->flushing = false;
+
             if(decref(xf) == 0)
                 sendp(cxfidfree, xf);
             break;
@@ -310,19 +316,13 @@ xfidopen(Xfid *x)
     /*e: [[xfidxxx()]] respond error if window was deleted */
     switch(FILE(x->f->qid)){
     /*s: [[xfidopen()]] cases */
-    case Qconsctl:
-        if(w->ctlopen){
-            filsysrespond(x->fs, x, &fc, Einuse);
-            return;
-        }
-        w->ctlopen = true;
-        break;
-    /*x: [[xfidopen()]] cases */
     case Qmouse:
         if(w->mouseopen){
             filsysrespond(x->fs, x, &fc, Einuse);
             return;
         }
+        w->mouseopen = true;
+
         /*
          * Reshaped: there's a race if the appl. opens the
          * window, is resized, and then opens the mouse,
@@ -332,7 +332,14 @@ xfidopen(Xfid *x)
          * dawn of time.  We choose the lesser evil.
          */
         w->resized = false;
-        w->mouseopen = true;
+        break;
+    /*x: [[xfidopen()]] cases */
+    case Qconsctl:
+        if(w->ctlopen){
+            filsysrespond(x->fs, x, &fc, Einuse);
+            return;
+        }
+        w->ctlopen = true;
         break;
     /*x: [[xfidopen()]] cases */
     case Qwctl:
@@ -394,6 +401,14 @@ xfidclose(Xfid *x)
     w = x->f->w;
     switch(FILE(x->f->qid)){
     /*s: [[xfidclose()]] cases */
+    case Qmouse:
+        w->mouseopen = false;
+
+        w->resized = false;
+        if(w->i != nil)
+            wsendctlmesg(w, Refresh, w->i->r, nil);
+        break;
+    /*x: [[xfidclose()]] cases */
     case Qconsctl:
         /*s: [[xfidclose()]] Qconsctl case, if rawing */
         if(w->rawing){
@@ -408,13 +423,6 @@ xfidclose(Xfid *x)
         }
         /*e: [[xfidclose()]] Qconsctl case, if holding */
         w->ctlopen = false;
-        break;
-    /*x: [[xfidclose()]] cases */
-    case Qmouse:
-        w->resized = false;
-        w->mouseopen = false;
-        if(w->i != nil)
-            wsendctlmesg(w, Refresh, w->i->r, nil);
         break;
     /*x: [[xfidclose()]] cases */
     case Qcursor:
@@ -458,12 +466,14 @@ xfidwrite(Xfid *x)
     int off, cnt;
     /*s: [[xfidwrite()]] other locals */
     int c, nb, nr;
-    char buf[256], *p;
-    Point pt;
+    char buf[256];
     Rune *r;
     Conswritemesg cwm;
     Stringpair pair;
     Alt alts[NCW+1];
+    /*x: [[xfidwrite()]] other locals */
+    char *p;
+    Point pt;
     /*e: [[xfidwrite()]] other locals */
     
     w = x->f->w;
@@ -480,6 +490,24 @@ xfidwrite(Xfid *x)
 
     switch(qid){
     /*s: [[xfidwrite()]] cases */
+    case Qmouse:
+        if(w!=input || Dx(w->screenr)<=0)
+            break;
+        if(x->data[0] != 'm'){
+            filsysrespond(x->fs, x, &fc, Ebadmouse);
+            return;
+        }
+        p = nil;
+        pt.x = strtoul(x->data+1, &p, 0);
+        if(p == nil){
+            filsysrespond(x->fs, x, &fc, Eshort);
+            return;
+        }
+        pt.y = strtoul(p, nil, 0);
+        if(w==input && wpointto(mouse->xy)==w)
+            wsendctlmesg(w, Movemouse, Rpt(pt, pt), nil);
+        break;
+    /*x: [[xfidwrite()]] cases */
     case Qcons:
         nr = x->f->nrpart;
         if(nr > 0){
@@ -501,26 +529,35 @@ xfidwrite(Xfid *x)
             memmove(x->f->rpart, x->data+nb, cnt-nb);
             x->f->nrpart = cnt-nb;
         }
+        /*s: [[xfidxxx()]] set flushtag */
         x->flushtag = x->tag;
+        /*e: [[xfidxxx()]] set flushtag */
 
         alts[CWdata].c = w->conswrite;
         alts[CWdata].v = &cwm;
         alts[CWdata].op = CHANRCV;
+        /*s: [[xfidwrite()]] when Qcons, set alts for flush */
         alts[CWflush].c = x->flushc;
         alts[CWflush].v = nil;
         alts[CWflush].op = CHANRCV;
+        /*e: [[xfidwrite()]] when Qcons, set alts for flush */
         alts[NCW].op = CHANEND;
 
         switch(alt(alts)){
         case CWdata:
             break;
+        /*s: [[xfidwrite()]] when Qcons, switch alt flush case */
         case CWflush:
             filsyscancel(x);
             return;
+        /*e: [[xfidwrite()]] when Qcons, switch alt flush case */
         }
 
         /* received data */
+        /*s: [[xfidxxx()]] unset flushtag */
         x->flushtag = -1;
+        /*e: [[xfidxxx()]] unset flushtag */
+        /*s: [[xfidwrite()]] when Qcons, if flushing */
         if(x->flushing){
             recv(x->flushc, nil);	/* wake up flushing xfid */
             pair.s = runemalloc(1);
@@ -529,6 +566,8 @@ xfidwrite(Xfid *x)
             filsyscancel(x);
             return;
         }
+        /*e: [[xfidwrite()]] when Qcons, if flushing */
+
         qlock(&x->active);
         pair.s = r;
         pair.ns = nr;
@@ -568,26 +607,9 @@ xfidwrite(Xfid *x)
             break;
         }
         /*e: [[xfidwrite()]] Qconsctl case */
+        // else
         filsysrespond(x->fs, x, &fc, "unknown control message");
         return;
-    /*x: [[xfidwrite()]] cases */
-    case Qmouse:
-        if(w!=input || Dx(w->screenr)<=0)
-            break;
-        if(x->data[0] != 'm'){
-            filsysrespond(x->fs, x, &fc, Ebadmouse);
-            return;
-        }
-        p = nil;
-        pt.x = strtoul(x->data+1, &p, 0);
-        if(p == nil){
-            filsysrespond(x->fs, x, &fc, Eshort);
-            return;
-        }
-        pt.y = strtoul(p, nil, 0);
-        if(w==input && wpointto(mouse->xy)==w)
-            wsendctlmesg(w, Movemouse, Rpt(pt, pt), nil);
-        break;
     /*x: [[xfidwrite()]] cases */
     case Qcursor:
         if(cnt < 2*4+2*2*16)
@@ -714,17 +736,19 @@ xfidread(Xfid *x)
     /*s: [[xfidread()]] other locals */
     char buf[128];
     int n, c;
-    char *t;
     char cbuf[30];
-    Mouse ms;
     Rectangle r;
     Image *i;
-    Channel *c1, *c2;	/* chan (tuple(char*, int)) */
-    Consreadmesg crm;
-    Mousereadmesg mrm;
     Consreadmesg cwrm;
-    Stringpair pair;
     Alt alts[NCR+1];
+    /*x: [[xfidread()]] other locals */
+    Mousereadmesg mrm;
+    Mouse ms;
+    /*x: [[xfidread()]] other locals */
+    Consreadmesg crm;
+    Channel *c1, *c2;	/* chan (tuple(char*, int)) */
+    char *t;
+    Stringpair pair;
     /*e: [[xfidread()]] other locals */
     
     w = x->f->w;
@@ -740,76 +764,43 @@ xfidread(Xfid *x)
 
     switch(qid){
     /*s: [[xfidread()]] cases */
-    case Qcons:
-        x->flushtag = x->tag;
-
-        alts[CRdata].c = w->consread;
-        alts[CRdata].v = &crm;
-        alts[CRdata].op = CHANRCV;
-        alts[CRflush].c = x->flushc;
-        alts[CRflush].v = nil;
-        alts[CRflush].op = CHANRCV;
-        alts[NCR].op = CHANEND;
-
-        switch(alt(alts)){
-        case CRdata:
-            break;
-        case CRflush:
-            filsyscancel(x);
-            return;
-        }
-
-        /* received data */
-        x->flushtag = -1;
-        c1 = crm.c1;
-        c2 = crm.c2;
-        t = malloc(cnt+UTFmax+1);	/* room to unpack partial rune plus */
-        pair.s = t;
-        pair.ns = cnt;
-        send(c1, &pair);
-        if(x->flushing){
-            recv(x->flushc, nil);	/* wake up flushing xfid */
-            recv(c2, nil);			/* wake up window and toss data */
-            free(t);
-            filsyscancel(x);
-            return;
-        }
-        qlock(&x->active);
-        recv(c2, &pair);
-        fc.data = pair.s;
-        fc.count = pair.ns;
-        filsysrespond(x->fs, x, &fc, nil);
-        free(t);
-        qunlock(&x->active);
-        break;
-    /*x: [[xfidread()]] cases */
     case Qmouse:
+        /*s: [[xfidxxx()]] set flushtag */
         x->flushtag = x->tag;
+        /*e: [[xfidxxx()]] set flushtag */
 
         alts[MRdata].c = w->mouseread;
         alts[MRdata].v = &mrm;
         alts[MRdata].op = CHANRCV;
+        /*s: [[xfidread()]] when Qmouse, set alts for flush */
         alts[MRflush].c = x->flushc;
         alts[MRflush].v = nil;
         alts[MRflush].op = CHANRCV;
+        /*e: [[xfidread()]] when Qmouse, set alts for flush */
         alts[NMR].op = CHANEND;
 
         switch(alt(alts)){
         case MRdata:
             break;
+        /*s: [[xfidread()]] when Qmouse, switch alt flush case */
         case MRflush:
             filsyscancel(x);
             return;
+        /*e: [[xfidread()]] when Qmouse, switch alt flush case */
         }
-
         /* received data */
+        /*s: [[xfidxxx()]] unset flushtag */
         x->flushtag = -1;
+        /*e: [[xfidxxx()]] unset flushtag */
+        /*s: [[xfidread()]] when Qmouse, if flushing */
         if(x->flushing){
             recv(x->flushc, nil);		/* wake up flushing xfid */
             recv(mrm.cm, nil);			/* wake up window and toss data */
             filsyscancel(x);
             return;
         }
+        /*e: [[xfidread()]] when Qmouse, if flushing */
+
         qlock(&x->active);
         recv(mrm.cm, &ms);
         c = 'm';
@@ -817,9 +808,65 @@ xfidread(Xfid *x)
             c = 'r';
         n = sprint(buf, "%c%11d %11d %11d %11ld ", c, ms.xy.x, ms.xy.y, ms.buttons, ms.msec);
         w->resized = false;
+
         fc.data = buf;
         fc.count = min(n, cnt);
         filsysrespond(x->fs, x, &fc, nil);
+        qunlock(&x->active);
+        break;
+    /*x: [[xfidread()]] cases */
+    case Qcons:
+        /*s: [[xfidxxx()]] set flushtag */
+        x->flushtag = x->tag;
+        /*e: [[xfidxxx()]] set flushtag */
+
+        alts[CRdata].c = w->consread;
+        alts[CRdata].v = &crm;
+        alts[CRdata].op = CHANRCV;
+        /*s: [[xfidread()]] when Qcons, set alts for flush */
+        alts[CRflush].c = x->flushc;
+        alts[CRflush].v = nil;
+        alts[CRflush].op = CHANRCV;
+        /*e: [[xfidread()]] when Qcons, set alts for flush */
+        alts[NCR].op = CHANEND;
+
+        switch(alt(alts)){
+        case CRdata:
+            break;
+        /*s: [[xfidread()]] when Qcons, switch alt flush case */
+        case CRflush:
+            filsyscancel(x);
+            return;
+        /*e: [[xfidread()]] when Qcons, switch alt flush case */
+        }
+        /* received data */
+        /*s: [[xfidxxx()]] unset flushtag */
+        x->flushtag = -1;
+        /*e: [[xfidxxx()]] unset flushtag */
+
+        c1 = crm.c1;
+        c2 = crm.c2;
+        t = malloc(cnt+UTFmax+1);	/* room to unpack partial rune plus */
+        pair.s = t;
+        pair.ns = cnt;
+        send(c1, &pair);
+
+        /*s: [[xfidread()]] when Qcons, if flushing */
+        if(x->flushing){
+            recv(x->flushc, nil);	/* wake up flushing xfid */
+            recv(c2, nil);			/* wake up window and toss data */
+            free(t);
+            filsyscancel(x);
+            return;
+        }
+        /*e: [[xfidread()]] when Qcons, if flushing */
+
+        qlock(&x->active);
+        recv(c2, &pair);
+        fc.data = pair.s;
+        fc.count = pair.ns;
+        filsysrespond(x->fs, x, &fc, nil);
+        free(t);
         qunlock(&x->active);
         break;
     /*x: [[xfidread()]] cases */
@@ -835,23 +882,6 @@ xfidread(Xfid *x)
         }
         t = estrdup(w->name);
         goto Text;
-    /*x: [[xfidread()]] cases */
-    case Qwinid:
-        n = sprint(buf, "%11d ", w->id);
-        t = estrdup(buf);
-        goto Text;
-    /*x: [[xfidread()]] cases */
-    case Qlabel:
-        n = strlen(w->label);
-        if(off > n)
-            off = n;
-        if(off+cnt > n)
-            cnt = n - off;
-
-        fc.data = w->label + off;
-        fc.count = cnt;
-        filsysrespond(x->fs, x, &fc, nil);
-        break;
     /*x: [[xfidread()]] cases */
     case Qscreen:
         i = display->image;
@@ -911,6 +941,23 @@ xfidread(Xfid *x)
         free(t);
         break;
     /*x: [[xfidread()]] cases */
+    case Qwinid:
+        n = sprint(buf, "%11d ", w->id);
+        t = estrdup(buf);
+        goto Text;
+    /*x: [[xfidread()]] cases */
+    case Qlabel:
+        n = strlen(w->label);
+        if(off > n)
+            off = n;
+        if(off+cnt > n)
+            cnt = n - off;
+
+        fc.data = w->label + off;
+        fc.count = cnt;
+        filsysrespond(x->fs, x, &fc, nil);
+        break;
+    /*x: [[xfidread()]] cases */
     case Qwdir:
         t = estrdup(w->dir);
         n = strlen(t);
@@ -921,32 +968,41 @@ xfidread(Xfid *x)
             filsysrespond(x->fs, x, &fc, Etooshort);
             break;
         }
+        /*s: [[xfidxxx()]] set flushtag */
         x->flushtag = x->tag;
+        /*e: [[xfidxxx()]] set flushtag */
 
         alts[WCRdata].c = w->wctlread;
         alts[WCRdata].v = &cwrm;
         alts[WCRdata].op = CHANRCV;
+        /*s: [[xfidread()]] when Qwctl, set alts for flush */
         alts[WCRflush].c = x->flushc;
         alts[WCRflush].v = nil;
         alts[WCRflush].op = CHANRCV;
+        /*e: [[xfidread()]] when Qwctl, set alts for flush */
         alts[NMR].op = CHANEND;
 
         switch(alt(alts)){
         case WCRdata:
             break;
+        /*s: [[xfidread()]] when Qwctl, switch alt flush case */
         case WCRflush:
             filsyscancel(x);
             return;
+        /*e: [[xfidread()]] when Qwctl, switch alt flush case */
         }
 
         /* received data */
+        /*s: [[xfidxxx()]] unset flushtag */
         x->flushtag = -1;
+        /*e: [[xfidxxx()]] unset flushtag */
         c1 = cwrm.c1;
         c2 = cwrm.c2;
         t = malloc(cnt+1);	/* be sure to have room for NUL */
         pair.s = t;
         pair.ns = cnt+1;
         send(c1, &pair);
+        /*s: [[xfidread()]] when Qwctl, if flushing */
         if(x->flushing){
             recv(x->flushc, nil);	/* wake up flushing xfid */
             recv(c2, nil);			/* wake up window and toss data */
@@ -954,6 +1010,8 @@ xfidread(Xfid *x)
             filsyscancel(x);
             return;
         }
+        /*e: [[xfidread()]] when Qwctl, if flushing */
+
         qlock(&x->active);
         recv(c2, &pair);
         fc.data = pair.s;

@@ -53,9 +53,6 @@ Rectangle	viewr;
 /*s: global fontname */
 char		*fontname;
 /*e: global fontname */
-/*s: global mainpid */
-int		mainpid;
-/*e: global mainpid */
 
 /*s: enum _anon_ (windows/rio/rio.c) */
 enum
@@ -195,8 +192,6 @@ void threadmain(int argc, char *argv[])
         startdir = estrdup(".");
     else
         startdir = estrdup(buf);
-    /*x: [[main()]] set some globals */
-    mainpid = getpid();
     /*x: [[main()]] set some globals */
     s = getenv("tabstop");
     if(s != nil)

@@ -1623,14 +1623,16 @@ void
 wsetpid(Window *w, int pid, bool dolabel)
 {
     char buf[128];
-    int fd;
+    fdt fd;
 
     w->pid = pid;
+
     if(dolabel){
         sprint(buf, "rc %d", pid);
         free(w->label);
         w->label = estrdup(buf);
     }
+
     sprint(buf, "/proc/%d/notepg", pid);
     fd = open(buf, OWRITE|OCEXEC);
     if(w->notefd > 0)

@@ -4,25 +4,25 @@ enum Qxxx
 {
     Qdir,			/* /dev for this window */
     /*s: [[qid]] cases */
+    Qmouse,
+    /*x: [[qid]] cases */
     Qcons,
     /*x: [[qid]] cases */
     Qconsctl,
     /*x: [[qid]] cases */
-    Qmouse,
-    /*x: [[qid]] cases */
     Qcursor,
     /*x: [[qid]] cases */
     Qwinname,
-    /*x: [[qid]] cases */
-    Qwinid,
-    /*x: [[qid]] cases */
-    Qlabel,
     /*x: [[qid]] cases */
     Qscreen,
     /*x: [[qid]] cases */
     Qwindow,
     /*x: [[qid]] cases */
     Qtext,
+    /*x: [[qid]] cases */
+    Qwinid,
+    /*x: [[qid]] cases */
+    Qlabel,
     /*x: [[qid]] cases */
     Qwdir,
     /*x: [[qid]] cases */
@@ -151,6 +151,7 @@ struct Consreadmesg
 /*s: struct Mousereadmesg */
 struct Mousereadmesg
 {
+    // chan<Mouse> (listener = xfidread(Qmouse), sender = winctl)
     Channel	*cm;		/* chan(Mouse) */
 };
 /*e: struct Mousereadmesg */
@@ -178,9 +179,12 @@ struct Mouseinfo
 
     int	ri;	/* read index into queue */
     int	wi;	/* write index */
+
     ulong	counter;	/* serial no. of last mouse event we received */
     ulong	lastcounter;	/* serial no. of last mouse event sent to client */
+
     int	lastb;	/* last button state we received */
+
     uchar	qfull;	/* filled the queue; no more recording until client comes back */	
 };	
 /*e: struct Mouseinfo */
@@ -249,6 +253,7 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] process fields */
     int		pid;
+    // /proc/<pid>/notepg
     fdt	 	notefd;
     /*e: [[Window]] process fields */
     
@@ -304,13 +309,15 @@ struct Window
     /*x: [[Window]] other fields */
     bool	 	resized;
     /*x: [[Window]] other fields */
-    bool	ctlopen;
-    /*x: [[Window]] other fields */
+    // chan<Mousereadmesg> (listener = xfidread(Qmouse), sender = winctl)
     Channel		*mouseread;	/* chan(Mousereadmesg) */
     /*x: [[Window]] other fields */
+    // chan<Consreadmesg> (listener = xfidread(Qcons), sender = winctl)
     Channel		*consread;	/* chan(Consreadmesg) */
     /*x: [[Window]] other fields */
     Channel		*conswrite;	/* chan(Conswritemesg) */
+    /*x: [[Window]] other fields */
+    bool	ctlopen;
     /*x: [[Window]] other fields */
     Rectangle	lastsr;
     /*x: [[Window]] other fields */
@@ -391,9 +398,9 @@ struct Xfid
         Filsys	*fs;
 
         /*s: [[Xfid]] flushing fields */
-        int	flushing;	/* another Xfid is trying to flush us */
         int	flushtag;	/* our tag, so flush can find us */
         Channel	*flushc;/* channel(int) to notify us we're being flushed */
+        bool	flushing;	/* another Xfid is trying to flush us */
         /*e: [[Xfid]] flushing fields */
         /*s: [[Xfid]] other fields */
         QLock	active;
@@ -421,7 +428,6 @@ struct Filsys
     // server
     fdt		sfd;
 
-    int		pid;
     // ref_own<string>
     char	*user;
 

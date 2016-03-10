@@ -38,25 +38,25 @@ Dirtab dirtab[]=
 {
     { ".",		QTDIR,	Qdir,		0500|DMDIR },
     /*s: dirtab array elements */
+    { "mouse",		QTFILE,	Qmouse,		0600 },
+    /*x: dirtab array elements */
     { "cons",		QTFILE,	Qcons,		0600 },
     /*x: dirtab array elements */
     { "consctl",	QTFILE,	Qconsctl,	0200 },
     /*x: dirtab array elements */
-    { "mouse",		QTFILE,	Qmouse,		0600 },
-    /*x: dirtab array elements */
     { "cursor",		QTFILE,	Qcursor,	0600 },
     /*x: dirtab array elements */
     { "winname",	QTFILE,	Qwinname,	0400 },
-    /*x: dirtab array elements */
-    { "winid",		QTFILE,	Qwinid,		0400 },
-    /*x: dirtab array elements */
-    { "label",		QTFILE,	Qlabel,		0600 },
     /*x: dirtab array elements */
     { "screen",		QTFILE,	Qscreen,	0400 },
     /*x: dirtab array elements */
     { "window",		QTFILE,	Qwindow,	0400 },
     /*x: dirtab array elements */
     { "text",		QTFILE,	Qtext,		0400 },
+    /*x: dirtab array elements */
+    { "winid",		QTFILE,	Qwinid,		0400 },
+    /*x: dirtab array elements */
+    { "label",		QTFILE,	Qlabel,		0600 },
     /*x: dirtab array elements */
     { "wdir",		QTFILE,	Qwdir,		0600 },
     /*x: dirtab array elements */
@@ -119,15 +119,16 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
     [Twrite]   = filsyswrite,
     [Tstat]    = filsysstat,
 
+    /*s: [[fcall]] other methods */
     [Tcreate]  = filsyscreate,
     [Tremove]  = filsysremove,
-
     [Twstat]   = filsyswstat,
-
-    [Tflush]   = filsysflush,
-
+    /*x: [[fcall]] other methods */
     [Tversion] = filsysversion,
     [Tauth]    = filsysauth,
+    /*x: [[fcall]] other methods */
+    [Tflush]   = filsysflush,
+    /*e: [[fcall]] other methods */
 };
 /*e: global fcall */
 
@@ -270,8 +271,6 @@ filsysproc(void *arg)
     /*e: [[filsysproc()]] other locals */
 
     threadsetname("FILSYSPROC");
-
-    fs->pid = getpid();
 
     for(;;){
         buf = emalloc(messagesize+UTFmax);	/* UTFmax for appending partial rune in xfidwrite */
