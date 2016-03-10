@@ -148,11 +148,6 @@ a set of {windows}.
 
 Here are a few questions we hope this book will answer:
 \begin{itemize}
-% how manage and orchestrate a set of processes (rio is a graphical os/shell)
-% need create process, delete process, associate window, 
-% send resize/refresh, ...
-% kinda a scheduler
-
 % how demultiplex the screen, how receive drawing
 % commands from windows applications and display right place
 % (actually mostly handled by Graphics.nw)
@@ -161,15 +156,20 @@ Here are a few questions we hope this book will answer:
 %draw in other windows?
 % it's not
 
+% how demultiplex the mouse and keyboard, how virtualize
+% /dev/mouse, /dev/cons?
+
 % how overlapping windows, how save state and restore when exposed back?
 % (actually mostly handled by Graphics.nw)
+
+% how manage and orchestrate a set of processes (rio is a graphical os/shell)
+% need create process, delete process, associate window, 
+% send resize/refresh, ...
+% kinda a scheduler
 
 % how xterm? terminal emulator, backward compatibility,
 % How redirect stdin/stdout to the right place, to do the right
 % thing, so that console app also works?
-
-% how demultiplex the mouse and keyboard, how virtualize
-% /dev/mouse, /dev/cons?
 
 % How terminal scrolling, text selection, copy/paste, etc
 
@@ -181,6 +181,21 @@ the display of text glyphs on the screen in the appropriate window?
 
 \end{itemize}
 
+
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures:
+% - circular buffers (Window.mouse.queue)
+% - growing arrays (windows (by 1), ...)
+
+%algorithms:
+
+%concurrency patterns:
+% - master/workers
+% - producer/consumer queue (Window.mouse.queue)
+% - send and receive alts =~ select
+% - passing channels as parameters
+% - proc vs threads
+% - cooperative threads and no need for lock
 
 \section{[[rio]]}
 
@@ -215,7 +230,7 @@ but were ultimately discarded:
 \end{itemize}
 
 %history:
-% - Blit
+% - Blit (mux)
 % - NeWS?
 %other:
 % - Qnx photons, 1.44MB demo disk! even with web browser!
@@ -312,6 +327,8 @@ who wrote in some sense most of this book.
 % A toy app can run outside rio
 % but with rio can have "virtual" screen.
 
+%alt:?
+
 \subsection{Process manager}
 
 % it's a kinda of scheduler, a bit like kernel. Need manage
@@ -332,6 +349,8 @@ who wrote in some sense most of this book.
 \subsection{Terminal emulator}
 
 % for keyboard, can even lead to need of terminal emulator.
+
+%alt:
 
 \subsection{Window manager}
 
@@ -598,7 +617,7 @@ usage(void)
 
 \section{Devices handlers}
 
-\subsection{Output, [[Display]] and [[view]]}
+\subsection{Output: [[Display]] and [[view]]}
 
 % rio is first a graphical app, like other graphical app. 
 % So use display, view, etc. See Graphics.nw and draw.h and initdraw called
@@ -632,7 +651,7 @@ Rectangle	viewr;
 % rio will provide actually to its client a view Image too!
 % but for subpart of screen (subpart of rio's view).
 
-\subsection{Input, [[mousectl]] and [[keyboardctl]]}
+\subsection{Input: [[mousectl]] and [[keyboardctl]]}
 
 % rio is a graphical app which uses the keyboard and mouse.
 
@@ -904,6 +923,7 @@ Window	*input;
 bool	mouseopen;
 @
 %old: was bool_byte
+% graphical window & mouse field.
 
 
 \subsection{Textual windows}
@@ -915,14 +935,25 @@ bool	mouseopen;
 Frame;
 @
 % Image is inside frame or cover frame too?
-% this is only for textual windows?
+% graphics & textual window field 
+% will see Frame later.
 
+% and of course it has text!
+
+<<[[Window]] textual window fields>>=
+// growing_array<Rune> (size = Window.maxr)
+Rune		*r;
+uint		nr;	/* number of runes in window */
+uint		maxr;	/* number of runes allocated in r */
+@
+% see wcontents!
 
 % automatic scroll mode, also a textual window field
 <<[[Window]] config fields>>=
 bool	scrolling;
 @
 %old: was bool_byte
+% config & textual window field
 
 
 %\subsection{[[Wctlmesg]]}
@@ -1059,7 +1090,7 @@ newfid(Filsys *fs, int fid)
 @
 
 
-\l put Qid here?
+
 
 <<[[Fid]] other fields>>=
 Window	*w;
@@ -1069,11 +1100,6 @@ Window	*w;
 % the windows id.
 % So full circle here! get back a Window!
 
-%XXX
-<<[[Fid]] other fields>>=
-int		nrpart;
-uchar	rpart[UTFmax];
-@
 
 
 
@@ -1516,23 +1542,6 @@ xfidinit(void)
 % regular threads, so no race between xfidxxx and winctl!
 
 
-\subsection{[[XXX]]}
-
-
-%XXX
-<<global startdir>>=
-char		*startdir;
-@
-<<[[main()]] locals>>=
-char buf[256];
-@
-%old dead? static void *arg[1];
-<<[[main()]] set some globals>>=
-if(getwd(buf, sizeof buf) == nil)
-    startdir = estrdup(".");
-else
-    startdir = estrdup(buf);
-@
 
 
 
@@ -1608,6 +1617,10 @@ keyboardthread(void*)
 }
 @
 % no alts(), just a single message, so just recv()
+
+% Rune! so super simple, no need to have Ctl, Alt, ... all of
+% those composed keys are Rune? Hmm but then cant intercept
+% when guy just type on Ctlr and release?
 
 % pretty simple, send key to the window (window ck channel and thread) 
 % with the focus
@@ -1908,15 +1921,6 @@ enum {
 };
 @
 
-%XXX mv later
-<<[[Wxxx]] cases>>=
-WMouseread, // ??
-
-WCwrite,
-WCread, 
-
-WWread, // ??
-@
 
 
 
@@ -1925,9 +1929,9 @@ WWread, // ??
 char buf[4*12+1]; // /dev/mouse interface
 Rune *rp, *bp, *tp, *up;
 uint qh;
-int nr, nb, c, wid, i, initial;
+int nr, c, wid, i, initial;
 int npart, lastb;
-char *s, *t, part[3];
+char *s, part[3];
 @
 
 
@@ -2013,7 +2017,7 @@ case WKey:
 %//		while(nbrecv(w->ck, &r))
 %//			wkeyctl(w, r);
 
-% use of end marker L'\0' here
+% use of end marker L'\0' here, same than in keyboardthread
 
 
 % winctl -> <> (when key on ck channel)
@@ -2035,7 +2039,6 @@ wkeyctl(Window *w, Rune r)
     <<[[wkeyctl()]] if holding>>
 
     // here when no navigation key, no rawing, no 0x1B holding
-
     if(r != 0x7F){ // 0x7F = ??
         wsnarf(w);
         wcut(w);
@@ -2200,6 +2203,10 @@ filsysproc(void *arg)
 }
 @
 %dead:    fs->pid = getpid();  was after threadsetname
+
+% for the comment about UTFMAX, it's because there is a memmove
+% far later in xfidwrite when put back a partial rune
+% wrote last time
 
 % this reset x after the call? if result could be
 % processed immediately, then can reuse, otherwise need
@@ -2450,7 +2457,6 @@ Cursor sightcursor = {
 @
 % when select delete in system menu
 
-% for holding mode
 <<global whitearrow (windows/rio/data.c)>>=
 Cursor whitearrow = {
     {0, 0},
@@ -2464,6 +2470,7 @@ Cursor whitearrow = {
      0xD3, 0xB8, 0xF1, 0xF0, 0xE0, 0xE0, 0xC0, 0x40, }
 };
 @
+% for holding mode
 
 <<global query (windows/rio/data.c)>>=
 Cursor query = {
@@ -2478,6 +2485,7 @@ Cursor query = {
      0x00, 0x00, 0x03, 0x80, 0x03, 0x80, 0x00, 0x00, }
 };
 @
+% ???
 
 \subsection{Borders and corners cursors}
 
@@ -2625,6 +2633,8 @@ riosetcursor(Cursor *p, bool force)
 @
 
 % setcursor() from mouse.h, will write in /dev/cursor
+
+% what this force is all about? why sometimes need and sometimes not?
 
 \subsection{[[cornercursor()]]}
 
@@ -3084,7 +3094,6 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     <<[[new()]] mc allocation>>
 
     w = wmk(i, mc, ck, cctl, scrollit);
-
     free(mc);	/* wmk copies *mc */
 
     // growing array
@@ -3238,6 +3247,29 @@ wborder(Window *w, int type)
 if(w->i == nil)
     return;
 @
+
+
+
+<<[[Window]] other fields>>=
+char		*dir; // /dev/wdir
+@
+% window working dir
+
+
+<<global startdir>>=
+char		*startdir;
+@
+<<[[main()]] locals>>=
+char buf[256];
+@
+%old dead? static void *arg[1];
+<<[[main()]] set some globals>>=
+if(getwd(buf, sizeof buf) == nil)
+    startdir = estrdup(".");
+else
+    startdir = estrdup(buf);
+@
+
 
 
 %XXX
@@ -4235,6 +4267,7 @@ bool	 	resized;
 % why important to remember? for creating a resize
 % even to client listening to /mnt/wsys/mouse
 % a bit uglt
+\t put in Resize event section?
 
 <<function wresize>>=
 void
@@ -4259,6 +4292,10 @@ wresize(Window *w, Image *i, bool move)
 }
 @
 % mouse counter ??? comes with resize thing?
+% yes, both case there is a new event in the queue to send
+% if process listen to /dev/mouse, he will get the event
+%  which will prompt it to redo a getwindow to read back
+%  new /dev/winname
 
 \subsection{Mouse action [[bandsize()]]}
 
@@ -4735,7 +4772,7 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     return nil;
 }
 @
-\l nrpart?
+
 
 % return nil, because worker has a job to do asynchronously so filsysproc
 % need allocate a new worker for next request.
@@ -4899,10 +4936,11 @@ xfidopen(Xfid *x)
     <<[[xfidopen()]] cases>>
     }
 
-    fc.qid = x->f->qid;
-    fc.iounit = messagesize-IOHDRSZ;
     x->f->open = true;
     x->f->mode = x->mode;
+
+    fc.qid = x->f->qid;
+    fc.iounit = messagesize-IOHDRSZ;
     filsysrespond(x->fs, x, &fc, nil);
 }
 @
@@ -5029,11 +5067,8 @@ if(b == nil)
 
 %XXX split
 <<[[xfidread()]] other locals>>=
-char buf[128];
 int n, c;
 char cbuf[30];
-Rectangle r;
-Image *i;
 Consreadmesg cwrm;
 Alt alts[NCR+1];
 @
@@ -5066,7 +5101,8 @@ xfidread(Xfid *x)
 }
 @
 
-
+% off, cnt, very important.
+% see read(2) API?
 
 \section{Write}
 
@@ -5086,9 +5122,8 @@ filsyswrite(Filsys*, Xfid *x, Fid*)
 
 %XXX
 <<[[xfidwrite()]] other locals>>=
-int c, nb, nr;
+int c;
 char buf[256];
-Rune *r;
 Conswritemesg cwm;
 Stringpair pair;
 Alt alts[NCW+1];
@@ -5177,7 +5212,7 @@ dostat(Filsys *fs, int id, Dirtab *dir, uchar *buf, int nbuf, uint clock)
 
 
 
-\section{Walk}
+\section{Walk TODO}
 
 \subsection{[[filsyswalk()]]}
 
@@ -5408,11 +5443,12 @@ filsysversion(Filsys *fs, Xfid *x, Fid*)
     fc.msize = messagesize;
     if(strncmp(x->version, "9P2000", 6) != 0)
         return filsysrespond(x->fs, x, &fc, "unrecognized 9P version");
+    // else
     fc.version = "9P2000";
     return filsysrespond(fs, x, &fc, nil);
 }
 @
-
+% why 256? 
 
 <<function filsysauth>>=
 static
@@ -5444,45 +5480,10 @@ Qmouse,
 { "mouse",		QTFILE,	Qmouse,		0600 },
 @
 
-% seen mouseopen attribute in core DS
-<<[[xfidopen()]] cases>>=
-case Qmouse:
-    if(w->mouseopen){
-        filsysrespond(x->fs, x, &fc, Einuse);
-        return;
-    }
-    w->mouseopen = true;
-
-    /*
-     * Reshaped: there's a race if the appl. opens the
-     * window, is resized, and then opens the mouse,
-     * but that's rare.  The alternative is to generate
-     * a resized event every time a new program starts
-     * up in a window that has been resized since the
-     * dawn of time.  We choose the lesser evil.
-     */
-    w->resized = false;
-    break;
-@
-
-% remember than xfidxxx are executed by xfid threads,
-% and because of thread model of plan9, no race between
-% winctl and xfid threads so safe to update the w fields!
+% xfidopen for Qmouse is now discussed in Graphical windows chapter.
 
 
-<<[[xfidclose()]] cases>>=
-case Qmouse:
-    w->mouseopen = false;
-
-    w->resized = false;
-    if(w->i != nil)
-        wsendctlmesg(w, Refresh, w->i->r, nil);
-    break;
-@
-% why Refresh ? when close the mouse?
-% put Refresh here?
-
-\subsection{Reading}
+\subsection{Reading part1}
 % and window.mouseread
 
 % So if client reads /dev/mouse (after it has been opened of course),
@@ -5517,6 +5518,7 @@ enum { MRdata, MRflush, NMR };
 Mousereadmesg mrm;
 Mouse ms;
 @
+% c local?
 
 <<[[xfidread()]] cases>>=
 case Qmouse:
@@ -5540,8 +5542,7 @@ case Qmouse:
     qlock(&x->active);
     recv(mrm.cm, &ms);
     c = 'm';
-    if(w->resized)
-        c = 'r';
+    <<[[xfidread()]] when Qmouse, adjust c for resize message if resized>>
     n = sprint(buf, "%c%11d %11d %11d %11ld ", c, ms.xy.x, ms.xy.y, ms.buttons, ms.msec);
     w->resized = false;
 
@@ -5551,7 +5552,7 @@ case Qmouse:
     qunlock(&x->active);
     break;
 @
-
+\l hide even more switch and code after? put alt(alts) how of it?
 
 \subsection{Writing}
 
@@ -5608,7 +5609,7 @@ Qcons,
 @
 
 
-\subsection{Reading}
+\subsection{Reading part1}
 
 % So if client reads /dev/cons,
 % then we wait for key event to come to us by listening to consread!
@@ -5628,7 +5629,9 @@ struct Consreadmesg
 @
 % pass channels inside channel ... subtle
 % why not just one? because need first pass a buffer allocated
-%  by xfidread who knows how much he wants
+%  by xfidread who knows how much he wants.
+% file interface is byte, but runes are multi bytes, so need
+%  ajust, maybe send partial rune, etc.
 
 <<struct Stringpair>>=
 struct Stringpair	/* rune and nrune or byte and nbyte */
@@ -5689,8 +5692,9 @@ case Qcons:
 @
 %bug: was alts.[NMR] = ... above, but it should be NCR
 
+% here s and ns are byte and nbyte
 
-\subsection{Writing}
+\subsection{Writing part1}
 
 % So if client writes to /dev/cons ??
 % then we wait for key event to come to us by listening to consread!
@@ -5713,8 +5717,25 @@ enum { CWdata, CWflush, NCW };
 @
 
 
+% we have stuff to write! stuff to write in the console,
+% but this time it must be Rune!
+
+<<[[xfidwrite()]] other locals>>=
+Rune *r;
+int nr; // nb runes
+int nb; // nb bytes
+@
+% see cvttorunes function in appendix
+
+<<[[Fid]] other fields>>=
+uchar	rpart[UTFmax];
+int		nrpart;
+@
+
+%XXX
 <<[[xfidwrite()]] cases>>=
 case Qcons:
+
     nr = x->f->nrpart;
     if(nr > 0){
         memmove(x->data+nr, x->data, cnt);	/* there's room: see malloc in filsysproc */
@@ -5722,8 +5743,10 @@ case Qcons:
         cnt += nr;
         x->f->nrpart = 0;
     }
+
     r = runemalloc(cnt);
     cvttorunes(x->data, cnt-UTFmax, r, &nb, &nr, nil);
+
     /* approach end of buffer */
     while(fullrune(x->data+nb, cnt-nb)){
         c = nb;
@@ -5731,8 +5754,9 @@ case Qcons:
         if(r[nr])
             nr++;
     }
+    // assert(cnt-nb < UTFMAX);
     if(nb < cnt){
-        memmove(x->f->rpart, x->data+nb, cnt-nb);
+        memmove(x->f->rpart, x->data + nb, cnt-nb);
         x->f->nrpart = cnt-nb;
     }
     <<[[xfidxxx()]] set flushtag>>
@@ -5763,6 +5787,7 @@ case Qcons:
     return;
 @
 
+% this time pass full rune, not byte
 
 \section{[[/mnt/wsys/consctl]]}
 
@@ -5806,6 +5831,7 @@ case Qconsctl:
     filsysrespond(x->fs, x, &fc, "unknown control message");
     return;
 @
+% will see later writing on consctl, why we need it
 
 \section{[[/mnt/wsys/cursor]]}
 
@@ -5816,12 +5842,15 @@ Qcursor,
 { "cursor",		QTFILE,	Qcursor,	0600 },
 @
 
+% seen Window.cursorp before
+
 <<[[xfidclose()]] cases>>=
 case Qcursor:
     w->cursorp = nil;
     wsetcursor(w, false);
     break;
 @
+% will put back default cursor?
 
 <<[[xfidread()]] cases>>=
 case Qcursor:
@@ -5842,7 +5871,7 @@ case Qcursor:
     wsetcursor(w, !sweeping);
     break;
 @
-
+% does not adjust cnt? off?
 
 \section{[[/dev/draw/]] and [[/mnt/wsys/winname]]}
 
@@ -5852,7 +5881,7 @@ case Qcursor:
 % Done by the namedimage thing and /dev/winname
 
 % security issue? can pass wrong screen id to draw operation?
-
+% anyway, anybody can access the full screen in display->image, hmm
 
 <<[[qid]] cases>>=
 Qwinname,
@@ -5884,34 +5913,86 @@ case Qwinname:
 
 \chapter{Graphical Windows}
 
-% does not care about writing in /mnt/wsys/cons, but care
-% about /dev/draw, /mnt/wsys/mouse 
-% (and /mnt/wsys/consctl and /mnt/wys/cons for reading keyboard in raw mode)
+% Graphical windows use /dev/draw (and /mnt/wsys/winname), /mnt/wsys/mouse.
+% They usually not care about writing in /mnt/wsys/cons; they care
+% optionally about /mnt/wsys/consctl and /mnt/wys/cons
+%  for reading from the keyboard in "raw" mode.
 
 \section{Graphical window setup}
-% not really creation, since most of the time create first
+
+% We say setup cos not really creation, since most of the time create first
 % textual window and then setup things to become a graphical window
+% (as we have seen it until now where we dont cover yet /srv/rio.user.pid)
 
-% regular window that calls initdraw() => mouseopen set?
+\subsection{[[initdraw()]]}
 
-\subsection{Mouse open mode}
+% regular graphical apps calls initdraw() in Graphics.nw.
+% connect to /dev/draw and /mnt/wys/winname to get window to draw into.
+% See Graphics.nw
+
+\subsection{[[initmouse()]], mouse open mode}
+
+% graphical apps calls usually also initmouse() which open /mnt/wys/mouse.
 
 % direct access to mouse events, no interpretation like cut/copy/paste
-% menu
+% menu as we will see in Section X.
 
-\subsection{Keyboard raw mode}
+% seen mouseopen attribute in core DS, quite important bool,
+%  used by mousethread a lot to do different things
+%bool mouseopen;
+
+<<[[xfidopen()]] cases>>=
+case Qmouse:
+    if(w->mouseopen){
+        filsysrespond(x->fs, x, &fc, Einuse);
+        return;
+    }
+    w->mouseopen = true;
+
+    /*
+     * Reshaped: there's a race if the appl. opens the
+     * window, is resized, and then opens the mouse,
+     * but that's rare.  The alternative is to generate
+     * a resized event every time a new program starts
+     * up in a window that has been resized since the
+     * dawn of time.  We choose the lesser evil.
+     */
+    w->resized = false;
+    break;
+@
+
+% remember than xfidxxx are executed by xfid threads,
+% and because of thread model of plan9, no race between
+% winctl and xfid threads so safe to update the w fields!
+
+
+<<[[xfidclose()]] cases>>=
+case Qmouse:
+    w->mouseopen = false;
+
+    w->resized = false;
+    if(w->i != nil)
+        wsendctlmesg(w, Refresh, w->i->r, nil);
+    break;
+@
+% why Refresh ? when close the mouse?
+% put Refresh here?
+
+
+
+
+\subsection{[[initkeyboard()]], keyboard raw mode}
+
+% not necessarily tied to graphical app, but strongly correlated.
+% again, initkeyboard() in Graphics.nw.
 
 % direct access to keyboard event, no interpretation of special navigation 
 % key, buffered input, etc (actually have navigation key if mouse not opened
 % even if raw mode)
 
-% not necessarily tied to graphical app, but strongly correlated.
-
 % actually first thing initkeyboard does is to write
 % rawon on /dev/consctl, see Graphics.ns
 
-
-% could be also in Window graphical window section
 <<[[Window]] config fields>>=
 bool	rawing;
 @
@@ -5947,40 +6028,6 @@ Rawon,
 Rawoff,
 @
 
-
-
-
-
-
-% could be also in Window keyboad section
-<<[[Window]] graphical window fields>>=
-// array<Rune>
-Rune		*raw;
-uint		nraw;
-@
-
-
-
-<<[[wkeyctl()]] if rawing>>=
-if(w->rawing && (w->q0 == w->nr || w->mouseopen)){
-    waddraw(w, &r, 1);
-    return;
-}
-@
-% faux ami, not a draw operation :) but w_add_raw
-
-<<function waddraw>>=
-void
-waddraw(Window *w, Rune *r, int nr)
-{
-    w->raw = runerealloc(w->raw, w->nraw+nr);
-    runemove(w->raw + w->nraw, r, nr);
-    w->nraw += nr;
-}
-@
-% realloc at each key press??
-
-
 <<[[wctlmesg()]] cases>>=
 case Rawon:
     // already setup w->rawing in xfidwrite, nothing else todo
@@ -5988,11 +6035,7 @@ case Rawon:
 case Rawoff:
     if(w->deleted)
         break;
-    while(w->nraw > 0){
-        wkeyctl(w, w->raw[0]);
-        --w->nraw;
-        runemove(w->raw, w->raw+1, w->nraw);
-    }
+    <<[[wctlmesg()]] When Rawoff, process raw keys in non rawing mode>>
     break;
 @
 
@@ -6005,6 +6048,7 @@ case Rawoff:
 % always use simply /dev/mouse!
 
 
+\subsection{Mouse state queue}
 
 <<[[Window]] mouse fields>>=
 Mouseinfo	mouse;
@@ -6015,17 +6059,27 @@ struct Mouseinfo
 {
     Mousestate	queue[16];
 
+    // consumer
     int	ri;	/* read index into queue */
+    // producer
     int	wi;	/* write index */
 
+    bool	qfull;/* filled the queue; no more recording until client comes back */	
+
     ulong	counter;	/* serial no. of last mouse event we received */
-    ulong	lastcounter;	/* serial no. of last mouse event sent to client */
+    ulong	lastcounter;/* serial no. of last mouse event sent to client */
 
     int	lastb;	/* last button state we received */
 
-    uchar	qfull;	/* filled the queue; no more recording until client comes back */	
 };	
 @
+%old: was uchar for qfull
+
+\l need counter thing? not enough the ri != wi?
+\l  or is it because of resize where increment counter without
+\l  producing a thing in queue?
+
+% producer/consumer, classic.
 
 <<struct Mousestate>>=
 struct Mousestate
@@ -6035,9 +6089,23 @@ struct Mousestate
 };
 @
 
+
+\subsection{[[/mnt/wsys/mouse]]  reading part2}
+
+% chain of event, read /mnt/wsys/mouse => ??
+% start from actual click -> mousethread listening on
+% channel conntected to ioproc reading /dev/mouse.
+% -> winctl
+
+\subsubsection{Producer}
+
+% WMouse
+
 <<[[winctl()]] locals>>=
 Mousestate *mp, m;
 @
+% mp = m producer, and m = m consumer (but cant use mc cos conflict
+% with mouse control)
 
 % received a mouse even from mousethread
 <<[[winctl()]] WMouse case if mouseopen>>=
@@ -6046,6 +6114,8 @@ if(w->mouseopen) {
 
     /* queue click events */
     if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
+
+        //insert_queue(wc->mc, w->mouse.queue
         mp = &w->mouse.queue[w->mouse.wi];
         if(++w->mouse.wi == nelem(w->mouse.queue))
             w->mouse.wi = 0;
@@ -6053,14 +6123,20 @@ if(w->mouseopen) {
             w->mouse.qfull = true;
         mp->Mouse = w->mc;
         mp->counter = w->mouse.counter;
+
         lastb = w->mc.buttons;
     }
 }
 @
+% if same buttons, then no new event?
 
+\subsubsection{Consumer}
+% Consumer and producer, like in a pipe
 
+<<[[Wxxx]] cases>>=
+WMouseread,
+@
 
-\subsection{[[/mnt/wsys/mouse]]  emitting}
 
 <<[[winctl()]] locals>>=
 Mousereadmesg mrm;
@@ -6068,6 +6144,9 @@ Mousereadmesg mrm;
 <<[[winctl()]] channels creation>>=
 mrm.cm = chancreate(sizeof(Mouse), 0);
 @
+
+% if child process listening on mouseread, we can feed him
+% stuff in our queue
 
 
 <<[[winctl()]] alts setup>>=
@@ -6083,6 +6162,12 @@ if(w->mouseopen && w->mouse.counter != w->mouse.lastcounter)
 else
     alts[WMouseread].op = CHANNOP;
 @
+% prepare to send something if the mouse was opened and if there is
+% something to send
+
+\t why need to go through 2 stages with the channel?
+\t  anyway we queue mouse events and we look for counters,
+\t  so could send directly 
 
 
 <<[[winctl()]] event loop cases>>=
@@ -6091,6 +6176,7 @@ case WMouseread:
     /* if the queue has filled, we discard all the events it contained. */
     /* the intent is to discard frantic clicking by the user during long latencies. */
     w->mouse.qfull = false;
+    // if produced more than read
     if(w->mouse.wi != w->mouse.ri) {
         m = w->mouse.queue[w->mouse.ri];
         if(++w->mouse.ri == nelem(w->mouse.queue))
@@ -6099,28 +6185,85 @@ case WMouseread:
         m = (Mousestate){w->mc.Mouse, w->mouse.counter};
 
     w->mouse.lastcounter = m.counter;
+    // consumed and relay
     send(mrm.cm, &m.Mouse);
     continue;
 @
 
 
 
-
 \section{Keyboard events}
 
-% WCread in raw mode?
+\subsection{Raw keys queue}
 
-\subsection{[[/mnt/wsys/cons]] emitting}
-% relaying
+% could be also in Window keyboad section
+<<[[Window]] graphical window fields>>=
+// array<Rune> (size = Window.nraw)
+Rune		*raw;
+uint		nraw;
+@
+% also keyboard field
 
+
+
+\subsection{[[/mnt/wsys/cons]] reading part2}
+
+\subsubsection{Producer}
+
+% seen keyboard listening code already in section X.
+
+% winctl -> <>
+<<[[wkeyctl()]] if rawing>>=
+if(w->rawing && (w->mouseopen || w->q0 == w->nr)){
+    waddraw(w, &r, 1);
+    return;
+}
+@
+%old: I transposed the || arguments, clearer for now
+
+% faux ami, not a draw operation :) but w_add_raw
+
+% nr? q0? will see later
+
+
+<<function waddraw>>=
+void
+waddraw(Window *w, Rune *r, int nr)
+{
+    w->raw = runerealloc(w->raw, w->nraw+nr);
+    runemove(w->raw + w->nraw, r, nr);
+    w->nraw += nr;
+}
+@
+% realloc at each key press??
+
+
+<<[[wctlmesg()]] When Rawoff, process raw keys in non rawing mode>>=
+while(w->nraw > 0){
+    wkeyctl(w, w->raw[0]);
+    --w->nraw;
+    runemove(w->raw, w->raw+1, w->nraw);
+}
+@
+% wkeyctl will not loop back to same code now that rawing has been
+%  set off in xfidclose. It just feeds back the rune to 
+%  regular textual window mode.
+
+
+
+\subsubsection{Consumer}
+% Consumer and producer, like in a pipe
+
+<<[[Wxxx]] cases>>=
+WCread, 
+@
 
 <<[[winctl()]] locals>>=
-Conswritemesg cwm;
 Consreadmesg crm;
 @
 
+
 <<[[winctl()]] channels creation>>=
-cwm.cw = chancreate(sizeof(Stringpair), 0);
 crm.c1 = chancreate(sizeof(Stringpair), 0);
 crm.c2 = chancreate(sizeof(Stringpair), 0);
 @
@@ -6132,91 +6275,33 @@ crm.c2 = chancreate(sizeof(Stringpair), 0);
 
 
 <<[[winctl()]] alts setup>>=
-alts[WCwrite].c = w->conswrite;
-alts[WCwrite].v = &cwm;
-alts[WCwrite].op = CHANSND;
 alts[WCread].c = w->consread;
 alts[WCread].v = &crm;
 alts[WCread].op = CHANSND;
 @
 % CHANSND!!
 
-<<[[winctl()]] alts adjustments>>=
-if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->nchars)
-    alts[WCwrite].op = CHANNOP;
-else
-    alts[WCwrite].op = CHANSND;
-@
-% ! mouseopen??
-
 
 <<[[winctl()]] alts adjustments>>=
-/* this code depends on NL and EOT fitting in a single byte */
-/* kind of expensive for each loop; worth precomputing? */
 <<[[winctl()]] alts adjustments, if holding>>
-else if(npart || (w->rawing && w->nraw>0))
+else if((w->rawing && w->nraw>0) || npart)
     alts[WCread].op = CHANSND;
 else{
     alts[WCread].op = CHANNOP;
-    for(i=w->qh; i<w->nr; i++){
-        c = w->r[i];
-        // buffering, until get a newline in which case we are ready to send
-        if(c=='\n' || c=='\004'){
-            alts[WCread].op = CHANSND;
-            break;
-        }
-    }
+    <<[[winctl()]] alts adjustments, revert to CHANSND if newline in queue>>
 }
 @
+%old: I transposed again the || arguments, clearer to see raw first
 
+\t npart? partial stuff?
 
 <<[[winctl()]] locals>>=
 Stringpair pair;
 @
 
-<<[[winctl()]] event loop cases>>=
-case WCwrite:
-    recv(cwm.cw, &pair);
-    rp = pair.s;
-    nr = pair.ns;
-    bp = rp;
-    for(i=0; i<nr; i++)
-        if(*bp++ == '\b'){
-            --bp;
-            initial = 0;
-            tp = runemalloc(nr);
-            runemove(tp, rp, i);
-            up = tp+i;
-            for(; i<nr; i++){
-                *up = *bp++;
-                if(*up == '\b')
-                    if(up == tp)
-                        initial++;
-                    else
-                        --up;
-                else
-                    up++;
-            }
-            if(initial){
-                if(initial > w->qh)
-                    initial = w->qh;
-                qh = w->qh-initial;
-                wdelete(w, qh, qh+initial);
-                w->qh = qh;
-            }
-            free(rp);
-            rp = tp;
-            nr = up-tp;
-            rp[nr] = 0;
-            break;
-        }
-    w->qh = winsert(w, rp, nr, w->qh)+nr;
-    if(w->scrolling || w->mouseopen)
-        wshow(w, w->qh);
-    wsetselect(w, w->q0, w->q1);
-    wscrdraw(w);
-    free(rp);
-    break;
+<<[[winctl()]] locals>>=
+char *t;
+int nb;
 @
 
 <<[[winctl()]] event loop cases>>=
@@ -6224,17 +6309,22 @@ case WCread:
     recv(crm.c1, &pair);
     t = pair.s;
     nb = pair.ns;
+
     i = npart;
     npart = 0;
+
     if(i)
         memmove(t, part, i);
+
     while(i<nb && (w->qh < w->nr || w->nraw > 0)){
+
         if(w->qh == w->nr){
             wid = runetochar(t+i, &w->raw[0]);
             w->nraw--;
             runemove(w->raw, w->raw+1, w->nraw);
         }else
             wid = runetochar(t+i, &w->r[w->qh++]);
+
         c = t[i];	/* knows break characters fit in a byte */
         i += wid;
         if(!w->rawing && (c == '\n' || c=='\004')){
@@ -6245,44 +6335,61 @@ case WCread:
     }
     if(i==nb && w->qh < w->nr && w->r[w->qh]=='\004')
         w->qh++;
+
     if(i > nb){
         npart = i-nb;
         memmove(part, t+nb, npart);
         i = nb;
     }
+
     pair.s = t;
     pair.ns = i;
     send(crm.c2, &pair);
     continue;
 @
+%old: again I reverted some ||
 
 
 
 
 
 
-\section{[[/mnt/wsys/screen]]}
-% actually this one is global too
 
-% but not /dev/draw!
-% this is not demultiplex, but instead
-% writing to /dev/screen write to /dev/draw at the right place
+\section{Resize events}
+
+% actually abuse the mouse device for that, a big ugly.
+
+<<[[xfidread()]] when Qmouse, adjust c for resize message if resized>>=
+if(w->resized)
+    c = 'r';
+@
+
+% also mounter.counter++ in wresize()
+
+
+\section{[[/mnt/wsys/window]]}
 
 <<[[qid]] cases>>=
-Qscreen,
+Qwindow,
 @
 <<dirtab array elements>>=
-{ "screen",		QTFILE,	Qscreen,	0400 },
+{ "window",		QTFILE,	Qwindow,	0400 },
+@
+
+<<[[xfidread()]] other locals>>=
+Image *i;
+Rectangle r;
+char buf[128];
 @
 
 <<[[xfidread()]] cases>>=
-case Qscreen:
-    i = display->image;
-    if(i == nil){
-        filsysrespond(x->fs, x, &fc, "no top-level screen");
-        break;
+case Qwindow:
+    i = w->i;
+    if(i == nil || Dx(w->screenr)<=0){
+        filsysrespond(x->fs, x, &fc, Enowindow);
+        return;
     }
-    r = i->r;
+    r = w->screenr;
     /* fall through */
 
 caseImage:
@@ -6329,26 +6436,7 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 @
 
 
-\section{[[/mnt/wsys/window]]}
-% put in graphical window chapter?
 
-<<[[qid]] cases>>=
-Qwindow,
-@
-<<dirtab array elements>>=
-{ "window",		QTFILE,	Qwindow,	0400 },
-@
-
-<<[[xfidread()]] cases>>=
-case Qwindow:
-    i = w->i;
-    if(i == nil || Dx(w->screenr)<=0){
-        filsysrespond(x->fs, x, &fc, Enowindow);
-        return;
-    }
-    r = w->screenr;
-    goto caseImage;
-@
 
 
 
@@ -6359,8 +6447,8 @@ case Qwindow:
 % to do some drawtext() ... we want backward compatibility, some
 % kind of emulation! (and with more services!)
 
-% it's relatively easy to have an xterm
-% thx to the fake /dev/cons and frame lib
+% it's relatively easy to have an xterm under plan9
+% thx to the fake /dev/cons
 
 %https://www.destroyallsoftware.com/talks/a-whole-new-world
 
@@ -6369,11 +6457,14 @@ case Qwindow:
 % Saw window creation section before. Some additional setup
 % for textual windows.
 
+
+
 <<[[wmk()]] textual window settings>>=
 r = insetrect(i->r, Selborder+1);
 w->scrollr = r;
 w->scrollr.max.x = r.min.x+Scrollwid;
 w->lastsr = ZR;
+
 r.min.x += Scrollwid+Scrollgap;
 
 frinit(w, r, font, i, cols);
@@ -6392,7 +6483,9 @@ r = insetrect(i->r, Selborder+1);
 w->scrollr = r;
 w->scrollr.max.x = r.min.x+Scrollwid;
 w->lastsr = ZR;
+
 r.min.x += Scrollwid+Scrollgap;
+
 if(move)
     frsetrects(w, r, w->i);
 else{
@@ -6412,7 +6505,6 @@ else{
 
 % what is around the window (actually it's part of the window??)
 
-% XXX mv later and split
 <<struct Frame>>=
 struct Frame
 {
@@ -6430,6 +6522,7 @@ struct Frame
     Frbox	*box;
 
     ulong	p0, p1;		/* selection */
+
     ushort	nbox, nalloc;
     ushort	maxtab;		/* max size of tab, in pixels */
     ushort	nchars;		/* # runes in frame */
@@ -6595,13 +6688,6 @@ if(!w->mouseopen)
 
 
 <<[[Window]] textual window fields>>=
-// array<Rune>
-Rune		*r;
-uint		nr;	/* number of runes in window */
-uint		maxr;	/* number of runes allocated in r */
-@
-
-<<[[Window]] textual window fields>>=
 uint		org;
 @
 
@@ -6741,10 +6827,9 @@ button2menu(Window *w)
 {
     if(w->deleted)
         return;
+
     incref(w);
-
     <<[[button2menu()]] menu2str adjustments for scrolling>>
-
     switch(menuhit(2, mousectl, &menu2, wscreen)){
     <<[[button2menu()]] cases>>
     }
@@ -6755,15 +6840,10 @@ button2menu(Window *w)
 @
 
 
-<<enum _anon_ (windows/rio/rio.c)2>>=
-enum
+<<global menu2>>=
+Menu menu2 =
 {
-    Cut,
-    Paste,
-    Snarf,
-    Plumb,
-    Send,
-    Scroll,
+    menu2str
 };
 @
 
@@ -6779,12 +6859,18 @@ char*		menu2str[] = {
 };
 @
 
-<<global menu2>>=
-Menu menu2 =
+<<enum _anon_ (windows/rio/rio.c)2>>=
+enum
 {
-    menu2str
+    Cut,
+    Paste,
+    Snarf,
+    Plumb,
+    Send,
+    Scroll,
 };
 @
+
 
 
 
@@ -6831,9 +6917,110 @@ wmousectl(Window *w)
 @
 % transform mouse even in key event :) for scrolling
 
+% see scrolling later, using but value
+
+
+
 \section{Keyboard events}
 
 % when write on /dev/cons, then need update text.
+
+\subsection{[[/mnt/wsys/cons]] reading part3}
+
+\t put code from reading part2 unrelated to raw chars
+
+\subsection{[[/mnt/wsys/cons]] writing part2}
+
+% process output string by writing on /dev/cons!
+% newline too, runes
+
+\subsubsection{Producer}
+
+<<[[winctl()]] alts adjustments, revert to CHANSND if newline in queue>>=
+/* this code depends on NL and EOT fitting in a single byte */
+/* kind of expensive for each loop; worth precomputing? */
+for(i=w->qh; i < w->nr; i++){
+     c = w->r[i];
+     // buffering, until get a newline in which case we are ready to send
+     if(c=='\n' || c=='\004'){
+         alts[WCread].op = CHANSND;
+         break;
+     }
+ }
+@
+
+\subsubsection{Consumer}
+
+<<[[Wxxx]] cases>>=
+WCwrite,
+@
+
+<<[[winctl()]] locals>>=
+Conswritemesg cwm;
+@
+<<[[winctl()]] channels creation>>=
+cwm.cw = chancreate(sizeof(Stringpair), 0);
+@
+
+<<[[winctl()]] alts setup>>=
+alts[WCwrite].c = w->conswrite;
+alts[WCwrite].v = &cwm;
+alts[WCwrite].op = CHANSND;
+@
+
+<<[[winctl()]] alts adjustments>>=
+if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->nchars)
+    alts[WCwrite].op = CHANNOP;
+else
+    alts[WCwrite].op = CHANSND;
+@
+% ! mouseopen??
+
+
+<<[[winctl()]] event loop cases>>=
+case WCwrite:
+    recv(cwm.cw, &pair);
+    rp = pair.s;
+    nr = pair.ns;
+    bp = rp;
+    for(i=0; i<nr; i++)
+        if(*bp++ == '\b'){
+            --bp;
+            initial = 0;
+            tp = runemalloc(nr);
+            runemove(tp, rp, i);
+            up = tp+i;
+            for(; i<nr; i++){
+                *up = *bp++;
+                if(*up == '\b')
+                    if(up == tp)
+                        initial++;
+                    else
+                        --up;
+                else
+                    up++;
+            }
+            if(initial){
+                if(initial > w->qh)
+                    initial = w->qh;
+                qh = w->qh-initial;
+                wdelete(w, qh, qh+initial);
+                w->qh = qh;
+            }
+            free(rp);
+            rp = tp;
+            nr = up-tp;
+            rp[nr] = 0;
+            break;
+        }
+    w->qh = winsert(w, rp, nr, w->qh)+nr;
+    if(w->scrolling || w->mouseopen)
+        wshow(w, w->qh);
+    wsetselect(w, w->q0, w->q1);
+    wscrdraw(w);
+    free(rp);
+    break;
+@
 
 \subsection{Ordinary characters}
 
@@ -7026,6 +7213,8 @@ wbswidth(Window *w, Rune c)
 @
 
 \section{Content modification}
+
+% See also Efuns.nw?
 
 <<enum _anon_ (windows/rio/wind.c)>>=
 enum
@@ -7387,7 +7576,6 @@ Rectangle	scrollr;
 @
 
 
-% mv later with textual??
 <<[[mousethread()]] locals>>=
 bool scrolling = false;
 @
@@ -7717,7 +7905,7 @@ wbacknl(Window *w, uint p, uint n)
 
 
 \section{[[/mnt/wsys/text]]}
-% put in Textual window chapter?
+% interesting to understand structure!
 
 <<[[qid]] cases>>=
 Qtext,
@@ -7753,7 +7941,7 @@ wcontents(Window *w, int *ip)
     return runetobyte(w->r, w->nr, ip);
 }
 @
-
+% runetobyte libc
 
 
 \chapter{[[/mnt/wsys/...]] Windows Files}
@@ -7775,6 +7963,7 @@ case Qwinid:
     t = estrdup(buf);
     goto Text;
 @
+% sanity check n?
 
 \section{[[/mnt/wsys/winname]]}
 % before
@@ -7802,6 +7991,8 @@ case Qlabel:
     filsysrespond(x->fs, x, &fc, nil);
     break;
 @
+% could use goto Text? we avoid some allocations here
+
 
 <<[[xfidwrite()]] cases>>=
 case Qlabel:
@@ -7816,13 +8007,8 @@ case Qlabel:
     break;
 @
 
+
 \section{[[/mnt/wsys/wdir]]}
-
-<<[[Window]] other fields>>=
-char		*dir; // /dev/wdir
-@
-% window working dir
-
 
 <<[[qid]] cases>>=
 Qwdir,
@@ -7866,6 +8052,30 @@ case Qwdir:
     }
     break;
 @
+
+\section{[[/mnt/wsys/screen]]}
+
+% read only
+
+<<[[qid]] cases>>=
+Qscreen,
+@
+<<dirtab array elements>>=
+{ "screen",		QTFILE,	Qscreen,	0400 },
+@
+
+<<[[xfidread()]] cases>>=
+case Qscreen:
+    i = display->image;
+    if(i == nil){
+        filsysrespond(x->fs, x, &fc, "no top-level screen");
+        break;
+    }
+    r = i->r;
+    goto caseImage;
+@
+%old: the caseImage used to be here, but I prefer to put
+% it with the Qwindow case
 
 \section{[[/mnt/wsys/wsys/]]}
 
@@ -7941,9 +8151,10 @@ case Qwsysdir:
 
 
 \section{[[/mnt/wsys/wctl]]}
-
-% allow to command an app? a la watir/selenium/... ?
 % Adv topics? Debugging support chapter?
+% allow to command an app? a la watir/selenium/... ?
+
+
 
 <<[[Window]] other fields>>=
 bool	wctlopen;
@@ -8006,6 +8217,13 @@ if(w != oi){
 @
 % But Wakeup does nothing actually
 
+\subsection{Reading}
+
+\subsubsection{Producer}
+
+\subsubsection{Consumer}
+
+\subsubsection{XXX}
 
 <<enum _anon_ (windows/rio/xfid.c)5>>=
 enum { WCRdata, WCRflush, NWCR };
@@ -8052,6 +8270,74 @@ case Qwctl:	/* read returns rectangle, hangs if not resized */
     qunlock(&x->active);
     break;
 @
+
+
+
+
+% when read by app it's the current status of the window
+
+<<[[Window]] other fields>>=
+Channel		*wctlread;	/* chan(Consreadmesg) */
+@
+
+<<[[winctl()]] locals>>=
+Consreadmesg cwrm;
+@
+
+<<[[winctl()]] channels creation>>=
+cwrm.c1 = chancreate(sizeof(Stringpair), 0);
+cwrm.c2 = chancreate(sizeof(Stringpair), 0);
+@
+
+
+<<[[Wxxx]] cases>>=
+WWread,
+@
+
+
+<<[[winctl()]] alts setup>>=
+alts[WWread].c = w->wctlread;
+alts[WWread].v = &cwrm;
+alts[WWread].op = CHANSND;
+@
+
+<<[[winctl()]] alts adjustments>>=
+if(w->deleted || !w->wctlready)
+    alts[WWread].op = CHANNOP;
+else
+    alts[WWread].op = CHANSND;
+@
+
+
+
+<<[[winctl()]] event loop cases>>=
+case WWread:
+    w->wctlready = false;
+    recv(cwrm.c1, &pair);
+    if(w->deleted || w->i==nil)
+        pair.ns = sprint(pair.s, "");
+    else{
+        s = "visible";
+        for(i=0; i<nhidden; i++)
+            if(hidden[i] == w){
+                s = "hidden";
+                break;
+            }
+        t = "notcurrent";
+        if(w == input)
+            t = "current";
+        pair.ns = snprint(pair.s, pair.ns, "%11d %11d %11d %11d %s %s ",
+            w->i->r.min.x, w->i->r.min.y, w->i->r.max.x, w->i->r.max.y, t, s);
+    }
+    send(cwrm.c2, &pair);
+    continue;
+@
+
+
+
+
+
+\subsection{Writing (controlling windows)}
 
 <<[[xfidwrite()]] cases>>=
 case Qwctl:
@@ -8183,65 +8469,9 @@ writewctl(Xfid *x, char *err)
 }
 @
 
+% nice summary of all Wctlmesgkind
 
 
-
-
-\subsection{[[/mnt/wsys/wctl]] emitting}
-
-% when read by app it's the current status of the window
-
-<<[[Window]] other fields>>=
-Channel		*wctlread;	/* chan(Consreadmesg) */
-@
-
-<<[[winctl()]] locals>>=
-Consreadmesg cwrm;
-@
-
-<<[[winctl()]] channels creation>>=
-cwrm.c1 = chancreate(sizeof(Stringpair), 0);
-cwrm.c2 = chancreate(sizeof(Stringpair), 0);
-@
-
-
-<<[[winctl()]] alts setup>>=
-alts[WWread].c = w->wctlread;
-alts[WWread].v = &cwrm;
-alts[WWread].op = CHANSND;
-@
-
-<<[[winctl()]] alts adjustments>>=
-if(w->deleted || !w->wctlready)
-    alts[WWread].op = CHANNOP;
-else
-    alts[WWread].op = CHANSND;
-@
-
-
-
-<<[[winctl()]] event loop cases>>=
-case WWread:
-    w->wctlready = false;
-    recv(cwrm.c1, &pair);
-    if(w->deleted || w->i==nil)
-        pair.ns = sprint(pair.s, "");
-    else{
-        s = "visible";
-        for(i=0; i<nhidden; i++)
-            if(hidden[i] == w){
-                s = "hidden";
-                break;
-            }
-        t = "notcurrent";
-        if(w == input)
-            t = "current";
-        pair.ns = snprint(pair.s, pair.ns, "%11d %11d %11d %11d %s %s ",
-            w->i->r.min.x, w->i->r.min.y, w->i->r.max.x, w->i->r.max.y, t, s);
-    }
-    send(cwrm.c2, &pair);
-    continue;
-@
 
 
 
@@ -8645,6 +8875,7 @@ wctlthread(void *v)
 
 
 
+\t mv before in other /mnt/wsys/ctl?
 
 <<enum _anon_ (windows/rio/wctl.c)>>=
 /* >= Top are disallowed if mouse button is pressed */
@@ -9066,6 +9297,7 @@ case MReshape:
     break;
 @
 
+% resized is what regular applications are supposed to do.
 
 % from MReshape, how can get this event? from resize of rio window itself?
 % so get that when run vgactl? or when run rio inside rio and resize
@@ -9082,14 +9314,18 @@ resized(void)
 
     if(getwindow(display, Refnone) < 0)
         error("failed to re-attach window");
+
     freescrtemps();
     freescreen(wscreen);
+
     wscreen = allocscreen(view, background, 0);
     if(wscreen == nil)
         error("can't re-allocate screen");
+
     draw(view, view->r, background, nil, ZP);
     o = subpt(viewr.max, viewr.min);
     n = subpt(view->clipr.max, view->clipr.min);
+
     for(i=0; i<nwindow; i++){
         w = windows[i];
         if(w->deleted)
@@ -9118,7 +9354,10 @@ resized(void)
     flushimage(display, 1);
 }
 @
+% force redisplay by Reshaped!
 
+% Nice code where see the full state of rio and how to iterate
+%  over it
 
 \section{Snarf}
 %\subsection{[[/dev/snarf]]}
@@ -10513,6 +10752,7 @@ int isalnum(Rune c)
 @
 
 
+% cvt ?? 
 <<function cvttorunes>>=
 void
 cvttorunes(char *p, int n, Rune *r, int *nb, int *nr, int *nulls)
