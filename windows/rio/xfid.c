@@ -316,6 +316,14 @@ xfidopen(Xfid *x)
     /*e: [[xfidxxx()]] respond error if window was deleted */
     switch(FILE(x->f->qid)){
     /*s: [[xfidopen()]] cases */
+    case Qconsctl:
+        if(w->ctlopen){
+            filsysrespond(x->fs, x, &fc, Einuse);
+            return;
+        }
+        w->ctlopen = true;
+        break;
+    /*x: [[xfidopen()]] cases */
     case Qmouse:
         if(w->mouseopen){
             filsysrespond(x->fs, x, &fc, Einuse);
@@ -332,14 +340,6 @@ xfidopen(Xfid *x)
          * dawn of time.  We choose the lesser evil.
          */
         w->resized = false;
-        break;
-    /*x: [[xfidopen()]] cases */
-    case Qconsctl:
-        if(w->ctlopen){
-            filsysrespond(x->fs, x, &fc, Einuse);
-            return;
-        }
-        w->ctlopen = true;
         break;
     /*x: [[xfidopen()]] cases */
     case Qwctl:
@@ -380,10 +380,11 @@ xfidopen(Xfid *x)
     /*e: [[xfidopen()]] cases */
     }
 
-    fc.qid = x->f->qid;
-    fc.iounit = messagesize-IOHDRSZ;
     x->f->open = true;
     x->f->mode = x->mode;
+
+    fc.qid = x->f->qid;
+    fc.iounit = messagesize-IOHDRSZ;
     filsysrespond(x->fs, x, &fc, nil);
 }
 /*e: function xfidopen */
@@ -401,14 +402,6 @@ xfidclose(Xfid *x)
     w = x->f->w;
     switch(FILE(x->f->qid)){
     /*s: [[xfidclose()]] cases */
-    case Qmouse:
-        w->mouseopen = false;
-
-        w->resized = false;
-        if(w->i != nil)
-            wsendctlmesg(w, Refresh, w->i->r, nil);
-        break;
-    /*x: [[xfidclose()]] cases */
     case Qconsctl:
         /*s: [[xfidclose()]] Qconsctl case, if rawing */
         if(w->rawing){
@@ -428,6 +421,14 @@ xfidclose(Xfid *x)
     case Qcursor:
         w->cursorp = nil;
         wsetcursor(w, false);
+        break;
+    /*x: [[xfidclose()]] cases */
+    case Qmouse:
+        w->mouseopen = false;
+
+        w->resized = false;
+        if(w->i != nil)
+            wsendctlmesg(w, Refresh, w->i->r, nil);
         break;
     /*x: [[xfidclose()]] cases */
     case Qwctl:
@@ -465,15 +466,18 @@ xfidwrite(Xfid *x)
     uint qid;
     int off, cnt;
     /*s: [[xfidwrite()]] other locals */
-    int c, nb, nr;
+    int c;
     char buf[256];
-    Rune *r;
     Conswritemesg cwm;
     Stringpair pair;
     Alt alts[NCW+1];
     /*x: [[xfidwrite()]] other locals */
     char *p;
     Point pt;
+    /*x: [[xfidwrite()]] other locals */
+    Rune *r;
+    int nr; // nb runes
+    int nb; // nb bytes
     /*e: [[xfidwrite()]] other locals */
     
     w = x->f->w;
@@ -509,6 +513,7 @@ xfidwrite(Xfid *x)
         break;
     /*x: [[xfidwrite()]] cases */
     case Qcons:
+
         nr = x->f->nrpart;
         if(nr > 0){
             memmove(x->data+nr, x->data, cnt);	/* there's room: see malloc in filsysproc */
@@ -516,8 +521,10 @@ xfidwrite(Xfid *x)
             cnt += nr;
             x->f->nrpart = 0;
         }
+
         r = runemalloc(cnt);
         cvttorunes(x->data, cnt-UTFmax, r, &nb, &nr, nil);
+
         /* approach end of buffer */
         while(fullrune(x->data+nb, cnt-nb)){
             c = nb;
@@ -525,8 +532,9 @@ xfidwrite(Xfid *x)
             if(r[nr])
                 nr++;
         }
+        // assert(cnt-nb < UTFMAX);
         if(nb < cnt){
-            memmove(x->f->rpart, x->data+nb, cnt-nb);
+            memmove(x->f->rpart, x->data + nb, cnt-nb);
             x->f->nrpart = cnt-nb;
         }
         /*s: [[xfidxxx()]] set flushtag */
@@ -734,11 +742,8 @@ xfidread(Xfid *x)
     uint qid;
     int off, cnt;
     /*s: [[xfidread()]] other locals */
-    char buf[128];
     int n, c;
     char cbuf[30];
-    Rectangle r;
-    Image *i;
     Consreadmesg cwrm;
     Alt alts[NCR+1];
     /*x: [[xfidread()]] other locals */
@@ -749,6 +754,10 @@ xfidread(Xfid *x)
     Channel *c1, *c2;	/* chan (tuple(char*, int)) */
     char *t;
     Stringpair pair;
+    /*x: [[xfidread()]] other locals */
+    Image *i;
+    Rectangle r;
+    char buf[128];
     /*e: [[xfidread()]] other locals */
     
     w = x->f->w;
@@ -804,8 +813,10 @@ xfidread(Xfid *x)
         qlock(&x->active);
         recv(mrm.cm, &ms);
         c = 'm';
+        /*s: [[xfidread()]] when Qmouse, adjust c for resize message if resized */
         if(w->resized)
             c = 'r';
+        /*e: [[xfidread()]] when Qmouse, adjust c for resize message if resized */
         n = sprint(buf, "%c%11d %11d %11d %11ld ", c, ms.xy.x, ms.xy.y, ms.buttons, ms.msec);
         w->resized = false;
 
@@ -883,13 +894,13 @@ xfidread(Xfid *x)
         t = estrdup(w->name);
         goto Text;
     /*x: [[xfidread()]] cases */
-    case Qscreen:
-        i = display->image;
-        if(i == nil){
-            filsysrespond(x->fs, x, &fc, "no top-level screen");
-            break;
+    case Qwindow:
+        i = w->i;
+        if(i == nil || Dx(w->screenr)<=0){
+            filsysrespond(x->fs, x, &fc, Enowindow);
+            return;
         }
-        r = i->r;
+        r = w->screenr;
         /* fall through */
 
     caseImage:
@@ -913,15 +924,6 @@ xfidread(Xfid *x)
         }
         free(t);
         return;
-    /*x: [[xfidread()]] cases */
-    case Qwindow:
-        i = w->i;
-        if(i == nil || Dx(w->screenr)<=0){
-            filsysrespond(x->fs, x, &fc, Enowindow);
-            return;
-        }
-        r = w->screenr;
-        goto caseImage;
     /*x: [[xfidread()]] cases */
     case Qtext:
         t = wcontents(w, &n);
@@ -962,6 +964,15 @@ xfidread(Xfid *x)
         t = estrdup(w->dir);
         n = strlen(t);
         goto Text;
+    /*x: [[xfidread()]] cases */
+    case Qscreen:
+        i = display->image;
+        if(i == nil){
+            filsysrespond(x->fs, x, &fc, "no top-level screen");
+            break;
+        }
+        r = i->r;
+        goto caseImage;
     /*x: [[xfidread()]] cases */
     case Qwctl:	/* read returns rectangle, hangs if not resized */
         if(cnt < 4*12){

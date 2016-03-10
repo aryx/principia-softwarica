@@ -800,14 +800,18 @@ resized(void)
 
     if(getwindow(display, Refnone) < 0)
         error("failed to re-attach window");
+
     freescrtemps();
     freescreen(wscreen);
+
     wscreen = allocscreen(view, background, 0);
     if(wscreen == nil)
         error("can't re-allocate screen");
+
     draw(view, view->r, background, nil, ZP);
     o = subpt(viewr.max, viewr.min);
     n = subpt(view->clipr.max, view->clipr.min);
+
     for(i=0; i<nwindow; i++){
         w = windows[i];
         if(w->deleted)
@@ -893,15 +897,14 @@ button2menu(Window *w)
 {
     if(w->deleted)
         return;
-    incref(w);
 
+    incref(w);
     /*s: [[button2menu()]] menu2str adjustments for scrolling */
     if(w->scrolling)
         menu2str[Scroll] = "noscroll";
     else
         menu2str[Scroll] = "scroll";
     /*e: [[button2menu()]] menu2str adjustments for scrolling */
-
     switch(menuhit(2, mousectl, &menu2, wscreen)){
     /*s: [[button2menu()]] cases */
     case Cut:
@@ -1443,7 +1446,6 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     /*e: [[new()]] mc allocation */
 
     w = wmk(i, mc, ck, cctl, scrollit);
-
     free(mc);	/* wmk copies *mc */
 
     // growing array

@@ -53,6 +53,7 @@ struct Frame
     Frbox	*box;
 
     ulong	p0, p1;		/* selection */
+
     ushort	nbox, nalloc;
     ushort	maxtab;		/* max size of tab, in pixels */
     ushort	nchars;		/* # runes in frame */

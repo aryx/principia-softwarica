@@ -14,8 +14,6 @@ enum Qxxx
     /*x: [[qid]] cases */
     Qwinname,
     /*x: [[qid]] cases */
-    Qscreen,
-    /*x: [[qid]] cases */
     Qwindow,
     /*x: [[qid]] cases */
     Qtext,
@@ -25,6 +23,8 @@ enum Qxxx
     Qlabel,
     /*x: [[qid]] cases */
     Qwdir,
+    /*x: [[qid]] cases */
+    Qscreen,
     /*x: [[qid]] cases */
     Qwsys,		/* directory of window directories */
     /*x: [[qid]] cases */
@@ -177,15 +177,18 @@ struct Mouseinfo
 {
     Mousestate	queue[16];
 
+    // consumer
     int	ri;	/* read index into queue */
+    // producer
     int	wi;	/* write index */
 
+    bool	qfull;/* filled the queue; no more recording until client comes back */	
+
     ulong	counter;	/* serial no. of last mouse event we received */
-    ulong	lastcounter;	/* serial no. of last mouse event sent to client */
+    ulong	lastcounter;/* serial no. of last mouse event sent to client */
 
     int	lastb;	/* last button state we received */
 
-    uchar	qfull;	/* filled the queue; no more recording until client comes back */	
 };	
 /*e: struct Mouseinfo */
 
@@ -274,7 +277,7 @@ struct Window
     // Textual Window
     //--------------------------------------------------------------------
     /*s: [[Window]] textual window fields */
-    // array<Rune>
+    // growing_array<Rune> (size = Window.maxr)
     Rune		*r;
     uint		nr;	/* number of runes in window */
     uint		maxr;	/* number of runes allocated in r */
@@ -296,7 +299,7 @@ struct Window
     /*s: [[Window]] graphical window fields */
     bool	mouseopen;
     /*x: [[Window]] graphical window fields */
-    // array<Rune>
+    // array<Rune> (size = Window.nraw)
     Rune		*raw;
     uint		nraw;
     /*e: [[Window]] graphical window fields */
@@ -306,6 +309,8 @@ struct Window
     //--------------------------------------------------------------------
     /*s: [[Window]] other fields */
     int	 	topped;
+    /*x: [[Window]] other fields */
+    char		*dir; // /dev/wdir
     /*x: [[Window]] other fields */
     bool	 	resized;
     /*x: [[Window]] other fields */
@@ -320,8 +325,6 @@ struct Window
     bool	ctlopen;
     /*x: [[Window]] other fields */
     Rectangle	lastsr;
-    /*x: [[Window]] other fields */
-    char		*dir; // /dev/wdir
     /*x: [[Window]] other fields */
     bool	wctlopen;
     bool 	wctlready;
@@ -367,10 +370,10 @@ struct Fid
     /*x: [[Fid]] other fields */
     Window	*w;
     /*x: [[Fid]] other fields */
-    int		nrpart;
-    uchar	rpart[UTFmax];
-    /*x: [[Fid]] other fields */
     Dirtab	*dir;
+    /*x: [[Fid]] other fields */
+    uchar	rpart[UTFmax];
+    int		nrpart;
     /*e: [[Fid]] other fields */
 
     // Extra

@@ -48,8 +48,6 @@ Dirtab dirtab[]=
     /*x: dirtab array elements */
     { "winname",	QTFILE,	Qwinname,	0400 },
     /*x: dirtab array elements */
-    { "screen",		QTFILE,	Qscreen,	0400 },
-    /*x: dirtab array elements */
     { "window",		QTFILE,	Qwindow,	0400 },
     /*x: dirtab array elements */
     { "text",		QTFILE,	Qtext,		0400 },
@@ -59,6 +57,8 @@ Dirtab dirtab[]=
     { "label",		QTFILE,	Qlabel,		0600 },
     /*x: dirtab array elements */
     { "wdir",		QTFILE,	Qwdir,		0600 },
+    /*x: dirtab array elements */
+    { "screen",		QTFILE,	Qscreen,	0400 },
     /*x: dirtab array elements */
     { "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
     /*x: dirtab array elements */
@@ -413,6 +413,7 @@ filsysversion(Filsys *fs, Xfid *x, Fid*)
     fc.msize = messagesize;
     if(strncmp(x->version, "9P2000", 6) != 0)
         return filsysrespond(x->fs, x, &fc, "unrecognized 9P version");
+    // else
     fc.version = "9P2000";
     return filsysrespond(fs, x, &fc, nil);
 }
