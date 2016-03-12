@@ -261,7 +261,7 @@ xfidattach(Xfid *x)
                 err = Ebadrect;
             else{
                 if(hideit)
-                    i = allocimage(display, r, view->chan, 0, DWhite);
+                    i = allocimage(display, r, view->chan, false, DWhite);
                 else
                     i = allocwindow(wscreen, r, Refbackup, DWhite);
                 if(i){

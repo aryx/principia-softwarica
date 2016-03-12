@@ -26,7 +26,7 @@ scrtemps(void)
     if(scrtmp)
         return;
     h = BIG*Dy(view->r);
-    scrtmp = allocimage(display, Rect(0, 0, 32, h), view->chan, 0, DWhite);
+    scrtmp = allocimage(display, Rect(0, 0, 32, h), view->chan, false, DWhite);
     if(scrtmp == nil)
         error("scrtemps");
 }

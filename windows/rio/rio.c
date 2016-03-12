@@ -795,22 +795,27 @@ void
 resized(void)
 {
     Image *im;
-    int i, j, ishidden;
+    int i, j;
+    bool ishidden;
     Rectangle r;
     Point o, n;
     Window *w;
 
+    // updates view (and screen)
     if(getwindow(display, Refnone) < 0)
         error("failed to re-attach window");
 
     freescrtemps();
     freescreen(wscreen);
 
-    wscreen = allocscreen(view, background, 0);
+    wscreen = allocscreen(view, background, false);
+    /*s: [[resized()]] sanity check wscreen */
     if(wscreen == nil)
         error("can't re-allocate screen");
-
+    /*e: [[resized()]] sanity check wscreen */
     draw(view, view->r, background, nil, ZP);
+
+    // old view rectangle
     o = subpt(viewr.max, viewr.min);
     n = subpt(view->clipr.max, view->clipr.min);
 
@@ -826,22 +831,24 @@ resized(void)
         r.max.x = (r.max.x*n.x)/o.x;
         r.max.y = (r.max.y*n.y)/o.y;
         r = rectaddpt(r, view->clipr.min);
-        ishidden = 0;
+
+        ishidden = false;
         for(j=0; j<nhidden; j++)
             if(w == hidden[j]){
-                ishidden = 1;
+                ishidden = true;
                 break;
             }
         if(ishidden){
-            im = allocimage(display, r, view->chan, 0, DWhite);
+            im = allocimage(display, r, view->chan, false, DWhite);
             r = ZR;
         }else
             im = allocwindow(wscreen, r, Refbackup, DWhite);
+
         if(im)
             wsendctlmesg(w, Reshaped, r, im);
     }
     viewr = view->r;
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 /*e: function resized */
 

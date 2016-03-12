@@ -89,19 +89,19 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     /*s: [[wmk()]] cols initialisation */
     if(cols[0] == nil){
         /* greys are multiples of 0x11111100+0xFF, 14* being palest */
-        grey     = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xEEEEEEFF);
-        darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x666666FF);
+        grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
+        darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
         cols[BACK] = display->white;
-        cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xCCCCCCFF);
-        cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x999999FF);
+        cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xCCCCCCFF);
+        cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x999999FF);
         cols[TEXT] = display->black;
         cols[HTEXT] = display->black;
 
-        titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
-        lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreygreen);
-        holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
-        lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreyblue);
-        paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
+        titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreygreen);
+        lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreygreen);
+        holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, true, DMedblue);
+        lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreyblue);
+        paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreyblue);
     }
     /*e: [[wmk()]] cols initialisation */
 

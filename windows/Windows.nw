@@ -1393,8 +1393,8 @@ if(wscreen == nil)
 void
 iconinit(void)
 {
-    background = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0x777777FF);
-    red        = allocimage(display, Rect(0,0,1,1), RGB24, 1, 0xDD0000FF);
+    background = allocimage(display, Rect(0,0,1,1), RGB24, true, 0x777777FF);
+    red        = allocimage(display, Rect(0,0,1,1), RGB24, true, 0xDD0000FF);
 }
 @
 % why iconinit? icon??
@@ -1967,9 +1967,7 @@ if(mouse->buttons){
 
 
 
-
-
-%XXX
+\t ??? 
 <<[[mousethread()]] Drain label>>=
 Drain:
     do {
@@ -1978,7 +1976,7 @@ Drain:
     moving = false;
     goto Again;	/* recalculate mouse position, cursor */
 @
-%??????????
+
 
 
 \section{Windows threads}
@@ -6762,19 +6760,19 @@ static	Image	*lighttitlecol;
 <<[[wmk()]] cols initialisation>>=
 if(cols[0] == nil){
     /* greys are multiples of 0x11111100+0xFF, 14* being palest */
-    grey     = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xEEEEEEFF);
-    darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x666666FF);
+    grey     = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xEEEEEEFF);
+    darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x666666FF);
     cols[BACK] = display->white;
-    cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xCCCCCCFF);
-    cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x999999FF);
+    cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0xCCCCCCFF);
+    cols[BORD] = allocimage(display, Rect(0,0,1,1), CMAP8, true, 0x999999FF);
     cols[TEXT] = display->black;
     cols[HTEXT] = display->black;
 
-    titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
-    lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreygreen);
-    holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
-    lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreyblue);
-    paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
+    titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreygreen);
+    lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreygreen);
+    holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, true, DMedblue);
+    lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, true, DGreyblue);
+    paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, true, DPalegreyblue);
 }
 @
 % the cols will be inverted at some point.
@@ -7968,7 +7966,7 @@ scrtemps(void)
     if(scrtmp)
         return;
     h = BIG*Dy(view->r);
-    scrtmp = allocimage(display, Rect(0, 0, 32, h), view->chan, 0, DWhite);
+    scrtmp = allocimage(display, Rect(0, 0, 32, h), view->chan, false, DWhite);
     if(scrtmp == nil)
         error("scrtemps");
 }
@@ -8823,7 +8821,7 @@ if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
             err = Ebadrect;
         else{
             if(hideit)
-                i = allocimage(display, r, view->chan, 0, DWhite);
+                i = allocimage(display, r, view->chan, false, DWhite);
             else
                 i = allocwindow(wscreen, r, Refbackup, DWhite);
             if(i){
@@ -9306,7 +9304,7 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
         argv[3] = nil;
     }
     if(hideit)
-        i = allocimage(display, rect, view->chan, 0, DWhite);
+        i = allocimage(display, rect, view->chan, false, DWhite);
     else
         i = allocwindow(wscreen, rect, Refbackup, DWhite);
     if(i == nil){
@@ -9394,22 +9392,24 @@ void
 resized(void)
 {
     Image *im;
-    int i, j, ishidden;
+    int i, j;
+    bool ishidden;
     Rectangle r;
     Point o, n;
     Window *w;
 
+    // updates view (and screen)
     if(getwindow(display, Refnone) < 0)
         error("failed to re-attach window");
 
     freescrtemps();
     freescreen(wscreen);
 
-    wscreen = allocscreen(view, background, 0);
-    if(wscreen == nil)
-        error("can't re-allocate screen");
-
+    wscreen = allocscreen(view, background, false);
+    <<[[resized()]] sanity check wscreen>>
     draw(view, view->r, background, nil, ZP);
+
+    // old view rectangle
     o = subpt(viewr.max, viewr.min);
     n = subpt(view->clipr.max, view->clipr.min);
 
@@ -9422,22 +9422,24 @@ resized(void)
         r.max.x = (r.max.x*n.x)/o.x;
         r.max.y = (r.max.y*n.y)/o.y;
         r = rectaddpt(r, view->clipr.min);
-        ishidden = 0;
+
+        ishidden = false;
         for(j=0; j<nhidden; j++)
             if(w == hidden[j]){
-                ishidden = 1;
+                ishidden = true;
                 break;
             }
         if(ishidden){
-            im = allocimage(display, r, view->chan, 0, DWhite);
+            im = allocimage(display, r, view->chan, false, DWhite);
             r = ZR;
         }else
             im = allocwindow(wscreen, r, Refbackup, DWhite);
+
         if(im)
             wsendctlmesg(w, Reshaped, r, im);
     }
     viewr = view->r;
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 @
 % force redisplay by Reshaped!
@@ -9445,6 +9447,11 @@ resized(void)
 % Nice code where see the full state of rio and how to iterate
 %  over it
 
+
+<<[[resized()]] sanity check wscreen>>=
+if(wscreen == nil)
+    error("can't re-allocate screen");
+@
 
 <<[[resized()]] continue if window was deleted>>=
 if(w->deleted)

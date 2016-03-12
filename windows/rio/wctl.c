@@ -367,7 +367,7 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
         argv[3] = nil;
     }
     if(hideit)
-        i = allocimage(display, rect, view->chan, 0, DWhite);
+        i = allocimage(display, rect, view->chan, false, DWhite);
     else
         i = allocwindow(wscreen, rect, Refbackup, DWhite);
     if(i == nil){
