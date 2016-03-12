@@ -51,6 +51,7 @@ static	int	id;
 /*e: global id */
 
 /*s: global cols */
+// map<Property, Color>
 static	Image	*cols[NCOL];
 /*e: global cols */
 /*s: global grey */
@@ -88,7 +89,7 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     /*s: [[wmk()]] cols initialisation */
     if(cols[0] == nil){
         /* greys are multiples of 0x11111100+0xFF, 14* being palest */
-        grey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xEEEEEEFF);
+        grey     = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xEEEEEEFF);
         darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x666666FF);
         cols[BACK] = display->white;
         cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xCCCCCCFF);
@@ -96,11 +97,11 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
         cols[TEXT] = display->black;
         cols[HTEXT] = display->black;
 
-        titlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
-        lighttitlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1,DPalegreygreen);
-        holdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
+        titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
+        lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreygreen);
+        holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
         lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreyblue);
-        paleholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
+        paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
     }
     /*e: [[wmk()]] cols initialisation */
 
@@ -128,14 +129,12 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     r = insetrect(i->r, Selborder+1);
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
-    w->lastsr = ZR;
 
     r.min.x += Scrollwid+Scrollgap;
-
     frinit(w, r, font, i, cols);
 
+    w->lastsr = ZR;
     w->maxtab = maxtab * stringwidth(font, "0");
-
     w->scrolling = scrolling;
 
     r = insetrect(w->i->r, Selborder);
@@ -201,6 +200,7 @@ wresize(Window *w, Image *i, bool move)
     r = insetrect(i->r, Selborder+1);
     w->scrollr = r;
     w->scrollr.max.x = r.min.x+Scrollwid;
+
     w->lastsr = ZR;
 
     r.min.x += Scrollwid+Scrollgap;
@@ -211,9 +211,12 @@ wresize(Window *w, Image *i, bool move)
         frclear(w, false);
         frinit(w, r, w->font, w->i, cols);
         wsetcols(w);
+
         w->maxtab = maxtab * stringwidth(w->font, "0");
+
         r = insetrect(w->i->r, Selborder);
         draw(w->i, r, cols[BACK], nil, w->entire.min);
+
         wfill(w);
         wsetselect(w, w->q0, w->q1);
         wscrdraw(w);
@@ -301,24 +304,29 @@ winctl(void *arg)
     char buf[4*12+1]; // /dev/mouse interface
     Rune *rp, *bp, *tp, *up;
     uint qh;
-    int nr, c, wid, i, initial;
-    int npart, lastb;
-    char *s, part[3];
+    int nr, initial;
+    char *s;
     /*x: [[winctl()]] locals */
     Rune *kbdr;
     /*x: [[winctl()]] locals */
     Wctlmesg wcm;
     /*x: [[winctl()]] locals */
-    Mousestate *mp, m;
+    Mousestate *mp;
+    int lastb = -1;
     /*x: [[winctl()]] locals */
     Mousereadmesg mrm;
+    /*x: [[winctl()]] locals */
+    Mousestate m;
     /*x: [[winctl()]] locals */
     Consreadmesg crm;
     /*x: [[winctl()]] locals */
     Stringpair pair;
-    /*x: [[winctl()]] locals */
     char *t;
     int nb;
+    int i, c, wid;
+    /*x: [[winctl()]] locals */
+    char part[3]; // UTFMAX-1
+    int npart = 0;
     /*x: [[winctl()]] locals */
     Conswritemesg cwm;
     /*x: [[winctl()]] locals */
@@ -371,10 +379,6 @@ winctl(void *arg)
     /*e: [[winctl()]] alts setup */
     alts[NWALT].op = CHANEND;
 
-    /*s: [[winctl()]] local initialisation */
-    npart = 0;
-    lastb = -1;
-    /*e: [[winctl()]] local initialisation */
     for(;;){
         /*s: [[winctl()]] alts adjustments */
         if(w->mouseopen && w->mouse.counter != w->mouse.lastcounter)
@@ -393,7 +397,7 @@ winctl(void *arg)
             /*s: [[winctl()]] alts adjustments, revert to CHANSND if newline in queue */
             /* this code depends on NL and EOT fitting in a single byte */
             /* kind of expensive for each loop; worth precomputing? */
-            for(i=w->qh; i < w->nr; i++){
+            for(i = w->qh; i < w->nr; i++){
                  c = w->r[i];
                  // buffering, until get a newline in which case we are ready to send
                  if(c=='\n' || c=='\004'){
@@ -431,7 +435,7 @@ winctl(void *arg)
                 /* queue click events */
                 if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
 
-                    //insert_queue(wc->mc, w->mouse.queue
+                    //insert_queue(w->mc, w->mouse.queue)
                     mp = &w->mouse.queue[w->mouse.wi];
                     if(++w->mouse.wi == nelem(w->mouse.queue))
                         w->mouse.wi = 0;
@@ -452,14 +456,14 @@ winctl(void *arg)
         /*x: [[winctl()]] event loop cases */
         case WCtl:
             if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
-                /*s: [[winctl()]] Wctl case, free channels */
+                /*s: [[winctl()]] Wctl case, free channels if wctlmesg is Excited */
                 chanfree(crm.c1);
                 chanfree(crm.c2);
                 chanfree(mrm.cm);
                 chanfree(cwm.cw);
                 chanfree(cwrm.c1);
                 chanfree(cwrm.c2);
-                /*e: [[winctl()]] Wctl case, free channels */
+                /*e: [[winctl()]] Wctl case, free channels if wctlmesg is Excited */
                 threadexits(nil);
             }
             continue;
@@ -487,13 +491,15 @@ winctl(void *arg)
             t = pair.s;
             nb = pair.ns;
 
+            i = 0;
+            /*s: [[winctl()]] when WCRead, copy in t previous partial rune bytes */
             i = npart;
             npart = 0;
-
             if(i)
                 memmove(t, part, i);
+            /*e: [[winctl()]] when WCRead, copy in t previous partial rune bytes */
 
-            while(i<nb && (w->qh < w->nr || w->nraw > 0)){
+            while(i<nb && (w->nraw > 0 || w->qh < w->nr)){
 
                 if(w->qh == w->nr){
                     wid = runetochar(t+i, &w->raw[0]);
@@ -502,22 +508,27 @@ winctl(void *arg)
                 }else
                     wid = runetochar(t+i, &w->r[w->qh++]);
 
-                c = t[i];	/* knows break characters fit in a byte */
                 i += wid;
+                /*s: [[winctl()]] when WCRead, break if newline and handle EOF character */
+                c = t[i-wid];	/* knows break characters fit in a byte */
                 if(!w->rawing && (c == '\n' || c=='\004')){
                     if(c == '\004')
                         i--;
                     break;
+                /*e: [[winctl()]] when WCRead, break if newline and handle EOF character */
                 }
             }
+            /*s: [[winctl()]] when WCRead, handle EOF character after while loop */
             if(i==nb && w->qh < w->nr && w->r[w->qh]=='\004')
                 w->qh++;
-
+            /*e: [[winctl()]] when WCRead, handle EOF character after while loop */
+            /*s: [[winctl()]] when WCRead, store overflow bytes of partial rune */
             if(i > nb){
                 npart = i-nb;
                 memmove(part, t+nb, npart);
                 i = nb;
             }
+            /*e: [[winctl()]] when WCRead, store overflow bytes of partial rune */
 
             pair.s = t;
             pair.ns = i;
@@ -528,8 +539,9 @@ winctl(void *arg)
             recv(cwm.cw, &pair);
             rp = pair.s;
             nr = pair.ns;
+
             bp = rp;
-            for(i=0; i<nr; i++)
+            for(i=0; i<nr; i++) {
                 if(*bp++ == '\b'){
                     --bp;
                     initial = 0;
@@ -559,7 +571,9 @@ winctl(void *arg)
                     rp[nr] = 0;
                     break;
                 }
-            w->qh = winsert(w, rp, nr, w->qh)+nr;
+            }
+
+            w->qh = winsert(w, rp, nr, w->qh) + nr;
             if(w->scrolling || w->mouseopen)
                 wshow(w, w->qh);
             wsetselect(w, w->q0, w->q1);
@@ -744,6 +758,7 @@ wkeyctl(Window *w, Rune r)
 {
     /*s: [[wkeyctl()]] locals */
     uint q0;
+    /*x: [[wkeyctl()]] locals */
     uint q1;
     int n, nb;
     /*x: [[wkeyctl()]] locals */
@@ -853,21 +868,17 @@ wkeyctl(Window *w, Rune r)
     }
     /*e: [[wkeyctl()]] if holding */
 
+    /*s: [[wkeyctl()]] when not rawing */
     // here when no navigation key, no rawing, no 0x1B holding
-    if(r != 0x7F){ // 0x7F = ??
+
+    /*s: [[wkeyctl()]] snarf and cut if not interrupt key */
+    if(r != 0x7F){ // 0x7F = Interrupt key
         wsnarf(w);
         wcut(w);
     }
+    /*e: [[wkeyctl()]] snarf and cut if not interrupt key */
     switch(r){
     /*s: [[wkeyctl()]] special key cases and no special mode */
-    case 0x7F:		/* send interrupt */
-        w->qh = w->nr;
-        wshow(w, w->qh);
-        notefd = emalloc(sizeof(int));
-        *notefd = w->notefd;
-        proccreate(interruptproc, notefd, 4096);
-        return;
-    /*x: [[wkeyctl()]] special key cases and no special mode */
     case 0x08:	/* ^H: erase character */
     case 0x15:	/* ^U: erase line */
     case 0x17:	/* ^W: erase word */
@@ -886,6 +897,14 @@ wkeyctl(Window *w, Rune r)
         }
         return;
     /*x: [[wkeyctl()]] special key cases and no special mode */
+    case 0x7F:		/* send interrupt */
+        w->qh = w->nr;
+        wshow(w, w->qh);
+        notefd = emalloc(sizeof(int));
+        *notefd = w->notefd;
+        proccreate(interruptproc, notefd, 4096);
+        return;
+    /*x: [[wkeyctl()]] special key cases and no special mode */
     case 0x06:	/* ^F: file name completion */
     case Kins:		/* Insert: file name completion */
         rp = namecomplete(w);
@@ -899,13 +918,15 @@ wkeyctl(Window *w, Rune r)
         return;
     /*e: [[wkeyctl()]] special key cases and no special mode */
     }
- 
+    // else
+
     /* otherwise ordinary character; just insert */
     /*s: [[wkeyctl()]] ordinary character */
     q0 = w->q0;
     q0 = winsert(w, &r, 1, q0);
     wshow(w, q0+1);
     /*e: [[wkeyctl()]] ordinary character */
+    /*e: [[wkeyctl()]] when not rawing */
 }
 /*e: function wkeyctl */
 
@@ -1873,7 +1894,7 @@ wshow(Window *w, uint q0)
     uint q;
 
     qe = w->org + w->nchars;
-    if(w->org<=q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
+    if(w->org <= q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
         wscrdraw(w);
     else{
         nl = 4*w->maxlines/5;
@@ -1906,7 +1927,7 @@ wsetorigin(Window *w, uint org, int exact)
             org++;
         }
     }
-    a = org-w->org;
+    a = org - w->org;
     fixup = 0;
     if(a>=0 && a<w->nchars){
         frdelete(w, 0, a);
@@ -2018,9 +2039,11 @@ winsert(Window *w, Rune *r, int n, uint q0)
             w->maxr = m;
         }
     }
-    runemove(w->r+q0+n, w->r+q0, w->nr-q0);
-    runemove(w->r+q0, r, n);
+
+    runemove(w->r + q0 + n, w->r + q0, w->nr - q0);
+    runemove(w->r + q0, r, n);
     w->nr += n;
+
     /* if output touches, advance selection, not qh; works best for keyboard and output */
     if(q0 <= w->q1)
         w->q1 += n;
@@ -2030,8 +2053,8 @@ winsert(Window *w, Rune *r, int n, uint q0)
         w->qh += n;
     if(q0 < w->org)
         w->org += n;
-    else if(q0 <= w->org+w->nchars)
-        frinsert(w, r, r+n, q0-w->org);
+    else if(q0 <= w->org + w->nchars)
+        frinsert(w, r, r+n, q0 - w->org);
     return q0;
 }
 /*e: function winsert */

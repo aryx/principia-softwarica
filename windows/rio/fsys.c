@@ -826,6 +826,7 @@ newfid(Filsys *fs, int fid)
     ff = nil;
     fh = &fs->fids[fid&(Nhash-1)];
 
+    // lookup_hash(fid, fs->fids)
     for(f=*fh; f; f=f->next) {
         if(f->fid == fid)
             return f;

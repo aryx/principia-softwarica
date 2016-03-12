@@ -13,18 +13,20 @@ frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
     f->font = ft;
     f->display = b->display;
     f->maxtab = 8 * stringwidth(ft, "0");
+
     f->nbox = 0;
     f->nalloc = 0;
     f->nchars = 0;
     f->nlines = 0;
+
     f->p0 = 0;
     f->p1 = 0;
     f->box = 0;
     f->lastlinefull = 0;
-    if(cols != 0)
+    if(cols != nil)
         memmove(f->cols, cols, sizeof f->cols);
     frsetrects(f, r, b);
-    if(f->tick==nil && f->cols[BACK]!=0)
+    if(f->tick == nil && f->cols[BACK] != nil)
         frinittick(f);
 }
 /*e: function frinit */

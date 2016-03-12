@@ -136,6 +136,7 @@ struct Wctlmesg
 /*s: struct Conswritemesg */
 struct Conswritemesg
 {
+    // chan<ref<array<Rune>> (listener = winctl, sender = xfidwrite(Qcons))
     Channel	*cw;		/* chan(Stringpair) */
 };
 /*e: struct Conswritemesg */
@@ -143,7 +144,9 @@ struct Conswritemesg
 /*s: struct Consreadmesg */
 struct Consreadmesg
 {
+    // chan<ref<array<Rune>> (listener = winctl, sender = xfidread(Qcons))
     Channel	*c1;		/* chan(tuple(char*, int) == Stringpair) */
+    // chan<ref<array<Rune>> (listener = xdidread(Qcons), sender = winctl)
     Channel	*c2;		/* chan(tuple(char*, int) == Stringpair) */
 };
 /*e: struct Consreadmesg */
@@ -282,15 +285,17 @@ struct Window
     uint		nr;	/* number of runes in window */
     uint		maxr;	/* number of runes allocated in r */
     /*x: [[Window]] textual window fields */
-    uint		org;
+    // index in Window.r
+    uint		qh; // output point
     /*x: [[Window]] textual window fields */
-    // selection? start vs end?
-    uint		q0;
-    uint		q1;
-    /*x: [[Window]] textual window fields */
-    uint		qh;
+    // index in Window.r
+    uint		q0; // cursor, where entered text go (and selection start)
+    // index in Window.r
+    uint		q1; // selection end
     /*x: [[Window]] textual window fields */
     Rectangle	scrollr;
+    /*x: [[Window]] textual window fields */
+    uint		org;
     /*e: [[Window]] textual window fields */
 
     //--------------------------------------------------------------------
@@ -320,6 +325,7 @@ struct Window
     // chan<Consreadmesg> (listener = xfidread(Qcons), sender = winctl)
     Channel		*consread;	/* chan(Consreadmesg) */
     /*x: [[Window]] other fields */
+    // chan<Conswritemesg> (listener = xfidwrite(Qcons), sender = winctl)
     Channel		*conswrite;	/* chan(Conswritemesg) */
     /*x: [[Window]] other fields */
     bool	ctlopen;
@@ -329,6 +335,7 @@ struct Window
     bool	wctlopen;
     bool 	wctlready;
     /*x: [[Window]] other fields */
+    // chan<Consreadmesg> (listener = , sender = )
     Channel		*wctlread;	/* chan(Consreadmesg) */
     /*e: [[Window]] other fields */
 
@@ -402,6 +409,7 @@ struct Xfid
 
         /*s: [[Xfid]] flushing fields */
         int	flushtag;	/* our tag, so flush can find us */
+        // chan<int> (listener = ?, sender = ?)
         Channel	*flushc;/* channel(int) to notify us we're being flushed */
         bool	flushing;	/* another Xfid is trying to flush us */
         /*e: [[Xfid]] flushing fields */

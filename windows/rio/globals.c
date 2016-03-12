@@ -19,6 +19,7 @@
 Mousectl	*mousectl;
 /*e: global mousectl */
 /*s: global mouse */
+// alias for &mousectl->Mouse
 Mouse	*mouse;
 /*e: global mouse */
 /*s: global keyboardctl */
@@ -78,7 +79,7 @@ bool		scrolling;
 int		maxtab = 0;
 /*e: global maxtab */
 /*s: global deletechan */
-// chan<stirng> (listener = deletethread, sender = deletetimeoutproc)
+// chan<string> (listener = deletethread, sender = deletetimeoutproc)
 Channel* deletechan;
 /*e: global deletechan */
 /*s: global startdir */

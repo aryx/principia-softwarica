@@ -224,6 +224,7 @@ void threadmain(int argc, char *argv[])
         exits("display open");
     }
     viewr = view->r;
+
     iconinit(); // allocate background and red images
 
     /*s: [[main()]] mouse initialisation */
@@ -243,6 +244,7 @@ void threadmain(int argc, char *argv[])
     if(wscreen == nil)
         error("can't allocate screen");
     /*e: [[main()]] sanity check wscreen */
+
     draw(view, viewr, background, nil, ZP);
     flushimage(display, true);
     /*e: [[main()]] graphics initializations */
@@ -907,6 +909,11 @@ button2menu(Window *w)
     /*e: [[button2menu()]] menu2str adjustments for scrolling */
     switch(menuhit(2, mousectl, &menu2, wscreen)){
     /*s: [[button2menu()]] cases */
+    case Scroll:
+        if(w->scrolling ^= 1)
+            wshow(w, w->nr);
+        break;
+    /*x: [[button2menu()]] cases */
     case Cut:
         wsnarf(w);
         wcut(w);
@@ -944,14 +951,10 @@ button2menu(Window *w)
     case Plumb:
         wplumb(w);
         break;
-    /*x: [[button2menu()]] cases */
-    case Scroll:
-        if(w->scrolling ^= 1)
-            wshow(w, w->nr);
-        break;
     /*e: [[button2menu()]] cases */
     }
     wclose(w); // decref
+
     wsendctlmesg(w, Wakeup, ZR, nil);
     flushimage(display, true);
 }

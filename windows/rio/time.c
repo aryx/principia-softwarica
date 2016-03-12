@@ -13,6 +13,7 @@
 #include "fns.h"
 
 /*s: global ctimer */
+// chan<?> (listener = ?, sender = ?)
 static Channel*	ctimer;	/* chan(Timer*)[100] */
 /*e: global ctimer */
 /*s: global timer */

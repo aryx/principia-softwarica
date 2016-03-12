@@ -514,6 +514,7 @@ xfidwrite(Xfid *x)
     /*x: [[xfidwrite()]] cases */
     case Qcons:
 
+        /*s: [[xfidwrite()]] when Qcons, look for previous partial rune bytes */
         nr = x->f->nrpart;
         if(nr > 0){
             memmove(x->data+nr, x->data, cnt);	/* there's room: see malloc in filsysproc */
@@ -521,10 +522,10 @@ xfidwrite(Xfid *x)
             cnt += nr;
             x->f->nrpart = 0;
         }
-
+        /*e: [[xfidwrite()]] when Qcons, look for previous partial rune bytes */
         r = runemalloc(cnt);
         cvttorunes(x->data, cnt-UTFmax, r, &nb, &nr, nil);
-
+        /*s: [[xfidwrite()]] when Qcons, look if more full runes */
         /* approach end of buffer */
         while(fullrune(x->data+nb, cnt-nb)){
             c = nb;
@@ -532,11 +533,15 @@ xfidwrite(Xfid *x)
             if(r[nr])
                 nr++;
         }
+        /*e: [[xfidwrite()]] when Qcons, look if more full runes */
+        /*s: [[xfidwrite()]] when Qcons, store remaining partial rune bytes */
         // assert(cnt-nb < UTFMAX);
         if(nb < cnt){
             memmove(x->f->rpart, x->data + nb, cnt-nb);
             x->f->nrpart = cnt-nb;
         }
+        /*e: [[xfidwrite()]] when Qcons, store remaining partial rune bytes */
+
         /*s: [[xfidxxx()]] set flushtag */
         x->flushtag = x->tag;
         /*e: [[xfidxxx()]] set flushtag */

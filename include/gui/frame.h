@@ -7,11 +7,11 @@ typedef struct Frame Frame;
 
 /*s: enum _anon_ (include/frame.h) */
 enum{
-    BACK,
-    HIGH,
-    BORD,
-    TEXT,
-    HTEXT,
+    BACK, // Background
+    HIGH, // ??
+    BORD, // Border
+    TEXT, // Text
+    HTEXT, // Highlited text
 
     NCOL
 };
@@ -41,6 +41,7 @@ struct Frame
 {
     Display	*display;	/* on which frame appears */
     Image	*b;		/* on which frame appears */
+
     Image	*cols[NCOL];	/* text and background colors */
 
     Font	*font;		/* of chars in the frame */
@@ -48,7 +49,7 @@ struct Frame
     Rectangle	r;		/* in which text appears */
     Rectangle	entire;		/* of full frame */
 
-    void			(*scroll)(Frame*, int);	/* scroll function provided by application */
+    void (*scroll)(Frame*, int); /* scroll function provided by application */
 
     Frbox	*box;
 
