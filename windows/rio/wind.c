@@ -769,8 +769,10 @@ wkeyctl(Window *w, Rune r)
 
     if(r == 0)
         return;
+    /*s: [[wkeyctl()]] return if window was deleted */
     if(w->deleted)
         return;
+    /*e: [[wkeyctl()]] return if window was deleted */
 
     /* navigation keys work only when mouse is not open */
     /*s: [[wkeyctl()]] when mouse not opened and navigation keys */
@@ -1127,8 +1129,10 @@ wmousectl(Window *w)
     }
 
     incref(w);		/* hold up window while we track */
+    /*s: [[wmousectl()]] goto Return if window was deleted */
     if(w->deleted)
         goto Return;
+    /*e: [[wmousectl()]] goto Return if window was deleted */
 
     /*s: [[wmousectl()]] if pt in scrollbar */
     if(ptinrect(w->mc.xy, w->scrollr)){
@@ -1357,8 +1361,10 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         break;
     /*x: [[wctlmesg()]] cases */
     case Deleted:
+        /*s: [[wctlmesg()]] break if window was deleted */
         if(w->deleted)
             break;
+        /*e: [[wctlmesg()]] break if window was deleted */
         write(w->notefd, "hangup", 6);
         proccreate(deletetimeoutproc, estrdup(w->name), 4096);
         wclosewin(w);
@@ -1412,8 +1418,10 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         // already setup w->rawing in xfidwrite, nothing else todo
         break;
     case Rawoff:
+        /*s: [[wctlmesg()]] break if window was deleted */
         if(w->deleted)
             break;
+        /*e: [[wctlmesg()]] break if window was deleted */
         /*s: [[wctlmesg()]] When Rawoff, process raw keys in non rawing mode */
         while(w->nraw > 0){
             wkeyctl(w, w->raw[0]);
@@ -1425,8 +1433,10 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
     /*x: [[wctlmesg()]] cases */
     case Holdon:
     case Holdoff:
+        /*s: [[wctlmesg()]] break if window was deleted */
         if(w->deleted)
             break;
+        /*e: [[wctlmesg()]] break if window was deleted */
         wrepaint(w);
         flushimage(display, true);
         break;

@@ -816,8 +816,10 @@ resized(void)
 
     for(i=0; i<nwindow; i++){
         w = windows[i];
+        /*s: [[resized()]] continue if window was deleted */
         if(w->deleted)
             continue;
+        /*e: [[resized()]] continue if window was deleted */
         r = rectsubpt(w->i->r, viewr.min);
         r.min.x = (r.min.x*n.x)/o.x;
         r.min.y = (r.min.y*n.y)/o.y;
@@ -897,8 +899,10 @@ button3menu(void)
 void
 button2menu(Window *w)
 {
+    /*s: [[button2menu()]] return if window was deleted */
     if(w->deleted)
         return;
+    /*e: [[button2menu()]] return if window was deleted */
 
     incref(w);
     /*s: [[button2menu()]] menu2str adjustments for scrolling */
