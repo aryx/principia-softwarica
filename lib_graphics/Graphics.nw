@@ -33,13 +33,18 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, better understand svgalib? tronscroll:) mode X? cairo?:
-%  - better understand channels, and the many image formats
-%  - better understand alpha
-%  - SEMI better understand clipping and tiling (replicating)
-%  - SEMI better understand antialiasing 
-%     (the lightness of a pixel is function of its distance to the ideal point)
-%  - TODO learn scanline algorithm for polygons (subtle)
-%  - TODO learn bezier (could be useful for edge bunding visual)
+%  - graphics terminology, I didn't take Image option at INSA
+%  - raster vs vector graphics, discrete pixels vs continuous geometry shape
+%  - channels are the size spec for the different pixel components
+%    and the source of many pixel formats
+%  - alpha channel is a way to encode transparency strenght for compositing
+%    operations
+%  - clipping is to restrict operations on a rectangle, essential
+%  - tiling is replicating a simple pattern repeatidely
+%  - antialiasing is just a simple way to remove effect d'escalier by setting
+%    the lightness of a pixel to be function of its distance to the ideal point
+%  - scanline algorithm for polygons (subtle)
+%  - TODO bezier (could be useful for edge bunding visual)
 %    that they are the essence of vectoriel fonts?
 %  - TODO understand freshrate, double buffer, vertical sync, flickering,
 %    refresh sync
@@ -111,7 +116,7 @@
 %******************************************************************************
 \title{
 {\Huge 
-Principia Softwarica: The Plan9 Graphics System [[/dev/draw/]]
+Principia Softwarica: The Plan~9 Graphics System [[/dev/draw/]]
 }\\
 {version 0.1}
 }
@@ -207,16 +212,18 @@ How fonts are managed? What are truetype fonts?
 % - moveable shared area with backward pointer to intermediate wrapper
 
 %algorithms:
+% - bitblt
 % - fill polygon, quite complex
 % - ellipses, arcs, bezier
-% - overlapping windows with save and interception and RECURS
+% - layerop, overlapping windows with save and interception and RECURS
 
 \section{\plan{} [[/dev/draw/]]}
 
 We will explain in this book the code of the \plan graphics
-system, visible to the user primarily through 
-its [[/dev/draw/]] {device directory}, 
-and also partially through the [[/dev/mouse]] and [[/dev/cons]] {device files}.
+system, visible to the user through its [[/dev/draw/]] {device directory}.
+% Graphics related to mouse, so will see also code for
+%and also partially through the [[/dev/mouse]] and [[/dev/cons]] {device files}.
+
 % LOC?
 % 2d Graphics library.
 % visible to programmer mostly through include/draw.h
@@ -234,6 +241,14 @@ and also partially through the [[/dev/mouse]] and [[/dev/cons]] {device files}.
 % (see memdrawtest), but still a bit ugly. The images, fonts,
 % reside in special kernel memory (imagmem).
 
+
+% actually almost one of the first graphics system!
+% Alto -> Blit (a cheap Alto) -> ... /dev/draw
+%      |> Macintosh -> Microsoft Window -> ...
+%      |> X11 (or comes from Lisp Machine?)
+
+% Xerox vs Bell Labs !
+
 \section{Other graphics systems}
 
 Here are a few graphics systems that were considered for this book 
@@ -243,6 +258,9 @@ but which were ultimately discarded:
 \item gks
 % the seminal one? but present in any real system?
 % or was it bitblt and the blit machine?
+
+% OO graphics, from GKS and PHIGS to OO systems
+%https://books.google.com/books?id=KUWqCAAAQBAJ
 
 \item SRGP (Simple Raster Graphics Package)
 % used in second edition of CGPP book. But actual reference implementation?
@@ -263,6 +281,8 @@ but which were ultimately discarded:
 % "why X11 is so big" by Ken Thompson, partly the motivation for plan9
 % "A simple X11 Client Prgram or Hoa hard it can really be to write
 %  hello world" = David Rosenthal
+% X11 is multiple things at the same time, graphics system and windowing
+% system (but not window manager), but in plan9 this is decoupled.
 
 \item OpenGL
 % mostly 3d! can do also 2d. gouraud, shading, textures, 3d rasterizer, etc.
@@ -307,6 +327,12 @@ but which were ultimately discarded:
 % - CoreGraphics (and before QuickDraw)
 % - Quartz, relate to macos expose? advanced graphics there
 % - Flash
+%history:
+% - Xerox Alto! first bitmap, bitblt, started in 1973
+% - Lisp Machine?
+% - Blit
+% - Smalltalk
+% - X
 %mini:
 % - mini X
 % - nano X (was microwindows)
@@ -371,18 +397,23 @@ but which were ultimately discarded:
 % lib_graphics/docs/blit.pdf, lib_graphics/docs/pike-bitmap.ps
 % plan9-in-technicolor.ps? meh.
 
+% Principle of Interactive Computer Graphics, Newman and Sproull, McGraw-Hill
+%  1979
+% seems seminal book about vector graphics, and source for GKS 
+% (from pike84bitblt.pdf), even cited by Alto paper
+
 \section{About this document}
 #include "../docs/latex/About.nw"
 
 \section{Copyright}
 
-Most of this document is actually source code from Plan9, so
+Most of this document is actually source code from \plan, so
 those parts are copyright by Lucent Technologies Inc.
 The prose is mine and is licensed under the \license.
 
 \section{Acknowledgments}
 
-I would like to acknowledge of course Plan9's authors who wrote
+I would like to acknowledge of course \plan's authors who wrote
 most of this book: Rob Pike, Russ Cox, and many other people
 from Bell Labs.
 
@@ -394,15 +425,22 @@ from Bell Labs.
 \chapter{Overview}
 
 \section{Graphics system principles}
-
 %https://en.wikipedia.org/wiki/Computer_graphics
 
+% pike84bitbltd.pdf intro is pretty good to describe early history
+% of graphics, rational for things.
+
+
 % graphics system =~ screen drawing API
+
 
 % screen made of pixels. Lots of them. Resolution. Depth/encoding. Image(s)!!
 % software/hardware interface can be as simple as a framebuffer (e.g. bcm/).
 % pixels, so not continuous! so if draw diagonal, then no that easy actually :)
 % => bresenham algorithm, scanline algorithm.
+
+% history was bitmap because black/white and one pixel = 1 bit, so
+% had a map of bits (bitmap). Fundamental was bitblt.
 
 % FIGURE, scale
 
@@ -414,14 +452,15 @@ from Bell Labs.
 % clipping, rotate/scale/transform (lacking in plan9).
 % tiling (replicating) when used as a source.
 
-% Vector graphics, rasterization
 
 % very generic and powerful operations: draw()! (like bitblt before) 
 % see cairo intro? 
 
 % notion of soft screen, flush, direct framebuffer are important.
 
-
+% Note that principle is not to be a windowing system! independent!
+% often correlated but in plan9 can run graphical app outside
+% windowing system!!
 
 % advanced: windows, menus, mouse/keyboard
 
@@ -438,6 +477,39 @@ from Bell Labs.
 % - 3d. lighting. Not in this book. based on triangles usually.
 % - physical rendering
 % - GPU
+
+\subsection{Raster graphics (Frame buffer, pixels, bitmaps)}
+%https://en.wikipedia.org/wiki/Raster_graphics
+
+% frame buffer, pixels, bitmaps, discrete, digital
+
+
+% raster mean?
+
+% {image} = two dimensional array, each element is a {pixel}
+
+% from television industry, individual pixels, two dimentional array,
+% framebuffer.
+% After some time frame buffer less expensive to make than a vector
+% display.
+% Imperfect, discrete.
+% But programmer should not be exposed to them and given access
+% to ideal shapes of plane geometry
+
+\subsection{Vector graphics (lines, arcs)}
+% lines, shapes, continuous, analog
+
+% from oscilloscope industry, description of lines, curves, shapes!
+% was actually the first one to be invented. Analog! continuous.
+
+\subsection{Rasterization}
+
+% From ideal to concrete.
+
+\subsection{[[bitblt()]] and Compositing}
+
+\subsection{Advanced topics}
+
 
 \section{[[/dev/draw/]] files interface}
 
@@ -2276,10 +2348,12 @@ enum Drawop
 \chapter{Initializations}
 % =~ Main
 
+%kernel/user, server/client, system/app
 
 \section{Kernel side}
 % part1
-% also kinda "Server side". 
+% also kinda "Server side". Actually mount and bind are user side
+%  operation (triggering kernel side code)
 % Better to see first user side?
 
 \subsection{Mounting the VGA device}
@@ -5690,6 +5764,9 @@ if(checkname && !drawgoodname(d))
 %less: put technicolor.ps slides with draw (of actual images like in racket)?
 % (meh, technicolors.ps not that good actually)
 
+% see bibio/cs-history/pike84bitblt.pdf, history bitblt() from the Alto
+% and Blit. History and implementation. Inventor = Dan Ingalls Diana Merry
+
 \subsection{API}
 
 <<function draw>>=
@@ -7953,7 +8030,8 @@ return;
 \l  a good stepping stone to the more complex algo in xscan?
 
 
-\section{Polyline}
+\section{Polyline and polygon}
+% put polygon in separate section?
 
 % actually used as we have seen before for general case of (thick) line drawing.
 
@@ -12932,7 +13010,7 @@ Err1:
 
 \section{Additional data structures}
 
-\subsection{[[Screen]] (and [[Memscreen]])}
+\subsection{Desktop, [[Screen]] (and [[Memscreen]])}
 
 \subsubsection{[[Screen]]}
 
@@ -13112,7 +13190,7 @@ struct Memscreen
 
 
 
-\subsection{Windows (and [[Memlayer]])}
+\subsection{Window (and [[Memlayer]])}
 
 % Windows are images! They just have a few more operations available to
 % them. But they need to be connected to a desktop.
@@ -13234,7 +13312,7 @@ Image		*next;	/* next in list of windows */
 \t  and freeimage but nobody is using those fields then.
 
 
-\subsection{Windows stack}
+\subsection{Window stack}
 
 % double linked list of windows.
 
@@ -13255,7 +13333,7 @@ Memimage	*rear;	/* window behind this one*/
 % access to the other windows, which will be needed when move around
 % this Memlayer/window, to hide(save)/expose(restore) other windows.
 
-\section{Screen allocation}
+\section{Desktop allocation}
 
 \subsection{API}
 
@@ -14112,7 +14190,7 @@ memlfree(Memimage *i)
 
 
 
-\section{Windows stack manipulation}
+\section{Window stack manipulation}
 
 \subsection{API}
 
@@ -15664,8 +15742,8 @@ return n;
 \chapter{Windowing System Support}
 
 %trans:
-% Saw windows chapter before. Can be used for regular app. Will be
-% used by rio. Actually used by every app by default too as we will see.
+% Saw windows chapter before. Can be used for regular app. e.g. acme.
+% Will be used by rio. Actually used by every app by default too as we will see.
 % Saw Naming images section before. Can be used for interprocess sharing.
 % A few more pieces (/dev/winname) and enough building blocks for rio.
 
@@ -17190,44 +17268,8 @@ closekeyboard(Keyboardctl *kc)
 %  in advanced topics now and move also egetrect.c and emenuhits.c?
 
 
-
 %\chapter{Widgets}
-%
-%\section{Libpanel}
-%% different alloc, different event loop, 
-%% and the Panel main data structure
-%
-%
-%
-%\section{Frame}
-%% have libframe/ but also a frame widge in libpanel
-%
-%\section{Scrolling}
-%% have also a menu in libpanel, scrollbar
-%
-%\section{Menu}
-%% have also a menu in libpanel, popup, pulldown
-%
-%\section{Button}
-%
-%\section{Label}
-%
-%\section{Text entry}
-%
-%\section{Completion}
-%
-%\section{Slider}
-%
-%\section{List}
-%
-%\section{Pack}
-%
-%\section{Canvas}
-%
-%\section{Text view}
-%
-%\section{Rich text}
-
+% now in Widgets.nw
 
 
 \chapter{Non 32 Bits Images TODO}
@@ -19872,6 +19914,8 @@ setcursor(Mousectl *mc, Cursor *c)
 \section{Menus}
 % mv in advanced shapes?
 % related to mouse too.
+
+% should be in Widgets.nw maybe.
 
 % Nice example of use of drawing API?
 
@@ -24814,7 +24858,7 @@ static  char Ewrongname[] =     "wrong name for image";
 
 % screen.c and vcore.c
 
-\chapter{PC VGA driver}
+\chapter{PC VGA driver TODO}
 
 <<struct VGAscr(x86)>>=
 struct VGAscr {
@@ -26709,7 +26753,7 @@ icossin2(int x, int y, int *cosp, int *sinp)
 
 
 
-\chapter{Examples of Graphical Applications}
+\chapter{Examples of Graphical Applications TODO}
 
 % rio! next book.
 

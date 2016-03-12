@@ -33,6 +33,8 @@
 % - master/worker architecture with threads, passing around function 
 %   pointers in channels
 % - a filesystem server a la Fuse, multithreaded to handle multiple requests
+% - better understand need for raw mode for keyboard input in addition to
+%   "edit" mode (with backspace handling and newline only for send)
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -97,7 +99,7 @@
 %******************************************************************************
 \title{
 {\Huge 
-Principia Softwarica: Plan9 Windowing System [[rio]]
+Principia Softwarica: Plan~9 Windowing System [[rio]]
 }\\
 {version 0.1}
 }
@@ -185,7 +187,7 @@ the display of text glyphs on the screen in the appropriate window?
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
 %data-structures:
 % - circular buffers (Window.mouse.queue)
-% - growing arrays (windows (by 1), ...)
+% - growing arrays (windows (by 1), Window.r, Window.nraw, ...)
 
 %algorithms:
 
@@ -205,6 +207,11 @@ the display of text glyphs on the screen in the appropriate window?
 
 % blit ancestor: https://www.youtube.com/watch?v=emh22gT5e9k in 1982
 
+% actually almost one of the first windowing system!
+% Alto -> Blit, mux ->  ... -> rio
+%      |> Smalltalk (or just application on top of Alto?) -> ...
+%      |> Macintosh -> Window -> ...
+
 \section{Other windowing systems}
 % other GUI
 
@@ -213,6 +220,8 @@ but were ultimately discarded:
 \begin{itemize}
 \item X11
 % the obvious choice, but really big
+% Support remote, but actually plan9 rio too! thx to 9p, network
+% for free!
 
 \item Mini X
 
@@ -229,9 +238,15 @@ but were ultimately discarded:
 
 \end{itemize}
 
+%industry:
+% - Macos?
+% - Windows?
 %history:
+% - Alto, started in 1973, had overlapping windows, mouse, fonts, etc
 % - Blit (mux)
+% - Smalltalk?
 % - NeWS?
+% - XWindow
 %other:
 % - Qnx photons, 1.44MB demo disk! even with web browser!
 % - berlin?
@@ -292,7 +307,7 @@ but were ultimately discarded:
 
 \section{Copyright}
 
-Most of this document is actually source code from Plan9, so
+Most of this document is actually source code from \plan, so
 those parts are copyright by Lucent Technologies Inc.
 The prose is mine and is licensed under the GNU Free Documentation
 License.
@@ -313,6 +328,12 @@ who wrote in some sense most of this book.
 \section{Windowing system principles}
 
 % imagine how would you code a windowing system? not that easy.
+
+% note that principle is not to provide graphics! it is often put
+% together, e.g. X11 is windowing system and graphics system, but
+% does not have to be. In fact in plan9 can have graphical app
+% outside windowing system!
+% (Alto was mixing? Smalltalk was? Blit was?)
 
 \subsection{Virtual screen (window)}
 
@@ -356,6 +377,8 @@ who wrote in some sense most of this book.
 
 % The other role of windowing system is a windows manager!
 % mv/resize/close/hide/etc menus.
+
+% related is window borders.
 
 %alt: under X11 this is actually delegated to another program
 
@@ -664,9 +687,10 @@ Mousectl	*mousectl;
 
 
 <<global mouse>>=
+// alias for &mousectl->Mouse
 Mouse	*mouse;
 @
-% = &mousectl->Mouse
+% explain inline struct
 
 
 % keyboard.h
@@ -928,17 +952,7 @@ bool	mouseopen;
 
 \subsection{Textual windows}
 
-% A textual window, e.g. terminal, has a frame around it so
-% can scroll it!
-
-<<[[Window]] graphics fields>>=
-Frame;
-@
-% Image is inside frame or cover frame too?
-% graphics & textual window field 
-% will see Frame later.
-
-% and of course it has text!
+% of course it has text!
 
 <<[[Window]] textual window fields>>=
 // growing_array<Rune> (size = Window.maxr)
@@ -948,16 +962,72 @@ uint		maxr;	/* number of runes allocated in r */
 @
 % see wcontents!
 
-% automatic scroll mode, also a textual window field
+
+% see "Windows should be transparent" intro, talk about
+% insert point, cursor, etc.
+
+% output point? "division between characters the host has seen
+% and characters not yet transmitted ... the positino in the
+% text that separates output from input".
+
+<<[[Window]] textual window fields>>=
+// index in Window.r
+uint		qh; // output point
+@
+% why qh??
+
+% "when characters are sent from the host, they are inserted at
+% the output point and the output point is advanced.
+
+% "When newline, chars between output point and newline are sent."
+
+
+% FIGURE! or delay to later?
+
+<<[[Window]] textual window fields>>=
+// index in Window.r
+uint		q0; // cursor, where entered text go (and selection start)
+// index in Window.r
+uint		q1; // selection end
+@
+
+
+
+
+
+% Frame actually means image with text inside, with lines,
+%  which can be scrolled.
+
+<<[[Window]] graphics fields>>=
+Frame;
+@
+% Image is inside frame or cover frame too?
+% graphics & textual window field 
+
+% will see Frame later.
+
+<<[[Window]] textual window fields>>=
+Rectangle	scrollr;
+@
+
+% FIGURE, Scrollbar | gap | Frame (TextWidget really)
+
+
+% automatic scroll mode! this is actually quite important
+%  because when automatic scrolling, if process write on /dev/cons
+%  then need output it, otherwise have to block process on
+%  its write
 <<[[Window]] config fields>>=
 bool	scrolling;
 @
 %old: was bool_byte
 % config & textual window field
+\t rename autoscroll?
+
 
 
 %\subsection{[[Wctlmesg]]}
-
+%later
 
 \section{Filesystem server}
 
@@ -1066,6 +1136,7 @@ newfid(Filsys *fs, int fid)
     ff = nil;
     fh = &fs->fids[fid&(Nhash-1)];
 
+    // lookup_hash(fid, fs->fids)
     for(f=*fh; f; f=f->next) {
         if(f->fid == fid)
             return f;
@@ -1293,6 +1364,7 @@ if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
     exits("display open");
 }
 viewr = view->r;
+
 iconinit(); // allocate background and red images
 
 <<[[main()]] mouse initialisation>>
@@ -1300,6 +1372,7 @@ iconinit(); // allocate background and red images
 
 wscreen = allocscreen(view, background, false);
 <<[[main()]] sanity check wscreen>>
+
 draw(view, viewr, background, nil, ZP);
 flushimage(display, true);
 @
@@ -1754,6 +1827,13 @@ Again:
 
 % FIGURE: with winput->screenr, i->r, screen->r, etc and how they relate.
 
+
+<<constant Selborder>>=
+Selborder		= 4,	/* border of selected window */
+@
+%coupling with Borderwidth in draw.h? why not use same constant?
+
+
 \subsection{Application mouse events}
 
 % when set sending to true? what are the conditions to relay mouse events?
@@ -1767,7 +1847,8 @@ if(inside &&
 @
 % if mouseopen then need relay all mouse messages
 
-% scrolling? when started click to scroll?
+% scrolling? when started click to scroll? or when automatic
+%  scrolling selected?
 
 <<[[mousethread()]] locals>>=
 Mouse tmp;
@@ -1854,7 +1935,7 @@ wpointto(Point pt)
 % thx to topped can find the topmost one under the cursor
 
 
-
+% hmmm, complicated dispatch function.
 % LP split and make more readable the action
 <<[[mousethread()]] if buttons and was not sending>>=
 /* we're not sending the event, but if button is down maybe we should */
@@ -1929,9 +2010,8 @@ enum {
 char buf[4*12+1]; // /dev/mouse interface
 Rune *rp, *bp, *tp, *up;
 uint qh;
-int nr, c, wid, i, initial;
-int npart, lastb;
-char *s, part[3];
+int nr, initial;
+char *s;
 @
 
 
@@ -1955,7 +2035,6 @@ winctl(void *arg)
     <<[[winctl()]] alts setup>>
     alts[NWALT].op = CHANEND;
 
-    <<[[winctl()]] local initialisation>>
     for(;;){
         <<[[winctl()]] alts adjustments>>
 
@@ -1970,12 +2049,11 @@ winctl(void *arg)
 }
 @
 
-%XXX
-<<[[winctl()]] local initialisation>>=
-npart = 0;
-lastb = -1;
-@
-% ???
+%<<[[winctl()]] local initialisation>>=
+%@
+%old: 
+% npart = 0; was there, but better put with local decl.
+% lastb = -1; same
 
 % m = mouse, c = cons
 % r = read, w = write
@@ -1998,6 +2076,7 @@ Channel	*ck;		/* chan(Rune[10]) */
 <<[[winctl()]] locals>>=
 Rune *kbdr;
 @
+% allocated by who? because chan 20?
 
 <<[[winctl()]] alts setup>>=
 alts[WKey].c = w->ck;
@@ -2038,19 +2117,13 @@ wkeyctl(Window *w, Rune r)
     <<[[wkeyctl()]] if rawing>>
     <<[[wkeyctl()]] if holding>>
 
-    // here when no navigation key, no rawing, no 0x1B holding
-    if(r != 0x7F){ // 0x7F = ??
-        wsnarf(w);
-        wcut(w);
-    }
-    switch(r){
-    <<[[wkeyctl()]] special key cases and no special mode>>
-    }
- 
-    /* otherwise ordinary character; just insert */
-    <<[[wkeyctl()]] ordinary character>>
+    <<[[wkeyctl()]] when not rawing>>
 }
 @
+\l actually it's not exactly when not rawing, because the if rawing
+\l  path is taken if w->rawing && other condition
+
+% when have rune 0?
 
 % will see those cases later when talk about graphical and textual windows.
 % will see actually relay to other channel.
@@ -2119,7 +2192,7 @@ alts[WCtl].op = CHANRCV;
 <<[[winctl()]] event loop cases>>=
 case WCtl:
     if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
-        <<[[winctl()]] Wctl case, free channels>>
+        <<[[winctl()]] Wctl case, free channels if wctlmesg is Excited>>
         threadexits(nil);
     }
     continue;
@@ -2128,7 +2201,7 @@ case WCtl:
 % will see wctlmesg later
 
 %XXX
-<<[[winctl()]] Wctl case, free channels>>=
+<<[[winctl()]] Wctl case, free channels if wctlmesg is Excited>>=
 chanfree(crm.c1);
 chanfree(crm.c2);
 chanfree(mrm.cm);
@@ -3066,6 +3139,9 @@ case New:
 % sweep will let user specify a window geometry
 % and  allocate a window!
 
+% There are other way to create new window, but will see later.
+% this one is simplest.
+
 \subsection{Window thread creation, [[new()]]}
 
 % if pid == 0 then means create a new terminal process
@@ -3163,10 +3239,6 @@ if(cm==nil || ck==nil || cctl==nil)
 
 \subsection{Window allocation, [[wmk()]]}
 
-<<constant Selborder>>=
-Selborder		= 4,	/* border of selected window */
-@
-%coupling with Borderwidth in draw.h? why not use same constant?
 
 %ctor 
 <<function wmk>>=
@@ -3221,7 +3293,7 @@ w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
 w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
 @
 
-
+%\subsection{Window border}
 
 <<function wborder>>=
 void
@@ -3866,7 +3938,7 @@ deletetimeoutproc(void *v)
 
 
 <<global deletechan>>=
-// chan<stirng> (listener = deletethread, sender = deletetimeoutproc)
+// chan<string> (listener = deletethread, sender = deletetimeoutproc)
 Channel* deletechan;
 @
 % deletetimeoutproc (as ? in proccreate(<>) <- wctlmesg(Delete | Moved) <- 
@@ -5463,6 +5535,10 @@ filsysauth(Filsys *fs, Xfid *x, Fid*)
 
 
 
+
+
+
+
 \chapter{[[/mnt/wsys/...]] Virtual Devices}
 
 % remember that /mnt/wsys is unioned in /dev/ so access to /dev/cons
@@ -5497,6 +5573,10 @@ Channel		*mouseread;	/* chan(Mousereadmesg) */
 @
 % why does not send Mouse directly? maybe because mouse state
 % at sending time is not good anymore at receiving time?
+% No, because sender send only when he has something he is ready
+% to send and it's queue anyway. Maybe because of the flushing?
+% because then on the other channel there is no alt with a flush
+% message? but could ...
 
 <<struct Mousereadmesg>>=
 struct Mousereadmesg
@@ -5623,7 +5703,9 @@ Channel		*consread;	/* chan(Consreadmesg) */
 <<struct Consreadmesg>>=
 struct Consreadmesg
 {
+    // chan<ref<array<Rune>> (listener = winctl, sender = xfidread(Qcons))
     Channel	*c1;		/* chan(tuple(char*, int) == Stringpair) */
+    // chan<ref<array<Rune>> (listener = xdidread(Qcons), sender = winctl)
     Channel	*c2;		/* chan(tuple(char*, int) == Stringpair) */
 };
 @
@@ -5631,7 +5713,11 @@ struct Consreadmesg
 % why not just one? because need first pass a buffer allocated
 %  by xfidread who knows how much he wants.
 % file interface is byte, but runes are multi bytes, so need
-%  ajust, maybe send partial rune, etc.
+%  adjust, maybe send partial rune, etc.
+% Cant just use one channel in both direction? channel = unidirectional pipe?
+
+% note that channels are in Runes, but OS interface is in bytes
+% so we will see adjustments because of that.
 
 <<struct Stringpair>>=
 struct Stringpair	/* rune and nrune or byte and nbyte */
@@ -5640,7 +5726,7 @@ struct Stringpair	/* rune and nrune or byte and nbyte */
     int		ns;
 };
 @
-
+\t where this is used to send bytes on a channel?
 
 
 <<enum _anon_ (windows/rio/xfid.c)3>>=
@@ -5696,17 +5782,19 @@ case Qcons:
 
 \subsection{Writing part1}
 
-% So if client writes to /dev/cons ??
-% then we wait for key event to come to us by listening to consread!
-% The winctl itself listen for key events on w->ck from keyboardthread
+% So if client writes to /dev/cons, he wants to output strings
+% on the terminal,
+% then we wait for conswrite to get the go from winctl.
 
 <<[[Window]] other fields>>=
+// chan<Conswritemesg> (listener = xfidwrite(Qcons), sender = winctl)
 Channel		*conswrite;	/* chan(Conswritemesg) */
 @
 
 <<struct Conswritemesg>>=
 struct Conswritemesg
 {
+    // chan<ref<array<Rune>> (listener = winctl, sender = xfidwrite(Qcons))
     Channel	*cw;		/* chan(Stringpair) */
 };
 @
@@ -5717,48 +5805,23 @@ enum { CWdata, CWflush, NCW };
 @
 
 
-% we have stuff to write! stuff to write in the console,
-% but this time it must be Rune!
-
 <<[[xfidwrite()]] other locals>>=
 Rune *r;
 int nr; // nb runes
 int nb; // nb bytes
 @
+
 % see cvttorunes function in appendix
 
-<<[[Fid]] other fields>>=
-uchar	rpart[UTFmax];
-int		nrpart;
-@
-
-%XXX
 <<[[xfidwrite()]] cases>>=
 case Qcons:
 
-    nr = x->f->nrpart;
-    if(nr > 0){
-        memmove(x->data+nr, x->data, cnt);	/* there's room: see malloc in filsysproc */
-        memmove(x->data, x->f->rpart, nr);
-        cnt += nr;
-        x->f->nrpart = 0;
-    }
-
+    <<[[xfidwrite()]] when Qcons, look for previous partial rune bytes>>
     r = runemalloc(cnt);
     cvttorunes(x->data, cnt-UTFmax, r, &nb, &nr, nil);
+    <<[[xfidwrite()]] when Qcons, look if more full runes>>
+    <<[[xfidwrite()]] when Qcons, store remaining partial rune bytes>>
 
-    /* approach end of buffer */
-    while(fullrune(x->data+nb, cnt-nb)){
-        c = nb;
-        nb += chartorune(&r[nr], x->data+c);
-        if(r[nr])
-            nr++;
-    }
-    // assert(cnt-nb < UTFMAX);
-    if(nb < cnt){
-        memmove(x->f->rpart, x->data + nb, cnt-nb);
-        x->f->nrpart = cnt-nb;
-    }
     <<[[xfidxxx()]] set flushtag>>
 
     alts[CWdata].c = w->conswrite;
@@ -5789,14 +5852,56 @@ case Qcons:
 
 % this time pass full rune, not byte
 
-\section{[[/mnt/wsys/consctl]]}
 
-<<[[Window]] other fields>>=
-bool	ctlopen;
+% we have stuff to write! stuff to write in the console,
+% but this time it must be Rune! cant pass half rune to winctl
+% as it will not be able to display it. So need
+% to remember in Fid partial runes.
+
+<<[[Fid]] other fields>>=
+uchar	rpart[UTFmax];
+int		nrpart;
 @
-% exclusive access to /dev/consctl (why?)
-%old: bool_byte
+% rune partial
 
+
+<<[[xfidwrite()]] when Qcons, store remaining partial rune bytes>>=
+// assert(cnt-nb < UTFMAX);
+if(nb < cnt){
+    memmove(x->f->rpart, x->data + nb, cnt-nb);
+    x->f->nrpart = cnt-nb;
+}
+@
+% didn't send complete rune, need store those bytes for next run
+% of xfidwrite to have complete rune to relay
+
+<<[[xfidwrite()]] when Qcons, look for previous partial rune bytes>>=
+nr = x->f->nrpart;
+if(nr > 0){
+    memmove(x->data+nr, x->data, cnt);	/* there's room: see malloc in filsysproc */
+    memmove(x->data, x->f->rpart, nr);
+    cnt += nr;
+    x->f->nrpart = 0;
+}
+@
+
+
+% did cnt-UTFMAX, but maybe still full rune in UTFMAX, can have
+% 4 simple runes
+<<[[xfidwrite()]] when Qcons, look if more full runes>>=
+/* approach end of buffer */
+while(fullrune(x->data+nb, cnt-nb)){
+    c = nb;
+    nb += chartorune(&r[nr], x->data+c);
+    if(r[nr])
+        nr++;
+}
+@
+% see also cvttorunes
+
+
+
+\section{[[/mnt/wsys/consctl]]}
 
 <<[[qid]] cases>>=
 Qconsctl,
@@ -5804,6 +5909,13 @@ Qconsctl,
 <<dirtab array elements>>=
 { "consctl",	QTFILE,	Qconsctl,	0200 },
 @
+
+
+<<[[Window]] other fields>>=
+bool	ctlopen;
+@
+% exclusive access to /dev/consctl (why?)
+%old: bool_byte
 
 <<[[xfidopen()]] cases>>=
 case Qconsctl:
@@ -5911,18 +6023,26 @@ case Qwinname:
 % will use mount anyway, and env var is anyway a fileserver in plan9
 % so simpler to use /mnt/wsys for that too
 
+
+
+
+
+
+
 \chapter{Graphical Windows}
 
 % Graphical windows use /dev/draw (and /mnt/wsys/winname), /mnt/wsys/mouse.
-% They usually not care about writing in /mnt/wsys/cons; they care
-% optionally about /mnt/wsys/consctl and /mnt/wys/cons
+% They do not write in /mnt/wsys/cons (instead they use 
+%  stringxxx API from draw.h)
+% they care optionally about /mnt/wsys/consctl and /mnt/wys/cons
 %  for reading from the keyboard in "raw" mode.
 
 \section{Graphical window setup}
 
 % We say setup cos not really creation, since most of the time create first
 % textual window and then setup things to become a graphical window
-% (as we have seen it until now where we dont cover yet /srv/rio.user.pid)
+% (we will see later a way to create directly graphical window
+%  with  /srv/rio.user.pid)
 
 \subsection{[[initdraw()]]}
 
@@ -6077,7 +6197,7 @@ struct Mouseinfo
 
 \l need counter thing? not enough the ri != wi?
 \l  or is it because of resize where increment counter without
-\l  producing a thing in queue?
+\l  producing a thing in the queue?
 
 % producer/consumer, classic.
 
@@ -6099,10 +6219,12 @@ struct Mousestate
 
 \subsubsection{Producer}
 
-% WMouse
+
+% seen WMouse before
 
 <<[[winctl()]] locals>>=
-Mousestate *mp, m;
+Mousestate *mp;
+int lastb = -1;
 @
 % mp = m producer, and m = m consumer (but cant use mc cos conflict
 % with mouse control)
@@ -6115,7 +6237,7 @@ if(w->mouseopen) {
     /* queue click events */
     if(!w->mouse.qfull && lastb != w->mc.buttons) {	/* add to ring */
 
-        //insert_queue(wc->mc, w->mouse.queue
+        //insert_queue(w->mc, w->mouse.queue)
         mp = &w->mouse.queue[w->mouse.wi];
         if(++w->mouse.wi == nelem(w->mouse.queue))
             w->mouse.wi = 0;
@@ -6163,12 +6285,18 @@ else
     alts[WMouseread].op = CHANNOP;
 @
 % prepare to send something if the mouse was opened and if there is
-% something to send
+% something to send.
+% Remember that adjustments are made inside the for loop, so
+%  after each message has been processed, revisit the alts setting
 
 \t why need to go through 2 stages with the channel?
 \t  anyway we queue mouse events and we look for counters,
-\t  so could send directly 
+\t  so we could send directly 
 
+
+<<[[winctl()]] locals>>=
+Mousestate *m;
+@
 
 <<[[winctl()]] event loop cases>>=
 case WMouseread:
@@ -6196,14 +6324,16 @@ case WMouseread:
 
 \subsection{Raw keys queue}
 
-% could be also in Window keyboad section
 <<[[Window]] graphical window fields>>=
 // array<Rune> (size = Window.nraw)
 Rune		*raw;
 uint		nraw;
 @
-% also keyboard field
+% graphical window & keyboard field
 
+
+% in addition have runes from the text copied potentially by user
+% with the mouse after the output point.
 
 
 \subsection{[[/mnt/wsys/cons]] reading part2}
@@ -6221,9 +6351,15 @@ if(w->rawing && (w->mouseopen || w->q0 == w->nr)){
 @
 %old: I transposed the || arguments, clearer for now
 
+
+% if rawing and graphical mode, then dont care about output pointer.
+
 % faux ami, not a draw operation :) but w_add_raw
 
 % nr? q0? will see later
+% but because can have raw mode also for textual window,
+% in which case add rune (and no echo),
+% otherwise the "when not rawing" section will happen
 
 
 <<function waddraw>>=
@@ -6262,7 +6398,6 @@ WCread,
 Consreadmesg crm;
 @
 
-
 <<[[winctl()]] channels creation>>=
 crm.c1 = chancreate(sizeof(Stringpair), 0);
 crm.c2 = chancreate(sizeof(Stringpair), 0);
@@ -6293,16 +6428,21 @@ else{
 @
 %old: I transposed again the || arguments, clearer to see raw first
 
-\t npart? partial stuff?
+% ready to send only if have stuff indeed to send!
+
+% similar to Fid.rpart and Fid.nrpart, but this time
+% on the side of the winctl, since it is the one who 
+
 
 <<[[winctl()]] locals>>=
 Stringpair pair;
-@
-
-<<[[winctl()]] locals>>=
 char *t;
 int nb;
+int i, c, wid;
 @
+% app is reading /dev/cons for bytes, not Rune.
+
+
 
 <<[[winctl()]] event loop cases>>=
 case WCread:
@@ -6310,13 +6450,10 @@ case WCread:
     t = pair.s;
     nb = pair.ns;
 
-    i = npart;
-    npart = 0;
+    i = 0;
+    <<[[winctl()]] when WCRead, copy in t previous partial rune bytes>>
 
-    if(i)
-        memmove(t, part, i);
-
-    while(i<nb && (w->qh < w->nr || w->nraw > 0)){
+    while(i<nb && (w->nraw > 0 || w->qh < w->nr)){
 
         if(w->qh == w->nr){
             wid = runetochar(t+i, &w->raw[0]);
@@ -6325,22 +6462,12 @@ case WCread:
         }else
             wid = runetochar(t+i, &w->r[w->qh++]);
 
-        c = t[i];	/* knows break characters fit in a byte */
         i += wid;
-        if(!w->rawing && (c == '\n' || c=='\004')){
-            if(c == '\004')
-                i--;
-            break;
+        <<[[winctl()]] when WCRead, break if newline and handle EOF character>>
         }
     }
-    if(i==nb && w->qh < w->nr && w->r[w->qh]=='\004')
-        w->qh++;
-
-    if(i > nb){
-        npart = i-nb;
-        memmove(part, t+nb, npart);
-        i = nb;
-    }
+    <<[[winctl()]] when WCRead, handle EOF character after while loop>>
+    <<[[winctl()]] when WCRead, store overflow bytes of partial rune>>
 
     pair.s = t;
     pair.ns = i;
@@ -6350,6 +6477,30 @@ case WCread:
 %old: again I reverted some ||
 
 
+
+% similar issue than in xfid where need store partial rune bytes
+
+<<[[winctl()]] locals>>=
+char part[3]; // UTFMAX-1
+int npart = 0;
+@
+% end of w->raw[] unprocessed last time
+
+<<[[winctl()]] when WCRead, store overflow bytes of partial rune>>=
+if(i > nb){
+    npart = i-nb;
+    memmove(part, t+nb, npart);
+    i = nb;
+}
+@
+
+
+<<[[winctl()]] when WCRead, copy in t previous partial rune bytes>>=
+i = npart;
+npart = 0;
+if(i)
+    memmove(t, part, i);
+@
 
 
 
@@ -6375,6 +6526,7 @@ Qwindow,
 <<dirtab array elements>>=
 { "window",		QTFILE,	Qwindow,	0400 },
 @
+
 
 <<[[xfidread()]] other locals>>=
 Image *i;
@@ -6414,6 +6566,7 @@ caseImage:
     free(t);
     return;
 @
+\l could make a function case_image instead of using labels and goto.
 
 <<function readwindow>>=
 int
@@ -6443,7 +6596,7 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 
 \chapter{Textual Windows}
 
-% challenge is don't want to change all our command line apps
+% challenge is we don't want to change all our command line apps
 % to do some drawtext() ... we want backward compatibility, some
 % kind of emulation! (and with more services!)
 
@@ -6452,36 +6605,47 @@ readwindow(Image *i, char *t, Rectangle r, int offset, int n)
 
 %https://www.destroyallsoftware.com/talks/a-whole-new-world
 
+\l put most stuff of libframe in appendix
+
 \section{Textual window creation}
 
 % Saw window creation section before. Some additional setup
-% for textual windows.
+% for textual windows we skipped.
 
+<<constants Scrollxxx>>=
+Scrollwid 		= 12,	/* width of scroll bar */
+Scrollgap 		= 4,	/* gap right of scroll bar */
+@
+\n could also put that in Scrolling section later, but then
+\n force to split wmk too much I think
 
+% FIGURE again?
 
 <<[[wmk()]] textual window settings>>=
 r = insetrect(i->r, Selborder+1);
 w->scrollr = r;
 w->scrollr.max.x = r.min.x+Scrollwid;
-w->lastsr = ZR;
 
 r.min.x += Scrollwid+Scrollgap;
-
 frinit(w, r, font, i, cols);
 
+w->lastsr = ZR;
 w->maxtab = maxtab * stringwidth(font, "0");
-
 w->scrolling = scrolling;
 
 r = insetrect(w->i->r, Selborder);
 draw(w->i, r, cols[BACK], nil, w->entire.min);
 @
+% entire? frame property?
 
+% will see cols soon
 
+% similar code
 <<[[wresize()]] textual window updates>>=
 r = insetrect(i->r, Selborder+1);
 w->scrollr = r;
 w->scrollr.max.x = r.min.x+Scrollwid;
+
 w->lastsr = ZR;
 
 r.min.x += Scrollwid+Scrollgap;
@@ -6492,24 +6656,34 @@ else{
     frclear(w, false);
     frinit(w, r, w->font, w->i, cols);
     wsetcols(w);
+
     w->maxtab = maxtab * stringwidth(w->font, "0");
+
     r = insetrect(w->i->r, Selborder);
     draw(w->i, r, cols[BACK], nil, w->entire.min);
+
     wfill(w);
     wsetselect(w, w->q0, w->q1);
     wscrdraw(w);
 }
 @
+% useful opti to differentiate move and resize?
+% maybe could factorize more code with wmk creation.
+% Have a paint function! (see codemap)
 
 \section{[[Frame]]}
 
-% what is around the window (actually it's part of the window??)
+% mv in Widgets.nw?
+
+% It is actually not what is around the window. Bad name.
+% Rename maybe TextWidget?
 
 <<struct Frame>>=
 struct Frame
 {
     Display	*display;	/* on which frame appears */
     Image	*b;		/* on which frame appears */
+
     Image	*cols[NCOL];	/* text and background colors */
 
     Font	*font;		/* of chars in the frame */
@@ -6517,7 +6691,7 @@ struct Frame
     Rectangle	r;		/* in which text appears */
     Rectangle	entire;		/* of full frame */
 
-    void			(*scroll)(Frame*, int);	/* scroll function provided by application */
+    void (*scroll)(Frame*, int); /* scroll function provided by application */
 
     Frbox	*box;
 
@@ -6536,23 +6710,26 @@ struct Frame
     int		ticked;	/* flag: is tick onscreen? */
 };
 @
-% the actual content is in the englobing data structure (e.g. Window)
+% the actual content is in the englobing data structure (e.g. Window.r)
 
-% layers!
+% properties
 <<enum _anon_ (include/frame.h)>>=
 enum{
-    BACK,
-    HIGH,
-    BORD,
-    TEXT,
-    HTEXT,
+    BACK, // Background
+    HIGH, // ??
+    BORD, // Border
+    TEXT, // Text
+    HTEXT, // Highlited text
 
     NCOL
 };
 @
+\l rename enums? use full word?
+\t Bord is not the same that window border?
 
-%images/colors for the frame
+% images/colors for the frame
 <<global cols>>=
+// map<Property, Color>
 static	Image	*cols[NCOL];
 @
 
@@ -6578,7 +6755,7 @@ static	Image	*lighttitlecol;
 <<[[wmk()]] cols initialisation>>=
 if(cols[0] == nil){
     /* greys are multiples of 0x11111100+0xFF, 14* being palest */
-    grey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xEEEEEEFF);
+    grey     = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xEEEEEEFF);
     darkgrey = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0x666666FF);
     cols[BACK] = display->white;
     cols[HIGH] = allocimage(display, Rect(0,0,1,1), CMAP8, 1, 0xCCCCCCFF);
@@ -6586,13 +6763,14 @@ if(cols[0] == nil){
     cols[TEXT] = display->black;
     cols[HTEXT] = display->black;
 
-    titlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
-    lighttitlecol = allocimage(display, Rect(0,0,1,1), CMAP8, 1,DPalegreygreen);
-    holdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
+    titlecol     = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreygreen);
+    lighttitlecol= allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreygreen);
+    holdcol      = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DMedblue);
     lightholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DGreyblue);
-    paleholdcol = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
+    paleholdcol  = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPalegreyblue);
 }
 @
+% the cols will be inverted at some point.
 
 % libframe/
 % ... -> new -> wmk() -> <>
@@ -6603,18 +6781,20 @@ frinit(Frame *f, Rectangle r, Font *ft, Image *b, Image *cols[NCOL])
     f->font = ft;
     f->display = b->display;
     f->maxtab = 8 * stringwidth(ft, "0");
+
     f->nbox = 0;
     f->nalloc = 0;
     f->nchars = 0;
     f->nlines = 0;
+
     f->p0 = 0;
     f->p1 = 0;
     f->box = 0;
     f->lastlinefull = 0;
-    if(cols != 0)
+    if(cols != nil)
         memmove(f->cols, cols, sizeof f->cols);
     frsetrects(f, r, b);
-    if(f->tick==nil && f->cols[BACK]!=0)
+    if(f->tick == nil && f->cols[BACK] != nil)
         frinittick(f);
 }
 @
@@ -6676,9 +6856,6 @@ wsetcols(Window *w)
 @
 % invert color, but who then redraw the content?
 
-% will see cols later
-
-
 
 <<[[wrepaint()]] if mouse not opened>>=
 if(!w->mouseopen)
@@ -6686,21 +6863,9 @@ if(!w->mouseopen)
 @
 
 
-
 <<[[Window]] textual window fields>>=
 uint		org;
 @
-
-<<[[Window]] textual window fields>>=
-// selection? start vs end?
-uint		q0;
-uint		q1;
-@
-
-<<[[Window]] textual window fields>>=
-uint		qh;
-@
-
 
 
 % nchars is in Frame!
@@ -6714,7 +6879,7 @@ wshow(Window *w, uint q0)
     uint q;
 
     qe = w->org + w->nchars;
-    if(w->org<=q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
+    if(w->org <= q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
         wscrdraw(w);
     else{
         nl = 4*w->maxlines/5;
@@ -6747,7 +6912,7 @@ wsetorigin(Window *w, uint org, int exact)
             org++;
         }
     }
-    a = org-w->org;
+    a = org - w->org;
     fixup = 0;
     if(a>=0 && a<w->nchars){
         frdelete(w, 0, a);
@@ -6808,9 +6973,10 @@ wfill(Window *w)
 
 
 
-
-
 \section{Mouse events}
+
+% no producer/consumer here, just click generating action,
+% textual windows do not read /mnt/wsys/mouse
 
 \subsection{Middle click menu}
 
@@ -6834,6 +7000,7 @@ button2menu(Window *w)
     <<[[button2menu()]] cases>>
     }
     wclose(w); // decref
+
     wsendctlmesg(w, Wakeup, ZR, nil);
     flushimage(display, true);
 }
@@ -6923,23 +7090,124 @@ wmousectl(Window *w)
 
 \section{Keyboard events}
 
-% when write on /dev/cons, then need update text.
+\subsection{Text input queue}
+
+% it's between w->qh and w->nr!
+% see core DS chapter
 
 \subsection{[[/mnt/wsys/cons]] reading part3}
 
-\t put code from reading part2 unrelated to raw chars
-
-\subsection{[[/mnt/wsys/cons]] writing part2}
-
-% process output string by writing on /dev/cons!
-% newline too, runes
-
 \subsubsection{Producer}
+
+<<[[wkeyctl()]] when not rawing>>=
+// here when no navigation key, no rawing, no 0x1B holding
+
+<<[[wkeyctl()]] snarf and cut if not interrupt key>>
+switch(r){
+<<[[wkeyctl()]] special key cases and no special mode>>
+}
+// else
+
+/* otherwise ordinary character; just insert */
+<<[[wkeyctl()]] ordinary character>>
+@
+
+% will see soon special keys
+
+<<[[wkeyctl()]] locals>>=
+uint q0;
+@
+
+<<[[wkeyctl()]] ordinary character>>=
+q0 = w->q0;
+q0 = winsert(w, &r, 1, q0);
+wshow(w, q0+1);
+@
+% echo back!
+
+
+
+<<function winsert>>=
+uint
+winsert(Window *w, Rune *r, int n, uint q0)
+{
+    uint m;
+
+    if(n == 0)
+        return q0;
+    if(w->nr+n > HiWater && q0>=w->org && q0>=w->qh){
+        m = min(HiWater-LoWater, min(w->org, w->qh));
+        w->org -= m;
+        w->qh -= m;
+        if(w->q0 > m)
+            w->q0 -= m;
+        else
+            w->q0 = 0;
+        if(w->q1 > m)
+            w->q1 -= m;
+        else
+            w->q1 = 0;
+        w->nr -= m;
+        runemove(w->r, w->r+m, w->nr);
+        q0 -= m;
+    }
+    if(w->nr+n > w->maxr){
+        /*
+         * Minimize realloc breakage:
+         *	Allocate at least MinWater
+         * 	Double allocation size each time
+         *	But don't go much above HiWater
+         */
+        m = max(min(2*(w->nr+n), HiWater), w->nr+n)+MinWater;
+        if(m > HiWater)
+            m = max(HiWater+MinWater, w->nr+n);
+        if(m > w->maxr){
+            w->r = runerealloc(w->r, m);
+            w->maxr = m;
+        }
+    }
+
+    runemove(w->r + q0 + n, w->r + q0, w->nr - q0);
+    runemove(w->r + q0, r, n);
+    w->nr += n;
+
+    /* if output touches, advance selection, not qh; works best for keyboard and output */
+    if(q0 <= w->q1)
+        w->q1 += n;
+    if(q0 <= w->q0)
+        w->q0 += n;
+    if(q0 < w->qh)
+        w->qh += n;
+    if(q0 < w->org)
+        w->org += n;
+    else if(q0 <= w->org + w->nchars)
+        frinsert(w, r, r+n, q0 - w->org);
+    return q0;
+}
+@
+
+
+
+% See also Efuns.nw?
+
+<<enum _anon_ (windows/rio/wind.c)>>=
+enum
+{
+    HiWater	= 640000,	/* max size of history */
+    LoWater	= 400000,	/* min size of history after max'ed */
+    MinWater	= 20000,	/* room to leave available when reallocating */
+};
+@
+
+\subsubsection{Consumer}
+
+% similar to graphical window, except condition
+% not just have raw char, now check for newline
 
 <<[[winctl()]] alts adjustments, revert to CHANSND if newline in queue>>=
 /* this code depends on NL and EOT fitting in a single byte */
 /* kind of expensive for each loop; worth precomputing? */
-for(i=w->qh; i < w->nr; i++){
+for(i = w->qh; i < w->nr; i++){
      c = w->r[i];
      // buffering, until get a newline in which case we are ready to send
      if(c=='\n' || c=='\004'){
@@ -6949,91 +7217,32 @@ for(i=w->qh; i < w->nr; i++){
  }
 @
 
-\subsubsection{Consumer}
-
-<<[[Wxxx]] cases>>=
-WCwrite,
-@
-
-<<[[winctl()]] locals>>=
-Conswritemesg cwm;
-@
-<<[[winctl()]] channels creation>>=
-cwm.cw = chancreate(sizeof(Stringpair), 0);
-@
-
-<<[[winctl()]] alts setup>>=
-alts[WCwrite].c = w->conswrite;
-alts[WCwrite].v = &cwm;
-alts[WCwrite].op = CHANSND;
-@
-
-<<[[winctl()]] alts adjustments>>=
-if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->nchars)
-    alts[WCwrite].op = CHANNOP;
-else
-    alts[WCwrite].op = CHANSND;
-@
-% ! mouseopen??
 
 
-<<[[winctl()]] event loop cases>>=
-case WCwrite:
-    recv(cwm.cw, &pair);
-    rp = pair.s;
-    nr = pair.ns;
-    bp = rp;
-    for(i=0; i<nr; i++)
-        if(*bp++ == '\b'){
-            --bp;
-            initial = 0;
-            tp = runemalloc(nr);
-            runemove(tp, rp, i);
-            up = tp+i;
-            for(; i<nr; i++){
-                *up = *bp++;
-                if(*up == '\b')
-                    if(up == tp)
-                        initial++;
-                    else
-                        --up;
-                else
-                    up++;
-            }
-            if(initial){
-                if(initial > w->qh)
-                    initial = w->qh;
-                qh = w->qh-initial;
-                wdelete(w, qh, qh+initial);
-                w->qh = qh;
-            }
-            free(rp);
-            rp = tp;
-            nr = up-tp;
-            rp[nr] = 0;
-            break;
-        }
-    w->qh = winsert(w, rp, nr, w->qh)+nr;
-    if(w->scrolling || w->mouseopen)
-        wshow(w, w->qh);
-    wsetselect(w, w->q0, w->q1);
-    wscrdraw(w);
-    free(rp);
+<<[[winctl()]] when WCRead, break if newline and handle EOF character>>=
+c = t[i-wid];	/* knows break characters fit in a byte */
+if(!w->rawing && (c == '\n' || c=='\004')){
+    if(c == '\004')
+        i--;
     break;
 @
+%old: was c = t[i] but I put i+=wid earlier to aspectize this part
+% break so will not fill more t, will stop even if guy asked for more.
 
-\subsection{Ordinary characters}
-
-<<[[wkeyctl()]] ordinary character>>=
-q0 = w->q0;
-q0 = winsert(w, &r, 1, q0);
-wshow(w, q0+1);
+<<[[winctl()]] when WCRead, handle EOF character after while loop>>=
+if(i==nb && w->qh < w->nr && w->r[w->qh]=='\004')
+    w->qh++;
 @
+% ???
+
+
+
+
 
 \subsection{Navigation keys}
+% can help to understand q0, qh, etc?
 
 <<[[wkeyctl()]] locals>>=
-uint q0;
 uint q1;
 int n, nb;
 @
@@ -7118,42 +7327,7 @@ default:
 
 \subsection{Special keys}
 
-<<[[wkeyctl()]] locals>>=
-int nr;
-Rune *rp;
-int *notefd;
-@
-
-<<[[wkeyctl()]] special key cases and no special mode>>=
-case 0x7F:		/* send interrupt */
-    w->qh = w->nr;
-    wshow(w, w->qh);
-    notefd = emalloc(sizeof(int));
-    *notefd = w->notefd;
-    proccreate(interruptproc, notefd, 4096);
-    return;
-@
-
-% wkeyctl -> proccreate(<>)
-<<function interruptproc>>=
-/*
- * Need to do this in a separate proc because if process we're interrupting
- * is dying and trying to print tombstone, kernel is blocked holding p->debug lock.
- */
-void
-interruptproc(void *v)
-{
-    int *notefd;
-
-    notefd = v;
-    write(*notefd, "interrupt", 9);
-    free(notefd);
-}
-@
-
-
-
-
+\subsubsection{Delete}
 
 <<[[wkeyctl()]] special key cases and no special mode>>=
 case 0x08:	/* ^H: erase character */
@@ -7212,79 +7386,145 @@ wbswidth(Window *w, Rune c)
 }
 @
 
-\section{Content modification}
 
-% See also Efuns.nw?
+\subsubsection{Interrupt}
 
-<<enum _anon_ (windows/rio/wind.c)>>=
-enum
-{
-    HiWater	= 640000,	/* max size of history */
-    LoWater	= 400000,	/* min size of history after max'ed */
-    MinWater	= 20000,	/* room to leave available when reallocating */
-};
+% 0x7F = Del? (see Kernel.nw )
+
+<<[[wkeyctl()]] locals>>=
+int nr;
+Rune *rp;
+int *notefd;
 @
 
+<<[[wkeyctl()]] special key cases and no special mode>>=
+case 0x7F:		/* send interrupt */
+    w->qh = w->nr;
+    wshow(w, w->qh);
+    notefd = emalloc(sizeof(int));
+    *notefd = w->notefd;
+    proccreate(interruptproc, notefd, 4096);
+    return;
+@
 
-<<function winsert>>=
-uint
-winsert(Window *w, Rune *r, int n, uint q0)
+% wkeyctl -> proccreate(<>)
+<<function interruptproc>>=
+/*
+ * Need to do this in a separate proc because if process we're interrupting
+ * is dying and trying to print tombstone, kernel is blocked holding p->debug lock.
+ */
+void
+interruptproc(void *v)
 {
-    uint m;
+    int *notefd;
 
-    if(n == 0)
-        return q0;
-    if(w->nr+n > HiWater && q0>=w->org && q0>=w->qh){
-        m = min(HiWater-LoWater, min(w->org, w->qh));
-        w->org -= m;
-        w->qh -= m;
-        if(w->q0 > m)
-            w->q0 -= m;
-        else
-            w->q0 = 0;
-        if(w->q1 > m)
-            w->q1 -= m;
-        else
-            w->q1 = 0;
-        w->nr -= m;
-        runemove(w->r, w->r+m, w->nr);
-        q0 -= m;
-    }
-    if(w->nr+n > w->maxr){
-        /*
-         * Minimize realloc breakage:
-         *	Allocate at least MinWater
-         * 	Double allocation size each time
-         *	But don't go much above HiWater
-         */
-        m = max(min(2*(w->nr+n), HiWater), w->nr+n)+MinWater;
-        if(m > HiWater)
-            m = max(HiWater+MinWater, w->nr+n);
-        if(m > w->maxr){
-            w->r = runerealloc(w->r, m);
-            w->maxr = m;
-        }
-    }
-    runemove(w->r+q0+n, w->r+q0, w->nr-q0);
-    runemove(w->r+q0, r, n);
-    w->nr += n;
-    /* if output touches, advance selection, not qh; works best for keyboard and output */
-    if(q0 <= w->q1)
-        w->q1 += n;
-    if(q0 <= w->q0)
-        w->q0 += n;
-    if(q0 < w->qh)
-        w->qh += n;
-    if(q0 < w->org)
-        w->org += n;
-    else if(q0 <= w->org+w->nchars)
-        frinsert(w, r, r+n, q0-w->org);
-    return q0;
+    notefd = v;
+    write(*notefd, "interrupt", 9);
+    free(notefd);
 }
 @
 
 
+
+
+
+\section{Content modification}
+
+
+
+
+
+\subsection{[[/mnt/wsys/cons]] writing part2}
+
+% when write on /dev/cons, then need update text.
+
+% process output string by writing on /dev/cons!
+% newline too, runes
+
+\subsubsection{Producer}
+
+% is user process writing on /mnt/wsys/cons
+
+\subsubsection{Consumer}
+
+<<[[Wxxx]] cases>>=
+WCwrite,
+@
+
+<<[[winctl()]] locals>>=
+Conswritemesg cwm;
+@
+<<[[winctl()]] channels creation>>=
+cwm.cw = chancreate(sizeof(Stringpair), 0);
+@
+
+<<[[winctl()]] alts setup>>=
+alts[WCwrite].c = w->conswrite;
+alts[WCwrite].v = &cwm;
+alts[WCwrite].op = CHANSND;
+@
+
+<<[[winctl()]] alts adjustments>>=
+if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->nchars)
+    alts[WCwrite].op = CHANNOP;
+else
+    alts[WCwrite].op = CHANSND;
+@
+% ! mouseopen??
+
+
+<<[[winctl()]] event loop cases>>=
+case WCwrite:
+    recv(cwm.cw, &pair);
+    rp = pair.s;
+    nr = pair.ns;
+
+    bp = rp;
+    for(i=0; i<nr; i++) {
+        if(*bp++ == '\b'){
+            --bp;
+            initial = 0;
+            tp = runemalloc(nr);
+            runemove(tp, rp, i);
+            up = tp+i;
+            for(; i<nr; i++){
+                *up = *bp++;
+                if(*up == '\b')
+                    if(up == tp)
+                        initial++;
+                    else
+                        --up;
+                else
+                    up++;
+            }
+            if(initial){
+                if(initial > w->qh)
+                    initial = w->qh;
+                qh = w->qh-initial;
+                wdelete(w, qh, qh+initial);
+                w->qh = qh;
+            }
+            free(rp);
+            rp = tp;
+            nr = up-tp;
+            rp[nr] = 0;
+            break;
+        }
+    }
+
+    w->qh = winsert(w, rp, nr, w->qh) + nr;
+    if(w->scrolling || w->mouseopen)
+        wshow(w, w->qh);
+    wsetselect(w, w->q0, w->q1);
+    wscrdraw(w);
+    free(rp);
+    break;
+@
+
+
+
 \section{Word selection}
+% adv topics?
 
 <<global clickwin>>=
 static Window	*clickwin;
@@ -7562,23 +7802,36 @@ wsetselect(Window *w, uint q0, uint q1)
 
 
 \section{Cut, Copy, Paste}
+% adv topics?
 % put snarf stuff here
 
-\section{Scrolling}
 
-<<constants Scrollxxx>>=
-Scrollwid 		= 12,	/* width of scroll bar */
-Scrollgap 		= 4,	/* gap right of scroll bar */
+\section{Automatic scrolling mode}
+% hard to put in adv topics, this global is pretty important
+
+<<[[button2menu()]] menu2str adjustments for scrolling>>=
+if(w->scrolling)
+    menu2str[Scroll] = "noscroll";
+else
+    menu2str[Scroll] = "scroll";
 @
 
-<<[[Window]] textual window fields>>=
-Rectangle	scrollr;
+<<[[button2menu()]] cases>>=
+case Scroll:
+    if(w->scrolling ^= 1)
+        wshow(w, w->nr);
+    break;
 @
 
+
+\section{Scroll bars}
+
+% seen Window.scrollr before
 
 <<[[mousethread()]] locals>>=
 bool scrolling = false;
 @
+% != Window.scrolling !! this is when inside scrollbar
 
 % window terminal have scrollbars
 <<[[mousethread()]] set scrolling>>=
@@ -7597,10 +7850,6 @@ else
 if((mouse->buttons&(8|16)) && !winput->mouseopen)
     goto Sending;
 @
-
-
-
-
 
 
 
@@ -7994,6 +8243,11 @@ case Qlabel:
 % could use goto Text? we avoid some allocations here
 
 
+% used in hidden!
+% not used in title bar, see rational in "Windows should be transparent",
+% pike does not like title bar, useless according to him, encouraging
+% to put state info in it which anyway should not exist!
+
 <<[[xfidwrite()]] cases>>=
 case Qlabel:
     if(off != 0){
@@ -8024,7 +8278,9 @@ case Qwdir:
     goto Text;
 @
 
+
 % so can write on /dev/wdir, but effect?
+% a bit like chdir()?
 
 <<[[xfidwrite()]] cases>>=
 case Qwdir:
@@ -8155,7 +8411,6 @@ case Qwsysdir:
 % allow to command an app? a la watir/selenium/... ?
 
 
-
 <<[[Window]] other fields>>=
 bool	wctlopen;
 bool 	wctlready;
@@ -8277,8 +8532,10 @@ case Qwctl:	/* read returns rectangle, hangs if not resized */
 % when read by app it's the current status of the window
 
 <<[[Window]] other fields>>=
+// chan<Consreadmesg> (listener = , sender = )
 Channel		*wctlread;	/* chan(Consreadmesg) */
 @
+% abuse Consreadmesg
 
 <<[[winctl()]] locals>>=
 Consreadmesg cwrm;
@@ -8475,193 +8732,6 @@ writewctl(Xfid *x, char *err)
 
 
 
-\chapter{Timer}
-% adv topics?
-
-% seems only used by wscrsleep so maybe should be put in adv topics,
-%  but maybe it's an interesting thing to show
-
-<<global clockfd>>=
-fdt	clockfd;
-@
-
-<<[[filsysinit()]] set clockfd>>=
-clockfd = open("/dev/time", OREAD|OCEXEC);
-@
-
-%  -> <>
-% used to give current date for files /dev/xxx
-<<function getclock>>=
-static
-uint
-getclock(void)
-{
-    char buf[32];
-
-    seek(clockfd, 0, 0);
-    read(clockfd, buf, sizeof buf);
-    return atoi(buf);
-}
-@
-
-
-
-
-
-
-
-% who uses the timer and timerproc?
-% wscrsleep
-
-
-<<struct Timer>>=
-struct Timer
-{
-    int		dt;
-    int		cancel;
-    Channel	*c;	/* chan(int) */
-    Timer	*next;
-};
-@
-
-<<function timerinit>>=
-void
-timerinit(void)
-{
-    ctimer = chancreate(sizeof(Timer*), 100);
-    proccreate(timerproc, nil, STACK);
-}
-@
-
-<<function timerproc>>=
-static
-void
-timerproc(void*)
-{
-    int i, nt, na, dt, del;
-    Timer **t, *x;
-    uint old, new;
-
-    rfork(RFFDG);
-    threadsetname("TIMERPROC");
-
-    t = nil;
-    na = 0;
-    nt = 0;
-    old = msec();
-    for(;;){
-        sleep(1);	/* will sleep minimum incr */
-        new = msec();
-        dt = new-old;
-        old = new;
-        if(dt < 0)	/* timer wrapped; go around, losing a tick */
-            continue;
-        for(i=0; i<nt; i++){
-            x = t[i];
-            x->dt -= dt;
-            del = 0;
-            if(x->cancel){
-                timerstop(x);
-                del = 1;
-            }else if(x->dt <= 0){
-                /*
-                 * avoid possible deadlock if client is
-                 * now sending on ctimer
-                 */
-                if(nbsendul(x->c, 0) > 0)
-                    del = 1;
-            }
-            if(del){
-                memmove(&t[i], &t[i+1], (nt-i-1)*sizeof t[0]);
-                --nt;
-                --i;
-            }
-        }
-        if(nt == 0){
-            x = recvp(ctimer);
-    gotit:
-            if(nt == na){
-                na += 10;
-                t = realloc(t, na*sizeof(Timer*));
-                if(t == nil)
-                    abort();
-            }
-            t[nt++] = x;
-            old = msec();
-        }
-        if(nbrecv(ctimer, &x) > 0)
-            goto gotit;
-    }
-}
-@
-
-
-
-
-
-
-<<global ctimer>>=
-static Channel*	ctimer;	/* chan(Timer*)[100] */
-@
-
-<<global timer>>=
-static Timer *timer;
-@
-
-<<function msec>>=
-static
-uint
-msec(void)
-{
-    return nsec()/1000000;
-}
-@
-
-<<function timerstop>>=
-void
-timerstop(Timer *t)
-{
-    t->next = timer;
-    timer = t;
-}
-@
-
-<<function timercancel>>=
-void
-timercancel(Timer *t)
-{
-    t->cancel = true;
-}
-@
-
-
-
-<<function timerstart>>=
-/*
- * timeralloc() and timerfree() don't lock, so can only be
- * called from the main proc.
- */
-Timer*
-timerstart(int dt)
-{
-    Timer *t;
-
-    t = timer;
-    if(t)
-        timer = timer->next;
-    else{
-        t = emalloc(sizeof(Timer));
-        t->c = chancreate(sizeof(int), 0);
-    }
-    t->next = nil;
-    t->dt = dt;
-    t->cancel = false;
-    sendp(ctimer, t);
-    return t;
-}
-@
-
-
 
 %\chapter{Debugging Support}
 % ? with rio -k? with /mnt/wsys/wctl?
@@ -8672,6 +8742,8 @@ timerstart(int dt)
 
 % this make fileserver accessible more easily to external
 % processes. 
+
+% also allow newwindow() we saw in Graphics.nw!
 
 % Until now done filsysmount() from rio itself
 % in child process where mount(filesys->cfd, ...) and
@@ -9275,6 +9347,8 @@ wbottomme(Window *w)
 <<[[Mxxx]] cases>>=
 MReshape,
 @
+% a Mxxx because in plan9 resize events are communicated through
+%  /dev/mouse (ugly)
 
 %mouse(3)
 %The mouse and cursor files are multiplexed by rio(1) to give the
@@ -9361,6 +9435,13 @@ resized(void)
 
 \section{Snarf}
 %\subsection{[[/dev/snarf]]}
+
+<<[[wkeyctl()]] snarf and cut if not interrupt key>>=
+if(r != 0x7F){ // 0x7F = Interrupt key
+    wsnarf(w);
+    wcut(w);
+}
+@
 
 \subsection{Snarf menu}
 
@@ -9885,21 +9966,7 @@ windfilewidth(Window *w, uint q0, int oneelement)
 @
 
 
-\section{Scrolling terminal behavior, [[rio -s]]}
-
-<<[[button2menu()]] menu2str adjustments for scrolling>>=
-if(w->scrolling)
-    menu2str[Scroll] = "noscroll";
-else
-    menu2str[Scroll] = "scroll";
-@
-
-<<[[button2menu()]] cases>>=
-case Scroll:
-    if(w->scrolling ^= 1)
-        wshow(w, w->nr);
-    break;
-@
+\section{Automatic scrolling, [[rio -s]]}
 
 
 <<global scrolling>>=
@@ -9911,6 +9978,7 @@ case 's':
     scrolling = true;
     break;
 @
+% who uses that then? default mode in new()?
 
 % and then who set w->scrolling to true?
 
@@ -10301,6 +10369,195 @@ killprocs(void)
 @
 
 
+\section{Timer}
+
+% seems only used by wscrsleep so maybe should be put in adv topics,
+%  but maybe it's an interesting thing to show
+
+<<global clockfd>>=
+fdt	clockfd;
+@
+
+<<[[filsysinit()]] set clockfd>>=
+clockfd = open("/dev/time", OREAD|OCEXEC);
+@
+
+%  -> <>
+% used to give current date for files /dev/xxx
+<<function getclock>>=
+static
+uint
+getclock(void)
+{
+    char buf[32];
+
+    seek(clockfd, 0, 0);
+    read(clockfd, buf, sizeof buf);
+    return atoi(buf);
+}
+@
+
+
+
+
+
+
+
+% who uses the timer and timerproc?
+% wscrsleep
+
+
+<<struct Timer>>=
+struct Timer
+{
+    int		dt;
+    int		cancel;
+    Channel	*c;	/* chan(int) */
+    Timer	*next;
+};
+@
+
+<<function timerinit>>=
+void
+timerinit(void)
+{
+    ctimer = chancreate(sizeof(Timer*), 100);
+    proccreate(timerproc, nil, STACK);
+}
+@
+
+<<function timerproc>>=
+static
+void
+timerproc(void*)
+{
+    int i, nt, na, dt, del;
+    Timer **t, *x;
+    uint old, new;
+
+    rfork(RFFDG);
+    threadsetname("TIMERPROC");
+
+    t = nil;
+    na = 0;
+    nt = 0;
+    old = msec();
+    for(;;){
+        sleep(1);	/* will sleep minimum incr */
+        new = msec();
+        dt = new-old;
+        old = new;
+        if(dt < 0)	/* timer wrapped; go around, losing a tick */
+            continue;
+        for(i=0; i<nt; i++){
+            x = t[i];
+            x->dt -= dt;
+            del = 0;
+            if(x->cancel){
+                timerstop(x);
+                del = 1;
+            }else if(x->dt <= 0){
+                /*
+                 * avoid possible deadlock if client is
+                 * now sending on ctimer
+                 */
+                if(nbsendul(x->c, 0) > 0)
+                    del = 1;
+            }
+            if(del){
+                memmove(&t[i], &t[i+1], (nt-i-1)*sizeof t[0]);
+                --nt;
+                --i;
+            }
+        }
+        if(nt == 0){
+            x = recvp(ctimer);
+    gotit:
+            if(nt == na){
+                na += 10;
+                t = realloc(t, na*sizeof(Timer*));
+                if(t == nil)
+                    abort();
+            }
+            t[nt++] = x;
+            old = msec();
+        }
+        if(nbrecv(ctimer, &x) > 0)
+            goto gotit;
+    }
+}
+@
+
+
+
+
+
+
+<<global ctimer>>=
+// chan<?> (listener = ?, sender = ?)
+static Channel*	ctimer;	/* chan(Timer*)[100] */
+@
+
+<<global timer>>=
+static Timer *timer;
+@
+
+<<function msec>>=
+static
+uint
+msec(void)
+{
+    return nsec()/1000000;
+}
+@
+
+<<function timerstop>>=
+void
+timerstop(Timer *t)
+{
+    t->next = timer;
+    timer = t;
+}
+@
+
+<<function timercancel>>=
+void
+timercancel(Timer *t)
+{
+    t->cancel = true;
+}
+@
+
+
+
+<<function timerstart>>=
+/*
+ * timeralloc() and timerfree() don't lock, so can only be
+ * called from the main proc.
+ */
+Timer*
+timerstart(int dt)
+{
+    Timer *t;
+
+    t = timer;
+    if(t)
+        timer = timer->next;
+    else{
+        t = emalloc(sizeof(Timer));
+        t->c = chancreate(sizeof(int), 0);
+    }
+    t->next = nil;
+    t->dt = dt;
+    t->cancel = false;
+    sendp(ctimer, t);
+    return t;
+}
+@
+
+
+
+
 
 \section{Flushing}
 
@@ -10314,6 +10571,7 @@ killprocs(void)
 
 <<[[Xfid]] flushing fields>>=
 int	flushtag;	/* our tag, so flush can find us */
+// chan<int> (listener = ?, sender = ?)
 Channel	*flushc;/* channel(int) to notify us we're being flushed */
 bool	flushing;	/* another Xfid is trying to flush us */
 @
@@ -10516,7 +10774,7 @@ if(DEBUG)
 
 %\chapter{Profiling}
 
-\chapter{Error Managment}
+\chapter{Error Management}
 
 \section{Error codes}
 
@@ -10829,8 +11087,9 @@ runetobyte(Rune *r, int n, int *ip)
 
 
 %\chapter{Frame Library}
+% really Text Widget
 
-\chapter{Examples of Windowing System Applications}
+\chapter{Examples of Windowing System Applications TODO}
 
 % statusbar
 % winwatch
