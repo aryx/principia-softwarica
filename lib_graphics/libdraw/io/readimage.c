@@ -104,7 +104,7 @@ readimage(Display *d, fdt fd, bool dolock)
         if(dolock)
             lockdisplay(d);
         /*e: [[readimage()]] lock display */
-        i = allocimage(d, r, chan, 0, -1);
+        i = allocimage(d, r, chan, false, -1);
         /*s: [[readimage()]] unlock display */
         if(dolock)
             unlockdisplay(d);

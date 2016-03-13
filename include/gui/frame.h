@@ -8,7 +8,7 @@ typedef struct Frame Frame;
 /*s: enum _anon_ (include/frame.h) */
 enum{
     BACK, // Background
-    HIGH, // ??
+    HIGH, // Background highlighted text
     BORD, // Border
     TEXT, // Text
     HTEXT, // Highlited text
@@ -57,10 +57,13 @@ struct Frame
 
     ushort	nbox, nalloc;
     ushort	maxtab;		/* max size of tab, in pixels */
+
     ushort	nchars;		/* # runes in frame */
     ushort	nlines;		/* # lines with text */
+
     ushort	maxlines;	/* total # lines in frame */
     ushort	lastlinefull;	/* last line fills frame */
+
     ushort	modified;	/* changed since frselect() */
 
     Image	*tick;	/* typing tick */

@@ -669,20 +669,26 @@ static
 Xfid*
 filsysread(Filsys *fs, Xfid *x, Fid *f)
 {
-    Fcall fc;
     int o, e;
     uint clock;
     byte *b;
+    int n;
+    Fcall fc;
     /*s: [[filsysread()]] other locals */
-    int i, n, len, j, k, *ids;
-    Dirtab *d, dt;
+    int i, j, k;
+    int len;
+    int *ids;
+    Dirtab dt;
     char buf[16];
+    /*x: [[filsysread()]] other locals */
+    Dirtab *d;
     /*e: [[filsysread()]] other locals */
 
     if(!(f->qid.type & QTDIR)){
         sendp(x->c, xfidread);
         return nil;
     }
+
     // else, a directory
 
     o = x->offset;

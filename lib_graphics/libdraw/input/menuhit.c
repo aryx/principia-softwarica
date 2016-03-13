@@ -45,8 +45,8 @@ menucolors(void)
 {
     /* Main tone is greenish, with negative selection */
     back = allocimagemix(display, DPalegreen, DWhite);
-    high = allocimage(display, Rect(0,0,1,1), view->chan, 1, DDarkgreen);	/* dark green */
-    bord = allocimage(display, Rect(0,0,1,1), view->chan, 1, DMedgreen);	/* not as dark green */
+    high = allocimage(display, Rect(0,0,1,1), view->chan, true, DDarkgreen);	/* dark green */
+    bord = allocimage(display, Rect(0,0,1,1), view->chan, true, DMedgreen);	/* not as dark green */
     if(back == nil || high == nil || bord == nil)
         goto Error;
     text = display->black;
@@ -176,7 +176,7 @@ menuscrollpaint(Image *m, Rectangle scrollr, int off, int nitem, int nitemdrawn)
         r.max.y = r.min.y+2;
     border(m, r, 1, bord, ZP);
     if(menutxt == 0)
-        menutxt = allocimage(display, Rect(0, 0, 1, 1), view->chan, 1, DDarkgreen);	/* border color; BUG? */
+        menutxt = allocimage(display, Rect(0, 0, 1, 1), view->chan, true, DDarkgreen);	/* border color; BUG? */
     if(menutxt)
         draw(m, insetrect(r, 1), menutxt, nil, ZP);
 }
@@ -257,13 +257,13 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
         backup = nil;
     }else{
         b = view;
-        backup = allocimage(display, menur, view->chan, 0, -1);
+        backup = allocimage(display, menur, view->chan, false, -1);
         if(backup)
             draw(backup, menur, view, nil, menur.min);
     }
     draw(b, menur, back, nil, ZP);
     border(b, menur, Blackborder, bord, ZP);
-    save = allocimage(display, menurect(textr, 0), view->chan, 0, -1);
+    save = allocimage(display, menurect(textr, 0), view->chan, false, -1);
     r = menurect(textr, lasti);
     moveto(mc, divpt(addpt(r.min, r.max), 2));
     menupaint(b, menu, textr, off, nitemdrawn);

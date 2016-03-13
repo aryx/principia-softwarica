@@ -465,19 +465,20 @@ xfidwrite(Xfid *x)
     Window *w;
     uint qid;
     int off, cnt;
-    /*s: [[xfidwrite()]] other locals */
-    int c;
     char buf[256];
-    Conswritemesg cwm;
-    Stringpair pair;
-    Alt alts[NCW+1];
-    /*x: [[xfidwrite()]] other locals */
+    /*s: [[xfidwrite()]] other locals */
     char *p;
     Point pt;
     /*x: [[xfidwrite()]] other locals */
     Rune *r;
     int nr; // nb runes
     int nb; // nb bytes
+    /*x: [[xfidwrite()]] other locals */
+    Alt alts[NCW+1];
+    Conswritemesg cwm;
+    Stringpair pair;
+    /*x: [[xfidwrite()]] other locals */
+    int c;
     /*e: [[xfidwrite()]] other locals */
     
     w = x->f->w;
@@ -742,18 +743,15 @@ enum { WCRdata, WCRflush, NWCR };
 void
 xfidread(Xfid *x)
 {
-    Fcall fc;
     Window *w;
     uint qid;
     int off, cnt;
+    Fcall fc;
     /*s: [[xfidread()]] other locals */
-    int n, c;
-    char cbuf[30];
-    Consreadmesg cwrm;
     Alt alts[NCR+1];
-    /*x: [[xfidread()]] other locals */
     Mousereadmesg mrm;
     Mouse ms;
+    int n, c;
     /*x: [[xfidread()]] other locals */
     Consreadmesg crm;
     Channel *c1, *c2;	/* chan (tuple(char*, int)) */
@@ -763,6 +761,9 @@ xfidread(Xfid *x)
     Image *i;
     Rectangle r;
     char buf[128];
+    char cbuf[30];
+    /*x: [[xfidread()]] other locals */
+    Consreadmesg cwrm;
     /*e: [[xfidread()]] other locals */
     
     w = x->f->w;

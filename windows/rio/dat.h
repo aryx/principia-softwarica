@@ -221,8 +221,6 @@ struct Window
      * Now they're always the same but the code doesn't assume so.
     */
     Rectangle	screenr; /* screen coordinates of window */
-    /*x: [[Window]] graphics fields */
-    Frame;
     /*e: [[Window]] graphics fields */
     
     //--------------------------------------------------------------------
@@ -280,20 +278,27 @@ struct Window
     // Textual Window
     //--------------------------------------------------------------------
     /*s: [[Window]] textual window fields */
+    /*s: [[Window]] textual window fields, text data */
     // growing_array<Rune> (size = Window.maxr)
     Rune		*r;
     uint		nr;	/* number of runes in window */
     uint		maxr;	/* number of runes allocated in r */
-    /*x: [[Window]] textual window fields */
-    // index in Window.r
-    uint		qh; // output point
-    /*x: [[Window]] textual window fields */
+    /*e: [[Window]] textual window fields, text data */
+    /*s: [[Window]] textual window fields, text cursors */
     // index in Window.r
     uint		q0; // cursor, where entered text go (and selection start)
     // index in Window.r
-    uint		q1; // selection end
-    /*x: [[Window]] textual window fields */
+    uint		q1; // selection end or same value than q0 when no selection
+    /*x: [[Window]] textual window fields, text cursors */
+    // index in Window.r
+    uint		qh; // output point
+    /*e: [[Window]] textual window fields, text cursors */
+    /*s: [[Window]] textual window fields, visible text */
+    Frame;
+    /*e: [[Window]] textual window fields, visible text */
+    /*s: [[Window]] textual window fields, graphics */
     Rectangle	scrollr;
+    /*e: [[Window]] textual window fields, graphics */
     /*x: [[Window]] textual window fields */
     uint		org;
     /*e: [[Window]] textual window fields */

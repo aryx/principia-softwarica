@@ -69,6 +69,7 @@ enum
     ICOSSCALE	= 1024,
     /*e: constant ICOSSCALE */
     /*s: constant Borderwidth */
+    //coupling: must be equal to Selborder in rio
     Borderwidth =	4,
     /*e: constant Borderwidth */
 };

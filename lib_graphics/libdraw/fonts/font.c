@@ -443,7 +443,7 @@ fontresize(Font *f, int wid, int ncache, int depth)
         goto Nodisplay;
     /*e: [[fontresize()]] sanity check d */
 
-    new = allocimage(d, Rect(0, 0, ncache*wid, f->height), CHAN1(CGrey, depth), 0, 0);
+    new = allocimage(d, Rect(0, 0, ncache*wid, f->height), CHAN1(CGrey, depth), false, 0);
     /*s: [[fontresize()]] sanity check new */
     if(new == nil){
         fprint(2, "font cache resize failed: %r\n");

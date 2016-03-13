@@ -25,7 +25,7 @@ scrtemps(void)
 
     if(scrtmp)
         return;
-    h = BIG*Dy(view->r);
+    h = BIG * Dy(view->r);
     scrtmp = allocimage(display, Rect(0, 0, 32, h), view->chan, false, DWhite);
     if(scrtmp == nil)
         error("scrtemps");
@@ -80,8 +80,10 @@ wscrdraw(Window *w)
     Image *b;
 
     scrtemps();
+    /*s: [[wscrdraw()]] sanity check the window image */
     if(w->i == nil)
         error("scrdraw");
+    /*e: [[wscrdraw()]] sanity check the window image */
     r = w->scrollr;
     b = scrtmp;
     r1 = r;
@@ -97,6 +99,7 @@ wscrdraw(Window *w)
         draw(b, r2, w->cols[BACK], nil, ZP);
         r2.min.x = r2.max.x-1;
         draw(b, r2, w->cols[BORD], nil, ZP);
+
         draw(w->i, r, b, nil, Pt(0, r1.min.y));
     }
 }

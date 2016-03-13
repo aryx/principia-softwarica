@@ -431,8 +431,8 @@ initdisplay(char *dev, char *win, Errorfn error)
     qlock(&disp->qlock); // released in closedisplay (why not earlier? first API call?)
   
     // first API calls!
-    disp->white = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DWhite);
-    disp->black = allocimage(disp, Rect(0, 0, 1, 1), GREY1, 1, DBlack);
+    disp->white = allocimage(disp, Rect(0, 0, 1, 1), GREY1, true, DWhite);
+    disp->black = allocimage(disp, Rect(0, 0, 1, 1), GREY1, true, DBlack);
     /*s: [[initdisplay()]] sanity check white and black */
     if(disp->white == nil || disp->black == nil){
         free(disp->devdir);

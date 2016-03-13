@@ -119,9 +119,12 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     w->ck = ck;
     w->cctl = cctl;
     /*x: [[wmk()]] channels creation */
-    w->conswrite = chancreate(sizeof(Conswritemesg), 0);
-    w->consread =  chancreate(sizeof(Consreadmesg), 0);
     w->mouseread =  chancreate(sizeof(Mousereadmesg), 0);
+    /*x: [[wmk()]] channels creation */
+    w->consread =  chancreate(sizeof(Consreadmesg), 0);
+    /*x: [[wmk()]] channels creation */
+    w->conswrite = chancreate(sizeof(Conswritemesg), 0);
+    /*x: [[wmk()]] channels creation */
     w->wctlread =  chancreate(sizeof(Consreadmesg), 0);
     /*e: [[wmk()]] channels creation */
 
@@ -225,6 +228,7 @@ wresize(Window *w, Image *i, bool move)
 
     wborder(w, Selborder);
     w->topped = ++topped;
+
     w->resized = true;
     w->mouse.counter++;
 }
@@ -300,38 +304,40 @@ winctl(void *arg)
     Window *w = arg;
     // map<enum<Wxxx>, Alt>
     Alt alts[NWALT+1];
-    /*s: [[winctl()]] locals */
-    char buf[4*12+1]; // /dev/mouse interface
-    Rune *rp, *bp, *tp, *up;
-    uint qh;
-    int nr, initial;
-    char *s;
-    /*x: [[winctl()]] locals */
+    char buf[128]; // /dev/mouse interface
+    /*s: [[winctl()]] other locals */
     Rune *kbdr;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
     Wctlmesg wcm;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
     Mousestate *mp;
     int lastb = -1;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
     Mousereadmesg mrm;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
     Mousestate m;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
     Consreadmesg crm;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
     Stringpair pair;
     char *t;
     int nb;
     int i, c, wid;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
     char part[3]; // UTFMAX-1
     int npart = 0;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
     Conswritemesg cwm;
-    /*x: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
+    Rune *rp, *bp, *tp, *up;
+    int nr;
+    int initial;
+    uint qh;
+    /*x: [[winctl()]] other locals */
     Consreadmesg cwrm;
-    /*e: [[winctl()]] locals */
+    /*x: [[winctl()]] other locals */
+    char *s;
+    /*e: [[winctl()]] other locals */
     
     snprint(buf, sizeof buf, "winctl-id%d", w->id);
     threadsetname(buf);
@@ -457,10 +463,13 @@ winctl(void *arg)
         case WCtl:
             if(wctlmesg(w, wcm.type, wcm.r, wcm.image) == Exited){
                 /*s: [[winctl()]] Wctl case, free channels if wctlmesg is Excited */
+                chanfree(mrm.cm);
+                /*x: [[winctl()]] Wctl case, free channels if wctlmesg is Excited */
                 chanfree(crm.c1);
                 chanfree(crm.c2);
-                chanfree(mrm.cm);
+                /*x: [[winctl()]] Wctl case, free channels if wctlmesg is Excited */
                 chanfree(cwm.cw);
+                /*x: [[winctl()]] Wctl case, free channels if wctlmesg is Excited */
                 chanfree(cwrm.c1);
                 chanfree(cwrm.c2);
                 /*e: [[winctl()]] Wctl case, free channels if wctlmesg is Excited */
@@ -778,30 +787,45 @@ wkeyctl(Window *w, Rune r)
     /*s: [[wkeyctl()]] when mouse not opened and navigation keys */
     if(!w->mouseopen)
     switch(r){
+    /*s: [[wkeyctl()]] when mouse not opened, switch key cases */
+    case Khome:
+        wshow(w, 0);
+        return;
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
+    case Kend:
+        wshow(w, w->nr);
+        return;
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kdown:
-        n = w->maxlines/3;
+        n = w->maxlines / 3;
         goto case_Down;
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kscrollonedown:
         n = mousescrollsize(w->maxlines);
         if(n <= 0)
             n = 1;
         goto case_Down;
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kpgdown:
-        n = 2*w->maxlines/3;
+        n = 2 * w->maxlines / 3;
         // Fallthrough
     case_Down:
-        q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+n*w->font->height));
+        q0 = w->org +
+            frcharofpt(w, Pt(w->Frame.r.min.x, 
+                             w->Frame.r.min.y + n * w->font->height));
         wsetorigin(w, q0, true);
         return;
-
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kup:
         n = w->maxlines/3;
         goto case_Up;
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kscrolloneup:
         n = mousescrollsize(w->maxlines);
         if(n <= 0)
             n = 1;
         goto case_Up;
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kpgup:
         n = 2*w->maxlines/3;
         // Fallthrough
@@ -809,14 +833,15 @@ wkeyctl(Window *w, Rune r)
         q0 = wbacknl(w, w->org, n);
         wsetorigin(w, q0, true);
         return;
-
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kleft:
         if(w->q0 > 0){
-            q0 = w->q0-1;
+            q0 = w->q0 - 1;
             wsetselect(w, q0, q0);
             wshow(w, q0);
         }
         return;
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kright:
         if(w->q1 < w->nr){
             q1 = w->q1+1;
@@ -824,29 +849,23 @@ wkeyctl(Window *w, Rune r)
             wshow(w, q1);
         }
         return;
-
-    case Khome:
-        wshow(w, 0);
-        return;
-    case Kend:
-        wshow(w, w->nr);
-        return;
-
-    case 0x01:	/* ^A: beginning of line */
-        if(w->q0==0 || w->q0==w->qh || w->r[w->q0-1]=='\n')
-            return;
-        nb = wbswidth(w, 0x15 /* ^U */);
-        wsetselect(w, w->q0-nb, w->q0-nb);
-        wshow(w, w->q0);
-        return;
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case 0x05:	/* ^E: end of line */
         q0 = w->q0;
-        while(q0 < w->nr && w->r[q0]!='\n')
+        while(q0 < w->nr && w->r[q0] != '\n')
             q0++;
         wsetselect(w, q0, q0);
         wshow(w, w->q0);
         return;
-
+    /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
+    case 0x01:	/* ^A: beginning of line */
+        if(w->q0==0 || w->q0 == w->qh || w->r[w->q0 - 1]=='\n')
+            return;
+        nb = wbswidth(w, 0x15 /* ^U */);
+        wsetselect(w, w->q0 - nb, w->q0 - nb);
+        wshow(w, w->q0);
+        return;
+    /*e: [[wkeyctl()]] when mouse not opened, switch key cases */
     default:
         ; // no return! fallthrough
     }
@@ -1906,8 +1925,9 @@ wshow(Window *w, uint q0)
     qe = w->org + w->nchars;
     if(w->org <= q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
         wscrdraw(w);
+    /*s: [[wshow()]] else, when q0 is out of scope */
     else{
-        nl = 4*w->maxlines/5;
+        nl = 4 * w->maxlines / 5;
         q = wbacknl(w, q0, nl);
         /* avoid going backwards if trying to go forwards - long lines! */
         if(!(q0 > w->org && q < w->org))
@@ -1915,6 +1935,7 @@ wshow(Window *w, uint q0)
         while(q0 > w->org + w->nchars)
             wsetorigin(w, w->org+1, false);
     }
+    /*e: [[wshow()]] else, when q0 is out of scope */
 }
 /*e: function wshow */
 
@@ -1981,6 +2002,7 @@ wsetselect(Window *w, uint q0, uint q1)
         p1 = w->nchars;
     if(p0==w->p0 && p1==w->p1)
         return;
+
     /* screen disagrees with desired selection */
     if(w->p1<=p0 || p1<=w->p0 || p0==p1 || w->p1==w->p0){
         /* no overlap or too easy to bother trying */
@@ -2018,7 +2040,8 @@ winsert(Window *w, Rune *r, int n, uint q0)
 
     if(n == 0)
         return q0;
-    if(w->nr+n > HiWater && q0>=w->org && q0>=w->qh){
+    /*s: [[winsert()]] if size of rune array is getting really big */
+    if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
         m = min(HiWater-LoWater, min(w->org, w->qh));
         w->org -= m;
         w->qh -= m;
@@ -2034,6 +2057,8 @@ winsert(Window *w, Rune *r, int n, uint q0)
         runemove(w->r, w->r+m, w->nr);
         q0 -= m;
     }
+    /*e: [[winsert()]] if size of rune array is getting really big */
+    /*s: [[winsert()]] grow rune array if reach maxr */
     if(w->nr+n > w->maxr){
         /*
          * Minimize realloc breakage:
@@ -2049,22 +2074,28 @@ winsert(Window *w, Rune *r, int n, uint q0)
             w->maxr = m;
         }
     }
+    /*e: [[winsert()]] grow rune array if reach maxr */
 
+    // move to the right the runes after the cursor q0 to make some space
     runemove(w->r + q0 + n, w->r + q0, w->nr - q0);
+    // fill the space
     runemove(w->r + q0, r, n);
     w->nr += n;
 
     /* if output touches, advance selection, not qh; works best for keyboard and output */
+    if(q0 <= w->q0)
+        w->q0 += n; // move the q0 cursor
     if(q0 <= w->q1)
         w->q1 += n;
-    if(q0 <= w->q0)
-        w->q0 += n;
     if(q0 < w->qh)
         w->qh += n;
+
+    /*s: [[winsert()]] update visible text */
     if(q0 < w->org)
         w->org += n;
     else if(q0 <= w->org + w->nchars)
-        frinsert(w, r, r+n, q0 - w->org);
+        frinsert(w, r, r+n, q0 - w->org); // echo back
+    /*e: [[winsert()]] update visible text */
     return q0;
 }
 /*e: function winsert */
@@ -2100,7 +2131,7 @@ wfill(Window *w)
             }
         }
         frinsert(w, rp, rp+i, w->nchars);
-    }while(w->lastlinefull == false);
+    } while(w->lastlinefull == false);
     free(rp);
 }
 /*e: function wfill */
