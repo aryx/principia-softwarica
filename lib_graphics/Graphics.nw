@@ -13,11 +13,11 @@
 
 %thx to LP, changed for the better a few things:
 % - removed deadcode (Displaybufsize, drawbuf/ndrawbuf, Display.dataqid,
-%    Display.isnew, Memdata.imref, convxx[], fillxxx(), mkfont(),
+%    Display.isnew (many stuff), Memdata.imref, convxx[], fillxxx(), mkfont(),
 %    openmemsubfont(), stringsubfont(), ... 
 %    and more, see the %dead in this file
-% - screen.h cleaner interface
-% - renamed some globals (screen -> view, _screen -> screen)
+% - screen.h cleaner interface (taking as inspiration the raspberry plan9 code)
+% - renamed some globals (screen -> view, _screen -> screen) TODO desktop?
 %   TODO gscreen, screenimage, vgascr, so easier to see associated part
 %   TODO or merge globals (screenimage and gscreen, can?)
 % - TODO transformed globals in locals (softscreen)
@@ -32,25 +32,26 @@
 %   relevant file (or even function), better cluster the code
 %   (harder to understand non functional code using lots of globals)
 
-%thx to this manual, better understand svgalib? tronscroll:) mode X? cairo?:
+%thx to this manual, better understand:
 %  - graphics terminology, I didn't take Image option at INSA
-%  - raster vs vector graphics, discrete pixels vs continuous geometry shape
+%  - raster vs vector graphics, discrete pixels vs continuous geometry shapes
 %  - channels are the size spec for the different pixel components
 %    and the source of many pixel formats
-%  - alpha channel is a way to encode transparency strenght for compositing
+%  - alpha channel is a way to encode transparency strength for compositing
 %    operations
-%  - clipping is to restrict operations on a rectangle, essential
+%  - clipping is to restrict operations on a rectangle
 %  - tiling is replicating a simple pattern repeatidely
 %  - antialiasing is just a simple way to remove effect d'escalier by setting
 %    the lightness of a pixel to be function of its distance to the ideal point
 %  - scanline algorithm for polygons (subtle)
-%  - TODO bezier (could be useful for edge bunding visual)
+%  - TODO bezier (could be useful for edge bundling visual in codemap)
 %    that they are the essence of vectoriel fonts?
 %  - TODO understand freshrate, double buffer, vertical sync, flickering,
 %    refresh sync
 %  - SEMI need for painting-like algorithm for windows, as they overlap and
 %    have stuff in front and back, or a more optimized variant where
 %    use save image and tricky RECURS
+%  - svgalib? tronscroll:) mode X? cairo?:
 
 
 %history LP-ization:
@@ -128,7 +129,7 @@ Yoann Padioleau\\
 with code from\\
 Rob Pike and Russ Cox
 }
-% really?
+% Looks like Pike did Blit a long time ago and Russ added support for colors
 
 \maketitle 
 
@@ -156,54 +157,104 @@ a {graphics system}.
 
 \section{Motivations}
 
-Why a graphics system? Because we think you are a better programmer if
+Why a graphics system? 
+Because we think you are a better programmer if
 you fully understand how things work under the hood, and
 with so many fancy graphics on your screen, there are plenty
 of things happening under the hood to be understood.
 
-% Part hardware/software too. Actually more and more done by
-% hardware. 3d. But here only 2d and in software mostly.
-% Drawing API essentially. But also need mediate shared resource,
-% screen, in kernel. 
-% (Actually good if also networked, like X11)
+
+A {graphics system} provides essentially a {drawing API} (lines, 
+rectangles, text, etc) to the programmer.
+It also mediates access to a shared resource: the {screen}.
+\n could be in principles section, but better define now as GS is a bit vague
+%
+It is usually implemented by a combination of hardware and software.
+In fact, modern graphics systems rely more and more on specialized
+hardware, especially for {3D operations}.
+%
+In this book though we will cover only {2D operations}, implemented mostly
+in software. We will assume very little from the graphics hardware.
+\n a framebuffer, see also VGA appendix
+
+
+Even though 2D operations are usually covered very quickly
+in books about computer graphics, e.g.~\cite{cgpp-foley}
+where the focus is more on 3D and advanced rendering techniques,
+the result of simple 2D operations is what most people see
+on their screen.
+%
+Indeed, drawing lines, rectangles, or text
+are the primitives used by most graphical applications
+and the basis of even the {windowing systems} themselves,
+(e.g. Microsoft Windows, MacOS or X Window).
+%
+In fact, we will describe in the \book{Windows}
+the \plan windowing system which relies
+on many of the functions described in this book.
+
 
 Here are a few questions we hope this book will answer:
 \begin{itemize}
-\item How graphical elements such as  rectangles, lines, circles, or arcs, are
-rendered on the screen? How the graphics card helps? How
-the kernel helps? 
 
 \item Which low-level instructions allow to modify the screen?
+\n can relate to Assembler.nw
 
 \item How the picture on the screen is represented in the machine?
 What is a framebuffer?
 
-\item What are the algorithms to draw arbitrary lines
-(e.g. non-vertical and non-horizontal lines)
-on a rectangular aligned set of pixels (the screen)?
-% or polygons
+\item How the kernel and graphics system provides and protects access to 
+the screen?
 
-\item How pictures are represented in memory? How they
-are stored on the disk? What is the format of a JPG file?
+\item How pictures are represented in memory? 
+How are they stored on the disk? 
+What is the format of a JPG file?
+\n actually we will see related one, creadimage
+
+\item How graphical elements such as 
+rectangles, 
+lines, 
+or circles,
+are rendered on the screen? 
+How the graphics card helps? 
+
+\item What is the algorithm to draw arbitrary lines
+(e.g. non-vertical and non-horizontal lines)
+on a rectangular grid of pixels (the screen)?
+\n actually we will see fillpolygon
 
 \item What is the alpha channel?
 
 \item What is rasterization? What are vector graphics?
 
 \item How characters are drawn on the screen? 
-How fonts are managed? What are truetype fonts? 
+How fonts are managed? 
+What are TrueType fonts? 
+\n in fact not implemented by /dev/draw
 
 \item What is anti-aliasing?
+\n in fact not implemented by /dev/draw
 
 \item How is the mouse cursor handled?
 
 \end{itemize}
-\l how cooperate with windowing system?
 \l how implement overlapping windows? 
+\l how cooperate with windowing system?
+
+
+%tags used in this file for different recurring themes:
+ % 
+ %real-world: to relate to other graphics systems
+ %alt: alternative techniques
+ %ocaml: to give a hint on how rewriting C in OCaml could improve things
+ %old: for original code I changed to be clearer
+ %pad: for code I introduced to be clearer
+ %dead: dead code removed
+ %toc: %trans: %dup: %example: %chunks:
 
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
 %data-structures:
-% - double linked lists (windows in Screen.frontmost)
+% - double linked lists (Screen.frontmost and Screen.rearmost)
 % - growing array (Kdraw.clients, Font.subf, ...)
 % - growing hashtable with buckets inline in array (Font.cache)
 %   and lookup small window when hash conflict (jordan/julien did that
@@ -212,42 +263,78 @@ How fonts are managed? What are truetype fonts?
 % - moveable shared area with backward pointer to intermediate wrapper
 
 %algorithms:
-% - bitblt
+% - bitblt()
 % - fill polygon, quite complex
-% - ellipses, arcs, bezier
+% - ellipses, arcs
+% - bezier
 % - layerop, overlapping windows with save and interception and RECURS
 
 \section{\plan{} [[/dev/draw/]]}
 
-We will explain in this book the code of the \plan graphics
-system, visible to the user through its [[/dev/draw/]] {device directory}.
-% Graphics related to mouse, so will see also code for
-%and also partially through the [[/dev/mouse]] and [[/dev/cons]] {device files}.
+We will explain in this book the code of the \plan graphics system,
+visible to the user primarily through the [[/dev/draw/]] {device directory}
+\footnote{\url{http://plan9.bell-labs.com/magic/man2html/3/draw}},
+and to the programmer mostly through the [[draw.h]] header file.
+%
+Because graphical applications are usually manipulated with a {mouse},
+we will cover also code related to the [[/dev/mouse]] {device file}
+(and [[mouse.h]] header file).
+\n also a bit [[/dev/cons]] and [[/dev/cursor]]
+%
+In total, the \plan graphics system, which from now on we will 
+call just [[draw]], is made of 23 300 lines of code (LOC),
+including a few device drivers. It is written entirely in C.
+\l part library, part kernel, part drivers. 
+\n LOC includes some tests and apps.
 
-% LOC?
-% 2d Graphics library.
-% visible to programmer mostly through include/draw.h
 
-% It actually provides some forms of windows managment (overlapping windows
-% with backing store), and even menus (but rio is more complete).
-% It can also be remote like X11! for free! can draw through the network, and
-% so have graphical application running on one machine but displaying
-% result on your (powerful! like browser! and web app!)
+%dup: from Assembler.nw
+Like for most books in \principia, we chose a \plan software because
+they are simple, small, elegant, open source, and they form together
+a coherent set of software.
+%
+The ancestor of [[draw]], the Blit~\cite{blit},
+created also by Rob Pike, was actually one of the first 
+graphics system back in 1982. It was created even before the Macintosh,
+Microsoft Windows, and X Window.
+\n comment shows the lineage and dates
+% Alto -> Blit (a cheap Alto, Xerox vs Bell Labs) -> ... /dev/draw (1990?)
+%  79  |> Lisa (1983) -> Macintosh (1984) -> Microsoft Windows (1985) -> ...
+%      |> X Window (1984) (or comes from MIT Lisp Machine?)
 
-% screenshot?
 
-% bad stuff of draw though: most of the code is in the kernel :(
+Note that because [[draw]] services are accessible through a filesystem
+(in [[/dev/draw/]]), and because filesystems can be exported through
+the network in \plan, [[draw]] is actually also a 
+{networked graphics system}, just like X Window.
+%
+Thus, in \plan, applications running on one machine
+can even display their results on another machine.
+\l powerful! like browser! remote for free
+
+
+As opposed to X Window, in \plan the graphics system ([[draw]])
+and windowing system (called [[rio]])
+are clearly separated. One can even use graphical applications
+without a windowing system running.
+%
+[[draw]] provides some forms of {windows managment} by giving the ability
+for applications to create {overlapping windows}, but
+\l and backing store, and menus
+this is only one of the building block necessary to get
+a windowing system.
+The code of the \plan windowing system [[rio]] will be explained
+in another book (the \book{Windows}).
+
+\l bad stuff of draw though: most of the code is in the kernel :(
 % but lots of stuff can be in library and can be tested outside
 % (see memdrawtest), but still a bit ugly. The images, fonts,
 % reside in special kernel memory (imagmem).
+% Note that putting stuff in kernel is trendy with Xorg/wayland and Linux
 
+\l just 2D, no 3D, mostly in software, almost no hardware acceleration, no GPU
 
-% actually almost one of the first graphics system!
-% Alto -> Blit (a cheap Alto) -> ... /dev/draw
-%      |> Macintosh -> Microsoft Window -> ...
-%      |> X11 (or comes from MIT Lisp Machine?)
-
-% Xerox vs Bell Labs !
+\n there is also a draw in plan9port written by Russ Cox
 
 \section{Other graphics systems}
 
@@ -255,99 +342,152 @@ Here are a few graphics systems that were considered for this book
 but which were ultimately discarded:
 \begin{itemize}
 
-\item gks
-% the seminal one? but present in any real system?
-% or was it bitblt and the blit machine?
+\item Xorg~\furl{http://www.x.org} is the most popular open source
+implementation of the X Window System,
+a graphics system (and windowing system) designed in the 1980's.
+It is used by most Linux distributions and has even been ported
+to other operating systems such as MacOS and Microsoft Windows.
+%
+X Window defines a protocol (X11) for
+a networked client/server architecture. Clients using
+a set of libraries (e.g. Xlib) can communicate with
+a {display server} (e.g. [[Xorg]]) to render graphics.
+\n actually similar archi in plan9, but shorter!
+\n now XCB seems to be preferred to Xlib, cairo has backends for Xlib and XCB
+%
+Xorg is very complete, with support for many graphics card
+(with hardware acceleration), many extensions (e.g. 3D operations), 
+and many operating systems.
+It is very large though with more than 1M LOC,
+\n just xserver/{dix/,fb/,mi/} is about 70 000 LOC
+even when counting just the code of the display server, a few core libraries, 
+and a few device drivers.
+\l known to be hard to understand, many tutorials on the web
+\l "why X11 is so big" by Ken Thompson, partly the motivation for plan9
 
-% OO graphics, from GKS and PHIGS to OO systems
-%https://books.google.com/books?id=KUWqCAAAQBAJ
+X Window was designed at a time where memory was 
+very limited and remote applications were looked as very important.
+This is not true anymore
+but this historical baggage means that even the code of simple applications
+such as a graphical hello world~\cite{x11-hello-world} is
+actually very long and quite complicated to write.
+\l compare size of draw.h with size of any X11 header ... (or cairo, or pixman)
+%
+Some {toolkits} such as GTK or Qt
+\l Xaw, Xt, FLTK, WxWindows, ...
+have been created to simplify things
+but they add another layer on something that is already complicated.
+%
+Finally, the graphics and windowing system parts of Xorg 
+are strongly coupled which makes
+the whole system more complex to understand than [[draw]]
+and [[rio]] which can been studied separately.
 
-\item SRGP (Simple Raster Graphics Package)
-% used in second edition of CGPP book. But actual reference implementation?
-%  or implemented by calling Xlib, Quickdraw, etc?
-% (SGP discussed in the first edition of cgpp book
-%  and based on siggraph core 1979 standard)
-% SPHIGS was for 3d (Simple PHIGS, where PHIGS was a precursor of openGL)
-% 3rd edition use WPF, argh, and apparently does not discuss old style
-%  scanline algorithms.
+\l Another approach, Wayland, but long time before ready? and also
+\l  a pile of layers with the kernel, soft archi diagrams looks complicated
+\l  also Linux graphic archi is now super complicated 
+\l  and also just a buffer compositor, it assumes clients use cairo or openGL
+% (DRM, GEM, KMS, DRI, etc)
+%http://blog.mecheye.net/2012/06/the-linux-graphics-stack/
 
-\item Postscript
-% maybe every drawing APIs after took Postscript as a model?
-% with idea of Context?
 
-\item X11/Xlib
-% remote, so cool, bug very very big
-% rely also on libpixman now, they factorized code with cairo
-% "why X11 is so big" by Ken Thompson, partly the motivation for plan9
-% "A simple X11 Client Prgram or Hoa hard it can really be to write
-%  hello world" = David Rosenthal
-% X11 is multiple things at the same time, graphics system and windowing
-% system (but not window manager), but in plan9 this is decoupled.
+\item Cairo~\furl{http://cairographics.org/} is a 2D
+graphics library used in many applications, e.g. Firefox.
+It is not a complete graphics system though as it relies on
+a ``backend'' for the final display.
+%
+It is fairly large, 235 KLOC (350 KLOC with the tests and benchmark code),
+but supports many drawing primitives
+and many backends, e.g. X Window via Xlib, MacOS via Quartz, etc.
+\l can leverage hardware acceleration e.g. XRender
+\l win32, opengl, directFB, DRM, even now SKIA
+It can also generate directly graphic documents with backends for
+Postscript, PDF, SVG, PNG, etc.
+%
+All drawing operations are expressed in float coordinates, not pixels,
+\l also pen-based drawing model
+and can be transformed by any affine transformation
+(rotation, scaling, translation).
+\l openGL has also that (/dev/draw nope but could have higher-level lib with it)
 
-\item OpenGL
-% mostly 3d! can do also 2d. gouraud, shading, textures, 3d rasterizer, etc.
+\l maybe API simpler than the one of plan9. I get confused with the 
+\l complex parameters of draw(), the rectangles and point and clipping.
+
+\l toy text API, Pango, freetype? fontconfig? size?
+\n nice is cairo/BIBLIOGRAPHY file
+
+Note that both Cairo and Xorg rely on the Pixman 
+library~\furl{http://www.pixman.org/}
+for low-level pixel manipulation and compositing. 
+This library adds another 50 KLOC.
+
+
+\item Skia~\furl{https://skia.org/} is a 2D graphics library
+developed by Google similar to Cairo.
+\n written in C plus plus
+It is the graphics engine used notably in Android and Chrome.
+It is also very large: 485 KLOC without the tests.
+\l anti-aliasing, subpixel text, shaders, ... gpu/ is big
+\n http://www.slideshare.net/SamsungOSG/duel-of-two-libraries-cairo-skia (ok)
+
+
+\item Mesa~\furl{http://www.mesa3d.org/} is a 3D graphics library
+implementing the OpenGL specification, a standard API for rendering 2D
+and 3D vector graphics. Mesa contains a few software-based
+renderers as well as drivers for many graphics cards.
+It is very large though with more than 1.6 MLOC.
+% mostly 3d! can do also 2d. % but we are more interested in 2D. 
+\l gouraud, shading, textures, 3d rasterizer, etc.
+\l not good story for text
+\l opengl and glut. the menuhit function is kinda related to glut.
+
 %not much key/mouse/menu thing, like here actually
-% tinyGL of bellard (openGL in software).
-% Mesa? (openGL also in software no?)
-%recent: vulkan, just got out, but looks far more low-level
+%related: tinyGL of bellard (openGL in software), LOC?
 
-\item Cairo
-% 2d graphics lib with support for many output "devices",
-% xwindow, quartz, win32, image buffer, pdf, postscript, svg, opengl, directFB.
-% used in firefox
-% can leverage hardware acceleration.
-% operations similar to drawing operators of postscript and pdf
-% from readme:
-%  Operations in cairo include stroking and filling
-%  cubic BÃ©zier splines, transforming and compositing translucent images,
-%  and antialiased text rendering. All drawing operations can be
-%  transformed by any affine transformation (scale, rotation, shear,
-%  etc.).
-% 350 K with tests
-% rely on libpixman for pixel stuff, channels, move, etc.
-
-% maybe API simpler than the one of plan9. I get confused with the 
-% complex parameters of draw(), the rectangles and point and clipping.
-
-% cairo also handle affine transformation, scaling, rotate, etc a la OpenGL.
-% /dev/draw does not (but could make higher-level lib that does).
-
-\item skia
-% used in android and chrome
-
-
-\item NX graphics
-% nuttx has some graphic and windowing stack apparently too!
-%http://nuttx.org/doku.php?id=documentation:nxgraphics
 
 \end{itemize}
+\n there is a literate award winning book about rendering http://www.pbrt.org/
 
+\l lots of other graphics systems, see the comment in the .nw
 %#industry:
-% - WPF (Windows Presentation Framework?), used by 3rd ed of CGPP book. sad.
-% - CoreGraphics (and before QuickDraw)
-% - Quartz, relate to macos expose? advanced graphics there
-% - Flash
+% - GDI, WPF (Windows Presentation Framework?), Direct2D (lots of optis)
+%   (WPF used by 3rd ed of CGPP book which doesn't even discuss scanline algo)
+% - CoreGraphics (and before QuickDraw), Quartz 2D,
+% - Display Postscript, used by NeXT, ancestor of Quartz probably.
+%   seminal one? originated in printing. Every drawing APIs took Postscript
+%   as a model? with idea of Context?
+% - PDF, Flash (adobe did lots of stuff on graphics), SVG, Canvas, ...
 %history:
-% - Xerox Alto! first bitmap, bitblt, started in 1973
-% - Lisp Machine?
-% - Blit
-% - Smalltalk
-% - X
+% - Xerox Alto! first bitmap display, bitblt, started in 1973 (-> Smalltalk)
+% - Lisp Machine (->? W Window -> X Window)
+% - Blit (-> rio)
+%education:
+% - GKS, first graphics standard. But not present in any current system.
+%   "OO graphics, from GKS and PHIGS to OO systems"
+%   https://books.google.com/books?id=KUWqCAAAQBAJ
+% - SRGP (Simple Raster Graphics Package)
+%   used in second edition of CGPP book. But actual reference implementation?
+%   Seems implemented by some by calling Xlib, Quickdraw, etc.
+%   SGP discussed in the first edition of cgpp book
+%   and based on siggraph core 1979 standard.
+%   SPHIGS was for 3d (Simple PHIGS, where PHIGS was a precursor of openGL).
 %mini:
 % - mini X
-% - nano X (was microwindows)
+% - nano X (was microwindows, started as a fork of mini X)
 %other:
-% - PDF, SVG, canvas, ... 
-% - opengl and glut. the menuhit function is kinda related to glut.
-% - wayland, mir
+% - nuttx, NX graphics
+%   nuttx has some graphic and windowing stack apparently too!
+%   http://nuttx.org/doku.php?id=documentation:nxgraphics
+% - wayland, mir, apparently the futur of graphics stack on Linux
 % - http://www.helenos.org/doc/theses/pk-thesis.pdf
 %wrappers:
 % - SDL, SFML, Allegro, Clanlib
 % - ocamlgraphics (cleaner/portable interface on top of X11 or windows graphics)
 %oldies:
 % - svgalib
-%#research:
+%#research/recent:
 %  - Nile/Gezira DSL from vpri
+%  - vulkan, just got out, but looks far more low-level
 
 %advanced:
 % http://www.adriancourreges.com/blog/2015/11/02/gta-v-graphics-study/
@@ -356,15 +496,55 @@ but which were ultimately discarded:
 
 
 \section{Getting started}
-% x86
-\n no rio yet, really getting started so minimal!
+\n no rio; minimal "getting started"!
 
-% install driver command? #vga?
-% install devdraw #i
+To play with [[draw]] you will first need to install
+the \plan fork used in \principia. See \urlinstall.
+Once installed, you can test [[draw]] under \plan with:
 
-% compile and test toy graphical app /tests/draw/ ?
+\begin{verbatim}
+1   $ bind -a '#v' /dev
+2   $ vga -l 640x480x8 
+# screen should change layout
+3   $ bind -a '#i' /dev
+4   $ cd /tests/draw
+5   $ 8c hellodraw.c
+6   $ 8l hellodraw.8 -o hellowdraw
+7   $ ./hellodraw
+\end{verbatim}
+% x86 for vga part
 
-% FIGURE screenshot
+You should then see the graphics in Figure~\ref{fig:hellodraw}.
+
+\begin{figure}\begin{center}
+\includegraphics[width=10cm]{hellodraw}
+\end{center}
+\caption{[[hellodraw]] screenshot}
+\label{fig:hellodraw}
+\end{figure}
+
+The command in Line~1 installs the VGA {device driver}
+and exports the VGA {device files} in [[/dev/]], e.g.
+[[/dev/vgactl]].
+See the \book{Kernel} for more information on how device
+drivers work.
+%
+Line~2 runs the program [[vga]] which internally uses
+the [[/dev/vgactl]] device file to instruct the graphic card
+to change the {resolution} to 640 by 480 with 8 bits
+per pixel. This will change the layout of the screen
+but you will still be in a terminal mode.
+%
+Line~3 then installs the [[draw]] device and
+export the [[draw]] devices files in [[/dev]], e.g.
+[[/dev/draw/new]].
+%
+Line~5 and 6 compiles and links the simple
+C program [[hellodraw.c]] which uses functions from [[draw.h]].
+%
+Finally Line~7 executes the program which will internally
+use files under [[dev/draw/]] to create the graphics
+shown in Figure~\ref{fig:hellodraw}.
 
 
 \section{Requirements}
@@ -390,9 +570,9 @@ but which were ultimately discarded:
 
 %advanced: more for later chapters
 % font(6)
-% window(2) 
 % mouse(3)
-%note that CGPP talks also about windowing system I think.
+% window(2) 
+%(note that CGPP talks also about windowing system I think.)
 
 % lib_graphics/docs/blit.pdf, lib_graphics/docs/pike-bitmap.ps
 % plan9-in-technicolor.ps? meh.
@@ -413,9 +593,10 @@ The prose is mine and is licensed under the \license.
 
 \section{Acknowledgments}
 
-I would like to acknowledge of course \plan's authors who wrote
-most of this book: Rob Pike, Russ Cox, and many other people
-from Bell Labs.
+I would like to acknowledge of course the authors of [[draw]],
+Rob Pike and Russ Cox, 
+who wrote in some sense most of this book.
+
 
 
 
@@ -426,6 +607,9 @@ from Bell Labs.
 
 \section{Graphics system principles}
 %https://en.wikipedia.org/wiki/Computer_graphics
+
+% FIGURE a screenshot where can see graphic elements?
+% genre Facebook page? rectangles, gradiant, circles, images
 
 % pike84bitbltd.pdf intro is pretty good to describe early history
 % of graphics, rational for things.
@@ -478,10 +662,10 @@ from Bell Labs.
 % - physical rendering
 % - GPU
 
-\subsection{Raster graphics (Frame buffer, pixels, bitmaps)}
+\subsection{Raster graphics (pixels)}
 %https://en.wikipedia.org/wiki/Raster_graphics
 
-% frame buffer, pixels, bitmaps, discrete, digital
+% frame buffer, pixels (picture elements), bitmaps, discrete, digital
 
 
 % raster mean?
@@ -534,7 +718,7 @@ from Bell Labs.
 %implementation allows you to read and write files can already do a lot
 %of things (including GUIs, IPC and so on).
 
-\section{A toy graphical application}
+\section{[[hellodraw.c]]}
 
 % API more convenient that direct IO and protocol.
 
@@ -567,6 +751,8 @@ from Bell Labs.
 
 
 \section{Code organization}
+
+\l part library, part kernel, part drivers
 
 % user code usually just have to do
 % #include <draw.h>
@@ -781,6 +967,12 @@ from Bell Labs.
 
 \section{Software architecture}
 
+The \plan graphics system is visible to the programmer mostly through
+the [[draw.h]] header filer. This file contains the main data structures
+and functions to draw different shapes (lines, rectangles, text) on
+the screen.
+
+
 % Memdraw is core algo. Used by kernel. Wrapped by kernel
 % in some Dxxx (e.g. DImage). Memlayer is overlay on memdraw
 % to handle overlapping windows and backstore. Kernel use memdraw. 
@@ -904,7 +1096,9 @@ from Bell Labs.
 \chapter{Core Data Structures}
 
 Below are the most important data structures of [[draw.h]].
-% Also their pending DS in the kernel!
+% For many structures, e.g. Display, we will also show
+% pending DS in the kernel, e.g. Client.
+
 % many important globals are in libdraw/init.c
 
 % hmm, lots of DS to present.
@@ -4388,6 +4582,8 @@ drawmesg(Client *client, void *av, int n)
 % The initial display->image is actually allocated for you
 % (got a first image allocated for you when open draw device, 'screen/view')
 % But how allocate new one? temporary canvas to draw on.
+
+% see Image IO later, individual pixels! raster images.
 
 \section{Allocation}
 
@@ -12974,8 +13170,8 @@ Err1:
 
 
 
-\chapter{Windows}
-% overlapping windows
+\chapter{Overlapping Windows}
+% aka layers
 
 % See window(2)! have even nice examples at the end.
 
@@ -26805,6 +27001,8 @@ icossin2(int x, int y, int *cosp, int *sinp)
 \label{sec:glossary}
 
 \begin{verbatim}
+API = Application Programming Interface
+LOC = Lines Of Code 
 \end{verbatim}
 
 \chapter*{Indexes}
