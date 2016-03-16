@@ -519,12 +519,12 @@ echo(char *buf, int n)
             switch(*p){
 
            /*s: [[echo()]] special key C-p */
-                   case 0x10:  /* ^P */
-                       if(cpuserver && !kbd.ctlpoff){
-                           active.exiting = true;
-                           return;
-                       }
-                       break;
+           case 0x10:  /* ^P */
+               if(cpuserver && !kbd.ctlpoff){
+                   active.exiting = true;
+                   return;
+               }
+               break;
            /*e: [[echo()]] special key C-p */
  
             case 0x14:  /* ^T */
@@ -1104,11 +1104,11 @@ conswrite(Chan *c, void *va, long n, vlong off)
                 kbd.raw = false;
             }
             /*s: [[conswrite()]] Qconsctl other ifs */
-                        else if(strncmp(a, "ctlpon", 6) == 0){
-                            kbd.ctlpoff = false;
-                        } else if(strncmp(a, "ctlpoff", 7) == 0){
-                            kbd.ctlpoff = true;
-                        }
+            else if(strncmp(a, "ctlpon", 6) == 0){
+                kbd.ctlpoff = false;
+            } else if(strncmp(a, "ctlpoff", 7) == 0){
+                kbd.ctlpoff = true;
+            }
             /*e: [[conswrite()]] Qconsctl other ifs */
             if(a = strchr(a, ' '))
                 a++;

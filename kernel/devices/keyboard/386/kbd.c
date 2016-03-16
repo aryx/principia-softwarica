@@ -506,9 +506,9 @@ kbdputsc(byte k, int external)
      */
     if(!(c & (Spec|KF))){
         /*s: [[kbdputsc()]] reboot if ctl-alt-del(x86) */
-                if(kbscan->ctl)
-                    if(kbscan->alt && c == Del) // Ctl-Alt-Del
-                        exit(0);
+        if(kbscan->ctl)
+            if(kbscan->alt && c == Del) // Ctl-Alt-Del
+                exit(0);
         /*e: [[kbdputsc()]] reboot if ctl-alt-del(x86) */
         /*s: [[kbdputsc()]] if collecting(x86) */
         if(kbscan->collecting){

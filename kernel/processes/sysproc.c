@@ -551,7 +551,7 @@ sysexec(ulong* arg)
     /*e: [[sysexec()]] adjust data segment s for demand loading on tc */
 
     /* BSS. Zero fill on demand */
-    up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT);
+    up->seg[BSEG] = newseg(SG_BSS, d, (b-d)>>PGSHIFT); // 0 fill! see fixfault
 
     /*
      * Move the stack

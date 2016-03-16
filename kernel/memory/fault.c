@@ -116,7 +116,7 @@ fixfault(Segment *s, virt_addr addr, bool read, bool doputmmu)
     case SG_SHARED:         /* Zero fill on demand */
     case SG_STACK:
         if(*pte == nil) {
-            new = newpage(true, &s, addr);
+            new = newpage(true, &s, addr); // true so clear! zeroed BSS & heap!
             if(s == nil) //?? when can be nil at exit?
                 return -1;
             *pte = new;
