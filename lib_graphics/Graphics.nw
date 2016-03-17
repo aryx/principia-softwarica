@@ -35,6 +35,7 @@
 %thx to this manual, better understand:
 %  - graphics terminology, I didn't take Image option at INSA
 %  - raster vs vector graphics, discrete pixels vs continuous geometry shapes
+%  - bitblt(), which I often heard but never really understood what it was
 %  - channels are the size spec for the different pixel components
 %    and the source of many pixel formats
 %  - alpha channel is a way to encode transparency strength for compositing
@@ -174,7 +175,7 @@ In fact, modern graphics systems rely more and more on specialized
 hardware, especially for {3D operations}.
 %
 In this book though we will cover only {2D operations}, implemented mostly
-in software. We will assume very little from the graphics hardware.
+in software. We will actually assume very little from the graphics hardware.
 \n a framebuffer, see also VGA appendix
 
 
@@ -186,7 +187,7 @@ on their screen.
 %
 Indeed, drawing lines, rectangles, or text
 are the primitives used by most graphical applications
-and the basis of even the {windowing systems} themselves,
+and the basis of even the {windowing systems} themselves
 (e.g. Microsoft Windows, MacOS or X Window).
 %
 In fact, we will describe in the \book{Windows}
@@ -225,7 +226,7 @@ on a rectangular grid of pixels (the screen)?
 
 \item What is the alpha channel?
 
-\item What is rasterization? What are vector graphics?
+\item What is the rasterization process? What are vector graphics?
 
 \item How characters are drawn on the screen? 
 How fonts are managed? 
@@ -269,7 +270,7 @@ What are TrueType fonts?
 % - bezier
 % - layerop, overlapping windows with save and interception and RECURS
 
-\section{\plan{} [[/dev/draw/]]}
+\section{The \plan{} graphics system,  [[/dev/draw/]]}
 
 We will explain in this book the code of the \plan graphics system,
 visible to the user primarily through the [[/dev/draw/]] {device directory}
@@ -358,7 +359,7 @@ a {display server} (e.g. [[Xorg]]) to render graphics.
 Xorg is very complete, with support for many graphics card
 (with hardware acceleration), many extensions (e.g. 3D operations), 
 and many operating systems.
-It is very large though with more than 1M LOC,
+It is very large though with more than 1 MLOC,
 \n just xserver/{dix/,fb/,mi/} is about 70 000 LOC
 even when counting just the code of the display server, a few core libraries, 
 and a few device drivers.
@@ -376,7 +377,8 @@ actually very long and quite complicated to write.
 Some {toolkits} such as GTK or Qt
 \l Xaw, Xt, FLTK, WxWindows, ...
 have been created to simplify things
-but they add another layer on something that is already complicated.
+but they add another layer of complexity on something that 
+is already very complicated.
 %
 Finally, the graphics and windowing system parts of Xorg 
 are strongly coupled which makes
@@ -387,9 +389,13 @@ and [[rio]] which can been studied separately.
 \l  a pile of layers with the kernel, soft archi diagrams looks complicated
 \l  also Linux graphic archi is now super complicated 
 \l  and also just a buffer compositor, it assumes clients use cairo or openGL
+\l  it just composes a set of pixmaps
 % (DRM, GEM, KMS, DRI, etc)
 %http://blog.mecheye.net/2012/06/the-linux-graphics-stack/
+%http://blogs.igalia.com/itoral/2014/07/29/a-brief-introduction-to-the-linux-graphics-stack/
 
+\n drawterm is a port of draw to many systems, including X Window! can be
+\n  nice to compare the API
 
 \item Cairo~\furl{http://cairographics.org/} is a 2D
 graphics library used in many applications, e.g. Firefox.
@@ -399,7 +405,7 @@ a ``backend'' for the final display.
 It is fairly large, 235 KLOC (350 KLOC with the tests and benchmark code),
 but supports many drawing primitives
 and many backends, e.g. X Window via Xlib, MacOS via Quartz, etc.
-\l can leverage hardware acceleration e.g. XRender
+\l can leverage hardware acceleration e.g. XRender, send directly pixmaps
 \l win32, opengl, directFB, DRM, even now SKIA
 It can also generate directly graphic documents with backends for
 Postscript, PDF, SVG, PNG, etc.
@@ -496,11 +502,13 @@ It is very large though with more than 1.6 MLOC.
 
 
 \section{Getting started}
+\label{sec:getting-started}
 \n no rio; minimal "getting started"!
 
 To play with [[draw]] you will first need to install
 the \plan fork used in \principia. See \urlinstall.
-Once installed, you can test [[draw]] under \plan with:
+Once installed, you can test [[draw]] under \plan
+on an x86 machine by executing the following commands:
 
 \begin{verbatim}
 1   $ bind -a '#v' /dev
@@ -514,7 +522,8 @@ Once installed, you can test [[draw]] under \plan with:
 \end{verbatim}
 % x86 for vga part
 
-You should then see the graphics in Figure~\ref{fig:hellodraw}.
+You should then see on your screen
+the graphics in Figure~\ref{fig:hellodraw}.
 
 \begin{figure}\begin{center}
 \includegraphics[width=10cm]{hellodraw}
@@ -524,10 +533,11 @@ You should then see the graphics in Figure~\ref{fig:hellodraw}.
 \end{figure}
 
 The command in Line~1 installs the VGA {device driver}
+(a popular graphics standard for x86 machines)
 and exports the VGA {device files} in [[/dev/]], e.g.
 [[/dev/vgactl]].
 See the \book{Kernel} for more information on how device
-drivers work.
+drivers work and how to use [[bind]].
 %
 Line~2 runs the program [[vga]] which internally uses
 the [[/dev/vgactl]] device file to instruct the graphic card
@@ -549,38 +559,74 @@ shown in Figure~\ref{fig:hellodraw}.
 
 \section{Requirements}
 
-% C as usual.
+%dup: from Assembler.nw
+Because most of this book is made of C source code, 
+you will need a good knowledge of 
+the C programming language~\cite{k-r} to understand it.
+%
+We also assume a basic knowledge of geometry and trigonometry.
+%
+Books on computer graphics such as~\cite{cgpp-foley}
+would be useful, especially for Chapter~\ref{chap:drawing-shapes} 
+which contains the drawing shapes algorithms (lines, ellipses, etc),
+but they are not mandatory. Most computer graphics books focus anyway
+on 3D which we do not cover at all.
+\n actually CGPP 3rd edition does not even cover scanline algo apparently, hmm
 
-% Basic geometry.
-% assume Computer Graphics, Principles and Practice (CGPP) by Foley et al.?
-%  Maybe for drawing shapes chapter? Too long otherwise to explain algorithm?
-% other books? no, most books focused on 3d anyway.
+\l Principle of Interactive Computer Graphics, Newman and Sproull, McGraw-Hill
+% seems seminal book about vector graphics, and source for GKS, in 1979
+% (from pike84bitblt.pdf), even cited by Alto paper
 
-% graphics(2)!! for big picture
-%  great (a few changes though, like screen -> view)
-% draw(2) for API
-% draw(3) for protocol
-% image(6) for image format
+We strongly suggest to read the \book{Kernel} before reading
+this book, especially for Chapter~\ref{chap:user-kernel-bridge}.
+Indeed, an important part of [[draw]] resides
+in the kernel and implements interfaces such as [[Dev]]
+defined by the kernel. 
+\l after all draw is first a filesystem
 
-% http://blog.golang.org/go-imagedraw-package
-% http.golang.org/go-image-package
+It can also be useful to read the many manual pages concerning
+[[draw]] in our \plan repository under [[docs/man/]]:
 
-% memdraw(2) API of libmemdraw, should not be used by user directly,
-%  internal code
+\begin{itemize}
 
-%advanced: more for later chapters
-% font(6)
-% mouse(3)
-% window(2) 
-%(note that CGPP talks also about windowing system I think.)
+\item [[2/graphics]] for the big picture,
+\n a few changes though, like screen -> view
 
-% lib_graphics/docs/blit.pdf, lib_graphics/docs/pike-bitmap.ps
+\item [[2/draw]] for the API,
+
+\item [[3/draw]] for the [[draw]] protocol used between
+applications and the [[/dev/draw/]] device files,
+\l [[/dev/draw/x/data]]
+
+\item [[6/image]] for the image format,
+
+\item [[2/memdraw]] for the drawing functions used
+inside the kernel.
+
+\end{itemize}
+\l plan9 tutorial? shows some use of /dev/draw/?
+
+
+A few other manual pages concern advanced functionalities
+of [[draw]] such as 
+the font system ([[6/font]])
+the mouse ([[3/mouse]]), or 
+overlapping windows ([[2/window]]),
+but they can be read later.
+\n CGPP talks also about windowing system I think
+
+The historical document 
+[[lib_graphics/docs/pike-bitmap-1983.ps]]
+describes an ancestor of [[draw]] for the Blit machine,
+which can be useful to understand some of the design decisions
+presented in this book.
 % plan9-in-technicolor.ps? meh.
 
-% Principle of Interactive Computer Graphics, Newman and Sproull, McGraw-Hill
-%  1979
-% seems seminal book about vector graphics, and source for GKS 
-% (from pike84bitblt.pdf), even cited by Alto paper
+Finally there are some extra notes about descendants of [[draw]]
+at \url{http://blog.golang.org/go-imagedraw-package} and
+\url{http.golang.org/go-image-package}
+which can be useful.
+
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -606,50 +652,243 @@ who wrote in some sense most of this book.
 \chapter{Overview}
 
 \section{Graphics system principles}
-%https://en.wikipedia.org/wiki/Computer_graphics
 
-% FIGURE a screenshot where can see graphic elements?
+As said in the introduction, a {\em graphics system}
+provides essentially an API to {draw} {things} on a {screen}:
+lines, 
+rectangles, 
+circles, 
+characters, with different 
+{colors},
+{widths},
+{fonts}, 
+{filling patterns}, etc.
+%
+A {\em screen} is made of thousands of {picture elements}
+called {\em pixels} which can be individually accessed
+programmatically.
+
+\l FIGURE a screenshot where can see graphic elements?
 % genre Facebook page? rectangles, gradiant, circles, images
 
-% pike84bitbltd.pdf intro is pretty good to describe early history
-% of graphics, rational for things.
+%\subsection{Image}
+
+The {\em resolution} of a screen or {image},
+e.g. [[640x480x8]], indicates the 
+{width} (640), 
+{height} (480), and 
+{depth} (8) of the image.
+%
+The {\em width} and {\em height} specify the shape of the two dimensional
+array of pixels, also called the {\em grid}.
+The {\em depth} represents the number of bits used per pixel.
+%
+For instance, with a depth of 8 bits each pixel can take one of 
+256 different values.
+
+\l FIGURE where can see grey picture and next to it matrix with values
+
+Pixel values usually encode either a color or a shade of grey
+depending on the {monitor}.
+%
+For the shades of grey, 0 can mean black and 255 white.
+In old black and white displays, each pixel was using only
+one bit: 0 for black and 1 for white. Pictures were then called {\em bitmaps}.
+%
+Colors are usually decomposed in three different {\em components}:
+red, green, and blue, or {\em RGB} for short.
+\l history is monitor? CRT tubes?
+The pixel value can be translated into an actual color by using for instance
+a {color map}. A {\em color map} associates to one pixel value
+between 0 and 255 the three different values for the different RGB components,
+for instance 12 for red, 45 for green, and 251 for blue.
+%
+Note that color maps are not necessary. If the resolution of a screen
+is for instance [[1024x768x24]], meaning that 24 bits are used
+to represent one pixel, then those 24 bits can be decomposed in three
+different bytes encoding each one of the RGB component.
+24 bits are enough to encode millions of colors.
+\l channels =~ components, but not necessarly colors, pixel value structure
+
+%dupe: intro/draw
+In most operating systems, e.g. Linux, MacOS, or Microsoft Windows,
+the graphics system is strongly coupled with the {windowing system}.
+This is not the case in \plan though where one can run a graphical
+application outside any windowing system.
+\l advanced: windows, menus, mouse/keyboard
 
 
-% graphics system =~ screen drawing API
+\subsection{Raster graphics (pixels)}
+\n discrete, digital
+
+The term {\em raster graphics} is often used to talk about graphics
+in terms of pixels. 
+%
+The word {raster} comes from the {\em raster scan} process used in
+the cathode ray tubes of old television sets. This process painted an image
+line by line by illuminating with three different electron emitters
+thousands of phosphorecent dots triples (one red, one green, one blue)
+arranged in a grid.
+%
+In raster graphics, an image is seen as a two dimensional array.
+\n nice property is that fix amount of memory for any image
+
+The software interface of a graphic card
+can be as simple as a reserved area of the memory address space
+representing the screen as a two dimensional array.
+Such an area is often called the {\em frame buffer}. 
+One can then draw on the screen simply by modifying bytes in the frame buffer.
+The graphics card then interprets the pixel values in the 
+framebuffer to send the right signals to the monitor.
+
+The graphics card of the Raspberry Pi machine uses such an interface,
+as explained in Appendix~\ref{chap:raspberry-pi-graphic-card}.
+If the resolution of the screen is [[1024x768x24]], 
+\n actually it's 1024x768x16 by default, but 16 is complicated to explain
+then the frame buffer requires around 2.2 MB of address space.
+If we assume that the frame buffer is memory-mapped
+at the physical address [[0xA0000000]], then the simple function 
+below can be used to set the color of any pixels on the screen:
+
+<<function set_pixel>>=
+void set_pixel(uint x, uint y, byte red, byte green, byte blue) {
+  byte* addr;
+
+  assert(x < 1024);
+  assert(y < 768);
+  addr = 0xA0000000 + y*1024*3 + x*3;
+  *addr = red;
+  *(addr+1) = green;
+  *(addr+2) = blue;
+}
+@
+\n assume RGB order is byte order, also assume y grows up, also assume kernel
+\n  since access directly physical space
+
+\n notion of soft screen and flush vs direct framebuffer but can see later
 
 
-% screen made of pixels. Lots of them. Resolution. Depth/encoding. Image(s)!!
-% software/hardware interface can be as simple as a framebuffer (e.g. bcm/).
-% pixels, so not continuous! so if draw diagonal, then no that easy actually :)
+
+\subsection{Vector graphics (shapes)}
+\l continuous, analog
+
+%trans:
+Drawing pictures by modifying individual pixels can be
+very tiresome though. One would like a more high-level approach.
+%
+The term {\em vector graphics}, used in opposition
+to raster graphics, expresses graphics in terms of
+ideal geometric shapes:
+lines, 
+rectangles,
+circles, 
+ellipsis, 
+arcs,
+bezier curves,
+etc.
+%
+An image is then seen as a list of shapes.
+%
+A shape can be defined by a list of vectors defining the control
+points of a polygon or a curve.
+
+\n horiz/vert lines, rectangle, arbitrary line, polyline, polygon (fill),
+\n ellipse, arc, bezier
+
+Note that vector graphics displays, developed from the oscilloscope
+industry, actually predated raster graphics displays, which
+were rooted in the television industry.
+\n pike-bitbltd-1984.pdf intro is good to describe early history of graphics
+% description of lines, curves?
+With time, raster displays became more econonomic to produce
+and more flexible to program.
+
+\subsection{Rasterization}
+
+{\em Rasterization} is the process of turning vector graphics, that is 
+geometric shapes, into raster graphics, that is pixels on a grid.
+This is a fundamental operation.
+%
+For instance, Figure~\ref{fig:line-raster}
+shows the set of pixels resulting from the rasterization
+of a line drawn in the [[hellodraw.c]] program
+mentioned in Section~\ref{sec:getting-started}.
+Figure~\ref{fig:line-raster} shows the magnified left part of the screen of 
+Figure~\ref{fig:hellodraw} where one can see the individual pixels
+making up a line.
+
+\begin{figure}\begin{center}
+\includegraphics[width=10cm]{line-raster}
+\end{center}
+\caption{Line rasterization}
+\label{fig:line-raster}
+\end{figure}
+\n From ideal to concrete.
+
+\n if draw not at 45 degree but 32, then no that easy actually :)
 % => bresenham algorithm, scanline algorithm.
 
-% history was bitmap because black/white and one pixel = 1 bit, so
-% had a map of bits (bitmap). Fundamental was bitblt.
+\subsection{[[bitblt()]] and Compositing}
 
-% FIGURE, scale
+[[bitblt()]], for {\em bit}-boundary {\em bl}ock {\em t}ransfer, is another
+fundamental graphic operation. It copies a rectangular area of
+the screen (or image), the {\em source},
+to another area of the screen (or image), the {\em destination},
+while applying for each pixel involved a {\em composition operator} [[op]].
+%
+The value of a destination pixel [[d]]
+is given by the following formula where [[s]] is the value
+of a source pixel:
 
-% horiz/vert lines, rectangle, arbitrary line, polyline, polygon (fill),
-% ellipse, arc, bezier,
-% and also text (fonts) which are special kind of pictures (bezier? or raster?)
-% colors, alpha, channels, color map
-% "images", composition (porter-duff) so can have transluscent effect, 
-% clipping, rotate/scale/transform (lacking in plan9).
-% tiling (replicating) when used as a source.
+\begin{verbatim}
+d <- d op s;
+\end{verbatim}
 
+% FIGURE?
 
-% very generic and powerful operations: draw()! (like bitblt before) 
-% see cairo intro? 
+The name [[bitblt()]] comes from its use in early graphic systems
+where pictures were represented as bitmaps.
+%
+[[bitblt()]] was used for drawing characters, highlighing regions, 
+moving rectangles, and many more things.
+\n see pike-bitbltd-1984.pdf
+\l see pictures of graphics smalltalk kernel.
+%
+In pictures with colors, the [[bitblt()]] primitive can be used
+to encode a variety of effects such as transluscence by using
+the appropriate composition operator.
+\n porter-duff
 
-% notion of soft screen, flush, direct framebuffer are important.
+Under \plan the [[bitblt()]] primitive is called [[draw()]],
+which is a very generic and powerful function.
+In fact, it is such a versatile procedure that, as we will see later,
+it is the building block used by all the other drawing functions.
+Drawing a line, a polygon, or a circle involves at some
+point many internal calls to [[draw()]].
 
-% Note that principle is not to be a windowing system! independent!
-% often correlated but in plan9 can run graphical app outside
-% windowing system!!
+\n FIGURE Indeed in Figure X a line is a set of horizontal or vertical
+% lines which can be set through bitblt.
 
-% advanced: windows, menus, mouse/keyboard
+\l clipping
+\l tiling (replicating) when used as a source.
 
-%http://blog.mecheye.net/2012/06/the-linux-graphics-stack/
-%http://blogs.igalia.com/itoral/2014/07/29/a-brief-introduction-to-the-linux-graphics-stack/
+\subsection{Fonts}
+
+%trans:
+% graphics, but also text is important! 
+%
+% can different size, different style!
+
+% {\em font} is a serie of glyphs for each character. 
+% can be represented as vector or raster.
+
+% plan9 unicode, more complex. huge. Which is why indeed have subfont concept.
+
+%\subsection{Alpha layer}
+
+%\subsection{Advanced topics}
+
+\l In this book we will cover basic 2D primitives but many adv topics
 
 %other topics:
 % - scale/rotate/transform not in this book. But can be library wrapper
@@ -661,38 +900,6 @@ who wrote in some sense most of this book.
 % - 3d. lighting. Not in this book. based on triangles usually.
 % - physical rendering
 % - GPU
-
-\subsection{Raster graphics (pixels)}
-%https://en.wikipedia.org/wiki/Raster_graphics
-
-% frame buffer, pixels (picture elements), bitmaps, discrete, digital
-
-
-% raster mean?
-
-% {image} = two dimensional array, each element is a {pixel}
-
-% from television industry, individual pixels, two dimentional array,
-% framebuffer.
-% After some time frame buffer less expensive to make than a vector
-% display.
-% Imperfect, discrete.
-% But programmer should not be exposed to them and given access
-% to ideal shapes of plane geometry
-
-\subsection{Vector graphics (lines, arcs)}
-% lines, shapes, continuous, analog
-
-% from oscilloscope industry, description of lines, curves, shapes!
-% was actually the first one to be invented. Analog! continuous.
-
-\subsection{Rasterization}
-
-% From ideal to concrete.
-
-\subsection{[[bitblt()]] and Compositing}
-
-\subsection{Advanced topics}
 
 
 \section{[[/dev/draw/]] files interface}
@@ -720,6 +927,9 @@ who wrote in some sense most of this book.
 
 \section{[[hellodraw.c]]}
 
+%trans:
+% program do not access directly /dev/draw. Higher level API,
+% draw.h.
 % API more convenient that direct IO and protocol.
 
 % HelloGraphicalWorld.c ?
@@ -740,6 +950,8 @@ who wrote in some sense most of this book.
 %update: actually you can, but you have to make your image a window
 % which means you also have to create a Screen first.
 
+% hellorawdraw.c without draw.h
+
 %\section{A toy window application}
 % has nothing to do! abstraction power!
 
@@ -752,19 +964,24 @@ who wrote in some sense most of this book.
 
 \section{Code organization}
 
-\l part library, part kernel, part drivers
+The \plan graphics system is visible to the programmer mostly through
+the [[draw.h]] header filer. This file contains the main data structures
+and functions to draw different shapes (lines, rectangles, text) on
+the screen.
 
 % user code usually just have to do
 % #include <draw.h>
 % (in addition to u.h and libc.h)
 
-% libdraw/, libmemdraw/, libmemlayer/, kernel/devices/screen/
+% below header file, lots of code.
+\l part library, part generic interface and code kernel, part specific drivers
+
+% include/draw.h libdraw/, libmemdraw/, libmemlayer/, kernel/devices/screen/
 % lofs of files have similar name in libdraw/ and libmemdraw/
+
 \t could subdivide in further subdirs  image/ font/ input/ ...
 
-%-------------------
-% libdraw/
-%-------------------
+\subsection{[[lib_graphics/libdraw/]]}
 
 % libdraw is mostly for user DS and API that then just
 % marshalled and delegate the actual work to /dev/draw
@@ -861,10 +1078,7 @@ who wrote in some sense most of this book.
 %mkfont.c: dead (used in very few apps)
 %stringsubfont.c: dead (or used in test code)
 
-
-%-------------------
-% kernel/drivers/screen/
-%-------------------
+\subsection{[[kernel/devices/screen/]]}
 
 % libdraw mostly wrapper on /dev/draw, marshall data, special protocol
 
@@ -884,9 +1098,8 @@ who wrote in some sense most of this book.
 % vgavesa.c: vesa specifics? needed?
 % vgaclgd542x.c: cirrus logic specifics
 
-%-------------------
-% libmemdraw/
-%-------------------
+\subsection{[[lib_graphics/libmemdraw/]]}
+
 % libmemdraw actually does the drawing stuff in memory
 % (and rely on some kernel vga functions to do the rest and transfer
 %  images from memory to the actual screen (or nop if framebuffer))
@@ -933,10 +1146,8 @@ who wrote in some sense most of this book.
 % but normally hwdraw() should be a bridge to screen.h interface 
 % functions? (implemented by vgascreen)
 
+\subsection{[[lib_graphics/libmemlayer/]]}
 
-%-------------------
-% libmemlayer/
-%-------------------
 % libmemlayer is really about overlapping windows. It's not really
 %  layer in the cairo sese.
 % Then one can easily implement a windowing system with 
@@ -964,13 +1175,7 @@ who wrote in some sense most of this book.
 %ltorear.c: put to rear
 
 
-
 \section{Software architecture}
-
-The \plan graphics system is visible to the programmer mostly through
-the [[draw.h]] header filer. This file contains the main data structures
-and functions to draw different shapes (lines, rectangles, text) on
-the screen.
 
 
 % Memdraw is core algo. Used by kernel. Wrapped by kernel
@@ -1071,21 +1276,31 @@ the screen.
 % you specify each time. The API is also very general, see draw().
 
 
-\section{Initialization overview}
-
+%\section{Initialization overview}
 % more in Chapter X.
 
-\section{Trace of a simple drawing operation}
+%\section{Trace of a simple drawing operation}
 % when do draw(), then where does it go? go in kernel? yes ... :(
 % at least when call flush().
 
+
 %\section{Trace of a mouse click}
+% more important in Windows.nw
 
 %\section{Trace of a key press}
+% more important in Windows.nw
+
 
 
 \section{Book structure}
 
+%trans: %dup: (and adapted) from Assembler.nw
+We now have enough background to understand the source code of [[draw]].
+%toc:
+The rest of the book is organized as follows.
+%
+We will start by describing the core data structures of [[draw]]
+in Chapter~\ref{chap:core-ds}. 
 
 
 
@@ -1659,7 +1874,8 @@ if(cp == nil)
 % and [[screen/view]],  and DImage?
 
 % Images in plan9 draw are specials! (see technicolor.ps!)
-% used for many things. Screen, temp images, colors, fonts, masks, etc.
+% used for many things. Screen, off-screen (temp) images, 
+% colors, fonts, masks, etc.
 % even windows!
 
 \subsection{[[Image]]}
@@ -3713,6 +3929,7 @@ if(disp == nil)
 
 
 \chapter{User/Kernel Bridge}
+\label{chap:user-kernel-bridge}
 % kernel side part 2
 
 % some kind of RPC and protocol
@@ -4589,6 +4806,8 @@ drawmesg(Client *client, void *av, int n)
 
 % already one allocated for you! the screen, image id 0.
 % view! (was screen)
+
+% allocimage(2)
 
 \subsection{API}
 
@@ -7844,6 +8063,7 @@ bsrc.alpha += sadelta;
 
 
 \chapter{Drawing Shapes}
+\label{chap:drawing-shapes}
 
 %trans:
 % seen draw rectangle which is actually basic block to draw any shape!
@@ -9560,6 +9780,9 @@ memarc(Memimage *dst, Point c, int a, int b, int t, Memimage *src, Point sp, int
 
 
 \chapter{Fonts}
+
+% fonts  are a special kind of pictures (bezier? or raster? raster here
+% bout could be bezier)
 
 % Show simple test code showing use of font.
 % Maybe just 2 calls to 2 different openfont() and 2 calls to string().
@@ -18781,6 +19004,7 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 
 
 
+
 \chapter{Advanced Topics TODO}
 %\section{Image naming?} Better before.
 %\section{Image compression?}
@@ -20121,12 +20345,12 @@ setcursor(Mousectl *mc, Cursor *c)
 
 \section{Menus}
 % mv in advanced shapes?
-% related to mouse too.
+% Nice example of use of drawing API? mv in appendix?
 % should be in Widgets.nw maybe?
 % Or make Widgets chapter? and say that just subset?
 % At the same time kinda example of use of draw.h
 
-% Nice example of use of drawing API?
+% related to mouse too.
 
 % dupe in mouse.h
 <<struct Menu>>=
@@ -25062,7 +25286,427 @@ static  char Ewrongname[] =     "wrong name for image";
 
 
 
-\chapter{Raspberry Framebuffer Driver}
+\chapter{Mathematics}
+
+\section{Trigonometric functions}
+
+% float is expensive, so instead represent float in integer approximation.
+% 0.0 = 0 degree, 1.0 = 1024
+
+<<global sinus>>=
+/*
+ * Integer sine and cosine for integral degree argument.
+ * Tables computed by (sin,cos)(PI*d/180).
+ */
+static short sinus[91] = {
+    0,	/* 0 */
+    18,	/* 1 */
+    36,	/* 2 */
+    54,	/* 3 */
+    71,	/* 4 */
+    89,	/* 5 */
+    107,	/* 6 */
+    125,	/* 7 */
+    143,	/* 8 */
+    160,	/* 9 */
+    178,	/* 10 */
+    195,	/* 11 */
+    213,	/* 12 */
+    230,	/* 13 */
+    248,	/* 14 */
+    265,	/* 15 */
+    282,	/* 16 */
+    299,	/* 17 */
+    316,	/* 18 */
+    333,	/* 19 */
+    350,	/* 20 */
+    367,	/* 21 */
+    384,	/* 22 */
+    400,	/* 23 */
+    416,	/* 24 */
+    433,	/* 25 */
+    449,	/* 26 */
+    465,	/* 27 */
+    481,	/* 28 */
+    496,	/* 29 */
+    512,	/* 30 */
+    527,	/* 31 */
+    543,	/* 32 */
+    558,	/* 33 */
+    573,	/* 34 */
+    587,	/* 35 */
+    602,	/* 36 */
+    616,	/* 37 */
+    630,	/* 38 */
+    644,	/* 39 */
+    658,	/* 40 */
+    672,	/* 41 */
+    685,	/* 42 */
+    698,	/* 43 */
+    711,	/* 44 */
+    724,	/* 45 */
+    737,	/* 46 */
+    749,	/* 47 */
+    761,	/* 48 */
+    773,	/* 49 */
+    784,	/* 50 */
+    796,	/* 51 */
+    807,	/* 52 */
+    818,	/* 53 */
+    828,	/* 54 */
+    839,	/* 55 */
+    849,	/* 56 */
+    859,	/* 57 */
+    868,	/* 58 */
+    878,	/* 59 */
+    887,	/* 60 */
+    896,	/* 61 */
+    904,	/* 62 */
+    912,	/* 63 */
+    920,	/* 64 */
+    928,	/* 65 */
+    935,	/* 66 */
+    943,	/* 67 */
+    949,	/* 68 */
+    956,	/* 69 */
+    962,	/* 70 */
+    968,	/* 71 */
+    974,	/* 72 */
+    979,	/* 73 */
+    984,	/* 74 */
+    989,	/* 75 */
+    994,	/* 76 */
+    998,	/* 77 */
+    1002,	/* 78 */
+    1005,	/* 79 */
+    1008,	/* 80 */
+    1011,	/* 81 */
+    1014,	/* 82 */
+    1016,	/* 83 */
+    1018,	/* 84 */
+    1020,	/* 85 */
+    1022,	/* 86 */
+    1023,	/* 87 */
+    1023,	/* 88 */
+    1024,	/* 89 */
+    1024,	/* 90 */
+};
+@
+
+<<function icossin>>=
+void
+icossin(int deg, int *cosp, int *sinp)
+{
+    int sinsign, cossign;
+    short *stp, *ctp;
+
+    deg %= 360;
+    if(deg < 0)
+        deg += 360;
+    sinsign = 1;
+    cossign = 1;
+    stp = 0;
+    ctp = 0;
+    switch(deg/90){
+    case 2:
+        sinsign = -1;
+        cossign = -1;
+        deg -= 180;
+        /* fall through */
+    case 0:
+        stp = &sinus[deg];
+        ctp = &sinus[90-deg];
+        break;
+    case 3:
+        sinsign = -1;
+        cossign = -1;
+        deg -= 180;
+        /* fall through */
+    case 1:
+        deg = 180-deg;
+        cossign = -cossign;
+        stp = &sinus[deg];
+        ctp = &sinus[90-deg];
+        break;
+    }
+    *sinp = sinsign*stp[0];
+    *cosp = cossign*ctp[0];
+}
+@
+
+
+
+<<global sinus (lib_graphics/libdraw/icossin2.c)>>=
+/*
+ * Sine and Cosine of arctangents, calculated by 
+ *   (sin(atan(index/100.0))*1024.+0.5)
+ *   (cos(atan(index/100.0))*1024.+0.5)
+ * To use, get rational tangent between 0<=tan<=1, scale by 100,
+ * and look up sin and cos, and use linear interpolation.  divide by 1024.
+ * Maximum error is 0.0020.  Without linear interpolation, it's 0.010.
+ */
+static
+short sinus[] = {
+    0,	/* 0.00 */
+    10,	/* 0.01 */
+    20,	/* 0.02 */
+    31,	/* 0.03 */
+    41,	/* 0.04 */
+    51,	/* 0.05 */
+    61,	/* 0.06 */
+    72,	/* 0.07 */
+    82,	/* 0.08 */
+    92,	/* 0.09 */
+    102,	/* 0.10 */
+    112,	/* 0.11 */
+    122,	/* 0.12 */
+    132,	/* 0.13 */
+    142,	/* 0.14 */
+    152,	/* 0.15 */
+    162,	/* 0.16 */
+    172,	/* 0.17 */
+    181,	/* 0.18 */
+    191,	/* 0.19 */
+    201,	/* 0.20 */
+    210,	/* 0.21 */
+    220,	/* 0.22 */
+    230,	/* 0.23 */
+    239,	/* 0.24 */
+    248,	/* 0.25 */
+    258,	/* 0.26 */
+    267,	/* 0.27 */
+    276,	/* 0.28 */
+    285,	/* 0.29 */
+    294,	/* 0.30 */
+    303,	/* 0.31 */
+    312,	/* 0.32 */
+    321,	/* 0.33 */
+    330,	/* 0.34 */
+    338,	/* 0.35 */
+    347,	/* 0.36 */
+    355,	/* 0.37 */
+    364,	/* 0.38 */
+    372,	/* 0.39 */
+    380,	/* 0.40 */
+    388,	/* 0.41 */
+    397,	/* 0.42 */
+    405,	/* 0.43 */
+    412,	/* 0.44 */
+    420,	/* 0.45 */
+    428,	/* 0.46 */
+    436,	/* 0.47 */
+    443,	/* 0.48 */
+    451,	/* 0.49 */
+    458,	/* 0.50 */
+    465,	/* 0.51 */
+    472,	/* 0.52 */
+    480,	/* 0.53 */
+    487,	/* 0.54 */
+    493,	/* 0.55 */
+    500,	/* 0.56 */
+    507,	/* 0.57 */
+    514,	/* 0.58 */
+    520,	/* 0.59 */
+    527,	/* 0.60 */
+    533,	/* 0.61 */
+    540,	/* 0.62 */
+    546,	/* 0.63 */
+    552,	/* 0.64 */
+    558,	/* 0.65 */
+    564,	/* 0.66 */
+    570,	/* 0.67 */
+    576,	/* 0.68 */
+    582,	/* 0.69 */
+    587,	/* 0.70 */
+    593,	/* 0.71 */
+    598,	/* 0.72 */
+    604,	/* 0.73 */
+    609,	/* 0.74 */
+    614,	/* 0.75 */
+    620,	/* 0.76 */
+    625,	/* 0.77 */
+    630,	/* 0.78 */
+    635,	/* 0.79 */
+    640,	/* 0.80 */
+    645,	/* 0.81 */
+    649,	/* 0.82 */
+    654,	/* 0.83 */
+    659,	/* 0.84 */
+    663,	/* 0.85 */
+    668,	/* 0.86 */
+    672,	/* 0.87 */
+    676,	/* 0.88 */
+    681,	/* 0.89 */
+    685,	/* 0.90 */
+    689,	/* 0.91 */
+    693,	/* 0.92 */
+    697,	/* 0.93 */
+    701,	/* 0.94 */
+    705,	/* 0.95 */
+    709,	/* 0.96 */
+    713,	/* 0.97 */
+    717,	/* 0.98 */
+    720,	/* 0.99 */
+    724,	/* 1.00 */
+    728,	/* 1.01 */
+};
+@
+
+<<global cosinus>>=
+static
+short cosinus[] = {
+    1024,	/* 0.00 */
+    1024,	/* 0.01 */
+    1024,	/* 0.02 */
+    1024,	/* 0.03 */
+    1023,	/* 0.04 */
+    1023,	/* 0.05 */
+    1022,	/* 0.06 */
+    1022,	/* 0.07 */
+    1021,	/* 0.08 */
+    1020,	/* 0.09 */
+    1019,	/* 0.10 */
+    1018,	/* 0.11 */
+    1017,	/* 0.12 */
+    1015,	/* 0.13 */
+    1014,	/* 0.14 */
+    1013,	/* 0.15 */
+    1011,	/* 0.16 */
+    1010,	/* 0.17 */
+    1008,	/* 0.18 */
+    1006,	/* 0.19 */
+    1004,	/* 0.20 */
+    1002,	/* 0.21 */
+    1000,	/* 0.22 */
+    998,	/* 0.23 */
+    996,	/* 0.24 */
+    993,	/* 0.25 */
+    991,	/* 0.26 */
+    989,	/* 0.27 */
+    986,	/* 0.28 */
+    983,	/* 0.29 */
+    981,	/* 0.30 */
+    978,	/* 0.31 */
+    975,	/* 0.32 */
+    972,	/* 0.33 */
+    969,	/* 0.34 */
+    967,	/* 0.35 */
+    963,	/* 0.36 */
+    960,	/* 0.37 */
+    957,	/* 0.38 */
+    954,	/* 0.39 */
+    951,	/* 0.40 */
+    947,	/* 0.41 */
+    944,	/* 0.42 */
+    941,	/* 0.43 */
+    937,	/* 0.44 */
+    934,	/* 0.45 */
+    930,	/* 0.46 */
+    927,	/* 0.47 */
+    923,	/* 0.48 */
+    920,	/* 0.49 */
+    916,	/* 0.50 */
+    912,	/* 0.51 */
+    909,	/* 0.52 */
+    905,	/* 0.53 */
+    901,	/* 0.54 */
+    897,	/* 0.55 */
+    893,	/* 0.56 */
+    890,	/* 0.57 */
+    886,	/* 0.58 */
+    882,	/* 0.59 */
+    878,	/* 0.60 */
+    874,	/* 0.61 */
+    870,	/* 0.62 */
+    866,	/* 0.63 */
+    862,	/* 0.64 */
+    859,	/* 0.65 */
+    855,	/* 0.66 */
+    851,	/* 0.67 */
+    847,	/* 0.68 */
+    843,	/* 0.69 */
+    839,	/* 0.70 */
+    835,	/* 0.71 */
+    831,	/* 0.72 */
+    827,	/* 0.73 */
+    823,	/* 0.74 */
+    819,	/* 0.75 */
+    815,	/* 0.76 */
+    811,	/* 0.77 */
+    807,	/* 0.78 */
+    804,	/* 0.79 */
+    800,	/* 0.80 */
+    796,	/* 0.81 */
+    792,	/* 0.82 */
+    788,	/* 0.83 */
+    784,	/* 0.84 */
+    780,	/* 0.85 */
+    776,	/* 0.86 */
+    773,	/* 0.87 */
+    769,	/* 0.88 */
+    765,	/* 0.89 */
+    761,	/* 0.90 */
+    757,	/* 0.91 */
+    754,	/* 0.92 */
+    750,	/* 0.93 */
+    746,	/* 0.94 */
+    742,	/* 0.95 */
+    739,	/* 0.96 */
+    735,	/* 0.97 */
+    731,	/* 0.98 */
+    728,	/* 0.99 */
+    724,	/* 1.00 */
+    720,	/* 1.01 */
+};
+@
+
+<<function icossin2>>=
+void
+icossin2(int x, int y, int *cosp, int *sinp)
+{
+    int sinsign, cossign, tan, tan10, rem;
+    short *stp, *ctp;
+
+    if(x == 0){
+        if(y >= 0)
+            *sinp = ICOSSCALE, *cosp = 0;
+        else
+            *sinp = -ICOSSCALE, *cosp = 0;
+        return;
+    }
+    sinsign = cossign = 1;
+    if(x < 0){
+        cossign = -1;
+        x = -x;
+    }
+    if(y < 0){
+        sinsign = -1;
+        y = -y;
+    }
+    if(y > x){
+        tan = 1000*x/y;
+        tan10 = tan/10;
+        stp = &cosinus[tan10];
+        ctp = &sinus[tan10];
+    }else{
+        tan = 1000*y/x;
+        tan10 = tan/10;
+        stp = &sinus[tan10];
+        ctp = &cosinus[tan10];
+    }
+    rem = tan-(tan10*10);
+    *sinp = sinsign*(stp[0]+(stp[1]-stp[0])*rem/10);
+    *cosp = cossign*(ctp[0]+(ctp[1]-ctp[0])*rem/10);
+}
+@
+
+
+
+
+
+\chapter{Raspberry Pi Graphic Driver TODO}
+\label{chap:raspberry-pi-graphic-card}
+
 % bcm2385 framebuffer and videocore GPU
 
 % 1024 x 768 x 16 (and can do also x 32)
@@ -25072,6 +25716,7 @@ static  char Ewrongname[] =     "wrong name for image";
 
 \chapter{PC VGA driver TODO}
 
+% XXX LP split
 <<struct VGAscr(x86)>>=
 struct VGAscr {
 
@@ -26547,424 +27192,6 @@ clgd542xload(VGAscr* scr, Cursor* curs)
 
 
 
-\chapter{Mathematics}
-
-\section{Trigonometric functions}
-
-% float is expensive, so instead represent float in integer approximation.
-% 0.0 = 0 degree, 1.0 = 1024
-
-<<global sinus>>=
-/*
- * Integer sine and cosine for integral degree argument.
- * Tables computed by (sin,cos)(PI*d/180).
- */
-static short sinus[91] = {
-    0,	/* 0 */
-    18,	/* 1 */
-    36,	/* 2 */
-    54,	/* 3 */
-    71,	/* 4 */
-    89,	/* 5 */
-    107,	/* 6 */
-    125,	/* 7 */
-    143,	/* 8 */
-    160,	/* 9 */
-    178,	/* 10 */
-    195,	/* 11 */
-    213,	/* 12 */
-    230,	/* 13 */
-    248,	/* 14 */
-    265,	/* 15 */
-    282,	/* 16 */
-    299,	/* 17 */
-    316,	/* 18 */
-    333,	/* 19 */
-    350,	/* 20 */
-    367,	/* 21 */
-    384,	/* 22 */
-    400,	/* 23 */
-    416,	/* 24 */
-    433,	/* 25 */
-    449,	/* 26 */
-    465,	/* 27 */
-    481,	/* 28 */
-    496,	/* 29 */
-    512,	/* 30 */
-    527,	/* 31 */
-    543,	/* 32 */
-    558,	/* 33 */
-    573,	/* 34 */
-    587,	/* 35 */
-    602,	/* 36 */
-    616,	/* 37 */
-    630,	/* 38 */
-    644,	/* 39 */
-    658,	/* 40 */
-    672,	/* 41 */
-    685,	/* 42 */
-    698,	/* 43 */
-    711,	/* 44 */
-    724,	/* 45 */
-    737,	/* 46 */
-    749,	/* 47 */
-    761,	/* 48 */
-    773,	/* 49 */
-    784,	/* 50 */
-    796,	/* 51 */
-    807,	/* 52 */
-    818,	/* 53 */
-    828,	/* 54 */
-    839,	/* 55 */
-    849,	/* 56 */
-    859,	/* 57 */
-    868,	/* 58 */
-    878,	/* 59 */
-    887,	/* 60 */
-    896,	/* 61 */
-    904,	/* 62 */
-    912,	/* 63 */
-    920,	/* 64 */
-    928,	/* 65 */
-    935,	/* 66 */
-    943,	/* 67 */
-    949,	/* 68 */
-    956,	/* 69 */
-    962,	/* 70 */
-    968,	/* 71 */
-    974,	/* 72 */
-    979,	/* 73 */
-    984,	/* 74 */
-    989,	/* 75 */
-    994,	/* 76 */
-    998,	/* 77 */
-    1002,	/* 78 */
-    1005,	/* 79 */
-    1008,	/* 80 */
-    1011,	/* 81 */
-    1014,	/* 82 */
-    1016,	/* 83 */
-    1018,	/* 84 */
-    1020,	/* 85 */
-    1022,	/* 86 */
-    1023,	/* 87 */
-    1023,	/* 88 */
-    1024,	/* 89 */
-    1024,	/* 90 */
-};
-@
-
-<<function icossin>>=
-void
-icossin(int deg, int *cosp, int *sinp)
-{
-    int sinsign, cossign;
-    short *stp, *ctp;
-
-    deg %= 360;
-    if(deg < 0)
-        deg += 360;
-    sinsign = 1;
-    cossign = 1;
-    stp = 0;
-    ctp = 0;
-    switch(deg/90){
-    case 2:
-        sinsign = -1;
-        cossign = -1;
-        deg -= 180;
-        /* fall through */
-    case 0:
-        stp = &sinus[deg];
-        ctp = &sinus[90-deg];
-        break;
-    case 3:
-        sinsign = -1;
-        cossign = -1;
-        deg -= 180;
-        /* fall through */
-    case 1:
-        deg = 180-deg;
-        cossign = -cossign;
-        stp = &sinus[deg];
-        ctp = &sinus[90-deg];
-        break;
-    }
-    *sinp = sinsign*stp[0];
-    *cosp = cossign*ctp[0];
-}
-@
-
-
-
-<<global sinus (lib_graphics/libdraw/icossin2.c)>>=
-/*
- * Sine and Cosine of arctangents, calculated by 
- *   (sin(atan(index/100.0))*1024.+0.5)
- *   (cos(atan(index/100.0))*1024.+0.5)
- * To use, get rational tangent between 0<=tan<=1, scale by 100,
- * and look up sin and cos, and use linear interpolation.  divide by 1024.
- * Maximum error is 0.0020.  Without linear interpolation, it's 0.010.
- */
-static
-short sinus[] = {
-    0,	/* 0.00 */
-    10,	/* 0.01 */
-    20,	/* 0.02 */
-    31,	/* 0.03 */
-    41,	/* 0.04 */
-    51,	/* 0.05 */
-    61,	/* 0.06 */
-    72,	/* 0.07 */
-    82,	/* 0.08 */
-    92,	/* 0.09 */
-    102,	/* 0.10 */
-    112,	/* 0.11 */
-    122,	/* 0.12 */
-    132,	/* 0.13 */
-    142,	/* 0.14 */
-    152,	/* 0.15 */
-    162,	/* 0.16 */
-    172,	/* 0.17 */
-    181,	/* 0.18 */
-    191,	/* 0.19 */
-    201,	/* 0.20 */
-    210,	/* 0.21 */
-    220,	/* 0.22 */
-    230,	/* 0.23 */
-    239,	/* 0.24 */
-    248,	/* 0.25 */
-    258,	/* 0.26 */
-    267,	/* 0.27 */
-    276,	/* 0.28 */
-    285,	/* 0.29 */
-    294,	/* 0.30 */
-    303,	/* 0.31 */
-    312,	/* 0.32 */
-    321,	/* 0.33 */
-    330,	/* 0.34 */
-    338,	/* 0.35 */
-    347,	/* 0.36 */
-    355,	/* 0.37 */
-    364,	/* 0.38 */
-    372,	/* 0.39 */
-    380,	/* 0.40 */
-    388,	/* 0.41 */
-    397,	/* 0.42 */
-    405,	/* 0.43 */
-    412,	/* 0.44 */
-    420,	/* 0.45 */
-    428,	/* 0.46 */
-    436,	/* 0.47 */
-    443,	/* 0.48 */
-    451,	/* 0.49 */
-    458,	/* 0.50 */
-    465,	/* 0.51 */
-    472,	/* 0.52 */
-    480,	/* 0.53 */
-    487,	/* 0.54 */
-    493,	/* 0.55 */
-    500,	/* 0.56 */
-    507,	/* 0.57 */
-    514,	/* 0.58 */
-    520,	/* 0.59 */
-    527,	/* 0.60 */
-    533,	/* 0.61 */
-    540,	/* 0.62 */
-    546,	/* 0.63 */
-    552,	/* 0.64 */
-    558,	/* 0.65 */
-    564,	/* 0.66 */
-    570,	/* 0.67 */
-    576,	/* 0.68 */
-    582,	/* 0.69 */
-    587,	/* 0.70 */
-    593,	/* 0.71 */
-    598,	/* 0.72 */
-    604,	/* 0.73 */
-    609,	/* 0.74 */
-    614,	/* 0.75 */
-    620,	/* 0.76 */
-    625,	/* 0.77 */
-    630,	/* 0.78 */
-    635,	/* 0.79 */
-    640,	/* 0.80 */
-    645,	/* 0.81 */
-    649,	/* 0.82 */
-    654,	/* 0.83 */
-    659,	/* 0.84 */
-    663,	/* 0.85 */
-    668,	/* 0.86 */
-    672,	/* 0.87 */
-    676,	/* 0.88 */
-    681,	/* 0.89 */
-    685,	/* 0.90 */
-    689,	/* 0.91 */
-    693,	/* 0.92 */
-    697,	/* 0.93 */
-    701,	/* 0.94 */
-    705,	/* 0.95 */
-    709,	/* 0.96 */
-    713,	/* 0.97 */
-    717,	/* 0.98 */
-    720,	/* 0.99 */
-    724,	/* 1.00 */
-    728,	/* 1.01 */
-};
-@
-
-<<global cosinus>>=
-static
-short cosinus[] = {
-    1024,	/* 0.00 */
-    1024,	/* 0.01 */
-    1024,	/* 0.02 */
-    1024,	/* 0.03 */
-    1023,	/* 0.04 */
-    1023,	/* 0.05 */
-    1022,	/* 0.06 */
-    1022,	/* 0.07 */
-    1021,	/* 0.08 */
-    1020,	/* 0.09 */
-    1019,	/* 0.10 */
-    1018,	/* 0.11 */
-    1017,	/* 0.12 */
-    1015,	/* 0.13 */
-    1014,	/* 0.14 */
-    1013,	/* 0.15 */
-    1011,	/* 0.16 */
-    1010,	/* 0.17 */
-    1008,	/* 0.18 */
-    1006,	/* 0.19 */
-    1004,	/* 0.20 */
-    1002,	/* 0.21 */
-    1000,	/* 0.22 */
-    998,	/* 0.23 */
-    996,	/* 0.24 */
-    993,	/* 0.25 */
-    991,	/* 0.26 */
-    989,	/* 0.27 */
-    986,	/* 0.28 */
-    983,	/* 0.29 */
-    981,	/* 0.30 */
-    978,	/* 0.31 */
-    975,	/* 0.32 */
-    972,	/* 0.33 */
-    969,	/* 0.34 */
-    967,	/* 0.35 */
-    963,	/* 0.36 */
-    960,	/* 0.37 */
-    957,	/* 0.38 */
-    954,	/* 0.39 */
-    951,	/* 0.40 */
-    947,	/* 0.41 */
-    944,	/* 0.42 */
-    941,	/* 0.43 */
-    937,	/* 0.44 */
-    934,	/* 0.45 */
-    930,	/* 0.46 */
-    927,	/* 0.47 */
-    923,	/* 0.48 */
-    920,	/* 0.49 */
-    916,	/* 0.50 */
-    912,	/* 0.51 */
-    909,	/* 0.52 */
-    905,	/* 0.53 */
-    901,	/* 0.54 */
-    897,	/* 0.55 */
-    893,	/* 0.56 */
-    890,	/* 0.57 */
-    886,	/* 0.58 */
-    882,	/* 0.59 */
-    878,	/* 0.60 */
-    874,	/* 0.61 */
-    870,	/* 0.62 */
-    866,	/* 0.63 */
-    862,	/* 0.64 */
-    859,	/* 0.65 */
-    855,	/* 0.66 */
-    851,	/* 0.67 */
-    847,	/* 0.68 */
-    843,	/* 0.69 */
-    839,	/* 0.70 */
-    835,	/* 0.71 */
-    831,	/* 0.72 */
-    827,	/* 0.73 */
-    823,	/* 0.74 */
-    819,	/* 0.75 */
-    815,	/* 0.76 */
-    811,	/* 0.77 */
-    807,	/* 0.78 */
-    804,	/* 0.79 */
-    800,	/* 0.80 */
-    796,	/* 0.81 */
-    792,	/* 0.82 */
-    788,	/* 0.83 */
-    784,	/* 0.84 */
-    780,	/* 0.85 */
-    776,	/* 0.86 */
-    773,	/* 0.87 */
-    769,	/* 0.88 */
-    765,	/* 0.89 */
-    761,	/* 0.90 */
-    757,	/* 0.91 */
-    754,	/* 0.92 */
-    750,	/* 0.93 */
-    746,	/* 0.94 */
-    742,	/* 0.95 */
-    739,	/* 0.96 */
-    735,	/* 0.97 */
-    731,	/* 0.98 */
-    728,	/* 0.99 */
-    724,	/* 1.00 */
-    720,	/* 1.01 */
-};
-@
-
-<<function icossin2>>=
-void
-icossin2(int x, int y, int *cosp, int *sinp)
-{
-    int sinsign, cossign, tan, tan10, rem;
-    short *stp, *ctp;
-
-    if(x == 0){
-        if(y >= 0)
-            *sinp = ICOSSCALE, *cosp = 0;
-        else
-            *sinp = -ICOSSCALE, *cosp = 0;
-        return;
-    }
-    sinsign = cossign = 1;
-    if(x < 0){
-        cossign = -1;
-        x = -x;
-    }
-    if(y < 0){
-        sinsign = -1;
-        y = -y;
-    }
-    if(y > x){
-        tan = 1000*x/y;
-        tan10 = tan/10;
-        stp = &cosinus[tan10];
-        ctp = &sinus[tan10];
-    }else{
-        tan = 1000*y/x;
-        tan10 = tan/10;
-        stp = &sinus[tan10];
-        ctp = &cosinus[tan10];
-    }
-    rem = tan-(tan10*10);
-    *sinp = sinsign*(stp[0]+(stp[1]-stp[0])*rem/10);
-    *cosp = cossign*(ctp[0]+(ctp[1]-ctp[0])*rem/10);
-}
-@
-
-
-
-
-
 \chapter{Examples of Graphical Applications TODO}
 
 % rio! next book.
@@ -26977,7 +27204,6 @@ icossin2(int x, int y, int *cosp, int *sinp)
 % color.c?
 % lens? illustrate well features?
 % faces.c? 
-
 % both are mentioned in Unix Readers as very early graphic programs.
 
 
@@ -27003,6 +27229,8 @@ icossin2(int x, int y, int *cosp, int *sinp)
 \begin{verbatim}
 API = Application Programming Interface
 LOC = Lines Of Code 
+VGA = Video Graphics Array
+RGB = Red Green Blue
 \end{verbatim}
 
 \chapter*{Indexes}
