@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <draw_private.h>
 
 /*s: constant HSHIFT */
 #define	HSHIFT	3	/* HSHIFT==5 runs slightly faster, but hash table is 64x bigger */

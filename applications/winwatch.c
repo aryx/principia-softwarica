@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <draw_private.h> // for _string, but should not use it
 #include <event.h>
 #include <regexp.h>
 

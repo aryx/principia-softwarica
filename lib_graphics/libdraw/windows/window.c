@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <draw_private.h>
 
 // dup from memdraw.h
 typedef struct Memimage Memimage;

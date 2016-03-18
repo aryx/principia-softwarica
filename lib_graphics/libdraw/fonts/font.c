@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <draw_private.h>
 
 static int	fontresize(Font*, int, int, int);
 

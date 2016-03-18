@@ -7,6 +7,7 @@
 #include    "fns.h"
 
 #include    <draw.h>
+#include    <draw_private.h> // for BPLONG
 #include    <memdraw.h>
 #include    <memlayer.h>
 #include    <cursor.h>

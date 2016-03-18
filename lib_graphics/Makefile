@@ -24,6 +24,7 @@ SRC_VIEWS= \
    ../include/graphics/input/event.h\
    ../include/graphics/input/keyboard.h\
    ../include/graphics/input/mouse.h\
+   ../include/graphics/internals/draw_private.h\
    ../include/graphics/internals/memdraw.h\
    ../include/graphics/internals/memlayer.h\
    libdraw/misc.c\
@@ -96,7 +97,6 @@ SRC_VIEWS= \
    libmemdraw/iprint.c\
    libmemdraw/line.c\
    libmemdraw/load.c\
-   libmemdraw/openmemsubfont.c\
    libmemdraw/poly.c\
    libmemdraw/read.c\
    libmemdraw/scripts/mkcmap.c\

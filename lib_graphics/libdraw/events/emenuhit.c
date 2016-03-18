@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <draw_private.h>
 #include <event.h>
 
 /*s: enum _anon_ (lib_graphics/libdraw/emenuhit.c) */

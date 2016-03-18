@@ -222,17 +222,6 @@ typedef void (*Errorfn)(Display*, char*);
 /*e: type Errorfn */
 
 
-/*s: struct Screen */
-struct Screen
-{
-    Display	*display;	/* display holding data */
-    int		id;			/* id of system-held Screen */
-
-    Image	*image;		/* unused; for reference only */
-    Image	*fill;		/* color to paint behind windows */
-};
-/*e: struct Screen */
-
 /*s: struct Display */
 struct Display
 {
@@ -324,6 +313,18 @@ struct Image
 };
 /*e: struct Image */
 
+/*s: struct Screen */
+struct Screen
+{
+    Display	*display;	/* display holding data */
+    int		id;			/* id of system-held Screen */
+
+    Image	*image;		/* unused; for reference only */
+    Image	*fill;		/* color to paint behind windows */
+};
+/*e: struct Screen */
+
+
 /*s: struct RGB */
 struct RGB
 {
@@ -379,40 +380,6 @@ struct	Subfont
     int		ref;
 };
 /*e: struct Subfont */
-
-/*s: enum _anon_ (include/draw.h)6 */
-enum
-{
-    /* starting values */
-    /*s: constant NFCACHE */
-    LOG2NFCACHE =	6,
-    NFCACHE =	(1<<LOG2NFCACHE),	/* #chars cached */
-    /*e: constant NFCACHE */
-    /*s: constant NFLOOK */
-    NFLOOK =	5,			/* #chars to scan in cache */
-    /*e: constant NFLOOK */
-    /*s: constant NFSUBF */
-    NFSUBF =	2,			/* #subfonts to cache */
-    /*e: constant NFSUBF */
-
-    /* max value */
-    /*s: constant MAXFCACHE */
-    MAXFCACHE =	1024+NFLOOK,		/* upper limit */
-    /*e: constant MAXFCACHE */
-    /*s: constant MAXSUBF */
-    MAXSUBF =	50,			/* generous upper limit */
-    /*e: constant MAXSUBF */
-
-    /* deltas */
-    /*s: constant DSUBF */
-    DSUBF = 	4,
-    /*e: constant DSUBF */
-
-    /* expiry ages */
-    SUBFAGE	=	10000,
-    CACHEAGE =	10000
-};
-/*e: enum _anon_ (include/draw.h)6 */
 
 /*s: struct Cachefont */
 struct Cachefont
@@ -515,8 +482,8 @@ extern void		closedisplay(Display*);
 extern int		flushimage(Display*, bool);
 
 extern Image*	allocimage(Display*, Rectangle, ulong, bool, rgba);
-extern int		freeimage(Image*);
 extern Image* 	allocimagemix(Display*, ulong, ulong);
+extern int		freeimage(Image*);
 
 extern int		loadimage(Image*, Rectangle, byte*, int);
 extern int		unloadimage(Image*, Rectangle, byte*, int);
@@ -548,6 +515,7 @@ extern int		freescreen(Screen*);
 extern Screen*	publicscreen(Display*, int, ulong);
 
 extern Image*	allocwindow(Screen*, Rectangle, int, ulong);
+
 extern int	originwindow(Image*, Point, Point);
 extern void	bottomnwindows(Image**, int);
 extern void	bottomwindow(Image*);
@@ -564,6 +532,7 @@ extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
  * Geometry
  */
 extern Point	Pt(int, int);
+
 extern Point	addpt(Point, Point);
 extern Point	subpt(Point, Point);
 extern Point	divpt(Point, int);
@@ -572,6 +541,7 @@ extern int		eqpt(Point, Point);
 
 extern Rectangle	Rect(int, int, int, int);
 extern Rectangle	Rpt(Point, Point);
+
 extern int			eqrect(Rectangle, Rectangle);
 extern Rectangle	insetrect(Rectangle, int);
 extern Rectangle	rectaddpt(Rectangle, Point);
@@ -670,28 +640,6 @@ extern void		freefont(Font*);
 
 extern Font*	buildfont(Display*, char*, char*);
 
-// public? or internal to font code?
-extern Subfont*	allocsubfont(char*, int, int, int, Fontchar*, Image*);
-extern void	freesubfont(Subfont*);
-extern Subfont*	lookupsubfont(Display*, char*);
-extern void	installsubfont(char*, Subfont*);
-extern void	uninstallsubfont(Subfont*);
-extern Subfont*	readsubfont(Display*, char*, int, int);
-extern char*	subfontname(char*, char*, int);
-extern Subfont*	_getsubfont(Display*, char*);
-// for subfont designers
-extern int	writesubfont(int, Subfont*);
-
-// internal again
-extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
-extern void		agefont(Font*);
-extern void		_unpackinfo(Fontchar*, byte*, int);
-extern Point	strsubfontwidth(Subfont*, char*);
-extern int		loadchar(Font*, Rune, Cacheinfo*, int, int, char**);
-extern Subfont*	getdefont(Display*);
-
-extern int		drawlsetrefresh(ulong, int, void*, void*);
-
 // seems related to font
 extern void		lockdisplay(Display*);
 extern void		unlockdisplay(Display*);
@@ -716,69 +664,6 @@ extern	Display	*display;
 extern	Image	*view; // was called screen before
 extern	Font	*font;
 extern	Screen	*screen; // was called _screen before
-
-
-
-// PRIVATE ???? drawimpl.h ??
-
-
-extern	byte	defontdata[];
-extern	int		sizeofdefont;
-
-
-// dead?
-extern	int		_cursorfd;
-
-extern	bool	_drawdebug;	/* set to true to see errors from flushimage */
-
-// forward decl, could be move to individual files or in a drawimpl.h
-// used also by window.c
-extern Image*	_allocimage(Image*, Display*, Rectangle, ulong, int, ulong, int, int);
-extern int	    _freeimage1(Image*);
-extern Image*	_allocwindow(Image*, Screen*, Rectangle, int, ulong);
-extern Point	_string(Image*, Point, Image*, Point, Font*, char*, Rune*, int, Rectangle, Image*, Point, Drawop);
-extern	void	_setdrawop(Display*, Drawop);
-
-// internals
-extern byte*	bufimage(Display*, int);
-
-/*s: function BGSHORT */
-#define	BGSHORT(p)		(((p)[0]<<0) | ((p)[1]<<8))
-/*e: function BGSHORT */
-/*s: function BGLONG */
-#define	BGLONG(p)		((BGSHORT(p)<<0) | (BGSHORT(p+2)<<16))
-/*e: function BGLONG */
-/*s: function BPSHORT */
-#define	BPSHORT(p, v)		((p)[0]=(v), (p)[1]=((v)>>8))
-/*e: function BPSHORT */
-/*s: function BPLONG */
-#define	BPLONG(p, v)		(BPSHORT(p, (v)), BPSHORT(p+2, (v)>>16))
-/*e: function BPLONG */
-
-/*s: constant NMATCH */
-/*
- * Compressed image file parameters and helper routines
- */
-#define	NMATCH	3		/* shortest match possible */
-/*e: constant NMATCH */
-/*s: constant NRUN */
-#define	NRUN	(NMATCH+31)	/* longest match possible */
-/*e: constant NRUN */
-/*s: constant NMEM */
-#define	NMEM	1024		/* window size */
-/*e: constant NMEM */
-/*s: constant NDUMP */
-#define	NDUMP	128		/* maximum length of dump */
-/*e: constant NDUMP */
-/*s: constant NCBLOCK */
-#define	NCBLOCK	6000		/* size of compressed blocks */
-/*e: constant NCBLOCK */
-extern	void _twiddlecompressed(byte*, int);
-extern	int	_compblocksize(Rectangle, int);
-
-/* XXX backwards helps; should go */
-extern	ulong	drawld2chan[];
-extern	void	drawsetdebug(bool);
 
 // dumpers
 #pragma varargck	type	"R"	Rectangle

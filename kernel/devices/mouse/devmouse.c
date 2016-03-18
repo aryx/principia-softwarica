@@ -9,6 +9,7 @@
 /*e: kernel basic includes */
 
 #include    <draw.h>
+#include    <draw_private.h> // for BPLONG
 #include    <memdraw.h>
 #include    <cursor.h>
 
