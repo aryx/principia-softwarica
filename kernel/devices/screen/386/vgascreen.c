@@ -474,7 +474,7 @@ screensize(int x, int y, int z, ulong chan)
         /*e: [[screensize()]] when use softscreen, other settings */
     }
     else{
-        // direct framebuffer
+        // direct frame buffer
         gscreendata.bdata = scr->vaddr;
         scr->useflush = (scr->dev && scr->dev->flush);
     }
