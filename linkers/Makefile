@@ -55,3 +55,5 @@ XX=\
   8l/asm.c\
   8l/span.c\
   8l/obj.c\
+
+# also linkers/5l/tests/hello2.s and linkers/5l/tests/world.s
