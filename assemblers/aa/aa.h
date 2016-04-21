@@ -139,7 +139,7 @@ struct  Io
 /*s: struct Htab */
 struct Htab
 {
-    // option<ref<Sym>>>
+    // option<ref<Sym>>
     Sym*    sym;
     //enum<Sym_kind>
     short   symkind;

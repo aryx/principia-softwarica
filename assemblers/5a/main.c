@@ -78,7 +78,7 @@ main(int argc, char *argv[])
                     print("%s:\n", *argv);
                     if(assemble(*argv))
                         errorexit();
-                    exits(0);
+                    exits(nil);
                 }
                 nout++;
                 argc--;
@@ -88,7 +88,7 @@ main(int argc, char *argv[])
             if(i < 0) {
                 if(c)
                     errorexit();
-                exits(0);
+                exits(nil);
             }
             if(status)
                 c++;
@@ -99,7 +99,7 @@ main(int argc, char *argv[])
 
     if(assemble(argv[0]))
         errorexit();
-    exits(0);
+    exits(nil);
 }
 /*e: function main(arm) */
 

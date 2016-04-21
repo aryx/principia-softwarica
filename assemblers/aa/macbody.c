@@ -162,20 +162,20 @@ dodefine(char *cp)
 /*s: global mactab */
 struct
 {
-    char	*macname;
-    void	(*macf)(void);
+    char    *macname;
+    void    (*macf)(void);
 } mactab[] =
 {
-    "ifdef",	nil,	/* macif(0) */
-    "ifndef",	nil,	/* macif(1) */
-    "else",		nil,	/* macif(2) */
-    "endif",	macend,
+    "ifdef",    nil,    /* macif(0) */
+    "ifndef",   nil,    /* macif(1) */
+    "else",     nil,    /* macif(2) */
+    "endif",    macend,
 
-    "include",	macinc,
-    "define",	macdef,
-    "undef",	macund,
-    "pragma",	macprag,
-    "line",		maclin,
+    "include",  macinc,
+    "define",   macdef,
+    "undef",    macund,
+    "pragma",   macprag,
+    "line",     maclin,
     0
 };
 /*e: global mactab */
@@ -274,7 +274,7 @@ macdef(void)
     ischr = 0;
     for(;;) {
         if(isalpha(c) || c == '_') {
-            np = symb;
+            np = symb; // jarod: overflow?
             *np++ = c;
             c = getc();
             while(isalnum(c) || c == '_') {
@@ -372,10 +372,10 @@ macdef(void)
         }
         base = allocn(base, len, 1);
         base[len++] = c;
-        c = ((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff));
+        c = ((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff)); //jarod: GETC
         if(c == '\n')
             lineno++;
-        if(c == -1) {
+        if(c == -1) { // jarod: EOF
             yyerror("eof in a macro: %s", s->name);
             break;
         }
@@ -451,7 +451,7 @@ macexpand(Sym *s, char *b)
                         c = getc();
                         continue;
                     }
-                    if(c == '\n')
+                    if(c == '\n') //jarod: how can have this in a macro def?
                         goto bad;
                     if(c == '"')
                         break;
