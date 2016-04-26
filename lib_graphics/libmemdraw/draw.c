@@ -2459,7 +2459,7 @@ memoptdraw(Memdrawparam *par)
     /*
      * If we have a 1-bit mask, 1-bit source, and 1-bit destination, and
      * they're all bit aligned, we can just use bit operators.  This happens
-     * when we're manipulating boolean masks, e.g. in the arc code.
+     * when we're manipulating boolean masks, e.g., in the arc code.
      */
     if((par->state&(Simplemask|Simplesrc|Replmask|Replsrc))==0 
     && dst->chan==GREY1 

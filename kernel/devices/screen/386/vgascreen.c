@@ -85,7 +85,7 @@ vgaxo(long port, uchar index, uchar data)
     case Grx:
         /*
          * We could use an outport here, but some chips
-         * (e.g. 86C928) have trouble with that for some
+         * (e.g., 86C928) have trouble with that for some
          * registers.
          */
         outb(port, index);
@@ -726,7 +726,7 @@ setpalette(ulong p, ulong r, ulong g, ulong b)
 
 /*s: function setcolor(x86) */
 /*
- * On some video cards (e.g. Mach64), the palette is used as the 
+ * On some video cards (e.g., Mach64), the palette is used as the 
  * DAC registers for >8-bit modes.  We don't want to set them when the user
  * is trying to set a colormap and the card is in one of these modes.
  */
@@ -944,7 +944,7 @@ vgalinearpci(VGAscr *scr)
 
     /*
      * Scan for largest memory region on card.
-     * Some S3 cards (e.g. Savage) have enormous
+     * Some S3 cards (e.g., Savage) have enormous
      * mmio regions (but even larger frame buffers).
      * Some 3dfx cards (e.g., Voodoo3) have mmio
      * buffers the same size as the frame buffer,

@@ -427,7 +427,7 @@ struct Cachesubf
 /*s: struct Font */
 struct Font
 {
-    // ref_own<filename>, // e.g. /lib/font/bit/lucm/latin1.9.font
+    // ref_own<filename>, // e.g., /lib/font/bit/lucm/latin1.9.font
     char		*name;
     // ref<Display>
     Display		*display;
