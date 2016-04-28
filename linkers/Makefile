@@ -23,18 +23,21 @@ SRC_VIEWS= \
   ../include/exec/elf.h\
   ../include/obj/ar.h\
   5l/l.h\
-  5l/m.h\
   5l/globals.c\
-  5l/optab.c\
-  5l/utils.c\
-  5l/list.c\
-  5l/compat.c\
-  5l/pass.c\
-  5l/asm.c\
-  5l/span.c\
-  5l/obj.c\
-  5l/noop.c\
   5l/main.c\
+  5l/obj.c\
+  5l/pass.c\
+  5l/noop.c\
+  5l/span.c\
+  5l/m.h\
+  5l/optab.c\
+  5l/asm.c\
+  5l/hist.c\
+  5l/profile.c\
+  5l/float.c\
+  5l/error.c\
+  5l/utils.c\
+  5l/fmt.c\
   \
   8l/elf.h\
   8l/elf.c\

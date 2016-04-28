@@ -8,18 +8,11 @@
 
 #include    "../8l/elf.h"
 
-/*s: macro DBG */
-#define DBG if(debug['v']) mylog
-/*e: macro DBG */
-
-/*s: constant LIBNAMELEN */
-#define LIBNAMELEN  300
-/*e: constant LIBNAMELEN */
-
-typedef struct  Adr Adr;
-typedef struct  Sym Sym;
+// forward decls
+typedef struct  Adr     Adr;
 typedef struct  Auto    Auto;
 typedef struct  Prog    Prog;
+typedef struct  Sym     Sym;
 
 /*s: struct Adr(arm) */
 struct  Adr
@@ -51,85 +44,6 @@ struct  Adr
     /*e: [[Adr]] other fields */
 };
 /*e: struct Adr(arm) */
-/*s: enum Operand_class(arm) */
-// order of entries for one kind matters! coupling with cmp() and ocmp()
-enum Operand_class {
-    C_NONE      = 0,
-
-    C_REG,     // D_REG
-    C_BRANCH,  // D_BRANCH
-
-    // D_CONST
-    /*s: [[Operand_class]] C_xCON cases */
-    C_RCON,     /* 0xff rotated */ // [0..0xff] range, possibly rotated
-    C_NCON,     /* ~RCON */
-    C_LCON,
-    /*e: [[Operand_class]] C_xCON cases */
-
-    // D_OREG
-    /*s: [[Operand_class]] C_xOREG cases */
-    /*s: [[Operand_class]] cases, in C_xOREG, half case */
-    C_HOREG,
-    /*e: [[Operand_class]] cases, in C_xOREG, half case */
-    /*s: [[Operand_class]] cases, in C_xOREG, float cases */
-    C_FOREG,
-    C_HFOREG,
-    /*e: [[Operand_class]] cases, in C_xOREG, float cases */
-    C_SOREG,
-    C_LOREG,
-
-    C_ROREG,
-    C_SROREG,   /* both S and R */
-    /*e: [[Operand_class]] C_xOREG cases */
-    // D_OREG with symbol N_EXTERN (or N_INTERN)
-    /*s: [[Operand_class]] C_xEXT cases */
-    /*s: [[Operand_class]] cases, in C_xEXT, half case */
-    C_HEXT,
-    /*e: [[Operand_class]] cases, in C_xEXT, half case */
-    /*s: [[Operand_class]] cases, in C_xEXT, float cases */
-    C_FEXT,
-    C_HFEXT,
-    /*e: [[Operand_class]] cases, in C_xEXT, float cases */
-    C_SEXT,
-    C_LEXT,
-    /*e: [[Operand_class]] C_xEXT cases */
-    // D_OREG with symbol N_PARAM or N_LOCAL
-    /*s: [[Operand_class]] C_xAUTO cases */
-    /*s: [[Operand_class]] cases, in C_xAUTO, half case */
-    C_HAUTO,    /* halfword insn offset (-0xff to 0xff) */
-    /*e: [[Operand_class]] cases, in C_xAUTO, half case */
-    /*s: [[Operand_class]] cases, in C_xAUTO, float cases */
-    C_FAUTO,    /* float insn offset (0 to 0x3fc, word aligned) */
-    C_HFAUTO,   /* both H and F */
-    /*e: [[Operand_class]] cases, in C_xAUTO, float cases */
-    C_SAUTO,    /* -0xfff to 0xfff */
-    C_LAUTO,
-    /*e: [[Operand_class]] C_xAUTO cases */
-
-    // D_ADDR
-    /*s: [[Operand_class]] C_xxCON cases */
-    C_RECON,
-    /*x: [[Operand_class]] C_xxCON cases */
-    C_RACON,
-    C_LACON,
-    /*e: [[Operand_class]] C_xxCON cases */
-
-    /*s: [[Operand_class]] cases */
-    C_SHIFT,   // D_SHIFT
-    /*x: [[Operand_class]] cases */
-    C_ADDR,     /* relocatable address */
-    /*x: [[Operand_class]] cases */
-    C_FREG,
-    C_FCON,
-    C_FCR,
-    /*x: [[Operand_class]] cases */
-    C_REGREG,  // D_REGREG
-    /*x: [[Operand_class]] cases */
-    C_PSR,     // D_PSR
-    /*e: [[Operand_class]] cases */
-    C_GOK, // must be at the end e.g., for xcmp[] decl, or buildop loops
-};
-/*e: enum Operand_class(arm) */
 
 /*s: struct Prog(arm) */
 struct  Prog
@@ -223,10 +137,6 @@ struct  Sym
 #define S       ((Sym*)nil)
 /*e: constant S */
 
-/*s: constant TNAME(arm) */
-#define TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
-/*e: constant TNAME(arm) */
-
 /*s: enum Section(arm) */
 enum Section
 {
@@ -300,9 +210,6 @@ enum rxxx {
     Rindex  = 10,       /* no. bits for index in relocation address */
 };
 /*e: enum rxxx */
-/*s: constant SIGNINTERN(arm) */
-#define SIGNINTERN  (1729*325*1729)
-/*e: constant SIGNINTERN(arm) */
 /*s: enum misc_constant(arm) */
 enum misc_constants {
     /*s: constant BIG */
@@ -331,6 +238,14 @@ enum misc_constants {
     /*e: constant MAXHIST */
 };
 /*e: enum misc_constant(arm) */
+
+/*s: constant SIGNINTERN(arm) */
+#define SIGNINTERN  (1729*325*1729)
+/*e: constant SIGNINTERN(arm) */
+
+/*s: constant LIBNAMELEN */
+#define LIBNAMELEN  300
+/*e: constant LIBNAMELEN */
 
 /*s: struct Buf */
 union Buf
@@ -361,12 +276,12 @@ extern  long    INITTEXTP;      /* text location (physical) */ // ELF
 
 // input
 extern union Buf buf;
-extern  int cbc;
+extern  int     cbc;
 extern  char*   cbp;
 
 // output
 extern  char*   outfile;
-extern  fdt cout;
+extern  fdt     cout;
 extern  Biobuf  bso;
 
 // core algorithm
@@ -386,6 +301,10 @@ extern  Auto*   curhist;
 extern  Prog*   curp;
 extern  long    autosize;
 
+/*s: constant TNAME(arm) */
+#define TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
+/*e: constant TNAME(arm) */
+
 // sections size
 extern  long    textsize;
 extern  long    datsize;
@@ -404,8 +323,8 @@ extern  char*   noname;
 
 // debugging support
 extern  Sym*    histfrog[MAXHIST];
-extern  int histfrogp;
-extern  int histgen;
+extern  int     histfrogp;
+extern  int     histgen;
 
 // library
 extern  char*   library[50];
@@ -422,6 +341,10 @@ extern  int imports, nimports;
 extern  int exports, nexports;
 extern  char*   EXPTAB;
 extern  Prog    undefp;
+
+/*s: constant UP */
+#define UP  (&undefp)
+/*e: constant UP */
 
 extern  Prog*   prog_div;
 extern  Prog*   prog_divu;
@@ -444,10 +367,6 @@ extern  long    thunk;
 extern long nsymbol;
 extern  int version;
 
-/*s: constant UP */
-#define UP  (&undefp)
-/*e: constant UP */
-
 
 /*s: pragmas varargck type */
 #pragma varargck    type    "A" int
@@ -465,27 +384,27 @@ extern  int version;
 // obj.c
 int     isobjfile(char *f);
 void    ldobj(int, long, char*);
+void    objfile(char*);
+
 void    loadlib(void);
 void    addlibpath(char*);
-void    objfile(char*);
 
 void    nuxiinit(void);
 void    readundefs(char*, int);
 void    undefsym(Sym*);
 void    zerosig(char*);
 
-// TODO float.c (was in obj.c)
+// float.c
 double  ieeedtod(Ieee*);
 long    ieeedtof(Ieee*);
 
-// TODO? hist.c (was in obj.c)
+// hist.c
 void    addhist(long, int);
 void    histtoauto(void);
 
-// TODO profile.c (was in obj.c)
+// profile.c
 void    doprof1(void);
 void    doprof2(void);
-
 
 // noops.c
 void    noops(void);
@@ -537,24 +456,26 @@ void    wputl(long);
 
 int chipfloat(Ieee*);
 
+// error.c
+void    diag(char*, ...);
+void  errorexit(void);
+
 // utils.c
 Sym*  lookup(char*, int);
 Prog* prg(void);
-void  mylog(char*, ...);
-void  errorexit(void);
 void  gethunk(void);
-
-// TODO utils.c (was in pass.c)
+// and malloc/free/setmalloctag overwrite
 long    atolwhex(char*);
 long    rnd(long, long);
-
-// compat.c
 int     fileexists(char*);
-// and malloc/free/setmalloctag overwrite
+void  mylog(char*, ...);
 
-// list.c (dumpers)
+/*s: macro DBG */
+#define DBG if(debug['v']) mylog
+/*e: macro DBG */
+
+// fmt.c (dumpers)
 void listinit(void);
-void    diag(char*, ...);
 void    prasm(Prog*);
 int Aconv(Fmt*);
 int Cconv(Fmt*);
@@ -562,6 +483,4 @@ int Dconv(Fmt*);
 int Nconv(Fmt*);
 int Pconv(Fmt*);
 int Sconv(Fmt*);
-
-
 /*e: linkers/5l/l.h */
