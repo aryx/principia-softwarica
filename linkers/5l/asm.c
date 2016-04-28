@@ -950,7 +950,7 @@ asmout(Prog *p, Optab *o)
         rt = p->to.reg;
         r = p->reg;
         if(p->as == AMOVW || p->as == AMVN) // can be AMOVW??
-            r = 0; // R0
+            r = 0;
         else 
           /*s: [[asmout()]] adjust [[r]] */
           if(r == R_NONE) // ADD FROM, TO ==> ADD FROM, TO, TO

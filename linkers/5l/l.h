@@ -5,6 +5,7 @@
 
 #include    <common.out.h>
 #include    <5.out.h>
+
 #include    "../8l/elf.h"
 
 /*s: macro DBG */
@@ -126,7 +127,7 @@ enum Operand_class {
     /*x: [[Operand_class]] cases */
     C_PSR,     // D_PSR
     /*e: [[Operand_class]] cases */
-    C_GOK, // must be at the end e.g. for xcmp[] decl, or buildop loops
+    C_GOK, // must be at the end e.g., for xcmp[] decl, or buildop loops
 };
 /*e: enum Operand_class(arm) */
 
@@ -187,7 +188,7 @@ struct  Sym
     short   version; 
 
     // The generic value, 
-    // e.g. virtual pc for a TEXT procedure, size for GLOBL
+    // e.g., virtual pc for a TEXT procedure, size for GLOBL
     long    value; 
 
     /*s: [[Sym]] section field */

@@ -159,6 +159,7 @@ checkpool(Prog *p)
 /*e: function checkpool(arm) */
 
 /*s: function flushpool(arm) */
+/// (dotext -> checkpool) | dotext -> <>
 void
 flushpool(Prog *p, bool skip)
 {
@@ -503,8 +504,7 @@ aclass(Adr *a)
                 break;
             /*e: [[aclass()]] D_ADDR case, N_EXTERN case, sanity check s */
             switch(s->type) {
-            case STEXT: case SSTRING:
-            case SUNDEF:
+            case STEXT: case SSTRING: case SUNDEF:
                 instoffset = s->value + a->offset;
                 return C_LCON; // etext is stable
             case SNONE: case SXREF:

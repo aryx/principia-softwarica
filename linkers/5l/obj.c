@@ -374,7 +374,7 @@ inopd(byte *p, Adr *a, Sym *h[])
     t = a->symkind;
     l = a->offset;
 
-    // a parameter or local with a symbol, e.g. p+4(FP)
+    // a parameter or local with a symbol, e.g., p+4(FP)
     if(s != S && (t == N_LOCAL || t == N_PARAM)) {
   
        /*s: [[inopd()]] return if stack variable already present in curauto */
@@ -382,7 +382,7 @@ inopd(byte *p, Adr *a, Sym *h[])
            if(u->asym == s)
             if(u->type == t) {
                if(u->aoffset > l)
-                   u->aoffset = l; // diag()? inconcistent offset?
+                   u->aoffset = l; // diag()? inconsistent offset?
                return size;
            }
        /*e: [[inopd()]] return if stack variable already present in curauto */
