@@ -386,13 +386,14 @@ int     isobjfile(char *f);
 void    ldobj(int, long, char*);
 void    objfile(char*);
 
-void    loadlib(void);
-void    addlibpath(char*);
-
 void    nuxiinit(void);
 void    readundefs(char*, int);
 void    undefsym(Sym*);
 void    zerosig(char*);
+
+// lib.c
+void    loadlib(void);
+void    addlibpath(char*);
 
 // float.c
 double  ieeedtod(Ieee*);

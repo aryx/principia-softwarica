@@ -26,6 +26,7 @@ SRC_VIEWS= \
   5l/globals.c\
   5l/main.c\
   5l/obj.c\
+  5l/lib.c\
   5l/pass.c\
   5l/noop.c\
   5l/span.c\
