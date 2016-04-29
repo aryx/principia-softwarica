@@ -14,15 +14,15 @@
 %thx to LP, I changed for the better a few things:
 % - introduced Headtype enum instead of hardcoded integers
 % - introduced mylog() and DBG() to factorize the tracing code
-% - removed many portable myxxx() wrappers
+% - removed many portable myxxx() wrappers (and merged compat.c with utils.c)
 % - collateral evolutions of changes in 5a, e.g., NREG -> R_NONE, 
 %   D_FILE1 -> N_LINE, etc
 % - removed some deadcode 
 %    * C_LBRA, C_LECON, C_SCON, D_OCONST, regused
-%    * ADYNT, AINIT
+%    * ADYNT, AINIT (stuff used only by dead Alef language?)
 %    * NENT
 %    * commented lots of code that was in dead ifdefs or was related to
-%      dead alef features like BECOME
+%      dead Alef features like BECOME
 %    * forward decl typedef Count
 %    * code to deal with UBIT where does not make sense (MOVW)
 % - reorganized code
@@ -34,14 +34,15 @@
 %    * introduced D_ADDR in Assembler so can have cleaner code in Linker
 %    * more consistent olr/osr/olrr/... pass opcode and sc as first params
 %      so can also factorize code regarding bit 22 and have simpler wrappers
-% - TODO reorganized the code to better match the chapters
-%    by introducing more files: main.c, lib.c, error.c, m.h
+% - reorganized the code to better match the chapters
+%    by introducing more files: main.c, lib.c, error.c, m.h, profile.c, hist.c
+%     etc
 
 %thx to 5l in ocaml: 
 %  - see again that code could be so much simpler, no need so many globals,
 %    can be far more functional, more explicit on which information is
 %    needed by a function.
-%  - introduced more files, obj.c, main.c, lookup.c
+%  - introduced more files, obj.c, main.c (could also have a lookup.c)
 %  - ANAME simplifies things actually in 5l; it factorizes code. We have
 %    to write visitor boilerplate in ocaml.
 %  - naming phase done thx also to ANAME. There is symbol table transformation!
@@ -60,6 +61,10 @@
 
 %thx to codemap/codegraph/scheck:
 % - see subtle dependency to 8c/enam.c through anames
+% - TODO? mv more globals closer to their owner
+% - use scheck to remove deadcode, dead prototypes, useless export
+%   or mv as forward decl
+%   (harder to understand big interface files)
 
 %thx to this manual, better understand linking:
 % - that an object is really a module, the simplest/lowest module abstraction
@@ -93,7 +98,7 @@
 % - understand main(), LP split main, improve TOC
 % - understand main functions, LP split, cluster, improve TOC
 % - LP split the structures, use datalog for flow to field info
-% - SEMI nullify, boolify, typeify,    scheckify
+% - nullify, boolify, typeify,    scheckify
 % - aspectify advanced features!
 % - add figures
 % - add explanations
@@ -1750,7 +1755,7 @@ entry point                            & \ref{chap:main}                        
 \midrule
 
 loading objects                        & \ref{chap:loading-objects}                       & [[obj.c]] & [[ldobj()]]                                            & {1525} \\
-loading libraries                      & \ref{chap:loading-libraries}                     &           & [[loadlib()]]                                          & \\
+loading libraries                      & \ref{chap:loading-libraries}                     & [[lib.c]] & [[loadlib()]]                                          & \\ %pad: I created this file
 
 
 resolving symbols                      & \ref{chap:resolving}          & [[pass.c]]                   & [[patch()]] [[dodata()]]                               & 734 \\
@@ -1766,14 +1771,20 @@ ARM code generation                    &                               & [[span.
 
 \midrule
 
+Debugging support                          & \ref{chap:debugging}           & [[hist.c]]                    & [[addhist()]]                                           & 21 \\       
+
+Profiling support                          & \ref{chap:profiling}           & [[profile.c]]                    & [[doprof1()]] [[doprof2()]]                                           & 21 \\       
+
+\midrule
+
 ELF constants                          & \ref{chap:advanced}           & [[elf.h]]                    & [[Ehdr32sz]]                                           & 21 \\       
 ELF generation                         & \ref{chap:advanced}           & [[elf.c]]                    & [[elf32()]]                                            & 172 \\ % actually in 8l/
-utilities to manage float instructions & \ref{chap:advanced}           & [[float.c]]                    & [[ieeedtof()]]                                            & 172 \\ %pad: I created this file
+float instructions                     & \ref{chap:advanced}           & [[float.c]]                    & [[ieeedtof()]]                                            & 172 \\ %pad: I created this file
 
 \midrule
 
 dumpers                                & \ref{chap:debugging-appendix} & [[fmt.c]]        & [[prasm()]] [[Pconv()]] [[Dconv()]]                    & 377 \\ %pad: I renamed list.c -> fmt.c
-dumper for ARM opcodes                 & \ref{chap:debugging-appendix} & [[enam.c]]                   & [[anames]]                                             & 99 \\ %5l/enam.c: which is a symlink in 5c/
+%dumper for ARM opcodes                 & \ref{chap:debugging-appendix} & [[enam.c]]                   & [[anames]]                                             & 99 \\ %5l/enam.c: which is a symlink in 5c/
 error management                       & \ref{chap:error}              & [[error.c]]        & [[diag()]] [[errorexit()]]                    & 377 \\ %pad: I created this file
 utilities                              & \ref{chap:libc}               & [[utils.c]]                  & [[lookup()]] [[malloc()]]                           & 120 \\ %pad: merged with compat.c
 
@@ -6071,7 +6082,7 @@ xrefresolv = true;
 
 <<function addlib>>=
 /// ldobj(case AHISTORY and local_line == -1 special mark) -> <>
-static void
+void
 addlib(char *obj)
 {
     char fn1[LIBNAMELEN], fn2[LIBNAMELEN], comp[LIBNAMELEN];
@@ -17777,7 +17788,7 @@ listinit(); // fmtinstall()
 \l use STDOUT?
 
 
-\section{Fmt}
+\section{Dumpers}
 \label{sec:dumpers}
 
 % dupe with Compiler.nw
