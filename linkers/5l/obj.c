@@ -4,6 +4,7 @@
 
 // forward decls
 int     find1(long, int);
+void ldobj(fdt f, long c, char *pn);
 
 /*s: global noname linker */
 char	*noname		= "<none>";

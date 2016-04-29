@@ -2,6 +2,9 @@
 #include	"l.h"
 #include	"m.h"
 
+// forward decls
+long    immaddr(long);
+
 /*s: global pool(arm) */
 static struct {
     // PC of first instruction referencing the pool

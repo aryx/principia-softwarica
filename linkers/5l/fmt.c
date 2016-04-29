@@ -1,6 +1,14 @@
 /*s: linkers/5l/fmt.c */
 #include "l.h"
 
+// forward decls
+int Aconv(Fmt*);
+int Cconv(Fmt*);
+int Dconv(Fmt*);
+int Nconv(Fmt*);
+int Pconv(Fmt*);
+int Sconv(Fmt*);
+
 /*s: function listinit(arm) */
 void
 listinit(void)

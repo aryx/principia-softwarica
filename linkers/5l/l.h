@@ -333,7 +333,6 @@ extern  int libraryp;
 extern  int xrefresolv;
 
 // advanced topics
-extern  int dtype;
 extern  int armv4;
 extern  int vfp;
 extern  int doexp, dlm;
@@ -383,7 +382,6 @@ extern  int version;
 
 // obj.c
 int     isobjfile(char *f);
-void    ldobj(int, long, char*);
 void    objfile(char*);
 
 void    nuxiinit(void);
@@ -429,7 +427,6 @@ void    dotext(void);
 void    xdefine(char*, int, long);
 int aclass(Adr*);
 long    immrot(ulong);
-long    immaddr(long);
 long    regoff(Adr*); // for float
 // oplook in m.h
 
@@ -438,18 +435,11 @@ void    asmdyn(void);
 
 // asm.c
 void    asmb(void);
-long    entryvalue(void);
 void    cflush(void);
-void    asmsym(void);
-void    putsymb(char*, int, long, int);
-void    asmlc(void);
-void    datblk(long, long, int);
 // asmout in m.h
 
 void    strnput(char*, int);
 void    cput(int);
-void    llput(vlong);
-void    llputl(vlong);
 void    lput(long);
 void    lputl(long);
 void    wput(long);
@@ -464,7 +454,6 @@ void  errorexit(void);
 // utils.c
 Sym*  lookup(char*, int);
 Prog* prg(void);
-void  gethunk(void);
 // and malloc/free/setmalloctag overwrite
 long    atolwhex(char*);
 long    rnd(long, long);
@@ -478,10 +467,4 @@ void  mylog(char*, ...);
 // fmt.c (dumpers)
 void listinit(void);
 void    prasm(Prog*);
-int Aconv(Fmt*);
-int Cconv(Fmt*);
-int Dconv(Fmt*);
-int Nconv(Fmt*);
-int Pconv(Fmt*);
-int Sconv(Fmt*);
 /*e: linkers/5l/l.h */

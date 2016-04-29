@@ -2,6 +2,14 @@
 #include	"l.h"
 #include	"m.h"
 
+void    asmsym(void);
+void    putsymb(char*, int, long, int);
+
+void    asmlc(void);
+void    datblk(long, long, int);
+
+void    asmout(Prog*, Optab*);
+
 // forward decls
 long    oprrr(int, int);
 
@@ -245,6 +253,7 @@ asmb(void)
 }
 /*e: function asmb(arm) */
 
+
 /*s: function strnput(arm) */
 void
 strnput(char *s, int n)
@@ -329,24 +338,6 @@ lputl(long l)
         cflush();
 }
 /*e: function lputl(arm) */
-
-/*s: function llput */
-void
-llput(vlong v)
-{
-    lput(v>>32);
-    lput(v);
-}
-/*e: function llput */
-
-/*s: function llputl */
-void
-llputl(vlong v)
-{
-    lputl(v);
-    lputl(v>>32);
-}
-/*e: function llputl */
 
 /*s: function cflush */
 void

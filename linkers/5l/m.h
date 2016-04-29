@@ -153,11 +153,7 @@ extern  long    instoffset;
 extern  Prog*   blitrl;
 extern  Prog*   elitrl;
 
-extern  char    literal[32];
 extern  bool    xcmp[C_GOK+1][C_GOK+1];
-
-// asm.c
-void    asmout(Prog*, Optab*);
 
 // span.c
 Optab*  oplook(Prog*);
