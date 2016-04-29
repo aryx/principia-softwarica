@@ -2,7 +2,6 @@
 #include	"l.h"
 
 // forward decls
-int     relinv(int);
 void    xfol(Prog*);
 void    mkfwd(void);
 Prog*   brloop(Prog*);

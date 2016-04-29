@@ -232,24 +232,6 @@ nopout(Prog *p)
 }
 /*e: function nopout */
 
-/*s: function readsome */
-static byte*
-readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
-{
-    int n;
-
-    n = stop - good;
-    memmove(buf, good, n);
-    stop = buf + n;
-    n = MAXIO - n;
-    if(n > max)
-        n = max;
-    n = read(f, stop, n);
-    if(n <= 0)
-        return nil;
-    return stop + n;
-}
-/*e: function readsome */
 
 
 /*s: function ldobj(arm) */

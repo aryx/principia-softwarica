@@ -420,6 +420,9 @@ long    regoff(Adr*); // for float
 void    dynreloc(Sym*, long, int);
 void    asmdyn(void);
 
+// datagen.c
+void datblk(long s, long n, bool sstring);
+
 // asm.c
 void    asmb(void);
 void    cflush(void);
@@ -434,6 +437,10 @@ void    wputl(long);
 // hist.c
 void    addhist(long, int);
 void    histtoauto(void);
+
+// debugging.c
+void asmsym(void);
+void asmlc(void);
 
 // profile.c
 void    doprof1(void);

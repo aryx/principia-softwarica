@@ -39,9 +39,13 @@ SRC_VIEWS= \
   5l/m.h\
   5l/optab.c\
   5l/asm.c\
+  5l/datagen.c\
   5l/codegen.c\
+  5l/io.c\
+  5l/dynamic.c\
   5l/hist.c\
   5l/profile.c\
+  5l/debugging.c\
   5l/float.c\
   5l/error.c\
   5l/utils.c\
