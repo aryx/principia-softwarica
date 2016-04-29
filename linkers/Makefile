@@ -33,11 +33,13 @@ SRC_VIEWS= \
   5l/obj.c\
   5l/lib.c\
   5l/pass.c\
+  5l/layout.c\
   5l/noop.c\
   5l/span.c\
   5l/m.h\
   5l/optab.c\
   5l/asm.c\
+  5l/codegen.c\
   5l/hist.c\
   5l/profile.c\
   5l/float.c\
