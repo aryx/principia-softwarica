@@ -411,6 +411,7 @@ void    dotext(void);
 void    xdefine(char*, int, long);
 int aclass(Adr*);
 long    immrot(ulong);
+long    immaddr(long);
 long    regoff(Adr*); // for float
 // oplook in m.h
 
