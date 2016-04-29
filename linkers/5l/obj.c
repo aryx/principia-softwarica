@@ -4,7 +4,6 @@
 
 // forward decls
 int     find1(long, int);
-void ldobj(fdt f, long c, char *pn);
 
 /*s: global noname linker */
 char	*noname		= "<none>";
@@ -45,152 +44,7 @@ isobjfile(char *f)
 }
 /*e: function isobjfile */
 
-extern char* findlib(char *file);
 
-/*s: function objfile */
-/// main | loadlib  -> <>
-void
-objfile(char *file)
-{
-    fdt f;
-    long len;
-    char magbuf[SARMAG]; // magic buffer
-    /*s: [[objfile()]] other locals */
-    struct ar_hdr arhdr;
-    long off, esym, cnt;
-    Sym *s;
-    char pname[LIBNAMELEN];
-    char name[LIBNAMELEN];
-    char *e, *start, *stop;
-    bool work;
-    int pass = 1;
-    /*e: [[objfile()]] other locals */
-
-    DBG("%5.2f objfile: %s\n", cputime(), file);
-
-    /*s: [[objfile()]] adjust file if -lxxx filename */
-    if(file[0] == '-' && file[1] == 'l') {
-        snprint(pname, sizeof(pname), "lib%s.a", file+2);
-        e = findlib(pname);
-        if(e == nil) {
-            diag("cannot find library: %s", file);
-            errorexit();
-        }
-        snprint(name, sizeof(name), "%s/%s", e, pname);
-        file = name;
-    }
-    /*e: [[objfile()]] adjust file if -lxxx filename */
-
-    f = open(file, 0);
-    /*s: [[objfile()]] sanity check f */
-    if(f < 0) {
-        diag("cannot open %s: %r", file);
-        errorexit();
-    }
-    /*e: [[objfile()]] sanity check f */
-
-    len = read(f, magbuf, SARMAG);
-
-    // is it a regular object? (not a library)
-    if(len != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
-        /* load it as a regular file */
-        len = seek(f, 0L, SEEK__END); // len = filesize(f);
-        seek(f, 0L, SEEK__START);
-
-        // the important call!
-        ldobj(f, len, file);
-
-        close(f);
-        return;
-    }
-    // else
-    /*s: [[objfile()]] when file is a library */
-    DBG("%5.2f ldlib: %s\n", cputime(), file);
-
-    len = read(f, &arhdr, SAR_HDR);
-
-    /*s: [[objfile()]] sanity check library header size and content */
-    if(len != SAR_HDR) {
-        diag("%s: short read on archive file symbol header", file);
-        goto out;
-    }
-    if(strncmp(arhdr.name, symname, strlen(symname))) {
-        diag("%s: first entry not symbol header", file);
-        goto out;
-    }
-    /*e: [[objfile()]] sanity check library header size and content */
-
-    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
-    off = SARMAG + SAR_HDR;
-
-    /*
-     * just bang the whole symbol file into memory
-     */
-    seek(f, off, 0);
-    cnt = esym - off;
-    start = malloc(cnt + 10);
-    cnt = read(f, start, cnt);
-    if(cnt <= 0){
-        close(f);
-        return;
-    }
-    stop = &start[cnt];
-    memset(stop, '\0', 10);
-
-    work = true;
-    while(work) {
-
-        DBG("%5.2f library pass%d: %s\n", cputime(), pass, file);
-        pass++;
-        work = false;
-        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
-
-            s = lookup(e+5, 0);
-            // loading only the object files containing symbols we are looking for
-            if(s->type == SXREF || 
-               (s->type == SNONE && strcmp(s->name, "main") == 0)) {
-                sprint(pname, "%s(%s)", file, s->name);
-                DBG("%5.2f library: %s\n", cputime(), pname);
-            
-                len = e[1] & 0xff;
-                len |= (e[2] & 0xff) << 8;
-                len |= (e[3] & 0xff) << 16;
-                len |= (e[4] & 0xff) << 24;
-                // >> >> >> >>
-            
-                seek(f, len, SEEK__START);
-                len = read(f, &arhdr, SAR_HDR);
-                /*s: [[objfile()]] sanity check entry header */
-                if(len != SAR_HDR)
-                    goto bad;
-                if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
-                    goto bad;
-                /*e: [[objfile()]] sanity check entry header */
-                len = atolwhex(arhdr.size);
-
-                // loading the object file containing the symbol
-                ldobj(f, len, pname);
-            
-                if(s->type == SXREF) {
-                    diag("%s: failed to load: %s", file, s->name);
-                    errorexit();
-                }
-                work = true; // maybe some new SXREF has been found in ldobj()
-               /*s: [[objfile()]] an SXREF was found hook */
-               xrefresolv = true;
-               /*e: [[objfile()]] an SXREF was found hook */
-            }
-        }
-    }
-    return;
-
-    bad:
-        diag("%s: bad or out of date archive", file);
-    out:
-        close(f);
-    /*e: [[objfile()]] when file is a library */
-}
-/*e: function objfile */
 
 /*s: function inopd(arm) */
 /// main -> objfile -> ldobj -> <>
@@ -326,6 +180,8 @@ inopd(byte *p, Adr *a, Sym *h[])
 /*e: function inopd(arm) */
 
 
+
+
 /*s: function collapsefrog */
 static void
 collapsefrog(Sym *s)
@@ -395,7 +251,6 @@ readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
 }
 /*e: function readsome */
 
-extern void addlib(char *obj);
 
 /*s: function ldobj(arm) */
 /// main -> objfile -> <>
@@ -990,4 +845,150 @@ readundefs(char *f, int t)
     Bterm(b);
 }
 /*e: function readundefs */
+
+/*s: function objfile */
+/// main | loadlib  -> <>
+void
+objfile(char *file)
+{
+    fdt f;
+    long len;
+    char magbuf[SARMAG]; // magic buffer
+    /*s: [[objfile()]] other locals */
+    struct ar_hdr arhdr;
+    long off, esym, cnt;
+    Sym *s;
+    char pname[LIBNAMELEN];
+    char name[LIBNAMELEN];
+    char *e, *start, *stop;
+    bool work;
+    int pass = 1;
+    /*e: [[objfile()]] other locals */
+
+    DBG("%5.2f objfile: %s\n", cputime(), file);
+
+    /*s: [[objfile()]] adjust file if -lxxx filename */
+    if(file[0] == '-' && file[1] == 'l') {
+        snprint(pname, sizeof(pname), "lib%s.a", file+2);
+        e = findlib(pname);
+        if(e == nil) {
+            diag("cannot find library: %s", file);
+            errorexit();
+        }
+        snprint(name, sizeof(name), "%s/%s", e, pname);
+        file = name;
+    }
+    /*e: [[objfile()]] adjust file if -lxxx filename */
+
+    f = open(file, 0);
+    /*s: [[objfile()]] sanity check f */
+    if(f < 0) {
+        diag("cannot open %s: %r", file);
+        errorexit();
+    }
+    /*e: [[objfile()]] sanity check f */
+
+    len = read(f, magbuf, SARMAG);
+
+    // is it a regular object? (not a library)
+    if(len != SARMAG || strncmp(magbuf, ARMAG, SARMAG)){
+        /* load it as a regular file */
+        len = seek(f, 0L, SEEK__END); // len = filesize(f);
+        seek(f, 0L, SEEK__START);
+
+        // the important call!
+        ldobj(f, len, file);
+
+        close(f);
+        return;
+    }
+    // else
+    /*s: [[objfile()]] when file is a library */
+    DBG("%5.2f ldlib: %s\n", cputime(), file);
+
+    len = read(f, &arhdr, SAR_HDR);
+
+    /*s: [[objfile()]] sanity check library header size and content */
+    if(len != SAR_HDR) {
+        diag("%s: short read on archive file symbol header", file);
+        goto out;
+    }
+    if(strncmp(arhdr.name, symname, strlen(symname))) {
+        diag("%s: first entry not symbol header", file);
+        goto out;
+    }
+    /*e: [[objfile()]] sanity check library header size and content */
+
+    esym = SARMAG + SAR_HDR + atolwhex(arhdr.size);
+    off = SARMAG + SAR_HDR;
+
+    /*
+     * just bang the whole symbol file into memory
+     */
+    seek(f, off, 0);
+    cnt = esym - off;
+    start = malloc(cnt + 10);
+    cnt = read(f, start, cnt);
+    if(cnt <= 0){
+        close(f);
+        return;
+    }
+    stop = &start[cnt];
+    memset(stop, '\0', 10);
+
+    work = true;
+    while(work) {
+
+        DBG("%5.2f library pass%d: %s\n", cputime(), pass, file);
+        pass++;
+        work = false;
+        for(e = start; e < stop; e = strchr(e+5, 0) + 1) {
+
+            s = lookup(e+5, 0);
+            // loading only the object files containing symbols we are looking for
+            if(s->type == SXREF || 
+               (s->type == SNONE && strcmp(s->name, "main") == 0)) {
+                sprint(pname, "%s(%s)", file, s->name);
+                DBG("%5.2f library: %s\n", cputime(), pname);
+            
+                len = e[1] & 0xff;
+                len |= (e[2] & 0xff) << 8;
+                len |= (e[3] & 0xff) << 16;
+                len |= (e[4] & 0xff) << 24;
+                // >> >> >> >>
+            
+                seek(f, len, SEEK__START);
+                len = read(f, &arhdr, SAR_HDR);
+                /*s: [[objfile()]] sanity check entry header */
+                if(len != SAR_HDR)
+                    goto bad;
+                if(strncmp(arhdr.fmag, ARFMAG, sizeof(arhdr.fmag)))
+                    goto bad;
+                /*e: [[objfile()]] sanity check entry header */
+                len = atolwhex(arhdr.size);
+
+                // loading the object file containing the symbol
+                ldobj(f, len, pname);
+            
+                if(s->type == SXREF) {
+                    diag("%s: failed to load: %s", file, s->name);
+                    errorexit();
+                }
+                work = true; // maybe some new SXREF has been found in ldobj()
+               /*s: [[objfile()]] an SXREF was found hook */
+               xrefresolv = true;
+               /*e: [[objfile()]] an SXREF was found hook */
+            }
+        }
+    }
+    return;
+
+    bad:
+        diag("%s: bad or out of date archive", file);
+    out:
+        close(f);
+    /*e: [[objfile()]] when file is a library */
+}
+/*e: function objfile */
+
 /*e: linkers/5l/obj.c */

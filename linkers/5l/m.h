@@ -153,6 +153,9 @@ extern  long    instoffset;
 
 extern  bool    xcmp[C_GOK+1][C_GOK+1];
 
+// codegen.c
+void    asmout(Prog*, Optab*);
+
 // span.c
 Optab*  oplook(Prog*);
 

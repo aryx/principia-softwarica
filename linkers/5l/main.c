@@ -17,6 +17,21 @@ usage(void)
 }
 /*e: function usage, linker */
 
+/*s: function undef */
+/// main -> <>
+void
+undef(void)
+{
+    int i;
+    Sym *s;
+
+    for(i=0; i<NHASH; i++)
+        for(s = hash[i]; s != S; s = s->link)
+            if(s->type == SXREF)
+                diag("%s: not defined", s->name);
+}
+/*e: function undef */
+
 /*s: function main(arm) */
 void
 main(int argc, char *argv[])

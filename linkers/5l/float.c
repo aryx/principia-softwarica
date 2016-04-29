@@ -57,4 +57,37 @@ ieeedtod(Ieee *ieeep)
     return ldexp(fr, exp);
 }
 /*e: function ieeedtod */
+
+/*s: global chipfloats(arm) */
+static Ieee chipfloats[] = {
+    {0x00000000, 0x00000000}, /* 0 */
+    {0x00000000, 0x3ff00000}, /* 1 */
+    {0x00000000, 0x40000000}, /* 2 */
+    {0x00000000, 0x40080000}, /* 3 */
+    {0x00000000, 0x40100000}, /* 4 */
+    {0x00000000, 0x40140000}, /* 5 */
+    {0x00000000, 0x3fe00000}, /* .5 */
+    {0x00000000, 0x40240000}, /* 10 */
+};
+/*e: global chipfloats(arm) */
+
+/*s: function chipfloat(arm) */
+int
+chipfloat(Ieee *e)
+{
+    Ieee *p;
+    int n;
+
+    if(vfp)
+        return -1;
+    for(n = sizeof(chipfloats)/sizeof(chipfloats[0]); --n >= 0;){
+        p = &chipfloats[n];
+        if(p->l == e->l && p->h == e->h)
+            return n;
+    }
+    return -1;
+}
+/*e: function chipfloat(arm) */
+
+
 /*e: linkers/5l/float.c */

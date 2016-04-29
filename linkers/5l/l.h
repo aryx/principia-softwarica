@@ -364,6 +364,9 @@ extern long nsymbol;
 #pragma varargck    argpos  diag 1
 /*e: pragmas varargck argpos */
 
+// main.c
+void    undef(void);
+
 // obj.c
 int     isobjfile(char *f);
 void    objfile(char*);
@@ -376,18 +379,16 @@ void    zerosig(char*);
 // lib.c
 void    loadlib(void);
 void    addlibpath(char*);
+char* findlib(char *file);
+void addlib(char *obj);
 
-// float.c
-double  ieeedtod(Ieee*);
-long    ieeedtof(Ieee*);
+// pass.c
+void    patch(void);
+void    follow(void);
 
-// hist.c
-void    addhist(long, int);
-void    histtoauto(void);
-
-// profile.c
-void    doprof1(void);
-void    doprof2(void);
+void    import(void);
+void    export(void);
+void    ckoff(Sym*, long);
 
 // noops.c
 void    noops(void);
@@ -395,20 +396,13 @@ void    divsig(void);
 void    initdiv(void);
 void    nocache(Prog*);
 
-// pass.c
-void    undef(void);
-void    patch(void);
+// layout.c
 void    dodata(void);
-void    follow(void);
-
-void    import(void);
-void    export(void);
-void    ckoff(Sym*, long);
+void    dotext(void);
+void    xdefine(char*, int, long);
 
 // span.c
 void    buildop(void);
-void    dotext(void);
-void    xdefine(char*, int, long);
 int aclass(Adr*);
 long    immrot(ulong);
 long    immaddr(long);
@@ -425,10 +419,24 @@ void    cflush(void);
 
 void    cput(int);
 void    lput(long);
+void    lputl(long l);
 void    wput(long);
 void    wputl(long);
 
+// hist.c
+void    addhist(long, int);
+void    histtoauto(void);
+
+// profile.c
+void    doprof1(void);
+void    doprof2(void);
+
+// float.c
+double  ieeedtod(Ieee*);
+long    ieeedtof(Ieee*);
 int chipfloat(Ieee*);
+
+
 
 // error.c
 void    diag(char*, ...);
@@ -442,6 +450,7 @@ long    atolwhex(char*);
 long    rnd(long, long);
 int     fileexists(char*);
 void  mylog(char*, ...);
+
 
 /*s: macro DBG */
 #define DBG if(debug['v']) mylog

@@ -796,6 +796,9 @@ extern long nsymbol;
 <<pragmas varargck type>>
 <<pragmas varargck argpos>>
 
+// main.c
+void    undef(void);
+
 // obj.c
 int     isobjfile(char *f);
 void    objfile(char*);
@@ -808,18 +811,16 @@ void    zerosig(char*);
 // lib.c
 void    loadlib(void);
 void    addlibpath(char*);
+char* findlib(char *file);
+void addlib(char *obj);
 
-// float.c
-double  ieeedtod(Ieee*);
-long    ieeedtof(Ieee*);
+// pass.c
+void    patch(void);
+void    follow(void);
 
-// hist.c
-void    addhist(long, int);
-void    histtoauto(void);
-
-// profile.c
-void    doprof1(void);
-void    doprof2(void);
+void    import(void);
+void    export(void);
+void    ckoff(Sym*, long);
 
 // noops.c
 void    noops(void);
@@ -827,20 +828,13 @@ void    divsig(void);
 void    initdiv(void);
 void    nocache(Prog*);
 
-// pass.c
-void    undef(void);
-void    patch(void);
+// layout.c
 void    dodata(void);
-void    follow(void);
-
-void    import(void);
-void    export(void);
-void    ckoff(Sym*, long);
+void    dotext(void);
+void    xdefine(char*, int, long);
 
 // span.c
 void    buildop(void);
-void    dotext(void);
-void    xdefine(char*, int, long);
 int aclass(Adr*);
 long    immrot(ulong);
 long    immaddr(long);
@@ -857,10 +851,24 @@ void    cflush(void);
 
 void    cput(int);
 void    lput(long);
+void    lputl(long l);
 void    wput(long);
 void    wputl(long);
 
+// hist.c
+void    addhist(long, int);
+void    histtoauto(void);
+
+// profile.c
+void    doprof1(void);
+void    doprof2(void);
+
+// float.c
+double  ieeedtod(Ieee*);
+long    ieeedtof(Ieee*);
 int chipfloat(Ieee*);
+
+
 
 // error.c
 void    diag(char*, ...);
@@ -874,6 +882,7 @@ long    atolwhex(char*);
 long    rnd(long, long);
 int     fileexists(char*);
 void  mylog(char*, ...);
+
 
 <<macro DBG>>
 
@@ -913,12 +922,16 @@ extern  long    instoffset;
 
 extern  bool    xcmp[C_GOK+1][C_GOK+1];
 
+// codegen.c
+void    asmout(Prog*, Optab*);
+
 // span.c
 Optab*  oplook(Prog*);
 
 @
 
 \subsection*{[[linkers/5l/globals.c]]}
+%pad: I created this file, content was in l.h before (EXTERN trick)
 
 
 %-------------------------------------------------------------
@@ -1102,6 +1115,9 @@ int Sconv(Fmt*);
 
 \subsection*{[[linkers/5l/layout.c]]}
 
+%pad: I created this file, dodata was in pass.c, dotext and pool stuff
+% was in span.c
+
 %-------------------------------------------------------------
 
 <<linkers/5l/layout.c>>=
@@ -1152,8 +1168,6 @@ void    mkfwd(void);
 Prog*   brloop(Prog*);
 
 
-<<function undef>>
-
 <<function brchain(arm)>>
 
 <<function relinv(arm)>>
@@ -1179,11 +1193,46 @@ Prog*   brloop(Prog*);
 @
 
 \subsection*{[[linkers/5l/codegen.c]]}
+%pad: I created this file; content was in asm.c before
 
 %-------------------------------------------------------------
 
 <<linkers/5l/codegen.c>>=
 #include	"l.h"
+#include	"m.h"
+
+<<function oprrr(arm)>>
+
+<<function opvfprrr(arm)>>
+
+<<function opbra(arm)>>
+
+<<function olr(arm)>>
+
+<<function olhr(arm)>>
+
+<<function osr(arm)>>
+
+<<function oshr(arm)>>
+    
+
+<<function olrr(arm)>>
+
+<<function olhrr(arm)>>
+
+<<function osrr(arm)>>
+
+<<function oshrr(arm)>>
+
+
+<<function ovfpmem(arm)>>
+
+<<function ofsr(arm)>>
+
+<<function omvl(arm)>>
+
+
+<<function asmout(arm)>>
 
 @
 
@@ -1219,44 +1268,10 @@ Prog*   brloop(Prog*);
 #include	"l.h"
 #include	"m.h"
 
-// forward decls
-void    asmsym(void);
-void    putsymb(char*, int, long, int);
-
-void    asmlc(void);
-void    datblk(long, long, int);
-
-void    asmout(Prog*, Optab*);
-
-void    lputl(long);
-
-// more forward decls
-long    oprrr(int, int);
-
-long    omvl(Prog*, Adr*, int);
-
-long    olr(int, int, long, int, int);
-long    olrr(int, int, int, int, int);
-
-long    osr(int, int, int, long, int);
-long    osrr(int, int, int, int, int);
-
-long    olhr(long, int, int, int);
-long    olhrr(int, int, int, int);
-long    oshr(int, long, int, int);
-long    oshrr(int, int, int, int);
-
-long    opvfprrr(int, int);
-long    ofsr(int, int, long, int, int, Prog*);
-
-long    opbra(int, int);
-
-
 <<constant Dbufslop>>
 
 <<function entryvalue(arm)>>
 
-<<function asmb(arm)>>
 
 
 <<function strnput(arm)>>
@@ -1273,49 +1288,20 @@ long    opbra(int, int);
 
 <<function cflush>>
 
+<<function putsymb>>
+
 <<function asmsym(arm)>>
 
-<<function putsymb>>
 
 <<constant MINLC(arm)>>
 <<function asmlc>>
 
 <<function datblk(arm)>>
 
-<<function asmout(arm)>>
 
-<<function oprrr(arm)>>
 
-<<function opvfprrr(arm)>>
+<<function asmb(arm)>>
 
-<<function opbra(arm)>>
-
-<<function olr(arm)>>
-
-<<function olhr(arm)>>
-
-<<function osr(arm)>>
-
-<<function oshr(arm)>>
-    
-
-<<function osrr(arm)>>
-
-<<function oshrr(arm)>>
-
-<<function olrr(arm)>>
-
-<<function olhrr(arm)>>
-
-<<function ovfpmem(arm)>>
-
-<<function ofsr(arm)>>
-
-<<function omvl(arm)>>
-
-<<global chipfloats(arm)>>
-
-<<function chipfloat(arm)>>
 @
 
 
@@ -1330,6 +1316,7 @@ long    opbra(int, int);
 
 // forward decls
 typedef struct Reloc Reloc;
+
 int cmp(int, int);
 int     ocmp(const void*, const void*);
 
@@ -1387,7 +1374,6 @@ int     ocmp(const void*, const void*);
 
 // forward decls
 int     find1(long, int);
-void ldobj(fdt f, long c, char *pn);
 
 <<global noname linker>>
 <<global symname linker>>
@@ -1398,11 +1384,11 @@ void ldobj(fdt f, long c, char *pn);
 
 <<function isobjfile>>
 
-extern char* findlib(char *file);
 
-<<function objfile>>
 
 <<function inopd(arm)>>
+
+
 
 
 <<function collapsefrog>>
@@ -1411,7 +1397,6 @@ extern char* findlib(char *file);
 
 <<function readsome>>
 
-extern void addlib(char *obj);
 
 <<function ldobj(arm)>>
 
@@ -1424,11 +1409,15 @@ extern void addlib(char *obj);
 <<function zerosig>>
 
 <<function readundefs>>
+
+<<function objfile>>
+
 @
 
 
 
 \subsection*{[[linkers/5l/lib.c]]}
+%pad: I created this file, content was in obj.c before
 
 %-------------------------------------------------------------
 
@@ -1484,9 +1473,7 @@ extern void addlib(char *obj);
 @
 
 \subsection*{[[linkers/5l/float.c]]}
-%pad: I created this file; content was in obj.c before.
-
-\l mv chipfloat here too?
+%pad: I created this file; content was in obj.c before and asm.c
 
 %-------------------------------------------------------------
 
@@ -1496,11 +1483,17 @@ extern void addlib(char *obj);
 <<function ieeedtof>>
 
 <<function ieeedtod>>
+
+<<global chipfloats(arm)>>
+
+<<function chipfloat(arm)>>
+
+
 @
 
 
 \subsection*{[[linkers/5l/profile.c]]}
-%pad: I created this file; content was in ??? before.
+%pad: I created this file; content was in obj.c before.
 
 %-------------------------------------------------------------
 
@@ -1516,7 +1509,7 @@ extern void addlib(char *obj);
 @
 
 \subsection*{[[linkers/5l/hist.c]]}
-%pad: I created this file; content was in obj before.
+%pad: I created this file; content was in obj.c before.
 
 <<linkers/5l/hist.c>>=
 #include	"l.h"
@@ -1529,7 +1522,7 @@ extern void addlib(char *obj);
 
 
 \subsection*{[[linkers/5l/main.c]]}
-%pad: I created this file; content was in obj.c before.
+%pad: I created this file; content was in obj.c before and pass.c for undef
 
 %-------------------------------------------------------------
 
@@ -1540,6 +1533,8 @@ extern void addlib(char *obj);
 <<global thestring>>
 
 <<function usage, linker>>
+
+<<function undef>>
 
 <<function main(arm)>>
 

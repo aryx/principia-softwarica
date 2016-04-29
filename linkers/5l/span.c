@@ -4,6 +4,7 @@
 
 // forward decls
 typedef struct Reloc Reloc;
+
 int cmp(int, int);
 int     ocmp(const void*, const void*);
 

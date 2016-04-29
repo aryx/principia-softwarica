@@ -8,21 +8,6 @@ void    mkfwd(void);
 Prog*   brloop(Prog*);
 
 
-/*s: function undef */
-/// main -> <>
-void
-undef(void)
-{
-    int i;
-    Sym *s;
-
-    for(i=0; i<NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->type == SXREF)
-                diag("%s: not defined", s->name);
-}
-/*e: function undef */
-
 /*s: function brchain(arm) */
 static Prog*
 brchain(Prog *p)
