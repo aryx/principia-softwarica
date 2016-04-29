@@ -153,9 +153,16 @@ fileexists(char *s)
 }
 /*e: function fileexists */
 
+/*s: global hunk */
+char*	hunk;
+/*e: global hunk */
+/*s: global nhunk */
+long	nhunk;
+/*e: global nhunk */
+// thunk defined in globals.c because also used by main.c for profiling report
 
 /*s: function gethunk */
-void
+static void
 gethunk(void)
 {
     char *h;

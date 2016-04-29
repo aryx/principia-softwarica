@@ -7,6 +7,10 @@
 
 long	entryvalue(void);
 
+// specific to each archi, defined in asm.c
+void    strnput(char*, int);
+void    lputl(long);
+
 /*s: enum _anon_ (linkers/8l/elf.c) */
 enum {
     /* offsets into string table */

@@ -14,6 +14,15 @@ static struct {
 } pool;
 /*e: global pool(arm) */
 
+/*s: global blitrl(arm) */
+// list<ref_own<prog>> (next = Prog.link)
+Prog*	blitrl;
+/*e: global blitrl(arm) */
+/*s: global elitrl(arm) */
+// ref<Prog> (end from = blitrl)
+Prog*	elitrl;
+/*e: global elitrl(arm) */
+
 // forward decls
 void	checkpool(Prog*);
 void 	flushpool(Prog*, int);

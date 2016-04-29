@@ -2,6 +2,7 @@
 #include	"l.h"
 #include	"m.h"
 
+// forward decls
 void    asmsym(void);
 void    putsymb(char*, int, long, int);
 
@@ -10,7 +11,9 @@ void    datblk(long, long, int);
 
 void    asmout(Prog*, Optab*);
 
-// forward decls
+void    lputl(long);
+
+// more forward decls
 long    oprrr(int, int);
 
 long    omvl(Prog*, Adr*, int);

@@ -6,7 +6,6 @@
 union Buf buf;
 /*e: global buf */
 
-
 /*s: global HEADR */
 long	HEADR; /* length of header */
 /*e: global HEADR */
@@ -52,6 +51,7 @@ char*	cbp;
 /*s: global cout */
 fdt	cout = -1;
 /*e: global cout */
+
 /*s: global curauto */
 // list<ref<Auto>> (next = Auto.link)
 Auto*	curauto;
@@ -67,6 +67,7 @@ Prog*	curp;
 //option<ref<Prog>> where Prog.as == ATEXT
 Prog*	curtext = P;
 /*e: global curtext */
+
 /*s: global datap */
 // list<ref_own<Prog>> (next = Prog.link)
 Prog*	datap = P;
@@ -108,24 +109,9 @@ int	histfrogp;
 int	histgen = 0;
 /*e: global histgen */
 
-/*s: global library */
-// array<option<filename>>
-char*	library[50];
-/*e: global library */
-/*s: global libraryobj */
-char*	libraryobj[50];
-/*e: global libraryobj */
-/*s: global libraryp */
-// index of first free entry in library array
-int	libraryp;
-/*e: global libraryp */
-
 /*s: global xrefresolv */
 bool	xrefresolv;
 /*e: global xrefresolv */
-/*s: global hunk */
-char*	hunk;
-/*e: global hunk */
 
 /*s: global inuxi1 */
 char	inuxi1[1];
@@ -144,12 +130,6 @@ Prog*	lastp;
 /*s: global lcsize */
 long	lcsize;
 /*e: global lcsize */
-/*s: global nerrors */
-int	nerrors = 0;
-/*e: global nerrors */
-/*s: global nhunk */
-long	nhunk;
-/*e: global nhunk */
 /*s: global nsymbol linker */
 long	nsymbol;
 /*e: global nsymbol linker */
@@ -179,9 +159,6 @@ long	textsize;
 /*s: global thunk */
 long	thunk;
 /*e: global thunk */
-/*s: global version */
-int	version = 0;
-/*e: global version */
 /*s: global xcmp(arm) */
 bool	xcmp[C_GOK+1][C_GOK+1];
 /*e: global xcmp(arm) */
@@ -223,25 +200,4 @@ char*	EXPTAB;
 Prog	undefp;
 /*e: global undefp */
 
-/*s: global blitrl(arm) */
-// list<ref_own<prog>> (next = Prog.link)
-Prog*	blitrl;
-/*e: global blitrl(arm) */
-/*s: global elitrl(arm) */
-// ref<Prog> (end from = blitrl)
-Prog*	elitrl;
-/*e: global elitrl(arm) */
-
-/*s: global prog_div(arm) */
-Prog*	prog_div;
-/*e: global prog_div(arm) */
-/*s: global prog_divu(arm) */
-Prog*	prog_divu;
-/*e: global prog_divu(arm) */
-/*s: global prog_mod(arm) */
-Prog*	prog_mod;
-/*e: global prog_mod(arm) */
-/*s: global prog_modu(arm) */
-Prog*	prog_modu;
-/*e: global prog_modu(arm) */
 /*e: linkers/5l/globals.c */

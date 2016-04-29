@@ -1,6 +1,10 @@
 /*s: linkers/5l/error.c */
 #include "l.h"
 
+/*s: global nerrors */
+int	nerrors = 0;
+/*e: global nerrors */
+
 /*s: function errorexit */
 void
 errorexit(void)

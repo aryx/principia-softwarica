@@ -150,8 +150,6 @@ enum Optab_flag {
 extern  Optab   optab[];
 extern  Oprange oprange[ALAST];
 extern  long    instoffset;
-extern  Prog*   blitrl;
-extern  Prog*   elitrl;
 
 extern  bool    xcmp[C_GOK+1][C_GOK+1];
 

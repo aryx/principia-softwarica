@@ -13,6 +13,10 @@ char	*noname		= "<none>";
 char	symname[]	= SYMDEF;
 /*e: global symname linker */
 
+/*s: global version */
+int	version = 0;
+/*e: global version */
+
 /*s: global literal(arm) */
 char	literal[32];
 /*e: global literal(arm) */

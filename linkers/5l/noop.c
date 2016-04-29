@@ -14,6 +14,19 @@ static	Sym*	sym_mod;
 static	Sym*	sym_modu;
 /*e: global sym_modu(arm) */
 
+/*s: global prog_div(arm) */
+Prog*	prog_div;
+/*e: global prog_div(arm) */
+/*s: global prog_divu(arm) */
+Prog*	prog_divu;
+/*e: global prog_divu(arm) */
+/*s: global prog_mod(arm) */
+Prog*	prog_mod;
+/*e: global prog_mod(arm) */
+/*s: global prog_modu(arm) */
+Prog*	prog_modu;
+/*e: global prog_modu(arm) */
+
 /*s: function noops(arm) */
 /// main -> <>
 void

@@ -1,6 +1,18 @@
 /*s: linkers/5l/lib.c */
 #include	"l.h"
 
+/*s: global library */
+// array<option<filename>>
+char*	library[50];
+/*e: global library */
+/*s: global libraryobj */
+char*	libraryobj[50];
+/*e: global libraryobj */
+/*s: global libraryp */
+// index of first free entry in library array
+int	libraryp;
+/*e: global libraryp */
+
 /*s: global libdir */
 // growing_array<dirname>
 char**	libdir;

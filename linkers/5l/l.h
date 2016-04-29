@@ -259,10 +259,12 @@ union Buf
 };
 /*e: struct Buf */
 
-// globals.c
+// main.c (used also in lib.c)
 
 extern char	 thechar;
 extern char* thestring;
+
+// globals.c
 
 // configuration
 extern  short   HEADTYPE;       /* type of header */
@@ -271,7 +273,6 @@ extern  long    INITTEXT;       /* text location */
 extern  long    INITRND;        /* data round above text location */
 extern  long    INITDAT;        /* data location */
 extern  char*   INITENTRY;      /* entry point */
-
 extern  long    INITTEXTP;      /* text location (physical) */ // ELF
 
 // input
@@ -312,7 +313,6 @@ extern  long    bsssize;
 extern  long    symsize;
 extern  long    lcsize;
 
-
 extern  char    inuxi1[1];
 extern  char    inuxi2[2];
 extern  char    inuxi4[4];
@@ -327,9 +327,6 @@ extern  int     histfrogp;
 extern  int     histgen;
 
 // library
-extern  char*   library[50];
-extern  char*   libraryobj[50];
-extern  int libraryp;
 extern  int xrefresolv;
 
 // advanced topics
@@ -345,26 +342,13 @@ extern  Prog    undefp;
 #define UP  (&undefp)
 /*e: constant UP */
 
-extern  Prog*   prog_div;
-extern  Prog*   prog_divu;
-extern  Prog*   prog_mod;
-extern  Prog*   prog_modu;
-
 // debugging
 extern  bool    debug[128];
 extern  char*   anames[];
 
-// error managment
-extern  int nerrors;
-
-// utils
-extern  char*   hunk;
-extern  long    nhunk;
+// utils (for statistics)
 extern  long    thunk;
-
-// ???
 extern long nsymbol;
-extern  int version;
 
 
 /*s: pragmas varargck type */
@@ -438,10 +422,8 @@ void    asmb(void);
 void    cflush(void);
 // asmout in m.h
 
-void    strnput(char*, int);
 void    cput(int);
 void    lput(long);
-void    lputl(long);
 void    wput(long);
 void    wputl(long);
 

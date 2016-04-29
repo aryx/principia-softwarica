@@ -3,6 +3,11 @@ TOP=..
 all:
 	echo todo
 
+
+graph:
+	echo "!!Adjust also the skip list!!"
+	cd ..; ~/pfff/codegraph -lang c -build include/ linkers/5l/
+
 include $(TOP)/docs/latex/Makefile.common
 
 ##############################################################################
