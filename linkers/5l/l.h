@@ -8,6 +8,10 @@
 
 #include    "../8l/elf.h"
 
+//----------------------------------------------------------------------------
+// Data structures and constants
+//----------------------------------------------------------------------------
+
 // forward decls
 typedef struct  Adr     Adr;
 typedef struct  Auto    Auto;
@@ -259,6 +263,10 @@ union Buf
 };
 /*e: struct Buf */
 
+//----------------------------------------------------------------------------
+// Globals
+//----------------------------------------------------------------------------
+
 // main.c (used also in lib.c)
 
 extern char	 thechar;
@@ -364,8 +372,9 @@ extern long nsymbol;
 #pragma varargck    argpos  diag 1
 /*e: pragmas varargck argpos */
 
-// main.c
-void    undef(void);
+//----------------------------------------------------------------------------
+// Functions
+//----------------------------------------------------------------------------
 
 // obj.c
 int     isobjfile(char *f);
@@ -399,23 +408,22 @@ void    nocache(Prog*);
 // layout.c
 void    dodata(void);
 void    dotext(void);
-void    xdefine(char*, int, long);
 
 // span.c
 void    buildop(void);
 int aclass(Adr*);
 long    immrot(ulong);
 long    immaddr(long);
-long    regoff(Adr*); // for float
-// oplook in m.h
 
+long    regoff(Adr*); // for float
+// oplook() in m.h
 void    dynreloc(Sym*, long, int);
 void    asmdyn(void);
 
 // asm.c
 void    asmb(void);
 void    cflush(void);
-// asmout in m.h
+// asmout() in m.h
 
 void    cput(int);
 void    lput(long);
@@ -451,7 +459,6 @@ long    rnd(long, long);
 int     fileexists(char*);
 void  mylog(char*, ...);
 
-
 /*s: macro DBG */
 #define DBG if(debug['v']) mylog
 /*e: macro DBG */
@@ -459,4 +466,5 @@ void  mylog(char*, ...);
 // fmt.c (dumpers)
 void listinit(void);
 void    prasm(Prog*);
+
 /*e: linkers/5l/l.h */
