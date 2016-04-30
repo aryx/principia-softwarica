@@ -2,12 +2,291 @@
 #include	"l.h"
 #include	"m.h"
 
-// forward decls
-typedef struct Reloc Reloc;
+/*s: global oprange(arm) */
+// map<enum<Opcode>, Oprange>
+Oprange	oprange[ALAST];
+/*e: global oprange(arm) */
+/*s: global xcmp(arm) */
+bool	xcmp[C_GOK+1][C_GOK+1];
+/*e: global xcmp(arm) */
 
-int cmp(int, int);
-int     ocmp(const void*, const void*);
+/*s: function cmp(arm) */
+bool
+cmp(int a, int b)
+{
 
+    if(a == b)
+        return true;
+
+    switch(a) {
+    /*s: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_LCON:
+        if(b == C_RCON || b == C_NCON)
+            return true;
+        break;
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_SROREG:
+        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
+    case C_SOREG:
+    case C_ROREG:
+        return b == C_SROREG || cmp(C_HFOREG, b);
+    case C_LOREG:
+        return cmp(C_SROREG, b);
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_SEXT:
+        return cmp(C_HFEXT, b);
+    case C_LEXT:
+        return cmp(C_SEXT, b);
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_SAUTO:
+        return cmp(C_HFAUTO, b);
+    case C_LAUTO:
+        return cmp(C_SAUTO, b);
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_LACON:
+        if(b == C_RACON)
+            return true;
+        break;
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_HFEXT:
+        return b == C_HEXT || b == C_FEXT;
+    case C_FEXT:
+    case C_HEXT:
+        return b == C_HFEXT;
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_HFAUTO:
+        return b == C_HAUTO || b == C_FAUTO;
+    case C_FAUTO:
+    case C_HAUTO:
+        return b == C_HFAUTO;
+    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    case C_HFOREG:
+        return b == C_HOREG || b == C_FOREG;
+    case C_FOREG:
+    case C_HOREG:
+        return b == C_HFOREG;
+    /*e: [[cmp()]] switch on a, the operand class in optab rule, cases */
+    }
+    return false;
+}
+/*e: function cmp(arm) */
+
+/*s: function ocmp(arm) */
+/// main -> buildop -> qsort(..., <>)
+int
+ocmp(const void *a, const void *b)
+{
+    Optab *p1, *p2;
+    int n;
+
+    p1 = (Optab*)a;
+    p2 = (Optab*)b;
+
+    n = p1->as - p2->as;
+    if(n)
+        return n;
+    /*s: [[ocmp()]] if v4 flag on p1 or p2 */
+    n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
+    if(n)
+        return n;
+    /*e: [[ocmp()]] if v4 flag on p1 or p2 */
+    /*s: [[ocmp()]] if floating point flag on p1 or p2 */
+    n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
+    if(n)
+        return n;
+    /*e: [[ocmp()]] if floating point flag on p1 or p2 */
+    n = p1->a1 - p2->a1;
+    if(n)
+        return n;
+    n = p1->a2 - p2->a2;
+    if(n)
+        return n;
+    n = p1->a3 - p2->a3;
+
+    if(n)
+        return n;
+    return 0;
+}
+/*e: function ocmp(arm) */
+
+/*s: function buildop(arm) */
+/// main -> <>
+void
+buildop(void)
+{
+    int i, n;
+    // enum<Opcode> representing a range
+    int r;
+
+    /*s: [[buildop()]] initialize xcmp cache */
+    for(i=0; i<C_GOK; i++)
+        for(n=0; n<C_GOK; n++)
+            xcmp[i][n] = cmp(n, i);
+    /*e: [[buildop()]] initialize xcmp cache */
+    /*s: [[buildop()]] initialize flags */
+    vfp = debug['f'];
+    /*x: [[buildop()]] initialize flags */
+    armv4 = !debug['h'];
+    /*e: [[buildop()]] initialize flags */
+
+    for(n=0; optab[n].as != AXXX; n++) {
+        /*s: [[buildop()]] adjust optab if flags, remove certain rules */
+        if((optab[n].flag & VFP) && !vfp)
+            optab[n].as = AXXX;
+        /*x: [[buildop()]] adjust optab if flags, remove certain rules */
+        if((optab[n].flag & V4) && !armv4) {
+            optab[n].as = AXXX;
+            break;
+        }
+        /*e: [[buildop()]] adjust optab if flags, remove certain rules */
+    }
+    // n contains now the size of optab
+
+    qsort(optab, n, sizeof(optab[0]), ocmp);
+
+    for(i=0; i<n; i++) {
+        r = optab[i].as;
+
+        // initialize oprange for the representants
+        oprange[r].start = optab+i;
+        while(optab[i].as == r)
+            i++;
+        oprange[r].stop = optab+i;
+        i--; // compensate the i++ of the for
+
+        // setup opcode sets of representants
+        switch(r)
+        {
+        /*s: [[buildop()]] switch opcode r for ranges cases */
+        case AXXX:
+          break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ATEXT:
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AWORD:
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AADD:
+            oprange[ASUB] = oprange[r];
+
+            oprange[AAND] = oprange[r];
+            oprange[AEOR] = oprange[r];
+            oprange[AORR] = oprange[r];
+
+            oprange[AADC] = oprange[r];
+            oprange[ASBC] = oprange[r];
+            oprange[ARSC] = oprange[r];
+            oprange[ARSB] = oprange[r];
+            oprange[ABIC] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ACMP:
+            oprange[ATST] = oprange[r];
+            oprange[ATEQ] = oprange[r];
+            oprange[ACMN] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AMVN:
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ASLL:
+            oprange[ASRL] = oprange[r];
+            oprange[ASRA] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AMUL:
+            oprange[AMULU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AB:
+        case ABL:
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ABEQ:
+            oprange[ABNE] = oprange[r];
+            oprange[ABHS] = oprange[r];
+            oprange[ABLO] = oprange[r];
+            oprange[ABMI] = oprange[r];
+            oprange[ABPL] = oprange[r];
+            oprange[ABVS] = oprange[r];
+            oprange[ABVC] = oprange[r];
+            oprange[ABHI] = oprange[r];
+            oprange[ABLS] = oprange[r];
+            oprange[ABGE] = oprange[r];
+            oprange[ABLT] = oprange[r];
+            oprange[ABGT] = oprange[r];
+            oprange[ABLE] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AMOVW:
+        case AMOVB:
+        case AMOVBU:
+        case AMOVH:
+        case AMOVHU:
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ASWPW:
+            oprange[ASWPBU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ASWI:
+        case ARFE:
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AADDF:
+            oprange[AADDD] = oprange[r];
+            oprange[ASUBF] = oprange[r];
+            oprange[ASUBD] = oprange[r];
+            oprange[AMULF] = oprange[r];
+            oprange[AMULD] = oprange[r];
+            oprange[ADIVF] = oprange[r];
+            oprange[ADIVD] = oprange[r];
+            oprange[AMOVFD] = oprange[r];
+            oprange[AMOVDF] = oprange[r];
+            break;
+    
+        case ACMPF:
+            oprange[ACMPD] = oprange[r];
+            break;
+
+        case AMOVF:
+            oprange[AMOVD] = oprange[r];
+            break;
+
+        case AMOVFW:
+            oprange[AMOVWF] = oprange[r];
+            oprange[AMOVWD] = oprange[r];
+            oprange[AMOVDW] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ADIV:
+            oprange[AMOD] = oprange[r];
+            oprange[AMODU] = oprange[r];
+            oprange[ADIVU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AMULL:
+            oprange[AMULA] = oprange[r];
+            oprange[AMULAL] = oprange[r];
+            oprange[AMULLU] = oprange[r];
+            oprange[AMULALU] = oprange[r];
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case AMOVM:
+            break;
+        /*x: [[buildop()]] switch opcode r for ranges cases */
+        case ACASE:
+        case ABCASE:
+            break;
+        /*e: [[buildop()]] switch opcode r for ranges cases */
+        default:
+            diag("unknown op in build: %A", r);
+            errorexit();
+        }
+    }
+}
+/*e: function buildop(arm) */
 
 
 /*s: function regoff(arm) */
@@ -388,450 +667,4 @@ oplook(Prog *p)
 }
 /*e: function oplook(arm) */
 
-/*s: function cmp(arm) */
-bool
-cmp(int a, int b)
-{
-
-    if(a == b)
-        return true;
-
-    switch(a) {
-    /*s: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_LCON:
-        if(b == C_RCON || b == C_NCON)
-            return true;
-        break;
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_SROREG:
-        return cmp(C_SOREG, b) || cmp(C_ROREG, b);
-    case C_SOREG:
-    case C_ROREG:
-        return b == C_SROREG || cmp(C_HFOREG, b);
-    case C_LOREG:
-        return cmp(C_SROREG, b);
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_SEXT:
-        return cmp(C_HFEXT, b);
-    case C_LEXT:
-        return cmp(C_SEXT, b);
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_SAUTO:
-        return cmp(C_HFAUTO, b);
-    case C_LAUTO:
-        return cmp(C_SAUTO, b);
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_LACON:
-        if(b == C_RACON)
-            return true;
-        break;
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_HFEXT:
-        return b == C_HEXT || b == C_FEXT;
-    case C_FEXT:
-    case C_HEXT:
-        return b == C_HFEXT;
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_HFAUTO:
-        return b == C_HAUTO || b == C_FAUTO;
-    case C_FAUTO:
-    case C_HAUTO:
-        return b == C_HFAUTO;
-    /*x: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    case C_HFOREG:
-        return b == C_HOREG || b == C_FOREG;
-    case C_FOREG:
-    case C_HOREG:
-        return b == C_HFOREG;
-    /*e: [[cmp()]] switch on a, the operand class in optab rule, cases */
-    }
-    return false;
-}
-/*e: function cmp(arm) */
-
-/*s: function ocmp(arm) */
-/// main -> buildop -> qsort(..., <>)
-int
-ocmp(const void *a, const void *b)
-{
-    Optab *p1, *p2;
-    int n;
-
-    p1 = (Optab*)a;
-    p2 = (Optab*)b;
-
-    n = p1->as - p2->as;
-    if(n)
-        return n;
-    /*s: [[ocmp()]] if v4 flag on p1 or p2 */
-    n = (p2->flag&V4) - (p1->flag&V4);	/* architecture version */
-    if(n)
-        return n;
-    /*e: [[ocmp()]] if v4 flag on p1 or p2 */
-    /*s: [[ocmp()]] if floating point flag on p1 or p2 */
-    n = (p2->flag&VFP) - (p1->flag&VFP);	/* floating point arch */
-    if(n)
-        return n;
-    /*e: [[ocmp()]] if floating point flag on p1 or p2 */
-    n = p1->a1 - p2->a1;
-    if(n)
-        return n;
-    n = p1->a2 - p2->a2;
-    if(n)
-        return n;
-    n = p1->a3 - p2->a3;
-
-    if(n)
-        return n;
-    return 0;
-}
-/*e: function ocmp(arm) */
-
-/*s: function buildop(arm) */
-/// main -> <>
-void
-buildop(void)
-{
-    int i, n;
-    // enum<Opcode> representing a range
-    int r;
-
-    /*s: [[buildop()]] initialize xcmp cache */
-    for(i=0; i<C_GOK; i++)
-        for(n=0; n<C_GOK; n++)
-            xcmp[i][n] = cmp(n, i);
-    /*e: [[buildop()]] initialize xcmp cache */
-    /*s: [[buildop()]] initialize flags */
-    vfp = debug['f'];
-    /*x: [[buildop()]] initialize flags */
-    armv4 = !debug['h'];
-    /*e: [[buildop()]] initialize flags */
-
-    for(n=0; optab[n].as != AXXX; n++) {
-        /*s: [[buildop()]] adjust optab if flags, remove certain rules */
-        if((optab[n].flag & VFP) && !vfp)
-            optab[n].as = AXXX;
-        /*x: [[buildop()]] adjust optab if flags, remove certain rules */
-        if((optab[n].flag & V4) && !armv4) {
-            optab[n].as = AXXX;
-            break;
-        }
-        /*e: [[buildop()]] adjust optab if flags, remove certain rules */
-    }
-    // n contains now the size of optab
-
-    qsort(optab, n, sizeof(optab[0]), ocmp);
-
-    for(i=0; i<n; i++) {
-        r = optab[i].as;
-
-        // initialize oprange for the representants
-        oprange[r].start = optab+i;
-        while(optab[i].as == r)
-            i++;
-        oprange[r].stop = optab+i;
-        i--; // compensate the i++ of the for
-
-        // setup opcode sets of representants
-        switch(r)
-        {
-        /*s: [[buildop()]] switch opcode r for ranges cases */
-        case AXXX:
-          break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ATEXT:
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AWORD:
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AADD:
-            oprange[ASUB] = oprange[r];
-
-            oprange[AAND] = oprange[r];
-            oprange[AEOR] = oprange[r];
-            oprange[AORR] = oprange[r];
-
-            oprange[AADC] = oprange[r];
-            oprange[ASBC] = oprange[r];
-            oprange[ARSC] = oprange[r];
-            oprange[ARSB] = oprange[r];
-            oprange[ABIC] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ACMP:
-            oprange[ATST] = oprange[r];
-            oprange[ATEQ] = oprange[r];
-            oprange[ACMN] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AMVN:
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ASLL:
-            oprange[ASRL] = oprange[r];
-            oprange[ASRA] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AMUL:
-            oprange[AMULU] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AB:
-        case ABL:
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ABEQ:
-            oprange[ABNE] = oprange[r];
-            oprange[ABHS] = oprange[r];
-            oprange[ABLO] = oprange[r];
-            oprange[ABMI] = oprange[r];
-            oprange[ABPL] = oprange[r];
-            oprange[ABVS] = oprange[r];
-            oprange[ABVC] = oprange[r];
-            oprange[ABHI] = oprange[r];
-            oprange[ABLS] = oprange[r];
-            oprange[ABGE] = oprange[r];
-            oprange[ABLT] = oprange[r];
-            oprange[ABGT] = oprange[r];
-            oprange[ABLE] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AMOVW:
-        case AMOVB:
-        case AMOVBU:
-        case AMOVH:
-        case AMOVHU:
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ASWPW:
-            oprange[ASWPBU] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ASWI:
-        case ARFE:
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AADDF:
-            oprange[AADDD] = oprange[r];
-            oprange[ASUBF] = oprange[r];
-            oprange[ASUBD] = oprange[r];
-            oprange[AMULF] = oprange[r];
-            oprange[AMULD] = oprange[r];
-            oprange[ADIVF] = oprange[r];
-            oprange[ADIVD] = oprange[r];
-            oprange[AMOVFD] = oprange[r];
-            oprange[AMOVDF] = oprange[r];
-            break;
-    
-        case ACMPF:
-            oprange[ACMPD] = oprange[r];
-            break;
-
-        case AMOVF:
-            oprange[AMOVD] = oprange[r];
-            break;
-
-        case AMOVFW:
-            oprange[AMOVWF] = oprange[r];
-            oprange[AMOVWD] = oprange[r];
-            oprange[AMOVDW] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ADIV:
-            oprange[AMOD] = oprange[r];
-            oprange[AMODU] = oprange[r];
-            oprange[ADIVU] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AMULL:
-            oprange[AMULA] = oprange[r];
-            oprange[AMULAL] = oprange[r];
-            oprange[AMULLU] = oprange[r];
-            oprange[AMULALU] = oprange[r];
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case AMOVM:
-            break;
-        /*x: [[buildop()]] switch opcode r for ranges cases */
-        case ACASE:
-        case ABCASE:
-            break;
-        /*e: [[buildop()]] switch opcode r for ranges cases */
-        default:
-            diag("unknown op in build: %A", r);
-            errorexit();
-        }
-    }
-}
-/*e: function buildop(arm) */
-
-/*s: enum _anon_ (linkers/5l/span.c)(arm) */
-enum{
-    ABSD = 0,
-    ABSU = 1,
-    RELD = 2,
-    RELU = 3,
-};
-/*e: enum _anon_ (linkers/5l/span.c)(arm) */
-
-/*s: global modemap */
-int modemap[4] = { 0, 1, -1, 2, };
-/*e: global modemap */
-
-/*s: struct Reloc */
-struct Reloc
-{
-    int n;
-    int t;
-    byte *m;
-    ulong *a;
-};
-/*e: struct Reloc */
-
-/*s: global rels */
-Reloc rels;
-/*e: global rels */
-
-/*s: function grow */
-static void
-grow(Reloc *r)
-{
-    int t;
-    byte *m, *nm;
-    ulong *a, *na;
-
-    t = r->t;
-    r->t += 64;
-    m = r->m;
-    a = r->a;
-    r->m = nm = malloc(r->t * sizeof(byte));
-    r->a = na = malloc(r->t * sizeof(ulong));
-    memmove(nm, m, t*sizeof(byte));
-    memmove(na, a, t*sizeof(ulong));
-    free(m);
-    free(a);
-}
-/*e: function grow */
-
-/*s: function dynreloc(arm) */
-void
-dynreloc(Sym *s, long v, int abs)
-{
-    int i, k, n;
-    byte *m;
-    ulong *a;
-    Reloc *r;
-
-    if(v&3)
-        diag("bad relocation address");
-    v >>= 2;
-
-    if(s != S && s->type == SUNDEF)
-        k = abs ? ABSU : RELU;
-    else
-        k = abs ? ABSD : RELD;
-    /* Bprint(&bso, "R %s a=%ld(%lx) %d\n", s->name, a, a, k); */
-    k = modemap[k];
-    r = &rels;
-    n = r->n;
-    if(n >= r->t)
-        grow(r);
-    m = r->m;
-    a = r->a;
-    for(i = n; i > 0; i--){
-        if(v < a[i-1]){	/* happens occasionally for data */
-            m[i] = m[i-1];
-            a[i] = a[i-1];
-        }
-        else
-            break;
-    }
-    m[i] = k;
-    a[i] = v;
-    r->n++;
-}
-/*e: function dynreloc(arm) */
-
-/*s: function sput */
-static int
-sput(char *s)
-{
-    char *p;
-
-    p = s;
-    while(*s)
-        cput(*s++);
-    cput(0);
-    return  s-p+1;
-}
-/*e: function sput */
-
-/*s: function asmdyn */
-void
-asmdyn()
-{
-    int i, n, t, c;
-    Sym *s;
-    ulong la, ra, *a;
-    vlong off;
-    byte *m;
-    Reloc *r;
-
-    cflush();
-    off = seek(cout, 0, 1);
-    lput(0);
-    t = 0;
-    lput(imports);
-    t += 4;
-    for(i = 0; i < NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->type == SUNDEF){
-                lput(s->sig);
-                t += 4;
-                t += sput(s->name);
-            }
-
-    la = 0;
-    r = &rels;
-    n = r->n;
-    m = r->m;
-    a = r->a;
-    lput(n);
-    t += 4;
-    for(i = 0; i < n; i++){
-        ra = *a-la;
-        if(*a < la)
-            diag("bad relocation order");
-        if(ra < 256)
-            c = 0;
-        else if(ra < 65536)
-            c = 1;
-        else
-            c = 2;
-        cput((c<<6)|*m++);
-        t++;
-        if(c == 0){
-            cput(ra);
-            t++;
-        }
-        else if(c == 1){
-            wput(ra);
-            t += 2;
-        }
-        else{
-            lput(ra);
-            t += 4;
-        }
-        la = *a++;
-    }
-
-    cflush();
-    seek(cout, off, 0);
-    lput(t);
-
-    DBG("import table entries = %d\n", imports);
-    DBG("export table entries = %d\n", exports);
-}
-/*e: function asmdyn */
 /*e: linkers/5l/span.c */

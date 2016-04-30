@@ -2,9 +2,6 @@
 #include	"l.h"
 #include	<ar.h>
 
-// forward decls
-int     find1(long, int);
-
 /*s: global noname linker */
 char	*noname		= "<none>";
 /*e: global noname linker */
@@ -43,7 +40,6 @@ isobjfile(char *f)
     return v;
 }
 /*e: function isobjfile */
-
 
 
 /*s: function inopd(arm) */
@@ -181,7 +177,6 @@ inopd(byte *p, Adr *a, Sym *h[])
 
 
 
-
 /*s: function collapsefrog */
 static void
 collapsefrog(Sym *s)
@@ -231,7 +226,6 @@ nopout(Prog *p)
     p->to.type = D_NONE;
 }
 /*e: function nopout */
-
 
 
 /*s: function ldobj(arm) */
@@ -691,142 +685,6 @@ eof:
     diag("truncated object file: %s", pn);
 }
 /*e: function ldobj(arm) */
-
-/*s: function nuxiinit(arm) */
-void
-nuxiinit(void)
-{
-
-    int i, c;
-
-    for(i=0; i<4; i++) {
-        c = find1(0x04030201L, i+1);
-        if(i < 2)
-            inuxi2[i] = c;
-        if(i < 1)
-            inuxi1[i] = c;
-        inuxi4[i] = c;
-        /*s: [[nuxiinit()]] in loop i, fnuxi initialisation */
-        fnuxi4[i] = c;
-        if(debug['d'] == 0){
-            fnuxi8[i] = c;
-            fnuxi8[i+4] = c+4;
-        }
-        else{
-            fnuxi8[i] = c+4; /* ms word first, then ls, even in little endian mode */
-            fnuxi8[i+4] = c;
-        }
-        /*e: [[nuxiinit()]] in loop i, fnuxi initialisation */
-    }
-    /*s: [[nuxiinit()]] debug */
-    if(debug['v']) {
-        Bprint(&bso, "inuxi = ");
-        for(i=0; i<1; i++)
-            Bprint(&bso, "%d", inuxi1[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<2; i++)
-            Bprint(&bso, "%d", inuxi2[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", inuxi4[i]);
-        Bprint(&bso, "\nfnuxi = ");
-        for(i=0; i<4; i++)
-            Bprint(&bso, "%d", fnuxi4[i]);
-        Bprint(&bso, " ");
-        for(i=0; i<8; i++)
-            Bprint(&bso, "%d", fnuxi8[i]);
-        Bprint(&bso, "\n");
-    }
-    /*e: [[nuxiinit()]] debug */
-    Bflush(&bso);
-}
-/*e: function nuxiinit(arm) */
-
-/*s: function find1 */
-int
-find1(long l, int c)
-{
-    char *p;
-    int i;
-
-    p = (char*)&l;
-    for(i=0; i<4; i++)
-        if(*p++ == c)
-            return i;
-    return 0;
-}
-/*e: function find1 */
-
-/*s: function undefsym */
-void
-undefsym(Sym *s)
-{
-    int n;
-
-    n = imports;
-    if(s->value != 0)
-        diag("value != 0 on SXREF");
-    if(n >= 1<<Rindex)
-        diag("import index %d out of range", n);
-    s->value = n<<Roffset;
-    s->type = SUNDEF;
-    imports++;
-}
-/*e: function undefsym */
-
-/*s: function zerosig */
-void
-zerosig(char *sp)
-{
-    Sym *s;
-
-    s = lookup(sp, 0);
-    s->sig = 0;
-}
-/*e: function zerosig */
-
-/*s: function readundefs */
-void
-readundefs(char *f, int t)
-{
-    int i, n;
-    Sym *s;
-    Biobuf *b;
-    char *l, buf[256], *fields[64];
-
-    if(f == nil)
-        return;
-    b = Bopen(f, OREAD);
-    if(b == nil){
-        diag("could not open %s: %r", f);
-        errorexit();
-    }
-    while((l = Brdline(b, '\n')) != nil){
-        n = Blinelen(b);
-        if(n >= sizeof(buf)){
-            diag("%s: line too long", f);
-            errorexit();
-        }
-        memmove(buf, l, n);
-        buf[n-1] = '\0';
-        n = getfields(buf, fields, nelem(fields), 1, " \t\r\n");
-        if(n == nelem(fields)){
-            diag("%s: bad format", f);
-            errorexit();
-        }
-        for(i = 0; i < n; i++){
-            s = lookup(fields[i], 0);
-            s->type = SXREF;
-            s->subtype = t;
-            if(t == SIMPORT)
-                nimports++;
-            else
-                nexports++;
-        }
-    }
-    Bterm(b);
-}
-/*e: function readundefs */
 
 /*s: function objfile */
 /// main | loadlib  -> <>

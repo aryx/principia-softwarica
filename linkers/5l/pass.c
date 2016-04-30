@@ -3,9 +3,6 @@
 
 // forward decls
 void    xfol(Prog*);
-void    mkfwd(void);
-Prog*   brloop(Prog*);
-
 
 /*s: function brchain(arm) */
 static Prog*
@@ -199,6 +196,82 @@ loop:
 }
 /*e: function xfol(arm) */
 
+/*s: constant LOG */
+#define	LOG	5
+/*e: constant LOG */
+/*s: function mkfwd */
+/// main -> patch -> <>
+void
+mkfwd(void)
+{
+    long cnt[LOG]; // (length of arc)/LOG at a certain level (constant)
+    long dwn[LOG]; // remaining elements to skip at a level (goes down)
+    Prog *lst[LOG]; // past instruction saved at a level
+    Prog *p;
+    int i; // level
+
+    /*s: [[mkfwd()]] initializes cnt, dwn, lst */
+    for(i=0; i<LOG; i++) {
+        if(i == 0)
+            cnt[i] = 1; 
+        else
+            cnt[i] = LOG * cnt[i-1];
+        dwn[i] = 1;
+        lst[i] = P;
+    }
+    /*e: [[mkfwd()]] initializes cnt, dwn, lst */
+
+    i = 0;
+    for(p = firstp; p != P; p = p->link) {
+        /*s: adjust curtext when iterate over instructions p */
+        if(p->as == ATEXT)
+            curtext = p;
+        /*e: adjust curtext when iterate over instructions p */
+        p->forwd = P;
+
+        /*s: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
+        // first loop, the levels
+        i--;
+        if(i < 0)
+            i = LOG-1;
+
+        // second loop, the frequency at a certain level
+        dwn[i]--;
+        if(dwn[i] <= 0) {
+            dwn[i] = cnt[i];
+
+            if(lst[i] != P)
+                lst[i]->forwd = p; // link from past p to p
+            lst[i] = p;
+        }
+        /*e: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
+    }
+}
+/*e: function mkfwd */
+
+/*s: function brloop(arm) */
+/// main -> patch -> <>
+Prog*
+brloop(Prog *p)
+{
+    Prog *q;
+    int c = 0;
+
+    for(; p!=P;) {
+        if(p->as != AB)
+            return p;
+        q = p->cond;
+        if(q <= p) {
+            c++;
+            if(q == p || c > 5000)
+                break;
+        }
+        p = q;
+    }
+    return P;
+}
+/*e: function brloop(arm) */
+
 /*s: function patch(arm) */
 /// main -> <>
 void
@@ -296,226 +369,4 @@ patch(void)
 }
 /*e: function patch(arm) */
 
-/*s: constant LOG */
-#define	LOG	5
-/*e: constant LOG */
-/*s: function mkfwd */
-/// main -> patch -> <>
-void
-mkfwd(void)
-{
-    long cnt[LOG]; // (length of arc)/LOG at a certain level (constant)
-    long dwn[LOG]; // remaining elements to skip at a level (goes down)
-    Prog *lst[LOG]; // past instruction saved at a level
-    Prog *p;
-    int i; // level
-
-    /*s: [[mkfwd()]] initializes cnt, dwn, lst */
-    for(i=0; i<LOG; i++) {
-        if(i == 0)
-            cnt[i] = 1; 
-        else
-            cnt[i] = LOG * cnt[i-1];
-        dwn[i] = 1;
-        lst[i] = P;
-    }
-    /*e: [[mkfwd()]] initializes cnt, dwn, lst */
-
-    i = 0;
-    for(p = firstp; p != P; p = p->link) {
-        /*s: adjust curtext when iterate over instructions p */
-        if(p->as == ATEXT)
-            curtext = p;
-        /*e: adjust curtext when iterate over instructions p */
-        p->forwd = P;
-
-        /*s: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
-        // first loop, the levels
-        i--;
-        if(i < 0)
-            i = LOG-1;
-
-        // second loop, the frequency at a certain level
-        dwn[i]--;
-        if(dwn[i] <= 0) {
-            dwn[i] = cnt[i];
-
-            if(lst[i] != P)
-                lst[i]->forwd = p; // link from past p to p
-            lst[i] = p;
-        }
-        /*e: [[mkfwd()]] in for loop, add forward links from past p in lst to p */
-    }
-}
-/*e: function mkfwd */
-
-/*s: function brloop(arm) */
-/// main -> patch -> <>
-Prog*
-brloop(Prog *p)
-{
-    Prog *q;
-    int c = 0;
-
-    for(; p!=P;) {
-        if(p->as != AB)
-            return p;
-        q = p->cond;
-        if(q <= p) {
-            c++;
-            if(q == p || c > 5000)
-                break;
-        }
-        p = q;
-    }
-    return P;
-}
-/*e: function brloop(arm) */
-
-/*s: function import(arm) */
-void
-import(void)
-{
-    int i;
-    Sym *s;
-
-    for(i = 0; i < NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->sig != 0 && s->type == SXREF && (nimports == 0 || s->subtype == SIMPORT)){
-                undefsym(s);
-                Bprint(&bso, "IMPORT: %s sig=%lux v=%ld\n", s->name, s->sig, s->value);
-            }
-}
-/*e: function import(arm) */
-
-/*s: function ckoff */
-void
-ckoff(Sym *s, long v)
-{
-    if(v < 0 || v >= 1<<Roffset)
-        diag("relocation offset %ld for %s out of range", v, s->name);
-}
-/*e: function ckoff */
-
-/*s: function newdata(arm) */
-static Prog*
-newdata(Sym *s, int o, int w, int t)
-{
-    Prog *p;
-
-    p = prg();
-    p->link = datap;
-    datap = p;
-
-    p->as = ADATA;
-    p->reg = w;
-    p->from.type = D_OREG;
-    p->from.symkind = t;
-    p->from.sym = s;
-    p->from.offset = o;
-    p->to.type = D_CONST;
-    p->to.symkind = N_NONE;
-
-    return p;
-}
-/*e: function newdata(arm) */
-
-/*s: function export(arm) */
-void
-export(void)
-{
-    int i, j, n, off, nb, sv, ne;
-    Sym *s, *et, *str, **esyms;
-    Prog *p;
-    char buf[NSNAME], *t;
-
-    n = 0;
-    for(i = 0; i < NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->sig != 0 && s->type != SXREF && s->type != SUNDEF && (nexports == 0 || s->subtype == SEXPORT))
-                n++;
-    esyms = malloc(n*sizeof(Sym*));
-    ne = n;
-    n = 0;
-    for(i = 0; i < NHASH; i++)
-        for(s = hash[i]; s != S; s = s->link)
-            if(s->sig != 0 && s->type != SXREF && s->type != SUNDEF && (nexports == 0 || s->subtype == SEXPORT))
-                esyms[n++] = s;
-    for(i = 0; i < ne-1; i++)
-        for(j = i+1; j < ne; j++)
-            if(strcmp(esyms[i]->name, esyms[j]->name) > 0){
-                s = esyms[i];
-                esyms[i] = esyms[j];
-                esyms[j] = s;
-            }
-
-    nb = 0;
-    off = 0;
-    et = lookup(EXPTAB, 0);
-    if(et->type != 0 && et->type != SXREF)
-        diag("%s already defined", EXPTAB);
-    et->type = SDATA;
-    str = lookup(".string", 0);
-    if(str->type == 0)
-        str->type = SDATA;
-    sv = str->value;
-    for(i = 0; i < ne; i++){
-        s = esyms[i];
-        Bprint(&bso, "EXPORT: %s sig=%lux t=%d\n", s->name, s->sig, s->type);
-
-        /* signature */
-        p = newdata(et, off, sizeof(long), N_EXTERN);
-        off += sizeof(long);
-        p->to.offset = s->sig;
-
-        /* address */
-        p = newdata(et, off, sizeof(long), N_EXTERN);
-        off += sizeof(long);
-        p->to.symkind = N_EXTERN;
-        p->to.sym = s;
-
-        /* string */
-        t = s->name;
-        n = strlen(t)+1;
-        for(;;){
-            buf[nb++] = *t;
-            sv++;
-            if(nb >= NSNAME){
-                p = newdata(str, sv-NSNAME, NSNAME, N_INTERN);
-                p->to.type = D_SCONST;
-                p->to.sval = malloc(NSNAME);
-                memmove(p->to.sval, buf, NSNAME);
-                nb = 0;
-            }
-            if(*t++ == 0)
-                break;
-        }
-
-        /* name */
-        p = newdata(et, off, sizeof(long), N_EXTERN);
-        off += sizeof(long);
-        p->to.symkind = N_INTERN;
-        p->to.sym = str;
-        p->to.offset = sv-n;
-    }
-
-    if(nb > 0){
-        p = newdata(str, sv-nb, nb, N_INTERN);
-        p->to.type = D_SCONST;
-        p->to.sval = malloc(NSNAME);
-        memmove(p->to.sval, buf, nb);
-    }
-
-    for(i = 0; i < 3; i++){
-        newdata(et, off, sizeof(long), N_EXTERN);
-        off += sizeof(long);
-    }
-    et->value = off;
-    if(sv == 0)
-        sv = 1;
-    str->value = sv;
-    exports = ne;
-    free(esyms);
-}
-/*e: function export(arm) */
 /*e: linkers/5l/pass.c */

@@ -148,15 +148,12 @@ enum Optab_flag {
 
 // globals
 extern  Optab   optab[];
-extern  Oprange oprange[ALAST];
 extern  long    instoffset;
-
-extern  bool    xcmp[C_GOK+1][C_GOK+1];
-
-// codegen.c
-void    asmout(Prog*, Optab*);
 
 // span.c
 Optab*  oplook(Prog*);
+
+// codegen.c
+void    asmout(Prog*, Optab*);
 
 /*e: linkers/5l/m.h */

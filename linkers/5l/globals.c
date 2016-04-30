@@ -2,9 +2,12 @@
 #include	"l.h"
 #include	"m.h"
 
-/*s: global buf */
-union Buf buf;
-/*e: global buf */
+/*s: global thechar */
+char	thechar;
+/*e: global thechar */
+/*s: global thestring */
+char*	thestring;
+/*e: global thestring */
 
 /*s: global HEADR */
 long	HEADR; /* length of header */
@@ -29,28 +32,15 @@ long	INITTEXTP = -1; /* text location (physical) */
 char*	INITENTRY = nil;		/* entry point */
 /*e: global INITENTRY */
 
-/*s: global autosize(arm) */
-long	autosize;
-/*e: global autosize(arm) */
-/*s: global bso */
-Biobuf	bso;
-/*e: global bso */
-/*s: global bsssize */
-long	bsssize;
-/*e: global bsssize */
-
-/*s: global cbc */
-// remaining bytes in buf.obuf
-int	cbc;
-/*e: global cbc */
-/*s: global cbp */
-// array<byte> (slice of buf.obuf) 
-char*	cbp;
-/*e: global cbp */
-
+/*s: global outfile */
+char*	outfile;
+/*e: global outfile */
 /*s: global cout */
 fdt	cout = -1;
 /*e: global cout */
+/*s: global bso */
+Biobuf	bso;
+/*e: global bso */
 
 /*s: global curauto */
 // list<ref<Auto>> (next = Auto.link)
@@ -68,16 +58,18 @@ Prog*	curp;
 Prog*	curtext = P;
 /*e: global curtext */
 
+/*s: global autosize(arm) */
+long	autosize;
+/*e: global autosize(arm) */
+/*s: global instoffset(arm) */
+long	instoffset;
+/*e: global instoffset(arm) */
+
+
 /*s: global datap */
 // list<ref_own<Prog>> (next = Prog.link)
 Prog*	datap = P;
 /*e: global datap */
-/*s: global datsize */
-long	datsize;
-/*e: global datsize */
-/*s: global debug */
-bool	debug[128];
-/*e: global debug */
 /*s: global etextp */
 // ref<Prog> (end from = textp)
 Prog*	etextp = P;
@@ -86,18 +78,47 @@ Prog*	etextp = P;
 // list<ref_own<Prog>> (next = Prog.link)
 Prog*	firstp;
 /*e: global firstp */
+/*s: global lastp */
+// ref<Prog> (end from = firstp)
+Prog*	lastp;
+/*e: global lastp */
+/*s: global textp */
+// list<ref<Prog>> (next = Prog.cond)
+Prog*	textp = P;
+/*e: global textp */
 
-/*s: global fnuxi4 */
-char	fnuxi4[4];
-/*e: global fnuxi4 */
-/*s: global fnuxi8 */
-char	fnuxi8[8];
-/*e: global fnuxi8 */
+
+/*s: global debug */
+bool	debug[128];
+/*e: global debug */
+
+
+/*s: global textsize */
+long	textsize;
+/*e: global textsize */
+/*s: global datsize */
+long	datsize;
+/*e: global datsize */
+/*s: global bsssize */
+long	bsssize;
+/*e: global bsssize */
+/*s: global symsize */
+long	symsize;
+/*e: global symsize */
+/*s: global lcsize */
+long	lcsize;
+/*e: global lcsize */
 
 /*s: global hash linker */
 // hash<Sym.name * Sym.version, ref_own<Sym>> (next = Sym.link in bucket)
 Sym*	hash[NHASH];
 /*e: global hash linker */
+/*s: global pc */
+long	pc = 0;
+/*e: global pc */
+/*s: global zprg */
+Prog	zprg;
+/*e: global zprg */
 
 /*s: global histfrog */
 Sym*	histfrog[MAXHIST];
@@ -113,58 +134,14 @@ int	histgen = 0;
 bool	xrefresolv;
 /*e: global xrefresolv */
 
-/*s: global inuxi1 */
-char	inuxi1[1];
-/*e: global inuxi1 */
-/*s: global inuxi2 */
-char	inuxi2[2];
-/*e: global inuxi2 */
-/*s: global inuxi4 */
-char	inuxi4[4];
-/*e: global inuxi4 */
-
-/*s: global lastp */
-// ref<Prog> (end from = firstp)
-Prog*	lastp;
-/*e: global lastp */
-/*s: global lcsize */
-long	lcsize;
-/*e: global lcsize */
-/*s: global nsymbol linker */
-long	nsymbol;
-/*e: global nsymbol linker */
-/*s: global instoffset(arm) */
-long	instoffset;
-/*e: global instoffset(arm) */
-/*s: global oprange(arm) */
-// map<enum<Opcode>, Oprange>
-Oprange	oprange[ALAST];
-/*e: global oprange(arm) */
-/*s: global outfile */
-char*	outfile;
-/*e: global outfile */
-/*s: global pc */
-long	pc = 0;
-/*e: global pc */
-/*s: global symsize */
-long	symsize;
-/*e: global symsize */
-/*s: global textp */
-// list<ref<Prog>> (next = Prog.cond)
-Prog*	textp = P;
-/*e: global textp */
-/*s: global textsize */
-long	textsize;
-/*e: global textsize */
 /*s: global thunk */
 long	thunk;
 /*e: global thunk */
-/*s: global xcmp(arm) */
-bool	xcmp[C_GOK+1][C_GOK+1];
-/*e: global xcmp(arm) */
-/*s: global zprg */
-Prog	zprg;
-/*e: global zprg */
+/*s: global nsymbol linker */
+long	nsymbol;
+/*e: global nsymbol linker */
+
+
 /*s: global armv4(arm) */
 bool	armv4;
 /*e: global armv4(arm) */
@@ -180,18 +157,6 @@ bool	doexp;
 bool dlm;
 /*e: global dlm */
 
-/*s: global imports */
-int	imports;
-/*e: global imports */
-/*s: global nimports */
-int nimports;
-/*e: global nimports */
-/*s: global exports */
-int	exports;
-/*e: global exports */
-/*s: global nexports */
-int nexports;
-/*e: global nexports */
 /*s: global EXPTAB */
 char*	EXPTAB;
 /*e: global EXPTAB */

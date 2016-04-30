@@ -267,12 +267,15 @@ union Buf
 // Globals
 //----------------------------------------------------------------------------
 
-// main.c (used also in lib.c)
+// io.c
+extern union Buf buf;
+extern  int     cbc;
+extern  char*   cbp;
+
+// globals.c
 
 extern char	 thechar;
 extern char* thestring;
-
-// globals.c
 
 // configuration
 extern  short   HEADTYPE;       /* type of header */
@@ -282,11 +285,6 @@ extern  long    INITRND;        /* data round above text location */
 extern  long    INITDAT;        /* data location */
 extern  char*   INITENTRY;      /* entry point */
 extern  long    INITTEXTP;      /* text location (physical) */ // ELF
-
-// input
-extern union Buf buf;
-extern  int     cbc;
-extern  char*   cbp;
 
 // output
 extern  char*   outfile;
@@ -310,10 +308,6 @@ extern  Auto*   curhist;
 extern  Prog*   curp;
 extern  long    autosize;
 
-/*s: constant TNAME(arm) */
-#define TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
-/*e: constant TNAME(arm) */
-
 // sections size
 extern  long    textsize;
 extern  long    datsize;
@@ -321,13 +315,11 @@ extern  long    bsssize;
 extern  long    symsize;
 extern  long    lcsize;
 
-extern  char    inuxi1[1];
-extern  char    inuxi2[2];
-extern  char    inuxi4[4];
-extern  char    fnuxi4[4];
-extern  char    fnuxi8[8];
-
 extern  char*   noname;
+/*s: constant TNAME(arm) */
+#define TNAME (curtext && curtext->from.sym ? curtext->from.sym->name : noname)
+/*e: constant TNAME(arm) */
+
 
 // debugging support
 extern  Sym*    histfrog[MAXHIST];
@@ -340,12 +332,11 @@ extern  int xrefresolv;
 // advanced topics
 extern  int armv4;
 extern  int vfp;
-extern  int doexp, dlm;
-extern  int imports, nimports;
-extern  int exports, nexports;
+extern  bool doexp;
+extern  bool dlm;
 extern  char*   EXPTAB;
-extern  Prog    undefp;
 
+extern  Prog    undefp;
 /*s: constant UP */
 #define UP  (&undefp)
 /*e: constant UP */
@@ -380,24 +371,15 @@ extern long nsymbol;
 int     isobjfile(char *f);
 void    objfile(char*);
 
-void    nuxiinit(void);
-void    readundefs(char*, int);
-void    undefsym(Sym*);
-void    zerosig(char*);
-
 // lib.c
 void    loadlib(void);
 void    addlibpath(char*);
-char* findlib(char *file);
-void addlib(char *obj);
+char*   findlib(char *file);
+void    addlib(char *obj);
 
 // pass.c
 void    patch(void);
 void    follow(void);
-
-void    import(void);
-void    export(void);
-void    ckoff(Sym*, long);
 
 // noops.c
 void    noops(void);
@@ -411,28 +393,24 @@ void    dotext(void);
 
 // span.c
 void    buildop(void);
-int aclass(Adr*);
+int     aclass(Adr*);
 long    immrot(ulong);
 long    immaddr(long);
+// oplook() in m.h
 
 long    regoff(Adr*); // for float
-// oplook() in m.h
-void    dynreloc(Sym*, long, int);
-void    asmdyn(void);
 
 // datagen.c
-void datblk(long s, long n, bool sstring);
+void    nuxiinit(void);
+void    datblk(long s, long n, bool sstring);
+
+// codegen.c
+// asmout() in m.h
 
 // asm.c
 void    asmb(void);
-void    cflush(void);
-// asmout() in m.h
 
-void    cput(int);
-void    lput(long);
-void    lputl(long l);
-void    wput(long);
-void    wputl(long);
+
 
 // hist.c
 void    addhist(long, int);
@@ -451,7 +429,24 @@ double  ieeedtod(Ieee*);
 long    ieeedtof(Ieee*);
 int chipfloat(Ieee*);
 
+// dynamic.c
+void    zerosig(char*);
+void    readundefs(char*, int);
+void    dynreloc(Sym*, long, int);
+void    asmdyn(void);
+void    import(void);
+void    export(void);
+void    ckoff(Sym*, long);
 
+
+// io.c
+void    cput(int);
+void    lput(long);
+void    lputl(long l);
+void    wput(long);
+void    wputl(long);
+void    cflush(void);
+byte* readsome(fdt f, byte *buf, byte *good, byte *stop, int max);
 
 // error.c
 void    diag(char*, ...);
@@ -465,7 +460,6 @@ long    atolwhex(char*);
 long    rnd(long, long);
 int     fileexists(char*);
 void  mylog(char*, ...);
-
 /*s: macro DBG */
 #define DBG if(debug['v']) mylog
 /*e: macro DBG */

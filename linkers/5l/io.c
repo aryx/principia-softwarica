@@ -1,8 +1,22 @@
 /*s: linkers/5l/io.c */
 #include	"l.h"
 
+/*s: global buf */
+union Buf buf;
+/*e: global buf */
+
+/*s: global cbc */
+// remaining bytes in buf.obuf
+int	cbc;
+/*e: global cbc */
+/*s: global cbp */
+// array<byte> (slice of buf.obuf) 
+char*	cbp;
+/*e: global cbp */
+
+
 /*s: function readsome */
-static byte*
+byte*
 readsome(fdt f, byte *buf, byte *good, byte *stop, int max)
 {
     int n;

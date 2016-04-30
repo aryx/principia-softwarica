@@ -5,6 +5,90 @@
 #define	Dbufslop	100
 /*e: constant Dbufslop */
 
+/*s: global inuxi1 */
+char	inuxi1[1];
+/*e: global inuxi1 */
+/*s: global inuxi2 */
+char	inuxi2[2];
+/*e: global inuxi2 */
+/*s: global inuxi4 */
+char	inuxi4[4];
+/*e: global inuxi4 */
+
+/*s: global fnuxi4 */
+char	fnuxi4[4];
+/*e: global fnuxi4 */
+/*s: global fnuxi8 */
+char	fnuxi8[8];
+/*e: global fnuxi8 */
+
+
+/*s: function find1 */
+int
+find1(long l, int c)
+{
+    char *p;
+    int i;
+
+    p = (char*)&l;
+    for(i=0; i<4; i++)
+        if(*p++ == c)
+            return i;
+    return 0;
+}
+/*e: function find1 */
+
+/*s: function nuxiinit(arm) */
+void
+nuxiinit(void)
+{
+
+    int i, c;
+
+    for(i=0; i<4; i++) {
+        c = find1(0x04030201L, i+1);
+        if(i < 2)
+            inuxi2[i] = c;
+        if(i < 1)
+            inuxi1[i] = c;
+        inuxi4[i] = c;
+        /*s: [[nuxiinit()]] in loop i, fnuxi initialisation */
+        fnuxi4[i] = c;
+        if(debug['d'] == 0){
+            fnuxi8[i] = c;
+            fnuxi8[i+4] = c+4;
+        }
+        else{
+            fnuxi8[i] = c+4; /* ms word first, then ls, even in little endian mode */
+            fnuxi8[i+4] = c;
+        }
+        /*e: [[nuxiinit()]] in loop i, fnuxi initialisation */
+    }
+    /*s: [[nuxiinit()]] debug */
+    if(debug['v']) {
+        Bprint(&bso, "inuxi = ");
+        for(i=0; i<1; i++)
+            Bprint(&bso, "%d", inuxi1[i]);
+        Bprint(&bso, " ");
+        for(i=0; i<2; i++)
+            Bprint(&bso, "%d", inuxi2[i]);
+        Bprint(&bso, " ");
+        for(i=0; i<4; i++)
+            Bprint(&bso, "%d", inuxi4[i]);
+        Bprint(&bso, "\nfnuxi = ");
+        for(i=0; i<4; i++)
+            Bprint(&bso, "%d", fnuxi4[i]);
+        Bprint(&bso, " ");
+        for(i=0; i<8; i++)
+            Bprint(&bso, "%d", fnuxi8[i]);
+        Bprint(&bso, "\n");
+    }
+    /*e: [[nuxiinit()]] debug */
+    Bflush(&bso);
+}
+/*e: function nuxiinit(arm) */
+
+
 /*s: function datblk(arm) */
 void
 datblk(long s, long n, bool sstring)

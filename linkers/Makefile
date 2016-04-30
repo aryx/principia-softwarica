@@ -24,37 +24,39 @@ SRC_ORIG=Linker.nw Linker_extra.nw Linker_x86.nw
 
 # actually also dependency to 8c/enam.c and 5c/enam.c for anames
 SRC_VIEWS= \
-  ../include/exec/a.out.h\
-  ../include/exec/elf.h\
-  ../include/obj/ar.h\
   5l/l.h\
   5l/globals.c\
   5l/main.c\
+  5l/asm.c\
+  5l/datagen.c\
   5l/obj.c\
   5l/lib.c\
   5l/pass.c\
-  5l/layout.c\
   5l/noop.c\
-  5l/span.c\
+  5l/layout.c\
   5l/m.h\
   5l/optab.c\
-  5l/asm.c\
-  5l/datagen.c\
+  5l/span.c\
   5l/codegen.c\
-  5l/io.c\
-  5l/dynamic.c\
+  5l/debugging.c\
   5l/hist.c\
   5l/profile.c\
-  5l/debugging.c\
+  5l/dynamic.c\
   5l/float.c\
-  5l/error.c\
-  5l/utils.c\
-  5l/fmt.c\
   \
   8l/elf.h\
   8l/elf.c\
+  \
+  5l/fmt.c\
+  5l/error.c\
+  5l/io.c\
+  5l/utils.c\
 
 XX=\
+  ../include/exec/a.out.h\
+  ../include/exec/elf.h\
+  ../include/obj/ar.h\
+  \
   misc/ar.c\
   misc/nm.c\
   misc/size.c\

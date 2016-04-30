@@ -1,13 +1,6 @@
 /*s: linkers/5l/main.c */
 #include	"l.h"
 
-/*s: global thechar */
-char	thechar;
-/*e: global thechar */
-/*s: global thestring */
-char*	thestring;
-/*e: global thestring */
-
 /*s: function usage, linker */
 void
 usage(void)

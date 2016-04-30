@@ -1,37 +1,6 @@
 /*s: linkers/5l/fmt.c */
 #include "l.h"
 
-// forward decls
-int Aconv(Fmt*);
-int Cconv(Fmt*);
-int Dconv(Fmt*);
-int Nconv(Fmt*);
-int Pconv(Fmt*);
-int Sconv(Fmt*);
-
-/*s: function listinit(arm) */
-void
-listinit(void)
-{
-
-    fmtinstall('A', Aconv);
-    fmtinstall('C', Cconv);
-    fmtinstall('D', Dconv);
-    fmtinstall('N', Nconv);
-    fmtinstall('P', Pconv);
-    fmtinstall('S', Sconv);
-}
-/*e: function listinit(arm) */
-
-/*s: function prasm(arm) */
-void
-prasm(Prog *p)
-{
-    print("%P\n", p);
-}
-/*e: function prasm(arm) */
-
-
 /*s: function Pconv(arm) */
 // Prog -> string
 int
@@ -359,5 +328,28 @@ Sconv(Fmt *fp)
     return fmtstrcpy(fp, str);
 }
 /*e: function Sconv(arm) */
+
+
+/*s: function listinit(arm) */
+void
+listinit(void)
+{
+
+    fmtinstall('A', Aconv);
+    fmtinstall('C', Cconv);
+    fmtinstall('D', Dconv);
+    fmtinstall('N', Nconv);
+    fmtinstall('P', Pconv);
+    fmtinstall('S', Sconv);
+}
+/*e: function listinit(arm) */
+
+/*s: function prasm(arm) */
+void
+prasm(Prog *p)
+{
+    print("%P\n", p);
+}
+/*e: function prasm(arm) */
 
 /*e: linkers/5l/fmt.c */

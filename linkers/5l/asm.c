@@ -34,10 +34,6 @@ entryvalue(void)
 }
 /*e: function entryvalue(arm) */
 
-
-
-
-
 /*s: function asmb(arm) */
 /// main -> <>
 void

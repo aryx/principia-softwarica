@@ -89,5 +89,4 @@ chipfloat(Ieee *e)
 }
 /*e: function chipfloat(arm) */
 
-
 /*e: linkers/5l/float.c */
