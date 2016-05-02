@@ -264,7 +264,6 @@ void  errorexit(void);
 // utils.c
 void* alloc(long n);
 void* allocn(void *p, long on, long n);
-void  gethunk(void);
 int systemtype(int);
 int pathchar(void);
 int mywait(int*);

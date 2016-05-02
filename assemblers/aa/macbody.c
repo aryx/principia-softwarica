@@ -269,7 +269,9 @@ macdef(void)
     if(isspace(c))
         if(c != '\n')
             c = getnsc();
+
     base = hunk;
+
     len = 1;
     ischr = 0;
     for(;;) {

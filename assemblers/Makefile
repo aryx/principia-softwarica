@@ -22,12 +22,12 @@ SRC_ORIG=Assembler.nw Assembler_extra.nw Assembler_x86.nw
 
 SRC_VIEWS= \
   aa/aa.h\
+  aa/lookup.c\
   aa/globals.c\
   aa/utils.c\
   aa/error.c\
   aa/hist.c\
   aa/float.c\
-  aa/lookup.c\
   aa/lexbody.c\
   aa/macbody.c\
   \
@@ -40,15 +40,14 @@ SRC_VIEWS= \
   5a/a.y\
   5a/obj.c\
   5a/main.c\
-  \
-  ../lib_core/libc/arm/div.s
 
 # also 5a/tests/helloworld.s at some point and many more .s
 
 
 # temporarily split from SRC_VIEWS for 'make loc'
 XX=\
-  ../include/obj/8.out.h\
+  ../lib_core/libc/arm/div.s \
+  ../include/obj/8.out.h \
   misc/data2s.c\
   8a/a.h\
   8a/globals.c\

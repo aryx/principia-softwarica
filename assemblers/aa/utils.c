@@ -1,6 +1,28 @@
 /*s: assemblers/aa/utils.c */
 #include "aa.h"
 
+/*s: function gethunk */
+void
+gethunk(void)
+{
+    char *h;
+    long nh;
+
+    nh = NHUNK;
+    if(thunk >= 10L*NHUNK)
+        nh = 10L*NHUNK;
+
+    h = (char*)sbrk(nh);
+    if(h == (char*)-1) {
+        yyerror("out of memory");
+        errorexit();
+    }
+    hunk = h;
+    nhunk = nh;
+    thunk += nh;
+}
+/*e: function gethunk */
+
 /*s: function alloc */
 /*
  * real allocs
@@ -48,27 +70,6 @@ allocn(void *p, long on, long n)
 }
 /*e: function allocn */
 
-/*s: function gethunk */
-void
-gethunk(void)
-{
-    char *h;
-    long nh;
-
-    nh = NHUNK;
-    if(thunk >= 10L*NHUNK)
-        nh = 10L*NHUNK;
-
-    h = (char*)sbrk(nh);
-    if(h == (char*)-1) {
-        yyerror("out of memory");
-        errorexit();
-    }
-    hunk = h;
-    nhunk = nh;
-    thunk += nh;
-}
-/*e: function gethunk */
 
 
 /*s: function mycreat */
