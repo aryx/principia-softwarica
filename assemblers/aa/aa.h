@@ -5,15 +5,19 @@
 #include <ctype.h>
 
 // The content of this file was originally copy pasted in 8a/a.h, 5a/a.h, etc.
-// It was almost always the same in all archi so I factorized things in aa.h.
+// It was almost always the same in all archi, so I factorized things in aa.h.
 // aa.h is the generic part; for the specifics do #include Y.out.h in Ya/a.h,
-// e.g.:
+// ex:
 //#include "8.out.h" in 8a/a.h
 //#include "5.out.h" in 5a/a.h
 
 #include <common.out.h>
 
 #pragma lib "../aa/aa.a$O"
+
+//----------------------------------------------------------------------------
+// Data structures and constants
+//----------------------------------------------------------------------------
 
 typedef struct  Sym Sym;
 typedef struct  Io Io;
@@ -37,6 +41,13 @@ typedef struct  Hist Hist;
 /*s: constant NHUNK */
 #define NHUNK       10000
 /*e: constant NHUNK */
+/*s: constant NHASH */
+#define NHASH       503
+/*e: constant NHASH */
+/*s: constant STRINGSZ */
+#define STRINGSZ    200
+/*e: constant STRINGSZ */
+
 /*s: constant EOF */
 #define EOF     (-1)
 /*e: constant EOF */
@@ -47,12 +58,6 @@ typedef struct  Hist Hist;
 /// main -> assemble -> yyparse -> yylex -> <>
 #define GETC()      ((--fi.c < 0) ? filbuf() : *fi.p++ & 0xff)
 /*e: function GETC */
-/*s: constant NHASH */
-#define NHASH       503
-/*e: constant NHASH */
-/*s: constant STRINGSZ */
-#define STRINGSZ    200
-/*e: constant STRINGSZ */
 
 
 /*s: struct Sym */
@@ -168,6 +173,10 @@ struct  Hist
 #define H   ((Hist*)nil)
 /*e: constant H */
 
+//----------------------------------------------------------------------------
+// Globals
+//----------------------------------------------------------------------------
+
 // core algorithm
 extern  Sym*  hash[NHASH];
 extern  int   pass;
@@ -214,6 +223,10 @@ extern  int nerrors;
 extern  char*   hunk;
 extern  long    nhunk;
 extern  long    thunk;
+
+//----------------------------------------------------------------------------
+// Functions
+//----------------------------------------------------------------------------
 
 // lookup.c
 Sym*    slookup(char*);

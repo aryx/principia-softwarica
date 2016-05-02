@@ -23,7 +23,6 @@ SRC_ORIG=Assembler.nw Assembler_extra.nw Assembler_x86.nw
 SRC_VIEWS= \
   aa/aa.h\
   aa/globals.c\
-  aa/compat.c\
   aa/utils.c\
   aa/lookup.c\
   aa/lexbody.c\
