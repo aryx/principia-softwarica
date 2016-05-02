@@ -23,11 +23,11 @@ enum Register {
     REGTMP =    11,
     /*e: [[Register]] linker conventions cases */
 
-    // reserved by linker
+    // reserved by the linker
     REGSB =     12, // static base
     REGSP =     13, // stack pointer
 
-    // reserved by ARM
+    // reserved by the ARM machine
     REGLINK =   14,
     REGPC =     15,
 

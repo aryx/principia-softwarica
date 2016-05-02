@@ -82,7 +82,7 @@ struct  Sym
     char*   macro;
     /*e: [[Sym]] macro fields */
     /*s: [[Sym]] token fields */
-    //enum<token_code> (e.g. LLAB, LNAME, LVAR, LARITH, etc)
+    //enum<token_code> (e.g., LLAB, LNAME, LVAR, LARITH)
     ushort  type;
     /*e: [[Sym]] token fields */
 

@@ -186,7 +186,7 @@ assemble(char *infile)
     for(i=0; i<nDlist; i++)
             dodefine(Dlist[i]);
     /*e: [[assemble()]] init Dlist after pinit */
-    yyparse(); // calls outcode() that now does things
+    yyparse(); // calls outcode() which now does things
 
     cclean();
     return nerrors;
