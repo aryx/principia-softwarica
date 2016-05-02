@@ -5,9 +5,8 @@
 #include <ctype.h>
 
 // The content of this file was originally copy pasted in 8a/a.h, 5a/a.h, etc.
-// It was almost always the same in all archi, so I factorized things in aa.h.
-// aa.h is the generic part; for the specifics do #include Y.out.h in Ya/a.h,
-// ex:
+// It was almost always the same in all archi, so I factorized the generic
+// part in aa.h.; for the specifics do #include Y.out.h in Ya/a.h as followed:
 //#include "8.out.h" in 8a/a.h
 //#include "5.out.h" in 5a/a.h
 
@@ -216,7 +215,7 @@ extern  long    lineno;
 // debugging
 extern  bool    debug[256];
 
-// error managments
+// error management
 extern  int nerrors;
 
 // utils (used by mac.c)
@@ -242,7 +241,6 @@ void  newfile(char*, int);
 void  setinclude(char*);
 int   escchar(int);
 int  filbuf(void); // used by GETC()
-void yyerror(char*, ...);
 int  getc(void);
 int  getnsc(void);
 void unget(int);
@@ -251,22 +249,26 @@ void unget(int);
 void dodefine(char*);
 void domacro(void);
 void macexpand(Sym*, char*);
+
+// hist.c
 void linehist(char*, int);
+void prfile(long l);
 
 // float.c
 void ieeedtod(Ieee *ieee, double native);
 
-// compat.c
+// error.c
+void yyerror(char*, ...);
+void  errorexit(void);
+
+// utils.c
+void* alloc(long n);
+void* allocn(void *p, long on, long n);
+void  gethunk(void);
 int systemtype(int);
 int pathchar(void);
 int mywait(int*);
 int mycreat(char*, int);
-
-// utils.c
-void  errorexit(void);
-void* alloc(long n);
-void* allocn(void *p, long on, long n);
-void  gethunk(void);
 
 
 /*s: enum _anon_ (assemblers/aa/aa.h) */

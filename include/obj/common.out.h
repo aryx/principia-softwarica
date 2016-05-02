@@ -4,8 +4,8 @@
 #define	NSYM	50
 /*e: constant NSYM */
 
-// was originally in some xxx/y.out.h, but was always the same in all archi
-// hence the factorization here
+// It was originally in some xxx/y.out.h, but was always the same in 
+// all architecture, hence the factorization here.
 /*s: struct ieee */
 /*
  * this is the simulated IEEE floating point

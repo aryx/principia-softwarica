@@ -70,18 +70,6 @@ gethunk(void)
 }
 /*e: function gethunk */
 
-/*s: function errorexit */
-/// main | assemble | yyerror | ... -> <>
-void
-errorexit(void)
-{
-
-    if(outfile)
-        remove(outfile);
-    exits("error");
-}
-/*e: function errorexit */
-
 
 /*s: function mycreat */
 int

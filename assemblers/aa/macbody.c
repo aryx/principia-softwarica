@@ -841,39 +841,4 @@ macend(void)
 }
 /*e: function macend */
 
-/*s: function linehist */
-/// (pinit | macinc -> newfile) | (GETC -> filbuf) | maclin -> <>
-void
-linehist(char *f, int local_line)
-{
-    Hist *h;
-
-    /*s: [[linehist()]] debug */
-    if(debug['f'])
-        if(f) {
-            if(local_line)
-                print("%4ld: %s (#line %d)\n", lineno, f, local_line);
-            else
-                print("%4ld: %s\n", lineno, f);
-        } else
-            print("%4ld: <pop>\n", lineno);
-    /*e: [[linehist()]] debug */
-
-    h = alloc(sizeof(Hist));
-    h->filename = f;
-    h->global_line = lineno;
-    h->local_line = local_line;
-
-    //add_list(hist, ehist, h)
-    h->link = H;
-    if(ehist == H) {
-        hist = h;
-        ehist = h;
-        return;
-    }
-    ehist->link = h;
-    ehist = h;
-}
-/*e: function linehist */
-
 /*e: assemblers/aa/macbody.c */
