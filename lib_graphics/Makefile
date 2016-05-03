@@ -60,7 +60,6 @@ SRC_VIEWS= \
    libdraw/line.c\
    libdraw/loadimage.c\
    libdraw/menuhit.c\
-   libdraw/mkfont.c\
    libdraw/mouse.c\
    libdraw/newwindow.c\
    libdraw/openfont.c\

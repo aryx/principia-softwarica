@@ -1389,7 +1389,7 @@ applications using [[draw.h]].
 
 \section{Code organization}
 
-The code of [[draw]] can be decomposed in multiple components, which
+We can decompose the code of [[draw]] in multiple components that
 correspond to different directories in the \plan repository:
 
 \begin{itemize}
@@ -1405,64 +1405,229 @@ the functions defined in [[draw.h]]. However, those functions are just
 thin wrappers that write into [[/dev/draw/x/data]] to delegate
 the actual rendering to code in the kernel.
 
-\item [[kernel/devices/screen/]] contains the kernel code
-which implements the [[draw]] device as well as a few device
-drivers for popular graphics cards. 
-%
-The [[devdraw.c]] file in particular contains the different
-device methods, e.g., [[drawopen()]], [[drawread()]], or [[drawwrite()]],
-which will be executed when files from [[/dev/draw/]] are accessed.
-\l [[screen.h]]
-%
-As we will see later, [[drawwrite()]] calls [[drawmesg()]] when
-the file involved is a [[/dev/draw/x/data]] device file.
-[[drawmesg()]] is a large function which
-processes all incoming drawing commands in
-a giant [[switch()]], looking at the first letter of
-the drawing command, and then performs the appropriate 
-graphic operation.
-
-\item [[lib_graphics/libmemdraw/]] is a library
-used by the kernel which contains most of the 
-generic graphics-related code. [[drawmesg()]] calls mostly functions
-from [[libmemdraw/]] (e.g., [[memimagedraw()]], [[_memimageline()]]).
-Most of those functions operate on the [[Memimage]] type defined
-in [[include/graphics/internals/memlayer.h]].
-\l why not directly use memdraw.h? why need all this mess?
-
-\item [[lib_graphics/libmemlayer/]] is another library used
-by the kernel to manage overlapping windows. It will be covered
-later in Chapter~\ref{chap:windows}.
-
-\end{itemize}
-
-
-\l part library, part generic interface and code kernel, part specific drivers
-
-% lofs of files have similar name in libdraw/ and libmemdraw/
-
-
-%\subsection{[[lib_graphics/libdraw/]]}
-
-% libdraw is mostly for user DS and API that then just
-% marshalled and delegate the actual work to /dev/draw
 % normally apps must link just with libdraw.a (and not libmemdraw.a
 % or libmemlayer.a!) (there are some apps that use memlayer too though
 %  to implement a windowing like system inside the app, e.g., acme)
 % can actually divide libdraw in two, have a libcoredraw (or libgeometry)
 % so the kernel would not even depend on libdraw
 
-%arith.c: Point and Rectangle ctor and arithmetic (+-/*)
-% (libgeometry)
 
-%icossin.c: math
-%icossin2.c: math
+\item [[kernel/devices/screen/]] contains the kernel code
+which implements the [[draw]] device, as well as a few device
+drivers for popular graphics cards. 
+%
+The [[devdraw.c]] file, in particular, contains the different
+device methods (e.g., [[drawopen()]], [[drawread()]], or [[drawwrite()]])
+that will be executed when you access files from [[/dev/draw/]].
+\l [[screen.h]]
+%
+As we will see later, the [[drawwrite()]] method calls [[drawmesg()]] when
+the file involved is a [[/dev/draw/x/data]] device file.
+[[drawmesg()]] is a large function that
+processes all incoming drawing commands in
+a giant [[switch()]]. This function looks at the first letter of
+the drawing command to decide which graphic operation to perform.
+
+% drawmesg() dispatcher to libmemdraw operations and libmemlayer operations
+% should also have actual calls to screen.h implem, e.g., vgascreen.c!
+
+% pool.c?: imagmem! image data store! (in kernel :( X11 spirit )
+% screen.c: factorize stuff, gscreen, soft cursor, cursor, graphic text mode
+%  (I created it as a model of the one in bcm/)
+% vgascreen.c: implem of screen.h hardware specific hooks needed by devdraw
+%  and memdraw
+% devvga.c: /dev/vga ctl files for vgascreen global parameters?
+
+
+\item [[lib_graphics/libmemdraw/]] is a library
+used by the kernel that contains most of the 
+generic graphics-related code. [[drawmesg()]] calls mostly functions
+from [[libmemdraw/]] (e.g., [[memimagedraw()]], [[_memimageline()]]).
+Most of those functions operate on the [[Memimage]] type defined
+in [[include/graphics/internals/memlayer.h]].
+\l why not directly use memdraw.h? why need all this mess?
+
+% libmemdraw actually does the drawing stuff in memory
+% (and rely on some kernel vga functions to do the rest and transfer
+%  images from memory to the actual screen (or nop if frame buffer))
+% it also rely on some code in libmemlayer.
+% most apps should link only with libdraw. Only the kernel
+% (and test programs) link with libmemdraw.a normally.
+
+
+%replmul.c: replmul global used in mktables to duplicate bits
+
+%string.c: seems used only for graphical text mode, simple code at least
+% drawchar() is actually in devvga.c
+%defont.c: getmemdefont, used only for graphical text mode
+%subfont.c: dead
+%openmemsubfont.c: dead
+%write.c: dead
+%todo: could remove files below? who links with libmemdraw except 
+% test files? they can define then the hwdraw(), iprint() empty handler
+%hwdraw.c: kernel cruft
+%iprint.c: kernel cruft
+% when people link with memdraw outside the kernel
+% then the linker will complain if no hwdraw() function,
+% but normally hwdraw() should be a bridge to screen.h interface 
+% functions? (implemented by vgascreen)
+
+
+\item [[lib_graphics/libmemlayer/]] is another library used
+by the kernel that manages overlapping windows. It will be covered
+later in Chapter~\ref{chap:windows}.
+
+% It's not really layer in the cairo sense. It's really windows.
+% Then you can easily implement a windowing system with 
+% overlapping pictures (windows) that actually can get exposed back.
+
+%adapter:
+% draw.c: again, memdraw(), but should be in libmemdraw/
+% line.c: again! memline(), but should be only for horizontal/vert here no?
+% load.c:
+% unload.c:
+
+%layerop.c
+
+%lalloc.c: memlayer alloc
+%ldelete.c: memlayer free
+
+%lsetrefresh.c
+
+%window operations:
+% lorigin.c: mv window (or its origin)
+% lhide.c: expose/hide window
+% ltofront.c: back to top
+% ltorear.c: put to rear
+
+%\item [[kernel/devices/screen/user/]]
+% user-space utilities for VGA, see appendix X?
+% could get rid of it?
+
+%\item [[lib_graphics/libimg/]]
+
+\end{itemize}
+
+\l part library, part generic interface and code kernel, part specific drivers
+
+
+%dup: (and adapted) from Assembler.nw
+Table~\ref{tab:code-orga} presents short descriptions
+of the source files used by [[draw]], together with
+the main entities (e.g., structures, functions, globals) the file defines,
+and the corresponding chapter in this document in which the code
+contained in the file is primarily discussed.
+
+%todo for libmemdraw/draw.c: super big file
+% init.c with memimageinit.c (now in draw.c)
+% clip.c ? with drawclip?
+% mv readcmap from draw.c to cmap.c?
+% imgtorgba()?? rgba.c?
+%todo for kernel/.../devdraw.c: super big file (but convenient for mkfile?) meh
+% split data structures outside devdraw.h?
+% drawerror.c? with all the Exxx?
+% put screen stuff outside? drawdesktop.c?
+% drawalloc.c? or drawimage.c?
+% drawinit.c? 
+% drawmesg.c
+% drawmisc.c?
+%todo for libdraw/:
+% mv nameximage out of alloc.c
+% merge subfont stuff together? have almost one function per file
+% split init.c with initwindow.c and flush.c?
+% merge load/unload together?
+% put all window stuff together? newwindow, getwindow, etc?
+% merge colmap stuff together?
+% mv scroll.c with mouse.c
+% stringbg.c with string.c so then no need export _string in draw_private.h
+% merge subfont.c freesubfont.c and code containing installsubfont
+%  such as subfontcache.c so can even clean draw_private.h!
+% split window.c with desktop.c (screen)
+
+% drawrepl.c?
+
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcp{5cm}lp{4cm}p{5cm}r}
+\toprule
+{\bf Function} & {\bf Chapter} & {\bf [[libdraw/]] Files} & {\bf [[libmemdraw/]] Files} & {\bf [[kernel/]] Files} & {\bf Entities} & {\bf LOC} \\
+\otoprule
+data structures &              & [[draw.h]]               & [[memdraw.h]]               & [[screen.h]] [[screen.c]] & [[Point]] [[Rectangle]] [[Display]] [[Image]] [[Memimage]] [[ImageChan]] [[rgba]] & 0 \\ % actually the .h are under include/graphics/
+geometry operations &          & [[arith.c]]              &                             &                         & [[eqpt()]] [[addpt()]] [[eqrect()]] [[rectaddpt()]] [[ZP]] [[ZR]]        & 0 \\ %  (libgeometry)        
+image resolution utilities &   & [[bytesperline.c]] [[chan.c]] &                              &                        & [[bytesperline()]] [[chantodepth()]] & 0 \\
+initializations &              & [[init.c]]               &                             &                         & [[display]] [[screensize()]] [[memimageinit()]] [[initscreenimage()]] [[initdraw()]] [[initdisplay()]]       & 0 \\
+[[draw]] device &              &                          &                             & [[devdraw.c]]           & [[drawdevtab]] [[Qxxx]] [[drawwalk()]] [[drawopen()]] [[drawmesg()]]  & 0 \\
+
+\midrule                                                                                                                  
+
+image allocation &             &  [[alloc.c]]             & [[alloc.c]]                 &                         & [[allocimage()]] [[allocmemimage()]]                                 & 0 \\ % mv byteaddr() memsetchan() elsewhere? % [[freeimage()]] 
+clipping and replication &     &  [[replclipr.c]] [[rectclip.c]]                       &                             &                         & [[]] & 0 \\
+image naming     &             &                          &                             &                         & [[nameimage()]] [[namedimage()]]                                   & 0 \\
+
+\midrule 
+
+manipulating rectangles &      & [[draw.c]] [[border.c]]  & [[draw.c]]                  &                         & [[draw()]] [[memimagedraw()]] [[alphadraw()]]  & 0 \\
+line drawing            &      & [[line.c]]          & [[line.c]]                  &                         & [[line()]] [[_memimageline()]]                                          & 0 \\
+polygon drawing         &      & [[poly.c]]               & [[poly.c]] [[fillpoly.c]]   &                         & [[poly()]] [[fillpoly()]] [[mempoly()]]                                          & 0 \\
+ellipse and circle drawing&    & [[ellipse.c]]            & [[ellipse.c]]               &                         & [[ellipse()]] [[fillellipse()]] [[memellipse()]]                                          & 0 \\
+arc drawing               &    &                          & [[arc.c]]                &                         & [[arc()]] [[fillarc()]] [[memarc()]]                                          & 0 \\
+
+\midrule                                                                                                                  
+font initialization    &      & [[defont.c]] [[getdefont.c]] [[openfont.c]]  &                             &                         & [[defontdata]] [[getdefont()]] [[openfont()]]    & 0 \\
+font allocation        &      & [[buildfont.c]]          &                             &                         & [[buildfont()]] [[freefont()]]                                         & 0 \\
+text drawing           &      & [[string.c]] [[stringbg.c]]&                             &                         & [[string()]] [[stringbg()]] [[drawchar() ]]                                          & 0 \\
+computing text width   &      & [[stringwidth.c]]        &                             &                         & [[stringwidth()]]                         & 0\\
+characters cache       &      & [[font.c]] [[draw_private.h]]       &                             &                         & [[cachechars()]] [[loadchar()]] [[fontresize()]] & 0 \\
+subfont management     &      & [[subfont.c]] [[freesubfont.c]] [[getsubfont.c]] [[readsubfont.c]] [[subfontcache.c]] [[subfontname.c]] [[writesubfont.c]]  &                             &                         & [[readsubfont()]] [[writesubfont()]]                            & 0 \\
+
+\midrule
+
+loading/unloading an image   &      &  [[loadimage.c]] [[unloadimage.c]]   & [[load.c]] [[unload.c]]              &                         & [[loadimage()]] [[loadmemimage()]]                            & 0 \\ % [[unloadimage()]] [[unloadmemimage()]]
+image disk IO          &      & [[readimage.c]]          & [[read.c]]                           &                         & [[readimage()]] & 0 \\
+
+\midrule
+mouse management      &       & [[mouse.c]] [[scroll.c]] &                             &                         & [[Mouse]] [[Mousectl]] [[initmouse()]] [[readmouse()]] & 0 \\ % [[closemouse()]] 
+cursor management    &        &                          &                             &                         & [[swcursorinit()]] [[cursoron()]] & 0 \\
+raw key access       &        & [[keyboard.c]]           &                             &                         & [[Kxxx]] [[Keyboardctl]] [[initkeyboard()]] & 0 \\ % [[closekeyboard()]] 
+
+\midrule
+color maps           &        & [[readcolmap.c]] [[writecolmap.c]] [[rgb.c]] & [[cmap.c]]                            &                         & [[rgb2cmap()]] [[cmap2rgb()]] [[readcmap()]] [[readcolmap()]] [[memdefcmap]]   & 0 \\ % [[writecmap()]] [[writecolmap()]] %cmap.c (generated by scripts/mkcmap.c)
+bezier curves drawing &       & [[bezier.c]]             &                             &                         & [[bezier()]] [[bezspline()]] [[fillbezier()]] & 0 \\
+get rect?             &       & [[getrect.c]]            &                             &                         & [[getrect()]] & 0 \\
+basic menus           &       & [[menuhit.c]] [[allocimagemix.c]]      &                             &                         & [[Menu]] [[menuhit()]] & 0 \\
+event-based IO        &       & [[event.c]] [[emunuhits.c]] [[egetrect.c]]           &                             &                         & [[Event]] [[einit()]] [[ekbd()]] [[emouse()]] & 0 \\
+image compression     &       & [[computil.c]] [[cloadimage.c]] [[creadimage.c]] [[writeimage.c]]        & [[cload.c]] [[cread.c]]                 &                         & [[cloadimage()]] [[cloadmemimage() [[creadimage()]] [[creadmemimage()]] [[writeimage()]] & 0 \\
+graphics text mode    &       &                          &                             & [[cga.c]]               & & 0 \\
+
+\midrule
+debugging             &       & [[debug.c]]              &                             &                         & [[drawsetdebug()]] & 0 \\
+dumpers               &       & [[fmt.c]]                &                             &                         & [[Pfmt()]] [[Rfmt()]] [[chantostr()]] [[printmesg()]] & 0 \\x
+error management      &       &                          &                             &                         & [[Errorfn]] [[drawerror()]] & 0 \\
+trigonometry          &       & [[icossin.c]] [[icossin2.c]]  &                             &                         & [[sinus]] [[cosinus]] [[icossin()]] [[icossin2()]] & 0 \\
+
+\midrule
+
+VideoCore driver      &       &                          &                             &                         & & 0\\
+VGA generic driver    &       &                          &                             &  [[vga.h]] [[devvga.c]] [[vgascreen.c]] [[vgavesa.c]]                       & [[vgadevtab]] [[VGAscr]] [[vgascreen]] [[VGAdev]] [[vgaattach()]] & 0\\
+Cirrus logic VGA driver &     &                          &                             &  [[vgaclgd542x.c]]                       & & 0 \\
+\otoprule
+Total          &               &                    &                       &                   &                & 4219 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Chapters and source files of [[draw]].}
+\label{tab:code-orga}
+\end{table*}
+
+\l explain that multiple dir because of the way draw is architectured
+% lofs of files have similar name in libdraw/ and libmemdraw/
 
 %rectclip.c: rectclip() utility
 %replclipr.c: replicate and clipping rectangle API
 %drawrepl.c: replicate utilities
 
-%misc.c: old image format
+%misc.c: old image format. delete? used by font still? utilities to convert?
+
 
 %a few other utilities appear later: bytesperline.c, chan.c
 
@@ -1485,7 +1650,7 @@ later in Chapter~\ref{chap:windows}.
 
 %alloc.c: alloc images
  %bytesperline.c: resolution -> malloc size 
-  %(actually used in memdraw/alloc.c, but also here by readimage.c/...)
+  %(actually used in memdraw/alloc.c, but also here by readimage.c/...) so should be in libgeometry
  %allocimagemix.c: used by menuhits
 
 %chan.c: channel functions
@@ -1536,104 +1701,12 @@ later in Chapter~\ref{chap:windows}.
 %stringwidth.c
 
 %openfont.c: dead or redundant with buildfont I think
-%mkfont.c: dead (used in very few apps)
-%stringsubfont.c: dead (or used in test code)
-
-%\subsection{[[kernel/devices/screen/]]}
-
-% libdraw mostly wrapper on /dev/draw, marshall data, special protocol
-
-% devdraw.c is the /dev/draw handler, especially drawmesg() dispatcher
-%  to libmemdraw operations and libmemlayer operations
-% should also have actual calls to screen.h implem,
-% e.g., vgascreen.c!
-
-% pool.c?: imagmem! image data store! (in kernel :( X11 spirit )
-% devdraw.c: /dev/draw
-% screen.c: factorize stuff, gscreen, soft cursor, cursor, graphic text mode
-%  (I created it as a model of the one in bcm/)
-% vgascreen.c: implem of screen.h hardware specific hooks needed by devdraw
-%  and memdraw
-
-% devvga.c: /dev/vga ctl files for vgascreen global parameters?
-% vgavesa.c: vesa specifics? needed?
-% vgaclgd542x.c: cirrus logic specifics
-
-%\subsection{[[lib_graphics/libmemdraw/]]}
-
-% libmemdraw actually does the drawing stuff in memory
-% (and rely on some kernel vga functions to do the rest and transfer
-%  images from memory to the actual screen (or nop if frame buffer))
-% it also rely on some code in libmemlayer.
-% most apps should link only with libdraw. Only the kernel
-% (and test programs) link with libmemdraw.a normally.
-
-%draw.c: draw rectangle, actual memory code
-
-%replmul.c: replmul global used in mktables to duplicate bits
-
-%line.c:
-%poly.c
-%fillpoly.c
-%ellipse.c
-%arc.c
-
-%alloc.c: memimage
-
-%cmap.c (generated by scripts/mkcmap.c)
-
-%load.c:
-%unload.c:
-
-%write.c: dupe, less important
-%read.c: dupe, less important
-
-%cload.c: compressed load
-%cread.c: compressed read
-
-%string.c: seems used only for graphical text mode, simple code at least
-%defont.c: getmemdefont, used only for graphical text mode
-
-%subfont.c: dead
-%openmemsubfont.c: dead
 
 
-%todo: could remove files below? who links with libmemdraw except 
-% test files? they can define then the hwdraw(), iprint() empty handler
-%hwdraw.c: kernel cruft
-%iprint.c: kernel cruft
-% when people link with memdraw outside the kernel
-% then the linker will complain if no hwdraw() function,
-% but normally hwdraw() should be a bridge to screen.h interface 
-% functions? (implemented by vgascreen)
 
-%\subsection{[[lib_graphics/libmemlayer/]]}
 
-% libmemlayer is really about overlapping windows. It's not really
-%  layer in the cairo sense.
-% Then you can easily implement a windowing system with 
-% overlapping pictures (windows) that actually can get exposed back.
-% Not sure why it's called layers. It's an additional layer before
-% the actual image.
 
-%adapter:
-% draw.c: again, memdraw(), but should be in libmemdraw/
-% line.c: again! memline(), but should be only for horizontal/vert here no?
-% load.c:
-% unload.c:
 
-%layerop.c
-
-%lalloc.c: memlayer alloc
-%ldelete.c: memlayer free
-
-%lsetrefresh.c
-
-%window operations:
-%lorigin.c: mv window (or its origin)
-%lhide.c: expose/hide window
-%ltofront.c: back to top
-%ltorear.c: put to rear
 
 
 \section{Software architecture}
@@ -2101,6 +2174,9 @@ ptinrect(Point p, Rectangle r)
 % will see later Line, Polyline, Ellipse, Arcs, 
 % but they all use Pt and Rectangle for their parameters.
 
+\l bytesperline here?
+\l rectclip here?
+
 \section{[[Display]] (and [[Client]])}
 % and [[display]]
 
@@ -2507,6 +2583,7 @@ int		imageid;
 % why need that client side? id allocation is handled in kernel no?
 % apparently not, kernel actually just check that passed id is indeed
 % unused (in Client DImage hash).
+
 
 
 \subsection{[[Memimage]], [[screenimage]] and [[gscreen]]}
@@ -8831,6 +8908,7 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
     <<[[_memimageline()]] when arbitrary lines>>
 }
 @
+\l why _ ?
 
 % Explain previous comment about clipping?
 
@@ -11670,6 +11748,7 @@ if(ci<0 || ci>=font->nfchar){
 % it has a fchar field that is populated by cachechars and loadchar
 % we will see soon.
 
+% in devvga.c, ugly, because of DImage here
 <<function drawchar>>=
 Point
 drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImage *font, int index, int op)
@@ -19346,7 +19425,6 @@ getval(char **p)
  * if we ever get bitmaps with ldepth > 3, because the
  * colormap will have to be written in chunks
  */
-
 void
 writecolmap(Display *d, RGB *m)
 {
@@ -24961,6 +25039,7 @@ creadmemimage(int fd)
 
 
 \section{Old image format}
+\l simply delete no? hmm font uses this old format?
 
 <<[[readimage()]] other locals>>=
 bool new;

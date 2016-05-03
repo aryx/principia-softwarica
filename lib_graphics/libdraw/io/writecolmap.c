@@ -9,7 +9,6 @@
  * if we ever get bitmaps with ldepth > 3, because the
  * colormap will have to be written in chunks
  */
-
 void
 writecolmap(Display *d, RGB *m)
 {
