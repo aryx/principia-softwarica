@@ -1,7 +1,7 @@
 /*s: kernel/devices/screen/screen.h */
-// this used to contain the stuff now in vga.h but those prototypes are
-// VGA independent, so better to have a generic screen.h interface and vga.h
-// in a separate file.
+// This file used to contain the stuff now in vga.h, but the prototypes were
+// VGA independent, so it is better to have a generic screen.h interface and 
+// vga.h in a separate file.
 
 // defined in screen.c, set in xxxscreen.c, used by generic screen.c stuff
 extern Memimage *gscreen;
@@ -12,8 +12,10 @@ extern Rectangle physgscreenr;  /* actual monitor size */
 extern void 	flushmemscreen(Rectangle);
 extern byte* 	attachscreen(Rectangle*, ulong*, int*, int*, int*);
 extern void 	blankscreen(bool);
+
 extern void		getcolor(ulong, ulong*, ulong*, ulong*);
 extern int		setcolor(ulong, ulong, ulong, ulong);
+
 // this used to be a macro, but then it was forbidding this file to be generic
 extern bool ishwimage(Memimage*);
 

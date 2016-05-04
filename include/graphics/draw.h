@@ -671,5 +671,4 @@ extern	Screen	*screen; // was called _screen before
 extern	int	Rfmt(Fmt*);
 extern	int	Pfmt(Fmt*);
 
-
 /*e: include/draw.h */
