@@ -21,6 +21,9 @@ extern Screen*	allocscreen(Image*, Image*, int);
 extern int		freescreen(Screen*);
 extern Screen*	publicscreen(Display*, int, ulong);
 
+// set by initdraw() automatically.
+extern	Screen	*screen; // was called _screen before
+
 /*
  * Windows
  */
@@ -35,7 +38,5 @@ extern void	topwindow(Image*);
 extern int	newwindow(char*);
 extern int	getwindow(Display*, int);
 extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
-
-extern	Screen	*screen; // was called _screen before
 
 /*e: include/window.h */

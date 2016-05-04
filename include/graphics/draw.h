@@ -2,6 +2,10 @@
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 
+//----------------------------------------------------------------------------
+// Data structures and constants
+//----------------------------------------------------------------------------
+
 // forward decls
 typedef struct	Cachefont Cachefont;
 typedef struct	Cacheinfo Cacheinfo;
@@ -16,7 +20,6 @@ typedef struct	Rectangle Rectangle;
 typedef struct	RGB RGB;
 typedef struct	Subfont Subfont;
 typedef struct	Screen Screen;
-
 
 #pragma incomplete Mouse
 
@@ -197,10 +200,14 @@ enum ImageType {
 };
 /*e: enum _anon_ (include/draw.h)5 */
 
-extern	int		chantodepth(ulong);
+/*s: type channels */
+typedef ulong channels;
+/*e: type channels */
 
-extern	char*	chantostr(char*, ulong);
-extern	ulong	strtochan(char*);
+extern	int		chantodepth(channels);
+
+extern	char*	chantostr(char*, channels);
+extern	channels	strtochan(char*);
 
 /*s: struct Point */
 struct	Point
@@ -294,7 +301,7 @@ struct Image
 
     Rectangle	r;		/* rectangle in data area, local coords */
 
-    ulong		chan; // image format
+    channels		chan; // image format
     // derives from Image.chan
     int			depth;		/* number of bits per pixel */
 
@@ -452,6 +459,27 @@ struct Font
 };
 /*e: struct Font */
 
+//----------------------------------------------------------------------------
+// Globals
+//----------------------------------------------------------------------------
+
+/*
+ * Set up by initdraw()
+ */
+extern	Display	*display;
+extern	Image	*view; // was called screen before
+extern	Font	*font;
+
+/*
+ * Predefined 
+ */
+extern	Point		ZP;
+extern	Rectangle	ZR;
+
+//----------------------------------------------------------------------------
+// Functions
+//----------------------------------------------------------------------------
+
 /*s: function Dx */
 #define	Dx(r)	((r).max.x-(r).min.x)
 /*e: function Dx */
@@ -459,10 +487,10 @@ struct Font
 #define	Dy(r)	((r).max.y-(r).min.y)
 /*e: function Dy */
 
-/*
- * Image management
- */
-// set globals at the end of this file: display, view, font, screen
+//
+// Display
+//
+// set globals at the end of this file: display, view, font (and screen)
 extern int	initdraw(Errorfn, char*, char*);
 extern int	geninitdraw(char*, Errorfn, char*, char*, char*, int);
 
@@ -471,8 +499,13 @@ extern void		closedisplay(Display*);
 
 extern int		flushimage(Display*, bool);
 
-extern Image*	allocimage(Display*, Rectangle, ulong, bool, rgba);
-extern Image* 	allocimagemix(Display*, ulong, ulong);
+extern void	drawerror(Display*, char*);
+
+/*
+ * Image management
+ */
+extern Image*	allocimage(Display*, Rectangle, channels, bool, rgba);
+extern Image* 	allocimagemix(Display*, rgba, rgba);
 extern int		freeimage(Image*);
 
 extern int		loadimage(Image*, Rectangle, byte*, int);
@@ -486,17 +519,15 @@ extern Image* 	creadimage(Display*, int, int);
 extern Image*	namedimage(Display*, char*);
 extern int		nameimage(Image*, char*, bool);
 
-extern void	drawerror(Display*, char*);
-
-extern int	bytesperline(Rectangle, int);
-extern int	wordsperline(Rectangle, int);
-
 /*
  * Colors
  */
 extern	void	readcolmap(Display*, RGB*);
 extern	void	writecolmap(Display*, RGB*);
 
+extern int		rgb2cmap(int, int, int);
+extern int		cmap2rgb(int);
+extern int		cmap2rgba(int);
 
 /*
  * Geometry
@@ -526,10 +557,6 @@ extern int		ptinrect(Point, Rectangle);
 extern void		replclipr(Image*, int, Rectangle);
 extern int		drawreplxy(int, int, int);	/* used to be drawsetxy */
 extern Point	drawrepl(Rectangle, Point);
-
-extern int		rgb2cmap(int, int, int);
-extern int		cmap2rgb(int);
-extern int		cmap2rgba(int);
 
 extern void		icossin(int, int*, int*);
 extern void		icossin2(int, int, int*, int*);
@@ -619,20 +646,9 @@ extern void		unlockdisplay(Display*);
  */
 extern int		mousescrollsize(int);
 
+extern int	bytesperline(Rectangle, int);
+extern int	wordsperline(Rectangle, int);
 
-/*
- * Predefined 
- */
-extern	Point		ZP;
-extern	Rectangle	ZR;
-
-
-/*
- * Set up by initdraw()
- */
-extern	Display	*display;
-extern	Image	*view; // was called screen before
-extern	Font	*font;
 
 // dumpers
 #pragma varargck	type	"R"	Rectangle

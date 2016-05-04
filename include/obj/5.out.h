@@ -1,6 +1,6 @@
 /*s: include/arm/5.out.h */
 
-// Many of the types below are serialized in the .5 object files
+// Many of the types below are serialized in the .5 object files,
 // so take care when changing those types to not alter the order
 // (or to recompile carefully everything).
 
