@@ -27,6 +27,7 @@ SRC_VIEWS= \
    ../include/graphics/internals/draw_private.h\
    ../include/graphics/internals/memdraw.h\
    ../include/graphics/internals/memlayer.h\
+   \
    libdraw/misc.c\
    libdraw/alloc.c\
    libdraw/allocimagemix.c\
@@ -84,6 +85,7 @@ SRC_VIEWS= \
    libdraw/writecolmap.c\
    libdraw/writeimage.c\
    libdraw/writesubfont.c\
+   \
    libmemdraw/alloc.c\
    libmemdraw/arc.c\
    libmemdraw/cload.c\
@@ -105,6 +107,7 @@ SRC_VIEWS= \
    libmemdraw/tests/memdrawtest.c\
    libmemdraw/unload.c\
    libmemdraw/write.c\
+   \
    libmemlayer/draw.c\
    libmemlayer/lalloc.c\
    libmemlayer/layerop.c\
@@ -117,9 +120,11 @@ SRC_VIEWS= \
    libmemlayer/ltofront.c\
    libmemlayer/ltorear.c\
    libmemlayer/unload.c\
+   \
    ../applications/clock.c\
    ../applications/colors.c\
    ../applications/screenlock.c\
+   \
    ../kernel/devices/screen/devdraw.c\
    ../kernel/devices/screen/screen.h\
    ../kernel/devices/screen/screen.c\
@@ -128,8 +133,6 @@ SRC_VIEWS= \
    ../kernel/devices/screen/386/devvga.c\
    ../kernel/devices/screen/386/vgaclgd542x.c\
    ../kernel/devices/screen/386/vgavesa.c\
-
-#   ../kernel/devices/screen/screen.h\
 
 #   ../lib_graphics/libmemdraw/hwdraw.c\
    ../kernel/devices/screen/386/cga.c\
