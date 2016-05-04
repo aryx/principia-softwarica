@@ -14,8 +14,9 @@ typedef struct	Mouse Mouse;
 typedef struct	Point Point;
 typedef struct	Rectangle Rectangle;
 typedef struct	RGB RGB;
-typedef struct	Screen Screen;
 typedef struct	Subfont Subfont;
+typedef struct	Screen Screen;
+
 
 #pragma incomplete Mouse
 
@@ -313,17 +314,6 @@ struct Image
 };
 /*e: struct Image */
 
-/*s: struct Screen */
-struct Screen
-{
-    Display	*display;	/* display holding data */
-    int		id;			/* id of system-held Screen */
-
-    Image	*image;		/* unused; for reference only */
-    Image	*fill;		/* color to paint behind windows */
-};
-/*e: struct Screen */
-
 
 /*s: struct RGB */
 struct RGB
@@ -507,26 +497,6 @@ extern int	wordsperline(Rectangle, int);
 extern	void	readcolmap(Display*, RGB*);
 extern	void	writecolmap(Display*, RGB*);
 
-/*
- * Windows
- */
-extern Screen*	allocscreen(Image*, Image*, int);
-extern int		freescreen(Screen*);
-extern Screen*	publicscreen(Display*, int, ulong);
-
-extern Image*	allocwindow(Screen*, Rectangle, int, ulong);
-
-extern int	originwindow(Image*, Point, Point);
-extern void	bottomnwindows(Image**, int);
-extern void	bottomwindow(Image*);
-extern void	topnwindows(Image**, int);
-extern void	topwindow(Image*);
-
-// was in Image section
-extern int	newwindow(char*);
-extern int	getwindow(Display*, int);
-extern int	gengetwindow(Display*, char*, Image**, Screen**, int);
-
 
 /*
  * Geometry
@@ -663,7 +633,6 @@ extern	Rectangle	ZR;
 extern	Display	*display;
 extern	Image	*view; // was called screen before
 extern	Font	*font;
-extern	Screen	*screen; // was called _screen before
 
 // dumpers
 #pragma varargck	type	"R"	Rectangle

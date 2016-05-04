@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <draw_private.h>
+#include <window.h>
 
 /*s: global display */
 // option<Display>
@@ -22,9 +23,6 @@ bool	_drawdebug = false;
 /*s: global deffontname */
 static char deffontname[] = "*default*";
 /*e: global deffontname */
-/*s: global _screen */
-Screen	*screen;
-/*e: global _screen */
 
 /*s: global debuglockdisplay */
 bool		debuglockdisplay = false;
@@ -168,107 +166,6 @@ initdraw(Errorfn error, char *fontname , char *label)
     return geninitdraw("/dev", error, fontname, label, "/dev", Refnone);
 }
 /*e: function initdraw */
-
-/*s: function gengetwindow */
-/*
- * Attach, or possibly reattach, to window.
- * If reattaching, maintain value of screen pointer.
- */
-errorneg1
-gengetwindow(Display *d, char *winname, Image **winp, Screen **scrp, int ref)
-{
-    int n;
-    fdt fd;
-    char buf[64+1]; // /dev/winname content
-    Image *image;
-    Rectangle r;
-
-    fd = open(winname, OREAD);
-    if(fd<0 || (n=read(fd, buf, sizeof buf-1))<=0){
-        // no /dev/winname, image is then the full screen
-        image = d->image;
-        /*s: [[gengetwindow()]] sanity check image from display */
-        if(image == nil){
-            fprint(2, "gengetwindow: %r\n");
-            /*s: [[gengetwindow()]] return error */
-            *winp = nil;
-            d->screenimage = nil;
-            return ERROR_NEG1;
-            /*e: [[gengetwindow()]] return error */
-        }
-        /*e: [[gengetwindow()]] sanity check image from display */
-        strcpy(buf, "noborder");
-    }else{
-        close(fd);
-        buf[n] = '\0';
-        /*s: [[gengetwindow()]] if already had a view, free it */
-        if(*winp != nil){
-            _freeimage1(*winp);
-            freeimage((*scrp)->image);
-            freescreen(*scrp);
-            *scrp = nil;
-        }
-        /*e: [[gengetwindow()]] if already had a view, free it */
-        // get our window!
-        image = namedimage(d, buf);
-        /*s: [[gengetwindow()]] sanity check image from namedimage */
-        if(image == nil){
-            fprint(2, "namedimage %s failed: %r\n", buf);
-            /*s: [[gengetwindow()]] return error */
-            *winp = nil;
-            d->screenimage = nil;
-            return ERROR_NEG1;
-            /*e: [[gengetwindow()]] return error */
-        }
-        assert(image->chan != 0);
-        /*e: [[gengetwindow()]] sanity check image from namedimage */
-    }
-
-    d->screenimage = image;
-    *scrp = allocscreen(image, d->white, false);
-    /*s: [[gengetwindow()]] sanity check srcp */
-    if(*scrp == nil){
-        freeimage(d->screenimage);
-        /*s: [[gengetwindow()]] return error */
-        *winp = nil;
-        d->screenimage = nil;
-        return ERROR_NEG1;
-        /*e: [[gengetwindow()]] return error */
-    }
-    /*e: [[gengetwindow()]] sanity check srcp */
-
-    r = image->r;
-    if(strncmp(buf, "noborder", 8) != 0)
-        r = insetrect(image->r, Borderwidth);
-    *winp = _allocwindow(*winp, *scrp, r, ref, DWhite);
-    /*s: [[gengetwindow()]] sanity check winp */
-    if(*winp == nil){
-        freescreen(*scrp);
-        *scrp = nil;
-        freeimage(image);
-        /*s: [[gengetwindow()]] return error */
-        *winp = nil;
-        d->screenimage = nil;
-        return ERROR_NEG1;
-        /*e: [[gengetwindow()]] return error */
-    }
-    /*e: [[gengetwindow()]] sanity check winp */
-    d->screenimage = *winp;
-    assert((*winp)->chan != 0);
-    return OK_1;
-}
-/*e: function gengetwindow */
-
-/*s: function getwindow */
-errorneg1
-getwindow(Display *d, int ref)
-{
-    char winname[128];
-
-    snprint(winname, sizeof winname, "%s/winname", d->windir);
-    return gengetwindow(d, winname, &view, &screen, ref);
-}
-/*e: function getwindow */
 
 /*s: constant NINFO */
 #define	NINFO	12*12
