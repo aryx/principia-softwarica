@@ -2,7 +2,7 @@
 #pragma	src	"/sys/src/libc"
 
 // --------------------------------------------
-// pad stuff
+// pad's stuff
 // --------------------------------------------
 // Could also be in u.h. More types! Types are good!
 typedef int bool;
@@ -10,14 +10,18 @@ enum _bool {
   false = 0,
   true = 1
 };
+typedef uchar bool_byte;
+
 typedef uchar byte;
-typedef byte bool_byte;
+
 //typedef char* string; // conflict
 //typedef char* filename; // conflict in sam with function filename
+
 #define STDIN 0
 #define STDOUT 1
 #define STDERR 2
 typedef int fdt; // file descriptor type
+
 #define OK_0 0
 #define OK_1 1
 #define ERROR_0 0
@@ -27,8 +31,9 @@ typedef int fdt; // file descriptor type
 typedef int error0; // 0 is the error value
 typedef int error1; // 1 is the error value
 typedef int errorneg1; // -1 is the error value
+
 // --------------------------------------------
-// end pad stuff
+// end pad's stuff
 // --------------------------------------------
 
 
@@ -145,6 +150,7 @@ extern	ulong	msize(void*);
 extern	void*	mallocalign(ulong, ulong, long, ulong);
 extern	void*	calloc(ulong, ulong);
 extern	void*	realloc(void*, ulong);
+
 extern	void	setmalloctag(void*, ulong);
 extern	void	setrealloctag(void*, ulong);
 extern	ulong	getmalloctag(void*);
@@ -329,23 +335,28 @@ extern	ulong	getfcr(void);
 extern	void	setfsr(ulong);
 extern	ulong	getfsr(void);
 extern	void	setfcr(ulong);
+
 extern	double	NaN(void);
 extern	double	Inf(int);
 extern	int		isNaN(double);
 extern	int		isInf(double, int);
+
 extern	ulong	umuldiv(ulong, ulong, ulong);
 extern	long	muldiv(long, long, long);
 
 extern	double	pow(double, double);
-extern	double	atan2(double, double);
 extern	double	fabs(double);
-extern	double	atan(double);
 extern	double	log(double);
 extern	double	log10(double);
 extern	double	exp(double);
 extern	double	floor(double);
 extern	double	ceil(double);
 extern	double	hypot(double, double);
+extern	double	sqrt(double);
+extern	double	fmod(double, double);
+
+extern	double	atan(double);
+extern	double	atan2(double, double);
 extern	double	sin(double);
 extern	double	cos(double);
 extern	double	tan(double);
@@ -354,8 +365,7 @@ extern	double	acos(double);
 extern	double	sinh(double);
 extern	double	cosh(double);
 extern	double	tanh(double);
-extern	double	sqrt(double);
-extern	double	fmod(double, double);
+
 
 #define	HUGE	3.4028234e38
 #define	PIO2	1.570796326794896619231e0
@@ -700,44 +710,84 @@ struct IOchunk {
 	ulong	len;
 };
 
-extern	void	_exits(char*);
 
 // syscalls or small helpers around syscalls
-// TODO separate them actually
-extern	void	abort(void);
-extern	int		access(char*, int);
-extern	long	alarm(ulong);
-extern	int		await(char*, int);
-extern	int		bind(char*, char*, int);
-extern	int		chdir(char*);
-extern	int		close(int);
-extern	int		create(char*, int, ulong);
-extern	int		dup(int, int);
-extern	int		errstr(char*, uint);
-extern	int		exec(char*, char*[]);
-extern	int		execl(char*, ...);
+
+// process
 extern	int		fork(void);
 extern	int		rfork(int);
-extern	int		fauth(int, char*);
-extern	int		fstat(int, uchar*, int);
-extern	int		fwstat(int, uchar*, int);
-extern	int		fversion(int, int, char*, int);
-extern	int		mount(int, int, char*, int, char*);
-extern	int		unmount(char*, char*);
-extern	int		noted(int);
-extern	int		notify(void(*)(void*, char*));
+extern	int		exec(char*, char*[]);
+extern	int		execl(char*, ...);
+extern	void	_exits(char*);
+extern	void	abort(void);
+extern	Waitmsg*	wait(void);
+extern	int		getpid(void);
+extern	int		getppid(void);
+
+// memory
+extern	void*	sbrk(ulong);
+
+// file
 extern	int		open(char*, int);
-extern	int		fd2path(int, char*, int);
-extern	int		pipe(int*);
+extern	int		close(int);
+extern	long	read(int, void*, long);
 extern	long	pread(int, void*, long, vlong);
 extern	long	preadv(int, IOchunk*, int, vlong);
-extern	long	pwrite(fdt, void*, long, vlong);
-extern	long	pwritev(int, IOchunk*, int, vlong);
-extern	long	read(int, void*, long);
 extern	long	readn(int, void*, long);
 extern	long	readv(int, IOchunk*, int);
+extern	long	write(int, void*, long);
+extern	long	pwrite(fdt, void*, long, vlong);
+extern	long	pwritev(int, IOchunk*, int, vlong);
+extern	long	writev(int, IOchunk*, int);
+
+// directory
+extern	int		create(char*, int, ulong);
 extern	int		remove(char*);
-extern	void*	sbrk(ulong);
+extern	int		chdir(char*);
+extern	int		fd2path(int, char*, int);
+extern	int		fstat(int, uchar*, int);
+extern	int		fwstat(int, uchar*, int);
+extern	Dir*	dirstat(char*);
+extern	Dir*	dirfstat(fdt);
+extern	int		dirwstat(char*, Dir*);
+extern	int		dirfwstat(int, Dir*);
+extern	long	dirread(int, Dir**);
+extern	void	nulldir(Dir*);
+extern	long	dirreadall(int, Dir**);
+
+// namespace
+extern	int		bind(char*, char*, int);
+extern	int		mount(int, int, char*, int, char*);
+extern	int		unmount(char*, char*);
+
+// time
+extern	long	alarm(ulong);
+extern	int		sleep(long);
+
+// ipc
+extern	int		noted(int);
+extern	int		notify(void(*)(void*, char*));
+
+// concurrency
+extern	int		await(char*, int);
+extern	void*	segattach(int, char*, void*, ulong);
+extern	void*	segbrk(void*, void*);
+extern	int		segdetach(void*);
+extern	int		segflush(void*, ulong);
+extern	int		segfree(void*, ulong);
+extern	int		semacquire(long*, int);
+extern	long	semrelease(long*, long);
+extern	int		tsemacquire(long*, ulong);
+
+// special file
+extern	int		dup(int, int);
+extern	int		pipe(int*);
+
+// security
+extern	int		fauth(int, char*);
+extern	int		fversion(int, int, char*, int);
+
+extern	int		access(char*, int);
 // extern	int	fdflush(int);
 
 // pad stuff, but is actually also in stdio.h
@@ -747,36 +797,19 @@ enum seek_cursor {
     SEEK__END = 2,
 };
 extern	vlong	seek(int, vlong, int);
-extern	void*	segattach(int, char*, void*, ulong);
-extern	void*	segbrk(void*, void*);
-extern	int		segdetach(void*);
-extern	int		segflush(void*, ulong);
-extern	int		segfree(void*, ulong);
-extern	int		semacquire(long*, int);
-extern	long	semrelease(long*, long);
-extern	int		sleep(long);
+
 extern	int		stat(char*, uchar*, int);
-extern	int		tsemacquire(long*, ulong);
-extern	Waitmsg*	wait(void);
 extern	int		waitpid(void);
-extern	long	write(int, void*, long);
-extern	long	writev(int, IOchunk*, int);
 extern	int		wstat(char*, uchar*, int);
 extern	void*	rendezvous(void*, void*);
 
-extern	Dir*	dirstat(char*);
-extern	Dir*	dirfstat(fdt);
-extern	int		dirwstat(char*, Dir*);
-extern	int		dirfwstat(int, Dir*);
-extern	long	dirread(int, Dir**);
-extern	void	nulldir(Dir*);
-extern	long	dirreadall(int, Dir**);
-extern	int		getpid(void);
-extern	int		getppid(void);
 extern	void	rerrstr(char*, uint);
 extern	char*	sysname(void);
+
+extern	int		errstr(char*, uint);
 extern	void	werrstr(char*, ...);
 #pragma	varargck	argpos	werrstr	1
+
 
 // getopt like macros
 extern char *argv0;
