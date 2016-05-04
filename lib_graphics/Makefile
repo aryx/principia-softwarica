@@ -21,6 +21,7 @@ SRC_ORIG=Graphics.nw Graphics_extra.nw
 SRC_VIEWS= \
    ../include/graphics/cursor.h\
    ../include/graphics/draw.h\
+   ../include/graphics/window.h\
    ../include/graphics/input/event.h\
    ../include/graphics/input/keyboard.h\
    ../include/graphics/input/mouse.h\

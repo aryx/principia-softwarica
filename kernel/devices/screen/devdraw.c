@@ -1131,6 +1131,8 @@ drawnewclient(void)
 }
 /*e: function drawnewclient */
 
+
+
 /*s: function drawclientop */
 static int
 drawclientop(Client *cl)
@@ -1208,6 +1210,35 @@ drawpoint(Point *p, uchar *a)
 }
 /*e: function drawpoint */
 
+/*s: function drawcoord */
+uchar*
+drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
+{
+    int b, x;
+
+    if(p >= maxp)
+        error(Eshortdraw);
+    b = *p++;
+    x = b & 0x7F;
+    if(b & 0x80){
+        if(p+1 >= maxp)
+            error(Eshortdraw);
+        x |= *p++ << 7;
+        x |= *p++ << 15;
+        if(x & (1<<22))
+            x |= ~0<<23;
+    }else{
+        if(b & 0x40)
+            x |= ~0<<7;
+        x += oldx;
+    }
+    *newx = x;
+    return p;
+}
+/*e: function drawcoord */
+
+
+
 /*s: function drawchar */
 Point
 drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImage *font, int index, int op)
@@ -1262,6 +1293,8 @@ drawchar(Memimage *dst, Memimage *rdst, Point p, Memimage *src, Point *sp, DImag
     return p;
 }
 /*e: function drawchar */
+
+
 
 /*s: function makescreenimage */
 static DImage*
@@ -1380,6 +1413,9 @@ resetscreenimage(void)
     dunlock();
 }
 /*e: function resetscreenimage */
+
+
+
 
 /*s: function drawattach */
 static Chan*
@@ -1835,32 +1871,7 @@ drawwrite(Chan *c, void *a, long n, vlong)
 }
 /*e: function drawwrite */
 
-/*s: function drawcoord */
-uchar*
-drawcoord(uchar *p, uchar *maxp, int oldx, int *newx)
-{
-    int b, x;
 
-    if(p >= maxp)
-        error(Eshortdraw);
-    b = *p++;
-    x = b & 0x7F;
-    if(b & 0x80){
-        if(p+1 >= maxp)
-            error(Eshortdraw);
-        x |= *p++ << 7;
-        x |= *p++ << 15;
-        if(x & (1<<22))
-            x |= ~0<<23;
-    }else{
-        if(b & 0x40)
-            x |= ~0<<7;
-        x += oldx;
-    }
-    *newx = x;
-    return p;
-}
-/*e: function drawcoord */
 
 /*s: function printmesg */
 static void
@@ -2853,6 +2864,7 @@ drawmesg(Client *client, void *av, int n)
 }
 /*e: function drawmesg */
 
+
 /*s: global drawdevtab */
 Dev drawdevtab = {
     .dc       =    'i',
@@ -2878,6 +2890,8 @@ Dev drawdevtab = {
     .shutdown =    devshutdown,
 };
 /*e: global drawdevtab */
+
+
 
 /*s: function drawcmap */
 /*

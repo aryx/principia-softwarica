@@ -11,6 +11,7 @@ typedef struct Memimage Memimage;
 static int	screenid;
 /*e: global screenid */
 
+
 /*s: function allocscreen */
 Screen*
 allocscreen(Image *image, Image *fill, bool public)
@@ -138,6 +139,7 @@ freescreen(Screen *s)
 }
 /*e: function freescreen */
 
+
 /*s: function allocwindow */
 Image*
 allocwindow(Screen *s, Rectangle r, int ref, rgba val)
@@ -167,6 +169,7 @@ _allocwindow(Image *i, Screen *s, Rectangle r, int ref, rgba val)
     return i;
 }
 /*e: function _allocwindow */
+
 
 /*s: function topbottom */
 static
