@@ -294,4 +294,102 @@ writesubfont(fdt fd, Subfont *f)
 }
 /*e: function writesubfont */
 
+
+/*s: function subfontname */
+/*
+ * Default version: convert to file name
+ */
+char*
+subfontname(char *cfname, char *fname, int maxdepth)
+{
+    char *t, *u, *tmp1, *tmp2;
+    int i;
+
+    t = strdup(cfname);  /* t is the return string */
+    if(strcmp(cfname, "*default*") == 0)
+        return t;
+    if(t[0] != '/'){
+        tmp2 = strdup(fname);
+        u = utfrrune(tmp2, '/');
+        if(u)
+            u[0] = 0;
+        else
+            strcpy(tmp2, ".");
+        tmp1 = smprint("%s/%s", tmp2, t);
+        free(tmp2);
+        free(t);
+        t = tmp1;
+    }
+
+    if(maxdepth > 8)
+        maxdepth = 8;
+
+    for(i=3; i>=0; i--){
+        if((1<<i) > maxdepth)
+            continue;
+        /* try i-bit grey */
+        tmp2 = smprint("%s.%d", t, i);
+        if(access(tmp2, AREAD) == 0) {
+            free(t);
+            return tmp2;
+        }
+        free(tmp2);
+    }
+
+    /* try default */
+    if(access(t, AREAD) == 0)
+        return t;
+
+    free(t);
+    return nil;
+}
+/*e: function subfontname */
+
+/*
+ * Easy versions of the cache routines; may be substituted by fancier ones for other purposes
+ */
+
+/*s: global lastname */
+static char	*lastname;
+/*e: global lastname */
+/*s: global lastsubfont */
+Subfont	*lastsubfont;
+/*e: global lastsubfont */
+
+/*s: function lookupsubfont */
+Subfont*
+lookupsubfont(Display *d, char *name)
+{
+    if(d && strcmp(name, "*default*") == 0)
+        return d->defaultsubfont; 
+    if(lastname && strcmp(name, lastname)==0)
+      if(d == lastsubfont->bits->display){
+        lastsubfont->ref++;
+        return lastsubfont;
+    }
+    return nil;
+}
+/*e: function lookupsubfont */
+
+/*s: function installsubfont */
+void
+installsubfont(char *name, Subfont *subfont)
+{
+    free(lastname);
+    lastname = strdup(name);
+    lastsubfont = subfont;	/* notice we don't free the old one; that's your business */
+}
+/*e: function installsubfont */
+
+/*s: function uninstallsubfont */
+void
+uninstallsubfont(Subfont *subfont)
+{
+    if(subfont == lastsubfont){
+        lastname = nil;
+        lastsubfont = nil;
+    }
+}
+/*e: function uninstallsubfont */
+
 /*e: lib_graphics/libdraw/subfont.c */

@@ -37,7 +37,7 @@ SRC_VIEWS= \
     libdraw/naming.c\
    libdraw/arith.c\
    libdraw/bezier.c\
-   libdraw/buildfont.c\
+   libdraw/font.c\
    libdraw/bytesperline.c\
    libdraw/chan.c\
    libdraw/debug.c\
@@ -48,7 +48,7 @@ SRC_VIEWS= \
    libdraw/event.c\
    libdraw/egetrect.c\
    libdraw/emenuhit.c\
-   libdraw/font.c\
+   libdraw/fontcache.c\
    libdraw/getrect.c\
    libdraw/icossin.c\
    libdraw/icossin2.c\
@@ -61,15 +61,11 @@ SRC_VIEWS= \
    libdraw/line.c\
    libdraw/menuhit.c\
    libdraw/mouse.c\
-   libdraw/openfont.c\
    libdraw/poly.c\
    libdraw/replclipr.c\
-   libdraw/scroll.c\
    libdraw/string.c\
    libdraw/stringwidth.c\
    libdraw/subfont.c\
-   libdraw/subfontcache.c\
-   libdraw/subfontname.c\
    libdraw/window.c\
     libdraw/desktop.c\
     libdraw/io.c\
