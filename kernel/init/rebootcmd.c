@@ -34,7 +34,7 @@ static uchar elfident[] = {
     '\177', 'E', 'L', 'F',
 };
 
-void
+static void
 readn(Chan *c, void *vp, long n)
 {
     char *p = vp;

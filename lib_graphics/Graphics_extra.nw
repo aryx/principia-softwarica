@@ -39,12 +39,24 @@ typedef struct	Font Font;
 typedef struct	RGB RGB;
 
 // defined in other header files
-typedef struct	Mouse Mouse;
 typedef struct	Screen Screen;
 typedef struct	Cachefont Cachefont;
 typedef struct	Cacheinfo Cacheinfo;
 typedef struct	Cachesubf Cachesubf;
 typedef struct	Subfont Subfont;
+#pragma incomplete Screen
+#pragma incomplete Cachefont
+#pragma incomplete Cacheinfo
+#pragma incomplete Cachesubf
+#pragma incomplete Subfont
+
+// temporary hack, because does not have a memfont.h so need to
+// disable safe-linking for Fontchar everywhere
+typedef struct	Fontchar Fontchar;
+#pragma incomplete Fontchar
+
+// TODO why need that?
+typedef struct	Mouse Mouse;
 #pragma incomplete Mouse
 
 <<struct Point>>
@@ -77,6 +89,7 @@ typedef struct	Subfont Subfont;
 <<struct Image>>
 
 <<struct Font>>
+
 
 
 <<enum constants1>>
@@ -366,6 +379,9 @@ typedef struct	Subfont Subfont;
 
 <<struct Cachesubf>>
 
+<<enum misc>>
+
+
 // internal to font code
 extern Subfont*	allocsubfont(char*, int, int, int, Fontchar*, Image*);
 extern void	    freesubfont(Subfont*);
@@ -380,13 +396,15 @@ extern int	writesubfont(int, Subfont*);
 
 extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
 extern void		agefont(Font*);
-extern void		_unpackinfo(Fontchar*, byte*, int);
 extern Point	strsubfontwidth(Subfont*, char*);
 extern int		loadchar(Font*, Rune, Cacheinfo*, int, int, char**);
 extern Subfont*	getdefont(Display*);
 
+// used also by libmemdraw/
+extern void		_unpackinfo(Fontchar*, byte*, int);
 extern	byte	defontdata[];
 extern	int		sizeofdefont;
+
 
 @
 
@@ -412,8 +430,6 @@ extern byte*	bufimage(Display*, int);
 
 <<include/draw_private.h>>=
 
-<<enum misc>>
-
 extern int		drawlsetrefresh(ulong, int, void*, void*);
 
 // dead?
@@ -426,6 +442,10 @@ extern Image*	_allocimage(Image*, Display*, Rectangle, ulong, int, ulong, int, i
 extern int	    _freeimage1(Image*);
 
 extern	void	_setdrawop(Display*, Drawop);
+
+// used also by libmemdraw/
+void _twiddlecompressed(uchar *buf, int n);
+int _compblocksize(Rectangle r, int depth);
 
 <<constant NMATCH>>
 <<constant NRUN>>
@@ -454,15 +474,19 @@ extern	void	drawsetdebug(bool);
 <<include/memdraw.h>>=
 #pragma	src	"/sys/src/libmemdraw"
 #pragma	lib	"libmemdraw.a"
+// This file assumes you have included draw.h before.
 
 typedef struct	Memimage Memimage;
 typedef struct	Memdata Memdata;
 typedef struct	Memsubfont Memsubfont;
-typedef struct	Memlayer Memlayer;
 typedef struct	Memcmap Memcmap;
 typedef struct	Memdrawparam	Memdrawparam;
 
+// defined in other header files
+typedef struct	Memlayer Memlayer;
+typedef struct	Fontchar Fontchar;
 #pragma incomplete Memlayer
+#pragma incomplete Fontchar
 
 <<struct Memdata>>
 
@@ -475,6 +499,7 @@ typedef struct	Memdrawparam	Memdrawparam;
 <<struct Memsubfont>>
 
 <<enum _anon_ (include/memdraw.h)2>>
+//TODO: internal to draw.c?
 <<struct Memdrawparam>>
 
 /*
@@ -521,6 +546,7 @@ extern void	memarc(Memimage*, Point, int, int, int, Memimage*, Point, int, int, 
 
 extern Point	memimagestring(Memimage*, Point, Memimage*, Point, Memsubfont*, char*);
 
+// TODO: cruft private?
 // !!!
 extern int	hwdraw(Memdrawparam*);
 
@@ -588,6 +614,8 @@ extern int		drawdebug;
 <<include/memlayer.h>>=
 #pragma src "/sys/src/libmemlayer"
 #pragma lib "libmemlayer.a"
+// This file assumes you have included draw.h before.
+
 
 typedef struct Memscreen Memscreen;
 typedef void (*Refreshfn)(Memimage*, Rectangle, void*);
@@ -646,7 +674,7 @@ extern	Keyboardctl*	initkeyboard(char*);
 extern	int				ctlkeyboard(Keyboardctl*, char*);
 extern	void			closekeyboard(Keyboardctl*);
 
-<<enum _anon_ (include/keyboard.h)>>
+<<enum Kxxx>>
 @
 
 
@@ -716,6 +744,7 @@ typedef struct	Cursor Cursor;
 typedef struct	Cursor Cursor;
 typedef struct	Event Event;
 typedef struct	Menu Menu;
+//typedef struct	Mouse Mouse;
 
 <<enum _anon_ (include/event.h)>>
 
@@ -1474,13 +1503,16 @@ defontdata[] =
 #include <draw_private.h>
 #include <font.h>
 
+// This file is one of the very few files linked by the kernel, because
+// of defontdata. Do not add functions in this file with complex dependencies,
+// otherwise they will be linked also with the kernel.
+
 <<global defontdata>>
 
 <<global sizeofdefont>>
 
 <<function _unpackinfo>>
 
-<<function getdefont>>
 @
 
 %\subsection*{[[lib_graphics/libdraw/getdefont.c]]}
@@ -1996,6 +2028,13 @@ _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, i
 #include <draw.h>
 #include <draw_private.h>
 #include <font.h>
+
+// Do not put this function in defont.c! Otherwise it will create a chain
+// of dependencies that will force the kernel to link in lockdisplay().
+// This in turn will generate a signature conflict because of the differences
+// between QLock (used in Display) in libc.h and in the kernel (in lib.h).
+<<function getdefont>>
+
 
 <<function allocsubfont>>
 
@@ -3035,6 +3074,7 @@ static Memcmap def = {
 #include <libc.h>
 #include <draw.h>
 #include <draw_private.h>
+#include <font.h>
 #include <memdraw.h>
 
 <<function getmemdefont>>
@@ -3924,6 +3964,7 @@ int		(*iprint)(char*, ...) = &memdraw_iprint;
 #include <draw.h>
 #include <memdraw.h>
 #include <memlayer.h>
+#include <font.h>
 
 <<function memimagestring>>
 
@@ -5723,6 +5764,7 @@ main(int, char**)
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <window.h>
 #include <event.h>
 
 static Image *hrhand, *minhand;
@@ -5941,6 +5983,7 @@ main(int argc, char *argv[])
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <window.h>
 #include <event.h>
 
 static int nbit, npix;
@@ -6292,6 +6335,7 @@ threadmain(int argc, char *argv[])
 #include <libc.h>
 #include <libsec.h>
 #include <draw.h>
+#include <window.h>
 #include <thread.h>
 #include <auth.h>
 
@@ -6731,6 +6775,7 @@ extern void swcursorinit(void);
 #include <ureg.h>
 
 #include <draw.h>
+#include <font.h>
 #include <memdraw.h>
 #include <cursor.h>
 

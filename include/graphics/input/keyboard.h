@@ -26,7 +26,7 @@ extern	Keyboardctl*	initkeyboard(char*);
 extern	int				ctlkeyboard(Keyboardctl*, char*);
 extern	void			closekeyboard(Keyboardctl*);
 
-/*s: enum _anon_ (include/keyboard.h) */
+/*s: enum Kxxx */
 enum {
     KF=	0xF000,	/* Rune: beginning of private Unicode space */
     Spec=	0xF800,
@@ -55,5 +55,5 @@ enum {
     Keof=	0x04, // C-d
     Kbs=	0x08, // C-h (backspace)
 };
-/*e: enum _anon_ (include/keyboard.h) */
+/*e: enum Kxxx */
 /*e: include/keyboard.h */

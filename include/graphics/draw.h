@@ -25,10 +25,14 @@ typedef struct	Subfont Subfont;
 #pragma incomplete Cachesubf
 #pragma incomplete Subfont
 
+// temporary hack, because does not have a memfont.h so need to
+// disable safe-linking for Fontchar everywhere
+typedef struct	Fontchar Fontchar;
+#pragma incomplete Fontchar
+
 // TODO why need that?
 typedef struct	Mouse Mouse;
 #pragma incomplete Mouse
-
 
 /*s: struct Point */
 struct	Point

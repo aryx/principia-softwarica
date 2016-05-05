@@ -146,7 +146,7 @@ Lock vgascreenlock;
 
 /*s: function vgaimageinit(x86) */
 void
-vgaimageinit(ulong chan)
+vgaimageinit(channels chan)
 {
     if(back == nil){
         back = allocmemimage(Rect(0,0,1,1), chan);  /* RSC BUG */

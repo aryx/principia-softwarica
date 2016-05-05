@@ -3,8 +3,8 @@
 #include <libc.h>
 #include <draw.h>
 #include <draw_private.h>
-#include <memdraw.h>
 #include <font.h>
+#include <memdraw.h>
 
 /*s: function getmemdefont */
 Memsubfont*

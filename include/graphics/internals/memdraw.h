@@ -6,14 +6,14 @@
 typedef struct	Memimage Memimage;
 typedef struct	Memdata Memdata;
 typedef struct	Memsubfont Memsubfont;
-typedef struct	Memlayer Memlayer;
 typedef struct	Memcmap Memcmap;
 typedef struct	Memdrawparam	Memdrawparam;
 
 // defined in other header files
+typedef struct	Memlayer Memlayer;
 typedef struct	Fontchar Fontchar;
-
 #pragma incomplete Memlayer
+#pragma incomplete Fontchar
 
 /*s: struct Memdata */
 /*
@@ -136,6 +136,7 @@ enum Drawparams {
     Fullmask=1<<4, // fully opaque mask
 };
 /*e: enum _anon_ (include/memdraw.h)2 */
+//TODO: internal to draw.c?
 /*s: struct Memdrawparam */
 struct	Memdrawparam
 {
@@ -209,6 +210,7 @@ extern void	memarc(Memimage*, Point, int, int, int, Memimage*, Point, int, int, 
 
 extern Point	memimagestring(Memimage*, Point, Memimage*, Point, Memsubfont*, char*);
 
+// TODO: cruft private?
 // !!!
 extern int	hwdraw(Memdrawparam*);
 
