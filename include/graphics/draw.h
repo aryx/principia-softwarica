@@ -2,10 +2,6 @@
 #pragma src "/sys/src/libdraw"
 #pragma lib "libdraw.a"
 
-//----------------------------------------------------------------------------
-// Data structures and constants
-//----------------------------------------------------------------------------
-
 typedef struct	Point Point;
 typedef struct	Rectangle Rectangle;
 typedef struct	Display Display;
@@ -33,6 +29,10 @@ typedef struct	Fontchar Fontchar;
 // TODO why need that?
 typedef struct	Mouse Mouse;
 #pragma incomplete Mouse
+
+//----------------------------------------------------------------------------
+// Data structures and constants
+//----------------------------------------------------------------------------
 
 /*s: struct Point */
 struct	Point
@@ -382,7 +382,7 @@ enum EndLine
  * Set up by initdraw()
  */
 extern	Display	*display;
-extern	Image	*view; // was called screen before
+extern	Image	*view; // was called 'screen' before
 extern	Font	*font;
 
 /*
@@ -448,15 +448,16 @@ extern int		cmap2rgba(int);
  * Geometry
  */
 extern Point	Pt(int, int);
+extern int		eqpt(Point, Point);
 
 extern Point	addpt(Point, Point);
 extern Point	subpt(Point, Point);
 extern Point	divpt(Point, int);
 extern Point	mulpt(Point, int);
-extern int		eqpt(Point, Point);
 
 extern Rectangle	Rect(int, int, int, int);
 extern Rectangle	Rpt(Point, Point);
+extern int			eqrect(Rectangle, Rectangle);
 
 /*s: function Dx */
 #define	Dx(r)	((r).max.x-(r).min.x)
@@ -465,23 +466,23 @@ extern Rectangle	Rpt(Point, Point);
 #define	Dy(r)	((r).max.y-(r).min.y)
 /*e: function Dy */
 
-extern int			eqrect(Rectangle, Rectangle);
-extern Rectangle	insetrect(Rectangle, int);
 extern Rectangle	rectaddpt(Rectangle, Point);
 extern Rectangle	rectsubpt(Rectangle, Point);
+extern Rectangle	insetrect(Rectangle, int);
 extern Rectangle	canonrect(Rectangle);
 extern int		rectXrect(Rectangle, Rectangle);
 extern int		rectinrect(Rectangle, Rectangle);
 extern void		combinerect(Rectangle*, Rectangle);
-extern int		rectclip(Rectangle*, Rectangle);
 extern int		ptinrect(Point, Rectangle);
-
-extern void		replclipr(Image*, int, Rectangle);
-extern int		drawreplxy(int, int, int);	/* used to be drawsetxy */
-extern Point	drawrepl(Rectangle, Point);
 
 extern void		icossin(int, int*, int*);
 extern void		icossin2(int, int, int*, int*);
+
+// Clipping and replication
+extern void		replclipr(Image*, int, Rectangle);
+extern int		rectclip(Rectangle*, Rectangle);
+extern int		drawreplxy(int, int, int);	/* used to be drawsetxy */
+extern Point	drawrepl(Rectangle, Point);
 
 /*
  * Graphics
@@ -554,10 +555,9 @@ extern int		runestringnwidth(Font*, Rune*, int);
 /*
  * Font management
  */
+extern Font*	buildfont(Display*, char*, char*);
 extern Font*	openfont(Display*, char*);
 extern void		freefont(Font*);
-
-extern Font*	buildfont(Display*, char*, char*);
 
 /*
  * One of a kind
