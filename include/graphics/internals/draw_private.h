@@ -1,39 +1,5 @@
 /*s: include/draw_private.h */
 
-/*s: enum misc */
-enum
-{
-    /* starting values */
-    /*s: constant NFCACHE */
-    LOG2NFCACHE =	6,
-    NFCACHE =	(1<<LOG2NFCACHE),	/* #chars cached */
-    /*e: constant NFCACHE */
-    /*s: constant NFLOOK */
-    NFLOOK =	5,			/* #chars to scan in cache */
-    /*e: constant NFLOOK */
-    /*s: constant NFSUBF */
-    NFSUBF =	2,			/* #subfonts to cache */
-    /*e: constant NFSUBF */
-
-    /* max value */
-    /*s: constant MAXFCACHE */
-    MAXFCACHE =	1024+NFLOOK,		/* upper limit */
-    /*e: constant MAXFCACHE */
-    /*s: constant MAXSUBF */
-    MAXSUBF =	50,			/* generous upper limit */
-    /*e: constant MAXSUBF */
-
-    /* deltas */
-    /*s: constant DSUBF */
-    DSUBF = 	4,
-    /*e: constant DSUBF */
-
-    /* expiry ages */
-    SUBFAGE	=	10000,
-    CACHEAGE =	10000
-};
-/*e: enum misc */
-
 extern int		drawlsetrefresh(ulong, int, void*, void*);
 
 // dead?
@@ -46,6 +12,10 @@ extern Image*	_allocimage(Image*, Display*, Rectangle, ulong, int, ulong, int, i
 extern int	    _freeimage1(Image*);
 
 extern	void	_setdrawop(Display*, Drawop);
+
+// used also by libmemdraw/
+void _twiddlecompressed(uchar *buf, int n);
+int _compblocksize(Rectangle r, int depth);
 
 /*s: constant NMATCH */
 /*

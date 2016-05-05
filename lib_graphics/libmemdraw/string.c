@@ -4,6 +4,7 @@
 #include <draw.h>
 #include <memdraw.h>
 #include <memlayer.h>
+#include <font.h>
 
 /*s: function memimagestring */
 Point

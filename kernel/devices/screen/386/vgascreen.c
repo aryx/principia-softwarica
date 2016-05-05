@@ -10,6 +10,7 @@
 #include <ureg.h>
 
 #include <draw.h>
+#include <font.h>
 #include <memdraw.h>
 #include <cursor.h>
 

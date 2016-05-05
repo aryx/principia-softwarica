@@ -1,6 +1,8 @@
 /*s: include/memlayer.h */
 #pragma src "/sys/src/libmemlayer"
 #pragma lib "libmemlayer.a"
+// This file assumes you have included draw.h before.
+
 
 typedef struct Memscreen Memscreen;
 typedef void (*Refreshfn)(Memimage*, Rectangle, void*);

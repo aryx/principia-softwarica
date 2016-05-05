@@ -1,6 +1,7 @@
 /*s: include/memdraw.h */
 #pragma	src	"/sys/src/libmemdraw"
 #pragma	lib	"libmemdraw.a"
+// This file assumes you have included draw.h before.
 
 typedef struct	Memimage Memimage;
 typedef struct	Memdata Memdata;
@@ -8,6 +9,9 @@ typedef struct	Memsubfont Memsubfont;
 typedef struct	Memlayer Memlayer;
 typedef struct	Memcmap Memcmap;
 typedef struct	Memdrawparam	Memdrawparam;
+
+// defined in other header files
+typedef struct	Fontchar Fontchar;
 
 #pragma incomplete Memlayer
 

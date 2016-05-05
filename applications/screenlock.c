@@ -4,6 +4,7 @@
 #include <libc.h>
 #include <libsec.h>
 #include <draw.h>
+#include <window.h>
 #include <thread.h>
 #include <auth.h>
 

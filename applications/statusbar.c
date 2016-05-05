@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <window.h>
 #include <bio.h>
 #include <event.h>
 

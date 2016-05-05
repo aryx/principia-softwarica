@@ -14,13 +14,21 @@ typedef struct	Font Font;
 typedef struct	RGB RGB;
 
 // defined in other header files
-typedef struct	Mouse Mouse;
 typedef struct	Screen Screen;
 typedef struct	Cachefont Cachefont;
 typedef struct	Cacheinfo Cacheinfo;
 typedef struct	Cachesubf Cachesubf;
 typedef struct	Subfont Subfont;
+#pragma incomplete Screen
+#pragma incomplete Cachefont
+#pragma incomplete Cacheinfo
+#pragma incomplete Cachesubf
+#pragma incomplete Subfont
+
+// TODO why need that?
+typedef struct	Mouse Mouse;
 #pragma incomplete Mouse
+
 
 /*s: struct Point */
 struct	Point
@@ -296,6 +304,7 @@ struct Font
 /*e: struct Font */
 
 
+
 /*s: enum constants1 */
 enum
 {
@@ -336,7 +345,7 @@ enum Drawop
 typedef enum drawop Drawop;
 
 /*s: enum Refresh */
-enum Refresh
+enum RefreshMethod
 {
     /* refresh methods */
     Refbackup	= 0,

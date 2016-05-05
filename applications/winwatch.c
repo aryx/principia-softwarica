@@ -2,9 +2,12 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
-#include <draw_private.h> // for _string, but should not use it
+//#include <draw_private.h> // for _string, but should not use it
+#include <window.h>
 #include <event.h>
 #include <regexp.h>
+
+extern Point _string(Image *dst, Point pt, Image *src, Point sp, Font *f, char *s, Rune *r, int len, Rectangle clipr, Image *bg, Point bgp, Drawop op);
 
 typedef struct Win Win;
 /*s: struct Win */

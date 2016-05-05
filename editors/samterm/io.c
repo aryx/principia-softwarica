@@ -1,6 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <window.h>
 #include <thread.h>
 #include <mouse.h>
 #include <keyboard.h>

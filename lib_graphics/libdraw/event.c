@@ -133,6 +133,7 @@ eread(ulong keys, Event *e)
             }
         extract();
     }
+    return 0; // unreachable
 }
 /*e: function eread */
 
@@ -177,6 +178,7 @@ ecanread(ulong keys)
             return 0;
         extract();
     }
+    return 0; // unreachable
 }
 /*e: function ecanread */
 

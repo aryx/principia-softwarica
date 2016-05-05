@@ -5,6 +5,7 @@
 typedef struct	Cursor Cursor;
 typedef struct	Event Event;
 typedef struct	Menu Menu;
+//typedef struct	Mouse Mouse;
 
 /*s: enum _anon_ (include/event.h) */
 enum

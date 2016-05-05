@@ -1,6 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <window.h>
 #include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
@@ -10,6 +11,7 @@
 #include <plumb.h>
 #include "dat.h"
 #include "fns.h"
+
 	/* for generating syms in mkfile only: */
 	#include <bio.h>
 	#include "edit.h"

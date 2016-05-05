@@ -7,6 +7,7 @@
 #include <bio.h>
 
 #include <draw.h>
+#include <window.h>
 #include <mouse.h>
 #include <cursor.h>
 #include <keyboard.h>

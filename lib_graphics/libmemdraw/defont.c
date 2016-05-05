@@ -4,6 +4,7 @@
 #include <draw.h>
 #include <draw_private.h>
 #include <memdraw.h>
+#include <font.h>
 
 /*s: function getmemdefont */
 Memsubfont*

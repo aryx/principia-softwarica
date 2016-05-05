@@ -1,6 +1,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <window.h>
 #include <plumb.h>
 #include <regexp.h>
 #include <event.h>	/* for support routines only */

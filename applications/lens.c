@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <window.h>
 #include <event.h>
 
 /*s: enum _anon_ (windows/apps/lens.c) */

@@ -101,6 +101,41 @@ struct Cachesubf
 };
 /*e: struct Cachesubf */
 
+/*s: enum misc */
+enum
+{
+    /* starting values */
+    /*s: constant NFCACHE */
+    LOG2NFCACHE =	6,
+    NFCACHE =	(1<<LOG2NFCACHE),	/* #chars cached */
+    /*e: constant NFCACHE */
+    /*s: constant NFLOOK */
+    NFLOOK =	5,			/* #chars to scan in cache */
+    /*e: constant NFLOOK */
+    /*s: constant NFSUBF */
+    NFSUBF =	2,			/* #subfonts to cache */
+    /*e: constant NFSUBF */
+
+    /* max value */
+    /*s: constant MAXFCACHE */
+    MAXFCACHE =	1024+NFLOOK,		/* upper limit */
+    /*e: constant MAXFCACHE */
+    /*s: constant MAXSUBF */
+    MAXSUBF =	50,			/* generous upper limit */
+    /*e: constant MAXSUBF */
+
+    /* deltas */
+    /*s: constant DSUBF */
+    DSUBF = 	4,
+    /*e: constant DSUBF */
+
+    /* expiry ages */
+    SUBFAGE	=	10000,
+    CACHEAGE =	10000
+};
+/*e: enum misc */
+
+
 // internal to font code
 extern Subfont*	allocsubfont(char*, int, int, int, Fontchar*, Image*);
 extern void	    freesubfont(Subfont*);
@@ -115,12 +150,14 @@ extern int	writesubfont(int, Subfont*);
 
 extern int		cachechars(Font*, char**, Rune**, ushort*, int, int*, char**);
 extern void		agefont(Font*);
-extern void		_unpackinfo(Fontchar*, byte*, int);
 extern Point	strsubfontwidth(Subfont*, char*);
 extern int		loadchar(Font*, Rune, Cacheinfo*, int, int, char**);
 extern Subfont*	getdefont(Display*);
 
+// used also by libmemdraw/
+extern void		_unpackinfo(Fontchar*, byte*, int);
 extern	byte	defontdata[];
 extern	int		sizeofdefont;
+
 
 /*e: include/font.h */

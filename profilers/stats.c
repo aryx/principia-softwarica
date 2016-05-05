@@ -5,6 +5,7 @@
 #include <auth.h>
 #include <fcall.h>
 #include <draw.h>
+#include <window.h>
 #include <event.h>
 
 /*s: constant MAXNUM */
