@@ -21,6 +21,9 @@
 %   TODO gscreen, screenimage, vgascr, so easier to see associated part
 %   TODO or merge globals (screenimage and gscreen, can?)
 % - TODO transformed globals in locals (softscreen)
+% - reorganized a lot the code, merged many small files in a bigger one
+%   (e.g., libdraw/subfont.c), or split in different files to better
+%   separate concern (e.g., draw.h in window.h and font.h and draw_private.h)
 
 %thx to codemap/codegraph/scheck:
 % - SEMI use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -264,6 +267,7 @@ What are {True Type} fonts?
 \end{itemize}
 \l how implement overlapping windows? what is a backing store?
 \l how cooperate with windowing system?
+\t how synchro with monitor balayage? glitches?
 
 %tags used in this file for different recurring themes:
  %history:
@@ -452,18 +456,18 @@ Ghostscript though is a very large program, with more than
 \n not counting external dependencies, libpng, etc
 \n xpost is 30 KLOC but not complete
 
-Note that a few graphics systems, e.g., Display Postscript (DPS) 
-in the NeXT computer and the NeWS windowing system from Sun,
+Note that a few graphics systems (e.g., Display Postscript (DPS) 
+in the NeXT computer and the NeWS windowing system from Sun)
 were based on Postscript and embedded a Postscript interpreter
 to render graphics on the screen.
 \l ancestor of Quartz for MacOS (Quartz 2D is using PDF model =~ Postscript)
 %
 One advantage of this approach is that it is easy to print what is on
-the screen when the printer understands also Postscript. 
-The same code can be used. Moreover,
+the screen when the printer understands also Postscript;
+the same code can be used. Moreover,
 what is printed will match exactly what is on the screen.
 %
-One issue though is that one has to use two languages to program a
+One issue though is that you have to use two languages to program a
 graphical application: one for the business logic, e.g., C,
 and one for the graphics (Postscript).
 
@@ -641,8 +645,7 @@ VGA is a popular graphics standard for x86 machines.
 \l more in appendix
 }
 {device driver}
-which exports the VGA {device files} in [[/dev/]], e.g.
-[[/dev/vgactl]].
+which exports the VGA {device files} in [[/dev/]] (e.g., [[/dev/vgactl]]).
 %
 See the \book{Kernel} for more information on how device
 drivers work and how to use [[bind]]. You can also read
@@ -692,7 +695,7 @@ this book, especially for Chapter~\ref{chap:user-kernel-bridge}.
 Indeed, an important part of [[draw]] resides
 in the kernel and implements interfaces such as [[Dev]]
 defined by the kernel.
-[[draw]] is implemented as a device
+[[draw]] is implemented as a device,
 so I assume you know what is a {device file} for instance.
 
 It can also be useful to read the many manual pages concerning
@@ -905,6 +908,7 @@ Such an area is often called the {\em frame buffer}.
 You can then draw on the screen simply by modifying bytes in the frame buffer.
 The graphics card then interprets the pixel values in the 
 frame buffer to send the right signals to the monitor.
+\t only issue is synchro!
 
 The graphics card of the Raspberry Pi machine uses such an interface,
 as explained in Appendix~\ref{chap:raspberry-pi-graphic-card}.
@@ -1202,16 +1206,15 @@ create a new connection subdirectory under [[/dev/draw/]].
 Those directories will make more sense in the \book{Windows}.
 Indeed, the use by multiple processes of the same screen at the same time
 is useful mainly in a windowing system context
-when independent graphical applications
-are running concurrently.
+where independent graphical applications are running concurrently.
 
 \item [[/dev/draw/1/ctl]] (and [[/dev/draw/2/ctl]], etc)
 is at the third level
-and contains mostly information about the screen 
-such as its resolution.
+and contains mostly information about the screen, for instance,
+its resolution.
 Opening [[/dev/draw/new]] actually returns a file descriptor
-which corresponds to a [[/dev/draw/x/ctl]] file so one
-does not have not to open this file too.
+that corresponds to a [[/dev/draw/x/ctl]] file, so one
+does not need to open this file.
 \l a big magic
 \n 12 strings, info on screen, first Image.
 
@@ -1222,7 +1225,7 @@ to the display server.
 The format of those drawing commands is pretty regular:
 they start all with a single character, e.g., [['L']] for drawing a line,
 followed by binary parameters. Multibyte integer parameters
-are transmitted with the low order byte first.
+are transmitted with the low-order byte first.
 %
 All drawing functions in [[draw.h]] eventually write 
 a drawing command in the [[/dev/draw/x/data]] device file.
@@ -1231,8 +1234,8 @@ a drawing command in the [[/dev/draw/x/data]] device file.
 
 \end{itemize}
 
-The remaining device files managed by [[draw]] are listed below
-but will be covered later in the book:
+The remaining device files managed by [[draw]] are listed below,
+but they will be covered later in the book:
 
 \begin{itemize}
 
@@ -1243,7 +1246,7 @@ This file will be covered later in Section~\ref{sec:colormap}.
 in Section~\ref{sec:refresh}.
 
 \item [[/dev/winname]] is at the first level again, 
-and is the only device file managed by [[draw]] which is
+and is the only device file managed by [[draw]] that is 
 not under [[/dev/draw/]].
 It is related to the windowing system
 and will be covered later in Chapter~\ref{chap:windowing-support}.
@@ -1275,7 +1278,7 @@ They use instead a higher-level API that is declared in [[draw.h]],
 rather than writing directly in the device files.
 %
 The program [[hellodraw.c]] below, which was mentioned
-in Section~\ref{sec:getting-started} and whose graphical output
+in Section~\ref{sec:getting-started}, and whose graphical output
 is shown in Figure~\ref{fig:hellodraw}, uses this API:
 
 <<tests/draw/hellodraw.c>>=
@@ -1516,31 +1519,10 @@ later in Chapter~\ref{chap:windows}.
 Table~\ref{tab:code-orga} presents short descriptions
 of the source files used by [[draw]]. Those files are
 organized according to the directories we mentioned above.
-Table~\ref{tab:code-orga} shows also
+The table shows also
 the main entities (e.g., structures, functions, globals) the file defines,
 and the corresponding chapter in this document in which the code
 contained in the file is primarily discussed.
-
-
-%todo for libdraw/:
-% marshall.c?
-% flush.c?
-% mv nameximage out of alloc.c
-% merge subfont stuff together? have almost one function per file
-% split init.c with initwindow.c and flush.c?
-% merge load/unload together?
-% put all window stuff together? newwindow, getwindow, etc?
-% window.c and desktop.c
-% merge colmap stuff together?
-% mv scroll.c with mouse.c
-% stringbg.c with string.c so then no need export _string in draw_private.h
-% merge subfont.c freesubfont.c and code containing installsubfont
-%  such as subfontcache.c so can even clean draw_private.h!
-% split window.c with desktop.c (screen)
-% draw_font.h? or just font.h!
-% draw_window.h? or just window.h?
-%could have a globals.c split from init.c
-% mv rectclip.c to libmemdraw!! cos not used by libdraw/! but used by apps?
 
 %todo for kernel/.../devdraw.c: super big file (but convenient for mkfile?) meh
 % split data structures outside devdraw.h?
@@ -1556,7 +1538,6 @@ contained in the file is primarily discussed.
 % drawblank.c?
 % drawrefresh.c?
 
-
 %todo for libmemdraw/draw.c: super big file
 % init.c with memimageinit.c (now in draw.c)
 % clip.c ? with drawclip?
@@ -1564,9 +1545,6 @@ contained in the file is primarily discussed.
 % imgtorgba()?? rgba.c? color.c?
 % alphadraw.c split from draw.c?
 
-
-
-% drawrepl.c?
 
 \begin{table*}[tbh!]
 \begin{center}
@@ -1578,50 +1556,50 @@ data structures          & \ref{chap:core-ds}                   & [[draw.h]]    
 geometry                 & \ref{chap:core-ds}                   & [[arith.c]]                     &                           &                             & [[eqpt()]] [[eqrect()]] [[ZP]] [[ZR]]                      & 0 \\ %  (libgeometry) % [[addpt()]] [[rectaddpt()]]
 image resolution         & \ref{chap:core-ds}                   & [[RESOLUTION.c]]                &  [[RESOLUTION.c]]         &                             & [[bytesperline()]] [[chantodepth()]]                       & 0 \\ % [[bytesperline.c]] [[chan.c]] % byteaddr()
 initializations          & \ref{chap:init}                      & [[init.c]]                      &  [[INIT.c]]               & [[DRAWINIT.c]]              & [[initdraw()]] [[memimageinit()]]                          & 0 \\ % [[display]] [[screensize()]]  [[initscreenimage()]]  [[initdisplay()]]
-user/kernel bridge       & \ref{chap:user-kernel-bridge}        & [[MARSHAL.c]]                  &                           & [[UNMARSHAL.c]] [[devdraw.c]]               & [[drawdevtab]] [[Qxxx]] [[drawopen()]] [[drawmesg()]]      & 0 \\ %  [[drawwalk()]] 
+user/kernel bridge       & \ref{chap:user-kernel-bridge}        & [[marshal.h]] [[flush.c]]       &                           & [[UNMARSHAL.c]] [[devdraw.c]]               & [[drawdevtab]] [[Qxxx]] [[drawopen()]] [[drawmesg()]]      & 0 \\ %  [[drawwalk()]] 
 
 \midrule                                                                                                                  
 
 image allocation         & \ref{chap:images}                    &  [[alloc.c]]                    & [[alloc.c]]               & [[DRAWALLOC.c]]             & [[allocimage()]] [[allocmemimage()]]                       & 0 \\ % mv byteaddr() memsetchan() elsewhere? % [[freeimage()]] 
-clipping and replication & \ref{chap:images}                    &  [[replclipr.c]] [[rectclip.c]] &                           &                             & [[]]                                                       & 0 \\
-image naming             & \ref{chap:images}                    &  [[NAMING.c]]                   &                           & [[DRAWNAME.c]]                        & [[nameimage()]] [[namedimage()]]                           & 0 \\
-manipulating rectangles  & \ref{chap:draw}                      & [[draw.c]] [[border.c]]         & [[draw.c]]                &                             & [[draw()]] [[memimagedraw()]] [[alphadraw()]]              & 0 \\
+clipping and replication & \ref{chap:images}                    &  [[replclipr.c]]                &                           &                             & [[]]                                                       & 0 \\
+image naming             & \ref{chap:images}                    &  [[naming.c]]                   &                           & [[DRAWNAME.c]]                        & [[nameimage()]] [[namedimage()]]                           & 0 \\
+manipulating rectangles  & \ref{chap:draw}                      & [[draw.c]]                      & [[draw.c]] [[ALPHADRAW.c]]&                             & [[draw()]] [[memimagedraw()]] [[alphadraw()]]              & 0 \\
 drawing lines            & \ref{chap:drawing-shapes}            & [[line.c]]                      & [[line.c]]                &                             & [[line()]] [[_memimageline()]]                             & 0 \\
 drawing polygons         & \ref{chap:drawing-shapes}            & [[poly.c]]                      & [[poly.c]] [[fillpoly.c]] &                             & [[poly()]] [[fillpoly()]] [[mempoly()]]                    & 0 \\
 drawing ellipses/arcs    & \ref{chap:drawing-shapes}            & [[ellipse.c]]                   & [[ellipse.c]] [[arc.c]]   &                             & [[ellipse()]] [[fillellipse()]] [[memellipse()]]           & 0 \\ % [[arc()]] [[fillarc()]] [[memarc()]]
 
 \midrule                                                                                                                  
-font initialization      & \ref{chap:fonts}                     & [[defont.c]] [[getdefont.c]]    &                           &                             & [[defontdata]] [[getdefont()]] [[openfont()]]              & 0 \\ % [[openfont.c]]
-font allocation          & \ref{chap:fonts}                     & [[buildfont.c]]                 &                           &                             & [[buildfont()]] [[freefont()]]                             & 0 \\
-text drawing             & \ref{chap:fonts}                     & [[string.c]]                    &                           &                             & [[string()]] [[stringbg()]] [[drawchar() ]]                & 0 \\ % [[stringbg.c]]
+font data structures     & \ref{chap:fonts}                     & [[font.h]]                      &                           &                             & [[Subfont]] [[Cacheinfo]]                                  & 0 \\ %pad: I created font.h
+font initialization      & \ref{chap:fonts}                     & [[defont.c]] [[buildfont.c]]    &                           &                             & [[getdefont()]] [[buildfont()]]              & 0 \\ % [[openfont.c]] % freefont()
+text drawing             & \ref{chap:fonts}                     & [[string.c]]                    &                           &                             & [[string()]] [[stringbg()]]                 & 0 \\ % [[drawchar()]] is not in string.c!
 %computing text width    & \ref{chap:fonts}                     & [[stringwidth.c]]               &                           &                             & [[stringwidth()]]                                          & 0\\
-characters cache         & \ref{chap:fonts}                     & [[FONT_CACHE.c]]                &                           &                             & [[cachechars()]] [[loadchar()]] [[fontresize()]]           & 0 \\ % [[draw_private.h]], have a draw_private_font.h? % font.c
-subfont management       & \ref{chap:fonts}                     & [[SUBFONT.c]]                   &                           &                             & [[readsubfont()]] [[writesubfont()]]                       & 0 \\ % [[freesubfont.c]] [[getsubfont.c]] [[readsubfont.c]] [[subfontcache.c]] [[subfontname.c]] [[writesubfont.c]]
+characters cache         & \ref{chap:fonts}                     & [[font.c]]                      &                           &                             & [[cachechars()]] [[loadchar()]] [[fontresize()]]           & 0 \\ %
+subfont management       & \ref{chap:fonts}                     & [[subfont.c]]                   &                           &                             & [[readsubfont()]] [[writesubfont()]]                       & 0 \\ % [[subfontcache.c]] [[subfontname.c]]
 
 \midrule
 
-loading an image         & \ref{chap:image-io}                  & [[LOADIMAGE.c]]                 & [[load.c]] [[unload.c]]   &                             & [[loadimage()]] [[loadmemimage()]]                         & 0 \\ % [[unloadimage()]] [[unloadmemimage()]] % [[unloadimage.c]]
-image disk IO            & \ref{chap:image-io}                  & [[readimage.c]]                 & [[read.c]]                &                             & [[readimage()]]                                            & 0 \\
+transfering an image     & \ref{chap:image-io}                  & [[transfer.c]]                 & [[load.c]] [[unload.c]]   &                             & [[loadimage()]] [[loadmemimage()]]                         & 0 \\ % [[unloadimage()]] [[unloadmemimage()]] %
+image IO                 & \ref{chap:image-io}                  & [[io.c]]                       & [[read.c]]                &                             & [[readimage()]]                                            & 0 \\
 
 \midrule
-mouse management         & \ref{chap:input}                     & [[mouse.h]] [[mouse.c]]         &                           &                             & [[Mouse]] [[Mousectl]] [[initmouse()]] [[readmouse()]]     & 0 \\ % [[closemouse()]]  % [[scroll.c]] 
-cursor management        & \ref{chap:input}                     &                                 &                           & [[CURSOR.h]] [[SWCURSOR.c]] & [[swcursorinit()]] [[cursoron()]]                          & 0 \\
+mouse management         & \ref{chap:input}                     & [[mouse.h]] [[mouse.c]]         &                           &                             & [[Mouse]] [[Mousectl]] [[initmouse()]] [[readmouse()]]     & 0 \\ % [[closemouse()]]
+cursor management        & \ref{chap:input}                     & [[cursor.h]]                    &                           & [[CURSOR.h]] [[SWCURSOR.c]] & [[swcursorinit()]] [[cursoron()]]                          & 0 \\
 keyboard management      & \ref{chap:input}                     & [[keyboard.h]] [[keyboard.c]]   &                           &                             & [[Kxxx]] [[Keyboardctl]] [[initkeyboard()]]                & 0 \\ % [[closekeyboard()]] 
 
 \midrule
-color maps               & \ref{chap:non-true-color}            & [[COLMAP.c]]                    & [[cmap.c]]                &                             & [[rgb2cmap()]] [[cmap2rgb()]] [[readcmap()]]               & 0 \\ % [[writecmap()]] [[writecolmap()]] %cmap.c (generated by scripts/mkcmap.c) % [[readcolmap.c]] [[writecolmap.c]] [[rgb.c]] %  [[readcolmap()]] [[memdefcmap]] 
+color maps               & \ref{chap:non-true-color}            & [[colormap.c]]                    & [[cmap.c]]                &                             & [[rgb2cmap()]] [[cmap2rgb()]] [[readcmap()]]               & 0 \\ % [[writecmap()]] [[writecolmap()]] %cmap.c (generated by scripts/mkcmap.c) % %  [[readcolmap()]] [[memdefcmap]] 
 bezier curves drawing    & \ref{chap:advanced}                  & [[bezier.c]]                    &                           &                             & [[bezier()]] [[bezspline()]] [[fillbezier()]]              & 0 \\
 %get rect?               & \ref{chap:advanced}                  & [[getrect.c]]                   &                           &                             & [[getrect()]]                                              & 0 \\
-basic menus              & \ref{chap:advanced}                  & [[menuhit.c]]                   &                           &                             & [[Menu]] [[menuhit()]]                                     & 0 \\ % [[allocimagemix.c]]
+basic menus              & \ref{chap:advanced}                  & [[menuhit.c]]                   &                           &                             & [[Menu]] [[menuhit()]]                                     & 0 \\ %
 event-based IO           & \ref{chap:advanced}                  & [[event.c]]                     &                           &                             & [[Event]] [[einit()]] [[ekbd()]] [[emouse()]]              & 0 \\ % [[egetrect.c]] [[emunuhits.c]]
 graphical text mode      & \ref{chap:advanced}                  &                                 & [[defont.c]] [[string.c]] & [[VGACONSOLE.c]]            & [[vgascreenputc()]] [[memimagestring()]]                                                           & 0 \\ % cga.c is for old style
 %refresh                 & \ref{chap:advanced}                  &                                 &                           &                             &                                                            & & \\
-image compression        & \ref{chap:advanced}                  & [[COMPRESSION.c]]               & [[cload.c]] [[cread.c]]   &                             & [[cloadimage()]]  [[creadimage()]] [[writeimage()]]        & 0 \\ % [[computil.c]] [[cloadimage.c]] [[creadimage.c]] [[writeimage.c]]   [[cloadmemimage()]] [[creadmemimage()]]
+image compression        & \ref{chap:advanced}                  & [[compressed.c]]               & [[cload.c]] [[cread.c]]   &                             & [[cloadimage()]]  [[creadimage()]] [[writeimage()]]        & 0 \\ % [[cloadmemimage()]] [[creadmemimage()]]
 
 \midrule
 debugging                & \ref{chap:debugging-appendix}        & [[debug.c]]                     &                           &                             & [[drawsetdebug()]]                                         & 0 \\
-dumpers                  & \ref{chap:debugging-appendix}        & [[fmt.c]]                       &                           &                             & [[Pfmt()]] [[Rfmt()]] [[chantostr()]] [[printmesg()]]      & 0 \\x
-error management         & \ref{chap:error}                     & [[ERROR.c]]                     &                           & [[DRAWERROR.c]]             & [[Errorfn]] [[drawerror()]]                                & 0 \\
+dumpers                  & \ref{chap:debugging-appendix}        & [[fmt.c]]                       &                           &                             & [[Pfmt()]] [[Rfmt()]] [[chantostr()]] [[printmesg()]]      & 0 \\
+error management         & \ref{chap:error}                     & [[error.c]]                     &                           & [[DRAWERROR.c]]             & [[Errorfn]] [[drawerror()]]                                & 0 \\ %pad: I created this file
 trigonometry             & \ref{chap:math}                      & [[icossin.c]] [[icossin2.c]]    &                           &                             & [[sinus]] [[cosinus]] [[icossin()]] [[icossin2()]]         & 0 \\
 
 \midrule
@@ -1659,6 +1637,106 @@ Total                    &                                      &               
 
 
 \section{Software architecture}
+
+% first control flow. Different components.
+% Figure X.
+
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+       hellodraw.c-----+    clock.c--+    colors.c--+
+       |               |    |        |    |         |
+ U     |   line(...);  |    |        |    |         |    APPLICATIONS
+ S     +---------------+    +--------+    +---------+
+ E  include/graphics/draw.h----------------------------+
+ R  |    void line(...);                               |
+    +--------------------------------------------------+
+ S  lib_graphics/libdraw/------------------------------+
+ P  |  line.c-------------------------+ ellipse.c--+   |    USER
+ A  |  |void line(...) {              | |          |   |  LIBRARIES
+ C  |  |  ...                         | |          |   |
+ E  |  |  write(display->fd, "L ...");| |          |   |
+    |  |}                             | |          |   |
+    |  +------------------------------+ +----------+   |
+    +--------------------------------------------------+
+ -----------------------------------------------------------------
+     kernel/---------------------------------------------+
+     |+---+ files/------+ devices/screen/--------------+ |
+ K   || s | | syswrite()| | devdraw.c----------------+ | |
+ E   || y | | sysread() | | |void drawwrite() { ... }| | |
+ R   || s | |           | | |void drawmesg(...) {    | | |
+ N   || c | +-----------+ | |  ...                   | | |  KERNEL
+ E   || a |               | |  switch(c) {           | | |
+ L   || l |               | |  ...                   | | |
+     || l |               | |  case 'L':             | | |
+ S   || s |               | |     memline(...);      | | |
+ P   || / |               | +------------------------+ | |
+ A   |+---+               +----------------------------+ |
+ C   +---------------------------------------------------+
+ E   lib_graphics/libmemlayer/---------------------------+
+     | line.c------------------------------------+       |
+     | |void memline(...) { memimageline(...); } |       |
+     | +-----------------------------------------+       |
+     +---------------------------------------------------+   KERNEL
+     lib_graphics/libmemdraw/----------------------------+ LIBRARIES
+     | line.c---------+  ellipse.c----+                  |
+     | |memimageline()|  |            |                  |
+     | +--------------+  +------------+                  |
+     +---------------------------------------------------+
+\end{verbatim}
+\caption{Tracing of a call to [[line()]] through the [[draw]] components.}
+\label{fig:soft-archi}
+\end{figure}
+
+% then line() signature and memline signature?
+% Figure Y.
+% share id, and then in the end frame buffer!
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\end{verbatim}
+\caption{Data structures of the different [[draw]] components.}
+\label{fig:soft-archi}
+\end{figure}
+
+
+
+
+
 
 % Display server. Will understand more when see Windows.nw.
 % can have multiple clients, which do the initdraw().
@@ -1762,52 +1840,6 @@ Total                    &                                      &               
 % you specify each time. The API is also very general, see draw().
 
 
-
-\begin{figure}[!]\centering
-\begin{verbatim}
-       hellodraw.c-----+     clock.c-----+     colors.c----+
-       |               |     |           |     |           |
- U     |   line(...);  |     |           |     |           |  APPLICATIONS
- S     +---------------+     +-----------+     +-----------+
- E  include/graphics/draw.h-----------------------------------+
- R  |    void line(...);                                      |
-    +---------------------------------------------------------+
- S  lib_graphics/libdraw/-------------------------------------+
- P  |  line.c-------------------------+ ellipse.c--+ init.c-+ |   USER
- A  |  |void line(...) {              | |          | |      | | LIBRARIES
- C  |  |  ...                         | |          | |      | |
- E  |  |  write(display->fd, "L ...");| |          | |      | |
-    |  |}                             | |          | |      | |
-    |  +------------------------------+ +----------+ +------+ |
-    +---------------------------------------------------------+
- -----------------------------------------------------------------
-     kernel/---------------------------------------------+
-     |+---+ files/------+ devices/screen/--------------+ |
- K   || s | | syswrite()| | devdraw.c----------------+ | |
- E   || y | | sysread() | | |void drawwrite() { ... }| | |
- R   || s | |           | | |void drawmesg(...) {    | | |
- N   || c | +-----------+ | |  ...                   | | |      KERNEL
- E   || a |               | |  switch(c) {           | | |
- L   || l |               | |  ...                   | | |
-     || l |               | |  case 'L':             | | |
- S   || s |               | |     memline(...);      | | |
- P   || / |               | +------------------------+ | |
- A   |+---+               +----------------------------+ |
- C   +---------------------------------------------------+
- E      lib_graphics/libmemlayer/------------+
-        | line.c--------+                    |
-        | |memline()    |                    |
-        | +-------------+                    |                 KERNEL
-        +------------------------------------+               LIBRARIES
-        lib_graphics/libmemdraw/-------------+
-        | line.c---------+                   |
-        | |memimageline()|                   |
-        | +--------------+                   |
-        +------------------------------------+
-\end{verbatim}
-\caption{Tracing of a call to [[line()]] through the [[draw]] components.}
-\label{fig:soft-archi}
-\end{figure}
 
 
 
@@ -2983,7 +3015,7 @@ enum ImageChan {
 
 % most common image formats:
 
-<<enum _anon_ (include/draw.h)5>>=
+<<enum ImageType>>=
 enum ImageType {
     GREY1	= CHAN1(CGrey, 1), // used for masks, black and white
     CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default, 1 byte per pixel
@@ -8733,7 +8765,7 @@ line(Image *dst, Point p0, Point p1, int end0, int end1, int radius, Image *src,
 % if src is complex picture, can do very fancy effect! like getting
 % a slice of the face of someone drawn as a line!
 
-<<enum _anon_ (include/draw.h)3>>=
+<<enum Endline>>=
 enum EndLine
 {
     /* line ends */
@@ -11924,7 +11956,7 @@ if(++n > 10){
 
 % cachechars(2)
 
-<<enum _anon_ (include/draw.h)6>>=
+<<enum misc>>=
 enum
 {
     /* starting values */
@@ -23138,8 +23170,8 @@ Refreshfn reffn;
 Refx *refx;
 @
 
-<<enum _anon_ (include/draw.h)2>>=
-enum
+<<enum Refresh>>=
+enum Refresh
 {
     /* refresh methods */
     Refbackup	= 0,
@@ -23236,6 +23268,11 @@ memlsetrefresh(Memimage *i, Refreshfn fn, void *ptr)
 
 \subsection{[[lockdisplay()]]}
 
+<<[[Display]] concurrency fields>>=
+QLock	qlock;
+@
+
+
 % seems related to IO. graphics(2) mentions it when
 %  use multi-thread program! then need lock Display around
 %  each API call
@@ -23258,9 +23295,6 @@ unlockdisplay(Display *disp)
 }
 @
 
-<<[[Display]] concurrency fields>>=
-QLock	qlock;
-@
 
 % also need notify the library to use a locking protocol also
 % for its own accesses (seems used mostly when do internal IO)

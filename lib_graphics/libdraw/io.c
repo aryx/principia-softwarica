@@ -1,4 +1,4 @@
-/*s: lib_graphics/libdraw/readimage.c */
+/*s: lib_graphics/libdraw/io.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
@@ -184,4 +184,5 @@ readimage(Display *d, fdt fd, bool dolock)
     return i;
 }
 /*e: function readimage */
-/*e: lib_graphics/libdraw/readimage.c */
+
+/*e: lib_graphics/libdraw/io.c */

@@ -19,73 +19,64 @@ SRC_ORIG=Graphics.nw Graphics_extra.nw
 
 # from list_graphics originally
 SRC_VIEWS= \
-   ../include/graphics/cursor.h\
    ../include/graphics/draw.h\
-   ../include/graphics/window.h\
+    ../include/graphics/window.h\
+    ../include/graphics/internals/font.h\
+    ../include/graphics/internals/marshal.h\
+    ../include/graphics/internals/draw_private.h\
+   \
+   ../include/graphics/internals/memdraw.h\
+   ../include/graphics/internals/memlayer.h\
+   ../include/graphics/cursor.h\
    ../include/graphics/input/event.h\
    ../include/graphics/input/keyboard.h\
    ../include/graphics/input/mouse.h\
-   ../include/graphics/internals/draw_private.h\
-   ../include/graphics/internals/memdraw.h\
-   ../include/graphics/internals/memlayer.h\
    \
    libdraw/misc.c\
    libdraw/alloc.c\
-   libdraw/allocimagemix.c\
+    libdraw/naming.c\
    libdraw/arith.c\
    libdraw/bezier.c\
-   libdraw/border.c\
    libdraw/buildfont.c\
    libdraw/bytesperline.c\
    libdraw/chan.c\
-   libdraw/cloadimage.c\
-   libdraw/computil.c\
-   libdraw/creadimage.c\
    libdraw/debug.c\
+   libdraw/fmt.c\
    libdraw/defont.c\
    libdraw/draw.c\
-   libdraw/drawrepl.c\
-   libdraw/egetrect.c\
    libdraw/ellipse.c\
-   libdraw/emenuhit.c\
    libdraw/event.c\
-   libdraw/fmt.c\
+   libdraw/egetrect.c\
+   libdraw/emenuhit.c\
    libdraw/font.c\
-   libdraw/freesubfont.c\
-   libdraw/getdefont.c\
    libdraw/getrect.c\
-   libdraw/getsubfont.c\
    libdraw/icossin.c\
    libdraw/icossin2.c\
    libdraw/init.c\
+    libdraw/error.c\
+    libdraw/flush.c\
+    libdraw/globals.c\
+    libdraw/concurrency.c\
    libdraw/keyboard.c\
    libdraw/line.c\
-   libdraw/loadimage.c\
    libdraw/menuhit.c\
    libdraw/mouse.c\
-   libdraw/newwindow.c\
    libdraw/openfont.c\
    libdraw/poly.c\
-   libdraw/readcolmap.c\
-   libdraw/readimage.c\
-   libdraw/readsubfont.c\
-   libdraw/rectclip.c\
    libdraw/replclipr.c\
-   libdraw/rgb.c\
    libdraw/scroll.c\
    libdraw/string.c\
-   libdraw/stringbg.c\
-   libdraw/stringsubfont.c\
    libdraw/stringwidth.c\
    libdraw/subfont.c\
    libdraw/subfontcache.c\
    libdraw/subfontname.c\
-   libdraw/tests/drawtest.c\
-   libdraw/unloadimage.c\
    libdraw/window.c\
-   libdraw/writecolmap.c\
-   libdraw/writeimage.c\
-   libdraw/writesubfont.c\
+    libdraw/desktop.c\
+    libdraw/io.c\
+    libdraw/transfer.c\
+    libdraw/compressed.c\
+    libdraw/colormap.c\
+   libdraw/tests/drawtest.c\
    \
    libmemdraw/alloc.c\
    libmemdraw/arc.c\

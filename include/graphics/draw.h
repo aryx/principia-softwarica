@@ -6,22 +6,38 @@
 // Data structures and constants
 //----------------------------------------------------------------------------
 
-// forward decls
+typedef struct	Point Point;
+typedef struct	Rectangle Rectangle;
+typedef struct	Display Display;
+typedef struct	Image Image;
+typedef struct	Font Font;
+typedef struct	RGB RGB;
+
+// defined in other header files
+typedef struct	Mouse Mouse;
+typedef struct	Screen Screen;
 typedef struct	Cachefont Cachefont;
 typedef struct	Cacheinfo Cacheinfo;
 typedef struct	Cachesubf Cachesubf;
-typedef struct	Display Display;
-typedef struct	Font Font;
-typedef struct	Fontchar Fontchar;
-typedef struct	Image Image;
-typedef struct	Mouse Mouse;
-typedef struct	Point Point;
-typedef struct	Rectangle Rectangle;
-typedef struct	RGB RGB;
 typedef struct	Subfont Subfont;
-typedef struct	Screen Screen;
-
 #pragma incomplete Mouse
+
+/*s: struct Point */
+struct	Point
+{
+    int	x;
+    int	y;
+};
+/*e: struct Point */
+
+/*s: struct Rectangle */
+struct Rectangle
+{
+    Point	min;
+    Point	max;
+};
+/*e: struct Rectangle */
+
 
 /*s: enum Colors */
 enum
@@ -66,70 +82,15 @@ enum
 typedef ulong rgba;
 /*e: type rgba */
 
-/*s: enum _anon_ (include/draw.h) */
-enum
+/*s: struct RGB */
+struct RGB
 {
-    /*s: constant ICOSSCALE */
-    ICOSSCALE	= 1024,
-    /*e: constant ICOSSCALE */
-    /*s: constant Borderwidth */
-    //coupling: must be equal to Selborder in rio
-    Borderwidth =	4,
-    /*e: constant Borderwidth */
+    ulong	red;
+    ulong	green;
+    ulong	blue;
 };
-/*e: enum _anon_ (include/draw.h) */
+/*e: struct RGB */
 
-/*s: enum _anon_ (include/draw.h)2 */
-enum
-{
-    /* refresh methods */
-    Refbackup	= 0,
-    Refnone		= 1,
-    Refmesg		= 2 // incomplete apparently
-};
-/*e: enum _anon_ (include/draw.h)2 */
-
-/*s: enum _anon_ (include/draw.h)3 */
-enum EndLine
-{
-    /* line ends */
-    Endsquare	= 0, // default
-    Enddisc		= 1,
-    Endarrow	= 2,
-
-    Endmask		= 0x1F
-};
-/*e: enum _anon_ (include/draw.h)3 */
-
-/*s: function ARROW */
-#define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
-/*e: function ARROW */
-
-/*s: enum drawop */
-enum Drawop
-{
-    /* Porter-Duff compositing operators */
-    Clear	= 0,
-
-    SinD	= 8,
-    DinS	= 4,
-    SoutD	= 2,
-    DoutS	= 1,
-
-    S		= SinD|SoutD,
-    SoverD	= SinD|SoutD|DoutS, // classic Source over Destination
-    SatopD	= SinD|DoutS,
-    SxorD	= SoutD|DoutS,
-
-    D		= DinS|DoutS,
-    DoverS	= DinS|DoutS|SoutD,
-    DatopS	= DinS|SoutD,
-    DxorS	= DoutS|SoutD,	/* == SxorD */
-
-    Ncomp = 12,
-};
-/*e: enum drawop */
-typedef enum drawop Drawop;
 
 /*s: enum ImageChan */
 /*
@@ -152,7 +113,6 @@ enum ImageChan {
     NChan,
 };
 /*e: enum ImageChan */
-
 /*s: function __DC */
 #define __DC(type, nbits)	((((type)&15)<<4)|((nbits)&15))
 /*e: function __DC */
@@ -168,15 +128,13 @@ enum ImageChan {
 /*s: function CHAN4 */
 #define CHAN4(a,b,c,d,e,f,g,h)	(CHAN3((a),(b),(c),(d),(e),(f))<<8|__DC((g),(h)))
 /*e: function CHAN4 */
-
 /*s: function NBITS */
 #define NBITS(c) ((c)&15)
 /*e: function NBITS */
 /*s: function TYPE */
 #define TYPE(c) (((c)>>4)&15)
 /*e: function TYPE */
-
-/*s: enum _anon_ (include/draw.h)5 */
+/*s: enum ImageType */
 enum ImageType {
     GREY1	= CHAN1(CGrey, 1), // used for masks, black and white
     CMAP8	= CHAN1(CMap, 8), // PC graphics mode by default, 1 byte per pixel
@@ -198,37 +156,15 @@ enum ImageType {
     XBGR32	= CHAN4(CIgnore, 8, CBlue, 8, CGreen, 8, CRed, 8),
     /*e: [[ImageType] cases */
 };
-/*e: enum _anon_ (include/draw.h)5 */
-
+/*e: enum ImageType */
 /*s: type channels */
 typedef ulong channels;
 /*e: type channels */
 
-extern	int		chantodepth(channels);
-
-extern	char*	chantostr(char*, channels);
-extern	channels	strtochan(char*);
-
-/*s: struct Point */
-struct	Point
-{
-    int	x;
-    int	y;
-};
-/*e: struct Point */
-
-/*s: struct Rectangle */
-struct Rectangle
-{
-    Point	min;
-    Point	max;
-};
-/*e: struct Rectangle */
 
 /*s: type Errorfn */
 typedef void (*Errorfn)(Display*, char*);
 /*e: type Errorfn */
-
 
 /*s: struct Display */
 struct Display
@@ -321,106 +257,6 @@ struct Image
 };
 /*e: struct Image */
 
-
-/*s: struct RGB */
-struct RGB
-{
-    ulong	red;
-    ulong	green;
-    ulong	blue;
-};
-/*e: struct RGB */
-
-/*s: struct Fontchar */
-struct	Fontchar
-{
-    // character coordinates in Subfont.bits
-    int		x;		/* left edge of bits */
-    uchar	top;		/* first non-zero scan-line */
-    uchar	bottom;		/* last non-zero scan-line + 1 */
-
-    // adjustments to make on drawing point coordinates in destination
-    schar	left;		/* offset of baseline */
-    uchar	width;		/* width of baseline */
-};
-/*e: struct Fontchar */
-
-/*s: struct Subfont */
-/*
- * Subfonts
- *
- * given char c, Subfont *f, Fontchar *i, and Point p, one says
- *	i = f->info + c;
- *	draw(b, Rect(p.x + i->left, p.y + i->top,
- *		p.x + i->left + ((i+1)->x - i->x), p.y + i->bottom),
- *		color, f->bits, Pt(i->x, i->top));
- *	p.x += i->width;
- * to draw characters in the specified color (itself an Image) in Image b.
- */
-struct	Subfont
-{
-    // ref_own<string>
-    char		*name;
-    // ref_own<Image> ?
-    Image		*bits;	/* of font */
-
-    // array<Fontchar> (size = Subfont.n + 1)
-    Fontchar 	*info;	/* n+1 character descriptors */
-    short		n;		/* number of chars in font */
-
-    /*s: [[Subfont]] other fields */
-    uchar		height;		/* height of image */
-    char		ascent;		/* top of image to baseline */
-    /*e: [[Subfont]] other fields */
-
-    // Extra
-    int		ref;
-};
-/*e: struct Subfont */
-
-/*s: struct Cachefont */
-struct Cachefont
-{
-    Rune		min;	/* lowest rune value to be taken from subfont */
-    Rune		max;	/* highest rune value+1 to be taken from subfont */
-    // option<int>, None = 0
-    int		offset;	/* position in subfont of character at min */
-
-    // ref_own<string>, relative filename
-    char		*name;			/* stored in font */
-    // option<ref_own<filename>>, absolute filename, computed by subfontname()
-    char		*subfontname;		/* to access subfont */
-
-};
-/*e: struct Cachefont */
-
-/*s: struct Cacheinfo */
-struct Cacheinfo
-{
-    // the key
-    Rune		value;	/* value of character at this slot in cache */
-
-    // the values
-    ushort		x;		/* left edge of bits */
-    byte		width;		/* width of baseline */
-    schar		left;		/* offset of baseline */
-
-    ushort		age;
-};
-/*e: struct Cacheinfo */
-
-/*s: struct Cachesubf */
-struct Cachesubf
-{
-    // ref<Cachefont>, the key
-    Cachefont	*cf;	/* font info that owns us */
-    // ref_own<Subfont>, the value
-    Subfont		*f;	/* attached subfont */
-
-    ulong		age;	/* for replacement */
-};
-/*e: struct Cachesubf */
-
 /*s: struct Font */
 struct Font
 {
@@ -459,6 +295,72 @@ struct Font
 };
 /*e: struct Font */
 
+
+/*s: enum constants1 */
+enum
+{
+    /*s: constant ICOSSCALE */
+    ICOSSCALE	= 1024,
+    /*e: constant ICOSSCALE */
+    /*s: constant Borderwidth */
+    //coupling: must be equal to Selborder in rio
+    Borderwidth =	4,
+    /*e: constant Borderwidth */
+};
+/*e: enum constants1 */
+
+/*s: enum drawop */
+enum Drawop
+{
+    /* Porter-Duff compositing operators */
+    Clear	= 0,
+
+    SinD	= 8,
+    DinS	= 4,
+    SoutD	= 2,
+    DoutS	= 1,
+
+    S		= SinD|SoutD,
+    SoverD	= SinD|SoutD|DoutS, // classic Source over Destination
+    SatopD	= SinD|DoutS,
+    SxorD	= SoutD|DoutS,
+
+    D		= DinS|DoutS,
+    DoverS	= DinS|DoutS|SoutD,
+    DatopS	= DinS|SoutD,
+    DxorS	= DoutS|SoutD,	/* == SxorD */
+
+    Ncomp = 12,
+};
+/*e: enum drawop */
+typedef enum drawop Drawop;
+
+/*s: enum Refresh */
+enum Refresh
+{
+    /* refresh methods */
+    Refbackup	= 0,
+    Refnone		= 1,
+    Refmesg		= 2 // incomplete apparently
+};
+/*e: enum Refresh */
+
+/*s: enum Endline */
+enum EndLine
+{
+    /* line ends */
+    Endsquare	= 0, // default
+    Enddisc		= 1,
+    Endarrow	= 2,
+
+    Endmask		= 0x1F
+};
+/*e: enum Endline */
+
+/*s: function ARROW */
+#define	ARROW(a, b, c)	(Endarrow|((a)<<5)|((b)<<14)|((c)<<23))
+/*e: function ARROW */
+
 //----------------------------------------------------------------------------
 // Globals
 //----------------------------------------------------------------------------
@@ -480,17 +382,10 @@ extern	Rectangle	ZR;
 // Functions
 //----------------------------------------------------------------------------
 
-/*s: function Dx */
-#define	Dx(r)	((r).max.x-(r).min.x)
-/*e: function Dx */
-/*s: function Dy */
-#define	Dy(r)	((r).max.y-(r).min.y)
-/*e: function Dy */
-
 //
 // Display
 //
-// set globals at the end of this file: display, view, font (and screen)
+// This sets the following globals: display, view, font (and screen).
 extern int	initdraw(Errorfn, char*, char*);
 extern int	geninitdraw(char*, Errorfn, char*, char*, char*, int);
 
@@ -519,6 +414,13 @@ extern Image* 	creadimage(Display*, int, int);
 extern Image*	namedimage(Display*, char*);
 extern int		nameimage(Image*, char*, bool);
 
+//
+// Channels
+//
+extern	int		chantodepth(channels);
+extern	char*	    chantostr(char*, channels);
+extern	channels	strtochan(char*);
+
 /*
  * Colors
  */
@@ -542,6 +444,13 @@ extern int		eqpt(Point, Point);
 
 extern Rectangle	Rect(int, int, int, int);
 extern Rectangle	Rpt(Point, Point);
+
+/*s: function Dx */
+#define	Dx(r)	((r).max.x-(r).min.x)
+/*e: function Dx */
+/*s: function Dy */
+#define	Dy(r)	((r).max.y-(r).min.y)
+/*e: function Dy */
 
 extern int			eqrect(Rectangle, Rectangle);
 extern Rectangle	insetrect(Rectangle, int);
@@ -637,10 +546,6 @@ extern void		freefont(Font*);
 
 extern Font*	buildfont(Display*, char*, char*);
 
-// seems related to font
-extern void		lockdisplay(Display*);
-extern void		unlockdisplay(Display*);
-
 /*
  * One of a kind
  */
@@ -649,8 +554,13 @@ extern int		mousescrollsize(int);
 extern int	bytesperline(Rectangle, int);
 extern int	wordsperline(Rectangle, int);
 
+// seems related to font
+extern void		lockdisplay(Display*);
+extern void		unlockdisplay(Display*);
 
-// dumpers
+//
+// Dumpers
+//
 #pragma varargck	type	"R"	Rectangle
 #pragma varargck	type	"P"	Point
 extern	int	Rfmt(Fmt*);

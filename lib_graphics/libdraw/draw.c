@@ -88,4 +88,28 @@ gendrawop(Image *dst, Rectangle r, Image *src, Point p0, Image *mask, Point p1, 
     draw1(dst, &r, src, &p0, mask, &p1, op);
 }
 /*e: function gendrawop */
+
+/*s: function border */
+void
+border(Image *im, Rectangle r, int i, Image *color, Point sp)
+{
+    /*s: [[border()]] if negative i, border goes outside */
+    if(i < 0){
+        r = insetrect(r, i);
+        sp = addpt(sp, Pt(i,i));
+        i = -i;
+    }
+    /*e: [[border()]] if negative i, border goes outside */
+    // horizontal bars
+    draw(im, Rect(r.min.x, r.min.y,   r.max.x, r.min.y+i),
+        color, nil, sp);
+    draw(im, Rect(r.min.x, r.max.y-i,   r.max.x, r.max.y),
+        color, nil, Pt(sp.x, sp.y+Dy(r)-i));
+    // vertical bars
+    draw(im, Rect(r.min.x, r.min.y+i,   r.min.x+i, r.max.y-i),
+        color, nil, Pt(sp.x, sp.y+i));
+    draw(im, Rect(r.max.x-i, r.min.y+i,   r.max.x, r.max.y-i),
+        color, nil, Pt(sp.x+Dx(r)-i, sp.y+i));
+}
+/*e: function border */
 /*e: lib_graphics/libdraw/draw.c */

@@ -1,8 +1,218 @@
-/*s: lib_graphics/libdraw/writeimage.c */
+/*s: lib_graphics/libdraw/compressed.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <draw_private.h>
+
+/*s: function _twiddlecompressed */
+/*
+ * compressed data are seuences of byte codes.  
+ * if the first byte b has the 0x80 bit set, the next (b^0x80)+1 bytes
+ * are data.  otherwise, it's two bytes specifying a previous string to repeat.
+ */
+void
+_twiddlecompressed(uchar *buf, int n)
+{
+    uchar *ebuf;
+    int j, k, c;
+
+    ebuf = buf+n;
+    while(buf < ebuf){
+        c = *buf++;
+        if(c >= 128){
+            k = c-128+1;
+            for(j=0; j<k; j++, buf++)
+                *buf ^= 0xFF;
+        }else
+            buf++;
+    }
+}
+/*e: function _twiddlecompressed */
+
+/*s: function _compblocksize */
+int
+_compblocksize(Rectangle r, int depth)
+{
+    int bpl;
+
+    bpl = bytesperline(r, depth);
+    bpl = 2*bpl;	/* add plenty extra for blocking, etc. */
+    if(bpl < NCBLOCK)
+        return NCBLOCK;
+    return bpl;
+}
+/*e: function _compblocksize */
+
+/*s: function cloadimage */
+int
+cloadimage(Image *i, Rectangle r, uchar *data, int ndata)
+{
+    int m, nb, miny, maxy, ncblock;
+    uchar *a;
+
+    if(!rectinrect(r, i->r)){
+        werrstr("cloadimage: bad rectangle");
+        return -1;
+    }
+
+    miny = r.min.y;
+    m = 0;
+    ncblock = _compblocksize(r, i->depth);
+    while(miny != r.max.y){
+        maxy = atoi((char*)data+0*12);
+        nb = atoi((char*)data+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("creadimage: bad maxy %d", maxy);
+            return -1;
+        }
+        data += 2*12;
+        ndata -= 2*12;
+        m += 2*12;
+        if(nb<=0 || ncblock<nb || nb>ndata){
+            werrstr("creadimage: bad count %d", nb);
+            return -1;
+        }
+        a = bufimage(i->display, 21+nb);
+        if(a == nil)
+            return -1;
+        a[0] = 'Y';
+        BPLONG(a+1, i->id);
+        BPLONG(a+5, r.min.x);
+        BPLONG(a+9, miny);
+        BPLONG(a+13, r.max.x);
+        BPLONG(a+17, maxy);
+        memmove(a+21, data, nb);
+        miny = maxy;
+        data += nb;
+        ndata += nb;
+        m += nb;
+    }
+    return m;
+}
+/*e: function cloadimage */
+
+/*s: function creadimage */
+Image *
+creadimage(Display *d, int fd, int dolock)
+{
+    char hdr[5*12+1];
+    Rectangle r;
+    int m, nb, miny, maxy, new, ldepth, ncblock;
+    uchar *buf, *a;
+    Image *i;
+    ulong chan;
+
+    if(readn(fd, hdr, 5*12) != 5*12)
+        return nil;
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("creadimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("creadimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("creadimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+    r.min.x=atoi(hdr+1*12);
+    r.min.y=atoi(hdr+2*12);
+    r.max.x=atoi(hdr+3*12);
+    r.max.y=atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("creadimage: bad rectangle");
+        return nil;
+    }
+
+    if(d){
+        if(dolock)
+            lockdisplay(d);
+        i = allocimage(d, r, chan, 0, 0);
+        /*s: [[creadimage()]] set malloc tag for debug */
+        setmalloctag(i, getcallerpc(&d));
+        /*e: [[creadimage()]] set malloc tag for debug */
+        if(dolock)
+            unlockdisplay(d);
+        if(i == nil)
+            return nil;
+    }else{
+        i = mallocz(sizeof(Image), 1);
+        if(i == nil)
+            return nil;
+    }
+    ncblock = _compblocksize(r, chantodepth(chan));
+    buf = malloc(ncblock);
+    if(buf == nil)
+        goto Errout;
+    miny = r.min.y;
+    while(miny != r.max.y){
+        if(readn(fd, hdr, 2*12) != 2*12){
+        Errout:
+            if(dolock)
+                lockdisplay(d);
+        Erroutlock:
+            freeimage(i);
+            if(dolock)
+                unlockdisplay(d);
+            free(buf);
+            return nil;
+        }
+        maxy = atoi(hdr+0*12);
+        nb = atoi(hdr+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("creadimage: bad maxy %d", maxy);
+            goto Errout;
+        }
+        if(nb<=0 || ncblock<nb){
+            werrstr("creadimage: bad count %d", nb);
+            goto Errout;
+        }
+        if(readn(fd, buf, nb)!=nb)
+            goto Errout;
+        if(d){
+            if(dolock)
+                lockdisplay(d);
+            a = bufimage(i->display, 21+nb);
+            if(a == nil)
+                goto Erroutlock;
+            a[0] = 'Y';
+            BPLONG(a+1, i->id);
+            BPLONG(a+5, r.min.x);
+            BPLONG(a+9, miny);
+            BPLONG(a+13, r.max.x);
+            BPLONG(a+17, maxy);
+            if(!new)	/* old image: flip the data bits */
+                _twiddlecompressed(buf, nb);
+            memmove(a+21, buf, nb);
+            if(dolock)
+                unlockdisplay(d);
+        }
+        miny = maxy;
+    }
+    free(buf);
+    return i;
+}
+/*e: function creadimage */
 
 /*s: constant HSHIFT */
 #define	HSHIFT	3	/* HSHIFT==5 runs slightly faster, but hash table is 64x bigger */
@@ -205,4 +415,7 @@ writeimage(fdt fd, Image *i, bool dolock)
     return 0;
 }
 /*e: function writeimage */
-/*e: lib_graphics/libdraw/writeimage.c */
+
+
+
+/*e: lib_graphics/libdraw/compressed.c */

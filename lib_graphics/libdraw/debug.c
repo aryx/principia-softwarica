@@ -4,6 +4,10 @@
 #include <draw.h>
 #include <draw_private.h>
 
+/*s: global _drawdebug */
+bool	_drawdebug = false;
+/*e: global _drawdebug */
+
 /*s: function drawsetdebug */
 void
 drawsetdebug(bool v)

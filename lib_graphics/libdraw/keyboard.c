@@ -5,7 +5,6 @@
 #include <thread.h>
 #include <keyboard.h>
 
-
 /*s: function closekeyboard */
 void
 closekeyboard(Keyboardctl *kc)

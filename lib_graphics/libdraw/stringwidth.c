@@ -3,6 +3,7 @@
 #include <libc.h>
 #include <draw.h>
 #include <draw_private.h>
+#include <font.h>
 
 /*s: enum _anon_ (lib_graphics/libdraw/stringwidth.c) */
 enum { Max = 64 };

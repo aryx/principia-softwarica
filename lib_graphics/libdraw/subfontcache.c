@@ -2,6 +2,7 @@
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
+#include <font.h>
 
 /*
  * Easy versions of the cache routines; may be substituted by fancier ones for other purposes

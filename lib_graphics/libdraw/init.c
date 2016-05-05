@@ -4,29 +4,11 @@
 #include <draw.h>
 #include <draw_private.h>
 #include <window.h>
-
-/*s: global display */
-// option<Display>
-Display	*display;
-/*e: global display */
-/*s: global font */
-Font	*font;
-/*e: global font */
-/*s: global screen */
-// ref<Image>, a window
-Image	*view;
-/*e: global screen */
-/*s: global _drawdebug */
-bool	_drawdebug = false;
-/*e: global _drawdebug */
+#include <font.h>
 
 /*s: global deffontname */
 static char deffontname[] = "*default*";
 /*e: global deffontname */
-
-/*s: global debuglockdisplay */
-bool		debuglockdisplay = false;
-/*e: global debuglockdisplay */
 
 static void _closedisplay(Display*, int);
 
@@ -405,113 +387,5 @@ _closedisplay(Display *disp, bool isshutdown)
     free(disp);
 }
 /*e: function _closedisplay */
-
-/*s: function lockdisplay */
-void
-lockdisplay(Display *disp)
-{
-    /*s: [[lockdisplay()]] if debuglockdisplay */
-    if(debuglockdisplay){
-        /* avoid busy looping; it's rare we collide anyway */
-        while(!canqlock(&disp->qlock)){
-            fprint(1, "proc %d waiting for display lock...\n", getpid());
-            sleep(1000);
-        }
-    }
-    /*e: [[lockdisplay()]] if debuglockdisplay */
-    else
-        qlock(&disp->qlock);
-}
-/*e: function lockdisplay */
-
-/*s: function unlockdisplay */
-void
-unlockdisplay(Display *disp)
-{
-    qunlock(&disp->qlock);
-}
-/*e: function unlockdisplay */
-
-/*s: function drawerror */
-void
-drawerror(Display *d, char *s)
-{
-    char err[ERRMAX];
-
-    if(d && d->error)
-        d->error(d, s);
-    else{
-        errstr(err, sizeof err);
-        fprint(STDERR, "draw: %s: %s\n", s, err);
-        exits(s); // extreme!
-    }
-}
-/*e: function drawerror */
-
-/*s: function doflush */
-static
-errorneg1
-doflush(Display *d)
-{
-    int n, nn;
-
-    n = d->bufp - d->buf;
-    if(n <= 0)
-        return OK_1; // warning?
-
-    nn=write(d->fd, d->buf, n);
-    /*s: [[doflush()]] sanity check nn */
-    if(nn != n){
-        /*s: [[doflush()]] if _drawdebug */
-        if(_drawdebug)
-            fprint(2, "flushimage fail: d=%p: n=%d nn=%d %r\n", d, n, nn); /**/
-        /*e: [[doflush()]] if _drawdebug */
-        d->bufp = d->buf;	/* might as well; chance of continuing */
-        return ERROR_NEG1;
-    }
-    /*e: [[doflush()]] sanity check nn */
-    d->bufp = d->buf;
-    return OK_1;
-}
-/*e: function doflush */
-
-/*s: function flushimage */
-errorneg1
-flushimage(Display *d, bool visible)
-{
-    /*s: [[flushimage()]] sanity check d */
-    if(d == nil)
-        return OK_0;
-    /*e: [[flushimage()]] sanity check d */
-    /*s: [[flushimage()]] if visible */
-    // visible: 'v'
-    if(visible){
-        *d->bufp++ = 'v';	/* five bytes always reserved for this */
-    }
-    /*e: [[flushimage()]] if visible */
-    return doflush(d);
-}
-/*e: function flushimage */
-
-/*s: function bufimage */
-byte*
-bufimage(Display *d, int n)
-{
-    byte *p;
-
-    /*s: [[bufimage()]] sanity check n */
-    if(n < 0 || n > d->bufsize){
-        werrstr("bad count in bufimage");
-        return nil;
-    }
-    /*e: [[bufimage()]] sanity check n */
-    if(d->bufp + n  >  d->buf + d->bufsize)
-        if(doflush(d) < 0)
-            return nil;
-    p = d->bufp;
-    d->bufp += n;
-    return p;
-}
-/*e: function bufimage */
 
 /*e: lib_graphics/libdraw/init.c */
