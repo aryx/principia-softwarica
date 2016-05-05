@@ -5,22 +5,6 @@
 #include <thread.h>
 #include <keyboard.h>
 
-/*s: function closekeyboard */
-void
-closekeyboard(Keyboardctl *kc)
-{
-    if(kc == nil)
-        return;
-
-    postnote(PNPROC, kc->pid, "kill");
-    close(kc->ctlfd);
-    close(kc->consfd);
-    free(kc->file);
-    free(kc->c);
-    free(kc);
-}
-/*e: function closekeyboard */
-
 /*s: function _ioproc */
 static
 void
@@ -56,6 +40,14 @@ _ioproc(void *arg)
     }
 }
 /*e: function _ioproc */
+
+/*s: function ctlkeyboard */
+int
+ctlkeyboard(Keyboardctl *kc, char *m)
+{
+    return write(kc->ctlfd, m, strlen(m));
+}
+/*e: function ctlkeyboard */
 
 /*s: function initkeyboard */
 Keyboardctl*
@@ -109,11 +101,22 @@ initkeyboard(char *file)
 }
 /*e: function initkeyboard */
 
-/*s: function ctlkeyboard */
-int
-ctlkeyboard(Keyboardctl *kc, char *m)
+
+/*s: function closekeyboard */
+void
+closekeyboard(Keyboardctl *kc)
 {
-    return write(kc->ctlfd, m, strlen(m));
+    if(kc == nil)
+        return;
+
+    postnote(PNPROC, kc->pid, "kill");
+    close(kc->ctlfd);
+    close(kc->consfd);
+    free(kc->file);
+    free(kc->c);
+    free(kc);
 }
-/*e: function ctlkeyboard */
+/*e: function closekeyboard */
+
+
 /*e: lib_graphics/libdraw/keyboard.c */

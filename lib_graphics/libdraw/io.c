@@ -185,4 +185,6 @@ readimage(Display *d, fdt fd, bool dolock)
 }
 /*e: function readimage */
 
+// writeimage() is in compressed.c. It does not support the 
+// regular (uncompressed) format.
 /*e: lib_graphics/libdraw/io.c */

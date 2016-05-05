@@ -16,28 +16,6 @@ moveto(Mousectl *m, Point pt)
 }
 /*e: function moveto */
 
-/*s: function closemouse */
-void
-closemouse(Mousectl *mc)
-{
-    /*s: [[closemouse()]] sanity check mc */
-    if(mc == nil)
-        return;
-    /*e: [[closemouse()]] sanity check mc */
-
-    postnote(PNPROC, mc->pid, "kill");
-
-    do ; while(nbrecv(mc->c, &mc->Mouse) > 0);
-
-    close(mc->mfd);
-    close(mc->cfd);
-    free(mc->file);
-    free(mc->c);
-    free(mc->resizec);
-    free(mc);
-}
-/*e: function closemouse */
-
 /*s: function readmouse */
 errorneg1
 readmouse(Mousectl *mc)
@@ -187,4 +165,27 @@ setcursor(Mousectl *mc, Cursor *c)
     }
 }
 /*e: function setcursor */
+
+/*s: function closemouse */
+void
+closemouse(Mousectl *mc)
+{
+    /*s: [[closemouse()]] sanity check mc */
+    if(mc == nil)
+        return;
+    /*e: [[closemouse()]] sanity check mc */
+
+    postnote(PNPROC, mc->pid, "kill");
+
+    do ; while(nbrecv(mc->c, &mc->Mouse) > 0);
+
+    close(mc->mfd);
+    close(mc->cfd);
+    free(mc->file);
+    free(mc->c);
+    free(mc->resizec);
+    free(mc);
+}
+/*e: function closemouse */
+
 /*e: lib_graphics/libdraw/mouse.c */

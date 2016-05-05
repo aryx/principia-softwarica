@@ -5,11 +5,42 @@
 #include <window.h>
 #include <draw_private.h>
 
+// see getwindow()
 /*s: global _screen */
 Screen	*screen;
 /*e: global _screen */
 
-Image* _allocwindow(Image *i, Screen *s, Rectangle r, int ref, rgba val);
+/*s: function _allocwindow */
+Image*
+_allocwindow(Image *i, Screen *s, Rectangle r, int ref, rgba val)
+{
+    Display *d;
+
+    d = s->display;
+    i = _allocimage(i, d, r, d->screenimage->chan, false, val, s->id, ref);
+    /*s: [[_allocwindow()]] sanity check i */
+    if(i == nil)
+        return nil;
+    /*e: [[_allocwindow()]] sanity check i */
+    i->screen = s;
+
+    // add_list(i, display->windows)
+    i->next = s->display->windows;
+    s->display->windows = i;
+
+    return i;
+}
+/*e: function _allocwindow */
+
+/*s: function allocwindow */
+Image*
+allocwindow(Screen *s, Rectangle r, int ref, rgba val)
+{
+    return _allocwindow(nil, s, r, ref, val);
+}
+/*e: function allocwindow */
+
+
 
 /*s: function gengetwindow */
 /*
@@ -113,36 +144,6 @@ getwindow(Display *d, int ref)
 /*e: function getwindow */
 
 
-
-/*s: function allocwindow */
-Image*
-allocwindow(Screen *s, Rectangle r, int ref, rgba val)
-{
-    return _allocwindow(nil, s, r, ref, val);
-}
-/*e: function allocwindow */
-
-/*s: function _allocwindow */
-Image*
-_allocwindow(Image *i, Screen *s, Rectangle r, int ref, rgba val)
-{
-    Display *d;
-
-    d = s->display;
-    i = _allocimage(i, d, r, d->screenimage->chan, false, val, s->id, ref);
-    /*s: [[_allocwindow()]] sanity check i */
-    if(i == nil)
-        return nil;
-    /*e: [[_allocwindow()]] sanity check i */
-    i->screen = s;
-
-    // add_list(i, display->windows)
-    i->next = s->display->windows;
-    s->display->windows = i;
-
-    return i;
-}
-/*e: function _allocwindow */
 
 
 /*s: function topbottom */
