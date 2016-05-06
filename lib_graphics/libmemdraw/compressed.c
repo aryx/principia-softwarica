@@ -1,9 +1,13 @@
-/*s: lib_graphics/libmemdraw/cload.c */
+/*s: lib_graphics/libmemdraw/compressed.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <draw_private.h>
 #include <memdraw.h>
+
+// creadmemimage() could be in this file but then it creates a dependency
+// to libdraw which ends up linking in lockdisplay in the kernel.
+// To avoid this issue creadmemimage() is defined instead in io.c.
 
 /*s: function cloadmemimage */
 int
@@ -70,4 +74,5 @@ cloadmemimage(Memimage *i, Rectangle r, uchar *data, int ndata)
     return u-data;
 }
 /*e: function cloadmemimage */
-/*e: lib_graphics/libmemdraw/cload.c */
+
+/*e: lib_graphics/libmemdraw/compressed.c */

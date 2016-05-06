@@ -416,6 +416,4 @@ writeimage(fdt fd, Image *i, bool dolock)
 }
 /*e: function writeimage */
 
-
-
 /*e: lib_graphics/libdraw/compressed.c */

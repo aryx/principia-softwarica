@@ -1,9 +1,215 @@
-/*s: lib_graphics/libmemdraw/write.c */
+/*s: lib_graphics/libmemdraw/io.c */
 #include <u.h>
 #include <libc.h>
 #include <draw.h>
 #include <draw_private.h>
 #include <memdraw.h>
+
+/*s: function readmemimage */
+Memimage*
+readmemimage(fdt fd)
+{
+    char hdr[5*12+1];
+    int dy;
+    ulong chan;
+    uint l, n;
+    int m, j;
+    int new, miny, maxy;
+    Rectangle r;
+    uchar *tmp;
+    int ldepth, chunk;
+    Memimage *i;
+
+    if(readn(fd, hdr, 11) != 11){
+        werrstr("readimage: short header");
+        return nil;
+    }
+    if(memcmp(hdr, "compressed\n", 11) == 0)
+        return creadmemimage(fd);
+
+    if(readn(fd, hdr+11, 5*12-11) != 5*12-11){
+        werrstr("readimage: short header (2)");
+        return nil;
+    }
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("readimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("readimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("readimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+
+    r.min.x = atoi(hdr+1*12);
+    r.min.y = atoi(hdr+2*12);
+    r.max.x = atoi(hdr+3*12);
+    r.max.y = atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("readimage: bad rectangle");
+        return nil;
+    }
+
+    miny = r.min.y;
+    maxy = r.max.y;
+
+    l = bytesperline(r, chantodepth(chan));
+    i = allocmemimage(r, chan);
+    if(i == nil)
+        return nil;
+    chunk = 32*1024;
+    if(chunk < l)
+        chunk = l;
+    tmp = malloc(chunk);
+    if(tmp == nil)
+        goto Err;
+    while(maxy > miny){
+        dy = maxy - miny;
+        if(dy*l > chunk)
+            dy = chunk/l;
+        if(dy <= 0){
+            werrstr("readmemimage: image too wide for buffer");
+            goto Err;
+        }
+        n = dy*l;
+        m = readn(fd, tmp, n);
+        if(m != n){
+            werrstr("readmemimage: read count %d not %d: %r", m, n);
+   Err:
+    freememimage(i);
+            free(tmp);
+            return nil;
+        }
+        if(!new)	/* an old image: must flip all the bits */
+            for(j=0; j<chunk; j++)
+                tmp[j] ^= 0xFF;
+
+        if(loadmemimage(i, Rect(r.min.x, miny, r.max.x, miny+dy), tmp, chunk) <= 0)
+            goto Err;
+        miny += dy;
+    }
+    free(tmp);
+    return i;
+}
+/*e: function readmemimage */
+
+/*s: function creadmemimage */
+Memimage*
+creadmemimage(int fd)
+{
+    char hdr[5*12+1];
+    Rectangle r;
+    int m, nb, miny, maxy, new, ldepth, ncblock;
+    uchar *buf;
+    Memimage *i;
+    ulong chan;
+
+    if(readn(fd, hdr, 5*12) != 5*12){
+        werrstr("readmemimage: short header (2)");
+        return nil;
+    }
+
+    /*
+     * distinguish new channel descriptor from old ldepth.
+     * channel descriptors have letters as well as numbers,
+     * while ldepths are a single digit formatted as %-11d.
+     */
+    new = 0;
+    for(m=0; m<10; m++){
+        if(hdr[m] != ' '){
+            new = 1;
+            break;
+        }
+    }
+    if(hdr[11] != ' '){
+        werrstr("creadimage: bad format");
+        return nil;
+    }
+    if(new){
+        hdr[11] = '\0';
+        if((chan = strtochan(hdr)) == 0){
+            werrstr("creadimage: bad channel string %s", hdr);
+            return nil;
+        }
+    }else{
+        ldepth = ((int)hdr[10])-'0';
+        if(ldepth<0 || ldepth>3){
+            werrstr("creadimage: bad ldepth %d", ldepth);
+            return nil;
+        }
+        chan = drawld2chan[ldepth];
+    }
+    r.min.x=atoi(hdr+1*12);
+    r.min.y=atoi(hdr+2*12);
+    r.max.x=atoi(hdr+3*12);
+    r.max.y=atoi(hdr+4*12);
+    if(r.min.x>r.max.x || r.min.y>r.max.y){
+        werrstr("creadimage: bad rectangle");
+        return nil;
+    }
+
+    i = allocmemimage(r, chan);
+    if(i == nil)
+        return nil;
+    ncblock = _compblocksize(r, i->depth);
+    buf = malloc(ncblock);
+    if(buf == nil)
+        goto Errout;
+    miny = r.min.y;
+    while(miny != r.max.y){
+        if(readn(fd, hdr, 2*12) != 2*12){
+        Shortread:
+            werrstr("readmemimage: short read");
+        Errout:
+            freememimage(i);
+            free(buf);
+            return nil;
+        }
+        maxy = atoi(hdr+0*12);
+        nb = atoi(hdr+1*12);
+        if(maxy<=miny || r.max.y<maxy){
+            werrstr("readimage: bad maxy %d", maxy);
+            goto Errout;
+        }
+        if(nb<=0 || ncblock<nb){
+            werrstr("readimage: bad count %d", nb);
+            goto Errout;
+        }
+        if(readn(fd, buf, nb)!=nb)
+            goto Shortread;
+        if(!new)	/* old image: flip the data bits */
+            _twiddlecompressed(buf, nb);
+        cloadmemimage(i, Rect(r.min.x, miny, r.max.x, maxy), buf, nb);
+        miny = maxy;
+    }
+    free(buf);
+    return i;
+}
+/*e: function creadmemimage */
+
+
 
 /*s: constant CHUNK */
 #define	CHUNK	8000
@@ -197,4 +403,5 @@ writememimage(int fd, Memimage *i)
     return 0;
 }
 /*e: function writememimage */
-/*e: lib_graphics/libmemdraw/write.c */
+
+/*e: lib_graphics/libmemdraw/io.c */

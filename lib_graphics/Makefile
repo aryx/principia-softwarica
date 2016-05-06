@@ -76,25 +76,23 @@ SRC_VIEWS= \
    \
    libmemdraw/alloc.c\
    libmemdraw/arc.c\
-   libmemdraw/cload.c\
+   libmemdraw/compressed.c\
    libmemdraw/cmap.c\
-   libmemdraw/cread.c\
    libmemdraw/defont.c\
    libmemdraw/draw.c\
+    libmemdraw/init.c\
    libmemdraw/ellipse.c\
    libmemdraw/fillpoly.c\
-   libmemdraw/iprint.c\
+   libmemdraw/hooks.c\
    libmemdraw/line.c\
-   libmemdraw/load.c\
+   libmemdraw/transfer.c\
+   libmemdraw/io.c\
    libmemdraw/poly.c\
-   libmemdraw/read.c\
-   libmemdraw/scripts/mkcmap.c\
    libmemdraw/string.c\
    libmemdraw/subfont.c\
+   libmemdraw/scripts/mkcmap.c\
    libmemdraw/tests/arctest.c\
    libmemdraw/tests/memdrawtest.c\
-   libmemdraw/unload.c\
-   libmemdraw/write.c\
    \
    libmemlayer/draw.c\
    libmemlayer/lalloc.c\

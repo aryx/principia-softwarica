@@ -3,12 +3,9 @@
 #include <libc.h>
 #include <draw.h>
 #include <memdraw.h>
-#include <pool.h>
 
 #define DBG1 if(0) print
 #define DBG if(0) print
-
-extern Pool* imagmem;
 
 /*s: global drawdebug */
 bool drawdebug;
@@ -38,82 +35,9 @@ bool drawdebug;
 #define MUL0123(a, x, s, t)	((MUL13(a, x, s)<<8)|MUL02(a, x, t))
 /*e: function MUL0123 */
 
-static void mktables(void);
-
 typedef int Subdraw(Memdrawparam*);
 static Subdraw chardraw, alphadraw, memoptdraw;
 
-/*s: global memones */
-static Memimage*	memones;
-/*e: global memones */
-/*s: global memzeros */
-static Memimage*	memzeros;
-/*e: global memzeros */
-/*s: global memwhite */
-Memimage *memwhite;
-/*e: global memwhite */
-/*s: global memblack */
-Memimage *memblack;
-/*e: global memblack */
-/*s: global memtransparent */
-Memimage *memtransparent;
-/*e: global memtransparent */
-/*s: global memopaque */
-Memimage *memopaque;
-/*e: global memopaque */
-
-int	_ifmt(Fmt*);
-
-/*s: function memimageinit */
-void
-memimageinit(void)
-{
-    /*s: [[memimageinit()]] only once guard */
-    static bool didinit = false;
-    if(didinit)
-        return;
-    didinit = true;
-    /*e: [[memimageinit()]] only once guard */
-
-    /*s: [[memimageinit()]] set image pool allocator move */
-    if(  strcmp(imagmem->name, "Image") == 0 
-      || strcmp(imagmem->name, "image") == 0
-      )
-        imagmem->move = memimagemove;
-    /*e: [[memimageinit()]] set image pool allocator move */
-    /*s: [[memimageinit()]] initializations */
-    _memmkcmap();
-    /*x: [[memimageinit()]] initializations */
-    mktables();
-    /*e: [[memimageinit()]] initializations */
-    /*s: [[memimageinit()]] install dumpers */
-    fmtinstall('P', Pfmt);
-    fmtinstall('R', Rfmt); 
-    /*x: [[memimageinit()]] install dumpers */
-    fmtinstall('b', _ifmt);
-    /*e: [[memimageinit()]] install dumpers */
-
-    memzeros = allocmemimage(Rect(0,0,1,1), GREY1);
-    memzeros->flags |= Frepl;
-    memzeros->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
-    *byteaddr(memzeros, ZP) = 0;
-
-    memones = allocmemimage(Rect(0,0,1,1), GREY1);
-    memones->flags |= Frepl;
-    memones->clipr = Rect(-0x3FFFFFF, -0x3FFFFFF, 0x3FFFFFF, 0x3FFFFFF);
-    *byteaddr(memones, ZP) = ~0;
-
-    /*s: [[memimageinit()]] sanity check memxxx */
-    if(memones == nil || memzeros == nil)
-        assert(0 /*cannot initialize memimage library */);	/* RSC BUG */
-    /*e: [[memimageinit()]] sanity check memxxx */
-
-    memwhite = memones;
-    memblack = memzeros;
-    memopaque = memones;
-    memtransparent = memzeros;
-}
-/*e: function memimageinit */
 
 static ulong imgtorgba(Memimage*, ulong);
 static ulong rgbatoimg(Memimage*, ulong);
@@ -386,33 +310,8 @@ drawclip(Memimage *dst, Rectangle *r, Memimage *src, Point *p0, Memimage *mask, 
 /*
  * Conversion tables.
  */
-static uchar replbit[1+8][256];		/* replbit[x][y] is the replication of the x-bit quantity y to 8-bit depth */
+uchar replbit[1+8][256];		/* replbit[x][y] is the replication of the x-bit quantity y to 8-bit depth */
 /*e: global replbit */
-
-extern int replmul[];
-
-/*s: function mktables */
-static void
-mktables(void)
-{
-    int i, j, small;
-    /*s: [[mktables()]] only once guard */
-    static bool	tablesbuilt = false;
-    if(tablesbuilt)
-        return;
-    tablesbuilt = true;
-    /*e: [[mktables()]] only once guard */
-
-    /* bit replication up to 8 bits */
-    for(i=0; i<256; i++){
-        for(j=0; j<=8; j++){	/* j <= 8 [sic] */
-            small = i & ((1<<j)-1);
-            replbit[j][i] = (small*replmul[j])>>8;
-        }
-    }
-
-}
-/*e: function mktables */
 
 /*s: global ones */
 static uchar ones = 0xff;
