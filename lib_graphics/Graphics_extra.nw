@@ -516,6 +516,7 @@ extern int			unloadmemimage(Memimage*, Rectangle, uchar*, int);
 extern Memimage*	creadmemimage(int);
 extern int			cloadmemimage(Memimage*, Rectangle, uchar*, int);
 
+// misc utilities
 extern ulong*	wordaddr(Memimage*, Point);
 extern uchar*	byteaddr(Memimage*, Point);
 
@@ -579,6 +580,9 @@ extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Poi
 //extern void	memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
 
 extern void	_memfillpolysc(Memimage*, Point*, int, int, Memimage*, Point, int, int, int, int);
+
+// used by color.c and alphadraw.c now (and test files)
+<<function RGB2K>>
 
 /*
  * Kernel interface
@@ -883,6 +887,9 @@ extern Rectangle	egetrect(int, Mouse*);
 
 \subsection*{[[lib_graphics/libdraw/resolution.c]]}
 %pad: this file was called bytesperline.c
+
+% Actually used in memdraw/alloc.c, but also here by readimage.c/...) 
+% so must be in libgeometry.
 
 %-------------------------------------------------------------
 
@@ -3110,6 +3117,172 @@ extern uchar replbit[1+8][256];
 
 @
 
+\subsection*{[[lib_graphics/libmemdraw/alphadraw.c]]}
+%pad: I created this file; its content was in draw.c before
+
+%-------------------------------------------------------------
+
+<<lib_graphics/libmemdraw/alphadraw.c>>=
+#include <u.h>
+#include <libc.h>
+#include <draw.h>
+#include <memdraw.h>
+
+#define DBG1 if(0) print
+
+<<function MUL>>
+<<constant MASK13>>
+<<constant MASK02>>
+<<function MUL13>>
+<<function MUL02>>
+<<function MUL0123>>
+
+<<global ones>>
+
+/*
+ * General alpha drawing case.  Can handle anything.
+ */
+typedef struct	Buffer	Buffer;
+<<struct Buffer>>
+
+typedef struct	ParamDraw	Param;
+typedef Buffer	Readfn(Param*, uchar*, int);
+typedef void	Writefn(Param*, uchar*, Buffer);
+typedef Buffer	Calcfn(Buffer, Buffer, Buffer, int, int, int);
+
+<<enum _anon_ (lib_graphics/libmemdraw/draw.c)>>
+
+<<struct ParamDraw>>
+
+static Readfn	greymaskread, replread, readptr;
+
+<<global nullwrite>>
+
+static Calcfn	alphacalc0, alphacalc14, alphacalc2810, alphacalc3679, alphacalc5, alphacalc11, alphacalcS;
+static Calcfn	boolcalc14, boolcalc236789, boolcalc1011;
+
+static Readfn*	readfn(Memimage*);
+static Readfn*	readalphafn(Memimage*);
+static Writefn*	writefn(Memimage*);
+
+static Calcfn*	boolcopyfn(Memimage*, Memimage*);
+static Readfn*	convfn(Memimage*, Param*, Memimage*, Param*, int*);
+static Readfn*	ptrfn(Memimage*);
+
+<<global alphacalc>>
+
+<<global boolcalc>>
+
+/*
+ * Avoid standard Lock, QLock so that can be used in kernel.
+ */
+typedef struct Dbuf Dbuf;
+<<struct Dbuf>>
+<<global dbuf>>
+
+<<function allocdbuf>>
+
+<<function getparam>>
+
+<<function clipy>>
+
+<<function alphadraw>>
+
+<<function alphacalc0>>
+
+<<function alphacalc14>>
+
+<<function alphacalc2810>>
+
+<<function alphacalc3679>>
+
+<<function alphacalc5>>
+
+<<function alphacalc11>>
+
+<<function alphacalcS>>
+
+<<function boolcalc14>>
+
+<<function boolcalc236789>>
+
+<<function boolcalc1011>>
+<<function replread>>
+
+<<function greymaskread>>
+
+<<global replbit>>
+
+
+<<function readnbit>>
+
+<<function writenbit>>
+
+<<function readcmap>>
+
+<<function writecmap>>
+
+<<function readbyte>>
+
+<<function writebyte>>
+
+<<function readfn>>
+
+<<function readalphafn>>
+
+<<function writefn>>
+
+<<function nullwrite>>
+
+<<function readptr>>
+
+<<function boolmemmove>>
+
+<<function boolcopy8>>
+
+<<function boolcopy16>>
+
+<<function boolcopy24>>
+
+<<function boolcopy32>>
+
+<<function genconv>>
+
+<<function convfn>>
+
+<<function pixelbits>>
+
+<<function boolcopyfn>>
+
+
+@
+
+\subsection*{[[lib_graphics/libmemdraw/color.c]]}
+%pad: I created this file; its content was in draw.c before.
+% the img<->rgba functions were static before.
+
+%-------------------------------------------------------------
+
+<<lib_graphics/libmemdraw/color.c>>=
+#include <u.h>
+#include <libc.h>
+#include <draw.h>
+#include <memdraw.h>
+
+#define DBG1 if(0) print
+
+<<function imgtorgba>>
+
+<<function rgbatoimg>>
+
+// could put that back in draw
+// in draw.c
+extern void memsetl(void *vp, ulong val, int n);
+extern void memset24(void *vp, ulong val, int n);
+
+<<function memfillcolor>>
+@
+
 \subsection*{[[lib_graphics/libmemdraw/draw.c]]}
 
 %dead:
@@ -3206,14 +3379,7 @@ extern uchar replbit[1+8][256];
 
 <<global drawdebug>>
 
-<<function RGB2K>>
 
-<<function MUL>>
-<<constant MASK13>>
-<<constant MASK02>>
-<<function MUL13>>
-<<function MUL02>>
-<<function MUL0123>>
 
 typedef int Subdraw(Memdrawparam*);
 static Subdraw chardraw, alphadraw, memoptdraw;
@@ -3221,127 +3387,14 @@ static Subdraw chardraw, alphadraw, memoptdraw;
 
 static ulong imgtorgba(Memimage*, ulong);
 static ulong rgbatoimg(Memimage*, ulong);
+
 static ulong pixelbits(Memimage*, Point);
 
 <<function memimagedraw>>
 
 <<function drawclip>>
 
-<<global replbit>>
 
-<<global ones>>
-
-/*
- * General alpha drawing case.  Can handle anything.
- */
-typedef struct	Buffer	Buffer;
-<<struct Buffer>>
-
-typedef struct	ParamDraw	Param;
-typedef Buffer	Readfn(Param*, uchar*, int);
-typedef void	Writefn(Param*, uchar*, Buffer);
-typedef Buffer	Calcfn(Buffer, Buffer, Buffer, int, int, int);
-
-<<enum _anon_ (lib_graphics/libmemdraw/draw.c)>>
-
-<<struct ParamDraw>>
-
-static Readfn	greymaskread, replread, readptr;
-
-<<global nullwrite>>
-
-static Calcfn	alphacalc0, alphacalc14, alphacalc2810, alphacalc3679, alphacalc5, alphacalc11, alphacalcS;
-static Calcfn	boolcalc14, boolcalc236789, boolcalc1011;
-
-static Readfn*	readfn(Memimage*);
-static Readfn*	readalphafn(Memimage*);
-static Writefn*	writefn(Memimage*);
-
-static Calcfn*	boolcopyfn(Memimage*, Memimage*);
-static Readfn*	convfn(Memimage*, Param*, Memimage*, Param*, int*);
-static Readfn*	ptrfn(Memimage*);
-
-<<global alphacalc>>
-
-<<global boolcalc>>
-
-/*
- * Avoid standard Lock, QLock so that can be used in kernel.
- */
-typedef struct Dbuf Dbuf;
-<<struct Dbuf>>
-<<global dbuf>>
-
-<<function allocdbuf>>
-
-<<function getparam>>
-
-<<function clipy>>
-
-<<function alphadraw>>
-
-<<function alphacalc0>>
-
-<<function alphacalc14>>
-
-<<function alphacalc2810>>
-
-<<function alphacalc3679>>
-
-<<function alphacalc5>>
-
-<<function alphacalc11>>
-
-<<function alphacalcS>>
-
-<<function boolcalc14>>
-
-<<function boolcalc236789>>
-
-<<function boolcalc1011>>
-<<function replread>>
-
-<<function greymaskread>>
-
-<<function readnbit>>
-
-<<function writenbit>>
-
-<<function readcmap>>
-
-<<function writecmap>>
-
-<<function readbyte>>
-
-<<function writebyte>>
-
-<<function readfn>>
-
-<<function readalphafn>>
-
-<<function writefn>>
-
-<<function nullwrite>>
-
-<<function readptr>>
-
-<<function boolmemmove>>
-
-<<function boolcopy8>>
-
-<<function boolcopy16>>
-
-<<function boolcopy24>>
-
-<<function boolcopy32>>
-
-<<function genconv>>
-
-<<function convfn>>
-
-<<function pixelbits>>
-
-<<function boolcopyfn>>
 
 <<function memsets>>
 
@@ -3349,15 +3402,9 @@ typedef struct Dbuf Dbuf;
 
 <<function memset24>>
 
-<<function imgtorgba>>
-
-<<function rgbatoimg>>
-
 <<function memoptdraw>>
 
 <<function chardraw>>
-
-<<function memfillcolor>>
 
 @
 % >>
@@ -4231,6 +4278,7 @@ main(int argc, char **argv)
 <<function RGB2K (lib_graphics/libmemdraw/tests/memdrawtest.c)>>=
 #define RGB2K(r,g,b)	((299*((ulong)(r))+587*((ulong)(g))+114*((ulong)(b)))/1000)
 @
+\l factorize with the one in memdraw.h now?
 
 <<global drawdebug (lib_graphics/libmemdraw/tests/memdrawtest.c)>>=
 //old: used to have static in front, but at some point I got

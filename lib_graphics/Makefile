@@ -83,6 +83,8 @@ SRC_VIEWS= \
    libmemdraw/defont.c\
    libmemdraw/draw.c\
     libmemdraw/init.c\
+    libmemdraw/color.c\
+    libmemdraw/alphadraw.c\
    libmemdraw/ellipse.c\
    libmemdraw/fillpoly.c\
    libmemdraw/hooks.c\

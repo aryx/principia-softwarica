@@ -180,6 +180,7 @@ extern int			unloadmemimage(Memimage*, Rectangle, uchar*, int);
 extern Memimage*	creadmemimage(int);
 extern int			cloadmemimage(Memimage*, Rectangle, uchar*, int);
 
+// misc utilities
 extern ulong*	wordaddr(Memimage*, Point);
 extern uchar*	byteaddr(Memimage*, Point);
 
@@ -243,6 +244,12 @@ extern void	_memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Poi
 //extern void	memimageline(Memimage*, Point, Point, int, int, int, Memimage*, Point, int);
 
 extern void	_memfillpolysc(Memimage*, Point*, int, int, Memimage*, Point, int, int, int, int);
+
+// used by color.c and alphadraw.c now (and test files)
+/*s: function RGB2K */
+/* perfect approximation to NTSC = .299r+.587g+.114b when 0 ≤ r,g,b < 256 */
+#define RGB2K(r,g,b)	((156763*(r)+307758*(g)+59769*(b))>>19)
+/*e: function RGB2K */
 
 /*
  * Kernel interface
