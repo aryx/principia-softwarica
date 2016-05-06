@@ -38,7 +38,7 @@ SRC_VIEWS= \
    libdraw/arith.c\
    libdraw/bezier.c\
    libdraw/font.c\
-   libdraw/bytesperline.c\
+   libdraw/resolution.c\
    libdraw/chan.c\
    libdraw/debug.c\
    libdraw/fmt.c\
@@ -75,6 +75,8 @@ SRC_VIEWS= \
    libdraw/tests/drawtest.c\
    \
    libmemdraw/alloc.c\
+    libmemdraw/resolution.c\
+    libmemdraw/chan.c\
    libmemdraw/arc.c\
    libmemdraw/compressed.c\
    libmemdraw/cmap.c\
