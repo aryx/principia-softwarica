@@ -120,8 +120,7 @@ rgbatoimg(Memimage *img, rgba rgba)
 }
 /*e: function rgbatoimg */
 
-// could put that back in draw
-// in draw.c
+// could put memfillcolor in draw.c so no need those extern decls.
 extern void memsetl(void *vp, ulong val, int n);
 extern void memset24(void *vp, ulong val, int n);
 

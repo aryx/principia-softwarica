@@ -11,16 +11,16 @@
 bool drawdebug;
 /*e: global drawdebug */
 
-
-
 typedef int Subdraw(Memdrawparam*);
-static Subdraw chardraw, alphadraw, memoptdraw;
+static Subdraw chardraw, memoptdraw;
 
-
-static ulong imgtorgba(Memimage*, ulong);
-static ulong rgbatoimg(Memimage*, ulong);
-
-static ulong pixelbits(Memimage*, Point);
+// in alphadraw.c
+Subdraw alphadraw;
+// in color.c
+ulong imgtorgba(Memimage*, ulong);
+ulong rgbatoimg(Memimage*, ulong);
+// in resolution.c
+ulong pixelbits(Memimage*, Point);
 
 /*s: function memimagedraw */
 void
