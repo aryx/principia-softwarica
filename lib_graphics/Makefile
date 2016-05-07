@@ -17,7 +17,6 @@ DOC=Graphics
 # to work
 SRC_ORIG=Graphics.nw Graphics_extra.nw
 
-# from list_graphics originally
 SRC_VIEWS= \
    ../include/graphics/draw.h\
     ../include/graphics/window.h\
@@ -35,10 +34,10 @@ SRC_VIEWS= \
    libdraw/misc.c\
    libdraw/alloc.c\
     libdraw/naming.c\
+    libdraw/resolution.c\
    libdraw/arith.c\
    libdraw/bezier.c\
    libdraw/font.c\
-   libdraw/resolution.c\
    libdraw/chan.c\
    libdraw/debug.c\
    libdraw/fmt.c\
@@ -68,10 +67,10 @@ SRC_VIEWS= \
    libdraw/subfont.c\
    libdraw/window.c\
     libdraw/desktop.c\
-    libdraw/io.c\
-    libdraw/transfer.c\
-    libdraw/compressed.c\
-    libdraw/colormap.c\
+   libdraw/io.c\
+   libdraw/transfer.c\
+   libdraw/compressed.c\
+   libdraw/colormap.c\
    libdraw/tests/drawtest.c\
    \
    libmemdraw/alloc.c\
@@ -116,6 +115,14 @@ SRC_VIEWS= \
    ../applications/screenlock.c\
    \
    ../kernel/devices/screen/devdraw.c\
+    ../kernel/devices/screen/devdraw.h\
+    ../kernel/devices/screen/drawinit.c\
+    ../kernel/devices/screen/drawname.c\
+    ../kernel/devices/screen/drawalloc.c\
+    ../kernel/devices/screen/drawwindow.c\
+    ../kernel/devices/screen/drawerror.c\
+    ../kernel/devices/screen/drawmesg.c\
+    ../kernel/devices/screen/drawmisc.c\
    ../kernel/devices/screen/screen.h\
    ../kernel/devices/screen/screen.c\
    ../kernel/devices/screen/386/vga.h\

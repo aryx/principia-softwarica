@@ -79,6 +79,7 @@ allocmemimaged(Rectangle r, ulong chan, Memdata *md)
 }
 /*e: function allocmemimaged */
 
+
 /*s: function allocmemimage */
 Memimage*
 allocmemimage(Rectangle r, ulong chan)

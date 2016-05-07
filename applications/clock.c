@@ -63,7 +63,7 @@ redraw(Image *view)
 
 /*s: function eresized */
 void
-eresized(int new)
+eresized(bool new)
 {
     if(new && getwindow(display, Refnone) < 0)
         fprint(2,"can't reattach to window");
@@ -86,9 +86,10 @@ main(int, char**)
         sysfatal("initdraw failed");
     back = allocimagemix(display, DPalebluegreen, DWhite);
 
-    hrhand = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkblue);
+    hrhand  = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DDarkblue);
     minhand = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DPaleblue);
-    dots = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DBlue);
+    dots    = allocimage(display, Rect(0,0,1,1), CMAP8, 1, DBlue);
+
     redraw(view);
 
     einit(Emouse);
@@ -97,7 +98,7 @@ main(int, char**)
 
     menu.item = mstr;
     menu.lasthit = 0;
-        // the event loop
+    // the event loop
     for(;;) {
         key = event(&e);
         if(key == Emouse) {
@@ -109,7 +110,7 @@ main(int, char**)
         } else if(key == timer) {
             redraw(view);
         }
-    }	
+    }   
 }
 /*e: function main (windows/apps/clock.c) */
 /*e: windows/apps/clock.c */

@@ -13,8 +13,8 @@
 
 #include    "screen.h"
 
-// many of the stuff below used to be in vgascreen.c, but they are
-// quite VGA independent so better to have a generic screen.c
+// Many of the stuff below used to be in vgascreen.c, but they are
+// quite VGA independent so better to have a generic screen.c.
 
 /*s: global gscreen */
 Memimage *gscreen;

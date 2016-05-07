@@ -31,7 +31,7 @@ static char user[256];
 
 /*s: function blankscreen */
 static void
-blankscreen(int blank)
+blankscreen(bool blank)
 {
     if(vgactl < 0)
         return;

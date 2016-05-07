@@ -6,9 +6,9 @@
 #include <draw_private.h>
 
 // see getwindow()
-/*s: global _screen */
+/*s: global screen */
 Screen	*screen;
-/*e: global _screen */
+/*e: global screen */
 
 /*s: function _allocwindow */
 Image*

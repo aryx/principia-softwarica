@@ -92,5 +92,4 @@ pixelbits(Memimage *i, Point pt)
 }
 /*e: function pixelbits */
 
-
 /*e: lib_graphics/libmemdraw/resolution.c */

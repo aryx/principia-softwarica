@@ -27,6 +27,7 @@ replclipr(Image *i, bool repl, Rectangle clipr)
 }
 /*e: function replclipr */
 
+
 /*s: function rectclip */
 bool
 rectclip(Rectangle *rp, Rectangle b) /* first by reference, second by value */

@@ -16,7 +16,7 @@ extern void 	blankscreen(bool);
 extern void		getcolor(ulong, ulong*, ulong*, ulong*);
 extern int		setcolor(ulong, ulong, ulong, ulong);
 
-// this used to be a macro, but then it was forbidding this file to be generic
+// this used to be a macro, but then it was preventing this file to be generic
 extern bool ishwimage(Memimage*);
 
 
