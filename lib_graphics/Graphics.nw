@@ -17,14 +17,13 @@
 %    openmemsubfont(), stringsubfont(), ... 
 %    and more (see the %dead in this file)
 % - screen.h cleaner interface (taking as inspiration the raspberry plan9 code)
-% - renamed some globals (screen -> view, _screen -> screen) 
-%   TODO desktop
+% - renamed some globals (screen -> view, _screen -> screen TODO desktop)
 %   TODO gscreen, screenimage, vgascr, so easier to see associated part
 %   TODO or merge globals (screenimage and gscreen, can?)
 % - TODO transformed globals in locals (softscreen)
-% - reorganized a lot the files; merged many small files in bigger one
+% - reorganized a lot the files; I merged many small files in bigger one
 %   (e.g., libdraw/subfont.c), or split in different files to better
-%   separate concern (e.g., draw.h in window.h and font.h and draw_private.h)
+%   separate concerns (e.g., draw.h in window.h and font.h and draw_private.h)
 
 %thx to codemap/codegraph/scheck:
 % - SEMI use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -37,27 +36,28 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to this manual, I better understand:
-%  - graphics terminology, I didn't take Image option at INSA
-%  - graphics history, with Postscript, Pdf, Display Postscript, Cairo, Xlib
+%  - graphics terminology (I didn't take the Image option at INSA)
+%  - graphics history, with Postscript, PDF, Display Postscript, Cairo, Xlib
 %  - raster vs vector graphics, discrete pixels vs continuous geometry shapes
-%  - bitblt(), which I often heard but never really understood what it was
+%  - bitblt(), which I often heard of but never really understood what it was
 %  - channels are the size spec for the different pixel components
 %    and the source of many pixel formats
 %  - alpha channel is a way to encode transparency strength for compositing
-%    operations
+%    operations at a pixel granularity (very flexible)
+%  - TODO pre-alpha vs post-alpha?
 %  - clipping is to restrict operations on a rectangle
 %  - tiling is replicating a simple pattern repeatidely
 %  - antialiasing is just a simple way to remove effect d'escalier by setting
-%    the lightness of a pixel to be function of its distance to the ideal point
-%    so clearer text as the cost of slight blur
-%  - scanline algorithm for polygons (subtle)
+%    the lightness of a pixel to be function of its distance to the ideal point,
+%    so clearer text at the cost of slight blur
+%  - SEMI scanline algorithm for polygons (subtle)
 %  - TODO bezier (could be useful for edge bundling visual in codemap?)
 %    that they are the essence of vectoriel fonts.
 %  - TODO understand freshrate, double buffer, vertical sync, flickering,
 %    refresh sync
-%  - need for painting-like algorithm for windows, as they overlap and
-%    have stuff in front and back, or a more optimized variant where
-%    use save image and tricky RECURS
+%  - need for a painting-like algorithm for overlapping windows, as they
+%    overlap and have stuff in front and back, or a more optimized variant
+%    where use save image and tricky RECURS
 %  - svgalib? tronscroll:) mode X?
 %  - True Color, True Type
 
@@ -73,11 +73,11 @@
 % - distribute parts of the Extra section in the main file
 % - understand main(), LP split main, improve TOC
 % - understand main functions, LP split, cluster, improve TOC
-% - LP split the structures, use datalog for flow to field info
+% - LP split the structures (optionally use datalog for flow to field info)
 % - nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
 % - aspecify advanced features! remove useless features
-% - TODO add figures
-% - TODO add explanations
+% - SEMI add figures
+% - SEMI add explanations
 
 %------------------------------------------------------------------------------
 % Packages
@@ -170,7 +170,7 @@ Why a graphics system?
 Because I think you are a better programmer if
 you fully understand how things work under the hood, and
 with so many fancy graphics on your screen, there are plenty
-of things happening under the hood to be understood.
+of things happening under the hood to understand.
 
 
 A {graphics system} provides essentially an
@@ -227,9 +227,10 @@ the screen?
 \n how to manage multiple processes wanting to access shared resource?
 \n  hmm more a windowing system issue than graphic system issue
 
-\item How pictures are represented in memory? 
+\item How images are represented in memory? 
 How are they stored on the disk? 
 What is the format of a JPG file?
+\l image vs picture?
 \n actually we will see related one, creadimage
 
 \item How graphical elements such as 
@@ -268,7 +269,7 @@ What are {True Type} fonts?
 \end{itemize}
 \l how to implement overlapping windows? what is a backing store?
 \l how to cooperate with windowing system?
-\t how synchro with monitor balayage? glitches?
+\t how synchro with monitor balayage? glitches? API? how done in Soldat.nw?
 
 %tags used in this file for different recurring themes:
  %history:
@@ -287,7 +288,7 @@ What are {True Type} fonts?
 % - double linked lists (Screen.frontmost and Screen.rearmost)
 % - growing array (Kdraw.clients, Font.subf, ...)
 % - growing hashtable with buckets inline in array (Font.cache)
-%   and lookup small window when hash conflict (jordan/julien did that
+%   and lookup with small window when hash conflict (jordan/julien did that
 %   for hh_server no?)
 % - glyphs pictures and glyphs cache (a bit like sprite cache?)
 % - moveable shared area with backward pointer to intermediate wrapper
@@ -332,29 +333,29 @@ created also by Rob Pike, was actually one of the first
 graphics system back in 1982. 
 It was created even before the Macintosh, X Window, and Microsoft Windows.
 \n comment shows the lineage and dates
-% Alto -> Blit (a cheap Alto, Xerox vs Bell Labs) -> ... /dev/draw (1990?)
+% Alto -> Blit (1982, a cheap Alto, Xerox vs Bell Labs) -> .. /dev/draw (1990?)
 %  79  |> Lisa (1983) -> Macintosh (1984) -> Microsoft Windows (1985) -> ...
 %      |> X Window (1984) (or comes from MIT Lisp Machine?)
 
 
 [[draw]] services, like many other services in \plan,
-are accessible through files (in [[/dev/draw/]]).
+are accessible through files. For [[draw]], those files are in [[/dev/draw/]].
 Because filesystems can be exported through
 the network in \plan, [[draw]] is actually also a 
 {networked graphics system}, just like X Window.
 %
-Thus in \plan, applications running on one machine
+Thus, in \plan, applications running on one machine
 can even display their results on another machine.
 \l powerful! like browser! remote for free
 
 
-As opposed to X Window, in \plan the graphics system ([[draw]])
-and windowing system (called [[rio]])
+As opposed to X Window, in \plan, the graphics system ([[draw]])
+and windowing system, which is called [[rio]],
 are clearly separated. You can even use graphical applications
 without a windowing system running.
 %
-[[draw]] provides some forms of {windows management}, by giving the ability
-for applications to create {overlapping windows}, but
+[[draw]] provides some forms of {windows management}, by giving
+for instance the ability for applications to create {overlapping windows}, but
 \l and backing store, and menus
 this is only one of the building blocks necessary to get
 a windowing system.
@@ -365,10 +366,10 @@ in another book (the \book{Windows}).
 % but lots of stuff can be in library and can be tested outside
 % (see memdrawtest), but still a bit ugly. The images, fonts,
 % reside in special kernel memory (imagmem).
-% Note that putting stuff in kernel is trendy with Xorg/wayland and Linux.
+% Note though that putting stuff in kernel is trendy with Xorg/wayland in Linux.
 
 \l just 2D, no 3D, mostly in software, almost no hardware acceleration, no GPU
-\l no scale/rotate/translate as in cairo. 
+\l no scale/rotate/translate as in cairo, so no text in diagonal, no codemap
 \l No true type fonts. No subpixel rendering. No anti-aliasing.
 
 \n there is also a draw in plan9port written by Russ Cox called drawterm,
@@ -390,7 +391,7 @@ to other operating systems such as MacOS and Microsoft Windows.
 X Window defines a protocol (X11) for
 a networked client/server architecture. Clients using
 a set of libraries (e.g., Xlib) communicate with
-a {display server} (e.g., [[Xorg]]) to render graphics.
+a {display server} ([[Xorg]]) to render graphics.
 \n actually similar archi in plan9, but shorter!
 \n now XCB seems to be preferred to Xlib, cairo has backends for Xlib and XCB
 %
@@ -401,7 +402,7 @@ and many operating systems.
 It is very large though with more than 1 MLOC,
 even when counting just the code of the display server, a few core libraries, 
 and a few device drivers.
-\n just xserver/{dix/,fb/,mi/} is about 70 000 LOC
+\n just xserver/{dix/,fb/,mi/} is about 70 000 LOC though.
 
 \l known to be hard to understand, many tutorials on the web
 \l "why X11 is so big" by Ken Thompson, partly the motivation for plan9
@@ -409,16 +410,17 @@ and a few device drivers.
 X Window was designed at a time where memory was 
 very limited and remote applications were looked as very important.
 \n nice to have network, I used it at FB with emacs, but big design price to pay
-This is not true anymore
+This is not true anymore,
 but this historical baggage means that even the code of simple applications
 such as a graphical hello world~\cite{x11-hello-world} is
 actually very long and quite complicated to write.
 \l compare size of draw.h with size of any X11 header ... (or cairo, or pixman)
+\l stupid expose callback, should be done by display server!
 %
-Some {toolkits} such as Gtk or Qt
+Some programmers invented {toolkits} such as Gtk or Qt
 \n Xaw, Xt, FLTK, WxWindows, ...
-have been created to simplify things
-but they add another layer of complexity on something that 
+to simplify things,
+but those toolkits add another layer of complexity to something that 
 is already very complicated.
 %
 \l also drawing API in Xlib is poor. No transluscence, no compositing.
@@ -427,9 +429,9 @@ is already very complicated.
 \n X Render by Keith packard was inspired by plan9 draw and rio
 %
 Finally, the graphics and windowing system parts of Xorg 
-are strongly coupled which makes
+are strongly coupled; this coupling makes
 the whole system more complex to understand than [[draw]]
-and [[rio]] which can been studied separately.
+and [[rio]], which we can study separately.
 
 \l Another approach, Wayland, futur of graphics stack on Linux
 \l but long time before ready? and also
@@ -446,18 +448,18 @@ open source interpreter for Postscript, a graphics language
 invented by Adobe and used originally in printers.
 \n by people who worked before with Sutherland and later at Xerox
 \n Page Description Language (PDL), Printer Control Language (PCL)
-Postscript was a very influential language and most graphics API
+Postscript was a very influential language; most graphics API
 today use it as a model.
 \l seminal one? idea of Context? Stroke?
 %
 \l Ghostscript not full graphics system.
-Ghostscript though is a very large program, with more than
+However, Ghostscript is a very large program, with more than
 750 KLOC.
 \n not counting external dependencies, libpng, etc
 \n xpost is 30 KLOC but not complete
 
 Note that a few graphics systems (e.g., Display Postscript (DPS) 
-in the NeXT computer and the NeWS windowing system from Sun)
+in the NeXT computer, the NeWS windowing system from Sun)
 were based on Postscript and embedded a Postscript interpreter
 to render graphics on the screen.
 \l ancestor of Quartz for MacOS (Quartz 2D is using PDF model =~ Postscript)
@@ -477,19 +479,20 @@ and one for the graphics (Postscript).
 \item Cairo~\furl{http://cairographics.org/} is a 2D
 graphics library used in many applications, e.g., Firefox.
 \n actually partly grew from X limitations, called Xr. User-space compositing. 
-It is not a complete graphics system though as it relies on
+It is not a complete graphics system though; it relies on
 a ``backend'' for the final display.
 % =~ Postscript + Compositing extensions (=~ PDF 1.4 model) in C, EDSL
 %
-It is fairly large, 235 KLOC (350 KLOC with the tests and benchmark code),
+It is fairly large with its 235 KLOC 
+(350 KLOC with the tests and benchmark code),
 \n originally in Xr paper it was just 7000 LOC
 but supports many drawing primitives
-and many backends, e.g., X Window via Xlib, MacOS via Quartz 2D, etc.
+and many backends, e.g., X Window via Xlib, MacOS via Quartz 2D.
 \l can leverage hardware acceleration e.g., XRender, send directly pixmaps
 \l actually use 3d hardware to optimize also 2d operations!
 \l   see their siggraph failed paper
 \l win32, opengl, directFB, DRM, even now SKIA
-It can also generate directly graphic documents with backends for
+Cairo can also generate directly graphic documents with backends for
 Postscript, PDF, SVG, PNG, etc.
 %
 All drawing operations are expressed in float coordinates, not pixels,
@@ -515,7 +518,7 @@ This library adds another 50 KLOC.
 
 
 \item Skia~\furl{https://skia.org/} is a 2D graphics library
-developed by Google similar to Cairo.
+developed by Google that is similar to Cairo.
 \n written in C plus plus
 It is the graphics engine used notably in Android and Chrome.
 It is also very large: 485 KLOC without the tests.
@@ -525,26 +528,26 @@ It is also very large: 485 KLOC without the tests.
 
 \item Mesa~\furl{http://www.mesa3d.org/} is a 3D graphics library
 implementing the OpenGL (Open Graphics Library)
-specification, a standard API for rendering 2D
+specification, which is a standard API for rendering 2D
 and 3D vector graphics.
 \l also stateful, similar to Postscript/Cairo
 Mesa contains a few software-based
 renderers as well as drivers supporting hardware-accelerated
 operations for many graphics cards.
-It is very large though with more than 1.6 MLOC.
+However, it is very large with more than 1.6 MLOC.
 
 Mesa in some sense is more general than Cairo, Skia, or [[draw]]. Indeed,
 if a function allows to draw a line in 3D, the same function can
-be used to draw a line in 2D. The algorithms and geometry involved
-are far more complicated to explain though.
-%dup: intro/motivation
+be used to draw a line in 2D. However, the algorithms and geometry involved
+are far more complicated to explain.
+%dup: (but changed) intro/motivation
 In practice, the graphics in most applications
 are 2D graphics, except for some video games and CAD software,
 which is why I decided to focus on 2D in this book.
 %
 Moreover, OpenGL does not really have a good API to draw text
-on the screen, while texts are fundamental, even in graphical applications.
-\n gouraud, shading, textures, 3d rasterizer, etc.
+on the screen, although text is fundamental, even in graphical applications.
+\n has gouraud shading, phong?, textures, 3d rasterizer, ...
 \l not good story for window integration too, and menu, and key/mouse
 \l opengl and glut. the menuhit function is kinda related to glut.
 
@@ -558,10 +561,10 @@ on the screen, while texts are fundamental, even in graphical applications.
 % - GDI (quite limited apparently), WPF (Windows Presentation Framework?), 
 %   Direct2D (lots of optis), DirectX, etc.
 %   (WPF used by 3rd ed of CGPP book which doesn't even discuss scanline algo)
-% - Quartz 2D (part of CoreGraphics), and before QuickDraw (which was
-%   apparently very innovative)
-% - PDF, Flash (Adobe did lots of stuff on graphics), 
-% - SVG, Canvas, ...
+% - QuickDraw (which was apparently very innovative), Quartz 2D (part of 
+%   CoreGraphics)
+% - PDF, Flash (Adobe did lots of stuff on graphics)
+% - SVG, Canvas (Apple again?), ...
 %history:
 % - Xerox Alto! first bitmap display, bitblt, started in 1973 (-> Smalltalk)
 % - Lisp Machine (->? W Window -> X Window)
@@ -582,8 +585,8 @@ on the screen, while texts are fundamental, even in graphical applications.
 % - tinyGL of bellard (openGL in software), 6800 LOC
 %   mentions NanoX (mentions also Mesa and copy examples from it and .h)
 % - Twin by keith packard, 2004, 12 KLOC, supports only A8, RGB16 and ARGB32,
-%   says that took as a model porter/duff and [[draw]]
-%   includes also widgets
+%   says that took as a model porter/duff and [[draw]].
+%   Includes also widgets.
 %other:
 % - metafont by Knuth
 % - gnome libart
@@ -611,7 +614,7 @@ on the screen, while texts are fundamental, even in graphical applications.
 
 \section{Getting started}
 \label{sec:getting-started}
-\n no rio; minimal "getting started"!
+\n no rio; minimal "getting started" spirit!
 
 To play with [[draw]] you will first need to install
 the \plan fork used in \principia. See \urlinstall.
@@ -630,6 +633,7 @@ on an x86 machine by executing the following commands:
 \end{verbatim}
 % x86 for vga part
 \l on bcm? needs to do anything? can change to 1024x768x24? instead of 16?
+\t use bcm instead? and then 5c, not 8c.
 
 You should then see on your screen
 the graphics in Figure~\ref{fig:hellodraw}.
@@ -641,31 +645,32 @@ the graphics in Figure~\ref{fig:hellodraw}.
 \label{fig:hellodraw}
 \end{figure}
 
-The command in Line~1 installs the VGA\footnote{
+The command in Line~1 above installs the VGA\footnote{
 VGA is a popular graphics standard for x86 machines.
 \l more in appendix
 }
-{device driver}
+{device driver},
 which exports the VGA {device files} in [[/dev/]] (e.g., [[/dev/vgactl]]).
 %
 See the \book{Kernel} for more information on how device
 drivers work and how to use [[bind]]. You can also read
 [[docs/man/2/0intro]] for an introduction to \plan devices.
 
-Line~2 runs the program [[vga]] which internally uses
+Line~2 runs the program [[vga]]. This program internally uses
 the [[/dev/vgactl]] device file to instruct the graphics card
-to change the {resolution} to 640 by 480 with 8 bits
-per pixel. This will change the layout of the screen
+to change the {resolution}, here to 640 by 480 with 8 bits
+per pixel. This will change the layout of the screen,
 but you will still be in a {terminal textual mode}.
+\n see Section X for graphical text-mode.
 %
-Line~3 then installs the [[draw]] device which
+Line~3 then installs the [[draw]] device, which
 exports the [[draw]] devices files in [[/dev]], e.g.
 [[/dev/draw/new]].
 %
 Line~5 and 6 respectively compiles and links the simple
-C program [[hellodraw.c]] which uses functions from [[draw.h]].
+C program [[hellodraw.c]], which uses functions from [[draw.h]].
 %
-Finally, Line~7 executes the program which will internally
+Finally, Line~7 executes the program, which will internally
 use files under [[dev/draw/]] to create the graphics
 shown in Figure~\ref{fig:hellodraw}.
 
@@ -677,13 +682,13 @@ Because most of this book is made of C source code,
 you will need a good knowledge of 
 the C programming language~\cite{k-r} to understand it.
 %
-I also assume a basic knowledge of geometry and trigonometry.
+I also assume you have a basic knowledge of geometry and trigonometry.
 %
 Books on computer graphics such as~\cite{cgpp-foley}
 would be useful, especially for Chapter~\ref{chap:drawing-shapes} 
 which contains the algorithms do draw shapes (e.g., lines, ellipses),
-but they are not mandatory. Most computer graphics books focus anyway
-on 3D which I do not cover at all.
+but those books are not mandatory. Most computer graphics books focus anyway
+on 3D, which I do not cover at all.
 \n actually CGPP3 does not even cover scanline algo apparently.
 \n CS overview by brookshear covers only 3D
 
@@ -700,7 +705,7 @@ defined by the kernel.
 so I assume you know what is a {device file} for instance.
 
 It can also be useful to read the many manual pages concerning
-[[draw]], which are located under [[docs/man/]]
+[[draw]]. Those pages are located under [[docs/man/]]
 in my \plan repository:
 
 \begin{itemize}
@@ -768,7 +773,7 @@ who wrote in some sense most of this book.
 %trans:
 Before showing the source code of [[draw]] in the following chapters, 
 %toc:
-I first give an overview in this chapter
+I first give in this chapter an overview 
 of the general principles of a graphics system.
 I also describe quickly the interface of the
 device files in [[/dev/draw/]], and show the code
@@ -823,17 +828,17 @@ from multiple {\em clients}, via a drawing API, and translates those commands
 in instructions to the graphics card.
 %
 Designers of graphics systems often used a client/server architecture 
-because a graphics
-system is usually coupled with a windowing system. In that case,
+because graphics systems are usually coupled with a windowing system. 
+In that case,
 the graphics system needs to serve many clients:
 the multiple processes corresponding to the multiple windows
-that all want to draw things on the same screen.
+(which all want to draw things on the same screen).
 
-%dup: intro/draw
+%dup: (and changed) intro/draw
 In most operating systems (e.g., Linux, MacOS, or Microsoft Windows)
 the graphics system is {strongly} coupled with the {windowing system}.
 \l and some windowing systems have network component!
-This does not have to be the case. In fact, in \plan 
+However, this does not have to be the case. In fact, in \plan 
 you can run a graphical application without any windowing system running.
 \l advanced: windows, menus, mouse/keyboard
 
@@ -876,8 +881,8 @@ The pixel value of a colored image
 can be translated into an actual color by using for instance
 a {color map}. A {\em color map} associates to one pixel value
 between 0 and 255 the three different values for the different RGB components,
-for instance 127 for red, 127 for green, and 0 for blue (
-forming a light yellow).
+for instance 127 for red, 127 for green, and 0 for blue 
+(forming a light yellow).
 
 Note that color maps are not necessary. If the resolution of a screen
 is for instance [[1024x768x24]], meaning that 24 bits are used
@@ -897,7 +902,7 @@ in terms of pixels.
 %
 The word {raster} comes from the {\em raster scan} process used in
 the cathode ray tubes of old television sets. This process painted an image
-line by line by illuminating with three different electron emitters
+line by line by illuminating, with three different electron emitters,
 thousands of phosphorecent dots triples (one red, one green, one blue)
 arranged in a grid.
 %
@@ -915,9 +920,9 @@ frame buffer to send the right signals to the monitor.
 
 The graphics card of the Raspberry Pi machine uses such an interface,
 as explained in Appendix~\ref{chap:raspberry-pi-graphic-card}.
-If the resolution of the screen is [[1024x768x24]], 
+When the resolution of the screen is [[1024x768x24]], 
 \n actually it's 1024x768x16 by default, but 16 is complicated to explain
-then the frame buffer requires around 2.2 MB of address space.
+the frame buffer requires around 2.2 MB of address space.
 If we assume that the frame buffer is {memory-mapped}
 at the physical address [[0xA0000000]], then the simple function 
 below can be used to set the color of any pixels on the screen:
@@ -994,10 +999,11 @@ making up a line.
 %
 If the resolution of the screen is high enough, and the pixels 
 on the monitor small enough,
-then the eye can be fooled and get the illusion that the line
+then the brain can be fooled and can get the illusion that the line
 is continuous as in Figure~\ref{fig:hellodraw}.
 \n anti-aliasing makes it even better, better illusion, trick the eye more
 \l actually just like the thing you read now on paper, it's dots too?
+\n Retina display reach physical limite of the eye/retina/brain?
 
 \begin{figure}\begin{center}
 \includegraphics[width=8cm]{line-raster}
@@ -1039,7 +1045,7 @@ where pictures were represented as bitmaps.
 drawing horizontal and vertical lines, drawing
 rectangles, scrolling an image, and many more things.
 \n see pike-bitbltd-1984.pdf
-\l see pictures of graphics smalltalk kernel.
+\l see pictures in "Graphics Smalltalk Kernel" article?
 %
 In pictures with colors, the [[bitblt()]] primitive can be used
 to encode a variety of effects such as transluscence by using
@@ -1051,6 +1057,9 @@ the appropriate composition operator.
 
 % FIGURE with different alpha values?
 
+\t how is rendered a picture with certain alpha value? those are used?
+\t or it's used only when compositing? notion of pre-alpha vs post-alpha?
+
 Under \plan the [[bitblt()]] primitive is called [[draw()]]
 and is slightly more general. It is a very generic and powerful function.
 In fact, it is such a versatile procedure that, as we will see later,
@@ -1059,14 +1068,15 @@ Drawing a line, a polygon, or a circle involves at some
 point many internal calls to [[draw()]].
 \n actually [[memimagedraw()]]
 
-\n FIGURE Indeed in Figure X a line is a set of horizontal or vertical
+\t FIGURE Indeed in Figure X a line is a set of horizontal or vertical
 % lines which can be set through bitblt.
+% same for polygon! fill polygon, scanline.
 
 \l clipping
 \l tiling (replicating) when used as a source.
 
 \subsection{Fonts}
-\n font illustrates many of the principles we have seen so far
+\n fonts illustrate many of the principles we have seen so far, so cool.
 
 %trans:
 Geometric shapes are important, but so is {text}, even in a graphical
@@ -1074,14 +1084,14 @@ user interface context.
 %
 A graphics system can actually improve over text-based user interface
 (e.g., terminals) by allowing
-the programmer to draw text of different sizes, different styles, and
+the programmer to draw text with different sizes, different styles, and
 even different orientations.
 \l [[draw]] cant do that though, as opposed to cairo, or can it?
-To draw characters the graphics system requires
+To draw characters, the graphics system requires
 a series of pictures defining the shapes of each character
 of an alphabet. Such a set of pictures is called a {\em font}.
 
-Each character picture can actually be represented 
+Each character-picture can actually be represented 
 either using vector graphics, as in Figure~\ref{fig:font-vector},
 or raster graphics, as in Figure~\ref{fig:font-raster}.
 The two approaches illustrate well the pro and cons of the
@@ -1103,7 +1113,7 @@ two picture representations:
 
 
 \begin{itemize}
-\item In Figure~\ref{fig:font-vector} the letter [[m]] is defined
+\item In Figure~\ref{fig:font-vector}, the letter [[m]] is defined
 as a set of vectors defining the control points of straight lines
 or bezier curves.
 \n also called Outline Font.
@@ -1117,16 +1127,17 @@ A character is then just another list of geometric shapes to draw.
 This approach is {scalable} as one
 can {render} the letter in different sizes by rasterizing
 its different elements.
+\l hmm scalable missleading? because it is actually slow.
 \l actually some issues when scaled down, so some fonts use ``Hinting''
 Such a rasterization can be expensive
 to compute though and must be done each time
 the program wants to draw a character.
 \n in the end it also uses bitblt/draw
 
-\item In Figure~\ref{fig:font-raster} the letter [[a]] is
+\item In Figure~\ref{fig:font-raster}, the letter [[a]] is
 defined instead simply as a bitmap.
-This approach supports only one size but drawing a character 
-can be very fast as 
+This approach supports only one size, but drawing a character 
+can be very fast. Indeed, 
 a program can simply use [[bitblt()]] to copy the rectangle defining
 the character.
 \l idea of glyphs put together, kinda template, like printing machine
@@ -1152,7 +1163,7 @@ so fonts can be very large.
 % - antialiasing (very simple actually, put light intensity in function of
 %    distance to theoritical point on the line (the error))
 % - subpixel rendering, leverage position of RGB dots on the screen
-% - True Type fonts, fonts using bezier curves
+% - SEMI True Type fonts, fonts using bezier curves
 %    that are vectoriel and so scalable
 % - Animation (Core Animation, Flash)
 % - 3D. lighting. Shaders. GPU.
@@ -1166,11 +1177,12 @@ so fonts can be very large.
 [[draw]] is a \plan{} {device}, not a regular program, so its interface
 is not made of command line arguments and input/output files.
 Instead, its main interface is the files it {serves}.
-\l can take some param when bind, but usually empty, just /dev
+\l draw is actually many things. one of its interface is draw.h
+\n can take some param when bind, but usually empty, just /dev
 %
 Once you have {installed} [[draw]], usually with the command
 [[bind -a '#i' /dev]] (see Section~\ref{sec:getting-started}),
-[[draw]] serves a three levels file tree that provides an interface 
+[[draw]] serves a three-levels file tree that provides an interface 
 to the graphics facilities of \plan.
 \l unioned with other devices
 \n 3 levels not that important now, but will be useful later with Q3rd/Q2nd/...
@@ -1241,15 +1253,14 @@ a drawing command in the [[/dev/draw/x/data]] device file.
 \end{itemize}
 
 The remaining device files managed by [[draw]] are listed below;
-they will be covered later in the book:
+they will be covered later in this book:
 
 \begin{itemize}
 
 \item [[/dev/draw/1/colormap]] is useful only on 8-bit displays.
 This file will be covered in Section~\ref{sec:colormap}.
 
-\item [[/dev/draw/1/refresh]] will be discussed
-in Section~\ref{sec:refresh}.
+\item [[/dev/draw/1/refresh]] will be discussed in Section~\ref{sec:refresh}.
 
 \item [[/dev/winname]] is at the first level again, 
 and is the only device file managed by [[draw]] that is 
@@ -1272,19 +1283,20 @@ format see [[docs/man/3/draw]].
 %   of things (including GUIs, IPC and so on).
 %actually programs uses a C FFI with draw.h, so not a net win.
 % maybe one advantage is that it's more transparent.
-%alt: maybe Mach MIG is better than everything is a filesystem metaphor?
+%alt: maybe Mach MIG is better than "everything is a filesystem" metaphor?
 
 \section{[[hellodraw.c]]}
+\label{sec:hellodraw_c}
 
 %trans:
 Programs usually do not access directly [[/dev/draw/new]]
 or [[/dev/draw/x/data]].
-They use instead a higher-level API that is declared in [[draw.h]],
-rather than writing directly in the device files.
+They use instead a higher-level API that is declared in [[draw.h]].
+%rather than writing directly in the device files.
 %
 The program [[hellodraw.c]] below, which was mentioned
 in Section~\ref{sec:getting-started}, and whose graphical output
-is shown in Figure~\ref{fig:hellodraw}, uses this API:
+was shown in Figure~\ref{fig:hellodraw}, uses this API:
 
 <<tests/draw/hellodraw.c>>=
 1   #include <u.h>
@@ -1300,7 +1312,7 @@ is shown in Figure~\ref{fig:hellodraw}, uses this API:
 11          exits("Error in initdraw");
 12      }
 13      
-14      color = allocimage(display, Rect(0,0,1,1), RGBA32, true, DMagenta);
+14      color = allocimage(display, Rect(0,0, 1,1), RGB24, true, DMagenta);
 15      draw(display->image, display->image->r, color, nil, ZP);
 16      
 17      line(display->image, 
@@ -1313,18 +1325,19 @@ is shown in Figure~\ref{fig:hellodraw}, uses this API:
 24      
 25      sleep(5000); // msec
 @
-\n use view? no use display->image directly so even simple. hellorio.c use view!
+\n use view? no, use display->image directly so simpler. hellorio.c uses view!
 
 Here are a few important things to note in this program:
 
 \begin{itemize}
-\item Line~3 includes [[draw.h]], which contains all
+
+\item [[draw.h]], included at Line~3, contains all
 the public data structures and drawing functions of [[draw]].
 %
 [[libc.h]], included at Line~2, defines
 the functions of the \plan core C library.
 
-\item Line~9 calls [[initdraw()]]; this call must be the first
+\item [[initdraw()]], called at Line~9, must be the first
 call to the [[draw]] API. It initializes important globals
 such as [[display]] (used later at Line~14, 15, 17, etc),
 which contains information about the screen. 
@@ -1339,16 +1352,17 @@ to the default font of the system.
 \item Lines~7 and 14 illustrate an important concept in [[draw]]:
 {\em everything is an image}. Indeed, the [[Image]] type from [[draw.h]]
 unifies many things: the screen is represented as an
-image (in [[display->image]]); fonts are images;
-windows as we will see later are images; even colors are images.
+image in [[display->image]]; fonts are images;
+windows, as we will see later, are images; even colors are images.
 %
 A color is simply an 
 [[1x1]] image 
-(see the second argument of [[allocimage()]] Line~14 that creates a rectangle with [[Rect(0,0,1,1)]])
+(see the second argument of [[allocimage()]] Line~14 that creates a 
+rectangle with [[Rect(0,0,1,1)]])
 with the {\em replicating} bit set to true 
 (the forth argument of [[allocimage()]]), 
 and where all pixels have a fixed RGB value (here [[DMagenta]],
-see the last argument of [[allocimage()]]).
+the last argument of [[allocimage()]]).
 \l RGBA32?
 
 \item Line~15 uses the very general [[draw()]] function,
@@ -1363,9 +1377,9 @@ the whole screen rectangle ([[display->image->r]]).
 \item Line~20 draws some text in the font specified in
 the global [[font]], which was set previously by [[initdraw()]].
 
-\item Line~23 {flushes} the {command buffer} by writing
+\item Line~23 {flushes} the {drawing command buffer} by writing
 all the previous commands in [[/dev/draw/x/data]].
-It also instructs the [[draw]] server to make the result 
+Line~23 also instructs the [[draw]] server to make the result 
 visible on the screen via the second parameter
 of [[flushimage()]].
 \l we will see more about that later.
@@ -1390,24 +1404,25 @@ See Appendix~\ref{chap:examples} for more examples of graphical
 applications using [[draw.h]].
 
 
-% for education purpose, program below show how to draw a line
-% without using draw.h but accessing directly the devices.
-% hellorawdraw.c without draw.h
+\l education purpose, program below show how to draw a line
+\l without using draw.h but accessing directly the devices.
+\l hellorawdraw.c without draw.h
 
-% note that can run 'colors' in console outside rio! it just
+\l note that can run 'colors' in console outside rio! it just
 % use /dev/draw, /dev/mouse, etc!
 
 
 
 \section{Code organization}
+\label{sec:code-orga}
 
-We can decompose the code of [[draw]] in multiple components that
+I can decompose the code of [[draw]] in multiple components that
 correspond to different directories in the \plan repository:
 
 \begin{itemize}
 
 \item [[include/graphics/draw.h]] contains the visible part of [[draw]]
-for the programmer. This header file contains the 
+for the programmer. This header file contains the
 data structures (e.g., [[Image]]) and 
 function declarations (e.g., [[draw()]], [[line()]], [[string()]])
 to draw different shapes on the screen.
@@ -1423,11 +1438,12 @@ the actual rendering to code in the kernel.
 
 
 \item [[kernel/devices/screen/]] contains the kernel code
-which implements the [[draw]] device, as well as a few device
+that implements the [[draw]] device, as well as a few device
 drivers for popular graphics cards. 
 %
 The [[devdraw.c]] file in particular contains the different
 device methods (e.g., [[drawopen()]], [[drawread()]], or [[drawwrite()]])
+\l filesystem methods
 that will be executed when a program accesses files from [[/dev/draw/]].
 \l [[screen.h]]
 %
@@ -1438,9 +1454,6 @@ processes all incoming drawing commands in
 a giant [[switch()]]. This function looks at the first letter of
 the drawing command to decide which graphic operation to perform.
 
-% drawmesg() dispatcher to libmemdraw operations and libmemlayer operations
-% should also have actual calls to screen.h implem, e.g., vgascreen.c!
-
 % pool.c?: imagmem! image data store! (in kernel :( X11 spirit )
 % screen.c: factorize stuff, gscreen, soft cursor, cursor, graphic text mode
 %  (I created it as a model of the one in bcm/)
@@ -1448,14 +1461,15 @@ the drawing command to decide which graphic operation to perform.
 %  and memdraw
 % devvga.c: /dev/vga ctl files for vgascreen global parameters?
 
-
 \item [[lib_graphics/libmemdraw/]] is a library
 used by the kernel that contains most of the 
 generic graphics-related code. [[drawmesg()]] calls mostly functions
-from [[libmemdraw/]] (e.g., [[memimagedraw()]], [[_memimageline()]]).
+from [[libmemdraw/]] (e.g., [[memimagedraw()]], [[memimageline()]]).
 Most of those functions operate on the [[Memimage]] type defined
 in [[include/graphics/internals/memdraw.h]].
 \l why not directly use memdraw.h? why need all this mess?
+% drawmesg() dispatcher to libmemdraw operations and libmemlayer operations
+% should also have actual calls to screen.h implem, e.g., vgascreen.c!
 
 % libmemdraw actually does the drawing stuff in memory
 % (and rely on some kernel vga functions to do the rest and transfer
@@ -1473,36 +1487,15 @@ in [[include/graphics/internals/memdraw.h]].
 
 
 \item [[lib_graphics/libmemlayer/]] is another library used
-by the kernel that manages overlapping windows. It will be covered
-later in Chapter~\ref{chap:windows}.
-
+by the kernel to manage overlapping windows. It will be covered
+later in Chapter~\ref{chap:overlapping-windows}.
 % It's not really layer in the cairo sense. It's really windows.
 % Then you can easily implement a windowing system with 
 % overlapping pictures (windows) that actually can get exposed back.
 
-%libdraw/window.c: image "layers" (hmm but actually not transparent right now)
-%libdraw/desktop.c
-%kernel/devices/screen/drawwindow.c
-
-%adapter:
-% draw.c: again, memdraw(), but should be in libmemdraw/
-% line.c: again! memline(), but should be only for horizontal/vert here no?
-% load.c:
-% unload.c:
-
-%layerop.c
-
-%lalloc.c: memlayer alloc
-%ldelete.c: memlayer free
-
-%lsetrefresh.c
-
-%window operations:
-% lorigin.c: mv window (or its origin)
-% lhide.c: expose/hide window
-% ltofront.c: back to top
-% ltorear.c: put to rear
-
+%\item [[kernel/devices/screen/386/]]
+% specific drivers. Important is interface to provide access to the screen
+%  Memimage/Memdata.
 
 %\item [[kernel/devices/screen/user/]]
 % user-space utilities for VGA, see appendix X?
@@ -1512,10 +1505,12 @@ later in Chapter~\ref{chap:windows}.
 
 \end{itemize}
 
-%dup: (and adapted) from Assembler.nw
+%dup: (but changed a lot) from Assembler.nw
 Table~\ref{tab:code-orga} presents short descriptions
 of the source files used by [[draw]]. Those files are
-organized according to the directories we mentioned above.
+organized according to the directories we mentioned above,
+except for the files in [[lib_graphics/libmemlayer/]]
+that I will cover in Chapter~\ref{chap:overlapping-windows}.
 \t explain that put together in one line
 \t  because of the way draw is architectured they are strongly related.
 \l lofs of files have similar name in libdraw/ and libmemdraw/.
@@ -1530,74 +1525,79 @@ contained in a file is primarily discussed.
 
 \begin{table*}[tbh!]
 \begin{center}
-\begin{tabular}{lcllllr}
+\begin{tabular}{lcllll}
 \toprule
-{\bf Function} & {\bf Chapter} & {\bf [[libdraw/]] Files} & {\bf [[libmemdraw/]] Files} & {\bf [[kernel/]] Files} & {\bf Entities} & {\bf LOC} \\
+{\bf Function} & {\bf Chap} & {\bf [[libdraw/]] Files} & {\bf [[libmemdraw/]] Files} & {\bf [[kernel/]] Files} & {\bf Entities}\\
 \otoprule
-data structures          & \ref{chap:core-ds}                   & [[draw.h]]                      & [[memdraw.h]]             & [[devdraw.h]] [[screen.h]]  & [[Point]] [[Rectangle]] [[Display]] [[Image]] [[Memimage]] & 0 \\ % actually many .h are under include/graphics/ % [[ImageChan]] [[rgba]] % [[screen.c]]  Colors
-geometry                 & \ref{chap:core-ds}                   & [[arith.c]]                     &                           &                             & [[eqpt()]] [[eqrect()]] [[ZP]] [[ZR]]                      & 0 \\ %  (libgeometry) % [[addpt()]] [[rectaddpt()]]
-image resolution         & \ref{chap:core-ds}                   & [[chan.c]] [[resolution.c]]     &  [[color.c]] [[resolution.c]]         &                             & [[bytesperline()]] [[chantodepth()]]                       & 0 \\ % byteaddr() % chan.c for libmemdraw too
-initializations          & \ref{chap:init}                      & [[init.c]]                      &  [[init.c]]               & [[drawinit.c]]              & [[initdraw()]] [[memimageinit()]]                          & 0 \\ % [[display]] [[screensize()]]  [[initscreenimage()]]  [[initdisplay()]]
-user/kernel bridge       & \ref{chap:user-kernel-bridge}        & [[marshal.h]] [[flush.c]]       &                           & [[devdraw.c]] [[drawmesg.c]]& [[drawdevtab]] [[Qxxx]] [[drawopen()]] [[drawmesg()]]      & 0 \\ %  [[drawwalk()]] 
+data structures          & \ref{chap:core-ds}                   & [[draw.h]] [[arith.c]]          & [[memdraw.h]]             & [[devdraw.h]] [[screen.h]]  & [[Point]] [[Rectangle]] [[Display]] [[Image]] [[Memimage]]  \\ % actually many .h are under include/graphics/ % [[ImageChan]] [[rgba]] % [[screen.c]]  Colors
+%geometry                 & \ref{chap:core-ds}                   & [[arith.c]]                     &                           &                             & [[eqpt()]] [[eqrect()]] [[ZP]] [[ZR]]                       \\ %  (libgeometry) % [[addpt()]] [[rectaddpt()]]
+%
+image resolution         & \ref{chap:core-ds}                   & [[chan.c]] [[resolution.c]]     &  [[color.c]] [[resolution.c]]         &                             & [[bytesperline()]] [[chantodepth()]]            \\ % byteaddr() % chan.c for libmemdraw too
+initializations          & \ref{chap:init}                      & [[init.c]]                      &  [[init.c]]               & [[drawinit.c]]              & [[initdraw()]] [[memimageinit()]]                           \\ % [[display]] [[screensize()]]  [[initscreenimage()]]  [[initdisplay()]]
+user/kernel bridge       & \ref{chap:user-kernel-bridge}        & [[marshal.h]] [[flush.c]]       &                           & [[devdraw.c]] [[drawmesg.c]]& [[drawdevtab]] [[Qxxx]] [[drawopen()]] [[drawmesg()]]       \\ %  [[drawwalk()]] 
 
 \midrule                                                                                                                  
 
-image allocation         & \ref{chap:images}                    & [[alloc.c]]                     & [[alloc.c]]               & [[drawalloc.c]]             & [[allocimage()]] [[allocmemimage()]]                       & 0 \\ % mv byteaddr() memsetchan() elsewhere? % [[freeimage()]] 
-clipping and replication & \ref{chap:images}                    & [[replclipr.c]]                 &                           &                             & [[]]                                                       & 0 \\ % replmul.c, could also have a libmemdraw/drawclip.c also with rectclip() maybe
-image naming             & \ref{chap:images}                    & [[naming.c]]                    &                           & [[drawname.c]]                        & [[nameimage()]] [[namedimage()]]                           & 0 \\
-manipulating rectangles  & \ref{chap:draw}                      & [[draw.c]]                      & [[draw.c]] [[alphadraw.c]]&                             & [[draw()]] [[memimagedraw()]] [[alphadraw()]]              & 0 \\
-drawing lines            & \ref{chap:drawing-shapes}            & [[line.c]]                      & [[line.c]]                &                             & [[line()]] [[_memimageline()]]                             & 0 \\
-drawing polygons         & \ref{chap:drawing-shapes}            & [[poly.c]]                      & [[poly.c]] [[fillpoly.c]] &                             & [[poly()]] [[fillpoly()]] [[mempoly()]]                    & 0 \\
-drawing ellipses/arcs    & \ref{chap:drawing-shapes}            & [[ellipse.c]]                   & [[ellipse.c]] [[arc.c]]   &                             & [[ellipse()]] [[fillellipse()]] [[memellipse()]]           & 0 \\ % [[arc()]] [[fillarc()]] [[memarc()]]
+image allocation         & \ref{chap:images}                    & [[alloc.c]]                     & [[alloc.c]]               & [[drawalloc.c]]             & [[allocimage()]] [[allocmemimage()]]                        \\ % mv byteaddr() memsetchan() elsewhere? % [[freeimage()]] 
+clipping and replication & \ref{chap:images}                    & [[replclipr.c]]                 &                           &                             & [[]]                                                        \\ % replmul.c, could also have a libmemdraw/drawclip.c also with rectclip() maybe
+image naming             & \ref{chap:images}                    & [[naming.c]]                    &                           & [[drawname.c]]                        & [[nameimage()]] [[namedimage()]]                  \\
+manipulating rectangles  & \ref{chap:draw}                      & [[draw.c]]                      & [[draw.c]] [[alphadraw.c]]&                             & [[draw()]] [[memimagedraw()]] [[alphadraw()]]               \\
+drawing lines            & \ref{chap:drawing-shapes}            & [[line.c]]                      & [[line.c]]                &                             & [[line()]] [[memimageline()]]                              \\
+drawing polygons         & \ref{chap:drawing-shapes}            & [[poly.c]]                      & [[poly.c]] [[fillpoly.c]] &                             & [[poly()]] [[fillpoly()]] [[mempoly()]]                     \\
+drawing ellipses/arcs    & \ref{chap:drawing-shapes}            & [[ellipse.c]]                   & [[ellipse.c]] [[arc.c]]   &                             & [[ellipse()]] [[fillellipse()]] [[memellipse()]]            \\ % [[arc()]] [[fillarc()]] [[memarc()]]
 
 \midrule                                                                                                                  
-font data structures     & \ref{chap:fonts}                     & [[font.h]]                      &                           &                             & [[Subfont]] [[Cacheinfo]]                                  & 0 \\ %pad: I created font.h
-font initialization      & \ref{chap:fonts}                     & [[defont.c]] [[font.c]]         &                           &                             & [[defontdata]] [[buildfont()]]              & 0 \\ % %pad: I changed font.c to contain buildfont.   freefont()
-text drawing             & \ref{chap:fonts}                     & [[string.c]]                    &                           &                             & [[string()]] [[stringbg()]]                 & 0 \\ % [[drawchar()]] is not in string.c!
-%computing text width    & \ref{chap:fonts}                     & [[stringwidth.c]]               &                           &                             & [[stringwidth()]]                                          & 0\\
-characters cache         & \ref{chap:fonts}                     & [[fontcache.c]]                 &                           &                             & [[cachechars()]] [[loadchar()]] [[fontresize()]]           & 0 \\ %
-subfont management       & \ref{chap:fonts}                     & [[subfont.c]]                   &                           &                             & [[readsubfont()]] [[writesubfont()]]                       & 0 \\ % 
+
+font data structures     & \ref{chap:fonts}                     & [[font.h]]                      &                           &                             & [[Subfont]] [[Cacheinfo]]                                   \\ %pad: I created font.h
+font initialization      & \ref{chap:fonts}                     & [[defont.c]] [[font.c]]         &                           &                             & [[defontdata]] [[buildfont()]]                              \\ % %pad: I changed font.c to contain buildfont.   freefont()
+text drawing             & \ref{chap:fonts}                     & [[string.c]]                    &                           &                             & [[string()]] [[stringbg()]]                                 \\ % [[drawchar()]] is not in string.c!
+%computing text width    & \ref{chap:fonts}                     & [[stringwidth.c]]               &                           &                             & [[stringwidth()]]                                           \\
+characters cache         & \ref{chap:fonts}                     & [[fontcache.c]]                 &                           &                             & [[cachechars()]] [[loadchar()]] [[fontresize()]]            \\ %
+subfont management       & \ref{chap:fonts}                     & [[subfont.c]]                   &                           &                             & [[readsubfont()]] [[writesubfont()]]                        \\ % could put subfont.c of libmemdraw, but not really needed
 
 \midrule
 
-transfering an image     & \ref{chap:image-io}                  & [[transfer.c]]                 & [[transfer.c]]            &                             & [[loadimage()]] [[loadmemimage()]]                         & 0 \\ % [[unloadimage()]] [[unloadmemimage()]] %
-image IO                 & \ref{chap:image-io}                  & [[io.c]]                       & [[io.c]]                  &                             & [[readimage()]]                                            & 0 \\ % writememimage() is here actually, and it's compressed
+transfering an image     & \ref{chap:image-io}                  & [[transfer.c]]                  & [[transfer.c]]            &                             & [[loadimage()]] [[loadmemimage()]]                           \\ % [[unloadimage()]] [[unloadmemimage()]] %
+image IO                 & \ref{chap:image-io}                  & [[io.c]]                        & [[io.c]]                  &                             & [[readimage()]]                                              \\ % writememimage() is here actually, and it's compressed
+%
+overlapping windows      & \ref{chap:overlapping-windows}       & [[window.h]] [[window.c]]       &                           & [[DRAWDESKTOP.c]]           & [[allocwindow()]] \\ % desktop.c,
+%
+mouse management         & \ref{chap:input}                     & [[mouse.h]] [[mouse.c]]         &                           &                             & [[Mouse]] [[Mousectl]] [[initmouse()]] [[readmouse()]]      \\ % [[closemouse()]]
+cursor management        & \ref{chap:input}                     & [[cursor.h]]                    &                           & [[CURSOR.h]] [[SWCURSOR.c]] & [[swcursorinit()]] [[cursoron()]]                           \\
+keyboard management      & \ref{chap:input}                     & [[keyboard.h]] [[keyboard.c]]   &                           &                             & [[Kxxx]] [[Keyboardctl]] [[initkeyboard()]]                 \\ % [[closekeyboard()]] 
+%
+color maps               & \ref{chap:non-true-color}            & [[colormap.c]]                  & [[cmap.c]]                &                             & [[rgb2cmap()]] [[cmap2rgb()]] [[readcmap()]]                \\ % [[writecmap()]] [[writecolmap()]] %cmap.c (generated by scripts/mkcmap.c) % %  [[readcolmap()]] [[memdefcmap]]  % lots of stuff in memdraw/draw.c related to color map too
+drawing bezier curves    & \ref{chap:advanced}                  & [[bezier.c]]                    &                           &                             & [[bezier()]] [[bezspline()]] [[fillbezier()]]               \\
+%get rect?               & \ref{chap:advanced}                  & [[getrect.c]]                   &                           &                             & [[getrect()]]                                               \\
+basic menus              & \ref{chap:advanced}                  & [[menuhit.c]]                   &                           &                             & [[Menu]] [[menuhit()]]                                      \\ %
+event-based IO           & \ref{chap:advanced}                  & [[event.c]]                     &                           &                             & [[Event]] [[einit()]] [[ekbd()]] [[emouse()]]               \\ % [[egetrect.c]] [[emunuhits.c]]
+graphical text mode      & \ref{chap:advanced}                  &                                 & [[defont.c]] [[string.c]] & [[VGACONSOLE.c]]            & [[vgascreenputc()]] [[memimagestring()]]                    \\ % cga.c is for old style
+%refresh                 & \ref{chap:advanced}                  &                                 &                           & [[drawmisc.c]]              &                                                             \\
+image compression        & \ref{chap:advanced}                  & [[compressed.c]]                & [[compressed.c]]           &                             & [[cloadimage()]]  [[creadimage()]] [[writeimage()]]        \\ % [[cloadmemimage()]] [[creadmemimage()]] % libmemdraw/io.c contains some compressed stuff too
 
 \midrule
-mouse management         & \ref{chap:input}                     & [[mouse.h]] [[mouse.c]]         &                           &                             & [[Mouse]] [[Mousectl]] [[initmouse()]] [[readmouse()]]     & 0 \\ % [[closemouse()]]
-cursor management        & \ref{chap:input}                     & [[cursor.h]]                    &                           & [[CURSOR.h]] [[SWCURSOR.c]] & [[swcursorinit()]] [[cursoron()]]                          & 0 \\
-keyboard management      & \ref{chap:input}                     & [[keyboard.h]] [[keyboard.c]]   &                           &                             & [[Kxxx]] [[Keyboardctl]] [[initkeyboard()]]                & 0 \\ % [[closekeyboard()]] 
-
-\midrule
-color maps               & \ref{chap:non-true-color}            & [[colormap.c]]                  & [[cmap.c]]                &                             & [[rgb2cmap()]] [[cmap2rgb()]] [[readcmap()]]               & 0 \\ % [[writecmap()]] [[writecolmap()]] %cmap.c (generated by scripts/mkcmap.c) % %  [[readcolmap()]] [[memdefcmap]]  % lots of stuff in memdraw/draw.c related to color map too
-drawing bezier curves    & \ref{chap:advanced}                  & [[bezier.c]]                    &                           &                             & [[bezier()]] [[bezspline()]] [[fillbezier()]]              & 0 \\
-%get rect?               & \ref{chap:advanced}                  & [[getrect.c]]                   &                           &                             & [[getrect()]]                                              & 0 \\
-basic menus              & \ref{chap:advanced}                  & [[menuhit.c]]                   &                           &                             & [[Menu]] [[menuhit()]]                                     & 0 \\ %
-event-based IO           & \ref{chap:advanced}                  & [[event.c]]                     &                           &                             & [[Event]] [[einit()]] [[ekbd()]] [[emouse()]]              & 0 \\ % [[egetrect.c]] [[emunuhits.c]]
-graphical text mode      & \ref{chap:advanced}                  &                                 & [[defont.c]] [[string.c]] & [[VGACONSOLE.c]]            & [[vgascreenputc()]] [[memimagestring()]]                                                           & 0 \\ % cga.c is for old style
-%refresh                 & \ref{chap:advanced}                  &                                 &                           & [[drawmisc.c]]              &                                                            & & \\
-image compression        & \ref{chap:advanced}                  & [[compressed.c]]                & [[compressed.c]]           &                             & [[cloadimage()]]  [[creadimage()]] [[writeimage()]]        & 0 \\ % [[cloadmemimage()]] [[creadmemimage()]] % libmemdraw/io.c contains some compressed stuff too
-
-\midrule
-debugging                & \ref{chap:debugging-appendix}        & [[debug.c]]                     &                           &                             & [[drawsetdebug()]]                                         & 0 \\
-dumpers                  & \ref{chap:debugging-appendix}        & [[fmt.c]]                       &                           &                             & [[Pfmt()]] [[Rfmt()]] [[chantostr()]] [[printmesg()]]      & 0 \\
-error management         & \ref{chap:error}                     & [[error.c]]                     &                           & [[drawerror.c]]             & [[Errorfn]] [[drawerror()]]                                & 0 \\ %pad: I created this file
-trigonometry             & \ref{chap:math}                      & [[icossin.c]] [[icossin2.c]]    &                           &                             & [[sinus]] [[cosinus]] [[icossin()]] [[icossin2()]]         & 0 \\
+debugging                & \ref{chap:debugging-appendix}        & [[debug.c]]                     &                           &                             & [[drawsetdebug()]]                                          \\
+dumpers                  & \ref{chap:debugging-appendix}        & [[fmt.c]]                       &                           &                             & [[Pfmt()]] [[Rfmt()]] [[chantostr()]] [[printmesg()]]       \\
+error management         & \ref{chap:error}                     & [[error.c]]                     &                           & [[drawerror.c]]             & [[Errorfn]] [[drawerror()]]                                 \\ %pad: I created this file
+trigonometry             & \ref{chap:math}                      & [[icossin.c]] [[icossin2.c]]    &                           &                             & [[sinus]] [[cosinus]] [[icossin()]] [[icossin2()]]          \\
 
 \midrule
 
-VideoCore driver         & \ref{chap:raspberry-pi-graphic-card} &                                 &                           &                             &                                                            & 0\\
-VGA generic driver       & \ref{chap:pc-vga-driver}             &                                 &                           &  [[vga.h]] [[devvga.c]]     & [[vgadevtab]] [[VGAscr]] [[VGAdev]] [[vgaattach()]]        & 0\\ % [[vgascreen]] % [[vgascreen.c]] [[vgavesa.c]]  
-%Cirrus logic VGA driver &                                      &                                 &                           &  [[vgaclgd542x.c]]          &                                                            & 0 \\
+VideoCore driver         & \ref{chap:raspberry-pi-graphic-card} &                                 &                           &                             &                                                            \\
+VGA generic driver       & \ref{chap:pc-vga-driver}             &                                 &                           &  [[vga.h]] [[devvga.c]]     & [[vgadevtab]] [[VGAscr]] [[VGAdev]] [[vgaattach()]]        \\ % [[vgascreen]] % [[vgascreen.c]] [[vgavesa.c]]  
+%Cirrus logic VGA driver &                                      &                                 &                           &  [[vgaclgd542x.c]]          &                                                             \\
 \otoprule
-Total                    &                                      &                                 &                           &                             &                                                            & 4219 \\
+Total LOC                &                                      &  8700                           &  5800                     &  7300                       &                                                             \\
 \bottomrule
 \end{tabular}
 \end{center}
 \caption{Chapters and source files of [[draw]].}
 \label{tab:code-orga}
 \end{table*}
-
+\n put total LOC per directory, no space for a LOC column and made less sense
+\t add window and windowing system support. Have files in libdraw/ and kernel
+\t  related to that. maybe can even split libdraw/window.c in rio.c
+\t  with getwindow() there and view/screen ?
 
 % normally apps must link just with libdraw.a, and not libmemdraw.a
 % (or libmemlayer.a). 
@@ -1631,51 +1631,163 @@ Total                    &                                      &               
 
 \section{Software architecture}
 
-% soft archi of draw complicated. Many components as we have seen
-% previously. A user-space lib (libdraw), 2 kernel libraries,
-% a filesystem (/dev/draw and devdraw.c), a protocol (/dev/draw/x/data),
-% and a few device drivers.
+From the programmer's point of view, [[draw]] is just a library.
+\n not a program you execute like [[5a]] or [[5l]]
+%dup: overview/code-orga
+Its software architecture is first made of the set of
+functions you can call (e.g., [[line()]], [[string()]]),
+and data structures you can use (e.g., [[Image]]),
+to draw things on a screen.
+%dup: overview/interface  overview/helloworld.c  overview/code-orga
+All those entities are declared in [[draw.h]].
 %
-% A good way is to trace a call to line through those different
-% components as shown in Figure X.
+Those are the {\em entry points} of [[draw]].
+%
+What is under those entry points is rather complicated though.
+Indeed, as we have seen in Section~\ref{sec:code-orga},
+[[draw]] has many {components}:
+\begin{itemize}
 
-\l part library, part generic interface and code kernel, part specific drivers
+\item A user-space library ([[libdraw]])
 
-% it's not a software, it's a library, so archi is first
-% a set of functions and DS in draw.h! entry points!
-% Then complicated archi because part done in kernel, part
-% in user side, so need bridge, and marshalling and protocol.
-% (but this could be skipped if reader interested only in core ideas).
-% Moreover in kernel side also complicated because many different
-% graphics card so split in different components.
+\item Two kernel-space libraries ([[libmemdraw]] and [[libmemlayer]])
+
+\item A filesystem (accessible though [[/dev/draw/]], thanks mainly
+to [[devdraw.c]])
+
+\item A protocol (for user-space programs to communicate with
+the kernel via a [[/dev/draw/x/data]] device file)
+
+\item A few device drivers (for different graphics cards)
+
+\end{itemize}
+\l Could this be skipped if reader interested only in core ideas?
+
+\subsection{Trace of a simple drawing operation}
+\l When do draw(), go in kernel? yes (at least when call flush())
+
+A good way to see how those components work together is to
+{\em trace} a call to one of the functions of the [[draw]] API
+through those different components.
+%
+Figure~\ref{fig:soft-archi-directories} illustrates one such trace, with
+a call to [[line()]].
+%
+This trace starts at the top of Figure~\ref{fig:soft-archi-directories}
+with the call to [[line()]] in the program [[hellodraw.c]] that you saw
+in Section~\ref{sec:hellodraw_c}. I will now go gradually
+downwards in Figure~\ref{fig:soft-archi-directories} to explain the trace:
+
+\begin{enumerate}
+
+\item [[line()]] is declared in [[draw.h]].
+Its slightly simplified prototype is given below:
+\begin{verbatim}
+void line(Image* dst, Point p0, Point p1, ..., 
+          int width, Image* color, ...);
+\end{verbatim}
+\l or better to keep things simpler for now?
+
+\item [[line()]] is defined in [[libdraw/]].
+%dup: (changed) overview/code-orga
+However, like I said in Section~\ref{sec:code-orga}, [[libdraw]] is just a 
+thin wrapper that delegates most of the work to the kernel. 
+The code of [[line()]] just writes a {\em drawing command} 
+(starting with the letter [['L']]) in the file descriptor [[Display.fd]]
+of the global [[display]].
+\n actually this is done in flushimage, but too subtle for now.
+%
+Remember that this global has been set
+previously by a call to [[initdraw()]], as we saw in
+Section~\ref{sec:hellodraw_c}.
+
+\item [[display->fd]], as we will see in Chapter~\ref{chap:core-ds},
+is a file descriptor that corresponds to a [[/dev/draw/x/data]] device file.
+This device file is the main interface between 
+a graphical application and the graphics code in the kernel.
+
+\item The call to [[write()]] in [[libdraw/line.c]] is actually
+a {\em system call}. It triggers a {\em software interrupt}
+that jumps to code in the kernel.
+%
+For more information on how system calls work,
+I refer you to the \book{Kernel}.
+The important thing, for what is concerning us here, is that
+%
+this software interrupt is handled by
+the {system-call dispatcher} in [[kernel/syscalls/]].
+
+\item The system-call dispatcher calls [[syswrite()]] 
+in [[kernel/files/]] because the original system call was [[write()]].
+
+\item [[syswrite()]] dispatches to the appropriate {\em filesystem method}.
+Because the argument to [[write()]] is a file descriptor corresponding
+to a file under [[/dev/draw/]], [[syswrite()]] calls the
+[[drawwrite()]] method in [[kernel/devices/screen/devdraw.c]].
+%
+Again, I refer you to the \book{Kernel} to understand how
+filesystems work.
+
+\item [[drawwrite()]] calls [[drawmesg()]] because
+the file descriptor corresponds to a [[/dev/draw/x/data]]
+device file.
+
+\item [[drawmesg()]] is the kernel function that handles
+all the drawing commands written in [[/dev/draw/x/data]].
+Because the first letter of the command is [['L']], 
+[[drawmesg()]] calls the [[memline()]] function.
+
+\item [[memline()]] is a function from the [[libmemlayer]]
+library. This library, which I will describe in 
+Chapter~\ref{chap:overlapping-windows},
+handles images that are overlapping windows.
+The important thing, for what is concerning us here, 
+is that [[memline()]] eventually calls [[memimageline()]].
+
+\item [[memimageline()]] is a function from the [[libmemdraw]]
+library. Its sligtly simplified prototype is given below:
+
+\begin{verbatim}
+void memimageline(Memimage *dst, Point p0, Point p1, ..., 
+                   int radius, Memimage *color, ...);
+\end{verbatim}
+\t it is actually _memimageline for now, rename it!
+\l explain Memimage vs Image? or say will explain soon.
+
+[[memimageline()]] contains the actual algorithm to draw lines in 
+images in memory. Those images have the type [[Memimage]].
+As we will see soon, some images
+correspond to the framebuffer; changing bytes
+in those images translates to changes on the screen.
+%
+[[memimageline()]] then returns to the caller
+[[memline()]], which does the same.
+Eventually, the whole call stack is popped,
+leading back to code in [[hellodraw.c]].
 
 
-% first control flow. Different components.
-% Figure X.
+\end{enumerate}
+\l device driver?
 
-% line(); draw.h. libdraw. display, display->fd, /dev/draw/x/data, "L".
-% syscall. See Kernel. syscalls/ syswrite() drawwrite.
-% drawmesg switch c. libmemlayer (see chapter X), libmemdraw.
-% device driver?
 
 \begin{figure}[!]\centering
 \begin{verbatim}
        hellodraw.c-----+    clock.c--+    colors.c--+
-       |               |    |        |    |         |
- U     |   line(...);  |    |        |    |         |    APPLICATIONS
+       |   ...         |    |        |    |         |    APPLICATIONS
+ U     |   line(...);  |    |        |    |         |
  S     +---------------+    +--------+    +---------+
  E  include/graphics/draw.h----------------------------+
- R  |    void line(...);                               |
+ R  |    void line(...);        ...                    |
     +--------------------------------------------------+
  S  lib_graphics/libdraw/------------------------------+
- P  |  line.c-------------------------+ ellipse.c--+   |    USER
- A  |  |void line(...) {              | |          |   |  LIBRARIES
- C  |  |  ...                         | |          |   |
- E  |  |  write(display->fd, "L ...");| |          |   |
-    |  |}                             | |          |   |
-    |  +------------------------------+ +----------+   |
+ P  |  line.c-------------------------+ ellipse.c+     |    USER
+ A  |  |void line(...) {              | |        |     |  LIBRARIES
+ C  |  |  ...                         | |        |     |
+ E  |  |  write(display->fd, "L ...");| |        | ... |
+    |  |}                             | |        |     |
+    |  +------------------------------+ +--------+     |
     +--------------------------------------------------+
- -----------------------------------------------------------------
+ ----------------------- /dev/draw/1/data  -----------------------
      kernel/---------------------------------------------+
      |+---+ files/------+ devices/screen/--------------+ |
  K   || s | | syswrite()| | devdraw.c----------------+ | |
@@ -1691,35 +1803,164 @@ Total                    &                                      &               
  C   +---------------------------------------------------+
  E   lib_graphics/libmemlayer/---------------------------+
      | line.c------------------------------------+       |
-     | |void memline(...) { memimageline(...); } |       |
+     | |void memline(...) { memimageline(...); } |  ...  |
      | +-----------------------------------------+       |
      +---------------------------------------------------+   KERNEL
      lib_graphics/libmemdraw/----------------------------+ LIBRARIES
-     | line.c---------+  ellipse.c----+                  |
-     | |memimageline()|  |            |                  |
-     | +--------------+  +------------+                  |
+     | line.c-----------------------+ ellipse.c-+        |
+     | |void memimageline() { ... } | |         |   ...  |
+     | +----------------------------+ +---------+        |
      +---------------------------------------------------+
 \end{verbatim}
 \caption{Tracing of [[line()]] through the [[draw]] components.}
-\label{fig:soft-archi}
+\label{fig:soft-archi-directories}
 \end{figure}
 
-% then line() signature and memline signature?
-% Figure Y.
-% share id, and then in the end frame buffer!
+\l This was complicated ... Why not get line() call directly memimageline?
+%  could, but will still need a system call to transfer computed 
+%  pictures from user-space to the framebuffer (but there will be no
+%  need for drawing commands and the protocol though). Would need a Xrender.
+
+\l about protocol/RPC vs frame buffer.
+% design goal was like X11, to be remote! can log on another
+% machine, execute program there that actually display on your screen.
+% for plan9 they just reuse 9p! network file system so /dev/draw
+% can be on the network!
+% but this design imply it can not be a frame buffer! The frame buffer
+% may not be on the machine the program is running!
+% so need send drawing commands, like in X11, because can't allow to send
+% all pixels each time through big write on /dev/draw over the network
+% (hmm actually with high-speed network maybe we could)
+
+\subsection{Data structures relationships}
+
+%trans:
+Figure~\ref{fig:soft-archi-directories} focused on the functions
+and the control flow of [[draw]]. This is only one part of the
+story though. A few questions are remaining such as 
+%
+how images are represented in memory? 
+What is the difference between an [[Image]] and a [[Memimage]]?
+Where images reside in memory? In user space? In kernel space? 
+How the frame buffer, usually a protected area of memory, can be modified
+by user-space programs? 
+%
+To answer those questions, Figure~\ref{fig:soft-archi-data}
+focuses on the data structures of [[draw]], as well as their relationships.
+\n the data flow this time
+%
+This time I will go from the top and bottom of 
+Figure~\ref{fig:soft-archi-data} towards its center.
+
+
+At the top of Figure~\ref{fig:soft-archi-data} is the
+global [[display]] I mentioned a few times before.
+%
+Its type is the structure [[Display]] defined in [[draw.h]].
+In Figure~\ref{fig:soft-archi-directories} we saw the use
+of [[display->fd]] to write drawing commands in [[/dev/draw/x/data]].
+Another important field is [[display->image]], which, as
+I said in Section~\ref{sec:hellodraw_c}, {\em represents} the screen.
+%
+The type of [[display->image]] is the structure [[Image]],
+also defined in [[draw.h]]. The global [[display]]
+and [[display->image]] are both initialized by [[initdraw()]].
+An [[Image]] has three important fields:
+\begin{itemize}
+
+\item An {identifier} ([[Image.id]])
+
+\item A {rectangle} ([[Image.r]])
+
+\item An {image format} (called [[Image.chan]]
+because it is made of a set of  {\em channels}, 
+which I will define in Section~\ref{sec:channels})
+
+\end{itemize}
+
+The last two fields together specify the {resolution} of the image.
+%
+The first field provides the mean for user-space programs to
+reference data in the kernel. Indeed, an [[Image]] identifier is nothing more
+than a {\em handle} to the real image (of type [[Memimage]])
+that resides in kernel space.
+%
+The identifier is what is transmitted through [[/dev/draw/x/data]].
+The call to [[line(display->image, ...)]], in Section~\ref{sec:hellodraw_c},
+eventually writes [['L']] (a character), and the identifer
+for the screen image [['1']] (an integer) in [[/dev/draw/x/data]].
+Identifiers allow programs to tell on which image to 
+apply the drawing command.
+
+The first [[Image]] allocated by [[initdraw()]] has always
+the identifier [['1']], and always corresponds to the screen.
+A program can allocate more off-screen images, for instance
+with [[allocimage()]], as shown in Section~\ref{sec:hellodraw_c}.
+As we will see in Chapter~\ref{chap:images}, calls to [[allocimage()]]
+lead to memory allocations both in user space, for [[Image]],
+and kernel space, for [[Memimage]] and the data containing
+all the pixels.
+
+
+%trans:
+The kernel-space side of Figure~\ref{fig:soft-archi-data},
+at the bottom, is a bit more complicated than the user-space side.
+%
+At the very bottom, the kernel (static) global [[sdraw]]
+keeps track of the set of clients the [[draw]] display server
+serves.
+%dup: (but changed) overview/files-interface
+In the examples of this book, the display server will serve mostly a single
+client. In the \book{Windows}, it will serve many clients, one
+per graphical window.
+\n and one for rio itself, and actually not one per terminal window
+%dup: (but changed) overview/files-interface overview/hellodraw
+In any case, each graphical application must first call [[initdraw()]],
+which, by opening [[/dev/draw/new]], opens a new connexion
+to the display server. Each connexion adds a new entry in
+[[sdraw.clients]], which is an array of pointers of [[Client]],
+a structure defined in [[devdraw.h]].
+
+Each [[Client]] has an integer identifier that corresponds to
+one of the [[/dev/draw/x/]] subdirectories.
+%
+Moreover, the field [[Client.dimage]] contains a 
+set of [[Dimage]] (for [[Draw]] image), a structure defined 
+also in [[devdraw.h]].
+%
+A [[DImage]] mirrors in kernel space one part of an [[Image]] 
+that resides in user-space.
+They share the same identifier. But, a [[DImage]] maps
+an image identifier to a [[Memimage]], a structured defined
+in [[memdraw.h]]. A [[Memimage]] is similar to an [[Image]];
+they have similar fields ([[r]] and [[chan]]). An important
+difference is that the new field [[Memimage.data]] points
+to an area in kernel space where resides the actual pixels
+of the image.
+This area can be either the framebuffer (shortened [[FB]] in
+Figure~\ref{fig:soft-archi-data}), or an off-screen image
+allocated from the {\em memory pool} [[imagmem]].
+I refer you to the \book{Kernel} and \book{Libcore} for
+more information on memory pools.
+\l (or soft screen and flush hook)
+The [[Memimage]] representing the screen is also stored
+in the global [[drawscreen]].
+\n skip Memdata for now, already quite complicated.
+\l Many intermediate because sharing. will see later.
+
 
 \begin{figure}[!]\centering
 \begin{verbatim}
     display <Display>
- U  |               |
+ U  |.fd = ...      |
  S  |.image = --+   |
  E  |           |   |
  R  +-----------+---+
                 v
  S   <Image>---------------+  <Image>----------+
  P   |.id = 1              |  |.id = 2         |
- A   |.r = (0,0),(1024,768)|  |.r = (0,0),(8,8)|
- C   |.chan = RGB24        |  |.chan = GREY1   |
+ A   |.r = (0,0),(1024,768)|  |.r = (0,0),(1,1)|
+ C   |.chan = RGB24        |  |.chan = RGB24   |
  E   +---------------------+  +----------------+
                 ^                      ^
  ---------------+----------------------+--------------------------
@@ -1729,9 +1970,9 @@ Total                    &                                      &               
    +--->|.image = -+    |      | .image = -+   |  |  |        |  |
    |    +----------+----+      +-----------+---+  |  |        |  |
  K |               v                       v      |  +--------+  |
- E | drawscreen <Memimage>-+  <Memimage>-------+  |  +---+       |
- R | |.r = (0,0),(1024,768)|  |.r = (0,0),(8,8)| ++->|   |       |
- N | |.chan = RGB24        |  |.chan = GREY1   | ||  +---+       |
+ E | drawscreen <Memimage>-+  <Memimage>-------+  |  +-+         |
+ R | |.r = (0,0),(1024,768)|  |.r = (0,0),(1,1)| ++->| |         |
+ N | |.chan = RGB24        |  |.chan = RGB24   | ||  +-+         |
  E | |.data = |            |  |.data = --------+-+|              |
  L | +--------+------------+  +----------------+  |  +---------+ |
    |          +-----------------------------+     |  |         | |
@@ -1747,24 +1988,17 @@ Total                    &                                      &               
    +---------------+                              +--------------+
 \end{verbatim}
 \caption{Data structures of [[draw]].}
-\label{fig:soft-archi}
+\label{fig:soft-archi-data}
 \end{figure}
 \n use RBG24, not default config for Raspberry, but simpler
-\n in fact .data point to Memdata intermediate first, but too suble for now.
-
-% Display. Image. screen. rectangle. channel.
-
-% sdraw. clients. DImage for Draw image.
-% Memimage. mimic Image. Memdata. pool and framebuffer
-% off screen images. (or soft screen and flush hook)
-% drawscreen. screen. 
-% Many intermediate because sharing. will see later.
-% GREY1 vs RGB24 so copy need translation. Complex.
+\n could use CMAP8 instead of RGB24 for color, so need translation, but Complex
+\n .data point to Memdata intermediate first actually, but too suble for now.
 
 
-% Display server. Will understand more when see Windows.nw.
-% can have multiple clients, which do the initdraw().
-% shared resource.
+
+
+% --------------------------------
+
 
 % Memdraw is core algo. Used by kernel. Wrapped by kernel
 % in some Dxxx (e.g., DImage). Memlayer is overlay on memdraw
@@ -1777,11 +2011,6 @@ Total                    &                                      &               
 
 % draw() rectangle is fundamental! all other shapes are in term of draw().
 
-
-% complicated archi. Even just user side is complicated. So when
-% add kernel side, it can get tricky. Maybe easier to first
-% show archi on user side, the relation between the important
-% types (Display, Image, Rectangle, etc).
 
 % maybe can also show the simplest interface, a frame buffer, and
 % how /dev/draw build on top of that? In theory could have
@@ -1842,37 +2071,19 @@ Total                    &                                      &               
 % (width, depth, chan). That's it!
 
 
-% about RPC vs frame buffer.
-% design goal was like X11 can be remote! can login on another
-% machine, execute program there that actually display on your screen.
-% for plan9 they just reuse 9p! network file system so /dev/draw
-% can be on the network!
-% but this design means it's not a frame buffer! it accepts
-% drawing commands, like in X11, because can't allow to send
-% all pixels each time through big write on /dev/draw over the network
-% (hmm actually with high speed network maybe we could)
-
-% the API seems mostly stateless. As opposed to ocaml graphics
-% where you move the cursor and then ask to draw stuff, here
-% you specify each time. The API is also very general, see draw().
-
-
-
-
+%alt: a stateful API.
+% The API of draw stateless, as opposed to ocamlgraphics/cairo/X11/...
+% where you move the cursor and then ask to draw stuff. In those systems
+% you have a context. Here you specify everything each time.
 
 %\section{Initialization overview}
 % more in Chapter X.
-
-%\section{Trace of a simple drawing operation}
-% when do draw(), then where does it go? go in kernel? yes ... :(
-% at least when call flush().
 
 %\section{Trace of a mouse click}
 % more important in Windows.nw
 
 %\section{Trace of a key press}
 % more important in Windows.nw
-
 
 \section{Book structure}
 
@@ -1884,38 +2095,78 @@ The rest of the book is organized as follows.
 I will start by describing the core data structures of [[draw]]
 in Chapter~\ref{chap:core-ds}.
 %
-Then, in Chapter~\ref{chap:init} I will describe
+Then, in Chapter~\ref{chap:init}, I will explain
 how [[draw]] is initialized, both on the kernel side,
 where the graphics card needs to be configured for a certain
 resolution, and on the user side, where client applications
 need to connect to the display server.
 %
 Chapter~\ref{chap:user-kernel-bridge} will focus on the bridge
-between the user and the kernel, which allows the clients
-to X
+between the user and the kernel. I will explain how
+client applications communicate with the display server.
 %
 The following chapters will describe the different
-functions of the drawing API in [[draw.h]]: 
-
-% fundamental draw()! in chapter X
-
-
-% client/server DS.
+functions of the [[draw]] API: 
+Chapter~\ref{chap:images} will present the functions to allocate images
+(e.g. [[allocimage()]]), 
+Chapter~\ref{chap:draw} the central function [[draw()]] to manipulate
+rectangles, 
+Chapter~\ref{chap:drawing-shapes} the functions to draw shapes
+(e.g. [[line()]]),
+\l rely on draw
+Chapter~\ref{chap:fonts} the functions to draw text
+(e.g. [[string()]],
+\l rely also on draw
+and finally Chapter~\ref{chap:image-io} the functions to load and save images 
+(e.g. [[loadimage()]]).
+\l Image IO not draw, not vector but raster, pixel directly.
 %
-% init setup/config grapgics card, and server connection
+Chapter~\ref{chap:overlapping-windows} and Chapter~\ref{chap:windowing-support}
+will present an important image extension: overlapping windows.
+They are one of the building block to implement a windowing system,
+but they can also be used in graphical applications
+(e.g., the \plan editor [[acme]]).
+%
+In Chapter~\ref{chap:input}, I will describe the functions of [[draw]]
+that allow to interact with input devices, especially the mouse.
+The mouse is the primary device used in graphical applications,
+and it even leads to the drawing of graphics on the screen: the mouse cursor.
+%
+Some of the code in Chapter~\ref{chap:images} through
+\ref{chap:image-io} will be simplified to show
+only the parts of the code that handle 32-bits images.
+However, a real graphics system must support different image formats:
+24-bits, 16-bits, 8 bits, images using color maps, or
+even bitmaps. A graphics system must be able to copy the
+pixels from one image using one format, to another image
+using a completely different format. I will cover
+all those cases in Chapter~\ref{chap:non-true-color}.
+% 
+Chapter~\ref{chap:advanced} presents other
+features of [[draw]] which we did not present 
+before to simplify the explanations, for instance,
+the support for bezier curves, or optimizations in 
+certain drawing functions.
+%
+Finally, Chapter~\ref{chap:conclusion} concludes
+and give pointers to other books in the \principia series.
 
-% draw()
-% shapes rely on draw
-% Fonts also draw
-% Image IO not draw, not vector but raster, pixel directly.
-
-% Most code 32 bits images. But real graphics system must support
-% different image formats, 16, 24, but also smaller one, bitmaps,
-% 8 bits, and be able to copy pixels from one image format to
-% a completely different format. I will cover this in chapter X.
-
-
-
+%toc: %dup: (adapted) Assembler.nw
+Some appendices present the code of non-functional properties:
+code to help debug [[draw]] in Appendix~\ref{chap:debugging-appendix}, 
+and code to manage errors in Appendix~\ref{chap:error}.
+%
+Appendix~\ref{chap:math} contains the code of generic
+mathematic functions used by [[draw]], but which are
+not specific to [[draw]].
+\l hmm actually a bit specific
+%
+Appendix~\ref{chap:raspberry-pi-graphic-card} and \ref{chap:pc-vga-driver}
+will present the code for the device drivers of two popular graphics card.
+%
+Finally, Appendix~\ref{chap:examples} contains more examples of
+graphical applications to get a better feel of [[draw]] and to see how
+it is used in practice.
 
 
 
@@ -2268,8 +2519,8 @@ struct Display
 % rename image field to screen/view? is it the same than global screen/view?
 % NO! it's not the same. it's the whole screen here.
 % actually even when run under rio you can draw on the rest :( ugly.
-\t so maybe rename screen then!! now that I have cleaned up screen name issues
-\t  by using view and desktop (still todo last part)
+\t rename to screen!! now that I have cleaned up screen-name issues
+\t  by using instead view and desktop (still todo last part)
 
 
 % why not just a fd to device file? because complex device, device
@@ -2640,6 +2891,8 @@ int		imageid;
 \subsection{[[Memimage]]}
 % rename draw_screen, screen_screen, vga_screen
 
+% Equivalent of Image but on kernel side. Very similar fields
+% to Image.
 
 <<struct Memimage>>=
 struct Memimage
@@ -2674,6 +2927,9 @@ struct Memimage
 % with different id in different clients
 % (e.g., the screen, but also imagewhite, etc (even though all of
 % those should have same id in client too)
+
+% important diff with Image, data field! this is the real image!
+% not just a handler.
 
 % Note that share also Memdata! many Memimage can be different
 % views of the same Memdata (e.g., the screen). Efficient. No copy.
@@ -2965,15 +3221,14 @@ if(d == nil)
 
 
 \section{Channels}
+\label{sec:channels}
 
 <<type channels>>=
 typedef ulong channels;
 @
 
-
-
-% =~ pixel format. How many bits, what bytes represent which color.
-% This + rectangle = image format.
+% =~ image format. How many bits, what bytes represent which color.
+% This + rectangle = image resolution.
 
 %trans: Image.chan and Memimage.chan
 % saw ulong chan; in Image and Memimage.
@@ -3442,6 +3697,8 @@ enum Drawop
 % also kinda "Server side". Actually mount and bind are user side
 %  operation (triggering kernel side code)
 % Better to see first user side?
+
+% complex flow, maybe need a control flow Figure?
 
 \subsection{Binding the VGA device}
 % [[vgascreen]], (-> vga_screen)
@@ -8989,7 +9246,7 @@ _memimageline(Memimage *dst, Point p0, Point p1, int end0, int end1, int radius,
     <<[[_memimageline()]] when arbitrary lines>>
 }
 @
-\l why _ ?
+\l why _ ? because interface was simpler in memimageline? no clipr param?
 
 % Explain previous comment about clipping?
 
@@ -14130,11 +14387,39 @@ Err1:
 
 
 \chapter{Overlapping Windows}
-\label{chap:windows}
+\label{chap:overlapping-windows}
 % aka layers
 
 % put another code orga here? desktop.c, window.c, good stuff!
 % stuff in libdraw/desktop.c, and also now stuff in kernel/.../drawwindow.c
+
+%libdraw/window.c: image "layers" (hmm but actually not transparent right now)
+%libdraw/desktop.c
+%kernel/devices/screen/drawwindow.c
+
+%adapter:
+% draw.c: again, memdraw(), but should be in libmemdraw/
+% line.c: again! memline(), but should be only for horizontal/vert here no?
+% load.c:
+% unload.c:
+
+%layerop.c
+
+%lalloc.c: memlayer alloc
+%ldelete.c: memlayer free
+
+%lsetrefresh.c
+
+%window operations:
+% lorigin.c: mv window (or its origin)
+% lhide.c: expose/hide window
+% ltofront.c: back to top
+% ltorear.c: put to rear
+
+
+
+
+
 
 % actually Window is a bad name (see pike paper?)
 
@@ -17326,7 +17611,7 @@ if(fd < 0)
 
 
 
-\chapter{Input}
+\chapter{Input Devices}
 \label{chap:input}
 
 %trans: why talk about input in book mostly about output (Graphics)?
@@ -28016,6 +28301,7 @@ LOC = Lines Of Code
 VGA = Video Graphics Array
 RGB = Red Green Blue
 GUI = Graphical User Interface
+CAD = Computer Aided Design
 \end{verbatim}
 
 \chapter*{Indexes}
