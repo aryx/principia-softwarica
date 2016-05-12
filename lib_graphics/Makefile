@@ -17,15 +17,11 @@ DOC=Graphics
 # to work
 SRC_ORIG=Graphics.nw Graphics_extra.nw
 
-SRC_VIEWS= \
-   ../include/graphics/draw.h\
+L1= ../include/graphics/draw.h\
     ../include/graphics/window.h\
     ../include/graphics/internals/font.h\
     ../include/graphics/internals/marshal.h\
     ../include/graphics/internals/draw_private.h\
-   \
-   ../include/graphics/internals/memdraw.h\
-   ../include/graphics/internals/memlayer.h\
    ../include/graphics/cursor.h\
    ../include/graphics/input/event.h\
    ../include/graphics/input/keyboard.h\
@@ -71,7 +67,11 @@ SRC_VIEWS= \
    libdraw/transfer.c\
    libdraw/compressed.c\
    libdraw/colormap.c\
-   libdraw/tests/drawtest.c\
+
+L1TEST= libdraw/tests/drawtest.c
+
+
+L2= ../include/graphics/internals/memdraw.h\
    \
    libmemdraw/alloc.c\
     libmemdraw/resolution.c\
@@ -93,9 +93,15 @@ SRC_VIEWS= \
    libmemdraw/poly.c\
    libmemdraw/string.c\
    libmemdraw/subfont.c\
+
+L2TEST= \
    libmemdraw/scripts/mkcmap.c\
    libmemdraw/tests/arctest.c\
    libmemdraw/tests/memdrawtest.c\
+
+#   ../lib_graphics/libmemdraw/hwdraw.c\
+
+L3= ../include/graphics/internals/memlayer.h\
    \
    libmemlayer/draw.c\
    libmemlayer/lalloc.c\
@@ -109,11 +115,8 @@ SRC_VIEWS= \
    libmemlayer/ltofront.c\
    libmemlayer/ltorear.c\
    libmemlayer/unload.c\
-   \
-   ../applications/clock.c\
-   ../applications/colors.c\
-   ../applications/screenlock.c\
-   \
+
+L4= \
    ../kernel/devices/screen/devdraw.c\
     ../kernel/devices/screen/devdraw.h\
     ../kernel/devices/screen/drawinit.c\
@@ -131,11 +134,26 @@ SRC_VIEWS= \
    ../kernel/devices/screen/386/vgaclgd542x.c\
    ../kernel/devices/screen/386/vgavesa.c\
 
-#   ../lib_graphics/libmemdraw/hwdraw.c\
-   ../kernel/devices/screen/386/cga.c\
-$   codegraph.h
+#   ../kernel/devices/screen/386/cga.c\
+#   codegraph.h
 
 #not anymore, merged in vgascreen.c
 #   ../kernel/devices/screen/386/vga.c\
 #   ../kernel/devices/screen/386/vgax.c\
+
+L5= \
+   ../applications/clock.c\
+   ../applications/colors.c\
+   ../applications/screenlock.c\
+
+
+SRC_VIEWS= $(L1) $(L1TEST) $(L2) $(L2TEST) $(L3) $(L4) $(L5)
+
+loc1:
+	wc -l $(L1)
+loc2:
+	wc -l $(L2)
+loc3:
+	wc -l $(L3) $(L4)
+
 
