@@ -125,7 +125,7 @@ enum	/* control messages */
 /*s: struct Wctlmesg */
 struct Wctlmesg
 {
-    // enum<wctlmesgkind>
+    // enum<Wctlmesgkind>
     int		type;
 
     Rectangle	r;
@@ -470,7 +470,6 @@ struct Timer
 extern Display	*display;
 extern Font	*font;
 
-
 extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 extern Keyboardctl	*keyboardctl;
@@ -484,30 +483,34 @@ extern Cursor	query;
 extern Cursor	*corners[9];
 
 extern Image	*background;
-//extern Image	*lightgrey;
 extern Image	*red;
+//extern Image	*lightgrey;
 
 extern Window	**windows;
-
-extern Window	*wkeyboard;	/* window of simulated keyboard */
 extern int		nwindow;
-extern int		snarffd;
 extern Window	*input;
-extern QLock	all;			/* BUG */
-extern Filsys	*filsys;
+
 extern Window	*hidden[100];
 extern int		nhidden;
-extern int		nsnarf;
-extern Rune*	snarf;
-extern int		scrolling;
-extern int		maxtab;
+
+extern Filsys	*filsys;
+
 extern Channel*	winclosechan;
 extern Channel*	deletechan;
+
+extern Rune*	snarf;
+extern int		nsnarf;
+extern int		snarffd;
+extern int		snarfversion;	/* updated each time it is written */
+
+extern Window	*wkeyboard;	/* window of simulated keyboard */
+extern QLock	all;			/* BUG */
+extern int		scrolling;
+extern int		maxtab;
 extern char		*startdir;
 extern int		sweeping;
 extern int		wctlfd;
 extern bool		errorshouldabort;
 extern bool		menuing;
-extern int		snarfversion;	/* updated each time it is written */
 extern int		messagesize;	/* negotiated in 9P version setup */
 /*e: windows/rio/dat.h */

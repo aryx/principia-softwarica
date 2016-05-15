@@ -217,7 +217,7 @@ void threadmain(int argc, char *argv[])
     putenv("font", fontname);
     /*e: [[main()]] set some globals */
 
-    // Rio, a graphical app
+    // Rio, a graphical application
 
     /*s: [[main()]] graphics initializations */
     if(geninitdraw(nil, derror, nil, "rio", nil, Refnone) < 0){
@@ -250,7 +250,7 @@ void threadmain(int argc, char *argv[])
     flushimage(display, true);
     /*e: [[main()]] graphics initializations */
 
-    // Rio, a concurrent app
+    // Rio, a concurrent application
 
     /*s: [[main()]] communication channels creation */
     exitchan     = chancreate(sizeof(int), 0);
