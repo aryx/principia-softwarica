@@ -37,16 +37,16 @@ void 		wscrsleep(Window*, uint);
 
 // XFid stuff
 Channel*	xfidinit(void);
-void		xfidflush(Xfid*);
 void		xfidattach(Xfid*);
 void		xfidopen(Xfid*);
 void		xfidclose(Xfid*);
 void		xfidread(Xfid*);
 void		xfidwrite(Xfid*);
+void		xfidflush(Xfid*);
 
 // Filsys stuff
-Filsys*	filsysinit(Channel*);
-int		filsysmount(Filsys*, int);
+Filsys*	    filsysinit(Channel*);
+int		    filsysmount(Filsys*, int);
 Xfid*		filsysrespond(Filsys*, Xfid*, Fcall*, char*);
 void		filsyscancel(Xfid*);
 

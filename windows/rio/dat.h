@@ -1,4 +1,24 @@
 /*s: windows/rio/dat.h */
+
+typedef	struct	Window Window;
+typedef	struct	Wctlmesg Wctlmesg;
+typedef	struct	Filsys Filsys;
+typedef	struct	Fid Fid;
+typedef	struct	Xfid Xfid;
+typedef	struct	Consreadmesg Consreadmesg;
+typedef	struct	Conswritemesg Conswritemesg;
+typedef	struct	Stringpair Stringpair;
+typedef	struct	Dirtab Dirtab;
+typedef	struct	Mouseinfo	Mouseinfo;
+typedef	struct	Mousereadmesg Mousereadmesg;
+typedef	struct	Mousestate	Mousestate;
+typedef	struct	Ref Ref;
+typedef	struct	Timer Timer;
+
+//----------------------------------------------------------------------------
+// Data structures and constants
+//----------------------------------------------------------------------------
+
 /*s: enum qid */
 enum Qxxx
 {
@@ -41,6 +61,17 @@ enum Qxxx
 };
 /*e: enum qid */
 
+/*s: function QID */
+#define	QID(winid,qxxx)	((winid<<8)|(qxxx))
+/*e: function QID */
+/*s: function WIN */
+#define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
+/*e: function WIN */
+/*s: function FILE */
+#define	FILE(q)	(((ulong)(q).path) & 0xFF)
+/*e: function FILE */
+
+
 /*s: enum _anon_ (windows/rio/dat.h)2 */
 enum
 {
@@ -52,21 +83,6 @@ enum
 /*s: constant STACK */
 #define	STACK	8192
 /*e: constant STACK */
-
-typedef	struct	Consreadmesg Consreadmesg;
-typedef	struct	Conswritemesg Conswritemesg;
-typedef	struct	Stringpair Stringpair;
-typedef	struct	Dirtab Dirtab;
-typedef	struct	Fid Fid;
-typedef	struct	Filsys Filsys;
-typedef	struct	Mouseinfo	Mouseinfo;
-typedef	struct	Mousereadmesg Mousereadmesg;
-typedef	struct	Mousestate	Mousestate;
-typedef	struct	Ref Ref;
-typedef	struct	Timer Timer;
-typedef	struct	Wctlmesg Wctlmesg;
-typedef	struct	Window Window;
-typedef	struct	Xfid Xfid;
 
 /*s: enum _anon_ (windows/rio/dat.h)3 */
 enum
@@ -87,15 +103,6 @@ enum
 };
 /*e: enum _anon_ (windows/rio/dat.h)3 */
 
-/*s: function QID */
-#define	QID(winid,qxxx)	((winid<<8)|(qxxx))
-/*e: function QID */
-/*s: function WIN */
-#define	WIN(q)	((((ulong)(q).path)>>8) & 0xFFFFFF)
-/*e: function WIN */
-/*s: function FILE */
-#define	FILE(q)	(((ulong)(q).path) & 0xFF)
-/*e: function FILE */
 
 /*s: enum wctlmesgkind */
 enum	/* control messages */
@@ -466,22 +473,18 @@ struct Timer
 };
 /*e: struct Timer */
 
-// draw.h
-extern Display	*display;
-extern Font	*font;
+//----------------------------------------------------------------------------
+// Globals
+//----------------------------------------------------------------------------
 
-extern Mousectl	*mousectl;
-extern Mouse	*mouse;
-extern Keyboardctl	*keyboardctl;
+// draw.h globals
+//extern Display	*display;
+//extern Font	*font;
+//extern Image  *view;
+
+// globals.c
 
 extern Screen	*wscreen;
-extern Cursor	boxcursor;
-extern Cursor	crosscursor;
-extern Cursor	sightcursor;
-extern Cursor	whitearrow;
-extern Cursor	query;
-extern Cursor	*corners[9];
-
 extern Image	*background;
 extern Image	*red;
 //extern Image	*lightgrey;
@@ -495,6 +498,17 @@ extern int		nhidden;
 
 extern Filsys	*filsys;
 
+extern Keyboardctl	*keyboardctl;
+extern Mousectl	*mousectl;
+extern Mouse	*mouse;
+
+extern Cursor	boxcursor;
+extern Cursor	crosscursor;
+extern Cursor	sightcursor;
+extern Cursor	whitearrow;
+extern Cursor	query;
+extern Cursor	*corners[9];
+
 extern Channel*	winclosechan;
 extern Channel*	deletechan;
 
@@ -503,14 +517,17 @@ extern int		nsnarf;
 extern int		snarffd;
 extern int		snarfversion;	/* updated each time it is written */
 
+extern int		sweeping;
+extern bool		menuing;
+extern int		scrolling;
+
+// misc
 extern Window	*wkeyboard;	/* window of simulated keyboard */
 extern QLock	all;			/* BUG */
-extern int		scrolling;
 extern int		maxtab;
 extern char		*startdir;
-extern int		sweeping;
-extern int		wctlfd;
+extern fdt		wctlfd;
 extern bool		errorshouldabort;
-extern bool		menuing;
 extern int		messagesize;	/* negotiated in 9P version setup */
+
 /*e: windows/rio/dat.h */
