@@ -63,6 +63,7 @@ char Ebadwrect[] = 	"rectangle outside screen";
 /*s: global Ebadoffset */
 char Ebadoffset[] = 	"window read not on scan line boundary";
 /*e: global Ebadoffset */
+
 extern char Eperm[];
 
 /*s: global xfidfree */

@@ -39,7 +39,6 @@ Image*	drag(Window*, Rectangle*);
 void	resized(void);
 
 void	mousethread(void*);
-void	keyboardthread(void*);
 void 	winclosethread(void*);
 void 	deletethread(void*);
 void	initcmd(void*);
@@ -127,13 +126,6 @@ char *kbdargv[] = { "rc", "-c", nil, nil };
 
 
 
-/*s: function derror */
-void
-derror(Display*, char *errorstr)
-{
-    error(errorstr);
-}
-/*e: function derror */
 
 /*s: function usage */
 void
@@ -415,36 +407,6 @@ killprocs(void)
 }
 /*e: function killprocs */
 
-/*s: function keyboardthread */
-void
-keyboardthread(void*)
-{
-    Rune buf[2][20];
-    // points to buf[0] or buf[1]
-    Rune *rp;
-    int n, i;
-
-    threadsetname("keyboardthread");
-
-    n = 0;
-    for(;;){
-        rp = buf[n];
-        n = 1-n;
-
-        // Listen
-        recv(keyboardctl->c, rp);
-
-        for(i=1; i<nelem(buf[0])-1; i++)
-            if(nbrecv(keyboardctl->c, rp+i) <= 0)
-                break;
-        rp[i] = L'\0';
-
-        if(input != nil)
-            // Dispatch, to current window thread!
-            sendp(input->ck, rp);
-    }
-}
-/*e: function keyboardthread */
 
 /*s: function keyboardsend */
 /*

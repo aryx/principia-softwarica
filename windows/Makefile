@@ -32,6 +32,17 @@ SRC_VIEWS= \
    rio/fns.h\
    rio/fsys.c\
    rio/rio.c\
+    rio/thread_mouse.c \
+    rio/thread_keyboard.c \
+    rio/threads_misc.c \
+    rio/wm.c \
+    rio/error.c \
+   \
+   rio/threads_window.c \
+   rio/threads_worker.c \
+   rio/terminal.c \
+   rio/snarf.c \
+   \
    rio/scrl.c\
    rio/time.c\
    rio/util.c\

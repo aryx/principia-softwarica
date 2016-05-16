@@ -97,9 +97,6 @@ bool menuing;/* menu action is pending; waiting for window to be indicated */
 /*s: global snarfversion */
 int		snarfversion;	/* updated each time it is written */
 /*e: global snarfversion */
-/*s: global errorshouldabort */
-bool errorshouldabort = false;
-/*e: global errorshouldabort */
 /*s: global winclosechan */
 // chan<ref<Window>> (listener = winclosethread, sender = filsyswalk | filsysclunk )
 Channel	*winclosechan; /* chan(Window*); */

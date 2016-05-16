@@ -38,8 +38,8 @@ struct Plumbattr
 };
 /*e: struct Plumbattr */
 
-int		plumbsend(int, Plumbmsg*);
-int		plumbsendtext(int, char*, char*, char*, char*);
+int		    plumbsend(int, Plumbmsg*);
+int		    plumbsendtext(int, char*, char*, char*, char*);
 Plumbmsg*	plumbrecv(int);
 char*		plumbpack(Plumbmsg*, int*);
 Plumbmsg*	plumbunpack(char*, int);
@@ -50,6 +50,7 @@ Plumbattr*	plumbaddattr(Plumbattr*, Plumbattr*);
 Plumbattr*	plumbdelattr(Plumbattr*, char*);
 void		plumbfree(Plumbmsg*);
 char*		plumblookup(Plumbattr*, char*);
-int		plumbopen(char*, int);
+int		    plumbopen(char*, int);
+
 int		eplumb(int, char*);
 /*e: include/plumb.h */

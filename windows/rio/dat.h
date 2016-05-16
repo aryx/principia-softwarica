@@ -527,7 +527,9 @@ extern QLock	all;			/* BUG */
 extern int		maxtab;
 extern char		*startdir;
 extern fdt		wctlfd;
-extern bool		errorshouldabort;
 extern int		messagesize;	/* negotiated in 9P version setup */
+
+// error.c
+extern bool		errorshouldabort;
 
 /*e: windows/rio/dat.h */

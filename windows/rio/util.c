@@ -47,16 +47,6 @@ cvttorunes(char *p, int n, Rune *r, int *nb, int *nr, int *nulls)
 }
 /*e: function cvttorunes */
 
-/*s: function error */
-void
-error(char *s)
-{
-    fprint(STDERR, "rio: %s: %r\n", s);
-    if(errorshouldabort)
-        abort();
-    threadexitsall("error");
-}
-/*e: function error */
 
 /*s: function erealloc */
 void*

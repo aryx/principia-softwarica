@@ -1,7 +1,13 @@
 /*s: windows/rio/fns.h */
 
+// thread_keyboard.c (for main())
+void	keyboardthread(void*);
+
+// error.c (for main())
+void derror(Display*, char *);
+
 // Window stuff
-int		winborder(Window*, Point);
+int		    winborder(Window*, Point);
 void		winctl(void*);
 void		winshell(void*);
 Window*		wlookid(int);
@@ -11,7 +17,7 @@ Window*		wtop(Point);
 void		wtopme(Window*);
 void		wbottomme(Window*);
 char*		wcontents(Window*, int*);
-int		wclose(Window*);
+int		    wclose(Window*);
 
 uint		wbacknl(Window*, uint, uint);
 uint		winsert(Window*, Rune*, int, uint);

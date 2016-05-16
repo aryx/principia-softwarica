@@ -84,6 +84,7 @@ void	frinit(Frame*, Rectangle, Font*, Image*, Image**);
 void	frsetrects(Frame*, Rectangle, Image*);
 void	frclear(Frame*, int);
 
+// private??? frame_private.h?
 uchar	*_frallocstr(Frame*, unsigned);
 void	_frinsure(Frame*, int, unsigned);
 Point	_frdraw(Frame*, Point);
@@ -106,6 +107,7 @@ void	_fraddbox(Frame*, int, int);
 Point	_frptofcharptb(Frame*, ulong, Point, int);
 Point	_frptofcharnb(Frame*, ulong, int);
 int	_frstrlen(Frame*, int);
+
 void	frtick(Frame*, Point, int);
 void	frinittick(Frame*);
 void	frredraw(Frame*);
