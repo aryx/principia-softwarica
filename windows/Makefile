@@ -3,6 +3,10 @@ TOP=..
 all:
 	echo todo
 
+graph:
+	echo "!!Adjust also the skip list!!"
+	cd ..; ~/pfff/codegraph -lang c -build include/ windows/rio windows/libcomplete windows/libframe windows/libplumb
+
 include $(TOP)/docs/latex/Makefile.common
 
 ##############################################################################
