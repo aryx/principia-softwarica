@@ -503,6 +503,8 @@ extern Keyboardctl	*keyboardctl;
 extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 
+extern Cursor	*lastcursor; // was static in wind.c
+
 extern Cursor	boxcursor;
 extern Cursor	crosscursor;
 extern Cursor	sightcursor;
@@ -512,7 +514,7 @@ extern Cursor	*corners[9];
 
 
 
-extern Channel	*exitchan;
+extern Channel	*exitchan; // was static in rio.c
 
 extern Channel*	winclosechan;
 extern Channel*	deletechan;

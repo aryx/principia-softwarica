@@ -251,6 +251,8 @@ extern Keyboardctl	*keyboardctl;
 extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 
+extern Cursor	*lastcursor; // was static in wind.c
+
 extern Cursor	boxcursor;
 extern Cursor	crosscursor;
 extern Cursor	sightcursor;
@@ -260,7 +262,7 @@ extern Cursor	*corners[9];
 
 
 
-extern Channel	*exitchan;
+extern Channel	*exitchan; // was static in rio.c
 
 extern Channel*	winclosechan;
 extern Channel*	deletechan;
@@ -297,29 +299,42 @@ extern bool		errorshouldabort;
 
 <<windows/rio/fns.h>>=
 
-// thread_keyboard.c (for main())
+// thread_keyboard.c (for rio.c)
 void	keyboardthread(void*);
 
-// thread_mouse.c (for main())
+// thread_mouse.c (for rio.c)
 void	mousethread(void*);
 
-// threads_misc.c (for main())
+// threads_misc.c (for rio.c)
 void 	winclosethread(void*);
 void 	deletethread(void*);
 
-// wm.c (for mousethread())
-void cornercursor(Window *w, Point p, bool force);
+// threads_window.c (for wm.c)
+void    winctl(void*);
+
+// wm.c (for thread_mouse.c)
+void    cornercursor(Window *w, Point p, bool force);
 Image	*bandsize(Window*);
 Image*	drag(Window*, Rectangle*);
-void button3menu(void);
+void    button3menu(void);
 
-// terminal.c (for mousethread())
+// wind.c (for threads_window.c)
+void	wresize(Window*, Image*, int);
+void	wclosewin(Window*);
+void	wrefresh(Window*, Rectangle);
+void	wrepaint(Window*);
+
+// wind.c (for terminal.c)
+void	wfill(Window*);
+
+// terminal.c (for threads_window.c)
 void button2menu(Window *w);
+void	wkeyctl(Window*, Rune);
+void	wmousectl(Window*);
+void	wdelete(Window*, uint, uint);
 
-// error.c (for main())
+// error.c (for main.c)
 void derror(Display*, char *);
-
-
 
 
 
@@ -328,7 +343,6 @@ void derror(Display*, char *);
 
 // Window stuff
 int		    winborder(Window*, Point);
-void		winctl(void*);
 void		winshell(void*);
 Window*		wlookid(int);
 Window*		wmk(Image*, Mousectl*, Channel*, Channel*, int);
@@ -339,9 +353,10 @@ void		wbottomme(Window*);
 char*		wcontents(Window*, int*);
 int		    wclose(Window*);
 
+void		waddraw(Window*, Rune*, int);
+
 uint		wbacknl(Window*, uint, uint);
 uint		winsert(Window*, Rune*, int, uint);
-void		waddraw(Window*, Rune*, int);
 void		wcurrent(Window*);
 void		wcut(Window*);
 void		wmovemouse(Window*, Point);
@@ -383,7 +398,23 @@ void		deletetimeoutproc(void*);
 
 
 
+
+// util.c
+int	min(int, int);
+int	max(int, int);
+Rune*	strrune(Rune*, Rune);
+int	isalnum(Rune);
+void	*erealloc(void*, uint);
+void 	*emalloc(uint);
+char 	*estrdup(char*);
+void	cvttorunes(char*, int, Rune*, int*, int*, int*);
+/* was (byte*,int)	runetobyte(Rune*, int); */
+char* 	runetobyte(Rune*, int, int*);
+
+void	error(char*);
+
 // Misc stuff
+
 void	keyboardsend(char*, int);
 int	whide(Window*);
 int	wunhide(int);
@@ -392,21 +423,12 @@ int	parsewctl(char**, Rectangle, Rectangle*, int*, int*, int*, int*, char**, cha
 int	writewctl(Xfid*, char*);
 Window *new(Image*, int, int, int, char*, char*, char**);
 void	riosetcursor(Cursor*, int);
-int	min(int, int);
-int	max(int, int);
-Rune*	strrune(Rune*, Rune);
-int	isalnum(Rune);
+
 void	timerstop(Timer*);
 void	timercancel(Timer*);
 Timer*	timerstart(int);
-void	error(char*);
+
 void	iconinit(void);
-void	*erealloc(void*, uint);
-void 	*emalloc(uint);
-char 	*estrdup(char*);
-void	cvttorunes(char*, int, Rune*, int*, int*, int*);
-/* was (byte*,int)	runetobyte(Rune*, int); */
-char* 	runetobyte(Rune*, int, int*);
 void	putsnarf(void);
 void	getsnarf(void);
 void	timerinit(void);
@@ -542,11 +564,40 @@ int	goodrect(Rectangle);
 @
 
 \subsection*{[[windows/rio/threads_window.c]]}
-%pad: I created this file; its content was in ?? before.
+%pad: I created this file; its content was in wind.c before.
 
 %-------------------------------------------------------------
 
 <<windows/rio/threads_window.c>>=
+
+#include <u.h>
+#include <libc.h>
+
+// for dat.h
+#include <draw.h>
+#include <mouse.h>
+#include <cursor.h>
+#include <keyboard.h>
+#include <frame.h>
+#include <fcall.h>
+#include <thread.h>
+
+#include <window.h>
+
+#include "dat.h"
+#include "fns.h"
+
+
+<<enum Wxxx>>
+
+
+
+<<function wctlmesg>>
+
+
+<<function winctl>>
+
+<<function wsendctlmesg>>
 
 @
 
@@ -707,7 +758,8 @@ int	goodrect(Rectangle);
 @
 
 \subsection*{[[windows/rio/terminal.c]]}
-%pad: I created this file; its content was in rio.c before.
+%pad: I created this file; its content was in rio.c and wind.c before.
+
 
 %-------------------------------------------------------------
 
@@ -724,10 +776,14 @@ int	goodrect(Rectangle);
 #include <fcall.h>
 #include <thread.h>
 
+#include <plumb.h>
+#include <complete.h>
+
+
 #include "dat.h"
 #include "fns.h"
 
-
+<<enum _anon_ (windows/rio/wind.c)>>
 
 <<enum _anon_ (windows/rio/rio.c)2>>
 
@@ -735,9 +791,127 @@ int	goodrect(Rectangle);
 
 <<global menu2>>
 
+<<global clickwin>>
+<<global clickmsec>>
+<<global selectwin>>
+<<global selectq>>
+
+
+//----------------------------------------------------------------------------
+// Completion
+//----------------------------------------------------------------------------
+
+
+<<function windfilewidth>>
+
+<<function showcandidates>>
+
+<<function namecomplete>>
+
+
+//----------------------------------------------------------------------------
+// Scrolling
+//----------------------------------------------------------------------------
+
+<<function wframescroll>>
+
+<<function framescroll>>
+
+
+//----------------------------------------------------------------------------
+// Selection
+//----------------------------------------------------------------------------
+
+<<function wclickmatch>>
+
+
+<<global left1>>
+<<global right1>>
+<<global left2>>
+<<global left3>>
+
+<<global left>>
+<<global right>>
+
+<<function wdoubleclick>>
+
+
+
+
+<<function wselect>>
+
+//----------------------------------------------------------------------------
+// Clicking
+//----------------------------------------------------------------------------
+
+
+//----------------------------------------------------------------------------
+// Cut/copy/paste
+//----------------------------------------------------------------------------
+
+<<function wsnarf>>
+
+<<function wcut>>
+
+<<function wpaste>>
+
+//----------------------------------------------------------------------------
+// Plumb
+//----------------------------------------------------------------------------
+
+<<function wplumb>>
+
+
+
+//----------------------------------------------------------------------------
+// Middle click
+//----------------------------------------------------------------------------
 
 
 <<function button2menu>>
+
+//----------------------------------------------------------------------------
+// Editor
+//----------------------------------------------------------------------------
+
+<<function wbswidth>>
+
+<<function wfill>>
+
+
+<<function wdelete>>
+
+<<function wbacknl>>
+
+
+<<function wshow>>
+
+<<function wsetorigin>>
+
+<<function wsetselect>>
+
+<<function winsert>>
+
+
+<<function wcontents>>
+
+
+//----------------------------------------------------------------------------
+// Mouse dispatch
+//----------------------------------------------------------------------------
+
+<<function wmousectl>>
+
+//----------------------------------------------------------------------------
+// Key dispatch
+//----------------------------------------------------------------------------
+
+
+<<function interruptproc>>
+
+
+
+<<function wkeyctl>>
 
 @
 
@@ -837,10 +1011,7 @@ int	goodrect(Rectangle);
 <<function shutdown>>
 
 
-
-
 <<function threadmain>>
-
 
 @
 
@@ -903,41 +1074,31 @@ int	goodrect(Rectangle);
 <<windows/rio/wind.c>>=
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <window.h>
 #include <thread.h>
 #include <cursor.h>
 #include <mouse.h>
 #include <keyboard.h>
+
 #include <frame.h>
 #include <fcall.h>
-#include <plumb.h>
-
-#include <complete.h>
 
 #include "dat.h"
 #include "fns.h"
 
-
-void	wrefresh(Window*, Rectangle);
-void	wresize(Window*, Image*, int);
-void	wkeyctl(Window*, Rune);
+/*
+int 	wctlmesg(Window*, int, Rectangle, Image*);
 void	wsetcols(Window*);
-void	wrepaint(Window*);
 int 	wbswidth(Window*, Rune);
-void	wmousectl(Window*);
-void	wdelete(Window*, uint, uint);
 void	wframescroll(Window*, int);
 void	wselect(Window*);
-int 	wctlmesg(Window*, int, Rectangle, Image*);
 void	wborder(Window*, int);
-void	wclosewin(Window*);
 void	wdoubleclick(Window*, uint*, uint*);
 int 	wclickmatch(Window*, int, int, int, uint*);
-void	wfill(Window*);
+*/
 
-
-<<enum _anon_ (windows/rio/wind.c)>>
 
 <<global topped>>
 <<global id>>
@@ -945,12 +1106,20 @@ void	wfill(Window*);
 <<global cols>>
 <<global grey>>
 <<global darkgrey>>
-<<global lastcursor>>
+
+
 <<global titlecol>>
 <<global lighttitlecol>>
 <<global holdcol>>
 <<global lightholdcol>>
 <<global paleholdcol>>
+
+<<global lastcursor>>
+
+<<function wborder>>
+
+<<function wsetcols>>
+
 
 <<function wmk>>
 
@@ -962,65 +1131,32 @@ void	wfill(Window*);
 
 <<function wclose>>
 
-<<enum Wxxx>>
-
-<<function winctl>>
 
 <<function waddraw>>
 
-<<function interruptproc>>
 
-<<function windfilewidth>>
 
-<<function showcandidates>>
 
-<<function namecomplete>>
-
-<<function wkeyctl>>
-
-<<function wsetcols>>
 
 <<function wrepaint>>
 
-<<function wbswidth>>
 
-<<function wsnarf>>
 
-<<function wcut>>
-
-<<function wpaste>>
-
-<<function wplumb>>
 
 <<function winborder>>
 
-<<function wmousectl>>
-
-<<function wdelete>>
 
 
-<<global clickwin>>
-<<global clickmsec>>
-<<global selectwin>>
-<<global selectq>>
 
-<<function framescroll>>
 
-<<function wframescroll>>
-
-<<function wselect>>
-
-<<function wsendctlmesg>>
 
 <<function deletetimeoutproc>>
 
 
 
-<<function wctlmesg>>
 
 <<function wmovemouse>>
 
-<<function wborder>>
 
 <<function wpointto>>
 
@@ -1044,32 +1180,6 @@ void	wfill(Window*);
 
 <<function winshell>>
 
-<<global left1>>
-<<global right1>>
-<<global left2>>
-<<global left3>>
-
-<<global left>>
-<<global right>>
-
-<<function wdoubleclick>>
-
-<<function wclickmatch>>
-
-
-<<function wbacknl>>
-
-<<function wshow>>
-
-<<function wsetorigin>>
-
-<<function wsetselect>>
-
-<<function winsert>>
-
-<<function wfill>>
-
-<<function wcontents>>
 @
 
 

@@ -100,8 +100,6 @@ shutdown(void *, char *msg)
 /*e: function shutdown */
 
 
-
-
 /*s: function threadmain */
 void threadmain(int argc, char *argv[])
 {
@@ -263,6 +261,5 @@ void threadmain(int argc, char *argv[])
     threadexitsall(nil);
 }
 /*e: function threadmain */
-
 
 /*e: windows/rio/rio.c */
