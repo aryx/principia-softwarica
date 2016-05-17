@@ -477,10 +477,7 @@ struct Timer
 // Globals
 //----------------------------------------------------------------------------
 
-// draw.h globals
-//extern Display	*display;
-//extern Font	*font;
-//extern Image  *view;
+// see also draw.h globals: display, font, view
 
 // globals.c
 
@@ -488,7 +485,7 @@ extern Screen	*wscreen;
 extern Image	*background;
 extern Image	*red;
 //extern Image	*lightgrey;
-extern Rectangle	viewr;
+extern Rectangle	viewr; // was static in rio.c
 
 extern Window	**windows;
 extern int		nwindow;
@@ -502,15 +499,6 @@ extern Filsys	*filsys;
 extern Keyboardctl	*keyboardctl;
 extern Mousectl	*mousectl;
 extern Mouse	*mouse;
-
-extern Cursor	*lastcursor; // was static in wind.c
-
-extern Cursor	boxcursor;
-extern Cursor	crosscursor;
-extern Cursor	sightcursor;
-extern Cursor	whitearrow;
-extern Cursor	query;
-extern Cursor	*corners[9];
 
 
 
@@ -527,6 +515,17 @@ extern int		snarfversion;	/* updated each time it is written */
 extern int		sweeping;
 extern bool		menuing;
 extern int		scrolling;
+
+// data.c
+extern Cursor	boxcursor;
+extern Cursor	crosscursor;
+extern Cursor	sightcursor;
+extern Cursor	whitearrow;
+extern Cursor	query;
+extern Cursor	*corners[9];
+
+// cursor.c
+extern Cursor	*lastcursor; // was static in wind.c
 
 // misc
 extern Window	*wkeyboard;	/* window of simulated keyboard */

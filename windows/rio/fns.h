@@ -32,7 +32,7 @@ Xfid*	filsysrespond(Filsys*, Xfid*, Fcall*, char*);
 void	filsyscancel(Xfid*);
 int		filsysmount(Filsys*, int);
 
-// cursor.c TODO
+// cursor.c
 void	riosetcursor(Cursor*, int);
 
 // TODO
@@ -49,10 +49,13 @@ int	whide(Window*); // for wctl
 int	wunhide(int);   // for wctl
 
 // wind.c
-Window*	wpointto(Point);
-void	wresize(Window*, Image*, int);
+Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
 int		wclose(Window*);
 void	wclosewin(Window*);
+Window*	wpointto(Point);
+void	wcurrent(Window*);
+Window*	wlookid(int);
+void	wresize(Window*, Image*, int);
 void	wrefresh(Window*, Rectangle);
 void	wrepaint(Window*);
 int		winborder(Window*, Point);
@@ -60,18 +63,15 @@ Window*	wtop(Point);
 void	wtopme(Window*);
 void	wbottomme(Window*);
 void	wsetcursor(Window*, bool);
-void	wfill(Window*);
-void	wcurrent(Window*);
 void	wmovemouse(Window*, Point);
-Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
+void	wfill(Window*);
 void	wsetname(Window*);
 void	wsetpid(Window*, int, int);
-Window*	wlookid(int);
 
-// processes_winshell TODO
+// processes_winshell
 void	winshell(void*);
 
-// graphical_window.c TODO
+// graphical_window.c
 void	waddraw(Window*, Rune*, int);
 
 // terminal.c
@@ -108,8 +108,7 @@ int	    max(int, int);
 Rune*	strrune(Rune*, Rune);
 int	    isalnum(Rune);
 void	cvttorunes(char*, int, Rune*, int*, int*, int*);
-/* was (byte*,int)	runetobyte(Rune*, int); */
-char* 	runetobyte(Rune*, int, int*);
+char* 	runetobyte(Rune*, int, int*);/* was (byte*,int) runetobyte(Rune*,int);*/
 void*	erealloc(void*, uint);
 void* 	emalloc(uint);
 char* 	estrdup(char*);
