@@ -488,6 +488,7 @@ extern Screen	*wscreen;
 extern Image	*background;
 extern Image	*red;
 //extern Image	*lightgrey;
+extern Rectangle	viewr;
 
 extern Window	**windows;
 extern int		nwindow;
@@ -508,6 +509,10 @@ extern Cursor	sightcursor;
 extern Cursor	whitearrow;
 extern Cursor	query;
 extern Cursor	*corners[9];
+
+
+
+extern Channel	*exitchan;
 
 extern Channel*	winclosechan;
 extern Channel*	deletechan;

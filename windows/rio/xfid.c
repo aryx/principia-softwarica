@@ -456,6 +456,27 @@ xfidclose(Xfid *x)
 }
 /*e: function xfidclose */
 
+
+/*s: function keyboardsend */
+/*
+ * Used by /dev/kbdin
+ */
+void
+keyboardsend(char *s, int cnt)
+{
+    Rune *r;
+    int i, nb, nr;
+
+    r = runemalloc(cnt);
+    /* BUGlet: partial runes will be converted to error runes */
+    cvttorunes(s, cnt, r, &nb, &nr, nil);
+    for(i=0; i<nr; i++)
+        send(keyboardctl->c, &r[i]);
+    free(r);
+}
+/*e: function keyboardsend */
+
+
 /*s: enum _anon_ (windows/rio/xfid.c)2 */
 enum { CWdata, CWflush, NCW };
 /*e: enum _anon_ (windows/rio/xfid.c)2 */

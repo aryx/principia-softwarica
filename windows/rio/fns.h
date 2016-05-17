@@ -3,8 +3,31 @@
 // thread_keyboard.c (for main())
 void	keyboardthread(void*);
 
+// thread_mouse.c (for main())
+void	mousethread(void*);
+
+// threads_misc.c (for main())
+void 	winclosethread(void*);
+void 	deletethread(void*);
+
+// wm.c (for mousethread())
+void cornercursor(Window *w, Point p, bool force);
+Image	*bandsize(Window*);
+Image*	drag(Window*, Rectangle*);
+void button3menu(void);
+
+// terminal.c (for mousethread())
+void button2menu(Window *w);
+
 // error.c (for main())
 void derror(Display*, char *);
+
+
+
+
+
+
+
 
 // Window stuff
 int		    winborder(Window*, Point);

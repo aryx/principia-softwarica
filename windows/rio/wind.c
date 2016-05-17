@@ -1361,6 +1361,19 @@ wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
 }
 /*e: function wsendctlmesg */
 
+/*s: function deletetimeoutproc */
+void
+deletetimeoutproc(void *v)
+{
+    char *s = v;
+
+    sleep(750);	/* remove window from screen after 3/4 of a second */
+    sendp(deletechan, s);
+}
+/*e: function deletetimeoutproc */
+
+
+
 /*s: function wctlmesg */
 int
 wctlmesg(Window *w, int m, Rectangle r, Image *i)

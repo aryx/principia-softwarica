@@ -47,6 +47,16 @@ Window	*wkeyboard;	/* window of simulated keyboard */
 int	nwindow;
 /*e: global nwindow */
 
+/*s: global viewr */
+Rectangle	viewr;
+/*e: global viewr */
+
+/*s: global exitchan */
+// chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
+Channel	*exitchan;	/* chan(int) */
+/*e: global exitchan */
+
+
 /*s: global snarffd */
 fdt		snarffd;
 /*e: global snarffd */
