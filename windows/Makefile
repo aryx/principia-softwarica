@@ -23,36 +23,43 @@ SRC_ORIG=Windows.nw Windows_extra.nw
 
 # from list_windows originally
 SRC_VIEWS= \
-   ../include/strings/complete.h\
-   ../include/gui/frame.h\
-   ../include/ipc/plumb.h\
    rio/dat.h\
-   rio/globals.c\
-   rio/data.c\
+    rio/globals.c\
    rio/fns.h\
-   rio/fsys.c\
    rio/rio.c\
-    rio/thread_mouse.c \
     rio/thread_keyboard.c \
+    rio/thread_mouse.c \
     rio/threads_misc.c \
     rio/wm.c \
     rio/error.c \
-   \
-   rio/threads_window.c \
-   rio/threads_worker.c \
-   rio/terminal.c \
-   rio/snarf.c \
-   \
+   rio/data.c\
+   rio/wind.c\
+    rio/threads_window.c \
+    rio/terminal.c \
+    rio/snarf.c \
+    rio/cursor.c \
+    rio/processes_winshell.c \
+    rio/graphical_window.c \
+   rio/fsys.c\
    rio/scrl.c\
+   \
+   rio/threads_worker.c \
+   \
    rio/time.c\
    rio/util.c\
    rio/wctl.c\
-   rio/wind.c\
    rio/xfid.c\
+   \
    ../applications/lens.c\
    ../applications/statusbar.c\
    ../applications/winwatch.c\
+   \
+   ../include/strings/complete.h\
+   ../include/gui/frame.h\
+   ../include/ipc/plumb.h\
+   \
    libcomplete/complete.c\
+   \
    libframe/frbox.c\
    libframe/frdelete.c\
    libframe/frdraw.c\
@@ -62,6 +69,7 @@ SRC_VIEWS= \
    libframe/frselect.c\
    libframe/frstr.c\
    libframe/frutil.c\
+   \
    libplumb/event.c\
    libplumb/mesg.c\
    libplumb/plumbsendtext.c\
