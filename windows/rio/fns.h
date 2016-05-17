@@ -49,24 +49,24 @@ int	whide(Window*); // for wctl
 int	wunhide(int);   // for wctl
 
 // wind.c
+Window*	wpointto(Point);
 void	wresize(Window*, Image*, int);
+int		wclose(Window*);
 void	wclosewin(Window*);
 void	wrefresh(Window*, Rectangle);
 void	wrepaint(Window*);
 int		winborder(Window*, Point);
 Window*	wtop(Point);
 void	wtopme(Window*);
+void	wbottomme(Window*);
 void	wsetcursor(Window*, bool);
 void	wfill(Window*);
-Window*	wpointto(Point);
 void	wcurrent(Window*);
 void	wmovemouse(Window*, Point);
-int		wclose(Window*);
 Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
 void	wsetname(Window*);
 void	wsetpid(Window*, int, int);
 Window*	wlookid(int);
-void	wbottomme(Window*);
 
 // processes_winshell TODO
 void	winshell(void*);
