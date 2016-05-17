@@ -47,9 +47,6 @@ Window	*wkeyboard;	/* window of simulated keyboard */
 int	nwindow;
 /*e: global nwindow */
 
-/*s: global viewr */
-Rectangle	viewr;
-/*e: global viewr */
 
 /*s: global exitchan */
 // chan<unit> (listener = threadmain, sender = mousethread(Exit) | ?)
@@ -57,9 +54,6 @@ Channel	*exitchan;	/* chan(int) */
 /*e: global exitchan */
 
 
-/*s: global snarffd */
-fdt		snarffd;
-/*e: global snarffd */
 /*s: global input */
 //option<ref<Window>>, the window with the focus! the window to send input to
 Window	*input;
@@ -76,12 +70,6 @@ Window	*hidden[100];
 /*s: global nhidden */
 int		nhidden;
 /*e: global nhidden */
-/*s: global nsnarf */
-int		nsnarf;
-/*e: global nsnarf */
-/*s: global snarf */
-Rune*	snarf;
-/*e: global snarf */
 /*s: global scrolling */
 bool		scrolling;
 /*e: global scrolling */

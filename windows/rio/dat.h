@@ -484,8 +484,6 @@ struct Timer
 extern Screen	*wscreen;
 extern Image	*background;
 extern Image	*red;
-//extern Image	*lightgrey;
-extern Rectangle	viewr; // was static in rio.c
 
 extern Window	**windows;
 extern int		nwindow;
@@ -507,14 +505,20 @@ extern Channel	*exitchan; // was static in rio.c
 extern Channel*	winclosechan;
 extern Channel*	deletechan;
 
+// snarf.
+extern fdt		snarffd;
 extern Rune*	snarf;
 extern int		nsnarf;
-extern int		snarffd;
+
+
 extern int		snarfversion;	/* updated each time it is written */
 
 extern int		sweeping;
 extern bool		menuing;
 extern int		scrolling;
+
+// thread_mouse.c
+extern Rectangle	viewr; // was static in rio.c
 
 // data.c
 extern Cursor	boxcursor;
@@ -527,13 +531,17 @@ extern Cursor	*corners[9];
 // cursor.c
 extern Cursor	*lastcursor; // was static in wind.c
 
+
+extern char		*startdir;
+
 // misc
 extern Window	*wkeyboard;	/* window of simulated keyboard */
 extern QLock	all;			/* BUG */
-extern int		maxtab;
-extern char		*startdir;
 extern fdt		wctlfd;
 extern int		messagesize;	/* negotiated in 9P version setup */
+
+// TODO delete
+extern int		maxtab;
 
 // error.c
 extern bool		errorshouldabort;

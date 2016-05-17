@@ -45,6 +45,9 @@ keyboardhide(void)
 }
 /*e: function keyboardhide */
 
+/*s: global viewr */
+Rectangle	viewr;
+/*e: global viewr */
 
 /*s: function resized */
 void

@@ -14,6 +14,17 @@
 #include "dat.h"
 #include "fns.h"
 
+/*s: global snarffd */
+fdt		snarffd;
+/*e: global snarffd */
+
+/*s: global snarf */
+Rune*	snarf;
+/*e: global snarf */
+/*s: global nsnarf */
+int		nsnarf;
+/*e: global nsnarf */
+
 
 /*s: function putsnarf */
 /*
