@@ -2,139 +2,117 @@
 
 // thread_keyboard.c (for rio.c)
 void	keyboardthread(void*);
-
-// thread_mouse.c (for rio.c)
+// thread_mouse.c    (for rio.c)
 void	mousethread(void*);
-
-// threads_misc.c (for rio.c)
+// threads_misc.c    (for rio.c)
 void 	winclosethread(void*);
 void 	deletethread(void*);
-
-// threads_window.c (for wm.c)
+// threads_window.c
 void    winctl(void*);
+void    wsendctlmesg(Window*, int, Rectangle, Image*);
+
+// data.c (for rio.c)
+void	iconinit(void);
+// timer.c (for rio.c and scrl.c)
+void	timerinit(void);
+void	timerstop(Timer*);
+void	timercancel(Timer*);
+Timer*	timerstart(int);
+// xfid.c  (for rio.c and fsys.c)
+Channel*xfidinit(void);
+void	xfidattach(Xfid*);
+void	xfidopen(Xfid*);
+void	xfidclose(Xfid*);
+void	xfidread(Xfid*);
+void	xfidwrite(Xfid*);
+void	xfidflush(Xfid*);
+// fsys.c (for rio.c and xfid.c and process_winshell.c)
+Filsys*	filsysinit(Channel*);
+Xfid*	filsysrespond(Filsys*, Xfid*, Fcall*, char*);
+void	filsyscancel(Xfid*);
+int		filsysmount(Filsys*, int);
+
+// cursor.c TODO
+void	riosetcursor(Cursor*, int);
+
+// TODO
+int	    goodrect(Rectangle);
+
 
 // wm.c (for thread_mouse.c)
 void    cornercursor(Window *w, Point p, bool force);
 Image	*bandsize(Window*);
 Image*	drag(Window*, Rectangle*);
 void    button3menu(void);
+Window *new(Image*, int, int, int, char*, char*, char**); // for wkeyboard
+int	whide(Window*); // for wctl
+int	wunhide(int);   // for wctl
 
-// wind.c (for threads_window.c)
+// wind.c
 void	wresize(Window*, Image*, int);
 void	wclosewin(Window*);
 void	wrefresh(Window*, Rectangle);
 void	wrepaint(Window*);
-
-// wind.c (for terminal.c)
+int		winborder(Window*, Point);
+Window*	wtop(Point);
+void	wtopme(Window*);
+void	wsetcursor(Window*, bool);
 void	wfill(Window*);
+Window*	wpointto(Point);
+void	wcurrent(Window*);
+void	wmovemouse(Window*, Point);
+int		wclose(Window*);
+Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
+void	wsetname(Window*);
+void	wsetpid(Window*, int, int);
+Window*	wlookid(int);
+void	wbottomme(Window*);
 
-// terminal.c (for threads_window.c)
-void button2menu(Window *w);
+// processes_winshell TODO
+void	winshell(void*);
+
+// graphical_window.c TODO
+void	waddraw(Window*, Rune*, int);
+
+// terminal.c
+void    button2menu(Window *w);
 void	wkeyctl(Window*, Rune);
 void	wmousectl(Window*);
 void	wdelete(Window*, uint, uint);
+uint	winsert(Window*, Rune*, int, uint);
+void	wshow(Window*, uint);
+void	wsetselect(Window*, uint, uint);
+void	wsetorigin(Window*, uint, int);
+uint	wbacknl(Window*, uint, uint);
+char*	wcontents(Window*, int*);
 
-// error.c (for main.c)
-void derror(Display*, char *);
+// scroll.c
+void	freescrtemps(void);
+void	wscrdraw(Window*);
+void 	wscrsleep(Window*, uint);
+void	wscroll(Window*, int);
 
+// snarf.c
+void	putsnarf(void);
+void	getsnarf(void);
 
-
-
-
-
-// Window stuff
-int		    winborder(Window*, Point);
-void		winshell(void*);
-Window*		wlookid(int);
-Window*		wmk(Image*, Mousectl*, Channel*, Channel*, int);
-Window*		wpointto(Point);
-Window*		wtop(Point);
-void		wtopme(Window*);
-void		wbottomme(Window*);
-char*		wcontents(Window*, int*);
-int		    wclose(Window*);
-
-void		waddraw(Window*, Rune*, int);
-
-uint		wbacknl(Window*, uint, uint);
-uint		winsert(Window*, Rune*, int, uint);
-void		wcurrent(Window*);
-void		wcut(Window*);
-void		wmovemouse(Window*, Point);
-void		wpaste(Window*);
-void		wplumb(Window*);
-
-void		wscrdraw(Window*);
-void		wscroll(Window*, int);
-void		wsendctlmesg(Window*, int, Rectangle, Image*);
-void		wsetcursor(Window*, bool);
-void		wsetname(Window*);
-void		wsetorigin(Window*, uint, int);
-void		wsetpid(Window*, int, int);
-void		wsetselect(Window*, uint, uint);
-void		wshow(Window*, uint);
-void		wsnarf(Window*);
-void 		wscrsleep(Window*, uint);
-
-
-// XFid stuff
-Channel*	xfidinit(void);
-void		xfidattach(Xfid*);
-void		xfidopen(Xfid*);
-void		xfidclose(Xfid*);
-void		xfidread(Xfid*);
-void		xfidwrite(Xfid*);
-void		xfidflush(Xfid*);
-
-// Filsys stuff
-Filsys*	    filsysinit(Channel*);
-int		    filsysmount(Filsys*, int);
-Xfid*		filsysrespond(Filsys*, Xfid*, Fcall*, char*);
-void		filsyscancel(Xfid*);
-
-void		wctlproc(void*);
-void		wctlthread(void*);
-
-void		deletetimeoutproc(void*);
-
-
-
+// wctl.c (for fsys.c and xfid.c)
+void	wctlproc(void*);
+void	wctlthread(void*);
+int	    parsewctl(char**, Rectangle, Rectangle*, int*, int*, int*, int*, char**, char*, char*);
+int	    writewctl(Xfid*, char*);
 
 // util.c
-int	min(int, int);
-int	max(int, int);
+int	    min(int, int);
+int	    max(int, int);
 Rune*	strrune(Rune*, Rune);
-int	isalnum(Rune);
-void	*erealloc(void*, uint);
-void 	*emalloc(uint);
-char 	*estrdup(char*);
+int	    isalnum(Rune);
 void	cvttorunes(char*, int, Rune*, int*, int*, int*);
 /* was (byte*,int)	runetobyte(Rune*, int); */
 char* 	runetobyte(Rune*, int, int*);
-
-void	error(char*);
-
-// Misc stuff
-
-void	keyboardsend(char*, int);
-int	whide(Window*);
-int	wunhide(int);
-void	freescrtemps(void);
-int	parsewctl(char**, Rectangle, Rectangle*, int*, int*, int*, int*, char**, char*, char*);
-int	writewctl(Xfid*, char*);
-Window *new(Image*, int, int, int, char*, char*, char**);
-void	riosetcursor(Cursor*, int);
-
-void	timerstop(Timer*);
-void	timercancel(Timer*);
-Timer*	timerstart(int);
-
-void	iconinit(void);
-void	putsnarf(void);
-void	getsnarf(void);
-void	timerinit(void);
-int	goodrect(Rectangle);
-
+void*	erealloc(void*, uint);
+void* 	emalloc(uint);
+char* 	estrdup(char*);
 
 /*s: function runemalloc */
 #define	runemalloc(n)		malloc((n)*sizeof(Rune))
@@ -145,4 +123,9 @@ int	goodrect(Rectangle);
 /*s: function runemove */
 #define	runemove(a, b, n)	memmove(a, b, (n)*sizeof(Rune))
 /*e: function runemove */
+
+// error.c
+void    derror(Display*, char *); // for main.c
+void	error(char*);
+
 /*e: windows/rio/fns.h */

@@ -15,18 +15,6 @@
 #include "dat.h"
 #include "fns.h"
 
-/*
-int 	wctlmesg(Window*, int, Rectangle, Image*);
-void	wsetcols(Window*);
-int 	wbswidth(Window*, Rune);
-void	wframescroll(Window*, int);
-void	wselect(Window*);
-void	wborder(Window*, int);
-void	wdoubleclick(Window*, uint*, uint*);
-int 	wclickmatch(Window*, int, int, int, uint*);
-*/
-
-
 /*s: global topped */
 static	int		topped;
 /*e: global topped */
@@ -314,7 +302,7 @@ wclose(Window *w)
 }
 /*e: function wclose */
 
-
+// TODO in graphical_window.c
 /*s: function waddraw */
 void
 waddraw(Window *w, Rune *r, int nr)
@@ -351,8 +339,6 @@ wrepaint(Window *w)
 /*e: function wrepaint */
 
 
-
-
 /*s: function winborder */
 bool
 winborder(Window *w, Point xy)
@@ -361,24 +347,6 @@ winborder(Window *w, Point xy)
            !ptinrect(xy, insetrect(w->screenr, Selborder));
 }
 /*e: function winborder */
-
-
-
-
-
-
-/*s: function deletetimeoutproc */
-void
-deletetimeoutproc(void *v)
-{
-    char *s = v;
-
-    sleep(750);	/* remove window from screen after 3/4 of a second */
-    sendp(deletechan, s);
-}
-/*e: function deletetimeoutproc */
-
-
 
 
 /*s: function wmovemouse */

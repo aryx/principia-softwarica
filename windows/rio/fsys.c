@@ -256,6 +256,43 @@ Rescue:
 }
 /*e: function filsysinit */
 
+/*s: function filsysrespond */
+Xfid*
+filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
+{
+    int n;
+
+    if(err){
+        fc->type = Rerror;
+        fc->ename = err;
+    }else
+        fc->type = x->type+1; // Reply type just after Transmit type
+
+    fc->fid = x->fid;
+    fc->tag = x->tag;
+
+    if(x->buf == nil)
+        x->buf = malloc(messagesize);
+    n = convS2M(fc, x->buf, messagesize);
+    /*s: [[filsysrespond()]] sanity check n */
+    if(n <= 0)
+        error("convert error in convS2M");
+    /*e: [[filsysrespond()]] sanity check n */
+
+    if(write(fs->sfd, x->buf, n) != n)
+        error("write error in respond");
+    /*s: [[filsysrespond()]] dump Fcall t if debug */
+    if(DEBUG)
+        fprint(STDERR, "rio:->%F\n", fc);
+    /*e: [[filsysrespond()]] dump Fcall t if debug */
+    free(x->buf);
+    x->buf = nil;
+    return x;
+}
+/*e: function filsysrespond */
+
+
+
 /*s: function filsysproc */
 static
 void
@@ -350,40 +387,6 @@ filsysmount(Filsys *fs, int id)
 }
 /*e: function filsysmount */
 
-/*s: function filsysrespond */
-Xfid*
-filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
-{
-    int n;
-
-    if(err){
-        fc->type = Rerror;
-        fc->ename = err;
-    }else
-        fc->type = x->type+1; // Reply type just after Transmit type
-
-    fc->fid = x->fid;
-    fc->tag = x->tag;
-
-    if(x->buf == nil)
-        x->buf = malloc(messagesize);
-    n = convS2M(fc, x->buf, messagesize);
-    /*s: [[filsysrespond()]] sanity check n */
-    if(n <= 0)
-        error("convert error in convS2M");
-    /*e: [[filsysrespond()]] sanity check n */
-
-    if(write(fs->sfd, x->buf, n) != n)
-        error("write error in respond");
-    /*s: [[filsysrespond()]] dump Fcall t if debug */
-    if(DEBUG)
-        fprint(STDERR, "rio:->%F\n", fc);
-    /*e: [[filsysrespond()]] dump Fcall t if debug */
-    free(x->buf);
-    x->buf = nil;
-    return x;
-}
-/*e: function filsysrespond */
 
 /*s: function filsyscancel */
 void

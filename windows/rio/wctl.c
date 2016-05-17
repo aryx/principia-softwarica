@@ -101,28 +101,6 @@ static char *params[] = {
 };
 /*e: global params */
 
-/*s: function goodrect */
-/*
- * Check that newly created window will be of manageable size
- */
-int
-goodrect(Rectangle r)
-{
-    if(!eqrect(canonrect(r), r))
-        return 0;
-    if(Dx(r)<100 || Dy(r)<3*font->height)
-        return 0;
-    /* must have some screen and border visible so we can move it out of the way */
-    if(Dx(r) >= Dx(view->r) && Dy(r) >= Dy(view->r))
-        return 0;
-    /* reasonable sizes only please */
-    if(Dx(r) > BIG*Dx(view->r))
-        return 0;
-    if(Dy(r) > BIG*Dx(view->r))
-        return 0;
-    return 1;
-}
-/*e: function goodrect */
 
 /*s: function word */
 static

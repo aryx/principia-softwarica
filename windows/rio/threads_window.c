@@ -37,6 +37,16 @@ enum {
 };
 /*e: enum Wxxx */
 
+/*s: function deletetimeoutproc */
+void
+deletetimeoutproc(void *v)
+{
+    char *s = v;
+
+    sleep(750);	/* remove window from screen after 3/4 of a second */
+    sendp(deletechan, s);
+}
+/*e: function deletetimeoutproc */
 
 
 /*s: function wctlmesg */

@@ -195,6 +195,390 @@ namecomplete(Window *w)
 
 
 //----------------------------------------------------------------------------
+// Editor
+//----------------------------------------------------------------------------
+
+/*s: function wbswidth */
+int
+wbswidth(Window *w, Rune c)
+{
+    uint q, eq, stop;
+    Rune r;
+    int skipping;
+
+    /* there is known to be at least one character to erase */
+    if(c == 0x08)	/* ^H: erase character */
+        return 1;
+    q = w->q0;
+    stop = 0;
+    if(q > w->qh)
+        stop = w->qh;
+    skipping = true;
+    while(q > stop){
+        r = w->r[q-1];
+        if(r == '\n'){		/* eat at most one more character */
+            if(q == w->q0)	/* eat the newline */
+                --q;
+            break; 
+        }
+        if(c == 0x17){
+            eq = isalnum(r);
+            if(eq && skipping)	/* found one; stop skipping */
+                skipping = false;
+            else if(!eq && !skipping)
+                break;
+        }
+        --q;
+    }
+    return w->q0-q;
+}
+/*e: function wbswidth */
+
+/*s: function wfill */
+void
+wfill(Window *w)
+{
+    Rune *rp;
+    int i, n, m, nl;
+
+    if(w->lastlinefull)
+        return;
+    rp = malloc(messagesize);
+    do{
+        n = w->nr-(w->org+w->nchars);
+        if(n == 0)
+            break;
+        if(n > 2000)	/* educated guess at reasonable amount */
+            n = 2000;
+        runemove(rp, w->r+(w->org+w->nchars), n);
+        /*
+         * it's expensive to frinsert more than we need, so
+         * count newlines.
+         */
+        nl = w->maxlines-w->nlines;
+        m = 0;
+        for(i=0; i<n; ){
+            if(rp[i++] == '\n'){
+                m++;
+                if(m >= nl)
+                    break;
+            }
+        }
+        frinsert(w, rp, rp+i, w->nchars);
+    } while(w->lastlinefull == false);
+    free(rp);
+}
+/*e: function wfill */
+
+
+/*s: function wdelete */
+void
+wdelete(Window *w, uint q0, uint q1)
+{
+    uint n, p0, p1;
+
+    n = q1-q0;
+    if(n == 0)
+        return;
+    runemove(w->r+q0, w->r+q1, w->nr-q1);
+    w->nr -= n;
+    if(q0 < w->q0)
+        w->q0 -= min(n, w->q0-q0);
+    if(q0 < w->q1)
+        w->q1 -= min(n, w->q1-q0);
+    if(q1 < w->qh)
+        w->qh -= n;
+    else if(q0 < w->qh)
+        w->qh = q0;
+    if(q1 <= w->org)
+        w->org -= n;
+    else if(q0 < w->org+w->nchars){
+        p1 = q1 - w->org;
+        if(p1 > w->nchars)
+            p1 = w->nchars;
+        if(q0 < w->org){
+            w->org = q0;
+            p0 = 0;
+        }else
+            p0 = q0 - w->org;
+        frdelete(w, p0, p1);
+        wfill(w);
+    }
+}
+/*e: function wdelete */
+
+/*s: function wbacknl */
+uint
+wbacknl(Window *w, uint p, uint n)
+{
+    int i, j;
+
+    /* look for start of this line if n==0 */
+    if(n==0 && p>0 && w->r[p-1]!='\n')
+        n = 1;
+    i = n;
+    while(i-->0 && p>0){
+        --p;	/* it's at a newline now; back over it */
+        if(p == 0)
+            break;
+        /* at 128 chars, call it a line anyway */
+        for(j=128; --j>0 && p>0; p--)
+            if(w->r[p-1]=='\n')
+                break;
+    }
+    return p;
+}
+/*e: function wbacknl */
+
+/*s: function wsetorigin */
+void
+wsetorigin(Window *w, uint org, int exact)
+{
+    int i, a, fixup;
+    Rune *r;
+    uint n;
+
+    if(org>0 && !exact){
+        /* org is an estimate of the char posn; find a newline */
+        /* don't try harder than 256 chars */
+        for(i=0; i<256 && org<w->nr; i++){
+            if(w->r[org] == '\n'){
+                org++;
+                break;
+            }
+            org++;
+        }
+    }
+    a = org - w->org;
+    fixup = 0;
+    if(a>=0 && a<w->nchars){
+        frdelete(w, 0, a);
+        fixup = 1;	/* frdelete can leave end of last line in wrong selection mode; it doesn't know what follows */
+    }else if(a<0 && -a<w->nchars){
+        n = w->org - org;
+        r = runemalloc(n);
+        runemove(r, w->r+org, n);
+        frinsert(w, r, r+n, 0);
+        free(r);
+    }else
+        frdelete(w, 0, w->nchars);
+    w->org = org;
+    wfill(w);
+    wscrdraw(w);
+    wsetselect(w, w->q0, w->q1);
+    if(fixup && w->p1 > w->p0)
+        frdrawsel(w, frptofchar(w, w->p1-1), w->p1-1, w->p1, 1);
+}
+/*e: function wsetorigin */
+
+
+/*s: function wshow */
+void
+wshow(Window *w, uint q0)
+{
+    int qe;
+    int nl;
+    uint q;
+
+    qe = w->org + w->nchars;
+    if(w->org <= q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
+        wscrdraw(w);
+    /*s: [[wshow()]] else, when q0 is out of scope */
+    else{
+        nl = 4 * w->maxlines / 5;
+        q = wbacknl(w, q0, nl);
+        /* avoid going backwards if trying to go forwards - long lines! */
+        if(!(q0 > w->org && q < w->org))
+            wsetorigin(w, q, true);
+        while(q0 > w->org + w->nchars)
+            wsetorigin(w, w->org+1, false);
+    }
+    /*e: [[wshow()]] else, when q0 is out of scope */
+}
+/*e: function wshow */
+
+
+/*s: function wsetselect */
+void
+wsetselect(Window *w, uint q0, uint q1)
+{
+    int p0, p1;
+
+    /* w->p0 and w->p1 are always right; w->q0 and w->q1 may be off */
+    w->q0 = q0;
+    w->q1 = q1;
+    /* compute desired p0,p1 from q0,q1 */
+    p0 = q0-w->org;
+    p1 = q1-w->org;
+    if(p0 < 0)
+        p0 = 0;
+    if(p1 < 0)
+        p1 = 0;
+    if(p0 > w->nchars)
+        p0 = w->nchars;
+    if(p1 > w->nchars)
+        p1 = w->nchars;
+    if(p0==w->p0 && p1==w->p1)
+        return;
+
+    /* screen disagrees with desired selection */
+    if(w->p1<=p0 || p1<=w->p0 || p0==p1 || w->p1==w->p0){
+        /* no overlap or too easy to bother trying */
+        frdrawsel(w, frptofchar(w, w->p0), w->p0, w->p1, 0);
+        frdrawsel(w, frptofchar(w, p0), p0, p1, 1);
+        goto Return;
+    }
+    /* overlap; avoid unnecessary painting */
+    if(p0 < w->p0){
+        /* extend selection backwards */
+        frdrawsel(w, frptofchar(w, p0), p0, w->p0, 1);
+    }else if(p0 > w->p0){
+        /* trim first part of selection */
+        frdrawsel(w, frptofchar(w, w->p0), w->p0, p0, 0);
+    }
+    if(p1 > w->p1){
+        /* extend selection forwards */
+        frdrawsel(w, frptofchar(w, w->p1), w->p1, p1, 1);
+    }else if(p1 < w->p1){
+        /* trim last part of selection */
+        frdrawsel(w, frptofchar(w, p1), p1, w->p1, 0);
+    }
+
+    Return:
+    w->p0 = p0;
+    w->p1 = p1;
+}
+/*e: function wsetselect */
+
+/*s: function winsert */
+uint
+winsert(Window *w, Rune *r, int n, uint q0)
+{
+    uint m;
+
+    if(n == 0)
+        return q0;
+    /*s: [[winsert()]] if size of rune array is getting really big */
+    if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
+        m = min(HiWater-LoWater, min(w->org, w->qh));
+        w->org -= m;
+        w->qh -= m;
+        if(w->q0 > m)
+            w->q0 -= m;
+        else
+            w->q0 = 0;
+        if(w->q1 > m)
+            w->q1 -= m;
+        else
+            w->q1 = 0;
+        w->nr -= m;
+        runemove(w->r, w->r+m, w->nr);
+        q0 -= m;
+    }
+    /*e: [[winsert()]] if size of rune array is getting really big */
+    /*s: [[winsert()]] grow rune array if reach maxr */
+    if(w->nr+n > w->maxr){
+        /*
+         * Minimize realloc breakage:
+         *	Allocate at least MinWater
+         * 	Double allocation size each time
+         *	But don't go much above HiWater
+         */
+        m = max(min(2*(w->nr+n), HiWater), w->nr+n)+MinWater;
+        if(m > HiWater)
+            m = max(HiWater+MinWater, w->nr+n);
+        if(m > w->maxr){
+            w->r = runerealloc(w->r, m);
+            w->maxr = m;
+        }
+    }
+    /*e: [[winsert()]] grow rune array if reach maxr */
+
+    // move to the right the runes after the cursor q0 to make some space
+    runemove(w->r + q0 + n, w->r + q0, w->nr - q0);
+    // fill the space
+    runemove(w->r + q0, r, n);
+    w->nr += n;
+
+    /* if output touches, advance selection, not qh; works best for keyboard and output */
+    if(q0 <= w->q0)
+        w->q0 += n; // move the q0 cursor
+    if(q0 <= w->q1)
+        w->q1 += n;
+    if(q0 < w->qh)
+        w->qh += n;
+
+    /*s: [[winsert()]] update visible text */
+    if(q0 < w->org)
+        w->org += n;
+    else if(q0 <= w->org + w->nchars)
+        frinsert(w, r, r+n, q0 - w->org); // echo back
+    /*e: [[winsert()]] update visible text */
+    return q0;
+}
+/*e: function winsert */
+
+
+/*s: function wcontents */
+char*
+wcontents(Window *w, int *ip)
+{
+    return runetobyte(w->r, w->nr, ip);
+}
+/*e: function wcontents */
+
+
+//----------------------------------------------------------------------------
+// Cut/copy/paste
+//----------------------------------------------------------------------------
+
+/*s: function wsnarf */
+void
+wsnarf(Window *w)
+{
+    if(w->q1 == w->q0)
+        return;
+    nsnarf = w->q1 - w->q0;
+    snarf = runerealloc(snarf, nsnarf);
+    snarfversion++;	/* maybe modified by parent */
+    runemove(snarf, w->r+w->q0, nsnarf);
+    putsnarf();
+}
+/*e: function wsnarf */
+
+/*s: function wcut */
+void
+wcut(Window *w)
+{
+    if(w->q1 == w->q0)
+        return;
+    wdelete(w, w->q0, w->q1);
+    wsetselect(w, w->q0, w->q0);
+}
+/*e: function wcut */
+
+/*s: function wpaste */
+void
+wpaste(Window *w)
+{
+    uint q0;
+
+    if(nsnarf == 0)
+        return;
+    wcut(w);
+    q0 = w->q0;
+    if(w->rawing && q0==w->nr){
+        waddraw(w, snarf, nsnarf);
+        wsetselect(w, q0, q0);
+    }else{
+        q0 = winsert(w, snarf, nsnarf, w->q0);
+        wsetselect(w, q0, q0+nsnarf);
+    }
+}
+/*e: function wpaste */
+
+
+//----------------------------------------------------------------------------
 // Scrolling
 //----------------------------------------------------------------------------
 
@@ -447,54 +831,6 @@ wselect(Window *w)
 //----------------------------------------------------------------------------
 
 
-//----------------------------------------------------------------------------
-// Cut/copy/paste
-//----------------------------------------------------------------------------
-
-/*s: function wsnarf */
-void
-wsnarf(Window *w)
-{
-    if(w->q1 == w->q0)
-        return;
-    nsnarf = w->q1 - w->q0;
-    snarf = runerealloc(snarf, nsnarf);
-    snarfversion++;	/* maybe modified by parent */
-    runemove(snarf, w->r+w->q0, nsnarf);
-    putsnarf();
-}
-/*e: function wsnarf */
-
-/*s: function wcut */
-void
-wcut(Window *w)
-{
-    if(w->q1 == w->q0)
-        return;
-    wdelete(w, w->q0, w->q1);
-    wsetselect(w, w->q0, w->q0);
-}
-/*e: function wcut */
-
-/*s: function wpaste */
-void
-wpaste(Window *w)
-{
-    uint q0;
-
-    if(nsnarf == 0)
-        return;
-    wcut(w);
-    q0 = w->q0;
-    if(w->rawing && q0==w->nr){
-        waddraw(w, snarf, nsnarf);
-        wsetselect(w, q0, q0);
-    }else{
-        q0 = winsert(w, snarf, nsnarf, w->q0);
-        wsetselect(w, q0, q0+nsnarf);
-    }
-}
-/*e: function wpaste */
 
 //----------------------------------------------------------------------------
 // Plumb
@@ -622,337 +958,6 @@ button2menu(Window *w)
 }
 /*e: function button2menu */
 
-//----------------------------------------------------------------------------
-// Editor
-//----------------------------------------------------------------------------
-
-/*s: function wbswidth */
-int
-wbswidth(Window *w, Rune c)
-{
-    uint q, eq, stop;
-    Rune r;
-    int skipping;
-
-    /* there is known to be at least one character to erase */
-    if(c == 0x08)	/* ^H: erase character */
-        return 1;
-    q = w->q0;
-    stop = 0;
-    if(q > w->qh)
-        stop = w->qh;
-    skipping = true;
-    while(q > stop){
-        r = w->r[q-1];
-        if(r == '\n'){		/* eat at most one more character */
-            if(q == w->q0)	/* eat the newline */
-                --q;
-            break; 
-        }
-        if(c == 0x17){
-            eq = isalnum(r);
-            if(eq && skipping)	/* found one; stop skipping */
-                skipping = false;
-            else if(!eq && !skipping)
-                break;
-        }
-        --q;
-    }
-    return w->q0-q;
-}
-/*e: function wbswidth */
-
-/*s: function wfill */
-void
-wfill(Window *w)
-{
-    Rune *rp;
-    int i, n, m, nl;
-
-    if(w->lastlinefull)
-        return;
-    rp = malloc(messagesize);
-    do{
-        n = w->nr-(w->org+w->nchars);
-        if(n == 0)
-            break;
-        if(n > 2000)	/* educated guess at reasonable amount */
-            n = 2000;
-        runemove(rp, w->r+(w->org+w->nchars), n);
-        /*
-         * it's expensive to frinsert more than we need, so
-         * count newlines.
-         */
-        nl = w->maxlines-w->nlines;
-        m = 0;
-        for(i=0; i<n; ){
-            if(rp[i++] == '\n'){
-                m++;
-                if(m >= nl)
-                    break;
-            }
-        }
-        frinsert(w, rp, rp+i, w->nchars);
-    } while(w->lastlinefull == false);
-    free(rp);
-}
-/*e: function wfill */
-
-
-/*s: function wdelete */
-void
-wdelete(Window *w, uint q0, uint q1)
-{
-    uint n, p0, p1;
-
-    n = q1-q0;
-    if(n == 0)
-        return;
-    runemove(w->r+q0, w->r+q1, w->nr-q1);
-    w->nr -= n;
-    if(q0 < w->q0)
-        w->q0 -= min(n, w->q0-q0);
-    if(q0 < w->q1)
-        w->q1 -= min(n, w->q1-q0);
-    if(q1 < w->qh)
-        w->qh -= n;
-    else if(q0 < w->qh)
-        w->qh = q0;
-    if(q1 <= w->org)
-        w->org -= n;
-    else if(q0 < w->org+w->nchars){
-        p1 = q1 - w->org;
-        if(p1 > w->nchars)
-            p1 = w->nchars;
-        if(q0 < w->org){
-            w->org = q0;
-            p0 = 0;
-        }else
-            p0 = q0 - w->org;
-        frdelete(w, p0, p1);
-        wfill(w);
-    }
-}
-/*e: function wdelete */
-
-/*s: function wbacknl */
-uint
-wbacknl(Window *w, uint p, uint n)
-{
-    int i, j;
-
-    /* look for start of this line if n==0 */
-    if(n==0 && p>0 && w->r[p-1]!='\n')
-        n = 1;
-    i = n;
-    while(i-->0 && p>0){
-        --p;	/* it's at a newline now; back over it */
-        if(p == 0)
-            break;
-        /* at 128 chars, call it a line anyway */
-        for(j=128; --j>0 && p>0; p--)
-            if(w->r[p-1]=='\n')
-                break;
-    }
-    return p;
-}
-/*e: function wbacknl */
-
-
-/*s: function wshow */
-void
-wshow(Window *w, uint q0)
-{
-    int qe;
-    int nl;
-    uint q;
-
-    qe = w->org + w->nchars;
-    if(w->org <= q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
-        wscrdraw(w);
-    /*s: [[wshow()]] else, when q0 is out of scope */
-    else{
-        nl = 4 * w->maxlines / 5;
-        q = wbacknl(w, q0, nl);
-        /* avoid going backwards if trying to go forwards - long lines! */
-        if(!(q0 > w->org && q < w->org))
-            wsetorigin(w, q, true);
-        while(q0 > w->org + w->nchars)
-            wsetorigin(w, w->org+1, false);
-    }
-    /*e: [[wshow()]] else, when q0 is out of scope */
-}
-/*e: function wshow */
-
-/*s: function wsetorigin */
-void
-wsetorigin(Window *w, uint org, int exact)
-{
-    int i, a, fixup;
-    Rune *r;
-    uint n;
-
-    if(org>0 && !exact){
-        /* org is an estimate of the char posn; find a newline */
-        /* don't try harder than 256 chars */
-        for(i=0; i<256 && org<w->nr; i++){
-            if(w->r[org] == '\n'){
-                org++;
-                break;
-            }
-            org++;
-        }
-    }
-    a = org - w->org;
-    fixup = 0;
-    if(a>=0 && a<w->nchars){
-        frdelete(w, 0, a);
-        fixup = 1;	/* frdelete can leave end of last line in wrong selection mode; it doesn't know what follows */
-    }else if(a<0 && -a<w->nchars){
-        n = w->org - org;
-        r = runemalloc(n);
-        runemove(r, w->r+org, n);
-        frinsert(w, r, r+n, 0);
-        free(r);
-    }else
-        frdelete(w, 0, w->nchars);
-    w->org = org;
-    wfill(w);
-    wscrdraw(w);
-    wsetselect(w, w->q0, w->q1);
-    if(fixup && w->p1 > w->p0)
-        frdrawsel(w, frptofchar(w, w->p1-1), w->p1-1, w->p1, 1);
-}
-/*e: function wsetorigin */
-
-/*s: function wsetselect */
-void
-wsetselect(Window *w, uint q0, uint q1)
-{
-    int p0, p1;
-
-    /* w->p0 and w->p1 are always right; w->q0 and w->q1 may be off */
-    w->q0 = q0;
-    w->q1 = q1;
-    /* compute desired p0,p1 from q0,q1 */
-    p0 = q0-w->org;
-    p1 = q1-w->org;
-    if(p0 < 0)
-        p0 = 0;
-    if(p1 < 0)
-        p1 = 0;
-    if(p0 > w->nchars)
-        p0 = w->nchars;
-    if(p1 > w->nchars)
-        p1 = w->nchars;
-    if(p0==w->p0 && p1==w->p1)
-        return;
-
-    /* screen disagrees with desired selection */
-    if(w->p1<=p0 || p1<=w->p0 || p0==p1 || w->p1==w->p0){
-        /* no overlap or too easy to bother trying */
-        frdrawsel(w, frptofchar(w, w->p0), w->p0, w->p1, 0);
-        frdrawsel(w, frptofchar(w, p0), p0, p1, 1);
-        goto Return;
-    }
-    /* overlap; avoid unnecessary painting */
-    if(p0 < w->p0){
-        /* extend selection backwards */
-        frdrawsel(w, frptofchar(w, p0), p0, w->p0, 1);
-    }else if(p0 > w->p0){
-        /* trim first part of selection */
-        frdrawsel(w, frptofchar(w, w->p0), w->p0, p0, 0);
-    }
-    if(p1 > w->p1){
-        /* extend selection forwards */
-        frdrawsel(w, frptofchar(w, w->p1), w->p1, p1, 1);
-    }else if(p1 < w->p1){
-        /* trim last part of selection */
-        frdrawsel(w, frptofchar(w, p1), p1, w->p1, 0);
-    }
-
-    Return:
-    w->p0 = p0;
-    w->p1 = p1;
-}
-/*e: function wsetselect */
-
-/*s: function winsert */
-uint
-winsert(Window *w, Rune *r, int n, uint q0)
-{
-    uint m;
-
-    if(n == 0)
-        return q0;
-    /*s: [[winsert()]] if size of rune array is getting really big */
-    if(w->nr + n > HiWater && q0 >= w->org && q0 >= w->qh){
-        m = min(HiWater-LoWater, min(w->org, w->qh));
-        w->org -= m;
-        w->qh -= m;
-        if(w->q0 > m)
-            w->q0 -= m;
-        else
-            w->q0 = 0;
-        if(w->q1 > m)
-            w->q1 -= m;
-        else
-            w->q1 = 0;
-        w->nr -= m;
-        runemove(w->r, w->r+m, w->nr);
-        q0 -= m;
-    }
-    /*e: [[winsert()]] if size of rune array is getting really big */
-    /*s: [[winsert()]] grow rune array if reach maxr */
-    if(w->nr+n > w->maxr){
-        /*
-         * Minimize realloc breakage:
-         *	Allocate at least MinWater
-         * 	Double allocation size each time
-         *	But don't go much above HiWater
-         */
-        m = max(min(2*(w->nr+n), HiWater), w->nr+n)+MinWater;
-        if(m > HiWater)
-            m = max(HiWater+MinWater, w->nr+n);
-        if(m > w->maxr){
-            w->r = runerealloc(w->r, m);
-            w->maxr = m;
-        }
-    }
-    /*e: [[winsert()]] grow rune array if reach maxr */
-
-    // move to the right the runes after the cursor q0 to make some space
-    runemove(w->r + q0 + n, w->r + q0, w->nr - q0);
-    // fill the space
-    runemove(w->r + q0, r, n);
-    w->nr += n;
-
-    /* if output touches, advance selection, not qh; works best for keyboard and output */
-    if(q0 <= w->q0)
-        w->q0 += n; // move the q0 cursor
-    if(q0 <= w->q1)
-        w->q1 += n;
-    if(q0 < w->qh)
-        w->qh += n;
-
-    /*s: [[winsert()]] update visible text */
-    if(q0 < w->org)
-        w->org += n;
-    else if(q0 <= w->org + w->nchars)
-        frinsert(w, r, r+n, q0 - w->org); // echo back
-    /*e: [[winsert()]] update visible text */
-    return q0;
-}
-/*e: function winsert */
-
-
-/*s: function wcontents */
-char*
-wcontents(Window *w, int *ip)
-{
-    return runetobyte(w->r, w->nr, ip);
-}
-/*e: function wcontents */
 
 
 //----------------------------------------------------------------------------
