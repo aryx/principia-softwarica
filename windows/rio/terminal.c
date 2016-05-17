@@ -71,6 +71,10 @@ static Window	*selectwin;
 static uint	selectq;
 /*e: global selectq */
 
+/*s: global maxtab */
+int		maxtab = 0;
+/*e: global maxtab */
+
 
 //----------------------------------------------------------------------------
 // Completion

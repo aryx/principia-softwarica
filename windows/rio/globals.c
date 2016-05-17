@@ -73,9 +73,6 @@ int		nhidden;
 /*s: global scrolling */
 bool		scrolling;
 /*e: global scrolling */
-/*s: global maxtab */
-int		maxtab = 0;
-/*e: global maxtab */
 /*s: global deletechan */
 // chan<string> (listener = deletethread, sender = deletetimeoutproc)
 Channel* deletechan;

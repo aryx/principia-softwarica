@@ -499,23 +499,25 @@ extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 
 
-
 extern Channel	*exitchan; // was static in rio.c
 
 extern Channel*	winclosechan;
 extern Channel*	deletechan;
-
-// snarf.
-extern fdt		snarffd;
-extern Rune*	snarf;
-extern int		nsnarf;
-
 
 extern int		snarfversion;	/* updated each time it is written */
 
 extern int		sweeping;
 extern bool		menuing;
 extern int		scrolling;
+
+extern char		*startdir;
+
+// misc
+extern Window	*wkeyboard;	/* window of simulated keyboard */
+extern QLock	all;			/* BUG */
+extern fdt		wctlfd;
+extern int		messagesize;	/* negotiated in 9P version setup */
+
 
 // thread_mouse.c
 extern Rectangle	viewr; // was static in rio.c
@@ -531,16 +533,12 @@ extern Cursor	*corners[9];
 // cursor.c
 extern Cursor	*lastcursor; // was static in wind.c
 
+// snarf.c
+extern fdt		snarffd;
+extern Rune*	snarf;
+extern int		nsnarf;
 
-extern char		*startdir;
-
-// misc
-extern Window	*wkeyboard;	/* window of simulated keyboard */
-extern QLock	all;			/* BUG */
-extern fdt		wctlfd;
-extern int		messagesize;	/* negotiated in 9P version setup */
-
-// TODO delete
+// terminal.c
 extern int		maxtab;
 
 // error.c
