@@ -7,9 +7,16 @@ void	mousethread(void*);
 // threads_misc.c    (for rio.c)
 void 	winclosethread(void*);
 void 	deletethread(void*);
+// threads_worker.c (for rio.c)
+Channel* xfidinit(void);
+void	xfidflush(Xfid*);
+// process_fileserver (for rio.c and process_winshell.c)
+Filsys*	filsysinit(Channel*);
+int		filsysmount(Filsys*, int);
 // threads_window.c
 void    winctl(void*);
-void    wsendctlmesg(Window*, int, Rectangle, Image*);
+// processes_winshell
+void	winshell(void*);
 
 // data.c (for rio.c)
 void	iconinit(void);
@@ -18,26 +25,12 @@ void	timerinit(void);
 void	timerstop(Timer*);
 void	timercancel(Timer*);
 Timer*	timerstart(int);
-// xfid.c  (for rio.c and fsys.c)
-Channel*xfidinit(void);
-void	xfidattach(Xfid*);
-void	xfidopen(Xfid*);
-void	xfidclose(Xfid*);
-void	xfidread(Xfid*);
-void	xfidwrite(Xfid*);
-void	xfidflush(Xfid*);
+
+
 // fsys.c (for rio.c and xfid.c and process_winshell.c)
-Filsys*	filsysinit(Channel*);
-Xfid*	filsysrespond(Filsys*, Xfid*, Fcall*, char*);
-void	filsyscancel(Xfid*);
-int		filsysmount(Filsys*, int);
 
 // cursor.c
 void	riosetcursor(Cursor*, int);
-
-// TODO
-int	    goodrect(Rectangle);
-
 
 // wm.c (for thread_mouse.c)
 void    cornercursor(Window *w, Point p, bool force);
@@ -49,6 +42,7 @@ int	whide(Window*); // for wctl
 int	wunhide(int);   // for wctl
 
 // wind.c
+void    wsendctlmesg(Window*, int, Rectangle, Image*);
 Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
 int		wclose(Window*);
 void	wclosewin(Window*);
@@ -68,8 +62,9 @@ void	wfill(Window*);
 void	wsetname(Window*);
 void	wsetpid(Window*, int, int);
 
-// processes_winshell
-void	winshell(void*);
+
+// TODO
+int	    goodrect(Rectangle);
 
 // graphical_window.c
 void	waddraw(Window*, Rune*, int);
@@ -95,6 +90,17 @@ void	wscroll(Window*, int);
 // snarf.c
 void	putsnarf(void);
 void	getsnarf(void);
+
+// 9p.c (for fsys.c and xfid.c)
+Xfid*	filsysrespond(Filsys*, Xfid*, Fcall*, char*);
+void	filsyscancel(Xfid*);
+
+// xfid.c  (for fsys.c)
+void	xfidattach(Xfid*);
+void	xfidopen(Xfid*);
+void	xfidclose(Xfid*);
+void	xfidread(Xfid*);
+void	xfidwrite(Xfid*);
 
 // wctl.c (for fsys.c and xfid.c)
 void	wctlproc(void*);

@@ -103,6 +103,9 @@ enum
 };
 /*e: enum _anon_ (windows/rio/dat.h)3 */
 
+/*s: constant DEBUG */
+#define DEBUG false
+/*e: constant DEBUG */
 
 /*s: enum wctlmesgkind */
 enum	/* control messages */
@@ -498,9 +501,7 @@ extern Keyboardctl	*keyboardctl;
 extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 
-
 extern Channel	*exitchan; // was static in rio.c
-
 extern Channel*	winclosechan;
 extern Channel*	deletechan;
 
@@ -516,6 +517,10 @@ extern char		*startdir;
 extern Window	*wkeyboard;	/* window of simulated keyboard */
 extern QLock	all;			/* BUG */
 extern fdt		wctlfd;
+extern int		maxtab;
+
+
+// 9p.c
 extern int		messagesize;	/* negotiated in 9P version setup */
 
 
@@ -538,10 +543,8 @@ extern fdt		snarffd;
 extern Rune*	snarf;
 extern int		nsnarf;
 
-// terminal.c
-extern int		maxtab;
-
 // error.c
 extern bool		errorshouldabort;
+extern char Eperm[];
 
 /*e: windows/rio/dat.h */

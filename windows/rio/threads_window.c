@@ -480,18 +480,5 @@ winctl(void *arg)
 }
 /*e: function winctl */
 
-/*s: function wsendctlmesg */
-void
-wsendctlmesg(Window *w, int type, Rectangle r, Image *image)
-{
-    Wctlmesg wcm;
-
-    wcm.type = type;
-    wcm.r = r;
-    wcm.image = image;
-
-    send(w->cctl, &wcm);
-}
-/*e: function wsendctlmesg */
 
 /*e: windows/rio/threads_window.c */

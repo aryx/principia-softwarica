@@ -188,6 +188,7 @@ typedef	struct	Timer Timer;
 
 <<enum _anon_ (windows/rio/dat.h)3>>
 
+<<constant DEBUG>>
 
 <<enum wctlmesgkind>>
 
@@ -246,9 +247,7 @@ extern Keyboardctl	*keyboardctl;
 extern Mousectl	*mousectl;
 extern Mouse	*mouse;
 
-
 extern Channel	*exitchan; // was static in rio.c
-
 extern Channel*	winclosechan;
 extern Channel*	deletechan;
 
@@ -264,6 +263,10 @@ extern char		*startdir;
 extern Window	*wkeyboard;	/* window of simulated keyboard */
 extern QLock	all;			/* BUG */
 extern fdt		wctlfd;
+extern int		maxtab;
+
+
+// 9p.c
 extern int		messagesize;	/* negotiated in 9P version setup */
 
 
@@ -286,11 +289,9 @@ extern fdt		snarffd;
 extern Rune*	snarf;
 extern int		nsnarf;
 
-// terminal.c
-extern int		maxtab;
-
 // error.c
 extern bool		errorshouldabort;
+extern char Eperm[];
 
 @
 
@@ -311,9 +312,16 @@ void	mousethread(void*);
 // threads_misc.c    (for rio.c)
 void 	winclosethread(void*);
 void 	deletethread(void*);
+// threads_worker.c (for rio.c)
+Channel* xfidinit(void);
+void	xfidflush(Xfid*);
+// process_fileserver (for rio.c and process_winshell.c)
+Filsys*	filsysinit(Channel*);
+int		filsysmount(Filsys*, int);
 // threads_window.c
 void    winctl(void*);
-void    wsendctlmesg(Window*, int, Rectangle, Image*);
+// processes_winshell
+void	winshell(void*);
 
 // data.c (for rio.c)
 void	iconinit(void);
@@ -322,26 +330,12 @@ void	timerinit(void);
 void	timerstop(Timer*);
 void	timercancel(Timer*);
 Timer*	timerstart(int);
-// xfid.c  (for rio.c and fsys.c)
-Channel*xfidinit(void);
-void	xfidattach(Xfid*);
-void	xfidopen(Xfid*);
-void	xfidclose(Xfid*);
-void	xfidread(Xfid*);
-void	xfidwrite(Xfid*);
-void	xfidflush(Xfid*);
+
+
 // fsys.c (for rio.c and xfid.c and process_winshell.c)
-Filsys*	filsysinit(Channel*);
-Xfid*	filsysrespond(Filsys*, Xfid*, Fcall*, char*);
-void	filsyscancel(Xfid*);
-int		filsysmount(Filsys*, int);
 
 // cursor.c
 void	riosetcursor(Cursor*, int);
-
-// TODO
-int	    goodrect(Rectangle);
-
 
 // wm.c (for thread_mouse.c)
 void    cornercursor(Window *w, Point p, bool force);
@@ -353,6 +347,7 @@ int	whide(Window*); // for wctl
 int	wunhide(int);   // for wctl
 
 // wind.c
+void    wsendctlmesg(Window*, int, Rectangle, Image*);
 Window*	wmk(Image*, Mousectl*, Channel*, Channel*, int);
 int		wclose(Window*);
 void	wclosewin(Window*);
@@ -372,8 +367,9 @@ void	wfill(Window*);
 void	wsetname(Window*);
 void	wsetpid(Window*, int, int);
 
-// processes_winshell
-void	winshell(void*);
+
+// TODO
+int	    goodrect(Rectangle);
 
 // graphical_window.c
 void	waddraw(Window*, Rune*, int);
@@ -399,6 +395,17 @@ void	wscroll(Window*, int);
 // snarf.c
 void	putsnarf(void);
 void	getsnarf(void);
+
+// 9p.c (for fsys.c and xfid.c)
+Xfid*	filsysrespond(Filsys*, Xfid*, Fcall*, char*);
+void	filsyscancel(Xfid*);
+
+// xfid.c  (for fsys.c)
+void	xfidattach(Xfid*);
+void	xfidopen(Xfid*);
+void	xfidclose(Xfid*);
+void	xfidread(Xfid*);
+void	xfidwrite(Xfid*);
 
 // wctl.c (for fsys.c and xfid.c)
 void	wctlproc(void*);
@@ -467,6 +474,10 @@ void	error(char*);
 
 <<global exitchan>>
 
+<<global winclosechan>>
+
+<<global deletechan>>
+
 
 <<global input>>
 <<global all>>
@@ -474,14 +485,16 @@ void	error(char*);
 <<global hidden>>
 <<global nhidden>>
 <<global scrolling>>
-<<global deletechan>>
+
+
 <<global startdir>>
 <<global sweeping>>
 <<global wctlfd>>
 <<global menuing>>
 <<global snarfversion>>
-<<global winclosechan>>
-<<global messagesize>>
+
+<<global maxtab>>
+
 @
 
 \subsection*{[[windows/rio/rio.c]]}
@@ -633,7 +646,6 @@ void	error(char*);
 
 <<function winctl>>
 
-<<function wsendctlmesg>>
 
 @
 
@@ -643,6 +655,39 @@ void	error(char*);
 %-------------------------------------------------------------
 
 <<windows/rio/threads_worker.c>>=
+#include <u.h>
+#include <libc.h>
+
+// for dat.h
+#include <draw.h>
+#include <mouse.h>
+#include <cursor.h>
+#include <keyboard.h>
+#include <frame.h>
+#include <fcall.h>
+#include <thread.h>
+
+#include "dat.h"
+#include "fns.h"
+
+<<global xfidfree>>
+<<global xfid>>
+<<global cxfidalloc>>
+<<global cxfidfree>>
+
+<<enum Xxxx>>
+
+
+<<function xfidctl>>
+
+
+<<function xfidflush>>
+
+
+<<function xfidallocthread>>
+
+<<function xfidinit>>
+
 
 @
 
@@ -915,6 +960,9 @@ void	error(char*);
 <<global paleholdcol>>
 
 
+<<function wsendctlmesg>>
+
+
 <<function wborder>>
 
 <<function wsetcols>>
@@ -1032,7 +1080,6 @@ void	error(char*);
 <<global selectwin>>
 <<global selectq>>
 
-<<global maxtab>>
 
 
 //----------------------------------------------------------------------------
@@ -1223,6 +1270,26 @@ void	error(char*);
 %-------------------------------------------------------------
 
 <<windows/rio/9p.c>>=
+#include <u.h>
+#include <libc.h>
+
+// for dat.h
+#include <draw.h>
+#include <mouse.h>
+#include <cursor.h>
+#include <keyboard.h>
+#include <frame.h>
+#include <fcall.h>
+#include <thread.h>
+
+#include "dat.h"
+#include "fns.h"
+
+<<global messagesize>>
+
+<<function filsysrespond>>
+
+<<function filsyscancel>>
 
 @
 
@@ -1232,6 +1299,41 @@ void	error(char*);
 %-------------------------------------------------------------
 
 <<windows/rio/process_fileserver.c>>=
+#include <u.h>
+#include <libc.h>
+
+// for dat.h
+#include <draw.h>
+#include <mouse.h>
+#include <cursor.h>
+#include <keyboard.h>
+#include <frame.h>
+#include <fcall.h>
+#include <thread.h>
+
+#include "dat.h"
+#include "fns.h"
+
+extern Xfid* 	(*fcall[])(Filsys*, Xfid*, Fid*);
+extern char	Ebadfcall[];
+extern bool	firstmessage;
+extern Fid*		newfid(Filsys*, int);
+extern fdt	clockfd;
+
+<<global srvpipe (windows/rio/fsys.c)>>
+<<global srvwctl (windows/rio/fsys.c)>>
+
+<<function filsysproc>>
+
+<<function cexecpipe>>
+
+<<function post>>
+
+
+<<function filsysinit>>
+
+<<function filsysmount>>
+
 
 @
 
@@ -1254,27 +1356,21 @@ void	error(char*);
 #include "dat.h"
 #include "fns.h"
 
-<<global Eperm>>
 <<global Eexist>>
 <<global Enotdir>>
 <<global Ebadfcall>>
 <<global Eoffset>>
 
 
-<<constant DEBUG>>
-
 <<global dirtab>>
 
 static uint		getclock(void);
-static void		filsysproc(void*);
-static Fid*		newfid(Filsys*, int);
+Fid*		newfid(Filsys*, int);
 static int		dostat(Filsys*, int, Dirtab*, uchar*, int, uint);
 
 <<global clockfd>>
 <<global firstmessage>>
 
-<<global srvpipe (windows/rio/fsys.c)>>
-<<global srvwctl (windows/rio/fsys.c)>>
 
 static	Xfid*	filsysflush(Filsys*, Xfid*, Fid*);
 static	Xfid*	filsysversion(Filsys*, Xfid*, Fid*);
@@ -1293,22 +1389,8 @@ static	Xfid*	filsyswstat(Filsys*, Xfid*, Fid*);
 
 <<global fcall>>
 
-<<function post>>
-
-<<function cexecpipe>>
-
-<<function filsysinit>>
-
-<<function filsysrespond>>
 
 
-
-<<function filsysproc>>
-
-<<function filsysmount>>
-
-
-<<function filsyscancel>>
 
 <<function filsysversion>>
 
@@ -1355,6 +1437,7 @@ static	Xfid*	filsyswstat(Filsys*, Xfid*, Fid*);
 <<windows/rio/xfid.c>>=
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <marshal.h>
 #include <window.h>
@@ -1368,8 +1451,6 @@ static	Xfid*	filsyswstat(Filsys*, Xfid*, Fid*);
 
 #include "dat.h"
 #include "fns.h"
-
-void		xfidctl(void*);
 
 <<constant MAXSNARF>>
 
@@ -1388,25 +1469,10 @@ void		xfidctl(void*);
 <<global Ebadwrect>>
 <<global Ebadoffset>>
 
-extern char Eperm[];
-
-<<global xfidfree>>
-<<global xfid>>
-<<global cxfidalloc>>
-<<global cxfidfree>>
-
 <<global tsnarf>>
 <<global ntsnarf>>
 
-<<enum Xxxx>>
 
-<<function xfidallocthread>>
-
-<<function xfidinit>>
-
-<<function xfidctl>>
-
-<<function xfidflush>>
 
 <<function xfidattach>>
 
@@ -1429,6 +1495,7 @@ extern char Eperm[];
 <<enum _anon_ (windows/rio/xfid.c)5>>
 
 <<function xfidread>>
+
 @
 
 
@@ -1574,6 +1641,10 @@ extern char Eperm[];
 #include <thread.h>
 
 <<global errorshouldabort>>
+
+// could be in 9p.c too
+<<global Eperm>>
+
 
 <<function error>>
 

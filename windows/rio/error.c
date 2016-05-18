@@ -8,6 +8,12 @@
 bool errorshouldabort = false;
 /*e: global errorshouldabort */
 
+// could be in 9p.c too
+/*s: global Eperm */
+char Eperm[] = "permission denied";
+/*e: global Eperm */
+
+
 /*s: function error */
 void
 error(char *s)
