@@ -61,7 +61,6 @@
 %  - svgalib? tronscroll:) mode X?
 %  - True Color, True Type
 
-
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
 % - put all content of files in the Extra section, via 'pfff -lpize'
@@ -274,6 +273,7 @@ What are {True Type} fonts?
 \l how to implement overlapping windows? what is a backing store?
 \l how to cooperate with windowing system?
 \t how synchro with monitor balayage? glitches? API? how done in Soldat.nw?
+\t memory leak with imagmem? or when close fd then freeimage in pool?
 
 %tags used in this file for different recurring themes:
  %history:
@@ -332,7 +332,7 @@ Like for most books in \principia, I chose a \plan program because
 those programs are simple, small, elegant, open source, and they form together
 a coherent set.
 %history:
-The ancestor of [[draw]], the Blit~\cite{blit},
+The ancestor of [[draw]], the graphics system of the Blit machine~\cite{blit},
 also designed by Rob Pike, was one of the first graphics systems back in 1982. 
 It was created even before the Macintosh, X Window, and Microsoft Windows.
 \n comment shows the lineage and dates
@@ -360,8 +360,8 @@ and windowing system are clearly separated.
 You can even use graphical applications
 without a windowing system running.
 %
-[[draw]] provides some forms of {windows management}, for instance, by giving
-the ability to applications to create {overlapping windows}, but
+[[draw]] provides some forms of {window management}, for instance, by giving
+the ability for applications to create {overlapping windows}, but
 \l and backing store, and menus
 this is only one of the building blocks necessary to get
 a windowing system.
@@ -410,12 +410,13 @@ Its codebase is enormous though with more than 1 million LOC,
 even when counting just the code of the display server, a few core libraries, 
 and a few device drivers.
 \n but just xserver/{dix/,fb/,mi/} is about 70 000 LOC though.
+\n and xserver/hw/kdrive/fb/ is small, a tiny X server model implementation.
 
 \l known to be hard to understand, many tutorials on the web
 \l "why X11 is so big" by Ken Thompson, partly the motivation for plan9
 
 X Window was designed at a time where memory was 
-extremely limited, and remote applications were looked as crucial.
+extremely limited, and remote applications were crucial.
 \n nice to have network, I used it at FB with emacs, but big design price to pay
 Time has changed,
 but this historical baggage means that even the code of simple applications
@@ -483,6 +484,7 @@ and one for the graphics (Postscript).
 
 \item Cairo~\furl{http://cairographics.org/} is a 2D
 graphics library used in many applications (e.g., Firefox).
+\l and libraries (GTK use cairo internally).
 \n actually partly grew from X limitations, called Xr. User-space compositing. 
 However, it is not a complete graphics system; it relies on
 a ``backend'' for the final display.
@@ -546,6 +548,7 @@ Mesa in some sense is more general than Cairo, Skia, or [[draw]]. Indeed,
 if a function can draw a line in 3D, the same function can
 be used to draw a line in 2D. However, the algorithms and geometry involved
 are far more complicated to explain.
+\l but being more general is better? learn once and apply for many things?
 %dup: (but changed) intro/motivation
 In practice, the graphics in most applications
 are 2D graphics, except for some video games and CAD software,
@@ -566,7 +569,7 @@ even in graphical applications.
 \l  and also just a buffer compositor, it assumes clients use cairo or openGL
 \l  it just composes a set of pixmaps.
 %  
-%http://blog.mecheye.net/2012/06/the-linux-graphics-stack/
+%http://blog.mecheye.net/2012/06/the-linux-graphics-stack/ (very good)
 %http://blogs.igalia.com/itoral/2014/07/29/a-brief-introduction-to-the-linux-graphics-stack/
 
 
@@ -586,7 +589,8 @@ even in graphical applications.
 % - SVG, Canvas (Apple again?), ...
 %history:
 % - Xerox Alto! first bitmap display, bitblt, started in 1973 (-> Smalltalk)
-% - Lisp Machine (->? W Window -> X Window)
+% - Lisp Machine (->? DLisp? Interlisp-D?  
+%  -? -> W Window -> X Window
 % - Blit (-> draw/rio)
 %education:
 % - GKS, first graphics standard. But not present in any current system.
@@ -608,7 +612,7 @@ even in graphical applications.
 %   Includes also widgets.
 %other:
 % - metafont by Knuth
-% - gnome libart
+% - gnome libart?
 % - nuttx, NX graphics
 %   nuttx has some graphic and windowing stack apparently too!
 %   http://nuttx.org/doku.php?id=documentation:nxgraphics
@@ -720,6 +724,7 @@ Indeed, an important part of [[draw]] resides
 in the kernel and implements interfaces such as [[Dev]]
 defined by the kernel.
 [[draw]] is implemented as a device,
+\l and a filesystem
 so I assume you know what is a {device file} for instance.
 
 It can also be useful to read the many manual pages concerning
@@ -789,7 +794,7 @@ They wrote in some sense most of this book.
 
 \chapter{Overview}
 
-%trans:
+%trans: %dup: Assembler.nw
 Before showing the source code of [[draw]] in the following chapters, 
 %toc:
 I first give in this chapter an overview 
@@ -823,9 +828,9 @@ with different
 {widths},
 {fonts}, 
 {filling patterns},
-{orientation},
+{orientations},
 etc.
-\n orientation, hmm
+\n orientation, hmm, not so much for text in [[draw]]
 %
 A {\em screen} is composed of thousands of {picture elements}
 called {\em pixels}, which can be individually accessed
@@ -1063,14 +1068,14 @@ d <- d op s;
 The name [[bitblt()]] comes from its use in early graphic systems
 where pictures were represented as bitmaps.
 %
-Programmers were using [[bitblt()]] to draw characters, highlight regions, 
+Programmers were using [[bitblt()]] to highlight regions, 
 draw horizontal and vertical lines, draw
-rectangles, scroll an image, and many more things.
+rectangles, scroll an image, draw characters, and many more things.
 \n see pike-bitbltd-1984.pdf
 \l see pictures in "Graphics Smalltalk Kernel" article?
 %
 In pictures with colors, the [[bitblt()]] primitive can be used
-to encode a variety of effects such as translucence by using
+to implement a variety of effects such as translucence by using
 the appropriate composition operator.
 \n porter-duff
 
@@ -1105,7 +1110,7 @@ point many internal calls to [[draw()]].
 Geometric shapes are important, but so is {text}, even in a 
 graphical-user-interface context.
 %
-A graphics system can improve over text-based user interface
+A graphics system can improve over text-based user interfaces
 (e.g., terminals) by allowing
 the programmer to draw text with different sizes, different styles, and
 even different orientations.
@@ -1148,7 +1153,7 @@ A character is then just another list of geometric shapes to draw.
 \n unify power!
 %
 This approach is {scalable} as one
-can {render} the letter in different sizes by rasterizing
+can {render} the letter in different sizes or orientations by rasterizing
 its different elements.
 \l hmm scalable missleading? because it is actually slow.
 \l actually some issues when scaled down, so some fonts use ``Hinting''
@@ -1452,6 +1457,7 @@ for the programmer. This header file contains the
 data structures (e.g., [[Image]]) and 
 function declarations (e.g., [[draw()]], [[line()]], or [[string()]])
 to draw different shapes on the screen.
+\n I reference only entities used in hellodraw.c
 
 \item [[lib_graphics/libdraw/]] is a user-space library implementing
 the functions defined in [[draw.h]]. However, those functions are just
@@ -1537,8 +1543,8 @@ later in Chapter~\ref{chap:overlapping-windows}.
 Table~\ref{tab:code-orga} presents short descriptions
 of the source files used by [[draw]]. I organized
 those files according to the directories I mentioned above,
-except for the files in [[lib_graphics/libmemlayer/]]
-that I will cover in Chapter~\ref{chap:overlapping-windows}.
+except for the files in [[lib_graphics/libmemlayer/]],
+which I will cover in Chapter~\ref{chap:overlapping-windows}.
 \t explain that put together in one line
 \t  because of the way draw is architectured they are strongly related.
 \l lofs of files have similar name in libdraw/ and libmemdraw/.
@@ -1691,14 +1697,15 @@ the kernel via a [[/dev/draw/x/data]] device file)
 \end{itemize}
 \l Could this be skipped if reader interested only in core ideas?
 
-\subsection{Trace of a drawing operation}
-\l When do draw(), go in kernel? yes (at least when call flush())
-
+%toc:
 A good way to see how those components work together is to
 {\em trace} a call to one of the functions of the [[draw]] API
 through those different components.
-%
-Figure~\ref{fig:soft-archi-directories} illustrates one such trace with
+
+\subsection{Trace of a drawing operation}
+\l When do draw(), go in kernel? yes (at least when call flush())
+
+Figure~\ref{fig:soft-archi-directories} illustrates a trace of
 a call to [[line()]].
 %
 This trace starts at the top of Figure~\ref{fig:soft-archi-directories}
@@ -1728,6 +1735,7 @@ of the global [[display]].
 Remember that this global has been set
 previously by a call to [[initdraw()]], as we saw in
 Section~\ref{sec:hellodraw_c}.
+\l form of RPC. a la thrift.
 
 \item [[display->fd]], as we will see in Chapter~\ref{chap:core-ds},
 is a file descriptor that corresponds to a [[/dev/draw/x/data]] device file.
