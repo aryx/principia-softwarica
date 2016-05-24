@@ -219,6 +219,8 @@ This is a pity because the windowing system is as important
 as the kernel for the user.
 \n Per Brinch Hansen was right, windowing systems is major OS innovation
 
+\t other motivation is that great concurrent application! learn a lot.
+\t  learn many concurrency patterns
 
 Here are a few questions I hope this book will answer:
 \begin{itemize}
@@ -229,7 +231,7 @@ a window manager,
 a window compositor,
 a display server, and
 a desktop system?
-\l a window server, a graphical shell
+\l a window server, a graphical shell, display manager, session manager
 \n windowing system is all of that mostly.
 
 
@@ -388,7 +390,7 @@ the {per-process namespaces}, the {union-mount directories}, and
 the {file-server protocol 9P}.
 See the \book{Kernel} for more information on those features.
 \t or intro to plan9 article? or the use of namespace in plan9?
-
+%
 With [[rio]], the virtual devices are accessible under [[/mnt/wsys/]]
 (e.g. [[/mnt/wsys/mouse]], [[/mnt/wsys/cons]]), 
 %
@@ -413,7 +415,8 @@ by a single user-space program: [[rio]].
 % "Each window mounts a different root of a distinc file system implemented
 %  by Rio, containing an identical-looking simulation of the standard 
 %  device file set for display, mouse, and keyboard."
-
+\t if not clear, do not worry, explain more later, but can see namespace.ps
+\t  article too.
 
 
 A nice side effect of the multiplexer approach used by [[rio]] is that
@@ -436,45 +439,119 @@ Here are a few windowing systems that I considered for this book,
 but which I ultimately discarded:
 \begin{itemize}
 
-\item Xorg~\furl{http://www.x.org}, which I mentioned already
+\item Xorg~\furl{http://xorg.freedesktop.org}, which I mentioned already
 in the \book{Graphics}, 
-%dupe: Graphics.nw
+%dup: Graphics.nw
 is the most popular open-source implementation of the X Window System,
 a windowing system (and a graphics system) designed in the 1980's at MIT.
-% the obvious choice, but really big
-
-% does not include window manager
-% twm = LOC? but many many window managers.
-% Does not include terminal emulator either, xterm is 80 KLOC!!
-% more than whole code of rio which includes a terminal emulator.
-
-% hundreds of repositories
-
-% Support remote, but actually plan9 rio too! thx to 9p, network
-% for free!
-
-% X11 hide the OS, very different set of mechanisms. Rio extend naturally,
-% still a /dev/cons, /dev/draw, /dev/mouse! Transparent windowing system!
-% Really just a multiplexer (in fact first was called mux)
-% (well, cheat a bit for draw)
-% cite Window system should be transparent?
-
+%
+However, its codebase is enormous. In fact, the whole system is divided
+in hundreds of repositories\furl{https://cgit.freedesktop.org/xorg}
+to better handle its complexity. One of this repository,
+[[xserver]]\furl{https://cgit.freedesktop.org/xorg/xserver/},
+which contains the code of the display server,
+\l and window {compositor}, but then need define compositor here?
+has already more than 500~000 LOC. 
 \l KDrive (Xkdrive and Xfbdev) are small actually, but still need libX11/...
+This does not even include the code for the
+window manager (e.g., [[twm]] with 17~000 LOC),
+\n can have many window managers
+the terminal emulator (e.g., [[xterm]] with 80~000 LOC),
+\n rxvt is 37 000 LOC so similar
+or the many libraries that are required by clients (e.g., [[Xlib]]
+with 150~000 LOC).
+\l more than whole code of rio which includes a terminal emulator.
 
-\item Wayland is a protocol similar to X11.
-Weston is a reference implementation of a compositor.
-% grew out of Xorg limitations. Drop shadows, expose, etc.
-% Can, but then Xorg features not really used. Use Cairo instead.
-% Useless intermediate. 
-% replace X11 in the long term. Not there yet.
-% just compositor.
-% not network transparent. No remote (or a la VNC), cos no drawing
-% API. Just transfer pixels (via shared buffer when on same machine).
-% still need xterm? actually has one, 
-% so total LOC? 200 000?
+Part of the reason for the enormous size of Xorg is that
+Xorg supports many graphic cards (with hardware acceleration),
+many monitors, many input devices, and many extensions (e.g., 3D operations).
+\n XRender, XRandR, Shape, etc
+%
+Another reason is that X Window is an old program;
+programmers extended X Window for more than 30 years now.
+Programmers added many extensions while still remaining
+backward compatible with graphical applications designed in the 1980's. 
+
+%dup: Graphics.nw
+X Window defines a special protocol, X11, for a 
+networked client/server architecture.
+Client applications must use {\em sockets} to connect to the display server.
+%
+Unfortunately, the set of mechanisms involved are different from
+the ones offered by the kernel, for instance, the simple opening of 
+files in [[/dev/]] such as  [[/dev/mouse]]. 
+In some sense, X Window hides the features of the underlying kernel.
+%
+On the opposite, [[rio]]
+is more {\em transparent}\cite{window-system-should-be-transparent}
+by {extending} the services offered by the kernel, for instance
+with the virtual device file [[/dev/mouse]].
+%
+The use of sockets in X Window allows client applications
+to display their result on another machine on the network.
+However, this is also possible with [[rio]], for free, thanks to the generic
+9P protocol.
+\l still a /dev/cons, /dev/draw, /dev/mouse
+
+
+
+\item Wayland~\furl{https://wayland.freedesktop.org/} is a protocol, 
+similar to X11,
+specifying the communication between a display server, called
+a Wayland {\em compositor}, and a set of {local} clients.
+Weston~\furl{https://cgit.freedesktop.org/wayland/weston/}
+is a reference implementation of a Wayland compositor.
+%
+Wayland and Weston grew out of the frustation of some
+developers of Xorg with the complexity of X Window, as well as
+the inability of X Window to support the modern needs of a windowing
+system: 
+transluscent windows, 
+drop shadows on the window's border as in Mac OS Aqua,
+fancy window-switcher such as Mac OS Expose, etc.
+
+Fortunately, during the last ten years, lots of the code of
+Xorg got gradually moved out of the display server and
+put either in the Linux kernel (e.g., the resolution setting
+of the screen, called KMS for kernel mode setting, or the ability
+to interact directly with the graphics hardware, called DRM
+for direct rendering manager),
+or in external libraries (e.g., Cairo for an advanced drawing
+API and imaging model, or [[libinput]] for a generic interface
+to the input devices).
+%
+What remains in Xorg is an old drawing API, the ability
+to have remote applications, and a display server that is backward
+compatible with old graphical applications.
+\l Useless intermediate. 
+%
+The developers of Wayland used this opportunity to redesign
+from scratch a modern windowing system, while reusing lots of the
+code that was now outside Xorg.
+
+There are many differences between Wayland and X11.
+For instance, Wayland does not specify any drawing API. Instead,
+it assumes the clients do their own graphics rendering, by using
+libraries such as Cairo, on locally-shared image buffers.
+Weston then just uses those shared buffers
+and composes them together (hence the use of the word {\em compositor}),
+while possibly applying effects during the image composition
+such as transluscence. The use of locally-shared buffers means that 
+Wayland does not support remote applications; Fortunately, most users now
+run and display their applications on the same machine.
+\l well except for the Web, so maybe remote app is important
+\l not network transparent. No remote cos no drawing API.
+\l   (or need transfer all the pixels a la VNC)
+\n need rewrite X11 apps? not if they're using GTK/QT. Already compatible!
+\n still need xterm? actually has one, 
+
+The code of Wayland and Weston is far smaller than Xorg, 
+but is still fairly large: 120~000 LOC (excluding the tests).
+Moreover, Weston relies on a set of libraries (e.g., Cairo, [[libinput]]),
+as well as lots of code and subsystems of the Linux graphics stack
+(e.g., KMS, DRM, GEM, fbdev, evdev).
+This would add up to lots of code to explain.
 \l  a pile of layers with the kernel, soft archi diagrams looks complicated
-% require to rewrite X11 apps? no if they're using GTK/QT/... already
-% backward compatible.
 
 
 \item Nano X (previously known as MicroWindows), is TODO.
@@ -737,6 +814,8 @@ to understand the code I will show later.
 
 \subsection{Window compositor}
 
+% tiling, stacking, or compositing
+
 % each window as off-screen buffer, so then windowing system can
 % compose those images in different ways: drop shadow, 3d effects, scaling
 % (expose). Transluscence.
@@ -981,6 +1060,9 @@ usage(void)
 % (instead of writing directly to the screen)
 
 
+% far cleaner than hello world for X11. No need for expose ugly stuff!
+% (but still need to handle resize :( )
+
 \section{Code organization}
 
 % different dirs. libframe/, libcomplete/, libframe/, rio/
@@ -1041,9 +1123,10 @@ terminal scrolling            & \ref{chap:textual-windows}   & [[scrl.c]]       
 \midrule
 
 external window control       & \ref{chap:advanced}          & [[wctl.c]]               &  [[parsewctl()]] [[wctlthread()]] [[wctlproc()]]                          & 0 \\
-copy/paste IPC clipboard      & \ref{chap:advanced}          & [[snarf.c]]              & [[putsnarf()]] [[getsnarf()]]                                             & 0 \\
+copy/paste clipboard          & \ref{chap:advanced}          & [[snarf.c]]              & [[putsnarf()]] [[getsnarf()]]                                             & 0 \\
 %  TODO put globals there
 timer                         & \ref{chap:advanced}          & [[timer.c]]              & [[timerstart()]]                                                          & 0 \\
+% timer for what? scrolling?
 
 % srv.c?
 % completion.c? 
