@@ -4,7 +4,7 @@
 #include "../boot/boot.h"
 
 /*
- * we should inherit the standard fds all referring to /dev/cons,
+ * we should inherit the standard fds referring to /dev/cons,
  * but we're being paranoid.
  */
 static void
@@ -50,6 +50,8 @@ execinit(void)
 {
   int fd;
 
+  // basics
+
   bind_safe("#p", "/proc", MREPL); //devproc
   // used by rc and many programs, e.g. via open("#d/0")
   bind_safe("#d", "/fd", MREPL); //devdup
@@ -65,6 +67,8 @@ execinit(void)
   bind_safe("#m", "/dev", MAFTER); //devmouse
   run("/bin/mouse", "ps2", nil);
 
+
+  // for draw
 
   bind_safe("#v", "/dev", MAFTER); //devvga
   //this just need a regular vga driver
