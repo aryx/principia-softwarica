@@ -158,12 +158,14 @@ allowing the user to create and manipulate those {windows}.
 %dup: Graphics.nw
 Windowing systems are usually coupled with a {graphics system}
 to form a {graphical user interface} (GUI).
+\l hmm actually can have a GUI without a windowing system.
+\l windowing system is a kind of GUI, a GUI implementing WIMP
 %history: %dup: Graphics.nw
 GUIs, introduced in the 1970's with the Xerox Alto~\cite{alto},
 were a vast improvement over {text-based} user interfaces, to
 the point where every mainstream operating systems now come with a GUI
-(e.g., Microsoft Windows, MacOS and iOS, Linux with X Window, or Android).
-\l hmm iOS/Android have windows? Not WIMP, just IM actually. But still GUI.
+(e.g., Microsoft Windows, MacOS, or Linux with X Window).
+\n iOS/Android dont have windows. Not WIMP, just IM actually. But still GUI.
 \l even command line become more powerful with multiple windows
 
 A windowing system relies on a graphics system to {render}
@@ -231,7 +233,8 @@ a window manager,
 a window compositor,
 a display server, and
 a desktop system?
-\l a window server, a graphical shell, display manager, session manager, ...
+\l a window server, a graphical shell, display manager, session manager,
+\l  a graphical user interface, ...
 \n windowing system is all of that mostly.
 
 
@@ -541,7 +544,7 @@ For instance, Wayland does not specify any drawing API. Instead,
 it assumes the clients do their own graphics rendering by using
 libraries such as Cairo on locally-shared image buffers.
 Weston then just uses those shared buffers
-and composes them together (hence the use of the word {\em compositor}),
+and composes them together (hence the use of the word {compositor}),
 while possibly applying effects during the image composition
 such as transluscence.
 %
@@ -589,8 +592,9 @@ However, this is still bigger than the code of [[draw]] and [[rio]].
 
 \l lots of other windowing systems, see the comment in the .nw
 %industry:
-% - Windows DWM?
+% - Windows DWM
 % - MacOS Quartz compositor (innovative: Expose, window closing effects, etc)
+% - Android SurfaceFlinger (but no real windows on the screen)
 %history:
 % - Alto, started in 1973, had overlapping windows, mouse, fonts, etc
 % - Blit (mux -> rio/draw), 1982
@@ -609,6 +613,8 @@ However, this is still bigger than the code of [[draw]] and [[rio]].
 % - berlin? dead?
 % - http://ignorethecode.net/blog/2009/04/22/oberon/
 % - redox in rust has a windowing system apparently, Orbital?
+% - arcan/durden https://arcan-fe.com/ mix of game engine, display server
+%   and streaming multimedia engine
 %semi windowing systems (single client with multiple windows; no clients/server)
 % - Mini-X (see Graphics.nw)
 % - TWIN   (see Graphics.nw)
@@ -716,37 +722,38 @@ used by [[rio]] and introduced by those books:
 
 \begin{itemize}
 
-\item The \book{Graphics}:
+\item The \nobook{Graphics}:
 display server, 
 drawing API, 
-[[dev/draw/]], [[/dev/mouse]], [[/dev/cons]],
+[[dev/draw/]], [[/dev/mouse]],
 overlapping windows, and
 windowing system support ([[/dev/winname]] and the global [[view]]).
 
-\item The \book{Kernel}:
+\item The \nobook{Kernel}:
 filesystem methods, 
 [[/dev/cons]],
 per-process namespaces, 
 [[mount]], 
 and union-mount directories.
 
-\item The \book{Network}:
+\item The \nobook{Network}:
 remote procedure calls (RPC), 
 filesystems in userspace, and
 9P protocol.
 \l /srv
 
-\item The \book{Libcore}: 
+
+\item The \nobook{Libcore}: 
 channels (a communication abstraction),
 cooperative light threads, 
 shared memory between threads and processes, and
 [[alt()]].
-
+\l contains also 9p stuff: read9pmsg(), fcallfmt, etc
 
 \end{itemize}
 \l could put in a table instead
 
-The most important book in this list is the \book{Graphics}.
+The most important book in this list is the \nobook{Graphics}.
 Regarding the three other books, you can probably understand most of the code
 in this book without reading them if you read at least
 the introduction to \plan in [[docs/articles/9.ps]],
@@ -772,7 +779,7 @@ this book.
 %dup: (and changed a lot) from Graphics.nw
 If, while reading this book,
 you have specific questions on the interfaces of [[rio]]
-or the API used by [[rio]], you can find answers in
+or on the API used by [[rio]], you can find answers in
 certain manual pages.
 Those pages are located under [[docs/man/]] in my \plan repository.
 Here is a partial list of those pages and a short description
@@ -842,65 +849,164 @@ Before showing the source code of [[rio]] in the following chapters,
 %toc:
 I first give in this chapter an overview 
 of the general principles of a windowing system.
-%I also describe quickly the graphical user interface of rio
-% and also its filesystem interface in [[/mnt/wsys/]],
-%Also show the code
-%of a toy graphical applications running under rio. Different model!
-% Reactive.
-%  using functions from [[draw.h]]
-%  but also mouse (opposed to hellodraw.c in Graphics which was just
-%  drawing, no interactivity, and was not using view)
+%
+I also describe quickly the graphical user interface of [[rio]],
+as well as its filesystem interface in [[/mnt/wsys/]].
+%
+I also show the code of a toy graphical applications
+running under [[rio]] and using functions from [[draw.h]] and
+[[mouse.h]].
+\l Different model! Interactive! Reactive!
 %dup: from Assembler.nw
-I also define terms, explain how the code is organized, 
+Finally, I define terms, explain how the code is organized, 
 and more generally give the background necessary
 to understand the code I will show later.
 
 \section{Windowing system principles}
 
-% As said in intro,
-% a {windowing system} is a program or set of programs
-% allowing to create and manipulate windows!
-% What is window then ...
-% And Why set of programs?
-% and many components. We mentioned a few already:
-% Display server, window manager, compositor,
-% terminal emulator, etc.
-% I will explain all of that now! Figure X summarize
-% components.
+A {\em windowing system} is a program (or a set of programs)
+with a {graphical user interface} (GUI) allowing users to
+create and manipulate {windows};
+%use the GUI of other programs;
+\l def of GUI? program with graphics and interactive with mouse?
+a {\em window} is a usually rectangular and resizeable
+{surface} of the screen containing the GUI of another program.
+%each of those programs is assigned a ... surface ... called a {\em window}.
+\l actually should be called viewport
+%
+Just like the kernel is a {\em meta-program}, that is 
+a program allowing the user to run other programs, 
+the windowing system is a {\em meta-GUI}, that is
+a graphical user interface allowing the user to run the
+graphical user interfaces of other programs.
 
-% imagine how would you code a windowing system? not that easy.
-% graphical app = use mouse, keyboard, and screen.
-% windowing system also use screen, mouse and keyboard, but
-%  demultiplex it! so windowing system is demultiplexer.
-%  in fact rio can run under itself!
+A windowing system uses 
+windows, 
+{icons}, 
+{menus}, and a single
+{pointer}, or {\em WIMP} for short.
+\l actually rio just WMP
+Note that windowing systems are not the only kind of meta-GUIs.
+For example, the user interface of phones running under iOS or
+Android do not have any windows. Moreover, the user can use
+multiple pointers through his multiple fingers.
+\n has unresizable tabs instead of windows
 
-% windowing system is a type of GUI which implements WIMP paradigm.
-% Each app is assigned a usually rectangular window.
-% can overlap. Have decoration.
 
-%\item What are the differences among
-%a windowing system,
-%a window manager,
-%a window compositor,
-%a display server, and
-%a desktop system?
-\t maybe diagram showing relation with all of that
-% desktop system is big, windowing system inside, then
-% window manager, compositor, and display server works together.
+A windowing system has many components, which sometimes
+can even be separate programs. 
+\n hence  'set of programs' above
+I mentioned a few already:
+the {display server}, the {window manager}, the {window compositor}, or
+the {terminal emulator}.
+%toc:
+Figure~\ref{fig:window-system-components} 
+presents the relationships between those components.
+The following sections will explain those relations as well
+as the role of each of those components.
+But before, I need to better characterize what a window is.
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+ +-------------+ +-------------+ +-----------+
+ |  Graphical  | |  Graphical  | |  Textual  |
+ |application 1| |application 2| |application|
+ +------+--^---+ +-^---^-------+ +----^------+
+        |  |       |   |              |
++-------v--+-------v---+--------------+------+
+|       |  |       |   |              |      |
+|       |  +-------+---+-+        +---v----+ |
+|    +--v----------v-+   |        |Terminal| |
+|    |    Window     | +-+--------+emulator| |
+|    |  compositor   | | |        +---^----+ |
+|    +----+----------+ | +-------+----+      |
+|         |            |         |           |
+|  +------v-------+    |  +------+-------+   |
+|  |   Display    <----+  |    Window    |   |
+|  |    server    <-------+   manager    |   |
+|  +------+-------+       +----^-----^---+   |
+|         |                    |     |       |
+|         |    Windowing system|     |       |
++---------+--------------------+-----+-------+
++---------v--------------------+-----+-------+
+|         |         Kernel     |     |       |
++---------+--------------------^-----^-------+
+ +--------v---+          +-----+-+ +-+-------+
+ |  Display   |          | Mouse | |Keyboard |
+ |   device   |          |device | | device  |
+ +------------+          +-------+ +---------+
+\end{verbatim}
+\caption{Components of a windowing system.}
+\label{fig:window-system-components}
+\end{figure}
+\l desktop system then is bigger; just windowing systems with special programs
+\l could have input manager?
+
+\l imagine how would you code a windowing system? not that easy.
+\l multiplexer!
 
 \subsection{Window}
 
-% actually a misnommer according to first people.
-
-% "A surface to have an activity ..."
-% So window is first part of screen. An image.
-% But it's also an associated process. A living image!
+A window is multiple things at the same time;
+it is a {\em surface} of the screen, but
+\l A surface to have an activity, an image, a part of the screen
+also the visual output of a running program.
+\l an associated process. 
+It is a {\em dynamic picture} responding to inputs from the user.
+\l magic ink!
 % It's also something that can be manipulated (window manager), like OS/shell,
-% a Graphical shell: new, moved, resized, closed. Dynamic surface! 
-% usually via decoration/border. Also have often title.
+% a Graphical shell: new, moved, resized, closed.
+% usually via decoration/border.
 
-% Overlapping.
-% Compositing.
+A window surface is made of multiple elements
+as shown in Figure~\ref{fig:window-elements}.
+Here is the list of those elements as well as their functions:
+
+\begin{itemize}
+
+\item {\em Window content}: contains the GUI of the underlying running program
+
+\item {\em Window border} (or {\em window decoration}):
+allows the user to move or resize the window
+\l generated by window manager, not running program
+
+\item {\em Title bar}: contains the name of program
+
+\item {\em Windowing system icons}: allows the user to close, expand, or hide
+the window
+
+\end{itemize}
+
+% first elt is mandatory.
+% [[rio]] has X.
+% other elements are optional and done by window manager!
+\l sometimes no border; everything done via keyboard
+
+%in-rio:
+In [[rio]], as well as in many other windowing systems,
+windows can {\em overlap} each other.
+% also known as stacked.
+\l overlapping bitmap layers for Pike.
+%In other windowing systems, the window instead are tiled
+% automatically instead (or hidden).
+% Finally, in recent windowing system, composited.
+% overlapped but can see overlapped with translucent effects,
+% or can have drop shadows. Can also have zooming out effects
+% such as Expose that autotaically tiled all windows but high level
+% zoomout.
+
+
+%The pixels of the window not visible to the user, because overlapped
+%by another window, can be managed either by the windowing system
+%automatically, or by the program itself.
+
+% actually a misnomer according to first people (in \cite{pike-layers}
+% he cites NewMan-Sproull-79). Should be called viewport in graphics
+% terminology.
+
+% rectangular area of the screen which maintains input and output
+%  context for a particular program or graphics application.
+
 
 % from SunDew:
 %"a window should be just that. it is a surface on which he
@@ -908,11 +1014,11 @@ to understand the code I will show later.
 %completely hidden from the client"
 % => no refresh/repaint brain damage.
 
-%in rio?
 
 \subsection{Display server}
 
 % First compoment of windowing system is display server.
+% more than graphics system, display server!
 % Can have graphics system without server, direct, but
 % when windowing system context, multiple clients, so need
 % server to coordinate!
@@ -920,10 +1026,6 @@ to understand the code I will show later.
 % related to Graphics.nw, but context of multiple applications.
 \l display server vs window server vs compositor
 
-% windowing system need first display server. They will be
-% many applications displaying stuff, need coord, need display server.
-
-% more than graphics system, display server!
 % because if want universal, then need multiple clients in
 % independent processes. mini X is not universal. draw is!
 
@@ -932,11 +1034,11 @@ to understand the code I will show later.
 % does not have to be. In fact in plan9 can have graphical app
 % outside windowing system!
 % (Alto was mixing? Smalltalk was? Blit was?)
-
+% separate program.
 
 % clients/server archi. (=> threads?)
 
-%in rio: draw
+%in-rio: draw
 
 %http://tech.slashdot.org/story/14/06/19/1317227/x-window-system-turns-30-years-old?utm_source=slashdot&utm_medium=facebook
 %"A server lets clients access a shared resource. On a file server, it's
@@ -945,6 +1047,9 @@ to understand the code I will show later.
 %clients are given access to it."
 
 %\subsection{communication protocol}
+
+% can be for input and output. in rio just output. for input
+% use traditional devices.
 
 \subsection{Window compositor}
 
@@ -958,7 +1063,7 @@ to understand the code I will show later.
 % (expose). Transluscence.
 
 
-%in rio: no compositor, no effects; just delegate to display server.
+%in-rio: no compositor, no effects; just delegate to display server.
 % but could.
 
 \subsection{Window manager}
@@ -967,7 +1072,7 @@ to understand the code I will show later.
 % mv/resize/close/hide/etc menus. mouse right click and options.
 % Graphical shell! Run commands.
 
-%in rio: user draw rectangle and get terminal. Then graph app
+%in-rio: user draw rectangle and get terminal. Then graph app
 % took over. Also possible to create window programmatically,
 % see Section X.
 
@@ -998,12 +1103,22 @@ to understand the code I will show later.
 
 % could be separate program than wm, e.g. the Dock under MacOS.
 
+\subsection{Desktop system}
+% e.g. KDE, GNome.
+
+% kind of windowing system promoting desktop like interface
+% in addition to windows. So Icons too. WIMP. Also set of
+% app modeling a desktop: clock, rolodeck, folders, etc.
+% window is then like a paper/activity.
+
+% Star interface first one.
+% Most windowing system are desktop systems.
+%in rio: not icon, just WMP.
+
 %\subsection{Desktop shell}
 % can have WM without icons, without file, garbage can, etc.
 % In fact rio is not a WIMP, just a WMP.
 
-%\subsection{Desktop environment}
-% e.g. KDE, GNome.
 
 \subsection{Virtual screen}
 
@@ -1083,7 +1198,7 @@ to understand the code I will show later.
 
 % for keyboard, can even lead to need of terminal emulator.
 
-%in rio: beautiful! transparent!
+%in-rio: beautiful! transparent!
 
 %alt: pty, ugly.
 
@@ -1260,9 +1375,6 @@ usage(void)
 
 \section{Code organization}
 
-% different dirs. libframe/, libcomplete/, libframe/, rio/
-% but will focus on rio/
-% depends also on libdraw/, libc/
 
 %dup: (and adapted) from Assembler.nw
 Table~\ref{tab:code-orga} presents short descriptions
@@ -1270,6 +1382,10 @@ of the source files used by [[rio]], together with
 the main entities (e.g., structures, functions, globals) the file defines,
 and the corresponding chapter in this document in which the code
 contained in the file is primarily discussed.
+
+% Actually different dirs. libframe/, libcomplete/, libframe/, rio/
+% but Table X focus just on rio/.
+% depends also on libdraw/, libc/ in other books. (also lib9p?)
 
 
 \begin{table*}[tbh!]
@@ -1351,12 +1467,11 @@ Total                         &                              &                  
 % use many kernel devices:
 % /dev/mouse, /dev/cons (the core one)
 % /dev/cursor
-
 % /dev/draw!
 
 % depends on libdraw
-% (depends also on libmemdraw? libmemlayer? no, just libdraw)
 % For the graphics system part see Graphics.nw
+% (depends also on libmemdraw? libmemlayer? no, just libdraw)
 
 % kernel driver vs graphic libs vs rio vs graphical apps
 % different levels! kernel, rio, window, client app
@@ -1367,7 +1482,6 @@ Total                         &                              &                  
 % kernel manages the images, so Image* is really an handle ID
 % that can be passed in draw commands to /dev/draw and can be
 % retrieved by the kernel
-
 
 % (actually rio will virtualize some of those, so those could be
 %  actually not the kernel devices but rio virtual files)
@@ -1433,14 +1547,6 @@ Total                         &                              &                  
 \end{figure}
 
 % no need for locks!
-
-
-% show the different threads! threadmain, mouse, keyboard, and windows threads!
-% (as well as close, delete, and xfids)
-
-% actually also have different processes! winshell, timer, and the main rio one
-% Also have process for mouse and keyboard (connected to mouse and keyboard
-% thread), filsysproc!
 
 % so process  = system threads
 % and threads = cooperative lightweight threads (no need lock between light
@@ -1550,6 +1656,30 @@ Total                         &                              &                  
 
 \section{Book structure}
 
+%trans: %dup: (and adapted) from Assembler.nw
+You now have enough background to understand the source code of [[rio]].
+%toc:
+The rest of the book is organized as follows.
+%
+I will start by describing the core data structures of [[rio]]
+in Chapter~\ref{chap:core-ds}.
+%
+%TODO
+%
+Finally, Chapter~\ref{chap:conclusion} concludes
+and give pointers to other books in the \principia series.
+
+%toc: %dup: (adapted) Assembler.nw
+Some appendices present the code of non-functional properties:
+code to help debug [[rio]] in Appendix~\ref{chap:debugging-appendix}, 
+and code to manage errors in Appendix~\ref{chap:error}.
+%
+Appendix~\ref{chap:utilities} contains the code of utility
+functions used by [[rio]], but which are not specific to [[rio]].
+%
+Finally, Appendix~\ref{chap:examples} contains examples of
+graphical applications that extends the window-manager component
+of [[rio]], for instance a window-switching bar.
 
 
 
