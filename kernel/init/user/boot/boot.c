@@ -78,6 +78,7 @@ execinit(void)
   bind_safe("#i", "/dev", MAFTER); // devdraw
 
   // for rio
+
   run("/bin/ramfs", "-m", "/mnt", nil);
   run("/bin/mkdir", "/mnt/temp", nil); // see thread(2), used to create pipes
   run("/bin/mkdir", "/mnt/wsys", nil);
@@ -86,10 +87,12 @@ execinit(void)
   close(fd);
 
   // network
+
   bind_safe("#I", "/net", MREPL); // devip
   bind_safe("#l0", "/net", MAFTER); // ether (and dev 0)
 
   // for 8c, 8a, 8l
+
   putenv("objtype", "386");
 
   // I have a bug in the kernel where I can't get the current
