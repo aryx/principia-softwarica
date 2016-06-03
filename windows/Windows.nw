@@ -234,7 +234,8 @@ Here are a few questions I hope this book will answer:
 \item How does the windowing system manage multiple processes? How
 does it communicate with those processes?
 \n kernel: syscall interface and time interrupt handler
-\n rio: virtual-devices/fs for input and draw for graphics (clients/server)
+\n rio: through files! /dev/{cons,mouse} for input and /dev/draw for graphics
+\n  (and /dev/winname). Shared image IPC, pipe IPC (for fs), syscall (for draw)
 \n X11: sockets and client/server archi with loop in server
 
 \item How does the windowing system control access to the screen,
@@ -338,14 +339,16 @@ the display of text glyphs on the screen in the appropriate window?
 % - cooperative threads and no need for lock
 
 \section{The \plan{} windowing system, [[rio]]}
+\label{sec:rio}
 
 I will explain in this book the code of the \plan windowing system 
 [[rio]]\footnote{\url{http://plan9.bell-labs.com/magic/man2html/4/rio}},
 which is about 10~000 lines of code (LOC).
 \n when include libframe/ and libplumb/ and libcomplete/! include full emulator!
 [[rio]] is written entirely in C.
+
 %dup: (and adapted) Graphics.nw, intro/motivations
-Note that in most operating systems (e.g., MacOS, Microsoft Windows)
+In most operating systems (e.g., MacOS, Microsoft Windows)
 the windowing system is {\em strongly} coupled with the {graphics system}.
 %
 In \plan, the windowing system [[rio]], and the graphics system,
@@ -353,8 +356,10 @@ called [[draw]], are clearly separated. [[rio]] is a user-space
 program that relies on [[draw]], which is implemented
 as a device in the kernel
 (for more information on [[draw]], read the \book{Graphics}).
-In \plan, you can run graphical applications without [[rio]].
+In \plan, you can run graphical applications with or without [[rio]].
 \l all in userspace, so portable! x86 and ARM!
+In fact, [[rio]] itself is a graphical application.
+\l recursive
 
 
 %dup: (and adapted) from Assembler.nw
@@ -387,11 +392,14 @@ It was created even before the Macintosh, X~Window, and Microsoft Windows.
 \n so not a bad idea to explain rio; it has street credit like X.
 
 %dup: (and adapted) Graphics.nw
-[[rio]] services, like many other services in \plan,
-are accessible through files. Indeed, [[rio]] is a user-space program
+Like many other services in \plan, some of the [[rio]] services
+are accessible through files. Indeed, [[rio]] is a
+graphical application
+\l user-space program
 {\em and} a filesystem (see the \book{Kernel} if this sounds confusing).
+\l well it is also a graphical application
 %
-To understand why [[rio]] is implemented as a filesystem, you need
+To understand why a part of [[rio]] is implemented as a filesystem, you need
 (1) to have a general idea on how to implement a windowing system,
 and (2) be familiar with some of the advanced features of the
 \plan kernel.
@@ -407,7 +415,8 @@ use the mouse, the keyboard, and the screen.
 %
 Thus, a windowing system can be implemented simply
 as a {\em multiplexer}; the windowing system can use
-the {\em physical devices} and serve {\em virtual devices}
+the {\em physical devices} (managed by the kernel)
+and serve {\em virtual devices}
 to the multiple graphical applications running under it.
 
 
@@ -420,6 +429,7 @@ See the \book{Kernel} for more information on those features,
 or the articles in my \plan repository in 
 [[docs/article/9.ps]] and [[docs/article/names.ps]],
 which both contain good introductions to those features.
+\l replace with \cite with a note in it to say available in repo?
 %
 With [[rio]], the virtual devices are accessible under [[/mnt/wsys/]]
 (e.g., [[/mnt/wsys/mouse]], [[/mnt/wsys/cons]]), 
@@ -994,6 +1004,7 @@ presents the relationships between those components.
 %toc:
 The following sections will explain those relations as well
 as the role of each of those components.
+\l different soft archi possible. will illustrate mostly with X Window and rio.
 But before, I need to better characterize what a window is.
 
 \begin{figure}[!]\centering
@@ -1290,6 +1301,7 @@ The window manager communicates also with the display server, like other
 clients. However, the manager is assigned a special role by the display server.
 \l under X11 this is actually delegated to another program
 %alt: rebind parent window and root window concept. Hints for positions.
+
 %alt: 
 In Weston and Wayland, the display server, compositor, and window manager
 are all parts of the same program.
@@ -1352,8 +1364,8 @@ but IDEs rarely integrate all the tools used by a programmer.
 
 
 The environment needed by a command-line application is minimal:
-three opened files in the first three file descriptors
-of the application corresponding to the {\em standard input},
+three opened files, in the first three file descriptors of the application,
+corresponding to the {\em standard input},
 {\em standard output}, and {\em standard error}.
 \l via fork, adjust, exec trick
 %
@@ -1396,9 +1408,9 @@ This is mainly because pseudo-tty are replaced by a more
 general approach: {virtual device files} and {filesystems in userspace}.
 %
 Indeed, under  [[rio]], a command-line application stills
-opens the {console device} by opening in reading and writing
-[[/dev/cons]]. This file, thanks to the per-process namespace
-feature of \plan is a virtual device managed by
+opens the {console device} by opening in read and write {modes}
+[[/dev/cons]]. However, this file, thanks to the per-process namespace
+feature of \plan, is a virtual device managed by
 [[rio]]; every file request on [[/dev/cons]] is redirected
 to a 9P request to [[rio]].
 
@@ -1493,11 +1505,11 @@ to a 9P request to [[rio]].
 [[rio]] is first a program you run through the command line, with 
 optional command-line arguments. 
 %
-Then, it takes over the screen and become a graphical application.
+Then, it takes over the screen and becomes a graphical application.
 %
 Finally, it internally spawns a new process acting as a filesystem. 
 %
-Thus, [[rio]] has three different interfaces that I will describe 
+Thus, [[rio]] has three different interfaces, which I will describe 
 in the following sections.
 
 \subsection{Command-line interface}
@@ -1517,7 +1529,7 @@ usage(void)
 Most of the time you will run [[rio]] without any argument,
 as shown in Section~\ref{sec:getting-started}.
 %
-The arguments are optionals and correspond to
+The arguments are all optionals and correspond to
 advanced features of [[rio]] I will explain in Chapter~\ref{chap:advanced}.
 
 
@@ -1537,7 +1549,7 @@ Figure~\ref{fig:rio-start}. % of Section~\ref{sec:getting-started}.
 %
 Then, using the mouse, you can create new windows.
 %
-Figure~\ref{fig:rio-gui} illustrates the main elements of the GUI of [[rio]].
+Figure~\ref{fig:rio-gui} illustrates the main elements of [[rio]]'s GUI.
 
 
 %dup: overview/principles/...
@@ -1549,16 +1561,16 @@ You can left-click on a window to put it at the top if it
 was overlapped. Moroever, by doing so, the window gets
 the {\em focus}; this means every keyboard input will be sent
 to this window.
-\l current window 
+\l {\em current} window 
 \l really? focus by click? or is it just if mouse is inside window?
 When the window gets the focus, its border changes from a light
 blue to a darker blue, as shown in the bottom of Figure~\ref{fig:rio-gui}.
-Moreover, for window terminals, if the window lose the focus,
+Moreover, for window terminals, if the window loses the focus,
 the text inside the window changes from black to a light grey,
 as shown in the left of Figure~\ref{fig:rio-gui}.
+\l nice visual feedback
+\l get an event? or get that because terminal is builtin?
 
-\l nice visual feedback 
-\l illustrate with fig:rio-gui
 
 \begin{figure}\begin{center}
 \includegraphics[width=8cm]{rio-gui}
@@ -1571,11 +1583,17 @@ as shown in the left of Figure~\ref{fig:rio-gui}.
 
 
 By right-clicking outside any window, on the grey background image of [[rio]],
-you trigger a {\em system menu} allowing you to create, delete,
-move, resize, or hide a window, as shown in 
+you trigger a {\em system menu} allowing you to 
+create, 
+resize, 
+move, 
+delete,
+or hide 
+a window, as shown in 
 the right of Figure~\ref{fig:rio-gui}.
 \n actually can also right click in textual window
 \n button3menu()
+\l also exit rio.
 Note that [[rio]] assumes a mouse with three buttons (left, middle, and right).
 %
 To create a new window, activate the system menu,
@@ -1617,6 +1635,7 @@ for instance, [[colors]].
 %
 This application should then take over the window terminal,
 as shown in Figure~\ref{fig:new-step3-color-app}.
+\l same mechanism that rio uses also initially
 \l same mechanism that makes possible recursive-rio
 %
 Once you quit this graphical application, the terminal will be back.
@@ -1632,97 +1651,166 @@ Once you quit this graphical application, the terminal will be back.
 \end{figure}
 
 You can also use the border of the window to resize or move the window.
-When the mouse is over the border, the cursor changes to
+When the mouse is over the border, the cursor changes again to
 indicate a possible action. By left-clicking or middle-clicking
 on the border, you can respectively resize or move the window.
 \l also menu resize/move/delete/hide also cursor change and right-click
 \l  to designate the window
 
 
-For a full description of the GUI of [[rio]] I refer
+For a full description of the GUI of [[rio]], I refer
 you to its manual page in [[docs/man/1/rio]] in my \plan repository.
 \l also a bit 8-1/2 ancestor of rio with same interface (actually since mpx)
 %dup: (adapted) intro/rio
 You can also watch the historical demo of the Blit
 and [[mpx]] at \url{https://www.youtube.com/watch?v=emh22gT5e9k};
-the user interface of [[mpx]] is almost identical to the one 
-in [[rio]].
+the user interface of [[mpx]] is almost identical to the one in [[rio]].
 \l just black and white instead of color
 
 
 \subsection{Filesystem interface}
 
-% As said in section X, rio implemented as a filesystem in userspace.
+%trans:
+As opposed to the two previous interfaces,
+the last interface of [[rio]] is almost invisible to the user.
+%
+It is the set of files served by [[rio]] to all its window processes:
+the filesystem interface.
+%
+It is mostly invisible because it is mainly an interface for programs, 
+not users.
+\l can explore in /mnt/wsys/ though
+Moreover, the files served by [[rio]] mimic and replace existingdevice files 
+managed by the kernel (e.g., [[/dev/mouse]]), 
+making the interface harder to notice.
+\l but a few files more too
+
+
+%dup: intro/rio intro/requirements
+As said in Section~\ref{sec:rio}, [[rio]] is also a filesystem in user space.
+\t to understand why, need expose internals of rio.
 \l more accurately a fileserver because in userspace.
 
-% when create new window/process under rio,
-\l fork adjust exec trick again
-% also create new namespace, internal mount, so
-% child process see different files in /dev/. In fact
-% first in /mnt/wsys and then bind so also in /dev/
+
+
+When you create a new window under [[rio]],
+[[rio]] internally
+forks a new process (with [[rfork()]]), 
+adjusts the environment in the child process,
+and finally executes (with [[exec()]]) a shell command ([[/bin/rc]]).
+%
+This is a classic idiom of \unix programming.
+For instance, this is the way the shell connects two processes
+together with a pipe when you type the command [[cat foo.c | wc]]
+(see the \book{Shell}).
+%
+For [[rio]], the adjustment consists in changing the namespace
+in the child process by using the [[mount()]] and [[bind()]]
+system calls.
+\n actually also pipe, but done before
+\l show actual calls now?
+%dup: intro/rio overview/principle/terminal
+After the call to [[mount()]], the child process will see special files
+in [[/mnt/wsys/]], thanks to the per-process namespace feature
+of the \plan kernel.
+% those files are managed by rio.
+% access to those file will trigger request on a pipe connected
+% to rio filesystem process in userspace. pipe there too.
+Moreover, because of the [[bind()]] call,
+the same files will also be accessible under [[/dev/]] and replace
+\l well not actually replace
+any existing files there, thanks to the union-mount feature of the kernel.
+
+
+% mount table
+% not bind #i /xxx, and code in the kernel. instead mount fd /xxx
+% where fd is a file descriptor open to a connection on the
+% network or a pipe to a fileserver.
+
+% signature of mount
+% actually rio also use a pipe! serve one side, and other given
+% as mount and handle by kernel that know and transfer request to it
+% to fcall 
+
+%int mount(fdt fd, int afd, char *old, int flag, char *aname)
+%int mount(fdt fd, ..., char *old, int flag, ...)
+% MREPL MAFTER
+
+% signature of bind
+% int bind(char *name, char *old, int flag)
+
+%% then to create new window, mount $wsys /mnt/wys/ 1
+%% and there you will have new device files. 
+%% Can then do the same and bind it in -b /dev and boom, 
+%% you have setup the right environment.
 
 
 
+% main files and short descr
+% I use /mnt/wsys, but also in /dev. By using /mnt/wsys clearer
+% also it's the version of the device file served by rio, not the kernel one
+% (or a parent rio when in recursive rio).
 
-
-% show command in new()?
-
-%/mnt/wsys/cons, /mnt/wsys/consctl, %kbdin
-%/mnt/wsys/mouse, /mnt/wsys/cursor
+%/mnt/wsys/cons, console, read/write
+%/mnt/wsys/consctl, %kbdin, raw mode, not line editing, used by graphic app
+%  rio itself uses that feature
+%/mnt/wsys/mouse, if open mouse, mean graphic app, not command-line
+%  actually also abuse for resize
+%/mnt/wsys/cursor, each window can change its cursor
 
 %alt: could also /mnt/wsys/draw! but would be slower,
 % more efficient access directly /dev/draw/ but that means
 % then needed to have really a display server accepting multiple
 % connections (less elegant).
+%/mnt/wsys/winname
 
-% graphical vs textual windows?
-% mouseopen or not? this has influence on many things.
-% need to explain that early?
+% note that can even run rio inside rio!
 
-%/mnt/wsys/winid, /mnt/wsys/winname, /mnt/wsys/label,
-%/mnt/wsys/screen /mnt/wsys/window (actually those are read-only)
+
+%% graphical vs textual windows?
+%% mouseopen or not? this has influence on many things.
+%% need to explain that early?
+
+% other files, but advanced features.
+% here is list and short descr. For more info see chapter X.
+
+%/mnt/wsys/winid
+%/mnt/wsys/label
+%/mnt/wsys/screen 
+%/mnt/wsys/window (actually those are read-only)
 %/mnt/wsys/text
 %/mnt/wsys/snarf
 %/mnt/wsys/wdir
 %/mnt/wsys/wctl 
-%/mnt/wsys/wsys/1/
+%/mnt/wsys/wsys/1/. like /proc, but for windows
 
-
-% then to create new window, mount $wsys /mnt/wys/ 1
-% and there you will have new device files. 
-% Can then do the same and bind it in -b /dev and boom, 
-% you have setup the right environment.
 
 % also has special files in /srv/
-% for external process to create new window and still have
-% the mount.
-% wsys and wctl are maybe advanced stuff we can delay?
-% wctl for sure, allow to control rio from command line but
-%  less important
+% for external process to create new window and still have the mount.
+% wsys and wctl are advanced stuff we can delay
+% wctl for sure, allow to control rio from command line but less important
 %/srv
 % rio.user.pid
 % riowctl.user.pid
 %env var:
-%$wsys (e.g., /srv/rio.pad.21)
-%$wctl (e.g., /srv/riowctl.pad.21)
+% $wsys (e.g., /srv/rio.pad.21)
+% $wctl (e.g., /srv/riowctl.pad.21)
 %
-% can also ctl rio by writing in $wctl
+%can also ctl rio by writing in $wctl
 % also have fileserver that can take command (e.g., wctlnew())
 % the fileserver offer also virtual views for the apps running
 % inside the windows
 % mount #s/rio.user.pid /mnt/wsys 1
 % mount -b #s/rio.user.pid /dev
 
-% $rio
-% manual creation of window (not via menu)
-% see rio(5)
+% manual creation of window (not via menu) see rio(5)
 % mount $wsys /tmp 'new -r 0 0 128 64 -pid' $pid
 % echo hi > /tmp/cons
 % :)
 
 
 
-% note that can even run rio inside rio!
+
 
 
 
@@ -2435,6 +2523,7 @@ Window	*input;
 @
 % should rename winput I think. or wcurrent (but there is wcurrent())
 % or just current. of focuswin.
+% in rio(1) he uses the term "current"
 
 
 % also
