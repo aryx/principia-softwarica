@@ -756,8 +756,8 @@ extern	void	nulldir(Dir*);
 extern	long	dirreadall(int, Dir**);
 
 // namespace
-extern	int		bind(char*, char*, int);
-extern	int		mount(int, int, char*, int, char*);
+extern	int		bind(char*, char*, int/*Mxxx*/);
+extern	int		mount(fdt, int, char*, int/*Mxxx*/, char*);
 extern	int		unmount(char*, char*);
 
 // time
