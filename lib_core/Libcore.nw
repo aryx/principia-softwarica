@@ -146,7 +146,7 @@ without [[select()]] in the kernel?
 \end{itemize}
 \l sinus, cosinus, how when no hardware support?
 
-\section{\plan [[libc]], [[libthread]], [[libregexp]]}
+\section{\plan core libraries, [[libc]], [[libthread]], and [[libregexp]]}
 
 % gonna present core libs of plan9, its libc of course, 
 % but also its thread libraries,
@@ -371,7 +371,6 @@ License.
 \section{Syscalls, [[pipe()]], [[notify()]], [[segattach()]]}
 
 \chapter{Channels and Cooperative Threads}
-% should be a last chapter, but put here for now
 
 \section{Overview}
 
@@ -437,9 +436,15 @@ License.
 
 %main.c: !!!
 
-\subsection{Architecture overview}
+\subsection{Software architecture}
 
 % _xxx = private
+
+% rely on shared memory and futex for synchro.
+% ainc, adec. (atomic inc, atomic dec)
+
+% channels are structured in shared memory between processes and
+% threads. Used concurrently.
 
 \section{A toy example}
 
@@ -475,6 +480,7 @@ decref(Ref *r)
 <<global xincport_lock>>=
 static Lock xincport_lock;
 @
+% port for portable?
 
 <<function _xinc>>=
 void
@@ -500,8 +506,6 @@ _xdec(long *p)
     return r;
 }
 @
-
-
 
 
 % see Lock, QLock, Rendez!! 
@@ -539,11 +543,16 @@ struct Channel {
     volatile int closed;	/* channel is closed */
 
     // must be at the end of the struct! 
-    uchar	v[1];		/* Array of s values in the channel */
+    byte	v[1];		/* Array of s values in the channel */
 };
 @
 % no Lock?
 % volatile?
+
+<<global chanlock>>=
+static Lock chanlock;		/* central channel access lock */
+@
+
 
 <<function chancreate>>=
 Channel*
@@ -553,13 +562,14 @@ chancreate(int elemsize, int elemcnt)
 
     if(elemcnt < 0 || elemsize <= 0)
         return nil;
-    c = _threadmalloc(sizeof(Channel)+elemsize*elemcnt, 1);
+    c = _threadmalloc(sizeof(Channel) + elemsize*elemcnt, 1);
     c->e = elemsize;
     c->s = elemcnt;
     _threaddebug(DBGCHAN, "chancreate %p", c);
     return c;
 }
 @
+% _threadmalloc ?
 
 % have to be called by user? could do that in chancreate no?
 <<function chaninit>>=
@@ -628,9 +638,6 @@ enum {
 #define Closed	((void*)CHANCLOSD)
 @
 
-<<global chanlock>>=
-static Lock chanlock;		/* central channel access lock */
-@
 
 
 
@@ -734,7 +741,7 @@ struct Proc
 
 
 
-    int		splhi;			/* delay notes */
+    bool		splhi;			/* delay notes */
 
     int		needexec;
     Execargs	exec;			/* exec argument */
@@ -825,6 +832,31 @@ struct Pqueue {		/* Proc queue */
 @
 
 
+<<function proccreate>>=
+int
+proccreate(void (*f)(void*), void *arg, uint stacksize)
+{
+    return procrfork(f, arg, stacksize, 0);
+}
+@
+
+<<function procrfork>>=
+int
+procrfork(void (*f)(void *), void *arg, uint stacksize, int rforkflag)
+{
+    Proc *p;
+    int id;
+
+    p = _threadgetproc();
+    assert(p->newproc == nil);
+    p->newproc = _newproc(f, arg, stacksize, nil, p->thread->grp, rforkflag);
+    id = p->newproc->threads.head->id;
+    _sched();
+    return id;
+}
+@
+
+
 
 <<function _newproc>>=
 /*
@@ -854,29 +886,7 @@ _newproc(void (*f)(void *arg), void *arg, uint stacksize, char *name, int grp, i
 @
 
 
-<<function procrfork>>=
-int
-procrfork(void (*f)(void *), void *arg, uint stacksize, int rforkflag)
-{
-    Proc *p;
-    int id;
 
-    p = _threadgetproc();
-    assert(p->newproc == nil);
-    p->newproc = _newproc(f, arg, stacksize, nil, p->thread->grp, rforkflag);
-    id = p->newproc->threads.head->id;
-    _sched();
-    return id;
-}
-@
-
-<<function proccreate>>=
-int
-proccreate(void (*f)(void*), void *arg, uint stacksize)
-{
-    return procrfork(f, arg, stacksize, 0);
-}
-@
 
 
 <<function _freeproc>>=
@@ -994,6 +1004,20 @@ nextID(void)
 }
 @
 
+
+<<function threadcreate>>=
+/* 
+ * Create a new thread and schedule it to run.
+ * The thread grp is inherited from the currently running thread.
+ */
+int
+threadcreate(void (*f)(void *arg), void *arg, uint stacksize)
+{
+    return newthread(_threadgetproc(), f, arg, stacksize, nil, threadgetgrp());
+}
+@
+
+
 % ctor
 <<function newthread>>=
 /*
@@ -1067,17 +1091,6 @@ _threadinitstack(Thread *t, void (*f)(void*), void *arg)
 
 
 
-<<function threadcreate>>=
-/* 
- * Create a new thread and schedule it to run.
- * The thread grp is inherited from the currently running thread.
- */
-int
-threadcreate(void (*f)(void *arg), void *arg, uint stacksize)
-{
-    return newthread(_threadgetproc(), f, arg, stacksize, nil, threadgetgrp());
-}
-@
 
 
 <<function _freethread>>=
@@ -1168,8 +1181,10 @@ enum state
 enum chanstate
 {
     Channone,
+
     Chansend,
     Chanrecv,
+
     Chanalt,
 };
 @
@@ -1220,6 +1235,11 @@ threadgetname(void)
 
 % "Plan9 has no select call"
 
+% But in libdraw/event.c they use an event pipe; a pipe between
+% a master and a set of slaves, and master can listen to multiple
+% slaves at the same time and get the next event from those slaves.
+% Here is alternative model to event, threads and channels and alt().
+
 <<enum chanop>>=
 enum chanop {
     CHANEND,
@@ -1250,6 +1270,7 @@ struct Alt {
 
 
 \section{[[main()]]}
+% and threadmain()
 
 <<global mainp>>=
 // ref<ref<Proc>
@@ -1327,6 +1348,7 @@ mainlauncher(void *arg)
     Mainarg *a;
 
     a = arg;
+
     // user defined threadmain()!!
     threadmain(a->argc, a->argv);
 
@@ -1576,6 +1598,8 @@ _schedexit(Proc *p)
 
 \section{[[alt()]]}
 
+% send()/recv() use alt(), so better see alt() first.
+
 % !!!
 <<function alt>>=
 int
@@ -1717,7 +1741,7 @@ alt(Alt *alts)
 @
 
 <<function isopenfor>>=
-static int
+static bool
 isopenfor(Channel *c, int op)
 {
     return c->closed == 0 || (op == CHANRCV && c->n > 0);
