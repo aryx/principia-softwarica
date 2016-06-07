@@ -1,6 +1,7 @@
 /*s: windows/apps/lens.c */
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <window.h>
 #include <event.h>
@@ -115,6 +116,7 @@ main(int argc, char *argv[])
     draw(chequer, Rect(0, 0, 1, 1), display->white, nil, ZP);
     draw(chequer, Rect(1, 1, 2, 2), display->white, nil, ZP);
     lastp = divpt(addpt(view->r.min, view->r.max), 2);
+
     screenfd = open("/dev/screen", OREAD);
     if(screenfd < 0){
         fprint(2, "lens: can't open /dev/screen: %r\n");

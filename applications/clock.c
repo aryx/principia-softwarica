@@ -1,6 +1,7 @@
 /*s: windows/apps/clock.c */
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <window.h>
 #include <event.h>
@@ -57,7 +58,7 @@ redraw(Image *view)
     line(view, c, circlept(c, (rad*3)/4, angmin), 0, 0, 1, minhand, ZP);
     line(view, c, circlept(c, rad/2, anghr), 0, 0, 1, hrhand, ZP);
 
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 /*e: function redraw */
 
@@ -82,7 +83,7 @@ main(int, char**)
     int key, timer;
     int t;
 
-    if (initdraw(0, 0, "clock") < 0)
+    if (initdraw(nil, nil, "clock") < 0)
         sysfatal("initdraw failed");
     back = allocimagemix(display, DPalebluegreen, DWhite);
 
@@ -105,7 +106,7 @@ main(int, char**)
             m = e.mouse;
             if(m.buttons & 4) {
                 if(emenuhit(3, &m, &menu) == 0)
-                    exits(0);
+                    exits(nil);
             }
         } else if(key == timer) {
             redraw(view);

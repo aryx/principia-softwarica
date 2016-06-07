@@ -1,6 +1,7 @@
 /*s: windows/apps/colors.c */
 #include <u.h>
 #include <libc.h>
+
 #include <draw.h>
 #include <window.h>
 #include <event.h>
@@ -51,7 +52,7 @@ eresized(bool new)
             draw(view, crect[i], color[i], nil, ZP);
         }
     }
-    flushimage(display, 1);
+    flushimage(display, true);
 }
 /*e: function eresized (windows/apps/colors.c) */
 
@@ -189,7 +190,7 @@ main(int argc, char *argv[])
         case 4: // right click
             switch(emenuhit(3, &m, &menu)){
             case 0:
-                exits(0);
+                exits(nil);
             }
         }
     }
