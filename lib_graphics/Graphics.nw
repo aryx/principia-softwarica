@@ -198,7 +198,7 @@ However, in this book, I will cover only {2D operations}, implemented mostly
 in software. I will assume very little from the graphics hardware.
 \n a frame buffer, see also VGA appendix
 %
-Even though 2D operations are usually covered very quickly
+Even though 2D operations are usually covered quickly
 in books about computer graphics (e.g.,~\cite{cgpp-foley}),
 where the focus is more on 3D and advanced rendering techniques,
 the result of simple 2D operations is what most people see
@@ -274,6 +274,7 @@ What are {True Type} fonts?
 \end{itemize}
 \l how to implement overlapping windows? what is a backing store?
 \l how to cooperate with windowing system?
+\l how graphics and mouse change programming model? What are events?
 \t how synchro with monitor balayage? glitches? API? how done in Soldat.nw?
 \t memory leak with imagmem? or when close fd then freeimage in pool?
 
@@ -1460,9 +1461,9 @@ to the {destination} image [[display->image]] (the screen) over
 the whole screen rectangle ([[display->image->r]]).
 \l mask but here nil. ZP is Zero point so Pt(0,0)
 
-\item Line~17 draws on the screen a black line of width 10 in diagonal.
-
-\item Line~20 draws some text in the font specified by
+\item 
+Line~17 draws on the screen a black line of width 10 in diagonal.
+Line~20 draws some text in the font specified by
 the global [[font]], which was set previously by [[initdraw()]].
 
 \item Line~23 {\em flushes} the {\em drawing commands buffer} by writing
@@ -17740,6 +17741,7 @@ if(fd < 0)
 % Actually mouse has also some output feedback: the cursor! 
 % (ok can have cursor in text mode with gpm, but not the same)
 
+
 \section{Mouse}
 
 %example:
@@ -18006,6 +18008,9 @@ if(mc == nil)
 
 
 \subsection{API}
+
+% synchrone
+% for choice, use alt() with mc->c in the list of Alt.
 
 <<function readmouse>>=
 errorneg1
@@ -21266,6 +21271,7 @@ mouseresize();
 \subsection{[[getrect.c]]}
 % ????
 % mv with cursor?
+% =~ sweep() action done by rio, but available for other programs?
 
 <<constant W (lib_graphics/libdraw/getrect.c)>>=
 #define	W	Borderwidth
@@ -21881,30 +21887,59 @@ menuhit(int but, Mousectl *mc, Menu *menu, Screen *scr)
     return -1;
 }
 @
-
+% >> >> >> >> >>
 
 
 \section{Event-based IO}
-% Should be in Widgets too?
-
-%related: big-bang function in racket/htdp
 
 % seen before /dev/mouse synchrony issue, and the introduction
 % of ioproc and channel and alt(). 
-% Events are alternative API.
-%classic thread vs event slide?
+
+% Events are an alternative API. 
+% classic thread vs event slide.
+% See event(2)
+%  "These routines provide an interface to multiple sources of input 
+%   for unthreaded programs. Threaded programs (see thread (2))
+%   should instead use the threaded mouse and keyboard interface ..."
+
+% The event pipe!
+
 
 % have lots of dupes, menuhit.c vs emenuhit.c?
 
 %alt: X11 has XEvent structure
+%related: big-bang function in racket/htdp
 
-<<enum _anon_ (include/event.h)>>=
+\subsection{Data structures}
+
+<<enum Key>>=
 enum
 {
     Emouse	= 1,
     Ekeyboard	= 2,
 };
 @
+% keys, arguments to einit. bitset actually.
+% bitset because can have multiple events at the same time
+
+<<type keys>>
+// bitset<Key>
+typedef ulong keys;
+@
+
+
+<<struct Event>>=
+struct	Event
+{
+    int		kbdc;
+    Mouse	mouse;
+
+    int		n;		/* number of characters in message */
+    void	*v;		/* data unpacked by general event-handling function */
+    byte	data[EMAXMSG];	/* message from an arbitrary file descriptor */
+};
+@
+% int or Rune for kbdc?
 
 % dupe
 <<struct Mouse>>=
@@ -21916,23 +21951,6 @@ struct	Mouse
 };
 @
 
-<<struct Event>>=
-struct	Event
-{
-    int		kbdc;
-    Mouse	mouse;
-
-    int		n;		/* number of characters in message */
-    void	*v;		/* data unpacked by general event-handling function */
-    uchar	data[EMAXMSG];	/* message from an arbitrary file descriptor */
-};
-@
-
-
-% event.c
-
-
-
 <<enum _anon_ (include/event.h)2>>=
 enum
 {
@@ -21940,29 +21958,38 @@ enum
     EMAXMSG = 128+8192,	/* size of 9p header+data */
 };
 @
-
+% 32 cos use bitset. A bit like select set?
 
 <<struct Slave>>=
 struct Slave
 {
     int	pid;
+
     Ebuf	*head;		/* queue of messages for this descriptor */
     Ebuf	*tail;
+
     int	(*fn)(int, Event*, uchar*, int);
 };
 @
+% generalize the special ioproc for the mouse and the keyboard
+% but in the end the same.
 
 <<struct Ebuf>>=
 struct Ebuf
 {
-    Ebuf	*next;
     int	n;		/* number of bytes in buf */
-    uchar	buf[EMAXMSG];
+    byte	buf[EMAXMSG];
+
+    // Extra
+    Ebuf	*next;
 };
 @
 
 <<global eslave>>=
 static	Slave	eslave[MAXSLAVE];
+@
+<<global nslave>>=
+static	int	nslave;
 @
 
 
@@ -21970,6 +21997,7 @@ static	Slave	eslave[MAXSLAVE];
 <<global Skeyboard>>=
 static	int	Skeyboard = -1;
 @
+% index in eslave? the ioproc for the keyboard?
 
 <<global Smouse>>=
 static	int	Smouse = -1;
@@ -21980,31 +22008,342 @@ static	int	Stimer = -1;
 @
 
 
-
-<<global logfid>>=
-static	int	logfid;
-@
-
-<<global nslave>>=
-static	int	nslave;
-@
-
 <<global parentpid>>=
 static	int	parentpid;
 @
 
-<<global epipe>>=
-static	int	epipe[2];
+<<global logfid>>=
+static	fdt	logfid;
 @
+
+
+% The event pipe!
+<<global epipe>>=
+static	fdt	epipe[2];
+@
+% One pipe shared by all slaves. atomic write? I think so.
+% first byte is slave identifier, followed by variable number of
+% bytes depending if mouse or keyboard or something else.
 
 <<global mousefd>>=
-static	int	mousefd;
+static	fdt	mousefd;
 @
-
 <<global cursorfd>>=
-static	int	cursorfd;
+static	fdt	cursorfd;
 @
 
+\subsection{Initialization, [[einit()]]}
+
+<<function einit>>=
+void
+einit(keys keys)
+{
+    fdt ctl, fd;
+    char buf[256];
+
+    parentpid = getpid();
+    if(pipe(epipe) < 0)
+        drawerror(display, "events: einit pipe");
+
+    atexit(ekill);
+    atnotify(enote, 1);
+
+    snprint(buf, sizeof buf, "%s/mouse", display->devdir);
+    mousefd = open(buf, ORDWR|OCEXEC);
+    if(mousefd < 0)
+        drawerror(display, "einit: can't open mouse\n");
+
+    snprint(buf, sizeof buf, "%s/cursor", display->devdir);
+    cursorfd = open(buf, ORDWR|OCEXEC);
+    if(cursorfd < 0)
+        drawerror(display, "einit: can't open cursor\n");
+
+    if(keys&Ekeyboard){
+        snprint(buf, sizeof buf, "%s/cons", display->devdir);
+        fd = open(buf, OREAD);
+        if(fd < 0)
+            drawerror(display, "events: can't open console");
+
+        snprint(buf, sizeof buf, "%s/consctl", display->devdir);
+        ctl = open("/dev/consctl", OWRITE|OCEXEC);
+        if(ctl < 0)
+            drawerror(display, "events: can't open consctl");
+        write(ctl, "rawon", 5);
+
+        for(Skeyboard=0; Ekeyboard & ~(1<<Skeyboard); Skeyboard++)
+            ;
+        ekeyslave(fd);
+    }
+    if(keys&Emouse){
+        estart(Emouse, mousefd, 1+4*12);
+        for(Smouse=0; Emouse & ~(1<<Smouse); Smouse++)
+            ;
+    }
+}
+@
+% >> >> >>
+
+
+<<function ekill>>=
+static void
+ekill(void)
+{
+    enote(0, 0);
+}
+@
+
+<<function enote>>=
+static int
+enote(void *v, char *s)
+{
+    char t[1];
+    int i, pid;
+
+    USED(v, s);
+    pid = getpid();
+    if(pid != parentpid){
+        for(i=0; i<nslave; i++){
+            if(pid == eslave[i].pid){
+                t[0] = MAXSLAVE;
+                write(epipe[1], t, 1);
+                break;
+            }
+        }
+        return 0;
+    }
+    close(epipe[0]);
+    epipe[0] = -1;
+    close(epipe[1]);
+    epipe[1] = -1;
+    for(i=0; i<nslave; i++){
+        if(pid == eslave[i].pid)
+            continue;	/* don't kill myself */
+        postnote(PNPROC, eslave[i].pid, "die");
+    }
+    return 0;
+}
+@
+
+\subsection{The slaves}
+
+<<function ekeyslave>>=
+static void
+ekeyslave(fdt fd)
+{
+    Rune r;
+    char t[3], k[10];
+    int kr, kn, w;
+
+    if(eforkslave(Ekeyboard) < MAXSLAVE)
+        // parent (master)
+        return;
+
+    // child (slave) code
+    kn = 0;
+    t[0] = Skeyboard;
+    for(;;){
+        while(!fullrune(k, kn)){
+            // blocking call
+            kr = read(fd, k+kn, sizeof k - kn);
+            if(kr <= 0)
+                goto breakout;
+            kn += kr;
+        }
+        w = chartorune(&r, k);
+        kn -= w;
+        memmove(k, &k[w], kn);
+        t[1] = r;
+        t[2] = r>>8; // TODO what about other parts of the Rune????
+        // send to master
+        if(write(epipe[1], t, 3) != 3)
+            break;
+    }
+breakout:;
+    t[0] = MAXSLAVE;
+    write(epipe[1], t, 1);
+    _exits(0);
+}
+@
+
+
+<<function eforkslave>>=
+static int
+eforkslave(ulong key)
+{
+    int i, pid;
+
+    for(i=0; i<MAXSLAVE; i++)
+        if((key & ~(1<<i)) == 0 && eslave[i].pid == 0){
+            if(nslave <= i)
+                nslave = i + 1;
+            /*
+             * share the file descriptors so the last child
+             * out closes all connections to the window server.
+             */
+            switch(pid = rfork(RFPROC)){
+            // child
+            case 0:
+                return MAXSLAVE+i;
+            case -1:
+                fprint(2, "events: fork error\n");
+                exits("fork");
+            }
+            // parent
+            eslave[i].pid = pid;
+            eslave[i].head = eslave[i].tail = nil;
+            return i;
+        }
+    drawerror(display, "events: bad slave assignment");
+    return 0;
+}
+@
+% >> >>
+
+
+
+% for the mouse
+<<function estart>>=
+ulong
+estart(ulong key, fdt fd, int n)
+{
+    return estartfn(key, fd, n, nil);
+}
+@
+
+<<function estartfn>>=
+ulong
+estartfn(ulong key, fdt fd, int n, int (*fn)(int, Event*, uchar*, int))
+{
+    char buf[EMAXMSG+1];
+    int i, r;
+
+    if(fd < 0)
+        drawerror(display, "events: bad file descriptor");
+    if(n <= 0 || n > EMAXMSG)
+        n = EMAXMSG;
+
+    i = eforkslave(key);
+    // master
+    if(i < MAXSLAVE){
+        eslave[i].fn = fn;
+        return 1<<i;
+    }
+    // slave
+    buf[0] = i - MAXSLAVE; // slave identifier
+    while((r = read(fd, buf+1, n))>0)
+        if(write(epipe[1], buf, r+1)!=r+1)
+            break;
+
+    buf[0] = MAXSLAVE;
+    write(epipe[1], buf, 1);
+    _exits(nil);
+    return 0;
+}
+@
+% >>
+
+
+
+
+\subsection{Event loop, [[event()]]}
+
+% to get next event, usually called in event loop
+<<function event>>=
+keys
+event(Event *e)
+{
+    return eread(~0UL, e);
+}
+@
+
+<<function eread>>=
+keys
+eread(keys keys, Event *e)
+{
+    Ebuf *eb;
+    int i, id;
+
+    if(keys == 0)
+        return 0;
+    for(;;){
+        // check if pending message
+        for(i=0; i<nslave; i++) {
+            if((keys & (1<<i)) && eslave[i].head){
+                id = 1<<i;
+                if(i == Smouse)
+                    e->mouse = emouse();
+                else if(i == Skeyboard)
+                    e->kbdc = ekbd();
+                else if(i == Stimer)
+                    eslave[i].head = nil;
+                else{
+                    eb = ebread(&eslave[i]);
+                    e->n = eb->n;
+                    if(eslave[i].fn)
+                        id = (*eslave[i].fn)(id, e, eb->buf, eb->n);
+                    else
+                        memmove(e->data, eb->buf, eb->n);
+                    free(eb);
+                }
+                return id;
+            }
+        }
+        // read from pipe new messages from the slaves
+        extract();
+    }
+    return 0; // unreachable
+}
+@
+% >> >>
+%note: would like to use switch, but the Smouse are not constants, they
+% are static globals
+
+
+
+<<function emouse>>=
+Mouse
+emouse(void)
+{
+    Mouse m;
+    Ebuf *eb;
+    static int but[2];
+    int b;
+
+    if(Smouse < 0)
+        drawerror(display, "events: mouse not initialized");
+    eb = ebread(&eslave[Smouse]);
+    m.xy.x = atoi((char*)eb->buf+1+0*12);
+    m.xy.y = atoi((char*)eb->buf+1+1*12);
+    b = atoi((char*)eb->buf+1+2*12);
+    m.buttons = b;
+    m.msec = atoi((char*)eb->buf+1+3*12);
+    if (logfid)
+        fprint(logfid, "b: %d xy: %P\n", m.buttons, m.xy);
+    free(eb);
+    return m;
+}
+@
+
+<<function ekbd>>=
+int
+ekbd(void)
+{
+    Ebuf *eb;
+    int c;
+
+    if(Skeyboard < 0)
+        drawerror(display, "events: keyboard not initialzed");
+    eb = ebread(&eslave[Skeyboard]);
+    c = eb->buf[0] + (eb->buf[1]<<8);
+    free(eb);
+    return c;
+}
+@
+% >>
+
+
+
+% emouse | ekbd | eread  -> <>
 <<function ebread>>=
 static
 Ebuf*
@@ -22022,60 +22361,94 @@ ebread(Slave *s)
         free(d);
         if(s->head && l==0)
             break;
+        // else
         extract();
     }
+    // eb = pop_queue(s->head, s->tail);
     eb = s->head;
     s->head = s->head->next;
-    if(s->head == 0)
-        s->tail = 0;
+    if(s->head == nil)
+        s->tail = nil;
+
     return eb;
 }
 @
 
-<<function event>>=
-ulong
-event(Event *e)
-{
-    return eread(~0UL, e);
-}
-@
+\subsection{The master, [[extract()]]}
 
-<<function eread>>=
-ulong
-eread(ulong keys, Event *e)
+<<function extract>>=
+static void
+extract(void)
 {
+    Slave *s;
     Ebuf *eb;
-    int i, id;
+    int i, n;
+    byte ebuf[EMAXMSG+1];
 
-    if(keys == 0)
-        return 0;
-    for(;;){
-        for(i=0; i<nslave; i++)
-            if((keys & (1<<i)) && eslave[i].head){
-                id = 1<<i;
-                if(i == Smouse)
-                    e->mouse = emouse();
-                else if(i == Skeyboard)
-                    e->kbdc = ekbd();
-                else if(i == Stimer)
-                    eslave[i].head = 0;
-                else{
-                    eb = ebread(&eslave[i]);
-                    e->n = eb->n;
-                    if(eslave[i].fn)
-                        id = (*eslave[i].fn)(id, e, eb->buf, eb->n);
-                    else
-                        memmove(e->data, eb->buf, eb->n);
-                    free(eb);
-                }
-                return id;
-            }
-        extract();
+    /* avoid generating a message if there's nothing to show. */
+    /* this test isn't perfect, though; could do flushimage(display, 0) then call extract */
+    /* also: make sure we don't interfere if we're multiprocessing the display */
+    if(display->locking){
+        /* if locking is being done by program, this means it can't depend on automatic flush in emouse() etc. */
+        if(canqlock(&display->qlock)){
+            if(display->bufp > display->buf)
+                flushimage(display, true);
+            unlockdisplay(display);
+        }
+    }else
+        if(display->bufp > display->buf)
+            flushimage(display, true);
+
+loop:
+    if((n=read(epipe[0], ebuf, EMAXMSG+1)) < 0
+    || ebuf[0] >= MAXSLAVE)
+        drawerror(display, "eof on event pipe");
+    if(n == 0)
+        goto loop;
+
+    i = ebuf[0];
+    if(i >= nslave || n <= 1)
+        drawerror(display, "events: protocol error: short read");
+    s = &eslave[i];
+
+    if(i == Stimer){
+        s->head = (Ebuf *)1;
+        return;
     }
-    return 0; // unreachable
+    if(i == Skeyboard && n != 3)
+        drawerror(display, "events: protocol error: keyboard");
+    if(i == Smouse){
+        if(n < 1+1+2*12)
+            drawerror(display, "events: protocol error: mouse");
+        if(ebuf[1] == 'r')
+            eresized(1);
+
+        /* squash extraneous mouse events */
+        if((eb=s->tail) && memcmp(eb->buf+1+2*12, ebuf+1+1+2*12, 12)==0){
+            memmove(eb->buf, &ebuf[1], n - 1);
+            return;
+        }
+    }
+
+    /* try to save space by only allocating as much buffer as we need */
+    eb = malloc(sizeof(*eb) - sizeof(eb->buf) + n - 1);
+    if(eb == nil)
+        drawerror(display, "events: protocol error 4");
+    eb->n = n - 1;
+    memmove(eb->buf, &ebuf[1], n - 1);
+
+    // add_queue(eb, s->head, s->tail)
+    eb->next = nil;
+    if(s->head)
+        s->tail = s->tail->next = eb;
+    else
+        s->head = s->tail = eb;
 }
 @
-% >> >>
+% what if multiple events in the pipe? first out win all?
+% timer too??
+
+\subsection{[[ecanxxx()]]}
 
 <<function ecanmouse>>=
 int
@@ -22123,319 +22496,44 @@ ecanread(ulong keys)
 @
 % >>
 
-<<function estartfn>>=
-ulong
-estartfn(ulong key, int fd, int n, int (*fn)(int, Event*, uchar*, int))
-{
-    char buf[EMAXMSG+1];
-    int i, r;
-
-    if(fd < 0)
-        drawerror(display, "events: bad file descriptor");
-    if(n <= 0 || n > EMAXMSG)
-        n = EMAXMSG;
-    i = eforkslave(key);
-    if(i < MAXSLAVE){
-        eslave[i].fn = fn;
-        return 1<<i;
-    }
-    buf[0] = i - MAXSLAVE;
-    while((r = read(fd, buf+1, n))>0)
-        if(write(epipe[1], buf, r+1)!=r+1)
-            break;
-    buf[0] = MAXSLAVE;
-    write(epipe[1], buf, 1);
-    _exits(0);
-    return 0;
-}
-@
-% >>
-
-<<function estart>>=
-ulong
-estart(ulong key, int fd, int n)
-{
-    return estartfn(key, fd, n, nil);
-}
-@
+\subsection{Timer}
 
 <<function etimer>>=
 ulong
 etimer(ulong key, int n)
 {
     char t[2];
+    int cnt;
 
     if(Stimer != -1)
         drawerror(display, "events: timer started twice");
     Stimer = eforkslave(key);
+    // master
     if(Stimer < MAXSLAVE)
         return 1<<Stimer;
+    // slave
     if(n <= 0)
         n = 1000;
     t[0] = t[1] = Stimer - MAXSLAVE;
-    do
+    do {
         sleep(n);
-    while(write(epipe[1], t, 2) == 2);
+        cnt = write(epipe[1], t, 2);
+    } while(cnt == 2);
+
     t[0] = MAXSLAVE;
     write(epipe[1], t, 1);
-    _exits(0);
+    _exits(nil);
     return 0;
 }
 @
 % >> >> >> >> >>
-
-<<function ekeyslave>>=
-static void
-ekeyslave(int fd)
-{
-    Rune r;
-    char t[3], k[10];
-    int kr, kn, w;
-
-    if(eforkslave(Ekeyboard) < MAXSLAVE)
-        return;
-    kn = 0;
-    t[0] = Skeyboard;
-    for(;;){
-        while(!fullrune(k, kn)){
-            kr = read(fd, k+kn, sizeof k - kn);
-            if(kr <= 0)
-                goto breakout;
-            kn += kr;
-        }
-        w = chartorune(&r, k);
-        kn -= w;
-        memmove(k, &k[w], kn);
-        t[1] = r;
-        t[2] = r>>8;
-        if(write(epipe[1], t, 3) != 3)
-            break;
-    }
-breakout:;
-    t[0] = MAXSLAVE;
-    write(epipe[1], t, 1);
-    _exits(0);
-}
-@
-
-<<function einit>>=
-void
-einit(ulong keys)
-{
-    int ctl, fd;
-    char buf[256];
-
-    parentpid = getpid();
-    if(pipe(epipe) < 0)
-        drawerror(display, "events: einit pipe");
-    atexit(ekill);
-    atnotify(enote, 1);
-    snprint(buf, sizeof buf, "%s/mouse", display->devdir);
-    mousefd = open(buf, ORDWR|OCEXEC);
-    if(mousefd < 0)
-        drawerror(display, "einit: can't open mouse\n");
-    snprint(buf, sizeof buf, "%s/cursor", display->devdir);
-    cursorfd = open(buf, ORDWR|OCEXEC);
-    if(cursorfd < 0)
-        drawerror(display, "einit: can't open cursor\n");
-    if(keys&Ekeyboard){
-        snprint(buf, sizeof buf, "%s/cons", display->devdir);
-        fd = open(buf, OREAD);
-        if(fd < 0)
-            drawerror(display, "events: can't open console");
-        snprint(buf, sizeof buf, "%s/consctl", display->devdir);
-        ctl = open("/dev/consctl", OWRITE|OCEXEC);
-        if(ctl < 0)
-            drawerror(display, "events: can't open consctl");
-        write(ctl, "rawon", 5);
-        for(Skeyboard=0; Ekeyboard & ~(1<<Skeyboard); Skeyboard++)
-            ;
-        ekeyslave(fd);
-    }
-    if(keys&Emouse){
-        estart(Emouse, mousefd, 1+4*12);
-        for(Smouse=0; Emouse & ~(1<<Smouse); Smouse++)
-            ;
-    }
-}
-@
-% >> >> >>
+%old: I moved the write outside the while and use a cnt local
 
 
-<<function extract>>=
-static void
-extract(void)
-{
-    Slave *s;
-    Ebuf *eb;
-    int i, n;
-    uchar ebuf[EMAXMSG+1];
 
-    /* avoid generating a message if there's nothing to show. */
-    /* this test isn't perfect, though; could do flushimage(display, 0) then call extract */
-    /* also: make sure we don't interfere if we're multiprocessing the display */
-    if(display->locking){
-        /* if locking is being done by program, this means it can't depend on automatic flush in emouse() etc. */
-        if(canqlock(&display->qlock)){
-            if(display->bufp > display->buf)
-                flushimage(display, true);
-            unlockdisplay(display);
-        }
-    }else
-        if(display->bufp > display->buf)
-            flushimage(display, true);
-loop:
-    if((n=read(epipe[0], ebuf, EMAXMSG+1)) < 0
-    || ebuf[0] >= MAXSLAVE)
-        drawerror(display, "eof on event pipe");
-    if(n == 0)
-        goto loop;
-    i = ebuf[0];
-    if(i >= nslave || n <= 1)
-        drawerror(display, "events: protocol error: short read");
-    s = &eslave[i];
-    if(i == Stimer){
-        s->head = (Ebuf *)1;
-        return;
-    }
-    if(i == Skeyboard && n != 3)
-        drawerror(display, "events: protocol error: keyboard");
-    if(i == Smouse){
-        if(n < 1+1+2*12)
-            drawerror(display, "events: protocol error: mouse");
-        if(ebuf[1] == 'r')
-            eresized(1);
-        /* squash extraneous mouse events */
-        if((eb=s->tail) && memcmp(eb->buf+1+2*12, ebuf+1+1+2*12, 12)==0){
-            memmove(eb->buf, &ebuf[1], n - 1);
-            return;
-        }
-    }
-    /* try to save space by only allocating as much buffer as we need */
-    eb = malloc(sizeof(*eb) - sizeof(eb->buf) + n - 1);
-    if(eb == 0)
-        drawerror(display, "events: protocol error 4");
-    eb->n = n - 1;
-    memmove(eb->buf, &ebuf[1], n - 1);
-    eb->next = 0;
-    if(s->head)
-        s->tail = s->tail->next = eb;
-    else
-        s->head = s->tail = eb;
-}
-@
 
-<<function eforkslave>>=
-static int
-eforkslave(ulong key)
-{
-    int i, pid;
 
-    for(i=0; i<MAXSLAVE; i++)
-        if((key & ~(1<<i)) == 0 && eslave[i].pid == 0){
-            if(nslave <= i)
-                nslave = i + 1;
-            /*
-             * share the file descriptors so the last child
-             * out closes all connections to the window server.
-             */
-            switch(pid = rfork(RFPROC)){
-            case 0:
-                return MAXSLAVE+i;
-            case -1:
-                fprint(2, "events: fork error\n");
-                exits("fork");
-            }
-            eslave[i].pid = pid;
-            eslave[i].head = eslave[i].tail = 0;
-            return i;
-        }
-    drawerror(display, "events: bad slave assignment");
-    return 0;
-}
-@
-% >> >>
-
-<<function enote>>=
-static int
-enote(void *v, char *s)
-{
-    char t[1];
-    int i, pid;
-
-    USED(v, s);
-    pid = getpid();
-    if(pid != parentpid){
-        for(i=0; i<nslave; i++){
-            if(pid == eslave[i].pid){
-                t[0] = MAXSLAVE;
-                write(epipe[1], t, 1);
-                break;
-            }
-        }
-        return 0;
-    }
-    close(epipe[0]);
-    epipe[0] = -1;
-    close(epipe[1]);
-    epipe[1] = -1;
-    for(i=0; i<nslave; i++){
-        if(pid == eslave[i].pid)
-            continue;	/* don't kill myself */
-        postnote(PNPROC, eslave[i].pid, "die");
-    }
-    return 0;
-}
-@
-
-<<function ekill>>=
-static void
-ekill(void)
-{
-    enote(0, 0);
-}
-@
-
-<<function emouse>>=
-Mouse
-emouse(void)
-{
-    Mouse m;
-    Ebuf *eb;
-    static int but[2];
-    int b;
-
-    if(Smouse < 0)
-        drawerror(display, "events: mouse not initialized");
-    eb = ebread(&eslave[Smouse]);
-    m.xy.x = atoi((char*)eb->buf+1+0*12);
-    m.xy.y = atoi((char*)eb->buf+1+1*12);
-    b = atoi((char*)eb->buf+1+2*12);
-    m.buttons = b;
-    m.msec = atoi((char*)eb->buf+1+3*12);
-    if (logfid)
-        fprint(logfid, "b: %d xy: %P\n", m.buttons, m.xy);
-    free(eb);
-    return m;
-}
-@
-
-<<function ekbd>>=
-int
-ekbd(void)
-{
-    Ebuf *eb;
-    int c;
-
-    if(Skeyboard < 0)
-        drawerror(display, "events: keyboard not initialzed");
-    eb = ebread(&eslave[Skeyboard]);
-    c = eb->buf[0] + (eb->buf[1]<<8);
-    free(eb);
-    return c;
-}
-@
-% >>
+\subsection{Misc}
 
 <<function emoveto>>=
 void
@@ -22501,22 +22599,6 @@ eatomouse(Mouse *m, char *buf, int n)
     return n;
 }
 @
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 \subsection{[[egetrects.c]]}
