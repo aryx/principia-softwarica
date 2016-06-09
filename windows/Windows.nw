@@ -227,7 +227,6 @@ as the kernel for the user.
 \l how to implement a windowing system? coordinate processes, clients/server,
 \l  async input from multiple sources, concurrency, graphics, efficient, etc.
 
-
 \l other motivation is that great concurrent application! learn a lot.
 \l  learn many concurrency patterns. Also different programming model! reactif!
 
@@ -255,7 +254,7 @@ to make sure they can not draw in other windows?
 How is the screen virtualized?
 \n well they can draw in other windows, but have originWindow/clipping/named-image
 \n I use window instead of graphical application. More specific.
-
+\l intercept pb maybe too specific to draw/rio; no pb in X Window.
 
 \item How does the windowing system handle the mouse device? When
 are mouse events dispatched to the windows? How does
@@ -329,7 +328,7 @@ the display of text glyphs on the screen in the appropriate window?
 %tags used in this file for different recurring themes:
  %in-plan9: when in general section (e.g., principles), instantiate with plan9
  %real-world: mostly talk about X Window
- %toc: %trans: etc
+ %toc: %trans: %dup: etc
 
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
 %data-structures:
@@ -473,6 +472,7 @@ by a single user-space program: [[rio]].
 A nice side effect of the multiplexer approach used by [[rio]] is that
 [[rio]] can run under itself (see Section~\ref{sec:recursive-rio}).
 This is useful for development and debugging purposes.
+\n another nice side effect is that same app can run with or without rio (later)
 %
 Moreover, because you can export filesystems through
 the network in \plan, [[rio]] is also a 
@@ -541,6 +541,7 @@ On the opposite, [[rio]]
 is more {\em transparent}\cite{window-system-should-be-transparent}
 and instead {extends} the services offered by the kernel, for instance,
 with the virtual device file [[/dev/mouse]].
+\n not super clear for now (but better explained later)
 %
 Of course, the use of sockets in X~Window allows client applications
 to display their result on another machine on the network.
@@ -783,7 +784,7 @@ drawing API,
 overlapping windows, and
 windowing system support ([[/dev/winname]] and the global [[view]]).
 \l shared images
-\l draw.h, mouse.h, keyboard.h
+\l draw.h, mouse.h, keyboard.h, window.h
 \l #i #m #v
 
 \item The \nobook{Kernel}:
@@ -804,6 +805,8 @@ filesystems in userspace, and
 \l /srv? 
 \l fcall.h
 \l #s
+\l mount is here instead?
+
 
 
 \item The \nobook{Libcore}: 
@@ -814,7 +817,7 @@ shared memory between threads and processes, and
 \l contains also 9p stuff: read9pmsg(), fcallfmt, etc
 \l sendp(), recvp(), etc
 \l threadcreate(), proccreate
-\l libc.h, thread.h
+\l thread.h
 
 \end{itemize}
 \l could put in a table instead, with different categories like
@@ -920,10 +923,11 @@ I also describe quickly the graphical user interface of [[rio]],
 as well as its filesystem interface in [[/mnt/wsys/]].
 %
 I also show the code of a toy graphical applications
-running under [[rio]] and using functions from [[draw.h]] and [[mouse.h]].
+running under [[rio]].
+% and using functions from [[draw.h]] and [[mouse.h]].
 \l Different model! Interactive! Reactive!
 \l using threads, so good first step for code of rio
-%dup: from Assembler.nw
+%dup: Assembler.nw
 Finally, I define terms, explain how the code is organized, 
 and more generally give the background necessary
 to understand the code I will show later.
@@ -959,6 +963,7 @@ Those interfaces are called {\em post-WIMP} interfaces.
 \n has unresizable tabs instead of windows.
 
 %\subsection{Desktop system}
+%\subsection{Desktop shell}
 
 A {\em desktop system} is a kind of windowing system
 promoting the following metaphor: 
@@ -997,10 +1002,6 @@ not a WIMP, just a WMP.
 \l why? simpler, minimalst, non-essential anyway.
 \l actually I introduced Desktop type.
 
-%\subsection{Desktop shell}
-% can have WM without icons, without file, garbage can, etc.
-% In fact rio is not a WIMP, just a WMP.
-
 
 
 
@@ -1017,6 +1018,7 @@ The following sections will explain those relations as well
 as the role of each of those components.
 \l different soft archi possible. will illustrate mostly with X Window and rio.
 But before, I need to better characterize what a window is.
+
 
 \begin{figure}[!]\centering
 \begin{verbatim}
@@ -1063,6 +1065,9 @@ containing the visual {\em output} of a running program\footnote{
 The term ``window'' is actually a misnomer~\cite{pike-layers}. 
 In graphics terminology, such an output is called instead the
 {\em viewport}.};
+\l but in {pike-window-transparent} he says that "apt word because in
+\l  a transparent windowing system, it is through windows that you see
+\l  the operating systems and its programs"
 \n he cites NewMan-Sproull-79; a window is actually the whole virtual world.
 it is a {dynamic picture} representing a separate activity.
 \n Magic Ink! Bret Victor.
@@ -1140,7 +1145,7 @@ hiding the pixels of the windows below.
 %
 In other windowing systems, windows instead are {\em tiled} automatically
 {next to each other} (or hidden completely).
-%
+%real-world:
 Finally, in recent windowing systems, windows can be
 {\em composited} {with each other}; 
 %dup: intro/other-systems
@@ -1434,6 +1439,7 @@ every file request on [[/dev/cons]] is redirected to a 9P request to [[rio]]
 
 
 \subsection{Windowing system API}
+\label{sec:windowing-system-api}
 
 %trans: 
 I just described the {\em internal} structure of a windowing system,
@@ -1445,17 +1451,21 @@ as well as the needs of a graphical application running under this
 windowing system?
 %
 What API should a windowing system offer to its clients?
+\l the top edges in Figure~\ref{fig:window-system-components}
 
 
 Obviously, a graphical application running under a windowing system
 wants to access the screen, the mouse, and sometimes the keyboard.
 %in-plan9: %dup: (but clearer) intro/rio
 Note that there is already an API to access those devices under \plan.
-Indeed, to access 
-the screen, 
-the mouse, and 
-the keyboard 
-a \plan program can simply read or write in respectively the 
+Indeed, 
+%to access 
+%the screen, 
+%the mouse, and 
+%the keyboard 
+a \plan program can simply read or write in 
+%respectively 
+the 
 [[/dev/draw]], 
 [[/dev/mouse]], and
 [[/dev/cons]]
@@ -1503,7 +1513,7 @@ in the corresponding device files.
 \caption{[[rio]] multiplexer.}
 \label{fig:rio-multiplexer}
 \end{figure}
-\n actually a bit different for /dev/draw, but simpler to cheat
+\n actually a bit different for /dev/draw, but simpler to cheat for now
 
 %in-plan9:
 Thus, under \plan,
@@ -1516,7 +1526,7 @@ implemented as a {\em multiplexer};
 it accesses the {physical devices} (managed by the kernel) 
 at the bottom right of Figure~\ref{fig:rio-multiplexer},
 and provides {virtual devices} to its clients (called [[App 1]] and [[App 2]])
-with identical interfaces at the bottom left of 
+with similar interfaces at the bottom left of 
 Figure~\ref{fig:rio-multiplexer}.
 \l like for terminal emulator, virtual device files.
 
@@ -1560,127 +1570,11 @@ graphical application outside X Window.
 \l partly because run on OS without features necessary for virtual device files
 \l  but also cos badly designed
 
-%toc:
-In the following sections, I will give more details about the
-[[rio]] interfaces to access the screen, the mouse, and the keyboard.
-I will repeat partly explanations found in the \book{Graphics}
-and \book{Kernel} as [[rio]] emulates interfaces provided
-by the graphics stack and the kernel. However, the interfaces
-have a few differences because the context in which the graphical
-application runs is sligthly different.
-
-\subsubsection{Virtual screen}
-
-%trans:
-% first device to multiplex is the screen.
-% Clients need abstraction! hide complexity! 
-
-% like OS with % virtual mem, virtual CPU. Dont want handle that complexity.
-% dont want handle other processes.
-% Same for screen! clients wants a virtual screen! illusion
-% alone, no need with other windows.
-% should have /dev/screen. with originWindow.
-% "virtual screens" that applications can draw into.
-
-%% just like virtual /dev/cons for emulator,
-
-% Another thing where abstract and hide complexity, dont want
-% put overlapping on window.
-
-% overlapping windows! can hide each other, and when resume
-% get back its state (like suspended process) (so need
-% save window content somewhere)
-
-% In rio, transparent. Again client does not need to know.
-%real-world:
-% In X~Window, because restricted memory, client responsible
-% to draw back after an Expose event.
-%in-plan9: handled for the app. Off-screen image.
-
-
-
-
-% resize!! cant hide this compare to graphics context.
-%  ugly a bit, mouse event, and then need redo getwindow.
-
-
-% not that draw is used by rio to manage screen, have windows,
-% window borders. But regular apps can also use draw! to have their
-% own internal overlapping windows! A menu, dialog box, widgets, all of that
-% can be done with overlapping windows!
-
-% create external window? yes can, via /srv/ I think.
-% so there is some windowing system API a bit.
-
-\subsubsection{Virtual mouse}
-
-%trans: virtual output, then clients wants also virtual input!
-
-% Same for mouse. coordinate relative to window.
-% does not need to know run inside rio.
-
-% dont want program to read mouse concurrently and check
-% if mouse is on top of his window, translate coord, etc.
-% Job of windowing system.
-% Abstraction.
-
-% multiplexer!
-
-% many processes, but one keyboard/mouse.
-% so need to virtualize/demultiplex keyboard/mouse.
-
-\subsubsection{Virtual keyboard}
-
-% Seen /dev/cons for command line app.
-% Similar for graphical app, except raw key.
-
-
-%alt: how kernel does that? it does not really, only one process
-% read the key at the same time (and mouse not really handled)
-%alt: evdev in linux? yet another mechanism
-
-%\subsection{Events versus threads}
-
-% Seen multiple input devices: mouse, keyboard (and potentially
-%  also input from windowing systme itself when resize event or move)
-% But issue of synchrony.
-%dup: (TODO write there) Graphics.nw
-% In fact already had issue in Graphics.nw.
-% 2 models:
-%
-% events: one activity, multiple source of events (and asynchronous)
-% threads: multiple activities, multiple source of events (and asynchronous)
-
-% inside-out style (see Mini-X tutorial; I saw that sentence other times)
-
-
-
-% input from mouse, keyboard, windowing system (resize).
-% How?
-
-% reactivity  and the events loop or threads.
-
-% for threads, under the hood, it's alts() and channels.
-% for events, it's a pipe from one master to multiple slaves and read().
-
-% input events
-% user-generated events (action with window manager)
-%  expose event! resize event!
-
-% reactive style, not proactive.
-% event loop.
-%alt: threads and channels! keyboard thread, mouse thread! display thread
-% (but rely on event loop under the hood for thread scheduler?)
-
-% In fact windowing system must be programmed that way too!
-
-
-%alt: can have event and then threads to serve them (old debate)
-% rio does that!
-
-
 
 \section{[[rio]] interfaces}
+
+%trans: seen general principles, illustrated with X Window and rio.
+% let's now be more specific and details interfaces of rio.
 
 %toc:
 [[rio]] is first a program you run through the command line, with 
@@ -1850,6 +1744,7 @@ the user interface of [[mpx]] is almost identical to the one in [[rio]].
 
 
 \subsection{Filesystem interface}
+% also windowing system API
 
 %trans:
 As opposed to the two previous interfaces,
@@ -1861,66 +1756,213 @@ the filesystem interface.
 It is mostly invisible because it is mainly an interface for programs, 
 not users.
 \l can explore in /mnt/wsys/ though
-Moreover, the files served by [[rio]] mimic and replace existing device files 
+%dup: intro/rio intro/other-systems overview/principle/emulator  overview/principle/api
+Moreover, as explained in Section~\ref{sec:windowing-system-api},
+[[rio]] is a transparent windowing system;
+the files served by [[rio]] mimic and replace {existing} device files 
 managed by the kernel (e.g., [[/dev/mouse]]), 
 making the interface harder to notice.
 \l but a few files more too
-\l transparent windowing system, so almost invisible
 
-%dup: intro/rio intro/requirements
-%As said in Section~\ref{sec:rio}, [[rio]] is also a filesystem in user space.
-\t to understand why, need expose internals of rio.
-\l more accurately a fileserver because in userspace.
-\t will not do that here. See section X for internals.
-\t here just list.
-%Complex. see Section X for trace of creating new window and connecting
-% process to rio filesystem.
+\l As said in Section~\ref{sec:rio}, [[rio]] is also a filesystem in user space.
+\l (more accurately a fileserver because in userspace).
+\l to understand why, need expose internals of rio. will not do that here. 
+\l See Section X for trace of creating new window and connect process to rio fs.
 
-
-
-% main files and short descr
-% I use /mnt/wsys, but also in /dev. By using /mnt/wsys clearer
-% also it's the version of the device file served by rio, not the kernel one
-% (or a parent rio when in recursive rio).
+%toc:
+In the following sections, I will describe the files served by [[rio]]. 
+Those files act as interfaces to access
+the screen, 
+the mouse,
+the keyboard,
+but also the windowing system itself.
+%dup: intro/rio 
+I will prefix those files with [[/mnt/wsys/]] because that is
+where the [[rio]] filesystem is originally {mounted} by the
+window processes.
+\l see Section X for full explanation of connection
+However, as I mentioned in Section~\ref{sec:rio},
+those files are also available in [[/dev]], thanks to the union-mount
+feature of the \plan kernel.
+%dup: intro/rio overview/principles/api
+It is by being accessible in [[/dev/]] that [[rio]] can become a multiplexer, 
+as explained in Section~\ref{sec:windowing-system-api}. However, by using
+the [[/mnt/wsys]] prefix, it is clearer that the file involved
+is the file served by [[rio]] (e.g. [[/mnt/wsys/mouse]]) and not
+the real device served by the kernel (e.g. [[/dev/mouse]]).
+\n or a parent rio when in recursive rio
+%
+In the following sections, I will repeat partly explanations 
+found in the \book{Graphics} and \book{Kernel} as [[rio]] emulates 
+interfaces provided by the graphics system and the kernel. 
+However, the interfaces
+have a few differences because the context in which the graphical
+application runs is sligthly different.
 
 %% graphical vs textual windows?
 %% mouseopen or not? this has influence on many things.
 %% need to explain that early?
 
+\subsubsection{[[/dev/draw]] and [[/mnt/wsys/winname]]}
+% virtual screen. Screen API
+\n was originally in principles section, but was sad cos very rio specific
 
-\begin{itemize}
+%trans:
+The first interface [[rio]] needs to mimic is the interface to the screen,
+which under \plan involves the [[/dev/draw/]] directory and the
+[[draw.h]] header file.
+% draw.h, convenient functions to draw lines, rectangles, text.
 
-\item [[/mnt/wsys/mouse]]
+\paragraph{A virtual screen}
+
+% when run outside rio, whole screen, start 0,0 left top.
+% role of windowing system, like kernel, is offer abstraction! hide complexity!
+
+% like OS with % virtual mem, virtual CPU. Dont want handle that complexity.
+% dont want handle other processes.
+% Same for screen! clients wants a virtual screen! illusion
+% alone, no need with other windows.
+% "virtual screens" that applications can draw into.
+%% just like virtual /dev/cons for emulator,
+
+% should have /dev/screen. with originWindow.
+% even if window in right corner.
+
+\paragraph{[[/mnt/wsys/winname}
+
+%alt: could also /mnt/wsys/draw! but would be slower,
+%dup: intro/rio 
+% elegant 8 1/2, less efficient.
+
+%dup: intro/rio 
+% more efficient access directly /dev/draw/ but that means
+% then needed to have really a display server accepting multiple
+% connections (less elegant). 
+%Complex. see Section X for trace.
+% but winname changed, public image, initdraw does read /dev/winname
+% and use nameimage. See Graphics book.
+
+
+\paragraph{Overlapping windows}
+
+%trans:
+% running outside or inside has a few differences.
+%
+% specific to windowing context is window can be overlapped.
+% can hide each other, and when resume
+% draw back its state 
+
+% Another thing where abstract and hide complexity, dont want
+% put overlapping issues on graphical application. 
+% Windowing system should manage it.
+
+%in-plan9: 
+% In rio, transparent. Again client does not need to know.
+% handled for the app. Off-screen image. Abstraction!
+% (like suspended process) (so need save window content somewhere)
+% actually handled by display server draw.
+
+%real-world:
+% In X~Window, because restricted memory, client responsible
+% to draw back after an Expose event. Ugly.
+
+\paragraph{Creating windows}
+
+% also windowing system API should allow create windows, not just
+% graphics. in plan9, also done by draw.
+% toplevel window created by rio, but each app can create
+% window inside its windows thx to window.h. Desktop, windows.
+% in fact rio itself use this.
+
+% also different than graphical context.
+% but in the end actually done by display server.
+% can need windows also in acme.
+
+% window.h
+% not that draw is used by rio to manage screen, have windows,
+% window borders. But regular apps can also use draw! to have their
+% own internal overlapping windows! A menu, dialog box, widgets, all of that
+% can be done with overlapping windows!
+
+% create external window? yes can, via /srv/ I think.
+% so there is some windowing system API a bit.
+
+
+\paragraph{Resizing windows}
+
+% Another specific to windowing system context is window can
+% be resized.
+% hmm maybe also in graphics context when change resolution.
+% This cant be hidden though.
+% resize!! cant hide this compare to graphics context.
+
+%in-plan9:
+%  ugly a bit, mouse event, and then need redo getwindow.
+
+
+
+\subsubsection{[[/mnt/wsys/mouse]] and [[/mnt/wsys/cursor]]}
+% virtual mouse. Mouse API
+
+% /dev/mouse
+% synchronous.
+
+% or mouse.h! asynchronous! channel, threads.
+
+%trans: virtual output, then clients wants also virtual input!
+% Same for mouse. coordinate relative to window.
+% does not need to know run inside rio.
+% dont want program to read mouse concurrently and check
+% if mouse is on top of his window, translate coord, etc.
+% Job of windowing system.
+% Abstraction.
+
+%in-plan9:
+% resize via special mouse message. ugly a bit.
+
+
 %/mnt/wsys/mouse, if open mouse, mean graphic app, not command-line
 %  actually also abuse for resize
+%  rio itself uses that feature
 
-\item [[/mnt/wsys/cursor]]
 %/mnt/wsys/cursor, each window can change its cursor
 
 
-\item [[/mnt/wsys/cons]]
+\subsubsection{[[/mnt/wsys/cons]] and [[/mnt/wsys/consctl]]}
+% virtual keyboard, Keyboard API meh
+
+% /dev/cons (console)
+% Seen /dev/cons for command line app. printf, etc.
+
+% but in graphical context, different. dont want buffered input.
+% want respond as soon as type key.
+% {raw mode}.
+% in fact supported also for command line app, /dev/consctl!
+
+% use keyboard.h, swotch to raw mode, and then
+% channel! so can use alt() with mouse!
+
+
+%alt: how kernel does that? it does not really, only one process
+% read the key at the same time (and mouse not really handled)
+%alt: evdev in linux? yet another mechanism
+
+
 %/mnt/wsys/cons, console, read/write in command-line mode, I will
 % call textual window from now on.
 % just read for graphical window. output out is done via drawing instead.
 
-\item [[/mnt/wsys/consctl]]
 %/mnt/wsys/consctl, %kbdin, raw mode, not line editing, used by graphic app
 %  rio itself uses that feature
+  
+\subsubsection{Other [[/mnt/wsys/]] files}
 
+%trans:
+% seen main files! virtual versions of existing device files
+% managed by the kernel.
+% thx to this file, transparent! mimic! why also can even run rio inside rio!
 
-
-\item [[/mnt/wsys/winname]]
-%alt: could also /mnt/wsys/draw! but would be slower,
-% more efficient access directly /dev/draw/ but that means
-% then needed to have really a display server accepting multiple
-% connections (less elegant).
-%Complex. see Section X for trace.
-
-\end{itemize}
-
-% note that can even run rio inside rio!
-
-% other files, but advanced features.
+% now other files, but advanced features.
 % here is list and short descr. For more info see chapter X.
 
 \begin{itemize}
@@ -1930,32 +1972,36 @@ making the interface harder to notice.
 \item [[/mnt/wsys/label]]
 
 \item [[/mnt/wsys/screen]]
-% useful for screenshot.
+% useful for screenshot. read only.
 % lens.c uses it too.
 
 \item [[/mnt/wsys/window]]
-% (actually those are read-only)
+% read-only
 
 \item [[/mnt/wsys/text]]
+% textual window only
 
 \item [[/mnt/wsys/snarf]]
 
 \item [[/mnt/wsys/wdir]]
+%?
 
 \item [[/mnt/wsys/wctl]]
+% advanced, see section X
 
 \item [[/mnt/wsys/wsys/]]
 %1/. like /proc, but for windows
+% use winid
 
 \end{itemize}
 
 %dup: (adapted) Graphics.nw
-%For more information on the [[draw]] device files and their
-%format see [[docs/man/3/draw]].
+%For more information on the [[rio]] filesystem, see [[docs/man/4/rio]].
 
 
 %% also has special files in /srv/
 %% for external process to create new window and still have the mount.
+%% for processes outside rio namespace.
 %% wsys and wctl are advanced stuff we can delay
 %% wctl for sure, allow to control rio from command line but less important
 %%/srv
@@ -2062,6 +2108,46 @@ making the interface harder to notice.
 
 % far cleaner than hello world for X11. No need for expose ugly stuff!
 % (but still need to handle resize :( )
+
+%\subsection{Events versus threads}
+
+% Seen multiple input devices: mouse, keyboard (and potentially
+%  also input from windowing systme itself when resize event or move)
+% But issue of synchrony.
+%dup: (TODO write there) Graphics.nw
+% In fact already had issue in Graphics.nw.
+% 2 models:
+%
+% events: one activity, multiple source of events (and asynchronous)
+% threads: multiple activities, multiple source of events (and asynchronous)
+
+% inside-out style (see Mini-X tutorial; I saw that sentence other times)
+
+
+
+% input from mouse, keyboard, windowing system (resize).
+% How?
+
+% reactivity  and the events loop or threads.
+
+% for threads, under the hood, it's alts() and channels.
+% for events, it's a pipe from one master to multiple slaves and read().
+
+% input events
+% user-generated events (action with window manager)
+%  expose event! resize event!
+
+% reactive style, not proactive.
+% event loop.
+%alt: threads and channels! keyboard thread, mouse thread! display thread
+% (but rely on event loop under the hood for thread scheduler?)
+
+% In fact windowing system must be programmed that way too!
+
+
+%alt: can have event and then threads to serve them (old debate)
+% rio does that!
+
 
 \section{Code organization}
 
@@ -11474,6 +11560,8 @@ wbottomme(Window *w)
 
 \t screenshot with rio and see hidden color inside a nested rio
 \t or a cut system menu
+
+\l then can also show FIGURE of rio multiplexer with 2 levels this time!
 
 
 % could be in Debugging section, after all it's mostly
