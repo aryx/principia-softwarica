@@ -401,6 +401,8 @@ extern	Rectangle	ZR;
 // This sets the following globals: display, view, font (and screen).
 extern int	initdraw(Errorfn, char*, char*);
 extern int	geninitdraw(char*, Errorfn, char*, char*, char*, int);
+// to call after a resize event
+extern int	getwindow(Display*, int);
 
 extern Display*	initdisplay(char*, char*, Errorfn);
 extern void		closedisplay(Display*);
