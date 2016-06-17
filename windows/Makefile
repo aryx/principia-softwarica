@@ -24,6 +24,7 @@ SRC_ORIG=Windows.nw Windows_extra.nw
 
 # from list_windows originally
 SRC_VIEWS= \
+   ../ROOT/tests/rio/hellorio.c \
    rio/dat.h\
     rio/globals.c\
    rio/fns.h\
