@@ -49,8 +49,6 @@ Dirtab dirtab[]=
     /*x: dirtab array elements */
     { "label",		QTFILE,	Qlabel,		0600 },
     /*x: dirtab array elements */
-    { "wdir",		QTFILE,	Qwdir,		0600 },
-    /*x: dirtab array elements */
     { "screen",		QTFILE,	Qscreen,	0400 },
     /*x: dirtab array elements */
     { "wsys",		QTDIR,	Qwsys,		0500|DMDIR },
@@ -58,6 +56,8 @@ Dirtab dirtab[]=
     { "wctl",		QTFILE,	Qwctl,		0600 },
     /*x: dirtab array elements */
     { "snarf",		QTFILE,	Qsnarf,		0600 },
+    /*x: dirtab array elements */
+    { "wdir",		QTFILE,	Qwdir,		0600 },
     /*x: dirtab array elements */
     { "kbdin",		QTFILE,	Qkbdin,		0200 },
     /*e: dirtab array elements */

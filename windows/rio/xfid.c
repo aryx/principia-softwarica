@@ -511,6 +511,26 @@ xfidwrite(Xfid *x)
         w->label[cnt] = '\0';
         break;
     /*x: [[xfidwrite()]] cases */
+    case Qwctl:
+        if(writewctl(x, buf) < 0){
+            filsysrespond(x->fs, x, &fc, buf);
+            return;
+        }
+        flushimage(display, true);
+        break;
+    /*x: [[xfidwrite()]] cases */
+    case Qsnarf:
+        /* always append only */
+        if(ntsnarf > MAXSNARF){	/* avoid thrashing when people cut huge text */
+            filsysrespond(x->fs, x, &fc, Elong);
+            return;
+        }
+        tsnarf = erealloc(tsnarf, ntsnarf+cnt+1);	/* room for NUL */
+        memmove(tsnarf+ntsnarf, x->data, cnt);
+        ntsnarf += cnt;
+        snarfversion++;
+        break;
+    /*x: [[xfidwrite()]] cases */
     case Qwdir:
         if(cnt == 0)
             break;
@@ -534,26 +554,6 @@ xfidwrite(Xfid *x)
             free(w->dir);
             w->dir = cleanname(p);
         }
-        break;
-    /*x: [[xfidwrite()]] cases */
-    case Qwctl:
-        if(writewctl(x, buf) < 0){
-            filsysrespond(x->fs, x, &fc, buf);
-            return;
-        }
-        flushimage(display, true);
-        break;
-    /*x: [[xfidwrite()]] cases */
-    case Qsnarf:
-        /* always append only */
-        if(ntsnarf > MAXSNARF){	/* avoid thrashing when people cut huge text */
-            filsysrespond(x->fs, x, &fc, Elong);
-            return;
-        }
-        tsnarf = erealloc(tsnarf, ntsnarf+cnt+1);	/* room for NUL */
-        memmove(tsnarf+ntsnarf, x->data, cnt);
-        ntsnarf += cnt;
-        snarfversion++;
         break;
     /*x: [[xfidwrite()]] cases */
     case Qkbdin:
@@ -829,11 +829,6 @@ xfidread(Xfid *x)
         filsysrespond(x->fs, x, &fc, nil);
         break;
     /*x: [[xfidread()]] cases */
-    case Qwdir:
-        t = estrdup(w->dir);
-        n = strlen(t);
-        goto Text;
-    /*x: [[xfidread()]] cases */
     case Qscreen:
         i = display->image;
         if(i == nil){
@@ -912,6 +907,11 @@ xfidread(Xfid *x)
             t = nil;
             n = 0;
         }
+        goto Text;
+    /*x: [[xfidread()]] cases */
+    case Qwdir:
+        t = estrdup(w->dir);
+        n = strlen(t);
         goto Text;
     /*e: [[xfidread()]] cases */
     default:

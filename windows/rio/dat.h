@@ -42,8 +42,6 @@ enum Qxxx
     /*x: [[qid]] cases */
     Qlabel,
     /*x: [[qid]] cases */
-    Qwdir,
-    /*x: [[qid]] cases */
     Qscreen,
     /*x: [[qid]] cases */
     Qwsys,		/* directory of window directories */
@@ -53,6 +51,8 @@ enum Qxxx
     Qwctl,
     /*x: [[qid]] cases */
     Qsnarf,
+    /*x: [[qid]] cases */
+    Qwdir,
     /*x: [[qid]] cases */
     Qkbdin,
     /*e: [[qid]] cases */
