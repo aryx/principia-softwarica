@@ -1804,6 +1804,54 @@ through those different components.
 \subsection{Trace of a drawing operation}
 \l When do draw(), go in kernel? yes (at least when call flush())
 
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+       hellodraw.c-----+    clock.c--+    colors.c--+
+       |   ...         |    |        |    |         |    APPLICATIONS
+ U     |   line(...);  |    |        |    |         |
+ S     +---------------+    +--------+    +---------+
+ E  include/graphics/draw.h----------------------------+
+ R  |    void line(...);        ...                    |
+    +--------------------------------------------------+
+ S  lib_graphics/libdraw/------------------------------+
+ P  |  line.c-------------------------+ ellipse.c+     |    USER
+ A  |  |void line(...) {              | |        |     |  LIBRARIES
+ C  |  |  ...                         | |        |     |
+ E  |  |  write(display->fd, "L ...");| |        | ... |
+    |  |}                             | |        |     |
+    |  +------------------------------+ +--------+     |
+    +--------------------------------------------------+
+ ----------------------- /dev/draw/1/data  -----------------------
+     kernel/---------------------------------------------+
+     |+---+ files/------+ devices/screen/--------------+ |
+ K   || s | | syswrite()| | devdraw.c----------------+ | |
+ E   || y | | sysread() | | |void drawwrite() { ... }| | |
+ R   || s | |           | | |void drawmesg(...) {    | | |
+ N   || c | +-----------+ | |  ...                   | | |  KERNEL
+ E   || a |               | |  switch(c) {           | | |
+ L   || l |               | |  ...                   | | |
+     || l |               | |  case 'L':             | | |
+ S   || s |               | |     memline(...);      | | |
+ P   || / |               | +------------------------+ | |
+ A   |+---+               +----------------------------+ |
+ C   +---------------------------------------------------+
+ E   lib_graphics/libmemlayer/---------------------------+
+     | line.c------------------------------------+       |
+     | |void memline(...) { memimageline(...); } |  ...  |
+     | +-----------------------------------------+       |
+     +---------------------------------------------------+   KERNEL
+     lib_graphics/libmemdraw/----------------------------+ LIBRARIES
+     | line.c-----------------------+ ellipse.c-+        |
+     | |void memimageline() { ... } | |         |   ...  |
+     | +----------------------------+ +---------+        |
+     +---------------------------------------------------+
+\end{verbatim}
+\caption{Tracing of [[line()]] through the [[draw]] components.}
+\label{fig:soft-archi-directories}
+\end{figure}
+
+
 Figure~\ref{fig:soft-archi-directories} illustrates a trace of
 a call to [[line()]].
 %
@@ -1811,6 +1859,7 @@ This trace starts at the top of Figure~\ref{fig:soft-archi-directories}
 with the call to [[line()]] in the program [[hellodraw.c]] that you saw
 in Section~\ref{sec:hellodraw_c}. I will now go gradually
 downwards in Figure~\ref{fig:soft-archi-directories} to explain the trace:
+
 
 \begin{enumerate}
 
@@ -1898,52 +1947,11 @@ in this image translates to changes on the screen.
 \end{enumerate}
 \l device driver?
 
+[[memimageline()]] then returns to the caller
+[[memline()]], which does the same.
+Eventually, the whole call stack is popped,
+leading back to code in [[hellodraw.c]].
 
-\begin{figure}[!]\centering
-\begin{verbatim}
-       hellodraw.c-----+    clock.c--+    colors.c--+
-       |   ...         |    |        |    |         |    APPLICATIONS
- U     |   line(...);  |    |        |    |         |
- S     +---------------+    +--------+    +---------+
- E  include/graphics/draw.h----------------------------+
- R  |    void line(...);        ...                    |
-    +--------------------------------------------------+
- S  lib_graphics/libdraw/------------------------------+
- P  |  line.c-------------------------+ ellipse.c+     |    USER
- A  |  |void line(...) {              | |        |     |  LIBRARIES
- C  |  |  ...                         | |        |     |
- E  |  |  write(display->fd, "L ...");| |        | ... |
-    |  |}                             | |        |     |
-    |  +------------------------------+ +--------+     |
-    +--------------------------------------------------+
- ----------------------- /dev/draw/1/data  -----------------------
-     kernel/---------------------------------------------+
-     |+---+ files/------+ devices/screen/--------------+ |
- K   || s | | syswrite()| | devdraw.c----------------+ | |
- E   || y | | sysread() | | |void drawwrite() { ... }| | |
- R   || s | |           | | |void drawmesg(...) {    | | |
- N   || c | +-----------+ | |  ...                   | | |  KERNEL
- E   || a |               | |  switch(c) {           | | |
- L   || l |               | |  ...                   | | |
-     || l |               | |  case 'L':             | | |
- S   || s |               | |     memline(...);      | | |
- P   || / |               | +------------------------+ | |
- A   |+---+               +----------------------------+ |
- C   +---------------------------------------------------+
- E   lib_graphics/libmemlayer/---------------------------+
-     | line.c------------------------------------+       |
-     | |void memline(...) { memimageline(...); } |  ...  |
-     | +-----------------------------------------+       |
-     +---------------------------------------------------+   KERNEL
-     lib_graphics/libmemdraw/----------------------------+ LIBRARIES
-     | line.c-----------------------+ ellipse.c-+        |
-     | |void memimageline() { ... } | |         |   ...  |
-     | +----------------------------+ +---------+        |
-     +---------------------------------------------------+
-\end{verbatim}
-\caption{Tracing of [[line()]] through the [[draw]] components.}
-\label{fig:soft-archi-directories}
-\end{figure}
 
 \l This was complicated ... Why not get line() call directly memimageline?
 %  could, but will still need a system call to transfer computed 
@@ -1961,15 +1969,56 @@ in this image translates to changes on the screen.
 % all pixels each time through big write on /dev/draw over the network
 % (hmm actually with high-speed network maybe we could)
 
-[[memimageline()]] then returns to the caller
-[[memline()]], which does the same.
-Eventually, the whole call stack is popped,
-leading back to code in [[hellodraw.c]].
-
 
 
 \subsection{Data structures relationships}
 \label{sec:data-struct-relationshops}
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+    display <Display>
+ U  |.fd = ...      |
+ S  |.image = --+   |
+ E  |           |   |
+ R  +-----------+---+
+                v
+ S   <Image>---------------+  <Image>----------+
+ P   |.id = 1              |  |.id = 2         |
+ A   |.r = (0,0),(1024,768)|  |.r = (0,0),(1,1)|
+ C   |.chan = RGB24        |  |.chan = RGB24   |
+ E   +---------------------+  +----------------+
+                ^                      ^
+ ---------------+----------------------+--------------------------
+                v                      v
+        <DImage>--------+      <DImage>--------+  imagmem <Pool>-+
+        |.id = 1        |      | .id = 2       |  |  +--------+  |
+   +--->|.image = -+    |      | .image = -+   |  |  |        |  |
+   |    +----------+----+      +-----------+---+  |  |        |  |
+ K |               v                       v      |  +--------+  |
+ E | drawscreen <Memimage>-+  <Memimage>-------+  |  +-+         |
+ R | |.r = (0,0),(1024,768)|  |.r = (0,0),(1,1)| ++->| |         |
+ N | |.chan = RGB24        |  |.chan = RGB24   | ||  +-+         |
+ E | |.data = |            |  |.data = --------+-+|              |
+ L | +--------+------------+  +----------------+  |  +---------+ |
+   |          +-----------------------------+     |  |         | |
+ S | <Client>--------+  <Client>---------+  |     |  +---------+ |
+ P | |.clientid = 1  |  |.clientid = ... |  |     +--------------+
+ A | |.dimage =|     |  |   ...          |  |
+ C | +---------+-----+  +----------------+  |     0xA0000000 (FB)+
+ E +-----------+  ^        ^                |     |              |
+                  +--------+                |     |              |
+   sdraw <KDraw>--++                        +---->|              |
+   |              ||                              |              |
+   | .clients =---+|                              |              |
+   +---------------+                              +--------------+
+\end{verbatim}
+\caption{Data structures of [[draw]].}
+\label{fig:soft-archi-data}
+\end{figure}
+\n use RBG24, not default config for Raspberry, but simpler
+\n could use CMAP8 instead of RGB24 for color, so need translation, but Complex
+\n .data point to Memdata intermediate first actually, but too suble for now.
+
 
 %trans:
 Figure~\ref{fig:soft-archi-directories} focused on the functions
@@ -2094,50 +2143,6 @@ in the global [[drawscreen]].
 \l Many intermediate because sharing. will see later.
 
 
-\begin{figure}[!]\centering
-\begin{verbatim}
-    display <Display>
- U  |.fd = ...      |
- S  |.image = --+   |
- E  |           |   |
- R  +-----------+---+
-                v
- S   <Image>---------------+  <Image>----------+
- P   |.id = 1              |  |.id = 2         |
- A   |.r = (0,0),(1024,768)|  |.r = (0,0),(1,1)|
- C   |.chan = RGB24        |  |.chan = RGB24   |
- E   +---------------------+  +----------------+
-                ^                      ^
- ---------------+----------------------+--------------------------
-                v                      v
-        <DImage>--------+      <DImage>--------+  imagmem <Pool>-+
-        |.id = 1        |      | .id = 2       |  |  +--------+  |
-   +--->|.image = -+    |      | .image = -+   |  |  |        |  |
-   |    +----------+----+      +-----------+---+  |  |        |  |
- K |               v                       v      |  +--------+  |
- E | drawscreen <Memimage>-+  <Memimage>-------+  |  +-+         |
- R | |.r = (0,0),(1024,768)|  |.r = (0,0),(1,1)| ++->| |         |
- N | |.chan = RGB24        |  |.chan = RGB24   | ||  +-+         |
- E | |.data = |            |  |.data = --------+-+|              |
- L | +--------+------------+  +----------------+  |  +---------+ |
-   |          +-----------------------------+     |  |         | |
- S | <Client>--------+  <Client>---------+  |     |  +---------+ |
- P | |.clientid = 1  |  |.clientid = ... |  |     +--------------+
- A | |.dimage =|     |  |   ...          |  |
- C | +---------+-----+  +----------------+  |     0xA0000000 (FB)+
- E +-----------+  ^        ^                |     |              |
-                  +--------+                |     |              |
-   sdraw <KDraw>--++                        +---->|              |
-   |              ||                              |              |
-   | .clients =---+|                              |              |
-   +---------------+                              +--------------+
-\end{verbatim}
-\caption{Data structures of [[draw]].}
-\label{fig:soft-archi-data}
-\end{figure}
-\n use RBG24, not default config for Raspberry, but simpler
-\n could use CMAP8 instead of RGB24 for color, so need translation, but Complex
-\n .data point to Memdata intermediate first actually, but too suble for now.
 
 % --------------------------------
 
@@ -26278,6 +26283,7 @@ writememimage(int fd, Memimage *i)
 
 
 
+%###############################################################################
 
 \appendix
 
