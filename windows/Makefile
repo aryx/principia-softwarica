@@ -44,7 +44,7 @@ SRC_VIEWS= \
     rio/graphical_window.c \
    rio/fsys.c\
     rio/9p.c \
-    rio/process_fileserver.c \
+    rio/proc_fileserver.c \
    rio/scrl.c\
    \
    rio/threads_worker.c \

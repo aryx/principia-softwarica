@@ -641,6 +641,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     mc->c = cm;
     /*e: [[new()]] mc allocation */
 
+    // create Window data structure
     w = wmk(i, mc, ck, cctl, scrollit);
     free(mc);	/* wmk copies *mc */
 
@@ -654,7 +655,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
     }
     /*e: [[new()]] if hideit */
 
-    // a new thread! for this new window!
+    // create a new thread! for this new window!
     threadcreate(winctl, w, 8192);
 
     if(!hideit)
@@ -662,6 +663,7 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
 
     flushimage(display, true);
 
+    // create a new process
     /*s: [[new()]] if pid == 0, create winshell process and set pid */
     if(pid == 0){
         arg = emalloc(5 * sizeof(void*));
@@ -688,8 +690,9 @@ new(Image *i, bool hideit, bool scrollit, int pid, char *dir, char *cmd, char **
         return nil;
     }
     /*e: [[new()]] sanity check pid */
-
     wsetpid(w, pid, true);
+
+    // create a new layer
     wsetname(w);
 
     if(dir)

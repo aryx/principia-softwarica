@@ -10,7 +10,7 @@ void 	deletethread(void*);
 // threads_worker.c (for rio.c)
 Channel* xfidinit(void);
 void	xfidflush(Xfid*);
-// process_fileserver (for rio.c and process_winshell.c)
+// proc_fileserver (for rio.c and process_winshell.c)
 Filsys*	filsysinit(Channel*);
 int		filsysmount(Filsys*, int);
 // threads_window.c

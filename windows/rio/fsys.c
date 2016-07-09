@@ -110,10 +110,10 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
     [Tremove]  = filsysremove,
     [Twstat]   = filsyswstat,
     /*x: [[fcall]] other methods */
+    [Tflush]   = filsysflush,
+    /*x: [[fcall]] other methods */
     [Tversion] = filsysversion,
     [Tauth]    = filsysauth,
-    /*x: [[fcall]] other methods */
-    [Tflush]   = filsysflush,
     /*e: [[fcall]] other methods */
 };
 /*e: global fcall */
