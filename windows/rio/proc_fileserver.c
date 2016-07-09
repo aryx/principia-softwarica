@@ -1,4 +1,4 @@
-/*s: windows/rio/process_fileserver.c */
+/*s: windows/rio/proc_fileserver.c */
 #include <u.h>
 #include <libc.h>
 
@@ -247,4 +247,4 @@ filsysmount(Filsys *fs, int id)
 /*e: function filsysmount */
 
 
-/*e: windows/rio/process_fileserver.c */
+/*e: windows/rio/proc_fileserver.c */
