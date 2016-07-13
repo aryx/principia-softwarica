@@ -155,8 +155,8 @@ you fully understand how things work under the hood,
 and one of the first thing you should see on your screen is
 a set of {windows}.
 The {windowing system} is the program
-\n or set of programs (said later)
 allowing you to create and manipulate those {windows}.
+\n or set of programs (said later)
 \n def window (defined later, but most people knows intuitively what it is)
 
 %dup: Graphics.nw
@@ -603,7 +603,8 @@ such as transluscence.
 The use of locally-shared buffers means that 
 Wayland does not support remote applications. Fortunately, most users now
 run and display their applications on the same machine.
-\l well except for the Web, so maybe remote app is important
+\l footnote? well except for the Web, so maybe remote app is important
+\l  and done with lots of complexity, so maybe better to go back to rio model!
 \l not network transparent. No remote cos no drawing API (but can do VNC-like)
 \n need rewrite X11 apps? not if they're using GTK/QT. Already compatible!
 \n still need xterm? actually has one (LOC?)
@@ -650,10 +651,11 @@ combined.
 % - Windows DWM
 % - macOS Quartz compositor (innovative: Expose, window closing effects, etc)
 % - Android SurfaceFlinger (but no real windows on the screen)
+% - Qnx photons, 1.44MB demo disk! even with web browser!
 %history:
 % - Alto, started in 1973, had overlapping windows, mouse, fonts, etc
-% - Blit (mux -> rio/draw), 1982
 % - Smalltalk?
+% - Blit (mux -> rio/draw), 1982
 % - NeWS, Network/Extensible Window system =~ X + Display Postscript, 1989
 %   https://books.google.com/books?id=DdbvBwAAQBAJ
 %other:
@@ -663,7 +665,6 @@ combined.
 % - pico GUI? \furl{http://picogui.org/} seems similar to Nano-X.
 %   no news since 2003 on website and repository
 %   mentions microwindows on history document, saying he should have use it
-% - Qnx photons, 1.44MB demo disk! even with web browser!
 % - Kolibri/MenuetOS, also floppy disk with full GUI, but all in assembly
 % - berlin? dead?
 % - http://ignorethecode.net/blog/2009/04/22/oberon/
@@ -680,6 +681,8 @@ combined.
 %mini:
 % - mgr http://www.hack.org/mc/mgr/, but very old, and restrictive license
 % - Xynth and Xfast
+% - Xorg contains also a few mini server to prototype thinhs (written by 
+%   Keith packard again)
 %window managers: (still rely on X11)
 % - xmonad
 % - efuns/gwml
@@ -708,7 +711,7 @@ combined.
 %  - FVWM fast key to many terminals
 %  - Emacs eshell fast key to many terminals
 %  - virtual desktops
-%  - macOS expose! bird's eye view
+%  - macOS expose! bird's eye view (great feature)
 
 \section{Getting started}
 \label{sec:getting-started}
@@ -782,11 +785,13 @@ display server, drawing API, shared image, overlapping layers &
 
 \nobook{Kernel} &
 filesystem, device, pipe, console, per-process namespace, union-mount, shared memory &
+% system call
 [[/dev/cons]] [[/dev/consctl]] [[/dev/mouse]] [[/dev/pipes/]] & [[#c]] [[#m]] [[#|]] &
 [[syscall.h]] \\
 
 \nobook{Libcore} &
-channel, proc, thread, message &
+channel, proc, thread, message, message queue &
+% system call
 & &
 [[libc.h]] [[thread.h]] \\
 
@@ -814,7 +819,7 @@ The most important book in Table~\ref{tab:principia-books}
 is the \nobook{Graphics}.
 %
 Regarding the three other books, you can probably understand most of the code
-in this book without reading them if you read at least
+in the following chapters without reading those books if you read at least
 {\em Plan 9 from Bell Labs}~\cite{plan9},
 as well as {\em The Use of Name Spaces in Plan 9}~\cite{namespaces-plan9};
 those two articles introduce many of the concepts listed 
@@ -924,7 +929,7 @@ to understand the code I will show later.
 \label{sec:principles}
 
 A {\em windowing system} is a program (or a set of programs)
-with a {graphical user interface} (GUI) allowing users to
+with a {graphical user interface} (GUI) allowing the user to
 create and manipulate {windows}.
 \l def of GUI? program with graphics and interactive with mouse?
 A {\em window} is a usually rectangular and resizeable
@@ -1069,7 +1074,7 @@ the different components in Figure~\ref{fig:window-system-components}
 as well as the role of each of those components. I will also
 quickly describe how those components are implemented in X~Window and [[rio]].
 \l different soft archi possible.
-But before, I need to better characterize what a window is.
+But before, I need to better characterize what is a window.
 
 
 \l imagine how would you code a windowing system? not that easy.
@@ -1178,10 +1183,12 @@ nice effect is to zoom out and tile automatically
 all the images of the windows, as in macOS Expose,
 to get a bird's eye view of all the windows.}.
 \n even dynamic!
-\l so tiling and overlapped (and composited)
+\l thus combining some advantages of tiling and stacking
+\l in the end tiling, overlapped, composited
 
 
 \subsection{Display server}
+\label{sec:display-server}
 \l and communication protocol
 
 %trans: now that window clearer, I switch back to Figure X and its components.
@@ -2027,6 +2034,7 @@ a {shell prompt} at the top.
 \caption{Built-in terminal running under [[rio]].}
 \label{fig:new-step2-basic-window-terminal}
 \end{figure}
+\l maybe start to type colors and screenshot of that
 
 
 Because there is no icon in [[rio]], to launch a graphical
@@ -2294,7 +2302,7 @@ need to react to a mouse event so frequently. Moreover, the size of
 the data involved with [[/dev/mouse]] is small: just a few bytes
 to represent a mouse location and button states.
 \l no need to be handle at the frame rate. sure?
-}, as shown in Figure~\ref{fig:rio-multiplexer}.
+} as shown in Figure~\ref{fig:rio-multiplexer}.
 %
 The main job of [[rio]] regarding the mouse interface
 is to relay a [[read()]] by the window application on 
@@ -2498,8 +2506,9 @@ graphical window (raw access on), or textual window (line-editing on).
 For graphical windows, writing on [[/mnt/wsys/cons]] should be 
 considered an error.
 \t Is it?
-Indeed, the graphical application should instead use the [[string()]] function
-from [[draw.h]] to output text on the screen at a specific
+Indeed, the graphical application should instead use the [[string()]] 
+\l or runestring
+function from [[draw.h]] to output text on the screen at a specific
 location via [[/dev/draw]]
 (see the \book{Graphics}).
 %
@@ -2524,6 +2533,7 @@ terminal emulator.
 %
 Writes to [[/mnt/wsys/cons]] should be converted to calls to
 [[string()]] by the terminal emulator, in order to output text at 
+\l or runestring
 the right place in the window (possibly applying line wrapping).
 
 \n kbdin explained later
@@ -2637,7 +2647,7 @@ another window, for instance, by writing in [[/mnt/wsys/wsys/2/wctl]]
 For more information on the files served by [[rio]]
 and their format, I refer you to the documentation of
 [[rio]] in [[docs/man/4/rio]] in my \plan repository.
-
+\t also files in /srv/, see Section X.
 
 %% also has special files in /srv/
 %% for external process to create new window and still have the mount.
@@ -2732,6 +2742,7 @@ can also become a window application.
 \l this is why I do not use hellodraw.c as an example
 
 \subsection{Skeleton and output code}
+\label{sec:hellorio-skeleton}
 
 Here is the skeleton of [[hellorio.c]]:
 
@@ -3373,7 +3384,7 @@ Indeed, [[rio]] makes heavy use of [[draw]]'s {layers}
 %
 Many of the window management tasks are actually done by [[draw]], not [[rio]].
 For instance, it is the [[draw]] function [[topwindow()]] which
-does most of the heavy lifting when the user clicks on a window 
+does most of the heavy lifting when you click on a window 
 to put it at the top;
 it is [[topwindow()]] that restores the pixels overlapped previously 
 by other windows.
@@ -3413,10 +3424,10 @@ architecture of [[rio]].
 A good way to understand how those threads work together is to
 {\em trace} a {user action} through those different threads.
 %toc:
-This is why in the following sections, I will also explain the trace
-resulting from the creation of a new window by the user, the trace
-of a mouse click in this window, and the trace of a call to a drawing
-function by the program running in this window.
+This is why in the following sections, I will also explain 
+the trace resulting from the creation of a new window by the user, 
+the trace of a mouse click and key press in this window, and 
+the trace of a call to a drawing function by the program running in this window.
 
 %like me: https://wayland.freedesktop.org/architecture.html
 %"A good way to understand the wayland architecture and how it is
@@ -3495,7 +3506,7 @@ by a dashed rectangle.
 \n seems like acme has a similar archi
 \n wctlproc and timerproc are not shown, to simplify
 \n hellorio is actually also a terminal, shell and then below forked hellorio
-\l  (unless can do exec hellorio from the shell?)
+\l  (unless can do exec hellorio from the shell?) and also has some IO procs.
 
 \begin{figure}\begin{center}
 \includegraphics[width=8cm]{hellorio-and-shell}
@@ -3574,6 +3585,7 @@ Those procs would read [[/mnt/wsys/cons]] and [[/mnt/wsys/mouse]].
 %
 They are the results of calls to respectively [[initkeyboard()]] and 
 [[initmouse()]] by [[rio]] during startup.
+\l but connect to real devices! also initdraw() so /dev/draw/1/
 %
 Both procs are usually blocked in a [[read()]] on a device file.
 \n actually it is the single thread in the proc that is blocked (said later)
@@ -3673,7 +3685,7 @@ as well as the creation of the associated window threads.
 In the next section, I will explain the creation of the worker threads.
 
 %dup: overview/interface/gui
-As I said in Section~\ref{sec:rio-gui}, the user creates
+As I said in Section~\ref{sec:rio-gui}, you create
 a new window by first activating the system menu with a right-click,
 then choosing [[New]] in this menu, and finally by
 drawing a rectangle with the mouse specifying the dimension of a window.
@@ -3695,7 +3707,7 @@ as explained in the following sections.
 
 \subsubsection{A new process}
 
-When the user creates a new window, [[rio]] internally 
+When you create a new window, [[rio]] internally 
 (1) forks a new process (with [[proccreate()]]), 
 (2) adjusts the environment in the child process, and finally 
 (3) executes (with [[procexec()]]) a command (the \plan shell [[/bin/rc]])
@@ -3747,10 +3759,10 @@ thanks to the union-mount feature of the \plan kernel.
 
 %\paragraph{A \plan namespace refresher, [[bind()]] and [[mount()]]}
 \n too much detail? could skip in Overview? hard to skip.
-%trans: before showing actual calls to bind and mount, a refresh course.
-
+%trans: 
+Before showing the actual calls to [[bind()]] and [[mount()]] in [[rio]],
 %dup? Kernel
-Here are the slightly simplified signatures of [[bind()]]
+here are the slightly simplified signatures of [[bind()]]
 and [[mount()]] from [[syscall.h]]:
 
 <<simplified signatures of namespace functions [[syscall.h]]>>=
@@ -3951,6 +3963,7 @@ which process) a file request comes from.
 %
 This is important because the [[fileserver]] proc reads
 from a pipe that is shared by many processes.
+\l each process does a special call to mount
 \l and same file may return something different for each process.
 \n so drawwalk will return special Qid for each process
 
@@ -3981,7 +3994,7 @@ and its namespace adjusted,
 To do so, [[rio]] allocates a new [[Window]] structure,
 which gathers information about a window.
 [[rio]] also adds this structure in the global [[windows]],
-which contains the list of [[Window]]s
+which contains the list of all [[Window]]s
 (see Section~\ref{sec:core-ds-Windows} for more information).
 %
 The [[Window]] structure has many fields. For instance,
@@ -4023,9 +4036,10 @@ a new window thread.
 Moreover, [[rio]] creates multiple channels to communicate with this new thread.
 For instance, [[Window.mch]] contains a channel used to exchange messages 
 between the mouse thread and the window thread.
+\l Window.ck for keyboard
 
 
-When the user moves the mouse, the event is transmitted at some point 
+When you move the mouse, the event is transmitted at some point 
 to the mouse thread of [[rio]], which gets the information 
 by listening on [[mousectl->c]]
 %rio-reflection:
@@ -4051,12 +4065,14 @@ are connected to all the window threads.
 
 \subsubsection{A new layer}
 \label{sec:new-layer}
+\n move discussion to trace of drawing operation and initialization?
+\n  maybe good to repeat there anyway.
 
 %trans: 
 The last thing [[rio]] internally creates when you create a new window is
 a new image layer with the dimension of the window.
 %
-This image is stored in the [[Window.i]] field of the window.
+This image is stored in the [[Window.img]] field of the window.
 {\em Each window is associated to one layer}.
 \l via [[allocwindow()]]
 %dup: overview/principles/window-vs-graphical
@@ -4072,8 +4088,8 @@ application so that this application can draw in this new layer.
 As mentioned in Section~\ref{sec:winname}, each window application is
 connected directly to the [[draw]] device,
 as shown in Figure~\ref{fig:soft-archi-threads} with
-the [[hellorio process]] (connected to [[draw]] via [[/dev/draw/2/data]]).
-%
+the [[hellorio process]] connected to [[draw]] via [[/dev/draw/2/]].
+%dup: overview/interface/fs/screen
 The drawing operations by the window application do not go through
 a virtual [[/mnt/wsys/draw]] file that would be managed by [[rio]]
 (and its [[fileserver]] proc).
@@ -4083,7 +4099,7 @@ where the window application should draw.
 %
 Fortunately, [[draw]] has an IPC feature allowing multiple processes
 to share an image or an image layer.
-%
+%dup: overview/interface/fs/screen
 By giving a {public name} to the new image layer (with [[nameimage()]]),
 [[rio]] allows another process to retrieve a handle to the image 
 (with [[namedimage()]]) if this process knows the name of the image.
@@ -4092,18 +4108,18 @@ By giving a {public name} to the new image layer (with [[nameimage()]]),
 This unique name is stored in the [[Window.name]] field of the window.
 %trans:
 However, we still need a way to communicate this name to the window application.
-%
+%dup: overview/interface/fs/screen
 To do so, [[rio]] uses the same mechanism it uses to transmit any 
 kind of information to its window: a file under [[/mnt/wsys/]], in that case
 [[/mnt/wsys/winname]], which contains the string in [[Window.name]].
 
 
 Note that each window application will read a different string
-from their [[/mnt/wsys/winname]] file . Indeed, each window process
+from his [[/mnt/wsys/winname]] file. Indeed, each window process
 has a different namespace since a unique window identifier 
 is passed to the [[mount()]] command (see Section~\ref{sec:new-namespace}).
 %
-When a window application requests a read on [[/mnt/wsys/winname]],
+When a window application reads [[/mnt/wsys/winname]],
 the request goes to the [[fileserver]] proc through a pipe,
 and [[fileserver]] knows which [[Window.name]] field to read
 since the window identifier is passed also in the request.
@@ -4112,6 +4128,7 @@ since the window identifier is passed also in the request.
 \bigskip
 %trans:
 This concludes the trace of a new window creation. 
+%
 Now that [[rio]] has created all the necessary entities to support the
 new window, I can explain the trace of a mouse click in this new window
 in the next section.
@@ -4126,8 +4143,9 @@ to [[rio]] and possibly to the window with the focus, for instance,
 [[hellorio]] at the bottom right in Figure~\ref{fig:soft-archi-threads}.
 %toc:
 The goal of this section is to describe the full trace of a mouse
-click in the window of [[hellorio]]. This trace
-will go through many elements of Figure~\ref{fig:soft-archi-threads}.
+click in the window of [[hellorio]]. 
+\l I assume window already has the focus
+This trace will go through many elements of Figure~\ref{fig:soft-archi-threads}.
 \l FIGURE as shown by data flow in Figure X  (path in special color?)
 Moreover, in this section, I will also explain the creation of the 
 last remaining threads of [[main-proc]]: the {worker threads}.
@@ -4135,10 +4153,13 @@ last remaining threads of [[main-proc]]: the {worker threads}.
 \subsubsection{Mouse initialization}
 
 %trans:
-Before the user clicks on the mouse,
+Before you click on the mouse,
 %
 the window application [[hellorio]] must first become ready to receive 
-such a mouse event, as explained by the following trace:
+such a mouse event by calling [[initmouse()]]. 
+The trace resulting from such a call is explained below:
+%rio-reflection:
+% in fact also rio initialization itself. initmouse, real /dev/mouse
 
 \begin{enumerate}
 
@@ -4146,13 +4167,18 @@ such a mouse event, as explained by the following trace:
 opens [[/dev/mouse]] (via [[initmouse()]])
 and reads [[/dev/mouse]] 
 (via its own IO proc, see Section~\ref{sec:hellorio}).
+\l actually two different steps, two different syscalls. open creates worker.
+\l mouseopen! change things for rio!
 
 \item The kernel resolves the access to [[/dev/mouse]] to the file 
 [[/mnt/wsys/mouse]], because of a [[bind()]] call 
 in the parent process of [[hellorio]]
 (see Section~\ref{sec:new-namespace}).
+\l not really parent, more previous-yourself 
+\n (actually parent because shell, but then would need to show shell in figure)
 
 \item The kernel relays a read on [[/mnt/wsys/mouse]] to
+\l actually relay first the opem
 a 9P request written in the pipe to [[fileserver]] proc,
 because of a call to [[mount()]] in the parent process of [[hellorio]]
 (see Section~\ref{sec:new-namespace}).
@@ -4166,6 +4192,7 @@ to process the request.
 
 \end{enumerate}
 
+
 \subsubsection{Worker initialization}
 
 %trans:
@@ -4173,17 +4200,17 @@ The question now is what should the [[fileserver]] proc do
 with the read request on [[/mnt/wsys/mouse]] from [[hellorio]]?
 %
 \l can not block reading /dev/mouse, or by communicating with mouse thread.
-It can not block until the user moves the mouse. Indeed, another
-process may also need to communicate with the [[fileserver]] proc,
-for instance, a process in a terminal window may want to display some
-text by writing in its [[/mnt/wsys/cons]] file.
+It can not block until you move the mouse. Indeed, another
+process may also need to communicate with the [[fileserver]] proc
+in the mean time, for instance, a process in a terminal window may 
+want to display some text by writing in its [[/mnt/wsys/cons]] file.
 \l would be bad to block every other window app.
 %
 To manage independent file requests, the [[fileserver]] proc offloads
 work to independent {worker threads}.
 \l worker allocator
 {\em Each worker thread represents an opened file of [[rio]]'s filesystem}.
-
+\l so actually done for open, not read
 
 In the case of [[hellorio]] reading [[/mnt/wsys/mouse]],
 the worker thread is called [[Worker 3]] in 
@@ -4201,7 +4228,7 @@ which can write back the appropriate 9P answers into the pipe.
 \l then schedules who? hellorio process blocked? Kernel decodes 9P results?
 At this point, the kernel will unblock the [[hellorio]] process
 (actually its mouse IO proc), which can modify the GUI or do
-nothing depending on the mouse event.
+nothing depending on the mouse event returned from [[/mnt/wsys/mouse]].
 \l actually also here read channel mousectl->c
 
 \subsubsection{Mouse event}
@@ -4211,7 +4238,7 @@ The remaining question is how does the mouse event arrive
 to the [[Worker 3]] thread?
 %
 Now that [[hellorio]] is ready to receive mouse events, and
-[[Worker 3]] has been created, I can explain finally the trace resulting
+[[Worker 3]] has been created, I can finally explain the trace resulting
 from a mouse click in the window of [[hellorio]]:
 
 \begin{enumerate}
@@ -4255,21 +4282,23 @@ the [[Window]] structured allocated for [[hellorio]].
 Thus, [[Window 2]] can communicate with [[Worker 3]] by writing
 the mouse event through this channel.
 \l event loop for send too
+\t physical to logical translation ???? 
 
 \end{enumerate}
 
 At this point, The [[Worker 3]] thread, which was listening on 
 [[Window.mouseread]], receives the mouse event and relays
 it to the [[fileserver]] proc as explained above.
+\l by using another channel
 %
 This concludes the trace of mouse click.
 
 
-Note that if the user clicks with the mouse outside any window, the
+Note that if you click with the mouse outside any window, the
 mouse event does not go to any window thread. 
 %
 Instead, the event stops at the mouse thread, which contains code to
-process the event to move, resize, or create a new window. 
+process the event to possibly move, resize, hide, or create a new window. 
 %dup: overview/soft-archi/trace-new-window
 Indeed, as mentioned in Section~\ref{sec:trace-new-window}, it
 is the mouse thread that creates windows and all their
@@ -4308,24 +4337,50 @@ and [[Window]]s).
 % containing the info (shared memory).
 
 
+\subsubsection{Worker allocator}
 
-%\subsection{Trace of a key press}
-%\label{sec:trace-key-press}
-% maybe better later, already lots of stuff right now.
+\t worker thread in space of main-proc. Because need access globals
+% such as Windows. Dont want lock. But then created from fileserver.
+% How? worker allocator in main-proc, communicate function pointer 
+% from fileserver proc. Subtle. Nice.
 
 
-Note also that the trace of a key press in a graphical window
+\subsection{Trace of a key press}
+\label{sec:trace-key-press}
+
+%trans:
+The trace of a key press in the window of [[hellorio]]
 is similar to the trace of a mouse click. 
 %
-In that case, the key event
-is transmitted from [[/dev/cons]] to the keyboard thread
-through [[keyboardctl->c]], 
-then to the window thread through the [[Window.ck]] channel,
-and finally to a worker thread through the [[Window.consread]] channel.
+The trace starts also at the bottom left in Figure~\ref{fig:soft-archi-threads},
+but this time with the keyboard device.
 %
-For textual windows, the trace of a key press is more complicated
-as [[rio]] provides some advanced line-editing features, which
-will be explained in Chapter~\ref{chap:textual-windows}.
+The key event is transmitted from the kernel
+to the [[IO-proc-keyboard]] through [[/dev/cons]],
+then relayed to the keyboard thread through [[keyboardctl->c]], 
+then to the window thread [[Window 2]] through a [[Window.ck]] channel,
+then to the worker thread [[Worker 4]] through a [[Window.consread]] channel,
+then to the [[fileserver]] proc, and finally
+back to the kernel and [[hellorio]] through a pipe.
+%
+[[hellorio]] finally reads the key event through his [[/mnt/wsys/cons]]
+file that was opened (in raw access mode) at startup via a
+call to [[initkeyboard()]].
+
+
+For textual windows, such as the shell process 
+in Figure~\ref{fig:soft-archi-threads} (represented by the [[Window 1]] thread),
+the trace of a key press is more complicated.
+%
+Indeed, [[rio]] provides advanced line-editing features that complicates
+the flow of data to [[/mnt/wsys/cons]]. Moreover, this file
+is opened both in read and write modes, resulting from two
+worker threads in Figure~\ref{fig:soft-archi-threads}: [[Worker 1]]
+and [[Worker 2]].
+\l worker 1 actually draw things then
+%
+This is why the trace of a key press in a textual window
+will be explained later in Chapter~\ref{chap:textual-windows}.
 
 
 % when keydown the keyboard thread is triggered
@@ -4351,38 +4406,412 @@ will be explained in Chapter~\ref{chap:textual-windows}.
 \label{sec:trace-draw}
 
 %trans:
-% final trace is the trace of a drawing operation by hellorio
-% graphical application.
+The final trace illustrating Figure~\ref{fig:soft-archi-threads}
+is the trace of a drawing operation by [[hellorio]].
+%dup: intro/rio overview/interface/fs/screen 
+As I said in Section~\ref{sec:winname}, the ancestor of [[rio]],
+[[8-1/2]]~\cite{eight-and-a-half}, was offering a
+virtual [[/mnt/wsys/draw]] device file;
+%
+the trace of a drawing operation was then similar to the trace of
+a mouse click or a key press
+in Section~\ref{sec:trace-mouse-click} and Section~\ref{sec:trace-key-press}.
+\l maybe ouput simpler than input; fileserver can do fast IO on /dev/draw
+\l  but still need layers
+%dup: overview/soft-archi/new-window/new-layer
+However, for efficiency reasons, with [[rio]] the window applications 
+are connected directly to the [[draw]] device, 
+as shown in Figure~\ref{fig:soft-archi-threads} with
+the [[hellorio]] process connected to [[draw]] via [[/dev/draw/2/]].
+%
+This simplifies the trace of a drawing operation, 
+\n well memlayer is complicated
+but complicates the initialization of graphics for the window process.
+%
+Indeed, as I explained partly already in different sections, 
+[[rio]] and [[draw]] needs to cooperate to enable window 
+applications to draw on the screen:
 
-%dup: intro/rio
-% 8-1/2 was offering a virtual /dev/draw, so was similar to 2 previous
-% traces. But more inefficient.
 
-%\subsubsection{Graphics initialization}
+\begin{itemize}
 
-% shell process -> hellorio -> fork/exec. 
-% same fd shared. Same namespace inherited
-% Figure X actually wrong, hellorio has parent process
+\item [[rio]] is using [[draw]]'s layers to implement overlapping windows 
+(see Section~\ref{sec:layer-introduction})
+
+\item [[draw]] is using a client/server architecture to support 
+the multiple clients of [[rio]]
+(see Section~\ref{sec:winname}) % and sec:display-server
+
+\item [[draw]] supports the naming and sharing of layers across multiple clients
+(see Section~\ref{sec:winname}) % and sec:new-layer
+
+\item [[hellorio]] uses in his code the global [[view]], 
+which is a reference to a layer, to draw things in its window
+(see Section~\ref{sec:hellorio}) % and sec:winname
+
+\item [[rio]] is using [[/mnt/wsys/winname]] to communicate the name of 
+a layer to the window 
+(see Section~\ref{sec:new-layer}) % and sec:winname
+
+\end{itemize}
+
+The goal of this section is to put together all those 
+pieces of information to better understand how a
+window application draws on the screen.
 
 
-% there are no write on /dev/screen or /dev/window.
-% those are read-only device.
-% /dev/draw does its own demultiplexing. A client
-% open /dev/draw/new, get a handler, and then getwindow
-% give name of image for this client to use, stored then
-% in view.
+\subsubsection{Graphics initialization}
 
-%\subsubsection{Graphics operation}
+Before being able to call drawing functions from [[draw.h]],
+[[hellorio]] must first connect to the [[draw]] device with [[initdraw()]]
+(see the \book{Graphics}).
+%
+This is similar to what [[hellorio]] did 
+in the trace of a mouse click with [[initmouse()]], and 
+in the trace of a key press with [[initkeyboard()]].
+%rio-reflection
+In fact, [[rio]] itself also calls at startup those [[initxxx()]] functions.
+In the case of [[rio]], all those functions connect to real [[/dev/]] devices,
+not virtual devices under [[/mnt/wsys/]].
+%
+The graphics initialization of [[hellorio]] 
+relies actually on two calls done previously by [[rio]]:
 
-%dup: Graphics.nw
-% full trace explained in Graphics book
-% toy app does a draw operation, what happens?
-% it writes on /dev/draw/n/data? 
+\begin{enumerate}
+\item The call to [[initdraw()]], which sets the global [[view]],
+during the initialization of [[rio]]
+\n hard to not talk about rio graphics init. Harder than for mouse and keyboard
+\n  because layer created is based on view, so need to explain view.
 
-% a bit annoying that have to transform your xy into the final
-% xy ourself by adding view->r.min. Not really "abstraction"
-% power. I'd rather have my 0x0 to be the top left on _my_ window.
-%update: can use originwindow! then cleaner!
+\item The call to [[allocwindow()]] to create a new layer,
+using [[view]] as the base layer,
+during the creation by [[rio]] of the new terminal window 
+from where [[hellorio]] will be eventially launched
+
+\end{enumerate}
+
+Thanks to those two previous calls, the call to [[initdraw()]] in 
+[[hellorio]] can fetch a reference to the layer created by [[rio]].
+\n need more, need also nameimage, namespace, and lots of stuff
+
+The following paragraphs will give more details about those steps
+by describing the traces of those steps.
+%
+However, those traces will be partial. Indeed, I will omit 
+certain explanations that are contained in the \book{Graphics}.
+\l moreover for full explanations, read the following chapters!
+
+
+
+\paragraph{[[rio]] and [[initdraw()]]}
+The trace of [[initdraw()]] in [[rio]] is as follows:
+
+\begin{enumerate}
+
+\item When [[rio]] starts, it calls [[initdraw()]], which opens
+[[/dev/draw/new]] to open a new connexion to the display server
+(see the \book{Graphics}).
+
+\item The kernel resolves the access to [[/dev/draw/new]] to
+a method of the [[draw]] device in the kernel,
+because of a call to [[bind("#i", "/dev/")]] in the 
+parent process of [[rio]] (see Section~\ref{sec:getting-started}).
+\n actually bind program, but internally calls bind() function
+%
+Since [[rio]] is the first application to open [[/dev/draw/new]], 
+the kernel returns a file handler to [[/dev/draw/1/ctl]].
+\n unless recursive rio
+This is why in Figure~\ref{fig:soft-archi-threads}, the [[rio]]
+process is connected to the [[/dev/draw/1]] directory.
+
+\item [[initdraw()]] reads the information about the screen contained
+in [[/dev/draw/1/ctl]] and sets the global [[display]].
+\n another syscall, read() this time, not open()
+\l less important step, could be removed
+
+\item [[initdraw()]] calls [[gengetwindow()]], which
+opens and reads [[/dev/winname]].
+\n again two different syscalls
+
+\item The kernel resolves the access to [[/dev/winname]]
+to a method of the [[draw]] device. The content returned 
+for this file is [["noborder.screen.1"]], the name given by [[draw]] 
+to the framebuffer image.
+\l unless recursive rio, in which case get a layer name! nest!
+\n start change for hellorio trace later 
+
+\item [[initdraw()]] then calls [[namedimage()]] to grab
+a reference to the image named [["noborder.screen.1"]].
+%
+Remember that API calls to [[draw]] such as [[namedimage()]] are
+translated by [[libdraw]] in written commands in [[/dev/draw/1/data]]
+(see the \book{Graphics}).
+\l remember also that images are stored in kernel. Image are just reference
+\l  to internal kernel data structure, Memimage, with image identifier.
+\n actually there is DImage intermediate even
+
+\item The kernel resolves the access to [[/dev/draw/1/data]]
+to a method of the [[draw]] device. This method parses the [[namedimage()]]
+command, creates a new image identifier, find the image
+corresponding to [["noborder.screen.1"]] (the framebuffer), 
+internally {links} the new image identifier to this image,
+and finally returns the new image identifier.
+\l because noborder.screen.1 drawaddname
+\n actually libdraw pass image identifier (display->imageid)
+\n new DImage, returns image id.
+
+\item [[initdraw()]] reads information about this new image identifier
+in [[/dev/draw/1/ctl]] and stores the information in the global [[view]].
+\l Image vs Memimage, in the kernel referring to the screen framebuffer
+
+\end{enumerate}
+\l at this point, view and display->image are 2 image identifiers refering
+\l  internally to the same kernel image, the framebuffer.
+
+Once [[rio]] called [[initdraw()]], it can draw things on the screen
+by passing the global [[view]] as an argument to drawing functions.
+%
+Moreover, after [[initmouse()]], [[rio]] enables also the user to use the mouse.
+
+
+
+
+\paragraph{[[rio]] and [[allocwindow()]]}
+\l [[alloclayer()]]
+The trace leading to the creation of a new layer is as follows:
+
+\begin{enumerate}
+
+%dup: (shorten) overview/interface/gui overview/soft-archi/trace-new-window
+\item To create a new window, you must right-click on the
+mouse while dragging the mouse to specify a rectangle on the screen
+(see Section~\ref{sec:rio-gui}).
+%
+All those actions are handled by code in the mouse thread of [[rio]]. 
+%
+This code also uses the global [[view]] as an argument to functions
+in [[draw.h]], for instance, 
+to draw on the screen the white rectangle specified with the mouse, 
+as well as its red border (see Figure~\ref{fig:new-step1-specify-new-window}).
+\n actually allocwindow() already (and freeimage()); not draw()
+
+
+\item Once you release the right-click, 
+\n actually call allocwindow() all the time
+%dup: overview/soft-archi/trace-new-window
+[[rio]] creates internally many new entities: a process, a namespace, a
+[[Window]] (stored in the global array [[windows]]), and a thread
+(see Section~\ref{sec:trace-new-window}).
+%
+[[rio]] also calls [[allocwindow()]] from [[window.h]] to create a new layer. 
+%
+It passes [[view]] as the base-layer argument to [[allocwindow()]], and 
+the rectangle specified with the mouse for the dimension of the layer.
+\n actually pass desktop (but derived from view though)
+%
+The call to [[allocwindow()]] is translated by [[libdraw]] in a command
+written in [[/dev/draw/1/data]]. The [[view]] argument is reduced 
+to its image identifier.
+\l actually desktop->id
+
+
+\item The kernel parses the [[allocwindow()]] command written 
+in [[/dev/draw/1/data]] and allocates a new layer with a new image identifier.
+\l Memlayer, actually allocwindow translated in allocimage with screen id arg
+%
+It uses the framebuffer as the base layer for this layer,
+since the image identifier written in [[/dev/draw/1/data]] was 
+previously linked by the kernel to the framebuffer.
+\l actually passed baselayer id in [[allocimage()]] command
+%
+The kernel also records in a list the set of layers associated
+with the framebuffer, and put this new layer at the top of the list.
+\l MemlayerBase DS
+%
+If a program draws in this layer, it will draw directly in the framebuffer
+since the layer is at the top.
+%
+Finally, the kernel returns the new image identifier to [[rio]].
+
+
+\item [[rio]] stores the new image identifier in the [[Window.img]]
+field of the [[Window]] structure allocated for the new window.
+\l abuse image identifier for Image, but in essence that's what it is
+%
+[[rio]] creates also a new name for this layer, e.g. [["window.1"]]. 
+and stores it in the [[Window.name]] field.
+%
+[[rio]] then calls [[nameimage()]] with [[Window.img]] and [[Window.name]]
+as arguments, to name and share the layer.
+%
+This call is translated again by [[libdraw]] in a command
+written in [[/dev/draw/1/data]]. 
+
+\item The kernel parses the [[nameimage()]] command
+and adds in a global hash table in the kernel an association between
+[["window.1"]] and the layer created previously.
+
+\end{enumerate}
+
+Remember that when you create a new window, this window
+is always first a textual window managed by the terminal emulator.
+%
+This window is initially connected to a shell process, as shown
+at the bottom right in Figure~\ref{fig:soft-archi-threads}.
+%
+Because the terminal emulator is an integral part of [[rio]],
+it has access to the globals of [[rio]] such as [[view]]
+or [[windows]].
+\l run from window thread, e.g. Window 1.
+%
+Thus, the terminal emulator can draw in the layer stored previously
+in [[Window.img]]. 
+It can translate text output from the shell process through [[/mnt/wsys/cons]]
+to calls to drawing functions taking [[Window.img]] as an argument
+(e.g., [[string()]]).
+\l or runestring
+\l more on this in Chapter X
+
+At some point, you can launch [[hellorio]] from
+this terminal window by typing the name of the command in the shell.
+
+\paragraph{[[hellorio]] and [[initdraw()]]} Here is finally the trace
+of [[initdraw()]] in [[hellorio]]:
+
+\begin{enumerate}
+
+\item When [[hellorio]] starts, it also calls [[initdraw()]]
+(like [[rio]] did), which opens [[/dev/draw/new]].
+%
+Since [[hellorio]] is the second application to open this file,
+the kernel returns a file handler to [[/dev/draw/2/ctl]].
+%
+This is why in Figure~\ref{fig:soft-archi-threads},
+the [[hellorio]] process is connected to the [[/dev/draw/2]] directory.
+%dup: merge step 1,2,3 of trace of initdraw for rio
+
+\item [[initdraw()]] calls [[gengetwindow()]], which opens
+and reads [[/dev/winname]].
+\n two different syscalls, two different traces normally
+
+\item The kernel resolves this time the access to [[/dev/winname]]
+to [[/mnt/wsys/winname]], and communicates the read request
+on this file to the [[fileserver]] proc.
+%
+This is different from the trace of [[initdraw()]] in [[rio]].
+Indeed, the namespace set in the parent process of [[hellorio]] by [[rio]]
+is different from the namespace of [[rio]] itself.
+%dup: more explanations in trace window-click step 2,3,4
+
+\item The [[fileserver]] proc allocates a new worker thread
+to serve [[/mnt/wsys/winname]] for [[hellorio]].
+\n for the open
+%
+Note that this thread is not shown in Figure~\ref{fig:soft-archi-threads}.
+Indeed, this worker thread exists only during the call to [[initdraw()]].
+Before returning, [[initdraw()]] closes [[/dev/winname]], and so
+[[fileserver]] releases the worker thread.
+
+
+\item The worker thread looks for the name of the layer for [[hellorio]]
+in the [[Window.name]] field of the [[Window]] associated with [[hellorio]]. 
+%
+This [[Window]] is stored in the global array [[windows]].
+%
+To find the appropriate [[Window]], the worker thread
+compares the window identifier stored in [[Window.id]] and the window
+identifier in the 9P request (which was originally passed to [[mount()]]
+in the parent process of [[hellorio]], see Section~\ref{sec:new-namespace}).
+%
+Finally, the worker thread returns [["window.1"]], the content
+of [[Window.name]] for the window from where [[hellorio]] was launched.
+\n then return to fileserver proc, write in pipe, etc. see trace mouse click
+
+\item [[initdraw()]] then calls [[namedimage()]] to grab
+a reference to the image named [["window.1"]].
+%
+The kernel creates a new image identifier, 
+find the image corresponding to [["window.1"]] by looking in a global
+hash table (this image is the layer created by [[rio]] above), 
+internally links the new image identifier to this image, and finally
+returns the new image identifier.
+%
+[[initdraw()]] then stores the new image identifier in the global [[view]]
+of the [[hellorio]] process.
+\n again abuse image identifier for Image
+%dup: merge step 6,7,8
+
+\end{enumerate}
+
+This concludes the graphics initialization for [[hellorio]].
+
+\l originwindow()?? !! physical to logical!! maybe better delay to later
+\l mouseopen! change things for rio!
+
+\subsubsection{Graphics operation}
+
+%trans: %dup: (adapted, screen -> window) trace rio
+Once [[hellorio]] called [[initdraw()]], it can draw things in
+its window by passing the global [[view]] as an argument to drawing functions.
+%
+This time, [[view]] corresponds to an image layer in the kernel,
+not the framebuffer. However, this layer is linked to the framebuffer,
+as well as the other layers created for the other windows.
+%
+Here is the trace of the call to [[draw()]] in the [[redraw()]]
+function in [[hellorio.c]] (see Section~\ref{sec:hellorio-skeleton}):
+
+\begin{enumerate}
+
+\item When [[hellorio]] calls [[draw()]], the call is translated
+by [[libdraw]] in a command written in [[/dev/draw/2/data]]. 
+\n actually need wait until flushimage()
+The [[view]] argument is reduced to its image identifier.
+
+\item The kernel resolves the access to [[/dev/draw/2/data]] to
+a method of the [[draw]] device. This method parses
+the [[draw()]] command and fetches the image associated
+to the image identifier written in [[/dev/draw/2/data]]. 
+\n DImage, vs Memimage, vs Memlayer
+\n image identifier local to each client of draw, but not important to know
+%
+This image is actually a layer, which is associated to the framebuffer.
+
+\item The kernel then calls [[memdraw()]], a function from [[libmemlayer]]
+that contains special code to handle image layers.
+%
+[[memdraw()]] then goes through the list of layers associated
+to the framebuffer to check if the layer of [[hellorio]] is the {top layer}. 
+\l actually not done like this I think
+%
+If it is, [[memdraw()]] calls [[memimagedraw()]] from
+[[libmemdraw]] to draw pixels directly in the framebuffer. 
+%
+If it is not the top layer, [[memdraw()]] allocates a new
+off-screen image and calls [[memimagedraw()]] to draw
+in this image instead for all the rectangles overlapped by
+other layers.
+\l actually done by layerop, and not sure there is only one off-screen image
+
+\end{enumerate}
+
+Later, if you click on the window of [[hellorio]] to make it the top window, 
+[[rio]] will call the [[draw]] function [[topwindow()]].
+%
+This command will be parsed by the kernel. The kernel will readjust the list
+of layers associated to the framebuffer, and copy back the pixels
+from the off-screen image associated to the layer of [[hellorio]]
+to the framebuffer.
+
+\bigskip
+This concludes the trace of a drawing operation, as well as the
+presentation of the software architecture of [[rio]].
+%
+The traces above are simplified, but the essential elements are there. 
+For a more precise trace of a drawing operation, see the \book{Graphics}.
+%trans:
+For more details about the other traces, read the following chapters.
+
 
 
 \section{Book structure}
@@ -4395,8 +4824,46 @@ The rest of the book is organized as follows.
 I will start by describing the core data structures of [[rio]]
 in Chapter~\ref{chap:core-ds}.
 %
-%TODO
+Then, I will use a top-down approach, starting with Chapter~\ref{chap:main}
+with the description of [[main()]] and the core initializations in [[rio]].
+\n actually code of threadmain, but still description of main
 %
+I will continue in Chapter~\ref{chap:procs-and-threads} by presenting
+the main functions called by the threads and procs of [[rio]].
+I will describe also the messages and channels used by those threads.
+%
+Then, I will describe the code to manage cursors in 
+Chapter~\ref{chap:cursor},
+%
+before presenting the code of the window manager in Chapter~\ref{chap:wm}. 
+Starting from a mouse click, I will describe the main functions
+to create, focus, delete, move, resize, and hide windows.
+%
+In Chapter~\ref{chap:filesystem} I will switch to a bottom-up
+approach, and switch the focus from [[main-proc]] to [[fileserver]],
+by presenting the filesystem methods of the [[fileserver]] proc.
+%
+Those methods are entry points that offload the work
+to worker threads and specific functions to handle the 
+different virtual devices of [[rio]] under [[/mnt/wsys/]]
+(e.g., [[/mnt/wsys/cons]], [[/mnt/wsys/mouse]]).
+%
+I will present the code to serve those virtual devices
+in Chapter~\ref{chap:virtual-devices}.
+%
+Some virtual devices behave differently depending if the
+window is a graphical or textual window.
+This is why I will describe the specifics of graphical windows
+in Chapter~\ref{chap:graphical-windows}, and of textual
+windows in Chapter~\ref{chap:textual-windows}, including
+the code of the terminal emulator.
+%
+Chapter~\ref{chap:windowing-system-files} presents the code to serve
+the other files under [[/mnt/wsys]] (e.g., [[/mnt/wsys/ctl]]).
+%
+Chapter~\ref{chap:advanced} presents advanced functionalities
+of [[rio]] that I did not present before to simplify the explanations.
+\l for instance, 
 Finally, Chapter~\ref{chap:conclusion} concludes
 and gives pointers to other books in the \principia series.
 
@@ -4631,12 +5098,8 @@ struct Window
 <<[[Window]] id fields>>=
 int	    id;       // visible through /mnt/wsys/winid
 char    name[32]; // visible through /mnt/wsys/winname
-char    *label;   // writable through /mnt/wsys/label
 @
-% name vs label? name is here for client to find back its window/image via
-%  namedimage, so rio sends info back to window. name is just readable.
-%  label is actually set by client, and displayed back by rio.
-%  label can be arbitrary size and /dev/label is writable
+
 
 % counter
 <<global id>>=
@@ -4651,7 +5114,7 @@ static	int	id;
 // ref_own<Image>, public image for the window (name in /dev/winname)
 Image	*i;
 @
-\l rename img?
+\t rename img? I already use [[window.img]] before
 % will be used by Graphics, e.g., topwindow(w->i) in wtop()
 % this is whole image, including its border, see sweep() and wmk()
 % shared with window process.
@@ -4680,6 +5143,14 @@ Rectangle	screenr; /* screen coordinates of window */
 
 
 
+
+<<[[Window]] id fields>>=
+char    *label;   // writable through /mnt/wsys/label
+@
+% name vs label? name is here for client to find back its window/image via
+%  namedimage, so rio sends info back to window. name is just readable.
+%  label is actually set by client, and displayed back by rio.
+%  label can be arbitrary size and /dev/label is writable
 
 
 
@@ -5156,8 +5627,6 @@ Xfid* 	(*fcall[Tmax])(Filsys*, Xfid*, Fid*) =
 
 \chapter{[[main()]]}
 \label{chap:main}
-
-\n actually it's threadmain()
 
 % see Libcore.nw, quick refresh on threads in plan9 and
 % fact that main is then threadmain.
@@ -9964,7 +10433,7 @@ case Qmouse:
 
 
 
-\subsection{[[initkeyboard()]], raw mode}
+\subsection{[[initkeyboard()]], raw-access mode}
 
 % not necessarily tied to graphical app, but strongly correlated.
 % again, initkeyboard() in Graphics.nw.
@@ -15302,6 +15771,7 @@ PTY = Pseudo TTY
 TTY = Teletype
 WIMP = Window Icon Menu Pointer
 MIME = Multipurpose Internet Mail Extensions
+PDA = Personal Digital Assistant
 \end{verbatim}
 
 \chapter*{Indexes}
