@@ -26,9 +26,9 @@ Mouse	*mouse;
 Keyboardctl	*keyboardctl;
 /*e: global keyboardctl */
 
-/*s: global wscreen */
-Screen	*wscreen;
-/*e: global wscreen */
+/*s: global desktop */
+Screen	*desktop;
+/*e: global desktop */
 /*s: global background */
 Image	*background;
 /*e: global background */

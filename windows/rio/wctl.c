@@ -348,7 +348,7 @@ wctlnew(Rectangle rect, char *arg, int pid, int hideit, int scrollit, char *dir,
     if(hideit)
         i = allocimage(display, rect, view->chan, false, DWhite);
     else
-        i = allocwindow(wscreen, rect, Refbackup, DWhite);
+        i = allocwindow(desktop, rect, Refbackup, DWhite);
     if(i == nil){
         strcpy(err, Ewalloc);
         return -1;
@@ -420,7 +420,7 @@ writewctl(Xfid *x, char *err)
         }
         if(eqrect(rect, w->screenr))
             return 1;
-        i = allocwindow(wscreen, rect, Refbackup, DWhite);
+        i = allocwindow(desktop, rect, Refbackup, DWhite);
         if(i == nil){
             strcpy(err, Ewalloc);
             return -1;

@@ -906,7 +906,7 @@ button2menu(Window *w)
     else
         menu2str[Scroll] = "scroll";
     /*e: [[button2menu()]] menu2str adjustments for scrolling */
-    switch(menuhit(2, mousectl, &menu2, wscreen)){
+    switch(menuhit(2, mousectl, &menu2, desktop)){
     /*s: [[button2menu()]] cases */
     case Scroll:
         if(w->scrolling ^= 1)

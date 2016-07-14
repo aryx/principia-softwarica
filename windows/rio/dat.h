@@ -490,7 +490,7 @@ struct Timer
 
 // globals.c
 
-extern Screen	*wscreen;
+extern Screen	*desktop;
 extern Image	*background;
 extern Image	*red;
 

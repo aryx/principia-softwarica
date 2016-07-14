@@ -65,13 +65,13 @@ resized(void)
         error("failed to re-attach window");
 
     freescrtemps();
-    freescreen(wscreen);
+    freescreen(desktop);
 
-    wscreen = allocscreen(view, background, false);
-    /*s: [[resized()]] sanity check wscreen */
-    if(wscreen == nil)
-        error("can't re-allocate screen");
-    /*e: [[resized()]] sanity check wscreen */
+    desktop = allocscreen(view, background, false);
+    /*s: [[resized()]] sanity check desktop */
+    if(desktop == nil)
+        error("can't re-allocate desktop");
+    /*e: [[resized()]] sanity check desktop */
     draw(view, view->r, background, nil, ZP);
 
     // old view rectangle
@@ -101,7 +101,7 @@ resized(void)
             im = allocimage(display, r, view->chan, false, DWhite);
             r = ZR;
         }else
-            im = allocwindow(wscreen, r, Refbackup, DWhite);
+            im = allocwindow(desktop, r, Refbackup, DWhite);
 
         if(im)
             wsendctlmesg(w, Reshaped, r, im);

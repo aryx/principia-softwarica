@@ -196,11 +196,11 @@ void threadmain(int argc, char *argv[])
         error("can't find keyboard");
     /*e: [[main()]] keyboard initialisation */
 
-    wscreen = allocscreen(view, background, false);
-    /*s: [[main()]] sanity check wscreen */
-    if(wscreen == nil)
-        error("can't allocate screen");
-    /*e: [[main()]] sanity check wscreen */
+    desktop = allocscreen(view, background, false);
+    /*s: [[main()]] sanity check desktop */
+    if(desktop == nil)
+        error("can't allocate desktop");
+    /*e: [[main()]] sanity check desktop */
 
     draw(view, viewr, background, nil, ZP);
     flushimage(display, true);
@@ -245,7 +245,7 @@ void threadmain(int argc, char *argv[])
             r = view->r;
             r.max.x = r.min.x+300;
             r.max.y = r.min.y+80;
-            i = allocwindow(wscreen, r, Refbackup, DWhite);
+            i = allocwindow(desktop, r, Refbackup, DWhite);
             wkeyboard = new(i, false, scrolling, 0, nil, "/bin/rc", kbdargv);
             if(wkeyboard == nil)
                 error("can't create keyboard window");

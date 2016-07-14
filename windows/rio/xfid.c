@@ -105,7 +105,7 @@ xfidattach(Xfid *x)
                 if(hideit)
                     i = allocimage(display, r, view->chan, false, DWhite);
                 else
-                    i = allocwindow(wscreen, r, Refbackup, DWhite);
+                    i = allocwindow(desktop, r, Refbackup, DWhite);
                 if(i){
                     border(i, r, Selborder, display->black, ZP);
                     if(pid == 0)

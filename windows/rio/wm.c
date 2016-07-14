@@ -211,7 +211,7 @@ sweep(void)
             r = canonrect(Rpt(p0, p));
 
             if(Dx(r)>5 && Dy(r)>5){
-                i = allocwindow(wscreen, r, Refnone, 0xEEEEEEFF); /* grey */
+                i = allocwindow(desktop, r, Refnone, 0xEEEEEEFF); /* grey */
                 freeimage(oi);
                 /*s: [[sweep()]] sanity check i */
                 if(i == nil)
@@ -230,7 +230,7 @@ sweep(void)
         goto Rescue;
     /*e: [[sweep()]] sanity check mouse buttons, i, and rectangle size */
     oi = i;
-    i = allocwindow(wscreen, oi->r, Refbackup, DWhite);
+    i = allocwindow(desktop, oi->r, Refbackup, DWhite);
     freeimage(oi);
     /*s: [[sweep()]] sanity check i */
     if(i == nil)
@@ -269,7 +269,7 @@ drawedge(Image **bp, Rectangle r)
         originwindow(b, r.min, r.min);
     else{
         freeimage(b);
-        *bp = allocwindow(wscreen, r, Refbackup, DRed);
+        *bp = allocwindow(desktop, r, Refbackup, DRed);
     }
 }
 /*e: function drawedge */
@@ -337,7 +337,7 @@ drag(Window *w, Rectangle *rp)
 
     flushimage(display, true);
     if(mouse->buttons == 0)
-        ni=allocwindow(wscreen, r, Refbackup, DWhite);
+        ni = allocwindow(desktop, r, Refbackup, DWhite);
     /*s: [[drag()]] sanity check mouse buttons and ni */
     if(mouse->buttons!=0 || ni==nil){
         moveto(mousectl, om);
@@ -470,7 +470,7 @@ bandsize(Window *w)
     if(abs(p.x - startp.x) + abs(p.y - startp.y) <= 1)
         return nil;
     /*e: [[bandsize()]] sanity check mouse buttons, rectanglr [[or]], point [[p]] */
-    i = allocwindow(wscreen, or, Refbackup, DWhite);
+    i = allocwindow(desktop, or, Refbackup, DWhite);
     /*s: [[bandsize()]] sanity check i */
     if(i == nil)
         return nil;
@@ -560,7 +560,7 @@ wunhide(int h)
     Window *w;
 
     w = hidden[h];
-    i = allocwindow(wscreen, w->i->r, Refbackup, DWhite);
+    i = allocwindow(desktop, w->i->r, Refbackup, DWhite);
     if(i){
         --nhidden;
         memmove(hidden+h, hidden+h+1, (nhidden-h)*sizeof(Window*));
@@ -722,7 +722,7 @@ button3menu(void)
     /*e: [[button3menu()]] menu3str adjustments with hidden windows */
 
     sweeping = true;
-    switch(i = menuhit(3, mousectl, &menu3, wscreen)){
+    switch(i = menuhit(3, mousectl, &menu3, desktop)){
     /*s: [[button3menu()]] cases */
     case Exit:
         send(exitchan, nil);
