@@ -214,6 +214,7 @@ struct Window
     /*s: [[Window]] id fields */
     int	    id;       // visible through /mnt/wsys/winid
     char    name[32]; // visible through /mnt/wsys/winname
+    /*x: [[Window]] id fields */
     char    *label;   // writable through /mnt/wsys/label
     /*x: [[Window]] id fields */
     uint		namecount;
@@ -392,6 +393,7 @@ struct Fid
     /*x: [[Fid]] other fields */
     Window	*w;
     /*x: [[Fid]] other fields */
+    // ref<Dirtab>
     Dirtab	*dir;
     /*x: [[Fid]] other fields */
     uchar	rpart[UTFmax];
@@ -400,6 +402,7 @@ struct Fid
 
     // Extra
     /*s: [[Fid]] extra fields */
+    // list<Fid> (head = Filsys.fids[i])
     Fid		*next;
     /*x: [[Fid]] extra fields */
     bool	busy;
@@ -420,6 +423,7 @@ struct Xfid
         Channel	*c;	/* chan(void(*)(Xfid*)) */
 
         Fid	*f;
+
         Filsys	*fs;
 
         /*s: [[Xfid]] flushing fields */
@@ -460,8 +464,10 @@ struct Filsys
     // map<fid, Fid> (next in bucket = Fid.next)
     Fid		*fids[Nhash];
 
+    /*s: [[Filsys]] other fields */
     // chan<ref<Xfid>> (listener = filsysproc, sender = xfidallocthread)
     Channel	*cxfidalloc;	/* chan(Xfid*) */
+    /*e: [[Filsys]] other fields */
 };
 /*e: struct Filsys */
 
