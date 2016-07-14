@@ -62,29 +62,29 @@ filsysproc(void *arg)
         }
         x->buf = buf;
 
-        if(convM2S(buf, n, x) != n)
+        if(convM2S(buf, n, &x->req) != n)
             error("convert error in convM2S");
         /*s: [[filsysproc()]] dump Fcall if debug */
         if(DEBUG)
-            fprint(STDERR, "rio:<-%F\n", &x->Fcall);
+            fprint(STDERR, "rio:<-%F\n", &x->req);
         /*e: [[filsysproc()]] dump Fcall if debug */
 
         /*s: [[filsysproc()]] sanity check x type */
-        if(fcall[x->type] == nil)
+        if(fcall[x->req.type] == nil)
             x = filsysrespond(fs, x, &fc, Ebadfcall);
         /*e: [[filsysproc()]] sanity check x type */
         else{
             /*s: [[filsysproc()]] if x type is Tversion or Tauth */
-            if(x->type==Tversion || x->type==Tauth)
+            if(x->req.type==Tversion || x->req.type==Tauth)
                 f = nil;
             /*e: [[filsysproc()]] if x type is Tversion or Tauth */
             else
-                f = newfid(fs, x->fid);
+                f = newfid(fs, x->req.fid);
 
             x->f = f;
 
             // Dispatch
-            x  = (*fcall[x->type])(fs, x, f);
+            x  = (*fcall[x->req.type])(fs, x, f);
         }
         firstmessage = false;
     }

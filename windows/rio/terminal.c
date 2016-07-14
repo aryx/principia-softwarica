@@ -241,22 +241,23 @@ wfill(Window *w)
 {
     Rune *rp;
     int i, n, m, nl;
+    Frame *frm = &w->frm;
 
-    if(w->lastlinefull)
+    if(frm->lastlinefull)
         return;
     rp = malloc(messagesize);
     do{
-        n = w->nr-(w->org+w->nchars);
+        n = w->nr - (w->org + frm->nchars);
         if(n == 0)
             break;
         if(n > 2000)	/* educated guess at reasonable amount */
             n = 2000;
-        runemove(rp, w->r+(w->org+w->nchars), n);
+        runemove(rp, w->r + (w->org + frm->nchars), n);
         /*
          * it's expensive to frinsert more than we need, so
          * count newlines.
          */
-        nl = w->maxlines-w->nlines;
+        nl = frm->maxlines - frm->nlines;
         m = 0;
         for(i=0; i<n; ){
             if(rp[i++] == '\n'){
@@ -265,8 +266,8 @@ wfill(Window *w)
                     break;
             }
         }
-        frinsert(w, rp, rp+i, w->nchars);
-    } while(w->lastlinefull == false);
+        frinsert(frm, rp, rp+i, frm->nchars);
+    } while(frm->lastlinefull == false);
     free(rp);
 }
 /*e: function wfill */
@@ -277,6 +278,7 @@ void
 wdelete(Window *w, uint q0, uint q1)
 {
     uint n, p0, p1;
+    Frame *frm = &w->frm;
 
     n = q1-q0;
     if(n == 0)
@@ -293,16 +295,16 @@ wdelete(Window *w, uint q0, uint q1)
         w->qh = q0;
     if(q1 <= w->org)
         w->org -= n;
-    else if(q0 < w->org+w->nchars){
+    else if(q0 < w->org + frm->nchars){
         p1 = q1 - w->org;
-        if(p1 > w->nchars)
-            p1 = w->nchars;
+        if(p1 > frm->nchars)
+            p1 = frm->nchars;
         if(q0 < w->org){
             w->org = q0;
             p0 = 0;
         }else
             p0 = q0 - w->org;
-        frdelete(w, p0, p1);
+        frdelete(frm, p0, p1);
         wfill(w);
     }
 }
@@ -338,11 +340,12 @@ wsetorigin(Window *w, uint org, int exact)
     int i, a, fixup;
     Rune *r;
     uint n;
+    Frame *frm = &w->frm;
 
     if(org>0 && !exact){
         /* org is an estimate of the char posn; find a newline */
         /* don't try harder than 256 chars */
-        for(i=0; i<256 && org<w->nr; i++){
+        for(i=0; i<256 && org < w->nr; i++){
             if(w->r[org] == '\n'){
                 org++;
                 break;
@@ -352,23 +355,23 @@ wsetorigin(Window *w, uint org, int exact)
     }
     a = org - w->org;
     fixup = 0;
-    if(a>=0 && a<w->nchars){
-        frdelete(w, 0, a);
+    if(a>=0 && a < frm->nchars){
+        frdelete(frm, 0, a);
         fixup = 1;	/* frdelete can leave end of last line in wrong selection mode; it doesn't know what follows */
-    }else if(a<0 && -a<w->nchars){
+    }else if(a<0 && -a < frm->nchars){
         n = w->org - org;
         r = runemalloc(n);
         runemove(r, w->r+org, n);
-        frinsert(w, r, r+n, 0);
+        frinsert(frm, r, r+n, 0);
         free(r);
     }else
-        frdelete(w, 0, w->nchars);
+        frdelete(frm, 0, frm->nchars);
     w->org = org;
     wfill(w);
     wscrdraw(w);
     wsetselect(w, w->q0, w->q1);
-    if(fixup && w->p1 > w->p0)
-        frdrawsel(w, frptofchar(w, w->p1-1), w->p1-1, w->p1, 1);
+    if(fixup && frm->p1 > frm->p0)
+        frdrawsel(frm, frptofchar(frm, frm->p1-1), frm->p1-1, frm->p1, 1);
 }
 /*e: function wsetorigin */
 
@@ -381,17 +384,17 @@ wshow(Window *w, uint q0)
     int nl;
     uint q;
 
-    qe = w->org + w->nchars;
+    qe = w->org + w->frm.nchars;
     if(w->org <= q0 && (q0 < qe || (q0 == qe && qe == w->nr)))
         wscrdraw(w);
     /*s: [[wshow()]] else, when q0 is out of scope */
     else{
-        nl = 4 * w->maxlines / 5;
+        nl = 4 * w->frm.maxlines / 5;
         q = wbacknl(w, q0, nl);
         /* avoid going backwards if trying to go forwards - long lines! */
         if(!(q0 > w->org && q < w->org))
             wsetorigin(w, q, true);
-        while(q0 > w->org + w->nchars)
+        while(q0 > w->org + w->frm.nchars)
             wsetorigin(w, w->org+1, false);
     }
     /*e: [[wshow()]] else, when q0 is out of scope */
@@ -404,6 +407,7 @@ void
 wsetselect(Window *w, uint q0, uint q1)
 {
     int p0, p1;
+    Frame *frm = &w->frm;
 
     /* w->p0 and w->p1 are always right; w->q0 and w->q1 may be off */
     w->q0 = q0;
@@ -415,39 +419,39 @@ wsetselect(Window *w, uint q0, uint q1)
         p0 = 0;
     if(p1 < 0)
         p1 = 0;
-    if(p0 > w->nchars)
-        p0 = w->nchars;
-    if(p1 > w->nchars)
-        p1 = w->nchars;
-    if(p0==w->p0 && p1==w->p1)
+    if(p0 > frm->nchars)
+        p0 = frm->nchars;
+    if(p1 > frm->nchars)
+        p1 = frm->nchars;
+    if(p0 == frm->p0 && p1 == frm->p1)
         return;
 
     /* screen disagrees with desired selection */
-    if(w->p1<=p0 || p1<=w->p0 || p0==p1 || w->p1==w->p0){
+    if(frm->p1 <= p0 || p1 <= frm->p0 || p0==p1 || frm->p1 == frm->p0){
         /* no overlap or too easy to bother trying */
-        frdrawsel(w, frptofchar(w, w->p0), w->p0, w->p1, 0);
-        frdrawsel(w, frptofchar(w, p0), p0, p1, 1);
+        frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, frm->p1, 0);
+        frdrawsel(frm, frptofchar(frm, p0), p0, p1, 1);
         goto Return;
     }
     /* overlap; avoid unnecessary painting */
-    if(p0 < w->p0){
+    if(p0 < frm->p0){
         /* extend selection backwards */
-        frdrawsel(w, frptofchar(w, p0), p0, w->p0, 1);
-    }else if(p0 > w->p0){
+        frdrawsel(frm, frptofchar(frm, p0), p0, frm->p0, 1);
+    }else if(p0 > frm->p0){
         /* trim first part of selection */
-        frdrawsel(w, frptofchar(w, w->p0), w->p0, p0, 0);
+        frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, p0, 0);
     }
-    if(p1 > w->p1){
+    if(p1 > frm->p1){
         /* extend selection forwards */
-        frdrawsel(w, frptofchar(w, w->p1), w->p1, p1, 1);
-    }else if(p1 < w->p1){
+        frdrawsel(frm, frptofchar(frm, frm->p1), frm->p1, p1, 1);
+    }else if(p1 < frm->p1){
         /* trim last part of selection */
-        frdrawsel(w, frptofchar(w, p1), p1, w->p1, 0);
+        frdrawsel(frm, frptofchar(frm, p1), p1, frm->p1, 0);
     }
 
     Return:
-    w->p0 = p0;
-    w->p1 = p1;
+    frm->p0 = p0;
+    frm->p1 = p1;
 }
 /*e: function wsetselect */
 
@@ -512,8 +516,8 @@ winsert(Window *w, Rune *r, int n, uint q0)
     /*s: [[winsert()]] update visible text */
     if(q0 < w->org)
         w->org += n;
-    else if(q0 <= w->org + w->nchars)
-        frinsert(w, r, r+n, q0 - w->org); // echo back
+    else if(q0 <= w->org + w->frm.nchars)
+        frinsert(&w->frm, r, r+n, q0 - w->org); // echo back
     /*e: [[winsert()]] update visible text */
     return q0;
 }
@@ -588,6 +592,7 @@ void
 wframescroll(Window *w, int dl)
 {
     uint q0;
+    Frame *frm = &w->frm;
 
     if(dl == 0){
         wscrsleep(w, 100);
@@ -595,18 +600,18 @@ wframescroll(Window *w, int dl)
     }
     if(dl < 0){
         q0 = wbacknl(w, w->org, -dl);
-        if(selectq > w->org+w->p0)
-            wsetselect(w, w->org+w->p0, selectq);
+        if(selectq > w->org + frm->p0)
+            wsetselect(w, w->org + frm->p0, selectq);
         else
-            wsetselect(w, selectq, w->org+w->p0);
+            wsetselect(w, selectq, w->org + frm->p0);
     }else{
-        if(w->org+w->nchars == w->nr)
+        if(w->org + frm->nchars == w->nr)
             return;
-        q0 = w->org+frcharofpt(w, Pt(w->Frame.r.min.x, w->Frame.r.min.y+dl*w->font->height));
-        if(selectq >= w->org+w->p1)
-            wsetselect(w, w->org+w->p1, selectq);
+        q0 = w->org + frcharofpt(frm, Pt(frm->r.min.x, frm->r.min.y + dl * frm->font->height));
+        if(selectq >= w->org + frm->p1)
+            wsetselect(w, w->org + frm->p1, selectq);
         else
-            wsetselect(w, selectq, w->org+w->p1);
+            wsetselect(w, selectq, w->org + frm->p1);
     }
     wsetorigin(w, q0, true);
 }
@@ -619,7 +624,7 @@ wframescroll(Window *w, int dl)
 void
 framescroll(Frame *f, int dl)
 {
-    if(f != &selectwin->Frame)
+    if(f != &selectwin->frm)
         error("frameselect not right frame");
     wframescroll(selectwin, dl);
 }
@@ -748,6 +753,7 @@ wselect(Window *w)
 {
     uint q0, q1;
     int b, x, y, first;
+    Frame *frm = &w->frm;
 
     first = 1;
     selectwin = w;
@@ -757,7 +763,7 @@ wselect(Window *w)
     b = w->mc.buttons;
     q0 = w->q0;
     q1 = w->q1;
-    selectq = w->org+frcharofpt(w, w->mc.xy);
+    selectq = w->org + frcharofpt(frm, w->mc.xy);
     if(clickwin==w && w->mc.msec-clickmsec<500)
     if(q0==q1 && selectq==w->q0){
         wdoubleclick(w, &q0, &q1);
@@ -776,20 +782,20 @@ wselect(Window *w)
         selectq = q0;
     }
     if(w->mc.buttons == b){
-        w->scroll = framescroll;
-        frselect(w, &w->mc);
+        frm->scroll = framescroll;
+        frselect(frm, &w->mc);
         /* horrible botch: while asleep, may have lost selection altogether */
         if(selectq > w->nr)
-            selectq = w->org + w->p0;
-        w->Frame.scroll = nil;
+            selectq = w->org + frm->p0;
+        frm->scroll = nil;
         if(selectq < w->org)
             q0 = selectq;
         else
-            q0 = w->org + w->p0;
-        if(selectq > w->org+w->nchars)
+            q0 = w->org + frm->p0;
+        if(selectq > w->org + frm->nchars)
             q1 = selectq;
         else
-            q1 = w->org+w->p1;
+            q1 = w->org + frm->p1;
     }
     if(q0 == q1){
         if(q0==w->q0 && clickwin==w && w->mc.msec-clickmsec<500){
@@ -1066,37 +1072,37 @@ wkeyctl(Window *w, Rune r)
         return;
     /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kdown:
-        n = w->maxlines / 3;
+        n = w->frm.maxlines / 3;
         goto case_Down;
     /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kscrollonedown:
-        n = mousescrollsize(w->maxlines);
+        n = mousescrollsize(w->frm.maxlines);
         if(n <= 0)
             n = 1;
         goto case_Down;
     /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kpgdown:
-        n = 2 * w->maxlines / 3;
+        n = 2 * w->frm.maxlines / 3;
         // Fallthrough
     case_Down:
         q0 = w->org +
-            frcharofpt(w, Pt(w->Frame.r.min.x, 
-                             w->Frame.r.min.y + n * w->font->height));
+            frcharofpt(&w->frm, Pt(w->frm.r.min.x, 
+                                   w->frm.r.min.y + n * w->frm.font->height));
         wsetorigin(w, q0, true);
         return;
     /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kup:
-        n = w->maxlines/3;
+        n = w->frm.maxlines/3;
         goto case_Up;
     /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kscrolloneup:
-        n = mousescrollsize(w->maxlines);
+        n = mousescrollsize(w->frm.maxlines);
         if(n <= 0)
             n = 1;
         goto case_Up;
     /*x: [[wkeyctl()]] when mouse not opened, switch key cases */
     case Kpgup:
-        n = 2*w->maxlines/3;
+        n = 2*w->frm.maxlines/3;
         // Fallthrough
     case_Up:
         q0 = wbacknl(w, w->org, n);

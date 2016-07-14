@@ -373,12 +373,12 @@ writewctl(Xfid *x, char *err)
     Window *w;
 
     w = x->f->w;
-    cnt = x->count;
-    x->data[cnt] = '\0';
+    cnt = x->req.count;
+    x->req.data[cnt] = '\0';
     id = 0;
 
     rect = rectsubpt(w->screenr, view->r.min);
-    cmd = parsewctl(&arg, rect, &rect, &pid, &id, &hideit, &scrollit, &dir, x->data, err);
+    cmd = parsewctl(&arg, rect, &rect, &pid, &id, &hideit, &scrollit, &dir, x->req.data, err);
     if(cmd < 0)
         return -1;
 

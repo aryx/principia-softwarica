@@ -28,10 +28,10 @@ filsysrespond(Filsys *fs, Xfid *x, Fcall *fc, char *err)
         fc->type = Rerror;
         fc->ename = err;
     }else
-        fc->type = x->type+1; // Reply type just after Transmit type
+        fc->type = x->req.type+1; // Reply type just after Transmit type
 
-    fc->fid = x->fid;
-    fc->tag = x->tag;
+    fc->fid = x->req.fid;
+    fc->tag = x->req.tag;
 
     if(x->buf == nil)
         x->buf = malloc(messagesize);

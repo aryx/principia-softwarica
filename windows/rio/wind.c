@@ -102,15 +102,15 @@ wsetcols(Window *w)
     /*s: [[wsetcols()]] if holding */
     if(w->holding)
         if(w == input)
-            w->cols[TEXT] = w->cols[HTEXT] = holdcol;
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = holdcol;
         else
-            w->cols[TEXT] = w->cols[HTEXT] = lightholdcol;
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = lightholdcol;
     /*e: [[wsetcols()]] if holding */
     else
         if(w == input)
-            w->cols[TEXT] = w->cols[HTEXT] = display->black;
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = display->black;
         else
-            w->cols[TEXT] = w->cols[HTEXT] = darkgrey;
+            w->frm.cols[TEXT] = w->frm.cols[HTEXT] = darkgrey;
 }
 /*e: function wsetcols */
 
@@ -170,14 +170,14 @@ wmk(Image *i, Mousectl *mc, Channel *ck, Channel *cctl, bool scrolling)
     w->scrollr.max.x = r.min.x+Scrollwid;
 
     r.min.x += Scrollwid+Scrollgap;
-    frinit(w, r, font, i, cols);
+    frinit(&w->frm, r, font, i, cols);
 
     w->lastsr = ZR;
-    w->maxtab = maxtab * stringwidth(font, "0");
+    w->frm.maxtab = maxtab * stringwidth(font, "0");
     w->scrolling = scrolling;
 
     r = insetrect(w->i->r, Selborder);
-    draw(w->i, r, cols[BACK], nil, w->entire.min);
+    draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
     /*e: [[wmk()]] textual window settings */
 
     w->notefd = -1;
@@ -245,16 +245,16 @@ wresize(Window *w, Image *i, bool move)
     r.min.x += Scrollwid+Scrollgap;
 
     if(move)
-        frsetrects(w, r, w->i);
+        frsetrects(&w->frm, r, w->i);
     else{
-        frclear(w, false);
-        frinit(w, r, w->font, w->i, cols);
+        frclear(&w->frm, false);
+        frinit(&w->frm, r, w->frm.font, w->i, cols);
         wsetcols(w);
 
-        w->maxtab = maxtab * stringwidth(w->font, "0");
+        w->frm.maxtab = maxtab * stringwidth(w->frm.font, "0");
 
         r = insetrect(w->i->r, Selborder);
-        draw(w->i, r, cols[BACK], nil, w->entire.min);
+        draw(w->i, r, cols[BACK], nil, w->frm.entire.min);
 
         wfill(w);
         wsetselect(w, w->q0, w->q1);
@@ -274,6 +274,8 @@ wresize(Window *w, Image *i, bool move)
 void
 wrefresh(Window *w, Rectangle)
 {
+    Frame *frm = &w->frm;
+
     /* BUG: rectangle is ignored */
     if(w == input)
         wborder(w, Selborder);
@@ -283,13 +285,14 @@ wrefresh(Window *w, Rectangle)
         return;
     // else
 
-    draw(w->i, insetrect(w->i->r, Borderwidth), w->cols[BACK], nil, w->i->r.min);
-    w->ticked = 0;
-    if(w->p0 > 0)
-        frdrawsel(w, frptofchar(w, 0), 0, w->p0, 0);
-    if(w->p1 < w->nchars)
-        frdrawsel(w, frptofchar(w, w->p1), w->p1, w->nchars, 0);
-    frdrawsel(w, frptofchar(w, w->p0), w->p0, w->p1, 1);
+    draw(w->i, insetrect(w->i->r, Borderwidth), frm->cols[BACK], nil, 
+         w->i->r.min);
+    frm->ticked = 0;
+    if(frm->p0 > 0)
+        frdrawsel(frm, frptofchar(frm, 0), 0, frm->p0, 0);
+    if(frm->p1 < frm->nchars)
+        frdrawsel(frm, frptofchar(frm, frm->p1), frm->p1, frm->nchars, 0);
+    frdrawsel(frm, frptofchar(frm, frm->p0), frm->p0, frm->p1, 1);
     w->lastsr = ZR;
     wscrdraw(w);
 }
@@ -329,7 +332,7 @@ wrepaint(Window *w)
     /*e: [[wrepaint()]] update cols */
     /*s: [[wrepaint()]] if mouse not opened */
     if(!w->mouseopen)
-        frredraw(w);
+        frredraw(&w->frm);
     /*e: [[wrepaint()]] if mouse not opened */
 
     if(w == input){

@@ -74,7 +74,7 @@ xfidflush(Xfid *x)
     Xfid *xf;
 
     for(xf=xfid; xf; xf=xf->next)
-        if(xf->flushtag == x->oldtag){
+        if(xf->flushtag == x->req.oldtag){
             xf->flushtag = -1;
             xf->flushing = true;
             incref(xf);	/* to hold data structures up at tail of synchronization */

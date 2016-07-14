@@ -130,13 +130,13 @@ filsysversion(Filsys *fs, Xfid *x, Fid*)
 
     if(!firstmessage)
         return filsysrespond(x->fs, x, &fc, "version request not first message");
-    if(x->msize < 256)
+    if(x->req.msize < 256)
         return filsysrespond(x->fs, x, &fc, "version: message size too small");
 
-    messagesize = x->msize;
+    messagesize = x->req.msize;
 
     fc.msize = messagesize;
-    if(strncmp(x->version, "9P2000", 6) != 0)
+    if(strncmp(x->req.version, "9P2000", 6) != 0)
         return filsysrespond(x->fs, x, &fc, "unrecognized 9P version");
     // else
     fc.version = "9P2000";
@@ -175,7 +175,7 @@ filsysattach(Filsys *, Xfid *x, Fid *f)
     /*e: [[filsysattach()]] locals */
 
     /*s: [[filsysattach()]] sanity check same user */
-    if(strcmp(x->uname, x->fs->user) != 0)
+    if(strcmp(x->req.uname, x->fs->user) != 0)
         return filsysrespond(x->fs, x, &fc, Eperm);
     /*e: [[filsysattach()]] sanity check same user */
 
@@ -224,9 +224,9 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
     if(f->open)
         return filsysrespond(fs, x, &fc, "walk of open file");
     nf = nil;
-    if(x->fid  != x->newfid){
+    if(x->req.fid  != x->req.newfid){
         /* BUG: check exists */
-        nf = newfid(fs, x->newfid);
+        nf = newfid(fs, x->req.newfid);
         if(nf->busy)
             return filsysrespond(fs, x, &fc, "clone to busy fid");
         nf->busy = true;
@@ -246,13 +246,13 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
     qid = f->qid;
     dir = f->dir;
 
-    if(x->nwname > 0){
-        for(i=0; i<x->nwname; i++){
+    if(x->req.nwname > 0){
+        for(i=0; i < x->req.nwname; i++){
             if((qid.type & QTDIR) == 0){
                 err = Enotdir;
                 break;
             }
-            if(strcmp(x->wname[i], "..") == 0){
+            if(strcmp(x->req.wname[i], "..") == 0){
                 type = QTDIR;
                 path = Qdir;
                 dir = dirtab;
@@ -273,10 +273,10 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
 
             if(qid.path == Qwsys){
                 /* is it a numeric name? */
-                if(!numeric(x->wname[i]))
+                if(!numeric(x->req.wname[i]))
                     break;
                 /* yes: it's a directory */
-                id = atoi(x->wname[i]);
+                id = atoi(x->req.wname[i]);
                 qlock(&all);
                 w = wlookid(id);
                 if(w == nil){
@@ -293,13 +293,13 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
                 goto Accept;
             }
         
-            if(snarffd>=0 && strcmp(x->wname[i], "snarf")==0)
+            if(snarffd>=0 && strcmp(x->req.wname[i], "snarf")==0)
                 break;	/* don't serve /dev/snarf if it's provided in the environment */
             id = WIN(f->qid);
             d = dirtab;
             d++;	/* skip '.' */
             for(; d->name; d++)
-                if(strcmp(x->wname[i], d->name) == 0){
+                if(strcmp(x->req.wname[i], d->name) == 0){
                     path = d->qid;
                     type = d->type;
                     dir = d;
@@ -313,14 +313,14 @@ filsyswalk(Filsys *fs, Xfid *x, Fid *f)
             err = Eexist;
     }
 
-    if(err!=nil || fc.nwqid<x->nwname){
+    if(err!=nil || fc.nwqid < x->req.nwname){
         if(nf){
             if(nf->w)
                 sendp(winclosechan, nf->w);
             nf->open = false;
             nf->busy = false;
         }
-    }else if(fc.nwqid == x->nwname){
+    }else if(fc.nwqid == x->req.nwname){
         f->dir = dir;
         f->qid = qid;
     }
@@ -339,12 +339,12 @@ filsysopen(Filsys *fs, Xfid *x, Fid *f)
 
     /*s: [[filsysopen()]] sanity check mode */
     /* can't truncate anything, so just disregard */
-    x->mode &= ~(OTRUNC|OCEXEC);
+    x->req.mode &= ~(OTRUNC|OCEXEC);
     /* can't execute or remove anything */
-    if(x->mode==OEXEC || (x->mode&ORCLOSE))
+    if(x->req.mode==OEXEC || (x->req.mode & ORCLOSE))
         goto Deny;
 
-    switch(x->mode){
+    switch(x->req.mode){
     case OREAD:
         m = 0400;
         break;
@@ -416,8 +416,8 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
 
     // else, a directory
 
-    o = x->offset;
-    e = x->offset + x->count;
+    o = x->req.offset;
+    e = x->req.offset + x->req.count;
     clock = getclock();
     b = malloc(messagesize-IOHDRSZ);	/* avoid memset of emalloc */
     /*s: [[filsysread()]] sanity check b */
@@ -444,7 +444,7 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
             dt.qid = QID(k, Qdir);
             dt.type = QTDIR;
             dt.perm = DMDIR|0700;
-            len = dostat(fs, k, &dt, b+n, x->count-n, clock);
+            len = dostat(fs, k, &dt, b+n, x->req.count - n, clock);
             if(len == 0)
                 break;
             if(i >= o)
@@ -459,7 +459,7 @@ filsysread(Filsys *fs, Xfid *x, Fid *f)
         d = dirtab;
         d++;	/* first entry is '.' */
         for(i=0; d->name != nil && i<e; i+=len){
-            len = dostat(fs, WIN(x->f->qid), d, b+n, x->count-n, clock);
+            len = dostat(fs, WIN(x->f->qid), d, b+n, x->req.count - n, clock);
             if(len <= BIT16SZ)
                 break;
             if(i >= o)

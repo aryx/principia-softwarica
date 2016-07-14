@@ -79,7 +79,7 @@ wctlmesg(Window *w, int m, Rectangle r, Image *i)
         break;
     /*x: [[wctlmesg()]] cases */
     case Exited:
-        frclear(w, true);
+        frclear(&w->frm, true);
         close(w->notefd);
         chanfree(w->mc.c);
         chanfree(w->ck);
@@ -275,7 +275,7 @@ winctl(void *arg)
             /*e: [[winctl()]] alts adjustments, revert to CHANSND if newline in queue */
         }
         /*x: [[winctl()]] alts adjustments */
-        if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->nchars)
+        if(!w->scrolling && !w->mouseopen && w->qh >  w->org + w->frm.nchars)
             alts[WCwrite].op = CHANNOP;
         else
             alts[WCwrite].op = CHANSND;

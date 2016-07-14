@@ -94,9 +94,9 @@ xfidattach(Xfid *x)
     qlock(&all);
 
     /*s: [[xfidattach()]] if mount "new ..." */
-    if(strncmp(x->aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
+    if(strncmp(x->req.aname, "new", 3) == 0){	/* new -dx -dy - new syntax, as in wctl */
         pid = 0;
-        if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->aname, errbuf) < 0)
+        if(parsewctl(nil, ZR, &r, &pid, nil, &hideit, &scrollit, &dir, x->req.aname, errbuf) < 0)
             err = errbuf;
         else {
             if(!goodrect(r))
@@ -121,7 +121,7 @@ xfidattach(Xfid *x)
     /*e: [[xfidattach()]] if mount "new ..." */
     else{
         // mount(fs->cfd, ..., "/mnt/wsys", ..., "2"), winid
-        id = atoi(x->aname);
+        id = atoi(x->req.aname);
         w = wlookid(id);
     }
 
@@ -185,7 +185,7 @@ xfidopen(Xfid *x)
         break;
     /*x: [[xfidopen()]] cases */
     case Qwctl:
-        if(x->mode==OREAD || x->mode==ORDWR){
+        if(x->req.mode==OREAD || x->req.mode==ORDWR){
             /*
              * It would be much nicer to implement fan-out for wctl reads,
              * so multiple people can see the resizings, but rio just isn't
@@ -205,7 +205,7 @@ xfidopen(Xfid *x)
         break;
     /*x: [[xfidopen()]] cases */
     case Qsnarf:
-        if(x->mode==ORDWR || x->mode==OWRITE){
+        if(x->req.mode==ORDWR || x->req.mode==OWRITE){
             if(tsnarf)
                 free(tsnarf);	/* collision, but OK */
             ntsnarf = 0;
@@ -223,7 +223,7 @@ xfidopen(Xfid *x)
     }
 
     x->f->open = true;
-    x->f->mode = x->mode;
+    x->f->mode = x->req.mode;
 
     fc.qid = x->f->qid;
     fc.iounit = messagesize-IOHDRSZ;
@@ -325,6 +325,7 @@ void
 xfidwrite(Xfid *x)
 {
     Fcall fc;
+    Fcall *req = &x->req;
     Window *w;
     uint qid;
     int off, cnt;
@@ -352,21 +353,21 @@ xfidwrite(Xfid *x)
     }
     /*e: [[xfidxxx()]] respond error if window was deleted */
     qid = FILE(x->f->qid);
-    cnt = x->count;
-    off = x->offset;
-    x->data[cnt] = 0;
+    cnt = req->count;
+    off = req->offset;
+    req->data[cnt] = 0;
 
     switch(qid){
     /*s: [[xfidwrite()]] cases */
     case Qmouse:
         if(w!=input || Dx(w->screenr)<=0)
             break;
-        if(x->data[0] != 'm'){
+        if(req->data[0] != 'm'){
             filsysrespond(x->fs, x, &fc, Ebadmouse);
             return;
         }
         p = nil;
-        pt.x = strtoul(x->data+1, &p, 0);
+        pt.x = strtoul(req->data+1, &p, 0);
         if(p == nil){
             filsysrespond(x->fs, x, &fc, Eshort);
             return;
@@ -381,19 +382,19 @@ xfidwrite(Xfid *x)
         /*s: [[xfidwrite()]] when Qcons, look for previous partial rune bytes */
         nr = x->f->nrpart;
         if(nr > 0){
-            memmove(x->data+nr, x->data, cnt);	/* there's room: see malloc in filsysproc */
-            memmove(x->data, x->f->rpart, nr);
+            memmove(req->data + nr, req->data, cnt);	/* there's room: see malloc in filsysproc */
+            memmove(req->data, x->f->rpart, nr);
             cnt += nr;
             x->f->nrpart = 0;
         }
         /*e: [[xfidwrite()]] when Qcons, look for previous partial rune bytes */
         r = runemalloc(cnt);
-        cvttorunes(x->data, cnt-UTFmax, r, &nb, &nr, nil);
+        cvttorunes(req->data, cnt-UTFmax, r, &nb, &nr, nil);
         /*s: [[xfidwrite()]] when Qcons, look if more full runes */
         /* approach end of buffer */
-        while(fullrune(x->data+nb, cnt-nb)){
+        while(fullrune(req->data + nb, cnt-nb)){
             c = nb;
-            nb += chartorune(&r[nr], x->data+c);
+            nb += chartorune(&r[nr], req->data + c);
             if(r[nr])
                 nr++;
         }
@@ -401,13 +402,13 @@ xfidwrite(Xfid *x)
         /*s: [[xfidwrite()]] when Qcons, store remaining partial rune bytes */
         // assert(cnt-nb < UTFMAX);
         if(nb < cnt){
-            memmove(x->f->rpart, x->data + nb, cnt-nb);
+            memmove(x->f->rpart, req->data + nb, cnt-nb);
             x->f->nrpart = cnt-nb;
         }
         /*e: [[xfidwrite()]] when Qcons, store remaining partial rune bytes */
 
         /*s: [[xfidxxx()]] set flushtag */
-        x->flushtag = x->tag;
+        x->flushtag = req->tag;
         /*e: [[xfidxxx()]] set flushtag */
 
         alts[CWdata].c = w->conswrite;
@@ -449,14 +450,14 @@ xfidwrite(Xfid *x)
         pair.s = r;
         pair.ns = nr;
         send(cwm.cw, &pair);
-        fc.count = x->count;
+        fc.count = req->count;
         filsysrespond(x->fs, x, &fc, nil);
         qunlock(&x->active);
         return;
     /*x: [[xfidwrite()]] cases */
     case Qconsctl:
         /*s: [[xfidwrite()]] Qconsctl case */
-        if(strncmp(x->data, "rawon", 5)==0){
+        if(strncmp(req->data, "rawon", 5)==0){
             /*s: [[xfidwrite()]] Qconsctl case, if rawon message and holding mode */
             if(w->holding){
                 w->holding = false;
@@ -467,18 +468,18 @@ xfidwrite(Xfid *x)
                 wsendctlmesg(w, Rawon, ZR, nil);
             break;
         }
-        if(strncmp(x->data, "rawoff", 6)==0 && w->rawing){
+        if(strncmp(req->data, "rawoff", 6)==0 && w->rawing){
             if(--w->rawing == 0)
                 wsendctlmesg(w, Rawoff, ZR, nil);
             break;
         }
         /*x: [[xfidwrite()]] Qconsctl case */
-        if(strncmp(x->data, "holdon", 6)==0){
+        if(strncmp(req->data, "holdon", 6)==0){
             if(w->holding++ == 0)
                 wsendctlmesg(w, Holdon, ZR, nil);
             break;
         }
-        if(strncmp(x->data, "holdoff", 7)==0 && w->holding){
+        if(strncmp(req->data, "holdoff", 7)==0 && w->holding){
             if(--w->holding == false)
                 wsendctlmesg(w, Holdoff, ZR, nil);
             break;
@@ -492,9 +493,9 @@ xfidwrite(Xfid *x)
         if(cnt < 2*4+2*2*16)
             w->cursorp = nil;
         else{
-            w->cursor.offset.x = BGLONG(x->data+0*4);
-            w->cursor.offset.y = BGLONG(x->data+1*4);
-            memmove(w->cursor.clr, x->data+2*4, 2*2*16);
+            w->cursor.offset.x = BGLONG(req->data+0*4);
+            w->cursor.offset.y = BGLONG(req->data+1*4);
+            memmove(w->cursor.clr, req->data+2*4, 2*2*16);
             w->cursorp = &w->cursor;
         }
         wsetcursor(w, !sweeping);
@@ -507,7 +508,7 @@ xfidwrite(Xfid *x)
         }
         free(w->label);
         w->label = emalloc(cnt+1);
-        memmove(w->label, x->data, cnt);
+        memmove(w->label, req->data, cnt);
         w->label[cnt] = '\0';
         break;
     /*x: [[xfidwrite()]] cases */
@@ -526,7 +527,7 @@ xfidwrite(Xfid *x)
             return;
         }
         tsnarf = erealloc(tsnarf, ntsnarf+cnt+1);	/* room for NUL */
-        memmove(tsnarf+ntsnarf, x->data, cnt);
+        memmove(tsnarf+ntsnarf, req->data, cnt);
         ntsnarf += cnt;
         snarfversion++;
         break;
@@ -534,17 +535,17 @@ xfidwrite(Xfid *x)
     case Qwdir:
         if(cnt == 0)
             break;
-        if(x->data[cnt-1] == '\n'){
+        if(req->data[cnt-1] == '\n'){
             if(cnt == 1)
                 break;
-            x->data[cnt-1] = '\0';
+            req->data[cnt-1] = '\0';
         }
         /* assume data comes in a single write */
         /*
           * Problem: programs like dossrv, ftp produce illegal UTF;
           * we must cope by converting it first.
           */
-        snprint(buf, sizeof buf, "%.*s", cnt, x->data);
+        snprint(buf, sizeof buf, "%.*s", cnt, req->data);
         if(buf[0] == '/'){
             free(w->dir);
             w->dir = estrdup(buf);
@@ -557,7 +558,7 @@ xfidwrite(Xfid *x)
         break;
     /*x: [[xfidwrite()]] cases */
     case Qkbdin:
-        keyboardsend(x->data, cnt);
+        keyboardsend(req->data, cnt);
         break;
     /*e: [[xfidwrite()]] cases */
     default:
@@ -610,6 +611,7 @@ xfidread(Xfid *x)
     uint qid;
     int off, cnt;
     Fcall fc;
+    Fcall *req = &x->req;
     /*s: [[xfidread()]] other locals */
     Alt alts[NCR+1];
     Mousereadmesg mrm;
@@ -637,14 +639,14 @@ xfidread(Xfid *x)
     }
     /*e: [[xfidxxx()]] respond error if window was deleted */
     qid = FILE(x->f->qid);
-    off = x->offset;
-    cnt = x->count;
+    off = req->offset;
+    cnt = req->count;
 
     switch(qid){
     /*s: [[xfidread()]] cases */
     case Qmouse:
         /*s: [[xfidxxx()]] set flushtag */
-        x->flushtag = x->tag;
+        x->flushtag = req->tag;
         /*e: [[xfidxxx()]] set flushtag */
 
         alts[MRdata].c = w->mouseread;
@@ -697,7 +699,7 @@ xfidread(Xfid *x)
     /*x: [[xfidread()]] cases */
     case Qcons:
         /*s: [[xfidxxx()]] set flushtag */
-        x->flushtag = x->tag;
+        x->flushtag = req->tag;
         /*e: [[xfidxxx()]] set flushtag */
 
         alts[CRdata].c = w->consread;
@@ -844,7 +846,7 @@ xfidread(Xfid *x)
             break;
         }
         /*s: [[xfidxxx()]] set flushtag */
-        x->flushtag = x->tag;
+        x->flushtag = req->tag;
         /*e: [[xfidxxx()]] set flushtag */
 
         alts[WCRdata].c = w->wctlread;

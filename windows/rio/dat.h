@@ -305,7 +305,7 @@ struct Window
     uint		qh; // output point
     /*e: [[Window]] textual window fields, text cursors */
     /*s: [[Window]] textual window fields, visible text */
-    Frame;
+    Frame frm;
     /*e: [[Window]] textual window fields, visible text */
     /*s: [[Window]] textual window fields, graphics */
     Rectangle	scrollr;
@@ -414,7 +414,7 @@ struct Fid
 struct Xfid
 {
         // incoming parsed request
-        Fcall;
+        Fcall req;
         // answer buffer
         byte	*buf;
  
