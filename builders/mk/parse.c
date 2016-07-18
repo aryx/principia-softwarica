@@ -17,54 +17,114 @@ static char* rbody(Biobuf*);
 void
 parse(char *f, fdt fd, bool varoverride)
 {
-    int hline;
-    char *body;
-    Word *head, *tail;
-    int attr, pid;
-    bool set;
-    char *prog, *p;
-    int newfd;
     Biobuf in;
     Bufblock *buf;
+    char c;
+    Word *head, *tail;
+    int hline; // head line number
+    /*s: [[parse()]] other locals */
+    // bitset<Rule_attr>
+    int attr;
+    char *prog; // for :P: attribute TODO??
+    /*x: [[parse()]] other locals */
+    char *body;
+    /*x: [[parse()]] other locals */
+    fdt newfd;
+    char *p;
+    /*x: [[parse()]] other locals */
+    bool set;
+    /*x: [[parse()]] other locals */
+    int pid;
+    /*e: [[parse()]] other locals */
 
+    /*s: [[parse()]] sanity check fd */
     if(fd < 0){
         perror(f);
         Exit();
     }
+    /*e: [[parse()]] sanity check fd */
+    /*s: [[parse()]] start, push */
     ipush();
+    /*e: [[parse()]] start, push */
+
     infile = strdup(f);
     mkinline = 1;
-
     Binit(&in, fd, OREAD);
     buf = newbuf();
 
+    // Lexing
     while(assline(&in, buf)){
         hline = mkinline;
-        switch(rhead(buf->start, &head, &tail, &attr, &prog))
+
+        // Parsing
+        c = rhead(buf->start, &head, &tail,     &attr, &prog);
+
+        // Semantic actions
+        switch(c)
         {
+        /*s: [[parse()]] switch rhead cases */
+        case ':':
+            body = rbody(&in);
+            addrules(head, tail, body, attr, hline, prog);
+            break;
+        /*x: [[parse()]] switch rhead cases */
         case '<':
             p = wtos(tail, ' ');
-            if(*p == 0){
+            /*s: [[parse()]] when parsing included file, sanity check p */
+            if(*p == '\0'){
                 SYNERR(-1);
                 fprint(STDERR, "missing include file name\n");
                 Exit();
             }
+            /*e: [[parse()]] when parsing included file, sanity check p */
             newfd = open(p, OREAD);
+            /*s: [[parse()]] when parsing included file, sanity check newfd */
             if(newfd < 0){
                 fprint(STDERR, "warning: skipping missing include file: ");
                 perror(p);
-            } else
-                parse(p, newfd, 0);
+            }
+            /*e: [[parse()]] when parsing included file, sanity check newfd */
+            else
+                parse(p, newfd, false);
             break;
+        /*x: [[parse()]] switch rhead cases */
+        case '=':
+            /*s: [[parse()]] when parsing variable definitions, sanity check head */
+            if(head->next){
+                SYNERR(-1);
+                fprint(STDERR, "multiple vars on left side of assignment\n");
+                Exit();
+            }
+            /*e: [[parse()]] when parsing variable definitions, sanity check head */
+            /*s: [[parse()]] when parsing variable definitions, override handling */
+            if(symlook(head->s, S_OVERRIDE, nil)){
+                set = varoverride;
+            } else {
+                set = true;
+                if(varoverride)
+                    symlook(head->s, S_OVERRIDE, (void *)"");
+            }
+            /*e: [[parse()]] when parsing variable definitions, override handling */
+
+            if(set){
+                setvar(head->s, (void *) tail);
+                symlook(head->s, S_WESET, (void *)"");
+            }
+            /*s: [[parse()]] when parsing variable definitions, if variable with attr */
+            if(attr)
+                symlook(head->s, S_NOEXPORT, (void *)"");
+            /*e: [[parse()]] when parsing variable definitions, if variable with attr */
+            break;
+        /*x: [[parse()]] switch rhead cases */
         case '|':
             p = wtos(tail, ' ');
-            if(*p == 0){
+            if(*p == '\0'){
                 SYNERR(-1);
                 fprint(STDERR, "missing include program name\n");
                 Exit();
             }
             execinit();
-            pid=pipecmd(p, envy, &newfd);
+            pid = pipecmd(p, envy, &newfd);
             if(newfd < 0){
                 fprint(STDERR, "warning: skipping missing program file: ");
                 perror(p);
@@ -77,35 +137,7 @@ parse(char *f, fdt fd, bool varoverride)
                 Exit();
             }
             break;
-        case ':':
-            body = rbody(&in);
-            addrules(head, tail, body, attr, hline, prog);
-            break;
-        case '=':
-            if(head->next){
-                SYNERR(-1);
-                fprint(STDERR, "multiple vars on left side of assignment\n");
-                Exit();
-            }
-            if(symlook(head->s, S_OVERRIDE, 0)){
-                set = varoverride;
-            } else {
-                set = true;
-                if(varoverride)
-                    symlook(head->s, S_OVERRIDE, (void *)"");
-            }
-            if(set){
-/*
-char *cp;
-dumpw("tail", tail);
-cp = wtos(tail, ' '); print("assign %s to %s\n", head->s, cp); free(cp);
-*/
-                setvar(head->s, (void *) tail);
-                symlook(head->s, S_WESET, (void *)"");
-            }
-            if(attr)
-                symlook(head->s, S_NOEXPORT, (void *)"");
-            break;
+        /*e: [[parse()]] switch rhead cases */
         default:
             SYNERR(hline);
             fprint(STDERR, "expected one of :<=\n");
@@ -115,7 +147,9 @@ cp = wtos(tail, ' '); print("assign %s to %s\n", head->s, cp); free(cp);
     }
     close(fd);
     freebuf(buf);
+    /*s: [[parse()]] end, pop */
     ipop();
+    /*e: [[parse()]] end, pop */
 }
 /*e: function parse */
 
@@ -127,6 +161,8 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
 
     assert(/*addrules args*/ head && body);
     /* tuck away first non-meta rule as default target*/
+
+    /*s: [[addrules()]] set [[target1]] */
     if(target1 == nil && !(attr&REGEXP)){
         for(w = head; w; w = w->next)
             if(charin(w->s, "%&"))
@@ -134,6 +170,7 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
         if(w == nil)
             target1 = wdup(head);
     }
+    /*e: [[addrules()]] set [[target1]] */
     for(w = head; w; w = w->next)
         addrule(w->s, tail, body, head, attr, hline, prog);
 }
@@ -141,26 +178,35 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
 
 /*s: function rhead */
 static int
-rhead(char *line, Word **h, Word **t, int *attr, char **prog)
+rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
 {
     char *p;
-    char *pp;
-    int sep;
+    int sep; // : = < 
+    Word *w;
+    /*s: [[rhead()]] other locals */
     Rune r;
     int n;
-    Word *w;
+    /*x: [[rhead()]] other locals */
+    char *pp;
+    /*e: [[rhead()]] other locals */
 
-    p = charin(line,":=<");
+    p = charin(line, ":=<");
     if(p == 0)
         return '?';
+
     sep = *p;
-    *p++ = 0;
+    *p++ = '\0';
+    /*s: [[rhead()]] adjust sep if dynamic mkfile [[<|]] */
     if(sep == '<' && *p == '|'){
         sep = '|';
         p++;
     }
-    *attr = 0;
+    /*e: [[rhead()]] adjust sep if dynamic mkfile [[<|]] */
+    /*s: [[rhead()]] adjust [[attr]] and [[prog]] */
+    *attr = 0; // Nothing
     *prog = nil;
+
+    /*s: [[rhead()]] if sep is [[=]] */
     if(sep == '='){
         pp = charin(p, termchars);	/* termchars is shell-dependent */
         if (pp && *pp == '=') {
@@ -181,6 +227,8 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             p++;		/* skip trailing '=' */
         }
     }
+    /*e: [[rhead()]] if sep is [[=]] */
+    /*s: [[rhead()]] if sep is [[:]] */
     if((sep == ':') && *p && (*p != ' ') && (*p != '\t')){
         while (*p) {
             n = chartorune(&r, p);
@@ -189,19 +237,39 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             p += n;
             switch(r)
             {
+            /*s: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'D':
                 *attr |= DEL;
                 break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'E':
                 *attr |= NOMINUSE;
                 break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'n':
                 *attr |= NOVIRT;
                 break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'N':
                 *attr |= NOREC;
                 break;
-
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
+            case 'Q':
+                *attr |= QUIET;
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
+            case 'R':
+                *attr |= REGEXP;
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
+            case 'U':
+                *attr |= UPD;
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
+            case 'V':
+                *attr |= VIR;
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'P':
                 pp = utfrune(p, ':');
                 if (pp == 0 || *pp == 0)
@@ -211,20 +279,7 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
                 *pp = ':';
                 p = pp;
                 break;
-
-            case 'Q':
-                *attr |= QUIET;
-                break;
-            case 'R':
-                *attr |= REGEXP;
-                break;
-            case 'U':
-                *attr |= UPD;
-                break;
-            case 'V':
-                *attr |= VIR;
-                break;
-
+            /*e: [[rhead()]] when parsing rule attributes, switch rune cases */
             default:
                 SYNERR(-1);
                 fprint(STDERR, "unknown attribute '%c'\n", p[-1]);
@@ -238,13 +293,22 @@ rhead(char *line, Word **h, Word **t, int *attr, char **prog)
             Exit();
         }
     }
+    /*e: [[rhead()]] if sep is [[:]] */
+    /*e: [[rhead()]] adjust [[attr]] and [[prog]] */
+
+    // potentially expand variable names in head
     *h = w = stow(line);
+    /*s: [[rhead()]] sanity check w */
     if(*w->s == 0 && sep != '<' && sep != '|') {
         SYNERR(mkinline-1);
-        fprint(STDERR, "no var on left side of assignment/rule\n");
+        fprint(STDERR, "no var/target on left side of assignment/rule\n");
         Exit();
     }
+    /*e: [[rhead()]] sanity check w */
+
+    // potentially expand variable names in tail
     *t = stow(p);
+
     return sep;
 }
 /*e: function rhead */
@@ -279,6 +343,7 @@ rbody(Biobuf *in)
     insert(buf, '\0');
     p = strdup(buf->start);
     freebuf(buf);
+
     return p;
 }
 /*e: function rbody */
@@ -306,8 +371,10 @@ ipush(void)
     me = (struct Input *)Malloc(sizeof(*me));
     me->file = infile;
     me->line = mkinline;
-    me->next = 0;
-    if(inputs == 0)
+    me->next = nil;
+
+    // add_list(me, inputs)
+    if(inputs == nil)
         inputs = me;
     else {
         for(in = inputs; in->next; )
@@ -324,14 +391,15 @@ ipop(void)
     struct Input *in, *me;
 
     assert(/*pop input list*/ inputs != 0);
-    if(inputs->next == 0){
+    // me = pop_list(inputs)
+    if(inputs->next == nil){
         me = inputs;
-        inputs = 0;
+        inputs = nil;
     } else {
         for(in = inputs; in->next->next; )
             in = in->next;
         me = in->next;
-        in->next = 0;
+        in->next = nil;
     }
     infile = me->file;
     mkinline = me->line;

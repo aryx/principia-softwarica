@@ -27,10 +27,12 @@ stow(char *s)
         new = nextword(&s);
         if(new == nil)
             break;
+        // add_list(new, head)
         if (w)
             w->next = new;
         else
             head = w = new;
+        // concat_list(head, new)
         while(w->next)
             w = w->next;
         
@@ -105,19 +107,24 @@ delword(Word *w)
 static Word*
 nextword(char **s)
 {
-    Bufblock *b;
-    Word *head, *tail, *w;
-    Rune r;
     char *cp;
-    int empty;
+    Bufblock *b;
+    Word *head, *tail;
+    Rune r;
+    bool empty;
+    /*s: [[nextword()]] other locals */
+    Word *w;
+    /*e: [[nextword()]] other locals */
 
     cp = *s;
     b = newbuf();
+
 restart:
     head = tail = nil;
     while(*cp == ' ' || *cp == '\t')		/* leading white space */
         cp++;
-    empty = 1;
+    empty = true;
+
     while(*cp){
         cp += chartorune(&r, cp);
         switch(r)
@@ -126,24 +133,26 @@ restart:
         case '\t':
         case '\n':
             goto out;
+        /*s: [[nextword()]] switch rune cases */
         case '\\':
         case '\'':
         case '"':
-            empty = 0;
+            empty = false;
             cp = expandquote(cp, r, b);
             if(cp == 0){
                 fprint(STDERR, "missing closing quote: %s\n", *s);
                 Exit();
             }
             break;
-        case '$': //$
+        /*x: [[nextword()]] switch rune cases */
+        case '$':
             w = varsub(&cp);
-            if(w == 0){
+            if(w == nil){
                 if(empty)
                     goto restart;
                 break;
             }
-            empty = 0;
+            empty = false;
             if(b->current != b->start){
                 bufcpy(b, w->s, strlen(w->s));
                 insert(b, '\0');
@@ -163,11 +172,13 @@ restart:
                 b->current = b->start;
             } else
                 tail = head = w;
+
             while(tail->next)
                 tail = tail->next;
             break;
+        /*e: [[nextword()]] switch rune cases */
         default:
-            empty = 0;
+            empty = false;
             rinsert(b, r);
             break;
         }
@@ -178,7 +189,7 @@ out:
         if(head){
             cp = b->current;
             bufcpy(b, tail->s, strlen(tail->s));
-            bufcpy(b, b->start, cp-b->start);
+            bufcpy(b, b->start, cp - b->start);
             insert(b, '\0');
             free(tail->s);
             tail->s = strdup(cp);

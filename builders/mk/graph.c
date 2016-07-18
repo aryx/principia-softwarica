@@ -15,18 +15,29 @@ Node*
 graph(char *target)
 {
     Node *root;
+    /*s: [[graph()]] other locals */
+    // map<ruleid, int>
     char *cnt;
+    /*e: [[graph()]] other locals */
 
+    /*s: [[graph()]] set cnt for infinite rule detection */
     cnt = rulecnt();
+    /*e: [[graph()]] set cnt for infinite rule detection */
     root = applyrules(target, cnt);
+    /*s: [[graph()]] free cnt */
     free(cnt);
+    /*e: [[graph()]] free cnt */
 
+    /*s: [[graph()]] checking the graph */
     cyclechk(root);
 
     root->flags |= PROBABLE;	/* make sure it doesn't get deleted */
     vacuous(root);
-    ambiguous(root);
 
+    ambiguous(root);
+    /*e: [[graph()]] checking the graph */
+
+    // propagate attributes in rules to their node
     attribute(root);
 
     return root;
@@ -37,37 +48,45 @@ graph(char *target)
 static Node*
 applyrules(char *target, char *cnt)
 {
-    /*s: [[applyrules]] locals */
-    Symtab *sym;
     Node *node;
     Arc head;
     Arc *a = &head;
-    /*x: [[applyrules]] locals */
+    /*s: [[applyrules]] other locals */
+    Symtab *sym;
     Rule *r;
     Word *w;
-    /*x: [[applyrules]] locals */
+    /*x: [[applyrules]] other locals */
     char buf[NAMEBLOCK];
     char stem[NAMEBLOCK];
-    /*x: [[applyrules]] locals */
+    /*x: [[applyrules]] other locals */
     Resub rmatch[NREGEXP];
-    /*e: [[applyrules]] locals */
-    
+    /*e: [[applyrules]] other locals */
+
+    /*s: [[applyrules]] debug */
     if(DEBUG(D_TRACE)) 
         print("applyrules(%lux='%s')\n", target, target);
-
-    sym = symlook(target, S_NODE, 0);
+    /*e: [[applyrules]] debug */
+    /*s: [[applyrules]] check node cache if target is already there */
+    sym = symlook(target, S_NODE, nil);
     if(sym)
         return sym->u.ptr;
+    /*e: [[applyrules]] check node cache if target is already there */
+    // else
 
     target = strdup(target);
+    // calls timeof()
     node = newnode(target);
+
     head.n = nil;
     head.next = nil;
-    memset((char*)rmatch, 0, sizeof(rmatch));
 
-    // apply regular rules with target as a head
+    /*s: [[applyrules]] set rmatch */
+    memset((char*)rmatch, 0, sizeof(rmatch));
+    /*e: [[applyrules]] set rmatch */
+
+    // apply regular rules with target as a head (modify node, head, a)
     /*s: [[applyrules()]] apply regular rules */
-    sym = symlook(target, S_TARGET, 0);
+    sym = symlook(target, S_TARGET, nil);
     for(r = (sym? sym->u.ptr : nil); r; r = r->chain){
         /*s: [[applyrules()]] skip this rule and continue if some conditions */
         if(r->attr&META) continue;
@@ -76,9 +95,12 @@ applyrules(char *target, char *cnt)
            && (!r->tail || !r->tail->s || !*r->tail->s)) 
               continue;	/* no effect; ignore */
         /*e: [[applyrules()]] skip this rule and continue if some conditions */
-        if(cnt[r->rule] >= nreps) continue;
-
+        /*s: [[applyrules()]] infinite rule detection part1 */
+        if(cnt[r->rule] >= nreps) 
+            continue;
         cnt[r->rule]++;
+        /*e: [[applyrules()]] infinite rule detection part1 */
+
         node->flags |= PROBABLE;
 
         /*s: [[applyrules()]] if no prerequistes in rule r */
@@ -94,7 +116,9 @@ applyrules(char *target, char *cnt)
                 a->next = newarc(applyrules(w->s, cnt), r, "", rmatch);
                 a = a->next;
         }
+        /*s: [[applyrules()]] infinite rule detection part2 */
         cnt[r->rule]--;
+        /*e: [[applyrules()]] infinite rule detection part2 */
         head.n = node;
     }
     /*e: [[applyrules()]] apply regular rules */
@@ -121,9 +145,11 @@ applyrules(char *target, char *cnt)
         else {
             if(!match(node->name, r->target, stem)) continue;
         }
-        if(cnt[r->rule] >= nreps) continue;
-
+        /*s: [[applyrules()]] infinite rule detection part1 */
+        if(cnt[r->rule] >= nreps) 
+            continue;
         cnt[r->rule]++;
+        /*e: [[applyrules()]] infinite rule detection part1 */
 
         /*s: [[applyrules()]] if no prerequistes in meta rule r */
         if(!r->tail || !r->tail->s || !*r->tail->s) {
@@ -143,12 +169,16 @@ applyrules(char *target, char *cnt)
                 a->next = newarc(applyrules(buf, cnt), r, stem, rmatch);
                 a = a->next;
             }
+        /*s: [[applyrules()]] infinite rule detection part2 */
         cnt[r->rule]--;
+        /*e: [[applyrules()]] infinite rule detection part2 */
     }
     /*e: [[applyrules()]] apply meta rules */
 
+    // ???
     a->next = node->prereqs;
     node->prereqs = head.next;
+
     return node;
 }
 /*e: function applyrules */
@@ -214,17 +244,22 @@ newnode(char *name)
     Node *node;
 
     node = (Node *)Malloc(sizeof(Node));
+    /*s: [[newnode()]] update node cache */
     symlook(name, S_NODE, (void *)node);
+    /*e: [[newnode()]] update node cache */
 
     node->name = name;
+
+    // call to timeof()! 
     node->time = timeof(name, false);
+
     node->flags = (node->time? PROBABLE : 0);
     node->prereqs = nil;
     node->next = nil;
-
+    /*s: [[newnode()]] debug */
     if(DEBUG(D_TRACE)) 
         print("newnode(%s), time = %d\n", name, node->time);
-
+    /*e: [[newnode()]] debug */
     return node;
 }
 /*e: constructor newnode */
@@ -294,8 +329,10 @@ ambiguous(Node *n)
         if(a->n)
             ambiguous(a->n);
         if(*a->r->recipe == 0) continue;
-        if(r == nil)
-            r = a->r, la = a;
+        if(r == nil) {
+            r = a->r;
+            la = a;
+        }
         else{
             if(r->recipe != a->r->recipe){
                 if((r->attr&META) && !(a->r->attr&META)){
@@ -307,7 +344,7 @@ ambiguous(Node *n)
                 }
             }
             if(r->recipe != a->r->recipe){
-                if(bad == false){
+                if(!bad){
                     fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
                     bad = true;
                     trace(n->name, la);

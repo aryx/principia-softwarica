@@ -6,7 +6,7 @@
 /*e: constant ENVQUANTA */
 
 /*s: global envy */
-// array<Envy>
+// growing_array<Envy>
 Envy	*envy;
 /*e: global envy */
 /*s: global nextv */

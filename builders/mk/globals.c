@@ -6,11 +6,11 @@
 int debug;
 /*e: global debug */
 /*s: global rules */
-// list<ref_own<Rule>> (next = Rule.next)
+// list<ref_own<Rule>> (next = Rule.next, end = lr)
 Rule *rules;
 /*e: global rules */
 /*s: global metarules */
-// list<ref_own<Rule>>
+// list<ref_own<Rule>> (next = Rule.next)
 Rule *metarules;
 /*e: global metarules */
 /*s: global nflag */

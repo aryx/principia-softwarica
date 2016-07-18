@@ -28,17 +28,19 @@ void
 main(int argc, char **argv)
 {
     /*s: [[main()]] locals */
-    Bufblock *buf = newbuf();
-    /*x: [[main()]] locals */
     Word *w;
     char *s;
     int i;
     /*x: [[main()]] locals */
-    char *temp;
+    Bufblock *buf = newbuf();
+    /*x: [[main()]] locals */
+    char *temp = nil;
     fdt tfd = -1;
     Biobuf tb;
     /*x: [[main()]] locals */
-    char *files[256], **f = files;
+    char *files[256];
+    char **f = files;
+    /*x: [[main()]] locals */
     char **ff;
     /*x: [[main()]] locals */
     bool sflag = false;
@@ -46,29 +48,34 @@ main(int argc, char **argv)
     Bufblock *whatif = nil;
     /*e: [[main()]] locals */
 
+    // Initializing
+
+    /*s: [[main()]] initializations */
     /*
      *  start with a copy of the current environment variables
      *  instead of sharing them
      */
-    //???
+    //??? for execinit?? for initenv/
 
     Binit(&bout, STDOUT, OWRITE);
-
-    /*s: [[main()]] argv processing for -xxx, modify flags, modify buf */
+    /*s: [[main()]] argv processing part 1, -xxx */
     USED(argc);
     for(argv++; *argv && (**argv == '-'); argv++)
     {
+        /*s: [[main()]] add [[argv[0]]] in [[buf]] */
         bufcpy(buf, argv[0], strlen(argv[0]));
         insert(buf, ' ');
-
+        /*e: [[main()]] add [[argv[0]]] in [[buf]] */
         switch(argv[0][1]) {
         /*s: [[main()]] -xxx switch cases */
         case 'f':
             if(*++argv == nil)
                 badusage();
             *f++ = *argv;
+            /*s: [[main()]] add [[argv[0]]] in [[buf]] */
             bufcpy(buf, argv[0], strlen(argv[0]));
             insert(buf, ' ');
+            /*e: [[main()]] add [[argv[0]]] in [[buf]] */
             break;
         /*x: [[main()]] -xxx switch cases */
         case 's':
@@ -134,8 +141,7 @@ main(int argc, char **argv)
             badusage();
         }
     }
-    /*e: [[main()]] argv processing for -xxx, modify flags, modify buf */
-
+    /*e: [[main()]] argv processing part 1, -xxx */
     /*s: [[main()]] setup optional profiling */
     #ifdef	PROF
         {
@@ -143,45 +149,48 @@ main(int argc, char **argv)
             monitor(main, etext, buf, sizeof buf, 300);
         }
     #endif
-    usage();
     /*e: [[main()]] setup optional profiling */
+    usage();
     syminit();
     initenv();
-
-    usage(); // useful?
-
-    /*s: [[main()]] argv processing for xxx=yyy */
+    usage();
+    /*s: [[main()]] argv processing part 2, xxx=yyy */
     /*
      *   assignment args become null strings
      */
-    temp = 0;
     for(i = 0; argv[i]; i++) 
       if(utfrune(argv[i], '=')){
+        /*s: [[main()]] add [[argv[i]]] in [[buf]] */
         bufcpy(buf, argv[i], strlen(argv[i]));
         insert(buf, ' ');
+        /*e: [[main()]] add [[argv[i]]] in [[buf]] */
+        /*s: [[main()]] create temporary file if not exist yet */
         if(tfd < 0){
             temp = maketmp();
             if(temp == nil) {
                 perror("temp file");
                 Exit();
             }
-            if((tfd = create(temp, ORDWR, 0600)) < 0){
+            tfd = create(temp, ORDWR, 0600);
+            if(tfd < 0){
                 perror(temp);
                 Exit();
             }
             Binit(&tb, tfd, OWRITE);
         }
+        /*e: [[main()]] create temporary file if not exist yet */
         Bprint(&tb, "%s\n", argv[i]);
         *argv[i] = '\0';
       }
+
     if(tfd >= 0){
         Bflush(&tb);
         seek(tfd, 0L, SEEK__START);
         parse("<command line args>", tfd, true);
         remove(temp);
     }
-    /*e: [[main()]] argv processing for xxx=yyy */
-    /*s: [[main()]] set some variables */
+    /*e: [[main()]] argv processing part 2, xxx=yyy */
+    /*s: [[main()]] set variables for recursive mk */
     /*s: [[main()]] set MKFLAGS variable */
     if (buf->current != buf->start) {
         buf->current--;
@@ -203,16 +212,18 @@ main(int argc, char **argv)
 
     freebuf(buf);
     /*e: [[main()]] set MKARGS variable */
-    /*e: [[main()]] set some variables */
+    /*e: [[main()]] set variables for recursive mk */
+    /*e: [[main()]] initializations */
+
+    // Parsing
 
     /*s: [[main()]] parsing mkfile, call parse() */
     if(f == files){
-        if(access(MKFILE, 4) == 0)
-            parse(MKFILE, open(MKFILE, 0), false);
+        if(access(MKFILE, AREAD) == 0)
+            parse(MKFILE, open(MKFILE, OREAD), false);
     } else
         for(ff = files; ff < f; ff++)
-            parse(*ff, open(*ff, 0), false);
-    /*e: [[main()]] parsing mkfile, call parse() */
+            parse(*ff, open(*ff, OREAD), false);
     /*s: [[main()]] if DEBUG(D_PARSE) */
     if(DEBUG(D_PARSE)){
         dumpw("default targets", target1);
@@ -221,6 +232,9 @@ main(int argc, char **argv)
         dumpv("variables");
     }
     /*e: [[main()]] if DEBUG(D_PARSE) */
+    /*e: [[main()]] parsing mkfile, call parse() */
+
+    // Querying (optional)
 
     /*s: [[main()]] whatif optional setup */
     if(whatif){
@@ -230,14 +244,20 @@ main(int argc, char **argv)
     }
     /*e: [[main()]] whatif optional setup */
 
+    // Building
+
+    /*s: [[main()]] initializations before building */
     execinit();
 
+    // can do that earlier??
+    /*s: [[main()]] argv processing part 3, skip xxx=yyy */
     /* skip assignment args */
     while(*argv && (**argv == '\0'))
         argv++;
+    /*e: [[main()]] argv processing part 3, skip xxx=yyy */
 
     catchnotes();
-
+    /*e: [[main()]] initializations before building */
     /*s: [[main()]] building the targets, call mk() */
     if(*argv == nil){
         /*s: [[main()]] when no target arguments */
@@ -286,10 +306,15 @@ main(int argc, char **argv)
     }
     /*e: [[main()]] building the targets, call mk() */
 
+    // Reporting (optional)
+
     /*s: [[main()]] print profiling stats if uflag */
     if(uflag)
         prusage();
     /*e: [[main()]] print profiling stats if uflag */
+
+    // Exiting
+
     exits(nil);
 }
 /*e: function main */

@@ -51,7 +51,7 @@ mk(char *target)
         waitup(-2, (int *)nil);
 
     assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
-    if(did == false)
+    if(!did)
         Bprint(&bout, "mk: '%s' is up to date\n", root->name);
 }
 /*e: function mk */
@@ -99,8 +99,10 @@ work(Node *node,   Node *p, Arc *parc)
     char cwd[256];
     /*e: [[work()]] locals */
 
+    /*s: [[work()]] debug */
     if(DEBUG(D_TRACE))
         print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);
+    /*e: [[work()]] debug */
 
     if(node->flags&BEINGMADE)
         return did;
@@ -176,9 +178,9 @@ work(Node *node,   Node *p, Arc *parc)
         }
     /*e: [[work()]] check if node out of date with prerequisites, recursively */
 
-    if(ready == false)	/* can't do anything now */
+    if(!ready)	/* can't do anything now */
         return did;
-    if(weoutofdate == false){
+    if(!weoutofdate){
         MADESET(node, MADE);
         return did;
     }
@@ -186,7 +188,7 @@ work(Node *node,   Node *p, Arc *parc)
     /*
      *   can we pretend to be made?
      */
-    if((iflag == false) && (node->time == 0) 
+    if((!iflag) && (node->time == 0) 
             && (node->flags&(PRETENDING|CANPRETEND))
             && p && ra->n && !outofdate(p, ra, false)){
         node->flags &= ~CANPRETEND;
@@ -211,7 +213,7 @@ work(Node *node,   Node *p, Arc *parc)
             did = work(a->n, node, a) || did;
             ready = false;
         }
-    if(ready == false)/* try later unless nothing has happened for -k's sake */
+    if(!ready)/* try later unless nothing has happened for -k's sake */
         return did || work(node, p, parc);
     /*e: [[work()]] possibly pretending node */
 

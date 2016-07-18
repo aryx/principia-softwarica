@@ -8,33 +8,27 @@ static	int	bquote(Biobuf*, Bufblock*);
  *	Assemble a line skipping blank lines, comments, and eliding
  *	escaped newlines
  */
-int
+bool
 assline(Biobuf *bp, Bufblock *buf)
 {
     int c;
+    /*s: [[assline()]] other locals */
     int lastc;
+    /*e: [[assline()]] other locals */
 
-    buf->current=buf->start;
-    while ((c = nextrune(bp, 1)) >= 0){
+    // reset buf
+    buf->current = buf->start;
+
+    while ((c = nextrune(bp, true)) >= 0){
         switch(c)
         {
         case '\n':
             if (buf->current != buf->start) {
                 insert(buf, '\0');
-                return 1;
+                return true;
             }
             break;		/* skip empty lines */
-        case '\\':
-        case '\'':
-        case '"':
-            rinsert(buf, c);
-            if (escapetoken(bp, buf, 1, c) == 0)
-                Exit();
-            break;
-        case '`':
-            if (bquote(bp, buf) == 0)
-                Exit();
-            break;
+        /*s: [[assline()]] switch character cases */
         case '#':
             lastc = '#';
             while ((c = Bgetc(bp)) != '\n') {
@@ -48,9 +42,23 @@ assline(Biobuf *bp, Bufblock *buf)
                 break;		/* propagate escaped newlines??*/
             if (buf->current != buf->start) {
                 insert(buf, '\0');
-                return 1;
+                return true;
             }
             break;
+        /*x: [[assline()]] switch character cases */
+        case '\\':
+        case '\'':
+        case '"':
+            rinsert(buf, c);
+            if (escapetoken(bp, buf, true, c) == 0)
+                Exit();
+            break;
+        /*x: [[assline()]] switch character cases */
+        case '`':
+            if (bquote(bp, buf) == 0)
+                Exit();
+            break;
+        /*e: [[assline()]] switch character cases */
         default:
             rinsert(buf, c);
             break;
@@ -58,7 +66,7 @@ assline(Biobuf *bp, Bufblock *buf)
     }
 eof:
     insert(buf, '\0');
-    return *buf->start != 0;
+    return *buf->start != '\0';
 }
 /*e: function assline */
 
@@ -115,7 +123,7 @@ bquote(Biobuf *bp, Bufblock *buf)
  *	replaced with a blank.
  */
 int
-nextrune(Biobuf *bp, int elide)
+nextrune(Biobuf *bp, bool elide)
 {
     int c;
 

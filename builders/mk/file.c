@@ -7,26 +7,29 @@
 ulong
 timeof(char *name, bool force)
 {
-    Symtab *sym;
     ulong t;
+    /*s: [[timeof()]] other locals */
+    Symtab *sym;
+    /*e: [[timeof()]] other locals */
 
     /*s: [[timeof()]] if name archive member */
     if(utfrune(name, '('))
         return atimeof(force, name);		/* archive */
     /*e: [[timeof()]] if name archive member */
-
     if(force)
         return mkmtime(name, true);
 
+    /*s: [[timeof()]] check time cache */
     sym = symlook(name, S_TIME, nil);
     if (sym)
         return sym->u.value;		/* uggh */
-
+    /*e: [[timeof()]] check time cache */
     t = mkmtime(name, false);
+    /*s: [[timeof()]] update time cache */
     if(t == 0)
         return 0;
-
     symlook(name, S_TIME, (void*)t);		/* install time in cache */
+    /*e: [[timeof()]] update time cache */
     return t;
 }
 /*e: function timeof */

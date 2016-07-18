@@ -15,14 +15,18 @@ varsub(char **s)
     Bufblock *b;
     Word *w;
 
+    /*s: [[varsub()]] if variable starts with open brace */
     if(**s == '{')		/* either ${name} or ${name: A%B==C%D}*/
         return expandvar(s);
+    /*e: [[varsub()]] if variable starts with open brace */
+    // else
 
     b = varname(s);
     if(b == nil)
         return nil;
 
     w = varmatch(b->start);
+
     freebuf(b);
     return w;
 }
@@ -49,12 +53,14 @@ varname(char **s)
         rinsert(b, r);
         cp += n;
     }
+    /*s: [[varname()]] sanity check b */
     if (b->current == b->start){
         SYNERR(-1);
         fprint(STDERR, "missing variable name <%s>\n", *s);
         freebuf(b);
         return nil;
     }
+    /*e: [[varname()]] sanity check b */
     *s = cp;
     insert(b, '\0');
     return b;

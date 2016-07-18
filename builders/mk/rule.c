@@ -2,9 +2,11 @@
 #include	"mk.h"
 
 /*s: global lr */
+// option<ref<Rule>> (head = rules)
 static Rule *lr;
 /*e: global lr */
 /*s: global lmr */
+// option<ref<Rule>> (head = metarules)
 static Rule *lmr;
 /*e: global lmr */
 
@@ -34,14 +36,18 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
                 break;
             }
     }
+
     if(r == nil)
         r = (Rule *)Malloc(sizeof(Rule));
     r->target = head;
     r->tail = tail;
     r->recipe = body;
+
     r->line = hline;
     r->file = infile;
+
     r->attr = attr;
+
     r->rule = nrules++;
 
     r->alltargets = ahead;
@@ -57,7 +63,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
         r->next = nil;
     }
 
-    if((attr&REGEXP) || charin(head, "%&")){
+    if(charin(head, "%&") || (attr&REGEXP)){
         r->attr |= META;
         if(reuse)
             return;
@@ -67,6 +73,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
             r->pat = regcomp(head);
         }
         /*e: [[addrule()]] if REGEXP attribute */
+        // add_list(r, metarules, lmr)
         if(metarules == nil)
             metarules = lmr = r;
         else {
@@ -76,8 +83,8 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     } else {
         if(reuse)
             return;
-
         r->pat = nil;
+        // add_list(r, rules, lr)
         if(rules == nil)
             rules = lr = r;
         else {

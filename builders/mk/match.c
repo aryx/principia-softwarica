@@ -18,7 +18,8 @@ match(char *name, char *template, char *stem)
     }
     if(!PERCENT(*template))
         return false;
-    n = strlen(name)-strlen(template+1);
+
+    n = strlen(name) - strlen(template+1);
     if (n < 0)
         return false;
     if (strcmp(template+1, name+n))
@@ -27,8 +28,10 @@ match(char *name, char *template, char *stem)
     strncpy(stem, name, n);
     stem[n] = '\0';
 
+    /*s: [[match()]] if ampersand template */
     if(*template == '&')
         return !charin(stem, "./");
+    /*e: [[match()]] if ampersand template */
 
     return true;
 }
@@ -42,7 +45,7 @@ subst(char *stem, char *template,   char *dest, int dlen)
     char *s, *e;
     int n;
 
-    e = dest+dlen-1;
+    e = dest + dlen - 1;
     while(*template){
         n = chartorune(&r, template);
         if (PERCENT(r)) {

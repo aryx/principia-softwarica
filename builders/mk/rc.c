@@ -120,13 +120,14 @@ expandquote(char *s, Rune r, Bufblock *b)
  *	double-quote and backslash.  Only the first is a valid escape for
  *	rc; the others are just inserted into the receiving buffer.
  */
-int
-escapetoken(Biobuf *bp, Bufblock *buf, int preserve, int esc)
+bool
+escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
 {
-    int c, line;
+    int c;
+    int line;
 
     if(esc != '\'')
-        return 1;
+        return true;
 
     line = mkinline;
     while((c = nextrune(bp, 0)) > 0){
@@ -138,13 +139,14 @@ escapetoken(Biobuf *bp, Bufblock *buf, int preserve, int esc)
                 break;
             if(c != '\''){
                 Bungetrune(bp);
-                return 1;
+                return true;
             }
         }
         rinsert(buf, c);
     }
-    SYNERR(line); fprint(STDERR, "missing closing %c\n", esc);
-    return 0;
+    SYNERR(line); 
+    fprint(STDERR, "missing closing %c\n", esc);
+    return false;
 }
 /*e: function escapetoken */
 
