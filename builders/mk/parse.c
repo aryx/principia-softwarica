@@ -34,8 +34,10 @@ parse(char *f, fdt fd, bool varoverride)
     ipush();
     infile = strdup(f);
     mkinline = 1;
+
     Binit(&in, fd, OREAD);
     buf = newbuf();
+
     while(assline(&in, buf)){
         hline = mkinline;
         switch(rhead(buf->start, &head, &tail, &attr, &prog))

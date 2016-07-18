@@ -59,8 +59,10 @@ struct Rule
     Word 		*tail;		/* constituents of targets */
     char 		*recipe;	/* do it ! */
 
+    /*s: [[Rule]] debug fields */
     char* 		file;		/* source file */
     short 		line;		/* source line */
+    /*e: [[Rule]] debug fields */
 
     // enum<rule_attr>
     short 		attr;		/* attributes */
@@ -229,9 +231,9 @@ extern Job *jobs;
 /*s: struct Symtab */
 struct Symtab
 {
-    // the key
+    // the key: (name x space)
     char		*name;
-    // enum<sxxx>, the ``namespace''
+    // enum<Namespace>, the ``namespace''
     short		space;
 
     // the value (generic)
@@ -322,7 +324,7 @@ enum dxxx {
     // for jobs
     D_EXEC  =		0x04,
     // tracing some calls
-    D_TRACE  =           0x08,
+    D_TRACE  =		0x08,
 };
 /*e: enum dxxx */
 /*s: function DEBUG */

@@ -8,7 +8,7 @@
 #define	HASHMUL	79L	/* this is a good value */
 /*e: constant HASHMUL */
 /*s: global hash */
-// hash<(string * enum<sxxx>), 'a> (next = Symtab.next in bucket)
+// hash<(string * enum<Namespace>), 'a> (next = Symtab.next in bucket)
 static Symtab *hash[NHASH];
 /*e: global hash */
 
@@ -44,6 +44,7 @@ symlook(char *sym, int space, void *install)
     for(s = hash[h]; s; s = s->next)
         if((s->space == space) && (strcmp(s->name, sym) == 0))
             return s;
+    // else
 
     if(install == nil)
         return nil;
@@ -53,6 +54,7 @@ symlook(char *sym, int space, void *install)
     s->name = sym;
     s->u.ptr = install;
 
+    // add_list(s, hash)
     s->next = hash[h];
     hash[h] = s;
 

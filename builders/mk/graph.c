@@ -215,6 +215,7 @@ newnode(char *name)
 
     node = (Node *)Malloc(sizeof(Node));
     symlook(name, S_NODE, (void *)node);
+
     node->name = name;
     node->time = timeof(name, false);
     node->flags = (node->time? PROBABLE : 0);
