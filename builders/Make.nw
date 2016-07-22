@@ -12,7 +12,14 @@
 %------------------------------------------------------------------------------
 
 %thx to LP, I changed for the better a few things:
-% - dead code (S_PID, S_MAKEFILE)
+% - removed dead code:
+%    dead namespaces (S_PID, S_MAKEFILE, S_EXPORTED),
+%    dead rule attributes (UNUSED, UPD),
+%    dead constants (IWS)
+%    TODO useless code (head.n=node, ...)
+% - TODO rename variables, was abusing head/tail for too many things at the same
+%   time (target vs pretargets, but also heat vs tail of lists of arcs, 
+%   head and tail of rule/assignement, ...)
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -27,10 +34,12 @@
 %thx to this manual, better understand make?:
 % - minimal-syntax design leads to use of escaping-newline because newline is
 %   (ab)used as a terminator for many things
+% - SEMI need for multiple targets, and multiple rules with same target, 
 % - SEMI how to debug issues in your own makefile
 % - SEMI mk is actually a job scheduler! with dependent tasks!
 % - to not use ';' but instead && for eflag -e to work
-% - scope and life of variables (still dont understand in make, = vs := )
+% - scope and life of variables (still dont understand in GNU make, = vs := )
+%   whether can use $xx in target, in prereqs, in includes, etc
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -139,10 +148,14 @@ Indeed, it allows programmers to
 assemble, 
 compile, 
 link,
+test,
 package, and 
 distribute 
 software with a simple command, ``the one command that rules them all'',
 from very simple programs to entire operating systems.
+
+% A build system is .. describe and  maintain dependencies. Rules.
+\n def build system so I can use "rule" and "dependency" in questions below
 
 % No deep concepts. nice DSL though. language-based solution to a problem.
 % minimal syntax. nice checks.
@@ -152,11 +165,17 @@ Here are a few questions I hope this book will answer:
 
 \begin{itemize}
 
-\item What are the fundamental concepts of a build system? 
+\item What are the fundamental concepts of a build system?
 
-\item What is the exact procedure to compute dependencies
-between files? What does happen when there are ambiguities
-between different rules?
+% What is minimal syntax one needs.
+
+% what kind of dependency are necessary? just file (target) to file (prereq)?
+% target to multi prereq ? what about multi targets to one prereq?
+% Do you need multiple rules for same target? what about ambiguities?
+
+\item What are the user mistakes a build system can detect?
+Can it detect stupid rules? Redundant rules? Ambiguous rules?
+Infinite rules?
 
 \item How can you visualize the actual dependency tree? 
 What help does the build system offer to debug a makefile?
@@ -165,7 +184,7 @@ What help does the build system offer to debug a makefile?
 them? How do you write a simple job scheduler?
 
 \end{itemize}
-\l no great questions for now :(
+
 
 \section{The \plan build system, [[mk]]}
 
@@ -176,6 +195,7 @@ them? How do you write a simple job scheduler?
 % with one mk command, build plan9 libs, plan9 programs, plan9 kernel,
 % and build disk image that can be installed on raspberry or QEMU.
 % one command!
+\n actually I use make right now :)
 
 % similar to make. 
 % differences with make? More regular. Simpler (e.g. variables,
@@ -183,7 +203,7 @@ them? How do you write a simple job scheduler?
 % Author of make Stu Fedlman consider mk better in every way.
 % run in // by default, main feature compared to original make
 %  (and actually design and features influenced by that I think,
-% e.g. multiple targets rule, or build graph at mk time once)
+%  e.g. multiple targets rule, or build graph at mk time once)
 % because plan9 context.
 % Also well written, nice use of assert!
 % Also no infamous TAB issue :)
@@ -210,7 +230,9 @@ but which I ultimately discarded:
 %   in research UNIX make)
 
 \item GNU make
-% also in //. Many extensions. Too many.
+% also in // make -j. But as good as mk? since mk has full graph, can
+%  run in // from very different parts of the tree. make can?
+% Many extensions. Too many.
 % 37 000 LOC? main.c 3200 LOC
 
 \item Cmake
@@ -260,12 +282,12 @@ To play with [[mk]], you will first need to install
 the \plan fork used in \principia. See \urlinstall.
 Once installed you can test [[mk]] under \plan with:
 
-% actually bootstrapping issue here. mk use make? or shell script?
-
-% can get the one from kencc? or plan9port?
-% issues though with rc vs sh ...
-
+% cd /tests/mk/
+% mk -f hello.mk
 % TODO
+
+\n could get one from kencc or plan9port. issues though with rc vs sh ...
+
 
 
 \section{Requirements}
@@ -282,9 +304,9 @@ and so are familiar with concepts such as
 a {makefile},
 a {rule},
 a {target}, 
-the set of prerequisites,
-a {recipe}, 
-etc.
+a {prerequisite}, or
+a {shell command}.
+\n called recipe in mk, by shell command easier (said later)
 %
 If not, I suggest you to read the 
 \plan article~\cite{article-mk}, which introduces [[mk]]
@@ -293,7 +315,9 @@ and is available in my \plan distribution.
 The man page of [[mk]] can also useful at [[docs/man/1/mk]].
 %
 %builders/make/ contain how mk used in plan9,
-%(and mk_successor_make.pdf if interested specifically of diff with make)
+
+%also for design decisions, see_successor mk.pdf
+%moreover contains diffs with make
 
 \section{About this document}
 #include "../docs/latex/About.nw"
@@ -350,7 +374,11 @@ maintain {\em efficiently}
 %  tailored for one task. Usually not as expressive as full PL,
 %  but trade expressivity for compactness, and special checks.
 
-%\subsubsection{Rules}
+%toc:
+% very small language.
+% rules, variables, inclusion.
+
+\subsubsection{Rules}
 
 % essence is state dependencies and how to achieve it.
 % simplest syntax,  x : y \n z.
@@ -358,39 +386,77 @@ maintain {\em efficiently}
 % like arc in a graph. src, dest, and label on edge.
 % (and indeed later will see that we generate a graph)
 
-% Most build systems have the notion of
-% rule, target: dependencies
+% In build systems called
+% rule.
+% also give names to left and right parts: target: dependencies
+
 % In mk, very simple, minimal syntax! just ':', and newlines
 % no need "" around shell command.
-
 % same spirit than shell actually. no need () for calling
 % commands, "" around strings, remember
 % order of options (but then lead to -xxx named arguments)
-
 % in fact body of a rule is shell command. Embedded lang
 % inside lang. Not interpreted. As is. (simpler than in make)
 
-%\subsubsection{Variables}
+%advanced? maybe fundamental. what kinds of dependencies we need?
+% can have multiple targets:
+%    x.ml x.mly: x.mly
+%  (but then can be confusing when making graph of deps. dont want
+%  run recipe twice, so tricky, so need mark multiple nodes from one job done)
+\n  also can be used to factorize simple rules like a.o b.o: x.h
 
-% can also set variables. again, minimal syntax, X=Y.
+% can have same target and multiple rules (a condition only one recipe)
+%    x.o: x.c  recipe     x.o: y.h
+% (also with metarules below, when instantiate can add more rules??)
+%  but maybe this one is really sugar, could put all prerequisites at once!
+
+\subsubsection{Variables}
+
+% to factorize. ex, CFLAGS=-g -x -...
+% and then can use in many rules CFLAGS
+% easier to modify too.
+
+% one of design of mk is reusing existing stuff. So reuse
+% syntax (and some machinery) of shell to define and use variables.
+% but in mk really more constants than variables.
+% (actually check when override?)
+% Again, minimal syntax, X=Y.
 % no need [;] for list of things. Just use = until newline
 %  (but then need to have \ escaped newline to scale to large lists)
+% I say constant cos subtle! 
+\n even though can be overriden on commandline
+% They need to be statically known for mk, so better
+% use constants. Also clearer then diff between constants like OBJS=..
+% and variables generated by mk such as target, stem etc.
 
 % defs and uses, and actually can have complex uses with substitutions
 %  on stemming
 
-%\subsubsection{Generic rules}
+% can use constants in rules!
+% can reuse constants in different rules.
 
-% metarules, variables => generic stuff
-% stemming, so can factorize with generic rules.
-
-% describe a set of arcs in a graph in a generic way.
-
-%\subsubsection{Modularity}
+\subsubsection{Modularity}
 
 % < so modularity and can factorize in different files
 
-%\subsection{Generic language}
+% with variables above, offers already some kind of genericity!
+% in fact many mkfiles are just  < /sys/src/cmd/mkone !
+% but still need metarules for that.
+
+
+\subsubsection{Generic (meta) rules}
+
+% metarules (rule generating rules), use variable names => generic stuff
+%  (especially when use modularity)
+% stemming, so can factorize with generic rules.
+
+% can use only variables in target and prerequisites
+% (but can use variables in recipe)
+
+% describe a set of arcs in a graph in a generic way.
+
+%\subsubsection{Generality}
+
 % works for all PLs. not adhoc to one PL like IDEs
 
 %related: generate from mkfile .project, like Buck does.
@@ -412,6 +478,7 @@ maintain {\em efficiently}
 
 
 \subsection{A job scheduler}
+% parallel job scheduler
 
 % FIGURE where can see different steps stuff you can do in //? 
 
@@ -433,6 +500,7 @@ maintain {\em efficiently}
 % different for each programming language.
 
 % enter .depend 
+% (and so also need for multiple rules for same targets (but with empty recipe))
 
 % so ocamldep, 
 % gcc -MM.
@@ -486,6 +554,18 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 \section{[[hello.mk]]}
 \n [[hello.mk]] concistent with my other books.
 \l A simple [[mkfile]]
+
+<<tests/mk/hello.mk>>=
+OBJS=hello.5 world.5
+
+hello: $OBJS
+ 5l -o hello $OBJS
+
+%.5: %.c
+  5c -c $stem.c
+@
+%$
+\n simple var, simple rule, metarule, special vars; the essence of mk is there
 
 % mkfile of helloworld.c?
 \n minimum spirit, no <objfile, no factorize with mkone
@@ -555,12 +635,18 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 
 \section{Software architecture}
 
+% compute graph statically! once and for all at the beginning.
+% then process graph.
+
 % graphviz of files? or just of the types?
+
+% from top to bottom, and left to right.
 
 % main() -> parse(mkfile) (populate rules, metarules, target1, S_VAR, ...)
 %        -> mk(target1) -> graph(target1)
-%                       -> work(node) -> outofdate(file)
-%                                     -> run(job) -> sched() -> execsh()
+%                       -> work(node) -> outofdate(node, prereq)
+%                                     -> dorecipe
+%                                         -> run(job) -> sched() -> execsh()
 %                                     
 %                       -> waitup()
 
@@ -662,11 +748,14 @@ job gather information about what needs to be actually done, recipe.
 struct Symtab
 {
     // the key: (name x space)
+
+    // ref_own<string>
     char		*name;
     // enum<Namespace>, the ``namespace''
     short		space;
 
     // the value (generic)
+
     union{
         void*	ptr;
         uintptr	value;
@@ -689,6 +778,9 @@ enum Sxxx {
     <<[[Sxxx]] cases>>
 };
 @
+\l actually should be S_CONST? well some variables can be overriden
+\l  when passed on the command line, so technically it is kinda a variable
+\l  but maybe better to differentate still
 % use for fast access and also for memoization, operates as a cache
 %dead:
 %S_PID,		/* pid -> products */
@@ -794,13 +886,14 @@ symtraverse(int space, void (*fn)(Symtab*))
 S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
 @
 % diff with S_VAR? not set by user! set by mk automatically
+% those one are really variables (maybe that's why they are in lowercase)
 
 <<global myenv>>=
 static char	*myenv[] =
 {
     "target",
-    "stem",
     "prereq",
+    "stem",
 
     <<[[myenv]] other array elements>>
     0,
@@ -808,7 +901,7 @@ static char	*myenv[] =
 @
 % $stem $prereq
 % (better than $@, $^ )
-
+% but actually can be multiple targets, and prereqs!
 
 % main -> <>
 <<function initenv>>=
@@ -819,11 +912,12 @@ initenv(void)
 
     for(p = myenv; *p; p++)
         symlook(*p, S_INTERNAL, (void *)"");
+
     readenv();				/* o.s. dependent */
 }
 @
-% readenv? for /env/.
-
+% readenv? for /env/, see later.
+% call init_symboltable() instead no?
 
 
 <<[[Sxxx]] cases>>=
@@ -854,7 +948,9 @@ setvar(char *name, void *value)
 <<struct Word>>=
 struct Word
 {
+    // ref_own<string>
     char 		*s;
+
     struct Word 	*next;
 };
 @
@@ -876,7 +972,7 @@ newword(char *s)
 }
 @
 
-% it's actually delwords
+% it's actually delwords, or freewords
 <<destructor delword>>=
 void
 delword(Word *w)
@@ -891,6 +987,23 @@ delword(Word *w)
     }
 }
 @
+
+% treat list as a set, dont add if already there
+<<function addw>>=
+void
+addw(Word *w, char *s)
+{
+    Word *lw;
+
+    for(lw = w; w = w->next; lw = w){
+        if(strcmp(s, w->s) == 0)
+            return;
+    }
+    lw->next = newword(s);
+}
+@
+\t mv in words.c ?
+
 
 <<function wdup>>=
 Word*
@@ -929,6 +1042,7 @@ wtos(Word *w, int sep)
             insert(buf, sep);
     }
     insert(buf, '\0');
+
     cp = strdup(buf->start);
     freebuf(buf);
     return cp;
@@ -936,8 +1050,11 @@ wtos(Word *w, int sep)
 @
 %ocaml: Common.join (but using Buffer would be faster too)
 
-% insert? Bufblock? See appendix.
+% insert? Bufblock? See appendix!
+% will use Bufblock many times. Avoid quadatric string concatenations.
+%ocaml: use Buffer.insert
 
+% stow() later, but complex because does variable expansion!
 
 \section{Rules}
 
@@ -950,8 +1067,9 @@ wtos(Word *w, int sep)
 struct Rule
 {
     char 		*target;	/* one target */
-    // ref_own<Words>
+    // option<ref_own<Words>>
     Word 		*tail;		/* constituents of targets */
+    // option<string>
     char 		*recipe;	/* do it ! */
 
     <<[[Rule]] other fields>>
@@ -962,6 +1080,7 @@ struct Rule
 };
 @
 \t rename tail to prerequistes? 
+\t seems like recipe can not be nil actually, cos do *a->r->recipe
 % note that can have multiple rules
 % with the same head, in which case you add prerequistes.
 
@@ -975,6 +1094,10 @@ struct Rule
 %  when the recipe is executed.
 % why? probably because recipe/rc will do the subst itself, but for
 % the graph we need concrete values so faster to do it eagerly when parsing
+% also because for recipe, some values are known later, when instantiate 
+% the rule (e.g., for $stem)
+
+\l recipe can also just be '\0' ? ugly.
 
 % can also be metarule, %.$O: %.c (but $O would have been expanded)
 
@@ -983,6 +1106,9 @@ char* 		file;		/* source file */
 short 		line;		/* source line */
 @
 \t put in Debugging support section?
+
+
+
 
 \subsection{Simple [[rules]]}
 
@@ -996,7 +1122,7 @@ Rule *rules;
 struct Rule	*next;
 @
 
-% end of rules list, so can add at the end
+% end (last) of rules list, so can add at the end
 <<global lr>>=
 // option<ref<Rule>> (head = rules)
 static Rule *lr;
@@ -1023,9 +1149,16 @@ enum Rule_attr {
     <<[[Rule_attr]] cases>>
 };
 @
-% META is for % metarule and also regexp rules :R:
-%//@Scheck: dead indeed
-%UNUSED = 0x0002,
+% META is for % metarule (and also regexp rules :R:)
+%dead: indeed, unused :)
+% UNUSED = 0x0002,
+% UPD    = 0x0004,
+%dead:
+% <<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+% case 'U':
+%     *attr |= UPD;
+%     break;
+% @
 
 
 <<global metarules>>=
@@ -1033,20 +1166,17 @@ enum Rule_attr {
 Rule *metarules;
 @
 
-% end of metarules list, so can add at the end
+% end (last) of metarules list, so can add at the end
 <<global lmr>>=
 // option<ref<Rule>> (head = metarules)
 static Rule *lmr;
 @
 
 
+\subsection{Adding rules}
+% and indexing
 
-\subsection{[[addrule()]]}
-
-% incremented by addrule()
-<<global nrules>>=
-static int nrules = 0;
-@
+\subsubsection{Single target rule, [[addrule()]]}
 
 
 % kind of ctor
@@ -1056,26 +1186,17 @@ static int nrules = 0;
 void
 addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, char *prog)
 {
-    Rule *r;
-    Rule *rr;
-    Symtab *sym;
-    bool reuse;
+    Rule *r = nil;
+    <<[[addrule()]] other locals>>
 
-    r = nil;
-
-    reuse = false;
-    if(sym = symlook(head, S_TARGET, nil)){
-        for(r = sym->u.ptr; r; r = r->chain)
-            if(rcmp(r, head, tail) == 0){
-                reuse = true;
-                break;
-            }
-    }
+    <<[[addrule()]] find if rule already exists>>
 
     if(r == nil)
         r = (Rule *)Malloc(sizeof(Rule));
+
     r->target = head;
     r->tail = tail;
+
     r->recipe = body;
 
     r->line = hline;
@@ -1083,26 +1204,17 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 
     r->attr = attr;
 
-    r->rule = nrules++;
+    <<[[addrule()]] set more fields>>
 
-    r->alltargets = ahead;
-    r->prog = prog;
+    <<[[addrule()]] indexing [[r]] by target in [[S_TARGET]]>>
 
-    if(!reuse){
-        rr = symlook(head, S_TARGET, r)->u.ptr;
-        if(rr != r){
-            r->chain = rr->chain;
-            rr->chain = r;
-        } else 
-            r->chain = nil;
-        r->next = nil;
-    }
 
     if(charin(head, "%&") || (attr&REGEXP)){
         r->attr |= META;
         if(reuse)
             return;
         <<[[addrule()]] if REGEXP attribute>>
+
         // add_list(r, metarules, lmr)
         if(metarules == nil)
             metarules = lmr = r;
@@ -1114,6 +1226,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
         if(reuse)
             return;
         r->pat = nil;
+
         // add_list(r, rules, lr)
         if(rules == nil)
             rules = lr = r;
@@ -1124,25 +1237,34 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     }
 }
 @
+\t rename arguments! target, prereqs, alltargets, etc
 % could print when find an existing rule with same target/pre
 % and display a message?
+\l r->pat ??
+
+% will see charin later. subtle.
+
+% will see later addrules()
 
 
-% used in addrule()
-<<[[Sxxx]] cases>>=
-S_TARGET,		/* target -> rule */ // actually rules
+<<[[addrule()]] other locals>>=
+Symtab *sym;
+bool reuse;
 @
 
-% can have multiple rules with the same target!
-% no need :: ? will get ambiguous rule?
-
-<<[[Rule]] extra fields>>=
-struct Rule	*chain;		/* hashed per target */
+<<[[addrule()]] find if rule already exists>>=
+reuse = false;
+if(sym = symlook(head, S_TARGET, nil)){
+    for(r = sym->u.ptr; r; r = r->chain)
+        if(rcmp(r, head, tail) == 0){
+            reuse = true;
+            break;
+        }
+}
 @
-
-% seen symlook before.
-
-
+\t why allows that? just return error? simpler.
+\t  anyway, was not guarding nrules++ with if(!reuse) so weird.
+\t but now S_TARGET is later ... so mv check later?
 
 % rule compare, check if same target and same prerequistes
 <<function rcmp>>=
@@ -1160,9 +1282,102 @@ rcmp(Rule *r, char *target, Word *tail)
 }
 @
 \t strcmp sucks, use string_equal, and return bool that makes sense
-\t  so less rcmp(...) == 0, instead rule_match(...)
+\t  so less rcmp(...) == 0, instead rule_equal(...)
 
 
+\subsubsection{One target, multiple rules, [[S_TARGET]]}
+
+% useful also for .depend? or different because here
+%  get multiple rules for same target? x.o: x.c   x.o: y.h
+
+% used in addrule()
+<<[[Sxxx]] cases>>=
+S_TARGET,		/* target -> rules */ 
+@
+%old: rule -> rules
+
+% can have multiple rules with the same target!
+% no need :: ? will get ambiguous rule?
+
+<<[[Rule]] extra fields>>=
+// list<ref<Rule>> (head = symlook(x, S_TARGET))
+struct Rule	*chain;		/* hashed per target */
+@
+% different than next! here in same list because same target.
+% for next in same list because same hashed name. 
+% And for next, it supports only one element. Here can
+% have set of hashed things. One target symbol, get multiple symbols.
+% (hashset)
+
+
+<<[[addrule()]] other locals>>=
+Rule *rr;
+@
+% sym local is above.
+
+<<[[addrule()]] indexing [[r]] by target in [[S_TARGET]]>>=
+if(!reuse){
+    sym = symlook(head, S_TARGET, r);
+    rr = sym->u.ptr;
+    if(rr != r){
+        r->chain = rr->chain;
+        rr->chain = r;
+    } else 
+        r->chain = nil;
+    r->next = nil;
+}
+@
+%old: rr = symlook(head, S_TARGET, r)->u.ptr;
+ 
+% seen symlook before.
+
+
+
+
+
+\subsubsection{Multiple targets rule, [[addrules()]]}
+% was in advanced topics, but  maybe fundamental features then. 
+% Also too much code doing stuff to support multiple targets.
+
+
+% useful for parser.ml parser.mli: parser.mly !
+
+<<[[Rule]] other fields>>=
+// ref<list<ref_own<string>>
+Word 		*alltargets;	/* all the targets */
+@
+% as in  gram.c gram.h: gram.y ...
+% (hmm but could be rewritten with 2 rules, it's just
+% that with mk the file would be possibly rebuilt two times!
+% because it could run the command in parallel!!!!
+
+% Is there a few places where use Word* targets
+% where in most cases it should really be simply char* target; ??
+
+% why target and alltargets? why not just have alltargets?
+% because we index per single target so in applyrules we can be
+% faster (but still slow on metarules)
+
+<<function addrules>>=
+void
+addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
+{
+    Word *w;
+
+    assert(/*addrules args*/ head && body);
+
+    <<[[addrules()]] set [[target1]]>>
+    for(w = head; w; w = w->next)
+        addrule(w->s, tail, body, head, attr, hline, prog);
+}
+@
+% can have multiple target, so go through all of them
+\t head -> targets!! tail -> prereqs
+
+<<[[addrule()]] set more fields>>=
+r->alltargets = ahead;
+@
+\t rename ahead -> alltargets
 
 
 \section{Graph}
@@ -1174,6 +1389,9 @@ rcmp(Rule *r, char *target, Word *tail)
 
 % it's really more a DAG than a graph; there should be no cycle
 % (see cycle check section)
+
+% FIGURE? where see deps go downward. prereqs.
+% tgt vs pre. parent vs child. src vs dest.
 
 \subsection{[[Node]]}
 
@@ -1187,7 +1405,7 @@ struct Node
     // bitset<enum<Node_flag>>
     ushort		flags;
 
-    <<[[Node]] other fields>>
+    <<[[Node]] arcs field>>
 
     // Extra
     <<[[Node]] extra fields>>
@@ -1195,6 +1413,7 @@ struct Node
 @
 % the flags is often an inline of the union of the flags of the
 % rules linking to the prerequistes nodes
+\l name can also maybe be an archive member? like lib.a(foo.o) ?
 
 %ctor. dtor = ?
 % main -> mk -> graph -> applyrules -> <>
@@ -1220,8 +1439,7 @@ newnode(char *name)
 }
 @
 % owning name after call! => call strdup in caller
-
-
+\t aspectize PROBABLE? for vacuous. see later.
 
 <<enum Node_flag>>=
 enum Node_flag {
@@ -1230,9 +1448,12 @@ enum Node_flag {
 @
 % used to be a set of #define
 
+% maybe put here MADE BEINGMADE etc. so make sense
+% to have link to set of Nodes in Job
+
 \subsection{[[Arc]]}
 
-<<[[Node]] other fields>>=
+<<[[Node]] arcs field>>=
 // list<ref_own<Arc>> (next = Arc.next)
 Arc		*prereqs;
 @
@@ -1241,9 +1462,9 @@ Arc		*prereqs;
 <<struct Arc>>=
 struct Arc
 {
-    // option<ref<Node>>, the other node in the arc
+    // option<ref<Node>>, the other node in the arc (the dependency)
     struct Node *n;
-    // ref<Rule>, contain recipe to gen the target node from the dependent nodes
+    // ref<Rule>, to gen the target node from the dependent node
     Rule *r;
 
     <<[[Arc]] other fields>>
@@ -1253,12 +1474,13 @@ struct Arc
 };
 @
 % option Node? apparently some code is doing if(a->n) so ...
-% have some fake arc for leaves nodes (but why create an arc at all?)
+%  have some fake arc for leaves nodes (but why create an arc at all?)
+% option Rule? I dont think so, every call to newarc have a defined rule arg
 
 % seen Rule before.
 
 <<[[Arc]] extra fields>>=
-// list<ref_own<arc> (head = Node.prereq)
+// list<ref_own<arc> (head = Node.prereqs)
 struct Arc	*next;
 @
 
@@ -1266,13 +1488,16 @@ struct Arc	*next;
 
 % node   arc   rule   relations?
 
-% so can subst $stem by the actual value for the recipe to run
+% so can set $stem for the actual value for the recipe to run
 <<[[Arc]] other fields>>=
-// what will replace the %
+// ref_own<string>, what will replace the %
 char		*stem;
 @
-\t why need that? Node.name is not expanded already?
-
+% why need that? Node.name is not expanded already?
+%  yes, in graph, but in recipe still need to set dollar stem in env
+% here not in Rule because Rule is generic template; Here it is instantiated.
+% Also used because in dorecipe we also use alltargets, which is not
+%  expanded.
 
 % ctor.  dtor = ?
 % main -> mk -> graph -> applyrules -> <>
@@ -1286,7 +1511,7 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->n = n;
     a->r = r;
     a->stem = strdup(stem);
-    rcopy(a->match, match, NREGEXP);
+    <<[[newarc()]] set match field>>
 
     a->next = nil;
     a->flag = 0;
@@ -1294,7 +1519,7 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     return a;
 }
 @
-
+\l assert r ? (but not assert n)
 
 
 
@@ -1304,22 +1529,20 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 % final piece.
 % reference rule, node (so Arc) (and Word but less important)
 
-% why so short field names suddenly? avoid
-% confusion with the one in Rule?
 <<struct Job>>=
 struct Job
 {
-    Word		*t;	/* targets */
-    Word		*p;	/* prerequisites */
-
-    //list<ref<Node>> (next = Node.next??)
-    Node		*n;	/* list of node targets */
-    //ref<Rule>
+    // ref<Rule>
     Rule		*r;	/* master rule for job */
 
-    char		*stem;
+    Word		*t;	/* targets */
+    // list<ref<Node>> (next = Node.next)
+    Node		*n;	/* list of node targets */
 
-    int		nproc;	/* slot number */ // or -1 if unassigned
+    Word		*p;	/* prerequisites */
+
+    // option<int> (None = -1)
+    int		nproc;	/* slot number */
 
     <<[[Job]] other fields>>
 
@@ -1327,31 +1550,58 @@ struct Job
     <<[[Job]] extra fields>>
 };
 @
-\t stem again?
+\l why so short field names suddenly? avoid confusion with the one in Rule? meh
+
+% have list of nodes because finishing a job will modify
+% the graph! put some MADE
+
+% targets! prerequisites! plural!
+
+<<[[Job]] other fields>>=
+char		*stem;
+@
+% stem again? propagated from Arc? to pass to shell for dollar stem setting
+
+<<[[Node]] extra fields>>=
+// list<ref<Node>> (head = Job.n)
+struct Node	*next;		/* list for a rule */
+@
+% list of all targets for a job (with a master rule), as when done
+%  will need to mark as done multiple files (and check they are there)
+% usually have set of nodes via Arc, but here, no need target (parent) node.
+
 
 % ctor
 <<constructor newjob>>=
 Job*
-newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
+newjob(Rule *r, Node *nlist, char *stem, char **match, 
+       Word *pre, Word *npre, 
+       Word *targets, Word *atar)
 {
     Job *j;
 
     j = (Job *)Malloc(sizeof(Job));
     j->r = r;
     j->n = nlist;
+    j->p = pre;
+    j->t = targets;
+
     j->stem = stem;
     j->match = match;
-    j->p = pre;
+
     j->np = npre;
-    j->t = tar;
     j->at = atar;
+
     j->nproc = -1;
+
     j->next = nil;
     return j;
 }
 @
+%old: tar -> targets
 
 
+% here cos used by mk(). Cant delayed
 <<global jobs>>=
 // list<ref_won<jobs>> (next = Job.next)
 Job *jobs;
@@ -1362,10 +1612,7 @@ struct Job	*next;
 @
 
 
-%XXX ???? Job.n?
-<<[[Node]] extra fields>>=
-struct Node	*next;		/* list for a rule */
-@
+
 
 
 
@@ -1446,20 +1693,19 @@ usage();
 <<[[main()]] argv processing part 2, xxx=yyy>>
 <<[[main()]] set variables for recursive mk>>
 @
-\t simplify
-
+\t simplify 
+\l usage? for profiling, but how it works?? need all that calls?
 
 
 <<[[main()]] initializations before building>>=
 execinit();
 
-// can do that earlier??
 <<[[main()]] argv processing part 3, skip xxx=yyy>>
 
 catchnotes();
 @
-\t simplify
-
+\t simplify put part 3 at end of initializations instead?
+\l mv later in Process management section?
 
 \section{[[mk -xxx]] argument processing}
 
@@ -1470,6 +1716,7 @@ USED(argc);
 for(argv++; *argv && (**argv == '-'); argv++)
 {
     <<[[main()]] add [[argv[0]]] in [[buf]]>>
+
     switch(argv[0][1]) {
     <<[[main()]] -xxx switch cases>>
     default:
@@ -1480,20 +1727,6 @@ for(argv++; *argv && (**argv == '-'); argv++)
 %chunks:
 % will see gradually -xxx
 
-<<[[main()]] locals>>=
-Bufblock *buf = newbuf();
-@
-\t save -xxx, why? recursive mk? mv everything later then
-
-<<[[main()]] add [[argv[0]]] in [[buf]]>>=
-bufcpy(buf, argv[0], strlen(argv[0]));
-insert(buf, ' ');
-@
-
-<<[[main()]] add [[argv[i]]] in [[buf]]>>=
-bufcpy(buf, argv[i], strlen(argv[i]));
-insert(buf, ' ');
-@
 
 \section{[[mk xxx=yyy]] argument processing}
 
@@ -1515,6 +1748,7 @@ Biobuf tb;
 for(i = 0; argv[i]; i++) 
   if(utfrune(argv[i], '=')){
     <<[[main()]] add [[argv[i]]] in [[buf]]>>
+
     <<[[main()]] create temporary file if not exist yet>>
     Bprint(&tb, "%s\n", argv[i]);
     *argv[i] = '\0';
@@ -1591,9 +1825,10 @@ if(f == files){
 @
 %old: use AREAD and OREAD instead of 4 and 0 argument
 
+% will modify rules, metarules,
 
 
-\section{Building the targets}
+\section{Building the target(s)}
 
 % parse(), so modified globals rules, metarules.
 % just need to initiate with target passed as argument (or use default one)
@@ -1632,6 +1867,47 @@ else {
 }
 @
 
+% will see later that Exit is special, but here could be just exits I think.
+
+
+\subsection{Parallel mode}
+
+<<[[main()]] parallel mode and target arguments given>>=
+Word *head, *tail;
+Word *t;
+
+/* fake a new rule with all the args as prereqs */
+tail = nil;
+t = nil;
+for(; *argv; argv++)
+    if(**argv){
+        // add_list(newword(*argv), t)
+        if(tail == nil)
+            tail = t = newword(*argv);
+        else {
+            t->next = newword(*argv);
+            t = t->next;
+        }
+    }
+if(tail->next == nil)
+    // a single target argument
+    mk(tail->s);
+else {
+    head = newword("<command line arguments>");
+    addrules(head, tail, strdup(""), VIR, mkinline, nil);
+    mk(head->s);
+}
+@
+% could pass 0 instead of mkinline I think
+% why not call addrule() directly? why addrules? because addrules set target1
+\l confusing that tail is actually the head of the prereqs
+\t tail -> prereqs, t -> eprereqs, head -> targets
+
+% VIR for virtual because target does not exist, and so ok
+%  if after recipe not there. Do not generate warning.
+% mkinline, meh. could pass -1 or 0.
+
+
 
 
 \subsection{Sequential mode}
@@ -1654,39 +1930,9 @@ if(sflag){
             mk(*argv);
 }
 @
-
-\subsection{Parallel mode}
-
-<<[[main()]] parallel mode and target arguments given>>=
-Word *head, *tail, *t;
-
-/* fake a new rule with all the args as prereqs */
-tail = nil;
-t = nil;
-for(; *argv; argv++)
-    if(**argv){
-        if(tail == nil)
-            tail = t = newword(*argv);
-        else {
-            t->next = newword(*argv);
-            t = t->next;
-        }
-    }
-if(tail->next == nil)
-    mk(tail->s);
-else {
-    head = newword("<command line arguments>");
-    addrules(head, tail, strdup(""), VIR, mkinline, nil);
-    mk(head->s);
-}
-@
-% could pass 0 instead of mkinline I think
-
-% VIR? virtual? used later?
-
-
-
-
+% but actually for that target it will do things in parallel.
+% (unless you put nproclimit to 1), so maybe not that useful.
+\l put in advanced feature?
 
 \chapter{Parsing [[mkfile]]s}
 \l Parsing Rules and Variables
@@ -1708,7 +1954,7 @@ char *infile;
 <<global mkinline>>=
 int mkinline;
 @
-% rename just inline?
+% rename just inline? or lineno.
 
 <<function SYNERR>>=
 #define	SYNERR(l)	(fprint(STDERR, "mk: %s:%d: syntax error; ", \
@@ -1777,9 +2023,9 @@ if(fd < 0){
 <<[[parse()]] other locals>>=
 // bitset<Rule_attr>
 int attr;
-char *prog; // for :P: attribute TODO??
 @
-\t aspectize 
+
+% prog argument, will see later.
 
 \subsection{Assembling a line, [[assline()]]}
 
@@ -1822,8 +2068,11 @@ eof:
 }
 @
 % rinsert until newline
+\l int -> Rune?
 \t have resetbuf() function and emptybuf() function? and bufcontent()?
 %ocaml: use Buffer too
+
+\l so if have line with only spaces, it is not skipped then? skipped later?
 
 % return false when EOF after line parsed
 
@@ -1898,9 +2147,18 @@ case '#':
     }
     break;
 @
-\t \r ? for windows?
+\t \r ? for windows? so simplify and just unguard the lastc = c
+\t rename lastc to prevc, but maybe remove it cos comment looks weird
+\t  maybe he does not handle escaped newline actually
+
+% when buf is not empty? when had stuff before the # ? in which case
+%  do the same thing as if it was a single newline
 
 \subsubsection{Escaped character}
+
+\t to handle variable containing string with space?
+\t to make difference between variable containing list of things
+\t  (which use space for separator) and stuff with space inside?
 
 <<[[assline()]] switch character cases>>=
 case '\\':
@@ -1961,7 +2219,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
 
 % <, =, :
 
-% rhead for rule head, but used not only for rule.
+% rhead for rule head, or maybe read head because used not only for rule.
 
 \l int -> Rune for return?
 <<function rhead>>=
@@ -1974,7 +2232,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     <<[[rhead()]] other locals>>
 
     p = charin(line, ":=<");
-    if(p == 0)
+    if(p == nil)
         return '?';
 
     sep = *p;
@@ -2002,7 +2260,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
 
 
 <<[[rhead()]] sanity check w>>=
-if(*w->s == 0 && sep != '<' && sep != '|') {
+if(*w->s == '\0' && sep != '<' && sep != '|') {
     SYNERR(mkinline-1);
     fprint(STDERR, "no var/target on left side of assignment/rule\n");
     Exit();
@@ -2020,6 +2278,100 @@ if(*w->s == 0 && sep != '<' && sep != '|') {
 
 <<[[rhead()]] if sep is [[=]]>>
 <<[[rhead()]] if sep is [[:]]>>
+@
+
+\subsection{Dealing with quotes and variables, [[charin()]]}
+
+% addrule | rhead -> <>
+<<function charin>>=
+/*
+ *	search a string for characters in a pattern set
+ *	characters in quotes and variable generators are escaped
+ */
+char*
+charin(char *cp, char *pat)
+{
+    Rune r;
+    int n;
+    bool vargen = false;
+
+    while(*cp){
+        n = chartorune(&r, cp);
+        switch(r){
+        <<[[charin()]] switch rune cases>>
+        default:
+            if(!vargen && utfrune(pat, r))
+                return cp;
+            break;
+        }
+        cp += n;
+    }
+    <<[[charin()]] sanity check vargen>>
+    return nil;
+}
+@
+%$ 
+% unicode stuff makes the code hard to read. Regexps or lex are 
+% so much cleaner.
+
+\subsubsection{Quoted strings}
+
+<<[[charin()]] switch rune cases>>=
+case '\'':			/* skip quoted string */
+    cp = squote(cp+1);	/* n must = 1 */
+    if(!cp)
+        return nil;
+    break;
+@
+
+% charin -> <>
+<<function squote>>=
+/*
+ *	skip a token in single quotes.
+ */
+static char *
+squote(char *cp)
+{
+    Rune r;
+    int n;
+
+    while(*cp){
+        n = chartorune(&r, cp);
+        if(r == '\'') {
+            n += chartorune(&r, cp+n);
+            if(r != '\'')
+                return cp;
+        }
+        cp += n;
+    }
+    SYNERR(-1);		/* should never occur */
+    fprint(STDERR, "missing closing '\n");
+    return 0;
+}
+@
+
+
+\subsubsection{Variables}
+
+<<[[charin()]] switch rune cases>>=
+case '$':
+    if(*(cp+1) == '{')
+        vargen = true;
+    break;
+case '}':
+    if(vargen)
+        vargen = false;
+    else if(utfrune(pat, r))
+        return cp;
+    break;
+@
+%$
+
+<<[[charin()]] sanity check vargen>>=
+if(vargen){
+    SYNERR(-1);
+    fprint(STDERR, "missing closing } in pattern generator\n");
+}
 @
 
 \subsection{Parsing words, [[stow()]]}
@@ -2124,7 +2476,9 @@ out:
 }
 @
 %$
+\t mv nextword out of word.c
 
+%chunks: will see advanced variables and advanced words gradually
 
 
 <<[[nextword()]] switch rune cases>>=
@@ -2133,7 +2487,7 @@ case '\'':
 case '"':
     empty = false;
     cp = expandquote(cp, r, b);
-    if(cp == 0){
+    if(cp == nil){
         fprint(STDERR, "missing closing quote: %s\n", *s);
         Exit();
     }
@@ -2141,6 +2495,36 @@ case '"':
 @
 \t need that again?
 
+
+
+<<function expandquote>>=
+/*
+ *	extract an escaped token.  Possible escape chars are single-quote,
+ *	double-quote,and backslash.  Only the first is valid for rc. the
+ *	others are just inserted into the receiving buffer.
+ */
+char*
+expandquote(char *s, Rune r, Bufblock *b)
+{
+    if (r != '\'') {
+        rinsert(b, r);
+        return s;
+    }
+
+    while(*s){
+        s += chartorune(&r, s);
+        if(r == '\'') {
+            if(*s == '\'')
+                s++;
+            else
+                return s;
+        }
+        rinsert(b, r);
+    }
+    return 0;
+}
+@
+% diff with escapetoken? input an escaped token vs extract?
 
 \subsection{Expanding variables in words (part 1)}
 
@@ -2191,8 +2575,10 @@ case '$':
 % see varsup() later.
 
 
-\section{Rules, {\em t}[[:]]{\em reqs}]]}
+\section{Rules, {\em target}[[:]]{\em prereqs}}
 
+% actually can have multiple targets!
+% hence addrules below, not addrule.
 
 <<[[parse()]] other locals>>=
 char *body;
@@ -2246,24 +2632,10 @@ rbody(Biobuf *in)
 
 % no stow here! no variable expansion
 
-<<function addrules>>=
-void
-addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
-{
-    Word *w;
-
-    assert(/*addrules args*/ head && body);
-    /* tuck away first non-meta rule as default target*/
-
-    <<[[addrules()]] set [[target1]]>>
-    for(w = head; w; w = w->next)
-        addrule(w->s, tail, body, head, attr, hline, prog);
-}
-@
-% can have multiple target, so go through all of them
 
 
 <<[[addrules()]] set [[target1]]>>=
+/* tuck away first non-meta rule as default target*/
 if(target1 == nil && !(attr&REGEXP)){
     for(w = head; w; w = w->next)
         if(charin(w->s, "%&"))
@@ -2272,6 +2644,7 @@ if(target1 == nil && !(attr&REGEXP)){
         target1 = wdup(head);
 }
 @
+% why not also attr&META?
 
 
 
@@ -2310,90 +2683,7 @@ eos:
 %old: switch cases originally sorted alphabetically, but after
 % LP distribution, they might not be anymore
 
-% XXX
-\t LP distribute
-
-<<[[Rule_attr]] cases>>=
-DEL    = 0x0080,
-@
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'D':
-    *attr |= DEL;
-    break;
-@
-
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'E':
-    *attr |= NOMINUSE;
-    break;
-@
-
-<<[[Rule_attr]] cases>>=
-NOVIRT = 0x0100,
-@
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'n':
-    *attr |= NOVIRT;
-    break;
-@
-
-<<[[Rule_attr]] cases>>=
-NOREC  = 0x0040,
-@
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'N':
-    *attr |= NOREC;
-    break;
-@
-
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'Q':
-    *attr |= QUIET;
-    break;
-@
-
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'R':
-    *attr |= REGEXP;
-    break;
-@
-
-
-<<[[Rule_attr]] cases>>=
-UPD    = 0x0004,
-@
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'U':
-    *attr |= UPD;
-    break;
-@
-
-<<[[Rule_attr]] cases>>=
-VIR    = 0x0010,
-@
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'V':
-    *attr |= VIR;
-    break;
-@
-
-
-<<[[rhead()]] other locals>>=
-char *pp;
-@
-
-<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
-case 'P':
-    pp = utfrune(p, ':');
-    if (pp == 0 || *pp == 0)
-        goto eos;
-    *pp = 0;
-    *prog = strdup(p);
-    *pp = ':';
-    p = pp;
-    break;
-@
-\t WHAT IS THAT?
+%chunks: will see them gradually
 
 \section{Included files, [[<]]{\em file}}
 
@@ -2502,7 +2792,8 @@ if(newfd < 0){
 }
 @
 
-\section{Variable definitions, {\em V}[[=]]{\em X}}
+\section{Variable definitions, {\em C}[[=]]{\em words}}
+% really Constant definitions, not variable.
 
 
 <<[[parse()]] other locals>>=
@@ -2539,7 +2830,7 @@ if(symlook(head->s, S_OVERRIDE, nil)){
 }
 @
 \t could simplify maybe, if there, then set set=false; clearer.
-
+\t also generate warning when set again same var? 
 
 <<[[Sxxx]] cases>>=
 S_OVERRIDE,	/* can't override */
@@ -2551,7 +2842,7 @@ S_WESET,	/* variable; we set in the mkfile */
 @
 % set in mkfile or via mk xxx=yyy? when mk xxx=yyy, varoverride is true
 %  so also S_WESET i guess.
-\t useful? used for?
+% useful for shprint, to expand only weset variables.
 
 
 <<[[parse()]] when parsing variable definitions, sanity check head>>=
@@ -2564,21 +2855,6 @@ if(head->next){
 
 
 \subsection{Variable attributes}
-
-% rhead can set attr?
-
-% variable with attributes?? just private var
-%  to not transmit to recipe process?
-
-<<[[parse()]] when parsing variable definitions, if variable with attr>>=
-if(attr)
-    symlook(head->s, S_NOEXPORT, (void *)"");
-@
-
-<<[[Sxxx]] cases>>=
-S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
-@
-
 
 % rc.c
 <<global termchars>>=
@@ -2593,13 +2869,11 @@ if(sep == '='){
             n = chartorune(&r, p);
             switch(r)
             {
+            <<[[rhead()]] when parsing variable attributes, switch rune cases>>
             default:
                 SYNERR(-1);
                 fprint(STDERR, "unknown attribute '%c'\n",*p);
                 Exit();
-            case 'U':
-                *attr = 1;
-                break;
             }
             p += n;
         }
@@ -2607,11 +2881,12 @@ if(sep == '='){
     }
 }
 @
+% can chain? X=V=foo ? or it is more C=U=bla
 
 
 
 
-\section{Variable uses (part 2), [[$]]{\em V} }
+\section{Variable uses (expanding variables part 2), [[$]]{\em C} }
 %$
 
 \t merge with part 1
@@ -2742,7 +3017,9 @@ graph(char *target)
 }
 @
 %pad: node -> root, clearer I think
-
+\l need attribute? anyway can access rule of node each time
+\l  or is it because it is a union of attr for all matching rules?
+\l  not just the master rule?
 
 
 
@@ -2782,7 +3059,8 @@ applyrules(char *target, char *cnt)
     return node;
 }
 @
-\t node->prereqs should be nil no?
+\t node->prereqs should be nil no? assert?
+\t confusing again to use head, this time for head of arcs.
 
 % call to newnode() which will call timeof()!
 
@@ -2794,14 +3072,7 @@ applyrules(char *target, char *cnt)
 % *		if(r->attr&DEL)
 % *			node->flags |= DELETE;
 % */
-%/*		if(r->attr&VIR)
-% *			node->flags |= VIRTUAL;
-% *		if(r->attr&NOREC)
-% *			node->flags |= NORECIPE;
-% *		if(r->attr&DEL)
-% *			node->flags |= DELETE;
-% */
-
+% now done in attribute() anyway.
 
 
 \section{Finding the simple rules for a target}
@@ -2835,6 +3106,8 @@ for(r = (sym? sym->u.ptr : nil); r; r = r->chain){
 }
 @
 % PROBABLE?
+\t what is the point of setting head.n? it is not used anyway, and
+\t  similar to node
 
 <<[[applyrules()]] skip this rule and continue if some conditions>>=
 if(r->attr&META) continue;
@@ -2846,6 +3119,9 @@ if((!r->recipe || !*r->recipe)
 %TODO safe to continue when no recipe? should still have an arc
 % so than can check if outofdate no?
 \t how can be META and in S_TARGET?
+\t ugly those chain of test on tail. Should assert always has a tail?
+\t  or should forbid singleton empty word.
+\t  maybe define  empty_prereqs() ? and empty_recipe() !!!
 
 <<[[applyrules()]] if no prerequistes in rule r>>=
 // no prerequistes, a leaf, still create fake arc
@@ -2856,6 +3132,7 @@ if(!r->tail || !r->tail->s || !*r->tail->s) {
 @
 % stem is "" here
 % why need that? to at least have something propagate in attribute()?
+% example: clean:, there will be no prereqs
 
 \section{Finding matching metarules and substituting the stem}
 
@@ -2895,8 +3172,6 @@ for(r = metarules; r; r = r->next){
 if((!r->recipe || !*r->recipe) 
    && (!r->tail || !r->tail->s || !*r->tail->s)) 
     continue;	/* no effect; ignore */
-if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
-    continue;
 @
 
 <<[[applyrules()]] if no prerequistes in meta rule r>>=
@@ -2907,6 +3182,7 @@ if(!r->tail || !r->tail->s || !*r->tail->s) {
 @
 % almost identical to before, except pass stem here instead of ""
 % (not sure it matters, maybe could factorize code)
+\t use empty_prereqs again
 
 \subsection{Matching, [[match()]]}
 
@@ -3018,6 +3294,13 @@ timeof(char *name, bool force)
 %old: ulong mtime(char *name) {  return mkmtime(name, true);}
 %but simpler to remove, refactor caller sites
 
+% Note that applyrules goes until the end, even if leaf is up to date
+% already. it will compute also the dependencies for this up-to-date
+% leaf. Because applyrules just does one thing! Build static graph,
+% and then can do analysis on this graph. Better separate concerns
+% (so can do tricky analysis like implicit dependencies, etc)
+
+
 <<function mkmtime>>=
 ulong
 mkmtime(char *name, bool force)
@@ -3069,6 +3352,8 @@ symlook(name, S_TIME, (void*)t);		/* install time in cache */
 
 \section{Checking the rules}
 
+% also simplify the graph by removing some arcs (see togo())
+
 <<[[graph()]] checking the graph>>=
 cyclechk(root);
 
@@ -3077,6 +3362,9 @@ vacuous(root);
 
 ambiguous(root);
 @
+\l can do vacuous after ambiguous? ambiguous simpler to explain
+
+% PROBABLE is against TOGO?
 
 \subsection{Cycle detection}
 
@@ -3101,6 +3389,7 @@ cyclechk(Node *n)
     n->flags &= ~CYCLE;
 }
 @
+% important restore back flags as they were before?
 
 \subsection{Infinite rule detection, [[$NREP]]}%$
 
@@ -3109,6 +3398,24 @@ cyclechk(Node *n)
 // map<ruleid, int>
 char *cnt;
 @
+
+
+<<[[Rule]] other fields>>=
+int 		rule;		/* rule number */
+@
+
+
+% incremented by addrule()
+<<global nrules>>=
+static int nrules = 0;
+@
+% used by rulecnt() later
+
+
+<<[[addrule()]] set more fields>>=
+r->rule = nrules++;
+@
+
 
 <<[[graph()]] set cnt for infinite rule detection>>=
 cnt = rulecnt();
@@ -3135,10 +3442,6 @@ rulecnt(void)
 % nrules modified by addrule
 
 
-% for GC? to identify unused rules?
-<<[[Rule]] other fields>>=
-int 		rule;		/* rule number */
-@
 
 
 
@@ -3188,23 +3491,97 @@ nrep(void)
 @
 
 
-\subsection{Vacuous rule detection}
+\subsection{Ambiguous rule detection}
+% help to understand subtelities of multiple targets, multiple prereqs,
+%  multiple rules ?
 
-% def of vacuous? =~ stupid
-\t example of stupid rule?
+% seems that rely on TOGO field, so assume vacuous has been called before?
 
-<<[[Node_flag]] cases>>=
-VACUOUS    = 0x0200,
+%nice output:
+%mk: ambiguous recipes for install:
+%	install <-(/sys/src/cmd/mklib:28)- libthreads.a <-(/sys/src/cmd/mklib:12)- libthreads.a(scheduler.8)
+%	install <-(mkfile:19)- 
+
+% how to allow :: of GNU make?
+% maybe bad to allow :: in the end.
+
+<<function ambiguous>>=
+static void
+ambiguous(Node *n)
+{
+    Arc *a;
+    Rule *r = nil;
+    Arc *la = nil;
+    bool bad = false;
+
+    for(a = n->prereqs; a; a = a->next){
+        // recurse
+        if(a->n)
+            ambiguous(a->n);
+
+        // rules without any recipe do not generate ambiguity
+        if(*a->r->recipe == '\0') continue;
+        // else
+
+        // first rule with recipe (so no ambiguity)
+        if(r == nil) {
+            r = a->r;
+            la = a;
+        }
+        else{
+            <<[[ambiguous()]] give priority to simple rules over meta rules>>
+            if(r->recipe != a->r->recipe){
+                if(!bad){
+                    fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
+                    bad = true;
+                    trace(n->name, la);
+                }
+                trace(n->name, a);
+            }
+        }
+    }
+    if(bad)
+        Exit();
+    <<[[ambiguous()]] get rid of all skipped rules>>
+}
+@
+\l why not mark TOGO for rule without recipe?
+
+<<function trace>>=
+static void
+trace(char *s, Arc *a)
+{
+    fprint(STDERR, "\t%s", s);
+    while(a){
+        fprint(STDERR, " <-(%s:%d)- %s", a->r->file, a->r->line,
+            a->n? a->n->name:"");
+        if(a->n){
+            for(a = a->n->prereqs; a; a = a->next)
+                if(*a->r->recipe) break;
+        } else
+            a = nil;
+    }
+    fprint(STDERR, "\n");
+}
 @
 
-<<[[Node_flag]] cases>>=
-PROBABLE   = 0x0100,
-@
 
-<<[[Node_flag]] cases>>=
-READY      = 0x0004,
-@
 
+
+
+
+<<[[ambiguous()]] give priority to simple rules over meta rules>>=
+if(r->recipe != a->r->recipe){
+    if((r->attr&META) && !(a->r->attr&META)){
+        la->flag |= TOGO;
+        r = a->r;
+        la = a;
+    } else if(!(r->attr&META) && (a->r->attr&META)){
+        a->flag |= TOGO;
+        continue;
+    }
+}
+@
 
 <<[[Arc]] other fields>>=
 // bool (TOGO)
@@ -3215,6 +3592,67 @@ short flag;
 /* Arc.flag */
 #define		TOGO		true
 @
+% mark arc as to be removed
+
+
+
+<<[[ambiguous()]] get rid of all skipped rules>>=
+togo(n);
+@
+
+
+<<function togo>>=
+static void
+togo(Node *node)
+{
+    Arc *a, *la;
+
+    /* delete them now */
+    la = nil;
+    for(a = node->prereqs; a; la = a, a = a->next)
+        if(a->flag&TOGO){
+            fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
+                     node->name, a->n->name);
+            //remove_list(a, node->prereqs)
+            if(a == node->prereqs)
+                node->prereqs = a->next;
+            else
+                la->next = a->next, a = la;
+        }
+}
+@
+% la = last a
+% pad: I've added the warning
+
+
+
+\subsection{Vacuous rule detection}
+\t What is that? read mk.ps?
+
+% def of vacuous =~ stupid
+
+\t example of stupid rule?
+%  when have ambiguity on target for simple rule and metarule, 
+%   then we prioritize the first and make vacuous the other one?
+
+
+
+<<[[Node_flag]] cases>>=
+VACUOUS    = 0x0200,
+@
+
+
+<<[[Node_flag]] cases>>=
+PROBABLE   = 0x0100,
+@
+% ??? not very clear
+
+<<[[Node_flag]] cases>>=
+READY      = 0x0004,
+@
+% for what? not very clear name
+
+
 
 
 
@@ -3237,7 +3675,7 @@ vacuous(Node *node)
 
     /* if a rule generated arcs that DON'T go; no others from that rule go */
     for(a = node->prereqs; a; a = a->next)
-        if((a->flag&TOGO) == 0)
+        if(!(a->flag&TOGO))
             for(la = node->prereqs; la; la = la->next)
                 if((la->flag&TOGO) && (la->r == a->r)){
                     la->flag &= ~TOGO;
@@ -3252,107 +3690,8 @@ vacuous(Node *node)
 @
 % pad: I've added the warning
 
-<<function togo>>=
-static void
-togo(Node *node)
-{
-    Arc *a, *la;
 
-    /* delete them now */
-    la = nil;
-    for(a = node->prereqs; a; la = a, a = a->next)
-        if(a->flag&TOGO){
-            fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
-                     node->name, a->n->name);
-            //delete(a, node->prereqs)
-            if(a == node->prereqs)
-                node->prereqs = a->next;
-            else
-                la->next = a->next, a = la;
-        }
-}
-@
-% la = last a
-% pad: I've added the warning
-
-\subsection{Ambiguous rule detection}
-
-%nice output:
-%mk: ambiguous recipes for install:
-%	install <-(/sys/src/cmd/mklib:28)- libthreads.a <-(/sys/src/cmd/mklib:12)- libthreads.a(scheduler.8)
-%	install <-(mkfile:19)- 
-
-% how to allow :: of GNU make?
-% maybe bad to allow :: in the end.
-
-<<function ambiguous>>=
-static void
-ambiguous(Node *n)
-{
-    Arc *a;
-    Rule *r = nil;
-    Arc *la = nil;
-    bool bad = false;
-
-    for(a = n->prereqs; a; a = a->next){
-        if(a->n)
-            ambiguous(a->n);
-        if(*a->r->recipe == 0) continue;
-        if(r == nil) {
-            r = a->r;
-            la = a;
-        }
-        else{
-            if(r->recipe != a->r->recipe){
-                if((r->attr&META) && !(a->r->attr&META)){
-                    la->flag |= TOGO;
-                    r = a->r, la = a;
-                } else if(!(r->attr&META) && (a->r->attr&META)){
-                    a->flag |= TOGO;
-                    continue;
-                }
-            }
-            if(r->recipe != a->r->recipe){
-                if(!bad){
-                    fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
-                    bad = true;
-                    trace(n->name, la);
-                }
-                trace(n->name, a);
-            }
-        }
-    }
-    if(bad)
-        Exit();
-    togo(n);
-}
-@
-
-<<function trace>>=
-static void
-trace(char *s, Arc *a)
-{
-    fprint(STDERR, "\t%s", s);
-    while(a){
-        fprint(STDERR, " <-(%s:%d)- %s", a->r->file, a->r->line,
-            a->n? a->n->name:"");
-        if(a->n){
-            for(a = a->n->prereqs; a; a = a->next)
-                if(*a->r->recipe) break;
-        } else
-            a = 0;
-    }
-    fprint(STDERR, "\n");
-}
-@
-
-\section{Rule attribute propagation}
-
-<<[[Node_flag]] cases>>=
-VIRTUAL    = 0x0001,
-NORECIPE   = 0x0400,
-DELETE     = 0x0800,
-@
+\section{Rule attributes propagation}
 
 % propagate from rule to node
 % why?
@@ -3364,23 +3703,18 @@ attribute(Node *n)
     Arc *a;
 
     for(a = n->prereqs; a; a = a->next){
-        if(a->r->attr&VIR)
-            n->flags |= VIRTUAL;
-        if(a->r->attr&NOREC)
-            n->flags |= NORECIPE;
-        if(a->r->attr&DEL)
-            n->flags |= DELETE;
+        <<[[attribute()]] propagate rule attribute to node cases>>
+        // recurse
         if(a->n)
             attribute(a->n);
     }
-    if(n->flags&VIRTUAL)
-        n->time = 0;
+    <<[[attribute()]] if virtual node>>
 }
 @
 
 
 
-\chapter{Analyzing Outdated Dependencies}
+\chapter{Finding Outdated Files}
 
 % the core!
 
@@ -3416,6 +3750,7 @@ MADE       = 0x0080,
 <<global runerrs>>=
 int runerrs;
 @
+\l global did?
 
 
 % main -> <> -> graph() ; clrmade(); work()
@@ -3444,11 +3779,7 @@ mk(char *target)
             }
         }
     }
-    if(root->flags&BEINGMADE) // because of a runerrs
-        waitup(-1, (int *)nil);
-
-    while(jobs)
-        waitup(-2, (int *)nil);
+    <<[[main()]] more [[waitup()]] before exiting>>
 
     assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
     if(!did)
@@ -3456,9 +3787,16 @@ mk(char *target)
 }
 @
 %old: was called node, but root is better.
+
 %note: subtle, important while loop! because of mk // so run some jobs
 % but then later another job might depend on the end of this one,
 % so have BEINGMADE flag and waitup??
+
+\l but can have runerrs only when use mk -k ? so could put that in assert too?
+
+% when can have did==false so print xx is up to date?
+% when did nothing, because prog was _already_ uptodate.
+\l maybe change message.
 
 \t wanted to make did a global because was always threading it
 % everywhere and doing did = foo () || did;   
@@ -3575,12 +3913,7 @@ if(getwd(cwd, sizeof cwd))
     fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
 else
     fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
-
-if(kflag){
-    node->flags |= BEINGMADE;
-    runerrs++;
-} else
-    Exit();
+<<[[work()]] when inexistent target without prerequisites, exit unless kflag>>
 @
 
 
@@ -3632,6 +3965,9 @@ outofdate(Node *node, Arc *arc, bool eval)
 }
 @
 % inexistent file has zero time (like very very old time)
+%old: was <=, but annoying, so I ignored the comment
+
+% eval argument? seems used only for :P: prog stuff
 
 %note: on very fast machine the <= above test can be actually annoying.
 % For instance in ocaml both the .cmo and .cmi may have
@@ -3646,174 +3982,225 @@ outofdate(Node *node, Arc *arc, bool eval)
 
 \section{[[dorecipe()]]}
 
-% if return error code, then should stop mk right?
+%bool dorecipe(Node *node)
 
-%TODO: if have a TAB then does not display it in the output?
-% if have a recipe which starts with some space then it outputs
-% this extra space?
+% will iterate over arcs, node in args,
+% words, and symbols.
+
+% find right arc with recipe, find master rule
+
+<<[[dorecipe()]] other locals>>=
+Arc *aa = nil; // arc with recipe
+Rule *r = nil; // rule with recipe
+@
+\t rename aa to arc
+
+% set list of targets (most of the time single one)
+% and have alltargets and only-old-targets (outofdate)
+
+<<[[dorecipe()]] other locals>>=
+Word head, ahead; // out of date targets,   all targets
+@
+\t rename head ahead
+
+% set list of prereqs (most of the time single one)
+% and have allprereqs and only-new-prereqs (causing outofdate target)
+
+<<[[dorecipe()]] other locals>>=
+Word lp, ln; // all prereqs, prereqs making target out of date
+@
+\t rename lp ln
+%old: l for list?
+
+<<[[dorecipe()]] other locals>>=
+bool did = false;
+@
+%dead, always false (maybe use [[did]] instead of false cos clearer)
+
 
 % main -> mk -> work -> ... -> run(newjob())
 <<function dorecipe>>=
 bool
 dorecipe(Node *node)
 {
-    bool did = false;
-    char buf[BIGBLOCK], cwd[256];
-    Arc *a, *aa;
+    // iterators
+    Arc *a;
     Node *n;
-    Rule *r = nil;
+    Word *w;
     Symtab *s;
-    Word head, ahead, lp, ln, *w, *ww, *aw;
+    <<[[dorecipe()]] other locals>>
 
-    aa = nil;
     /*
      *   pick up the rule
      */
     for(a = node->prereqs; a; a = a->next)
         if(*a->r->recipe) {
             aa = a;
-            r = aa->r;
+            r = a->r;
         }
-    /*
-     *   no recipe? go to buggery!
-     */
-    if(r == nil){
-        if(!(node->flags&VIRTUAL) && !(node->flags&NORECIPE)){
-            if(getwd(cwd, sizeof cwd))
-                fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
-            else
-                fprint(STDERR, "mk: no recipe to make '%s'\n", node->name);
-            Exit();
-        }
-        if(strchr(node->name, '(') && node->time == 0)
-            MADESET(node, MADE);
-        else
-            update(false, node);
-        if(tflag){
-            if(!(node->flags&VIRTUAL))
-                touch(node->name);
-            else if(explain)
-                Bprint(&bout, "no touch of virtual '%s'\n", node->name);
-        }
-        return did;
-    }
+    <<[[dorecipe()]] if no recipe found>>
+    // else
 
     /*
      *   build the node list
      */
-    node->next = 0;
-    head.next = 0;
-    ww = &head;
-    ahead.next = 0;
-    aw = &ahead;
-    if(r->attr&REGEXP){
-        ww->next = newword(node->name);
-        aw->next = newword(node->name);
-    } else {
-        for(w = r->alltargets; w; w = w->next){
-            if(r->attr&META)
-                subst(aa->stem, w->s, buf, sizeof(buf));
-            else
-                strecpy(buf, buf + sizeof buf - 1, w->s);
-            aw->next = newword(buf);
-            aw = aw->next;
-            if((s = symlook(buf, S_NODE, 0)) == 0)
-                continue;	/* not a node we are interested in */
-            n = s->u.ptr;
-            if(!aflag && n->time) {
-                for(a = n->prereqs; a; a = a->next)
-                    if(a->n && outofdate(n, a, false))
-                        break;
-                if(a == 0)
-                    continue;
-            }
-            ww->next = newword(buf);
-            ww = ww->next;
-            if(n == node) continue;
-            n->next = node->next;
-            node->next = n;
-        }
-    }
-    for(n = node; n; n = n->next)
-        if((n->flags&READY) == 0)
-            return did;
+    node->next = nil;
+    head.next = ahead.next = nil;
+    <<[[dorecipe()]] build lists of targets and node list>>
+
+    <<[[dorecipe()]] return if one target not READY>>
+
     /*
-        gather the params for the job
-    */
-    lp.next = ln.next = 0;
+     *   gather the params for the job
+     */
+    lp.next = ln.next = nil;
     for(n = node; n; n = n->next){
-        for(a = n->prereqs; a; a = a->next){
-            if(a->n){
-                addw(&lp, a->n->name);
-                if(outofdate(n, a, false)){
-                    addw(&ln, a->n->name);
-                    if(explain)
-                        fprint(1, "%s(%ld) < %s(%ld)\n",
-                            n->name, n->time, a->n->name, a->n->time);
-                }
-            } else {
-                if(explain)
-                    fprint(1, "%s has no prerequisites\n",
-                            n->name);
-            }
-        }
+        <<[[dorecipe()]] build lists of prerequisites>>
         MADESET(n, BEINGMADE);
     }
-    run(newjob(r, node, aa->stem, aa->match, lp.next, ln.next, head.next, ahead.next));
+
+    // run the job
+    run(newjob(r, node, aa->stem, aa->match, 
+               lp.next, ln.next, 
+               head.next, ahead.next));
     return true;
 }
 @
 %/*print("lt=%s ln=%s lp=%s\n",wtos(head.next, ' '),wtos(ln.next, ' '),wtos(lp.next, ' '));
+\t remove local did?
 
 
-<<function update>>=
-void
-update(bool fake, Node *node)
-{
-    Arc *a;
+% if return error code, then should stop mk right?
 
-    MADESET(node, fake? BEINGMADE : MADE);
-    if(DEBUG(D_TRACE))
-        print("update(): node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);
+%TODO: if have a TAB then does not display it in the output?
+% if have a recipe which starts with some space then it outputs
+% this extra space?
 
-    if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
-        node->time = timeof(node->name, true);
-        <<[[update()]] unpretend node>>
-        for(a = node->prereqs; a; a = a->next)
-            if(a->prog)
-                outofdate(node, a, true);
+
+<<[[dorecipe()]] other locals>>=
+Word *ww, *aw;
+char buf[BIGBLOCK];
+@
+
+
+<<[[dorecipe()]] build lists of targets and node list>>=
+ww = &head;
+aw = &ahead;
+<<[[dorecipe()]] if regexp rule>>
+else {
+    for(w = r->alltargets; w; w = w->next){
+        if(r->attr&META)
+            subst(aa->stem, w->s, buf, sizeof(buf));
+        else
+            strecpy(buf, buf + sizeof buf - 1, w->s);
+
+        aw->next = newword(buf);
+        aw = aw->next;
+
+        s = symlook(buf, S_NODE, nil);
+        if(s == nil)
+            continue;	/* not a node we are interested in */
+        // else
+        n = s->u.ptr;
+
+        <<[[dorecipe()]] update list of outdated targets>>
+
+        if(n == node) continue;
+
+        n->next = node->next;
+        node->next = n;
+    }
+}
+@
+
+
+<<[[dorecipe()]] update list of outdated targets>>=
+if(!aflag && n->time) {
+    for(a = n->prereqs; a; a = a->next)
+        if(a->n && outofdate(n, a, false))
+            break;
+    // no out of date arc, node does not need to be regenerated
+    if(a == nil)
+        continue; 
+    // else, find an outdated arc for node of target
+}
+ww->next = newword(buf);
+ww = ww->next;
+@
+
+
+<<[[dorecipe()]] return if one target not READY>>=
+for(n = node; n; n = n->next)
+    if(!(n->flags&READY))
+        return did;
+@
+% did always false here no?
+% and look vacuous(), READY is usually not set ...
+\t ????
+
+<<[[dorecipe()]] build lists of prerequisites>>=
+for(a = n->prereqs; a; a = a->next){
+    if(a->n){
+        addw(&lp, a->n->name);
+        if(outofdate(n, a, false)){
+            addw(&ln, a->n->name);
+            <<[[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date>>
+        }
     } else {
-        node->time = 1;
-        for(a = node->prereqs; a; a = a->next)
-            if(a->n && outofdate(node, a, true))
-                node->time = a->n->time;
+        <<[[dorecipe()]] explain when found target [[n]] with no prerequisite>>
     }
 }
 @
+\l why arc without a node??
 
+<<[[dorecipe()]] other locals>>=
+char cwd[256];
+@
 
-
-<<function addw>>=
-void
-addw(Word *w, char *s)
-{
-    Word *lw;
-
-    for(lw = w; w = w->next; lw = w){
-        if(strcmp(s, w->s) == 0)
-            return;
+<<[[dorecipe()]] if no recipe found>>=
+/*
+ *   no recipe? go to buggery!
+ */
+if(r == nil){
+    if(!(node->flags&VIRTUAL) && !(node->flags&NORECIPE)){
+        if(getwd(cwd, sizeof cwd))
+            fprint(STDERR, "mk: no recipe to make '%s' in directory %s\n", node->name, cwd);
+        else
+            fprint(STDERR, "mk: no recipe to make '%s'\n", node->name);
+        Exit();
     }
-    lw->next = newword(s);
+    // else
+    if(strchr(node->name, '(') && node->time == 0)
+        MADESET(node, MADE);
+    else
+        update(false, node);
+
+    if(tflag){
+        if(!(node->flags&VIRTUAL))
+            touch(node->name);
+        else if(explain)
+            Bprint(&bout, "no touch of virtual '%s'\n", node->name);
+    }
+    return did;
 }
 @
+\t change !X && !Y  to X || Y   so easier to aspectize
+
+
+
 
 \chapter{Scheduling Jobs}
-% can do stuff in //! make originally didn't apparently
+\l Fixing outdated files
 
-%trans: remaining thing to see, run(), the waitup()
+%trans: remaining things to see: run(), waitup()
+% seen Job and jobs before.
+% will see a few more globals: nproclimit, nevent, nrunning
 
-\section{[[run()]]}
+% can do stuff in //. Make originally didn't (apparently).
 
+\section{Enqueuing jobs}
+
+\subsection{[[nrunning]] and [[nproclimit]]}
 
 <<global nrunning>>=
 static int nrunning;
@@ -3822,9 +4209,12 @@ static int nrunning;
 <<global nproclimit>>=
 static int nproclimit;
 @
+% can be set in env (readenv) $NPROC, see below
+\l put code setting up nproclimit here?
 
+\subsection{[[run()]]}
 
-% main -> mk -> work -> dorecipe -> <> -> sched()
+% main -> mk -> work -> dorecipe -> <> (-> sched())
 <<function run>>=
 void
 run(Job *j)
@@ -3845,276 +4235,13 @@ run(Job *j)
         sched();
 }
 @
+\l j->next = nil  redundant since does it already in newjob
 
-\section{Launching jobs, [[sched()]]}
-
-<<struct RunEvent>>=
-struct RunEvent {
-    int pid;
-    Job *job;
-};
-@
-
-% should be array[nproclimit]
-<<global events>>=
-static RunEvent *events;
-@
-
-% should be equal to nproclimit
-<<global nevents>>=
-static int nevents;
-@
+% if no more processor free, then just enqueued. next round
+%  will pop this one.
 
 
-<<function sched>>=
-static void
-sched(void)
-{
-    Job *j;
-    int slot;
-    Envy *e;
-
-    Bufblock *buf;
-    char *flags;
-    Node *n;
-
-    if(jobs == nil){
-        usage();
-        return;
-    }
-
-    // j = pop(jobs)
-    j = jobs;
-    jobs = j->next;
-    <<[[sched()]] if DEBUG(D_EXEC)>>
-
-    slot = nextslot();
-    events[slot].job = j;
-
-    e = buildenv(j, slot);
-    <<[[sched()]] print recipe command on stdout>>
-
-    <<[[sched()]] if dry mode or touch mode>>
-    else {
-       <<[[sched()]] if DEBUG(D_EXEC) print recipe>>
-        flags = (j->r->attr&NOMINUSE)? nil : "-e";
-        // launching the job!
-        events[slot].pid = execsh(flags, j->r->recipe, 0, e);
-        usage();
-        nrunning++;
-       <<[[sched()]] if DEBUG(D_EXEC) print pid>>
-    }
-}
-@
-% -e is important!! want any error in the subshell command
-% to abort the whole thing
-
-<<[[Node_flag]] cases>>=
-NOMINUSE   = 0x1000,
-@
-
-
-<<[[Rule_attr]] cases>>=
-QUIET  = 0x0008,
-@
-
-<<[[sched()]] print recipe command on stdout>>=
-buf = newbuf();
-shprint(j->r->recipe, e, buf);
-if(!tflag && (nflag || !(j->r->attr&QUIET)))
-    Bwrite(&bout, buf->start, (long)strlen(buf->start));
-freebuf(buf);
-@
-
-
-
-<<function nextslot>>=
-int
-nextslot(void)
-{
-    int i;
-
-    for(i = 0; i < nproclimit; i++)
-        if(events[i].pid <= 0) 
-            return i;
-    assert(/*out of slots!!*/ false);
-    return 0;	/* cyntax */
-}
-@
-
-
-
-\section{[[Process]]}
-
-<<struct Process>>=
-struct Process {
-    int pid;
-    int status;
-
-    // Extra
-    // double linked list, backward, forward
-    Process *b, *f;
-};
-@
-% again another example of redundant code ... should be factorized
-% in a container library
-
-<<global phead>>=
-// double_list<ref_own<Process> (next = Process.f)
-static Process *phead;
-@
-
-<<global pfree>>=
-// double_list<ref_own<Process> (next = Process.f)
-static Process *pfree;
-@
-
-% ctor
-<<function pnew>>=
-static void
-pnew(int pid, int status)
-{
-    Process *p;
-
-    if(pfree){
-        p = pfree;
-        pfree = p->f;
-    } else
-        p = (Process *)Malloc(sizeof(Process));
-
-    p->pid = pid;
-    p->status = status;
-
-    p->f = phead;
-    phead = p;
-    if(p->f)
-        p->f->b = p;
-    p->b = nil;
-}
-@
-
-% dtor
-<<function pdelete>>=
-static void
-pdelete(Process *p)
-{
-    if(p->f)
-        p->f->b = p->b;
-    if(p->b)
-        p->b->f = p->f;
-    else
-        phead = p->f;
-    p->f = pfree;
-    pfree = p;
-}
-@
-
-
-
-
-\section{Waiting children}
-
-
-% echildok -1, -2, -3?? just to help debug which one of the waitup?
-% then use __LINE__ no?
-<<function waitup>>=
-int
-waitup(int echildok, int *retstatus)
-{
-    Envy *e;
-    int pid;
-    int slot;
-    Symtab *s;
-    Word *w;
-    Job *j;
-    char buf[ERRMAX];
-    Bufblock *bp;
-    int uarg = 0;
-    int done;
-    Node *n;
-    Process *p;
-
-    /* first check against the proces slist */
-    if(retstatus)
-        for(p = phead; p; p = p->f)
-            if(p->pid == *retstatus){
-                *retstatus = p->status;
-                pdelete(p);
-                return -1;
-            }
-again:		/* rogue processes */
-    pid = waitfor(buf);
-    if(pid == -1){
-        if(echildok > 0)
-            return 1;
-        else {
-            fprint(STDERR, "mk: (waitup %d) ", echildok);
-            perror("mk wait");
-            Exit();
-        }
-    }
-    <<[[waitup()]] if DEBUG(D_EXEC) print pid>>
-    if(retstatus && pid == *retstatus){
-        *retstatus = buf[0]? 1:0;
-        return -1;
-    }
-    slot = pidslot(pid);
-    if(slot < 0){
-       <<[[waitup()]] if DEBUG(D_EXEC) and slot < 0>>
-        pnew(pid, buf[0]? 1:0);
-        goto again;
-    }
-    j = events[slot].job;
-    usage();
-    nrunning--;
-    events[slot].pid = -1;
-    if(buf[0]){
-        e = buildenv(j, slot);
-        bp = newbuf();
-        shprint(j->r->recipe, e, bp);
-        front(bp->start);
-        fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
-        freebuf(bp);
-        for(n = j->n, done = 0; n; n = n->next)
-            if(n->flags&DELETE){
-                if(done++ == 0)
-                    fprint(STDERR, ", deleting");
-                fprint(STDERR, " '%s'", n->name);
-                delete(n->name);
-            }
-        fprint(STDERR, "\n");
-        if(kflag){
-            runerrs++;
-            uarg = 1;
-        } else {
-            jobs = 0;
-            Exit();
-        }
-    }
-    for(w = j->t; w; w = w->next){
-        if((s = symlook(w->s, S_NODE, 0)) == 0)
-            continue;	/* not interested in this node */
-        update(uarg, s->u.ptr);
-    }
-    if(nrunning < nproclimit)
-        sched();
-    return 0;
-}
-@
-
-<<function delete>>=
-void
-delete(char *name)
-{
-    if(utfrune(name, '(') == 0) {		/* file */
-        if(remove(name) < 0)
-            perror(name);
-    } else
-        fprint(STDERR, "hoon off; mk can'tdelete archive members\n");
-}
-@
-
-\section{Parallel processing, [[$NPROC]]}%$
+\subsection{[[$NPROC]]}%$
 % export NPROC=...
 
 <<[[mk()]] initialisation>>=
@@ -4136,19 +4263,65 @@ nproc(void)
     if(nproclimit < 1)
         nproclimit = 1;
     <<[[nproc()]] if DEBUG(D_EXEC)>>
-    if(nproclimit > nevents){
-        if(nevents)
-            events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
-        else
-            events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
 
-        while(nevents < nproclimit)
-            events[nevents++].pid = 0;
-    }
+    <<[[nproc()]] grow nevents if necessary>>
 }
 @
 
 
+\section{Scheduling jobs}
+
+%trans: if processor free, then run job, and keep track of it.
+
+\subsection{[[RunEvent]] and [[events]]}
+
+% to keep track of children process, what they were supposed to do.
+
+<<struct RunEvent>>=
+struct RunEvent {
+    // option<Pid> (None = 0)
+    int pid;
+
+    // ref_own<Job>
+    Job *job;
+};
+@
+%bug? seems that job never freed
+
+
+<<global events>>=
+// growing_array<Runevent> (size = nevents (== nproclimit))
+static RunEvent *events;
+@
+%ocaml: use instead map from pid to job.
+
+
+<<global nevents>>=
+static int nevents;
+@
+\t should be == nproclimit, so maybe can remove it
+\l  or sometimes nproclimit can go down, in which case we dont really
+\l  but useless opti
+\t  just remember old_nproclimit in nproc() so know if need realloc
+
+% the slaves processors! called a slot.
+
+% sched -> <>
+<<function nextslot>>=
+int
+nextslot(void)
+{
+    int i;
+
+    for(i = 0; i < nproclimit; i++)
+        if(events[i].pid <= 0) 
+            return i;
+    assert(/*out of slots!!*/ false);
+    return 0;	/* cyntax */
+}
+@
+
+% waitup -> <>
 <<function pidslot>>=
 int
 pidslot(int pid)
@@ -4162,10 +4335,438 @@ pidslot(int pid)
     return -1;
 }
 @
+% this one iterate on all nevents, not just nproclimit
+% but should be the same between two runs of mk
+% so maybe could simplify.
+\t use nproclimit, not nevents above, more consistent
+
+
+<<[[nproc()]] grow nevents if necessary>>=
+if(nproclimit > nevents){
+    if(nevents)
+        events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
+    else
+        events = (RunEvent *)Malloc(nproclimit*sizeof(RunEvent));
+
+    while(nevents < nproclimit)
+        events[nevents++].pid = 0;
+}
+@
+\t replace nproclimit by != nevents
+
+% so nevents should be = to nproclimit at the end
+
+
+\subsection{[[sched()]]}
+
+% main -> mk -> work -> dorecipe -> run -> sched()
+<<function sched>>=
+static void
+sched(void)
+{
+    Job *j;
+    int slot;
+    Envy *e;
+    char *flags;
+    <<[[sched()]] other locals>>
+
+    <<[[sched()]] sanity check jobs>>
+
+    // j = pop(jobs)
+    j = jobs;
+    jobs = j->next;
+    <<[[sched()]] if DEBUG(D_EXEC)>>
+
+    slot = nextslot();
+    events[slot].job = j;
+
+    e = buildenv(j, slot);
+    <<[[sched()]] print recipe command on stdout>>
+
+    <<[[sched()]] if dry mode or touch mode, alternate to execsh>>
+    else {
+       <<[[sched()]] if DEBUG(D_EXEC) print recipe>>
+        flags = "-e";
+       <<[[sched()]] reset flags if NOMINUSE rule>>
+
+        // launching the job!
+        events[slot].pid = execsh(flags, j->r->recipe, nil, e);
+
+        usage();
+        nrunning++;
+       <<[[sched()]] if DEBUG(D_EXEC) print pid>>
+    }
+}
+@
+% -e is important!! want any error in the subshell command
+% to abort the whole thing
+
+<<[[sched()]] sanity check jobs>>=
+if(jobs == nil){
+    usage();
+    return;
+}
+@
+\t how can have jobs == nil?
+% should issue an error here, assert!
+
+% buildenv is important; it is the function using most of the fields in j;
+
+\subsection{Executing shell recipes, [[execsh()]]}
+
+<<global shell>>=
+char 	*shell =	"/bin/rc";
+@
+<<global shellname>>=
+char 	*shellname =	"rc";
+@
+
+
+<<global shflags>>=
+char	*shflags = "-I";	/* rc flag to force non-interactive mode */
+@
+% pad: should add also -e!! actually -e is added by default
+%  unless you added :E: for NOMINUSE
+
+% will fork, exec shell, and pass as stdin input in pipe 
+% to the shell the recipe string.
+%alt: sh -e '' ? but then need escape mess?
+
+% can also pass a buf for bquote (backquote execution), to store
+%  stdout instead of just displaying it gradually
+
+% FIGURE? cos 2 forks below.
+% 2 fork trick for what? because dont want current
+% process to be blocked on feeding input to shell. Instead
+% do that in another process.
+
+%plan9.c 
+<<function execsh>>=
+int
+execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
+{
+    int pid;
+    fdt in[2];
+    int err;
+    <<[[execsh()]] other locals>>
+
+    <<[[execsh()]] if buf then create pipe to save output>>
+
+    pid = rfork(RFPROC|RFFDG|RFENVG);
+    <<[[execsh()]] sanity check pid rfork>>
+    // children
+    if(pid == 0){
+        <<[[execsh()]] in children, if buf, close one side of pipe>>
+        err = pipe(in);
+        <<[[execsh()]] sanity check err pipe>>
+        pid = fork();
+        <<[[execsh()]] sanity check pid fork>>
+        // child 1, the shell interpreter
+        if(pid != 0){
+            // input now comes from the pipe
+            dup(in[0], STDIN);
+            <<[[execsh()]] in child 1, if buf, dup and close>>
+            close(in[0]);
+            close(in[1]);
+            if (e)
+                exportenv(e);
+            if(shflags)
+                execl(shell, shellname, shflags, args, nil);
+            else
+                execl(shell, shellname, args, nil);
+            // should not be reached
+            perror(shell);
+            _exits("exec");
+        }
+        // child 2, feeding the shell with recipe, through a pipe
+        <<[[execsh()]] in child 2, if buf, close other side of pipe>>
+        close(in[0]);
+        <<[[execsh()]] in child 2, write cmd in pipe>>
+        close(in[1]); // will flush
+        _exits(0);
+    }
+    // parent
+    <<[[execsh()]] in parent, if buf, close other side of pipe and read output>>
+    return pid;
+}
+@
+%pad: I introduced int err; so can better aspectize sanity checks
+\n put flags after cmd in argument of execsh, more logical? no! cmd is input!
+\t rename cmd to input ?
+
+% exportenv! so set in child the variables in environment
+
+<<[[execsh()]] other locals>>=
+char *p;
+@
+<<[[execsh()]] in child 2, write cmd in pipe>>=
+p = cmd+strlen(cmd);
+while(cmd < p){
+    n = write(in[1], cmd, p-cmd);
+    if(n < 0)
+        break;
+    cmd += n;
+}
+@
 
 
 
-\section{Signals/Notes managment}
+<<[[execsh()]] sanity check pid rfork>>=
+if(pid < 0){
+    perror("mk rfork");
+    Exit();
+}
+@
+<<[[execsh()]] sanity check pid fork>>=
+if(pid < 0){
+    perror("mk fork");
+    Exit();
+}
+@
+<<[[execsh()]] sanity check err pipe>>=
+if(err < 0){
+    perror("pipe");
+    Exit();
+}
+@
+
+
+
+
+
+
+
+
+\section{Waiting jobs}
+
+\subsection{[[waitup()]]}
+
+% wait user processes?
+
+% retstatus mostly not used. used for <| and :P: so can aspectize it
+% INOUT. for IN it is a pid and OUT it is the return status (ugly)
+% put here because can have only one call to wait. wait is waiting
+%  indiscrimently, so have to centralize in one place.
+% For more info, see Section X.
+
+% mk -> work; <>
+<<function waitup>>=
+int
+waitup(int echildok, int *retstatus)
+{
+    // child process
+    int pid;
+    // return string of child process
+    char buf[ERRMAX];
+    // index in events[]
+    int slot;
+    Job *j;
+    Symtab *sym;
+    Word *w;
+    bool fake = false;
+    <<[[waitup()]] other locals>>
+
+    <<[[waitup()]] if retstatus, check process list>>
+again:		/* rogue processes */
+
+    pid = waitfor(buf);
+    <<[[waitup()]] if no more children>>
+    <<[[waitup()]] if DEBUG(D_EXEC) print pid>>
+    <<[[waitup()]] if retstatus, check if matching pid>>
+
+    slot = pidslot(pid);
+    <<[[waitup()]] if slot not found, not a job pid, update process list>>
+
+    j = events[slot].job;
+    usage();
+    nrunning--;
+    // free events[slot]
+    events[slot].pid = -1;
+
+    <<[[waitup()]] if error in child process, possibly set fake or exit>>
+    // else
+
+    for(w = j->t; w; w = w->next){
+        sym = symlook(w->s, S_NODE, nil);
+        <<[[waitup()]] skip if node not found>>
+        update(fake, (Node*) sym->u.ptr);
+    }
+
+    if(nrunning < nproclimit)
+        sched();
+    return 0;
+}
+@
+%bug? could free job in events[i] too
+%old: fake was called [[uarg]] (for update arg)
+\t return value used?
+
+%plan9.c
+<<function waitfor>>=
+int
+waitfor(char *msg)
+{
+    Waitmsg *w;
+    int pid;
+
+    // blocking call, wait for any children
+    w = wait();
+    // no more children
+    if(w == nil)
+        return -1;
+    strecpy(msg, msg+ERRMAX, w->msg);
+    pid = w->pid;
+    free(w);
+    return pid;
+}
+@
+% strecpy set msg[0] to \0 if nothing?
+
+
+% echildok -1, -2, -3?? just to help debug which one of the waitup?
+%alt: could use __LINE__ instead
+\t introduce enum? ERROR_CHILD_OK, ERROR_CHILD_NOTOK1, ERROR_CHILD_NOTOK2
+\t  or is it EMPTY_CHILD_OK?
+
+<<[[waitup()]] if no more children>>=
+if(pid == -1){
+    if(echildok > 0)
+        return 1;
+    else {
+        fprint(STDERR, "mk: (waitup %d) ", echildok);
+        perror("mk wait");
+        Exit();
+    }
+}
+@
+
+
+
+<<[[waitup()]] other locals>>=
+Envy *e;
+Bufblock *bp;
+@
+
+<<[[waitup()]] if error in child process, possibly set fake or exit>>=
+if(buf[0]){
+    e = buildenv(j, slot);
+    bp = newbuf();
+    shprint(j->r->recipe, e, bp);
+    front(bp->start);
+    fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
+    freebuf(bp);
+    <<[[waitup()]] when error in child process, delete if DELETE node>>
+    fprint(STDERR, "\n");
+
+    <<[[waitup()]] when error in child process, exit unless kflag>>
+}
+@
+% nice shprint! see final command with expanded variables!
+
+<<[[waitup()]] skip if node not found>>=
+if(sym == nil)
+    continue;	/* not interested in this node */
+@
+
+% because up to date target anyway?
+
+<<function front>>=
+void
+front(char *s)
+{
+    char *t, *q;
+    int i, j;
+    char *flds[512];
+
+    q = strdup(s);
+    i = getfields(q, flds, nelem(flds), 0, " \t\n");
+    if(i > 5){
+        flds[4] = flds[i-1];
+        flds[3] = "...";
+        i = 5;
+    }
+    t = s;
+    for(j = 0; j < i; j++){
+        for(s = flds[j]; *s; *t++ = *s++);
+        *t++ = ' ';
+    }
+    *t = 0;
+    free(q);
+}
+@
+
+
+
+
+\subsection{[[update()]]}
+
+% mk -> waitup -> <>
+<<function update>>=
+void
+update(bool fake, Node *node)
+{
+    Arc *a;
+
+    MADESET(node, fake? BEINGMADE : MADE);
+    <<[[update()]] debug>>
+
+
+    if((!(node->flags&VIRTUAL)) && (access(node->name, AEXIST) == 0)){
+        node->time = timeof(node->name, true);
+        <<[[update()]] unpretend node>>
+        <<[[update()]] set outofdate prereqs if arc prog>>
+    } 
+    else {
+        // target does not exist
+        node->time = 1;
+        for(a = node->prereqs; a; a = a->next)
+            if(a->n && outofdate(node, a, true))
+                node->time = a->n->time;
+    }
+}
+@
+% pass true to outofdate here!!
+
+% so if target not exist, still put MADE for node?
+% because anyway, otherwise would loop infinitely?
+
+
+
+
+
+
+\section{Process management}
+
+% cant just exit with process hanging out.
+% wait at least until job finished.
+
+<<function Exit>>=
+void
+Exit(void)
+{
+    while(waitpid() >= 0)
+        ;
+    exits("error");
+}
+@
+
+% Malloc, Realloc, they call Exit in case of error.
+% there should be no calls directly to exits
+
+
+
+
+% subtle
+<<[[main()]] more [[waitup()]] before exiting>>=
+if(root->flags&BEINGMADE) // because of a runerrs
+    waitup(-1, (int *)nil);
+
+while(jobs)
+    waitup(-2, (int *)nil);
+@
+\t when do we have this?
+
+\subsection{Signals/Notes management}
 
 % main -> <>
 <<function catchnotes>>=
@@ -4204,12 +4805,22 @@ killchildren(char *msg)
 
     kflag = true;	/* to make sure waitup doesn't exit */
     jobs = nil;		/* make sure no more get scheduled */
+
     for(p = phead; p; p = p->f)
         expunge(p->pid, msg);
-    while(waitup(1, (int *)0) == 0)
+    while(waitup(1, (int *)nil) == 0)
         ;
     Bprint(&bout, "mk: %s\n", msg);
     Exit();
+}
+@
+
+
+<<function expunge>>=
+void
+expunge(int pid, char *msg)
+{
+    postnote(PNPROC, pid, msg);
 }
 @
 
@@ -4219,57 +4830,44 @@ killchildren(char *msg)
 
 
 
+
 \chapter{Interacting with the Shell}
-% the recipe
 
-<<global shell>>=
-char 	*shell =	"/bin/rc";
-@
+% The recipe is shell command. 
+% Seen execsh() above with global shell, shellname stuff. 
+%  (already plan9 specific and some stuff rc specific)
+% was taking an Envy because recipe can contain variables.
+% buildenv() in sched() before execsh, passing an Envy.
 
-<<global shellname>>=
-char 	*shellname =	"rc";
-@
+%\section{Variables expansion (part 3)}
+% not done actually! shell does it! 
+% simpler! no $$i mess.
+% simplify many things.
 
-
-
-
-<<global shflags>>=
-char	*shflags = "-I";	/* rc flag to force non-interactive mode */
-@
-% pad: should add also -e!! actually -e is added by default
-%  unless you added :E: for NOMINUSE
-
-<<global IWS>>=
-int	IWS = '\1';		/* inter-word separator in env - not used in plan 9 */
-@
-
-
-
-
-
-
-\section{[[Envy]]}
-%\section{Environment Variables, [[Envy]] and [[envy]]}
-% could be in core DS, but used just here, and outside, S_VAR is good
-% enough.
-
+%real-world:
 % mk simpler than make on this. no Make variables vs shell variables.
 % (but then stronger coupling with the shell language? portable?)
 
 % variables, different occurences: in rule target, prerequistes,
 % or in recipe. Different handling depending on context.
+% See quote from mk manual.
 
-% Not envy :) just environment variable stuff, rename?
+\section{[[Envy]] and [[envy]]}
+%\section{Environment Variables, [[Envy]] and [[envy]]}
+% could be in core DS, but used just here, and outside, S_VAR is good enough.
+
+\t Not envy :) just environment variable stuff, rename? Environment and envir?
 <<struct Envy>>=
 struct Envy
 {
-    // key
+    // ref<string>, the key
     char 		*name;
-    // value, list<ref_own<string>>
+
+    // list<ref_own<string>>, the value
     Word 		*values;
 };
 @
-\l rename values to value?
+\l why y?
 
 
 <<global envy>>=
@@ -4294,20 +4892,17 @@ envinsert(char *name, Word *value)
 {
     static int envsize;
 
+    // grow array if necessary
     if (nextv >= envsize) {
         envsize += ENVQUANTA;
         envy = (Envy *) Realloc((char *) envy, envsize*sizeof(Envy));
     }
+
     envy[nextv].name = name;
     envy[nextv++].values = value;
 }
 @
 
-
-
-\section{The environment}
-% as opposed to make, no $(XX), no $$i, the string is passed
-% as is to shell! less escaping need!
 
 
 <<function envupd>>=
@@ -4327,23 +4922,16 @@ envupd(char *name, Word *value)
     envinsert(nil,nil); // ???
 }
 @
+\t else if not found, generate error! 
+\t what is this nil,nil? to make a special mark in envy?
+\t  because then use e->name termination condition?
 
-<<function ecopy>>=
-static void
-ecopy(Symtab *s)
-{
-    char **p;
+\section{Initializing the environment, [[execinit()]]}
+% as opposed to make, no $(XX), no $$i, the string is passed
+% as is to shell! less escaping need!
 
-    if(symlook(s->name, S_NOEXPORT, 0))
-        return;
-    for(p = myenv; *p; p++)
-        if(strcmp(*p, s->name) == 0)
-            return;
-    envinsert(s->name, s->u.ptr);
-}
-@
 
-% main -> execinit()
+% main -> parse; mk; <>
 <<function execinit>>=
 void
 execinit(void)
@@ -4351,105 +4939,90 @@ execinit(void)
     char **p;
 
     nextv = 0; // reset envy
+
+    // internal mk variables
     for(p = myenv; *p; p++)
         envinsert(*p, stow(""));
 
+    // user variables in mkfile or process shell environment
     symtraverse(S_VAR, ecopy);
+
+    // end marker
     envinsert(nil, nil);
 }
 @
+\l potential leak when reset on Envy.values ?
+\t again nil,nil insert because nextv is static. Should be global!
 
+% use myenv also in initenv, but it is for the S_INTERNAL stuff and
+%  used later for readenv
 
-
-<<[[myenv]] other array elements>>=
-"pid",
-"nproc",
-@
-
-
-<<function buildenv>>=
-Envy*
-buildenv(Job *j, int slot)
+% execinit -> symtraverse -> <> (as x <- symtraverse(..., <>) <- execinit)
+<<function ecopy>>=
+static void
+ecopy(Symtab *s)
 {
-    char **p, *cp, *qp;
-    Word *w, *v, **l;
-    int i;
-    char buf[256];
+    char **p;
 
-    envupd("target", wdup(j->t));
-    if(j->r->attr&REGEXP)
-        envupd("stem", newword(""));
-    else
-        envupd("stem", newword(j->stem));
-    envupd("prereq", wdup(j->p));
-
-    snprint(buf, sizeof buf, "%d", getpid());
-    envupd("pid", newword(buf));
-    snprint(buf, sizeof buf, "%d", slot);
-    envupd("nproc", newword(buf));
-
-    <<[[buildenv()]] envupd some variables>>
-    
-    <<[[buildenv()]] newmember variable setting>>
-    <<[[buildenv()]] stemx variables setting>>
-
-    return envy;
+    <<[[ecopy()]] return and do not copy if S_NOEXPORT symbol>>
+    <<[[ecopy()]] return and do not copy if conflict with mk internal variable>>
+     // else
+     envinsert(s->name, s->u.ptr);
 }
 @
 
 
-
-<<[[Sxxx]] cases>>=
-S_EXPORTED,	/* var -> current exported value */
+<<[[ecopy()]] return and do not copy if conflict with mk internal variable>>=
+for(p = myenv; *p; p++)
+    if(strcmp(*p, s->name) == 0)
+        return;
 @
+% maybe should issue a warning? anyway it is only for user variables
+%  because for readenv(), those variables are skipped.
+
+
+\section{Importing the external environment, [[readenv()]]}
+
+% popupate symbol table, but by transitivity it populates
+% also envy at some point because of execinit
 
 % plan9 specific, in plan9.c
+% initenv -> <>
 <<function readenv>>=
 void
 readenv(void)
 {
-    char *p;
-    int envf, f;
+    fdt envf; // envdir
+    fdt f; // envfile
     Dir *e;
+    int i, n, len, len2;
+    char *p;
     char nam[1024];
-    int i, n, len;
     Word *w;
 
     rfork(RFENVG);	/*  use copy of the current environment variables */
 
     envf = open("/env", OREAD);
-    if(envf < 0)
-        return;
+    <<[[readenv()]] sanity check envf>>
     while((n = dirread(envf, &e)) > 0){
         for(i = 0; i < n; i++){
             len = e[i].length;
-                /* don't import funny names, NULL values,
-                 * or internal mk variables
-                 */
-            if(len <= 0 || *shname(e[i].name) != '\0')
-                continue;
-            if (symlook(e[i].name, S_INTERNAL, 0))
-                continue;
+            <<[[readenv()]] skip some names>>
+
             snprint(nam, sizeof nam, "/env/%s", e[i].name);
             f = open(nam, OREAD);
-            if(f < 0)
-                continue;
+            <<[[readenv()]] sanity check f>>
             p = Malloc(len+1);
-            if(read(f, p, len) != len){
-                perror(nam);
-                close(f);
-                continue;
-            }
+            len2 = read(f, p, len);
+            <<[[readenv()]] sanity check len2>>
             close(f);
-            if (p[len-1] == 0)
-                len--;
-            else
-                p[len] = 0;
+            <<[[readenv()]] add null terminator character at end of [[p]]>>
             w = encodenulls(p, len);
             free(p);
             p = strdup(e[i].name);
+
+            // populating symbol table
             setvar(p, (void *) w);
-            symlook(p, S_EXPORTED, (void*)"")->u.ptr = "";
         }
         free(e);
     }
@@ -4457,115 +5030,329 @@ readenv(void)
 }
 @
 
-
-\section{Variables expansion (part 3)}
-
-% not done actually! shell does it! 
-% simpler! no $$i mess.
-
-\section{Quotation}
-% aka escaping
+%dead: 
+% <<[[Sxxx]] cases>>=
+% S_EXPORTED,	/* var -> current exported value */
+% @
+%  symlook(p, S_EXPORTED, (void*)"")->u.ptr = "";
 
 
-<<function squote>>=
-/*
- *	skip a token in single quotes.
+<<[[readenv()]] skip some names>>=
+/* don't import funny names, NULL values,
+ * or internal mk variables
  */
-static char *
-squote(char *cp)
+if(len <= 0 || *shname(e[i].name) != '\0')
+    continue;
+if (symlook(e[i].name, S_INTERNAL, nil))
+    continue;
+@
+
+<<[[readenv()]] add null terminator character at end of [[p]]>>=
+if (p[len-1] == '\0')
+    len--;
+else
+    p[len] = '\0';
+@
+% why? some variable have and some have not? not specified in plan9?
+
+<<[[readenv()]] sanity check envf>>=
+if(envf < 0)
+    return;
+@
+<<[[readenv()]] sanity check f>>=
+if(f < 0)
+    continue;
+@
+
+<<[[readenv()]] sanity check len2>>=
+if(len2 != len){
+    perror(nam);
+    close(f);
+    continue;
+}
+@
+
+
+<<function encodenulls>>=
+/* break string of values into words at 01's or nulls*/
+static Word *
+encodenulls(char *s, int n)
+{
+    Word *w, *head;
+    char *cp;
+
+    head = w = nil;
+    while (n-- > 0) {
+        for (cp = s; *cp && *cp != '\0'; cp++)
+                n--;
+        *cp = '\0';
+
+        // add_list(newword(s), w)
+        if (w) {
+            w->next = newword(s);
+            w = w->next;
+        } else
+            head = w = newword(s);
+
+        s = cp+1;
+    }
+    if (!head)
+        head = newword("");
+    return head;
+}
+@
+
+
+\section{Adjusting the environment, [[buildenv()]]}
+
+% ->  run -> sched -> <>
+<<function buildenv>>=
+Envy*
+buildenv(Job *j, int slot)
+{
+    <<[[buildenv()]] locals>>
+
+    // main variables 
+    envupd("target", wdup(j->t));
+    <<[[buildenv()]] if regexp rule>>
+    else
+        envupd("stem", newword(j->stem));
+    envupd("prereq", wdup(j->p));
+
+    // advanced variables 
+    <<[[buildenv()]] envupd some variables>>
+
+    return envy;
+}
+@
+\t rename adjustenv? or instantiate_env?
+
+
+
+
+\section{Exporting the environment, [[exportenv()]]}
+
+% execsh -> <>
+<<function exportenv>>=
+/* as well as 01's, change blanks to nulls, so that rc will
+ * treat the words as separate arguments
+ */
+void
+exportenv(Envy *e)
+{
+    Symtab *sy;
+    int f, n;
+    bool hasvalue;
+    int first;
+    Word *w;
+    char nam[256];
+
+    for(;e->name; e++){
+        sy = symlook(e->name, S_VAR, nil);
+        if (e->values == nil || e->values->s == nil || e->values->s[0] == '\0')
+            hasvalue = false;
+        else
+            hasvalue = true;
+        if(sy == nil && !hasvalue)	/* non-existant null symbol */
+            continue;
+
+        snprint(nam, sizeof nam, "/env/%s", e->name);
+        if (sy != 0 && !hasvalue) {	/* Remove from environment */
+                /* we could remove it from the symbol table
+                 * too, but we're in the child copy, and it
+                 * would still remain in the parent's table.
+                 */
+            remove(nam);
+            delword(e->values);
+            e->values = 0;		/* memory leak */
+            continue;
+        }
+    
+        f = create(nam, OWRITE, 0666L);
+        if(f < 0) {
+            fprint(STDERR, "can't create %s, f=%d\n", nam, f);
+            perror(nam);
+            continue;
+        }
+        first = 1;
+        for (w = e->values; w; w = w->next) {
+            n = strlen(w->s);
+            if (n) {
+                if(first)
+                    first = 0;
+                else{
+                    if (write (f, "\0", 1) != 1)
+                        perror(nam);
+                }
+                if (write(f, w->s, n) != n)
+                    perror(nam);
+            }
+        }
+        close(f);
+    }
+}
+@
+\t rename sy to sym, more consistent
+
+
+\chapter{Debugging and Profiling Support}
+
+\section{Printing jobs, [[shprint()]]}
+
+% With use of variables, can be hard to know what was actually executed
+% so when there is an error, useful to expand those vars.
+
+<<[[sched()]] other locals>>=
+Bufblock *buf;
+@
+
+<<[[sched()]] print recipe command on stdout>>=
+buf = newbuf();
+shprint(j->r->recipe, e, buf);
+if(!tflag && (nflag || !(j->r->attr&QUIET)))
+    Bwrite(&bout, buf->start, (long)strlen(buf->start));
+freebuf(buf);
+@
+
+%\subsection{[[shprint()]]}
+
+% called to print what mk is executing, and also when error in a child.
+
+% sched | update -> <> 
+<<function shprint>>=
+void
+shprint(char *s, Envy *env, Bufblock *buf)
 {
     Rune r;
     int n;
 
-    while(*cp){
-        n = chartorune(&r, cp);
-        if(r == '\'') {
-            n += chartorune(&r, cp+n);
-            if(r != '\'')
-                return cp;
+    while(*s) {
+        n = chartorune(&r, s);
+        if (r == '$')
+            s = vexpand(s, env, buf);
+        else {
+            rinsert(buf, r);
+            s += n;
+            s = copyq(s, r, buf);	/*handle quoted strings*/
         }
-        cp += n;
     }
-    SYNERR(-1);		/* should never occur */
-    fprint(STDERR, "missing closing '\n");
-    return 0;
+    insert(buf, 0);
 }
 @
+%$
+\l abuse s as argument and iterator. Maybe could do char *p = s; 
 
-<<function charin>>=
-/*
- *	search a string for characters in a pattern set
- *	characters in quotes and variable generators are escaped
- */
-char*
-charin(char *cp, char *pat)
+\subsection{Variables}
+
+<<function vexpand>>=
+static char*
+vexpand(char *w, Envy *env, Bufblock *buf)
+{
+    char *s;
+    char *p, *q;
+    char carry;
+
+    assert(/*vexpand no $*/ *w == '$');
+    p = w+1;	/* skip dollar sign */
+    if(*p == '{') {
+        p++;
+        q = utfrune(p, '}');
+        if (!q)
+            q = strchr(p, 0);
+    } else
+        q = shname(p);
+
+    carry = *q;
+    *q = '\0';
+    s = mygetenv(p, env);
+    *q = carry;
+
+    if (carry == '}')
+        q++;
+
+    if (s) {
+        bufcpy(buf, s, strlen(s));
+        free(s);
+    } else 		/* copy name intact*/
+        bufcpy(buf, w, q-w);
+
+    return q;
+}
+@
+\l rename carry to savechar?
+
+% either $xxx where xxx must be part of certain chars
+% or ${...} and can be anything inside
+
+<<function shname>>=
+char *
+shname(char *a)
 {
     Rune r;
-    int n, vargen;
+    int n;
 
-    vargen = 0;
-    while(*cp){
-        n = chartorune(&r, cp);
-        switch(r){
-        case '\'':			/* skip quoted string */
-            cp = squote(cp+1);	/* n must = 1 */
-            if(!cp)
-                return 0;
+    while (*a) {
+        n = chartorune(&r, a);
+        if (!WORDCHR(r))
             break;
-        case '$':
-            if(*(cp+1) == '{')
-                vargen = 1;
-            break;
-        case '}':
-            if(vargen)
-                vargen = 0;
-            else if(utfrune(pat, r))
-                return cp;
-            break;
-        default:
-            if(vargen == 0 && utfrune(pat, r))
-                return cp;
-            break;
-        }
-        cp += n;
+        a += n;
     }
-    if(vargen){
-        SYNERR(-1);
-        fprint(STDERR, "missing closing } in pattern generator\n");
-    }
-    return 0;
+    return a;
 }
 @
-%$ 
 
-<<function expandquote>>=
-/*
- *	extract an escaped token.  Possible escape chars are single-quote,
- *	double-quote,and backslash.  Only the first is valid for rc. the
- *	others are just inserted into the receiving buffer.
- */
-char*
-expandquote(char *s, Rune r, Bufblock *b)
+
+% expand only "interesting" variables
+
+<<function mygetenv>>=
+static char*
+mygetenv(char *name, Envy *env)
 {
-    if (r != '\'') {
-        rinsert(b, r);
-        return s;
-    }
+    if (!env)
+        return nil;
+    if (!symlook(name, S_WESET, nil) && 
+        !symlook(name, S_INTERNAL, nil))
+        return nil;
+    // else
 
-    while(*s){
-        s += chartorune(&r, s);
-        if(r == '\'') {
-            if(*s == '\'')
-                s++;
-            else
-                return s;
-        }
-        rinsert(b, r);
+    /* only resolve internal variables and variables we've set */
+    for(; env->name; env++){
+        if (strcmp(env->name, name) == 0)
+            return wtos(env->values, ' ');
     }
-    return 0;
+    return nil;
 }
 @
 
+\subsection{Quoted strings}
+
+% -> <>
+<<function copyq>>=
+/*
+ *	check for quoted strings.  backquotes are handled here; single quotes above.
+ *	s points to char after opening quote, q.
+ */
+char *
+copyq(char *s, Rune q, Bufblock *buf)
+{
+    if(q == '\'')				/* copy quoted string */
+        return copysingle(s, buf);
+
+    if(q != '`')				/* not quoted */
+        return s;
+    // else
+
+    while(*s){				/* copy backquoted string */
+        s += chartorune(&q, s);
+        rinsert(buf, q);
+        if(q == '}')
+            break;
+        if(q == '\'')
+            s = copysingle(s, buf);	/* copy quoted string */
+    }
+    return s;
+}
+@
 
 <<function copysingle>>=
 /*
@@ -4586,34 +5373,7 @@ copysingle(char *s, Bufblock *buf)
 }
 @
 
-<<function copyq>>=
-/*
- *	check for quoted strings.  backquotes are handled here; single quotes above.
- *	s points to char after opening quote, q.
- */
-char *
-copyq(char *s, Rune q, Bufblock *buf)
-{
-    if(q == '\'')				/* copy quoted string */
-        return copysingle(s, buf);
 
-    if(q != '`')				/* not quoted */
-        return s;
-
-    while(*s){				/* copy backquoted string */
-        s += chartorune(&q, s);
-        rinsert(buf, q);
-        if(q == '}')
-            break;
-        if(q == '\'')
-            s = copysingle(s, buf);	/* copy quoted string */
-    }
-    return s;
-}
-@
-
-
-\chapter{Debugging and Profiling Support}
 
 \section{Explain mode, [[mk -e]]}
 
@@ -4625,6 +5385,18 @@ bool explain = false;
 case 'e':
     explain = true;
     break;
+@
+
+
+<<[[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date>>=
+if(explain)
+    fprint(STDOUT, "%s(%ld) < %s(%ld)\n",
+        n->name, n->time, a->n->name, a->n->time);
+@
+
+<<[[dorecipe()]] explain when found target [[n]] with no prerequisite>>=
+if(explain)
+    fprint(STDOUT, "%s has no prerequisites\n", n->name);
 @
 
 \section{Dry mode, [[mk -n]]}
@@ -4639,8 +5411,11 @@ case 'n':
     break;
 @
 
-<<[[sched()]] if dry mode or touch mode>>=
-if(nflag||tflag){
+<<[[sched()]] other locals>>=
+Node *n;
+@
+<<[[sched()]] if dry mode or touch mode, alternate to execsh>>=
+if(nflag || tflag){
     for(n = j->n; n; n = n->next){
         <<[[sched()]] if touch mode>>
         n->time = time((long *)nil);
@@ -4667,12 +5442,13 @@ case 'w':
     if(argv[0][2])
         bufcpy(whatif, &argv[0][2], strlen(&argv[0][2]));
     else {
-        if(*++argv == 0)
+        if(*++argv == '\0')
             badusage();
         bufcpy(whatif, &argv[0][0], strlen(&argv[0][0]));
     }
     break;
 @
+\t why not use Words instead? since you join to later split
 
 <<[[main()]] whatif optional setup>>=
 if(whatif){
@@ -4692,7 +5468,7 @@ timeinit(char *s)
     Rune r;
     int c, n;
 
-    t = time(0);
+    t = time(nil);
     while (*s) {
         cp = s;
         do{
@@ -4723,9 +5499,11 @@ timeinit(char *s)
 
 %\chapter{Profiling Support}
 
-\section{Utilization, [[mk -u]]}
+\section{Processor utilization, [[mk -u]]}
 
 % display time spent in different nrunnning configuration
+% also display time to parse and build graph since at that time
+%  nrunning is zero.
 
 <<global uflag>>=
 bool uflag = false;
@@ -4740,6 +5518,7 @@ case 'u':
 <<global tslot>>=
 static ulong tslot[1000];
 @
+% must be more than nproclimit
 
 % could be made local static!
 <<global tick>>=
@@ -4759,6 +5538,7 @@ usage(void)
     tick = t;
 }
 @
+\t rename usage, to profile
 
 <<[[main()]] print profiling stats if uflag>>=
 if(uflag)
@@ -4776,21 +5556,27 @@ prusage(void)
         fprint(1, "%d: %lud\n", i, tslot[i]);
 }
 @
-
+% nevents = nproclimit
 
 
 
 \chapter{Advanced Features}
 
-% all those features are meh in my opinion
+% many of those features are meh in my opinion
 
 \section{Regular-expression rules, [[:R:]]}
 
-% use libregexp/, regcomp(), regexec(), regsub()
+% use libregexp/: regcomp(), regexec(), regsub()
 
 <<[[Rule_attr]] cases>>=
 REGEXP = 0x0020,
 @
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+case 'R':
+    *attr |= REGEXP;
+    break;
+@
+
 
 <<[[Rule]] other fields>>=
 Reprog		*pat;		/* reg exp goo */
@@ -4808,6 +5594,19 @@ if(attr&REGEXP){
     patrule = r;
     r->pat = regcomp(head);
 }
+@
+
+
+<<[[dorecipe()]] if regexp rule>>=
+if(r->attr&REGEXP){
+    ww->next = newword(node->name);
+    aw->next = newword(node->name);
+}
+@
+
+<<[[buildenv()]] if regexp rule>>=
+if(j->r->attr&REGEXP)
+    envupd("stem", newword(""));
 @
 
 <<function regerror>>=
@@ -4828,12 +5627,39 @@ void regerror(char *s)
 <<constant NREGEXP>>=
 #define		NREGEXP		10
 @
-
+% so stem1, stem2, stem9
 
 % instead of stem
 <<[[Arc]] other fields>>=
 char		*match[NREGEXP];
 @
+
+<<[[newarc()]] set match field>>=
+rcopy(a->match, match, NREGEXP);
+@
+
+<<function rcopy>>=
+void
+rcopy(char **to, Resub *match, int n)
+{
+    int c;
+    char *p;
+
+    *to = match->sp;		/* stem0 matches complete target */
+    for(to++, match++; --n > 0; to++, match++){
+        if(match->sp && match->ep){
+            p = match->ep;
+            c = *p;
+            *p = 0;
+            *to = strdup(match->sp);
+            *p = c;
+        }
+        else
+            *to = 0;
+    }
+}
+@
+
 
 % instead of stem
 <<[[Job]] other fields>>=
@@ -4853,7 +5679,12 @@ char		**match;
 "stem9",
 @
 
-<<[[buildenv()]] stemx variables setting>>=
+<<[[buildenv()]] locals>>=
+char **p;
+int i;
+@
+
+<<[[buildenv()]] envupd some variables>>=
 /* update stem0 -> stem9 */
 for(p = myenv; *p; p++)
     if(strcmp(*p, "stem0") == 0)
@@ -4889,35 +5720,6 @@ if(r->attr&REGEXP)
     regsub(w->s, buf, sizeof(buf), rmatch, NREGEXP);
 @
 
-\section{Multiple targets}
-
-%less: hmm useful for parser.ml parser.mli: parser.mly ?
-
-% a few places where use Word* targets
-% where in most cases it should really be simply char* target;
-
-<<[[Rule]] other fields>>=
-// list<ref_own?<string>>?
-Word 		*alltargets;	/* all the targets */
-@
-% as in  gram.c gram.h: gram.y ...
-% (hmm but could be rewritten with 2 rules, it's just
-% that with mk the file would be possibly rebuilt two times!
-% because it could run the command in parallel!!!!
-
-<<[[Job]] other fields>>=
-Word		*at;	/* all targets */
-@
-
-<<[[myenv]] other array elements>>=
-"alltarget",
-@
-
-<<[[buildenv()]] envupd some variables>>=
-envupd("alltarget", wdup(j->at));
-@
-
-
 \section{Dynamic [[mkfile]], [[<|]]{\em prog}}
 
 <<[[rhead()]] adjust sep if dynamic mkfile [[<|]]>>=
@@ -4928,11 +5730,12 @@ if(sep == '<' && *p == '|'){
 @
 
 % mkfile content through pipe
-% |cmd  instead of <file
+% <|cmd  instead of <file
 
 <<[[parse()]] other locals>>=
 int pid;
 @
+% abused to store pid and later return status
 
 <<[[parse()]] switch rhead cases>>=
 case '|':
@@ -4942,6 +5745,7 @@ case '|':
         fprint(STDERR, "missing include program name\n");
         Exit();
     }
+
     execinit();
     pid = pipecmd(p, envy, &newfd);
     if(newfd < 0){
@@ -4957,10 +5761,57 @@ case '|':
     }
     break;
 @
+% why use waitup? it's a parsing time, so there should be no jobs
+% yet so stupid to introduce Process machinery for that.
+
+% execinit cos command string can contain variables?
+
+%plan9.c
+<<function pipecmd>>=
+int
+pipecmd(char *cmd, Envy *e, int *fd)
+{
+    int pid;
+    fdt pfd[2];
+
+    if(DEBUG(D_EXEC))
+        fprint(1, "pipecmd='%s'\n", cmd);/**/
+
+    if(fd && pipe(pfd) < 0){
+        perror("pipe");
+        Exit();
+    }
+    pid = rfork(RFPROC|RFFDG|RFENVG);
+    if(pid < 0){
+        perror("mk fork");
+        Exit();
+    }
+    if(pid == 0){
+        if(fd){
+            close(pfd[0]);
+            dup(pfd[1], 1);
+            close(pfd[1]);
+        }
+        if(e)
+            exportenv(e);
+        if(shflags)
+            execl(shell, shellname, shflags, "-c", cmd, nil);
+        else
+            execl(shell, shellname, "-c", cmd, nil);
+        perror(shell);
+        _exits("exec");
+    }
+    if(fd){
+        close(pfd[1]);
+        *fd = pfd[0];
+    }
+    return pid;
+}
+@
 
 
 
-\section{Complex variables, [[${]]{\em \ldots}[[}]]}
+\section{Complex variable uses, [[${]]{\em \ldots}[[}]]}
 %$
 
 
@@ -5163,18 +6014,22 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 
 \section{Shell-command expansion, [[`]]{\em cmd}[[`]]}
 
+% actually two styles, `{...} or `...`
+
 <<[[assline()]] switch character cases>>=
 case '`':
-    if (bquote(bp, buf) == 0)
+    if (bquote(bp, buf) == ERROR_0)
         Exit();
     break;
 @
+
+\subsection{[[bquote()]]}
 
 <<function bquote>>=
 /*
  *	assemble a back-quoted shell command into a buffer
  */
-static int
+static error0
 bquote(Biobuf *bp, Bufblock *buf)
 {
     int c, line, term;
@@ -5190,39 +6045,296 @@ bquote(Biobuf *bp, Bufblock *buf)
     } else
         term = '`';		/* sh style */
 
-    start = buf->current-buf->start;
+    start = buf->current - buf->start;
     for(;c > 0; c = nextrune(bp, 0)){
         if(c == term){
             insert(buf, '\n');
             insert(buf, '\0');
-            buf->current = buf->start+start;
+            buf->current = buf->start + start;
+
             execinit();
-            execsh(0, buf->current, buf, envy);
-            return 1;
+            // running the command, passing a buf argument
+            execsh(nil, buf->current, buf, envy);
+
+            return OK_1;
         }
         if(c == '\n')
             break;
         if(c == '\'' || c == '"' || c == '\\'){
             insert(buf, c);
             if(!escapetoken(bp, buf, 1, c))
-                return 0;
+                return ERROR_0;
             continue;
         }
         rinsert(buf, c);
     }
     SYNERR(line);
     fprint(STDERR, "missing closing %c after `\n", term);
-    return 0;
+    return ERROR_0;
 }
 @
 
 
-\section{Aggregates, archives}
-% meh
+\subsection{[[execsh()]] adjustments}
+
+% mv with code of bquote()?
+
+<<[[execsh()]] other locals>>=
+fdt out[2];
+@
+<<[[execsh()]] if buf then create pipe to save output>>=
+if(buf && pipe(out) < 0){
+    perror("pipe");
+    Exit();
+}
+@
+
+<<[[execsh()]] in children, if buf, close one side of pipe>>=
+if(buf)
+    close(out[0]);
+@
+
+<<[[execsh()]] in child 1, if buf, dup and close>>=
+if(buf){
+    // output now goes in the pipe
+    dup(out[1], STDOUT);
+    close(out[1]);
+}
+@
+
+<<[[execsh()]] in child 2, if buf, close other side of pipe>>=
+if(buf)
+    close(out[1]);
+@
+%bug: %pad: was not guared by if(buf), but was bug I think
+
+
+
+<<[[execsh()]] other locals>>=
+int tot, n;
+@
+
+<<[[execsh()]] in parent, if buf, close other side of pipe and read output>>=
+if(buf){
+    close(out[1]);
+    tot = 0;
+    for(;;){
+        if (buf->current >= buf->end)
+            growbuf(buf);
+        n = read(out[0], buf->current, buf->end-buf->current);
+        if(n <= 0)
+            break;
+        buf->current += n;
+        tot += n;
+    }
+    if (tot && buf->current[-1] == '\n')
+        buf->current--;
+    close(out[0]);
+}
+@
+
+\section{Advanced rule attributes}
+
+\subsection{Deleting target when recipe returns an error, [[:D:]]}
+
+<<[[Rule_attr]] cases>>=
+DEL    = 0x0080,
+@
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+case 'D':
+    *attr |= DEL;
+    break;
+@
+
+<<[[Node_flag]] cases>>=
+DELETE     = 0x0800,
+@
+<<[[attribute()]] propagate rule attribute to node cases>>=
+if(a->r->attr&DEL)
+    n->flags |= DELETE;
+@
+
+
+
+
+
+<<[[waitup()]] other locals>>=
+Node *n;
+int done;
+@
+
+<<[[waitup()]] when error in child process, delete if DELETE node>>=
+for(n = j->n, done = 0; n; n = n->next)
+    if(n->flags&DELETE){
+        if(done++ == 0)
+            fprint(STDERR, ", deleting");
+        fprint(STDERR, " '%s'", n->name);
+        delete(n->name);
+    }
+@
+
+% waitup -> <>
+<<function delete>>=
+void
+delete(char *name)
+{
+    if(utfrune(name, '(') == 0) {		/* file */
+        if(remove(name) < 0)
+            perror(name);
+    } else
+        fprint(STDERR, "hoon off; mk can't delete archive members\n");
+}
+@
+%ugly: bug if filename contain open parenthesis
+
+\subsection{Running shell command without [[-e]], [[:E:]]}
+
+<<[[Node_flag]] cases>>=
+NOMINUSE   = 0x1000,
+@
+
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+case 'E':
+    *attr |= NOMINUSE;
+    break;
+@
+
+<<[[sched()]] reset flags if NOMINUSE rule>>=
+if (j->r->attr&NOMINUSE)
+    flags = nil;
+@
+%old: flags = (j->r->attr&NOMINUSE)? nil : "-e" ; but was harder to aspectize
+
+
+\subsection{Disabling norecipe warning, [[:N:]]}
+
+<<[[Rule_attr]] cases>>=
+NOREC  = 0x0040,
+@
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+case 'N':
+    *attr |= NOREC;
+    break;
+@
+
+
+<<[[Node_flag]] cases>>=
+NORECIPE   = 0x0400,
+@
+<<[[attribute()]] propagate rule attribute to node cases>>=
+if(a->r->attr&NOREC)
+    n->flags |= NORECIPE;
+@
+
+% when no recipe found, print warning or not?
+
+
+\subsection{Not printing the recipe (quiet mode), [[:Q:]]}
+% work with -n too? nflag || !QUIET?
+
+<<[[Rule_attr]] cases>>=
+QUIET  = 0x0008,
+@
+
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+case 'Q':
+    *attr |= QUIET;
+    break;
+@
+
+
+
+
+\subsection{Virtual target, [[:V:]]}
+
+% ex, clean:V: so even if there is a file called clean
+% in the directory (and no prereqs),
+%  mk clean   will still run the recipe
+
+<<[[Rule_attr]] cases>>=
+VIR    = 0x0010,
+@
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+case 'V':
+    *attr |= VIR;
+    break;
+@
+
+<<[[Node_flag]] cases>>=
+VIRTUAL    = 0x0001,
+@
+<<[[attribute()]] propagate rule attribute to node cases>>=
+if(a->r->attr&VIR)
+    n->flags |= VIRTUAL;
+@
+
+<<[[attribute()]] if virtual node>>=
+if(n->flags&VIRTUAL)
+    n->time = 0;
+@
+% time 0 is treated specially?
+
+\subsection{Forbidding metarules to match virtual targets,  [[:n:]]}
+
+<<[[Rule_attr]] cases>>=
+NOVIRT = 0x0100,
+@
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+case 'n':
+    *attr |= NOVIRT;
+    break;
+@
+
+<<[[applyrules()]] skip this meta rule and continue if some conditions>>=
+if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
+    continue;
+@
+% really useful?
+
+\section{Advanced variable attributes}
+% constant with attributes?? just private var
+%  to not transmit to recipe process?
+
+<<[[rhead()]] when parsing variable attributes, switch rune cases>>=
+case 'U':
+    *attr = 1;
+    break;
+@
+<<[[parse()]] when parsing variable definitions, if variable with attr>>=
+if(attr)
+    symlook(head->s, S_NOEXPORT, (void *)"");
+@
+
+<<[[Sxxx]] cases>>=
+S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
+@
+
+<<[[ecopy()]] return and do not copy if S_NOEXPORT symbol>>=
+if(symlook(s->name, S_NOEXPORT, nil))
+    return;
+@
+
+
+\section{Advanced [[mk]] variables}
+
+\subsection{[[$target]] versus [[$alltargets]]}
+
+
+<<[[myenv]] other array elements>>=
+"alltarget",
+@
 
 <<[[Job]] other fields>>=
-Word		*np;	/* new prerequistes */
+Word		*at;	/* all targets */
 @
+
+<<[[buildenv()]] envupd some variables>>=
+envupd("alltarget", wdup(j->at));
+@
+
+\subsection{[[$prereq]] versus [[$newprereq]]}
+
+% seems used only for aggregate rules to optimize library building.
 
 <<[[myenv]] other array elements>>=
 "newprereq",
@@ -5230,20 +6342,63 @@ Word		*np;	/* new prerequistes */
 % so does not put *.5 but only the .5 that were more recent than
 % the archive.
 
+
+<<[[Job]] other fields>>=
+Word		*np;	/* new prerequistes */
+@
+
 <<[[buildenv()]] envupd some variables>>=
 envupd("newprereq", wdup(j->np));
 @
 
+% related to aggregates?
+
+\subsection{[[$pid]]}
+%$
 
 
+<<[[myenv]] other array elements>>=
+"pid",
+@
+
+<<[[buildenv()]] locals>>=
+char buf[256];
+@
+
+<<[[buildenv()]] envupd some variables>>=
+snprint(buf, sizeof buf, "%d", getpid());
+envupd("pid", newword(buf));
+@
+% use of pid? mk.ps say can be useful to communicate between rules
+
+\subsection{[[$nproc]]}
+%$
+
+<<[[myenv]] other array elements>>=
+"nproc",
+@
+
+<<[[buildenv()]] envupd some variables>>=
+snprint(buf, sizeof buf, "%d", slot);
+envupd("nproc", newword(buf));
+@
+% use of nproc??
 
 
+\section{Aggregates, archives}
+% meh
 
 <<[[myenv]] other array elements>>=
 "newmember",
 @
 
-<<[[buildenv()]] newmember variable setting>>=
+<<[[buildenv()]] locals>>=
+Word *w, *v, **l;
+char *cp, *qp;
+@
+
+<<[[buildenv()]] envupd some variables>>=
+// newmember
 l = &v;
 v = w = wdup(j->np);
 while(w){
@@ -5463,9 +6618,12 @@ if(strchr(arc->n->name, '(') && arc->n->time == 0)
 \section{Optimizations}
 
 \subsection{Node cache}
-\t mv in optim chapter?
+\l generalize to Cache? with node cache, time cache, etc?
+
 % useful in practice? when reuse a target node? when same file
-% mentioned again and again, like .o or .a used in different targets
+%  mentioned again and again, like .o or .a used in different targets?
+% but then it's not really an opti, you want to have only one node, 
+%  otherwise you will run multiple times the same recipe
 
 <<[[applyrules]] check node cache if target is already there>>=
 sym = symlook(target, S_NODE, nil);
@@ -5481,6 +6639,7 @@ S_NODE,		/* target name -> node */
 symlook(name, S_NODE, (void *)node);
 @
 
+%\subsection{Time cache}
 
 \subsection{Missing-intermediates optimization, [[mk -I]]}
 % mk -i suppress this behavior
@@ -5510,6 +6669,7 @@ case 'i':
 CANPRETEND = 0x0008,
 PRETENDING = 0x0010,
 @
+% again, should be a different field, not agglomerated with the other node flags
 
 
 <<[[clrmade()]] n->flags pretend adjustments>>=
@@ -5642,6 +6802,9 @@ chgtime(char *name)
 
 \subsection{Bulk time optimisation}
 
+% in addition to time cache, mk also batch the call to time
+% by reading/caching the dir?
+
 <<[[mkmtime]] locals>>=
 //char *s, *ss;
 //char carry;
@@ -5744,7 +6907,6 @@ dirtime(char *dir, char *path)
 
 
 \section{Recompiling everything, [[mk -a]]}
-% bad place
 
 <<global aflag>>=
 bool aflag = false;
@@ -5756,8 +6918,8 @@ case 'a':
     break;
 @
 % iflag = true; used to be after the switch, but same
-% when -a, means we want to build also the intermediate files when
-% they are not there
+% when -a, means we want to build _also_ the intermediate files when
+% they are not there.
 
 \section{Recursive [[mk]]}
 
@@ -5767,6 +6929,23 @@ case 'a':
 
 %\section{Setting [[MKFLAGS]], [[MKARGS]]}
 % used by? at least mkfile called recursively can expect those variables
+
+
+<<[[main()]] locals>>=
+Bufblock *buf = newbuf();
+@
+
+<<[[main()]] add [[argv[0]]] in [[buf]]>>=
+bufcpy(buf, argv[0], strlen(argv[0]));
+insert(buf, ' ');
+@
+
+<<[[main()]] add [[argv[i]]] in [[buf]]>>=
+bufcpy(buf, argv[i], strlen(argv[i]));
+insert(buf, ' ');
+@
+
+
 
 <<[[main()]] set variables for recursive mk>>=
 <<[[main()]] set MKFLAGS variable>>
@@ -5796,18 +6975,53 @@ symlook("MKARGS", S_VAR, (void *) stow(buf->start));
 freebuf(buf);
 @
 
-\section{[[:P:]] ??}
+\section{Custom dependency comparison, [[:P:]]}
 
+% see mk man page.  use for x.tab and y.tab.h, but
+% can do without
+% x.tab.h:Pcmp -s: y.tab.h
+%    cp y.tab.h x.tab.h
 
-%XXX??
+% but can do with
+% x.tab.h: y.tab.h
+%    cmp y.tab.h x.tab.h || cp y.tab.h x.tab.h
+
 <<[[Rule]] other fields>>=
 char		*prog;		/* to use in out of date */
 @
 % prog??
 
-%XXX?
 <<[[Arc]] other fields>>=
 char		*prog;
+@
+
+
+<<[[parse()]] other locals>>=
+char *prog;
+@
+% passed as rhread(..., &prog) so can then
+% be passed to addrules as an argument
+
+<<[[addrule()]] set more fields>>=
+r->prog = prog;
+@
+
+
+
+<<[[rhead()]] other locals>>=
+char *pp;
+@
+
+<<[[rhead()]] when parsing rule attributes, switch rune cases>>=
+case 'P':
+    pp = utfrune(p, ':');
+    if (pp == 0 || *pp == 0)
+        goto eos;
+    *pp = 0;
+    *prog = strdup(p);
+    *pp = ':';
+    p = pp;
+    break;
 @
 
 
@@ -5815,6 +7029,13 @@ char		*prog;
 S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
 @
 % abuse string ...
+
+
+<<[[update()]] set outofdate prereqs if arc prog>>=
+for(a = node->prereqs; a; a = a->next)
+    if(a->prog)
+        outofdate(node, a, true);
+@
 
 
 <<[[outofdate()]] locals>>=
@@ -5859,6 +7080,130 @@ pcmp(char *prog, char *p, char *q)
 }
 @
 
+
+
+
+
+
+\subsection{[[Process]]}
+
+% with all those extensions (backquote, :P:, <|)
+% you can run not just recipe jobs. However we need to wait for
+% those process to finish too. wait() does not discriminate
+% so we need to put more logic in waitup() and remember
+% which process are job process and which one are not.
+
+<<struct Process>>=
+struct Process {
+    int pid;
+    int status;
+
+    // Extra
+    // double_list<ref_own<Process> backward, forward
+    Process *b, *f;
+};
+@
+%ocaml: another ex of redundant code. should be factorized in container library.
+\t why need that? [[events]] not enough? seems to store results of process
+\t  so rename  ProcessStatus?
+\t  I think needed only for process that are not jobs! not in events!
+\t  such as backquote, or :P: stuff.
+\t rename status to bool error.
+\t rename NotJobProcesses
+
+<<global phead>>=
+// double_list<ref_own<Process> (next = Process.f)
+static Process *phead;
+@
+
+% classic, dynamic allocator
+<<global pfree>>=
+// double_list<ref_own<Process> (next = Process.f)
+static Process *pfree;
+@
+
+% ctor
+% waitup -> <>
+<<function pnew>>=
+static void
+pnew(int pid, int status)
+{
+    Process *p;
+
+    // p = pop_list(pfree)
+    if(pfree){
+        p = pfree;
+        pfree = p->f;
+    } else
+        p = (Process *)Malloc(sizeof(Process));
+
+    p->pid = pid;
+    p->status = status;
+
+    // add_list(p, phead)
+    p->f = phead;
+    phead = p;
+    if(p->f)
+        p->f->b = p;
+    p->b = nil;
+}
+@
+
+% dtor
+<<function pdelete>>=
+static void
+pdelete(Process *p)
+{
+    // remove_double_list(p, phead, pfree)
+    if(p->f)
+        p->f->b = p->b;
+    if(p->b)
+        p->b->f = p->f;
+    else
+        phead = p->f;
+    p->f = pfree;
+    pfree = p;
+}
+@
+\l rename pfree instead?
+
+\subsection{[[waitup()]] adjustments}
+
+<<[[waitup()]] if slot not found, not a job pid, update process list>>=
+if(slot < 0){
+   <<[[waitup()]] if DEBUG(D_EXEC) and slot < 0>>
+    pnew(pid, buf[0]? 1:0);
+    goto again;
+}
+@
+% when can this happen? can waitfor child that was not in 
+%  events? maybe child 2 in execsh?
+
+
+
+% used only for <|, maybe move to later
+
+<<[[waitup()]] other locals>>=
+Process *p;
+@
+
+<<[[waitup()]] if retstatus, check process list>>=
+/* first check against the process list */
+if(retstatus)
+    for(p = phead; p; p = p->f)
+        if(p->pid == *retstatus){
+            *retstatus = p->status;
+            pdelete(p);
+            return -1;
+        }
+@
+
+<<[[waitup()]] if retstatus, check if matching pid>>=
+if(retstatus && pid == *retstatus){
+    *retstatus = buf[0]? 1:0;
+    return -1;
+}
+@
 
 
 \chapter{Conclusion}
@@ -6126,6 +7471,14 @@ if(DEBUG(D_TRACE))
     print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);
 @
 
+<<[[update()]] debug>>=
+if(DEBUG(D_TRACE))
+    print("update(): node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);
+@
+
+
+
+
 \chapter{Profiling}
 
 <<global buf>>=
@@ -6179,6 +7532,23 @@ case 'k':
     break;
 @
 
+<<[[work()]] when inexistent target without prerequisites, exit unless kflag>>=
+if(kflag){
+    node->flags |= BEINGMADE;
+    runerrs++;
+} else
+    Exit();
+@
+
+<<[[waitup()]] when error in child process, exit unless kflag>>=
+if(kflag){
+    runerrs++;
+    fake = true;
+} else {
+    jobs = nil;
+    Exit();
+}
+@
 
 
 
@@ -6217,15 +7587,7 @@ Realloc(void *s, int n)
 @
 
 
-<<function Exit>>=
-void
-Exit(void)
-{
-    while(waitpid() >= 0)
-        ;
-    exits("error");
-}
-@
+
 
 \chapter{Libc}
 
