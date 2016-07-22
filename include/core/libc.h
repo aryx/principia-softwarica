@@ -464,6 +464,7 @@ extern	int	enc16(char*, int, uchar*, int);
 
 
 extern	long	time(long*);
+
 extern	int	tolower(int);
 extern	int	toupper(int);
 

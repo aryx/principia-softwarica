@@ -9,8 +9,8 @@ static char *shbquote(char*, Bufblock*);
 void
 shprint(char *s, Envy *env, Bufblock *buf)
 {
-    int n;
     Rune r;
+    int n;
 
     while(*s) {
         n = chartorune(&r, s);
@@ -32,9 +32,12 @@ mygetenv(char *name, Envy *env)
 {
     if (!env)
         return nil;
-    if (symlook(name, S_WESET, 0) == 0 && symlook(name, S_INTERNAL, 0) == 0)
+    if (!symlook(name, S_WESET, nil) && 
+        !symlook(name, S_INTERNAL, nil))
         return nil;
-        /* only resolve internal variables and variables we've set */
+    // else
+
+    /* only resolve internal variables and variables we've set */
     for(; env->name; env++){
         if (strcmp(env->name, name) == 0)
             return wtos(env->values, ' ');
@@ -47,7 +50,9 @@ mygetenv(char *name, Envy *env)
 static char*
 vexpand(char *w, Envy *env, Bufblock *buf)
 {
-    char *s, carry, *p, *q;
+    char *s;
+    char *p, *q;
+    char carry;
 
     assert(/*vexpand no $*/ *w == '$');
     p = w+1;	/* skip dollar sign */
@@ -58,17 +63,21 @@ vexpand(char *w, Envy *env, Bufblock *buf)
             q = strchr(p, 0);
     } else
         q = shname(p);
+
     carry = *q;
-    *q = 0;
+    *q = '\0';
     s = mygetenv(p, env);
     *q = carry;
+
     if (carry == '}')
         q++;
+
     if (s) {
         bufcpy(buf, s, strlen(s));
         free(s);
     } else 		/* copy name intact*/
         bufcpy(buf, w, q-w);
+
     return q;
 }
 /*e: function vexpand */

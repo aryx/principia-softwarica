@@ -11,7 +11,9 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->n = n;
     a->r = r;
     a->stem = strdup(stem);
+    /*s: [[newarc()]] set match field */
     rcopy(a->match, match, NREGEXP);
+    /*e: [[newarc()]] set match field */
 
     a->next = nil;
     a->flag = 0;

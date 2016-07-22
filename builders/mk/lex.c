@@ -55,7 +55,7 @@ assline(Biobuf *bp, Bufblock *buf)
             break;
         /*x: [[assline()]] switch character cases */
         case '`':
-            if (bquote(bp, buf) == 0)
+            if (bquote(bp, buf) == ERROR_0)
                 Exit();
             break;
         /*e: [[assline()]] switch character cases */
@@ -74,7 +74,7 @@ eof:
 /*
  *	assemble a back-quoted shell command into a buffer
  */
-static int
+static error0
 bquote(Biobuf *bp, Bufblock *buf)
 {
     int c, line, term;
@@ -90,29 +90,32 @@ bquote(Biobuf *bp, Bufblock *buf)
     } else
         term = '`';		/* sh style */
 
-    start = buf->current-buf->start;
+    start = buf->current - buf->start;
     for(;c > 0; c = nextrune(bp, 0)){
         if(c == term){
             insert(buf, '\n');
             insert(buf, '\0');
-            buf->current = buf->start+start;
+            buf->current = buf->start + start;
+
             execinit();
-            execsh(0, buf->current, buf, envy);
-            return 1;
+            // running the command, passing a buf argument
+            execsh(nil, buf->current, buf, envy);
+
+            return OK_1;
         }
         if(c == '\n')
             break;
         if(c == '\'' || c == '"' || c == '\\'){
             insert(buf, c);
             if(!escapetoken(bp, buf, 1, c))
-                return 0;
+                return ERROR_0;
             continue;
         }
         rinsert(buf, c);
     }
     SYNERR(line);
     fprint(STDERR, "missing closing %c after `\n", term);
-    return 0;
+    return ERROR_0;
 }
 /*e: function bquote */
 

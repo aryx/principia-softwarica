@@ -32,8 +32,6 @@ main(int argc, char **argv)
     char *s;
     int i;
     /*x: [[main()]] locals */
-    Bufblock *buf = newbuf();
-    /*x: [[main()]] locals */
     char *temp = nil;
     fdt tfd = -1;
     Biobuf tb;
@@ -46,6 +44,8 @@ main(int argc, char **argv)
     bool sflag = false;
     /*x: [[main()]] locals */
     Bufblock *whatif = nil;
+    /*x: [[main()]] locals */
+    Bufblock *buf = newbuf();
     /*e: [[main()]] locals */
 
     // Initializing
@@ -66,6 +66,7 @@ main(int argc, char **argv)
         bufcpy(buf, argv[0], strlen(argv[0]));
         insert(buf, ' ');
         /*e: [[main()]] add [[argv[0]]] in [[buf]] */
+
         switch(argv[0][1]) {
         /*s: [[main()]] -xxx switch cases */
         case 'f':
@@ -98,7 +99,7 @@ main(int argc, char **argv)
             if(argv[0][2])
                 bufcpy(whatif, &argv[0][2], strlen(&argv[0][2]));
             else {
-                if(*++argv == 0)
+                if(*++argv == '\0')
                     badusage();
                 bufcpy(whatif, &argv[0][0], strlen(&argv[0][0]));
             }
@@ -164,6 +165,7 @@ main(int argc, char **argv)
         bufcpy(buf, argv[i], strlen(argv[i]));
         insert(buf, ' ');
         /*e: [[main()]] add [[argv[i]]] in [[buf]] */
+
         /*s: [[main()]] create temporary file if not exist yet */
         if(tfd < 0){
             temp = maketmp();
@@ -249,7 +251,6 @@ main(int argc, char **argv)
     /*s: [[main()]] initializations before building */
     execinit();
 
-    // can do that earlier??
     /*s: [[main()]] argv processing part 3, skip xxx=yyy */
     /* skip assignment args */
     while(*argv && (**argv == '\0'))
@@ -280,13 +281,15 @@ main(int argc, char **argv)
         /*e: [[main()]] if sequential mode and target arguments given */
         else {
            /*s: [[main()]] parallel mode and target arguments given */
-           Word *head, *tail, *t;
+           Word *head, *tail;
+           Word *t;
 
            /* fake a new rule with all the args as prereqs */
            tail = nil;
            t = nil;
            for(; *argv; argv++)
                if(**argv){
+                   // add_list(newword(*argv), t)
                    if(tail == nil)
                        tail = t = newword(*argv);
                    else {
@@ -295,6 +298,7 @@ main(int argc, char **argv)
                    }
                }
            if(tail->next == nil)
+               // a single target argument
                mk(tail->s);
            else {
                head = newword("<command line arguments>");

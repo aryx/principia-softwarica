@@ -60,7 +60,7 @@ delete(char *name)
         if(remove(name) < 0)
             perror(name);
     } else
-        fprint(STDERR, "hoon off; mk can'tdelete archive members\n");
+        fprint(STDERR, "hoon off; mk can't delete archive members\n");
 }
 /*e: function delete */
 
@@ -73,7 +73,7 @@ timeinit(char *s)
     Rune r;
     int c, n;
 
-    t = time(0);
+    t = time(nil);
     while (*s) {
         cp = s;
         do{

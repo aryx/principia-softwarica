@@ -130,6 +130,7 @@ applyrules(char *target, char *cnt)
         if((!r->recipe || !*r->recipe) 
            && (!r->tail || !r->tail->s || !*r->tail->s)) 
             continue;	/* no effect; ignore */
+        /*x: [[applyrules()]] skip this meta rule and continue if some conditions */
         if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
             continue;
         /*e: [[applyrules()]] skip this meta rule and continue if some conditions */
@@ -195,7 +196,7 @@ togo(Node *node)
         if(a->flag&TOGO){
             fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
                      node->name, a->n->name);
-            //delete(a, node->prereqs)
+            //remove_list(a, node->prereqs)
             if(a == node->prereqs)
                 node->prereqs = a->next;
             else
@@ -223,7 +224,7 @@ vacuous(Node *node)
 
     /* if a rule generated arcs that DON'T go; no others from that rule go */
     for(a = node->prereqs; a; a = a->next)
-        if((a->flag&TOGO) == 0)
+        if(!(a->flag&TOGO))
             for(la = node->prereqs; la; la = la->next)
                 if((la->flag&TOGO) && (la->r == a->r)){
                     la->flag &= ~TOGO;
@@ -292,7 +293,7 @@ trace(char *s, Arc *a)
             for(a = a->n->prereqs; a; a = a->next)
                 if(*a->r->recipe) break;
         } else
-            a = 0;
+            a = nil;
     }
     fprint(STDERR, "\n");
 }
@@ -326,23 +327,32 @@ ambiguous(Node *n)
     bool bad = false;
 
     for(a = n->prereqs; a; a = a->next){
+        // recurse
         if(a->n)
             ambiguous(a->n);
-        if(*a->r->recipe == 0) continue;
+
+        // rules without any recipe do not generate ambiguity
+        if(*a->r->recipe == '\0') continue;
+        // else
+
+        // first rule with recipe (so no ambiguity)
         if(r == nil) {
             r = a->r;
             la = a;
         }
         else{
+            /*s: [[ambiguous()]] give priority to simple rules over meta rules */
             if(r->recipe != a->r->recipe){
                 if((r->attr&META) && !(a->r->attr&META)){
                     la->flag |= TOGO;
-                    r = a->r, la = a;
+                    r = a->r;
+                    la = a;
                 } else if(!(r->attr&META) && (a->r->attr&META)){
                     a->flag |= TOGO;
                     continue;
                 }
             }
+            /*e: [[ambiguous()]] give priority to simple rules over meta rules */
             if(r->recipe != a->r->recipe){
                 if(!bad){
                     fprint(STDERR, "mk: ambiguous recipes for %s:\n", n->name);
@@ -355,7 +365,9 @@ ambiguous(Node *n)
     }
     if(bad)
         Exit();
+    /*s: [[ambiguous()]] get rid of all skipped rules */
     togo(n);
+    /*e: [[ambiguous()]] get rid of all skipped rules */
 }
 /*e: function ambiguous */
 
@@ -366,17 +378,24 @@ attribute(Node *n)
     Arc *a;
 
     for(a = n->prereqs; a; a = a->next){
-        if(a->r->attr&VIR)
-            n->flags |= VIRTUAL;
-        if(a->r->attr&NOREC)
-            n->flags |= NORECIPE;
+        /*s: [[attribute()]] propagate rule attribute to node cases */
         if(a->r->attr&DEL)
             n->flags |= DELETE;
+        /*x: [[attribute()]] propagate rule attribute to node cases */
+        if(a->r->attr&NOREC)
+            n->flags |= NORECIPE;
+        /*x: [[attribute()]] propagate rule attribute to node cases */
+        if(a->r->attr&VIR)
+            n->flags |= VIRTUAL;
+        /*e: [[attribute()]] propagate rule attribute to node cases */
+        // recurse
         if(a->n)
             attribute(a->n);
     }
+    /*s: [[attribute()]] if virtual node */
     if(n->flags&VIRTUAL)
         n->time = 0;
+    /*e: [[attribute()]] if virtual node */
 }
 /*e: function attribute */
 /*e: mk/graph.c */

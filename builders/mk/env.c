@@ -18,13 +18,10 @@ static int nextv;
 static char	*myenv[] =
 {
     "target",
-    "stem",
     "prereq",
+    "stem",
 
     /*s: [[myenv]] other array elements */
-    "pid",
-    "nproc",
-    /*x: [[myenv]] other array elements */
     "stem0",		/* must be in order from here */
     "stem1",
     "stem2",
@@ -40,6 +37,10 @@ static char	*myenv[] =
     /*x: [[myenv]] other array elements */
     "newprereq",
     /*x: [[myenv]] other array elements */
+    "pid",
+    /*x: [[myenv]] other array elements */
+    "nproc",
+    /*x: [[myenv]] other array elements */
     "newmember",
     /*e: [[myenv]] other array elements */
     0,
@@ -54,6 +55,7 @@ initenv(void)
 
     for(p = myenv; *p; p++)
         symlook(*p, S_INTERNAL, (void *)"");
+
     readenv();				/* o.s. dependent */
 }
 /*e: function initenv */
@@ -64,10 +66,12 @@ envinsert(char *name, Word *value)
 {
     static int envsize;
 
+    // grow array if necessary
     if (nextv >= envsize) {
         envsize += ENVQUANTA;
         envy = (Envy *) Realloc((char *) envy, envsize*sizeof(Envy));
     }
+
     envy[nextv].name = name;
     envy[nextv++].values = value;
 }
@@ -97,12 +101,17 @@ ecopy(Symtab *s)
 {
     char **p;
 
-    if(symlook(s->name, S_NOEXPORT, 0))
+    /*s: [[ecopy()]] return and do not copy if S_NOEXPORT symbol */
+    if(symlook(s->name, S_NOEXPORT, nil))
         return;
+    /*e: [[ecopy()]] return and do not copy if S_NOEXPORT symbol */
+    /*s: [[ecopy()]] return and do not copy if conflict with mk internal variable */
     for(p = myenv; *p; p++)
         if(strcmp(*p, s->name) == 0)
             return;
-    envinsert(s->name, s->u.ptr);
+    /*e: [[ecopy()]] return and do not copy if conflict with mk internal variable */
+     // else
+     envinsert(s->name, s->u.ptr);
 }
 /*e: function ecopy */
 
@@ -113,10 +122,15 @@ execinit(void)
     char **p;
 
     nextv = 0; // reset envy
+
+    // internal mk variables
     for(p = myenv; *p; p++)
         envinsert(*p, stow(""));
 
+    // user variables in mkfile or process shell environment
     symtraverse(S_VAR, ecopy);
+
+    // end marker
     envinsert(nil, nil);
 }
 /*e: function execinit */
@@ -125,30 +139,50 @@ execinit(void)
 Envy*
 buildenv(Job *j, int slot)
 {
-    char **p, *cp, *qp;
-    Word *w, *v, **l;
+    /*s: [[buildenv()]] locals */
+    char **p;
     int i;
+    /*x: [[buildenv()]] locals */
     char buf[256];
+    /*x: [[buildenv()]] locals */
+    Word *w, *v, **l;
+    char *cp, *qp;
+    /*e: [[buildenv()]] locals */
 
+    // main variables 
     envupd("target", wdup(j->t));
+    /*s: [[buildenv()]] if regexp rule */
     if(j->r->attr&REGEXP)
         envupd("stem", newword(""));
+    /*e: [[buildenv()]] if regexp rule */
     else
         envupd("stem", newword(j->stem));
     envupd("prereq", wdup(j->p));
 
-    snprint(buf, sizeof buf, "%d", getpid());
-    envupd("pid", newword(buf));
-    snprint(buf, sizeof buf, "%d", slot);
-    envupd("nproc", newword(buf));
-
+    // advanced variables 
     /*s: [[buildenv()]] envupd some variables */
+    /* update stem0 -> stem9 */
+    for(p = myenv; *p; p++)
+        if(strcmp(*p, "stem0") == 0)
+            break;
+    for(i = 0; *p; i++, p++){
+        if((j->r->attr&REGEXP) && j->match[i])
+            envupd(*p, newword(j->match[i]));
+        else 
+            envupd(*p, newword(""));
+    }
+    /*x: [[buildenv()]] envupd some variables */
     envupd("alltarget", wdup(j->at));
     /*x: [[buildenv()]] envupd some variables */
     envupd("newprereq", wdup(j->np));
-    /*e: [[buildenv()]] envupd some variables */
-    
-    /*s: [[buildenv()]] newmember variable setting */
+    /*x: [[buildenv()]] envupd some variables */
+    snprint(buf, sizeof buf, "%d", getpid());
+    envupd("pid", newword(buf));
+    /*x: [[buildenv()]] envupd some variables */
+    snprint(buf, sizeof buf, "%d", slot);
+    envupd("nproc", newword(buf));
+    /*x: [[buildenv()]] envupd some variables */
+    // newmember
     l = &v;
     v = w = wdup(j->np);
     while(w){
@@ -169,19 +203,7 @@ buildenv(Job *j, int slot)
         w = *l;
     }
     envupd("newmember", v);
-    /*e: [[buildenv()]] newmember variable setting */
-    /*s: [[buildenv()]] stemx variables setting */
-    /* update stem0 -> stem9 */
-    for(p = myenv; *p; p++)
-        if(strcmp(*p, "stem0") == 0)
-            break;
-    for(i = 0; *p; i++, p++){
-        if((j->r->attr&REGEXP) && j->match[i])
-            envupd(*p, newword(j->match[i]));
-        else 
-            envupd(*p, newword(""));
-    }
-    /*e: [[buildenv()]] stemx variables setting */
+    /*e: [[buildenv()]] envupd some variables */
 
     return envy;
 }

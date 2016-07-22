@@ -58,6 +58,7 @@ wtos(Word *w, int sep)
             insert(buf, sep);
     }
     insert(buf, '\0');
+
     cp = strdup(buf->start);
     freebuf(buf);
     return cp;
@@ -139,7 +140,7 @@ restart:
         case '"':
             empty = false;
             cp = expandquote(cp, r, b);
-            if(cp == 0){
+            if(cp == nil){
                 fprint(STDERR, "missing closing quote: %s\n", *s);
                 Exit();
             }

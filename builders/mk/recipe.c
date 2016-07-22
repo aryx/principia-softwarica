@@ -7,23 +7,36 @@ void	addw(Word*, char*);
 bool
 dorecipe(Node *node)
 {
-    bool did = false;
-    char buf[BIGBLOCK], cwd[256];
-    Arc *a, *aa;
+    // iterators
+    Arc *a;
     Node *n;
-    Rule *r = nil;
+    Word *w;
     Symtab *s;
-    Word head, ahead, lp, ln, *w, *ww, *aw;
+    /*s: [[dorecipe()]] other locals */
+    Arc *aa = nil; // arc with recipe
+    Rule *r = nil; // rule with recipe
+    /*x: [[dorecipe()]] other locals */
+    Word head, ahead; // out of date targets,   all targets
+    /*x: [[dorecipe()]] other locals */
+    Word lp, ln; // all prereqs, prereqs making target out of date
+    /*x: [[dorecipe()]] other locals */
+    bool did = false;
+    /*x: [[dorecipe()]] other locals */
+    Word *ww, *aw;
+    char buf[BIGBLOCK];
+    /*x: [[dorecipe()]] other locals */
+    char cwd[256];
+    /*e: [[dorecipe()]] other locals */
 
-    aa = nil;
     /*
      *   pick up the rule
      */
     for(a = node->prereqs; a; a = a->next)
         if(*a->r->recipe) {
             aa = a;
-            r = aa->r;
+            r = a->r;
         }
+    /*s: [[dorecipe()]] if no recipe found */
     /*
      *   no recipe? go to buggery!
      */
@@ -35,10 +48,12 @@ dorecipe(Node *node)
                 fprint(STDERR, "mk: no recipe to make '%s'\n", node->name);
             Exit();
         }
+        // else
         if(strchr(node->name, '(') && node->time == 0)
             MADESET(node, MADE);
         else
             update(false, node);
+
         if(tflag){
             if(!(node->flags&VIRTUAL))
                 touch(node->name);
@@ -47,69 +62,99 @@ dorecipe(Node *node)
         }
         return did;
     }
+    /*e: [[dorecipe()]] if no recipe found */
+    // else
 
     /*
      *   build the node list
      */
-    node->next = 0;
-    head.next = 0;
+    node->next = nil;
+    head.next = ahead.next = nil;
+    /*s: [[dorecipe()]] build lists of targets and node list */
     ww = &head;
-    ahead.next = 0;
     aw = &ahead;
+    /*s: [[dorecipe()]] if regexp rule */
     if(r->attr&REGEXP){
         ww->next = newword(node->name);
         aw->next = newword(node->name);
-    } else {
+    }
+    /*e: [[dorecipe()]] if regexp rule */
+    else {
         for(w = r->alltargets; w; w = w->next){
             if(r->attr&META)
                 subst(aa->stem, w->s, buf, sizeof(buf));
             else
                 strecpy(buf, buf + sizeof buf - 1, w->s);
+
             aw->next = newword(buf);
             aw = aw->next;
-            if((s = symlook(buf, S_NODE, 0)) == 0)
+
+            s = symlook(buf, S_NODE, nil);
+            if(s == nil)
                 continue;	/* not a node we are interested in */
+            // else
             n = s->u.ptr;
+
+            /*s: [[dorecipe()]] update list of outdated targets */
             if(!aflag && n->time) {
                 for(a = n->prereqs; a; a = a->next)
                     if(a->n && outofdate(n, a, false))
                         break;
-                if(a == 0)
-                    continue;
+                // no out of date arc, node does not need to be regenerated
+                if(a == nil)
+                    continue; 
+                // else, find an outdated arc for node of target
             }
             ww->next = newword(buf);
             ww = ww->next;
+            /*e: [[dorecipe()]] update list of outdated targets */
+
             if(n == node) continue;
+
             n->next = node->next;
             node->next = n;
         }
     }
+    /*e: [[dorecipe()]] build lists of targets and node list */
+
+    /*s: [[dorecipe()]] return if one target not READY */
     for(n = node; n; n = n->next)
-        if((n->flags&READY) == 0)
+        if(!(n->flags&READY))
             return did;
+    /*e: [[dorecipe()]] return if one target not READY */
+
     /*
-        gather the params for the job
-    */
-    lp.next = ln.next = 0;
+     *   gather the params for the job
+     */
+    lp.next = ln.next = nil;
     for(n = node; n; n = n->next){
+        /*s: [[dorecipe()]] build lists of prerequisites */
         for(a = n->prereqs; a; a = a->next){
             if(a->n){
                 addw(&lp, a->n->name);
                 if(outofdate(n, a, false)){
                     addw(&ln, a->n->name);
+                    /*s: [[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date */
                     if(explain)
-                        fprint(1, "%s(%ld) < %s(%ld)\n",
+                        fprint(STDOUT, "%s(%ld) < %s(%ld)\n",
                             n->name, n->time, a->n->name, a->n->time);
+                    /*e: [[dorecipe()]] explain when found arc [[a]] making target [[n]] out of date */
                 }
             } else {
+                /*s: [[dorecipe()]] explain when found target [[n]] with no prerequisite */
                 if(explain)
-                    fprint(1, "%s has no prerequisites\n",
-                            n->name);
+                    fprint(STDOUT, "%s has no prerequisites\n", n->name);
+                /*e: [[dorecipe()]] explain when found target [[n]] with no prerequisite */
             }
         }
+        /*e: [[dorecipe()]] build lists of prerequisites */
         MADESET(n, BEINGMADE);
     }
-    run(newjob(r, node, aa->stem, aa->match, lp.next, ln.next, head.next, ahead.next));
+
+    // run the job
+    run(newjob(r, node, aa->stem, aa->match, 
+               lp.next, ln.next, 
+               head.next, ahead.next));
     return true;
 }
 /*e: function dorecipe */

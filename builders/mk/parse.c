@@ -25,7 +25,6 @@ parse(char *f, fdt fd, bool varoverride)
     /*s: [[parse()]] other locals */
     // bitset<Rule_attr>
     int attr;
-    char *prog; // for :P: attribute TODO??
     /*x: [[parse()]] other locals */
     char *body;
     /*x: [[parse()]] other locals */
@@ -35,6 +34,8 @@ parse(char *f, fdt fd, bool varoverride)
     bool set;
     /*x: [[parse()]] other locals */
     int pid;
+    /*x: [[parse()]] other locals */
+    char *prog;
     /*e: [[parse()]] other locals */
 
     /*s: [[parse()]] sanity check fd */
@@ -123,6 +124,7 @@ parse(char *f, fdt fd, bool varoverride)
                 fprint(STDERR, "missing include program name\n");
                 Exit();
             }
+
             execinit();
             pid = pipecmd(p, envy, &newfd);
             if(newfd < 0){
@@ -160,9 +162,9 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
     Word *w;
 
     assert(/*addrules args*/ head && body);
-    /* tuck away first non-meta rule as default target*/
 
     /*s: [[addrules()]] set [[target1]] */
+    /* tuck away first non-meta rule as default target*/
     if(target1 == nil && !(attr&REGEXP)){
         for(w = head; w; w = w->next)
             if(charin(w->s, "%&"))
@@ -191,7 +193,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     /*e: [[rhead()]] other locals */
 
     p = charin(line, ":=<");
-    if(p == 0)
+    if(p == nil)
         return '?';
 
     sep = *p;
@@ -214,13 +216,15 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
                 n = chartorune(&r, p);
                 switch(r)
                 {
+                /*s: [[rhead()]] when parsing variable attributes, switch rune cases */
+                case 'U':
+                    *attr = 1;
+                    break;
+                /*e: [[rhead()]] when parsing variable attributes, switch rune cases */
                 default:
                     SYNERR(-1);
                     fprint(STDERR, "unknown attribute '%c'\n",*p);
                     Exit();
-                case 'U':
-                    *attr = 1;
-                    break;
                 }
                 p += n;
             }
@@ -238,16 +242,16 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
             switch(r)
             {
             /*s: [[rhead()]] when parsing rule attributes, switch rune cases */
+            case 'R':
+                *attr |= REGEXP;
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'D':
                 *attr |= DEL;
                 break;
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'E':
                 *attr |= NOMINUSE;
-                break;
-            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
-            case 'n':
-                *attr |= NOVIRT;
                 break;
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'N':
@@ -258,16 +262,12 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
                 *attr |= QUIET;
                 break;
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
-            case 'R':
-                *attr |= REGEXP;
-                break;
-            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
-            case 'U':
-                *attr |= UPD;
-                break;
-            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'V':
                 *attr |= VIR;
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
+            case 'n':
+                *attr |= NOVIRT;
                 break;
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'P':
@@ -299,7 +299,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     // potentially expand variable names in head
     *h = w = stow(line);
     /*s: [[rhead()]] sanity check w */
-    if(*w->s == 0 && sep != '<' && sep != '|') {
+    if(*w->s == '\0' && sep != '<' && sep != '|') {
         SYNERR(mkinline-1);
         fprint(STDERR, "no var/target on left side of assignment/rule\n");
         Exit();

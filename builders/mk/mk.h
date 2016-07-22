@@ -30,7 +30,9 @@ struct Bufblock
 /*s: struct Word */
 struct Word
 {
+    // ref_own<string>
     char 		*s;
+
     struct Word 	*next;
 };
 /*e: struct Word */
@@ -42,9 +44,10 @@ extern Word *target1;
 /*s: struct Envy */
 struct Envy
 {
-    // key
+    // ref<string>, the key
     char 		*name;
-    // value, list<ref_own<string>>
+
+    // list<ref_own<string>>, the value
     Word 		*values;
 };
 /*e: struct Envy */
@@ -55,20 +58,21 @@ extern Envy *envy;
 struct Rule
 {
     char 		*target;	/* one target */
-    // ref_own<Words>
+    // option<ref_own<Words>>
     Word 		*tail;		/* constituents of targets */
+    // option<string>
     char 		*recipe;	/* do it ! */
 
     /*s: [[Rule]] other fields */
     // bitset<Rule_attr>
     short 		attr;		/* attributes */
     /*x: [[Rule]] other fields */
+    // ref<list<ref_own<string>>
+    Word 		*alltargets;	/* all the targets */
+    /*x: [[Rule]] other fields */
     int 		rule;		/* rule number */
     /*x: [[Rule]] other fields */
     Reprog		*pat;		/* reg exp goo */
-    /*x: [[Rule]] other fields */
-    // list<ref_own?<string>>?
-    Word 		*alltargets;	/* all the targets */
     /*x: [[Rule]] other fields */
     char		*prog;		/* to use in out of date */
     /*e: [[Rule]] other fields */
@@ -82,6 +86,7 @@ struct Rule
     // list<ref_own<Rule>> (head = rules | metarules)
     struct Rule	*next;
     /*x: [[Rule]] extra fields */
+    // list<ref<Rule>> (head = symlook(x, S_TARGET))
     struct Rule	*chain;		/* hashed per target */
     /*e: [[Rule]] extra fields */
 };
@@ -93,19 +98,17 @@ extern Rule *rules, *metarules, *patrule;
 enum Rule_attr {
     META   = 0x0001,
     /*s: [[Rule_attr]] cases */
-    DEL    = 0x0080,
+    REGEXP = 0x0020,
     /*x: [[Rule_attr]] cases */
-    NOVIRT = 0x0100,
+    DEL    = 0x0080,
     /*x: [[Rule_attr]] cases */
     NOREC  = 0x0040,
     /*x: [[Rule_attr]] cases */
-    UPD    = 0x0004,
+    QUIET  = 0x0008,
     /*x: [[Rule_attr]] cases */
     VIR    = 0x0010,
     /*x: [[Rule_attr]] cases */
-    QUIET  = 0x0008,
-    /*x: [[Rule_attr]] cases */
-    REGEXP = 0x0020,
+    NOVIRT = 0x0100,
     /*e: [[Rule_attr]] cases */
 };
 /*e: enum Rule_attr */
@@ -117,13 +120,13 @@ enum Rule_attr {
 /*s: struct Arc */
 struct Arc
 {
-    // option<ref<Node>>, the other node in the arc
+    // option<ref<Node>>, the other node in the arc (the dependency)
     struct Node *n;
-    // ref<Rule>, contain recipe to gen the target node from the dependent nodes
+    // ref<Rule>, to gen the target node from the dependent node
     Rule *r;
 
     /*s: [[Arc]] other fields */
-    // what will replace the %
+    // ref_own<string>, what will replace the %
     char		*stem;
     /*x: [[Arc]] other fields */
     // bool (TOGO)
@@ -136,7 +139,7 @@ struct Arc
     
     //Extra
     /*s: [[Arc]] extra fields */
-    // list<ref_own<arc> (head = Node.prereq)
+    // list<ref_own<arc> (head = Node.prereqs)
     struct Arc	*next;
     /*e: [[Arc]] extra fields */
 };
@@ -157,13 +160,14 @@ struct Node
     // bitset<enum<Node_flag>>
     ushort		flags;
 
-    /*s: [[Node]] other fields */
+    /*s: [[Node]] arcs field */
     // list<ref_own<Arc>> (next = Arc.next)
     Arc		*prereqs;
-    /*e: [[Node]] other fields */
+    /*e: [[Node]] arcs field */
 
     // Extra
     /*s: [[Node]] extra fields */
+    // list<ref<Node>> (head = Job.n)
     struct Node	*next;		/* list for a rule */
     /*e: [[Node]] extra fields */
 };
@@ -180,15 +184,17 @@ enum Node_flag {
     /*x: [[Node_flag]] cases */
     READY      = 0x0004,
     /*x: [[Node_flag]] cases */
-    VIRTUAL    = 0x0001,
-    NORECIPE   = 0x0400,
-    DELETE     = 0x0800,
-    /*x: [[Node_flag]] cases */
     NOTMADE    = 0x0020,
     BEINGMADE  = 0x0040,
     MADE       = 0x0080,
     /*x: [[Node_flag]] cases */
+    DELETE     = 0x0800,
+    /*x: [[Node_flag]] cases */
     NOMINUSE   = 0x1000,
+    /*x: [[Node_flag]] cases */
+    NORECIPE   = 0x0400,
+    /*x: [[Node_flag]] cases */
+    VIRTUAL    = 0x0001,
     /*x: [[Node_flag]] cases */
     CANPRETEND = 0x0008,
     PRETENDING = 0x0010,
@@ -202,19 +208,21 @@ enum Node_flag {
 /*s: struct Job */
 struct Job
 {
-    Word		*t;	/* targets */
-    Word		*p;	/* prerequisites */
-
-    //list<ref<Node>> (next = Node.next??)
-    Node		*n;	/* list of node targets */
-    //ref<Rule>
+    // ref<Rule>
     Rule		*r;	/* master rule for job */
 
-    char		*stem;
+    Word		*t;	/* targets */
+    // list<ref<Node>> (next = Node.next)
+    Node		*n;	/* list of node targets */
 
-    int		nproc;	/* slot number */ // or -1 if unassigned
+    Word		*p;	/* prerequisites */
+
+    // option<int> (None = -1)
+    int		nproc;	/* slot number */
 
     /*s: [[Job]] other fields */
+    char		*stem;
+    /*x: [[Job]] other fields */
     char		**match;
     /*x: [[Job]] other fields */
     Word		*at;	/* all targets */
@@ -235,11 +243,14 @@ extern Job *jobs;
 struct Symtab
 {
     // the key: (name x space)
+
+    // ref_own<string>
     char		*name;
     // enum<Namespace>, the ``namespace''
     short		space;
 
     // the value (generic)
+
     union{
         void*	ptr;
         uintptr	value;
@@ -260,17 +271,15 @@ enum Sxxx {
     /*x: [[Sxxx]] cases */
     S_MAKEVAR,	/* dumpable mk variable */
     /*x: [[Sxxx]] cases */
-    S_TARGET,		/* target -> rule */ // actually rules
+    S_TARGET,		/* target -> rules */ 
     /*x: [[Sxxx]] cases */
     S_OVERRIDE,	/* can't override */
     /*x: [[Sxxx]] cases */
     S_WESET,	/* variable; we set in the mkfile */
     /*x: [[Sxxx]] cases */
-    S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
-    /*x: [[Sxxx]] cases */
     S_TIME,		/* file -> time */
     /*x: [[Sxxx]] cases */
-    S_EXPORTED,	/* var -> current exported value */
+    S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
     /*x: [[Sxxx]] cases */
     S_AGG,		/* aggregate -> time */
     /*x: [[Sxxx]] cases */
@@ -293,9 +302,6 @@ extern	int	nreps;
 extern	bool explain;
 extern	char	*termchars;
 extern	char 	*shflags;
-//extern	char 	*shell;
-//extern	char 	*shellname;
-//extern	int	IWS;
 extern int runerrs;
 
 /*s: function SYNERR */

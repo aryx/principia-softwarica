@@ -44,11 +44,13 @@ mk(char *target)
             }
         }
     }
+    /*s: [[main()]] more [[waitup()]] before exiting */
     if(root->flags&BEINGMADE) // because of a runerrs
         waitup(-1, (int *)nil);
 
     while(jobs)
         waitup(-2, (int *)nil);
+    /*e: [[main()]] more [[waitup()]] before exiting */
 
     assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
     if(!did)
@@ -137,12 +139,13 @@ work(Node *node,   Node *p, Arc *parc)
                 fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
             else
                 fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
-
+            /*s: [[work()]] when inexistent target without prerequisites, exit unless kflag */
             if(kflag){
                 node->flags |= BEINGMADE;
                 runerrs++;
             } else
                 Exit();
+            /*e: [[work()]] when inexistent target without prerequisites, exit unless kflag */
             /*e: [[work()]] print error when inexistent file without prerequisites */
         } else
             MADESET(node, MADE);
@@ -229,18 +232,25 @@ update(bool fake, Node *node)
     Arc *a;
 
     MADESET(node, fake? BEINGMADE : MADE);
+    /*s: [[update()]] debug */
     if(DEBUG(D_TRACE))
         print("update(): node %s time=%lud flags=0x%x\n", node->name, node->time, node->flags);
+    /*e: [[update()]] debug */
 
-    if(((node->flags&VIRTUAL) == 0) && (access(node->name, 0) == 0)){
+
+    if((!(node->flags&VIRTUAL)) && (access(node->name, AEXIST) == 0)){
         node->time = timeof(node->name, true);
         /*s: [[update()]] unpretend node */
         node->flags &= ~(CANPRETEND|PRETENDING);
         /*e: [[update()]] unpretend node */
+        /*s: [[update()]] set outofdate prereqs if arc prog */
         for(a = node->prereqs; a; a = a->next)
             if(a->prog)
                 outofdate(node, a, true);
-    } else {
+        /*e: [[update()]] set outofdate prereqs if arc prog */
+    } 
+    else {
+        // target does not exist
         node->time = 1;
         for(a = node->prereqs; a; a = a->next)
             if(a->n && outofdate(node, a, true))

@@ -7,9 +7,6 @@ char	*termchars = "'= \t";	/*used in parse.c to isolate assignment attribute*/
 /*s: global shflags */
 char	*shflags = "-I";	/* rc flag to force non-interactive mode */
 /*e: global shflags */
-/*s: global IWS */
-int	IWS = '\1';		/* inter-word separator in env - not used in plan 9 */
-/*e: global IWS */
 
 /*
  *	This file contains functions that depend on rc's syntax.  Most
@@ -50,39 +47,44 @@ char*
 charin(char *cp, char *pat)
 {
     Rune r;
-    int n, vargen;
+    int n;
+    bool vargen = false;
 
-    vargen = 0;
     while(*cp){
         n = chartorune(&r, cp);
         switch(r){
+        /*s: [[charin()]] switch rune cases */
         case '\'':			/* skip quoted string */
             cp = squote(cp+1);	/* n must = 1 */
             if(!cp)
-                return 0;
+                return nil;
             break;
+        /*x: [[charin()]] switch rune cases */
         case '$':
             if(*(cp+1) == '{')
-                vargen = 1;
+                vargen = true;
             break;
         case '}':
             if(vargen)
-                vargen = 0;
+                vargen = false;
             else if(utfrune(pat, r))
                 return cp;
             break;
+        /*e: [[charin()]] switch rune cases */
         default:
-            if(vargen == 0 && utfrune(pat, r))
+            if(!vargen && utfrune(pat, r))
                 return cp;
             break;
         }
         cp += n;
     }
+    /*s: [[charin()]] sanity check vargen */
     if(vargen){
         SYNERR(-1);
         fprint(STDERR, "missing closing } in pattern generator\n");
     }
-    return 0;
+    /*e: [[charin()]] sanity check vargen */
+    return nil;
 }
 /*e: function charin */
 
@@ -182,6 +184,7 @@ copyq(char *s, Rune q, Bufblock *buf)
 
     if(q != '`')				/* not quoted */
         return s;
+    // else
 
     while(*s){				/* copy backquoted string */
         s += chartorune(&q, s);

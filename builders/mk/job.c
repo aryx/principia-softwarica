@@ -3,20 +3,26 @@
 
 /*s: constructor newjob */
 Job*
-newjob(Rule *r, Node *nlist, char *stem, char **match, Word *pre, Word *npre, Word *tar, Word *atar)
+newjob(Rule *r, Node *nlist, char *stem, char **match, 
+       Word *pre, Word *npre, 
+       Word *targets, Word *atar)
 {
     Job *j;
 
     j = (Job *)Malloc(sizeof(Job));
     j->r = r;
     j->n = nlist;
+    j->p = pre;
+    j->t = targets;
+
     j->stem = stem;
     j->match = match;
-    j->p = pre;
+
     j->np = npre;
-    j->t = tar;
     j->at = atar;
+
     j->nproc = -1;
+
     j->next = nil;
     return j;
 }

@@ -12,12 +12,16 @@ static void pdelete(Process *);
 
 /*s: struct RunEvent */
 struct RunEvent {
+    // option<Pid> (None = 0)
     int pid;
+
+    // ref_own<Job>
     Job *job;
 };
 /*e: struct RunEvent */
 
 /*s: global events */
+// growing_array<Runevent> (size = nevents (== nproclimit))
 static RunEvent *events;
 /*e: global events */
 /*s: global nevents */
@@ -36,7 +40,7 @@ struct Process {
     int status;
 
     // Extra
-    // double linked list, backward, forward
+    // double_list<ref_own<Process> backward, forward
     Process *b, *f;
 };
 /*e: struct Process */
@@ -77,15 +81,19 @@ sched(void)
     Job *j;
     int slot;
     Envy *e;
-
-    Bufblock *buf;
     char *flags;
+    /*s: [[sched()]] other locals */
+    Bufblock *buf;
+    /*x: [[sched()]] other locals */
     Node *n;
+    /*e: [[sched()]] other locals */
 
+    /*s: [[sched()]] sanity check jobs */
     if(jobs == nil){
         usage();
         return;
     }
+    /*e: [[sched()]] sanity check jobs */
 
     // j = pop(jobs)
     j = jobs;
@@ -107,8 +115,8 @@ sched(void)
     freebuf(buf);
     /*e: [[sched()]] print recipe command on stdout */
 
-    /*s: [[sched()]] if dry mode or touch mode */
-    if(nflag||tflag){
+    /*s: [[sched()]] if dry mode or touch mode, alternate to execsh */
+    if(nflag || tflag){
         for(n = j->n; n; n = n->next){
             /*s: [[sched()]] if touch mode */
             if(tflag){
@@ -122,16 +130,22 @@ sched(void)
             MADESET(n, MADE);
         }
     }
-    /*e: [[sched()]] if dry mode or touch mode */
+    /*e: [[sched()]] if dry mode or touch mode, alternate to execsh */
     else {
        /*s: [[sched()]] if DEBUG(D_EXEC) print recipe */
        if(DEBUG(D_EXEC))
            fprint(STDOUT, "recipe='%s'\n", j->r->recipe);
        Bflush(&bout);
        /*e: [[sched()]] if DEBUG(D_EXEC) print recipe */
-        flags = (j->r->attr&NOMINUSE)? nil : "-e";
+        flags = "-e";
+       /*s: [[sched()]] reset flags if NOMINUSE rule */
+       if (j->r->attr&NOMINUSE)
+           flags = nil;
+       /*e: [[sched()]] reset flags if NOMINUSE rule */
+
         // launching the job!
-        events[slot].pid = execsh(flags, j->r->recipe, 0, e);
+        events[slot].pid = execsh(flags, j->r->recipe, nil, e);
+
         usage();
         nrunning++;
        /*s: [[sched()]] if DEBUG(D_EXEC) print pid */
@@ -146,20 +160,28 @@ sched(void)
 int
 waitup(int echildok, int *retstatus)
 {
-    Envy *e;
+    // child process
     int pid;
-    int slot;
-    Symtab *s;
-    Word *w;
-    Job *j;
+    // return string of child process
     char buf[ERRMAX];
+    // index in events[]
+    int slot;
+    Job *j;
+    Symtab *sym;
+    Word *w;
+    bool fake = false;
+    /*s: [[waitup()]] other locals */
+    Envy *e;
     Bufblock *bp;
-    int uarg = 0;
-    int done;
+    /*x: [[waitup()]] other locals */
     Node *n;
+    int done;
+    /*x: [[waitup()]] other locals */
     Process *p;
+    /*e: [[waitup()]] other locals */
 
-    /* first check against the proces slist */
+    /*s: [[waitup()]] if retstatus, check process list */
+    /* first check against the process list */
     if(retstatus)
         for(p = phead; p; p = p->f)
             if(p->pid == *retstatus){
@@ -167,8 +189,11 @@ waitup(int echildok, int *retstatus)
                 pdelete(p);
                 return -1;
             }
+    /*e: [[waitup()]] if retstatus, check process list */
 again:		/* rogue processes */
+
     pid = waitfor(buf);
+    /*s: [[waitup()]] if no more children */
     if(pid == -1){
         if(echildok > 0)
             return 1;
@@ -178,15 +203,20 @@ again:		/* rogue processes */
             Exit();
         }
     }
+    /*e: [[waitup()]] if no more children */
     /*s: [[waitup()]] if DEBUG(D_EXEC) print pid */
     if(DEBUG(D_EXEC))
         fprint(STDOUT, "waitup got pid=%d, status='%s'\n", pid, buf);
     /*e: [[waitup()]] if DEBUG(D_EXEC) print pid */
+    /*s: [[waitup()]] if retstatus, check if matching pid */
     if(retstatus && pid == *retstatus){
         *retstatus = buf[0]? 1:0;
         return -1;
     }
+    /*e: [[waitup()]] if retstatus, check if matching pid */
+
     slot = pidslot(pid);
+    /*s: [[waitup()]] if slot not found, not a job pid, update process list */
     if(slot < 0){
        /*s: [[waitup()]] if DEBUG(D_EXEC) and slot < 0 */
         if(DEBUG(D_EXEC))
@@ -195,10 +225,15 @@ again:		/* rogue processes */
         pnew(pid, buf[0]? 1:0);
         goto again;
     }
+    /*e: [[waitup()]] if slot not found, not a job pid, update process list */
+
     j = events[slot].job;
     usage();
     nrunning--;
+    // free events[slot]
     events[slot].pid = -1;
+
+    /*s: [[waitup()]] if error in child process, possibly set fake or exit */
     if(buf[0]){
         e = buildenv(j, slot);
         bp = newbuf();
@@ -206,6 +241,7 @@ again:		/* rogue processes */
         front(bp->start);
         fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
         freebuf(bp);
+        /*s: [[waitup()]] when error in child process, delete if DELETE node */
         for(n = j->n, done = 0; n; n = n->next)
             if(n->flags&DELETE){
                 if(done++ == 0)
@@ -213,20 +249,31 @@ again:		/* rogue processes */
                 fprint(STDERR, " '%s'", n->name);
                 delete(n->name);
             }
+        /*e: [[waitup()]] when error in child process, delete if DELETE node */
         fprint(STDERR, "\n");
+
+        /*s: [[waitup()]] when error in child process, exit unless kflag */
         if(kflag){
             runerrs++;
-            uarg = 1;
+            fake = true;
         } else {
-            jobs = 0;
+            jobs = nil;
             Exit();
         }
+        /*e: [[waitup()]] when error in child process, exit unless kflag */
     }
+    /*e: [[waitup()]] if error in child process, possibly set fake or exit */
+    // else
+
     for(w = j->t; w; w = w->next){
-        if((s = symlook(w->s, S_NODE, 0)) == 0)
+        sym = symlook(w->s, S_NODE, nil);
+        /*s: [[waitup()]] skip if node not found */
+        if(sym == nil)
             continue;	/* not interested in this node */
-        update(uarg, s->u.ptr);
+        /*e: [[waitup()]] skip if node not found */
+        update(fake, (Node*) sym->u.ptr);
     }
+
     if(nrunning < nproclimit)
         sched();
     return 0;
@@ -251,6 +298,8 @@ nproc(void)
     if(DEBUG(D_EXEC))
         fprint(1, "nprocs = %d\n", nproclimit);
     /*e: [[nproc()]] if DEBUG(D_EXEC) */
+
+    /*s: [[nproc()]] grow nevents if necessary */
     if(nproclimit > nevents){
         if(nevents)
             events = (RunEvent *)Realloc((char *)events, nproclimit*sizeof(RunEvent));
@@ -260,6 +309,7 @@ nproc(void)
         while(nevents < nproclimit)
             events[nevents++].pid = 0;
     }
+    /*e: [[nproc()]] grow nevents if necessary */
 }
 /*e: function nproc */
 
@@ -301,6 +351,7 @@ pnew(int pid, int status)
 {
     Process *p;
 
+    // p = pop_list(pfree)
     if(pfree){
         p = pfree;
         pfree = p->f;
@@ -310,6 +361,7 @@ pnew(int pid, int status)
     p->pid = pid;
     p->status = status;
 
+    // add_list(p, phead)
     p->f = phead;
     phead = p;
     if(p->f)
@@ -322,6 +374,7 @@ pnew(int pid, int status)
 static void
 pdelete(Process *p)
 {
+    // remove_double_list(p, phead, pfree)
     if(p->f)
         p->f->b = p->b;
     if(p->b)
@@ -341,9 +394,10 @@ killchildren(char *msg)
 
     kflag = true;	/* to make sure waitup doesn't exit */
     jobs = nil;		/* make sure no more get scheduled */
+
     for(p = phead; p; p = p->f)
         expunge(p->pid, msg);
-    while(waitup(1, (int *)0) == 0)
+    while(waitup(1, (int *)nil) == 0)
         ;
     Bprint(&bout, "mk: %s\n", msg);
     Exit();

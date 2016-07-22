@@ -5,6 +5,7 @@
 // bitset<enum<dxxx>>
 int debug;
 /*e: global debug */
+
 /*s: global rules */
 // list<ref_own<Rule>> (next = Rule.next, end = lr)
 Rule *rules;
@@ -13,6 +14,7 @@ Rule *rules;
 // list<ref_own<Rule>> (next = Rule.next)
 Rule *metarules;
 /*e: global metarules */
+
 /*s: global nflag */
 bool nflag = false;
 /*e: global nflag */
@@ -28,9 +30,11 @@ bool kflag = false;
 /*s: global aflag */
 bool aflag = false;
 /*e: global aflag */
+
 /*s: global explain */
 bool explain = false;
 /*e: global explain */
+
 /*s: global nreps */
 int nreps = 1;
 /*e: global nreps */

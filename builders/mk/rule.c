@@ -21,13 +21,15 @@ static int rcmp(Rule *r, char *target, Word *tail);
 void
 addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, char *prog)
 {
-    Rule *r;
-    Rule *rr;
+    Rule *r = nil;
+    /*s: [[addrule()]] other locals */
     Symtab *sym;
     bool reuse;
+    /*x: [[addrule()]] other locals */
+    Rule *rr;
+    /*e: [[addrule()]] other locals */
 
-    r = nil;
-
+    /*s: [[addrule()]] find if rule already exists */
     reuse = false;
     if(sym = symlook(head, S_TARGET, nil)){
         for(r = sym->u.ptr; r; r = r->chain)
@@ -36,11 +38,14 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
                 break;
             }
     }
+    /*e: [[addrule()]] find if rule already exists */
 
     if(r == nil)
         r = (Rule *)Malloc(sizeof(Rule));
+
     r->target = head;
     r->tail = tail;
+
     r->recipe = body;
 
     r->line = hline;
@@ -48,13 +53,18 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 
     r->attr = attr;
 
-    r->rule = nrules++;
-
+    /*s: [[addrule()]] set more fields */
     r->alltargets = ahead;
+    /*x: [[addrule()]] set more fields */
+    r->rule = nrules++;
+    /*x: [[addrule()]] set more fields */
     r->prog = prog;
+    /*e: [[addrule()]] set more fields */
 
+    /*s: [[addrule()]] indexing [[r]] by target in [[S_TARGET]] */
     if(!reuse){
-        rr = symlook(head, S_TARGET, r)->u.ptr;
+        sym = symlook(head, S_TARGET, r);
+        rr = sym->u.ptr;
         if(rr != r){
             r->chain = rr->chain;
             rr->chain = r;
@@ -62,6 +72,8 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
             r->chain = nil;
         r->next = nil;
     }
+    /*e: [[addrule()]] indexing [[r]] by target in [[S_TARGET]] */
+
 
     if(charin(head, "%&") || (attr&REGEXP)){
         r->attr |= META;
@@ -73,6 +85,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
             r->pat = regcomp(head);
         }
         /*e: [[addrule()]] if REGEXP attribute */
+
         // add_list(r, metarules, lmr)
         if(metarules == nil)
             metarules = lmr = r;
@@ -84,6 +97,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
         if(reuse)
             return;
         r->pat = nil;
+
         // add_list(r, rules, lr)
         if(rules == nil)
             rules = lr = r;
