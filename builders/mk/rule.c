@@ -74,7 +74,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
     }
     /*e: [[addrule()]] indexing [[r]] by target in [[S_TARGET]] */
 
-
+    /*s: [[addrule()]] if meta rule */
     if(charin(head, "%&") || (attr&REGEXP)){
         r->attr |= META;
         if(reuse)
@@ -93,7 +93,9 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
             lmr->next = r;
             lmr = r;
         }
-    } else {
+    }
+    /*e: [[addrule()]] if meta rule */
+    else {
         if(reuse)
             return;
         r->pat = nil;

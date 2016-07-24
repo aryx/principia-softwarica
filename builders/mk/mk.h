@@ -60,7 +60,7 @@ struct Rule
     char 		*target;	/* one target */
     // option<ref_own<Words>>
     Word 		*tail;		/* constituents of targets */
-    // option<string>
+    // ref_own<string>, never nil, but can be empty string (just '\0')
     char 		*recipe;	/* do it ! */
 
     /*s: [[Rule]] other fields */
@@ -100,13 +100,13 @@ enum Rule_attr {
     /*s: [[Rule_attr]] cases */
     REGEXP = 0x0020,
     /*x: [[Rule_attr]] cases */
-    DEL    = 0x0080,
+    VIR    = 0x0010,
     /*x: [[Rule_attr]] cases */
-    NOREC  = 0x0040,
+    DEL    = 0x0080,
     /*x: [[Rule_attr]] cases */
     QUIET  = 0x0008,
     /*x: [[Rule_attr]] cases */
-    VIR    = 0x0010,
+    NOREC  = 0x0040,
     /*x: [[Rule_attr]] cases */
     NOVIRT = 0x0100,
     /*e: [[Rule_attr]] cases */
@@ -153,10 +153,10 @@ struct Arc
 /*s: struct Node */
 struct Node
 {
-    // ref_own<string>, usually a filename, or target label like 'default'
+    // ref_own<string>, usually a filename, or a virtual target like 'clean'
     char*		name; 
-    // last mtime of the file (or zero for non existing files)
-    ulong		time;
+    // option<Time> (None = 0, for nonexistent files and virtual targets)
+    ulong		time; // last mtime of file 
     // bitset<enum<Node_flag>>
     ushort		flags;
 
@@ -188,13 +188,13 @@ enum Node_flag {
     BEINGMADE  = 0x0040,
     MADE       = 0x0080,
     /*x: [[Node_flag]] cases */
+    VIRTUAL    = 0x0001,
+    /*x: [[Node_flag]] cases */
     DELETE     = 0x0800,
     /*x: [[Node_flag]] cases */
     NOMINUSE   = 0x1000,
     /*x: [[Node_flag]] cases */
     NORECIPE   = 0x0400,
-    /*x: [[Node_flag]] cases */
-    VIRTUAL    = 0x0001,
     /*x: [[Node_flag]] cases */
     CANPRETEND = 0x0008,
     PRETENDING = 0x0010,
@@ -269,15 +269,15 @@ enum Sxxx {
     /*s: [[Sxxx]] cases */
     S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
     /*x: [[Sxxx]] cases */
-    S_MAKEVAR,	/* dumpable mk variable */
-    /*x: [[Sxxx]] cases */
     S_TARGET,		/* target -> rules */ 
     /*x: [[Sxxx]] cases */
     S_OVERRIDE,	/* can't override */
     /*x: [[Sxxx]] cases */
+    S_TIME,		/* file -> time */
+    /*x: [[Sxxx]] cases */
     S_WESET,	/* variable; we set in the mkfile */
     /*x: [[Sxxx]] cases */
-    S_TIME,		/* file -> time */
+    S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
     /*x: [[Sxxx]] cases */
     S_NOEXPORT,	/* var -> noexport */ // set of noexport variables
     /*x: [[Sxxx]] cases */
@@ -288,8 +288,6 @@ enum Sxxx {
     S_NODE,		/* target name -> node */
     /*x: [[Sxxx]] cases */
     S_BULKED,	/* we have bulked this dir */
-    /*x: [[Sxxx]] cases */
-    S_OUTOFDATE,	/* n1\377n2 -> 2(outofdate) or 1(not outofdate) */
     /*e: [[Sxxx]] cases */
 };
 /*e: enum Sxxx */

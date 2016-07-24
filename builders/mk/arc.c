@@ -11,13 +11,14 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
     a->n = n;
     a->r = r;
     a->stem = strdup(stem);
-    /*s: [[newarc()]] set match field */
-    rcopy(a->match, match, NREGEXP);
-    /*e: [[newarc()]] set match field */
 
     a->next = nil;
     a->flag = 0;
+    /*s: [[newarc()]] set other fields */
+    rcopy(a->match, match, NREGEXP);
+    /*x: [[newarc()]] set other fields */
     a->prog = r->prog;
+    /*e: [[newarc()]] set other fields */
     return a;
 }
 /*e: constructor newarc */

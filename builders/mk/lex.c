@@ -31,6 +31,7 @@ assline(Biobuf *bp, Bufblock *buf)
         /*s: [[assline()]] switch character cases */
         case '#':
             lastc = '#';
+            // skil all characters in comment until newline
             while ((c = Bgetc(bp)) != '\n') {
                 if (c < 0)
                     goto eof;
@@ -40,17 +41,20 @@ assline(Biobuf *bp, Bufblock *buf)
             mkinline++;
             if (lastc == '\\')
                 break;		/* propagate escaped newlines??*/
-            if (buf->current != buf->start) {
+
+           // like '\n' case 
+           if (buf->current != buf->start) {
                 insert(buf, '\0');
                 return true;
             }
+            // skip lines with only a comment
             break;
         /*x: [[assline()]] switch character cases */
         case '\\':
         case '\'':
         case '"':
             rinsert(buf, c);
-            if (escapetoken(bp, buf, true, c) == 0)
+            if (escapetoken(bp, buf, true, c) == ERROR_0)
                 Exit();
             break;
         /*x: [[assline()]] switch character cases */
@@ -91,7 +95,7 @@ bquote(Biobuf *bp, Bufblock *buf)
         term = '`';		/* sh style */
 
     start = buf->current - buf->start;
-    for(;c > 0; c = nextrune(bp, 0)){
+    for(;c > 0; c = nextrune(bp, false)){
         if(c == term){
             insert(buf, '\n');
             insert(buf, '\0');
@@ -137,6 +141,7 @@ nextrune(Biobuf *bp, bool elide)
                 mkinline++;
                 if (elide)
                     continue;
+                // else
                 return ' ';
             }
             Bungetrune(bp);

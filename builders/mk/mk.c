@@ -14,13 +14,15 @@ mk(char *target)
 {
     Node *root;
     bool did = false;
+    // enum<WaitupResult>
+    int res;
 
     /*s: [[mk()]] initialisation */
     nrep();		/* it can be updated dynamically */
     /*x: [[mk()]] initialisation */
-    runerrs = 0;
-    /*x: [[mk()]] initialisation */
     nproc();	/* it can be updated dynamically */
+    /*x: [[mk()]] initialisation */
+    runerrs = 0;
     /*e: [[mk()]] initialisation */
 
     root = graph(target);
@@ -36,25 +38,29 @@ mk(char *target)
         if(work(root, (Node *)nil, (Arc *)nil))
             did = true;	/* found something to do */
         else {
-            if(waitup(1, (int *)nil) > 0){
+            res = waitup(1, (int *)nil);
+            /*s: [[mk()]] if no child to waitup and root not MADE, possibly break */
+            if(res > 0){
                 if(root->flags&(NOTMADE|BEINGMADE)){
                     assert(/*must be run errors*/ runerrs);
                     break;	/* nothing more waiting */
                 }
             }
+            /*e: [[mk()]] if no child to waitup and root not MADE, possibly break */
         }
     }
-    /*s: [[main()]] more [[waitup()]] before exiting */
+    /*s: [[main()]] before returning, more [[waitup()]] if there was an error */
     if(root->flags&BEINGMADE) // because of a runerrs
         waitup(-1, (int *)nil);
 
     while(jobs)
         waitup(-2, (int *)nil);
-    /*e: [[main()]] more [[waitup()]] before exiting */
 
     assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
+    /*e: [[main()]] before returning, more [[waitup()]] if there was an error */
     if(!did)
         Bprint(&bout, "mk: '%s' is up to date\n", root->name);
+    return;
 }
 /*e: function mk */
 
@@ -64,14 +70,15 @@ clrmade(Node *n)
 {
     Arc *a;
 
-    /*s: [[clrmade()]] n->flags pretend adjustments */
+    /*s: [[clrmade()]] [[n->flags]] pretend adjustments */
     n->flags &= ~(CANPRETEND|PRETENDING);
-    if(strchr(n->name, '(') ==0 || n->time)
+    if(strchr(n->name, '(') == 0 || n->time)
         n->flags |= CANPRETEND;
-    /*e: [[clrmade()]] n->flags pretend adjustments */
+    /*e: [[clrmade()]] [[n->flags]] pretend adjustments */
     MADESET(n, NOTMADE);
     for(a = n->prereqs; a; a = a->next)
         if(a->n)
+            // recurse
             clrmade(a->n);
 }
 /*e: function clrmade */
@@ -93,22 +100,21 @@ work(Node *node,   Node *p, Arc *parc)
     /*s: [[work()]] locals */
     bool did = false;
     /*x: [[work()]] locals */
-    bool weoutofdate;
-    bool ready;
-    Arc *a;
-    Arc *ra;
-    /*x: [[work()]] locals */
     char cwd[256];
+    /*x: [[work()]] locals */
+    bool weoutofdate = false;
+    bool ready = true;
+    Arc *a;
+    /*x: [[work()]] locals */
+    Arc *ra = nil;
     /*e: [[work()]] locals */
 
     /*s: [[work()]] debug */
     if(DEBUG(D_TRACE))
         print("work(%s) flags=0x%x time=%lud\n", node->name, node->flags, node->time);
     /*e: [[work()]] debug */
-
     if(node->flags&BEINGMADE)
         return did;
-
     /*s: [[work()]] possibly unpretending node */
     if((node->flags&MADE) && (node->flags&PRETENDING) && p
         && outofdate(p, parc, false)){
@@ -139,27 +145,31 @@ work(Node *node,   Node *p, Arc *parc)
                 fprint(STDERR, "mk: don't know how to make '%s' in directory %s\n", node->name, cwd);
             else
                 fprint(STDERR, "mk: don't know how to make '%s'\n", node->name);
-            /*s: [[work()]] when inexistent target without prerequisites, exit unless kflag */
+
+            /*s: [[work()]] when inexistent target without prerequisites, if kflag */
             if(kflag){
                 node->flags |= BEINGMADE;
                 runerrs++;
-            } else
+            }
+            /*e: [[work()]] when inexistent target without prerequisites, if kflag */
+            else
                 Exit();
-            /*e: [[work()]] when inexistent target without prerequisites, exit unless kflag */
             /*e: [[work()]] print error when inexistent file without prerequisites */
         } else
             MADESET(node, MADE);
         return did;
     }
     /*e: [[work()]] no prerequisite, a leaf */
+    // else
     // Node case
+    /*s: [[work()]] some prerequisites, a node */
+    /*s: [[work()]] adjust weoutofdate if aflag */
+    if(aflag)
+        weoutofdate = true;
+    /*e: [[work()]] adjust weoutofdate if aflag */
     /*
      *   now see if we are out of date or what
      */
-    ready = true;
-    weoutofdate = aflag;
-    /*s: [[work()]] check if node out of date with prerequisites, recursively */
-    ra = nil;
     for(a = node->prereqs; a; a = a->next)
         if(a->n){
             // recursive call! go in depth
@@ -169,17 +179,20 @@ work(Node *node,   Node *p, Arc *parc)
                 ready = false;
             if(outofdate(node, a, false)){
                 weoutofdate = true;
+                /*s: [[work()]] update [[ra]] when outofdate [[node]] with arc [[a]] */
                 if((ra == nil) || (ra->n == nil) || (ra->n->time < a->n->time))
                     ra = a;
+                /*e: [[work()]] update [[ra]] when outofdate [[node]] with arc [[a]] */
             }
         } else {
             if(node->time == 0){
                 weoutofdate = true;
+                /*s: [[work()]] update [[ra]] when no dest in arc and no src */
                 if(ra == nil)
                     ra = a;
+                /*e: [[work()]] update [[ra]] when no dest in arc and no src */
             }
         }
-    /*e: [[work()]] check if node out of date with prerequisites, recursively */
 
     if(!ready)	/* can't do anything now */
         return did;
@@ -220,8 +233,11 @@ work(Node *node,   Node *p, Arc *parc)
         return did || work(node, p, parc);
     /*e: [[work()]] possibly pretending node */
 
+    // else, out of date
+
     did = dorecipe(node) || did;
     return did;
+    /*e: [[work()]] some prerequisites, a node */
 }
 /*e: function work */
 
@@ -250,7 +266,7 @@ update(bool fake, Node *node)
         /*e: [[update()]] set outofdate prereqs if arc prog */
     } 
     else {
-        // target does not exist
+        // target still does not exist (but still marked as MADE)
         node->time = 1;
         for(a = node->prereqs; a; a = a->next)
             if(a->n && outofdate(node, a, true))
@@ -305,11 +321,11 @@ outofdate(Node *node, Arc *arc, bool eval)
     }
     /*e: [[outofdate()]] if arc->prog */
     else 
-     /*s: [[outofdate()]] of arc node is an archive member */
+     /*s: [[outofdate()]] if arc node is an archive member */
      if(strchr(arc->n->name, '(') && arc->n->time == 0)
         /* missing archive member */
         return true;
-     /*e: [[outofdate()]] of arc node is an archive member */
+     /*e: [[outofdate()]] if arc node is an archive member */
      else
         /*
          * Treat equal times as out-of-date.

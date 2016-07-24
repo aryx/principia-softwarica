@@ -27,12 +27,12 @@ stow(char *s)
         new = nextword(&s);
         if(new == nil)
             break;
-        // add_list(new, head)
+
+        // concat_list(new, head, w)
         if (w)
             w->next = new;
         else
             head = w = new;
-        // concat_list(head, new)
         while(w->next)
             w = w->next;
         

@@ -51,12 +51,6 @@ main(int argc, char **argv)
     // Initializing
 
     /*s: [[main()]] initializations */
-    /*
-     *  start with a copy of the current environment variables
-     *  instead of sharing them
-     */
-    //??? for execinit?? for initenv/
-
     Binit(&bout, STDOUT, OWRITE);
     /*s: [[main()]] argv processing part 1, -xxx */
     USED(argc);
@@ -81,6 +75,10 @@ main(int argc, char **argv)
         /*x: [[main()]] -xxx switch cases */
         case 's':
             sflag = true;
+            break;
+        /*x: [[main()]] -xxx switch cases */
+        case 'k':
+            kflag = true;
             break;
         /*x: [[main()]] -xxx switch cases */
         case 'e':
@@ -133,28 +131,24 @@ main(int argc, char **argv)
             else
                 debug = 0xFFFF; // D_PARSE | D_GRAPH | D_EXEC
             break;
-        /*x: [[main()]] -xxx switch cases */
-        case 'k':
-            kflag = true;
-            break;
         /*e: [[main()]] -xxx switch cases */
         default:
             badusage();
         }
     }
     /*e: [[main()]] argv processing part 1, -xxx */
-    /*s: [[main()]] setup optional profiling */
+    /*s: [[main()]] setup profiling */
+    usage();
+    /*x: [[main()]] setup profiling */
     #ifdef	PROF
         {
             extern int etext();
             monitor(main, etext, buf, sizeof buf, 300);
         }
     #endif
-    /*e: [[main()]] setup optional profiling */
-    usage();
+    /*e: [[main()]] setup profiling */
     syminit();
     initenv();
-    usage();
     /*s: [[main()]] argv processing part 2, xxx=yyy */
     /*
      *   assignment args become null strings
@@ -215,13 +209,21 @@ main(int argc, char **argv)
     freebuf(buf);
     /*e: [[main()]] set MKARGS variable */
     /*e: [[main()]] set variables for recursive mk */
+    /*s: [[main()]] argv processing part 3, skip xxx=yyy */
+    /* skip assignment args */
+    while(*argv && (**argv == '\0'))
+        argv++;
+    /*e: [[main()]] argv processing part 3, skip xxx=yyy */
+    /*s: [[main()]] profile initializations */
+    usage();
+    /*e: [[main()]] profile initializations */
     /*e: [[main()]] initializations */
 
     // Parsing
 
     /*s: [[main()]] parsing mkfile, call parse() */
     if(f == files){
-        if(access(MKFILE, AREAD) == 0)
+        if(access(MKFILE, AREAD) == OK_0)
             parse(MKFILE, open(MKFILE, OREAD), false);
     } else
         for(ff = files; ff < f; ff++)
@@ -236,28 +238,18 @@ main(int argc, char **argv)
     /*e: [[main()]] if DEBUG(D_PARSE) */
     /*e: [[main()]] parsing mkfile, call parse() */
 
-    // Querying (optional)
+    // Building
 
-    /*s: [[main()]] whatif optional setup */
+    /*s: [[main()]] initializations before building */
+    catchnotes();
+    /*x: [[main()]] initializations before building */
+    execinit();
+    /*x: [[main()]] initializations before building */
     if(whatif){
         insert(whatif, '\0');
         timeinit(whatif->start);
         freebuf(whatif);
     }
-    /*e: [[main()]] whatif optional setup */
-
-    // Building
-
-    /*s: [[main()]] initializations before building */
-    execinit();
-
-    /*s: [[main()]] argv processing part 3, skip xxx=yyy */
-    /* skip assignment args */
-    while(*argv && (**argv == '\0'))
-        argv++;
-    /*e: [[main()]] argv processing part 3, skip xxx=yyy */
-
-    catchnotes();
     /*e: [[main()]] initializations before building */
     /*s: [[main()]] building the targets, call mk() */
     if(*argv == nil){

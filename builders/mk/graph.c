@@ -30,10 +30,10 @@ graph(char *target)
 
     /*s: [[graph()]] checking the graph */
     cyclechk(root);
-
+    /*s: [[graph()]] set root flags before [[vacuous()]] */
     root->flags |= PROBABLE;	/* make sure it doesn't get deleted */
+    /*e: [[graph()]] set root flags before [[vacuous()]] */
     vacuous(root);
-
     ambiguous(root);
     /*e: [[graph()]] checking the graph */
 
@@ -100,9 +100,9 @@ applyrules(char *target, char *cnt)
             continue;
         cnt[r->rule]++;
         /*e: [[applyrules()]] infinite rule detection part1 */
-
+        /*s: [[applyrules()]] when found a regular rule for target [[node]], set flags */
         node->flags |= PROBABLE;
-
+        /*e: [[applyrules()]] when found a regular rule for target [[node]], set flags */
         /*s: [[applyrules()]] if no prerequistes in rule r */
         // no prerequistes, a leaf, still create fake arc
         if(!r->tail || !r->tail->s || !*r->tail->s) {
@@ -254,7 +254,10 @@ newnode(char *name)
     // call to timeof()! 
     node->time = timeof(name, false);
 
+    /*s: [[newnode()]] set flags of node */
     node->flags = (node->time? PROBABLE : 0);
+    /*e: [[newnode()]] set flags of node */
+
     node->prereqs = nil;
     node->next = nil;
     /*s: [[newnode()]] debug */
@@ -365,9 +368,9 @@ ambiguous(Node *n)
     }
     if(bad)
         Exit();
-    /*s: [[ambiguous()]] get rid of all skipped rules */
+    /*s: [[ambiguous()]] get rid of all skipped arcs */
     togo(n);
-    /*e: [[ambiguous()]] get rid of all skipped rules */
+    /*e: [[ambiguous()]] get rid of all skipped arcs */
 }
 /*e: function ambiguous */
 
@@ -379,14 +382,14 @@ attribute(Node *n)
 
     for(a = n->prereqs; a; a = a->next){
         /*s: [[attribute()]] propagate rule attribute to node cases */
+        if(a->r->attr&VIR)
+            n->flags |= VIRTUAL;
+        /*x: [[attribute()]] propagate rule attribute to node cases */
         if(a->r->attr&DEL)
             n->flags |= DELETE;
         /*x: [[attribute()]] propagate rule attribute to node cases */
         if(a->r->attr&NOREC)
             n->flags |= NORECIPE;
-        /*x: [[attribute()]] propagate rule attribute to node cases */
-        if(a->r->attr&VIR)
-            n->flags |= VIRTUAL;
         /*e: [[attribute()]] propagate rule attribute to node cases */
         // recurse
         if(a->n)

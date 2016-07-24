@@ -114,9 +114,10 @@ void
 exportenv(Envy *e)
 {
     Symtab *sy;
-    int f, n;
+    int n;
+    fdt f;
     bool hasvalue;
-    int first;
+    bool first;
     Word *w;
     char nam[256];
 
@@ -128,35 +129,43 @@ exportenv(Envy *e)
             hasvalue = true;
         if(sy == nil && !hasvalue)	/* non-existant null symbol */
             continue;
+        // else
 
         snprint(nam, sizeof nam, "/env/%s", e->name);
-        if (sy != 0 && !hasvalue) {	/* Remove from environment */
-                /* we could remove it from the symbol table
-                 * too, but we're in the child copy, and it
-                 * would still remain in the parent's table.
-                 */
+        /*s: [[exportenv()]] if existing symbol but not value, remove from env */
+        if (sy != nil && !hasvalue) {	/* Remove from environment */
+            /* we could remove it from the symbol table
+             * too, but we're in the child copy, and it
+             * would still remain in the parent's table.
+             */
             remove(nam);
             delword(e->values);
-            e->values = 0;		/* memory leak */
+            e->values = nil;		/* memory leak */
             continue;
         }
+        /*e: [[exportenv()]] if existing symbol but not value, remove from env */
+        // else
     
         f = create(nam, OWRITE, 0666L);
+        /*s: [[exportenv()]] sanity check f */
         if(f < 0) {
             fprint(STDERR, "can't create %s, f=%d\n", nam, f);
             perror(nam);
             continue;
         }
-        first = 1;
+        /*e: [[exportenv()]] sanity check f */
+        first = true;
         for (w = e->values; w; w = w->next) {
             n = strlen(w->s);
             if (n) {
+                /*s: [[exportenv()]] write null separator */
                 if(first)
-                    first = 0;
+                    first = false;
                 else{
                     if (write (f, "\0", 1) != 1)
                         perror(nam);
                 }
+                /*e: [[exportenv()]] write null separator */
                 if (write(f, w->s, n) != n)
                     perror(nam);
             }
@@ -362,6 +371,7 @@ Exit(void)
 int
 notifyf(void *a, char *msg)
 {
+    /*s: [[notifyf()]] sanity check not too many notes */
     static int nnote;
 
     USED(a);
@@ -370,6 +380,7 @@ notifyf(void *a, char *msg)
         notify(0);
         abort();
     }
+    /*e: [[notifyf()]] sanity check not too many notes */
     if(strcmp(msg, "interrupt")!=0 && strcmp(msg, "hangup")!=0)
         return 0;
     killchildren(msg);

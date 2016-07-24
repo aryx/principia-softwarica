@@ -6,7 +6,6 @@ void
 setvar(char *name, void *value)
 {
     symlook(name, S_VAR, value)->u.ptr = value;
-    symlook(name, S_MAKEVAR, (void*)"");
 }
 /*e: function setvar */
 

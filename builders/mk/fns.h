@@ -8,7 +8,7 @@ void	delete(char*);
 
 // Constructors/destructors core data structures
 
-// Bufblock
+// bufblock.c
 Bufblock* newbuf(void);
 void	freebuf(Bufblock*);
 void	growbuf(Bufblock *);
@@ -16,7 +16,7 @@ void	bufcpy(Bufblock *, char *, int);
 void	insert(Bufblock *, int);
 void	rinsert(Bufblock *, Rune);
 
-// Word
+// words.c
 Word*	newword(char*);
 void	delword(Word*);
 Word*	wdup(Word*);
@@ -27,11 +27,11 @@ char*	wtos(Word*, int);
 // Arc
 Arc*	newarc(Node*, Rule*, char*, Resub*);
 
-// Rule
+// rule.c
 void	addrule(char*, Word*, char*, Word*, int, int, char*);
 void	addrules(Word*, Word*, char*, int, int, char*);
 
-// Job
+// job.c
 Job*	newjob(Rule*, Node*, char*, char**, Word*, Word*, Word*, Word*);
 
 // Dumpers
@@ -44,7 +44,7 @@ void	dumpj(char*, Job*, int);
 
 
 
-// Symbol table
+// symtab.c
 void	syminit(void);
 Symtab*	symlook(char*, int, void*);
 void	symtraverse(int, void(*)(Symtab*));
@@ -63,7 +63,7 @@ ulong	mkmtime(char*, bool);
 int		chgtime(char*);
 void	touch(char*);
 
-// Archive managment
+// archive.c
 ulong	atimeof(int,char*);
 void	atouch(char*);
 

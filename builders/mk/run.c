@@ -175,7 +175,7 @@ waitup(int echildok, int *retstatus)
     Bufblock *bp;
     /*x: [[waitup()]] other locals */
     Node *n;
-    int done;
+    bool done;
     /*x: [[waitup()]] other locals */
     Process *p;
     /*e: [[waitup()]] other locals */
@@ -242,25 +242,28 @@ again:		/* rogue processes */
         fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
         freebuf(bp);
         /*s: [[waitup()]] when error in child process, delete if DELETE node */
-        for(n = j->n, done = 0; n; n = n->next)
+        for(n = j->n, done = false; n; n = n->next)
             if(n->flags&DELETE){
-                if(done++ == 0)
+                if(!done) {
                     fprint(STDERR, ", deleting");
+                    done = true;
+                }
                 fprint(STDERR, " '%s'", n->name);
                 delete(n->name);
             }
         /*e: [[waitup()]] when error in child process, delete if DELETE node */
         fprint(STDERR, "\n");
 
-        /*s: [[waitup()]] when error in child process, exit unless kflag */
+        /*s: [[waitup()]] when error in child process, if kflag */
         if(kflag){
             runerrs++;
             fake = true;
-        } else {
+        }
+        /*e: [[waitup()]] when error in child process, if kflag */
+        else {
             jobs = nil;
             Exit();
         }
-        /*e: [[waitup()]] when error in child process, exit unless kflag */
     }
     /*e: [[waitup()]] if error in child process, possibly set fake or exit */
     // else
@@ -390,13 +393,18 @@ pdelete(Process *p)
 void
 killchildren(char *msg)
 {
+    /*s: [[killchildren()]] locals */
     Process *p;
+    /*e: [[killchildren()]] locals */
 
     kflag = true;	/* to make sure waitup doesn't exit */
     jobs = nil;		/* make sure no more get scheduled */
 
+    /*s: [[killchildren()]] expunge not-job processes */
     for(p = phead; p; p = p->f)
         expunge(p->pid, msg);
+    /*e: [[killchildren()]] expunge not-job processes */
+
     while(waitup(1, (int *)nil) == 0)
         ;
     Bprint(&bout, "mk: %s\n", msg);
@@ -405,6 +413,7 @@ killchildren(char *msg)
 /*e: function killchildren */
 
 /*s: global tslot */
+// map<nrunning, int>
 static ulong tslot[1000];
 /*e: global tslot */
 /*s: global tick */

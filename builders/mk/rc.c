@@ -34,7 +34,7 @@ squote(char *cp)
     }
     SYNERR(-1);		/* should never occur */
     fprint(STDERR, "missing closing '\n");
-    return 0;
+    return nil;
 }
 /*e: function squote */
 
@@ -67,8 +67,10 @@ charin(char *cp, char *pat)
         case '}':
             if(vargen)
                 vargen = false;
-            else if(utfrune(pat, r))
-                return cp;
+            else
+               // same as default: case
+               if(utfrune(pat, r))
+                  return cp;
             break;
         /*e: [[charin()]] switch rune cases */
         default:
@@ -112,7 +114,7 @@ expandquote(char *s, Rune r, Bufblock *b)
         }
         rinsert(b, r);
     }
-    return 0;
+    return nil;
 }
 /*e: function expandquote */
 
@@ -122,33 +124,35 @@ expandquote(char *s, Rune r, Bufblock *b)
  *	double-quote and backslash.  Only the first is a valid escape for
  *	rc; the others are just inserted into the receiving buffer.
  */
-bool
+error0
 escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
 {
     int c;
     int line;
 
     if(esc != '\'')
-        return true;
+        return OK_1;
 
     line = mkinline;
-    while((c = nextrune(bp, 0)) > 0){
+    while((c = nextrune(bp, false)) > 0){
         if(c == '\''){
             if(preserve)
                 rinsert(buf, c);
+
             c = Bgetrune(bp);
             if (c < 0)
                 break;
             if(c != '\''){
                 Bungetrune(bp);
-                return true;
+                return OK_1;
             }
         }
         rinsert(buf, c);
     }
+    // reached EOF
     SYNERR(line); 
     fprint(STDERR, "missing closing %c\n", esc);
-    return false;
+    return ERROR_0;
 }
 /*e: function escapetoken */
 

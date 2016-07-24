@@ -19,7 +19,7 @@ parse(char *f, fdt fd, bool varoverride)
 {
     Biobuf in;
     Bufblock *buf;
-    char c;
+    char c; // one of : = <
     Word *head, *tail;
     int hline; // head line number
     /*s: [[parse()]] other locals */
@@ -31,7 +31,7 @@ parse(char *f, fdt fd, bool varoverride)
     fdt newfd;
     char *p;
     /*x: [[parse()]] other locals */
-    bool set;
+    bool set = true;
     /*x: [[parse()]] other locals */
     int pid;
     /*x: [[parse()]] other locals */
@@ -48,6 +48,7 @@ parse(char *f, fdt fd, bool varoverride)
     ipush();
     /*e: [[parse()]] start, push */
 
+    // Init
     infile = strdup(f);
     mkinline = 1;
     Binit(&in, fd, OREAD);
@@ -86,6 +87,7 @@ parse(char *f, fdt fd, bool varoverride)
             }
             /*e: [[parse()]] when parsing included file, sanity check newfd */
             else
+                // recurse
                 parse(p, newfd, false);
             break;
         /*x: [[parse()]] switch rhead cases */
@@ -106,10 +108,11 @@ parse(char *f, fdt fd, bool varoverride)
                     symlook(head->s, S_OVERRIDE, (void *)"");
             }
             /*e: [[parse()]] when parsing variable definitions, override handling */
-
             if(set){
                 setvar(head->s, (void *) tail);
+                /*s: [[parse()]] when parsing variable definitions, extra setting */
                 symlook(head->s, S_WESET, (void *)"");
+                /*e: [[parse()]] when parsing variable definitions, extra setting */
             }
             /*s: [[parse()]] when parsing variable definitions, if variable with attr */
             if(attr)
@@ -183,7 +186,7 @@ static int
 rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
 {
     char *p;
-    int sep; // : = < 
+    int sep; // one of : = < 
     Word *w;
     /*s: [[rhead()]] other locals */
     Rune r;
@@ -207,7 +210,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     /*s: [[rhead()]] adjust [[attr]] and [[prog]] */
     *attr = 0; // Nothing
     *prog = nil;
-
+    // variable attributes
     /*s: [[rhead()]] if sep is [[=]] */
     if(sep == '='){
         pp = charin(p, termchars);	/* termchars is shell-dependent */
@@ -232,6 +235,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
         }
     }
     /*e: [[rhead()]] if sep is [[=]] */
+    // rule attributes
     /*s: [[rhead()]] if sep is [[:]] */
     if((sep == ':') && *p && (*p != ' ') && (*p != '\t')){
         while (*p) {
@@ -246,8 +250,16 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
                 *attr |= REGEXP;
                 break;
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
+            case 'V':
+                *attr |= VIR;
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'D':
                 *attr |= DEL;
+                break;
+            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
+            case 'Q':
+                *attr |= QUIET;
                 break;
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'E':
@@ -256,14 +268,6 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'N':
                 *attr |= NOREC;
-                break;
-            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
-            case 'Q':
-                *attr |= QUIET;
-                break;
-            /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
-            case 'V':
-                *attr |= VIR;
                 break;
             /*x: [[rhead()]] when parsing rule attributes, switch rune cases */
             case 'n':
@@ -296,7 +300,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     /*e: [[rhead()]] if sep is [[:]] */
     /*e: [[rhead()]] adjust [[attr]] and [[prog]] */
 
-    // potentially expand variable names in head
+    // potentially expand variables in head
     *h = w = stow(line);
     /*s: [[rhead()]] sanity check w */
     if(*w->s == '\0' && sep != '<' && sep != '|') {
@@ -306,7 +310,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     }
     /*e: [[rhead()]] sanity check w */
 
-    // potentially expand variable names in tail
+    // potentially expand variables in tail
     *t = stow(p);
 
     return sep;
@@ -323,13 +327,14 @@ rbody(Biobuf *in)
 
     lastr = '\n';
     buf = newbuf();
+
     for(;;){
         r = Bgetrune(in);
         if (r < 0)
             break;
         if (lastr == '\n') {
             if (r == '#')
-                rinsert(buf, r);
+                rinsert(buf, r); // the shell recognize comments too
             else if (r != ' ' && r != '\t') {
                 Bungetrune(in);
                 break;
@@ -340,6 +345,7 @@ rbody(Biobuf *in)
         if (r == '\n')
             mkinline++;
     }
+
     insert(buf, '\0');
     p = strdup(buf->start);
     freebuf(buf);
@@ -359,7 +365,7 @@ struct Input
 };
 /*e: struct input */
 /*s: global inputs */
-static struct Input *inputs = 0;
+static struct Input *inputs = nil;
 /*e: global inputs */
 
 /*s: function ipush */

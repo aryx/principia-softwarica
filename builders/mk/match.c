@@ -3,7 +3,7 @@
 
 /*s: function match */
 bool
-match(char *name, char *template, char *stem)
+match(char *name, char *template,    char *stem)
 {
     Rune r;
     int n;
