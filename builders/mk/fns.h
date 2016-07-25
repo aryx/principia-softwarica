@@ -1,10 +1,4 @@
 /*s: mk/fns.h */
-// Utilities
-void*	Malloc(int);
-void*	Realloc(void*, int);
-void	Exit(void);
-char*	maketmp(void);
-void	delete(char*);
 
 // Constructors/destructors core data structures
 
@@ -22,9 +16,7 @@ void	delword(Word*);
 Word*	wdup(Word*);
 char*	wtos(Word*, int);
 
-// Node
-// Node* graph(char* target)
-// Arc
+// arc.c
 Arc*	newarc(Node*, Rule*, char*, Resub*);
 
 // rule.c
@@ -33,6 +25,81 @@ void	addrules(Word*, Word*, char*, int, int, char*);
 
 // job.c
 Job*	newjob(Rule*, Node*, char*, char**, Word*, Word*, Word*, Word*);
+
+
+// symtab.c
+void	syminit(void);
+Symtab*	symlook(char*, int, void*);
+void	symtraverse(int, void(*)(Symtab*));
+void	symstat(void);
+//void	symdel(char*, int);
+
+// var.c
+void	setvar(char*, void*);
+char*	shname(char*);
+
+// varsub.c
+Word*	varsub(char**);
+
+// file.c
+ulong	timeof(char*, int);
+void	timeinit(char*);
+void	touch(char*);
+
+// archive.c
+ulong	atimeof(int,char*);
+void	atouch(char*);
+
+// env.c
+Envy*	buildenv(Job*, int);
+
+
+// lex.c
+int		assline(Biobuf *, Bufblock *);
+
+// parse.c
+void	parse(char*, int, int);
+
+// graph.c
+Node*	graph(char*);
+
+// match.c
+int		match(char*, char*, char*);
+void	subst(char*, char*, char*, int);
+
+// mk.c
+void	mk(char*);
+
+// recipe.c
+int		dorecipe(Node*);
+
+// run.c
+void	run(Job*);
+int		waitup(int, int*);
+void	killchildren(char*);
+void	nproc(void);
+void	prusage(void);
+void	usage(void);
+
+// shprint.c
+void	shprint(char*, Envy*, Bufblock*);
+
+// plan9.c
+void	readenv(void);
+int		execsh(char*, char*, Bufblock*, Envy*);
+int		pipecmd(char*, Envy*, int*);
+ulong	mkmtime(char*, bool);
+int		chgtime(char*);
+void	catchnotes(void);
+int		waitfor(char*);
+
+// rc.c
+char* 	charin(char *, char *);
+
+
+// utils.c
+void*	Malloc(int);
+void*	Realloc(void*, int);
 
 // Dumpers
 void	dumpv(char*);
@@ -43,66 +110,14 @@ void	dumpa(char*, Arc*);
 void	dumpj(char*, Job*, int);
 
 
-
-// symtab.c
-void	syminit(void);
-Symtab*	symlook(char*, int, void*);
-void	symtraverse(int, void(*)(Symtab*));
-void	symstat(void);
-//void	symdel(char*, int);
-
-void	initenv(void);
-void	readenv(void);
-void	setvar(char*, void*);
-
-
-// File time managment
-ulong	timeof(char*, int);
-void	timeinit(char*);
-ulong	mkmtime(char*, bool);
-int		chgtime(char*);
-void	touch(char*);
-
-// archive.c
-ulong	atimeof(int,char*);
-void	atouch(char*);
-
-// Env managment
-Envy*	buildenv(Job*, int);
-
-
-// Matching and subst
-int		match(char*, char*, char*);
-void	subst(char*, char*, char*, int);
-Word*	varsub(char**);
-
-// Process managment
-int		execsh(char*, char*, Bufblock*, Envy*);
-void	killchildren(char*);
-int		waitfor(char*);
-int		waitup(int, int*);
-int		pipecmd(char*, Envy*, int*);
-
-void	nproc(void);
-void	prusage(void);
-void	usage(void);
-
-// Parsing
-void	parse(char*, int, int);
-int		assline(Biobuf *, Bufblock *);
-Word*	stow(char*);
-
-// Main functions
-void	mk(char*);
-Node*	graph(char*);
-int		outofdate(Node*, Arc*, int);
-int		dorecipe(Node*);
-void	run(Job*);
-
 // MISC
+void	Exit(void);
+char*	maketmp(void);
+void	delete(char*);
+void	initenv(void);
+int		outofdate(Node*, Arc*, int);
+Word*	stow(char*);
 char*	copyq(char*, Rune, Bufblock*);
-void	catchnotes(void);
-char* 	charin(char *, char *);
 void	execinit(void);
 int		escapetoken(Biobuf*, Bufblock*, int, int);
 char*	expandquote(char*, Rune, Bufblock*);
@@ -112,7 +127,5 @@ int		nextrune(Biobuf*, int);
 void	nrep(void);
 void	rcopy(char**, Resub*, int);
 char*	rulecnt(void);
-char*	shname(char*);
-void	shprint(char*, Envy*, Bufblock*);
 void	update(bool, Node*);
 /*e: mk/fns.h */
