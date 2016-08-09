@@ -16,7 +16,7 @@ TEX=CompilerGenerator.tex
 
 # must be in the same order of the #include for syncweb multi files support
 # to work
-SRC_ORIG=CompilerGenerator.nw CompilerGenerator_extra.nw
+SRC_ORIG=CompilerGenerator.nw CompilerGenerator_extra.nw CompilerGenerator_c.nw
 
 #TODO yacc/yaccpar lex/ncform (which then add pragma to libl.a)   lex/parser.y
 SRC_VIEWS= \
@@ -40,7 +40,7 @@ SRC_VIEWS= \
 sync::
 	$(MAKE) sync_ml
 
-CAML=/home/pad/github/plan9-ml/generators
+CAML=/home/pad/github/plan9-ml/
 
 SRC_VIEWS_ML=\
   $(CAML)/lex/ast.ml \
@@ -52,29 +52,29 @@ SRC_VIEWS_ML=\
   $(CAML)/lex/compact.ml \
   $(CAML)/lex/main.ml \
   $(CAML)/lex/lexer.mll \
-  $(CAML)/stdlib/lexing.mli \
-  $(CAML)/stdlib/lexing.ml \
-  $(CAML)/yacc2/ast.ml \
-  $(CAML)/yacc2/check.mli \
-  $(CAML)/yacc2/check.ml \
-  $(CAML)/yacc2/lr0.mli \
-  $(CAML)/yacc2/lr0.ml \
-  $(CAML)/yacc2/first_follow.mli \
-  $(CAML)/yacc2/first_follow.ml \
-  $(CAML)/yacc2/lrtables.ml \
-  $(CAML)/yacc2/slr.mli \
-  $(CAML)/yacc2/slr.ml \
-  $(CAML)/yacc2/lalr.mli \
-  $(CAML)/yacc2/lalr.ml \
-  $(CAML)/yacc2/output.mli \
-  $(CAML)/yacc2/output.ml \
-  $(CAML)/yacc2/dump.mli \
-  $(CAML)/yacc2/dump.ml \
-  $(CAML)/yacc2/tests.ml \
-  $(CAML)/yacc2/lexer.mll \
-  $(CAML)/yacc2/main.ml \
-  $(CAML)/stdlib/parsing.mli \
-  $(CAML)/stdlib/parsing.ml \
+  $(CAML)/lib_parsing/lexing_.mli \
+  $(CAML)/lib_parsing/lexing_.ml \
+  $(CAML)/yacc/ast.ml \
+  $(CAML)/yacc/check.mli \
+  $(CAML)/yacc/check.ml \
+  $(CAML)/yacc/lr0.mli \
+  $(CAML)/yacc/lr0.ml \
+  $(CAML)/yacc/first_follow.mli \
+  $(CAML)/yacc/first_follow.ml \
+  $(CAML)/yacc/lrtables.ml \
+  $(CAML)/yacc/slr.mli \
+  $(CAML)/yacc/slr.ml \
+  $(CAML)/yacc/lalr.mli \
+  $(CAML)/yacc/lalr.ml \
+  $(CAML)/yacc/output.mli \
+  $(CAML)/yacc/output.ml \
+  $(CAML)/yacc/dump.mli \
+  $(CAML)/yacc/dump.ml \
+  $(CAML)/yacc/tests.ml \
+  $(CAML)/yacc/lexer.mll \
+  $(CAML)/yacc/main.ml \
+  $(CAML)/lib_parsing/parsing_.mli \
+  $(CAML)/lib_parsing/parsing_.ml \
 
 
 SYNCWEB_ML=~/github/syncweb/syncweb -md5sum_in_auxfile -less_marks -lang ocaml
@@ -89,5 +89,5 @@ sync::
 SYNCWEB_YACC=~/github/syncweb/syncweb -md5sum_in_auxfile -less_marks -lang ocamlyacc
 sync_yacc:
 	$(SYNCWEB_YACC) $(SRC_ORIG) $(CAML)/lex/parser.mly
-	$(SYNCWEB_YACC) $(SRC_ORIG) $(CAML)/yacc2/parser.mly
+	$(SYNCWEB_YACC) $(SRC_ORIG) $(CAML)/yacc/parser.mly
 
