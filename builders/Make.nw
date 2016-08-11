@@ -15,7 +15,7 @@
 % - removed dead code:
 %    dead namespaces (S_PID, S_MAKEFILE, S_EXPORTED, S_MAKEVAR),
 %    dead rule attributes (UNUSED, UPD),
-%    dead constants (IWS)
+%    dead constants (IWS), dead fields (Job.nproc)
 %    TODO useless code (head.n=node, ...)
 % - TODO rename variables, was abusing head/tail for too many things 
 %   (target vs prerequisites, but also head vs tail of lists of arcs, 
@@ -31,10 +31,21 @@
 %   relevant file (or even function), better cluster the code
 %   (harder to understand non functional code using lots of globals)
 
-%thx to this manual, better understand make?:
-% - minimal-syntax design leads to use of escaping-newline because newline is
+%thx to mk in ocaml: (see also the %ocaml-found: tag in this file)
+%  - parsing code could be simpler, and also better see the
+%    different lexing contexts and subtelities
+%  - can do X=a and $X=42, hmm
+%  - understand need for ${name}ici
+%  - understand check for recipe pointer in ambiguous(), cos can have 
+%    many arcs but no ambiguity cos all have the same recipe
+%  - understand vacuous check and interaction with ambiguous.
+
+%thx to this manual, better understand mk/make:
+% - minimal-syntax design leads to need for escaping-newline because newline is
 %   (ab)used as a terminator for many things
-% - escaping rules, tricky
+% - escaping rules, tricky, but needed because space is used too for separator
+% - need for ${} in mk (no pb in make though) so can do ${name}here
+% - finally will remember the syntax for ${name:%=%} :) 
 % - need for multiple targets, and multiple rules with same target 
 % - SEMI how to debug issues in your own makefile
 % - SEMI mk is actually a job scheduler! with dependent tasks!
@@ -154,6 +165,7 @@ package, and
 distribute 
 software with one simple command, ``the one command that rules them all'',
 from very simple programs to entire operating systems.
+\n deploy
 
 % A build system is .. describe and  maintain dependencies between files. Rules.
 \n def build system so I can use "rule" and "dependency" in questions below
@@ -173,7 +185,8 @@ Here are a few questions I hope this book will answer:
 % Do you need multiple rules for same target? what about ambiguities?
 % one-to-one, many-to-many?
 
-% What is minimal syntax one needs.
+% What is minimal syntax one needs. DSL.
+% :, =, newline, then how escape?
 
 \item What are the user mistakes a build system can detect?
 Can it detect stupid rules? Redundant rules? Ambiguous rules?
@@ -186,6 +199,24 @@ What help does the build system offer to debug a makefile?
 them? How do you write a simple job scheduler?
 
 \end{itemize}
+
+\t put in conclusion non-trivial adv algo and data structures seen? see comment
+%data-structures (beyond list/hashtbl):
+% - queue
+
+%algorithms (beyond search/sort): (actually use neither search nor sort)
+
+
+%tags used in this file for different recurring themes:
+ %
+ %real-world: to relate to other assemblers
+ %ocaml: to give a hint on how rewriting C in OCaml could improve things
+ %ocaml-found: found subtle behavior of mk because I ported it to ocaml
+ %alt: alternative technique
+ %old: for original code I changed to be clearer
+ %pad: for code I introduced to be clearer
+ %dead: dead code removed
+ %toc: %trans: %dup: %example: %chunks:
 
 
 \section{The \plan build system, [[mk]]}
@@ -218,10 +249,11 @@ but which I ultimately discarded:
 
 \item \unix make
 % I mentioned before. Original one.
-% Stu Feldman, ACM system software award
-% - what about ape/cmd/make/? looks pretty small too.
-% Stu himself considers mk a better solution.
+% Stu Feldman, ACM System Software Award.
+% in ape/cmd/make/, 3000 LOC. MAKE 2.78 unix 8th edition
+% (also in unix-history-repo)
 
+% Stu himself considers mk a better solution.
 % see mk.ps section 4
 %  less uglyness with variables too, no $$i need, variables passed as-is
 %  (like for rc, cleaner?) so remove some intermediates
@@ -230,7 +262,6 @@ but which I ultimately discarded:
 %  well many mk extensions have become gnu make, e.g. %.c rules instead of .c
 %  (hmm still? mk introduced pattern metarules, but metarules may have been
 %   in research UNIX make)
-
 % see also https://github.com/dcjones/mk for list of improvements
 %  cryptic $@, $^, $* vs $target, $prereq, $stem
 
@@ -238,48 +269,87 @@ but which I ultimately discarded:
 % also in // make -j. But as good as mk? since mk has full graph, can
 %  run in // from very different parts of the tree. make can?
 % Many extensions. Too many.
+% still include support for many old platforms, e.g., DOS, VMS., amiga
 % 37 000 LOC? main.c 3200 LOC
 
-\item Cmake
-% LOC, lol
-
 \item ant
-% XML
+% 222~000 LOC (without tests)
+% Java specific?
+% XML, major drawback.
+% and Ivy (dependency manager, equivalent of cargo?)
+
+\item Cmake
+% 560~000 LOC, lol
+% but it is more a build system generator, more than a build system
+% a meta build-system.
+% like automake, gyp, etc. mix actually configure/automate feature I think.
+
 
 % one using python, EDSL, but more syntax boilerplate "", [;], etc
 
 \end{itemize}
 
 \l a few other, see the comment in this file:
-% - https://github.com/dcjones/mk mk in Go! 2285 LOC but some files
+%make-clones:
+% - pmake, freebsd https://www.freebsd.org/doc/en_US.ISO8859-1/books/pmake/
+%   parallel make
+% - https://github.com/dcjones/mk is mk port in Go! 2285 LOC but some files
 %   looks almost like an automatic C->Go translation (identical logic)
-% - ninja, seems interesting this one, but assembly of build system
-% - maven, like ant?
-% - buck, huge, python-based like many other google-inspired build systems
-%   the ocaml-specific stuff is already 4000 LOC, hmmm
-% - gyp, gulp, ... huge list
-% - bazel, latest from google:
-%   http://google-opensource.blogspot.com/2015/09/building-build-system-bazel-reaches-beta.html
-% - rake, qake, sbt, omake,   many PL-specifics
-%   omake apparently has listen-to-fs features too, so daemon
+% - omake, apparently has listen-to-fs features too, so daemon
 %   and rerun when save in editor?
 %   http://blog.camlcity.org/blog/omake1.html
+%other:
+% - ninja, seems interesting, the assembler of build system, 19~000 LOC
+% - bazel?? latest from google:
+%   http://google-opensource.blogspot.com/2015/09/building-build-system-bazel-reaches-beta.html
+% - buck, huge, python-based like many other google-inspired build systems.
+%   the ocaml-specific stuff is already 4000 LOC, hmmm
+% - cons/scons, Perl-based and python-based build systems???
+% - tup, 31 000 LOC (just src/tup/), does not look that much better than mk
+%   but looks pretty nice: *.c |> gcc %f -p %o |> %B.o
+%   http://gittup.org/tup/make_vs_tup.html benchmark
+% - redo, from dan bernstein, seems minimalist, not sure it's better.
+%   maybe better for autodeps.
+%meta build system:
+% - automake
+% - gyp, meta-build-system from Google, python-inspired, simple, 28~000 LOC
+%   but support many backends (make, cmake, ninja, eclipse, xcode, ...),
+%   fbcode is similar to gyp
+%wrappers:
+% - qake, just a big makefile, so relies on GNU make
+% - OCamlMakefile
+%language specific:
+% - java: 
+%    * maven, first to provide ability to download dependency over the network?
+%    * ant+ivy (to catchup with maven)
+%    * gradle seems best one, use of DSL based on Groovy. huge codebase.
+%    comparison: https://technologyconversations.com/2014/06/18/build-tools/
+%    but all 3 are bad.
+% - javascript: gulp, grunt
+% - ruby: rake, can write rules in Ruby. EDSL again. more verbose than make,
+%   need of do, end, need '' around filenames, need of many builtins.
+%   maybe inspiration for brew
+% - haskell: shake, EDSL in haskell, seems too verbose
+% - scala: sbt, meh
+% - rust: cargo, integrate in build system a dependency manager
+% - ocaml: opam (just dependency manager though)
 
 % see https://en.wikipedia.org/wiki/List_of_build_automation_software
 
-%http://aosabook.org/en/500L/contingent-a-fully-dynamic-build-system.html
 %http://www.lihaoyi.com/post/WhatsinaBuildTool.html
-
-% make advocacy :)
-%http://bost.ocks.org/mike/make/
+% nice comparisons of a few tools
 %http://hadihariri.com/2014/04/21/build-make-no-more/
-
-%make theory and practice
-% http://www.ploxiln.net/make.html
-%how we use make:
-% https://segment.com/blog/how-we-use-make/
-%the essence of make (but looks pedantic)
+% nice bashing of all make competitors, a la "evolution of a programmer"
+%the essence of make, not too bad, nice relation between ninja and make
 % http://bentnib.org/posts/2015-04-17-propositions-as-filenames-essence-of-make.html
+%make advocacy :)
+% http://bost.ocks.org/mike/make/
+%http://aosabook.org/en/500L/contingent-a-fully-dynamic-build-system.html
+% meh, EDSL
+%make theory and practice
+% http://www.ploxiln.net/make.html  meh
+%how we use make:
+% https://segment.com/blog/how-we-use-make/ list of targets
 
 
 
@@ -320,6 +390,8 @@ If not, I suggest you to read the
 and which is available in my \plan distribution.
 %
 %builders/make/ contain how mk used in plan9,
+
+% GNU make manual? books on make? cite them at least?
 
 % if you have questions on interface
 The man page of [[mk]] can also useful at [[docs/man/1/mk]].
@@ -402,15 +474,25 @@ maintain {\em efficiently}
 % recipe also called body.
 % and start of rule is called head of the rule.
 
-% simplest syntax,  x : y \n z.
+% simplest syntax,  x : y \n z1 \n z2.
+% could also x : y ; z1; z2
 
 % In mk, very simple, minimal syntax! just ':', and newlines
 % no need "" around shell command.
 % same spirit than shell actually. no need () for calling
 % commands, "" around strings, remember
 % order of options (but then lead to -xxx named arguments)
+
+%\subsubsection{Recipe}
 % in fact body of a rule is shell command. Embedded lang
 % inside lang. Not interpreted. As is. (simpler than in make)
+% leverage existing tools!
+
+% optional recipe. space/tab first char cos support multiline 
+% for shell command (otherwise would need escaped newline there too, ugly).
+
+
+
 
 %advanced? maybe fundamental. what types of dependencies we need?
 % can have multiple targets:
@@ -426,6 +508,7 @@ maintain {\em efficiently}
 
 % how to allow :: of GNU make? bad to allow :: in the end? can generate
 %  ambiguity? just agglomerate recipe?
+
 
 \subsubsection{Variables}
 
@@ -446,11 +529,17 @@ maintain {\em efficiently}
 % use constants. Also clearer then diff between constants like OBJS=..
 % and variables generated by mk such as target, stem etc.
 
+
+% var really contain list of strings. Concatenation of list is easy,
+% just juxtapose as in  X=a b c  Y=$X d e f
+%ocaml-found: scalar vs list context! can be stricter actually
+
 % defs and uses, and actually can have complex uses with substitutions
 %  on stemming
 
 % can use constants in rules!
 % can reuse constants in different rules.
+
 
 \subsubsection{Inclusion}
 
@@ -540,6 +629,11 @@ maintain {\em efficiently}
 % what about when have multiple binaries in one distrib?
 % hh_server nice, but works because generate a giant PHP library.
 
+% in the end, could be job of compiler? like javac does? but then
+% impose constrain on how to organize classes in files and path
+% (or use hh_server, but again, impose constraint of one giant
+% single binary/library)
+
 \section{[[mk]] command-line interface}
 
 % interface is pretty simple, go in dir, type 'mk'
@@ -558,6 +652,7 @@ badusage(void)
 @
 \l also have NPROC, NREP global variables
 \t actually -I now, not -i
+%ocaml: use Arg so cleaner --help (but true that redundant with man page)
 
 %chunks: will present options gradually
 
@@ -567,6 +662,7 @@ badusage(void)
 <<constant MKFILE>>=
 #define	MKFILE		"mkfile"
 @
+%ocaml: used only once, so could be expanded where it's used
 
 % but can change with -f.
 
@@ -575,7 +671,7 @@ badusage(void)
 % has also many -xxx options, advanced features explained later in the book.
 
 
-%dead?
+%dead? used by some tools?
 <<global version>>=
 static char *version = "@(#)mk general release 4 (plan 9)";
 @
@@ -808,8 +904,8 @@ struct Symtab
     <<[[Symtab]] extra fields>>
 };
 @
-%ocaml: could reuse hashtbl, but still pb for namespaces.
-% so need a record of hashtbl.
+%ocaml: reuse hashtbl and use a record of hashtbl for namespaces
+% (so also better types instead of overly generic union)
 
 % the "world" data structure? hmm rules+metarules is more the world
 % here it's more an index over the rules, metarules, and some cache
@@ -841,11 +937,13 @@ static Symtab *hash[NHASH];
 <<constant NHASH>>=
 #define	NHASH	4099
 @
+%ocaml: does not have to be a global, can be passed around
+% if split in different parts for each namespace
+% (var and internal vars, hnodes, time cache)
 
 <<[[Symtab]] extra fields>>=
 struct Symtab	*next;
 @
-
 
 <<constant HASHMUL>>=
 #define	HASHMUL	79L	/* this is a good value */
@@ -888,8 +986,7 @@ symlook(char *sym, int space, void *install)
     return s;
 }
 @
-%ocaml: just use Hashtbl.find, and separate namespaces in different fields
-% of a record
+%ocaml: just use Hashtbl.find
 \t define symexists() that uses install == nil, cleaner?
 \t  and return bool
 
@@ -906,6 +1003,7 @@ symtraverse(int space, void (*fn)(Symtab*))
                 (*fn)(ss);
 }
 @
+%ocaml: used only for ecopy, so could use Hashtbl.copy?
 
 % main -> <>
 <<function syminit>>=
@@ -922,6 +1020,7 @@ syminit(void)
 }
 @
 \l free necessary? should be nil no? syminit called at the start of main
+%ocaml: use Hashtbl, which is initialized correctly by ocaml
 
 %\subsection{[[setvar()]]}
 
@@ -938,7 +1037,7 @@ setvar(char *name, void *value)
 %<<[[Sxxx]] cases>>=
 %S_MAKEVAR,	/* dumpable mk variable */
 %@
-
+%ocaml: since S_MAKEVAR is dead, can just use Hashtbl.set
 
 \subsection{Namespaces}
 
@@ -952,6 +1051,7 @@ S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
 @
 % diff with S_VAR? not set by user! set by mk automatically
 % those one are really variables (maybe that's why they are in lowercase)
+%ocaml: use record
 
 <<global myenv>>=
 static char	*myenv[] =
@@ -986,8 +1086,8 @@ initenv(void)
 }
 @
 % readenv? for /env/, see later.
-\t call initsyms() or inithash()
-
+\t call initsyms() or inithash() (or rename Envy to Shellenv)
+%bug? it is supposed to be words no? so at least newword("") ?
 
 
 
@@ -1010,7 +1110,7 @@ struct Word
 };
 @
 \t rename Words?
-%ocaml: just use List
+%ocaml: just use List, or even better W of word list
 
 
 % rename newword_list? new_singleword?
@@ -1042,6 +1142,7 @@ delword(Word *w)
     }
 }
 @
+%ocaml: just use the garbage collector
 
 % treat list as a set, dont add if already there
 <<function addw>>=
@@ -1058,7 +1159,9 @@ addw(Word *w, char *s)
 }
 @
 \t mv in words.c ?
-
+%ocaml-found: but can not use Set, because then order
+% may not be the order of insertion, and it is important
+% since $prereq must be the same than the order in the prereq in the mkfile.
 
 <<function wdup>>=
 Word*
@@ -1148,8 +1251,8 @@ struct Rule
 %  the rule is read; variable substitution in the recipe is done
 %  when the recipe is executed.
 % why? probably because recipe/rc will do the subst itself, but for
-% the graph we need concrete values so faster to do it eagerly when parsing
-% also because for recipe, some values are known later, when instantiate 
+% the graph we need concrete values so faster to do it eagerly when parsing.
+% Also because for recipe, some values are known later, when instantiate 
 % the rule (e.g., for $stem)
 
 \t recipe can also just be '\0' ? ugly.
@@ -1173,6 +1276,7 @@ short 		line;		/* source line */
 // list<ref_own<Rule>> (next = Rule.next, end = lr)
 Rule *rules;
 @
+%ocaml: return them instead of using globals
 
 <<[[Rule]] extra fields>>=
 // list<ref_own<Rule>> (head = rules | metarules)
@@ -1225,6 +1329,7 @@ enum Rule_attr {
 // list<ref_own<Rule>> (next = Rule.next)
 Rule *metarules;
 @
+%ocaml: return them instead of using globals
 
 % end (last) of metarules list, so can add at the end
 <<global lmr>>=
@@ -1289,7 +1394,8 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 % could print when find an existing rule with same target/pre
 % and display a message?
 \l r->pat ?? Malloc does not memset zero anyway?
-
+%ocaml: use record, and no need wrapper constructor, construct directly with
+% the fields
 
 <<[[addrule()]] if meta rule>>=
 if(charin(head, "%&") || (attr&REGEXP)){
@@ -1330,6 +1436,7 @@ if(sym = symlook(head, S_TARGET, nil)){
 \t why allows that? just return error? simpler.
 \t  anyway, was not guarding nrules++ with if(!reuse) so weird.
 \t but now S_TARGET is later ... so mv check later?
+\t or even simpler, let it go, it will be detected later by ambiguous()
 
 % rule compare, check if same target and same prerequistes
 <<function rcmp>>=
@@ -1348,7 +1455,8 @@ rcmp(Rule *r, char *target, Word *tail)
 @
 \t strcmp sucks, use string_equal, and return bool that makes sense
 \t  so less rcmp(...) == 0, instead rule_equal(...)
-
+%bug? what about when different orders of prereqs? should compare as a set
+% anyway I think it's redundant with ambiguous rule check
 
 \subsubsection{One target with multiple rules, [[S_TARGET]]}
 
@@ -1360,6 +1468,7 @@ rcmp(Rule *r, char *target, Word *tail)
 S_TARGET,		/* target -> rules */ 
 @
 %old: rule -> rules
+%ocaml: build hash in separate phase
 
 % can have multiple rules with the same target!
 % no need :: ? will get ambiguous rule?
@@ -1416,6 +1525,7 @@ Word 		*alltargets;	/* all the targets */
 % (hmm but could be rewritten with 2 rules, it's just
 % that with mk the file would be possibly rebuilt two times!
 % because it could run the command in parallel!!!!
+%ocaml: merge with Rule.target, and make it a list instead of char*
 
 % Is there a few places where use Word* targets
 % where in most cases it should really be simply char* target; ??
@@ -1532,6 +1642,9 @@ enum Node_flag {
 // list<ref_own<Arc>> (next = Arc.next)
 Arc		*prereqs;
 @
+\t actually would be better to call it arcs, because 
+\l not always a prereq as for instance virtual rule have an arc
+\l from the target without any destination node
 
 
 <<struct Arc>>=
@@ -1552,6 +1665,7 @@ struct Arc
 %  have some fake arc for virtual targets and need arc to carry the rule
 %  (which contains the recipe)
 % option Rule? I dont think so, every call to newarc have a defined rule arg
+%ocaml: I think you just need the recipe and some flags of the rule.
 
 % seen Rule before.
 
@@ -1566,7 +1680,7 @@ struct Arc	*next;
 
 % so can set $stem for the actual value for the recipe to run
 <<[[Arc]] other fields>>=
-// ref_own<string>, what will replace the %
+// option<ref_own<string>>, what will replace the %
 char		*stem;
 @
 % why need that? Node.name is not expanded already?
@@ -1574,6 +1688,7 @@ char		*stem;
 % here not in Rule because Rule is generic template; Here it is instantiated.
 % Also used because in dorecipe we also use alltargets, which is not
 %  expanded.
+%ocaml: do a rule_exec containing all necessary information
 
 % ctor.  dtor = ?
 % main -> mk -> graph -> applyrules -> <>
@@ -1610,14 +1725,12 @@ struct Job
     // ref<Rule>
     Rule		*r;	/* master rule for job */
 
-    Word		*t;	/* targets */
     // list<ref<Node>> (next = Node.next)
     Node		*n;	/* list of node targets */
 
+    // $target and $prereq
+    Word		*t;	/* targets */
     Word		*p;	/* prerequisites */
-
-    // option<int> (None = -1)
-    int		nproc;	/* slot number */
 
     <<[[Job]] other fields>>
 
@@ -1625,6 +1738,8 @@ struct Job
     <<[[Job]] extra fields>>
 };
 @
+%ocaml: I think you just need the recipe and some flags of the rule.
+%  also why need targets? info is already in node. To ease envupd?
 \l why so short field names suddenly? avoid confusion with the one in Rule? meh
 
 % have list of nodes because finishing a job will modify
@@ -1636,6 +1751,7 @@ struct Job
 char		*stem;
 @
 % stem again? propagated from Arc? to pass to shell for dollar stem setting
+%ocaml: factorize in rule_exec
 
 <<[[Node]] extra fields>>=
 // list<ref<Node>> (head = Job.n)
@@ -1667,8 +1783,6 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
     j->np = npre;
     j->at = atar;
 
-    j->nproc = -1;
-
     j->next = nil;
     return j;
 }
@@ -1683,6 +1797,8 @@ Job *jobs;
 % here cos used by mk(). Cant delayed. 
 \t actually aspectized now, so maybe could delay? or maybe useful
 \t  to know there is a list of jobs
+%ocaml: not sure you need a global, can be a local in run.ml?
+% also use a Queue
 
 <<[[Job]] extra fields>>=
 struct Job	*next;
@@ -1745,6 +1861,7 @@ Biobuf bout;
 %  compared to scanf/printf? 
 % used in mk for printing on stdout. No big win vs printf I think.
 %  actually use fprintf(2,) for other stuff
+%ocaml: stdlib already buffer output
 
 <<[[main()]] initializations>>=
 Binit(&bout, STDOUT, OWRITE);
@@ -1789,6 +1906,7 @@ for(argv++; *argv && (**argv == '-'); argv++)
     }
 }
 @
+%ocaml: use Arg module
 %chunks:
 % will see gradually -xxx
 
@@ -1867,7 +1985,7 @@ char *files[256];
 char **f = files;
 @
 % can have more than one file? can use multiple -f, but meh.
-
+%ocaml: one -f is enough
 
 <<[[main()]] -xxx switch cases>>=
 case 'f':
@@ -1893,6 +2011,8 @@ if(f == files){
 <<[[main()]] if DEBUG(D_PARSE)>>
 @
 %old: use AREAD and OREAD instead of 4 and 0 argument
+%bug? if mkfile not there, no error? it displays "mk: nothing to mk"
+% because target will be empty
 
 % will modify rules, metarules,
 
@@ -1919,7 +2039,7 @@ if(*argv == nil){
 Word *target1;
 @
 
-% e.g. 'default', 
+% e.g. 'all, 
 % should be initialized while parsing with the first rule added
 \t should be a single word (but consistent to use Word), change to char*?
 \l  or first rule can contain multiple targets
@@ -2009,10 +2129,15 @@ else {
 % parse() will modify rules, metarules (patrules), target1.
 %ocaml: return those instead of modifying globals
 
-% UNIX make was using Yacc? 
-% cleaner to use Yacc? tricky cos in recipe the tokens have a different meaning
-%  => need a lexer with different states/modes (a la Perl/PHP).
-% also escaping is tricky. unicode also is tricky.
+% mk has a very particular way to parse. 
+% Partly because mimimal-syntax.
+% But maybe grew out with more escaping rules and in the end it's
+% a bit complicated.
+%real-world: unix make was actually using yacc.
+
+%ocaml: cleaner to use Yacc? tricky too cos in recipe the tokens 
+% have a different meaning => need a lexer with different states/modes 
+% (a la Perl/PHP). Also escaping is tricky. Unicode also is tricky.
 
 \section{[[parse()]]}
 
@@ -2024,7 +2149,7 @@ char *infile;
 <<global mkinline>>=
 int mkinline;
 @
-% rename just inline? or lineno.
+\t rename just inline? or lineno.
 
 <<function SYNERR>>=
 #define	SYNERR(l)	(fprint(STDERR, "mk: %s:%d: syntax error; ", \
@@ -2032,7 +2157,8 @@ int mkinline;
 @
 % when call SYNERR with explicit line? when dont want default of using
 % mkinline because error was actually before.
-
+% note that useful to put mk: before, to indicate errors comes from mk,
+%  not one of its subprocess (and there may be many)
 
 % read fd, make input buffer, make string buffer, then get line and put in buf.
 % use of libbio
@@ -2148,8 +2274,9 @@ eof:
 
 % pass true to nextrune so elide
 
-\t so if have line with only spaces, it is not skipped then? skipped later?
-\t  generate error then because no :=< ?
+%ocaml-found:
+% skip only empty lines
+% if have line with only spaces, it generate an error because not one of :=<
 
 
 
@@ -2207,7 +2334,7 @@ nextrune(Biobuf *bp, bool elide)
 <<[[assline()]] other locals>>=
 int lastc;
 @
-\t why? to handle \ again?
+% to handle escaped newline after comment, meh
 
 <<[[assline()]] switch character cases>>=
 case '#':
@@ -2238,6 +2365,13 @@ case '#':
 % so A=foo # this is a long thing\
 %      bar 
 % will be parsed as a single line A=foo bar
+
+% convenient for
+% X=foo\
+%  bar\
+%  #notthisone\
+%  foobar
+% ...
 
 % when buf is not empty? when had stuff before the # ? in which case
 %  do the same thing as if it was a single newline
@@ -2317,6 +2451,7 @@ escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
 
 % pass false this time to nextrune, so transform escaped newline in space
 
+% use nextrune so handle escaped newline also in quoted string
 
 
 \subsection{Parsing the head of a line, [[rhead()]]}
@@ -2391,7 +2526,7 @@ if(*w->s == '\0' && sep != '<' && sep != '|') {
 <<[[rhead()]] if sep is [[:]]>>
 @
 
-\subsubsection{Dealing with quotes and variables, [[charin()]]}
+\subsubsection{Skipping quotes and variables, [[charin()]]}
 % part 2
 
 % redo a bit some of the lexing work done in assline, sad.
@@ -2500,6 +2635,17 @@ case '}':
 %$
 \l could goto default:
 
+%ocaml-found:
+% note that in ${name} name must also be simple, but need that
+% so can contatenate a variable name with a letter, as in ${name}ici
+% otherwise ambiguity with $nameici, and dont want put a space because
+% space have a meaning.
+%real-world: not a pb in make since impose $(xxx) format for every variables.
+
+%rc deals with that with ^ so can do in a recipe $stem1^l to get
+% 5l, 8l, etc.
+
+
 <<[[charin()]] sanity check vargen>>=
 if(vargen){
     SYNERR(-1);
@@ -2551,9 +2697,10 @@ stow(char *s)
 \t rename w to last?
 \t rename newword -> new_singleword
 \t rename nextword to nextwords?
+%ocaml: expanding is done later in eval.ml instead, but 
+% the splitting is done at lexing/parsing time.
 
-
-\subsubsection{Dealing with quotes, backquotes, and variables, [[nextword()]]}
+\subsubsection{Expanding quotes, backquotes, and variables, [[nextword()]]}
 
 % again :)
 
@@ -2649,6 +2796,7 @@ case '"':
 \l but missing closing quote should never happen
 % this time they are removed
 
+% by expand it means remove quote arounds
 
 <<function expandquote>>=
 /*
@@ -2755,6 +2903,7 @@ varsub(char **s)
 @
 % yes! ${x:%=%}
 
+
 %\subsection{Simple variables, }
 %$
 
@@ -2827,6 +2976,7 @@ varmatch(char *name)
 
 
 
+\t could put the code for dollar{name} here, important escaping mechanism
 
 % will see backquote later too
 
@@ -2894,6 +3044,7 @@ rbody(Biobuf *in)
             }
         } else
             rinsert(buf, r);
+
         lastr = r;
         if (r == '\n')
             mkinline++;
@@ -2910,6 +3061,7 @@ rbody(Biobuf *in)
 
 % handle multi lines shell commands, as long as have leading space or tab
 %  after last newline
+% handle 
 
 % note that no call to  stow() here! no variable expansion
 
@@ -2972,6 +3124,9 @@ case '<':
 @
 % parsed by rhead, so got variable expansion there too! < $arch.mk 
 
+% handle filename with spaces now ... no need escaping
+%ocaml: be more consistent and stricter
+
 % recurse but use globals infile, mkinline, so
 % to save and restore them.
 
@@ -2982,7 +3137,7 @@ ipush();
 <<[[parse()]] end, pop>>=
 ipop();
 @
-
+%ocaml: do that in eval, and use call stack to handle recursivity
 
 <<struct input>>=
 struct Input
@@ -3098,6 +3253,13 @@ if(head->next){
 }
 @
 
+%ocaml-found:
+% note that calls wtos() on head before, so can have vars in head!
+% can do crazy stuff like
+% A=B
+% $A=42
+% and now B is 42! pointers :) 
+
 \subsection{Overriding variable definitions}
 
 % saw calling parse with true for override for the xxx=yyy argument parsing.
@@ -3195,7 +3357,10 @@ graph(char *target)
 % need attribute? anyway can access rule of node each time
 % or probably because it is a union of attr for all matching rules.
 %  not just the master rule.
-\l but in which situation it matters?
+% But in which situation it matters? for Virtual! because timeof
+% may have been wrong and considered a file with the same name of
+% a target. When we find out it is a virtual node, we need to reset
+% the time of this node.
 
 
 
@@ -3281,6 +3446,9 @@ for(r = (sym? sym->u.ptr : nil); r; r = r->chain){
 \t what is the point of setting head.n? it is not used anyway, and
 \t  similar to node
 
+% so for each prereq there is an arc! (but all of those arcs
+% will share the same rule/recipe)
+
 <<[[applyrules()]] skip this rule and continue if some conditions>>=
 if(r->attr&META) continue;
 if(strcmp(target, r->target)) continue; // how can happen??
@@ -3296,6 +3464,9 @@ if((!r->recipe || !*r->recipe)
 \t  maybe define  empty_prereqs() ? and empty_recipe() !!!
 \t but no need !r->recipe, every rule has recipe (which can be empty)
 \t  so do assert in empty_recipe()
+
+% empty recipe and empty prereqs is useless, but tools like ocamldep
+% generates such dependencies
 
 <<[[applyrules()]] if no prerequistes in rule r>>=
 // no prerequistes, a leaf, still create fake arc
@@ -3356,8 +3527,9 @@ if((!r->recipe || !*r->recipe)
     continue;	/* no effect; ignore */
 @
 \t useless !r->recipe, can assert instead
-\t could issue a warning? why would someone write a meta without recipe and
-\t  prereqs?
+% could issue a warning, but some tools generate such dependencies with
+%  no recipe and no prereqs
+\l could factorize with previous one
 
 <<[[applyrules()]] if no prerequistes in meta rule r>>=
 if(!r->tail || !r->tail->s || !*r->tail->s) {
@@ -3393,7 +3565,9 @@ match(char *name, char *template,    char *stem)
     if(!PERCENT(*template))
         return false;
 
+    // how many characters % is matching
     n = strlen(name) - strlen(template+1);
+
     if (n < 0)
         return false;
     if (strcmp(template+1, name+n))
@@ -3408,7 +3582,7 @@ match(char *name, char *template,    char *stem)
 }
 @
 % simple pattern, single % or &
-
+\t introduce a len_after_percent_in_template?
 
 <<[[match()]] if ampersand template>>=
 if(*template == '&')
@@ -3445,6 +3619,31 @@ subst(char *stem, char *template,   char *dest, int dlen)
 }
 @
 
+
+\section{Node cache}
+\l generalize to Cache? with node cache, time cache, etc?
+
+% S_NODE used at a few places so maybe cant delay that to opti section.
+% Also it is a DAG, not a tree
+
+% useful in practice? when reuse a target node? when same file
+%  mentioned again and again, like .o or .a used in different targets?
+% but then it's not really an opti, you want to have only one node, 
+%  otherwise you will run multiple times the same recipe
+
+<<[[applyrules]] check node cache if target is already there>>=
+sym = symlook(target, S_NODE, nil);
+if(sym)
+    return sym->u.ptr;
+@
+
+<<[[Sxxx]] cases>>=
+S_NODE,		/* target name -> node */
+@
+
+<<[[newnode()]] update node cache>>=
+symlook(name, S_NODE, (void *)node);
+@
 
 
 \section{[[timeof()]]}
@@ -3505,6 +3704,10 @@ mkmtime(char *name, bool force)
 }
 @
 
+% cleanname! so normalize! otherwise lost opportunity to realize 
+%  same file
+% but actually not put in node cache
+
 \subsection{Time cache}
 \t adv topics? with opti of node cache?
 
@@ -3550,8 +3753,8 @@ symlook(name, S_TIME, (void*)t);		/* install time in cache */
 
 
 
-\section{Checking the rules}
-% checking the graph actually
+\section{Checking the graph}
+\n was 'checking the rules', but really it is more checking the graph
 
 % Also simplify the graph by removing some arcs (see togo()).
 % Give priority for instance to specialized over meta rules. So
@@ -3563,8 +3766,8 @@ cyclechk(root);
 vacuous(root);
 ambiguous(root);
 @
-\l can do vacuous after ambiguous? ambiguous simpler to explain
-
+% can do vacuous after ambiguous? NO! cos whole point of vacuous is
+% to delete some nodes and arcs that would generate ambiguity!
 
 \subsection{Cycle detection}
 
@@ -3592,8 +3795,14 @@ cyclechk(Node *n)
 % important to restore back flags as they were before?
 % YES because graph is a DAG, so might encounter another time the same
 %  note but that's ok.
+% Could optimize and have both a visited field and cycle field
+%  so dont explore twice the same already checked subtree?
+%  NO, cos context might be different and we might have a loop.
 
 % FIGURE
+
+% sucks a bit that does not show trace, so hard to debug.
+%ocaml: give a trace!
 
 \subsection{Infinite rule detection and [[$NREP]]}%$
 
@@ -3696,7 +3905,7 @@ nrep(void)
 \t mv to graph.c? or check.c?
 
 
-\subsection{Ambiguous rule detection}
+\subsection{Ambiguous rules detection}
 % also modify graph to fix things.
 
 % help to understand subtelities of multiple targets, multiple prereqs,
@@ -3751,9 +3960,23 @@ ambiguous(Node *n)
 }
 @
 \t rename r to master_rule ? and la to master_arc ?
-\l why not mark TOGO for rule without recipe?
 \t use empty_recipe() (and assert != nil)
-\t use != to compare recipe? string address comparison? not strcmp?
+\l could optimize again and avoid visiting node already visited
+
+%ocaml-found:
+% use != to compare recipe? string address comparison? not strcmp?
+%  when can have 2 arcs with same recipe pointer?
+% all the time, because in foo.exe: foo.o bar.o\n gcc foo.o bar.o -o foo.exe
+%  you will have multiple arcs with recipe, but always same recipe so it's ok.
+%  When we build the graph we splitted such single rule in multiple arcs,
+%  but we need to remember they come from the same rule after.
+  
+
+% why not mark TOGO for rule without recipe? because we still want this
+% arc for outdated check! this arc does not contain a recipe, but it
+% is still important, e.g. dependencies like foo.o: foo.h
+
+\l can have target with no recipe arc at all?
 
 <<function trace>>=
 static void
@@ -3772,7 +3995,7 @@ trace(char *s, Arc *a)
     fprint(STDERR, "\n");
 }
 @
-
+\t what is the stuff looking in the prereqs of the prereq?
 
 \subsubsection{Specialized versus generic rules}
 
@@ -3821,8 +4044,6 @@ togo(Node *node)
     la = nil;
     for(a = node->prereqs; a; la = a, a = a->next)
         if(a->flag&TOGO){
-            fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
-                     node->name, a->n->name);
             //remove_list(a, node->prereqs)
             if(a == node->prereqs)
                 node->prereqs = a->next;
@@ -3831,31 +4052,50 @@ togo(Node *node)
         }
 }
 @
-% la = last a
 %pad: I've added the warning, BUT ACTUALLY I should not!
-\t do it only for explain?
+%            fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
+%                     node->name, a->n->name);
+\l could do it for explain mode
+
+% la = last a
 % leak! 
 % should we remove all children of this node? no because DAG so potentially
 %  referenced elsewhere
 
+%ocaml: useful only for ambiguous for specialized vs generic so do
+% adjustments there by resetting the list of prereqs
 
-\subsection{Vacuous rule detection}
+
+\subsection{Vacuous node detection}
 % def of vacuous =~ stupid
 
-\t example of stupid rule?
+%ocaml-found:
+% without this check and graph adjustment, generic rules such as
+% %.o: %.c; CC ...  and %.o: %.s; AS ... would conflict with each other
+% (as in plan9/sys/src/cmd/mkone)
+% and generate ambiguity. Of course if an object foo.o is requested
+% and the directory contain foo.c, obviously we do not want the
+% rule foo.o: foo.s. 
+% We can mark as PROBABLY node with files that already exist and
+% detect VACUOUS node that would generate ambiguity by looking
+% if the file in the node does not exist and the node was generated
+% from a metarule!
+
+
 
 % goal is to mark certain nodes as VACUOUS.
 <<[[Node_flag]] cases>>=
 VACUOUS    = 0x0200,
 @
-
+\l but not sure this flag is needed as it is used only inside
+\l  vacuous. If got rid of READY, then no need for VACUOUS
 
 % before, mark a few nodes as PROBABLE
-
 <<[[Node_flag]] cases>>=
 PROBABLE   = 0x0100,
 @
-% ??? not very clear
+% not very clear name, but means file exist so probably
+% a good node
 
 
 <<[[newnode()]] set flags of node>>=
@@ -3866,6 +4106,8 @@ node->flags = (node->time? PROBABLE : 0);
 <<[[applyrules()]] when found a regular rule for target [[node]], set flags>>=
 node->flags |= PROBABLE;
 @
+% make sense, even if file does not exist, probably a node we
+% are interested in.
 
 <<[[graph()]] set root flags before [[vacuous()]]>>=
 root->flags |= PROBABLE;	/* make sure it doesn't get deleted */
@@ -3897,24 +4139,29 @@ vacuous(Node *node)
             a->flag |= TOGO;
         else
             vac = false;
+    <<[[vacuous]] possibly undelete some arcs>>
 
-    /* if a rule generated arcs that DON'T go; no others from that rule go */
-    for(a = node->prereqs; a; a = a->next)
-        if(!(a->flag&TOGO))
-            for(la = node->prereqs; la; la = la->next)
-                if((la->flag&TOGO) && (la->r == a->r)){
-                    la->flag &= ~TOGO;
-                }
     togo(node);
     if(vac) {
-        fprint(STDERR, "mk: vacuous node found %s\n", node->name);
         node->flags |= VACUOUS;
     }
     return vac;
 }
 @
-% pad: I've added the warning
+% pad: I've originally added the warning
+%        fprint(STDERR, "mk: vacuous node found %s\n", node->name);
+% but this is wrong. a vacuous node is ok.
 
+<<[[vacuous]] possibly undelete some arcs>>=
+/* if a rule generated arcs that DON'T go; no others from that rule go */
+for(a = node->prereqs; a; a = a->next)
+    if(!(a->flag&TOGO))
+        for(la = node->prereqs; la; la = la->next)
+            if((la->flag&TOGO) && (la->r == a->r)){
+                la->flag &= ~TOGO;
+            }
+@
+\l when this matter?
 
 \section{Rule attributes propagation}
 
@@ -3943,31 +4190,31 @@ attribute(Node *n)
 
 % the core algorithm.
 % main idea = 
-% construct dependency graph for target root (previous chapter)
-% set all nodes to NOTMADE.
-% Then ask to build root which will recurse. 
-%  If leaf then node MADE if exist
-%  Otherwise look at time 
-%   if file > time of all children then MADE, 
-%   otherwise run recipe job in parallel, return and wait it's MADE (so loop).
-%  if error in any recipe, then Exit.
+%  construct dependency graph for target root (previous chapter)
+%  set all nodes to NOTMADE.
+%    Then ask to build root which will recurse. 
+%    If leaf then node MADE if exist
+%    Otherwise look at time 
+%     if file > time of all children then MADE, 
+%     otherwise run recipe job in parallel, return and wait it's MADE (so loop).
+%    if error in any recipe, then Exit.
 
 % while(root not finished) { run wave of jobs and update graph }
 
 \section{[[mk()]]}
-
 
 <<[[Node_flag]] cases>>=
 NOTMADE    = 0x0020,
 BEINGMADE  = 0x0040,
 MADE       = 0x0080,
 @
+%ocaml: should be different field than other node flags
+
 % NOTMADE initially (see clrmade())
 % BEINGMADE? when start recipe, but mk can run in // so it returns!
 %   can go back to node with BEINGMADE? when
-%   2 files with deps on same Node? DAG
+%   2 files with deps on same Node, because of the DAG
 % MADE finally when recipe done! (or time was already good, so no need update)
-%ocaml: should be different field than other node flags
 
 % FIGURE displaying a tree of files and
 % see how mk is running some waves of jobs, and how at each node
@@ -4004,6 +4251,9 @@ mk(char *target)
             <<[[mk()]] if no child to waitup and root not MADE, possibly break>>
         }
     }
+    if(root->flags&BEINGMADE)
+        waitup(-1, (int *)nil);
+
     <<[[main()]] before returning, more [[waitup()]] if there was an error>>
     if(!did)
         Bprint(&bout, "mk: '%s' is up to date\n", root->name);
@@ -4016,6 +4266,20 @@ mk(char *target)
 
 % pass nil, nil to pass previous node and previous arc, but used only
 % for pretending stuff.
+
+%ocaml-found:
+% waitup take 1 to say 'ok to not have children'.
+% when can be the case? when top is virtual target with no recipe
+% e.g., all: prog,
+% and previous round built prog and updated to MADE the prog node.
+% Still the root node is not made, and work will not trigger
+% any new process; it will update though all to MADE but we should
+% not waitup().
+
+%ocaml-found:
+% why extra waitup after? because last work round may have put
+% root as BeingMade and so will go out of the loop,
+% but we still need to wait!
 
 %note: subtle, important while loop! because of mk // so run some jobs
 % but then later another job might depend on the end of this one,
@@ -4053,6 +4317,8 @@ clrmade(Node *n)
             clrmade(a->n);
 }
 @
+%bug? DAG? should avoid repetitive work too there?
+%ocaml: no need, do that in newnode() thx to another field.
 
 \section{[[work()]]}
 
@@ -4068,6 +4334,8 @@ bool did = false;
 
 
 \t parent_node, prev_arc, TODO rename parameters?
+% extra params for advanced functionality not needed
+
 % main -> mk -> <> -> outofdate(); dorecipe()
 <<function work>>=
 bool
@@ -4110,7 +4378,9 @@ if(node->prereqs == nil){
 }
 @
 % if no prereqs, then no arcs, then no rule with recipe
+\t why not use update(false, node) here?
 
+% remember that virtual rules have an arc
 
 <<[[work()]] locals>>=
 char cwd[256];
@@ -4126,6 +4396,8 @@ else
 else
     Exit();
 @
+% the directory part is useful in recursive mk context
+\l aspectize that part and put in recursive mk section?
 
 \subsection{Node case}
 
@@ -4136,7 +4408,7 @@ Arc *a;
 @
 %old: used to be done later, and weoutofdate used to be aflag
 %old: initialization was done later
-
+\n called weoutofdate to avoid conflict with outofdate function
 
 <<[[work()]] some prerequisites, a node>>=
 <<[[work()]] adjust weoutofdate if aflag>>
@@ -4224,8 +4496,7 @@ outofdate(Node *node, Arc *arc, bool eval)
 
 %bool dorecipe(Node *node)
 
-% will iterate over arcs, node in args,
-% words, and symbols.
+% will iterate over arcs, node in args, words, and symbols.
 
 % find right arc with recipe, find master rule
 
@@ -4233,7 +4504,7 @@ outofdate(Node *node, Arc *arc, bool eval)
 Arc *aa = nil; // arc with recipe
 Rule *r = nil; // rule with recipe
 @
-\t rename aa to arc
+\t rename aa to arc or master_arc
 
 % set list of targets (most of the time single one)
 % and have alltargets and only-old-targets (outofdate)
@@ -4287,7 +4558,6 @@ dorecipe(Node *node)
     node->next = nil;
     head.next = ahead.next = nil;
     <<[[dorecipe()]] build lists of targets and node list>>
-
     <<[[dorecipe()]] return if one target not READY>>
 
     /*
@@ -4348,8 +4618,15 @@ else {
     }
 }
 @
+%ocaml: can do the subst once and for all and have a better rule_exec!
 \t but then need to have talked about S_NODE before? so cant aspectize
-\t node cache?
+\t  node cache?
+
+% when can have the case of node not found in S_NODE? because
+%  when we build the graph we start from one target which may
+%  be part of a multi-target rule, e.g. parser.ml parser.mli: parser.mly
+%  and if we did mk parser.mli, then parser.ml will not be in
+%  the graph even though we want to add it for the alltargets variable
 
 <<[[dorecipe()]] update list of outdated targets>>=
 if(!aflag && n->time) {
@@ -4372,7 +4649,7 @@ for(n = node; n; n = n->next)
         return did;
 @
 % did always false here no?
-% and look vacuous(), READY is usually not set ...
+% and look vacuous(), READY is always set ...
 \t ???? remove code?
 
 <<[[dorecipe()]] build lists of prerequisites>>=
@@ -4407,17 +4684,11 @@ if(r == nil){
         Exit();
     }
     // else
-    if(strchr(node->name, '(') && node->time == 0)
-        MADESET(node, MADE);
+    <<[[dorecipe()]] when no recipe found, if archive name>>
     else
         update(false, node);
 
-    if(tflag){
-        if(!(node->flags&VIRTUAL))
-            touch(node->name);
-        else if(explain)
-            Bprint(&bout, "no touch of virtual '%s'\n", node->name);
-    }
+    <<[[dorecipe()]] when no recipe found, if tflag>>
     return did;
 }
 @
@@ -4472,6 +4743,7 @@ run(Job *j)
         sched();
 }
 @
+%ocaml: use Queue.add
 \l j->next = nil  redundant since does it already in newjob
 
 % if no more processor free, then just enqueued. next round
@@ -4525,12 +4797,11 @@ struct RunEvent {
 @
 %bug? seems that job never freed
 
-
 <<global events>>=
 // growing_array<Runevent> (size = nevents (== nproclimit))
 static RunEvent *events;
 @
-%ocaml: use instead map from pid to job.
+%ocaml: use instead map (e.g., hash) from pid to job.
 
 
 <<global nevents>>=
@@ -4557,6 +4828,7 @@ nextslot(void)
     return 0;	/* cyntax */
 }
 @
+%ocaml: no need growing_array, just use hash
 
 % waitup -> <>
 <<function pidslot>>=
@@ -4576,6 +4848,7 @@ pidslot(int pid)
 % but should be the same between two runs of mk
 % so maybe could simplify.
 \t use nproclimit, not nevents above, more consistent
+%ocaml: use Hashtbl.find
 
 
 <<[[nproc()]] grow nevents if necessary>>=
@@ -4590,6 +4863,7 @@ if(nproclimit > nevents){
 }
 @
 \t replace nproclimit by != nevents
+%ocaml: no need, Hashtbl.t grows as needed
 
 % so nevents should be = to nproclimit at the end
 
@@ -4646,6 +4920,7 @@ if(jobs == nil){
 @
 \t how can have jobs == nil?
 % should issue an error here, assert!
+\t actually usage is for profiling
 
 % buildenv is important; it is the function using most of the fields in j;
 
@@ -4662,6 +4937,8 @@ char 	*shellname =	"rc";
 <<global shflags>>=
 char	*shflags = "-I";	/* rc flag to force non-interactive mode */
 @
+\t need that ? does not repeat on stdout the command
+
 % pad: should add also -e!! actually -e is added by default
 %  unless you added :E: for NOMINUSE
 
@@ -4718,9 +4995,10 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
         // child 2, feeding the shell with recipe, through a pipe
         <<[[execsh()]] in child 2, if buf, close other side of pipe>>
         close(in[0]);
+        // feed the shell
         <<[[execsh()]] in child 2, write cmd in pipe>>
         close(in[1]); // will flush
-        _exits(0);
+        _exits(nil);
     }
     // parent
     <<[[execsh()]] in parent, if buf, close other side of pipe and read output>>
@@ -4730,6 +5008,13 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
 %pad: I introduced int err; so can better aspectize sanity checks
 \n put flags after cmd in argument of execsh, more logical? no! cmd is input!
 \t rename cmd to input ?
+
+%ocaml-found:
+% important for second fork to do the code of the shell in the case where
+%  pid <> 0!!
+% otherwise, would wait for wrong process! would wait for
+% child2 that feeds the shell which returns very quickly!
+% Also wait for could possibly capture child2.
 
 % exportenv! so set in child the variables in environment
 
@@ -4911,6 +5196,8 @@ if(buf[0]){
 if(sym == nil)
     continue;	/* not interested in this node */
 @
+\t should never happen I think, cos node list is made with
+\t  node we are interested in
 
 % because up to date target anyway?
 
@@ -4941,7 +5228,6 @@ front(char *s)
 \t ??? getfields?
 
 
-
 \subsection{[[update()]]}
 
 % mk -> waitup -> <>
@@ -4961,7 +5247,7 @@ update(bool fake, Node *node)
         <<[[update()]] set outofdate prereqs if arc prog>>
     } 
     else {
-        // target still does not exist (but still marked as MADE)
+        // virtual target or target still does not exist (but marked as MADE)
         node->time = 1;
         for(a = node->prereqs; a; a = a->next)
             if(a->n && outofdate(node, a, true))
@@ -4972,6 +5258,9 @@ update(bool fake, Node *node)
 % pass true to outofdate here!!
 % pass true to timeof, to force, to not use the cache because indeed
 %  time probably changed
+% why set time to 1 for virtual node? just to be different than None
+%  and then anway later take latest time of one of the prereq
+\t but then what if no prereq? then time is 1. important?
 
 % so if target not exist, still put MADE for node
 % because anyway, otherwise would loop infinitely.
@@ -5134,9 +5423,6 @@ if(res > 0){
 
 % subtle
 <<[[main()]] before returning, more [[waitup()]] if there was an error>>=
-if(root->flags&BEINGMADE) // because of a runerrs
-    waitup(-1, (int *)nil);
-
 while(jobs)
     waitup(-2, (int *)nil);
 
@@ -5151,16 +5437,14 @@ assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 
 \chapter{Interacting with the Shell}
 
-% The recipe is shell command. 
+% The recipe is a shell command (or multiple commands).
 % Seen execsh() above with global shell, shellname stuff. 
 %  (already plan9 specific and some stuff rc specific)
 % was taking an Envy because recipe can contain variables.
 % buildenv() in sched() before execsh, passing an Envy.
 
 %\section{Variables expansion (part 3)}
-% not done actually! shell does it! 
-% simpler! no $$i mess.
-% simplify many things.
+% not done actually! shell does it!  simpler! no $$i mess. simplify some things.
 
 %real-world:
 % mk simpler than make on this. no Make variables vs shell variables.
@@ -5172,7 +5456,7 @@ assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 
 \section{[[Envy]] and [[envy]]}
 %\section{Environment Variables, [[Envy]] and [[envy]]}
-% could be in core DS, but used just here, and outside, S_VAR is good enough.
+% could be in core DS, but used just here, and outside S_VAR is good enough.
 
 \t Not envy :) just environment variable stuff, rename? Env and env?
 <<struct Envy>>=
@@ -5189,10 +5473,14 @@ struct Envy
 
 
 <<global envy>>=
-// growing_array<Envy>
+// growing_array<Envy> (endmarker = nil,nil)
 Envy	*envy;
 @
-%ocaml: could use a hashtbl
+%ocaml: just use a hashtbl and reuse env (hash). useless I think to optimize.
+
+%use special data structure with special marks because used in
+% special way. Have first full static environment and then
+% each time different value for special mk variables ($stem, $target).
 
 <<constant ENVQUANTA>>=
 #define ENVQUANTA 10
@@ -5220,7 +5508,7 @@ envinsert(char *name, Word *value)
     envy[nextv++].values = value;
 }
 @
-
+%ocaml: just Hashtbl.add
 
 
 <<function envupd>>=
@@ -5241,8 +5529,14 @@ envupd(char *name, Word *value)
 }
 @
 \t else if not found, generate error! 
-\t what is this nil,nil? to make a special mark in envy?
-\t  because then use e->name termination condition?
+\t could also just call simply envinsert(e->name, value) instead
+\t of this envinsert(nil,nil), but then this would require
+\t  to have access to nextv in envupd too.
+%ocaml: just Hashtbl.replace
+
+% what is this nil,nil? to make a special mark in envy.
+%  because then use e->name termination condition.
+%  because growing array and special end marker!
 
 \section{Initializing the environment, [[execinit()]]}
 % as opposed to make, no $(XX), no $$i, the string is passed
@@ -5251,6 +5545,7 @@ envupd(char *name, Word *value)
 <<[[main()]] initializations before building>>=
 execinit();
 @
+%ocaml: just reuse env, no need for another environment-like data structure.
 
 
 % main -> parse; mk; <>
@@ -5277,6 +5572,9 @@ execinit(void)
 \t again nil,nil insert because nextv is static. Should be global!
 \t rename initenv() for that!
 
+%note that internal vars are put first in Envy because they are the one
+% that will be updated! so want fast iteration there.
+
 % use myenv also in initenv(inithash), but it is for the S_INTERNAL stuff and
 %  used later for readenv
 
@@ -5293,7 +5591,7 @@ ecopy(Symtab *s)
      envinsert(s->name, s->u.ptr);
 }
 @
-
+%ocaml: just Hashtbl.copy, but not even sure we need that
 
 <<[[ecopy()]] return and do not copy if conflict with mk internal variable>>=
 for(p = myenv; *p; p++)
@@ -5302,6 +5600,10 @@ for(p = myenv; *p; p++)
 @
 % maybe should issue a warning? anyway it is only for user variables
 %  because for readenv(), those variables are skipped.
+%ocaml-found:
+% when use mk recursively, you will get a $stem in the environment! and
+% you need to filter it otherwise in exportenv you would need to take care
+% of duplicate and give priority to the fresh $stem
 
 
 \section{Importing the external environment, [[readenv()]]}
@@ -5369,6 +5671,8 @@ if(len <= 0 || *shname(e[i].name) != '\0')
 if (symlook(e[i].name, S_INTERNAL, nil))
     continue;
 @
+%alt: could import variables with same name, just give priority to
+% S_INTERNAL when lookup
 
 <<[[readenv()]] add null terminator character at end of [[p]]>>=
 if (p[len-1] == '\0')
@@ -5534,12 +5838,15 @@ if(f < 0) {
 
 
 
+
+
 \chapter{Debugging and Profiling Support}
 
 
 % seen file/line fields in Rule, so can report error accurately.
 
 \section{Printing jobs, [[shprint()]]}
+\l not sure it can be considered a debugging facility, more mandatory
 
 % With use of variables, can be hard to know what was actually executed
 % so when there is an error, useful to expand those vars.
@@ -5557,6 +5864,7 @@ if(!tflag && (nflag || !(j->r->attr&QUIET)))
     Bwrite(&bout, buf->start, (long)strlen(buf->start));
 freebuf(buf);
 @
+\t should do shprint inside the if, useless otherwise
 
 %\subsection{[[shprint()]]}
 
@@ -5931,7 +6239,7 @@ prusage(void)
 
     usage();
     for(i = 0; i <= nevents; i++)
-        fprint(1, "%d: %lud\n", i, tslot[i]);
+        fprint(STDOUT, "%d: %lud\n", i, tslot[i]);
 }
 @
 % nevents = nproclimit
@@ -5940,11 +6248,19 @@ prusage(void)
 
 \chapter{Advanced Features}
 
-% many of those features are meh in my opinion
-
 \section{Regular-expression rules, [[:R:]]}
 
 % use libregexp/: regcomp(), regexec(), regsub()
+
+%in sys/src/cmd/mkfile
+%^([$OS])\.(.*):R:	\2.\1
+%	$stem1^l -o $target $stem2.$stem1
+%
+%.*\.[$OS]:R:	$HFILES
+%
+%(.*)\.([$OS])'$':R:	\1.c
+%	$stem2^c $CFLAGS $stem1.c
+
 
 <<[[Rule_attr]] cases>>=
 REGEXP = 0x0020,
@@ -6104,6 +6420,12 @@ if(r->attr&REGEXP)
 
 \section{Dynamic [[mkfile]], [[<|]]{\em prog}}
 
+% How to do the ifdef I use in pfff's makefiles?
+
+% Useful to provide an alternative to ifdef in Make.
+% instead you put the configurable part in an external
+% shell program that just does some echo FOO=X.
+
 <<[[rhead()]] adjust sep if dynamic mkfile [[<|]]>>=
 if(sep == '<' && *p == '|'){
     sep = '|';
@@ -6157,7 +6479,7 @@ pipecmd(char *cmd, Envy *e, int *fd)
     fdt pfd[2];
 
     if(DEBUG(D_EXEC))
-        fprint(1, "pipecmd='%s'\n", cmd);/**/
+        fprint(STDOUT, "pipecmd='%s'\n", cmd);/**/
 
     if(fd && pipe(pfd) < 0){
         perror("pipe");
@@ -6191,207 +6513,6 @@ pipecmd(char *cmd, Envy *e, int *fd)
 }
 @
 
-
-
-\section{Complex variable uses, [[${]]{\em \ldots}[[}]]}
-%$
-
-
-<<[[varsub()]] if variable starts with open brace>>=
-if(**s == '{')		/* either ${name} or ${name: A%B==C%D}*/
-    return expandvar(s);
-@
-
-<<function expandvar>>=
-static Word*
-expandvar(char **s)
-{
-    Word *w;
-    Bufblock *buf;
-    Symtab *sym;
-    char *cp, *begin, *end;
-
-    begin = *s;
-    (*s)++;						/* skip the '{' */
-    buf = varname(s);
-    if (buf == nil)
-        return nil;
-    cp = *s;
-    if (*cp == '}') {				/* ${name} variant*/ //$
-        (*s)++;					/* skip the '}' */
-        w = varmatch(buf->start);
-        freebuf(buf);
-        return w;
-    }
-    if (*cp != ':') {
-        SYNERR(-1);
-        fprint(STDERR, "bad variable name <%s>\n", buf->start);
-        freebuf(buf);
-        return nil;
-    }
-    cp++;
-    end = charin(cp , "}");
-    if(end == nil){
-        SYNERR(-1);
-        fprint(STDERR, "missing '}': %s\n", begin);
-        Exit();
-    }
-    *end = '\0';
-    *s = end+1;
-    
-    sym = symlook(buf->start, S_VAR, 0);
-    if(sym == nil || sym->u.value == 0)
-        w = newword(buf->start);
-    else
-        w = subsub(sym->u.ptr, cp, end);
-    freebuf(buf);
-    return w;
-}
-@
-%$
-
-
-<<function subsub>>=
-static Word*
-subsub(Word *v, char *s, char *end)
-{
-    int nmid;
-    Word *head, *tail, *w, *h;
-    Word *a, *b, *c, *d;
-    Bufblock *buf;
-    char *cp, *enda;
-
-    a = extractpat(s, &cp, "=%&", end);
-    b = c = d = nil;
-    if(PERCENT(*cp))
-        b = extractpat(cp+1, &cp, "=", end);
-    if(*cp == '=')
-        c = extractpat(cp+1, &cp, "&%", end);
-    if(PERCENT(*cp))
-        d = stow(cp+1);
-    else if(*cp)
-        d = stow(cp);
-
-    head = tail = nil;
-    buf = newbuf();
-    for(; v; v = v->next){
-        h = w = 0;
-        if(submatch(v->s, a, b, &nmid, &enda)){
-            /* enda points to end of A match in source;
-             * nmid = number of chars between end of A and start of B
-             */
-            if(c){
-                h = w = wdup(c);
-                while(w->next)
-                    w = w->next;
-            }
-            if(PERCENT(*cp) && nmid > 0){	
-                if(w){
-                    bufcpy(buf, w->s, strlen(w->s));
-                    bufcpy(buf, enda, nmid);
-                    insert(buf, '\0');
-                    free(w->s);
-                    w->s = strdup(buf->start);
-                } else {
-                    bufcpy(buf, enda, nmid);
-                    insert(buf, '\0');
-                    h = w = newword(buf->start);
-                }
-                buf->current = buf->start;
-            }
-            if(d && *d->s){
-                if(w){
-
-                    bufcpy(buf, w->s, strlen(w->s));
-                    bufcpy(buf, d->s, strlen(d->s));
-                    insert(buf, '\0');
-                    free(w->s);
-                    w->s = strdup(buf->start);
-                    w->next = wdup(d->next);
-                    while(w->next)
-                        w = w->next;
-                    buf->current = buf->start;
-                } else
-                    h = w = wdup(d);
-            }
-        }
-        if(w == 0)
-            h = w = newword(v->s);
-    
-        if(head == 0)
-            head = h;
-        else
-            tail->next = h;
-        tail = w;
-    }
-    freebuf(buf);
-    delword(a);
-    delword(b);
-    delword(c);
-    delword(d);
-    return head;
-}
-@
-
-% subsub -> <>
-<<function extractpat>>=
-static Word*
-extractpat(char *s, char **r, char *term, char *end)
-{
-    int save;
-    char *cp;
-    Word *w;
-
-    cp = charin(s, term);
-    if(cp){
-        *r = cp;
-        if(cp == s)
-            return nil;
-        save = *cp;
-        *cp = '\0';
-        w = stow(s);
-        *cp = save;
-    } else {
-        *r = end;
-        w = stow(s);
-    }
-    return w;
-}
-@
-
-% subsub -> <>
-<<function submatch>>=
-static bool
-submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
-{
-    Word *w;
-    int n;
-    char *end;
-
-    n = 0;
-    for(w = a; w; w = w->next){
-        n = strlen(w->s);
-        if(strncmp(s, w->s, n) == 0)
-            break;
-    }
-    if(a && w == nil)		/*  a == NULL matches everything*/
-        return false;
-
-    *enda = s+n;		/* pointer to end a A part match */
-    *nmid = strlen(s)-n;	/* size of remainder of source */
-    end = *enda+*nmid;
-    for(w = b; w; w = w->next){
-        n = strlen(w->s);
-        if(strcmp(w->s, end-n) == 0){
-            *nmid -= n;
-            break;
-        }
-    }
-    if(b && w == nil)		/* b == NULL matches everything */
-        return false;
-    return true;
-}
-@
 
 
 \section{Shell-command expansion, [[`]]{\em cmd}[[`]]}
@@ -6518,6 +6639,215 @@ if(buf){
 }
 @
 
+\section{Complex variable uses, [[${]]{\em \ldots}[[}]]}
+%$
+
+% note that can use ${x:%=%} only outside recipe :(
+% they are not recognized by the shell and recipe are
+% not processed by mk.
+
+% charin -> <>
+<<[[varsub()]] if variable starts with open brace>>=
+if(**s == '{')		/* either ${name} or ${name: A%B==C%D}*/
+    return expandvar(s);
+@
+
+<<function expandvar>>=
+static Word*
+expandvar(char **s)
+{
+    Word *w;
+    Bufblock *buf;
+    Symtab *sym;
+    char *cp, *begin, *end;
+
+    begin = *s;
+    (*s)++;						/* skip the '{' */
+    buf = varname(s);
+    if (buf == nil)
+        return nil;
+    cp = *s;
+    if (*cp == '}') {				/* ${name} variant*/ //$
+        (*s)++;					/* skip the '}' */
+        w = varmatch(buf->start);
+        freebuf(buf);
+        return w;
+    }
+
+
+    if (*cp != ':') {
+        SYNERR(-1);
+        fprint(STDERR, "bad variable name <%s>\n", buf->start);
+        freebuf(buf);
+        return nil;
+    }
+    cp++;
+    end = charin(cp , "}");
+    if(end == nil){
+        SYNERR(-1);
+        fprint(STDERR, "missing '}': %s\n", begin);
+        Exit();
+    }
+    *end = '\0';
+    *s = end+1;
+    
+    sym = symlook(buf->start, S_VAR, 0);
+    if(sym == nil || sym->u.value == 0)
+        w = newword(buf->start);
+    else
+        w = subsub(sym->u.ptr, cp, end);
+    freebuf(buf);
+    return w;
+}
+@
+%$
+
+% note that does not support recursive vars! like ${name:${O}%.c=%.o}
+
+<<function subsub>>=
+static Word*
+subsub(Word *v, char *s, char *end)
+{
+    int nmid;
+    Word *head, *tail, *w, *h;
+    Word *a, *b, *c, *d;
+    Bufblock *buf;
+    char *cp, *enda;
+
+    a = extractpat(s, &cp, "=%&", end);
+    b = c = d = nil;
+    if(PERCENT(*cp))
+        b = extractpat(cp+1, &cp, "=", end);
+    if(*cp == '=')
+        c = extractpat(cp+1, &cp, "&%", end);
+    if(PERCENT(*cp))
+        d = stow(cp+1);
+    else if(*cp)
+        d = stow(cp);
+
+    head = tail = nil;
+    buf = newbuf();
+    for(; v; v = v->next){
+        h = w = 0;
+        if(submatch(v->s, a, b, &nmid, &enda)){
+            /* enda points to end of A match in source;
+             * nmid = number of chars between end of A and start of B
+             */
+            if(c){
+                h = w = wdup(c);
+                while(w->next)
+                    w = w->next;
+            }
+            if(PERCENT(*cp) && nmid > 0){	
+                if(w){
+                    bufcpy(buf, w->s, strlen(w->s));
+                    bufcpy(buf, enda, nmid);
+                    insert(buf, '\0');
+                    free(w->s);
+                    w->s = strdup(buf->start);
+                } else {
+                    bufcpy(buf, enda, nmid);
+                    insert(buf, '\0');
+                    h = w = newword(buf->start);
+                }
+                buf->current = buf->start;
+            }
+            if(d && *d->s){
+                if(w){
+
+                    bufcpy(buf, w->s, strlen(w->s));
+                    bufcpy(buf, d->s, strlen(d->s));
+                    insert(buf, '\0');
+                    free(w->s);
+                    w->s = strdup(buf->start);
+                    w->next = wdup(d->next);
+                    while(w->next)
+                        w = w->next;
+                    buf->current = buf->start;
+                } else
+                    h = w = wdup(d);
+            }
+        }
+        if(w == 0)
+            h = w = newword(v->s);
+    
+        if(head == 0)
+            head = h;
+        else
+            tail->next = h;
+        tail = w;
+    }
+    freebuf(buf);
+    delword(a);
+    delword(b);
+    delword(c);
+    delword(d);
+    return head;
+}
+@
+
+% another parsing function ...
+% subsub -> <>
+<<function extractpat>>=
+static Word*
+extractpat(char *s, char **r, char *term, char *end)
+{
+    int save;
+    char *cp;
+    Word *w;
+
+    cp = charin(s, term);
+    if(cp){
+        *r = cp;
+        if(cp == s)
+            return nil;
+        save = *cp;
+        *cp = '\0';
+        w = stow(s);
+        *cp = save;
+    } else {
+        *r = end;
+        w = stow(s);
+    }
+    return w;
+}
+@
+
+% subsub -> <>
+<<function submatch>>=
+static bool
+submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
+{
+    Word *w;
+    int n;
+    char *end;
+
+    n = 0;
+    for(w = a; w; w = w->next){
+        n = strlen(w->s);
+        if(strncmp(s, w->s, n) == 0)
+            break;
+    }
+    if(a && w == nil)		/*  a == NULL matches everything*/
+        return false;
+
+    *enda = s+n;		/* pointer to end a A part match */
+    *nmid = strlen(s)-n;	/* size of remainder of source */
+    end = *enda+*nmid;
+    for(w = b; w; w = w->next){
+        n = strlen(w->s);
+        if(strcmp(w->s, end-n) == 0){
+            *nmid -= n;
+            break;
+        }
+    }
+    if(b && w == nil)		/* b == NULL matches everything */
+        return false;
+    return true;
+}
+@
+
+
 \section{Advanced rule attributes}
 
 \subsection{Virtual target, [[:V:]]}
@@ -6527,6 +6857,7 @@ if(buf){
 % ex, clean:V: so even if there is a file called clean
 % in the directory (and no prereqs),
 %  mk clean   will still run the recipe
+% or all:V: $PROG in mkone
 
 <<[[Rule_attr]] cases>>=
 VIR    = 0x0010,
@@ -6545,11 +6876,17 @@ if(a->r->attr&VIR)
     n->flags |= VIRTUAL;
 @
 
+
 <<[[attribute()]] if virtual node>>=
 if(n->flags&VIRTUAL)
     n->time = 0;
 @
-% time 0 is treated specially?
+%ocaml-found:
+% need that because maybe there was a file with the same name
+% than the virtual target in the directory
+% with a date that timeof would have used! then maybe this
+% date was very recent, more recent than the prereqs and
+% so the recipe will not have been triggered.
 
 \subsection{Deleting target when recipe returns an error, [[:D:]]}
 
@@ -6674,6 +7011,7 @@ if(a->r->attr&NOREC)
 
 
 \subsection{Forbidding metarules to match virtual targets,  [[:n:]]}
+
 %" the rule is a meta-rule that cannot be a target of a virtual rule,
 % only files match the pattern in the target"
 
@@ -6960,6 +7298,7 @@ expunge(int pid, char *msg)
 % PNPROC?
 
 
+
 \section{Advanced variable attributes}
 % constant with attributes?? just private var
 %  to not transmit to recipe process?
@@ -7064,6 +7403,14 @@ envupd("nproc", newword(buf));
 % use of nproc??
 
 
+%dead: (was used only in dumper but never set correctly)
+%<<[[Job]] other fields>>
+%// option<int> (None = -1)
+%int		nproc;	/* slot number */
+%@
+% in newjob()
+%    j->nproc = -1;
+
 \section{Aggregates, archives}
 % meh
 
@@ -7105,6 +7452,11 @@ envupd("newmember", v);
 S_AGG,		/* aggregate -> time */
 @
 
+
+<<[[dorecipe()]] when no recipe found, if archive name>>=
+if(strchr(node->name, '(') && node->time == 0)
+    MADESET(node, MADE);
+@
 
 <<[[timeof()]] if name archive member>>=
 if(utfrune(name, '('))
@@ -7296,29 +7648,7 @@ if(strchr(arc->n->name, '(') && arc->n->time == 0)
 
 \section{Optimizations}
 
-\subsection{Node cache}
-\l generalize to Cache? with node cache, time cache, etc?
-
-\t S_NODE used at a few places so maybe cant delay that to here.
-
-% useful in practice? when reuse a target node? when same file
-%  mentioned again and again, like .o or .a used in different targets?
-% but then it's not really an opti, you want to have only one node, 
-%  otherwise you will run multiple times the same recipe
-
-<<[[applyrules]] check node cache if target is already there>>=
-sym = symlook(target, S_NODE, nil);
-if(sym)
-    return sym->u.ptr;
-@
-
-<<[[Sxxx]] cases>>=
-S_NODE,		/* target name -> node */
-@
-
-<<[[newnode()]] update node cache>>=
-symlook(name, S_NODE, (void *)node);
-@
+%\subsection{Node cache}
 
 %\subsection{Time cache}
 
@@ -7372,7 +7702,7 @@ if((!iflag) && (node->time == 0)
     node->flags &= ~CANPRETEND;
     MADESET(node, MADE);
     if(explain && ((node->flags&PRETENDING) == 0))
-        fprint(1, "pretending %s has time %lud\n", node->name, node->time);
+        fprint(STDOUT, "pretending %s has time %lud\n", node->name, node->time);
     node->flags |= PRETENDING;
     return did;
 }
@@ -7401,7 +7731,7 @@ if(!ready)/* try later unless nothing has happened for -k's sake */
 if((node->flags&MADE) && (node->flags&PRETENDING) && p
     && outofdate(p, parc, false)){
     if(explain)
-        fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
+        fprint(STDOUT, "unpretending %s(%lud) because %s is out of date(%lud)\n",
             node->name, node->time, p->name, p->time);
     unpretend(node);
 }
@@ -7458,6 +7788,15 @@ bool tflag = false;
 case 't':
     tflag = true;
     break;
+@
+
+<<[[dorecipe()]] when no recipe found, if tflag>>=
+if(tflag){
+    if(!(node->flags&VIRTUAL))
+        touch(node->name);
+    else if(explain)
+        Bprint(&bout, "no touch of virtual '%s'\n", node->name);
+}
 @
 
 <<[[sched()]] if touch mode>>=
@@ -7905,7 +8244,7 @@ if(DEBUG(D_EXEC))
 
 <<[[nproc()]] if DEBUG(D_EXEC)>>=
 if(DEBUG(D_EXEC))
-    fprint(1, "nprocs = %d\n", nproclimit);
+    fprint(STDERR, "nprocs = %d\n", nproclimit);
 @
 
 
@@ -7917,15 +8256,15 @@ dumpj(char *s, Job *j, int all)
 {
     Bprint(&bout, "%s\n", s);
     while(j){
-        Bprint(&bout, "job@%p: r=%p n=%p stem='%s' nproc=%d\n",
-            j, j->r, j->n, j->stem, j->nproc);
+        Bprint(&bout, "job@%p: r=%p n=%p stem='%s'\n",
+            j, j->r, j->n, j->stem);
         Bprint(&bout, "\ttarget='%s' alltarget='%s' prereq='%s' nprereq='%s'\n",
             wtos(j->t, ' '), wtos(j->at, ' '), wtos(j->p, ' '), wtos(j->np, ' '));
         j = all? j->next : nil;
     }
 }
 @
-
+%old:  nproc=%d ... , j->nproc
 
 \section{The function calls, [[mk -dt]]}
 
@@ -8197,10 +8536,10 @@ maketmp(void)
 \fi
 
 %\chapter{Changelog}
-% code via make loc = 4763 LOC, after full lpized 5219 LOC
-% orig Make.nw = 5400 LOC, after full lpized and comments in sections 7781
+% code via make loc = 4763 LOC, after full lpized 5285 LOC
+% orig Make.nw = 5400 LOC, after full lpized and comments in sections 8540
 % now: =~ ?? LOC so added ?? LOE (Lines of explanations)
-% mk in ocaml: ?? LOC
+% mk in ocaml: 2000 LOC (but not all features)
 
 
 \chapter*{Glossary}
