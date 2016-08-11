@@ -49,17 +49,21 @@ dorecipe(Node *node)
             Exit();
         }
         // else
+        /*s: [[dorecipe()]] when no recipe found, if archive name */
         if(strchr(node->name, '(') && node->time == 0)
             MADESET(node, MADE);
+        /*e: [[dorecipe()]] when no recipe found, if archive name */
         else
             update(false, node);
 
+        /*s: [[dorecipe()]] when no recipe found, if tflag */
         if(tflag){
             if(!(node->flags&VIRTUAL))
                 touch(node->name);
             else if(explain)
                 Bprint(&bout, "no touch of virtual '%s'\n", node->name);
         }
+        /*e: [[dorecipe()]] when no recipe found, if tflag */
         return did;
     }
     /*e: [[dorecipe()]] if no recipe found */
@@ -116,7 +120,6 @@ dorecipe(Node *node)
         }
     }
     /*e: [[dorecipe()]] build lists of targets and node list */
-
     /*s: [[dorecipe()]] return if one target not READY */
     for(n = node; n; n = n->next)
         if(!(n->flags&READY))

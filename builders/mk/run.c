@@ -299,7 +299,7 @@ nproc(void)
         nproclimit = 1;
     /*s: [[nproc()]] if DEBUG(D_EXEC) */
     if(DEBUG(D_EXEC))
-        fprint(1, "nprocs = %d\n", nproclimit);
+        fprint(STDERR, "nprocs = %d\n", nproclimit);
     /*e: [[nproc()]] if DEBUG(D_EXEC) */
 
     /*s: [[nproc()]] grow nevents if necessary */
@@ -441,7 +441,7 @@ prusage(void)
 
     usage();
     for(i = 0; i <= nevents; i++)
-        fprint(1, "%d: %lud\n", i, tslot[i]);
+        fprint(STDOUT, "%d: %lud\n", i, tslot[i]);
 }
 /*e: function prusage */
 /*e: mk/run.c */

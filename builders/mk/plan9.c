@@ -280,6 +280,7 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
             close(out[1]);
         /*e: [[execsh()]] in child 2, if buf, close other side of pipe */
         close(in[0]);
+        // feed the shell
         /*s: [[execsh()]] in child 2, write cmd in pipe */
         p = cmd+strlen(cmd);
         while(cmd < p){
@@ -290,7 +291,7 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
         }
         /*e: [[execsh()]] in child 2, write cmd in pipe */
         close(in[1]); // will flush
-        _exits(0);
+        _exits(nil);
     }
     // parent
     /*s: [[execsh()]] in parent, if buf, close other side of pipe and read output */
@@ -323,7 +324,7 @@ pipecmd(char *cmd, Envy *e, int *fd)
     fdt pfd[2];
 
     if(DEBUG(D_EXEC))
-        fprint(1, "pipecmd='%s'\n", cmd);/**/
+        fprint(STDOUT, "pipecmd='%s'\n", cmd);/**/
 
     if(fd && pipe(pfd) < 0){
         perror("pipe");

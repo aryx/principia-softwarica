@@ -106,6 +106,8 @@ expandvar(char **s)
         freebuf(buf);
         return w;
     }
+
+
     if (*cp != ':') {
         SYNERR(-1);
         fprint(STDERR, "bad variable name <%s>\n", buf->start);

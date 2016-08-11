@@ -126,7 +126,7 @@ struct Arc
     Rule *r;
 
     /*s: [[Arc]] other fields */
-    // ref_own<string>, what will replace the %
+    // option<ref_own<string>>, what will replace the %
     char		*stem;
     /*x: [[Arc]] other fields */
     // bool (TOGO)
@@ -211,14 +211,12 @@ struct Job
     // ref<Rule>
     Rule		*r;	/* master rule for job */
 
-    Word		*t;	/* targets */
     // list<ref<Node>> (next = Node.next)
     Node		*n;	/* list of node targets */
 
+    // $target and $prereq
+    Word		*t;	/* targets */
     Word		*p;	/* prerequisites */
-
-    // option<int> (None = -1)
-    int		nproc;	/* slot number */
 
     /*s: [[Job]] other fields */
     char		*stem;
@@ -273,6 +271,8 @@ enum Sxxx {
     /*x: [[Sxxx]] cases */
     S_OVERRIDE,	/* can't override */
     /*x: [[Sxxx]] cases */
+    S_NODE,		/* target name -> node */
+    /*x: [[Sxxx]] cases */
     S_TIME,		/* file -> time */
     /*x: [[Sxxx]] cases */
     S_WESET,	/* variable; we set in the mkfile */
@@ -284,8 +284,6 @@ enum Sxxx {
     S_AGG,		/* aggregate -> time */
     /*x: [[Sxxx]] cases */
     S_BITCH,	/* bitched about aggregate not there */
-    /*x: [[Sxxx]] cases */
-    S_NODE,		/* target name -> node */
     /*x: [[Sxxx]] cases */
     S_BULKED,	/* we have bulked this dir */
     /*e: [[Sxxx]] cases */

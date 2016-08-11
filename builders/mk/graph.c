@@ -194,8 +194,6 @@ togo(Node *node)
     la = nil;
     for(a = node->prereqs; a; la = a, a = a->next)
         if(a->flag&TOGO){
-            fprint(STDERR, "mk: vacuous arc found %s->%s\n", 
-                     node->name, a->n->name);
             //remove_list(a, node->prereqs)
             if(a == node->prereqs)
                 node->prereqs = a->next;
@@ -221,7 +219,7 @@ vacuous(Node *node)
             a->flag |= TOGO;
         else
             vac = false;
-
+    /*s: [[vacuous]] possibly undelete some arcs */
     /* if a rule generated arcs that DON'T go; no others from that rule go */
     for(a = node->prereqs; a; a = a->next)
         if(!(a->flag&TOGO))
@@ -229,9 +227,10 @@ vacuous(Node *node)
                 if((la->flag&TOGO) && (la->r == a->r)){
                     la->flag &= ~TOGO;
                 }
+    /*e: [[vacuous]] possibly undelete some arcs */
+
     togo(node);
     if(vac) {
-        fprint(STDERR, "mk: vacuous node found %s\n", node->name);
         node->flags |= VACUOUS;
     }
     return vac;

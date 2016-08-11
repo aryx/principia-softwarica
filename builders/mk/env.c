@@ -6,7 +6,7 @@
 /*e: constant ENVQUANTA */
 
 /*s: global envy */
-// growing_array<Envy>
+// growing_array<Envy> (endmarker = nil,nil)
 Envy	*envy;
 /*e: global envy */
 /*s: global nextv */

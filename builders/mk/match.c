@@ -19,7 +19,9 @@ match(char *name, char *template,    char *stem)
     if(!PERCENT(*template))
         return false;
 
+    // how many characters % is matching
     n = strlen(name) - strlen(template+1);
+
     if (n < 0)
         return false;
     if (strcmp(template+1, name+n))

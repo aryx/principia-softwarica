@@ -49,10 +49,10 @@ mk(char *target)
             /*e: [[mk()]] if no child to waitup and root not MADE, possibly break */
         }
     }
-    /*s: [[main()]] before returning, more [[waitup()]] if there was an error */
-    if(root->flags&BEINGMADE) // because of a runerrs
+    if(root->flags&BEINGMADE)
         waitup(-1, (int *)nil);
 
+    /*s: [[main()]] before returning, more [[waitup()]] if there was an error */
     while(jobs)
         waitup(-2, (int *)nil);
 
@@ -119,7 +119,7 @@ work(Node *node,   Node *p, Arc *parc)
     if((node->flags&MADE) && (node->flags&PRETENDING) && p
         && outofdate(p, parc, false)){
         if(explain)
-            fprint(1, "unpretending %s(%lud) because %s is out of date(%lud)\n",
+            fprint(STDOUT, "unpretending %s(%lud) because %s is out of date(%lud)\n",
                 node->name, node->time, p->name, p->time);
         unpretend(node);
     }
@@ -210,7 +210,7 @@ work(Node *node,   Node *p, Arc *parc)
         node->flags &= ~CANPRETEND;
         MADESET(node, MADE);
         if(explain && ((node->flags&PRETENDING) == 0))
-            fprint(1, "pretending %s has time %lud\n", node->name, node->time);
+            fprint(STDOUT, "pretending %s has time %lud\n", node->name, node->time);
         node->flags |= PRETENDING;
         return did;
     }
@@ -266,7 +266,7 @@ update(bool fake, Node *node)
         /*e: [[update()]] set outofdate prereqs if arc prog */
     } 
     else {
-        // target still does not exist (but still marked as MADE)
+        // virtual target or target still does not exist (but marked as MADE)
         node->time = 1;
         for(a = node->prereqs; a; a = a->next)
             if(a->n && outofdate(node, a, true))

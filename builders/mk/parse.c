@@ -341,6 +341,7 @@ rbody(Biobuf *in)
             }
         } else
             rinsert(buf, r);
+
         lastr = r;
         if (r == '\n')
             mkinline++;
