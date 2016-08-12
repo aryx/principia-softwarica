@@ -278,7 +278,7 @@ but which I ultimately discarded:
 % XML, major drawback.
 % and Ivy (dependency manager, equivalent of cargo?)
 
-\item Cmake
+\item CMake
 % 560~000 LOC, lol
 % but it is more a build system generator, more than a build system
 % a meta build-system.
@@ -386,7 +386,7 @@ a {shell command}.
 \n called recipe in mk, by shell command easier (said later)
 %
 If not, I suggest you to read the 
-\plan article~\cite{article-mk}, which introduces [[mk]],
+\plan article~\cite{article-mk} that introduces [[mk]],
 and which is available in my \plan distribution.
 %
 %builders/make/ contain how mk used in plan9,
@@ -426,7 +426,7 @@ of the general principles of a build system.
 %dup: from Assembler.nw
 I also define terms, explain how the code is organized, 
 and more generally give the background necessary
-to understand the code we will show later.
+to understand the code I will show later.
 
 \section{Build system principles}
 
@@ -446,9 +446,10 @@ maintain {\em efficiently}
 %toc:
 % every word is important :) 
 % concisely lead to create of DSL.
-% efficiently leads to creation of graph, and stuff in parallel
+% dependencies leads to graph representation
+% efficiently leads job scheduler and stuff in parallel
 % as explained in next sections.
-\n dependencies because there are different kinds of deps actually many-to-many
+\n there are different kinds of deps actually many-to-many
 
 \subsection{A domain-specific language}
 
@@ -550,6 +551,36 @@ maintain {\em efficiently}
 % but still need metarules for that.
 
 
+%\subsection{Generating some dependencies automatically}
+
+% object level deps. libs.
+% But also semantic level.
+
+% Many dependencies are implicit in files. if foo.c include
+% foo.h, should recompile. Can declare deps in mkfile, but
+% redundant, hard to maintain. 
+% So can be good to auto generate some dependencies. But 
+% different for each programming language.
+
+% enter .depend 
+% (and so also need for multiple rules for same targets (but with empty recipe))
+
+% so ocamldep, 
+% gcc -MM.
+
+% related is library of variables and rules for different languages.
+
+% question is can we generate every dependencies automatically?
+% IDE tries to do that. But requires helps, AddFile, AddDir.
+% what about when have multiple binaries in one distrib?
+% hh_server nice, but works because generate a giant PHP library.
+
+% in the end, could be job of compiler? like javac does? but then
+% impose constrain on how to organize classes in files and path
+% (or use hh_server, but again, impose constraint of one giant
+% single binary/library)
+
+
 \subsubsection{Generic (meta) rules}
 
 % metarules (rule generating rules), use variable names => generic stuff
@@ -571,7 +602,7 @@ maintain {\em efficiently}
 
 
 
-\subsection{Graph of dependencies}
+\subsection{A graph of dependencies}
 
 % As said, dependencies mostly definition of arc. 
 % so can take all rules and build global graph.
@@ -605,34 +636,6 @@ maintain {\em efficiently}
 % then need coordinate. wait for finish, run independent.
 % Master/Workers?
 
-\subsection{Generating some dependencies automatically}
-
-% object level deps. libs.
-% But also semantic level.
-
-% Many dependencies are implicit in files. if foo.c include
-% foo.h, should recompile. Can declare deps in mkfile, but
-% redundant, hard to maintain. 
-% So can be good to auto generate some dependencies. But 
-% different for each programming language.
-
-% enter .depend 
-% (and so also need for multiple rules for same targets (but with empty recipe))
-
-% so ocamldep, 
-% gcc -MM.
-
-% related is library of variables and rules for different languages.
-
-% question is can we generate every dependencies automatically?
-% IDE tries to do that. But requires helps, AddFile, AddDir.
-% what about when have multiple binaries in one distrib?
-% hh_server nice, but works because generate a giant PHP library.
-
-% in the end, could be job of compiler? like javac does? but then
-% impose constrain on how to organize classes in files and path
-% (or use hh_server, but again, impose constraint of one giant
-% single binary/library)
 
 \section{[[mk]] command-line interface}
 
@@ -640,6 +643,9 @@ maintain {\em efficiently}
 % or 'mk target' 
 \n great way to use mk is have list of one-liner
 % actually can give multiple targets
+
+% even shorter than make to type :) good, because will type
+% this command a lot. (even close on keyboard)
 
 <<function badusage>>=
 void
@@ -656,6 +662,10 @@ badusage(void)
 
 %chunks: will present options gradually
 
+
+% can also mk -f (as shown in Section X), if dont like
+% default mkfile.
+
 % mk then look for mkfile by default
 %real-world: (make look for Makefile).
 
@@ -671,11 +681,12 @@ badusage(void)
 % has also many -xxx options, advanced features explained later in the book.
 
 
+\ifallcode
 %dead? used by some tools?
 <<global version>>=
 static char *version = "@(#)mk general release 4 (plan 9)";
 @
-
+\fi
 
 
 \section{[[hello.mk]]}
@@ -693,6 +704,7 @@ hello: $OBJS
 @
 %$
 \n simple var, simple rule, metarule, special vars; the essence of mk is there
+
 
 % mkfile of helloworld.c?
 \n minimum spirit, no <objfile, no factorize with mkone
@@ -716,6 +728,12 @@ hello: $OBJS
 
 % For more examples, see appendix. Goal here is to give a taste.
 % actually the mkfile of mk itself :) appendix!
+
+<<tests/mk/hello.mk alternative>>=
+hello: hello.5 world.5
+ 5l -o $target $prereq
+@
+%$
 
 
 
@@ -852,7 +870,7 @@ Appendix~\ref{chap:examples} present examples of [[mkfile]]s.
 
 
 %toc:
-In this chapter we will present the core data structures of [[mk]],
+In this chapter I will present the core data structures of [[mk]],
 \t WHICH ARE big symbol table for variables, AST for rules, 
 %and nodes and arcs for graph of dependencies, and
 %job gather all information needed to generate one target.
@@ -912,8 +930,8 @@ struct Symtab
 % (e.g. time of a file)
 %less: could use a record instead of that which would be better typed
 
-<<enum Sxxx>>=
-enum Sxxx {
+<<enum Namespace>>=
+enum Namespace {
     S_VAR,	/* variable -> value */ // value is a list of words
     <<[[Sxxx]] cases>>
 };
@@ -1095,10 +1113,12 @@ initenv(void)
 \section{[[Word]]s}
 % and Bufblock
 
-% what is this for? it has to be Words otherwise
-% there is no much point in having a Word type that is
-% just a wrapper over char*
+% list of words is fundamental!
+% many things are done over lists in mk. list of prerequistes,
+% list of targets, list of files in variables as in
 % HFILES=fns.h mk.h => list of 2 words
+
+
 
 <<struct Word>>=
 struct Word
@@ -1109,7 +1129,9 @@ struct Word
     struct Word 	*next;
 };
 @
-\t rename Words?
+\n rename Words? less consistent with other use of C. You just need to
+\n  better qualify the pointer each time in comment.
+\n But has to be Words; no much point in having Word just be a char* wrapper
 %ocaml: just use List, or even better W of word list
 
 
@@ -1434,7 +1456,7 @@ if(sym = symlook(head, S_TARGET, nil)){
 }
 @
 \t why allows that? just return error? simpler.
-\t  anyway, was not guarding nrules++ with if(!reuse) so weird.
+\t  anyway, was not guarding nrules plusplus with if(!reuse) so weird.
 \t but now S_TARGET is later ... so mv check later?
 \t or even simpler, let it go, it will be detected later by ambiguous()
 
@@ -1821,6 +1843,7 @@ char *s;
 int i;
 @
 \fi
+\t distribute
 
 <<function main>>=
 void
@@ -1834,12 +1857,12 @@ main(int argc, char **argv)
 
     // Parsing
 
-    <<[[main()]] parsing mkfile, call parse()>>
+    <<[[main()]] parsing mkfile, call [[parse()]]>>
 
     // Building
 
     <<[[main()]] initializations before building>>
-    <<[[main()]] building the targets, call mk()>>
+    <<[[main()]] building the targets, call [[mk()]]>>
 
     // Reporting (optional)
 
@@ -1860,7 +1883,7 @@ Biobuf bout;
 % use of libbio quite a lot. Buffered IO module. For output and input.
 %  compared to scanf/printf? 
 % used in mk for printing on stdout. No big win vs printf I think.
-%  actually use fprintf(2,) for other stuff
+%  actually use fprintf(STDERR,) for other stuff
 %ocaml: stdlib already buffer output
 
 <<[[main()]] initializations>>=
@@ -1889,7 +1912,7 @@ initenv();
 
 
 
-\section{[[mk -xxx]] argument processing}
+\section{[[mk -xxx]] arguments processing}
 
 % use for -f, or debug flags.
 
@@ -1907,12 +1930,13 @@ for(argv++; *argv && (**argv == '-'); argv++)
 }
 @
 %ocaml: use Arg module
+
 %chunks:
 % will see gradually -xxx
 
 % note that modify argv!
 
-\section{[[mk xxx=yyy]] argument processing}
+\section{[[mk xxx=yyy]] arguments processing}
 
 % mk CC=6c default => override
 
@@ -1976,7 +2000,7 @@ while(*argv && (**argv == '\0'))
 % but what if mix target and assignments? then will get an error?
 \t test it  mk XX=1 default YY=2,  get good error message?
 
-\section{Parsing [[mkfile]] or [[mk -f]]{\em file}}
+\section{Parsing the [[mkfile]] or [[mk -f]]{\em file}}
 
 \t simplify code? remove multi -f, who needs that?
 
@@ -2001,7 +2025,7 @@ case 'f':
 char **ff;
 @
 
-<<[[main()]] parsing mkfile, call parse()>>=
+<<[[main()]] parsing mkfile, call [[parse()]]>>=
 if(f == files){
     if(access(MKFILE, AREAD) == OK_0)
         parse(MKFILE, open(MKFILE, OREAD), false);
@@ -2022,7 +2046,7 @@ if(f == files){
 % parse(), so modified globals rules, metarules.
 % just need to initiate with target passed as argument (or use default one)
 
-<<[[main()]] building the targets, call mk()>>=
+<<[[main()]] building the targets, call [[mk()]]>>=
 if(*argv == nil){
     <<[[main()]] when no target arguments>>
 } else {
@@ -2982,6 +3006,7 @@ varmatch(char *name)
 
 
 \section{Rules, {\em target}[[:]]{\em prereqs}}
+% actually targets : prereqs
 
 %trans:
 % seen main lexing/parsing/splitting.
@@ -3219,6 +3244,7 @@ if(newfd < 0){
 
 \section{Variable definitions, {\em C}[[=]]{\em words}}
 % really Constant definitions, not variable.
+\n ninja calls them bindings
 
 
 <<[[parse()]] other locals>>=
@@ -3753,7 +3779,7 @@ symlook(name, S_TIME, (void*)t);		/* install time in cache */
 
 
 
-\section{Checking the graph}
+\section{Checking the rules and the graph}
 \n was 'checking the rules', but really it is more checking the graph
 
 % Also simplify the graph by removing some arcs (see togo()).
@@ -6645,6 +6671,8 @@ if(buf){
 % note that can use ${x:%=%} only outside recipe :(
 % they are not recognized by the shell and recipe are
 % not processed by mk.
+% So variables are a bit leaky abstraction. Vars in targets/prereqs
+% are treated differently than in recipe.
 
 % charin -> <>
 <<[[varsub()]] if variable starts with open brace>>=
@@ -8523,11 +8551,22 @@ maketmp(void)
 \section{The [[mkfile]]s of \plan}
 % mentioned in mk.ms ?
 
-\subsection{[[/arm/mkfile]]}
+\subsection{[[/$objtype/mkfile]]}
+%$
 
-\subsection{[[mkone]]}
+\subsection{[[/sys/src/mkfile.proto]]}
 
 
+\subsection{[[/sys/src/cmd/mkone]]}
+% also mkmany
+
+\subsection{[[/sys/src/cmd/mklib]]}
+% also mksyslib
+
+
+% and then the instances
+%\subsection{[[/sys/src/mkfile]]}
+%\subsection{[[/sys/src/cmd/mkfile]]}
 
 \chapter{Extra Code}
 
