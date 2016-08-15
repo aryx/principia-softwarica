@@ -15,11 +15,14 @@
 % - removed dead code:
 %    dead namespaces (S_PID, S_MAKEFILE, S_EXPORTED, S_MAKEVAR),
 %    dead rule attributes (UNUSED, UPD),
-%    dead constants (IWS), dead fields (Job.nproc)
+%    dead constants (IWS)
+%    dead fields (Job.nproc)
 %    TODO useless code (head.n=node, ...)
-% - TODO rename variables, was abusing head/tail for too many things 
-%   (target vs prerequisites, but also head vs tail of lists of arcs, 
-%   head and tail of rule/assignement, ...)
+% - cleaned up code:
+%    TODO renamed variables, was abusing head/tail for too many things 
+%    (target vs prerequisites, but also head vs tail of lists of arcs, 
+%    head and tail of rule/assignement, ...)
+% - TODO reorganized the files?
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps, introduce globals.c, utils.c,
@@ -32,13 +35,13 @@
 %   (harder to understand non functional code using lots of globals)
 
 %thx to mk in ocaml: (see also the %ocaml-found: tag in this file)
-%  - parsing code could be simpler, and also better see the
+%  - parsing code can be simpler, and also better see the
 %    different lexing contexts and subtelities
 %  - can do X=a and $X=42, hmm
 %  - understand need for ${name}ici
 %  - understand check for recipe pointer in ambiguous(), cos can have 
 %    many arcs but no ambiguity cos all have the same recipe
-%  - understand vacuous check and interaction with ambiguous.
+%  - understand vacuous check and interaction with ambiguous
 
 %thx to this manual, better understand mk/make:
 % - minimal-syntax design leads to need for escaping-newline because newline is
@@ -47,7 +50,7 @@
 % - need for ${} in mk (no pb in make though) so can do ${name}here
 % - finally will remember the syntax for ${name:%=%} :) 
 % - need for multiple targets, and multiple rules with same target 
-% - SEMI how to debug issues in your own makefile
+% - SEMI how to debug issues in your own Makefile
 % - SEMI mk is actually a job scheduler! with dependent tasks!
 % - to not use ';' but instead && for eflag -e to work
 % - scope and life of variables (still dont understand in GNU make, = vs := )
@@ -165,35 +168,88 @@ package, and
 distribute 
 software with one simple command, ``the one command that rules them all'',
 from very simple programs to entire operating systems.
-\n deploy
+\n check, deploy
 
-% A build system is .. describe and  maintain dependencies between files. Rules.
-\n def build system so I can use "rule" and "dependency" in questions below
 
-% No deep concepts. nice DSL though. language-based solution to a problem.
-% minimal syntax. nice checks.
-% Also use of //. job scheduler (quite useful in general).
+\n def so I can use dependency/rule/Makefile/make/... in questions below
+A {build system} allows to {describe} and {maintain} {dependencies} 
+between files.
+\n could have better definition (said later)
+%
+Those dependencies are usually represented by {rules}, which are
+stored in a special {configuration file},
+for instance, a [[Makefile]] with the build system Make~\cite{make}
+(one of the most popular build system).
+
+
+
+Even though a build system is not as interesting as 
+a kernel or 
+a compiler 
+to study, it is a necessary piece in the programmer's toolbox.
+Indeed, all programs, including kernels and compilers, rely on a 
+build system to be built.
+%bootstrap:
+In fact, a build system usually also relies on itself to be built, leading to
+bootstrapping issues similar to the ones found in compilers.
+%
+Moreover, build systems contain components that are useful in many contexts,
+for instance, a job scheduler.
+\l even if may seem boring at first
+\l contain only simple algorithms? no neep concept?
+\l like kernel, paralellize tasks, one of the first program to do (after kernel)
+\l parallelization is even more important now
+%
+Finally, build systems such as Make use an original approach 
+to solve problems.
+\l that is interesting to study
+Indeed, to describe dependencies, Make provides a 
+{domain-specific language} (DSL).
+\n not a XML/JSON/... configuration file (said later)
+%
+The author of Make carefully designed this language to require
+as less syntax as possible, to remove as much overhead as possible
+to the programmer when writing rules.
+\n actually some bad design with TAB, but not with mk (said later)
+Moreover, this specific language, because it is restricted, 
+because it is not as powerful as a general-purpose programming language, 
+allows in counterpart special checks that would be impossible in a 
+general language.
+\n actually not make, but with mk (said later)
 
 Here are a few questions I hope this book will answer:
 
 \begin{itemize}
 
-\item What are the fundamental concepts of a build system?
+\item What are the fundamental concepts in a build system?
+\n graph of dependencies, DAG, target, prereq, rules, cycle, ambiguous, job
 
-% what kind of dependency are necessary? just file (target) to file (prereq)?
-% target to multi prereq ? what about multi targets to one prereq?
-% Do you need multiple rules for same target? what about ambiguities?
-% one-to-one, many-to-many?
+\item What are the kinds of dependencies a build system needs to represent
+to cover all the use-cases?
+Can a file depend only on one other file (one-to-one dependency),
+or on many files (one-to-many)? 
+Can many files depend on the same single file (many-to-one), 
+or on many files (many-to-many)?
+\n just file (target) to file (prereq)?  (said later)
+\l all dependencies concerning a file can be described by a single rule?
+\l  or more convenient to have multiple rules describing dependency of same file?
+\n Do you need multiple rules for same target? what about ambiguities?
+\l can have mutual dependencies? self dependency? tree? graph? DAG?
 
-% What is minimal syntax one needs. DSL.
-% :, =, newline, then how escape?
+\item What is the minimal syntax one needs to describe dependencies,
+and to describe the {commands} to maintain those dependencies?
+\n :, space, newline
+If this syntax uses special symbols, how do you reference
+filenames containing those symbols?
+\n escaping mechanism, quoting
 
-\item What are the user mistakes a build system can detect?
-Can it detect stupid rules? Redundant rules? Ambiguous rules?
-Infinite rules?
+\item What are the mistakes a build system can detect?
+Can it detect ambiguous rules? 
+Infinite rules? 
+Can it detect cycles in dependencies?
 
-\item How can you visualize the actual dependency tree? 
-What help does the build system offer to debug a makefile?
+\item What kind of help a build system can offer to help debug a [[Makefile]]?
+How can you visualize the dependencies? 
 
 \item How does the build system run different tasks in parallel and coordinate
 them? How do you write a simple job scheduler?
@@ -201,15 +257,18 @@ them? How do you write a simple job scheduler?
 \end{itemize}
 
 \t put in conclusion non-trivial adv algo and data structures seen? see comment
-%data-structures (beyond list/hashtbl):
-% - queue
+%data-structures (beyond list/hashtbl): (use list of words, symbol hash table)
+% - queue (jobs)
+% - graph (via pointers)
 
 %algorithms (beyond search/sort): (actually use neither search nor sort)
+% - graph DFS and visited flag, cycle detection
+% - matching and substituting (poor's man regexp)
 
 
 %tags used in this file for different recurring themes:
  %
- %real-world: to relate to other assemblers
+ %real-world: to relate to other build system
  %ocaml: to give a hint on how rewriting C in OCaml could improve things
  %ocaml-found: found subtle behavior of mk because I ported it to ocaml
  %alt: alternative technique
@@ -221,25 +280,55 @@ them? How do you write a simple job scheduler?
 
 \section{The \plan build system, [[mk]]}
 
-% I gonna present mk, build system of plan9. X? LOC. written entirely in C.
-% used also outside plan9 by a few open source software.
-% Elegant, simple, bla bla.
+I will explain in this book the code of the \plan build system
+[[mk]]\furl{http://plan9.bell-labs.com/magic/man2html/1/mk},
+which contains about 5300 lines of code (LOC).
+%
+[[mk]] is written entirely in C.
 
-% with one mk command, build plan9 libs, plan9 programs, plan9 kernel,
-% and build disk image that can be installed on raspberry or QEMU.
-% one command!
+
+%dup: from Assembler.nw
+Like for most books in \principia, I chose a \plan program because
+those programs are simple, small, elegant, open source, and they form together
+a coherent set.
+%history:
+[[mk]] is the spiritual successor~\cite{mk-successor} to Make~\cite{make}.
+\l not as popular as make, but better variant
+\n even shorter to type (said later)
+Indeed, it was designed in the same lab (Bell Labs), 
+and Stuart Feldman, the original author of Make,
+recommends [[mk]] as a better system.
+\t cite?
+\l mk is to plan9 what make was to unix, and plan9 successor to unix
+[[mk]] is modeled after Make (like many other build systems),
+but is both simpler and more powerful at the same time.
+\n explained differences why better (said later)
+%
+For instance, [[mk]] does not suffer from 
+the infamous [[TAB]] requirement in the 
+first column~\furl{http://www.catb.org/esr/writings/taoup/html/ch15s04.html}
+\l See \cite{TAOUP} Page X, or \url{}
+\l also http://stackoverflow.com/questions/1755550/what-is-the-reasoning-behind-the-makefile-whitespace-syntax 
+\n GNU make has .RECIPEPREFIX to allow spaces too
+from Make; the programmer can use spaces and tabs interchangeably.
+%
+Moreover, [[mk]] executes shell commands in parallel,
+an important improvement over the original Make.
+This speeds up greatly the building process on machines 
+with multiple processors.
+
+
+With one single command ([[mk]]) executed from the top
+directory of the \plan fork used in \principia, 
+you can build all 
+the \plan libraries, 
+the \plan programs,
+the \plan kernel,
+and build a disk image containing a \plan distribution
+that can be installed on a Raspberry Pi or booted through QEMU;
+all of this with one single command.
 \n actually I use make right now :)
-
-% similar to make. 
-% differences with make? More regular. Simpler (e.g. variables,
-%  escaping).
-% Author of make Stu Fedlman consider mk better in every way.
-% run in // by default, main feature compared to original make
-%  (and actually design and features influenced by that I think,
-%  e.g. multiple targets rule, or build graph at mk time once)
-% because plan9 context.
-% Also well written, nice use of assert!
-% Also no infamous TAB issue :)
+\l used also outside plan9 by a few open source software.
 
 \section{Other build systems}
 
@@ -247,42 +336,108 @@ Here are a few build systems that I considered for this book,
 but which I ultimately discarded:
 \begin{itemize}
 
-\item \unix make
-% I mentioned before. Original one.
-% Stu Feldman, ACM System Software Award.
-% in ape/cmd/make/, 3000 LOC. MAKE 2.78 unix 8th edition
-% (also in unix-history-repo)
-
-% Stu himself considers mk a better solution.
-% see mk.ps section 4
-%  less uglyness with variables too, no $$i need, variables passed as-is
-%  (like for rc, cleaner?) so remove some intermediates
-%  also no $(X), just $X, far more consistent
+\item Make~\cite{make}, which from now on I will call \unix Make
+to differentiate it from its other variants, 
+was the original Make part of early versions of \unix.
 %
-%  well many mk extensions have become gnu make, e.g. %.c rules instead of .c
-%  (hmm still? mk introduced pattern metarules, but metarules may have been
-%   in research UNIX make)
-% see also https://github.com/dcjones/mk for list of improvements
-%  cryptic $@, $^, $* vs $target, $prereq, $stem
+Stuart Feldman, its author, won the ACM System Software Award in 2003 for it: 
+``there is probably no large software system in the world today that
+has not been processed by a version or offspring of MAKE.''
+\furl{http://awards.acm.org/award_winners/feldman_1240498.cfm}.
+%
+Indeed, \unix Make has many variants, which 
+are often confusingly called also Make (e.g., BSD Make, GNU Make), 
+and which often use the same command-line program name: [[make]].
+\n actually there is pmake, bmake, gmake, but often aliased as make
 
-\item GNU make
-% also in // make -j. But as good as mk? since mk has full graph, can
-%  run in // from very different parts of the tree. make can?
-% Many extensions. Too many.
-% still include support for many old platforms, e.g., DOS, VMS., amiga
-% 37 000 LOC? main.c 3200 LOC
 
-\item ant
-% 222~000 LOC (without tests)
-% Java specific?
-% XML, major drawback.
+One of the latest version of \unix Make\footnote{
+Make 2.58 at \url{http://minnie.tuhs.org/cgi-bin/utree.pl?file=V7/usr/src/cmd/make/ident.c} for the 7th edition of \unix in 1979.}
+contains less than 2500 LOC.
+\n also in ape/cmd/make/ (V8 2.78 3000 LOC) and in unix-history-repo
+\t maybe good candidate in the end. even use yacc!
+%
+This is smaller than [[mk]], but \unix Make contains also far less features
+than [[mk]]. For instance, it lacks the 
+ability to execute shell commands in parallel.
+\l need for parallel probably because was done for plan9 (said later?)
+%
+This ability requires more than just a few lines of code.
+In fact, it led to the redesign in [[mk]] of the whole 
+approach used by Make to compute dependencies.
+%
+Indeed, [[mk]] computes a graph of dependencies statically when it starts
+and then uses this graph to guide the building process.
+\t this allows many more things? really? 
+\t  can run in // from very different parts of the tree? make cant?
+\t make does not have a graph? no transitive closure so what?
+%dup:
+\l Stuart himself considers mk a better solution 
+
+
+
+
+\item GNU Make~\furl{https://www.gnu.org/software/make/} is probably
+the most popular variant of Make.
+%
+It is used by almost every open source software under Linux.
+%and is probably used also in many commercial applications.
+\n Linux requires gmake; it uses many GNU make extensions and has a 
+\n  very fancy Makefile (make V=1 ...)
+\n I think even FreeBSD switched to GNU Make
+%
+GNU Make contains many extensions to the original \unix make, 
+including the ability to run shell commands in parallel\footnote{With 
+[[make -j]].} as in [[mk]].
+\l also conditional, but can be emulated in mk
+\t but as good as mk since mk has full graph?
+It supports also many platforms, including old platforms
+such as DOS, VMS, or Amiga.
+%
+However its codebase is also significantly larger: 37~000 LOC, which
+is almost one order of magnitude more code than [[mk]].
+\l main.c 3200 LOC
+
+GNU Make follows closely the design of \unix Make, and so
+inherits also its major flaws, for instance, the requirement
+to use TAB in the first column for shell commands.
+%
+Where [[mk]] tries to generalize, unify, and reuse the services
+and syntax of other tools, GNU Make specializes and adds an extra layer
+of complexity.
+%
+For instance, use of variables in GNU Make (and \unix Make) requires
+an extra set of parenthesis (e.g., [[$(OBJS)]])
+compared to the use of variables in a shell (e.g., [[$OBJS]]),
+and the use of shell variables inside a Makefile requires an
+extra dollar (e.g., [[$$i]]).
+%
+In [[mk]], the syntax for variables is the same than in
+the shell (e.g., [[$OBJS]]).%$
+\n actually there is the subst variable
+%
+Finally, [[mk]] replaces cryptic Make variables such as [[$@]] or [[$^]]
+with variables with clearer names such as [[$target]] or [[$prereq]].
+\l for more comparisons, see comments in .tex
+% - regexp rules and no suffix rules (but meta % rules were already in
+%   unix make, not an invention of mk)
+% - mk better written, nice use of assert!
+% - see mk.ps section 4
+% - see also https://github.com/dcjones/mk for list of improvements
+
+\item Ant
+% Java specific. Popular. different approach. No DSL but configuration
+% file use
+% XML. Major drawback. ok if generated by IDE.
 % and Ivy (dependency manager, equivalent of cargo?)
+% 222~000 LOC (without tests)
 
 \item CMake
-% 560~000 LOC, lol
+% used by many large projects.
 % but it is more a build system generator, more than a build system
 % a meta build-system.
 % like automake, gyp, etc. mix actually configure/automate feature I think.
+% 560~000 LOC, lol
 
 
 % one using python, EDSL, but more syntax boilerplate "", [;], etc
@@ -298,6 +453,8 @@ but which I ultimately discarded:
 % - omake, apparently has listen-to-fs features too, so daemon
 %   and rerun when save in editor?
 %   http://blog.camlcity.org/blog/omake1.html
+% - nmake (replaced by msbuild later)
+% - dmake, etc
 %other:
 % - ninja, seems interesting, the assembler of build system, 19~000 LOC
 % - bazel?? latest from google:
@@ -310,32 +467,40 @@ but which I ultimately discarded:
 %   http://gittup.org/tup/make_vs_tup.html benchmark
 % - redo, from dan bernstein, seems minimalist, not sure it's better.
 %   maybe better for autodeps.
-%meta build system:
-% - automake
-% - gyp, meta-build-system from Google, python-inspired, simple, 28~000 LOC
-%   but support many backends (make, cmake, ninja, eclipse, xcode, ...),
-%   fbcode is similar to gyp
+% - msbuild, 452 000 LOC, wow, XML-based too
+%meta build systems:
+% - imake (for X, but then superseded by autotools)
+% - automake and autotools (for GNU)
+% - gyp, from Google, python-inspired, simple, 28~000 LOC
+%   support many backends (make, cmake, ninja, eclipse, xcode, ...),
+%   fbmake is similar to gyp
 %wrappers:
 % - qake, just a big makefile, so relies on GNU make
 % - OCamlMakefile
+% - premake?
 %language specific:
 % - java: 
 %    * maven, first to provide ability to download dependency over the network?
 %    * ant+ivy (to catchup with maven)
 %    * gradle seems best one, use of DSL based on Groovy. huge codebase.
 %    comparison: https://technologyconversations.com/2014/06/18/build-tools/
-%    but all 3 are bad.
+%    but all 3 are bad in my opinion.
 % - javascript: gulp, grunt
 % - ruby: rake, can write rules in Ruby. EDSL again. more verbose than make,
 %   need of do, end, need '' around filenames, need of many builtins.
 %   maybe inspiration for brew
-% - haskell: shake, EDSL in haskell, seems too verbose
+% - haskell: shake, EDSL in haskell, seems too verbose, 
+%   cabal
 % - scala: sbt, meh
 % - rust: cargo, integrate in build system a dependency manager
-% - ocaml: opam (just dependency manager though)
+% - ocaml: omake, opam (just dependency manager though)
+% - lisp: asdf
+% - clojure: leiningen
 
 % see https://en.wikipedia.org/wiki/List_of_build_automation_software
 
+%http://www.catb.org/esr/writings/taoup/html/ch15s04.html
+% discussions of a few meta build systems, and nice history of make
 %http://www.lihaoyi.com/post/WhatsinaBuildTool.html
 % nice comparisons of a few tools
 %http://hadihariri.com/2014/04/21/build-make-no-more/
@@ -375,7 +540,7 @@ you will need a good knowledge of
 the C programming language~\cite{k-r} to understand it.
 %
 I also assume you are already familiar with at least 
-one build system, for instance, [[make]],
+one build system, for instance, \unix Make,
 %
 and so are familiar with concepts such as
 a {makefile},
@@ -386,8 +551,8 @@ a {shell command}.
 \n called recipe in mk, by shell command easier (said later)
 %
 If not, I suggest you to read the 
-\plan article~\cite{article-mk} that introduces [[mk]],
-and which is available in my \plan distribution.
+\plan article that introduces [[mk]]~\cite{mk},
+which is available in my \plan distribution.
 %
 %builders/make/ contain how mk used in plan9,
 
@@ -409,8 +574,8 @@ The man page of [[mk]] can also useful at [[docs/man/1/mk]].
 
 I would like to acknowledge of course the author of [[mk]],
 Andrew Hume,
-% and Bob Flandera?, 
 who wrote in some sense most of this book.
+\n and Bob Flandera? more for plan9 mkfiles than mk itself, 
 
 
 
@@ -439,6 +604,7 @@ to understand the code I will show later.
 %  what depends on the change.
 % (but can be used for bootstrapping mk)
 
+%dup: intro/motiv (but longer version)
 The goal of a build system is to 
 describe {\em concisely} and 
 maintain {\em efficiently}
@@ -450,6 +616,9 @@ maintain {\em efficiently}
 % efficiently leads job scheduler and stuff in parallel
 % as explained in next sections.
 \n there are different kinds of deps actually many-to-many
+
+% I will show example using syntax of mk, but principles
+% apply to most build systems. They are very similar.
 
 \subsection{A domain-specific language}
 
@@ -512,6 +681,7 @@ maintain {\em efficiently}
 
 
 \subsubsection{Variables}
+%bindings
 
 % to factorize. ex, CFLAGS=-g -x -...
 % and then can use in many rules CFLAGS
@@ -704,6 +874,7 @@ hello: $OBJS
 @
 %$
 \n simple var, simple rule, metarule, special vars; the essence of mk is there
+\n  no objtype/mkfile, cos then cant use hello.5, should use hello.dollar0
 
 
 % mkfile of helloworld.c?
@@ -731,7 +902,7 @@ hello: $OBJS
 
 <<tests/mk/hello.mk alternative>>=
 hello: hello.5 world.5
- 5l -o $target $prereq
+ $CC -o $target $prereq
 @
 %$
 
@@ -1912,7 +2083,7 @@ initenv();
 
 
 
-\section{[[mk -xxx]] arguments processing}
+\section{[[mk -]]{\em flag} arguments processing}
 
 % use for -f, or debug flags.
 
@@ -1936,7 +2107,7 @@ for(argv++; *argv && (**argv == '-'); argv++)
 
 % note that modify argv!
 
-\section{[[mk xxx=yyy]] arguments processing}
+\section{[[mk ]]{\em var}[[=]]{\em values} arguments processing}
 
 % mk CC=6c default => override
 
@@ -6665,7 +6836,7 @@ if(buf){
 }
 @
 
-\section{Complex variable uses, [[${]]{\em \ldots}[[}]]}
+\section{Substitution variables, [[${]]{\em name}[[:]]{\em pattern}[[=]]{\em subst}[[}]]}
 %$
 
 % note that can use ${x:%=%} only outside recipe :(
@@ -6990,7 +7161,7 @@ case 'Q':
 
 
 
-\subsection{Running shell command without [[-e]], [[:E:]]}
+\subsection{Running shell without [[-e]], [[:E:]]}
 % "continue execution if the recipe draws errors"
 
 % when want that?
@@ -7012,7 +7183,7 @@ if (j->r->attr&NOMINUSE)
 %old: flags = (j->r->attr&NOMINUSE)? nil : "-e" ; but was harder to aspectize
 
 
-\subsection{Disabling norecipe warning, [[:N:]]}
+\subsection{Disabling the no-recipe warning, [[:N:]]}
 %"if there is no recipe, the target has its time updated"
 
 % when want that?
@@ -8548,6 +8719,9 @@ maketmp(void)
 \section{[[mkfile]] of [[mk]]}
 % relies on next section
 
+% can also bootstrap simply using a shell script for the very first time.
+
+
 \section{The [[mkfile]]s of \plan}
 % mentioned in mk.ms ?
 
@@ -8586,6 +8760,8 @@ maketmp(void)
 \label{sec:glossary}
 
 \begin{verbatim}
+LOC = Lines Of Code
+DSL = Domain Specific Language
 \end{verbatim}
 
 \chapter*{Indexes}
@@ -8595,7 +8771,7 @@ maketmp(void)
 \addcontentsline{toc}{chapter}{References}
 
 \bibliography{../docs/latex/Principia}
-\bibliographystyle{plain}
+\bibliographystyle{alpha}
 
 %******************************************************************************
 % Postlude
