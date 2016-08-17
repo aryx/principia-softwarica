@@ -261,8 +261,8 @@ struct Symtab
 };
 /*e: struct Symtab */
 
-/*s: enum Sxxx */
-enum Sxxx {
+/*s: enum Namespace */
+enum Namespace {
     S_VAR,	/* variable -> value */ // value is a list of words
     /*s: [[Sxxx]] cases */
     S_INTERNAL,	/* an internal mk variable (e.g., stem, target) */
@@ -288,7 +288,7 @@ enum Sxxx {
     S_BULKED,	/* we have bulked this dir */
     /*e: [[Sxxx]] cases */
 };
-/*e: enum Sxxx */
+/*e: enum Namespace */
 
 extern	int	debug;
 extern	bool	nflag, tflag, iflag, kflag, aflag;

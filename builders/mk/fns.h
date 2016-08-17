@@ -1,6 +1,6 @@
 /*s: mk/fns.h */
 
-// Constructors/destructors core data structures
+// Constructors/destructors for core data structures
 
 // bufblock.c
 Bufblock* newbuf(void);

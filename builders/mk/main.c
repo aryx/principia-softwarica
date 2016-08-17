@@ -221,7 +221,7 @@ main(int argc, char **argv)
 
     // Parsing
 
-    /*s: [[main()]] parsing mkfile, call parse() */
+    /*s: [[main()]] parsing mkfile, call [[parse()]] */
     if(f == files){
         if(access(MKFILE, AREAD) == OK_0)
             parse(MKFILE, open(MKFILE, OREAD), false);
@@ -236,7 +236,7 @@ main(int argc, char **argv)
         dumpv("variables");
     }
     /*e: [[main()]] if DEBUG(D_PARSE) */
-    /*e: [[main()]] parsing mkfile, call parse() */
+    /*e: [[main()]] parsing mkfile, call [[parse()]] */
 
     // Building
 
@@ -251,7 +251,7 @@ main(int argc, char **argv)
         freebuf(whatif);
     }
     /*e: [[main()]] initializations before building */
-    /*s: [[main()]] building the targets, call mk() */
+    /*s: [[main()]] building the targets, call [[mk()]] */
     if(*argv == nil){
         /*s: [[main()]] when no target arguments */
         if(target1)
@@ -300,7 +300,7 @@ main(int argc, char **argv)
            /*e: [[main()]] parallel mode and target arguments given */
         }
     }
-    /*e: [[main()]] building the targets, call mk() */
+    /*e: [[main()]] building the targets, call [[mk()]] */
 
     // Reporting (optional)
 

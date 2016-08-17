@@ -6,7 +6,9 @@ typedef struct Process Process;
 
 int	nextslot(void);
 int pidslot(int);
+
 static void sched(void);
+
 static void pnew(int, int);
 static void pdelete(Process *);
 

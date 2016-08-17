@@ -454,7 +454,7 @@ Indeed, with Make, the command-line programs used
 in a [[Makefile]] may be specific to an operating system.
 %
 For instance, the default C compiler, linker, and file utilities
-under Microsoft Windows are not the same than in Linux or in macOS.
+under Microsoft Windows are not the same than in Linux or macOS.
 \n but now cygwin, mac port, brew, portable GNU utilities (said later)
 %
 In fact, even the shell and [[make]] programs are different
@@ -467,8 +467,8 @@ the tests).
 
 
 The main advantage of Make (and [[mk]]) over Ant is {generality}.
-Indeed, the shell is a powerful language. Moreover, the user
-can call any command-line program from the [[Makefile]].
+Indeed, the shell is an expressive language. Moreover, the user
+can call any command-line programs from the [[Makefile]].
 \l does not need to look at API of Ant either, can reuse past knowledge
 %
 With Ant, if there is no XML tag for a certain task,
@@ -486,7 +486,7 @@ used in many large open source projects (e.g., LLVM).
 It was designed like Ant to overcome the lack of portability of [[Makefile]]s.
 %
 Unlike Ant, CMake acts as a frontend to Make (and other build systems).
-Indeed, CMake is a {meta build system}.
+Indeed, CMake is a {\em meta} build system.
 %
 Instead of writing [[Makefile]]s, the user of CMake 
 creates [[CMakeLists.txt]] files containing builtin (portable) commands 
@@ -519,7 +519,7 @@ Note that the portability issue of Make has been
 partially fixed in the last ten years.
 %
 Indeed, with the availabiltiy of GNU utilities 
-in operating systems other than Linux (e.g., 
+for operating systems other than Linux (e.g., 
 through cygwin~\furl{https://www.cygwin.com/} for Microsoft Windows, 
 and macports~\furl{https://www.macports.org/} or 
 Homebrew~\furl{http://brew.sh/} for macOS) 
@@ -621,13 +621,13 @@ Once installed you can test [[mk]] under \plan with:
 
 Line~2 runs [[mk]] with the [[-f hello.mk]] parameter
 to tell [[mk]] to use the rules in the [[hello.mk]] file
-instead of the default [[mkfile]] ([[mk]]'s equivalent of
-the [[Makefile]] for Make).
+instead of the default [[mkfile]] 
+([[mk]]'s equivalent of a [[Makefile]] for Make).
 %
 Line~3 through 5 then output the shell commands run by
 [[mk]] given the rules contained in [[hello.mk]]. 
 %
-Those commands just compile and link a simple program
+Those commands just compile and link a simple program called [[hello]]
 using the ARM C Compiler ([[5c]], see the \book{Compiler})
 and ARM linker ([[5l]], see the \book{Linker}).
 
@@ -688,27 +688,56 @@ who wrote in some sense most of this book.
 
 \chapter{Overview}
 
-%trans:
+%trans: %dup: Assembler.nw
 Before showing the source code of [[mk]] in the following chapters, 
 %toc:
 I first give an overview in this chapter
 of the general principles of a build system.
-\t TODO command line interface of mk, simple mkfile.
+%
+I also quickly describe the command-line interface of [[mk]]
+and show a simple [[mkfile]] for a toy application.
 %dup: from Assembler.nw
-I also define terms, explain how the code is organized, 
+Finally, I define terms, explain how the code is organized, 
 and more generally give the background necessary
 to understand the code I will show later.
 
 \section{Build system principles}
 
-% How was doing before make? Manually remember in your head what needs
-% to be done.
-% adhoc shell scripts 'make', as projects got more complex,
-% more files. Example for mk.c? 
-% Long. would like to factorize.
-% Also not efficient. redo. should recompile only what is necessary, 
-%  what depends on the change.
-% (but can be used for bootstrapping mk)
+To understand the principles of a build system, it is interesting to remember
+how programmers were compiling projects before Make was invented.
+\l remember -> imagine? compiling -> maintaining? building?
+Before Make, programmers were using shell scripts to {record} the
+compiling and linking commands for a project. For instance, here
+is one such script to build the toy program mentioned 
+in Section~\ref{sec:getting-started}:
+
+<<tests/mk/make.rc>>=
+#!/bin/rc
+
+5c -c hello.c
+5c -c world.c
+5l -o hello hello.5 world.5
+@
+\l rc, not sh or bash,  see \book{Shell}
+
+%bootstrap:
+This approach can still be used to bootstrap the build system itself.
+%
+However, as programs grow larger, and the number of files grows,
+the shell-script approach becomes too inefficient. 
+\l also Long, but could factorize with shell variables
+Indeed, in the previous example, if only
+[[hello.c]] is modified, there is no need to recompile also [[world.c]].
+%
+An alternative for the programmer is to keep track in his head of
+all the modifications, and to recompile manually only what is necessary.
+%
+However, again, as programs grow larger, and dependencies between files
+become more complex, it becomes difficult to remember which files need
+to be recompiled and what are the precise flags used to recompile
+or link those files. Enters Make, which solved those problems.
+\l more scalable
+\n actually as programs become really really big, ninja is better
 
 %dup: intro/motiv (but longer version)
 The goal of a build system is to 
@@ -716,15 +745,18 @@ describe {\em concisely} and
 maintain {\em efficiently}
 {\em dependencies} between files or programs.
 %toc:
-% every word is important :) 
-% concisely lead to create of DSL.
-% dependencies leads to graph representation
-% efficiently leads job scheduler and stuff in parallel
-% as explained in next sections.
+Every word in the last sentence is important:
+'concisely' led to the creation of a {DSL},
+'dependencies' led to the use of a {graph} to represent the relationships
+between files, and
+'efficiently' led to the use of a job scheduler to run in
+parallel multiple tasks, as 
+explained in the following sections.
 \n there are different kinds of deps actually many-to-many
-
-% I will show example using syntax of mk, but principles
-% apply to most build systems. They are very similar.
+%
+In the next sections, I will also use examples using the syntax of [[mk]],
+but the principles apply to most build systems.
+\l They are very similar.
 
 \subsection{A domain-specific language}
 
@@ -740,26 +772,39 @@ maintain {\em efficiently}
 
 \subsubsection{Rules}
 
-% essence is state dependencies and how to achieve it.
+% essence is state dependencies between files,
+% for instance object file and its source,
+% and how to achieve it.
 
 % like arc in a graph. src, dest, and label on edge.
 % (and indeed later will see that we generate a graph)
 % In build systems called
 % rule.
 % also give names to left and right parts: target: dependencies
+% and way to maintain is recipe.
 
-% {target} {dependencies} {recipe}
+% simplest syntax Make and mk,  
+
+% {target}: {dependencies}
+%     {recipe}
+
+% example, 
+% hello.5: hello.c
+%    5c -c hello.c
+
+% x : y \n z1 \n z2.
+% could also x : y ; z1; z2
+
 % recipe also called body.
 % and start of rule is called head of the rule.
 
-% simplest syntax,  x : y \n z1 \n z2.
-% could also x : y ; z1; z2
-
 % In mk, very simple, minimal syntax! just ':', and newlines
-% no need "" around shell command.
+% no need "" around shell command, or filenames.
 % same spirit than shell actually. no need () for calling
 % commands, "" around strings, remember
 % order of options (but then lead to -xxx named arguments)
+
+% if date of target or inexistent, then run recipe! Simple!
 
 %\subsubsection{Recipe}
 % in fact body of a rule is shell command. Embedded lang
@@ -769,9 +814,7 @@ maintain {\em efficiently}
 % optional recipe. space/tab first char cos support multiline 
 % for shell command (otherwise would need escaped newline there too, ugly).
 
-
-
-
+%\subsubsection{Dependency arities}
 %advanced? maybe fundamental. what types of dependencies we need?
 % can have multiple targets:
 %    x.ml x.mly: x.mly
@@ -826,8 +869,7 @@ maintain {\em efficiently}
 
 % with variables above, offers already some kind of genericity!
 % in fact many mkfiles are just  < /sys/src/cmd/mkone !
-% but still need metarules for that.
-
+% (but still need metarules for that)
 
 %\subsection{Generating some dependencies automatically}
 
@@ -877,7 +919,7 @@ maintain {\em efficiently}
 %related: generate from mkfile .project, like Buck does.
 
 %\subsection{Different types of dependencies}
-
+% before
 
 
 \subsection{A graph of dependencies}
@@ -984,6 +1026,7 @@ hello: $OBJS
 \n simple var, simple rule, metarule, special vars; the essence of mk is there
 \n  no objtype/mkfile, cos then cant use hello.5, should use hello.dollar0
 
+% seen features before in Section~\ref{sec:principles}.
 
 % mkfile of helloworld.c?
 \n minimum spirit, no <objfile, no factorize with mkone
@@ -1024,49 +1067,74 @@ hello: hello.5 world.5
 
 \section{Code organization}
 
-%mk.h: main data structures and globals declarations
-%fns.h: forward function declarations (prototypes)
+%dup: (and adapted) from Assembler.nw
+Table~\ref{tab:code-orga} presents short descriptions
+of the source files used by [[mk]], together with
+the main entities (e.g., structures, functions, globals) the file defines,
+and the corresponding chapter in this document in which the code
+contained in the file is primarily discussed.
+\n sorted by chapters, make more sense than sorted by dir
 
-%symtab.c: global hash table, and cache
-%globals.c: globals definitions
-%var.c: setvar(), dumper, utilities
+\begin{table*}[tbh!]
+\begin{center}
+\begin{tabular}{lcllr}
+\toprule
+{\bf Function}  & {\bf Chapter} & {\bf File} & {\bf Entities} & {\bf LOC} \\
+\otoprule
+data structures and constants     & \ref{chap:core-ds}           & [[mk.h]]       & [[Symtab]] [[Word]] [[Rule]] [[Arc]] [[Node]] [[Job]] & 0 \\ 
+symbol table and cache            & \ref{chap:core-ds}           & [[symtab.c]]   & [[hash]] [[symlook()]] [[syminit()]] [[symtraverse()]]& 0 \\ % symstat
+variables                         & \ref{chap:core-ds}           & [[var.c]]      & [[setvar()]]                                          & 0 \\ % dumpv shname
+list of strings (words)           & \ref{chap:core-ds}           & [[word.c]]     & [[newword()]] [[stow()]] [[wtos()]] [[nextword()]]    & 0 \\ % wdup delword nextword dumpw
+arc constructor                   & \ref{chap:core-ds}           & [[arc.c]]      & [[newarc()]]                                          & 0 \\ % dumpa(), nrep()
+job constructor                   & \ref{chap:core-ds}           & [[job.c]]      & [[newjob()]]                                          & 0 \\ % dumpj
+globals                           & \ref{chap:core-ds}           & [[globals.c]]  & [[rules]] [[metarules]] [[jobs]]                      & 0 \\ %pad: was in mk.h before? or main.c?
+function prototypes               & \ref{chap:core-ds}           & [[fns.h]]      &                                                       & 0 \\
 
-%word.c: list of strings
-%rule.c: addrule(), dumper
-%arc.c: newarc(), dumper, nrep() (move it?)
-% maybe have also a node.c?
-%job.c: newjob(), dumper
+\midrule
+entry point                       & \ref{chap:main}              & [[main.c]]     & [[main()]]                                            & 0 \\ % badusage
+
+\midrule
+lexer                             & \ref{chap:parsing}           & [[lex.c]]      & [[assline()]] [[nextrune()]]                          & 0 \\ % bquote 
+parser                            & \ref{chap:parsing}           & [[parse.c]]    & [[parse()]] [[rhead()]] [[rbody()]] [[addrules()]]    & 0 \\ % ipush ipop
+parsing and escaping methods for [[rc]]   & \ref{chap:parsing}           & [[rc.c]]       & [[charin()]] [[squote()]] [[escapetoken()]]           & 0 \\ 
+adding rules                      & \ref{chap:parsing}           & [[rule.c]]     & [[addrule()]]                                         & 0 \\ %dumpr rulecnt regerror?
+parsing and expanding variables   & \ref{chap:parsing}           & [[varsub.c]]   & [[expandvar()]] [[varname()]] [[varsub()]]            & 0 \\ % subsub extractpat
+
+\midrule
+
+building and checking the graph   & \ref{chap:graph}             & [[graph.c]]    & [[graph()]] [[applyrules()]] [[cyclechk()]]           &  0 \\ %newnode() ambiguous vacuous
+file and time management          & \ref{chap:graph}             & [[file.c]]     & [[timeof()]] [[touch()]] [[delete()]]                 & 0 \\
+pattern matching and substituting & \ref{chap:graph}             & [[match.c]]    & [[match()]] [[subst()]]                               & 0 \\
+
+\midrule
+
+finding outdated files            & \ref{chap:finding-outdated}  & [[mk.c]]       & [[mk()]] [[work()]] [[outofdate()]]                   & 0 \\ % clrmade, pretend, update
+building a job                    & \ref{chap:finding-outdated}  & [[recipe.c]]   & [[dorecipe()]]                                        & 0 \\ % addw() 
+
+scheduling jobs                   & \ref{chap:scheduling}        & [[run.c]]      & [[run()]] [[sched()]] [[waitup()]] [[RunEvent]]       & 0 \\ % Process pnew pdelete nproc killchildren usage
+
+shell environment                 & \ref{chap:interacting}       & [[env.c]]      & [[buildenv()]] [[envy]] [[envinsert()]]               & 0 \\ %execinit, initenv, envupd
+\plan's methods                   & \ref{chap:interacting}       & [[plan9.c]]    & [[readenv()]] [[exportenv()]] [[execsh()]]            & 0 \\ %waitfor pipecmd Exit 
+
+\midrule
+printing shell commands           & \ref{chap:debugging-support} & [[shprint.c]]  & [[shprint()]]                                         & 0 \\ %mygetenv vexpand front?
+
+handling archives (libraries)     & \ref{chap:advanced}          & [[archive.c]]  & [[atimeof()]]                                         & 0 \\ % atouch() atimes()
+
+\midrule
+error management                  & \ref{chap:error}             & [[utils.c]]    & [[Malloc()]] [[Realloc()]]                            & 0 \\
+string buffer                     & \ref{chap:libc}              & [[bufblock.c]] & [[newbuf()]] [[insert()]]                             & 0 \\ % rinsert, growbuf, freebuf
+
+\otoprule
+Total                                    &                               &                 &                                                                           & 8142 \\
+\bottomrule
+\end{tabular}
+\end{center}
+\caption{Chapters and source files of [[mk]].}
+\label{tab:code-orga}
+\end{table*}
 
 
-%main.c: main() entry point!
-
-%lex.c: lexing a line
-%parse.c: parsing mkfile
-%varsub.c: managing variables and substitution
-
-
-%graph.c: graph(), building the dependency graph
-%match.c: match() and subst() for metarules
-
-%mk.c: mk() and work(), building the graph and then the targets
-
-%run.c: job schedule, run(), sched(), profiling processors
-%env.c: recipe environment
-%rc.c: rc interaction, quote, unquote, escaping, etc
-%recipe.c: dorecipe()
-
-%file.c: timeof(), touch(), delete(), timeinit()
-% maybe have a time.c instead?
-
-
-%shprint.c: print recipe before executing it
-
-%archive.c: special archive extension xxx(yyy)
-
-%bufblock.c: buffered IO
-%utils.c: libc like helper functions
-%plan9.c: libc like helper functions plan9 specific (unix.c, windows.c)
-% (rename os.c?)
 
 \section{Software architecture}
 
@@ -1102,16 +1170,19 @@ The rest of the book is organized as follows.
 I will start by describing the core data structures of [[mk]]
 in Chapter~\ref{chap:core-ds}. 
 %
-Then, I will use a top-down approach in Chapter~\ref{chap:main}, and,
-starting from [[main()]], I will present the code
-%, or a high-level view of the code, of some 
-of the main functions of [[mk]], e.g., [[mk()]].
+Then, I will use a top-down approach, starting with Chapter~\ref{chap:main}
+with the description of [[main()]] and the initializations of [[mk]].
 %
 The following chapters will describe
 the main components of the building pipeline:
-\t parsing rules, building graph, analyzing deps, scheduling jobs,
-and finally interacting with the shell.
-\t debugging and profiling support for user.
+Chapter~\ref{chap:parsing} will present the code to parse an [[mkfile]],
+Chapter~\ref{chap:graph} the code to build the graph of dependencies,
+Chapter~\ref{chap:finding-outdated} the code to find outdated files in the graph,
+Chapter~\ref{chap:scheduling} the code to schedule jobs, and finally
+Chapter~\ref{chap:interacting} the code to interact with the shell.
+%
+In Chapter~\ref{chap:debugging-support}, I will present code to help the user
+debug and profile his [[mkfile]].
 %
 Chapter~\ref{chap:advanced} presents advanced
 features of [[mk]] that I did not present before to simplify the explanations,
@@ -1129,7 +1200,7 @@ and code to manage errors in Appendix~\ref{chap:error}.
 Appendix~\ref{chap:libc} contains the code of generic
 utility functions used by [[mk]] but which are not specific to [[mk]].
 %
-Appendix~\ref{chap:examples} present examples of [[mkfile]]s.
+Finally, Appendix~\ref{chap:examples} presents examples of [[mkfile]]s.
 
 
 %###############################################################################
@@ -2114,6 +2185,7 @@ struct Job	*next;
 
 
 \chapter{[[main()]]}
+\label{chap:main}
 
 \ifallcode
 <<[[main()]] locals>>=
@@ -2426,7 +2498,8 @@ else {
 
 
 
-\chapter{Parsing [[mkfile]]s}
+\chapter{Parsing the [[mkfile]]}
+\label{chap:parsing}
 \l Parsing Rules and Variables
 
 % parse() will modify rules, metarules (patrules), target1.
@@ -3631,6 +3704,7 @@ if(sep == '='){
 
 
 \chapter{Building the Dependency Graph}
+\label{chap:graph}
 
 % Will see [[mk()]] later. But will call [[graph(target)]]
 % which goes down building tree using [[rules]] and [[metarules]].
@@ -4492,6 +4566,7 @@ attribute(Node *n)
 
 
 \chapter{Finding Outdated Files}
+\label{chap:finding-outdated}
 
 % the core algorithm.
 % main idea = 
@@ -5003,6 +5078,7 @@ if(r == nil){
 
 
 \chapter{Scheduling Jobs}
+\label{chap:scheduling}
 \l Fixing outdated files
 
 %trans: remaining things to see: run(), waitup()
@@ -5320,6 +5396,11 @@ execsh(char *args, char *cmd, Bufblock *buf, Envy *e)
 % otherwise, would wait for wrong process! would wait for
 % child2 that feeds the shell which returns very quickly!
 % Also wait for could possibly capture child2.
+
+% because feed stdin and then close, that means programs called from
+% shell can not read from stdin :( for instance make sync works but
+% mk sync does not.
+
 
 % exportenv! so set in child the variables in environment
 
@@ -5741,6 +5822,7 @@ assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
 
 
 \chapter{Interacting with the Shell}
+\label{chap:interacting}
 
 % The recipe is a shell command (or multiple commands).
 % Seen execsh() above with global shell, shellname stuff. 
@@ -6146,6 +6228,7 @@ if(f < 0) {
 
 
 \chapter{Debugging and Profiling Support}
+\label{chap:debugging-support}
 
 
 % seen file/line fields in Rule, so can report error accurately.
@@ -6552,6 +6635,7 @@ prusage(void)
 
 
 \chapter{Advanced Features}
+\label{chap:advanced}
 
 \section{Regular-expression rules, [[:R:]]}
 
@@ -8332,6 +8416,7 @@ freebuf(buf);
 
 
 \chapter{Conclusion}
+\label{chap:conclusion}
 
 % could be nice to have a mk -d session at the end
 % where see how all make sense, the flag values of nodes with 0x4
@@ -8343,6 +8428,7 @@ freebuf(buf);
 \appendix
 
 \chapter{Debugging}
+\label{chap:debugging-appendix}
 
 %todo? http://bashdb.sourceforge.net/remake/
 % apparently make with more debugging capabilities
@@ -8600,6 +8686,7 @@ if(DEBUG(D_TRACE))
 
 
 \chapter{Profiling}
+\label{chap:profiling-appendix}
 
 <<global buf>>=
 short buf[10000];
@@ -8639,6 +8726,7 @@ symstat(void)
 
 
 \chapter{Error Management}
+\label{chap:error}
 
 % related is mk -k, but not really error management in the end.
 
@@ -8682,6 +8770,7 @@ Realloc(void *s, int n)
 
 
 \chapter{Libc}
+\label{chap:libc}
 
 %\section{Memory managment}
 % Malloc and Realloc now in error management section
