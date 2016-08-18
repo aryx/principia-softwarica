@@ -1,13 +1,6 @@
 /*s: mk/parse.c */
 #include	"mk.h"
 
-/*s: global infile */
-char *infile;
-/*e: global infile */
-/*s: global mkinline */
-int mkinline;
-/*e: global mkinline */
-
 void	ipop(void);
 void	ipush(void);
 static int   rhead(char *, Word **, Word **, int *, char **);
@@ -413,4 +406,5 @@ ipop(void)
     free((char *)me);
 }
 /*e: function ipop */
+
 /*e: mk/parse.c */

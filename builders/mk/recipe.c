@@ -1,7 +1,30 @@
 /*s: mk/recipe.c */
 #include	"mk.h"
 
-void	addw(Word*, char*);
+/*s: constructor newjob */
+Job*
+newjob(Rule *r, Node *nlist, char *stem, char **match, 
+       Word *pre, Word *npre, 
+       Word *targets, Word *atar)
+{
+    Job *j;
+
+    j = (Job *)Malloc(sizeof(Job));
+    j->r = r;
+    j->n = nlist;
+    j->p = pre;
+    j->t = targets;
+
+    j->stem = stem;
+    j->match = match;
+
+    j->np = npre;
+    j->at = atar;
+
+    j->next = nil;
+    return j;
+}
+/*e: constructor newjob */
 
 /*s: function dorecipe */
 bool
@@ -162,17 +185,4 @@ dorecipe(Node *node)
 }
 /*e: function dorecipe */
 
-/*s: function addw */
-void
-addw(Word *w, char *s)
-{
-    Word *lw;
-
-    for(lw = w; w = w->next; lw = w){
-        if(strcmp(s, w->s) == 0)
-            return;
-    }
-    lw->next = newword(s);
-}
-/*e: function addw */
 /*e: mk/recipe.c */

@@ -273,4 +273,137 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
     return true;
 }
 /*e: function submatch */
+
+
+/*s: function nextword */
+/*
+ *	break out a word from a string handling quotes, executions,
+ *	and variable expansions.
+ */
+static Word*
+nextword(char **s)
+{
+    char *cp;
+    Bufblock *b;
+    Word *head, *tail;
+    Rune r;
+    bool empty;
+    /*s: [[nextword()]] other locals */
+    Word *w;
+    /*e: [[nextword()]] other locals */
+
+    cp = *s;
+    b = newbuf();
+
+restart:
+    head = tail = nil;
+    while(*cp == ' ' || *cp == '\t')		/* leading white space */
+        cp++;
+    empty = true;
+
+    while(*cp){
+        cp += chartorune(&r, cp);
+        switch(r)
+        {
+        case ' ':
+        case '\t':
+        case '\n':
+            goto out;
+        /*s: [[nextword()]] switch rune cases */
+        case '\\':
+        case '\'':
+        case '"':
+            empty = false;
+            cp = expandquote(cp, r, b);
+            if(cp == nil){
+                fprint(STDERR, "missing closing quote: %s\n", *s);
+                Exit();
+            }
+            break;
+        /*x: [[nextword()]] switch rune cases */
+        case '$':
+            w = varsub(&cp);
+            if(w == nil){
+                if(empty)
+                    goto restart;
+                break;
+            }
+            empty = false;
+            if(b->current != b->start){
+                bufcpy(b, w->s, strlen(w->s));
+                insert(b, '\0');
+                free(w->s);
+                w->s = strdup(b->start);
+                b->current = b->start;
+            }
+            if(head){
+                bufcpy(b, tail->s, strlen(tail->s));
+                bufcpy(b, w->s, strlen(w->s));
+                insert(b, '\0');
+                free(tail->s);
+                tail->s = strdup(b->start);
+                tail->next = w->next;
+                free(w->s);
+                free(w);
+                b->current = b->start;
+            } else
+                tail = head = w;
+
+            while(tail->next)
+                tail = tail->next;
+            break;
+        /*e: [[nextword()]] switch rune cases */
+        default:
+            empty = false;
+            rinsert(b, r);
+            break;
+        }
+    }
+out:
+    *s = cp;
+    if(b->current != b->start){
+        if(head){
+            cp = b->current;
+            bufcpy(b, tail->s, strlen(tail->s));
+            bufcpy(b, b->start, cp - b->start);
+            insert(b, '\0');
+            free(tail->s);
+            tail->s = strdup(cp);
+        } else {
+            insert(b, '\0');
+            head = newword(b->start);
+        }
+    }
+    freebuf(b);
+    return head;
+}
+/*e: function nextword */
+
+/*s: function stow */
+Word *
+stow(char *s)
+{
+    Word *head, *w, *new;
+
+    w = head = nil;
+    while(*s){
+        new = nextword(&s);
+        if(new == nil)
+            break;
+
+        // concat_list(new, head, w)
+        if (w)
+            w->next = new;
+        else
+            head = w = new;
+        while(w->next)
+            w = w->next;
+        
+    }
+    if (!head)
+        head = newword("");
+    return head;
+}
+/*e: function stow */
+
 /*e: mk/varsub.c */

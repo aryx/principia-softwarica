@@ -9,28 +9,6 @@ setvar(char *name, void *value)
 }
 /*e: function setvar */
 
-/*s: function print1 */
-static void
-print1(Symtab *s)
-{
-    Word *w;
-
-    Bprint(&bout, "\t%s=", s->name);
-    for (w = s->u.ptr; w; w = w->next)
-        Bprint(&bout, "'%s'", w->s);
-    Bprint(&bout, "\n");
-}
-/*e: function print1 */
-
-/*s: dumper dumpv */
-void
-dumpv(char *s)
-{
-    Bprint(&bout, "%s:\n", s);
-    symtraverse(S_VAR, print1);
-}
-/*e: dumper dumpv */
-
 /*s: function shname */
 char *
 shname(char *a)

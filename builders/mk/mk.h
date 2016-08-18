@@ -294,7 +294,6 @@ extern	int	debug;
 extern	bool	nflag, tflag, iflag, kflag, aflag;
 extern	int	mkinline;
 extern	char	*infile;
-extern	int	nreps;
 extern	bool explain;
 extern	char	*termchars;
 extern	char 	*shflags;

@@ -111,21 +111,6 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 }
 /*e: function addrule */
 
-/*s: dumper dumpr */
-void
-dumpr(char *s, Rule *r)
-{
-    Bprint(&bout, "%s: start=%p\n", s, r);
-    for(; r; r = r->next){
-        Bprint(&bout, "\tRule %p: %s:%d attr=%x next=%p chain=%p alltarget='%s'",
-            r, r->file, r->line, r->attr, r->next, r->chain, wtos(r->alltargets, ' '));
-        if(r->prog)
-            Bprint(&bout, " prog='%s'", r->prog);
-        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->tail,' '));
-        Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
-    }
-}
-/*e: dumper dumpr */
 
 /*s: function rcmp */
 static int

@@ -1,10 +1,18 @@
 /*s: mk/globals.c */
 #include	"mk.h"
 
+// used by DEBUG which is used by many files
 /*s: global debug */
 // bitset<enum<dxxx>>
 int debug;
 /*e: global debug */
+
+/*s: global infile */
+char *infile;
+/*e: global infile */
+/*s: global mkinline */
+int mkinline;
+/*e: global mkinline */
 
 /*s: global rules */
 // list<ref_own<Rule>> (next = Rule.next, end = lr)
@@ -14,6 +22,14 @@ Rule *rules;
 // list<ref_own<Rule>> (next = Rule.next)
 Rule *metarules;
 /*e: global metarules */
+/*s: global patrule */
+Rule *patrule;
+/*e: global patrule */
+
+// was in main.c, but used also by parse.c
+/*s: global target1 */
+Word *target1;
+/*e: global target1 */
 
 /*s: global nflag */
 bool nflag = false;
@@ -35,21 +51,13 @@ bool aflag = false;
 bool explain = false;
 /*e: global explain */
 
-/*s: global nreps */
-int nreps = 1;
-/*e: global nreps */
 /*s: global jobs */
 // list<ref_won<jobs>> (next = Job.next)
 Job *jobs;
 /*e: global jobs */
+
 /*s: global bout */
 Biobuf bout;
 /*e: global bout */
-/*s: global patrule */
-Rule *patrule;
-/*e: global patrule */
-// was in main.c, but used also by parse.c
-/*s: global target1 */
-Word *target1;
-/*e: global target1 */
+
 /*e: mk/globals.c */

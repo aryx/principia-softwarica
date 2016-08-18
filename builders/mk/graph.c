@@ -4,11 +4,17 @@
 static Node *applyrules(char *, char *);
 static void togo(Node *);
 static int vacuous(Node *);
+Arc* newarc(Node *n, Rule *r, char *stem, Resub *match);
+
 static Node *newnode(char *);
 static void trace(char *, Arc *);
 static void cyclechk(Node *);
 static void ambiguous(Node *);
 static void attribute(Node *);
+
+/*s: global nreps */
+int nreps = 1;
+/*e: global nreps */
 
 /*s: function graph */
 Node*
@@ -184,6 +190,28 @@ applyrules(char *target, char *cnt)
 }
 /*e: function applyrules */
 
+/*s: function nrep */
+void
+nrep(void)
+{
+    Symtab *sym;
+    Word *w;
+
+    sym = symlook("NREP", S_VAR, nil);
+    if(sym){
+        w = sym->u.ptr;
+        if (w && w->s && *w->s)
+            nreps = atoi(w->s);
+    }
+    if(nreps < 1)
+        nreps = 1;
+    /*s: [[nrep()]] if DEBUG(D_GRAPH) */
+    if(DEBUG(D_GRAPH))
+        Bprint(&bout, "nreps = %d\n", nreps);
+    /*e: [[nrep()]] if DEBUG(D_GRAPH) */
+}
+/*e: function nrep */
+
 /*s: function togo */
 static void
 togo(Node *node)
@@ -267,21 +295,28 @@ newnode(char *name)
 }
 /*e: constructor newnode */
 
-/*s: dumper dumpn */
-void
-dumpn(char *s, Node *n)
+/*s: constructor newarc */
+Arc*
+newarc(Node *n, Rule *r, char *stem, Resub *match)
 {
-    char buf[1024];
     Arc *a;
 
-    Bprint(&bout, "%s%s@%p: time=%ld flags=0x%x next=%p\n",
-        s, n->name, n, n->time, n->flags, n->next);
-    for(a = n->prereqs; a; a = a->next){
-        snprint(buf, sizeof buf, "%s   ", (*s == ' ')? s:"");
-        dumpa(buf, a);
-    }
+    a = (Arc *)Malloc(sizeof(Arc));
+    a->n = n;
+    a->r = r;
+    a->stem = strdup(stem);
+
+    a->next = nil;
+    a->flag = 0;
+    /*s: [[newarc()]] set other fields */
+    rcopy(a->match, match, NREGEXP);
+    /*x: [[newarc()]] set other fields */
+    a->prog = r->prog;
+    /*e: [[newarc()]] set other fields */
+    return a;
 }
-/*e: dumper dumpn */
+/*e: constructor newarc */
+
 
 /*s: function trace */
 static void
