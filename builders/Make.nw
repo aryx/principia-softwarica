@@ -22,7 +22,8 @@
 %    TODO renamed variables, was abusing head/tail for too many things 
 %    (target vs prerequisites, but also head vs tail of lists of arcs, 
 %    head and tail of rule/assignement, ...)
-% - TODO reorganized the files?
+% - reorganized the files (removed arc.c, job.c, introduced globals.c, mv
+%    arounf functions)
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps (only 8: 0.76%), introduce globals.c/utils.c,
@@ -50,6 +51,8 @@
 % - escaping rules, tricky, but needed because space is used too for separator
 % - need for ${} in mk (no pb in make though) so can do ${name}here
 % - finally will remember the syntax for ${name:%=%} :) 
+% - also the syntax for rules, do I need empty lines between rules, what
+%   is exactly a rule boundary
 % - need for multiple targets, and multiple rules with same target 
 % - SEMI how to debug issues in your own Makefile
 % - SEMI mk is actually a job scheduler! with dependent tasks!
@@ -210,7 +213,7 @@ Indeed, to describe dependencies, Make provides a
 %
 The author of Make carefully designed this language to require
 as less syntax as possible, in order to remove as much overhead as possible
-to the programmer when writing rules.
+for the programmer when writing rules.
 \n actually some bad design with TAB, but not with mk (said later)
 Moreover, this specific language, because it is restricted, 
 because it is not as powerful as a general-purpose programming language, 
@@ -625,17 +628,18 @@ Once installed you can test [[mk]] under \plan with:
 Line~2 runs [[mk]] with the [[-f hello.mk]] parameter
 to tell [[mk]] to use the rules in the [[hello.mk]] file
 instead of the default [[mkfile]] 
-([[mk]]'s equivalent of a [[Makefile]] for Make).
+([[mk]]'s equivalent of a [[Makefile]]).
 %
 Line~3 through 5 then output the shell commands run by
 [[mk]] given the rules contained in [[hello.mk]]. 
 %
-Those commands just compile and link a simple program called [[hello]]
-using the ARM C Compiler ([[5c]], see the \book{Compiler})
-and ARM linker ([[5l]], see the \book{Linker}).
+Those commands compile and link a simple program called [[hello]]
+using the ARM C Compiler [[5c]] (see the \book{Compiler})
+and ARM linker [[5l]] (see the \book{Linker}).
 %
-Remember that [[.5]] is the file extension for ARM object files
-under \plan.
+Remember that [[.5]] is the filename extension of ARM object files
+under \plan, hence the use of [[hello.5]] and [[world.5]] in the
+linking command above.
 
 
 
@@ -702,6 +706,7 @@ of the general principles of a build system.
 %
 I also quickly describe the command-line interface of [[mk]]
 and show a simple [[mkfile]] for a toy application.
+\n actually hello.mk
 %dup: from Assembler.nw
 Finally, I define terms, explain how the code is organized, 
 and more generally give the background necessary
@@ -709,10 +714,11 @@ to understand the code I will show later.
 
 \section{Build system principles}
 
-To understand the principles of a build system, it is interesting to remember
+%trans:
+To understand the principles of a build system, it is useful to remember
 how programmers were compiling projects before Make was invented.
 \l remember -> imagine? compiling -> maintaining? building?
-Before Make, programmers were using shell scripts to {record} the
+Before Make, programmers were using {shell scripts} to {record} the
 compiling and linking commands for a project. For instance, here
 is one such script to build the toy program mentioned 
 in Section~\ref{sec:getting-started}:
@@ -726,11 +732,11 @@ in Section~\ref{sec:getting-started}:
 @
 \l rc, not sh or bash,  see \book{Shell}
 
-%bootstrap:
-This approach can still be used to bootstrap the build system itself.
-%
 However, as programs grow larger, and the number of files grows,
-the shell-script approach becomes too inefficient. 
+the shell-script approach becomes too inefficient\footnote{
+%bootstrap:
+This approach can still be useful to bootstrap the build system itself.
+}.
 \l also Long, but could factorize with shell variables
 Indeed, in the previous example, if only
 [[hello.c]] is modified, there is no need to recompile also [[world.c]].
@@ -739,7 +745,9 @@ An alternative for the programmer is to keep track in his head of
 all the modifications, and to recompile manually only what is necessary.
 %
 However, again, as programs grow larger, and dependencies between files
-become more complex, it becomes difficult to remember which files need
+become more complex, 
+\l make depend, gcc -MM (said later?)
+it becomes difficult to remember which files need
 to be recompiled and what are the precise flags used to recompile
 or link those files. Enters Make, which solved those problems.
 \l more scalable
@@ -749,9 +757,14 @@ or link those files. Enters Make, which solved those problems.
 The goal of a build system is to 
 describe {\em concisely} and 
 maintain {\em efficiently}
-{\em dependencies} between files or programs.
+the {\em dependencies} between files.
+\l or programs. 
+Those files are source code, objects, and executables for a programmer.
+For a writer, those files can be Troff or TeX documents, pictures, or
+PDFs. 
+A build system can be used in many contexts, not just programming.
 %toc:
-Every word in the last sentence is important:
+Note that every word in the first sentence of this paragraph is important:
 'concisely' led to the creation of a {DSL},
 'dependencies' led to the use of a {graph} to represent the relationships
 between files, and
@@ -761,31 +774,37 @@ explained in the following sections.
 \n there are different kinds of deps actually many-to-many
 %
 In the next sections, I will also use examples using the syntax of [[mk]],
+which is very close to the syntax of Make,
 but the principles apply to most build systems.
 \l They are very similar.
 
 \subsection{A domain-specific language}
 
 % A domain-specific language (DSL) is a computer language
-%  tailored for one task. 
-%dup: intro/motivations
-% Usually not as expressive as full PL,
-%  but trade expressivity for compactness, and special checks.
+%  tailored for one task. Here dependencies and commands.
+%trans:
+% shell script above almost good. already simple syntax to
+% run program.
+% shell almost DSL, with pipe, redirection (before grew as full language)
+% idea of Make and mk is extend slightly shell with construct for dependencies!
+% small superset actually.
 
 %toc:
 % very small language.
-% rules, variables, inclusion, patterns.
+% rules, patterns, variables, inclusion
+
+%dup: intro/motivations
+% Usually not as expressive as full PL,
+%  but trade expressivity for compactness, and special checks later.
+
 
 \subsubsection{Rules}
 
+% first construct of mk is rule.
+% A rule is ...
 % essence is state dependencies between files,
 % for instance object file and its source,
 % and how to achieve it.
-
-% like arc in a graph. src, dest, and label on edge.
-% (and indeed later will see that we generate a graph)
-% In build systems called
-% rule.
 % also give names to left and right parts: target: dependencies
 % and way to maintain is recipe.
 
@@ -794,10 +813,19 @@ but the principles apply to most build systems.
 % {target}: {dependencies}
 %     {recipe}
 
-% example, 
-% hello.5: hello.c
-%    5c -c hello.c
+<<tests/mk/mkfile simple version>>=
+hello.5: hello.c
+    5c -c hello.c
+world.5: world.c
+    5c -c world.c
+hello: hello.5 world.5
+    5l -o hello hello.5 world.5
+@
+\n would be better to have hello first rule so that default rule but ok
 
+% very similar to shell script, but with added deps.
+\l could be extracted automatically ... except hello.5 not visible from 
+\l  5c command, would need -o hello.5 then.
 % x : y \n z1 \n z2.
 % could also x : y ; z1; z2
 
@@ -812,13 +840,25 @@ but the principles apply to most build systems.
 
 % if date of target or inexistent, then run recipe! Simple!
 
+% like arc in a graph. src, dest, and label on edge.
+% (and indeed later will see that we generate a graph)
+
+
 %\subsubsection{Recipe}
 % in fact body of a rule is shell command. Embedded lang
 % inside lang. Not interpreted. As is. (simpler than in make)
 % leverage existing tools!
 
+% in fact a bit like Yacc, lex, or even PHP. Mix 2 languages together.
+% HTML and can embed some dynamic code. Here shell but 
+% embed special time construct.
+\n actually in make not full shell, a bit weird, but not unlike
+\n  Yacc where can use dollar1, dollar2, with make you use extra parenthesis
+
 % optional recipe. space/tab first char cos support multiline 
 % for shell command (otherwise would need escaped newline there too, ugly).
+
+
 
 %\subsubsection{Dependency arities}
 %advanced? maybe fundamental. what types of dependencies we need?
@@ -837,12 +877,35 @@ but the principles apply to most build systems.
 %  ambiguity? just agglomerate recipe?
 
 
+\subsubsection{Generic (meta) rules}
+
+% repetitive stuff. Concise, so want factorize!
+
+% metarules (rule generating rules).
+% file patterns with %.
+
+% simplified regexp. In fact regexp, more general, see Section X.
+%real-world: .SUFFIX too
+
+% {stem}
+
+% can use only variables in target and prerequisites
+% (but can use variables in recipe)
+
+% describe a set of arcs in a graph in a generic way.
+
+
+
 \subsubsection{Variables}
 %bindings
 
-% to factorize. ex, CFLAGS=-g -x -...
+% other way to factorize, use variable names => more generic stuff
+%  (especially when use modularity/inclusion)
+
+% Not used before, but CFLAGS=-g -x -...
 % and then can use in many rules CFLAGS
 % easier to modify too.
+% (but if use metarule then less useful)
 
 % one of design of mk is reusing existing stuff. So reuse
 % syntax (and some machinery) of shell to define and use variables.
@@ -871,7 +934,11 @@ but the principles apply to most build systems.
 
 \subsubsection{Inclusion}
 
+%trans:
+% last construct is inclusion.
+
 % < so modularity and can factorize in different files
+%real-world: include (or -include)
 
 % with variables above, offers already some kind of genericity!
 % in fact many mkfiles are just  < /sys/src/cmd/mkone !
@@ -906,18 +973,6 @@ but the principles apply to most build systems.
 % (or use hh_server, but again, impose constraint of one giant
 % single binary/library)
 
-
-\subsubsection{Generic (meta) rules}
-
-% metarules (rule generating rules), use variable names => generic stuff
-%  (especially when use modularity)
-% stemming, so can factorize with generic rules.
-
-% can use only variables in target and prerequisites
-% (but can use variables in recipe)
-
-% describe a set of arcs in a graph in a generic way.
-
 %\subsubsection{Generality}
 
 % works for all PLs. not adhoc to one PL like IDEs
@@ -942,6 +997,7 @@ but the principles apply to most build systems.
 
 % graph of deps, if modify a leaf then have to rebuild everything up!
 %  but not everything!
+% DFS.
 
 % actually DAG (and acyclic check later). So in code we will see
 % a few times to set a flag on a node marked as done, to avoid
@@ -955,6 +1011,7 @@ but the principles apply to most build systems.
 
 
 \subsection{A job scheduler}
+
 % parallel job scheduler
 
 % FIGURE where can see different steps stuff you can do in //? 
@@ -962,7 +1019,9 @@ but the principles apply to most build systems.
 % mk is actually kind of a scheduler because can do things in //,
 % run recipe of independent jobs in //, and need to manage dependencies
 % between those jobs
+
 % then need coordinate. wait for finish, run independent.
+% indeed, cant run in // linker with compiler. need to wait.
 % Master/Workers?
 
 
@@ -974,8 +1033,9 @@ in a directory and type [[mk]]\footnote{
 This interface is similar to the one in Make, 
 except [[mk]] is even shorter to type than [[make]].
 This is useful as [[mk]] is a command you will type a lot;
-the two letters are even close on a QWERTY keyboard.
+the two letters are even next to each other on a QWERTY keyboard.
 }.
+%dup: intro/getting-started
 However, this assumes the directory contains a file named [[mkfile]]:
 
 <<constant MKFILE>>=
@@ -1029,23 +1089,37 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 \n [[hello.mk]] concistent with my other books.
 \l A simple [[mkfile]]
 
+% Seen features before in Section~\ref{sec:principles}, but
+% summarize here and present a few more features. 
+% mkfile for Section X.
+
 <<tests/mk/hello.mk>>=
 OBJS=hello.5 world.5
+CFLAGS=
 
 hello: $OBJS
  5l -o hello $OBJS
 
 %.5: %.c
- 5c -c $stem.c
+ 5c $CFLAGS -c $stem.c
 @
 %$
-\n simple var, simple rule, metarule, special vars; the essence of mk is there
-\n  no objtype/mkfile, cos then cant use hello.5, should use hello.dollar0
-
-% seen features before in Section~\ref{sec:principles}.
-
-% mkfile of helloworld.c?
 \n minimum spirit, no <objfile, no factorize with mkone
+\n simple var, simple rule, metarule, special vars; the essence of mk is there
+\n  no objtype/mkfile, cos then cant use hello.5, should use hello.dollarO
+
+%real-world: .SUFFIXES 
+
+% stem.
+
+
+<<tests/mk/hello.mk alternative>>=
+hello: hello.5 world.5
+ $CC -o $target $prereq
+@
+%$
+\n but prereq not always work, for instance for meta rule better use stem
+\n  cos prereq will also match the .h in the .depend
 
 % running example
 % concepts: target, prerequistes, recipe
@@ -1067,11 +1141,6 @@ hello: $OBJS
 % For more examples, see appendix. Goal here is to give a taste.
 % actually the mkfile of mk itself :) appendix!
 
-<<tests/mk/hello.mk alternative>>=
-hello: hello.5 world.5
- $CC -o $target $prereq
-@
-%$
 
 
 
@@ -1090,6 +1159,7 @@ the main entities (e.g., structures, functions, globals) the file defines,
 and the corresponding chapter in this document in which the code
 contained in the file is primarily discussed.
 \n sorted by chapters, make more sense than sorted by dir
+\t so? what this table is useful for/
 
 \begin{table*}[tbh!]
 \begin{center}
@@ -1305,6 +1375,7 @@ at the very beginning.
 Starting from the root, [[work()]] recursively goes down 
 the graph to find nodes corresponding to inexistent files, or
 to files that are older than the files in the nodes they are connected to.
+\l depth first search
 %
 Once it found such a node,
 [[work()]] calls [[dorecipe()]]
@@ -1322,8 +1393,8 @@ a free processor to run the job in parallel.
 
 [[mk()]] works by calling in a loop [[work()]] to schedule jobs in
 parallel until the root node is up-to-date. However, during those loops,
-[[work()]] may not be able to schedule any job. Indeed, all processors
-may already be used, or certain jobs can not be started until
+[[work()]] may not be able to schedule any job. Indeed, all the processors
+may already be in use, or certain jobs may not be able to start until
 other jobs are finished.
 This is why [[mk()]] also calls [[waitup()]] to wait for those jobs to finish.
 Once a job is finished, [[waitup()]] calls [[update()]] to update 
@@ -1400,7 +1471,7 @@ Finally, Appendix~\ref{chap:examples} presents examples of [[mkfile]]s.
 In this chapter I will present the core data structures of [[mk]],
 \t WHICH ARE big symbol table for variables, AST for rules, 
 %and nodes and arcs for graph of dependencies, and
-%job gather all information needed to generate one target.
+%gather all information needed to generate one target called a job.
 % Maybe say appendix X for string buffer Bufblock?
 % Also words.
 
@@ -5317,6 +5388,8 @@ run(Job *j)
 nproc();	/* it can be updated dynamically */
 @
 
+% like nrep()
+
 <<function nproc>>=
 void
 nproc(void)
@@ -7421,6 +7494,7 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 \section{Advanced rule attributes}
 
 \subsection{Virtual target, [[:V:]]}
+%real-world: .PHONY
 
 % this is useful
 
@@ -8594,6 +8668,9 @@ freebuf(buf);
 
 
 
+
+
+
 \chapter{Conclusion}
 \label{chap:conclusion}
 
@@ -9089,6 +9166,7 @@ maketmp(void)
 }
 @
 
+
 \chapter{Examples of [[mkfile]]s TODO}
 \label{chap:examples}
 
@@ -9139,6 +9217,7 @@ maketmp(void)
 LOC = Lines Of Code
 DSL = Domain Specific Language
 IDE = Integrated Developement Environment
+DAG = Directed Acyclic Graph
 \end{verbatim}
 
 \chapter*{Indexes}
