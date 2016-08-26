@@ -22,8 +22,8 @@
 %    TODO renamed variables, was abusing head/tail for too many things 
 %    (target vs prerequisites, but also head vs tail of lists of arcs, 
 %    head and tail of rule/assignement, ...)
-% - reorganized the files (removed arc.c, job.c, introduced globals.c, mv
-%    arounf functions)
+% - reorganized the files (removed arc.c, job.c, introduced dumpers.c, mv
+%    around a few functions)
 
 %thx to codemap/codegraph/scheck:
 % - use cg to reduce backward deps (only 8: 0.76%), introduce globals.c/utils.c,
@@ -206,7 +206,6 @@ for instance, a job scheduler.
 %
 Finally, build systems such as Make use an original approach 
 to solve problems.
-\l that is interesting to study
 Indeed, to describe dependencies, Make provides a 
 {domain-specific language} (DSL).
 \n not a XML/JSON/... configuration file (said later)
@@ -234,7 +233,6 @@ Can a file depend only on one other file (one-to-one dependency),
 or on many files (one-to-many)? 
 Can many files depend on the same single file (many-to-one), 
 or on many files (many-to-many)?
-\n just file (target) to file (prereq)?  (said later)
 \l all dependencies concerning a file can be described by a single rule?
 \l  or more convenient to have multiple rules describing dependency of same file?
 \n Do you need multiple rules for same target? what about ambiguities?
@@ -255,6 +253,7 @@ Can it detect cycles in dependencies?
 
 \item What kind of help a build system can offer to help debug a [[Makefile]]?
 How can you visualize the dependencies? 
+\n mk -dump_graph with mk.byte
 
 \item How does the build system run different tasks in parallel, and 
 how does it coordinate them? How do you write a simple job scheduler?
@@ -290,6 +289,7 @@ I will explain in this book the code of the \plan build system
 which contains about 5300 lines of code (LOC).
 %
 [[mk]] is written entirely in C.
+\l used also outside plan9 by a few open source software.
 
 
 %dup: from Assembler.nw
@@ -308,17 +308,16 @@ recommends [[mk]] as a better system.
 
 [[mk]] is modeled after Make, like many other build systems,
 but is both simpler and more powerful at the same time.
-\n explained differences why better (said later)
 %
 For instance, [[mk]] does not suffer from 
 the infamous [[TAB]] requirement in the first column
 from Make~\footnote{
 See \url{http://www.catb.org/esr/writings/taoup/html/ch15s04.html}
-for the history behind the TAB requirement
+for the history behind the [[TAB]] requirement.
 \l See \cite{TAOUP} Page X, or \url{}
 \l also http://stackoverflow.com/questions/1755550/what-is-the-reasoning-behind-the-makefile-whitespace-syntax 
-};
 \n GNU make has .RECIPEPREFIX to allow spaces too
+};
 with [[mk]] the programmer can use spaces and tabs interchangeably.
 %
 Moreover, [[mk]] executes shell commands in parallel,
@@ -337,7 +336,6 @@ and build a disk image containing a \plan distribution
 that can be installed on a Raspberry Pi or booted through QEMU.
 All of this with one single command.
 \n actually I use make right now :)
-\l used also outside plan9 by a few open source software.
 
 \section{Other build systems}
 
@@ -390,7 +388,6 @@ and then uses this graph to guide the building process.
 the most popular variant of Make.
 %
 It is used by almost every open source applications under Linux.
-%and is probably used also in many commercial applications.
 \n Linux requires gmake; it uses many GNU make extensions and has a 
 \n  very fancy Makefile (make V=1 ...)
 \n I think even FreeBSD switched to GNU Make
@@ -405,12 +402,12 @@ such as DOS, VMS, or Amiga.
 %
 However its codebase is also significantly larger: 37~000 LOC, which
 is almost one order of magnitude more code than [[mk]].
-\l main.c 3200 LOC
+\l main.c 3200 LOC, almost as big as whole codebase of mk
 
 
 GNU Make follows closely the design of \unix Make, and so
 inherits also its major flaws, for instance, the requirement
-to use TABs in the first column for shell commands.
+to use [[TAB]]s in the first column for shell commands.
 %
 Where [[mk]] tries to generalize, unify, and reuse the services
 and syntax of other tools, GNU Make specializes and adds an extra layer
@@ -425,16 +422,16 @@ extra dollar (e.g., [[$$i]]).
 %
 In [[mk]], the syntax for variables is the same than in
 the shell (e.g., [[$OBJS]], [[$i]]).%$
-\n actually there is the subst variable
+\n actually there is the subst variable, and leaky abstraction
 %
 Finally, [[mk]] replaces cryptic Make variables such as [[$@]] or [[$^]]
 with clearer variables such as [[$target]] or [[$prereq]].
 \l for more comparisons, see comments in .tex
 % - regexp rules and no suffix rules (but meta % rules were already in
-%   unix make, not an invention of mk)
+%   unix make, not an invention of mk) (said later)
 % - mk better written, nice use of assert!
-% - see mk.ps section 4
-% - see also https://github.com/dcjones/mk for list of improvements
+% see mk.ps section 4
+% see also https://github.com/dcjones/mk for list of improvements
 
 
 \item Ant~\furl{http://ant.apache.org/} is a build system used by
@@ -487,7 +484,7 @@ you need to extend Ant itself.
 Finally, XML is an extremely verbose language; writing
 XML dependency rules by hand is long and tedious.
 \l ok if generated by IDE.
-\l and Ivy (dependency manager, equivalent of cargo?)
+\l also Ant has Ivy (dependency manager, equivalent of Cargo?)
 
 
 \item CMake~\furl{https://cmake.org/} is a cross-platform build system
@@ -507,7 +504,7 @@ CMake then generates from those configuration files regular
 %
 CMake can also generate instead files for IDEs such as Apple's Xcode or
 Microsoft's Visual Studio.
-\n also ninja
+\n also can generate files for ninja
 \l like automake, gyp, etc. mix actually configure/automate feature I think.
 
 CMake contains thousands of builtin commands,
@@ -662,7 +659,7 @@ you will need a good knowledge of
 the C programming language~\cite{k-r} to understand it.
 %
 I also assume you are already familiar with at least 
-one build system, for instance, any variant of Make,
+one build system, for instance, a variant of Make,
 \l also a shell
 %
 and so are familiar with concepts such as
@@ -702,7 +699,8 @@ I would like to acknowledge of course the author of [[mk]],
 Andrew Hume,
 who wrote in some sense most of this book.
 \n and Bob Flandera? more for plan9 mkfiles than mk itself, 
-
+\n apparently Hume did stuff also on optimizing Boyer Moore,
+\n  cited by author of GNU grep https://lists.freebsd.org/pipermail/freebsd-current/2010-August/019310.html
 
 
 
@@ -731,8 +729,12 @@ how programmers were compiling projects before Make was invented.
 %history:
 Before Make, programmers were using {shell scripts} to {record} the
 compiling and linking commands for a project. For instance, here
-is one such script to build the toy program mentioned 
-in Section~\ref{sec:getting-started}:
+is one such script called [[make.rc]]\footnote{This script
+is using the \plan shell called [[rc]] (see the \book{Shell}), hence the filename
+extension.
+\l not sh or bash
+}
+to build the toy program mentioned in Section~\ref{sec:getting-started}:
 \l can be used to build {from scratch}, or after modified
 
 <<tests/mk/make.rc>>=
@@ -742,7 +744,6 @@ in Section~\ref{sec:getting-started}:
 5c -c world.c
 5l -o hello hello.5 world.5
 @
-\l rc, not sh or bash,  see \book{Shell}
 
 However, as programs grow larger, and the number of files grows,
 the shell-script approach becomes too {inefficient}\footnote{
@@ -753,7 +754,7 @@ This approach can still be useful to bootstrap the build system itself.
 \l also Long, but could factorize with shell variables
 Indeed, in the previous example, if only
 [[hello.c]] is modified, there is no need to recompile also [[world.c]],
-but that is what the script will do when it is ran again to rebuild
+but that is what the script will do when it will be run again to rebuild
 the program.
 %
 An alternative for the programmer is to keep track in his head of
@@ -766,8 +767,6 @@ it becomes difficult to remember
 \n remember => describe concisely
 which files need to be recompiled and what are the precise flags 
 used to recompile or link those files. 
-\l Enters Make, which solved those problems.
-\l more scalable
 \n actually as programs become really really big, ninja is better
 
 %dup: intro/motiv (but longer version)
@@ -796,7 +795,6 @@ explained in the following sections.
 In the next sections, I will use examples using the syntax of [[mk]],
 which is very close to the syntax of Make,
 but the principles apply to most build systems.
-\l They are very similar.
 
 \subsection{A domain-specific language}
 
@@ -804,7 +802,7 @@ A {\em domain-specific language} (DSL), as its name suggests, is a language
 specialized for one particular task. 
 %dup: intro/motivations overview/principe
 In the case of a build system, the task is 
-(1) to describe dependencies, and 
+(1) to describe file dependencies, and 
 (2) to describe the commands to maintain those dependencies.
 %
 A DSL uses a special syntax to describe more concisely than
@@ -825,7 +823,6 @@ Thus, the idea behind the DSL of [[mk]] (and Make before)
 was to extend slightly the shell syntax to accomodate also (1), 
 with special constructs to express dependencies between files.
 \l small superset actually. very small language.
-\l in addition to shell command, 
 %toc:
 Those constructs are 
 the rule, 
@@ -879,7 +876,6 @@ hello: hello.5 world.5
     5l -o hello hello.5 world.5
 @
 \n would be better to have hello first rule so that default rule but ok.
-\l syntax for comment, same as shell, again
 
 The rules are usually stored in a special {\em configuration file}:
 an [[mkfile]] for [[mk]] (and a [[Makefile]] for Make).
@@ -896,6 +892,7 @@ for instance, [[hello.5]] in respectively the first and third rule.
 
 
 The syntax of an [[mkfile]] is very similar to the syntax of a shell script.
+\l Syntax for comment, same as shell, again.
 \l could be extracted automatically ... except hello.5 not visible from 
 \l  5c command, would need -o hello.5 then.
 The only syntactical addition is the use of [[":"]] to separate the target from
@@ -917,29 +914,29 @@ The semantic of a rule is also very simple. [[mk]] will check
 if the {\em modification time} of a target is more recent than {all} its
 prerequisites.
 \n actually more recent or equal in mk-in-ocaml, cos second not precise enough
+\l actually DFS first, so semantic more subtle than what it looks
 If not, it will run the recipe, which hopefully will update the 
 modification time of the target.
 \l can do the check? mk does? mk-in-ocaml does!
-\l actually DFS first, so semantic more subtle
 
 %\paragraph{Recipe}
 As I said before, the recipe is simply a shell command.
 Even though the commands in the [[mkfile]] above are simple, 
 [[mk]] allows to use the full language of the \plan shell [[rc]]
-(see the \book{Shell}), with loops, conditionals, etc.
+(see the \book{Shell}), with loops, conditionals, functions, etc.
 %
 Indeed, one of the design principles of [[mk]] is to leverage existing tools.
 \n and syntax (said later)
 The shell language is {\em embedded} inside [[mk]]'s DSL.
-\l Not even interpreted. As is. simpler than in make.
+\l Not even interpreted. As is. simpler than in make (said later?)
 %
 This is similar to other \unix DSLs such as Lex~\cite{lex} and Yacc~\cite{yacc}
-\l but also PHP, HTML and embed dynamic ocde
 where the programmer can use special syntax to define respectively
 {regexps} and {grammar rules}, but where he can also use the full C language 
 for the {actions} triggered when a regexp or grammar rule is recognized
 (See the \book{CompilerGenerator}).
 \n actually in Make weird mix for vars, but not unlike Yacc with dollar1
+\n Similar to PHP too, with HTML and where embed dynamic ocde
 
 
 In [[mk]], the actions are not written in C but in the shell language of [[rc]],
@@ -991,18 +988,17 @@ they differ only by the name of the file.
 This is why to factorize rules, [[mk]] allows to use {patterns} inside a rule.
 
 
-A {\em pattern} is a string containing a sequence of
-characters including the special character [[%]]
+A {\em pattern} is a sequence of characters including 
+the special character [[%]]
 that matches any sequence of characters.
-\l separated by space?
+\l separated by space? but then can also have quote.
+\l longest match?
 Here is an example of a pattern matching any C source files:
 
 \begin{verbatim}
 %.c
 \end{verbatim}
 
-\l longest?
-%
 A rule containing a pattern for his target
 is called a {\em meta rule} in [[mk]]'s terminology.
 \l one of the target
@@ -1026,8 +1022,10 @@ hello: hello.5 world.5
 %$
 
 During the processing of the simple rule, [[mk]] will
-recognize that [[hello.5]] (and [[world.5]]) {\em matches}
-the target in the meta rule if the percent is set to [[hello]] (or [[world]]).
+recognize that [[hello.5]] (and [[world.5]]),
+which is mentioned in the prerequisites of the rule,
+{\em matches} the target in the meta rule if the percent is 
+set to [[hello]] (or [[world]]).
 %
 [[mk]] will then {\em instantiate} the meta rule to generate
 a specific rule for [[hello.5]] (and [[world.5]]).
@@ -1036,7 +1034,9 @@ a specific rule for [[hello.5]] (and [[world.5]]).
 The percent in the prerequisite is then {\em substituted} by
 the matched string ([[hello]]), and the variable [[$stem]] %$
 can be used from the shell command to access the matched string.
-\t could use percent in recipe, but then not shell recipe
+\t footnote could use percent in recipe, but then not shell recipe
+\t  goal is be as less intrusive as possible (as opposed to Make,
+\t  which does processing on recipe such as variable expansion)
 
 The use of [[%]] to match any sequence of characters
 is similar to the use of [[.*]] in a {\em regular expression}.
@@ -1044,9 +1044,12 @@ is similar to the use of [[.*]] in a {\em regular expression}.
 In fact, [[mk]] supports also meta rules using 
 regular expressions, as explained in Section~\ref{sec:regexp}.
 %
-However, in most cases, patterns using [[%]] are expressive enough.
+However, in most cases, patterns using [[%]] are expressive enough
+and simpler to write.
+\l regexp notiriously difficult
 %real-world: 
-Make supports meta rules with percents but not with regular expressions.
+Make supports also meta rules with percents, but not with 
+regular expressions.
 It also supports {\em suffix rules} (e.g., [[.5.o: ...]]).
 However, those rules are less intuitive to write and less expressive 
 than meta rules. This is why they are not supported by [[mk]].
@@ -1056,11 +1059,11 @@ than meta rules. This is why they are not supported by [[mk]].
 
 
 \subsubsection{The variable}
-%bindings
 
 %trans:
-I have just shown the use in a recipe of a variable ([[$stem]])
-set by [[mk]]. %$
+In the previous section, I have shown the use in a recipe 
+of a variable ([[$stem]]) %$
+set by [[mk]]. 
 %
 You can also define and use your own variables in an [[mkfile]]
 to factorize things.
@@ -1069,15 +1072,15 @@ to factorize things.
 %
 Those variables can contain a list of {\em words}, which
 can correspond to anything: filenames, compiler flags, etc.
-Here is an example of a variable containing two object files:
+Here is an example of a variable containing two filenames:
 
 \begin{verbatim}
 OBJS=hello.5 world.5
 \end{verbatim}
 
 Here is a slightly different version 
-% not even shorter (in numbers of characters)
-of the previous [[mkfile]] using variables:
+% shorter (in numbers of characters) % actually not shorter
+of the previous [[mkfile]] using a variable:
 
 <<tests/mk/mkfile version 3>>=
 OBJS=hello.5 world.5
@@ -1093,13 +1096,12 @@ hello: $OBJS
 \l CFLAGS=-g -x -...and then can use in many rules CFLAGS. easier to modify too.
 \l but if use metarule then less useful
 
-One of the design principles of [[mk]] is to leverage existing
-tools and syntax.
+One of the design principles of [[mk]] is to leverage existing tools and syntax.
 Thus, the syntax to define and use variables in [[mk]] is
 exactly the same than in the shell.
 \n define and use! Make sucks here.
 \l but not same exactly! handled by mk itself this time!
-\l reuse syntax and some machinery
+\l reuse syntax and some machinery (but not all machinery)
 This syntax is again minimalist.
 To define a variable, type a variable name, followed by an equal sign, 
 followed by a list of words simply separated by space.
@@ -1109,44 +1111,54 @@ like in other languages
 (e.g., [[ char* OBJS[] = {"hello.5", "world.5"}; ]] in C).
 %
 The next newline marks the end of the variable definition.
-\l  (but then need to have \ escaped newline to scale to large lists)
+\l  (unless it is {escaped} to scale to larger list, as explained in Section X)
 To use a variable, prefix the variable name with the dollar sign.
-\l also {} for special cases (said later)
+\n also {} for special cases (said later)
 
 
 Note that [[mk]], like the shell, treats a variable as a list. 
 It also offers a special syntax to concatenate lists
-by simply juxtaposing a variable use with other elements or other
+by simply juxtaposing a variable with other elements or other
 variables, as in the following example:
 
 \begin{verbatim}
-X= a b c
+X= b c d
 # Y will contain a b c d e f
-Y=$X d e f
+Y=a $X d e f
 \end{verbatim}
 %ocaml-found: scalar vs list context! can be stricter actually
 
 [[mk]] offers also a special syntax to transform lists,
 as explained in Section~\ref{sec:transform-list}
 
+
 Once a variable is defined, you can use it in other variable
-definitions, or in a rule (in the target, in the prerequisite, 
-or even in recipe). You can also use variables in meta rules.
+definitions, or in a rule (in the target, in the prerequisites, 
+or even in the recipe). 
+You can also use variables in patterns in meta rules.
+\n also in file inclusion (said later)
 %
-However, the term variable in the context of [[mk]] is misleading.
+Moreover, [[mk]] imports the variables from the environment,
+so you can use variables such as [[$HOME]] in your mkfile. %$
+\l like the shell, also import and prefix with dollar
+\n or objtype (said later)
+%
+However, the term variable in the context of [[mk]] is slightly misleading.
 In [[mk]] variables are constants.
 \n actually mk-in-ocaml check if override
 \n even though can be overriden on commandline
-Variable definitions are actually binding definitions. 
+Variable definitions are actually binding definitions.
+\t expanded in target and prerequiste and def as parse the file
+\t  (but not in recipe, cos use different mechanism, export env, 
+\t   again to not be intrusive on recipe, embeded DSL, so no extra escaping)
 Indeed, [[mk]] needs to know statically the value of a variable to be
 able to compute the graph of dependencies.
 \t why? need explain more
+%real-world:
+\t actually in Make vars are different and binding and scope is complex
 \l Also clearer then diff between variables like OBJS=..
 % and variables generated by mk such as target, stem etc.
-
-\l defs and uses, and actually can have complex uses with substitutions
-\l  on stemming
-
+\l also leaky abstraction, use of var in target/prereqs is diff than in recipe
 
 %trans:
 % more generic stuff when use modularity/inclusion
@@ -1154,40 +1166,82 @@ able to compute the graph of dependencies.
 \subsubsection{File inclusion}
 
 %trans:
-% last construct is inclusion.
-% again allow factorize.
-% have a library of rules in a separate files! 
-% for instance can factorize put all meta rules.
+The last construct of [[mk]]'s DSL is the file inclusion.
+\l better term? the include?
+%
+A {\em file inclusion} is an {instruction} in the [[mkfile]],
+starting with [[<]], used to load the rules and variables defined 
+in another file.
+This file can itself includes other files, recursively.
+Here is an example of a file inclusion:
 
-% again reuse syntax of shell for file input with <.
-% EXAMPLE:
+\begin{verbatim}
+</$objtype/mkfile
+\end{verbatim}
 
-% < so modularity and can factorize in different files
+The effect is similar to an [[#include]] in C.
+%
+Note that the filename can contain variables defined
+previously in the [[mkfile]] (or in the environment).
+%
+Here, [[$objtype]] %$
+is a special \plan environment variable containing the
+type of architecture of the current machine (e.g., [[arm]], [[386]]).
+\l cite?
+%
+Each architecture can then define in a specific [[mkfile]]
+variables such as [[CC]] or [[LD]]
+to contain the name of the native compiler and linker.
+%
+Section~\ref{sec:mkfile-objtype} presents such an [[mkfile]]
+for the ARM architecture.
+%
+It is good practice to include [[/$objtype/mkfile]] %$
+at the beginning of an [[mkfile]] for better portability.
+%
+Note that again [[mk]] reuses the syntax of other tools by
+using the [[<]] symbol for input redirection of the shell. 
+\n not so convincing this one
 
-% combined with variables, can even have library
-% of simple rules instantiated with variables.
 
-% with variables above, offers already some kind of genericity!
-% in fact many mkfiles are just  < /sys/src/cmd/mkone !
-% (but still need metarules for that)
+Just like the rule, the pattern, and the variable,
+a file inclusion allows to factorize things.
+%
+Indeed, you can store a library of meta rules
+in a separate file (e.g., [[/shared/mkgeneric]]) and reuse this
+file in multiple projects.
+\l [[<]] so modularity and can factorize in different files
+In fact, by combining variables and file inclusion, you can
+also have a library of simple rules shared by multiple projects,
+as shown by the example below:
 
 <<tests/mk/mkfile version 4>>=
 OBJS=hello.5 world.5
 PROG=hello
 
-</sys/src/cmd/mkone
+</shared/mkone
 @
 %$
-\n actually with mkone it is OFILES and TARG
+\n actually /sys/src/cmd/mkone, and it is OFILES and TARG not OBJS and PROG
 
+<</shared/mkone>>=
+$PROG: $OBJS
+    5l -o $PROG $OBJS
+%.5: %.c
+    5c -c $stem.c
+@
+%$
 %real-world: include (or -include)
 
+% with variables above, offers already some kind of genericity!
+% in fact many mkfiles are just  < /sys/src/cmd/mkone !
+% (but still need metarules for that)
 
 %\subsection{Generating some dependencies automatically}
 
-% object level deps. libs.
-% But also semantic level.
-
+% another use for file inclusion is include dependencies information generated
+% automatically by other tools.
+% Can do manually, but can be tedious.
 % Many dependencies are implicit in files. if foo.c include
 % foo.h, should recompile. Can declare deps in mkfile, but
 % redundant, hard to maintain. 
@@ -1201,6 +1255,9 @@ PROG=hello
 % gcc -MM.
 
 % related is library of variables and rules for different languages.
+
+% object level deps. libs.
+% But also semantic level.
 
 % question is can we generate every dependencies automatically?
 % IDE tries to do that. But requires helps, AddFile, AddDir.
@@ -1221,6 +1278,17 @@ PROG=hello
 %\subsection{Different types of dependencies}
 % before?
 
+\bigskip
+[[mk]] offers a few more constructs
+(described in in Chapter~\ref{chap:advanced})
+beyond 
+the rule, 
+the pattern,
+the variable, and 
+the file inclusion, 
+but those are the constructs representing 
+the essence of a build system.
+
 
 \subsection{A graph of dependencies}
 \label{sec:graph}
@@ -1234,12 +1302,11 @@ PROG=hello
 
 % build graph of deps. accurate representation of dependencies.
 
-% graph of deps, if modify a leaf then have to rebuild everything up!
-%  but not everything!
-% DFS.
+% once build, idea is DFS. go in depth.
+% if modify a leaf then have to rebuild everything up!
+% FIGURE example?
 
 % actually DAG (and acyclic check later). 
-
 % So in code we will see a few times to set a flag on a node marked as done,
 % to avoid repeat multiple times the same thing.
 \n actually not that much
@@ -1255,10 +1322,12 @@ PROG=hello
 
 \subsection{A job scheduler}
 
-% parallel job scheduler
+%trans:
+% build graph of deps, DFS. But can do things in parallel!
 
 % FIGURE where can see different steps stuff you can do in //? 
 
+% waves!
 % mk is actually kind of a scheduler because can do things in //,
 % run recipe of independent jobs in //, and need to manage dependencies
 % between those jobs
@@ -1267,6 +1336,8 @@ PROG=hello
 % indeed, cant run in // linker with compiler. need to wait.
 % Master/Workers?
 
+
+%trans: ?
 
 \section{[[mk]] command-line interface}
 
@@ -1294,14 +1365,15 @@ To change this default behavior, you can use the [[-f]] flag, as shown in
 Section~\ref{sec:getting-started}, to specify another configuration file.
 %
 Moreover, you can change the default target by specifying a target
-on the command line (e.g., [[mk hello.5]]). 
+from the command line (e.g., [[mk hello.5]]). 
 In fact, you can even give a list of targets on the command line.
-\n great way to use mk is have list of one-liner
+\l great way to use mk is have list of one-liner (said later?)
 
 [[mk]] supports also a few extra options to help debug [[mk]] itself
 or to provide advanced features.
 %chunks:
 I will present gradually those options in this book.
+%
 Here is the full command-line interface of [[mk]]:
 
 <<function badusage>>=
@@ -1332,9 +1404,11 @@ static char *version = "@(#)mk general release 4 (plan 9)";
 \n [[hello.mk]] concistent with my other books.
 \l A simple [[mkfile]]
 
-% Seen features before in Section~\ref{sec:principles}, but
-% summarize here and present a few more features. 
-% mkfile for Section X.
+% Seen example of mkfile before in Section~\ref{sec:principles}, 
+% and most features.
+% I present here another mkfile,
+%  summarize here and present a few more features. 
+% mkfile for Section X, called hello.mk so have to use -f.
 
 <<tests/mk/hello.mk>>=
 OBJS=hello.5 world.5
@@ -1351,15 +1425,21 @@ hello: $OBJS
 \n minimum spirit, no <objfile, no factorize with mkone
 \n simple var, simple rule, metarule, special vars; the essence of mk is there
 \n  no objtype/mkfile, cos then cant use hello.5, should use hello.dollarO
-\n but prereq not always work, for instance for meta rule better use stem
+\n note that prereq not always work, for instance for meta rule better use stem
 \n  cos prereq will also match the .h in the .depend
 
+% show also simple output of running mk on a toy project.
+% VERBATIM 5c ...
+% if modify hello.c
+% VERBATIM 5c hello.c; 5l ...
+% if nothing
+% VERBATIM already done
 
-% running example
-% concepts: target, prerequistes, recipe
-
-% show also simple output of running mk on a toy project
 % maybe even include mk -e output?
+
+% can also add flags on command-line
+% CFLAGS=-g
+% \footnote not needed in plan9? by default compile info? or -a for acid.
 
 %How add to an existing variable? e.g. CFLAGS+= -p?
 % easy, CFLAGS= -xxx $CFLAGS
@@ -1432,7 +1512,7 @@ building a job                    & \ref{chap:finding-outdated}  & [[recipe.c]] 
 scheduling jobs                   & \ref{chap:scheduling}        & [[run.c]]      & [[run()]] [[sched()]] [[waitup()]] [[RunEvent]]       & 0 \\ % Process pnew pdelete nproc killchildren usage
 
 shell environment                 & \ref{chap:interacting}       & [[env.c]]      & [[buildenv()]] [[envy]] [[envinsert()]]               & 0 \\ %execinit initenv envupd
-process and environment methods for \plan         & \ref{chap:interacting}       & [[plan9.c]]    & [[readenv()]] [[exportenv()]] [[execsh()]]            & 0 \\ %waitfor pipecmd Exit catchnotes
+environment and process methods for \plan         & \ref{chap:interacting}       & [[plan9.c]]    & [[readenv()]] [[exportenv()]] [[execsh()]]            & 0 \\ %waitfor pipecmd Exit catchnotes
 
 \midrule
 printing shell commands           & \ref{chap:debugging-support} & [[shprint.c]]  & [[shprint()]]                                         & 0 \\ %mygetenv vexpand front?
@@ -1618,14 +1698,15 @@ with the outdated node as a parameter.
 recipe to regenerate the file in the node.
 \l can have ambiguity, but always a master arc, a master rule (said later)
 %
-[[dorecipe()]] then calls [[run()]] to add in queue the job to run the recipe. 
+[[dorecipe()]] then calls [[run()]] to add in a queue the job to 
+run the recipe. 
 [[run()]] possibly calls [[sched()]] to schedule the job, if there was
 a free processor to run the job in parallel.
 %
 [[sched()]] then calls [[execsh()]] to fork and execute in a shell the recipe.
 
 
-[[mk()]] works by calling in a loop [[work()]] to schedule jobs in
+[[mk()]] calls [[work()]] in a loop, to schedule jobs in
 parallel until the root node is up-to-date. However, during those loops,
 [[work()]] may not be able to schedule any job. Indeed, all the processors
 may already be in use, or certain jobs may not be able to start until
@@ -7405,6 +7486,9 @@ pipecmd(char *cmd, Envy *e, int *fd)
 
 % actually two styles, `{...} or `...`
 
+% useful for `data`.
+% also useful for globbing! SRC=`echo *.c`
+
 <<[[assline()]] switch character cases>>=
 case '`':
     if (bquote(bp, buf) == ERROR_0)
@@ -9428,8 +9512,8 @@ maketmp(void)
 \section{The [[mkfile]]s of \plan}
 % mentioned in mk.ms ?
 
-\subsection{[[/$objtype/mkfile]]}
-%$
+\subsection{[[/$objtype/mkfile]] for the ARM} %$
+\label{sec:mkfile-objtype}
 
 \subsection{[[/sys/src/mkfile.proto]]}
 
