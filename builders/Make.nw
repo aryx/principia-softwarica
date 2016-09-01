@@ -786,7 +786,7 @@ Indeed, in the previous example, if only
 [[hello.c]] is modified, there is no need to recompile also [[world.c]],
 but that is what the script will do when it will be run again to rebuild
 the program.
-\l not incremental
+\l not incremental. rebuild from scratch.
 %
 An alternative for the programmer is to keep track in his head of
 all the modifications, and to recompile manually only what is necessary.
@@ -995,23 +995,19 @@ uses a graph to represent the dependencies between files.
 
 
 %\paragraph{Dependency arities}
-%advanced? maybe fundamental. what types of dependencies we need?
-% can have multiple targets:
+%What types of dependencies we need? can have multiple targets:
 %    x.ml x.mly: x.mly
 %  (but then can be confusing when making graph of deps. dont want
 %  run recipe twice, so tricky, so need mark multiple nodes from one job done)
 \n  also can be used to factorize simple rules like a.o b.o: x.h
 
-% can have same target and multiple rules (a condition only one recipe)
+% can have same target and multiple rules (but only if one recipe)
 %    x.o: x.c  recipe     x.o: y.h
 % (also with metarules below, when instantiate can add more rules??)
 %  but maybe this one is really sugar, could put all prerequisites at once!
 
 % lead to optional recipe. space/tab first char cos support multiline 
 % for shell command (otherwise would need escaped newline there too, ugly).
-
-% how to allow :: of GNU make? bad to allow :: in the end? can generate
-%  ambiguity? just agglomerate recipe?
 
 
 
@@ -1310,9 +1306,6 @@ $PROG: $OBJS
 % enter .depend 
 % (and so also need for multiple rules for same targets (but with empty recipe))
 
-% so ocamldep, 
-% gcc -MM.
-
 % related is library of variables and rules for different languages.
 
 % object level deps. libs.
@@ -1494,7 +1487,7 @@ and stopped.
 At this point, running [[mk]] should recompile [[world.c]]
 (and relink [[hello]]), but should not recompile [[hello.c]]. 
 
-%trans: Thx to labels, can understand algo.
+%trans: Thx to labels, ready to talk about algo.
 
 \subsubsection{Depth-first search on a tree}
 
@@ -1529,6 +1522,7 @@ Once the graph of dependencies is built,
 the main algorithm behind [[mk]] is to perform a 
 \l and other build systems?
 {\em depth-first search} (DFS) traversal on this graph.
+\l cite cormen?
 %
 Figure~\ref{fig:graph-hello-dfs} presents the order in which 
 the nodes are visited by the DFS on the previous graph.
@@ -1563,7 +1557,7 @@ then there is nothing to be done but to continue the DFS
 If the node is older than one or more of its prerequistes,
 for instance, [[world.5]] is older than [[world.c]] 
 in Figure~\ref{fig:graph-hello-labels},
-then the algorithm runs the associated recipe
+then the algorithm should run the associated recipe
 \l which recipe? recipe of arc?
 in a separate shell process.
 \l more on this later
@@ -1650,7 +1644,10 @@ the graph must remain acyclic.
 Indeed, a file can not depend on itself, directly or indirectly
 \l would make no sense.
 (Section~\ref{sec:cycle-check} presents the code to check for
-cycles in the graph of dependencies).
+{cycles} in the graph of dependencies).
+\t Moreover, because DAG, DFS needs record if visited already a node
+\t  to not update multiple times the same file
+\l even though here cannot see that cos common.h is a leaf
 
 
 There are multiple ways to add the dependency
@@ -1682,7 +1679,8 @@ hello.5: common.h
 \end{verbatim}
 
 It is important to impose to have the same recipe. 
-If the recipe was different, [[mk]] would be confronted with an ambiguity
+If the recipe was different, [[mk]] would be confronted with an 
+{\em ambiguity}
 when both the source file [[hello.c]] and the header [[common.h]] are modified:
 which recipe to choose to update the target [[hello.5]]?
 \l see Section X for ambiguity check?
@@ -1700,7 +1698,7 @@ hello.5: common.h
 
 This would work if the build system
 imposes that there must be another {single} rule,
-called a {\em master rule}, with the same target and including
+called the {\em master rule}, with the same target and including
 a recipe. In that case, there would be no ambiguity and no need
 to check if two recipes are equivalent.
 
@@ -1713,7 +1711,7 @@ but (3) is more convenient for the programmer as it works well with meta-rules.
 Moreover, when combined with file inclusion, (3) allows
 to leverage programs that automatically extract header
 dependencies from source files (e.g., [[gcc -MM]], [[ocamldep]]).
-\l other? makedepend?
+\l other? makedepend? furl?
 %
 Indeed, the output of such programs can simply be redirected
 in a [[.depend]] file that can be included from the [[mkfile]].
@@ -1777,7 +1775,7 @@ This is similar to the situation depicted by Figure~\ref{fig:graph-hello-dag}
 with the shared file [[common.h]].
 %
 However, in Figure~\ref{fig:graph-many-to-one}, 
-two files, [[parser.h]] and [[parser.c]], depend also exclusively
+two files, [[parser.h]] and [[parser.c]], depend {exclusively}
 on the same file, [[parser.y]], with the same recipe ([[yacc parser.y]]).
 %
 Indeed, this last file is a Yacc~\cite{yacc} grammar file.
@@ -1823,11 +1821,12 @@ DFS traversal of the graph of dependencies.
 Indeed, in Figure~\ref{fig:graph-many-to-one}, once the DFS has processed
 [[parser.y]], backtracked on [[parser.h]], and run the recipe
 to update [[parser.h]], 
-\n actually done indirectly through job queue
+\n actually done later and indirectly through job queue
 it is important that the algorithm adjusts the 
 modification time of both the [[parser.h]] and [[parser.c]] nodes.
+%
 If only the [[parser.h]] node is updated, [[mk]]
-would run another time the yacc command when the [[DFS]] would
+would run another time the yacc command when the [[DFS]]
 reach the [[parser.c]] node with an obsolete modification time.
 \l could also each time reread mtime
 This is why, as you will see later in Section~\ref{sec:multi-targets},
@@ -1835,36 +1834,153 @@ the arc from [[parser.h]] to [[parser.h]] contains also
 a reference to the [[parser.c]] node.
 \t so mk put as BEINGMADE alltargets ?
 
-
+%trans: this conclude examples of graphs? 
 
 
 \subsection{A job scheduler}
 
-[[mk]] maintains dependencies between files efficiently firstly
-because it is {\em incremental}. Indeed, if you modify
-only one source file, [[mk]] will recompile and relink only
-what is necessary.
+%trans: 
+I have described the main features of the DSL of a build system,
+the underlying representation of dependencies in a build system,
+as well as the basic algorithm behind a build system (the DFS); 
+I will now focus on the efficiency of a build system.
 %
-Another way [[mk]] 
-
-%trans:
-% having graph, easy to see can do things in parallel for efficiency.
-% If 2 brothers, then // cos independent!
+A build system maintains dependencies between files efficiently firstly
+by being an {\em incremental} program. Indeed, if you modify
+only one source file, the build system will recompile and 
+relink only what is necessary.
+%
+This is made possible by comparing the modification times of nodes 
+in the graph of dependencies.
+%
+In fact, this graph enables also the build system to be more efficient by
+running recipes in {\em parallel}.
+%
+Indeed, with a graph, it is easy to detect that two commands
+can be run in parallel if they belong to two independent branches in the graph.
+\l independent is too informal?
 \l In fact if 2 separate successors, can, even if at different level.
-% as explained in next section.
+\l but algo does not do those branch-check? it uses the BEINGMADE thing
+%
+For instance, in Figure~\ref{fig:graph-many-to-one}, 
+the recipes with the [[lex]] and [[yacc]] commands can be run in parallel.
+%
+However, if only [[lex]] finished, it is not possible
+to run [[5c -c lexer.c]] in parallel with [[yacc]] since
+there is an arc between [[lexer.5]] and [[parser.h]] in the graph.
 
-% efficiency.
-% incremental. Only what is needed.
-% Next step is //
 
-%trans:
-% build graph of deps, DFS. But can do things in parallel!
+To run recipes in parallel, a build system should not 
+wait during the DFS that a shell process finishes executing a recipe.
+%
+This is why, during the DFS, [[mk]] adds instead the recipe in a {\em queue},
+as well as a pointer to the target node (or target nodes) associated with
+the recipe, and continue the DFS.
+%
+That way, multiple recipes can be added in the queue and executed
+in parallel once the DFS finished.
+\n actually done during DFS via sched() (see later)
+%alt: do DFS in parallel? but then concurrency issue? if DAG?
+The recipe and associated target node(s) stored in the queue is called a
+{\em job} in [[mk]]'s terminology, and so the queue is a queue
+of jobs. Thus, [[mk]] is also a {\em job scheduler}.
+
+
+The use of a job queue has implications on the graph and the DFS.
+%
+Indeed, in Figure~\ref{fig:graph-hello-dfs} (as well as in
+Figure~\ref{fig:graph-being-made}), if the job to regenerate
+[[world.5]] from [[world.c]] is enqueud at step 7 (instead of being
+executed {synchronously}), the modification time of 
+[[world.5]] node will not be updated. 
+%
+Then, when the DFS backtracks on the root node (at step 8), 
+the modification time of the root node may still be more
+recent than all its prerequistes 
+(as shown in Figure~\ref{fig:graph-hello-labels}).
+However, [[mk]] should not stop there.
+\l but can detect that situation so, as job queue not empty
+This is why the modification time of nodes associated with a job
+should be marked specially in the graph.
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+                +-------+ NotMade
+            (1) | hello | (8)
+                +--X--^-+
+                    X  \
+                 / / \  \
+           / - -  /   \  \----\
+            /----/     \----\  \
+         / /                 \  \
+        v v                   v  \
+     +--------+          +--------+ BeingMade
+ (2) |hello.5 + - - - - >|world.5 | (7)
+     +--+-----+(4)    (5)+--+-----+
+          | ^ Made            | ^
+        | | |               | | |
+        v v                 v v
+Made +------+-+     Made +------+-+
+ (3) |hello.c |      (6) |world.c |
+     +--------+          +--------+
+\end{verbatim}
+\caption{Graph of dependencies with progress-status labels.}
+\label{fig:graph-being-made}
+\end{figure}
+
+
+To keep track of the nodes involved in a job, [[mk]] use
+an extra label on each node to indicate the progress status
+of the node: [[NotMade]], [[Made]], and [[BeingMade]]
+(as shown in Figure~\ref{fig:graph-being-made}).
+%
+The algorithm behind [[mk]] exposed previously is modified as follows.
+After the graph is built, every status labels in every nodes
+is set to [[NotMade]].
+%
+During the DFS, if the algorithm reaches a leaf with an existing
+file, the node is marked as [[Made]] (e.g., [[hello.c]] at step 3, and
+[[world.c]] at step 6 in Figure~\ref{fig:graph-being-made}).
+%
+During backtracking, the algorithm will use different marks
+depending on the situation:
+
+\begin{itemize}
+\item If the node is more recent than all its prerequistes,
+and all those nodes are marked as [[Made]], then this node is also
+marked as [[Made]] 
+(e.g., [[hello.5]] at step 4 in Figure~\ref{fig:graph-being-made}).
+
+\item If the node is older than one or more of its prerequistes,
+and those prerequistes are marked as [[Made]], then a new
+job will be enqueued and the node is marked as [[BeingMade]]
+(e.g., [[world.5]] at step 7 in Figure~\ref{fig:graph-being-made}).
+
+\item If the node is older or more recent, but one of its prerequistes
+is marked as [[BeingMade]], then the status should be kept as
+[[NotMade]].
+
+\end{itemize}
+
+[[mk]] will run in a loop multiple times the DFS until
+the root node is marked as [[Made]]. During each of those loops,
+the DFS will find new jobs to run in parallel.
+
+
+% just made vs notmade? why need also beingmade if have also generic visited?
+% and check on empty queue? because if have DAG?
+
+%real-world: Make has the need for BeingMade? it kinda wait
+% that all child are done still? 
+\t then less opportunity for //ization? Example?
+
 
 % When go through graph, when see older node, does not
 % run directly process and wait to finish. Schedule jobs.
 % and continue through graph to find possibly other
 % opportunities. But then need to mark in graph that
 % BEING MADE. So more labels. MADE, NOTMADE, BEINGMADE.
+% FIGURE X, once DFS processed hello.5
 % when check node if older, also need check everything is
 % MADE. 
 % So when DFS and leaf, then mark as MADE. When node,
@@ -1882,6 +1998,12 @@ Another way [[mk]]
 
 % FIGURE where can see different steps stuff you can do in //? 
 
+% Note that in Figure with yacc, if BeingMade on parser.h,
+% should also mark BeingMade for parser.c!
+
+% Note that in second wave, can have more efficient DFS as no need
+% go down in branch marked as Made
+\l mk does that? does not because bottleneck is not there?
 
 %trans: ?
 
@@ -9580,6 +9702,12 @@ freebuf(buf);
 % because all are READY, etc.
 
 
+% Note that did not cover much automatic dependencies.
+% Also tricky when change flags, flag should also be source
+% of dependencies (redo does that?)
+
+% how to allow :: of GNU make? bad to allow :: in the end? can generate
+%  ambiguity? just agglomerate recipe?
 
 
 \appendix
