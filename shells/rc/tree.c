@@ -23,8 +23,11 @@ newtree(void)
     t->iskw = false;
     t->str = nil;
     t->child[0] = t->child[1] = t->child[2] = nil;
+
+    // add_list(t, treenodes)
     t->next = treenodes;
     treenodes = t;
+
     return t;
 }
 /*e: function newtree */

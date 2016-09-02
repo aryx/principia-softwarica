@@ -189,6 +189,7 @@ void main(int argc, char *argv[])
         if(flag['i']==nil && argc==1 && Isatty(STDIN)) 
            flag['i'] = flagset;
     /*e: [[main()]] argc argv processing, modify flags */
+
     /*s: [[main()]] initialisation */
     err = openfd(STDERR);
     /*x: [[main()]] initialisation */
@@ -246,6 +247,7 @@ void main(int argc, char *argv[])
     for(i = argc-1;i!=0;--i) 
         pushword(argv[i]);
     /*e: [[main()]] initialize runq->argv */
+
     /*s: [[main()]] interpreter loop */
     for(;;){
         /*s: [[main()]] debug runq in interpreter loop */
@@ -398,11 +400,11 @@ Xexit(void)
 {
     struct Var *trapreq;
     struct Word *starval;
-    static int beenhere = 0;
+    static bool beenhere = false;
     if(getpid()==mypid && !beenhere){
         trapreq = vlook("sigexit");
         if(trapreq->fn){
-            beenhere = 1;
+            beenhere = true;
             --runq->pc;
             starval = vlook("*")->val;
             start(trapreq->fn, trapreq->pc, (struct Var *)0);
