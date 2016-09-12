@@ -79,7 +79,8 @@ struct	Node
     // option<ref_own<Node>>
     Node*	right;
 
-    long	lineno;
+    // after preprocessing, global lineno
+    long	lineno; 
 
     /*s: [[Node]] value fields */
     Sym*	sym; // for ONAME, ODOT/OELEM, OSTRUCT/OUNION
