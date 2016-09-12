@@ -1212,7 +1212,8 @@ copyau(Adr *a, Adr *v)
         } else if(a->type == D_SHIFT) {
             if((a->offset&0xf) == v->reg)
                 return 1;
-            if((a->offset&(1<<4)) && (a->offset>>8) == v->reg)
+            if((a->offset&(1<<4)) && 
+                (a->offset>>8) == v->reg)
                 return 1;
         }
     }
@@ -1251,7 +1252,8 @@ copysub(Adr *a, Adr *v, Adr *s, int f)
         if(a->type == D_SHIFT) {
             if((a->offset&0xf) == v->reg)
                 a->offset = (a->offset&~0xf)|s->reg;
-            if((a->offset&(1<<4)) && (a->offset>>8) == v->reg)
+            if((a->offset&(1<<4)) && 
+                          (a->offset>>8) == v->reg)
                 a->offset = (a->offset&~(0xf<<8))|(s->reg<<8);
         } else
             a->reg = s->reg;
