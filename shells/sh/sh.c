@@ -76,22 +76,32 @@ char	*path[] ={"/bin", 0};
 int	ignored;
 /*e: global ignored */
 
-Node	*alloc(int (*op)(Node *));
-int	builtin(Node *np);
-Node	*command(void);
-int	getch(void);
+// lexer
 int	gettoken(void);
+int	getch(void);
+// parser (recursive descent)
 Node	*list(void);
-void	error(char *s, char *t);
-Node	*pipeline(void);
-void	redirect(Node *np);
-int	setio(Node *np);
+Node	*command(void);
 Node	*simple(void);
+Node	*pipeline(void);
+int	setio(Node *np);
+// interpreter
+// see execute macro above
+int	builtin(Node *np);
+
+
+void	redirect(Node *np);
+
 int	xpipeline(Node *np);
 int	xsimple(Node *np);
 int	xsubshell(Node *np);
 int	xnowait(Node *np);
 int	xwait(Node *np);
+
+// error management
+void	error(char *s, char *t);
+// memory management
+Node	*alloc(int (*op)(Node *));
 
 /*s: function main (sh/sh.c) */
 void
@@ -486,7 +496,7 @@ xpipeline(Node *np)
         if(pid > 0)
             while(waitpid()!=pid)
                 ;
-        exits(0);
+        exits(nil);
     }else if(pid == -1){
         error("can't create process", "");
         return 0;
@@ -516,6 +526,7 @@ xsimple(Node *np)
     redirect(np);	/* child process */
     exec(np->argv[0], &np->argv[0]);
     i = np->argv[0][0];
+
     if(i!='/' && i!='#' && (i!='.' || np->argv[0][1]!='/'))
         for(i = 0; path[i]; i++){
             sprint(name, "%s/%s", path[i], np->argv[0]);
