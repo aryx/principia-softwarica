@@ -59,8 +59,10 @@ loop:
          n->xoffset = s->offset;
          n->class = s->class;
 
+         /*s: [[dodecl()]] debug declaration */
          if(debug['d'])
              dbgdecl(s);
+         /*e: [[dodecl()]] debug declaration */
          acidvar(s);
 
          s->varlineno = lineno;
@@ -202,14 +204,17 @@ doinit(Sym *s, Type *t, long o, Node *a)
         return Z;
     if(s->class == CEXTERN) {
         s->class = CGLOBL;
+        /*s: [[doinit()]] debug declaration */
         if(debug['d'])
             dbgdecl(s);
+        /*e: [[doinit()]] debug declaration */
     }
+    /*s: [[doinit()]] debug initialization */
     if(debug['i']) {
         print("t = %T; o = %ld; n = %s\n", t, o, s->name);
         prtree(a, "doinit value");
     }
-
+    /*e: [[doinit()]] debug initialization */
 
     n = initlist;
     if(a->op == OINIT)
@@ -340,10 +345,12 @@ init1(Sym *s, Type *t, long o, int exflag)
     if(a == Z)
         return Z;
 
+    /*s: [[init1()]] debug initialization */
     if(debug['i']) {
         print("t = %T; o = %ld; n = %s\n", t, o, s->name);
         prtree(a, "init1 value");
     }
+    /*e: [[init1()]] debug initialization */
 
     if(exflag && a->op == OINIT)
         return doinit(s, t, o, nextinit());
@@ -841,8 +848,10 @@ Node* revertdcl(void)
             return n;
         /*x: [[revertdcl()]] switch declaration type cases */
         case DSUE:
+            /*s: [[revertdcl()]] debug revert DSUE */
             if(debug['d'])
                 print("revert2 \"%s\"\n", s->name);
+            /*e: [[revertdcl()]] debug revert DSUE */
 
             // retore info previous tag
             s->suetag = d->type;
@@ -851,8 +860,10 @@ Node* revertdcl(void)
             break;
         /*x: [[revertdcl()]] switch declaration type cases */
         case DLABEL:
+            /*s: [[revertdcl()]] debug revert DLABEL */
             if(debug['d'])
                 print("revert3 \"%s\"\n", s->name);
+            /*e: [[revertdcl()]] debug revert DLABEL */
 
             /*s: [[reverdcl()]] DLABEL case, warn if label not used */
             if(s->label && s->label->addable == 0)
@@ -862,8 +873,10 @@ Node* revertdcl(void)
             break;
         /*x: [[revertdcl()]] switch declaration type cases */
         case DAUTO:
+            /*s: [[revertdcl()]] debug revert DAUTO */
             if(debug['d'])
                 print("revert1 \"%s\"\n", s->name);
+            /*e: [[revertdcl()]] debug revert DAUTO */
 
             /*s: [[reverdcl()]] DAUTO case, warn if auto declared but not used */
             if(!s->aused) {
@@ -1025,13 +1038,13 @@ push1(Sym *s)
     d->val = DAUTO;
 
     /*s: [[push1()]] save symbol fields in decl */
-    d->type = s->type;
+    d->type   = s->type;
     d->offset = s->offset;
-    d->block = s->block;
+    d->block  = s->block;
 
-    d->class = s->class;
+    d->class  = s->class;
+    d->aused  = s->aused;
     d->varlineno = s->varlineno;
-    d->aused = s->aused;
     /*e: [[push1()]] save symbol fields in decl */
 
     return d;
@@ -1327,8 +1340,10 @@ Node* dcllabel(Sym *s, bool defcontext)
 
     s->label = n;
 
+    /*s: [[dcllabel()]] debug declaration */
     if(debug['d'])
         dbgdecl(s);
+    /*e: [[dcllabel()]] debug declaration */
     return n;
 }
 /*e: function dcllabel */
@@ -1688,8 +1703,10 @@ void doenum(Sym *s, Node *n)
         en.lastenum++;
     }
 
+    /*s: [[doenum()]] debug declaration */
     if(debug['d'])
         dbgdecl(s);
+    /*e: [[doenum()]] debug declaration */
     acidvar(s);
 }
 /*e: function doenum */
@@ -1729,10 +1746,12 @@ Node* contig(Sym *s, Node *n, long v)
     long w;
     Type *zt;
 
+    /*s: [[contig()]] debug initialization */
     if(debug['i']) {
         print("contig v = %ld; s = %s\n", v, s->name);
         prtree(n, "doinit value");
     }
+    /*e: [[contig()]] debug initialization */
 
     if(n == Z)
         goto no;

@@ -52,6 +52,7 @@ getsym(void)
         unget(c);
         return S;
     }
+    // else isalpha() or '_'
     for(cp = symb;;) {
         if(cp <= symb+NSYMB-4)
             *cp++ = c;
@@ -61,7 +62,7 @@ getsym(void)
         unget(c);
         break;
     }
-    *cp = 0;
+    *cp = '\0';
     if(cp > symb+NSYMB-4)
         yyerror("symbol too large: %s", symb);
     return lookup();
@@ -70,7 +71,7 @@ getsym(void)
 
 /*s: function getsymdots */
 Sym*
-getsymdots(int *dots)
+getsymdots(bool *dots)
 {
     int c;
     Sym *s;
@@ -86,7 +87,7 @@ getsymdots(int *dots)
     }
     if(getc() != '.' || getc() != '.')
         yyerror("bad dots in macro");
-    *dots = 1;
+    *dots = true;
     return slookup("__VA_ARGS__");
 }
 /*e: function getsymdots */
@@ -101,14 +102,19 @@ getcom(void)
         c = getnsc();
         if(c != '/')
             break;
+        // else c == '/'
         c = getc();
+        /*s: [[getcom()]] if [[//]] comment */
         if(c == '/') {
             while(c != '\n')
                 c = getc();
             break;
         }
+        /*e: [[getcom()]] if [[//]] comment */
         if(c != '*')
             break;
+        // else c == '*'
+        /*s: [[getcom()]] when [[/*]] comment */
         c = getc();
         for(;;) {
             if(c == '*') {
@@ -124,6 +130,7 @@ getcom(void)
             }
             c = getc();
         }
+        /*e: [[getcom()]] when [[/*]] comment */
         if(c == '\n')
             break;
     }
@@ -142,17 +149,19 @@ dodefine(char *cp)
     strcpy(symb, cp);
     p = strchr(symb, '=');
     if(p) {
-        *p++ = 0;
+        *p++ = '\0';
         s = lookup();
         l = strlen(p) + 2;	/* +1 null, +1 nargs */
+      
         while(l & 3)
             l++;
-
         while(nhunk < l)
             gethunk();
-        *hunk = 0;
+        *hunk = '\0'; // 0 nargs
+
         strcpy(hunk+1, p);
         s->macro = hunk;
+
         hunk += l;
         nhunk -= l;
 
@@ -174,17 +183,17 @@ struct
     void	(*macf)(void);
 } mactab[] =
 {
-    "ifdef",	nil,	/* macif(0) */
-    "ifndef",	nil,	/* macif(1) */
-    "else",	nil,	/* macif(2) */
+    "ifdef",    nil,    /* macif(0) */
+    "ifndef",   nil,    /* macif(1) */
+    "else",     nil,    /* macif(2) */
 
-    "line",	maclin,
-    "define",	macdef,
-    "include",	macinc,
-    "undef",	macund,
+    "line",     maclin,
+    "define",   macdef,
+    "include",  macinc,
+    "undef",    macund,
 
-    "pragma",	macprag,
-    "endif",	macend,
+    "pragma",   macprag,
+    "endif",    macend,
     0
 };
 /*e: global mactab */
@@ -197,8 +206,10 @@ domacro(void)
     Sym *s;
 
     s = getsym();
+    /*s: [[domacro()]] set s to endif symbol if no symbol */
     if(s == S)
         s = slookup("endif");
+    /*e: [[domacro()]] set s to endif symbol if no symbol */
 
     for(i=0; mactab[i].macname; i++)
         if(strcmp(s->name, mactab[i].macname) == 0) {
@@ -209,6 +220,7 @@ domacro(void)
                 macif(i);
             return;
         }
+    // else
     yyerror("unknown #: %s", s->name);
     macend();
 }
@@ -220,12 +232,15 @@ macund(void)
 {
     Sym *s;
 
+    // lexing
     s = getsym();
     macend();
     if(s == S) {
         yyerror("syntax in #undef");
         return;
     }
+
+    // action
     s->macro = nil;
 }
 /*e: function macund */
@@ -237,21 +252,34 @@ macund(void)
 void
 macdef(void)
 {
-    Sym *s, *a;
-    char *args[NARG], *np, *base;
-    int n, i, c, len, dots;
-    int ischr;
+    char *args[NARG]; // parameters
+    // option<int> (None = -1), size of parameters
+    int n;
+    bool dots;
+    char *base; // body
+    /*s: [[macdef()]] other locals */
+    Sym *s;
+    Sym *a;
+    char *np;
+    int i, c, len;
+    int ischr; // quote character
+    /*e: [[macdef()]] other locals */
 
+    // lexing 
+    /*s: [[macdef]] lexing the macro name */
     s = getsym();
     if(s == S)
         goto bad;
     if(s->macro)
         yyerror("macro redefined: %s", s->name);
+    /*e: [[macdef]] lexing the macro name */
+    /*s: [[macdef]] lexing the parameters */
     c = getc();
-    n = -1;
-    dots = 0;
+    n = -1; // no parameter (which is different than 0 argument)
+    dots = false;
+
     if(c == '(') {
-        n++;
+        n++; // at least 0 parameters now
         c = getnsc();
         if(c != ')') {
             unget(c);
@@ -276,10 +304,15 @@ macdef(void)
     if(isspace(c))
         if(c != '\n')
             c = getnsc();
+    /*e: [[macdef]] lexing the parameters */
+    /*s: [[macdef]] lexing the body */
     base = hunk;
     len = 1;
     ischr = 0;
+
     for(;;) {
+        /*s: [[macdef()]] when lexing the body, if identifier */
+        // identifier
         if(isalpha(c) || c == '_') {
             np = symb;
             *np++ = c;
@@ -288,7 +321,8 @@ macdef(void)
                 *np++ = c;
                 c = getc();
             }
-            *np = 0;
+            *np = '\0';
+
             for(i=0; i<n; i++)
                 if(strcmp(symb, args[i]) == 0)
                     break;
@@ -299,12 +333,16 @@ macdef(void)
                 len += i;
                 continue;
             }
+            // else
             base = allocn(base, len, 2);
             base[len++] = '#';
             base[len++] = 'a' + i;
             continue;
         }
+        /*e: [[macdef()]] when lexing the body, if identifier */
+        /*s: [[macdef()]] when lexing the body, if string or character or comment */
         if(ischr){
+            // inside a string or character
             if(c == '\\'){ 
                 base = allocn(base, len, 1);
                 base[len++] = c;
@@ -312,6 +350,7 @@ macdef(void)
             }else if(c == ischr)
                 ischr = 0;
         }else{
+            // string or character
             if(c == '"' || c == '\''){
                 base = allocn(base, len, 1);
                 base[len++] = c;
@@ -319,9 +358,12 @@ macdef(void)
                 c = getc();
                 continue;
             }
+            /*s: [[macdef()]] if comment */
+            // comment
             if(c == '/') {
                 c = getc();
                 if(c == '/'){
+                    // // comment
                     c = getc();
                     for(;;) {
                         if(c == '\n')
@@ -331,6 +373,7 @@ macdef(void)
                     continue;
                 }
                 if(c == '*'){
+                    // /* comment
                     c = getc();
                     for(;;) {
                         if(c == '*') {
@@ -352,13 +395,18 @@ macdef(void)
                 base[len++] = '/';
                 continue;
             }
+            /*e: [[macdef()]] if comment */
         }
+        /*e: [[macdef()]] when lexing the body, if string or character or comment */
+
+        // antislash outside a string
         if(c == '\\') {
             c = getc();
             if(c == '\n') {
                 c = getc();
                 continue;
             }
+            // windows
             else if(c == '\r') {
                 c = getc();
                 if(c == '\n') {
@@ -366,19 +414,23 @@ macdef(void)
                     continue;
                 }
             }
+            // else
             base = allocn(base, len, 1);
             base[len++] = '\\';
             continue;
         }
         if(c == '\n')
             break;
-        if(c == '#')
-        if(n > 0) {
+
+        if(c == '#') // escape # by adding an extra #
+          if(n > 0) {
             base = allocn(base, len, 1);
             base[len++] = c;
         }
         base = allocn(base, len, 1);
         base[len++] = c;
+
+        // GETC
         c = ((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff));
         if(c == '\n')
             lineno++;
@@ -391,8 +443,11 @@ macdef(void)
         base = allocn(base, len, 1);
         base[len++] = 0;
     } while(len & 3);
+    /*e: [[macdef]] lexing the body */
 
-    *base = n+1;
+    // action
+
+    *base = n+1; // nargs (+1 to differentiate #define foo() from #define foo)
     if(dots)
         *base |= VARMAC;
     s->macro = base;
@@ -415,17 +470,28 @@ bad:
 void
 macexpand(Sym *s, char *b)
 {
+    int  nargs;
+    bool dots;
+    int  c;
+    /*s: [[macexpand()]] other locals */
     char buf[2000];
-    int n, l, c, nargs;
-    char *arg[NARG], *cp, *ob, *ecp, dots;
+    int n;
+    int l; // depth
+    char *arg[NARG]; // the arguments
+    char *cp, *ecp;
+    char *ob = b;
+    /*e: [[macexpand()]] other locals */
 
-    ob = b;
-    if(*s->macro == 0) {
+    // if macro has no parameter
+    if(*s->macro == '\0') {
         strcpy(b, s->macro+1);
+        /*s: [[macexpand()]] debug macro expansion */
         if(debug['m'])
             print("#expand %s %s\n", s->name, ob);
+        /*e: [[macexpand()]] debug macro expansion */
         return;
     }
+    // else, macro has parameters
     
     nargs = (char)(*s->macro & ~VARMAC) - 1;
     dots = *s->macro & VARMAC;
@@ -433,18 +499,25 @@ macexpand(Sym *s, char *b)
     c = getnsc();
     if(c != '(')
         goto bad;
+
+    /*s: [[macexpand()]] parsing the arguments */
     n = 0;
     c = getc();
     if(c != ')') {
         unget(c);
+
         l = 0;
         cp = buf;
         ecp = cp + sizeof(buf)-4;
         arg[n++] = cp;
+
         for(;;) {
             if(cp >= ecp)
                 goto toobig;
             c = getc();
+
+            /*s: [[macexpand()]] when parsing the arguments, if string */
+            // string argument
             if(c == '"')
                 for(;;) {
                     if(cp >= ecp)
@@ -461,6 +534,9 @@ macexpand(Sym *s, char *b)
                     if(c == '"')
                         break;
                 }
+            /*e: [[macexpand()]] when parsing the arguments, if string */
+            /*s: [[macexpand()]] when parsing the arguments, if character */
+            // quote argument
             if(c == '\'')
                 for(;;) {
                     if(cp >= ecp)
@@ -477,6 +553,9 @@ macexpand(Sym *s, char *b)
                     if(c == '\'')
                         break;
                 }
+            /*e: [[macexpand()]] when parsing the arguments, if character */
+            /*s: [[macexpand()]] when parsing the arguments, if comment */
+            // comment
             if(c == '/') {
                 c = getc();
                 switch(c) {
@@ -500,13 +579,14 @@ macexpand(Sym *s, char *b)
                     c = '/';
                 }
             }
+            /*e: [[macexpand()]] when parsing the arguments, if comment */
             if(l == 0) {
                 if(c == ',') {
                     if(n == nargs && dots) {
                         *cp++ = ',';
                         continue;
                     }
-                    *cp++ = 0;
+                    *cp++ = '\0';
                     arg[n++] = cp;
                     if(n > nargs)
                         break;
@@ -523,13 +603,16 @@ macexpand(Sym *s, char *b)
             if(c == ')')
                 l--;
         }
-        *cp = 0;
+        *cp = '\0';
     }
     if(n != nargs) {
         yyerror("argument mismatch expanding: %s", s->name);
-        *b = 0;
+        *b = '\0';
         return;
     }
+    /*e: [[macexpand()]] parsing the arguments */
+
+    /*s: [[macexpand()]] substituting the arguments */
     cp = s->macro+1;
     for(;;) {
         c = *cp++;
@@ -541,10 +624,11 @@ macexpand(Sym *s, char *b)
                 break;
             continue;
         }
+        // else
         c = *cp++;
         if(c == 0)
             goto bad;
-        if(c == '#') {
+        if(c == '#') { // # are escaped as double ##
             *b++ = c;
             continue;
         }
@@ -554,20 +638,24 @@ macexpand(Sym *s, char *b)
         strcpy(b, arg[c]);
         b += strlen(arg[c]);
     }
-    *b = 0;
+    *b = '\0';
+    /*e: [[macexpand()]] substituting the arguments */
+
+    /*s: [[macexpand()]] debug macro expansion */
     if(debug['m'])
         print("#expand %s %s\n", s->name, ob);
+    /*e: [[macexpand()]] debug macro expansion */
 
     return;
 
 bad:
     yyerror("syntax in macro expansion: %s", s->name);
-    *b = 0;
+    *b = '\0';
     return;
 
 toobig:
     yyerror("too much text in macro expansion: %s", s->name);
-    *b = 0;
+    *b = '\0';
 }
 /*e: function macexpand */
 
@@ -575,9 +663,17 @@ toobig:
 void
 macinc(void)
 {
-    int c0, c, i, f;
-    char str[STRINGSZ], *hp;
+    char str[STRINGSZ];
+    char *hp = str;
+    int i;
+    /*s: [[macinc()]] other locals */
+    int c0, c;
+    /*e: [[macinc()]] other locals */
+    fdt f;
 
+    // lexing
+
+    /*s: [[macinc()]] lexing the included filename */
     c0 = getnsc();
     if(c0 != '"') {
         c = c0;
@@ -585,7 +681,7 @@ macinc(void)
             goto bad;
         c0 = '>';
     }
-    for(hp = str;;) {
+    for(;;) {
         c = getc();
         if(c == c0)
             break;
@@ -593,20 +689,25 @@ macinc(void)
             goto bad;
         *hp++ = c;
     }
-    *hp = 0;
+    *hp = '\0';
 
     c = getcom();
     if(c != '\n')
         goto bad;
+    /*e: [[macinc()]] lexing the included filename */
 
+    // action
+
+    /*s: [[macinc()]] finding the included filename full path */
     f = -1;
     for(i=0; i<ninclude; i++) {
-        if(i == 0 && c0 == '>')
+        if(i == 0 && c0 == '>') // do not look in '.' for system headers
             continue;
+
         strcpy(symb, include[i]);
         strcat(symb, "/");
         if(strcmp(symb, "./") == 0)
-            symb[0] = 0;
+            symb[0] = '\0';
         strcat(symb, str);
 
         f = open(symb, 0);
@@ -616,16 +717,19 @@ macinc(void)
     }
     if(f < 0)
         strcpy(symb, str);
-    c = strlen(symb) + 1;
+    /*e: [[macinc()]] finding the included filename full path */
+
+    c = strlen(symb) + 1; 
+
     while(c & 3)
         c++;
-
     while(nhunk < c)
         gethunk();
     hp = hunk;
-    memcpy(hunk, symb, c);
     nhunk -= c;
     hunk += c;
+
+    memcpy(hp, symb, c);
 
     newio();
     pushio();
@@ -646,6 +750,8 @@ maclin(void)
     char *cp;
     int c;
     long n;
+
+    // lexing
 
     n = getnsn();
     c = getc();
@@ -672,10 +778,12 @@ maclin(void)
             break;
         *cp++ = c;
     }
-    *cp = 0;
+    *cp = '\0';
     c = getcom();
     if(c != '\n')
         goto bad;
+
+    // action
 
 nn:
     c = strlen(symb) + 1;
@@ -703,54 +811,69 @@ bad:
 void
 macif(int f)
 {
-    int c, l;
-    bool bol;
     Sym *s;
+    /*s: [[macif()]] other locals */
+    int c;
+    int l; // depth
+    bool bol; // beginning of line
+    /*e: [[macif()]] other locals */
 
-    if(f == 2)
+    if(f == 2) // else
         goto skip;
+
+    // lexing
+
+    /*s: [[macif()]] lexing the symbol */
     s = getsym();
     if(s == S)
         goto bad;
     if(getcom() != '\n')
         goto bad;
+    /*e: [[macif()]] lexing the symbol */
+
     if((s->macro != nil) ^ f)
         return;
+    // else
 
-skip:
-    bol = true;
-    l = 0;
-    for(;;) {
-        c = getc();
-        if(c != '#') {
-            if(!isspace(c))
-                bol = false;
-            if(c == '\n')
-                bol = true;
-            continue;
-        }
-        if(!bol)
-            continue;
-        s = getsym();
-        if(s == S)
-            continue;
-        if(strcmp(s->name, "endif") == 0) {
-            if(l) {
-                l--;
+    // action
+    /*s: [[macif()]] skipping text */
+    skip:
+        bol = true;
+        l = 0;
+        for(;;) {
+            c = getc();
+            if(c != '#') {
+                if(!isspace(c))
+                    bol = false;
+                if(c == '\n')
+                    bol = true;
                 continue;
             }
-            macend();
-            return;
+            // else a #xxx
+            if(!bol)
+                continue;
+
+            s = getsym();
+            if(s == S)
+                continue;
+            if(strcmp(s->name, "endif") == 0) {
+                if(l) {
+                    l--;
+                    continue;
+                }
+                macend();
+                return;
+            }
+            if(strcmp(s->name, "ifdef") == 0 || strcmp(s->name, "ifndef") == 0) {
+                l++;
+                continue;
+            }
+            if(l == 0 && f != 2 && strcmp(s->name, "else") == 0) {
+                macend();
+                return;
+            }
         }
-        if(strcmp(s->name, "ifdef") == 0 || strcmp(s->name, "ifndef") == 0) {
-            l++;
-            continue;
-        }
-        if(l == 0 && f != 2 && strcmp(s->name, "else") == 0) {
-            macend();
-            return;
-        }
-    }
+    /*e: [[macif()]] skipping text */
 
 bad:
     yyerror("syntax in #if(n)def");
@@ -766,6 +889,8 @@ macprag(void)
     int c0, c;
     char *hp;
     Hist *h;
+
+    // lexing
 
     s = getsym();
 
@@ -807,8 +932,9 @@ macprag(void)
         h = alloc(sizeof(Hist));
         h->name = hp;
         h->line = lineno;
-        h->offset = -1;
+        h->offset = -1; // pragma
 
+        // add_list(h, hist)
         h->link = H;
         if(ehist == H) {
             hist = h;
@@ -853,16 +979,19 @@ linehist(char *f, int offset)
 {
     Hist *h;
 
+    /*s: [[linehist()]] possibly overwrite last line directive */
     /*
      * overwrite the last #line directive if
      * no alloc has happened since the last one
      */
-    if(newflag == false && ehist != H && offset != 0 && ehist->offset != 0)
+    if(!newflag && ehist != H && offset != 0 && ehist->offset != 0)
         if(f && ehist->name && strcmp(f, ehist->name) == 0) {
             ehist->line = lineno;
             ehist->offset = offset;
             return;
         }
+    newflag = false;
+    /*e: [[linehist()]] possibly overwrite last line directive */
     /*s: [[linehist()]] debug */
     if(debug['f'])
         if(f) {
@@ -874,12 +1003,12 @@ linehist(char *f, int offset)
             print("%4ld: <pop>\n", lineno);
     /*e: [[linehist()]] debug */
 
-    newflag = false;
-
     h = alloc(sizeof(Hist));
     h->name = f;
     h->line = lineno;
     h->offset = offset;
+
+    // add_list(h, hist)
     h->link = H;
     if(ehist == H) {
         hist = h;

@@ -261,6 +261,7 @@ struct	Decl
     /*x: [[Decl]] sym copy fields */
     char	class;
     long	varlineno;
+    /*x: [[Decl]] sym copy fields */
     bool	aused;
     /*e: [[Decl]] sym copy fields */
 
@@ -336,7 +337,9 @@ struct	Init			/* general purpose initialization */
 /*s: struct Fi */
 struct Fi
 {
+    // ref<char> (target = Io.b)
     char*	p;
+    // remaining characters in Io.b to read
     int	c;
 };
 /*e: struct Fi */
@@ -345,14 +348,20 @@ extern struct Fi fi;
 /*s: struct Io */
 struct	Io
 {
-    char	b[BUFSIZ];
-
+    // option<fdt> (None = -1)
     short	f;
-
+    /*s: [[Io]] buffer fields */
+    char	b[BUFSIZ];
+    /*x: [[Io]] buffer fields */
+    // like Fi, saved pointers in Io.b
     char*	p;
     short	c;
-
+    /*e: [[Io]] buffer fields */
+    // Extra
+    /*s: [[Io]] extra fields */
+    // list<ref_own<Io>> (from = iostack or iofree)
     Io*	link;
+    /*e: [[Io]] extra fields */
 };
 /*e: struct Io */
 /*s: constant I */
@@ -362,12 +371,18 @@ struct	Io
 /*s: struct Hist */
 struct	Hist
 {
+    // option<ref_own<string> (None = nil = a ``pop'')
     char*	name;
 
+    // global line of this Hist
     long	line;
+    // 0 for #include, +n for #line, -1 for #pragma lib (ugly)
     long	offset;
 
+    // Extra
+    /*s: [[Hist]] extra fields */
     Hist*	link;
+    /*e: [[Hist]] extra fields */
 };
 /*e: struct Hist */
 /*s: constant H */
@@ -621,6 +636,7 @@ enum type_kind_bis {
     TAUTO	= NTYPE,
     TEXTERN,
     TSTATIC,
+
     TTYPEDEF, // ugly, not really a storage class
     TREGISTER,
     /*x: [[Type_kind_bis]] storage cases */
@@ -710,7 +726,7 @@ enum storage_class
 /*s: enum qualifier */
 enum qualifier
 {
-    GXXX		= 0,
+    GXXX		= 0, // None
 
     GCONSTNT	= 1<<0,
     GVOLATILE	= 1<<1,

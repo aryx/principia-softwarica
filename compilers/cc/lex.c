@@ -65,6 +65,8 @@ void main(int argc, char *argv[])
     int ndef = 0;
     /*x: [[main()]] locals */
     char *p;
+    /*x: [[main()]] locals */
+    // growing_array<string>
     char **np;
     int maxdef = 0;
     /*x: [[main()]] locals */
@@ -80,12 +82,12 @@ void main(int argc, char *argv[])
     arginit(); // printf argument checking initialisation
     /*e: [[main()]] xxxinit() */
     /*s: [[main()]] remaining initialisation */
+    setinclude(".");
+    /*x: [[main()]] remaining initialisation */
     tufield = simplet((1L<<tfield->etype) | BUNSIGNED);
     /*x: [[main()]] remaining initialisation */
     profileflg = true;	/* #pragma can turn it off */
     /*e: [[main()]] remaining initialisation */
-
-    setinclude(".");
 
     ARGBEGIN {
     /*s: [[main()]] command line processing */
@@ -96,6 +98,7 @@ void main(int argc, char *argv[])
     case 'D':
         p = ARGF();
         if(p) {
+           /*s: [[main()]] when -D in command line processing, grow defs array */
             // realloc, growing array
             if(ndef >= maxdef){
                 maxdef += 50;
@@ -104,8 +107,9 @@ void main(int argc, char *argv[])
                     memmove(np, defs, (maxdef - 50) * sizeof *np);
                 defs = np;
             }
-
+           /*e: [[main()]] when -D in command line processing, grow defs array */
             defs[ndef++] = p;
+
             dodefine(p);
         }
         break;
@@ -207,7 +211,7 @@ compile(char *infile, char **defs, int ndef)
     strcpy(ofile, infile);
     p = utfrrune(ofile, pathchar());
     if(p) {
-        *p++ = 0;
+        *p++ = '\0';
         if(!debug['.'])
             include[0] = strdup(ofile);
     } else
@@ -254,6 +258,7 @@ compile(char *infile, char **defs, int ndef)
 
     if (first)
         Binit(&diagbuf, STDOUT, OWRITE);
+    first = false;
 
     /*s: [[compile()]] if writing acid to standard output */
     /*
@@ -277,8 +282,11 @@ compile(char *infile, char **defs, int ndef)
         }
         Binit(&outbuf, ofd, OWRITE);
     }
+
+    /*s: [[compile()]] initialize IO */
+    // for embedded cpp
     newio();
-    first = false;
+    /*e: [[compile()]] initialize IO */
 
     /*s: [[compile()]] if use ANSI preprocessor */
     /* Use an ANSI preprocessor */
@@ -337,7 +345,7 @@ compile(char *infile, char **defs, int ndef)
     /*e: [[compile()]] if use ANSI preprocessor */
     else {
         if(strcmp(infile, "stdin") == 0)
-            newfile(infile, 0);
+            newfile(infile, STDIN);
         else
             newfile(infile, -1);
     }
@@ -374,6 +382,8 @@ void
 newio(void)
 {
     Io *i;
+
+    /*s: [[newio()]] allocate a new Io in [[i]] or find a free one */
     static int pushdepth = 0;
 
     i = iofree;
@@ -386,6 +396,7 @@ newio(void)
         i = alloc(sizeof(*i));
     } else
         iofree = i->link;
+    /*e: [[newio()]] allocate a new Io in [[i]] or find a free one */
     i->c = 0;
     i->f = -1;
     ionext = i;
@@ -398,12 +409,16 @@ newfile(char *s, int f)
 {
     Io *i;
 
+    /*s: [[newfile()]] debug */
     if(debug['e'])
         print("%L: %s\n", lineno, s);
+    /*e: [[newfile()]] debug */
 
+    // add_list(ionext, iostack)
     i = ionext;
     i->link = iostack;
     iostack = i;
+
     i->f = f;
     if(f < 0)
         i->f = open(s, 0);
@@ -412,7 +427,10 @@ newfile(char *s, int f)
         errorexit();
     }
     fi.c = 0;
+
+    /*s: [[newfile()]] call linehist */
     linehist(s, 0);
+    /*e: [[newfile()]] call linehist */
 }
 /*e: function newfile */
 
@@ -436,6 +454,7 @@ lookup(void)
     char *p;
     int c, n;
 
+    // h = hash(symb)
     h = 0;
     for(p=symb; *p;) {
         h = h * 3;
@@ -453,11 +472,13 @@ lookup(void)
         if(strcmp(s->name, symb) == 0)
             return s;
     }
+    // else
     s = alloc(sizeof(*s));
     s->name = alloc(n);
     memmove(s->name, symb, n);
 
     strcpy(s->name, symb);
+
     s->link = hash[h];
     hash[h] = s;
     syminit(s);
@@ -499,12 +520,15 @@ syminit(Sym *s)
 /*e: function GETC */
 
 /*s: enum numxxx */
-enum numxxx
+enum Numxxx
 {
     Numdec		= 1<<0,
-    Numlong		= 1<<1,
+    /*s: [[Numxxx]] cases */
     Numuns		= 1<<2,
+    /*x: [[Numxxx]] cases */
+    Numlong		= 1<<1,
     Numvlong	= 1<<3,
+    /*e: [[Numxxx]] cases */
     Numflt		= 1<<4,
 };
 /*e: enum numxxx */
@@ -513,24 +537,33 @@ enum numxxx
 //@Scheck: not dead, called by yyparse
 long yylex(void)
 {
-    long c;
+    long c; // Rune?
     /*s: [[yylex()]] locals */
-    vlong vv;
-    long c1, t;
+    long c1;
+    /*x: [[yylex()]] locals */
     char *cp;
-    Rune rune;
+    /*x: [[yylex()]] locals */
     Sym *s;
+    /*x: [[yylex()]] locals */
+    vlong vv;
+    // enum<Type_kind>
+    long t;
+    /*x: [[yylex()]] locals */
+    Rune rune;
     /*e: [[yylex()]] locals */
 
+    /*s: [[yylex()]] peekc handling, starting part */
     if(peekc != IGN) {
         c = peekc;
         peekc = IGN;
         goto l1;
     }
+    /*e: [[yylex()]] peekc handling, starting part */
 l0:
     c = GETC();
 
 l1:
+    /*s: [[yylex()]] if unicode character */
     if(c >= Runeself) {
         /*
          * extension --
@@ -539,13 +572,19 @@ l1:
         cp = symb;
         goto talph;
     }
+    /*e: [[yylex()]] if unicode character */
     if(isspace(c)) {
+        /*s: [[yylex()]] if c is newline */
         if(c == '\n')
             lineno++;
+        /*e: [[yylex()]] if c is newline */
+        // ignore spaces
         goto l0;
     }
+    /*s: [[yylex()]] before switch, if isxxx */
     if(isalpha(c)) {
         cp = symb;
+        /*s: [[yylex()]] if L followed by unicode strings or character */
         if(c != 'L')
             goto talph;
 
@@ -553,10 +592,10 @@ l1:
         c = GETC();
         if(c == '\'') {
             /* L'x' */
-            c = escchar('\'', 1, 0);
+            c = escchar('\'', true, false);
             if(c == EOF)
                 c = '\'';
-            c1 = escchar('\'', 1, 0);
+            c1 = escchar('\'', true, false);
             if(c1 != EOF) {
                 yyerror("missing '");
                 peekc = c1;
@@ -567,35 +606,23 @@ l1:
         if(c == '"') {
             goto caselq;
         }
+        /*e: [[yylex()]] if L followed by unicode strings or character */
         goto talph;
     }
+    /*x: [[yylex()]] before switch, if isxxx */
     if(isdigit(c))
         goto tnum;
-
+    /*e: [[yylex()]] before switch, if isxxx */
     switch(c) {
     /*s: [[yylex()]] switch c cases */
     case EOF:
         peekc = EOF;
-        return -1;
-    /*x: [[yylex()]] switch c cases */
-    case '#':
-        domacro();
-        goto l0;
-    /*x: [[yylex()]] switch c cases */
-    case '.':
-        c1 = GETC();
-        if(isdigit(c1)) {
-            cp = symb;
-            *cp++ = c;
-            c = c1;
-            c1 = 0;
-            goto casedot;
-        }
-        break;
+        return -1; // EOF
     /*x: [[yylex()]] switch c cases */
     case '/':
         c1 = GETC();
         if(c1 == '*') {
+            // '/''*' read, skip everything until next '*''/'
             for(;;) {
                 c = getr();
                 while(c == '*') {
@@ -610,6 +637,7 @@ l1:
             }
         }
         if(c1 == '/') {
+            // '/''/' read, skip everything until next '\n'
             for(;;) {
                 c = getr();
                 if(c == '\n')
@@ -718,16 +746,28 @@ l1:
             return LXORE;
         break;
     /*x: [[yylex()]] switch c cases */
+    case '.':
+        c1 = GETC();
+        if(isdigit(c1)) {
+            cp = symb;
+            *cp++ = c;
+            c = c1;
+            c1 = 0;
+            goto casedot;
+        }
+        break;
+    /*x: [[yylex()]] switch c cases */
     case '\'':
         /* '.' */
-        c = escchar('\'', 0, 0);
+        c = escchar('\'', false, false);
         if(c == EOF)
             c = '\'';
-        c1 = escchar('\'', 0, 0);
+        c1 = escchar('\'', false, false);
         if(c1 != EOF) {
             yyerror("missing '");
             peekc = c1;
         }
+
         vv = c;
         yylval.vval = convvtox(vv, TUCHAR);
         if(yylval.vval != vv)
@@ -747,7 +787,7 @@ l1:
 
         /* "..." */
         for(;;) {
-            c = escchar('"', 0, 1);
+            c = escchar('"', false, true);
             if(c == EOF)
                 break;
             if(c & ESC) {
@@ -764,7 +804,7 @@ l1:
         yylval.sval.l = c1;
         do {
             cp = allocn(cp, c1, 1);
-            cp[c1++] = 0;
+            cp[c1++] = '\0';
         } while(c1 & MAXALIGN);
         yylval.sval.s = cp;
         return LSTRING;
@@ -775,7 +815,7 @@ l1:
         cp = alloc(0);
         c1 = 0;
         for(;;) {
-            c = escchar('"', 1, 0);
+            c = escchar('"', true, false);
             if(c == EOF)
                 break;
             cp = allocn(cp, c1, sizeof(TRune));
@@ -790,11 +830,17 @@ l1:
         } while(c1 & MAXALIGN);
         yylval.sval.s = cp;
         return LLSTRING;
+    /*x: [[yylex()]] switch c cases */
+    case '#':
+        domacro();
+        goto l0;
     /*e: [[yylex()]] switch c cases */
     default:
         return c;
     }
+    /*s: [[yylex()]] peekc handling, ending part */
     peekc = c1;
+    /*e: [[yylex()]] peekc handling, ending part */
     return c;
 
 /*s: [[yylex()]] labels */
@@ -804,6 +850,7 @@ talph:
      * prefix has been stored
      */
     for(;;) {
+        /*s: [[yylex()]] in talph case, if unicode character */
         if(c >= Runeself) {
             for(c1=0;;) {
                 cp[c1++] = c;
@@ -815,35 +862,45 @@ talph:
             c = GETC();
             continue;
         }
+        /*e: [[yylex()]] in talph case, if unicode character */
         if(!isalnum(c) && c != '_')
             break;
         *cp++ = c;
         c = GETC();
     }
-    *cp = 0;
+    *cp = '\0';
+    /*s: [[yylex()]] in talph case, debug symbol */
     if(debug['L'])
         print("%L: %s\n", lineno, symb);
+    /*e: [[yylex()]] in talph case, debug symbol */
     peekc = c;
 
     // the important call!
     s = lookup();
 
+    /*s: [[yylex()]] in talph case, if macro symbol */
     if(s->macro) {
         newio();
         cp = ionext->b;
         macexpand(s, cp);
         pushio();
+
+        // push_list(ionext, iostack)
         ionext->link = iostack;
         iostack = ionext;
+
         fi.p = cp;
         fi.c = strlen(cp);
+
         if(peekc != IGN) {
             cp[fi.c++] = peekc;
-            cp[fi.c] = 0;
+            cp[fi.c] = '\0';
             peekc = IGN;
         }
         goto l0;
     }
+    /*e: [[yylex()]] in talph case, if macro symbol */
+
     yylval.sym = s;
     /*s: [[yylex()]] alpha case, return LTYPE if typedef symbol s */
     if(s->class == CTYPEDEF || s->class == CTYPESTR)
@@ -855,6 +912,7 @@ tnum:
     c1 = 0;
     cp = symb;
     if(c != '0') {
+        // not an hexa or octal number
         c1 |= Numdec;
         for(;;) {
             *cp++ = c;
@@ -864,6 +922,8 @@ tnum:
             goto dc;
         }
     }
+    /*s: [[yylex()]] in number case, 0xxx handling */
+    // else, octal or hexadecimal number
     *cp++ = c;
     c = GETC();
     if(c == 'x' || c == 'X')
@@ -891,31 +951,41 @@ tnum:
         goto ncu;
     }
     //Fallthrough
+    /*e: [[yylex()]] in number case, 0xxx handling */
+/*s: [[yylex()]] in number case, decimal dc label handling */
 dc:
+    /*s: [[yylex()]] in number case, in decimal case, float handling */
     if(c == '.')
         goto casedot;
     if(c == 'e' || c == 'E')
         goto casee;
+    /*e: [[yylex()]] in number case, in decimal case, float handling */
     //Fallthrough
+/*s: [[yylex()]] in number case, in decimal case, ncu suffix label handling */
 ncu:
     if((c == 'U' || c == 'u') && !(c1 & Numuns)) {
         c = GETC();
         c1 |= Numuns;
         goto ncu;
     }
-    if((c == 'L' || c == 'l') && !(c1 & Numvlong)) {
-        c = GETC();
-        if(c1 & Numlong)
-            c1 |= Numvlong;
-        c1 |= Numlong;
-        goto ncu;
-    }
-    *cp = 0;
+/*e: [[yylex()]] in number case, in decimal case, ncu suffix label handling */
+/*s: [[yylex()]] in number case, in decimal case, long suffix label handling */
+if((c == 'L' || c == 'l') && !(c1 & Numvlong)) {
+    c = GETC();
+    if(c1 & Numlong)
+        c1 |= Numvlong;
+    c1 |= Numlong;
+    goto ncu;
+}
+/*e: [[yylex()]] in number case, in decimal case, long suffix label handling */
+    *cp = '\0';
     peekc = c;
+
     if(mpatov(symb, &yylval.vval))
         yyerror("overflow in constant");
 
     vv = yylval.vval;
+    /*s: [[yylex()]] in number case, in decimal case, if vlong number */
     if(c1 & Numvlong) {
         if((c1 & Numuns) || convvtox(vv, TVLONG) < 0) {
             c = LUVLCONST;
@@ -926,6 +996,8 @@ ncu:
         t = TVLONG;
         goto nret;
     }
+    /*e: [[yylex()]] in number case, in decimal case, if vlong number */
+    /*s: [[yylex()]] in number case, in decimal case, if long number */
     if(c1 & Numlong) {
         if((c1 & Numuns) || convvtox(vv, TLONG) < 0) {
             c = LULCONST;
@@ -936,14 +1008,18 @@ ncu:
         t = TLONG;
         goto nret;
     }
+    /*e: [[yylex()]] in number case, in decimal case, if long number */
+    /*s: [[yylex()]] in number case, in decimal case, if unsigned number */
     if((c1 & Numuns) || convvtox(vv, TINT) < 0) {
         c = LUCONST;
         t = TUINT;
         goto nret;
     }
+    /*e: [[yylex()]] in number case, in decimal case, if unsigned number */
     c = LCONST;
     t = TINT;
     goto nret;
+/*e: [[yylex()]] in number case, decimal dc label handling */
 /*x: [[yylex()]] labels */
 nret:
     yylval.vval = convvtox(vv, t);
@@ -981,7 +1057,7 @@ casee:
 caseout:
     if(c == 'L' || c == 'l') {
         c = GETC();
-        c1 |= Numlong;
+        c1 |= Numlong; // DEAD? used?
     } else
     if(c == 'F' || c == 'f') {
         c = GETC();
@@ -1079,11 +1155,15 @@ getc(void)
 {
     int c;
 
+    /*s: [[getc()]] peekc handling */
     if(peekc != IGN) {
         c = peekc;
         peekc = IGN;
-    } else
+    }
+    /*e: [[getc()]] peekc handling */
+    else
         c = GETC();
+
     if(c == '\n')
         lineno++;
     if(c == EOF) {
@@ -1132,11 +1212,15 @@ getnsc(void)
 {
     int c;
 
+    /*s: [[getnsc()]] peekc handling */
     if(peekc != IGN) {
         c = peekc;
         peekc = IGN;
-    } else
+    }
+    /*e: [[getnsc()]] peekc handling */
+    else
         c = GETC();
+
     for(;;) {
         if(c >= Runeself || !isspace(c))
             return c;
@@ -1178,7 +1262,10 @@ loop:
             c = EOF;
         return c;
     }
+    // else c is '\\'
     c = getr();
+
+    /*s: [[escchar()]] if hexadecimal character */
     if(c == 'x') {
         /*
          * note this is not ansi,
@@ -1209,6 +1296,8 @@ loop:
             l |= ESC;
         return l;
     }
+    /*e: [[escchar()]] if hexadecimal character */
+    /*s: [[escchar()]] if octal character */
     if(c >= '0' && c <= '7') {
         /*
          * note this is not ansi,
@@ -1230,6 +1319,7 @@ loop:
             l |= ESC;
         return l;
     }
+    /*e: [[escchar()]] if octal character */
     switch(c)
     {
     case '\n':	goto loop;
@@ -1237,6 +1327,7 @@ loop:
     case 't':	return '\t';
     case 'b':	return '\b';
     case 'r':	return '\r';
+
     case 'f':	return '\f';
     case 'a':	return '\a';
     case 'v':	return '\v';
@@ -1286,8 +1377,8 @@ struct
     "if",		LIF,		0,
     "else",		LELSE,		0,
     "while",	LWHILE,		0,
-    "for",		LFOR,		0,
     "do",		LDO,		0,
+    "for",		LFOR,		0,
     "break",	LBREAK,		0,
     "continue",	LCONTINUE,	0,
     "switch",	LSWITCH,	0,
@@ -1321,10 +1412,11 @@ cinit(void)
     nerrors = 0;
     /*x: [[cinit()]] lexing globals initialization */
     lineno = 1;
-    peekc = IGN;
     /*x: [[cinit()]] lexing globals initialization */
     iostack = I;
     iofree = I;
+    /*x: [[cinit()]] lexing globals initialization */
+    peekc = IGN;
     /*e: [[cinit()]] lexing globals initialization */
     /*s: [[cinit()]] memory globals initialization */
     nhunk = 0;
@@ -1332,19 +1424,19 @@ cinit(void)
     /*s: [[cinit()]] types initialization */
     types[TXXX] = T;
 
-    types[TCHAR] = typ(TCHAR, T);
-    types[TUCHAR] = typ(TUCHAR, T);
-    types[TSHORT] = typ(TSHORT, T);
+    types[TCHAR]   = typ(TCHAR, T);
+    types[TUCHAR]  = typ(TUCHAR, T);
+    types[TSHORT]  = typ(TSHORT, T);
     types[TUSHORT] = typ(TUSHORT, T);
-    types[TINT] = typ(TINT, T);
-    types[TUINT] = typ(TUINT, T);
-    types[TLONG] = typ(TLONG, T);
-    types[TULONG] = typ(TULONG, T);
-    types[TVLONG] = typ(TVLONG, T);
+    types[TINT]    = typ(TINT, T);
+    types[TUINT]   = typ(TUINT, T);
+    types[TLONG]   = typ(TLONG, T);
+    types[TULONG]  = typ(TULONG, T);
+    types[TVLONG]  = typ(TVLONG, T);
     types[TUVLONG] = typ(TUVLONG, T);
-    types[TFLOAT] = typ(TFLOAT, T);
+    types[TFLOAT]  = typ(TFLOAT, T);
     types[TDOUBLE] = typ(TDOUBLE, T);
-    types[TVOID] = typ(TVOID, T);
+    types[TVOID]   = typ(TVOID, T);
 
     types[TENUM] = typ(TENUM, T);
     types[TFUNC] = typ(TFUNC, types[TINT]);
@@ -1392,9 +1484,10 @@ cinit(void)
     fmtinstall('O', Oconv);
     fmtinstall('T', Tconv);
     fmtinstall('F', FNconv);
-    fmtinstall('L', Lconv);
     fmtinstall('Q', Qconv);
     fmtinstall('|', VBconv);
+    /*x: [[cinit()]] fmtinstall */
+    fmtinstall('L', Lconv);
     /*e: [[cinit()]] fmtinstall */
 }
 /*e: function cinit */
@@ -1414,24 +1507,33 @@ loop:
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     if(fi.c < 0) {
         close(i->f);
+        /*s: [[filbuf()]] when close file, call linehist */
         linehist(0, 0);
+        /*e: [[filbuf()]] when close file, call linehist */
         goto pop;
     }
     fi.p = i->b + 1;
     return i->b[0] & 0xff;
 
+/*s: [[filbuf()]] pop */
 pop:
+    // pop(iostack)
     iostack = i->link;
+    // push(i, iofree)
     i->link = iofree;
     iofree = i;
+
+    // i = top(iostack), the fresh top of the stack input file
     i = iostack;
     if(i == I)
         return EOF;
+    // restore file pointers
     fi.p = i->p;
     fi.c = i->c;
     if(--fi.c < 0)
         goto loop;
     return *fi.p++ & 0xff;
+/*e: [[filbuf()]] pop */
 }
 /*e: function filbuf */
 
@@ -1523,6 +1625,7 @@ Lconv(Fmt *fp)
     }
     if(n == 0)
         strcat(str, "<eof>");
+
     return fmtstrcpy(fp, str);
 }
 /*e: function Lconv */
@@ -1663,16 +1766,19 @@ setinclude(char *p)
     int i;
     char *e, **np;
 
-    while(*p != 0) {
+    while(*p != '\0') {
         e = strchr(p, ' ');
-        if(e != 0)
+        if(e != nil)
             *e = '\0';
 
+        // already there?
         for(i=0; i < ninclude; i++)
             if(strcmp(p, include[i]) == 0)
                 break;
 
         if(i >= ninclude){
+            /*s: [[setinclude()]] grow the array if necessary */
+            // grow the array
             if(i >= maxinclude){
                 maxinclude += 20;
                 np = alloc(maxinclude * sizeof *np);
@@ -1680,10 +1786,11 @@ setinclude(char *p)
                     memmove(np, include, (maxinclude - 20) * sizeof *np);
                 include = np;
             }
+            /*e: [[setinclude()]] grow the array if necessary */
             include[ninclude++] = p;
         }
 
-        if(e == 0)
+        if(e == nil)
             break;
         p = e+1;
     }

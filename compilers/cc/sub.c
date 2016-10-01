@@ -20,14 +20,17 @@ new(int t, Node *l, Node *r)
     n->left = l;
     n->right = r;
 
+    /*s: [[new()]] set lineno */
     if(l && t != OGOTO)
         n->lineno = l->lineno;
     else if(r)
         n->lineno = r->lineno;
     else
         n->lineno = lineno;
-
+    /*x: [[new()]] set lineno */
     newflag = true;
+    /*e: [[new()]] set lineno */
+
     return n;
 }
 /*e: function new */
@@ -214,7 +217,7 @@ int simplec(long b)
     b &= BCLASS;
     switch(b) {
     case 0: 
-    // skipping regsiter
+    // skipping register
     case BREGISTER:
         return CXXX;
     case BAUTO:
@@ -247,6 +250,7 @@ simplet(long b)
 {
 
     b &= ~BCLASS & ~BGARB;
+
     switch(b) {
     case BCHAR:
     case BCHAR|BSIGNED:

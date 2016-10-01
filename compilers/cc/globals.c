@@ -50,15 +50,18 @@ Sym*	hash[NHASH];
 char*	hunk;
 /*e: global hunk */
 /*s: global include */
+// growing_array<string>
 char**	include;
 /*e: global include */
 /*s: global iofree */
 Io*	iofree;
 /*e: global iofree */
 /*s: global ionext */
+// option<ref<Io>>
 Io*	ionext;
 /*e: global ionext */
 /*s: global iostack */
+// list<ref_own<Io> (next = Io.link)
 Io*	iostack;
 /*e: global iostack */
 /*s: global lastbit */

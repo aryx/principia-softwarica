@@ -63,6 +63,7 @@
 %left   ','
 %right  '=' LPE LME LMLE LDVE LMDE LRSHE LLSHE LANDE LXORE LORE
 %right  '?' ':'
+
 %left   LOROR
 %left   LANDAND
 %left   '|'
@@ -73,6 +74,7 @@
 %left   LLSH LRSH
 %left   '+' '-'
 %left   '*' '/' '%'
+
 %right  LMM LPP LMG '.' '[' '('
 /*e: priority and associativity declarations */
 /*s: type declarations */
@@ -749,8 +751,10 @@ tname:  /* type words */
 |   LSHORT    { $$ = BSHORT; }
 |   LINT      { $$ = BINT; }
 |   LLONG     { $$ = BLONG; }
+
 |   LFLOAT    { $$ = BFLOAT; }
 |   LDOUBLE   { $$ = BDOUBLE; }
+
 |   LVOID     { $$ = BVOID; }
 /*x: tname rule */
 |   LSIGNED   { $$ = BSIGNED; }

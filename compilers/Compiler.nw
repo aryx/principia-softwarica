@@ -11,7 +11,7 @@
 %history:
 %------------------------------------------------------------------------------
 
-%thx to LP, changed for the better a few things:
+%thx to LP, I changed for the better a few things:
 % - deadcode (TFILE, OFAS, OTST, OENUM, CSELEM, CLABEL)
 % - rename more consistently things (thisfn->thisfntype, lastdcl->lastdcltype)
 % - TODO D_CONST -> D_ADDR
@@ -29,12 +29,14 @@
 
 %thx to this manual, better understand compilers and C:
 % - TODO assignment of structures? deep copy?
-% - TODO x++ and ++x in complex situations
 % - SEMI initialisation of complex globals, e.g. znode, all fields set to 0?
 %   it's a kernel loader issue, BSS is zeroe'd
+% - TODO x++ and ++x in complex situations
 % - TODO what happen if pass array in func? int foo(int arr[4]), pass
 %   actually a pointer? see Network.nw
-% - the LL UL suffix to numbers
+% - the LL UL suffix to numbers? especially unsigned?
+% - SEMI the meaning of volatile, how things are not optimized to stay
+%   in a register
 
 %history LP-ization:
 % - skeleton, mostly copy paste of Template.nw skeleton
@@ -153,10 +155,10 @@ assembly, and ultimately machine code, is essential.
 % even ocaml needs C :) for ocamlrun and its runtime library
 
 
-Here are a few questions we hope this book will answer:
+Here are a few questions I hope this book will answer:
 \begin{itemize}
 
-\item How are conditionals, loops, and other control flow constructs
+\item How are conditionals, loops, and other control-flow constructs
 translated in basic assembly jumps?
 %codegen: labelize
 
@@ -167,7 +169,7 @@ assembly instructions using a small set of registers?
 \item How is translated a switch?
 
 \item How are passed the arguments in a function call?
-Are registers used? Or the stack? How is communicated the return value
+Are registers used? Is the stack used? How is communicated the return value
 to the caller?
 %codegen: frameize
 
@@ -194,8 +196,8 @@ to the caller?
 
 \section{Other compilers}
 
-Here are a few compilers that I considered for this book but
-which were ultimately discarded:
+Here are a few compilers that I considered for this book, but
+which I ultimately discarded:
 
 \begin{itemize}
 
@@ -209,18 +211,21 @@ which were ultimately discarded:
 
 \item lcc 
 %maybe better actually, but already a book on it, 
-% 20 000LOC according to wikipedia
+% 20 000 LOC according to wikipedia
 % but seems to not use yacc (or lex), and copyright seems restrictive
 
 \item compcert
 % harder to understand coq :), but definitly better IL and CFG I think.
+
+\item bcc
+% bruce evans, code used by linus at the beginning?
 
 \item tinycc, fbcc
 % cool maybe
 
 \item cminusminus
 % maybe a good idea to also present c--
-
+% just for backend.
 
 \item rust
 % Maybe rust could replace C one day, but we are not there yet
@@ -228,15 +233,11 @@ which were ultimately discarded:
 % uses C :)
 % use SSA and MIR now (middleend intermediate IR)
 
-\item bcc
-% bruce evans, code used by linus at the beginning?
-
 \end{itemize}
 
 %\item Tiger
 % not real, not C, but more educatif and better written for teaching purpose
 % (actually can maybe refer to govereau book?)
-
 
 %https://github.com/melling/ComputerLanguages/blob/master/compilers.org
 % (small for now)
@@ -324,7 +325,7 @@ I would like to acknowledge of course the author of
 [[5c]], Ken Thompson, 
 who wrote in some sense most of this book.
 
-% mireille ducasse, marie jo pedrono
+% Mireille Ducasse, Marie Jo Pedrono
 % Aho, Appel
 
 
@@ -447,12 +448,17 @@ who wrote in some sense most of this book.
 
 \section{[[helloworld.c]]}
 
-% (at least put an arithmetic expression?)
+% show ARM assembly output for a simple program.
+
+% (at least put an arithmetic expression? "hello world, 42 is the answer!")
 
 \section{Input C language}
 
 % mostly ANSI C. a few extensions.
 % see K&R book.
+
+% show tricky stuff? like scope and blockid?
+% struct x; forward decl.
 
 % TODO add __LINE__? 
 % TODO add check for code not using return value (e.g.
@@ -526,7 +532,7 @@ who wrote in some sense most of this book.
 \section{Software architecture}
 
 % actually all in one program, cpp, assembler. Probably
-%  to avoid fork to have a really fast compiler (because pike
+%  to avoid fork to have a really fast compiler (because Pike
 %  hated cpp and long compilation time, which led in the end
 %  to some strong design choices for Go)
 % in fact time 8c vs time pcc is really big on my machine.
@@ -534,7 +540,7 @@ who wrote in some sense most of this book.
 
 % see lex.c#main()! have command line flags in comment
 
-% lexer -> preprocessor -> parser -> ast -> visit and gen assembly -> opti
+% lexer -> preprocessor -> parser -> AST -> visit and gen assembly -> opti
 %  -> object ARM code.
 % with optimisations done?
 
@@ -569,7 +575,10 @@ who wrote in some sense most of this book.
 
 
 
+
+
 %###############################################################################
+
 
 \chapter{Core Data Structures}
 
@@ -634,6 +643,11 @@ enum node_kind
 % which is a bit more difficult)
 %dead: OTST,		/* used in some compilers */
 %dead: OFAS
+%ocaml: use ADT.
+
+% each time OXXX TXXX for start and end. Sentinel.
+% But OXXX to mark as wront value?
+%ocaml: just use precise AST. no need OXXX and OEND.
 
 <<struct Node>>=
 struct	Node
@@ -673,6 +687,7 @@ struct	Node
 % hmm get some warnings though when do that, but maybe should fix those 
 % warnings anyway
 %still?: different split? identifier field where have sym and storage? 
+%ocaml: use ADT, and mv semantic fields to another phase?
 
 % put value fields here?
 % How things are represented for
@@ -696,7 +711,7 @@ struct	Node
 OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
 @
 % add an OPAIR alias?
-%ocaml: note that ADT would be better ...
+%ocaml: use 'a list (expr list, stmt list, etc)
 
 
 % for nodes involving a symbol (entity used, field access)
@@ -705,7 +720,8 @@ OLIST, // of stmts/labels/parameters/...  and also for pairs/triples/...
 Sym*	sym; // for ONAME, ODOT/OELEM, OSTRUCT/OUNION
 @
 % see Sym in next section
-
+%ocaml: do naming directly? or can rely on external hashtbl instead
+% of direct pointer?
 
 
 
@@ -773,20 +789,25 @@ new(int t, Node *l, Node *r)
     n->left = l;
     n->right = r;
 
-    if(l && t != OGOTO)
-        n->lineno = l->lineno;
-    else if(r)
-        n->lineno = r->lineno;
-    else
-        n->lineno = lineno;
+    <<[[new()]] set lineno>>
 
-    newflag = true;
     return n;
 }
 @
-%less: newflag?
+
 %less: why this special thing about OGOTO? becaus goto take a symbol
 % and don't want the line of the symbol?
+%ocaml: build directly AST
+
+<<[[new()]] set lineno>>=
+if(l && t != OGOTO)
+    n->lineno = l->lineno;
+else if(r)
+    n->lineno = r->lineno;
+else
+    n->lineno = lineno;
+@
+%ocaml: ? mk_exp ?
 
 <<global lineno>>=
 long	lineno;
@@ -830,6 +851,7 @@ new1(int o, Node *l, Node *r)
 Node	znode;
 @
 % This get its fields set to zero by default? Semantic of C?
+%ocaml: build directly
 
 \subsection{[[Type]]}
 
@@ -843,7 +865,7 @@ enum type_kind
     NTYPE,
 };
 @
-\t put major categories, integers, float, composite,
+\t LP split more and put major categories, integers, float, composite,
 
 % basic types
 <<type cases>>=
@@ -867,11 +889,13 @@ TUVLONG,
 % just have those 10 basic types! (and the floats below)
 %coupling: with the global 'tab' which use initialisers that
 % assumes a certain order
+%ocaml: can factorize the Signed vs Unsigned
 
 <<type cases>>=
 TFLOAT,
 TDOUBLE,
 @
+% no double long as in gcc?
 
 <<type cases>>=
 TVOID,
@@ -924,6 +948,10 @@ struct	Type
 };
 @
 %less: char -> ushort? but get some warnings (but we should fix that too)
+%ocaml: ADT better again here.
+
+\l lineno of what here? of def? of use? so if two vars use int type,
+\l will get same lineno or 2 different?
 
 % Here are how things are represented for the different composed types:
 %  - TVOID, simple, should actually be in the simple case
@@ -938,7 +966,6 @@ struct	Type
 %  - TYPEDEF? they are not in enum type_kind! they are substitued
 %    at use time? where?
 %  - TFUNC: the return is in the link, the parameters in the down
-%ocaml: note that ADT would be better again here.
 
 % when type involves a symbol, e.g. for tags in struct/union/enum
 <<[[Type]] value fields>>=
@@ -956,6 +983,8 @@ Type*	type;
 % so it's more than an AST actually, there is semantic info attached to it
 % by other phases.
 % see Type in next section
+%ocaml: separate AST? or have generic AST? 'a xxx ? need that just for expr
+% but because of mutual recursivity, might need that for stmt too.
 
 % seems mostly inline of type->etype, except in fvn() and ccom()
 <<[[Node]] type and storage fields>>=
@@ -964,7 +993,7 @@ char	etype;
 @
 %less: could remove? redundant no? annoying to maintain?
 % annoying those n->etype = (s->type?): s->type->etype: TVOID;
-
+%ocaml: remove
 
 <<[[Type]] qualifier fields>>=
 // enum<qualifier>
@@ -978,7 +1007,7 @@ char	garb;
 <<enum qualifier>>=
 enum qualifier
 {
-    GXXX		= 0,
+    GXXX		= 0, // None
 
     GCONSTNT	= 1<<0,
     GVOLATILE	= 1<<1,
@@ -990,6 +1019,7 @@ enum qualifier
 @
 % >> >> >> >>
 % see also gnames in debugging section
+% GINCOMPLETE?
 
 % storage class is not there! it's an attribute of the 
 % variable, not of the type of the variable, so it's
@@ -1033,7 +1063,7 @@ typ(int et, Type *d)
 long	width; // ewidth[Type.etype]
 @
 % semantic phase? for codegen?
-
+%ocaml: separate
 
 <<function copytyp>>=
 Type*
@@ -1046,30 +1076,34 @@ copytyp(Type *t)
     return nt;
 }
 @
-% typ will copy.
+%ocaml: just share
+
+% typ will copy. actually they will share their down and link field!
+%  not a deep copy.
 
 %Why see that global? because often used?
 <<global types>>=
 Type*	types[NTYPE];
 @
-
+%ocaml: no diff between enum and full type. Use ADT so get powerful
+% enum directly.
 
 <<[[cinit()]] types initialization>>=
 types[TXXX] = T;
 
-types[TCHAR] = typ(TCHAR, T);
-types[TUCHAR] = typ(TUCHAR, T);
-types[TSHORT] = typ(TSHORT, T);
+types[TCHAR]   = typ(TCHAR, T);
+types[TUCHAR]  = typ(TUCHAR, T);
+types[TSHORT]  = typ(TSHORT, T);
 types[TUSHORT] = typ(TUSHORT, T);
-types[TINT] = typ(TINT, T);
-types[TUINT] = typ(TUINT, T);
-types[TLONG] = typ(TLONG, T);
-types[TULONG] = typ(TULONG, T);
-types[TVLONG] = typ(TVLONG, T);
+types[TINT]    = typ(TINT, T);
+types[TUINT]   = typ(TUINT, T);
+types[TLONG]   = typ(TLONG, T);
+types[TULONG]  = typ(TULONG, T);
+types[TVLONG]  = typ(TVLONG, T);
 types[TUVLONG] = typ(TUVLONG, T);
-types[TFLOAT] = typ(TFLOAT, T);
+types[TFLOAT]  = typ(TFLOAT, T);
 types[TDOUBLE] = typ(TDOUBLE, T);
-types[TVOID] = typ(TVOID, T);
+types[TVOID]   = typ(TVOID, T);
 
 types[TENUM] = typ(TENUM, T);
 types[TFUNC] = typ(TFUNC, types[TINT]);
@@ -1139,6 +1173,8 @@ struct	Sym
 % for the same symbol 's'. 
 %coupling: if add a field here, don't forget to update Decl too
 % and especially its "sym copy fields" section
+%ocaml: have an environment types, with different fields for the 
+% different namespaces
 
 %namespace: it's the symbol table for different kind of names
 % - identifier, see s->type, s->class, etc s->xoffset? x->block?
@@ -1183,7 +1219,7 @@ Sym*	link;
 <<constant S>>=
 #define	S	((Sym*)nil)
 @
-
+%ocaml: use Hashtbl
 
 <<[[cinit()]] hash initialization>>=
 for(i=0; i<NHASH; i++)
@@ -1202,6 +1238,7 @@ slookup(char *s)
     return lookup();
 }
 @
+%ocaml: use Hashtbl.find
 
 
 <<global symb>>=
@@ -1210,7 +1247,7 @@ char	symb[NSYMB];
 <<constant NSYMB>>=
 #define	NSYMB		1500
 @
-%assembler: similiar
+%assembler: similar
 
 <<function lookup>>=
 Sym*
@@ -1221,6 +1258,7 @@ lookup(void)
     char *p;
     int c, n;
 
+    // h = hash(symb)
     h = 0;
     for(p=symb; *p;) {
         h = h * 3;
@@ -1238,11 +1276,13 @@ lookup(void)
         if(strcmp(s->name, symb) == 0)
             return s;
     }
+    // else
     s = alloc(sizeof(*s));
     s->name = alloc(n);
     memmove(s->name, symb, n);
 
     strcpy(s->name, symb);
+
     s->link = hash[h];
     hash[h] = s;
     syminit(s);
@@ -1252,7 +1292,7 @@ lookup(void)
 @
 %assembler: similiar
 %linker: similiar
-
+%ocaml: use Hashtbl.find and do not use a global
 
 % complex sub structure :)
 <<[[Sym]] identifier value fields>>=
@@ -1282,6 +1322,7 @@ ushort	block;
 <<[[Sym]] macro value fields>>=
 char*	macro;
 @
+%ocaml: have separate cpp
 
 % for labels?
 %  see later labels
@@ -1294,7 +1335,7 @@ char*	macro;
 ushort	lexical;
 @
 % for if, then, where value is then TIF, ...
-
+%ocaml: dont abuse Sym for everything, use Lexing.lexeme
 
 <<function syminit>>=
 void
@@ -1339,7 +1380,6 @@ enum namespace
 % - LAUTO(lexeme), 
 % - CAUTO(class), 
 % hmmm that's a lot.
-
 %ocaml: DMARK is ugly, we should just use a list of list.
 
 <<struct Decl>>=
@@ -1426,10 +1466,14 @@ push1(Sym *s)
 <<global blockno>>=
 int	blockno;
 @
+% blockcounter
 
 <<global autobn>>=
 int	autobn;
 @
+% managed in a stack
+%ocaml: put in env stack like other things instead of abusing fields
+% to save old value
 
 <<[[cinit()]] namespace globals initialization>>=
 blockno = 0;
@@ -1456,6 +1500,7 @@ void markdcl(void)
 }
 @
 % save current scope autobn, so can restore it when pop DMARK.
+%ocaml: just introduce a new list, no need DMARK
 
 <<[[Decl]] sym copy fields>>=
 Type*	type;  // for Sym.type and Sym.suetag
@@ -1464,6 +1509,7 @@ long	offset; // for Sym.offset and autoffset
 @
 % this are sym copy fields and also copy of autobn and autooffset
 % actually.
+\l rename old_type, old_block, old_offset?
 
 % where dealloc things? 
 % - end of functions all labels attached to Sym of that name should be freed?
@@ -1501,6 +1547,7 @@ Node* revertdcl(void)
 % what is this Node n? why return a node? because when we revert
 % a local volatile we actually generate some fake nodes USED(&local_volatile)
 % so we need to return this OLIST of hidden generated nodes.
+%ocaml: just pop
 
 <<[[revertdcl()]] switch declaration type cases>>=
 case DMARK:
@@ -1511,12 +1558,12 @@ case DMARK:
     return n;
 @
 % return here! we don't want to go further
+% autoffset should be in a separate phase? dont abuse Decl for everything?
 
 
 <<[[revertdcl()]] switch declaration type cases>>=
 case DSUE:
-    if(debug['d'])
-        print("revert2 \"%s\"\n", s->name);
+    <<[[revertdcl()]] debug revert DSUE>>
 
     // retore info previous tag
     s->suetag = d->type;
@@ -1528,8 +1575,7 @@ case DSUE:
 
 <<[[revertdcl()]] switch declaration type cases>>=
 case DLABEL:
-    if(debug['d'])
-        print("revert3 \"%s\"\n", s->name);
+    <<[[revertdcl()]] debug revert DLABEL>>
 
     <<[[reverdcl()]] DLABEL case, warn if label not used>>
     s->label = Z;
@@ -1537,15 +1583,14 @@ case DLABEL:
 @
 %less: no restore? probably because labels are at function scope
 % and there is no global labels, so safe to set to Z.
-% see dcllabels(), maybe they are not added in the current
-% scope but the function scope?
+\t see dcllabels(), maybe they are not added in the current
+\t   scope but the function scope?
 %lint: start to to do lint check at parsing time :)
 
 
 <<[[revertdcl()]] switch declaration type cases>>=
 case DAUTO:
-    if(debug['d'])
-        print("revert1 \"%s\"\n", s->name);
+    <<[[revertdcl()]] debug revert DAUTO>>
 
     <<[[reverdcl()]] DAUTO case, warn if auto declared but not used>>
     <<[[reverdcl()]] if volatile symbol>>
@@ -1559,8 +1604,14 @@ case DAUTO:
 <<[[Decl]] sym copy fields>>=
 char	class;
 long	varlineno;
+@
+\l rename old_class, old_varlineno?
+
+<<[[Decl]] sym copy fields>>=
 bool	aused;
 @
+% a used for used/set checking!
+% see also Sym.aused
 
 <<[[reverdcl()]] DAUTO case, restore symbol fields from decl>>=
 s->type = d->type;
@@ -1574,13 +1625,13 @@ s->aused = d->aused;
 
 
 <<[[push1()]] save symbol fields in decl>>=
-d->type = s->type;
+d->type   = s->type;
 d->offset = s->offset;
-d->block = s->block;
+d->block  = s->block;
 
-d->class = s->class;
+d->class  = s->class;
+d->aused  = s->aused;
 d->varlineno = s->varlineno;
-d->aused = s->aused;
 @
 
 
@@ -1603,6 +1654,7 @@ d->aused = s->aused;
    <<[[union yacc]] other fields>>
 }
 @
+%ocaml: dont do symbol table and naming in parsing. Do that later.
 
 % from cc.y
 <<token declarations>>=
@@ -1611,6 +1663,9 @@ d->aused = s->aused;
 %token  <dval>  LFCONST LDCONST
 %token  <sval>  LSTRING LLSTRING
 @
+\l LTYPE -> LTYPENAME
+%ocaml: factorize the U vs nonU and I vs L vs VL, have sign and intsize type
+%ocaml: same for floats and strings
 
 <<token declarations>>=
 %token  LVOID   LCHAR LSHORT LINT LLONG   LDOUBLE LFLOAT   LSIGNED LUNSIGNED
@@ -1657,7 +1712,7 @@ struct	Prog
 % line information of the C code.
 % 'char' is enough, less than 255 ARM opcodes :)
 %linker: same?
-
+%ocaml: just reuse same type; use Ast_asm5.ml, precise AST.
 
 % really ARM specific
 <<[[Prog]] other fields(arm)>>=
@@ -1779,6 +1834,7 @@ int ndef = 0;
 @
 % the -Dxxx
 %less: why have not something similar for Assembler.nw?
+%ocaml: use list directly
 
 <<function main>>=
 //@Scheck: not dead, entry point :)
@@ -1790,8 +1846,6 @@ void main(int argc, char *argv[])
 
     <<[[main()]] xxxinit()>>
     <<[[main()]] remaining initialisation>>
-
-    setinclude(".");
 
     ARGBEGIN {
     <<[[main()]] command line processing>>
@@ -1812,6 +1866,9 @@ void main(int argc, char *argv[])
 }
 @
 % compile returns number of possible errors
+%ocaml: be stricter
+
+% really useful to compile stdin??
 
 
 <<[[main()]] xxxinit()>>=
@@ -1820,6 +1877,9 @@ cinit(); // C lexing/parsing globals initialisation
 ginit(); // arch dependent globals initialisation, 5c/8c/...
 arginit(); // printf argument checking initialisation
 @
+%ocaml: no need, can initialize things in modules already
+% and most of those things are not needed because we build things
+% directly
 
 <<[[ginit()]] initialisation>>=
 thechar = '5';
@@ -1839,28 +1899,40 @@ case 'o':
 
 <<[[main()]] locals>>=
 char *p;
-char **np;
-int maxdef = 0;
 @
 
 <<[[main()]] command line processing>>=
 case 'D':
     p = ARGF();
     if(p) {
-        // realloc, growing array
-        if(ndef >= maxdef){
-            maxdef += 50;
-            np = alloc(maxdef * sizeof *np);
-            if(defs != nil)
-                memmove(np, defs, (maxdef - 50) * sizeof *np);
-            defs = np;
-        }
-
+       <<[[main()]] when -D in command line processing, grow defs array>>
         defs[ndef++] = p;
+
         dodefine(p);
     }
     break;
 @
+% should report error if do just -D no?
+%ocaml: use List, no need growing array
+
+<<[[main()]] locals>>=
+// growing_array<string>
+char **np;
+int maxdef = 0;
+@
+
+<<[[main()]] when -D in command line processing, grow defs array>>=
+ // realloc, growing array
+ if(ndef >= maxdef){
+     maxdef += 50;
+     np = alloc(maxdef * sizeof *np);
+     if(defs != nil)
+         memmove(np, defs, (maxdef - 50) * sizeof *np);
+     defs = np;
+ }
+@
+
+% remember that p is possibly string containing XX=YY 
 
 <<[[main()]] command line processing>>=
 case 'I':
@@ -1870,6 +1942,12 @@ case 'I':
     break;
 @
 
+<<[[main()]] remaining initialisation>>=
+setinclude(".");
+@
+% so include[0] is special! used for "" vs <>
+% (will be overwritten later)
+%ocaml: use a pair for the local dir and system paths, clearer
 
 <<[[main()]] command line processing>>=
 default:
@@ -1886,16 +1964,21 @@ default:
 % instead, so we could call codegen in the main (or compile)
 % instead of in cc.y.
 
+\t put -c here?
+
 \section{[[compile()]]}
 
 <<global outbuf>>=
 Biobuf	outbuf;
 @
 % used by outcode()
+%ocaml: dump the whole Ast_asm5.ml in one function call. No need buffer.
+% just use Marshall.
 
 <<global diagbuf>>=
 Biobuf	diagbuf;
 @
+%ocaml: use pr2? already buffered no?
 
 <<[[compile()]] locals>>=
 char *p;
@@ -1920,6 +2003,7 @@ compile(char *infile, char **defs, int ndef)
 
     if (first)
         Binit(&diagbuf, STDOUT, OWRITE);
+    first = false;
 
     <<[[compile()]] if writing acid to standard output>>
     else {
@@ -1931,13 +2015,13 @@ compile(char *infile, char **defs, int ndef)
         }
         Binit(&outbuf, ofd, OWRITE);
     }
-    newio();
-    first = false;
+
+    <<[[compile()]] initialize IO>>
 
     <<[[compile()]] if use ANSI preprocessor>>
     else {
         if(strcmp(infile, "stdin") == 0)
-            newfile(infile, 0);
+            newfile(infile, STDIN);
         else
             newfile(infile, -1);
     }
@@ -1952,6 +2036,9 @@ compile(char *infile, char **defs, int ndef)
 }
 @
 %old: file -> infile
+%old: I put the first = false; closer to code using it
+%ocaml: should also pass includes, outfile, instead of using globals
+% and should not support stdin, and using newio() and other globals for cpp
 
 % main -> compile -> yyparse -> yylex -> macxxx
 %                            -> codgen (portable) -> gen
@@ -1975,13 +2062,22 @@ char ofile[400];
 strcpy(ofile, infile);
 p = utfrrune(ofile, pathchar());
 if(p) {
-    *p++ = 0;
+    *p++ = '\0';
     if(!debug['.'])
         include[0] = strdup(ofile);
 } else
     p = ofile;
 @
+%ocaml: use Filename.dirname and regexps
+\l include global? why not using setinclude?
+% so overwrite include[0] here.
+% (unless -. to not overwrite first entry which is current dir ("."))
+% see setinclude(".") before.
+%ocaml: remove this feature?
 
+
+% FIGURE where p is in the middle, and replace the / by a \0
+% so have two strings and strdup(ofile) works
 
 <<[[compile()]] set outfile, using p, to {basename(infile)}.{thechar}>>=
 outfile = p;
@@ -2000,6 +2096,7 @@ if(outfile) {
 } else
     outfile = "/dev/null";
 @
+%ocaml: use Filename.basename and regexps
 
 <<[[compile()]] locals>>=
 char incfile[20];
@@ -2017,6 +2114,7 @@ if(p = getenv("INCLUDE")) {
     }
 }
 @
+% note that INCLUDE can contain space! and setinclude handles that
 
 %XXX
 <<[[compile()]] locals>>=
@@ -2053,7 +2151,7 @@ gclean(void)
     outcode();
 }
 @
-
+%ocaml: lift up outcode; not very visible inside gclean
 
 
 
@@ -2101,7 +2199,6 @@ urk(char *name, int max, int i)
 @
 
 
-
 \subsection{[[cinit()]]}
 % C lexing/parsing language initialisation?
 
@@ -2144,6 +2241,7 @@ cinit(void)
 char*	pathname;
 @
 % 
+\l rename cwd?
 
 <<[[cinit()]] pathname initialisation from cwd>>=
 pathname = allocn(pathname, 0, 100);
@@ -2153,6 +2251,7 @@ if(getwd(pathname, 99) == 0) {
         strcpy(pathname, "/???");
 }
 @
+% who uses that? for include "" ?
 
 \subsection{[[ginit()]]}
 % generation code initialisation
@@ -2172,7 +2271,6 @@ ginit(void)
 }
 @
 
-
 \subsection{[[arginit()]]}
 
 % see later
@@ -2186,60 +2284,40 @@ ginit(void)
 
 
 \chapter{Input}
-% similar to Assembler, could reuse
+%dup: similar to Assembler, could reuse
 
 % lineno in Node section
 
-<<global peekc>>=
-int	peekc;
-@
-
-<<constant EOF>>=
-#define	EOF	(-1)
-@
-
-<<constant IGN>>=
-#define	IGN	(-2)
-@
-
-
 <<[[cinit()]] lexing globals initialization>>=
 lineno = 1;
-peekc = IGN;
 @
 
 
-\section{Files managment}
-
-<<constant BUFSIZ>>=
-#define	BUFSIZ		8192
-@
+\section{Files management, [[iostack]]}
 
 <<struct Io>>=
 struct	Io
 {
-    char	b[BUFSIZ];
-
+    // option<fdt> (None = -1)
     short	f;
-
-    char*	p;
-    short	c;
-
-    Io*	link;
+    <<[[Io]] buffer fields>>
+    // Extra
+    <<[[Io]] extra fields>>
 };
 @
+%ocaml: use a stack of lexbuf (over a chan or over a string)
+% and adds also in the stack an optional chan as need to close it
+
 
 <<global iostack>>=
+// list<ref_own<Io> (next = Io.link)
 Io*	iostack;
 @
+%ocaml: use list (used as a stack) directly
 
-<<global iofree>>=
-Io*	iofree;
-@
-
-
-<<global ionext>>=
-Io*	ionext;
+<<[[Io]] extra fields>>=
+// list<ref_own<Io>> (from = iostack or iofree)
+Io*	link;
 @
 
 <<constant I>>=
@@ -2247,10 +2325,18 @@ Io*	ionext;
 @
 
 
-<<[[cinit()]] lexing globals initialization>>=
-iostack = I;
-iofree = I;
+
+<<global ionext>>=
+// option<ref<Io>>
+Io*	ionext;
 @
+
+
+<<[[compile()]] initialize IO>>=
+// for embedded cpp
+newio();
+@
+
 
 
 <<function newio>>=
@@ -2258,36 +2344,61 @@ void
 newio(void)
 {
     Io *i;
-    static int pushdepth = 0;
 
-    i = iofree;
-    if(i == I) {
-        pushdepth++;
-        if(pushdepth > 1000) {
-            yyerror("macro/io expansion too deep");
-            errorexit();
-        }
-        i = alloc(sizeof(*i));
-    } else
-        iofree = i->link;
+    <<[[newio()]] allocate a new Io in [[i]] or find a free one>>
     i->c = 0;
     i->f = -1;
     ionext = i;
 }
 @
 
+
+<<global iofree>>=
+Io*	iofree;
+@
+%ocaml: just use a list and Gc
+
+<<[[cinit()]] lexing globals initialization>>=
+iostack = I;
+iofree = I;
+@
+
+
+<<[[newio()]] allocate a new Io in [[i]] or find a free one>>=
+static int pushdepth = 0;
+
+i = iofree;
+if(i == I) {
+    pushdepth++;
+    if(pushdepth > 1000) {
+        yyerror("macro/io expansion too deep");
+        errorexit();
+    }
+    i = alloc(sizeof(*i));
+} else
+    iofree = i->link;
+@
+% note that when expand macro, we need to process expansion, which
+%  may trigger further expansions!
+%ocaml: just use a list and Gc
+
+% remember in compile():
+%            newfile(infile, -1);
+
+% main | macinc -> <>
 <<function newfile>>=
 void
 newfile(char *s, int f)
 {
     Io *i;
 
-    if(debug['e'])
-        print("%L: %s\n", lineno, s);
+    <<[[newfile()]] debug>>
 
+    // add_list(ionext, iostack)
     i = ionext;
     i->link = iostack;
     iostack = i;
+
     i->f = f;
     if(f < 0)
         i->f = open(s, 0);
@@ -2296,16 +2407,38 @@ newfile(char *s, int f)
         errorexit();
     }
     fi.c = 0;
-    linehist(s, 0);
+
+    <<[[newfile()]] call linehist>>
 }
 @
 
-\section{Buffer managment}
+<<[[newfile()]] call linehist>>=
+linehist(s, 0);
+@
+
+
+
+
+\section{Buffer managment, [[fi]]}
+
+%ocaml: IO are already buffered
+
+<<constant BUFSIZ>>=
+#define	BUFSIZ		8192
+@
+% used also for macro expansion!
+
+<<[[Io]] buffer fields>>=
+char	b[BUFSIZ];
+@
+%ocaml: store lexbuf in stack of included files
 
 <<struct Fi>>=
 struct Fi
 {
+    // ref<char> (target = Io.b)
     char*	p;
+    // remaining characters in Io.b to read
     int	c;
 };
 @
@@ -2314,9 +2447,17 @@ struct Fi
 struct Fi fi;
 @
 
+\section{[[GETC()]]}
+
 <<function GETC>>=
 #define	GETC()	((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff))
 @
+
+<<constant EOF>>=
+#define	EOF	(-1)
+@
+%ocaml: ocamllex handles that already
+
 
 <<function filbuf>>=
 int
@@ -2333,30 +2474,50 @@ loop:
     fi.c = read(i->f, i->b, BUFSIZ) - 1;
     if(fi.c < 0) {
         close(i->f);
-        linehist(0, 0);
+        <<[[filbuf()]] when close file, call linehist>>
         goto pop;
     }
     fi.p = i->b + 1;
     return i->b[0] & 0xff;
 
+<<[[filbuf()]] pop>>
+}
+@
+
+% so potentially could have a token spread on 2 files?
+
+
+<<[[filbuf()]] when close file, call linehist>>=
+linehist(0, 0);
+@
+
+<<[[filbuf()]] pop>>=
 pop:
+    // pop(iostack)
     iostack = i->link;
+    // push(i, iofree)
     i->link = iofree;
     iofree = i;
+
+    // i = top(iostack), the fresh top of the stack input file
     i = iostack;
     if(i == I)
         return EOF;
+    // restore file pointers
     fi.p = i->p;
     fi.c = i->c;
     if(--fi.c < 0)
         goto loop;
     return *fi.p++ & 0xff;
-}
 @
 
 
 
-
+<<[[Io]] buffer fields>>=
+// like Fi, saved pointers in Io.b
+char*	p;
+short	c;
+@
 
 
 \chapter{Lexing}
@@ -2368,77 +2529,32 @@ pop:
 
 \section{[[yylex()]]}
 
-<<[[yylex()]] locals>>=
-vlong vv;
-long c1, t;
-char *cp;
-Rune rune;
-Sym *s;
-@
 
 <<function yylex>>=
 //@Scheck: not dead, called by yyparse
 long yylex(void)
 {
-    long c;
+    long c; // Rune?
     <<[[yylex()]] locals>>
 
-    if(peekc != IGN) {
-        c = peekc;
-        peekc = IGN;
-        goto l1;
-    }
+    <<[[yylex()]] peekc handling, starting part>>
 l0:
     c = GETC();
 
 l1:
-    if(c >= Runeself) {
-        /*
-         * extension --
-         *	all multibyte runes are alpha
-         */
-        cp = symb;
-        goto talph;
-    }
+    <<[[yylex()]] if unicode character>>
     if(isspace(c)) {
-        if(c == '\n')
-            lineno++;
+        <<[[yylex()]] if c is newline>>
+        // ignore spaces
         goto l0;
     }
-    if(isalpha(c)) {
-        cp = symb;
-        if(c != 'L')
-            goto talph;
-
-        *cp++ = c;
-        c = GETC();
-        if(c == '\'') {
-            /* L'x' */
-            c = escchar('\'', 1, 0);
-            if(c == EOF)
-                c = '\'';
-            c1 = escchar('\'', 1, 0);
-            if(c1 != EOF) {
-                yyerror("missing '");
-                peekc = c1;
-            }
-            yylval.vval = convvtox(c, TRUNE);
-            return LUCONST;
-        }
-        if(c == '"') {
-            goto caselq;
-        }
-        goto talph;
-    }
-    if(isdigit(c))
-        goto tnum;
-
+    <<[[yylex()]] before switch, if isxxx>>
     switch(c) {
     <<[[yylex()]] switch c cases>>
     default:
         return c;
     }
-    peekc = c1;
+    <<[[yylex()]] peekc handling, ending part>>
     return c;
 
 <<[[yylex()]] labels>>
@@ -2446,45 +2562,64 @@ l1:
 @
 
 
+<<[[yylex()]] if c is newline>>=
+if(c == '\n')
+    lineno++;
+@
+% this unfortunately needs to be handled at many places
+
+\section{Peek, seek, and look ahead}
+
+<<global peekc>>=
+int	peekc;
+@
+%ocaml: ocamllex handles that
+
+<<constant IGN>>=
+#define	IGN	(-2)
+@
+
+<<[[cinit()]] lexing globals initialization>>=
+peekc = IGN;
+@
+
+
+<<[[yylex()]] peekc handling, starting part>>=
+if(peekc != IGN) {
+    c = peekc;
+    peekc = IGN;
+    goto l1;
+}
+@
+%ocaml: ocamllex handles that
+<<[[yylex()]] locals>>=
+long c1;
+@
+<<[[yylex()]] peekc handling, ending part>>=
+peekc = c1;
+@
+
+
+
 
 <<[[yylex()]] switch c cases>>=
 case EOF:
     peekc = EOF;
-    return -1;
+    return -1; // EOF
 @
-
-<<[[yylex()]] switch c cases>>=
-case '#':
-    domacro();
-    goto l0;
-@
-
-<<[[yylex()]] switch c cases>>=
-case '.':
-    c1 = GETC();
-    if(isdigit(c1)) {
-        cp = symb;
-        *cp++ = c;
-        c = c1;
-        c1 = 0;
-        goto casedot;
-    }
-    break;
-@
-
-
-
-
-
+% why not using EOF? why use -1 explicitely? because this time
+% it is the lexeme kind, not the character?
 
 
 
 \section{Comments}
+% part 1
 
 <<[[yylex()]] switch c cases>>=
 case '/':
     c1 = GETC();
     if(c1 == '*') {
+        // '/''*' read, skip everything until next '*''/'
         for(;;) {
             c = getr();
             while(c == '*') {
@@ -2499,6 +2634,7 @@ case '/':
         }
     }
     if(c1 == '/') {
+        // '/''/' read, skip everything until next '\n'
         for(;;) {
             c = getr();
             if(c == '\n')
@@ -2514,8 +2650,10 @@ case '/':
     break;
 @
 % LDVE, not a comment here!!
+% also will return just '/' for Div.
 
 \section{Keywords and identifiers}
+
 
 <<global itab>>=
 struct
@@ -2558,8 +2696,8 @@ struct
     "if",		LIF,		0,
     "else",		LELSE,		0,
     "while",	LWHILE,		0,
-    "for",		LFOR,		0,
     "do",		LDO,		0,
+    "for",		LFOR,		0,
     "break",	LBREAK,		0,
     "continue",	LCONTINUE,	0,
     "switch",	LSWITCH,	0,
@@ -2584,6 +2722,11 @@ for(i=0; itab[i].name; i++) {
 @
 % abuse symbol table
 
+<<[[yylex()]] locals>>=
+char *cp;
+@
+
+
 
 <<[[yylex()]] switch c cases>>=
 case '_':
@@ -2591,6 +2734,17 @@ case '_':
     goto talph;
 @
 
+<<[[yylex()]] before switch, if isxxx>>=
+if(isalpha(c)) {
+    cp = symb;
+    <<[[yylex()]] if L followed by unicode strings or character>>
+    goto talph;
+}
+@
+
+<<[[yylex()]] locals>>=
+Sym *s;
+@
 
 
 <<[[yylex()]] labels>>=
@@ -2600,46 +2754,21 @@ talph:
      * prefix has been stored
      */
     for(;;) {
-        if(c >= Runeself) {
-            for(c1=0;;) {
-                cp[c1++] = c;
-                if(fullrune(cp, c1))
-                    break;
-                c = GETC();
-            }
-            cp += c1;
-            c = GETC();
-            continue;
-        }
+        <<[[yylex()]] in talph case, if unicode character>>
         if(!isalnum(c) && c != '_')
             break;
         *cp++ = c;
         c = GETC();
     }
-    *cp = 0;
-    if(debug['L'])
-        print("%L: %s\n", lineno, symb);
+    *cp = '\0';
+    <<[[yylex()]] in talph case, debug symbol>>
     peekc = c;
 
     // the important call!
     s = lookup();
 
-    if(s->macro) {
-        newio();
-        cp = ionext->b;
-        macexpand(s, cp);
-        pushio();
-        ionext->link = iostack;
-        iostack = ionext;
-        fi.p = cp;
-        fi.c = strlen(cp);
-        if(peekc != IGN) {
-            cp[fi.c++] = peekc;
-            cp[fi.c] = 0;
-            peekc = IGN;
-        }
-        goto l0;
-    }
+    <<[[yylex()]] in talph case, if macro symbol>>
+
     yylval.sym = s;
     <<[[yylex()]] alpha case, return LTYPE if typedef symbol s>>
     return s->lexical;
@@ -2647,8 +2776,34 @@ talph:
 
 
 
+\subsection{Unicode identifiers}
 
-\section{Typedef trick}
+<<[[yylex()]] if unicode character>>=
+if(c >= Runeself) {
+    /*
+     * extension --
+     *	all multibyte runes are alpha
+     */
+    cp = symb;
+    goto talph;
+}
+@
+
+<<[[yylex()]] in talph case, if unicode character>>=
+if(c >= Runeself) {
+    for(c1=0;;) {
+        cp[c1++] = c;
+        if(fullrune(cp, c1))
+            break;
+        c = GETC();
+    }
+    cp += c1;
+    c = GETC();
+    continue;
+}
+@
+
+\subsection{Typedef trick}
 
 % lexer/parser/symboltable cooperation. The parser sets the class
 % of the symbol.
@@ -2662,6 +2817,10 @@ if(s->class == CTYPEDEF || s->class == CTYPESTR)
     return LTYPE;
 @
 % CTYPEDEF class explained later, in parsing.
+%ocaml: do via separate hashtbl instead of global symbol table
+% for everything
+
+% CTYPESTR??
 
 \section{Operators}
 
@@ -2786,13 +2945,16 @@ case '^':
 
 \section{Numbers}
 
+<<[[yylex()]] before switch, if isxxx>>=
+if(isdigit(c))
+    goto tnum;
+@
+
 <<enum numxxx>>=
-enum numxxx
+enum Numxxx
 {
     Numdec		= 1<<0,
-    Numlong		= 1<<1,
-    Numuns		= 1<<2,
-    Numvlong	= 1<<3,
+    <<[[Numxxx]] cases>>
     Numflt		= 1<<4,
 };
 @
@@ -2803,6 +2965,7 @@ tnum:
     c1 = 0;
     cp = symb;
     if(c != '0') {
+        // not an hexa or octal number
         c1 |= Numdec;
         for(;;) {
             *cp++ = c;
@@ -2812,88 +2975,43 @@ tnum:
             goto dc;
         }
     }
-    *cp++ = c;
-    c = GETC();
-    if(c == 'x' || c == 'X')
-        for(;;) {
-            *cp++ = c;
-            c = GETC();
-            if(isdigit(c))
-                continue;
-            if(c >= 'a' && c <= 'f')
-                continue;
-            if(c >= 'A' && c <= 'F')
-                continue;
-            if(cp == symb+2)
-                yyerror("malformed hex constant");
-            goto ncu;
-        }
-    if(c < '0' || c > '7')
-        goto dc;
-    for(;;) {
-        if(c >= '0' && c <= '7') {
-            *cp++ = c;
-            c = GETC();
-            continue;
-        }
-        goto ncu;
-    }
-    //Fallthrough
+    <<[[yylex()]] in number case, 0xxx handling>>
+<<[[yylex()]] in number case, decimal dc label handling>>
+@
+
+
+
+\subsection{Decimals}
+
+<<[[yylex()]] locals>>=
+vlong vv;
+// enum<Type_kind>
+long t;
+@
+
+
+<<[[yylex()]] in number case, decimal dc label handling>>=
 dc:
-    if(c == '.')
-        goto casedot;
-    if(c == 'e' || c == 'E')
-        goto casee;
+    <<[[yylex()]] in number case, in decimal case, float handling>>
     //Fallthrough
-ncu:
-    if((c == 'U' || c == 'u') && !(c1 & Numuns)) {
-        c = GETC();
-        c1 |= Numuns;
-        goto ncu;
-    }
-    if((c == 'L' || c == 'l') && !(c1 & Numvlong)) {
-        c = GETC();
-        if(c1 & Numlong)
-            c1 |= Numvlong;
-        c1 |= Numlong;
-        goto ncu;
-    }
-    *cp = 0;
+<<[[yylex()]] in number case, in decimal case, ncu suffix label handling>>
+<<[[yylex()]] in number case, in decimal case, long suffix label handling>>
+    *cp = '\0';
     peekc = c;
+
     if(mpatov(symb, &yylval.vval))
         yyerror("overflow in constant");
 
     vv = yylval.vval;
-    if(c1 & Numvlong) {
-        if((c1 & Numuns) || convvtox(vv, TVLONG) < 0) {
-            c = LUVLCONST;
-            t = TUVLONG;
-            goto nret;
-        }
-        c = LVLCONST;
-        t = TVLONG;
-        goto nret;
-    }
-    if(c1 & Numlong) {
-        if((c1 & Numuns) || convvtox(vv, TLONG) < 0) {
-            c = LULCONST;
-            t = TULONG;
-            goto nret;
-        }
-        c = LLCONST;
-        t = TLONG;
-        goto nret;
-    }
-    if((c1 & Numuns) || convvtox(vv, TINT) < 0) {
-        c = LUCONST;
-        t = TUINT;
-        goto nret;
-    }
+    <<[[yylex()]] in number case, in decimal case, if vlong number>>
+    <<[[yylex()]] in number case, in decimal case, if long number>>
+    <<[[yylex()]] in number case, in decimal case, if unsigned number>>
     c = LCONST;
     t = TINT;
     goto nret;
 @
 %ocaml: lex definitely better I think
+
 
 <<[[yylex()]] labels>>=
 nret:
@@ -2906,7 +3024,20 @@ nret:
 @
 
 
+<<function convvtox>>=
+vlong
+convvtox(vlong c, int et)
+{
+    int n;
 
+    n = 8 * ewidth[et];
+    c &= MASK(n);
+    if(!typeu[et])
+        if(c & SIGN(n))
+            c |= ~MASK(n);
+    return c;
+}
+@
 
 
 % yylex()#ncu -> <>
@@ -2980,15 +3111,138 @@ bad:
     return true;
 }
 @
+% could split
+%ocaml: int_of_string? handle long stuff?
 
 
-\subsection{Decimals}
 
-\subsection{Hexadecimals}
+\subsection{Hexadecimals and octals}
 
-\subsection{Octadecimals}
+<<[[yylex()]] in number case, 0xxx handling>>=
+// else, octal or hexadecimal number
+*cp++ = c;
+c = GETC();
+if(c == 'x' || c == 'X')
+    for(;;) {
+        *cp++ = c;
+        c = GETC();
+        if(isdigit(c))
+            continue;
+        if(c >= 'a' && c <= 'f')
+            continue;
+        if(c >= 'A' && c <= 'F')
+            continue;
+        if(cp == symb+2)
+            yyerror("malformed hex constant");
+        goto ncu;
+    }
+if(c < '0' || c > '7')
+    goto dc;
+for(;;) {
+    if(c >= '0' && c <= '7') {
+        *cp++ = c;
+        c = GETC();
+        continue;
+    }
+    goto ncu;
+}
+//Fallthrough
+@
+
+\subsection{Unsigned numbers}
+
+% why matters? why need this suffix?
+
+<<[[Numxxx]] cases>>=
+Numuns		= 1<<2,
+@
+
+<<[[yylex()]] in number case, in decimal case, ncu suffix label handling>>=
+ncu:
+    if((c == 'U' || c == 'u') && !(c1 & Numuns)) {
+        c = GETC();
+        c1 |= Numuns;
+        goto ncu;
+    }
+@
+% if second U? generate error? or part of other token? ugly.
+
+<<[[yylex()]] in number case, in decimal case, if unsigned number>>=
+if((c1 & Numuns) || convvtox(vv, TINT) < 0) {
+    c = LUCONST;
+    t = TUINT;
+    goto nret;
+}
+@
+
+\subsection{Long numbers}
+
+% why need this suffix?
+
+<<[[Numxxx]] cases>>=
+Numlong		= 1<<1,
+Numvlong	= 1<<3,
+@
+
+<<[[yylex()]] in number case, in decimal case, long suffix label handling>>=
+if((c == 'L' || c == 'l') && !(c1 & Numvlong)) {
+    c = GETC();
+    if(c1 & Numlong)
+        c1 |= Numvlong;
+    c1 |= Numlong;
+    goto ncu;
+}
+@
+
+<<[[yylex()]] in number case, in decimal case, if vlong number>>=
+if(c1 & Numvlong) {
+    if((c1 & Numuns) || convvtox(vv, TVLONG) < 0) {
+        c = LUVLCONST;
+        t = TUVLONG;
+        goto nret;
+    }
+    c = LVLCONST;
+    t = TVLONG;
+    goto nret;
+}
+@
+
+<<[[yylex()]] in number case, in decimal case, if long number>>=
+if(c1 & Numlong) {
+    if((c1 & Numuns) || convvtox(vv, TLONG) < 0) {
+        c = LULCONST;
+        t = TULONG;
+        goto nret;
+    }
+    c = LLCONST;
+    t = TLONG;
+    goto nret;
+}
+@
 
 \subsection{Floats}
+
+<<[[yylex()]] in number case, in decimal case, float handling>>=
+if(c == '.')
+    goto casedot;
+if(c == 'e' || c == 'E')
+    goto casee;
+@
+
+<<[[yylex()]] switch c cases>>=
+case '.':
+    c1 = GETC();
+    if(isdigit(c1)) {
+        cp = symb;
+        *cp++ = c;
+        c = c1;
+        c1 = 0;
+        goto casedot;
+    }
+    break;
+@
+% break cos '.' is a symbol
+
 
 <<[[yylex()]] labels>>=
 casedot:
@@ -3019,7 +3273,7 @@ casee:
 caseout:
     if(c == 'L' || c == 'l') {
         c = GETC();
-        c1 |= Numlong;
+        c1 |= Numlong; // DEAD? used?
     } else
     if(c == 'F' || c == 'f') {
         c = GETC();
@@ -3039,18 +3293,20 @@ caseout:
 %ocaml: lex definitely better I think
 
 \section{Characters}
+% part1
 
 <<[[yylex()]] switch c cases>>=
 case '\'':
     /* '.' */
-    c = escchar('\'', 0, 0);
+    c = escchar('\'', false, false);
     if(c == EOF)
         c = '\'';
-    c1 = escchar('\'', 0, 0);
+    c1 = escchar('\'', false, false);
     if(c1 != EOF) {
         yyerror("missing '");
         peekc = c1;
     }
+
     vv = c;
     yylval.vval = convvtox(vv, TUCHAR);
     if(yylval.vval != vv)
@@ -3063,13 +3319,39 @@ case '\'':
     yylval.vval = convvtox(vv, TCHAR);
     return LCONST;
 @
+% type not set for this LCONST?
 
+% chars are converted to integer constants.
 
+\subsection{Unicode characters}
 
+<<[[yylex()]] if L followed by unicode strings or character>>=
+if(c != 'L')
+    goto talph;
 
+*cp++ = c;
+c = GETC();
+if(c == '\'') {
+    /* L'x' */
+    c = escchar('\'', true, false);
+    if(c == EOF)
+        c = '\'';
+    c1 = escchar('\'', true, false);
+    if(c1 != EOF) {
+        yyerror("missing '");
+        peekc = c1;
+    }
+    yylval.vval = convvtox(c, TRUNE);
+    return LUCONST;
+}
+if(c == '"') {
+    goto caselq;
+}
+@
 
 \subsection{Escaping characters}
 
+%dup: Assembler.nw except have also the longflg and escflg
 <<function escchar>>=
 long
 escchar(long e, int longflg, bool escflg)
@@ -3088,58 +3370,11 @@ loop:
             c = EOF;
         return c;
     }
+    // else c is '\\'
     c = getr();
-    if(c == 'x') {
-        /*
-         * note this is not ansi,
-         * supposed to only accept 2 hex
-         */
-        i = 2;
-        if(longflg)
-            i = 6;
-        l = 0;
-        for(; i>0; i--) {
-            c = getc();
-            if(c >= '0' && c <= '9') {
-                l = l*16 + c-'0';
-                continue;
-            }
-            if(c >= 'a' && c <= 'f') {
-                l = l*16 + c-'a' + 10;
-                continue;
-            }
-            if(c >= 'A' && c <= 'F') {
-                l = l*16 + c-'A' + 10;
-                continue;
-            }
-            unget(c);
-            break;
-        }
-        if(escflg)
-            l |= ESC;
-        return l;
-    }
-    if(c >= '0' && c <= '7') {
-        /*
-         * note this is not ansi,
-         * supposed to only accept 3 oct
-         */
-        i = 2;
-        if(longflg)
-            i = 8;
-        l = c - '0';
-        for(; i>0; i--) {
-            c = getc();
-            if(c >= '0' && c <= '7') {
-                l = l*8 + c-'0';
-                continue;
-            }
-            unget(c);
-        }
-        if(escflg)
-            l |= ESC;
-        return l;
-    }
+
+    <<[[escchar()]] if hexadecimal character>>
+    <<[[escchar()]] if octal character>>
     switch(c)
     {
     case '\n':	goto loop;
@@ -3147,6 +3382,7 @@ loop:
     case 't':	return '\t';
     case 'b':	return '\b';
     case 'r':	return '\r';
+
     case 'f':	return '\f';
     case 'a':	return '\a';
     case 'v':	return '\v';
@@ -3154,6 +3390,31 @@ loop:
     return c;
 }
 @
+
+<<[[escchar()]] if octal character>>=
+if(c >= '0' && c <= '7') {
+    /*
+     * note this is not ansi,
+     * supposed to only accept 3 oct
+     */
+    i = 2;
+    if(longflg)
+        i = 8;
+    l = c - '0';
+    for(; i>0; i--) {
+        c = getc();
+        if(c >= '0' && c <= '7') {
+            l = l*8 + c-'0';
+            continue;
+        }
+        unget(c);
+    }
+    if(escflg)
+        l |= ESC;
+    return l;
+}
+@
+% who uses this ESC thing? when use escchar() to lex strings.
 
 
 <<function getr>>=
@@ -3188,10 +3449,49 @@ loop:
 }
 @
 
+% specific to 5c!
+<<[[escchar()]] if hexadecimal character>>=
+if(c == 'x') {
+    /*
+     * note this is not ansi,
+     * supposed to only accept 2 hex
+     */
+    i = 2;
+    if(longflg)
+        i = 6;
+    l = 0;
+    for(; i>0; i--) {
+        c = getc();
+        if(c >= '0' && c <= '9') {
+            l = l*16 + c-'0';
+            continue;
+        }
+        if(c >= 'a' && c <= 'f') {
+            l = l*16 + c-'a' + 10;
+            continue;
+        }
+        if(c >= 'A' && c <= 'F') {
+            l = l*16 + c-'A' + 10;
+            continue;
+        }
+        unget(c);
+        break;
+    }
+    if(escflg)
+        l |= ESC;
+    return l;
+}
+@
+
 \section{Strings}
+% part1
 
 <<constant ESC>>=
 #define	ESC	(Runemask+1)		/* Rune flag: a literal byte */
+@
+
+<<[[yylex()]] locals>>=
+Rune rune;
 @
 
 <<[[yylex()]] switch c cases>>=
@@ -3202,7 +3502,7 @@ case '"':
 
     /* "..." */
     for(;;) {
-        c = escchar('"', 0, 1);
+        c = escchar('"', false, true);
         if(c == EOF)
             break;
         if(c & ESC) {
@@ -3219,7 +3519,7 @@ case '"':
     yylval.sval.l = c1;
     do {
         cp = allocn(cp, c1, 1);
-        cp[c1++] = 0;
+        cp[c1++] = '\0';
     } while(c1 & MAXALIGN);
     yylval.sval.s = cp;
     return LSTRING;
@@ -3235,7 +3535,7 @@ caselq:
     cp = alloc(0);
     c1 = 0;
     for(;;) {
-        c = escchar('"', 1, 0);
+        c = escchar('"', true, false);
         if(c == EOF)
             break;
         cp = allocn(cp, c1, sizeof(TRune));
@@ -3257,22 +3557,32 @@ caselq:
 
 \chapter{Preprocessing}
 
+% 5c has a builtin cpp, like 5a.
+% By integrating directly cpp in the parsing process,
+% it makes compilation faster because there is no fork at all! 
+
+% 5c gives also the possiblity to call an external program,
+% (e.g., /bin/cpp, which is a bit different
+% than the builtin cpp), which is convenient for APE (and pcc wrapper).
+% See also 5c -p
+
 %http://blog.robertelder.org/7-weird-old-things-about-the-c-preprocessor/
-
 %https://www.iar.com/support/resources/articles/advanced-preprocessor-tips-and-tricks/
+%preprocessing algorithm: 
+% http://www.spinellis.gr/blog/20060626/
 
-% similar to Assembler.nw again, except here have also the possiblity
-% to call an external program (e.g. /bin/cpp which is a bit different
-% than the builtin cpp)
+% A bit of code duplication with the assembler. Some code was originally
+% factorized, but in an ugly way. 
+% I should try to better factorize at some point.
 
+\section{[[mactab]] and [[domacro()]] dispatch}
 
-% Builtin in the binary. A bit of code duplication with the
-% assmembler, but maybe it makes compilation faster because
-% there is no fork at all!
-% builtin preprocessor integrated with lexer (benefit? faster? no fork?)
-% see also 5c -p
+<<[[yylex()]] switch c cases>>=
+case '#':
+    domacro();
+    goto l0;
+@
 
-% dupe with Assembler.nw, should try to factorize at some point
 
 <<global mactab>>=
 struct
@@ -3281,22 +3591,24 @@ struct
     void	(*macf)(void);
 } mactab[] =
 {
-    "ifdef",	nil,	/* macif(0) */
-    "ifndef",	nil,	/* macif(1) */
-    "else",	nil,	/* macif(2) */
+    "ifdef",    nil,    /* macif(0) */
+    "ifndef",   nil,    /* macif(1) */
+    "else",     nil,    /* macif(2) */
 
-    "line",	maclin,
-    "define",	macdef,
-    "include",	macinc,
-    "undef",	macund,
+    "line",     maclin,
+    "define",   macdef,
+    "include",  macinc,
+    "undef",    macund,
 
-    "pragma",	macprag,
-    "endif",	macend,
+    "pragma",   macprag,
+    "endif",    macend,
     0
 };
 @
+%ocaml: use ocamllex again, instead of adhoc lexing.
 
-% dispatcher, should rename because it's not just about macro =>
+% dispatcher. 
+% I should rename this func because it's not just about macro =>
 % less: parse_and_dispatch_pp_directive?
 <<function domacro>>=
 void
@@ -3306,8 +3618,7 @@ domacro(void)
     Sym *s;
 
     s = getsym();
-    if(s == S)
-        s = slookup("endif");
+    <<[[domacro()]] set s to endif symbol if no symbol>>
 
     for(i=0; mactab[i].macname; i++)
         if(strcmp(s->name, mactab[i].macname) == 0) {
@@ -3318,89 +3629,22 @@ domacro(void)
                 macif(i);
             return;
         }
+    // else
     yyerror("unknown #: %s", s->name);
     macend();
 }
 @
-% abuse getsym just to get an ident, don't have to go through
-% lookup really
+% abuse getsym just to get an ident, don't have to go through lookup really.
+%ocaml: dispatch by letting ocamllex do it
 
-<<function macend>>=
-void
-macend(void)
-{
-    int c;
-
-    for(;;) {
-        c = getnsc();
-        if(c < 0 || c == '\n')
-            return;
-    }
-}
+<<[[domacro()]] set s to endif symbol if no symbol>>=
+if(s == S)
+    s = slookup("endif");
 @
-% I don't think c can be < 0 here.
+%ocaml: dont do that, ugly
 
 
-
-\section{[[getc()]], [[unget()]], [[getnsc()]]}
-
-<<function getc>>=
-int
-getc(void)
-{
-    int c;
-
-    if(peekc != IGN) {
-        c = peekc;
-        peekc = IGN;
-    } else
-        c = GETC();
-    if(c == '\n')
-        lineno++;
-    if(c == EOF) {
-        yyerror("End of file");
-        errorexit();
-    }
-    return c;
-}
-@
-
-<<function unget>>=
-void
-unget(int c)
-{
-
-    peekc = c;
-    if(c == '\n')
-        lineno--;
-}
-@
-
-<<function getnsc>>=
-int
-getnsc(void)
-{
-    int c;
-
-    if(peekc != IGN) {
-        c = peekc;
-        peekc = IGN;
-    } else
-        c = GETC();
-    for(;;) {
-        if(c >= Runeself || !isspace(c))
-            return c;
-        if(c == '\n') {
-            lineno++;
-            return c;
-        }
-        c = GETC();
-    }
-}
-@
-
-
-\section{[[getsym()]]}
+%\section{[[getsym()]]}
 % mv with Keywords and identifier section?
 
 <<function getsym>>=
@@ -3415,6 +3659,7 @@ getsym(void)
         unget(c);
         return S;
     }
+    // else isalpha() or '_'
     for(cp = symb;;) {
         if(cp <= symb+NSYMB-4)
             *cp++ = c;
@@ -3424,56 +3669,114 @@ getsym(void)
         unget(c);
         break;
     }
-    *cp = 0;
+    *cp = '\0';
     if(cp > symb+NSYMB-4)
         yyerror("symbol too large: %s", symb);
     return lookup();
 }
 @
 % 4 = sizeof Rune?
+%ocaml: no symbol too large message, dynamic alloc ftw
 
-\section{[[getcom()]]}
-% mv with Comments section above?
+% so define, ifdef, etc are in the symbol table too.
 
-<<function getcom>>=
+% get non space character
+<<function getnsc>>=
 int
-getcom(void)
+getnsc(void)
+{
+    int c;
+
+    <<[[getnsc()]] peekc handling>>
+    else
+        c = GETC();
+
+    for(;;) {
+        if(c >= Runeself || !isspace(c))
+            return c;
+        if(c == '\n') {
+            lineno++;
+            return c;
+        }
+        c = GETC();
+    }
+}
+@
+
+<<[[getnsc()]] peekc handling>>=
+if(peekc != IGN) {
+    c = peekc;
+    peekc = IGN;
+}
+@
+%ocaml: ugly to have this IGN thing everywhere. Better use ocamllex.
+
+
+<<function unget>>=
+void
+unget(int c)
+{
+
+    peekc = c;
+    if(c == '\n')
+        lineno--;
+}
+@
+%ocaml: again, ocamllex can do that, and this peekc thing must be repeated
+% at many places. Duplication.
+
+
+% (domacro | macinc  -> yyerror; <>) | (macund -> <>)
+<<function macend>>=
+void
+macend(void)
 {
     int c;
 
     for(;;) {
         c = getnsc();
-        if(c != '/')
-            break;
-        c = getc();
-        if(c == '/') {
-            while(c != '\n')
-                c = getc();
-            break;
-        }
-        if(c != '*')
-            break;
-        c = getc();
-        for(;;) {
-            if(c == '*') {
-                c = getc();
-                if(c != '/')
-                    continue;
-                c = getc();
-                break;
-            }
-            if(c == '\n') {
-                yyerror("comment across newline");
-                break;
-            }
-            c = getc();
-        }
-        if(c == '\n')
-            break;
+        if(c < 0 || c == '\n')
+            return;
+    }
+}
+@
+% I don't think c can be < 0 here.
+% Or it means EOF?
+
+% it just eats everything that is until the end of line.
+% so could enter garbage stuff after a #ifdef, #line, etc.
+
+
+%\section{[[getc()]], [[unget()]], [[getnsc()]]}
+
+<<function getc>>=
+int
+getc(void)
+{
+    int c;
+
+    <<[[getc()]] peekc handling>>
+    else
+        c = GETC();
+
+    if(c == '\n')
+        lineno++;
+    if(c == EOF) {
+        yyerror("End of file");
+        errorexit();
     }
     return c;
 }
 @
+
+
+<<[[getc()]] peekc handling>>=
+if(peekc != IGN) {
+    c = peekc;
+    peekc = IGN;
+}
+@
+
 
 \section{[[#include]]}
 % and [[-I]]
@@ -3482,17 +3785,16 @@ getcom(void)
 
 % was using fixed array in assembler
 <<global include>>=
+// growing_array<string>
 char**	include;
 @
-
 <<global ninclude>>=
 int	ninclude;
 @
-
 <<global maxinclude>>=
 int	maxinclude;
 @
-
+%ocaml: just use a list
 
 % main -> <>(".")
 <<function setinclude>>=
@@ -3502,49 +3804,69 @@ setinclude(char *p)
     int i;
     char *e, **np;
 
-    while(*p != 0) {
+    while(*p != '\0') {
         e = strchr(p, ' ');
-        if(e != 0)
+        if(e != nil)
             *e = '\0';
 
+        // already there?
         for(i=0; i < ninclude; i++)
             if(strcmp(p, include[i]) == 0)
                 break;
 
         if(i >= ninclude){
-            if(i >= maxinclude){
-                maxinclude += 20;
-                np = alloc(maxinclude * sizeof *np);
-                if(include != nil)
-                    memmove(np, include, (maxinclude - 20) * sizeof *np);
-                include = np;
-            }
+            <<[[setinclude()]] grow the array if necessary>>
             include[ninclude++] = p;
         }
 
-        if(e == 0)
+        if(e == nil)
             break;
         p = e+1;
     }
 }
 @
 
+<<[[setinclude()]] grow the array if necessary>>=
+// grow the array
+if(i >= maxinclude){
+    maxinclude += 20;
+    np = alloc(maxinclude * sizeof *np);
+    if(include != nil)
+        memmove(np, include, (maxinclude - 20) * sizeof *np);
+    include = np;
+}
+@
+
+% accept a list of includes if separated by space, so can
+% process INCLUDE environment variable directly.
+
 \subsection{Tracing origin and [[Hist]]}
 
 <<struct Hist>>=
 struct	Hist
 {
+    // option<ref_own<string> (None = nil = a ``pop'')
     char*	name;
 
+    // global line of this Hist
     long	line;
+    // 0 for #include, +n for #line, -1 for #pragma lib (ugly)
     long	offset;
 
-    Hist*	link;
+    // Extra
+    <<[[Hist]] extra fields>>
 };
 @
+\t rename line -> global_line, and offset, local_line
+%ocaml: use ADT to separate different kind of "event", #include, #line, eof.
+
 
 <<constant H>>=
 #define	H	((Hist*)nil)
+@
+
+<<[[Hist]] extra fields>>=
+Hist*	link;
 @
 
 <<global hist>>=
@@ -3555,9 +3877,9 @@ Hist*	hist;
 Hist*	ehist;
 @
 
-<<global newflag>>=
-bool	newflag;
-@
+
+
+
 
 
 <<function linehist>>=
@@ -3566,24 +3888,15 @@ linehist(char *f, int offset)
 {
     Hist *h;
 
-    /*
-     * overwrite the last #line directive if
-     * no alloc has happened since the last one
-     */
-    if(newflag == false && ehist != H && offset != 0 && ehist->offset != 0)
-        if(f && ehist->name && strcmp(f, ehist->name) == 0) {
-            ehist->line = lineno;
-            ehist->offset = offset;
-            return;
-        }
+    <<[[linehist()]] possibly overwrite last line directive>>
     <<[[linehist()]] debug>>
-
-    newflag = false;
 
     h = alloc(sizeof(Hist));
     h->name = f;
     h->line = lineno;
     h->offset = offset;
+
+    // add_list(h, hist)
     h->link = H;
     if(ehist == H) {
         hist = h;
@@ -3594,6 +3907,35 @@ linehist(char *f, int offset)
     ehist = h;
 }
 @
+
+
+% delete? mv in opti chapter?
+<<[[linehist()]] possibly overwrite last line directive>>=
+/*
+ * overwrite the last #line directive if
+ * no alloc has happened since the last one
+ */
+if(!newflag && ehist != H && offset != 0 && ehist->offset != 0)
+    if(f && ehist->name && strcmp(f, ehist->name) == 0) {
+        ehist->line = lineno;
+        ehist->offset = offset;
+        return;
+    }
+newflag = false;
+@
+%ocaml: useful opti? meh
+
+<<global newflag>>=
+bool	newflag;
+@
+
+<<[[new()]] set lineno>>=
+newflag = true;
+@
+% newflag? this is for linehist, to detect if no new nodes were allocated
+%  so no lineno were set so the old #line information directive can be
+%  discarded
+
 
 \subsection{[[#include]]}
 
@@ -3607,57 +3949,31 @@ linehist(char *f, int offset)
 void
 macinc(void)
 {
-    int c0, c, i, f;
-    char str[STRINGSZ], *hp;
+    char str[STRINGSZ];
+    char *hp = str;
+    int i;
+    <<[[macinc()]] other locals>>
+    fdt f;
 
-    c0 = getnsc();
-    if(c0 != '"') {
-        c = c0;
-        if(c0 != '<')
-            goto bad;
-        c0 = '>';
-    }
-    for(hp = str;;) {
-        c = getc();
-        if(c == c0)
-            break;
-        if(c == '\n')
-            goto bad;
-        *hp++ = c;
-    }
-    *hp = 0;
+    // lexing
 
-    c = getcom();
-    if(c != '\n')
-        goto bad;
+    <<[[macinc()]] lexing the included filename>>
 
-    f = -1;
-    for(i=0; i<ninclude; i++) {
-        if(i == 0 && c0 == '>')
-            continue;
-        strcpy(symb, include[i]);
-        strcat(symb, "/");
-        if(strcmp(symb, "./") == 0)
-            symb[0] = 0;
-        strcat(symb, str);
+    // action
 
-        f = open(symb, 0);
-        if(f >= 0)
-            break;
+    <<[[macinc()]] finding the included filename full path>>
 
-    }
-    if(f < 0)
-        strcpy(symb, str);
-    c = strlen(symb) + 1;
+    c = strlen(symb) + 1; 
+
     while(c & 3)
         c++;
-
     while(nhunk < c)
         gethunk();
     hp = hunk;
-    memcpy(hunk, symb, c);
     nhunk -= c;
     hunk += c;
+
+    memcpy(hp, symb, c);
 
     newio();
     pushio();
@@ -3669,6 +3985,60 @@ bad:
     yyerror("syntax in #include");
     macend();
 }
+@
+%old: 'for (hp = str;;) ...' but better initialize before
+%pad: I reordered code to make it easier to replace hunk stuff by malloc()
+\t use malloc
+\t abuse c, could use other local [[n]]
+
+<<[[macinc()]] other locals>>=
+int c0, c;
+@
+<<[[macinc()]] lexing the included filename>>=
+c0 = getnsc();
+if(c0 != '"') {
+    c = c0;
+    if(c0 != '<')
+        goto bad;
+    c0 = '>';
+}
+for(;;) {
+    c = getc();
+    if(c == c0)
+        break;
+    if(c == '\n')
+        goto bad;
+    *hp++ = c;
+}
+*hp = '\0';
+
+c = getcom();
+if(c != '\n')
+    goto bad;
+@
+
+% first entry is setinclude(".") so accept only
+% if not system file
+
+<<[[macinc()]] finding the included filename full path>>=
+f = -1;
+for(i=0; i<ninclude; i++) {
+    if(i == 0 && c0 == '>') // do not look in '.' for system headers
+        continue;
+
+    strcpy(symb, include[i]);
+    strcat(symb, "/");
+    if(strcmp(symb, "./") == 0)
+        symb[0] = '\0';
+    strcat(symb, str);
+
+    f = open(symb, 0);
+    if(f >= 0)
+        break;
+
+}
+if(f < 0)
+    strcpy(symb, str);
 @
 
 
@@ -3687,6 +4057,61 @@ pushio(void)
     i->c = fi.c;
 }
 @
+%ocaml: just use another lexbuf and keep old lexbuf in the stack
+
+%\section{[[getcom()]]}
+% mv with Comments section above?
+
+% comment part2
+<<function getcom>>=
+int
+getcom(void)
+{
+    int c;
+
+    for(;;) {
+        c = getnsc();
+        if(c != '/')
+            break;
+        // else c == '/'
+        c = getc();
+        <<[[getcom()]] if [[//]] comment>>
+        if(c != '*')
+            break;
+        // else c == '*'
+        <<[[getcom()]] when [[/*]] comment>>
+        if(c == '\n')
+            break;
+    }
+    return c;
+}
+@
+
+<<[[getcom()]] if [[//]] comment>>=
+if(c == '/') {
+    while(c != '\n')
+        c = getc();
+    break;
+}
+@
+
+<<[[getcom()]] when [[/*]] comment>>=
+c = getc();
+for(;;) {
+    if(c == '*') {
+        c = getc();
+        if(c != '/')
+            continue;
+        c = getc();
+        break;
+    }
+    if(c == '\n') {
+        yyerror("comment across newline");
+        break;
+    }
+    c = getc();
+}
+@
 
 \section{[[#define]]}
 
@@ -3694,6 +4119,7 @@ pushio(void)
 
 % no Dlist here, instead pass the defs to compile()
 
+% cp can be just XX or also XX=YY
 <<function dodefine>>=
 void
 dodefine(char *cp)
@@ -3705,17 +4131,19 @@ dodefine(char *cp)
     strcpy(symb, cp);
     p = strchr(symb, '=');
     if(p) {
-        *p++ = 0;
+        *p++ = '\0';
         s = lookup();
         l = strlen(p) + 2;	/* +1 null, +1 nargs */
+      
         while(l & 3)
             l++;
-
         while(nhunk < l)
             gethunk();
-        *hunk = 0;
+        *hunk = '\0'; // 0 nargs
+
         strcpy(hunk+1, p);
         s->macro = hunk;
+
         hunk += l;
         nhunk -= l;
 
@@ -3726,14 +4154,31 @@ dodefine(char *cp)
     <<[[dodefine()]] debug>>
 }
 @
+% use \000 to not have ambiguity with \01 
+%ocaml: use ADT for macro def, with pair or record for nargs
+% also pass pair in dodefine, not a single string
+%ocaml: ugly hunk thing, just use Gc
+\t use malloc
 
 % LP split macro field of Sym
-
+% factorize hunk/
 
 \subsection{[[#define]]}
 
 <<constant NARG>>=
 #define	NARG	25
+@
+% use 'a'+i to mark arguments in the string, so can have
+% only up to 25 arguments (size of alphabet)
+%ocaml: more than 25 args, use #1, not #a
+
+%XXX
+<<[[macdef()]] other locals>>=
+Sym *s;
+Sym *a;
+char *np;
+int i, c, len;
+int ischr; // quote character
 @
 
 % wow, this is complicated
@@ -3741,162 +4186,21 @@ dodefine(char *cp)
 void
 macdef(void)
 {
-    Sym *s, *a;
-    char *args[NARG], *np, *base;
-    int n, i, c, len, dots;
-    int ischr;
+    char *args[NARG]; // parameters
+    // option<int> (None = -1), size of parameters
+    int n;
+    bool dots;
+    char *base; // body
+    <<[[macdef()]] other locals>>
 
-    s = getsym();
-    if(s == S)
-        goto bad;
-    if(s->macro)
-        yyerror("macro redefined: %s", s->name);
-    c = getc();
-    n = -1;
-    dots = 0;
-    if(c == '(') {
-        n++;
-        c = getnsc();
-        if(c != ')') {
-            unget(c);
-            for(;;) {
-                a = getsymdots(&dots);
-                if(a == S)
-                    goto bad;
-                if(n >= NARG) {
-                    yyerror("too many arguments in #define: %s", s->name);
-                    goto bad;
-                }
-                args[n++] = a->name;
-                c = getnsc();
-                if(c == ')')
-                    break;
-                if(c != ',' || dots)
-                    goto bad;
-            }
-        }
-        c = getc();
-    }
-    if(isspace(c))
-        if(c != '\n')
-            c = getnsc();
-    base = hunk;
-    len = 1;
-    ischr = 0;
-    for(;;) {
-        if(isalpha(c) || c == '_') {
-            np = symb;
-            *np++ = c;
-            c = getc();
-            while(isalnum(c) || c == '_') {
-                *np++ = c;
-                c = getc();
-            }
-            *np = 0;
-            for(i=0; i<n; i++)
-                if(strcmp(symb, args[i]) == 0)
-                    break;
-            if(i >= n) {
-                i = strlen(symb);
-                base = allocn(base, len, i);
-                memcpy(base+len, symb, i);
-                len += i;
-                continue;
-            }
-            base = allocn(base, len, 2);
-            base[len++] = '#';
-            base[len++] = 'a' + i;
-            continue;
-        }
-        if(ischr){
-            if(c == '\\'){ 
-                base = allocn(base, len, 1);
-                base[len++] = c;
-                c = getc();
-            }else if(c == ischr)
-                ischr = 0;
-        }else{
-            if(c == '"' || c == '\''){
-                base = allocn(base, len, 1);
-                base[len++] = c;
-                ischr = c;
-                c = getc();
-                continue;
-            }
-            if(c == '/') {
-                c = getc();
-                if(c == '/'){
-                    c = getc();
-                    for(;;) {
-                        if(c == '\n')
-                            break;
-                        c = getc();
-                    }
-                    continue;
-                }
-                if(c == '*'){
-                    c = getc();
-                    for(;;) {
-                        if(c == '*') {
-                            c = getc();
-                            if(c != '/')
-                                continue;
-                            c = getc();
-                            break;
-                        }
-                        if(c == '\n') {
-                            yyerror("comment and newline in define: %s", s->name);
-                            break;
-                        }
-                        c = getc();
-                    }
-                    continue;
-                }
-                base = allocn(base, len, 1);
-                base[len++] = '/';
-                continue;
-            }
-        }
-        if(c == '\\') {
-            c = getc();
-            if(c == '\n') {
-                c = getc();
-                continue;
-            }
-            else if(c == '\r') {
-                c = getc();
-                if(c == '\n') {
-                    c = getc();
-                    continue;
-                }
-            }
-            base = allocn(base, len, 1);
-            base[len++] = '\\';
-            continue;
-        }
-        if(c == '\n')
-            break;
-        if(c == '#')
-        if(n > 0) {
-            base = allocn(base, len, 1);
-            base[len++] = c;
-        }
-        base = allocn(base, len, 1);
-        base[len++] = c;
-        c = ((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff));
-        if(c == '\n')
-            lineno++;
-        if(c == -1) {
-            yyerror("eof in a macro: %s", s->name);
-            break;
-        }
-    }
-    do {
-        base = allocn(base, len, 1);
-        base[len++] = 0;
-    } while(len & 3);
+    // lexing 
+    <<[[macdef]] lexing the macro name>>
+    <<[[macdef]] lexing the parameters>>
+    <<[[macdef]] lexing the body>>
 
-    *base = n+1;
+    // action
+
+    *base = n+1; // nargs (+1 to differentiate #define foo() from #define foo)
     if(dots)
         *base |= VARMAC;
     s->macro = base;
@@ -3912,14 +4216,219 @@ bad:
 }
 @
 
+% process also inside of strings! so can have 
+% #define	assert(x)	do{ if(x) {} else _assert("x"); }while(false)
+% no need for stringify concept. just use x
+
+
+<<[[macdef]] lexing the macro name>>=
+s = getsym();
+if(s == S)
+    goto bad;
+if(s->macro)
+    yyerror("macro redefined: %s", s->name);
+@
+
+
+<<[[macdef]] lexing the parameters>>=
+c = getc();
+n = -1; // no parameter (which is different than 0 argument)
+dots = false;
+
+if(c == '(') {
+    n++; // at least 0 parameters now
+    c = getnsc();
+    if(c != ')') {
+        unget(c);
+        for(;;) {
+            a = getsymdots(&dots);
+            if(a == S)
+                goto bad;
+            if(n >= NARG) {
+                yyerror("too many arguments in #define: %s", s->name);
+                goto bad;
+            }
+            args[n++] = a->name;
+            c = getnsc();
+            if(c == ')')
+                break;
+            if(c != ',' || dots)
+                goto bad;
+        }
+    }
+    c = getc();
+}
+if(isspace(c))
+    if(c != '\n')
+        c = getnsc();
+@
+
+
+
+
+<<[[macdef]] lexing the body>>=
+base = hunk;
+len = 1;
+ischr = 0;
+
+for(;;) {
+    <<[[macdef()]] when lexing the body, if identifier>>
+    <<[[macdef()]] when lexing the body, if string or character or comment>>
+
+    // antislash outside a string
+    if(c == '\\') {
+        c = getc();
+        if(c == '\n') {
+            c = getc();
+            continue;
+        }
+        // windows
+        else if(c == '\r') {
+            c = getc();
+            if(c == '\n') {
+                c = getc();
+                continue;
+            }
+        }
+        // else
+        base = allocn(base, len, 1);
+        base[len++] = '\\';
+        continue;
+    }
+    if(c == '\n')
+        break;
+
+    if(c == '#') // escape # by adding an extra #
+      if(n > 0) {
+        base = allocn(base, len, 1);
+        base[len++] = c;
+    }
+    base = allocn(base, len, 1);
+    base[len++] = c;
+
+    // GETC
+    c = ((--fi.c < 0)? filbuf(): (*fi.p++ & 0xff));
+    if(c == '\n')
+        lineno++;
+    if(c == -1) {
+        yyerror("eof in a macro: %s", s->name);
+        break;
+    }
+}
+do {
+    base = allocn(base, len, 1);
+    base[len++] = 0;
+} while(len & 3);
+@
+
+
+<<[[macdef()]] when lexing the body, if identifier>>=
+// identifier
+if(isalpha(c) || c == '_') {
+    np = symb;
+    *np++ = c;
+    c = getc();
+    while(isalnum(c) || c == '_') {
+        *np++ = c;
+        c = getc();
+    }
+    *np = '\0';
+
+    for(i=0; i<n; i++)
+        if(strcmp(symb, args[i]) == 0)
+            break;
+    if(i >= n) {
+        i = strlen(symb);
+        base = allocn(base, len, i);
+        memcpy(base+len, symb, i);
+        len += i;
+        continue;
+    }
+    // else
+    base = allocn(base, len, 2);
+    base[len++] = '#';
+    base[len++] = 'a' + i;
+    continue;
+}
+@
+
+
+
+% string part 2
+<<[[macdef()]] when lexing the body, if string or character or comment>>=
+if(ischr){
+    // inside a string or character
+    if(c == '\\'){ 
+        base = allocn(base, len, 1);
+        base[len++] = c;
+        c = getc();
+    }else if(c == ischr)
+        ischr = 0;
+}else{
+    // string or character
+    if(c == '"' || c == '\''){
+        base = allocn(base, len, 1);
+        base[len++] = c;
+        ischr = c;
+        c = getc();
+        continue;
+    }
+    <<[[macdef()]] if comment>>
+}
+@
+
+% comment part3
+<<[[macdef()]] if comment>>=
+// comment
+if(c == '/') {
+    c = getc();
+    if(c == '/'){
+        // // comment
+        c = getc();
+        for(;;) {
+            if(c == '\n')
+                break;
+            c = getc();
+        }
+        continue;
+    }
+    if(c == '*'){
+        // /* comment
+        c = getc();
+        for(;;) {
+            if(c == '*') {
+                c = getc();
+                if(c != '/')
+                    continue;
+                c = getc();
+                break;
+            }
+            if(c == '\n') {
+                yyerror("comment and newline in define: %s", s->name);
+                break;
+            }
+            c = getc();
+        }
+        continue;
+    }
+    base = allocn(base, len, 1);
+    base[len++] = '/';
+    continue;
+}
+@
+% again last case if not a comment but just a regular '/'
+
+
 <<constant VARMAC>>=
 #define VARMAC 0x80
 @
+% variable arity macro (extension?)
+%ocaml: a boolean in the record defining a macro
 
 
 <<function getsymdots>>=
 Sym*
-getsymdots(int *dots)
+getsymdots(bool *dots)
 {
     int c;
     Sym *s;
@@ -3935,12 +4444,40 @@ getsymdots(int *dots)
     }
     if(getc() != '.' || getc() != '.')
         yyerror("bad dots in macro");
-    *dots = 1;
+    *dots = true;
     return slookup("__VA_ARGS__");
 }
 @
+\t 5c of kencc does not seem to handle those
 
 \subsection{Macro Expansion}
+
+<<[[yylex()]] in talph case, if macro symbol>>=
+if(s->macro) {
+    newio();
+    cp = ionext->b;
+    macexpand(s, cp);
+    pushio();
+
+    // push_list(ionext, iostack)
+    ionext->link = iostack;
+    iostack = ionext;
+
+    fi.p = cp;
+    fi.c = strlen(cp);
+
+    if(peekc != IGN) {
+        cp[fi.c++] = peekc;
+        cp[fi.c] = '\0';
+        peekc = IGN;
+    }
+    goto l0;
+}
+@
+
+% note that can have recursive macro expansion! if expanded code
+% contains itself some macros. Can even do recursive stuff?
+% => push_depth check.
 
 %<<[[yylex()]] if macro symbol>>=
 
@@ -3949,17 +4486,18 @@ getsymdots(int *dots)
 void
 macexpand(Sym *s, char *b)
 {
-    char buf[2000];
-    int n, l, c, nargs;
-    char *arg[NARG], *cp, *ob, *ecp, dots;
+    int  nargs;
+    bool dots;
+    int  c;
+    <<[[macexpand()]] other locals>>
 
-    ob = b;
-    if(*s->macro == 0) {
+    // if macro has no parameter
+    if(*s->macro == '\0') {
         strcpy(b, s->macro+1);
-        if(debug['m'])
-            print("#expand %s %s\n", s->name, ob);
+        <<[[macexpand()]] debug macro expansion>>
         return;
     }
+    // else, macro has parameters
     
     nargs = (char)(*s->macro & ~VARMAC) - 1;
     dots = *s->macro & VARMAC;
@@ -3967,142 +4505,185 @@ macexpand(Sym *s, char *b)
     c = getnsc();
     if(c != '(')
         goto bad;
-    n = 0;
-    c = getc();
-    if(c != ')') {
-        unget(c);
-        l = 0;
-        cp = buf;
-        ecp = cp + sizeof(buf)-4;
-        arg[n++] = cp;
-        for(;;) {
-            if(cp >= ecp)
-                goto toobig;
-            c = getc();
-            if(c == '"')
-                for(;;) {
-                    if(cp >= ecp)
-                        goto toobig;
-                    *cp++ = c;
-                    c = getc();
-                    if(c == '\\') {
-                        *cp++ = c;
-                        c = getc();
-                        continue;
-                    }
-                    if(c == '\n')
-                        goto bad;
-                    if(c == '"')
-                        break;
-                }
-            if(c == '\'')
-                for(;;) {
-                    if(cp >= ecp)
-                        goto toobig;
-                    *cp++ = c;
-                    c = getc();
-                    if(c == '\\') {
-                        *cp++ = c;
-                        c = getc();
-                        continue;
-                    }
-                    if(c == '\n')
-                        goto bad;
-                    if(c == '\'')
-                        break;
-                }
-            if(c == '/') {
-                c = getc();
-                switch(c) {
-                case '*':
-                    for(;;) {
-                        c = getc();
-                        if(c == '*') {
-                            c = getc();
-                            if(c == '/')
-                                break;
-                        }
-                    }
-                    *cp++ = ' ';
-                    continue;
-                case '/':
-                    while((c = getc()) != '\n')
-                        ;
-                    break;
-                default:
-                    unget(c);
-                    c = '/';
-                }
-            }
-            if(l == 0) {
-                if(c == ',') {
-                    if(n == nargs && dots) {
-                        *cp++ = ',';
-                        continue;
-                    }
-                    *cp++ = 0;
-                    arg[n++] = cp;
-                    if(n > nargs)
-                        break;
-                    continue;
-                }
-                if(c == ')')
-                    break;
-            }
-            if(c == '\n')
-                c = ' ';
-            *cp++ = c;
-            if(c == '(')
-                l++;
-            if(c == ')')
-                l--;
-        }
-        *cp = 0;
-    }
-    if(n != nargs) {
-        yyerror("argument mismatch expanding: %s", s->name);
-        *b = 0;
-        return;
-    }
-    cp = s->macro+1;
-    for(;;) {
-        c = *cp++;
-        if(c == '\n')
-            c = ' ';
-        if(c != '#') {
-            *b++ = c;
-            if(c == 0)
-                break;
-            continue;
-        }
-        c = *cp++;
-        if(c == 0)
-            goto bad;
-        if(c == '#') {
-            *b++ = c;
-            continue;
-        }
-        c -= 'a';
-        if(c < 0 || c >= n)
-            continue;
-        strcpy(b, arg[c]);
-        b += strlen(arg[c]);
-    }
-    *b = 0;
-    if(debug['m'])
-        print("#expand %s %s\n", s->name, ob);
+
+    <<[[macexpand()]] parsing the arguments>>
+
+    <<[[macexpand()]] substituting the arguments>>
+
+    <<[[macexpand()]] debug macro expansion>>
 
     return;
 
 bad:
     yyerror("syntax in macro expansion: %s", s->name);
-    *b = 0;
+    *b = '\0';
     return;
 
 toobig:
     yyerror("too much text in macro expansion: %s", s->name);
-    *b = 0;
+    *b = '\0';
 }
+@
+
+%XXX
+<<[[macexpand()]] other locals>>=
+char buf[2000];
+int n;
+int l; // depth
+char *arg[NARG]; // the arguments
+char *cp, *ecp;
+char *ob = b;
+@
+% ob = old buffer, ecp = end cp
+% l = depth of parenthesis
+
+<<[[macexpand()]] parsing the arguments>>=
+n = 0;
+c = getc();
+if(c != ')') {
+    unget(c);
+
+    l = 0;
+    cp = buf;
+    ecp = cp + sizeof(buf)-4;
+    arg[n++] = cp;
+
+    for(;;) {
+        if(cp >= ecp)
+            goto toobig;
+        c = getc();
+
+        <<[[macexpand()]] when parsing the arguments, if string>>
+        <<[[macexpand()]] when parsing the arguments, if character>>
+        <<[[macexpand()]] when parsing the arguments, if comment>>
+        if(l == 0) {
+            if(c == ',') {
+                if(n == nargs && dots) {
+                    *cp++ = ',';
+                    continue;
+                }
+                *cp++ = '\0';
+                arg[n++] = cp;
+                if(n > nargs)
+                    break;
+                continue;
+            }
+            if(c == ')')
+                break;
+        }
+        if(c == '\n')
+            c = ' ';
+        *cp++ = c;
+        if(c == '(')
+            l++;
+        if(c == ')')
+            l--;
+    }
+    *cp = '\0';
+}
+if(n != nargs) {
+    yyerror("argument mismatch expanding: %s", s->name);
+    *b = '\0';
+    return;
+}
+@
+
+% string part 3
+<<[[macexpand()]] when parsing the arguments, if string>>=
+// string argument
+if(c == '"')
+    for(;;) {
+        if(cp >= ecp)
+            goto toobig;
+        *cp++ = c;
+        c = getc();
+        if(c == '\\') {
+            *cp++ = c;
+            c = getc();
+            continue;
+        }
+        if(c == '\n')
+            goto bad;
+        if(c == '"')
+            break;
+    }
+@
+
+% character part 3
+<<[[macexpand()]] when parsing the arguments, if character>>=
+// quote argument
+if(c == '\'')
+    for(;;) {
+        if(cp >= ecp)
+            goto toobig;
+        *cp++ = c;
+        c = getc();
+        if(c == '\\') {
+            *cp++ = c;
+            c = getc();
+            continue;
+        }
+        if(c == '\n')
+            goto bad;
+        if(c == '\'')
+            break;
+    }
+@
+
+<<[[macexpand()]] when parsing the arguments, if comment>>=
+// comment
+if(c == '/') {
+    c = getc();
+    switch(c) {
+    case '*':
+        for(;;) {
+            c = getc();
+            if(c == '*') {
+                c = getc();
+                if(c == '/')
+                    break;
+            }
+        }
+        *cp++ = ' ';
+        continue;
+    case '/':
+        while((c = getc()) != '\n')
+            ;
+        break;
+    default:
+        unget(c);
+        c = '/';
+    }
+}
+@
+
+<<[[macexpand()]] substituting the arguments>>=
+cp = s->macro+1;
+for(;;) {
+    c = *cp++;
+    if(c == '\n')
+        c = ' ';
+    if(c != '#') {
+        *b++ = c;
+        if(c == 0)
+            break;
+        continue;
+    }
+    // else
+    c = *cp++;
+    if(c == 0)
+        goto bad;
+    if(c == '#') { // # are escaped as double ##
+        *b++ = c;
+        continue;
+    }
+    c -= 'a';
+    if(c < 0 || c >= n)
+        continue;
+    strcpy(b, arg[c]);
+    b += strlen(arg[c]);
+}
+*b = '\0';
 @
 
 \section{[[#undef]]}
@@ -4113,15 +4694,19 @@ macund(void)
 {
     Sym *s;
 
+    // lexing
     s = getsym();
     macend();
     if(s == S) {
         yyerror("syntax in #undef");
         return;
     }
+
+    // action
     s->macro = nil;
 }
 @
+% ugly to do macend here.
 
 \section{[[#ifdef]]}
 
@@ -4130,20 +4715,45 @@ macund(void)
 void
 macif(int f)
 {
-    int c, l;
-    bool bol;
     Sym *s;
+    <<[[macif()]] other locals>>
 
-    if(f == 2)
+    if(f == 2) // else
         goto skip;
-    s = getsym();
-    if(s == S)
-        goto bad;
-    if(getcom() != '\n')
-        goto bad;
+
+    // lexing
+
+    <<[[macif()]] lexing the symbol>>
+
     if((s->macro != nil) ^ f)
         return;
+    // else
 
+    // action
+    <<[[macif()]] skipping text>>
+
+bad:
+    yyerror("syntax in #if(n)def");
+    macend();
+}
+@
+
+
+<<[[macif()]] lexing the symbol>>=
+s = getsym();
+if(s == S)
+    goto bad;
+if(getcom() != '\n')
+    goto bad;
+@
+
+<<[[macif()]] other locals>>=
+int c;
+int l; // depth
+bool bol; // beginning of line
+@
+
+<<[[macif()]] skipping text>>=
 skip:
     bol = true;
     l = 0;
@@ -4156,8 +4766,10 @@ skip:
                 bol = true;
             continue;
         }
+        // else a #xxx
         if(!bol)
             continue;
+
         s = getsym();
         if(s == S)
             continue;
@@ -4178,11 +4790,6 @@ skip:
             return;
         }
     }
-
-bad:
-    yyerror("syntax in #if(n)def");
-    macend();
-}
 @
 
 \section{[[#pragma]]}
@@ -4197,6 +4804,8 @@ macprag(void)
     int c0, c;
     char *hp;
     Hist *h;
+
+    // lexing
 
     s = getsym();
 
@@ -4238,8 +4847,9 @@ macprag(void)
         h = alloc(sizeof(Hist));
         h->name = hp;
         h->line = lineno;
-        h->offset = -1;
+        h->offset = -1; // pragma
 
+        // add_list(h, hist)
         h->link = H;
         if(ehist == H) {
             hist = h;
@@ -4263,10 +4873,10 @@ bad:
     }
 }
 @
-
+\t use malloc
 
 % most pragma seems to be discarded except #pragma lib, so
-% I removed it (could have aslo simplified by calling prag_do_nothing()).
+% I removed it (could have also simplified by calling prag_do_nothing()).
 % is it because code was shared with cc? or because it's in aa/
 % and other archi do different things?
 %
@@ -4351,6 +4961,8 @@ maclin(void)
     int c;
     long n;
 
+    // lexing
+
     n = getnsn();
     c = getc();
     if(n < 0)
@@ -4376,10 +4988,12 @@ maclin(void)
             break;
         *cp++ = c;
     }
-    *cp = 0;
+    *cp = '\0';
     c = getcom();
     if(c != '\n')
         goto bad;
+
+    // action
 
 nn:
     c = strlen(symb) + 1;
@@ -4402,6 +5016,7 @@ bad:
     macend();
 }
 @
+\t use malloc!
 
 % could move with the other getxxx()
 <<function getnsn>>=
@@ -4434,10 +5049,11 @@ getnsn(void)
 
 
 \chapter{Parsing}
+% and typechecking
 
 \section{Overview}
 
-% I assume you understand Yacc! if not read the oreilly book on Lex&Yacc
+% I assume you understand Yacc! if not read the O'Reilly book on Lex&Yacc
 %  or docs/doc/unix/yacc.pdf (or read CompilerGenerator.nw :) )
 %(compared to ocamlyacc can have actions in the middle, and they count
 % as indexable elements for the $xxx ($1, $2, etc))
@@ -4466,6 +5082,7 @@ getnsn(void)
 %left   ','
 %right  '=' LPE LME LMLE LDVE LMDE LRSHE LLSHE LANDE LXORE LORE
 %right  '?' ':'
+
 %left   LOROR
 %left   LANDAND
 %left   '|'
@@ -4476,6 +5093,7 @@ getnsn(void)
 %left   LLSH LRSH
 %left   '+' '-'
 %left   '*' '/' '%'
+
 %right  LMM LPP LMG '.' '[' '('
 @
 % LXE = L X Equal, e.g. LPE = L Plus Equal (+=)
@@ -4591,6 +5209,8 @@ xdecl:
 %  - struct x { ... }; (ok something kinda useful).
 %todo: effect of dodecl when pass Z? xdecl will not be called anyway ...
 % to set nearln? 
+%ocaml: should check if got struct or enum def here, otherwise
+% no sense to have no identifier here.
 
 
 %ugly? do that because C sucks? 
@@ -4618,7 +5238,8 @@ zctlist:
 @
 % so no type means int by default, as in 'x;' really means 'int x;'
 % can even have ';' which is not very useful.
-%ocaml: could return a pair instead of modifying globals.
+%ocaml: return a pair instead of modifying globals. Also forbid
+% empty declaration without any type or storage.
 
 <<extra grammar rules>>=
 ctlist:
@@ -4801,8 +5422,7 @@ case ONAME:
     n->xoffset = s->offset;
     n->class = s->class;
 
-    if(debug['d'])
-        dbgdecl(s);
+    <<[[dodecl()]] debug declaration>>
     acidvar(s);
 
     s->varlineno = lineno;
@@ -4924,6 +5544,9 @@ slist:
 @
 %$
 % adecl! for locals
+
+% Note that no reverdecl or markdecl here. done in caller!
+% See also ulstmnt and Blocks below.
 
 % invert in place
 <<function invert>>=
@@ -5211,8 +5834,7 @@ Node* dcllabel(Sym *s, bool defcontext)
 
     s->label = n;
 
-    if(debug['d'])
-        dbgdecl(s);
+    <<[[dcllabel()]] debug declaration>>
     return n;
 }
 @
@@ -6031,14 +6653,9 @@ doinit(Sym *s, Type *t, long o, Node *a)
         return Z;
     if(s->class == CEXTERN) {
         s->class = CGLOBL;
-        if(debug['d'])
-            dbgdecl(s);
+        <<[[doinit()]] debug declaration>>
     }
-    if(debug['i']) {
-        print("t = %T; o = %ld; n = %s\n", t, o, s->name);
-        prtree(a, "doinit value");
-    }
-
+    <<[[doinit()]] debug initialization>>
 
     n = initlist;
     if(a->op == OINIT)
@@ -6081,10 +6698,7 @@ init1(Sym *s, Type *t, long o, int exflag)
     if(a == Z)
         return Z;
 
-    if(debug['i']) {
-        print("t = %T; o = %ld; n = %s\n", t, o, s->name);
-        prtree(a, "init1 value");
-    }
+    <<[[init1()]] debug initialization>>
 
     if(exflag && a->op == OINIT)
         return doinit(s, t, o, nextinit());
@@ -6466,6 +7080,7 @@ enum type_kind_bis {
 
 % enum bxxx is used mainly in the grammar
 % and is a 64 bits bitset of the types above.
+%  (use of 1L, not just 1)
 % bitset, because need to aggregate keywords to form the final thing.
 % to do 'unsigned char' -> TUCHAR
 % pre: Txxx must have less than 64 cases? 1L => long => long enum
@@ -6575,7 +7190,7 @@ tlist:
 @
 % do not allow to specify storage class
 %less: hmmm could have done via grammar no?
-
+%ocaml: should rewrite grammar to disallow this by construction
 
 
 
@@ -6654,8 +7269,10 @@ tname:  /* type words */
 |   LSHORT    { $$ = BSHORT; }
 |   LINT      { $$ = BINT; }
 |   LLONG     { $$ = BLONG; }
+
 |   LFLOAT    { $$ = BFLOAT; }
 |   LDOUBLE   { $$ = BDOUBLE; }
+
 |   LVOID     { $$ = BVOID; }
 @
 
@@ -6720,6 +7337,7 @@ simplet(long b)
 {
 
     b &= ~BCLASS & ~BGARB;
+
     switch(b) {
     case BCHAR:
     case BCHAR|BSIGNED:
@@ -6803,6 +7421,7 @@ zgnlist:
 TAUTO	= NTYPE,
 TEXTERN,
 TSTATIC,
+
 TTYPEDEF, // ugly, not really a storage class
 TREGISTER,
 @
@@ -6826,7 +7445,7 @@ int simplec(long b)
     b &= BCLASS;
     switch(b) {
     case 0: 
-    // skipping regsiter
+    // skipping register
     case BREGISTER:
         return CXXX;
     case BAUTO:
@@ -7449,8 +8068,7 @@ void doenum(Sym *s, Node *n)
         en.lastenum++;
     }
 
-    if(debug['d'])
-        dbgdecl(s);
+    <<[[doenum()]] debug declaration>>
     acidvar(s);
 }
 @
@@ -8031,7 +8649,8 @@ adlist:
     }
 @
 %$
-
+%ocaml: can just factorize with xdlist as do the adecl vs xdecl
+% in the caller
 
 
 % pdecl | dodecl(<>) -> <>
@@ -8100,10 +8719,7 @@ Node* contig(Sym *s, Node *n, long v)
     long w;
     Type *zt;
 
-    if(debug['i']) {
-        print("contig v = %ld; s = %s\n", v, s->name);
-        prtree(n, "doinit value");
-    }
+    <<[[contig()]] debug initialization>>
 
     if(n == Z)
         goto no;
@@ -13777,6 +14393,8 @@ fatal(Node *n, char *fmt, ...)
 }
 @
 
+% %L will use Lconv to have right location
+
 \section{Symbol resolution}
 
 % Done in parsing, as C force to forward decl everything and have huge .h
@@ -17045,6 +17663,14 @@ if(canreach && thisfntype->link->etype != TVOID){
 % ansi C is diag instead of warn!
 
 \subsection{Constant if, [[5c -c]]}
+
+
+
+
+
+
+
+
 
 
 \chapter{AST-level Optimisations}
@@ -25354,20 +25980,6 @@ bool64(Node *n)
 
 
 
-<<function convvtox>>=
-vlong
-convvtox(vlong c, int et)
-{
-    int n;
-
-    n = 8 * ewidth[et];
-    c &= MASK(n);
-    if(!typeu[et])
-        if(c & SIGN(n))
-            c |= ~MASK(n);
-    return c;
-}
-@
 
 %\subsection{[[8c/cgen64.c]]}
 
@@ -25386,6 +25998,8 @@ convvtox(vlong c, int et)
 
 
 \section{Using an external preprocessor, [[/bin/cpp]]}
+
+%5c -p
 
 <<constant CPP>>=
 #define	CPP	"/bin/cpp"
@@ -25528,13 +26142,14 @@ char	debug[256];
 
 \section{Dumpers}
 
+
 \subsection{[[cc/]] [[Fmt]] data structures}
+
 
 <<[[cinit()]] fmtinstall>>=
 fmtinstall('O', Oconv);
 fmtinstall('T', Tconv);
 fmtinstall('F', FNconv);
-fmtinstall('L', Lconv);
 fmtinstall('Q', Qconv);
 fmtinstall('|', VBconv);
 @
@@ -25657,87 +26272,6 @@ Init	onamesinit[] =
 };
 @
 
-<<constant HISTSZ>>=
-#define	HISTSZ		20
-@
-
-<<struct Atab>>=
-struct Atab
-    {
-        Hist*	incl;	/* start of this include file */
-        long	idel;	/* delta line number to apply to include */
-        Hist*	line;	/* start of this #line directive */
-        long	ldel;	/* delta line number to apply to #line */
-};
-@
-
-% location!
-%assembler: similar to prfile() but used via %L e.g. in yyerror
-<<function Lconv>>=
-// int -> string?
-int
-Lconv(Fmt *fp)
-{
-    char str[STRINGSZ], s[STRINGSZ];
-    Hist *h;
-    long l, d;
-    int i, n;
-    struct Atab  a[HISTSZ];
-
-    l = va_arg(fp->args, long);
-    n = 0;
-    for(h = hist; h != H; h = h->link) {
-        if(l < h->line)
-            break;
-        if(h->name) {
-            if(h->offset != 0) {		/* #line directive, not #pragma */
-                if(n > 0 && n < HISTSZ && h->offset >= 0) {
-                    a[n-1].line = h;
-                    a[n-1].ldel = h->line - h->offset + 1;
-                }
-            } else {
-                if(n < HISTSZ) {	/* beginning of file */
-                    a[n].incl = h;
-                    a[n].idel = h->line;
-                    a[n].line = 0;
-                }
-                n++;
-            }
-            continue;
-        }
-        n--;
-        if(n > 0 && n < HISTSZ) {
-            d = h->line - a[n].incl->line;
-            a[n-1].ldel += d;
-            a[n-1].idel += d;
-        }
-    }
-    if(n > HISTSZ)
-        n = HISTSZ;
-    str[0] = 0;
-    for(i=n-1; i>=0; i--) {
-        if(i != n-1) {
-            if(fp->flags & ~(FmtWidth|FmtPrec))	/* BUG ROB - was f3 */
-                break;
-            strcat(str, " ");
-        }
-        if(a[i].line)
-            snprint(s, STRINGSZ, "%s:%ld[%s:%ld]",
-                a[i].line->name, l-a[i].ldel+1,
-                a[i].incl->name, l-a[i].idel+1);
-        else
-            snprint(s, STRINGSZ, "%s:%ld",
-                a[i].incl->name, l-a[i].idel+1);
-        if(strlen(s)+strlen(str) >= STRINGSZ-10)
-            break;
-        strcat(str, s);
-        l = a[i].incl->line - 1;	/* now print out start of this file */
-    }
-    if(n == 0)
-        strcat(str, "<eof>");
-    return fmtstrcpy(fp, str);
-}
-@
 
 <<function Tconv>>=
 // option<Type> -> string
@@ -26496,11 +27030,30 @@ prtree1(Node *n, int d, bool f)
 if(debug['m'])
     print("#define (-D) %s %s\n", s->name, s->macro+1);
 @
+% plus 1 because first byte is for nbargs.
 
 <<[[macdef()]] debug>>=
 if(debug['m'])
     print("#define %s %s\n", s->name, s->macro+1);
 @
+
+
+
+<<[[macexpand()]] debug macro expansion>>=
+if(debug['m'])
+    print("#expand %s %s\n", s->name, ob);
+@
+
+
+\section{[[5c -e]], file inclusion debugging}
+
+% s is name of file (or "<stdin>")
+
+<<[[newfile()]] debug>>=
+if(debug['e'])
+    print("%L: %s\n", lineno, s);
+@
+%ocaml: -debug_inclusion is clearer
 
 \section{[[5c -f]], line information debugging}
 % also in Assembler.nw
@@ -26518,9 +27071,35 @@ if(debug['f'])
 
 \section{[[5c -L]], printing names}
 
+<<[[yylex()]] in talph case, debug symbol>>=
+if(debug['L'])
+    print("%L: %s\n", lineno, symb);
+@
+
+
 \section{[[5c -d]], printing declarations}
 % useful to debug, potentially useful to build tools too! e.g. tags file
 % also print when revert a decl in revertdcl()
+
+<<[[dodecl()]] debug declaration>>=
+if(debug['d'])
+    dbgdecl(s);
+@
+
+<<[[dcllabel()]] debug declaration>>=
+if(debug['d'])
+    dbgdecl(s);
+@
+
+<<[[doinit()]] debug declaration>>=
+if(debug['d'])
+    dbgdecl(s);
+@
+
+<<[[doenum()]] debug declaration>>=
+if(debug['d'])
+    dbgdecl(s);
+@
 
 % labels
 <<function dbgdecl>>=
@@ -26533,6 +27112,21 @@ dbgdecl(Sym *s)
 @
 
 
+<<[[revertdcl()]] debug revert DSUE>>=
+if(debug['d'])
+    print("revert2 \"%s\"\n", s->name);
+@
+
+<<[[revertdcl()]] debug revert DLABEL>>=
+if(debug['d'])
+    print("revert3 \"%s\"\n", s->name);
+@
+
+<<[[revertdcl()]] debug revert DAUTO>>=
+if(debug['d'])
+    print("revert1 \"%s\"\n", s->name);
+@
+
 \section{[[5c -t]], printing expression type trees}
 % before and after different phases
 
@@ -26544,7 +27138,29 @@ dbgdecl(Sym *s)
 
 \section{[[5c -i]], printing initializations}
 
+<<[[doinit()]] debug initialization>>=
+if(debug['i']) {
+    print("t = %T; o = %ld; n = %s\n", t, o, s->name);
+    prtree(a, "doinit value");
+}
+@
+
+<<[[init1()]] debug initialization>>=
+if(debug['i']) {
+    print("t = %T; o = %ld; n = %s\n", t, o, s->name);
+    prtree(a, "init1 value");
+}
+@
+
+<<[[contig()]] debug initialization>>=
+if(debug['i']) {
+    print("contig v = %ld; s = %s\n", v, s->name);
+    prtree(n, "doinit value");
+}
+@
+
 \section{[[5c -m]], printing arithmetic trees}
+% should choose another one!! -m is already used for debugging macros
 
 \section{[[5c -r]], printing registerization}
 
@@ -26553,21 +27169,10 @@ dbgdecl(Sym *s)
 \chapter{Error Managment}
 %assembler: very similar
 
+
 <<global nerrors>>=
 int	nerrors;
 @
-
-% main | compile | newio | newfile | yylex | ... -> <>
-<<function errorexit>>=
-void
-errorexit(void)
-{
-    if(outfile)
-        remove(outfile);
-    exits("error");
-}
-@
-
 
 <<function yyerror>>=
 void
@@ -26591,6 +27196,9 @@ yyerror(char *fmt, ...)
     }
 }
 @
+% %L will use Lconv!
+%ocaml: call errorexit directly, do not do any error recovery
+
 
 <<[[yyerror()]] when called from yyparse>>=
 /*
@@ -26601,6 +27209,20 @@ if(strcmp(fmt, "syntax error") == 0) {
     return;
 }
 @
+
+% main | compile | newio | newfile | yylex | ... -> <>
+<<function errorexit>>=
+void
+errorexit(void)
+{
+    if(outfile)
+        remove(outfile);
+    exits("error");
+}
+@
+% good citizen! no need for :D: in mkfile then, file is removed
+% if there was an error!
+
 
 <<function diag>>=
 void
@@ -26630,6 +27252,101 @@ diag(Node *n, char *fmt, ...)
     }
 }
 @
+
+
+
+
+<<[[cinit()]] fmtinstall>>=
+fmtinstall('L', Lconv);
+@
+
+
+<<constant HISTSZ>>=
+#define	HISTSZ		20
+@
+
+<<struct Atab>>=
+struct Atab
+    {
+        Hist*	incl;	/* start of this include file */
+        long	idel;	/* delta line number to apply to include */
+        Hist*	line;	/* start of this #line directive */
+        long	ldel;	/* delta line number to apply to #line */
+};
+@
+
+% location!
+%assembler: similar to prfile() but used via %L e.g. in yyerror
+<<function Lconv>>=
+// int -> string?
+int
+Lconv(Fmt *fp)
+{
+    char str[STRINGSZ], s[STRINGSZ];
+    Hist *h;
+    long l, d;
+    int i, n;
+    struct Atab  a[HISTSZ];
+
+    l = va_arg(fp->args, long);
+    n = 0;
+    for(h = hist; h != H; h = h->link) {
+        if(l < h->line)
+            break;
+        if(h->name) {
+            if(h->offset != 0) {		/* #line directive, not #pragma */
+                if(n > 0 && n < HISTSZ && h->offset >= 0) {
+                    a[n-1].line = h;
+                    a[n-1].ldel = h->line - h->offset + 1;
+                }
+            } else {
+                if(n < HISTSZ) {	/* beginning of file */
+                    a[n].incl = h;
+                    a[n].idel = h->line;
+                    a[n].line = 0;
+                }
+                n++;
+            }
+            continue;
+        }
+        n--;
+        if(n > 0 && n < HISTSZ) {
+            d = h->line - a[n].incl->line;
+            a[n-1].ldel += d;
+            a[n-1].idel += d;
+        }
+    }
+    if(n > HISTSZ)
+        n = HISTSZ;
+    str[0] = 0;
+    for(i=n-1; i>=0; i--) {
+        if(i != n-1) {
+            if(fp->flags & ~(FmtWidth|FmtPrec))	/* BUG ROB - was f3 */
+                break;
+            strcat(str, " ");
+        }
+        if(a[i].line)
+            snprint(s, STRINGSZ, "%s:%ld[%s:%ld]",
+                a[i].line->name, l-a[i].ldel+1,
+                a[i].incl->name, l-a[i].idel+1);
+        else
+            snprint(s, STRINGSZ, "%s:%ld",
+                a[i].incl->name, l-a[i].idel+1);
+        if(strlen(s)+strlen(str) >= STRINGSZ-10)
+            break;
+        strcat(str, s);
+        l = a[i].incl->line - 1;	/* now print out start of this file */
+    }
+    if(n == 0)
+        strcat(str, "<eof>");
+
+    return fmtstrcpy(fp, str);
+}
+@
+
+
+
+
 
 
 
@@ -26875,7 +27592,7 @@ enum os				/* also in ../{8a,5a,0a}.h */
 };
 @
 
-\chapter{[[5c]] in OCaml}
+%%%\chapter{[[5c]] in OCaml}
 % oh yeah!
 
 \chapter{Extra Code}
