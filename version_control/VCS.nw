@@ -1,0 +1,331 @@
+\documentclass[twocolumn, landscape]{report}
+
+%******************************************************************************
+% Prelude
+%******************************************************************************
+\newif\iffinal
+\newif\ifverbose
+\finaltrue\verbosefalse % see also other newif in Macros.tex
+
+%------------------------------------------------------------------------------
+%history: 
+%------------------------------------------------------------------------------
+
+%thx to LP, changed for the better a few things:
+
+%thx to codemap/codegraph/scheck:
+% - TODO use cg to reduce backward deps, introduce globals.c, utils.c,
+%   (harder to understand non layered code)
+% - TODO use scheck to remove deadcode, dead prototypes, useless export
+%   or mv as forward decl
+%   (harder to understand big interface files)
+% - TODO use cg to reduce number of globals by moving them closer to the
+%   relevant file (or even function), better cluster the code
+%   (harder to understand non functional code using lots of globals)
+
+%thx to this manual, better understand VCS?:
+
+%history LP-ization:
+% - skeleton, mostly copy paste of Template.nw skeleton
+% - put all content of files in the Extra section, via 'pfff -lpize'
+%   which also now split in chunks!
+%    * function, global, struct, enum, constant, macro(actually function)
+%    * TODO ctor/dtor, dumper
+%    * TODO [[xxx]] other fields, [[xxx]] extra fields
+% - TODO read Extra section, identify concepts, first TOC
+% - TODO distribute parts of the Extra section in the main file
+% - TODO understand main(), LP split main, improve TOC
+% - TODO understand main functions, LP split, cluster, improve TOC
+% - TODO LP split the structures, use datalog for flow to field info
+% - TODO nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
+% - TODO aspecify advanced features! remove useless features
+% - TODO add figures
+% - TODO add explanations
+
+%------------------------------------------------------------------------------
+% Packages
+%------------------------------------------------------------------------------
+
+\usepackage{../docs/latex/noweb}
+ \noweboptions{footnotesizecode,nomargintag}
+ %note: allow chunk on different pages, less white space at bottom of pages
+ \def\nwendcode{\endtrivlist \endgroup}
+ \let\nwdocspar=\par
+\usepackage{xspace}
+\usepackage{verbatim}
+%note: required by noweblatexpad for the \t \l \n in this file
+\usepackage{fancyvrb}
+\usepackage{url}
+\iffinal
+\usepackage{hyperref}
+ \hypersetup{colorlinks=true}
+\fi
+\usepackage[pageref]{backref}
+ \def\backref{{\footnotesize cited page(s)}~}
+%\usepackage{cleveref} %\cref
+%\usepackage{multirow}
+\usepackage{booktabs} 
+ \newcommand{\otoprule}{\midrule[\heavyrulewidth]}
+\usepackage{graphicx}
+%\usepackage{minitoc}
+
+%------------------------------------------------------------------------------
+% Macros
+%------------------------------------------------------------------------------
+\input{../docs/latex/Macros}
+
+%------------------------------------------------------------------------------
+% Config
+%------------------------------------------------------------------------------
+\allcodefalse
+% used for forward decl, pragmas, func decl, extern decl, stats, #ifdef,
+% debugging macros
+
+\addtolength{\topmargin}{-.850in}
+\addtolength{\textheight}{1.70in}
+
+
+\begin{document}
+%******************************************************************************
+% Title
+%******************************************************************************
+\title{
+{\Huge 
+Principia Softwarica: The Version Control System [[camp]]
+}\\
+{version 0.1}
+}
+
+\author{
+Yoann Padioleau\\
+\texttt{yoann.padioleau@gmail.com}\\
+\\
+with code from\\
+Ian Lynagh
+}
+
+\maketitle 
+\onecolumn
+\hrule
+\begin{quote}
+    Copyright \copyright{} 2015 Yoann Padioleau \\
+    Permission is granted to copy, distribute and/or modify this document,
+    except all the source code it contains, under the terms of the GNU Free
+    Documentation License, Version 1.3.
+\end{quote}
+\hrule
+
+%CONFIG: \dominitoc
+
+\iffinal
+\begingroup
+\hypersetup{linkcolor=blue}
+% need to s/onecolumn/twocolumn in report.cls :) for \tableofcontents
+\twocolumn
+\tableofcontents
+\endgroup
+\else
+\tableofcontents
+\fi
+
+%******************************************************************************
+% Body
+%******************************************************************************
+
+\chapter{Introduction}
+
+\section{Motivations}
+
+The goal of this book is to present in full details the source code of
+a version control system.
+Why? Because I think it makes you a better programmer if
+you fully understand how things work under the hood.
+
+% Chose camp, a mini darcs. Simple? Elegant? Arguably more powerful.
+% < 10 000 LOC.
+%% Can be good opportunity also to read some haskell code. Maybe can then
+%% port the code to OCaml.
+
+Here are other candidates that were considered but ultimately discarded:
+\begin{itemize}
+
+\item RCS
+% 24000 LOC, but too limited, just one file, no branch, no concurrent work
+
+\item CVS
+% 160 000 LOC, with rcs.c at 8000 LOC, hmm,
+% concurrent, but branch is really tedious
+
+\item git
+% 489 000 LOC
+% very good, but big codebase in C, and complicated (e.g. rebase)
+% has an article in AOSA book 1 or 2
+% first commit was small:
+%  https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290
+% also libgit2, LOC? share code with git?
+
+\item darcs
+% 80 000 LOC (using literate haskell), maybe good candidate, simpler
+% model, arguably simpler than git (rebase for free?), some patch theory.
+% But code looks actually awful. Lots of boilerplate. Huge types.
+
+\item mercurial
+% core of 1.0 is? maybe not that bad
+
+\end{itemize}
+
+PIJUL instead ? or dulwich!
+
+%gitless, a better design for git, great paper:
+% http://people.csail.mit.edu/sperezde/pre-print-oopsla16.pdf
+
+% subversion (630 000 LOC, hmm), mercurial (147 000 LOC, core = 84 000 LOC)
+% gnu arch (aka tla 273 000 LOC), bazaar (477 000 LOC), 
+% bitkeeper, perforce, ....
+%https://en.wikipedia.org/wiki/List_of_revision_control_software
+
+%#clone in other languages (all clones of git actually):
+% - dulwich: git written in python (15000 LOC (without tests))
+% - git-go: git written in Go (but seems limited to archeology command)
+% - JGit: git in Java
+% - libgit: git in C, but reuse git code or new implem?
+% - gat: git in haskell http://evan-tech.livejournal.com/254793.html
+%   also git-clone in haskell: 
+%   http://stefan.saasen.me/articles/git-clone-in-haskell-from-the-bottom-up/
+
+%http://www.catb.org/esr/writings/version-control/version-control.html
+
+%https://codewords.recurse.com/issues/two/git-from-the-inside-out
+
+%future:
+% - my semantic-vcs proposal!
+%   related: https://www.semanticmerge.com/
+
+\section{Getting started}
+
+\section{Requirements}
+
+\section{About this document}
+#include "docs/latex/About.nw"
+
+\section{Copyright}
+
+Most of this document is actually source code from Camp, so
+those parts are copyright by Ian Lynagh.
+The prose is mine and is licensed under the GNU Free Documentation
+License.
+
+\section{Acknowledgments}
+
+
+\chapter{Overview}
+
+\section{VCS principles}
+
+% See Misfits paper, great summary of essential purposes.
+
+% First, store past versions. Can go back in time if made a mistake.
+% Could get that with copy, but better organized, and storing
+% deltas has efficiency implications. 
+
+% Also by having delta
+% and message associated with it help explore history. Git log, git
+% blame are fantastic tool, even in single-user mode. To know
+% code related to a line, the message of this patch, etc.
+% Also in multi-user mode good to know the author, test plan, test
+% files, coupled code, etc.
+% I used it a lot to understand code at Facebook.
+
+% Then when work in groups, useful to have way to work concurrently,
+% to not pass his copy and wait for the "token". Concurrent
+% techniques are lock, or better optimistic and later merge.
+
+% Branches are also very useful. Work on different tasks, different
+% branches. Can juggle between those.
+
+% What brings distributed then? More convenient than centralized.
+% Less imposing. Nice to have everything locally. Just more general.
+% Can do centralized with distributed (e.g. "main" repo on github
+% is the main thing to pull from).
+
+% Finally github is fantastic. Easy to setup and start sharing work.
+
+% ten innovations in the history of vcs:
+% http://www.flourish.org/blog/?p=397
+% http://www.flourish.org/2011/12/astonishments-ten-in-the-history-of-version-control/
+% free easy hosting is in it? a la github?
+
+% see Mercurial chapter in AOSA book.
+
+\section{[[camp]] services}
+
+\section{Repository format}
+
+\section{A toy session}
+
+\section{Code organization}
+
+\section{Software architecture}
+
+%###############################################################################
+
+\chapter{Core Data Structures}
+
+\chapter{[[main()]]}
+
+
+\chapter{Branches}
+% purpose: parallel development
+% gitless records working version of files, so can easily switch branch!
+% no problem if got uncommitted stuff in current dir or untracked file
+% that conflicts with tracked file in another branch, it will be saved!
+% in gitless, it really is like you had 2 separate dirs with 2
+%  separate working versions!
+
+\chapter{Advanced Topics}
+
+\chapter{Conclusion}
+
+\appendix
+
+\chapter{Debugging}
+
+\chapter{Profiling}
+
+\chapter{Error Managment}
+
+\chapter{Extra Code}
+
+\ifallcode
+#include "VCS_extra.nw"
+\fi
+
+%\chapter{Changelog}
+%\label{sec:changelog}
+
+% code via make loc = X LOC
+% orig VCS.nw = XX, just lpized and few comments, ?? pages pdf
+% now: =~ XX LOC so added XX LOE (Lines of explanations)
+% vcs in ocaml: XX LOC (but still miss some advanced-topics features)
+
+\chapter{Glossary}
+\label{sec:glossary}
+
+\begin{verbatim}
+\end{verbatim}
+
+\chapter*{Indexes}
+\addcontentsline{toc}{section}{Index}
+
+%\chapter{References} 
+\addcontentsline{toc}{section}{References}
+
+\bibliography{../docs/latex/Principia}
+\bibliographystyle{alpha}
+
+%******************************************************************************
+% Postlude
+%******************************************************************************
+
+\end{document}
+
