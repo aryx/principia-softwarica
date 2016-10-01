@@ -10,14 +10,24 @@
 
 /*s: token declarations */
 %token FOR IN WHILE IF NOT SWITCH FN
-%token TWIDDLE BANG SUBSHELL /** ~ ! @ */
-%token REDIR DUP PIPE /** {>, <, <<, >>} DUP = ??? | */
+%token TWIDDLE BANG  /** ~ ! */
+%token REDIR PIPE /** {>, <, <<, >>} | */
 %token ANDAND OROR /** && || */
 %token COUNT SUB /** $# ( */
 %token WORD /** anything else (e.g. foo, --help, 42, /a/b/c, etc) */
 /*x: token declarations */
-%token SIMPLE ARGLIST WORDS
-%token BRACE PAREN PCMD PIPEFD /* not used in syntax */
+/* not used in syntax */
+%token SIMPLE 
+%token ARGLIST WORDS
+%token BRACE PAREN 
+/*x: token declarations */
+%token PCMD
+/*x: token declarations */
+%token SUBSHELL /** @ */
+/*x: token declarations */
+%token DUP
+/*x: token declarations */
+%token PIPEFD 
 /*e: token declarations */
 /*s: priority and associativity declarations */
 /* operator priorities -- lowest first */
@@ -64,6 +74,8 @@ cmd:
 /*x: cmd rule other cases */
 |   cmd PIPE cmd        {$$=mung2($2, $1, $3);}
 /*x: cmd rule other cases */
+|   brace epilog        {$$=epimung($1, $2);}
+/*x: cmd rule other cases */
 |   redir cmd  %prec BANG
         {$$=mung2($1, $1->child[0], $2);}
 /*x: cmd rule other cases */
@@ -87,15 +99,13 @@ cmd:
 |   FOR '(' word ')' {skipnl();} cmd
     {$$=mung3($1, $3, (struct Tree *)0, $6);}
 /*x: cmd rule other cases */
-|   brace epilog        {$$=epimung($1, $2);}
-/*x: cmd rule other cases */
-|   SUBSHELL cmd        {$$=mung1($1, $2);}
-/*x: cmd rule other cases */
 |   FN words brace  {$$=tree2(FN, $2, $3);}
 |   FN words        {$$=tree1(FN, $2);}
 /*x: cmd rule other cases */
 |   assign cmd %prec BANG   
       {$$=mung3($1, $1->child[0], $1->child[1], $2);}
+/*x: cmd rule other cases */
+|   SUBSHELL cmd        {$$=mung1($1, $2);}
 /*e: cmd rule other cases */
 /*e: cmd rule */
 /*s: simple rule */
@@ -106,6 +116,7 @@ simple:
 |   simple redir        {$$=tree2(ARGLIST, $1, $2);}
 /*e: simple rule other cases */
 /*e: simple rule */
+
 /*s: word rule */
 word:   
     comword
@@ -116,15 +127,17 @@ word:
 comword: 
     WORD
 /*s: comword rule other cases */
-|   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
-/*x: comword rule other cases */
-|   '$' word       {$$=tree1('$', $2);}
+|   '$' word        {$$=tree1('$', $2);}
 |   COUNT word      {$$=tree1(COUNT, $2);}
 |   '$' word SUB words ')'  {$$=tree2(SUB, $2, $4);}
 /*x: comword rule other cases */
-|   '"' word        {$$=tree1('"', $2);}
-|   '`' brace       {$$=tree1('`', $2);}
 |   '(' words ')'   {$$=tree1(PAREN, $2);}
+/*x: comword rule other cases */
+|   REDIR brace     {$$=mung1($1, $2); $$->type=PIPEFD;}
+/*x: comword rule other cases */
+|   '`' brace       {$$=tree1('`', $2);}
+/*x: comword rule other cases */
+|   '"' word        {$$=tree1('"', $2);}
 /*e: comword rule other cases */
 /*e: comword rule */
 
@@ -145,7 +158,9 @@ cmdsa:
 /*x: other rules */
 redir:  
     REDIR word      {$$=mung1($1, $1->rtype==HERE ? heredoc($2) : $2);}
+/*s: redir rule other cases */
 |   DUP
+/*e: redir rule other cases */
 /*x: other rules */
 epilog: 
     /*empty*/           {$$=nil;}

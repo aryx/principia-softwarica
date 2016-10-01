@@ -27,7 +27,7 @@ dotrap(void)
             runq->local = newvar(strdup("*"), runq->local);
             runq->local->val = copywords(starval, (struct Word *)nil);
             runq->local->changed = true;
-            runq->redir = runq->startredir = 0;
+            runq->redir = runq->startredir = nil;
         }
         else if(i==SIGINT || i==SIGQUIT){
             /*

@@ -272,12 +272,15 @@ void
 globlist(void)
 {
     word *a;
-    globv = 0;
+    globv = nil;
+
     globlist1(runq->argv->words);
     poplist();
     pushlist();
+
     if(globv){
-        for(a = globv;a->next;a = a->next);
+        for(a = globv;a->next;a = a->next)
+            ;
         a->next = runq->argv->words;
         runq->argv->words = globv;
     }

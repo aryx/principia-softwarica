@@ -48,7 +48,10 @@ struct Redir {
     short from;
     short to;
 
+    // Extra
+    /*s: [[Redir]] extra fields */
     struct Redir *next;		/* what else to do (reverse order) */
+    /*e: [[Redir]] extra fields */
 };
 /*e: struct redir */
 
@@ -79,12 +82,6 @@ struct Thread {
     // list<ref_own<Var>> (next = Var.next)
     struct Var *local;		/* list of local variables */
     /*x: [[Thread]] other fields */
-    struct Redir *redir;	/* redirection stack */
-    struct Redir *startredir;	/* redir inheritance point */
-    /*x: [[Thread]] other fields */
-    int pid;		/* process for Xpipewait to wait for */
-    char status[NSTATUS];	/* status for Xpipewait */
-    /*x: [[Thread]] other fields */
     struct Io *cmdfd;	/* file descriptor for Xrdcmd */
     char *cmdfile;		/* file name in Xrdcmd */
     bool iflag;		/* interactive? */
@@ -93,8 +90,19 @@ struct Thread {
     /*x: [[Thread]] other fields */
     int lineno;			/* linenumber */
     /*x: [[Thread]] other fields */
+    // list<ref_own<Redir>> (next = Redir.next)
+    struct Redir *redir;	/* redirection stack */
+    /*x: [[Thread]] other fields */
+    struct Redir *startredir;	/* redir inheritance point */
+    /*x: [[Thread]] other fields */
+    // option<int> (None = -1)
+    int pid;		/* process for Xpipewait to wait for */
+    /*x: [[Thread]] other fields */
+    char status[NSTATUS];	/* status for Xpipewait */
+    /*x: [[Thread]] other fields */
     bool iflast;		/* static `if not' checking */
     /*e: [[Thread]] other fields */
+
     // Extra
     /*s: [[Thread]] extra fields */
     thread *ret;		/* who continues when this finishes */

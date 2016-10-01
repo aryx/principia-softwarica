@@ -10,7 +10,7 @@
 void
 Xasync(void)
 {
-    int null = open("/dev/null", 0);
+    fdt null = open("/dev/null", 0);
     int pid;
     char npid[10];
     if(null<0){
@@ -22,18 +22,20 @@ Xasync(void)
         close(null);
         Xerror("try again");
         break;
-    case 0:
+    case 0: // child
         clearwaitpids();
         pushredir(ROPEN, null, 0);
+        // start a new Thread runq->pc+1 so skip pointer to code after &
         start(runq->code, runq->pc+1, runq->local);
         runq->ret = 0;
         break;
-    default:
+    default: // parent
         addwaitpid(pid);
         close(null);
+        // jump to code after &
         runq->pc = runq->code[runq->pc].i;
         inttoascii(npid, pid);
-        setvar("apid", newword(npid, (word *)0));
+        setvar("apid", newword(npid, (word *)nil));
         break;
     }
 }
@@ -44,10 +46,12 @@ void
 Xpipe(void)
 {
     struct Thread *p = runq;
-    int pc = p->pc, forkid;
-    int lfd = p->code[pc++].i;
-    int rfd = p->code[pc++].i;
-    int pfd[2];
+    int pc = p->pc;
+    int forkid;
+    fdt lfd = p->code[pc++].i;
+    fdt rfd = p->code[pc++].i;
+    fdt pfd[2];
+
     if(pipe(pfd)<0){
         Xerror("can't get pipe");
         return;
@@ -56,14 +60,15 @@ Xpipe(void)
     case -1:
         Xerror("try again");
         break;
-    case 0:
+    case 0: // child
         clearwaitpids();
+        // pc+2 so jump the jump addresses
         start(p->code, pc+2, runq->local);
-        runq->ret = 0;
+        runq->ret = nil;
         close(pfd[PRD]);
         pushredir(ROPEN, pfd[PWR], lfd);
         break;
-    default:
+    default: // parent
         addwaitpid(forkid);
         start(p->code, p->code[pc].i, runq->local);
         close(pfd[PWR]);
@@ -103,13 +108,13 @@ Xbackq(void)
         close(pfd[PRD]);
         close(pfd[PWR]);
         return;
-    case 0:
+    case 0: // child
         clearwaitpids();
         close(pfd[PRD]);
         start(runq->code, runq->pc+1, runq->local);
         pushredir(ROPEN, pfd[PWR], 1);
         return;
-    default:
+    default: // parent
         addwaitpid(pid);
         close(pfd[PWR]);
         f = openfd(pfd[PRD]);
@@ -173,14 +178,14 @@ Xpipefd(void)
     case -1:
         Xerror("try again");
         break;
-    case 0:
+    case 0: // child
         clearwaitpids();
         start(p->code, pc+2, runq->local);
         close(mainfd);
         pushredir(ROPEN, sidefd, p->code[pc].i==READ?1:0);
         runq->ret = 0;
         break;
-    default:
+    default: // parent
         addwaitpid(pid);
         close(sidefd);
         pushredir(ROPEN, mainfd, mainfd);	/* isn't this a noop? */
@@ -202,12 +207,12 @@ Xsubshell(void)
     case -1:
         Xerror("try again");
         break;
-    case 0:
+    case 0: // child
         clearwaitpids();
         start(runq->code, runq->pc+1, runq->local);
-        runq->ret = 0;
+        runq->ret = nil;
         break;
-    default:
+    default: // parent
         addwaitpid(pid);
         Waitfor(pid, 1);
         runq->pc = runq->code[runq->pc].i;
@@ -233,7 +238,7 @@ execforkexec(void)
         pushword("exec");
         execexec();
 
-        // should not be reached!
+        // should not be reached! unless the command did not exist
         strcpy(buf, "can't exec: ");
         n = strlen(buf);
         errstr(buf+n, ERRMAX-n);

@@ -228,7 +228,7 @@ but which I ultimately discarded:
 % but many corner cases. Actually Duff says nobody knows the grammar
 %  of sh (even though sh article by Bourne contains a grammar in appendix).
 %  Not in yacc, recursive descent, and hacky he says.
-
+% http://samrowe.com/wordpress/advancing-in-the-bash-shell/
 
 \item Bash (Bourne Again Shell) 
 % big codebase
@@ -1400,6 +1400,11 @@ if(argc==-1)
 % so c:1 so -c except one argument.
 % same for -m.
 
+
+% when do  sh foo.sh <some arguments>
+% can we have conflicts in some arguments with flags that sh would
+% interpret?
+
 \subsection{Login mode, [[rc -l]]}
 % or nothing but - in argv0
 
@@ -1414,7 +1419,7 @@ if(argv[0][0]=='-')
 % or nothing but can detect Isatty
 
 % mv later? advanced feature? hmm interactive is important notion.
-<<[[main()]] argc argv processing, modify flags>>
+<<[[main()]] argc argv processing, modify flags>>=
 if(flag['I'])
     flag['i'] = nil;
 else 
@@ -1564,7 +1569,7 @@ for(i = argc-1; i!=0; --i)
 @
 % start from end because list/stack so at the end the top of the stack will
 % be the first argument of the command
-% does getflags consume argv and argc?
+% does getflags consume argv and argc? Yes! so push only non flags
 %ocaml: no need to call pushlist() here. Already have working argv.
 % no nil in OCaml!
 
@@ -1821,7 +1826,7 @@ if(!inquote && c=='\\'){
     c = rchr(runq->cmdfd);
 
     if(c=='\n' && !incomm){		/* don't continue a comment */
-        <<[[getnext()]] when backslash and newline, set doprompt>>=
+        <<[[getnext()]] when backslash and newline, set doprompt>>
         c=' ';
     }
     else{
@@ -2599,6 +2604,9 @@ if(lastword){
 
 
 
+
+
+
 \chapter{Parsing}
 
 \section{Overview}
@@ -2836,6 +2844,7 @@ for(u = t->child[0]; u->type==ARGLIST; u = u->child[0]){
 % when do  ls /tmp/x > foo < bar /tmp/y
 % then want to transform in   (> foo (< bar (ls /tmp/x /tmp/y))) in AST
 
+
 \section{Operators}
 
 % actually operators are at different levels, line rule, cmd rule,
@@ -2876,10 +2885,10 @@ cmdsa:
 % when argument of if/while in general
 <<cmd rule other cases>>=
 |   BANG cmd            {$$=mung1($1, $2);}
-|   TWIDDLE word words  {$$=mung2($1, $2, $3);}
 @
-%$
 % could also just do tree2(BANG, $2) I think
+
+
 
 % redir is in simple/expr, so has more prirority
 
@@ -2894,15 +2903,6 @@ tree* mung1(tree *t, tree *c0)
 @
 %ocaml: build directly
 
-<<function mung2>>=
-//@Scheck: used by syn.y
-tree* mung2(tree *t, tree *c0, tree *c1)
-{
-    t->child[0] = c0;
-    t->child[1] = c1;
-    return t;
-}
-@
 
 <<function mung3>>=
 //@Scheck: used by syn.y
@@ -2911,6 +2911,28 @@ tree* mung3(tree *t, tree *c0, tree *c1, tree *c2)
     t->child[0] = c0;
     t->child[1] = c1;
     t->child[2] = c2;
+    return t;
+}
+@
+
+\subsection{String operator}
+
+% Fundamental type is list of string. No int, no float, just strings.
+% So fundamental operator is string matching ~.
+% Can be used for arithmetic too,  if(~ $#xxx 0)
+
+
+<<cmd rule other cases>>=
+|   TWIDDLE word words  {$$=mung2($1, $2, $3);}
+@
+%$
+
+<<function mung2>>=
+//@Scheck: used by syn.y
+tree* mung2(tree *t, tree *c0, tree *c1)
+{
+    t->child[0] = c0;
+    t->child[1] = c1;
     return t;
 }
 @
@@ -3014,6 +3036,10 @@ tree* epimung(tree *comp, tree *epi)
 % fishy. See rc(1) note about it.
 % Also normally else requires lookahead but "the shell cannot afford
 %  to do lookahead since it is an interactive language"
+% It has to process  if(...) cmd NEWLINE.
+% It can not wait to check if there is an else (anyway it can
+% already proceed). But then else is really another separate command,
+% hence the special indication.
 
 % for(x) iterate over $*
 % can do before *=`{ ... } for instance
@@ -3244,6 +3270,11 @@ error0 compile(tree *t)
     return OK_1;
 }
 @
+
+% note that compile is called for each line entered interactively,
+% and also inline of a script.
+% So for each line in a script there are set of opcodes for this line
+% followed by a Xreturn to go back to the REPL to read the next line!
 
 <<[[compile()]] check nerror>>=
 if(nerror){
@@ -3981,6 +4012,7 @@ case TWIDDLE:
         emitf(Xeflag);
     break;
 @
+% why Xeflag here? no command, just word, so why exit early?
 
 <<function Xmatch>>=
 void
@@ -3988,6 +4020,7 @@ Xmatch(void)
 {
     word *p;
     char *subject;
+
     subject = list2str(runq->argv->words);
     setstatus("no match");
     for(p = runq->argv->next->words;p;p = p->next)
@@ -4000,6 +4033,8 @@ Xmatch(void)
     poplist();
 }
 @
+% but list of words should contain only one element no?
+% no cos pattern can be the content of a variable
 
 <<function list2str>>=
 char*
@@ -4008,12 +4043,15 @@ list2str(word *words)
     char *value, *s, *t;
     int len = 0;
     word *ap;
+
     for(ap = words;ap;ap = ap->next)
-        len+=1+strlen(ap->word);
+        len += 1+strlen(ap->word);
     value = emalloc(len+1);
+
     s = value;
     for(ap = words;ap;ap = ap->next){
-        for(t = ap->word;*t;) *s++=*t++;
+        for(t = ap->word;*t;) 
+            *s++=*t++;
         *s++=' ';
     }
     if(s==value)
@@ -4022,7 +4060,7 @@ list2str(word *words)
     return value;
 }
 @
-
+%ocaml: String.concat " "
 
 
 % see also /bin/test! often used as argument to if()
@@ -4670,7 +4708,7 @@ Xwastrue(void)
 
 <<[[outcode()]] cases>>=
 case NOT:
-    <<[[outcode()]] when NOT, sanity check last command was an if>>=
+    <<[[outcode()]] when NOT, sanity check last command was an if>>
     emitf(Xifnot);
     p = emiti(0);
     outcode(c0, eflag);
@@ -4835,35 +4873,45 @@ codeswitch(tree *t, bool eflag)
     int out;		/* jump here to leave switch */
     int nextcase;	/* patch jump address to next case */
     tree *tt;
+
+    // c1 is BRACE { ; ; ; }
     if(c1->child[0]==nil
-    || c1->child[0]->type!=';'
+    || c1->child[0]->type != ';'
     || !iscase(c1->child[0]->child[0])){
         yyerror("case missing in switch");
         return;
     }
+
     emitf(Xmark);
     outcode(c0, eflag);
     emitf(Xjump);
+
     nextcase = emiti(0);
     out = emitf(Xjump);
     leave = emiti(0);
+
     stuffdot(nextcase);
+
+    // from now on c0, c1, ... refer to this new t
     t = c1->child[0];
     while(t->type==';'){
         tt = c1;
         emitf(Xmark);
-        for(t = c0->child[0];t->type==ARGLIST;t = c0) outcode(c1, eflag);
+        for(t = c0->child[0];t->type==ARGLIST;t = c0) 
+            outcode(c1, eflag);
         emitf(Xcase);
         nextcase = emiti(0);
         t = tt;
         for(;;){
             if(t->type==';'){
-                if(iscase(c0)) break;
+                if(iscase(c0)) 
+                    break;
                 outcode(c0, eflag);
                 t = c1;
             }
             else{
-                if(!iscase(t)) outcode(t, eflag);
+                if(!iscase(t)) 
+                    outcode(t, eflag);
                 break;
             }
         }
@@ -4875,7 +4923,18 @@ codeswitch(tree *t, bool eflag)
     emitf(Xpopm);
 }
 @
+%ocaml: easier in ocaml, more precise AST, so less jungle with c0, c1
+% and also first word of simple command is directly accessible. No need
+% to go through ARGLIST.
 
+% funny that case is not a keyword. It's just a word, but
+% it's recognized specially by rc
+% but must be alone on its line (or need to use ; so case 1; cmd1; cmd2 etc)
+
+% remember that foo arg1 arg2 is represented as a tree of ARGLIST
+%  where foo is in depth.
+% remember that list of commands in a switch is represented as a 
+%  list with ';' for the node, and the top node has BRACE.
 
 % used by swich only. So could mv later.
 % In fact could remove the need for List, just have a single argv.
@@ -4886,6 +4945,8 @@ Xpopm(void)
     poplist();
 }
 @
+% why not call directly poplist then? because would be dependency
+% to runtime from compile!
 
 
 
@@ -4899,6 +4960,7 @@ iscase(tree *t)
     return t->type==WORD && !t->quoted && strcmp(t->str, "case")==0;
 }
 @
+%ocaml: just use pattern match, much cleaner, much more typesafe
 
 % * Xcase(pat, value){...}		exec code on match, leave (value) on
 
@@ -4908,11 +4970,12 @@ Xcase(void)
 {
     word *p;
     char *s;
-    int ok = 0;
+    bool ok = false;
+
     s = list2str(runq->argv->next->words);
     for(p = runq->argv->words;p;p = p->next){
         if(match(s, p->word, '\0')){
-            ok = 1;
+            ok = true;
             break;
         }
     }
@@ -4951,6 +5014,9 @@ code	*fn;		/* pointer to function's code vector */
 int	pc;		/* pc of start of function */
 bool	fnchanged;
 @
+%ocaml: put in another type, not with Var
+
+
 
 \subsection{Definitions}
 % defs
@@ -4965,7 +5031,7 @@ case FN:
         emitf(Xfn);
         p = emiti(0);
         emits(fnstr(c1));
-        outcode(c1, eflag);
+        outcode(c1, eflag); // body of the function
         emitf(Xunlocal);	/* get rid of $* */ //$
         emitf(Xreturn);
         stuffdot(p);
@@ -5025,16 +5091,18 @@ Xdelfn(void)
 {
     var *v;
     word *a;
+
     for(a = runq->argv->words;a;a = a->next){
         v = gvlook(a->word);
         if(v->fn)
             codefree(v->fn);
-        v->fn = 0;
-        v->fnchanged = 1;
+        v->fn = nil;
+        v->fnchanged = true;
     }
     poplist();
 }
 @
+% can delete a list of functions. meh.
 
 \subsection{Uses}
 
@@ -5221,7 +5289,7 @@ Xdol(void)
     runq->argv->words = a;
 }
 @
-
+%ocaml: be more strict when array index out of bound
 
 
 <<function copywords>>=
@@ -5261,27 +5329,32 @@ Xcount(void)
     char *s, *t;
     int n;
     char num[12];
+
     if(count(runq->argv->words)!=1){
         Xerror1("variable name not singleton!");
         return;
     }
     s = runq->argv->words->word;
     deglob(s);
+
+    // n = int_of_string(s)
     n = 0;
-    for(t = s;'0'<=*t && *t<='9';t++) n = n*10+*t-'0';
+    for(t = s;'0'<=*t && *t<='9';t++) 
+        n = n*10 + *t - '0';
     if(n==0 || *t){
         a = vlook(s)->val;
         inttoascii(num, count(a));
     }
     else{
         a = vlook("*")->val;
-        inttoascii(num, a && 1<=n && n<=count(a)?1:0);
+        inttoascii(num, (a && 1<=n && n<=count(a)) ? 1 : 0);
     }
     poplist();
     pushword(num);
 }
 @
-
+%ocaml: factorize in a vlook_varname_or_index with code for Xdol?
+% a bit hard to factorize, different logic
 
 
 <<[[outcode()]] cases>>=
@@ -5633,8 +5706,7 @@ execdot(void)
     <<[[execdot()]] other locals>>
 
     <<[[execdot()]] if first>>
-    else
-        eflagok = true;
+    <<[[execdot()]] if not first execution>>
 
     popword(); // "."
     if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
@@ -6779,6 +6851,11 @@ bool eflagok;	/* kludge flag so that -e doesn't exit in startup */
 @
 % who sets that? execdot, execval
 
+<<[[execdot()]] if not first execution>>=
+else
+    eflagok = true;
+@
+
 <<function Xeflag>>=
 void
 Xeflag(void)
@@ -6894,6 +6971,10 @@ Xsubshell(void)
 % >>
 
 % again spirit of interactive REPL. enter data from command line.
+% Yes, but more importantly, ancestor of Bundle! Prog and data
+% in one file. Can have a script with a database (see example
+% of 'tel' command in Bourne paper) included in the file.
+% can mv around the script. no problem.
 
 <<constant HERE>>=
 #define	HERE	4
@@ -7757,6 +7838,7 @@ void
 execflag(void)
 {
     char *letter, *val;
+
     switch(count(runq->argv->words)){
     case 2:
         setstatus(flag[(uchar)runq->argv->words->next->word[0]]?"":"flag not set");
@@ -7831,15 +7913,15 @@ union Code rdfns[4];
 void
 execfinit(void)
 {
-    static int first = 1;
+    static bool first = true;
     if(first){
         rdfns[0].i = 1;
         rdfns[1].f = Xrdfn;
         rdfns[2].f = Xjump;
         rdfns[3].i = 1;
-        first = 0;
+        first = false;
     }
-    Xpopm();
+    Xpopm(); // pop_list()
     envdir = open("/env", 0);
     if(envdir<0){
         pfmt(err, "rc: can't open /env: %r\n");
@@ -7848,6 +7930,7 @@ execfinit(void)
     start(rdfns, 1, runq->local);
 }
 @
+\l should call pop_list(), not Xpopm
 
 % really need that? nice that enclosing script
 % can define function that can be used in callee

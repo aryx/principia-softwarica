@@ -13,7 +13,7 @@ int lastc;
 int mypid;
 /*e: global mypid */
 /*s: global gvar */
-// hash<string, ref<Var>> (next = Var.next in bucket list)
+// map<string, ref_own<Var>> (next = Var.next in bucket list)
 var *gvar[NVAR];		/* hash for globals */
 /*e: global gvar */
 /*s: global ndot */
@@ -35,10 +35,11 @@ io *err;
 
 // was in exec.h
 /*s: global runq */
-// list<ref_own<Thread>> (next = Thread.ret)
+// stack<ref_own<Thread>> (next = Thread.ret)
 thread *runq;
 /*e: global runq */
 /*s: global codebuf */
+// growing_array<ref_own<Code>>
 code *codebuf;				/* compiler output */
 /*e: global codebuf */
 /*s: global ntrap */

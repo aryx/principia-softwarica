@@ -258,20 +258,24 @@ Waitfor(int pid, int)
     if(pid >= 0 && !havewaitpid(pid))
         return 0;
 
-    // wait()!!
+    // wait()!! until we found it
     while((w = wait()) != nil){
         delwaitpid(w->pid);
+
         if(w->pid==pid){
             setstatus(w->msg);
             free(w);
             return 0;
         }
+        /*s: [[Waitfor()]] in while loop, if wait returns another pid */
+        // else
         for(p = runq->ret;p;p = p->ret)
             if(p->pid==w->pid){
                 p->pid=-1;
                 strcpy(p->status, w->msg);
             }
         free(w);
+        /*e: [[Waitfor()]] in while loop, if wait returns another pid */
     }
 
     errstr(errbuf, sizeof errbuf);
@@ -285,8 +289,9 @@ Waitfor(int pid, int)
 char **
 mkargv(word *a)
 {
-    char **argv = (char **)emalloc((count(a)+2)*sizeof(char *));
+    char **argv = (char **)emalloc((count(a)+2) * sizeof(char *));
     char **argp = argv+1;	/* leave one at front for runcoms */
+
     for(;a;a = a->next) 
         *argp++=a->word;
     *argp = nil;
@@ -362,7 +367,8 @@ void
 Execute(word *args, word *path)
 {
     char **argv = mkargv(args);
-    char file[1024], errstr[1024];
+    char file[1024];
+    char errstr[1024];
     int nc;
 
     Updenv();
@@ -382,7 +388,8 @@ Execute(word *args, word *path)
                 // The actual exec() system call!
                 exec(file, argv+1);
 
-                // should not be reached!
+                // reached if the file does not exist
+
                 rerrstr(errstr, sizeof errstr);
                 /*
                  * if file exists and is executable, exec should
@@ -709,7 +716,7 @@ Malloc(ulong n)
 /*e: function Malloc */
 
 /*s: global waitpids */
-// list<pid>
+// growing_array<pid> (but really a list)
 int *waitpids;
 /*e: global waitpids */
 /*s: global nwaitpids */

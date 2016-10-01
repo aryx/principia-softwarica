@@ -26,7 +26,7 @@ idchr(int c)
      * return 'a'<=c && c<='z' || 'A'<=c && c<='Z' || '0'<=c && c<='9'
      *	|| c=='_' || c=='*';
      */
-    return c>' ' && !strchr("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~", c);
+    return c > ' ' && !strchr("!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~", c);
 }
 /*e: function idchr */
 
@@ -63,7 +63,9 @@ int
 advance(void)
 {
     int c = nextc();
+    /*s: [[advance()]] save future in lastc */
     lastc = future;
+    /*e: [[advance()]] save future in lastc */
     future = EOF;
     return c;
 }
@@ -76,26 +78,38 @@ int
 getnext(void)
 {
     int c;
+    /*s: [[getnext()]] other locals */
     static int peekc = EOF;
+    /*e: [[getnext()]] other locals */
 
+    /*s: [[getnext()]] peekc handling */
     if(peekc!=EOF){
         c = peekc;
         peekc = EOF;
         return c;
     }
+    /*e: [[getnext()]] peekc handling */
+    /*s: [[getnext()]] return if already at EOF */
     if(runq->eof)
         return EOF;
-
+    /*e: [[getnext()]] return if already at EOF */
+    /*s: [[getnext()]] prompt management before reading the character */
     if(doprompt)
+        // pprompt() internally set doprompt back to false at the end
         pprompt();
+    /*e: [[getnext()]] prompt management before reading the character */
 
     c = rchr(runq->cmdfd);
 
+    /*s: [[getnext()]] handle backslash */
     if(!inquote && c=='\\'){
 
         c = rchr(runq->cmdfd);
+
         if(c=='\n' && !incomm){		/* don't continue a comment */
+            /*s: [[getnext()]] when backslash and newline, set doprompt */
             doprompt = true;
+            /*e: [[getnext()]] when backslash and newline, set doprompt */
             c=' ';
         }
         else{
@@ -103,12 +117,19 @@ getnext(void)
             c='\\';
         }
     }
+    /*e: [[getnext()]] handle backslash */
+    /*s: [[getnext()]] prompt management after the character is read */
     doprompt = doprompt || c=='\n' || c==EOF;
+    /*e: [[getnext()]] prompt management after the character is read */
+    /*s: [[getnext()]] if character read is EOF */
     if(c==EOF)
         runq->eof = true;
+    /*e: [[getnext()]] if character read is EOF */
+    /*s: [[getnext()]] if not EOF but verbose mode, print character read */
     else 
         if(flag['V'] || ndot>=2 && flag['v'])
             pchr(err, c);
+    /*e: [[getnext()]] if not EOF but verbose mode, print character read */
 
     return c;
 }
@@ -119,10 +140,13 @@ void
 pprompt(void)
 {
     var *prompt;
+
     if(runq->iflag){
+        // printing the prompt
         pstr(err, promptstr);
         flush(err);
 
+        // set promptstr for the next pprompt()
         prompt = vlook("prompt");
         if(prompt->val && prompt->val->next)
             promptstr = prompt->val->next->word;
@@ -155,7 +179,8 @@ skipwhite(void)
         }
         if(c==' ' || c=='\t')
             advance();
-        else return;
+        else 
+            return;
     }
 }
 /*e: function skipwhite */
@@ -170,6 +195,7 @@ skipnl(void)
         c = nextc();
         if(c!='\n')
             return;
+        // consume the newline
         advance();
     }
 }
@@ -239,15 +265,19 @@ bool lastword;	/* was the last token read a word or compound word terminator? */
 int yylex(void)
 {
     int c;
-    int d = nextc();
+    /*s: [[yylex()]] other locals */
     char *w = tok;
+    /*x: [[yylex()]] other locals */
     struct Tree *t;
+    /*x: [[yylex()]] other locals */
+    int d = nextc();
+    /*e: [[yylex()]] other locals */
 
-    yylval.tree = nil;
+    /*s: [[yylex()]] hack for SUB */
     /*
      * Embarassing sneakiness:  if the last token read was a quoted or unquoted
      * WORD then we alter the meaning of what follows.  If the next character
-     * is `(', we return SUB (a subscript paren) and consume the `('.  Otherwise,
+     * is `(', we return SUB (a subscript paren) and consume the `('. Otherwise,
      * if the next character is the first character of a simple or compound word,
      * we insert a `^' before it.
      */
@@ -258,20 +288,37 @@ int yylex(void)
             strcpy(tok, "( [SUB]");
             return SUB;
         }
-        if(wordchr(d) || d=='\'' || d=='`' || d=='$' || d=='"'){ //$
+        if(wordchr(d) || d=='\'' || d=='`' || d=='$' || d=='"'){
             strcpy(tok, "^");
             return '^';
         }
     }
+    /*e: [[yylex()]] hack for SUB */
+    /*s: [[yylex()]] initialisations */
+    yylval.tree = nil;
+    /*x: [[yylex()]] initialisations */
     inquote = false;
+    /*e: [[yylex()]] initialisations */
+
     skipwhite();
-    // lastdol = false; factorize code?
 
     switch(c = advance()){
+    /*s: [[yylex()]] switch c cases */
     case EOF:
         lastdol = false;
         strcpy(tok, "EOF");
         return EOF;
+    /*x: [[yylex()]] switch c cases */
+    case '&':
+        lastdol = false;
+        if(nextis('&')){
+            skipnl();
+            strcpy(tok, "&&");
+            return ANDAND;
+        }
+        strcpy(tok, "&");
+        return '&';
+    /*x: [[yylex()]] switch c cases */
     case '$':
         lastdol = true;
         if(nextis('#')){
@@ -283,16 +330,8 @@ int yylex(void)
             return '"';
         }
         strcpy(tok, "$");
-        return '$'; //$
-    case '&':
-        lastdol = false;
-        if(nextis('&')){
-            skipnl();
-            strcpy(tok, "&&");
-            return ANDAND;
-        }
-        strcpy(tok, "&");
-        return '&';
+        return '$';
+    /*x: [[yylex()]] switch c cases */
     case '|':
         lastdol = false;
         if(nextis('|')){
@@ -304,6 +343,7 @@ int yylex(void)
     case '<':
     case '>':
         lastdol = false;
+        /*s: [[yylex()]] in switch when redirection character */
         /*
          * funny redirection tokens:
          *	redir:	arrow | arrow '[' fd ']'
@@ -315,32 +355,45 @@ int yylex(void)
         *w++=c;
         t = newtree();
         switch(c){
+        /*s: [[yylex()]] in switch when redirection character, switch c cases */
         case '|':
             t->type = PIPE;
-            t->fd0 = 1;
-            t->fd1 = 0;
+            t->fd0 = 1; // left fd of pipe (stdout of left cmd)
+            t->fd1 = 0; // right fd of pipe (stdin of right cmd)
             break;
+        /*x: [[yylex()]] in switch when redirection character, switch c cases */
         case '>':
             t->type = REDIR;
-            if(nextis(c)){
+            if(nextis('>')){
                 t->rtype = APPEND;
                 *w++=c;
             }
-            else t->rtype = WRITE;
+            else 
+                t->rtype = WRITE;
             t->fd0 = 1;
             break;
+        /*x: [[yylex()]] in switch when redirection character, switch c cases */
         case '<':
             t->type = REDIR;
+            /*s: [[yylex()]] in switch when redirection character, if here document */
             if(nextis(c)){
                 t->rtype = HERE;
                 *w++=c;
-            } else if (nextis('>')){
+            }
+            /*e: [[yylex()]] in switch when redirection character, if here document */
+            /*s: [[yylex()]] in switch when redirection character, if read/write redirect */
+            else if (nextis('>')){
                 t->rtype = RDWR;
                 *w++=c;
-            } else t->rtype = READ;
+            }
+            /*e: [[yylex()]] in switch when redirection character, if read/write redirect */
+            else 
+                t->rtype = READ;
             t->fd0 = 0;
             break;
+        /*e: [[yylex()]] in switch when redirection character, switch c cases */
         }
+        /*s: [[yylex()]] in switch when redirection character, if bracket after */
         if(nextis('[')){
             *w++='[';
             c = advance();
@@ -354,13 +407,15 @@ int yylex(void)
             }
             t->fd0 = 0;
             do{
-                t->fd0 = t->fd0*10+c-'0';
+                t->fd0 = t->fd0*10 + c-'0';
                 *w++=c;
                 c = advance();
             }while('0'<=c && c<='9');
+
             if(c=='='){
                 *w++='=';
                 if(t->type==REDIR)
+                    // change the token type
                     t->type = DUP;
                 c = advance();
                 if('0'<=c && c<='9'){
@@ -384,16 +439,18 @@ int yylex(void)
                 goto RedirErr;
             *w++=']';
         }
+        /*e: [[yylex()]] in switch when redirection character, if bracket after */
         *w='\0';
         yylval.tree = t;
         if(t->type==PIPE)
             skipnl();
         return t->type;
-
+        /*e: [[yylex()]] in switch when redirection character */
+    /*x: [[yylex()]] switch c cases */
     case '\'':
-        lastdol = false;
-        lastword = true;
         inquote = true;
+        lastword = true;
+        lastdol = false;
         for(;;){
             c = advance();
             if(c==EOF)
@@ -405,28 +462,37 @@ int yylex(void)
             }
             w = addutf(w, c);
         }
-        if(w!=nil)
+        if(w != nil)
             *w='\0';
 
         t = token(tok, WORD);
-
         t->quoted = true;
+
         yylval.tree = t;
         return t->type;
-    } // end switch
-
+    /*e: [[yylex()]] switch c cases */
+    }
+    // else
+    /*s: [[yylex()]] if c is not a word character */
     if(!wordchr(c)){
         lastdol = false;
         tok[0] = c;
         tok[1]='\0';
         return c;
     }
+    /*e: [[yylex()]] if c is not a word character */
+    // else
+    /*s: [[yylex()]] if c is a word character */
     for(;;){
+        /*s: [[yylex()]] when c is a word character, if glob character */
         if(c=='*' || c=='[' || c=='?' || c==GLOB)
             w = addtok(w, GLOB);
+        /*e: [[yylex()]] when c is a word character, if glob character */
         w = addutf(w, c);
+
         c = nextc();
-        if(lastdol ? !idchr(c) : !wordchr(c)) break;
+        if(lastdol ? !idchr(c) : !wordchr(c)) 
+            break;
         advance();
     }
 
@@ -434,13 +500,16 @@ int yylex(void)
     lastdol = false;
     if(w!=nil)
         *w='\0';
+
     t = klook(tok);
-    if(t->type!=WORD)
+    if(t->type != WORD)
         lastword = false;
+
     t->quoted = false;
 
     yylval.tree = t;
     return t->type;
+    /*e: [[yylex()]] if c is a word character */
 }
 /*e: function yylex */
 /*e: rc/lex.c */

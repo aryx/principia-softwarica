@@ -18,7 +18,7 @@ int	mapfd(int);
  */
 int
 exitnext(void){
-    union Code *c=&runq->code[runq->pc];
+    union Code *c = &runq->code[runq->pc];
     while(c->f==Xpopredir) 
         c++;
     return c->f==Xexit;
@@ -38,15 +38,22 @@ Xsimple(void)
     struct Builtin *bp;
     /*e: [[Xsimple()]] other locals */
 
+    /*s: [[Xsimple()]] initializations, [[globlist()]] */
     globlist();
+    /*e: [[Xsimple()]] initializations, [[globlist()]] */
 
     a = runq->argv->words;
+    /*s: [[Xsimple()]] sanity check a */
     if(a==nil){
         Xerror1("empty argument list");
         return;
     }
+    /*e: [[Xsimple()]] sanity check a */
+
+    /*s: [[Xsimple()]] if -x */
     if(flag['x'])
         pfmt(err, "%v\n", p->argv->words); /* wrong, should do redirs */
+    /*e: [[Xsimple()]] if -x */
 
     /*s: [[Xsimple()]] if argv0 is a function */
     v = gvlook(a->word);
@@ -55,6 +62,7 @@ Xsimple(void)
     /*e: [[Xsimple()]] if argv0 is a function */
     else{
         /*s: [[Xsimple()]] if argv0 is a builtin */
+        /*s: [[Xsimple()]] if argv0 is the builtin keyword */
         if(strcmp(a->word, "builtin")==0){
             if(count(a)==1){
                 pfmt(err, "builtin: empty argument list\n");
@@ -65,6 +73,7 @@ Xsimple(void)
             a = a->next;
             popword();
         }
+        /*e: [[Xsimple()]] if argv0 is the builtin keyword */
         for(bp = Builtin;bp->name;bp++)
             if(strcmp(a->word, bp->name)==0){
                 (*bp->fnc)();
@@ -104,20 +113,26 @@ void
 doredir(redir *rp)
 {
     if(rp){
+        // recurse first, so do them in the reverse order of the list
         doredir(rp->next);
+
         switch(rp->type){
+        /*s: [[doredir()]] switch redir type cases */
         case ROPEN:
-            if(rp->from!=rp->to){
+            if(rp->from != rp->to){
                 Dup(rp->from, rp->to);
                 close(rp->from);
             }
             break;
+        /*x: [[doredir()]] switch redir type cases */
         case RDUP:
             Dup(rp->from, rp->to);
             break;
+        /*x: [[doredir()]] switch redir type cases */
         case RCLOSE:
             close(rp->from);
             break;
+        /*e: [[doredir()]] switch redir type cases */
         }
     }
 }
@@ -144,13 +159,18 @@ void
 execexec(void)
 {
     popword();	/* "exec" */
+    /*s: [[execexec()]] sanity check arguments */
     if(runq->argv->words==nil){
         Xerror1("empty argument list");
         return;
     }
+    /*e: [[execexec()]] sanity check arguments */
+    /*s: [[execexec()]] perform the redirections */
     doredir(runq->redir);
+    /*e: [[execexec()]] perform the redirections */
+
     Execute(runq->argv->words, searchpath(runq->argv->words->word));
-    // should not be reached!
+    // should not be reached! unless command did not exist
     poplist();
 }
 /*e: function execexec */
@@ -163,7 +183,7 @@ execfunc(var *func)
 
     popword();
     starval = runq->argv->words;
-    runq->argv->words = 0;
+    runq->argv->words = nil;
     poplist();
     start(func->fn, func->pc, runq->local);
     runq->local = newvar(strdup("*"), runq->local);
@@ -177,7 +197,7 @@ errorneg1
 dochdir(char *word)
 {
     /* report to /dev/wdir if it exists and we're interactive */
-    static int wdirfd = -2;
+    static fdt wdirfd = -2;
 
     // the actual syscall
     if(chdir(word)<0) 
@@ -353,6 +373,7 @@ execcmds(io *f)
         rdcmds[2].f = Xreturn;
         first = false;
     }
+
     start(rdcmds, 1, runq->local);
     runq->cmdfd = f;
     runq->iflast = false;
@@ -374,6 +395,7 @@ execeval(void)
     eflagok = true;
     for(ap = runq->argv->words->next;ap;ap = ap->next)
         len+=1+strlen(ap->word);
+
     cmdline = emalloc(len);
     s = cmdline;
     for(ap = runq->argv->words->next;ap;ap = ap->next){
@@ -382,6 +404,7 @@ execeval(void)
     }
     s[-1]='\n';
     poplist();
+
     execcmds(opencore(cmdline, len));
     efree(cmdline);
 }
@@ -394,38 +417,48 @@ union Code dotcmds[14];
 void
 execdot(void)
 {
-    bool iflag = false;
-    int fd;
-    list *av;
     thread *p = runq;
-    char *zero, *file;
+    bool iflag = false;
+    fdt fd;
+    list *av;
+    char *zero; // new stdin
+    char *file;
     word *path;
+    /*s: [[execdot()]] other locals */
     static bool first = true;
+    /*e: [[execdot()]] other locals */
 
+    /*s: [[execdot()]] if first */
     if(first){
         dotcmds[0].i = 1;
         dotcmds[1].f = Xmark;
-        dotcmds[2].f = Xword;
-        dotcmds[3].s="0";
-        dotcmds[4].f = Xlocal;
+          dotcmds[2].f = Xword;
+          dotcmds[3].s = "0";
+        dotcmds[4].f = Xlocal; // will pop_list twice
+
         dotcmds[5].f = Xmark;
-        dotcmds[6].f = Xword;
-        dotcmds[7].s="*";
-        dotcmds[8].f = Xlocal;
-        dotcmds[9].f = Xrdcmds;
+          dotcmds[6].f = Xword;
+          dotcmds[7].s="*";
+        dotcmds[8].f = Xlocal; // will pop_list twice
+
+        dotcmds[9].f = Xrdcmds; // the REPL
+
         dotcmds[10].f = Xunlocal;
         dotcmds[11].f = Xunlocal;
         dotcmds[12].f = Xreturn;
+
         first = false;
     }
+    /*e: [[execdot()]] if first */
     else
         eflagok = true;
 
-    popword();
+    popword(); // "."
     if(p->argv->words && strcmp(p->argv->words->word, "-i")==0){
         iflag = true;
         popword();
     }
+
     /* get input file */
     if(p->argv->words==nil){
         Xerror1("Usage: . [-i] file [arg ...]");
@@ -433,6 +466,7 @@ execdot(void)
     }
     zero = strdup(p->argv->words->word);
     popword();
+
     fd = -1;
     for(path = searchpath(zero); path; path = path->next){
         if(path->word[0] != '\0')
@@ -444,15 +478,10 @@ execdot(void)
         free(file);
         if(fd >= 0)
             break;
-        if(strcmp(file, "/dev/stdin")==0){	/* for sun & ucb */
-            fd = Dup1(0);
-            if(fd>=0)
-                break;
-        }
     }
     if(fd<0){
         pfmt(err, "%s: ", zero);
-        setstatus("can't open");
+        setstatus("can't open"); // what for? it is reseted by Xerror anyway
         Xerror(".: can't open");
         return;
     }
@@ -464,17 +493,22 @@ execdot(void)
     runq->cmdfile = zero;
     runq->cmdfd = openfd(fd);
     runq->iflag = iflag;
+
     runq->iflast = false;
+
     /* push $* value */
     pushlist();
     runq->argv->words = p->argv->words;
+
     /* free caller's copy of $* */
     av = p->argv;
     p->argv = av->next;
     efree((char *)av);
+
     /* push $0 value */
     pushlist();
     pushword(zero);
+
     ndot++;
 }
 /*e: function execdot */

@@ -53,11 +53,12 @@ kinit(void)
     kenter(WHILE, "while");
     kenter(IF, "if");
     kenter(NOT, "not");
+    kenter(SWITCH, "switch");
+    kenter(FN, "fn");
+
     kenter(TWIDDLE, "~");
     kenter(BANG, "!");
     kenter(SUBSHELL, "@");
-    kenter(SWITCH, "switch");
-    kenter(FN, "fn");
 }
 /*e: function kinit */
 
@@ -71,7 +72,6 @@ klook(char *name)
     for(p = kw[hash(name, NKW)];p;p = p->next)
         if(strcmp(p->name, name)==0){
             t->type = p->type;
-            t->iskw = true;
             break;
         }
     return t;
@@ -84,8 +84,12 @@ gvlook(char *name)
 {
     int h = hash(name, NVAR);
     var *v;
-    for(v = gvar[h];v;v = v->next) if(strcmp(v->name, name)==0) return v;
-    return gvar[h] = newvar(strdup(name), gvar[h]);
+
+    for(v = gvar[h];v;v = v->next) 
+        if(strcmp(v->name, name)==0) 
+            return v;
+    gvar[h] = newvar(strdup(name), gvar[h]);
+    return gvar[h];
 }
 /*e: function gvlook */
 
@@ -96,7 +100,9 @@ vlook(char *name)
     var *v;
     if(runq)
         for(v = runq->local;v;v = v->next)
-            if(strcmp(v->name, name)==0) return v;
+            if(strcmp(v->name, name)==0) 
+                return v;
+
     return gvlook(name);
 }
 /*e: function vlook */

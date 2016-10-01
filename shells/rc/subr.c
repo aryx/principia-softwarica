@@ -21,7 +21,6 @@ emalloc(long n)
 void
 efree(void *p)
 {
-/*	pfmt(err, "free %p\n", p); flush(err); /**/
     if(p)
         free(p);
     else pfmt(err, "free 0\n");
@@ -41,14 +40,17 @@ yyerror(char *m)
         pfmt(err, "%s: ", runq->cmdfile);
     else if(!runq->iflag)
         pfmt(err, "line %d: ", runq->lineno);
+
     if(tok[0] && tok[0]!='\n')
         pfmt(err, "token %q: ", tok);
     pfmt(err, "%s\n", m);
     flush(err);
     lastword = false;
     lastdol = false;
+
     while(lastc!='\n' && lastc!=EOF) 
         advance();
+
     nerror++;
     setvar("status", newword(m, (word *)nil));
 }

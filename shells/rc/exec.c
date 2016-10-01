@@ -25,14 +25,18 @@ start(code *c, int pc, var *local)
 
     p->argv = nil;
     p->local = local;
-    p->lineno = 1;
 
-    p->redir = p->startredir = runq ? runq->redir : nil;
     p->cmdfile = nil;
     p->cmdfd = nil;
+    p->lineno = 1;
     p->eof = false;
     p->iflag = false;
 
+    /*s: [[start()]] set redir */
+    p->redir = p->startredir = runq ? runq->redir : nil;
+    /*e: [[start()]] set redir */
+
+    // add_stack(runq, p)
     p->ret = runq;
     runq = p;
 }
@@ -64,11 +68,15 @@ void
 popword(void)
 {
     word *p;
-    if(runq->argv==0)
+    /*s: [[popword()]] sanity check argv */
+    if(runq->argv==nil)
         panic("popword but no argv!", 0);
+    /*e: [[popword()]] sanity check argv */
     p = runq->argv->words;
-    if(p==0)
+    /*s: [[popword()]] sanity check argv words */
+    if(p==nil)
         panic("popword but no word!", 0);
+    /*e: [[popword()]] sanity check argv words */
     runq->argv->words = p->next;
     efree(p->word);
     efree((char *)p);
@@ -94,6 +102,8 @@ void
 pushlist(void)
 {
     list *p = new(list);
+
+    // add_list(p, runq->argv)
     p->next = runq->argv;
     p->words = nil;
     runq->argv = p;
@@ -105,7 +115,7 @@ void
 poplist(void)
 {
     list *p = runq->argv;
-    if(p==0)
+    if(p==nil)
         panic("poplist but no argv", 0);
     freelist(p->words);
     runq->argv = p->next;
@@ -132,6 +142,8 @@ pushredir(int type, int from, int to)
     rp->type = type;
     rp->from = from;
     rp->to = to;
+
+    // add_list(runq->redir, rp)
     rp->next = runq->redir;
     runq->redir = rp;
 }
@@ -143,7 +155,8 @@ newvar(char *name, var *next)
 {
     var *v = new(var);
     v->name = name;
-    v->val = 0;
+    v->val = nil;
+
     v->fn = nil;
     v->changed = false;
     v->fnchanged = false;
@@ -162,7 +175,6 @@ newvar(char *name, var *next)
  * start interpreting code
  */
 /*s: function main (rc/exec.c) */
-//@Scheck: not dead! entry point!
 void main(int argc, char *argv[])
 {
     /*s: [[main()]] locals */
@@ -177,12 +189,12 @@ void main(int argc, char *argv[])
 
     /*s: [[main()]] argc argv processing, modify flags */
     argc = getflags(argc, argv, "SsrdiIlxepvVc:1m:1[command]", 1);
-
     if(argc==-1)
         usage("[file [arg ...]]");
-
+    /*x: [[main()]] argc argv processing, modify flags */
     if(argv[0][0]=='-')
         flag['l'] = flagset;
+    /*x: [[main()]] argc argv processing, modify flags */
     if(flag['I'])
         flag['i'] = nil;
     else 
@@ -193,45 +205,42 @@ void main(int argc, char *argv[])
     /*s: [[main()]] initialisation */
     err = openfd(STDERR);
     /*x: [[main()]] initialisation */
-    kinit(); // initialize keywords
+    kinit();    // initialize keywords
     Trapinit(); // notify() function setup
-    Vinit(); // read environment variables and add them in gvar
+    Vinit();    // read environment variables and add them in gvar
     /*x: [[main()]] initialisation */
     rcmain = flag['m'] ? flag['m'][0] : Rcmain; 
     /*x: [[main()]] initialisation */
     mypid = getpid();
     inttoascii(num, mypid);
     setvar("pid", newword(num, (word *)nil));
-
-    setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
-
+    /*x: [[main()]] initialisation */
     setvar("rcname", newword(argv[0], (word *)nil));
+    /*x: [[main()]] initialisation */
+    setvar("cflag", flag['c']? newword(flag['c'][0], (word *)nil) : (word *)nil);
     /*e: [[main()]] initialisation */
     /*s: [[main()]] initialize [[boostrap]] */
     memset(bootstrap, 0, sizeof bootstrap);
 
     i = 0;
     bootstrap[i++].i=1;
+    // runq->argv is populated with the arguments to rc
+    // we just need to add '*=(argv)'
     bootstrap[i++].f = Xmark;
-    bootstrap[i++].f = Xword;
-    bootstrap[i++].s="*";
+      bootstrap[i++].f = Xword;
+      bootstrap[i++].s="*";
+    bootstrap[i++].f = Xassign; // will pop_list() x2
 
-    bootstrap[i++].f = Xassign;
     bootstrap[i++].f = Xmark;
-    bootstrap[i++].f = Xmark;
-
-    bootstrap[i++].f = Xword;
-    bootstrap[i++].s="*";
-
-    bootstrap[i++].f = Xdol;
-
-    bootstrap[i++].f = Xword;
-    bootstrap[i++].s = rcmain;
-
-    bootstrap[i++].f = Xword;
-    bootstrap[i++].s=".";
-
-    bootstrap[i++].f = Xsimple;
+      bootstrap[i++].f = Xmark;
+        bootstrap[i++].f = Xword;
+        bootstrap[i++].s="*";
+      bootstrap[i++].f = Xdol; // will pop_list()
+      bootstrap[i++].f = Xword;
+      bootstrap[i++].s = rcmain;
+      bootstrap[i++].f = Xword;
+      bootstrap[i++].s=".";
+    bootstrap[i++].f = Xsimple; // will pop_list()
 
     bootstrap[i++].f = Xexit;
 
@@ -239,12 +248,16 @@ void main(int argc, char *argv[])
     /*e: [[main()]] initialize [[boostrap]] */
     /*s: [[main()]] initialize runq with bootstrap code */
     start(bootstrap, 1, (var *)nil);
+    /*x: [[main()]] initialize runq with bootstrap code */
+    runq->cmdfd = openfd(STDIN); // reading from stdin
+    runq->cmdfile = "<stdin>";
+    runq->iflag = flag['i']? true : false;// interactive mode; will print a prompt
     /*e: [[main()]] initialize runq with bootstrap code */
     /*s: [[main()]] initialize runq->argv */
     /* prime bootstrap argv */
     pushlist();
     argv0 = strdup(argv[0]);
-    for(i = argc-1;i!=0;--i) 
+    for(i = argc-1; i!=0; --i) 
         pushword(argv[i]);
     /*e: [[main()]] initialize runq->argv */
 
@@ -390,7 +403,8 @@ Xdup(void)
 void
 Xeflag(void)
 {
-    if(eflagok && !truestatus()) Xexit();
+    if(eflagok && !truestatus()) 
+        Xexit();
 }
 /*e: function Xeflag */
 
@@ -401,6 +415,7 @@ Xexit(void)
     struct Var *trapreq;
     struct Word *starval;
     static bool beenhere = false;
+
     if(getpid()==mypid && !beenhere){
         trapreq = vlook("sigexit");
         if(trapreq->fn){
@@ -411,7 +426,7 @@ Xexit(void)
             runq->local = newvar(strdup("*"), runq->local);
             runq->local->val = copywords(starval, (struct Word *)0);
             runq->local->changed = true;
-            runq->redir = runq->startredir = 0;
+            runq->redir = runq->startredir = nil;
             return;
         }
     }
@@ -527,7 +542,7 @@ Xrdwr(void)
 void
 turfredir(void)
 {
-    while(runq->redir!=runq->startredir)
+    while(runq->redir != runq->startredir)
         Xpopredir();
 }
 /*e: function turfredir */
@@ -537,11 +552,16 @@ void
 Xpopredir(void)
 {
     struct Redir *rp = runq->redir;
-    if(rp==0)
+
+    if(rp==nil)
         panic("turfredir null!", 0);
+
+    // pop_list(runq->redir);
     runq->redir = rp->next;
+
     if(rp->type==ROPEN)
         close(rp->from);
+
     efree((char *)rp);
 }
 /*e: function Xpopredir */
@@ -551,12 +571,19 @@ void
 Xreturn(void)
 {
     struct Thread *p = runq;
+
+    /*s: [[Xreturn()]] pop the redirections from this thread */
     turfredir();
-    while(p->argv) poplist();
+    /*e: [[Xreturn()]] pop the redirections from this thread */
+    // free p
+    while(p->argv) 
+        poplist();
     codefree(p->code);
+    // pop(runq)
     runq = p->ret;
     efree((char *)p);
-    if(runq==0)
+
+    if(runq==nil)
         Exit(getstatus());
 }
 /*e: function Xreturn */
@@ -603,7 +630,7 @@ void
 Xwrite(void)
 {
     char *file;
-    int f;
+    fdt f;
     switch(count(runq->argv->words)){
     default:
         Xerror1("> requires singleton\n");
@@ -742,14 +769,15 @@ Xassign(void)
         Xerror1("variable name not singleton!");
         return;
     }
-    deglob(runq->argv->words->word);
+    deglob(runq->argv->words->word); // remove the special \001 mark
     v = vlook(runq->argv->words->word);
     poplist();
+
     globlist();
     freewords(v->val);
     v->val = runq->argv->words;
     v->changed = true;
-    runq->argv->words = 0;
+    runq->argv->words = nil;
     poplist();
 }
 /*e: function Xassign */
@@ -760,9 +788,11 @@ Xassign(void)
 word*
 copywords(word *a, word *tail)
 {
-    word *v = 0, **end;
+    word *v = nil;
+    word **end;
+
     for(end=&v;a;a = a->next,end=&(*end)->next)
-        *end = newword(a->word, 0);
+        *end = newword(a->word, nil);
     *end = tail;
     return v;
 }
@@ -775,21 +805,26 @@ Xdol(void)
     word *a, *star;
     char *s, *t;
     int n;
+
     if(count(runq->argv->words)!=1){
         Xerror1("variable name not singleton!");
         return;
     }
     s = runq->argv->words->word;
     deglob(s);
+
     n = 0;
-    for(t = s;'0'<=*t && *t<='9';t++) n = n*10+*t-'0';
+    for(t = s;'0'<=*t && *t<='9';t++) 
+        n = n*10+*t-'0';
+
     a = runq->argv->next->words;
     if(n==0 || *t)
         a = copywords(vlook(s)->val, a);
     else{
         star = vlook("*")->val;
-        if(star && 1<=n && n<=count(star)){
-            while(--n) star = star->next;
+        if(star && 1 <= n && n <= count(star)){
+            while(--n) 
+                star = star->next;
             a = newword(star->word, a);
         }
     }
@@ -838,10 +873,9 @@ Xqdol(void)
 word*
 copynwords(word *a, word *tail, int n)
 {
-    word *v, **end;
+    word *v = nil;
+    word **end = &v;
     
-    v = 0;
-    end = &v;
     while(n-- > 0){
         *end = newword(a->word, 0);
         end = &(*end)->next;
@@ -950,7 +984,8 @@ Xlocal(void)
     globlist();
     runq->local->val = runq->argv->words;
     runq->local->changed = true;
-    runq->argv->words = 0;
+    // change ownership
+    runq->argv->words = nil;
     poplist();
 }
 /*e: function Xlocal */
@@ -1063,12 +1098,15 @@ void
 Xrdcmds(void)
 {
     struct Thread *p = runq;
-    word *prompt;
     bool error;
+    /*s: [[Xrdcmds()]] other locals */
+    word *prompt;
+    /*e: [[Xrdcmds()]] other locals */
 
+    /*s: [[Xrdcmds()]] flush errors and reset error count */
     flush(err);
     nerror = 0;
-
+    /*e: [[Xrdcmds()]] flush errors and reset error count */
     /*s: [[Xrdcmds()]] print status if -s */
     if(flag['s'] && !truestatus())
         pfmt(err, "status=%v\n", vlook("status")->val);
@@ -1082,11 +1120,11 @@ Xrdcmds(void)
             promptstr="% ";
     }
     /*e: [[Xrdcmds()]] set promptstr if interactive mode */
+
     /*s: [[Xrdcmds()]] calls Noerror() before yyparse() */
     Noerror();
     /*e: [[Xrdcmds()]] calls Noerror() before yyparse() */
-
-    // read cmd, compiles it, and modifies codebuf global
+    // read one cmd line, compiles it, and modifies codebuf global
     error = yyparse();
 
     /*s: [[Xrdcmds()]] if yyparse() returned an error */
@@ -1095,6 +1133,7 @@ Xrdcmds(void)
             if(p->cmdfile)
                 efree(p->cmdfile);
             closeio(p->cmdfd);
+
             Xreturn();	/* should this be omitted? */
         }else{
             if(Eintr()){
@@ -1127,7 +1166,9 @@ Xerror(char *s)
         pfmt(err, "rc (%s): %s: %r\n", argv0, s);
     flush(err);
     setstatus("error");
-    while(!runq->iflag) Xreturn();
+
+    while(!runq->iflag) 
+        Xreturn();
 }
 /*e: function Xerror */
 
@@ -1141,7 +1182,9 @@ Xerror1(char *s)
         pfmt(err, "rc (%s): %s\n", argv0, s);
     flush(err);
     setstatus("error");
-    while(!runq->iflag) Xreturn();
+
+    while(!runq->iflag) 
+        Xreturn();
 }
 /*e: function Xerror1 */
 
@@ -1149,7 +1192,7 @@ Xerror1(char *s)
 void
 setstatus(char *s)
 {
-    setvar("status", newword(s, (word *)0));
+    setvar("status", newword(s, (word *)nil));
 }
 /*e: function setstatus */
 
@@ -1158,7 +1201,7 @@ char*
 getstatus(void)
 {
     var *status = vlook("status");
-    return status->val?status->val->word:"";
+    return status->val ? status->val->word : "";
 }
 /*e: function getstatus */
 

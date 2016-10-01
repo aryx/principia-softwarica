@@ -63,23 +63,28 @@ typedef struct Builtin builtin;
 /*s: struct tree */
 struct Tree {
 
-    // enum<token_kind>
+    // either<enum<Token_kind>, char>
     int	type;
-    // string of the token or AST dump the whole subtree for certain nodes
+    // string of the token or AST dump of the whole subtree for certain nodes
     char *str;
+
     // array<option<ref_own<Tree>>
     tree	*child[3];
 
-    /*s: [[Tree]] other fields */
-    //enum<redirection_kind>
+    /*s: [[Tree]] redirection and pipe specific fields */
+    //enum<Redirection_kind>
     int	rtype;
+
+    // For a pipe, fd0 is the left fd of the pipe, and fd1 the right fd.
+    // For a redirection, fd0 is what we redirect (stdout for >, stdin for <)
+    // and fd1 is what we possibly redirect to (when DUP).
     fdt fd0;
     fdt fd1;	/* details of REDIR PIPE DUP tokens */
-    /*x: [[Tree]] other fields */
+    /*e: [[Tree]] redirection and pipe specific fields */
+    /*s: [[Tree]] word specific fields */
     bool	quoted;
+    /*e: [[Tree]] word specific fields */
 
-    bool iskw; // dead?
-    /*e: [[Tree]] other fields */
     // Extra
     /*s: [[Tree]] extra fields */
     tree	*next;
@@ -149,7 +154,9 @@ extern char tok[NTOK + UTFmax];
 
 /*s: struct var */
 struct Var {
+    // key
     char	*name;		/* ascii name */
+    // value
     word	*val;		/* value */
 
     /*s: [[Var]] other fields */

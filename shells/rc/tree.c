@@ -8,7 +8,7 @@
 void freetree(tree*);
 
 /*s: global treenodes */
-// list<ref_own<tree>> (next = Tree.next)
+// list<ref_own<Tree>> (next = Tree.next)
 tree *treenodes;
 /*e: global treenodes */
 /*s: function newtree */
@@ -20,7 +20,6 @@ tree*
 newtree(void)
 {
     tree *t = new(tree);
-    t->iskw = false;
     t->str = nil;
     t->child[0] = t->child[1] = t->child[2] = nil;
 
@@ -68,12 +67,16 @@ tree*
 tree3(int type, tree *c0, tree *c1, tree *c2)
 {
     tree *t;
+
+    /*s: [[tree3]] if some empty sequence */
     if(type==';'){
         if(c0==nil)
             return c1;
         if(c1==nil)
             return c0;
     }
+    /*e: [[tree3]] if some empty sequence */
+    // else
     t = newtree();
     t->type = type;
     t->child[0] = c0;
@@ -143,14 +146,15 @@ tree* simplemung(tree *t)
     t->str = strdup((char *)s->strp);
     closeio(s);
 
-    for(u = t->child[0];u->type==ARGLIST;u = u->child[0]){
-        if(u->child[1]->type==DUP
-        || u->child[1]->type==REDIR){
+    /*s: [[simplemung()]] percolate redirections up to the root */
+    for(u = t->child[0]; u->type==ARGLIST; u = u->child[0]){
+        if(u->child[1]->type==REDIR || u->child[1]->type==DUP){
             u->child[1]->child[1] = t;
             t = u->child[1];
-            u->child[1] = 0;
+            u->child[1] = nil;
         }
     }
+    /*e: [[simplemung()]] percolate redirections up to the root */
     return t;
 }
 /*e: function simplemung */
@@ -167,18 +171,4 @@ token(char *str, int type)
 }
 /*e: function token */
 
-/*s: function freetree */
-void
-freetree(tree *p)
-{
-    if(p==nil)
-        return;	
-    freetree(p->child[0]);
-    freetree(p->child[1]);
-    freetree(p->child[2]);
-    if(p->str)
-        efree(p->str);
-    efree((char *)p);
-}
-/*e: function freetree */
 /*e: rc/tree.c */
