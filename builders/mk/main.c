@@ -320,7 +320,8 @@ void
 badusage(void)
 {
 
-    fprint(STDERR, "Usage: mk [-f file] [-n] [-a] [-e] [-t] [-k] [-i] [-d[egp]] [targets ...]\n");
+    fprint(STDERR, 
+           "Usage: mk [-f file] [-(n|a|e|t|k|i)] [-d[egp]] [targets ...]\n");
     Exit();
 }
 /*e: function badusage */
