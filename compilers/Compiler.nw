@@ -49,9 +49,9 @@
 % - distribute parts of the Extra section in the main file
 % - understand main(), LP split main, improve TOC
 % - understand main functions, LP split, cluster, improve TOC
-% - SEMI LP split the structures, use datalog to see what flows into fields
-% - SEMI nullify, boolify, enumify,  typeify,    scheckify, plan9ify
-% - SEMI aspecify advanced features! remove useless features
+% - LP split the structures, use datalog to see what flows into fields
+% - nullify, boolify, enumify,  typeify,    scheckify, plan9ify
+% - aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
 
@@ -172,6 +172,8 @@ assembly instructions using a small set of registers?
 Are registers used? Is the stack used? How is communicated the return value
 to the caller?
 %codegen: frameize
+
+% aligns, offsets, structs
 
 \end{itemize}
 
@@ -688,6 +690,8 @@ struct	Node
 % warnings anyway
 %still?: different split? identifier field where have sym and storage? 
 %ocaml: use ADT, and mv semantic fields to another phase?
+% but cons is that have to duplicate lineno, have complex dumper, visitor
+% compare to this generic binary tree.
 
 % put value fields here?
 % How things are represented for
@@ -727,7 +731,7 @@ Sym*	sym; // for ONAME, ODOT/OELEM, OSTRUCT/OUNION
 
 
 
-% for declaration nodes?
+% for declaration nodes? also at use-time after naming/typechecking?
 <<[[Node]] type and storage fields>>=
 // enum<storage_class>
 char	class;
@@ -823,11 +827,11 @@ long	nearln;
 % this is useful for error reporting when use warn on an empty node,
 % to at least give an error location not too far away.
 % we can't use lineno in those cases because the parsing has been done,
-% so lineno is set to the maximum line of the expanded file, hence
-% nearln.
+% so lineno is set to the maximum line of the expanded file, hence nearln.
+%
 % nearln is also very useful for nextpc()! so that the generated
 % assembly instructions are tied to related C code they are generated
-% from! helps for the debugger!
+% from! goodsupport for the debugger!
 
 <<function new1>>=
 Node*
@@ -856,7 +860,7 @@ Node	znode;
 \subsection{[[Type]]}
 
 <<enum type_kind>>=
-enum type_kind
+enum Type_kind
 {
     TXXX,
 
@@ -994,6 +998,9 @@ char	etype;
 %less: could remove? redundant no? annoying to maintain?
 % annoying those n->etype = (s->type?): s->type->etype: TVOID;
 %ocaml: remove
+
+
+
 
 <<[[Type]] qualifier fields>>=
 // enum<qualifier>
@@ -1317,7 +1324,7 @@ char	class;
 ushort	block;
 @
 % see also Decl.block (below)
-
+%ocaml: do naming phase or do it in parsing. embed blockid in fullname type.
 
 <<[[Sym]] macro value fields>>=
 char*	macro;
@@ -1829,6 +1836,7 @@ int c;
 %old: was called c
 
 <<[[main()]] locals>>=
+// growing_array<string>
 char **defs = nil;
 int ndef = 0;
 @
@@ -1868,7 +1876,8 @@ void main(int argc, char *argv[])
 % compile returns number of possible errors
 %ocaml: be stricter
 
-% really useful to compile stdin??
+%really useful to compile stdin??
+%ocaml: no compile from stdin, never used. 5c is not an interpreter.
 
 
 <<[[main()]] xxxinit()>>=
@@ -1916,7 +1925,6 @@ case 'D':
 %ocaml: use List, no need growing array
 
 <<[[main()]] locals>>=
-// growing_array<string>
 char **np;
 int maxdef = 0;
 @
@@ -2084,7 +2092,7 @@ outfile = p;
 if(outfile) {
     if(p = utfrrune(outfile, '.'))
         if(p[1] == 'c' && p[2] == 0)
-            p[0] = 0;
+            p[0] = '\0';
     p = utfrune(outfile, 0);
     <<[[compile()]] adjust p for outfile if acid option>>
     <<[[compile()]] adjust p for outfile if pickle option>>
@@ -2369,18 +2377,21 @@ static int pushdepth = 0;
 
 i = iofree;
 if(i == I) {
-    pushdepth++;
-    if(pushdepth > 1000) {
-        yyerror("macro/io expansion too deep");
-        errorexit();
-    }
+    <<[[newio()]] sanity check depth of macro expansion>>
     i = alloc(sizeof(*i));
 } else
     iofree = i->link;
 @
 % note that when expand macro, we need to process expansion, which
 %  may trigger further expansions!
-%ocaml: just use a list and Gc
+
+<<[[newio()]] sanity check depth of macro expansion>>=
+pushdepth++;
+if(pushdepth > 1000) {
+    yyerror("macro/io expansion too deep");
+    errorexit();
+}
+@
 
 % remember in compile():
 %            newfile(infile, -1);
@@ -2486,6 +2497,7 @@ loop:
 
 % so potentially could have a token spread on 2 files?
 
+%dup: put FIGURE in Assembler.nw
 
 <<[[filbuf()]] when close file, call linehist>>=
 linehist(0, 0);
@@ -2524,8 +2536,9 @@ short	c;
 
 % Why not using lex? Why handwritten? ...
 % Because anyway have to do a few things which are easier outside
-% lex like comment handling, typedefs, escape characters
-% and unicode! ocamllex not great with unicode (hence ulex).
+% lex like comment handling, typedefs, escape characters?
+% Had with C lex? hmm but can do that with ocamllex!
+% For unicode! ocamllex not great with unicode (hence ulex) is is true.
 
 \section{[[yylex()]]}
 
@@ -2561,7 +2574,7 @@ l1:
 }
 @
 
-
+% newline part 1 (lots of code to deal with lineno)
 <<[[yylex()]] if c is newline>>=
 if(c == '\n')
     lineno++;
@@ -2582,6 +2595,10 @@ int	peekc;
 <<[[cinit()]] lexing globals initialization>>=
 peekc = IGN;
 @
+% again, a few places doing that, because cpp is factorized with 5a
+%  and try to be independent.
+%ocaml: ocamllex handles that automatically if share the same lexbuf
+% in different "parser"
 
 
 <<[[yylex()]] peekc handling, starting part>>=
@@ -2613,8 +2630,8 @@ case EOF:
 
 
 \section{Comments}
-% part 1
 
+% comment part 1
 <<[[yylex()]] switch c cases>>=
 case '/':
     c1 = GETC();
@@ -2651,6 +2668,9 @@ case '/':
 @
 % LDVE, not a comment here!!
 % also will return just '/' for Div.
+
+% getr() here, for get rune, different from GETC.
+
 
 \section{Keywords and identifiers}
 
@@ -2775,6 +2795,8 @@ talph:
 @
 
 
+% note that macro symbol case! can have macro expansion.
+% complicated code, see chapter X.
 
 \subsection{Unicode identifiers}
 
@@ -2805,8 +2827,13 @@ if(c >= Runeself) {
 
 \subsection{Typedef trick}
 
-% lexer/parser/symboltable cooperation. The parser sets the class
-% of the symbol.
+% ambiguity in C grammar. 
+% ex:
+% not context-free.
+% need to know if identifier is a typedef.
+% so need  lexer/parser/symboltable cooperation
+% (a bit ugly, mutual dependency).
+% The parser sets the class of the symbol.
 % Is there any issue when do  xxx xxx; ? no because
 % xdecor actually uses ltag with LNAME | LTYPE.
 % (but no conflict????)
@@ -3321,33 +3348,13 @@ case '\'':
 @
 % type not set for this LCONST?
 
+% supports the ''' syntax
+\t but I'm not sure cpp does!
+
+% escchar is special. it returns next char unless it
+% is the char passed as parameter in which case it returns (abuses) EOF.
+
 % chars are converted to integer constants.
-
-\subsection{Unicode characters}
-
-<<[[yylex()]] if L followed by unicode strings or character>>=
-if(c != 'L')
-    goto talph;
-
-*cp++ = c;
-c = GETC();
-if(c == '\'') {
-    /* L'x' */
-    c = escchar('\'', true, false);
-    if(c == EOF)
-        c = '\'';
-    c1 = escchar('\'', true, false);
-    if(c1 != EOF) {
-        yyerror("missing '");
-        peekc = c1;
-    }
-    yylval.vval = convvtox(c, TRUNE);
-    return LUCONST;
-}
-if(c == '"') {
-    goto caselq;
-}
-@
 
 \subsection{Escaping characters}
 
@@ -3377,7 +3384,8 @@ loop:
     <<[[escchar()]] if octal character>>
     switch(c)
     {
-    case '\n':	goto loop;
+    case '\n':	goto loop; // escaped newline
+
     case 'n':	return '\n';
     case 't':	return '\t';
     case 'b':	return '\b';
@@ -3390,6 +3398,7 @@ loop:
     return c;
 }
 @
+% this allows escaped newline! in character or string.
 
 <<[[escchar()]] if octal character>>=
 if(c >= '0' && c <= '7') {
@@ -3483,8 +3492,34 @@ if(c == 'x') {
 }
 @
 
+\subsection{Unicode characters}
+
+<<[[yylex()]] if L followed by unicode strings or character>>=
+if(c != 'L')
+    goto talph;
+
+*cp++ = c;
+c = GETC();
+if(c == '\'') {
+    /* L'x' */
+    c = escchar('\'', true, false);
+    if(c == EOF)
+        c = '\'';
+    c1 = escchar('\'', true, false);
+    if(c1 != EOF) {
+        yyerror("missing '");
+        peekc = c1;
+    }
+    yylval.vval = convvtox(c, TRUNE);
+    return LUCONST;
+}
+if(c == '"') {
+    goto caselq;
+}
+@
+% pass longflag true here! to escchar
+
 \section{Strings}
-% part1
 
 <<constant ESC>>=
 #define	ESC	(Runemask+1)		/* Rune flag: a literal byte */
@@ -3494,9 +3529,10 @@ if(c == 'x') {
 Rune rune;
 @
 
+% string part 1
 <<[[yylex()]] switch c cases>>=
 case '"':
-    strcpy(symb, "\"<string>\"");
+    strcpy(symb, "\"<string>\""); // for error reporting
     cp = alloc(0);
     c1 = 0;
 
@@ -3559,13 +3595,19 @@ caselq:
 
 % 5c has a builtin cpp, like 5a.
 % By integrating directly cpp in the parsing process,
-% it makes compilation faster because there is no fork at all! 
+% compilation runs faster because there is no fork at all! 
 
 % 5c gives also the possiblity to call an external program,
 % (e.g., /bin/cpp, which is a bit different
 % than the builtin cpp), which is convenient for APE (and pcc wrapper).
 % See also 5c -p
 
+% cpp not part of C really, but fundamental. C would have died
+% without cpp (quote stroustrup?).
+% Allowed to extend C in powerful ways. Can even add closures
+% with macros! or exceptions!
+
+% cpp is very powerful, but tricky!
 %http://blog.robertelder.org/7-weird-old-things-about-the-c-preprocessor/
 %https://www.iar.com/support/resources/articles/advanced-preprocessor-tips-and-tricks/
 %preprocessing algorithm: 
@@ -3582,6 +3624,9 @@ case '#':
     domacro();
     goto l0;
 @
+\l rename domacro, so dont need to explain that
+\l domacro() means "do macroprocessing", not just macro definition/expansion
+\l (It covers every cpp directives (include, ifdef, etc))
 
 
 <<global mactab>>=
@@ -3609,13 +3654,13 @@ struct
 
 % dispatcher. 
 % I should rename this func because it's not just about macro =>
-% less: parse_and_dispatch_pp_directive?
+% less: parse_and_dispatch_cpp_directive?
 <<function domacro>>=
 void
 domacro(void)
 {
-    int i;
     Sym *s;
+    int i;
 
     s = getsym();
     <<[[domacro()]] set s to endif symbol if no symbol>>
@@ -3680,7 +3725,7 @@ getsym(void)
 
 % so define, ifdef, etc are in the symbol table too.
 
-% get non space character
+% get non space character (really space, newline is not considered a space here)
 <<function getnsc>>=
 int
 getnsc(void)
@@ -3698,11 +3743,14 @@ getnsc(void)
             lineno++;
             return c;
         }
+        // else, was a space, so continue
         c = GETC();
     }
 }
 @
+% why call GETC here? why not getc()? which handles already peekc?
 
+% peek part 2
 <<[[getnsc()]] peekc handling>>=
 if(peekc != IGN) {
     c = peekc;
@@ -3768,7 +3816,7 @@ getc(void)
     return c;
 }
 @
-
+%ocaml: so much code duplication again
 
 <<[[getc()]] peekc handling>>=
 if(peekc != IGN) {
@@ -3781,9 +3829,9 @@ if(peekc != IGN) {
 \section{[[#include]]}
 % and [[-I]]
 
-\subsection{Include path, [[-I]]}
+\subsection{Include paths, [[-I]]}
 
-% was using fixed array in assembler
+%assembler: was using fixed array in assembler
 <<global include>>=
 // growing_array<string>
 char**	include;
@@ -3796,7 +3844,7 @@ int	maxinclude;
 @
 %ocaml: just use a list
 
-% main -> <>(".")
+% main -> <>(".") | main -> <>
 <<function setinclude>>=
 void
 setinclude(char *p)
@@ -3813,7 +3861,7 @@ setinclude(char *p)
         for(i=0; i < ninclude; i++)
             if(strcmp(p, include[i]) == 0)
                 break;
-
+        // else
         if(i >= ninclude){
             <<[[setinclude()]] grow the array if necessary>>
             include[ninclude++] = p;
@@ -3825,6 +3873,10 @@ setinclude(char *p)
     }
 }
 @
+\l why >= ninclude? = not enough?
+
+% accept a list of includes if separated by space, so can
+% process INCLUDE environment variable directly.
 
 <<[[setinclude()]] grow the array if necessary>>=
 // grow the array
@@ -3837,10 +3889,16 @@ if(i >= maxinclude){
 }
 @
 
-% accept a list of includes if separated by space, so can
-% process INCLUDE environment variable directly.
 
 \subsection{Tracing origin and [[Hist]]}
+
+% Once you include file, you can not just give a line number for
+% an error. You need also the file in which the error occur.
+% We have only seen lineno in Core Ds, but in fact global line number
+% after preprocessing. Then need extra DS to map global line number
+% to pair of file x local_line. Enter Hist.
+% Store event, so can then reconstruct history of inclusion to
+% report accurately errors.
 
 <<struct Hist>>=
 struct	Hist
@@ -3858,7 +3916,7 @@ struct	Hist
 };
 @
 \t rename line -> global_line, and offset, local_line
-%ocaml: use ADT to separate different kind of "event", #include, #line, eof.
+%ocaml: use ADT to separate different kinds of "event": #include, #line, eof.
 
 
 <<constant H>>=
@@ -3870,9 +3928,9 @@ Hist*	link;
 @
 
 <<global hist>>=
+// list<ref_own<Hist>> (next = Hist.link)
 Hist*	hist;
 @
-
 <<global ehist>>=
 Hist*	ehist;
 @
@@ -3909,40 +3967,12 @@ linehist(char *f, int offset)
 @
 
 
-% delete? mv in opti chapter?
-<<[[linehist()]] possibly overwrite last line directive>>=
-/*
- * overwrite the last #line directive if
- * no alloc has happened since the last one
- */
-if(!newflag && ehist != H && offset != 0 && ehist->offset != 0)
-    if(f && ehist->name && strcmp(f, ehist->name) == 0) {
-        ehist->line = lineno;
-        ehist->offset = offset;
-        return;
-    }
-newflag = false;
-@
-%ocaml: useful opti? meh
-
-<<global newflag>>=
-bool	newflag;
-@
-
-<<[[new()]] set lineno>>=
-newflag = true;
-@
-% newflag? this is for linehist, to detect if no new nodes were allocated
-%  so no lineno were set so the old #line information directive can be
-%  discarded
-
 
 \subsection{[[#include]]}
 
 <<constant STRINGSZ>>=
 #define	STRINGSZ	200
 @
-
 
 % LP split, and factorize code with gethunk
 <<function macinc>>=
@@ -3952,8 +3982,8 @@ macinc(void)
     char str[STRINGSZ];
     char *hp = str;
     int i;
+    fdt f = -1;
     <<[[macinc()]] other locals>>
-    fdt f;
 
     // lexing
 
@@ -3961,10 +3991,11 @@ macinc(void)
 
     // action
 
-    <<[[macinc()]] finding the included filename full path>>
+    <<[[macinc()]] find and store the included filename full path in [[symb]]>>
 
     c = strlen(symb) + 1; 
 
+    // hp = malloc(c);
     while(c & 3)
         c++;
     while(nhunk < c)
@@ -3990,6 +4021,8 @@ bad:
 %pad: I reordered code to make it easier to replace hunk stuff by malloc()
 \t use malloc
 \t abuse c, could use other local [[n]]
+%ocaml: I separate the lexing and action in different file by using an
+% intermediate AST for the cpp directives
 
 <<[[macinc()]] other locals>>=
 int c0, c;
@@ -4020,8 +4053,7 @@ if(c != '\n')
 % first entry is setinclude(".") so accept only
 % if not system file
 
-<<[[macinc()]] finding the included filename full path>>=
-f = -1;
+<<[[macinc()]] find and store the included filename full path in [[symb]]>>=
 for(i=0; i<ninclude; i++) {
     if(i == 0 && c0 == '>') // do not look in '.' for system headers
         continue;
@@ -4041,6 +4073,11 @@ if(f < 0)
     strcpy(symb, str);
 @
 
+% the ./ special case will also allow to handle absolute path
+% by not concatenating anything in front of it
+% but what about overwriting of include[0] with dirname(file)?
+% if run 5c xxx/include_absolute.c vs 5c include_absolute.c will get
+%  different result?
 
 <<function pushio>>=
 void
@@ -4062,7 +4099,7 @@ pushio(void)
 %\section{[[getcom()]]}
 % mv with Comments section above?
 
-% comment part2
+% comment part 2
 <<function getcom>>=
 int
 getcom(void)
@@ -4139,8 +4176,8 @@ dodefine(char *cp)
             l++;
         while(nhunk < l)
             gethunk();
-        *hunk = '\0'; // 0 nargs
 
+        *hunk = '\0'; // 0 nargs
         strcpy(hunk+1, p);
         s->macro = hunk;
 
@@ -4172,20 +4209,13 @@ dodefine(char *cp)
 % only up to 25 arguments (size of alphabet)
 %ocaml: more than 25 args, use #1, not #a
 
-%XXX
-<<[[macdef()]] other locals>>=
-Sym *s;
-Sym *a;
-char *np;
-int i, c, len;
-int ischr; // quote character
-@
 
 % wow, this is complicated
 <<function macdef>>=
 void
 macdef(void)
 {
+    Sym *s;
     char *args[NARG]; // parameters
     // option<int> (None = -1), size of parameters
     int n;
@@ -4194,9 +4224,9 @@ macdef(void)
     <<[[macdef()]] other locals>>
 
     // lexing 
-    <<[[macdef]] lexing the macro name>>
-    <<[[macdef]] lexing the parameters>>
-    <<[[macdef]] lexing the body>>
+    <<[[macdef]] lexing the macro name, set [[s]]>>
+    <<[[macdef]] lexing the parameters, set [[args]], [[n]], and [[dots]]>>
+    <<[[macdef]] lexing the body, set [[base]]>>
 
     // action
 
@@ -4215,13 +4245,19 @@ bad:
     macend();
 }
 @
+%ocaml: again I separate the lexing from the action (thx to AST of directive)
 
-% process also inside of strings! so can have 
-% #define	assert(x)	do{ if(x) {} else _assert("x"); }while(false)
-% no need for stringify concept. just use x
+<<constant VARMAC>>=
+#define VARMAC 0x80
+@
+% variable arity macro (extension?)
+%ocaml: a boolean in the record defining a macro
 
 
-<<[[macdef]] lexing the macro name>>=
+
+
+
+<<[[macdef]] lexing the macro name, set [[s]]>>=
 s = getsym();
 if(s == S)
     goto bad;
@@ -4230,7 +4266,13 @@ if(s->macro)
 @
 
 
-<<[[macdef]] lexing the parameters>>=
+<<[[macdef()]] other locals>>=
+int c;
+Sym *a;
+@
+\t rename a to param (it is not an argument!)
+
+<<[[macdef]] lexing the parameters, set [[args]], [[n]], and [[dots]]>>=
 c = getc();
 n = -1; // no parameter (which is different than 0 argument)
 dots = false;
@@ -4249,6 +4291,7 @@ if(c == '(') {
                 goto bad;
             }
             args[n++] = a->name;
+
             c = getnsc();
             if(c == ')')
                 break;
@@ -4266,7 +4309,39 @@ if(isspace(c))
 
 
 
-<<[[macdef]] lexing the body>>=
+<<function getsymdots>>=
+Sym*
+getsymdots(bool *dots)
+{
+    int c;
+    Sym *s;
+
+    s = getsym();
+    if(s != S)
+        return s;
+
+    c = getnsc();
+    if(c != '.'){
+        unget(c);
+        return S;
+    }
+    if(getc() != '.' || getc() != '.')
+        yyerror("bad dots in macro");
+    *dots = true;
+    return slookup("__VA_ARGS__");
+}
+@
+\t 5c of kencc does not seem to handle those
+
+
+
+
+<<[[macdef()]] other locals>>=
+int ischr; // quote character
+int len;
+@
+
+<<[[macdef]] lexing the body, set [[base]]>>=
 base = hunk;
 len = 1;
 ischr = 0;
@@ -4274,35 +4349,12 @@ ischr = 0;
 for(;;) {
     <<[[macdef()]] when lexing the body, if identifier>>
     <<[[macdef()]] when lexing the body, if string or character or comment>>
-
-    // antislash outside a string
-    if(c == '\\') {
-        c = getc();
-        if(c == '\n') {
-            c = getc();
-            continue;
-        }
-        // windows
-        else if(c == '\r') {
-            c = getc();
-            if(c == '\n') {
-                c = getc();
-                continue;
-            }
-        }
-        // else
-        base = allocn(base, len, 1);
-        base[len++] = '\\';
-        continue;
-    }
+    <<[[macdef()]] when lexing the body, if antislash outside a string>>
     if(c == '\n')
         break;
+    <<[[macdef()]] when lexing the body, if sharp character, escape it>>
 
-    if(c == '#') // escape # by adding an extra #
-      if(n > 0) {
-        base = allocn(base, len, 1);
-        base[len++] = c;
-    }
+    // else, a regular character (space, punctuation, etc)
     base = allocn(base, len, 1);
     base[len++] = c;
 
@@ -4317,10 +4369,17 @@ for(;;) {
 }
 do {
     base = allocn(base, len, 1);
-    base[len++] = 0;
+    base[len++] = '\0';
 } while(len & 3);
 @
+\l why not call GETC? why duplicate filbuf stuff?
 
+
+
+<<[[macdef()]] other locals>>=
+char *np;
+int i;
+@
 
 <<[[macdef()]] when lexing the body, if identifier>>=
 // identifier
@@ -4353,8 +4412,12 @@ if(isalpha(c) || c == '_') {
 @
 
 
+% process also inside of strings! so can have 
+% #define	assert(x)	do{ if(x) {} else _assert("x"); }while(false)
+% no need for stringify concept. just use x
 
-% string part 2
+% string part 2 (but does not handle ''' escape I think here)
+% character part 2
 <<[[macdef()]] when lexing the body, if string or character or comment>>=
 if(ischr){
     // inside a string or character
@@ -4418,37 +4481,42 @@ if(c == '/') {
 @
 % again last case if not a comment but just a regular '/'
 
-
-<<constant VARMAC>>=
-#define VARMAC 0x80
-@
-% variable arity macro (extension?)
-%ocaml: a boolean in the record defining a macro
-
-
-<<function getsymdots>>=
-Sym*
-getsymdots(bool *dots)
-{
-    int c;
-    Sym *s;
-
-    s = getsym();
-    if(s != S)
-        return s;
-
-    c = getnsc();
-    if(c != '.'){
-        unget(c);
-        return S;
+<<[[macdef()]] when lexing the body, if antislash outside a string>>=
+// antislash outside a string
+if(c == '\\') {
+    c = getc();
+    if(c == '\n') {
+        c = getc();
+        continue;
     }
-    if(getc() != '.' || getc() != '.')
-        yyerror("bad dots in macro");
-    *dots = true;
-    return slookup("__VA_ARGS__");
+    // else
+    base = allocn(base, len, 1);
+    base[len++] = '\\';
+    continue;
 }
 @
-\t 5c of kencc does not seem to handle those
+% does not replace escaped newline by space here. skip both character
+
+%dead:
+%    // windows
+%    else if(c == '\r') {
+%        c = getc();
+%        if(c == '\n') {
+%            c = getc();
+%            continue;
+%        }
+%    }
+
+
+<<[[macdef()]] when lexing the body, if sharp character, escape it>>=
+if(c == '#') // escape # by adding an extra #
+  if(n > 0) {
+    base = allocn(base, len, 1);
+    base[len++] = c;
+}
+@
+
+
 
 \subsection{Macro Expansion}
 
@@ -4457,8 +4525,8 @@ if(s->macro) {
     newio();
     cp = ionext->b;
     macexpand(s, cp);
-    pushio();
 
+    pushio();
     // push_list(ionext, iostack)
     ionext->link = iostack;
     iostack = ionext;
@@ -4466,20 +4534,27 @@ if(s->macro) {
     fi.p = cp;
     fi.c = strlen(cp);
 
-    if(peekc != IGN) {
-        cp[fi.c++] = peekc;
-        cp[fi.c] = '\0';
-        peekc = IGN;
-    }
+    <<[[yylex()]] in talph case, when macro symbol, peekc handling>>
     goto l0;
 }
 @
+
+% peekc part 3
+<<[[yylex()]] in talph case, when macro symbol, peekc handling>>=
+if(peekc != IGN) {
+    cp[fi.c++] = peekc;
+    cp[fi.c] = '\0';
+    peekc = IGN;
+}
+@
+% argh, again
 
 % note that can have recursive macro expansion! if expanded code
 % contains itself some macros. Can even do recursive stuff?
 % => push_depth check.
 
-%<<[[yylex()]] if macro symbol>>=
+
+\subsubsection{[[macexpand()]]}
 
 % wow, complicated too
 <<function macexpand>>=
@@ -4525,12 +4600,15 @@ toobig:
 }
 @
 
+
+\subsubsection{Extracting the arguments}
+
 %XXX
 <<[[macexpand()]] other locals>>=
 char buf[2000];
-int n;
 int l; // depth
 char *arg[NARG]; // the arguments
+int n;
 char *cp, *ecp;
 char *ob = b;
 @
@@ -4587,6 +4665,8 @@ if(n != nargs) {
     return;
 }
 @
+%ocaml: better error message than "<eof> End of file" when could not
+% find a closing ')'
 
 % string part 3
 <<[[macexpand()]] when parsing the arguments, if string>>=
@@ -4629,6 +4709,7 @@ if(c == '\'')
             break;
     }
 @
+% exactly the same, except look for different end character
 
 <<[[macexpand()]] when parsing the arguments, if comment>>=
 // comment
@@ -4644,7 +4725,7 @@ if(c == '/') {
                     break;
             }
         }
-        *cp++ = ' ';
+        *cp++ = ' '; // ???
         continue;
     case '/':
         while((c = getc()) != '\n')
@@ -4656,27 +4737,34 @@ if(c == '/') {
     }
 }
 @
+% remember that getc() handles lineno internally
+
+
+% Subst arguments!
+
+\subsubsection{Substituting the arguments}
 
 <<[[macexpand()]] substituting the arguments>>=
 cp = s->macro+1;
 for(;;) {
     c = *cp++;
-    if(c == '\n')
+    if(c == '\n') // can happen?
         c = ' ';
     if(c != '#') {
         *b++ = c;
-        if(c == 0)
+        if(c == '\0')
             break;
         continue;
     }
-    // else
+    // else, a #
     c = *cp++;
-    if(c == 0)
+    if(c == '\0')
         goto bad;
     if(c == '#') { // # are escaped as double ##
         *b++ = c;
         continue;
     }
+    // else, a #a to #z
     c -= 'a';
     if(c < 0 || c >= n)
         continue;
@@ -4747,6 +4835,7 @@ if(getcom() != '\n')
     goto bad;
 @
 
+
 <<[[macif()]] other locals>>=
 int c;
 int l; // depth
@@ -4757,6 +4846,7 @@ bool bol; // beginning of line
 skip:
     bol = true;
     l = 0;
+
     for(;;) {
         c = getc();
         if(c != '#') {
@@ -4778,6 +4868,7 @@ skip:
                 l--;
                 continue;
             }
+            // else l == 0
             macend();
             return;
         }
@@ -4791,6 +4882,8 @@ skip:
         }
     }
 @
+% does not manage comment? or string? so if have comment
+% with inside a # in the first line, then it gets confused?
 
 \section{[[#pragma]]}
 
@@ -5217,12 +5310,10 @@ xdecl:
 %ocaml: my parser_c.mly was also complicated when it come to decl handling ...
 <<global lastclass>>=
 // enum<storage_class>
-//@Scheck: y.tab.c
 char	lastclass;
 @
 
 <<global lasttype>>=
-//@Scheck: y.tab.c
 Type*	lasttype;
 @
 % really lastype_partone.
@@ -5398,6 +5489,7 @@ ltag:
 @
 % no grammar ambiguity?? so can have typedef int x; ...; x x;  
 % declarations without pb?
+\l why tag and ltag?
 
 <<[[dodecl()]] locals>>=
 Sym *s;
@@ -5496,15 +5588,21 @@ Type*	thisfntype;
         Node *n;
         n = revertdcl();
         <<xdecl rule, adjust block body with possible hidden generated nodes>>
-        if(debug['x']) {
-            prtree($2, "func");
-            prtree($6, "body");
-        }
+        <<xdecl rule, debug function body>>
         if(!debug['a'] && !debug['Z'])
             codgen($6, $2); // !!!!!!!!!!!!!!!!!!!!!
     }
 @
 %$
+
+
+<<xdecl rule, debug function body>>=
+if(debug['x']) {
+    prtree($2, "func");
+    prtree($6, "body");
+}
+@
+
 
 % markdcl(), revertdcl(), see next section
 
@@ -7040,6 +7138,7 @@ nextinit(void)
 % xdecl: zctlist, ... zctlist: ctlist ... ctlist: types
 
 % tlist because can have a list like unsigned int, or long long
+%ocaml: impose order, so no need for those set operations
 
 % ugly in C but types decomposed in two parts, 
 % before identifier, and around identifier (after and also before).
@@ -7077,6 +7176,8 @@ enum type_kind_bis {
 %note: now that we splitted fron enum type_kind, does it still work with
 % enum<bxxx>?
 %dead:TFILE
+%ocaml: separate storage, qualifier, and type in grammar rules so
+% no need for those set union operations
 
 % enum bxxx is used mainly in the grammar
 % and is a 64 bits bitset of the types above.
@@ -7164,7 +7265,7 @@ gcname:
     gname
 |   cname
 @
-
+%ocaml: can simplify and remove all that
 
 
 
@@ -7288,7 +7389,7 @@ TSIGNED,
 |   LSIGNED   { $$ = BSIGNED; }
 |   LUNSIGNED { $$ = BUNSIGNED; }
 @
-
+%ocaml: can simplify
 
 
 
@@ -7318,6 +7419,7 @@ TSIGNED,
         $$.t = garbt($$.t, $1|$3);
     }
 @
+%ocaml: can simplify
 
 
 
@@ -7507,7 +7609,7 @@ if(s->type != T)
         Bprint(&diagbuf, "	%s %T %L\n", cnames[s->class], s->type, s->varlineno);
     }
 @
-
+%ocaml: can not happen by construction
 
 
 \subsection{Qualifiers}
@@ -7731,7 +7833,7 @@ if(bn != 0 && bn != s->sueblock) {
 //@Scheck: used by cc.y
 int	taggen;
 @
-% gensym() like
+%ocaml: gensym() like
 
 % anon defs
 <<complex rule>>=
@@ -7788,6 +7890,7 @@ long	firstbit;
 <<global lastbit>>=
 long	lastbit;
 @
+\l mv in advanced topics the bitfield related stuff?
 
 <<types, storage classes, qualifiers rules>>=
 sbody:
@@ -8926,7 +9029,7 @@ abdecor3:
 % as we visit we will create new ASM instructions, linked
 % together that will be then serialized and written to a file
 % (see outcode()). So nextpc() is here to create those new instruction
-% and increment the pc global counter.
+% and increment the pc (virtual) global counter.
 
 <<global pc>>=
 long	pc;
@@ -26118,6 +26221,39 @@ if(argc > 1) {
 @
 
 \fi
+
+\section{Other optimizations}
+
+\subsection{Minimizing [[#line]] history}
+
+% delete?
+<<[[linehist()]] possibly overwrite last line directive>>=
+/*
+ * overwrite the last #line directive if
+ * no alloc has happened since the last one
+ */
+if(!newflag && ehist != H && offset != 0 && ehist->offset != 0)
+    if(f && ehist->name && strcmp(f, ehist->name) == 0) {
+        ehist->line = lineno;
+        ehist->offset = offset;
+        return;
+    }
+newflag = false;
+@
+%ocaml: useful opti? meh
+
+<<global newflag>>=
+bool	newflag;
+@
+
+<<[[new()]] set lineno>>=
+newflag = true;
+@
+% newflag? this is for linehist, to detect if no new nodes were allocated
+%  so no lineno were set so the old #line information directive can be
+%  discarded
+
+
 
 \chapter{Conclusion}
 
