@@ -85,8 +85,8 @@ void	frsetrects(Frame*, Rectangle, Image*);
 void	frclear(Frame*, int);
 
 // private??? frame_private.h?
-uchar	*_frallocstr(Frame*, unsigned);
-void	_frinsure(Frame*, int, unsigned);
+uchar	*_frallocstr(Frame*, unsigned int);
+void	_frinsure(Frame*, int, unsigned int);
 Point	_frdraw(Frame*, Point);
 void	_frgrowbox(Frame*, int);
 void	_frfreebox(Frame*, int, int);

@@ -15,7 +15,7 @@ int pfmtnest = 0;
 int emptybuf(io*);
 int fullbuf(io*, int);
 void pdec(io*, int);
-void poct(io*, unsigned);
+void poct(io*, unsigned int);
 void pptr(io*, void*);
 void pval(io*, word*);
 void pquo(io*, char*);
@@ -45,7 +45,7 @@ pfmt(io *f, char *fmt, ...)
             pdec(f, va_arg(ap, int));
             break;
         case 'o':
-            poct(f, va_arg(ap, unsigned));
+            poct(f, va_arg(ap, unsigned int));
             break;
         case 'p':
             pptr(f, va_arg(ap, void*));
@@ -210,7 +210,7 @@ pdec(io *f, int n)
 
 /*s: function poct */
 void
-poct(io *f, unsigned n)
+poct(io *f, unsigned int n)
 {
     if(n>7)
         poct(f, n>>3);

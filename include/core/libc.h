@@ -69,6 +69,8 @@ extern	void*	memchr(void*, int, ulong);
  */
 extern	char*	strcat(char*, char*);
 extern	char*	strchr(char*, int);
+//todo: rename to _strcmp and have a string_equal wrapper 
+// (and refactor code using spatch)
 extern	int		strcmp(char*, char*);
 extern	char*	strcpy(char*, char*);
 extern	char*	strecpy(char*, char*, char*);

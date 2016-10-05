@@ -162,7 +162,7 @@ exportenv(Envy *e)
                 if(first)
                     first = false;
                 else{
-                    if (write (f, "\0", 1) != 1)
+                    if (write (f, "\000", 1) != 1)
                         perror(nam);
                 }
                 /*e: [[exportenv()]] write null separator */
