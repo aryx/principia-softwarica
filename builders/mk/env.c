@@ -85,7 +85,7 @@ envupd(char *name, Word *value)
 
     for(e = envy; e->name; e++)
         if(strcmp(name, e->name) == 0){
-            delword(e->values);
+            freewords(e->values);
             e->values = value;
             return;
         }

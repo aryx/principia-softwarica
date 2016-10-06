@@ -57,9 +57,9 @@ wdup(Word *w)
 }
 /*e: function wdup */
 
-/*s: destructor delword */
+/*s: destructor freewords */
 void
-delword(Word *w)
+freewords(Word *w)
 {
     Word *v;
 
@@ -70,7 +70,7 @@ delword(Word *w)
         free(v);
     }
 }
-/*e: destructor delword */
+/*e: destructor freewords */
 
 // was in recipe.c before
 /*s: function addw */

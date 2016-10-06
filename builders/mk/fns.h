@@ -1,7 +1,6 @@
 /*s: mk/fns.h */
 
 // Constructors/destructors for core data structures
-// (assumes have included mk.h before)
 
 // bufblock.c
 Bufblock* newbuf(void);
@@ -13,17 +12,15 @@ void	rinsert(Bufblock *, Rune);
 
 // words.c
 Word*	newword(char*);
-void	delword(Word*);
+void	freewords(Word*);
 Word*	wdup(Word*);
 char*	wtos(Word*, int);
 void	addw(Word*, char*);
 
 // symtab.c
-void	syminit(void);
 Symtab*	symlook(char*, int, void*);
 void	symtraverse(int, void(*)(Symtab*));
 void	symstat(void);
-//void	symdel(char*, int);
 
 // var.c
 void	setvar(char*, void*);

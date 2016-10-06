@@ -139,7 +139,7 @@ exportenv(Envy *e)
              * would still remain in the parent's table.
              */
             remove(nam);
-            delword(e->values);
+            freewords(e->values);
             e->values = nil;		/* memory leak */
             continue;
         }

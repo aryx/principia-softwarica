@@ -243,6 +243,7 @@ again:		/* rogue processes */
         front(bp->start);
         fprint(STDERR, "mk: %s: exit status=%s", bp->start, buf);
         freebuf(bp);
+
         /*s: [[waitup()]] when error in child process, delete if DELETE node */
         for(n = j->n, done = false; n; n = n->next)
             if(n->flags&DELETE){

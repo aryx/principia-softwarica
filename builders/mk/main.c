@@ -147,7 +147,6 @@ main(int argc, char **argv)
         }
     #endif
     /*e: [[main()]] setup profiling */
-    syminit();
     initenv();
     /*s: [[main()]] argv processing part 2, xxx=yyy */
     /*

@@ -233,10 +233,10 @@ subsub(Word *v, char *s, char *end)
         tail = w;
     }
     freebuf(buf);
-    delword(a);
-    delword(b);
-    delword(c);
-    delword(d);
+    freewords(a);
+    freewords(b);
+    freewords(c);
+    freewords(d);
     return head;
 }
 /*e: function subsub */

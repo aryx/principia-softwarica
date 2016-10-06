@@ -60,7 +60,7 @@ struct Rule
     char 		*target;	/* one target */
     // option<ref_own<Words>>
     Word 		*tail;		/* constituents of targets */
-    // ref_own<string>, never nil, but can be empty string (just '\0')
+    // ref_own<string>, never nil, but can be the empty string (just '\0')
     char 		*recipe;	/* do it ! */
 
     /*s: [[Rule]] other fields */

@@ -12,40 +12,31 @@
 static Symtab *hash[NHASH];
 /*e: global hash */
 
-/*s: function syminit */
-void
-syminit(void)
-{
-    Symtab **s, *ss;
-
-    for(s = hash; s < &hash[NHASH]; s++){
-        for(ss = *s; ss; ss = ss->next)
-            free((char *)ss);
-        *s = nil;
-    }
-}
-/*e: function syminit */
-
 /*s: function symlook */
 Symtab*
 symlook(char *sym, int space, void *install)
 {
-    long h;
-    char *p;
     Symtab *s;
+    long h;
+    /*s: [[lookup()]] other locals */
+    char *p;
+    /*e: [[lookup()]] other locals */
 
+    /*s: [[lookup()]] compute hash value [[h]] of [[sym]] */
     //h = hash(sym, space)
     for(p = sym, h = space; *p; h += *p++)
         h *= HASHMUL;
     if(h < 0)
         h = ~h;
     h %= NHASH;
+    /*e: [[lookup()]] compute hash value [[h]] of [[sym]] */
 
+    // hash_lookup((sym, space), h, hash)
     for(s = hash[h]; s; s = s->next)
         if((s->space == space) && (strcmp(s->name, sym) == 0))
             return s;
     // else
-
+    /*s: [[lookup()]] if symbol not found */
     if(install == nil)
         return nil;
 
@@ -59,6 +50,7 @@ symlook(char *sym, int space, void *install)
     hash[h] = s;
 
     return s;
+    /*e: [[lookup()]] if symbol not found */
 }
 /*e: function symlook */
 
