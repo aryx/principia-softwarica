@@ -23,10 +23,10 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 {
     Rule *r = nil;
     /*s: [[addrule()]] other locals */
+    Rule *rr;
+    /*x: [[addrule()]] other locals */
     Symtab *sym;
     bool reuse;
-    /*x: [[addrule()]] other locals */
-    Rule *rr;
     /*e: [[addrule()]] other locals */
 
     /*s: [[addrule()]] find if rule already exists */

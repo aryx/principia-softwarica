@@ -3173,9 +3173,12 @@ chapters.
 
 Now that I described the data structures and globals related to
 the rules and meta rules, I can explain the code to add rules.
-%
 
 \subsubsection{One rule with one target, [[addrule()]]}
+
+[[addrule()]] is used to a add rule with a single target.
+%
+I will explain later the code to support rules using multiple targets.
 
 
 % kind of ctor
@@ -3252,46 +3255,6 @@ if(charin(head, "%&") || (attr&REGEXP)){
 % because we need to handle filenames that have special characters in it.
 
 
-<<[[addrule()]] other locals>>=
-Symtab *sym;
-bool reuse;
-@
-
-<<[[addrule()]] find if rule already exists>>=
-reuse = false;
-if(sym = symlook(head, S_TARGET, nil)){
-    for(r = sym->u.ptr; r; r = r->chain)
-        if(rcmp(r, head, tail) == 0){
-            reuse = true;
-            break;
-        }
-}
-@
-\t why allows that? just return error? simpler.
-\t  anyway, was not guarding nrules plusplus with if(!reuse) so weird.
-\t but now S_TARGET is later ... so mv check later?
-\t or even simpler, let it go, it will be detected later by ambiguous()
-
-% rule compare, check if same target and same prerequistes
-<<function rcmp>>=
-static int
-rcmp(Rule *r, char *target, Word *tail)
-{
-    Word *w;
-
-    if(strcmp(r->target, target))
-        return 1;
-    for(w = r->tail; w && tail; w = w->next, tail = tail->next)
-        if(strcmp(w->s, tail->s))
-            return 1;
-    return (w || tail);
-}
-@
-\t strcmp sucks, use string_equal, and return bool that makes sense
-\t  so less rcmp(...) == 0, instead rule_equal(...)
-%bug? what about when different orders of prereqs? should compare as a set
-% anyway I think it's redundant with ambiguous rule check
-
 \subsubsection{One target with multiple rules, [[S_TARGET]]}
 
 % useful also for .depend? or different because here
@@ -3344,12 +3307,55 @@ if(!reuse){
 
 
 
+<<[[addrule()]] other locals>>=
+Symtab *sym;
+bool reuse;
+@
+
+<<[[addrule()]] find if rule already exists>>=
+reuse = false;
+if(sym = symlook(head, S_TARGET, nil)){
+    for(r = sym->u.ptr; r; r = r->chain)
+        if(rcmp(r, head, tail) == 0){
+            reuse = true;
+            break;
+        }
+}
+@
+\t why allows that? just return error? simpler.
+\t  anyway, was not guarding nrules plusplus with if(!reuse) so weird.
+\t but now S_TARGET is later ... so mv check later?
+\t or even simpler, let it go, it will be detected later by ambiguous()
+
+% rule compare, check if same target and same prerequistes
+<<function rcmp>>=
+static int
+rcmp(Rule *r, char *target, Word *tail)
+{
+    Word *w;
+
+    if(strcmp(r->target, target))
+        return 1;
+    for(w = r->tail; w && tail; w = w->next, tail = tail->next)
+        if(strcmp(w->s, tail->s))
+            return 1;
+    return (w || tail);
+}
+@
+\t strcmp sucks, use string_equal, and return bool that makes sense
+\t  so less rcmp(...) == 0, instead rule_equal(...)
+%bug? what about when different orders of prereqs? should compare as a set
+% anyway I think it's redundant with ambiguous rule check
+
 \subsubsection{One rule with multiple targets, [[addrules()]]}
 \label{sec:multi-targets}
-% was in advanced topics, but  maybe fundamental features then. 
-% Also too much code doing stuff to support multiple targets.
+\n was in advanced topics, but  maybe fundamental features then.
+\n Also too much code doing stuff to support multiple targets.
 
-
+%trans:
+% finally multiple targets. As explained in Section X,
+% need remember in an arc, and so rule of an arc that
+% when update target , may update other nodes
 % useful for parser.ml parser.mli: parser.mly !
 
 <<[[Rule]] other fields>>=
@@ -3364,10 +3370,6 @@ Word 		*alltargets;	/* all the targets */
 
 % Is there a few places where use Word* targets
 % where in most cases it should really be simply char* target; ??
-
-% why target and alltargets? why not just have alltargets?
-% because we index per single target so in applyrules we can be
-% faster (but still slow on metarules)
 
 <<function addrules>>=
 void
@@ -3389,6 +3391,12 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
 r->alltargets = ahead;
 @
 \t rename ahead -> alltargets
+
+
+% why target and alltargets? why not just have alltargets?
+% because we index per single target so in applyrules we can be
+% faster (but still slow on metarules)
+
 
 
 %\subsubsection{Extracting the first target}
