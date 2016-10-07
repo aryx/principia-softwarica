@@ -45,7 +45,7 @@
 %    many arcs but no ambiguity cos all have the same recipe
 %  - understand vacuous check and interaction with ambiguous
 
-%thx to this manual, better understand mk/make:
+%thx to this manual, I better understand mk/make:
 % - minimal-syntax design leads to need for escaping-newline because newline is
 %   (ab)used as a terminator for many things
 % - escaping rules, tricky, but needed because space is used too for separator
@@ -1435,9 +1435,12 @@ of two arcs in the graph of dependencies.
 \l same for two targets (said later?)
 \l one-to-one, one-to-many
 
+\l target vs prerequistes, parent vs child, src vs dest.
+
 %trans: nice graph, but not enough to explain algo.
 
 \subsubsection{A labeled tree}
+\label{sec:labeled-tree}
 
 \begin{figure}[!]\centering
 \begin{verbatim}
@@ -1669,6 +1672,9 @@ Indeed, a file can not depend on itself, directly or indirectly
 \l even though here cannot see that cos common.h is a leaf
 
 
+%\subsubsection{Multiple rules with the same target}
+\label{sec:master-rule} 
+
 There are multiple ways to add the dependency
 to [[common.h]] from [[hello.5]] (and [[world.5]]) in the
 [[mkfile]]s of Section~\ref{sec:dsl}:
@@ -1857,6 +1863,7 @@ a reference to the [[parser.c]] node.
 
 
 \subsection{A job scheduler}
+\label{sec:job}
 
 %trans: 
 I have described the main features of the DSL of a build system,
@@ -1955,7 +1962,7 @@ Made +------+-+     Made +------+-+
 \label{fig:graph-being-made}
 \end{figure}
 
-
+\label{sec:build-status}
 To keep track of the nodes involved in a job, [[mk]] use
 an extra label on each node to indicate the progress status
 of the node: [[NotMade]], [[Made]], and [[BeingMade]],
@@ -2645,7 +2652,7 @@ function [[lookup()]] which internally uses the global [[hash]].
 It takes a symbol name and a namespace, forming a full key, and 
 returns the [[Symtab]] in the symbol table [[hash]] associated with this key.
 
-
+\label{sec:symlook}
 % many stuff -> <>
 % will create new entry if not there!
 <<function symlook>>=
@@ -2845,12 +2852,13 @@ which will be stored in the [[S_VAR]] namespace.
 
 
 \section{[[Word]]s}
+\label{sec:word}
 % and Bufblock
 
 %trans:
 There are many places in the code of [[mk]] where [[mk]]
-manipulates a {\em list of words}:
-when manipulating a list of prerequistes, 
+manipulates a {\em list of words};
+when it manipulates a list of prerequistes, 
 a list of targets,
 or the content of a variable.
 %ex: HFILES=fns.h mk.h => list of 2 words
@@ -2996,6 +3004,8 @@ its code is described in Appendix~\ref{chap:libc} and not here.
 
 \l stow() later, but complex because does variable expansion!
 
+
+
 \section{Rules}
 
 %trans:
@@ -3008,7 +3018,7 @@ the creation of the graph of dependencies.
 
 \subsection{[[Rule]]}
 
-The structure [[Rule]] below represents a {\em rule} in memory.
+The structure [[Rule]] below represents a {rule} in memory.
 You can see that the first fields represent the major
 elements of a rule I mentioned in Section~\ref{sec:rule-simple-mkfile}:
 the [[target]], the [[prereq]]uistes, and the [[recipe]].
@@ -3035,23 +3045,31 @@ struct Rule
 \t  can be nil? sometimes seems assume cannot, and sometimes can. fix it!
 \t  according to rbody(), it cant be nil, at least it is empty string
 
-The prerequistes is a list of words, hence the use of [[Word]] described above.
+[[Rule.prereqs]] contains a list of words, hence the use of a pointer
+to a [[Word]] ([[Word]] was described in Section~\ref{sec:word}).
 %
-\l target single string, not list of words, even though certain rules
-% have multiple targets. See why later split.
-% note that can have multiple rules with the same head, 
-% in which case you add prerequistes?
-\l recipe can contain [[$]], target and tail not, the variables are expanded %$
-% at parsing time as explained in Section X.
+[[Rule.target]] is a single string, not a list of words, 
+even though some rules have multiple targets. 
+I will explain later how rules with multiple targets are represented.
+%
+\l note that can have multiple rules with the same head, 
+\l in which case you add prerequistes?
+[[Rule.recipe]] is a string. This string can contain variables 
+using the dollar sign.
+However, the strings in [[Rule.target]] and [[Rule.prereqs]]
+do not contain any variable. Indeed, as I will show in 
+Section~\ref{sec:expand-vars}, variables used outside a recipe
+are expanded at parsing time.
 % from man page:
 %  Variable substitution in a rule is done when
 %  the rule is read; variable substitution in the recipe is done
 %  when the recipe is executed.
-% why? probably because recipe/rc will do the subst itself, but for
-% the graph we need concrete values so faster to do it eagerly when parsing.
+\l why? probably because recipe/rc will do the subst itself, but for
+\l the graph we need concrete values so faster to do it eagerly when parsing.
 % Also because for recipe, some values are known later, when instantiate 
 % the rule (e.g., for $stem)
 % can also be metarule, %.$O: %.c (but $O would have been expanded)
+\l can contain percent
 
 In addition to the major fields mentioned above, [[Rule]] contains
 also information about where a rule comes from:
@@ -3089,7 +3107,7 @@ list:
 struct Rule	*next;
 @
 
-To add a rule to the end of the list of rules [[rules]], [[mk]]
+To quickly add a rule to the end of the list [[rules]], [[mk]]
 maintains another global [[lr]] pointing to the last rule:
 
 <<global lr>>=
@@ -3118,7 +3136,7 @@ Remember that a meta rule is a rule using the {special character} [[%]]
 to specify a {\em pattern} in the target or prerequistes of a rule
 (see Section~\ref{sec:pattern}).
 In fact, [[mk]] supports another special character to represent
-a pattern: [[&]], hence the code in the function below:
+a pattern: [[&]], hence the code in the macro below:
 
 <<function PERCENT>>=
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
@@ -3135,7 +3153,8 @@ except period or slash
 \end{itemize}
  
 In addition to being stored in [[metarules]] instead of [[rules]],
-a meta rule contains also the [[META]] {\em attribute} in [[Rule.attr]]:
+a meta rule contains also the [[META]] {\em rule attribute} in 
+[[Rule.attr]]:
 
 <<[[Rule]] other fields>>=
 // bitset<Rule_attr>
@@ -3176,44 +3195,41 @@ the rules and meta rules, I can explain the code to add rules.
 
 \subsubsection{One rule with one target, [[addrule()]]}
 
-[[addrule()]] is used to a add rule with a single target.
+[[addrule()]] is used to add a rule with a single target.
 %
-I will explain later the code to support rules using multiple targets.
+I will explain later the code to support rules with multiple targets.
 
 
 % kind of ctor
-% syntax: head -> target, tail -> reqs, body -> recipe
 % (main -> parse | main) -> <>
 <<function addrule>>=
 void
-addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, char *prog)
+addrule(char *head, Word *tail, char *body, 
+        Word *ahead, int attr, int hline, char *prog)
 {
     Rule *r = nil;
     <<[[addrule()]] other locals>>
 
-    <<[[addrule()]] find if rule already exists>>
+    <<[[addrule()]] find if rule already exists, set reuse>>
 
     if(r == nil)
         r = (Rule *)Malloc(sizeof(Rule));
 
     r->target = head;
     r->tail = tail;
-
     r->recipe = body;
 
     r->line = hline;
     r->file = infile;
 
     r->attr = attr;
-
     <<[[addrule()]] set more fields>>
 
     <<[[addrule()]] indexing [[r]] by target in [[S_TARGET]]>>
 
     <<[[addrule()]] if meta rule>>
     else {
-        if(reuse)
-            return;
+        <<[[addrule()]] return if reuse, to not add the rule in a list>>
         r->pat = nil;
 
         // add_list(r, rules, lr)
@@ -3227,9 +3243,6 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 }
 @
 \t rename arguments! target, prereqs, alltargets, etc
-\t mv hline at the very end, or before attr and prog
-% could print when find an existing rule with same target/pre
-% and display a message?
 \l r->pat ?? Malloc does not memset zero anyway?
 %ocaml: use record, and no need wrapper constructor, construct directly with
 % the fields
@@ -3237,8 +3250,7 @@ addrule(char *head, Word *tail, char *body, Word *ahead, int attr, int hline, ch
 <<[[addrule()]] if meta rule>>=
 if(charin(head, "%&") || (attr&REGEXP)){
     r->attr |= META;
-    if(reuse)
-        return;
+    <<[[addrule()]] return if reuse, to not add the rule in a list>>
     <<[[addrule()]] if REGEXP attribute>>
 
     // add_list(r, metarules, lmr)
@@ -3251,68 +3263,103 @@ if(charin(head, "%&") || (attr&REGEXP)){
 }
 @
 
-% will see charin() later. subtle if want to handle quoted characters
-% because we need to handle filenames that have special characters in it.
+I will describe the function [[charin()]] later in Section~\ref{sec:charin}.
+%
+Note that [[charin()]] does not just search for a set of character 
+in a string (here [[head]], the target). Indeed, [[charin()]] must
+also handle escaped characters, for instance, when the target name
+is put inside a quote as in [['myfile%has%weird%characters.doc']],
+in which case the target should not be considered a pattern.
+%
+For the rule attribute [[REGEXP]] used below, see Section~\ref{sec:regexp}.
 
 
 \subsubsection{One target with multiple rules, [[S_TARGET]]}
 
-% useful also for .depend? or different because here
-%  get multiple rules for same target? x.o: x.c   x.o: y.h
+It is useful, when building the graph of dependencies, to quickly
+know the rule associated to a specific target.
+%
+Thus, [[mk]] uses another namespace, [[S_TARGET]], to store
+such information in the symbol table.
 
-% used in addrule()
 <<[[Sxxx]] cases>>=
 S_TARGET,		/* target -> rules */ 
 @
-%old: rule -> rules
+%old: rule,  but really it is -> rules
 %ocaml: build hash in separate phase
 
-% can have multiple rules with the same target!
-% no need :: ? will get ambiguous rule?
-% but there will be a master rule. Other should have empty recipe.
+In fact, as I mentioned in Section~\ref{sec:master-rule}, [[mk]]
+allows the user to write multiple rules using the same target.
+%
+For instance, an [[mkfile]] can contain a {master rule} such as
+[[foo.5: foo.c ...]], and a [[.depend]] file included by this [[mkfile]]
+can contain another rule without any recipe but extra dependencies such as
+[[foo.5: foo.h bar.h]].
+\l need :: ? will get ambiguous rule?
+Thus, the symbol table and the namespace [[S_TARGET]] map a target
+to a set of rules chained together by an extra field in [[Rule]]:
 
 <<[[Rule]] extra fields>>=
 // list<ref<Rule>> (head = symlook(x, S_TARGET))
 struct Rule	*chain;		/* hashed per target */
 @
-% different than next! here in same list because same target.
-% for next in same list because same hashed name. 
-% And for next, it supports only one element. Here can
-% have set of hashed things. One target symbol, get multiple symbols.
-% (hashset)
+% FIGURE note that Rule.chain is different than Rule.next! And also Sym.next!
+% Here in same list because same target.
+% For Sym.next in same list because same hashed (name x namespace).
+% Can even have symbol in different namespace in the same bucket in Sym.next.
 
+Here is the code to update the symbol table when adding a rule:
 
 <<[[addrule()]] other locals>>=
+Symtab *sym;
 Rule *rr;
 @
-% sym local is above.
-
 <<[[addrule()]] indexing [[r]] by target in [[S_TARGET]]>>=
 if(!reuse){
     sym = symlook(head, S_TARGET, r);
     rr = sym->u.ptr;
-    if(rr != r){
+    if(rr != r){ // target had already a rule
         r->chain = rr->chain;
         rr->chain = r;
     } else 
         r->chain = nil;
-    r->next = nil;
 }
 @
 %old: rr = symlook(head, S_TARGET, r)->u.ptr;
- 
-% seen symlook before.
+
+Remember from Section~\ref{sec:symlook} that the last parameter
+of [[symlook()]], called [[install]] (and here set to the argument [[r]]),
+is used to initialize a new symbol if the symbol was not already
+in the symbol table.
+%
+Thus, if the test [[if (rr != r)]] above succeeds, this means
+a symbol was already there, in which case [[mk]] needs to add
+the rule [[r]] to the chain.
 
 
+The guard using the variable [[reuse]] above will be explained in the next
+section.
 
 
+\subsubsection{Overwriting a previous rule}
+\label{sec:overwrite-rule}
+
+[[mk]] allows to overwrite the recipe of a
+a rule when another rule uses exactly the same target and prerequistes.
+%
+This can be useful when a generic [[mkfile.generic]]
+defines some default targets and recipes, but the user wants to overwrite
+those defaults in his own [[mkfile]] (which can include [[mkfile.generic]]).
+\l could be done with variables, but true that sometimes difficult
+
+The code below detects whether a previous rule was using the
+same target and prerequistes, in which case [[mk]] needs to
+reuse and overwrite this previously allocated rule:
 
 <<[[addrule()]] other locals>>=
-Symtab *sym;
 bool reuse;
 @
-
-<<[[addrule()]] find if rule already exists>>=
+<<[[addrule()]] find if rule already exists, set reuse>>=
 reuse = false;
 if(sym = symlook(head, S_TARGET, nil)){
     for(r = sym->u.ptr; r; r = r->chain)
@@ -3322,12 +3369,10 @@ if(sym = symlook(head, S_TARGET, nil)){
         }
 }
 @
-\t why allows that? just return error? simpler.
-\t  anyway, was not guarding nrules plusplus with if(!reuse) so weird.
-\t but now S_TARGET is later ... so mv check later?
-\t or even simpler, let it go, it will be detected later by ambiguous()
+%ocaml: return a warning at least, but overwrite otherwise it will
+% be detected by ambiguous later.
+%ocaml: can have a :O: attribute clearly saying you overwrite! @override spirit.
 
-% rule compare, check if same target and same prerequistes
 <<function rcmp>>=
 static int
 rcmp(Rule *r, char *target, Word *tail)
@@ -3344,8 +3389,25 @@ rcmp(Rule *r, char *target, Word *tail)
 @
 \t strcmp sucks, use string_equal, and return bool that makes sense
 \t  so less rcmp(...) == 0, instead rule_equal(...)
-%bug? what about when different orders of prereqs? should compare as a set
-% anyway I think it's redundant with ambiguous rule check
+%bug? what about when different orders of prereqs? should compare as a set.
+% it will be detected as ambiguous then
+
+
+<<[[addrule()]] set more fields>>=
+if(!reuse){
+    r->next = nil;
+}
+@
+%old: was after the indexing of S_TARGET, but seems unrelated,
+% so I put it earlier, with the code to set misc fields.
+
+<<[[addrule()]] return if reuse, to not add the rule in a list>>=
+if(reuse)
+    return;
+@
+
+
+
 
 \subsubsection{One rule with multiple targets, [[addrules()]]}
 \label{sec:multi-targets}
@@ -3353,23 +3415,9 @@ rcmp(Rule *r, char *target, Word *tail)
 \n Also too much code doing stuff to support multiple targets.
 
 %trans:
-% finally multiple targets. As explained in Section X,
-% need remember in an arc, and so rule of an arc that
-% when update target , may update other nodes
-% useful for parser.ml parser.mli: parser.mly !
-
-<<[[Rule]] other fields>>=
-// ref<list<ref_own<string>>
-Word 		*alltargets;	/* all the targets */
-@
-% as in  gram.c gram.h: gram.y ...
-% (hmm but could be rewritten with 2 rules, it's just
-% that with mk the file would be possibly rebuilt two times!
-% because it could run the command in parallel!!!!
-%ocaml: merge with Rule.target, and make it a list instead of char*
-
-% Is there a few places where use Word* targets
-% where in most cases it should really be simply char* target; ??
+I can finally show the code to handle rules with multiple targets.
+%
+[[mk]] first adds separate rules for each target in the original rule:
 
 <<function addrules>>=
 void
@@ -3384,19 +3432,43 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
         addrule(w->s, tail, body, head, attr, hline, prog);
 }
 @
-% can have multiple target, so go through all of them
 \t head -> targets!! tail -> prereqs
+
+%trans: dup: overview/graph/
+However, as I mentioned in Section~\ref{sec:graph-many-to-one}, 
+the use of multiple targets in a rule has implications on the
+DFS traversal of the graph of dependencies.
+%
+[[mk]] needs to remember the other targets associated with a rule.
+This is why in addition to passing [[w-s]] above, [[addrules()]]
+passes also set the of targets in the third argument to [[addrule()]].
+%
+This argument is then stored in a special field in the rule:
+
+<<[[Rule]] other fields>>=
+// ref<list<ref_own<string>>
+Word 		*alltargets;	/* all the targets */
+@
+% as in  gram.c gram.h: gram.y ...
+% (hmm but could be rewritten with 2 rules, it's just
+% that with mk the file would be possibly rebuilt two times!
+% because it could run the command in parallel!!!!
+%ocaml: merge with Rule.target, and make it a list instead of char*
 
 <<[[addrule()]] set more fields>>=
 r->alltargets = ahead;
 @
 \t rename ahead -> alltargets
 
+% thus even if add a rule with one target (in Rule.target),
+% mk remembers other targets in the rule:
 
-% why target and alltargets? why not just have alltargets?
-% because we index per single target so in applyrules we can be
-% faster (but still slow on metarules)
+% Is there a few places where use Word* targets
+% where in most cases it should really be simply char* target; ??
 
+\l why target and alltargets? why not just have alltargets?
+\l because we index per single target so in applyrules we can be
+\l faster (but still slow on metarules)
 
 
 %\subsubsection{Extracting the first target}
@@ -3404,18 +3476,24 @@ r->alltargets = ahead;
 
 \section{Graph}
 
+%trans:
 % Rule and metarules are general static descriptions, patterns.
 % Node and Arc are concrete instantiation with existing files.
-% the actual graph of dependencies! nodes are target names usually filenames
-% arcs link nodes to other filenames with a rule attached to know what to do
 
-% it's really more a DAG than a graph; there should be no cycle
-% (see cycle check section)
-
-% FIGURE? where see deps go downward. prereqs.
-% tgt vs pre. parent vs child. src vs dest.
+The graph of dependencies is represented in [[mk]] essentially
+as a set of {nodes} linked together through pointers.
+%
+[[mk]] does not use a matrix or an array of adjacent lists
+to represent a graph; it just uses pointers.
 
 \subsection{[[Node]]}
+
+A node represents a file in the graph of dependencies.
+%
+As I mentioned in Section~\ref{sec:labeled-tree},
+a node is also {labeled} with the modification time of the file.
+That way, the DFS can find out-of-date files by comparing
+the [[Node.time]] field in different nodes.
 
 <<struct Node>>=
 struct Node
@@ -3424,18 +3502,17 @@ struct Node
     char*		name; 
     // option<Time> (None = 0, for nonexistent files and virtual targets)
     ulong		time; // last mtime of file 
-    // bitset<enum<Node_flag>>
-    ushort		flags;
 
     <<[[Node]] arcs field>>
+    <<[[Node]] other fields>>
 
     // Extra
     <<[[Node]] extra fields>>
 };
 @
-% the flags is often an inline of the union of the flags of the
-% rules linking to the prerequistes nodes
 \l name can also maybe be an archive member? like lib.a(foo.o) ?
+
+The function below builds a new node:
 
 %ctor. dtor = ?
 % main -> mk -> graph -> applyrules -> <>
@@ -3449,10 +3526,8 @@ newnode(char *name)
     <<[[newnode()]] update node cache>>
 
     node->name = name;
-
     // call to timeof()! 
     node->time = timeof(name, false);
-
     <<[[newnode()]] set flags of node>>
 
     node->prereqs = nil;
@@ -3461,25 +3536,50 @@ newnode(char *name)
     return node;
 }
 @
-% owning name after call! => call strdup in caller
+\n owning name after call! => call strdup in caller
 
 % pass false, cos ok to use cache. nothing has been generated so nothing
 %  can have invalidate the cache.
 \t rename false to USE_CACHE_IS_OK, vs FORCE_READ_NO_CACHE
+\l node cache? put now?
 
+A node is also labeled with a set of {\em node attributes}:
+\n seen rule attributes before
+
+<<[[Node]] other fields>>=
+// bitset<enum<Node_flag>>
+ushort		flags;
+@
 <<enum Node_flag>>=
 enum Node_flag {
     <<[[Node_flag]] cases>>
 };
 @
-% used to be a set of #define
+%old: used to be a set of #define
 
-%chunks: will see gradually. Mostly used during analysis of graph.
+The build status of a node ([[Made]], [[NotMade]], and [[BeingMade]]),
+which I mentioned in Section~\ref{sec:build-status}, 
+is stored in [[Node.flags]], as well
+as other information used for advanced features of [[mk]].
 
-% maybe put here MADE BEINGMADE etc. so make sense
-% to have link to set of Nodes in Job
+<<[[Node_flag]] cases>>=
+NOTMADE    = 0x0020,
+BEINGMADE  = 0x0040,
+MADE       = 0x0080,
+@
+%ocaml: should be different field than other node flags
+
+
+%chunks: 
+I will gradually describe the other {node attributes} in the following chapters.
+\l mostly used during analysis of graph.
+\l often also an inline of the union of the flags of the rule 
+\l  linking to the prerequistes nodes
 
 \subsection{[[Arc]]}
+
+A [[Node]] contains also a set of arcs where each arc
+contains a pointer to another node (a prerequiste):
 
 <<[[Node]] arcs field>>=
 // list<ref_own<Arc>> (next = Arc.next)
@@ -3488,7 +3588,6 @@ Arc		*prereqs;
 \t actually would be better to call it arcs, because 
 \l not always a prereq as for instance virtual rule have an arc
 \l from the target without any destination node
-
 
 <<struct Arc>>=
 struct Arc
@@ -3504,13 +3603,23 @@ struct Arc
     <<[[Arc]] extra fields>>
 };
 @
-% option Node? apparently some code is doing if(a->n) so ...
-%  have some fake arc for virtual targets and need arc to carry the rule
-%  (which contains the recipe)
-% option Rule? I dont think so, every call to newarc have a defined rule arg
-%ocaml: I think you just need the recipe and some flags of the rule.
+\n option Rule? I dont think so, every call to newarc have a defined rule arg
+%ocaml: I think you just need the recipe and some flags of the rule,
+% so separate rule vs rule_exec
 
-% seen Rule before.
+As I mentioned in Section~\ref{sec:labeled-tree}, an arc is labeled
+with a rule, hence the field [[Arc.r]] above.
+%
+Note that [[Arc.n]] can sometimes be [[nil]] when a rule does not have
+any prerequiste (for instance, because it is a virtual target,
+as explained in Section~\ref{sec:virtual}). In that case,
+we still want the node corresponding to the target of the rule
+to be connected to a rule, especially its recipe.
+%alt: could have rule in Node, actually master rule in Node.
+\l seen Rule before.
+
+The head of the list of arcs of a node is stored in [[Node.arcs]],
+and the arcs are chained together with the following field:
 
 <<[[Arc]] extra fields>>=
 // list<ref_own<arc> (head = Node.prereqs)
@@ -3518,20 +3627,32 @@ struct Arc	*next;
 @
 
 
-
-% node   arc   rule   relations?
+Some nodes and arcs are derived from meta rules. 
+For instance, in Figure~\ref{fig:graph-hello},
+the nodes [[hello.5]] and [[hello.c]] could come from
+a meta rule such as [[%.5: %.c ...]].
+%
+In that case, [[mk]] needs to remember in the arc 
+connecting [[hello.5]] to [[hello.c]] the {stem}
+that was used to instantiate the meta rule (here [[hello]]):
 
 % so can set $stem for the actual value for the recipe to run
 <<[[Arc]] other fields>>=
 // option<ref_own<string>>, what will replace the %
 char		*stem;
 @
-% why need that? Node.name is not expanded already?
+\l why need that? Node.name is not expanded already?
 %  yes, in graph, but in recipe still need to set dollar stem in env
-% here not in Rule because Rule is generic template; Here it is instantiated.
+\l here not in Rule because Rule is generic template; Here it is instantiated.
 % Also used because in dorecipe we also use alltargets, which is not
 %  expanded.
 %ocaml: do a rule_exec containing all necessary information
+
+The function below builds a new arc to connect 
+to a node [[n]], with the rule [[r]], possibly instantiated
+with the stem [[stem]] if the rule was a meta rule
+(the last parameter [[match]] is used for regexp rules,
+as explained in Section~\ref{sec:regexp}):
 
 % ctor.  dtor = ?
 % main -> mk -> graph -> applyrules -> <>
@@ -3559,8 +3680,17 @@ newarc(Node *n, Rule *r, char *stem, Resub *match)
 
 \section{[[Job]] and [[jobs]]}
 
-% final piece.
-% reference rule, node (so Arc) (and Word but less important)
+%trans:
+Finally, the last core data structure of [[mk]] is the
+%
+description of a job.
+%
+As I mentioned in Section~\ref{sec:job}, a job must contain
+all the information needed to run a recipe and update
+the graph of dependencies: a rule (and its recipe), 
+a list of nodes to update, and the value of special
+variables such as [[$target]], [[$prereq]], or
+[[$stem]]:
 
 <<struct Job>>=
 struct Job
@@ -3574,6 +3704,8 @@ struct Job
     // $target and $prereq
     Word		*t;	/* targets */
     Word		*p;	/* prerequisites */
+    // $stem
+    char		*stem;
 
     <<[[Job]] other fields>>
 
@@ -3582,19 +3714,22 @@ struct Job
 };
 @
 %ocaml: I think you just need the recipe and some flags of the rule.
-%  also why need targets? info is already in node. To ease envupd?
+\l why need targets? info is already in node. To ease envupd?
 \l why so short field names suddenly? avoid confusion with the one in Rule? meh
+
+
+% reference rule, node (so Arc) (and Word but less important)
 
 % have list of nodes because finishing a job will modify
 % the graph! put some MADE
 
 % targets! prerequisites! plural!
 
-<<[[Job]] other fields>>=
-char		*stem;
-@
 % stem again? propagated from Arc? to pass to shell for dollar stem setting
 %ocaml: factorize in rule_exec
+
+The list of target nodes of a job are chained together through
+an extra field in [[Node]]:
 
 <<[[Node]] extra fields>>=
 // list<ref<Node>> (head = Job.n)
@@ -3604,6 +3739,7 @@ struct Node	*next;		/* list for a rule */
 %  will need to mark as done multiple files (and check they are there)
 % usually have set of nodes via Arc, but here, no need target (parent) node.
 
+The function below builds a new job:
 
 % ctor
 <<constructor newjob>>=
@@ -3633,11 +3769,15 @@ newjob(Rule *r, Node *nlist, char *stem, char **match,
 %old: tar -> targets
 \t rename fields, aspectize setting certain fields
 
+
+This job can then be added in the job queue stored in the
+global [[jobs]]:
+
 <<global jobs>>=
-// list<ref_won<jobs>> (next = Job.next)
+// list<ref_own<jobs>> (next = Job.next)
 Job *jobs;
 @
-% here cos used by mk(). Cant delayed. 
+\n here cos used by mk(). Cant delayed.
 \t actually aspectized now, so maybe could delay? or maybe useful
 \t  to know there is a list of jobs
 %ocaml: not sure you need a global, can be a local in run.ml?
@@ -4378,6 +4518,7 @@ if(*w->s == '\0' && sep != '<' && sep != '|') {
 @
 
 \subsubsection{Skipping quotes and variables, [[charin()]]}
+\label{sec:charin}
 % part 2
 
 % redo a bit some of the lexing work done in assline, sad.
@@ -4506,6 +4647,7 @@ if(vargen){
 % pattern, meh
 
 \subsection{Splitting a string in words, [[stow()]]}
+\label{sec:expand-vars}
 
 % so used for target, prereqs, but also varname, var defs.
 
@@ -6068,11 +6210,11 @@ attribute(Node *n)
 
 \section{[[mk()]]}
 
-<<[[Node_flag]] cases>>=
-NOTMADE    = 0x0020,
-BEINGMADE  = 0x0040,
-MADE       = 0x0080,
-@
+%<<[[Node_flag]] cases>>=
+%NOTMADE    = 0x0020,
+%BEINGMADE  = 0x0040,
+%MADE       = 0x0080,
+%@
 %ocaml: should be different field than other node flags
 
 % NOTMADE initially (see clrmade())
@@ -7135,6 +7277,8 @@ update(bool fake, Node *node)
 % pass true to outofdate here!!
 % pass true to timeof, to force, to not use the cache because indeed
 %  time probably changed
+% what if it did not change? return an error? No! it can happen legitimely
+%  in some cases, like when do x.tab.h: y.tab.h (see plan9/shell/rc/mkfile).
 % why set time to 1 for virtual node? just to be different than None
 %  and then anway later take latest time of one of the prereq
 \t but then what if no prereq? then time is 1. important?
@@ -8754,6 +8898,7 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 \section{Advanced rule attributes}
 
 \subsection{Virtual target, [[:V:]]}
+\label{sec:virtual}
 %real-world: .PHONY
 
 % this is useful
