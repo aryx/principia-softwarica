@@ -74,8 +74,8 @@
 % - LP split the structures, use datalog for flow to field info
 % - nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
 % - aspecify advanced features! remove useless features
-% - TODO add figures
-% - TODO add explanations
+% - SEMI add figures
+% - SEMI add explanations
 
 %------------------------------------------------------------------------------
 % Packages
@@ -258,7 +258,7 @@ How can you visualize the dependencies?
 
 \item How does the build system run different tasks in parallel, and 
 how does it coordinate them? How do you write a simple job scheduler?
-\t how achieve efficiency? incremental? more? can paralell? how know when safe?
+\t how achieve efficiency? incremental? more? can parallel? how know when safe?
 
 \end{itemize}
 
@@ -548,7 +548,7 @@ Homebrew~\furl{http://brew.sh/} for macOS),
 % - pmake, freebsd https://www.freebsd.org/doc/en_US.ISO8859-1/books/pmake/
 %   parallel make
 % - nmake (replaced by msbuild later)
-% - dmake, etc
+% - dmake
 % - omake, apparently has listen-to-fs features too, so daemon
 %   and rerun when save in editor?
 %   http://blog.camlcity.org/blog/omake1.html
@@ -576,7 +576,7 @@ Homebrew~\furl{http://brew.sh/} for macOS),
 % - automake and autotools (for GNU)
 % - gyp, from Google, python-inspired, simple, 28~000 LOC
 %   support many backends (make, cmake, ninja, eclipse, xcode, ...),
-%   fbmake is similar to gyp
+% - fbmake, very similar to gyp
 %wrappers:
 % - qake, just a big makefile, so relies on GNU make
 % - OCamlMakefile
@@ -2826,6 +2826,7 @@ I will also gradually describe more namespaces.
 [[myenv]] is used to initialize entries in the symbol table
 in [[initenv()]] called from [[main()]]:
 
+\label{sec:initenv}
 % main -> <>
 <<function initenv>>=
 void
@@ -3801,14 +3802,16 @@ struct Job	*next;
 \chapter{[[main()]]}
 \label{chap:main}
 
-\ifallcode
-<<[[main()]] locals>>=
-Word *w;
-char *s;
-int i;
-@
-\fi
-\t distribute
+%toc: %dup: (and adapted) from Assembler.nw %trans:
+I now switch to a top-down approach;
+%
+I will describe the main functions of [[mk]], starting in this chapter 
+with [[main()]], the entry point of [[mk]].
+
+\section{[[main()]] skeleton]]}
+
+The main components of the building pipeline are illustrated in the
+[[main()]] skeleton below:
 
 <<function main>>=
 void
@@ -3820,14 +3823,14 @@ main(int argc, char **argv)
 
     <<[[main()]] initializations>>
 
-    // Parsing
+    // Parsing the mkfile
 
     <<[[main()]] parsing mkfile, call [[parse()]]>>
 
-    // Building
+    // Building the graph, finding outofdate files
 
     <<[[main()]] initializations before building>>
-    <<[[main()]] building the targets, call [[mk()]]>>
+    <<[[main()]] setting the targets, call [[mk()]]>>
 
     // Reporting (optional)
 
@@ -3839,20 +3842,38 @@ main(int argc, char **argv)
 }
 @
 
+%trans:
+The next chapters will detail those different components.
+%toc:
+In this chapter I will focus mostly on the initializations
+and the processing of command-line arguments.
 
-
+An important global set by [[main()]] is [[bout]]:
 
 <<global bout>>=
 Biobuf bout;
 @
-% use of libbio quite a lot. Buffered IO module. For output and input.
-%  compared to scanf/printf? 
-% used in mk for printing on stdout. No big win vs printf I think.
-%  actually use fprintf(STDERR,) for other stuff
 %ocaml: stdlib already buffer output
+
+[[mk]] uses this global to print message to the user (errors, job progress,
+profiling information, etc). 
+[[bout]] is a buffer connected to the standard output:
 
 <<[[main()]] initializations>>=
 Binit(&bout, STDOUT, OWRITE);
+@
+
+[[Biobuf]], the type of  [[bout]], is a data structure defined
+in the [[libbio]] (for buffered IO) library, which
+extends the C library (see the \book{Libcore}).
+\l  compared to scanf/printf? No big win vs printf I think.
+\l  actually use fprintf(STDERR,) for other stuff
+
+
+[[mk]] processes the command-line arguments in three steps,
+as explained in the following sections.
+
+<<[[main()]] initializations>>=
 <<[[main()]] argv processing part 1, -xxx>>
 <<[[main()]] setup profiling>>
 initenv();
@@ -3864,9 +3885,7 @@ initenv();
 %old: 
 % - the processing part 3 was before catchnotes() before but I think better here
 % - calls to second usage was earlier
-
 %dead: syminit();
-
 
 %/*
 % *  start with a copy of the current environment variables
@@ -3874,13 +3893,17 @@ initenv();
 % */
 \t for execinit?? for initenv/
 
-
-
-
+As I explained in Section~\ref{sec:initenv}, [[initenv()]] called above
+initializes certain variables in the symbol table and {imports}
+variables from the environment in the symbol table (e.g., [[$objtype]],
+[[$HOME]]).
+%$
 
 \section{[[mk -]]{\em flag} arguments processing}
 
-% use for -f, or debug flags.
+%trans:
+The first step in the processing of command-line arguments
+is an iteration over [[argv]]:
 
 <<[[main()]] argv processing part 1, -xxx>>=
 USED(argc);
@@ -3897,35 +3920,54 @@ for(argv++; *argv && (**argv == '-'); argv++)
 @
 %ocaml: use Arg module
 
+This iteration looks for command-line arguments prefixed by [[-]]
+(e.g., [[-f]]).
+\l or debug flags.
 %chunks:
-% will see gradually -xxx
-
-% note that modify argv!
+I will gradually described the cases of the [[switch]] above 
+in the following chapters.
+\l note that modify argv!
+\l also special code for buf? explained later
 
 \section{[[mk ]]{\em var}[[=]]{\em values} arguments processing}
 
-% mk CC=6c default => override
+%trans:
+The second step in the processing of command-line arguments
+is also an iteration over [[argv]], but this time looking
+for arguments containing an equal sign.
+%
+Indeed, [[mk]] allows the user to overwrite variables defined
+in the [[mkfile]] by adding a command-line argument
+in the form [[x=y]] before the target, as in [[mk objtype=arm all]].
 
-% done by writing variable in temporary file and reusing
-%  machinery in parse()
+
+Because the parser of [[mkfile]] I will describe in Chapter~\ref{chap:parsing}
+contains already code to process variable definitions, [[mk]]
+reuses this code to deal with command-line definitions.
+%
+Indeed, after storing those definitions in a temporary file, [[mk]] can
+then simply call [[parse()]] on this temporary file to load those definitions.
+%
+The temporary file is first 
+a filename ([[temp]]), then 
+a file descriptor ([[tfd]]) once opened, and finally 
+an output buffer ([[tb]]) once initialized:
 
 <<[[main()]] locals>>=
+int i;
 char *temp = nil;
 fdt tfd = -1;
 Biobuf tb;
 @
 
 <<[[main()]] argv processing part 2, xxx=yyy>>=
-/*
- *   assignment args become null strings
- */
 for(i = 0; argv[i]; i++) 
   if(utfrune(argv[i], '=')){
     <<[[main()]] add [[argv[i]]] in [[buf]]>>
 
-    <<[[main()]] create temporary file if not exist yet>>
+    <<[[main()]] create temporary file if not exist yet and set [[tb]]>>
     Bprint(&tb, "%s\n", argv[i]);
-    *argv[i] = '\0';
+    <<[[main()]] mark [[argv[i]] for skipping>>
   }
 
 if(tfd >= 0){
@@ -3939,9 +3981,16 @@ if(tfd >= 0){
 %  so those variables will be marked specially S_OVERRIDE
 %old: seek() used to be LSEEK() a macro expanding ultimately to seek
 
-% replace those argv by \0, used later.
+[[utfrune()]] above is a function to look for a certain character
+in a string. This string can contain unicode characters
+(see the \book{Libcore} for more information on unicode and [[utfrune()]]).
+%
+The last argument to [[parse()]] above is a boolean indicating
+whether [[parse()]] should accept definitions overwriting
+previous definitions. Obviously, here [[true]] is passed to [[parse()]].
 
-<<[[main()]] create temporary file if not exist yet>>=
+
+<<[[main()]] create temporary file if not exist yet and set [[tb]]>>=
 if(tfd < 0){
     temp = maketmp();
     if(temp == nil) {
@@ -3958,6 +4007,16 @@ if(tfd < 0){
 @
 \l perror?
 
+The last step in the processing of command-line arguments
+is to skip variable definitions:
+
+<<[[main()]] mark [[argv[i]] for skipping>>=
+/*
+ *   assignment args become null strings
+ */
+*argv[i] = '\0';
+@
+
 <<[[main()]] argv processing part 3, skip xxx=yyy>>=
 /* skip assignment args */
 while(*argv && (**argv == '\0'))
@@ -3966,7 +4025,14 @@ while(*argv && (**argv == '\0'))
 % but what if mix target and assignments? then will get an error?
 \t test it  mk XX=1 default YY=2,  get good error message?
 
+\t why need that?
+
+
 \section{Parsing the [[mkfile]] or [[mk -f]]{\em file}}
+
+%trans:
+% I described before in Section X the use of -f to change
+% the default file used by [[mk]].
 
 \t simplify code? remove multi -f, who needs that?
 
@@ -4004,15 +4070,19 @@ if(f == files){
 %bug? if mkfile not there, no error? it displays "mk: nothing to mk"
 % because target will be empty
 
-% will modify rules, metarules,
+% parse will process mkfile and modify rules, metarules, and other globals.
 
 
 \section{Building the target(s)}
 
-% parse(), so modified globals rules, metarules.
-% just need to initiate with target passed as argument (or use default one)
+%trans:
+% once parse() process mkfile and modified globals rules, metarules,
+% mk is ready to build a target.
+%toc:
+% there are multiple ways to specify the target to build and how
+% to build it as explained in the following sections.
 
-<<[[main()]] building the targets, call [[mk()]]>>=
+<<[[main()]] setting the targets, call [[mk()]]>>=
 if(*argv == nil){
     <<[[main()]] when no target arguments>>
 } else {
@@ -4025,6 +4095,10 @@ if(*argv == nil){
 
 \subsection{Default target, [[target1]]}
 
+% As I mentioned in Section X, if no target on command line,
+% mk use the target of the first simple rule found in mkfile as default target.
+% This default target is stored in the following global:
+
 <<global target1>>=
 Word *target1;
 @
@@ -4034,7 +4108,13 @@ Word *target1;
 \t should be a single word (but consistent to use Word), change to char*?
 \l  or first rule can contain multiple targets
 
+% Section X contains the code in parse() modifying this global.
+% if target1 was set, and no target argument, then build
+% this target by calling [[mk]]:
 
+<<[[main()]] locals>>=
+Word *w;
+@
 <<[[main()]] when no target arguments>>=
 if(target1)
     for(w = target1; w; w = w->next)
@@ -4046,10 +4126,18 @@ else {
 }
 @
 
+% Note that first simple rule can contain multiple targets, which
+% is why code above iterate over the list of words in [[target1]].
 % will see later that Exit is special, but here could be just exits I think.
-
+ 
 
 \subsection{Sequential mode}
+
+%trans:
+% The second way to build a target or multiple targets is to
+% specify the set of targets on the command line.
+%mk supports a special flag [[-s]], for sequential mode, 
+% to build in sequence those targets:
 
 % sequential not parallel command line arguments
 <<[[main()]] locals>>=
@@ -4069,11 +4157,20 @@ if(sflag){
             mk(*argv);
 }
 @
-% but actually for that target it will do things in parallel.
+
+\l but actually for that target it will do things in parallel.
 % (unless you put nproclimit to 1), so maybe not that useful.
 \l put in advanced feature?
 
 \subsection{Parallel mode}
+
+%trans:
+% the last way to build one or more targets is to specify
+% them on the command line without -s flag. In that case
+% targets will be built in parallel.
+% To do so, mk simply creates a new artificial rule
+% with the command-line targets as the prerequistes of the rule
+% and with an artificial string for its target:
 
 <<[[main()]] parallel mode and target arguments given>>=
 Word *head, *tail;
@@ -4106,8 +4203,13 @@ else {
 \l confusing that tail is actually the head of the prereqs
 \t tail -> prereqs, t -> eprereqs, head -> targets
 
-% VIR for virtual because target does not exist, and so ok
+% VIR argument for virtual because target does not exist, and so ok
 %  if after recipe not there. Do not generate warning.
+% (see Section X for more information on virtual targets).
+
+% the last two arguments are line and file location of the rule,
+% used for error reporting. Here because articial rule created by mk,
+% file set to nil.
 % mkinline, meh. could pass -1 or 0.
 
 
@@ -6247,7 +6349,7 @@ mk(char *target)
     <<[[mk()]] initialisation>>
 
     root = graph(target);
-    <<[[main()]] if DEBUG(D_GRAPH)>>
+    <<[[mk()]] if DEBUG(D_GRAPH)>>
     clrmade(root);
 
     while(root->flags&NOTMADE){
@@ -6261,7 +6363,7 @@ mk(char *target)
     if(root->flags&BEINGMADE)
         waitup(-1, (int *)nil);
 
-    <<[[main()]] before returning, more [[waitup()]] if there was an error>>
+    <<[[mk()]] before returning, more [[waitup()]] if there was an error>>
     if(!did)
         Bprint(&bout, "mk: '%s' is up to date\n", root->name);
     return;
@@ -7451,7 +7553,7 @@ if(res > 0){
 \t res == WEmptyChild ?
 
 % subtle
-<<[[main()]] before returning, more [[waitup()]] if there was an error>>=
+<<[[mk()]] before returning, more [[waitup()]] if there was an error>>=
 while(jobs)
     waitup(-2, (int *)nil);
 
@@ -10137,7 +10239,9 @@ int debug;
 #define	DEBUG(x)	(debug&(x))
 @
 
-
+<<[[main()]] locals>>=
+char *s;
+@
 <<[[main()]] -xxx switch cases>>=
 case 'd':
     if(*(s = &argv[0][2]))
