@@ -19,9 +19,9 @@
 %    dead fields (Job.nproc)
 %    TODO useless code (head.n=node, ...)
 % - cleaned up code:
-%    TODO renamed variables, was abusing head/tail for too many things 
+%    SEMI renamed variables, was abusing head/tail for too many things 
 %    (target vs prerequisites, but also head vs tail of lists of arcs, 
-%    head and tail of rule/assignement, ...)
+%    head and tail of rule/assignement, tail for last word, ...)
 % - reorganized the files (removed arc.c, job.c, introduced dumpers.c, mv
 %    around a few functions)
 
@@ -273,6 +273,7 @@ how does it coordinate them? How do you write a simple job scheduler?
 
 
 %tags used in this file for different recurring themes:
+ %compiler: similar techno found in compiler (or assembler, or cpp)
  %
  %real-world: to relate to other build system
  %ocaml: to give a hint on how rewriting C in OCaml could improve things
@@ -924,6 +925,7 @@ hello: hello.5 world.5
     5l -o hello hello.5 world.5
 @
 \n would be better to have hello first rule so that default rule but ok.
+\l use of comment here
 
 The rules are usually stored in a special {\em configuration file}:
 an [[mkfile]] for [[mk]] (and a [[Makefile]] for Make).
@@ -941,7 +943,7 @@ for instance, [[hello.5]] in respectively the first and third rule.
 
 
 The syntax of an [[mkfile]] is very similar to the syntax of a shell script.
-\l Syntax for comment, same as shell, again.
+\t Syntax for comment, same as shell, again.
 \l could be extracted automatically ... except hello.5 not visible from 
 \l  5c command, would need -o hello.5 then.
 The only syntactical addition is the use of [[":"]] to separate the target from
@@ -2027,6 +2029,7 @@ to run in parallel.
 %trans: ?
 
 \section{[[mk]] command-line interface}
+\label{sec:mk-interface}
 
 The command-line interface of [[mk]] is very simple: just go
 in a directory and type [[mk]]\footnote{
@@ -2697,7 +2700,7 @@ h %= NHASH;
 
 
 If the key is not found and the install parameter is not
-nil, [[lookup()]] creates a new symbol:
+[[nil]], [[lookup()]] creates a new symbol:
 
 
 <<[[lookup()]] if symbol not found>>=
@@ -3268,10 +3271,11 @@ I will describe the function [[charin()]] later in Section~\ref{sec:charin}.
 %
 Note that [[charin()]] does not just search for a set of character 
 in a string (here [[head]], the target). Indeed, [[charin()]] must
-also handle escaped characters, for instance, when the target name
+also handle {escaped characters}, for instance, when the target name
 is put inside a quote as in [['myfile%has%weird%characters.doc']],
 in which case the target should not be considered a pattern.
-%
+
+
 For the rule attribute [[REGEXP]] used below, see Section~\ref{sec:regexp}.
 
 
@@ -3487,6 +3491,9 @@ as a set of {nodes} linked together through pointers.
 [[mk]] does not use a matrix or an array of adjacent lists
 to represent a graph; it just uses pointers.
 
+%toc: 
+\l nodes and arcs, toc
+
 \subsection{[[Node]]}
 
 A node represents a file in the graph of dependencies.
@@ -3639,7 +3646,7 @@ that was used to instantiate the meta rule (here [[hello]]):
 
 % so can set $stem for the actual value for the recipe to run
 <<[[Arc]] other fields>>=
-// option<ref_own<string>>, what will replace the %
+// option<ref_own<string>>, what '%' matched?
 char		*stem;
 @
 \l why need that? Node.name is not expanded already?
@@ -3803,12 +3810,12 @@ struct Job	*next;
 \label{chap:main}
 
 %toc: %dup: (and adapted) from Assembler.nw %trans:
-I now switch to a top-down approach;
-%
+I now switch to a top-down approach
+where
 I will describe the main functions of [[mk]], starting in this chapter 
 with [[main()]], the entry point of [[mk]].
 
-\section{[[main()]] skeleton]]}
+\section{[[main()]] skeleton}
 
 The main components of the building pipeline are illustrated in the
 [[main()]] skeleton below:
@@ -3827,7 +3834,7 @@ main(int argc, char **argv)
 
     <<[[main()]] parsing mkfile, call [[parse()]]>>
 
-    // Building the graph, finding outofdate files
+    // Building the graph, finding out-of-date files
 
     <<[[main()]] initializations before building>>
     <<[[main()]] setting the targets, call [[mk()]]>>
@@ -3845,7 +3852,7 @@ main(int argc, char **argv)
 %trans:
 The next chapters will detail those different components.
 %toc:
-In this chapter I will focus mostly on the initializations
+In this chapter, I will focus mostly on the initializations
 and the processing of command-line arguments.
 
 An important global set by [[main()]] is [[bout]]:
@@ -3871,7 +3878,7 @@ extends the C library (see the \book{Libcore}).
 
 
 [[mk]] processes the command-line arguments in three steps,
-as explained in the following sections.
+as hinted in the code below, and as explained in the following sections.
 
 <<[[main()]] initializations>>=
 <<[[main()]] argv processing part 1, -xxx>>
@@ -3886,6 +3893,7 @@ initenv();
 % - the processing part 3 was before catchnotes() before but I think better here
 % - calls to second usage was earlier
 %dead: syminit();
+\l also profiling stuff and recursive mk, explained later.
 
 %/*
 % *  start with a copy of the current environment variables
@@ -3947,7 +3955,8 @@ reuses this code to deal with command-line definitions.
 %
 Indeed, after storing those definitions in a temporary file, [[mk]] can
 then simply call [[parse()]] on this temporary file to load those definitions.
-%
+
+
 The temporary file is first 
 a filename ([[temp]]), then 
 a file descriptor ([[tfd]]) once opened, and finally 
@@ -3981,10 +3990,11 @@ if(tfd >= 0){
 %  so those variables will be marked specially S_OVERRIDE
 %old: seek() used to be LSEEK() a macro expanding ultimately to seek
 
-[[utfrune()]] above is a function to look for a certain character
+[[utfrune()]] called above is a function looking for a certain character
 in a string. This string can contain unicode characters
 (see the \book{Libcore} for more information on unicode and [[utfrune()]]).
-%
+
+
 The last argument to [[parse()]] above is a boolean indicating
 whether [[parse()]] should accept definitions overwriting
 previous definitions. Obviously, here [[true]] is passed to [[parse()]].
@@ -4025,62 +4035,75 @@ while(*argv && (**argv == '\0'))
 % but what if mix target and assignments? then will get an error?
 \t test it  mk XX=1 default YY=2,  get good error message?
 
-\t why need that?
+Once mk has cleaned up [[argv]], the strings remaining
+in [[argv]] are the targets the user wants to build.
 
 
 \section{Parsing the [[mkfile]] or [[mk -f]]{\em file}}
 
 %trans:
-% I described before in Section X the use of -f to change
-% the default file used by [[mk]].
-
-\t simplify code? remove multi -f, who needs that?
+I described before in Section~\ref{sec:getting-started}
+the use of [[-f]] to change the default file used by [[mk]]:
 
 <<[[main()]] locals>>=
-char *files[256];
-char **f = files;
+char *f = nil;
 @
 % can have more than one file? can use multiple -f, but meh.
+%old: char *files[256];
+%old: char **f = files;
 %ocaml: one -f is enough
 
 <<[[main()]] -xxx switch cases>>=
 case 'f':
     if(*++argv == nil)
         badusage();
-    *f++ = *argv;
+    f = *argv;
     <<[[main()]] add [[argv[0]]] in [[buf]]>>
     break;
 @
 % saw -xxx processing before.
+%old:    *f++ = *argv;
+%old: <<[[main()]] locals>>=
+%old: char **ff;
+%old: @
 
-<<[[main()]] locals>>=
-char **ff;
-@
 
 <<[[main()]] parsing mkfile, call [[parse()]]>>=
-if(f == files){
+if(f == nil){
     if(access(MKFILE, AREAD) == OK_0)
         parse(MKFILE, open(MKFILE, OREAD), false);
 } else
-    for(ff = files; ff < f; ff++)
-        parse(*ff, open(*ff, OREAD), false);
+    parse(f, open(f, OREAD), false);
 <<[[main()]] if DEBUG(D_PARSE)>>
 @
 %old: use AREAD and OREAD instead of 4 and 0 argument
+%old:
+%  if(f == files){
+%      if(access(MKFILE, AREAD) == OK_0)
+%          parse(MKFILE, open(MKFILE, OREAD), false);
+%  } else
+%      for(ff = files; ff < f; ff++)
+%          parse(*ff, open(*ff, OREAD), false);
+
 %bug? if mkfile not there, no error? it displays "mk: nothing to mk"
 % because target will be empty
 
-% parse will process mkfile and modify rules, metarules, and other globals.
-
+The [[parse()]] function called above will process the [[mkfile]]
+(or another file if [[-f]] was used), modify the globals
+[[rules]] and [[metarules]] as well as other globals.
+%
+Note that this time [[false]] is passed to [[parse()]], so overwriting
+variable definitions is forbidden.
+\l is it actually? or it is just not processed and silently passed over?
 
 \section{Building the target(s)}
 
 %trans:
-% once parse() process mkfile and modified globals rules, metarules,
-% mk is ready to build a target.
+Once [[parse()]] processed the [[mkfile]] and modified some globals,
+[[mk]] is ready to build a target.
 %toc:
-% there are multiple ways to specify the target to build and how
-% to build it as explained in the following sections.
+There are multiple ways to specify the target to build and how
+to build it, as explained in the following sections.
 
 <<[[main()]] setting the targets, call [[mk()]]>>=
 if(*argv == nil){
@@ -4095,22 +4118,24 @@ if(*argv == nil){
 
 \subsection{Default target, [[target1]]}
 
-% As I mentioned in Section X, if no target on command line,
-% mk use the target of the first simple rule found in mkfile as default target.
-% This default target is stored in the following global:
+%dup: overview/interface overview/soft-archi
+As I mentioned in Section~\ref{sec:mk-interface}, 
+if the user did not specify any target on the command-line,
+[[mk]] uses the target of the first simple rule found 
+in the [[mkfile]] as the default target.
+%
+This default target is stored in the following global:
 
 <<global target1>>=
 Word *target1;
 @
+\l e.g. 'all, 
 
-% e.g. 'all, 
-% should be initialized while parsing with the first rule added
-\t should be a single word (but consistent to use Word), change to char*?
-\l  or first rule can contain multiple targets
-
-% Section X contains the code in parse() modifying this global.
-% if target1 was set, and no target argument, then build
-% this target by calling [[mk]]:
+Section~\ref{sec:set-target1} contains the code in [[parse()]]
+modifying [[target1]].
+%
+If [[target1]] was set, and the user did not provide a target
+on the command-line, then [[mk]] builds this target by calling [[mk()]]:
 
 <<[[main()]] locals>>=
 Word *w;
@@ -4126,18 +4151,20 @@ else {
 }
 @
 
-% Note that first simple rule can contain multiple targets, which
-% is why code above iterate over the list of words in [[target1]].
+Note that first simple rule can contain multiple targets, which
+is why the code above iterate over the list of words in [[target1]].
+\l The function [[Exit]] called above is
 % will see later that Exit is special, but here could be just exits I think.
- 
+\n actually you could call exit here 
 
 \subsection{Sequential mode}
 
 %trans:
-% The second way to build a target or multiple targets is to
-% specify the set of targets on the command line.
-%mk supports a special flag [[-s]], for sequential mode, 
-% to build in sequence those targets:
+The second way to build a target, or multiple targets, is 
+to specify a set of targets on the command-line.
+%
+Moreover, [[mk]] supports a special flag, [[-s]] (for sequential mode),
+to build in sequence those targets:
 
 % sequential not parallel command line arguments
 <<[[main()]] locals>>=
@@ -4149,6 +4176,7 @@ case 's':
     sflag = true;
     break;
 @
+\t why do you want that? to debug?
 
 <<[[main()]] if sequential mode and target arguments given>>=
 if(sflag){
@@ -4157,7 +4185,6 @@ if(sflag){
             mk(*argv);
 }
 @
-
 \l but actually for that target it will do things in parallel.
 % (unless you put nproclimit to 1), so maybe not that useful.
 \l put in advanced feature?
@@ -4165,12 +4192,17 @@ if(sflag){
 \subsection{Parallel mode}
 
 %trans:
-% the last way to build one or more targets is to specify
-% them on the command line without -s flag. In that case
-% targets will be built in parallel.
-% To do so, mk simply creates a new artificial rule
-% with the command-line targets as the prerequistes of the rule
-% and with an artificial string for its target:
+The last way to build one or more targets is to specify
+them on the command-line without the  [[-s]] flag. 
+%
+In that case, [[mk]] builds the targets in parallel.
+%
+To do so, [[mk]] creates a new rule
+with the command-line targets as the prerequistes of the new rule,
+and an arbitrary string for its target.
+%
+[[mk]] then calls [[mk()]] with this arbitrary string, which will
+engage the DFS and machinery to build its prerequistes in parallel.
 
 <<[[main()]] parallel mode and target arguments given>>=
 Word *head, *tail;
@@ -4198,64 +4230,105 @@ else {
     mk(head->s);
 }
 @
-% could pass 0 instead of mkinline I think
-% why not call addrule() directly? why addrules? because addrules set target1
+\l why not call addrule() directly? why addrules? because addrules set target1
 \l confusing that tail is actually the head of the prereqs
 \t tail -> prereqs, t -> eprereqs, head -> targets
 
-% VIR argument for virtual because target does not exist, and so ok
-%  if after recipe not there. Do not generate warning.
-% (see Section X for more information on virtual targets).
+You can see a few functions I described in Chapter~\ref{chap:core-ds}
+such as [[newword()]] and [[addrules()]]. I will describe [[mk()]],
+the most important function of [[mk]], in Chapter~\ref{chap:finding-outdated}.
 
-% the last two arguments are line and file location of the rule,
-% used for error reporting. Here because articial rule created by mk,
-% file set to nil.
-% mkinline, meh. could pass -1 or 0.
+The [[VIR]] argument above indicates that the target is a 
+{\em virtual target}. [[VIR]] is a rule attribute I will
+explain fully in Section~\ref{sec:virtual}.
+The arbitrary string is a virtual target because it does not correspond
+to a file. It is ok if the target does not exist after the recipe has run.
+%
+%Virtual targets are often used for cleaning targets such as [[mk clean]]
+%which ...
+
+The last two arguments to [[addrules()]] above
+are the line and file location of the rule. This is used
+for error reporting. Here, because this rule was created artificially
+by [[mk]], the file location is set to [[nil]].
+\l mkinline, meh. could pass -1 or 0.
+\l could pass 0 instead of mkinline I think
 
 
 
 
 \chapter{Parsing the [[mkfile]]}
 \label{chap:parsing}
-\l Parsing Rules and Variables
 
-% parse() will modify rules, metarules (patrules), target1.
+%trans:
+Now that you have seen [[main()]], I can explain
+the different components in the building pipeline,
+starting in this chapter with the parsing functions.
+
+%dup?
+I mentioned before [[parse()]], which 
+takes a path to an [[mkfile]] as an argument, 
+parses this [[mkfile]] to identify rules, meta rules, and definitions, and 
+stores those entities in different globals
+([[rules]], [[metarules]], and the symbol table [[hash]]).
+\n also patrules and target1 (said later)
 %ocaml: return those instead of modifying globals
+%toc:
+[[parse()]] is a complex function that relies on many other
+functions to 
+scan a file,
+identify rules,
+expand variables,
+process included files,
+or define variables,
+as explained in the following sections.
 
-% mk has a very particular way to parse. 
-% Partly because mimimal-syntax.
+\l mk has a very particular way to parse. Partly because mimimal-syntax.
 % But maybe grew out with more escaping rules and in the end it's
 % a bit complicated.
-%real-world: unix make was actually using yacc.
-
-%ocaml: cleaner to use Yacc? tricky too cos in recipe the tokens 
-% have a different meaning => need a lexer with different states/modes 
+%real-world: Unix Make was actually using yacc.
+%ocaml: cleaner to use Yacc. But, in recipe the tokens
+% have a different meaning so you need a lexer with different states/modes 
 % (a la Perl/PHP). Also escaping is tricky. Unicode also is tricky.
 
 \section{[[parse()]]}
 
-% error management:
+%trans:
+Before showing the code of [[parse()]],
+%
+I describe here a few globals used by [[parse()]] (and a few other
+functions) to report errors to the user.
+
+[[infile]] below contains the name of the file currently 
+processed by [[parse()]] (an [[mkfile]] or one of its included files):
+
 <<global infile>>=
 char *infile;
 @
 
+[[mkinline]] contains the line number of the line currently processed
+by [[parse()]]:
+
 <<global mkinline>>=
 int mkinline;
 @
-\t rename just inline? or lineno.
+\t rename just inline? conflicting keyword? rename lineno.
+%ocaml: so many code in this chapter that updates mkinline, ugly; a bit better 
+% in mk-in-ocaml where it is more centralized
+
+Both globals are used in the following macro to report syntax 
+errors to the user:
 
 <<function SYNERR>>=
 #define	SYNERR(l)	(fprint(STDERR, "mk: %s:%d: syntax error; ", \
                             infile, ((l)>=0)? (l) : mkinline))
 @
-% when call SYNERR with explicit line? when dont want default of using
-% mkinline because error was actually before.
-% note that useful to put mk: before, to indicate errors comes from mk,
+\l when call SYNERR with explicit line? when dont want default of using
+%  mkinline because error was actually before.
+\l note that useful to put mk: before, to indicate errors comes from mk,
 %  not one of its subprocess (and there may be many)
 
-% read fd, make input buffer, make string buffer, then get line and put in buf.
-% use of libbio
-% use of Bufblock, appendix X. =~ growing string (realloc)
+Here is finally the code of [[parse()]]:
 
 <<function parse>>=
 void
@@ -4271,7 +4344,7 @@ parse(char *f, fdt fd, bool varoverride)
     <<[[parse()]] sanity check fd>>
     <<[[parse()]] start, push>>
 
-    // Init
+    // Initialization
     infile = strdup(f);
     mkinline = 1;
     Binit(&in, fd, OREAD);
@@ -4284,15 +4357,10 @@ parse(char *f, fdt fd, bool varoverride)
         // Parsing
         c = rhead(buf->start, &head, &tail,     &attr, &prog);
 
-        // Semantic actions
+        // Semantic actions (they may read more lines)
         switch(c)
         {
         <<[[parse()]] switch rhead cases>>
-        default:
-            SYNERR(hline);
-            fprint(STDERR, "expected one of :<=\n");
-            Exit();
-            break;
         }
     }
     close(fd);
@@ -4302,7 +4370,49 @@ parse(char *f, fdt fd, bool varoverride)
 @
 \l leak strdup for infile? when free?
 
-% use Biobuf because will sometimes unget a character.
+The code of [[parse()]] operates in 4 steps:
+
+\begin{enumerate}
+
+\item Initialization of the globals [[infile]] and [[mkinline]]
+mentioned above, as well as two local buffers:
+[[in]] is an input buffer using the [[libbio]] library (see the \book{Libcore})
+and is connected to the file descriptor of the opened [[mkfile]];
+\n use Biobuf because will sometimes unget a character (said later)
+[[buf]] is a string buffer (see Section~\ref{sec:bufblock}) that will
+be used to store one line of the [[mkfile]].
+
+%compiler:
+\item Reading and assembling of a line from the [[mkfile]] in [[buf]]
+(via the function [[assline()]]).
+This is similar to the lexing phase in a compiler (see the \book{Compiler}).
+
+\item Parsing of a line to extract its elements:
+the target and prerequistes around the special character [[:]] in a rule,
+or the variable name and values around the special character [[=]] in
+a variable definition.
+%
+[[rhead()]] uses the buffer containing a line from the [[mkfile]]
+as an argument and returns the special character [[c]] used in the line
+([[:]] for a rule, [[=]] for a definition, [[<]] for an inclusion).
+%
+It also modifies the [[head]] and [[tail]] arguments passed by address
+to contain respectively the left and right parts around
+the special character (for [[<]], the left part [[head]] is empty).
+\l head because head vs body. for body just for rule. def have no body.
+\l also hline for head line, so report error first line
+
+\item Acting based on the special character read in the previous step. 
+This is where [[mk]] populates [[rules]] and [[metarules]]
+as well as the symbol table.
+%chunk:
+I will describe in the next sections the cases of the [[switch]] above.
+
+\end{enumerate}
+
+%dup: Windows.nw
+The skeleton of [[parse()]], above, omits the error management
+code shown below:
 
 <<[[parse()]] sanity check fd>>=
 if(fd < 0){
@@ -4311,17 +4421,32 @@ if(fd < 0){
 }
 @
 
-
-<<[[parse()]] other locals>>=
-// bitset<Rule_attr>
-int attr;
+<<[[parse()]] switch rhead cases>>=
+default:
+    SYNERR(hline);
+    fprint(STDERR, "expected one of :<=\n");
+    Exit();
+    break;
 @
-% prog argument, will see later.
+
+%dup: Windows.nw
+In the rest of this book, I will usually not comment the 
+error-management code. Such code is often trivial (but necessary).
+\l explain Exit?
+
+There are two other locals in [[parse()]] that are passed by address
+to [[rhead()]]: 
+[[attr]], which will contain possibly a rule attribute, 
+\l or variable attribute
+and [[prog]].
+Both locals are used for advanced features of [[mk]] I will describe later.
+
 
 \subsection{Assembling a line, [[assline()]]}
 
-% =~ lexing
-
+The [[assline()]] function below reads characters from the 
+input buffer [[bp]], and fills the string buffer [[buf]] with
+those characters until it finds a newline:
 
 % nice function name
 <<function assline>>=
@@ -4358,32 +4483,89 @@ eof:
     return *buf->start != '\0';
 }
 @
-% rinsert until newline
 \l int -> Rune?
-\t have resetbuf() function and emptybuf() function? and bufcontent()?
+\t use reset(), isempty(), and content()?
 %ocaml: use Buffer too
+\l superior or equal zero here? why diff with escapetoken later?
 
-% return false when EOF after line parsed
+[[insert()]], [[rinsert]] (for ``Rune insert''), [[reset()]], [[content()]],
+and [[isempty()]], called above, are all functions (or macros) 
+operating on a string buffer and are described in Section~\ref{sec:bufblock}.
+\l what is a rune? (said later, with nextrune)
 
-% pass true to nextrune so elide
+
+The code of [[assline]] may look trivial, but as its 
+(inappropriate) name suggests, [[assline()]] does not just
+{read} a line: it {assembles} a line.
+%
+First, if the current line is a {comment},
+[[assline()]] will
+skip the line to return the next meaningful line to [[parse()]].
+%
+Indeed, as I said in Section~\ref{sec:rule-simple-mkfile},
+[[mk]] allows the user to add comments in his [[mkfile]] by prefixing
+a line with the special character [[#]]. 
+\l like shell, cos reuse syntax
+%
+Moreover, [[assline()]] handles also blank lines, escaped newlines,
+and certain quoted characters, as explained in the following sections.
+
+%compiler: %dup: parsing/parse
+[[assline()]] is similar to the lexing function in a
+compiler (see the \book{Compiler} or \book{Assembler}).
+\l return false when EOF after line parsed
+\l pass true to nextrune so elide
 
 %ocaml-found:
 % skip only empty lines
 % if have line with only spaces, it generate an error because not one of :=<
 
-
-
-
 \subsubsection{Escaped newline, [[nextrune()]]}
 
-% When need to support this escape newline feature? 
-% Yes, when setting variables containing lots of elements,
-% for instance OBJS.
+[[assline()]] relies on the function [[nextrune()]] below to read
+the next character from the input buffer [[bp]].
+%
+In \plan, a {\em rune} is the term used to denote a {unicode}
+character (see the \book{Libcore}).
+%
+[[nextrune()]] is essentially a wrapper over [[Bgetrune()]] from
+the [[libbio]] library.
+
+%Again, this may sound trivial, but [[nextrune()]] is not. 
+%Indeed, 
+[[nextrune()]] must also handle {escaped newlines}.
+%
+An {\em escaped newline} is a newline character prefixed by
+the special {\em escape character} [[\]].
+
+%ex: with escaped newline? after all, new feature needs more introduction.
+
+%dup: overview/principles/dsl/rule
+As I mentioned in Section~\ref{sec:rule-simple-mkfile}, the syntax
+of [[mk]] (and Make) is minimalist. For example, a variable definition
+consists simply of a name followed by an equal sign and a set
+of values separated by space and terminated by a newline.
+%compiler:
+Thus, spaces and newlines have a meaning in [[mk]]  (as opposed
+to most programming languages).
+\l TAB used too,  but ugly cos dont see diff in editor and can do without
+%
+However, if the list of values is very long, it would be convenient
+to split the list over multiple lines.
+%
+[[mk]] allows to split such definitions on multiple lines if each
+newline is preceded by the special character [[\]];
+the newline is then said to be {\em escaped}.
 %alt: have syntax for lists, with terminator different than newline,
 %  for instance ']' in ocaml
-% space and newlines have meaning (TAB used to have one too, consistent,
-%  but in the end ugly because dont see diff in editor and can do without)
-
+%compiler:
+This is similar to what the C preprocessor [[cpp]] provides
+for definining long macros over multiple lines (see the \book{Compiler}).
+\l space and newlines have meaning 
+Thus, when [[nextrune()]] reads an escaped newline, it does not
+return the newline character to the caller [[assline()]], which 
+will cause [[assline()]] to read more characters 
+(until the next true non-escaped newline).
 
 <<function nextrune>>=
 /*
@@ -4400,12 +4582,14 @@ nextrune(Biobuf *bp, bool elide)
         c = Bgetrune(bp);
         if (c == '\\') {
             if (Bgetrune(bp) == '\n') {
+                // an escaped newline!
                 mkinline++;
                 if (elide)
                     continue;
                 // else
                 return ' ';
             }
+            // else, it was just \
             Bungetrune(bp);
         }
         if (c == '\n')
@@ -4416,73 +4600,134 @@ nextrune(Biobuf *bp, bool elide)
 @
 \l int -> Rune?? also in bio.h?
 \t when do you not elide? for escapetoken() and bquote()
+%ocaml: ugly to have to handle mkinline here again.
 
-% Bgetrune comes from bio.h, buffered IO library (libbio).
 
+Note that if [[\]] is not followed by a newline, [[nextrune()]]
+must just return the [[\]] character. However, [[nextrune()]]
+already went too far in the input buffer by reading an extra
+character (to check whether this character was a newline).
+%
+This is why [[libbio]] provides the function [[Bungetrune()]] called above
+to go back in the input buffer.
+%
+This is one of the reason [[mk]] uses [[libbio]] instead
+of the reading and seeking functions of the C library.
 
+% FIGURE? with going to far and so going back?
 
 
 \subsubsection{Comments}
 
+As mentioned before, [[assline()]] recognizes and skips
+comments:
+
+%ex: with comment? after all just showed briefly before.
+
 <<[[assline()]] other locals>>=
 int lastc;
 @
-% to handle escaped newline after comment, meh
+\t rename lastc to prevc
+
 
 <<[[assline()]] switch character cases>>=
 case '#':
     lastc = '#';
-    // skil all characters in comment until newline
+    // skip all characters in comment until newline
     while ((c = Bgetc(bp)) != '\n') {
         if (c < 0)
             goto eof;
-        if(c != '\r')
-            lastc = c;
+        lastc = c;
     }
     mkinline++;
-    if (lastc == '\\')
-        break;		/* propagate escaped newlines??*/
-
-   // like '\n' case 
-   if (buf->current != buf->start) {
-        insert(buf, '\0');
-        return true;
-    }
-    // skip lines with only a comment
+   <<[[assline()]] when processing comments, if escaped newline>>
+   <<[[assline()]] when processing comments, if not only comment on the line>>
+    // else, skip lines with only a comment
     break;
 @
-\t \r ? for windows? so simplify and just unguard the lastc = c
-\t rename lastc to prevc
+%old:        if(c != '\r')
+%            lastc = c;
+% seems windows-only stuff
+\l handle unicode here? can have end of unicode char finishing with [[\n]]?
 
-% lastc is to handle escaped newline after comment.
-% so A=foo # this is a long thing\
-%      bar 
-% will be parsed as a single line A=foo bar
+A comment can be alone on its line. I can also be used at the end
+of a variable definition or rule as in [[FOO=1 # true]].
+%
+When a comment is not alone on its line, the characters
+before the comments are not skipped but returned instead by [[assline()]]:
 
-% convenient for
+<<[[assline()]] when processing comments, if not only comment on the line>>=
+if (buf->current != buf->start) {
+     insert(buf, '\0');
+     return true;
+ }
+@
+\n like '\n' case 
+\t use empty()
+
+
+The [[lastc]] local variable above handles escaped newlines 
+in a comment as in:
+
+<<example of escaped newline>>=
+A=foo # this is a long definition mixed with a comment\
+  bar 
+@
+
+In that case, the definition will be parsed as the single line
+[[A=foo bar]].
+\l convenient for
 % X=foo\
 %  bar\
 %  #notthisone\
 %  foobar
 % ...
 
-% when buf is not empty? when had stuff before the # ? in which case
-%  do the same thing as if it was a single newline
+<<[[assline()]] when processing comments, if escaped newline>>=
+if (lastc == '\\')
+    break;		/* propagate escaped newlines??*/
+@
 
 \subsubsection{Quoted characters}
 % part 1
 
-% some filenames can contain weird characters, like #, :, =.
+%trans: %dup: parsing/parse/assline
+Assembling a line sounds like an easy ask, but as you have just
+seen [[assline()]] is not trivial: it must handle escaped newlines
+(through [[nextrune()]]), blank lines, and comments.
 
-% when input a line which contains a quote or backquote,
-% then # inside has a different meaning; it is not a comment
-% anymore, so it needs special processing.
 
-% escaped newline also has a different meaning, it is then a space.
+The use of a special character to denote comments, [[#]], introduces
+in turn another complication for [[assline()]].
+%
+Indeed, what if the target or prerequiste in a rule contains
+a [[#]] in its filename?
+\l not that it can not contain a newline
+We do not want [[assline()]] to skip all the characters following 
+that [[#]] in the rule.
+%
+In fact, certain filenames in a project may contain
+other special characters used by [[mk]] such as [[:]], [[=]], [[<]],
+or even space.
+\l but not newline
 
-% same way, we can quote : < =, which are lexical elements of mk.
-% without quoting syntax, there is no way to have target (filenames)
-% containing :, #, =, etc.
+
+To reference filenames using special characters in an [[mkfile]], the user must
+{\em quote} them in order for [[mk]] to not {interpret} them.
+%compiler: 
+This is a feature found in most programming languages.
+\l Lisp. Statchey introduced it (Bourne said it). used in shell also a lot.
+%
+For [[mk]], the character used to quote a filename
+is the single quote character [[']].
+\l hence the name of the technique? in Lisp it is also (quote)
+\l similar to escape, but for set of chars instead of just one
+%dup: (but rearranged)
+When [[assline()]] reads a line thats contains a quote,
+the [[#]] inside the quote has a different meaning; it is not
+a comment anymore.
+
+%ex: with quoted chars? after all, new feature needs more introduction.
 
 
 <<[[assline()]] switch character cases>>=
@@ -4494,11 +4739,29 @@ case '"':
         Exit();
     break;
 @
-\t why process that? 
-\t seems like only second one handled, so maybe can remove cases?
-% to allow other shells to manage those things.
 
-% escapetoken keep the quote when preserve is true
+[[mk]] can be configured to use either the \plan shell [[rc]]
+(see the \book{Shell}) or a Bourne-alike shell.
+%
+However, each shell has its own escaping rules: sometimes a single quote,
+sometimes double quotes, or sometimes the antislash character.
+Moreover, as I mentioned before, [[mk]] tries to reuse as 
+much as possible the syntax of the shell.
+%
+This is why the cases of [[assline()]] above are as generic
+as possible and delegate instead the shell escaping policy to
+the shell-specific [[escapetoken()]] function.
+\l method.
+
+The function below is the [[escapetoken()]] for
+[[rc]] in [[mk/rc.c]].
+%
+Like [[assline()]], it reads characters from the 
+input buffer [[bp]], and fills the string buffer [[buf]] with
+those characters, but this time not until the next newline
+but until the next quote.
+\n indeed, assline and escapetoken are very similar
+
 
 % rc.c
 <<function escapetoken>>=
@@ -4511,61 +4774,89 @@ error0
 escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
 {
     int c;
-    int line;
+    int line = mkinline;
 
     if(esc != '\'')
         return OK_1;
 
-    line = mkinline;
     while((c = nextrune(bp, false)) > 0){
         if(c == '\''){
             if(preserve)
                 rinsert(buf, c);
-
-            c = Bgetrune(bp);
-            if (c < 0)
-                break;
-            if(c != '\''){
-                Bungetrune(bp);
-                return OK_1;
-            }
+            <<[[escapetoken()]] return, unless double quote>>
         }
+        // else
         rinsert(buf, c);
     }
-    // reached EOF
+    // must have reached EOF
     SYNERR(line); 
     fprint(STDERR, "missing closing %c\n", esc);
     return ERROR_0;
 }
 @
+%old: initialization of line was done after first if (useless opti).
+\l this time it is strictly superior to 0 test for nextrune? why the diff?
+\l rename? input_quote?
+\l could lpize the first if
 
-\l does it handle escape of ' itself?
-\l  I guess if double '' ? hence the extra read?
+Of course, since [[']] is now a special character {reserved} to quote
+special characters, how do you quote [[']] itself?
+%compiler:
+A common technique found in most programming languages is to {double}
+the escaping or quoting character.
+%
+Thus, in [[rc]] and [[mk]], two [[']] inside a quoted
+string are interpreted as a single [[']].
+%
+For example, [[mk]] interprets [['foo''bar']] as a filename
+containing a single quote between the strings [[foo]] and [[bar]]
+([[foo'bar]]).
+%
+Here is the code to handle double quotes:
 
+<<[[escapetoken()]] return, unless double quote>>=
+c = Bgetrune(bp);
+if (c < 0)
+    break; // eof
+if(c != '\''){
+    Bungetrune(bp);
+    return OK_1;
+}
+// else, '', so continue the while loop
+@
+
+%real-world: antislash quote, and double antislash
+
+
+\l use nextrune so handle escaped newline also in quoted string
 % pass false this time to nextrune, so transform escaped newline in space
+% escaped newline also has a different meaning, it is then a space.
 
-% use nextrune so handle escaped newline also in quoted string
+\l escapetoken keep the quote when preserve is true
 
+%\subsubsection{Quote and escaping}
+% similar thing? why 2 mechanisms?
 
 \subsection{Parsing the head of a line, [[rhead()]]}
 
-% =~ parsing
+%trans:
+Once [[parse()]] assembled a line,
+%
+it can analyze the line with [[rhead()]] to return the 
+special character {separator} involved in the line.
+\l rhead for rule head, or maybe read head because used not only for rule.
+%dup: parsing/parse
+[[rhead()]] also sets the second and third arguments passed by address
+to contain the list of words on the left (the {head} [[h]]) 
+and right (the {tail} [[t]]) of the separator:
 
-% <, =, :
 
-% rhead for rule head, or maybe read head because used not only for rule.
-
-% line is buf->start, but with special \0 mark in the middle so know
-%  what we need to read.
-
-\l int -> Rune for return?
 <<function rhead>>=
 static int
 rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
 {
     char *p;
     int sep; // one of : = < 
-    Word *w;
     <<[[rhead()]] other locals>>
 
     p = charin(line, ":=<");
@@ -4578,60 +4869,105 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     <<[[rhead()]] adjust [[attr]] and [[prog]]>>
 
     // potentially expand variables in head
-    *h = w = stow(line);
-    <<[[rhead()]] sanity check w>>
-
+    *h = stow(line);
+    <<[[rhead()]] sanity check h>>
     // potentially expand variables in tail
     *t = stow(p);
 
     return sep;
 }
 @
-\t why need intermediate w? just sanity check *h ?
+%old:     *h = w = stow(line);
+% but why needed intermediate w? so sanity check test code was simpler, 
+% with less indirection? *(*h)->s instead of just *w->s
+\l int -> Rune for return? or even char!
+
+[[rhead()]] relies on the function [[charin()]] to find one of
+the characters mentioned in its second argument in the string
+passed in its first argument; I will describe [[charin()]] below.
+\l complex actually, handle head which can contain a :=< (said later)
+
+The address of the special character separator is stored first in the local
+variable [[p]]. The content of [[p]] is saved in the other local
+variable [[sep]], before being overwritten by the end-of-string
+null character as illustrated in the middle of
+Figure~\ref{fig:mk-rhead-overwrite}.
+%
+At this point, [[line]] and [[p]] point to the start of two
+independent strings. Both strings are then processed by [[stow()]]
+(for ``string to words''), which I will explain in Section~\ref{sec:stow}.
+%
+[[stow()]] splits the content of a string in a list of words, as shown
+at the bottom of Figure~\ref{fig:mk-rhead-overwrite}.
+\l again, more complex, need expand variables (said later)
+
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+ line
+   |
+   v-------------------+          start of
+   |foo.5 : foo.c foo.h|          rhead()
+   +-------------------+
+
+ line     p
+   |      |                         after
+   v------v------------+         *p++ = '\0'
+   |foo.5 | foo.c foo.h|
+   +------+------------+
+ h          t
+ |          |
+ v--+       v--+
+ |. |       |. |
+ ++-+       ++-+
+  |          |
+  v-----+    v-----+   +-----+     end of
+  |foo.5|    |foo.c|-->|foo.h|     rhead()
+  +-----+    +-----+   +-----+
+\end{verbatim}
+\caption{Evolution of local variables in [[rhead()]].}\label{fig:mk-rhead-overwrite}
+\end{figure}
+
+
+%compiler:
+\l equivalent to  parsing in compiler
 
 % FIGURE where before long string,
 % then string split in 2 because of \0 put at place of special char
 
-% charin later, complex actually, handle special syntax in head which could
-%  contain inside a :=<
 
+Note that if the separator in the line is [[<]] 
+(for an inclusion instruction), it is normal for [[h]] to be empty;
+%
+otherwise, [[mk]] should report an error to the user:
 
-% except <, should have a head (var or target)
-
-<<[[rhead()]] sanity check w>>=
-if(*w->s == '\0' && sep != '<' && sep != '|') {
+<<[[rhead()]] sanity check h>>=
+if(*((*h)->s) == '\0' && sep != '<' && sep != '|') {
     SYNERR(mkinline-1);
     fprint(STDERR, "no var/target on left side of assignment/rule\n");
     Exit();
 }
 @
-%pad: I added the /target in error message
+%pad: I added the /target in error message and replaced w by *h
+\l explain pipe, advanced feature
 
 
 
 
-<<[[rhead()]] adjust [[attr]] and [[prog]]>>=
-*attr = 0; // Nothing
-*prog = nil;
-// variable attributes
-<<[[rhead()]] if sep is [[=]]>>
-// rule attributes
-<<[[rhead()]] if sep is [[:]]>>
-@
 
-\subsubsection{Skipping quotes and variables, [[charin()]]}
+\subsubsection{Finding special characters, [[charin()]]}
 \label{sec:charin}
-% part 2
 
-% redo a bit some of the lexing work done in assline, sad.
-%ocaml: use lex so work done only once? or forbid certain elements
-% in filenames? meh, bad practice
+[[charin()]] below essentially iterates over the characters
+\l actually rune
+in [[cp]] by incrementing [[cp]] until the start of [[cp]] points
+to one of the character in [[pat]]:
 
 % addrule | rhead -> <>
 <<function charin>>=
 /*
- *	search a string for characters in a pattern set
- *	characters in quotes and variable generators are escaped
+ *	Search a string for characters in a pattern set.
+ *	Characters in quotes and variable generators are escaped.
  */
 char*
 charin(char *cp, char *pat)
@@ -4645,7 +4981,7 @@ charin(char *cp, char *pat)
         switch(r){
         <<[[charin()]] switch rune cases>>
         default:
-            if(!vargen && utfrune(pat, r))
+            if(utfrune(pat, r) && !vargen)
                 return cp;
             break;
         }
@@ -4656,13 +4992,36 @@ charin(char *cp, char *pat)
 }
 @
 %$
-\t rename vargen to  in_variable_token
-% unicode stuff makes the code hard to read. Regexps or lex are 
-% so much cleaner.
+\t rename vargen to  invargenerator (in code and below also)
+\n unicode stuff makes the code hard to read. Regexps or lex are much cleaner.
+%ocaml: redo a bit some of the lexing work done in assline, sad.
+% I use lex so work less repeated
+%old: I reversed utfrune() with !vargen, but then less efficient
 
+[[chartorune()]] called above is a function from the C library (see
+the \book{Libcore}).
+It is similar to [[Bgetrune()]] used in [[nextrune()]] before, but
+operates on a plain string instead of a string buffer.
+\l return chars read to form a rune in n, correspond to advanced in buffer
 
-\subsubsection{Quoted characters}
+[[utfrune()]] is another function from the C library. It checks
+whether a rune is equal to one of the characters in a 
+a set of characters (the ``pattern'').
+\l but confusing with mk pattern
+
+The local variable [[vargen]] is used to handle variable generator,
+an advanced feature of [[mk]] I will explain later in 
+Section~\ref{sec:var-generator}.
+
+\subsubsection{Skipping quoted characters}
 % part 2
+
+Just like [[assline()]] needs special code to handle quoted strings, because
+they may contain a [[#]] that needs to be treated differently, 
+[[charin()]] needs also special code to handle quoted strings,
+because they may contain one of the special characters
+[[rhead()]] is looking for ([[:]], [[=]], or [[<]]).
+
 
 <<[[charin()]] switch rune cases>>=
 case '\'':			/* skip quoted string */
@@ -4686,9 +5045,7 @@ squote(char *cp)
     while(*cp){
         n = chartorune(&r, cp);
         if(r == '\'') {
-            n += chartorune(&r, cp+n);
-            if(r != '\'')
-                return cp;
+            <<[[squote()]] return, unless double quote>>
         }
         cp += n;
     }
@@ -4698,89 +5055,60 @@ squote(char *cp)
 }
 @
 
-% second chartorune is to handle ''' I think.
-
-% simpler that escapetoken because no need to update mkinline, or
-% to modify a buffer. We just need to skip it.
-
-% should never occur because escapetoken already handles the case
-
-
-\subsubsection{Variables}
-
-% variables can contain ':' so need special handling here.
-% Didnt do that in assline because variables dont influence the
-% semantic of # or newline.
-
-<<[[charin()]] switch rune cases>>=
-case '$':
-    if(*(cp+1) == '{')
-        vargen = true;
-    break;
-case '}':
-    if(vargen)
-        vargen = false;
-    else
-       // same as default: case
-       if(utfrune(pat, r))
-          return cp;
-    break;
+<<[[squote()]] return, unless double quote>>=
+n += chartorune(&r, cp+n);
+if(r != '\'')
+    return cp;
+// else, double '', continue while loop
 @
-%$
-\l could goto default:
+\n simpler that escapetoken because no need to update mkinline, or
+\n to modify a buffer. We just need to skip it.
+\l newline should never occur because escapetoken already handles the case?
 
-%ocaml-found:
-% note that in ${name} name must also be simple, but need that
-% so can contatenate a variable name with a letter, as in ${name}ici
-% otherwise ambiguity with $nameici, and dont want put a space because
-% space have a meaning.
-%real-world: not a pb in make since impose $(xxx) format for every variables.
+%\subsubsection{Skipping variables generators}
+% now in advanced topics
 
-%rc deals with that with ^ so can do in a recipe $stem1^l to get
-% 5l, 8l, etc.
-
-
-<<[[charin()]] sanity check vargen>>=
-if(vargen){
-    SYNERR(-1);
-    fprint(STDERR, "missing closing } in pattern generator\n");
-}
-@
-% pattern, meh
 
 \subsection{Splitting a string in words, [[stow()]]}
-\label{sec:expand-vars}
+\label{sec:stow}
 
-% so used for target, prereqs, but also varname, var defs.
-
-% will expand not just variable set in mkfile but also
-% plan9 variables, because of [[readenv()]] at the beginning
-% of mk.
-
-% note also that do not expand in recipe! this is done
-% by shell, and so it allows late binding of variables, use
-% before define, etc.
+%trans:
+After [[rhead()]] found the position of the special character in 
+the line assembled by [[assline()]],
+%dup: parsing/parse/rhead
+[[rhead()]] calls [[stow()]] to split in multiple words the strings
+on the left and right parts of the special character.
+\l so used for target, prereqs, but also varname, var defs, and also file in <
+%
+The code of [[stow()]] below is very simple because it 
+delegates most of the complexity to [[nextword()]], which I will
+explain after.
 
 % string to word
 <<function stow>>=
 Word *
 stow(char *s)
 {
-    Word *head, *w, *new;
+    // list<ref_own<Word>>
+    Word *head, *new;
+    // option<ref<Word>>
+    Word *lastw;
 
-    w = head = nil;
+    head = nil;
+    lastw = nil;
     while(*s){
         new = nextword(&s);
         if(new == nil)
             break;
 
-        // concat_list(new, head, w)
-        if (w)
-            w->next = new;
+        // head = concat_list(head, new)
+        if (lastw)
+            lastw->next = new;
         else
-            head = w = new;
-        while(w->next)
-            w = w->next;
+            head = lastw = new;
+
+        while(lastw->next)
+            lastw = lastw->next;
         
     }
     if (!head)
@@ -4788,20 +5116,31 @@ stow(char *s)
     return head;
 }
 @
-% new can already contain multiple words!
-\t rename w to last?
+%old: I renamed w to lastw
 \t rename newword -> new_singleword
 \t rename nextword to nextwords?
 %ocaml: expanding is done later in eval.ml instead, but 
 % the splitting is done at lexing/parsing time.
 
-\subsubsection{Expanding quotes, backquotes, and variables, [[nextword()]]}
+Note that [[nextword()]] does not return a string but a list
+of words, for reasons I will explain soon.
+%
+This is why [[stow()]] must concatenate the lists in
+[[head]] and [[new]], not just adding one word to a list of words.
 
-% again :)
 
-% indeed, separator marker is space or tab, but what if filename
-% with space or tab? deal with putting the filename between ''
-% but then splitting need to handle this special character!
+\subsubsection{Assembling the next words, [[nextword()]]}
+
+The code for [[nextword()]] sounds trivial again: look for
+the next space character 
+\l or tab. or newline?
+in the string as the separation marker between two words.
+%
+However, again, [[nextword()]] must also handle quoted strings, because
+they may contain a space that must not be treated as a {word separator}.
+%
+In fact, [[nextword()]] must also handle variables and other features
+of [[mk]], as explained in the following sections.
 
 % stow -> <>
 <<function nextword>>=
@@ -4812,21 +5151,23 @@ stow(char *s)
 static Word*
 nextword(char **s)
 {
-    char *cp;
+    char *cp = *s;
     Bufblock *b;
-    Word *head, *tail;
     Rune r;
+    // list<ref_own<Word>>
+    Word *head;
+    // option<ref<Word>>
+    Word  *lastw;
     bool empty;
     <<[[nextword()]] other locals>>
 
-    cp = *s;
     b = newbuf();
 
 restart:
-    head = tail = nil;
-    while(*cp == ' ' || *cp == '\t')		/* leading white space */
-        cp++;
+    head = nil;
+    lastw = nil;
     empty = true;
+    <<[[nextword()]] skipping leading white space>>
 
     while(*cp){
         cp += chartorune(&r, cp);
@@ -4846,14 +5187,8 @@ restart:
 out:
     *s = cp;
     if(b->current != b->start){
-        if(head){
-            cp = b->current;
-            bufcpy(b, tail->s, strlen(tail->s));
-            bufcpy(b, b->start, cp - b->start);
-            insert(b, '\0');
-            free(tail->s);
-            tail->s = strdup(cp);
-        } else {
+        <<[[nextword()]] when buffer not empty, if there was already an head>>
+         else {
             insert(b, '\0');
             head = newword(b->start);
         }
@@ -4863,23 +5198,48 @@ out:
 }
 @
 %$
-\t mv nextword out of word.c
 \t rename b to buf
+%old: I renamed tail to lastw
+\t use empty()
 
-% so here will handle leading and trailing whitespaces
-% so X = yy vv   will be parsed as X=yy vv
 
-% restart because once expanded a backquote, then reprocess
+The presence of a label [[restart]] above, as well as the local
+variables [[empty]] and [[lastw]] will become clear later.
+%
+They are needed because certain strings can expand in other strings
+that need to be reprocessed by [[nextword()]].
+\l those cases are contain in hidden cases in switch above
+%chunks: will see those cases gradually.
+% advanced variables and advanced words gradually
 
-%chunks: will see advanced variables and advanced words gradually
+Note that [[nextword()]] skips the leading white spaces in the string:
 
-\subsubsection{Quoted characters}
+<<[[nextword()]] skipping leading white space>>=
+while(*cp == ' ' || *cp == '\t')		/* leading white space */
+    cp++;
+@
+
+This is why there is no difference between writing a rule like
+[[foo.5:foo.c]] and [[foo.5: foo.c]], or between a definition like
+[[FOO=a b]] and [[FOO = a b]].
+
+\subsubsection{Expanding quoted characters}
 % part 3
 
+As I just mentioned, [[nextword()]] must handle quoted strings.
+%
+As opposed to [[assline()]], which just inputs a quoted string,
+or [[charin()]], which skips over a quoted string, [[nextword()]]
+{expands} a quoted string and stores the expansion in the buffer [[b]].
+%
+Indeed, [[stow()]] and [[nextword()]] are the last steps in the
+parsing phase; there is no need to keep the quotes (or double
+quotes inside those quotes) anymore. 
+
 <<[[nextword()]] switch rune cases>>=
-case '\\':
 case '\'':
 case '"':
+case '\\':
     empty = false;
     cp = expandquote(cp, r, b);
     if(cp == nil){
@@ -4889,14 +5249,12 @@ case '"':
     break;
 @
 \l but missing closing quote should never happen
-% this time they are removed
-
-% by expand it means remove quote arounds
+\l what if empty quoted string? empty is not false then
 
 <<function expandquote>>=
 /*
  *	extract an escaped token.  Possible escape chars are single-quote,
- *	double-quote,and backslash.  Only the first is valid for rc. the
+ *	double-quote, and backslash.  Only the first is valid for rc. The
  *	others are just inserted into the receiving buffer.
  */
 char*
@@ -4910,70 +5268,84 @@ expandquote(char *s, Rune r, Bufblock *b)
     while(*s){
         s += chartorune(&r, s);
         if(r == '\'') {
-            if(*s == '\'')
-                s++;
-            else
-                return s;
+            <<[[expandquote()]] return, unless double quote>>
         }
         rinsert(b, r);
     }
     return nil;
 }
 @
-% diff with escapetoken? input an escaped token vs extract?
+\l could lpize again the first if
+
+<<[[expandquote()]] return, unless double quote>>=
+if(*s == '\'')
+    s++; // skip one of the double quote
+else
+    return s;
+@
 
 \l '' to handle escaping of ' itself? but then handled by
 
-\subsubsection{Expanding variables in words (part 1)}
+\subsubsection{Expanding variables}
+\label{sec:expand-vars}
 
-% in rules target, prerequisites, in variable uses.
-% but not recipe!
+The expansion of variables in rules, variable definitions, and inclusions
+\l but not recipe (said later)
+is done at parsing-time by [[nextword()]], just like the expansion
+of quotes (and backquotes, as explained in Section~\ref{sec:backquotes}).
+\l why parsing-time? why doing it at all?
+
+
+Note that a single variable can expand to multiple words because a variable
+holds a list of words in [[mk]].
 
 <<[[nextword()]] other locals>>=
+// list<ref_own<Word>
 Word *w;
 @
+
+This is why [[nextword()]] returns a list of words, 
+and [[stow()]] concatenate a list of words;
+what may seem like a single word (a variable) can expand to multiple words.
+
+
+The code of [[nextword()]] below relies on [[varsub()]] to return 
+the value of a variable. 
+%
+[[varsub()]] can also substitute variables, as explained 
+in Section~\ref{sec:subst-var}, hence its name.
 
 <<[[nextword()]] switch rune cases>>=
 case '$':
     w = varsub(&cp);
-    if(w == nil){
-        if(empty)
-            goto restart;
-        break;
-    }
+    <<[[nextword()]] when in variable case, if w is nil>>
     empty = false;
-    if(b->current != b->start){
-        bufcpy(b, w->s, strlen(w->s));
-        insert(b, '\0');
-        free(w->s);
-        w->s = strdup(b->start);
-        b->current = b->start;
-    }
-    if(head){
-        bufcpy(b, tail->s, strlen(tail->s));
-        bufcpy(b, w->s, strlen(w->s));
-        insert(b, '\0');
-        free(tail->s);
-        tail->s = strdup(b->start);
-        tail->next = w->next;
-        free(w->s);
-        free(w);
-        b->current = b->start;
-    } else
-        tail = head = w;
 
-    while(tail->next)
-        tail = tail->next;
+    <<[[nextword()]] when in variable case, if non-space chars before var>>
+    <<[[nextword()]] when in variable case, if head is not empty>>
+    else
+        head = lastw = w;
+
+    while(lastw->next)
+        lastw = lastw->next;
     break;
 @
 %$
 
-% done at parsing time for the non recipe part (target and prerequisites).
+\l expand vars in rules target, prerequisites, in variable uses.
+% but not recipe!
+% this is done% by shell, and so it allows late binding of variables, use
+% before define, etc.
+
+\l will expand not just variable set in mkfile but also
+% plan9 variables, because of [[readenv()]] at the beginning
+% of mk.
 
 
-
-% not just $V, can have complex pattern there too.
-% sometimes ${xx:%.y=%.z} ! but later in adv topics
+[[varsub()]] in turn relies on 
+[[varname()]] to extract the name of the variable from the string 
+pointed by [[s]] ([[varname()]] also increments [[s]] by side effect), and
+[[varmatch()]] to grab the value of the variable from the symbol table:
 
 % nextword -> <>
 <<function varsub>>=
@@ -4987,20 +5359,53 @@ varsub(char **s)
     // else
 
     b = varname(s);
-    if(b == nil)
-        return nil;
-
+    <<[[varsub()]] sanity check b>>
     w = varmatch(b->start);
 
     freebuf(b);
     return w;
 }
 @
-% yes! ${x:%=%}
+\n not just [[$V]], can have complex pattern there too.
+\n sometimes ${xx:%.y=%.z} ! but later in adv topics
+%$
+
+Note that if the user mentions a variable not defined anywhere
+(neither in the [[mkfile]] nor in the environment), [[nextword()]]
+will skip over this variable:
+
+<<[[varsub()]] sanity check b>>=
+if(b == nil)
+    return nil;
+@
+
+<<[[nextword()]] when in variable case, if w is nil>>=
+if(w == nil){
+   <<[[nextword()]] when in variable case, if w is nil and no char before>>
+    break;
+}
+@
+
+In fact, if the variable is not defined and there was no character
+before the variable, as in [[FOO= $bar abc]], %$
+[[nextword()]] must skip over the undefined variable and also
+skip again the possible whitespaces after the variable, hence the jump to
+[[restart]] below:
+
+<<[[nextword()]] when in variable case, if w is nil and no char before>>=
+if(empty)
+    goto restart;
+@
+\n but no reprocessing of words already parsed here, cp is still empty
+\n reprocessing is done for backquote only I think
 
 
 %\subsection{Simple variables, }
 %$
+
+[[varname()]] below
+returns a buffer containing the name of a variable in [[s]], and 
+increments [[s]] to point after the variable name:
 
 <<function varname>>=
 /*
@@ -5010,12 +5415,12 @@ static Bufblock*
 varname(char **s)
 {
     Bufblock *b;
-    char *cp;
+    char *cp = s;
     Rune r;
     int n;
 
     b = newbuf();
-    cp = *s;
+
     for(;;){
         n = chartorune(&r, cp);
         if (!WORDCHR(r))
@@ -5030,12 +5435,14 @@ varname(char **s)
 }
 @
 
-% what constitutes a variable name, anything except special chars
-%  maybe specific to shell too?
+What constitutes a variable name is mostly anything except
+the set of special characters in the macro below:
+
 <<function WORDCHR>>=
 #define WORDCHR(r)	((r) > ' ' && !utfrune("!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~", (r)))
 @
 %$
+\l  maybe specific to shell too?
 
 
 <<[[varname()]] sanity check b>>=
@@ -5059,7 +5466,7 @@ varmatch(char *name)
     
     sym = symlook(name, S_VAR, nil);
     if(sym){
-            /* check for at least one non-NULL value */
+        /* check for at least one non-NULL value */
         for (w = sym->u.ptr; w; w = w->next)
             if(w->s && *w->s)
                 return wdup(w);
@@ -5067,21 +5474,161 @@ varmatch(char *name)
     return nil;
 }
 @
+\l rename? bad name
 
 
+Note that if a variable is preceded directly by non-space characters,
+as at the bottom of Figure~\ref{fig:mk-nextword1}, the first word in the list of
+words in the value of the variable must be {adjusted}:
+
+<<[[nextword()]] when in variable case, if non-space chars before var>>=
+if(b->current != b->start){
+    bufcpy(b, w->s, strlen(w->s));
+    insert(b, '\0');
+    free(w->s);
+    w->s = strdup(b->start);
+    // reset buf
+    b->current = b->start;
+}
+@
+\t use EMPTY()
+%ocaml: I actually forbid that if variable is not a scalar
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+  cp           where A=foo bar
+   |                 B=bar foo
+  +v------+
+s:|@$A$B: |                                   start of
+  +-------+                                  nextword()
 
 
-\t could put the code for dollar{name} here, important escaping mechanism
+             start
+   cp          | current
+    |          | |
+  +-v-----+    v-v---------+                 processing
+s:|@$A$B: |  b:|@          |                    '@'
+  +-------+    +-----------+
 
-% will see backquote later too
+            start           start
+               |current     current
+     cp        | |             |
+      |        v-v---------+   v----+------+
+  +---v---+  b:|@          | b:|@foo|      |
+s:|@$A$B: |    +-----------+   +----+------+ processing
+  +-------+    +---+  +---+    +----+  +---+    '$A'
+             w:|foo|->|bar|  w:|@foo|->|bar|
+               +---+  +---+    +----+  +---+
+
+               (before)          (after)
+
+                  adjusting the first
+                         word
+\end{verbatim}
+\caption{[[nextword()]] edge cases (part 1).}\label{fig:mk-nextword1}
+\end{figure}
+
+Moreover, if a variable is followed by another variable, 
+as at the top of Figure~\ref{fig:mk-nextword2}, the last
+word of the first variable must be {merged} with the first word
+of the second variable:
+
+<<[[nextword()]] when in variable case, if head is not empty>>=
+if(head){
+    bufcpy(b, lastw->s, strlen(lastw->s));
+    bufcpy(b, w->s, strlen(w->s));
+    insert(b, '\0');
+    free(lastw->s);
+    lastw->s = strdup(b->start);
+
+    lastw->next = w->next;
+    free(w->s);
+    free(w);
+    // reset buf
+    b->current = b->start;
+}
+@
+%ocaml: I actually forbid that if variable is not a scalar
+
+
+Finally, if a variable is followed directly by non-space
+characters, as at the bottom of Figure~\ref{fig:mk-nextword2}, the last word
+must be adjusted:
+
+<<[[nextword()]] when buffer not empty, if there was already an head>>=
+if(head){
+    cp = b->current;
+    bufcpy(b, lastw->s, strlen(lastw->s));
+    bufcpy(b, b->start, cp - b->start);
+    insert(b, '\0');
+    free(lastw->s);
+    lastw->s = strdup(cp);
+}
+@
+%ocaml: I actually forbid that if variable is not a scalar
+\l ugly abuse cp here
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+                   where A=foo bar
+                         B=bar foo
+
+            start               start
+            current             current
+               |                   |
+       cp      v-----------+       v------+----+
+        |    b:|           |     b:|barbar|    |
+  +-----v-+    +-----------+       +------+----+ processing
+s:|@$A$B: |    +---+  +---+        +---+  +---+     '$B'
+  +-------+  w:|bar|->|foo|      w:|bar|->|foo|
+               +---+  +---+        +---+  +---+
+               +----+  +---+       +----+  +------+  +---+
+          head:|@foo|->|bar|  head:|@foo|->|barbar|->|foo|
+               +----+  ^---+       +----+  ^------+  +---+
+                       |                   |
+                      lastw               lastw
+
+                   (before)          (after)
+
+                     merging the last and
+                          first word
+
+            start                    start
+               |current                |cp   current
+        cp     | |                     | |    |
+         |     v-v---------+           v-v---+v----+ processing
+  +------v+  b:|:          |         b:|:foo:|     |    ':'
+s:|@$A$B: |    +-----------+           +-----+-----+
+  +-------+
+            +----+  +------+  +---+  +----+  +------+  +----+
+      head: |@foo|->|barbar|->|foo|  |@foo|->|barbar|->|foo:|
+            +----+  +------+  ^---+  +----+  +------+  ^----+
+                              |                        |
+                             lastw                    lastw
+                (before)                   (after)
+
+                       adjusting the last
+                              word
+\end{verbatim}
+\caption{[[nextword()]] edge cases (part 2).}\label{fig:mk-nextword2}
+\end{figure}
+\n actually the buffer contain [[@foo]] at the beginning here
+
+\t maybe say ok if variables are scalar, but could issue a warning otherwise
+
+\n could put the code for dollar{name} here, important escaping mechanism
+\n will see backquote later too
 
 
 \section{Rules, {\em target}[[:]]{\em prereqs}}
-% actually targets : prereqs
+\n actually targets [[:]] prereqs, not just one target
 
 %trans:
-% seen main lexing/parsing/splitting.
-% Now special parsing code for different constructs.
+% now that you have seen lexing/parsing of mkfile, I can
+% describe actions based on
+% information returned by rhead: the special char and list of words
+% on left and right parts of the special character.
+% starting here with rules, when special char returned is [[:]]
 
 
 <<[[parse()]] other locals>>=
@@ -5095,8 +5642,14 @@ case ':':
 @
 \t mv hline at the very end
 
-% can have multiple targets! hence addrules below, not addrule.
+% seen addrules in Section X. handle rules with multiple targets.
+% so call addrules, not addrule.
 
+% I mentioned before in Section X that mk during parsing also
+% set global target1 to contain first target found in the mkfile.
+% Here is the code:
+
+\label{sec:set-target1}
 % put before?
 <<[[addrules()]] set [[target1]]>>=
 /* tuck away first non-meta rule as default target*/
@@ -5164,6 +5717,28 @@ rbody(Biobuf *in)
 
 \subsection{Parsing rule attributes}
 
+% I mentioned attributes before.
+
+<<[[parse()]] other locals>>=
+// bitset<Rule_attr>
+int attr;
+@
+\l or var_attr?
+
+% passed by address to rhead.
+
+
+<<[[rhead()]] adjust [[attr]] and [[prog]]>>=
+*attr = 0; // Nothing
+*prog = nil;
+// variable attributes
+<<[[rhead()]] if sep is [[=]]>>
+// rule attributes
+<<[[rhead()]] if sep is [[:]]>>
+@
+
+
+
 <<[[rhead()]] other locals>>=
 Rune r;
 int n;
@@ -5200,7 +5775,11 @@ eos:
 
 %chunks: will see them gradually
 
+
 \section{Included files, [[<]]{\em file}}
+
+%trans:
+% second construct is inclusion, when rhread returned '<'.
 
 <<[[parse()]] other locals>>=
 fdt newfd;
@@ -5219,6 +5798,7 @@ case '<':
     break;
 @
 % parsed by rhead, so got variable expansion there too! < $arch.mk 
+% head empty.
 
 % handle filename with spaces now ... no need escaping
 %ocaml: be more consistent and stricter
@@ -5273,6 +5853,8 @@ ipush(void)
     }
 }
 @
+%ocaml: do not use globals for infile and inline? actually I do,
+% so my code is very similar here.
 
 <<function ipop>>=
 void
@@ -5317,6 +5899,10 @@ if(newfd < 0){
 % really Constant definitions, not variable.
 \n ninja calls them bindings
 
+%trans: finally, last construct variable def.
+% left is variable name, right is set of values (possibly containing
+% variables, which are expanded by nextword())
+
 
 <<[[parse()]] other locals>>=
 bool set = true;
@@ -5360,6 +5946,7 @@ if(head->next){
 \subsection{Overriding variable definitions}
 
 % saw calling parse with true for override for the xxx=yyy argument parsing.
+% remember parse() signature is varoverride parameter.
 
 <<[[parse()]] when parsing variable definitions, override handling>>=
 if(symlook(head->s, S_OVERRIDE, nil)){
@@ -8659,6 +9246,7 @@ pipecmd(char *cmd, Envy *e, int *fd)
 
 
 \section{Shell-command expansion, [[`]]{\em cmd}[[`]]}
+\label{sec:backquotes}
 
 % actually two styles, `{...} or `...`
 
@@ -8788,12 +9376,66 @@ if(buf){
 \section{Substitution variables, [[${]]{\em name}[[:]]{\em pattern}[[=]]{\em subst}[[}]]}
 %$
 \label{sec:transform-list}
+\label{sec:var-generator}
+\label{sec:subst-var}
+
+% 2 uses for ${}. One for escaping, or for concatenation
+% with things that would be interpreted as part of variable name.
+% Other is variable "generator"
 
 % note that can use ${x:%=%} only outside recipe :(
 % they are not recognized by the shell and recipe are
 % not processed by mk.
 % So variables are a bit leaky abstraction. Vars in targets/prereqs
 % are treated differently than in recipe.
+
+
+%\subsubsection{Variables} 
+% was in Parsing chapter before, after charin()
+\subsection{Parsing adjustments}
+
+% variables can contain ':' so need special handling here.
+% Didnt do that in assline because variables dont influence the
+% semantic of # or newline.
+
+<<[[charin()]] switch rune cases>>=
+case '$':
+    if(*(cp+1) == '{')
+        vargen = true;
+    break;
+case '}':
+    if(vargen)
+        vargen = false;
+    else
+       // same as default: case
+       if(utfrune(pat, r))
+          return cp;
+    break;
+@
+%$
+\l could goto default:
+
+%ocaml-found:
+% note that in ${name} name must also be simple, but need that
+% so can contatenate a variable name with a letter, as in ${name}ici
+% otherwise ambiguity with $nameici, and dont want put a space because
+% space have a meaning.
+%real-world: not a pb in make since impose $(xxx) format for every variables.
+
+%rc deals with that with ^ so can do in a recipe $stem1^l to get
+% 5l, 8l, etc.
+
+
+<<[[charin()]] sanity check vargen>>=
+if(vargen){
+    SYNERR(-1);
+    fprint(STDERR, "missing closing } in pattern generator\n");
+}
+@
+% pattern, meh, actually not always a pattern
+
+
+
 
 % charin -> <>
 <<[[varsub()]] if variable starts with open brace>>=
@@ -8850,6 +9492,8 @@ expandvar(char **s)
 }
 @
 %$
+
+\subsection{Substitutions, [[subsub()]]}
 
 % note that does not support recursive vars! like ${name:${O}%.c=%.o}
 
@@ -10200,6 +10844,8 @@ freebuf(buf);
 % next book: Shell.nw!! many of the features of mk, are features
 %  of Shell! ability to do loops, calls programs easily, redirection,
 %  pipe, etc. Reuse everything.
+
+% related futur work? Cargo, Yarn, and other package-manager/build-system?
 
 \appendix
 
