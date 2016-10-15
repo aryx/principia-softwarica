@@ -340,8 +340,10 @@ rbody(Biobuf *in)
             rinsert(buf, r);
 
         lastr = r;
+        /*s: [[rbody()]] handle mkinline */
         if (r == '\n')
             mkinline++;
+        /*e: [[rbody()]] handle mkinline */
     }
 
     insert(buf, '\0');

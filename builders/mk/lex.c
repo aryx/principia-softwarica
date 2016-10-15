@@ -149,8 +149,10 @@ nextrune(Biobuf *bp, bool elide)
             // else, it was just \
             Bungetrune(bp);
         }
+        /*s: [[nextrune()]] handle mkinline */
         if (c == '\n')
             mkinline++;
+        /*e: [[nextrune()]] handle mkinline */
         return c;
     }
 }
