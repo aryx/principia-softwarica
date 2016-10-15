@@ -3164,6 +3164,7 @@ a meta rule contains also the [[META]] {\em rule attribute} in
 // bitset<Rule_attr>
 short 		attr;		/* attributes */
 @
+\l contain visible rule attribute between :: and some implicit like META
 
 <<enum Rule_attr>>=
 enum Rule_attr {
@@ -3185,8 +3186,8 @@ enum Rule_attr {
 \l META is for % metarule (and also regexp rules :R:)
 
 %chunks: 
-I will describe gradually the other rule attributes in the following
-chapters.
+I will describe gradually the other rule attributes in the following chapters.
+\l users can add explicit attributes also to a rule
 
 
 
@@ -3274,7 +3275,6 @@ in a string (here [[head]], the target). Indeed, [[charin()]] must
 also handle {escaped characters}, for instance, when the target name
 is put inside a quote as in [['myfile%has%weird%characters.doc']],
 in which case the target should not be considered a pattern.
-
 
 For the rule attribute [[REGEXP]] used below, see Section~\ref{sec:regexp}.
 
@@ -4117,6 +4117,7 @@ if(*argv == nil){
 @
 
 \subsection{Default target, [[target1]]}
+\label{sec:default-target}
 
 %dup: overview/interface overview/soft-archi
 As I mentioned in Section~\ref{sec:mk-interface}, 
@@ -4241,11 +4242,12 @@ the most important function of [[mk]], in Chapter~\ref{chap:finding-outdated}.
 The [[VIR]] argument above indicates that the target is a 
 {\em virtual target}. [[VIR]] is a rule attribute I will
 explain fully in Section~\ref{sec:virtual}.
-The arbitrary string is a virtual target because it does not correspond
-to a file. It is ok if the target does not exist after the recipe has run.
 %
-%Virtual targets are often used for cleaning targets such as [[mk clean]]
-%which ...
+The arbitrary string used in the call to [[newword()]]
+is a virtual target because it does not correspond
+to a file. It is ok if the target does not exist after the recipe has run.
+\l Virtual targets are often used for targets such as [[mk clean]] (said later)
+
 
 The last two arguments to [[addrules()]] above
 are the line and file location of the rule. This is used
@@ -4403,7 +4405,7 @@ the special character (for [[<]], the left part [[head]] is empty).
 \l also hline for head line, so report error first line
 
 \item Acting based on the special character read in the previous step. 
-This is where [[mk]] populates [[rules]] and [[metarules]]
+This is where [[mk]] populates [[rules]] and [[metarules]],
 as well as the symbol table.
 %chunk:
 I will describe in the next sections the cases of the [[switch]] above.
@@ -4731,14 +4733,15 @@ a comment anymore.
 
 
 <<[[assline()]] switch character cases>>=
-case '\\':
 case '\'':
 case '"':
+case '\\':
     rinsert(buf, c);
     if (escapetoken(bp, buf, true, c) == ERROR_0)
         Exit();
     break;
 @
+\n meta! here use of double \, and single \ to escape quote itself (said later)
 
 [[mk]] can be configured to use either the \plan shell [[rc]]
 (see the \book{Shell}) or a Bourne-alike shell.
@@ -4803,7 +4806,9 @@ Of course, since [[']] is now a special character {reserved} to quote
 special characters, how do you quote [[']] itself?
 %compiler:
 A common technique found in most programming languages is to {double}
-the escaping or quoting character.
+the escaping or quoting character
+(as shown for C in the code of [[assline()]] above, where the antislash
+character is doubled).
 %
 Thus, in [[rc]] and [[mk]], two [[']] inside a quoted
 string are interpreted as a single [[']].
@@ -4850,7 +4855,7 @@ special character {separator} involved in the line.
 to contain the list of words on the left (the {head} [[h]]) 
 and right (the {tail} [[t]]) of the separator:
 
-
+% read head
 <<function rhead>>=
 static int
 rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
@@ -5075,7 +5080,7 @@ if(r != '\'')
 %trans:
 After [[rhead()]] found the position of the special character in 
 the line assembled by [[assline()]],
-%dup: parsing/parse/rhead
+%dup: parsing/parse parsing/parse/rhead
 [[rhead()]] calls [[stow()]] to split in multiple words the strings
 on the left and right parts of the special character.
 \l so used for target, prereqs, but also varname, var defs, and also file in <
@@ -5486,6 +5491,7 @@ if(b->current != b->start){
     bufcpy(b, w->s, strlen(w->s));
     insert(b, '\0');
     free(w->s);
+    // adjust the first word
     w->s = strdup(b->start);
     // reset buf
     b->current = b->start;
@@ -5535,6 +5541,7 @@ of the second variable:
 
 <<[[nextword()]] when in variable case, if head is not empty>>=
 if(head){
+    // merge the last and first words
     bufcpy(b, lastw->s, strlen(lastw->s));
     bufcpy(b, w->s, strlen(w->s));
     insert(b, '\0');
@@ -5562,6 +5569,7 @@ if(head){
     bufcpy(b, b->start, cp - b->start);
     insert(b, '\0');
     free(lastw->s);
+    // adjust the last word
     lastw->s = strdup(cp);
 }
 @
@@ -5624,11 +5632,20 @@ s:|@$A$B: |    +-----------+           +-----+-----+
 \n actually targets [[:]] prereqs, not just one target
 
 %trans:
-% now that you have seen lexing/parsing of mkfile, I can
-% describe actions based on
-% information returned by rhead: the special char and list of words
-% on left and right parts of the special character.
-% starting here with rules, when special char returned is [[:]]
+Now that you have seen the generic parts of the code to
+parse an [[mkfile]],
+%
+I can describe the specific parts with the {actions} in [[parse()]]
+to process the rules, definitions, and inclusions.
+%
+Those actions are based on
+the information returned by [[rhead()]]:
+%dup: parsing/parse parsing/parse/rhead parsing/parse/stow
+the special character in the line, as well as the list of words on the 
+left and right parts of this special character.
+%
+I will start in this section with the action to manage rules,
+when the special character returned by [[rhead()]] is [[:]].
 
 
 <<[[parse()]] other locals>>=
@@ -5637,38 +5654,66 @@ char *body;
 <<[[parse()]] switch rhead cases>>=
 case ':':
     body = rbody(&in);
-    addrules(head, tail, body, attr, hline, prog);
+    addrules(head, tail, body,   attr, hline, prog);
     break;
 @
-\t mv hline at the very end
+\t mv hline as the last parameter, or fourth
 
-% seen addrules in Section X. handle rules with multiple targets.
-% so call addrules, not addrule.
+The action above relies on [[rbody()]] to read the body
+of a rule, that is its recipe.
+%
+I will explain [[rbody()]] in the next section.
 
-% I mentioned before in Section X that mk during parsing also
-% set global target1 to contain first target found in the mkfile.
-% Here is the code:
+%dup: core-ds/rule/addrules
+I have described [[addrules()]] called above in Section~\ref{sec:multi-targets}.
+[[addrules()]] can handle rules with multiple targets; it
+internally calls [[addrule()]] for each target.
+
+
+I mentioned also in Section~\ref{sec:default-target} 
+that [[mk]], during parsing, sets the global [[target1]] to contain
+the first target found in the mkfile.
+%
+Here is finally the code that sets [[target1]]:
 
 \label{sec:set-target1}
-% put before?
 <<[[addrules()]] set [[target1]]>>=
 /* tuck away first non-meta rule as default target*/
 if(target1 == nil && !(attr&REGEXP)){
     for(w = head; w; w = w->next)
         if(charin(w->s, "%&"))
             break;
-    if(w == nil)
+    if(w == nil) // head does not contain any pattern
         target1 = wdup(head);
 }
 @
-% why not also attr&META?
+\n I could mv this before, but addrules is in Core DS and target1
+\n mentioned in main. Also use charin below described in this chapter.
+
+Note the use of [[charin()]] above to make sure the first target
+does not contain any {pattern}. Indeed, [[mk]] would not
+know how to instantiate this pattern to build a concrete target.
+\l pattern can be [[%]] or [[&]] as described in X
+
+For the rule attribute [[REGEXP]] used above, see Section~\ref{sec:regexp}.
+\l why not also attr&META? because we didnt call yet addrule, and
+\l addrule does not return the rule
 
 
 \subsection{Parsing the recipe, [[rbody()]]}
 
-% Not infamous TAB!
+[[rbody()]], like [[assline()]], takes as a parameter an input buffer [[in]].
+%
+The {cursor} in this buffer should now point to the character following
+the newline of the line containing the target and prerequisites of the rule.
+% FIGURE?
+[[rbody()]] then fills its local string buffer [[buf]] until
+a non-spacing character is found in the first column.
+%
+This character marks the end of the recipe
+and the start of a new rule, definition, or inclusion.
 
-% rule body
+% read body
 <<function rbody>>=
 static char *
 rbody(Biobuf *in)
@@ -5683,15 +5728,17 @@ rbody(Biobuf *in)
     for(;;){
         r = Bgetrune(in);
         if (r < 0)
-            break;
+            break; // eof
+        // in first column
         if (lastr == '\n') {
-            if (r == '#')
-                rinsert(buf, r); // the shell recognize comments too
-            else if (r != ' ' && r != '\t') {
+            <<[[rbody()]] if comment in first column>>
+            else 
+              if (r != ' ' && r != '\t') {
                 Bungetrune(in);
                 break;
             }
         } else
+            // not in first column
             rinsert(buf, r);
 
         lastr = r;
@@ -5706,18 +5753,68 @@ rbody(Biobuf *in)
     return p;
 }
 @
-% so body/recipe always contains at least empty string.
+\l int -> Rune
 
-% handle multi lines shell commands, as long as have leading space or tab
-%  after last newline
-% handle 
+If a comment is found in the first column, it can not be
+the start of a rule, definition, or inclusion, so it is
+added in the buffer for the recipe:
 
-% note that no call to  stow() here! no variable expansion
+<<[[rbody()]] if comment in first column>>=
+if (r == '#')
+    rinsert(buf, r); // the shell recognize comments too
+@
+
+If a rule has no recipe, [[rbody()]] returns
+the empty string to its caller [[parse()]]. 
+%
+Note that the empty string is not the same thing than [[nil]]. Indeed,
+an empty string contains one byte: the end-of-string null character [[\0]].
+\l why insist? because invariant used later
+
+Note also that [[mk]] does not impose to use a [[TAB]] 
+in the first column like Make. A space character is also valid.
+Moreover, more than one spacing character can be used.
+\l but then weird shprint?
+You can also write multiple shell commands on multiple lines as long
+as they all have a leading spacing character in the first column.
+\l Make force to escape newline?
+
+\t note that no call to  stow() here! no variable expansion
 
 
 \subsection{Parsing rule attributes}
 
-% I mentioned attributes before.
+[[mk]] allows the user to customize certain rules by using
+{\em rule attributes}.
+%dup: main/build/parallel-mode (for VIR)
+An attribute often used is the attribute to indicate that
+the target in a rule does not correspond to a filename;
+[[mk]] should then not expect from the recipe to generate such a target.
+\l but in fact mk does not check that, so it is more to skip
+\l the reading of time if by bad luck there is a file named clean in the dir
+For instance, many [[mkfile]]s use the target [[clean]] to
+cleanup a directory.
+%dup: main/build/parallel-mode (for VIR)
+In [[mk]]'s terminology, such a target is called a {\em virtual target}
+(see Section~\ref{sec:virtual} for a full explanation).
+%real-world:
+In GNU Make, the use of [[.PHONY:]] followed by a string in a
+[[Makefile]] indicates that the string is a virtual target.
+
+In [[mk]], the syntax to add attributes to a rule is to add
+non-spacing characters after the first [[:]] of a rule, and
+to add another [[:]] after those characters, as in the following rule:
+
+<<tests/mkfile/mkclean>>=
+clean:V:
+    rm -f *.5 $PROG $LIB
+@
+
+Each character between the two [[:]] correspond to a different
+attribute.
+
+Rule attributes are stored in [[Rule.attr]], but before, they
+are stored in a local variable in [[parse()]]:
 
 <<[[parse()]] other locals>>=
 // bitset<Rule_attr>
@@ -5725,8 +5822,7 @@ int attr;
 @
 \l or var_attr?
 
-% passed by address to rhead.
-
+This variable is passed by address to [[rhead()]]:
 
 <<[[rhead()]] adjust [[attr]] and [[prog]]>>=
 *attr = 0; // Nothing
@@ -5737,14 +5833,13 @@ int attr;
 <<[[rhead()]] if sep is [[:]]>>
 @
 
-
+[[rhead()]] then modifies [[attr]] in the cases of
+the [[switch]] below:
 
 <<[[rhead()]] other locals>>=
 Rune r;
 int n;
 @
-
-% if not space or tab after :, then must be an attribute!
 
 <<[[rhead()]] if sep is [[:]]>>=
 if((sep == ':') && *p && (*p != ' ') && (*p != '\t')){
@@ -5773,18 +5868,26 @@ eos:
 %old: switch cases originally sorted alphabetically, but after
 % LP distribution, they might not be anymore
 
-%chunks: will see them gradually
+%chunks: 
+I will describe gradually the cases above and the different rule
+attributes.
+
 
 
 \section{Included files, [[<]]{\em file}}
 
 %trans:
-% second construct is inclusion, when rhread returned '<'.
+I will now describe the action to manage inclusions,
+when the special character returned by [[rhead()]] is [[<]].
+
+A file inclusion in an [[mkfile]] will result in the opening of
+a new file, hence the following additional variables in [[parse()]]:
 
 <<[[parse()]] other locals>>=
-fdt newfd;
 char *p;
+fdt newfd;
 @
+
 
 <<[[parse()]] switch rhead cases>>=
 case '<':
@@ -5797,14 +5900,50 @@ case '<':
         parse(p, newfd, false);
     break;
 @
-% parsed by rhead, so got variable expansion there too! < $arch.mk 
-% head empty.
 
-% handle filename with spaces now ... no need escaping
+<<[[parse()]] when parsing included file, sanity check p>>=
+if(*p == '\0'){
+    SYNERR(-1);
+    fprint(STDERR, "missing include file name\n");
+    Exit();
+}
+@
+<<[[parse()]] when parsing included file, sanity check newfd>>=
+if(newfd < 0){
+    fprint(STDERR, "warning: skipping missing include file: ");
+    perror(p);
+}
+@
+
+
+Note that [[tail]] above, contains the list of words on the right
+of [[<]] ([[head]], which contains the list of words on the left,
+should be empty).
+%
+Just like for the rules, this list of words is set in [[rhead()]]
+and is the result of a call to [[stow()]], which performs
+quote and variable expansions.
+%
+Thus, you can also use variables in the filename to include, 
+as in:
+
+<<tests/mkfile/mkincludearc>>=
+</$objtype/mkfile
+@
+%$
+
+I described [[wtos()]] called above in Section~\ref{sec:word}.
+It converts a list of words back to a string. In practice, this
+list should contain only one element.
+\l handle filename with spaces now ... no need escaping
 %ocaml: be more consistent and stricter
 
-% recurse but use globals infile, mkinline, so
-% to save and restore them.
+
+
+To include a file, [[mk]] simply calls recursively [[parse()]].
+However, a the globals [[infile]] and [[mkinline]] must
+be saved before the call and restored after, hence the following
+calls in [[parse()]]:
 
 <<[[parse()]] start, push>>=
 ipush();
@@ -5814,6 +5953,9 @@ ipush();
 ipop();
 @
 %ocaml: do that in eval, and use call stack to handle recursivity
+
+Both functions use the following structure to remember the list
+of {parent} files:
 
 <<struct input>>=
 struct Input
@@ -5827,10 +5969,10 @@ struct Input
 @
 
 <<global inputs>>=
+// list<ref_own<Input>> (next = Input.next)
 static struct Input *inputs = nil;
 @
 
-% can process many files, because of the </sys/src/... 
 
 <<function ipush>>=
 void
@@ -5881,19 +6023,6 @@ ipop(void)
 
 
 
-<<[[parse()]] when parsing included file, sanity check p>>=
-if(*p == '\0'){
-    SYNERR(-1);
-    fprint(STDERR, "missing include file name\n");
-    Exit();
-}
-@
-<<[[parse()]] when parsing included file, sanity check newfd>>=
-if(newfd < 0){
-    fprint(STDERR, "warning: skipping missing include file: ");
-    perror(p);
-}
-@
 
 \section{Variable definitions, {\em C}[[=]]{\em words}}
 % really Constant definitions, not variable.
