@@ -277,10 +277,8 @@ newnode(char *name)
     /*e: [[newnode()]] update node cache */
 
     node->name = name;
-
     // call to timeof()! 
     node->time = timeof(name, false);
-
     /*s: [[newnode()]] set flags of node */
     node->flags = (node->time? PROBABLE : 0);
     /*e: [[newnode()]] set flags of node */

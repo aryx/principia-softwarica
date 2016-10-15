@@ -26,9 +26,12 @@ squote(char *cp)
     while(*cp){
         n = chartorune(&r, cp);
         if(r == '\'') {
+            /*s: [[squote()]] return, unless double quote */
             n += chartorune(&r, cp+n);
             if(r != '\'')
                 return cp;
+            // else, double '', continue while loop
+            /*e: [[squote()]] return, unless double quote */
         }
         cp += n;
     }
@@ -40,8 +43,8 @@ squote(char *cp)
 
 /*s: function charin */
 /*
- *	search a string for characters in a pattern set
- *	characters in quotes and variable generators are escaped
+ *	Search a string for characters in a pattern set.
+ *	Characters in quotes and variable generators are escaped.
  */
 char*
 charin(char *cp, char *pat)
@@ -74,7 +77,7 @@ charin(char *cp, char *pat)
             break;
         /*e: [[charin()]] switch rune cases */
         default:
-            if(!vargen && utfrune(pat, r))
+            if(utfrune(pat, r) && !vargen)
                 return cp;
             break;
         }
@@ -93,7 +96,7 @@ charin(char *cp, char *pat)
 /*s: function expandquote */
 /*
  *	extract an escaped token.  Possible escape chars are single-quote,
- *	double-quote,and backslash.  Only the first is valid for rc. the
+ *	double-quote, and backslash.  Only the first is valid for rc. The
  *	others are just inserted into the receiving buffer.
  */
 char*
@@ -107,10 +110,12 @@ expandquote(char *s, Rune r, Bufblock *b)
     while(*s){
         s += chartorune(&r, s);
         if(r == '\'') {
+            /*s: [[expandquote()]] return, unless double quote */
             if(*s == '\'')
-                s++;
+                s++; // skip one of the double quote
             else
                 return s;
+            /*e: [[expandquote()]] return, unless double quote */
         }
         rinsert(b, r);
     }
@@ -128,28 +133,30 @@ error0
 escapetoken(Biobuf *bp, Bufblock *buf, bool preserve, int esc)
 {
     int c;
-    int line;
+    int line = mkinline;
 
     if(esc != '\'')
         return OK_1;
 
-    line = mkinline;
     while((c = nextrune(bp, false)) > 0){
         if(c == '\''){
             if(preserve)
                 rinsert(buf, c);
-
+            /*s: [[escapetoken()]] return, unless double quote */
             c = Bgetrune(bp);
             if (c < 0)
-                break;
+                break; // eof
             if(c != '\''){
                 Bungetrune(bp);
                 return OK_1;
             }
+            // else, '', so continue the while loop
+            /*e: [[escapetoken()]] return, unless double quote */
         }
+        // else
         rinsert(buf, c);
     }
-    // reached EOF
+    // must have reached EOF
     SYNERR(line); 
     fprint(STDERR, "missing closing %c\n", esc);
     return ERROR_0;

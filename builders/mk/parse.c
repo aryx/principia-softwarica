@@ -16,13 +16,13 @@ parse(char *f, fdt fd, bool varoverride)
     Word *head, *tail;
     int hline; // head line number
     /*s: [[parse()]] other locals */
+    char *body;
+    /*x: [[parse()]] other locals */
     // bitset<Rule_attr>
     int attr;
     /*x: [[parse()]] other locals */
-    char *body;
-    /*x: [[parse()]] other locals */
-    fdt newfd;
     char *p;
+    fdt newfd;
     /*x: [[parse()]] other locals */
     bool set = true;
     /*x: [[parse()]] other locals */
@@ -41,7 +41,7 @@ parse(char *f, fdt fd, bool varoverride)
     ipush();
     /*e: [[parse()]] start, push */
 
-    // Init
+    // Initialization
     infile = strdup(f);
     mkinline = 1;
     Binit(&in, fd, OREAD);
@@ -54,13 +54,19 @@ parse(char *f, fdt fd, bool varoverride)
         // Parsing
         c = rhead(buf->start, &head, &tail,     &attr, &prog);
 
-        // Semantic actions
+        // Semantic actions (they may read more lines)
         switch(c)
         {
         /*s: [[parse()]] switch rhead cases */
+        default:
+            SYNERR(hline);
+            fprint(STDERR, "expected one of :<=\n");
+            Exit();
+            break;
+        /*x: [[parse()]] switch rhead cases */
         case ':':
             body = rbody(&in);
-            addrules(head, tail, body, attr, hline, prog);
+            addrules(head, tail, body,   attr, hline, prog);
             break;
         /*x: [[parse()]] switch rhead cases */
         case '<':
@@ -136,11 +142,6 @@ parse(char *f, fdt fd, bool varoverride)
             }
             break;
         /*e: [[parse()]] switch rhead cases */
-        default:
-            SYNERR(hline);
-            fprint(STDERR, "expected one of :<=\n");
-            Exit();
-            break;
         }
     }
     close(fd);
@@ -165,7 +166,7 @@ addrules(Word *head, Word *tail, char *body, int attr, int hline, char *prog)
         for(w = head; w; w = w->next)
             if(charin(w->s, "%&"))
                 break;
-        if(w == nil)
+        if(w == nil) // head does not contain any pattern
             target1 = wdup(head);
     }
     /*e: [[addrules()]] set [[target1]] */
@@ -180,7 +181,6 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
 {
     char *p;
     int sep; // one of : = < 
-    Word *w;
     /*s: [[rhead()]] other locals */
     Rune r;
     int n;
@@ -294,15 +294,14 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     /*e: [[rhead()]] adjust [[attr]] and [[prog]] */
 
     // potentially expand variables in head
-    *h = w = stow(line);
-    /*s: [[rhead()]] sanity check w */
-    if(*w->s == '\0' && sep != '<' && sep != '|') {
+    *h = stow(line);
+    /*s: [[rhead()]] sanity check h */
+    if(*((*h)->s) == '\0' && sep != '<' && sep != '|') {
         SYNERR(mkinline-1);
         fprint(STDERR, "no var/target on left side of assignment/rule\n");
         Exit();
     }
-    /*e: [[rhead()]] sanity check w */
-
+    /*e: [[rhead()]] sanity check h */
     // potentially expand variables in tail
     *t = stow(p);
 
@@ -324,15 +323,20 @@ rbody(Biobuf *in)
     for(;;){
         r = Bgetrune(in);
         if (r < 0)
-            break;
+            break; // eof
+        // in first column
         if (lastr == '\n') {
+            /*s: [[rbody()]] if comment in first column */
             if (r == '#')
                 rinsert(buf, r); // the shell recognize comments too
-            else if (r != ' ' && r != '\t') {
+            /*e: [[rbody()]] if comment in first column */
+            else 
+              if (r != ' ' && r != '\t') {
                 Bungetrune(in);
                 break;
             }
         } else
+            // not in first column
             rinsert(buf, r);
 
         lastr = r;
@@ -359,6 +363,7 @@ struct Input
 };
 /*e: struct input */
 /*s: global inputs */
+// list<ref_own<Input>> (next = Input.next)
 static struct Input *inputs = nil;
 /*e: global inputs */
 

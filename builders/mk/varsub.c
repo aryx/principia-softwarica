@@ -22,9 +22,10 @@ varsub(char **s)
     // else
 
     b = varname(s);
+    /*s: [[varsub()]] sanity check b */
     if(b == nil)
         return nil;
-
+    /*e: [[varsub()]] sanity check b */
     w = varmatch(b->start);
 
     freebuf(b);
@@ -40,12 +41,12 @@ static Bufblock*
 varname(char **s)
 {
     Bufblock *b;
-    char *cp;
+    char *cp = *s;
     Rune r;
     int n;
 
     b = newbuf();
-    cp = *s;
+
     for(;;){
         n = chartorune(&r, cp);
         if (!WORDCHR(r))
@@ -76,7 +77,7 @@ varmatch(char *name)
     
     sym = symlook(name, S_VAR, nil);
     if(sym){
-            /* check for at least one non-NULL value */
+        /* check for at least one non-NULL value */
         for (w = sym->u.ptr; w; w = w->next)
             if(w->s && *w->s)
                 return wdup(w);
@@ -283,23 +284,29 @@ submatch(char *s, Word *a, Word *b, int *nmid, char **enda)
 static Word*
 nextword(char **s)
 {
-    char *cp;
+    char *cp = *s;
     Bufblock *b;
-    Word *head, *tail;
     Rune r;
+    // list<ref_own<Word>>
+    Word *head;
+    // option<ref<Word>>
+    Word  *lastw;
     bool empty;
     /*s: [[nextword()]] other locals */
+    // list<ref_own<Word>
     Word *w;
     /*e: [[nextword()]] other locals */
 
-    cp = *s;
     b = newbuf();
 
 restart:
-    head = tail = nil;
+    head = nil;
+    lastw = nil;
+    empty = true;
+    /*s: [[nextword()]] skipping leading white space */
     while(*cp == ' ' || *cp == '\t')		/* leading white space */
         cp++;
-    empty = true;
+    /*e: [[nextword()]] skipping leading white space */
 
     while(*cp){
         cp += chartorune(&r, cp);
@@ -310,9 +317,9 @@ restart:
         case '\n':
             goto out;
         /*s: [[nextword()]] switch rune cases */
-        case '\\':
         case '\'':
         case '"':
+        case '\\':
             empty = false;
             cp = expandquote(cp, r, b);
             if(cp == nil){
@@ -323,34 +330,49 @@ restart:
         /*x: [[nextword()]] switch rune cases */
         case '$':
             w = varsub(&cp);
+            /*s: [[nextword()]] when in variable case, if w is nil */
             if(w == nil){
-                if(empty)
-                    goto restart;
+               /*s: [[nextword()]] when in variable case, if w is nil and no char before */
+               if(empty)
+                   goto restart;
+               /*e: [[nextword()]] when in variable case, if w is nil and no char before */
                 break;
             }
+            /*e: [[nextword()]] when in variable case, if w is nil */
             empty = false;
+
+            /*s: [[nextword()]] when in variable case, if non-space chars before var */
             if(b->current != b->start){
                 bufcpy(b, w->s, strlen(w->s));
                 insert(b, '\0');
                 free(w->s);
+                // adjust the first word
                 w->s = strdup(b->start);
+                // reset buf
                 b->current = b->start;
             }
+            /*e: [[nextword()]] when in variable case, if non-space chars before var */
+            /*s: [[nextword()]] when in variable case, if head is not empty */
             if(head){
-                bufcpy(b, tail->s, strlen(tail->s));
+                // merge the last and first words
+                bufcpy(b, lastw->s, strlen(lastw->s));
                 bufcpy(b, w->s, strlen(w->s));
                 insert(b, '\0');
-                free(tail->s);
-                tail->s = strdup(b->start);
-                tail->next = w->next;
+                free(lastw->s);
+                lastw->s = strdup(b->start);
+
+                lastw->next = w->next;
                 free(w->s);
                 free(w);
+                // reset buf
                 b->current = b->start;
-            } else
-                tail = head = w;
+            }
+            /*e: [[nextword()]] when in variable case, if head is not empty */
+            else
+                head = lastw = w;
 
-            while(tail->next)
-                tail = tail->next;
+            while(lastw->next)
+                lastw = lastw->next;
             break;
         /*e: [[nextword()]] switch rune cases */
         default:
@@ -362,14 +384,18 @@ restart:
 out:
     *s = cp;
     if(b->current != b->start){
+        /*s: [[nextword()]] when buffer not empty, if there was already an head */
         if(head){
             cp = b->current;
-            bufcpy(b, tail->s, strlen(tail->s));
+            bufcpy(b, lastw->s, strlen(lastw->s));
             bufcpy(b, b->start, cp - b->start);
             insert(b, '\0');
-            free(tail->s);
-            tail->s = strdup(cp);
-        } else {
+            free(lastw->s);
+            // adjust the last word
+            lastw->s = strdup(cp);
+        }
+        /*e: [[nextword()]] when buffer not empty, if there was already an head */
+         else {
             insert(b, '\0');
             head = newword(b->start);
         }
@@ -383,21 +409,26 @@ out:
 Word *
 stow(char *s)
 {
-    Word *head, *w, *new;
+    // list<ref_own<Word>>
+    Word *head, *new;
+    // option<ref<Word>>
+    Word *lastw;
 
-    w = head = nil;
+    head = nil;
+    lastw = nil;
     while(*s){
         new = nextword(&s);
         if(new == nil)
             break;
 
-        // concat_list(new, head, w)
-        if (w)
-            w->next = new;
+        // head = concat_list(head, new)
+        if (lastw)
+            lastw->next = new;
         else
-            head = w = new;
-        while(w->next)
-            w = w->next;
+            head = lastw = new;
+
+        while(lastw->next)
+            lastw = lastw->next;
         
     }
     if (!head)

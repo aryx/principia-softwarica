@@ -52,7 +52,7 @@ bool explain = false;
 /*e: global explain */
 
 /*s: global jobs */
-// list<ref_won<jobs>> (next = Job.next)
+// list<ref_own<jobs>> (next = Job.next)
 Job *jobs;
 /*e: global jobs */
 

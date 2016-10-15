@@ -28,30 +28,29 @@ void
 main(int argc, char **argv)
 {
     /*s: [[main()]] locals */
-    Word *w;
-    char *s;
     int i;
-    /*x: [[main()]] locals */
     char *temp = nil;
     fdt tfd = -1;
     Biobuf tb;
     /*x: [[main()]] locals */
-    char *files[256];
-    char **f = files;
+    char *f = nil;
     /*x: [[main()]] locals */
-    char **ff;
+    Word *w;
     /*x: [[main()]] locals */
     bool sflag = false;
     /*x: [[main()]] locals */
     Bufblock *whatif = nil;
     /*x: [[main()]] locals */
     Bufblock *buf = newbuf();
+    /*x: [[main()]] locals */
+    char *s;
     /*e: [[main()]] locals */
 
     // Initializing
 
     /*s: [[main()]] initializations */
     Binit(&bout, STDOUT, OWRITE);
+    /*x: [[main()]] initializations */
     /*s: [[main()]] argv processing part 1, -xxx */
     USED(argc);
     for(argv++; *argv && (**argv == '-'); argv++)
@@ -66,7 +65,7 @@ main(int argc, char **argv)
         case 'f':
             if(*++argv == nil)
                 badusage();
-            *f++ = *argv;
+            f = *argv;
             /*s: [[main()]] add [[argv[0]]] in [[buf]] */
             bufcpy(buf, argv[0], strlen(argv[0]));
             insert(buf, ' ');
@@ -149,9 +148,6 @@ main(int argc, char **argv)
     /*e: [[main()]] setup profiling */
     initenv();
     /*s: [[main()]] argv processing part 2, xxx=yyy */
-    /*
-     *   assignment args become null strings
-     */
     for(i = 0; argv[i]; i++) 
       if(utfrune(argv[i], '=')){
         /*s: [[main()]] add [[argv[i]]] in [[buf]] */
@@ -159,7 +155,7 @@ main(int argc, char **argv)
         insert(buf, ' ');
         /*e: [[main()]] add [[argv[i]]] in [[buf]] */
 
-        /*s: [[main()]] create temporary file if not exist yet */
+        /*s: [[main()]] create temporary file if not exist yet and set [[tb]] */
         if(tfd < 0){
             temp = maketmp();
             if(temp == nil) {
@@ -173,9 +169,14 @@ main(int argc, char **argv)
             }
             Binit(&tb, tfd, OWRITE);
         }
-        /*e: [[main()]] create temporary file if not exist yet */
+        /*e: [[main()]] create temporary file if not exist yet and set [[tb]] */
         Bprint(&tb, "%s\n", argv[i]);
+        /*s: [[main()]] mark [[argv[i]] for skipping */
+        /*
+         *   assignment args become null strings
+         */
         *argv[i] = '\0';
+        /*e: [[main()]] mark [[argv[i]] for skipping */
       }
 
     if(tfd >= 0){
@@ -218,15 +219,14 @@ main(int argc, char **argv)
     /*e: [[main()]] profile initializations */
     /*e: [[main()]] initializations */
 
-    // Parsing
+    // Parsing the mkfile
 
     /*s: [[main()]] parsing mkfile, call [[parse()]] */
-    if(f == files){
+    if(f == nil){
         if(access(MKFILE, AREAD) == OK_0)
             parse(MKFILE, open(MKFILE, OREAD), false);
     } else
-        for(ff = files; ff < f; ff++)
-            parse(*ff, open(*ff, OREAD), false);
+        parse(f, open(f, OREAD), false);
     /*s: [[main()]] if DEBUG(D_PARSE) */
     if(DEBUG(D_PARSE)){
         dumpw("default targets", target1);
@@ -237,7 +237,7 @@ main(int argc, char **argv)
     /*e: [[main()]] if DEBUG(D_PARSE) */
     /*e: [[main()]] parsing mkfile, call [[parse()]] */
 
-    // Building
+    // Building the graph, finding out-of-date files
 
     /*s: [[main()]] initializations before building */
     catchnotes();
@@ -250,7 +250,7 @@ main(int argc, char **argv)
         freebuf(whatif);
     }
     /*e: [[main()]] initializations before building */
-    /*s: [[main()]] building the targets, call [[mk()]] */
+    /*s: [[main()]] setting the targets, call [[mk()]] */
     if(*argv == nil){
         /*s: [[main()]] when no target arguments */
         if(target1)
@@ -299,7 +299,7 @@ main(int argc, char **argv)
            /*e: [[main()]] parallel mode and target arguments given */
         }
     }
-    /*e: [[main()]] building the targets, call [[mk()]] */
+    /*e: [[main()]] setting the targets, call [[mk()]] */
 
     // Reporting (optional)
 

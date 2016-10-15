@@ -26,12 +26,12 @@ mk(char *target)
     /*e: [[mk()]] initialisation */
 
     root = graph(target);
-    /*s: [[main()]] if DEBUG(D_GRAPH) */
+    /*s: [[mk()]] if DEBUG(D_GRAPH) */
     if(DEBUG(D_GRAPH)){
         dumpn("new target\n", root);
         Bflush(&bout);
     }
-    /*e: [[main()]] if DEBUG(D_GRAPH) */
+    /*e: [[mk()]] if DEBUG(D_GRAPH) */
     clrmade(root);
 
     while(root->flags&NOTMADE){
@@ -52,12 +52,12 @@ mk(char *target)
     if(root->flags&BEINGMADE)
         waitup(-1, (int *)nil);
 
-    /*s: [[main()]] before returning, more [[waitup()]] if there was an error */
+    /*s: [[mk()]] before returning, more [[waitup()]] if there was an error */
     while(jobs)
         waitup(-2, (int *)nil);
 
     assert(/*target didnt get done*/ runerrs || (root->flags&MADE));
-    /*e: [[main()]] before returning, more [[waitup()]] if there was an error */
+    /*e: [[mk()]] before returning, more [[waitup()]] if there was an error */
     if(!did)
         Bprint(&bout, "mk: '%s' is up to date\n", root->name);
     return;

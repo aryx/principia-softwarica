@@ -126,7 +126,7 @@ struct Arc
     Rule *r;
 
     /*s: [[Arc]] other fields */
-    // option<ref_own<string>>, what will replace the %
+    // option<ref_own<string>>, what '%' matched?
     char		*stem;
     /*x: [[Arc]] other fields */
     // bool (TOGO)
@@ -157,13 +157,15 @@ struct Node
     char*		name; 
     // option<Time> (None = 0, for nonexistent files and virtual targets)
     ulong		time; // last mtime of file 
-    // bitset<enum<Node_flag>>
-    ushort		flags;
 
     /*s: [[Node]] arcs field */
     // list<ref_own<Arc>> (next = Arc.next)
     Arc		*prereqs;
     /*e: [[Node]] arcs field */
+    /*s: [[Node]] other fields */
+    // bitset<enum<Node_flag>>
+    ushort		flags;
+    /*e: [[Node]] other fields */
 
     // Extra
     /*s: [[Node]] extra fields */
@@ -176,6 +178,10 @@ struct Node
 /*s: enum Node_flag */
 enum Node_flag {
     /*s: [[Node_flag]] cases */
+    NOTMADE    = 0x0020,
+    BEINGMADE  = 0x0040,
+    MADE       = 0x0080,
+    /*x: [[Node_flag]] cases */
     CYCLE      = 0x0002,
     /*x: [[Node_flag]] cases */
     VACUOUS    = 0x0200,
@@ -183,10 +189,6 @@ enum Node_flag {
     PROBABLE   = 0x0100,
     /*x: [[Node_flag]] cases */
     READY      = 0x0004,
-    /*x: [[Node_flag]] cases */
-    NOTMADE    = 0x0020,
-    BEINGMADE  = 0x0040,
-    MADE       = 0x0080,
     /*x: [[Node_flag]] cases */
     VIRTUAL    = 0x0001,
     /*x: [[Node_flag]] cases */
@@ -217,10 +219,10 @@ struct Job
     // $target and $prereq
     Word		*t;	/* targets */
     Word		*p;	/* prerequisites */
+    // $stem
+    char		*stem;
 
     /*s: [[Job]] other fields */
-    char		*stem;
-    /*x: [[Job]] other fields */
     char		**match;
     /*x: [[Job]] other fields */
     Word		*at;	/* all targets */
