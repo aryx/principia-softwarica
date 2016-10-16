@@ -1,3 +1,4 @@
+/*s: libregexp/regcomp.h */
 /*
  *  substitution list
  */
@@ -61,3 +62,4 @@ extern Relist*	_renewthread(Relist*, Reinst*, int, Resublist*);
 extern void	_renewmatch(Resub*, int, Resublist*);
 extern Relist*	_renewemptythread(Relist*, Reinst*, int, char*);
 extern Relist*	_rrenewemptythread(Relist*, Reinst*, int, Rune*);
+/*e: libregexp/regcomp.h */
