@@ -1,10 +1,14 @@
+/*s: port/u64.c */
 #include <u.h>
 #include <libc.h>
 
+/*s: enum _anon_ (port/u64.c) */
 enum {
-	INVAL=	255
+    INVAL=  255
 };
+/*e: enum _anon_ (port/u64.c) */
 
+/*s: global t64d */
 static uchar t64d[256] = {
    INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,
    INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,
@@ -23,105 +27,113 @@ static uchar t64d[256] = {
    INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,
    INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL,INVAL
 };
+/*e: global t64d */
+/*s: global t64e */
 static char t64e[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+/*e: global t64e */
 
+/*s: function dec64 */
 int
 dec64(uchar *out, int lim, char *in, int n)
 {
-	ulong b24;
-	uchar *start = out;
-	uchar *e = out + lim;
-	int i, c;
+    ulong b24;
+    uchar *start = out;
+    uchar *e = out + lim;
+    int i, c;
 
-	b24 = 0;
-	i = 0;
-	while(n-- > 0){
+    b24 = 0;
+    i = 0;
+    while(n-- > 0){
  
-		c = t64d[*(uchar*)in++];
-		if(c == INVAL)
-			continue;
-		switch(i){
-		case 0:
-			b24 = c<<18;
-			break;
-		case 1:
-			b24 |= c<<12;
-			break;
-		case 2:
-			b24 |= c<<6;
-			break;
-		case 3:
-			if(out + 3 > e)
-				goto exhausted;
+        c = t64d[*(uchar*)in++];
+        if(c == INVAL)
+            continue;
+        switch(i){
+        case 0:
+            b24 = c<<18;
+            break;
+        case 1:
+            b24 |= c<<12;
+            break;
+        case 2:
+            b24 |= c<<6;
+            break;
+        case 3:
+            if(out + 3 > e)
+                goto exhausted;
 
-			b24 |= c;
-			*out++ = b24>>16;
-			*out++ = b24>>8;
-			*out++ = b24;
-			i = -1;
-			break;
-		}
-		i++;
-	}
-	switch(i){
-	case 2:
-		if(out + 1 > e)
-			goto exhausted;
-		*out++ = b24>>16;
-		break;
-	case 3:
-		if(out + 2 > e)
-			goto exhausted;
-		*out++ = b24>>16;
-		*out++ = b24>>8;
-		break;
-	}
+            b24 |= c;
+            *out++ = b24>>16;
+            *out++ = b24>>8;
+            *out++ = b24;
+            i = -1;
+            break;
+        }
+        i++;
+    }
+    switch(i){
+    case 2:
+        if(out + 1 > e)
+            goto exhausted;
+        *out++ = b24>>16;
+        break;
+    case 3:
+        if(out + 2 > e)
+            goto exhausted;
+        *out++ = b24>>16;
+        *out++ = b24>>8;
+        break;
+    }
 exhausted:
-	return out - start;
+    return out - start;
 }
+/*e: function dec64 */
 
+/*s: function enc64 */
 int
 enc64(char *out, int lim, uchar *in, int n)
 {
-	int i;
-	ulong b24;
-	char *start = out;
-	char *e = out + lim;
+    int i;
+    ulong b24;
+    char *start = out;
+    char *e = out + lim;
 
-	for(i = n/3; i > 0; i--){
-		b24 = (*in++)<<16;
-		b24 |= (*in++)<<8;
-		b24 |= *in++;
-		if(out + 4 >= e)
-			goto exhausted;
-		*out++ = t64e[(b24>>18)];
-		*out++ = t64e[(b24>>12)&0x3f];
-		*out++ = t64e[(b24>>6)&0x3f];
-		*out++ = t64e[(b24)&0x3f];
-	}
+    for(i = n/3; i > 0; i--){
+        b24 = (*in++)<<16;
+        b24 |= (*in++)<<8;
+        b24 |= *in++;
+        if(out + 4 >= e)
+            goto exhausted;
+        *out++ = t64e[(b24>>18)];
+        *out++ = t64e[(b24>>12)&0x3f];
+        *out++ = t64e[(b24>>6)&0x3f];
+        *out++ = t64e[(b24)&0x3f];
+    }
 
-	switch(n%3){
-	case 2:
-		b24 = (*in++)<<16;
-		b24 |= (*in)<<8;
-		if(out + 4 >= e)
-			goto exhausted;
-		*out++ = t64e[(b24>>18)];
-		*out++ = t64e[(b24>>12)&0x3f];
-		*out++ = t64e[(b24>>6)&0x3f];
-		*out++ = '=';
-		break;
-	case 1:
-		b24 = (*in)<<16;
-		if(out + 4 >= e)
-			goto exhausted;
-		*out++ = t64e[(b24>>18)];
-		*out++ = t64e[(b24>>12)&0x3f];
-		*out++ = '=';
-		*out++ = '=';
-		break;
-	}
+    switch(n%3){
+    case 2:
+        b24 = (*in++)<<16;
+        b24 |= (*in)<<8;
+        if(out + 4 >= e)
+            goto exhausted;
+        *out++ = t64e[(b24>>18)];
+        *out++ = t64e[(b24>>12)&0x3f];
+        *out++ = t64e[(b24>>6)&0x3f];
+        *out++ = '=';
+        break;
+    case 1:
+        b24 = (*in)<<16;
+        if(out + 4 >= e)
+            goto exhausted;
+        *out++ = t64e[(b24>>18)];
+        *out++ = t64e[(b24>>12)&0x3f];
+        *out++ = '=';
+        *out++ = '=';
+        break;
+    }
 exhausted:
-	*out = 0;
-	return out - start;
+    *out = 0;
+    return out - start;
 }
+/*e: function enc64 */
+/*e: port/u64.c */

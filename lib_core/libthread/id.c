@@ -127,9 +127,9 @@ procdata(void)
 }
 /*e: function procdata */
 
-/*s: global privlock */
+/*s: global privlock (libthread/id.c) */
 static Lock privlock;
-/*e: global privlock */
+/*e: global privlock (libthread/id.c) */
 /*s: global privmask */
 //array<bool> NPRIV at least
 static int privmask = 1;

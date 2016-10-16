@@ -7,9 +7,9 @@
 
 typedef struct DS DS;
 
-static int	call(char*, char*, DS*);
-static int	csdial(DS*);
-static void	_dial_string_parse(char*, DS*);
+static int  call(char*, char*, DS*);
+static int  csdial(DS*);
+static void _dial_string_parse(char*, DS*);
 
 /*s: enum _anon_ (lib_core/libthread/dial.c) */
 enum
@@ -19,7 +19,7 @@ enum
 };
 /*e: enum _anon_ (lib_core/libthread/dial.c) */
 
-/*s: struct DS */
+/*s: struct DS (libthread/dial.c) */
 struct DS {
     /* dist string */
     char	buf[Maxstring];
@@ -32,7 +32,7 @@ struct DS {
     char	*dir;
     int	*cfdp;
 };
-/*e: struct DS */
+/*e: struct DS (libthread/dial.c) */
 
 
 /*s: function _threaddial */
@@ -79,7 +79,7 @@ _threaddial(char *dest, char *local, char *dir, int *cfdp)
 }
 /*e: function _threaddial */
 
-/*s: function csdial */
+/*s: function csdial (libthread/dial.c) */
 static int
 csdial(DS *ds)
 {
@@ -135,9 +135,9 @@ csdial(DS *ds)
         werrstr("%s", err);
     return rv;
 }
-/*e: function csdial */
+/*e: function csdial (libthread/dial.c) */
 
-/*s: function call */
+/*s: function call (libthread/dial.c) */
 static int
 call(char *clone, char *dest, DS *ds)
 {
@@ -197,9 +197,9 @@ call(char *clone, char *dest, DS *ds)
         close(cfd);
     return fd;
 }
-/*e: function call */
+/*e: function call (libthread/dial.c) */
 
-/*s: function _dial_string_parse */
+/*s: function _dial_string_parse (libthread/dial.c) */
 /*
  *  parse a dial string
  */
@@ -231,5 +231,5 @@ _dial_string_parse(char *str, DS *ds)
         ds->rem = p + 1;
     }
 }
-/*e: function _dial_string_parse */
+/*e: function _dial_string_parse (libthread/dial.c) */
 /*e: lib_core/libthread/dial.c */

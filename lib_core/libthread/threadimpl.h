@@ -2,30 +2,30 @@
 /* 
  * Some notes on locking:
  *
- *	All the locking woes come from implementing
- *	threadinterrupt (and threadkill).
+ *  All the locking woes come from implementing
+ *  threadinterrupt (and threadkill).
  *
- *	_threadgetproc()->thread is always a live pointer.
- *	p->threads, p->ready, and _threadrgrp also contain
- * 	live thread pointers.  These may only be consulted
- *	while holding p->lock or _threadrgrp.lock; in procs
- *	other than p, the pointers are only guaranteed to be live
- *	while the lock is still being held.
+ *  _threadgetproc()->thread is always a live pointer.
+ *  p->threads, p->ready, and _threadrgrp also contain
+ *  live thread pointers.  These may only be consulted
+ *  while holding p->lock or _threadrgrp.lock; in procs
+ *  other than p, the pointers are only guaranteed to be live
+ *  while the lock is still being held.
  *
- *	Thread structures can only be freed by the proc
- *	they belong to.  Threads marked with t->inrendez
- * 	need to be extracted from the _threadrgrp before
- *	being freed.
+ *  Thread structures can only be freed by the proc
+ *  they belong to.  Threads marked with t->inrendez
+ *  need to be extracted from the _threadrgrp before
+ *  being freed.
  *
- *	_threadrgrp.lock cannot be acquired while holding p->lock.
+ *  _threadrgrp.lock cannot be acquired while holding p->lock.
  */
 
-typedef struct Pqueue	Pqueue;
-typedef struct Rgrp	Rgrp;
-typedef struct Tqueue	Tqueue;
-typedef struct Thread	Thread;
-typedef struct Execargs	Execargs;
-typedef struct Proc	Proc;
+typedef struct Pqueue   Pqueue;
+typedef struct Rgrp Rgrp;
+typedef struct Tqueue   Tqueue;
+typedef struct Thread   Thread;
+typedef struct Execargs Execargs;
+typedef struct Proc Proc;
 
 
 /* must match list in sched.c */
@@ -220,41 +220,41 @@ struct Ioproc
 };
 /*e: struct Ioproc */
 
-void	_freeproc(Proc*);
-void	_freethread(Thread*);
-Proc*	_newproc(void(*)(void*), void*, uint, char*, int, int);
-int	_procsplhi(void);
-void	_procsplx(int);
-void	_sched(void);
-int	_schedexec(Execargs*);
-void	_schedexecwait(void);
-void	_schedexit(Proc*);
-int	_schedfork(Proc*);
-void	_schedinit(void*);
-void	_systhreadinit(void);
-void	_threadassert(char*);
-void	_threadbreakrendez(void);
-void	_threaddebug(ulong, char*, ...);
-void	_threadexitsall(char*);
-void	_threadflagrendez(Thread*);
-Proc*	_threadgetproc(void);
-void	_threadsetproc(Proc*);
-void	_threadinitstack(Thread*, void(*)(void*), void*);
-void*	_threadmalloc(long, int);
-void	_threadnote(void*, char*);
-void	_threadready(Thread*);
-void*	_threadrendezvous(void*, void*);
-void	_threadsignal(void);
-void	_threadsysfatal(char*, va_list);
-void**	_workerdata(void);
-void	_xinc(long*);
-long	_xdec(long*);
+void    _freeproc(Proc*);
+void    _freethread(Thread*);
+Proc*   _newproc(void(*)(void*), void*, uint, char*, int, int);
+int _procsplhi(void);
+void    _procsplx(int);
+void    _sched(void);
+int _schedexec(Execargs*);
+void    _schedexecwait(void);
+void    _schedexit(Proc*);
+int _schedfork(Proc*);
+void    _schedinit(void*);
+void    _systhreadinit(void);
+void    _threadassert(char*);
+void    _threadbreakrendez(void);
+void    _threaddebug(ulong, char*, ...);
+void    _threadexitsall(char*);
+void    _threadflagrendez(Thread*);
+Proc*   _threadgetproc(void);
+void    _threadsetproc(Proc*);
+void    _threadinitstack(Thread*, void(*)(void*), void*);
+void*   _threadmalloc(long, int);
+void    _threadnote(void*, char*);
+void    _threadready(Thread*);
+void*   _threadrendezvous(void*, void*);
+void    _threadsignal(void);
+void    _threadsysfatal(char*, va_list);
+void**  _workerdata(void);
+void    _xinc(long*);
+long    _xdec(long*);
 
-extern int		_threaddebuglevel;
-extern char*		_threadexitsallstatus;
-extern Pqueue		_threadpq;
-extern Channel*		_threadwaitchan;
-extern Rgrp		_threadrgrp;
+extern int      _threaddebuglevel;
+extern char*        _threadexitsallstatus;
+extern Pqueue       _threadpq;
+extern Channel*     _threadwaitchan;
+extern Rgrp     _threadrgrp;
 
 /*s: constant DBGAPPL */
 #define DBGAPPL	(1 << 0)

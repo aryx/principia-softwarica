@@ -10,9 +10,9 @@ typedef struct Note Note;
 int	_threadnopasser;
 /*e: global _threadnopasser */
 
-/*s: constant NFN */
+/*s: constant NFN (libthread/note.c) */
 #define	NFN		33
-/*e: constant NFN */
+/*e: constant NFN (libthread/note.c) */
 /*s: constant ERRLEN */
 #define	ERRLEN	48
 /*e: constant ERRLEN */

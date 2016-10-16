@@ -1,17 +1,21 @@
-#include	<u.h>
-#include	<libc.h>
+/*s: port/memchr.c */
+#include    <u.h>
+#include    <libc.h>
 
+/*s: function memchr */
 void*
 memchr(void *ap, int c, ulong n)
 {
-	uchar *sp;
+    uchar *sp;
 
-	sp = ap;
-	c &= 0xFF;
-	while(n > 0) {
-		if(*sp++ == c)
-			return sp-1;
-		n--;
-	}
-	return 0;
+    sp = ap;
+    c &= 0xFF;
+    while(n > 0) {
+        if(*sp++ == c)
+            return sp-1;
+        n--;
+    }
+    return 0;
 }
+/*e: function memchr */
+/*e: port/memchr.c */

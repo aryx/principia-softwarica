@@ -92,7 +92,7 @@ mainlauncher(void *arg)
 }
 /*e: function mainlauncher */
 
-/*s: function skip */
+/*s: function skip (libthread/main.c) */
 static char*
 skip(char *p)
 {
@@ -102,7 +102,7 @@ skip(char *p)
         p++;
     return p;
 }
-/*e: function skip */
+/*e: function skip (libthread/main.c) */
 
 /*s: function _times */
 static long

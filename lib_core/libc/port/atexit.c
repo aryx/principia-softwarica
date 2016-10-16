@@ -1,60 +1,76 @@
+/*s: port/atexit.c */
 #include <u.h>
 #include <libc.h>
 
-#define	NEXIT	33
+/*s: constant NEXIT */
+#define NEXIT   33
+/*e: constant NEXIT */
 
 typedef struct Onex Onex;
+/*s: struct Onex */
 struct Onex{
-	void	(*f)(void);
-	int	pid;
+    void    (*f)(void);
+    int pid;
 };
+/*e: struct Onex */
 
+/*s: global onexlock */
 static Lock onexlock;
+/*e: global onexlock */
+/*s: global onex */
 Onex onex[NEXIT];
+/*e: global onex */
 
+/*s: function atexit */
 int
 atexit(void (*f)(void))
 {
-	int i;
+    int i;
 
-	lock(&onexlock);
-	for(i=0; i<NEXIT; i++)
-		if(onex[i].f == 0) {
-			onex[i].pid = getpid();
-			onex[i].f = f;
-			unlock(&onexlock);
-			return 1;
-		}
-	unlock(&onexlock);
-	return 0;
+    lock(&onexlock);
+    for(i=0; i<NEXIT; i++)
+        if(onex[i].f == 0) {
+            onex[i].pid = getpid();
+            onex[i].f = f;
+            unlock(&onexlock);
+            return 1;
+        }
+    unlock(&onexlock);
+    return 0;
 }
+/*e: function atexit */
 
+/*s: function atexitdont */
 void
 atexitdont(void (*f)(void))
 {
-	int i, pid;
+    int i, pid;
 
-	pid = getpid();
-	for(i=0; i<NEXIT; i++)
-		if(onex[i].f == f && onex[i].pid == pid)
-			onex[i].f = 0;
+    pid = getpid();
+    for(i=0; i<NEXIT; i++)
+        if(onex[i].f == f && onex[i].pid == pid)
+            onex[i].f = 0;
 }
+/*e: function atexitdont */
 
 #pragma profile off
 
+/*s: function exits */
 void
 exits(char *s)
 {
-	int i, pid;
-	void (*f)(void);
+    int i, pid;
+    void (*f)(void);
 
-	pid = getpid();
-	for(i = NEXIT-1; i >= 0; i--)
-		if((f = onex[i].f) && pid == onex[i].pid) {
-			onex[i].f = 0;
-			(*f)();
-		}
-	_exits(s);
+    pid = getpid();
+    for(i = NEXIT-1; i >= 0; i--)
+        if((f = onex[i].f) && pid == onex[i].pid) {
+            onex[i].f = 0;
+            (*f)();
+        }
+    _exits(s);
 }
+/*e: function exits */
 
 #pragma profile on
+/*e: port/atexit.c */

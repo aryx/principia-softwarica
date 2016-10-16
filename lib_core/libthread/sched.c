@@ -5,7 +5,7 @@
 #include "threadimpl.h"
 #include <tos.h>
 
-static Thread	*runthread(Proc*);
+static Thread   *runthread(Proc*);
 
 /*s: global _psstate */
 static char *_psstate[] = {
