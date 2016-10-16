@@ -26,6 +26,7 @@ loop:
 	MOVW	$_exitstr<>(SB), R(arg)
 	MOVW	R(arg), 4(R(sp))
 	BL	exits(SB)
+    // unreachable
 	BL	_div(SB) // force loading of div??
 	B	loop
 
