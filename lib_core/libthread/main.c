@@ -84,6 +84,7 @@ mainlauncher(void *arg)
     Mainarg *a;
 
     a = arg;
+
     // user defined threadmain()!!
     threadmain(a->argc, a->argv);
 

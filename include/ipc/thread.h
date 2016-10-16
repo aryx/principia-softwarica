@@ -30,7 +30,7 @@ struct Channel {
     volatile int closed;	/* channel is closed */
 
     // must be at the end of the struct! 
-    uchar	v[1];		/* Array of s values in the channel */
+    byte	v[1];		/* Array of s values in the channel */
 };
 /*e: struct Channel */
 

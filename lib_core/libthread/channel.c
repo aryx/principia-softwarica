@@ -89,7 +89,7 @@ chancreate(int elemsize, int elemcnt)
 
     if(elemcnt < 0 || elemsize <= 0)
         return nil;
-    c = _threadmalloc(sizeof(Channel)+elemsize*elemcnt, 1);
+    c = _threadmalloc(sizeof(Channel) + elemsize*elemcnt, 1);
     c->e = elemsize;
     c->s = elemcnt;
     _threaddebug(DBGCHAN, "chancreate %p", c);
@@ -98,7 +98,7 @@ chancreate(int elemsize, int elemcnt)
 /*e: function chancreate */
 
 /*s: function isopenfor */
-static int
+static bool
 isopenfor(Channel *c, int op)
 {
     return c->closed == 0 || (op == CHANRCV && c->n > 0);

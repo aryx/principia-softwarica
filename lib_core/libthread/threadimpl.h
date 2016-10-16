@@ -44,8 +44,10 @@ typedef enum state State;
 enum chanstate
 {
     Channone,
+
     Chansend,
     Chanrecv,
+
     Chanalt,
 };
 /*e: enum chanstate */
@@ -152,7 +154,7 @@ struct Proc
 
 
 
-    int		splhi;			/* delay notes */
+    bool		splhi;			/* delay notes */
 
     int		needexec;
     Execargs	exec;			/* exec argument */
