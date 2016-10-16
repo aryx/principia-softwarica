@@ -3,7 +3,7 @@
 #include <libc.h>
 #include <ureg.h>
 
-/*s: function notejmp */
+/*s: function notejmp (arm) */
 void
 notejmp(void *vr, jmp_buf j, int ret)
 {
@@ -16,5 +16,5 @@ notejmp(void *vr, jmp_buf j, int ret)
     r->r13 = j[JMPBUFSP];
     noted(NCONT);
 }
-/*e: function notejmp */
+/*e: function notejmp (arm) */
 /*e: arm/notejmp.c */
