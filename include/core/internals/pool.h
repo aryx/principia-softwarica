@@ -1,3 +1,4 @@
+/*s: include/pool.h */
 typedef struct Pool Pool;
 struct Pool {
 	char*	name;
@@ -54,3 +55,4 @@ enum {	/* flags */
 	POOL_TOLERANCE	= 1<<5,
 	POOL_NOREUSE	= 1<<6,
 };
+/*e: include/pool.h */

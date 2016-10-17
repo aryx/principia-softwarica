@@ -54,7 +54,6 @@ atexitdont(void (*f)(void))
 /*e: function atexitdont */
 
 #pragma profile off
-
 /*s: function exits */
 void
 exits(char *s)
@@ -71,6 +70,5 @@ exits(char *s)
     _exits(s);
 }
 /*e: function exits */
-
 #pragma profile on
 /*e: port/atexit.c */

@@ -34,8 +34,8 @@ struct Channel {
 };
 /*e: struct Channel */
 
-/* Channel operations for alt: */
 /*s: enum chanop */
+/* Channel operations for alt: */
 enum chanop {
     CHANEND,
 

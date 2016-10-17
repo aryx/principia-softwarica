@@ -14,7 +14,7 @@ static void     ppanic(Pool*, char*, ...);
 typedef struct Private Private;
 /*s: struct Private */
 struct Private {
-    Lock        lk;
+    Lock    lk;
     int     pid;
     int     printfd;    /* gets debugging output if set */
 };

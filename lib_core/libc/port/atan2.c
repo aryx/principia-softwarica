@@ -1,6 +1,7 @@
 /*s: port/atan2.c */
 #include <u.h>
 #include <libc.h>
+
 /*s: function atan2 */
 /*
     atan2 discovers what quadrant the angle

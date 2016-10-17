@@ -15,7 +15,7 @@ memchr(void *ap, int c, ulong n)
             return sp-1;
         n--;
     }
-    return 0;
+    return nil;
 }
 /*e: function memchr */
 /*e: port/memchr.c */

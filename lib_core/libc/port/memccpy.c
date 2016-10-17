@@ -16,7 +16,7 @@ memccpy(void *a1, void *a2, int c, ulong n)
             return s1;
         n--;
     }
-    return 0;
+    return nil;
 }
 /*e: function memccpy */
 /*e: port/memccpy.c */

@@ -40,6 +40,7 @@ typedef int errorneg1; // -1 is the error value
 
 #define nelem(x)    (sizeof(x)/sizeof((x)[0]))
 #define offsetof(s, m)  (ulong)(&(((s*)nil)->m))
+
 #define assert(x)   do{ if(x) {} else _assert("x"); }while(false)
 
 typedef struct Fmt Fmt;
@@ -416,8 +417,9 @@ extern  void    (*_assert)(char*);
 extern  uintptr getcallerpc(void*);
 extern  void    perror(char*);
 extern  void    sysfatal(char*, ...);
-#pragma varargck    argpos  sysfatal    1
 extern  void    syslog(int, char*, char*, ...);
+
+#pragma varargck    argpos  sysfatal    1
 #pragma varargck    argpos  syslog  3
 
 // close to syscalls

@@ -1,29 +1,35 @@
 /*s: include/arch/arm/u.h */
+/*s: constant nil */
 #define nil     ((void*)0)
+/*e: constant nil */
 
 typedef unsigned short  ushort;
 typedef unsigned char   uchar;
 typedef unsigned long   ulong;
 typedef unsigned int    uint;
 
+typedef unsigned char u8int;
+typedef unsigned short u16int;
+typedef unsigned int    u32int;
+typedef unsigned long long u64int;
+
 typedef signed char schar;
+
 typedef long long   vlong;
 typedef unsigned long long uvlong;
+
 typedef unsigned long   uintptr;
 typedef unsigned long   usize;
 typedef uint        Rune;
+typedef unsigned int    mpdigit;    /* for /sys/include/mp.h */
+
 typedef     union FPdbleword FPdbleword;
+
 typedef long    jmp_buf[2];
 #define JMPBUFSP    0
 #define JMPBUFPC    1
 #define JMPBUFDPC   0
 
-typedef unsigned int    mpdigit;    /* for /sys/include/mp.h */
-
-typedef unsigned char u8int;
-typedef unsigned short u16int;
-typedef unsigned int    u32int;
-typedef unsigned long long u64int;
 
 /* VFP FCR */
 #define FPINEX  (1<<12)         /* trap enables for exceptions */
