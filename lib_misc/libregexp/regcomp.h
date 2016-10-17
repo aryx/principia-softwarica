@@ -6,7 +6,7 @@
 typedef struct Resublist	Resublist;
 struct	Resublist
 {
-	Resub	m[NSUBEXP];
+ Resub	m[NSUBEXP];
 };
 
 /*
@@ -42,20 +42,20 @@ struct	Resublist
 typedef struct Relist	Relist;
 struct Relist
 {
-	Reinst*		inst;		/* Reinstruction of the thread */
-	Resublist	se;		/* matched subexpressions in this thread */
+ Reinst*		inst;		/* Reinstruction of the thread */
+ Resublist	se;		/* matched subexpressions in this thread */
 };
 typedef struct Reljunk	Reljunk;
 struct	Reljunk
 {
-	Relist*	relist[2];
-	Relist*	reliste[2];
-	int	starttype;
-	Rune	startchar;
-	char*	starts;
-	char*	eol;
-	Rune*	rstarts;
-	Rune*	reol;
+ Relist*	relist[2];
+ Relist*	reliste[2];
+ int	starttype;
+ Rune	startchar;
+ char*	starts;
+ char*	eol;
+ Rune*	rstarts;
+ Rune*	reol;
 };
 
 extern Relist*	_renewthread(Relist*, Reinst*, int, Resublist*);
