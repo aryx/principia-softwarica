@@ -24,7 +24,7 @@
 %   relevant file (or even function), better cluster the code
 %   (harder to understand non functional code using lots of globals)
 
-%thx to this manual, better understand XXX?:
+%thx to this manual, better understand libc:
 % - TODO errno global
 % - SEMI malloc vs brk internals
 
@@ -35,12 +35,12 @@
 %    * function, global, struct, enum, constant, macro(actually function)
 %    * TODO ctor/dtor, dumper
 %    * TODO [[xxx]] other fields, [[xxx]] extra fields
-% - TODO read Extra section, identify concepts, first TOC
-% - TODO distribute parts of the Extra section in the main file
+% - read Extra section, identify concepts, first TOC
+% - SEMI distribute parts of the Extra section in the main file
 % - TODO understand main(), LP split main, improve TOC
 % - TODO understand main functions, LP split, cluster, improve TOC
 % - TODO LP split the structures, use datalog for flow to field info
-% - TODO nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
+% - SEMI nullify, boolify, errorify, enumify,  typeify,    scheckify, plan9ify
 % - TODO aspecify advanced features! remove useless features
 % - TODO add figures
 % - TODO add explanations
@@ -279,19 +279,147 @@ which I ultimately discarded:
 
 \chapter{Core Types and Data Structures}
 
+\section{Basic types}
+
+% void, int, float, 
+% pointer, void*!
+% in Compiler.nw
+
+\subsection{Integers}
+
+<<type uxxx>>=
+typedef unsigned short  ushort;
+typedef unsigned char   uchar;
+typedef unsigned long   ulong;
+typedef unsigned int    uint;
+@
+
+<<type uxxxint>>=
+typedef unsigned char u8int;
+typedef unsigned short u16int;
+typedef unsigned int    u32int;
+typedef unsigned long long u64int;
+@
+% ok this deserves to be in arm/u.h
+
+
+<<type xxxvlong>>=
+typedef long long   vlong;
+typedef unsigned long long uvlong;
+@
+
+
+% A few convenient aliases
+<<type usize>>=
+typedef unsigned long   usize;
+@
+
+
+\subsection{Booleans}
+
+<<type bool>>=
+typedef int bool;
+enum _bool {
+  false = 0,
+  true = 1
+};
+@
+%pad: I added that
+
+
+\subsection{Strings and characters}
+
+<<type Rune>>=
+typedef uint        Rune;
+@
+
+\subsection{Floats}
+
+<<type FPdbleword>>=
+union FPdbleword
+{
+    double  x;
+
+    struct {    /* little endian */
+        ulong lo;
+        ulong hi;
+    };
+};
+@
+
+\section{Complex types}
+
+\subsection{Pointers}
+
 <<constant nil>>=
 #define nil     ((void*)0)
 @
 % why in u.h? could be in libc.h no?
 
+<<type uintptr>>=
+typedef unsigned long   uintptr;
+@
 
-% void
+<<type byte>>=
+typedef uchar byte;
+@
 
-% basic types, bool pad's addon!
+<<type va_list>>=
+typedef char*   va_list;
+@
 
-% pointer, void*!
+<<function va_start>>=
+#define va_start(list, start) list =\
+    (sizeof(start) < 4?\
+        (char*)((int*)&(start)+1):\
+        (char*)(&(start)+1))
+@
+
+<<function va_end>>=
+#define va_end(list)\
+    USED(list)
+@
+<<function va_arg>>=
+#define va_arg(list, mode)\
+    ((sizeof(mode) == 1)?\
+        ((list += 4), (mode*)list)[-4]:\
+    (sizeof(mode) == 2)?\
+        ((list += 4), (mode*)list)[-2]:\
+        ((list += sizeof(mode)), (mode*)list)[-1])
+@
+
+\subsection{Arrays}
+
+<<function nelem>>=
+#define nelem(x)    (sizeof(x)/sizeof((x)[0]))
+@
+
+\subsection{Structures}
+
+<<function offsetof>>=
+#define offsetof(s, m)  (ulong)(&(((s*)nil)->m))
+@
+
+\section{IO}
+
+<<type fdt>>=
+typedef int fdt; // file descriptor type
+@
+%pad: I added that. More explicit, better signatures. abusing int is bad.
+
+<<constant STDxxx>>=
+#define STDIN 0
+#define STDOUT 1
+#define STDERR 2
+@
+%pad: I added that, but is in APE also
+
+\section{Regular expression}
+% more in Regexp chapter
 
 % string, see special chapter
+
+\section{Collections}
 
 % collection types (not really :( ) but
 % can provide template on how they encode lists, hashs, queues,
@@ -319,6 +447,7 @@ which I ultimately discarded:
 
 % Lots of functions defined in assembly, so maximal control, maximal opti.
 % Important cos used a lot.
+% But also many portable (slower) implem in libc/port/
 
 \chapter{Memory Management}
 
@@ -376,7 +505,7 @@ which I ultimately discarded:
 
 \chapter{IO}
 
-% file descriptor
+% file descriptor type in core DS.
 
 \section{Syscalls: [[open()]], [[read()]], etc}
 
@@ -418,6 +547,18 @@ which I ultimately discarded:
 
 % see lock(2), rendezvous(2)
 % sleep/wakeup
+
+\section{Coroutines}
+
+<<type jmp_buf>>=
+typedef long    jmp_buf[2];
+@
+
+<<type jmpbufxxx>>=
+#define JMPBUFSP    0
+#define JMPBUFPC    1
+#define JMPBUFDPC   0
+@
 
 \chapter{IPC}
 % 9P and RPC? fcall.h
@@ -3264,7 +3405,7 @@ _dial_string_parse(char *str, DS *ds)
 
 
 
-\section{Error managment}
+\section{Error management}
 
 %"Thread library functions do not return on failure; if errors occur, the entire program is aborted."
 
@@ -3797,28 +3938,95 @@ chanprint(Channel *c, char *fmt, ...)
 
 \section{Floats}
 
+<<type FPxxx>>=
+/* VFP FCR */
+#define FPINEX  (1<<12)         /* trap enables for exceptions */
+#define FPUNFL  (1<<11)
+#define FPOVFL  (1<<10)
+#define FPZDIV  (1<<9)
+#define FPINVAL (1<<8)
+#define FPRNR   (0<<22)
+#define FPRZ    (1<<22)
+#define FPRPINF (2<<22)
+#define FPRNINF (3<<22)
+#define FPRMASK (3<<22)
+#define FPPEXT  0
+#define FPPSGL  0
+#define FPPDBL  0
+#define FPPMASK 0
+/* FSR */
+#define FPAINEX (1<<4)          /* accrued exceptions */
+#define FPAUNFL (1<<3)
+#define FPAOVFL (1<<2)
+#define FPAZDIV (1<<1)
+#define FPAINVAL    (1<<0)
+@
+
 \section{Trigonometry}
 
 \section{Logarithms and exponentials}
 
 \section{Random numbers}
+% see also Cryptography section later
 
 
 \chapter{Error Management}
 
+<<type errorxxx>>=
+// later: unify all of that to be more consistent!
+typedef int error0; // 0 is the error value
+typedef int error1; // 1 is the error value
+typedef int errorneg1; // -1 is the error value
+@
+%pad: I added that
+
+<<constant OKxxx>>=
+#define OK_0 0
+#define OK_1 1
+@
+
+<<constant ERRORxxx>>=
+#define ERROR_0 0
+#define ERROR_1 1
+#define ERROR_NEG1 (-1)
+@
+
 % perror? errno
 
+
+
+<<function assert>>=
+#define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
+@
+% note that use x inside a string so implicity strinfify in plan9 cpp
+% (see Compiler.nw)
+
 \chapter{Debugging Support}
+
 
 \chapter{Profiling Support}
 
 % arm/main9p.s
 
+
+
 \chapter{Security}
 
 \section{Cryptography}
 
+
+
 \chapter{Advanced Topics}
+
+\section{Arbitrary precision arithmetics}
+
+<<type mpdigit>>=
+typedef unsigned int    mpdigit;    /* for /sys/include/mp.h */
+@
+
+
+
+
 
 
 \chapter{Conclusion}
