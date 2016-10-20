@@ -29,7 +29,7 @@ atexit(void (*f)(void))
 
     lock(&onexlock);
     for(i=0; i<NEXIT; i++)
-        if(onex[i].f == 0) {
+        if(onex[i].f == nil) {
             onex[i].pid = getpid();
             onex[i].f = f;
             unlock(&onexlock);
@@ -39,19 +39,6 @@ atexit(void (*f)(void))
     return 0;
 }
 /*e: function atexit */
-
-/*s: function atexitdont */
-void
-atexitdont(void (*f)(void))
-{
-    int i, pid;
-
-    pid = getpid();
-    for(i=0; i<NEXIT; i++)
-        if(onex[i].f == f && onex[i].pid == pid)
-            onex[i].f = 0;
-}
-/*e: function atexitdont */
 
 #pragma profile off
 /*s: function exits */
@@ -64,7 +51,7 @@ exits(char *s)
     pid = getpid();
     for(i = NEXIT-1; i >= 0; i--)
         if((f = onex[i].f) && pid == onex[i].pid) {
-            onex[i].f = 0;
+            onex[i].f = nil;
             (*f)();
         }
     _exits(s);

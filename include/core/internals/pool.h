@@ -1,5 +1,7 @@
 /*s: include/pool.h */
 typedef struct Pool Pool;
+
+/*s: type Pool */
 struct Pool {
 	char*	name;
 	ulong	maxsize;
@@ -16,7 +18,7 @@ struct Pool {
 	void*	arenalist;	/* actually Arena* */
 
 	void*	(*alloc)(ulong);
-	int	(*merge)(void*, void*);
+	int	    (*merge)(void*, void*);
 	void	(*move)(void* from, void* to);
 
 	int	flags;
@@ -31,6 +33,7 @@ struct Pool {
 
 	void*	private;
 };
+/*e: type Pool */
 
 extern void*	poolalloc(Pool*, ulong);
 extern void*	poolallocalign(Pool*, ulong, ulong, long, ulong);
@@ -46,7 +49,8 @@ extern void	poolblockcheck(Pool*, void*);
 extern Pool*	mainmem;
 extern Pool*	imagmem;
 
-enum {	/* flags */
+/*s: type Pool_flag */
+enum Pool_flag {	/* flags */
 	POOL_ANTAGONISM	= 1<<0,
 	POOL_PARANOIA	= 1<<1,
 	POOL_VERBOSITY	= 1<<2,
@@ -55,4 +59,5 @@ enum {	/* flags */
 	POOL_TOLERANCE	= 1<<5,
 	POOL_NOREUSE	= 1<<6,
 };
+/*e: type Pool_flag */
 /*e: include/pool.h */

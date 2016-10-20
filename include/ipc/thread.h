@@ -77,21 +77,21 @@ Channel* chancreate(int elemsize, int bufsize);
 int chanclose(Channel*);
 int chanclosing(Channel *c);
 int chaninit(Channel *c, int elemsize, int elemcnt);
-void    chanfree(Channel *c);
+void chanfree(Channel *c);
 int chanprint(Channel *, char *, ...);
 
 // blocking API
 int recv(Channel *c, void *v);
-void*   recvp(Channel *c);
-ulong   recvul(Channel *c);
+void* recvp(Channel *c);
+ulong recvul(Channel *c);
 int send(Channel *c, void *v);
 int sendp(Channel *c, void *v);
 int sendul(Channel *c, ulong v);
 
 // non blocking API
 int nbrecv(Channel *c, void *v);
-void*   nbrecvp(Channel *c);
-ulong   nbrecvul(Channel *c);
+void* nbrecvp(Channel *c);
+ulong nbrecvul(Channel *c);
 int nbsend(Channel *c, void *v);
 int nbsendp(Channel *c, void *v);
 int nbsendul(Channel *c, ulong v);

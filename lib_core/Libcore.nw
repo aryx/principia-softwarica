@@ -135,6 +135,17 @@ you fully understand how things work under the hood.
 % interested mostly C libraries. Also some Asm.
 % Linked in all programs.
 
+% Some core components like malloc/free. Essential. Surprisingly
+% most people dont know how it works internally.
+% Again Google. Facebook have people designing new memory allocator
+% (jmealloc, tcmalloc). Core component!
+
+% Unicode also, more recent, again most people dont know. Learn by
+% implementation here.
+
+% Finally Thread scheduler. Again if implement lang, and not unusual,
+% Erlang, Elixir, Clojure, etc need know very well this stuff.
+
 Here are a few questions I hope this book will answer:
 \begin{itemize}
 
@@ -150,7 +161,7 @@ How is implemented [[alt()]] without [[select()]] in the kernel?
 \end{itemize}
 \l sinus, cosinus, how when no hardware support?
 
-\section{The \plan core libraries, [[libc]], [[libregexp]], and [[libthread]]}
+\section{The \plan core libraries: [[libc]], [[libregexp]], and [[libthread]]}
 
 % gonna present core libs of plan9, its libc of course, 
 % but also its thread libraries,
@@ -250,7 +261,7 @@ which I ultimately discarded:
 
 \subsection{Memory allocator}
 
-\subsection{Zero-cost abstraction}
+\subsection{Zero-cost abstractions}
 % if slow, everything is slow
 
 
@@ -281,9 +292,22 @@ which I ultimately discarded:
 
 \section{Basic types}
 
-% void, int, float, 
+% void, int, double, 
 % pointer, void*!
-% in Compiler.nw
+% signed vs unsigned, different int size, etc.
+% All defined in Compiler.nw but libcore define a few aliases.
+
+\subsection{Booleans}
+
+<<type bool>>=
+typedef int bool;
+enum _bool {
+  false = 0,
+  true = 1
+};
+@
+%pad: I added that
+
 
 \subsection{Integers}
 
@@ -315,26 +339,9 @@ typedef unsigned long   usize;
 @
 
 
-\subsection{Booleans}
-
-<<type bool>>=
-typedef int bool;
-enum _bool {
-  false = 0,
-  true = 1
-};
-@
-%pad: I added that
-
-
-\subsection{Strings and characters}
-
-<<type Rune>>=
-typedef uint        Rune;
-@
-
 \subsection{Floats}
 
+% in arm/u.h so probably arch specific
 <<type FPdbleword>>=
 union FPdbleword
 {
@@ -345,6 +352,84 @@ union FPdbleword
         ulong hi;
     };
 };
+@
+
+\subsection{Strings and characters}
+
+% ugly that take an int, because that way compatible with Rune??
+<<function toupper>>=
+int
+toupper(int c)
+{
+
+    if(c < 'a' || c > 'z')
+        return c;
+    return _toupper(c);
+}
+@
+
+<<function tolower>>=
+int
+tolower(int c)
+{
+
+    if(c < 'A' || c > 'Z')
+        return c;
+    return _tolower(c);
+}
+@
+
+
+<<global _ctype>>=
+uchar   _ctype[256] =
+{
+/*   0   1   2   3   4   5   6   7  */
+
+/*  0*/ _C, _C, _C, _C, _C, _C, _C, _C,
+/* 10*/ _C, _S|_C,  _S|_C,  _S|_C,  _S|_C,  _S|_C,  _C, _C,
+/* 20*/ _C, _C, _C, _C, _C, _C, _C, _C,
+/* 30*/ _C, _C, _C, _C, _C, _C, _C, _C,
+/* 40*/ _S|_B,  _P, _P, _P, _P, _P, _P, _P,
+/* 50*/ _P, _P, _P, _P, _P, _P, _P, _P,
+/* 60*/ _N|_X,  _N|_X,  _N|_X,  _N|_X,  _N|_X,  _N|_X,  _N|_X,  _N|_X,
+/* 70*/ _N|_X,  _N|_X,  _P, _P, _P, _P, _P, _P,
+/*100*/ _P, _U|_X,  _U|_X,  _U|_X,  _U|_X,  _U|_X,  _U|_X,  _U,
+/*110*/ _U, _U, _U, _U, _U, _U, _U, _U,
+/*120*/ _U, _U, _U, _U, _U, _U, _U, _U,
+/*130*/ _U, _U, _U, _P, _P, _P, _P, _P,
+/*140*/ _P, _L|_X,  _L|_X,  _L|_X,  _L|_X,  _L|_X,  _L|_X,  _L,
+/*150*/ _L, _L, _L, _L, _L, _L, _L, _L,
+/*160*/ _L, _L, _L, _L, _L, _L, _L, _L,
+/*170*/ _L, _L, _L, _P, _P, _P, _P, _C,
+};
+@
+
+
+
+
+% char =~ byte
+
+<<type Rune>>=
+typedef uint        Rune;
+@
+
+<<constant UTFmax>>=
+UTFmax      = 4,        /* maximum bytes per rune */
+@
+<<constant Runesync>>=
+Runesync    = 0x80,     /* cannot represent part of a UTF sequence (<) */
+@
+<<constant Runeself>>=
+Runeself    = 0x80,     /* rune and UTF sequences are the same (<) */
+@
+<<constant Runeerror>>=
+Runeerror   = 0xFFFD,   /* decoding error in UTF */
+@
+<<constant Runemax>>=
+Runemax     = 0x10FFFF, /* 21-bit rune */
+@
+<<constant Runemask>>=
+Runemask    = 0x1FFFFF, /* bits used by runes (see grep) */
 @
 
 \section{Complex types}
@@ -364,30 +449,6 @@ typedef unsigned long   uintptr;
 typedef uchar byte;
 @
 
-<<type va_list>>=
-typedef char*   va_list;
-@
-
-<<function va_start>>=
-#define va_start(list, start) list =\
-    (sizeof(start) < 4?\
-        (char*)((int*)&(start)+1):\
-        (char*)(&(start)+1))
-@
-
-<<function va_end>>=
-#define va_end(list)\
-    USED(list)
-@
-<<function va_arg>>=
-#define va_arg(list, mode)\
-    ((sizeof(mode) == 1)?\
-        ((list += 4), (mode*)list)[-4]:\
-    (sizeof(mode) == 2)?\
-        ((list += 4), (mode*)list)[-2]:\
-        ((list += sizeof(mode)), (mode*)list)[-1])
-@
-
 \subsection{Arrays}
 
 <<function nelem>>=
@@ -399,6 +460,46 @@ typedef char*   va_list;
 <<function offsetof>>=
 #define offsetof(s, m)  (ulong)(&(((s*)nil)->m))
 @
+
+\subsection{Functions}
+
+<<type va_list>>=
+typedef char*   va_list;
+@
+
+<<macro va_start>>=
+#define va_start(list, start) list =\
+    (sizeof(start) < 4?\
+        (char*)((int*)&(start)+1):\
+        (char*)(&(start)+1))
+@
+
+<<macro va_end>>=
+#define va_end(list)\
+    USED(list)
+@
+<<macro va_arg>>=
+#define va_arg(list, mode)\
+    ((sizeof(mode) == 1)?\
+        ((list += 4), (mode*)list)[-4]:\
+    (sizeof(mode) == 2)?\
+        ((list += 4), (mode*)list)[-2]:\
+        ((list += sizeof(mode)), (mode*)list)[-1])
+@
+
+%related: getcallerpc
+
+%\section{Memory pool}
+% More in memory management chapter
+
+\section{Regular expression}
+% more in Regexp chapter
+
+% string, see special chapter
+
+%\section{Fmt}
+% regexp =~ for structured input
+% fmt =~ for structured output
 
 \section{IO}
 
@@ -414,10 +515,39 @@ typedef int fdt; // file descriptor type
 @
 %pad: I added that, but is in APE also
 
-\section{Regular expression}
-% more in Regexp chapter
+\section{Time}
+% Tm
 
-% string, see special chapter
+<<type Tm>>=
+struct Tm {
+    int sec;
+    int min;
+    int hour;
+
+    int mday;
+    int mon;
+    int year;
+    int wday;
+    int yday;
+
+    char    zone[4];
+    int     tzoff;
+};
+@
+
+\section{Concurrency data structures}
+
+%\subsection{Locks}
+% normal, read-write
+
+%\subsection{Queues}
+
+%\subsection{Rendez-vous}
+
+%\subsection{Waitmsg}
+
+%\subsection{Channels}
+
 
 \section{Collections}
 
@@ -425,6 +555,10 @@ typedef int fdt; // file descriptor type
 % can provide template on how they encode lists, hashs, queues,
 % double linked lists, trees, etc. See kernel.nw for instance,
 % many example of collections.
+
+%\section{Misc}
+% lots of small enums for Open_flag, Dir_flag, Rfork_flag, profiling
+% which are presented later
 
 
 \chapter{[[_main()]]}
@@ -437,10 +571,133 @@ typedef int fdt; // file descriptor type
 
 %real-world: crt0 for "C runtime 0"?
 
-\section{Command-line arguments}
+\section{Command-line arguments: [[ARGBEGIN()]], [[ARGEND()]]}
+
+<<signature global argv0>>=
+extern char *argv0;
+@
+
+<<macro ARGBEGIN>>=
+#define ARGBEGIN    for((argv0||(argv0=*argv)),argv++,argc--;\
+                argv[0] && argv[0][0]=='-' && argv[0][1];\
+                argc--, argv++) {\
+                char *_args, *_argt;\
+                Rune _argc;\
+                _args = &argv[0][1];\
+                if(_args[0]=='-' && _args[1]==0){\
+                    argc--; argv++; break;\
+                }\
+                _argc = 0;\
+                while(*_args && (_args += chartorune(&_argc, _args)))\
+                switch(_argc)
+@
+
+<<macro ARGEND>>=
+#define ARGEND      SET(_argt);USED(_argt,_argc,_args);}USED(argv, argc);
+@
+
+
+<<macro ARGF>>=
+#define ARGF()      (_argt=_args, _args="",\
+                (*_argt? _argt: argv[1]? (argc--, *++argv): 0))
+@
+
+<<macro EARGF>>=
+#define EARGF(x)    (_argt=_args, _args="",\
+                (*_argt? _argt: argv[1]? (argc--, *++argv): ((x), abort(), (char*)0)))
+@
+
+<<macro ARGC>>=
+#define ARGC()      _argc
+@
+
+\section{syscall: [[_exits()]]}
+% ugly but special code in 9syscall/mkfile to rename call to 
+% EXITS syscall to _exits instead of exits because probably wanted to
+% add special code around _exits after and wanted to be backward
+% compatible with previous programs already using exits() in their code.
+
+\section{[[exits()]]}
+
+% profile is turned off around this function
+<<function exits>>=
+void
+exits(char *s)
+{
+    int i, pid;
+    void (*f)(void);
+
+    pid = getpid();
+    for(i = NEXIT-1; i >= 0; i--)
+        if((f = onex[i].f) && pid == onex[i].pid) {
+            onex[i].f = nil;
+            (*f)();
+        }
+    _exits(s);
+}
+@
+
+<<global onex>>=
+Onex onex[NEXIT];
+@
+<<constant NEXIT>>=
+#define NEXIT   33
+@
+
+<<struct Onex>>=
+struct Onex{
+    void    (*f)(void);
+    int pid;
+};
+@
+% Onex.pid because some fork can still share memory
+% but we want each fork to run separate callbacks when really
+% exits.
+
+<<global onexlock>>=
+static Lock onexlock;
+@
+% See Section X for concurrency primitives.
+
+
+<<function atexit>>=
+int
+atexit(void (*f)(void))
+{
+    int i;
+
+    lock(&onexlock);
+    for(i=0; i<NEXIT; i++)
+        if(onex[i].f == nil) {
+            onex[i].pid = getpid();
+            onex[i].f = f;
+            unlock(&onexlock);
+            return 1;
+        }
+    unlock(&onexlock);
+    return 0;
+}
+@
+
+%dead:
+%<<function atexitdont>>=
+%void
+%atexitdont(void (*f)(void))
+%{
+%    int i, pid;
+%
+%    pid = getpid();
+%    for(i=0; i<NEXIT; i++)
+%        if(onex[i].f == f && onex[i].pid == pid)
+%            onex[i].f = 0;
+%}
+%@
 
 \chapter{User/Kernel Bridge}
 
+% sys.h, syscall.h
+% lib_core/libc/9syscall/*.s and dispatcher in kernel for the sysxxx().
+% FIGURE copy one in Principia.nw?
 
 
 \chapter{Memory Area Operations}
@@ -448,6 +705,106 @@ typedef int fdt; // file descriptor type
 % Lots of functions defined in assembly, so maximal control, maximal opti.
 % Important cos used a lot.
 % But also many portable (slower) implem in libc/port/
+
+<<function memset>>=
+void*
+memset(void *ap, int c, ulong n)
+{
+    char *p;
+
+    p = ap;
+    while(n > 0) {
+        *p++ = c;
+        n--;
+    }
+    return ap;
+}
+@
+% typing issue in *p++ = c? int vs char*? if set -1, it will work.
+
+
+<<function memcpy>>=
+void*
+memcpy(void *a1, void *a2, ulong n)
+{
+    return memmove(a1, a2, n);
+}
+@
+
+
+<<function memmove>>=
+void*
+memmove(void *a1, void *a2, ulong n)
+{
+    char *s1, *s2;
+
+    if((long)n < 0)
+        abort();
+    s1 = a1;
+    s2 = a2;
+    if((s2 < s1) && (s2+n > s1))
+        goto back;
+    while(n > 0) {
+        *s1++ = *s2++;
+        n--;
+    }
+    return a1;
+
+back:
+    s1 += n;
+    s2 += n;
+    while(n > 0) {
+        *--s1 = *--s2;
+        n--;
+    }
+    return a1;
+}
+@
+% really bad name
+\t replace every call to memmove to memcpy!
+
+
+<<function memcmp>>=
+int
+memcmp(void *a1, void *a2, ulong n)
+{
+    uchar *s1, *s2;
+    uint c1, c2;
+
+    s1 = a1;
+    s2 = a2;
+    while(n > 0) {
+        c1 = *s1++;
+        c2 = *s2++;
+        if(c1 != c2) {
+            if(c1 > c2)
+                return 1;
+            return -1;
+        }
+        n--;
+    }
+    return 0;
+}
+@
+
+<<function memchr>>=
+void*
+memchr(void *ap, int c, ulong n)
+{
+    uchar *sp;
+
+    sp = ap;
+    c &= 0xFF;
+    while(n > 0) {
+        if(*sp++ == c)
+            return sp-1;
+        n--;
+    }
+    return nil;
+}
+@
+
+
 
 \chapter{Memory Management}
 
@@ -468,15 +825,311 @@ typedef int fdt; // file descriptor type
 % - http://swapped.cc/#!/halloc
 % -talloc (in petitboot) from Samba
 
+% mallo.c and pool.c!
+
 \section{Syscall: [[brk()]]}
 % sysbrk()
 
+% in 9sys/
+
+<<global bloc>>=
+// starting point for the heap, after the text, data, and bss.
+static  char    *bloc = { end };
+@
+
+<<function sbrk>>=
+void*
+sbrk(ulong n)
+{
+    uintptr bl;
+
+    bl = ((uintptr)bloc + Round) & ~Round;
+    if(brk((void*)(bl+n)) < 0)
+        return (void*)-1;
+    bloc = (char*)bl + n;
+    return (void*)bl;
+}
+@
+
+<<enum _anon_ (9sys/sbrk.c)>>=
+enum
+{
+    Round   = 7
+};
+@
+
+
 \section{Data structures}
+
+\subsection{[[Pool]]}
+
+<<type Pool>>=
+struct Pool {
+	char*	name;
+	ulong	maxsize;
+
+	ulong	cursize;
+	ulong	curfree;
+	ulong	curalloc;
+
+	ulong	minarena;	/* smallest size of new arena */
+	ulong	quantum;	/* allocated blocks should be multiple of */
+	ulong	minblock;	/* smallest newly allocated block */
+
+	void*	freeroot;	/* actually Free* */
+	void*	arenalist;	/* actually Arena* */
+
+	void*	(*alloc)(ulong);
+	int	    (*merge)(void*, void*);
+	void	(*move)(void* from, void* to);
+
+	int	flags;
+	int	nfree;
+	int	lastcompact;
+
+	void	(*lock)(Pool*);
+	void	(*unlock)(Pool*);
+	void	(*print)(Pool*, char*, ...);
+	void	(*panic)(Pool*, char*, ...);
+	void	(*logstack)(Pool*);
+
+	void*	private;
+};
+@
+
+<<type Pool_flag>>=
+enum Pool_flag {	/* flags */
+	POOL_ANTAGONISM	= 1<<0,
+	POOL_PARANOIA	= 1<<1,
+	POOL_VERBOSITY	= 1<<2,
+	POOL_DEBUGGING	= 1<<3,
+	POOL_LOGGING	= 1<<4,
+	POOL_TOLERANCE	= 1<<5,
+	POOL_NOREUSE	= 1<<6,
+};
+@
+
+
+<<struct Private>>=
+struct Private {
+    Lock    lk;
+    int     pid;
+    int     printfd;    /* gets debugging output if set */
+};
+@
+
+<<global sbrkmempriv>>=
+Private sbrkmempriv;
+@
+
+\subsection{[[sbrkmem]]}
+
+% in malloc.c
+<<global sbrkmem>>=
+static Pool sbrkmem = {
+    .name=      "sbrkmem",
+    .maxsize=   (3840UL-1)*1024*1024,   /* up to ~0xf0000000 */
+    .minarena=  4*1024,
+    .quantum=   32,
+    .alloc=     sbrkalloc,
+    .merge=     sbrkmerge,
+    .flags=     0,
+
+    .lock=      plock,
+    .unlock=        punlock,
+    .print=     pprint,
+    .panic=     ppanic,
+    .private=       &sbrkmempriv,
+};
+@
+
+<<global mainmem>>=
+Pool *mainmem = &sbrkmem;
+@
+
+<<global imagmem>>=
+Pool *imagmem = &sbrkmem;
+@
+
+\subsection{XXX}
+
+% in pool.c
+
+<<struct Bhdr>>=
+struct Bhdr {
+    ulong   magic;
+    ulong   size;
+};
+@
+
+<<enum _anon_ (port/pool.c)>>=
+enum {
+    NOT_MAGIC = 0xdeadfa11,
+    DEAD_MAGIC = 0xdeaddead,
+};
+@
+
+<<macro B2NB>>=
+#define B2NB(b) ((Bhdr*)((uchar*)(b)+(b)->size))
+@
+
+<<macro SHORT>>=
+#define SHORT(x) (((x)[0] << 8) | (x)[1])
+@
+
+<<macro PSHORT>>=
+#define PSHORT(p, x) \
+    (((uchar*)(p))[0] = ((x)>>8)&0xFF, \
+    ((uchar*)(p))[1] = (x)&0xFF)
+@
+
+<<enum _anon_ (port/pool.c)2>>=
+enum {
+    TAIL_MAGIC0 = 0xBE,
+    TAIL_MAGIC1 = 0xEF
+};
+@
+
+<<struct Btail>>=
+struct Btail {
+    uchar   magic0;
+    uchar   datasize[2];
+    uchar   magic1;
+    ulong   size;   /* same as Bhdr->size */
+};
+@
+
+<<macro B2T>>=
+#define B2T(b)  ((Btail*)((uchar*)(b)+(b)->size-sizeof(Btail)))
+@
+
+<<macro B2PT>>=
+#define B2PT(b) ((Btail*)((uchar*)(b)-sizeof(Btail)))
+@
+
+<<macro T2HDR>>=
+#define T2HDR(t) ((Bhdr*)((uchar*)(t)+sizeof(Btail)-(t)->size))
+@
+
+<<struct Free>>=
+struct Free {
+            Bhdr;
+    Free*   left;
+    Free*   right;
+    Free*   next;
+    Free*   prev;
+};
+@
+
+<<enum _anon_ (port/pool.c)3>>=
+enum {
+    FREE_MAGIC = 0xBA5EBA11,
+};
+@
+
+<<struct Alloc>>=
+/*
+ * the point of the notused fields is to make 8c differentiate
+ * between Bhdr and Allocblk, and between Kempt and Unkempt.
+ */
+struct Alloc {
+            Bhdr;
+};
+@
+
+<<enum _anon_ (port/pool.c)4>>=
+enum {
+    ALLOC_MAGIC = 0x0A110C09,
+    UNALLOC_MAGIC = 0xCAB00D1E+1,
+};
+@
+
+<<struct Arena>>=
+struct Arena {
+            Bhdr;
+    Arena*  aup;
+    Arena*  down;
+    ulong   asize;
+    ulong   pad;    /* to a multiple of 8 bytes */
+};
+@
+
+<<enum _anon_ (port/pool.c)5>>=
+enum {
+    ARENA_MAGIC = 0xC0A1E5CE+1,
+    ARENATAIL_MAGIC = 0xEC5E1A0C+1,
+};
+@
+
+<<macro A2TB>>=
+#define A2TB(a) ((Bhdr*)((uchar*)(a)+(a)->asize-sizeof(Bhdr)))
+@
+
+<<macro A2B>>=
+#define A2B(a)  B2NB(a)
+@
+
+<<enum _anon_ (port/pool.c)6>>=
+enum {
+    ALIGN_MAGIC = 0xA1F1D1C1,
+};
+@
+
+<<enum _anon_ (port/pool.c)7>>=
+enum {
+    MINBLOCKSIZE = sizeof(Free)+sizeof(Btail)
+};
+@
+
+<<global datamagic>>=
+static uchar datamagic[] = { 0xFE, 0xF1, 0xF0, 0xFA };
+@
+
+<<constant Poison>>=
+#define Poison  (void*)0xCafeBabe
+@
+
+<<macro _B2D>>=
+#define _B2D(a) ((void*)((uchar*)a+sizeof(Bhdr)))
+@
+
+<<macro _D2B>>=
+#define _D2B(v) ((Alloc*)((uchar*)v-sizeof(Bhdr)))
+@
+
 
 \section{[[malloc()]]}
 
+<<function malloc>>=
+void*
+malloc(ulong size)
+{
+    void *v;
+
+    v = poolalloc(mainmem, size+Npadlong*sizeof(ulong));
+    if(Npadlong && v != nil) {
+        v = (ulong*)v+Npadlong;
+        setmalloctag(v, getcallerpc(&size));
+        setrealloctag(v, 0);
+    }
+    return v;
+}
+@
+
 \section{[[free()]]}
 
+<<function free>>=
+void
+free(void *v)
+{
+    if(v != nil)
+        poolfree(mainmem, (ulong*)v-Npadlong);
+}
+@
+
+\section{Debugging support}
+
+\section{Advanced topics}
 
 
 \chapter{Strings}
@@ -488,17 +1141,194 @@ typedef int fdt; // file descriptor type
 
 % there is also a libstring/ but seems unused.
 
-\section{Conversions}
+%\section{Conversions}
+% see Mathematics section and Parsing subsections
 
-\section{Formatted Output}
-% Fmt
+\section{Basics}
 
-% printf
-%https://github.com/wkoszek/mini_printf
+% copy, search, len, etc.
+
+
+
+<<function strlen>>=
+long
+strlen(char *s)
+{
+
+    return strchr(s, 0) - s;
+}
+@
+
+
+<<function strcat>>=
+char*
+strcat(char *s1, char *s2)
+{
+
+    strcpy(strchr(s1, 0), s2);
+    return s1;
+}
+@
+
+<<function strchr>>=
+char*
+strchr(char *s, int c)
+{
+    char c0 = c;
+    char c1;
+
+    if(c == 0) {
+        while(*s++)
+            ;
+        return s-1;
+    }
+
+    while(c1 = *s++)
+        if(c1 == c0)
+            return s-1;
+    return 0;
+}
+@
+
+%todo: rename temporarily to _strcmp and have a string_equal wrapper 
+% and refactor code using spatch!
+
+<<function strcmp>>=
+int
+strcmp(char *s1, char *s2)
+{
+    unsigned c1, c2;
+
+    for(;;) {
+        c1 = *s1++;
+        c2 = *s2++;
+        if(c1 != c2) {
+            if(c1 > c2)
+                return 1;
+            return -1;
+        }
+        if(c1 == 0)
+            return 0;
+    }
+}
+@
+
+
+<<constant N>>=
+#define N   10000
+@
+
+<<function strcpy>>=
+char*
+strcpy(char *s1, char *s2)
+{
+    char *os1;
+
+    os1 = s1;
+    while(!memccpy(s1, s2, 0, N)) {
+        s1 += N;
+        s2 += N;
+    }
+    return os1;
+}
+@
+
+
+<<function strdup>>=
+char*
+strdup(char *s) 
+{  
+    char *ns;
+
+    ns = malloc(strlen(s) + 1);
+    if(ns == 0)
+        return 0;
+    setmalloctag(ns, getcallerpc(&s));
+
+    return strcpy(ns, s);
+}
+@
+
+
+
+<<function strstr>>=
+/*
+ * Return pointer to first occurrence of s2 in s1,
+ * 0 if none
+ */
+char*
+strstr(char *s1, char *s2)
+{
+    char *p, *pa, *pb;
+    int c0, c;
+
+    c0 = *s2;
+    if(c0 == 0)
+        return s1;
+    s2++;
+    for(p=strchr(s1, c0); p; p=strchr(p+1, c0)) {
+        pa = p;
+        for(pb=s2;; pb++) {
+            c = *pb;
+            if(c == 0)
+                return p;
+            if(c != *++pa)
+                break;
+        }
+    }
+    return 0;
+}
+@
+
 
 \section{Unicode}
 
 %see utf.ps
+
+\section{Formatted Output}
+
+<<type Fmt>>=
+struct Fmt {
+    uchar   runes;          /* output buffer is runes or chars? */
+    void    *start;         /* of buffer */
+    void    *to;            /* current place in the buffer */
+    void    *stop;          /* end of the buffer; overwritten if flush fails */
+    int     (*flush)(Fmt *);    /* called when to == stop */
+    void    *farg;          /* to make flush a closure */
+    int     nfmt;           /* num chars formatted so far */
+    va_list args;           /* args passed to dofmt */
+    int     r;          /* % format Rune */
+    int     width;
+    int     prec;
+    ulong   flags;
+};
+@
+
+<<type Fmt_flag>>=
+enum Fmt_flag {
+    FmtWidth    = 1,
+    FmtLeft     = FmtWidth << 1,
+    FmtPrec     = FmtLeft << 1,
+    FmtSharp    = FmtPrec << 1,
+    FmtSpace    = FmtSharp << 1,
+    FmtSign     = FmtSpace << 1,
+    FmtZero     = FmtSign << 1,
+    FmtUnsigned = FmtZero << 1,
+    FmtShort    = FmtUnsigned << 1,
+    FmtLong     = FmtShort << 1,
+    FmtVLong    = FmtLong << 1,
+    FmtComma    = FmtVLong << 1,
+    FmtByte     = FmtComma << 1,
+
+    FmtFlag     = FmtByte << 1
+};
+@
+
+% printf
+%https://github.com/wkoszek/mini_printf
+
+\section{Quoted strings}
+% adv topics?
 
 \chapter{Regular Expressions}
 % libregexp/
@@ -507,30 +1337,201 @@ typedef int fdt; // file descriptor type
 
 % file descriptor type in core DS.
 
+<<type Open_flag>>=
+// enum Open_flag, open parameter
+#define	OREAD	0	/* open for read */
+#define	OWRITE	1	/* write */
+#define	ORDWR	2	/* read and write */
+#define	OEXEC	3	/* execute, == read but check execute permission */
+// advanced stuff
+#define	OTRUNC	16	/* or'ed in (except for exec), truncate file first */
+#define	OCEXEC	32	/* or'ed in, close on exec */
+#define	ORCLOSE	64	/* or'ed in, remove on close */
+#define	OEXCL	0x1000	/* or'ed in, exclusive use (create only) */
+@
+%dead:// #define	OBEHIND	0x2000	/* use write behind for writes [for 9n] */
+
+<<type Access_flag>>=
+// enum Access_flag
+#define	AEXIST	0	/* accessible: exists */
+#define	AEXEC	1	/* execute access */
+#define	AWRITE	2	/* write access */
+#define	AREAD	4	/* read access */
+@
+
+<<type Qid>>=
+// Qid as in uniQue id
+struct Qid {
+	uvlong	path;
+	ulong	vers;
+    // bitset<Qidtype>
+	uchar	type;
+};
+@
+
+
+<<type Qid_type>>=
+/* bits in Qid.type */
+#define QTFILE		0x00		/* plain file */
+#define QTDIR		0x80		/* type bit for directories */
+// advanced stuff
+#define QTAPPEND	0x40		/* type bit for append only files */
+#define QTEXCL		0x20		/* type bit for exclusive use files */
+#define QTMOUNT		0x10		/* type bit for mounted channel */
+#define QTAUTH		0x08		/* type bit for authentication file */
+#define QTTMP		0x04		/* type bit for not-backed-up file */
+@
+
+<<type Seek_cursor>>=
+// pad's stuff (but it is actually also in stdio.h)
+enum Seek_cursor {
+    SEEK__START = 0,
+    SEEK__CUR = 1,
+    SEEK__END = 2,
+};
+@
+%pad: I added that
+
 \section{Syscalls: [[open()]], [[read()]], etc}
 
 % sysopen(), sysclose(), sysread(), syswrite(), sysseek(), etc
 % file, directory, namespace
 
+
+<<function read>>=
+long
+read(int fd, void *buf, long n)
+{
+    return pread(fd, buf, n, -1LL);
+}
+@
+
+<<function write>>=
+long
+write(int fd, void *buf, long n)
+{
+    return pwrite(fd, buf, n, -1LL);
+}
+@
+
 \chapter{Directory}
+
+<<type DirEntry>>=
+// TODO should be renamed DirEntry really
+// a similar structure is defined in the kernel!
+struct Dir {
+	/* system-modified data */
+	ushort	type;	/* server type */
+	uint	dev;	/* server subtype */
+
+	/* file data */
+	Qid	qid;	/* unique id from server */
+
+	ulong	mode;	/* permissions */
+	ulong	atime;	/* last read time */
+	ulong	mtime;	/* last write time */
+	vlong	length;	/* file length */
+	char	*name;	/* last element of path */
+	char	*uid;	/* owner name */
+	char	*gid;	/* group name */
+	char	*muid;	/* last modifier name */
+};
+@
+
+<<type Dir_mode>>=
+/* bits in Dir.mode */
+#define DMDIR		0x80000000	/* mode bit for directories */
+#define DMREAD		0x4		/* mode bit for read permission */
+#define DMWRITE		0x2		/* mode bit for write permission */
+#define DMEXEC		0x1		/* mode bit for execute permission */
+// advanced stuff
+#define DMAPPEND	0x40000000	/* mode bit for append only files */
+#define DMEXCL		0x20000000	/* mode bit for exclusive use files */
+#define DMMOUNT		0x10000000	/* mode bit for mounted channel */
+#define DMAUTH		0x08000000	/* mode bit for authentication file */
+#define DMTMP		0x04000000	/* mode bit for non-backed-up files */
+@
+
+<<constant DIRMAX>>=
+#define	DIRMAX	(sizeof(Dir)+STATMAX)	/* max length of Dir structure */
+@
+
+<<constant STATMAX>>=
+#define	STATMAX	65535U	/* max length of machine-independent stat structure */
+@
 
 \section{Syscalls: [[create()]], [[chdir()]], etc}
 
+
+<<function getwd>>=
+char*
+getwd(char *buf, int nbuf)
+{
+    int n, fd;
+
+    fd = open(".", OREAD);
+    if(fd < 0)
+        return nil;
+    n = fd2path(fd, buf, nbuf);
+    close(fd);
+    if(n < 0)
+        return nil;
+    return buf;
+}
+@
+
+\section{Path manipulation}
+
 \chapter{Namespace}
+
+<<type Namespace_flag>>=
+// enum Namespace_flag, mount/bind parameter
+#define	MREPL	0x0000	/* mount replaces object */
+#define	MBEFORE	0x0001	/* mount goes before others in union directory */
+#define	MAFTER	0x0002	/* mount goes after others in union directory */
+
+#define	MCREATE	0x0004	/* permit creation in mounted directory */
+#define	MCACHE	0x0010	/* cache some data */
+// bitset<Namespace_flag>
+#define	MORDER	0x0003	/* mask for bits defining order of mounting */
+
+#define	MMASK	0x0017	/* all bits on */
+@
 
 \section{Syscalls: [[bind()]], [[mount()]], etc}
 
 \chapter{Time}
 
+% see TM in core DS
+
+
 \section{Syscalls: [[sleep()]], [[alarm()]], etc}
 
+\section{Time and day}
+% called Time-of-day, not sure  why
 
-
-\chapter{Network}
-
-% More in Network.nw, here just wrappers.
 
 \chapter{Concurrency}
+
+<<type Rfork_flag>>=
+/* rfork */
+enum Rfork_flags
+{
+	RFNAMEG		= (1<<0),
+	RFENVG		= (1<<1),
+	RFFDG		= (1<<2),
+	RFNOTEG		= (1<<3),
+	RFPROC		= (1<<4),
+	RFMEM		= (1<<5),
+	RFNOWAIT	= (1<<6),
+	RFCNAMEG	= (1<<10),
+	RFCENVG		= (1<<11),
+	RFCFDG		= (1<<12),
+	RFREND		= (1<<13),
+	RFNOMNT		= (1<<14)
+};
+@
+
 
 \section{Syscalls: [[rfork()]], [[await()]], [[rendezvous()]], etc}
 
@@ -548,6 +1549,137 @@ typedef int fdt; // file descriptor type
 % see lock(2), rendezvous(2)
 % sleep/wakeup
 
+
+<<function fork>>=
+int
+fork(void)
+{
+    return rfork(RFPROC|RFFDG|RFREND);
+}
+@
+
+<<function getpid>>=
+int
+getpid(void)
+{
+    char b[20];
+    int f;
+
+    memset(b, 0, sizeof(b));
+    f = open("#c/pid", 0);
+    if(f >= 0) {
+        read(f, b, sizeof(b));
+        close(f);
+    }
+    return atol(b);
+}
+@
+
+<<function getppid>>=
+int
+getppid(void)
+{
+    char b[20];
+    int f;
+
+    memset(b, 0, sizeof(b));
+    f = open("/dev/ppid", 0);
+    if(f >= 0) {
+        read(f, b, sizeof(b));
+        close(f);
+    }
+    return atol(b);
+}
+@
+
+\section{Locks}
+
+<<type Lock>>=
+struct Lock {
+    long    key;
+    long    sem;
+};
+@
+
+<<function lock>>=
+void
+lock(Lock *l)
+{
+    if(ainc(&l->key) == 1)
+        return; /* changed from 0 -> 1: we hold lock */
+    /* otherwise wait in kernel */
+    while(semacquire(&l->sem, 1) < 0){
+        /* interrupted; try again */
+    }
+}
+@
+
+<<function unlock>>=
+void
+unlock(Lock *l)
+{
+    if(adec(&l->key) == 0)
+        return; /* changed from 1 -> 0: no contention */
+    semrelease(&l->sem, 1);
+}
+@
+
+<<function canlock>>=
+int
+canlock(Lock *l)
+{
+    if(ainc(&l->key) == 1)
+        return 1;   /* changed from 0 -> 1: success */
+    /* Undo increment (but don't miss wakeup) */
+    if(adec(&l->key) == 0)
+        return 0;   /* changed from 1 -> 0: no contention */
+    semrelease(&l->sem, 1);
+    return 0;
+}
+@
+
+
+\section{Queues}
+
+<<type QLock>>=
+struct QLock {
+    Lock    lock;
+    int locked;
+    QLp *head;
+    QLp     *tail;
+};
+@
+
+<<type QLp>>=
+struct QLp {
+    int inuse;
+    QLp *next;
+    char    state;
+};
+@
+
+\section{Read-write locks}
+
+<<type RWLock>>=
+struct RWLock {
+    Lock    lock;
+    int readers;    /* number of readers */
+    int writer;     /* number of writers */
+    QLp *head;      /* list of waiting processes */
+    QLp *tail;
+};
+@
+
+\section{Rendez-vous}
+
+<<type Rendez>>=
+struct Rendez {
+    QLock   *l;
+    QLp *head;
+    QLp *tail;
+};
+@
+
 \section{Coroutines}
 
 <<type jmp_buf>>=
@@ -563,8 +1695,191 @@ typedef long    jmp_buf[2];
 \chapter{IPC}
 % 9P and RPC? fcall.h
 
+
 \section{Syscalls: [[pipe()]], [[notify()]], [[segattach()]]}
 
+\section{Parent-child IPC}
+% can pass from parent to child via env, 
+% and from child to parent via wait message
+
+\subsection{Wait message}
+
+<<type Waitmsg>>=
+/* keep /sys/src/ape/lib/ap/plan9/sys9.h in sync with this -rsc */
+struct Waitmsg {
+	int	pid;		/* of loved one */
+	ulong	time[3];	/* of loved one & descendants */
+	char	*msg;
+};
+@
+
+% in 9sys/
+<<function wait>>=
+Waitmsg*
+wait(void)
+{
+    int n, l;
+    char buf[512], *fld[5];
+    Waitmsg *w;
+
+    n = await(buf, sizeof buf-1);
+    if(n < 0)
+        return nil;
+    buf[n] = '\0';
+    if(tokenize(buf, fld, nelem(fld)) != nelem(fld)){
+        werrstr("couldn't parse wait message");
+        return nil;
+    }
+    l = strlen(fld[4])+1;
+    w = malloc(sizeof(Waitmsg)+l);
+    if(w == nil)
+        return nil;
+    w->pid = atoi(fld[0]);
+    w->time[0] = atoi(fld[1]);
+    w->time[1] = atoi(fld[2]);
+    w->time[2] = atoi(fld[3]);
+    w->msg = (char*)&w[1];
+    memmove(w->msg, fld[4], l);
+    return w;
+}
+@
+
+<<function waitpid>>=
+int
+waitpid(void)
+{
+    int n;
+    char buf[512], *fld[5];
+
+    n = await(buf, sizeof buf-1);
+    if(n <= 0)
+        return -1;
+    buf[n] = '\0';
+    if(tokenize(buf, fld, nelem(fld)) != nelem(fld)){
+        werrstr("couldn't parse wait message");
+        return -1;
+    }
+    return atoi(fld[0]);
+}
+@
+
+
+\subsection{Environment}
+
+<<function getenv>>=
+char*
+getenv(char *name)
+{
+    int r, f;
+    long s;
+    char *ans;
+    char *p, *ep, ename[100];
+
+    if(strchr(name, '/') != nil)
+        return nil;
+    snprint(ename, sizeof ename, "/env/%s", name);
+    if(strcmp(ename+5, name) != 0)
+        return nil;
+    f = open(ename, OREAD);
+    if(f < 0)
+        return 0;
+    s = seek(f, 0, 2);
+    ans = malloc(s+1);
+    if(ans) {
+        setmalloctag(ans, getcallerpc(&name));
+        seek(f, 0, 0);
+        r = read(f, ans, s);
+        if(r >= 0) {
+            ep = ans + s - 1;
+            for(p = ans; p < ep; p++)
+                if(*p == '\0')
+                    *p = ' ';
+            ans[s] = '\0';
+        }
+    }
+    close(f);
+    return ans;
+}
+@
+
+<<function putenv>>=
+int
+putenv(char *name, char *val)
+{
+    int f;
+    char ename[100];
+    long s;
+
+    if(strchr(name, '/') != nil)
+        return -1;
+    snprint(ename, sizeof ename, "/env/%s", name);
+    if(strcmp(ename+5, name) != 0)
+        return -1;
+    f = create(ename, OWRITE, 0664);
+    if(f < 0)
+        return -1;
+    s = strlen(val);
+    if(write(f, val, s) != s){
+        close(f);
+        return -1;
+    }
+    close(f);
+    return 0;
+}
+@
+
+
+\section{Notes}
+
+<<type Note_flag>>=
+#define	NCONT	0	/* continue after note */
+#define	NDFLT	1	/* terminate after note */
+#define	NSAVE	2	/* clear note but hold state */
+#define	NRSTR	3	/* restore saved state */
+@
+
+<<function postnote>>=
+int
+postnote(int group, int pid, char *note)
+{
+    char file[128];
+    int f, r;
+
+    switch(group) {
+    case PNPROC:
+        sprint(file, "/proc/%d/note", pid);
+        break;
+    case PNGROUP:
+        sprint(file, "/proc/%d/notepg", pid);
+        break;
+    default:
+        return -1;
+    }
+
+    f = open(file, OWRITE);
+    if(f < 0)
+        return -1;
+
+    r = strlen(note);
+    if(write(f, note, r) != r) {
+        close(f);
+        return -1;
+    }
+    close(f);
+    return 0;
+}
+@
+
+
+\section{Pipes}
+
+\section{Shared segments}
+
+<<type Segattach_flag>>=
+/* Segattch */
+#define	SG_RONLY	0040	/* read only */
+#define	SG_CEXEC	0100	/* detach on exec */
+@
 
 \chapter{Channels and Cooperative Threads}
 
@@ -3929,6 +5244,24 @@ chanprint(Channel *c, char *fmt, ...)
     return n;
 }
 @
+\chapter{Network}
+
+% More in Network.nw, here just wrappers.
+
+<<type NetConnInfo>>=
+struct NetConnInfo {
+    char    *dir;       /* connection directory */
+    char    *root;      /* network root */
+    char    *spec;      /* binding spec */
+    char    *lsys;      /* local system */
+    char    *lserv;     /* local service */
+    char    *rsys;      /* remote system */
+    char    *rserv;     /* remote service */
+    char    *laddr;     /* local address */
+    char    *raddr;     /* remote address */
+};
+@
+
 \chapter{Mathematics}
 %http://developerblog.redhat.com/2015/01/02/improving-math-performance-in-glibc/
 
@@ -3936,7 +5269,325 @@ chanprint(Channel *c, char *fmt, ...)
 
 % "Computer Approximations, by Hart, Chenney, Lawson, ...
 
+\section{Basics}
+
+<<function abs>>=
+int
+abs(int a)
+{
+    if(a < 0)
+        return -a;
+    return a;
+}
+@
+
+<<function fabs>>=
+double
+fabs(double arg)
+{
+
+    if(arg < 0)
+        return -arg;
+    return arg;
+}
+@
+
+%dead:
+%<<function labs>>=
+%long
+%labs(long a)
+%{
+%    if(a < 0)
+%        return -a;
+%    return a;
+%}
+%@
+
+
+<<function floor>>=
+/*
+ * floor and ceil-- greatest integer <= arg
+ * (resp least >=)
+ */
+
+double
+floor(double d)
+{
+    double fract;
+
+    if(d < 0) {
+        fract = modf(-d, &d);
+        if(fract != 0.0)
+            d += 1;
+        d = -d;
+    } else
+        modf(d, &d);
+    return d;
+}
+@
+
+<<function ceil>>=
+double
+ceil(double d)
+{
+    return -floor(-d);
+}
+@
+
+
+
+
+
+\section{Integers}
+
+\subsection{Parsing}
+
+<<function atoi>>=
+int
+atoi(char *s)
+{
+
+    return atol(s);
+}
+@
+
+<<function atol>>=
+long
+atol(char *s)
+{
+    long n;
+    int f, c;
+
+    n = 0;
+    f = 0;
+    while(*s == ' ' || *s == '\t')
+        s++;
+    if(*s == '-' || *s == '+') {
+        if(*s++ == '-')
+            f = 1;
+        while(*s == ' ' || *s == '\t')
+            s++;
+    }
+    if(s[0]=='0' && s[1]) {
+        if(s[1]=='x' || s[1]=='X'){
+            s += 2;
+            for(;;) {
+                c = *s;
+                if(c >= '0' && c <= '9')
+                    n = n*16 + c - '0';
+                else
+                if(c >= 'a' && c <= 'f')
+                    n = n*16 + c - 'a' + 10;
+                else
+                if(c >= 'A' && c <= 'F')
+                    n = n*16 + c - 'A' + 10;
+                else
+                    break;
+                s++;
+            }
+        } else
+            while(*s >= '0' && *s <= '7')
+                n = n*8 + *s++ - '0';
+    } else
+        while(*s >= '0' && *s <= '9')
+            n = n*10 + *s++ - '0';
+    if(f)
+        n = -n;
+    return n;
+}
+@
+
+
+
+
+<<constant LONG_MAX>>=
+#define LONG_MAX    2147483647L
+@
+
+<<constant LONG_MIN>>=
+#define LONG_MIN    -2147483648L
+@
+
+% more flexible than atol, can accept stuff after numbers
+% and return pointer after. 
+% Can also use different base?? use? to not force to prefix with 0x or 0o?
+<<function strtol>>=
+long
+strtol(char *nptr, char **endptr, int base)
+{
+    char *p;
+    long n, nn, m;
+    int c, ovfl, v, neg, ndig;
+
+    p = nptr;
+    neg = 0;
+    n = 0;
+    ndig = 0;
+    ovfl = 0;
+
+    /*
+     * White space
+     */
+    for(;; p++) {
+        switch(*p) {
+        case ' ':
+        case '\t':
+        case '\n':
+        case '\f':
+        case '\r':
+        case '\v':
+            continue;
+        }
+        break;
+    }
+
+    /*
+     * Sign
+     */
+    if(*p=='-' || *p=='+')
+        if(*p++ == '-')
+            neg = 1;
+
+    /*
+     * Base
+     */
+    if(base==0) {
+        base = 10;
+        if(*p == '0') {
+            base = 8;
+            if(p[1]=='x' || p[1]=='X') {
+                p += 2;
+                base = 16;
+            }
+        }
+    } else
+    if(base==16 && *p=='0'){
+        if(p[1]=='x' || p[1]=='X')
+            p += 2;
+    } else
+    if(base<0 || 36<base)
+        goto Return;
+
+    /*
+     * Non-empty sequence of digits
+     */
+    m = LONG_MAX/base;
+    for(;; p++,ndig++){
+        c = *p;
+        v = base;
+        if('0'<=c && c<='9')
+            v = c - '0';
+        else
+        if('a'<=c && c<='z')
+            v = c - 'a' + 10;
+        else
+        if('A'<=c && c<='Z')
+            v = c - 'A' + 10;
+        if(v >= base)
+            break;
+        if(n > m)
+            ovfl = 1;
+        nn = n*base + v;
+        if(nn < n)
+            ovfl = 1;
+        n = nn;
+    }
+
+Return:
+    if(ndig == 0)
+        p = nptr;
+    if(endptr)
+        *endptr = p;
+    if(ovfl){
+        if(neg)
+            return LONG_MIN;
+        return LONG_MAX;
+    }
+    if(neg)
+        return -n;
+    return n;
+}
+@
+
+
 \section{Floats}
+
+\subsection{Special numbers}
+
+<<constant NANEXP>>=
+#define NANEXP  (2047<<20)
+@
+% >>
+
+
+<<function NaN>>=
+double
+NaN(void)
+{
+    FPdbleword a;
+
+    a.hi = NANEXP;
+    a.lo = 1;
+    return a.x;
+}
+@
+
+<<constant NANMASK>>=
+#define NANMASK (2047<<20)
+@
+% >>
+
+<<function isNaN>>=
+int
+isNaN(double d)
+{
+    FPdbleword a;
+
+    a.x = d;
+    if((a.hi & NANMASK) != NANEXP)
+        return 0;
+    return !isInf(d, 0);
+}
+@
+
+
+<<constant NANSIGN>>=
+#define NANSIGN (1<<31)
+@
+% >>
+
+<<function Inf>>=
+double
+Inf(int sign)
+{
+    FPdbleword a;
+
+    a.hi = NANEXP;
+    a.lo = 0;
+    if(sign < 0)
+        a.hi |= NANSIGN;
+    return a.x;
+}
+@
+
+<<function isInf>>=
+int
+isInf(double d, int sign)
+{
+    FPdbleword a;
+
+    a.x = d;
+    if(a.lo != 0)
+        return 0;
+    if(a.hi == NANEXP)
+        return sign >= 0;
+    if(a.hi == (NANEXP|NANSIGN))
+        return sign <= 0;
+    return 0;
+}
+@
+
+
 
 <<type FPxxx>>=
 /* VFP FCR */
@@ -3961,10 +5612,618 @@ chanprint(Channel *c, char *fmt, ...)
 #define FPAZDIV (1<<1)
 #define FPAINVAL    (1<<0)
 @
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >>
+
+
+\subsection{[[sqrt()]]}
+
+<<function sqrt>>=
+double
+sqrt(double arg)
+{
+    double x, temp;
+    int exp, i;
+
+    if(arg <= 0) {
+        if(arg < 0)
+            return NaN();
+        return 0;
+    }
+    if(isInf(arg, 1))
+        return arg;
+    x = frexp(arg, &exp);
+    while(x < 0.5) {
+        x *= 2;
+        exp--;
+    }
+    /*
+     * NOTE
+     * this wont work on 1's comp
+     */
+    if(exp & 1) {
+        x *= 2;
+        exp--;
+    }
+    temp = 0.5 * (1.0+x);
+
+    while(exp > 60) {
+        temp *= (1L<<30);
+        exp -= 60;
+    }
+    while(exp < -60) {
+        temp /= (1L<<30);
+        exp += 60;
+    }
+    if(exp >= 0)
+        temp *= 1L << (exp/2);
+    else
+        temp /= 1L << (-exp/2);
+    for(i=0; i<=4; i++)
+        temp = 0.5*(temp + arg/temp);
+    return temp;
+}
+@
+% >> >> >> >> >> >>
+
+\subsection{Parsing}
+
+<<function atof>>=
+double
+atof(char *cp)
+{
+    return strtod(cp, 0);
+}
+@
+
+<<function strtod>>=
+double
+strtod(char *as, char **aas)
+{
+    int na, ona, ex, dp, bp, c, i, flag, state;
+    ulong low[Prec], hig[Prec], mid[Prec], num, den;
+    double d;
+    char *s, a[Ndig];
+
+    flag = 0;   // Fsign, Fesign, Fdpoint
+    na = 0;     // number of digits of a[]
+    dp = 0;     // na of decimal point
+    ex = 0;     // exonent
+
+    state = S0;
+    for(s=as;; s++) {
+        c = *s;
+        if(c >= '0' && c <= '9') {
+            switch(state) {
+            case S0:
+            case S1:
+            case S2:
+                state = S2;
+                break;
+            case S3:
+            case S4:
+                state = S4;
+                break;
+
+            case S5:
+            case S6:
+            case S7:
+                state = S7;
+                ex = ex*10 + (c-'0');
+                continue;
+            }
+            if(na == 0 && c == '0') {
+                dp--;
+                continue;
+            }
+            if(na < Ndig-50)
+                a[na++] = c;
+            continue;
+        }
+        switch(c) {
+        case '\t':
+        case '\n':
+        case '\v':
+        case '\f':
+        case '\r':
+        case ' ':
+            if(state == S0)
+                continue;
+            break;
+        case '-':
+            if(state == S0)
+                flag |= Fsign;
+            else
+                flag |= Fesign;
+        case '+':
+            if(state == S0)
+                state = S1;
+            else
+            if(state == S5)
+                state = S6;
+            else
+                break;  // syntax
+            continue;
+        case '.':
+            flag |= Fdpoint;
+            dp = na;
+            if(state == S0 || state == S1) {
+                state = S3;
+                continue;
+            }
+            if(state == S2) {
+                state = S4;
+                continue;
+            }
+            break;
+        case 'e':
+        case 'E':
+            if(state == S2 || state == S4) {
+                state = S5;
+                continue;
+            }
+            break;
+        }
+        break;
+    }
+
+    /*
+     * clean up return char-pointer
+     */
+    switch(state) {
+    case S0:
+        if(xcmp(s, "nan") == 0) {
+            if(aas != nil)
+                *aas = s+3;
+            goto retnan;
+        }
+    case S1:
+        if(xcmp(s, "infinity") == 0) {
+            if(aas != nil)
+                *aas = s+8;
+            goto retinf;
+        }
+        if(xcmp(s, "inf") == 0) {
+            if(aas != nil)
+                *aas = s+3;
+            goto retinf;
+        }
+    case S3:
+        if(aas != nil)
+            *aas = as;
+        goto ret0;  // no digits found
+    case S6:
+        s--;        // back over +-
+    case S5:
+        s--;        // back over e
+        break;
+    }
+    if(aas != nil)
+        *aas = s;
+
+    if(flag & Fdpoint)
+    while(na > 0 && a[na-1] == '0')
+        na--;
+    if(na == 0)
+        goto ret0;  // zero
+    a[na] = 0;
+    if(!(flag & Fdpoint))
+        dp = na;
+    if(flag & Fesign)
+        ex = -ex;
+    dp += ex;
+    if(dp < -Maxe-Nmant/3)  /* actually -Nmant*log(2)/log(10), but Nmant/3 close enough */
+        goto ret0;  // underflow by exp
+    else
+    if(dp > +Maxe)
+        goto retinf;    // overflow by exp
+
+    /*
+     * normalize the decimal ascii number
+     * to range .[5-9][0-9]* e0
+     */
+    bp = 0;     // binary exponent
+    while(dp > 0)
+        divascii(a, &na, &dp, &bp);
+    while(dp < 0 || a[0] < '5')
+        mulascii(a, &na, &dp, &bp);
+    a[na] = 0;
+
+    /*
+     * very small numbers are represented using
+     * bp = -Bias+1.  adjust accordingly.
+     */
+    if(bp < -Bias+1){
+        ona = na;
+        divby(a, &na, -bp-Bias+1);
+        if(na < ona){
+            memmove(a+ona-na, a, na);
+            memset(a, '0', ona-na);
+            na = ona;
+        }
+        a[na] = 0;
+        bp = -Bias+1;
+    }
+
+    /* close approx by naive conversion */
+    num = 0;
+    den = 1;
+    for(i=0; i<9 && (c=a[i]); i++) {
+        num = num*10 + (c-'0');
+        den *= 10;
+    }
+    low[0] = umuldiv(num, One, den);
+    hig[0] = umuldiv(num+1, One, den);
+    for(i=1; i<Prec; i++) {
+        low[i] = 0;
+        hig[i] = One-1;
+    }
+
+    /* binary search for closest mantissa */
+    for(;;) {
+        /* mid = (hig + low) / 2 */
+        c = 0;
+        for(i=0; i<Prec; i++) {
+            mid[i] = hig[i] + low[i];
+            if(c)
+                mid[i] += One;
+            c = mid[i] & 1;
+            mid[i] >>= 1;
+        }
+        frnorm(mid);
+
+        /* compare */
+        c = fpcmp(a, mid);
+        if(c > 0) {
+            c = 1;
+            for(i=0; i<Prec; i++)
+                if(low[i] != mid[i]) {
+                    c = 0;
+                    low[i] = mid[i];
+                }
+            if(c)
+                break;  // between mid and hig
+            continue;
+        }
+        if(c < 0) {
+            for(i=0; i<Prec; i++)
+                hig[i] = mid[i];
+            continue;
+        }
+
+        /* only hard part is if even/odd roundings wants to go up */
+        c = mid[Prec-1] & (Sigbit-1);
+        if(c == Sigbit/2 && (mid[Prec-1]&Sigbit) == 0)
+            mid[Prec-1] -= c;
+        break;  // exactly mid
+    }
+
+    /* normal rounding applies */
+    c = mid[Prec-1] & (Sigbit-1);
+    mid[Prec-1] -= c;
+    if(c >= Sigbit/2) {
+        mid[Prec-1] += Sigbit;
+        frnorm(mid);
+    }
+    d = 0;
+    for(i=0; i<Prec; i++)
+        d = d*One + mid[i];
+    if(flag & Fsign)
+        d = -d;
+    d = ldexp(d, bp - Prec*Nbits);
+    return d;
+
+ret0:
+    return 0;
+
+retnan:
+    return NaN();
+
+retinf:
+    if(flag & Fsign)
+        return Inf(-1);
+    return Inf(+1);
+}
+@
+
+
+<<enum _anon_ (port/strtod.c)>>=
+/*
+ * This routine will convert to arbitrary precision
+ * floating point entirely in multi-precision fixed.
+ * The answer is the closest floating point number to
+ * the given decimal number. Exactly half way are
+ * rounded ala ieee rules.
+ * Method is to scale input decimal between .500 and .999...
+ * with external power of 2, then binary search for the
+ * closest mantissa to this decimal number.
+ * Nmant is is the required precision. (53 for ieee dp)
+ * Nbits is the max number of bits/word. (must be <= 28)
+ * Prec is calculated - the number of words of fixed mantissa.
+ */
+enum
+{
+    Nbits   = 28,               // bits safely represented in a ulong
+    Nmant   = 53,               // bits of precision required
+    Bias        = 1022,
+    Prec    = (Nmant+Nbits+1)/Nbits,    // words of Nbits each to represent mantissa
+    Sigbit  = 1<<(Prec*Nbits-Nmant),    // first significant bit of Prec-th word
+    Ndig    = 1500,
+    One = (ulong)(1<<Nbits),
+    Half    = (ulong)(One>>1),
+    Maxe    = 310,
+    Fsign   = 1<<0,     // found -
+    Fesign  = 1<<1,     // found e-
+    Fdpoint = 1<<2,     // found .
+
+    S0  = 0,        // _        _S0 +S1 #S2 .S3
+    S1,         // _+       #S2 .S3
+    S2,         // _+#      #S2 .S4 eS5
+    S3,         // _+.      #S4
+    S4,         // _+#.#    #S4 eS5
+    S5,         // _+#.#e   +S6 #S7
+    S6,         // _+#.#e+  #S7
+    S7,         // _+#.#e+# #S7
+};
+@
+% >> >> >> >> >> >> >> >>
+% >> >> >> >> >> >> >> >>
+
+<<struct Tab>>=
+struct  Tab
+{
+    int bp;
+    int siz;
+    char*   cmp;
+};
+@
+
+
+<<function frnorm>>=
+static void
+frnorm(ulong *f)
+{
+    int i, c;
+
+    c = 0;
+    for(i=Prec-1; i>0; i--) {
+        f[i] += c;
+        c = f[i] >> Nbits;
+        f[i] &= One-1;
+    }
+    f[0] += c;
+}
+@
+
+<<function fpcmp>>=
+static int
+fpcmp(char *a, ulong* f)
+{
+    ulong tf[Prec];
+    int i, d, c;
+
+    for(i=0; i<Prec; i++)
+        tf[i] = f[i];
+
+    for(;;) {
+        /* tf *= 10 */
+        for(i=0; i<Prec; i++)
+            tf[i] = tf[i]*10;
+        frnorm(tf);
+        d = (tf[0] >> Nbits) + '0';
+        tf[0] &= One-1;
+
+        /* compare next digit */
+        c = *a;
+        if(c == 0) {
+            if('0' < d)
+                return -1;
+            if(tf[0] != 0)
+                goto cont;
+            for(i=1; i<Prec; i++)
+                if(tf[i] != 0)
+                    goto cont;
+            return 0;
+        }
+        if(c > d)
+            return +1;
+        if(c < d)
+            return -1;
+        a++;
+    cont:;
+    }
+}
+@
+
+
+
+<<function _divby>>=
+static void
+_divby(char *a, int *na, int b)
+{
+    int n, c;
+    char *p;
+
+    p = a;
+    n = 0;
+    while(n>>b == 0) {
+        c = *a++;
+        if(c == 0) {
+            while(n) {
+                c = n*10;
+                if(c>>b)
+                    break;
+                n = c;
+            }
+            goto xx;
+        }
+        n = n*10 + c-'0';
+        (*na)--;
+    }
+    for(;;) {
+        c = n>>b;
+        n -= c<<b;
+        *p++ = c + '0';
+        c = *a++;
+        if(c == 0)
+            break;
+        n = n*10 + c-'0';
+    }
+    (*na)++;
+xx:
+    while(n) {
+        n = n*10;
+        c = n>>b;
+        n -= c<<b;
+        *p++ = c + '0';
+        (*na)++;
+    }
+    *p = 0;
+}
+@
+
+<<function divby>>=
+static void
+divby(char *a, int *na, int b)
+{
+    while(b > 9){
+        _divby(a, na, 9);
+        a[*na] = 0;
+        b -= 9;
+    }
+    if(b > 0)
+        _divby(a, na, b);
+}
+@
+
+<<global tab1>>=
+static  Tab tab1[] =
+{
+     1,  0, "",
+     3,  1, "7",
+     6,  2, "63",
+     9,  3, "511",
+    13,  4, "8191",
+    16,  5, "65535",
+    19,  6, "524287",
+    23,  7, "8388607",
+    26,  8, "67108863",
+    27,  9, "134217727",
+};
+@
+
+<<function divascii>>=
+static void
+divascii(char *a, int *na, int *dp, int *bp)
+{
+    int b, d;
+    Tab *t;
+
+    d = *dp;
+    if(d >= nelem(tab1))
+        d = nelem(tab1)-1;
+    t = tab1 + d;
+    b = t->bp;
+    if(memcmp(a, t->cmp, t->siz) > 0)
+        d--;
+    *dp -= d;
+    *bp += b;
+    divby(a, na, b);
+}
+@
+
+<<function mulby>>=
+static void
+mulby(char *a, char *p, char *q, int b)
+{
+    int n, c;
+
+    n = 0;
+    *p = 0;
+    for(;;) {
+        q--;
+        if(q < a)
+            break;
+        c = *q - '0';
+        c = (c<<b) + n;
+        n = c/10;
+        c -= n*10;
+        p--;
+        *p = c + '0';
+    }
+    while(n) {
+        c = n;
+        n = c/10;
+        c -= n*10;
+        p--;
+        *p = c + '0';
+    }
+}
+@
+
+<<global tab2>>=
+static  Tab tab2[] =
+{
+     1,  1, "",             // dp = 0-0
+     3,  3, "125",
+     6,  5, "15625",
+     9,  7, "1953125",
+    13, 10, "1220703125",
+    16, 12, "152587890625",
+    19, 14, "19073486328125",
+    23, 17, "11920928955078125",
+    26, 19, "1490116119384765625",
+    27, 19, "7450580596923828125",      // dp 8-9
+};
+@
+
+<<function mulascii>>=
+static void
+mulascii(char *a, int *na, int *dp, int *bp)
+{
+    char *p;
+    int d, b;
+    Tab *t;
+
+    d = -*dp;
+    if(d >= nelem(tab2))
+        d = nelem(tab2)-1;
+    t = tab2 + d;
+    b = t->bp;
+    if(memcmp(a, t->cmp, t->siz) < 0)
+        d--;
+    p = a + *na;
+    *bp -= b;
+    *dp += d;
+    *na += d;
+    mulby(a, p+d, p, b);
+}
+@
+
+<<function xcmp>>=
+static int
+xcmp(char *a, char *b)
+{
+    int c1, c2;
+
+    while(c1 = *b++) {
+        c2 = *a++;
+        if(isupper(c2))
+            c2 = tolower(c2);
+        if(c1 != c2)
+            return 1;
+    }
+    return 0;
+}
+@
+
+
 
 \section{Trigonometry}
 
 \section{Logarithms and exponentials}
+
 
 \section{Random numbers}
 % see also Cryptography section later
@@ -3972,11 +6231,67 @@ chanprint(Channel *c, char *fmt, ...)
 
 \chapter{Error Management}
 
+<<constant ERRMAX>>=
+#define	ERRMAX	128	/* max length of error string */
+@
+
+\section{syscall: [[errstr()]]}
+
+<<function rerrstr>>=
+void
+rerrstr(char *buf, uint nbuf)
+{
+    char tmp[ERRMAX];
+
+    tmp[0] = 0;
+    errstr(tmp, sizeof tmp);
+    utfecpy(buf, buf+nbuf, tmp);
+    errstr(tmp, sizeof tmp);
+}
+@
+
+<<function werrstr>>=
+void
+werrstr(char *fmt, ...)
+{
+    va_list arg;
+    char buf[ERRMAX];
+
+    va_start(arg, fmt);
+    vseprint(buf, buf+ERRMAX, fmt, arg);
+    va_end(arg);
+    errstr(buf, ERRMAX);
+}
+@
+
+
+\section{[[perror()]]}
+
+% perror? errno
+
+<<function perror>>=
+void
+perror(char *s)
+{
+    char buf[ERRMAX];
+
+    buf[0] = '\0';
+    errstr(buf, sizeof buf);
+    if(s && *s)
+        fprint(2, "%s: %s\n", s, buf);
+    else
+        fprint(2, "%s\n", buf);
+}
+@
+
+\section{Error return values}
+
 <<type errorxxx>>=
 // later: unify all of that to be more consistent!
 typedef int error0; // 0 is the error value
 typedef int error1; // 1 is the error value
 typedef int errorneg1; // -1 is the error value
+typedef int errorn; // 1 or more means error
 @
 %pad: I added that
 
@@ -3984,33 +6299,420 @@ typedef int errorneg1; // -1 is the error value
 #define OK_0 0
 #define OK_1 1
 @
+%pad: I added that
 
 <<constant ERRORxxx>>=
 #define ERROR_0 0
 #define ERROR_1 1
 #define ERROR_NEG1 (-1)
 @
+%pad: I added that
 
-% perror? errno
+\section{[[assert()]]}
 
-
-
-<<function assert>>=
+<<macro assert>>=
 #define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
 @
 % note that use x inside a string so implicity strinfify in plan9 cpp
 % (see Compiler.nw)
 
+
+<<global _assert>>=
+void (*_assert)(char*) = default_assert;
+@
+
+<<function default_assert>>=
+void
+default_assert(char *s)
+{
+    if(__assert)
+        (*__assert)(s);
+    fprint(2, "assert failed: %s\n", s);
+    abort();
+}
+@
+
+<<global __assert>>=
+void (*__assert)(char*);
+@
+% used by libthread to point to _theadassert that does ???
+
+
+
+<<function abort>>=
+void
+abort(void)
+{
+    while(*(int*)0)
+        ;
+}
+@
+% generate segfault
+
+
+\section{[[sysfatal()]]}
+
+<<function sysfatal>>=
+void
+sysfatal(char *fmt, ...)
+{
+    va_list arg;
+
+    va_start(arg, fmt);
+    (*_sysfatal)(fmt, arg);
+    va_end(arg);
+}
+@
+
+
+<<global _sysfatal>>=
+void (*_sysfatal)(char *fmt, va_list arg) = _sysfatalimpl;
+@
+% who changes that?
+
+<<function _sysfatalimpl>>=
+static void
+_sysfatalimpl(char *fmt, va_list arg)
+{
+    char buf[1024];
+
+    vseprint(buf, buf+sizeof(buf), fmt, arg);
+    if(argv0)
+        fprint(2, "%s: %s\n", argv0, buf);
+    else
+        fprint(2, "%s\n", buf);
+    exits(buf);
+}
+@
+
+
 \chapter{Debugging Support}
 
+% Seen some debugging support before, for memory pool.
+
+\section{Logging}
+
+<<function syslog>>=
+/*
+ * Print
+ *  sysname: time: mesg
+ * on /sys/log/logname.
+ * If cons or log file can't be opened, print on the system console, too.
+ */
+void
+syslog(int cons, char *logname, char *fmt, ...)
+{
+    char buf[1024];
+    char *ctim, *p;
+    va_list arg;
+    int n;
+    Dir *d;
+    char err[ERRMAX];
+
+    err[0] = '\0';
+    errstr(err, sizeof err);
+    lock(&sl);
+
+    /*
+     *  paranoia makes us stat to make sure a fork+close
+     *  hasn't broken our fd's
+     */
+    d = dirfstat(sl.fd);
+    if(sl.fd < 0 || sl.name == nil || strcmp(sl.name, logname) != 0 ||
+       !eqdirdev(d, sl.d)){
+        free(sl.name);
+        sl.name = strdup(logname);
+        if(sl.name == nil)
+            cons = 1;
+        else{
+            free(sl.d);
+            sl.d = nil;
+            _syslogopen();
+            if(sl.fd < 0)
+                cons = 1;
+            else
+                sl.d = dirfstat(sl.fd);
+        }
+    }
+    free(d);
+    if(cons){
+        d = dirfstat(sl.consfd);
+        if(sl.consfd < 0 || !eqdirdev(d, sl.consd)){
+            free(sl.consd);
+            sl.consd = nil;
+            sl.consfd = open("#c/cons", OWRITE|OCEXEC);
+            if(sl.consfd >= 0)
+                sl.consd = dirfstat(sl.consfd);
+        }
+        free(d);
+    }
+
+    if(fmt == nil){
+        unlock(&sl);
+        return;
+    }
+
+    ctim = ctime(time(0));
+    p = buf + snprint(buf, sizeof(buf)-1, "%s ", sysname());
+    strncpy(p, ctim+4, 15);
+    p += 15;
+    *p++ = ' ';
+    errstr(err, sizeof err);
+    va_start(arg, fmt);
+    p = vseprint(p, buf+sizeof(buf)-1, fmt, arg);
+    va_end(arg);
+    *p++ = '\n';
+    n = p - buf;
+
+    if(sl.fd >= 0){
+        seek(sl.fd, 0, 2);
+        write(sl.fd, buf, n);
+    }
+
+    if(cons && sl.consfd >=0)
+        write(sl.consfd, buf, n);
+
+    unlock(&sl);
+}
+@
+
+
+<<global sl>>=
+static struct
+{
+    int fd;
+    int consfd;
+    char    *name;
+    Dir *d;
+    Dir *consd;
+    Lock;
+} sl =
+{
+    -1, -1,
+};
+@
+
+<<function _syslogopen>>=
+static void
+_syslogopen(void)
+{
+    char buf[1024];
+
+    if(sl.fd >= 0)
+        close(sl.fd);
+    snprint(buf, sizeof(buf), "/sys/log/%s", sl.name);
+    sl.fd = open(buf, OWRITE|OCEXEC);
+}
+@
+
+<<function eqdirdev>>=
+static int
+eqdirdev(Dir *a, Dir *b)
+{
+    return a != nil && b != nil &&
+        a->dev == b->dev && a->type == b->type &&
+        a->qid.path == b->qid.path;
+}
+@
 
 \chapter{Profiling Support}
 
 % arm/main9p.s
 
+<<type Prof>>=
+enum Prof {
+    Profoff,        /* No profiling */
+
+    Profuser,       /* Measure user time only (default) */
+    Profkernel,     /* Measure user + kernel time */
+    Proftime,       /* Measure total time */
+    Profsample,     /* Use clock interrupt to sample (default when there is no cycle counter) */
+}; /* what */
+@
+
+<<struct Plink>>=
+struct  Plink
+{
+    Plink   *old;
+    Plink   *down;
+    Plink   *link;
+    long    pc;
+    long    count;
+    vlong time;
+};
+@
+
+
+<<function prof>>=
+void
+prof(void (*fn)(void*), void *arg, int entries, int what)
+{
+    _profinit(entries, what);
+    _tos->prof.pp = _tos->prof.next;
+    fn(arg);
+    _profdump();
+}
+@
+
+
+
+
+<<global khz>>=
+static  ulong   khz;
+@
+
+<<global perr>>=
+static  ulong   perr;
+@
+
+<<global havecycles>>=
+static  int havecycles;
+@
+
+\section{[[_profin()]]}
+% see \book{Linker}
+
+% pragma profile turned off for those functins
+<<function _profin>>=
+// Called at every procedure entry when use 5l -p, see Linker.nw
+ulong
+_profin(void)
+{
+    void *dummy;
+    long pc;
+    Plink *pp, *p;
+    ulong arg;
+    vlong t;
+
+    arg = _savearg();
+    pc = _callpc(&dummy);
+    pp = _tos->prof.pp;
+    if(pp == 0 || (_tos->prof.pid && _tos->pid != _tos->prof.pid))
+        return arg;
+
+    for(p=pp->down; p; p=p->link)
+        if(p->pc == pc)
+            goto out;
+    p = _tos->prof.next + 1;
+    if(p >= _tos->prof.last) {
+        _tos->prof.pp = 0;
+        perr++;
+        return arg;
+    }
+    _tos->prof.next = p;
+    p->link = pp->down;
+    pp->down = p;
+    p->pc = pc;
+    p->old = pp;
+    p->down = 0;
+    p->count = 0;
+    p->time = 0LL;
+
+out:
+    _tos->prof.pp = p;
+    p->count++;
+    switch(_tos->prof.what){
+    case Profkernel:
+        p->time = p->time - _tos->pcycles;
+        goto proftime;
+    case Profuser:
+        /* Add kernel cycles on proc entry */
+        p->time = p->time + _tos->kcycles;
+        /* fall through */
+    case Proftime:  
+    proftime:       /* Subtract cycle counter on proc entry */
+        cycles((uvlong*)&t);
+        p->time = p->time - t;
+        break;
+    case Profsample:
+        p->time = p->time - _tos->clock;
+        break;
+    }
+    return arg;     /* disgusting linkage */
+}
+@
+
+\section{[[_profout()]]}
+
+<<function _profout>>=
+// Called at every procedure return when use 5l -p, see Linker.nw
+ulong
+_profout(void)
+{
+    Plink *p;
+    ulong arg;
+    vlong t;
+
+    arg = _savearg();
+    p = _tos->prof.pp;
+    if (p == nil || (_tos->prof.pid != 0 && _tos->pid != _tos->prof.pid))
+        return arg; /* Not our process */
+    switch(_tos->prof.what){
+    case Profkernel:        /* Add proc cycles on proc entry */
+        p->time = p->time + _tos->pcycles;
+        goto proftime;
+    case Profuser:          /* Subtract kernel cycles on proc entry */
+        p->time = p->time - _tos->kcycles;
+        /* fall through */
+    case Proftime:  
+    proftime:               /* Add cycle counter on proc entry */
+        cycles((uvlong*)&t);
+        p->time = p->time + t;
+        break;
+    case Profsample:
+        p->time = p->time + _tos->clock;
+        break;
+    }
+    _tos->prof.pp = p->old;
+    return arg;
+}
+@
+
+\section{[[cputime()]]}
+
+% in 9sys/
+<<constant HZ>>=
+#define HZ  1000
+@
+
+<<function cputime>>=
+double
+cputime(void)
+{
+    long t[4];
+    int i;
+
+    times(t);
+    for(i=1; i<4; i++)
+        t[0] += t[i];
+    return t[0] / (double)HZ;
+}
+@
 
 
 \chapter{Security}
+
+<<function getuser>>=
+char *
+getuser(void)
+{
+    static char user[64];
+    int fd;
+    int n;
+
+    fd = open("/dev/user", OREAD);
+    if(fd < 0)
+        return "none";
+    n = read(fd, user, (sizeof user)-1);
+    close(fd);
+    if(n <= 0)
+        strcpy(user, "none");
+    else
+        user[n] = 0;
+    return user;
+}
+@
+
 
 \section{Cryptography}
 
@@ -4018,14 +6720,23 @@ typedef int errorneg1; // -1 is the error value
 
 \chapter{Advanced Topics}
 
+% Seen advanced topics before, for memory pool, thread and channels
+% in their respective chapters.
+
 \section{Arbitrary precision arithmetics}
 
 <<type mpdigit>>=
 typedef unsigned int    mpdigit;    /* for /sys/include/mp.h */
 @
 
+\section{IO chunks}
 
-
+<<type IOchunk>>=
+struct IOchunk {
+	void	*addr;
+	ulong	len;
+};
+@
 
 
 

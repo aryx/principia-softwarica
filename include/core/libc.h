@@ -5,43 +5,60 @@
 // --------------------------------------------
 // pad's stuff
 // --------------------------------------------
-// Could also be in u.h. More types! Types are good!
+// More types! Types are good!
+/*s: type bool */
 typedef int bool;
 enum _bool {
   false = 0,
   true = 1
 };
-typedef uchar bool_byte;
+/*e: type bool */
 
+/*s: type byte */
 typedef uchar byte;
+/*e: type byte */
+
+typedef uchar bool_byte;
 
 //typedef char* string; // conflict
 //typedef char* filename; // conflict in sam with function filename
 
+/*s: constant STDxxx */
 #define STDIN 0
 #define STDOUT 1
 #define STDERR 2
+/*e: constant STDxxx */
+/*s: type fdt */
 typedef int fdt; // file descriptor type
+/*e: type fdt */
 
+/*s: constant OKxxx */
 #define OK_0 0
 #define OK_1 1
+/*e: constant OKxxx */
+/*s: constant ERRORxxx */
 #define ERROR_0 0
 #define ERROR_1 1
 #define ERROR_NEG1 (-1)
+/*e: constant ERRORxxx */
+/*s: type errorxxx */
 // later: unify all of that to be more consistent!
 typedef int error0; // 0 is the error value
 typedef int error1; // 1 is the error value
 typedef int errorneg1; // -1 is the error value
+typedef int errorn; // 1 or more means error
+/*e: type errorxxx */
 
 // --------------------------------------------
 // end pad's stuff
 // --------------------------------------------
 
-
+/*s: function nelem */
 #define nelem(x)    (sizeof(x)/sizeof((x)[0]))
+/*e: function nelem */
+/*s: function offsetof */
 #define offsetof(s, m)  (ulong)(&(((s*)nil)->m))
-
-#define assert(x)   do{ if(x) {} else _assert("x"); }while(false)
+/*e: function offsetof */
 
 typedef struct Fmt Fmt;
 typedef struct Tm Tm;
@@ -59,34 +76,36 @@ typedef struct IOchunk IOchunk;
 /*
  * mem routines
  */
-extern  void*   memccpy(void*, void*, int, ulong);
-extern  void*   memset(void*, int, ulong);
-extern  int     memcmp(void*, void*, ulong);
 extern  void*   memcpy(void*, void*, ulong);
-extern  void*   memmove(void*, void*, ulong);
+extern  int     memcmp(void*, void*, ulong);
+extern  void*   memset(void*, int, ulong);
 extern  void*   memchr(void*, int, ulong);
+
+extern  void*   memmove(void*, void*, ulong);
+extern  void*   memccpy(void*, void*, int, ulong);
 
 /*
  * string routines
  */
+extern  char*   strcpy(char*, char*);
+extern  int     strcmp(char*, char*);
 extern  char*   strcat(char*, char*);
 extern  char*   strchr(char*, int);
-//todo: rename to _strcmp and have a string_equal wrapper 
-// (and refactor code using spatch)
-extern  int     strcmp(char*, char*);
-extern  char*   strcpy(char*, char*);
-extern  char*   strecpy(char*, char*, char*);
 extern  char*   strdup(char*);
+extern  long    strlen(char*);
+extern  char*   strstr(char*, char*);
+
+extern  char*   strecpy(char*, char*, char*);
 extern  char*   strncat(char*, char*, long);
 extern  char*   strncpy(char*, char*, long);
 extern  int     strncmp(char*, char*, long);
+
 extern  char*   strpbrk(char*, char*);
+
 extern  char*   strrchr(char*, int);
 extern  char*   strtok(char*, char*);
-extern  long    strlen(char*);
 extern  long    strspn(char*, char*);
 extern  long    strcspn(char*, char*);
-extern  char*   strstr(char*, char*);
 
 extern  int     cistrncmp(char*, char*, int);
 extern  int     cistrcmp(char*, char*);
@@ -96,12 +115,24 @@ extern  int     tokenize(char*, char**, int);
 
 enum
 {
+    /*s: constant UTFmax */
     UTFmax      = 4,        /* maximum bytes per rune */
+    /*e: constant UTFmax */
+    /*s: constant Runesync */
     Runesync    = 0x80,     /* cannot represent part of a UTF sequence (<) */
+    /*e: constant Runesync */
+    /*s: constant Runeself */
     Runeself    = 0x80,     /* rune and UTF sequences are the same (<) */
+    /*e: constant Runeself */
+    /*s: constant Runeerror */
     Runeerror   = 0xFFFD,   /* decoding error in UTF */
+    /*e: constant Runeerror */
+    /*s: constant Runemax */
     Runemax     = 0x10FFFF, /* 21-bit rune */
+    /*e: constant Runemax */
+    /*s: constant Runemask */
     Runemask    = 0x1FFFFF, /* bits used by runes (see grep) */
+    /*e: constant Runemask */
 };
 
 /*
@@ -110,6 +141,7 @@ enum
 extern  int runetochar(char*, Rune*);
 extern  int chartorune(Rune*, char*);
 extern  int runelen(long);
+
 extern  int runenlen(Rune*, int);
 extern  int fullrune(char*, int);
 extern  int utflen(char*);
@@ -150,6 +182,7 @@ extern  int isupperrune(Rune);
 extern  void*   malloc(ulong);
 extern  void*   mallocz(ulong, bool);
 extern  void    free(void*);
+
 extern  ulong   msize(void*);
 extern  void*   mallocalign(ulong, ulong, long, ulong);
 extern  void*   calloc(ulong, ulong);
@@ -164,6 +197,7 @@ extern  void*   malloctopoolblock(void*);
 /*
  * print routines
  */
+/*s: type Fmt */
 struct Fmt {
     uchar   runes;          /* output buffer is runes or chars? */
     void    *start;         /* of buffer */
@@ -178,8 +212,10 @@ struct Fmt {
     int     prec;
     ulong   flags;
 };
+/*e: type Fmt */
 
-enum{
+/*s: type Fmt_flag */
+enum Fmt_flag {
     FmtWidth    = 1,
     FmtLeft     = FmtWidth << 1,
     FmtPrec     = FmtLeft << 1,
@@ -196,25 +232,28 @@ enum{
 
     FmtFlag     = FmtByte << 1
 };
+/*e: type Fmt_flag */
 
-// pad: used to be just print()? but for cg transformed in a pointer func?
+// pad: used to be just print()? but for cg transformed in a pointer func
 extern  int     (*print)(char*, ...);
 extern  char*   seprint(char*, char*, char*, ...);
-extern  char*   vseprint(char*, char*, char*, va_list);
 extern  int     snprint(char*, int, char*, ...);
-extern  int     vsnprint(char*, int, char*, va_list);
 extern  char*   smprint(char*, ...);
-extern  char*   vsmprint(char*, va_list);
 extern  int     sprint(char*, char*, ...);
 extern  int     fprint(int, char*, ...);
+
+extern  char*   vseprint(char*, char*, char*, va_list);
+extern  int     vsnprint(char*, int, char*, va_list);
+extern  char*   vsmprint(char*, va_list);
 extern  int     vfprint(int, char*, va_list);
 
 extern  int     runesprint(Rune*, char*, ...);
 extern  int     runesnprint(Rune*, int, char*, ...);
-extern  int     runevsnprint(Rune*, int, char*, va_list);
 extern  Rune*   runeseprint(Rune*, Rune*, char*, ...);
-extern  Rune*   runevseprint(Rune*, Rune*, char*, va_list);
 extern  Rune*   runesmprint(char*, ...);
+
+extern  int     runevsnprint(Rune*, int, char*, va_list);
+extern  Rune*   runevseprint(Rune*, Rune*, char*, va_list);
 extern  Rune*   runevsmprint(char*, va_list);
 
 extern  int     fmtfdinit(Fmt*, int, char*, int);
@@ -335,40 +374,49 @@ extern  ulong   ntruerand(ulong);       /* uses /dev/random */
 /*
  * math
  */
-extern  ulong   getfcr(void);
-extern  void    setfsr(ulong);
-extern  ulong   getfsr(void);
-extern  void    setfcr(ulong);
+extern  int     abs(int);
+//extern  long    labs(long);
+extern  double  frexp(double, int*);
+extern  double  ldexp(double, int);
+extern  double  modf(double, double*);
+extern  double  pow10(int);
+
 
 extern  double  NaN(void);
 extern  double  Inf(int);
 extern  int     isNaN(double);
 extern  int     isInf(double, int);
 
-extern  ulong   umuldiv(ulong, ulong, ulong);
-extern  long    muldiv(long, long, long);
+extern  double  fabs(double);
+extern  double  floor(double);
+extern  double  ceil(double);
 
 extern  double  pow(double, double);
-extern  double  fabs(double);
 extern  double  log(double);
 extern  double  log10(double);
 extern  double  exp(double);
-extern  double  floor(double);
-extern  double  ceil(double);
-extern  double  hypot(double, double);
 extern  double  sqrt(double);
+extern  double  hypot(double, double);
 extern  double  fmod(double, double);
 
-extern  double  atan(double);
-extern  double  atan2(double, double);
 extern  double  sin(double);
 extern  double  cos(double);
 extern  double  tan(double);
 extern  double  asin(double);
 extern  double  acos(double);
+extern  double  atan(double);
+extern  double  atan2(double, double);
 extern  double  sinh(double);
 extern  double  cosh(double);
 extern  double  tanh(double);
+
+extern  ulong   getfcr(void);
+extern  void    setfsr(ulong);
+extern  ulong   getfsr(void);
+extern  void    setfcr(ulong);
+
+extern  ulong   umuldiv(ulong, ulong, ulong);
+extern  long    muldiv(long, long, long);
 
 
 #define HUGE    3.4028234e38
@@ -378,19 +426,22 @@ extern  double  tanh(double);
 /*
  * Time-of-day
  */
-
+/*s: type Tm */
 struct Tm {
     int sec;
     int min;
     int hour;
+
     int mday;
     int mon;
     int year;
     int wday;
     int yday;
+
     char    zone[4];
     int     tzoff;
 };
+/*e: type Tm */
 
 extern  Tm*     gmtime(long);
 extern  Tm*     localtime(long);
@@ -403,6 +454,9 @@ extern  vlong   nsec(void);
 
 extern  void    cycles(uvlong*);    /* 64-bit value of the cycle counter if there is one, 0 if there isn't */
 
+extern  long    time(long*);
+
+
 /*
  * one-of-a-kind
  */
@@ -413,49 +467,43 @@ enum
 };
 
 // debugging tools
+/*s: macro assert */
+#define assert(x)   do{ if(x) {} else _assert("x"); }while(0)
+/*e: macro assert */
 extern  void    (*_assert)(char*);
-extern  uintptr getcallerpc(void*);
 extern  void    perror(char*);
 extern  void    sysfatal(char*, ...);
 extern  void    syslog(int, char*, char*, ...);
 
+extern  uintptr getcallerpc(void*);
+
 #pragma varargck    argpos  sysfatal    1
 #pragma varargck    argpos  syslog  3
 
-// close to syscalls
-extern  void    exits(char*);
-extern  char*   getwd(char*, int);
-extern  char*   getenv(char*);
-extern  int     putenv(char*, char*);
-extern  char*   getuser(void);
-extern  char*   mktemp(char*);
-
+// concurrency
 extern  int     setjmp(jmp_buf);
 extern  void    longjmp(jmp_buf, int);
 extern  void    notejmp(void*, jmp_buf, int);
 
+// IPC
 extern  int     postnote(int, int, char *);
 extern  int     atexit(void(*)(void));
 extern  void    atexitdont(void(*)(void));
 extern  int     atnotify(int(*)(void*, char*), int);
 
-extern  int     abs(int);
-extern  long    labs(long);
-extern  double  frexp(double, int*);
-extern  double  ldexp(double, int);
-extern  double  modf(double, double*);
-extern  double  pow10(int);
-
+// conversion
 extern  double  atof(char*);
 extern  int     atoi(char*);
 extern  long    atol(char*);
 extern  vlong   atoll(char*);
+
 extern  double  strtod(char*, char**);
 extern  long    strtol(char*, char**, int);
 extern  ulong   strtoul(char*, char**, int);
 extern  vlong   strtoll(char*, char**, int);
 extern  uvlong  strtoull(char*, char**, int);
 
+// encryption
 extern  int decrypt(void*, void*, int);
 extern  int encrypt(void*, void*, int);
 extern  int netcrypt(void*, void*);
@@ -468,19 +516,21 @@ extern  int dec16(uchar*, int, char*, int);
 extern  int enc16(char*, int, uchar*, int);
 
 
-extern  long    time(long*);
-
 extern  int tolower(int);
 extern  int toupper(int);
 
 // misc
 extern  double  charstod(int(*)(void*), void*);
+
 // modified in place, so type should really be void cleanname(INOUT char*);
 extern  char*   cleanname(char*);
 extern  int     encodefmt(Fmt*);
+
 extern  int     getfields(char*, char**, int, int, char*);
 extern  int     gettokens(char *, char **, int, char *);
+
 extern  int     iounit(fdt);
+
 // ugly redefined by user code? see statusbar.c
 extern  void    qsort(void*, long, long, int (*)(void*, void*));
 
@@ -488,7 +538,8 @@ extern  void    qsort(void*, long, long, int (*)(void*, void*));
 /*
  *  profiling
  */
-enum prof {
+/*s: type Prof */
+enum Prof {
     Profoff,        /* No profiling */
 
     Profuser,       /* Measure user time only (default) */
@@ -496,6 +547,8 @@ enum prof {
     Proftime,       /* Measure total time */
     Profsample,     /* Use clock interrupt to sample (default when there is no cycle counter) */
 }; /* what */
+/*e: type Prof */
+
 extern  void    prof(void (*fn)(void*), void *arg, int entries, int what);
 
 /*
@@ -510,10 +563,12 @@ int     casl(ulong*, ulong, ulong);
 /*
  *  synchronization
  */
+/*s: type Lock */
 struct Lock {
     long    key;
     long    sem;
 };
+/*e: type Lock */
 
 extern int  _tas(int*);
 
@@ -521,24 +576,30 @@ extern  void    lock(Lock*);
 extern  void    unlock(Lock*);
 extern  int     canlock(Lock*);
 
+/*s: type QLp */
 struct QLp {
     int inuse;
     QLp *next;
     char    state;
 };
+/*e: type QLp */
 
+/*s: type QLock */
 struct QLock {
     Lock    lock;
     int locked;
     QLp *head;
     QLp     *tail;
 };
+/*e: type QLock */
+
 
 extern  void    qlock(QLock*);
 extern  void    qunlock(QLock*);
 extern  int     canqlock(QLock*);
 extern  void    _qlockinit(void* (*)(void*, void*));    /* called only by the thread library */
 
+/*s: type RWLock */
 struct RWLock {
     Lock    lock;
     int readers;    /* number of readers */
@@ -546,6 +607,8 @@ struct RWLock {
     QLp *head;      /* list of waiting processes */
     QLp *tail;
 };
+/*e: type RWLock */
+
 
 extern  void    rlock(RWLock*);
 extern  void    runlock(RWLock*);
@@ -554,11 +617,13 @@ extern  void    wlock(RWLock*);
 extern  void    wunlock(RWLock*);
 extern  int     canwlock(RWLock*);
 
+/*s: type Rendez */
 struct Rendez {
     QLock   *l;
     QLp *head;
     QLp *tail;
 };
+/*e: type Rendez */
 
 extern  void    rsleep(Rendez*);    /* unlocks r->l, sleeps, locks r->l again */
 extern  int     rwakeup(Rendez*);
@@ -588,6 +653,7 @@ extern  int pushtls(int, char*, char*, int, char*, char*);
 /*
  *  network services
  */
+/*s: type NetConnInfo */
 struct NetConnInfo {
     char    *dir;       /* connection directory */
     char    *root;      /* network root */
@@ -599,6 +665,7 @@ struct NetConnInfo {
     char    *laddr;     /* local address */
     char    *raddr;     /* remote address */
 };
+/*e: type NetConnInfo */
 extern  NetConnInfo*    getnetconninfo(char*, int);
 extern  void            freenetconninfo(NetConnInfo*);
 
@@ -611,7 +678,10 @@ extern  void            freenetconninfo(NetConnInfo*);
 
 
 // getopt like macros
+/*s: signature global argv0 */
 extern char *argv0;
+/*e: signature global argv0 */
+/*s: macro ARGBEGIN */
 #define ARGBEGIN    for((argv0||(argv0=*argv)),argv++,argc--;\
                 argv[0] && argv[0][0]=='-' && argv[0][1];\
                 argc--, argv++) {\
@@ -624,14 +694,22 @@ extern char *argv0;
                 _argc = 0;\
                 while(*_args && (_args += chartorune(&_argc, _args)))\
                 switch(_argc)
+/*e: macro ARGBEGIN */
+/*s: macro ARGEND */
 #define ARGEND      SET(_argt);USED(_argt,_argc,_args);}USED(argv, argc);
-
+/*e: macro ARGEND */
+/*s: macro ARGF */
 #define ARGF()      (_argt=_args, _args="",\
                 (*_argt? _argt: argv[1]? (argc--, *++argv): 0))
+/*e: macro ARGF */
+/*s: macro EARGF */
 #define EARGF(x)    (_argt=_args, _args="",\
                 (*_argt? _argt: argv[1]? (argc--, *++argv): ((x), abort(), (char*)0)))
-
+/*e: macro EARGF */
+/*s: macro ARGC */
 #define ARGC()      _argc
+/*e: macro ARGC */
+
 
 /* this is used by sbrk and brk,  it's a really bad idea to redefine it */
 extern  char    end[];

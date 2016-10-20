@@ -12,13 +12,4 @@ abs(int a)
 }
 /*e: function abs */
 
-/*s: function labs */
-long
-labs(long a)
-{
-    if(a < 0)
-        return -a;
-    return a;
-}
-/*e: function labs */
 /*e: port/abs.c */
