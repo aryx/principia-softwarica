@@ -36,6 +36,7 @@
 %thx to 5a in ocaml: 
 %  - see that code could be so much simpler, no need so many globals
 %  - could be stricter which would simplify things even more
+%    (ex: ??)
 %  - there are really only 3 kinds of operands: for arith, for mov, for branch
 %    (see ast.ml)
 %  - outcode must increment pc for TEXT too, because can branch on TEXT
@@ -47,6 +48,7 @@
 %  - see that LBCOND does not have cond, indeed would not make sense
 %  - introduced more files, obj.c, main.c, lookup.c
 % things which improved this document thx to assemblers/ocaml: 
+%  - many, hard to list
 
 %thx to codemap/codegraph/scheck:
 % - factorized code in aa/
@@ -58,7 +60,7 @@
 %   module abstraction with code, data, and imported/exported entities
 % - calling conventions, they are really that on ARM, conventions, cos
 %   BL does not impose anything
-% - can actually understand the assembly code in Kernel.nw :) param1+0(FP)
+% - can finally understand the assembly code in Kernel.nw :) param1+0(FP)
 % - the difference betweeen GLOBL and DATA, declaration vs definition
 % - assembly directives are actually more linker/loader directives,
 %   for instance they configure data for the loader to setup memory
@@ -133,7 +135,7 @@
 {\Huge 
 Principia Softwarica: The ARM Assembler [[5a]]
 }\\
-{version 0.1}
+{version 0.5}
 }
 
 \author{
@@ -253,6 +255,7 @@ between an object file and an executable?
  %kernel: for features essential to implement a kernel
  %
  %real-world: to relate to other assemblers
+ % (Hennessy and Patterson use sections prefixed with "Real Stuff: ARMv7 ...")
  %ocaml: to give a hint on how rewriting C in OCaml could improve things
  %alt: alternative technique
  %old: for original code I changed to be clearer
@@ -274,9 +277,12 @@ between an object file and an executable?
 % - lexing with automata and lookahead/peek, and escape management
 % - preprocessing? macro expansion? 
 % - parsing with grammar and actions (not completely context free though)
+%   but lexing/parsing is useful in many contexts! so many programs require
+%   some forms of lexing/parsing of data.
+%   actually have code for basic arithmetic evaluator, useful Yacc tutorial.
 % - def/use link with two-pass classic algorithm (alt: lazy lookup? )
-% - serialization/marshalling portable with fixed encoding, variable-length
-%   operands with tag, shared enum and dispatch
+% - serialization/marshalling portable! with fixed encoding, variable-length
+%   operands with tag, shared enum and dispatch, so not trivial
 
 
 \section{The \plan ARM assembler, [[5a]]}
@@ -456,6 +462,8 @@ on real machines.
 %related: IDE for nasm, masm, gas, fasm
 % https://dman95.github.io/SASM/english.html
 
+%http://embed.rs/articles/2016/arm-inline-assembly-rust/
+
 \section{Getting started}
 \label{sec:getting-started}
 
@@ -520,6 +528,7 @@ with concepts such as
 \n {frame pointer}, hmmm maybe not, we can explain in this doc.
 etc.
 \t if not good reference to learn Assembler? one mention by asl book?
+\t recent Hennessy and Patterson!
 \l MIPS assembly tutorial, might give some ideas (use spim)?
 %  http://programmedlessons.org/AssemblyTutorial/index.html
 \l Assembly Programming classic book? once cited by Assembler and Loaders?
@@ -546,7 +555,7 @@ understand this book,
 but I recommend to read the \book{Emulator} if you want to fully understand
 the semantics of the assembly instructions presented in this book.
 
-\l if specific question on interface, 
+\t if specific question on interface, 
 It can also be useful to read the documentation of
 the \plan assemblers~\cite{plan9-assemblers} available in 
 our \plan repository in
@@ -985,6 +994,7 @@ even though the entry point of C programs is [[main]], not [[_main]].
 This is because the core C library defines a [[_main()]] procedure,
 written in assembly, which does some core initializations
 and then calls [[main()]].
+\t can change entry point, -E, see 5l.
 %
 In this example I do not use and so do not link the C library, 
 to simplify things,
@@ -3344,6 +3354,7 @@ passed through a command line argument:
 void
 main(int argc, char *argv[])
 {
+    errorn err;
     <<[[main()]] locals>>
 
     <<[[main()]] debug initialization>>
@@ -3364,13 +3375,17 @@ main(int argc, char *argv[])
     }
 
     <<[[main()]] multiple files handling>>
+    // else
 
-    if(assemble(argv[0]))
+    err = assemble(argv[0]);
+    if(err > 0)
         errorexit();
-    exits(nil);
+    else
+        exits(nil);
 }
 @
 %ocaml: no need cinit, and include stuff can be done by outside cpp
+%pad: I added the errorn err; and mv call to assemble outside if
 
 \l ref to chap:error for errorexit?
 
@@ -3451,8 +3466,9 @@ for(i=0; i<sizeof(nullgen.sval); i++)
 %  =~ dirname(current_file)
 
 \label{sec:pathname}
-[[pathname]] represents the {\em current working directory} 
-(CWD). This is used also for the [[#include]] search path.
+[[pathname]] represents the {\em current working directory} (CWD). 
+This will be used when generating debugging information in
+the object file (see Section~\ref{sec:object-file-history}).
 
 <<global pathname>>=
 char*	pathname;
@@ -3469,8 +3485,7 @@ if(getwd(pathname, 99) == 0) {
         strcpy(pathname, "/???");
 }
 @
-%???
-\t mv later? with #include?
+
 
 \section{[[assemble()]]}
 
@@ -3497,7 +3512,7 @@ This global is set by [[assemble()]] below and is used
 in a few places in the grammar as well as in [[outcode()]]:
 
 <<function assemble>>=
-error1
+errorn
 assemble(char *infile)
 {
     fdt of; // outfile
@@ -4478,7 +4493,8 @@ but for unknown reasons
 things are done manually for those numbers:
 \n it is handled by Linux (jarod) and actually also by plan9, see man page
 \t why not use strtol for that too??
-%ocaml: int_of_string does
+%ocaml: rely on int_of_string (slightly different syntax though for
+% octal so have to prefix with 0o)
 
 
 <<[[yylex()]] in number case, 0xxx handling>>=
@@ -4570,6 +4586,8 @@ caseout:
         return LCONST;
     }
 @
+%ocaml: ocamllex regexps so much better
+%ocaml: rely also on powerful float_of_string?
 
 A dot without numbers before can be in Asm5 the start of a float or
 the start of an identifier, or simply the dot character:
@@ -4593,6 +4611,7 @@ case '.':
 \l why not simply goto talph for '.'? avoid duplicate the cp = symb; ...
 \t single token '.' used?
 %ocaml: ocamllex returns the longest or the first in the list
+
 
 \section{Characters and escape sequences}
 \l unicode?
@@ -4696,8 +4715,10 @@ loop:
 \l they abuse EOF to mean end of string
 \n if not known antislash, then return the char, but should yyerror I think
 
+\label{sec:getc}
 [[getc()]] is a small wrapper over [[GETC()]] which
 automatically handles [[lineno]]:
+\n will be called a lot by preprocessing code
 
 <<function getc>>=
 int
@@ -4705,11 +4726,7 @@ getc(void)
 {
     int c;
 
-    c = peekc;
-    if(c != IGN) {
-        peekc = IGN;
-        return c;
-    }
+    <<[[getc()]] peekc handling>>
 
     c = GETC();
 
@@ -4725,6 +4742,13 @@ getc(void)
 \l int? why not uint? GETC can return EOF but not this function!
 \t will be called also by macro processing code
 
+<<[[getc()]] peekc handling>>=
+c = peekc;
+if(c != IGN) {
+    peekc = IGN;
+    return c;
+}
+@
 
 <<[[escchar()]] if octal character>>=
 if(c >= '0' && c <= '7') {
@@ -4782,7 +4806,7 @@ case '"':
 
 
 
-\chapter{Preprocessing TODO}
+\chapter{Preprocessing}
 \label{chap:preprocessing}
 
 % Builtin in the binary. A bit of code duplication with the
@@ -4808,7 +4832,8 @@ case '#':
 % actually expanded or defined macros or undef, in any case
 % no token to return, but iostack will have maybe changed,
 % or symbol table, and so GETC will maybe change.
-%ocaml: external cpp, just handle #line!!
+%ocaml: external cpp, just handle #line?
+% update: actually I now use macroprocessor/ library
 
 <<global mactab>>=
 struct
@@ -4823,10 +4848,11 @@ struct
     "endif",    macend,
 
     "include",  macinc,
+    "line",     maclin,
     "define",   macdef,
     "undef",    macund,
+
     "pragma",   macprag,
-    "line",     maclin,
     0
 };
 @
@@ -4846,8 +4872,7 @@ domacro(void)
     Sym *s;
 
     s = getsym();
-    if(s == S)
-        s = slookup("endif");
+    <<[[domacro()]] set s to endif symbol if no symbol>>
 
     for(i=0; mactab[i].macname; i++)
         if(strcmp(s->name, mactab[i].macname) == 0) {
@@ -4858,6 +4883,7 @@ domacro(void)
                 macif(i);
             return;
         }
+    // else
     yyerror("unknown #: %s", s->name);
     macend();
 }
@@ -4866,6 +4892,12 @@ domacro(void)
 % lookup really
 % note: didn't know that a single # is actually equivalent to an endif
 
+<<[[domacro()]] set s to endif symbol if no symbol>>=
+if(s == S)
+    s = slookup("endif");
+@
+
+%\section{[[getsym()]]}
 
 
 <<function getsym>>=
@@ -4895,7 +4927,8 @@ getsym(void)
     return lookup();
 }
 @
-% seen getc before
+% seen getc() before, wrapper over GETC that handles incrementing lineno
+%  if needed
 % Runeself defined in libc.h
 \t why -4 ?
 
@@ -4913,6 +4946,7 @@ getnsc(void)
     }
 }
 @
+% the one in Compiler.nw is more complicated
 
 % what if had already a peekc? because called unget 2 times?
 % should raise Impossible!
@@ -4927,7 +4961,7 @@ unget(int c)
 @
 
 
-
+% for error
 <<function macend>>=
 void
 macend(void)
@@ -4947,20 +4981,11 @@ macend(void)
 \section{[[#include]]}
 % and [[-I]]
 
+%trans: first directive, #include
+
 \subsection{Include path, [[-I]]}
 
-<<[[main()]] locals>>=
-char *p;
-@
-
-% -I
-<<[[main()]] command line processing>>=
-case 'I':
-    p = ARGF();
-    setinclude(p);
-    break;
-@
-
+% rely on few globals.
 
 % hmm rename? include_paths?
 <<global include>>=
@@ -4974,10 +4999,7 @@ int	ninclude;
 @
 \n set to 0 because global?
 
-<<[[main()]] remaining initialisation>>=
-include[ninclude++] = ".";
-@
-% could do setinclude(".");  as in 5c
+
 
 <<function setinclude>>=
 void
@@ -5001,6 +5023,28 @@ setinclude(char *p)
 \t why starts at 1? because include[0] is special, it is "." or dirname(infile)
 \t nelem() is in libc.h
 
+
+
+<<[[main()]] remaining initialisation>>=
+include[ninclude++] = ".";
+@
+% could do setinclude(".");  as in 5c
+% overriden later? with full path of dirname(infile) ?
+
+
+<<[[main()]] locals>>=
+char *p;
+@
+% -I
+<<[[main()]] command line processing>>=
+case 'I':
+    p = ARGF();
+    setinclude(p);
+    break;
+@
+
+%\subsection{Tracing origin and [[Hist]]}
+
 \subsection{[[#include]]}
 
 <<constant STRINGSZ>>=
@@ -5008,53 +5052,24 @@ setinclude(char *p)
 @
 %jarod: doit etre plus grand que NSYMB
 
-% LP split
 <<function macinc>>=
 void
 macinc(void)
 {
-    int c0;
-    int c, i;
+    char str[STRINGSZ];
+    char *hp = str;
+    int i;
     fdt f = -1;
-    char str[STRINGSZ], *hp;
+    <<[[macinc()]] other locals>>
 
-    c0 = getnsc();
-    if(c0 != '"') {
-        c = c0;
-        if(c0 != '<')
-            goto bad;
-        c0 = '>';
-    }
-    for(hp = str;;) {
-        c = getc();
-        if(c == c0)
-            break;
-        if(c == '\n')
-            goto bad;
-        *hp++ = c;
-    }
-    *hp = '\0';
+    // lexing
 
-    c = getcom();
-    if(c != '\n')
-        goto bad;
+    <<[[macinc()]] lexing the included filename>>
 
-    for(i=0; i<ninclude; i++) {
-        if(i == 0 && c0 == '>')
-            continue;
-        strcpy(symb, include[i]);
-        strcat(symb, "/");
-        if(strcmp(symb, "./") == 0)
-            symb[0] = '\0';
-        strcat(symb, str);
+    // action
 
-        f = open(symb, 0);
-        if(f >= 0)
-            break;
+    <<[[macinc()]] find and store the included filename full path in [[symb]]>>
 
-    }
-    if(f < 0)
-        strcpy(symb, str);
     c = strlen(symb) + 1;
 
     while(c & 3)
@@ -5074,11 +5089,59 @@ bad:
     macend();
 }
 @
+%old: 'for (hp = str;;) ...' but better initialize before
 %jarod: does not check size of name, can overflow str?
 % use rnd(c, 4) instead of while
 \t how lineno? incremented by 1 and then start processing included file?
 \t or #include like non existent and replaced by content?
 
+
+<<[[macinc()]] other locals>>=
+int c0, c;
+@
+<<[[macinc()]] lexing the included filename>>=
+c0 = getnsc();
+if(c0 != '"') {
+    c = c0;
+    if(c0 != '<')
+        goto bad;
+    c0 = '>';
+}
+for(;;) {
+    c = getc();
+    if(c == c0)
+        break;
+    if(c == '\n')
+        goto bad;
+    *hp++ = c;
+}
+*hp = '\0';
+
+c = getcom();
+if(c != '\n')
+    goto bad;
+@
+
+<<[[macinc()]] find and store the included filename full path in [[symb]]>>=
+for(i=0; i<ninclude; i++) {
+    if(i == 0 && c0 == '>') // do not look in '.' for system headers
+        continue;
+
+    strcpy(symb, include[i]);
+    strcat(symb, "/");
+    if(strcmp(symb, "./") == 0)
+        symb[0] = '\0';
+    strcat(symb, str);
+
+    f = open(symb, 0);
+    if(f >= 0)
+        break;
+
+}
+if(f < 0)
+    strcpy(symb, str);
+
+@
 
 <<function pushio>>=
 void
@@ -5233,7 +5296,7 @@ getnsn(void)
     return n;
 }
 @
-
+%ocaml: ocamllex regexps are so much better
 
 %\section{[[getxxx()]]}
 
@@ -9173,6 +9236,12 @@ comma:
 \n instructions and registers
 \label{sec:float}
 
+% cinit | yylex -> <>
+<<constant FPCHIP(arm)>>=
+#define FPCHIP      true
+@
+
+
 % optional cos can simulate floats in software.
 % also can use fixed-precision arithmetic with integers (see ICFP
 % contest I did with the car racing)
@@ -9446,10 +9515,6 @@ ieeedtod(Ieee *ieee, double native)
 }
 @
 
-<<constant FPCHIP(arm)>>=
-#define FPCHIP      true
-@
-% used only by a small if(FPCHIP) in cinit
 
 \subsection{Multiplication and accumulation}
 
@@ -10093,6 +10158,7 @@ dodefine(char *cp)
 @
 
 % wow, this is complicated
+% See Compiler.nw, better LP split
 <<function macdef>>=
 void
 macdef(void)
