@@ -1,8 +1,10 @@
+/*s: include/ctype.h */
 #pragma	src	"/sys/src/libc/port"
 #pragma	lib	"libc.a"
 
 // could be merged in libc.h
 
+/*s: type Ctype_flag */
 #define	_U	01 // upper
 #define	_L	02 // lower
 #define	_N	04 // number
@@ -11,6 +13,7 @@
 #define	_C	040 // ctlr
 #define	_B	0100 // ??
 #define	_X	0200 // ??
+/*e: type Ctype_flag */
 
 extern unsigned char	_ctype[];
 
@@ -29,3 +32,4 @@ extern unsigned char	_ctype[];
 #define	_toupper(c)	((c)-'a'+'A')
 #define	_tolower(c)	((c)-'A'+'a')
 #define	toascii(c)	((c)&0177)
+/*e: include/ctype.h */

@@ -83,18 +83,18 @@
 /* rfork */
 enum Rfork_flags
 {
-	RFNAMEG		= (1<<0),
-	RFENVG		= (1<<1),
-	RFFDG		= (1<<2),
-	RFNOTEG		= (1<<3),
-	RFPROC		= (1<<4),
-	RFMEM		= (1<<5),
-	RFNOWAIT	= (1<<6),
-	RFCNAMEG	= (1<<10),
-	RFCENVG		= (1<<11),
-	RFCFDG		= (1<<12),
-	RFREND		= (1<<13),
-	RFNOMNT		= (1<<14)
+ RFNAMEG		= (1<<0),
+ RFENVG		= (1<<1),
+ RFFDG		= (1<<2),
+ RFNOTEG		= (1<<3),
+ RFPROC		= (1<<4),
+ RFMEM		= (1<<5),
+ RFNOWAIT	= (1<<6),
+ RFCNAMEG	= (1<<10),
+ RFCENVG		= (1<<11),
+ RFCFDG		= (1<<12),
+ RFREND		= (1<<13),
+ RFNOMNT		= (1<<14)
 };
 /*e: type Rfork_flag */
 
@@ -122,10 +122,10 @@ enum Seek_cursor {
 /*s: type Qid */
 // Qid as in uniQue id
 struct Qid {
-	uvlong	path;
-	ulong	vers;
+ uvlong	path;
+ ulong	vers;
     // bitset<Qidtype>
-	uchar	type;
+ uchar	type;
 };
 /*e: type Qid */
 
@@ -133,37 +133,37 @@ struct Qid {
 // TODO should be renamed DirEntry really
 // a similar structure is defined in the kernel!
 struct Dir {
-	/* system-modified data */
-	ushort	type;	/* server type */
-	uint	dev;	/* server subtype */
+ /* system-modified data */
+ ushort	type;	/* server type */
+ uint	dev;	/* server subtype */
 
-	/* file data */
-	Qid	qid;	/* unique id from server */
+ /* file data */
+ Qid	qid;	/* unique id from server */
 
-	ulong	mode;	/* permissions */
-	ulong	atime;	/* last read time */
-	ulong	mtime;	/* last write time */
-	vlong	length;	/* file length */
-	char	*name;	/* last element of path */
-	char	*uid;	/* owner name */
-	char	*gid;	/* group name */
-	char	*muid;	/* last modifier name */
+ ulong	mode;	/* permissions */
+ ulong	atime;	/* last read time */
+ ulong	mtime;	/* last write time */
+ vlong	length;	/* file length */
+ char	*name;	/* last element of path */
+ char	*uid;	/* owner name */
+ char	*gid;	/* group name */
+ char	*muid;	/* last modifier name */
 };
 /*e: type DirEntry */
 
 /*s: type Waitmsg */
 /* keep /sys/src/ape/lib/ap/plan9/sys9.h in sync with this -rsc */
 struct Waitmsg {
-	int	pid;		/* of loved one */
-	ulong	time[3];	/* of loved one & descendants */
-	char	*msg;
+ int	pid;		/* of loved one */
+ ulong	time[3];	/* of loved one & descendants */
+ char	*msg;
 };
 /*e: type Waitmsg */
 
 /*s: type IOchunk */
 struct IOchunk {
-	void	*addr;
-	ulong	len;
+ void	*addr;
+ ulong	len;
 };
 /*e: type IOchunk */
 

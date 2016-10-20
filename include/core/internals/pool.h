@@ -3,35 +3,35 @@ typedef struct Pool Pool;
 
 /*s: type Pool */
 struct Pool {
-	char*	name;
-	ulong	maxsize;
+ char*	name;
+ ulong	maxsize;
 
-	ulong	cursize;
-	ulong	curfree;
-	ulong	curalloc;
+ ulong	cursize;
+ ulong	curfree;
+ ulong	curalloc;
 
-	ulong	minarena;	/* smallest size of new arena */
-	ulong	quantum;	/* allocated blocks should be multiple of */
-	ulong	minblock;	/* smallest newly allocated block */
+ ulong	minarena;	/* smallest size of new arena */
+ ulong	quantum;	/* allocated blocks should be multiple of */
+ ulong	minblock;	/* smallest newly allocated block */
 
-	void*	freeroot;	/* actually Free* */
-	void*	arenalist;	/* actually Arena* */
+ void*	freeroot;	/* actually Free* */
+ void*	arenalist;	/* actually Arena* */
 
-	void*	(*alloc)(ulong);
-	int	    (*merge)(void*, void*);
-	void	(*move)(void* from, void* to);
+ void*	(*alloc)(ulong);
+ int	    (*merge)(void*, void*);
+ void	(*move)(void* from, void* to);
 
-	int	flags;
-	int	nfree;
-	int	lastcompact;
+ int	flags;
+ int	nfree;
+ int	lastcompact;
 
-	void	(*lock)(Pool*);
-	void	(*unlock)(Pool*);
-	void	(*print)(Pool*, char*, ...);
-	void	(*panic)(Pool*, char*, ...);
-	void	(*logstack)(Pool*);
+ void	(*lock)(Pool*);
+ void	(*unlock)(Pool*);
+ void	(*print)(Pool*, char*, ...);
+ void	(*panic)(Pool*, char*, ...);
+ void	(*logstack)(Pool*);
 
-	void*	private;
+ void*	private;
 };
 /*e: type Pool */
 
@@ -51,13 +51,13 @@ extern Pool*	imagmem;
 
 /*s: type Pool_flag */
 enum Pool_flag {	/* flags */
-	POOL_ANTAGONISM	= 1<<0,
-	POOL_PARANOIA	= 1<<1,
-	POOL_VERBOSITY	= 1<<2,
-	POOL_DEBUGGING	= 1<<3,
-	POOL_LOGGING	= 1<<4,
-	POOL_TOLERANCE	= 1<<5,
-	POOL_NOREUSE	= 1<<6,
+ POOL_ANTAGONISM	= 1<<0,
+ POOL_PARANOIA	= 1<<1,
+ POOL_VERBOSITY	= 1<<2,
+ POOL_DEBUGGING	= 1<<3,
+ POOL_LOGGING	= 1<<4,
+ POOL_TOLERANCE	= 1<<5,
+ POOL_NOREUSE	= 1<<6,
 };
 /*e: type Pool_flag */
 /*e: include/pool.h */
