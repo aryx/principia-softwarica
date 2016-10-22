@@ -268,21 +268,24 @@ between an object file and an executable?
 % - AST using enums and tag/union structure (not recursive and a bit chaotic)
 %   with "sentinel" for defensive programming (AXXX), 
 %   and end marker enum trick (ALAST)
+% - symbol table (really hash table)
 % - circular/spreaded symbol table with small symbol index (1 byte)
 % - stack/tree with flat list and special pop marker (hist)
 % - buffer
 % - bitsets and lots of bit tricks (abuse though), abuse int also for NONE
+% - automata (kinda, by abusing labels and gotos to parse regexps in yylex)
 
 %algorithms (beyond search/sort): (actually use neither search nor sort)
-% - lexing with automata and lookahead/peek, and escape management
-% - preprocessing? macro expansion? 
-% - parsing with grammar and actions (not completely context free though)
-%   but lexing/parsing is useful in many contexts! so many programs require
-%   some forms of lexing/parsing of data.
+% - lexing with automata (using labels and gotos and switch)
+%   and lookahead/peek, and escape management, and EOF
+% - preprocessing: macro expansion, and tracing of line origin
+% - parsing with grammar and actions.
+%   Lexing/parsing is useful in many contexts! There are so many programs
+%   requiring some forms of lexing/parsing of data.
 %   actually have code for basic arithmetic evaluator, useful Yacc tutorial.
 % - def/use link with two-pass classic algorithm (alt: lazy lookup? )
 % - serialization/marshalling portable! with fixed encoding, variable-length
-%   operands with tag, shared enum and dispatch, so not trivial
+%   operands with tag, shared enum and dispatch, so not trivial.
 
 
 \section{The \plan ARM assembler: [[5a]]}
@@ -346,6 +349,11 @@ the code of [[5a]] and [[5l]]), and leads also I think to simpler code.
 %   with https://news.ycombinator.com/item?id=8815778
 %   and http://www.reddit.com/r/programming/comments/2riayd/golang_is_trash/
 \l say here Asm5 is not _direct_ representation of underlying ARM machine?
+
+%pro:
+% not as used as binutils. Still, production-quality assembler!
+% used in plan9. Used in Go so used to build many services at Google!
+% production-quality!
 
 \section{Other assemblers}
 
@@ -654,6 +662,7 @@ Assembly languages use {\em mnemonics} to denote low-level {instructions}.
 For instance, an assembly programmer can simply use the mnemonic
 [[ADD]] in his code instead of having to remember that [[0000100]]
 is the binary code to perform an addition in an ARM processor.
+\t programmer -> you? also in the following paragraph?
 
 
 Typical instructions are made of an {\em opcode} and 
@@ -997,7 +1006,7 @@ The operands of the pseudo-instructions [[TEXT]] and [[GLOBL]]
 are the name of the {symbol} it defines followed by [[(SB)]],
 which I will explain later, and a {\em constant} value prefixed by a dollar.
 In Asm9, {\em all constants are prefixed by a dollar}.
-\l why? ambiguities? I think it's stupid because easy to make mistake then
+\t why? ambiguities? I think it's stupid because easy to make mistake then
 \l actually in DATA the size is specified without dollar in .../6, offsets too
 % I was doing MOVW 0, R1 which translates to MOVW 0(R0), R1 (not sure why)
 % instead of MOVW $0, R1 and so had some segfaults at 0xc because
@@ -1344,6 +1353,7 @@ R13 +-> +-------+
 
 %real-world:
 \t no need to save old value of R13 in the stack! RET does it.
+\t no bad DWARD of frame-pointer thing -fomit-frame-pointer
 
 \subsection{System calls}
 
@@ -1410,6 +1420,7 @@ However, if the function is not a leaf then the value in [[R14]]
 must be saved somewhere, in the stack, before the function calls
 another function via [[BL]] (which would overwrite [[R14]]).
 %\footnote{See the \book{Emulator} for more information on the ARM and [[BL]].}.
+
 
 \label{sec:extra-word-stack}
 Non-leaf functions are the reason the [[TEXT]] pseudo-instruction
@@ -1695,6 +1706,7 @@ finally a family of processors.
 %
 Up until now, and for the rest of this document, 
 when I use the term ARM I mean the {\em ARMv6} instruction set architecture.
+\t cite ARMv6?
 %
 Confusingly, ARMv6 is the instruction set
 used in the {\em ARM11} 32-bits processor 
@@ -3002,7 +3014,7 @@ Indeed, [[yylex()]]
 can also return single-character tokens, e.g., [[';']],
 in which case there is no need to give them a name.
 \n in unix yacc I think it starts at 256 because only ASCII conflict
-\l see Yacc. typedef Rune token_code; so plan9 lex is unicode aware? ulex?
+\l see Yacc. typedef int token_code; so plan9 lex is unicode aware? nope. ulex?
 
 Here is finally the union representing the different kinds of values
 a token can hold:
@@ -3574,7 +3586,7 @@ This character is stored in the following global:
 <<global thechar>>=
 int	thechar;
 @
-\l int? no char? then use Rune!
+\l int? no char? then use Rune at least!
 \n cant put = '5' here because this chunk is factorized for arm and x86
 
 [[thestring]] contains the longer, more readable, version
@@ -4475,28 +4487,30 @@ another time when there is nothing more to read.
 \label{chap:lexing}
 
 %trans:
-The next component in the assembly pipeline is the lexer
-function [[yylex()]] called by the parser function [[yyparse()]].
-%trans:
-It relies on [[GETC()]] which we have seen
-before to get the next character in the currently processed input file.
+The next component in the assembling pipeline is the lexer
+function [[yylex()]], called by the parser function [[yyparse()]].
+%trans: %dup: input input/GETC
+[[yylex()]] relies on [[GETC()]], 
+which I described in ~Chapter~\ref{chap:input},
+to get the next character in the currently processed input file.
 \l (that is iostack->f )
+%context: yyparse -> yylex -> GETC
 
 \section{[[yylex()]]}
 
-Even though [[5a]] is not using Lex, Yacc requires
+Even though [[5a]] is not using Lex~\cite{lex}, Yacc requires
 \t why not use Lex? (same question asked in soft archi section)
 % maybe to avoid bootstrapping issues?
 % hmm but they use yacc so ... (and lex uses yacc)
 % or maybe because if want to have builtin-cpp, easier to do without Lex?
-the lexer to be represented by a function called [[yylex()]]. 
+to name the lexer function [[yylex()]]. 
 %
 This function does not take any
-argument, hence the use of many globals, and must return one
+argument (hence the use of many globals), and must return one
 of the element below:
 \begin{itemize}
 
-\item The {\em code} of a token
+\item A {\em token code} (see Section~\ref{sec:token})
 
 \item [[-1]] (represented by EOF), when there is no more token to read
 
@@ -4505,35 +4519,47 @@ of the element below:
 \end{itemize}
 %ocaml: EOF needs special care also in ocamlyacc and ocamllex
 
+Here is the signature of [[yylex()]]:
+
 <<signature yylex>>=
-// unit -> (enum<token_code> | -1 (EOF) | Rune)
+// unit -> (enum<token_code> | -1 (EOF) | char)
 long    yylex(void);
 @
 %ocaml: ugly abuse long
 
 [[yylex()]] can also modify the global [[yylval]] 
 to store the {\em value} of the token.
-The type of [[yylval]] is the union type we saw in Section~\ref{sec:token}.
-This value can then be retrieved via the \$$n$ notation
-in the Yacc actions, as we will see in Chapter~\ref{chap:parsing}.
+%
+The type of [[yylval]] is a union type I described in Section~\ref{sec:token}.
+This token value can then be retrieved via the \$$n$ notation
+in the Yacc actions, as you will see in Chapter~\ref{chap:parsing}.
+
 
 [[yylex()]] is essentially an {\em automata} 
-reading characters (with [[GETC()]]) 
-in a loop (with the label [[l0:]] and [[goto]] below) and
-using a big [[switch]] on the current character read ([[c]])
-to transition states (using more labels and [[goto]]s as we will see), 
-until a full token is formed:
-%ocaml: should use lex. Simpler. 
-
+reading characters 
+%(with [[GETC()]]) 
+in a loop while
+%(with the label [[l0:]] and [[goto]] below) and
+using a big [[switch]] on the current character read 
+%([[c]])
+to transition states 
+%(using more labels and [[goto]]s as we will see), 
+until a full token is formed.
 \l FIGURE with automata?
-
+%ocaml: should use lex. Simpler. 
+To read characters, [[yylex()]] uses [[GETC()]], 
+to loop it uses the label [[l0:]] below and some [[goto l0]] statements,
+and to transition state it uses more labels and [[goto]]s
+as you will see soon.
+%
+Here is finally the skeleton of [[yylex()]]:
 
 <<function yylex>>=
 /// main -> assemble -> yyparse -> <>
 long
 yylex(void)
 {
-    int c; // Rune?
+    int c;
     <<[[yylex()]] locals>>
 
     <<[[yylex()]] peekc handling, starting part>>
@@ -4541,7 +4567,6 @@ l0:
     c = GETC();
 l1:
     if(c == EOF) {
-        peekc = EOF; // needed?
         return EOF;
     }
 
@@ -4550,6 +4575,7 @@ l1:
         // ignore spaces
         goto l0;
     }
+    // else
 
     <<[[yylex()]] before switch, if isxxx>>
     switch(c) {
@@ -4562,38 +4588,43 @@ l1:
 }
 @
 %old: was return -1, but return EOF better I think
-\t now return a long, fillbuf was returning an int. hmmm
+%dead? peekc = EOF;  in if(c== EOF), I think is needed.
+% it helps to skip a futur call to GETC in yylex() but anyway
+% GETC would work and return EOF too.
 %ocaml: ugly to not take any input and use globals. Should take a lexbuf!
 % also with pattern character range no need ugly isalpha and isdigit
+\t now return a long, fillbuf was returning an int. hmmm
+\t  but because imposed interface by yyparse?
+\t must return int at least because token code is more than a char
 
 
 %toc:
-In the next sections we will mostly show the code of the
-different cases in the [[switch]].
+In the next sections, I will show the code of the
+different cases in the [[switch]] above.
 
 \section{Peek, seek, and look ahead}
 
-When trying to identify a token, e.g., an identifier, it is
+When trying to identify a token, for instance, an identifier, it is
 frequent to read characters until the current character
-does not satisfy a certain criteria, e.g., being a letter.
-In that case one has read too far in the input file
+does not satisfy a certain criteria, for instance, being a letter.
+%
+In that case, you have read too far in the input file
 and should go back one character using [[seek()]].
 %
-Another technique is to store instead in a global
-this extra character:
+Another technique is to store in a global this extra character:
 
 <<global peekc>>=
-// option<Rune> (None = IGN)
+// option<char> (None = IGN)
 int	peekc = IGN;
 @
-\t use Rune?
+\n use Rune? nope.
 \l =~ yyback(1) trick, used by yylex() and getc(), and?? cg?
 %old: used to be set in cinit()
 
 %alt: use Biobuf, can get and unget character.
 
 <<constant IGN>>=
-#define IGN     (-2)
+#define IGN     (-2) // Ignore
 @
 \l also negative, -2 because EOF is -1 already used
 
@@ -4604,21 +4635,21 @@ peekc = IGN;
 % internally manage peekc/yyback
 
 
-Then we need to make sure the function reading characters 
+Then, we need to make sure the function reading characters 
 from the input file ([[yylex()]]) first looks in this global
 before trying to read any new character:
 
 <<[[yylex()]] peekc handling, starting part>>=
 c = peekc;
 if(c != IGN) {
-    peekc = IGN; // consumed
+    peekc = IGN; // consume the extra character saved in peekc
     goto l1; // skip the GETC(), we already have a character in c
 }
 @
 %ocaml: ocamllex handles that
 
-In the sections below, the local [[c1]] can be used
-to store the {\em look ahead} character when one needs to read
+In the sections below, the local [[c1]] will be used
+to store the {\em look ahead} character when the lexer needs to read
 an extra character in addition to [[c]] to decide
 what to do:
 
@@ -4628,8 +4659,8 @@ int c1;
 \n need that? why not modify peekc directly? because not automatic!
 
 This extra character is considered by default the
-peek character for the next call to [[yylex()]],
-unless [[yylex()]] returns before:
+peek character for the next call to [[yylex()]]
+(unless [[yylex()]] returns before):
 
 <<[[yylex()]] peekc handling, ending part>>=
 peekc = c1;
@@ -4641,9 +4672,11 @@ peekc = c1;
 \label{sec:semicolon}
 
 %dup: from overview/input-lang
-As said in Section~\ref{sec:asm5-lexical},
-newlines in Asm5 are transformed in semicolons which
-are recognized as instruction terminators in the Asm5 grammar:
+As I mentioned in Section~\ref{sec:asm5-lexical},
+[[5a]] transforms internally newlines in semicolons.
+%
+This transformation is done in [[yylex()]]:
+%are recognized as instruction terminators in the Asm5 grammar:
 \n and not separators
 
 <<[[yylex()]] if c is newline>>=
@@ -4654,14 +4687,18 @@ if(c == '\n') {
 @
 \l note also lineno plus plus
 
-Note that because the token is a single character, it can
-be returned directly. There is no need to invent
-a [[LSEMICOLON]] token code.
-%
+The grammar of Asm5 then uses those semicolons
+as instruction terminators (see Section~\ref{sec:semicolon-terminator-grammar}).
+
+Note that because the semicolon token is a single character, it can
+be returned directly by [[yylex()]]. 
+There is no need to introduce a [[LSEMICOLON]] token code.
+
+
 %for jarod:
 As we will see in Section~\ref{sec:empty-instr}, the grammar
 of Asm5 allows empty instructions, so empty lines with just
-a newline, or lines with only comments do not pose any problem.
+a newline, or lines with only comments, will not pose any problem.
 
 
 %old:
@@ -4675,20 +4712,20 @@ a newline, or lines with only comments do not pose any problem.
 
 \section{Comments}
 
-Asm5 comments use the same syntax than C comments,
-e.g., [[/* foo */]] or [[// foo]], and are skipped
-by the lexer hence the [[goto]] back to [[l0]] (or [[l1]])
+Asm5 comments use the same syntax than C comments
+(e.g., [[/* foo */]], [[// foo]]). They are skipped
+by the lexer, hence the [[goto]] back to [[l0]] (or [[l1]])
 below:
 
 <<[[yylex()]] switch c cases>>=
 case '/':
     c1 = GETC();
     if(c1 == '/') {
-        // '/''/' read, skip everything until next '\n'
+        // '/''/' read; skip everything until next '\n'
         for(;;) {
             c = GETC();
             if(c == '\n')
-                goto l1;
+                goto l1; // which will convert the \n in c in a ';'
             if(c == EOF) {
                 yyerror("eof in comment");
                 errorexit();
@@ -4696,10 +4733,10 @@ case '/':
         }
     }
     if(c1 == '*') {
-        // '/''*' read, skip everything until next '*''/'
+        // '/''*' read; skip everything until next '*''/'
         for(;;) {
             c = GETC();
-            while(c == '*') {
+            while(c == '*') { // not an if! to handle /** not finished */
                 c = GETC();
                 if(c == '/')
                     goto l0;
@@ -4722,16 +4759,19 @@ case '/':
 \section{Mnemonics, symbols, and labels}
 
 %trans:
-Until now we were mostly skipping characters (spaces, comments),
-or returning a single character (semicolon). 
+Until now, [[yylex()]] was mostly skipping characters (spaces and comments),
+or returning a single character (a semicolon). 
 %
-For identifiers we need to accumulate a set of characters and look if
-they correspond to mnemonics, symbols, or labels.
+For identifiers, [[yylex()]] needs to accumulate a set 
+of characters and look if those characters correspond to a know 
+mnemonic, symbol, or label.
 %
 The local [[cp]] below will point in the [[symb]] global buffer
-we have seen in Section~\ref{sec:sym} which is then internally
-used by [[lookup()]] to look for predefined identifiers
-or labels or symbols in the global [[hash]] symbol table:
+I introduced in Section~\ref{sec:sym}.
+%
+Remember that the global [[symb]] is used by [[lookup()]] 
+to look for predefined identifiers,
+labels, or symbols, in the global symbol table [[hash]].
 \t itab!
 
 <<[[yylex()]] locals>>=
@@ -4740,6 +4780,9 @@ char *cp;
 // ref<Symbol> (owner = hash)
 Sym *s;
 @
+
+Here is the code that uses [[cp]], [[symb]], and the local variable [[s]] 
+to recognize an identifier:
 
 <<[[yylex()]] before switch, if isxxx>>=
 if(isalpha(c))
@@ -4763,10 +4806,8 @@ aloop:
     peekc = c;
 
     *cp = '\0';
-    s = lookup(); // uses symb global and so cp
+    s = lookup(); // uses symb global (referenced by cp)
     <<[[yylex()]] if macro symbol>>
-    if(s->type == 0) // when can this happen?
-        s->type = LNAME;
     <<[[yylex()]] in identifier case, set yylval>>
     return s->type;
 @
@@ -4775,12 +4816,22 @@ aloop:
 \l @? maybe remove it so it would also remove the need for LAT token_kind
 \t possible to have s->type == 0? if new sym theni it is set to LNAME in syminit
 \t actually does not handle unicode identifiers? how works assembler in go?
+%dead?
+%    if(s->type == 0) // when can this happen? syminit set already to LNAME
+%        s->type = LNAME;
 
-Remember that [[Sym.type]] contains the token code of
-the ``symbol''.
-The union [[yylval]] is set according to the kind of the symbol:
-the actual [[Sym]] for labels and symbols, the enumeration value
-for predefined identifiers (mnemonics):
+Remember that [[yylex()]] returns to [[yyparse()]] a token code
+when the token is not a single character.
+%
+[[Sym.type]], used in the expression [[s->type]] above,
+contains the token code of the recognized symbol
+(e.g., [[LARITH]] if the identifier was an arithmetic opcode like [[ADD]]).
+
+The global [[yylval]] contains the value of the token.
+%
+For labels and symbols, the value is a pointer to a [[Sym]];
+for predefined identifiers, it is the value of an enumeration
+(e.g., [[AADD]]).
 
 <<[[yylex()]] in identifier case, set yylval>>=
 if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
@@ -4791,6 +4842,7 @@ if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
 @
 %ocaml: ugly to have lexer/parser side effect, solve label in resolve()
 % after lexing/parsing
+\l eg AADD in s->value
 
 \t note that LLAB set in grammar! so in pass2 or if defined before
 \t then return different token_kind! not context free. but need that??
@@ -4799,17 +4851,19 @@ if(s->type == LNAME || s->type == LLAB || s->type == LVAR) {
 
 %trans:
 Numbers are a bit more complicated to parse than what
-we have seen until now  because 
+we have seen until now.
 %
-Asm5 manages different kinds of numbers and
-allows different syntaxes for numbers, similar to C: 
+Indeed, 
+Asm5 allows to use different kinds of numbers with different syntax.
+%
+Just like in C, in Asm5 you can use
 decimals ([[12]]), 
 hexadecimals ([[0xa12]]), 
 octals ([[0777]]),
-floats ([[0.2]], [[1e3]]), 
-or typed integers ([[1uL]]).
+or floats ([[0.2]], [[1e3]]) in your assembly program.
+%or typed integers ([[1uL]]). (No more, I removed the code)
 %
-The [[case]] below use different labels and [[goto]]s
+The code below use different labels and [[goto]]s
 to transition to different states where each state
 recognizes a different kind of number:
 
@@ -4823,13 +4877,19 @@ tnum:
     cp = symb;
     if(c != '0')
         goto dc;
-
+    // else, read a '0', maybe the start of an hexadecimal number
     <<[[yylex()]] in number case, 0xxx handling>>
 
 <<[[yylex()]] in number case, decimal dc label handling>>
 <<[[yylex()]] in number case, float labels handling>>
 @
 
+Note that the code above also (ab)uses [[cp]] and [[symb]] to
+accumulate characters (but this time there will be no call to [[lookup()]]).
+
+%toc:
+I will explain the chunks referenced in the code above in the
+following sections.
 
 %old:
 %<<[[yylex()]] in number case, if vlong lval>>=
@@ -4842,8 +4902,15 @@ tnum:
 
 \subsection{Decimal numbers}
 
-Most of the magic for decimal numbers is done
-by [[strtol()]] from the core C library:
+%trans:
+The first label (and state) used to recognize numbers
+%
+is [[dc]] (for ``decimal'').
+[[yylex()]] jumps to this label when the first digit
+is not zero.
+%
+[[yylex()]] then reads more digits until the next character is not a
+digit anymore:
 
 <<[[yylex()]] in number case, decimal dc label handling>>=
 dc:
@@ -4857,75 +4924,110 @@ dc:
     *cp = '\0';
     yylval.lval = strtol(symb, nil, 10);
 
-<<[[yylex()]] in number case, in decimal case, ncu suffix label handling>>
     peekc = c;
     return LCONST;
 @
 %old:    <<[[yylex()]] in number case, if vlong lval>>
+%dead? assembly using that? anyway it was skipped by 5a
+% <<[[yylex()]] in number case, in decimal case, ncu suffix label handling>>
 
-The unsigned and long typed suffixes are ignored by Asm5:
+Most of the magic to convert a set of accumulated (digit)
+characters to an integer is done
+by the [[strtol()]] function from the core C library (see the \book{Libcore}).
+\l not use of peekc here! (could have also set c1?)
 
-<<[[yylex()]] in number case, in decimal case, ncu suffix label handling>>=
-ncu:
-    while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
-        c = GETC();
-@
+%The unsigned and long typed suffixes are ignored by Asm5:
+%<<[[yylex()]] in number case, in decimal case, ncu suffix label handling>>=
+%ncu:
+%    while(c == 'U' || c == 'u' || c == 'l' || c == 'L')
+%        c = GETC();
+%@
 \l ncu?  non current unit?
 \l note base 10 passed to strtol
-\t code using that? then comment no?
 
 \subsection{Hexadecimal and octal numbers}
 
-[[strtol()]] does handle hexadecimal and octal numbers, 
-but for unknown reasons
-things are done manually for those numbers:
+%trans:
+If a number starts with a zero, it is maybe the
+start of an hexadecimal or octal number.
+%
+In that case, similar to the code to handle decimals,
+[[yylex()]] accumulates also characters in [[symb]] (via [[cp]]).
+%
+However, this time [[yylex()]] does not
+rely on [[strtol()]] to convert the characters in 
+an integer\footnote{It could because [[strtol()]] handles those cases.}.
+Instead, [[yylex()]] gradually updates [[yylval.lval]]:
+
+%[[strtol()]] does handle hexadecimal and octal numbers, 
+%but for unknown reasons
+%things are done manually for those numbers:
 \n it is handled by Linux (jarod) and actually also by plan9, see man page
-\t why not use strtol for that too??
 %ocaml: rely on int_of_string (slightly different syntax though for
 % octal so have to prefix with 0o)
 
 
+<<[[yylex()]] locals>>=
+int baselog2;
+@
+%pad: I introduced that! the code was abusing c1 before.
+
 <<[[yylex()]] in number case, 0xxx handling>>=
 *cp++ = c;
 c = GETC();
-c1 = 3; // 2^3, for octal
+baselog2 = 3; // 2^3, for octal
 if(c == 'x' || c == 'X') {
-    c1 = 4; // 2^4, for hexa
+    baselog2 = 4; // 2^4, for hexadecimal
     c = GETC();
 } 
 else if(c < '0' || c > '7')
     goto dc;
+
 yylval.lval = 0;
 for(;;) {
     if(c >= '0' && c <= '9') {
-        if(c > '7' && c1 == 3)
+        if(c > '7' && baselog2 == 3)
             break;
-        yylval.lval <<= c1;
+        yylval.lval <<= baselog2;
         yylval.lval += c - '0';
         c = GETC();
         continue;
     }
-    if(c1 == 3)
+    // else
+    if(baselog2 == 3)
         break;
-    if(c >= 'A' && c <= 'F')
-        // c = lowercase(c)
-        c += 'a' - 'A';
+    // else
+    <<[[yylex()]] in number case, 0xxx handling, normalize letters>>
     if(c >= 'a' && c <= 'f') {
-        yylval.lval <<= c1;
+        yylval.lval <<= baselog2;
         yylval.lval += c - 'a' + 10;
         c = GETC();
         continue;
     }
     break;
 }
-goto ncu;
+
+peekc = c;
+return LCONST;
 @
 %ocaml: ugly 3 and 4 special code, ugly abuse c1, but convenient for the <<=
 % anyway just use int_of_string
+%old: I use an extra variable 'baselog2' to not abuse the confusing c1
+%old: it was doing goto ncu; but I removed ncu, so I inlined
+% the peekc=c; return LCONST  at the end
 
-% why not use mpatov from 5c?
+<<[[yylex()]] in number case, 0xxx handling, normalize letters>>=
+if(c >= 'A' && c <= 'F')
+    // c = lowercase(c)
+    c += 'a' - 'A';
+@
+
 
 \subsection{Floating-point numbers}
+
+%trans:
+[[yylex()]] uses a set of labels to recognize floating-point
+numbers: 
 
 <<[[yylex()]] in number case, in decimal case, float handling>>=
 if(c == '.')
@@ -4933,10 +5035,9 @@ if(c == '.')
 if(c == 'e' || c == 'E')
     goto casee;
 @
+\t put regexp for floats used in 5a-ocaml?
 
-Most of the magic for float numbers is done
-by [[atof()]] from the core C library:
-\l why a?? why not strtof?
+% the code below accumulates also the right set of characters in symb
 
 <<[[yylex()]] in number case, float labels handling>>=
 casedot:
@@ -4976,52 +5077,135 @@ caseout:
 @
 %ocaml: ocamllex regexps so much better
 %ocaml: rely also on powerful float_of_string?
+\l remove FPCHIP? true anyway
 
-A dot without numbers before can be in Asm5 the start of a float or
-the start of an identifier, or simply the dot character:
+Most of the magic to convert a set of characters in
+a floating-point number is done by the [[atof()]] 
+function from the core C library (see the \book{Libcore}).
+\l why a?? why not strtof?
+
+
+In Asm5, a dot without any number before can be the start of a float,
+the start of an identifier, or simply the dot character, hence
+the code below:
 
 <<[[yylex()]] switch c cases>>=
 case '.':
     c = GETC();
-    if(isalpha(c)) {
+    if(isalpha(c)) { // an identifier
         cp = symb;
         *cp++ = '.';
         goto aloop;
     }
-    if(isdigit(c)) {
+    if(isdigit(c)) { // a float
         cp = symb;
         *cp++ = '.';
         goto casedot;
     }
+    // else
     peekc = c;
-    return '.'; // used case?
+    return '.'; // a single '.'
 @
 \l why not simply goto talph for '.'? avoid duplicate the cp = symb; ...
-\t single token '.' used?
 %ocaml: ocamllex returns the longest or the first in the list
+% so simpler code
 
 
-\section{Characters and escape sequences}
-\l unicode?
+\section{Characters}
+\n unicode? nope! 5a does not support unicode.
 
-Asm5 allows {\em escape sequences}, which are started with
-an antislash, to represent special characters. This is similar to C.
-For instance 
+In Asm5, like in C, characters start and end with a single
+quote character (e.g., [['a']]).
+%
+However, because the quote character is used to mark the end of
+a character, how do you represent the quote character itself?
+Moreover, how do you represent ASCII characters that can not
+be put between quotes such as the backspace character?
+
+\subsection{Escaped sequences}
+
+Asm5, like C, allows to use {escape sequences} to represent
+special characters.
+%
+An {\em escape sequence} starts with the antislash character
+and is followed by a character or a series of numbers.
+%
+For example,
 [['\n']] represents the newline character,
-[['\007']] the character with the octal value [[7]], or
-\l interet? why not write 007 outside quote? because it's typed as a char!
-\l and it is more readable IMHO, I prefer '\0' to 0.
-[['\'']] the quote character itself.
-\l special chars because no representation otherwise? or because self escape!
+[['\007']] the character with the ASCII value [[7]],
+\n for Bell; 8 is backspace but in octal it is more complicated 010
+\l interet? why not write 008 outside quote? because it's typed as a char!
+\l  and it is more readable IMHO, I prefer '\0' to 0.
+and [['\'']] the quote character itself.
+\n  also [['\\']] (said later), because how escape escape?
+%real-world: escaping issues is in all languages, even tools like
+%  make or the shell!
 
-The function [[escchar()]] below is a wrapper around
-[[GETC()]] which returns also the next
-character unless it is the start of an escape sequence
-(the anti-slash) in which case it returns the value
-of the parsed escape sequence (the special character).
-\l if next char is special char, then return EOF
-Note that characters in Asm5 are converted in integers, hence
-the [[LCONST]] token code below:
+The function [[escchar()]] used below is a wrapper around [[GETC()]].
+Like [[GETC()]], [[escchar()]] reads a character from the input file
+and returns it unless 
+(1) the character read is the start of an escape sequence, or 
+(2) the quote character itself.
+%
+In the first case, [[escchar()]] reads more characters from the input
+file and returns the value of the escaped character.
+%
+In the second case, it returns [[EOF]] to indicate there was no
+character between the two quotes.
+%
+Figure~\ref{fig:assembler-escchar} illustrates a few examples
+of use of [[escchar()]].
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+                cursor
+                  |
+   input  +-------v---------+     before
+  buffer  |. . . ' a ' . . .|    escchar()
+          +-----------------+
+                  cursor
+                    |
+   input  +---------v-------+       after
+  buffer  |. . . ' a ' . . .|   escchar('\'')
+          +-----------------+
+
+      return value: 97 (ASCII code of 'a')
+
+
+                cursor
+                  |
+   input  +-------v---------+     before
+  buffer  |. . . ' \ n ' . .|    escchar()
+          +-----------------+
+                    cursor
+                      |
+   input  +-----------v-----+       after
+  buffer  |. . . ' \ n ' . .|   escchar('\'')
+          +-----------------+
+
+      return value: 10 (ASCII code of '\n')
+
+
+                cursor
+                   |
+  input  +---------v-------+     before
+ buffer  |. . . ' a ' . . .|    escchar()
+         +-----------------+
+                   cursor
+                     |
+  input  +-----------v-----+       after
+ buffer  |. . . ' a ' . . .|   escchar('\'')
+         +-----------------+
+
+          return value: EOF
+\end{verbatim}
+\caption{Examples of use of [[escchar()]].}\label{fig:assembler-escchar}
+\end{figure}
+
+% FIGURE with evolution of pointers to input after escchar?
+%  for 'a', '\n', and ''
+
+Here is finally the code to recognize characters in Asm5:
 
 <<[[yylex()]] switch c cases>>=
 case '\'':
@@ -5033,21 +5217,35 @@ case '\'':
     yylval.lval = c;
     return LCONST;
 @
+\l rename getc_or_escc
 
-There are two calls to [[escchar()]]: the first to consume the character
-after the first quote, e.g., [[a]] in [['a']],
-and the second to consume the ending quote itself.
+As I said before, [[5a]] converts characters in integers, hence
+the use of the [[LCONST]] token code above.
+
+There are two calls to [[escchar()]] above. 
+The first consumes the character
+after the first quote (e.g., [[a]] in [['a']], as shown
+at the top of Figure~\ref{fig:assembler-escchar})
+The second consumes the ending quote itself
+(as illustrated at the bottom of Figure~\ref{fig:assembler-escchar}).
 %
 Indeed, [[escchar()]] returns the special code EOF if 
-the character read is the same than the character passed as an argument, 
-here the quote.
+the character read is the same than the character passed as an argument
+(here a single quote).
 
-%Note also that the code itself below uses also escape sequences
-%(to represent the quote character):
-\l self!
+\subsection{Doubled special characters}
 
-The code below is to deal with the sequence [[''']], which
-is parsed as a single quote:
+Note that the C code above uses itself the escape
+sequence [['\'']] to represent the quote character.
+%
+Asm5 uses another technique to represent the quote character:
+the programmer can {\em double} the quote character
+to represent a single quote character.
+%
+Indeed, [[5a]] interprets the sequence of characters
+[[''']] as the single quote.
+%
+Here is the code to handle [[''']]:
 
 <<[[yylex()]] in character case, if c is EOF>>=
 if(c == EOF)
@@ -5055,27 +5253,32 @@ if(c == EOF)
 @
 \l C does not allow ''' ?
 
-%\section{Escaping characters}
-%Special characters?
+[[5a]] uses this same doubling technique to represent the
+escaping character itself; the sequence [['\\']]
+represents the antislash character.
+\l otherwise how represent antislash?
 
-The argument to [[escchar()]] is the character used to mark the
-end of the ``entity'', here
-a quote [[']] because we are parsing characters. In the
-next section the argument to [[escchar()]] will be the
-double quote [["]] character because we will parse strings.
+\subsection{[[escchar()]]}
+
+The argument to [[escchar()]] is a character used to mark the
+end of an ``entity''. In this section the mark is
+a single quote ([[']]) because we are parsing characters. 
+%
+In the next section, the argument to [[escchar()]] will be the
+double quote character ([["]]) because we will parse strings.
+
+Here is finally the code of [[escchar()]]:
 
 <<function escchar>>=
 int
 escchar(int e)
 {
-    int c, l;
+    int c;
+    <<[[escchar()]] other locals>>
 
 loop:
-    c = getc(); // not GETC
-    if(c == '\n') {
-        yyerror("newline in string");
-        return EOF;
-    }
+    c = getc();
+    <<[[escchar()]] sanity check if newline>>
     if(c != '\\') {
         if(c == e)
             return EOF;
@@ -5086,26 +5289,124 @@ loop:
     <<[[escchar()]] if octal character>>
     switch(c)
     {
-    case '\n':	goto loop; // multi line strings
-
-    case 'n':	return '\n';
-    case 't':	return '\t';
-    case 'b':	return '\b';
-    case 'r':	return '\r';
-    case 'f':	return '\f';
-
     <<[[escchar()]] switch cases>>
     }
+    // else (e.g., '\'', '\\')
     return c;
 }
 @
-\t use Rune instead of int?
+\t use Rune instead of int? could because escchar also used in 5c and
+\t  5c supports unicode characters
 \l they abuse EOF to mean end of string
-\n if not known antislash, then return the char, but should yyerror I think
+%ocaml: if not known antislash, then return the char, but 
+%  should yyerror I think (except for '\'' which I would add as a case before)
+
+
+<<[[escchar()]] switch cases>>=
+case 'n':	return '\n';
+case 't':	return '\t';
+case 'b':	return '\b';
+case 'r':	return '\r';
+case 'f':	return '\f';
+@
+
+Asm5 allows a few more escape sequences compared to C:
+
+<<[[escchar()]] switch cases>>=
+case 'a':	return 0x07;
+case 'v':	return 0x0b;
+case 'z':	return 0x00;
+@
+\l meh
+
+
+In Asm5, a series of numbers after an escape character
+is interpreted as a series of octal numbers.
+\l why?
+Here is the code to handle those escaped sequences (e.g., [['\007']]):
+
+<<[[escchar()]] other locals>>=
+int l;
+@
+<<[[escchar()]] if octal character>>=
+if(c >= '0' && c <= '7') {
+    l = c - '0';
+    c = getc();
+    if(c >= '0' && c <= '7') {
+        l = l*8 + c-'0';
+        c = getc();
+        if(c >= '0' && c <= '7') {
+            l = l*8 + c-'0';
+            return l;
+        }
+    }
+    peekc = c;
+    return l;
+}
+@
+\n can have 1, 2, or 3 oct, but no more
+
+
+
+\subsection{Escaped newlines}
+
+[[5a]] forbids the use of newlines in the middle of a character or string:
+
+<<[[escchar()]] sanity check if newline>>=
+if(c == '\n') {
+    yyerror("newline in character or string");
+    return EOF;
+}
+@
+%alt: could allow
+%pad: I added the "in character or"
+
+To represent a character or string containing a newline, use the escape
+sequence [['\n']] as in [["hello world\n"]].
+
+%alt:
+[[5a]] could allow to use directly a newline in a character or string as in:
+
+<<not valid Asm5 example>>=
+  MOVW '
+', R1
+@
+
+However, this would destroy the indentation of the program, 
+which is why [['\n']] is a more convenient way for the programmer
+to represent a newline character.
+
+
+In some cases, it is useful to split a long string on multiple lines.
+Asm5, like C, allows to {\em escape a newline} as in the following code:
+
+<<example of escaped newline>>=
+DATA foo(SB), "this is\
+a long string"
+@
+
+
+Here is the code to handle escaped newlines:
+
+<<[[escchar()]] switch cases>>=
+case '\n':	goto loop; // multi line strings
+@
+
+Note that the escaped character and the following newline
+are skipped by [[escchar()]].
+
+Escaped newlines are not really useful in Asm5 because 
+Asm5 limits strings to less than 8 characters.
+%
+They are supported by [[5a]] because the function [[escchar()]]
+was reused from the code of the C compiler [[5c]].
+
+
+\subsection{[[getc()]]}
 
 \label{sec:getc}
-[[getc()]] is a small wrapper over [[GETC()]] which
-automatically handles [[lineno]]:
+[[getc()]], called from [[escchar()]], is a small wrapper around [[GETC()]]
+that takes care of [[lineno]]:
 \n will be called a lot by preprocessing code
 
 <<function getc>>=
@@ -5115,7 +5416,6 @@ getc(void)
     int c;
 
     <<[[getc()]] peekc handling>>
-
     c = GETC();
 
     if(c == '\n')
@@ -5138,53 +5438,37 @@ if(c != IGN) {
 }
 @
 
-<<[[escchar()]] if octal character>>=
-if(c >= '0' && c <= '7') {
-    l = c - '0';
-    c = getc();
-    if(c >= '0' && c <= '7') {
-        l = l*8 + c-'0';
-        c = getc();
-        if(c >= '0' && c <= '7') {
-            l = l*8 + c-'0';
-            return l;
-        }
-    }
-    peekc = c;
-    return l;
-}
-@
-\n can have 1, 2, or 3 oct, but no more
-
-Asm5 allows a few more escape sequences compared to C:
-
-<<[[escchar()]] switch cases>>=
-case 'a':	return 0x07;
-case 'v':	return 0x0b;
-case 'z':	return 0x00;
-@
-\l meh
 
 \section{Strings}
+
+Asm5 supports the use of strings, for instance, in [[DATA]]
+pseudo-instructions.
+%
+The code below relies again on the function [[escchar()]]
+to handle escaped sequences in strings.
+
+<<[[yylex()]] locals>>=
+int i;
+@
+%pad: I added that, was abusing c1
 
 <<[[yylex()]] switch c cases>>=
 case '"':
     memcpy(yylval.sval, nullgen.sval, sizeof(yylval.sval));
     cp = yylval.sval;
-    c1 = 0;
+    i = 0;
     for(;;) {
         c = escchar('"');
         if(c == EOF)
             break;
-        if(c1 < sizeof(yylval.sval))
+        if(i < sizeof(yylval.sval))
             *cp++ = c;
-        c1++;
+        i++;
     }
-    if(c1 > sizeof(yylval.sval))
+    if(i > sizeof(yylval.sval))
         yyerror("string constant too long");
     return LSCONST;
 @
-\l abuse c1
 \t works nullgen.sval?? add the appropriate 0? why not just *cp = '\0' ?
 
 
@@ -5209,7 +5493,7 @@ case '"':
 % For macro, ifdef, pragma, see Compiler.
 
 
-\section{[[mactab]] and [[domacro()]]}
+\section{Directive dispatch, [[mactab]], and [[domacro()]]}
 
 <<[[yylex()]] switch c cases>>=
 case '#':
@@ -5461,7 +5745,7 @@ if(p) {
 
 %\subsection{Tracing origin and [[Hist]]}
 
-\subsection{[[#include]] and [[macinc()]]}
+\subsection{[[macinc()]]}
 
 <<constant STRINGSZ>>=
 #define STRINGSZ    200
@@ -5829,6 +6113,7 @@ prog:
 \l FIGURE with derivation where see set of lines?
 %ocaml: no EOF?
 
+\label{sec:semicolon-terminator-grammar}
 A [[line]] can be an [[inst]]ruction followed by a semicolon
 (remember that the lexer transforms newlines in semicolons
 as explained in Section~\ref{sec:semicolon}):
