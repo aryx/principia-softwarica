@@ -19,7 +19,7 @@ int mkinline;
 Rule *rules;
 /*e: global rules */
 /*s: global metarules */
-// list<ref_own<Rule>> (next = Rule.next)
+// list<ref_own<Rule>> (next = Rule.next, end = lmr)
 Rule *metarules;
 /*e: global metarules */
 /*s: global patrule */

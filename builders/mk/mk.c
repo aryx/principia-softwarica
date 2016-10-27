@@ -76,7 +76,7 @@ clrmade(Node *n)
         n->flags |= CANPRETEND;
     /*e: [[clrmade()]] [[n->flags]] pretend adjustments */
     MADESET(n, NOTMADE);
-    for(a = n->prereqs; a; a = a->next)
+    for(a = n->arcs; a; a = a->next)
         if(a->n)
             // recurse
             clrmade(a->n);
@@ -138,7 +138,7 @@ work(Node *node,   Node *p, Arc *parc)
     // Leaf case
     /*s: [[work()]] no prerequisite, a leaf */
     /* consider no prerequisite case */
-    if(node->prereqs == nil){
+    if(node->arcs == nil){
         if(node->time == 0){
             /*s: [[work()]] print error when inexistent file without prerequisites */
             if(getwd(cwd, sizeof cwd))
@@ -170,7 +170,7 @@ work(Node *node,   Node *p, Arc *parc)
     /*
      *   now see if we are out of date or what
      */
-    for(a = node->prereqs; a; a = a->next)
+    for(a = node->arcs; a; a = a->next)
         if(a->n){
             // recursive call! go in depth
             did = work(a->n, node, a) || did;
@@ -218,7 +218,7 @@ work(Node *node,   Node *p, Arc *parc)
      *   node is out of date and we REALLY do have to do something.
      *   quickly rescan for pretenders
      */
-    for(a = node->prereqs; a; a = a->next)
+    for(a = node->arcs; a; a = a->next)
         if(a->n && (a->n->flags&PRETENDING)){
             if(explain)
                 Bprint(&bout, "unpretending %s because of %s because of %s\n",
@@ -260,7 +260,7 @@ update(bool fake, Node *node)
         node->flags &= ~(CANPRETEND|PRETENDING);
         /*e: [[update()]] unpretend node */
         /*s: [[update()]] set outofdate prereqs if arc prog */
-        for(a = node->prereqs; a; a = a->next)
+        for(a = node->arcs; a; a = a->next)
             if(a->prog)
                 outofdate(node, a, true);
         /*e: [[update()]] set outofdate prereqs if arc prog */
@@ -268,7 +268,7 @@ update(bool fake, Node *node)
     else {
         // virtual target or target still does not exist (but marked as MADE)
         node->time = 1;
-        for(a = node->prereqs; a; a = a->next)
+        for(a = node->arcs; a; a = a->next)
             if(a->n && outofdate(node, a, true))
                 node->time = a->n->time;
     }

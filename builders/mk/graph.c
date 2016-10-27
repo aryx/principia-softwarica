@@ -98,7 +98,7 @@ applyrules(char *target, char *cnt)
         if(r->attr&META) continue;
         if(strcmp(target, r->target)) continue; // how can happen??
         if((!r->recipe || !*r->recipe)
-           && (!r->tail || !r->tail->s || !*r->tail->s)) 
+           && (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)) 
               continue;	/* no effect; ignore */
         /*e: [[applyrules()]] skip this rule and continue if some conditions */
         /*s: [[applyrules()]] infinite rule detection part1 */
@@ -111,13 +111,13 @@ applyrules(char *target, char *cnt)
         /*e: [[applyrules()]] when found a regular rule for target [[node]], set flags */
         /*s: [[applyrules()]] if no prerequistes in rule r */
         // no prerequistes, a leaf, still create fake arc
-        if(!r->tail || !r->tail->s || !*r->tail->s) {
+        if(!r->prereqs || !r->prereqs->s || !*r->prereqs->s) {
             a->next = newarc((Node *)nil, r, "", rmatch);
             a = a->next;
         } 
         /*e: [[applyrules()]] if no prerequistes in rule r */
         else
-            for(w = r->tail; w; w = w->next){
+            for(w = r->prereqs; w; w = w->next){
                 // recursive call!
                 a->next = newarc(applyrules(w->s, cnt), r, "", rmatch);
                 a = a->next;
@@ -134,7 +134,7 @@ applyrules(char *target, char *cnt)
     for(r = metarules; r; r = r->next){
         /*s: [[applyrules()]] skip this meta rule and continue if some conditions */
         if((!r->recipe || !*r->recipe) 
-           && (!r->tail || !r->tail->s || !*r->tail->s)) 
+           && (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)) 
             continue;	/* no effect; ignore */
         /*x: [[applyrules()]] skip this meta rule and continue if some conditions */
         if ((r->attr&NOVIRT) && a != &head && (a->r->attr&VIR))
@@ -159,13 +159,13 @@ applyrules(char *target, char *cnt)
         /*e: [[applyrules()]] infinite rule detection part1 */
 
         /*s: [[applyrules()]] if no prerequistes in meta rule r */
-        if(!r->tail || !r->tail->s || !*r->tail->s) {
+        if(!r->prereqs || !r->prereqs->s || !*r->prereqs->s) {
             a->next = newarc((Node *)nil, r, stem, rmatch);
             a = a->next;
         } 
         /*e: [[applyrules()]] if no prerequistes in meta rule r */
         else
-            for(w = r->tail; w; w = w->next){
+            for(w = r->prereqs; w; w = w->next){
                 /*s: [[applyrules()]] if regexp rule, adjust buf and rmatch */
                 if(r->attr&REGEXP)
                     regsub(w->s, buf, sizeof(buf), rmatch, NREGEXP);
@@ -183,8 +183,8 @@ applyrules(char *target, char *cnt)
     /*e: [[applyrules()]] apply meta rules */
 
     // ???
-    a->next = node->prereqs;
-    node->prereqs = head.next;
+    a->next = node->arcs;
+    node->arcs = head.next;
 
     return node;
 }
@@ -220,11 +220,11 @@ togo(Node *node)
 
     /* delete them now */
     la = nil;
-    for(a = node->prereqs; a; la = a, a = a->next)
+    for(a = node->arcs; a; la = a, a = a->next)
         if(a->flag&TOGO){
             //remove_list(a, node->prereqs)
-            if(a == node->prereqs)
-                node->prereqs = a->next;
+            if(a == node->arcs)
+                node->arcs = a->next;
             else
                 la->next = a->next, a = la;
         }
@@ -242,16 +242,16 @@ vacuous(Node *node)
         return node->flags&VACUOUS;
     node->flags |= READY;
 
-    for(a = node->prereqs; a; a = a->next)
+    for(a = node->arcs; a; a = a->next)
         if(a->n && vacuous(a->n) && (a->r->attr&META))
             a->flag |= TOGO;
         else
             vac = false;
     /*s: [[vacuous]] possibly undelete some arcs */
     /* if a rule generated arcs that DON'T go; no others from that rule go */
-    for(a = node->prereqs; a; a = a->next)
+    for(a = node->arcs; a; a = a->next)
         if(!(a->flag&TOGO))
-            for(la = node->prereqs; la; la = la->next)
+            for(la = node->arcs; la; la = la->next)
                 if((la->flag&TOGO) && (la->r == a->r)){
                     la->flag &= ~TOGO;
                 }
@@ -283,7 +283,7 @@ newnode(char *name)
     node->flags = (node->time? PROBABLE : 0);
     /*e: [[newnode()]] set flags of node */
 
-    node->prereqs = nil;
+    node->arcs = nil;
     node->next = nil;
     /*s: [[newnode()]] debug */
     if(DEBUG(D_TRACE)) 
@@ -325,7 +325,7 @@ trace(char *s, Arc *a)
         fprint(STDERR, " <-(%s:%d)- %s", a->r->file, a->r->line,
             a->n? a->n->name:"");
         if(a->n){
-            for(a = a->n->prereqs; a; a = a->next)
+            for(a = a->n->arcs; a; a = a->next)
                 if(*a->r->recipe) break;
         } else
             a = nil;
@@ -340,12 +340,12 @@ cyclechk(Node *n)
 {
     Arc *a;
 
-    if((n->flags&CYCLE) && n->prereqs){
+    if((n->flags&CYCLE) && n->arcs){
         fprint(STDERR, "mk: cycle in graph detected at target %s\n", n->name);
         Exit();
     }
     n->flags |= CYCLE;
-    for(a = n->prereqs; a; a = a->next)
+    for(a = n->arcs; a; a = a->next)
         if(a->n)
             cyclechk(a->n);
     n->flags &= ~CYCLE;
@@ -361,7 +361,7 @@ ambiguous(Node *n)
     Arc *la = nil;
     bool bad = false;
 
-    for(a = n->prereqs; a; a = a->next){
+    for(a = n->arcs; a; a = a->next){
         // recurse
         if(a->n)
             ambiguous(a->n);
@@ -412,7 +412,7 @@ attribute(Node *n)
 {
     Arc *a;
 
-    for(a = n->prereqs; a; a = a->next){
+    for(a = n->arcs; a; a = a->next){
         /*s: [[attribute()]] propagate rule attribute to node cases */
         if(a->r->attr&VIR)
             n->flags |= VIRTUAL;

@@ -45,7 +45,7 @@ addrule(char *head, Word *tail, char *body,
         r = (Rule *)Malloc(sizeof(Rule));
 
     r->target = head;
-    r->tail = tail;
+    r->prereqs = tail;
     r->recipe = body;
 
     r->line = hline;
@@ -126,7 +126,7 @@ rcmp(Rule *r, char *target, Word *tail)
 
     if(strcmp(r->target, target))
         return 1;
-    for(w = r->tail; w && tail; w = w->next, tail = tail->next)
+    for(w = r->prereqs; w && tail; w = w->next, tail = tail->next)
         if(strcmp(w->s, tail->s))
             return 1;
     return (w || tail);

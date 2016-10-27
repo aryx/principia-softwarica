@@ -54,7 +54,7 @@ dorecipe(Node *node)
     /*
      *   pick up the rule
      */
-    for(a = node->prereqs; a; a = a->next)
+    for(a = node->arcs; a; a = a->next)
         if(*a->r->recipe) {
             aa = a;
             r = a->r;
@@ -124,7 +124,7 @@ dorecipe(Node *node)
 
             /*s: [[dorecipe()]] update list of outdated targets */
             if(!aflag && n->time) {
-                for(a = n->prereqs; a; a = a->next)
+                for(a = n->arcs; a; a = a->next)
                     if(a->n && outofdate(n, a, false))
                         break;
                 // no out of date arc, node does not need to be regenerated
@@ -155,7 +155,7 @@ dorecipe(Node *node)
     lp.next = ln.next = nil;
     for(n = node; n; n = n->next){
         /*s: [[dorecipe()]] build lists of prerequisites */
-        for(a = n->prereqs; a; a = a->next){
+        for(a = n->arcs; a; a = a->next){
             if(a->n){
                 addw(&lp, a->n->name);
                 if(outofdate(n, a, false)){

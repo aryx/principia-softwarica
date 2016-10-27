@@ -20,6 +20,7 @@ struct Bufblock
 {
     char 		*start;
     char 		*end;
+
     char 		*current;
 
     // Extra
@@ -59,7 +60,7 @@ struct Rule
 {
     char 		*target;	/* one target */
     // option<ref_own<Words>>
-    Word 		*tail;		/* constituents of targets */
+    Word 		*prereqs;		/* constituents of targets */
     // ref_own<string>, never nil, but can be the empty string (just '\0')
     char 		*recipe;	/* do it ! */
 
@@ -160,7 +161,7 @@ struct Node
 
     /*s: [[Node]] arcs field */
     // list<ref_own<Arc>> (next = Arc.next)
-    Arc		*prereqs;
+    Arc		*arcs;
     /*e: [[Node]] arcs field */
     /*s: [[Node]] other fields */
     // bitset<enum<Node_flag>>

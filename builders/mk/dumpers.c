@@ -12,7 +12,7 @@ dumpn(char *s, Node *n)
 
     Bprint(&bout, "%s%s@%p: time=%ld flags=0x%x next=%p\n",
         s, n->name, n, n->time, n->flags, n->next);
-    for(a = n->prereqs; a; a = a->next){
+    for(a = n->arcs; a; a = a->next){
         snprint(buf, sizeof buf, "%s   ", (*s == ' ')? s:"");
         dumpa(buf, a);
     }
@@ -85,7 +85,7 @@ dumpr(char *s, Rule *r)
             r, r->file, r->line, r->attr, r->next, r->chain, wtos(r->alltargets, ' '));
         if(r->prog)
             Bprint(&bout, " prog='%s'", r->prog);
-        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->tail,' '));
+        Bprint(&bout, "\n\ttarget=%s: %s\n", r->target, wtos(r->prereqs,' '));
         Bprint(&bout, "\trecipe@%p='%s'\n", r->recipe, r->recipe);
     }
 }
