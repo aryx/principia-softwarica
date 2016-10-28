@@ -58,8 +58,9 @@ extern Envy *envy;
 /*s: struct Rule */
 struct Rule
 {
+    // ref_own<string>
     char 		*target;	/* one target */
-    // option<ref_own<Words>>
+    // list<ref_own<Word>>
     Word 		*prereqs;		/* constituents of targets */
     // ref_own<string>, never nil, but can be the empty string (just '\0')
     char 		*recipe;	/* do it ! */
@@ -123,7 +124,7 @@ struct Arc
 {
     // option<ref<Node>>, the other node in the arc (the dependency)
     struct Node *n;
-    // ref<Rule>, to gen the target node from the dependent node
+    // ref<Rule>, to generate the target node from the dependent node
     Rule *r;
 
     /*s: [[Arc]] other fields */
@@ -218,9 +219,11 @@ struct Job
     Node		*n;	/* list of node targets */
 
     // $target and $prereq
+    // list<ref<Word>>
     Word		*t;	/* targets */
+    // list<ref<Word>>
     Word		*p;	/* prerequisites */
-    // $stem
+    // ref<string> ($stem)
     char		*stem;
 
     /*s: [[Job]] other fields */

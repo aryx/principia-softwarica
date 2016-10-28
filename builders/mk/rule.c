@@ -83,6 +83,7 @@ addrule(char *head, Word *tail, char *body,
         if(reuse)
             return;
         /*e: [[addrule()]] return if reuse, to not add the rule in a list */
+        // else
         /*s: [[addrule()]] if REGEXP attribute */
         if(attr&REGEXP){
             patrule = r;
@@ -104,6 +105,7 @@ addrule(char *head, Word *tail, char *body,
         if(reuse)
             return;
         /*e: [[addrule()]] return if reuse, to not add the rule in a list */
+        // else
         r->pat = nil;
 
         // add_list(r, rules, lr)

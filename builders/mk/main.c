@@ -28,10 +28,10 @@ void
 main(int argc, char **argv)
 {
     /*s: [[main()]] locals */
-    int i;
     char *temp = nil;
     fdt tfd = -1;
     Biobuf tb;
+    int i;
     /*x: [[main()]] locals */
     char *f = nil;
     /*x: [[main()]] locals */
@@ -158,25 +158,29 @@ main(int argc, char **argv)
         /*s: [[main()]] create temporary file if not exist yet and set [[tb]] */
         if(tfd < 0){
             temp = maketmp();
+            /*s: [[main()]] when creating temporary file, sanity check temp */
             if(temp == nil) {
                 perror("temp file");
                 Exit();
             }
+            /*e: [[main()]] when creating temporary file, sanity check temp */
             tfd = create(temp, ORDWR, 0600);
+            /*s: [[main()]] when creating temporary file, sanity check tfd */
             if(tfd < 0){
                 perror(temp);
                 Exit();
             }
+            /*e: [[main()]] when creating temporary file, sanity check tfd */
             Binit(&tb, tfd, OWRITE);
         }
         /*e: [[main()]] create temporary file if not exist yet and set [[tb]] */
         Bprint(&tb, "%s\n", argv[i]);
-        /*s: [[main()]] mark [[argv[i]] for skipping */
+        /*s: [[main()]] mark [[argv[i]]] for skipping */
         /*
          *   assignment args become null strings
          */
         *argv[i] = '\0';
-        /*e: [[main()]] mark [[argv[i]] for skipping */
+        /*e: [[main()]] mark [[argv[i]]] for skipping */
       }
 
     if(tfd >= 0){
