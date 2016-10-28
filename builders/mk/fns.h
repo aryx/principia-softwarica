@@ -9,6 +9,15 @@ void	growbuf(Bufblock *);
 void	bufcpy(Bufblock *, char *, int);
 void	insert(Bufblock *, int);
 void	rinsert(Bufblock *, Rune);
+/*s: macro isempty */
+#define isempty(buf) (buf->current == buf->start)
+/*e: macro isempty */
+/*s: macro resetbuf */
+#define resetbuf(buf) do { buf->current = buf->start; } while(0)
+/*e: macro resetbuf */
+/*s: macro bufcontent */
+#define bufcontent(buf) buf->start
+/*e: macro bufcontent */
 
 // words.c
 Word*	newword(char*);

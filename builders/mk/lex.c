@@ -16,14 +16,13 @@ assline(Biobuf *bp, Bufblock *buf)
     int lastc;
     /*e: [[assline()]] other locals */
 
-    // reset buf
-    buf->current = buf->start;
+    resetbuf(buf);
 
     while ((c = nextrune(bp, true)) >= 0){
         switch(c)
         {
         case '\n':
-            if (buf->current != buf->start) {
+            if (!isempty(buf)) {
                 insert(buf, '\0');
                 return true;
             }
@@ -71,7 +70,7 @@ assline(Biobuf *bp, Bufblock *buf)
     }
 eof:
     insert(buf, '\0');
-    return *buf->start != '\0';
+    return *(bufcontent(buf)) != '\0';
 }
 /*e: function assline */
 
