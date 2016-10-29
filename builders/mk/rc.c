@@ -2,7 +2,7 @@
 #include	"mk.h"
 
 /*s: global termchars */
-char	*termchars = "'= \t";	/*used in parse.c to isolate assignment attribute*/
+char	*termchars = "=' \t";	/*used in parse.c to isolate assignment attribute*/
 /*e: global termchars */
 /*s: global shflags */
 char	*shflags = "-I";	/* rc flag to force non-interactive mode */
@@ -100,10 +100,10 @@ charin(char *cp, char *pat)
  *	others are just inserted into the receiving buffer.
  */
 char*
-expandquote(char *s, Rune r, Bufblock *b)
+expandquote(char *s, Rune r, Bufblock *buf)
 {
     if (r != '\'') {
-        rinsert(b, r);
+        rinsert(buf, r);
         return s;
     }
 
@@ -117,7 +117,7 @@ expandquote(char *s, Rune r, Bufblock *b)
                 return s;
             /*e: [[expandquote()]] return, unless double quote */
         }
-        rinsert(b, r);
+        rinsert(buf, r);
     }
     return nil;
 }

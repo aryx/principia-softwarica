@@ -12,7 +12,7 @@ static	Word		*varmatch(char *);
 Word*
 varsub(char **s)
 {
-    Bufblock *b;
+    Bufblock *buf;
     Word *w;
 
     /*s: [[varsub()]] if variable starts with open brace */
@@ -21,14 +21,14 @@ varsub(char **s)
     /*e: [[varsub()]] if variable starts with open brace */
     // else
 
-    b = varname(s);
-    /*s: [[varsub()]] sanity check b */
-    if(b == nil)
+    buf = varname(s);
+    /*s: [[varsub()]] sanity check buf */
+    if(buf == nil)
         return nil;
-    /*e: [[varsub()]] sanity check b */
-    w = varmatch(b->start);
+    /*e: [[varsub()]] sanity check buf */
+    w = varmatch(buf->start);
 
-    freebuf(b);
+    freebuf(buf);
     return w;
 }
 /*e: function varsub */
@@ -40,31 +40,31 @@ varsub(char **s)
 static Bufblock*
 varname(char **s)
 {
-    Bufblock *b;
+    Bufblock *buf;
     char *cp = *s;
     Rune r;
     int n;
 
-    b = newbuf();
+    buf = newbuf();
 
     for(;;){
         n = chartorune(&r, cp);
         if (!WORDCHR(r))
             break;
-        rinsert(b, r);
+        rinsert(buf, r);
         cp += n;
     }
-    /*s: [[varname()]] sanity check b */
-    if (b->current == b->start){
+    /*s: [[varname()]] sanity check buf */
+    if (isempty(buf)){
         SYNERR(-1);
         fprint(STDERR, "missing variable name <%s>\n", *s);
-        freebuf(b);
+        freebuf(buf);
         return nil;
     }
-    /*e: [[varname()]] sanity check b */
+    /*e: [[varname()]] sanity check buf */
     *s = cp;
-    insert(b, '\0');
-    return b;
+    insert(buf, '\0');
+    return buf;
 }
 /*e: function varname */
 
@@ -285,7 +285,7 @@ static Word*
 nextword(char **s)
 {
     char *cp = *s;
-    Bufblock *b;
+    Bufblock *buf;
     Rune r;
     // list<ref_own<Word>>
     Word *head;
@@ -297,7 +297,7 @@ nextword(char **s)
     Word *w;
     /*e: [[nextword()]] other locals */
 
-    b = newbuf();
+    buf = newbuf();
 
 restart:
     head = nil;
@@ -321,7 +321,7 @@ restart:
         case '"':
         case '\\':
             empty = false;
-            cp = expandquote(cp, r, b);
+            cp = expandquote(cp, r, buf);
             if(cp == nil){
                 fprint(STDERR, "missing closing quote: %s\n", *s);
                 Exit();
@@ -342,30 +342,29 @@ restart:
             empty = false;
 
             /*s: [[nextword()]] when in variable case, if non-space chars before var */
-            if(b->current != b->start){
-                bufcpy(b, w->s, strlen(w->s));
-                insert(b, '\0');
+            if(!isempty(buf)){
+                bufcpy(buf, w->s, strlen(w->s));
+                insert(buf, '\0');
                 free(w->s);
                 // adjust the first word
-                w->s = strdup(b->start);
-                // reset buf
-                b->current = b->start;
+                w->s = strdup(buf->start);
+    
+                resetbuf(buf);
             }
             /*e: [[nextword()]] when in variable case, if non-space chars before var */
             /*s: [[nextword()]] when in variable case, if head is not empty */
             if(head){
                 // merge the last and first words
-                bufcpy(b, lastw->s, strlen(lastw->s));
-                bufcpy(b, w->s, strlen(w->s));
-                insert(b, '\0');
+                bufcpy(buf, lastw->s, strlen(lastw->s));
+                bufcpy(buf, w->s, strlen(w->s));
+                insert(buf, '\0');
                 free(lastw->s);
-                lastw->s = strdup(b->start);
+                lastw->s = strdup(buf->start);
 
                 lastw->next = w->next;
                 free(w->s);
                 free(w);
-                // reset buf
-                b->current = b->start;
+                resetbuf(buf);
             }
             /*e: [[nextword()]] when in variable case, if head is not empty */
             else
@@ -377,30 +376,30 @@ restart:
         /*e: [[nextword()]] switch rune cases */
         default:
             empty = false;
-            rinsert(b, r);
+            rinsert(buf, r);
             break;
         }
     }
 out:
     *s = cp;
-    if(b->current != b->start){
+    if(!isempty(buf)){
         /*s: [[nextword()]] when buffer not empty, if there was already an head */
         if(head){
-            cp = b->current;
-            bufcpy(b, lastw->s, strlen(lastw->s));
-            bufcpy(b, b->start, cp - b->start);
-            insert(b, '\0');
+            cp = buf->current;
+            bufcpy(buf, lastw->s, strlen(lastw->s));
+            bufcpy(buf, buf->start, cp - buf->start);
+            insert(buf, '\0');
             free(lastw->s);
             // adjust the last word
             lastw->s = strdup(cp);
         }
         /*e: [[nextword()]] when buffer not empty, if there was already an head */
          else {
-            insert(b, '\0');
-            head = newword(b->start);
+            insert(buf, '\0');
+            head = newword(buf->start);
         }
     }
-    freebuf(b);
+    freebuf(buf);
     return head;
 }
 /*e: function nextword */

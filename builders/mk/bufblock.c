@@ -19,12 +19,13 @@ newbuf(void)
         freelist = freelist->next;
     } else {
         p = (Bufblock *) Malloc(sizeof(Bufblock));
-        p->start = Malloc(QUANTA*sizeof(*p->start));
+        p->start = Malloc(QUANTA*sizeof(char));
         p->end = p->start+QUANTA;
     }
     p->current = p->start;
     *p->start = '\0';
     p->next = nil;
+
     return p;
 }
 /*e: constructor newbuf */

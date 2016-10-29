@@ -298,7 +298,7 @@ rhead(char *line, Word **h, Word **t,    int *attr, char **prog)
     /*s: [[rhead()]] sanity check h */
     if(*((*h)->s) == '\0' && sep != '<' && sep != '|') {
         SYNERR(mkinline-1);
-        fprint(STDERR, "no var/target on left side of assignment/rule\n");
+        fprint(STDERR, "no var (or target) on left side of assignment (or rule)\n");
         Exit();
     }
     /*e: [[rhead()]] sanity check h */

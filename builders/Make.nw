@@ -197,8 +197,8 @@ build system to be built.
 In fact, a build system usually also relies on itself to be built, leading to
 bootstrapping issues similar to the ones found in compilers.
 %
-Moreover, build systems contain components that are useful in many contexts
-such as a job scheduler.
+Moreover, build systems contain components that are useful in many contexts,
+for example a job scheduler.
 \l even if may seem boring at first
 \l contain only simple algorithms? no neep concept?
 \l like kernel, paralellize tasks, one of the first program to do (after kernel)
@@ -645,10 +645,10 @@ Once installed you can test [[mk]] under \plan with:
 4   5c -c world.c
 5   5l -o hello hello.5 world.5
 
-6   $ mk
+6   $ mk -f hello.mk
 7   mk: 'hello' is up to date
 8   $ touch world.c
-9   $ mk
+9   $ mk -f hello.mk
 10  5c -c world.c
 11  5l -o hello hello.5 world.5
 12  $
@@ -1378,6 +1378,7 @@ constructs supported by [[mk]].
 \label{sec:graph}
 \label{sec:rule-essence}
 
+
 %trans: 
 The pattern, the variable, and the file inclusion are nice features,
 but they are not the essence of a build system;
@@ -1396,6 +1397,7 @@ Moreover, as I mentioned briefly in Section~\ref{sec:mk-is-a-graph},
 the rules in a build system define essentially the 
 {nodes} and {arcs} of a {graph}.
 Thus, the essence of a build system is also this {\em graph of dependencies}.
+\l or use dependency graph? then need to rename everywhere
 
 
 %toc:
@@ -2787,6 +2789,7 @@ symtraverse(int space, void (*fn)(Symtab*))
 
 %\subsection{[[setvar()]]}
 
+\label{sec:setvar}
 Finally, because setting the value of a variable is a common operation
 in [[mk]], the function below provides a shortcut:
 
@@ -3976,6 +3979,7 @@ in the following chapters.
 \l also special code for buf? explained later
 
 \section{[[mk ]]{\em var}[[=]]{\em values} arguments processing}
+\label{sec:vardef-command-line}
 
 %trans:
 The second step in the processing of command-line arguments
@@ -4524,7 +4528,6 @@ assline(Biobuf *bp, Bufblock *buf)
     <<[[assline()]] other locals>>
 
     resetbuf(buf);
-
     while ((c = nextrune(bp, true)) >= 0){
         switch(c)
         {
@@ -4594,6 +4597,37 @@ character (see the \book{Libcore}).
 [[nextrune()]] is essentially a wrapper over [[Bgetrune()]] from
 the [[libbio]] library.
 
+
+<<function nextrune>>=
+/*
+ *	get next character stripping escaped newlines
+ *	the flag specifies whether escaped newlines are to be elided or
+ *	replaced with a blank.
+ */
+int
+nextrune(Biobuf *bp, bool elide)
+{
+    int c;
+
+    for (;;) {
+        c = Bgetrune(bp);
+        <<[[nextrune()]] if escape character>>
+        <<[[nextrune()]] handle mkinline>>
+        return c;
+    }
+}
+@
+\l int -> Rune?? also in bio.h?
+\t when do you not elide? for escapetoken() and bquote()
+%ocaml: ugly to have to handle mkinline here again.
+
+<<[[nextrune()]] handle mkinline>>=
+if (c == '\n')
+    mkinline++;
+@
+
+
+
 %Again, this may sound trivial, but [[nextrune()]] is not. 
 %Indeed, 
 [[nextrune()]] must also handle {escaped newlines}.
@@ -4602,6 +4636,21 @@ An {\em escaped newline} is a newline character prefixed by
 the special {\em escape character} [['\']].
 
 %ex: with escaped newline? after all, new feature needs more introduction.
+
+<<[[nextrune()]] if escape character>>=
+if (c == '\\') {
+    if (Bgetrune(bp) == '\n') {
+        // an escaped newline!
+        mkinline++;
+        if (elide)
+            continue;
+        // else
+        return ' ';
+    }
+    // else, it was just \
+    Bungetrune(bp);
+}
+@
 
 %dup: overview/principles/dsl/rule
 As I mentioned in Section~\ref{sec:rule-simple-mkfile}, the syntax
@@ -4624,55 +4673,18 @@ the newline is then said to be {\em escaped}.
 %compiler:
 This is similar to what the C preprocessor [[cpp]] provides
 for definining long macros over multiple lines (see the \book{Compiler}).
-\l space and newlines have meaning 
-Thus, when [[nextrune()]] reads an escaped newline, it does not
+
+
+When [[nextrune()]] reads an escaped newline, it does not
 return the newline character to the caller [[assline()]].
 Instead, it {consumes} this escaped newline and returns the character
-after (unless this character is again an escaped newline, and unless
+after (unless this character is again an escaped newline or if
 the second argument to [[nextrune()]] is [[false]]).
 %
 By consuming the escaped newline, [[nextrune()]]
 will cause [[assline()]] to read more characters 
 until the next true (non-escaped) newline.
 
-<<function nextrune>>=
-/*
- *	get next character stripping escaped newlines
- *	the flag specifies whether escaped newlines are to be elided or
- *	replaced with a blank.
- */
-int
-nextrune(Biobuf *bp, bool elide)
-{
-    int c;
-
-    for (;;) {
-        c = Bgetrune(bp);
-        if (c == '\\') {
-            if (Bgetrune(bp) == '\n') {
-                // an escaped newline!
-                mkinline++;
-                if (elide)
-                    continue;
-                // else
-                return ' ';
-            }
-            // else, it was just \
-            Bungetrune(bp);
-        }
-        <<[[nextrune()]] handle mkinline>>
-        return c;
-    }
-}
-@
-\l int -> Rune?? also in bio.h?
-\t when do you not elide? for escapetoken() and bquote()
-%ocaml: ugly to have to handle mkinline here again.
-
-<<[[nextrune()]] handle mkinline>>=
-if (c == '\n')
-    mkinline++;
-@
 
 Note that if [['\']] is not followed by a newline, [[nextrune()]]
 must just return the [['\']] character. However, [[nextrune()]]
@@ -4696,19 +4708,19 @@ comments:
 %ex: with comment? after all just showed briefly before.
 
 <<[[assline()]] other locals>>=
-int lastc;
+int prevc;
 @
-\t rename lastc to prevc
+%old: lastc -> prevc
 
 
 <<[[assline()]] switch character cases>>=
 case '#':
-    lastc = '#';
+    prevc = '#';
     // skip all characters in comment until newline
     while ((c = Bgetc(bp)) != '\n') {
         if (c < 0)
             goto eof;
-        lastc = c;
+        prevc = c;
     }
     mkinline++;
    <<[[assline()]] when processing comments, if escaped newline>>
@@ -4721,24 +4733,24 @@ case '#':
 % seems windows-only stuff
 \l handle unicode here? can have end of unicode char finishing with [[\n]]?
 
-A comment can be alone on its line. It can also be used at the end
+A comment can be alone on its line, or it can be used at the end
 of a variable definition or rule, as in [[FOO=1 # true]].
 %
 When a comment is not alone on its line, the characters
 before the comments are not skipped but returned instead by [[assline()]]:
 
 <<[[assline()]] when processing comments, if not only comment on the line>>=
-if (buf->current != buf->start) {
+if (!isempty(buf)) {
      insert(buf, '\0');
      return true;
  }
 @
+%old: I now use empty()
 \n like '\n' case 
-\t use empty()
 
 
-The [[lastc]] local variable above handles escaped newlines 
-in a comment as in:
+The [[prevc]] local variable above is used to handle escaped newlines 
+in a comment as in
 
 <<example of escaped newline>>=
 A=foo # this is a long definition mixed with a comment\
@@ -4755,7 +4767,7 @@ In that case, the definition will be parsed as the single line
 % ...
 
 <<[[assline()]] when processing comments, if escaped newline>>=
-if (lastc == '\\')
+if (prevc == '\\')
     break;		/* propagate escaped newlines??*/
 @
 
@@ -4768,7 +4780,7 @@ seen [[assline()]] is not trivial: it must handle escaped newlines
 (through [[nextrune()]]), blank lines, and comments.
 
 
-The use of a special character to denote comments, [['#']], introduces
+The use of the special character [['#']] to denote comments introduces
 in turn another complication for [[assline()]].
 %
 Indeed, what if the target or prerequiste in a rule contains
@@ -4783,7 +4795,7 @@ or even space.
 \l but not newline
 
 
-To reference filenames using special characters in an [[mkfile]], the user must
+To reference filenames using special characters in an [[mkfile]], you must
 {\em quote} them in order for [[mk]] to not {interpret} them.
 %compiler: 
 This is a feature found in most programming languages.
@@ -5012,18 +5024,20 @@ at the bottom of Figure~\ref{fig:mk-rhead-overwrite}.
 
 Note that if the separator in the line is [['<']] 
 (for an inclusion instruction), it is normal for [[h]] to be empty;
+\l actually it will contain one element, the empty string
 %
 otherwise, [[mk]] should report an error to the user:
 
 <<[[rhead()]] sanity check h>>=
 if(*((*h)->s) == '\0' && sep != '<' && sep != '|') {
     SYNERR(mkinline-1);
-    fprint(STDERR, "no var/target on left side of assignment/rule\n");
+    fprint(STDERR, "no var (or target) on left side of assignment (or rule)\n");
     Exit();
 }
 @
-%pad: I added the /target in error message and replaced w by *h
+%pad: I added the (or target) in error message and replaced w by *h
 \l explain pipe, advanced feature
+\l could have an if sep == '=' and give precise error message for the 2 cases
 
 
 
@@ -5191,6 +5205,7 @@ stow(char *s)
 }
 @
 %old: I renamed w to lastw
+\l return always a list with 1 element at least (which can be the empty string)
 \t rename newword -> new_singleword
 \t rename nextword to nextwords?
 %ocaml: expanding is done later in eval.ml instead, but 
@@ -5204,6 +5219,7 @@ This is why [[stow()]] must concatenate the lists in
 
 
 \subsubsection{Assembling the next words, [[nextword()]]}
+\l rename nextwords?
 
 The code for [[nextword()]] sounds trivial again: look for
 the next space character 
@@ -5226,7 +5242,7 @@ static Word*
 nextword(char **s)
 {
     char *cp = *s;
-    Bufblock *b;
+    Bufblock *buf;
     Rune r;
     // list<ref_own<Word>>
     Word *head;
@@ -5235,7 +5251,7 @@ nextword(char **s)
     bool empty;
     <<[[nextword()]] other locals>>
 
-    b = newbuf();
+    buf = newbuf();
 
 restart:
     head = nil;
@@ -5254,30 +5270,30 @@ restart:
         <<[[nextword()]] switch rune cases>>
         default:
             empty = false;
-            rinsert(b, r);
+            rinsert(buf, r);
             break;
         }
     }
 out:
     *s = cp;
-    if(b->current != b->start){
+    if(!isempty(buf)){
         <<[[nextword()]] when buffer not empty, if there was already an head>>
          else {
-            insert(b, '\0');
-            head = newword(b->start);
+            insert(buf, '\0');
+            head = newword(buf->start);
         }
     }
-    freebuf(b);
+    freebuf(buf);
     return head;
 }
 @
 %$
-\t rename b to buf
 %old: I renamed tail to lastw
-\t use empty()
+%old: use empty()
+%old: b -> buf
 
 
-The presence of a label [[restart]] above, as well as the local
+The presence of the [[restart]] label above, as well as the local
 variables [[empty]] and [[lastw]] will become clear later.
 %
 They are needed because certain strings can expand in other strings
@@ -5293,14 +5309,14 @@ while(*cp == ' ' || *cp == '\t')		/* leading white space */
     cp++;
 @
 
-This is why there is no difference between writing a rule like
+Thus, there is no difference between writing a rule like
 [[foo.5:foo.c]] and [[foo.5: foo.c]], or between a definition like
 [[FOO=a b]] and [[FOO = a b]].
 
 \subsubsection{Expanding quoted characters}
 % part 3
 
-As I just mentioned, [[nextword()]] must handle quoted strings.
+As I mentioned before, [[nextword()]] must handle quoted strings.
 %
 As opposed to [[assline()]], which just inputs a quoted string,
 or [[charin()]], which skips over a quoted string, [[nextword()]]
@@ -5315,7 +5331,7 @@ case '\'':
 case '"':
 case '\\':
     empty = false;
-    cp = expandquote(cp, r, b);
+    cp = expandquote(cp, r, buf);
     if(cp == nil){
         fprint(STDERR, "missing closing quote: %s\n", *s);
         Exit();
@@ -5332,10 +5348,10 @@ case '\\':
  *	others are just inserted into the receiving buffer.
  */
 char*
-expandquote(char *s, Rune r, Bufblock *b)
+expandquote(char *s, Rune r, Bufblock *buf)
 {
     if (r != '\'') {
-        rinsert(b, r);
+        rinsert(buf, r);
         return s;
     }
 
@@ -5344,12 +5360,13 @@ expandquote(char *s, Rune r, Bufblock *b)
         if(r == '\'') {
             <<[[expandquote()]] return, unless double quote>>
         }
-        rinsert(b, r);
+        rinsert(buf, r);
     }
     return nil;
 }
 @
 \l could lpize again the first if
+%old: b -> buf
 
 <<[[expandquote()]] return, unless double quote>>=
 if(*s == '\'')
@@ -5379,7 +5396,7 @@ Word *w;
 @
 
 This is why [[nextword()]] returns a list of words, 
-and [[stow()]] concatenate a list of words;
+and why [[stow()]] concatenate a list of words;
 what may seem like a single word (a variable) can expand to multiple words.
 
 
@@ -5426,20 +5443,21 @@ pointed by [[s]] ([[varname()]] also increments [[s]] by side effect), and
 Word*
 varsub(char **s)
 {
-    Bufblock *b;
+    Bufblock *buf;
     Word *w;
 
     <<[[varsub()]] if variable starts with open brace>>
     // else
 
-    b = varname(s);
-    <<[[varsub()]] sanity check b>>
-    w = varmatch(b->start);
+    buf = varname(s);
+    <<[[varsub()]] sanity check buf>>
+    w = varmatch(buf->start);
 
-    freebuf(b);
+    freebuf(buf);
     return w;
 }
 @
+%old: b -> buf
 \n not just [[$V]], can have complex pattern there too.
 \n sometimes ${xx:%.y=%.z} ! but later in adv topics
 %$
@@ -5448,8 +5466,8 @@ Note that if the user mentions a variable not defined anywhere
 (neither in the [[mkfile]] nor in the environment), [[nextword()]]
 will skip over this variable:
 
-<<[[varsub()]] sanity check b>>=
-if(b == nil)
+<<[[varsub()]] sanity check buf>>=
+if(buf == nil)
     return nil;
 @
 
@@ -5488,24 +5506,24 @@ increments [[s]] to point after the variable name:
 static Bufblock*
 varname(char **s)
 {
-    Bufblock *b;
+    Bufblock *buf;
     char *cp = *s;
     Rune r;
     int n;
 
-    b = newbuf();
+    buf = newbuf();
 
     for(;;){
         n = chartorune(&r, cp);
         if (!WORDCHR(r))
             break;
-        rinsert(b, r);
+        rinsert(buf, r);
         cp += n;
     }
-    <<[[varname()]] sanity check b>>
+    <<[[varname()]] sanity check buf>>
     *s = cp;
-    insert(b, '\0');
-    return b;
+    insert(buf, '\0');
+    return buf;
 }
 @
 
@@ -5519,11 +5537,11 @@ the set of special characters in the macro below:
 \l  maybe specific to shell too?
 
 
-<<[[varname()]] sanity check b>>=
-if (b->current == b->start){
+<<[[varname()]] sanity check buf>>=
+if (isempty(buf)){
     SYNERR(-1);
     fprint(STDERR, "missing variable name <%s>\n", *s);
-    freebuf(b);
+    freebuf(buf);
     return nil;
 }
 @
@@ -5556,17 +5574,17 @@ as at the bottom of Figure~\ref{fig:mk-nextword1}, the first word in the list of
 words in the value of the variable must be {adjusted}:
 
 <<[[nextword()]] when in variable case, if non-space chars before var>>=
-if(b->current != b->start){
-    bufcpy(b, w->s, strlen(w->s));
-    insert(b, '\0');
+if(!isempty(buf)){
+    bufcpy(buf, w->s, strlen(w->s));
+    insert(buf, '\0');
     free(w->s);
     // adjust the first word
-    w->s = strdup(b->start);
-    // reset buf
-    b->current = b->start;
+    w->s = strdup(buf->start);
+    
+    resetbuf(buf);
 }
 @
-\t use isempty()
+%old: use isempty() and resetuf
 %ocaml: I actually forbid that if variable is not a scalar
 
 \begin{figure}[!]\centering
@@ -5611,20 +5629,20 @@ of the second variable:
 <<[[nextword()]] when in variable case, if head is not empty>>=
 if(head){
     // merge the last and first words
-    bufcpy(b, lastw->s, strlen(lastw->s));
-    bufcpy(b, w->s, strlen(w->s));
-    insert(b, '\0');
+    bufcpy(buf, lastw->s, strlen(lastw->s));
+    bufcpy(buf, w->s, strlen(w->s));
+    insert(buf, '\0');
     free(lastw->s);
-    lastw->s = strdup(b->start);
+    lastw->s = strdup(buf->start);
 
     lastw->next = w->next;
     free(w->s);
     free(w);
-    // reset buf
-    b->current = b->start;
+    resetbuf(buf);
 }
 @
 %ocaml: I actually forbid that if variable is not a scalar
+%old: use resetbuf()
 
 
 Finally, if a variable is followed directly by non-space
@@ -5633,10 +5651,10 @@ must be adjusted:
 
 <<[[nextword()]] when buffer not empty, if there was already an head>>=
 if(head){
-    cp = b->current;
-    bufcpy(b, lastw->s, strlen(lastw->s));
-    bufcpy(b, b->start, cp - b->start);
-    insert(b, '\0');
+    cp = buf->current;
+    bufcpy(buf, lastw->s, strlen(lastw->s));
+    bufcpy(buf, buf->start, cp - buf->start);
+    insert(buf, '\0');
     free(lastw->s);
     // adjust the last word
     lastw->s = strdup(cp);
@@ -5698,6 +5716,7 @@ s:|@$A$B: |    +-----------+           +-----+-----+
 
 
 \section{Rules, {\em target}[[:]]{\em prereqs}}
+\label{sec:parse-rules-add-rules}
 \n actually targets [[:]] prereqs, not just one target
 
 %trans:
@@ -5734,9 +5753,10 @@ of a rule, that is its recipe.
 I will explain [[rbody()]] in the next section.
 
 %dup: core-ds/rule/addrules
-I have described [[addrules()]] called above in Section~\ref{sec:multi-targets}.
-[[addrules()]] can handle rules with multiple targets; it
-internally calls [[addrule()]] for each target.
+I have described [[addrules()]], which is 
+called above, in Section~\ref{sec:multi-targets}.
+[[addrules()]] can handle rules with multiple targets by
+calling [[addrule()]] for each target.
 
 
 I mentioned also in Section~\ref{sec:default-target} 
@@ -5841,7 +5861,7 @@ If a rule has no recipe, [[rbody()]] returns
 the empty string to its caller [[parse()]]. 
 %
 Note that the empty string is not the same thing than [[nil]]. Indeed,
-an empty string contains one byte: the end-of-string null character [[\0]].
+an empty string contains one byte: the end-of-string null character [['\0']].
 \l why insist? because invariant used later
 
 Note also that [[mk]] does not impose to use a [[TAB]] 
@@ -5856,13 +5876,14 @@ as they all have a leading spacing character in the first column.
 
 
 \subsection{Parsing rule attributes}
+\label{sec:syntax-rule-attributes}
 
-[[mk]] allows the user to customize certain rules by using
+[[mk]] allows to customize certain rules by using
 {\em rule attributes}.
 %dup: main/build/parallel-mode (for VIR)
 An attribute often used is the attribute to indicate that
 the target in a rule does not correspond to a filename;
-[[mk]] should then not expect from the recipe to generate such a target.
+then [[mk]] should not expect from the recipe to generate such a target.
 \l but in fact mk does not check that, so it is more to skip
 \l the reading of time if by bad luck there is a file named clean in the dir
 For instance, many [[mkfile]]s use the target [[clean]] to
@@ -5942,8 +5963,8 @@ eos:
 % LP distribution, they might not be anymore
 
 %chunks: 
-I will describe gradually the cases above and the different rule
-attributes.
+I will describe gradually the cases above and the different rule attributes.
+\l actually only in advanced chapter
 
 
 
@@ -5961,6 +5982,7 @@ char *p;
 fdt newfd;
 @
 
+Here is the code using [[newfd]]:
 
 <<[[parse()]] switch rhead cases>>=
 case '<':
@@ -5998,7 +6020,7 @@ and is the result of a call to [[stow()]], which performs
 quote and variable expansions.
 %
 Thus, you can also use variables in the filename to include, 
-as in:
+as in
 
 <<tests/mkfile/mkincludearc>>=
 </$objtype/mkfile
@@ -6007,14 +6029,14 @@ as in:
 
 I described [[wtos()]] called above in Section~\ref{sec:word}.
 It converts a list of words back to a string. In practice, this
-list should contain only one element.
+list should contain only one element for file inclusions.
 \l handle filename with spaces now ... no need escaping
 %ocaml: be more consistent and stricter
 
 
 
 To include a file, [[mk]] simply calls recursively [[parse()]].
-However, a the globals [[infile]] and [[mkinline]] must
+However, the globals [[infile]] and [[mkinline]] must
 be saved before the call and restored after, hence the following
 calls in [[parse()]]:
 
@@ -6028,7 +6050,7 @@ ipop();
 %ocaml: do that in eval, and use call stack to handle recursivity
 
 Both functions use the following structure to remember the list
-of {parent} files:
+of ``parent'' files in the stack of opened files.
 
 <<struct input>>=
 struct Input
@@ -6098,13 +6120,11 @@ ipop(void)
 
 
 \section{Variable definitions, {\em var}[[=]]{\em values}}
-\n really Constant definitions, not variable.
-\n ninja calls them bindings
+\n more Constant definitions. the ninja build system calls them {bindings}
 
-%trans: finally, last construct variable def.
-% left is variable name, right is set of values (possibly containing
-% variables, which are expanded by nextword())
-
+%trans:
+The final action of [[parse()]] manages variable definitions,
+when the special character returned by [[rhead()]] is [['=']].
 
 <<[[parse()]] other locals>>=
 bool set = true;
@@ -6129,6 +6149,12 @@ case '=':
 %    cp = wtos(tail, ' '); print("assign %s to %s\n", head->s, cp); free(cp);
 %    */
 
+The code above relies mainly on the function [[setvar()]], which I
+described in Section~\ref{sec:setvar}, to add an entry in the
+[[S_VAR]] namespace in the symbol table.
+
+Note that for variable definitions, the list of words
+on the left of [['=']] should contain only one element:
 
 <<[[parse()]] when parsing variable definitions, sanity check head>>=
 if(head->next){
@@ -6137,18 +6163,36 @@ if(head->next){
     Exit();
 }
 @
+\n the check whether head->s == '\0' is done before in rhead
 
+Note also that both [[head]] and [[tail]] used above
+are the results of calls to [[stow()]] in [[rhead()]], which
+expands variables.
+%
+Thus, you can use variables on the right side of [['=']],
 %ocaml-found:
-% note that calls wtos() on head before, so can have vars in head!
-% can do crazy stuff like
-% A=B
-% $A=42
-% and now B is 42! pointers :) 
+but also more surprisingly on the left as in the following example:
+
+<<indirection in mkfile example>>=
+A=B
+D=d e f
+$A = a b c $D
+# => B contains a b c d e f
+@
+\l say bad practice?
 
 \subsection{Overriding variable definitions}
 
-% saw calling parse with true for override for the xxx=yyy argument parsing.
-% remember parse() signature is varoverride parameter.
+As I mentioned in Section~\ref{sec:vardef-command-line}, you can
+{override} variable definitions in an [[mkfile]] (or in files included
+from this [[mkfile]]) by passing definitions through the command-line,
+as in [[mk objtype=arm CFLAGS=-g]].
+%
+In that case, [[mk]] creates a temporary file containing those
+command-line definitions and calls [[parse()]] with [[true]]
+for its [[varoverride]] parameter (see Section~\ref{sec:vardef-command-line}).
+%
+Here is the code using this [[varoverride]] parameter:
 
 <<[[parse()]] when parsing variable definitions, override handling>>=
 if(symlook(head->s, S_OVERRIDE, nil)){
@@ -6163,22 +6207,36 @@ if(symlook(head->s, S_OVERRIDE, nil)){
 \t also generate warning when set again same var? 
 \t mk allows it? value is used until next def since evaluate vars as we parse.
 
+The code above relies on the new namespace [[S_OVERRIDE]], which
+contains the set of variables defined through the command-line
+(and whose definitions override definitions in the [[mkfile]]).
+
 <<[[Sxxx]] cases>>=
 S_OVERRIDE,	/* can't override */
 @
-% when do mk xxx=yyy, it's overriding! and it's ok.
 
-
+\l explain more? scenario? first call varovveride is true,
+\l add in namespace, and do setvar above. Then when parse mkfile,
+\l varovveride is false, and if same var, then look, set become false
+\l and no setvar so keep old definition 
+\t confusion is that old def is called the overriding definition, hmmm
 
 \subsection{Parsing variable attributes}
 
-% rc.c
-<<global termchars>>=
-char	*termchars = "'= \t";	/*used in parse.c to isolate assignment attribute*/
+%trans:
+Variables, likes rules, can have attributes.
+%
+The syntax for variable attributes uses a scheme similar to the
+rule attributes (see Section~\ref{sec:syntax-rule-attributes} 
+where the special character (here [['=']]) is
+doubled and attributes are between the two special characters,
+as in the following example:
+
+<<mkfile using a private variable>>=
+MYVAR=U= foo.5 bar.5 # a private variable
 @
-% what we really want is to find first =, but if there is
-% a quote before, then the = should not be interpreted as the = before
-% attribute.
+
+Here is the code in [[rhead()]] to extract variable attributes:
 
 <<[[rhead()]] if sep is [[=]]>>=
 if(sep == '='){
@@ -6202,8 +6260,41 @@ if(sep == '='){
 @
 % can chain? X=V=foo ? or it is more C=U=bla
 
+%chunks: 
+I will describe gradually the cases above and the different variable attributes.
+\l actually only in advanced chapter
+
+The code above relies on the following constant to check whether
+a line contains a variable attribute:
+
+% rc.c
+<<global termchars>>=
+char	*termchars = "=' \t";	/*used in parse.c to isolate assignment attribute*/
+@
+% what we really want is to find first =, but if there is
+% a quote before, then the = should not be interpreted as the = before
+% attribute.
+%old: "'= \t" but I prefer my order
 
 
+Note that [[termchars]] does not contain just [['=']].
+%
+Indeed, variable definitions can contain quoted string containg
+the equal character, as in [[A='U=1']], in which case the equal sign
+inside the quote should not be interpreted as the end mark of a variable
+attribute.
+%
+This is why the code above is looking for the first character that is
+either an equal or quote and stops there.
+%
+In fact, [[termchars]] contains also spacing characters to remove
+some possible ambiguities as shown in the following example:
+
+<<mkfile using space to disambiguate variable attributes>>=
+MYVAR=U=a b c d  # private var MYVAR containing the list: a b c d
+MYVAR= U=a b c d # MYVAR contains the list: U=a b c d
+@
+\n mentioned in man page of mk as a limitation
 
 %\section{Variable uses (expanding variables part 2), [[$]]{\em C} }
 %$
@@ -6211,11 +6302,30 @@ if(sep == '='){
 
 
 
-\chapter{Building the Dependency Graph}
+\chapter{Building the Graph of Dependencies}
 \label{chap:graph}
 
-% Will see [[mk()]] later. But will call [[graph(target)]]
-% which goes down building tree using [[rules]] and [[metarules]].
+%trans:
+The next component in the building pipeline is the construction of
+the {graph of dependencies}. Section~\ref{sec:graph} showed
+a few examples of graph of dependencies for small projects.
+
+%toc:
+The most important function in this chapter is [[graph()]],
+\l well really it is applyrules
+which takes a target name as a parameter and returns the {root}
+of the graph of dependencies for this target.
+%trans:
+[[graph()]] will use the globals [[rules]] and [[metarules]]
+populated by [[parse()]] in Section~\ref{sec:parse-rules-add-rules}.
+\n through addrules
+\l and this graph will be used by work in next chapter for DFS to find jobs
+%toc:
+I will also describe in this chapter the code to check for mistakes
+in the rules. Those mistakes translate in issues while building the graph,
+for instance, the presence of cycles in the dependencies
+(with the function [[cyclechk()]]).
+\l Will see [[mk()]] later. But will call [[graph(target)]].
 
 \section{[[graph()]] and [[applyrules()]]}
 
@@ -6232,22 +6342,12 @@ graph(char *target)
     <<[[graph()]] free cnt>>
 
     <<[[graph()]] checking the graph>>
-
-    // propagate attributes in rules to their node
-    attribute(root);
+    <<[[graph()]] propagate attributes>>
 
     return root;
 }
 @
 %pad: node -> root, clearer I think
-
-% need attribute? anyway can access rule of node each time
-% or probably because it is a union of attr for all matching rules.
-%  not just the master rule.
-% But in which situation it matters? for Virtual! because timeof
-% may have been wrong and considered a file with the same name of
-% a target. When we find out it is a virtual node, we need to reset
-% the time of this node.
 
 
 
@@ -6256,8 +6356,9 @@ static Node*
 applyrules(char *target, char *cnt)
 {
     Node *node;
+    // list<ref<Arc> (next = Arc.next, last = lasta)
     Arc head;
-    Arc *a = &head;
+    Arc *lasta = &head;
     <<[[applyrules]] other locals>>
 
     <<[[applyrules]] debug>>
@@ -6268,10 +6369,8 @@ applyrules(char *target, char *cnt)
     // calls timeof()
     node = newnode(target);
 
-    head.n = nil;
     head.next = nil;
-
-    <<[[applyrules]] set rmatch>>
+    <<[[applyrules]] other initializations>>
 
     // apply regular rules with target as a head (modify node, head, a)
     <<[[applyrules()]] apply regular rules>>
@@ -6279,17 +6378,17 @@ applyrules(char *target, char *cnt)
     // apply meta rules
     <<[[applyrules()]] apply meta rules>>
 
-    // ???
-    a->next = node->arcs;
     node->arcs = head.next;
 
     return node;
 }
 @
-\t node->prereqs should be nil no? assert?
-\t confusing again to use head, this time for head of arcs.
-
-% call to newnode() which will call timeof()!
+%dead? bug? node->arcs should be nil no at this point? assert?
+%    a->next = node->arcs;
+%dead? bug? useless, it is never used anyway
+%    head.n = nil;
+%old: a -> lasta, far clearer!
+\l confusing again to use head, this time for head of arcs.
 
 %old: in comment in the original code!
 %/*		if(r->attr&VIR)
@@ -6309,61 +6408,84 @@ applyrules(char *target, char *cnt)
 <<[[applyrules]] other locals>>=
 Symtab *sym;
 Rule *r;
-Word *w;
+Word *pre;
+Arc *arc;
 @
-% rename w to prerequiste?
+%old: w -> prereq? then it's a long var name for an iterator. w -> pre
+%pad: I introduced arc local, clearer.
 
 <<[[applyrules()]] apply regular rules>>=
 sym = symlook(target, S_TARGET, nil);
-for(r = (sym? sym->u.ptr : nil); r; r = r->chain){
+r = sym? sym->u.ptr : nil;
+for(; r; r = r->chain){
     <<[[applyrules()]] skip this rule and continue if some conditions>>
     <<[[applyrules()]] infinite rule detection part1>>
     <<[[applyrules()]] when found a regular rule for target [[node]], set flags>>
     <<[[applyrules()]] if no prerequistes in rule r>>
     else
-        for(w = r->prereqs; w; w = w->next){
+        for(pre = r->prereqs; pre; pre = pre->next){
             // recursive call!
-            a->next = newarc(applyrules(w->s, cnt), r, "", rmatch);
-            a = a->next;
+            arc = newarc(applyrules(pre->s, cnt), r, "", rmatch);
+            // add_list(head, arc)
+            lasta->next = arc;
+            lasta = lasta->next;
     }
     <<[[applyrules()]] infinite rule detection part2>>
-    head.n = node;
 }
 @
-\t what is the point of setting head.n? it is not used anyway, and
-\t  similar to node
+%old: I put the initialization of r outside the for
+%dead? bug? what is the point of setting head.n? it is not used anyway
+%    head.n = node;
+
+
+% stem is "" here
 
 % so for each prereq there is an arc! (but all of those arcs
 % will share the same rule/recipe)
 
 <<[[applyrules()]] skip this rule and continue if some conditions>>=
-if(r->attr&META) continue;
-if(strcmp(target, r->target)) continue; // how can happen??
-if((!r->recipe || !*r->recipe)
-   && (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)) 
+if(empty_recipe(r) && empty_prereqs(r))
       continue;	/* no effect; ignore */
 @
 %TODO safe to continue when no recipe? should still have an arc
 % so than can check if outofdate no?
-\t how can be META and in S_TARGET?
-\t ugly those chain of test on tail. Should assert always has a tail?
-\t  or should forbid singleton empty word.
-\t  maybe define  empty_prereqs() ? and empty_recipe() !!!
+%dead? bug? how can be META and in S_TARGET?
+%  if(r->attr&META) continue;
+%dead? bug? how can be in S_TARGET and not strcmp?
+% if(strcmp(target, r->target)) continue; 
+
+
+<<macro empty_recipe>>=
+#define empty_recipe(r) (!r->recipe || !*r->recipe)
+@
+%pad: I introduced that, was repeating ugly expressions everywhere
 \t but no need !r->recipe, every rule has recipe (which can be empty)
 \t  so do assert in empty_recipe()
+
+<<macro empty_prereqs>>=
+#define empty_prereqs(r) (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)
+@
+%pad: I introduced that, ugly those chain of test on prereqs. 
+\t Should assert always has a prereqs?
+\t  or should forbid singleton empty word.
+
+
 
 % empty recipe and empty prereqs is useless, but tools like ocamldep
 % generates such dependencies
 
 <<[[applyrules()]] if no prerequistes in rule r>>=
 // no prerequistes, a leaf, still create fake arc
-if(!r->prereqs || !r->prereqs->s || !*r->prereqs->s) {
-    a->next = newarc((Node *)nil, r, "", rmatch);
-    a = a->next;
+if(empty_prereqs(r)) {
+    arc = newarc((Node *)nil, r, "", rmatch);
+    // add_list(head, arc)
+    lasta->next = arc;
+    lasta = lasta->next;
 } 
 @
 % example: clean:, there will be no prereqs
 % stem is "" here
+%pad: use my empty_prereqs macro, clearer
 
 % why need that? to at least have something propagate in attribute()?
 %  so will pass the VIRT to the node?
@@ -6396,37 +6518,39 @@ for(r = metarules; r; r = r->next){
 
     <<[[applyrules()]] if no prerequistes in meta rule r>>
     else
-        for(w = r->prereqs; w; w = w->next){
+        for(pre = r->prereqs; pre; pre = pre->next){
             <<[[applyrules()]] if regexp rule, adjust buf and rmatch>>
             else
-                subst(stem, w->s, buf, sizeof(buf));
+                subst(stem, pre->s, buf, sizeof(buf));
             // recursive call!
-            a->next = newarc(applyrules(buf, cnt), r, stem, rmatch);
-            a = a->next;
+            arc = newarc(applyrules(buf, cnt), r, stem, rmatch);
+            // add_list(head, arc)
+            lasta->next = arc;
+            lasta = lasta->next;
         }
     <<[[applyrules()]] infinite rule detection part2>>
 }
 @
 
 <<[[applyrules()]] skip this meta rule and continue if some conditions>>=
-if((!r->recipe || !*r->recipe) 
-   && (!r->prereqs || !r->prereqs->s || !*r->prereqs->s)) 
+if(empty_recipe(r) && empty_prereqs(r)) 
     continue;	/* no effect; ignore */
 @
-\t useless !r->recipe, can assert instead
 % could issue a warning, but some tools generate such dependencies with
 %  no recipe and no prereqs
-\l could factorize with previous one
+\l could factorize with previous one now that cleaned up dead code
 
 <<[[applyrules()]] if no prerequistes in meta rule r>>=
-if(!r->prereqs || !r->prereqs->s || !*r->prereqs->s) {
-    a->next = newarc((Node *)nil, r, stem, rmatch);
-    a = a->next;
+if(empty_prereqs(r)) {
+    arc = newarc((Node *)nil, r, stem, rmatch);
+    // add_list(head, arc)
+    lasta->next = arc;
+    lasta = lasta->next;
 } 
 @
 % almost identical to before, except pass stem here instead of ""
 % (not sure it matters, maybe could factorize code)
-\t use empty_prereqs() again
+%pad: use empty_prereqs() again
 
 \subsection{Matching, [[match()]]}
 
@@ -6513,6 +6637,10 @@ subst(char *stem, char *template,   char *dest, int dlen)
 \l generalize to Cache? with node cache, time cache, etc?
 % not really a cache
 
+% I mentioned DAG in section X, not a tree. Here is code
+% to reference a previously constructed node.
+
+
 % S_NODE used at a few places so maybe cant delay that to opti section.
 % Also it is a DAG, not a tree
 
@@ -6538,6 +6666,9 @@ symlook(name, S_NODE, (void *)node);
 
 \section{[[timeof()]]}
 % for the leaves!
+
+%trans: last bit in graph is call to timeof to label
+% a node. called from newnode, called from applyrules.
 
 % force is here to say if want to bypass cache and redo
 % the actual read! for instance after the recipe is done
@@ -7065,6 +7196,19 @@ for(a = node->arcs; a; a = a->next)
 \l when this matter?
 
 \section{Rule attributes propagation}
+
+<<[[graph()]] propagate attributes>>=
+// propagate attributes in rules to their node
+attribute(root);
+@
+
+% need attribute? anyway can access rule of node each time
+% or probably because it is a union of attr for all matching rules.
+%  not just the master rule.
+% But in which situation it matters? for Virtual! because timeof
+% may have been wrong and considered a file with the same name of
+% a target. When we find out it is a virtual node, we need to reset
+% the time of this node.
 
 % propagate from rule to node
 \t why? just for the union of virtual?
@@ -9334,7 +9478,7 @@ for(i = 0; *p; i++, p++){
 <<[[applyrules]] other locals>>=
 Resub rmatch[NREGEXP];
 @
-<<[[applyrules]] set rmatch>>=
+<<[[applyrules]]  other initializations>>=
 memset((char*)rmatch, 0, sizeof(rmatch));
 @
 % rmatch??? for metarules? for newarc?
@@ -11415,6 +11559,7 @@ struct Bufblock
     char 		*start;
     char 		*end;
 
+    // between start and end
     char 		*current;
 
     // Extra
@@ -11422,10 +11567,10 @@ struct Bufblock
 };
 @
 
+% classic idiom
 <<global freelist>>=
 static Bufblock *freelist;
 @
-
 
 
 <<constant QUANTA>>=
@@ -11444,15 +11589,17 @@ newbuf(void)
         freelist = freelist->next;
     } else {
         p = (Bufblock *) Malloc(sizeof(Bufblock));
-        p->start = Malloc(QUANTA*sizeof(*p->start));
+        p->start = Malloc(QUANTA*sizeof(char));
         p->end = p->start+QUANTA;
     }
     p->current = p->start;
     *p->start = '\0';
     p->next = nil;
+
     return p;
 }
 @
+%old: sizeof(*p->start)
 
 % dtor
 <<destructor freebuf>>=
@@ -11463,6 +11610,61 @@ freebuf(Bufblock *p)
     freelist = p;
 }
 @
+
+
+
+
+
+<<macro isempty>>=
+#define isempty(buf) (buf->current == buf->start)
+@
+
+<<macro resetbuf>>=
+#define resetbuf(buf) do { buf->current = buf->start; } while(0)
+@
+
+<<macro bufcontent>>=
+#define bufcontent(buf) buf->start
+@
+
+
+<<function insert>>=
+void
+insert(Bufblock *buf, int c)
+{
+
+    if (buf->current >= buf->end)
+        growbuf(buf);
+    *buf->current++ = c;
+}
+@
+
+<<function rinsert>>=
+void
+rinsert(Bufblock *buf, Rune r)
+{
+    int n;
+
+    n = runelen(r);
+    if (buf->current+n > buf->end)
+        growbuf(buf);
+    runetochar(buf->current, &r);
+    buf->current += n;
+}
+@
+% indeed code more complicated when use runes instead of char.
+% variable-lenght characters are more complicated than just plusplus
+
+<<function bufcpy>>=
+void
+bufcpy(Bufblock *buf, char *cp, int n)
+{
+
+    while (n--)
+        insert(buf, *cp++);
+}
+@
+
 
 <<function growbuf>>=
 void
@@ -11495,54 +11697,12 @@ growbuf(Bufblock *p)
 }
 @
 
-<<function bufcpy>>=
-void
-bufcpy(Bufblock *buf, char *cp, int n)
-{
-
-    while (n--)
-        insert(buf, *cp++);
-}
-@
-
-<<function insert>>=
-void
-insert(Bufblock *buf, int c)
-{
-
-    if (buf->current >= buf->end)
-        growbuf(buf);
-    *buf->current++ = c;
-}
-@
-
-<<function rinsert>>=
-void
-rinsert(Bufblock *buf, Rune r)
-{
-    int n;
-
-    n = runelen(r);
-    if (buf->current+n > buf->end)
-        growbuf(buf);
-    runetochar(buf->current, &r);
-    buf->current += n;
-}
-@
 
 
 
-<<macro isempty>>=
-#define isempty(buf) (buf->current == buf->start)
-@
 
-<<macro resetbuf>>=
-#define resetbuf(buf) do { buf->current = buf->start; } while(0)
-@
 
-<<macro bufcontent>>=
-#define bufcontent(buf) buf->start
-@
+
 
 \section{Utilities}
 

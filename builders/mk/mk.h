@@ -21,6 +21,7 @@ struct Bufblock
     char 		*start;
     char 		*end;
 
+    // between start and end
     char 		*current;
 
     // Extra

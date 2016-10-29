@@ -13,11 +13,10 @@ assline(Biobuf *bp, Bufblock *buf)
 {
     int c;
     /*s: [[assline()]] other locals */
-    int lastc;
+    int prevc;
     /*e: [[assline()]] other locals */
 
     resetbuf(buf);
-
     while ((c = nextrune(bp, true)) >= 0){
         switch(c)
         {
@@ -29,20 +28,20 @@ assline(Biobuf *bp, Bufblock *buf)
             break;		/* skip empty lines */
         /*s: [[assline()]] switch character cases */
         case '#':
-            lastc = '#';
+            prevc = '#';
             // skip all characters in comment until newline
             while ((c = Bgetc(bp)) != '\n') {
                 if (c < 0)
                     goto eof;
-                lastc = c;
+                prevc = c;
             }
             mkinline++;
            /*s: [[assline()]] when processing comments, if escaped newline */
-           if (lastc == '\\')
+           if (prevc == '\\')
                break;		/* propagate escaped newlines??*/
            /*e: [[assline()]] when processing comments, if escaped newline */
            /*s: [[assline()]] when processing comments, if not only comment on the line */
-           if (buf->current != buf->start) {
+           if (!isempty(buf)) {
                 insert(buf, '\0');
                 return true;
             }
@@ -136,6 +135,7 @@ nextrune(Biobuf *bp, bool elide)
 
     for (;;) {
         c = Bgetrune(bp);
+        /*s: [[nextrune()]] if escape character */
         if (c == '\\') {
             if (Bgetrune(bp) == '\n') {
                 // an escaped newline!
@@ -148,6 +148,7 @@ nextrune(Biobuf *bp, bool elide)
             // else, it was just \
             Bungetrune(bp);
         }
+        /*e: [[nextrune()]] if escape character */
         /*s: [[nextrune()]] handle mkinline */
         if (c == '\n')
             mkinline++;
