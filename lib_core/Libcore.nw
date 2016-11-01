@@ -123,14 +123,14 @@ Yoann Padioleau\\
 \chapter{Introduction}
 
 The goal of this book is to explain with full details the source code of
-{core libraries}.
+a few {core libraries}.
 
 \section{Motivations}
 
 Why core libraries? Because I think you are a better programmer if
 you fully understand how things work under the hood.
 % and code in those libs underly everything.
-% even kernel!
+% even sometimes kernel!
 
 % interested mostly C libraries. Also some Asm.
 % Linked in all programs.
@@ -152,7 +152,7 @@ Here are a few questions I hope this book will answer:
 \item Is there any code executed before [[main()]] in a C program?
 
 \item Which program does memory allocation? The kernel? The C library? 
-How [[malloc()]] is implemented? 
+How is [[malloc()]] implemented? 
 How it relates to the [[sbrk()]] system call?
 
 \item How does a thread scheduler work? 
@@ -190,9 +190,6 @@ which I ultimately discarded:
 \end{itemize}
 
 %other:
-%#other libc
-% - libc in dev86
-% - muslc
 %#other core libs
 % - .NET Core, small set of APIs (primitives, collections, reflection, interop)
 % - .NET Standard, bigger set of APIs
@@ -200,7 +197,10 @@ which I ultimately discarded:
 %   (before was .NET Core, and .NET framework, and Windows Foundation)
 %   with Core, Threading, Io, Networking, Serialization, XML
 % - Core in MacOSX? 
-%mini:
+%#mini:
+% - libc in dev86
+% - muslc
+%   
 % - libcii, from Hanson book
 %misc:
 % - kencc/libmach/ is using netlib/fdlibm
@@ -208,6 +208,7 @@ which I ultimately discarded:
 % comparison: http://www.etalabs.net/compare_libcs.html
 % musl seems good in this comparison (but they are the author of the comparison)
 % https://gist.github.com/cl91/bb927df2525738502131#file-static-linking-against-musl-md
+
 
 \section{Getting started}
 
@@ -217,7 +218,7 @@ which I ultimately discarded:
 %  (so we will cross compile ARM libc)
 % mk all
 % cd /test/5c
-% 5l 
+% 5l explictly linking C library?
 
 
 \section{Requirements}
@@ -239,13 +240,6 @@ which I ultimately discarded:
 
 \chapter{Overview}
 
-%TODO: errno
-%    if(getwd(pathname, sizeof(pathname)) == 0) {
-%        fprint(2, "pwd: %r\n");
-%        exits("getwd");
-%    }
-% what is %r? last error code from libc function? a bit ugly
-% those == 0 are also ugly.
 
 \section{Principles}
 %\section{Core components}
@@ -260,6 +254,8 @@ which I ultimately discarded:
 %missing syscalls not covered yet: exec, dup, fversion, fauth
 
 \subsection{Memory allocator}
+% some parts of code are not allowed to call malloc because calls
+% from kernel!
 
 \subsection{Zero-cost abstractions}
 % if slow, everything is slow
@@ -356,6 +352,7 @@ union FPdbleword
 
 \subsection{Strings and characters}
 
+\subsubsection{ASCII characters}
 
 <<type Ctype_flag>>=
 #define	_U	01 // upper
@@ -394,6 +391,20 @@ uchar   _ctype[256] =
 @
 
 
+<<macros isxxx>>=
+#define	isalpha(c)	(_ctype[(unsigned char)(c)]&(_U|_L))
+#define	isupper(c)	(_ctype[(unsigned char)(c)]&_U)
+#define	islower(c)	(_ctype[(unsigned char)(c)]&_L)
+#define	isdigit(c)	(_ctype[(unsigned char)(c)]&_N)
+#define	isxdigit(c)	(_ctype[(unsigned char)(c)]&_X)
+#define	isspace(c)	(_ctype[(unsigned char)(c)]&_S)
+#define	ispunct(c)	(_ctype[(unsigned char)(c)]&_P)
+#define	isalnum(c)	(_ctype[(unsigned char)(c)]&(_U|_L|_N))
+#define	isprint(c)	(_ctype[(unsigned char)(c)]&(_P|_U|_L|_N|_B))
+#define	isgraph(c)	(_ctype[(unsigned char)(c)]&(_P|_U|_L|_N))
+#define	iscntrl(c)	(_ctype[(unsigned char)(c)]&_C)
+#define	isascii(c)	((unsigned char)(c)<=0177)
+@
 
 
 % ugly that take an int, because that way compatible with Rune??
@@ -420,6 +431,7 @@ tolower(int c)
 @
 
 
+\subsubsection{Runes}
 
 
 % char =~ byte
@@ -446,6 +458,10 @@ Runemax     = 0x10FFFF, /* 21-bit rune */
 <<constant Runemask>>=
 Runemask    = 0x1FFFFF, /* bits used by runes (see grep) */
 @
+
+\subsubsection{UTF}
+
+% diff with Rune? why we have some utfxxx and runexxx functions/
 
 \section{Complex types}
 
@@ -549,6 +565,7 @@ struct Tm {
     int     tzoff;
 };
 @
+% some redundant stuff above?
 
 \section{Concurrency data structures}
 
@@ -614,6 +631,7 @@ extern char *argv0;
                 while(*_args && (_args += chartorune(&_argc, _args)))\
                 switch(_argc)
 @
+% unicode handling!
 
 <<macro ARGEND>>=
 #define ARGEND      SET(_argt);USED(_argt,_argc,_args);}USED(argv, argc);
@@ -629,12 +647,14 @@ extern char *argv0;
 #define EARGF(x)    (_argt=_args, _args="",\
                 (*_argt? _argt: argv[1]? (argc--, *++argv): ((x), abort(), (char*)0)))
 @
+% Error-aware ARGF
 
 <<macro ARGC>>=
 #define ARGC()      _argc
 @
 
 \section{syscall: [[_exits()]]}
+
 % ugly but special code in 9syscall/mkfile to rename call to 
 % EXITS syscall to _exits instead of exits because probably wanted to
 % add special code around _exits after and wanted to be backward
@@ -858,6 +878,8 @@ memchr(void *ap, int c, ulong n)
 
 \section{Syscall: [[brk()]]}
 % sysbrk()
+
+\section{[[sbrk()]]}
 
 % in 9sys/
 
@@ -1177,16 +1199,15 @@ free(void *v)
 
 % copy, search, len, etc.
 
-
-
 <<function strlen>>=
 long
 strlen(char *s)
 {
 
-    return strchr(s, 0) - s;
+    return strchr(s, '\0') - s;
 }
 @
+%pad: I prefer '\0' to 0
 
 
 <<function strcat>>=
@@ -1194,7 +1215,7 @@ char*
 strcat(char *s1, char *s2)
 {
 
-    strcpy(strchr(s1, 0), s2);
+    strcpy(strchr(s1, '\0'), s2);
     return s1;
 }
 @
@@ -1206,7 +1227,7 @@ strchr(char *s, int c)
     char c0 = c;
     char c1;
 
-    if(c == 0) {
+    if(c == '\0') {
         while(*s++)
             ;
         return s-1;
@@ -1215,7 +1236,7 @@ strchr(char *s, int c)
     while(c1 = *s++)
         if(c1 == c0)
             return s-1;
-    return 0;
+    return nil;
 }
 @
 
@@ -1314,6 +1335,30 @@ strstr(char *s1, char *s2)
 
 %see utf.ps
 
+% _base2 in Libcore_big.nw
+
+<<function tobaserune>>=
+Rune
+tobaserune(Rune c)
+{
+    Rune *p;
+
+    p = _runebsearch(c, _base2, nelem(_base2)/2, 2);
+    if(p && c == p[0])
+        c = p[1];
+    return c;
+}
+@
+
+<<function isbaserune>>=
+int
+isbaserune(Rune c)
+{
+    return tobaserune(c) == c;
+}
+@
+
+
 \section{Formatted Output}
 
 <<type Fmt>>=
@@ -1362,9 +1407,13 @@ enum Fmt_flag {
 \chapter{Regular Expressions}
 % libregexp/
 
+
+
 \chapter{IO}
 
 % file descriptor type in core DS.
+
+\section{Data structures, [[Qid]]}
 
 <<type Open_flag>>=
 // enum Open_flag, open parameter
@@ -1421,11 +1470,12 @@ enum Seek_cursor {
 @
 %pad: I added that
 
-\section{Syscalls: [[open()]], [[read()]], etc}
+\section{Syscalls: [[open()]], [[pread()]], etc}
 
 % sysopen(), sysclose(), sysread(), syswrite(), sysseek(), etc
 % file, directory, namespace
 
+\section{[[read()]], [[write()]]}
 
 <<function read>>=
 long
@@ -1445,8 +1495,9 @@ write(int fd, void *buf, long n)
 
 \chapter{Directory}
 
+\section{Data structures, [[Dir]]}
+
 <<type DirEntry>>=
-// TODO should be renamed DirEntry really
 // a similar structure is defined in the kernel!
 struct Dir {
  /* system-modified data */
@@ -1461,11 +1512,13 @@ struct Dir {
  ulong	mtime;	/* last write time */
  vlong	length;	/* file length */
  char	*name;	/* last element of path */
+
  char	*uid;	/* owner name */
  char	*gid;	/* group name */
  char	*muid;	/* last modifier name */
 };
 @
+\t TODO should be renamed DirEntry really
 
 <<type Dir_mode>>=
 /* bits in Dir.mode */
@@ -1491,6 +1544,9 @@ struct Dir {
 
 \section{Syscalls: [[create()]], [[chdir()]], etc}
 
+\section{[[xxxstat()]]}
+
+\section{[[getwd()]]}
 
 <<function getwd>>=
 char*
@@ -1509,7 +1565,121 @@ getwd(char *buf, int nbuf)
 }
 @
 
+\section{Normalizing a filename, [[cleanname()]]}
+
+%real-world: realpath()
+
+% cite \plan paper on dotdot?
+
+
+<<macro SEP>>=
+/*
+ * In place, rewrite name to compress multiple /, eliminate ., and process ..
+ */
+#define SEP(x)  ((x)=='/' || (x) == 0)
+@
+
+% called also from kernel! in fixdotdotname
+<<function cleanname>>=
+char*
+cleanname(char *name)
+{
+    char *s;    /* source of copy */
+    char *d;    /* destination of copy */
+    char *d0;   /* start of path afer the root name */
+    Rune r;
+    bool rooted;
+
+    if(name[0] == '\0')
+        return strcpy(name, ".");
+
+    rooted = false;
+    d0 = name;
+    if(d0[0] == '#'){
+        if(d0[1] == '\0')
+            return d0;
+        d0  += 1 + chartorune(&r, d0+1); /* ignore slash: #/ */
+        while(!SEP(*d0))
+            d0 += chartorune(&r, d0);
+        if(d0 == '\0')
+            return name;
+        d0++;   /* keep / after #<name> */
+        rooted = true;
+    }else if(d0[0] == '/'){
+        rooted = true;
+        d0++;
+    }
+
+    s = d0;
+    if(rooted){
+        /* skip extra '/' at root name */
+        for(; *s == '/'; s++)
+            ;
+    }
+    /* remove dup slashes */
+    for(d = d0; *s != '\0'; s++){
+        *d++ = *s;
+        if(*s == '/')
+            while(s[1] == '/')
+                s++;
+    }
+    *d = '\0';
+
+    d = d0;
+    s = d0;
+    while(*s != '\0'){
+        if(s[0] == '.' && SEP(s[1])){
+            if(s[1] == '\0')
+                break;
+            s+= 2;
+            continue;
+        }
+        if(s[0] == '.' && s[1] == '.' && SEP(s[2])){
+            if(d == d0){
+                if(rooted){
+                    /* /../x -> /x */
+                    if(s[2] == '\0')
+                        break;
+                    s += 3;
+                    continue;
+                }else{
+                    /* ../x -> ../x; and never collect ../ */
+                    d0 += 3;
+                }
+            }
+            if(d > d0){
+                /* a/../x -> x */
+                assert(d-2 >= d0 && d[-1] == '/');
+                for(d -= 2; d > d0 && d[-1] != '/'; d--)
+                        ;
+                if(s[2] == '\0')
+                    break;
+                s += 3;
+                continue;
+            }
+        }
+        while(!SEP(*s))
+            *d++ = *s++;
+        if(*s == '\0')
+            break;
+        
+        *d++ = *s++;
+    }
+    *d = '\0';
+    if(d-1 > name && d[-1] == '/')  /* thanks to #/ */
+        *--d = '\0';
+    if(name[0] == '\0')
+        strcpy(name, ".");
+    return name;
+}
+@
+
+
+
+
 \section{Path manipulation}
+
+
 
 \chapter{Namespace}
 
@@ -1531,7 +1701,7 @@ getwd(char *buf, int nbuf)
 
 \chapter{Time}
 
-% see TM in core DS
+% see TM in core DS now
 
 
 \section{Syscalls: [[sleep()]], [[alarm()]], etc}
@@ -1578,6 +1748,7 @@ enum Rfork_flags
 % see lock(2), rendezvous(2)
 % sleep/wakeup
 
+\section{[[fork()]]}
 
 <<function fork>>=
 int
@@ -1586,6 +1757,8 @@ fork(void)
     return rfork(RFPROC|RFFDG|RFREND);
 }
 @
+
+\section{[[getpid()]]}
 
 <<function getpid>>=
 int
@@ -5646,56 +5819,6 @@ isInf(double d, int sign)
 % >> >> >> >> >> >> >>
 
 
-\subsection{[[sqrt()]]}
-
-<<function sqrt>>=
-double
-sqrt(double arg)
-{
-    double x, temp;
-    int exp, i;
-
-    if(arg <= 0) {
-        if(arg < 0)
-            return NaN();
-        return 0;
-    }
-    if(isInf(arg, 1))
-        return arg;
-    x = frexp(arg, &exp);
-    while(x < 0.5) {
-        x *= 2;
-        exp--;
-    }
-    /*
-     * NOTE
-     * this wont work on 1's comp
-     */
-    if(exp & 1) {
-        x *= 2;
-        exp--;
-    }
-    temp = 0.5 * (1.0+x);
-
-    while(exp > 60) {
-        temp *= (1L<<30);
-        exp -= 60;
-    }
-    while(exp < -60) {
-        temp /= (1L<<30);
-        exp += 60;
-    }
-    if(exp >= 0)
-        temp *= 1L << (exp/2);
-    else
-        temp /= 1L << (-exp/2);
-    for(i=0; i<=4; i++)
-        temp = 0.5*(temp + arg/temp);
-    return temp;
-}
-@
-% >> >> >> >> >> >>
-
 \subsection{Parsing}
 
 <<function atof>>=
@@ -6111,6 +6234,7 @@ xx:
     *p = 0;
 }
 @
+% >> >>
 
 <<function divby>>=
 static void
@@ -6190,6 +6314,7 @@ mulby(char *a, char *p, char *q, int b)
     }
 }
 @
+% >>
 
 <<global tab2>>=
 static  Tab tab2[] =
@@ -6249,6 +6374,56 @@ xcmp(char *a, char *b)
 
 
 
+\subsection{[[sqrt()]]}
+
+<<function sqrt>>=
+double
+sqrt(double arg)
+{
+    double x, temp;
+    int exp, i;
+
+    if(arg <= 0) {
+        if(arg < 0)
+            return NaN();
+        return 0;
+    }
+    if(isInf(arg, 1))
+        return arg;
+    x = frexp(arg, &exp);
+    while(x < 0.5) {
+        x *= 2;
+        exp--;
+    }
+    /*
+     * NOTE
+     * this wont work on 1's comp
+     */
+    if(exp & 1) {
+        x *= 2;
+        exp--;
+    }
+    temp = 0.5 * (1.0+x);
+
+    while(exp > 60) {
+        temp *= (1L<<30);
+        exp -= 60;
+    }
+    while(exp < -60) {
+        temp /= (1L<<30);
+        exp += 60;
+    }
+    if(exp >= 0)
+        temp *= 1L << (exp/2);
+    else
+        temp /= 1L << (-exp/2);
+    for(i=0; i<=4; i++)
+        temp = 0.5*(temp + arg/temp);
+    return temp;
+}
+@
+% >> >> >> >> >> >>
+
 \section{Trigonometry}
 
 \section{Logarithms and exponentials}
@@ -6260,11 +6435,23 @@ xcmp(char *a, char *b)
 
 \chapter{Error Management}
 
+
+%TODO: errno
+%    if(getwd(pathname, sizeof(pathname)) == 0) {
+%        fprint(2, "pwd: %r\n");
+%        exits("getwd");
+%    }
+% what is %r? last error code from libc function? a bit ugly
+% those == 0 are also ugly.
+
+
 <<constant ERRMAX>>=
 #define	ERRMAX	128	/* max length of error string */
 @
 
 \section{syscall: [[errstr()]]}
+
+\section{[[rerrstr()]], [[werrstr()]]}
 
 <<function rerrstr>>=
 void
@@ -6546,6 +6733,8 @@ eqdirdev(Dir *a, Dir *b)
 
 \chapter{Profiling Support}
 
+% see 5l -p -1 -2! See \book{Linker}
+
 % arm/main9p.s
 
 <<type Prof>>=
@@ -6767,7 +6956,9 @@ struct IOchunk {
 };
 @
 
+\section{Extra functions}
 
+\subsection{Strings}
 
 \chapter{Conclusion}
 
