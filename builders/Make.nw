@@ -1102,9 +1102,9 @@ can be used from the shell command to access the matched string.
 \t footnote could use percent in recipe, but then not shell recipe
 \t  goal is be as less intrusive as possible (as opposed to Make,
 \t  which does processing on recipe such as variable expansion)
-\t maybe just say explain later why different mechanism
-\t  if choose percent, then need process string, need escape mechanism
-\t  complicated.
+\t maybe just footonote that sas explain later why different mechanism
+\t  (if choose percent, then need process string, need escape mechanism
+\t  complicated).
 
 The use of [['%']] to match any sequence of characters
 is similar to the use of [[.*]] in a {\em regular expression}.
@@ -1620,6 +1620,7 @@ the ancestors should now be older than this newly-generated file.
 % (but maybe should really put recipe in node)
 
 \subsubsection{A direct acyclic graph}
+\label{sec:dag}
 % /\  many-to-many
 % \/
 
@@ -2275,6 +2276,7 @@ Total                                    &                               &      
 
 
 \section{Software architecture}
+\label{sec:soft-archi}
 
 %dup: (and adapted) from Assembler.nw
 Figure~\ref{fig:controlflow} describes 
@@ -3170,6 +3172,7 @@ to specify a {\em pattern} in the target or prerequistes of a rule
 In fact, [[mk]] supports another special character to represent
 a pattern: [['&']], hence the code in the macro below:
 
+\label{sec:PERCENT}
 <<function PERCENT>>=
 #define	PERCENT(ch)	(((ch) == '%') || ((ch) == '&'))
 @
@@ -3313,6 +3316,7 @@ For the rule attribute [[REGEXP]] used above, see Section~\ref{sec:regexp}.
 
 
 \subsubsection{One target with multiple rules, [[S_TARGET]]}
+\label{sec:indexing-target}
 
 It is useful when building the graph of dependencies to quickly
 know the rule associated to a specific target.
@@ -3364,6 +3368,7 @@ if(!reuse){
 }
 @
 %old: rr = symlook(head, S_TARGET, r)->u.ptr;
+\t why add in S_TARGET if meta rule? anyway skipped after in applyrules
 
 Remember from Section~\ref{sec:symlook} that the last parameter
 of [[symlook()]], called [[install]] (and here set to the argument [[r]]),
@@ -3557,6 +3562,7 @@ struct Node
 
 The function below builds a new node:
 
+\label{sec:newnode}
 %ctor. dtor = ?
 % main -> mk -> graph -> applyrules -> <>
 <<constructor newnode>>=
@@ -4249,6 +4255,7 @@ if(sflag){
 \l put in advanced feature?
 
 \subsection{Parallel mode}
+\label{sec:parallel-mode}
 
 %trans:
 The last way to build one or more targets is to specify
@@ -6309,27 +6316,31 @@ MYVAR= U=a b c d # MYVAR contains the list: U=a b c d
 The next component in the building pipeline is the construction of
 the {graph of dependencies}. Section~\ref{sec:graph} showed
 a few examples of graph of dependencies for small projects.
+You will see in this chapter how to build those graphs.
 
 %toc:
 The most important function in this chapter is [[graph()]],
-\l well really it is applyrules
+\n well really it is [[applyrules()]] (said later)
 which takes a target name as a parameter and returns the {root}
 of the graph of dependencies for this target.
 %trans:
 [[graph()]] will use the globals [[rules]] and [[metarules]]
 populated by [[parse()]] in Section~\ref{sec:parse-rules-add-rules}.
-\n through addrules
+\n through addrules()
 \l and this graph will be used by work in next chapter for DFS to find jobs
 %toc:
 I will also describe in this chapter the code to check for mistakes
 in the rules. Those mistakes translate in issues while building the graph,
-for instance, the presence of cycles in the dependencies
-(with the function [[cyclechk()]]).
+for instance, the presence of cycles in the graph.
+%(checked with the function [[cyclechk()]]).
 \l Will see [[mk()]] later. But will call [[graph(target)]].
 
 \section{[[graph()]] and [[applyrules()]]}
 
-% mk -> <>
+[[graph()]] is mostly a wrapper around [[applyrules()]], which is
+the function containing the logic to build the graph of dependencies.
+
+% main -> mk -> <>
 <<function graph>>=
 Node*
 graph(char *target)
@@ -6349,7 +6360,21 @@ graph(char *target)
 @
 %pad: node -> root, clearer I think
 
+I will present the code to check the graph in Section~\ref{sec:check-graph}.
 
+I mentioned briefly in Section~\ref{sec:soft-archi} the algorithm
+behind [[applyrules()]].
+%dup: overview/soft-archi
+The algorithm first
+builds a node corresponding to the target (via [[newnode()]]),
+then finds the rules or meta rules with {matching} targets, and finally
+applies recursively [[applyrules()]] on the prerequisites of
+those matching rules and meta rules.
+%
+The algorithm will stop when a node is a {leaf}, which happens
+when a node has no matching rules or rules with no prerequisites.
+%
+Here is the skeleton of [[applyrules()]]:
 
 <<function applyrules>>=
 static Node*
@@ -6358,6 +6383,7 @@ applyrules(char *target, char *cnt)
     Node *node;
     // list<ref<Arc> (next = Arc.next, last = lasta)
     Arc head;
+    // ref<Arc>
     Arc *lasta = &head;
     <<[[applyrules]] other locals>>
 
@@ -6366,16 +6392,14 @@ applyrules(char *target, char *cnt)
     // else
 
     target = strdup(target);
-    // calls timeof()
-    node = newnode(target);
-
+    node = newnode(target); // calls timeof() internally
     head.next = nil;
     <<[[applyrules]] other initializations>>
 
-    // apply regular rules with target as a head (modify node, head, a)
+    // apply regular rules with target as a head (modifies lasta)
     <<[[applyrules()]] apply regular rules>>
 
-    // apply meta rules
+    // apply meta rules (modifies lasta)
     <<[[applyrules()]] apply meta rules>>
 
     node->arcs = head.next;
@@ -6389,7 +6413,6 @@ applyrules(char *target, char *cnt)
 %    head.n = nil;
 %old: a -> lasta, far clearer!
 \l confusing again to use head, this time for head of arcs.
-
 %old: in comment in the original code!
 %/*		if(r->attr&VIR)
 % *			node->flags |= VIRTUAL;
@@ -6400,10 +6423,32 @@ applyrules(char *target, char *cnt)
 % */
 % now done in attribute() anyway.
 
+The code above relies on a local variable [[head]], containing
+an [[Arc]] allocated in the stack, and another local variable
+[[lasta]], pointing originally to this arc.
+\l and evolving as you will see in next sections
+This is a standard idiom in C allowing later to write code adding
+an element in a list without having to worry whether this list
+is originally empty or not (as the code of [[mk]] does for example in
+Section~\ref{sec:addrule} with the list of rules, or in
+Section~\ref{sec:parallel-mode} with a list of words).
+
+
+%toc:
+I will explain the code to apply rules and meta rules
+in the next two sections.
 
 \section{Finding the simple rules for a target}
+\label{sec:finding-simple-rules}
 
-% built index while parsing in hash
+%trans:
+The first step to find the dependencies of a node is to look
+for all the rules mentioning the node as a target.
+%
+Fortunately, [[applyrules()]] can rely on the symbol table and the [[S_TARGET]]
+namespace to quickly access all the rules mentioning a specific
+target (as explained in Section~\ref{sec:indexing-target}):
+\l built index while parsing in hash
 
 <<[[applyrules]] other locals>>=
 Symtab *sym;
@@ -6437,11 +6482,24 @@ for(; r; r = r->chain){
 %dead? bug? what is the point of setting head.n? it is not used anyway
 %    head.n = node;
 
+As I mentioned before, [[applyrules()]] simply calls itself
+recursively for each prerequiste of a matching rule and adds
+a new arc between the current node and the root of the subgraph
+returned by [[applyrules()]].
+%
+\l stem is [[""]] here
+\l so for each prereq there is an arc! (but all of those arcs
+\l will share the same rule/recipe)
 
-% stem is "" here
 
-% so for each prereq there is an arc! (but all of those arcs
-% will share the same rule/recipe)
+
+Some tools such as [[gcc -MM]] can generate in a [[.depend]] file included
+from your [[mkfile]] rules without neither a recipe nor prerequistes
+(e.g., [[foo.5: #no deps]]).
+\n ocamldep
+%
+[[applyrules()]] can simply skip those rules:
+\l we could warn.
 
 <<[[applyrules()]] skip this rule and continue if some conditions>>=
 if(empty_recipe(r) && empty_prereqs(r))
@@ -6449,11 +6507,14 @@ if(empty_recipe(r) && empty_prereqs(r))
 @
 %TODO safe to continue when no recipe? should still have an arc
 % so than can check if outofdate no?
-%dead? bug? how can be META and in S_TARGET?
+%dead? how can be META and in S_TARGET? it could! but we should
+% not add in S_TARGET in addrule when META, useless.
 %  if(r->attr&META) continue;
 %dead? bug? how can be in S_TARGET and not strcmp?
 % if(strcmp(target, r->target)) continue; 
 
+The code above relies on two macros that factorize the check
+for empty recipe and empty prerequistes:
 
 <<macro empty_recipe>>=
 #define empty_recipe(r) (!r->recipe || !*r->recipe)
@@ -6470,9 +6531,15 @@ if(empty_recipe(r) && empty_prereqs(r))
 \t  or should forbid singleton empty word.
 
 
-
-% empty recipe and empty prereqs is useless, but tools like ocamldep
-% generates such dependencies
+%dup: ds/graph/arc main/build/parallel parse/rules/attrs
+Some rules may have a recipe but no prerequistes, for instance, when
+the target is a virtual target (see Section~\ref{sec:virtual}).
+%
+In those cases, [[mk]] still adds an arc to the node, but without
+a destination node.
+%
+You will see later code using those ``fake'' arcs.
+\l example: clean:, there will be no prereqs
 
 <<[[applyrules()]] if no prerequistes in rule r>>=
 // no prerequistes, a leaf, still create fake arc
@@ -6483,62 +6550,94 @@ if(empty_prereqs(r)) {
     lasta = lasta->next;
 } 
 @
-% example: clean:, there will be no prereqs
-% stem is "" here
 %pad: use my empty_prereqs macro, clearer
-
-% why need that? to at least have something propagate in attribute()?
-%  so will pass the VIRT to the node?
+\l stem is "" here
+\t why need that? to at least have something propagate in attribute()?
+\l  so will pass the VIRT to the node?
 % because there is a rule attached here!! a recipe for virtual targets.
+
+
+\l Note that applyrules goes until the end, even if leaf is up to date
+\l already. it will compute also the dependencies for this up-to-date
+\l leaf. Because applyrules just does one thing! Build static graph,
+\l and then can do analysis on this graph. Better separate concerns
+\l (so can do tricky analysis like implicit dependencies, etc)
 
 
 \section{Finding matching metarules and substituting the stem}
 
-<<[[applyrules]] other locals>>=
-char buf[NAMEBLOCK];
-char stem[NAMEBLOCK];
-@
-
-<<constant NAMEBLOCK>>=
-#define	NAMEBLOCK	1000
-@
-
-
-% this time, do not use S_TARGET hash, go through all metarules
-% and check if pattern can match target.
+%trans:
+The other step to find the dependencies of a node is to look for metarules
+containing a target that {matches} the node.
+%
+This time, [[applyrules]] needs to go through
+all the meta rules stored in the global [[metarules]]:
 
 <<[[applyrules()]] apply meta rules>>=
 for(r = metarules; r; r = r->next){
     <<[[applyrules()]] skip this meta rule and continue if some conditions>>
     <<[[applyrules()]] if regexp rule then continue if some conditions>>
     else {
-        if(!match(node->name, r->target, stem)) continue;
-    }
-    <<[[applyrules()]] infinite rule detection part1>>
+        if(match(node->name, r->target, stem)) {
+            <<[[applyrules()]] infinite rule detection part1>>
 
-    <<[[applyrules()]] if no prerequistes in meta rule r>>
-    else
-        for(pre = r->prereqs; pre; pre = pre->next){
-            <<[[applyrules()]] if regexp rule, adjust buf and rmatch>>
+            <<[[applyrules()]] if no prerequistes in meta rule r>>
             else
-                subst(stem, pre->s, buf, sizeof(buf));
-            // recursive call!
-            arc = newarc(applyrules(buf, cnt), r, stem, rmatch);
-            // add_list(head, arc)
-            lasta->next = arc;
-            lasta = lasta->next;
-        }
-    <<[[applyrules()]] infinite rule detection part2>>
+                for(pre = r->prereqs; pre; pre = pre->next) {
+                    <<[[applyrules()]] if regexp rule, adjust buf and rmatch>>
+                    else
+                        subst(stem, pre->s, buf, sizeof(buf));
+                    // recursive call!
+                    arc = newarc(applyrules(buf, cnt), r, stem, rmatch);
+                    // add_list(head, arc)
+                    lasta->next = arc;
+                    lasta = lasta->next;
+                }
+             <<[[applyrules()]] infinite rule detection part2>>
+       }
+    }
 }
 @
+%old: I removed a continue and reorged the code, was ugly
+
+The code above relies on the functions [[match()]] and [[subst()]],
+which I will describe fully in the next two sections.
+%
+[[match()]] checks whether a string can match another string
+called the {\em template}. This template can contain 
+a pattern character (e.g., [[foo%.5]]),
+as explained in Section~\ref{sec:pattern}.
+%
+If the template matches the string, [[match()]] then stores the
+string matched by the pattern character, called the {\em stem},
+in the last parameter.
+
+<<[[applyrules]] other locals>>=
+char stem[NAMEBLOCK];
+@
+<<constant NAMEBLOCK>>=
+#define	NAMEBLOCK	1000
+@
+
+[[subst()]] then substitutes the stem in another template 
+(e.g., [[foo%.c]])
+and stores the result in a buffer passed as a parameter.
+
+<<[[applyrules]] other locals>>=
+char buf[NAMEBLOCK];
+@
+
+
+Just like for the simple rules, certain rules can be ignored:
 
 <<[[applyrules()]] skip this meta rule and continue if some conditions>>=
 if(empty_recipe(r) && empty_prereqs(r)) 
     continue;	/* no effect; ignore */
 @
-% could issue a warning, but some tools generate such dependencies with
-%  no recipe and no prereqs
+\l could issue a warning, can tools generate such meta rules? 
 \l could factorize with previous one now that cleaned up dead code
+
+Some meta rules can also contain virtual targets:
 
 <<[[applyrules()]] if no prerequistes in meta rule r>>=
 if(empty_prereqs(r)) {
@@ -6548,17 +6647,28 @@ if(empty_prereqs(r)) {
     lasta = lasta->next;
 } 
 @
-% almost identical to before, except pass stem here instead of ""
-% (not sure it matters, maybe could factorize code)
+
+This code is almost identical to code in Section~\ref{sec:finding-simple-rules},
+except [[applyrules()]] passes the [[stem]] buffer instead
+of the empty string.
+\l why? need store stem in arc! otherwise lose information for jobs
 %pad: use empty_prereqs() again
 
 \subsection{Matching, [[match()]]}
 
-% go through template until percent, and progress at the same time on name.
-
-% stem is OUT. pointer to array to modify.
-
-
+[[match()]] below iterates over two string parameters at the same
+time by incrementing both pointers until it finds the special
+pattern character ([[%]] or [[&]]) in the template parameter.
+%
+Once it found the pattern character, it computes the length of
+the string matched by the pattern character and makes sure the rest
+of the template also matches the end of the name.
+%
+Finally it modifies the [[stem]] buffer passed
+from [[applyrules]].
+\l stem is OUT. pointer to array to modify.
+Figure~\ref{fig:mk-match} illustrates how [[match()]] works
+on a simple example.
 
 <<function match>>=
 bool
@@ -6567,6 +6677,7 @@ match(char *name, char *template,    char *stem)
     Rune r;
     int n;
 
+    // Before pattern character
     while(*name && *template){
         n = chartorune(&r, template);
         if (PERCENT(r))
@@ -6575,14 +6686,16 @@ match(char *name, char *template,    char *stem)
             if(*name++ != *template++)
                 return false;
     }
+
+    // On pattern character
     if(!PERCENT(*template))
         return false;
-
     // how many characters % is matching
     n = strlen(name) - strlen(template+1);
-
     if (n < 0)
         return false;
+
+    // After pattern character
     if (strcmp(template+1, name+n))
         return false;
 
@@ -6594,8 +6707,43 @@ match(char *name, char *template,    char *stem)
     return true;
 }
 @
-% simple pattern, single % or &
-\t introduce a len_after_percent_in_template?
+\l return false many times
+
+
+\begin{figure}[!]\centering
+\begin{verbatim}
+                              name
+      name                    |  name+n
+      |                       |  |
+      v----------+        +---v--v---+
+      |foobar.5  |        |foobar.5  |
+      +----------+        +----------+
+                              <->
+                               n
+
+     template                template
+       |                       |
+       v--------+          +---v----+
+       |foo%.5  |          |foo%.5  |
+       +--------+          +--------+
+
+       +-----+             +-------+
+  stem |     |        stem |bar    |
+       +-----+             +-------+
+
+----------------------------------------
+    start of match()     end of match()
+
+\end{verbatim}
+\caption{[[match()]] simple example.}\label{fig:mk-match}
+\end{figure}
+
+%dup: ds/rules/metarules
+As I mentioned in Section~\ref{sec:PERCENT}, 
+[[mk]] supports two kinds of pattern characters: [[%]] and [[&]].
+%
+The [[&]] pattern can not match filenames containing a dot or
+a slash:
 
 <<[[match()]] if ampersand template>>=
 if(*template == '&')
@@ -6604,6 +6752,9 @@ if(*template == '&')
 \l adv topics?
 
 \subsection{Substituting, [[subst()]]}
+
+Figure~\ref{fig:mk-subst} illustrates how [[subst()]] works
+on a simple example.
 
 <<function subst>>=
 void
@@ -6632,22 +6783,62 @@ subst(char *stem, char *template,   char *dest, int dlen)
 }
 @
 
+\begin{figure}[!]\centering
+\begin{verbatim}
+       +-------+           +-------+
+  stem |bar    |      stem |bar    |
+       +-------+           +-------+
+
+     template                template
+       |                          |
+       v----------+        +------v---+
+       |foo%.c    |        |foo%.c    |
+       +----------+        +----------+
+
+                                      e
+                                      |
+       +-----------+       +----------v+
+  dest |           |  dest | foobar.c  |
+       +-----------+       +-----------+
+
+----------------------------------------
+    start of subst()     end of subst()
+\end{verbatim}
+\caption{[[subst()]] simple example.}\label{fig:mk-subst}
+\end{figure}
+
 
 \section{Node cache}
 \l generalize to Cache? with node cache, time cache, etc?
-% not really a cache
+% not really a cache here
 
-% I mentioned DAG in section X, not a tree. Here is code
-% to reference a previously constructed node.
+As I mentioned in Section~\ref{sec:dag}, the graph of dependencies
+can be more than a simple tree; it can also be a 
+direct acyclic graph (DAG).
+%
+Thus, before creating a new node for a target, [[applyrules()]] 
+makes sure the target node does not exist already.
+%
+To do so, it relies on the new namespace below:
 
+<<[[Sxxx]] cases>>=
+S_NODE,		/* target name -> node */
+@
+\n S_NODE also used at a few places so cant delay that to opti section
 
-% S_NODE used at a few places so maybe cant delay that to opti section.
-% Also it is a DAG, not a tree
+Each time [[newnode()]] creates a new node for a given file,
+\l or virtual target
+it adds this node in the symbol table before returning it
+(e.g., to [[applyrules()]]).
 
-% useful in practice? when reuse a target node? when same file
-%  mentioned again and again, like .o or .a used in different targets?
-% but then it's not really an opti, you want to have only one node, 
-%  otherwise you will run multiple times the same recipe
+<<[[newnode()]] update node cache>>=
+symlook(name, S_NODE, (void *)node);
+@
+
+Finally, [[applyrules()]] can consult the symbol table and 
+possibly return a pointer to a previously created node instead
+of recomputing the substree for this node (by calling
+again [[applyrules()]]).
 
 <<[[applyrules]] check node cache if target is already there>>=
 sym = symlook(target, S_NODE, nil);
@@ -6655,24 +6846,24 @@ if(sym)
     return sym->u.ptr;
 @
 
-<<[[Sxxx]] cases>>=
-S_NODE,		/* target name -> node */
-@
-
-<<[[newnode()]] update node cache>>=
-symlook(name, S_NODE, (void *)node);
-@
+Creating a simple node per file is important not only to avoid unecessary
+calls to [[applyrules()]]. Indeed, once [[mk]] finished
+executing a recipe, it can update the time of the target
+created by the recipe by modifying a single node.
+\l also otherwise you will run multiple times the same recipe, you will
+\l  not realize it is the same node
 
 
 \section{[[timeof()]]}
 % for the leaves!
 
-%trans: last bit in graph is call to timeof to label
-% a node. called from newnode, called from applyrules.
-
-% force is here to say if want to bypass cache and redo
-% the actual read! for instance after the recipe is done
-% we want to update the time of the file and disable the cache for sure!
+%trans: 
+The last important function to build the graph of dependencies
+is the call to [[timeof()]] in [[newnode()]] (see Section~\ref{sec:newnode})
+to {label} a node.
+%dup: overview/principles/graph/labeled-tree
+Indeed, as I explained in Section~\ref{sec:labeled-tree}, each node
+is labeled with the modification time of the file it represents.
 
 % newnode() -> <> -> mkmktime -> bulktime
 %                             -> dirstat (libc)
@@ -6692,92 +6883,56 @@ timeof(char *name, bool force)
 %old: ulong mtime(char *name) {  return mkmtime(name, true);}
 %but simpler to remove, refactor caller sites
 
-% Note that applyrules goes until the end, even if leaf is up to date
-% already. it will compute also the dependencies for this up-to-date
-% leaf. Because applyrules just does one thing! Build static graph,
-% and then can do analysis on this graph. Better separate concerns
-% (so can do tricky analysis like implicit dependencies, etc)
+I will explain in Section~\ref{sec:time-cache} 
+the [[force]] argument.
+\l actually newnode calls timeof with false! so leverage cache
 
-\subsection{[[mkmtime()]]}
+
+
+%\subsection{[[mkmtime()]]}
 
 <<function mkmtime>>=
 ulong
 mkmtime(char *name, bool force)
 {
     Dir *d;
-    char buf[4096];
     ulong t;
     <<[[mkmtime]] locals>>
 
-    strecpy(buf, buf + sizeof buf - 1, name);
-    cleanname(buf);
-    name = buf;
-
     <<[[mkmtime()]] bulk dir optimisation>>
-
-    if((d = dirstat(name)) == nil)
-        return 0;
-
+    d = dirstat(name);
+    <<[[mkmtime()]] check if inexistent file>>
     t = d->mtime;
     free(d);
 
     return t;
 }
 @
-
-% cleanname! so normalize! otherwise lost opportunity to realize 
-%  same file
-% but actually not put in node cache
-
-\subsection{Time cache}
-\t adv topics? with opti of node cache?
+%old: I moved assign [[d]] outside if.
 
 
-% multiple levels of cache ... first in cache, 
-% then bulk so will get more hit cache.
+Note that if the file does not exist, [[mkmktime()]] 
+and [[timeof()]] return [[0]]:
 
-
-<<[[Sxxx]] cases>>=
-S_TIME,		/* file -> time */
-@
-
-<<[[timeof()]] locals>>=
-ulong t;
-@
-
-<<[[timeof()]] if not force, use time cache>>=
-<<[[timeof()]] check time cache>>
-t = mkmtime(name, false);
-<<[[timeof()]] update time cache>>
-return t;
-@
-
-
-<<[[timeof()]] locals>>=
-Symtab *sym;
-@
-
-<<[[timeof()]] check time cache>>=
-sym = symlook(name, S_TIME, nil);
-if (sym)
-    return sym->u.value;		/* uggh */
-@
-% comment?
-
-<<[[timeof()]] update time cache>>=
-if(t == 0)
+<<[[mkmtime()]] check if inexistent file>>=
+if(d == nil)
     return 0;
-symlook(name, S_TIME, (void*)t);		/* install time in cache */
 @
 
-% other opti about bulktime later.
 
 
 
 \section{Checking the rules and the graph}
+\label{sec:check-graph}
 \n was 'checking the rules', but really it is more checking the graph
 
-% Also simplify the graph by removing some arcs (see togo()).
+%trans:
+Once [[applyrules()]] returned the graph of dependencies,
+[[graph()]] can check for errors in the graph.
+%toc:
+There a few errors [[mk]] can statically detect, as explained
+in the following sections.
+\l Also simplify the graph by removing some arcs (see togo()).
 % Give priority for instance to specialized over meta rules. So
 % important calls below.
 
@@ -6787,15 +6942,17 @@ cyclechk(root);
 vacuous(root);
 ambiguous(root);
 @
-% can do vacuous after ambiguous? NO! cos whole point of vacuous is
+\l can do vacuous after ambiguous? NO! cos whole point of vacuous is
 % to delete some nodes and arcs that would generate ambiguity!
+
 
 \subsection{Cycle detection}
 \label{sec:cycle-check}
 
-% possible because constraints on variables.
-% Need to be known at parsing-time. Static cycle detection check.
-% (but dynamic could be ok too).
+%trans:
+The first error [[mk]] can detect is the presence of {\em cycles}
+in the graph, as shown in Figure~\ref{fig:mk-cycles}.
+\t error in mkfile?
 
 <<[[Node_flag]] cases>>=
 CYCLE      = 0x0002,
@@ -6826,6 +6983,11 @@ cyclechk(Node *n)
 %  NO, cos context might be different and we might have a loop.
 
 % FIGURE
+
+
+% possible because constraints on variables.
+% Need to be known at parsing-time. Static cycle detection check.
+% (but dynamic could be ok too).
 
 % sucks a bit that does not show trace, so hard to debug.
 %ocaml: give a trace!
@@ -9478,7 +9640,7 @@ for(i = 0; *p; i++, p++){
 <<[[applyrules]] other locals>>=
 Resub rmatch[NREGEXP];
 @
-<<[[applyrules]]  other initializations>>=
+<<[[applyrules]] other initializations>>=
 memset((char*)rmatch, 0, sizeof(rmatch));
 @
 % rmatch??? for metarules? for newarc?
@@ -10991,6 +11153,54 @@ chgtime(char *name)
 }
 @
 
+
+\subsection{Time cache}
+\label{sec:time-cache}
+
+% multiple levels of cache ... first in cache, 
+% then bulk so will get more hit cache.
+
+
+% force is here to say if want to bypass cache and redo
+% the actual read! for instance after the recipe is done
+% we want to update the time of the file and disable the cache for sure!
+
+<<[[Sxxx]] cases>>=
+S_TIME,		/* file -> time */
+@
+
+<<[[timeof()]] locals>>=
+ulong t;
+@
+
+<<[[timeof()]] if not force, use time cache>>=
+<<[[timeof()]] check time cache>>
+t = mkmtime(name, false);
+<<[[timeof()]] update time cache>>
+return t;
+@
+
+
+<<[[timeof()]] locals>>=
+Symtab *sym;
+@
+
+<<[[timeof()]] check time cache>>=
+sym = symlook(name, S_TIME, nil);
+if (sym)
+    return sym->u.value;		/* uggh */
+@
+% comment?
+
+<<[[timeof()]] update time cache>>=
+if(t == 0)
+    return 0;
+symlook(name, S_TIME, (void*)t);		/* install time in cache */
+@
+
+% other opti about bulktime later.
+
+
 \subsection{Bulk time optimisation}
 
 % in addition to time cache, mk also batch the call to time
@@ -11002,7 +11212,9 @@ chgtime(char *name)
 //Symtab *sym;
 @
 
+
 <<[[mkmtime()]] bulk dir optimisation>>=
+<<[[mkmtime()]] cleanup name>>
 USED(force);
 //TODO    s = utfrrune(name, '/');
 //TODO    if(s == name)
@@ -11013,7 +11225,7 @@ USED(force);
 //TODO        *s = '\0';
 //TODO    }else{
 //TODO        ss = nil;
-//TODO        carry = 0;
+//TODO        carry = '\0';
 //TODO    }
 //TODO    if(carry)
 //TODO        *s = carry;
@@ -11034,6 +11246,20 @@ USED(force);
 % entry for HELLOC.C in S_TIME but not for helloc.c and then when asking
 % for helloc.c you will look in the cache and see nothing and so
 % return 0.
+
+
+<<[[mkmtime]] locals>>=
+char buf[4096];
+@
+
+<<[[mkmtime()]] cleanup name>>=
+strecpy(buf, buf + sizeof buf - 1, name);
+cleanname(buf);
+name = buf;
+@
+% cleanname! so normalize! otherwise lost opportunity to realize 
+%  same file in bulk cache
+
 
 <<[[Sxxx]] cases>>=
 S_BULKED,	/* we have bulked this dir */
@@ -11060,6 +11286,7 @@ bulkmtime(char *dir)
     }
     if(symlook(sym, S_BULKED, 0))
         return;
+    // else
     ss = strdup(sym);
     symlook(ss, S_BULKED, (void*)ss);
     dirtime(s, buf);
